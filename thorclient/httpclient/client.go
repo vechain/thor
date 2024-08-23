@@ -65,13 +65,13 @@ func (c *Client) InspectClauses(calldata *accounts.BatchCallData) ([]*accounts.C
 	return inspectionRes, nil
 }
 
-func (c *Client) SendTransaction(obj *transactions.RawTx) (*common.TxSendResult, error) {
+func (c *Client) SendTransaction(obj *transactions.RawTx) (*transactions.TxSendResult, error) {
 	body, err := c.httpPOST(c.url+"/transactions", obj)
 	if err != nil {
 		return nil, fmt.Errorf("unable to send raw transaction - %w", err)
 	}
 
-	var txID common.TxSendResult
+	var txID transactions.TxSendResult
 	if err = json.Unmarshal(body, &txID); err != nil {
 		return nil, fmt.Errorf("unable to unmarshall inspection - %w", err)
 	}

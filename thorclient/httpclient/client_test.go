@@ -21,7 +21,6 @@ import (
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/api/transfers"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/thorclient/common"
 )
 
 func TestClient_GetTransactionReceipt(t *testing.T) {
@@ -78,7 +77,7 @@ func TestClient_InspectClauses(t *testing.T) {
 
 func TestClient_SendTransaction(t *testing.T) {
 	rawTx := &transactions.RawTx{}
-	expectedResult := &common.TxSendResult{ID: &thor.Bytes32{0x01}}
+	expectedResult := &transactions.TxSendResult{ID: &thor.Bytes32{0x01}}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/transactions", r.URL.Path)
@@ -264,7 +263,7 @@ func TestClient_GetTransaction(t *testing.T) {
 	defer ts.Close()
 
 	client := New(ts.URL)
-	tx, err := client.GetTransaction(&txID, false)
+	tx, err := client.GetTransaction(&txID, false, false)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedTx, tx)
@@ -360,7 +359,7 @@ func TestClient_Errors(t *testing.T) {
 		{
 			name: "SendTransaction",
 			path: "/transactions",
-			function: func(client *Client) (*common.TxSendResult, error) {
+			function: func(client *Client) (*transactions.TxSendResult, error) {
 				return client.SendTransaction(&transactions.RawTx{})
 			},
 		},
@@ -404,9 +403,11 @@ func TestClient_Errors(t *testing.T) {
 			function: func(client *Client) (*blocks.JSONBlockSummary, error) { return client.GetBlock(blockID) },
 		},
 		{
-			name:     "GetTransaction",
-			path:     "/transactions/" + txID.String(),
-			function: func(client *Client) (*transactions.Transaction, error) { return client.GetTransaction(&txID, false) },
+			name: "GetTransaction",
+			path: "/transactions/" + txID.String(),
+			function: func(client *Client) (*transactions.Transaction, error) {
+				return client.GetTransaction(&txID, false, false)
+			},
 		},
 		{
 			name:     "GetPeers",

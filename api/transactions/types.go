@@ -220,3 +220,8 @@ func convertReceipt(txReceipt *tx.Receipt, header *block.Header, tx *tx.Transact
 	}
 	return receipt, nil
 }
+
+// TxSendResult is the response to the Send Tx method
+type TxSendResult struct {
+	ID *thor.Bytes32 `json:"id"`
+}

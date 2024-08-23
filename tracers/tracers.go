@@ -95,7 +95,7 @@ func (d *directory) New(name string, cfg json.RawMessage, allowCustom bool) (Tra
 		// Assume JS code
 		tracer, err := d.jsEval(name, cfg)
 		if err != nil {
-			return nil, errors.Wrap(err, "create custom tracer")
+			return nil, errors.Wrap(err, "unable to create custom tracer")
 		}
 		return tracer, nil
 	} else {

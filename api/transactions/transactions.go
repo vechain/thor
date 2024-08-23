@@ -133,9 +133,8 @@ func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Re
 		}
 		return err
 	}
-	return utils.WriteJSON(w, map[string]string{
-		"id": tx.ID().String(),
-	})
+	txID := tx.ID()
+	return utils.WriteJSON(w, &TxSendResult{ID: &txID})
 }
 
 func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http.Request) error {

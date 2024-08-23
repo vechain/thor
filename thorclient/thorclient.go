@@ -68,7 +68,7 @@ func (c *Client) InspectTxClauses(tx *tx.Transaction, senderAddr *thor.Address) 
 	return c.InspectClauses(clauses)
 }
 
-func (c *Client) SendTransaction(tx *tx.Transaction) (*common.TxSendResult, error) {
+func (c *Client) SendTransaction(tx *tx.Transaction) (*transactions.TxSendResult, error) {
 	rlpTx, err := rlp.EncodeToBytes(tx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to encode transaction - %w", err)
@@ -77,7 +77,7 @@ func (c *Client) SendTransaction(tx *tx.Transaction) (*common.TxSendResult, erro
 	return c.SendTransactionRaw(rlpTx)
 }
 
-func (c *Client) SendTransactionRaw(rlpTx []byte) (*common.TxSendResult, error) {
+func (c *Client) SendTransactionRaw(rlpTx []byte) (*transactions.TxSendResult, error) {
 	return c.httpConn.SendTransaction(&transactions.RawTx{Raw: hexutil.Encode(rlpTx)})
 }
 

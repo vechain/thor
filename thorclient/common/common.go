@@ -7,8 +7,6 @@ package common
 
 import (
 	"fmt"
-
-	"github.com/vechain/thor/v2/thor"
 )
 
 const (
@@ -20,10 +18,6 @@ var (
 	ErrNot200Status  = fmt.Errorf("not 200 status code")
 	ErrUnexpectedMsg = fmt.Errorf("unexpected message format")
 )
-
-type TxSendResult struct {
-	ID *thor.Bytes32
-}
 
 // EventWrapper is used to return errors from the websocket alongside the data
 type EventWrapper[T any] struct {
