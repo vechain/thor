@@ -266,6 +266,7 @@ func defaultAction(ctx *cli.Context) error {
 		ctx.Bool(enableMetricsFlag.Name),
 		ctx.Uint64(apiLogsLimitFlag.Name),
 		parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
+		false,
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -416,6 +417,7 @@ func soloAction(ctx *cli.Context) error {
 		ctx.Bool(enableMetricsFlag.Name),
 		ctx.Uint64(apiLogsLimitFlag.Name),
 		parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
+		true,
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
