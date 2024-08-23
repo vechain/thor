@@ -13,14 +13,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vechain/thor/v2/api/blocks"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/v2/api/blocks"
 )
 
 func TestDefaultAction(t *testing.T) {
 	dir := t.TempDir()
-	defer os.RemoveAll(dir)
+	t.Cleanup(func() {
+		os.RemoveAll(dir)
+	})
 	apiAddr := newApiAddr(t)
 
 	args := []string{os.Args[0], "--network", "main", "--data-dir", dir, "--api-addr", apiAddr}
