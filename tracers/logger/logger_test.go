@@ -58,11 +58,12 @@ func (*dummyStatedb) SetState(_ common.Address, _ common.Hash, _ common.Hash) {}
 
 func TestStoreCapture(t *testing.T) {
 	var (
-		logger, _ = NewStructLogger(nil)
-		env       = vm.NewEVM(vm.Context{}, &dummyStatedb{}, &vm.ChainConfig{ChainConfig: *params.TestChainConfig}, vm.Config{Tracer: logger})
+		unCastedLogger, _ = NewStructLogger(nil)
+		env               = vm.NewEVM(vm.Context{}, &dummyStatedb{}, &vm.ChainConfig{ChainConfig: *params.TestChainConfig}, vm.Config{Tracer: unCastedLogger.(*StructLogger)})
 
 		contract = vm.NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), 100000)
 	)
+	logger := unCastedLogger.(*StructLogger)
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x0, byte(vm.SSTORE)}
 	var index common.Hash
 	logger.CaptureStart(env, common.Address{}, contract.Address(), false, nil, 0, nil)
@@ -123,7 +124,8 @@ func TestFormatLogs(t *testing.T) {
 }
 
 func TestCaptureStart(t *testing.T) {
-	logger, _ := NewStructLogger(nil)
+	unCastedLogger, _ := NewStructLogger(nil)
+	logger := unCastedLogger.(*StructLogger)
 	env := &vm.EVM{}
 
 	logger.CaptureStart(env, common.Address{}, common.Address{}, false, nil, 0, nil)

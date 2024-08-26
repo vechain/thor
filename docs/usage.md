@@ -168,6 +168,7 @@ bin/thor -h
 | `--api-call-gas-limit`      | Limit contract call gas (default: 50000000)                                                 |
 | `--api-backtrace-limit`     | Limit the distance between 'position' and best block for subscriptions APIs (default: 1000) |
 | `--api-allow-custom-tracer` | Allow custom JS tracer to be used for the tracer API                                        |
+| `--api-allowed-tracers`     | Comma-separated list of allowed tracers (default: "none")                                   |
 | `--enable-api-logs`         | Enables API requests logging                                                                |
 | `--api-logs-limit`          | Limit the number of logs returned by /logs API (default: 1000)                              |
 | `--verbosity`               | Log verbosity (0-9) (default: 3)                                                            |
@@ -182,6 +183,9 @@ bin/thor -h
 | `--disable-pruner`          | Disable state pruner to keep all history                                                    |
 | `--enable-metrics`          | Enables the metrics server                                                                  |
 | `--metrics-addr`            | Metrics service listening address                                                           |
+| `--enable-admin`            | Enables the admin server                                                                    |
+| `--admin-addr`              | Admin service listening address                                                             |
+| `--txpool-limit-per-account`| Transaction pool size limit per account                                                     |
 | `--help, -h`                | Show help                                                                                   |
 | `--version, -v`             | Print the version                                                                           |
 
@@ -195,7 +199,7 @@ bin/thor -h
 | `--persist`                  | Save blockchain data to disk(default to memory)    |
 | `--gas-limit`                | Gas limit for each block                           |
 | `--txpool-limit`             | Transaction pool size limit                        |
-| `--txpool-limit-per-account` | Transaction pool size limit per account            |
+
 
 #### Discovery Node Flags
 

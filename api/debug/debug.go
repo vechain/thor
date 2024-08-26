@@ -8,6 +8,7 @@ package debug
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 	"math/big"
 	"net/http"
@@ -29,7 +30,6 @@ import (
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tracers"
-	"github.com/vechain/thor/v2/tracers/logger"
 	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/vm"
@@ -46,16 +46,18 @@ type Debug struct {
 	forkConfig        thor.ForkConfig
 	callGasLimit      uint64
 	allowCustomTracer bool
+	allowedTracers    map[string]interface{}
 	bft               bft.Committer
 }
 
-func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfig, callGaslimit uint64, allowCustomTracer bool, bft bft.Committer) *Debug {
+func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfig, callGaslimit uint64, allowCustomTracer bool, bft bft.Committer, allowedTracers map[string]interface{}) *Debug {
 	return &Debug{
 		repo,
 		stater,
 		forkConfig,
 		callGaslimit,
 		allowCustomTracer,
+		allowedTracers,
 		bft,
 	}
 }
@@ -211,9 +213,17 @@ func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error 
 }
 
 func (d *Debug) createTracer(name string, config json.RawMessage) (tracers.Tracer, error) {
-	if name == "" {
-		return logger.NewStructLogger(config)
+	if strings.TrimSpace(name) == "" {
+		return nil, fmt.Errorf("tracer name must be defined")
 	}
+	_, noTracers := d.allowedTracers["none"]
+	_, allTracers := d.allowedTracers["all"]
+
+	// fail if the requested tracer is not allowed OR if the "all" tracers code isn't active
+	if _, ok := d.allowedTracers[name]; noTracers || (!ok && !allTracers) {
+		return nil, fmt.Errorf("creating tracer is not allowed: %s", name)
+	}
+
 	return tracers.DefaultDirectory.New(name, config, d.allowCustomTracer)
 }
 

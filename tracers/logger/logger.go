@@ -34,6 +34,10 @@ import (
 	"github.com/vechain/thor/v2/vm"
 )
 
+func init() {
+	tracers.DefaultDirectory.Register("logger", NewStructLogger, false)
+}
+
 // Storage represents a contract's storage.
 type Storage map[common.Hash]common.Hash
 
@@ -119,7 +123,7 @@ type StructLogger struct {
 }
 
 // NewStructLogger returns a new logger
-func NewStructLogger(cfg json.RawMessage) (*StructLogger, error) {
+func NewStructLogger(cfg json.RawMessage) (tracers.Tracer, error) {
 	var config Config
 	if cfg != nil {
 		if err := json.Unmarshal(cfg, &config); err != nil {

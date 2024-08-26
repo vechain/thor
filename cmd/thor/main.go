@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -35,6 +36,7 @@ import (
 
 	// Force-load the tracer engines to trigger registration
 	_ "github.com/vechain/thor/v2/tracers/js"
+	_ "github.com/vechain/thor/v2/tracers/logger"
 	_ "github.com/vechain/thor/v2/tracers/native"
 )
 
@@ -93,6 +95,10 @@ func main() {
 			disablePrunerFlag,
 			enableMetricsFlag,
 			metricsAddrFlag,
+			adminAddrFlag,
+			enableAdminFlag,
+			txPoolLimitPerAccountFlag,
+			allowedTracersFlag,
 		},
 		Action: defaultAction,
 		Commands: []cli.Command{
@@ -125,6 +131,9 @@ func main() {
 					disablePrunerFlag,
 					enableMetricsFlag,
 					metricsAddrFlag,
+					adminAddrFlag,
+					enableAdminFlag,
+					allowedTracersFlag,
 				},
 				Action: soloAction,
 			},
@@ -156,7 +165,7 @@ func defaultAction(ctx *cli.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "parse verbosity flag")
 	}
-	initLogger(lvl, ctx.Bool(jsonLogsFlag.Name))
+	logLevel := initLogger(lvl, ctx.Bool(jsonLogsFlag.Name))
 
 	// enable metrics as soon as possible
 	metricsURL := ""
@@ -168,6 +177,16 @@ func defaultAction(ctx *cli.Context) error {
 		}
 		metricsURL = url
 		defer func() { log.Info("stopping metrics server..."); close() }()
+	}
+
+	adminURL := ""
+	if ctx.Bool(enableAdminFlag.Name) {
+		url, close, err := startAdminServer(ctx.String(adminAddrFlag.Name), logLevel)
+		if err != nil {
+			return fmt.Errorf("unable to start admin server - %w", err)
+		}
+		adminURL = url
+		defer func() { log.Info("stopping admin server..."); close() }()
 	}
 
 	gene, forkConfig, err := selectGenesis(ctx)
@@ -212,6 +231,10 @@ func defaultAction(ctx *cli.Context) error {
 	}
 
 	txpoolOpt := defaultTxPoolOptions
+	txpoolOpt.LimitPerAccount, err = readIntFromUInt64Flag(ctx.Uint64(txPoolLimitPerAccountFlag.Name))
+	if err != nil {
+		return errors.Wrap(err, "parse txpool-limit-per-account flag")
+	}
 	txPool := txpool.New(repo, state.NewStater(mainDB), txpoolOpt)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
@@ -242,6 +265,7 @@ func defaultAction(ctx *cli.Context) error {
 		ctx.Bool(enableAPILogsFlag.Name),
 		ctx.Bool(enableMetricsFlag.Name),
 		ctx.Uint64(apiLogsLimitFlag.Name),
+		parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -251,7 +275,7 @@ func defaultAction(ctx *cli.Context) error {
 	}
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
-	printStartupMessage2(gene, apiURL, p2pCommunicator.Enode(), metricsURL)
+	printStartupMessage2(gene, apiURL, p2pCommunicator.Enode(), metricsURL, adminURL)
 
 	if err := p2pCommunicator.Start(); err != nil {
 		return err
@@ -283,7 +307,8 @@ func soloAction(ctx *cli.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "parse verbosity flag")
 	}
-	initLogger(lvl, ctx.Bool(jsonLogsFlag.Name))
+
+	logLevel := initLogger(lvl, ctx.Bool(jsonLogsFlag.Name))
 
 	// enable metrics as soon as possible
 	metricsURL := ""
@@ -295,6 +320,16 @@ func soloAction(ctx *cli.Context) error {
 		}
 		metricsURL = url
 		defer func() { log.Info("stopping metrics server..."); close() }()
+	}
+
+	adminURL := ""
+	if ctx.Bool(enableAdminFlag.Name) {
+		url, close, err := startAdminServer(ctx.String(adminAddrFlag.Name), logLevel)
+		if err != nil {
+			return fmt.Errorf("unable to start admin server - %w", err)
+		}
+		adminURL = url
+		defer func() { log.Info("stopping admin server..."); close() }()
 	}
 
 	var (
@@ -380,6 +415,7 @@ func soloAction(ctx *cli.Context) error {
 		ctx.Bool(enableAPILogsFlag.Name),
 		ctx.Bool(enableMetricsFlag.Name),
 		ctx.Uint64(apiLogsLimitFlag.Name),
+		parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -397,7 +433,7 @@ func soloAction(ctx *cli.Context) error {
 		return errors.New("block-interval cannot be zero")
 	}
 
-	printSoloStartupMessage(gene, repo, instanceDir, apiURL, forkConfig, metricsURL)
+	printSoloStartupMessage(gene, repo, instanceDir, apiURL, forkConfig, metricsURL, adminURL)
 
 	optimizer := optimizer.New(mainDB, repo, !ctx.Bool(disablePrunerFlag.Name))
 	defer func() { log.Info("stopping optimizer..."); optimizer.Stop() }()
