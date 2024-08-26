@@ -33,17 +33,17 @@ import (
 var logger = log.WithContext("pkg", "api")
 
 type Options struct {
-	AllowedOrigins      string
-	BacktraceLimit      uint32
-	CallGasLimit        uint64
-	PprofOn             bool
-	SkipLogs            bool
-	AllowCustomTracer   bool
-	EnableReqLogger     bool
-	EnableMetrics       bool
-	LogsLimit           uint64
-	AllowedTracers      map[string]interface{}
-	SoloMode            bool
+	AllowedOrigins    string
+	BacktraceLimit    uint32
+	CallGasLimit      uint64
+	PprofOn           bool
+	SkipLogs          bool
+	AllowCustomTracer bool
+	EnableReqLogger   bool
+	EnableMetrics     bool
+	LogsLimit         uint64
+	AllowedTracers    map[string]interface{}
+	SoloMode          bool
 }
 
 // New return api router
