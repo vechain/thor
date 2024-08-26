@@ -11,7 +11,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -256,17 +255,7 @@ func defaultAction(ctx *cli.Context) error {
 		bftEngine,
 		p2pCommunicator.Communicator(),
 		forkConfig,
-		ctx.String(apiCorsFlag.Name),
-		uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
-		ctx.Uint64(apiCallGasLimitFlag.Name),
-		ctx.Bool(pprofFlag.Name),
-		skipLogs,
-		ctx.Bool(apiAllowCustomTracerFlag.Name),
-		ctx.Bool(enableAPILogsFlag.Name),
-		ctx.Bool(enableMetricsFlag.Name),
-		ctx.Uint64(apiLogsLimitFlag.Name),
-		parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
-		false,
+		newApiOptions(ctx, false),
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -407,17 +396,7 @@ func soloAction(ctx *cli.Context) error {
 		bftEngine,
 		&solo.Communicator{},
 		forkConfig,
-		ctx.String(apiCorsFlag.Name),
-		uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
-		ctx.Uint64(apiCallGasLimitFlag.Name),
-		ctx.Bool(pprofFlag.Name),
-		skipLogs,
-		ctx.Bool(apiAllowCustomTracerFlag.Name),
-		ctx.Bool(enableAPILogsFlag.Name),
-		ctx.Bool(enableMetricsFlag.Name),
-		ctx.Uint64(apiLogsLimitFlag.Name),
-		parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
-		true,
+		newApiOptions(ctx, false),
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 

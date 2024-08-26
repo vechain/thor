@@ -32,6 +32,20 @@ import (
 
 var logger = log.WithContext("pkg", "api")
 
+type Options struct {
+	AllowedOrigins      string
+	BacktraceLimit      uint32
+	CallGasLimit        uint64
+	PprofOn             bool
+	SkipLogs            bool
+	AllowCustomTracer   bool
+	EnableReqLogger     bool
+	EnableMetrics       bool
+	LogsLimit           uint64
+	AllowedTracers      map[string]interface{}
+	SoloMode            bool
+}
+
 // New return api router
 func New(
 	repo *chain.Repository,
@@ -41,19 +55,9 @@ func New(
 	bft bft.Finalizer,
 	nw node.Network,
 	forkConfig thor.ForkConfig,
-	allowedOrigins string,
-	backtraceLimit uint32,
-	callGasLimit uint64,
-	pprofOn bool,
-	skipLogs bool,
-	allowCustomTracer bool,
-	enableReqLogger bool,
-	enableMetrics bool,
-	logsLimit uint64,
-	allowedTracers map[string]interface{},
-	soloMode bool,
+	opts Options, // Changed to accept Options struct
 ) (http.HandlerFunc, func()) {
-	origins := strings.Split(strings.TrimSpace(allowedOrigins), ",")
+	origins := strings.Split(strings.TrimSpace(opts.AllowedOrigins), ",")
 	for i, o := range origins {
 		origins[i] = strings.ToLower(strings.TrimSpace(o))
 	}
@@ -71,27 +75,27 @@ func New(
 			http.Redirect(w, req, "doc/stoplight-ui/", http.StatusTemporaryRedirect)
 		})
 
-	accounts.New(repo, stater, callGasLimit, forkConfig, bft).
+	accounts.New(repo, stater, opts.CallGasLimit, forkConfig, bft).
 		Mount(router, "/accounts")
 
-	if !skipLogs {
-		events.New(repo, logDB, logsLimit).
+	if !opts.SkipLogs {
+		events.New(repo, logDB, opts.LogsLimit).
 			Mount(router, "/logs/event")
-		transfers.New(repo, logDB, logsLimit).
+		transfers.New(repo, logDB, opts.LogsLimit).
 			Mount(router, "/logs/transfer")
 	}
 	blocks.New(repo, bft).
 		Mount(router, "/blocks")
 	transactions.New(repo, txPool).
 		Mount(router, "/transactions")
-	debug.New(repo, stater, forkConfig, callGasLimit, allowCustomTracer, bft, allowedTracers, soloMode).
+	debug.New(repo, stater, forkConfig, opts.CallGasLimit, opts.AllowCustomTracer, bft, opts.AllowedTracers, opts.SoloMode).
 		Mount(router, "/debug")
 	node.New(nw).
 		Mount(router, "/node")
-	subs := subscriptions.New(repo, origins, backtraceLimit, txPool)
+	subs := subscriptions.New(repo, origins, opts.BacktraceLimit, txPool)
 	subs.Mount(router, "/subscriptions")
 
-	if pprofOn {
+	if opts.PprofOn {
 		router.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
 		router.HandleFunc("/debug/pprof/profile", pprof.Profile)
 		router.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
@@ -99,7 +103,7 @@ func New(
 		router.PathPrefix("/debug/pprof/").HandlerFunc(pprof.Index)
 	}
 
-	if enableMetrics {
+	if opts.EnableMetrics {
 		router.Use(metricsMiddleware)
 	}
 
@@ -110,7 +114,7 @@ func New(
 		handlers.ExposedHeaders([]string{"x-genesis-id", "x-thorest-ver"}),
 	)(handler)
 
-	if enableReqLogger {
+	if opts.EnableReqLogger {
 		handler = RequestLoggerHandler(handler, logger)
 	}
 

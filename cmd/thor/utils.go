@@ -40,6 +40,7 @@ import (
 	"github.com/mattn/go-tty"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/admin"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/doc"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/node"
@@ -797,6 +798,22 @@ func readIntFromUInt64Flag(val uint64) (int, error) {
 	}
 
 	return i, nil
+}
+
+func newApiOptions(ctx *cli.Context, soloMode bool) api.Options {
+	return api.Options{
+		AllowedOrigins:    ctx.String(apiCorsFlag.Name),
+		BacktraceLimit:    uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
+		CallGasLimit:      ctx.Uint64(apiCallGasLimitFlag.Name),
+		PprofOn:           ctx.Bool(pprofFlag.Name),
+		SkipLogs:          ctx.Bool(skipLogsFlag.Name),
+		AllowCustomTracer: ctx.Bool(apiAllowCustomTracerFlag.Name),
+		EnableReqLogger:   ctx.Bool(enableAPILogsFlag.Name),
+		EnableMetrics:     ctx.Bool(enableMetricsFlag.Name),
+		LogsLimit:         ctx.Uint64(apiLogsLimitFlag.Name),
+		AllowedTracers:    parseTracerList(ctx.String(allowedTracersFlag.Name)),
+		SoloMode:          soloMode,
+	}
 }
 
 func parseTracerList(list string) map[string]interface{} {
