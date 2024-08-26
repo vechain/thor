@@ -8,12 +8,11 @@ package node
 import (
 	"time"
 
-	"github.com/vechain/thor/v2/thor"
-
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/metrics"
+	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
 
