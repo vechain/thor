@@ -27,7 +27,6 @@ var (
 	metricBlockProcessedDuration = metrics.LazyLoadHistogram("block_processed_duration_ms", metrics.Bucket10s)
 	metricChainForkCount         = metrics.LazyLoadCounter("chain_fork_count")
 	metricChainForkSize          = metrics.LazyLoadGauge("chain_fork_gauge")
-	metricChainForkBlocks        = metrics.LazyLoadCounterVec("chain_fork_blocks_count", []string{"number"})
 	metricMissedSlotCount        = metrics.LazyLoadCounter("block_missed_slot_count")
 )
 
