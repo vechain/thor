@@ -56,7 +56,7 @@ func New(
 	allowCustomTracer bool,
 	bft bft.Finalizer,
 	allowedTracers map[string]interface{},
-	skipPoA bool) *Debug {
+	soloMode bool) *Debug {
 	return &Debug{
 		repo,
 		stater,
@@ -65,7 +65,7 @@ func New(
 		allowCustomTracer,
 		bft,
 		allowedTracers,
-		skipPoA,
+		soloMode,
 	}
 }
 
