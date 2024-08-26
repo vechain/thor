@@ -28,7 +28,7 @@ func TestNode(t *testing.T) {
 	initCommServer(t)
 	tclient := thorclient.New(ts.URL)
 
-	peersStats, err := tclient.GetPeers()
+	peersStats, err := tclient.Peers()
 	require.NoError(t, err)
 	assert.Equal(t, 0, len(peersStats), "count should be zero")
 }

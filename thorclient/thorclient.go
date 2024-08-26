@@ -55,7 +55,7 @@ func (c *Client) RawWSClient() *wsclient.Client {
 	return c.wsConn
 }
 
-func (c *Client) GetTransactionReceipt(id *thor.Bytes32) (*transactions.Receipt, error) {
+func (c *Client) TransactionReceipt(id *thor.Bytes32) (*transactions.Receipt, error) {
 	return c.httpConn.GetTransactionReceipt(id)
 }
 
@@ -89,52 +89,59 @@ func (c *Client) FilterTransfers(req *events.EventFilter) ([]*transfers.Filtered
 	return c.httpConn.FilterTransfers(req)
 }
 
-func (c *Client) GetAccount(addr *thor.Address) (*accounts.Account, error) {
+func (c *Client) Account(addr *thor.Address) (*accounts.Account, error) {
 	return c.httpConn.GetAccount(addr, "")
 }
 
-func (c *Client) GetAccountForRevision(addr *thor.Address, revision string) (*accounts.Account, error) {
+func (c *Client) GetAccount(addr *thor.Address, revision string) (*accounts.Account, error) {
 	return c.httpConn.GetAccount(addr, revision)
 }
 
-func (c *Client) GetAccountCode(addr *thor.Address) ([]byte, error) {
-	return c.httpConn.GetAccountCode(addr, "")
+func (c *Client) AccountCode(addr *thor.Address) (*accounts.GetCodeResult, error) {
+	return c.httpConn.GetAccountCode(addr, "best")
 }
 
-func (c *Client) GetAccountCodeForRevision(addr *thor.Address, revision string) ([]byte, error) {
+func (c *Client) GetAccountCode(addr *thor.Address, revision string) (*accounts.GetCodeResult, error) {
 	return c.httpConn.GetAccountCode(addr, revision)
 }
 
-func (c *Client) GetStorage(addr *thor.Address, key *thor.Bytes32) ([]byte, error) {
-	return c.httpConn.GetStorage(addr, key)
+func (c *Client) Storage(addr *thor.Address, key *thor.Bytes32) (*accounts.GetStorageResult, error) {
+	return c.httpConn.GetAccountStorage(addr, key, "best")
 }
 
-func (c *Client) GetBlockExpanded(block string) (blocks *blocks.JSONExpandedBlock, err error) {
-	return c.httpConn.GetBlockExpanded(block)
+func (c *Client) GetStorage(addr *thor.Address, key *thor.Bytes32, revision string) (*accounts.GetStorageResult, error) {
+	return c.httpConn.GetAccountStorage(addr, key, revision)
 }
 
-func (c *Client) GetBlock(block string) (blocks *blocks.JSONBlockSummary, err error) {
-	return c.httpConn.GetBlock(block)
+func (c *Client) ExpandedBlock(revision string) (blocks *blocks.JSONExpandedBlock, err error) {
+	return c.httpConn.GetBlockExpanded(revision)
 }
 
-func (c *Client) GetTransaction(id *thor.Bytes32) (*transactions.Transaction, error) {
-	return c.httpConn.GetTransaction(id, false, false)
+func (c *Client) Block(revision string) (blocks *blocks.JSONBlockSummary, err error) {
+	return c.httpConn.GetBlock(revision)
 }
 
-func (c *Client) GetTransactionRaw(id *thor.Bytes32) (*transactions.Transaction, error) {
-	return c.httpConn.GetTransaction(id, false, true)
+func (c *Client) Transaction(id *thor.Bytes32) (*transactions.Transaction, error) {
+	return c.httpConn.GetTransaction(id, "best", false)
 }
 
-func (c *Client) GetTransactionPending(id *thor.Bytes32) (*transactions.Transaction, error) {
-	return c.httpConn.GetTransaction(id, true, false)
+func (c *Client) GetTransaction(id *thor.Bytes32, revision string, pending bool) (*transactions.Transaction, error) {
+	return c.httpConn.GetTransaction(id, revision, pending)
 }
 
-func (c *Client) GetPeers() ([]*node.PeerStats, error) {
+func (c *Client) RawTransaction(id *thor.Bytes32) (*transactions.RawTransaction, error) {
+	return c.httpConn.GetRawTransaction(id, "best", false)
+}
+func (c *Client) GetRawTransaction(id *thor.Bytes32, revision string, pending bool) (*transactions.RawTransaction, error) {
+	return c.httpConn.GetRawTransaction(id, revision, pending)
+}
+
+func (c *Client) Peers() ([]*node.PeerStats, error) {
 	return c.httpConn.GetPeers()
 }
 
 func (c *Client) ChainTag() (byte, error) {
-	genesisBlock, err := c.GetBlock("0")
+	genesisBlock, err := c.Block("0")
 	if err != nil {
 		return 0, err
 	}

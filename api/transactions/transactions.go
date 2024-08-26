@@ -30,7 +30,7 @@ func New(repo *chain.Repository, pool *txpool.TxPool) *Transactions {
 	}
 }
 
-func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, allowPending bool) (*rawTransaction, error) {
+func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, allowPending bool) (*RawTransaction, error) {
 	chain := t.repo.NewChain(head)
 	tx, meta, err := chain.GetTransaction(txID)
 	if err != nil {
@@ -41,7 +41,7 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, a
 					if err != nil {
 						return nil, err
 					}
-					return &rawTransaction{
+					return &RawTransaction{
 						RawTx: RawTx{hexutil.Encode(raw)},
 					}, nil
 				}
@@ -59,7 +59,7 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, a
 	if err != nil {
 		return nil, err
 	}
-	return &rawTransaction{
+	return &RawTransaction{
 		RawTx: RawTx{hexutil.Encode(raw)},
 		Meta: &TxMeta{
 			BlockID:        summary.Header.ID(),

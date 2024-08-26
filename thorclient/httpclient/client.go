@@ -126,21 +126,46 @@ func (c *Client) GetAccount(addr *thor.Address, revision string) (*accounts.Acco
 	return &account, nil
 }
 
-func (c *Client) GetAccountCode(addr *thor.Address, revision string) ([]byte, error) {
+func (c *Client) GetAccountCode(addr *thor.Address, revision string) (*accounts.GetCodeResult, error) {
 	url := c.url + "/accounts/" + addr.String() + "/code"
 	if revision != "" {
 		url += "?revision=" + revision
 	}
 
-	return c.httpGET(url)
+	body, err := c.httpGET(url)
+	if err != nil {
+		return nil, fmt.Errorf("unable to retrieve account - %w", err)
+	}
+
+	var res accounts.GetCodeResult
+	if err = json.Unmarshal(body, &res); err != nil {
+		return nil, fmt.Errorf("unable to unmarshall code - %w", err)
+	}
+
+	return &res, nil
 }
 
-func (c *Client) GetStorage(addr *thor.Address, key *thor.Bytes32) ([]byte, error) {
-	return c.httpGET(c.url + "/accounts/" + addr.String() + "/key/" + key.String())
+func (c *Client) GetAccountStorage(addr *thor.Address, key *thor.Bytes32, revision string) (*accounts.GetStorageResult, error) {
+	url := c.url + "/accounts/" + addr.String() + "/key/" + key.String()
+	if revision != "" {
+		url += "?revision=" + revision
+	}
+
+	body, err := c.httpGET(url)
+	if err != nil {
+		return nil, fmt.Errorf("unable to retrieve account - %w", err)
+	}
+
+	var res accounts.GetStorageResult
+	if err = json.Unmarshal(body, &res); err != nil {
+		return nil, fmt.Errorf("unable to unmarshall code - %w", err)
+	}
+
+	return &res, nil
 }
 
-func (c *Client) GetBlockExpanded(blockID string) (*blocks.JSONExpandedBlock, error) {
-	body, err := c.httpGET(c.url + "/blocks/" + blockID + "?expanded=true")
+func (c *Client) GetBlockExpanded(revision string) (*blocks.JSONExpandedBlock, error) {
+	body, err := c.httpGET(c.url + "/blocks/" + revision + "?expanded=true")
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve block - %w", err)
 	}
@@ -167,13 +192,13 @@ func (c *Client) GetBlock(blockID string) (*blocks.JSONBlockSummary, error) {
 	return &block, nil
 }
 
-func (c *Client) GetTransaction(txID *thor.Bytes32, isPending bool, fetchRaw bool) (*transactions.Transaction, error) {
+func (c *Client) GetTransaction(txID *thor.Bytes32, head string, isPending bool) (*transactions.Transaction, error) {
 	url := c.url + "/transactions/" + txID.String() + "?"
 	if isPending {
 		url += "pending=true&"
 	}
-	if fetchRaw {
-		url += "raw=true&"
+	if head != "" {
+		url += "head=" + head
 	}
 
 	body, err := c.httpGET(url)
@@ -182,6 +207,28 @@ func (c *Client) GetTransaction(txID *thor.Bytes32, isPending bool, fetchRaw boo
 	}
 
 	var tx transactions.Transaction
+	if err = json.Unmarshal(body, &tx); err != nil {
+		return nil, fmt.Errorf("unable to unmarshall events - %w", err)
+	}
+
+	return &tx, nil
+}
+
+func (c *Client) GetRawTransaction(txID *thor.Bytes32, head string, isPending bool) (*transactions.RawTransaction, error) {
+	url := c.url + "/transactions/" + txID.String() + "?raw=true&"
+	if isPending {
+		url += "pending=true&"
+	}
+	if head != "" {
+		url += "head=" + head
+	}
+
+	body, err := c.httpGET(url)
+	if err != nil {
+		return nil, fmt.Errorf("unable to retrieve transaction - %w", err)
+	}
+
+	var tx transactions.RawTransaction
 	if err = json.Unmarshal(body, &tx); err != nil {
 		return nil, fmt.Errorf("unable to unmarshall events - %w", err)
 	}

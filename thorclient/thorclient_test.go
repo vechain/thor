@@ -88,26 +88,26 @@ func TestRevision(t *testing.T) {
 		expectedRevision string
 	}{
 		{
-			name:             "GetAccount",
-			function:         func(client *Client) { client.GetAccount(&addr) },
+			name:             "Account",
+			function:         func(client *Client) { client.Account(&addr) },
 			expectedPath:     "/accounts/" + addr.String(),
 			expectedRevision: "",
 		},
 		{
 			name:             "GetAccounForRevision",
-			function:         func(client *Client) { client.GetAccountForRevision(&addr, revision) },
+			function:         func(client *Client) { client.GetAccount(&addr, revision) },
 			expectedPath:     "/accounts/" + addr.String(),
 			expectedRevision: "",
 		},
 		{
 			name:             "GetAccountCode",
-			function:         func(client *Client) { client.GetAccountCode(&addr) },
+			function:         func(client *Client) { client.AccountCode(&addr) },
 			expectedPath:     "/accounts/" + addr.String() + "/code",
 			expectedRevision: "",
 		},
 		{
 			name:             "GetAccountCodeForRevision",
-			function:         func(client *Client) { client.GetAccountCodeForRevision(&addr, revision) },
+			function:         func(client *Client) { client.GetAccountCode(&addr, revision) },
 			expectedPath:     "/accounts/" + addr.String() + "/code",
 			expectedRevision: "",
 		},
@@ -142,13 +142,13 @@ func TestGetTransaction(t *testing.T) {
 		isPending bool
 	}{
 		{
-			name:      "GetTransaction",
-			function:  func(client *Client) { client.GetTransaction(&expectedTx.ID) },
+			name:      "Transaction",
+			function:  func(client *Client) { client.Transaction(&expectedTx.ID) },
 			isPending: false,
 		},
 		{
 			name:      "GetTransactionPending",
-			function:  func(client *Client) { client.GetTransactionPending(&expectedTx.ID) },
+			function:  func(client *Client) { client.GetTransaction(&expectedTx.ID, "best", true) },
 			isPending: true,
 		},
 	} {

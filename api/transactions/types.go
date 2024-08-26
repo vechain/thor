@@ -78,7 +78,7 @@ func (rtx *RawTx) decode() (*tx.Transaction, error) {
 	return tx, nil
 }
 
-type rawTransaction struct {
+type RawTransaction struct {
 	RawTx
 	Meta *TxMeta `json:"meta"`
 }

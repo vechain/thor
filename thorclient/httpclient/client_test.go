@@ -12,8 +12,10 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/api/events"
@@ -168,12 +170,15 @@ func TestClient_GetAccount(t *testing.T) {
 
 func TestClient_GetAccountCode(t *testing.T) {
 	addr := thor.Address{0x01}
-	expectedByteCode := []byte{0x01}
+	expectedCodeRsp := &accounts.GetCodeResult{Code: hexutil.Encode([]byte{0x01, 0x03})}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/accounts/"+addr.String()+"/code", r.URL.Path)
 
-		w.Write(expectedByteCode)
+		marshal, err := json.Marshal(expectedCodeRsp)
+		require.NoError(t, err)
+
+		w.Write(marshal)
 	}))
 	defer ts.Close()
 
@@ -181,26 +186,29 @@ func TestClient_GetAccountCode(t *testing.T) {
 	byteCode, err := client.GetAccountCode(&addr, "")
 
 	assert.NoError(t, err)
-	assert.Equal(t, expectedByteCode, byteCode)
+	assert.Equal(t, expectedCodeRsp.Code, byteCode.Code)
 }
 
 func TestClient_GetStorage(t *testing.T) {
 	addr := thor.Address{0x01}
 	key := thor.Bytes32{0x01}
-	expectedData := []byte{0x01}
+	expectedStorageRsp := &accounts.GetStorageResult{Value: hexutil.Encode([]byte{0x01, 0x03})}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/accounts/"+addr.String()+"/key/"+key.String(), r.URL.Path)
 
-		w.Write(expectedData)
+		marshal, err := json.Marshal(expectedStorageRsp)
+		require.NoError(t, err)
+
+		w.Write(marshal)
 	}))
 	defer ts.Close()
 
 	client := New(ts.URL)
-	data, err := client.GetStorage(&addr, &key)
+	data, err := client.GetAccountStorage(&addr, &key, "best")
 
 	assert.NoError(t, err)
-	assert.Equal(t, expectedData, data)
+	assert.Equal(t, expectedStorageRsp.Value, data.Value)
 }
 
 func TestClient_GetExpandedBlock(t *testing.T) {
@@ -263,7 +271,35 @@ func TestClient_GetTransaction(t *testing.T) {
 	defer ts.Close()
 
 	client := New(ts.URL)
-	tx, err := client.GetTransaction(&txID, false, false)
+	tx, err := client.GetTransaction(&txID, "best", false)
+
+	assert.NoError(t, err)
+	assert.Equal(t, expectedTx, tx)
+}
+
+func TestClient_GetRawTransaction(t *testing.T) {
+	txID := thor.Bytes32{0x01}
+	expectedTx := &transactions.RawTransaction{
+		Meta: &transactions.TxMeta{
+			BlockID:        thor.Bytes32{0x01},
+			BlockNumber:    1,
+			BlockTimestamp: 123,
+		},
+		RawTx: transactions.RawTx{Raw: hexutil.Encode([]byte{0x03})},
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/transactions/"+txID.String(), r.URL.Path)
+
+		txBytes, err := json.Marshal(expectedTx)
+		require.NoError(t, err)
+
+		w.Write(txBytes)
+	}))
+	defer ts.Close()
+
+	client := New(ts.URL)
+	tx, err := client.GetRawTransaction(&txID, "best", false)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedTx, tx)
@@ -345,7 +381,7 @@ func TestClient_Errors(t *testing.T) {
 		function interface{}
 	}{
 		{
-			name:     "GetTransactionReceipt",
+			name:     "TransactionReceipt",
 			path:     "/transactions/" + txID.String() + "/receipt",
 			function: func(client *Client) (*transactions.Receipt, error) { return client.GetTransactionReceipt(&txID) },
 		},
@@ -378,39 +414,41 @@ func TestClient_Errors(t *testing.T) {
 			},
 		},
 		{
-			name:     "GetAccount",
+			name:     "Account",
 			path:     "/accounts/" + addr.String(),
 			function: func(client *Client) (*accounts.Account, error) { return client.GetAccount(&addr, "") },
 		},
 		{
 			name:     "GetContractByteCode",
 			path:     "/accounts/" + addr.String() + "/code",
-			function: func(client *Client) ([]byte, error) { return client.GetAccountCode(&addr, "") },
+			function: func(client *Client) (*accounts.GetCodeResult, error) { return client.GetAccountCode(&addr, "") },
 		},
 		{
-			name:     "GetStorage",
-			path:     "/accounts/" + addr.String() + "/key/" + thor.Bytes32{}.String(),
-			function: func(client *Client) ([]byte, error) { return client.GetStorage(&addr, &thor.Bytes32{}) },
+			name: "GetAccountStorage",
+			path: "/accounts/" + addr.String() + "/key/" + thor.Bytes32{}.String(),
+			function: func(client *Client) (*accounts.GetStorageResult, error) {
+				return client.GetAccountStorage(&addr, &thor.Bytes32{}, "best")
+			},
 		},
 		{
-			name:     "GetBlockExpanded",
+			name:     "ExpandedBlock",
 			path:     "/blocks/" + blockID + "?expanded=true",
 			function: func(client *Client) (*blocks.JSONExpandedBlock, error) { return client.GetBlockExpanded(blockID) },
 		},
 		{
-			name:     "GetBlock",
+			name:     "Block",
 			path:     "/blocks/" + blockID,
 			function: func(client *Client) (*blocks.JSONBlockSummary, error) { return client.GetBlock(blockID) },
 		},
 		{
-			name: "GetTransaction",
+			name: "Transaction",
 			path: "/transactions/" + txID.String(),
 			function: func(client *Client) (*transactions.Transaction, error) {
-				return client.GetTransaction(&txID, false, false)
+				return client.GetTransaction(&txID, "best", false)
 			},
 		},
 		{
-			name:     "GetPeers",
+			name:     "Peers",
 			path:     "/node/network/peers",
 			function: func(client *Client) ([]*node.PeerStats, error) { return client.GetPeers() },
 		},
