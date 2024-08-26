@@ -112,6 +112,7 @@ func (engine *BFTEngine) Select(header *block.Header) (bool, error) {
 func (engine *BFTEngine) CommitBlock(header *block.Header, isPacking bool) error {
 	// save quality and finalized at the end of each round
 	if getStorePoint(header.Number()) == header.Number() {
+		metricCurrentEpoch().Set(int64(header.Timestamp()))
 		state, err := engine.computeState(header)
 		if err != nil {
 			return err

@@ -11,4 +11,5 @@ import (
 
 var (
 	metricBlocksCommitted = metrics.LazyLoadCounter("bft_committed_count")
+	metricCurrentEpoch    = metrics.LazyLoadGauge("bft_current_epoch_gauge")
 )

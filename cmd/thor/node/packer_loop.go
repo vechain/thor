@@ -208,9 +208,8 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 			logger.Debug("bandwidth updated", "gps", v)
 		}
 
-		metricBlockProcessedTxs().SetWithLabel(int64(len(receipts)), map[string]string{"type": "proposed"})
-		metricBlockProcessedGas().SetWithLabel(int64(newBlock.Header().GasUsed()), map[string]string{"type": "proposed"})
-		metricBlockProcessedDuration().Observe(time.Duration(realElapsed).Milliseconds())
+		recordBlockMetrics(newBlock, oldBest, receipts, realElapsed, true)
+
 		return nil
 	})
 }
