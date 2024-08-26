@@ -95,7 +95,7 @@ func TestRevision(t *testing.T) {
 		},
 		{
 			name:             "GetAccounForRevision",
-			function:         func(client *Client) { client.GetAccount(&addr, revision) },
+			function:         func(client *Client) { client.Account(&addr, Revision(revision)) },
 			expectedPath:     "/accounts/" + addr.String(),
 			expectedRevision: "",
 		},
@@ -107,7 +107,7 @@ func TestRevision(t *testing.T) {
 		},
 		{
 			name:             "GetAccountCodeForRevision",
-			function:         func(client *Client) { client.GetAccountCode(&addr, revision) },
+			function:         func(client *Client) { client.AccountCode(&addr, Revision(revision)) },
 			expectedPath:     "/accounts/" + addr.String() + "/code",
 			expectedRevision: "",
 		},
@@ -148,7 +148,7 @@ func TestGetTransaction(t *testing.T) {
 		},
 		{
 			name:      "GetTransactionPending",
-			function:  func(client *Client) { client.GetTransaction(&expectedTx.ID, "best", true) },
+			function:  func(client *Client) { client.Transaction(&expectedTx.ID, Revision("best"), Pending()) },
 			isPending: true,
 		},
 	} {

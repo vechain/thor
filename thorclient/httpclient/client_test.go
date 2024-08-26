@@ -46,7 +46,7 @@ func TestClient_GetTransactionReceipt(t *testing.T) {
 	defer ts.Close()
 
 	client := New(ts.URL)
-	receipt, err := client.GetTransactionReceipt(&txID)
+	receipt, err := client.GetTransactionReceipt(&txID, "")
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedReceipt, receipt)
@@ -71,7 +71,7 @@ func TestClient_InspectClauses(t *testing.T) {
 	defer ts.Close()
 
 	client := New(ts.URL)
-	results, err := client.InspectClauses(calldata)
+	results, err := client.InspectClauses(calldata, "")
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedResults, results)
@@ -383,13 +383,13 @@ func TestClient_Errors(t *testing.T) {
 		{
 			name:     "TransactionReceipt",
 			path:     "/transactions/" + txID.String() + "/receipt",
-			function: func(client *Client) (*transactions.Receipt, error) { return client.GetTransactionReceipt(&txID) },
+			function: func(client *Client) (*transactions.Receipt, error) { return client.GetTransactionReceipt(&txID, "") },
 		},
 		{
 			name: "InspectClauses",
 			path: "/accounts/*",
 			function: func(client *Client) ([]*accounts.CallResult, error) {
-				return client.InspectClauses(&accounts.BatchCallData{})
+				return client.InspectClauses(&accounts.BatchCallData{}, "")
 			},
 		},
 		{

@@ -48,6 +48,36 @@ func NewWithWS(url string) (*Client, error) {
 	}, nil
 }
 
+type Option func(*getOptions)
+
+type getOptions struct {
+	revision string
+	pending  bool
+}
+
+func applyOptions(opts []Option) *getOptions {
+	options := &getOptions{
+		revision: "best",
+		pending:  false,
+	}
+	for _, o := range opts {
+		o(options)
+	}
+	return options
+}
+
+func Revision(revision string) Option {
+	return func(o *getOptions) {
+		o.revision = revision
+	}
+}
+
+func Pending() Option {
+	return func(o *getOptions) {
+		o.pending = true
+	}
+}
+
 func (c *Client) RawHTTPClient() *httpclient.Client {
 	return c.httpConn
 }
@@ -55,17 +85,19 @@ func (c *Client) RawWSClient() *wsclient.Client {
 	return c.wsConn
 }
 
-func (c *Client) TransactionReceipt(id *thor.Bytes32) (*transactions.Receipt, error) {
-	return c.httpConn.GetTransactionReceipt(id)
+func (c *Client) TransactionReceipt(id *thor.Bytes32, opts ...Option) (*transactions.Receipt, error) {
+	options := applyOptions(opts)
+	return c.httpConn.GetTransactionReceipt(id, options.revision)
 }
 
-func (c *Client) InspectClauses(calldata *accounts.BatchCallData) ([]*accounts.CallResult, error) {
-	return c.httpConn.InspectClauses(calldata)
+func (c *Client) InspectClauses(calldata *accounts.BatchCallData, opts ...Option) ([]*accounts.CallResult, error) {
+	options := applyOptions(opts)
+	return c.httpConn.InspectClauses(calldata, options.revision)
 }
 
-func (c *Client) InspectTxClauses(tx *tx.Transaction, senderAddr *thor.Address) ([]*accounts.CallResult, error) {
+func (c *Client) InspectTxClauses(tx *tx.Transaction, senderAddr *thor.Address, opts ...Option) ([]*accounts.CallResult, error) {
 	clauses := convertToBatchCallData(tx, senderAddr)
-	return c.InspectClauses(clauses)
+	return c.InspectClauses(clauses, opts...)
 }
 
 func (c *Client) SendTransaction(tx *tx.Transaction) (*transactions.TxSendResult, error) {
@@ -89,28 +121,19 @@ func (c *Client) FilterTransfers(req *events.EventFilter) ([]*transfers.Filtered
 	return c.httpConn.FilterTransfers(req)
 }
 
-func (c *Client) Account(addr *thor.Address) (*accounts.Account, error) {
-	return c.httpConn.GetAccount(addr, "")
+func (c *Client) Account(addr *thor.Address, opts ...Option) (*accounts.Account, error) {
+	options := applyOptions(opts)
+	return c.httpConn.GetAccount(addr, options.revision)
 }
 
-func (c *Client) GetAccount(addr *thor.Address, revision string) (*accounts.Account, error) {
-	return c.httpConn.GetAccount(addr, revision)
+func (c *Client) AccountCode(addr *thor.Address, opts ...Option) (*accounts.GetCodeResult, error) {
+	options := applyOptions(opts)
+	return c.httpConn.GetAccountCode(addr, options.revision)
 }
 
-func (c *Client) AccountCode(addr *thor.Address) (*accounts.GetCodeResult, error) {
-	return c.httpConn.GetAccountCode(addr, "best")
-}
-
-func (c *Client) GetAccountCode(addr *thor.Address, revision string) (*accounts.GetCodeResult, error) {
-	return c.httpConn.GetAccountCode(addr, revision)
-}
-
-func (c *Client) Storage(addr *thor.Address, key *thor.Bytes32) (*accounts.GetStorageResult, error) {
-	return c.httpConn.GetAccountStorage(addr, key, "best")
-}
-
-func (c *Client) GetStorage(addr *thor.Address, key *thor.Bytes32, revision string) (*accounts.GetStorageResult, error) {
-	return c.httpConn.GetAccountStorage(addr, key, revision)
+func (c *Client) Storage(addr *thor.Address, key *thor.Bytes32, opts ...Option) (*accounts.GetStorageResult, error) {
+	options := applyOptions(opts)
+	return c.httpConn.GetAccountStorage(addr, key, options.revision)
 }
 
 func (c *Client) ExpandedBlock(revision string) (blocks *blocks.JSONExpandedBlock, err error) {
@@ -121,19 +144,14 @@ func (c *Client) Block(revision string) (blocks *blocks.JSONBlockSummary, err er
 	return c.httpConn.GetBlock(revision)
 }
 
-func (c *Client) Transaction(id *thor.Bytes32) (*transactions.Transaction, error) {
-	return c.httpConn.GetTransaction(id, "best", false)
+func (c *Client) Transaction(id *thor.Bytes32, opts ...Option) (*transactions.Transaction, error) {
+	options := applyOptions(opts)
+	return c.httpConn.GetTransaction(id, options.revision, options.pending)
 }
 
-func (c *Client) GetTransaction(id *thor.Bytes32, revision string, pending bool) (*transactions.Transaction, error) {
-	return c.httpConn.GetTransaction(id, revision, pending)
-}
-
-func (c *Client) RawTransaction(id *thor.Bytes32) (*transactions.RawTransaction, error) {
-	return c.httpConn.GetRawTransaction(id, "best", false)
-}
-func (c *Client) GetRawTransaction(id *thor.Bytes32, revision string, pending bool) (*transactions.RawTransaction, error) {
-	return c.httpConn.GetRawTransaction(id, revision, pending)
+func (c *Client) RawTransaction(id *thor.Bytes32, opts ...Option) (*transactions.RawTransaction, error) {
+	options := applyOptions(opts)
+	return c.httpConn.GetRawTransaction(id, options.revision, options.pending)
 }
 
 func (c *Client) Peers() ([]*node.PeerStats, error) {

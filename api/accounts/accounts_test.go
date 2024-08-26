@@ -186,10 +186,10 @@ func getAccountWithGenesisRevision(t *testing.T) {
 func getAccountWithFinalizedRevision(t *testing.T) {
 	soloAddress := thor.MustParseAddress("0xf077b491b355E64048cE21E3A6Fc4751eEeA77fa")
 
-	genesisAccount, err := tclient.GetAccount(&soloAddress, genesisBlock.Header().ID().String())
+	genesisAccount, err := tclient.Account(&soloAddress, thorclient.Revision(genesisBlock.Header().ID().String()))
 	require.NoError(t, err)
 
-	finalizedAccount, err := tclient.GetAccount(&soloAddress, tccommon.FinalizedRevision)
+	finalizedAccount, err := tclient.Account(&soloAddress, thorclient.Revision(tccommon.FinalizedRevision))
 	require.NoError(t, err)
 
 	genesisEnergy := (*big.Int)(&genesisAccount.Energy)

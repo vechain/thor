@@ -33,8 +33,13 @@ func New(url string) *Client {
 	}
 }
 
-func (c *Client) GetTransactionReceipt(txID *thor.Bytes32) (*transactions.Receipt, error) {
-	body, err := c.httpGET(c.url + "/transactions/" + txID.String() + "/receipt")
+func (c *Client) GetTransactionReceipt(txID *thor.Bytes32, revision string) (*transactions.Receipt, error) {
+	url := c.url + "/transactions/" + txID.String() + "/receipt"
+	if revision != "" {
+		url += "?revision=" + revision
+	}
+
+	body, err := c.httpGET(url)
 	if err != nil {
 		return nil, fmt.Errorf("unable to fetch receipt - %w", err)
 	}
@@ -51,8 +56,12 @@ func (c *Client) GetTransactionReceipt(txID *thor.Bytes32) (*transactions.Receip
 	return &receipt, nil
 }
 
-func (c *Client) InspectClauses(calldata *accounts.BatchCallData) ([]*accounts.CallResult, error) {
-	body, err := c.httpPOST(c.url+"/accounts/*", calldata)
+func (c *Client) InspectClauses(calldata *accounts.BatchCallData, revision string) ([]*accounts.CallResult, error) {
+	url := c.url + "/accounts/*"
+	if revision != "" {
+		url += "?revision=" + revision
+	}
+	body, err := c.httpPOST(url, calldata)
 	if err != nil {
 		return nil, fmt.Errorf("unable to request inspect clauses - %w", err)
 	}
