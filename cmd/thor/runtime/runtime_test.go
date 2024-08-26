@@ -17,30 +17,39 @@ import (
 	"github.com/vechain/thor/v2/api/blocks"
 )
 
-func TestDefaultAction(t *testing.T) {
-	dir := t.TempDir()
-	t.Cleanup(func() {
-		os.RemoveAll(dir)
-	})
-	apiAddr := newApiAddr(t)
+func TestStart(t *testing.T) {
+	baseArgs := []string{os.Args[0]}
 
-	args := []string{os.Args[0], "--network", "main", "--data-dir", dir, "--api-addr", apiAddr}
-	go func() {
-		Start(args)
-	}()
+	testCases := []struct {
+		name string
+		args []string
+	}{
+		{
+			name: "default",
+			args: []string{"--network", "main"},
+		},
+		{
+			name: "solo",
+			args: []string{"solo"},
+		},
+	}
 
-	assert.NoError(t, waitForServer(apiAddr))
-}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Cleanup(func() {
+				os.RemoveAll(dir)
+			})
+			apiAddr := newApiAddr(t)
 
-func TestSoloAction(t *testing.T) {
-	apiAddr := newApiAddr(t)
+			// Combine baseArgs with the test case-specific arguments
+			args := append(baseArgs, tc.args...)
+			args = append(args, "--data-dir", dir, "--api-addr", apiAddr, "--skip-logs")
+			go Start(args)
 
-	args := []string{os.Args[0], "solo", "--api-addr", apiAddr, "solo"}
-	go func() {
-		Start(args)
-	}()
-
-	assert.NoError(t, waitForServer(apiAddr))
+			assert.NoError(t, waitForServer(apiAddr))
+		})
+	}
 }
 
 func newApiAddr(t *testing.T) string {
