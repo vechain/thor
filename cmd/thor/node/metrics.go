@@ -39,8 +39,16 @@ func recordBlockMetrics(newBlock *block.Block, oldBest *chain.BlockSummary, rece
 		labels["type"] = "received"
 	}
 
+	processedClauses := 0
+	for _, receipt := range receipts {
+		processedClauses += len(receipt.Outputs)
+	}
+
 	metricBlockProcessedTxs().SetWithLabel(int64(len(receipts)), labels)
+	metricBlockProcessedClauses().SetWithLabel(int64(processedClauses), labels)
 	metricBlockProcessedGas().SetWithLabel(int64(newBlock.Header().GasUsed()), labels)
+	metricBlockGasUsage().Set(int64(newBlock.Header().GasUsed() * 100 / newBlock.Header().GasLimit()))
+	metricBlockSize().Set(int64(newBlock.Size()))
 	metricBlockProcessedDuration().Observe(time.Duration(realElapsed).Milliseconds())
 	// skip block timings if we're processing a fork
 	if oldBest.Header.ID() == newBlock.Header().ParentID() {
@@ -50,11 +58,4 @@ func recordBlockMetrics(newBlock *block.Block, oldBest *chain.BlockSummary, rece
 			metricMissedSlotCount().Add(1)
 		}
 	}
-	metricBlockGasUsage().Set(int64(newBlock.Header().GasUsed() * 100 / newBlock.Header().GasLimit()))
-	metricBlockSize().Set(int64(newBlock.Size()))
-	processedClauses := 0
-	for _, receipt := range receipts {
-		processedClauses += len(receipt.Outputs)
-	}
-	metricBlockProcessedClauses().SetWithLabel(int64(processedClauses), labels)
 }
