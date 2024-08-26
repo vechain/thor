@@ -19,7 +19,6 @@ import (
 	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api"
-	"github.com/vechain/thor/v2/api/admin"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/cmd/thor/node"
 	"github.com/vechain/thor/v2/cmd/thor/optimizer"
@@ -178,7 +177,7 @@ func defaultAction(ctx *cli.Context) error {
 
 	adminURL := ""
 	if ctx.Bool(enableAdminFlag.Name) {
-		url, close, err := admin.StartServer(ctx.String(adminAddrFlag.Name), logLevel)
+		url, close, err := api.StartAdminServer(ctx.String(adminAddrFlag.Name), logLevel)
 		if err != nil {
 			return fmt.Errorf("unable to start admin server - %w", err)
 		}
@@ -320,7 +319,7 @@ func soloAction(ctx *cli.Context) error {
 
 	adminURL := ""
 	if ctx.Bool(enableAdminFlag.Name) {
-		url, close, err := admin.StartServer(ctx.String(adminAddrFlag.Name), logLevel)
+		url, close, err := api.StartAdminServer(ctx.String(adminAddrFlag.Name), logLevel)
 		if err != nil {
 			return fmt.Errorf("unable to start admin server - %w", err)
 		}

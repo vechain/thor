@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package admin
+package api
 
 import (
 	"log/slog"
@@ -33,7 +33,7 @@ func HTTPHandler(logLevel *slog.LevelVar) http.Handler {
 	return handlers.CompressHandler(router)
 }
 
-func StartServer(addr string, logLevel *slog.LevelVar) (string, func(), error) {
+func StartAdminServer(addr string, logLevel *slog.LevelVar) (string, func(), error) {
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return "", nil, errors.Wrapf(err, "listen admin API addr [%v]", addr)
