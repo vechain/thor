@@ -24,7 +24,6 @@ import (
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus"
-	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
@@ -38,8 +37,6 @@ import (
 
 const defaultMaxStorageResult = 1000
 
-var devNetGenesisID = genesis.NewDevnet().ID()
-
 type Debug struct {
 	repo              *chain.Repository
 	stater            *state.Stater
@@ -48,9 +45,18 @@ type Debug struct {
 	allowCustomTracer bool
 	bft               bft.Finalizer
 	allowedTracers    map[string]interface{}
+	skipPoA           bool
 }
 
-func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfig, callGaslimit uint64, allowCustomTracer bool, bft bft.Finalizer, allowedTracers map[string]interface{}) *Debug {
+func New(
+	repo *chain.Repository,
+	stater *state.Stater,
+	forkConfig thor.ForkConfig,
+	callGaslimit uint64,
+	allowCustomTracer bool,
+	bft bft.Finalizer,
+	allowedTracers map[string]interface{},
+	soloMode bool) *Debug {
 	return &Debug{
 		repo,
 		stater,
@@ -59,6 +65,7 @@ func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfi
 		allowCustomTracer,
 		bft,
 		allowedTracers,
+		soloMode,
 	}
 }
 
@@ -78,12 +85,11 @@ func (d *Debug) prepareClauseEnv(ctx context.Context, blockID thor.Bytes32, txIn
 	if clauseIndex >= uint32(len(txs[txIndex].Clauses())) {
 		return nil, nil, thor.Bytes32{}, utils.Forbidden(errors.New("clause index out of range"))
 	}
-	skipPoA := d.repo.GenesisBlock().Header().ID() == devNetGenesisID
 	rt, err := consensus.New(
 		d.repo,
 		d.stater,
 		d.forkConfig,
-	).NewRuntimeForReplay(block.Header(), skipPoA)
+	).NewRuntimeForReplay(block.Header(), d.skipPoA)
 	if err != nil {
 		return nil, nil, thor.Bytes32{}, err
 	}
