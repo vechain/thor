@@ -22,7 +22,6 @@ type logLevelResponse struct {
 }
 
 type errorResponse struct {
-	ErrorCode    int    `json:"errorCode"`
 	ErrorMessage string `json:"errorMessage"`
 }
 
@@ -30,7 +29,6 @@ func writeError(w http.ResponseWriter, errCode int, errMsg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(errCode)
 	json.NewEncoder(w).Encode(errorResponse{
-		ErrorCode:    errCode,
 		ErrorMessage: errMsg,
 	})
 }
