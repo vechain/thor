@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/packer"
@@ -72,6 +73,14 @@ func TestTransaction(t *testing.T) {
 		"getTxReceipt":        getTxReceipt,
 		"getReceiptWithBadId": getReceiptWithBadId,
 		"handleGetTransactionReceiptByIDWithNonExistingHead": handleGetTransactionReceiptByIDWithNonExistingHead,
+	} {
+		t.Run(name, tt)
+	}
+
+	// Call transaction
+	for name, tt := range map[string]func(*testing.T){
+		"callTx":        callTx,
+		"invalidCallTx": invalidCallTx,
 	} {
 		t.Run(name, tt)
 	}
@@ -260,6 +269,114 @@ func handleGetTransactionReceiptByIDWithNonExistingHead(t *testing.T) {
 	assert.Equal(t, "head: leveldb: not found", strings.TrimSpace(string(res)))
 }
 
+func callTx(t *testing.T) {
+	var blockRef = tx.NewBlockRef(0)
+	var chainTag = repo.ChainTag()
+	var expiration = uint32(10)
+	var gas = uint64(21000)
+
+	for _, testTx := range []*tx.Transaction{
+		new(tx.Builder).
+			BlockRef(blockRef).
+			ChainTag(chainTag).
+			Expiration(expiration).
+			Gas(gas).
+			Build(),
+		new(tx.Builder).
+			BlockRef(blockRef).
+			ChainTag(chainTag).
+			Expiration(expiration).
+			Clause(tx.NewClause(&genesis.DevAccounts()[0].Address).WithValue(big.NewInt(1234))).
+			Gas(gas).
+			Build(),
+		new(tx.Builder).
+			BlockRef(blockRef).
+			ChainTag(chainTag).
+			Expiration(expiration).
+			Clause(
+				tx.NewClause(&genesis.DevAccounts()[0].Address).WithValue(big.NewInt(1234)),
+			).
+			Clause(
+				tx.NewClause(&genesis.DevAccounts()[0].Address).WithValue(big.NewInt(1234)),
+			).
+			Gas(2 * gas). // 2 clauses of value transfer
+			Build(),
+	} {
+		txCall := transactions.ConvertCallTransaction(testTx, nil, &genesis.DevAccounts()[0].Address, nil)
+
+		res := httpPostAndCheckResponseStatus(t, ts.URL+"/transactions/call", txCall, 200)
+		var callReceipt transactions.CallReceipt
+		if err := json.Unmarshal(res, &callReceipt); err != nil {
+			t.Fatal(err)
+		}
+		validateTxCall(t, testTx, &callReceipt, &genesis.DevAccounts()[0].Address, nil)
+	}
+}
+
+func invalidCallTx(t *testing.T) {
+	var chainTag = repo.ChainTag()
+	//var expiration = uint32(10)
+	var gas = uint64(21000)
+	var sendAddr = &genesis.DevAccounts()[0].Address
+
+	for _, tc := range []struct {
+		testTx *transactions.Transaction
+		errMsg string
+	}{
+		{
+			testTx: transactions.ConvertCallTransaction(new(tx.Builder).
+				Gas(gas).
+				Build(),
+				nil, sendAddr, nil),
+			errMsg: "chain tag mismatch",
+		},
+		//{
+		//	testTx: transactions.ConvertCallTransaction(new(tx.Builder).
+		//		ChainTag(chainTag).
+		//		Expiration(0).
+		//		Gas(gas).
+		//		Build(),
+		//		nil, sendAddr, nil),
+		//	errMsg: "chain tag mismatch",
+		//},
+		{
+			testTx: transactions.ConvertCallTransaction(new(tx.Builder).
+				ChainTag(chainTag).
+				Gas(gas).
+				Build(),
+				nil, &thor.Address{}, nil),
+			errMsg: "no Origin address specified",
+		},
+		{
+			testTx: transactions.ConvertCallTransaction(new(tx.Builder).
+				ChainTag(chainTag).
+				Gas(gas).
+				Clause(tx.NewClause(nil).WithData(make([]byte, 64*1024+1))).
+				Build(),
+				nil, sendAddr, nil),
+			errMsg: "size too large",
+		},
+	} {
+		t.Run(tc.errMsg, func(t *testing.T) {
+			res := httpPostAndCheckResponseStatus(t, ts.URL+"/transactions/call", tc.testTx, 500)
+			assert.Equal(t, tc.errMsg, strings.TrimSpace(string(res)))
+		})
+	}
+}
+
+func validateTxCall(t *testing.T, callTx *tx.Transaction, callRcpt *transactions.CallReceipt, callAddr, delegator *thor.Address) {
+	assert.Equal(t, callTx.ID(), callRcpt.TxID)
+	assert.Equal(t, *callAddr, callRcpt.TxOrigin)
+
+	if delegator != nil {
+		assert.Equal(t, delegator.String(), callRcpt.GasPayer.String())
+	} else {
+		assert.Equal(t, callAddr.String(), callRcpt.GasPayer.String())
+	}
+
+	assert.Equal(t, len(callTx.Clauses()), len(callRcpt.Outputs))
+}
+
 func httpPostAndCheckResponseStatus(t *testing.T, url string, obj interface{}, responseStatusCode int) []byte {
 	data, err := json.Marshal(obj)
 	if err != nil {
@@ -349,7 +466,7 @@ func initTransactionServer(t *testing.T) {
 		t.Fatal(e)
 	}
 
-	transactions.New(repo, mempool).Mount(router, "/transactions")
+	transactions.New(repo, stater, mempool, solo.NewBFTEngine(repo)).Mount(router, "/transactions")
 
 	ts = httptest.NewServer(router)
 }
