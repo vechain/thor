@@ -27,18 +27,20 @@ import (
 const maxTxSize = 64 * 1024
 
 type Transactions struct {
-	repo   *chain.Repository
-	pool   *txpool.TxPool
-	stater *state.Stater
-	bft    bft.Finalizer
+	repo       *chain.Repository
+	pool       *txpool.TxPool
+	stater     *state.Stater
+	bft        bft.Finalizer
+	forkConfig thor.ForkConfig
 }
 
-func New(repo *chain.Repository, stater *state.Stater, pool *txpool.TxPool, bft bft.Finalizer) *Transactions {
+func New(repo *chain.Repository, stater *state.Stater, pool *txpool.TxPool, bft bft.Finalizer, forkConfig thor.ForkConfig) *Transactions {
 	return &Transactions{
-		repo:   repo,
-		stater: stater,
-		pool:   pool,
-		bft:    bft,
+		repo:       repo,
+		stater:     stater,
+		pool:       pool,
+		bft:        bft,
+		forkConfig: forkConfig,
 	}
 }
 
@@ -234,7 +236,7 @@ func (t *Transactions) txCall(
 ) (*CallReceipt, error) {
 	callAddr := txCallMsg.Origin
 	if callAddr.String() == (thor.Address{}).String() {
-		return nil, fmt.Errorf("no Origin address specified")
+		return nil, fmt.Errorf("no origin address specified")
 	}
 
 	// todo handle the txCallMsg.Delegator
@@ -265,7 +267,7 @@ func (t *Transactions) txCall(
 			GasLimit:    header.GasLimit(),
 			TotalScore:  header.TotalScore(),
 		},
-		thor.NoFork)
+		t.forkConfig)
 
 	receipt, err := rt.CallTransaction(txCallData, &callAddr, nil) // TODO hook delegator
 	if err != nil {

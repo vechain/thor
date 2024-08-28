@@ -345,7 +345,7 @@ func invalidCallTx(t *testing.T) {
 				Gas(gas).
 				Build(),
 				nil, &thor.Address{}, nil),
-			errMsg: "no Origin address specified",
+			errMsg: "no origin address specified",
 		},
 		{
 			testTx: transactions.ConvertCallTransaction(new(tx.Builder).
@@ -466,7 +466,7 @@ func initTransactionServer(t *testing.T) {
 		t.Fatal(e)
 	}
 
-	transactions.New(repo, stater, mempool, solo.NewBFTEngine(repo)).Mount(router, "/transactions")
+	transactions.New(repo, stater, mempool, solo.NewBFTEngine(repo), thor.NoFork).Mount(router, "/transactions")
 
 	ts = httptest.NewServer(router)
 }
