@@ -10,6 +10,7 @@ import (
 )
 
 const (
+	BestRevision      = "best"
 	FinalizedRevision = "finalized"
 )
 

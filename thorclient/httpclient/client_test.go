@@ -23,6 +23,8 @@ import (
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/api/transfers"
 	"github.com/vechain/thor/v2/thor"
+
+	tccommon "github.com/vechain/thor/v2/thorclient/common"
 )
 
 func TestClient_GetTransactionReceipt(t *testing.T) {
@@ -205,7 +207,7 @@ func TestClient_GetStorage(t *testing.T) {
 	defer ts.Close()
 
 	client := New(ts.URL)
-	data, err := client.GetAccountStorage(&addr, &key, "best")
+	data, err := client.GetAccountStorage(&addr, &key, tccommon.BestRevision)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedStorageRsp.Value, data.Value)
@@ -271,7 +273,7 @@ func TestClient_GetTransaction(t *testing.T) {
 	defer ts.Close()
 
 	client := New(ts.URL)
-	tx, err := client.GetTransaction(&txID, "best", false)
+	tx, err := client.GetTransaction(&txID, tccommon.BestRevision, false)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedTx, tx)
@@ -299,7 +301,7 @@ func TestClient_GetRawTransaction(t *testing.T) {
 	defer ts.Close()
 
 	client := New(ts.URL)
-	tx, err := client.GetRawTransaction(&txID, "best", false)
+	tx, err := client.GetRawTransaction(&txID, tccommon.BestRevision, false)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedTx, tx)
@@ -427,7 +429,7 @@ func TestClient_Errors(t *testing.T) {
 			name: "GetAccountStorage",
 			path: "/accounts/" + addr.String() + "/key/" + thor.Bytes32{}.String(),
 			function: func(client *Client) (*accounts.GetStorageResult, error) {
-				return client.GetAccountStorage(&addr, &thor.Bytes32{}, "best")
+				return client.GetAccountStorage(&addr, &thor.Bytes32{}, tccommon.BestRevision)
 			},
 		},
 		{
@@ -444,7 +446,7 @@ func TestClient_Errors(t *testing.T) {
 			name: "Transaction",
 			path: "/transactions/" + txID.String(),
 			function: func(client *Client) (*transactions.Transaction, error) {
-				return client.GetTransaction(&txID, "best", false)
+				return client.GetTransaction(&txID, tccommon.BestRevision, false)
 			},
 		},
 		{

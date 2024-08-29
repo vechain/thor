@@ -23,6 +23,8 @@ import (
 	"github.com/vechain/thor/v2/thorclient/httpclient"
 	"github.com/vechain/thor/v2/thorclient/wsclient"
 	"github.com/vechain/thor/v2/tx"
+
+	tccommon "github.com/vechain/thor/v2/thorclient/common"
 )
 
 type Client struct {
@@ -57,7 +59,7 @@ type getOptions struct {
 
 func applyOptions(opts []Option) *getOptions {
 	options := &getOptions{
-		revision: "best",
+		revision: tccommon.BestRevision,
 		pending:  false,
 	}
 	for _, o := range opts {

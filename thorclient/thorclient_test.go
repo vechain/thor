@@ -16,6 +16,8 @@ import (
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
+
+	tccommon "github.com/vechain/thor/v2/thorclient/common"
 )
 
 func TestWs_Error(t *testing.T) {
@@ -148,7 +150,7 @@ func TestGetTransaction(t *testing.T) {
 		},
 		{
 			name:      "GetTransactionPending",
-			function:  func(client *Client) { client.Transaction(&expectedTx.ID, Revision("best"), Pending()) },
+			function:  func(client *Client) { client.Transaction(&expectedTx.ID, Revision(tccommon.BestRevision), Pending()) },
 			isPending: true,
 		},
 	} {
