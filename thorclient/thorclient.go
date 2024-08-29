@@ -142,7 +142,7 @@ func (c *Client) ExpandedBlock(revision string) (blocks *blocks.JSONExpandedBloc
 	return c.httpConn.GetBlockExpanded(revision)
 }
 
-func (c *Client) Block(revision string) (blocks *blocks.JSONBlockSummary, err error) {
+func (c *Client) Block(revision string) (blocks *blocks.JSONCollapsedBlock, err error) {
 	return c.httpConn.GetBlock(revision)
 }
 
@@ -168,7 +168,7 @@ func (c *Client) ChainTag() (byte, error) {
 	return genesisBlock.ID[31], nil
 }
 
-func (c *Client) SubscribeBlocks() (blocks <-chan common.EventWrapper[*blocks.JSONBlockSummary], err error) {
+func (c *Client) SubscribeBlocks() (blocks <-chan common.EventWrapper[*blocks.JSONCollapsedBlock], err error) {
 	if c.wsConn == nil {
 		return nil, fmt.Errorf("not a websocket typed client")
 	}

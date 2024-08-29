@@ -187,13 +187,13 @@ func (c *Client) GetBlockExpanded(revision string) (*blocks.JSONExpandedBlock, e
 	return &block, nil
 }
 
-func (c *Client) GetBlock(blockID string) (*blocks.JSONBlockSummary, error) {
+func (c *Client) GetBlock(blockID string) (*blocks.JSONCollapsedBlock, error) {
 	body, err := c.httpGET(c.url + "/blocks/" + blockID)
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve block - %w", err)
 	}
 
-	var block blocks.JSONBlockSummary
+	var block blocks.JSONCollapsedBlock
 	if err = json.Unmarshal(body, &block); err != nil {
 		return nil, fmt.Errorf("unable to unmarshall events - %w", err)
 	}

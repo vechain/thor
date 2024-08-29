@@ -50,13 +50,13 @@ func (c *Client) SubscribeEvents(query string) (<-chan common.EventWrapper[*subs
 	return subscribe[subscriptions.EventMessage](conn)
 }
 
-func (c *Client) SubscribeBlocks(query string) (<-chan common.EventWrapper[*blocks.JSONBlockSummary], error) {
+func (c *Client) SubscribeBlocks(query string) (<-chan common.EventWrapper[*blocks.JSONCollapsedBlock], error) {
 	conn, err := c.connect("/subscriptions/block", query)
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect - %w", err)
 	}
 
-	return subscribe[blocks.JSONBlockSummary](conn)
+	return subscribe[blocks.JSONCollapsedBlock](conn)
 }
 
 func (c *Client) SubscribeTransfers(query string) (<-chan common.EventWrapper[*subscriptions.TransferMessage], error) {

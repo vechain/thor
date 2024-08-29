@@ -46,7 +46,7 @@ func TestClient_SubscribeEvents(t *testing.T) {
 
 func TestClient_SubscribeBlocks(t *testing.T) {
 	query := "exampleQuery"
-	expectedBlock := &blocks.JSONBlockSummary{}
+	expectedBlock := &blocks.JSONCollapsedBlock{}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/subscriptions/block", r.URL.Path)
@@ -265,7 +265,7 @@ func TestClient_SubscribeBlocks_ServerError(t *testing.T) {
 
 func TestClient_SubscribeBlocks_ServerShutdown(t *testing.T) {
 	query := "exampleQuery"
-	expectedBlock := &blocks.JSONBlockSummary{}
+	expectedBlock := &blocks.JSONCollapsedBlock{}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/subscriptions/block", r.URL.Path)

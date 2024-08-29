@@ -234,15 +234,18 @@ func TestClient_GetExpandedBlock(t *testing.T) {
 
 func TestClient_GetBlock(t *testing.T) {
 	blockID := "123"
-	expectedBlock := &blocks.JSONBlockSummary{
-		Number:      123456,
-		ID:          thor.Bytes32{0x01},
-		GasLimit:    1000,
-		Beneficiary: thor.Address{0x01},
-		GasUsed:     100,
-		TxsRoot:     thor.Bytes32{0x03},
-		TxsFeatures: 1,
-		IsFinalized: false,
+	expectedBlock := &blocks.JSONCollapsedBlock{
+		JSONBlockSummary: &blocks.JSONBlockSummary{
+			Number:      123456,
+			ID:          thor.Bytes32{0x01},
+			GasLimit:    1000,
+			Beneficiary: thor.Address{0x01},
+			GasUsed:     100,
+			TxsRoot:     thor.Bytes32{0x03},
+			TxsFeatures: 1,
+			IsFinalized: false,
+		},
+		Transactions: nil,
 	}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -440,7 +443,7 @@ func TestClient_Errors(t *testing.T) {
 		{
 			name:     "Block",
 			path:     "/blocks/" + blockID,
-			function: func(client *Client) (*blocks.JSONBlockSummary, error) { return client.GetBlock(blockID) },
+			function: func(client *Client) (*blocks.JSONCollapsedBlock, error) { return client.GetBlock(blockID) },
 		},
 		{
 			name: "Transaction",
