@@ -33,10 +33,10 @@ func New(url string) *Client {
 	}
 }
 
-func (c *Client) GetTransactionReceipt(txID *thor.Bytes32, revision string) (*transactions.Receipt, error) {
+func (c *Client) GetTransactionReceipt(txID *thor.Bytes32, head string) (*transactions.Receipt, error) {
 	url := c.url + "/transactions/" + txID.String() + "/receipt"
-	if revision != "" {
-		url += "?revision=" + revision
+	if head != "" {
+		url += "?head=" + head
 	}
 
 	body, err := c.httpGET(url)
@@ -74,13 +74,13 @@ func (c *Client) InspectClauses(calldata *accounts.BatchCallData, revision strin
 	return inspectionRes, nil
 }
 
-func (c *Client) SendTransaction(obj *transactions.RawTx) (*transactions.TxSendResult, error) {
+func (c *Client) SendTransaction(obj *transactions.RawTx) (*transactions.SendTxResult, error) {
 	body, err := c.httpPOST(c.url+"/transactions", obj)
 	if err != nil {
 		return nil, fmt.Errorf("unable to send raw transaction - %w", err)
 	}
 
-	var txID transactions.TxSendResult
+	var txID transactions.SendTxResult
 	if err = json.Unmarshal(body, &txID); err != nil {
 		return nil, fmt.Errorf("unable to unmarshall inspection - %w", err)
 	}

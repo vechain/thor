@@ -134,7 +134,7 @@ func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Re
 		return err
 	}
 	txID := tx.ID()
-	return utils.WriteJSON(w, &TxSendResult{ID: &txID})
+	return utils.WriteJSON(w, &SendTxResult{ID: &txID})
 }
 
 func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http.Request) error {

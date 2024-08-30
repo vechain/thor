@@ -81,7 +81,7 @@ func TestClient_InspectClauses(t *testing.T) {
 
 func TestClient_SendTransaction(t *testing.T) {
 	rawTx := &transactions.RawTx{}
-	expectedResult := &transactions.TxSendResult{ID: &thor.Bytes32{0x01}}
+	expectedResult := &transactions.SendTxResult{ID: &thor.Bytes32{0x01}}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/transactions", r.URL.Path)
@@ -400,7 +400,7 @@ func TestClient_Errors(t *testing.T) {
 		{
 			name: "SendTransaction",
 			path: "/transactions",
-			function: func(client *Client) (*transactions.TxSendResult, error) {
+			function: func(client *Client) (*transactions.SendTxResult, error) {
 				return client.SendTransaction(&transactions.RawTx{})
 			},
 		},

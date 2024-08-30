@@ -6,7 +6,7 @@
 package common
 
 import (
-	"fmt"
+	"errors"
 )
 
 const (
@@ -15,9 +15,9 @@ const (
 )
 
 var (
-	ErrNotFound      = fmt.Errorf("not found")
-	ErrNot200Status  = fmt.Errorf("not 200 status code")
-	ErrUnexpectedMsg = fmt.Errorf("unexpected message format")
+	ErrNotFound      = errors.New("not found")
+	ErrNot200Status  = errors.New("not 200 status code")
+	ErrUnexpectedMsg = errors.New("unexpected message format")
 )
 
 // EventWrapper is used to return errors from the websocket alongside the data
