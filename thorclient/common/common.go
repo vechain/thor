@@ -15,7 +15,7 @@ const (
 )
 
 var (
-	ErrNotFound      = fmt.Errorf("not found")
+	ErrNotFound      = errors.New("not found") 
 	ErrNot200Status  = fmt.Errorf("not 200 status code")
 	ErrUnexpectedMsg = fmt.Errorf("unexpected message format")
 )
