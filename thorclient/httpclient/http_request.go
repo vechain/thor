@@ -34,7 +34,6 @@ func (c *Client) rawHTTPRequest(method, url string, payload io.Reader) ([]byte, 
 
 	if method == "POST" {
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	}
 
 	resp, err := c.c.Do(req)

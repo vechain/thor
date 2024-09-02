@@ -173,7 +173,7 @@ func (c *Client) GetAccountStorage(addr *thor.Address, key *thor.Bytes32, revisi
 	return &res, nil
 }
 
-func (c *Client) GetBlockExpanded(revision string) (*blocks.JSONExpandedBlock, error) {
+func (c *Client) GetExpandedBlock(revision string) (*blocks.JSONExpandedBlock, error) {
 	body, err := c.httpGET(c.url + "/blocks/" + revision + "?expanded=true")
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve block - %w", err)
@@ -191,6 +191,10 @@ func (c *Client) GetBlock(blockID string) (*blocks.JSONCollapsedBlock, error) {
 	body, err := c.httpGET(c.url + "/blocks/" + blockID)
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve block - %w", err)
+	}
+
+	if bytes.Equal(body, []byte("null")) {
+		return nil, nil
 	}
 
 	var block blocks.JSONCollapsedBlock

@@ -226,7 +226,7 @@ func TestClient_GetExpandedBlock(t *testing.T) {
 	defer ts.Close()
 
 	client := New(ts.URL)
-	block, err := client.GetBlockExpanded(blockID)
+	block, err := client.GetExpandedBlock(blockID)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedBlock, block)
@@ -253,6 +253,24 @@ func TestClient_GetBlock(t *testing.T) {
 
 		blockBytes, _ := json.Marshal(expectedBlock)
 		w.Write(blockBytes)
+	}))
+	defer ts.Close()
+
+	client := New(ts.URL)
+	block, err := client.GetBlock(blockID)
+
+	assert.NoError(t, err)
+	assert.Equal(t, expectedBlock, block)
+}
+
+func TestClient_GetNilBlock(t *testing.T) {
+	blockID := "123"
+	var expectedBlock *blocks.JSONCollapsedBlock
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/blocks/"+blockID, r.URL.Path)
+
+		w.Write([]byte("null"))
 	}))
 	defer ts.Close()
 
@@ -438,7 +456,7 @@ func TestClient_Errors(t *testing.T) {
 		{
 			name:     "ExpandedBlock",
 			path:     "/blocks/" + blockID + "?expanded=true",
-			function: func(client *Client) (*blocks.JSONExpandedBlock, error) { return client.GetBlockExpanded(blockID) },
+			function: func(client *Client) (*blocks.JSONExpandedBlock, error) { return client.GetExpandedBlock(blockID) },
 		},
 		{
 			name:     "Block",

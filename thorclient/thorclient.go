@@ -97,6 +97,7 @@ func (c *Client) InspectClauses(calldata *accounts.BatchCallData, opts ...Option
 	return c.httpConn.InspectClauses(calldata, options.revision)
 }
 
+// InspectTxClauses accepts both signed and unsigned Tx
 func (c *Client) InspectTxClauses(tx *tx.Transaction, senderAddr *thor.Address, opts ...Option) ([]*accounts.CallResult, error) {
 	clauses := convertToBatchCallData(tx, senderAddr)
 	return c.InspectClauses(clauses, opts...)
@@ -139,7 +140,7 @@ func (c *Client) Storage(addr *thor.Address, key *thor.Bytes32, opts ...Option) 
 }
 
 func (c *Client) ExpandedBlock(revision string) (blocks *blocks.JSONExpandedBlock, err error) {
-	return c.httpConn.GetBlockExpanded(revision)
+	return c.httpConn.GetExpandedBlock(revision)
 }
 
 func (c *Client) Block(revision string) (blocks *blocks.JSONCollapsedBlock, err error) {
