@@ -11,9 +11,11 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/api/subscriptions"
 	"github.com/vechain/thor/v2/thorclient/common"
@@ -38,10 +40,10 @@ func TestClient_SubscribeEvents(t *testing.T) {
 
 	client, err := NewClient(ts.URL)
 	assert.NoError(t, err)
-	eventChan, err := client.SubscribeEvents(query)
+	sub, err := client.SubscribeEvents(query)
 
 	assert.NoError(t, err)
-	assert.Equal(t, expectedEvent, (<-eventChan).Data)
+	assert.Equal(t, expectedEvent, (<-sub.EventChan).Data)
 }
 
 func TestClient_SubscribeBlocks(t *testing.T) {
@@ -63,10 +65,10 @@ func TestClient_SubscribeBlocks(t *testing.T) {
 
 	client, err := NewClient(ts.URL)
 	assert.NoError(t, err)
-	blockChan, err := client.SubscribeBlocks(query)
+	sub, err := client.SubscribeBlocks(query)
 
 	assert.NoError(t, err)
-	assert.Equal(t, expectedBlock, (<-blockChan).Data)
+	assert.Equal(t, expectedBlock, (<-sub.EventChan).Data)
 }
 
 func TestClient_SubscribeTransfers(t *testing.T) {
@@ -88,10 +90,11 @@ func TestClient_SubscribeTransfers(t *testing.T) {
 
 	client, err := NewClient(ts.URL)
 	assert.NoError(t, err)
-	transferChan, err := client.SubscribeTransfers(query)
+	sub, err := client.SubscribeTransfers(query)
 
 	assert.NoError(t, err)
-	assert.Equal(t, expectedTransfer, (<-transferChan).Data)
+	derp := (<-sub.EventChan).Data
+	assert.Equal(t, expectedTransfer, derp)
 }
 
 func TestClient_SubscribeTxPool(t *testing.T) {
@@ -113,10 +116,10 @@ func TestClient_SubscribeTxPool(t *testing.T) {
 
 	client, err := NewClient(ts.URL)
 	assert.NoError(t, err)
-	pendingTxIDChan, err := client.SubscribeTxPool(query)
+	sub, err := client.SubscribeTxPool(query)
 
 	assert.NoError(t, err)
-	assert.Equal(t, expectedPendingTxID, (<-pendingTxIDChan).Data)
+	assert.Equal(t, expectedPendingTxID, (<-sub.EventChan).Data)
 }
 
 func TestClient_SubscribeBeats2(t *testing.T) {
@@ -138,10 +141,10 @@ func TestClient_SubscribeBeats2(t *testing.T) {
 
 	client, err := NewClient(ts.URL)
 	assert.NoError(t, err)
-	beat2Chan, err := client.SubscribeBeats2(query)
+	sub, err := client.SubscribeBeats2(query)
 
 	assert.NoError(t, err)
-	assert.Equal(t, expectedBeat2, (<-beat2Chan).Data)
+	assert.Equal(t, expectedBeat2, (<-sub.EventChan).Data)
 }
 func TestNewClient(t *testing.T) {
 	expectedHost := "example.com"
@@ -253,12 +256,12 @@ func TestClient_SubscribeBlocks_ServerError(t *testing.T) {
 
 	client, err := NewClient(ts.URL)
 	assert.NoError(t, err)
-	blockChan, err := client.SubscribeBlocks(query)
+	sub, err := client.SubscribeBlocks(query)
 
 	assert.NoError(t, err)
 
 	// Read the error from the event channel
-	event := <-blockChan
+	event := <-sub.EventChan
 	assert.Error(t, event.Error)
 	assert.True(t, errors.Is(event.Error, common.ErrUnexpectedMsg))
 }
@@ -285,17 +288,66 @@ func TestClient_SubscribeBlocks_ServerShutdown(t *testing.T) {
 
 	client, err := NewClient(ts.URL)
 	assert.NoError(t, err)
-	blockChan, err := client.SubscribeBlocks(query)
+	sub, err := client.SubscribeBlocks(query)
 
 	assert.NoError(t, err)
 
 	// The first event should be the valid block
-	event := <-blockChan
+	event := <-sub.EventChan
 	assert.NoError(t, event.Error)
 	assert.Equal(t, expectedBlock, event.Data)
 
 	// The next event should be an error due to the server shutdown
-	event = <-blockChan
+	event = <-sub.EventChan
 	assert.Error(t, event.Error)
 	assert.Contains(t, event.Error.Error(), "websocket: close")
+}
+
+func TestClient_SubscribeBlocks_ClientShutdown(t *testing.T) {
+	query := "exampleQuery"
+	expectedBlock := &blocks.JSONCollapsedBlock{}
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/subscriptions/block", r.URL.Path)
+		assert.Equal(t, query, r.URL.RawQuery)
+
+		upgrader := websocket.Upgrader{}
+
+		conn, _ := upgrader.Upgrade(w, r, nil)
+
+		// Send a valid block to the client
+
+		for {
+			require.NoError(t, conn.WriteJSON(expectedBlock))
+			time.Sleep(10 * time.Millisecond)
+		}
+	}))
+	defer ts.Close()
+
+	client, err := NewClient(ts.URL)
+	assert.NoError(t, err)
+	sub, err := client.SubscribeBlocks(query)
+
+	assert.NoError(t, err)
+
+	// The first 50 events should be the valid block
+	// the server is producing events at high speed
+	for i := 0; i < 50; i++ {
+		event := <-sub.EventChan
+		assert.NoError(t, event.Error)
+		assert.Equal(t, expectedBlock, event.Data)
+	}
+
+	// unsubscribe should drain all messages first before shutting down the event reader and the connection
+	sub.Unsubscribe()
+
+	// Ensure no more events are received after unsubscribe
+	select {
+	case _, ok := <-sub.EventChan:
+		if ok {
+			t.Error("Expected the event channel to be closed after unsubscribe, but it was still open")
+		}
+	case <-time.After(2 * time.Second):
+		// Timeout here is expected since the channel should be closed and not sending events
+	}
 }

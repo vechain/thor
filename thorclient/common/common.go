@@ -25,3 +25,9 @@ type EventWrapper[T any] struct {
 	Data  T
 	Error error
 }
+
+// Subscription is used to handle the active subscription
+type Subscription[T any] struct {
+	EventChan   <-chan EventWrapper[T]
+	Unsubscribe func()
+}

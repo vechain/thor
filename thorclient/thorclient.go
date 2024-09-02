@@ -168,35 +168,35 @@ func (c *Client) ChainTag() (byte, error) {
 	return genesisBlock.ID[31], nil
 }
 
-func (c *Client) SubscribeBlocks() (blocks <-chan common.EventWrapper[*blocks.JSONCollapsedBlock], err error) {
+func (c *Client) SubscribeBlocks() (*common.Subscription[*blocks.JSONCollapsedBlock], error) {
 	if c.wsConn == nil {
 		return nil, fmt.Errorf("not a websocket typed client")
 	}
 	return c.wsConn.SubscribeBlocks("")
 }
 
-func (c *Client) SubscribeEvents() (blocks <-chan common.EventWrapper[*subscriptions.EventMessage], err error) {
+func (c *Client) SubscribeEvents() (*common.Subscription[*subscriptions.EventMessage], error) {
 	if c.wsConn == nil {
 		return nil, fmt.Errorf("not a websocket typed client")
 	}
 	return c.wsConn.SubscribeEvents("")
 }
 
-func (c *Client) SubscribeTransfers() (blocks <-chan common.EventWrapper[*subscriptions.TransferMessage], err error) {
+func (c *Client) SubscribeTransfers() (*common.Subscription[*subscriptions.TransferMessage], error) {
 	if c.wsConn == nil {
 		return nil, fmt.Errorf("not a websocket typed client")
 	}
 	return c.wsConn.SubscribeTransfers("")
 }
 
-func (c *Client) SubscribeTxPool() (blocks <-chan common.EventWrapper[*subscriptions.PendingTxIDMessage], err error) {
+func (c *Client) SubscribeTxPool() (*common.Subscription[*subscriptions.PendingTxIDMessage], error) {
 	if c.wsConn == nil {
 		return nil, fmt.Errorf("not a websocket typed client")
 	}
 	return c.wsConn.SubscribeTxPool("")
 }
 
-func (c *Client) SubscribeBeats2() (blocks <-chan common.EventWrapper[*subscriptions.Beat2Message], err error) {
+func (c *Client) SubscribeBeats2() (*common.Subscription[*subscriptions.Beat2Message], error) {
 	if c.wsConn == nil {
 		return nil, fmt.Errorf("not a websocket typed client")
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/api/subscriptions"
+	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/thorclient/common"
 )
 
@@ -41,80 +42,137 @@ func NewClient(url string) (*Client, error) {
 	}, nil
 }
 
-func (c *Client) SubscribeEvents(query string) (<-chan common.EventWrapper[*subscriptions.EventMessage], error) {
+func (c *Client) SubscribeEvents(query string) (*common.Subscription[*subscriptions.EventMessage], error) {
 	conn, err := c.connect("/subscriptions/event", query)
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect - %w", err)
 	}
 
-	return subscribe[subscriptions.EventMessage](conn)
+	// ensure the reader is stopped before stopping the ws connection
+	g := co.NewChoes()
+	eventChan := subscribe[subscriptions.EventMessage](g, conn)
+
+	return &common.Subscription[*subscriptions.EventMessage]{
+		EventChan:   eventChan,
+		Unsubscribe: stopFunc(g, eventChan),
+	}, nil
 }
 
-func (c *Client) SubscribeBlocks(query string) (<-chan common.EventWrapper[*blocks.JSONCollapsedBlock], error) {
+func (c *Client) SubscribeBlocks(query string) (*common.Subscription[*blocks.JSONCollapsedBlock], error) {
 	conn, err := c.connect("/subscriptions/block", query)
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect - %w", err)
 	}
 
-	return subscribe[blocks.JSONCollapsedBlock](conn)
+	// ensure the reader is stopped before stopping the ws connection
+	g := co.NewChoes()
+	eventChan := subscribe[blocks.JSONCollapsedBlock](g, conn)
+
+	return &common.Subscription[*blocks.JSONCollapsedBlock]{
+		EventChan:   eventChan,
+		Unsubscribe: stopFunc(g, eventChan),
+	}, nil
 }
 
-func (c *Client) SubscribeTransfers(query string) (<-chan common.EventWrapper[*subscriptions.TransferMessage], error) {
+func (c *Client) SubscribeTransfers(query string) (*common.Subscription[*subscriptions.TransferMessage], error) {
 	conn, err := c.connect("/subscriptions/transfer", query)
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect - %w", err)
 	}
 
-	return subscribe[subscriptions.TransferMessage](conn)
+	// ensure the reader is stopped before stopping the ws connection
+	g := co.NewChoes()
+	eventChan := subscribe[subscriptions.TransferMessage](g, conn)
+
+	return &common.Subscription[*subscriptions.TransferMessage]{
+		EventChan:   eventChan,
+		Unsubscribe: stopFunc(g, eventChan),
+	}, nil
 }
 
-func (c *Client) SubscribeTxPool(query string) (<-chan common.EventWrapper[*subscriptions.PendingTxIDMessage], error) {
+func (c *Client) SubscribeTxPool(query string) (*common.Subscription[*subscriptions.PendingTxIDMessage], error) {
 	conn, err := c.connect("/subscriptions/txpool", query)
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect - %w", err)
 	}
 
-	return subscribe[subscriptions.PendingTxIDMessage](conn)
+	// ensure the reader is stopped before stopping the ws connection
+	g := co.NewChoes()
+	eventChan := subscribe[subscriptions.PendingTxIDMessage](g, conn)
+
+	return &common.Subscription[*subscriptions.PendingTxIDMessage]{
+		EventChan:   eventChan,
+		Unsubscribe: stopFunc(g, eventChan),
+	}, nil
 }
 
-func (c *Client) SubscribeBeats2(query string) (<-chan common.EventWrapper[*subscriptions.Beat2Message], error) {
+func (c *Client) SubscribeBeats2(query string) (*common.Subscription[*subscriptions.Beat2Message], error) {
 	conn, err := c.connect("/subscriptions/beat2", query)
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect - %w", err)
 	}
 
-	return subscribe[subscriptions.Beat2Message](conn)
+	// ensure the reader is stopped before stopping the ws connection
+	g := co.NewChoes()
+	eventChan := subscribe[subscriptions.Beat2Message](g, conn)
+
+	return &common.Subscription[*subscriptions.Beat2Message]{
+		EventChan:   eventChan,
+		Unsubscribe: stopFunc(g, eventChan),
+	}, nil
+}
+
+// stopFunc ensure the reader is stopped before stopping the websocket connection
+func stopFunc[T any](g *co.Choes, eventChan <-chan common.EventWrapper[T]) func() {
+	return func() {
+		g.Stop()
+
+		// drain any pending messages
+		go func() {
+			for range eventChan {
+				// consume messages until channel is closed
+			}
+		}()
+
+		g.Wait()
+	}
 }
 
 // subscribe creates a channel to handle new subscriptions
 // It takes a websocket connection as an argument and returns a read-only channel for receiving messages of type T and an error if any occurs.
-func subscribe[T any](conn *websocket.Conn) (<-chan common.EventWrapper[*T], error) {
+func subscribe[T any](g *co.Choes, conn *websocket.Conn) <-chan common.EventWrapper[*T] {
 	// Create a new channel for events
-	eventChan := make(chan common.EventWrapper[*T])
+	eventChan := make(chan common.EventWrapper[*T], 10_000)
 
 	// Start a goroutine to handle receiving messages from the websocket connection
-	go func() {
+	// use the co.Choes that the client can wait for the stopChan signaling
+	g.Go(func(stopChan chan struct{}) {
 		defer close(eventChan)
 		defer conn.Close()
 
 		for {
-			var data T
-			// Read a JSON message from the websocket and unmarshal it into data
-			err := conn.ReadJSON(&data)
-			if err != nil {
-				// Send an EventWrapper with the error to the channel
-				eventChan <- common.EventWrapper[*T]{Error: fmt.Errorf("%w: %w", common.ErrUnexpectedMsg, err)}
+			select {
+			case <-stopChan:
 				return
-			}
+			default:
+				var data T
+				// Read a JSON message from the websocket and unmarshal it into data
+				err := conn.ReadJSON(&data)
+				if err != nil {
+					// Send an EventWrapper with the error to the channel
+					eventChan <- common.EventWrapper[*T]{Error: fmt.Errorf("%w: %w", common.ErrUnexpectedMsg, err)}
+					return
+				}
 
-			// Send the received data to the event channel
-			eventChan <- common.EventWrapper[*T]{Data: &data}
-			// TODO: handle the case where data is invalid or undesirable
+				// Send the received data to the event channel
+				eventChan <- common.EventWrapper[*T]{Data: &data}
+				// TODO: handle the case where data is invalid or undesirable
+			}
 		}
-	}()
+	})
 
 	// Return the event channel
-	return eventChan, nil
+	return eventChan
 }
 
 func (c *Client) connect(endpoint, rawQuery string) (*websocket.Conn, error) {
