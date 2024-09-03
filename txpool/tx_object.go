@@ -55,7 +55,7 @@ func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 	switch {
 	case o.Gas() > headBlock.GasLimit():
 		return false, errors.New("gas too large")
-	case o.IsExpired(headBlock.Number()):
+	case o.IsExpired(headBlock.Number() + 1):
 		return false, errors.New("expired")
 	case o.BlockRef().Number() > headBlock.Number()+uint32(5*60/thor.BlockInterval):
 		// reject deferred tx which will be applied after 5mins
@@ -81,12 +81,10 @@ func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 		}
 	}
 
-	if o.BlockRef().Number() > headBlock.Number() {
+	// tx valid in the future
+	if o.BlockRef().Number() > headBlock.Number()+1 {
 		return false, nil
 	}
-
-	// checkpoint := state.NewCheckpoint()
-	// defer state.RevertTo(checkpoint)
 
 	if _, _, _, _, err := o.resolved.BuyGas(state, headBlock.Timestamp()+thor.BlockInterval); err != nil {
 		return false, err
