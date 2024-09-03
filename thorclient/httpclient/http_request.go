@@ -56,16 +56,15 @@ func (c *Client) httpGET(url string) ([]byte, error) {
 
 func (c *Client) httpPOST(url string, payload interface{}) ([]byte, error) {
 	var data []byte
-	var err error
 
 	if _, ok := payload.([]byte); ok {
 		data = payload.([]byte)
 	} else {
+		var err error
 		data, err = json.Marshal(payload)
-	}
-
-	if err != nil {
-		return nil, fmt.Errorf("unable to unmarshal payload - %w", err)
+		if err != nil {
+			return nil, fmt.Errorf("unable to marshal payload - %w", err)
+		}
 	}
 
 	if string(data) == "[]" {
