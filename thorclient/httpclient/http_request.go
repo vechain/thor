@@ -63,13 +63,8 @@ func (c *Client) httpPOST(url string, payload interface{}) ([]byte, error) {
 	} else {
 		data, err = json.Marshal(payload)
 	}
-
 	if err != nil {
 		return nil, fmt.Errorf("unable to unmarshal payload - %w", err)
-	}
-
-	if string(data) == "[]" {
-		return nil, fmt.Errorf("invalid nil marshalling")
 	}
 
 	return c.httpRequest("POST", url, bytes.NewBuffer(data))
