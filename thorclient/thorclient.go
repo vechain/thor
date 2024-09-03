@@ -87,9 +87,9 @@ func (c *Client) RawWSClient() *wsclient.Client {
 	return c.wsConn
 }
 
-func (c *Client) TransactionReceipt(id *thor.Bytes32, opts ...Option) (*transactions.Receipt, error) {
+func (c *Client) Account(addr *thor.Address, opts ...Option) (*accounts.Account, error) {
 	options := applyOptions(opts)
-	return c.httpConn.GetTransactionReceipt(id, options.revision)
+	return c.httpConn.GetAccount(addr, options.revision)
 }
 
 func (c *Client) InspectClauses(calldata *accounts.BatchCallData, opts ...Option) ([]*accounts.CallResult, error) {
@@ -103,48 +103,14 @@ func (c *Client) InspectTxClauses(tx *tx.Transaction, senderAddr *thor.Address, 
 	return c.InspectClauses(clauses, opts...)
 }
 
-func (c *Client) SendTransaction(tx *tx.Transaction) (*transactions.SendTxResult, error) {
-	rlpTx, err := rlp.EncodeToBytes(tx)
-	if err != nil {
-		return nil, fmt.Errorf("unable to encode transaction - %w", err)
-	}
-
-	return c.SendTransactionRaw(rlpTx)
-}
-
-func (c *Client) SendTransactionRaw(rlpTx []byte) (*transactions.SendTxResult, error) {
-	return c.httpConn.SendTransaction(&transactions.RawTx{Raw: hexutil.Encode(rlpTx)})
-}
-
-func (c *Client) FilterEvents(req *events.EventFilter) ([]events.FilteredEvent, error) {
-	return c.httpConn.FilterEvents(req)
-}
-
-func (c *Client) FilterTransfers(req *events.EventFilter) ([]*transfers.FilteredTransfer, error) {
-	return c.httpConn.FilterTransfers(req)
-}
-
-func (c *Client) Account(addr *thor.Address, opts ...Option) (*accounts.Account, error) {
-	options := applyOptions(opts)
-	return c.httpConn.GetAccount(addr, options.revision)
-}
-
 func (c *Client) AccountCode(addr *thor.Address, opts ...Option) (*accounts.GetCodeResult, error) {
 	options := applyOptions(opts)
 	return c.httpConn.GetAccountCode(addr, options.revision)
 }
 
-func (c *Client) Storage(addr *thor.Address, key *thor.Bytes32, opts ...Option) (*accounts.GetStorageResult, error) {
+func (c *Client) AccountStorage(addr *thor.Address, key *thor.Bytes32, opts ...Option) (*accounts.GetStorageResult, error) {
 	options := applyOptions(opts)
 	return c.httpConn.GetAccountStorage(addr, key, options.revision)
-}
-
-func (c *Client) ExpandedBlock(revision string) (blocks *blocks.JSONExpandedBlock, err error) {
-	return c.httpConn.GetExpandedBlock(revision)
-}
-
-func (c *Client) Block(revision string) (blocks *blocks.JSONCollapsedBlock, err error) {
-	return c.httpConn.GetBlock(revision)
 }
 
 func (c *Client) Transaction(id *thor.Bytes32, opts ...Option) (*transactions.Transaction, error) {
@@ -155,6 +121,40 @@ func (c *Client) Transaction(id *thor.Bytes32, opts ...Option) (*transactions.Tr
 func (c *Client) RawTransaction(id *thor.Bytes32, opts ...Option) (*transactions.RawTransaction, error) {
 	options := applyOptions(opts)
 	return c.httpConn.GetRawTransaction(id, options.revision, options.pending)
+}
+
+func (c *Client) TransactionReceipt(id *thor.Bytes32, opts ...Option) (*transactions.Receipt, error) {
+	options := applyOptions(opts)
+	return c.httpConn.GetTransactionReceipt(id, options.revision)
+}
+
+func (c *Client) SendTransaction(tx *tx.Transaction) (*transactions.SendTxResult, error) {
+	rlpTx, err := rlp.EncodeToBytes(tx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to encode transaction - %w", err)
+	}
+
+	return c.SendRawTransaction(rlpTx)
+}
+
+func (c *Client) SendRawTransaction(rlpTx []byte) (*transactions.SendTxResult, error) {
+	return c.httpConn.SendTransaction(&transactions.RawTx{Raw: hexutil.Encode(rlpTx)})
+}
+
+func (c *Client) Block(revision string) (blocks *blocks.JSONCollapsedBlock, err error) {
+	return c.httpConn.GetBlock(revision)
+}
+
+func (c *Client) ExpandedBlock(revision string) (blocks *blocks.JSONExpandedBlock, err error) {
+	return c.httpConn.GetExpandedBlock(revision)
+}
+
+func (c *Client) FilterEvents(req *events.EventFilter) ([]events.FilteredEvent, error) {
+	return c.httpConn.FilterEvents(req)
+}
+
+func (c *Client) FilterTransfers(req *events.EventFilter) ([]*transfers.FilteredTransfer, error) {
+	return c.httpConn.FilterTransfers(req)
 }
 
 func (c *Client) Peers() ([]*node.PeerStats, error) {
@@ -190,18 +190,18 @@ func (c *Client) SubscribeTransfers() (*common.Subscription[*subscriptions.Trans
 	return c.wsConn.SubscribeTransfers("")
 }
 
-func (c *Client) SubscribeTxPool() (*common.Subscription[*subscriptions.PendingTxIDMessage], error) {
-	if c.wsConn == nil {
-		return nil, fmt.Errorf("not a websocket typed client")
-	}
-	return c.wsConn.SubscribeTxPool("")
-}
-
 func (c *Client) SubscribeBeats2() (*common.Subscription[*subscriptions.Beat2Message], error) {
 	if c.wsConn == nil {
 		return nil, fmt.Errorf("not a websocket typed client")
 	}
 	return c.wsConn.SubscribeBeats2("")
+}
+
+func (c *Client) SubscribeTxPool() (*common.Subscription[*subscriptions.PendingTxIDMessage], error) {
+	if c.wsConn == nil {
+		return nil, fmt.Errorf("not a websocket typed client")
+	}
+	return c.wsConn.SubscribeTxPool("")
 }
 
 func convertToBatchCallData(tx *tx.Transaction, addr *thor.Address) *accounts.BatchCallData {

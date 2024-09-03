@@ -33,27 +33,23 @@ func New(url string) *Client {
 	}
 }
 
-func (c *Client) GetTransactionReceipt(txID *thor.Bytes32, head string) (*transactions.Receipt, error) {
-	url := c.url + "/transactions/" + txID.String() + "/receipt"
-	if head != "" {
-		url += "?head=" + head
+func (c *Client) GetAccount(addr *thor.Address, revision string) (*accounts.Account, error) {
+	url := c.url + "/accounts/" + addr.String()
+	if revision != "" {
+		url += "?revision=" + revision
 	}
 
 	body, err := c.httpGET(url)
 	if err != nil {
-		return nil, fmt.Errorf("unable to fetch receipt - %w", err)
+		return nil, fmt.Errorf("unable to retrieve account - %w", err)
 	}
 
-	if len(body) == 0 || bytes.Equal(bytes.TrimSpace(body), []byte("null")) {
-		return nil, common.ErrNotFound
+	var account accounts.Account
+	if err = json.Unmarshal(body, &account); err != nil {
+		return nil, fmt.Errorf("unable to unmarshall events - %w", err)
 	}
 
-	var receipt transactions.Receipt
-	if err = json.Unmarshal(body, &receipt); err != nil {
-		return nil, fmt.Errorf("unable to unmarshall receipt - %w", err)
-	}
-
-	return &receipt, nil
+	return &account, nil
 }
 
 func (c *Client) InspectClauses(calldata *accounts.BatchCallData, revision string) ([]*accounts.CallResult, error) {
@@ -72,67 +68,6 @@ func (c *Client) InspectClauses(calldata *accounts.BatchCallData, revision strin
 	}
 
 	return inspectionRes, nil
-}
-
-func (c *Client) SendTransaction(obj *transactions.RawTx) (*transactions.SendTxResult, error) {
-	body, err := c.httpPOST(c.url+"/transactions", obj)
-	if err != nil {
-		return nil, fmt.Errorf("unable to send raw transaction - %w", err)
-	}
-
-	var txID transactions.SendTxResult
-	if err = json.Unmarshal(body, &txID); err != nil {
-		return nil, fmt.Errorf("unable to unmarshall inspection - %w", err)
-	}
-
-	return &txID, nil
-}
-
-func (c *Client) FilterEvents(req *events.EventFilter) ([]events.FilteredEvent, error) {
-	body, err := c.httpPOST(c.url+"/logs/event", req)
-	if err != nil {
-		return nil, fmt.Errorf("unable to send raw transaction - %w", err)
-	}
-
-	var filteredEvents []events.FilteredEvent
-	if err = json.Unmarshal(body, &filteredEvents); err != nil {
-		return nil, fmt.Errorf("unable to unmarshall events - %w", err)
-	}
-
-	return filteredEvents, nil
-}
-
-func (c *Client) FilterTransfers(req *events.EventFilter) ([]*transfers.FilteredTransfer, error) {
-	body, err := c.httpPOST(c.url+"/logs/transfer", req)
-	if err != nil {
-		return nil, fmt.Errorf("unable to send retrieve transfer logs - %w", err)
-	}
-
-	var filteredEvents []*transfers.FilteredTransfer
-	if err = json.Unmarshal(body, &filteredEvents); err != nil {
-		return nil, fmt.Errorf("unable to unmarshall events - %w", err)
-	}
-
-	return filteredEvents, nil
-}
-
-func (c *Client) GetAccount(addr *thor.Address, revision string) (*accounts.Account, error) {
-	url := c.url + "/accounts/" + addr.String()
-	if revision != "" {
-		url += "?revision=" + revision
-	}
-
-	body, err := c.httpGET(url)
-	if err != nil {
-		return nil, fmt.Errorf("unable to retrieve account - %w", err)
-	}
-
-	var account accounts.Account
-	if err = json.Unmarshal(body, &account); err != nil {
-		return nil, fmt.Errorf("unable to unmarshall events - %w", err)
-	}
-
-	return &account, nil
 }
 
 func (c *Client) GetAccountCode(addr *thor.Address, revision string) (*accounts.GetCodeResult, error) {
@@ -171,38 +106,6 @@ func (c *Client) GetAccountStorage(addr *thor.Address, key *thor.Bytes32, revisi
 	}
 
 	return &res, nil
-}
-
-func (c *Client) GetExpandedBlock(revision string) (*blocks.JSONExpandedBlock, error) {
-	body, err := c.httpGET(c.url + "/blocks/" + revision + "?expanded=true")
-	if err != nil {
-		return nil, fmt.Errorf("unable to retrieve block - %w", err)
-	}
-
-	var block blocks.JSONExpandedBlock
-	if err = json.Unmarshal(body, &block); err != nil {
-		return nil, fmt.Errorf("unable to unmarshall events - %w", err)
-	}
-
-	return &block, nil
-}
-
-func (c *Client) GetBlock(blockID string) (*blocks.JSONCollapsedBlock, error) {
-	body, err := c.httpGET(c.url + "/blocks/" + blockID)
-	if err != nil {
-		return nil, fmt.Errorf("unable to retrieve block - %w", err)
-	}
-
-	if bytes.Equal(body, []byte("null")) {
-		return nil, nil
-	}
-
-	var block blocks.JSONCollapsedBlock
-	if err = json.Unmarshal(body, &block); err != nil {
-		return nil, fmt.Errorf("unable to unmarshall events - %w", err)
-	}
-
-	return &block, nil
 }
 
 func (c *Client) GetTransaction(txID *thor.Bytes32, head string, isPending bool) (*transactions.Transaction, error) {
@@ -249,24 +152,105 @@ func (c *Client) GetRawTransaction(txID *thor.Bytes32, head string, isPending bo
 	return &tx, nil
 }
 
-func (c *Client) RawHTTPPost(url string, calldata interface{}) ([]byte, int, error) {
-	var data []byte
-	var err error
-
-	if _, ok := calldata.([]byte); ok {
-		data = calldata.([]byte)
-	} else {
-		data, err = json.Marshal(calldata)
-		if err != nil {
-			return nil, 0, fmt.Errorf("unable to unmarshal payload - %w", err)
-		}
+func (c *Client) GetTransactionReceipt(txID *thor.Bytes32, head string) (*transactions.Receipt, error) {
+	url := c.url + "/transactions/" + txID.String() + "/receipt"
+	if head != "" {
+		url += "?head=" + head
 	}
 
-	return c.rawHTTPRequest("POST", c.url+url, bytes.NewBuffer(data))
+	body, err := c.httpGET(url)
+	if err != nil {
+		return nil, fmt.Errorf("unable to fetch receipt - %w", err)
+	}
+
+	if len(body) == 0 || bytes.Equal(bytes.TrimSpace(body), []byte("null")) {
+		return nil, common.ErrNotFound
+	}
+
+	var receipt transactions.Receipt
+	if err = json.Unmarshal(body, &receipt); err != nil {
+		return nil, fmt.Errorf("unable to unmarshall receipt - %w", err)
+	}
+
+	return &receipt, nil
 }
 
-func (c *Client) RawHTTPGet(url string) ([]byte, int, error) {
-	return c.rawHTTPRequest("GET", c.url+url, nil)
+func (c *Client) SendTransaction(obj *transactions.RawTx) (*transactions.SendTxResult, error) {
+	body, err := c.httpPOST(c.url+"/transactions", obj)
+	if err != nil {
+		return nil, fmt.Errorf("unable to send raw transaction - %w", err)
+	}
+
+	var txID transactions.SendTxResult
+	if err = json.Unmarshal(body, &txID); err != nil {
+		return nil, fmt.Errorf("unable to unmarshall inspection - %w", err)
+	}
+
+	return &txID, nil
+}
+
+func (c *Client) GetBlock(blockID string) (*blocks.JSONCollapsedBlock, error) {
+	body, err := c.httpGET(c.url + "/blocks/" + blockID)
+	if err != nil {
+		return nil, fmt.Errorf("unable to retrieve block - %w", err)
+	}
+
+	if len(body) == 0 || bytes.Equal(bytes.TrimSpace(body), []byte("null")) {
+		return nil, common.ErrNotFound
+	}
+
+	var block blocks.JSONCollapsedBlock
+	if err = json.Unmarshal(body, &block); err != nil {
+		return nil, fmt.Errorf("unable to unmarshall events - %w", err)
+	}
+
+	return &block, nil
+}
+
+func (c *Client) GetExpandedBlock(revision string) (*blocks.JSONExpandedBlock, error) {
+	body, err := c.httpGET(c.url + "/blocks/" + revision + "?expanded=true")
+	if err != nil {
+		return nil, fmt.Errorf("unable to retrieve block - %w", err)
+	}
+
+	if len(body) == 0 || bytes.Equal(bytes.TrimSpace(body), []byte("null")) {
+		return nil, common.ErrNotFound
+	}
+
+	var block blocks.JSONExpandedBlock
+	if err = json.Unmarshal(body, &block); err != nil {
+		return nil, fmt.Errorf("unable to unmarshall events - %w", err)
+	}
+
+	return &block, nil
+}
+
+func (c *Client) FilterEvents(req *events.EventFilter) ([]events.FilteredEvent, error) {
+	body, err := c.httpPOST(c.url+"/logs/event", req)
+	if err != nil {
+		return nil, fmt.Errorf("unable to send raw transaction - %w", err)
+	}
+
+	var filteredEvents []events.FilteredEvent
+	if err = json.Unmarshal(body, &filteredEvents); err != nil {
+		return nil, fmt.Errorf("unable to unmarshall events - %w", err)
+	}
+
+	return filteredEvents, nil
+}
+
+func (c *Client) FilterTransfers(req *events.EventFilter) ([]*transfers.FilteredTransfer, error) {
+	body, err := c.httpPOST(c.url+"/logs/transfer", req)
+	if err != nil {
+		return nil, fmt.Errorf("unable to send retrieve transfer logs - %w", err)
+	}
+
+	var filteredEvents []*transfers.FilteredTransfer
+	if err = json.Unmarshal(body, &filteredEvents); err != nil {
+		return nil, fmt.Errorf("unable to unmarshall events - %w", err)
+	}
+
+	return filteredEvents, nil
 }
 
 func (c *Client) GetPeers() ([]*node.PeerStats, error) {
@@ -281,4 +265,24 @@ func (c *Client) GetPeers() ([]*node.PeerStats, error) {
 	}
 
 	return peers, nil
+}
+
+func (c *Client) RawHTTPPost(url string, calldata interface{}) ([]byte, int, error) {
+	var data []byte
+	var err error
+
+	if _, ok := calldata.([]byte); ok {
+		data = calldata.([]byte)
+	} else {
+		data, err = json.Marshal(calldata)
+		if err != nil {
+			return nil, 0, fmt.Errorf("unable to marshal payload - %w", err)
+		}
+	}
+
+	return c.rawHTTPRequest("POST", c.url+url, bytes.NewBuffer(data))
+}
+
+func (c *Client) RawHTTPGet(url string) ([]byte, int, error) {
+	return c.rawHTTPRequest("GET", c.url+url, nil)
 }

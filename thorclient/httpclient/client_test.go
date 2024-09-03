@@ -277,7 +277,7 @@ func TestClient_GetNilBlock(t *testing.T) {
 	client := New(ts.URL)
 	block, err := client.GetBlock(blockID)
 
-	assert.NoError(t, err)
+	assert.Equal(t, tccommon.ErrNotFound, err)
 	assert.Equal(t, expectedBlock, block)
 }
 
