@@ -43,8 +43,8 @@ type Debug struct {
 	forkConfig        thor.ForkConfig
 	callGasLimit      uint64
 	allowCustomTracer bool
-	bft               bft.Finalizer
 	allowedTracers    map[string]interface{}
+	bft               bft.Committer
 	skipPoA           bool
 }
 
@@ -54,7 +54,7 @@ func New(
 	forkConfig thor.ForkConfig,
 	callGaslimit uint64,
 	allowCustomTracer bool,
-	bft bft.Finalizer,
+	bft bft.Committer,
 	allowedTracers map[string]interface{},
 	soloMode bool) *Debug {
 	return &Debug{
@@ -63,8 +63,8 @@ func New(
 		forkConfig,
 		callGaslimit,
 		allowCustomTracer,
-		bft,
 		allowedTracers,
+		bft,
 		soloMode,
 	}
 }
