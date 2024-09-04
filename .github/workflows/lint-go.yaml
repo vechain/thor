@@ -23,7 +23,6 @@ jobs:
           version: v1.59.1
           # use the default if on main branch, otherwise use the pull request config
           args: --timeout=30m --config=.golangci.yml
-          only-new-issues: false
           skip-cache: true
           skip-pkg-cache: true
           skip-build-cache: true
