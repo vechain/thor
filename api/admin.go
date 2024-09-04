@@ -3,15 +3,13 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package admin
+package api
 
 import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
 
-	"github.com/gorilla/handlers"
-	"github.com/gorilla/mux"
 	"github.com/vechain/thor/v2/log"
 )
 
@@ -24,7 +22,6 @@ type logLevelResponse struct {
 }
 
 type errorResponse struct {
-	ErrorCode    int    `json:"errorCode"`
 	ErrorMessage string `json:"errorMessage"`
 }
 
@@ -32,7 +29,6 @@ func writeError(w http.ResponseWriter, errCode int, errMsg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(errCode)
 	json.NewEncoder(w).Encode(errorResponse{
-		ErrorCode:    errCode,
 		ErrorMessage: errMsg,
 	})
 }
@@ -81,23 +77,4 @@ func postLogLevelHandler(logLevel *slog.LevelVar) http.HandlerFunc {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(response)
 	}
-}
-
-func logLevelHandler(logLevel *slog.LevelVar) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			getLogLevelHandler(logLevel).ServeHTTP(w, r)
-		case http.MethodPost:
-			postLogLevelHandler(logLevel).ServeHTTP(w, r)
-		default:
-			writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-		}
-	}
-}
-
-func HTTPHandler(logLevel *slog.LevelVar) http.Handler {
-	router := mux.NewRouter()
-	router.HandleFunc("/admin/loglevel", logLevelHandler(logLevel))
-	return handlers.CompressHandler(router)
 }

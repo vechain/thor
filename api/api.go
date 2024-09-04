@@ -51,6 +51,7 @@ func New(
 	enableMetrics bool,
 	logsLimit uint64,
 	allowedTracers map[string]interface{},
+	soloMode bool,
 ) (http.HandlerFunc, func()) {
 	origins := strings.Split(strings.TrimSpace(allowedOrigins), ",")
 	for i, o := range origins {
@@ -83,7 +84,7 @@ func New(
 		Mount(router, "/blocks")
 	transactions.New(repo, txPool).
 		Mount(router, "/transactions")
-	debug.New(repo, stater, forkConfig, callGasLimit, allowCustomTracer, bft, allowedTracers).
+	debug.New(repo, stater, forkConfig, callGasLimit, allowCustomTracer, bft, allowedTracers, soloMode).
 		Mount(router, "/debug")
 	node.New(nw).
 		Mount(router, "/node")

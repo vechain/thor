@@ -171,7 +171,7 @@ func defaultAction(ctx *cli.Context) error {
 	metricsURL := ""
 	if ctx.Bool(enableMetricsFlag.Name) {
 		metrics.InitializePrometheusMetrics()
-		url, close, err := startMetricsServer(ctx.String(metricsAddrFlag.Name))
+		url, close, err := api.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
 		if err != nil {
 			return fmt.Errorf("unable to start metrics server - %w", err)
 		}
@@ -181,7 +181,7 @@ func defaultAction(ctx *cli.Context) error {
 
 	adminURL := ""
 	if ctx.Bool(enableAdminFlag.Name) {
-		url, close, err := startAdminServer(ctx.String(adminAddrFlag.Name), logLevel)
+		url, close, err := api.StartAdminServer(ctx.String(adminAddrFlag.Name), logLevel)
 		if err != nil {
 			return fmt.Errorf("unable to start admin server - %w", err)
 		}
@@ -266,6 +266,7 @@ func defaultAction(ctx *cli.Context) error {
 		ctx.Bool(enableMetricsFlag.Name),
 		ctx.Uint64(apiLogsLimitFlag.Name),
 		parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
+		false,
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -314,7 +315,7 @@ func soloAction(ctx *cli.Context) error {
 	metricsURL := ""
 	if ctx.Bool(enableMetricsFlag.Name) {
 		metrics.InitializePrometheusMetrics()
-		url, close, err := startMetricsServer(ctx.String(metricsAddrFlag.Name))
+		url, close, err := api.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
 		if err != nil {
 			return fmt.Errorf("unable to start metrics server - %w", err)
 		}
@@ -324,7 +325,7 @@ func soloAction(ctx *cli.Context) error {
 
 	adminURL := ""
 	if ctx.Bool(enableAdminFlag.Name) {
-		url, close, err := startAdminServer(ctx.String(adminAddrFlag.Name), logLevel)
+		url, close, err := api.StartAdminServer(ctx.String(adminAddrFlag.Name), logLevel)
 		if err != nil {
 			return fmt.Errorf("unable to start admin server - %w", err)
 		}
@@ -416,6 +417,7 @@ func soloAction(ctx *cli.Context) error {
 		ctx.Bool(enableMetricsFlag.Name),
 		ctx.Uint64(apiLogsLimitFlag.Name),
 		parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
+		true,
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 

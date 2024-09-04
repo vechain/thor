@@ -597,7 +597,7 @@ func initDebugServer(t *testing.T) {
 	forkConfig := thor.GetForkConfig(b.Header().ID())
 	router := mux.NewRouter()
 	allTracersEnabled := map[string]interface{}{"all": new(interface{})}
-	debug = New(repo, stater, forkConfig, 21000, true, solo.NewBFTEngine(repo), allTracersEnabled)
+	debug = New(repo, stater, forkConfig, 21000, true, solo.NewBFTEngine(repo), allTracersEnabled, false)
 	debug.Mount(router, "/debug")
 	ts = httptest.NewServer(router)
 }
