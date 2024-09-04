@@ -241,7 +241,11 @@ func (d *Debug) createTracer(name string, config json.RawMessage) (tracers.Trace
 		return tracers.DefaultDirectory.New(tracerName, config, false)
 	}
 
-	return tracers.DefaultDirectory.New(tracerName, config, d.allowCustomTracer)
+	if d.allowCustomTracer {
+		return tracers.DefaultDirectory.New(tracerName, config, true)
+	}
+
+	return nil, errors.New("tracer is not defined")
 }
 
 func (d *Debug) traceCall(ctx context.Context, tracer tracers.Tracer, header *block.Header, st *state.State, txCtx *xenv.TransactionContext, gas uint64, clause *tx.Clause) (interface{}, error) {

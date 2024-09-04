@@ -619,7 +619,7 @@ func TestCreateTracer(t *testing.T) {
 	assert.Nil(t, err)
 	assert.IsType(t, &logger.StructLogger{}, tr)
 	_, err = debug.createTracer("{result:()=>{}, fault:()=>{}}", nil)
-	assert.EqualError(t, err, "unsupported tracer")
+	assert.EqualError(t, err, "tracer is not defined")
 
 	tr, err = debug.createTracer("structLogger", nil)
 	assert.Nil(t, err)
