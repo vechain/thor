@@ -25,6 +25,7 @@ import (
 	"github.com/vechain/thor/v2/cmd/thor/optimizer"
 	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/health"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/metrics"
@@ -222,6 +223,7 @@ func defaultAction(ctx *cli.Context) error {
 		return err
 	}
 
+	healthStatus := &health.Health{}
 	printStartupMessage1(gene, repo, master, instanceDir, forkConfig)
 
 	if !skipLogs {
@@ -238,7 +240,7 @@ func defaultAction(ctx *cli.Context) error {
 	txPool := txpool.New(repo, state.NewStater(mainDB), txpoolOpt)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
-	p2pCommunicator, err := newP2PCommunicator(ctx, repo, txPool, instanceDir)
+	p2pCommunicator, err := newP2PCommunicator(ctx, repo, txPool, instanceDir, healthStatus)
 	if err != nil {
 		return err
 	}
@@ -255,6 +257,7 @@ func defaultAction(ctx *cli.Context) error {
 		logDB,
 		bftEngine,
 		p2pCommunicator.Communicator(),
+		healthStatus,
 		forkConfig,
 		ctx.String(apiCorsFlag.Name),
 		uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
@@ -297,7 +300,9 @@ func defaultAction(ctx *cli.Context) error {
 		p2pCommunicator.Communicator(),
 		ctx.Uint64(targetGasLimitFlag.Name),
 		skipLogs,
-		forkConfig).Run(exitSignal)
+		forkConfig,
+		healthStatus,
+	).Run(exitSignal)
 }
 
 func soloAction(ctx *cli.Context) error {
@@ -399,6 +404,8 @@ func soloAction(ctx *cli.Context) error {
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
 	bftEngine := solo.NewBFTEngine(repo)
+	healthStatus := &health.Health{}
+
 	apiHandler, apiCloser := api.New(
 		repo,
 		state.NewStater(mainDB),
@@ -406,6 +413,7 @@ func soloAction(ctx *cli.Context) error {
 		logDB,
 		bftEngine,
 		&solo.Communicator{},
+		healthStatus,
 		forkConfig,
 		ctx.String(apiCorsFlag.Name),
 		uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
@@ -443,6 +451,7 @@ func soloAction(ctx *cli.Context) error {
 	return solo.New(repo,
 		state.NewStater(mainDB),
 		logDB,
+		healthStatus,
 		txPool,
 		ctx.Uint64(gasLimitFlag.Name),
 		ctx.Bool(onDemandFlag.Name),

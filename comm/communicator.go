@@ -20,6 +20,7 @@ import (
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/comm/proto"
+	"github.com/vechain/thor/v2/health"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -39,12 +40,13 @@ type Communicator struct {
 	newBlockFeed   event.Feed
 	announcementCh chan *announcement
 	feedScope      event.SubscriptionScope
+	health         *health.Health
 	goes           co.Goes
 	onceSynced     sync.Once
 }
 
 // New create a new Communicator instance.
-func New(repo *chain.Repository, txPool *txpool.TxPool) *Communicator {
+func New(repo *chain.Repository, txPool *txpool.TxPool, health *health.Health) *Communicator {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Communicator{
 		repo:           repo,
@@ -52,6 +54,7 @@ func New(repo *chain.Repository, txPool *txpool.TxPool) *Communicator {
 		ctx:            ctx,
 		cancel:         cancel,
 		peerSet:        newPeerSet(),
+		health:         health,
 		syncedCh:       make(chan struct{}),
 		announcementCh: make(chan *announcement),
 	}
@@ -118,6 +121,7 @@ func (c *Communicator) Sync(ctx context.Context, handler HandleBlockStream) {
 			if shouldSynced() {
 				delay = syncInterval
 				c.onceSynced.Do(func() {
+					c.health.ChainSynced()
 					close(c.syncedCh)
 				})
 			}

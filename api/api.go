@@ -17,6 +17,7 @@ import (
 	"github.com/vechain/thor/v2/api/debug"
 	"github.com/vechain/thor/v2/api/doc"
 	"github.com/vechain/thor/v2/api/events"
+	"github.com/vechain/thor/v2/api/health"
 	"github.com/vechain/thor/v2/api/node"
 	"github.com/vechain/thor/v2/api/subscriptions"
 	"github.com/vechain/thor/v2/api/transactions"
@@ -28,6 +29,8 @@ import (
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/txpool"
+
+	healthstatus "github.com/vechain/thor/v2/health"
 )
 
 var logger = log.WithContext("pkg", "api")
@@ -40,6 +43,7 @@ func New(
 	logDB *logdb.LogDB,
 	bft bft.Committer,
 	nw node.Network,
+	healthStatus *healthstatus.Health,
 	forkConfig thor.ForkConfig,
 	allowedOrigins string,
 	backtraceLimit uint32,
@@ -73,6 +77,8 @@ func New(
 
 	accounts.New(repo, stater, callGasLimit, forkConfig, bft).
 		Mount(router, "/accounts")
+
+	health.New(healthStatus).Mount(router, "/health")
 
 	if !skipLogs {
 		events.New(repo, logDB, logsLimit).
