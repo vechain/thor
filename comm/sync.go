@@ -87,12 +87,12 @@ func warmupBlocks(ctx context.Context, fetched <-chan []*block.Block, warmedUp c
 					h.Beta()
 				}
 				for _, tx := range blk.Transactions() {
-					tx := tx
+					tmpTx := tx
 					queue <- func() {
-						tx.ID()
-						tx.UnprovedWork()
-						_, _ = tx.IntrinsicGas()
-						_, _ = tx.Delegator()
+						tmpTx.ID()
+						tmpTx.UnprovedWork()
+						_, _ = tmpTx.IntrinsicGas()
+						_, _ = tmpTx.Delegator()
 					}
 				}
 			}

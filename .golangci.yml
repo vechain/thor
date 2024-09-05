@@ -22,7 +22,7 @@ linters:
     - staticcheck
     - bidichk
     - durationcheck
-    - exportloopref
+    - copyloopvar
     - whitespace
     - gosec
 
@@ -38,6 +38,11 @@ linters:
 linters-settings:
   gofmt:
     simplify: true
+  gosec:
+    excludes:
+      - G115
+      - G406 # ignore ripe160 deprecation
+      - G507 # ignore ripe160 deprecation
 
 issues:
   max-issues-per-linter: 1000
