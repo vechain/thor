@@ -60,7 +60,7 @@ func (n *hashNode) encodeTrailing(e *lowrlp.Encoder) {
 	e.EncodeUint(n.seq)
 }
 
-func (n *valueNode) encode(e *lowrlp.Encoder, nonCrypto bool) {
+func (n *valueNode) encode(e *lowrlp.Encoder, _ bool) {
 	e.EncodeString(n.Value)
 }
 

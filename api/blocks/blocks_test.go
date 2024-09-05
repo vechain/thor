@@ -45,11 +45,11 @@ func TestBlock(t *testing.T) {
 
 	for name, tt := range map[string]func(*testing.T){
 		"testBadQueryParams":                    testBadQueryParams,
-		"testInvalidBlockId":                    testInvalidBlockId,
+		"testInvalidBlockID":                    testInvalidBlockID,
 		"testInvalidBlockNumber":                testInvalidBlockNumber,
-		"testGetBlockById":                      testGetBlockById,
+		"testGetBlockByID":                      testGetBlockByID,
 		"testGetBlockNotFound":                  testGetBlockNotFound,
-		"testGetExpandedBlockById":              testGetExpandedBlockById,
+		"testGetExpandedBlockByID":              testGetExpandedBlockByID,
 		"testGetBlockByHeight":                  testGetBlockByHeight,
 		"testGetBestBlock":                      testGetBestBlock,
 		"testGetFinalizedBlock":                 testGetFinalizedBlock,
@@ -111,7 +111,7 @@ func testGetJustifiedBlock(t *testing.T) {
 	assert.Equal(t, genesisBlock.Header().ID(), justified.ID)
 }
 
-func testGetBlockById(t *testing.T) {
+func testGetBlockByID(t *testing.T) {
 	res, statusCode := httpGet(t, ts.URL+"/blocks/"+blk.Header().ID().String())
 	rb := new(blocks.JSONCollapsedBlock)
 	if err := json.Unmarshal(res, rb); err != nil {
@@ -128,7 +128,7 @@ func testGetBlockNotFound(t *testing.T) {
 	assert.Equal(t, "null", strings.TrimSpace(string(res)))
 }
 
-func testGetExpandedBlockById(t *testing.T) {
+func testGetExpandedBlockByID(t *testing.T) {
 	res, statusCode := httpGet(t, ts.URL+"/blocks/"+blk.Header().ID().String()+"?expanded=true")
 	rb := new(blocks.JSONExpandedBlock)
 	if err := json.Unmarshal(res, rb); err != nil {
@@ -144,7 +144,7 @@ func testInvalidBlockNumber(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, statusCode)
 }
 
-func testInvalidBlockId(t *testing.T) {
+func testInvalidBlockID(t *testing.T) {
 	_, statusCode := httpGet(t, ts.URL+"/blocks/"+invalidBytes32)
 	assert.Equal(t, http.StatusBadRequest, statusCode)
 }

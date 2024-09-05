@@ -89,12 +89,12 @@ func TestHeaderEncoding(t *testing.T) {
 	rand.Read(proof[:]) // nolint
 	rand.Read(alpha[:]) // nolint
 
-	complex, err := NewComplexSignature(sig[:], proof[:])
+	cplx, err := NewComplexSignature(sig[:], proof[:])
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	b1 := new(Builder).Alpha(alpha[:]).Build().WithSignature(complex[:])
+	b1 := new(Builder).Alpha(alpha[:]).Build().WithSignature(cplx[:])
 	bs1, err := rlp.EncodeToBytes(b1.Header())
 	if err != nil {
 		t.Fatal(err)

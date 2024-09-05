@@ -20,7 +20,7 @@ import (
 )
 
 type TestBFT struct {
-	engine *BFTEngine
+	engine *Engine
 	db     *muxdb.MuxDB
 	repo   *chain.Repository
 	stater *state.Stater

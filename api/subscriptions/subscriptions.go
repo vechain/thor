@@ -80,7 +80,7 @@ func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32,
 	return sub
 }
 
-func (s *Subscriptions) handleBlockReader(w http.ResponseWriter, req *http.Request) (*blockReader, error) {
+func (s *Subscriptions) handleBlockReader(_ http.ResponseWriter, req *http.Request) (*blockReader, error) {
 	position, err := s.parsePosition(req.URL.Query().Get("pos"))
 	if err != nil {
 		return nil, err
@@ -128,7 +128,7 @@ func (s *Subscriptions) handleEventReader(w http.ResponseWriter, req *http.Reque
 	return newEventReader(s.repo, position, eventFilter), nil
 }
 
-func (s *Subscriptions) handleTransferReader(w http.ResponseWriter, req *http.Request) (*transferReader, error) {
+func (s *Subscriptions) handleTransferReader(_ http.ResponseWriter, req *http.Request) (*transferReader, error) {
 	position, err := s.parsePosition(req.URL.Query().Get("pos"))
 	if err != nil {
 		return nil, err

@@ -26,7 +26,7 @@ type justifier struct {
 	comVotes uint64
 }
 
-func (engine *BFTEngine) newJustifier(parentID thor.Bytes32) (*justifier, error) {
+func (engine *Engine) newJustifier(parentID thor.Bytes32) (*justifier, error) {
 	blockNum := block.Number(parentID) + 1
 
 	var lastOfParentRound uint32
@@ -67,7 +67,7 @@ func (engine *BFTEngine) newJustifier(parentID thor.Bytes32) (*justifier, error)
 }
 
 // AddBlock adds a new block to the set.
-func (js *justifier) AddBlock(blockID thor.Bytes32, signer thor.Address, isCOM bool) {
+func (js *justifier) AddBlock(_ thor.Bytes32, signer thor.Address, isCOM bool) {
 	if prev, ok := js.votes[signer]; !ok {
 		js.votes[signer] = isCOM
 		if isCOM {

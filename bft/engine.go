@@ -35,9 +35,9 @@ type justified struct {
 	value  thor.Bytes32
 }
 
-// BFTEngine tracks all votes of blocks, computes the finalized checkpoint.
+// Engine tracks all votes of blocks, computes the finalized checkpoint.
 // Not thread-safe!
-type BFTEngine struct {
+type Engine struct {
 	repo       *chain.Repository
 	data       kv.Store
 	stater     *state.Stater
@@ -54,8 +54,8 @@ type BFTEngine struct {
 }
 
 // NewEngine creates a new bft engine.
-func NewEngine(repo *chain.Repository, mainDB *muxdb.MuxDB, forkConfig thor.ForkConfig, master thor.Address) (*BFTEngine, error) {
-	engine := BFTEngine{
+func NewEngine(repo *chain.Repository, mainDB *muxdb.MuxDB, forkConfig thor.ForkConfig, master thor.Address) (*Engine, error) {
+	engine := Engine{
 		repo:       repo,
 		data:       mainDB.NewStore(dataStoreName),
 		stater:     state.NewStater(mainDB),
@@ -81,12 +81,12 @@ func NewEngine(repo *chain.Repository, mainDB *muxdb.MuxDB, forkConfig thor.Fork
 }
 
 // Finalized returns the finalized checkpoint.
-func (engine *BFTEngine) Finalized() thor.Bytes32 {
+func (engine *Engine) Finalized() thor.Bytes32 {
 	return engine.finalized.Load().(thor.Bytes32)
 }
 
 // Justified returns the justified checkpoint.
-func (engine *BFTEngine) Justified() (thor.Bytes32, error) {
+func (engine *Engine) Justified() (thor.Bytes32, error) {
 	head := engine.repo.BestBlockSummary().Header
 	finalized := engine.Finalized()
 
@@ -134,7 +134,7 @@ func (engine *BFTEngine) Justified() (thor.Bytes32, error) {
 }
 
 // Accepts checks if the given block is on the same branch of finalized checkpoint.
-func (engine *BFTEngine) Accepts(parentID thor.Bytes32) (bool, error) {
+func (engine *Engine) Accepts(parentID thor.Bytes32) (bool, error) {
 	finalized := engine.Finalized()
 
 	if block.Number(finalized) != 0 {
@@ -145,7 +145,7 @@ func (engine *BFTEngine) Accepts(parentID thor.Bytes32) (bool, error) {
 }
 
 // Select selects between the new block and the current best, return true if new one is better.
-func (engine *BFTEngine) Select(header *block.Header) (bool, error) {
+func (engine *Engine) Select(header *block.Header) (bool, error) {
 	newSt, err := engine.computeState(header)
 	if err != nil {
 		return false, err
@@ -165,7 +165,7 @@ func (engine *BFTEngine) Select(header *block.Header) (bool, error) {
 }
 
 // CommitBlock commits bft state to storage.
-func (engine *BFTEngine) CommitBlock(header *block.Header, isPacking bool) error {
+func (engine *Engine) CommitBlock(header *block.Header, isPacking bool) error {
 	// save quality and finalized at the end of each round
 	if getStorePoint(header.Number()) == header.Number() {
 		state, err := engine.computeState(header)
@@ -211,7 +211,7 @@ func (engine *BFTEngine) CommitBlock(header *block.Header, isPacking bool) error
 
 // ShouldVote decides if vote COM for a given parent block ID.
 // Packer only.
-func (engine *BFTEngine) ShouldVote(parentID thor.Bytes32) (bool, error) {
+func (engine *Engine) ShouldVote(parentID thor.Bytes32) (bool, error) {
 	// laze init casts
 	if engine.casts == nil {
 		if err := engine.newCasts(); err != nil {
@@ -286,7 +286,7 @@ func (engine *BFTEngine) ShouldVote(parentID thor.Bytes32) (bool, error) {
 }
 
 // computeState computes the bft state regarding the given block header to the closest checkpoint.
-func (engine *BFTEngine) computeState(header *block.Header) (*bftState, error) {
+func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 	if cached, ok := engine.caches.state.Get(header.ID()); ok {
 		return cached.(*bftState), nil
 	}
@@ -341,7 +341,7 @@ func (engine *BFTEngine) computeState(header *block.Header) (*bftState, error) {
 
 // findCheckpointByQuality finds the first checkpoint reaches the given quality.
 // It is caller's responsibility to ensure the epoch that headID belongs to is concluded.
-func (engine *BFTEngine) findCheckpointByQuality(target uint32, finalized, headID thor.Bytes32) (blockID thor.Bytes32, err error) {
+func (engine *Engine) findCheckpointByQuality(target uint32, finalized, headID thor.Bytes32) (blockID thor.Bytes32, err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			err = e.(error)
@@ -391,7 +391,7 @@ func (engine *BFTEngine) findCheckpointByQuality(target uint32, finalized, headI
 	return c.GetBlockID(searchStart + uint32(num)*thor.CheckpointInterval)
 }
 
-func (engine *BFTEngine) getMaxBlockProposers(sum *chain.BlockSummary) (uint64, error) {
+func (engine *Engine) getMaxBlockProposers(sum *chain.BlockSummary) (uint64, error) {
 	state := engine.stater.NewState(sum.Header.StateRoot(), sum.Header.Number(), sum.Conflicts, sum.SteadyNum)
 	params, err := builtin.Params.Native(state).Get(thor.KeyMaxBlockProposers)
 	if err != nil {
@@ -405,7 +405,7 @@ func (engine *BFTEngine) getMaxBlockProposers(sum *chain.BlockSummary) (uint64, 
 	return mbp, nil
 }
 
-func (engine *BFTEngine) getQuality(id thor.Bytes32) (quality uint32, err error) {
+func (engine *Engine) getQuality(id thor.Bytes32) (quality uint32, err error) {
 	if cached, ok := engine.caches.quality.Get(id); ok {
 		return cached.(uint32), nil
 	}

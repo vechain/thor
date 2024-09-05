@@ -15,7 +15,7 @@ import (
 // casts stores the master's overall casts, maintaining the map of quality to checkpoint.
 type casts map[thor.Bytes32]uint32
 
-func (engine *BFTEngine) newCasts() error {
+func (engine *Engine) newCasts() error {
 	c := make(casts)
 
 	finalized := engine.Finalized()

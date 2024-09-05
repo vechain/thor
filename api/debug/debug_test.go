@@ -55,9 +55,9 @@ func TestDebug(t *testing.T) {
 		"testTraceClauseWithEmptyTracerName":       testTraceClauseWithEmptyTracerName,
 		"testTraceClauseWithInvalidTracerName":     testTraceClauseWithInvalidTracerName,
 		"testTraceClauseWithEmptyTracerTarget":     testTraceClauseWithEmptyTracerTarget,
-		"testTraceClauseWithBadBlockId":            testTraceClauseWithBadBlockId,
-		"testTraceClauseWithNonExistingBlockId":    testTraceClauseWithNonExistingBlockId,
-		"testTraceClauseWithBadTxId":               testTraceClauseWithBadTxId,
+		"testTraceClauseWithBadBlockID":            testTraceClauseWithBadBlockID,
+		"testTraceClauseWithNonExistingBlockID":    testTraceClauseWithNonExistingBlockID,
+		"testTraceClauseWithBadTxID":               testTraceClauseWithBadTxID,
 		"testTraceClauseWithNonExistingTx":         testTraceClauseWithNonExistingTx,
 		"testTraceClauseWithBadClauseIndex":        testTraceClauseWithBadClauseIndex,
 		"testTraceClauseWithTxIndexOutOfBound":     testTraceClauseWithTxIndexOutOfBound,
@@ -75,7 +75,7 @@ func TestDebug(t *testing.T) {
 		"testHandleTraceCall":                                testHandleTraceCall,
 		"testHandleTraceCallWithValidRevisions":              testHandleTraceCallWithValidRevisions,
 		"testHandleTraceCallWithRevisionAsNonExistingHeight": testHandleTraceCallWithRevisionAsNonExistingHeight,
-		"testHandleTraceCallWithRevisionAsNonExistingId":     testHandleTraceCallWithRevisionAsNonExistingId,
+		"testHandleTraceCallWithRevisionAsNonExistingID":     testHandleTraceCallWithRevisionAsNonExistingID,
 		"testHandleTraceCallWithMalfomredRevision":           testHandleTraceCallWithMalfomredRevision,
 		"testHandleTraceCallWithInsufficientGas":             testHandleTraceCallWithInsufficientGas,
 		"testHandleTraceCallWithBadBlockRef":                 testHandleTraceCallWithBadBlockRef,
@@ -176,7 +176,7 @@ func testTraceClauseWithEmptyTracerTarget(t *testing.T) {
 	assert.Equal(t, "target: unsupported", strings.TrimSpace(res))
 }
 
-func testTraceClauseWithBadBlockId(t *testing.T) {
+func testTraceClauseWithBadBlockID(t *testing.T) {
 	traceClauseOption := &TraceClauseOption{
 		Name:   "logger",
 		Target: "badBlockId/x/x",
@@ -185,13 +185,13 @@ func testTraceClauseWithBadBlockId(t *testing.T) {
 	assert.Equal(t, "target[0]: invalid length", strings.TrimSpace(res))
 }
 
-func testTraceClauseWithNonExistingBlockId(t *testing.T) {
+func testTraceClauseWithNonExistingBlockID(t *testing.T) {
 	_, _, _, err := debug.prepareClauseEnv(context.Background(), randBytes32(), 1, 1)
 
 	assert.Error(t, err)
 }
 
-func testTraceClauseWithBadTxId(t *testing.T) {
+func testTraceClauseWithBadTxID(t *testing.T) {
 	traceClauseOption := &TraceClauseOption{
 		Name:   "logger",
 		Target: fmt.Sprintf("%s/badTxId/x", blk.Header().ID()),
@@ -201,10 +201,10 @@ func testTraceClauseWithBadTxId(t *testing.T) {
 }
 
 func testTraceClauseWithNonExistingTx(t *testing.T) {
-	nonExistingTxId := "0x4500ade0d72115abfc77571aef752df45ba5e87ca81fbd67fbfc46d455b17f91"
+	nonExistingTxID := "0x4500ade0d72115abfc77571aef752df45ba5e87ca81fbd67fbfc46d455b17f91"
 	traceClauseOption := &TraceClauseOption{
 		Name:   "logger",
-		Target: fmt.Sprintf("%s/%s/x", blk.Header().ID(), nonExistingTxId),
+		Target: fmt.Sprintf("%s/%s/x", blk.Header().ID(), nonExistingTxID),
 	}
 	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", traceClauseOption, 403)
 	assert.Equal(t, "transaction not found", strings.TrimSpace(res))
@@ -389,7 +389,7 @@ func testHandleTraceCallWithRevisionAsNonExistingHeight(t *testing.T) {
 	assert.Equal(t, "revision: not found", strings.TrimSpace(res))
 }
 
-func testHandleTraceCallWithRevisionAsNonExistingId(t *testing.T) {
+func testHandleTraceCallWithRevisionAsNonExistingID(t *testing.T) {
 	nonExistingRevision := "0x4500ade0d72115abfc77571aef752df45ba5e87ca81fbd67fbfc46d455b17f91"
 
 	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call?revision="+nonExistingRevision, &TraceCallOption{}, 400)

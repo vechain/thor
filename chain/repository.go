@@ -102,11 +102,11 @@ func NewRepository(db *muxdb.MuxDB, genesis *block.Block) (*Repository, error) {
 			return nil, errors.New("genesis mismatch")
 		}
 
-		if summary, err := repo.GetBlockSummary(bestID); err != nil {
+		summary, err := repo.GetBlockSummary(bestID)
+		if err != nil {
 			return nil, errors.Wrap(err, "get best block")
-		} else {
-			repo.bestSummary.Store(summary)
 		}
+		repo.bestSummary.Store(summary)
 	}
 
 	if val, err := repo.props.Get(steadyBlockIDKey); err != nil {
