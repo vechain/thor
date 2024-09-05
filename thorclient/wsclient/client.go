@@ -13,7 +13,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/api/subscriptions"
-	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/thorclient/common"
 )
 
@@ -48,13 +47,9 @@ func (c *Client) SubscribeEvents(query string) (*common.Subscription[*subscripti
 		return nil, fmt.Errorf("unable to connect - %w", err)
 	}
 
-	// ensure the reader is stopped before stopping the ws connection
-	g := co.NewChoes()
-	eventChan := subscribe[subscriptions.EventMessage](g, conn)
-
 	return &common.Subscription[*subscriptions.EventMessage]{
-		EventChan:   eventChan,
-		Unsubscribe: stopFunc(g, eventChan),
+		EventChan:   subscribe[subscriptions.EventMessage](conn),
+		Unsubscribe: stopFunc(conn),
 	}, nil
 }
 
@@ -64,13 +59,9 @@ func (c *Client) SubscribeBlocks(query string) (*common.Subscription[*blocks.JSO
 		return nil, fmt.Errorf("unable to connect - %w", err)
 	}
 
-	// ensure the reader is stopped before stopping the ws connection
-	g := co.NewChoes()
-	eventChan := subscribe[blocks.JSONCollapsedBlock](g, conn)
-
 	return &common.Subscription[*blocks.JSONCollapsedBlock]{
-		EventChan:   eventChan,
-		Unsubscribe: stopFunc(g, eventChan),
+		EventChan:   subscribe[blocks.JSONCollapsedBlock](conn),
+		Unsubscribe: stopFunc(conn),
 	}, nil
 }
 
@@ -80,13 +71,9 @@ func (c *Client) SubscribeTransfers(query string) (*common.Subscription[*subscri
 		return nil, fmt.Errorf("unable to connect - %w", err)
 	}
 
-	// ensure the reader is stopped before stopping the ws connection
-	g := co.NewChoes()
-	eventChan := subscribe[subscriptions.TransferMessage](g, conn)
-
 	return &common.Subscription[*subscriptions.TransferMessage]{
-		EventChan:   eventChan,
-		Unsubscribe: stopFunc(g, eventChan),
+		EventChan:   subscribe[subscriptions.TransferMessage](conn),
+		Unsubscribe: stopFunc(conn),
 	}, nil
 }
 
@@ -96,13 +83,9 @@ func (c *Client) SubscribeTxPool(query string) (*common.Subscription[*subscripti
 		return nil, fmt.Errorf("unable to connect - %w", err)
 	}
 
-	// ensure the reader is stopped before stopping the ws connection
-	g := co.NewChoes()
-	eventChan := subscribe[subscriptions.PendingTxIDMessage](g, conn)
-
 	return &common.Subscription[*subscriptions.PendingTxIDMessage]{
-		EventChan:   eventChan,
-		Unsubscribe: stopFunc(g, eventChan),
+		EventChan:   subscribe[subscriptions.PendingTxIDMessage](conn),
+		Unsubscribe: stopFunc(conn),
 	}, nil
 }
 
@@ -112,64 +95,48 @@ func (c *Client) SubscribeBeats2(query string) (*common.Subscription[*subscripti
 		return nil, fmt.Errorf("unable to connect - %w", err)
 	}
 
-	// ensure the reader is stopped before stopping the ws connection
-	g := co.NewChoes()
-	eventChan := subscribe[subscriptions.Beat2Message](g, conn)
-
 	return &common.Subscription[*subscriptions.Beat2Message]{
-		EventChan:   eventChan,
-		Unsubscribe: stopFunc(g, eventChan),
+		EventChan:   subscribe[subscriptions.Beat2Message](conn),
+		Unsubscribe: stopFunc(conn),
 	}, nil
 }
 
 // stopFunc ensure the reader is stopped before stopping the websocket connection
-func stopFunc[T any](g *co.Choes, eventChan <-chan common.EventWrapper[T]) func() {
+func stopFunc(conn *websocket.Conn) func() {
 	return func() {
-		g.Stop()
-
-		// drain any pending messages
-		go func() {
-			for range eventChan {
-				// consume messages until channel is closed
-			}
-		}()
-
-		g.Wait()
+		// todo add metrics
+		conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+		conn.Close()
 	}
 }
 
 // subscribe creates a channel to handle new subscriptions
 // It takes a websocket connection as an argument and returns a read-only channel for receiving messages of type T and an error if any occurs.
-func subscribe[T any](g *co.Choes, conn *websocket.Conn) <-chan common.EventWrapper[*T] {
+func subscribe[T any](conn *websocket.Conn) <-chan common.EventWrapper[*T] {
 	// Create a new channel for events
 	eventChan := make(chan common.EventWrapper[*T], 10_000)
 
 	// Start a goroutine to handle receiving messages from the websocket connection
 	// use the co.Choes that the client can wait for the stopChan signaling
-	g.Go(func(stopChan chan struct{}) {
+	go func() {
 		defer close(eventChan)
 		defer conn.Close()
 
 		for {
-			select {
-			case <-stopChan:
+			var data T
+			// Read a JSON message from the websocket and unmarshal it into data
+			err := conn.ReadJSON(&data)
+			if err != nil {
+				// Send an EventWrapper with the error to the channel
+				eventChan <- common.EventWrapper[*T]{Error: fmt.Errorf("%w: %w", common.ErrUnexpectedMsg, err)}
 				return
-			default:
-				var data T
-				// Read a JSON message from the websocket and unmarshal it into data
-				err := conn.ReadJSON(&data)
-				if err != nil {
-					// Send an EventWrapper with the error to the channel
-					eventChan <- common.EventWrapper[*T]{Error: fmt.Errorf("%w: %w", common.ErrUnexpectedMsg, err)}
-					return
-				}
-
-				// Send the received data to the event channel
-				eventChan <- common.EventWrapper[*T]{Data: &data}
-				// TODO: handle the case where data is invalid or undesirable
 			}
+
+			// Send the received data to the event channel
+			eventChan <- common.EventWrapper[*T]{Data: &data}
+			// TODO: handle the case where data is invalid or undesirable
 		}
-	})
+	}()
 
 	// Return the event channel
 	return eventChan

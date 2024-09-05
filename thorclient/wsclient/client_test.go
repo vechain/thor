@@ -15,7 +15,6 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/api/subscriptions"
 	"github.com/vechain/thor/v2/thorclient/common"
@@ -318,7 +317,10 @@ func TestClient_SubscribeBlocks_ClientShutdown(t *testing.T) {
 		// Send a valid block to the client
 
 		for {
-			require.NoError(t, conn.WriteJSON(expectedBlock))
+			err := conn.WriteJSON(expectedBlock)
+			if err != nil {
+				break
+			}
 			time.Sleep(10 * time.Millisecond)
 		}
 	}))
@@ -338,8 +340,61 @@ func TestClient_SubscribeBlocks_ClientShutdown(t *testing.T) {
 		assert.Equal(t, expectedBlock, event.Data)
 	}
 
-	// unsubscribe should drain all messages first before shutting down the event reader and the connection
+	// unsubscribe should close the connection forcing a connection error in the eventChan
 	sub.Unsubscribe()
+
+	// next message should be an error
+	assert.Error(t, (<-sub.EventChan).Error)
+
+	// Ensure no more events are received after unsubscribe
+	select {
+	case _, ok := <-sub.EventChan:
+		if ok {
+			t.Error("Expected the event channel to be closed after unsubscribe, but it was still open")
+		}
+	case <-time.After(200 * time.Second):
+		// Timeout here is expected since the channel should be closed and not sending events
+	}
+}
+
+func TestClient_SubscribeBlocks_ClientShutdown_LongBlocks(t *testing.T) {
+	query := "exampleQuery"
+	expectedBlock := &blocks.JSONCollapsedBlock{}
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/subscriptions/block", r.URL.Path)
+		assert.Equal(t, query, r.URL.RawQuery)
+
+		upgrader := websocket.Upgrader{}
+
+		conn, _ := upgrader.Upgrade(w, r, nil)
+
+		// Send a valid block to the client
+
+		for {
+			err := conn.WriteJSON(expectedBlock)
+			if err != nil {
+				break
+			}
+			time.Sleep(1 * time.Second)
+		}
+	}))
+	defer ts.Close()
+
+	client, err := NewClient(ts.URL)
+	assert.NoError(t, err)
+	sub, err := client.SubscribeBlocks(query)
+
+	assert.NoError(t, err)
+
+	assert.NoError(t, (<-sub.EventChan).Error)
+	assert.NotNil(t, (<-sub.EventChan).Data)
+
+	// unsubscribe should close the connection forcing a connection error in the eventChan
+	sub.Unsubscribe()
+
+	// next message should be an error
+	assert.Error(t, (<-sub.EventChan).Error)
 
 	// Ensure no more events are received after unsubscribe
 	select {
