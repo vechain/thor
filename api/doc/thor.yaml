@@ -2117,7 +2117,7 @@ components:
         name:
           type: string
           enum:
-            - logger
+            - structLogger
             - 4byte
             - call
             - noop

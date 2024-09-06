@@ -79,6 +79,17 @@ func (d *directory) RegisterJSEval(f jsCtorFn) {
 	d.jsEval = f
 }
 
+// Lookup returns true if the given tracer is registered.
+func (d *directory) Lookup(name string) bool {
+	if _, ok := d.elems[name]; ok {
+		return ok
+	}
+
+	// backward compatible, allow users emit "Tracer" suffix
+	_, ok := d.elems[name+"Tracer"]
+	return ok
+}
+
 // New returns a new instance of a tracer, by iterating through the
 // registered lookups. Name is either name of an existing tracer
 // or an arbitrary JS code.

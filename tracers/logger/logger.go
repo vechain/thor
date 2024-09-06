@@ -35,7 +35,7 @@ import (
 )
 
 func init() {
-	tracers.DefaultDirectory.Register("logger", NewStructLogger, false)
+	tracers.DefaultDirectory.Register("structLoggerTracer", NewStructLogger, false)
 }
 
 // Storage represents a contract's storage.
