@@ -57,7 +57,6 @@ func New(
 	bft bft.Committer,
 	allowedTracers []string,
 	soloMode bool) *Debug {
-
 	allowedMap := make(map[string]struct{})
 	for _, t := range allowedTracers {
 		allowedMap[t] = struct{}{}
