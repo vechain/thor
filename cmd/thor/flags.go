@@ -153,7 +153,7 @@ var (
 
 	enableAdminFlag = cli.BoolFlag{
 		Name:  "enable-admin",
-		Usage: "enables admin service",
+		Usage: "enables admin server",
 	}
 	adminAddrFlag = cli.StringFlag{
 		Name:  "admin-addr",

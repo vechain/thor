@@ -11,7 +11,10 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type TestCase struct {
@@ -89,13 +92,7 @@ func TestLogLevelHandler(t *testing.T) {
 					t.Errorf("handler returned unexpected log level: got %v want %v", response.CurrentLevel, tt.expectedLevel)
 				}
 			} else {
-				var response errorResponse
-				if err := json.NewDecoder(rr.Body).Decode(&response); err != nil {
-					t.Fatalf("could not decode response: %v", err)
-				}
-				if response.ErrorMessage != tt.expectedErrorMsg {
-					t.Errorf("handler returned unexpected error message: got %v want %v", response.ErrorMessage, tt.expectedErrorMsg)
-				}
+				assert.Equal(t, tt.expectedErrorMsg, strings.Trim(rr.Body.String(), "\n"))
 			}
 		})
 	}

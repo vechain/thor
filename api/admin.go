@@ -6,10 +6,11 @@
 package api
 
 import (
-	"encoding/json"
 	"log/slog"
 	"net/http"
 
+	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/log"
 )
 
@@ -21,35 +22,20 @@ type logLevelResponse struct {
 	CurrentLevel string `json:"currentLevel"`
 }
 
-type errorResponse struct {
-	ErrorMessage string `json:"errorMessage"`
-}
-
-func writeError(w http.ResponseWriter, errCode int, errMsg string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(errCode)
-	json.NewEncoder(w).Encode(errorResponse{
-		ErrorMessage: errMsg,
-	})
-}
-
-func getLogLevelHandler(logLevel *slog.LevelVar) http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
-		response := logLevelResponse{
+func getLogLevelHandler(logLevel *slog.LevelVar) utils.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) error {
+		return utils.WriteJSON(w, logLevelResponse{
 			CurrentLevel: logLevel.Level().String(),
-		}
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			writeError(w, http.StatusInternalServerError, "Failed to encode response")
-		}
+		})
 	}
 }
 
-func postLogLevelHandler(logLevel *slog.LevelVar) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func postLogLevelHandler(logLevel *slog.LevelVar) utils.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) error {
 		var req logLevelRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "Invalid request body")
-			return
+
+		if err := utils.ParseJSON(r.Body, &req); err != nil {
+			return utils.BadRequest(errors.WithMessage(err, "Invalid request body"))
 		}
 
 		switch req.Level {
@@ -66,15 +52,11 @@ func postLogLevelHandler(logLevel *slog.LevelVar) http.HandlerFunc {
 		case "crit":
 			logLevel.Set(log.LevelCrit)
 		default:
-			writeError(w, http.StatusBadRequest, "Invalid verbosity level")
-			return
+			return utils.BadRequest(errors.New("Invalid verbosity level"))
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		response := logLevelResponse{
+		return utils.WriteJSON(w, logLevelResponse{
 			CurrentLevel: logLevel.Level().String(),
-		}
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(response)
+		})
 	}
 }
