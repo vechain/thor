@@ -320,7 +320,7 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 		}
 
 		signer, _ := h.Signer()
-		js.AddBlock(h.ID(), signer, h.COM())
+		js.AddBlock(signer, h.COM())
 
 		if h.Number() <= end {
 			break

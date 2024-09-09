@@ -728,10 +728,8 @@ func TestJustifier(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				var blkID thor.Bytes32
 				for i := 0; i <= MaxBlockProposers*2/3; i++ {
-					blkID = datagen.RandomHash()
-					vs.AddBlock(blkID, datagen.RandomAddress(), true)
+					vs.AddBlock(datagen.RandomAddress(), true)
 				}
 
 				st := vs.Summarize()
@@ -740,7 +738,7 @@ func TestJustifier(t *testing.T) {
 				assert.True(t, st.Committed)
 
 				// add vote after commits，commit/justify stays the same
-				vs.AddBlock(datagen.RandomHash(), datagen.RandomAddress(), true)
+				vs.AddBlock(datagen.RandomAddress(), true)
 				st = vs.Summarize()
 				assert.Equal(t, uint32(3), st.Quality)
 				assert.True(t, st.Justified)
@@ -761,10 +759,8 @@ func TestJustifier(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				var blkID thor.Bytes32
 				for i := 0; i <= MaxBlockProposers*2/3; i++ {
-					blkID = datagen.RandomHash()
-					vs.AddBlock(blkID, datagen.RandomAddress(), false)
+					vs.AddBlock(datagen.RandomAddress(), false)
 				}
 
 				st := vs.Summarize()
@@ -787,34 +783,29 @@ func TestJustifier(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				var blkID thor.Bytes32
 				// vote <threshold> times COM
 				for i := 0; i < MaxBlockProposers*2/3; i++ {
-					blkID = datagen.RandomHash()
-					vs.AddBlock(blkID, datagen.RandomAddress(), true)
+					vs.AddBlock(datagen.RandomAddress(), true)
 				}
 
 				master := datagen.RandomAddress()
 				// master votes WIT
-				blkID = datagen.RandomHash()
-				vs.AddBlock(blkID, master, false)
+				vs.AddBlock(master, false)
 
 				// justifies but not committed
 				st := vs.Summarize()
 				assert.True(t, st.Justified)
 				assert.False(t, st.Committed)
 
-				blkID = datagen.RandomHash()
 				// master votes COM
-				vs.AddBlock(blkID, master, true)
+				vs.AddBlock(master, true)
 
 				// should not be committed
 				st = vs.Summarize()
 				assert.False(t, st.Committed)
 
 				// another master votes WIT
-				blkID = datagen.RandomHash()
-				vs.AddBlock(blkID, datagen.RandomAddress(), true)
+				vs.AddBlock(datagen.RandomAddress(), true)
 				st = vs.Summarize()
 				assert.True(t, st.Committed)
 			},
@@ -831,19 +822,19 @@ func TestJustifier(t *testing.T) {
 				}
 
 				master := datagen.RandomAddress()
-				vs.AddBlock(datagen.RandomHash(), master, true)
+				vs.AddBlock(master, true)
 				assert.Equal(t, true, vs.votes[master])
 				assert.Equal(t, uint64(1), vs.comVotes)
 
-				vs.AddBlock(datagen.RandomHash(), master, false)
+				vs.AddBlock(master, false)
 				assert.Equal(t, false, vs.votes[master])
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(datagen.RandomHash(), master, true)
+				vs.AddBlock(master, true)
 				assert.Equal(t, false, vs.votes[master])
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(datagen.RandomHash(), master, false)
+				vs.AddBlock(master, false)
 				assert.Equal(t, false, vs.votes[master])
 				assert.Equal(t, uint64(0), vs.comVotes)
 
@@ -851,19 +842,19 @@ func TestJustifier(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				vs.AddBlock(datagen.RandomHash(), master, false)
+				vs.AddBlock(master, false)
 				assert.Equal(t, false, vs.votes[master])
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(datagen.RandomHash(), master, true)
+				vs.AddBlock(master, true)
 				assert.Equal(t, false, vs.votes[master])
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(datagen.RandomHash(), master, true)
+				vs.AddBlock(master, true)
 				assert.Equal(t, false, vs.votes[master])
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(datagen.RandomHash(), master, false)
+				vs.AddBlock(master, false)
 				assert.Equal(t, false, vs.votes[master])
 				assert.Equal(t, uint64(0), vs.comVotes)
 			},
