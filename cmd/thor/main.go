@@ -171,22 +171,22 @@ func defaultAction(ctx *cli.Context) error {
 	metricsURL := ""
 	if ctx.Bool(enableMetricsFlag.Name) {
 		metrics.InitializePrometheusMetrics()
-		url, closeFun, err := api.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
+		url, closeFunc, err := api.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
 		if err != nil {
 			return fmt.Errorf("unable to start metrics server - %w", err)
 		}
 		metricsURL = url
-		defer func() { log.Info("stopping metrics server..."); closeFun() }()
+		defer func() { log.Info("stopping metrics server..."); closeFunc() }()
 	}
 
 	adminURL := ""
 	if ctx.Bool(enableAdminFlag.Name) {
-		url, closeFun, err := api.StartAdminServer(ctx.String(adminAddrFlag.Name), logLevel)
+		url, closeFunc, err := api.StartAdminServer(ctx.String(adminAddrFlag.Name), logLevel)
 		if err != nil {
 			return fmt.Errorf("unable to start admin server - %w", err)
 		}
 		adminURL = url
-		defer func() { log.Info("stopping admin server..."); closeFun() }()
+		defer func() { log.Info("stopping admin server..."); closeFunc() }()
 	}
 
 	gene, forkConfig, err := selectGenesis(ctx)
@@ -315,22 +315,22 @@ func soloAction(ctx *cli.Context) error {
 	metricsURL := ""
 	if ctx.Bool(enableMetricsFlag.Name) {
 		metrics.InitializePrometheusMetrics()
-		url, closeFun, err := api.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
+		url, closeFunc, err := api.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
 		if err != nil {
 			return fmt.Errorf("unable to start metrics server - %w", err)
 		}
 		metricsURL = url
-		defer func() { log.Info("stopping metrics server..."); closeFun() }()
+		defer func() { log.Info("stopping metrics server..."); closeFunc() }()
 	}
 
 	adminURL := ""
 	if ctx.Bool(enableAdminFlag.Name) {
-		url, closeFun, err := api.StartAdminServer(ctx.String(adminAddrFlag.Name), logLevel)
+		url, closeFunc, err := api.StartAdminServer(ctx.String(adminAddrFlag.Name), logLevel)
 		if err != nil {
 			return fmt.Errorf("unable to start admin server - %w", err)
 		}
 		adminURL = url
-		defer func() { log.Info("stopping admin server..."); closeFun() }()
+		defer func() { log.Info("stopping admin server..."); closeFunc() }()
 	}
 
 	var (
