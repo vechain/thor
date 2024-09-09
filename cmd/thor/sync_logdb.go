@@ -373,14 +373,12 @@ func pumpBlockAndReceipts(ctx context.Context, repo *chain.Repository, headID th
 			select {
 			case <-co.Parallel(func(queue chan<- func()) {
 				for _, b := range buf {
-					h := b.Header()
 					queue <- func() {
-						h.ID()
+						b.Header().ID()
 					}
 					for _, tx := range b.Transactions() {
-						tmpTx := tx
 						queue <- func() {
-							tmpTx.ID()
+							tx.ID()
 						}
 					}
 				}
