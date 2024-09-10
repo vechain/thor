@@ -12,11 +12,13 @@ import (
 	"github.com/vechain/thor/v2/api/utils"
 )
 
+const MountPath = "/node"
+
 type Node struct {
 	nw Network
 }
 
-func New(nw Network) *Node {
+func New(nw Network) utils.APIServer {
 	return &Node{
 		nw,
 	}
@@ -37,4 +39,8 @@ func (n *Node) Mount(root *mux.Router, pathPrefix string) {
 		Methods(http.MethodGet).
 		Name("node_get_peers").
 		HandlerFunc(utils.WrapHandlerFunc(n.handleNetwork))
+}
+
+func (n *Node) MountDefaultPath(router *mux.Router) {
+	n.Mount(router, MountPath)
 }

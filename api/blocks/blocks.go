@@ -17,12 +17,14 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
+const MountPath = "/blocks"
+
 type Blocks struct {
 	repo *chain.Repository
 	bft  bft.Committer
 }
 
-func New(repo *chain.Repository, bft bft.Committer) *Blocks {
+func New(repo *chain.Repository, bft bft.Committer) utils.APIServer {
 	return &Blocks{
 		repo,
 		bft,
@@ -97,4 +99,8 @@ func (b *Blocks) Mount(root *mux.Router, pathPrefix string) {
 		Methods(http.MethodGet).
 		Name("blocks_get_block").
 		HandlerFunc(utils.WrapHandlerFunc(b.handleGetBlock))
+}
+
+func (b *Blocks) MountDefaultPath(router *mux.Router) {
+	b.Mount(router, MountPath)
 }

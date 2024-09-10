@@ -16,16 +16,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gorilla/mux"
+	"github.com/stretchr/testify/require"
+	"github.com/vechain/thor/v2/node"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/api/events"
 	"github.com/vechain/thor/v2/api/transfers"
 	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
-	"github.com/vechain/thor/v2/muxdb"
-	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
@@ -67,18 +65,18 @@ func TestOption(t *testing.T) {
 		Order:       logdb.DESC,
 	}
 
-	res, statusCode := httpPost(t, ts.URL+"/transfers", filter)
+	res, statusCode := httpPost(t, ts.URL+"/logs/transfers", filter)
 	assert.Equal(t, "options.limit exceeds the maximum allowed value of 5", strings.Trim(string(res), "\n"))
 	assert.Equal(t, http.StatusForbidden, statusCode)
 
 	filter.Options.Limit = 5
-	_, statusCode = httpPost(t, ts.URL+"/transfers", filter)
+	_, statusCode = httpPost(t, ts.URL+"/logs/transfers", filter)
 	assert.Equal(t, http.StatusOK, statusCode)
 
 	// with nil options, should use default limit, when the filtered lower
 	// or equal to the limit, should return the filtered transfers
 	filter.Options = nil
-	res, statusCode = httpPost(t, ts.URL+"/transfers", filter)
+	res, statusCode = httpPost(t, ts.URL+"/logs/transfers", filter)
 	assert.Equal(t, http.StatusOK, statusCode)
 	var tLogs []*events.FilteredEvent
 	if err := json.Unmarshal(res, &tLogs); err != nil {
@@ -89,7 +87,7 @@ func TestOption(t *testing.T) {
 
 	// when the filtered transfers exceed the limit, should return the forbidden
 	insertBlocks(t, db, 6)
-	res, statusCode = httpPost(t, ts.URL+"/transfers", filter)
+	res, statusCode = httpPost(t, ts.URL+"/logs/transfers", filter)
 	assert.Equal(t, http.StatusForbidden, statusCode)
 	assert.Equal(t, "the number of filtered logs exceeds the maximum allowed value of 5, please use pagination", strings.Trim(string(res), "\n"))
 }
@@ -98,7 +96,7 @@ func TestOption(t *testing.T) {
 func testTransferBadRequest(t *testing.T) {
 	badBody := []byte{0x00, 0x01, 0x02}
 
-	res, err := http.Post(ts.URL+"/transfers", "application/x-www-form-urlencoded", bytes.NewReader(badBody))
+	res, err := http.Post(ts.URL+"/logs/transfers", "application/x-www-form-urlencoded", bytes.NewReader(badBody))
 
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, res.StatusCode)
@@ -112,7 +110,7 @@ func testTransferWithEmptyDb(t *testing.T) {
 		Order:       logdb.DESC,
 	}
 
-	res, statusCode := httpPost(t, ts.URL+"/transfers", emptyFilter)
+	res, statusCode := httpPost(t, ts.URL+"/logs/transfers", emptyFilter)
 	var tLogs []*transfers.FilteredTransfer
 	if err := json.Unmarshal(res, &tLogs); err != nil {
 		t.Fatal(err)
@@ -130,7 +128,7 @@ func testTransferWithBlocks(t *testing.T, expectedBlocks int) {
 		Order:       logdb.DESC,
 	}
 
-	res, statusCode := httpPost(t, ts.URL+"/transfers", emptyFilter)
+	res, statusCode := httpPost(t, ts.URL+"/logs/transfers", emptyFilter)
 	var tLogs []*transfers.FilteredTransfer
 	if err := json.Unmarshal(res, &tLogs); err != nil {
 		t.Fatal(err)
@@ -164,21 +162,16 @@ func insertBlocks(t *testing.T, db *logdb.LogDB, n int) {
 }
 
 func initTransferServer(t *testing.T, logDb *logdb.LogDB, limit uint64) {
-	router := mux.NewRouter()
+	thorChain, err := node.NewIntegrationTestChain()
+	require.NoError(t, err)
 
-	muxDb := muxdb.NewMem()
-	stater := state.NewStater(muxDb)
-	gene := genesis.NewDevnet()
+	thorNode, err := new(node.Builder).
+		WithChain(thorChain).
+		WithAPIs(transfers.New(thorChain.Repo(), logDb, limit)).
+		Build()
+	require.NoError(t, err)
 
-	b, _, _, err := gene.Build(stater)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	repo, _ := chain.NewRepository(muxDb, b)
-
-	transfers.New(repo, logDb, limit).Mount(router, "/transfers")
-	ts = httptest.NewServer(router)
+	ts = httptest.NewServer(thorNode.Router())
 }
 
 func createDb(t *testing.T) *logdb.LogDB {

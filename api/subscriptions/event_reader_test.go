@@ -8,17 +8,22 @@ package subscriptions
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/chain"
 )
 
 func TestEventReader_Read(t *testing.T) {
-	repo, generatedBlocks, _ := initChain(t)
-	genesisBlk := generatedBlocks[0]
-	newBlock := generatedBlocks[1]
+	// Arrange
+	thorNode := initChain(t)
+	allBlocks, err := thorNode.GetAllBlocks()
+	require.NoError(t, err)
+	genesisBlk := allBlocks[0]
+	newBlock := allBlocks[1]
 
 	er := &eventReader{
-		repo:        repo,
+		repo:        thorNode.Chain().Repo(),
 		filter:      &EventFilter{},
 		blockReader: &mockBlockReaderWithError{},
 	}
@@ -30,7 +35,7 @@ func TestEventReader_Read(t *testing.T) {
 	assert.False(t, ok)
 
 	// Test case 2: Events are available to read
-	er = newEventReader(repo, genesisBlk.Header().ID(), &EventFilter{})
+	er = newEventReader(thorNode.Chain().Repo(), genesisBlk.Header().ID(), &EventFilter{})
 
 	events, ok, err = er.Read()
 

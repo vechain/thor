@@ -8,18 +8,22 @@ package subscriptions
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/thor"
 )
 
 func TestBeatReader_Read(t *testing.T) {
 	// Arrange
-	repo, generatedBlocks, _ := initChain(t)
-	genesisBlk := generatedBlocks[0]
-	newBlock := generatedBlocks[1]
+	thorNode := initChain(t)
+	allBlocks, err := thorNode.GetAllBlocks()
+	require.NoError(t, err)
+	genesisBlk := allBlocks[0]
+	newBlock := allBlocks[1]
 
 	// Act
-	beatReader := newBeatReader(repo, genesisBlk.Header().ID())
+	beatReader := newBeatReader(thorNode.Chain().Repo(), genesisBlk.Header().ID())
 	res, ok, err := beatReader.Read()
 
 	// Assert
@@ -38,11 +42,13 @@ func TestBeatReader_Read(t *testing.T) {
 
 func TestBeatReader_Read_NoNewBlocksToRead(t *testing.T) {
 	// Arrange
-	repo, generatedBlocks, _ := initChain(t)
-	newBlock := generatedBlocks[1]
+	thorNode := initChain(t)
+	allBlocks, err := thorNode.GetAllBlocks()
+	require.NoError(t, err)
+	newBlock := allBlocks[1]
 
 	// Act
-	beatReader := newBeatReader(repo, newBlock.Header().ID())
+	beatReader := newBeatReader(thorNode.Chain().Repo(), newBlock.Header().ID())
 	res, ok, err := beatReader.Read()
 
 	// Assert
@@ -53,10 +59,10 @@ func TestBeatReader_Read_NoNewBlocksToRead(t *testing.T) {
 
 func TestBeatReader_Read_ErrorWhenReadingBlocks(t *testing.T) {
 	// Arrange
-	repo, _, _ := initChain(t)
+	thorNode := initChain(t)
 
 	// Act
-	beatReader := newBeatReader(repo, thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
+	beatReader := newBeatReader(thorNode.Chain().Repo(), thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
 	res, ok, err := beatReader.Read()
 
 	// Assert

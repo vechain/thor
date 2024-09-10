@@ -17,26 +17,24 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+	"github.com/vechain/thor/v2/node"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/api/transactions"
-	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/muxdb"
-	"github.com/vechain/thor/v2/packer"
-	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
 )
 
-var repo *chain.Repository
 var ts *httptest.Server
 var transaction *tx.Transaction
 var mempoolTx *tx.Transaction
+var chainTag byte
 
 func TestTransaction(t *testing.T) {
 	initTransactionServer(t)
@@ -108,7 +106,6 @@ func getTxReceipt(t *testing.T) {
 
 func sendTx(t *testing.T) {
 	var blockRef = tx.NewBlockRef(0)
-	var chainTag = repo.ChainTag()
 	var expiration = uint32(10)
 	var gas = uint64(21000)
 
@@ -276,19 +273,15 @@ func httpPostAndCheckResponseStatus(t *testing.T, url string, obj interface{}, r
 }
 
 func initTransactionServer(t *testing.T) {
-	db := muxdb.NewMem()
-	stater := state.NewStater(db)
-	gene := genesis.NewDevnet()
+	thorChain, err := node.NewIntegrationTestChain()
+	require.NoError(t, err)
 
-	b, _, _, err := gene.Build(stater)
-	if err != nil {
-		t.Fatal(err)
-	}
-	repo, _ = chain.NewRepository(db, b)
+	chainTag = thorChain.Repo().ChainTag()
+
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 	transaction = new(tx.Builder).
-		ChainTag(repo.ChainTag()).
+		ChainTag(chainTag).
 		GasPriceCoef(1).
 		Expiration(10).
 		Gas(21000).
@@ -296,62 +289,41 @@ func initTransactionServer(t *testing.T) {
 		Clause(cla).
 		BlockRef(tx.NewBlockRef(0)).
 		Build()
+	sig, err := crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	transaction = transaction.WithSignature(sig)
+	require.NoError(t, thorChain.MintTransactions(transaction))
+
+	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute})
+
+	thorNode, err := new(node.Builder).
+		WithChain(thorChain).
+		WithAPIs(transactions.New(thorChain.Repo(), mempool)).
+		Build()
+	require.NoError(t, err)
 
 	mempoolTx = new(tx.Builder).
-		ChainTag(repo.ChainTag()).
+		ChainTag(chainTag).
 		Expiration(10).
 		Gas(21000).
 		Nonce(1).
 		Build()
 
-	sig, err := crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	sig2, err := crypto.Sign(mempoolTx.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	transaction = transaction.WithSignature(sig)
 	mempoolTx = mempoolTx.WithSignature(sig2)
 
-	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
-	sum, _ := repo.GetBlockSummary(b.Header().ID())
-	flow, err := packer.Schedule(sum, uint64(time.Now().Unix()))
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = flow.Adopt(transaction)
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := stage.Commit(); err != nil {
-		t.Fatal(err)
-	}
-	if err := repo.AddBlock(b, receipts, 0); err != nil {
-		t.Fatal(err)
-	}
-	if err := repo.SetBestBlockID(b.Header().ID()); err != nil {
-		t.Fatal(err)
-	}
-	router := mux.NewRouter()
-
 	// Add a tx to the mempool to have both pending and non-pending transactions
-	mempool := txpool.New(repo, stater, txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute})
 	e := mempool.Add(mempoolTx)
 	if e != nil {
 		t.Fatal(e)
 	}
 
-	transactions.New(repo, mempool).Mount(router, "/transactions")
-
-	ts = httptest.NewServer(router)
+	ts = httptest.NewServer(thorNode.Router())
 }
 
 func checkMatchingTx(t *testing.T, expectedTx *tx.Transaction, actualTx *transactions.Transaction) {

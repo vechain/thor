@@ -8,26 +8,29 @@ package subscriptions
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
-	"github.com/gorilla/mux"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/stretchr/testify/require"
+	"github.com/vechain/thor/v2/node"
+	"github.com/vechain/thor/v2/tx"
+
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/txpool"
 )
 
 var ts *httptest.Server
-var client *http.Client
-var sub *Subscriptions
-var txPool *txpool.TxPool
-var repo *chain.Repository
 var blocks []*block.Block
 
 func TestSubscriptions(t *testing.T) {
@@ -211,14 +214,144 @@ func TestParseAddress(t *testing.T) {
 	assert.Equal(t, expectedAddr, *result)
 }
 
+// This is a helper function to forcly insert an event into the output receipts
+func insertMockOutputEventRcpt(receipts tx.Receipts) {
+	oldReceipt := receipts[0]
+	events := make(tx.Events, 0)
+	events = append(events, &tx.Event{
+		Address: thor.BytesToAddress([]byte("to")),
+		Topics:  []thor.Bytes32{thor.BytesToBytes32([]byte("topic"))},
+		Data:    []byte("data"),
+	})
+	outputs := &tx.Output{
+		Transfers: oldReceipt.Outputs[0].Transfers,
+		Events:    events,
+	}
+	receipts[0] = &tx.Receipt{
+		Reverted: oldReceipt.Reverted,
+		GasUsed:  oldReceipt.GasUsed,
+		Outputs:  []*tx.Output{outputs},
+		GasPayer: oldReceipt.GasPayer,
+		Paid:     oldReceipt.Paid,
+		Reward:   oldReceipt.Reward,
+	}
+}
+
 func initSubscriptionsServer(t *testing.T) {
-	r, generatedBlocks, pool := initChain(t)
-	repo = r
-	txPool = pool
-	blocks = generatedBlocks
-	router := mux.NewRouter()
-	sub = New(repo, []string{}, 5, txPool)
-	sub.Mount(router, "/subscriptions")
-	ts = httptest.NewServer(router)
-	client = &http.Client{}
+	thorChain, err := node.NewIntegrationTestChain()
+	require.NoError(t, err)
+
+	txPool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
+		Limit:           100,
+		LimitPerAccount: 16,
+		MaxLifetime:     time.Hour,
+	})
+
+	addr := thor.BytesToAddress([]byte("to"))
+	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
+	tr := new(tx.Builder).
+		ChainTag(thorChain.Repo().ChainTag()).
+		GasPriceCoef(1).
+		Expiration(10).
+		Gas(21000).
+		Nonce(1).
+		Clause(cla).
+		BlockRef(tx.NewBlockRef(0)).
+		Build()
+
+	sig, err := crypto.Sign(tr.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr = tr.WithSignature(sig)
+
+	require.NoError(t, thorChain.MintTransactionsWithReceiptFunc(&node.TxAndRcpt{
+		Transaction: tr,
+		ReceiptFunc: insertMockOutputEventRcpt, // todo review this
+	}))
+
+	thorNode, err := new(node.Builder).
+		WithChain(thorChain).
+		WithAPIs(
+			New(thorChain.Repo(), []string{}, 5, txPool),
+		).
+		Build()
+	require.NoError(t, err)
+
+	blocks, err = thorNode.GetAllBlocks()
+	require.NoError(t, err)
+
+	ts = httptest.NewServer(thorNode.Router())
+}
+
+func TestSubscriptionsBacktrace(t *testing.T) {
+	thorChain, err := node.NewIntegrationTestChain()
+	require.NoError(t, err)
+
+	txPool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
+		Limit:           100,
+		LimitPerAccount: 16,
+		MaxLifetime:     time.Hour,
+	})
+
+	addr := thor.BytesToAddress([]byte("to"))
+	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
+	tr := new(tx.Builder).
+		ChainTag(thorChain.Repo().ChainTag()).
+		GasPriceCoef(1).
+		Expiration(10).
+		Gas(21000).
+		Nonce(1).
+		Clause(cla).
+		BlockRef(tx.NewBlockRef(0)).
+		Build()
+
+	sig, err := crypto.Sign(tr.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr = tr.WithSignature(sig)
+
+	require.NoError(t, thorChain.MintTransactionsWithReceiptFunc(&node.TxAndRcpt{
+		Transaction: tr,
+		ReceiptFunc: insertMockOutputEventRcpt, // todo review this
+	}))
+
+	thorNode, err := new(node.Builder).
+		WithChain(thorChain).
+		WithAPIs(
+			New(thorChain.Repo(), []string{}, 5, txPool),
+		).
+		Build()
+	require.NoError(t, err)
+
+	for i := 0; i < 10; i++ {
+		require.NoError(t, thorNode.GenerateNewBlock())
+	}
+
+	blocks, err = thorNode.GetAllBlocks()
+	require.NoError(t, err)
+	ts = httptest.NewServer(thorNode.Router())
+
+	defer ts.Close()
+
+	t.Run("testHandleSubjectWithTransferBacktraceLimit", testHandleSubjectWithTransferBacktraceLimit)
+}
+func testHandleSubjectWithTransferBacktraceLimit(t *testing.T) {
+	genesisBlock := blocks[0]
+	queryArg := fmt.Sprintf("pos=%s", genesisBlock.Header().ID().String())
+	u := url.URL{Scheme: "ws", Host: strings.TrimPrefix(ts.URL, "http://"), Path: "/subscriptions/transfer", RawQuery: queryArg}
+
+	conn, resp, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	assert.Error(t, err)
+	assert.Equal(t, "websocket: bad handshake", err.Error())
+	defer resp.Body.Close() // Ensure body is closed after reading
+
+	// Read the response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("failed to read response body: %v", err)
+	}
+	assert.Equal(t, body, []byte("pos: backtrace limit exceeded\n"))
+	assert.Nil(t, conn)
 }

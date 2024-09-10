@@ -72,7 +72,7 @@ func New(
 		})
 
 	accounts.New(repo, stater, callGasLimit, forkConfig, bft).
-		Mount(router, "/accounts")
+		Mount(router, accounts.MountPath)
 
 	if !skipLogs {
 		events.New(repo, logDB, logsLimit).
@@ -114,5 +114,6 @@ func New(
 		handler = RequestLoggerHandler(handler, logger)
 	}
 
-	return handler.ServeHTTP, subs.Close // subscriptions handles hijacked conns, which need to be closed
+	castedSub := subs.(*subscriptions.Subscriptions)
+	return handler.ServeHTTP, castedSub.Close // subscriptions handles hijacked conns, which need to be closed
 }

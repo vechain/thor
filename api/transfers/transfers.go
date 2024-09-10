@@ -18,13 +18,15 @@ import (
 	"github.com/vechain/thor/v2/logdb"
 )
 
+const MountPath = "/logs/transfers"
+
 type Transfers struct {
 	repo  *chain.Repository
 	db    *logdb.LogDB
 	limit uint64
 }
 
-func New(repo *chain.Repository, db *logdb.LogDB, logsLimit uint64) *Transfers {
+func New(repo *chain.Repository, db *logdb.LogDB, logsLimit uint64) utils.APIServer {
 	return &Transfers{
 		repo,
 		db,
@@ -92,4 +94,8 @@ func (t *Transfers) Mount(root *mux.Router, pathPrefix string) {
 		Methods(http.MethodPost).
 		Name("logs_filter_transfer").
 		HandlerFunc(utils.WrapHandlerFunc(t.handleFilterTransferLogs))
+}
+
+func (t *Transfers) MountDefaultPath(router *mux.Router) {
+	t.Mount(router, MountPath)
 }

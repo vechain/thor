@@ -8,28 +8,26 @@ package subscriptions
 import (
 	"math/big"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/chain"
+	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/muxdb"
-	"github.com/vechain/thor/v2/packer"
-	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/node"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
-	"github.com/vechain/thor/v2/txpool"
 )
 
 func TestBlockReader_Read(t *testing.T) {
-	repo, generatedBlocks, _ := initChain(t)
-	genesisBlk := generatedBlocks[0]
-	newBlock := generatedBlocks[1]
+	// Arrange
+	thorNode := initChain(t)
+	allBlocks, err := thorNode.GetAllBlocks()
+	require.NoError(t, err)
+	genesisBlk := allBlocks[0]
+	newBlock := allBlocks[1]
 
 	// Test case 1: Successful read next blocks
-	br := newBlockReader(repo, genesisBlk.Header().ID())
+	br := newBlockReader(thorNode.Chain().Repo(), genesisBlk.Header().ID())
 	res, ok, err := br.Read()
 
 	assert.NoError(t, err)
@@ -42,7 +40,7 @@ func TestBlockReader_Read(t *testing.T) {
 	}
 
 	// Test case 2: There is no new block
-	br = newBlockReader(repo, newBlock.Header().ID())
+	br = newBlockReader(thorNode.Chain().Repo(), newBlock.Header().ID())
 	res, ok, err = br.Read()
 
 	assert.NoError(t, err)
@@ -50,7 +48,7 @@ func TestBlockReader_Read(t *testing.T) {
 	assert.Empty(t, res)
 
 	// Test case 3: Error when reading blocks
-	br = newBlockReader(repo, thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
+	br = newBlockReader(thorNode.Chain().Repo(), thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
 	res, ok, err = br.Read()
 
 	assert.Error(t, err)
@@ -58,27 +56,14 @@ func TestBlockReader_Read(t *testing.T) {
 	assert.Empty(t, res)
 }
 
-func initChain(t *testing.T) (*chain.Repository, []*block.Block, *txpool.TxPool) {
-	db := muxdb.NewMem()
-	stater := state.NewStater(db)
-	gene := genesis.NewDevnet()
-
-	b, _, _, err := gene.Build(stater)
-	if err != nil {
-		t.Fatal(err)
-	}
-	repo, _ := chain.NewRepository(db, b)
-
-	txPool := txpool.New(repo, stater, txpool.Options{
-		Limit:           100,
-		LimitPerAccount: 16,
-		MaxLifetime:     time.Hour,
-	})
+func initChain(t *testing.T) *node.Node {
+	thorChain, err := node.NewIntegrationTestChain()
+	require.NoError(t, err)
 
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 	tr := new(tx.Builder).
-		ChainTag(repo.ChainTag()).
+		ChainTag(thorChain.Repo().ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
 		Gas(21000).
@@ -92,31 +77,15 @@ func initChain(t *testing.T) (*chain.Repository, []*block.Block, *txpool.TxPool)
 		t.Fatal(err)
 	}
 	tr = tr.WithSignature(sig)
-	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
-	sum, _ := repo.GetBlockSummary(b.Header().ID())
-	flow, err := packer.Schedule(sum, uint64(time.Now().Unix()))
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = flow.Adopt(tr)
-	if err != nil {
-		t.Fatal(err)
-	}
-	blk, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := stage.Commit(); err != nil {
-		t.Fatal(err)
-	}
-	insertMockOutputEvent(receipts)
-	if err := repo.AddBlock(blk, receipts, 0); err != nil {
-		t.Fatal(err)
-	}
-	if err := repo.SetBestBlockID(blk.Header().ID()); err != nil {
-		t.Fatal(err)
-	}
-	return repo, []*block.Block{b, blk}, txPool
+
+	require.NoError(t, thorChain.MintTransactionsWithReceiptFunc(&node.TxAndRcpt{Transaction: tr, ReceiptFunc: insertMockOutputEvent}))
+
+	thorNode, err := new(node.Builder).
+		WithChain(thorChain).
+		WithAPIs().
+		Build()
+	require.NoError(t, err)
+	return thorNode
 }
 
 // This is a helper function to forcly insert an event into the output receipts
