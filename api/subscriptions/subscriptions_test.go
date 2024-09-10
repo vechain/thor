@@ -227,7 +227,7 @@ func initSubscriptionsServer(t *testing.T) {
 	ts = httptest.NewServer(router)
 }
 
-func TestSubscriptionsBacklog(t *testing.T) {
+func TestSubscriptionsBacktrace(t *testing.T) {
 	r, generatedBlocks, pool := initChainMultipleBlocks(t, 10)
 	repo = r
 	txPool = pool
@@ -238,9 +238,9 @@ func TestSubscriptionsBacklog(t *testing.T) {
 	ts = httptest.NewServer(router)
 	defer ts.Close()
 
-	t.Run("testHandleSubjectWithTransferBacklog", testHandleSubjectWithTransferBacklog)
+	t.Run("testHandleSubjectWithTransferBacktrace", testHandleSubjectWithTransferBacktrace)
 }
-func testHandleSubjectWithTransferBacklog(t *testing.T) {
+func testHandleSubjectWithTransferBacktrace(t *testing.T) {
 	genesisBlock := blocks[0]
 	queryArg := fmt.Sprintf("pos=%s", genesisBlock.Header().ID().String())
 	u := url.URL{Scheme: "ws", Host: strings.TrimPrefix(ts.URL, "http://"), Path: "/subscriptions/transfer", RawQuery: queryArg}
