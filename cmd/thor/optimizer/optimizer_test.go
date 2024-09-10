@@ -134,7 +134,7 @@ func newTempFileDB() (*muxdb.MuxDB, func() error, error) {
 		return nil, nil, err
 	}
 
-	closeFun := func() error {
+	closeFunc := func() error {
 		err = db.Close()
 		if err != nil {
 			return err
@@ -146,7 +146,7 @@ func newTempFileDB() (*muxdb.MuxDB, func() error, error) {
 		return nil
 	}
 
-	return db, closeFun, nil
+	return db, closeFunc, nil
 }
 
 func TestProcessDump(t *testing.T) {
