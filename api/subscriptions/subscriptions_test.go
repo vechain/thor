@@ -238,9 +238,9 @@ func TestSubscriptionsBacktrace(t *testing.T) {
 	ts = httptest.NewServer(router)
 	defer ts.Close()
 
-	t.Run("testHandleSubjectWithTransferBacktrace", testHandleSubjectWithTransferBacktrace)
+	t.Run("testHandleSubjectWithTransferBacktraceLimit", testHandleSubjectWithTransferBacktraceLimit)
 }
-func testHandleSubjectWithTransferBacktrace(t *testing.T) {
+func testHandleSubjectWithTransferBacktraceLimit(t *testing.T) {
 	genesisBlock := blocks[0]
 	queryArg := fmt.Sprintf("pos=%s", genesisBlock.Header().ID().String())
 	u := url.URL{Scheme: "ws", Host: strings.TrimPrefix(ts.URL, "http://"), Path: "/subscriptions/transfer", RawQuery: queryArg}
