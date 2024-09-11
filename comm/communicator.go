@@ -238,21 +238,19 @@ func (c *Communicator) BroadcastBlock(blk *block.Block) {
 	toAnnounce := peers[p:]
 
 	for _, peer := range toPropagate {
-		tmpPeer := peer
-		tmpPeer.MarkBlock(blk.Header().ID())
+		peer.MarkBlock(blk.Header().ID())
 		c.goes.Go(func() {
-			if err := proto.NotifyNewBlock(c.ctx, tmpPeer, blk); err != nil {
-				tmpPeer.logger.Debug("failed to broadcast new block", "err", err)
+			if err := proto.NotifyNewBlock(c.ctx, peer, blk); err != nil {
+				peer.logger.Debug("failed to broadcast new block", "err", err)
 			}
 		})
 	}
 
 	for _, peer := range toAnnounce {
-		tmpPeer := peer
-		tmpPeer.MarkBlock(blk.Header().ID())
+		peer.MarkBlock(blk.Header().ID())
 		c.goes.Go(func() {
-			if err := proto.NotifyNewBlockID(c.ctx, tmpPeer, blk.Header().ID()); err != nil {
-				tmpPeer.logger.Debug("failed to broadcast new block id", "err", err)
+			if err := proto.NotifyNewBlockID(c.ctx, peer, blk.Header().ID()); err != nil {
+				peer.logger.Debug("failed to broadcast new block id", "err", err)
 			}
 		})
 	}

@@ -49,7 +49,7 @@ type precompiledFailureTest struct {
 // allPrecompiles does not map to the actual set of precompiles, as it also contains
 // repriced versions of precompiles at certain slots
 var allPrecompiles = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}): &safe_ecrecover{},
+	common.BytesToAddress([]byte{1}): &safeEcrecover{},
 	common.BytesToAddress([]byte{2}): &sha256hash{},
 	common.BytesToAddress([]byte{3}): &ripemd160hash{},
 	common.BytesToAddress([]byte{4}): &dataCopy{},
@@ -233,16 +233,16 @@ func BenchmarkPrecompiledIdentity(bench *testing.B) {
 }
 
 // Tests the sample inputs from the ModExp EIP 198.
-func TestPrecompiledModExp(t *testing.T)      { testJson("modexp", "05", t) }
-func BenchmarkPrecompiledModExp(b *testing.B) { benchJson("modexp", "05", b) }
+func TestPrecompiledModExp(t *testing.T)      { testJSON("modexp", "05", t) }
+func BenchmarkPrecompiledModExp(b *testing.B) { benchJSON("modexp", "05", b) }
 
 // Tests the sample inputs from the elliptic curve addition EIP 213.
-func TestPrecompiledBn256Add(t *testing.T)      { testJson("bn256Add", "06", t) }
-func BenchmarkPrecompiledBn256Add(b *testing.B) { benchJson("bn256Add", "06", b) }
+func TestPrecompiledBn256Add(t *testing.T)      { testJSON("bn256Add", "06", t) }
+func BenchmarkPrecompiledBn256Add(b *testing.B) { benchJSON("bn256Add", "06", b) }
 
 // Tests OOG
 func TestPrecompiledModExpOOG(t *testing.T) {
-	modexpTests, err := loadJson("modexp")
+	modexpTests, err := loadJSON("modexp")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,15 +252,15 @@ func TestPrecompiledModExpOOG(t *testing.T) {
 }
 
 // Tests the sample inputs from the elliptic curve scalar multiplication EIP 213.
-func TestPrecompiledBn256ScalarMul(t *testing.T)      { testJson("bn256ScalarMul", "07", t) }
-func BenchmarkPrecompiledBn256ScalarMul(b *testing.B) { benchJson("bn256ScalarMul", "07", b) }
+func TestPrecompiledBn256ScalarMul(t *testing.T)      { testJSON("bn256ScalarMul", "07", t) }
+func BenchmarkPrecompiledBn256ScalarMul(b *testing.B) { benchJSON("bn256ScalarMul", "07", b) }
 
 // Tests the sample inputs from the elliptic curve pairing check EIP 197.
-func TestPrecompiledBn256Pairing(t *testing.T)      { testJson("bn256Pairing", "08", t) }
-func BenchmarkPrecompiledBn256Pairing(b *testing.B) { benchJson("bn256Pairing", "08", b) }
+func TestPrecompiledBn256Pairing(t *testing.T)      { testJSON("bn256Pairing", "08", t) }
+func BenchmarkPrecompiledBn256Pairing(b *testing.B) { benchJSON("bn256Pairing", "08", b) }
 
-func TestPrecompiledBlake2F(t *testing.T)      { testJson("blake2F", "09", t) }
-func BenchmarkPrecompiledBlake2F(b *testing.B) { benchJson("blake2F", "09", b) }
+func TestPrecompiledBlake2F(t *testing.T)      { testJSON("blake2F", "09", t) }
+func BenchmarkPrecompiledBlake2F(b *testing.B) { benchJSON("blake2F", "09", b) }
 
 func TestPrecompileBlake2FMalformedInput(t *testing.T) {
 	for _, test := range blake2FMalformedInputTests {
@@ -268,10 +268,10 @@ func TestPrecompileBlake2FMalformedInput(t *testing.T) {
 	}
 }
 
-func TestPrecompiledEcrecover(t *testing.T) { testJson("ecRecover", "01", t) }
+func TestPrecompiledEcrecover(t *testing.T) { testJSON("ecRecover", "01", t) }
 
-func testJson(name, addr string, t *testing.T) {
-	tests, err := loadJson(name)
+func testJSON(name, addr string, t *testing.T) {
+	tests, err := loadJSON(name)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,8 +280,8 @@ func testJson(name, addr string, t *testing.T) {
 	}
 }
 
-func benchJson(name, addr string, b *testing.B) {
-	tests, err := loadJson(name)
+func benchJSON(name, addr string, b *testing.B) {
+	tests, err := loadJSON(name)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -290,7 +290,7 @@ func benchJson(name, addr string, b *testing.B) {
 	}
 }
 
-func loadJson(name string) ([]precompiledTest, error) {
+func loadJSON(name string) ([]precompiledTest, error) {
 	data, err := os.ReadFile(fmt.Sprintf("testdata/precompiles/%v.json", name))
 	if err != nil {
 		return nil, err

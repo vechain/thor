@@ -37,7 +37,7 @@ func (m mem) Delete(k []byte) error {
 	delete(m, string(k))
 	return nil
 }
-func (m mem) IsNotFound(err error) bool {
+func (m mem) IsNotFound(error) bool {
 	return true
 }
 
@@ -156,7 +156,7 @@ func (s *DummyStore) Delete(key []byte) error {
 	return nil
 }
 
-func (s *DummyStore) DeleteRange(ctx context.Context, r Range) error {
+func (s *DummyStore) DeleteRange(_ context.Context, r Range) error {
 	for k := range s.data {
 		if k >= string(r.Start) && k < string(r.Limit) {
 			delete(s.data, k)
@@ -165,7 +165,7 @@ func (s *DummyStore) DeleteRange(ctx context.Context, r Range) error {
 	return nil
 }
 
-func (s *DummyStore) Iterate(r Range) Iterator {
+func (s *DummyStore) Iterate(_ Range) Iterator {
 	return &DummyIterator{}
 }
 
@@ -180,11 +180,11 @@ func (s *DummyStore) Snapshot() Snapshot {
 // Dummy Bulk Implementation
 type DummyBulk struct{}
 
-func (db *DummyBulk) Put(key, val []byte) error {
+func (db *DummyBulk) Put(_, _ []byte) error {
 	return nil
 }
 
-func (db *DummyBulk) Delete(key []byte) error {
+func (db *DummyBulk) Delete(_ []byte) error {
 	return nil
 }
 
@@ -232,7 +232,7 @@ func (di *DummyIterator) Error() error {
 // Dummy Snapshot implementation
 type DummySnapshot struct{}
 
-func (ds *DummySnapshot) Get(key []byte) ([]byte, error) {
+func (ds *DummySnapshot) Get(_ []byte) ([]byte, error) {
 	return nil, errors.New("key not found")
 }
 

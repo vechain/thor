@@ -27,11 +27,10 @@ func (c *Communicator) txsLoop() {
 				})
 
 				for _, peer := range peers {
-					tmpPeer := peer
-					tmpPeer.MarkTransaction(tx.Hash())
+					peer.MarkTransaction(tx.Hash())
 					c.goes.Go(func() {
-						if err := proto.NotifyNewTx(c.ctx, tmpPeer, tx); err != nil {
-							tmpPeer.logger.Debug("failed to broadcast tx", "err", err)
+						if err := proto.NotifyNewTx(c.ctx, peer, tx); err != nil {
+							peer.logger.Debug("failed to broadcast tx", "err", err)
 						}
 					})
 				}

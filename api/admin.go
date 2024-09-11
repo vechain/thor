@@ -34,7 +34,7 @@ func writeError(w http.ResponseWriter, errCode int, errMsg string) {
 }
 
 func getLogLevelHandler(logLevel *slog.LevelVar) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, _ *http.Request) {
 		response := logLevelResponse{
 			CurrentLevel: logLevel.Level().String(),
 		}
