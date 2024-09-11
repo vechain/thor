@@ -204,8 +204,6 @@ func defaultAction(ctx *cli.Context) error {
 	}
 	defer func() { log.Info("closing main database..."); mainDB.Close() }()
 
-	skipLogs := ctx.Bool(skipLogsFlag.Name)
-
 	logDB, err := openLogDB(instanceDir)
 	if err != nil {
 		return err
@@ -224,6 +222,7 @@ func defaultAction(ctx *cli.Context) error {
 
 	printStartupMessage1(gene, repo, master, instanceDir, forkConfig)
 
+	skipLogs := ctx.Bool(skipLogsFlag.Name)
 	if !skipLogs {
 		if err := syncLogDB(exitSignal, repo, logDB, ctx.Bool(verifyLogsFlag.Name)); err != nil {
 			return err
@@ -377,8 +376,9 @@ func soloAction(ctx *cli.Context) error {
 		return err
 	}
 
-	skipLogs := ctx.Bool(skipLogsFlag.Name)
+	printStartupMessage1(gene, repo, nil, instanceDir, forkConfig)
 
+	skipLogs := ctx.Bool(skipLogsFlag.Name)
 	if !skipLogs {
 		if err := syncLogDB(exitSignal, repo, logDB, ctx.Bool(verifyLogsFlag.Name)); err != nil {
 			return err
@@ -435,7 +435,7 @@ func soloAction(ctx *cli.Context) error {
 		return errors.New("block-interval cannot be zero")
 	}
 
-	printSoloStartupMessage(gene, repo, instanceDir, apiURL, forkConfig, metricsURL, adminURL)
+	printStartupMessage2(gene, apiURL, "", metricsURL, adminURL)
 
 	optimizer := optimizer.New(mainDB, repo, !ctx.Bool(disablePrunerFlag.Name))
 	defer func() { log.Info("stopping optimizer..."); optimizer.Stop() }()
