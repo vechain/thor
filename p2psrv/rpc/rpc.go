@@ -179,7 +179,7 @@ func (r *RPC) finalizeCall(id uint32) {
 }
 
 // Notify notifies a message to the peer.
-func (r *RPC) Notify(ctx context.Context, msgCode uint64, arg interface{}) error {
+func (r *RPC) Notify(_ context.Context, msgCode uint64, arg interface{}) error {
 	return p2p.Send(r.rw, msgCode, &msgData{0, false, arg})
 }
 

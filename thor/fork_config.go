@@ -11,6 +11,7 @@ import (
 	"strings"
 )
 
+// nolint: revive
 // ForkConfig config for a fork.
 type ForkConfig struct {
 	VIP191    uint32

@@ -87,7 +87,7 @@ func (s *StateDB) GetLogs() (tx.Events, tx.Transfers) {
 // }
 
 // CreateAccount stub.
-func (s *StateDB) CreateAccount(addr common.Address) {}
+func (s *StateDB) CreateAccount(_ common.Address) {}
 
 // GetBalance stub.
 func (s *StateDB) GetBalance(addr common.Address) *big.Int {
@@ -127,10 +127,10 @@ func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 }
 
 // GetNonce stub.
-func (s *StateDB) GetNonce(addr common.Address) uint64 { return 0 }
+func (s *StateDB) GetNonce(_ common.Address) uint64 { return 0 }
 
 // SetNonce stub.
-func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {}
+func (s *StateDB) SetNonce(_ common.Address, _ uint64) {}
 
 // GetCodeHash stub.
 func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {

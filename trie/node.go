@@ -76,8 +76,8 @@ func (n *valueNode) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, n.Value)
 }
 
-func (n *fullNode) copy() *fullNode   { copy := *n; return &copy }
-func (n *shortNode) copy() *shortNode { copy := *n; return &copy }
+func (n *fullNode) copy() *fullNode   { cpy := *n; return &cpy }
+func (n *shortNode) copy() *shortNode { cpy := *n; return &cpy }
 
 // nodeFlag contains caching-related metadata about a node.
 type nodeFlag struct {
@@ -130,10 +130,10 @@ func (n *fullNode) fstring(ind string) string {
 func (n *shortNode) fstring(ind string) string {
 	return fmt.Sprintf("{%x: %v} ", n.Key, n.Val.fstring(ind+"  "))
 }
-func (n *hashNode) fstring(ind string) string {
+func (n *hashNode) fstring(_ string) string {
 	return fmt.Sprintf("<%v> ", n.Hash)
 }
-func (n *valueNode) fstring(ind string) string {
+func (n *valueNode) fstring(_ string) string {
 	return fmt.Sprintf("%x ", n.Value)
 }
 
@@ -254,7 +254,7 @@ func decodeShort(hash *hashNode, buf, elems []byte, trailing *trailing, cacheGen
 	return &shortNode{key, r, flag}, nil
 }
 
-func decodeFull(hash *hashNode, buf, elems []byte, trailing *trailing, cacheGen uint16) (*fullNode, error) {
+func decodeFull(hash *hashNode, _, elems []byte, trailing *trailing, cacheGen uint16) (*fullNode, error) {
 	n := &fullNode{flags: nodeFlag{hash: hash, gen: cacheGen}}
 	for i := 0; i < 16; i++ {
 		cld, rest, err := decodeRef(elems, trailing, cacheGen)

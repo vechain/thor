@@ -100,13 +100,13 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 		},
 		{
 			name: "CreateAccount",
-			fn: func(a testAction, s *statedb.StateDB) {
+			fn: func(_ testAction, s *statedb.StateDB) {
 				s.CreateAccount(addr)
 			},
 		},
 		{
 			name: "Suicide",
-			fn: func(a testAction, s *statedb.StateDB) {
+			fn: func(_ testAction, s *statedb.StateDB) {
 				s.Suicide(addr)
 			},
 		},
