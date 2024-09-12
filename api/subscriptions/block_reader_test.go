@@ -86,7 +86,7 @@ func initChain(t *testing.T) *testchain.Chain {
 	return thorChain
 }
 
-// This is a helper function to forcly insert an event into the output receipts
+// This is a helper function to forcibly insert an event into the output receipts
 func insertMockOutputEvent(receipts tx.Receipts) {
 	oldReceipt := receipts[0]
 	events := make(tx.Events, 0)
