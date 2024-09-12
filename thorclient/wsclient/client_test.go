@@ -393,16 +393,39 @@ func TestClient_SubscribeBlocks_ClientShutdown_LongBlocks(t *testing.T) {
 	// unsubscribe should close the connection forcing a connection error in the eventChan
 	sub.Unsubscribe()
 
-	// next message should be an error
-	assert.Error(t, (<-sub.EventChan).Error)
-
 	// Ensure no more events are received after unsubscribe
 	select {
 	case _, ok := <-sub.EventChan:
 		if ok {
 			t.Error("Expected the event channel to be closed after unsubscribe, but it was still open")
 		}
-	case <-time.After(2 * time.Second):
+	case <-time.After(200 * time.Millisecond):
 		// Timeout here is expected since the channel should be closed and not sending events
+	}
+}
+
+// go test -timeout 80s -run ^TestSubscribeBeats2WithServer$ github.com/vechain/thor/v2/thorclient/wsclient -v
+func TestSubscribeBeats2WithServer(t *testing.T) {
+	// t.Skip("this is a manual test")
+	client, err := NewClient("https://mainnet.vechain.org")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sub, err := client.SubscribeBeats2("")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	go func() {
+		<-time.After(60 * time.Second)
+		sub.Unsubscribe()
+	}()
+
+	for ev := range sub.EventChan {
+		if ev.Error != nil {
+			t.Fatal(ev.Error)
+		}
+		t.Log(ev.Data)
 	}
 }
