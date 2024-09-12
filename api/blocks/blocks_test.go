@@ -17,13 +17,14 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/node"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
@@ -153,7 +154,7 @@ func testGetBlockWithRevisionNumberTooHigh(t *testing.T) {
 }
 
 func initBlockServer(t *testing.T) {
-	thorChain, err := node.NewIntegrationTestChain()
+	thorChain, err := testchain.NewIntegrationTestChain()
 	require.NoError(t, err)
 
 	addr := thor.BytesToAddress([]byte("to"))
@@ -175,20 +176,16 @@ func initBlockServer(t *testing.T) {
 	tx = tx.WithSignature(sig)
 	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], tx))
 
-	thorNode, err := new(node.Builder).
-		WithChain(thorChain).
-		WithAPIs(
-			blocks.New(thorChain.Repo(), solo.NewBFTEngine(thorChain.Repo())),
-		).
-		Build()
-	require.NoError(t, err)
-
-	allBlocks, err := thorNode.GetAllBlocks()
+	allBlocks, err := thorChain.GetAllBlocks()
 	require.NoError(t, err)
 
 	genesisBlock = allBlocks[0]
 	blk = allBlocks[1]
-	ts = httptest.NewServer(thorNode.Router())
+
+	router := mux.NewRouter()
+	bftEngine := solo.NewBFTEngine(thorChain.Repo())
+	blocks.New(thorChain.Repo(), bftEngine).Mount(router, "/blocks")
+	ts = httptest.NewServer(router)
 }
 
 func checkCollapsedBlock(t *testing.T, expBl *block.Block, actBl *blocks.JSONCollapsedBlock) {

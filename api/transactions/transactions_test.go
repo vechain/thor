@@ -17,15 +17,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-	"github.com/vechain/thor/v2/node"
-
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
@@ -273,7 +273,7 @@ func httpPostAndCheckResponseStatus(t *testing.T, url string, obj interface{}, r
 }
 
 func initTransactionServer(t *testing.T) {
-	thorChain, err := node.NewIntegrationTestChain()
+	thorChain, err := testchain.NewIntegrationTestChain()
 	require.NoError(t, err)
 
 	chainTag = thorChain.Repo().ChainTag()
@@ -298,12 +298,6 @@ func initTransactionServer(t *testing.T) {
 
 	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute})
 
-	thorNode, err := new(node.Builder).
-		WithChain(thorChain).
-		WithAPIs(transactions.New(thorChain.Repo(), mempool)).
-		Build()
-	require.NoError(t, err)
-
 	mempoolTx = new(tx.Builder).
 		ChainTag(chainTag).
 		Expiration(10).
@@ -323,7 +317,10 @@ func initTransactionServer(t *testing.T) {
 		t.Fatal(e)
 	}
 
-	ts = httptest.NewServer(thorNode.Router())
+	router := mux.NewRouter()
+	transactions.New(thorChain.Repo(), mempool).Mount(router, "/transactions")
+
+	ts = httptest.NewServer(router)
 }
 
 func checkMatchingTx(t *testing.T, expectedTx *tx.Transaction, actualTx *transactions.Transaction) {

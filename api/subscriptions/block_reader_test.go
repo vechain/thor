@@ -13,21 +13,21 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/node"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
 
 func TestBlockReader_Read(t *testing.T) {
 	// Arrange
-	thorNode := initChain(t)
-	allBlocks, err := thorNode.GetAllBlocks()
+	thorChain := initChain(t)
+	allBlocks, err := thorChain.GetAllBlocks()
 	require.NoError(t, err)
 	genesisBlk := allBlocks[0]
 	newBlock := allBlocks[1]
 
 	// Test case 1: Successful read next blocks
-	br := newBlockReader(thorNode.Chain().Repo(), genesisBlk.Header().ID())
+	br := newBlockReader(thorChain.Repo(), genesisBlk.Header().ID())
 	res, ok, err := br.Read()
 
 	assert.NoError(t, err)
@@ -40,7 +40,7 @@ func TestBlockReader_Read(t *testing.T) {
 	}
 
 	// Test case 2: There is no new block
-	br = newBlockReader(thorNode.Chain().Repo(), newBlock.Header().ID())
+	br = newBlockReader(thorChain.Repo(), newBlock.Header().ID())
 	res, ok, err = br.Read()
 
 	assert.NoError(t, err)
@@ -48,7 +48,7 @@ func TestBlockReader_Read(t *testing.T) {
 	assert.Empty(t, res)
 
 	// Test case 3: Error when reading blocks
-	br = newBlockReader(thorNode.Chain().Repo(), thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
+	br = newBlockReader(thorChain.Repo(), thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
 	res, ok, err = br.Read()
 
 	assert.Error(t, err)
@@ -56,8 +56,8 @@ func TestBlockReader_Read(t *testing.T) {
 	assert.Empty(t, res)
 }
 
-func initChain(t *testing.T) *node.Node {
-	thorChain, err := node.NewIntegrationTestChain()
+func initChain(t *testing.T) *testchain.Chain {
+	thorChain, err := testchain.NewIntegrationTestChain()
 	require.NoError(t, err)
 
 	addr := thor.BytesToAddress([]byte("to"))
@@ -80,15 +80,10 @@ func initChain(t *testing.T) *node.Node {
 
 	require.NoError(t, thorChain.MintTransactionsWithReceiptFunc(
 		genesis.DevAccounts()[0],
-		&node.TxAndRcpt{Transaction: tr, ReceiptFunc: insertMockOutputEvent}),
+		&testchain.TxAndRcpt{Transaction: tr, ReceiptFunc: insertMockOutputEvent}),
 	)
 
-	thorNode, err := new(node.Builder).
-		WithChain(thorChain).
-		WithAPIs().
-		Build()
-	require.NoError(t, err)
-	return thorNode
+	return thorChain
 }
 
 // This is a helper function to forcly insert an event into the output receipts

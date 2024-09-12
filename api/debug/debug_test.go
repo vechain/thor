@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/block"
@@ -27,9 +28,9 @@ import (
 	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
-	"github.com/vechain/thor/v2/node"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/test/datagen"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tracers/logger"
 	"github.com/vechain/thor/v2/tx"
@@ -511,7 +512,7 @@ func testStorageRangeDefaultOption(t *testing.T) {
 }
 
 func initDebugServer(t *testing.T) {
-	thorChain, err := node.NewIntegrationTestChain()
+	thorChain, err := testchain.NewIntegrationTestChain()
 	require.NoError(t, err)
 
 	addr := thor.BytesToAddress([]byte("to"))
@@ -549,22 +550,17 @@ func initDebugServer(t *testing.T) {
 	transaction = transaction.WithSignature(sig)
 
 	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], transaction, noClausesTx))
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0]))
 
-	debug = New(thorChain.Repo(), thorChain.Stater(), thor.NoFork, 21000, true, solo.NewBFTEngine(thorChain.Repo()), []string{"all"}, false).(*Debug)
-	thorNode, err := new(node.Builder).
-		WithChain(thorChain).
-		WithAPIs(
-			debug,
-		).
-		Build()
-	require.NoError(t, err)
-
-	require.NoError(t, thorNode.GenerateNewBlock())
-
-	allBlocks, err := thorNode.GetAllBlocks()
+	allBlocks, err := thorChain.GetAllBlocks()
 	require.NoError(t, err)
 	blk = allBlocks[1]
-	ts = httptest.NewServer(thorNode.Router())
+
+	forkConfig := thor.GetForkConfig(blk.Header().ID())
+	router := mux.NewRouter()
+	debug = New(thorChain.Repo(), thorChain.Stater(), forkConfig, 21000, true, solo.NewBFTEngine(thorChain.Repo()), []string{"all"}, false)
+	debug.Mount(router, "/debug")
+	ts = httptest.NewServer(router)
 }
 
 func httpPostAndCheckResponseStatus(t *testing.T, url string, obj interface{}, responseStatusCode int) string {

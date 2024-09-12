@@ -35,11 +35,7 @@ import (
 	"github.com/vechain/thor/v2/xenv"
 )
 
-const (
-	defaultMaxStorageResult = 1000
-
-	MountPath = "/debug"
-)
+const defaultMaxStorageResult = 1000
 
 type Debug struct {
 	repo              *chain.Repository
@@ -61,7 +57,7 @@ func New(
 	bft bft.Committer,
 	allowedTracers []string,
 	soloMode bool,
-) utils.APIServer {
+) *Debug {
 	allowedMap := make(map[string]struct{})
 	for _, t := range allowedTracers {
 		allowedMap[t] = struct{}{}
@@ -480,8 +476,4 @@ func (d *Debug) Mount(root *mux.Router, pathPrefix string) {
 		Methods(http.MethodPost).
 		Name("debug_trace_storage").
 		HandlerFunc(utils.WrapHandlerFunc(d.handleDebugStorage))
-}
-
-func (d *Debug) MountDefaultPath(router *mux.Router) {
-	d.Mount(router, MountPath)
 }

@@ -19,16 +19,18 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	ABI "github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/node"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
+
+	ABI "github.com/vechain/thor/v2/abi"
 )
 
 // pragma solidity ^0.4.18;
@@ -244,7 +246,7 @@ func getStorageWithNonExisitingRevision(t *testing.T) {
 }
 
 func initAccountServer(t *testing.T) {
-	thorChain, err := node.NewIntegrationTestChain()
+	thorChain, err := testchain.NewIntegrationTestChain()
 	require.NoError(t, err)
 
 	claTransfer := tx.NewClause(&addr).WithValue(value)
@@ -270,17 +272,13 @@ func initAccountServer(t *testing.T) {
 		),
 	)
 
-	thorNode, err := new(node.Builder).
-		WithChain(thorChain).
-		WithAPIs(
-			accounts.New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), thor.NoFork, solo.NewBFTEngine(thorChain.Repo())),
-		).
-		Build()
-	require.NoError(t, err)
-
 	genesisBlock = thorChain.GenesisBlock()
 
-	ts = httptest.NewServer(thorNode.Router())
+	router := mux.NewRouter()
+	accounts.New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), thor.NoFork, solo.NewBFTEngine(thorChain.Repo())).
+		Mount(router, "/accounts")
+
+	ts = httptest.NewServer(router)
 }
 
 func buildTxWithClauses(t *testing.T, chaiTag byte, clauses ...*tx.Clause) *tx.Transaction {

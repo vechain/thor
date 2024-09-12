@@ -22,10 +22,7 @@ import (
 	"github.com/vechain/thor/v2/txpool"
 )
 
-const (
-	txQueueSize = 20
-	MountPath   = "/subscriptions"
-)
+const txQueueSize = 20
 
 type Subscriptions struct {
 	backtraceLimit uint32
@@ -34,10 +31,6 @@ type Subscriptions struct {
 	pendingTx      *pendingTx
 	done           chan struct{}
 	wg             sync.WaitGroup
-}
-
-func (s *Subscriptions) MountDefaultPath(root *mux.Router) {
-	s.Mount(root, MountPath)
 }
 
 type msgReader interface {
@@ -55,7 +48,7 @@ const (
 	pingPeriod = (pongWait * 7) / 10
 )
 
-func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32, txpool *txpool.TxPool) utils.APIServer {
+func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32, txpool *txpool.TxPool) *Subscriptions {
 	sub := &Subscriptions{
 		backtraceLimit: backtraceLimit,
 		repo:           repo,

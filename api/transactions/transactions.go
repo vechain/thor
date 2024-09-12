@@ -18,14 +18,12 @@ import (
 	"github.com/vechain/thor/v2/txpool"
 )
 
-const MountPath = "/transactions"
-
 type Transactions struct {
 	repo *chain.Repository
 	pool *txpool.TxPool
 }
 
-func New(repo *chain.Repository, pool *txpool.TxPool) utils.APIServer {
+func New(repo *chain.Repository, pool *txpool.TxPool) *Transactions {
 	return &Transactions{
 		repo,
 		pool,
@@ -231,8 +229,4 @@ func (t *Transactions) Mount(root *mux.Router, pathPrefix string) {
 		Methods(http.MethodGet).
 		Name("transactions_get_receipt").
 		HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionReceiptByID))
-}
-
-func (t *Transactions) MountDefaultPath(router *mux.Router) {
-	t.Mount(router, MountPath)
 }

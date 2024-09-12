@@ -12,13 +12,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/node"
 	"github.com/vechain/thor/v2/comm"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/txpool"
-
-	thornode "github.com/vechain/thor/v2/node"
 )
 
 var ts *httptest.Server
@@ -34,22 +34,21 @@ func TestNode(t *testing.T) {
 }
 
 func initCommServer(t *testing.T) {
-	thorChain, err := thornode.NewIntegrationTestChain()
+	thorChain, err := testchain.NewIntegrationTestChain()
 	require.NoError(t, err)
 
-	comm := comm.New(thorChain.Repo(), txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
-		Limit:           10000,
-		LimitPerAccount: 16,
-		MaxLifetime:     10 * time.Minute,
-	}))
+	communicator := comm.New(
+		thorChain.Repo(),
+		txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
+			Limit:           10000,
+			LimitPerAccount: 16,
+			MaxLifetime:     10 * time.Minute,
+		}))
 
-	thorNode, err := new(thornode.Builder).
-		WithChain(thorChain).
-		WithAPIs(node.New(comm)).
-		Build()
-	require.NoError(t, err)
+	router := mux.NewRouter()
+	node.New(communicator).Mount(router, "/node")
 
-	ts = httptest.NewServer(thorNode.Router())
+	ts = httptest.NewServer(router)
 }
 
 func httpGet(t *testing.T, url string) []byte {

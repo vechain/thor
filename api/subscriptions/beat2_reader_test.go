@@ -16,15 +16,15 @@ import (
 
 func TestBeat2Reader_Read(t *testing.T) {
 	// Arrange
-	thorNode := initChain(t)
-	allBlocks, err := thorNode.GetAllBlocks()
+	thorChain := initChain(t)
+	allBlocks, err := thorChain.GetAllBlocks()
 	require.NoError(t, err)
 
 	genesisBlk := allBlocks[0]
 	newBlock := allBlocks[1]
 
 	// Act
-	beatReader := newBeat2Reader(thorNode.Chain().Repo(), genesisBlk.Header().ID())
+	beatReader := newBeat2Reader(thorChain.Repo(), genesisBlk.Header().ID())
 	res, ok, err := beatReader.Read()
 
 	// Assert
@@ -43,13 +43,13 @@ func TestBeat2Reader_Read(t *testing.T) {
 
 func TestBeat2Reader_Read_NoNewBlocksToRead(t *testing.T) {
 	// Arrange
-	thorNode := initChain(t)
-	allBlocks, err := thorNode.GetAllBlocks()
+	thorChain := initChain(t)
+	allBlocks, err := thorChain.GetAllBlocks()
 	require.NoError(t, err)
 	newBlock := allBlocks[1]
 
 	// Act
-	beatReader := newBeat2Reader(thorNode.Chain().Repo(), newBlock.Header().ID())
+	beatReader := newBeat2Reader(thorChain.Repo(), newBlock.Header().ID())
 	res, ok, err := beatReader.Read()
 
 	// Assert
@@ -60,10 +60,10 @@ func TestBeat2Reader_Read_NoNewBlocksToRead(t *testing.T) {
 
 func TestBeat2Reader_Read_ErrorWhenReadingBlocks(t *testing.T) {
 	// Arrange
-	thorNode := initChain(t)
+	thorChain := initChain(t)
 
 	// Act
-	beatReader := newBeat2Reader(thorNode.Chain().Repo(), thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
+	beatReader := newBeat2Reader(thorChain.Repo(), thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
 	res, ok, err := beatReader.Read()
 
 	// Assert

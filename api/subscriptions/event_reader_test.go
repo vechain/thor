@@ -16,14 +16,14 @@ import (
 
 func TestEventReader_Read(t *testing.T) {
 	// Arrange
-	thorNode := initChain(t)
-	allBlocks, err := thorNode.GetAllBlocks()
+	thorChain := initChain(t)
+	allBlocks, err := thorChain.GetAllBlocks()
 	require.NoError(t, err)
 	genesisBlk := allBlocks[0]
 	newBlock := allBlocks[1]
 
 	er := &eventReader{
-		repo:        thorNode.Chain().Repo(),
+		repo:        thorChain.Repo(),
 		filter:      &EventFilter{},
 		blockReader: &mockBlockReaderWithError{},
 	}
@@ -35,7 +35,7 @@ func TestEventReader_Read(t *testing.T) {
 	assert.False(t, ok)
 
 	// Test case 2: Events are available to read
-	er = newEventReader(thorNode.Chain().Repo(), genesisBlk.Header().ID(), &EventFilter{})
+	er = newEventReader(thorChain.Repo(), genesisBlk.Header().ID(), &EventFilter{})
 
 	events, ok, err = er.Read()
 

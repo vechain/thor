@@ -9,8 +9,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-
-	"github.com/gorilla/mux"
 )
 
 type httpError struct {
@@ -89,8 +87,3 @@ func WriteJSON(w http.ResponseWriter, obj interface{}) error {
 
 // M shortcut for type map[string]interface{}.
 type M map[string]interface{}
-
-type APIServer interface {
-	Mount(root *mux.Router, pathPrefix string)
-	MountDefaultPath(root *mux.Router)
-}

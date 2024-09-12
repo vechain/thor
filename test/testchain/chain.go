@@ -1,7 +1,9 @@
-package node
+package testchain
 
 import (
+	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/vechain/thor/v2/bft"
@@ -87,4 +89,28 @@ func (c *Chain) MintBlock(account genesis.DevAccount, txAndRcpts ...*TxAndRcpt) 
 		return fmt.Errorf("unable to set best block: %w", err)
 	}
 	return nil
+}
+
+func (c *Chain) GetAllBlocks() ([]*block.Block, error) {
+	bestBlkSummary := c.Repo().BestBlockSummary()
+	var blks []*block.Block
+	currBlockID := bestBlkSummary.Header.ID()
+	startTime := time.Now()
+	for {
+		blk, err := c.repo.GetBlock(currBlockID)
+		if err != nil {
+			return nil, err
+		}
+		blks = append(blks, blk)
+
+		if blk.Header().Number() == c.genesisBlock.Header().Number() {
+			slices.Reverse(blks) // make sure genesis is at position 0
+			return blks, err
+		}
+		currBlockID = blk.Header().ParentID()
+
+		if time.Since(startTime) > 5*time.Second {
+			return nil, errors.New("taking more than 5 seconds to retrieve all blocks")
+		}
+	}
 }

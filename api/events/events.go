@@ -17,15 +17,13 @@ import (
 	"github.com/vechain/thor/v2/logdb"
 )
 
-const MountPath = "/logs/event"
-
 type Events struct {
 	repo  *chain.Repository
 	db    *logdb.LogDB
 	limit uint64
 }
 
-func New(repo *chain.Repository, db *logdb.LogDB, logsLimit uint64) utils.APIServer {
+func New(repo *chain.Repository, db *logdb.LogDB, logsLimit uint64) *Events {
 	return &Events{
 		repo,
 		db,
@@ -88,8 +86,4 @@ func (e *Events) Mount(root *mux.Router, pathPrefix string) {
 		Methods(http.MethodPost).
 		Name("logs_filter_event").
 		HandlerFunc(utils.WrapHandlerFunc(e.handleFilter))
-}
-
-func (e *Events) MountDefaultPath(router *mux.Router) {
-	e.Mount(router, MountPath)
 }

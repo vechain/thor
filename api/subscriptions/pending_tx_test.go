@@ -25,8 +25,8 @@ import (
 
 func TestPendingTx_Subscribe(t *testing.T) {
 	// Arrange
-	thorNode := initChain(t)
-	txPool := txpool.New(thorNode.Chain().Repo(), thorNode.Chain().Stater(), txpool.Options{
+	thorChain := initChain(t)
+	txPool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
 		Limit:           100,
 		LimitPerAccount: 16,
 		MaxLifetime:     time.Hour,
@@ -45,8 +45,8 @@ func TestPendingTx_Subscribe(t *testing.T) {
 
 func TestPendingTx_Unsubscribe(t *testing.T) {
 	// Arrange
-	thorNode := initChain(t)
-	txPool := txpool.New(thorNode.Chain().Repo(), thorNode.Chain().Stater(), txpool.Options{
+	thorChain := initChain(t)
+	txPool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
 		Limit:           100,
 		LimitPerAccount: 16,
 		MaxLifetime:     time.Hour,

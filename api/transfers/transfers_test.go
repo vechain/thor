@@ -16,14 +16,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-	"github.com/vechain/thor/v2/node"
-
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/events"
 	"github.com/vechain/thor/v2/api/transfers"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
@@ -162,16 +162,13 @@ func insertBlocks(t *testing.T, db *logdb.LogDB, n int) {
 }
 
 func initTransferServer(t *testing.T, logDb *logdb.LogDB, limit uint64) {
-	thorChain, err := node.NewIntegrationTestChain()
+	thorChain, err := testchain.NewIntegrationTestChain()
 	require.NoError(t, err)
 
-	thorNode, err := new(node.Builder).
-		WithChain(thorChain).
-		WithAPIs(transfers.New(thorChain.Repo(), logDb, limit)).
-		Build()
-	require.NoError(t, err)
+	router := mux.NewRouter()
+	transfers.New(thorChain.Repo(), logDb, limit).Mount(router, "/logs/transfers")
 
-	ts = httptest.NewServer(thorNode.Router())
+	ts = httptest.NewServer(router)
 }
 
 func createDb(t *testing.T) *logdb.LogDB {

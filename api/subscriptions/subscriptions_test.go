@@ -18,12 +18,13 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/node"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
@@ -237,7 +238,7 @@ func insertMockOutputEventRcpt(receipts tx.Receipts) {
 }
 
 func initSubscriptionsServer(t *testing.T) {
-	thorChain, err := node.NewIntegrationTestChain()
+	thorChain, err := testchain.NewIntegrationTestChain()
 	require.NoError(t, err)
 
 	txPool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
@@ -265,27 +266,22 @@ func initSubscriptionsServer(t *testing.T) {
 	tr = tr.WithSignature(sig)
 
 	require.NoError(t, thorChain.MintTransactionsWithReceiptFunc(genesis.DevAccounts()[0],
-		&node.TxAndRcpt{
+		&testchain.TxAndRcpt{
 			Transaction: tr,
 			ReceiptFunc: insertMockOutputEventRcpt, // todo review this
 		}))
 
-	thorNode, err := new(node.Builder).
-		WithChain(thorChain).
-		WithAPIs(
-			New(thorChain.Repo(), []string{}, 5, txPool),
-		).
-		Build()
+	blocks, err = thorChain.GetAllBlocks()
 	require.NoError(t, err)
 
-	blocks, err = thorNode.GetAllBlocks()
-	require.NoError(t, err)
-
-	ts = httptest.NewServer(thorNode.Router())
+	router := mux.NewRouter()
+	New(thorChain.Repo(), []string{}, 5, txPool).
+		Mount(router, "/subscriptions")
+	ts = httptest.NewServer(router)
 }
 
 func TestSubscriptionsBacktrace(t *testing.T) {
-	thorChain, err := node.NewIntegrationTestChain()
+	thorChain, err := testchain.NewIntegrationTestChain()
 	require.NoError(t, err)
 
 	txPool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
@@ -313,26 +309,21 @@ func TestSubscriptionsBacktrace(t *testing.T) {
 	tr = tr.WithSignature(sig)
 
 	require.NoError(t, thorChain.MintTransactionsWithReceiptFunc(genesis.DevAccounts()[0],
-		&node.TxAndRcpt{
+		&testchain.TxAndRcpt{
 			Transaction: tr,
 			ReceiptFunc: insertMockOutputEventRcpt, // todo review this
 		}))
 
-	thorNode, err := new(node.Builder).
-		WithChain(thorChain).
-		WithAPIs(
-			New(thorChain.Repo(), []string{}, 5, txPool),
-		).
-		Build()
-	require.NoError(t, err)
-
 	for i := 0; i < 10; i++ {
-		require.NoError(t, thorNode.GenerateNewBlock())
+		require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0]))
 	}
 
-	blocks, err = thorNode.GetAllBlocks()
+	blocks, err = thorChain.GetAllBlocks()
 	require.NoError(t, err)
-	ts = httptest.NewServer(thorNode.Router())
+
+	router := mux.NewRouter()
+	New(thorChain.Repo(), []string{}, 5, txPool).Mount(router, "/subscriptions")
+	ts = httptest.NewServer(router)
 
 	defer ts.Close()
 

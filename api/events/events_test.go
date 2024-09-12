@@ -14,12 +14,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/events"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/logdb"
-	"github.com/vechain/thor/v2/node"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
@@ -172,15 +173,12 @@ func testEventWithBlocks(t *testing.T, expectedBlocks int) {
 
 // Init functions
 func initEventServer(t *testing.T, logDb *logdb.LogDB, limit uint64) {
-	thorChain, err := node.NewIntegrationTestChain()
+	thorChain, err := testchain.NewIntegrationTestChain()
 	require.NoError(t, err)
 
-	thorNode, err := new(node.Builder).
-		WithChain(thorChain).
-		WithAPIs(events.New(thorChain.Repo(), logDb, limit)).Build()
-	require.NoError(t, err)
-
-	ts = httptest.NewServer(thorNode.Router())
+	router := mux.NewRouter()
+	events.New(thorChain.Repo(), logDb, limit).Mount(router, "/logs/event")
+	ts = httptest.NewServer(router)
 }
 
 func createDb(t *testing.T) *logdb.LogDB {

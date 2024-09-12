@@ -1,4 +1,4 @@
-package node
+package testchain
 
 import (
 	"github.com/vechain/thor/v2/bft"

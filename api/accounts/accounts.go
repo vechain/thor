@@ -26,8 +26,6 @@ import (
 	"github.com/vechain/thor/v2/xenv"
 )
 
-const MountPath = "/accounts"
-
 type Accounts struct {
 	repo         *chain.Repository
 	stater       *state.Stater
@@ -42,7 +40,7 @@ func New(
 	callGasLimit uint64,
 	forkConfig thor.ForkConfig,
 	bft bft.Committer,
-) utils.APIServer {
+) *Accounts {
 	return &Accounts{
 		repo,
 		stater,
@@ -383,8 +381,4 @@ func (a *Accounts) Mount(root *mux.Router, pathPrefix string) {
 		Methods(http.MethodPost).
 		Name("accounts_call_contract_address").
 		HandlerFunc(utils.WrapHandlerFunc(a.handleCallContract))
-}
-
-func (a *Accounts) MountDefaultPath(root *mux.Router) {
-	a.Mount(root, MountPath)
 }
