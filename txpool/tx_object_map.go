@@ -7,25 +7,31 @@ package txpool
 
 import (
 	"errors"
+	"math/big"
 	"sync"
 
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
 
-// txObjectMap to maintain mapping of tx hash to tx object, and account quota.
+type originKey thor.Address
+type delegatorKey thor.Address
+
+// txObjectMap to maintain mapping of tx hash to tx object, account quota and pending cost.
 type txObjectMap struct {
 	lock      sync.RWMutex
 	mapByHash map[thor.Bytes32]*txObject
 	mapByID   map[thor.Bytes32]*txObject
-	quota     map[thor.Address]int
+	quota     map[interface{}]int
+	cost      map[thor.Address]*big.Int
 }
 
 func newTxObjectMap() *txObjectMap {
 	return &txObjectMap{
 		mapByHash: make(map[thor.Bytes32]*txObject),
 		mapByID:   make(map[thor.Bytes32]*txObject),
-		quota:     make(map[thor.Address]int),
+		quota:     make(map[interface{}]int),
+		cost:      make(map[thor.Address]*big.Int),
 	}
 }
 
@@ -36,7 +42,7 @@ func (m *txObjectMap) ContainsHash(txHash thor.Bytes32) bool {
 	return found
 }
 
-func (m *txObjectMap) Add(txObj *txObject, limitPerAccount int) error {
+func (m *txObjectMap) Add(txObj *txObject, limitPerAccount int, validatePayer func(payer thor.Address, needs *big.Int) error) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -45,26 +51,48 @@ func (m *txObjectMap) Add(txObj *txObject, limitPerAccount int) error {
 		return nil
 	}
 
-	if m.quota[txObj.Origin()] >= limitPerAccount {
+	origin := originKey(txObj.Origin())
+	if m.quota[origin] >= limitPerAccount {
 		return errors.New("account quota exceeded")
 	}
 
-	if d := txObj.Delegator(); d != nil {
-		if m.quota[*d] >= limitPerAccount {
+	delegator := (*delegatorKey)(txObj.Delegator())
+	if delegator != nil {
+		if m.quota[*delegator] >= limitPerAccount {
 			return errors.New("delegator quota exceeded")
 		}
-		m.quota[*d]++
 	}
 
-	m.quota[txObj.Origin()]++
+	var cost *big.Int
+	if txObj.Cost() != nil {
+		pending := m.cost[*txObj.Payer()]
+
+		if pending == nil {
+			cost = new(big.Int).Set(txObj.Cost())
+		} else {
+			cost = new(big.Int).Add(pending, txObj.Cost())
+		}
+
+		if err := validatePayer(*txObj.Payer(), cost); err != nil {
+			return err
+		}
+	}
+
+	m.quota[origin]++
 	m.mapByHash[hash] = txObj
 	m.mapByID[txObj.ID()] = txObj
+	if delegator != nil {
+		m.quota[*delegator]++
+	}
+	if cost != nil {
+		m.cost[*txObj.Payer()] = cost
+	}
 	return nil
 }
 
 func (m *txObjectMap) GetByID(id thor.Bytes32) *txObject {
-	m.lock.Lock()
-	defer m.lock.Unlock()
+	m.lock.RLock()
+	defer m.lock.RUnlock()
 	return m.mapByID[id]
 }
 
@@ -73,17 +101,29 @@ func (m *txObjectMap) RemoveByHash(txHash thor.Bytes32) bool {
 	defer m.lock.Unlock()
 
 	if txObj, ok := m.mapByHash[txHash]; ok {
-		if m.quota[txObj.Origin()] > 1 {
-			m.quota[txObj.Origin()]--
+		origin := originKey(txObj.Origin())
+		if m.quota[origin] > 1 {
+			m.quota[origin]--
 		} else {
-			delete(m.quota, txObj.Origin())
+			delete(m.quota, origin)
 		}
 
 		if d := txObj.Delegator(); d != nil {
-			if m.quota[*d] > 1 {
-				m.quota[*d]--
+			delegator := delegatorKey(*d)
+			if m.quota[delegator] > 1 {
+				m.quota[delegator]--
 			} else {
-				delete(m.quota, *d)
+				delete(m.quota, delegator)
+			}
+		}
+
+		if payer := txObj.Payer(); payer != nil {
+			if pending := m.cost[*payer]; pending != nil {
+				if pending.Cmp(txObj.Cost()) <= 0 {
+					delete(m.cost, *payer)
+				} else {
+					m.cost[*payer] = new(big.Int).Sub(pending, txObj.Cost())
+				}
 			}
 		}
 
@@ -92,6 +132,17 @@ func (m *txObjectMap) RemoveByHash(txHash thor.Bytes32) bool {
 		return true
 	}
 	return false
+}
+
+func (m *txObjectMap) UpdateCost(txObj *txObject) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	if pending := m.cost[*txObj.Payer()]; pending != nil {
+		m.cost[*txObj.Payer()] = new(big.Int).Add(pending, txObj.Cost())
+	} else {
+		m.cost[*txObj.Payer()] = new(big.Int).Set(txObj.Cost())
+	}
 }
 
 func (m *txObjectMap) ToTxObjects() []*txObject {
@@ -124,12 +175,13 @@ func (m *txObjectMap) Fill(txObjs []*txObject) {
 			continue
 		}
 		// skip account limit check
-		m.quota[txObj.Origin()]++
+		m.quota[originKey(txObj.Origin())]++
 		if d := txObj.Delegator(); d != nil {
-			m.quota[*d]++
+			m.quota[delegatorKey(*d)]++
 		}
 		m.mapByHash[txObj.Hash()] = txObj
 		m.mapByID[txObj.ID()] = txObj
+		// skip cost check and accumulation
 	}
 }
 

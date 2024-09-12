@@ -7,6 +7,7 @@ package txpool
 
 import (
 	"context"
+	"math/big"
 	"math/rand"
 	"os"
 	"sync/atomic"
@@ -15,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/co"
@@ -254,7 +256,19 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		}
 
 		txObj.executable = executable
-		if err := p.all.Add(txObj, p.options.LimitPerAccount); err != nil {
+		if err := p.all.Add(txObj, p.options.LimitPerAccount, func(payer thor.Address, needs *big.Int) error {
+			// check payer's balance
+			balance, err := state.GetBalance(payer)
+			if err != nil {
+				return err
+			}
+
+			if balance.Cmp(needs) < 0 {
+				return errors.New("insufficient energy")
+			}
+
+			return nil
+		}); err != nil {
 			return txRejectedError{err.Error()}
 		}
 
@@ -269,7 +283,8 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 			return txRejectedError{"pool is full"}
 		}
 
-		if err := p.all.Add(txObj, p.options.LimitPerAccount); err != nil {
+		// skip pending cost check when chain is not synced
+		if err := p.all.Add(txObj, p.options.LimitPerAccount, func(_ thor.Address, _ *big.Int) error { return nil }); err != nil {
 			return txRejectedError{err.Error()}
 		}
 		logger.Debug("tx added", "id", newTx.ID())
@@ -351,6 +366,7 @@ func (p *TxPool) Dump() tx.Transactions {
 func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transactions, removed int, err error) {
 	all := p.all.ToTxObjects()
 	var toRemove []*txObject
+	var toUpdateCost []*txObject
 	defer func() {
 		if err != nil {
 			// in case of error, simply cut pool size to limit
@@ -366,6 +382,10 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 				p.all.RemoveByHash(txObj.Hash())
 			}
 			removed = len(toRemove)
+		}
+		// update pending cost
+		for _, txObj := range toUpdateCost {
+			p.all.UpdateCost(txObj)
 		}
 	}()
 
@@ -460,8 +480,12 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 
 	for _, obj := range executableObjs {
 		executables = append(executables, obj.Transaction)
-		if !obj.executable || obj.localSubmitted {
+		if !obj.executable {
 			obj.executable = true
+			toUpdateCost = append(toUpdateCost, obj)
+			toBroadcast = append(toBroadcast, obj.Transaction)
+		} else if obj.localSubmitted {
+			// broadcast local submitted even it's already executable
 			toBroadcast = append(toBroadcast, obj.Transaction)
 		}
 	}

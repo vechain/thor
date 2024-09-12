@@ -278,11 +278,11 @@ func TestWashTxs(t *testing.T) {
 
 	tx2 := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[1])
 	txObj2, _ := resolveTx(tx2, false)
-	assert.Nil(t, pool.all.Add(txObj2, LIMIT_PER_ACCOUNT)) // this tx will participate in the wash out.
+	assert.Nil(t, pool.all.Add(txObj2, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })) // this tx will participate in the wash out.
 
 	tx3 := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[2])
 	txObj3, _ := resolveTx(tx3, false)
-	assert.Nil(t, pool.all.Add(txObj3, LIMIT_PER_ACCOUNT)) // this tx will participate in the wash out.
+	assert.Nil(t, pool.all.Add(txObj3, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })) // this tx will participate in the wash out.
 
 	txs, removedCount, err := pool.wash(pool.repo.BestBlockSummary())
 	assert.Nil(t, err)
@@ -455,7 +455,7 @@ func TestBlocked(t *testing.T) {
 	// added into all, will be washed out
 	txObj, err := resolveTx(trx, false)
 	assert.Nil(t, err)
-	pool.all.Add(txObj, LIMIT_PER_ACCOUNT)
+	pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
 	pool.wash(pool.repo.BestBlockSummary())
 	got := pool.Get(trx.ID())
@@ -499,7 +499,7 @@ func TestWash(t *testing.T) {
 
 				txObj, err := resolveTx(trx, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, LIMIT_PER_ACCOUNT)
+				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
 				pool.wash(pool.repo.BestBlockSummary())
 				got := pool.Get(trx.ID())
@@ -526,11 +526,11 @@ func TestWash(t *testing.T) {
 
 				txObj, err := resolveTx(trx2, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, LIMIT_PER_ACCOUNT)
+				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
 				txObj, err = resolveTx(trx3, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, LIMIT_PER_ACCOUNT)
+				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
 				pool.wash(pool.repo.BestBlockSummary())
 				got := pool.Get(trx3.ID())
@@ -557,11 +557,11 @@ func TestWash(t *testing.T) {
 
 				txObj, err := resolveTx(trx2, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, LIMIT_PER_ACCOUNT)
+				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
 				txObj, err = resolveTx(trx3, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, LIMIT_PER_ACCOUNT)
+				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
 				pool.wash(pool.repo.BestBlockSummary())
 				// all non executable should be washed out
