@@ -109,7 +109,7 @@ func BenchmarkFakeDB_WriteBlocks(t *testing.B) {
 	}{
 		{
 			"repeated writes",
-			func(b *testing.B) {
+			func(_ *testing.B) {
 				for i := 0; i < writeCount; i++ {
 					blk = new(block.Builder).
 						ParentID(blk.Header().ID()).
@@ -123,7 +123,7 @@ func BenchmarkFakeDB_WriteBlocks(t *testing.B) {
 		},
 		{
 			"batched writes",
-			func(b *testing.B) {
+			func(_ *testing.B) {
 				for i := 0; i < writeCount; i++ {
 					blk = new(block.Builder).
 						ParentID(blk.Header().ID()).

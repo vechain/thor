@@ -28,7 +28,7 @@ func (n *Node) PeersStats() []*PeerStats {
 	return ConvertPeersStats(n.nw.PeersStats())
 }
 
-func (n *Node) handleNetwork(w http.ResponseWriter, req *http.Request) error {
+func (n *Node) handleNetwork(w http.ResponseWriter, _ *http.Request) error {
 	return utils.WriteJSON(w, n.PeersStats())
 }
 

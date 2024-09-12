@@ -25,6 +25,7 @@ linters:
     - copyloopvar
     - whitespace
     - gosec
+    - revive
 
     # - structcheck # lots of false positives
     # - errcheck #lot of false positives
@@ -43,6 +44,16 @@ linters-settings:
       - G115
       - G406 # ignore ripe160 deprecation
       - G507 # ignore ripe160 deprecation
+  revive:
+    rules:
+      - name: var-naming
+        severity: warning
+        disabled: false
+        exclude: [""]
+        arguments:
+          - [] # AllowList
+          - [] # DenyList
+          - - upperCaseConst: true # Extra parameter (upperCaseConst|skipPackageNameChecks)
 
 issues:
   max-issues-per-linter: 1000

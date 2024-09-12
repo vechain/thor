@@ -34,7 +34,7 @@ type txIterator struct {
 	i        int
 }
 
-var nonce uint64 = uint64(time.Now().UnixNano())
+var nonce = uint64(time.Now().UnixNano())
 
 func (ti *txIterator) HasNext() bool {
 	return ti.i < 100
@@ -61,7 +61,7 @@ func (ti *txIterator) Next() *tx.Transaction {
 	return tx
 }
 
-func (ti *txIterator) OnProcessed(txID thor.Bytes32, err error) {
+func (ti *txIterator) OnProcessed(_ thor.Bytes32, _ error) {
 }
 
 func TestP(t *testing.T) {

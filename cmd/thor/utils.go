@@ -664,56 +664,6 @@ func printStartupMessage2(
 	)
 }
 
-func printSoloStartupMessage(
-	gene *genesis.Genesis,
-	repo *chain.Repository,
-	dataDir string,
-	apiURL string,
-	forkConfig thor.ForkConfig,
-	metricsURL string,
-	adminURL string,
-) {
-	bestBlock := repo.BestBlockSummary()
-
-	info := fmt.Sprintf(`Starting %v
-    Network     [ %v %v ]    
-    Best block  [ %v #%v @%v ]
-    Forks       [ %v ]
-    Data dir    [ %v ]
-    API portal  [ %v ]
-    Metrics     [ %v ]
-    Admin       [ %v ]
-`,
-		common.MakeName("Thor solo", fullVersion()),
-		gene.ID(), gene.Name(),
-		bestBlock.Header.ID(), bestBlock.Header.Number(), time.Unix(int64(bestBlock.Header.Timestamp()), 0),
-		forkConfig,
-		dataDir,
-		apiURL,
-		func() string {
-			if metricsURL == "" {
-				return "Disabled"
-			}
-			return metricsURL
-		}(),
-		func() string {
-			if adminURL == "" {
-				return "Disabled"
-			}
-			return adminURL
-		}(),
-	)
-
-	if gene.ID() == devNetGenesisID {
-		info += `┌──────────────────┬───────────────────────────────────────────────────────────────────────────────┐
-│  Mnemonic Words  │  denial kitchen pet squirrel other broom bar gas better priority spoil cross  │
-└──────────────────┴───────────────────────────────────────────────────────────────────────────────┘
-`
-	}
-
-	fmt.Print(info)
-}
-
 func openMemMainDB() *muxdb.MuxDB {
 	return muxdb.NewMem()
 }

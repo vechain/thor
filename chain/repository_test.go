@@ -11,7 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
-	. "github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
@@ -23,20 +23,20 @@ func M(args ...interface{}) []interface{} {
 	return args
 }
 
-func newTestRepo() (*muxdb.MuxDB, *Repository) {
+func newTestRepo() (*muxdb.MuxDB, *chain.Repository) {
 	db := muxdb.NewMem()
 	g := genesis.NewDevnet()
 	b0, _, _, _ := g.Build(state.NewStater(db))
 
-	repo, err := NewRepository(db, b0)
+	repo, err := chain.NewRepository(db, b0)
 	if err != nil {
 		panic(err)
 	}
 	return db, repo
 }
 
-func reopenRepo(db *muxdb.MuxDB, b0 *block.Block) *Repository {
-	repo, err := NewRepository(db, b0)
+func reopenRepo(db *muxdb.MuxDB, b0 *block.Block) *chain.Repository {
+	repo, err := chain.NewRepository(db, b0)
 	if err != nil {
 		panic(err)
 	}
@@ -63,7 +63,7 @@ func TestRepository(t *testing.T) {
 	g := genesis.NewDevnet()
 	b0, _, _, _ := g.Build(state.NewStater(db))
 
-	repo1, err := NewRepository(db, b0)
+	repo1, err := chain.NewRepository(db, b0)
 	if err != nil {
 		panic(err)
 	}
@@ -81,8 +81,8 @@ func TestRepository(t *testing.T) {
 	assert.Equal(t, uint32(0), repo1.BestBlockSummary().Header.Number())
 
 	repo1.SetBestBlockID(b1.Header().ID())
-	repo2, _ := NewRepository(db, b0)
-	for _, repo := range []*Repository{repo1, repo2} {
+	repo2, _ := chain.NewRepository(db, b0)
+	for _, repo := range []*chain.Repository{repo1, repo2} {
 		assert.Equal(t, b1.Header().ID(), repo.BestBlockSummary().Header.ID())
 		s, err := repo.GetBlockSummary(b1.Header().ID())
 		assert.Nil(t, err)

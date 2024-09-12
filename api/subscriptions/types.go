@@ -43,9 +43,9 @@ func convertBlock(b *chain.ExtendedBlock) (*BlockMessage, error) {
 	}
 
 	txs := b.Transactions()
-	txIds := make([]thor.Bytes32, len(txs))
+	txIDs := make([]thor.Bytes32, len(txs))
 	for i, tx := range txs {
-		txIds[i] = tx.ID()
+		txIDs[i] = tx.ID()
 	}
 	return &BlockMessage{
 		Number:       header.Number(),
@@ -63,7 +63,7 @@ func convertBlock(b *chain.ExtendedBlock) (*BlockMessage, error) {
 		TxsRoot:      header.TxsRoot(),
 		TxsFeatures:  uint32(header.TxsFeatures()),
 		COM:          header.COM(),
-		Transactions: txIds,
+		Transactions: txIDs,
 		Obsolete:     b.Obsolete,
 	}, nil
 }

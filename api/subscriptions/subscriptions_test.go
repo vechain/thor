@@ -18,15 +18,14 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/stretchr/testify/require"
-	"github.com/vechain/thor/v2/node"
-	"github.com/vechain/thor/v2/tx"
-
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/node"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
 )
 
