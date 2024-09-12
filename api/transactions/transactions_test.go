@@ -294,7 +294,7 @@ func initTransactionServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	transaction = transaction.WithSignature(sig)
-	require.NoError(t, thorChain.MintTransactions(transaction))
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], transaction))
 
 	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute})
 

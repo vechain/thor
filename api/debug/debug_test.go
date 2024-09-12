@@ -548,7 +548,7 @@ func initDebugServer(t *testing.T) {
 	}
 	transaction = transaction.WithSignature(sig)
 
-	require.NoError(t, thorChain.MintTransactions(transaction, noClausesTx))
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], transaction, noClausesTx))
 
 	debug = New(thorChain.Repo(), thorChain.Stater(), thor.NoFork, 21000, true, solo.NewBFTEngine(thorChain.Repo()), []string{"all"}, false).(*Debug)
 	thorNode, err := new(node.Builder).

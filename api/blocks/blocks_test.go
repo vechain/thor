@@ -173,7 +173,7 @@ func initBlockServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	tx = tx.WithSignature(sig)
-	require.NoError(t, thorChain.MintTransactions(tx))
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], tx))
 
 	thorNode, err := new(node.Builder).
 		WithChain(thorChain).

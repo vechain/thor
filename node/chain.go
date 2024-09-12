@@ -36,58 +36,47 @@ func (c *Chain) GenesisBlock() *block.Block {
 	return c.genesisBlock
 }
 
-func (c *Chain) MintTransactions(transactions ...*tx.Transaction) error {
-	for i, transaction := range transactions {
-		err := c.commitTxOnChain(transaction, nil)
-		if err != nil {
-			return fmt.Errorf("unable to mint tx: %d : %w", i, err)
+func (c *Chain) MintTransactions(account genesis.DevAccount, transactions ...*tx.Transaction) error {
+	var txAndRcpts []*TxAndRcpt
+	for _, transaction := range transactions {
+		txAndRcpts = append(txAndRcpts, &TxAndRcpt{Transaction: transaction})
+	}
+	return c.MintTransactionsWithReceiptFunc(account, txAndRcpts...)
+}
+
+func (c *Chain) MintTransactionsWithReceiptFunc(account genesis.DevAccount, txAndRcpts ...*TxAndRcpt) error {
+	return c.MintBlock(account, txAndRcpts...)
+}
+
+func (c *Chain) MintBlock(account genesis.DevAccount, txAndRcpts ...*TxAndRcpt) error {
+	// create a new block
+	blkPacker := packer.New(c.Repo(), c.Stater(), account.Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
+	blkFlow, err := blkPacker.Schedule(c.Repo().BestBlockSummary(), uint64(time.Now().Unix()))
+	if err != nil {
+		return fmt.Errorf("unable to schedule a new block: %w", err)
+	}
+
+	// adopt transactions in the new block
+	for _, txAndRcpt := range txAndRcpts {
+		if err = blkFlow.Adopt(txAndRcpt.Transaction); err != nil {
+			return fmt.Errorf("unable to adopt tx into block: %w", err)
 		}
 	}
-	return nil
-}
 
-func (c *Chain) MintTransactionsWithReceiptFunc(txAndRcpts ...*TxAndRcpt) error {
-	for i, txAndRcpt := range txAndRcpts {
-		err := c.commitTxOnChain(txAndRcpt.Transaction, txAndRcpt.ReceiptFunc)
-		if err != nil {
-			return fmt.Errorf("unable to mint tx: %d : %w", i, err)
+	// pack the transactions into the block
+	newBlk, stage, receipts, err := blkFlow.Pack(account.PrivateKey, 0, false)
+	if err != nil {
+		return fmt.Errorf("unable to pack tx: %w", err)
+	}
+
+	// modify any receipts in the new block
+	for _, txAndRcpt := range txAndRcpts {
+		if txAndRcpt.ReceiptFunc != nil {
+			txAndRcpt.ReceiptFunc(receipts)
 		}
 	}
-	return nil
-}
 
-func (c *Chain) commitTxOnChain(transaction *tx.Transaction, receiptFunc func(tx.Receipts)) error {
-	newBlk, stage, rcpts, err := c.packTxIntoBlock(transaction)
-	if err != nil {
-		return err
-	}
-
-	if receiptFunc != nil {
-		receiptFunc(rcpts)
-	}
-
-	return c.commitTxToChain(newBlk, stage, rcpts)
-}
-func (c *Chain) packTxIntoBlock(transaction *tx.Transaction) (*block.Block, *state.Stage, tx.Receipts, error) {
-	// TODO Fix the hardcoded accounts
-	blkPacker := packer.New(c.Repo(), c.Stater(), genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
-	flow, err := blkPacker.Schedule(c.Repo().BestBlockSummary(), uint64(time.Now().Unix()))
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("unable to schedule tx: %w", err)
-	}
-	err = flow.Adopt(transaction)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("unable to adopt tx: %w", err)
-	}
-	newBlk, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, false)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("unable to pack tx: %w", err)
-	}
-
-	return newBlk, stage, receipts, nil
-}
-
-func (c *Chain) commitTxToChain(newBlk *block.Block, stage *state.Stage, receipts tx.Receipts) error {
+	// commit block to chain state
 	if _, err := stage.Commit(); err != nil {
 		return fmt.Errorf("unable to commit tx: %w", err)
 	}

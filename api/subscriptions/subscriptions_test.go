@@ -265,10 +265,11 @@ func initSubscriptionsServer(t *testing.T) {
 	}
 	tr = tr.WithSignature(sig)
 
-	require.NoError(t, thorChain.MintTransactionsWithReceiptFunc(&node.TxAndRcpt{
-		Transaction: tr,
-		ReceiptFunc: insertMockOutputEventRcpt, // todo review this
-	}))
+	require.NoError(t, thorChain.MintTransactionsWithReceiptFunc(genesis.DevAccounts()[0],
+		&node.TxAndRcpt{
+			Transaction: tr,
+			ReceiptFunc: insertMockOutputEventRcpt, // todo review this
+		}))
 
 	thorNode, err := new(node.Builder).
 		WithChain(thorChain).
@@ -312,10 +313,11 @@ func TestSubscriptionsBacktrace(t *testing.T) {
 	}
 	tr = tr.WithSignature(sig)
 
-	require.NoError(t, thorChain.MintTransactionsWithReceiptFunc(&node.TxAndRcpt{
-		Transaction: tr,
-		ReceiptFunc: insertMockOutputEventRcpt, // todo review this
-	}))
+	require.NoError(t, thorChain.MintTransactionsWithReceiptFunc(genesis.DevAccounts()[0],
+		&node.TxAndRcpt{
+			Transaction: tr,
+			ReceiptFunc: insertMockOutputEventRcpt, // todo review this
+		}))
 
 	thorNode, err := new(node.Builder).
 		WithChain(thorChain).

@@ -78,7 +78,10 @@ func initChain(t *testing.T) *node.Node {
 	}
 	tr = tr.WithSignature(sig)
 
-	require.NoError(t, thorChain.MintTransactionsWithReceiptFunc(&node.TxAndRcpt{Transaction: tr, ReceiptFunc: insertMockOutputEvent}))
+	require.NoError(t, thorChain.MintTransactionsWithReceiptFunc(
+		genesis.DevAccounts()[0],
+		&node.TxAndRcpt{Transaction: tr, ReceiptFunc: insertMockOutputEvent}),
+	)
 
 	thorNode, err := new(node.Builder).
 		WithChain(thorChain).

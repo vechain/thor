@@ -262,7 +262,13 @@ func initAccountServer(t *testing.T) {
 	claCall := tx.NewClause(&contractAddr).WithData(input)
 	transactionCall := buildTxWithClauses(t, thorChain.Repo().ChainTag(), claCall)
 
-	require.NoError(t, thorChain.MintTransactions(transaction, transactionCall))
+	require.NoError(t,
+		thorChain.MintTransactions(
+			genesis.DevAccounts()[0],
+			transaction,
+			transactionCall,
+		),
+	)
 
 	thorNode, err := new(node.Builder).
 		WithChain(thorChain).
