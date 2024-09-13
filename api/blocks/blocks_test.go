@@ -51,14 +51,15 @@ func TestBlock(t *testing.T) {
 	tclient = thorclient.New(ts.URL)
 	for name, tt := range map[string]func(*testing.T){
 		"testBadQueryParams":                    testBadQueryParams,
-		"testInvalidBlockId":                    testInvalidBlockId,
+		"testInvalidBlockID":                    testInvalidBlockID,
 		"testInvalidBlockNumber":                testInvalidBlockNumber,
-		"testGetBlockById":                      testGetBlockById,
+		"testGetBlockByID":                      testGetBlockByID,
 		"testGetBlockNotFound":                  testGetBlockNotFound,
-		"testGetExpandedBlockById":              testGetExpandedBlockById,
+		"testGetExpandedBlockByID":              testGetExpandedBlockByID,
 		"testGetBlockByHeight":                  testGetBlockByHeight,
 		"testGetBestBlock":                      testGetBestBlock,
 		"testGetFinalizedBlock":                 testGetFinalizedBlock,
+		"testGetJustifiedBlock":                 testGetJustifiedBlock,
 		"testGetBlockWithRevisionNumberTooHigh": testGetBlockWithRevisionNumberTooHigh,
 	} {
 		t.Run(name, tt)
@@ -110,7 +111,18 @@ func testGetFinalizedBlock(t *testing.T) {
 	assert.Equal(t, genesisBlock.Header().ID(), finalized.ID)
 }
 
-func testGetBlockById(t *testing.T) {
+func testGetJustifiedBlock(t *testing.T) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/justified")
+	require.NoError(t, err)
+	justified := new(blocks.JSONCollapsedBlock)
+	require.NoError(t, json.Unmarshal(res, &justified))
+
+	assert.Equal(t, http.StatusOK, statusCode)
+	assert.Equal(t, uint32(0), justified.Number)
+	assert.Equal(t, genesisBlock.Header().ID(), justified.ID)
+}
+
+func testGetBlockByID(t *testing.T) {
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/" + blk.Header().ID().String())
 	require.NoError(t, err)
 	rb := new(blocks.JSONCollapsedBlock)
@@ -129,7 +141,7 @@ func testGetBlockNotFound(t *testing.T) {
 	assert.Equal(t, "null", strings.TrimSpace(string(res)))
 }
 
-func testGetExpandedBlockById(t *testing.T) {
+func testGetExpandedBlockByID(t *testing.T) {
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/" + blk.Header().ID().String() + "?expanded=true")
 	require.NoError(t, err)
 
@@ -148,7 +160,7 @@ func testInvalidBlockNumber(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, statusCode)
 }
 
-func testInvalidBlockId(t *testing.T) {
+func testInvalidBlockID(t *testing.T) {
 	_, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/" + invalidBytes32)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode)

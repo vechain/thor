@@ -12,7 +12,7 @@ info:
   license:
     name: LGPL 3.0
     url: https://www.gnu.org/licenses/lgpl-3.0.en.html
-  version: 2.1.3
+  version: 2.1.4
 servers:
   - url: /
     description: Current Node
@@ -689,9 +689,9 @@ paths:
     post:
       tags:
         - Debug
-      summary: Trace a contract call
+      summary: Trace a call
       description: |
-        This endpoint enables clients to create a tracer for a specific vechain function call. 
+        This endpoint enables clients to create a tracer for a specific vechain clause. 
         
         You can customize the tracer using various options to suit your debugging requirements.
 
@@ -2117,7 +2117,7 @@ components:
         name:
           type: string
           enum:
-            - logger
+            - structLogger
             - 4byte
             - call
             - noop
@@ -2252,7 +2252,7 @@ components:
     RevisionInQuery:
       name: revision
       in: query
-      description: Specify either `best`, `finalized`, a block number or block ID. If omitted, the `best` block is assumed.
+      description: Specify either `best`, `justified`, `finalized`, a block number or block ID. If omitted, the `best` block is assumed.
       schema:
         type: string
 
@@ -2260,7 +2260,7 @@ components:
       name: revision
       in: query
       description: |
-        Specify either `best`,`next`, `finalized`, a block number or block ID. If omitted, the `best` block is assumed.
+        Specify either `best`, `next`, `justified`, `finalized`, a block number or block ID. If omitted, the `best` block is assumed.
         
         If the `next` block is specified, the call code will be executed on the next block, with the following:
         - The block number is the `best` block number plus one.
@@ -2279,6 +2279,7 @@ components:
         - a block ID (hex string)
         - a block number (integer)
         - `best` stands for latest block
+        - `justified` stands for the justified block
         - `finalized` stands for the finalized block
       required: true
       schema:

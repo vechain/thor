@@ -57,7 +57,7 @@ func TestTransaction(t *testing.T) {
 	// Get tx
 	for name, tt := range map[string]func(*testing.T){
 		"getTx":           getTx,
-		"getTxWithBadId":  getTxWithBadId,
+		"getTxWithBadID":  getTxWithBadID,
 		"txWithBadHeader": txWithBadHeader,
 		"getNonExistingRawTransactionWhenTxStillInMempool": getNonExistingRawTransactionWhenTxStillInMempool,
 		"getNonPendingRawTransactionWhenTxStillInMempool":  getNonPendingRawTransactionWhenTxStillInMempool,
@@ -73,7 +73,7 @@ func TestTransaction(t *testing.T) {
 	// Get tx receipt
 	for name, tt := range map[string]func(*testing.T){
 		"getTxReceipt":        getTxReceipt,
-		"getReceiptWithBadId": getReceiptWithBadId,
+		"getReceiptWithBadID": getReceiptWithBadID,
 		"handleGetTransactionReceiptByIDWithNonExistingHead": handleGetTransactionReceiptByIDWithNonExistingHead,
 	} {
 		t.Run(name, tt)
@@ -139,10 +139,10 @@ func sendTx(t *testing.T) {
 	assert.Equal(t, tx.ID().String(), txObj["id"], "should be the same transaction id")
 }
 
-func getTxWithBadId(t *testing.T) {
-	txBadId := "0x123"
+func getTxWithBadID(t *testing.T) {
+	txBadID := "0x123"
 
-	res := httpGetAndCheckResponseStatus(t, "/transactions/"+txBadId, 400)
+	res := httpGetAndCheckResponseStatus(t, "/transactions/"+txBadID, 400)
 
 	assert.Contains(t, string(res), "invalid length")
 }
@@ -159,21 +159,21 @@ func txWithBadHeader(t *testing.T) {
 	}
 }
 
-func getReceiptWithBadId(t *testing.T) {
-	txBadId := "0x123"
+func getReceiptWithBadID(t *testing.T) {
+	txBadID := "0x123"
 
-	httpGetAndCheckResponseStatus(t, "/transactions/"+txBadId+"/receipt", 400)
+	httpGetAndCheckResponseStatus(t, "/transactions/"+txBadID+"/receipt", 400)
 }
 
 func getNonExistingRawTransactionWhenTxStillInMempool(t *testing.T) {
-	nonExistingTxId := "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+	nonExistingTxID := "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 	queryParams := []string{
 		"?raw=true",
 		"?raw=true&pending=true",
 	}
 
 	for _, queryParam := range queryParams {
-		res := httpGetAndCheckResponseStatus(t, "/transactions/"+nonExistingTxId+queryParam, 200)
+		res := httpGetAndCheckResponseStatus(t, "/transactions/"+nonExistingTxID+queryParam, 200)
 
 		assert.Equal(t, "null\n", string(res))
 	}

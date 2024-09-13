@@ -19,7 +19,7 @@ import (
 )
 
 func TestWrapHandlerFunc(t *testing.T) {
-	handlerFunc := func(w http.ResponseWriter, r *http.Request) error {
+	handlerFunc := func(_ http.ResponseWriter, r *http.Request) error {
 		return nil
 	}
 	wrapped := utils.WrapHandlerFunc(handlerFunc)
@@ -32,7 +32,7 @@ func TestWrapHandlerFunc(t *testing.T) {
 
 func TestWrapHandlerFuncWithGenericError(t *testing.T) {
 	genericErrorMsg := "This is a generic error request"
-	handlerFunc := func(w http.ResponseWriter, r *http.Request) error {
+	handlerFunc := func(_ http.ResponseWriter, r *http.Request) error {
 		return errors.New(genericErrorMsg)
 	}
 	wrapped := utils.WrapHandlerFunc(handlerFunc)
@@ -45,7 +45,7 @@ func TestWrapHandlerFuncWithGenericError(t *testing.T) {
 
 func TestWrapHandlerFuncWithBadRequestError(t *testing.T) {
 	badMsg := "This is a bad request"
-	handlerFunc := func(w http.ResponseWriter, r *http.Request) error {
+	handlerFunc := func(_ http.ResponseWriter, r *http.Request) error {
 		return utils.BadRequest(errors.New(badMsg))
 	}
 	wrapped := utils.WrapHandlerFunc(handlerFunc)
@@ -92,13 +92,13 @@ func callWrappedFunc(wrapped *http.HandlerFunc) *httptest.ResponseRecorder {
 }
 
 type mockReader struct {
-	Id   int
+	ID   int
 	Body string
 }
 
 func TestParseJSON(t *testing.T) {
 	var parsedRes mockReader
-	body := mockReader{Id: 1, Body: "test"}
+	body := mockReader{ID: 1, Body: "test"}
 	jsonBody, _ := json.Marshal(body)
 	req := httptest.NewRequest("GET", "http://example.com", bytes.NewReader(jsonBody))
 
@@ -118,10 +118,10 @@ func TestWriteJSON(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rr.Code)
 	assert.Equal(t, utils.JSONContentType, rr.Header().Get("Content-Type"))
 
-	respObj := mockReader{Id: 1, Body: "test"}
+	respObj := mockReader{ID: 1, Body: "test"}
 	err = json.NewDecoder(rr.Body).Decode(&respObj)
 
 	assert.NoError(t, err)
-	assert.Equal(t, body.Id, respObj.Id)
+	assert.Equal(t, body.ID, respObj.ID)
 	assert.Equal(t, body.Body, respObj.Body)
 }

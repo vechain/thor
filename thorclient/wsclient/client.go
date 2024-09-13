@@ -9,10 +9,11 @@ package wsclient
 
 import (
 	"fmt"
-	"github.com/vechain/thor/v2/thor"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/vechain/thor/v2/thor"
 
 	"github.com/gorilla/websocket"
 	"github.com/vechain/thor/v2/api/blocks"

@@ -68,7 +68,7 @@ func newPoolWithParams(limit int, limitPerAccount int, BlocklistCacheFilePath st
 	})
 }
 
-func newHttpServer() *httptest.Server {
+func newHTTPServer() *httptest.Server {
 	// Example data to be served by the mock server
 	data := "0x25Df024637d4e56c1aE9563987Bf3e92C9f534c0\n0x25Df024637d4e56c1aE9563987Bf3e92C9f534c1\n0x865306084235bf804c8bba8a8d56890940ca8f0b"
 
@@ -85,7 +85,7 @@ func newHttpServer() *httptest.Server {
 }
 
 func TestNewCloseWithServer(t *testing.T) {
-	server := newHttpServer()
+	server := newHTTPServer()
 	defer server.Close()
 
 	pool := newPoolWithParams(LIMIT, LIMIT_PER_ACCOUNT, "./", server.URL, uint64(time.Now().Unix()))

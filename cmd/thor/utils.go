@@ -34,12 +34,9 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/gorilla/handlers"
-	"github.com/gorilla/mux"
 	"github.com/mattn/go-isatty"
 	"github.com/mattn/go-tty"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/v2/admin"
 	"github.com/vechain/thor/v2/api/doc"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/node"
@@ -49,7 +46,6 @@ import (
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
-	"github.com/vechain/thor/v2/metrics"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/p2psrv"
 	"github.com/vechain/thor/v2/state"
@@ -571,48 +567,6 @@ func startAPIServer(ctx *cli.Context, handler http.Handler, genesisID thor.Bytes
 	}, nil
 }
 
-func startMetricsServer(addr string) (string, func(), error) {
-	listener, err := net.Listen("tcp", addr)
-	if err != nil {
-		return "", nil, errors.Wrapf(err, "listen metrics API addr [%v]", addr)
-	}
-
-	router := mux.NewRouter()
-	router.PathPrefix("/metrics").Handler(metrics.HTTPHandler())
-	handler := handlers.CompressHandler(router)
-
-	srv := &http.Server{Handler: handler, ReadHeaderTimeout: time.Second, ReadTimeout: 5 * time.Second}
-	var goes co.Goes
-	goes.Go(func() {
-		srv.Serve(listener)
-	})
-	return "http://" + listener.Addr().String() + "/metrics", func() {
-		srv.Close()
-		goes.Wait()
-	}, nil
-}
-
-func startAdminServer(addr string, logLevel *slog.LevelVar) (string, func(), error) {
-	listener, err := net.Listen("tcp", addr)
-	if err != nil {
-		return "", nil, errors.Wrapf(err, "listen admin API addr [%v]", addr)
-	}
-
-	router := mux.NewRouter()
-	router.PathPrefix("/admin").Handler(admin.HTTPHandler(logLevel))
-	handler := handlers.CompressHandler(router)
-
-	srv := &http.Server{Handler: handler, ReadHeaderTimeout: time.Second, ReadTimeout: 5 * time.Second}
-	var goes co.Goes
-	goes.Go(func() {
-		srv.Serve(listener)
-	})
-	return "http://" + listener.Addr().String() + "/admin", func() {
-		srv.Close()
-		goes.Wait()
-	}, nil
-}
-
 func printStartupMessage1(
 	gene *genesis.Genesis,
 	repo *chain.Repository,
@@ -710,56 +664,6 @@ func printStartupMessage2(
 	)
 }
 
-func printSoloStartupMessage(
-	gene *genesis.Genesis,
-	repo *chain.Repository,
-	dataDir string,
-	apiURL string,
-	forkConfig thor.ForkConfig,
-	metricsURL string,
-	adminURL string,
-) {
-	bestBlock := repo.BestBlockSummary()
-
-	info := fmt.Sprintf(`Starting %v
-    Network     [ %v %v ]    
-    Best block  [ %v #%v @%v ]
-    Forks       [ %v ]
-    Data dir    [ %v ]
-    API portal  [ %v ]
-    Metrics     [ %v ]
-    Admin       [ %v ]
-`,
-		common.MakeName("Thor solo", fullVersion()),
-		gene.ID(), gene.Name(),
-		bestBlock.Header.ID(), bestBlock.Header.Number(), time.Unix(int64(bestBlock.Header.Timestamp()), 0),
-		forkConfig,
-		dataDir,
-		apiURL,
-		func() string {
-			if metricsURL == "" {
-				return "Disabled"
-			}
-			return metricsURL
-		}(),
-		func() string {
-			if adminURL == "" {
-				return "Disabled"
-			}
-			return adminURL
-		}(),
-	)
-
-	if gene.ID() == devNetGenesisID {
-		info += `┌──────────────────┬───────────────────────────────────────────────────────────────────────────────┐
-│  Mnemonic Words  │  denial kitchen pet squirrel other broom bar gas better priority spoil cross  │
-└──────────────────┴───────────────────────────────────────────────────────────────────────────────┘
-`
-	}
-
-	fmt.Print(info)
-}
-
 func openMemMainDB() *muxdb.MuxDB {
 	return muxdb.NewMem()
 }
@@ -799,15 +703,24 @@ func readIntFromUInt64Flag(val uint64) (int, error) {
 	return i, nil
 }
 
-func parseTracerList(list string) map[string]interface{} {
+func parseTracerList(list string) []string {
 	inputs := strings.Split(list, ",")
-	tracerMap := map[string]interface{}{}
+	tracers := make([]string, 0, len(inputs))
+
 	for _, i := range inputs {
-		if i == "" {
+		name := strings.TrimSpace(i)
+		if name == "" {
 			continue
 		}
-		tracerMap[i] = new(interface{})
+		if name == "none" {
+			return []string{}
+		}
+		if name == "all" {
+			return []string{"all"}
+		}
+
+		tracers = append(tracers, i)
 	}
 
-	return tracerMap
+	return tracers
 }

@@ -7,13 +7,14 @@ package wsclient
 
 import (
 	"errors"
-	"github.com/vechain/thor/v2/test/datagen"
-	"github.com/vechain/thor/v2/thor"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/vechain/thor/v2/test/datagen"
+	"github.com/vechain/thor/v2/thor"
 
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
@@ -99,7 +100,7 @@ func TestClient_SubscribeTransfers(t *testing.T) {
 }
 
 func TestClient_SubscribeTxPool(t *testing.T) {
-	txID := datagen.RandBytes32()
+	txID := datagen.RandomHash()
 	expectedPendingTxID := &subscriptions.PendingTxIDMessage{}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

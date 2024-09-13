@@ -20,49 +20,6 @@ import (
 	tccommon "github.com/vechain/thor/v2/thorclient/common"
 )
 
-func TestWs_Error(t *testing.T) {
-	client := New("http://test.com")
-
-	for _, tc := range []struct {
-		name     string
-		function interface{}
-	}{
-		{
-			name:     "SubscribeBlocks",
-			function: client.SubscribeBlocks,
-		},
-		{
-			name:     "SubscribeEvents",
-			function: client.SubscribeEvents,
-		},
-		{
-			name:     "SubscribeTransfers",
-			function: client.SubscribeTransfers,
-		},
-		{
-			name:     "SubscribeTxPool",
-			function: client.SubscribeTxPool,
-		},
-		{
-			name:     "SubscribeBeats2",
-			function: client.SubscribeBeats2,
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			fn := reflect.ValueOf(tc.function)
-			result := fn.Call([]reflect.Value{})
-
-			if result[1].IsNil() {
-				t.Errorf("expected error for %s, but got nil", tc.name)
-				return
-			}
-
-			err := result[1].Interface().(error)
-			assert.Error(t, err)
-		})
-	}
-}
-
 func TestConvertToBatchCallData(t *testing.T) {
 	// Test case 1: Empty transaction
 	tx1 := &tx.Transaction{}

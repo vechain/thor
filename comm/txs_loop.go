@@ -27,7 +27,6 @@ func (c *Communicator) txsLoop() {
 				})
 
 				for _, peer := range peers {
-					peer := peer
 					peer.MarkTransaction(tx.Hash())
 					c.goes.Go(func() {
 						if err := proto.NotifyNewTx(c.ctx, peer, tx); err != nil {

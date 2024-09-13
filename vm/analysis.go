@@ -114,7 +114,7 @@ func codeBitmapInternal(code, bits bitvec) bitvec {
 		switch numbits {
 		case 1:
 			bits.set1(pc)
-			pc += 1
+			pc++
 		case 2:
 			bits.setN(set2BitsMask, pc)
 			pc += 2

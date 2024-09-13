@@ -28,9 +28,9 @@ func TestMarshalUnmarshal(t *testing.T) {
 
 	// Marshal the value back to JSON
 	// using direct function
-	directMarshallJson, err := unmarshaledValue.MarshalJSON()
+	directMarshallJSON, err := unmarshaledValue.MarshalJSON()
 	assert.NoError(t, err, "Marshaling should not produce an error")
-	assert.Equal(t, originalHex, string(directMarshallJson))
+	assert.Equal(t, originalHex, string(directMarshallJSON))
 
 	// using json overloading ( satisfies the json.Unmarshal interface )
 	// using value

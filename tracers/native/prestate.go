@@ -91,7 +91,7 @@ func newPrestateTracer(cfg json.RawMessage) (tracers.Tracer, error) {
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, _ []byte, _ uint64, _ *big.Int) {
 	t.env = env
 	t.create = create
 	t.to = to
@@ -109,7 +109,7 @@ func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *prestateTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
+func (t *prestateTracer) CaptureEnd(_ []byte, _ uint64, _ error) {
 	if t.config.DiffMode {
 		return
 	}
@@ -127,7 +127,7 @@ func (t *prestateTracer) CaptureClauseStart(gasLimit uint64) {
 	t.gasLimit = gasLimit
 }
 
-func (t *prestateTracer) CaptureClauseEnd(restGas uint64) {
+func (t *prestateTracer) CaptureClauseEnd(_ uint64) {
 	if !t.config.DiffMode {
 		return
 	}
@@ -197,7 +197,7 @@ func (t *prestateTracer) CaptureClauseEnd(restGas uint64) {
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
-func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, rData []byte, depth int, err error) {
+func (t *prestateTracer) CaptureState(_ uint64, op vm.OpCode, _, _ uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, _ []byte, _ int, err error) {
 	if err != nil {
 		return
 	}
