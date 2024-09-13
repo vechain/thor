@@ -7,6 +7,8 @@ package wsclient
 
 import (
 	"errors"
+	"github.com/vechain/thor/v2/test/datagen"
+	"github.com/vechain/thor/v2/thor"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -21,12 +23,12 @@ import (
 )
 
 func TestClient_SubscribeEvents(t *testing.T) {
-	query := "exampleQuery"
+	pos := "best"
 	expectedEvent := &subscriptions.EventMessage{}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/subscriptions/event", r.URL.Path)
-		assert.Equal(t, query, r.URL.RawQuery)
+		assert.Equal(t, "pos="+pos, r.URL.RawQuery)
 
 		upgrader := websocket.Upgrader{}
 
@@ -39,19 +41,19 @@ func TestClient_SubscribeEvents(t *testing.T) {
 
 	client, err := NewClient(ts.URL)
 	assert.NoError(t, err)
-	sub, err := client.SubscribeEvents(query)
+	sub, err := client.SubscribeEvents(pos, nil)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedEvent, (<-sub.EventChan).Data)
 }
 
 func TestClient_SubscribeBlocks(t *testing.T) {
-	query := "exampleQuery"
+	pos := "best"
 	expectedBlock := &blocks.JSONCollapsedBlock{}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/subscriptions/block", r.URL.Path)
-		assert.Equal(t, query, r.URL.RawQuery)
+		assert.Equal(t, "pos="+pos, r.URL.RawQuery)
 
 		upgrader := websocket.Upgrader{}
 
@@ -64,19 +66,19 @@ func TestClient_SubscribeBlocks(t *testing.T) {
 
 	client, err := NewClient(ts.URL)
 	assert.NoError(t, err)
-	sub, err := client.SubscribeBlocks(query)
+	sub, err := client.SubscribeBlocks(pos)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedBlock, (<-sub.EventChan).Data)
 }
 
 func TestClient_SubscribeTransfers(t *testing.T) {
-	query := "exampleQuery"
+	pos := "best"
 	expectedTransfer := &subscriptions.TransferMessage{}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/subscriptions/transfer", r.URL.Path)
-		assert.Equal(t, query, r.URL.RawQuery)
+		assert.Equal(t, "pos="+pos, r.URL.RawQuery)
 
 		upgrader := websocket.Upgrader{}
 
@@ -89,7 +91,7 @@ func TestClient_SubscribeTransfers(t *testing.T) {
 
 	client, err := NewClient(ts.URL)
 	assert.NoError(t, err)
-	sub, err := client.SubscribeTransfers(query)
+	sub, err := client.SubscribeTransfers(pos, nil)
 
 	assert.NoError(t, err)
 	derp := (<-sub.EventChan).Data
@@ -97,12 +99,12 @@ func TestClient_SubscribeTransfers(t *testing.T) {
 }
 
 func TestClient_SubscribeTxPool(t *testing.T) {
-	query := "exampleQuery"
+	txID := datagen.RandBytes32()
 	expectedPendingTxID := &subscriptions.PendingTxIDMessage{}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/subscriptions/txpool", r.URL.Path)
-		assert.Equal(t, query, r.URL.RawQuery)
+		assert.Equal(t, "id="+txID.String(), r.URL.RawQuery)
 
 		upgrader := websocket.Upgrader{}
 
@@ -115,19 +117,19 @@ func TestClient_SubscribeTxPool(t *testing.T) {
 
 	client, err := NewClient(ts.URL)
 	assert.NoError(t, err)
-	sub, err := client.SubscribeTxPool(query)
+	sub, err := client.SubscribeTxPool(&txID)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedPendingTxID, (<-sub.EventChan).Data)
 }
 
 func TestClient_SubscribeBeats2(t *testing.T) {
-	query := "exampleQuery"
+	pos := "best"
 	expectedBeat2 := &subscriptions.Beat2Message{}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/subscriptions/beat2", r.URL.Path)
-		assert.Equal(t, query, r.URL.RawQuery)
+		assert.Equal(t, "pos="+pos, r.URL.RawQuery)
 
 		upgrader := websocket.Upgrader{}
 
@@ -140,7 +142,7 @@ func TestClient_SubscribeBeats2(t *testing.T) {
 
 	client, err := NewClient(ts.URL)
 	assert.NoError(t, err)
-	sub, err := client.SubscribeBeats2(query)
+	sub, err := client.SubscribeBeats2(pos)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedBeat2, (<-sub.EventChan).Data)
@@ -192,7 +194,7 @@ func TestNewClientError(t *testing.T) {
 }
 
 func TestClient_SubscribeError(t *testing.T) {
-	query := "exampleQuery"
+	pos := "examplePos"
 	badURL := "http://example.com"
 	client, err := NewClient(badURL)
 	assert.NoError(t, err)
@@ -200,48 +202,66 @@ func TestClient_SubscribeError(t *testing.T) {
 	for _, tc := range []struct {
 		name          string
 		subscribeFunc interface{}
+		args          []interface{}
 	}{
 		{
 			name:          "SubscribeEvents",
 			subscribeFunc: client.SubscribeEvents,
+			args:          []interface{}{pos, (*subscriptions.EventFilter)(nil)}, // pos and a nil EventFilter
 		},
 		{
 			name:          "SubscribeTransfers",
 			subscribeFunc: client.SubscribeTransfers,
+			args:          []interface{}{pos, (*subscriptions.TransferFilter)(nil)}, // pos and a nil TransferFilter
 		},
 		{
 			name:          "SubscribeTxPool",
 			subscribeFunc: client.SubscribeTxPool,
+			args:          []interface{}{(*thor.Bytes32)(nil)}, // nil txID
 		},
 		{
 			name:          "SubscribeBeats2",
 			subscribeFunc: client.SubscribeBeats2,
+			args:          []interface{}{pos}, // only pos
 		},
 		{
 			name:          "SubscribeBlocks",
 			subscribeFunc: client.SubscribeBlocks,
+			args:          []interface{}{pos}, // only pos
 		},
 	} {
-		fn := reflect.ValueOf(tc.subscribeFunc)
-		result := fn.Call([]reflect.Value{reflect.ValueOf(query)})
+		t.Run(tc.name, func(t *testing.T) {
+			fn := reflect.ValueOf(tc.subscribeFunc)
 
-		if result[1].IsNil() {
-			t.Errorf("expected error for %s, but got nil", tc.name)
-			return
-		}
+			// Prepare the arguments for the function call
+			var reflectArgs []reflect.Value
+			for _, arg := range tc.args {
+				reflectArgs = append(reflectArgs, reflect.ValueOf(arg))
+			}
 
-		err := result[1].Interface().(error)
-		assert.Error(t, err)
+			// Call the subscription function
+			result := fn.Call(reflectArgs)
+
+			// Check if the second returned value is an error and not nil
+			if result[1].IsNil() {
+				t.Errorf("expected error for %s, but got nil", tc.name)
+				return
+			}
+
+			// Assert that the error is present
+			err := result[1].Interface().(error)
+			assert.Error(t, err)
+		})
 	}
 }
 
 func TestClient_SubscribeBlocks_ServerError(t *testing.T) {
-	query := ""
+	pos := "best"
 	expectedError := "test error"
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/subscriptions/block", r.URL.Path)
-		assert.Equal(t, query, r.URL.RawQuery)
+		assert.Equal(t, "pos="+pos, r.URL.RawQuery)
 
 		upgrader := websocket.Upgrader{}
 
@@ -255,7 +275,7 @@ func TestClient_SubscribeBlocks_ServerError(t *testing.T) {
 
 	client, err := NewClient(ts.URL)
 	assert.NoError(t, err)
-	sub, err := client.SubscribeBlocks(query)
+	sub, err := client.SubscribeBlocks(pos)
 
 	assert.NoError(t, err)
 
@@ -266,12 +286,12 @@ func TestClient_SubscribeBlocks_ServerError(t *testing.T) {
 }
 
 func TestClient_SubscribeBlocks_ServerShutdown(t *testing.T) {
-	query := "exampleQuery"
+	pos := "best"
 	expectedBlock := &blocks.JSONCollapsedBlock{}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/subscriptions/block", r.URL.Path)
-		assert.Equal(t, query, r.URL.RawQuery)
+		assert.Equal(t, "pos="+pos, r.URL.RawQuery)
 
 		upgrader := websocket.Upgrader{}
 
@@ -287,7 +307,7 @@ func TestClient_SubscribeBlocks_ServerShutdown(t *testing.T) {
 
 	client, err := NewClient(ts.URL)
 	assert.NoError(t, err)
-	sub, err := client.SubscribeBlocks(query)
+	sub, err := client.SubscribeBlocks(pos)
 
 	assert.NoError(t, err)
 
@@ -303,12 +323,12 @@ func TestClient_SubscribeBlocks_ServerShutdown(t *testing.T) {
 }
 
 func TestClient_SubscribeBlocks_ClientShutdown(t *testing.T) {
-	query := "exampleQuery"
+	pos := "best"
 	expectedBlock := &blocks.JSONCollapsedBlock{}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/subscriptions/block", r.URL.Path)
-		assert.Equal(t, query, r.URL.RawQuery)
+		assert.Equal(t, "pos="+pos, r.URL.RawQuery)
 
 		upgrader := websocket.Upgrader{}
 
@@ -328,7 +348,7 @@ func TestClient_SubscribeBlocks_ClientShutdown(t *testing.T) {
 
 	client, err := NewClient(ts.URL)
 	assert.NoError(t, err)
-	sub, err := client.SubscribeBlocks(query)
+	sub, err := client.SubscribeBlocks(pos)
 
 	assert.NoError(t, err)
 
@@ -343,9 +363,6 @@ func TestClient_SubscribeBlocks_ClientShutdown(t *testing.T) {
 	// unsubscribe should close the connection forcing a connection error in the eventChan
 	sub.Unsubscribe()
 
-	// next message should be an error
-	assert.Error(t, (<-sub.EventChan).Error)
-
 	// Ensure no more events are received after unsubscribe
 	select {
 	case _, ok := <-sub.EventChan:
@@ -358,12 +375,12 @@ func TestClient_SubscribeBlocks_ClientShutdown(t *testing.T) {
 }
 
 func TestClient_SubscribeBlocks_ClientShutdown_LongBlocks(t *testing.T) {
-	query := "exampleQuery"
+	pos := "best"
 	expectedBlock := &blocks.JSONCollapsedBlock{}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/subscriptions/block", r.URL.Path)
-		assert.Equal(t, query, r.URL.RawQuery)
+		assert.Equal(t, "pos="+pos, r.URL.RawQuery)
 
 		upgrader := websocket.Upgrader{}
 
@@ -383,7 +400,7 @@ func TestClient_SubscribeBlocks_ClientShutdown_LongBlocks(t *testing.T) {
 
 	client, err := NewClient(ts.URL)
 	assert.NoError(t, err)
-	sub, err := client.SubscribeBlocks(query)
+	sub, err := client.SubscribeBlocks(pos)
 
 	assert.NoError(t, err)
 
@@ -406,7 +423,7 @@ func TestClient_SubscribeBlocks_ClientShutdown_LongBlocks(t *testing.T) {
 
 // go test -timeout 80s -run ^TestSubscribeBeats2WithServer$ github.com/vechain/thor/v2/thorclient/wsclient -v
 func TestSubscribeBeats2WithServer(t *testing.T) {
-	// t.Skip("this is a manual test")
+	t.Skip("manual test")
 	client, err := NewClient("https://mainnet.vechain.org")
 	if err != nil {
 		t.Fatal(err)

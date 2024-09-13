@@ -202,43 +202,43 @@ func (c *Client) ChainTag() (byte, error) {
 }
 
 // SubscribeBlocks subscribes to block updates over WebSocket.
-func (c *Client) SubscribeBlocks() (*common.Subscription[*blocks.JSONCollapsedBlock], error) {
+func (c *Client) SubscribeBlocks(pos string) (*common.Subscription[*blocks.JSONCollapsedBlock], error) {
 	if c.wsConn == nil {
 		return nil, fmt.Errorf("not a websocket typed client")
 	}
-	return c.wsConn.SubscribeBlocks("")
+	return c.wsConn.SubscribeBlocks(pos)
 }
 
 // SubscribeEvents subscribes to event updates over WebSocket.
-func (c *Client) SubscribeEvents() (*common.Subscription[*subscriptions.EventMessage], error) {
+func (c *Client) SubscribeEvents(pos string, filter *subscriptions.EventFilter) (*common.Subscription[*subscriptions.EventMessage], error) {
 	if c.wsConn == nil {
 		return nil, fmt.Errorf("not a websocket typed client")
 	}
-	return c.wsConn.SubscribeEvents("")
+	return c.wsConn.SubscribeEvents(pos, filter)
 }
 
 // SubscribeTransfers subscribes to transfer updates over WebSocket.
-func (c *Client) SubscribeTransfers() (*common.Subscription[*subscriptions.TransferMessage], error) {
+func (c *Client) SubscribeTransfers(pos string, filter *subscriptions.TransferFilter) (*common.Subscription[*subscriptions.TransferMessage], error) {
 	if c.wsConn == nil {
 		return nil, fmt.Errorf("not a websocket typed client")
 	}
-	return c.wsConn.SubscribeTransfers("")
+	return c.wsConn.SubscribeTransfers(pos, filter)
 }
 
 // SubscribeBeats2 subscribes to Beat2 message updates over WebSocket.
-func (c *Client) SubscribeBeats2() (*common.Subscription[*subscriptions.Beat2Message], error) {
+func (c *Client) SubscribeBeats2(pos string) (*common.Subscription[*subscriptions.Beat2Message], error) {
 	if c.wsConn == nil {
 		return nil, fmt.Errorf("not a websocket typed client")
 	}
-	return c.wsConn.SubscribeBeats2("")
+	return c.wsConn.SubscribeBeats2(pos)
 }
 
 // SubscribeTxPool subscribes to pending transaction updates over WebSocket.
-func (c *Client) SubscribeTxPool() (*common.Subscription[*subscriptions.PendingTxIDMessage], error) {
+func (c *Client) SubscribeTxPool(txID *thor.Bytes32) (*common.Subscription[*subscriptions.PendingTxIDMessage], error) {
 	if c.wsConn == nil {
 		return nil, fmt.Errorf("not a websocket typed client")
 	}
-	return c.wsConn.SubscribeTxPool("")
+	return c.wsConn.SubscribeTxPool(txID)
 }
 
 // convertToBatchCallData converts a transaction and sender address to batch call data format.
