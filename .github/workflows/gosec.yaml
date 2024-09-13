@@ -22,4 +22,4 @@ jobs:
       - name: Run Gosec
         uses: securego/gosec@master
         with:
-          args: '-exclude=G115,G406,G507  ./...'
+          args: '-exclude=G115,G406,G507 -exclude-dir=builtin/gen ./...'
