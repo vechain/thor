@@ -50,13 +50,11 @@ func (ti *txIterator) Next() *tx.Transaction {
 
 	data, _ := method.EncodeInput(a1.Address, big.NewInt(1))
 
-	tx := new(tx.Builder).
+	tx, _ := new(tx.Builder).
 		ChainTag(ti.chainTag).
 		Clause(tx.NewClause(&builtin.Energy.Address).WithData(data)).
-		Gas(300000).GasPriceCoef(0).Nonce(nonce).Expiration(math.MaxUint32).Build()
+		Gas(300000).GasPriceCoef(0).Nonce(nonce).Expiration(math.MaxUint32).BuildAndSign(a0.PrivateKey)
 	nonce++
-	sig, _ := crypto.Sign(tx.SigningHash().Bytes(), a0.PrivateKey)
-	tx = tx.WithSignature(sig)
 
 	return tx
 }

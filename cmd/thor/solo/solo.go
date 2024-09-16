@@ -15,7 +15,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
@@ -261,14 +260,10 @@ func (s *Solo) newTx(clauses []*tx.Clause, from genesis.DevAccount) (*tx.Transac
 		builder.Clause(c)
 	}
 
-	newTx := builder.BlockRef(tx.NewBlockRef(0)).
+	return builder.BlockRef(tx.NewBlockRef(0)).
 		Expiration(math.MaxUint32).
 		Nonce(rand.Uint64()). // nolint:gosec
 		DependsOn(nil).
 		Gas(1_000_000).
-		Build()
-
-	sig, err := crypto.Sign(newTx.SigningHash().Bytes(), from.PrivateKey)
-
-	return newTx.WithSignature(sig), err
+		BuildAndSign(from.PrivateKey)
 }

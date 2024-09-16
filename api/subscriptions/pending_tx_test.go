@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
@@ -132,7 +132,7 @@ func addNewBlock(repo *chain.Repository, stater *state.Stater, b0 *block.Block, 
 func createTx(t *testing.T, repo *chain.Repository, addressNumber uint) *tx.Transaction {
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	tx := new(tx.Builder).
+	tx, err := new(tx.Builder).
 		ChainTag(repo.ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -140,12 +140,8 @@ func createTx(t *testing.T, repo *chain.Repository, addressNumber uint) *tx.Tran
 		Nonce(1).
 		Clause(cla).
 		BlockRef(tx.NewBlockRef(0)).
-		Build()
-	sig, err := crypto.Sign(tx.SigningHash().Bytes(), genesis.DevAccounts()[addressNumber].PrivateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tx = tx.WithSignature(sig)
+		BuildAndSign(genesis.DevAccounts()[addressNumber].PrivateKey)
+	require.NoError(t, err)
 
 	return tx
 }

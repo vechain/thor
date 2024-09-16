@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
@@ -95,20 +96,15 @@ func TestConvertTransfer(t *testing.T) {
 	repo, _ := chain.NewRepository(db, b)
 
 	// New tx
-	transaction := new(tx.Builder).
+	transaction, err := new(tx.Builder).
 		ChainTag(repo.ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
 		Gas(21000).
 		Nonce(1).
 		BlockRef(tx.NewBlockRef(0)).
-		Build()
-
-	sig, err := crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	transaction = transaction.WithSignature(sig)
+		BuildAndSign(genesis.DevAccounts()[0].PrivateKey)
+	require.NoError(t, err)
 
 	// New block
 	blk := new(block.Builder).
@@ -187,20 +183,15 @@ func TestConvertEvent(t *testing.T) {
 	repo, _ := chain.NewRepository(db, b)
 
 	// New tx
-	transaction := new(tx.Builder).
+	transaction, err := new(tx.Builder).
 		ChainTag(repo.ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
 		Gas(21000).
 		Nonce(1).
 		BlockRef(tx.NewBlockRef(0)).
-		Build()
-
-	sig, err := crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	transaction = transaction.WithSignature(sig)
+		BuildAndSign(genesis.DevAccounts()[0].PrivateKey)
+	require.NoError(t, err)
 
 	// New block
 	blk := new(block.Builder).

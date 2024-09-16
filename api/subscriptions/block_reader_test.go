@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
@@ -77,7 +77,7 @@ func initChain(t *testing.T) (*chain.Repository, []*block.Block, *txpool.TxPool)
 
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	tr := new(tx.Builder).
+	tr, err := new(tx.Builder).
 		ChainTag(repo.ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -85,13 +85,9 @@ func initChain(t *testing.T) (*chain.Repository, []*block.Block, *txpool.TxPool)
 		Nonce(1).
 		Clause(cla).
 		BlockRef(tx.NewBlockRef(0)).
-		Build()
+		BuildAndSign(genesis.DevAccounts()[0].PrivateKey)
+	require.NoError(t, err)
 
-	sig, err := crypto.Sign(tr.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tr = tr.WithSignature(sig)
 	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
 	sum, _ := repo.GetBlockSummary(b.Header().ID())
 	flow, err := packer.Schedule(sum, uint64(time.Now().Unix()))

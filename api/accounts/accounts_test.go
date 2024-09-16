@@ -19,9 +19,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	ABI "github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/block"
@@ -293,12 +293,9 @@ func buildTxWithClauses(t *testing.T, chaiTag byte, clauses ...*tx.Clause) *tx.T
 		builder.Clause(c)
 	}
 
-	transaction := builder.Build()
-	sig, err := crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return transaction.WithSignature(sig)
+	transaction, err := builder.BuildAndSign(genesis.DevAccounts()[0].PrivateKey)
+	require.NoError(t, err)
+	return transaction
 }
 
 func packTx(repo *chain.Repository, stater *state.Stater, transaction *tx.Transaction, t *testing.T) {

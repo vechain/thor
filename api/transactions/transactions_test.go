@@ -18,10 +18,10 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
@@ -112,17 +112,14 @@ func sendTx(t *testing.T) {
 	var expiration = uint32(10)
 	var gas = uint64(21000)
 
-	tx := new(tx.Builder).
+	tx, err := new(tx.Builder).
 		BlockRef(blockRef).
 		ChainTag(chainTag).
 		Expiration(expiration).
 		Gas(gas).
-		Build()
-	sig, err := crypto.Sign(tx.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tx = tx.WithSignature(sig)
+		BuildAndSign(genesis.DevAccounts()[0].PrivateKey)
+	require.NoError(t, err)
+
 	rlpTx, err := rlp.EncodeToBytes(tx)
 	if err != nil {
 		t.Fatal(err)
@@ -287,7 +284,7 @@ func initTransactionServer(t *testing.T) {
 	repo, _ = chain.NewRepository(db, b)
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	transaction = new(tx.Builder).
+	transaction, err = new(tx.Builder).
 		ChainTag(repo.ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -295,27 +292,16 @@ func initTransactionServer(t *testing.T) {
 		Nonce(1).
 		Clause(cla).
 		BlockRef(tx.NewBlockRef(0)).
-		Build()
+		BuildAndSign(genesis.DevAccounts()[0].PrivateKey)
+	require.NoError(t, err)
 
-	mempoolTx = new(tx.Builder).
+	mempoolTx, err = new(tx.Builder).
 		ChainTag(repo.ChainTag()).
 		Expiration(10).
 		Gas(21000).
 		Nonce(1).
-		Build()
-
-	sig, err := crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	sig2, err := crypto.Sign(mempoolTx.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	transaction = transaction.WithSignature(sig)
-	mempoolTx = mempoolTx.WithSignature(sig2)
+		BuildAndSign(genesis.DevAccounts()[0].PrivateKey)
+	require.NoError(t, err)
 
 	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
 	sum, _ := repo.GetBlockSummary(b.Header().ID())

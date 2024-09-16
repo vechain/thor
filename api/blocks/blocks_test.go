@@ -17,7 +17,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -171,7 +170,7 @@ func initBlockServer(t *testing.T) {
 	repo, _ := chain.NewRepository(db, b)
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	tx := new(tx.Builder).
+	tx, err := new(tx.Builder).
 		ChainTag(repo.ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -179,13 +178,9 @@ func initBlockServer(t *testing.T) {
 		Nonce(1).
 		Clause(cla).
 		BlockRef(tx.NewBlockRef(0)).
-		Build()
+		BuildAndSign(genesis.DevAccounts()[0].PrivateKey)
+	require.NoError(t, err)
 
-	sig, err := crypto.Sign(tx.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tx = tx.WithSignature(sig)
 	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
 	sum, _ := repo.GetBlockSummary(b.Header().ID())
 	flow, err := packer.Schedule(sum, uint64(time.Now().Unix()))
