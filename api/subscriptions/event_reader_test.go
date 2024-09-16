@@ -49,7 +49,7 @@ func TestEventReader_Read(t *testing.T) {
 			t.Fatal("unexpected type")
 		}
 	}
-	assert.Equal(t, 1, len(eventMessages))
+	assert.Equal(t, 2, len(eventMessages))
 	eventMsg := eventMessages[0]
 	assert.Equal(t, newBlock.Header().ID(), eventMsg.Meta.BlockID)
 	assert.Equal(t, newBlock.Header().Number(), eventMsg.Meta.BlockNumber)

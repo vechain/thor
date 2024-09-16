@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
@@ -24,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/test/eventcontract"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -214,29 +216,6 @@ func TestParseAddress(t *testing.T) {
 	assert.Equal(t, expectedAddr, *result)
 }
 
-// This is a helper function to forcly insert an event into the output receipts
-func insertMockOutputEventRcpt(receipts tx.Receipts) {
-	oldReceipt := receipts[0]
-	events := make(tx.Events, 0)
-	events = append(events, &tx.Event{
-		Address: thor.BytesToAddress([]byte("to")),
-		Topics:  []thor.Bytes32{thor.BytesToBytes32([]byte("topic"))},
-		Data:    []byte("data"),
-	})
-	outputs := &tx.Output{
-		Transfers: oldReceipt.Outputs[0].Transfers,
-		Events:    events,
-	}
-	receipts[0] = &tx.Receipt{
-		Reverted: oldReceipt.Reverted,
-		GasUsed:  oldReceipt.GasUsed,
-		Outputs:  []*tx.Output{outputs},
-		GasPayer: oldReceipt.GasPayer,
-		Paid:     oldReceipt.Paid,
-		Reward:   oldReceipt.Reward,
-	}
-}
-
 func initSubscriptionsServer(t *testing.T) {
 	thorChain, err := testchain.NewIntegrationTestChain()
 	require.NoError(t, err)
@@ -265,11 +244,20 @@ func initSubscriptionsServer(t *testing.T) {
 	}
 	tr = tr.WithSignature(sig)
 
-	require.NoError(t, thorChain.MintTransactionsWithReceiptFunc(genesis.DevAccounts()[0],
-		&testchain.TxAndRcpt{
-			Transaction: tr,
-			ReceiptFunc: insertMockOutputEventRcpt, // todo review this
-		}))
+	txDeploy := new(tx.Builder).
+		ChainTag(thorChain.Repo().ChainTag()).
+		GasPriceCoef(1).
+		Expiration(100).
+		Gas(1_000_000).
+		Nonce(3).
+		Clause(tx.NewClause(nil).WithData(common.Hex2Bytes(eventcontract.HexBytecode))).
+		BlockRef(tx.NewBlockRef(0)).
+		Build()
+	sigTxDeploy, err := crypto.Sign(txDeploy.SigningHash().Bytes(), genesis.DevAccounts()[1].PrivateKey)
+	require.NoError(t, err)
+	txDeploy = txDeploy.WithSignature(sigTxDeploy)
+
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], tr, txDeploy))
 
 	blocks, err = thorChain.GetAllBlocks()
 	require.NoError(t, err)
@@ -308,11 +296,20 @@ func TestSubscriptionsBacktrace(t *testing.T) {
 	}
 	tr = tr.WithSignature(sig)
 
-	require.NoError(t, thorChain.MintTransactionsWithReceiptFunc(genesis.DevAccounts()[0],
-		&testchain.TxAndRcpt{
-			Transaction: tr,
-			ReceiptFunc: insertMockOutputEventRcpt, // todo review this
-		}))
+	txDeploy := new(tx.Builder).
+		ChainTag(thorChain.Repo().ChainTag()).
+		GasPriceCoef(1).
+		Expiration(100).
+		Gas(1_000_000).
+		Nonce(3).
+		Clause(tx.NewClause(nil).WithData(common.Hex2Bytes(eventcontract.HexBytecode))).
+		BlockRef(tx.NewBlockRef(0)).
+		Build()
+	sigTxDeploy, err := crypto.Sign(txDeploy.SigningHash().Bytes(), genesis.DevAccounts()[1].PrivateKey)
+	require.NoError(t, err)
+	txDeploy = txDeploy.WithSignature(sigTxDeploy)
+
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], tr, txDeploy))
 
 	for i := 0; i < 10; i++ {
 		require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0]))

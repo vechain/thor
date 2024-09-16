@@ -57,22 +57,12 @@ func (c *Chain) GenesisBlock() *block.Block {
 // MintTransactions creates a block with the provided transactions and adds it to the blockchain.
 // It wraps the transactions with receipts and passes them to MintTransactionsWithReceiptFunc.
 func (c *Chain) MintTransactions(account genesis.DevAccount, transactions ...*tx.Transaction) error {
-	var txAndRcpts []*TxAndRcpt
-	for _, transaction := range transactions {
-		txAndRcpts = append(txAndRcpts, &TxAndRcpt{Transaction: transaction})
-	}
-	return c.MintTransactionsWithReceiptFunc(account, txAndRcpts...)
+	return c.MintBlock(account, transactions...)
 }
 
-// MintTransactionsWithReceiptFunc mints a block by accepting transactions and their associated receipt functions.
-// It calls MintBlock to finalize the process.
-func (c *Chain) MintTransactionsWithReceiptFunc(account genesis.DevAccount, txAndRcpts ...*TxAndRcpt) error {
-	return c.MintBlock(account, txAndRcpts...)
-}
-
-// MintBlock creates and finalizes a new block with the given transactions and receipts.
+// MintBlock creates and finalizes a new block with the given transactions.
 // It schedules a new block, adopts transactions, packs them into a block, and commits it to the chain.
-func (c *Chain) MintBlock(account genesis.DevAccount, txAndRcpts ...*TxAndRcpt) error {
+func (c *Chain) MintBlock(account genesis.DevAccount, transactions ...*tx.Transaction) error {
 	// Create a new block packer with the current chain state and account information.
 	blkPacker := packer.New(c.Repo(), c.Stater(), account.Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
 
@@ -83,8 +73,8 @@ func (c *Chain) MintBlock(account genesis.DevAccount, txAndRcpts ...*TxAndRcpt) 
 	}
 
 	// Adopt the provided transactions into the block.
-	for _, txAndRcpt := range txAndRcpts {
-		if err = blkFlow.Adopt(txAndRcpt.Transaction); err != nil {
+	for _, trx := range transactions {
+		if err = blkFlow.Adopt(trx); err != nil {
 			return fmt.Errorf("unable to adopt tx into block: %w", err)
 		}
 	}
@@ -93,13 +83,6 @@ func (c *Chain) MintBlock(account genesis.DevAccount, txAndRcpts ...*TxAndRcpt) 
 	newBlk, stage, receipts, err := blkFlow.Pack(account.PrivateKey, 0, false)
 	if err != nil {
 		return fmt.Errorf("unable to pack tx: %w", err)
-	}
-
-	// Execute any receipt modification functions if provided.
-	for _, txAndRcpt := range txAndRcpts {
-		if txAndRcpt.ReceiptFunc != nil {
-			txAndRcpt.ReceiptFunc(receipts)
-		}
 	}
 
 	// Commit the new block to the chain's state.

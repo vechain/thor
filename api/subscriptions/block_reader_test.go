@@ -9,10 +9,12 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/test/eventcontract"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -72,39 +74,24 @@ func initChain(t *testing.T) *testchain.Chain {
 		BlockRef(tx.NewBlockRef(0)).
 		Build()
 
-	sig, err := crypto.Sign(tr.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
+	sig, err := crypto.Sign(tr.SigningHash().Bytes(), genesis.DevAccounts()[1].PrivateKey)
+	require.NoError(t, err)
 	tr = tr.WithSignature(sig)
 
-	require.NoError(t, thorChain.MintTransactionsWithReceiptFunc(
-		genesis.DevAccounts()[0],
-		&testchain.TxAndRcpt{Transaction: tr, ReceiptFunc: insertMockOutputEvent}),
-	)
+	txDeploy := new(tx.Builder).
+		ChainTag(thorChain.Repo().ChainTag()).
+		GasPriceCoef(1).
+		Expiration(100).
+		Gas(1_000_000).
+		Nonce(3).
+		Clause(tx.NewClause(nil).WithData(common.Hex2Bytes(eventcontract.HexBytecode))).
+		BlockRef(tx.NewBlockRef(0)).
+		Build()
+	sigTxDeploy, err := crypto.Sign(txDeploy.SigningHash().Bytes(), genesis.DevAccounts()[1].PrivateKey)
+	require.NoError(t, err)
+	txDeploy = txDeploy.WithSignature(sigTxDeploy)
+
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], tr, txDeploy))
 
 	return thorChain
-}
-
-// This is a helper function to forcibly insert an event into the output receipts
-func insertMockOutputEvent(receipts tx.Receipts) {
-	oldReceipt := receipts[0]
-	events := make(tx.Events, 0)
-	events = append(events, &tx.Event{
-		Address: thor.BytesToAddress([]byte("to")),
-		Topics:  []thor.Bytes32{thor.BytesToBytes32([]byte("topic"))},
-		Data:    []byte("data"),
-	})
-	outputs := &tx.Output{
-		Transfers: oldReceipt.Outputs[0].Transfers,
-		Events:    events,
-	}
-	receipts[0] = &tx.Receipt{
-		Reverted: oldReceipt.Reverted,
-		GasUsed:  oldReceipt.GasUsed,
-		Outputs:  []*tx.Output{outputs},
-		GasPayer: oldReceipt.GasPayer,
-		Paid:     oldReceipt.Paid,
-		Reward:   oldReceipt.Reward,
-	}
 }
