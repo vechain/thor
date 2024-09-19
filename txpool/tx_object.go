@@ -55,7 +55,7 @@ func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 	switch {
 	case o.Gas() > headBlock.GasLimit():
 		return false, errors.New("gas too large")
-	case o.IsExpired(headBlock.Number() + 1):
+	case o.IsExpired(headBlock.Number() + 1): // Check tx expiration on top of next block
 		return false, errors.New("expired")
 	case o.BlockRef().Number() > headBlock.Number()+uint32(5*60/thor.BlockInterval):
 		// reject deferred tx which will be applied after 5mins
@@ -81,7 +81,7 @@ func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 		}
 	}
 
-	// tx valid in the future
+	// Tx is considered executable when the BlockRef has passed in reference to the next block.
 	if o.BlockRef().Number() > headBlock.Number()+1 {
 		return false, nil
 	}
