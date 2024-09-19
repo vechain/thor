@@ -258,13 +258,13 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		txObj.executable = executable
 		if err := p.all.Add(txObj, p.options.LimitPerAccount, func(payer thor.Address, needs *big.Int) error {
 			// check payer's balance
-			balance, err := state.GetBalance(payer)
+			balance, err := state.GetEnergy(payer, headSummary.Header.Timestamp()+thor.BlockInterval)
 			if err != nil {
 				return err
 			}
 
 			if balance.Cmp(needs) < 0 {
-				return errors.New("insufficient energy")
+				return errors.New("insufficient energy for overall pending cost")
 			}
 
 			return nil
@@ -480,6 +480,7 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 
 	for _, obj := range executableObjs {
 		executables = append(executables, obj.Transaction)
+		// the tx is not executable previously
 		if !obj.executable {
 			obj.executable = true
 			toUpdateCost = append(toUpdateCost, obj)

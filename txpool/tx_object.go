@@ -97,6 +97,9 @@ func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 		return false, nil
 	}
 
+	checkpoint := state.NewCheckpoint()
+	defer state.RevertTo(checkpoint)
+
 	_, _, payer, prepaid, _, err := o.resolved.BuyGas(state, headBlock.Timestamp()+thor.BlockInterval)
 	if err != nil {
 		return false, err

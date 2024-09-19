@@ -63,9 +63,14 @@ func (m *txObjectMap) Add(txObj *txObject, limitPerAccount int, validatePayer fu
 		}
 	}
 
-	var cost *big.Int
+	var (
+		cost  *big.Int
+		payer thor.Address
+	)
+
 	if txObj.Cost() != nil {
-		pending := m.cost[*txObj.Payer()]
+		payer = *txObj.Payer()
+		pending := m.cost[payer]
 
 		if pending == nil {
 			cost = new(big.Int).Set(txObj.Cost())
@@ -73,7 +78,7 @@ func (m *txObjectMap) Add(txObj *txObject, limitPerAccount int, validatePayer fu
 			cost = new(big.Int).Add(pending, txObj.Cost())
 		}
 
-		if err := validatePayer(*txObj.Payer(), cost); err != nil {
+		if err := validatePayer(payer, cost); err != nil {
 			return err
 		}
 	}
@@ -85,7 +90,7 @@ func (m *txObjectMap) Add(txObj *txObject, limitPerAccount int, validatePayer fu
 		m.quota[*delegator]++
 	}
 	if cost != nil {
-		m.cost[*txObj.Payer()] = cost
+		m.cost[payer] = cost
 	}
 	return nil
 }
