@@ -114,6 +114,7 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64) (
 		return returnedEnergy, nil
 	}
 
+	// prepaid is the max total of gas cost available to spend on this transaction
 	prepaid = new(big.Int).Mul(new(big.Int).SetUint64(r.tx.Gas()), gasPrice)
 	if r.Delegator != nil {
 		var sufficient bool

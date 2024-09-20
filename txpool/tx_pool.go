@@ -385,7 +385,7 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 		}
 		// update pending cost
 		for _, txObj := range toUpdateCost {
-			p.all.UpdateCost(txObj)
+			p.all.UpdatePendingCost(txObj)
 		}
 	}()
 

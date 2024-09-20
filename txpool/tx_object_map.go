@@ -84,14 +84,16 @@ func (m *txObjectMap) Add(txObj *txObject, limitPerAccount int, validatePayer fu
 	}
 
 	m.quota[origin]++
-	m.mapByHash[hash] = txObj
-	m.mapByID[txObj.ID()] = txObj
 	if delegator != nil {
 		m.quota[*delegator]++
 	}
+
 	if cost != nil {
 		m.cost[payer] = cost
 	}
+
+	m.mapByHash[hash] = txObj
+	m.mapByID[txObj.ID()] = txObj
 	return nil
 }
 
@@ -122,6 +124,7 @@ func (m *txObjectMap) RemoveByHash(txHash thor.Bytes32) bool {
 			}
 		}
 
+		// update the pending cost of payers
 		if payer := txObj.Payer(); payer != nil {
 			if pending := m.cost[*payer]; pending != nil {
 				if pending.Cmp(txObj.Cost()) <= 0 {
@@ -139,7 +142,7 @@ func (m *txObjectMap) RemoveByHash(txHash thor.Bytes32) bool {
 	return false
 }
 
-func (m *txObjectMap) UpdateCost(txObj *txObject) {
+func (m *txObjectMap) UpdatePendingCost(txObj *txObject) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
