@@ -134,7 +134,7 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 		nameargs = append(nameargs, addr.Hex())
 	}
 	for _, i := range action.args {
-		action.args[i] = rand.Int63n(100) // nolint:gosec
+		action.args[i] = rand.Int63n(100) // #nosec
 		nameargs = append(nameargs, fmt.Sprint(action.args[i]))
 	}
 	action.name += strings.Join(nameargs, ", ")

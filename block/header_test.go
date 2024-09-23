@@ -6,7 +6,7 @@
 package block
 
 import (
-	"math/rand"
+	"crypto/rand"
 	"sync/atomic"
 	"testing"
 
@@ -86,8 +86,8 @@ func TestHeaderEncoding(t *testing.T) {
 
 	var proof [81]byte
 	var alpha [32]byte
-	rand.Read(proof[:]) // nolint
-	rand.Read(alpha[:]) // nolint
+	rand.Read(proof[:])
+	rand.Read(alpha[:])
 
 	cplx, err := NewComplexSignature(sig[:], proof[:])
 	if err != nil {
@@ -110,7 +110,7 @@ func TestHeaderEncoding(t *testing.T) {
 // type extension struct{Alpha []byte}
 func TestEncodingBadExtension(t *testing.T) {
 	var sig [65]byte
-	rand.Read(sig[:]) // nolint
+	rand.Read(sig[:])
 
 	block := new(Builder).Build().WithSignature(sig[:])
 	h := block.Header()
@@ -157,8 +157,8 @@ func TestEncodingBadExtension(t *testing.T) {
 func TestEncodingExtension(t *testing.T) {
 	var sig [ComplexSigSize]byte
 	var alpha [32]byte
-	rand.Read(sig[:])   // nolint
-	rand.Read(alpha[:]) // nolint
+	rand.Read(sig[:])
+	rand.Read(alpha[:])
 
 	block := new(Builder).Alpha(alpha[:]).Build().WithSignature(sig[:])
 	h := block.Header()

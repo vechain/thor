@@ -546,7 +546,7 @@ func benchUpdate(b *testing.B, e binary.ByteOrder) *Trie {
 // insert into the trie before measuring the hashing.
 func BenchmarkHash(b *testing.B) {
 	// Make the random benchmark deterministic
-	random := rand.New(rand.NewSource(0)) // nolint:gosec
+	random := rand.New(rand.NewSource(0)) // #nosec
 
 	// Create a realistic account trie to hash
 	addresses := make([][20]byte, b.N)

@@ -6,7 +6,7 @@
 package metrics
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -26,21 +26,21 @@ func TestNoopMetrics(t *testing.T) {
 	Counter("count2")
 
 	count1.Add(1)
-	randCount2 := rand.Intn(100) + 1 // nolint:gosec
+	randCount2 := rand.N(100) + 1 // #nosec
 	for i := 0; i < randCount2; i++ {
 		Counter("count2").Add(1)
 	}
 
 	hist := Histogram("hist1", nil)
 	histVect := HistogramVec("hist2", []string{"zeroOrOne"}, nil)
-	for i := 0; i < rand.Intn(100)+1; i++ { // nolint:gosec
+	for i := 0; i < rand.N(100)+1; i++ { // #nosec
 		hist.Observe(int64(i))
 		histVect.ObserveWithLabels(int64(i), map[string]string{"thisIsNonsense": "butDoesntBreak"})
 	}
 
 	countVect := CounterVec("countVec1", []string{"zeroOrOne"})
 	gaugeVec := GaugeVec("gaugeVec1", []string{"zeroOrOne"})
-	for i := 0; i < rand.Intn(100)+1; i++ { // nolint:gosec
+	for i := 0; i < rand.N(100)+1; i++ { // #nosec
 		countVect.AddWithLabel(int64(i), map[string]string{"thisIsNonsense": "butDoesntBreak"})
 		gaugeVec.AddWithLabel(int64(i), map[string]string{"thisIsNonsense": "butDoesntBreak"})
 	}

@@ -24,7 +24,6 @@ linters:
     - durationcheck
     - copyloopvar
     - whitespace
-    - gosec
     - revive
 
     # - structcheck # lots of false positives
@@ -39,11 +38,6 @@ linters:
 linters-settings:
   gofmt:
     simplify: true
-  gosec:
-    excludes:
-      - G115
-      - G406 # ignore ripe160 deprecation
-      - G507 # ignore ripe160 deprecation
   revive:
     rules:
       - name: var-naming

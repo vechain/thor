@@ -214,7 +214,7 @@ func httpPost(t *testing.T, url string, body interface{}) ([]byte, int) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	res, err := http.Post(url, "application/x-www-form-urlencoded", bytes.NewReader(data)) // nolint: gosec
+	res, err := http.Post(url, "application/x-www-form-urlencoded", bytes.NewReader(data))
 	if err != nil {
 		t.Fatal(err)
 	}

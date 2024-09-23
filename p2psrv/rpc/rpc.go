@@ -7,7 +7,7 @@ package rpc
 
 import (
 	"context"
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 	"time"
 
@@ -16,11 +16,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/log"
 )
-
-func init() {
-	// required when generate call id
-	rand.Seed(time.Now().UnixNano()) // nolint:staticcheck
-}
 
 const (
 	rpcDefaultTimeout = time.Second * 10

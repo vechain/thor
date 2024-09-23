@@ -539,7 +539,7 @@ func httpPost(t *testing.T, url string, body interface{}) ([]byte, int) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	res, err := http.Post(url, "application/x-www-form-urlencoded", bytes.NewReader(data)) // nolint:gosec
+	res, err := http.Post(url, "application/x-www-form-urlencoded", bytes.NewReader(data))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -552,7 +552,7 @@ func httpPost(t *testing.T, url string, body interface{}) ([]byte, int) {
 }
 
 func httpGet(t *testing.T, url string) ([]byte, int) {
-	res, err := http.Get(url) // nolint:gosec
+	res, err := http.Get(url)
 	if err != nil {
 		t.Fatal(err)
 	}
