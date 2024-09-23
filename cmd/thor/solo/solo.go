@@ -262,7 +262,7 @@ func (s *Solo) newTx(clauses []*tx.Clause, from genesis.DevAccount) (*tx.Transac
 
 	return builder.BlockRef(tx.NewBlockRef(0)).
 		Expiration(math.MaxUint32).
-		Nonce(rand.Uint64()). // nolint:gosec
+		Nonce(rand.Uint64()). // #nosec
 		DependsOn(nil).
 		Gas(1_000_000).
 		BuildAndSign(from.PrivateKey)
