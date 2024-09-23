@@ -14,15 +14,12 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-type originKey thor.Address
-type delegatorKey thor.Address
-
 // txObjectMap to maintain mapping of tx hash to tx object, account quota and pending cost.
 type txObjectMap struct {
 	lock      sync.RWMutex
 	mapByHash map[thor.Bytes32]*txObject
 	mapByID   map[thor.Bytes32]*txObject
-	quota     map[interface{}]int
+	quota     map[thor.Address]int
 	cost      map[thor.Address]*big.Int
 }
 
@@ -30,7 +27,7 @@ func newTxObjectMap() *txObjectMap {
 	return &txObjectMap{
 		mapByHash: make(map[thor.Bytes32]*txObject),
 		mapByID:   make(map[thor.Bytes32]*txObject),
-		quota:     make(map[interface{}]int),
+		quota:     make(map[thor.Address]int),
 		cost:      make(map[thor.Address]*big.Int),
 	}
 }
@@ -51,12 +48,11 @@ func (m *txObjectMap) Add(txObj *txObject, limitPerAccount int, validatePayer fu
 		return nil
 	}
 
-	origin := originKey(txObj.Origin())
-	if m.quota[origin] >= limitPerAccount {
+	if m.quota[txObj.Origin()] >= limitPerAccount {
 		return errors.New("account quota exceeded")
 	}
 
-	delegator := (*delegatorKey)(txObj.Delegator())
+	delegator := txObj.Delegator()
 	if delegator != nil {
 		if m.quota[*delegator] >= limitPerAccount {
 			return errors.New("delegator quota exceeded")
@@ -83,7 +79,7 @@ func (m *txObjectMap) Add(txObj *txObject, limitPerAccount int, validatePayer fu
 		}
 	}
 
-	m.quota[origin]++
+	m.quota[txObj.Origin()]++
 	if delegator != nil {
 		m.quota[*delegator]++
 	}
@@ -108,19 +104,17 @@ func (m *txObjectMap) RemoveByHash(txHash thor.Bytes32) bool {
 	defer m.lock.Unlock()
 
 	if txObj, ok := m.mapByHash[txHash]; ok {
-		origin := originKey(txObj.Origin())
-		if m.quota[origin] > 1 {
-			m.quota[origin]--
+		if m.quota[txObj.Origin()] > 1 {
+			m.quota[txObj.Origin()]--
 		} else {
-			delete(m.quota, origin)
+			delete(m.quota, txObj.Origin())
 		}
 
-		if d := txObj.Delegator(); d != nil {
-			delegator := delegatorKey(*d)
-			if m.quota[delegator] > 1 {
-				m.quota[delegator]--
+		if delegator := txObj.Delegator(); delegator != nil {
+			if m.quota[*delegator] > 1 {
+				m.quota[*delegator]--
 			} else {
-				delete(m.quota, delegator)
+				delete(m.quota, *delegator)
 			}
 		}
 
@@ -183,9 +177,9 @@ func (m *txObjectMap) Fill(txObjs []*txObject) {
 			continue
 		}
 		// skip account limit check
-		m.quota[originKey(txObj.Origin())]++
-		if d := txObj.Delegator(); d != nil {
-			m.quota[delegatorKey(*d)]++
+		m.quota[txObj.Origin()]++
+		if delegator := txObj.Delegator(); delegator != nil {
+			m.quota[*delegator]++
 		}
 		m.mapByHash[txObj.Hash()] = txObj
 		m.mapByID[txObj.ID()] = txObj

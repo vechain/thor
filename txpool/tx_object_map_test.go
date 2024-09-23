@@ -77,9 +77,9 @@ func TestFill(t *testing.T) {
 	assert.Equal(t, m.GetByID(txObj1.ID()), txObj1, "Duplicate tx1 should not be added again")
 	assert.Equal(t, m.GetByID(txObj2.ID()), txObj2, "txObj2 should be retrievable by ID")
 
-	assert.Equal(t, 1, m.quota[originKey(genesis.DevAccounts()[0].Address)], "Account quota should be 1 for account 0")
-	assert.Equal(t, 1, m.quota[originKey(genesis.DevAccounts()[1].Address)], "Account quota should be 1 for account 1")
-	assert.Equal(t, 1, m.quota[delegatorKey(genesis.DevAccounts()[2].Address)], "Delegator quota should be 1 for account 2")
+	assert.Equal(t, 1, m.quota[genesis.DevAccounts()[0].Address], "Account quota should be 1 for account 0")
+	assert.Equal(t, 1, m.quota[genesis.DevAccounts()[1].Address], "Account quota should be 1 for account 1")
+	assert.Equal(t, 1, m.quota[genesis.DevAccounts()[2].Address], "Delegator quota should be 1 for account 2")
 }
 
 func TestTxObjMap(t *testing.T) {
