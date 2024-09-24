@@ -21,6 +21,7 @@ type LogMeta struct {
 	BlockNumber    uint32       `json:"blockNumber"`
 	BlockTimestamp uint64       `json:"blockTimestamp"`
 	TxID           thor.Bytes32 `json:"txID"`
+	TxIndex        uint32       `json:"txIndex"`
 	TxOrigin       thor.Address `json:"txOrigin"`
 	ClauseIndex    uint32       `json:"clauseIndex"`
 }
@@ -51,6 +52,7 @@ func convertEvent(event *logdb.Event) *FilteredEvent {
 			BlockNumber:    event.BlockNumber,
 			BlockTimestamp: event.BlockTime,
 			TxID:           event.TxID,
+			TxIndex:        event.TxIndex,
 			TxOrigin:       event.TxOrigin,
 			ClauseIndex:    event.ClauseIndex,
 		},
@@ -74,6 +76,7 @@ func (e *FilteredEvent) String() string {
 				blockNumber    %v,
 				blockTimestamp %v),
 				txID     %v,
+				txIndex  %v,
 				txOrigin %v,
 				clauseIndex %v)
 			)`,
@@ -84,6 +87,7 @@ func (e *FilteredEvent) String() string {
 		e.Meta.BlockNumber,
 		e.Meta.BlockTimestamp,
 		e.Meta.TxID,
+		e.Meta.TxIndex,
 		e.Meta.TxOrigin,
 		e.Meta.ClauseIndex,
 	)

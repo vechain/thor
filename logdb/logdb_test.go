@@ -147,6 +147,7 @@ func TestEvents(t *testing.T) {
 			allEvents = append(allEvents, &logdb.Event{
 				BlockNumber: b.Header().Number(),
 				Index:       uint32(j),
+				TxIndex:     uint32(j),
 				BlockID:     b.Header().ID(),
 				BlockTime:   b.Header().Timestamp(),
 				TxID:        tx.ID(),
