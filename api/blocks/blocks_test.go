@@ -170,16 +170,18 @@ func initBlockServer(t *testing.T) {
 	repo, _ := chain.NewRepository(db, b)
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	tx, err := new(tx.Builder).
-		ChainTag(repo.ChainTag()).
-		GasPriceCoef(1).
-		Expiration(10).
-		Gas(21000).
-		Nonce(1).
-		Clause(cla).
-		BlockRef(tx.NewBlockRef(0)).
-		BuildAndSign(genesis.DevAccounts()[0].PrivateKey)
-	require.NoError(t, err)
+	trx := tx.MustSignTx(
+		new(tx.Builder).
+			ChainTag(repo.ChainTag()).
+			GasPriceCoef(1).
+			Expiration(10).
+			Gas(21000).
+			Nonce(1).
+			Clause(cla).
+			BlockRef(tx.NewBlockRef(0)).
+			Build(),
+		genesis.DevAccounts()[0].PrivateKey,
+	)
 
 	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
 	sum, _ := repo.GetBlockSummary(b.Header().ID())
@@ -187,7 +189,7 @@ func initBlockServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = flow.Adopt(tx)
+	err = flow.Adopt(trx)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -6,11 +6,8 @@
 package tx
 
 import (
-	"crypto/ecdsa"
 	"encoding/binary"
-	"fmt"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -82,37 +79,4 @@ func (b *Builder) Features(feat Features) *Builder {
 func (b *Builder) Build() *Transaction {
 	tx := Transaction{body: b.body}
 	return &tx
-}
-
-// BuildAndSign builds tx object and signs it using the provided key.
-func (b *Builder) BuildAndSign(privateKey *ecdsa.PrivateKey) (*Transaction, error) {
-	tx := b.Build()
-	sig, err := crypto.Sign(tx.SigningHash().Bytes(), privateKey)
-	if err != nil {
-		return nil, fmt.Errorf("unable to sign transaction: %w", err)
-	}
-
-	return tx.WithSignature(sig), nil
-}
-
-func (b *Builder) BuildAndSignWithDelegator(privateKey *ecdsa.PrivateKey, delegatorPK *ecdsa.PrivateKey) (*Transaction, error) {
-	tx := b.Build()
-	sig, err := crypto.Sign(tx.SigningHash().Bytes(), privateKey)
-	if err != nil {
-		return nil, fmt.Errorf("unable to sign transaction: %w", err)
-	}
-
-	pub, err := crypto.SigToPub(tx.SigningHash().Bytes(), sig[:65])
-	if err != nil {
-		return nil, fmt.Errorf("unable to recover address from signature: %w", err)
-	}
-	origin := thor.Address(crypto.PubkeyToAddress(*pub))
-
-	dSig, err := crypto.Sign(tx.DelegatorSigningHash(origin).Bytes(), delegatorPK)
-	if err != nil {
-		return nil, fmt.Errorf("unable to delegator sign transaction: %w", err)
-	}
-	sig = append(sig, dSig...)
-
-	return tx.WithSignature(sig), nil
 }

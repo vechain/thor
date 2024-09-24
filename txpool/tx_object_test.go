@@ -34,15 +34,15 @@ func newTx(chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef
 		builder.Clause(c)
 	}
 
-	tx, _ := builder.BlockRef(blockRef).
+	return tx.MustSignTx(builder.BlockRef(blockRef).
 		Expiration(expiration).
 		Nonce(rand.Uint64()). // nolint:gosec
 		DependsOn(dependsOn).
 		Features(features).
 		Gas(gas).
-		BuildAndSign(from.PrivateKey)
-
-	return tx
+		Build(),
+		from.PrivateKey,
+	)
 }
 
 func newDelegatedTx(chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, from genesis.DevAccount, delegator genesis.DevAccount) *tx.Transaction {
@@ -54,15 +54,20 @@ func newDelegatedTx(chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx
 	var features tx.Features
 	features.SetDelegated(true)
 
-	tx, _ := builder.BlockRef(blockRef).
+	trx := builder.BlockRef(blockRef).
 		Expiration(expiration).
 		Nonce(rand.Uint64()). // nolint:gosec
 		DependsOn(dependsOn).
 		Features(features).
 		Gas(gas).
-		BuildAndSignWithDelegator(from.PrivateKey, delegator.PrivateKey)
+		Build()
 
-	return tx
+	trx, _ = tx.DelegatorSignTx(
+		tx.MustSignTx(trx, from.PrivateKey),
+		delegator.PrivateKey,
+	)
+
+	return trx
 }
 
 func SetupTest() (genesis.DevAccount, *chain.Repository, *block.Block, *state.State) {

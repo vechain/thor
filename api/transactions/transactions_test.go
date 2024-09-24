@@ -21,7 +21,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
@@ -112,15 +111,17 @@ func sendTx(t *testing.T) {
 	var expiration = uint32(10)
 	var gas = uint64(21000)
 
-	tx, err := new(tx.Builder).
-		BlockRef(blockRef).
-		ChainTag(chainTag).
-		Expiration(expiration).
-		Gas(gas).
-		BuildAndSign(genesis.DevAccounts()[0].PrivateKey)
-	require.NoError(t, err)
+	trx := tx.MustSignTx(
+		new(tx.Builder).
+			BlockRef(blockRef).
+			ChainTag(chainTag).
+			Expiration(expiration).
+			Gas(gas).
+			Build(),
+		genesis.DevAccounts()[0].PrivateKey,
+	)
 
-	rlpTx, err := rlp.EncodeToBytes(tx)
+	rlpTx, err := rlp.EncodeToBytes(trx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +131,7 @@ func sendTx(t *testing.T) {
 	if err = json.Unmarshal(res, &txObj); err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, tx.ID().String(), txObj["id"], "should be the same transaction id")
+	assert.Equal(t, trx.ID().String(), txObj["id"], "should be the same transaction id")
 }
 
 func getTxWithBadID(t *testing.T) {
@@ -284,7 +285,7 @@ func initTransactionServer(t *testing.T) {
 	repo, _ = chain.NewRepository(db, b)
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	transaction, err = new(tx.Builder).
+	transaction = new(tx.Builder).
 		ChainTag(repo.ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -292,16 +293,16 @@ func initTransactionServer(t *testing.T) {
 		Nonce(1).
 		Clause(cla).
 		BlockRef(tx.NewBlockRef(0)).
-		BuildAndSign(genesis.DevAccounts()[0].PrivateKey)
-	require.NoError(t, err)
+		Build()
+	transaction = tx.MustSignTx(transaction, genesis.DevAccounts()[0].PrivateKey)
 
-	mempoolTx, err = new(tx.Builder).
+	mempoolTx = new(tx.Builder).
 		ChainTag(repo.ChainTag()).
 		Expiration(10).
 		Gas(21000).
 		Nonce(1).
-		BuildAndSign(genesis.DevAccounts()[0].PrivateKey)
-	require.NoError(t, err)
+		Build()
+	mempoolTx = tx.MustSignTx(mempoolTx, genesis.DevAccounts()[0].PrivateKey)
 
 	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
 	sum, _ := repo.GetBlockSummary(b.Header().ID())

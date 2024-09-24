@@ -185,6 +185,6 @@ func txBuilder(tag byte) *tx.Builder {
 }
 
 func txSign(builder *tx.Builder) *tx.Transaction {
-	transaction, _ := builder.BuildAndSign(genesis.DevAccounts()[0].PrivateKey)
-	return transaction
+	transaction := builder.Build()
+	return tx.MustSignTx(transaction, genesis.DevAccounts()[0].PrivateKey)
 }

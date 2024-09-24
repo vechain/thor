@@ -19,8 +19,11 @@ import (
 )
 
 func newTx() *tx.Transaction {
-	tx, _ := new(tx.Builder).Nonce(rand.Uint64()).BuildAndSign(genesis.DevAccounts()[0].PrivateKey) // nolint:gosec
-	return tx
+	return tx.MustSignTx(
+		new(tx.Builder).
+			Nonce(rand.Uint64()).Build(), // nolint:gosec,
+		genesis.DevAccounts()[0].PrivateKey,
+	)
 }
 
 func TestTxStash(t *testing.T) {

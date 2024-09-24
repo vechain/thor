@@ -22,7 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
@@ -527,16 +526,16 @@ func initDebugServer(t *testing.T) {
 
 	// Adding an empty clause transaction to the block to cover the case of
 	// scanning multiple txs before getting the right one
-	noClausesTx, err := new(tx.Builder).
+	noClausesTx := new(tx.Builder).
 		ChainTag(repo.ChainTag()).
 		Expiration(10).
 		Gas(21000).
-		BuildAndSign(genesis.DevAccounts()[0].PrivateKey)
-	require.NoError(t, err)
+		Build()
+	noClausesTx = tx.MustSignTx(noClausesTx, genesis.DevAccounts()[0].PrivateKey)
 
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 	cla2 := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	transaction, err = new(tx.Builder).
+	transaction = new(tx.Builder).
 		ChainTag(repo.ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -545,8 +544,8 @@ func initDebugServer(t *testing.T) {
 		Clause(cla).
 		Clause(cla2).
 		BlockRef(tx.NewBlockRef(0)).
-		BuildAndSign(genesis.DevAccounts()[0].PrivateKey)
-	require.NoError(t, err)
+		Build()
+	transaction = tx.MustSignTx(transaction, genesis.DevAccounts()[0].PrivateKey)
 
 	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
 	sum, _ := repo.GetBlockSummary(b.Header().ID())

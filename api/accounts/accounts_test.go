@@ -21,7 +21,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	ABI "github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/block"
@@ -262,7 +261,7 @@ func initAccountServer(t *testing.T) {
 	repo, _ := chain.NewRepository(db, b)
 	claTransfer := tx.NewClause(&addr).WithValue(value)
 	claDeploy := tx.NewClause(nil).WithData(bytecode)
-	transaction := buildTxWithClauses(t, repo.ChainTag(), claTransfer, claDeploy)
+	transaction := buildTxWithClauses(repo.ChainTag(), claTransfer, claDeploy)
 	contractAddr = thor.CreateContractAddress(transaction.ID(), 1, 0)
 	packTx(repo, stater, transaction, t)
 
@@ -274,7 +273,7 @@ func initAccountServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	claCall := tx.NewClause(&contractAddr).WithData(input)
-	transactionCall := buildTxWithClauses(t, repo.ChainTag(), claCall)
+	transactionCall := buildTxWithClauses(repo.ChainTag(), claCall)
 	packTx(repo, stater, transactionCall, t)
 
 	router := mux.NewRouter()
@@ -284,7 +283,7 @@ func initAccountServer(t *testing.T) {
 	ts = httptest.NewServer(router)
 }
 
-func buildTxWithClauses(t *testing.T, chaiTag byte, clauses ...*tx.Clause) *tx.Transaction {
+func buildTxWithClauses(chaiTag byte, clauses ...*tx.Clause) *tx.Transaction {
 	builder := new(tx.Builder).
 		ChainTag(chaiTag).
 		Expiration(10).
@@ -293,9 +292,9 @@ func buildTxWithClauses(t *testing.T, chaiTag byte, clauses ...*tx.Clause) *tx.T
 		builder.Clause(c)
 	}
 
-	transaction, err := builder.BuildAndSign(genesis.DevAccounts()[0].PrivateKey)
-	require.NoError(t, err)
-	return transaction
+	trx := builder.Build()
+
+	return tx.MustSignTx(trx, genesis.DevAccounts()[0].PrivateKey)
 }
 
 func packTx(repo *chain.Repository, stater *state.Stater, transaction *tx.Transaction, t *testing.T) {

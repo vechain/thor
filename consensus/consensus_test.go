@@ -14,7 +14,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
@@ -578,11 +577,11 @@ func TestValidateBlockBody(t *testing.T) {
 		{
 			"TxOriginBlocked", func(t *testing.T) {
 				thor.MockBlocklist([]string{genesis.DevAccounts()[9].Address.String()})
-				tx, err := txBuilder(tc.tag).BuildAndSign(genesis.DevAccounts()[9].PrivateKey)
-				require.NoError(t, err)
+				trx := txBuilder(tc.tag).Build()
+				trx = tx.MustSignTx(trx, genesis.DevAccounts()[9].PrivateKey)
 
 				blk, err := tc.sign(
-					tc.builder(tc.original.Header()).Transaction(tx),
+					tc.builder(tc.original.Header()).Transaction(trx),
 				)
 				if err != nil {
 					t.Fatal(err)
