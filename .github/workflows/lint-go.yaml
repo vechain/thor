@@ -25,5 +25,3 @@ jobs:
           args: --timeout=30m --config=.golangci.yml
           only-new-issues: true
           skip-cache: true
-          skip-pkg-cache: true
-          skip-build-cache: true

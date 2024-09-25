@@ -106,7 +106,7 @@ func (rc *RandCache) Pick() *Entry {
 	if len(rc.s) == 0 {
 		return nil
 	}
-	ent := rc.s[rand.Intn(len(rc.s))] // nolint:gosec
+	ent := rc.s[rand.Intn(len(rc.s))] // #nosec
 	cpy := ent.Entry
 	return &cpy
 }
@@ -141,6 +141,6 @@ func (rc *RandCache) randDrop() {
 	if len(rc.s) == 0 {
 		return
 	}
-	ent := rc.s[rand.Intn(len(rc.s))] // nolint:gosec
+	ent := rc.s[rand.Intn(len(rc.s))] // #nosec
 	rc.remove(ent.Key)
 }
