@@ -85,7 +85,7 @@ func initChain(t *testing.T) (*chain.Repository, []*block.Block, *txpool.TxPool)
 		Clause(cla).
 		BlockRef(tx.NewBlockRef(0)).
 		Build()
-	tr = tx.MustSignTx(tr, genesis.DevAccounts()[0].PrivateKey)
+	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 
 	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
 	sum, _ := repo.GetBlockSummary(b.Header().ID())

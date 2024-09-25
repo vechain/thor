@@ -103,7 +103,7 @@ func TestConvertTransfer(t *testing.T) {
 		Nonce(1).
 		BlockRef(tx.NewBlockRef(0)).
 		Build()
-	transaction = tx.MustSignTx(transaction, genesis.DevAccounts()[0].PrivateKey)
+	transaction = tx.MustSign(transaction, genesis.DevAccounts()[0].PrivateKey)
 
 	// New block
 	blk := new(block.Builder).
@@ -182,7 +182,7 @@ func TestConvertEvent(t *testing.T) {
 	repo, _ := chain.NewRepository(db, b)
 
 	// New tx
-	transaction := tx.MustSignTx(
+	transaction := tx.MustSign(
 		new(tx.Builder).
 			ChainTag(repo.ChainTag()).
 			GasPriceCoef(1).

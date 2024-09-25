@@ -170,7 +170,7 @@ func initBlockServer(t *testing.T) {
 	repo, _ := chain.NewRepository(db, b)
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	trx := tx.MustSignTx(
+	trx := tx.MustSign(
 		new(tx.Builder).
 			ChainTag(repo.ChainTag()).
 			GasPriceCoef(1).

@@ -111,7 +111,7 @@ func sendTx(t *testing.T) {
 	var expiration = uint32(10)
 	var gas = uint64(21000)
 
-	trx := tx.MustSignTx(
+	trx := tx.MustSign(
 		new(tx.Builder).
 			BlockRef(blockRef).
 			ChainTag(chainTag).
@@ -294,7 +294,7 @@ func initTransactionServer(t *testing.T) {
 		Clause(cla).
 		BlockRef(tx.NewBlockRef(0)).
 		Build()
-	transaction = tx.MustSignTx(transaction, genesis.DevAccounts()[0].PrivateKey)
+	transaction = tx.MustSign(transaction, genesis.DevAccounts()[0].PrivateKey)
 
 	mempoolTx = new(tx.Builder).
 		ChainTag(repo.ChainTag()).
@@ -302,7 +302,7 @@ func initTransactionServer(t *testing.T) {
 		Gas(21000).
 		Nonce(1).
 		Build()
-	mempoolTx = tx.MustSignTx(mempoolTx, genesis.DevAccounts()[0].PrivateKey)
+	mempoolTx = tx.MustSign(mempoolTx, genesis.DevAccounts()[0].PrivateKey)
 
 	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
 	sum, _ := repo.GetBlockSummary(b.Header().ID())

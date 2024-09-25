@@ -531,7 +531,7 @@ func initDebugServer(t *testing.T) {
 		Expiration(10).
 		Gas(21000).
 		Build()
-	noClausesTx = tx.MustSignTx(noClausesTx, genesis.DevAccounts()[0].PrivateKey)
+	noClausesTx = tx.MustSign(noClausesTx, genesis.DevAccounts()[0].PrivateKey)
 
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 	cla2 := tx.NewClause(&addr).WithValue(big.NewInt(10000))
@@ -545,7 +545,7 @@ func initDebugServer(t *testing.T) {
 		Clause(cla2).
 		BlockRef(tx.NewBlockRef(0)).
 		Build()
-	transaction = tx.MustSignTx(transaction, genesis.DevAccounts()[0].PrivateKey)
+	transaction = tx.MustSign(transaction, genesis.DevAccounts()[0].PrivateKey)
 
 	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
 	sum, _ := repo.GetBlockSummary(b.Header().ID())

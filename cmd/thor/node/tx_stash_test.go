@@ -19,7 +19,7 @@ import (
 )
 
 func newTx() *tx.Transaction {
-	return tx.MustSignTx(
+	return tx.MustSign(
 		new(tx.Builder).
 			Nonce(rand.Uint64()).Build(), // nolint:gosec,
 		genesis.DevAccounts()[0].PrivateKey,

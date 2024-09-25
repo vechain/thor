@@ -578,7 +578,7 @@ func TestValidateBlockBody(t *testing.T) {
 			"TxOriginBlocked", func(t *testing.T) {
 				thor.MockBlocklist([]string{genesis.DevAccounts()[9].Address.String()})
 				trx := txBuilder(tc.tag).Build()
-				trx = tx.MustSignTx(trx, genesis.DevAccounts()[9].PrivateKey)
+				trx = tx.MustSign(trx, genesis.DevAccounts()[9].PrivateKey)
 
 				blk, err := tc.sign(
 					tc.builder(tc.original.Header()).Transaction(trx),

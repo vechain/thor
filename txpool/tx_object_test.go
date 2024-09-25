@@ -34,7 +34,7 @@ func newTx(chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef
 		builder.Clause(c)
 	}
 
-	return tx.MustSignTx(builder.BlockRef(blockRef).
+	return tx.MustSign(builder.BlockRef(blockRef).
 		Expiration(expiration).
 		Nonce(rand.Uint64()). // nolint:gosec
 		DependsOn(dependsOn).
@@ -62,8 +62,8 @@ func newDelegatedTx(chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx
 		Gas(gas).
 		Build()
 
-	trx, _ = tx.DelegatorSignTx(
-		tx.MustSignTx(trx, from.PrivateKey),
+	trx, _ = tx.SignDelegator(
+		tx.MustSign(trx, from.PrivateKey),
 		delegator.PrivateKey,
 	)
 

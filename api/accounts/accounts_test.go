@@ -294,7 +294,7 @@ func buildTxWithClauses(chaiTag byte, clauses ...*tx.Clause) *tx.Transaction {
 
 	trx := builder.Build()
 
-	return tx.MustSignTx(trx, genesis.DevAccounts()[0].PrivateKey)
+	return tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)
 }
 
 func packTx(repo *chain.Repository, stater *state.Stater, transaction *tx.Transaction, t *testing.T) {

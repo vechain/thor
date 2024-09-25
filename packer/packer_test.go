@@ -54,7 +54,7 @@ func (ti *txIterator) Next() *tx.Transaction {
 		ChainTag(ti.chainTag).
 		Clause(tx.NewClause(&builtin.Energy.Address).WithData(data)).
 		Gas(300000).GasPriceCoef(0).Nonce(nonce).Expiration(math.MaxUint32).Build()
-	trx = tx.MustSignTx(trx, a0.PrivateKey)
+	trx = tx.MustSign(trx, a0.PrivateKey)
 	nonce++
 
 	return trx

@@ -132,7 +132,7 @@ func createTx(repo *chain.Repository, addressNumber uint) *tx.Transaction {
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 
-	return tx.MustSignTx(
+	return tx.MustSign(
 		new(tx.Builder).
 			ChainTag(repo.ChainTag()).
 			GasPriceCoef(1).

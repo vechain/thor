@@ -1,3 +1,8 @@
+// Copyright (c) 2024 The VeChainThor developers
+
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
 package tx
 
 import (
@@ -5,38 +10,40 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/secp256k1"
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/thor"
 )
 
-// SignFunction is a type alias for a function that signs a hash using a private key.
+// SignatureFunc is a type alias for a function that signs a hash using a private key.
 // It returns the signature and an error if any occurs.
-type SignFunction func(hash []byte, prv *ecdsa.PrivateKey) (sig []byte, err error)
+type SignatureFunc func(hash []byte, prv *ecdsa.PrivateKey) (sig []byte, err error)
 
-// MustSignTx signs a transaction with the provided private key using the default signing function.
+// MustSign signs a transaction with the provided private key using the default signing function.
 // It panics if the signing process fails.
-func MustSignTx(tx *Transaction, pk *ecdsa.PrivateKey) *Transaction {
-	return MustCustomSignTx(crypto.Sign, tx, pk)
+func MustSign(tx *Transaction, pk *ecdsa.PrivateKey) *Transaction {
+	return MustSignFunc(crypto.Sign, tx, pk)
 }
 
-// MustCustomSignTx signs a transaction using a custom signing function and private key.
+// MustSignFunc signs a transaction using a custom signing function and private key.
 // It panics if the signing process fails.
-func MustCustomSignTx(sign SignFunction, tx *Transaction, pk *ecdsa.PrivateKey) *Transaction {
-	trx, err := CustomSignTx(sign, tx, pk)
+func MustSignFunc(sign SignatureFunc, tx *Transaction, pk *ecdsa.PrivateKey) *Transaction {
+	trx, err := SignFunc(sign, tx, pk)
 	if err != nil {
 		panic(err)
 	}
 	return trx
 }
 
-// SignTx signs a transaction with the provided private key using the default signing function.
+// Sign signs a transaction with the provided private key using the default signing function.
 // It returns the signed transaction or an error if the signing fails.
-func SignTx(tx *Transaction, pk *ecdsa.PrivateKey) (*Transaction, error) {
-	return CustomSignTx(crypto.Sign, tx, pk)
+func Sign(tx *Transaction, pk *ecdsa.PrivateKey) (*Transaction, error) {
+	return SignFunc(crypto.Sign, tx, pk)
 }
 
-// CustomSignTx signs a transaction using a custom signing function and private key.
+// SignFunc signs a transaction using a custom signing function and private key.
 // It returns the signed transaction or an error if the signing fails.
-func CustomSignTx(sign SignFunction, tx *Transaction, pk *ecdsa.PrivateKey) (*Transaction, error) {
+func SignFunc(sign SignatureFunc, tx *Transaction, pk *ecdsa.PrivateKey) (*Transaction, error) {
 	// Generate the signature for the transaction's signing hash.
 	sig, err := sign(tx.SigningHash().Bytes(), pk)
 	if err != nil {
@@ -47,15 +54,24 @@ func CustomSignTx(sign SignFunction, tx *Transaction, pk *ecdsa.PrivateKey) (*Tr
 	return tx.WithSignature(sig), nil
 }
 
-// DelegatorSignTx signs a transaction as a delegator with the provided private key using the default signing function.
+// SignDelegator signs a transaction as a delegator with the provided private key using the default signing function.
 // It returns the signed transaction or an error if the signing fails.
-func DelegatorSignTx(tx *Transaction, pk *ecdsa.PrivateKey) (*Transaction, error) {
-	return CustomDelegatorSignTx(crypto.Sign, tx, pk)
+func SignDelegator(tx *Transaction, pk *ecdsa.PrivateKey) (*Transaction, error) {
+	return SignDelegatorFunc(crypto.Sign, tx, pk)
 }
 
-// CustomDelegatorSignTx signs a transaction as a delegator using a custom signing function and private key.
+// SignDelegatorFunc signs a transaction as a delegator using a custom signing function and private key.
 // It returns the signed transaction or an error if the signing fails.
-func CustomDelegatorSignTx(sign SignFunction, tx *Transaction, pk *ecdsa.PrivateKey) (*Transaction, error) {
+func SignDelegatorFunc(sign SignatureFunc, tx *Transaction, pk *ecdsa.PrivateKey) (*Transaction, error) {
+	// Must have the delegated feature enabled
+	if !tx.Features().IsDelegated() {
+		return nil, errors.New("transaction delegated feature is not enabled")
+	}
+
+	// Must be signed by origin
+	if len(tx.Signature()) != 65 {
+		return nil, secp256k1.ErrInvalidSignatureLen
+	}
 	// Extract the public key from the existing transaction signature.
 	pub, err := crypto.SigToPub(tx.SigningHash().Bytes(), tx.Signature())
 	if err != nil {

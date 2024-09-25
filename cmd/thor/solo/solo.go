@@ -266,5 +266,5 @@ func (s *Solo) newTx(clauses []*tx.Clause, from genesis.DevAccount) (*tx.Transac
 		DependsOn(nil).
 		Gas(1_000_000).
 		Build()
-	return tx.SignTx(trx, from.PrivateKey)
+	return tx.Sign(trx, from.PrivateKey)
 }
