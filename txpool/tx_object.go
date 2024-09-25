@@ -23,10 +23,13 @@ type txObject struct {
 	*tx.Transaction
 	resolved *runtime.ResolvedTransaction
 
-	timeAdded       int64
-	executable      bool
+	timeAdded      int64
+	localSubmitted bool          // tx is submitted locally on this node, or synced remotely from p2p.
+	payer          *thor.Address // payer of the tx, either origin, delegator, or on-chain delegation payer
+	cost           *big.Int      // total tx cost the payer needs to pay before execution(gas price * gas)
+
+	executable      bool     // don't touch this value, will be updated by the pool
 	overallGasPrice *big.Int // don't touch this value, it's only be used in pool's housekeeping
-	localSubmitted  bool     // tx is submitted locally on this node, or synced remotely from p2p.
 }
 
 func resolveTx(tx *tx.Transaction, localSubmitted bool) (*txObject, error) {
@@ -49,6 +52,14 @@ func (o *txObject) Origin() thor.Address {
 
 func (o *txObject) Delegator() *thor.Address {
 	return o.resolved.Delegator
+}
+
+func (o *txObject) Cost() *big.Int {
+	return o.cost
+}
+
+func (o *txObject) Payer() *thor.Address {
+	return o.payer
 }
 
 func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock *block.Header) (bool, error) {
@@ -86,8 +97,17 @@ func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 		return false, nil
 	}
 
-	if _, _, _, _, err := o.resolved.BuyGas(state, headBlock.Timestamp()+thor.BlockInterval); err != nil {
+	checkpoint := state.NewCheckpoint()
+	defer state.RevertTo(checkpoint)
+
+	_, _, payer, prepaid, _, err := o.resolved.BuyGas(state, headBlock.Timestamp()+thor.BlockInterval)
+	if err != nil {
 		return false, err
+	}
+
+	if !o.executable {
+		o.payer = &payer
+		o.cost = prepaid
 	}
 	return true, nil
 }
