@@ -32,8 +32,7 @@ jobs:
           retention-days: 7
 
   run-tests:
-    # https://docs.aws.amazon.com/codebuild/latest/userguide/action-runner.html#sample-github-action-runners-create-project
-    runs-on: codebuild-ThorGHA-${{ github.run_id }}-${{ github.run_attempt }}-ubuntu-7.0-large
+    runs-on: ubuntu-latest
     needs: build-docker-image
     env:
       THOR_IMAGE: vechain/thor:${{ github.sha }}
