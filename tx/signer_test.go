@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestSignTx(t *testing.T) {
+func TestSign(t *testing.T) {
 	// Generate a new private key for testing
 	pk, err := crypto.GenerateKey()
 	assert.NoError(t, err)
@@ -28,7 +28,7 @@ func TestSignTx(t *testing.T) {
 	assert.NotNil(t, signedTx)
 }
 
-func TestDelegatorSignTx(t *testing.T) {
+func TestSignDelegated(t *testing.T) {
 	// Generate a new private key for testing
 	delegatorPK, err := crypto.GenerateKey()
 	assert.NoError(t, err)
@@ -39,7 +39,7 @@ func TestDelegatorSignTx(t *testing.T) {
 	tx := new(Builder).Build()
 
 	// Feature not enabled
-	signedTx, err := SignDelegator(tx, originPK, delegatorPK)
+	signedTx, err := SignDelegated(tx, originPK, delegatorPK)
 	assert.ErrorContains(t, err, "transaction delegated feature is not enabled")
 	assert.Nil(t, signedTx)
 
@@ -50,12 +50,12 @@ func TestDelegatorSignTx(t *testing.T) {
 	// tx is already signed
 	tx = new(Builder).Features(features).Build()
 	signedTx = MustSign(tx, originPK)
-	signedTx, err = SignDelegator(signedTx, originPK, delegatorPK)
+	signedTx, err = SignDelegated(signedTx, originPK, delegatorPK)
 	assert.ErrorIs(t, err, secp256k1.ErrInvalidSignatureLen)
 	assert.Nil(t, signedTx)
 
 	// Sign the transaction as a delegator
-	signedTx, err = SignDelegator(tx, originPK, delegatorPK)
+	signedTx, err = SignDelegated(tx, originPK, delegatorPK)
 	assert.NoError(t, err)
 	assert.NotNil(t, signedTx)
 }

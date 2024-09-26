@@ -15,14 +15,10 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-// SignatureFunc is a type alias for a function that signs a hash using a private key.
-// It returns the signature and an error if any occurs.
-type SignatureFunc func(hash []byte, prv *ecdsa.PrivateKey) (sig []byte, err error)
-
 // MustSign signs a transaction using the provided private key and the default signing function.
 // It panics if the signing process fails, returning a signed transaction upon success.
 func MustSign(tx *Transaction, pk *ecdsa.PrivateKey) *Transaction {
-	trx, err := signFunc(crypto.Sign, tx, pk)
+	trx, err := Sign(tx, pk)
 	if err != nil {
 		panic(err)
 	}
@@ -32,14 +28,8 @@ func MustSign(tx *Transaction, pk *ecdsa.PrivateKey) *Transaction {
 // Sign signs a transaction using the provided private key and the default signing function.
 // It returns the signed transaction or an error if the signing process fails.
 func Sign(tx *Transaction, pk *ecdsa.PrivateKey) (*Transaction, error) {
-	return signFunc(crypto.Sign, tx, pk)
-}
-
-// signFunc signs a transaction using a custom signing function and the provided private key.
-// It returns the signed transaction or an error if the signing process fails.
-func signFunc(sign SignatureFunc, tx *Transaction, pk *ecdsa.PrivateKey) (*Transaction, error) {
 	// Generate the signature for the transaction's signing hash.
-	sig, err := sign(tx.SigningHash().Bytes(), pk)
+	sig, err := crypto.Sign(tx.SigningHash().Bytes(), pk)
 	if err != nil {
 		return nil, fmt.Errorf("unable to sign transaction: %w", err)
 	}
@@ -48,25 +38,19 @@ func signFunc(sign SignatureFunc, tx *Transaction, pk *ecdsa.PrivateKey) (*Trans
 	return tx.WithSignature(sig), nil
 }
 
-// MustSignDelegator signs a transaction as a delegator using the provided private keys and the default signing function.
+// MustSignDelegated signs a transaction as a delegator using the provided private keys and the default signing function.
 // It panics if the signing process fails, returning a signed transaction upon success.
-func MustSignDelegator(tx *Transaction, originPK *ecdsa.PrivateKey, delegatorPK *ecdsa.PrivateKey) *Transaction {
-	trx, err := signDelegatorFunc(crypto.Sign, tx, originPK, delegatorPK)
+func MustSignDelegated(tx *Transaction, originPK *ecdsa.PrivateKey, delegatorPK *ecdsa.PrivateKey) *Transaction {
+	trx, err := SignDelegated(tx, originPK, delegatorPK)
 	if err != nil {
 		panic(err)
 	}
 	return trx
 }
 
-// SignDelegator signs a transaction as a delegator using the provided private keys and the default signing function.
+// SignDelegated signs a transaction as a delegator using the provided private keys and the default signing function.
 // It returns the signed transaction or an error if the signing process fails.
-func SignDelegator(tx *Transaction, originPK *ecdsa.PrivateKey, delegatorPK *ecdsa.PrivateKey) (*Transaction, error) {
-	return signDelegatorFunc(crypto.Sign, tx, originPK, delegatorPK)
-}
-
-// signDelegatorFunc signs a transaction as a delegator using a custom signing function and the provided private keys.
-// It returns the signed transaction or an error if the signing process fails.
-func signDelegatorFunc(sign SignatureFunc, unsignedTx *Transaction, originPK *ecdsa.PrivateKey, delegatorPK *ecdsa.PrivateKey) (*Transaction, error) {
+func SignDelegated(unsignedTx *Transaction, originPK *ecdsa.PrivateKey, delegatorPK *ecdsa.PrivateKey) (*Transaction, error) {
 	// Ensure the transaction has the delegated feature enabled.
 	if !unsignedTx.Features().IsDelegated() {
 		return nil, errors.New("transaction delegated feature is not enabled")
@@ -87,7 +71,7 @@ func signDelegatorFunc(sign SignatureFunc, unsignedTx *Transaction, originPK *ec
 	origin := thor.Address(crypto.PubkeyToAddress(originPK.PublicKey))
 
 	// Generate the delegator's signature using the transaction's delegator signing hash.
-	dSig, err := sign(signedTx.DelegatorSigningHash(origin).Bytes(), delegatorPK)
+	dSig, err := crypto.Sign(signedTx.DelegatorSigningHash(origin).Bytes(), delegatorPK)
 	if err != nil {
 		return nil, fmt.Errorf("unable to delegator sign transaction: %w", err)
 	}
