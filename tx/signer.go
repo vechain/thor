@@ -19,77 +19,82 @@ import (
 // It returns the signature and an error if any occurs.
 type SignatureFunc func(hash []byte, prv *ecdsa.PrivateKey) (sig []byte, err error)
 
-// MustSign signs a transaction with the provided private key using the default signing function.
-// It panics if the signing process fails.
+// MustSign signs a transaction using the provided private key and the default signing function.
+// It panics if the signing process fails, returning a signed transaction upon success.
 func MustSign(tx *Transaction, pk *ecdsa.PrivateKey) *Transaction {
-	return MustSignFunc(crypto.Sign, tx, pk)
-}
-
-// MustSignFunc signs a transaction using a custom signing function and private key.
-// It panics if the signing process fails.
-func MustSignFunc(sign SignatureFunc, tx *Transaction, pk *ecdsa.PrivateKey) *Transaction {
-	trx, err := SignFunc(sign, tx, pk)
+	trx, err := signFunc(crypto.Sign, tx, pk)
 	if err != nil {
 		panic(err)
 	}
 	return trx
 }
 
-// Sign signs a transaction with the provided private key using the default signing function.
-// It returns the signed transaction or an error if the signing fails.
+// Sign signs a transaction using the provided private key and the default signing function.
+// It returns the signed transaction or an error if the signing process fails.
 func Sign(tx *Transaction, pk *ecdsa.PrivateKey) (*Transaction, error) {
-	return SignFunc(crypto.Sign, tx, pk)
+	return signFunc(crypto.Sign, tx, pk)
 }
 
-// SignFunc signs a transaction using a custom signing function and private key.
-// It returns the signed transaction or an error if the signing fails.
-func SignFunc(sign SignatureFunc, tx *Transaction, pk *ecdsa.PrivateKey) (*Transaction, error) {
+// signFunc signs a transaction using a custom signing function and the provided private key.
+// It returns the signed transaction or an error if the signing process fails.
+func signFunc(sign SignatureFunc, tx *Transaction, pk *ecdsa.PrivateKey) (*Transaction, error) {
 	// Generate the signature for the transaction's signing hash.
 	sig, err := sign(tx.SigningHash().Bytes(), pk)
 	if err != nil {
 		return nil, fmt.Errorf("unable to sign transaction: %w", err)
 	}
 
-	// Attach the signature to the transaction.
+	// Attach the signature to the transaction and return the signed transaction.
 	return tx.WithSignature(sig), nil
 }
 
-// SignDelegator signs a transaction as a delegator with the provided private key using the default signing function.
-// It returns the signed transaction or an error if the signing fails.
-func SignDelegator(tx *Transaction, pk *ecdsa.PrivateKey) (*Transaction, error) {
-	return SignDelegatorFunc(crypto.Sign, tx, pk)
+// MustSignDelegator signs a transaction as a delegator using the provided private keys and the default signing function.
+// It panics if the signing process fails, returning a signed transaction upon success.
+func MustSignDelegator(tx *Transaction, originPK *ecdsa.PrivateKey, delegatorPK *ecdsa.PrivateKey) *Transaction {
+	trx, err := signDelegatorFunc(crypto.Sign, tx, originPK, delegatorPK)
+	if err != nil {
+		panic(err)
+	}
+	return trx
 }
 
-// SignDelegatorFunc signs a transaction as a delegator using a custom signing function and private key.
-// It returns the signed transaction or an error if the signing fails.
-func SignDelegatorFunc(sign SignatureFunc, tx *Transaction, pk *ecdsa.PrivateKey) (*Transaction, error) {
-	// Must have the delegated feature enabled
-	if !tx.Features().IsDelegated() {
+// SignDelegator signs a transaction as a delegator using the provided private keys and the default signing function.
+// It returns the signed transaction or an error if the signing process fails.
+func SignDelegator(tx *Transaction, originPK *ecdsa.PrivateKey, delegatorPK *ecdsa.PrivateKey) (*Transaction, error) {
+	return signDelegatorFunc(crypto.Sign, tx, originPK, delegatorPK)
+}
+
+// signDelegatorFunc signs a transaction as a delegator using a custom signing function and the provided private keys.
+// It returns the signed transaction or an error if the signing process fails.
+func signDelegatorFunc(sign SignatureFunc, unsignedTx *Transaction, originPK *ecdsa.PrivateKey, delegatorPK *ecdsa.PrivateKey) (*Transaction, error) {
+	// Ensure the transaction has the delegated feature enabled.
+	if !unsignedTx.Features().IsDelegated() {
 		return nil, errors.New("transaction delegated feature is not enabled")
 	}
 
-	// Must be signed by origin
-	if len(tx.Signature()) != 65 {
+	// Ensure the transaction has not already been signed by the origin.
+	if len(unsignedTx.Signature()) != 0 {
 		return nil, secp256k1.ErrInvalidSignatureLen
 	}
-	// Extract the public key from the existing transaction signature.
-	pub, err := crypto.SigToPub(tx.SigningHash().Bytes(), tx.Signature())
+
+	// Sign the transaction using the origin's private key.
+	signedTx, err := Sign(unsignedTx, originPK)
 	if err != nil {
-		return nil, fmt.Errorf("unable to extract public key from signature: %w", err)
+		return nil, err
 	}
 
-	// Convert the public key to the corresponding address.
-	origin := thor.Address(crypto.PubkeyToAddress(*pub))
+	// Convert the origin's public key to its corresponding address.
+	origin := thor.Address(crypto.PubkeyToAddress(originPK.PublicKey))
 
-	// Generate the delegator's signature using the delegator signing hash.
-	dSig, err := sign(tx.DelegatorSigningHash(origin).Bytes(), pk)
+	// Generate the delegator's signature using the transaction's delegator signing hash.
+	dSig, err := sign(signedTx.DelegatorSigningHash(origin).Bytes(), delegatorPK)
 	if err != nil {
 		return nil, fmt.Errorf("unable to delegator sign transaction: %w", err)
 	}
 
-	// Append the delegator's signature to the existing transaction signature.
-	sig := append(tx.Signature(), dSig...)
+	// Append the delegator's signature to the origin's signature.
+	sig := append(signedTx.Signature(), dSig...)
 
-	// Attach the combined signature to the transaction.
-	return tx.WithSignature(sig), nil
+	// Attach the combined signature to the transaction and return the signed transaction.
+	return signedTx.WithSignature(sig), nil
 }

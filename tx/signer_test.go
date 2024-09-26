@@ -6,7 +6,6 @@
 package tx
 
 import (
-	"crypto/rand"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -31,13 +30,16 @@ func TestSignTx(t *testing.T) {
 
 func TestDelegatorSignTx(t *testing.T) {
 	// Generate a new private key for testing
-	pk, err := crypto.GenerateKey()
+	delegatorPK, err := crypto.GenerateKey()
+	assert.NoError(t, err)
+
+	originPK, err := crypto.GenerateKey()
 	assert.NoError(t, err)
 
 	tx := new(Builder).Build()
 
 	// Feature not enabled
-	signedTx, err := SignDelegator(tx, pk)
+	signedTx, err := SignDelegator(tx, originPK, delegatorPK)
 	assert.ErrorContains(t, err, "transaction delegated feature is not enabled")
 	assert.Nil(t, signedTx)
 
@@ -45,19 +47,15 @@ func TestDelegatorSignTx(t *testing.T) {
 	var features Features
 	features.SetDelegated(true)
 
-	// No valid Signature
+	// tx is already signed
 	tx = new(Builder).Features(features).Build()
-	signedTx, err = SignDelegator(tx, pk)
+	signedTx = MustSign(tx, originPK)
+	signedTx, err = SignDelegator(signedTx, originPK, delegatorPK)
 	assert.ErrorIs(t, err, secp256k1.ErrInvalidSignatureLen)
 	assert.Nil(t, signedTx)
 
-	// create a fake signature
-	fakeSig := [65]byte{}
-	rand.Read(fakeSig[:])
-	tx = tx.WithSignature(fakeSig[:])
-
 	// Sign the transaction as a delegator
-	signedTx, err = SignDelegator(tx, pk)
-	assert.ErrorContains(t, err, "unable to extract public key from signature")
-	assert.Nil(t, signedTx)
+	signedTx, err = SignDelegator(tx, originPK, delegatorPK)
+	assert.NoError(t, err)
+	assert.NotNil(t, signedTx)
 }

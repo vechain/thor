@@ -62,8 +62,9 @@ func newDelegatedTx(chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx
 		Gas(gas).
 		Build()
 
-	trx, _ = tx.SignDelegator(
-		tx.MustSign(trx, from.PrivateKey),
+	trx = tx.MustSignDelegator(
+		trx,
+		from.PrivateKey,
 		delegator.PrivateKey,
 	)
 
