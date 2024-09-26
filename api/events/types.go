@@ -17,14 +17,33 @@ import (
 )
 
 type LogMeta struct {
-	BlockID        thor.Bytes32 `json:"blockID"`
-	BlockNumber    uint32       `json:"blockNumber"`
-	BlockTimestamp uint64       `json:"blockTimestamp"`
-	TxID           thor.Bytes32 `json:"txID"`
-	TxIndex        uint32       `json:"txIndex"`
-	LogIndex       uint32       `json:"logIndex"`
-	TxOrigin       thor.Address `json:"txOrigin"`
-	ClauseIndex    uint32       `json:"clauseIndex"`
+	BlockID        thor.Bytes32     `json:"blockID"`
+	BlockNumber    uint32           `json:"blockNumber"`
+	BlockTimestamp uint64           `json:"blockTimestamp"`
+	TxID           thor.Bytes32     `json:"txID"`
+	TxOrigin       thor.Address     `json:"txOrigin"`
+	ClauseIndex    uint32           `json:"clauseIndex"`
+	OptionalData   *LogOptionalData `json:"optionalData,omitempty"`
+}
+
+type LogOptionalData struct {
+	TxIndex  *uint32 `json:"txIndex,omitempty"`
+	LogIndex *uint32 `json:"logIndex,omitempty"`
+}
+
+func (opt *LogOptionalData) Empty() bool {
+	return opt == nil || (opt.TxIndex == nil && opt.LogIndex == nil)
+}
+
+func (opt *LogOptionalData) String() string {
+	var parts []string
+	if opt.TxIndex != nil {
+		parts = append(parts, fmt.Sprintf("txIndex: %v", *opt.TxIndex))
+	}
+	if opt.LogIndex != nil {
+		parts = append(parts, fmt.Sprintf("logIndex: %v", *opt.LogIndex))
+	}
+	return fmt.Sprintf("%v", parts)
 }
 
 type TopicSet struct {
@@ -44,8 +63,8 @@ type FilteredEvent struct {
 }
 
 // convert a logdb.Event into a json format Event
-func convertEvent(event *logdb.Event) *FilteredEvent {
-	fe := FilteredEvent{
+func convertEvent(event *logdb.Event, eventOptionalData *EventOptionalData) *FilteredEvent {
+	fe := &FilteredEvent{
 		Address: event.Address,
 		Data:    hexutil.Encode(event.Data),
 		Meta: LogMeta{
@@ -53,19 +72,37 @@ func convertEvent(event *logdb.Event) *FilteredEvent {
 			BlockNumber:    event.BlockNumber,
 			BlockTimestamp: event.BlockTime,
 			TxID:           event.TxID,
-			TxIndex:        event.TxIndex,
-			LogIndex:       event.Index,
 			TxOrigin:       event.TxOrigin,
 			ClauseIndex:    event.ClauseIndex,
 		},
 	}
+	fe = addOptionalData(fe, event, eventOptionalData)
+
 	fe.Topics = make([]*thor.Bytes32, 0)
 	for i := 0; i < 5; i++ {
 		if event.Topics[i] != nil {
 			fe.Topics = append(fe.Topics, event.Topics[i])
 		}
 	}
-	return &fe
+	return fe
+}
+
+func addOptionalData(fe *FilteredEvent, event *logdb.Event, eventOptionalData *EventOptionalData) *FilteredEvent {
+	if eventOptionalData != nil {
+		opt := &LogOptionalData{}
+
+		if eventOptionalData.LogIndex {
+			opt.LogIndex = &event.Index
+		}
+		if eventOptionalData.TxIndex {
+			opt.TxIndex = &event.TxIndex
+		}
+
+		if !opt.Empty() {
+			fe.Meta.OptionalData = opt
+		}
+	}
+	return fe
 }
 
 func (e *FilteredEvent) String() string {
@@ -78,10 +115,9 @@ func (e *FilteredEvent) String() string {
 				blockNumber    %v,
 				blockTimestamp %v),
 				txID     %v,
-				txIndex  %v,
-				logIndex %v,
 				txOrigin %v,
-				clauseIndex %v)
+				clauseIndex %v,
+				optionalData (%v))
 			)`,
 		e.Address,
 		e.Topics,
@@ -90,10 +126,9 @@ func (e *FilteredEvent) String() string {
 		e.Meta.BlockNumber,
 		e.Meta.BlockTimestamp,
 		e.Meta.TxID,
-		e.Meta.TxIndex,
-		e.Meta.LogIndex,
 		e.Meta.TxOrigin,
 		e.Meta.ClauseIndex,
+		e.Meta.OptionalData,
 	)
 }
 
@@ -103,10 +138,16 @@ type EventCriteria struct {
 }
 
 type EventFilter struct {
-	CriteriaSet []*EventCriteria `json:"criteriaSet"`
-	Range       *Range           `json:"range"`
-	Options     *logdb.Options   `json:"options"`
-	Order       logdb.Order      `json:"order"`
+	CriteriaSet  []*EventCriteria   `json:"criteriaSet"`
+	Range        *Range             `json:"range"`
+	Options      *logdb.Options     `json:"options"`
+	Order        logdb.Order        `json:"order"`
+	OptionalData *EventOptionalData `json:"optionalData,omitempty"`
+}
+
+type EventOptionalData struct {
+	LogIndex bool `json:"logIndex,omitempty"`
+	TxIndex  bool `json:"txIndex,omitempty"`
 }
 
 func convertEventFilter(chain *chain.Chain, filter *EventFilter) (*logdb.EventFilter, error) {

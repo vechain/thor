@@ -56,6 +56,79 @@ func TestEvents(t *testing.T) {
 	testEventWithBlocks(t, blocksToInsert)
 }
 
+func TestOptionalData(t *testing.T) {
+	db := createDb(t)
+	initEventServer(t, db, defaultLogLimit)
+	defer ts.Close()
+	insertBlocks(t, db, 5)
+
+	testCases := []struct {
+		name     string
+		optData  *events.EventOptionalData
+		expected *events.LogOptionalData
+	}{
+		{
+			name:     "empty optional data",
+			optData:  &events.EventOptionalData{},
+			expected: nil,
+		},
+		{
+			name: "optional data with txIndex",
+			optData: &events.EventOptionalData{
+				TxIndex: true,
+			},
+			expected: &events.LogOptionalData{
+				TxIndex: new(uint32),
+			},
+		},
+		{
+			name: "optional data with logIndex",
+			optData: &events.EventOptionalData{
+				LogIndex: true,
+			},
+			expected: &events.LogOptionalData{
+				LogIndex: new(uint32),
+			},
+		},
+		{
+			name: "optional data with txIndex and logIndex",
+			optData: &events.EventOptionalData{
+				TxIndex:  true,
+				LogIndex: true,
+			},
+			expected: &events.LogOptionalData{
+				TxIndex:  new(uint32),
+				LogIndex: new(uint32),
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			filter := events.EventFilter{
+				CriteriaSet:  make([]*events.EventCriteria, 0),
+				Range:        nil,
+				Options:      &logdb.Options{Limit: 6},
+				Order:        logdb.DESC,
+				OptionalData: tc.optData,
+			}
+
+			res, statusCode := httpPost(t, ts.URL+"/events", filter)
+			assert.Equal(t, http.StatusOK, statusCode)
+			var tLogs []*events.FilteredEvent
+			if err := json.Unmarshal(res, &tLogs); err != nil {
+				t.Fatal(err)
+			}
+			assert.Equal(t, http.StatusOK, statusCode)
+			assert.Equal(t, 5, len(tLogs))
+
+			for _, tLog := range tLogs {
+				assert.Equal(t, tc.expected, tLog.Meta.OptionalData)
+			}
+		})
+	}
+}
+
 func TestOption(t *testing.T) {
 	thorChain := initEventServer(t, 5)
 	defer ts.Close()
