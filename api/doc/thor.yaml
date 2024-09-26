@@ -1009,6 +1009,8 @@ components:
           enum:
             - asc
             - desc
+        optionalData:
+          $ref: '#/components/schemas/EventOptionalData'
 
     EventLogsResponse:
       type: array
@@ -1020,7 +1022,7 @@ components:
           - $ref: '#/components/schemas/Event'
           - properties:
               meta:
-                $ref: '#/components/schemas/LogMeta'
+                $ref: '#/components/schemas/EventLogMeta'
 
     TransferLogFilterRequest:
       type: object
@@ -1325,6 +1327,66 @@ components:
           description: The index of the clause in the transaction, from which the log was generated.
           example: 0
           nullable: false
+          
+    EventLogMeta:
+      title: EventLogMeta
+      type: object
+      description: The event or transfer log metadata such as block number, block timestamp, etc.
+      properties:
+        blockID:
+          type: string
+          format: hex
+          description: The block identifier in which the log was included.
+          example: '0x0004f6cc88bb4626a92907718e82f255b8fa511453a78e8797eb8cea3393b215'
+          nullable: false
+          pattern: '^0x[0-9a-f]{64}$'
+        blockNumber:
+          type: integer
+          format: uint32
+          description: The block number (height) of the block in which the log was included.
+          example: 325324
+          nullable: false
+        blockTimestamp:
+          type: integer
+          format: uint64
+          description: The UNIX timestamp of the block in which the log was included.
+          example: 1533267900
+          nullable: false
+        txID:
+          type: string
+          format: hex
+          description: The transaction identifier, from which the log was generated.
+          example: '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
+          nullable: false
+          pattern: '^0x[0-9a-f]{64}$'
+        txOrigin:
+          type: string
+          description: The account from which the transaction was sent.
+          example: '0xdb4027477b2a8fe4c83c6dafe7f86678bb1b8a8d'
+          nullable: false
+          pattern: '^0x[0-9a-f]{40}$'
+        clauseIndex:
+          type: integer
+          format: uint32
+          description: The index of the clause in the transaction, from which the log was generated.
+          example: 0
+          nullable: false
+        optionalData:
+          $ref: '#/components/schemas/LogOptionalData'
+          
+    LogOptionalData:
+      title: optionalData
+      type: object
+      nullable: true
+      properties:
+        txIndex:
+          type: integer
+          nullable: true
+          example: 1
+        logIndex:
+          type: integer
+          nullable: true
+          example: 1
 
     Block:
       title: Block
@@ -1916,6 +1978,26 @@ components:
         }
         ```
         This refers to the range from block 10 to block 1000.
+        
+    EventOptionalData:
+      nullable: true
+      type: object
+      title: EventOptionalData
+      properties:
+        txIndex:
+          type: boolean
+          example: true
+          nullable: true
+          description: |
+            Specifies whether to include in the response the event transaction index.
+        loglIndex:
+          type: boolean
+          example: true
+          nullable: true
+          description: |
+            Specifies whether to include in the response the event log index.
+      description: |
+        Specifies all the optional data that can be included in the response.
 
     EventCriteria:
       type: object
