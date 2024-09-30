@@ -1,7 +1,7 @@
 name: Gosec
 on:
   schedule:
-  #   # This is meant to run every day at 9am
+  #   # This is meant to run every day at 8am
     - cron:  '0 8 * * 1-5'
 
 jobs:
