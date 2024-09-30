@@ -6,13 +6,14 @@
 package datagen
 
 import (
-	mathrand "math/rand"
+	"crypto/rand"
+
+	"github.com/vechain/thor/v2/thor"
 )
 
-func RandInt() int {
-	return mathrand.Int() // #nosec
-}
+func RandomAddress() thor.Address {
+	var addr thor.Address
 
-func RandIntN(n int) int {
-	return mathrand.Intn(n) // #nosec
+	rand.Read(addr[:])
+	return addr
 }

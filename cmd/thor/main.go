@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -35,6 +36,7 @@ import (
 
 	// Force-load the tracer engines to trigger registration
 	_ "github.com/vechain/thor/v2/tracers/js"
+	_ "github.com/vechain/thor/v2/tracers/logger"
 	_ "github.com/vechain/thor/v2/tracers/native"
 )
 
@@ -96,6 +98,7 @@ func main() {
 			adminAddrFlag,
 			enableAdminFlag,
 			txPoolLimitPerAccountFlag,
+			allowedTracersFlag,
 		},
 		Action: defaultAction,
 		Commands: []cli.Command{
@@ -130,6 +133,7 @@ func main() {
 					metricsAddrFlag,
 					adminAddrFlag,
 					enableAdminFlag,
+					allowedTracersFlag,
 				},
 				Action: soloAction,
 			},
@@ -167,22 +171,22 @@ func defaultAction(ctx *cli.Context) error {
 	metricsURL := ""
 	if ctx.Bool(enableMetricsFlag.Name) {
 		metrics.InitializePrometheusMetrics()
-		url, close, err := startMetricsServer(ctx.String(metricsAddrFlag.Name))
+		url, closeFunc, err := api.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
 		if err != nil {
 			return fmt.Errorf("unable to start metrics server - %w", err)
 		}
 		metricsURL = url
-		defer func() { log.Info("stopping metrics server..."); close() }()
+		defer func() { log.Info("stopping metrics server..."); closeFunc() }()
 	}
 
 	adminURL := ""
 	if ctx.Bool(enableAdminFlag.Name) {
-		url, close, err := startAdminServer(ctx.String(adminAddrFlag.Name), logLevel)
+		url, closeFunc, err := api.StartAdminServer(ctx.String(adminAddrFlag.Name), logLevel)
 		if err != nil {
 			return fmt.Errorf("unable to start admin server - %w", err)
 		}
 		adminURL = url
-		defer func() { log.Info("stopping admin server..."); close() }()
+		defer func() { log.Info("stopping admin server..."); closeFunc() }()
 	}
 
 	gene, forkConfig, err := selectGenesis(ctx)
@@ -199,8 +203,6 @@ func defaultAction(ctx *cli.Context) error {
 		return err
 	}
 	defer func() { log.Info("closing main database..."); mainDB.Close() }()
-
-	skipLogs := ctx.Bool(skipLogsFlag.Name)
 
 	logDB, err := openLogDB(instanceDir)
 	if err != nil {
@@ -220,6 +222,7 @@ func defaultAction(ctx *cli.Context) error {
 
 	printStartupMessage1(gene, repo, master, instanceDir, forkConfig)
 
+	skipLogs := ctx.Bool(skipLogsFlag.Name)
 	if !skipLogs {
 		if err := syncLogDB(exitSignal, repo, logDB, ctx.Bool(verifyLogsFlag.Name)); err != nil {
 			return err
@@ -261,6 +264,8 @@ func defaultAction(ctx *cli.Context) error {
 		ctx.Bool(enableAPILogsFlag.Name),
 		ctx.Bool(enableMetricsFlag.Name),
 		ctx.Uint64(apiLogsLimitFlag.Name),
+		parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
+		false,
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -309,22 +314,22 @@ func soloAction(ctx *cli.Context) error {
 	metricsURL := ""
 	if ctx.Bool(enableMetricsFlag.Name) {
 		metrics.InitializePrometheusMetrics()
-		url, close, err := startMetricsServer(ctx.String(metricsAddrFlag.Name))
+		url, closeFunc, err := api.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
 		if err != nil {
 			return fmt.Errorf("unable to start metrics server - %w", err)
 		}
 		metricsURL = url
-		defer func() { log.Info("stopping metrics server..."); close() }()
+		defer func() { log.Info("stopping metrics server..."); closeFunc() }()
 	}
 
 	adminURL := ""
 	if ctx.Bool(enableAdminFlag.Name) {
-		url, close, err := startAdminServer(ctx.String(adminAddrFlag.Name), logLevel)
+		url, closeFunc, err := api.StartAdminServer(ctx.String(adminAddrFlag.Name), logLevel)
 		if err != nil {
 			return fmt.Errorf("unable to start admin server - %w", err)
 		}
 		adminURL = url
-		defer func() { log.Info("stopping admin server..."); close() }()
+		defer func() { log.Info("stopping admin server..."); closeFunc() }()
 	}
 
 	var (
@@ -371,8 +376,9 @@ func soloAction(ctx *cli.Context) error {
 		return err
 	}
 
-	skipLogs := ctx.Bool(skipLogsFlag.Name)
+	printStartupMessage1(gene, repo, nil, instanceDir, forkConfig)
 
+	skipLogs := ctx.Bool(skipLogsFlag.Name)
 	if !skipLogs {
 		if err := syncLogDB(exitSignal, repo, logDB, ctx.Bool(verifyLogsFlag.Name)); err != nil {
 			return err
@@ -410,6 +416,8 @@ func soloAction(ctx *cli.Context) error {
 		ctx.Bool(enableAPILogsFlag.Name),
 		ctx.Bool(enableMetricsFlag.Name),
 		ctx.Uint64(apiLogsLimitFlag.Name),
+		parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
+		true,
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -427,7 +435,7 @@ func soloAction(ctx *cli.Context) error {
 		return errors.New("block-interval cannot be zero")
 	}
 
-	printSoloStartupMessage(gene, repo, instanceDir, apiURL, forkConfig, metricsURL, adminURL)
+	printStartupMessage2(gene, apiURL, "", metricsURL, adminURL)
 
 	optimizer := optimizer.New(mainDB, repo, !ctx.Bool(disablePrunerFlag.Name))
 	defer func() { log.Info("stopping optimizer..."); optimizer.Stop() }()

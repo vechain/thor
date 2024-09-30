@@ -6,13 +6,14 @@
 package datagen
 
 import (
-	mathrand "math/rand"
+	"crypto/rand"
+
+	"github.com/vechain/thor/v2/thor"
 )
 
-func RandInt() int {
-	return mathrand.Int() // #nosec
-}
+func RandomHash() thor.Bytes32 {
+	var b32 thor.Bytes32
 
-func RandIntN(n int) int {
-	return mathrand.Intn(n) // #nosec
+	rand.Read(b32[:])
+	return b32
 }

@@ -674,7 +674,7 @@ type kedb struct {
 	*ethdb.MemDatabase
 }
 
-func (db *kedb) Encode(hash []byte, seq uint64, path []byte) []byte {
+func (db *kedb) Encode(_ []byte, seq uint64, path []byte) []byte {
 	var k [8]byte
 	binary.BigEndian.PutUint64(k[:], seq)
 	return append(k[:], path...)

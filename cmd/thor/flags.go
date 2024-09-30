@@ -153,7 +153,7 @@ var (
 
 	enableAdminFlag = cli.BoolFlag{
 		Name:  "enable-admin",
-		Usage: "enables admin service",
+		Usage: "enables admin server",
 	}
 	adminAddrFlag = cli.StringFlag{
 		Name:  "admin-addr",
@@ -164,6 +164,12 @@ var (
 		Name:  "txpool-limit-per-account",
 		Value: 16,
 		Usage: "set tx limit per account in pool",
+	}
+
+	allowedTracersFlag = cli.StringFlag{
+		Name:  "api-allowed-tracers",
+		Value: "none",
+		Usage: "comma separated list of allowed API tracers(none,all,call,prestate etc.)",
 	}
 
 	// solo mode only flags

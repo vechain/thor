@@ -36,19 +36,19 @@ func DiscardHandler() slog.Handler {
 	return &discardHandler{}
 }
 
-func (h *discardHandler) Handle(_ context.Context, r slog.Record) error {
+func (h *discardHandler) Handle(_ context.Context, _ slog.Record) error {
 	return nil
 }
 
-func (h *discardHandler) Enabled(_ context.Context, level slog.Level) bool {
+func (h *discardHandler) Enabled(_ context.Context, _ slog.Level) bool {
 	return false
 }
 
-func (h *discardHandler) WithGroup(name string) slog.Handler {
+func (h *discardHandler) WithGroup(_ string) slog.Handler {
 	panic("not implemented")
 }
 
-func (h *discardHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+func (h *discardHandler) WithAttrs(_ []slog.Attr) slog.Handler {
 	return &discardHandler{}
 }
 
@@ -104,7 +104,7 @@ func (h *TerminalHandler) Enabled(_ context.Context, level slog.Level) bool {
 	return level.Level() >= h.lvl.Level()
 }
 
-func (h *TerminalHandler) WithGroup(name string) slog.Handler {
+func (h *TerminalHandler) WithGroup(_ string) slog.Handler {
 	panic("not implemented")
 }
 
@@ -119,10 +119,10 @@ func (h *TerminalHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 }
 
 // ResetFieldPadding zeroes the field-padding for all attribute pairs.
-func (t *TerminalHandler) ResetFieldPadding() {
-	t.mu.Lock()
-	t.fieldPadding = make(map[string]int)
-	t.mu.Unlock()
+func (h *TerminalHandler) ResetFieldPadding() {
+	h.mu.Lock()
+	h.fieldPadding = make(map[string]int)
+	h.mu.Unlock()
 }
 
 type leveler struct{ minLevel *slog.LevelVar }

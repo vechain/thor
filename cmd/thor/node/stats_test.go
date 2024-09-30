@@ -20,10 +20,10 @@ func TestUpdateProcessed(t *testing.T) {
 	txs := 5
 	exec := mclock.AbsTime(100)
 	commit := mclock.AbsTime(200)
-	real := mclock.AbsTime(300)
+	realTime := mclock.AbsTime(300)
 	usedGas := uint64(5000)
 
-	s.UpdateProcessed(n, txs, exec, commit, real, usedGas)
+	s.UpdateProcessed(n, txs, exec, commit, realTime, usedGas)
 
 	assert.Equal(t, 10, s.processed, "processed count mismatch")
 	assert.Equal(t, 5, s.txs, "txs count mismatch")
