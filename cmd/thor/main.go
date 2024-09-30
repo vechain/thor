@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -179,13 +180,13 @@ func defaultAction(ctx *cli.Context) error {
 		defer func() { log.Info("stopping metrics server..."); closeFunc() }()
 	}
 
+	logAPIRequests := atomic.Bool{}
+	logAPIRequests.Store(ctx.Bool(enableAPILogsFlag.Name))
 	adminURL := ""
 	if ctx.Bool(enableAdminFlag.Name) {
-		url, closeFunc, err := api.StartAdminServer(ctx.String(adminAddrFlag.Name), logLevel)
-		if err != nil {
-			return fmt.Errorf("unable to start admin server - %w", err)
-		}
-		adminURL = url
+		admin := api.NewAdmin(ctx.String(adminAddrFlag.Name), logLevel, &logAPIRequests)
+		var closeFunc func()
+		adminURL, closeFunc, err = admin.Start()
 		defer func() { log.Info("stopping admin server..."); closeFunc() }()
 	}
 
@@ -261,7 +262,7 @@ func defaultAction(ctx *cli.Context) error {
 		ctx.Bool(pprofFlag.Name),
 		skipLogs,
 		ctx.Bool(apiAllowCustomTracerFlag.Name),
-		ctx.Bool(enableAPILogsFlag.Name),
+		&logAPIRequests,
 		ctx.Bool(enableMetricsFlag.Name),
 		ctx.Uint64(apiLogsLimitFlag.Name),
 		parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
@@ -322,13 +323,13 @@ func soloAction(ctx *cli.Context) error {
 		defer func() { log.Info("stopping metrics server..."); closeFunc() }()
 	}
 
+	logAPIRequests := atomic.Bool{}
+	logAPIRequests.Store(ctx.Bool(enableAPILogsFlag.Name))
 	adminURL := ""
 	if ctx.Bool(enableAdminFlag.Name) {
-		url, closeFunc, err := api.StartAdminServer(ctx.String(adminAddrFlag.Name), logLevel)
-		if err != nil {
-			return fmt.Errorf("unable to start admin server - %w", err)
-		}
-		adminURL = url
+		admin := api.NewAdmin(ctx.String(adminAddrFlag.Name), logLevel, &logAPIRequests)
+		var closeFunc func()
+		adminURL, closeFunc, err = admin.Start()
 		defer func() { log.Info("stopping admin server..."); closeFunc() }()
 	}
 
@@ -413,7 +414,7 @@ func soloAction(ctx *cli.Context) error {
 		ctx.Bool(pprofFlag.Name),
 		skipLogs,
 		ctx.Bool(apiAllowCustomTracerFlag.Name),
-		ctx.Bool(enableAPILogsFlag.Name),
+		&logAPIRequests,
 		ctx.Bool(enableMetricsFlag.Name),
 		ctx.Uint64(apiLogsLimitFlag.Name),
 		parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
