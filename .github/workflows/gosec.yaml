@@ -1,17 +1,16 @@
 name: Gosec
 on:
-  push:
-    branches:
-      - master
-  pull_request:
-    branches:
-      - master
+  schedule:
+  #   # This is meant to run every day at 9am
+    - cron:  '0 8 * * 1-5'
 
 jobs:
-  tests:
+  gosec:
     runs-on: ubuntu-latest
     env:
       GO111MODULE: on
+    outputs:
+      gosec-status: ${{ steps.gosec-run.outcome }}
     steps:
       - name: Checkout Source
         uses: actions/checkout@v4
@@ -20,6 +19,30 @@ jobs:
           go-version: '1.22'
           cache: false
       - name: Run Gosec
+        id: gosec-run
+        continue-on-error: true
         uses: securego/gosec@master
         with:
-          args: '-exclude=G104,G115,G304,G406,G507 -exclude-dir=builtin/gen ./...'
+          args: '-exclude=G104,G115,G304,G406,G507 ./...'
+
+  notify-slack:
+    name: Notify Slack
+    needs:
+      - gosec
+    if: always() && needs.gosec.outputs.gosec-status == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Notify Slack
+        uses: slackapi/slack-github-action@v1.25.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.GOSEC_SLACK_WEBHOOK }}
+        with:
+          payload: |
+            {
+              "commit-url": "${{ github.event.head_commit.url }}",
+              "branch": "${{ github.ref }}",
+              "repository": "${{ github.repository }}",
+            }
