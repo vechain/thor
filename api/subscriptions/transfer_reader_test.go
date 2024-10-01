@@ -8,19 +8,23 @@ package subscriptions
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/thor"
 )
 
 func TestTransferReader_Read(t *testing.T) {
 	// Arrange
-	repo, generatedBlocks, _ := initChain(t)
-	genesisBlk := generatedBlocks[0]
-	newBlock := generatedBlocks[1]
+	thorChain := initChain(t)
+	allBlocks, err := thorChain.GetAllBlocks()
+	require.NoError(t, err)
+	genesisBlk := allBlocks[0]
+	newBlock := allBlocks[1]
 	filter := &TransferFilter{}
 
 	// Act
-	br := newTransferReader(repo, genesisBlk.Header().ID(), filter)
+	br := newTransferReader(thorChain.Repo(), genesisBlk.Header().ID(), filter)
 	res, ok, err := br.Read()
 
 	// Assert
@@ -38,12 +42,14 @@ func TestTransferReader_Read(t *testing.T) {
 
 func TestTransferReader_Read_NoNewBlocksToRead(t *testing.T) {
 	// Arrange
-	repo, generatedBlocks, _ := initChain(t)
-	newBlock := generatedBlocks[1]
+	thorChain := initChain(t)
+	allBlocks, err := thorChain.GetAllBlocks()
+	require.NoError(t, err)
+	newBlock := allBlocks[1]
 	filter := &TransferFilter{}
 
 	// Act
-	br := newTransferReader(repo, newBlock.Header().ID(), filter)
+	br := newTransferReader(thorChain.Repo(), newBlock.Header().ID(), filter)
 	res, ok, err := br.Read()
 
 	// Assert
@@ -54,11 +60,11 @@ func TestTransferReader_Read_NoNewBlocksToRead(t *testing.T) {
 
 func TestTransferReader_Read_ErrorWhenReadingBlocks(t *testing.T) {
 	// Arrange
-	repo, _, _ := initChain(t)
+	thorChain := initChain(t)
 	filter := &TransferFilter{}
 
 	// Act
-	br := newTransferReader(repo, thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), filter)
+	br := newTransferReader(thorChain.Repo(), thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), filter)
 	res, ok, err := br.Read()
 
 	// Assert
@@ -69,8 +75,10 @@ func TestTransferReader_Read_ErrorWhenReadingBlocks(t *testing.T) {
 
 func TestTransferReader_Read_NoTransferMatchingTheFilter(t *testing.T) {
 	// Arrange
-	repo, generatedBlocks, _ := initChain(t)
-	genesisBlk := generatedBlocks[0]
+	thorChain := initChain(t)
+	allBlocks, err := thorChain.GetAllBlocks()
+	require.NoError(t, err)
+	genesisBlk := allBlocks[0]
 
 	nonExistingAddress := thor.MustParseAddress("0xffffffffffffffffffffffffffffffffffffffff")
 	badFilter := &TransferFilter{
@@ -78,7 +86,7 @@ func TestTransferReader_Read_NoTransferMatchingTheFilter(t *testing.T) {
 	}
 
 	// Act
-	br := newTransferReader(repo, genesisBlk.Header().ID(), badFilter)
+	br := newTransferReader(thorChain.Repo(), genesisBlk.Header().ID(), badFilter)
 	res, ok, err := br.Read()
 
 	// Assert

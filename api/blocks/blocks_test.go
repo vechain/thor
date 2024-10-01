@@ -15,7 +15,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gorilla/mux"
@@ -23,12 +22,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/muxdb"
-	"github.com/vechain/thor/v2/packer"
-	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
@@ -158,21 +154,13 @@ func testGetBlockWithRevisionNumberTooHigh(t *testing.T) {
 }
 
 func initBlockServer(t *testing.T) {
-	db := muxdb.NewMem()
-	stater := state.NewStater(db)
-	gene := genesis.NewDevnet()
+	thorChain, err := testchain.NewIntegrationTestChain()
+	require.NoError(t, err)
 
-	b, _, _, err := gene.Build(stater)
-	if err != nil {
-		t.Fatal(err)
-	}
-	genesisBlock = b
-
-	repo, _ := chain.NewRepository(db, b)
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 	tx := new(tx.Builder).
-		ChainTag(repo.ChainTag()).
+		ChainTag(thorChain.Repo().ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
 		Gas(21000).
@@ -186,34 +174,18 @@ func initBlockServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	tx = tx.WithSignature(sig)
-	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
-	sum, _ := repo.GetBlockSummary(b.Header().ID())
-	flow, err := packer.Schedule(sum, uint64(time.Now().Unix()))
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = flow.Adopt(tx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	block, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := stage.Commit(); err != nil {
-		t.Fatal(err)
-	}
-	if err := repo.AddBlock(block, receipts, 0); err != nil {
-		t.Fatal(err)
-	}
-	if err := repo.SetBestBlockID(block.Header().ID()); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], tx))
+
+	allBlocks, err := thorChain.GetAllBlocks()
+	require.NoError(t, err)
+
+	genesisBlock = allBlocks[0]
+	blk = allBlocks[1]
+
 	router := mux.NewRouter()
-	bftEngine := solo.NewBFTEngine(repo)
-	blocks.New(repo, bftEngine).Mount(router, "/blocks")
+	bftEngine := solo.NewBFTEngine(thorChain.Repo())
+	blocks.New(thorChain.Repo(), bftEngine).Mount(router, "/blocks")
 	ts = httptest.NewServer(router)
-	blk = block
 }
 
 func checkCollapsedBlock(t *testing.T, expBl *block.Block, actBl *blocks.JSONCollapsedBlock) {

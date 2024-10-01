@@ -16,13 +16,11 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/events"
 	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
-	"github.com/vechain/thor/v2/muxdb"
-	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
@@ -72,18 +70,18 @@ func TestOption(t *testing.T) {
 		Order:       logdb.DESC,
 	}
 
-	res, statusCode := httpPost(t, ts.URL+"/events", filter)
+	res, statusCode := httpPost(t, ts.URL+"/logs/event", filter)
 	assert.Equal(t, "options.limit exceeds the maximum allowed value of 5", strings.Trim(string(res), "\n"))
 	assert.Equal(t, http.StatusForbidden, statusCode)
 
 	filter.Options.Limit = 5
-	_, statusCode = httpPost(t, ts.URL+"/events", filter)
+	_, statusCode = httpPost(t, ts.URL+"/logs/event", filter)
 	assert.Equal(t, http.StatusOK, statusCode)
 
 	// with nil options, should use default limit, when the filtered lower
 	// or equal to the limit, should return the filtered events
 	filter.Options = nil
-	res, statusCode = httpPost(t, ts.URL+"/events", filter)
+	res, statusCode = httpPost(t, ts.URL+"/logs/event", filter)
 	assert.Equal(t, http.StatusOK, statusCode)
 	var tLogs []*events.FilteredEvent
 	if err := json.Unmarshal(res, &tLogs); err != nil {
@@ -94,7 +92,7 @@ func TestOption(t *testing.T) {
 
 	// when the filtered events exceed the limit, should return the forbidden
 	insertBlocks(t, db, 6)
-	res, statusCode = httpPost(t, ts.URL+"/events", filter)
+	res, statusCode = httpPost(t, ts.URL+"/logs/event", filter)
 	assert.Equal(t, http.StatusForbidden, statusCode)
 	assert.Equal(t, "the number of filtered logs exceeds the maximum allowed value of 5, please use pagination", strings.Trim(string(res), "\n"))
 }
@@ -103,7 +101,7 @@ func TestOption(t *testing.T) {
 func testEventsBadRequest(t *testing.T) {
 	badBody := []byte{0x00, 0x01, 0x02}
 
-	res, err := http.Post(ts.URL+"/events", "application/x-www-form-urlencoded", bytes.NewReader(badBody))
+	res, err := http.Post(ts.URL+"/logs/event", "application/x-www-form-urlencoded", bytes.NewReader(badBody))
 
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, res.StatusCode)
@@ -117,7 +115,7 @@ func testEventWithEmptyDb(t *testing.T) {
 		Order:       logdb.DESC,
 	}
 
-	res, statusCode := httpPost(t, ts.URL+"/events", emptyFilter)
+	res, statusCode := httpPost(t, ts.URL+"/logs/event", emptyFilter)
 	var tLogs []*events.FilteredEvent
 	if err := json.Unmarshal(res, &tLogs); err != nil {
 		t.Fatal(err)
@@ -135,7 +133,7 @@ func testEventWithBlocks(t *testing.T, expectedBlocks int) {
 		Order:       logdb.DESC,
 	}
 
-	res, statusCode := httpPost(t, ts.URL+"/events", emptyFilter)
+	res, statusCode := httpPost(t, ts.URL+"/logs/event", emptyFilter)
 	var tLogs []*events.FilteredEvent
 	if err := json.Unmarshal(res, &tLogs); err != nil {
 		t.Fatal(err)
@@ -161,7 +159,7 @@ func testEventWithBlocks(t *testing.T, expectedBlocks int) {
 		}},
 	}
 
-	res, statusCode = httpPost(t, ts.URL+"/events", matchingFilter)
+	res, statusCode = httpPost(t, ts.URL+"/logs/event", matchingFilter)
 	if err := json.Unmarshal(res, &tLogs); err != nil {
 		t.Fatal(err)
 	}
@@ -175,20 +173,11 @@ func testEventWithBlocks(t *testing.T, expectedBlocks int) {
 
 // Init functions
 func initEventServer(t *testing.T, logDb *logdb.LogDB, limit uint64) {
+	thorChain, err := testchain.NewIntegrationTestChain()
+	require.NoError(t, err)
+
 	router := mux.NewRouter()
-
-	muxDb := muxdb.NewMem()
-	stater := state.NewStater(muxDb)
-	gene := genesis.NewDevnet()
-
-	b, _, _, err := gene.Build(stater)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	repo, _ := chain.NewRepository(muxDb, b)
-
-	events.New(repo, logDb, limit).Mount(router, "/events")
+	events.New(thorChain.Repo(), logDb, limit).Mount(router, "/logs/event")
 	ts = httptest.NewServer(router)
 }
 

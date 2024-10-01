@@ -8,17 +8,22 @@ package subscriptions
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/chain"
 )
 
 func TestEventReader_Read(t *testing.T) {
-	repo, generatedBlocks, _ := initChain(t)
-	genesisBlk := generatedBlocks[0]
-	newBlock := generatedBlocks[1]
+	// Arrange
+	thorChain := initChain(t)
+	allBlocks, err := thorChain.GetAllBlocks()
+	require.NoError(t, err)
+	genesisBlk := allBlocks[0]
+	newBlock := allBlocks[1]
 
 	er := &eventReader{
-		repo:        repo,
+		repo:        thorChain.Repo(),
 		filter:      &EventFilter{},
 		blockReader: &mockBlockReaderWithError{},
 	}
@@ -30,7 +35,7 @@ func TestEventReader_Read(t *testing.T) {
 	assert.False(t, ok)
 
 	// Test case 2: Events are available to read
-	er = newEventReader(repo, genesisBlk.Header().ID(), &EventFilter{})
+	er = newEventReader(thorChain.Repo(), genesisBlk.Header().ID(), &EventFilter{})
 
 	events, ok, err = er.Read()
 
@@ -44,7 +49,7 @@ func TestEventReader_Read(t *testing.T) {
 			t.Fatal("unexpected type")
 		}
 	}
-	assert.Equal(t, 1, len(eventMessages))
+	assert.Equal(t, 2, len(eventMessages))
 	eventMsg := eventMessages[0]
 	assert.Equal(t, newBlock.Header().ID(), eventMsg.Meta.BlockID)
 	assert.Equal(t, newBlock.Header().Number(), eventMsg.Meta.BlockNumber)

@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -22,17 +21,16 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
-	ABI "github.com/vechain/thor/v2/abi"
+	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/muxdb"
-	"github.com/vechain/thor/v2/packer"
-	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
+
+	ABI "github.com/vechain/thor/v2/abi"
 )
 
 // pragma solidity ^0.4.18;
@@ -89,7 +87,7 @@ var addr = thor.BytesToAddress([]byte("to"))
 var value = big.NewInt(10000)
 var storageKey = thor.Bytes32{}
 var storageValue = byte(1)
-var gasLimit uint64
+var gasLimit = math.MaxUint32
 var genesisBlock *block.Block
 
 var contractAddr thor.Address
@@ -101,8 +99,6 @@ var runtimeBytecode = common.Hex2Bytes("6080604052600436106049576000357c01000000
 var invalidAddr = "abc"                                                                   //invlaid address
 var invalidBytes32 = "0x000000000000000000000000000000000000000000000000000000000000000g" //invlaid bytes32
 var invalidNumberRevision = "4294967296"                                                  //invalid block number
-
-var acc *accounts.Accounts
 var ts *httptest.Server
 
 func TestAccount(t *testing.T) {
@@ -250,22 +246,14 @@ func getStorageWithNonExisitingRevision(t *testing.T) {
 }
 
 func initAccountServer(t *testing.T) {
-	db := muxdb.NewMem()
-	stater := state.NewStater(db)
-	gene := genesis.NewDevnet()
+	thorChain, err := testchain.NewIntegrationTestChain()
+	require.NoError(t, err)
 
-	b, _, _, err := gene.Build(stater)
-	if err != nil {
-		t.Fatal(err)
-	}
-	genesisBlock = b
-	repo, _ := chain.NewRepository(db, b)
 	claTransfer := tx.NewClause(&addr).WithValue(value)
 	claDeploy := tx.NewClause(nil).WithData(bytecode)
-	transaction := buildTxWithClauses(t, repo.ChainTag(), claTransfer, claDeploy)
-	contractAddr = thor.CreateContractAddress(transaction.ID(), 1, 0)
-	packTx(repo, stater, transaction, t)
+	transaction := buildTxWithClauses(t, thorChain.Repo().ChainTag(), claTransfer, claDeploy)
 
+	contractAddr = thor.CreateContractAddress(transaction.ID(), 1, 0)
 	method := "set"
 	abi, _ := ABI.New([]byte(abiJSON))
 	m, _ := abi.MethodByName(method)
@@ -274,13 +262,22 @@ func initAccountServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	claCall := tx.NewClause(&contractAddr).WithData(input)
-	transactionCall := buildTxWithClauses(t, repo.ChainTag(), claCall)
-	packTx(repo, stater, transactionCall, t)
+	transactionCall := buildTxWithClauses(t, thorChain.Repo().ChainTag(), claCall)
+
+	require.NoError(t,
+		thorChain.MintTransactions(
+			genesis.DevAccounts()[0],
+			transaction,
+			transactionCall,
+		),
+	)
+
+	genesisBlock = thorChain.GenesisBlock()
 
 	router := mux.NewRouter()
-	gasLimit = math.MaxUint32
-	acc = accounts.New(repo, stater, gasLimit, thor.NoFork, solo.NewBFTEngine(repo))
-	acc.Mount(router, "/accounts")
+	accounts.New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), thor.NoFork, solo.NewBFTEngine(thorChain.Repo())).
+		Mount(router, "/accounts")
+
 	ts = httptest.NewServer(router)
 }
 
@@ -299,31 +296,6 @@ func buildTxWithClauses(t *testing.T, chaiTag byte, clauses ...*tx.Clause) *tx.T
 		t.Fatal(err)
 	}
 	return transaction.WithSignature(sig)
-}
-
-func packTx(repo *chain.Repository, stater *state.Stater, transaction *tx.Transaction, t *testing.T) {
-	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
-	flow, err := packer.Schedule(repo.BestBlockSummary(), uint64(time.Now().Unix()))
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = flow.Adopt(transaction)
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := stage.Commit(); err != nil {
-		t.Fatal(err)
-	}
-	if err := repo.AddBlock(b, receipts, 0); err != nil {
-		t.Fatal(err)
-	}
-	if err := repo.SetBestBlockID(b.Header().ID()); err != nil {
-		t.Fatal(err)
-	}
 }
 
 func deployContractWithCall(t *testing.T) {

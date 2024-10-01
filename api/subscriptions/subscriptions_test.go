@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -16,23 +17,22 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/muxdb"
-	"github.com/vechain/thor/v2/packer"
-	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/test/eventcontract"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
 )
 
 var ts *httptest.Server
-var sub *Subscriptions
-var txPool *txpool.TxPool
-var repo *chain.Repository
 var blocks []*block.Block
 
 func TestSubscriptions(t *testing.T) {
@@ -217,25 +217,111 @@ func TestParseAddress(t *testing.T) {
 }
 
 func initSubscriptionsServer(t *testing.T) {
-	r, generatedBlocks, pool := initChain(t)
-	repo = r
-	txPool = pool
-	blocks = generatedBlocks
+	thorChain, err := testchain.NewIntegrationTestChain()
+	require.NoError(t, err)
+
+	txPool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
+		Limit:           100,
+		LimitPerAccount: 16,
+		MaxLifetime:     time.Hour,
+	})
+
+	addr := thor.BytesToAddress([]byte("to"))
+	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
+	tr := new(tx.Builder).
+		ChainTag(thorChain.Repo().ChainTag()).
+		GasPriceCoef(1).
+		Expiration(10).
+		Gas(21000).
+		Nonce(1).
+		Clause(cla).
+		BlockRef(tx.NewBlockRef(0)).
+		Build()
+
+	sig, err := crypto.Sign(tr.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr = tr.WithSignature(sig)
+
+	txDeploy := new(tx.Builder).
+		ChainTag(thorChain.Repo().ChainTag()).
+		GasPriceCoef(1).
+		Expiration(100).
+		Gas(1_000_000).
+		Nonce(3).
+		Clause(tx.NewClause(nil).WithData(common.Hex2Bytes(eventcontract.HexBytecode))).
+		BlockRef(tx.NewBlockRef(0)).
+		Build()
+	sigTxDeploy, err := crypto.Sign(txDeploy.SigningHash().Bytes(), genesis.DevAccounts()[1].PrivateKey)
+	require.NoError(t, err)
+	txDeploy = txDeploy.WithSignature(sigTxDeploy)
+
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], tr, txDeploy))
+
+	blocks, err = thorChain.GetAllBlocks()
+	require.NoError(t, err)
+
 	router := mux.NewRouter()
-	sub = New(repo, []string{}, 5, txPool)
-	sub.Mount(router, "/subscriptions")
+	New(thorChain.Repo(), []string{}, 5, txPool).
+		Mount(router, "/subscriptions")
 	ts = httptest.NewServer(router)
 }
 
 func TestSubscriptionsBacktrace(t *testing.T) {
-	r, generatedBlocks, pool := initChainMultipleBlocks(t, 10)
-	repo = r
-	txPool = pool
-	blocks = generatedBlocks
+	thorChain, err := testchain.NewIntegrationTestChain()
+	require.NoError(t, err)
+
+	txPool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
+		Limit:           100,
+		LimitPerAccount: 16,
+		MaxLifetime:     time.Hour,
+	})
+
+	addr := thor.BytesToAddress([]byte("to"))
+	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
+	tr := new(tx.Builder).
+		ChainTag(thorChain.Repo().ChainTag()).
+		GasPriceCoef(1).
+		Expiration(10).
+		Gas(21000).
+		Nonce(1).
+		Clause(cla).
+		BlockRef(tx.NewBlockRef(0)).
+		Build()
+
+	sig, err := crypto.Sign(tr.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr = tr.WithSignature(sig)
+
+	txDeploy := new(tx.Builder).
+		ChainTag(thorChain.Repo().ChainTag()).
+		GasPriceCoef(1).
+		Expiration(100).
+		Gas(1_000_000).
+		Nonce(3).
+		Clause(tx.NewClause(nil).WithData(common.Hex2Bytes(eventcontract.HexBytecode))).
+		BlockRef(tx.NewBlockRef(0)).
+		Build()
+	sigTxDeploy, err := crypto.Sign(txDeploy.SigningHash().Bytes(), genesis.DevAccounts()[1].PrivateKey)
+	require.NoError(t, err)
+	txDeploy = txDeploy.WithSignature(sigTxDeploy)
+
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], tr, txDeploy))
+
+	for i := 0; i < 10; i++ {
+		require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0]))
+	}
+
+	blocks, err = thorChain.GetAllBlocks()
+	require.NoError(t, err)
+
 	router := mux.NewRouter()
-	sub = New(repo, []string{}, 5, txPool)
-	sub.Mount(router, "/subscriptions")
+	New(thorChain.Repo(), []string{}, 5, txPool).Mount(router, "/subscriptions")
 	ts = httptest.NewServer(router)
+
 	defer ts.Close()
 
 	t.Run("testHandleSubjectWithTransferBacktraceLimit", testHandleSubjectWithTransferBacktraceLimit)
@@ -257,51 +343,4 @@ func testHandleSubjectWithTransferBacktraceLimit(t *testing.T) {
 	}
 	assert.Equal(t, body, []byte("pos: backtrace limit exceeded\n"))
 	assert.Nil(t, conn)
-}
-
-func initChainMultipleBlocks(t *testing.T, blockCount int) (*chain.Repository, []*block.Block, *txpool.TxPool) {
-	db := muxdb.NewMem()
-	stater := state.NewStater(db)
-	gene := genesis.NewDevnet()
-
-	b, _, _, err := gene.Build(stater)
-	if err != nil {
-		t.Fatal(err)
-	}
-	repo, _ := chain.NewRepository(db, b)
-
-	txPool := txpool.New(repo, stater, txpool.Options{
-		Limit:           100,
-		LimitPerAccount: 16,
-		MaxLifetime:     time.Hour,
-	})
-
-	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
-
-	tmpBlock := b
-	createdBlocks := []*block.Block{b}
-	for i := 0; i < blockCount; i++ {
-		sum, _ := repo.GetBlockSummary(tmpBlock.Header().ID())
-		flow, err := packer.Schedule(sum, uint64(time.Now().Unix()))
-		if err != nil {
-			t.Fatal(err)
-		}
-		blk, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, false)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := stage.Commit(); err != nil {
-			t.Fatal(err)
-		}
-		if err := repo.AddBlock(blk, receipts, 0); err != nil {
-			t.Fatal(err)
-		}
-		if err := repo.SetBestBlockID(blk.Header().ID()); err != nil {
-			t.Fatal(err)
-		}
-		createdBlocks = append(createdBlocks, blk)
-		tmpBlock = blk
-	}
-
-	return repo, createdBlocks, txPool
 }
