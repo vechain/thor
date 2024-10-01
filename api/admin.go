@@ -27,7 +27,6 @@ type Admin struct {
 	logRequests *atomic.Bool
 }
 
-
 func NewAdmin(addr string, logLevel *slog.LevelVar, logRequests *atomic.Bool) *Admin {
 	return &Admin{
 		address:     addr,
@@ -83,7 +82,6 @@ func (a *Admin) Start() (string, func(), error) {
 	return "http://" + listener.Addr().String() + "/admin", cancel, nil
 }
 
-
 type logLevelRequest struct {
 	Level string `json:"level"`
 }
@@ -129,14 +127,14 @@ func (a *Admin) postLogLevelHandler(w http.ResponseWriter, r *http.Request) erro
 	})
 }
 
-
 type apiLogRequests struct {
-	Enabled bool `json:"enabled"`
+	Enabled *bool `json:"enabled"`
 }
 
 func (a *Admin) getRequestLoggerEnabled(w http.ResponseWriter, r *http.Request) error {
+	enabled := a.logRequests.Load()
 	res := apiLogRequests{
-		Enabled: a.logRequests.Load(),
+		Enabled: &enabled,
 	}
 	return utils.WriteJSON(w, res)
 }
@@ -148,9 +146,13 @@ func (a *Admin) postRequestLogger(w http.ResponseWriter, r *http.Request) error 
 		return utils.BadRequest(errors.WithMessage(err, "invalid request body"))
 	}
 
-	log.Warn("admin changed the request logger", "enabled", req.Enabled)
+	if req.Enabled == nil {
+		return utils.BadRequest(errors.New("missing 'enabled' field"))
+	}
 
-	a.logRequests.Store(req.Enabled)
+	log.Warn("admin changed the request logger", "enabled", *req.Enabled)
+
+	a.logRequests.Store(*req.Enabled)
 
 	return utils.WriteJSON(w, req)
 }

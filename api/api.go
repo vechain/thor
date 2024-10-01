@@ -33,10 +33,6 @@ import (
 
 var logger = log.WithContext("pkg", "api")
 
-type API struct {
-
-}
-
 // New return api router
 func New(
 	repo *chain.Repository,
@@ -114,7 +110,6 @@ func New(
 		handlers.AllowedHeaders([]string{"content-type", "x-genesis-id"}),
 		handlers.ExposedHeaders([]string{"x-genesis-id", "x-thorest-ver"}),
 	)(handler)
-
 
 	handler = RequestLoggerHandler(handler, logger, enableReqLogger)
 

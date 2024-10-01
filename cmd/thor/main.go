@@ -187,6 +187,9 @@ func defaultAction(ctx *cli.Context) error {
 		admin := api.NewAdmin(ctx.String(adminAddrFlag.Name), logLevel, &logAPIRequests)
 		var closeFunc func()
 		adminURL, closeFunc, err = admin.Start()
+		if err != nil {
+			return err
+		}
 		defer func() { log.Info("stopping admin server..."); closeFunc() }()
 	}
 
@@ -330,6 +333,9 @@ func soloAction(ctx *cli.Context) error {
 		admin := api.NewAdmin(ctx.String(adminAddrFlag.Name), logLevel, &logAPIRequests)
 		var closeFunc func()
 		adminURL, closeFunc, err = admin.Start()
+		if err != nil {
+			return err
+		}
 		defer func() { log.Info("stopping admin server..."); closeFunc() }()
 	}
 
