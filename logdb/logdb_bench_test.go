@@ -38,7 +38,7 @@ func init() {
 	flag.StringVar(&dbPath, "dbPath", "", "Path to the database file")
 }
 
-// TestLogDB_NewestBlockID performs a series of read/write benchmarks on the NewestBlockID functionality of the
+// TestLogDB_NewestBlockID performs a series of read/write benchmarks on the NewestBlockID functionality of LogDB.
 // It benchmarks the creating, writing, committing a new block, followed by fetching this new block as the NewestBlockID
 func BenchmarkFakeDB_NewestBlockID(t *testing.B) {
 	db, err := createTempDB()
@@ -146,7 +146,7 @@ func BenchmarkFakeDB_WriteBlocks(t *testing.B) {
 	}
 }
 
-// BenchmarkTestDB_HasBlockID opens a log.db file and measures the performance of the HasBlockID functionality of
+// BenchmarkTestDB_HasBlockID opens a log.db file and measures the performance of the HasBlockID functionality of LogDB.
 // It uses unbounded event filtering to check for blocks existence using the HasBlockID
 func BenchmarkTestDB_HasBlockID(b *testing.B) {
 	db, err := loadDBFromDisk(b)
@@ -168,7 +168,7 @@ func BenchmarkTestDB_HasBlockID(b *testing.B) {
 	}
 }
 
-// BenchmarkTestDB_FilterEvents opens a log.db file and measures the performance of the Event filtering functionality of
+// BenchmarkTestDB_FilterEvents opens a log.db file and measures the performance of the Event filtering functionality of LogDB.
 func BenchmarkTestDB_FilterEvents(b *testing.B) {
 	db, err := loadDBFromDisk(b)
 	require.NoError(b, err)
@@ -213,7 +213,7 @@ func BenchmarkTestDB_FilterEvents(b *testing.B) {
 	}
 }
 
-// BenchmarkTestDB_FilterEvents opens a log.db file and measures the performance of the Transfer filtering functionality of
+// BenchmarkTestDB_FilterEvents opens a log.db file and measures the performance of the Transfer filtering functionality of LogDB.
 // Running: go test -bench=BenchmarkTestDB_FilterTransfers  -benchmem  github.com/vechain/thor/v2/logdb -dbPath /path/to/log.db
 func BenchmarkTestDB_FilterTransfers(b *testing.B) {
 	db, err := loadDBFromDisk(b)
