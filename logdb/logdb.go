@@ -9,7 +9,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"math"
 	"math/big"
 
 	sqlite3 "github.com/mattn/go-sqlite3"
@@ -95,7 +94,7 @@ func (db *LogDB) Path() string {
 }
 
 func (db *LogDB) FilterEvents(ctx context.Context, filter *EventFilter) ([]*Event, error) {
-	const query = `SELECT e.seq, e.txIndex, r0.data, e.blockTime, r1.data, r2.data, e.clauseIndex, r3.data, r4.data, r5.data, r6.data, r7.data, r8.data, e.data
+	const query = `SELECT e.seq, r0.data, e.blockTime, r1.data, r2.data, e.clauseIndex, r3.data, r4.data, r5.data, r6.data, r7.data, r8.data, e.data
 FROM (%v) e
 	LEFT JOIN ref r0 ON e.blockID = r0.id
 	LEFT JOIN ref r1 ON e.txID = r1.id
@@ -118,10 +117,10 @@ FROM (%v) e
 
 	if filter.Range != nil {
 		subQuery += " AND seq >= ?"
-		args = append(args, newSequence(filter.Range.From, 0))
+		args = append(args, newSequence(filter.Range.From, 0, 0))
 		if filter.Range.To >= filter.Range.From {
 			subQuery += " AND seq <= ?"
-			args = append(args, newSequence(filter.Range.To, uint32(math.MaxInt32)))
+			args = append(args, newSequence(filter.Range.To, txIndexMask, logIndexMask))
 		}
 	}
 
@@ -184,10 +183,10 @@ FROM (%v) t
 
 	if filter.Range != nil {
 		subQuery += " AND seq >= ?"
-		args = append(args, newSequence(filter.Range.From, 0))
+		args = append(args, newSequence(filter.Range.From, 0, 0))
 		if filter.Range.To >= filter.Range.From {
 			subQuery += " AND seq <= ?"
-			args = append(args, newSequence(filter.Range.To, uint32(math.MaxInt32)))
+			args = append(args, newSequence(filter.Range.To, txIndexMask, logIndexMask))
 		}
 	}
 
@@ -244,7 +243,6 @@ func (db *LogDB) queryEvents(ctx context.Context, query string, args ...interfac
 		}
 		var (
 			seq         sequence
-			txIndex     uint32
 			blockID     []byte
 			blockTime   uint64
 			txID        []byte
@@ -256,7 +254,6 @@ func (db *LogDB) queryEvents(ctx context.Context, query string, args ...interfac
 		)
 		if err := rows.Scan(
 			&seq,
-			&txIndex,
 			&blockID,
 			&blockTime,
 			&txID,
@@ -274,11 +271,11 @@ func (db *LogDB) queryEvents(ctx context.Context, query string, args ...interfac
 		}
 		event := &Event{
 			BlockNumber: seq.BlockNumber(),
-			Index:       seq.Index(),
+			Index:       seq.LogIndex(),
 			BlockID:     thor.BytesToBytes32(blockID),
 			BlockTime:   blockTime,
 			TxID:        thor.BytesToBytes32(txID),
-			TxIndex:     txIndex,
+			TxIndex:     seq.TxIndex(),
 			TxOrigin:    thor.BytesToAddress(txOrigin),
 			ClauseIndex: clauseIndex,
 			Address:     thor.BytesToAddress(address),
@@ -337,7 +334,7 @@ func (db *LogDB) queryTransfers(ctx context.Context, query string, args ...inter
 		}
 		trans := &Transfer{
 			BlockNumber: seq.BlockNumber(),
-			Index:       seq.Index(),
+			Index:       seq.LogIndex(),
 			BlockID:     thor.BytesToBytes32(blockID),
 			BlockTime:   blockTime,
 			TxID:        thor.BytesToBytes32(txID),
@@ -379,7 +376,7 @@ func (db *LogDB) HasBlockID(id thor.Bytes32) (bool, error) {
 		UNION
 		SELECT * FROM (SELECT seq FROM event WHERE seq=? AND blockID=` + refIDQuery + ` LIMIT 1))`
 
-	seq := newSequence(block.Number(id), 0)
+	seq := newSequence(block.Number(id), 0, 0)
 	row := db.stmtCache.MustPrepare(query).QueryRow(seq, id[:], seq, id[:])
 	var count int
 	if err := row.Scan(&count); err != nil {
@@ -429,7 +426,7 @@ type Writer struct {
 
 // Truncate truncates the database by deleting logs after blockNum (included).
 func (w *Writer) Truncate(blockNum uint32) error {
-	seq := newSequence(blockNum, 0)
+	seq := newSequence(blockNum, 0, 0)
 	if err := w.exec("DELETE FROM event WHERE seq >= ?", seq); err != nil {
 		return err
 	}
@@ -509,8 +506,8 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 					return err
 				}
 
-				const query = "INSERT OR IGNORE INTO event(seq, txIndex, blockTime, clauseIndex, data, blockID, txID, txOrigin, address, topic0, topic1, topic2, topic3, topic4) " +
-					"VALUES(?,?,?,?,?," +
+				const query = "INSERT OR IGNORE INTO event(seq, blockTime, clauseIndex, data, blockID, txID, txOrigin, address, topic0, topic1, topic2, topic3, topic4) " +
+					"VALUES(?,?,?,?," +
 					refIDQuery + "," +
 					refIDQuery + "," +
 					refIDQuery + "," +
@@ -528,8 +525,7 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 
 				if err := w.exec(
 					query,
-					newSequence(blockNum, eventCount),
-					txIndex,
+					newSequence(blockNum, uint32(txIndex), eventCount),
 					blockTimestamp,
 					clauseIndex,
 					eventData,
@@ -564,7 +560,7 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 
 				if err := w.exec(
 					query,
-					newSequence(blockNum, transferCount),
+					newSequence(blockNum, uint32(txIndex), transferCount),
 					blockTimestamp,
 					clauseIndex,
 					tr.Amount.Bytes(),

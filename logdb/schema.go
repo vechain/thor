@@ -14,7 +14,6 @@ const (
 	// creates events table
 	eventTableSchema = `CREATE TABLE IF NOT EXISTS event (
 	seq INTEGER PRIMARY KEY NOT NULL,
-	txIndex INTEGER NOT NULL,
 	blockID	INTEGER NOT NULL,
 	blockTime INTEGER NOT NULL,
 	txID INTEGER NOT NULL,
