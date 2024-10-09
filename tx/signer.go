@@ -47,7 +47,7 @@ func MustSignDelegated(tx *Transaction, originPK *ecdsa.PrivateKey, delegatorPK 
 	return trx
 }
 
-// SignDelegated signs a transaction as a delegator using the provided private keys and the default signing function.
+// SignDelegated signs a transaction with both origin and delegator's private key and the default signing function.
 // It returns the signed transaction or an error if the signing process fails.
 func SignDelegated(tx *Transaction, originPK *ecdsa.PrivateKey, delegatorPK *ecdsa.PrivateKey) (*Transaction, error) {
 	// Ensure the transaction has the delegated feature enabled.
