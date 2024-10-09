@@ -534,6 +534,30 @@ func TestVerifyBlock(t *testing.T) {
 			},
 		},
 		{
+			"InvalidBeneficiary", func(t *testing.T) {
+				header := tc.original.Header()
+				builder := new(block.Builder).
+					ParentID(header.ParentID()).
+					Timestamp(header.Timestamp()).
+					TotalScore(header.TotalScore()).
+					GasLimit(header.GasLimit()).
+					GasUsed(header.GasUsed()).
+					Beneficiary(thor.Address{123}).
+					StateRoot(header.StateRoot()).
+					ReceiptsRoot(header.ReceiptsRoot())
+				builder.TransactionFeatures(header.TxsFeatures())
+
+				blk, err := tc.sign(builder)
+				if err != nil {
+					t.Fatal(err)
+				}
+				expectedPrefix := "block state root mismatch"
+				err = tc.consent(blk)
+
+				assert.True(t, strings.HasPrefix(err.Error(), expectedPrefix))
+			},
+		},
+		{
 			"InvalidReceiptsRoot", func(t *testing.T) {
 				header := tc.original.Header()
 				builder := new(block.Builder).
@@ -712,7 +736,7 @@ func TestValidateBlockBody(t *testing.T) {
 
 				tx := txSign(txBuilder)
 
-				blk, err := tc.sign(tc.builder(tc.original.Header()).Transaction(tx).Transaction(tx))
+				blk, err := tc.sign(tc.builder(tc.original.Header()).Transaction(tx))
 				if err != nil {
 					t.Fatal(err)
 				}
