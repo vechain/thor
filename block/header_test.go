@@ -63,7 +63,7 @@ func TestHeader_BetterThan(t *testing.T) {
 
 func TestHeaderEncoding(t *testing.T) {
 	var sig [65]byte
-	rand.Read(sig[:]) // nolint
+	rand.Read(sig[:])
 
 	block := new(Builder).Build().WithSignature(sig[:])
 	h := block.Header()

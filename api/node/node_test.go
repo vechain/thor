@@ -56,7 +56,7 @@ func initCommServer(t *testing.T) {
 }
 
 func httpGet(t *testing.T, url string) []byte {
-	res, err := http.Get(url)
+	res, err := http.Get(url) //#nosec G107
 	if err != nil {
 		t.Fatal(err)
 	}

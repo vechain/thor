@@ -3,6 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
+// #nosec G404
 package metrics
 
 import (
@@ -26,21 +27,21 @@ func TestNoopMetrics(t *testing.T) {
 	Counter("count2")
 
 	count1.Add(1)
-	randCount2 := rand.N(100) + 1 // #nosec
+	randCount2 := rand.N(100) + 1
 	for i := 0; i < randCount2; i++ {
 		Counter("count2").Add(1)
 	}
 
 	hist := Histogram("hist1", nil)
 	histVect := HistogramVec("hist2", []string{"zeroOrOne"}, nil)
-	for i := 0; i < rand.N(100)+1; i++ { // #nosec
+	for i := 0; i < rand.N(100)+1; i++ {
 		hist.Observe(int64(i))
 		histVect.ObserveWithLabels(int64(i), map[string]string{"thisIsNonsense": "butDoesntBreak"})
 	}
 
 	countVect := CounterVec("countVec1", []string{"zeroOrOne"})
 	gaugeVec := GaugeVec("gaugeVec1", []string{"zeroOrOne"})
-	for i := 0; i < rand.N(100)+1; i++ { // #nosec
+	for i := 0; i < rand.N(100)+1; i++ {
 		countVect.AddWithLabel(int64(i), map[string]string{"thisIsNonsense": "butDoesntBreak"})
 		gaugeVec.AddWithLabel(int64(i), map[string]string{"thisIsNonsense": "butDoesntBreak"})
 	}

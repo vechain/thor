@@ -26,7 +26,7 @@ func SetupTempFile(t *testing.T, dummyData string) string {
 	}
 	testFilePath := tempFile.Name()
 
-	err = os.WriteFile(testFilePath, []byte(dummyData), 0644) // #nosec
+	err = os.WriteFile(testFilePath, []byte(dummyData), 0600)
 	if err != nil {
 		t.Fatalf("Failed to write to temp file: %s", err)
 	}

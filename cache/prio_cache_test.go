@@ -3,6 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
+// #nosec G404
 package cache_test
 
 import (
@@ -44,9 +45,9 @@ func TestPrioCache(t *testing.T) {
 
 	for i := 0; i < 100; i++ {
 		e := kvp{
-			rand.Int(),     // #nosec
-			rand.Int(),     // #nosec
-			rand.Float64()} // #nosec
+			rand.Int(),
+			rand.Int(),
+			rand.Float64()}
 		kvps = append(kvps, e)
 		c.Set(e.k, e.v, e.p)
 	}

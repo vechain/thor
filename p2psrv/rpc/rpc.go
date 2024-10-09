@@ -153,7 +153,7 @@ func (r *RPC) prepareCall(msgCode uint64, onResult func(*p2p.Msg) error) uint32 
 	r.lock.Lock()
 	defer r.lock.Unlock()
 	for {
-		id := rand.Uint32() // #nosec
+		id := rand.Uint32() //#nosec G404
 		if id == 0 {
 			// 0 id is taken by Notify
 			continue

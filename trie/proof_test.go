@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// #nosec G404
 package trie
 
 import (
@@ -72,7 +73,7 @@ func TestVerifyBadProof(t *testing.T) {
 			t.Fatal("zero length proof")
 		}
 		keys := proofs.Keys()
-		key := keys[mrand.N(len(keys))] // #nosec
+		key := keys[mrand.N(len(keys))]
 		node, _ := proofs.Get(key)
 		proofs.Delete(key)
 		mutateByte(node)
@@ -85,8 +86,8 @@ func TestVerifyBadProof(t *testing.T) {
 
 // mutateByte changes one byte in b.
 func mutateByte(b []byte) {
-	for r := mrand.N(len(b)); ; { // #nosec
-		new := byte(mrand.N(255)) // #nosec
+	for r := mrand.N(len(b)); ; {
+		new := byte(mrand.N(255))
 		if new != b[r] {
 			b[r] = new
 			break

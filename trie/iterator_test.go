@@ -331,7 +331,8 @@ func TestIteratorContinueAfterError(t *testing.T) {
 		// because that one is already loaded.
 		var rkey []byte
 		for {
-			if rkey = keys[rand.N(len(keys))]; !bytes.Equal(rkey, tr.Hash().Bytes()) { // #nosec
+			//#nosec G404
+			if rkey = keys[rand.N(len(keys))]; !bytes.Equal(rkey, tr.Hash().Bytes()) {
 				break
 			}
 		}

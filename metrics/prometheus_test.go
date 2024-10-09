@@ -3,6 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
+// #nosec G404
 package metrics
 
 import (
@@ -31,13 +32,13 @@ func TestPromMetrics(t *testing.T) {
 	gaugeVec := GaugeVec("gaugeVec1", []string{"zeroOrOne"})
 
 	count1.Add(1)
-	randCount2 := rand.N(100) + 1 // #nosec
+	randCount2 := rand.N(100) + 1
 	for i := 0; i < randCount2; i++ {
 		Counter("count2").Add(1)
 	}
 
 	histTotal := 0
-	for i := 0; i < rand.N(100)+2; i++ { // #nosec
+	for i := 0; i < rand.N(100)+2; i++ {
 		zeroOrOne := i % 2
 		hist.Observe(int64(i))
 		HistogramVec("hist2", []string{"zeroOrOne"}, nil).
@@ -46,7 +47,7 @@ func TestPromMetrics(t *testing.T) {
 	}
 
 	totalCountVec := 0
-	randCountVec := rand.N(100) + 2 // #nosec
+	randCountVec := rand.N(100) + 2
 	for i := 0; i < randCountVec; i++ {
 		zeroOrOne := i % 2
 		countVect.AddWithLabel(int64(i), map[string]string{"zeroOrOne": strconv.Itoa(zeroOrOne)})
@@ -54,7 +55,7 @@ func TestPromMetrics(t *testing.T) {
 	}
 
 	totalGaugeVec := 0
-	randGaugeVec := rand.N(100) + 2 // #nosec
+	randGaugeVec := rand.N(100) + 2
 	for i := 0; i < randGaugeVec; i++ {
 		zeroOrOne := i % 2
 		gaugeVec.AddWithLabel(int64(i), map[string]string{"zeroOrOne": strconv.Itoa(zeroOrOne)})
