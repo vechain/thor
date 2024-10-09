@@ -32,6 +32,11 @@ func TestSign(t *testing.T) {
 	addr, err := signedTx.Origin()
 	require.NoError(t, err)
 	assert.Equal(t, thor.Address(crypto.PubkeyToAddress(pk.PublicKey)), addr)
+
+	// Verify the delegator
+	delegator, err := signedTx.Delegator()
+	require.NoError(t, err)
+	assert.Nil(t, delegator)
 }
 
 func TestSignDelegated(t *testing.T) {
@@ -58,4 +63,14 @@ func TestSignDelegated(t *testing.T) {
 	signedTx, err = SignDelegated(tx, originPK, delegatorPK)
 	assert.NoError(t, err)
 	assert.NotNil(t, signedTx)
+
+	// Verify address from Origin
+	origin, err := signedTx.Origin()
+	require.NoError(t, err)
+	assert.Equal(t, thor.Address(crypto.PubkeyToAddress(originPK.PublicKey)), origin)
+
+	// Verify the delegator
+	delegator, err := signedTx.Delegator()
+	require.NoError(t, err)
+	assert.Equal(t, thor.Address(crypto.PubkeyToAddress(delegatorPK.PublicKey)), *delegator)
 }
