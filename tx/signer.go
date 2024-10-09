@@ -10,7 +10,6 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -50,35 +49,31 @@ func MustSignDelegated(tx *Transaction, originPK *ecdsa.PrivateKey, delegatorPK 
 
 // SignDelegated signs a transaction as a delegator using the provided private keys and the default signing function.
 // It returns the signed transaction or an error if the signing process fails.
-func SignDelegated(unsignedTx *Transaction, originPK *ecdsa.PrivateKey, delegatorPK *ecdsa.PrivateKey) (*Transaction, error) {
+func SignDelegated(tx *Transaction, originPK *ecdsa.PrivateKey, delegatorPK *ecdsa.PrivateKey) (*Transaction, error) {
 	// Ensure the transaction has the delegated feature enabled.
-	if !unsignedTx.Features().IsDelegated() {
+	if !tx.Features().IsDelegated() {
 		return nil, errors.New("transaction delegated feature is not enabled")
 	}
 
-	// Ensure the transaction has not already been signed by the origin.
-	if len(unsignedTx.Signature()) != 0 {
-		return nil, secp256k1.ErrInvalidSignatureLen
-	}
-
 	// Sign the transaction using the origin's private key.
-	signedTx, err := Sign(unsignedTx, originPK)
+	// Generate the signature for the transaction's signing hash.
+	originSig, err := crypto.Sign(tx.SigningHash().Bytes(), originPK)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to sign transaction: %w", err)
 	}
 
 	// Convert the origin's public key to its corresponding address.
 	origin := thor.Address(crypto.PubkeyToAddress(originPK.PublicKey))
 
 	// Generate the delegator's signature using the transaction's delegator signing hash.
-	dSig, err := crypto.Sign(signedTx.DelegatorSigningHash(origin).Bytes(), delegatorPK)
+	dSig, err := crypto.Sign(tx.DelegatorSigningHash(origin).Bytes(), delegatorPK)
 	if err != nil {
 		return nil, fmt.Errorf("unable to delegator sign transaction: %w", err)
 	}
 
 	// Append the delegator's signature to the origin's signature.
-	sig := append(signedTx.Signature(), dSig...)
+	sig := append(originSig, dSig...)
 
 	// Attach the combined signature to the transaction and return the signed transaction.
-	return signedTx.WithSignature(sig), nil
+	return tx.WithSignature(sig), nil
 }

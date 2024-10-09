@@ -9,8 +9,9 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/vechain/thor/v2/thor"
 )
 
 func TestSign(t *testing.T) {
@@ -26,6 +27,11 @@ func TestSign(t *testing.T) {
 
 	// Verify the transaction was signed
 	assert.NotNil(t, signedTx)
+
+	// Verify address from Origin
+	addr, err := signedTx.Origin()
+	require.NoError(t, err)
+	assert.Equal(t, thor.Address(crypto.PubkeyToAddress(pk.PublicKey)), addr)
 }
 
 func TestSignDelegated(t *testing.T) {
@@ -46,13 +52,7 @@ func TestSignDelegated(t *testing.T) {
 	// enable the feature
 	var features Features
 	features.SetDelegated(true)
-
-	// tx is already signed
 	tx = new(Builder).Features(features).Build()
-	signedTx = MustSign(tx, originPK)
-	signedTx, err = SignDelegated(signedTx, originPK, delegatorPK)
-	assert.ErrorIs(t, err, secp256k1.ErrInvalidSignatureLen)
-	assert.Nil(t, signedTx)
 
 	// Sign the transaction as a delegator
 	signedTx, err = SignDelegated(tx, originPK, delegatorPK)
