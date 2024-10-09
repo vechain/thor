@@ -1186,7 +1186,7 @@ components:
         - $ref: '#/components/schemas/ClauseTracerOption'
       example:
         target: '0x010709463c1f0c9aa66a31182fb36d1977d99bfb6526bae0564a0eac4006c31a/0/0'
-        name: "prestate"
+        name: "call"
         config: { }
 
     PostDebugTracerCallRequest:
@@ -1207,6 +1207,7 @@ components:
         gasPayer: "0xd3ae78222beadb038203be21ed5ce7c9b1bff602"
         expiration: 1000
         blockRef: "0x00000000851caf3c"
+        name: "call"
 
     TxMeta:
       title: TxMeta
