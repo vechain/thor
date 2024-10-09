@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
@@ -112,18 +111,17 @@ func sendTx(t *testing.T) {
 	var expiration = uint32(10)
 	var gas = uint64(21000)
 
-	tx := new(tx.Builder).
-		BlockRef(blockRef).
-		ChainTag(chainTag).
-		Expiration(expiration).
-		Gas(gas).
-		Build()
-	sig, err := crypto.Sign(tx.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tx = tx.WithSignature(sig)
-	rlpTx, err := rlp.EncodeToBytes(tx)
+	trx := tx.MustSign(
+		new(tx.Builder).
+			BlockRef(blockRef).
+			ChainTag(chainTag).
+			Expiration(expiration).
+			Gas(gas).
+			Build(),
+		genesis.DevAccounts()[0].PrivateKey,
+	)
+
+	rlpTx, err := rlp.EncodeToBytes(trx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +131,7 @@ func sendTx(t *testing.T) {
 	if err = json.Unmarshal(res, &txObj); err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, tx.ID().String(), txObj["id"], "should be the same transaction id")
+	assert.Equal(t, trx.ID().String(), txObj["id"], "should be the same transaction id")
 }
 
 func getTxWithBadID(t *testing.T) {
@@ -296,6 +294,7 @@ func initTransactionServer(t *testing.T) {
 		Clause(cla).
 		BlockRef(tx.NewBlockRef(0)).
 		Build()
+	transaction = tx.MustSign(transaction, genesis.DevAccounts()[0].PrivateKey)
 
 	mempoolTx = new(tx.Builder).
 		ChainTag(repo.ChainTag()).
@@ -303,19 +302,7 @@ func initTransactionServer(t *testing.T) {
 		Gas(21000).
 		Nonce(1).
 		Build()
-
-	sig, err := crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	sig2, err := crypto.Sign(mempoolTx.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	transaction = transaction.WithSignature(sig)
-	mempoolTx = mempoolTx.WithSignature(sig2)
+	mempoolTx = tx.MustSign(mempoolTx, genesis.DevAccounts()[0].PrivateKey)
 
 	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
 	sum, _ := repo.GetBlockSummary(b.Header().ID())

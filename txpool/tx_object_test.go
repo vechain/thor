@@ -11,7 +11,6 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
@@ -29,25 +28,21 @@ func newChainRepo(db *muxdb.MuxDB) *chain.Repository {
 	return repo
 }
 
-func signTx(tx *tx.Transaction, acc genesis.DevAccount) *tx.Transaction {
-	sig, _ := crypto.Sign(tx.SigningHash().Bytes(), acc.PrivateKey)
-	return tx.WithSignature(sig)
-}
-
 func newTx(chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, features tx.Features, from genesis.DevAccount) *tx.Transaction {
 	builder := new(tx.Builder).ChainTag(chainTag)
 	for _, c := range clauses {
 		builder.Clause(c)
 	}
 
-	tx := builder.BlockRef(blockRef).
+	return tx.MustSign(builder.BlockRef(blockRef).
 		Expiration(expiration).
 		Nonce(rand.Uint64()). // nolint:gosec
 		DependsOn(dependsOn).
 		Features(features).
-		Gas(gas).Build()
-
-	return signTx(tx, from)
+		Gas(gas).
+		Build(),
+		from.PrivateKey,
+	)
 }
 
 func newDelegatedTx(chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, from genesis.DevAccount, delegator genesis.DevAccount) *tx.Transaction {
@@ -59,18 +54,21 @@ func newDelegatedTx(chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx
 	var features tx.Features
 	features.SetDelegated(true)
 
-	tx := builder.BlockRef(blockRef).
+	trx := builder.BlockRef(blockRef).
 		Expiration(expiration).
 		Nonce(rand.Uint64()). // nolint:gosec
 		DependsOn(dependsOn).
 		Features(features).
-		Gas(gas).Build()
+		Gas(gas).
+		Build()
 
-	sig, _ := crypto.Sign(tx.SigningHash().Bytes(), from.PrivateKey)
-	dSig, _ := crypto.Sign(tx.DelegatorSigningHash(from.Address).Bytes(), delegator.PrivateKey)
+	trx = tx.MustSignDelegated(
+		trx,
+		from.PrivateKey,
+		delegator.PrivateKey,
+	)
 
-	sig = append(sig, dSig...)
-	return tx.WithSignature(sig)
+	return trx
 }
 
 func SetupTest() (genesis.DevAccount, *chain.Repository, *block.Block, *state.State) {
