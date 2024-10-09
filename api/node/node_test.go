@@ -5,21 +5,20 @@
 package node_test
 
 import (
-	"encoding/json"
-	"io"
-	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/node"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/txpool"
 )
 
@@ -27,11 +26,10 @@ var ts *httptest.Server
 
 func TestNode(t *testing.T) {
 	initCommServer(t)
-	res := httpGet(t, ts.URL+"/node/network/peers")
-	var peersStats map[string]string
-	if err := json.Unmarshal(res, &peersStats); err != nil {
-		t.Fatal(err)
-	}
+	tclient := thorclient.New(ts.URL)
+
+	peersStats, err := tclient.Peers()
+	require.NoError(t, err)
 	assert.Equal(t, 0, len(peersStats), "count should be zero")
 }
 
@@ -53,17 +51,4 @@ func initCommServer(t *testing.T) {
 	router := mux.NewRouter()
 	node.New(comm).Mount(router, "/node")
 	ts = httptest.NewServer(router)
-}
-
-func httpGet(t *testing.T, url string) []byte {
-	res, err := http.Get(url) // nolint:gosec
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, err := io.ReadAll(res.Body)
-	res.Body.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return r
 }

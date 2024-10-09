@@ -6,9 +6,7 @@
 package events_test
 
 import (
-	"bytes"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -16,6 +14,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/events"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
@@ -24,16 +23,17 @@ import (
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/tx"
 )
 
 const defaultLogLimit uint64 = 1000
 
-var ts *httptest.Server
-
 var (
-	addr  = thor.BytesToAddress([]byte("address"))
-	topic = thor.BytesToBytes32([]byte("topic"))
+	ts      *httptest.Server
+	addr    = thor.BytesToAddress([]byte("address"))
+	topic   = thor.BytesToBytes32([]byte("topic"))
+	tclient *thorclient.Client
 )
 
 func TestEmptyEvents(t *testing.T) {
@@ -41,6 +41,7 @@ func TestEmptyEvents(t *testing.T) {
 	initEventServer(t, db, defaultLogLimit)
 	defer ts.Close()
 
+	tclient = thorclient.New(ts.URL)
 	for name, tt := range map[string]func(*testing.T){
 		"testEventsBadRequest": testEventsBadRequest,
 		"testEventWithEmptyDb": testEventWithEmptyDb,
@@ -55,6 +56,7 @@ func TestEvents(t *testing.T) {
 	defer ts.Close()
 
 	blocksToInsert := 5
+	tclient = thorclient.New(ts.URL)
 	insertBlocks(t, db, blocksToInsert)
 	testEventWithBlocks(t, blocksToInsert)
 }
@@ -65,6 +67,7 @@ func TestOption(t *testing.T) {
 	defer ts.Close()
 	insertBlocks(t, db, 5)
 
+	tclient = thorclient.New(ts.URL)
 	filter := events.EventFilter{
 		CriteriaSet: make([]*events.EventCriteria, 0),
 		Range:       nil,
@@ -72,18 +75,21 @@ func TestOption(t *testing.T) {
 		Order:       logdb.DESC,
 	}
 
-	res, statusCode := httpPost(t, ts.URL+"/events", filter)
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/events", filter)
+	require.NoError(t, err)
 	assert.Equal(t, "options.limit exceeds the maximum allowed value of 5", strings.Trim(string(res), "\n"))
 	assert.Equal(t, http.StatusForbidden, statusCode)
 
 	filter.Options.Limit = 5
-	_, statusCode = httpPost(t, ts.URL+"/events", filter)
+	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/events", filter)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, statusCode)
 
 	// with nil options, should use default limit, when the filtered lower
 	// or equal to the limit, should return the filtered events
 	filter.Options = nil
-	res, statusCode = httpPost(t, ts.URL+"/events", filter)
+	res, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/events", filter)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, statusCode)
 	var tLogs []*events.FilteredEvent
 	if err := json.Unmarshal(res, &tLogs); err != nil {
@@ -94,7 +100,8 @@ func TestOption(t *testing.T) {
 
 	// when the filtered events exceed the limit, should return the forbidden
 	insertBlocks(t, db, 6)
-	res, statusCode = httpPost(t, ts.URL+"/events", filter)
+	res, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/events", filter)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusForbidden, statusCode)
 	assert.Equal(t, "the number of filtered logs exceeds the maximum allowed value of 5, please use pagination", strings.Trim(string(res), "\n"))
 }
@@ -103,10 +110,9 @@ func TestOption(t *testing.T) {
 func testEventsBadRequest(t *testing.T) {
 	badBody := []byte{0x00, 0x01, 0x02}
 
-	res, err := http.Post(ts.URL+"/events", "application/x-www-form-urlencoded", bytes.NewReader(badBody))
-
+	_, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/events", badBody)
 	assert.NoError(t, err)
-	assert.Equal(t, http.StatusBadRequest, res.StatusCode)
+	assert.Equal(t, http.StatusBadRequest, statusCode)
 }
 
 func testEventWithEmptyDb(t *testing.T) {
@@ -117,7 +123,8 @@ func testEventWithEmptyDb(t *testing.T) {
 		Order:       logdb.DESC,
 	}
 
-	res, statusCode := httpPost(t, ts.URL+"/events", emptyFilter)
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/events", emptyFilter)
+	require.NoError(t, err)
 	var tLogs []*events.FilteredEvent
 	if err := json.Unmarshal(res, &tLogs); err != nil {
 		t.Fatal(err)
@@ -135,7 +142,8 @@ func testEventWithBlocks(t *testing.T, expectedBlocks int) {
 		Order:       logdb.DESC,
 	}
 
-	res, statusCode := httpPost(t, ts.URL+"/events", emptyFilter)
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/events", emptyFilter)
+	require.NoError(t, err)
 	var tLogs []*events.FilteredEvent
 	if err := json.Unmarshal(res, &tLogs); err != nil {
 		t.Fatal(err)
@@ -161,7 +169,8 @@ func testEventWithBlocks(t *testing.T, expectedBlocks int) {
 		}},
 	}
 
-	res, statusCode = httpPost(t, ts.URL+"/events", matchingFilter)
+	res, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/events", matchingFilter)
+	require.NoError(t, err)
 	if err := json.Unmarshal(res, &tLogs); err != nil {
 		t.Fatal(err)
 	}
@@ -198,24 +207,6 @@ func createDb(t *testing.T) *logdb.LogDB {
 		t.Fatal(err)
 	}
 	return logDb
-}
-
-// Utilities functions
-func httpPost(t *testing.T, url string, body interface{}) ([]byte, int) {
-	data, err := json.Marshal(body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	res, err := http.Post(url, "application/x-www-form-urlencoded", bytes.NewReader(data)) // nolint:gosec
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, err := io.ReadAll(res.Body)
-	res.Body.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return r, res.StatusCode
 }
 
 func insertBlocks(t *testing.T, db *logdb.LogDB, n int) {
