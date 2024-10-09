@@ -187,5 +187,4 @@ func TestIsEmpty(t *testing.T) {
 		LogIndex: &val,
 	}
 	assert.False(t, notEmptyCase.Empty())
-
 }
