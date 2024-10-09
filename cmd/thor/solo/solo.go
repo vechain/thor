@@ -9,7 +9,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"math/rand"
+	"math/rand/v2"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -262,7 +262,7 @@ func (s *Solo) newTx(clauses []*tx.Clause, from genesis.DevAccount) (*tx.Transac
 
 	trx := builder.BlockRef(tx.NewBlockRef(0)).
 		Expiration(math.MaxUint32).
-		Nonce(rand.Uint64()). // #nosec
+		Nonce(rand.Uint64()). //#nosec G404
 		DependsOn(nil).
 		Gas(1_000_000).
 		Build()

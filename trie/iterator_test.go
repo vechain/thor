@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -331,7 +331,8 @@ func TestIteratorContinueAfterError(t *testing.T) {
 		// because that one is already loaded.
 		var rkey []byte
 		for {
-			if rkey = keys[rand.Intn(len(keys))]; !bytes.Equal(rkey, tr.Hash().Bytes()) { // nolint:gosec
+			//#nosec G404
+			if rkey = keys[rand.N(len(keys))]; !bytes.Equal(rkey, tr.Hash().Bytes()) {
 				break
 			}
 		}

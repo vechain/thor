@@ -25,7 +25,7 @@ func TestReservedEncoding(t *testing.T) {
 	}
 
 	for i, c := range cases {
-		data, err := rlp.EncodeToBytes(&c.input) // nolint:gosec
+		data, err := rlp.EncodeToBytes(&c.input)
 		assert.Nil(t, err, "case #%v", i)
 		assert.Equal(t, c.expected, data, "case #%v", i)
 	}
