@@ -33,7 +33,7 @@ func (br *blockReader) Read() ([][]byte, bool, error) {
 	}
 	var msgs [][]byte
 	for _, block := range blocks {
-		msg, err := br.cache.GetOrAdd(block, br.repo)
+		msg, _, err := br.cache.GetOrAdd(block, br.repo)
 		if err != nil {
 			return nil, false, err
 		}

@@ -23,28 +23,28 @@ func newMessageCache(handler messageHandler, cacheSize int) (*messageCache, erro
 	}, err
 }
 
-// GetOrAdd can be called by thousands of goroutines concurrently. The first goroutine that invokes it for a specific
-// block will generate the message and store it in the cache. Subsequent goroutines will read the message from the cache.
-func (mc *messageCache) GetOrAdd(block *chain.ExtendedBlock, repo *chain.Repository) ([]byte, error) {
+// GetOrAdd returns the message of the block, if the message is not in the cache, it will generate the message and add it to the cache.
+// The second return value indicates whether the message is newly generated.
+func (mc *messageCache) GetOrAdd(block *chain.ExtendedBlock, repo *chain.Repository) ([]byte, bool, error) {
 	blockID := block.Header().ID().String()
 	mc.mu.RLock()
 	msg, ok := mc.cache.Get(blockID)
 	mc.mu.RUnlock()
 	if ok {
-		return msg.([]byte), nil
+		return msg.([]byte), false, nil
 	}
 
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 	msg, ok = mc.cache.Get(blockID)
 	if ok {
-		return msg.([]byte), nil
+		return msg.([]byte), false, nil
 	}
 
 	msg, err := mc.generator(block, repo)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	mc.cache.Add(blockID, msg)
-	return msg.([]byte), nil
+	return msg.([]byte), true, nil
 }
