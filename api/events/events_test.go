@@ -76,6 +76,13 @@ func TestOptionalData(t *testing.T) {
 			expected: nil,
 		},
 		{
+			name: "optional data with logIndex as false",
+			optData: &events.EventOptionalData{
+				LogIndex: false,
+			},
+			expected: nil,
+		},
+		{
 			name: "optional data with logIndex",
 			optData: &events.EventOptionalData{
 				LogIndex: true,
