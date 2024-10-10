@@ -103,12 +103,7 @@ func TestConvertTransfer(t *testing.T) {
 		Nonce(1).
 		BlockRef(tx.NewBlockRef(0)).
 		Build()
-
-	sig, err := crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	transaction = transaction.WithSignature(sig)
+	transaction = tx.MustSign(transaction, genesis.DevAccounts()[0].PrivateKey)
 
 	// New block
 	blk := new(block.Builder).
@@ -187,20 +182,17 @@ func TestConvertEvent(t *testing.T) {
 	repo, _ := chain.NewRepository(db, b)
 
 	// New tx
-	transaction := new(tx.Builder).
-		ChainTag(repo.ChainTag()).
-		GasPriceCoef(1).
-		Expiration(10).
-		Gas(21000).
-		Nonce(1).
-		BlockRef(tx.NewBlockRef(0)).
-		Build()
-
-	sig, err := crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	transaction = transaction.WithSignature(sig)
+	transaction := tx.MustSign(
+		new(tx.Builder).
+			ChainTag(repo.ChainTag()).
+			GasPriceCoef(1).
+			Expiration(10).
+			Gas(21000).
+			Nonce(1).
+			BlockRef(tx.NewBlockRef(0)).
+			Build(),
+		genesis.DevAccounts()[0].PrivateKey,
+	)
 
 	// New block
 	blk := new(block.Builder).
