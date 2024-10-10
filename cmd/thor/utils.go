@@ -44,6 +44,7 @@ import (
 	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/health"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/muxdb"
@@ -489,7 +490,7 @@ func loadNodeMaster(ctx *cli.Context) (*node.Master, error) {
 	return master, nil
 }
 
-func newP2PCommunicator(ctx *cli.Context, repo *chain.Repository, txPool *txpool.TxPool, instanceDir string) (*p2p.P2P, error) {
+func newP2PCommunicator(ctx *cli.Context, repo *chain.Repository, txPool *txpool.TxPool, instanceDir string, health *health.Health) (*p2p.P2P, error) {
 	// known peers will be loaded/stored from/in this file
 	peersCachePath := filepath.Join(instanceDir, "peers.cache")
 
@@ -529,7 +530,7 @@ func newP2PCommunicator(ctx *cli.Context, repo *chain.Repository, txPool *txpool
 	}
 
 	return p2p.New(
-		comm.New(repo, txPool),
+		comm.New(repo, txPool, health),
 		key,
 		instanceDir,
 		userNAT,
