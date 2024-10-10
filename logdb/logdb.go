@@ -9,7 +9,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"math"
 	"math/big"
 
 	sqlite3 "github.com/mattn/go-sqlite3"
@@ -118,10 +117,10 @@ FROM (%v) e
 
 	if filter.Range != nil {
 		subQuery += " AND seq >= ?"
-		args = append(args, newSequence(filter.Range.From, 0))
+		args = append(args, newSequence(filter.Range.From, 0, 0))
 		if filter.Range.To >= filter.Range.From {
 			subQuery += " AND seq <= ?"
-			args = append(args, newSequence(filter.Range.To, uint32(math.MaxInt32)))
+			args = append(args, newSequence(filter.Range.To, txIndexMask, logIndexMask))
 		}
 	}
 
@@ -184,10 +183,10 @@ FROM (%v) t
 
 	if filter.Range != nil {
 		subQuery += " AND seq >= ?"
-		args = append(args, newSequence(filter.Range.From, 0))
+		args = append(args, newSequence(filter.Range.From, 0, 0))
 		if filter.Range.To >= filter.Range.From {
 			subQuery += " AND seq <= ?"
-			args = append(args, newSequence(filter.Range.To, uint32(math.MaxInt32)))
+			args = append(args, newSequence(filter.Range.To, txIndexMask, logIndexMask))
 		}
 	}
 
@@ -272,7 +271,8 @@ func (db *LogDB) queryEvents(ctx context.Context, query string, args ...interfac
 		}
 		event := &Event{
 			BlockNumber: seq.BlockNumber(),
-			Index:       seq.Index(),
+			TxIndex:     seq.TxIndex(),
+			LogIndex:    seq.LogIndex(),
 			BlockID:     thor.BytesToBytes32(blockID),
 			BlockTime:   blockTime,
 			TxID:        thor.BytesToBytes32(txID),
@@ -334,7 +334,8 @@ func (db *LogDB) queryTransfers(ctx context.Context, query string, args ...inter
 		}
 		trans := &Transfer{
 			BlockNumber: seq.BlockNumber(),
-			Index:       seq.Index(),
+			TxIndex:     seq.TxIndex(),
+			LogIndex:    seq.LogIndex(),
 			BlockID:     thor.BytesToBytes32(blockID),
 			BlockTime:   blockTime,
 			TxID:        thor.BytesToBytes32(txID),
@@ -376,7 +377,7 @@ func (db *LogDB) HasBlockID(id thor.Bytes32) (bool, error) {
 		UNION
 		SELECT * FROM (SELECT seq FROM event WHERE seq=? AND blockID=` + refIDQuery + ` LIMIT 1))`
 
-	seq := newSequence(block.Number(id), 0)
+	seq := newSequence(block.Number(id), 0, 0)
 	row := db.stmtCache.MustPrepare(query).QueryRow(seq, id[:], seq, id[:])
 	var count int
 	if err := row.Scan(&count); err != nil {
@@ -414,7 +415,7 @@ type Writer struct {
 
 // Truncate truncates the database by deleting logs after blockNum (included).
 func (w *Writer) Truncate(blockNum uint32) error {
-	seq := newSequence(blockNum, 0)
+	seq := newSequence(blockNum, 0, 0)
 	if err := w.exec("DELETE FROM event WHERE seq >= ?", seq); err != nil {
 		return err
 	}
@@ -443,7 +444,7 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 		}
 	)
 
-	for i, r := range receipts {
+	for txIndex, r := range receipts {
 		if isReceiptEmpty(r) {
 			continue
 		}
@@ -461,8 +462,8 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 			txID     thor.Bytes32
 			txOrigin thor.Address
 		)
-		if i < len(txs) { // block 0 has no tx, but has receipts
-			tx := txs[i]
+		if txIndex < len(txs) { // block 0 has no tx, but has receipts
+			tx := txs[txIndex]
 			txID = tx.ID()
 			txOrigin, _ = tx.Origin()
 		}
@@ -504,7 +505,7 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 
 				if err := w.exec(
 					query,
-					newSequence(blockNum, eventCount),
+					newSequence(blockNum, uint32(txIndex), eventCount),
 					blockTimestamp,
 					clauseIndex,
 					eventData,
@@ -539,7 +540,7 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 
 				if err := w.exec(
 					query,
-					newSequence(blockNum, transferCount),
+					newSequence(blockNum, uint32(txIndex), transferCount),
 					blockTimestamp,
 					clauseIndex,
 					tr.Amount.Bytes(),
