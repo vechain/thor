@@ -57,7 +57,7 @@ func (bc *bloomContent) len() int {
 	return len(bc.items)
 }
 
-func generateBeatBytes(block *chain.ExtendedBlock, repo *chain.Repository) ([]byte, error) {
+func generateBeatMessage(block *chain.ExtendedBlock, repo *chain.Repository) ([]byte, error) {
 	header := block.Header()
 	receipts, err := repo.GetBlockReceipts(header.ID())
 	if err != nil {

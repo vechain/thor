@@ -14,7 +14,7 @@ import (
 )
 
 func beat2Cache() *messageCache {
-	cache, _ := newMessageCache(generateBeat2Bytes, 10)
+	cache, _ := newMessageCache(generateBeat2Message, 10)
 	return cache
 }
 

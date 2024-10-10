@@ -53,9 +53,9 @@ const (
 
 func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32, txpool *txpool.TxPool) *Subscriptions {
 	cacheSize := backtraceLimit * 120 / 100
-	beat2Cache, _ := newMessageCache(generateBeat2Bytes, int(cacheSize))
-	beatCache, _ := newMessageCache(generateBeatBytes, int(cacheSize))
-	blockCache, _ := newMessageCache(generateBlockBytes, int(cacheSize))
+	beat2Cache, _ := newMessageCache(generateBeat2Message, int(cacheSize))
+	beatCache, _ := newMessageCache(generateBeatMessage, int(cacheSize))
+	blockCache, _ := newMessageCache(generateBlockMessage, int(cacheSize))
 
 	sub := &Subscriptions{
 		backtraceLimit: backtraceLimit,

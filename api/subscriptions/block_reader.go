@@ -42,7 +42,7 @@ func (br *blockReader) Read() ([][]byte, bool, error) {
 	return msgs, len(blocks) > 0, nil
 }
 
-func generateBlockBytes(block *chain.ExtendedBlock, _ *chain.Repository) ([]byte, error) {
+func generateBlockMessage(block *chain.ExtendedBlock, _ *chain.Repository) ([]byte, error) {
 	blk, err := convertBlock(block)
 	if err != nil {
 		return nil, err

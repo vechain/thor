@@ -25,7 +25,7 @@ import (
 )
 
 func blockCache() *messageCache {
-	cache, _ := newMessageCache(generateBlockBytes, 10)
+	cache, _ := newMessageCache(generateBlockMessage, 10)
 	return cache
 }
 

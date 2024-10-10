@@ -46,7 +46,7 @@ func (br *beat2Reader) Read() ([][]byte, bool, error) {
 	return msgs, len(blocks) > 0, nil
 }
 
-func generateBeat2Bytes(block *chain.ExtendedBlock, repo *chain.Repository) ([]byte, error) {
+func generateBeat2Message(block *chain.ExtendedBlock, repo *chain.Repository) ([]byte, error) {
 	bloomGenerator := &bloom.Generator{}
 
 	bloomAdd := func(key []byte) {
