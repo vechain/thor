@@ -9,14 +9,21 @@ import (
 	"bytes"
 	"io"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/vechain/thor/v2/log"
 )
 
 // RequestLoggerHandler returns a http handler to ensure requests are syphoned into the writer
-func RequestLoggerHandler(handler http.Handler, logger log.Logger) http.Handler {
+func RequestLoggerHandler(handler http.Handler, logger log.Logger, enabled *atomic.Bool) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
+		// If logging is disabled, just call the original handler
+		if !enabled.Load() {
+			handler.ServeHTTP(w, r)
+			return
+		}
+
 		// Read and log the body (note: this can only be done once)
 		// Ensure you don't disrupt the request body for handlers that need to read it
 		var bodyBytes []byte
