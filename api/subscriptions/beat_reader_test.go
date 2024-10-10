@@ -6,11 +6,17 @@
 package subscriptions
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/thor"
 )
+
+func beatCache() *messageCache {
+	cache, _ := newMessageCache(generateBeatBytes, 10)
+	return cache
+}
 
 func TestBeatReader_Read(t *testing.T) {
 	// Arrange
@@ -19,21 +25,21 @@ func TestBeatReader_Read(t *testing.T) {
 	newBlock := generatedBlocks[1]
 
 	// Act
-	beatReader := newBeatReader(repo, genesisBlk.Header().ID())
+	beatReader := newBeatReader(repo, genesisBlk.Header().ID(), beatCache())
 	res, ok, err := beatReader.Read()
 
 	// Assert
 	assert.NoError(t, err)
 	assert.True(t, ok)
-	if beatMsg, ok := res[0].(*BeatMessage); !ok {
-		t.Fatal("unexpected type")
-	} else {
-		assert.Equal(t, newBlock.Header().Number(), beatMsg.Number)
-		assert.Equal(t, newBlock.Header().ID(), beatMsg.ID)
-		assert.Equal(t, newBlock.Header().ParentID(), beatMsg.ParentID)
-		assert.Equal(t, newBlock.Header().Timestamp(), beatMsg.Timestamp)
-		assert.Equal(t, uint32(newBlock.Header().TxsFeatures()), beatMsg.TxsFeatures)
-	}
+	beat := &BeatMessage{}
+	err = json.Unmarshal(res[0], beat)
+	assert.NoError(t, err)
+
+	assert.Equal(t, newBlock.Header().Number(), beat.Number)
+	assert.Equal(t, newBlock.Header().ID(), beat.ID)
+	assert.Equal(t, newBlock.Header().ParentID(), beat.ParentID)
+	assert.Equal(t, newBlock.Header().Timestamp(), beat.Timestamp)
+	assert.Equal(t, uint32(newBlock.Header().TxsFeatures()), beat.TxsFeatures)
 }
 
 func TestBeatReader_Read_NoNewBlocksToRead(t *testing.T) {
@@ -42,7 +48,7 @@ func TestBeatReader_Read_NoNewBlocksToRead(t *testing.T) {
 	newBlock := generatedBlocks[1]
 
 	// Act
-	beatReader := newBeatReader(repo, newBlock.Header().ID())
+	beatReader := newBeatReader(repo, newBlock.Header().ID(), beatCache())
 	res, ok, err := beatReader.Read()
 
 	// Assert
@@ -56,7 +62,7 @@ func TestBeatReader_Read_ErrorWhenReadingBlocks(t *testing.T) {
 	repo, _, _ := initChain(t)
 
 	// Act
-	beatReader := newBeatReader(repo, thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
+	beatReader := newBeatReader(repo, thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), beatCache())
 	res, ok, err := beatReader.Read()
 
 	// Assert

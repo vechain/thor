@@ -7,6 +7,7 @@ package subscriptions
 
 import (
 	"bytes"
+	"encoding/json"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/v2/chain"
@@ -17,65 +18,29 @@ import (
 type beatReader struct {
 	repo        *chain.Repository
 	blockReader chain.BlockReader
+	cache       *messageCache
 }
 
-func newBeatReader(repo *chain.Repository, position thor.Bytes32) *beatReader {
+func newBeatReader(repo *chain.Repository, position thor.Bytes32, cache *messageCache) *beatReader {
 	return &beatReader{
 		repo:        repo,
 		blockReader: repo.NewBlockReader(position),
+		cache:       cache,
 	}
 }
 
-func (br *beatReader) Read() ([]interface{}, bool, error) {
+func (br *beatReader) Read() ([][]byte, bool, error) {
 	blocks, err := br.blockReader.Read()
 	if err != nil {
 		return nil, false, err
 	}
-	var msgs []interface{}
+	var msgs [][]byte
 	for _, block := range blocks {
-		header := block.Header()
-		receipts, err := br.repo.GetBlockReceipts(header.ID())
+		msg, err := br.cache.GetOrAdd(block, br.repo)
 		if err != nil {
 			return nil, false, err
 		}
-		txs := block.Transactions()
-		bloomContent := &bloomContent{}
-		for i, receipt := range receipts {
-			bloomContent.add(receipt.GasPayer.Bytes())
-			for _, output := range receipt.Outputs {
-				for _, event := range output.Events {
-					bloomContent.add(event.Address.Bytes())
-					for _, topic := range event.Topics {
-						bloomContent.add(topic.Bytes())
-					}
-				}
-				for _, transfer := range output.Transfers {
-					bloomContent.add(transfer.Sender.Bytes())
-					bloomContent.add(transfer.Recipient.Bytes())
-				}
-			}
-			origin, _ := txs[i].Origin()
-			bloomContent.add(origin.Bytes())
-		}
-		signer, _ := header.Signer()
-		bloomContent.add(signer.Bytes())
-		bloomContent.add(header.Beneficiary().Bytes())
-
-		k := bloom.LegacyEstimateBloomK(bloomContent.len())
-		bloom := bloom.NewLegacyBloom(k)
-		for _, item := range bloomContent.items {
-			bloom.Add(item)
-		}
-		msgs = append(msgs, &BeatMessage{
-			Number:      header.Number(),
-			ID:          header.ID(),
-			ParentID:    header.ParentID(),
-			Timestamp:   header.Timestamp(),
-			TxsFeatures: uint32(header.TxsFeatures()),
-			Bloom:       hexutil.Encode(bloom.Bits[:]),
-			K:           uint32(k),
-			Obsolete:    block.Obsolete,
-		})
+		msgs = append(msgs, msg)
 	}
 	return msgs, len(blocks) > 0, nil
 }
@@ -90,4 +55,52 @@ func (bc *bloomContent) add(item []byte) {
 
 func (bc *bloomContent) len() int {
 	return len(bc.items)
+}
+
+func generateBeatBytes(block *chain.ExtendedBlock, repo *chain.Repository) ([]byte, error) {
+	header := block.Header()
+	receipts, err := repo.GetBlockReceipts(header.ID())
+	if err != nil {
+		return nil, err
+	}
+	txs := block.Transactions()
+	content := &bloomContent{}
+	for i, receipt := range receipts {
+		content.add(receipt.GasPayer.Bytes())
+		for _, output := range receipt.Outputs {
+			for _, event := range output.Events {
+				content.add(event.Address.Bytes())
+				for _, topic := range event.Topics {
+					content.add(topic.Bytes())
+				}
+			}
+			for _, transfer := range output.Transfers {
+				content.add(transfer.Sender.Bytes())
+				content.add(transfer.Recipient.Bytes())
+			}
+		}
+		origin, _ := txs[i].Origin()
+		content.add(origin.Bytes())
+	}
+	signer, _ := header.Signer()
+	content.add(signer.Bytes())
+	content.add(header.Beneficiary().Bytes())
+
+	k := bloom.LegacyEstimateBloomK(content.len())
+	bloom := bloom.NewLegacyBloom(k)
+	for _, item := range content.items {
+		bloom.Add(item)
+	}
+	beat := &BeatMessage{
+		Number:      header.Number(),
+		ID:          header.ID(),
+		ParentID:    header.ParentID(),
+		Timestamp:   header.Timestamp(),
+		TxsFeatures: uint32(header.TxsFeatures()),
+		Bloom:       hexutil.Encode(bloom.Bits[:]),
+		K:           uint32(k),
+		Obsolete:    block.Obsolete,
+	}
+
+	return json.Marshal(beat)
 }

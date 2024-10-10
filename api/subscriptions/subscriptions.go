@@ -31,10 +31,13 @@ type Subscriptions struct {
 	pendingTx      *pendingTx
 	done           chan struct{}
 	wg             sync.WaitGroup
+	beat2Cache     *messageCache
+	beatCache      *messageCache
+	blockCache     *messageCache
 }
 
 type msgReader interface {
-	Read() (msgs []interface{}, hasMore bool, err error)
+	Read() (msgs [][]byte, hasMore bool, err error)
 }
 
 var (
@@ -49,6 +52,11 @@ const (
 )
 
 func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32, txpool *txpool.TxPool) *Subscriptions {
+	cacheSize := backtraceLimit * 120 / 100
+	beat2Cache, _ := newMessageCache(generateBeat2Bytes, int(cacheSize))
+	beatCache, _ := newMessageCache(generateBeatBytes, int(cacheSize))
+	blockCache, _ := newMessageCache(generateBlockBytes, int(cacheSize))
+
 	sub := &Subscriptions{
 		backtraceLimit: backtraceLimit,
 		repo:           repo,
@@ -67,8 +75,11 @@ func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32,
 				return false
 			},
 		},
-		pendingTx: newPendingTx(txpool),
-		done:      make(chan struct{}),
+		pendingTx:  newPendingTx(txpool),
+		done:       make(chan struct{}),
+		beat2Cache: beat2Cache,
+		beatCache:  beatCache,
+		blockCache: blockCache,
 	}
 
 	sub.wg.Add(1)
@@ -85,7 +96,7 @@ func (s *Subscriptions) handleBlockReader(_ http.ResponseWriter, req *http.Reque
 	if err != nil {
 		return nil, err
 	}
-	return newBlockReader(s.repo, position), nil
+	return newBlockReader(s.repo, position, s.blockCache), nil
 }
 
 func (s *Subscriptions) handleEventReader(w http.ResponseWriter, req *http.Request) (*eventReader, error) {
@@ -158,7 +169,7 @@ func (s *Subscriptions) handleBeatReader(w http.ResponseWriter, req *http.Reques
 	if err != nil {
 		return nil, err
 	}
-	return newBeatReader(s.repo, position), nil
+	return newBeatReader(s.repo, position, s.beatCache), nil
 }
 
 func (s *Subscriptions) handleBeat2Reader(w http.ResponseWriter, req *http.Request) (*beat2Reader, error) {
@@ -166,7 +177,7 @@ func (s *Subscriptions) handleBeat2Reader(w http.ResponseWriter, req *http.Reque
 	if err != nil {
 		return nil, err
 	}
-	return newBeat2Reader(s.repo, position), nil
+	return newBeat2Reader(s.repo, position, s.beat2Cache), nil
 }
 
 func (s *Subscriptions) handleSubject(w http.ResponseWriter, req *http.Request) error {
@@ -308,7 +319,7 @@ func (s *Subscriptions) pipe(conn *websocket.Conn, reader msgReader, closed chan
 			return err
 		}
 		for _, msg := range msgs {
-			if err := conn.WriteJSON(msg); err != nil {
+			if err := conn.WriteMessage(websocket.BinaryMessage, msg); err != nil {
 				return err
 			}
 		}
