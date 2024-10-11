@@ -20,10 +20,14 @@ func (c *Client) httpRequest(method, url string, payload io.Reader) ([]byte, err
 	if err != nil {
 		return nil, err
 	}
-	if statusCode != http.StatusOK {
+	if !statusCodeIs2xx(statusCode) {
 		return nil, fmt.Errorf("http error - Status Code %d - %s - %w", statusCode, body, common.ErrNot200Status)
 	}
 	return body, nil
+}
+
+func statusCodeIs2xx(statusCode int) bool {
+	return statusCode >= 200 && statusCode < 300
 }
 
 func (c *Client) rawHTTPRequest(method, url string, payload io.Reader) ([]byte, int, error) {
