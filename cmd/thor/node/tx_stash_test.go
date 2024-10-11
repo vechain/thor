@@ -7,11 +7,10 @@ package node
 
 import (
 	"bytes"
-	"math/rand"
+	"math/rand/v2"
 	"sort"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/storage"
@@ -20,9 +19,10 @@ import (
 )
 
 func newTx() *tx.Transaction {
-	tx := new(tx.Builder).Nonce(rand.Uint64()).Build() // nolint:gosec
-	sig, _ := crypto.Sign(tx.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-	return tx.WithSignature(sig)
+	return tx.MustSign(
+		new(tx.Builder).Nonce(rand.Uint64()).Build(), //#nosec
+		genesis.DevAccounts()[0].PrivateKey,
+	)
 }
 
 func TestTxStash(t *testing.T) {

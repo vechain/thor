@@ -5,6 +5,8 @@
 package node_test
 
 import (
+	"io"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -51,4 +53,17 @@ func initCommServer(t *testing.T) {
 	router := mux.NewRouter()
 	node.New(comm).Mount(router, "/node")
 	ts = httptest.NewServer(router)
+}
+
+func httpGet(t *testing.T, url string) []byte {
+	res, err := http.Get(url) //#nosec G107
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := io.ReadAll(res.Body)
+	res.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
 }

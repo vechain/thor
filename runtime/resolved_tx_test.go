@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/builtin"
@@ -144,7 +143,7 @@ func (tr *testResolvedTransaction) TestBuyGas() {
 		if err != nil {
 			tr.t.Fatal(err)
 		}
-		_, _, payer, returnGas, err := resolve.BuyGas(state, targetTime)
+		_, _, payer, _, returnGas, err := resolve.BuyGas(state, targetTime)
 		tr.assert.Nil(err)
 		returnGas(100)
 		return payer
@@ -187,6 +186,5 @@ func txBuilder(tag byte) *tx.Builder {
 
 func txSign(builder *tx.Builder) *tx.Transaction {
 	transaction := builder.Build()
-	sig, _ := crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-	return transaction.WithSignature(sig)
+	return tx.MustSign(transaction, genesis.DevAccounts()[0].PrivateKey)
 }

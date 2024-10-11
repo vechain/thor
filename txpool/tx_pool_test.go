@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
@@ -278,11 +279,11 @@ func TestWashTxs(t *testing.T) {
 
 	tx2 := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[1])
 	txObj2, _ := resolveTx(tx2, false)
-	assert.Nil(t, pool.all.Add(txObj2, LIMIT_PER_ACCOUNT)) // this tx will participate in the wash out.
+	assert.Nil(t, pool.all.Add(txObj2, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })) // this tx will participate in the wash out.
 
 	tx3 := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[2])
 	txObj3, _ := resolveTx(tx3, false)
-	assert.Nil(t, pool.all.Add(txObj3, LIMIT_PER_ACCOUNT)) // this tx will participate in the wash out.
+	assert.Nil(t, pool.all.Add(txObj3, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })) // this tx will participate in the wash out.
 
 	txs, removedCount, err := pool.wash(pool.repo.BestBlockSummary())
 	assert.Nil(t, err)
@@ -455,7 +456,7 @@ func TestBlocked(t *testing.T) {
 	// added into all, will be washed out
 	txObj, err := resolveTx(trx, false)
 	assert.Nil(t, err)
-	pool.all.Add(txObj, LIMIT_PER_ACCOUNT)
+	pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
 	pool.wash(pool.repo.BestBlockSummary())
 	got := pool.Get(trx.ID())
@@ -499,7 +500,7 @@ func TestWash(t *testing.T) {
 
 				txObj, err := resolveTx(trx, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, LIMIT_PER_ACCOUNT)
+				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
 				pool.wash(pool.repo.BestBlockSummary())
 				got := pool.Get(trx.ID())
@@ -526,11 +527,11 @@ func TestWash(t *testing.T) {
 
 				txObj, err := resolveTx(trx2, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, LIMIT_PER_ACCOUNT)
+				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
 				txObj, err = resolveTx(trx3, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, LIMIT_PER_ACCOUNT)
+				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
 				pool.wash(pool.repo.BestBlockSummary())
 				got := pool.Get(trx3.ID())
@@ -557,11 +558,11 @@ func TestWash(t *testing.T) {
 
 				txObj, err := resolveTx(trx2, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, LIMIT_PER_ACCOUNT)
+				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
 				txObj, err = resolveTx(trx3, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, LIMIT_PER_ACCOUNT)
+				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
 				pool.wash(pool.repo.BestBlockSummary())
 				// all non executable should be washed out
@@ -576,4 +577,87 @@ func TestWash(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, tt.testFunc)
 	}
+}
+
+func TestAddOverPendingCost(t *testing.T) {
+	now := uint64(time.Now().Unix() - time.Now().Unix()%10 - 10)
+	db := muxdb.NewMem()
+	builder := new(genesis.Builder).
+		GasLimit(thor.InitialGasLimit).
+		Timestamp(now).
+		State(func(state *state.State) error {
+			if err := state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes()); err != nil {
+				return err
+			}
+			if err := state.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes()); err != nil {
+				return err
+			}
+			bal, _ := new(big.Int).SetString("42000000000000000000", 10)
+			for _, acc := range devAccounts {
+				state.SetEnergy(acc.Address, bal, now)
+			}
+			return nil
+		})
+
+	method, found := builtin.Params.ABI.MethodByName("set")
+	assert.True(t, found)
+
+	var executor thor.Address
+	data, err := method.EncodeInput(thor.KeyExecutorAddress, new(big.Int).SetBytes(executor[:]))
+	assert.Nil(t, err)
+	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), thor.Address{})
+
+	data, err = method.EncodeInput(thor.KeyBaseGasPrice, thor.InitialBaseGasPrice)
+	assert.Nil(t, err)
+	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
+
+	b0, _, _, err := builder.Build(state.NewStater(db))
+	assert.Nil(t, err)
+
+	st := state.New(db, b0.Header().StateRoot(), 0, 0, 0)
+	stage, err := st.Stage(1, 0)
+	assert.Nil(t, err)
+	root, err := stage.Commit()
+	assert.Nil(t, err)
+
+	var feat tx.Features
+	feat.SetDelegated(true)
+	b1 := new(block.Builder).
+		ParentID(b0.Header().ID()).
+		StateRoot(root).
+		TotalScore(100).
+		Timestamp(now + 10).
+		GasLimit(thor.InitialGasLimit).
+		TransactionFeatures(feat).Build()
+
+	repo, _ := chain.NewRepository(db, b0)
+	repo.AddBlock(b1, tx.Receipts{}, 0)
+	repo.SetBestBlockID(b1.Header().ID())
+	pool := New(repo, state.NewStater(db), Options{
+		Limit:           LIMIT,
+		LimitPerAccount: LIMIT,
+		MaxLifetime:     time.Hour,
+	})
+	defer pool.Close()
+
+	// first and second tx should be fine
+	err = pool.Add(newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
+	assert.Nil(t, err)
+	err = pool.Add(newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
+	assert.Nil(t, err)
+	// third tx should be rejected due to insufficient energy
+	err = pool.Add(newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
+	assert.EqualError(t, err, "tx rejected: insufficient energy for overall pending cost")
+	// delegated fee should also be counted
+	err = pool.Add(newDelegatedTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[9], devAccounts[0]))
+	assert.EqualError(t, err, "tx rejected: insufficient energy for overall pending cost")
+
+	// first and second tx should be fine
+	err = pool.Add(newDelegatedTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[1], devAccounts[2]))
+	assert.Nil(t, err)
+	err = pool.Add(newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[2]))
+	assert.Nil(t, err)
+	// delegated fee should also be counted
+	err = pool.Add(newDelegatedTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[8], devAccounts[2]))
+	assert.EqualError(t, err, "tx rejected: insufficient energy for overall pending cost")
 }

@@ -7,6 +7,7 @@ package blocks_test
 
 import (
 	"encoding/json"
+	"io"
 	"math"
 	"math/big"
 	"net/http"
@@ -16,7 +17,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -189,28 +189,26 @@ func initBlockServer(t *testing.T) {
 	repo, _ := chain.NewRepository(db, b)
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	tx := new(tx.Builder).
-		ChainTag(repo.ChainTag()).
-		GasPriceCoef(1).
-		Expiration(10).
-		Gas(21000).
-		Nonce(1).
-		Clause(cla).
-		BlockRef(tx.NewBlockRef(0)).
-		Build()
+	trx := tx.MustSign(
+		new(tx.Builder).
+			ChainTag(repo.ChainTag()).
+			GasPriceCoef(1).
+			Expiration(10).
+			Gas(21000).
+			Nonce(1).
+			Clause(cla).
+			BlockRef(tx.NewBlockRef(0)).
+			Build(),
+		genesis.DevAccounts()[0].PrivateKey,
+	)
 
-	sig, err := crypto.Sign(tx.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tx = tx.WithSignature(sig)
 	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
 	sum, _ := repo.GetBlockSummary(b.Header().ID())
 	flow, err := packer.Schedule(sum, uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = flow.Adopt(tx)
+	err = flow.Adopt(trx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,4 +266,17 @@ func checkExpandedBlock(t *testing.T, expBl *block.Block, actBl *blocks.JSONExpa
 	for i, tx := range expBl.Transactions() {
 		assert.Equal(t, tx.ID(), actBl.Transactions[i].ID, "txid should be equal")
 	}
+}
+
+func httpGet(t *testing.T, url string) ([]byte, int) {
+	res, err := http.Get(url) //#nosec G107
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := io.ReadAll(res.Body)
+	res.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r, res.StatusCode
 }
