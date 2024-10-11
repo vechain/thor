@@ -6,6 +6,7 @@
 package subscriptions
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -38,11 +39,9 @@ func TestEventReader_Read(t *testing.T) {
 	assert.True(t, ok)
 	var eventMessages []*EventMessage
 	for _, event := range events {
-		if msg, ok := event.(*EventMessage); ok {
-			eventMessages = append(eventMessages, msg)
-		} else {
-			t.Fatal("unexpected type")
-		}
+		eventMsg := &EventMessage{}
+		assert.NoError(t, json.Unmarshal(event, eventMsg))
+		eventMessages = append(eventMessages, eventMsg)
 	}
 	assert.Equal(t, 1, len(eventMessages))
 	eventMsg := eventMessages[0]
