@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -67,7 +68,9 @@ func TestRequestLoggerHandler(t *testing.T) {
 	})
 
 	// Create the RequestLoggerHandler
-	loggerHandler := RequestLoggerHandler(testHandler, mockLog)
+	enabled := &atomic.Bool{}
+	enabled.Store(true)
+	loggerHandler := RequestLoggerHandler(testHandler, mockLog, enabled)
 
 	// Create a test HTTP request
 	reqBody := "test body"
