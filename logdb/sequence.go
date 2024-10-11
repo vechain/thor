@@ -9,12 +9,12 @@ type sequence int64
 
 // Adjust these constants based on your bit allocation requirements
 const (
-	blockNumBits = 31
-	txIndexBits  = 12
+	blockNumBits = 28
+	txIndexBits  = 15
 	logIndexBits = 21
-	// Max = 2^31 - 1 = 2,147,483,647
+	// Max = 2^28 - 1 = 268,435,455
 	blockNumMask = (1 << blockNumBits) - 1
-	// Max = 2^12 - 1 = 4,095
+	// Max = 2^15 - 1 = 32,767
 	txIndexMask = (1 << txIndexBits) - 1
 	// Max = 2^21 - 1 = 2,097,151
 	logIndexMask = (1 << logIndexBits) - 1
