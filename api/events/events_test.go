@@ -68,7 +68,7 @@ func TestOptionalData(t *testing.T) {
 	testCases := []struct {
 		name     string
 		optData  *events.EventOptionalData
-		expected *events.LogOptionalData
+		expected *events.ExtendedLogMeta
 	}{
 		{
 			name:     "empty optional data",
@@ -80,7 +80,7 @@ func TestOptionalData(t *testing.T) {
 			optData: &events.EventOptionalData{
 				TxIndex: true,
 			},
-			expected: &events.LogOptionalData{
+			expected: &events.ExtendedLogMeta{
 				TxIndex: new(uint32),
 			},
 		},
@@ -89,7 +89,7 @@ func TestOptionalData(t *testing.T) {
 			optData: &events.EventOptionalData{
 				LogIndex: true,
 			},
-			expected: &events.LogOptionalData{
+			expected: &events.ExtendedLogMeta{
 				LogIndex: new(uint32),
 			},
 		},
@@ -99,7 +99,7 @@ func TestOptionalData(t *testing.T) {
 				TxIndex:  true,
 				LogIndex: true,
 			},
-			expected: &events.LogOptionalData{
+			expected: &events.ExtendedLogMeta{
 				TxIndex:  new(uint32),
 				LogIndex: new(uint32),
 			},
@@ -126,7 +126,7 @@ func TestOptionalData(t *testing.T) {
 			assert.Equal(t, 5, len(tLogs))
 
 			for _, tLog := range tLogs {
-				assert.Equal(t, tc.expected, tLog.Meta.OptionalData)
+				assert.Equal(t, tc.expected, tLog.Meta.ExtendedLogMeta)
 			}
 		})
 	}
