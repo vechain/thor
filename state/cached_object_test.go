@@ -6,8 +6,8 @@
 package state
 
 import (
+	"crypto/rand"
 	"math/big"
-	"math/rand"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -41,7 +41,7 @@ func TestCachedObject(t *testing.T) {
 	assert.Nil(t, err)
 
 	code := make([]byte, 100)
-	rand.Read(code) // nolint
+	rand.Read(code)
 
 	codeHash := thor.Keccak256(code).Bytes()
 	db.NewStore(codeStoreName).Put(codeHash, code)
