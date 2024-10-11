@@ -6,33 +6,36 @@
 package logdb
 
 import (
-	"math"
 	"testing"
 )
 
 func TestSequence(t *testing.T) {
 	type args struct {
 		blockNum uint32
-		index    uint32
+		txIndex  uint32
+		logIndex uint32
 	}
 	tests := []struct {
 		name string
 		args args
-		want args
 	}{
-		{"regular", args{1, 2}, args{1, 2}},
-		{"max bn", args{math.MaxUint32, 1}, args{math.MaxUint32, 1}},
-		{"max index", args{5, math.MaxInt32}, args{5, math.MaxInt32}},
-		{"both max", args{math.MaxUint32, math.MaxInt32}, args{math.MaxUint32, math.MaxInt32}},
+		{"regular", args{1, 2, 3}},
+		{"max bn", args{blockNumMask, 1, 2}},
+		{"max tx index", args{5, txIndexMask, 4}},
+		{"max log index", args{5, 4, logIndexMask}},
+		{"both max", args{blockNumMask, txIndexMask, logIndexMask}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := newSequence(tt.args.blockNum, tt.args.index)
-			if bn := got.BlockNumber(); bn != tt.want.blockNum {
-				t.Errorf("seq.blockNum() = %v, want %v", bn, tt.want.blockNum)
+			got := newSequence(tt.args.blockNum, tt.args.txIndex, tt.args.logIndex)
+			if bn := got.BlockNumber(); bn != tt.args.blockNum {
+				t.Errorf("seq.blockNum() = %v, want %v", bn, tt.args.blockNum)
 			}
-			if i := got.Index(); i != tt.want.index {
-				t.Errorf("seq.index() = %v, want %v", i, tt.want.index)
+			if ti := got.TxIndex(); ti != tt.args.txIndex {
+				t.Errorf("seq.txIndex() = %v, want %v", ti, tt.args.txIndex)
+			}
+			if i := got.LogIndex(); i != tt.args.logIndex {
+				t.Errorf("seq.index() = %v, want %v", i, tt.args.logIndex)
 			}
 		})
 	}
@@ -42,5 +45,12 @@ func TestSequence(t *testing.T) {
 			t.Errorf("newSequence should panic on 2nd arg > math.MaxInt32")
 		}
 	}()
-	newSequence(1, math.MaxInt32+1)
+	newSequence(1, txIndexMask+1, 5)
+
+	defer func() {
+		if e := recover(); e == nil {
+			t.Errorf("newSequence should panic on 3rd arg > math.MaxInt32")
+		}
+	}()
+	newSequence(1, 5, logIndexMask+1)
 }
