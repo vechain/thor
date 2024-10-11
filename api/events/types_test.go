@@ -164,8 +164,8 @@ func TestConvertEvent(t *testing.T) {
 	assert.Equal(t, event.BlockNumber, result.Meta.BlockNumber)
 	assert.Equal(t, event.BlockTime, result.Meta.BlockTimestamp)
 	assert.Equal(t, event.TxID, result.Meta.TxID)
-	assert.Equal(t, event.TxIndex, *result.Meta.OptionalData.TxIndex)
-	assert.Equal(t, event.Index, *result.Meta.OptionalData.LogIndex)
+	assert.Equal(t, event.TxIndex, *result.Meta.ExtendedLogMeta.TxIndex)
+	assert.Equal(t, event.Index, *result.Meta.ExtendedLogMeta.LogIndex)
 	assert.Equal(t, event.TxOrigin, result.Meta.TxOrigin)
 	assert.Equal(t, event.ClauseIndex, result.Meta.ClauseIndex)
 	assert.Equal(t, expectedTopics, result.Topics)
@@ -173,30 +173,30 @@ func TestConvertEvent(t *testing.T) {
 
 func TestIsEmpty(t *testing.T) {
 	// Empty cases
-	var nilCase *LogOptionalData
+	var nilCase *ExtendedLogMeta
 	assert.True(t, nilCase.Empty())
 
-	emptyCase := &LogOptionalData{}
+	emptyCase := &ExtendedLogMeta{}
 	assert.True(t, emptyCase.Empty())
 
-	emptyCase = &LogOptionalData{
+	emptyCase = &ExtendedLogMeta{
 		LogIndex: nil,
 	}
 	assert.True(t, emptyCase.Empty())
 
-	emptyCase = &LogOptionalData{
+	emptyCase = &ExtendedLogMeta{
 		TxIndex: nil,
 	}
 	assert.True(t, emptyCase.Empty())
 
 	// Not empty cases
 	val := uint32(1)
-	notEmptyCase := &LogOptionalData{
+	notEmptyCase := &ExtendedLogMeta{
 		LogIndex: &val,
 	}
 	assert.False(t, notEmptyCase.Empty())
 
-	notEmptyCase = &LogOptionalData{
+	notEmptyCase = &ExtendedLogMeta{
 		TxIndex: &val,
 	}
 	assert.False(t, notEmptyCase.Empty())

@@ -17,25 +17,25 @@ import (
 )
 
 type LogMeta struct {
-	BlockID        thor.Bytes32     `json:"blockID"`
-	BlockNumber    uint32           `json:"blockNumber"`
-	BlockTimestamp uint64           `json:"blockTimestamp"`
-	TxID           thor.Bytes32     `json:"txID"`
-	TxOrigin       thor.Address     `json:"txOrigin"`
-	ClauseIndex    uint32           `json:"clauseIndex"`
-	OptionalData   *LogOptionalData `json:"optionalData,omitempty"`
+	BlockID         thor.Bytes32     `json:"blockID"`
+	BlockNumber     uint32           `json:"blockNumber"`
+	BlockTimestamp  uint64           `json:"blockTimestamp"`
+	TxID            thor.Bytes32     `json:"txID"`
+	TxOrigin        thor.Address     `json:"txOrigin"`
+	ClauseIndex     uint32           `json:"clauseIndex"`
+	ExtendedLogMeta *ExtendedLogMeta `json:"extendedLogMeta,omitempty"`
 }
 
-type LogOptionalData struct {
+type ExtendedLogMeta struct {
 	TxIndex  *uint32 `json:"txIndex,omitempty"`
 	LogIndex *uint32 `json:"logIndex,omitempty"`
 }
 
-func (opt *LogOptionalData) Empty() bool {
+func (opt *ExtendedLogMeta) Empty() bool {
 	return opt == nil || (opt.TxIndex == nil && opt.LogIndex == nil)
 }
 
-func (opt *LogOptionalData) String() string {
+func (opt *ExtendedLogMeta) String() string {
 	var parts []string
 	if opt.TxIndex != nil {
 		parts = append(parts, fmt.Sprintf("txIndex: %v", *opt.TxIndex))
@@ -89,7 +89,7 @@ func convertEvent(event *logdb.Event, eventOptionalData *EventOptionalData) *Fil
 
 func addOptionalData(fe *FilteredEvent, event *logdb.Event, eventOptionalData *EventOptionalData) *FilteredEvent {
 	if eventOptionalData != nil {
-		opt := &LogOptionalData{}
+		opt := &ExtendedLogMeta{}
 
 		if eventOptionalData.LogIndex {
 			opt.LogIndex = &event.Index
@@ -99,7 +99,7 @@ func addOptionalData(fe *FilteredEvent, event *logdb.Event, eventOptionalData *E
 		}
 
 		if !opt.Empty() {
-			fe.Meta.OptionalData = opt
+			fe.Meta.ExtendedLogMeta = opt
 		}
 	}
 	return fe
@@ -128,7 +128,7 @@ func (e *FilteredEvent) String() string {
 		e.Meta.TxID,
 		e.Meta.TxOrigin,
 		e.Meta.ClauseIndex,
-		e.Meta.OptionalData,
+		e.Meta.ExtendedLogMeta,
 	)
 }
 

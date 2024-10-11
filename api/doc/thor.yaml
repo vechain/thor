@@ -1371,11 +1371,11 @@ components:
           description: The index of the clause in the transaction, from which the log was generated.
           example: 0
           nullable: false
-        optionalData:
-          $ref: '#/components/schemas/LogOptionalData'
+        extendedLogMeta:
+          $ref: '#/components/schemas/ExtendedLogMeta'
           
-    LogOptionalData:
-      title: optionalData
+    ExtendedLogMeta:
+      title: ExtendedLogMeta
       type: object
       nullable: true
       properties:
