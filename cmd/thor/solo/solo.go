@@ -22,6 +22,7 @@ import (
 	"github.com/vechain/thor/v2/cmd/thor/bandwidth"
 	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/health"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/packer"
@@ -43,6 +44,7 @@ type Solo struct {
 	txPool        *txpool.TxPool
 	packer        *packer.Packer
 	logDB         *logdb.LogDB
+	health        *health.Health
 	gasLimit      uint64
 	bandwidth     bandwidth.Bandwidth
 	blockInterval uint64
@@ -55,6 +57,7 @@ func New(
 	repo *chain.Repository,
 	stater *state.Stater,
 	logDB *logdb.LogDB,
+	health *health.Health,
 	txPool *txpool.TxPool,
 	gasLimit uint64,
 	onDemand bool,
@@ -73,6 +76,7 @@ func New(
 			&genesis.DevAccounts()[0].Address,
 			forkConfig),
 		logDB:         logDB,
+		health:        health,
 		gasLimit:      gasLimit,
 		blockInterval: blockInterval,
 		skipLogs:      skipLogs,
@@ -209,6 +213,8 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 		"id", fmt.Sprintf("[#%v…%x]", block.Number(blockID), blockID[28:]),
 	)
 	logger.Debug(b.String())
+
+	s.health.NewBestBlock(b.Header().ID())
 
 	return nil
 }
