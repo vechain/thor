@@ -19,6 +19,8 @@ type LogMeta struct {
 	TxID           thor.Bytes32 `json:"txID"`
 	TxOrigin       thor.Address `json:"txOrigin"`
 	ClauseIndex    uint32       `json:"clauseIndex"`
+	LogIndex       *uint32      `json:"logIndex,omitempty"` // pointer for backwards compatibility
+	TxIndex        *uint32      `json:"txIndex,omitempty"`  // pointer for backwards compatibility
 }
 
 type FilteredTransfer struct {
@@ -28,9 +30,9 @@ type FilteredTransfer struct {
 	Meta      LogMeta               `json:"meta"`
 }
 
-func convertTransfer(transfer *logdb.Transfer) *FilteredTransfer {
+func convertTransfer(transfer *logdb.Transfer, indexes bool) *FilteredTransfer {
 	v := math.HexOrDecimal256(*transfer.Amount)
-	return &FilteredTransfer{
+	t := &FilteredTransfer{
 		Sender:    transfer.Sender,
 		Recipient: transfer.Recipient,
 		Amount:    &v,
@@ -43,6 +45,13 @@ func convertTransfer(transfer *logdb.Transfer) *FilteredTransfer {
 			ClauseIndex:    transfer.ClauseIndex,
 		},
 	}
+
+	if indexes {
+		t.Meta.TxIndex = &transfer.TxIndex
+		t.Meta.LogIndex = &transfer.LogIndex
+	}
+
+	return t
 }
 
 type TransferFilter struct {
@@ -50,4 +59,5 @@ type TransferFilter struct {
 	Range       *events.Range
 	Options     *logdb.Options
 	Order       logdb.Order //default asc
+	Indexes     bool
 }

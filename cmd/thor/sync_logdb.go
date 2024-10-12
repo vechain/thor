@@ -301,7 +301,8 @@ func verifyLogDBPerBlock(
 				}
 				expectedEvLogs = append(expectedEvLogs, &logdb.Event{
 					BlockNumber: n,
-					Index:       uint32(len(expectedEvLogs)),
+					TxIndex:     uint32(txIndex),
+					LogIndex:    uint32(len(expectedEvLogs)),
 					BlockID:     id,
 					BlockTime:   ts,
 					TxID:        tx.ID(),
@@ -315,7 +316,8 @@ func verifyLogDBPerBlock(
 			for _, tr := range output.Transfers {
 				expectedTrLogs = append(expectedTrLogs, &logdb.Transfer{
 					BlockNumber: n,
-					Index:       uint32(len(expectedTrLogs)),
+					TxIndex:     uint32(txIndex),
+					LogIndex:    uint32(len(expectedTrLogs)),
 					BlockID:     id,
 					BlockTime:   ts,
 					TxID:        tx.ID(),

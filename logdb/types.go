@@ -15,7 +15,8 @@ import (
 // Event represents tx.Event that can be stored in db.
 type Event struct {
 	BlockNumber uint32
-	Index       uint32
+	LogIndex    uint32
+	TxIndex     uint32
 	BlockID     thor.Bytes32
 	BlockTime   uint64
 	TxID        thor.Bytes32
@@ -29,7 +30,8 @@ type Event struct {
 // Transfer represents tx.Transfer that can be stored in db.
 type Transfer struct {
 	BlockNumber uint32
-	Index       uint32
+	TxIndex     uint32
+	LogIndex    uint32
 	BlockID     thor.Bytes32
 	BlockTime   uint64
 	TxID        thor.Bytes32
