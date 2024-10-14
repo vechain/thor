@@ -6,13 +6,10 @@
 package debug
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math/big"
-	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -22,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
@@ -32,6 +30,7 @@ import (
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/tracers/logger"
 	"github.com/vechain/thor/v2/tx"
 
@@ -40,16 +39,20 @@ import (
 	_ "github.com/vechain/thor/v2/tracers/native"
 )
 
-var ts *httptest.Server
-var blk *block.Block
-var transaction *tx.Transaction
-var debug *Debug
+var (
+	ts          *httptest.Server
+	blk         *block.Block
+	transaction *tx.Transaction
+	debug       *Debug
+	tclient     *thorclient.Client
+)
 
 func TestDebug(t *testing.T) {
 	initDebugServer(t)
 	defer ts.Close()
 
 	// /tracers endpoint
+	tclient = thorclient.New(ts.URL)
 	for name, tt := range map[string]func(*testing.T){
 		"testTraceClauseWithInvalidTracerName":     testTraceClauseWithInvalidTracerName,
 		"testTraceClauseWithEmptyTracerTarget":     testTraceClauseWithEmptyTracerTarget,
@@ -157,12 +160,12 @@ func TestStorageRangeMaxResult(t *testing.T) {
 }
 
 func testTraceClauseWithInvalidTracerName(t *testing.T) {
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", &TraceClauseOption{Name: "non-existent"}, 403)
+	res := httpPostAndCheckResponseStatus(t, "/debug/tracers", &TraceClauseOption{Name: "non-existent"}, 403)
 	assert.Contains(t, res, "unable to create custom tracer")
 }
 
 func testTraceClauseWithEmptyTracerTarget(t *testing.T) {
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", &TraceClauseOption{Name: "structLogger"}, 400)
+	res := httpPostAndCheckResponseStatus(t, "/debug/tracers", &TraceClauseOption{Name: "structLogger"}, 400)
 	assert.Equal(t, "target: unsupported", strings.TrimSpace(res))
 }
 
@@ -171,7 +174,7 @@ func testTraceClauseWithBadBlockID(t *testing.T) {
 		Name:   "structLogger",
 		Target: "badBlockId/x/x",
 	}
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", traceClauseOption, 400)
+	res := httpPostAndCheckResponseStatus(t, "/debug/tracers", traceClauseOption, 400)
 	assert.Equal(t, "target[0]: invalid length", strings.TrimSpace(res))
 }
 
@@ -186,7 +189,7 @@ func testTraceClauseWithBadTxID(t *testing.T) {
 		Name:   "structLogger",
 		Target: fmt.Sprintf("%s/badTxId/x", blk.Header().ID()),
 	}
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", traceClauseOption, 400)
+	res := httpPostAndCheckResponseStatus(t, "/debug/tracers", traceClauseOption, 400)
 	assert.Equal(t, `target[1]: strconv.ParseUint: parsing "badTxId": invalid syntax`, strings.TrimSpace(res))
 }
 
@@ -196,7 +199,7 @@ func testTraceClauseWithNonExistingTx(t *testing.T) {
 		Name:   "structLogger",
 		Target: fmt.Sprintf("%s/%s/x", blk.Header().ID(), nonExistingTxID),
 	}
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", traceClauseOption, 403)
+	res := httpPostAndCheckResponseStatus(t, "/debug/tracers", traceClauseOption, 403)
 	assert.Equal(t, "transaction not found", strings.TrimSpace(res))
 }
 
@@ -206,7 +209,7 @@ func testTraceClauseWithBadClauseIndex(t *testing.T) {
 		Name:   "structLogger",
 		Target: fmt.Sprintf("%s/%s/x", blk.Header().ID(), transaction.ID()),
 	}
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", traceClauseOption, 400)
+	res := httpPostAndCheckResponseStatus(t, "/debug/tracers", traceClauseOption, 400)
 	assert.Equal(t, `target[2]: strconv.ParseUint: parsing "x": invalid syntax`, strings.TrimSpace(res))
 
 	// Clause index is out of range
@@ -214,7 +217,7 @@ func testTraceClauseWithBadClauseIndex(t *testing.T) {
 		Name:   "structLogger",
 		Target: fmt.Sprintf("%s/%s/%d", blk.Header().ID(), transaction.ID(), uint64(math.MaxUint64)),
 	}
-	res = httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", traceClauseOption, 400)
+	res = httpPostAndCheckResponseStatus(t, "/debug/tracers", traceClauseOption, 400)
 	assert.Equal(t, `invalid target[2]`, strings.TrimSpace(res))
 }
 
@@ -223,7 +226,7 @@ func testTraceClauseWithCustomTracer(t *testing.T) {
 		Target: fmt.Sprintf("%s/%s/1", blk.Header().ID(), transaction.ID()),
 		Name:   "nonExistingTracer",
 	}
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", traceClauseOption, 403)
+	res := httpPostAndCheckResponseStatus(t, "/debug/tracers", traceClauseOption, 403)
 	assert.Contains(t, strings.TrimSpace(res), "create custom tracer: ReferenceError: nonExistingTracer is not defined")
 
 	traceClauseOption = &TraceClauseOption{
@@ -236,7 +239,7 @@ func testTraceClauseWithCustomTracer(t *testing.T) {
 		ReturnValue: "",
 		StructLogs:  nil,
 	}
-	res = httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", traceClauseOption, 200)
+	res = httpPostAndCheckResponseStatus(t, "/debug/tracers", traceClauseOption, 200)
 
 	var parsedExecutionRes *logger.ExecutionResult
 	if err := json.Unmarshal([]byte(res), &parsedExecutionRes); err != nil {
@@ -256,7 +259,7 @@ func testTraceClause(t *testing.T) {
 		ReturnValue: "",
 		StructLogs:  make([]logger.StructLogRes, 0),
 	}
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", traceClauseOption, 200)
+	res := httpPostAndCheckResponseStatus(t, "/debug/tracers", traceClauseOption, 200)
 
 	var parsedExecutionRes *logger.ExecutionResult
 	if err := json.Unmarshal([]byte(res), &parsedExecutionRes); err != nil {
@@ -271,7 +274,7 @@ func testTraceClauseWithTxIndexOutOfBound(t *testing.T) {
 		Target: fmt.Sprintf("%s/10/1", blk.Header().ID()),
 	}
 
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", traceClauseOption, 403)
+	res := httpPostAndCheckResponseStatus(t, "/debug/tracers", traceClauseOption, 403)
 
 	assert.Equal(t, "tx index out of range", strings.TrimSpace(res))
 }
@@ -282,14 +285,14 @@ func testTraceClauseWithClauseIndexOutOfBound(t *testing.T) {
 		Target: fmt.Sprintf("%s/%s/10", blk.Header().ID(), transaction.ID()),
 	}
 
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", traceClauseOption, 403)
+	res := httpPostAndCheckResponseStatus(t, "/debug/tracers", traceClauseOption, 403)
 
 	assert.Equal(t, "clause index out of range", strings.TrimSpace(res))
 }
 
 func testHandleTraceCallWithMalformedBodyRequest(t *testing.T) {
 	badBodyRequest := "badBodyRequest"
-	httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call", badBodyRequest, 400)
+	httpPostAndCheckResponseStatus(t, "/debug/tracers/call", badBodyRequest, 400)
 }
 
 func testHandleTraceCallWithEmptyTraceCallOption(t *testing.T) {
@@ -301,7 +304,7 @@ func testHandleTraceCallWithEmptyTraceCallOption(t *testing.T) {
 		StructLogs:  make([]logger.StructLogRes, 0),
 	}
 
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call", traceCallOption, 200)
+	res := httpPostAndCheckResponseStatus(t, "/debug/tracers/call", traceCallOption, 200)
 
 	var parsedExecutionRes *logger.ExecutionResult
 	if err := json.Unmarshal([]byte(res), &parsedExecutionRes); err != nil {
@@ -312,11 +315,11 @@ func testHandleTraceCallWithEmptyTraceCallOption(t *testing.T) {
 
 func testTraceCallNextBlock(t *testing.T) {
 	traceCallOption := &TraceCallOption{Name: "structLogger"}
-	httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call?revision=next", traceCallOption, 200)
+	httpPostAndCheckResponseStatus(t, "/debug/tracers/call?revision=next", traceCallOption, 200)
 }
 
 func testHandleTraceCall(t *testing.T) {
-	addr := datagen.RandomAddress()
+	addr := datagen.RandAddress()
 	provedWork := math.HexOrDecimal256(*big.NewInt(1000))
 	traceCallOption := &TraceCallOption{
 		Name:       "structLogger",
@@ -338,7 +341,7 @@ func testHandleTraceCall(t *testing.T) {
 		StructLogs:  make([]logger.StructLogRes, 0),
 	}
 
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call", traceCallOption, 200)
+	res := httpPostAndCheckResponseStatus(t, "/debug/tracers/call", traceCallOption, 200)
 
 	var parsedExecutionRes *logger.ExecutionResult
 	if err := json.Unmarshal([]byte(res), &parsedExecutionRes); err != nil {
@@ -363,7 +366,7 @@ func testHandleTraceCallWithValidRevisions(t *testing.T) {
 			StructLogs:  make([]logger.StructLogRes, 0),
 		}
 
-		res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call?revision="+revision, &TraceCallOption{Name: "structLogger"}, 200)
+		res := httpPostAndCheckResponseStatus(t, "/debug/tracers/call?revision="+revision, &TraceCallOption{Name: "structLogger"}, 200)
 
 		var parsedExecutionRes *logger.ExecutionResult
 		if err := json.Unmarshal([]byte(res), &parsedExecutionRes); err != nil {
@@ -374,7 +377,7 @@ func testHandleTraceCallWithValidRevisions(t *testing.T) {
 }
 
 func testHandleTraceCallWithRevisionAsNonExistingHeight(t *testing.T) {
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call?revision=12345", &TraceCallOption{}, 400)
+	res := httpPostAndCheckResponseStatus(t, "/debug/tracers/call?revision=12345", &TraceCallOption{}, 400)
 
 	assert.Equal(t, "revision: not found", strings.TrimSpace(res))
 }
@@ -382,7 +385,7 @@ func testHandleTraceCallWithRevisionAsNonExistingHeight(t *testing.T) {
 func testHandleTraceCallWithRevisionAsNonExistingID(t *testing.T) {
 	nonExistingRevision := "0x4500ade0d72115abfc77571aef752df45ba5e87ca81fbd67fbfc46d455b17f91"
 
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call?revision="+nonExistingRevision, &TraceCallOption{}, 400)
+	res := httpPostAndCheckResponseStatus(t, "/debug/tracers/call?revision="+nonExistingRevision, &TraceCallOption{}, 400)
 
 	assert.Equal(t, "revision: leveldb: not found", strings.TrimSpace(res))
 }
@@ -390,20 +393,20 @@ func testHandleTraceCallWithRevisionAsNonExistingID(t *testing.T) {
 func testHandleTraceCallWithMalfomredRevision(t *testing.T) {
 	// Revision is a malformed byte array
 	traceCallOption := &TraceCallOption{}
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call?revision=012345678901234567890123456789012345678901234567890123456789012345", traceCallOption, 400)
+	res := httpPostAndCheckResponseStatus(t, "/debug/tracers/call?revision=012345678901234567890123456789012345678901234567890123456789012345", traceCallOption, 400)
 	assert.Equal(t, "revision: invalid prefix", strings.TrimSpace(res))
 
 	// Revision is a not accepted string
-	res = httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call?revision=badRevision", traceCallOption, 400)
+	res = httpPostAndCheckResponseStatus(t, "/debug/tracers/call?revision=badRevision", traceCallOption, 400)
 	assert.Equal(t, `revision: strconv.ParseUint: parsing "badRevision": invalid syntax`, strings.TrimSpace(res))
 
 	// Revision number is out of range
-	res = httpPostAndCheckResponseStatus(t, fmt.Sprintf("%s/debug/tracers/call?revision=%d", ts.URL, uint64(math.MaxUint64)), traceCallOption, 400)
+	res = httpPostAndCheckResponseStatus(t, fmt.Sprintf("/debug/tracers/call?revision=%d", uint64(math.MaxUint64)), traceCallOption, 400)
 	assert.Equal(t, "revision: block number out of max uint32", strings.TrimSpace(res))
 }
 
 func testHandleTraceCallWithInsufficientGas(t *testing.T) {
-	addr := datagen.RandomAddress()
+	addr := datagen.RandAddress()
 	traceCallOption := &TraceCallOption{
 		Name:       "structLogger",
 		To:         &addr,
@@ -417,13 +420,13 @@ func testHandleTraceCallWithInsufficientGas(t *testing.T) {
 		BlockRef:   "0x0000000000000000",
 	}
 
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call", traceCallOption, 403)
+	res := httpPostAndCheckResponseStatus(t, "/debug/tracers/call", traceCallOption, 403)
 
 	assert.Equal(t, "gas: exceeds limit", strings.TrimSpace(res))
 }
 
 func testHandleTraceCallWithBadBlockRef(t *testing.T) {
-	addr := datagen.RandomAddress()
+	addr := datagen.RandAddress()
 	traceCallOption := &TraceCallOption{
 		Name:       "structLogger",
 		To:         &addr,
@@ -437,13 +440,13 @@ func testHandleTraceCallWithBadBlockRef(t *testing.T) {
 		BlockRef:   "jh000000000000000",
 	}
 
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call", traceCallOption, 500)
+	res := httpPostAndCheckResponseStatus(t, "/debug/tracers/call", traceCallOption, 500)
 
 	assert.Equal(t, "blockRef: hex string without 0x prefix", strings.TrimSpace(res))
 }
 
 func testHandleTraceCallWithInvalidLengthBlockRef(t *testing.T) {
-	addr := datagen.RandomAddress()
+	addr := datagen.RandAddress()
 	traceCallOption := &TraceCallOption{
 		Name:       "structLogger",
 		To:         &addr,
@@ -457,7 +460,7 @@ func testHandleTraceCallWithInvalidLengthBlockRef(t *testing.T) {
 		BlockRef:   "0x00",
 	}
 
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call", traceCallOption, 500)
+	res := httpPostAndCheckResponseStatus(t, "/debug/tracers/call", traceCallOption, 500)
 
 	assert.Equal(t, "blockRef: invalid length", strings.TrimSpace(res))
 }
@@ -465,19 +468,19 @@ func testHandleTraceCallWithInvalidLengthBlockRef(t *testing.T) {
 func testStorageRangeWithError(t *testing.T) {
 	// Error case 1: empty StorageRangeOption
 	opt := &StorageRangeOption{}
-	httpPostAndCheckResponseStatus(t, ts.URL+"/debug/storage-range", opt, 400)
+	httpPostAndCheckResponseStatus(t, "/debug/storage-range", opt, 400)
 
 	// Error case 2: bad StorageRangeOption
 	badBodyRequest := 123
-	httpPostAndCheckResponseStatus(t, ts.URL+"/debug/storage-range", badBodyRequest, 400)
+	httpPostAndCheckResponseStatus(t, "/debug/storage-range", badBodyRequest, 400)
 
 	badMaxResult := &StorageRangeOption{MaxResult: 1001}
-	httpPostAndCheckResponseStatus(t, ts.URL+"/debug/storage-range", badMaxResult, 400)
+	httpPostAndCheckResponseStatus(t, "/debug/storage-range", badMaxResult, 400)
 }
 
 func testStorageRange(t *testing.T) {
 	opt := StorageRangeOption{
-		Address:   datagen.RandomAddress(),
+		Address:   datagen.RandAddress(),
 		KeyStart:  "0x00",
 		MaxResult: 100,
 		Target:    fmt.Sprintf("%s/%s/0", blk.Header().ID(), transaction.ID()),
@@ -487,7 +490,7 @@ func testStorageRange(t *testing.T) {
 		NextKey: nil,
 	}
 
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/storage-range", &opt, 200)
+	res := httpPostAndCheckResponseStatus(t, "/debug/storage-range", &opt, 200)
 
 	var parsedExecutionRes *StorageRangeResult
 	if err := json.Unmarshal([]byte(res), &parsedExecutionRes); err != nil {
@@ -502,7 +505,7 @@ func testStorageRangeDefaultOption(t *testing.T) {
 		Target:  fmt.Sprintf("%s/%s/0", blk.Header().ID(), transaction.ID()),
 	}
 
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/storage-range", &opt, 200)
+	res := httpPostAndCheckResponseStatus(t, "/debug/storage-range", &opt, 200)
 
 	var storageRangeRes *StorageRangeResult
 	if err := json.Unmarshal([]byte(res), &storageRangeRes); err != nil {
@@ -584,23 +587,12 @@ func initDebugServer(t *testing.T) {
 }
 
 func httpPostAndCheckResponseStatus(t *testing.T, url string, obj interface{}, responseStatusCode int) string {
-	data, err := json.Marshal(obj)
-	if err != nil {
-		t.Fatal(err)
-	}
-	res, err := http.Post(url, "application/x-www-form-urlencoded", bytes.NewReader(data)) //#nosec G107
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, responseStatusCode, res.StatusCode)
-	r, err := io.ReadAll(res.Body)
-	res.Body.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(r)
-}
+	body, status, err := tclient.RawHTTPClient().RawHTTPPost(url, obj)
+	require.NoError(t, err)
+	require.Equal(t, responseStatusCode, status)
 
+	return string(body)
+}
 func TestCreateTracer(t *testing.T) {
 	debug := &Debug{}
 
