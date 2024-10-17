@@ -11,7 +11,7 @@ require (
 	github.com/ethereum/go-ethereum v1.8.14
 	github.com/gorilla/handlers v1.5.1
 	github.com/gorilla/mux v1.8.1
-	github.com/gorilla/websocket v1.4.1
+	github.com/gorilla/websocket v1.5.0
 	github.com/hashicorp/golang-lru v0.0.0-20160813221303-0a025b7e63ad
 	github.com/holiman/uint256 v1.2.4
 	github.com/mattn/go-isatty v0.0.3
@@ -36,7 +36,6 @@ require (
 require (
 	github.com/aristanetworks/goarista v0.0.0-20180222005525-c41ed3986faa // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/btcsuite/btcd v0.0.0-20171128150713-2e60448ffcc6 // indirect
 	github.com/cespare/cp v1.1.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/deckarep/golang-set v1.7.1 // indirect
