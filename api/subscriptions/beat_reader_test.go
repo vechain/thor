@@ -13,11 +13,6 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-func beatCache() *messageCache {
-	cache, _ := newMessageCache(generateBeatMessage, 10)
-	return cache
-}
-
 func TestBeatReader_Read(t *testing.T) {
 	// Arrange
 	repo, generatedBlocks, _ := initChain(t)
@@ -25,7 +20,7 @@ func TestBeatReader_Read(t *testing.T) {
 	newBlock := generatedBlocks[1]
 
 	// Act
-	beatReader := newBeatReader(repo, genesisBlk.Header().ID(), beatCache())
+	beatReader := newBeatReader(repo, genesisBlk.Header().ID(), newMessageCache(10))
 	res, ok, err := beatReader.Read()
 
 	// Assert
@@ -48,7 +43,7 @@ func TestBeatReader_Read_NoNewBlocksToRead(t *testing.T) {
 	newBlock := generatedBlocks[1]
 
 	// Act
-	beatReader := newBeatReader(repo, newBlock.Header().ID(), beatCache())
+	beatReader := newBeatReader(repo, newBlock.Header().ID(), newMessageCache(10))
 	res, ok, err := beatReader.Read()
 
 	// Assert
@@ -62,7 +57,7 @@ func TestBeatReader_Read_ErrorWhenReadingBlocks(t *testing.T) {
 	repo, _, _ := initChain(t)
 
 	// Act
-	beatReader := newBeatReader(repo, thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), beatCache())
+	beatReader := newBeatReader(repo, thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), newMessageCache(10))
 	res, ok, err := beatReader.Read()
 
 	// Assert

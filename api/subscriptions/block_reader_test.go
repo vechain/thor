@@ -23,18 +23,15 @@ import (
 	"github.com/vechain/thor/v2/txpool"
 )
 
-func blockCache() *messageCache {
-	cache, _ := newMessageCache(generateBlockMessage, 10)
-	return cache
-}
-
 func TestBlockReader_Read(t *testing.T) {
 	repo, generatedBlocks, _ := initChain(t)
 	genesisBlk := generatedBlocks[0]
 	newBlock := generatedBlocks[1]
 
+	cache := newMessageCache(10)
+
 	// Test case 1: Successful read next blocks
-	br := newBlockReader(repo, genesisBlk.Header().ID(), blockCache())
+	br := newBlockReader(repo, genesisBlk.Header().ID(), cache)
 	res, ok, err := br.Read()
 
 	assert.NoError(t, err)
@@ -45,7 +42,7 @@ func TestBlockReader_Read(t *testing.T) {
 	assert.Equal(t, newBlock.Header().ParentID(), resBlock.ParentID)
 
 	// Test case 2: There is no new block
-	br = newBlockReader(repo, newBlock.Header().ID(), blockCache())
+	br = newBlockReader(repo, newBlock.Header().ID(), cache)
 	res, ok, err = br.Read()
 
 	assert.NoError(t, err)
@@ -53,7 +50,7 @@ func TestBlockReader_Read(t *testing.T) {
 	assert.Empty(t, res)
 
 	// Test case 3: Error when reading blocks
-	br = newBlockReader(repo, thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), blockCache())
+	br = newBlockReader(repo, thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), cache)
 	res, ok, err = br.Read()
 
 	assert.Error(t, err)

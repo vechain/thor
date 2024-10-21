@@ -13,23 +13,24 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/block"
 )
 
-func handler(blk *chain.ExtendedBlock, _ *chain.Repository) ([]byte, error) {
-	data := make(map[string]interface{})
-	data["id"] = blk.Header().ID().String()
-	return json.Marshal(blk)
+func handler(blk *block.Block) func() ([]byte, error) {
+	return func() ([]byte, error) {
+		data := make(map[string]interface{})
+		data["id"] = blk.Header().ID().String()
+		return json.Marshal(data)
+	}
 }
 
 func TestMessageCache_GetOrAdd(t *testing.T) {
-	repo, generatedBlocks, _ := initChain(t)
+	_, generatedBlocks, _ := initChain(t)
 
 	blk0 := generatedBlocks[0]
 	blk1 := generatedBlocks[1]
 
-	cache, err := newMessageCache(handler, 10)
-	assert.NoError(t, err)
+	cache := newMessageCache(10)
 
 	counter := atomic.Int32{}
 	wg := sync.WaitGroup{}
@@ -39,7 +40,7 @@ func TestMessageCache_GetOrAdd(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			time.Sleep(time.Until(start))
-			_, added, err := cache.GetOrAdd(&chain.ExtendedBlock{Block: blk0}, repo)
+			_, added, err := cache.GetOrAdd(blk0.Header().ID(), handler(blk0))
 			assert.NoError(t, err)
 			if added {
 				counter.Add(1)
@@ -49,8 +50,13 @@ func TestMessageCache_GetOrAdd(t *testing.T) {
 	wg.Wait()
 	assert.Equal(t, counter.Load(), int32(1))
 
-	_, added, err := cache.GetOrAdd(&chain.ExtendedBlock{Block: blk1}, repo)
+	_, added, err := cache.GetOrAdd(blk1.Header().ID(), handler(blk1))
 	assert.NoError(t, err)
 	assert.True(t, added)
 	assert.Equal(t, cache.cache.Len(), 2)
+}
+
+func TestNewMessageCache(t *testing.T) {
+	cache := newMessageCache(1001)
+	assert.Equal(t, cache.cache.Len(), 1000)
 }

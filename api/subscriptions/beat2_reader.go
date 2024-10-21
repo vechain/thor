@@ -37,7 +37,7 @@ func (br *beat2Reader) Read() ([][]byte, bool, error) {
 	var msgs [][]byte
 
 	for _, block := range blocks {
-		msg, _, err := br.cache.GetOrAdd(block, br.repo)
+		msg, _, err := br.cache.GetOrAdd(block.Header().ID(), br.generateBeat2Message(block))
 		if err != nil {
 			return nil, false, err
 		}
@@ -46,58 +46,60 @@ func (br *beat2Reader) Read() ([][]byte, bool, error) {
 	return msgs, len(blocks) > 0, nil
 }
 
-func generateBeat2Message(block *chain.ExtendedBlock, repo *chain.Repository) ([]byte, error) {
-	bloomGenerator := &bloom.Generator{}
+func (br *beat2Reader) generateBeat2Message(block *chain.ExtendedBlock) func() ([]byte, error) {
+	return func() ([]byte, error) {
+		bloomGenerator := &bloom.Generator{}
 
-	bloomAdd := func(key []byte) {
-		key = bytes.TrimLeft(key, "\x00")
-		// exclude non-address key
-		if len(key) <= thor.AddressLength {
-			bloomGenerator.Add(key)
+		bloomAdd := func(key []byte) {
+			key = bytes.TrimLeft(key, "\x00")
+			// exclude non-address key
+			if len(key) <= thor.AddressLength {
+				bloomGenerator.Add(key)
+			}
 		}
-	}
 
-	header := block.Header()
-	receipts, err := repo.GetBlockReceipts(header.ID())
-	if err != nil {
-		return nil, err
-	}
-	txs := block.Transactions()
-	for i, receipt := range receipts {
-		bloomAdd(receipt.GasPayer.Bytes())
-		for _, output := range receipt.Outputs {
-			for _, event := range output.Events {
-				bloomAdd(event.Address.Bytes())
-				for _, topic := range event.Topics {
-					bloomAdd(topic.Bytes())
+		header := block.Header()
+		receipts, err := br.repo.GetBlockReceipts(header.ID())
+		if err != nil {
+			return nil, err
+		}
+		txs := block.Transactions()
+		for i, receipt := range receipts {
+			bloomAdd(receipt.GasPayer.Bytes())
+			for _, output := range receipt.Outputs {
+				for _, event := range output.Events {
+					bloomAdd(event.Address.Bytes())
+					for _, topic := range event.Topics {
+						bloomAdd(topic.Bytes())
+					}
+				}
+				for _, transfer := range output.Transfers {
+					bloomAdd(transfer.Sender.Bytes())
+					bloomAdd(transfer.Recipient.Bytes())
 				}
 			}
-			for _, transfer := range output.Transfers {
-				bloomAdd(transfer.Sender.Bytes())
-				bloomAdd(transfer.Recipient.Bytes())
-			}
+			origin, _ := txs[i].Origin()
+			bloomAdd(origin.Bytes())
 		}
-		origin, _ := txs[i].Origin()
-		bloomAdd(origin.Bytes())
+		signer, _ := header.Signer()
+		bloomAdd(signer.Bytes())
+		bloomAdd(header.Beneficiary().Bytes())
+
+		const bitsPerKey = 20
+		filter := bloomGenerator.Generate(bitsPerKey, bloom.K(bitsPerKey))
+
+		beat2 := &Beat2Message{
+			Number:      header.Number(),
+			ID:          header.ID(),
+			ParentID:    header.ParentID(),
+			Timestamp:   header.Timestamp(),
+			TxsFeatures: uint32(header.TxsFeatures()),
+			GasLimit:    header.GasLimit(),
+			Bloom:       hexutil.Encode(filter.Bits),
+			K:           filter.K,
+			Obsolete:    block.Obsolete,
+		}
+
+		return json.Marshal(beat2)
 	}
-	signer, _ := header.Signer()
-	bloomAdd(signer.Bytes())
-	bloomAdd(header.Beneficiary().Bytes())
-
-	const bitsPerKey = 20
-	filter := bloomGenerator.Generate(bitsPerKey, bloom.K(bitsPerKey))
-
-	beat2 := &Beat2Message{
-		Number:      header.Number(),
-		ID:          header.ID(),
-		ParentID:    header.ParentID(),
-		Timestamp:   header.Timestamp(),
-		TxsFeatures: uint32(header.TxsFeatures()),
-		GasLimit:    header.GasLimit(),
-		Bloom:       hexutil.Encode(filter.Bits),
-		K:           filter.K,
-		Obsolete:    block.Obsolete,
-	}
-
-	return json.Marshal(beat2)
 }

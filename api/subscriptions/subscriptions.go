@@ -52,11 +52,6 @@ const (
 )
 
 func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32, txpool *txpool.TxPool) *Subscriptions {
-	cacheSize := backtraceLimit * 120 / 100
-	beat2Cache, _ := newMessageCache(generateBeat2Message, int(cacheSize))
-	beatCache, _ := newMessageCache(generateBeatMessage, int(cacheSize))
-	blockCache, _ := newMessageCache(generateBlockMessage, int(cacheSize))
-
 	sub := &Subscriptions{
 		backtraceLimit: backtraceLimit,
 		repo:           repo,
@@ -77,9 +72,9 @@ func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32,
 		},
 		pendingTx:  newPendingTx(txpool),
 		done:       make(chan struct{}),
-		beat2Cache: beat2Cache,
-		beatCache:  beatCache,
-		blockCache: blockCache,
+		beat2Cache: newMessageCache(backtraceLimit),
+		beatCache:  newMessageCache(backtraceLimit),
+		blockCache: newMessageCache(backtraceLimit),
 	}
 
 	sub.wg.Add(1)

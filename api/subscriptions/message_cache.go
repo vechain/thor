@@ -6,32 +6,39 @@
 package subscriptions
 
 import (
+	"fmt"
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/thor"
 )
 
-type messageHandler = func(*chain.ExtendedBlock, *chain.Repository) ([]byte, error)
-
 type messageCache struct {
-	cache     *lru.Cache
-	generator messageHandler
-	mu        sync.RWMutex
+	cache *lru.Cache
+	mu    sync.RWMutex
 }
 
-func newMessageCache(handler messageHandler, cacheSize int) (*messageCache, error) {
-	cache, err := lru.New(cacheSize)
+func newMessageCache(cacheSize uint32) *messageCache {
+	if cacheSize > 1000 {
+		cacheSize = 1000
+	}
+	if cacheSize == 0 {
+		cacheSize = 1
+	}
+	cache, err := lru.New(int(cacheSize))
+	if err != nil {
+		// lru.New only throws an error if the number is less than 1
+		panic(fmt.Errorf("failed to create message cache: %v", err))
+	}
 	return &messageCache{
-		cache:     cache,
-		generator: handler,
-	}, err
+		cache: cache,
+	}
 }
 
 // GetOrAdd returns the message of the block, if the message is not in the cache, it will generate the message and add it to the cache.
 // The second return value indicates whether the message is newly generated.
-func (mc *messageCache) GetOrAdd(block *chain.ExtendedBlock, repo *chain.Repository) ([]byte, bool, error) {
-	blockID := block.Header().ID().String()
+func (mc *messageCache) GetOrAdd(id thor.Bytes32, createMessage func() ([]byte, error)) ([]byte, bool, error) {
+	blockID := id.String()
 	mc.mu.RLock()
 	msg, ok := mc.cache.Get(blockID)
 	mc.mu.RUnlock()
@@ -46,7 +53,7 @@ func (mc *messageCache) GetOrAdd(block *chain.ExtendedBlock, repo *chain.Reposit
 		return msg.([]byte), false, nil
 	}
 
-	msg, err := mc.generator(block, repo)
+	msg, err := createMessage()
 	if err != nil {
 		return nil, false, err
 	}

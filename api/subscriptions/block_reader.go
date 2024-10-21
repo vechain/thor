@@ -13,14 +13,12 @@ import (
 )
 
 type blockReader struct {
-	repo        *chain.Repository
 	blockReader chain.BlockReader
 	cache       *messageCache
 }
 
 func newBlockReader(repo *chain.Repository, position thor.Bytes32, cache *messageCache) *blockReader {
 	return &blockReader{
-		repo:        repo,
 		blockReader: repo.NewBlockReader(position),
 		cache:       cache,
 	}
@@ -33,7 +31,7 @@ func (br *blockReader) Read() ([][]byte, bool, error) {
 	}
 	var msgs [][]byte
 	for _, block := range blocks {
-		msg, _, err := br.cache.GetOrAdd(block, br.repo)
+		msg, _, err := br.cache.GetOrAdd(block.Header().ID(), br.generateBlockMessage(block))
 		if err != nil {
 			return nil, false, err
 		}
@@ -42,10 +40,12 @@ func (br *blockReader) Read() ([][]byte, bool, error) {
 	return msgs, len(blocks) > 0, nil
 }
 
-func generateBlockMessage(block *chain.ExtendedBlock, _ *chain.Repository) ([]byte, error) {
-	blk, err := convertBlock(block)
-	if err != nil {
-		return nil, err
+func (br *blockReader) generateBlockMessage(block *chain.ExtendedBlock) func() ([]byte, error) {
+	return func() ([]byte, error) {
+		blk, err := convertBlock(block)
+		if err != nil {
+			return nil, err
+		}
+		return json.Marshal(blk)
 	}
-	return json.Marshal(blk)
 }
