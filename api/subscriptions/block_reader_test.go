@@ -6,6 +6,7 @@
 package subscriptions
 
 import (
+	"encoding/json"
 	"math/big"
 	"testing"
 	"time"
@@ -27,21 +28,21 @@ func TestBlockReader_Read(t *testing.T) {
 	genesisBlk := generatedBlocks[0]
 	newBlock := generatedBlocks[1]
 
+	cache := newMessageCache(10)
+
 	// Test case 1: Successful read next blocks
-	br := newBlockReader(repo, genesisBlk.Header().ID())
+	br := newBlockReader(repo, genesisBlk.Header().ID(), cache)
 	res, ok, err := br.Read()
 
 	assert.NoError(t, err)
 	assert.True(t, ok)
-	if resBlock, ok := res[0].(*BlockMessage); !ok {
-		t.Fatal("unexpected type")
-	} else {
-		assert.Equal(t, newBlock.Header().Number(), resBlock.Number)
-		assert.Equal(t, newBlock.Header().ParentID(), resBlock.ParentID)
-	}
+	resBlock := &BlockMessage{}
+	assert.NoError(t, json.Unmarshal(res[0], resBlock))
+	assert.Equal(t, newBlock.Header().Number(), resBlock.Number)
+	assert.Equal(t, newBlock.Header().ParentID(), resBlock.ParentID)
 
 	// Test case 2: There is no new block
-	br = newBlockReader(repo, newBlock.Header().ID())
+	br = newBlockReader(repo, newBlock.Header().ID(), cache)
 	res, ok, err = br.Read()
 
 	assert.NoError(t, err)
@@ -49,7 +50,7 @@ func TestBlockReader_Read(t *testing.T) {
 	assert.Empty(t, res)
 
 	// Test case 3: Error when reading blocks
-	br = newBlockReader(repo, thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
+	br = newBlockReader(repo, thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), cache)
 	res, ok, err = br.Read()
 
 	assert.Error(t, err)

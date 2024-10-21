@@ -6,34 +6,46 @@
 package subscriptions
 
 import (
+	"encoding/json"
+
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/thor"
 )
 
 type blockReader struct {
-	repo        *chain.Repository
 	blockReader chain.BlockReader
+	cache       *messageCache
 }
 
-func newBlockReader(repo *chain.Repository, position thor.Bytes32) *blockReader {
+func newBlockReader(repo *chain.Repository, position thor.Bytes32, cache *messageCache) *blockReader {
 	return &blockReader{
-		repo:        repo,
 		blockReader: repo.NewBlockReader(position),
+		cache:       cache,
 	}
 }
 
-func (br *blockReader) Read() ([]interface{}, bool, error) {
+func (br *blockReader) Read() ([][]byte, bool, error) {
 	blocks, err := br.blockReader.Read()
 	if err != nil {
 		return nil, false, err
 	}
-	var msgs []interface{}
+	var msgs [][]byte
 	for _, block := range blocks {
-		msg, err := convertBlock(block)
+		msg, _, err := br.cache.GetOrAdd(block.Header().ID(), br.generateBlockMessage(block))
 		if err != nil {
 			return nil, false, err
 		}
 		msgs = append(msgs, msg)
 	}
 	return msgs, len(blocks) > 0, nil
+}
+
+func (br *blockReader) generateBlockMessage(block *chain.ExtendedBlock) func() ([]byte, error) {
+	return func() ([]byte, error) {
+		blk, err := convertBlock(block)
+		if err != nil {
+			return nil, err
+		}
+		return json.Marshal(blk)
+	}
 }
