@@ -8,7 +8,7 @@ package txpool
 import (
 	"context"
 	"math/big"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"sync/atomic"
 	"time"
@@ -183,7 +183,7 @@ func (p *TxPool) fetchBlocklistLoop() {
 
 	for {
 		// delay 1~2 min
-		delay := time.Second * time.Duration(rand.Int()%60+60) // #nosec
+		delay := time.Second * time.Duration(rand.Int()%60+60) //#nosec G404
 		select {
 		case <-p.ctx.Done():
 			return
