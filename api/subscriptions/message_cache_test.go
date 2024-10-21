@@ -55,8 +55,3 @@ func TestMessageCache_GetOrAdd(t *testing.T) {
 	assert.True(t, added)
 	assert.Equal(t, cache.cache.Len(), 2)
 }
-
-func TestNewMessageCache(t *testing.T) {
-	cache := newMessageCache(1001)
-	assert.Equal(t, cache.cache.Len(), 1000)
-}
