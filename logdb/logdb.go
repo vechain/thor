@@ -409,7 +409,7 @@ func removeLeadingZeros(bytes []byte) []byte {
 	for ; i < len(bytes) && bytes[i] == 0; i++ {
 	}
 	bytes = bytes[i:]
-	// ensure at lease 1 byte
+	// ensure at least 1 byte
 	if len(bytes) == 0 {
 		return []byte{0}
 	}
