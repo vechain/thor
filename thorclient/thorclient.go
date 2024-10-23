@@ -183,7 +183,7 @@ func (c *Client) FilterEvents(req *events.EventFilter) ([]events.FilteredEvent, 
 }
 
 // FilterTransfers filters transfers based on the provided filter request.
-func (c *Client) FilterTransfers(req *events.EventFilter) ([]*transfers.FilteredTransfer, error) {
+func (c *Client) FilterTransfers(req *transfers.TransferFilter) ([]*transfers.FilteredTransfer, error) {
 	return c.httpConn.FilterTransfers(req)
 }
 

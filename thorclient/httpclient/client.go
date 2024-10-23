@@ -256,8 +256,8 @@ func (c *Client) FilterEvents(req *events.EventFilter) ([]events.FilteredEvent, 
 	return filteredEvents, nil
 }
 
-// FilterTransfers filters transfer events based on the provided event filter.
-func (c *Client) FilterTransfers(req *events.EventFilter) ([]*transfers.FilteredTransfer, error) {
+// FilterTransfers filters transfer based on the provided transfer filter.
+func (c *Client) FilterTransfers(req *transfers.TransferFilter) ([]*transfers.FilteredTransfer, error) {
 	body, err := c.httpPOST(c.url+"/logs/transfer", req)
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve transfer logs - %w", err)
