@@ -11,9 +11,7 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-func RandomAddress() thor.Address {
-	var addr thor.Address
-
+func RandAddress() (addr thor.Address) {
 	rand.Read(addr[:])
-	return addr
+	return
 }

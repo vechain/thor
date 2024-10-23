@@ -81,7 +81,7 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 		return err
 	}
 
-	return utils.WriteJSON(w, map[string]string{"code": hexutil.Encode(code)})
+	return utils.WriteJSON(w, &GetCodeResult{Code: hexutil.Encode(code)})
 }
 
 func (a *Accounts) getAccount(addr thor.Address, header *block.Header, state *state.State) (*Account, error) {
@@ -164,7 +164,7 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 	if err != nil {
 		return err
 	}
-	return utils.WriteJSON(w, map[string]string{"value": storage.String()})
+	return utils.WriteJSON(w, &GetStorageResult{Value: storage.String()})
 }
 
 func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) error {
