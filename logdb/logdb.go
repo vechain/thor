@@ -398,9 +398,21 @@ func (db *LogDB) NewWriterSyncOff() *Writer {
 
 func topicValue(topics []thor.Bytes32, i int) []byte {
 	if i < len(topics) {
-		return topics[i][:]
+		return removeLeadingZeros(topics[i][:])
 	}
 	return nil
+}
+
+func removeLeadingZeros(bytes []byte) []byte {
+	i := 0
+	// increase i until it reaches the first non-zero byte
+	for ; i < len(bytes) && bytes[i] == 0; i++ {
+	}
+	// ensure at least 1 byte exists
+	if i == len(bytes) {
+		return []byte{0}
+	}
+	return bytes[i:]
 }
 
 // Writer is the transactional log writer.
@@ -481,7 +493,8 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 					topicValue(ev.Topics, 1),
 					topicValue(ev.Topics, 2),
 					topicValue(ev.Topics, 3),
-					topicValue(ev.Topics, 4)); err != nil {
+					topicValue(ev.Topics, 4),
+				); err != nil {
 					return err
 				}
 
