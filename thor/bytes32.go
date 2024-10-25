@@ -55,6 +55,11 @@ func (b *Bytes32) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &hex); err != nil {
 		return err
 	}
+	hex = strings.TrimPrefix(hex, "0x")
+	// apply left padding
+	for i := len(hex); i < 32*2; i++ {
+		hex = "0" + hex
+	}
 	parsed, err := ParseBytes32(hex)
 	if err != nil {
 		return err
