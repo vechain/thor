@@ -22,15 +22,12 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/thor"
 )
 
 var (
 	// This is the known root hash of an empty trie.
 	emptyRoot = thor.Blake2b(rlp.EmptyString)
-
-	logger = log.WithContext("pkg", "trie")
 )
 
 // Version is the version number of a standalone trie node.

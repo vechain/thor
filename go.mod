@@ -24,8 +24,8 @@ require (
 	github.com/prometheus/client_model v0.5.0
 	github.com/prometheus/common v0.45.0
 	github.com/qianbin/directcache v0.9.7
-	github.com/stretchr/testify v1.8.4
 	github.com/qianbin/drlp v0.0.0-20240102101024-e0e02518b5f9
+	github.com/stretchr/testify v1.8.4
 	github.com/syndtr/goleveldb v1.0.1-0.20220614013038-64ee5596c38a
 	github.com/vechain/go-ecvrf v0.0.0-20220525125849-96fa0442e765
 	golang.org/x/crypto v0.21.0
