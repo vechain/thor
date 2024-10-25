@@ -159,7 +159,7 @@ func (c *Chain) MintBlock(account genesis.DevAccount, transactions ...*tx.Transa
 	}
 
 	// Add the block to the repository.
-	if err := c.Repo().AddBlock(newBlk, receipts, 0); err != nil {
+	if err := c.Repo().AddBlock(newBlk, receipts, 0, false); err != nil {
 		return fmt.Errorf("unable to add tx to repo: %w", err)
 	}
 

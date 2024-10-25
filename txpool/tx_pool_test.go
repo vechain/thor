@@ -615,8 +615,8 @@ func TestAddOverPendingCost(t *testing.T) {
 	b0, _, _, err := builder.Build(state.NewStater(db))
 	assert.Nil(t, err)
 
-	st := state.New(db, b0.Header().StateRoot(), 0, 0, 0)
-	stage, err := st.Stage(1, 0)
+	st := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
+	stage, err := st.Stage(trie.Version{Major: 1})
 	assert.Nil(t, err)
 	root, err := stage.Commit()
 	assert.Nil(t, err)
@@ -632,7 +632,7 @@ func TestAddOverPendingCost(t *testing.T) {
 		TransactionFeatures(feat).Build()
 
 	repo, _ := chain.NewRepository(db, b0)
-	repo.AddBlock(b1, tx.Receipts{}, 0)
+	repo.AddBlock(b1, tx.Receipts{}, 0, false)
 	repo.SetBestBlockID(b1.Header().ID())
 	pool := New(repo, state.NewStater(db), Options{
 		Limit:           LIMIT,
