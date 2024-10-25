@@ -51,14 +51,11 @@ func TestBytes32_UnmarshalJSON(t *testing.T) {
 	assert.Equal(t, `"0x0000000000000000000000000000000000000000000000000000000000000000"`, string(j))
 }
 
-func TestBytes32_UnmarshalJSON_ShouldApplyPadding(t *testing.T) {
+func TestParseBytes32(t *testing.T) {
 	// Example hex string representing the value 100
-	originalHex := `"0x01"`
-
-	// Unmarshal JSON into HexOrDecimal256
-	var unmarshaledValue Bytes32
-	err := unmarshaledValue.UnmarshalJSON([]byte(originalHex))
+	expected := MustParseBytes32("0x0000000000000000000000006d95e6dca01d109882fe1726a2fb9865fa41e7aa")
+	trimmed := "0x6d95e6dca01d109882fe1726a2fb9865fa41e7aa"
+	parsed, err := ParseBytes32(trimmed)
 	assert.NoError(t, err)
-
-	assert.Equal(t, MustParseBytes32("0x0000000000000000000000000000000000000000000000000000000000000001"), unmarshaledValue)
+	assert.Equal(t, expected, parsed)
 }
