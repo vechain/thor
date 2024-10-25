@@ -158,7 +158,7 @@ func TestPendingCost(t *testing.T) {
 
 	chain := repo.NewBestChain()
 	best := repo.BestBlockSummary()
-	state := stater.NewState(best.Header.StateRoot(), best.Header.Number(), best.Conflicts, best.SteadyNum)
+	state := stater.NewState(best.Root())
 
 	var err error
 	txObj1.executable, err = txObj1.Executable(chain, state, best.Header)

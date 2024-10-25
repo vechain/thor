@@ -293,7 +293,7 @@ func initChainMultipleBlocks(t *testing.T, blockCount int) (*chain.Repository, [
 		if _, err := stage.Commit(); err != nil {
 			t.Fatal(err)
 		}
-		if err := repo.AddBlock(blk, receipts, 0); err != nil {
+		if err := repo.AddBlock(blk, receipts, 0, false); err != nil {
 			t.Fatal(err)
 		}
 		if err := repo.SetBestBlockID(blk.Header().ID()); err != nil {
