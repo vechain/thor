@@ -13,8 +13,8 @@ import (
 )
 
 type BlockIngestion struct {
-	BestBlock          *thor.Bytes32 `json:"bestBlock"`
-	BestBlockTimestamp *time.Time    `json:"bestBlockTimestamp"`
+	BestBlock                   *thor.Bytes32 `json:"bestBlock"`
+	BestBlockIngestionTimestamp *time.Time    `json:"bestBlockIngestionTimestamp"`
 }
 
 type Status struct {
@@ -43,8 +43,8 @@ func (h *Health) Status() (*Status, error) {
 	defer h.lock.RUnlock()
 
 	blockIngest := &BlockIngestion{
-		BestBlock:          h.bestBlockID,
-		BestBlockTimestamp: &h.newBestBlock,
+		BestBlock:                   h.bestBlockID,
+		BestBlockIngestionTimestamp: &h.newBestBlock,
 	}
 
 	// todo review time slots
@@ -58,9 +58,9 @@ func (h *Health) Status() (*Status, error) {
 	}, nil
 }
 
-func (h *Health) ChainSynced() {
+func (h *Health) ChainSyncStatus(syncStatus bool) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
-	h.chainSynced = true
+	h.chainSynced = syncStatus
 }

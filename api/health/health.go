@@ -23,10 +23,16 @@ func New(healthStatus *health.Health) *Health {
 	}
 }
 
-func (h *Health) handleGetHealth(w http.ResponseWriter, req *http.Request) error {
+func (h *Health) handleGetHealth(w http.ResponseWriter, _ *http.Request) error {
 	acc, err := h.healthStatus.Status()
 	if err != nil {
 		return err
+	}
+
+	if !acc.Healthy {
+		w.WriteHeader(http.StatusServiceUnavailable) // Set the status to 503
+	} else {
+		w.WriteHeader(http.StatusOK) // Set the status to 200
 	}
 	return utils.WriteJSON(w, acc)
 }

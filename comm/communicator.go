@@ -119,9 +119,10 @@ func (c *Communicator) Sync(ctx context.Context, handler HandleBlockStream) {
 			syncCount++
 
 			if shouldSynced() {
+				c.health.ChainSyncStatus(false)
 				delay = syncInterval
 				c.onceSynced.Do(func() {
-					c.health.ChainSynced()
+					c.health.ChainSyncStatus(true)
 					close(c.syncedCh)
 				})
 			}
