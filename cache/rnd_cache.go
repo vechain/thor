@@ -6,14 +6,9 @@
 package cache
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"sync"
-	"time"
 )
-
-func init() {
-	rand.Seed(time.Now().UnixNano()) // nolint:staticcheck
-}
 
 // RandCache a simple cache which randomly evicts entries when
 // length exceeds limit.
@@ -106,7 +101,7 @@ func (rc *RandCache) Pick() *Entry {
 	if len(rc.s) == 0 {
 		return nil
 	}
-	ent := rc.s[rand.Intn(len(rc.s))] // nolint:gosec
+	ent := rc.s[rand.N(len(rc.s))] //#nosec G404
 	cpy := ent.Entry
 	return &cpy
 }
@@ -141,6 +136,6 @@ func (rc *RandCache) randDrop() {
 	if len(rc.s) == 0 {
 		return
 	}
-	ent := rc.s[rand.Intn(len(rc.s))] // nolint:gosec
+	ent := rc.s[rand.N(len(rc.s))] //#nosec
 	rc.remove(ent.Key)
 }

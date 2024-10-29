@@ -96,6 +96,7 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64) (
 	baseGasPrice *big.Int,
 	gasPrice *big.Int,
 	payer thor.Address,
+	prepaid *big.Int,
 	returnGas func(uint64) error,
 	err error,
 ) {
@@ -113,19 +114,20 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64) (
 		return returnedEnergy, nil
 	}
 
-	prepaid := new(big.Int).Mul(new(big.Int).SetUint64(r.tx.Gas()), gasPrice)
+	// prepaid is the max total of gas cost available to spend on this transaction
+	prepaid = new(big.Int).Mul(new(big.Int).SetUint64(r.tx.Gas()), gasPrice)
 	if r.Delegator != nil {
 		var sufficient bool
 		if sufficient, err = energy.Sub(*r.Delegator, prepaid); err != nil {
 			return
 		}
 		if sufficient {
-			return baseGasPrice, gasPrice, *r.Delegator, func(rgas uint64) error {
+			return baseGasPrice, gasPrice, *r.Delegator, prepaid, func(rgas uint64) error {
 				_, err := doReturnGas(rgas)
 				return err
 			}, nil
 		}
-		return nil, nil, thor.Address{}, nil, errors.New("insufficient energy")
+		return nil, nil, thor.Address{}, nil, nil, errors.New("insufficient energy")
 	}
 
 	commonTo := r.CommonTo()
@@ -164,7 +166,7 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64) (
 					return
 				}
 				if ok {
-					return baseGasPrice, gasPrice, sponsor, doReturnGasAndSetCredit, nil
+					return baseGasPrice, gasPrice, sponsor, prepaid, doReturnGasAndSetCredit, nil
 				}
 			}
 			// deduct from To
@@ -174,7 +176,7 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64) (
 				return
 			}
 			if sufficient {
-				return baseGasPrice, gasPrice, *commonTo, doReturnGasAndSetCredit, nil
+				return baseGasPrice, gasPrice, *commonTo, prepaid, doReturnGasAndSetCredit, nil
 			}
 		}
 	}
@@ -186,9 +188,9 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64) (
 	}
 
 	if sufficient {
-		return baseGasPrice, gasPrice, r.Origin, func(rgas uint64) error { _, err := doReturnGas(rgas); return err }, nil
+		return baseGasPrice, gasPrice, r.Origin, prepaid, func(rgas uint64) error { _, err := doReturnGas(rgas); return err }, nil
 	}
-	return nil, nil, thor.Address{}, nil, errors.New("insufficient energy")
+	return nil, nil, thor.Address{}, nil, nil, errors.New("insufficient energy")
 }
 
 // ToContext create a tx context object.

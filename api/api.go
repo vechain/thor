@@ -54,7 +54,7 @@ func New(
 	enableReqLogger bool,
 	enableMetrics bool,
 	logsLimit uint64,
-	allowedTracers map[string]interface{},
+	allowedTracers []string,
 	soloMode bool,
 ) (http.HandlerFunc, func()) {
 	origins := strings.Split(strings.TrimSpace(allowedOrigins), ",")

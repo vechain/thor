@@ -14,6 +14,7 @@ import (
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/co"
 )
 
@@ -23,12 +24,12 @@ func HTTPHandler(logLevel *slog.LevelVar) http.Handler {
 	sub.Path("/loglevel").
 		Methods(http.MethodGet).
 		Name("get-log-level").
-		HandlerFunc(getLogLevelHandler(logLevel))
+		HandlerFunc(utils.WrapHandlerFunc(getLogLevelHandler(logLevel)))
 
 	sub.Path("/loglevel").
 		Methods(http.MethodPost).
 		Name("post-log-level").
-		HandlerFunc(postLogLevelHandler(logLevel))
+		HandlerFunc(utils.WrapHandlerFunc(postLogLevelHandler(logLevel)))
 
 	return handlers.CompressHandler(router)
 }

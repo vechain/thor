@@ -168,9 +168,8 @@ func (t *Trie) newDatabase() trie.Database {
 			keyBuf = t.makeDedupedNodeKey(keyBuf[:0], thisSeq, thisPath)
 			if val, err := snapshot.Get(keyBuf); err == nil {
 				return append(dst, val...), nil
-			} else {
-				return nil, err
 			}
+			return nil, err
 		}),
 		databaseKeyEncodeFunc(func(hash []byte, seq uint64, path []byte) []byte {
 			thisHash = hash
@@ -295,7 +294,7 @@ func (t *Trie) Stage(newCommitNum, newDistinctNum uint32) (root thor.Bytes32, co
 			}
 			return nil
 		}),
-		databaseKeyEncodeFunc(func(hash []byte, seq uint64, path []byte) []byte {
+		databaseKeyEncodeFunc(func(_ []byte, _ uint64, path []byte) []byte {
 			thisPath = path
 			return nil
 		}),

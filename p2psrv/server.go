@@ -356,11 +356,11 @@ func (s *Server) fetchBootstrap() {
 	}
 
 	for {
-		if err := f(); err == nil || errors.Is(err, context.Canceled) {
+		err := f()
+		if err == nil || errors.Is(err, context.Canceled) {
 			return
-		} else {
-			logger.Warn("update bootstrap nodes from remote failed", "err", err)
 		}
+		logger.Warn("update bootstrap nodes from remote failed", "err", err)
 
 		select {
 		case <-ctx.Done():

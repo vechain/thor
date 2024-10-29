@@ -6,13 +6,13 @@
 package datagen
 
 import (
-	mathrand "math/rand"
+	mathrand "math/rand/v2"
 )
 
 func RandInt() int {
-	return mathrand.Int() // nolint:gosec
+	return mathrand.Int() //#nosec G404
 }
 
 func RandIntN(n int) int {
-	return mathrand.Intn(n) // nolint:gosec
+	return mathrand.N(n) //#nosec G404
 }

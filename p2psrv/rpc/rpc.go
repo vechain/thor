@@ -7,7 +7,7 @@ package rpc
 
 import (
 	"context"
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 	"time"
 
@@ -16,11 +16,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/log"
 )
-
-func init() {
-	// required when generate call id
-	rand.Seed(time.Now().UnixNano()) // nolint:staticcheck
-}
 
 const (
 	rpcDefaultTimeout = time.Second * 10
@@ -158,7 +153,7 @@ func (r *RPC) prepareCall(msgCode uint64, onResult func(*p2p.Msg) error) uint32 
 	r.lock.Lock()
 	defer r.lock.Unlock()
 	for {
-		id := rand.Uint32() // nolint:gosec
+		id := rand.Uint32() //#nosec G404
 		if id == 0 {
 			// 0 id is taken by Notify
 			continue
@@ -179,7 +174,7 @@ func (r *RPC) finalizeCall(id uint32) {
 }
 
 // Notify notifies a message to the peer.
-func (r *RPC) Notify(ctx context.Context, msgCode uint64, arg interface{}) error {
+func (r *RPC) Notify(_ context.Context, msgCode uint64, arg interface{}) error {
 	return p2p.Send(r.rw, msgCode, &msgData{0, false, arg})
 }
 

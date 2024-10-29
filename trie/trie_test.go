@@ -546,7 +546,7 @@ func benchUpdate(b *testing.B, e binary.ByteOrder) *Trie {
 // insert into the trie before measuring the hashing.
 func BenchmarkHash(b *testing.B) {
 	// Make the random benchmark deterministic
-	random := rand.New(rand.NewSource(0)) // nolint:gosec
+	random := rand.New(rand.NewSource(0)) //#nosec G404
 
 	// Create a realistic account trie to hash
 	addresses := make([][20]byte, b.N)
@@ -674,7 +674,7 @@ type kedb struct {
 	*ethdb.MemDatabase
 }
 
-func (db *kedb) Encode(hash []byte, seq uint64, path []byte) []byte {
+func (db *kedb) Encode(_ []byte, seq uint64, path []byte) []byte {
 	var k [8]byte
 	binary.BigEndian.PutUint64(k[:], seq)
 	return append(k[:], path...)

@@ -6,7 +6,7 @@
 package comm
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 	"time"
 
@@ -23,10 +23,6 @@ const (
 	maxKnownTxs    = 65536 // Maximum transactions IDs to keep in the known list (prevent DOS)
 	maxKnownBlocks = 1024  // Maximum block IDs to keep in the known list (prevent DOS)
 )
-
-func init() {
-	rand.Seed(time.Now().UnixNano()) // nolint:staticcheck
-}
 
 // Peer extends p2p.Peer with RPC integrated.
 type Peer struct {
@@ -84,7 +80,7 @@ func (p *Peer) UpdateHead(id thor.Bytes32, totalScore uint64) {
 // MarkTransaction marks a transaction to known.
 func (p *Peer) MarkTransaction(hash thor.Bytes32) {
 	// that's 10~100 block intervals
-	expiration := mclock.AbsTime(time.Second * time.Duration(thor.BlockInterval*uint64(rand.Intn(91)+10))) // nolint:gosec
+	expiration := mclock.AbsTime(time.Second * time.Duration(thor.BlockInterval*uint64(rand.N(91)+10))) //#nosec G404
 
 	deadline := mclock.Now() + expiration
 	p.knownTxs.Add(hash, deadline)

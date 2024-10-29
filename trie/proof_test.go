@@ -14,23 +14,19 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// #nosec G404
 package trie
 
 import (
 	"bytes"
 	crand "crypto/rand"
-	mrand "math/rand"
+	mrand "math/rand/v2"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/vechain/thor/v2/thor"
 )
-
-func init() {
-	mrand.Seed(time.Now().Unix()) // nolint:staticcheck
-}
 
 func TestProof(t *testing.T) {
 	trie, vals := randomTrie(500)
@@ -77,7 +73,7 @@ func TestVerifyBadProof(t *testing.T) {
 			t.Fatal("zero length proof")
 		}
 		keys := proofs.Keys()
-		key := keys[mrand.Intn(len(keys))] // nolint:gosec
+		key := keys[mrand.N(len(keys))]
 		node, _ := proofs.Get(key)
 		proofs.Delete(key)
 		mutateByte(node)
@@ -90,8 +86,8 @@ func TestVerifyBadProof(t *testing.T) {
 
 // mutateByte changes one byte in b.
 func mutateByte(b []byte) {
-	for r := mrand.Intn(len(b)); ; { // nolint:gosec
-		new := byte(mrand.Intn(255)) // nolint:gosec
+	for r := mrand.N(len(b)); ; {
+		new := byte(mrand.N(255))
 		if new != b[r] {
 			b[r] = new
 			break

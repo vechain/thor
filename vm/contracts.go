@@ -66,7 +66,7 @@ var PrecompiledContractsByzantium = map[common.Address]PrecompiledContract{
 // PrecompiledContractsIstanbul contains the default set of pre-compiled Ethereum
 // contracts used in the Istanbul release.
 var PrecompiledContractsIstanbul = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}): &safe_ecrecover{},
+	common.BytesToAddress([]byte{1}): &safeEcrecover{},
 	common.BytesToAddress([]byte{2}): &sha256hash{},
 	common.BytesToAddress([]byte{3}): &ripemd160hash{},
 	common.BytesToAddress([]byte{4}): &dataCopy{},
@@ -143,14 +143,14 @@ func (c *ecrecover) Run(input []byte) ([]byte, error) {
 	return common.LeftPadBytes(thor.Keccak256(pubKey[1:]).Bytes()[12:], 32), nil
 }
 
-// safe_ecrecover prevent touching the input buffer.
-type safe_ecrecover struct{}
+// safeEcrecover prevent touching the input buffer.
+type safeEcrecover struct{}
 
-func (c *safe_ecrecover) RequiredGas(input []byte) uint64 {
+func (c *safeEcrecover) RequiredGas(_ []byte) uint64 {
 	return params.EcrecoverGas
 }
 
-func (c *safe_ecrecover) Run(input []byte) ([]byte, error) {
+func (c *safeEcrecover) Run(input []byte) ([]byte, error) {
 	const ecRecoverInputLength = 128
 
 	input = common.RightPadBytes(input, ecRecoverInputLength)

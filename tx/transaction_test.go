@@ -47,7 +47,7 @@ func TestHash(t *testing.T) {
 func TestDependsOn(t *testing.T) {
 	tx := GetMockTx()
 	res := tx.DependsOn()
-	var expected *thor.Bytes32 = nil
+	var expected *thor.Bytes32
 	assert.Equal(t, expected, res)
 }
 
@@ -87,7 +87,7 @@ func TestProvedWork(t *testing.T) {
 	headBlockNum := uint32(20)
 
 	// Mock getBlockID function
-	getBlockID := func(num uint32) (thor.Bytes32, error) {
+	getBlockID := func(_ uint32) (thor.Bytes32, error) {
 		return thor.Bytes32{}, nil
 	}
 
