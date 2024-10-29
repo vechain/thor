@@ -73,10 +73,7 @@ func initChain(t *testing.T) *testchain.Chain {
 		Clause(cla).
 		BlockRef(tx.NewBlockRef(0)).
 		Build()
-
-	sig, err := crypto.Sign(tr.SigningHash().Bytes(), genesis.DevAccounts()[1].PrivateKey)
-	require.NoError(t, err)
-	tr = tr.WithSignature(sig)
+	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 
 	txDeploy := new(tx.Builder).
 		ChainTag(thorChain.Repo().ChainTag()).

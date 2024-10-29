@@ -76,7 +76,7 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 }
 
 func mintTransactions(t *testing.T, thorChain *testchain.Chain) {
-	toAddr := datagen.RandomAddress()
+	toAddr := datagen.RandAddress()
 
 	noClausesTx := new(tx.Builder).
 		ChainTag(thorChain.Repo().ChainTag()).

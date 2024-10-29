@@ -3,13 +3,13 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
+// #nosec G404
 package cache_test
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"sort"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/cache"
@@ -35,7 +35,6 @@ func TestPrioCacheAddRemove(t *testing.T) {
 
 func TestPrioCache(t *testing.T) {
 	c := cache.NewPrioCache(5)
-	rand.Seed(time.Now().UnixNano()) // nolint:staticcheck
 
 	type kvp struct {
 		k, v int
@@ -46,9 +45,9 @@ func TestPrioCache(t *testing.T) {
 
 	for i := 0; i < 100; i++ {
 		e := kvp{
-			rand.Int(),     // nolint: gosec
-			rand.Int(),     // nolint:gosec
-			rand.Float64()} // nolint:gosec
+			rand.Int(),
+			rand.Int(),
+			rand.Float64()}
 		kvps = append(kvps, e)
 		c.Set(e.k, e.v, e.p)
 	}

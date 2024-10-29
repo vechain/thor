@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
@@ -90,7 +89,7 @@ func TestPendingTx_DispatchLoop(t *testing.T) {
 	p.Subscribe(txCh)
 
 	// Add a new tx to the mempool
-	transaction := createTx(t, repo, 0)
+	transaction := createTx(repo, 0)
 	txPool.AddLocal(transaction)
 
 	// Start the dispatch loop
@@ -108,7 +107,7 @@ func TestPendingTx_DispatchLoop(t *testing.T) {
 	p.Unsubscribe(txCh)
 
 	// Add another tx to the mempool
-	tx2 := createTx(t, repo, 1)
+	tx2 := createTx(repo, 1)
 	txPool.AddLocal(tx2)
 
 	// Assert that the channel did not receive the second transaction
@@ -142,23 +141,20 @@ func addNewBlock(repo *chain.Repository, stater *state.Stater, b0 *block.Block, 
 	}
 }
 
-func createTx(t *testing.T, repo *chain.Repository, addressNumber uint) *tx.Transaction {
+func createTx(repo *chain.Repository, addressNumber uint) *tx.Transaction {
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	tx := new(tx.Builder).
-		ChainTag(repo.ChainTag()).
-		GasPriceCoef(1).
-		Expiration(10).
-		Gas(21000).
-		Nonce(1).
-		Clause(cla).
-		BlockRef(tx.NewBlockRef(0)).
-		Build()
-	sig, err := crypto.Sign(tx.SigningHash().Bytes(), genesis.DevAccounts()[addressNumber].PrivateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tx = tx.WithSignature(sig)
 
-	return tx
+	return tx.MustSign(
+		new(tx.Builder).
+			ChainTag(repo.ChainTag()).
+			GasPriceCoef(1).
+			Expiration(10).
+			Gas(21000).
+			Nonce(1).
+			Clause(cla).
+			BlockRef(tx.NewBlockRef(0)).
+			Build(),
+		genesis.DevAccounts()[addressNumber].PrivateKey,
+	)
 }
