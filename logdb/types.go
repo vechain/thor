@@ -71,7 +71,7 @@ func (c *EventCriteria) toWhereCondition() (cond string, args []interface{}) {
 	for i, topic := range c.Topics {
 		if topic != nil {
 			cond += fmt.Sprintf(" AND topic%v = ", i) + refIDQuery
-			args = append(args, topic.Bytes())
+			args = append(args, removeLeadingZeros(topic.Bytes()))
 		}
 	}
 	return
