@@ -6,9 +6,7 @@
 package events_test
 
 import (
-	"bytes"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -212,23 +210,6 @@ func createDb(t *testing.T) *logdb.LogDB {
 }
 
 // Utilities functions
-func httpPost(t *testing.T, url string, body interface{}) ([]byte, int) {
-	data, err := json.Marshal(body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	res, err := http.Post(url, "application/x-www-form-urlencoded", bytes.NewReader(data)) //#nosec G107
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, err := io.ReadAll(res.Body)
-	res.Body.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return r, res.StatusCode
-}
-
 func insertBlocks(t *testing.T, db *logdb.LogDB, n int) {
 	b := new(block.Builder).Build()
 	for i := 0; i < n; i++ {
