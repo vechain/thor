@@ -7,7 +7,6 @@ package blocks_test
 
 import (
 	"encoding/json"
-	"io"
 	"math"
 	"math/big"
 	"net/http"
@@ -266,17 +265,4 @@ func checkExpandedBlock(t *testing.T, expBl *block.Block, actBl *blocks.JSONExpa
 	for i, tx := range expBl.Transactions() {
 		assert.Equal(t, tx.ID(), actBl.Transactions[i].ID, "txid should be equal")
 	}
-}
-
-func httpGet(t *testing.T, url string) ([]byte, int) {
-	res, err := http.Get(url) //#nosec G107
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, err := io.ReadAll(res.Body)
-	res.Body.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return r, res.StatusCode
 }
