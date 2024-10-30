@@ -47,8 +47,7 @@ func (h *Health) Status() (*Status, error) {
 		BestBlockIngestionTimestamp: &h.newBestBlock,
 	}
 
-	// todo review time slots
-	healthy := time.Since(h.newBestBlock) >= 10*time.Second &&
+	healthy := time.Since(h.newBestBlock) <= 10*time.Second && // less than 10 secs have passed since a new block was received
 		h.chainSynced
 
 	return &Status{
