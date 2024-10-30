@@ -167,6 +167,7 @@ func defaultAction(ctx *cli.Context) error {
 		return errors.Wrap(err, "parse verbosity flag")
 	}
 	logLevel := initLogger(lvl, ctx.Bool(jsonLogsFlag.Name))
+	healthStatus := &health.Health{}
 
 	// enable metrics as soon as possible
 	metricsURL := ""
@@ -182,7 +183,7 @@ func defaultAction(ctx *cli.Context) error {
 
 	adminURL := ""
 	if ctx.Bool(enableAdminFlag.Name) {
-		url, closeFunc, err := api.StartAdminServer(ctx.String(adminAddrFlag.Name), logLevel)
+		url, closeFunc, err := api.StartAdminServer(ctx.String(adminAddrFlag.Name), logLevel, healthStatus)
 		if err != nil {
 			return fmt.Errorf("unable to start admin server - %w", err)
 		}
@@ -221,7 +222,6 @@ func defaultAction(ctx *cli.Context) error {
 		return err
 	}
 
-	healthStatus := &health.Health{}
 	printStartupMessage1(gene, repo, master, instanceDir, forkConfig)
 
 	skipLogs := ctx.Bool(skipLogsFlag.Name)
@@ -256,7 +256,6 @@ func defaultAction(ctx *cli.Context) error {
 		logDB,
 		bftEngine,
 		p2pCommunicator.Communicator(),
-		healthStatus,
 		forkConfig,
 		ctx.String(apiCorsFlag.Name),
 		uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
@@ -314,6 +313,7 @@ func soloAction(ctx *cli.Context) error {
 	}
 
 	logLevel := initLogger(lvl, ctx.Bool(jsonLogsFlag.Name))
+	healthStatus := &health.Health{}
 
 	// enable metrics as soon as possible
 	metricsURL := ""
@@ -329,7 +329,7 @@ func soloAction(ctx *cli.Context) error {
 
 	adminURL := ""
 	if ctx.Bool(enableAdminFlag.Name) {
-		url, closeFunc, err := api.StartAdminServer(ctx.String(adminAddrFlag.Name), logLevel)
+		url, closeFunc, err := api.StartAdminServer(ctx.String(adminAddrFlag.Name), logLevel, healthStatus)
 		if err != nil {
 			return fmt.Errorf("unable to start admin server - %w", err)
 		}
@@ -404,7 +404,6 @@ func soloAction(ctx *cli.Context) error {
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
 	bftEngine := solo.NewBFTEngine(repo)
-	healthStatus := &health.Health{}
 
 	apiHandler, apiCloser := api.New(
 		repo,
@@ -413,7 +412,6 @@ func soloAction(ctx *cli.Context) error {
 		logDB,
 		bftEngine,
 		&solo.Communicator{},
-		healthStatus,
 		forkConfig,
 		ctx.String(apiCorsFlag.Name),
 		uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),

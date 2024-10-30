@@ -40,7 +40,7 @@ func (h *Health) handleGetHealth(w http.ResponseWriter, _ *http.Request) error {
 func (h *Health) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
-	sub.Path("/").
+	sub.Path("").
 		Methods(http.MethodGet).
 		Name("health").
 		HandlerFunc(utils.WrapHandlerFunc(h.handleGetHealth))
