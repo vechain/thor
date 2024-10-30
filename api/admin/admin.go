@@ -19,10 +19,10 @@ import (
 
 func New(logLevel *slog.LevelVar, health *health.Health) http.HandlerFunc {
 	router := mux.NewRouter()
-	router.PathPrefix("/admin")
+	subRouter := router.PathPrefix("/admin").Subrouter()
 
-	loglevel.New(logLevel).Mount(router, "/loglevel")
-	healthAPI.New(health).Mount(router, "/health")
+	loglevel.New(logLevel).Mount(subRouter, "/loglevel")
+	healthAPI.New(health).Mount(subRouter, "/health")
 
 	handler := handlers.CompressHandler(router)
 
