@@ -24,7 +24,6 @@ import (
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus"
-	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
@@ -38,19 +37,32 @@ import (
 
 const defaultMaxStorageResult = 1000
 
-var devNetGenesisID = genesis.NewDevnet().ID()
-
 type Debug struct {
 	repo              *chain.Repository
 	stater            *state.Stater
 	forkConfig        thor.ForkConfig
 	callGasLimit      uint64
 	allowCustomTracer bool
-	bft               bft.Finalizer
-	allowedTracers    map[string]interface{}
+	bft               bft.Committer
+	allowedTracers    map[string]struct{}
+	skipPoA           bool
 }
 
-func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfig, callGaslimit uint64, allowCustomTracer bool, bft bft.Finalizer, allowedTracers map[string]interface{}) *Debug {
+func New(
+	repo *chain.Repository,
+	stater *state.Stater,
+	forkConfig thor.ForkConfig,
+	callGaslimit uint64,
+	allowCustomTracer bool,
+	bft bft.Committer,
+	allowedTracers []string,
+	soloMode bool,
+) *Debug {
+	allowedMap := make(map[string]struct{})
+	for _, t := range allowedTracers {
+		allowedMap[t] = struct{}{}
+	}
+
 	return &Debug{
 		repo,
 		stater,
@@ -58,7 +70,8 @@ func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfi
 		callGaslimit,
 		allowCustomTracer,
 		bft,
-		allowedTracers,
+		allowedMap,
+		soloMode,
 	}
 }
 
@@ -78,12 +91,11 @@ func (d *Debug) prepareClauseEnv(ctx context.Context, blockID thor.Bytes32, txIn
 	if clauseIndex >= uint32(len(txs[txIndex].Clauses())) {
 		return nil, nil, thor.Bytes32{}, utils.Forbidden(errors.New("clause index out of range"))
 	}
-	skipPoA := d.repo.GenesisBlock().Header().ID() == devNetGenesisID
 	rt, err := consensus.New(
 		d.repo,
 		d.stater,
 		d.forkConfig,
-	).NewRuntimeForReplay(block.Header(), skipPoA)
+	).NewRuntimeForReplay(block.Header(), d.skipPoA)
 	if err != nil {
 		return nil, nil, thor.Bytes32{}, err
 	}
@@ -213,18 +225,27 @@ func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error 
 }
 
 func (d *Debug) createTracer(name string, config json.RawMessage) (tracers.Tracer, error) {
-	if strings.TrimSpace(name) == "" {
-		return nil, fmt.Errorf("tracer name must be defined")
-	}
-	_, noTracers := d.allowedTracers["none"]
-	_, allTracers := d.allowedTracers["all"]
-
-	// fail if the requested tracer is not allowed OR if the "all" tracers code isn't active
-	if _, ok := d.allowedTracers[name]; noTracers || (!ok && !allTracers) {
-		return nil, fmt.Errorf("creating tracer is not allowed: %s", name)
+	tracerName := strings.TrimSpace(name)
+	// compatible with old API specs
+	if tracerName == "" {
+		tracerName = "structLoggerTracer" // default to struct log tracer
 	}
 
-	return tracers.DefaultDirectory.New(name, config, d.allowCustomTracer)
+	// if it's builtin tracers
+	if tracers.DefaultDirectory.Lookup(tracerName) {
+		_, allowAll := d.allowedTracers["all"]
+		// fail if the requested tracer is not allowed OR "all" not set
+		if _, allowed := d.allowedTracers[tracerName]; !allowAll && !allowed {
+			return nil, fmt.Errorf("creating tracer is not allowed: %s", name)
+		}
+		return tracers.DefaultDirectory.New(tracerName, config, false)
+	}
+
+	if d.allowCustomTracer {
+		return tracers.DefaultDirectory.New(tracerName, config, true)
+	}
+
+	return nil, errors.New("tracer is not defined")
 }
 
 func (d *Debug) traceCall(ctx context.Context, tracer tracers.Tracer, header *block.Header, st *state.State, txCtx *xenv.TransactionContext, gas uint64, clause *tx.Clause) (interface{}, error) {

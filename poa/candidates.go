@@ -44,8 +44,8 @@ func NewCandidates(list []*authority.Candidate) *Candidates {
 // Copy make a copy.
 func (c *Candidates) Copy() *Candidates {
 	c.referenced = true
-	copy := *c
-	return &copy
+	cpy := *c
+	return &cpy
 }
 
 // Pick picks a list of proposers, which satisfy preset conditions.
@@ -100,9 +100,9 @@ func (c *Candidates) Update(addr thor.Address, active bool) bool {
 			c.list = append([]*authority.Candidate(nil), c.list...)
 			c.referenced = false
 		}
-		copy := *c.list[i]
-		copy.Active = active
-		c.list[i] = &copy
+		cpy := *c.list[i]
+		cpy.Active = active
+		c.list[i] = &cpy
 		return true
 	}
 	return false

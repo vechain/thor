@@ -134,7 +134,7 @@ func newTempFileDB() (*muxdb.MuxDB, func() error, error) {
 		return nil, nil, err
 	}
 
-	close := func() error {
+	closeFunc := func() error {
 		err = db.Close()
 		if err != nil {
 			return err
@@ -146,7 +146,7 @@ func newTempFileDB() (*muxdb.MuxDB, func() error, error) {
 		return nil
 	}
 
-	return db, close, nil
+	return db, closeFunc, nil
 }
 
 func TestProcessDump(t *testing.T) {
@@ -224,7 +224,7 @@ func TestWaitUntil(t *testing.T) {
 	}
 
 	parentID := b0.Header().ID()
-	var parentScore uint64 = 0
+	var parentScore uint64
 	for i := 0; i < 6; i++ {
 		blk := newBlock(parentID, parentScore+2, b0.Header().StateRoot(), devAccounts[0].PrivateKey)
 		err := repo.AddBlock(blk, tx.Receipts{}, 0)

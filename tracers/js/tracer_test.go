@@ -33,23 +33,23 @@ import (
 
 type account struct{}
 
-func (account) SubBalance(amount *big.Int)                          {}
-func (account) AddBalance(amount *big.Int)                          {}
-func (account) SetAddress(common.Address)                           {}
-func (account) Value() *big.Int                                     { return nil }
-func (account) SetBalance(*big.Int)                                 {}
-func (account) SetNonce(uint64)                                     {}
-func (account) Balance() *big.Int                                   { return nil }
-func (account) Address() common.Address                             { return common.Address{} }
-func (account) SetCode(common.Hash, []byte)                         {}
-func (account) ForEachStorage(cb func(key, value common.Hash) bool) {}
+func (account) SubBalance(_ *big.Int)                              {}
+func (account) AddBalance(_ *big.Int)                              {}
+func (account) SetAddress(_ common.Address)                        {}
+func (account) Value() *big.Int                                    { return nil }
+func (account) SetBalance(_ *big.Int)                              {}
+func (account) SetNonce(_ uint64)                                  {}
+func (account) Balance() *big.Int                                  { return nil }
+func (account) Address() common.Address                            { return common.Address{} }
+func (account) SetCode(_ common.Hash, _ []byte)                    {}
+func (account) ForEachStorage(_ func(key, value common.Hash) bool) {}
 
 type dummyStatedb struct {
 	state.StateDB
 }
 
-func (*dummyStatedb) GetRefund() uint64                       { return 1337 }
-func (*dummyStatedb) GetBalance(addr common.Address) *big.Int { return new(big.Int) }
+func (*dummyStatedb) GetRefund() uint64                    { return 1337 }
+func (*dummyStatedb) GetBalance(_ common.Address) *big.Int { return new(big.Int) }
 
 func testCtx() vm.Context {
 	return vm.Context{

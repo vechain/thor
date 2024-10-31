@@ -396,7 +396,7 @@ func (rt *Runtime) PrepareCallTransaction(tx *tx.Transaction, address *thor.Addr
 		return nil, err
 	}
 
-	baseGasPrice, gasPrice, payer, returnGas, err := resolvedTx.BuyGas(rt.state, rt.ctx.Time)
+	baseGasPrice, gasPrice, payer, _, returnGas, err := resolvedTx.BuyGas(rt.state, rt.ctx.Time)
 	if err != nil {
 		return nil, err
 	}
@@ -510,7 +510,7 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 		return nil, err
 	}
 
-	baseGasPrice, gasPrice, payer, returnGas, err := resolvedTx.BuyGas(rt.state, rt.ctx.Time)
+	baseGasPrice, gasPrice, payer, _, returnGas, err := resolvedTx.BuyGas(rt.state, rt.ctx.Time)
 	if err != nil {
 		return nil, err
 	}

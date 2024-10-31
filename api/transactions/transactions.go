@@ -30,11 +30,11 @@ type Transactions struct {
 	repo       *chain.Repository
 	pool       *txpool.TxPool
 	stater     *state.Stater
-	bft        bft.Finalizer
+	bft        bft.Committer
 	forkConfig thor.ForkConfig
 }
 
-func New(repo *chain.Repository, stater *state.Stater, pool *txpool.TxPool, bft bft.Finalizer, forkConfig thor.ForkConfig) *Transactions {
+func New(repo *chain.Repository, stater *state.Stater, pool *txpool.TxPool, bft bft.Committer, forkConfig thor.ForkConfig) *Transactions {
 	return &Transactions{
 		repo:       repo,
 		stater:     stater,
@@ -44,7 +44,7 @@ func New(repo *chain.Repository, stater *state.Stater, pool *txpool.TxPool, bft 
 	}
 }
 
-func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, allowPending bool) (*rawTransaction, error) {
+func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, allowPending bool) (*RawTransaction, error) {
 	chain := t.repo.NewChain(head)
 	tx, meta, err := chain.GetTransaction(txID)
 	if err != nil {
@@ -55,7 +55,7 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, a
 					if err != nil {
 						return nil, err
 					}
-					return &rawTransaction{
+					return &RawTransaction{
 						RawTx: RawTx{hexutil.Encode(raw)},
 					}, nil
 				}
@@ -73,7 +73,7 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, a
 	if err != nil {
 		return nil, err
 	}
-	return &rawTransaction{
+	return &RawTransaction{
 		RawTx: RawTx{hexutil.Encode(raw)},
 		Meta: &TxMeta{
 			BlockID:        summary.Header.ID(),
@@ -148,9 +148,8 @@ func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Re
 		}
 		return err
 	}
-	return utils.WriteJSON(w, map[string]string{
-		"id": tx.ID().String(),
-	})
+	txID := tx.ID()
+	return utils.WriteJSON(w, &SendTxResult{ID: &txID})
 }
 
 func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http.Request) error {

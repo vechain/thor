@@ -7,7 +7,6 @@ package blocks_test
 
 import (
 	"encoding/json"
-	"io"
 	"math"
 	"math/big"
 	"net/http"
@@ -17,9 +16,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
@@ -29,29 +28,37 @@ import (
 	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/tx"
 )
 
-var genesisBlock *block.Block
-var blk *block.Block
-var ts *httptest.Server
+const (
+	invalidBytes32 = "0x000000000000000000000000000000000000000000000000000000000000000g" // invalid bytes32
+)
 
-var invalidBytes32 = "0x000000000000000000000000000000000000000000000000000000000000000g" //invlaid bytes32
+var (
+	genesisBlock *block.Block
+	blk          *block.Block
+	ts           *httptest.Server
+	tclient      *thorclient.Client
+)
 
 func TestBlock(t *testing.T) {
 	initBlockServer(t)
 	defer ts.Close()
 
+	tclient = thorclient.New(ts.URL)
 	for name, tt := range map[string]func(*testing.T){
 		"testBadQueryParams":                    testBadQueryParams,
-		"testInvalidBlockId":                    testInvalidBlockId,
+		"testInvalidBlockID":                    testInvalidBlockID,
 		"testInvalidBlockNumber":                testInvalidBlockNumber,
-		"testGetBlockById":                      testGetBlockById,
+		"testGetBlockByID":                      testGetBlockByID,
 		"testGetBlockNotFound":                  testGetBlockNotFound,
-		"testGetExpandedBlockById":              testGetExpandedBlockById,
+		"testGetExpandedBlockByID":              testGetExpandedBlockByID,
 		"testGetBlockByHeight":                  testGetBlockByHeight,
 		"testGetBestBlock":                      testGetBestBlock,
 		"testGetFinalizedBlock":                 testGetFinalizedBlock,
+		"testGetJustifiedBlock":                 testGetJustifiedBlock,
 		"testGetBlockWithRevisionNumberTooHigh": testGetBlockWithRevisionNumberTooHigh,
 	} {
 		t.Run(name, tt)
@@ -60,14 +67,16 @@ func TestBlock(t *testing.T) {
 
 func testBadQueryParams(t *testing.T) {
 	badQueryParams := "?expanded=1"
-	res, statusCode := httpGet(t, ts.URL+"/blocks/best"+badQueryParams)
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/best" + badQueryParams)
+	require.NoError(t, err)
 
 	assert.Equal(t, http.StatusBadRequest, statusCode)
 	assert.Equal(t, "expanded: should be boolean", strings.TrimSpace(string(res)))
 }
 
 func testGetBestBlock(t *testing.T) {
-	res, statusCode := httpGet(t, ts.URL+"/blocks/best")
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/best")
+	require.NoError(t, err)
 	rb := new(blocks.JSONCollapsedBlock)
 	if err := json.Unmarshal(res, &rb); err != nil {
 		t.Fatal(err)
@@ -77,7 +86,8 @@ func testGetBestBlock(t *testing.T) {
 }
 
 func testGetBlockByHeight(t *testing.T) {
-	res, statusCode := httpGet(t, ts.URL+"/blocks/1")
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/1")
+	require.NoError(t, err)
 	rb := new(blocks.JSONCollapsedBlock)
 	if err := json.Unmarshal(res, &rb); err != nil {
 		t.Fatal(err)
@@ -87,7 +97,8 @@ func testGetBlockByHeight(t *testing.T) {
 }
 
 func testGetFinalizedBlock(t *testing.T) {
-	res, statusCode := httpGet(t, ts.URL+"/blocks/finalized")
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/finalized")
+	require.NoError(t, err)
 	finalized := new(blocks.JSONCollapsedBlock)
 	if err := json.Unmarshal(res, &finalized); err != nil {
 		t.Fatal(err)
@@ -99,8 +110,20 @@ func testGetFinalizedBlock(t *testing.T) {
 	assert.Equal(t, genesisBlock.Header().ID(), finalized.ID)
 }
 
-func testGetBlockById(t *testing.T) {
-	res, statusCode := httpGet(t, ts.URL+"/blocks/"+blk.Header().ID().String())
+func testGetJustifiedBlock(t *testing.T) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/justified")
+	require.NoError(t, err)
+	justified := new(blocks.JSONCollapsedBlock)
+	require.NoError(t, json.Unmarshal(res, &justified))
+
+	assert.Equal(t, http.StatusOK, statusCode)
+	assert.Equal(t, uint32(0), justified.Number)
+	assert.Equal(t, genesisBlock.Header().ID(), justified.ID)
+}
+
+func testGetBlockByID(t *testing.T) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/" + blk.Header().ID().String())
+	require.NoError(t, err)
 	rb := new(blocks.JSONCollapsedBlock)
 	if err := json.Unmarshal(res, rb); err != nil {
 		t.Fatal(err)
@@ -110,14 +133,17 @@ func testGetBlockById(t *testing.T) {
 }
 
 func testGetBlockNotFound(t *testing.T) {
-	res, statusCode := httpGet(t, ts.URL+"/blocks/0x00000000851caf3cfdb6e899cf5958bfb1ac3413d346d43539627e6be7ec1b4a")
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/0x00000000851caf3cfdb6e899cf5958bfb1ac3413d346d43539627e6be7ec1b4a")
+	require.NoError(t, err)
 
 	assert.Equal(t, http.StatusOK, statusCode)
 	assert.Equal(t, "null", strings.TrimSpace(string(res)))
 }
 
-func testGetExpandedBlockById(t *testing.T) {
-	res, statusCode := httpGet(t, ts.URL+"/blocks/"+blk.Header().ID().String()+"?expanded=true")
+func testGetExpandedBlockByID(t *testing.T) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/" + blk.Header().ID().String() + "?expanded=true")
+	require.NoError(t, err)
+
 	rb := new(blocks.JSONExpandedBlock)
 	if err := json.Unmarshal(res, rb); err != nil {
 		t.Fatal(err)
@@ -128,18 +154,21 @@ func testGetExpandedBlockById(t *testing.T) {
 
 func testInvalidBlockNumber(t *testing.T) {
 	invalidNumberRevision := "4294967296" //invalid block number
-	_, statusCode := httpGet(t, ts.URL+"/blocks/"+invalidNumberRevision)
+	_, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/" + invalidNumberRevision)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode)
 }
 
-func testInvalidBlockId(t *testing.T) {
-	_, statusCode := httpGet(t, ts.URL+"/blocks/"+invalidBytes32)
+func testInvalidBlockID(t *testing.T) {
+	_, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/" + invalidBytes32)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode)
 }
 
 func testGetBlockWithRevisionNumberTooHigh(t *testing.T) {
 	revisionNumberTooHigh := strconv.FormatUint(math.MaxUint64, 10)
-	res, statusCode := httpGet(t, ts.URL+"/blocks/"+revisionNumberTooHigh)
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/" + revisionNumberTooHigh)
+	require.NoError(t, err)
 
 	assert.Equal(t, http.StatusBadRequest, statusCode)
 	assert.Equal(t, "revision: block number out of max uint32", strings.TrimSpace(string(res)))
@@ -159,28 +188,26 @@ func initBlockServer(t *testing.T) {
 	repo, _ := chain.NewRepository(db, b)
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	tx := new(tx.Builder).
-		ChainTag(repo.ChainTag()).
-		GasPriceCoef(1).
-		Expiration(10).
-		Gas(21000).
-		Nonce(1).
-		Clause(cla).
-		BlockRef(tx.NewBlockRef(0)).
-		Build()
+	trx := tx.MustSign(
+		new(tx.Builder).
+			ChainTag(repo.ChainTag()).
+			GasPriceCoef(1).
+			Expiration(10).
+			Gas(21000).
+			Nonce(1).
+			Clause(cla).
+			BlockRef(tx.NewBlockRef(0)).
+			Build(),
+		genesis.DevAccounts()[0].PrivateKey,
+	)
 
-	sig, err := crypto.Sign(tx.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tx = tx.WithSignature(sig)
 	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
 	sum, _ := repo.GetBlockSummary(b.Header().ID())
 	flow, err := packer.Schedule(sum, uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = flow.Adopt(tx)
+	err = flow.Adopt(trx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,17 +265,4 @@ func checkExpandedBlock(t *testing.T, expBl *block.Block, actBl *blocks.JSONExpa
 	for i, tx := range expBl.Transactions() {
 		assert.Equal(t, tx.ID(), actBl.Transactions[i].ID, "txid should be equal")
 	}
-}
-
-func httpGet(t *testing.T, url string) ([]byte, int) {
-	res, err := http.Get(url) // nolint:gosec
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, err := io.ReadAll(res.Body)
-	res.Body.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return r, res.StatusCode
 }

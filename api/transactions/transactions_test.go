@@ -6,22 +6,19 @@
 package transactions_test
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math/big"
-	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/solo"
@@ -30,20 +27,25 @@ import (
 	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
 )
 
-var repo *chain.Repository
-var ts *httptest.Server
-var transaction *tx.Transaction
-var mempoolTx *tx.Transaction
+var (
+	repo        *chain.Repository
+	ts          *httptest.Server
+	transaction *tx.Transaction
+	mempoolTx   *tx.Transaction
+	tclient     *thorclient.Client
+)
 
 func TestTransaction(t *testing.T) {
 	initTransactionServer(t)
 	defer ts.Close()
 
 	// Send tx
+	tclient = thorclient.New(ts.URL)
 	for name, tt := range map[string]func(*testing.T){
 		"sendTx":              sendTx,
 		"sendTxWithBadFormat": sendTxWithBadFormat,
@@ -55,7 +57,7 @@ func TestTransaction(t *testing.T) {
 	// Get tx
 	for name, tt := range map[string]func(*testing.T){
 		"getTx":           getTx,
-		"getTxWithBadId":  getTxWithBadId,
+		"getTxWithBadID":  getTxWithBadID,
 		"txWithBadHeader": txWithBadHeader,
 		"getNonExistingRawTransactionWhenTxStillInMempool": getNonExistingRawTransactionWhenTxStillInMempool,
 		"getNonPendingRawTransactionWhenTxStillInMempool":  getNonPendingRawTransactionWhenTxStillInMempool,
@@ -71,7 +73,7 @@ func TestTransaction(t *testing.T) {
 	// Get tx receipt
 	for name, tt := range map[string]func(*testing.T){
 		"getTxReceipt":        getTxReceipt,
-		"getReceiptWithBadId": getReceiptWithBadId,
+		"getReceiptWithBadID": getReceiptWithBadID,
 		"handleGetTransactionReceiptByIDWithNonExistingHead": handleGetTransactionReceiptByIDWithNonExistingHead,
 	} {
 		t.Run(name, tt)
@@ -87,14 +89,14 @@ func TestTransaction(t *testing.T) {
 }
 
 func getTx(t *testing.T) {
-	res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+transaction.ID().String(), 200)
+	res := httpGetAndCheckResponseStatus(t, "/transactions/"+transaction.ID().String(), 200)
 	var rtx *transactions.Transaction
 	if err := json.Unmarshal(res, &rtx); err != nil {
 		t.Fatal(err)
 	}
 	checkMatchingTx(t, transaction, rtx)
 
-	res = httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+transaction.ID().String()+"?raw=true", 200)
+	res = httpGetAndCheckResponseStatus(t, "/transactions/"+transaction.ID().String()+"?raw=true", 200)
 	var rawTx map[string]interface{}
 	if err := json.Unmarshal(res, &rawTx); err != nil {
 		t.Fatal(err)
@@ -107,7 +109,7 @@ func getTx(t *testing.T) {
 }
 
 func getTxReceipt(t *testing.T) {
-	r := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+transaction.ID().String()+"/receipt", 200)
+	r := httpGetAndCheckResponseStatus(t, "/transactions/"+transaction.ID().String()+"/receipt", 200)
 	var receipt *transactions.Receipt
 	if err := json.Unmarshal(r, &receipt); err != nil {
 		t.Fatal(err)
@@ -121,42 +123,41 @@ func sendTx(t *testing.T) {
 	var expiration = uint32(10)
 	var gas = uint64(21000)
 
-	tx := new(tx.Builder).
-		BlockRef(blockRef).
-		ChainTag(chainTag).
-		Expiration(expiration).
-		Gas(gas).
-		Build()
-	sig, err := crypto.Sign(tx.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tx = tx.WithSignature(sig)
-	rlpTx, err := rlp.EncodeToBytes(tx)
+	trx := tx.MustSign(
+		new(tx.Builder).
+			BlockRef(blockRef).
+			ChainTag(chainTag).
+			Expiration(expiration).
+			Gas(gas).
+			Build(),
+		genesis.DevAccounts()[0].PrivateKey,
+	)
+
+	rlpTx, err := rlp.EncodeToBytes(trx)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/transactions", transactions.RawTx{Raw: hexutil.Encode(rlpTx)}, 200)
+	res := httpPostAndCheckResponseStatus(t, "/transactions", transactions.RawTx{Raw: hexutil.Encode(rlpTx)}, 200)
 	var txObj map[string]string
 	if err = json.Unmarshal(res, &txObj); err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, tx.ID().String(), txObj["id"], "should be the same transaction id")
+	assert.Equal(t, trx.ID().String(), txObj["id"], "should be the same transaction id")
 }
 
-func getTxWithBadId(t *testing.T) {
-	txBadId := "0x123"
+func getTxWithBadID(t *testing.T) {
+	txBadID := "0x123"
 
-	res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+txBadId, 400)
+	res := httpGetAndCheckResponseStatus(t, "/transactions/"+txBadID, 400)
 
 	assert.Contains(t, string(res), "invalid length")
 }
 
 func txWithBadHeader(t *testing.T) {
 	badHeaderURL := []string{
-		ts.URL + "/transactions/" + transaction.ID().String() + "?head=badHead",
-		ts.URL + "/transactions/" + transaction.ID().String() + "/receipt?head=badHead",
+		"/transactions/" + transaction.ID().String() + "?head=badHead",
+		"/transactions/" + transaction.ID().String() + "/receipt?head=badHead",
 	}
 
 	for _, url := range badHeaderURL {
@@ -165,28 +166,28 @@ func txWithBadHeader(t *testing.T) {
 	}
 }
 
-func getReceiptWithBadId(t *testing.T) {
-	txBadId := "0x123"
+func getReceiptWithBadID(t *testing.T) {
+	txBadID := "0x123"
 
-	httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+txBadId+"/receipt", 400)
+	httpGetAndCheckResponseStatus(t, "/transactions/"+txBadID+"/receipt", 400)
 }
 
 func getNonExistingRawTransactionWhenTxStillInMempool(t *testing.T) {
-	nonExistingTxId := "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+	nonExistingTxID := "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 	queryParams := []string{
 		"?raw=true",
 		"?raw=true&pending=true",
 	}
 
 	for _, queryParam := range queryParams {
-		res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+nonExistingTxId+queryParam, 200)
+		res := httpGetAndCheckResponseStatus(t, "/transactions/"+nonExistingTxID+queryParam, 200)
 
 		assert.Equal(t, "null\n", string(res))
 	}
 }
 
 func getNonPendingRawTransactionWhenTxStillInMempool(t *testing.T) {
-	res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+mempoolTx.ID().String()+"?raw=true", 200)
+	res := httpGetAndCheckResponseStatus(t, "/transactions/"+mempoolTx.ID().String()+"?raw=true", 200)
 	var rawTx map[string]interface{}
 	if err := json.Unmarshal(res, &rawTx); err != nil {
 		t.Fatal(err)
@@ -196,7 +197,7 @@ func getNonPendingRawTransactionWhenTxStillInMempool(t *testing.T) {
 }
 
 func getRawTransactionWhenTxStillInMempool(t *testing.T) {
-	res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+mempoolTx.ID().String()+"?raw=true&pending=true", 200)
+	res := httpGetAndCheckResponseStatus(t, "/transactions/"+mempoolTx.ID().String()+"?raw=true&pending=true", 200)
 	var rawTx map[string]interface{}
 	if err := json.Unmarshal(res, &rawTx); err != nil {
 		t.Fatal(err)
@@ -211,13 +212,13 @@ func getRawTransactionWhenTxStillInMempool(t *testing.T) {
 }
 
 func getTransactionByIDTxNotFound(t *testing.T) {
-	res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+mempoolTx.ID().String(), 200)
+	res := httpGetAndCheckResponseStatus(t, "/transactions/"+mempoolTx.ID().String(), 200)
 
 	assert.Equal(t, "null\n", string(res))
 }
 
 func getTransactionByIDPendingTxNotFound(t *testing.T) {
-	res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+mempoolTx.ID().String()+"?pending=true", 200)
+	res := httpGetAndCheckResponseStatus(t, "/transactions/"+mempoolTx.ID().String()+"?pending=true", 200)
 	var rtx *transactions.Transaction
 	if err := json.Unmarshal(res, &rtx); err != nil {
 		t.Fatal(err)
@@ -229,7 +230,7 @@ func getTransactionByIDPendingTxNotFound(t *testing.T) {
 func sendTxWithBadFormat(t *testing.T) {
 	badRawTx := transactions.RawTx{Raw: "badRawTx"}
 
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/transactions", badRawTx, 400)
+	res := httpPostAndCheckResponseStatus(t, "/transactions", badRawTx, 400)
 
 	assert.Contains(t, string(res), hexutil.ErrMissingPrefix.Error())
 }
@@ -242,7 +243,7 @@ func sendTxThatCannotBeAcceptedInLocalMempool(t *testing.T) {
 	}
 	duplicatedRawTx := transactions.RawTx{Raw: hexutil.Encode(rlpTx)}
 
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/transactions", duplicatedRawTx, 400)
+	res := httpPostAndCheckResponseStatus(t, "/transactions", duplicatedRawTx, 400)
 
 	assert.Contains(t, string(res), "bad tx: chain tag mismatch")
 }
@@ -254,18 +255,18 @@ func handleGetTransactionByIDWithBadQueryParams(t *testing.T) {
 	}
 
 	for _, badQueryParam := range badQueryParams {
-		res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+transaction.ID().String()+badQueryParam, 400)
+		res := httpGetAndCheckResponseStatus(t, "/transactions/"+transaction.ID().String()+badQueryParam, 400)
 		assert.Contains(t, string(res), "should be boolean")
 	}
 }
 
 func handleGetTransactionByIDWithNonExistingHead(t *testing.T) {
-	res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+transaction.ID().String()+"?head=0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 400)
+	res := httpGetAndCheckResponseStatus(t, "/transactions/"+transaction.ID().String()+"?head=0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 400)
 	assert.Equal(t, "head: leveldb: not found", strings.TrimSpace(string(res)))
 }
 
 func handleGetTransactionReceiptByIDWithNonExistingHead(t *testing.T) {
-	res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+transaction.ID().String()+"/receipt?head=0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 400)
+	res := httpGetAndCheckResponseStatus(t, "/transactions/"+transaction.ID().String()+"/receipt?head=0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 400)
 	assert.Equal(t, "head: leveldb: not found", strings.TrimSpace(string(res)))
 }
 
@@ -304,7 +305,7 @@ func callTx(t *testing.T) {
 	} {
 		txCall := transactions.ConvertCallTransaction(testTx, nil, &genesis.DevAccounts()[0].Address, nil)
 
-		res := httpPostAndCheckResponseStatus(t, ts.URL+"/transactions/call", txCall, 200)
+		res := httpPostAndCheckResponseStatus(t, "/transactions/call", txCall, 200)
 		var callReceipt transactions.CallReceipt
 		if err := json.Unmarshal(res, &callReceipt); err != nil {
 			t.Fatal(err)
@@ -358,7 +359,7 @@ func invalidCallTx(t *testing.T) {
 		},
 	} {
 		t.Run(tc.errMsg, func(t *testing.T) {
-			res := httpPostAndCheckResponseStatus(t, ts.URL+"/transactions/call", tc.testTx, 500)
+			res := httpPostAndCheckResponseStatus(t, "/transactions/call", tc.testTx, 500)
 			assert.Equal(t, tc.errMsg, strings.TrimSpace(string(res)))
 		})
 	}
@@ -378,18 +379,11 @@ func validateTxCall(t *testing.T, callTx *tx.Transaction, callRcpt *transactions
 }
 
 func httpPostAndCheckResponseStatus(t *testing.T, url string, obj interface{}, responseStatusCode int) []byte {
-	data, err := json.Marshal(obj)
-	if err != nil {
-		t.Fatal(err)
-	}
-	res, err := http.Post(url, "application/x-www-form-urlencoded", bytes.NewReader(data)) // nolint: gosec
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, responseStatusCode, res.StatusCode, fmt.Sprintf("status code should be %d", responseStatusCode))
-	r := parseBytesBody(t, res.Body)
-	res.Body.Close()
-	return r
+	body, statusCode, err := tclient.RawHTTPClient().RawHTTPPost(url, obj)
+	require.NoError(t, err)
+	assert.Equal(t, responseStatusCode, statusCode, fmt.Sprintf("status code should be %d", responseStatusCode))
+
+	return body
 }
 
 func initTransactionServer(t *testing.T) {
@@ -413,6 +407,7 @@ func initTransactionServer(t *testing.T) {
 		Clause(cla).
 		BlockRef(tx.NewBlockRef(0)).
 		Build()
+	transaction = tx.MustSign(transaction, genesis.DevAccounts()[0].PrivateKey)
 
 	mempoolTx = new(tx.Builder).
 		ChainTag(repo.ChainTag()).
@@ -420,19 +415,7 @@ func initTransactionServer(t *testing.T) {
 		Gas(21000).
 		Nonce(1).
 		Build()
-
-	sig, err := crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	sig2, err := crypto.Sign(mempoolTx.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	transaction = transaction.WithSignature(sig)
-	mempoolTx = mempoolTx.WithSignature(sig2)
+	mempoolTx = tx.MustSign(mempoolTx, genesis.DevAccounts()[0].PrivateKey)
 
 	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
 	sum, _ := repo.GetBlockSummary(b.Header().ID())
@@ -488,23 +471,9 @@ func checkMatchingTx(t *testing.T, expectedTx *tx.Transaction, actualTx *transac
 }
 
 func httpGetAndCheckResponseStatus(t *testing.T, url string, responseStatusCode int) []byte {
-	res, err := http.Get(url) // nolint:gosec
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, responseStatusCode, res.StatusCode, fmt.Sprintf("status code should be %d", responseStatusCode))
-	r, err := io.ReadAll(res.Body)
-	res.Body.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return r
-}
+	body, statusCode, err := tclient.RawHTTPClient().RawHTTPGet(url)
+	require.NoError(t, err)
+	assert.Equal(t, responseStatusCode, statusCode, fmt.Sprintf("status code should be %d", responseStatusCode))
 
-func parseBytesBody(t *testing.T, body io.ReadCloser) []byte {
-	r, err := io.ReadAll(body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return r
+	return body
 }

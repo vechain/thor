@@ -19,8 +19,8 @@ import (
 )
 
 var (
-	metricHttpReqCounter       = metrics.LazyLoadCounterVec("api_request_count", []string{"name", "code", "method"})
-	metricHttpReqDuration      = metrics.LazyLoadHistogramVec("api_duration_ms", []string{"name", "code", "method"}, metrics.BucketHTTPReqs)
+	metricHTTPReqCounter       = metrics.LazyLoadCounterVec("api_request_count", []string{"name", "code", "method"})
+	metricHTTPReqDuration      = metrics.LazyLoadHistogramVec("api_duration_ms", []string{"name", "code", "method"}, metrics.BucketHTTPReqs)
 	metricActiveWebsocketCount = metrics.LazyLoadGaugeVec("api_active_websocket_count", []string{"subject"})
 )
 
@@ -89,8 +89,8 @@ func metricsMiddleware(next http.Handler) http.Handler {
 		if subscription != "" {
 			metricActiveWebsocketCount().AddWithLabel(-1, map[string]string{"subject": subscription})
 		} else if enabled {
-			metricHttpReqCounter().AddWithLabel(1, map[string]string{"name": name, "code": strconv.Itoa(mrw.statusCode), "method": r.Method})
-			metricHttpReqDuration().ObserveWithLabels(time.Since(now).Milliseconds(), map[string]string{"name": name, "code": strconv.Itoa(mrw.statusCode), "method": r.Method})
+			metricHTTPReqCounter().AddWithLabel(1, map[string]string{"name": name, "code": strconv.Itoa(mrw.statusCode), "method": r.Method})
+			metricHTTPReqDuration().ObserveWithLabels(time.Since(now).Milliseconds(), map[string]string{"name": name, "code": strconv.Itoa(mrw.statusCode), "method": r.Method})
 		}
 	})
 }

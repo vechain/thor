@@ -79,7 +79,7 @@ func (rtx *RawTx) decode() (*tx.Transaction, error) {
 	return tx, nil
 }
 
-type rawTransaction struct {
+type RawTransaction struct {
 	RawTx
 	Meta *TxMeta `json:"meta"`
 }
@@ -160,7 +160,7 @@ type CallReceipt struct {
 	TxID     thor.Bytes32          `json:"txID"`
 	TxOrigin thor.Address          `json:"txOrigin"`
 	Outputs  []*Output             `json:"outputs"`
-	VmError  string                `json:"vmError"`
+	VMError  string                `json:"vmError"`
 }
 
 // Output output of clause execution.
@@ -304,7 +304,7 @@ func convertErrorCallReceipt(
 		Reverted: true,
 		TxOrigin: *origin,
 		TxID:     tx.ID,
-		VmError:  vmErr.Error(),
+		VMError:  vmErr.Error(),
 	}
 	receipt.Outputs = make([]*Output, len(tx.Clauses))
 	for i := range tx.Clauses {
@@ -347,4 +347,9 @@ func convertToTxTransaction(incomingTx *Transaction) (*tx.Transaction, error) {
 	}
 
 	return convertedTxBuilder.Build(), nil
+}
+
+// SendTxResult is the response to the Send Tx method
+type SendTxResult struct {
+	ID *thor.Bytes32 `json:"id"`
 }

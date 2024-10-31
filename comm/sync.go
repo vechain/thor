@@ -81,13 +81,11 @@ func warmupBlocks(ctx context.Context, fetched <-chan []*block.Block, warmedUp c
 	<-co.Parallel(func(queue chan<- func()) {
 		for blocks := range fetched {
 			for _, blk := range blocks {
-				h := blk.Header()
 				queue <- func() {
-					h.ID()
-					h.Beta()
+					blk.Header().ID()
+					blk.Header().Beta()
 				}
 				for _, tx := range blk.Transactions() {
-					tx := tx
 					queue <- func() {
 						tx.ID()
 						tx.UnprovedWork()

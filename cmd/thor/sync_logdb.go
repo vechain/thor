@@ -276,8 +276,8 @@ func verifyLogDBPerBlock(
 ) error {
 	convertTopics := func(topics []thor.Bytes32) (r [5]*thor.Bytes32) {
 		for i, t := range topics {
-			t := t
-			r[i] = &t
+			topic := t
+			r[i] = &topic
 		}
 		return
 	}
@@ -373,12 +373,10 @@ func pumpBlockAndReceipts(ctx context.Context, repo *chain.Repository, headID th
 			select {
 			case <-co.Parallel(func(queue chan<- func()) {
 				for _, b := range buf {
-					h := b.Header()
 					queue <- func() {
-						h.ID()
+						b.Header().ID()
 					}
 					for _, tx := range b.Transactions() {
-						tx := tx
 						queue <- func() {
 							tx.ID()
 						}
