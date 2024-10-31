@@ -187,7 +187,7 @@ func testTraceClauseWithBadTxID(t *testing.T) {
 		Target: fmt.Sprintf("%s/badTxId/x", blk.Header().ID()),
 	}
 	res := httpPostAndCheckResponseStatus(t, "/debug/tracers", traceClauseOption, 400)
-	assert.Equal(t, `target[1]: strconv.ParseUint: parsing "badTxId": invalid syntax`, strings.TrimSpace(res))
+	assert.Equal(t, `target[0,1]: strconv.ParseUint: parsing "badTxId": invalid syntax`, strings.TrimSpace(res))
 }
 
 func testTraceClauseWithNonExistingTx(t *testing.T) {
@@ -207,7 +207,7 @@ func testTraceClauseWithBadClauseIndex(t *testing.T) {
 		Target: fmt.Sprintf("%s/%s/x", blk.Header().ID(), transaction.ID()),
 	}
 	res := httpPostAndCheckResponseStatus(t, "/debug/tracers", traceClauseOption, 400)
-	assert.Equal(t, `target[2]: strconv.ParseUint: parsing "x": invalid syntax`, strings.TrimSpace(res))
+	assert.Equal(t, `target[1,2]: strconv.ParseUint: parsing "x": invalid syntax`, strings.TrimSpace(res))
 
 	// Clause index is out of range
 	traceClauseOption = &TraceClauseOption{
@@ -215,7 +215,7 @@ func testTraceClauseWithBadClauseIndex(t *testing.T) {
 		Target: fmt.Sprintf("%s/%s/%d", blk.Header().ID(), transaction.ID(), uint64(math.MaxUint64)),
 	}
 	res = httpPostAndCheckResponseStatus(t, "/debug/tracers", traceClauseOption, 400)
-	assert.Equal(t, `invalid target[2]`, strings.TrimSpace(res))
+	assert.Equal(t, `invalid target[1,2]`, strings.TrimSpace(res))
 }
 
 func testTraceClauseWithCustomTracer(t *testing.T) {

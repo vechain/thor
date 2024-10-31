@@ -359,17 +359,23 @@ func (d *Debug) handleDebugStorage(w http.ResponseWriter, req *http.Request) err
 
 func (d *Debug) parseTarget(target string) (blockID thor.Bytes32, txIndex uint64, clauseIndex uint32, err error) {
 	parts := strings.Split(target, "/")
-	if len(parts) != 3 {
+	if len(parts) == 2 {
+		// this is a fake blockID, reset in the tx retrieve process
+		blockID = d.repo.BestBlockSummary().Header.ID()
+	} else if len(parts) == 3 {
+		blockID, err = thor.ParseBytes32(parts[0])
+		if err != nil {
+			return thor.Bytes32{}, 0, 0, utils.BadRequest(errors.WithMessage(err, "target[0]"))
+		}
+		parts = parts[1:]
+	} else {
 		return thor.Bytes32{}, 0, 0, utils.BadRequest(errors.New("target:" + target + " unsupported"))
 	}
-	blockID, err = thor.ParseBytes32(parts[0])
-	if err != nil {
-		return thor.Bytes32{}, 0, 0, utils.BadRequest(errors.WithMessage(err, "target[0]"))
-	}
-	if len(parts[1]) == 64 || len(parts[1]) == 66 {
-		txID, err := thor.ParseBytes32(parts[1])
+
+	if len(parts[0]) == 64 || len(parts[0]) == 66 {
+		txID, err := thor.ParseBytes32(parts[0])
 		if err != nil {
-			return thor.Bytes32{}, 0, 0, utils.BadRequest(errors.WithMessage(err, "target[1]"))
+			return thor.Bytes32{}, 0, 0, utils.BadRequest(errors.WithMessage(err, "target[0,1]"))
 		}
 
 		txMeta, err := d.repo.NewChain(blockID).GetTransactionMeta(txID)
@@ -379,19 +385,20 @@ func (d *Debug) parseTarget(target string) (blockID thor.Bytes32, txIndex uint64
 			}
 			return thor.Bytes32{}, 0, 0, err
 		}
+		blockID = txMeta.BlockID
 		txIndex = txMeta.Index
 	} else {
-		i, err := strconv.ParseUint(parts[1], 0, 0)
+		i, err := strconv.ParseUint(parts[0], 0, 0)
 		if err != nil {
-			return thor.Bytes32{}, 0, 0, utils.BadRequest(errors.WithMessage(err, "target[1]"))
+			return thor.Bytes32{}, 0, 0, utils.BadRequest(errors.WithMessage(err, "target[0,1]"))
 		}
 		txIndex = i
 	}
-	i, err := strconv.ParseUint(parts[2], 0, 0)
+	i, err := strconv.ParseUint(parts[1], 0, 0)
 	if err != nil {
-		return thor.Bytes32{}, 0, 0, utils.BadRequest(errors.WithMessage(err, "target[2]"))
+		return thor.Bytes32{}, 0, 0, utils.BadRequest(errors.WithMessage(err, "target[1,2]"))
 	} else if i > math.MaxUint32 {
-		return thor.Bytes32{}, 0, 0, utils.BadRequest(errors.New("invalid target[2]"))
+		return thor.Bytes32{}, 0, 0, utils.BadRequest(errors.New("invalid target[1,2]"))
 	}
 	clauseIndex = uint32(i)
 	return
