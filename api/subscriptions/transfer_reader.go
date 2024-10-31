@@ -26,12 +26,12 @@ func newTransferReader(repo *chain.Repository, position thor.Bytes32, filter *Tr
 	}
 }
 
-func (tr *transferReader) Read() ([][]byte, bool, error) {
+func (tr *transferReader) Read() ([]rawMessage, bool, error) {
 	blocks, err := tr.blockReader.Read()
 	if err != nil {
 		return nil, false, err
 	}
-	var msgs [][]byte
+	var msgs []rawMessage
 	for _, block := range blocks {
 		receipts, err := tr.repo.GetBlockReceipts(block.Header().ID())
 		if err != nil {

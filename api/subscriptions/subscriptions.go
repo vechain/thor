@@ -36,8 +36,10 @@ type Subscriptions struct {
 	blockCache     *messageCache
 }
 
+type rawMessage []byte
+
 type msgReader interface {
-	Read() (msgs [][]byte, hasMore bool, err error)
+	Read() (msgs []rawMessage, hasMore bool, err error)
 }
 
 var (
@@ -314,7 +316,7 @@ func (s *Subscriptions) pipe(conn *websocket.Conn, reader msgReader, closed chan
 			return err
 		}
 		for _, msg := range msgs {
-			if err := conn.WriteMessage(websocket.BinaryMessage, msg); err != nil {
+			if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
 				return err
 			}
 		}

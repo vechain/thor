@@ -29,12 +29,12 @@ func newBeat2Reader(repo *chain.Repository, position thor.Bytes32, cache *messag
 	}
 }
 
-func (br *beat2Reader) Read() ([][]byte, bool, error) {
+func (br *beat2Reader) Read() ([]rawMessage, bool, error) {
 	blocks, err := br.blockReader.Read()
 	if err != nil {
 		return nil, false, err
 	}
-	var msgs [][]byte
+	var msgs []rawMessage
 
 	for _, block := range blocks {
 		msg, _, err := br.cache.GetOrAdd(block.Header().ID(), br.generateBeat2Message(block))
