@@ -33,7 +33,6 @@ type Subscriptions struct {
 	wg             sync.WaitGroup
 	beat2Cache     *messageCache
 	beatCache      *messageCache
-	blockCache     *messageCache
 }
 
 type rawMessage []byte
@@ -76,7 +75,6 @@ func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32,
 		done:       make(chan struct{}),
 		beat2Cache: newMessageCache(backtraceLimit),
 		beatCache:  newMessageCache(backtraceLimit),
-		blockCache: newMessageCache(backtraceLimit),
 	}
 
 	sub.wg.Add(1)
@@ -93,7 +91,7 @@ func (s *Subscriptions) handleBlockReader(_ http.ResponseWriter, req *http.Reque
 	if err != nil {
 		return nil, err
 	}
-	return newBlockReader(s.repo, position, s.blockCache), nil
+	return newBlockReader(s.repo, position), nil
 }
 
 func (s *Subscriptions) handleEventReader(w http.ResponseWriter, req *http.Request) (*eventReader, error) {

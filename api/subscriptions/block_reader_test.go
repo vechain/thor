@@ -28,10 +28,8 @@ func TestBlockReader_Read(t *testing.T) {
 	genesisBlk := generatedBlocks[0]
 	newBlock := generatedBlocks[1]
 
-	cache := newMessageCache(10)
-
 	// Test case 1: Successful read next blocks
-	br := newBlockReader(repo, genesisBlk.Header().ID(), cache)
+	br := newBlockReader(repo, genesisBlk.Header().ID())
 	res, ok, err := br.Read()
 
 	assert.NoError(t, err)
@@ -42,7 +40,7 @@ func TestBlockReader_Read(t *testing.T) {
 	assert.Equal(t, newBlock.Header().ParentID(), resBlock.ParentID)
 
 	// Test case 2: There is no new block
-	br = newBlockReader(repo, newBlock.Header().ID(), cache)
+	br = newBlockReader(repo, newBlock.Header().ID())
 	res, ok, err = br.Read()
 
 	assert.NoError(t, err)
@@ -50,7 +48,7 @@ func TestBlockReader_Read(t *testing.T) {
 	assert.Empty(t, res)
 
 	// Test case 3: Error when reading blocks
-	br = newBlockReader(repo, thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), cache)
+	br = newBlockReader(repo, thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
 	res, ok, err = br.Read()
 
 	assert.Error(t, err)
