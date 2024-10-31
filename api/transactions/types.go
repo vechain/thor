@@ -84,9 +84,9 @@ type RawTransaction struct {
 	Meta *TxMeta `json:"meta"`
 }
 
-// ConvertCallTransaction convert a raw transaction into a json format transaction
+// ConvertCoreTransaction converts a core type transaction into an api tx (json format transaction)
 // allows to specify the origin and delegator
-func ConvertCallTransaction(tx *tx.Transaction, header *block.Header, origin *thor.Address, delegator *thor.Address) *Transaction {
+func ConvertCoreTransaction(tx *tx.Transaction, header *block.Header, origin *thor.Address, delegator *thor.Address) *Transaction {
 	cls := make(Clauses, len(tx.Clauses()))
 	for i, c := range tx.Clauses() {
 		cls[i] = convertClause(c)
@@ -117,12 +117,13 @@ func ConvertCallTransaction(tx *tx.Transaction, header *block.Header, origin *th
 	return t
 }
 
-// ConvertTransaction convert a raw transaction into a json format transaction
-func ConvertTransaction(tx *tx.Transaction, header *block.Header) *Transaction {
+// convertSignedCoreTransaction converts a core type transaction into an api tx (json format transaction)
+// retrieves the origin and delegator from signature
+func convertSignedCoreTransaction(tx *tx.Transaction, header *block.Header) *Transaction {
 	//tx origin
 	origin, _ := tx.Origin()
 	delegator, _ := tx.Delegator()
-	return ConvertCallTransaction(tx, header, &origin, delegator)
+	return ConvertCoreTransaction(tx, header, &origin, delegator)
 }
 
 type TxMeta struct {
@@ -320,8 +321,9 @@ func convertErrorCallReceipt(
 	return receipt, nil
 }
 
-// convertToTxTransaction converts a transaction.Transaction into a tx.Transaction
-func convertToTxTransaction(incomingTx *Transaction) (*tx.Transaction, error) {
+// ConvertCallTransaction converts a transaction.Transaction into a tx.Transaction
+// note: tx.Transaction will not be signed
+func ConvertCallTransaction(incomingTx *Transaction) (*tx.Transaction, error) {
 	//blockRef, err := thor.ParseBytes32(incomingTx.BlockRef)
 	//if err != nil {
 	//	return nil, fmt.Errorf("unable to parse block ref: %w", err)

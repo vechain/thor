@@ -74,7 +74,9 @@ func applyOptions(opts []Option) *getOptions {
 		pending:  false,
 	}
 	for _, o := range opts {
-		o(options)
+		if o != nil {
+			o(options)
+		}
 	}
 	return options
 }
@@ -137,7 +139,18 @@ func (c *Client) AccountStorage(addr *thor.Address, key *thor.Bytes32, opts ...O
 // Transaction retrieves a transaction by its ID.
 func (c *Client) Transaction(id *thor.Bytes32, opts ...Option) (*transactions.Transaction, error) {
 	options := applyOptions(opts)
+	// TODO review the revision vs head difference
+	// plus fix the finalizedRevision use, throw an error ?
+	if options.revision == tccommon.BestRevision {
+		options.revision = ""
+	}
 	return c.httpConn.GetTransaction(id, options.revision, options.pending)
+}
+
+// CallTransaction locally executes a given transaction
+func (c *Client) CallTransaction(transaction *transactions.Transaction, opts ...Option) (*transactions.CallReceipt, error) {
+	options := applyOptions(opts)
+	return c.httpConn.CallTransaction(transaction, options.revision)
 }
 
 // RawTransaction retrieves the raw transaction data by its ID.

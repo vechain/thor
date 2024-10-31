@@ -90,7 +90,7 @@ func (t *Transactions) getTransactionByID(txID thor.Bytes32, head thor.Bytes32, 
 		if t.repo.IsNotFound(err) {
 			if allowPending {
 				if pending := t.pool.Get(txID); pending != nil {
-					return ConvertTransaction(pending, nil), nil
+					return convertSignedCoreTransaction(pending, nil), nil
 				}
 			}
 			return nil, nil
@@ -102,7 +102,7 @@ func (t *Transactions) getTransactionByID(txID thor.Bytes32, head thor.Bytes32, 
 	if err != nil {
 		return nil, err
 	}
-	return ConvertTransaction(tx, summary.Header), nil
+	return convertSignedCoreTransaction(tx, summary.Header), nil
 }
 
 // GetTransactionReceiptByID get tx's receipt
@@ -239,7 +239,7 @@ func (t *Transactions) txCall(
 	}
 
 	// todo handle the txCallMsg.Delegator
-	txCallData, err := convertToTxTransaction(txCallMsg)
+	txCallData, err := ConvertCallTransaction(txCallMsg)
 	if err != nil {
 		return nil, fmt.Errorf("unable to convert transaction: %w", err)
 	}

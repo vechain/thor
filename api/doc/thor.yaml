@@ -191,6 +191,177 @@ paths:
                 type: string
                 example: 'Invalid transaction ID'
 
+  /transactions/call:
+    post:
+      parameters:
+        - $ref: '#/components/parameters/HeadInQuery'
+      tags:
+        - Transactions
+      summary: Execute a transaction locally
+      description: |
+        This endpoint allows you to execute a transaction locally. It simulates the transaction execution without submitting it to the blockchain.
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  description: Transaction ID placeholder.
+                  example: '0x0000000000000000000000000000000000000000000000000000000000000000'
+                chainTag:
+                  type: integer
+                  description: Chain tag identifier.
+                  example: 246
+                blockRef:
+                  type: string
+                  description: Block reference.
+                  example: '0x0000000000000000'
+                expiration:
+                  type: integer
+                  description: Expiration time for the transaction.
+                  example: 10
+                clauses:
+                  type: array
+                  description: An array of actions the transaction will perform.
+                  items:
+                    type: object
+                    properties:
+                      to:
+                        type: string
+                        description: Recipient address.
+                        example: '0xf077b491b355e64048ce21e3a6fc4751eeea77fa'
+                      value:
+                        type: string
+                        description: Amount to transfer, in hexadecimal.
+                        example: '0x4d2'
+                      data:
+                        type: string
+                        description: Input data for the clause.
+                        example: '0x'
+                gasPriceCoef:
+                  type: integer
+                  description: Coefficient for gas price.
+                  example: 0
+                gas:
+                  type: integer
+                  description: Gas limit.
+                  example: 21000
+                origin:
+                  type: string
+                  description: Origin address.
+                  example: '0xf077b491b355e64048ce21e3a6fc4751eeea77fa'
+                delegator:
+                  type: string
+                  description: Sponsor or delegator address, if any.
+                  nullable: true
+                  example: null
+                nonce:
+                  type: string
+                  description: Transaction nonce.
+                  example: '0x0'
+                dependsOn:
+                  type: string
+                  description: Dependent transaction ID, if any.
+                  nullable: true
+                  example: null
+                size:
+                  type: integer
+                  description: Size of the transaction.
+                  example: 40
+                meta:
+                  type: string
+                  description: Metadata for the transaction, if any.
+                  nullable: true
+                  example: null
+            example:
+              id: '0x0000000000000000000000000000000000000000000000000000000000000000'
+              chainTag: 246
+              blockRef: '0x0000000000000000'
+              expiration: 10
+              clauses:
+                - to: '0xf077b491b355e64048ce21e3a6fc4751eeea77fa'
+                  value: '0x4d2'
+                  data: '0x'
+              gasPriceCoef: 0
+              gas: 21000
+              origin: '0xf077b491b355e64048ce21e3a6fc4751eeea77fa'
+              delegator: null
+              nonce: '0x0'
+              dependsOn: null
+              size: 40
+              meta: null
+
+      responses:
+        '200':
+          description: Execution result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  gasUsed:
+                    type: integer
+                    description: Total gas used.
+                    example: 21000
+                  gasPayer:
+                    type: string
+                    description: Address that paid the gas fee.
+                    example: '0xf077b491b355e64048ce21e3a6fc4751eeea77fa'
+                  paid:
+                    type: string
+                    description: Total amount paid for gas, in hexadecimal.
+                    example: '0x2ea11e32ad50000'
+                  reward:
+                    type: string
+                    description: Gas reward, in hexadecimal.
+                    example: '0xdfd22a8cd98000'
+                  reverted:
+                    type: boolean
+                    description: Indicates if the transaction was reverted.
+                    example: false
+                  txID:
+                    type: string
+                    description: Transaction ID.
+                    example: '0x0000000000000000000000000000000000000000000000000000000000000000'
+                  txOrigin:
+                    type: string
+                    description: Origin address.
+                    example: '0xf077b491b355e64048ce21e3a6fc4751eeea77fa'
+                  outputs:
+                    type: array
+                    description: Details of outputs produced by each clause.
+                    items:
+                      type: object
+                      properties:
+                        contractAddress:
+                          type: string
+                          description: Contract address, if applicable.
+                          nullable: true
+                          example: null
+                        events:
+                          type: array
+                          items:
+                            $ref: '#/components/schemas/Event'
+                        transfers:
+                          type: array
+                          items:
+                            $ref: '#/components/schemas/Transfer'
+                  vmError:
+                    type: string
+                    description: Virtual machine error message, if any.
+                    example: ''
+        '400':
+          description: Bad Request
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: 'Invalid transaction request'
+
   /transactions/{id}/receipt:
     get:
       parameters:

@@ -81,8 +81,9 @@ func TestTransaction(t *testing.T) {
 
 	// Call transaction
 	for name, tt := range map[string]func(*testing.T){
-		"callTx":        callTx,
-		"invalidCallTx": invalidCallTx,
+		"callTx":         callTx,
+		"invalidCallTx":  invalidCallTx,
+		"callExistingTx": callExistingTx,
 	} {
 		t.Run(name, tt)
 	}
@@ -138,12 +139,9 @@ func sendTx(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res := httpPostAndCheckResponseStatus(t, "/transactions", transactions.RawTx{Raw: hexutil.Encode(rlpTx)}, 200)
-	var txObj map[string]string
-	if err = json.Unmarshal(res, &txObj); err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, trx.ID().String(), txObj["id"], "should be the same transaction id")
+	res, err := tclient.SendRawTransaction(rlpTx)
+	require.NoError(t, err)
+	assert.Equal(t, res.ID.String(), trx.ID().String(), "should be the same transaction id")
 }
 
 func getTxWithBadID(t *testing.T) {
@@ -303,15 +301,30 @@ func callTx(t *testing.T) {
 			Gas(2 * gas). // 2 clauses of value transfer
 			Build(),
 	} {
-		txCall := transactions.ConvertCallTransaction(testTx, nil, &genesis.DevAccounts()[0].Address, nil)
+		txCall := transactions.ConvertCoreTransaction(testTx, nil, &genesis.DevAccounts()[0].Address, nil)
+		callReceipt, err := tclient.CallTransaction(txCall, nil)
+		require.NoError(t, err)
 
-		res := httpPostAndCheckResponseStatus(t, "/transactions/call", txCall, 200)
-		var callReceipt transactions.CallReceipt
-		if err := json.Unmarshal(res, &callReceipt); err != nil {
-			t.Fatal(err)
-		}
-		validateTxCall(t, testTx, &callReceipt, &genesis.DevAccounts()[0].Address, nil)
+		validateCoreTxCall(t, testTx, callReceipt, &genesis.DevAccounts()[0].Address, nil)
 	}
+}
+
+func callExistingTx(t *testing.T) {
+	// fetch an existing transaction
+	existingTxID := transaction.ID()
+	testTx, err := tclient.Transaction(&existingTxID)
+	require.NoError(t, err)
+
+	// todo hook the block reference
+	//blk, err := tclient.Block(testTx.BlockRef)
+	//require.NoError(t, err)
+
+	// locally execute the transaction
+	callReceipt, err := tclient.CallTransaction(testTx)
+	require.NoError(t, err)
+
+	// evaluate call receipt response fields
+	validateTxCall(t, testTx, callReceipt, &genesis.DevAccounts()[0].Address, nil)
 }
 
 func invalidCallTx(t *testing.T) {
@@ -325,23 +338,14 @@ func invalidCallTx(t *testing.T) {
 		errMsg string
 	}{
 		{
-			testTx: transactions.ConvertCallTransaction(new(tx.Builder).
+			testTx: transactions.ConvertCoreTransaction(new(tx.Builder).
 				Gas(gas).
 				Build(),
 				nil, sendAddr, nil),
 			errMsg: "chain tag mismatch",
 		},
-		//{
-		//	testTx: transactions.ConvertCallTransaction(new(tx.Builder).
-		//		ChainTag(chainTag).
-		//		Expiration(0).
-		//		Gas(gas).
-		//		Build(),
-		//		nil, sendAddr, nil),
-		//	errMsg: "chain tag mismatch",
-		//},
 		{
-			testTx: transactions.ConvertCallTransaction(new(tx.Builder).
+			testTx: transactions.ConvertCoreTransaction(new(tx.Builder).
 				ChainTag(chainTag).
 				Gas(gas).
 				Build(),
@@ -349,7 +353,7 @@ func invalidCallTx(t *testing.T) {
 			errMsg: "no origin address specified",
 		},
 		{
-			testTx: transactions.ConvertCallTransaction(new(tx.Builder).
+			testTx: transactions.ConvertCoreTransaction(new(tx.Builder).
 				ChainTag(chainTag).
 				Gas(gas).
 				Clause(tx.NewClause(nil).WithData(make([]byte, 64*1024+1))).
@@ -359,13 +363,26 @@ func invalidCallTx(t *testing.T) {
 		},
 	} {
 		t.Run(tc.errMsg, func(t *testing.T) {
-			res := httpPostAndCheckResponseStatus(t, "/transactions/call", tc.testTx, 500)
-			assert.Equal(t, tc.errMsg, strings.TrimSpace(string(res)))
+			_, err := tclient.CallTransaction(tc.testTx, nil)
+			require.Error(t, err)
+			require.ErrorContains(t, err, tc.errMsg)
 		})
 	}
 }
 
-func validateTxCall(t *testing.T, callTx *tx.Transaction, callRcpt *transactions.CallReceipt, callAddr, delegator *thor.Address) {
+func validateTxCall(t *testing.T, callTx *transactions.Transaction, callRcpt *transactions.CallReceipt, callAddr, delegator *thor.Address) {
+	assert.Equal(t, *callAddr, callRcpt.TxOrigin)
+
+	if delegator != nil {
+		assert.Equal(t, delegator.String(), callRcpt.GasPayer.String())
+	} else {
+		assert.Equal(t, callAddr.String(), callRcpt.GasPayer.String())
+	}
+
+	assert.Equal(t, len(callTx.Clauses), len(callRcpt.Outputs))
+}
+
+func validateCoreTxCall(t *testing.T, callTx *tx.Transaction, callRcpt *transactions.CallReceipt, callAddr, delegator *thor.Address) {
 	assert.Equal(t, callTx.ID(), callRcpt.TxID)
 	assert.Equal(t, *callAddr, callRcpt.TxOrigin)
 
