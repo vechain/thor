@@ -105,3 +105,6 @@ jobs:
           repository: vechain/thor-internal-ci
           event-type: internal-thor-ci
           client-payload: '{"thor_image": "${{ fromJSON(steps.build-and-push-image.outputs.meta.json).tags[0] }}"}'
+        env:
+          # See https://github.com/aquasecurity/trivy/discussions/7538
+          TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2
