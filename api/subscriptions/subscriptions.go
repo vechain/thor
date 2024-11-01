@@ -31,14 +31,12 @@ type Subscriptions struct {
 	pendingTx      *pendingTx
 	done           chan struct{}
 	wg             sync.WaitGroup
-	beat2Cache     *messageCache
-	beatCache      *messageCache
+	beat2Cache     *messageCache[Beat2Message]
+	beatCache      *messageCache[BeatMessage]
 }
 
-type rawMessage []byte
-
 type msgReader interface {
-	Read() (msgs []rawMessage, hasMore bool, err error)
+	Read() (msgs []interface{}, hasMore bool, err error)
 }
 
 var (
@@ -73,8 +71,8 @@ func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32,
 		},
 		pendingTx:  newPendingTx(txpool),
 		done:       make(chan struct{}),
-		beat2Cache: newMessageCache(backtraceLimit),
-		beatCache:  newMessageCache(backtraceLimit),
+		beat2Cache: newMessageCache[Beat2Message](backtraceLimit),
+		beatCache:  newMessageCache[BeatMessage](backtraceLimit),
 	}
 
 	sub.wg.Add(1)
@@ -314,7 +312,7 @@ func (s *Subscriptions) pipe(conn *websocket.Conn, reader msgReader, closed chan
 			return err
 		}
 		for _, msg := range msgs {
-			if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+			if err := conn.WriteJSON(msg); err != nil {
 				return err
 			}
 		}

@@ -6,8 +6,6 @@
 package subscriptions
 
 import (
-	"encoding/json"
-
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -22,26 +20,18 @@ func newBlockReader(repo *chain.Repository, position thor.Bytes32) *blockReader 
 	}
 }
 
-func (br *blockReader) Read() ([]rawMessage, bool, error) {
+func (br *blockReader) Read() ([]interface{}, bool, error) {
 	blocks, err := br.blockReader.Read()
 	if err != nil {
 		return nil, false, err
 	}
-	var msgs []rawMessage
+	var msgs []interface{}
 	for _, block := range blocks {
-		msg, err := br.generateBlockMessage(block)
+		msg, err := convertBlock(block)
 		if err != nil {
 			return nil, false, err
 		}
 		msgs = append(msgs, msg)
 	}
 	return msgs, len(blocks) > 0, nil
-}
-
-func (br *blockReader) generateBlockMessage(block *chain.ExtendedBlock) ([]byte, error) {
-	blk, err := convertBlock(block)
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(blk)
 }

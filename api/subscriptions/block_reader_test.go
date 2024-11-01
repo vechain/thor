@@ -6,7 +6,6 @@
 package subscriptions
 
 import (
-	"encoding/json"
 	"math/big"
 	"testing"
 	"time"
@@ -34,8 +33,8 @@ func TestBlockReader_Read(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.True(t, ok)
-	resBlock := &BlockMessage{}
-	assert.NoError(t, json.Unmarshal(res[0], resBlock))
+	resBlock, ok := res[0].(*BlockMessage)
+	assert.True(t, ok)
 	assert.Equal(t, newBlock.Header().Number(), resBlock.Number)
 	assert.Equal(t, newBlock.Header().ParentID(), resBlock.ParentID)
 

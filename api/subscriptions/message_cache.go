@@ -1,8 +1,3 @@
-// Copyright (c) 2024 The VeChainThor developers
-//
-// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
-// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
-
 package subscriptions
 
 import (
@@ -13,12 +8,14 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-type messageCache struct {
+// messageCache is a generic cache that stores messages of any type.
+type messageCache[T any] struct {
 	cache *lru.Cache
 	mu    sync.RWMutex
 }
 
-func newMessageCache(cacheSize uint32) *messageCache {
+// newMessageCache creates a new messageCache with the specified cache size.
+func newMessageCache[T any](cacheSize uint32) *messageCache[T] {
 	if cacheSize > 1000 {
 		cacheSize = 1000
 	}
@@ -30,33 +27,35 @@ func newMessageCache(cacheSize uint32) *messageCache {
 		// lru.New only throws an error if the number is less than 1
 		panic(fmt.Errorf("failed to create message cache: %v", err))
 	}
-	return &messageCache{
+	return &messageCache[T]{
 		cache: cache,
 	}
 }
 
-// GetOrAdd returns the message of the block, if the message is not in the cache, it will generate the message and add it to the cache.
-// The second return value indicates whether the message is newly generated.
-func (mc *messageCache) GetOrAdd(id thor.Bytes32, createMessage func() ([]byte, error)) ([]byte, bool, error) {
+// GetOrAdd returns the message of the block. If the message is not in the cache,
+// it will generate the message and add it to the cache. The second return value
+// indicates whether the message is newly generated.
+func (mc *messageCache[T]) GetOrAdd(id thor.Bytes32, createMessage func() (T, error)) (T, bool, error) {
 	blockID := id.String()
 	mc.mu.RLock()
 	msg, ok := mc.cache.Get(blockID)
 	mc.mu.RUnlock()
 	if ok {
-		return msg.([]byte), false, nil
+		return msg.(T), false, nil
 	}
 
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 	msg, ok = mc.cache.Get(blockID)
 	if ok {
-		return msg.([]byte), false, nil
+		return msg.(T), false, nil
 	}
 
-	msg, err := createMessage()
+	newMsg, err := createMessage()
 	if err != nil {
-		return nil, false, err
+		var zero T
+		return zero, false, err
 	}
-	mc.cache.Add(blockID, msg)
-	return msg.([]byte), true, nil
+	mc.cache.Add(blockID, newMsg)
+	return newMsg, true, nil
 }

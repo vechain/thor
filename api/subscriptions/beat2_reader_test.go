@@ -6,7 +6,6 @@
 package subscriptions
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -20,14 +19,14 @@ func TestBeat2Reader_Read(t *testing.T) {
 	newBlock := generatedBlocks[1]
 
 	// Act
-	beatReader := newBeat2Reader(repo, genesisBlk.Header().ID(), newMessageCache(10))
+	beatReader := newBeat2Reader(repo, genesisBlk.Header().ID(), newMessageCache[Beat2Message](10))
 	res, ok, err := beatReader.Read()
 
 	// Assert
 	assert.NoError(t, err)
 	assert.True(t, ok)
-	beat := &Beat2Message{}
-	err = json.Unmarshal(res[0], beat)
+	beat, ok := res[0].(Beat2Message)
+	assert.True(t, ok)
 	assert.NoError(t, err)
 
 	assert.Equal(t, newBlock.Header().Number(), beat.Number)
@@ -45,7 +44,7 @@ func TestBeat2Reader_Read_NoNewBlocksToRead(t *testing.T) {
 	newBlock := generatedBlocks[1]
 
 	// Act
-	beatReader := newBeat2Reader(repo, newBlock.Header().ID(), newMessageCache(10))
+	beatReader := newBeat2Reader(repo, newBlock.Header().ID(), newMessageCache[Beat2Message](10))
 	res, ok, err := beatReader.Read()
 
 	// Assert
@@ -59,7 +58,7 @@ func TestBeat2Reader_Read_ErrorWhenReadingBlocks(t *testing.T) {
 	repo, _, _ := initChain(t)
 
 	// Act
-	beatReader := newBeat2Reader(repo, thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), newMessageCache(10))
+	beatReader := newBeat2Reader(repo, thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), newMessageCache[Beat2Message](10))
 	res, ok, err := beatReader.Read()
 
 	// Assert

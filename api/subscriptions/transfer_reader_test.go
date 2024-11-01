@@ -6,7 +6,6 @@
 package subscriptions
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,9 +26,8 @@ func TestTransferReader_Read(t *testing.T) {
 	// Assert
 	assert.NoError(t, err)
 	assert.True(t, ok)
-	transferMsg := &TransferMessage{}
-	assert.NoError(t, json.Unmarshal(res[0], transferMsg))
-
+	transferMsg, ok := res[0].(*TransferMessage)
+	assert.True(t, ok)
 	assert.Equal(t, newBlock.Header().Number(), transferMsg.Meta.BlockNumber)
 	assert.Equal(t, newBlock.Header().ID(), transferMsg.Meta.BlockID)
 	assert.Equal(t, newBlock.Header().Timestamp(), transferMsg.Meta.BlockTimestamp)

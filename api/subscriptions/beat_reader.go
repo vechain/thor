@@ -7,7 +7,6 @@ package subscriptions
 
 import (
 	"bytes"
-	"encoding/json"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/v2/chain"
@@ -18,10 +17,10 @@ import (
 type beatReader struct {
 	repo        *chain.Repository
 	blockReader chain.BlockReader
-	cache       *messageCache
+	cache       *messageCache[BeatMessage]
 }
 
-func newBeatReader(repo *chain.Repository, position thor.Bytes32, cache *messageCache) *beatReader {
+func newBeatReader(repo *chain.Repository, position thor.Bytes32, cache *messageCache[BeatMessage]) *beatReader {
 	return &beatReader{
 		repo:        repo,
 		blockReader: repo.NewBlockReader(position),
@@ -29,12 +28,12 @@ func newBeatReader(repo *chain.Repository, position thor.Bytes32, cache *message
 	}
 }
 
-func (br *beatReader) Read() ([]rawMessage, bool, error) {
+func (br *beatReader) Read() ([]interface{}, bool, error) {
 	blocks, err := br.blockReader.Read()
 	if err != nil {
 		return nil, false, err
 	}
-	var msgs []rawMessage
+	var msgs []interface{}
 	for _, block := range blocks {
 		msg, _, err := br.cache.GetOrAdd(block.Header().ID(), br.generateBeatMessage(block))
 		if err != nil {
@@ -45,12 +44,12 @@ func (br *beatReader) Read() ([]rawMessage, bool, error) {
 	return msgs, len(blocks) > 0, nil
 }
 
-func (br *beatReader) generateBeatMessage(block *chain.ExtendedBlock) func() ([]byte, error) {
-	return func() ([]byte, error) {
+func (br *beatReader) generateBeatMessage(block *chain.ExtendedBlock) func() (BeatMessage, error) {
+	return func() (BeatMessage, error) {
 		header := block.Header()
 		receipts, err := br.repo.GetBlockReceipts(header.ID())
 		if err != nil {
-			return nil, err
+			return BeatMessage{}, err
 		}
 		txs := block.Transactions()
 		content := &bloomContent{}
@@ -80,7 +79,7 @@ func (br *beatReader) generateBeatMessage(block *chain.ExtendedBlock) func() ([]
 		for _, item := range content.items {
 			bloom.Add(item)
 		}
-		beat := &BeatMessage{
+		beat := BeatMessage{
 			Number:      header.Number(),
 			ID:          header.ID(),
 			ParentID:    header.ParentID(),
@@ -91,7 +90,7 @@ func (br *beatReader) generateBeatMessage(block *chain.ExtendedBlock) func() ([]
 			Obsolete:    block.Obsolete,
 		}
 
-		return json.Marshal(beat)
+		return beat, nil
 	}
 }
 

@@ -7,7 +7,6 @@ package subscriptions
 
 import (
 	"bytes"
-	"encoding/json"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/v2/chain"
@@ -18,10 +17,10 @@ import (
 type beat2Reader struct {
 	repo        *chain.Repository
 	blockReader chain.BlockReader
-	cache       *messageCache
+	cache       *messageCache[Beat2Message]
 }
 
-func newBeat2Reader(repo *chain.Repository, position thor.Bytes32, cache *messageCache) *beat2Reader {
+func newBeat2Reader(repo *chain.Repository, position thor.Bytes32, cache *messageCache[Beat2Message]) *beat2Reader {
 	return &beat2Reader{
 		repo:        repo,
 		blockReader: repo.NewBlockReader(position),
@@ -29,12 +28,12 @@ func newBeat2Reader(repo *chain.Repository, position thor.Bytes32, cache *messag
 	}
 }
 
-func (br *beat2Reader) Read() ([]rawMessage, bool, error) {
+func (br *beat2Reader) Read() ([]interface{}, bool, error) {
 	blocks, err := br.blockReader.Read()
 	if err != nil {
 		return nil, false, err
 	}
-	var msgs []rawMessage
+	var msgs []interface{}
 
 	for _, block := range blocks {
 		msg, _, err := br.cache.GetOrAdd(block.Header().ID(), br.generateBeat2Message(block))
@@ -46,8 +45,8 @@ func (br *beat2Reader) Read() ([]rawMessage, bool, error) {
 	return msgs, len(blocks) > 0, nil
 }
 
-func (br *beat2Reader) generateBeat2Message(block *chain.ExtendedBlock) func() ([]byte, error) {
-	return func() ([]byte, error) {
+func (br *beat2Reader) generateBeat2Message(block *chain.ExtendedBlock) func() (Beat2Message, error) {
+	return func() (Beat2Message, error) {
 		bloomGenerator := &bloom.Generator{}
 
 		bloomAdd := func(key []byte) {
@@ -61,7 +60,7 @@ func (br *beat2Reader) generateBeat2Message(block *chain.ExtendedBlock) func() (
 		header := block.Header()
 		receipts, err := br.repo.GetBlockReceipts(header.ID())
 		if err != nil {
-			return nil, err
+			return Beat2Message{}, err
 		}
 		txs := block.Transactions()
 		for i, receipt := range receipts {
@@ -88,7 +87,7 @@ func (br *beat2Reader) generateBeat2Message(block *chain.ExtendedBlock) func() (
 		const bitsPerKey = 20
 		filter := bloomGenerator.Generate(bitsPerKey, bloom.K(bitsPerKey))
 
-		beat2 := &Beat2Message{
+		beat2 := Beat2Message{
 			Number:      header.Number(),
 			ID:          header.ID(),
 			ParentID:    header.ParentID(),
@@ -100,6 +99,6 @@ func (br *beat2Reader) generateBeat2Message(block *chain.ExtendedBlock) func() (
 			Obsolete:    block.Obsolete,
 		}
 
-		return json.Marshal(beat2)
+		return beat2, nil
 	}
 }

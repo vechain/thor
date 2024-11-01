@@ -6,7 +6,6 @@
 package subscriptions
 
 import (
-	"encoding/json"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -16,11 +15,16 @@ import (
 	"github.com/vechain/thor/v2/block"
 )
 
-func handler(blk *block.Block) func() ([]byte, error) {
-	return func() ([]byte, error) {
-		data := make(map[string]interface{})
-		data["id"] = blk.Header().ID().String()
-		return json.Marshal(data)
+type message struct {
+	id string
+}
+
+func handler(blk *block.Block) func() (message, error) {
+	return func() (message, error) {
+		msg := message{
+			id: blk.Header().ID().String(),
+		}
+		return msg, nil
 	}
 }
 
@@ -30,7 +34,7 @@ func TestMessageCache_GetOrAdd(t *testing.T) {
 	blk0 := generatedBlocks[0]
 	blk1 := generatedBlocks[1]
 
-	cache := newMessageCache(10)
+	cache := newMessageCache[message](10)
 
 	counter := atomic.Int32{}
 	wg := sync.WaitGroup{}
