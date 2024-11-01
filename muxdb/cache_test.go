@@ -55,7 +55,7 @@ func TestCacheNodeBlob(t *testing.T) {
 	assert.Nil(t, cache.GetNodeBlob(&keyBuf, "", nil, trie.Version{Major: 1}, false))
 }
 
-func Benchmark_cacheNoeBlob(b *testing.B) {
+func Benchmark_cacheNodeBlob(b *testing.B) {
 	var (
 		cache  = newCache(100, 0)
 		keyBuf []byte
