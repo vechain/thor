@@ -17,15 +17,13 @@
 package trie
 
 import (
-	"crypto/rand"
+	"io"
 	"testing"
-)
 
-func randBytes(n int) []byte {
-	r := make([]byte, n)
-	rand.Read(r)
-	return r
-}
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/v2/test/datagen"
+)
 
 func benchmarkEncodeFullNode(b *testing.B, consensus, skipHash bool) {
 	var (
@@ -33,7 +31,7 @@ func benchmarkEncodeFullNode(b *testing.B, consensus, skipHash bool) {
 		buf []byte
 	)
 	for i := 0; i < 16; i++ {
-		f.children[i] = &refNode{hash: randBytes(32)}
+		f.children[i] = &refNode{hash: datagen.RandomHash().Bytes()}
 	}
 	for i := 0; i < b.N; i++ {
 		if consensus {
@@ -47,7 +45,7 @@ func benchmarkEncodeShortNode(b *testing.B, consensus bool) {
 	var (
 		s = shortNode{
 			key:   []byte{0x1, 0x2, 0x10},
-			child: &valueNode{val: randBytes(32)},
+			child: &valueNode{val: datagen.RandBytes(32)},
 		}
 		buf []byte
 	)
@@ -84,7 +82,7 @@ func BenchmarkEncodeShortNodeConsensus(b *testing.B) {
 func benchmarkDecodeFullNode(b *testing.B, skipHash bool) {
 	f := fullNode{}
 	for i := 0; i < 16; i++ {
-		f.children[i] = &refNode{hash: randBytes(32)}
+		f.children[i] = &refNode{hash: datagen.RandomHash().Bytes()}
 	}
 	enc := f.encode(nil, skipHash)
 	for i := 0; i < b.N; i++ {
@@ -103,11 +101,142 @@ func BenchmarkDecodeFullNodeSkipHash(b *testing.B) {
 func BenchmarkDecodeShortNode(b *testing.B) {
 	s := shortNode{
 		key:   []byte{0x1, 0x2, 0x10},
-		child: &valueNode{val: randBytes(32)},
+		child: &valueNode{val: datagen.RandBytes(32)},
 	}
 
 	enc := s.encode(nil, false)
 	for i := 0; i < b.N; i++ {
 		mustDecodeNode(nil, enc, 0)
+	}
+}
+
+type fNode struct {
+	Children [17]interface{}
+}
+
+func (f *fNode) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, f.Children)
+}
+
+type sNode struct {
+	Key []byte
+	Val interface{}
+}
+type vNode []byte
+type hNode []byte
+
+func TestRefNodeEncodeConsensus(t *testing.T) {
+	for i := 0; i < 10; i++ {
+		randHash := datagen.RandomHash()
+
+		h := hNode(randHash.Bytes())
+		ref := &refNode{hash: randHash.Bytes()}
+
+		expected, err := rlp.EncodeToBytes(h)
+		assert.Nil(t, err)
+		actual := ref.encodeConsensus(nil)
+
+		assert.Equal(t, expected, actual)
+	}
+}
+
+func TestValueNodeEncodeConsensus(t *testing.T) {
+	for i := 0; i < 10; i++ {
+		randValue := datagen.RandBytes(datagen.RandIntN(30))
+
+		v := vNode(randValue)
+		value := &valueNode{val: randValue}
+
+		expected, err := rlp.EncodeToBytes(v)
+		assert.Nil(t, err)
+		actual := value.encodeConsensus(nil)
+
+		assert.Equal(t, expected, actual)
+	}
+}
+
+func TestShortNodeEncodeConsensus(t *testing.T) {
+	for i := 0; i < 10; i++ {
+		randKey := datagen.RandBytes(datagen.RandIntN(32))
+		randValue := datagen.RandBytes(datagen.RandIntN(30))
+
+		randKey = append(randKey, 16)
+		s := &sNode{Key: hexToCompact(randKey), Val: vNode(randValue)}
+		short := &shortNode{key: randKey, child: &valueNode{val: randValue}}
+
+		expected, err := rlp.EncodeToBytes(s)
+		assert.Nil(t, err)
+		actual := short.encodeConsensus(nil)
+
+		assert.Equal(t, expected, actual)
+	}
+
+	for i := 0; i < 10; i++ {
+		randKey := datagen.RandBytes(datagen.RandIntN(32))
+		randHash := datagen.RandomHash()
+
+		s := &sNode{Key: hexToCompact(randKey), Val: hNode(randHash.Bytes())}
+		short := &shortNode{key: randKey, child: &refNode{hash: randHash.Bytes()}}
+
+		expected, err := rlp.EncodeToBytes(s)
+		assert.Nil(t, err)
+		actual := short.encodeConsensus(nil)
+
+		assert.Equal(t, expected, actual)
+	}
+}
+
+func TestFullNodeEncodeConsensus(t *testing.T) {
+	for i := 0; i < 10; i++ {
+		randValue := datagen.RandBytes(datagen.RandIntN(30))
+
+		var (
+			f    fNode
+			full fullNode
+		)
+
+		for i := 0; i < 16; i++ {
+			if datagen.RandIntN(2) == 1 {
+				randHash := datagen.RandomHash()
+
+				f.Children[i] = hNode(randHash.Bytes())
+				full.children[i] = &refNode{hash: randHash.Bytes()}
+			} else {
+				f.Children[i] = vNode(nil)
+			}
+		}
+		f.Children[16] = vNode(randValue)
+		full.children[16] = &valueNode{val: randValue}
+
+		expected, err := rlp.EncodeToBytes(&f)
+		assert.Nil(t, err)
+		actual := full.encodeConsensus(nil)
+
+		assert.Equal(t, expected, actual)
+	}
+
+	for i := 0; i < 10; i++ {
+		var (
+			f    fNode
+			full fullNode
+		)
+
+		for i := 0; i < 16; i++ {
+			if datagen.RandIntN(2) == 1 {
+				randHash := datagen.RandomHash()
+
+				f.Children[i] = hNode(randHash.Bytes())
+				full.children[i] = &refNode{hash: randHash.Bytes()}
+			} else {
+				f.Children[i] = vNode(nil)
+			}
+		}
+		f.Children[16] = vNode(nil)
+
+		expected, err := rlp.EncodeToBytes(&f)
+		assert.Nil(t, err)
+		actual := full.encodeConsensus(nil)
+
+		assert.Equal(t, expected, actual)
 	}
 }
