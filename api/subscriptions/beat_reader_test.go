@@ -25,15 +25,15 @@ func TestBeatReader_Read(t *testing.T) {
 	// Assert
 	assert.NoError(t, err)
 	assert.True(t, ok)
-	beat, ok := res[0].(BeatMessage)
-	assert.True(t, ok)
-	assert.NoError(t, err)
-
-	assert.Equal(t, newBlock.Header().Number(), beat.Number)
-	assert.Equal(t, newBlock.Header().ID(), beat.ID)
-	assert.Equal(t, newBlock.Header().ParentID(), beat.ParentID)
-	assert.Equal(t, newBlock.Header().Timestamp(), beat.Timestamp)
-	assert.Equal(t, uint32(newBlock.Header().TxsFeatures()), beat.TxsFeatures)
+	if beatMsg, ok := res[0].(BeatMessage); !ok {
+		t.Fatal("unexpected type")
+	} else {
+		assert.Equal(t, newBlock.Header().Number(), beatMsg.Number)
+		assert.Equal(t, newBlock.Header().ID(), beatMsg.ID)
+		assert.Equal(t, newBlock.Header().ParentID(), beatMsg.ParentID)
+		assert.Equal(t, newBlock.Header().Timestamp(), beatMsg.Timestamp)
+		assert.Equal(t, uint32(newBlock.Header().TxsFeatures()), beatMsg.TxsFeatures)
+	}
 }
 
 func TestBeatReader_Read_NoNewBlocksToRead(t *testing.T) {

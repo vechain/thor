@@ -38,9 +38,11 @@ func TestEventReader_Read(t *testing.T) {
 	assert.True(t, ok)
 	var eventMessages []*EventMessage
 	for _, event := range events {
-		eventMsg, ok := event.(*EventMessage)
-		assert.True(t, ok)
-		eventMessages = append(eventMessages, eventMsg)
+		if msg, ok := event.(*EventMessage); ok {
+			eventMessages = append(eventMessages, msg)
+		} else {
+			t.Fatal("unexpected type")
+		}
 	}
 	assert.Equal(t, 1, len(eventMessages))
 	eventMsg := eventMessages[0]

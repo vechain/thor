@@ -26,12 +26,14 @@ func TestTransferReader_Read(t *testing.T) {
 	// Assert
 	assert.NoError(t, err)
 	assert.True(t, ok)
-	transferMsg, ok := res[0].(*TransferMessage)
-	assert.True(t, ok)
-	assert.Equal(t, newBlock.Header().Number(), transferMsg.Meta.BlockNumber)
-	assert.Equal(t, newBlock.Header().ID(), transferMsg.Meta.BlockID)
-	assert.Equal(t, newBlock.Header().Timestamp(), transferMsg.Meta.BlockTimestamp)
-	assert.Equal(t, newBlock.Transactions()[0].ID(), transferMsg.Meta.TxID)
+	if transferMsg, ok := res[0].(*TransferMessage); !ok {
+		t.Fatal("unexpected type")
+	} else {
+		assert.Equal(t, newBlock.Header().Number(), transferMsg.Meta.BlockNumber)
+		assert.Equal(t, newBlock.Header().ID(), transferMsg.Meta.BlockID)
+		assert.Equal(t, newBlock.Header().Timestamp(), transferMsg.Meta.BlockTimestamp)
+		assert.Equal(t, newBlock.Transactions()[0].ID(), transferMsg.Meta.TxID)
+	}
 }
 
 func TestTransferReader_Read_NoNewBlocksToRead(t *testing.T) {

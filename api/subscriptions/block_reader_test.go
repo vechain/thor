@@ -33,10 +33,12 @@ func TestBlockReader_Read(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.True(t, ok)
-	resBlock, ok := res[0].(*BlockMessage)
-	assert.True(t, ok)
-	assert.Equal(t, newBlock.Header().Number(), resBlock.Number)
-	assert.Equal(t, newBlock.Header().ParentID(), resBlock.ParentID)
+	if resBlock, ok := res[0].(*BlockMessage); !ok {
+		t.Fatal("unexpected type")
+	} else {
+		assert.Equal(t, newBlock.Header().Number(), resBlock.Number)
+		assert.Equal(t, newBlock.Header().ParentID(), resBlock.ParentID)
+	}
 
 	// Test case 2: There is no new block
 	br = newBlockReader(repo, newBlock.Header().ID())
