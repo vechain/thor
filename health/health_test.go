@@ -28,7 +28,7 @@ func TestHealth_NewBestBlock(t *testing.T) {
 		t.Errorf("newBestBlock timestamp is not recent")
 	}
 
-	h.ChainSyncStatus(true)
+	h.BootstrapStatus(true)
 
 	status, err := h.Status()
 	require.NoError(t, err)
@@ -39,14 +39,14 @@ func TestHealth_NewBestBlock(t *testing.T) {
 func TestHealth_ChainSyncStatus(t *testing.T) {
 	h := &Health{}
 
-	h.ChainSyncStatus(true)
-	if !h.chainSynced {
-		t.Errorf("expected chainSynced to be true, got false")
+	h.BootstrapStatus(true)
+	if !h.bootstrapStatus {
+		t.Errorf("expected bootstrapStatus to be true, got false")
 	}
 
-	h.ChainSyncStatus(false)
-	if h.chainSynced {
-		t.Errorf("expected chainSynced to be false, got true")
+	h.BootstrapStatus(false)
+	if h.bootstrapStatus {
+		t.Errorf("expected bootstrapStatus to be false, got true")
 	}
 
 	status, err := h.Status()
@@ -60,7 +60,7 @@ func TestHealth_Status(t *testing.T) {
 	blockID := thor.Bytes32{0x01, 0x02, 0x03}
 
 	h.NewBestBlock(blockID)
-	h.ChainSyncStatus(true)
+	h.BootstrapStatus(true)
 
 	status, err := h.Status()
 	if err != nil {
@@ -79,7 +79,7 @@ func TestHealth_Status(t *testing.T) {
 		t.Errorf("bestBlockIngestionTimestamp is not recent")
 	}
 
-	if !status.ChainSync {
+	if !status.ChainBootstrapped {
 		t.Errorf("expected chainSync to be true, got false")
 	}
 }

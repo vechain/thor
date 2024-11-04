@@ -18,16 +18,16 @@ type BlockIngestion struct {
 }
 
 type Status struct {
-	Healthy        bool            `json:"healthy"`
-	BlockIngestion *BlockIngestion `json:"blockIngestion"`
-	ChainSync      bool            `json:"chainSync"`
+	Healthy           bool            `json:"healthy"`
+	BlockIngestion    *BlockIngestion `json:"blockIngestion"`
+	ChainBootstrapped bool            `json:"chainBootstrapped"`
 }
 
 type Health struct {
-	lock         sync.RWMutex
-	newBestBlock time.Time
-	bestBlockID  *thor.Bytes32
-	chainSynced  bool
+	lock            sync.RWMutex
+	newBestBlock    time.Time
+	bestBlockID     *thor.Bytes32
+	bootstrapStatus bool
 }
 
 func (h *Health) NewBestBlock(ID thor.Bytes32) {
@@ -48,18 +48,18 @@ func (h *Health) Status() (*Status, error) {
 	}
 
 	healthy := time.Since(h.newBestBlock) <= 10*time.Second && // less than 10 secs have passed since a new block was received
-		h.chainSynced
+		h.bootstrapStatus
 
 	return &Status{
-		Healthy:        healthy,
-		BlockIngestion: blockIngest,
-		ChainSync:      h.chainSynced,
+		Healthy:           healthy,
+		BlockIngestion:    blockIngest,
+		ChainBootstrapped: h.bootstrapStatus,
 	}, nil
 }
 
-func (h *Health) ChainSyncStatus(syncStatus bool) {
+func (h *Health) BootstrapStatus(bootstrapStatus bool) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
-	h.chainSynced = syncStatus
+	h.bootstrapStatus = bootstrapStatus
 }
