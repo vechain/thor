@@ -15,7 +15,7 @@ import (
 )
 
 func TestHealth_NewBestBlock(t *testing.T) {
-	h := &Health{}
+	h := New(time.Duration(thor.BlockInterval) * time.Second)
 	blockID := thor.Bytes32{0x01, 0x02, 0x03}
 
 	h.NewBestBlock(blockID)

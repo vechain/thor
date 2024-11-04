@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -167,7 +168,7 @@ func defaultAction(ctx *cli.Context) error {
 		return errors.Wrap(err, "parse verbosity flag")
 	}
 	logLevel := initLogger(lvl, ctx.Bool(jsonLogsFlag.Name))
-	healthStatus := &health.Health{}
+	healthStatus := health.New(time.Duration(thor.BlockInterval))
 
 	// enable metrics as soon as possible
 	metricsURL := ""
@@ -313,7 +314,18 @@ func soloAction(ctx *cli.Context) error {
 	}
 
 	logLevel := initLogger(lvl, ctx.Bool(jsonLogsFlag.Name))
-	healthStatus := &health.Health{}
+
+	onDemandBlockProduction := ctx.Bool(onDemandFlag.Name)
+	blockProductionInterval := ctx.Uint64(blockInterval.Name)
+	if blockProductionInterval == 0 {
+		return errors.New("block-interval cannot be zero")
+	}
+
+	blockProductionHealthCheck := time.Duration(blockProductionInterval) * time.Second
+	if onDemandBlockProduction {
+		blockProductionHealthCheck = math.MaxUint16 * time.Second
+	}
+	healthStatus := health.NewSolo(blockProductionHealthCheck)
 
 	// enable metrics as soon as possible
 	metricsURL := ""
@@ -436,11 +448,6 @@ func soloAction(ctx *cli.Context) error {
 		srvCloser()
 	}()
 
-	blockInterval := ctx.Uint64(blockInterval.Name)
-	if blockInterval == 0 {
-		return errors.New("block-interval cannot be zero")
-	}
-
 	printStartupMessage2(gene, apiURL, "", metricsURL, adminURL)
 
 	optimizer := optimizer.New(mainDB, repo, !ctx.Bool(disablePrunerFlag.Name))
@@ -452,9 +459,9 @@ func soloAction(ctx *cli.Context) error {
 		healthStatus,
 		txPool,
 		ctx.Uint64(gasLimitFlag.Name),
-		ctx.Bool(onDemandFlag.Name),
+		onDemandBlockProduction,
 		skipLogs,
-		blockInterval,
+		blockProductionInterval,
 		forkConfig).Run(exitSignal)
 }
 

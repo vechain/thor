@@ -6,6 +6,7 @@
 package health
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -24,18 +25,26 @@ type Status struct {
 }
 
 type Health struct {
-	lock            sync.RWMutex
-	newBestBlock    time.Time
-	bestBlockID     *thor.Bytes32
-	bootstrapStatus bool
+	lock              sync.RWMutex
+	newBestBlock      time.Time
+	bestBlockID       *thor.Bytes32
+	bootstrapStatus   bool
+	timeBetweenBlocks time.Duration
 }
 
-func (h *Health) NewBestBlock(ID thor.Bytes32) {
-	h.lock.Lock()
-	defer h.lock.Unlock()
+const delayBuffer = 5 * time.Second
 
-	h.newBestBlock = time.Now()
-	h.bestBlockID = &ID
+func NewSolo(timeBetweenBlocks time.Duration) *Health {
+	return &Health{
+		timeBetweenBlocks: timeBetweenBlocks + delayBuffer,
+		// there is no bootstrap in solo mode
+		bootstrapStatus: true,
+	}
+}
+func New(timeBetweenBlocks time.Duration) *Health {
+	return &Health{
+		timeBetweenBlocks: timeBetweenBlocks + delayBuffer,
+	}
 }
 
 func (h *Health) Status() (*Status, error) {
@@ -47,14 +56,24 @@ func (h *Health) Status() (*Status, error) {
 		BestBlockIngestionTimestamp: &h.newBestBlock,
 	}
 
-	healthy := time.Since(h.newBestBlock) <= 10*time.Second && // less than 10 secs have passed since a new block was received
+	healthy := time.Since(h.newBestBlock) <= h.timeBetweenBlocks && // less than 10 secs have passed since a new block was received
 		h.bootstrapStatus
+
+	fmt.Println("time between blocks", time.Since(h.newBestBlock).Seconds(), "of max", h.timeBetweenBlocks.Seconds())
 
 	return &Status{
 		Healthy:           healthy,
 		BlockIngestion:    blockIngest,
 		ChainBootstrapped: h.bootstrapStatus,
 	}, nil
+}
+
+func (h *Health) NewBestBlock(ID thor.Bytes32) {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	h.newBestBlock = time.Now()
+	h.bestBlockID = &ID
 }
 
 func (h *Health) BootstrapStatus(bootstrapStatus bool) {
