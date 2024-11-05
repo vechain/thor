@@ -25,7 +25,7 @@ import (
 const (
 	trieHistSpace    = byte(0) // the key space for historical trie nodes.
 	trieDedupedSpace = byte(1) // the key space for deduped trie nodes.
-	namedStoreSpace  = byte(3) // the key space for named store.
+	namedStoreSpace  = byte(2) // the key space for named store.
 )
 
 const (
