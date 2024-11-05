@@ -455,11 +455,6 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 		}
 	)
 
-	indexes := make(map[thor.Bytes32]int, len(txs))
-	for i, tx := range txs {
-		indexes[tx.ID()] = i
-	}
-
 	for i, r := range receipts {
 		if isReceiptEmpty(r) {
 			continue
@@ -484,7 +479,7 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 			txOrigin, _ = tx.Origin()
 		}
 
-		txIndex := indexes[txID]
+		txIndex := i
 
 		if err := w.exec(
 			"INSERT OR IGNORE INTO ref(data) VALUES(?),(?)",

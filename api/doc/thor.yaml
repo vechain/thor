@@ -1380,10 +1380,12 @@ components:
       nullable: true
       properties:
         txIndex:
+          description: The index of the transaction in the block, from which the log was generated.
           type: integer
           nullable: true
           example: 1
         logIndex:
+          descrption: The index of the log in the receipt's outputs.
           type: integer
           nullable: true
           example: 1
