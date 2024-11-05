@@ -41,9 +41,8 @@ func newMessageCache[T any](cacheSize uint32) *messageCache[T] {
 // it will generate the message and add it to the cache. The second return value
 // indicates whether the message is newly generated.
 func (mc *messageCache[T]) GetOrAdd(id thor.Bytes32, createMessage func() (T, error)) (T, bool, error) {
-	blockID := id.String()
 	mc.mu.RLock()
-	msg, ok := mc.cache.Get(blockID)
+	msg, ok := mc.cache.Get(id)
 	mc.mu.RUnlock()
 	if ok {
 		return msg.(T), false, nil
@@ -51,7 +50,7 @@ func (mc *messageCache[T]) GetOrAdd(id thor.Bytes32, createMessage func() (T, er
 
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
-	msg, ok = mc.cache.Get(blockID)
+	msg, ok = mc.cache.Get(id)
 	if ok {
 		return msg.(T), false, nil
 	}
@@ -61,6 +60,6 @@ func (mc *messageCache[T]) GetOrAdd(id thor.Bytes32, createMessage func() (T, er
 		var zero T
 		return zero, false, err
 	}
-	mc.cache.Add(blockID, newMsg)
+	mc.cache.Add(id, newMsg)
 	return newMsg, true, nil
 }
