@@ -9,13 +9,13 @@ import (
 	"fmt"
 	"sync"
 
-	lru "github.com/hashicorp/golang-lru"
+	"github.com/hashicorp/golang-lru/simplelru"
 	"github.com/vechain/thor/v2/thor"
 )
 
 // messageCache is a generic cache that stores messages of any type.
 type messageCache[T any] struct {
-	cache *lru.Cache
+	cache *simplelru.LRU
 	mu    sync.RWMutex
 }
 
@@ -27,7 +27,7 @@ func newMessageCache[T any](cacheSize uint32) *messageCache[T] {
 	if cacheSize == 0 {
 		cacheSize = 1
 	}
-	cache, err := lru.New(int(cacheSize))
+	cache, err := simplelru.NewLRU(int(cacheSize), nil)
 	if err != nil {
 		// lru.New only throws an error if the number is less than 1
 		panic(fmt.Errorf("failed to create message cache: %v", err))
