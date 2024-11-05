@@ -19,13 +19,13 @@ func TestBeat2Reader_Read(t *testing.T) {
 	newBlock := generatedBlocks[1]
 
 	// Act
-	beatReader := newBeat2Reader(repo, genesisBlk.Header().ID())
+	beatReader := newBeat2Reader(repo, genesisBlk.Header().ID(), newMessageCache[Beat2Message](10))
 	res, ok, err := beatReader.Read()
 
 	// Assert
 	assert.NoError(t, err)
 	assert.True(t, ok)
-	if beatMsg, ok := res[0].(*Beat2Message); !ok {
+	if beatMsg, ok := res[0].(Beat2Message); !ok {
 		t.Fatal("unexpected type")
 	} else {
 		assert.Equal(t, newBlock.Header().Number(), beatMsg.Number)
@@ -33,6 +33,8 @@ func TestBeat2Reader_Read(t *testing.T) {
 		assert.Equal(t, newBlock.Header().ParentID(), beatMsg.ParentID)
 		assert.Equal(t, newBlock.Header().Timestamp(), beatMsg.Timestamp)
 		assert.Equal(t, uint32(newBlock.Header().TxsFeatures()), beatMsg.TxsFeatures)
+		// GasLimit is not part of the deprecated BeatMessage
+		assert.Equal(t, newBlock.Header().GasLimit(), beatMsg.GasLimit)
 	}
 }
 
@@ -42,7 +44,7 @@ func TestBeat2Reader_Read_NoNewBlocksToRead(t *testing.T) {
 	newBlock := generatedBlocks[1]
 
 	// Act
-	beatReader := newBeat2Reader(repo, newBlock.Header().ID())
+	beatReader := newBeat2Reader(repo, newBlock.Header().ID(), newMessageCache[Beat2Message](10))
 	res, ok, err := beatReader.Read()
 
 	// Assert
@@ -56,7 +58,7 @@ func TestBeat2Reader_Read_ErrorWhenReadingBlocks(t *testing.T) {
 	repo, _, _ := initChain(t)
 
 	// Act
-	beatReader := newBeat2Reader(repo, thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
+	beatReader := newBeat2Reader(repo, thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), newMessageCache[Beat2Message](10))
 	res, ok, err := beatReader.Read()
 
 	// Assert
