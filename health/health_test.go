@@ -56,7 +56,7 @@ func TestHealth_ChainSyncStatus(t *testing.T) {
 }
 
 func TestHealth_Status(t *testing.T) {
-	h := &Health{}
+	h := New(time.Second)
 	blockID := thor.Bytes32{0x01, 0x02, 0x03}
 
 	h.NewBestBlock(blockID)
@@ -71,15 +71,26 @@ func TestHealth_Status(t *testing.T) {
 		t.Errorf("expected healthy to be true, got false")
 	}
 
-	if status.BlockIngestion.BestBlock == nil || *status.BlockIngestion.BestBlock != blockID {
-		t.Errorf("expected bestBlock to be %v, got %v", blockID, status.BlockIngestion.BestBlock)
+	if status.BlockIngestion.ID == nil || *status.BlockIngestion.ID != blockID {
+		t.Errorf("expected bestBlock to be %v, got %v", blockID, status.BlockIngestion.ID)
 	}
 
-	if status.BlockIngestion.BestBlockIngestionTimestamp == nil || time.Since(*status.BlockIngestion.BestBlockIngestionTimestamp) > time.Second {
+	if status.BlockIngestion.Timestamp == nil || time.Since(*status.BlockIngestion.Timestamp) > time.Second {
 		t.Errorf("bestBlockIngestionTimestamp is not recent")
 	}
 
 	if !status.ChainBootstrapped {
 		t.Errorf("expected chainSync to be true, got false")
 	}
+}
+
+func TestHealth_Solo(t *testing.T) {
+	h := NewSolo(time.Duration(thor.BlockInterval) * time.Second)
+	h.NewBestBlock(thor.Bytes32{0x01, 0x02, 0x03})
+
+	status, err := h.Status()
+	require.NoError(t, err)
+
+	require.Equal(t, status.ChainBootstrapped, true)
+	require.Equal(t, status.Healthy, true)
 }

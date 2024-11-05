@@ -6,7 +6,6 @@
 package health
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -14,8 +13,8 @@ import (
 )
 
 type BlockIngestion struct {
-	BestBlock                   *thor.Bytes32 `json:"bestBlock"`
-	BestBlockIngestionTimestamp *time.Time    `json:"bestBlockIngestionTimestamp"`
+	ID        *thor.Bytes32 `json:"id"`
+	Timestamp *time.Time    `json:"timestamp"`
 }
 
 type Status struct {
@@ -52,14 +51,12 @@ func (h *Health) Status() (*Status, error) {
 	defer h.lock.RUnlock()
 
 	blockIngest := &BlockIngestion{
-		BestBlock:                   h.bestBlockID,
-		BestBlockIngestionTimestamp: &h.newBestBlock,
+		ID:        h.bestBlockID,
+		Timestamp: &h.newBestBlock,
 	}
 
 	healthy := time.Since(h.newBestBlock) <= h.timeBetweenBlocks && // less than 10 secs have passed since a new block was received
 		h.bootstrapStatus
-
-	fmt.Println("time between blocks", time.Since(h.newBestBlock).Seconds(), "of max", h.timeBetweenBlocks.Seconds())
 
 	return &Status{
 		Healthy:           healthy,
