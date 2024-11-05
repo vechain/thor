@@ -135,7 +135,7 @@ func (p *TxPool) housekeeping() {
 				}
 
 				metricTxPoolGauge().AddWithLabel(0-int64(removed), map[string]string{"source": "washed", "total": "true"})
-				logger.Debug("wash done", ctx...)
+				logger.Trace("wash done", ctx...)
 			}
 		}
 	}
@@ -275,7 +275,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		p.goes.Go(func() {
 			p.txFeed.Send(&TxEvent{newTx, &executable})
 		})
-		logger.Debug("tx added", "id", newTx.ID(), "executable", executable)
+		logger.Trace("tx added", "id", newTx.ID(), "executable", executable)
 	} else {
 		// we skip steps that rely on head block when chain is not synced,
 		// but check the pool's limit
@@ -287,7 +287,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		if err := p.all.Add(txObj, p.options.LimitPerAccount, func(_ thor.Address, _ *big.Int) error { return nil }); err != nil {
 			return txRejectedError{err.Error()}
 		}
-		logger.Debug("tx added", "id", newTx.ID())
+		logger.Trace("tx added", "id", newTx.ID())
 		p.goes.Go(func() {
 			p.txFeed.Send(&TxEvent{newTx, nil})
 		})
@@ -408,21 +408,21 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 	for _, txObj := range all {
 		if thor.IsOriginBlocked(txObj.Origin()) || p.blocklist.Contains(txObj.Origin()) {
 			toRemove = append(toRemove, txObj)
-			logger.Debug("tx washed out", "id", txObj.ID(), "err", "blocked")
+			logger.Trace("tx washed out", "id", txObj.ID(), "err", "blocked")
 			continue
 		}
 
 		// out of lifetime
 		if !txObj.localSubmitted && now > txObj.timeAdded+int64(p.options.MaxLifetime) {
 			toRemove = append(toRemove, txObj)
-			logger.Debug("tx washed out", "id", txObj.ID(), "err", "out of lifetime")
+			logger.Trace("tx washed out", "id", txObj.ID(), "err", "out of lifetime")
 			continue
 		}
 		// settled, out of energy or dep broken
 		executable, err := txObj.Executable(chain, newState(), headSummary.Header)
 		if err != nil {
 			toRemove = append(toRemove, txObj)
-			logger.Debug("tx washed out", "id", txObj.ID(), "err", err)
+			logger.Trace("tx washed out", "id", txObj.ID(), "err", err)
 			continue
 		}
 
@@ -430,7 +430,7 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 			provedWork, err := txObj.ProvedWork(headSummary.Header.Number(), chain.GetBlockID)
 			if err != nil {
 				toRemove = append(toRemove, txObj)
-				logger.Debug("tx washed out", "id", txObj.ID(), "err", err)
+				logger.Trace("tx washed out", "id", txObj.ID(), "err", err)
 				continue
 			}
 			txObj.overallGasPrice = txObj.OverallGasPrice(baseGasPrice, provedWork)
