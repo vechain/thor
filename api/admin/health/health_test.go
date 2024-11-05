@@ -6,47 +6,94 @@
 package health
 
 import (
-	"encoding/json"
-	"io"
-	"net/http"
-	"net/http/httptest"
 	"testing"
+	"time"
 
-	"github.com/gorilla/mux"
+	"github.com/vechain/thor/v2/cmd/thor/solo"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vechain/thor/v2/health"
+	"github.com/vechain/thor/v2/thor"
 )
 
-var ts *httptest.Server
+func TestHealth_NewBestBlock(t *testing.T) {
+	h := health{blockInterval: 10 * time.Second}
+	blockID := thor.Bytes32{0x01, 0x02, 0x03}
 
-func TestHealth(t *testing.T) {
-	initAPIServer(t)
+	h.NewBestBlock(blockID)
 
-	var healthStatus health.Status
-	respBody, statusCode := httpGet(t, ts.URL+"/health")
-	require.NoError(t, json.Unmarshal(respBody, &healthStatus))
-	assert.False(t, healthStatus.Healthy)
-	assert.Equal(t, http.StatusServiceUnavailable, statusCode)
+	if h.bestBlockID != blockID {
+		t.Errorf("expected bestBlockID to be %v, got %v", blockID, h.bestBlockID)
+	}
+
+	if time.Since(h.newBestBlock) > time.Second {
+		t.Errorf("newBestBlock timestamp is not recent")
+	}
+
+	h.BootstrapStatus(true)
+
+	status, err := h.status()
+	require.NoError(t, err)
+
+	assert.True(t, status.Healthy)
 }
 
-func initAPIServer(_ *testing.T) {
-	router := mux.NewRouter()
-	New(&health.Health{}).Mount(router, "/health")
+func TestHealth_ChainSyncStatus(t *testing.T) {
+	h := &health{}
 
-	ts = httptest.NewServer(router)
+	h.BootstrapStatus(true)
+	if !h.bootstrapStatus {
+		t.Errorf("expected bootstrapStatus to be true, got false")
+	}
+
+	h.BootstrapStatus(false)
+	if h.bootstrapStatus {
+		t.Errorf("expected bootstrapStatus to be false, got true")
+	}
+
+	status, err := h.status()
+	require.NoError(t, err)
+
+	assert.False(t, status.Healthy)
 }
 
-func httpGet(t *testing.T, url string) ([]byte, int) {
-	res, err := http.Get(url) //#nosec G107
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer res.Body.Close()
+func TestHealth_Status(t *testing.T) {
+	h := health{blockInterval: 10 * time.Second}
+	blockID := thor.Bytes32{0x01, 0x02, 0x03}
 
-	r, err := io.ReadAll(res.Body)
+	h.NewBestBlock(blockID)
+	h.BootstrapStatus(true)
+
+	status, err := h.status()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("unexpected error: %v", err)
 	}
-	return r, res.StatusCode
+
+	if !status.Healthy {
+		t.Errorf("expected healthy to be true, got false")
+	}
+
+	if status.BlockIngestion.ID != blockID {
+		t.Errorf("expected bestBlock to be %v, got %v", blockID, status.BlockIngestion.ID)
+	}
+
+	if status.BlockIngestion.Timestamp == nil || time.Since(*status.BlockIngestion.Timestamp) > time.Second {
+		t.Errorf("bestBlockIngestionTimestamp is not recent")
+	}
+
+	if !status.ChainBootstrapped {
+		t.Errorf("expected chainSync to be true, got false")
+	}
+}
+
+func TestHealth_Solo(t *testing.T) {
+	h := health{blockInterval: 10 * time.Second, node: &solo.Communicator{}}
+	go h.run()
+	h.NewBestBlock(thor.Bytes32{0x01, 0x02, 0x03})
+
+	status, err := h.status()
+	require.NoError(t, err)
+
+	require.Equal(t, status.ChainBootstrapped, false)
+	require.Equal(t, status.Healthy, false)
 }

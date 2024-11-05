@@ -6,42 +6,96 @@
 package health
 
 import (
-	"net/http"
+	"sync"
+	"time"
 
-	"github.com/gorilla/mux"
-	"github.com/vechain/thor/v2/api/utils"
-	"github.com/vechain/thor/v2/health"
+	"github.com/vechain/thor/v2/api/node"
+	"github.com/vechain/thor/v2/chain"
+
+	"github.com/vechain/thor/v2/thor"
 )
 
-type Health struct {
-	healthStatus *health.Health
+type BlockIngestion struct {
+	ID        thor.Bytes32 `json:"id"`
+	Timestamp *time.Time   `json:"timestamp"`
 }
 
-func New(healthStatus *health.Health) *Health {
-	return &Health{
-		healthStatus: healthStatus,
+type Status struct {
+	Healthy           bool            `json:"healthy"`
+	BlockIngestion    *BlockIngestion `json:"blockIngestion"`
+	ChainBootstrapped bool            `json:"chainBootstrapped"`
+}
+
+type health struct {
+	lock            sync.RWMutex
+	newBestBlock    time.Time
+	bestBlockID     thor.Bytes32
+	bootstrapStatus bool
+	blockInterval   time.Duration
+	repo            *chain.Repository
+	node            node.Network
+}
+
+func newHealth(repo *chain.Repository, node node.Network, blockInterval time.Duration) *health {
+	h := &health{
+		repo:          repo,
+		node:          node,
+		blockInterval: blockInterval,
+	}
+	go h.run()
+	return h
+}
+
+const delayBuffer = 5 * time.Second
+
+func (h *health) run() {
+	ticker := time.NewTicker(time.Second)
+	syncedChan := h.node.Synced()
+
+	go func() {
+		<-syncedChan
+		h.BootstrapStatus(true)
+	}()
+
+	for {
+		<-ticker.C
+		bestID := h.repo.BestBlockSummary().Header.ID()
+		if bestID != h.bestBlockID {
+			h.NewBestBlock(bestID)
+		}
 	}
 }
 
-func (h *Health) handleGetHealth(w http.ResponseWriter, _ *http.Request) error {
-	acc, err := h.healthStatus.Status()
-	if err != nil {
-		return err
+func (h *health) status() (*Status, error) {
+	h.lock.RLock()
+	defer h.lock.RUnlock()
+
+	blockIngest := &BlockIngestion{
+		ID:        h.bestBlockID,
+		Timestamp: &h.newBestBlock,
 	}
 
-	if !acc.Healthy {
-		w.WriteHeader(http.StatusServiceUnavailable) // Set the status to 503
-	} else {
-		w.WriteHeader(http.StatusOK) // Set the status to 200
-	}
-	return utils.WriteJSON(w, acc)
+	healthy := time.Since(h.newBestBlock) <= h.blockInterval+delayBuffer && // less than 10 secs have passed since a new block was received
+		h.bootstrapStatus
+
+	return &Status{
+		Healthy:           healthy,
+		BlockIngestion:    blockIngest,
+		ChainBootstrapped: h.bootstrapStatus,
+	}, nil
 }
 
-func (h *Health) Mount(root *mux.Router, pathPrefix string) {
-	sub := root.PathPrefix(pathPrefix).Subrouter()
+func (h *health) NewBestBlock(ID thor.Bytes32) {
+	h.lock.Lock()
+	defer h.lock.Unlock()
 
-	sub.Path("").
-		Methods(http.MethodGet).
-		Name("health").
-		HandlerFunc(utils.WrapHandlerFunc(h.handleGetHealth))
+	h.newBestBlock = time.Now()
+	h.bestBlockID = ID
+}
+
+func (h *health) BootstrapStatus(bootstrapStatus bool) {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	h.bootstrapStatus = bootstrapStatus
 }

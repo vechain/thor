@@ -20,6 +20,13 @@ func (comm *Communicator) PeersStats() []*comm.PeerStats {
 	return nil
 }
 
+// Synced returns a channel that is already synced.
+func (comm *Communicator) Synced() <-chan struct{} {
+	syncedChan := make(chan struct{}, 1)
+	syncedChan <- struct{}{}
+	return syncedChan
+}
+
 // BFTEngine is a fake bft engine for solo.
 type BFTEngine struct {
 	finalized thor.Bytes32

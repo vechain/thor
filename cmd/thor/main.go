@@ -26,7 +26,6 @@ import (
 	"github.com/vechain/thor/v2/cmd/thor/optimizer"
 	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/health"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/metrics"
@@ -163,35 +162,6 @@ func defaultAction(ctx *cli.Context) error {
 
 	defer func() { log.Info("exited") }()
 
-	lvl, err := readIntFromUInt64Flag(ctx.Uint64(verbosityFlag.Name))
-	if err != nil {
-		return errors.Wrap(err, "parse verbosity flag")
-	}
-	logLevel := initLogger(lvl, ctx.Bool(jsonLogsFlag.Name))
-	healthStatus := health.New(time.Duration(thor.BlockInterval))
-
-	// enable metrics as soon as possible
-	metricsURL := ""
-	if ctx.Bool(enableMetricsFlag.Name) {
-		metrics.InitializePrometheusMetrics()
-		url, closeFunc, err := api.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
-		if err != nil {
-			return fmt.Errorf("unable to start metrics server - %w", err)
-		}
-		metricsURL = url
-		defer func() { log.Info("stopping metrics server..."); closeFunc() }()
-	}
-
-	adminURL := ""
-	if ctx.Bool(enableAdminFlag.Name) {
-		url, closeFunc, err := api.StartAdminServer(ctx.String(adminAddrFlag.Name), logLevel, healthStatus)
-		if err != nil {
-			return fmt.Errorf("unable to start admin server - %w", err)
-		}
-		adminURL = url
-		defer func() { log.Info("stopping admin server..."); closeFunc() }()
-	}
-
 	gene, forkConfig, err := selectGenesis(ctx)
 	if err != nil {
 		return err
@@ -223,6 +193,12 @@ func defaultAction(ctx *cli.Context) error {
 		return err
 	}
 
+	lvl, err := readIntFromUInt64Flag(ctx.Uint64(verbosityFlag.Name))
+	if err != nil {
+		return errors.Wrap(err, "parse verbosity flag")
+	}
+	logLevel := initLogger(lvl, ctx.Bool(jsonLogsFlag.Name))
+
 	printStartupMessage1(gene, repo, master, instanceDir, forkConfig)
 
 	skipLogs := ctx.Bool(skipLogsFlag.Name)
@@ -240,7 +216,7 @@ func defaultAction(ctx *cli.Context) error {
 	txPool := txpool.New(repo, state.NewStater(mainDB), txpoolOpt)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
-	p2pCommunicator, err := newP2PCommunicator(ctx, repo, txPool, instanceDir, healthStatus)
+	p2pCommunicator, err := newP2PCommunicator(ctx, repo, txPool, instanceDir)
 	if err != nil {
 		return err
 	}
@@ -248,6 +224,34 @@ func defaultAction(ctx *cli.Context) error {
 	bftEngine, err := bft.NewEngine(repo, mainDB, forkConfig, master.Address())
 	if err != nil {
 		return errors.Wrap(err, "init bft engine")
+	}
+
+	// enable metrics as soon as possible
+	metricsURL := ""
+	if ctx.Bool(enableMetricsFlag.Name) {
+		metrics.InitializePrometheusMetrics()
+		url, closeFunc, err := api.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
+		if err != nil {
+			return fmt.Errorf("unable to start metrics server - %w", err)
+		}
+		metricsURL = url
+		defer func() { log.Info("stopping metrics server..."); closeFunc() }()
+	}
+
+	adminURL := ""
+	if ctx.Bool(enableAdminFlag.Name) {
+		url, closeFunc, err := api.StartAdminServer(
+			ctx.String(adminAddrFlag.Name),
+			logLevel,
+			repo,
+			p2pCommunicator.Communicator(),
+			time.Duration(thor.BlockInterval)*time.Second,
+		)
+		if err != nil {
+			return fmt.Errorf("unable to start admin server - %w", err)
+		}
+		adminURL = url
+		defer func() { log.Info("stopping admin server..."); closeFunc() }()
 	}
 
 	apiHandler, apiCloser := api.New(
@@ -300,7 +304,6 @@ func defaultAction(ctx *cli.Context) error {
 		ctx.Uint64(targetGasLimitFlag.Name),
 		skipLogs,
 		forkConfig,
-		healthStatus,
 	).Run(exitSignal)
 }
 
@@ -314,40 +317,6 @@ func soloAction(ctx *cli.Context) error {
 	}
 
 	logLevel := initLogger(lvl, ctx.Bool(jsonLogsFlag.Name))
-
-	onDemandBlockProduction := ctx.Bool(onDemandFlag.Name)
-	blockProductionInterval := ctx.Uint64(blockInterval.Name)
-	if blockProductionInterval == 0 {
-		return errors.New("block-interval cannot be zero")
-	}
-
-	blockProductionHealthCheck := time.Duration(blockProductionInterval) * time.Second
-	if onDemandBlockProduction {
-		blockProductionHealthCheck = math.MaxUint16 * time.Second
-	}
-	healthStatus := health.NewSolo(blockProductionHealthCheck)
-
-	// enable metrics as soon as possible
-	metricsURL := ""
-	if ctx.Bool(enableMetricsFlag.Name) {
-		metrics.InitializePrometheusMetrics()
-		url, closeFunc, err := api.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
-		if err != nil {
-			return fmt.Errorf("unable to start metrics server - %w", err)
-		}
-		metricsURL = url
-		defer func() { log.Info("stopping metrics server..."); closeFunc() }()
-	}
-
-	adminURL := ""
-	if ctx.Bool(enableAdminFlag.Name) {
-		url, closeFunc, err := api.StartAdminServer(ctx.String(adminAddrFlag.Name), logLevel, healthStatus)
-		if err != nil {
-			return fmt.Errorf("unable to start admin server - %w", err)
-		}
-		adminURL = url
-		defer func() { log.Info("stopping admin server..."); closeFunc() }()
-	}
 
 	var (
 		gene       *genesis.Genesis
@@ -391,6 +360,39 @@ func soloAction(ctx *cli.Context) error {
 	repo, err := initChainRepository(gene, mainDB, logDB)
 	if err != nil {
 		return err
+	}
+
+	onDemandBlockProduction := ctx.Bool(onDemandFlag.Name)
+	blockProductionInterval := ctx.Uint64(blockInterval.Name)
+	if blockProductionInterval == 0 {
+		return errors.New("block-interval cannot be zero")
+	}
+
+	blockProductionHealthCheck := time.Duration(blockProductionInterval) * time.Second
+	if onDemandBlockProduction {
+		blockProductionHealthCheck = math.MaxUint16 * time.Second
+	}
+
+	// enable metrics as soon as possible
+	metricsURL := ""
+	if ctx.Bool(enableMetricsFlag.Name) {
+		metrics.InitializePrometheusMetrics()
+		url, closeFunc, err := api.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
+		if err != nil {
+			return fmt.Errorf("unable to start metrics server - %w", err)
+		}
+		metricsURL = url
+		defer func() { log.Info("stopping metrics server..."); closeFunc() }()
+	}
+
+	adminURL := ""
+	if ctx.Bool(enableAdminFlag.Name) {
+		url, closeFunc, err := api.StartAdminServer(ctx.String(adminAddrFlag.Name), logLevel, repo, &solo.Communicator{}, blockProductionHealthCheck)
+		if err != nil {
+			return fmt.Errorf("unable to start admin server - %w", err)
+		}
+		adminURL = url
+		defer func() { log.Info("stopping admin server..."); closeFunc() }()
 	}
 
 	printStartupMessage1(gene, repo, nil, instanceDir, forkConfig)
@@ -456,7 +458,6 @@ func soloAction(ctx *cli.Context) error {
 	return solo.New(repo,
 		state.NewStater(mainDB),
 		logDB,
-		healthStatus,
 		txPool,
 		ctx.Uint64(gasLimitFlag.Name),
 		onDemandBlockProduction,

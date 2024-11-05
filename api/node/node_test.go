@@ -16,7 +16,6 @@ import (
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/health"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thorclient"
@@ -48,7 +47,7 @@ func initCommServer(t *testing.T) {
 		Limit:           10000,
 		LimitPerAccount: 16,
 		MaxLifetime:     10 * time.Minute,
-	}), &health.Health{})
+	}))
 	router := mux.NewRouter()
 	node.New(comm).Mount(router, "/node")
 	ts = httptest.NewServer(router)

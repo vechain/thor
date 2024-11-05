@@ -12,6 +12,7 @@ import (
 
 type Network interface {
 	PeersStats() []*comm.PeerStats
+	Synced() <-chan struct{}
 }
 
 type PeerStats struct {
