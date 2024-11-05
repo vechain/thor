@@ -20,7 +20,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
@@ -198,8 +197,7 @@ func initBlockServer(t *testing.T) {
 	blk = allBlocks[1]
 
 	router := mux.NewRouter()
-	bftEngine := solo.NewBFTEngine(thorChain.Repo())
-	blocks.New(thorChain.Repo(), bftEngine).Mount(router, "/blocks")
+	blocks.New(thorChain.Repo(), thorChain.Engine()).Mount(router, "/blocks")
 	ts = httptest.NewServer(router)
 }
 

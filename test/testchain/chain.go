@@ -14,7 +14,9 @@ import (
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/state"
@@ -32,6 +34,66 @@ type Chain struct {
 	repo         *chain.Repository
 	stater       *state.Stater
 	genesisBlock *block.Block
+	logDB        *logdb.LogDB
+}
+
+func New(
+	db *muxdb.MuxDB,
+	genesis *genesis.Genesis,
+	engine bft.Committer,
+	repo *chain.Repository,
+	stater *state.Stater,
+	genesisBlock *block.Block,
+	logDB *logdb.LogDB,
+) *Chain {
+	return &Chain{
+		db:           db,
+		genesis:      genesis,
+		engine:       engine,
+		repo:         repo,
+		stater:       stater,
+		genesisBlock: genesisBlock,
+		logDB:        logDB,
+	}
+}
+
+// NewIntegrationTestChain is a convenience function that creates a Chain for testing.
+// It uses an in-memory database, development network genesis, and a solo BFT engine.
+func NewIntegrationTestChain() (*Chain, error) {
+	// Initialize the database
+	db := muxdb.NewMem()
+
+	// Create the state manager (Stater) with the initialized database.
+	stater := state.NewStater(db)
+
+	// Initialize the genesis and retrieve the genesis block
+	gene := genesis.NewDevnet()
+	geneBlk, _, _, err := gene.Build(stater)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create the repository which manages chain data, using the database and genesis block.
+	repo, err := chain.NewRepository(db, geneBlk)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create an inMemory logdb
+	logDb, err := logdb.NewMem()
+	if err != nil {
+		return nil, err
+	}
+
+	return New(
+		db,
+		gene,
+		solo.NewBFTEngine(repo),
+		repo,
+		stater,
+		geneBlk,
+		logDb,
+	), nil
 }
 
 // Repo returns the blockchain's repository, which stores blocks and other data.
@@ -141,4 +203,14 @@ func (c *Chain) BestBlock() (*block.Block, error) {
 // GetForkConfig returns the current fork configuration based on the ID of the genesis block.
 func (c *Chain) GetForkConfig() thor.ForkConfig {
 	return thor.GetForkConfig(c.GenesisBlock().Header().ID())
+}
+
+// Database returns the current database.
+func (c *Chain) Database() *muxdb.MuxDB {
+	return c.db
+}
+
+// LogDB returns the current logdb.
+func (c *Chain) LogDB() *logdb.LogDB {
+	return c.logDB
 }

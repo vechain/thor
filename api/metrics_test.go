@@ -20,14 +20,11 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/prometheus/common/expfmt"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/api/subscriptions"
-	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/cmd/thor/solo"
-	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/metrics"
-	"github.com/vechain/thor/v2/muxdb"
-	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/txpool"
 )
@@ -37,28 +34,21 @@ func init() {
 }
 
 func TestMetricsMiddleware(t *testing.T) {
-	db := muxdb.NewMem()
-	stater := state.NewStater(db)
-	gene := genesis.NewDevnet()
-
-	b, _, _, err := gene.Build(stater)
-	if err != nil {
-		t.Fatal(err)
-	}
-	repo, _ := chain.NewRepository(db, b)
+	thorChain, err := testchain.NewIntegrationTestChain()
+	require.NoError(t, err)
 
 	// inject some invalid data to db
-	data := db.NewStore("chain.data")
+	data := thorChain.Database().NewStore("chain.data")
 	var blkID thor.Bytes32
 	rand.Read(blkID[:])
 	data.Put(blkID[:], []byte("invalid data"))
 
 	// get summary should fail since the block data is not rlp encoded
-	_, err = repo.GetBlockSummary(blkID)
+	_, err = thorChain.Repo().GetBlockSummary(blkID)
 	assert.NotNil(t, err)
 
 	router := mux.NewRouter()
-	acc := accounts.New(repo, stater, math.MaxUint64, thor.NoFork, solo.NewBFTEngine(repo))
+	acc := accounts.New(thorChain.Repo(), thorChain.Stater(), math.MaxUint64, thor.NoFork, thorChain.Engine())
 	acc.Mount(router, "/accounts")
 	router.PathPrefix("/metrics").Handler(metrics.HTTPHandler())
 	router.Use(metricsMiddleware)
@@ -109,18 +99,11 @@ func TestMetricsMiddleware(t *testing.T) {
 }
 
 func TestWebsocketMetrics(t *testing.T) {
-	db := muxdb.NewMem()
-	stater := state.NewStater(db)
-	gene := genesis.NewDevnet()
-
-	b, _, _, err := gene.Build(stater)
-	if err != nil {
-		t.Fatal(err)
-	}
-	repo, _ := chain.NewRepository(db, b)
+	thorChain, err := testchain.NewIntegrationTestChain()
+	require.NoError(t, err)
 
 	router := mux.NewRouter()
-	sub := subscriptions.New(repo, []string{"*"}, 10, txpool.New(repo, stater, txpool.Options{}))
+	sub := subscriptions.New(thorChain.Repo(), []string{"*"}, 10, txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{}))
 	sub.Mount(router, "/subscriptions")
 	router.PathPrefix("/metrics").Handler(metrics.HTTPHandler())
 	router.Use(metricsMiddleware)

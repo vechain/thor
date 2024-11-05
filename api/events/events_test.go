@@ -34,8 +34,7 @@ var (
 )
 
 func TestEmptyEvents(t *testing.T) {
-	db := createDb(t)
-	initEventServer(t, db, defaultLogLimit)
+	initEventServer(t, defaultLogLimit)
 	defer ts.Close()
 
 	tclient = thorclient.New(ts.URL)
@@ -48,21 +47,19 @@ func TestEmptyEvents(t *testing.T) {
 }
 
 func TestEvents(t *testing.T) {
-	db := createDb(t)
-	initEventServer(t, db, defaultLogLimit)
+	thorChain := initEventServer(t, defaultLogLimit)
 	defer ts.Close()
 
 	blocksToInsert := 5
 	tclient = thorclient.New(ts.URL)
-	insertBlocks(t, db, blocksToInsert)
+	insertBlocks(t, thorChain.LogDB(), blocksToInsert)
 	testEventWithBlocks(t, blocksToInsert)
 }
 
 func TestOption(t *testing.T) {
-	db := createDb(t)
-	initEventServer(t, db, 5)
+	thorChain := initEventServer(t, 5)
 	defer ts.Close()
-	insertBlocks(t, db, 5)
+	insertBlocks(t, thorChain.LogDB(), 5)
 
 	tclient = thorclient.New(ts.URL)
 	filter := events.EventFilter{
@@ -96,7 +93,7 @@ func TestOption(t *testing.T) {
 	assert.Equal(t, 5, len(tLogs))
 
 	// when the filtered events exceed the limit, should return the forbidden
-	insertBlocks(t, db, 6)
+	insertBlocks(t, thorChain.LogDB(), 6)
 	res, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/logs/event", filter)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusForbidden, statusCode)
@@ -180,21 +177,15 @@ func testEventWithBlocks(t *testing.T, expectedBlocks int) {
 }
 
 // Init functions
-func initEventServer(t *testing.T, logDb *logdb.LogDB, limit uint64) {
+func initEventServer(t *testing.T, limit uint64) *testchain.Chain {
 	thorChain, err := testchain.NewIntegrationTestChain()
 	require.NoError(t, err)
 
 	router := mux.NewRouter()
-	events.New(thorChain.Repo(), logDb, limit).Mount(router, "/logs/event")
+	events.New(thorChain.Repo(), thorChain.LogDB(), limit).Mount(router, "/logs/event")
 	ts = httptest.NewServer(router)
-}
 
-func createDb(t *testing.T) *logdb.LogDB {
-	logDb, err := logdb.NewMem()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return logDb
+	return thorChain
 }
 
 // Utilities functions

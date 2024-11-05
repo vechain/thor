@@ -21,7 +21,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
@@ -550,7 +549,7 @@ func initDebugServer(t *testing.T) {
 
 	forkConfig := thor.GetForkConfig(blk.Header().ID())
 	router := mux.NewRouter()
-	debug = New(thorChain.Repo(), thorChain.Stater(), forkConfig, 21000, true, solo.NewBFTEngine(thorChain.Repo()), []string{"all"}, false)
+	debug = New(thorChain.Repo(), thorChain.Stater(), forkConfig, 21000, true, thorChain.Engine(), []string{"all"}, false)
 	debug.Mount(router, "/debug")
 	ts = httptest.NewServer(router)
 }
