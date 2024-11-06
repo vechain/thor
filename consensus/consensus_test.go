@@ -10,6 +10,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -508,6 +509,54 @@ func TestVerifyBlock(t *testing.T) {
 				assert.Equal(t, err, expected)
 			},
 		},
+		{
+			"InvalidStateRoot", func(t *testing.T) {
+				header := tc.original.Header()
+				builder := new(block.Builder).
+					ParentID(header.ParentID()).
+					Timestamp(header.Timestamp()).
+					TotalScore(header.TotalScore()).
+					GasLimit(header.GasLimit()).
+					GasUsed(header.GasUsed()).
+					Beneficiary(header.Beneficiary()).
+					StateRoot(thor.Bytes32{123}).
+					ReceiptsRoot(header.ReceiptsRoot())
+				builder.TransactionFeatures(header.TxsFeatures())
+
+				blk, err := tc.sign(builder)
+				if err != nil {
+					t.Fatal(err)
+				}
+				expectedPrefix := "block state root mismatch"
+				err = tc.consent(blk)
+
+				assert.True(t, strings.HasPrefix(err.Error(), expectedPrefix))
+			},
+		},
+		{
+			"InvalidReceiptsRoot", func(t *testing.T) {
+				header := tc.original.Header()
+				builder := new(block.Builder).
+					ParentID(header.ParentID()).
+					Timestamp(header.Timestamp()).
+					TotalScore(header.TotalScore()).
+					GasLimit(header.GasLimit()).
+					GasUsed(header.GasUsed()).
+					Beneficiary(header.Beneficiary()).
+					StateRoot(header.StateRoot()).
+					ReceiptsRoot(thor.Bytes32{123})
+				builder.TransactionFeatures(header.TxsFeatures())
+
+				blk, err := tc.sign(builder)
+				if err != nil {
+					t.Fatal(err)
+				}
+				expectedPrefix := "block receipts root mismatch"
+				err = tc.consent(blk)
+
+				assert.True(t, strings.HasPrefix(err.Error(), expectedPrefix))
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -647,6 +696,27 @@ func TestValidateBlockBody(t *testing.T) {
 					),
 				)
 				assert.Equal(t, err, expected)
+			},
+		},
+		{
+			"ZeroGasTx", func(t *testing.T) {
+				txBuilder := new(tx.Builder).
+					GasPriceCoef(0).
+					Gas(0).
+					Expiration(100).
+					Clause(tx.NewClause(&thor.Address{}).WithValue(big.NewInt(0)).WithData(nil)).
+					Nonce(0).
+					ChainTag(30)
+
+				tx := txSign(txBuilder)
+
+				blk, err := tc.sign(tc.builder(tc.original.Header()).Transaction(tx).Transaction(tx))
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				err = tc.consent(blk)
+				assert.Equal(t, "intrinsic gas exceeds provided gas", err.Error())
 			},
 		},
 	}
