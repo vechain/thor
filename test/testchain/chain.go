@@ -35,6 +35,7 @@ type Chain struct {
 	stater       *state.Stater
 	genesisBlock *block.Block
 	logDB        *logdb.LogDB
+	forkConfig   thor.ForkConfig
 }
 
 func New(
@@ -54,6 +55,7 @@ func New(
 		stater:       stater,
 		genesisBlock: genesisBlock,
 		logDB:        logDB,
+		forkConfig:   thor.GetForkConfig(genesisBlock.Header().ID()),
 	}
 }
 
@@ -128,10 +130,14 @@ func (c *Chain) MintBlock(account genesis.DevAccount, transactions ...*tx.Transa
 	// Create a new block packer with the current chain state and account information.
 	blkPacker := packer.New(c.Repo(), c.Stater(), account.Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
 
-	// Schedule a new block to be packed at the current time.
-	blkFlow, err := blkPacker.Schedule(c.Repo().BestBlockSummary(), uint64(time.Now().Unix()))
+	// Create a new block
+	blkFlow, err := blkPacker.Mock(
+		c.Repo().BestBlockSummary(),
+		c.Repo().BestBlockSummary().Header.Timestamp()+thor.BlockInterval,
+		c.Repo().BestBlockSummary().Header.GasLimit(),
+	)
 	if err != nil {
-		return fmt.Errorf("unable to schedule a new block: %w", err)
+		return fmt.Errorf("unable to mock a new block: %w", err)
 	}
 
 	// Adopt the provided transactions into the block.
@@ -202,7 +208,7 @@ func (c *Chain) BestBlock() (*block.Block, error) {
 
 // GetForkConfig returns the current fork configuration based on the ID of the genesis block.
 func (c *Chain) GetForkConfig() thor.ForkConfig {
-	return thor.GetForkConfig(c.GenesisBlock().Header().ID())
+	return c.forkConfig
 }
 
 // Database returns the current database.
