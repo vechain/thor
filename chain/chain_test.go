@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
@@ -49,6 +50,7 @@ func TestChain(t *testing.T) {
 	assert.Equal(t, M(b3.Header().ID(), nil), M(c.GetBlockID(3)))
 	assert.Equal(t, M(b3.Header(), nil), M(c.GetBlockHeader(3)))
 	assert.Equal(t, M(block.Compose(b3.Header(), b3.Transactions()), nil), M(c.GetBlock(3)))
+	assert.Equal(t, repo.NewBestChain().GenesisID(), repo.GenesisBlock().Header().ID())
 
 	_, err := c.GetBlockID(4)
 	assert.True(t, c.IsNotFound(err))
@@ -96,4 +98,28 @@ func TestChain(t *testing.T) {
 
 	_, err = dangleChain.Exclude(c1)
 	assert.Error(t, err)
+}
+
+func TestHasTransaction(t *testing.T) {
+	_, repo := newTestRepo()
+
+	parent := repo.GenesisBlock()
+	for i := 1; i <= 101; i++ {
+		b := newBlock(parent, uint64(i)*10)
+		repo.AddBlock(b, nil, 0, false)
+		parent = b
+	}
+
+	repo.SetBestBlockID(parent.Header().ID())
+	has, err := repo.NewBestChain().HasTransaction(datagen.RandomHash(), 0)
+	assert.Nil(t, err)
+	assert.False(t, has)
+
+	tx1 := newTx()
+	bx := newBlock(parent, 10020, tx1)
+	repo.AddBlock(bx, tx.Receipts{&tx.Receipt{}}, 0, true)
+
+	has, err = repo.NewBestChain().HasTransaction(tx1.ID(), 0)
+	assert.Nil(t, err)
+	assert.True(t, has)
 }

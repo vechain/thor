@@ -89,6 +89,16 @@ func TestRepository(t *testing.T) {
 	}
 }
 
+func TestAddBlock(t *testing.T) {
+	_, repo := newTestRepo()
+
+	err := repo.AddBlock(new(block.Builder).Build(), nil, 0, false)
+	assert.Error(t, err, "parent missing")
+
+	b1 := newBlock(repo.GenesisBlock(), 10)
+	assert.Nil(t, repo.AddBlock(b1, nil, 0, false))
+}
+
 func TestConflicts(t *testing.T) {
 	_, repo := newTestRepo()
 	b0 := repo.GenesisBlock()
