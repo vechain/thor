@@ -37,7 +37,7 @@ available options.
 | CPU       | 2 Core                | 4 Core                    |
 | RAM       | 8 GB                  | 16 GB                     |
 | Bandwidth | 10 Mbit               | 20 Mbit                   |
-| Disk      | 300 GB NVMe SSD       | 500 GB NVMe SSD           |
+| Disk      | 200 GB NVMe SSD       | 300 GB NVMe SSD           |
 
 ### Validator Nodes
 
