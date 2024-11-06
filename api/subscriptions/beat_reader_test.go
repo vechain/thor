@@ -19,13 +19,13 @@ func TestBeatReader_Read(t *testing.T) {
 	newBlock := generatedBlocks[1]
 
 	// Act
-	beatReader := newBeatReader(repo, genesisBlk.Header().ID())
+	beatReader := newBeatReader(repo, genesisBlk.Header().ID(), newMessageCache[BeatMessage](10))
 	res, ok, err := beatReader.Read()
 
 	// Assert
 	assert.NoError(t, err)
 	assert.True(t, ok)
-	if beatMsg, ok := res[0].(*BeatMessage); !ok {
+	if beatMsg, ok := res[0].(BeatMessage); !ok {
 		t.Fatal("unexpected type")
 	} else {
 		assert.Equal(t, newBlock.Header().Number(), beatMsg.Number)
@@ -42,7 +42,7 @@ func TestBeatReader_Read_NoNewBlocksToRead(t *testing.T) {
 	newBlock := generatedBlocks[1]
 
 	// Act
-	beatReader := newBeatReader(repo, newBlock.Header().ID())
+	beatReader := newBeatReader(repo, newBlock.Header().ID(), newMessageCache[BeatMessage](10))
 	res, ok, err := beatReader.Read()
 
 	// Assert
@@ -56,7 +56,7 @@ func TestBeatReader_Read_ErrorWhenReadingBlocks(t *testing.T) {
 	repo, _, _ := initChain(t)
 
 	// Act
-	beatReader := newBeatReader(repo, thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
+	beatReader := newBeatReader(repo, thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), newMessageCache[BeatMessage](10))
 	res, ok, err := beatReader.Read()
 
 	// Assert
