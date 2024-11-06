@@ -1,7 +1,9 @@
 ## Hosting a Node
 
-_**Please note**: The recommendations and information below are based on the main network as of 22nd April 2024. The
+_**Please note**: The recommendations and information below are based on the main network as of 6th November 2024. The
 requirements may change as the network evolves._
+
+[VeChain Stats](https://vechainstats.com/charts/#thor-size) provides an up-to-date graphic of the network's current state, including the number of nodes, block height.
 
 ### Table of Contents
 
