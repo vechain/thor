@@ -30,49 +30,45 @@ func (l *LogLevel) Mount(root *mux.Router, pathPrefix string) {
 	sub.Path("").
 		Methods(http.MethodGet).
 		Name("get-log-level").
-		HandlerFunc(utils.WrapHandlerFunc(getLogLevelHandler(l.logLevel)))
+		HandlerFunc(utils.WrapHandlerFunc(l.getLogLevelHandler))
 
 	sub.Path("").
 		Methods(http.MethodPost).
 		Name("post-log-level").
-		HandlerFunc(utils.WrapHandlerFunc(postLogLevelHandler(l.logLevel)))
+		HandlerFunc(utils.WrapHandlerFunc(l.postLogLevelHandler))
 }
 
-func getLogLevelHandler(logLevel *slog.LevelVar) utils.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) error {
-		return utils.WriteJSON(w, Response{
-			CurrentLevel: logLevel.Level().String(),
-		})
-	}
+func (l *LogLevel) getLogLevelHandler(w http.ResponseWriter, _ *http.Request) error {
+	return utils.WriteJSON(w, Response{
+		CurrentLevel: l.logLevel.Level().String(),
+	})
 }
 
-func postLogLevelHandler(logLevel *slog.LevelVar) utils.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) error {
-		var req Request
+func (l *LogLevel) postLogLevelHandler(w http.ResponseWriter, r *http.Request) error {
+	var req Request
 
-		if err := utils.ParseJSON(r.Body, &req); err != nil {
-			return utils.BadRequest(errors.WithMessage(err, "Invalid request body"))
-		}
-
-		switch req.Level {
-		case "debug":
-			logLevel.Set(log.LevelDebug)
-		case "info":
-			logLevel.Set(log.LevelInfo)
-		case "warn":
-			logLevel.Set(log.LevelWarn)
-		case "error":
-			logLevel.Set(log.LevelError)
-		case "trace":
-			logLevel.Set(log.LevelTrace)
-		case "crit":
-			logLevel.Set(log.LevelCrit)
-		default:
-			return utils.BadRequest(errors.New("Invalid verbosity level"))
-		}
-
-		return utils.WriteJSON(w, Response{
-			CurrentLevel: logLevel.Level().String(),
-		})
+	if err := utils.ParseJSON(r.Body, &req); err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "Invalid request body"))
 	}
+
+	switch req.Level {
+	case "debug":
+		l.logLevel.Set(log.LevelDebug)
+	case "info":
+		l.logLevel.Set(log.LevelInfo)
+	case "warn":
+		l.logLevel.Set(log.LevelWarn)
+	case "error":
+		l.logLevel.Set(log.LevelError)
+	case "trace":
+		l.logLevel.Set(log.LevelTrace)
+	case "crit":
+		l.logLevel.Set(log.LevelCrit)
+	default:
+		return utils.BadRequest(errors.New("Invalid verbosity level"))
+	}
+
+	return utils.WriteJSON(w, Response{
+		CurrentLevel: l.logLevel.Level().String(),
+	})
 }
