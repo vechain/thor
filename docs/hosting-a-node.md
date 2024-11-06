@@ -3,17 +3,18 @@
 _**Please note**: The recommendations and information below are based on the main network as of 6th November 2024. The
 requirements may change as the network evolves._
 
-[VeChain Stats](https://vechainstats.com/charts/#thor-size) provides an up-to-date graphic of the network's current state, including the number of nodes, block height.
+[VeChain Stats](https://vechainstats.com/charts/#thor-size) provides an up-to-date graphic of the network's current
+state, including the disk space required for various node types.
 
 ### Table of Contents
 
 - [System Requirements](#system-requirements)
-  - [Authority Nodes](#authority-nodes)
-  - [Validator Nodes](#validator-nodes)
+    - [Authority Nodes](#authority-nodes)
+    - [Validator Nodes](#validator-nodes)
 - [Node Types](#node-types)
-  - [Full Archive Node](#full-archive-node)
-  - [Full Node](#full-node)
-  - [Full Node without Logs](#full-node-without-logs)
+    - [Full Archive Node](#full-archive-node)
+    - [Full Node](#full-node)
+    - [Full Node without Logs](#full-node-without-logs)
 - [Metrics](#metrics)
 
 ---
@@ -99,26 +100,29 @@ bin/thor --network main --skip-logs
 
 _As of 22nd April 2024, a full node without logs uses **~100 GB** of disk space._
 
-
 ### Metrics
 
-Telemetry plays a critical role in monitoring and managing blockchain nodes efficiently. 
+Telemetry plays a critical role in monitoring and managing blockchain nodes efficiently.
 Below is an overview of how metrics is integrated and utilized within our node systems.
 
 Metrics is enabled in nodes by default. It's possible to disable it by setting  `--enable-metrics=false`.
-By default, a [prometheus](https://prometheus.io/docs/introduction/overview/) server is available at `localhost:2112/metrics` with the metrics.
+By default, a [prometheus](https://prometheus.io/docs/introduction/overview/) server is available at
+`localhost:2112/metrics` with the metrics.
 
 ```shell
 curl localhost:2112/metrics
 ```
 
-Instrumentation is in a beta phase at this stage. You can read more about the metric types [here](https://prometheus.io/docs/concepts/metric_types/).
+Instrumentation is in a beta phase at this stage. You can read more about the metric
+types [here](https://prometheus.io/docs/concepts/metric_types/).
 
 ### Admin
 
-Admin is used to allow privileged actions to the node by the administrator. Currently it supports changing the logger's verbosity at runtime.
+Admin is used to allow privileged actions to the node by the administrator. Currently it supports changing the logger's
+verbosity at runtime.
 
-Admin is not enabled in nodes by default. It's possible to enable it by setting  `--enable-admin`. Once enabled, an Admin server is available at `localhost:2113/admin` with the following capabilities:
+Admin is not enabled in nodes by default. It's possible to enable it by setting  `--enable-admin`. Once enabled, an
+Admin server is available at `localhost:2113/admin` with the following capabilities:
 
 Retrieve the current log level via a GET request to /admin/loglevel.
 
