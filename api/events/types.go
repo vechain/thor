@@ -113,11 +113,6 @@ type EventFilter struct {
 	Order       logdb.Order      `json:"order"`
 }
 
-type EventOptionalData struct {
-	LogIndex bool `json:"logIndex,omitempty"`
-	TxIndex  bool `json:"txIndex,omitempty"`
-}
-
 func convertEventFilter(chain *chain.Chain, filter *EventFilter) (*logdb.EventFilter, error) {
 	rng, err := ConvertRange(chain, filter.Range)
 	if err != nil {
