@@ -10,7 +10,7 @@ state, including the disk space required for various node types.
 
 - [System Requirements](#system-requirements)
     - [Authority Nodes](#authority-nodes)
-    - [Validator Nodes](#validator-nodes)
+    - [Full Archive Nodes](#full-archive-nodes)
 - [Node Types](#node-types)
     - [Full Archive Node](#full-archive-node)
     - [Full Node](#full-node)
@@ -40,7 +40,7 @@ available options.
 | Bandwidth | 10 Mbit               | 20 Mbit                   |
 | Disk      | 200 GB NVMe SSD       | 300 GB NVMe SSD           |
 
-### Validator Nodes
+### Full Archive Nodes
 
 **Note**: For public nodes, it is essential to configure them with a robust and secure setup, including protection
 against DDoS attacks and intrusion detection systems (IDS).
