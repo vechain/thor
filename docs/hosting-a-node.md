@@ -51,7 +51,7 @@ against DDoS attacks and intrusion detection systems (IDS).
 | Resource  | Minimum Specification | Recommended Specification |
 |-----------|-----------------------|---------------------------|
 | CPU       | 2 Core                | 4 Core                    |
-| RAM       | 8 GB                  | 16 GB                     |
+| RAM       | 16 GB                 | 32 GB                     |
 | Bandwidth | 10 Mbit               | 20 Mbit                   |
 | Disk      | 600 GB SSD            | 1 TB SSD                  |
 
