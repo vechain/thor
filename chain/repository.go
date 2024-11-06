@@ -155,7 +155,7 @@ func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, conflic
 		id            = header.ID()
 		num           = header.Number()
 		txs           = block.Transactions()
-		txIDs         []thor.Bytes32
+		txIDs         = []thor.Bytes32{}
 		bulk          = r.db.NewStore("").Bulk()
 		hdrPutter     = kv.Bucket(hdrStoreName).NewPutter(bulk)
 		bodyPutter    = kv.Bucket(bodyStoreName).NewPutter(bulk)
