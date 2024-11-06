@@ -7,7 +7,7 @@ requirements may change as the network evolves._
 
 - [System Requirements](#system-requirements)
   - [Authority Nodes](#authority-nodes)
-  - [Public Nodes](#public-nodes)
+  - [Validator Nodes](#validator-nodes)
 - [Node Types](#node-types)
   - [Full Archive Node](#full-archive-node)
   - [Full Node](#full-node)
@@ -27,7 +27,8 @@ available options.
 
 #### Authority Nodes
 
-Below spec is the node configured in full node without logs.
+- Pruner enabled
+- Skip logs
 
 | Resource  | Minimum Specification | Recommended Specification |
 |-----------|-----------------------|---------------------------|
@@ -36,17 +37,18 @@ Below spec is the node configured in full node without logs.
 | Bandwidth | 10 Mbit               | 20 Mbit                   |
 | Disk      | 300 GB NVMe SSD       | 500 GB NVMe SSD           |
 
-#### Public Nodes
+### Validator Nodes
 
 **Note**: For public nodes, it is essential to configure them with a robust and secure setup, including protection
 against DDoS attacks and intrusion detection systems (IDS).
 
-Below spec is the node configured in full archive node.
+- Disabled pruner
+- Enabled logs
 
 | Resource  | Minimum Specification | Recommended Specification |
 |-----------|-----------------------|---------------------------|
-| CPU       | 8 Core                | 16 Core                   |
-| RAM       | 16 GB                 | 64 GB                     |
+| CPU       | 4 Core                | 8 Core                    |
+| RAM       | 8 GB                  | 16 GB                     |
 | Bandwidth | 10 Mbit               | 20 Mbit                   |
 | Disk      | 600 GB SSD            | 1 TB SSD                  |
 
