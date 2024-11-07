@@ -338,6 +338,7 @@ func (db *LogDB) queryTransfers(ctx context.Context, query string, args ...inter
 			BlockID:     thor.BytesToBytes32(blockID),
 			BlockTime:   blockTime,
 			TxID:        thor.BytesToBytes32(txID),
+			TxIndex:     seq.TxIndex(),
 			TxOrigin:    thor.BytesToAddress(txOrigin),
 			ClauseIndex: clauseIndex,
 			Sender:      thor.BytesToAddress(sender),
