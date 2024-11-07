@@ -19,15 +19,16 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	ABI "github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
-	tccommon "github.com/vechain/thor/v2/thorclient/common"
 	"github.com/vechain/thor/v2/tx"
+
+	ABI "github.com/vechain/thor/v2/abi"
+	tccommon "github.com/vechain/thor/v2/thorclient/common"
 )
 
 // pragma solidity ^0.4.18;
