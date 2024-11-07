@@ -31,6 +31,8 @@ type Subscriptions struct {
 	pendingTx      *pendingTx
 	done           chan struct{}
 	wg             sync.WaitGroup
+	beat2Cache     *messageCache[Beat2Message]
+	beatCache      *messageCache[BeatMessage]
 }
 
 type msgReader interface {
@@ -67,8 +69,10 @@ func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32,
 				return false
 			},
 		},
-		pendingTx: newPendingTx(txpool),
-		done:      make(chan struct{}),
+		pendingTx:  newPendingTx(txpool),
+		done:       make(chan struct{}),
+		beat2Cache: newMessageCache[Beat2Message](backtraceLimit),
+		beatCache:  newMessageCache[BeatMessage](backtraceLimit),
 	}
 
 	sub.wg.Add(1)
@@ -158,7 +162,7 @@ func (s *Subscriptions) handleBeatReader(w http.ResponseWriter, req *http.Reques
 	if err != nil {
 		return nil, err
 	}
-	return newBeatReader(s.repo, position), nil
+	return newBeatReader(s.repo, position, s.beatCache), nil
 }
 
 func (s *Subscriptions) handleBeat2Reader(w http.ResponseWriter, req *http.Request) (*beat2Reader, error) {
@@ -166,7 +170,7 @@ func (s *Subscriptions) handleBeat2Reader(w http.ResponseWriter, req *http.Reque
 	if err != nil {
 		return nil, err
 	}
-	return newBeat2Reader(s.repo, position), nil
+	return newBeat2Reader(s.repo, position, s.beat2Cache), nil
 }
 
 func (s *Subscriptions) handleSubject(w http.ResponseWriter, req *http.Request) error {

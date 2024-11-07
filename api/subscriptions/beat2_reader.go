@@ -17,12 +17,14 @@ import (
 type beat2Reader struct {
 	repo        *chain.Repository
 	blockReader chain.BlockReader
+	cache       *messageCache[Beat2Message]
 }
 
-func newBeat2Reader(repo *chain.Repository, position thor.Bytes32) *beat2Reader {
+func newBeat2Reader(repo *chain.Repository, position thor.Bytes32, cache *messageCache[Beat2Message]) *beat2Reader {
 	return &beat2Reader{
 		repo:        repo,
 		blockReader: repo.NewBlockReader(position),
+		cache:       cache,
 	}
 }
 
@@ -33,21 +35,32 @@ func (br *beat2Reader) Read() ([]interface{}, bool, error) {
 	}
 	var msgs []interface{}
 
-	bloomGenerator := &bloom.Generator{}
-
-	bloomAdd := func(key []byte) {
-		key = bytes.TrimLeft(key, "\x00")
-		// exclude non-address key
-		if len(key) <= thor.AddressLength {
-			bloomGenerator.Add(key)
-		}
-	}
-
 	for _, block := range blocks {
+		msg, _, err := br.cache.GetOrAdd(block.Header().ID(), br.generateBeat2Message(block))
+		if err != nil {
+			return nil, false, err
+		}
+		msgs = append(msgs, msg)
+	}
+	return msgs, len(blocks) > 0, nil
+}
+
+func (br *beat2Reader) generateBeat2Message(block *chain.ExtendedBlock) func() (Beat2Message, error) {
+	return func() (Beat2Message, error) {
+		bloomGenerator := &bloom.Generator{}
+
+		bloomAdd := func(key []byte) {
+			key = bytes.TrimLeft(key, "\x00")
+			// exclude non-address key
+			if len(key) <= thor.AddressLength {
+				bloomGenerator.Add(key)
+			}
+		}
+
 		header := block.Header()
 		receipts, err := br.repo.GetBlockReceipts(header.ID())
 		if err != nil {
-			return nil, false, err
+			return Beat2Message{}, err
 		}
 		txs := block.Transactions()
 		for i, receipt := range receipts {
@@ -74,7 +87,7 @@ func (br *beat2Reader) Read() ([]interface{}, bool, error) {
 		const bitsPerKey = 20
 		filter := bloomGenerator.Generate(bitsPerKey, bloom.K(bitsPerKey))
 
-		msgs = append(msgs, &Beat2Message{
+		beat2 := Beat2Message{
 			Number:      header.Number(),
 			ID:          header.ID(),
 			ParentID:    header.ParentID(),
@@ -84,7 +97,8 @@ func (br *beat2Reader) Read() ([]interface{}, bool, error) {
 			Bloom:       hexutil.Encode(filter.Bits),
 			K:           filter.K,
 			Obsolete:    block.Obsolete,
-		})
+		}
+
+		return beat2, nil
 	}
-	return msgs, len(blocks) > 0, nil
 }
