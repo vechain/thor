@@ -20,11 +20,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/transactions"
-	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/muxdb"
-	"github.com/vechain/thor/v2/packer"
-	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/tx"
@@ -32,11 +29,11 @@ import (
 )
 
 var (
-	repo        *chain.Repository
 	ts          *httptest.Server
 	transaction *tx.Transaction
 	mempoolTx   *tx.Transaction
 	tclient     *thorclient.Client
+	chainTag    byte
 )
 
 func TestTransaction(t *testing.T) {
@@ -110,7 +107,6 @@ func getTxReceipt(t *testing.T) {
 
 func sendTx(t *testing.T) {
 	var blockRef = tx.NewBlockRef(0)
-	var chainTag = repo.ChainTag()
 	var expiration = uint32(10)
 	var gas = uint64(21000)
 
@@ -270,19 +266,15 @@ func httpPostAndCheckResponseStatus(t *testing.T, url string, obj interface{}, r
 }
 
 func initTransactionServer(t *testing.T) {
-	db := muxdb.NewMem()
-	stater := state.NewStater(db)
-	gene := genesis.NewDevnet()
+	thorChain, err := testchain.NewIntegrationTestChain()
+	require.NoError(t, err)
 
-	b, _, _, err := gene.Build(stater)
-	if err != nil {
-		t.Fatal(err)
-	}
-	repo, _ = chain.NewRepository(db, b)
+	chainTag = thorChain.Repo().ChainTag()
+
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 	transaction = new(tx.Builder).
-		ChainTag(repo.ChainTag()).
+		ChainTag(chainTag).
 		GasPriceCoef(1).
 		Expiration(10).
 		Gas(21000).
@@ -292,47 +284,26 @@ func initTransactionServer(t *testing.T) {
 		Build()
 	transaction = tx.MustSign(transaction, genesis.DevAccounts()[0].PrivateKey)
 
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], transaction))
+
+	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute})
+
 	mempoolTx = new(tx.Builder).
-		ChainTag(repo.ChainTag()).
+		ChainTag(chainTag).
 		Expiration(10).
 		Gas(21000).
 		Nonce(1).
 		Build()
 	mempoolTx = tx.MustSign(mempoolTx, genesis.DevAccounts()[0].PrivateKey)
 
-	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
-	sum, _ := repo.GetBlockSummary(b.Header().ID())
-	flow, err := packer.Schedule(sum, uint64(time.Now().Unix()))
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = flow.Adopt(transaction)
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := stage.Commit(); err != nil {
-		t.Fatal(err)
-	}
-	if err := repo.AddBlock(b, receipts, 0); err != nil {
-		t.Fatal(err)
-	}
-	if err := repo.SetBestBlockID(b.Header().ID()); err != nil {
-		t.Fatal(err)
-	}
-	router := mux.NewRouter()
-
 	// Add a tx to the mempool to have both pending and non-pending transactions
-	mempool := txpool.New(repo, stater, txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute})
 	e := mempool.Add(mempoolTx)
 	if e != nil {
 		t.Fatal(e)
 	}
 
-	transactions.New(repo, mempool).Mount(router, "/transactions")
+	router := mux.NewRouter()
+	transactions.New(thorChain.Repo(), mempool).Mount(router, "/transactions")
 
 	ts = httptest.NewServer(router)
 }

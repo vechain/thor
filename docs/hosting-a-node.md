@@ -1,17 +1,20 @@
 ## Hosting a Node
 
-_**Please note**: The recommendations and information below are based on the main network as of 22nd April 2024. The
+_**Please note**: The recommendations and information below are based on the main network as of 6th November 2024. The
 requirements may change as the network evolves._
+
+[VeChain Stats](https://vechainstats.com/charts/#thor-size) provides an up-to-date graphic of the network's current
+state, including the disk space required for various node types.
 
 ### Table of Contents
 
 - [System Requirements](#system-requirements)
-  - [Authority Nodes](#authority-nodes)
-  - [Public Nodes](#public-nodes)
+    - [Authority Nodes](#authority-nodes)
+    - [Full Archive Nodes](#full-archive-nodes)
 - [Node Types](#node-types)
-  - [Full Archive Node](#full-archive-node)
-  - [Full Node](#full-node)
-  - [Full Node without Logs](#full-node-without-logs)
+    - [Full Archive Node](#full-archive-node)
+    - [Full Node](#full-node)
+    - [Full Node without Logs](#full-node-without-logs)
 - [Metrics](#metrics)
 
 ---
@@ -27,26 +30,25 @@ available options.
 
 #### Authority Nodes
 
-Below spec is the node configured in full node without logs.
+- Pruner enabled
+- Skip logs
 
 | Resource  | Minimum Specification | Recommended Specification |
 |-----------|-----------------------|---------------------------|
 | CPU       | 2 Core                | 4 Core                    |
 | RAM       | 8 GB                  | 16 GB                     |
 | Bandwidth | 10 Mbit               | 20 Mbit                   |
-| Disk      | 300 GB NVMe SSD       | 500 GB NVMe SSD           |
+| Disk      | 200 GB NVMe SSD       | 300 GB NVMe SSD           |
 
-#### Public Nodes
+### Full Archive Nodes
 
-**Note**: For public nodes, it is essential to configure them with a robust and secure setup, including protection
-against DDoS attacks and intrusion detection systems (IDS).
-
-Below spec is the node configured in full archive node.
+- Disabled pruner
+- Enabled logs
 
 | Resource  | Minimum Specification | Recommended Specification |
 |-----------|-----------------------|---------------------------|
-| CPU       | 8 Core                | 16 Core                   |
-| RAM       | 16 GB                 | 64 GB                     |
+| CPU       | 2 Core                | 4 Core                    |
+| RAM       | 16 GB                 | 32 GB                     |
 | Bandwidth | 10 Mbit               | 20 Mbit                   |
 | Disk      | 600 GB SSD            | 1 TB SSD                  |
 
@@ -95,26 +97,29 @@ bin/thor --network main --skip-logs
 
 _As of 22nd April 2024, a full node without logs uses **~100 GB** of disk space._
 
-
 ### Metrics
 
-Telemetry plays a critical role in monitoring and managing blockchain nodes efficiently. 
+Telemetry plays a critical role in monitoring and managing blockchain nodes efficiently.
 Below is an overview of how metrics is integrated and utilized within our node systems.
 
 Metrics is enabled in nodes by default. It's possible to disable it by setting  `--enable-metrics=false`.
-By default, a [prometheus](https://prometheus.io/docs/introduction/overview/) server is available at `localhost:2112/metrics` with the metrics.
+By default, a [prometheus](https://prometheus.io/docs/introduction/overview/) server is available at
+`localhost:2112/metrics` with the metrics.
 
 ```shell
 curl localhost:2112/metrics
 ```
 
-Instrumentation is in a beta phase at this stage. You can read more about the metric types [here](https://prometheus.io/docs/concepts/metric_types/).
+Instrumentation is in a beta phase at this stage. You can read more about the metric
+types [here](https://prometheus.io/docs/concepts/metric_types/).
 
 ### Admin
 
-Admin is used to allow privileged actions to the node by the administrator. Currently it supports changing the logger's verbosity at runtime.
+Admin is used to allow privileged actions to the node by the administrator. Currently it supports changing the logger's
+verbosity at runtime.
 
-Admin is not enabled in nodes by default. It's possible to enable it by setting  `--enable-admin`. Once enabled, an Admin server is available at `localhost:2113/admin` with the following capabilities:
+Admin is not enabled in nodes by default. It's possible to enable it by setting  `--enable-admin`. Once enabled, an
+Admin server is available at `localhost:2113/admin` with the following capabilities:
 
 Retrieve the current log level via a GET request to /admin/loglevel.
 

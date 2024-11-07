@@ -12,11 +12,8 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/cmd/thor/solo"
-	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/muxdb"
-	"github.com/vechain/thor/v2/state"
+	"github.com/stretchr/testify/require"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -101,15 +98,8 @@ func TestAllowNext(t *testing.T) {
 }
 
 func TestGetSummary(t *testing.T) {
-	db := muxdb.NewMem()
-	stater := state.NewStater(db)
-	gene := genesis.NewDevnet()
-	b, _, _, err := gene.Build(stater)
-	if err != nil {
-		t.Fatal(err)
-	}
-	repo, _ := chain.NewRepository(db, b)
-	bft := solo.NewBFTEngine(repo)
+	thorChain, err := testchain.NewIntegrationTestChain()
+	require.NoError(t, err)
 
 	// Test cases
 	testCases := []struct {
@@ -151,7 +141,7 @@ func TestGetSummary(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			summary, err := GetSummary(tc.revision, repo, bft)
+			summary, err := GetSummary(tc.revision, thorChain.Repo(), thorChain.Engine())
 			if tc.err != nil {
 				assert.Equal(t, tc.err.Error(), err.Error())
 			} else {
@@ -163,22 +153,17 @@ func TestGetSummary(t *testing.T) {
 }
 
 func TestGetSummaryAndState(t *testing.T) {
-	db := muxdb.NewMem()
-	stater := state.NewStater(db)
-	gene := genesis.NewDevnet()
-	b, _, _, err := gene.Build(stater)
-	if err != nil {
-		t.Fatal(err)
-	}
-	repo, _ := chain.NewRepository(db, b)
-	bft := solo.NewBFTEngine(repo)
+	thorChain, err := testchain.NewIntegrationTestChain()
+	require.NoError(t, err)
 
-	summary, _, err := GetSummaryAndState(&Revision{revBest}, repo, bft, stater)
+	b := thorChain.GenesisBlock()
+
+	summary, _, err := GetSummaryAndState(&Revision{revBest}, thorChain.Repo(), thorChain.Engine(), thorChain.Stater())
 	assert.Nil(t, err)
 	assert.Equal(t, summary.Header.Number(), b.Header().Number())
 	assert.Equal(t, summary.Header.Timestamp(), b.Header().Timestamp())
 
-	summary, _, err = GetSummaryAndState(&Revision{revNext}, repo, bft, stater)
+	summary, _, err = GetSummaryAndState(&Revision{revNext}, thorChain.Repo(), thorChain.Engine(), thorChain.Stater())
 	assert.Nil(t, err)
 	assert.Equal(t, summary.Header.Number(), b.Header().Number()+1)
 	assert.Equal(t, summary.Header.Timestamp(), b.Header().Timestamp()+thor.BlockInterval)

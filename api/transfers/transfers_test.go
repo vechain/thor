@@ -19,12 +19,9 @@ import (
 	"github.com/vechain/thor/v2/api/events"
 	"github.com/vechain/thor/v2/api/transfers"
 	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
-	"github.com/vechain/thor/v2/muxdb"
-	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/test/datagen"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/tx"
 )
@@ -72,20 +69,20 @@ func TestOption(t *testing.T) {
 		Order:       logdb.DESC,
 	}
 
-	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/transfers", filter)
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfers", filter)
 	require.NoError(t, err)
 	assert.Equal(t, "options.limit exceeds the maximum allowed value of 5", strings.Trim(string(res), "\n"))
 	assert.Equal(t, http.StatusForbidden, statusCode)
 
 	filter.Options.Limit = 5
-	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/transfers", filter)
+	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/logs/transfers", filter)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, statusCode)
 
 	// with nil options, should use default limit, when the filtered lower
 	// or equal to the limit, should return the filtered transfers
 	filter.Options = nil
-	res, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/transfers", filter)
+	res, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/logs/transfers", filter)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, statusCode)
 	var tLogs []*events.FilteredEvent
@@ -97,7 +94,7 @@ func TestOption(t *testing.T) {
 
 	// when the filtered transfers exceed the limit, should return the forbidden
 	insertBlocks(t, db, 6)
-	res, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/transfers", filter)
+	res, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/logs/transfers", filter)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusForbidden, statusCode)
 	assert.Equal(t, "the number of filtered logs exceeds the maximum allowed value of 5, please use pagination", strings.Trim(string(res), "\n"))
@@ -107,7 +104,7 @@ func TestOption(t *testing.T) {
 func testTransferBadRequest(t *testing.T) {
 	badBody := []byte{0x00, 0x01, 0x02}
 
-	_, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/transfers", badBody)
+	_, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfers", badBody)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode)
 }
@@ -120,7 +117,7 @@ func testTransferWithEmptyDb(t *testing.T) {
 		Order:       logdb.DESC,
 	}
 
-	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/transfers", emptyFilter)
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfers", emptyFilter)
 	require.NoError(t, err)
 	var tLogs []*transfers.FilteredTransfer
 	if err := json.Unmarshal(res, &tLogs); err != nil {
@@ -139,7 +136,7 @@ func testTransferWithBlocks(t *testing.T, expectedBlocks int) {
 		Order:       logdb.DESC,
 	}
 
-	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/transfers", emptyFilter)
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfers", emptyFilter)
 	require.NoError(t, err)
 	var tLogs []*transfers.FilteredTransfer
 	if err := json.Unmarshal(res, &tLogs); err != nil {
@@ -174,20 +171,12 @@ func insertBlocks(t *testing.T, db *logdb.LogDB, n int) {
 }
 
 func initTransferServer(t *testing.T, logDb *logdb.LogDB, limit uint64) {
+	thorChain, err := testchain.NewIntegrationTestChain()
+	require.NoError(t, err)
+
 	router := mux.NewRouter()
+	transfers.New(thorChain.Repo(), logDb, limit).Mount(router, "/logs/transfers")
 
-	muxDb := muxdb.NewMem()
-	stater := state.NewStater(muxDb)
-	gene := genesis.NewDevnet()
-
-	b, _, _, err := gene.Build(stater)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	repo, _ := chain.NewRepository(muxDb, b)
-
-	transfers.New(repo, logDb, limit).Mount(router, "/transfers")
 	ts = httptest.NewServer(router)
 }
 
