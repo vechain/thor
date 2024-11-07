@@ -196,7 +196,7 @@ func findCommonAncestor(ctx context.Context, repo *chain.Repository, peer *Peer,
 
 func (c *Communicator) syncTxs(peer *Peer) {
 	for i := 0; ; i++ {
-		peer.logger.Debug(fmt.Sprintf("sync txs loop %v", i))
+		peer.logger.Trace(fmt.Sprintf("sync txs loop %v", i))
 		result, err := proto.GetTxs(c.ctx, peer)
 		if err != nil {
 			peer.logger.Debug("failed to request txs", "err", err)

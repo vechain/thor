@@ -205,7 +205,7 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 		)
 
 		if v, updated := n.bandwidth.Update(newBlock.Header(), time.Duration(realElapsed)); updated {
-			logger.Debug("bandwidth updated", "gps", v)
+			logger.Trace("bandwidth updated", "gps", v)
 		}
 
 		metricBlockProcessedTxs().SetWithLabel(int64(len(receipts)), map[string]string{"type": "proposed"})
