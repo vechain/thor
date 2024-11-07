@@ -82,7 +82,7 @@ func New(
 	}
 	blocks.New(repo, bft).
 		Mount(router, "/blocks")
-	transactions.New(repo, txPool).
+	transactions.New(repo, stater, txPool, bft, forkConfig).
 		Mount(router, "/transactions")
 	debug.New(repo, stater, forkConfig, callGasLimit, allowCustomTracer, bft, allowedTracers, soloMode).
 		Mount(router, "/debug")

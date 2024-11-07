@@ -141,6 +141,26 @@ func (c *Client) GetTransaction(txID *thor.Bytes32, head string, isPending bool)
 	return &tx, nil
 }
 
+// CallTransaction locally executes a given transaction, along with options for head.
+func (c *Client) CallTransaction(transaction *transactions.Transaction, head string) (*transactions.CallReceipt, error) {
+	url := c.url + "/transactions/call?"
+	if head != "" {
+		url += "head=" + head
+	}
+
+	body, err := c.httpPOST(url, transaction)
+	if err != nil {
+		return nil, fmt.Errorf("unable to call transaction - %w", err)
+	}
+
+	var callReceipt transactions.CallReceipt
+	if err = json.Unmarshal(body, &callReceipt); err != nil {
+		return nil, fmt.Errorf("unable to unmarshal transaction call receipt - %w", err)
+	}
+
+	return &callReceipt, nil
+}
+
 // GetRawTransaction retrieves the raw transaction data by the transaction ID, along with options for head and pending status.
 func (c *Client) GetRawTransaction(txID *thor.Bytes32, head string, isPending bool) (*transactions.RawTransaction, error) {
 	url := c.url + "/transactions/" + txID.String() + "?raw=true&"
