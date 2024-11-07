@@ -454,7 +454,7 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 		}
 	)
 
-	writeBlockId := true
+	writeBlockID := true
 
 	for i, r := range receipts {
 		eventCount, transferCount := uint32(0), uint32(0)
@@ -463,14 +463,14 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 			continue
 		}
 
-		if writeBlockId {
+		if writeBlockID {
 			// block id is not yet inserted
 			if err := w.exec(
 				"INSERT OR IGNORE INTO ref(data) VALUES(?)",
 				blockID[:]); err != nil {
 				return err
 			}
-			writeBlockId = false
+			writeBlockID = false
 		}
 
 		var (
