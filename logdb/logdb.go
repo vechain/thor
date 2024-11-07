@@ -444,8 +444,6 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 		blockNum       = b.Header().Number()
 		blockTimestamp = b.Header().Timestamp()
 		txs            = b.Transactions()
-		eventCount,
-		transferCount uint32
 		isReceiptEmpty = func(r *tx.Receipt) bool {
 			for _, o := range r.Outputs {
 				if len(o.Events) > 0 || len(o.Transfers) > 0 {
@@ -456,18 +454,23 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 		}
 	)
 
+	writeBlockId := true
+
 	for i, r := range receipts {
+		eventCount, transferCount := uint32(0), uint32(0)
+
 		if isReceiptEmpty(r) {
 			continue
 		}
 
-		if eventCount == 0 && transferCount == 0 {
+		if writeBlockId {
 			// block id is not yet inserted
 			if err := w.exec(
 				"INSERT OR IGNORE INTO ref(data) VALUES(?)",
 				blockID[:]); err != nil {
 				return err
 			}
+			writeBlockId = false
 		}
 
 		var (
