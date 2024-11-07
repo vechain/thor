@@ -42,9 +42,6 @@ available options.
 
 ### Full Archive Nodes
 
-**Note**: For public nodes, it is essential to configure them with a robust and secure setup, including protection
-against DDoS attacks and intrusion detection systems (IDS).
-
 - Disabled pruner
 - Enabled logs
 
