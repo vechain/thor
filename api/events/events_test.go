@@ -56,64 +56,40 @@ func TestEvents(t *testing.T) {
 	testEventWithBlocks(t, blocksToInsert)
 }
 
-func TestOptionalData(t *testing.T) {
-	db := createDb(t)
-	initEventServer(t, db, defaultLogLimit)
+func TestOptionalIndexes(t *testing.T) {
+	thorChain := initEventServer(t, defaultLogLimit)
 	defer ts.Close()
-	insertBlocks(t, db, 5)
+	insertBlocks(t, thorChain.LogDB(), 5)
+	tclient = thorclient.New(ts.URL)
 
 	testCases := []struct {
-		name     string
-		optData  *events.EventOptionalData
-		expected *events.ExtendedLogMeta
+		name           string
+		includeIndexes bool
+		expected       *uint32
 	}{
 		{
-			name:     "empty optional data",
-			optData:  &events.EventOptionalData{},
-			expected: nil,
+			name:           "do not include indexes",
+			includeIndexes: false,
+			expected:       nil,
 		},
 		{
-			name: "optional data with txIndex",
-			optData: &events.EventOptionalData{
-				TxIndex: true,
-			},
-			expected: &events.ExtendedLogMeta{
-				TxIndex: new(uint32),
-			},
-		},
-		{
-			name: "optional data with logIndex",
-			optData: &events.EventOptionalData{
-				LogIndex: true,
-			},
-			expected: &events.ExtendedLogMeta{
-				LogIndex: new(uint32),
-			},
-		},
-		{
-			name: "optional data with txIndex and logIndex",
-			optData: &events.EventOptionalData{
-				TxIndex:  true,
-				LogIndex: true,
-			},
-			expected: &events.ExtendedLogMeta{
-				TxIndex:  new(uint32),
-				LogIndex: new(uint32),
-			},
+			name:           "include indexes",
+			includeIndexes: true,
+			expected:       new(uint32),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			filter := events.EventFilter{
-				CriteriaSet:  make([]*events.EventCriteria, 0),
-				Range:        nil,
-				Options:      &logdb.Options{Limit: 6},
-				Order:        logdb.DESC,
-				OptionalData: tc.optData,
+				CriteriaSet: make([]*events.EventCriteria, 0),
+				Range:       nil,
+				Options:     &logdb.Options{Limit: 6, IncludeIndexes: tc.includeIndexes},
+				Order:       logdb.DESC,
 			}
 
-			res, statusCode := httpPost(t, ts.URL+"/events", filter)
+			res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/event", filter)
+			assert.NoError(t, err)
 			assert.Equal(t, http.StatusOK, statusCode)
 			var tLogs []*events.FilteredEvent
 			if err := json.Unmarshal(res, &tLogs); err != nil {
@@ -123,7 +99,8 @@ func TestOptionalData(t *testing.T) {
 			assert.Equal(t, 5, len(tLogs))
 
 			for _, tLog := range tLogs {
-				assert.Equal(t, tc.expected, tLog.Meta.ExtendedLogMeta)
+				assert.Equal(t, tc.expected, tLog.Meta.TxIndex)
+				assert.Equal(t, tc.expected, tLog.Meta.LogIndex)
 			}
 		})
 	}

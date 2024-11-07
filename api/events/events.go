@@ -44,7 +44,7 @@ func (e *Events) filter(ctx context.Context, ef *EventFilter) ([]*FilteredEvent,
 	}
 	fes := make([]*FilteredEvent, len(events))
 	for i, e := range events {
-		fes[i] = convertEvent(e, ef.OptionalData)
+		fes[i] = convertEvent(e, ef.Options.IncludeIndexes)
 	}
 	return fes, nil
 }

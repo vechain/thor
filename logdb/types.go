@@ -34,6 +34,7 @@ type Transfer struct {
 	BlockID     thor.Bytes32
 	BlockTime   uint64
 	TxID        thor.Bytes32
+	TxIndex     uint32
 	TxOrigin    thor.Address
 	ClauseIndex uint32
 	Sender      thor.Address
@@ -54,8 +55,9 @@ type Range struct {
 }
 
 type Options struct {
-	Offset uint64
-	Limit  uint64
+	Offset         uint64
+	Limit          uint64
+	IncludeIndexes bool
 }
 
 type EventCriteria struct {
