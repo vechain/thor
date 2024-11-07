@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/block"
 )
 
@@ -29,10 +30,13 @@ func handler(blk *block.Block) func() (message, error) {
 }
 
 func TestMessageCache_GetOrAdd(t *testing.T) {
-	_, generatedBlocks, _ := initChain(t)
+	thorChain := initChain(t)
 
-	blk0 := generatedBlocks[0]
-	blk1 := generatedBlocks[1]
+	allBlocks, err := thorChain.GetAllBlocks()
+	require.NoError(t, err)
+
+	blk0 := allBlocks[0]
+	blk1 := allBlocks[1]
 
 	cache := newMessageCache[message](10)
 

@@ -13,7 +13,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -22,13 +21,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
-	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/test/datagen"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/tracers/logger"
@@ -515,22 +512,15 @@ func testStorageRangeDefaultOption(t *testing.T) {
 }
 
 func initDebugServer(t *testing.T) {
-	db := muxdb.NewMem()
-	stater := state.NewStater(db)
-	gene := genesis.NewDevnet()
-
-	b, _, _, err := gene.Build(stater)
-	if err != nil {
-		t.Fatal(err)
-	}
-	repo, _ := chain.NewRepository(db, b)
+	thorChain, err := testchain.NewIntegrationTestChain()
+	require.NoError(t, err)
 
 	addr := thor.BytesToAddress([]byte("to"))
 
 	// Adding an empty clause transaction to the block to cover the case of
 	// scanning multiple txs before getting the right one
 	noClausesTx := new(tx.Builder).
-		ChainTag(repo.ChainTag()).
+		ChainTag(thorChain.Repo().ChainTag()).
 		Expiration(10).
 		Gas(21000).
 		Build()
@@ -539,7 +529,7 @@ func initDebugServer(t *testing.T) {
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 	cla2 := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 	transaction = new(tx.Builder).
-		ChainTag(repo.ChainTag()).
+		ChainTag(thorChain.Repo().ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
 		Gas(37000).
@@ -550,38 +540,16 @@ func initDebugServer(t *testing.T) {
 		Build()
 	transaction = tx.MustSign(transaction, genesis.DevAccounts()[0].PrivateKey)
 
-	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
-	sum, _ := repo.GetBlockSummary(b.Header().ID())
-	flow, err := packer.Schedule(sum, uint64(time.Now().Unix()))
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = flow.Adopt(noClausesTx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = flow.Adopt(transaction)
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, false)
-	blk = b
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := stage.Commit(); err != nil {
-		t.Fatal(err)
-	}
-	if err := repo.AddBlock(b, receipts, 0); err != nil {
-		t.Fatal(err)
-	}
-	if err := repo.SetBestBlockID(b.Header().ID()); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], transaction, noClausesTx))
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0]))
 
-	forkConfig := thor.GetForkConfig(b.Header().ID())
+	allBlocks, err := thorChain.GetAllBlocks()
+	require.NoError(t, err)
+	blk = allBlocks[1]
+
+	forkConfig := thor.GetForkConfig(blk.Header().ID())
 	router := mux.NewRouter()
-	debug = New(repo, stater, forkConfig, 21000, true, solo.NewBFTEngine(repo), []string{"all"}, false)
+	debug = New(thorChain.Repo(), thorChain.Stater(), forkConfig, 21000, true, thorChain.Engine(), []string{"all"}, false)
 	debug.Mount(router, "/debug")
 	ts = httptest.NewServer(router)
 }
