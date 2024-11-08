@@ -271,7 +271,7 @@ func (db *LogDB) queryEvents(ctx context.Context, query string, args ...interfac
 		}
 		event := &Event{
 			BlockNumber: seq.BlockNumber(),
-			Index:       seq.LogIndex(),
+			LogIndex:    seq.LogIndex(),
 			BlockID:     thor.BytesToBytes32(blockID),
 			BlockTime:   blockTime,
 			TxID:        thor.BytesToBytes32(txID),
@@ -334,7 +334,7 @@ func (db *LogDB) queryTransfers(ctx context.Context, query string, args ...inter
 		}
 		trans := &Transfer{
 			BlockNumber: seq.BlockNumber(),
-			Index:       seq.LogIndex(),
+			LogIndex:    seq.LogIndex(),
 			BlockID:     thor.BytesToBytes32(blockID),
 			BlockTime:   blockTime,
 			TxID:        thor.BytesToBytes32(txID),
@@ -452,9 +452,8 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 			}
 			return true
 		}
+		blockIDInserted bool
 	)
-
-	writeBlockID := true
 
 	for i, r := range receipts {
 		eventCount, transferCount := uint32(0), uint32(0)
@@ -463,14 +462,14 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 			continue
 		}
 
-		if writeBlockID {
+		if !blockIDInserted {
 			// block id is not yet inserted
 			if err := w.exec(
 				"INSERT OR IGNORE INTO ref(data) VALUES(?)",
 				blockID[:]); err != nil {
 				return err
 			}
-			writeBlockID = false
+			blockIDInserted = true
 		}
 
 		var (
@@ -484,7 +483,6 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 		}
 
 		txIndex := i
-
 		if err := w.exec(
 			"INSERT OR IGNORE INTO ref(data) VALUES(?),(?)",
 			txID[:], txOrigin[:]); err != nil {

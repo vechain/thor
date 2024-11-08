@@ -42,8 +42,11 @@ func (t *Transfers) filter(ctx context.Context, filter *TransferFilter) ([]*Filt
 	transfers, err := t.db.FilterTransfers(ctx, &logdb.TransferFilter{
 		CriteriaSet: filter.CriteriaSet,
 		Range:       rng,
-		Options:     filter.Options,
-		Order:       filter.Order,
+		Options: &logdb.Options{
+			Offset: filter.Options.Offset,
+			Limit:  filter.Options.Limit,
+		},
+		Order: filter.Order,
 	})
 	if err != nil {
 		return nil, err
@@ -66,9 +69,10 @@ func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Re
 	if filter.Options == nil {
 		// if filter.Options is nil, set to the default limit +1
 		// to detect whether there are more logs than the default limit
-		filter.Options = &logdb.Options{
-			Offset: 0,
-			Limit:  t.limit + 1,
+		filter.Options = &events.Options{
+			Offset:         0,
+			Limit:          t.limit + 1,
+			IncludeIndexes: false,
 		}
 	}
 

@@ -6,7 +6,6 @@
 package events
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -60,7 +59,7 @@ func convertEvent(event *logdb.Event, addIndexes bool) *FilteredEvent {
 
 	if addIndexes {
 		fe.Meta.TxIndex = &event.TxIndex
-		fe.Meta.LogIndex = &event.Index
+		fe.Meta.LogIndex = &event.LogIndex
 	}
 
 	fe.Topics = make([]*thor.Bytes32, 0)
@@ -72,45 +71,22 @@ func convertEvent(event *logdb.Event, addIndexes bool) *FilteredEvent {
 	return fe
 }
 
-func (e *FilteredEvent) String() string {
-	return fmt.Sprintf(`
-		Event(
-			address: 	   %v,
-			topics:        %v,
-			data:          %v,
-			meta: (blockID     %v,
-				blockNumber    %v,
-				blockTimestamp %v),
-				txID     %v,
-				txOrigin %v,
-				clauseIndex %v,
-				txIndex: %v,
-				logIndex: %v)
-			)`,
-		e.Address,
-		e.Topics,
-		e.Data,
-		e.Meta.BlockID,
-		e.Meta.BlockNumber,
-		e.Meta.BlockTimestamp,
-		e.Meta.TxID,
-		e.Meta.TxOrigin,
-		e.Meta.ClauseIndex,
-		e.Meta.TxIndex,
-		e.Meta.LogIndex,
-	)
-}
-
 type EventCriteria struct {
 	Address *thor.Address `json:"address"`
 	TopicSet
 }
 
+type Options struct {
+	Offset         uint64
+	Limit          uint64
+	IncludeIndexes bool
+}
+
 type EventFilter struct {
-	CriteriaSet []*EventCriteria `json:"criteriaSet"`
-	Range       *Range           `json:"range"`
-	Options     *logdb.Options   `json:"options"`
-	Order       logdb.Order      `json:"order"`
+	CriteriaSet []*EventCriteria
+	Range       *Range
+	Options     *Options
+	Order       logdb.Order // default asc
 }
 
 func convertEventFilter(chain *chain.Chain, filter *EventFilter) (*logdb.EventFilter, error) {
@@ -119,9 +95,12 @@ func convertEventFilter(chain *chain.Chain, filter *EventFilter) (*logdb.EventFi
 		return nil, err
 	}
 	f := &logdb.EventFilter{
-		Range:   rng,
-		Options: filter.Options,
-		Order:   filter.Order,
+		Range: rng,
+		Options: &logdb.Options{
+			Offset: filter.Options.Offset,
+			Limit:  filter.Options.Limit,
+		},
+		Order: filter.Order,
 	}
 	if len(filter.CriteriaSet) > 0 {
 		f.CriteriaSet = make([]*logdb.EventCriteria, len(filter.CriteriaSet))

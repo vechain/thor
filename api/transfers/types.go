@@ -48,7 +48,7 @@ func convertTransfer(transfer *logdb.Transfer, addIndexes bool) *FilteredTransfe
 
 	if addIndexes {
 		ft.Meta.TxIndex = &transfer.TxIndex
-		ft.Meta.LogIndex = &transfer.Index
+		ft.Meta.LogIndex = &transfer.LogIndex
 	}
 
 	return ft
@@ -57,6 +57,6 @@ func convertTransfer(transfer *logdb.Transfer, addIndexes bool) *FilteredTransfe
 type TransferFilter struct {
 	CriteriaSet []*logdb.TransferCriteria
 	Range       *events.Range
-	Options     *logdb.Options
+	Options     *events.Options
 	Order       logdb.Order //default asc
 }

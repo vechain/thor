@@ -134,7 +134,7 @@ func TestConvertEvent(t *testing.T) {
 		BlockTime:   6,
 		TxID:        thor.Bytes32{0x07},
 		TxIndex:     8,
-		Index:       9,
+		LogIndex:    9,
 		TxOrigin:    thor.Address{0x0A},
 		ClauseIndex: 10,
 		Topics: [5]*thor.Bytes32{
@@ -161,7 +161,7 @@ func TestConvertEvent(t *testing.T) {
 	assert.Equal(t, event.BlockTime, result.Meta.BlockTimestamp)
 	assert.Equal(t, event.TxID, result.Meta.TxID)
 	assert.Equal(t, event.TxIndex, *result.Meta.TxIndex)
-	assert.Equal(t, event.Index, *result.Meta.LogIndex)
+	assert.Equal(t, event.LogIndex, *result.Meta.LogIndex)
 	assert.Equal(t, event.TxOrigin, result.Meta.TxOrigin)
 	assert.Equal(t, event.ClauseIndex, result.Meta.ClauseIndex)
 	assert.Equal(t, expectedTopics, result.Topics)

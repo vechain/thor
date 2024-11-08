@@ -65,7 +65,7 @@ func TestOption(t *testing.T) {
 	filter := transfers.TransferFilter{
 		CriteriaSet: make([]*logdb.TransferCriteria, 0),
 		Range:       nil,
-		Options:     &logdb.Options{Limit: 6},
+		Options:     &events.Options{Limit: 6},
 		Order:       logdb.DESC,
 	}
 
@@ -129,7 +129,7 @@ func TestOptionalData(t *testing.T) {
 			filter := transfers.TransferFilter{
 				CriteriaSet: make([]*logdb.TransferCriteria, 0),
 				Range:       nil,
-				Options:     &logdb.Options{Limit: 5, IncludeIndexes: tc.includeIndexes},
+				Options:     &events.Options{Limit: 5, IncludeIndexes: tc.includeIndexes},
 				Order:       logdb.DESC,
 			}
 

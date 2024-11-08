@@ -84,7 +84,7 @@ func TestOptionalIndexes(t *testing.T) {
 			filter := events.EventFilter{
 				CriteriaSet: make([]*events.EventCriteria, 0),
 				Range:       nil,
-				Options:     &logdb.Options{Limit: 6, IncludeIndexes: tc.includeIndexes},
+				Options:     &events.Options{Limit: 6, IncludeIndexes: tc.includeIndexes},
 				Order:       logdb.DESC,
 			}
 
@@ -115,7 +115,7 @@ func TestOption(t *testing.T) {
 	filter := events.EventFilter{
 		CriteriaSet: make([]*events.EventCriteria, 0),
 		Range:       nil,
-		Options:     &logdb.Options{Limit: 6},
+		Options:     &events.Options{Limit: 6},
 		Order:       logdb.DESC,
 	}
 
