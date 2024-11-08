@@ -1325,6 +1325,16 @@ components:
           description: The index of the clause in the transaction, from which the log was generated.
           example: 0
           nullable: false
+        txIndex:
+          description: The index of the transaction in the block, from which the log was generated.
+          type: integer
+          nullable: true
+          example: 1
+        logIndex:
+          description: The index of the log in the receipt's outputs. This is an overall index among all clauses.
+          type: integer
+          nullable: true
+          example: 1
 
     Block:
       title: Block
@@ -1855,6 +1865,11 @@ components:
             The limit of records to be included in the output. Use this parameter for pagination.
             
             Default's to all results.
+        includeIndexes:
+          type: boolean
+          example: true
+          nullable: true
+          description: Include both transaction and log index in the response.
       description: |
         Include these parameters to receive filtered results in a paged format. 
         
@@ -1865,7 +1880,8 @@ components:
         {
           "options": {
             "offset": 0,
-            "limit": 10
+            "limit": 10,
+            "includeIndexes": true
           }
         }
         ```
@@ -1916,6 +1932,26 @@ components:
         }
         ```
         This refers to the range from block 10 to block 1000.
+        
+    EventOptionalData:
+      nullable: true
+      type: object
+      title: EventOptionalData
+      properties:
+        txIndex:
+          type: boolean
+          example: true
+          nullable: true
+          description: |
+            Specifies whether to include in the response the event transaction index.
+        loglIndex:
+          type: boolean
+          example: true
+          nullable: true
+          description: |
+            Specifies whether to include in the response the event log index.
+      description: |
+        Specifies all the optional data that can be included in the response.
 
     EventCriteria:
       type: object

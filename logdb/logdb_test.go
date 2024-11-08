@@ -146,7 +146,8 @@ func TestEvents(t *testing.T) {
 			origin, _ := tx.Origin()
 			allEvents = append(allEvents, &Event{
 				BlockNumber: b.Header().Number(),
-				Index:       uint32(j),
+				LogIndex:    uint32(0),
+				TxIndex:     uint32(j),
 				BlockID:     b.Header().ID(),
 				BlockTime:   b.Header().Timestamp(),
 				TxID:        tx.ID(),
@@ -159,7 +160,8 @@ func TestEvents(t *testing.T) {
 
 			allTransfers = append(allTransfers, &Transfer{
 				BlockNumber: b.Header().Number(),
-				Index:       uint32(j),
+				LogIndex:    uint32(0),
+				TxIndex:     uint32(j),
 				BlockID:     b.Header().ID(),
 				BlockTime:   b.Header().Timestamp(),
 				TxID:        tx.ID(),

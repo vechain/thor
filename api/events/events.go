@@ -44,7 +44,7 @@ func (e *Events) filter(ctx context.Context, ef *EventFilter) ([]*FilteredEvent,
 	}
 	fes := make([]*FilteredEvent, len(events))
 	for i, e := range events {
-		fes[i] = convertEvent(e)
+		fes[i] = convertEvent(e, ef.Options.IncludeIndexes)
 	}
 	return fes, nil
 }
@@ -60,9 +60,10 @@ func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
 	if filter.Options == nil {
 		// if filter.Options is nil, set to the default limit +1
 		// to detect whether there are more logs than the default limit
-		filter.Options = &logdb.Options{
-			Offset: 0,
-			Limit:  e.limit + 1,
+		filter.Options = &Options{
+			Offset:         0,
+			Limit:          e.limit + 1,
+			IncludeIndexes: false,
 		}
 	}
 

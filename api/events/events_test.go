@@ -56,6 +56,56 @@ func TestEvents(t *testing.T) {
 	testEventWithBlocks(t, blocksToInsert)
 }
 
+func TestOptionalIndexes(t *testing.T) {
+	thorChain := initEventServer(t, defaultLogLimit)
+	defer ts.Close()
+	insertBlocks(t, thorChain.LogDB(), 5)
+	tclient = thorclient.New(ts.URL)
+
+	testCases := []struct {
+		name           string
+		includeIndexes bool
+		expected       *uint32
+	}{
+		{
+			name:           "do not include indexes",
+			includeIndexes: false,
+			expected:       nil,
+		},
+		{
+			name:           "include indexes",
+			includeIndexes: true,
+			expected:       new(uint32),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			filter := events.EventFilter{
+				CriteriaSet: make([]*events.EventCriteria, 0),
+				Range:       nil,
+				Options:     &events.Options{Limit: 6, IncludeIndexes: tc.includeIndexes},
+				Order:       logdb.DESC,
+			}
+
+			res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/event", filter)
+			assert.NoError(t, err)
+			assert.Equal(t, http.StatusOK, statusCode)
+			var tLogs []*events.FilteredEvent
+			if err := json.Unmarshal(res, &tLogs); err != nil {
+				t.Fatal(err)
+			}
+			assert.Equal(t, http.StatusOK, statusCode)
+			assert.Equal(t, 5, len(tLogs))
+
+			for _, tLog := range tLogs {
+				assert.Equal(t, tc.expected, tLog.Meta.TxIndex)
+				assert.Equal(t, tc.expected, tLog.Meta.LogIndex)
+			}
+		})
+	}
+}
+
 func TestOption(t *testing.T) {
 	thorChain := initEventServer(t, 5)
 	defer ts.Close()
@@ -65,7 +115,7 @@ func TestOption(t *testing.T) {
 	filter := events.EventFilter{
 		CriteriaSet: make([]*events.EventCriteria, 0),
 		Range:       nil,
-		Options:     &logdb.Options{Limit: 6},
+		Options:     &events.Options{Limit: 6},
 		Order:       logdb.DESC,
 	}
 
