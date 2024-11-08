@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/pkg/errors"
@@ -17,13 +18,13 @@ import (
 	"github.com/vechain/thor/v2/health"
 )
 
-func StartAdminServer(addr string, logLevel *slog.LevelVar, health *health.Health) (string, func(), error) {
+func StartAdminServer(addr string, logLevel *slog.LevelVar, health *health.Health, apiLogs *atomic.Bool) (string, func(), error) {
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return "", nil, errors.Wrapf(err, "listen admin API addr [%v]", addr)
 	}
 
-	adminHandler := admin.New(logLevel, health)
+	adminHandler := admin.New(logLevel, health, apiLogs)
 
 	srv := &http.Server{Handler: adminHandler, ReadHeaderTimeout: time.Second, ReadTimeout: 5 * time.Second}
 	var goes co.Goes

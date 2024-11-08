@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -59,6 +60,8 @@ func (m *mockLogger) GetLoggedData() []interface{} {
 
 func TestRequestLoggerHandler(t *testing.T) {
 	mockLog := &mockLogger{}
+	enabled := atomic.Bool{}
+	enabled.Store(true)
 
 	// Define a test handler to wrap
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -67,7 +70,7 @@ func TestRequestLoggerHandler(t *testing.T) {
 	})
 
 	// Create the RequestLoggerHandler
-	loggerHandler := RequestLoggerHandler(testHandler, mockLog)
+	loggerHandler := RequestLoggerHandler(testHandler, mockLog, &enabled)
 
 	// Create a test HTTP request
 	reqBody := "test body"

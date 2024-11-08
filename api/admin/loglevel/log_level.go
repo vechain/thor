@@ -68,6 +68,8 @@ func (l *LogLevel) postLogLevelHandler(w http.ResponseWriter, r *http.Request) e
 		return utils.BadRequest(errors.New("Invalid verbosity level"))
 	}
 
+	log.Info("log level changed", "pkg", "loglevel", "level", l.logLevel.Level().String())
+
 	return utils.WriteJSON(w, Response{
 		CurrentLevel: l.logLevel.Level().String(),
 	})
