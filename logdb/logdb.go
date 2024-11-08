@@ -271,7 +271,7 @@ func (db *LogDB) queryEvents(ctx context.Context, query string, args ...interfac
 		}
 		event := &Event{
 			BlockNumber: seq.BlockNumber(),
-			Index:       seq.LogIndex(),
+			LogIndex:    seq.LogIndex(),
 			BlockID:     thor.BytesToBytes32(blockID),
 			BlockTime:   blockTime,
 			TxID:        thor.BytesToBytes32(txID),
@@ -334,10 +334,11 @@ func (db *LogDB) queryTransfers(ctx context.Context, query string, args ...inter
 		}
 		trans := &Transfer{
 			BlockNumber: seq.BlockNumber(),
-			Index:       seq.LogIndex(),
+			LogIndex:    seq.LogIndex(),
 			BlockID:     thor.BytesToBytes32(blockID),
 			BlockTime:   blockTime,
 			TxID:        thor.BytesToBytes32(txID),
+			TxIndex:     seq.TxIndex(),
 			TxOrigin:    thor.BytesToAddress(txOrigin),
 			ClauseIndex: clauseIndex,
 			Sender:      thor.BytesToAddress(sender),
@@ -443,8 +444,6 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 		blockNum       = b.Header().Number()
 		blockTimestamp = b.Header().Timestamp()
 		txs            = b.Transactions()
-		eventCount,
-		transferCount uint32
 		isReceiptEmpty = func(r *tx.Receipt) bool {
 			for _, o := range r.Outputs {
 				if len(o.Events) > 0 || len(o.Transfers) > 0 {
@@ -453,20 +452,24 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 			}
 			return true
 		}
+		blockIDInserted bool
 	)
 
 	for i, r := range receipts {
+		eventCount, transferCount := uint32(0), uint32(0)
+
 		if isReceiptEmpty(r) {
 			continue
 		}
 
-		if eventCount == 0 && transferCount == 0 {
+		if !blockIDInserted {
 			// block id is not yet inserted
 			if err := w.exec(
 				"INSERT OR IGNORE INTO ref(data) VALUES(?)",
 				blockID[:]); err != nil {
 				return err
 			}
+			blockIDInserted = true
 		}
 
 		var (
@@ -480,7 +483,6 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 		}
 
 		txIndex := i
-
 		if err := w.exec(
 			"INSERT OR IGNORE INTO ref(data) VALUES(?),(?)",
 			txID[:], txOrigin[:]); err != nil {

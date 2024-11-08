@@ -6,7 +6,6 @@
 package events
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -17,33 +16,14 @@ import (
 )
 
 type LogMeta struct {
-	BlockID         thor.Bytes32     `json:"blockID"`
-	BlockNumber     uint32           `json:"blockNumber"`
-	BlockTimestamp  uint64           `json:"blockTimestamp"`
-	TxID            thor.Bytes32     `json:"txID"`
-	TxOrigin        thor.Address     `json:"txOrigin"`
-	ClauseIndex     uint32           `json:"clauseIndex"`
-	ExtendedLogMeta *ExtendedLogMeta `json:"extendedLogMeta,omitempty"`
-}
-
-type ExtendedLogMeta struct {
-	TxIndex  *uint32 `json:"txIndex,omitempty"`
-	LogIndex *uint32 `json:"logIndex,omitempty"`
-}
-
-func (opt *ExtendedLogMeta) Empty() bool {
-	return opt == nil || (opt.TxIndex == nil && opt.LogIndex == nil)
-}
-
-func (opt *ExtendedLogMeta) String() string {
-	var parts []string
-	if opt.TxIndex != nil {
-		parts = append(parts, fmt.Sprintf("txIndex: %v", *opt.TxIndex))
-	}
-	if opt.LogIndex != nil {
-		parts = append(parts, fmt.Sprintf("logIndex: %v", *opt.LogIndex))
-	}
-	return fmt.Sprintf("%v", parts)
+	BlockID        thor.Bytes32 `json:"blockID"`
+	BlockNumber    uint32       `json:"blockNumber"`
+	BlockTimestamp uint64       `json:"blockTimestamp"`
+	TxID           thor.Bytes32 `json:"txID"`
+	TxOrigin       thor.Address `json:"txOrigin"`
+	ClauseIndex    uint32       `json:"clauseIndex"`
+	TxIndex        *uint32      `json:"txIndex,omitempty"`
+	LogIndex       *uint32      `json:"logIndex,omitempty"`
 }
 
 type TopicSet struct {
@@ -63,7 +43,7 @@ type FilteredEvent struct {
 }
 
 // convert a logdb.Event into a json format Event
-func convertEvent(event *logdb.Event, eventOptionalData *EventOptionalData) *FilteredEvent {
+func convertEvent(event *logdb.Event, addIndexes bool) *FilteredEvent {
 	fe := &FilteredEvent{
 		Address: event.Address,
 		Data:    hexutil.Encode(event.Data),
@@ -76,7 +56,11 @@ func convertEvent(event *logdb.Event, eventOptionalData *EventOptionalData) *Fil
 			ClauseIndex:    event.ClauseIndex,
 		},
 	}
-	fe = addOptionalData(fe, event, eventOptionalData)
+
+	if addIndexes {
+		fe.Meta.TxIndex = &event.TxIndex
+		fe.Meta.LogIndex = &event.LogIndex
+	}
 
 	fe.Topics = make([]*thor.Bytes32, 0)
 	for i := 0; i < 5; i++ {
@@ -87,67 +71,22 @@ func convertEvent(event *logdb.Event, eventOptionalData *EventOptionalData) *Fil
 	return fe
 }
 
-func addOptionalData(fe *FilteredEvent, event *logdb.Event, eventOptionalData *EventOptionalData) *FilteredEvent {
-	if eventOptionalData != nil {
-		opt := &ExtendedLogMeta{}
-
-		if eventOptionalData.LogIndex {
-			opt.LogIndex = &event.Index
-		}
-		if eventOptionalData.TxIndex {
-			opt.TxIndex = &event.TxIndex
-		}
-
-		if !opt.Empty() {
-			fe.Meta.ExtendedLogMeta = opt
-		}
-	}
-	return fe
-}
-
-func (e *FilteredEvent) String() string {
-	return fmt.Sprintf(`
-		Event(
-			address: 	   %v,
-			topics:        %v,
-			data:          %v,
-			meta: (blockID     %v,
-				blockNumber    %v,
-				blockTimestamp %v),
-				txID     %v,
-				txOrigin %v,
-				clauseIndex %v,
-				optionalData (%v))
-			)`,
-		e.Address,
-		e.Topics,
-		e.Data,
-		e.Meta.BlockID,
-		e.Meta.BlockNumber,
-		e.Meta.BlockTimestamp,
-		e.Meta.TxID,
-		e.Meta.TxOrigin,
-		e.Meta.ClauseIndex,
-		e.Meta.ExtendedLogMeta,
-	)
-}
-
 type EventCriteria struct {
 	Address *thor.Address `json:"address"`
 	TopicSet
 }
 
-type EventFilter struct {
-	CriteriaSet  []*EventCriteria   `json:"criteriaSet"`
-	Range        *Range             `json:"range"`
-	Options      *logdb.Options     `json:"options"`
-	Order        logdb.Order        `json:"order"`
-	OptionalData *EventOptionalData `json:"optionalData,omitempty"`
+type Options struct {
+	Offset         uint64
+	Limit          uint64
+	IncludeIndexes bool
 }
 
-type EventOptionalData struct {
-	LogIndex bool `json:"logIndex,omitempty"`
-	TxIndex  bool `json:"txIndex,omitempty"`
+type EventFilter struct {
+	CriteriaSet []*EventCriteria
+	Range       *Range
+	Options     *Options
+	Order       logdb.Order // default asc
 }
 
 func convertEventFilter(chain *chain.Chain, filter *EventFilter) (*logdb.EventFilter, error) {
@@ -156,9 +95,12 @@ func convertEventFilter(chain *chain.Chain, filter *EventFilter) (*logdb.EventFi
 		return nil, err
 	}
 	f := &logdb.EventFilter{
-		Range:   rng,
-		Options: filter.Options,
-		Order:   filter.Order,
+		Range: rng,
+		Options: &logdb.Options{
+			Offset: filter.Options.Offset,
+			Limit:  filter.Options.Limit,
+		},
+		Order: filter.Order,
 	}
 	if len(filter.CriteriaSet) > 0 {
 		f.CriteriaSet = make([]*logdb.EventCriteria, len(filter.CriteriaSet))
