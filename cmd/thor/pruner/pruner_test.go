@@ -168,13 +168,12 @@ func TestWaitUntil(t *testing.T) {
 	var parentScore uint64 = 0
 	for i := 0; i < 6; i++ {
 		blk := newBlock(parentID, parentScore+2, b0.Header().StateRoot(), devAccounts[0].PrivateKey)
-		err := repo.AddBlock(blk, tx.Receipts{}, 0, false)
+		err := repo.AddBlock(blk, tx.Receipts{}, 0, true)
 		assert.Nil(t, err)
 
 		parentID = blk.Header().ID()
 		parentScore = blk.Header().TotalScore()
 	}
-	repo.SetBestBlockID(parentID)
 
 	parentID, err := fastForwardTo(block.Number(parentID), 100000-1, db)
 	assert.Nil(t, err)
@@ -184,13 +183,12 @@ func TestWaitUntil(t *testing.T) {
 		signer := devAccounts[0].PrivateKey
 		score := parentScore + 1
 		blk := newBlock(parentID, score, b0.Header().StateRoot(), signer)
-		err := repo.AddBlock(blk, tx.Receipts{}, 0, false)
+		err := repo.AddBlock(blk, tx.Receipts{}, 0, true)
 		assert.Nil(t, err)
 
 		parentID = blk.Header().ID()
 		parentScore = blk.Header().TotalScore()
 	}
-	repo.SetBestBlockID(parentID)
 
 	go func() {
 		cancel()
@@ -207,12 +205,11 @@ func TestWaitUntil(t *testing.T) {
 		score := parentScore + 2
 		blk := newBlock(parentID, score, b0.Header().StateRoot(), signer)
 
-		err := repo.AddBlock(blk, tx.Receipts{}, 0, false)
+		err := repo.AddBlock(blk, tx.Receipts{}, 0, true)
 		assert.Nil(t, err)
 		parentID = blk.Header().ID()
 		parentScore = blk.Header().TotalScore()
 	}
-	repo.SetBestBlockID(parentID)
 
 	ctx, cancel = context.WithCancel(context.Background())
 	pruner.ctx = ctx
@@ -267,11 +264,9 @@ func TestPrune(t *testing.T) {
 	assert.Nil(t, err)
 
 	blk := newBlock(parentID, 10, root, devAccounts[0].PrivateKey)
-	err = repo.AddBlock(blk, tx.Receipts{}, 0, false)
+	err = repo.AddBlock(blk, tx.Receipts{}, 0, true)
 	assert.Nil(t, err)
 	parentID = blk.Header().ID()
-
-	repo.SetBestBlockID(parentID)
 
 	err = pruner.pruneTries(repo.NewBestChain(), 0, block.Number(parentID)+1)
 	assert.Nil(t, err)

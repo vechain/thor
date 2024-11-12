@@ -785,8 +785,7 @@ func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 			StateRoot(stateRoot).
 			Build().
 			WithSignature(sig[:])
-		repo.AddBlock(b, tx.Receipts{}, 0, false)
-		repo.SetBestBlockID(b.Header().ID())
+		repo.AddBlock(b, tx.Receipts{}, 0, true)
 	}
 
 	st = state.New(db, repo.BestBlockSummary().Root())
@@ -855,8 +854,7 @@ func TestPrototypeNativeWithBlockNumber(t *testing.T) {
 			StateRoot(stateRoot).
 			Build().
 			WithSignature(sig[:])
-		repo.AddBlock(b, tx.Receipts{}, 0, false)
-		repo.SetBestBlockID(b.Header().ID())
+		repo.AddBlock(b, tx.Receipts{}, 0, true)
 	}
 
 	st = state.New(db, repo.BestBlockSummary().Root())

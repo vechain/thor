@@ -66,11 +66,12 @@ func TestRepository(t *testing.T) {
 
 	b1 := newBlock(repo1.GenesisBlock(), 10, tx1)
 	assert.Nil(t, repo1.AddBlock(b1, tx.Receipts{receipt1}, 0, false))
-
 	// best block not set, so still 0
 	assert.Equal(t, uint32(0), repo1.BestBlockSummary().Header.Number())
 
 	repo1.SetBestBlockID(b1.Header().ID())
+	assert.Equal(t, uint32(1), repo1.BestBlockSummary().Header.Number())
+
 	repo2, _ := chain.NewRepository(db, b0)
 	for _, repo := range []*chain.Repository{repo1, repo2} {
 		assert.Equal(t, b1.Header().ID(), repo.BestBlockSummary().Header.ID())

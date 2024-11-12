@@ -230,10 +230,9 @@ func TestSubscribeNewTx(t *testing.T) {
 		GasLimit(10000000).
 		StateRoot(root1).
 		Build().WithSignature(sig[:])
-	if err := pool.repo.AddBlock(b1, nil, 0, false); err != nil {
+	if err := pool.repo.AddBlock(b1, nil, 0, true); err != nil {
 		t.Fatal(err)
 	}
-	pool.repo.SetBestBlockID(b1.Header().ID())
 
 	txCh := make(chan *TxEvent)
 
@@ -338,8 +337,7 @@ func TestAdd(t *testing.T) {
 		GasLimit(10000000).
 		StateRoot(root1).
 		Build().WithSignature(sig[:])
-	pool.repo.AddBlock(b1, nil, 0, false)
-	pool.repo.SetBestBlockID(b1.Header().ID())
+	pool.repo.AddBlock(b1, nil, 0, true)
 	acc := devAccounts[0]
 
 	dupTx := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
@@ -632,8 +630,7 @@ func TestAddOverPendingCost(t *testing.T) {
 		TransactionFeatures(feat).Build()
 
 	repo, _ := chain.NewRepository(db, b0)
-	repo.AddBlock(b1, tx.Receipts{}, 0, false)
-	repo.SetBestBlockID(b1.Header().ID())
+	repo.AddBlock(b1, tx.Receipts{}, 0, true)
 	pool := New(repo, state.NewStater(db), Options{
 		Limit:           LIMIT,
 		LimitPerAccount: LIMIT,
