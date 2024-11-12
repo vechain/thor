@@ -106,11 +106,11 @@ func TestHasTransaction(t *testing.T) {
 	parent := repo.GenesisBlock()
 	for i := 1; i <= 101; i++ {
 		b := newBlock(parent, uint64(i)*10)
-		repo.AddBlock(b, nil, 0, false)
+		asBest := i == 101
+		repo.AddBlock(b, nil, 0, asBest)
 		parent = b
 	}
 
-	repo.SetBestBlockID(parent.Header().ID())
 	has, err := repo.NewBestChain().HasTransaction(datagen.RandomHash(), 0)
 	assert.Nil(t, err)
 	assert.False(t, has)

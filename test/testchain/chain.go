@@ -159,13 +159,8 @@ func (c *Chain) MintBlock(account genesis.DevAccount, transactions ...*tx.Transa
 	}
 
 	// Add the block to the repository.
-	if err := c.Repo().AddBlock(newBlk, receipts, 0, false); err != nil {
+	if err := c.Repo().AddBlock(newBlk, receipts, 0, true); err != nil {
 		return fmt.Errorf("unable to add tx to repo: %w", err)
-	}
-
-	// Set the new block as the best (latest) block in the repository.
-	if err := c.Repo().SetBestBlockID(newBlk.Header().ID()); err != nil {
-		return fmt.Errorf("unable to set best block: %w", err)
 	}
 
 	return nil

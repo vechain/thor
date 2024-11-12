@@ -122,11 +122,7 @@ func newTestConsensus() (*testConsensus, error) {
 		return nil, err
 	}
 
-	if err := repo.AddBlock(b1, receipts, 0, false); err != nil {
-		return nil, err
-	}
-
-	if err := repo.SetBestBlockID(b1.Header().ID()); err != nil {
+	if err := repo.AddBlock(b1, receipts, 0, true); err != nil {
 		return nil, err
 	}
 
