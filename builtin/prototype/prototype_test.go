@@ -22,8 +22,7 @@ func M(a ...interface{}) []interface{} {
 }
 
 func TestPrototype(t *testing.T) {
-	db := muxdb.NewMem()
-	st := state.New(db, trie.Root{})
+	st := state.New(muxdb.NewMem(), trie.Root{})
 
 	proto := prototype.New(thor.BytesToAddress([]byte("proto")), st)
 	binding := proto.Bind(thor.BytesToAddress([]byte("binding")))

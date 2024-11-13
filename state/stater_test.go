@@ -13,8 +13,7 @@ import (
 )
 
 func TestStater(t *testing.T) {
-	db := muxdb.NewMem()
-	stater := NewStater(db)
+	stater := NewStater(muxdb.NewMem())
 
 	// Example State
 	var root trie.Root

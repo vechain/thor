@@ -104,8 +104,7 @@ func TestCopy(t *testing.T) {
 }
 
 func TestPick(t *testing.T) {
-	db := muxdb.NewMem()
-	state := state.New(db, trie.Root{})
+	state := state.New(muxdb.NewMem(), trie.Root{})
 
 	candidateList := generateCandidateList(5)
 
