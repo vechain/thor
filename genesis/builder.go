@@ -74,9 +74,7 @@ func (b *Builder) ForkConfig(fc thor.ForkConfig) *Builder {
 
 // ComputeID compute genesis ID.
 func (b *Builder) ComputeID() (thor.Bytes32, error) {
-	db := muxdb.NewMem()
-
-	blk, _, _, err := b.Build(state.NewStater(db))
+	blk, _, _, err := b.Build(state.NewStater(muxdb.NewMem()))
 	if err != nil {
 		return thor.Bytes32{}, err
 	}

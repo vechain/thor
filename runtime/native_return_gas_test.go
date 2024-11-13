@@ -20,8 +20,7 @@ import (
 )
 
 func TestNativeCallReturnGas(t *testing.T) {
-	db := muxdb.NewMem()
-	state := state.New(db, trie.Root{})
+	state := state.New(muxdb.NewMem(), trie.Root{})
 	state.SetCode(builtin.Measure.Address, builtin.Measure.RuntimeBytecodes())
 
 	inner, _ := builtin.Measure.ABI.MethodByName("inner")

@@ -57,8 +57,7 @@ func TestStage(t *testing.T) {
 }
 
 func TestStageCommitError(t *testing.T) {
-	db := muxdb.NewMem()
-	state := New(db, trie.Root{})
+	state := New(muxdb.NewMem(), trie.Root{})
 
 	// Set up the state with an account, balance, code, and storage.
 	addr := thor.BytesToAddress([]byte("acc1"))

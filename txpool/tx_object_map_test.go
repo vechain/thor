@@ -19,8 +19,7 @@ import (
 )
 
 func TestGetByID(t *testing.T) {
-	db := muxdb.NewMem()
-	repo := newChainRepo(db)
+	repo := newChainRepo(muxdb.NewMem())
 
 	// Creating transactions
 	tx1 := newTx(repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
@@ -49,8 +48,7 @@ func TestGetByID(t *testing.T) {
 }
 
 func TestFill(t *testing.T) {
-	db := muxdb.NewMem()
-	repo := newChainRepo(db)
+	repo := newChainRepo(muxdb.NewMem())
 
 	// Creating transactions
 	tx1 := newTx(repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
@@ -83,8 +81,7 @@ func TestFill(t *testing.T) {
 }
 
 func TestTxObjMap(t *testing.T) {
-	db := muxdb.NewMem()
-	repo := newChainRepo(db)
+	repo := newChainRepo(muxdb.NewMem())
 
 	tx1 := newTx(repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
 	tx2 := newTx(repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
@@ -120,8 +117,7 @@ func TestTxObjMap(t *testing.T) {
 }
 
 func TestLimitByDelegator(t *testing.T) {
-	db := muxdb.NewMem()
-	repo := newChainRepo(db)
+	repo := newChainRepo(muxdb.NewMem())
 
 	tx1 := newTx(repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
 	tx2 := newDelegatedTx(repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[0], genesis.DevAccounts()[1])

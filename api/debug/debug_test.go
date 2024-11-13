@@ -95,8 +95,7 @@ func TestDebug(t *testing.T) {
 }
 
 func TestStorageRangeFunc(t *testing.T) {
-	db := muxdb.NewMem()
-	state := state.New(db, trie.Root{})
+	state := state.New(muxdb.NewMem(), trie.Root{})
 
 	// Create an account and set storage values
 	addr := thor.BytesToAddress([]byte("account1"))
@@ -125,8 +124,7 @@ func TestStorageRangeFunc(t *testing.T) {
 }
 
 func TestStorageRangeMaxResult(t *testing.T) {
-	db := muxdb.NewMem()
-	state := state.New(db, trie.Root{})
+	state := state.New(muxdb.NewMem(), trie.Root{})
 
 	addr := thor.BytesToAddress([]byte("account1"))
 	for i := 0; i < 1001; i++ {

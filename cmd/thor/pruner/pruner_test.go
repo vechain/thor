@@ -83,9 +83,7 @@ func newBlock(parentID thor.Bytes32, score uint64, stateRoot thor.Bytes32, priv 
 }
 
 func TestStatus(t *testing.T) {
-	db := muxdb.NewMem()
-
-	store := db.NewStore("test")
+	store := muxdb.NewMem().NewStore("test")
 
 	s := &status{}
 	err := s.Load(store)

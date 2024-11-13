@@ -17,9 +17,7 @@ import (
 )
 
 func TestStateReadWrite(t *testing.T) {
-	db := muxdb.NewMem()
-
-	state := New(db, trie.Root{})
+	state := New(muxdb.NewMem(), trie.Root{})
 
 	addr := thor.BytesToAddress([]byte("account1"))
 	storageKey := thor.BytesToBytes32([]byte("storageKey"))
@@ -58,7 +56,7 @@ func TestStateReadWrite(t *testing.T) {
 
 func TestStateRevert(t *testing.T) {
 	db := muxdb.NewMem()
-	state := New(db, trie.Root{})
+	state := New(muxdb.NewMem(), trie.Root{})
 
 	addr := thor.BytesToAddress([]byte("account1"))
 	storageKey := thor.BytesToBytes32([]byte("storageKey"))
@@ -100,8 +98,7 @@ func TestStateRevert(t *testing.T) {
 }
 
 func TestEnergy(t *testing.T) {
-	db := muxdb.NewMem()
-	st := New(db, trie.Root{})
+	st := New(muxdb.NewMem(), trie.Root{})
 
 	acc := thor.BytesToAddress([]byte("a1"))
 
@@ -120,8 +117,7 @@ func TestEnergy(t *testing.T) {
 }
 
 func TestEncodeDecodeStorage(t *testing.T) {
-	db := muxdb.NewMem()
-	state := New(db, trie.Root{})
+	state := New(muxdb.NewMem(), trie.Root{})
 
 	// Create an account and key
 	addr := thor.BytesToAddress([]byte("account1"))
@@ -154,8 +150,7 @@ func TestEncodeDecodeStorage(t *testing.T) {
 }
 
 func TestBuildStorageTrie(t *testing.T) {
-	db := muxdb.NewMem()
-	state := New(db, trie.Root{})
+	state := New(muxdb.NewMem(), trie.Root{})
 
 	// Create an account and set storage values
 	addr := thor.BytesToAddress([]byte("account1"))
@@ -175,8 +170,7 @@ func TestBuildStorageTrie(t *testing.T) {
 }
 
 func TestStorage(t *testing.T) {
-	db := muxdb.NewMem()
-	st := New(db, trie.Root{})
+	st := New(muxdb.NewMem(), trie.Root{})
 
 	addr := thor.BytesToAddress([]byte("addr"))
 	key := thor.BytesToBytes32([]byte("key"))

@@ -17,8 +17,7 @@ import (
 )
 
 func TestParamsGetSet(t *testing.T) {
-	db := muxdb.NewMem()
-	st := state.New(db, trie.Root{})
+	st := state.New(muxdb.NewMem(), trie.Root{})
 	setv := big.NewInt(10)
 	key := thor.BytesToBytes32([]byte("key"))
 	p := New(thor.BytesToAddress([]byte("par")), st)
