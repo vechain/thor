@@ -177,23 +177,6 @@ func (s *State) SetBalance(addr thor.Address, balance *big.Int) error {
 	return nil
 }
 
-// func getEnergyGrowthRate(addr thor.Address, state *State) (*big.Int, error) {
-// 	authorityContract := builtin.Authority.Native(state)
-// 	candidates, err := authorityContract.AllCandidates()
-
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	for _, candidate := range candidates {
-// 		if candidate.Identity == thor.Bytes32(addr.Bytes()) {
-// 			return thor.ValidatorEnergyGrowthRate, nil
-// 		}
-// 	}
-
-// 	return thor.EnergyGrowthRate, nil
-// }
-
 // GetEnergy get energy for the given address at block number specified.
 func (s *State) GetEnergy(addr thor.Address, blockTime uint64, energyGrowthRate *big.Int) (*big.Int, error) {
 	acc, err := s.getAccount(addr)

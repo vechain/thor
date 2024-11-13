@@ -123,6 +123,9 @@ func init() {
 				env.UseGas(thor.GetBalanceGas)
 				authorityContract := Authority.Native(env.State())
 				energyGrowthRate, err := authorityContract.GetEnergyGrowthRate(thor.Address(args.Self))
+
+				_, _, _ = authorityContract.CalcGenerationRates(env.State())
+
 				val, err := env.State().GetEnergy(thor.Address(args.Self), ctx.Time, energyGrowthRate)
 				if err != nil {
 					panic(err)
@@ -143,6 +146,8 @@ func init() {
 			env.UseGas(thor.GetBalanceGas)
 			authorityContract := Authority.Native(env.State())
 			energyGrowthRate, err := authorityContract.GetEnergyGrowthRate(thor.Address(args.Self))
+
+			_, _, _ = authorityContract.CalcGenerationRates(env.State())
 
 			if err != nil {
 				panic(err)

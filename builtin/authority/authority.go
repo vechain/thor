@@ -6,6 +6,7 @@
 package authority
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -258,13 +259,106 @@ func (a *Authority) GetEnergyGrowthRate(addr thor.Address) (*big.Int, error) {
 	}
 
 	for _, candidate := range candidates {
-		candidateAddress := thor.BytesToAddress(candidate.Identity.Bytes()).String()
+		candidateAddress := thor.BytesToAddress(candidate.Endorsor.Bytes()).String()
 		if candidateAddress == addr.String() {
 			return thor.ValidatorEnergyGrowthRate, nil
 		}
 	}
 
 	return thor.EnergyGrowthRate, nil
+}
+
+func (a *Authority) GetVetDistribution(state *state.State) (*big.Int, *big.Int, error) {
+	candidates, err := a.AllCandidates()
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	validatorVet := big.NewInt(0)
+
+	// Compute VET held by validators
+	for _, candidate := range candidates {
+		vetBalance, err := state.GetBalance(thor.Address(candidate.Endorsor.Bytes()))
+
+		if err != nil {
+			return nil, nil, err
+		}
+
+		validatorVet = validatorVet.Add(validatorVet, vetBalance)
+
+	}
+
+	restOfVet := thor.TotalSupply.Sub(thor.TotalSupply, validatorVet)
+
+	// Divide to get actual VET and not WEI
+	validatorVet = validatorVet.Div(validatorVet, big.NewInt(1e18))
+	restOfVet = restOfVet.Div(restOfVet, big.NewInt(1e18))
+
+	return validatorVet, restOfVet, nil
+}
+
+func (a *Authority) CalcGenerationRates(state *state.State) (*big.Int, *big.Int, error) {
+
+	validatorVet, userVet, err := a.GetVetDistribution(state)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Calculate validator VTHO
+	hundred := big.NewInt(100)
+	validatorVtho := new(big.Int).Mul(thor.VthoGenerationPerBlock, thor.ValidatorRewardRatio)
+	validatorVtho = new(big.Int).Div(validatorVtho, hundred)
+
+	// Calculate user VTHO
+	remainingRatio := new(big.Int).Sub(hundred, thor.ValidatorRewardRatio) // 100 - 20 = 80
+	userVtho := new(big.Int).Mul(thor.VthoGenerationPerBlock, remainingRatio)
+	userVtho = new(big.Int).Div(userVtho, hundred)
+
+	fmt.Println("validatorVet: ", validatorVet)
+	fmt.Println("userVet: ", userVet)
+
+	fmt.Println("userVtho: (WEI)", userVtho)
+	fmt.Println("validatorVtho: (WEI)", validatorVtho)
+
+	// todo: Actualy get the correct total supply of VET for solo
+
+	var validatorGenerationRate *big.Int
+
+	if validatorVet.Cmp(big.NewInt(0)) == 0 {
+		validatorGenerationRate = big.NewInt(0)
+	} else {
+		validatorGenerationRate = new(big.Int).Div(validatorVtho, validatorVet)
+	}
+
+	var userGenerationRate *big.Int
+
+	if userVet.Cmp(big.NewInt(0)) == 0 {
+		userGenerationRate = big.NewInt(0)
+	} else {
+		userGenerationRate = new(big.Int).Div(userVtho, userVet)
+	}
+
+	fmt.Println("validatorGenerationRate: ", validatorGenerationRate, " userGenerationRate: ", userGenerationRate)
+
+	return validatorGenerationRate, userGenerationRate, nil
+}
+
+func (a *Authority) IsAuthority(addr thor.Address) (bool, error) {
+	candidates, err := a.AllCandidates()
+	if err != nil {
+		return false, err
+	}
+
+	for _, candidate := range candidates {
+		candidateAddress := thor.BytesToAddress(candidate.Identity.Bytes()).String()
+		if candidateAddress == addr.String() {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 // First returns node master address of first entry.

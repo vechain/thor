@@ -145,6 +145,7 @@ func (t *prestateTracer) CaptureClauseEnd(_ uint64) {
 
 		authorityContract := builtin.Authority.Native(t.ctx.State)
 		energyGrowthRate, err := authorityContract.GetEnergyGrowthRate(thor.Address(addr))
+		_, _, _ = authorityContract.CalcGenerationRates(t.ctx.State)
 
 		if err != nil {
 			panic(err)
@@ -288,6 +289,7 @@ func (t *prestateTracer) lookupAccount(addr common.Address) {
 
 	authorityContract := builtin.Authority.Native(t.ctx.State)
 	energyGrowthRate, err := authorityContract.GetEnergyGrowthRate(thor.Address(addr))
+	_, _, _ = authorityContract.CalcGenerationRates(t.ctx.State)
 
 	if err != nil {
 		panic(err)

@@ -107,6 +107,7 @@ func (e *Energy) TotalBurned() (*big.Int, error) {
 func (e *Energy) Get(addr thor.Address) (*big.Int, error) {
 	// authorityContract := builtin.Authority.Native(e.state)
 	energyGrowthRate, err := e.authorityContract.GetEnergyGrowthRate(addr)
+	_, _, _ = e.authorityContract.CalcGenerationRates(e.state)
 
 	if err != nil {
 		return nil, err
@@ -122,6 +123,7 @@ func (e *Energy) Add(addr thor.Address, amount *big.Int) error {
 	}
 	// authorityContract := builtin.Authority.Native(e.state)
 	energyGrowthRate, err := e.authorityContract.GetEnergyGrowthRate(addr)
+	_, _, _ = e.authorityContract.CalcGenerationRates(e.state)
 
 	if err != nil {
 		return err
@@ -153,6 +155,7 @@ func (e *Energy) Sub(addr thor.Address, amount *big.Int) (bool, error) {
 
 	// authorityContract := builtin.Authority.Native(e.state)
 	energyGrowthRate, err := e.authorityContract.GetEnergyGrowthRate(addr)
+	_, _, _ = e.authorityContract.CalcGenerationRates(e.state)
 
 	if err != nil {
 		return false, err

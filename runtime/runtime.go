@@ -160,6 +160,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 
 			authorityContract := builtin.Authority.Native(rt.state)
 			energyGrowthRate, err := authorityContract.GetEnergyGrowthRate(thor.Address(sender))
+			_, _, _ = authorityContract.CalcGenerationRates(rt.state)
 
 			if err != nil {
 				return
@@ -259,6 +260,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 
 			authorityContract := builtin.Authority.Native(rt.state)
 			energyGrowthRate, err := authorityContract.GetEnergyGrowthRate(thor.Address(contractAddr))
+			_, _, _ = authorityContract.CalcGenerationRates(rt.state)
 
 			// it's IMPORTANT to process energy before token
 			amount, err := rt.state.GetEnergy(thor.Address(contractAddr), rt.ctx.Time, energyGrowthRate)
@@ -270,6 +272,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 				// no need to clear contract's energy, vm will delete the whole contract later.
 				authorityContract := builtin.Authority.Native(rt.state)
 				energyGrowthRate, err := authorityContract.GetEnergyGrowthRate(thor.Address(tokenReceiver))
+				_, _, _ = authorityContract.CalcGenerationRates(rt.state)
 
 				receiverEnergy, err := rt.state.GetEnergy(thor.Address(tokenReceiver), rt.ctx.Time, energyGrowthRate)
 				if err != nil {

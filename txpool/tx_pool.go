@@ -260,6 +260,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 
 			authorityContract := builtin.Authority.Native(state)
 			energyGrowthRate, err := authorityContract.GetEnergyGrowthRate(payer)
+			_, _, _ = authorityContract.CalcGenerationRates(state)
 
 			if err != nil {
 				return err

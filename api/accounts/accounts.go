@@ -98,6 +98,20 @@ func (a *Accounts) getAccount(addr thor.Address, header *block.Header, state *st
 	authorityContract := builtin.Authority.Native(state)
 	energyGrowthRate, err := authorityContract.GetEnergyGrowthRate(addr)
 
+	if err != nil {
+		return nil, err
+	}
+
+	validatorGenRate, userGenRate, err := authorityContract.CalcGenerationRates(state)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Todo: Store these somewhere
+	_ = validatorGenRate
+	_ = userGenRate
+
 	energy, err := state.GetEnergy(addr, header.Timestamp(), energyGrowthRate)
 	if err != nil {
 		return nil, err
