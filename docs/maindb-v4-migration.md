@@ -25,8 +25,7 @@ Note that the examples below assume you are operating a node on mainnet.
 ## Sync in Parallel
 
 - Syncing in parallel allows for minimal downtime.
-- Note that syncing in parallel requires additional storage space. Assume more than double the size of the instance
-  directory.
+- Note that syncing in parallel requires additional storage space, CPU and RAM.
 
 ### 1. Docker Migration
 
