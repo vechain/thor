@@ -88,7 +88,7 @@ rm -rf /path/to/thor/instance-39627e6be7ec1b4a-v3
 
 If you installed the `thor` CLI from the source, you can follow the steps below.
 
-- Assuming you started the following command:
+- Assuming you started the old version of the node with following command:
 
 ```html
 /previous/executable/thor --network main <your-additional-flags>
@@ -110,34 +110,40 @@ If you installed the `thor` CLI from the source, you can follow the steps below.
 - The `v2.1.4` node will continue to operate and write data to the data directory under `/data/dir/instance-39627e6be7ec1b4a-v3`, while `v2.2.0` will write the new databases to `/data/dir/instance-39627e6be7ec1b4a-v4`.
 - Allow some time for the new node to sync. 
 - Once the node is fully synced, it is time to switch the traffic to the new node.
-- Get the new nodes PID:
+
+#### 1. Get the new nodes PID:
 
 ```html
 lsof -n -i:8668
 ```
-
-- Stop the new node:
+#### 2. Stop the new node:
 
 ```html
 kill <pid>
 ```
 
-- Get the old nodes PID:
+#### 3. Get the old nodes PID:
 
 ```html
 lsof -n -i:8669
 ```
 
-- Stop the old node:
+#### 4. Stop the old node:
 
 ```html
 kill <pid>
 ```
 
-- Run the original command with the new binary:
+#### 5. Run the original command with the new binary:
 
 ```html
 /new/executable/thor --network main <your-additional-flags>
+```
+
+#### 6. Remove the old databases:
+
+```bash
+rm -rf /data/dir/instance-39627e6be7ec1b4a-v3
 ```
 
 ## Install Latest Version
