@@ -24,8 +24,8 @@ const (
 	hdrStoreName     = "chain.hdr"  // for block headers
 	bodyStoreName    = "chain.body" // for block bodies and receipts
 	propStoreName    = "chain.props"
-	headStoreName    = "chain.heads"
-	txIndexStoreName = "chain.txi"
+	headStoreName    = "chain.heads" // for chain heads
+	txIndexStoreName = "chain.txi"   // for tx metadata
 
 	txFlag         = byte(0) // flag byte of the key for saving tx blob
 	receiptFlag    = byte(1) // flag byte fo the key for saving receipt blob
@@ -262,6 +262,11 @@ func (r *Repository) ScanConflicts(blockNum uint32) (uint32, error) {
 }
 
 // ScanHeads returns all head blockIDs from the given blockNum(included) in descending order.
+// It will return all fork's head block id stored in to local database after the given block number.
+// The following example will return B' and C.
+// A -> B -> C
+//
+//	\ -> B'
 func (r *Repository) ScanHeads(from uint32) ([]thor.Bytes32, error) {
 	start := binary.BigEndian.AppendUint32(nil, from)
 

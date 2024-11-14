@@ -23,14 +23,14 @@ type cache struct {
 	committedNodes *directcache.Cache // caches newly committed node blobs.
 	roots          struct {           // caches root nodes.
 		m        map[string]trie.Node
-		lock     sync.Mutex
+		lock     sync.RWMutex
 		maxMajor uint32
 		ttl      uint32
 	}
 
 	nodeStats   cacheStats
 	rootStats   cacheStats
-	lastLogTime int64
+	lastLogTime atomic.Int64
 }
 
 // newCache creates a cache object with the given cache size.
@@ -39,8 +39,8 @@ func newCache(sizeMB int, rootTTL uint32) *cache {
 	cache := &cache{
 		queriedNodes:   directcache.New(sizeBytes / 4),
 		committedNodes: directcache.New(sizeBytes - sizeBytes/4),
-		lastLogTime:    time.Now().UnixNano(),
 	}
+	cache.lastLogTime.Store(time.Now().UnixNano())
 	cache.roots.m = make(map[string]trie.Node)
 	cache.roots.ttl = rootTTL
 	return cache
@@ -48,7 +48,7 @@ func newCache(sizeMB int, rootTTL uint32) *cache {
 
 func (c *cache) log() {
 	now := time.Now().UnixNano()
-	last := atomic.SwapInt64(&c.lastLogTime, now)
+	last := c.lastLogTime.Swap(now)
 
 	if now-last > int64(time.Second*20) {
 		log1, ok1 := c.nodeStats.ShouldLog("node cache stats")
@@ -59,7 +59,7 @@ func (c *cache) log() {
 			log2()
 		}
 	} else {
-		atomic.CompareAndSwapInt64(&c.lastLogTime, now, last)
+		c.lastLogTime.CompareAndSwap(now, last)
 	}
 }
 
@@ -154,8 +154,8 @@ func (c *cache) GetRootNode(name string, ver trie.Version) trie.Node {
 	if c == nil {
 		return nil
 	}
-	c.roots.lock.Lock()
-	defer c.roots.lock.Unlock()
+	c.roots.lock.RLock()
+	defer c.roots.lock.RUnlock()
 
 	if r, has := c.roots.m[name]; has {
 		if r.Version() == ver {
@@ -170,16 +170,16 @@ func (c *cache) GetRootNode(name string, ver trie.Version) trie.Node {
 }
 
 type cacheStats struct {
-	hit, miss int64
-	flag      int32
+	hit, miss atomic.Int64
+	flag      atomic.Int32
 }
 
-func (cs *cacheStats) Hit() int64  { return atomic.AddInt64(&cs.hit, 1) }
-func (cs *cacheStats) Miss() int64 { return atomic.AddInt64(&cs.miss, 1) }
+func (cs *cacheStats) Hit() int64  { return cs.hit.Add(1) }
+func (cs *cacheStats) Miss() int64 { return cs.miss.Add(1) }
 
 func (cs *cacheStats) ShouldLog(msg string) (func(), bool) {
-	hit := atomic.LoadInt64(&cs.hit)
-	miss := atomic.LoadInt64(&cs.miss)
+	hit := cs.hit.Load()
+	miss := cs.miss.Load()
 	lookups := hit + miss
 
 	hitrate := float64(hit) / float64(lookups)
@@ -196,6 +196,7 @@ func (cs *cacheStats) ShouldLog(msg string) (func(), bool) {
 			"lookups", lookups,
 			"hitrate", str,
 		)
-		atomic.StoreInt32(&cs.flag, flag)
-	}, atomic.LoadInt32(&cs.flag) != flag
+
+		cs.flag.Store(flag)
+	}, cs.flag.Load() != flag
 }

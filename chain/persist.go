@@ -33,11 +33,10 @@ type BlockSummary struct {
 
 // Root returns state root for accessing state trie.
 func (s *BlockSummary) Root() trie.Root {
-	h := s.Header
 	return trie.Root{
-		Hash: h.StateRoot(),
+		Hash: s.Header.StateRoot(),
 		Ver: trie.Version{
-			Major: h.Number(),
+			Major: s.Header.Number(),
 			Minor: s.Conflicts,
 		},
 	}
@@ -75,6 +74,9 @@ func saveBlockSummary(w kv.Putter, summary *BlockSummary) error {
 	return saveRLP(w, summary.Header.ID().Bytes(), summary)
 }
 
+// indexChainHead puts a header into store, it will put the block id and delete the parent id.
+// So there is only one block id stored for every branch(fork). Thus will result we can scan all
+// possible fork's head by iterating the index store.
 func indexChainHead(w kv.Putter, header *block.Header) error {
 	if err := w.Delete(header.ParentID().Bytes()); err != nil {
 		return err
