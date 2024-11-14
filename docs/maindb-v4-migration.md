@@ -35,7 +35,7 @@ Prior to running `v2.2.0`, you may have mapped the Docker volumes to a location 
 **Note**: These examples assume you used the default data directory within the container. If you have used a different
 directory, please adjust the examples accordingly.
 
-E.g.: assuming your host instance directory of `/path/to/thor`:
+Assuming you started your previous node with a host instance directory of `/path/to/thor`:
 
 ```html
 docker run -d \
