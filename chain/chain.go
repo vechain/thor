@@ -212,7 +212,7 @@ func (c *Chain) GetBlockHeader(num uint32) (*block.Header, error) {
 }
 
 // GetBlockSummary returns block summary by given block number.
-func (c Chain) GetBlockSummary(num uint32) (*BlockSummary, error) {
+func (c *Chain) GetBlockSummary(num uint32) (*BlockSummary, error) {
 	id, err := c.GetBlockID(num)
 	if err != nil {
 		return nil, err
