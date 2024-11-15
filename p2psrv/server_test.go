@@ -32,6 +32,7 @@ func TestNewServer(t *testing.T) {
 	}
 
 	server := New(opts)
+	server.KnownNodes()
 
 	assert.Equal(t, "testNode", server.opts.Name)
 	assert.Equal(t, privateKey, server.opts.PrivateKey)

@@ -168,7 +168,6 @@ func defaultAction(ctx *cli.Context) error {
 		return errors.Wrap(err, "parse verbosity flag")
 	}
 	logLevel := initLogger(lvl, ctx.Bool(jsonLogsFlag.Name))
-	healthStatus := health.New(time.Duration(thor.BlockInterval))
 
 	// enable metrics as soon as possible
 	metricsURL := ""
@@ -180,16 +179,6 @@ func defaultAction(ctx *cli.Context) error {
 		}
 		metricsURL = url
 		defer func() { log.Info("stopping metrics server..."); closeFunc() }()
-	}
-
-	adminURL := ""
-	if ctx.Bool(enableAdminFlag.Name) {
-		url, closeFunc, err := api.StartAdminServer(ctx.String(adminAddrFlag.Name), logLevel, healthStatus)
-		if err != nil {
-			return fmt.Errorf("unable to start admin server - %w", err)
-		}
-		adminURL = url
-		defer func() { log.Info("stopping admin server..."); closeFunc() }()
 	}
 
 	gene, forkConfig, err := selectGenesis(ctx)
@@ -240,9 +229,20 @@ func defaultAction(ctx *cli.Context) error {
 	txPool := txpool.New(repo, state.NewStater(mainDB), txpoolOpt)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
-	p2pCommunicator, err := newP2PCommunicator(ctx, repo, txPool, instanceDir, healthStatus)
+	p2pCommunicator, err := newP2PCommunicator(ctx, repo, txPool, instanceDir)
 	if err != nil {
 		return err
+	}
+
+	healthStatus := health.New(repo, p2pCommunicator.Communicator(), time.Duration(thor.BlockInterval))
+	adminURL := ""
+	if ctx.Bool(enableAdminFlag.Name) {
+		url, closeFunc, err := api.StartAdminServer(ctx.String(adminAddrFlag.Name), logLevel, healthStatus)
+		if err != nil {
+			return fmt.Errorf("unable to start admin server - %w", err)
+		}
+		adminURL = url
+		defer func() { log.Info("stopping admin server..."); closeFunc() }()
 	}
 
 	bftEngine, err := bft.NewEngine(repo, mainDB, forkConfig, master.Address())
@@ -300,7 +300,6 @@ func defaultAction(ctx *cli.Context) error {
 		ctx.Uint64(targetGasLimitFlag.Name),
 		skipLogs,
 		forkConfig,
-		healthStatus,
 	).Run(exitSignal)
 }
 
@@ -456,7 +455,6 @@ func soloAction(ctx *cli.Context) error {
 	return solo.New(repo,
 		state.NewStater(mainDB),
 		logDB,
-		healthStatus,
 		txPool,
 		ctx.Uint64(gasLimitFlag.Name),
 		onDemandBlockProduction,

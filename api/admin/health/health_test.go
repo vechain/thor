@@ -7,15 +7,19 @@ package health
 
 import (
 	"encoding/json"
+	"github.com/vechain/thor/v2/txpool"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/health"
+	"github.com/vechain/thor/v2/test/testchain"
 )
 
 var ts *httptest.Server
@@ -30,9 +34,14 @@ func TestHealth(t *testing.T) {
 	assert.Equal(t, http.StatusServiceUnavailable, statusCode)
 }
 
-func initAPIServer(_ *testing.T) {
+func initAPIServer(t *testing.T) {
+	thorChain, err := testchain.NewIntegrationTestChain()
+	require.NoError(t, err)
+
 	router := mux.NewRouter()
-	New(&health.Health{}).Mount(router, "/health")
+	New(
+		health.New(thorChain.Repo(), comm.New(thorChain.Repo(), txpool.New(thorChain.Repo(), nil, txpool.Options{})), time.Second),
+	).Mount(router, "/health")
 
 	ts = httptest.NewServer(router)
 }

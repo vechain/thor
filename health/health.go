@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -21,14 +23,14 @@ type Status struct {
 	Healthy           bool            `json:"healthy"`
 	BlockIngestion    *BlockIngestion `json:"blockIngestion"`
 	ChainBootstrapped bool            `json:"chainBootstrapped"`
+	PeerCount         int             `json:"peerCount"`
 }
 
 type Health struct {
 	lock              sync.RWMutex
-	newBestBlock      time.Time
-	bestBlockID       *thor.Bytes32
-	bootstrapStatus   bool
 	timeBetweenBlocks time.Duration
+	repo              *chain.Repository
+	p2p               *comm.Communicator
 }
 
 const delayBuffer = 5 * time.Second
@@ -37,45 +39,62 @@ func NewSolo(timeBetweenBlocks time.Duration) *Health {
 	return &Health{
 		timeBetweenBlocks: timeBetweenBlocks + delayBuffer,
 		// there is no bootstrap in solo mode
-		bootstrapStatus: true,
 	}
 }
-func New(timeBetweenBlocks time.Duration) *Health {
+
+func New(repo *chain.Repository, p2p *comm.Communicator, timeBetweenBlocks time.Duration) *Health {
 	return &Health{
+		repo:              repo,
 		timeBetweenBlocks: timeBetweenBlocks + delayBuffer,
+		p2p:               p2p,
 	}
+}
+
+// isNetworkProgressing checks if the network is producing new blocks within the allowed interval.
+func (h *Health) isNetworkProgressing(now time.Time, bestBlockTimestamp time.Time) bool {
+	return now.Sub(bestBlockTimestamp) <= h.timeBetweenBlocks
+}
+
+// hasNodeBootstrapped checks if the node has bootstrapped by comparing the block interval.
+func (h *Health) hasNodeBootstrapped(now time.Time, bestBlockTimestamp time.Time) bool {
+	blockInterval := time.Duration(thor.BlockInterval) * time.Second
+	return bestBlockTimestamp.Add(blockInterval).After(now)
+}
+
+// isNodeConnectedP2P checks if the node is connected to peers
+func (h *Health) isNodeConnectedP2P(peerCount int) bool {
+	return peerCount > 1
 }
 
 func (h *Health) Status() (*Status, error) {
 	h.lock.RLock()
 	defer h.lock.RUnlock()
 
-	blockIngest := &BlockIngestion{
-		ID:        h.bestBlockID,
-		Timestamp: &h.newBestBlock,
-	}
+	// Fetch the best block details
+	bestBlock := h.repo.BestBlockSummary()
+	bestBlockID := bestBlock.Header.ID()
+	bestBlockTimestamp := time.Unix(int64(bestBlock.Header.Timestamp()), 0)
 
-	healthy := time.Since(h.newBestBlock) <= h.timeBetweenBlocks && // less than 10 secs have passed since a new block was received
-		h.bootstrapStatus
+	// Fetch the current connected peers
+	connectedPeerCount := h.p2p.PeerCount()
+	now := time.Now()
 
+	// Perform the checks
+	networkProgressing := h.isNetworkProgressing(now, bestBlockTimestamp)
+	nodeBootstrapped := h.hasNodeBootstrapped(now, bestBlockTimestamp)
+	nodeConnected := h.isNodeConnectedP2P(connectedPeerCount)
+
+	// Calculate overall health status
+	healthy := networkProgressing && nodeBootstrapped && nodeConnected
+
+	// Return the current status
 	return &Status{
-		Healthy:           healthy,
-		BlockIngestion:    blockIngest,
-		ChainBootstrapped: h.bootstrapStatus,
+		Healthy: healthy,
+		BlockIngestion: &BlockIngestion{
+			ID:        &bestBlockID,
+			Timestamp: &bestBlockTimestamp,
+		},
+		ChainBootstrapped: nodeBootstrapped,
+		PeerCount:         connectedPeerCount,
 	}, nil
-}
-
-func (h *Health) NewBestBlock(ID thor.Bytes32) {
-	h.lock.Lock()
-	defer h.lock.Unlock()
-
-	h.newBestBlock = time.Now()
-	h.bestBlockID = &ID
-}
-
-func (h *Health) BootstrapStatus(bootstrapStatus bool) {
-	h.lock.Lock()
-	defer h.lock.Unlock()
-
-	h.bootstrapStatus = bootstrapStatus
 }
