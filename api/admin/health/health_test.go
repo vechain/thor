@@ -7,7 +7,6 @@ package health
 
 import (
 	"encoding/json"
-	"github.com/vechain/thor/v2/txpool"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -20,6 +19,7 @@ import (
 	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/health"
 	"github.com/vechain/thor/v2/test/testchain"
+	"github.com/vechain/thor/v2/txpool"
 )
 
 var ts *httptest.Server

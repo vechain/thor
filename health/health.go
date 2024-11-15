@@ -35,13 +35,6 @@ type Health struct {
 
 const delayBuffer = 5 * time.Second
 
-func NewSolo(timeBetweenBlocks time.Duration) *Health {
-	return &Health{
-		timeBetweenBlocks: timeBetweenBlocks + delayBuffer,
-		// there is no bootstrap in solo mode
-	}
-}
-
 func New(repo *chain.Repository, p2p *comm.Communicator, timeBetweenBlocks time.Duration) *Health {
 	return &Health{
 		repo:              repo,
@@ -76,7 +69,13 @@ func (h *Health) Status() (*Status, error) {
 	bestBlockTimestamp := time.Unix(int64(bestBlock.Header.Timestamp()), 0)
 
 	// Fetch the current connected peers
-	connectedPeerCount := h.p2p.PeerCount()
+	var connectedPeerCount int
+	if h.p2p == nil {
+		connectedPeerCount = 5010 // ignore peers in solo mode
+	} else {
+		connectedPeerCount = h.p2p.PeerCount()
+	}
+
 	now := time.Now()
 
 	// Perform the checks

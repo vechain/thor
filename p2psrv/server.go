@@ -373,7 +373,3 @@ func (s *Server) fetchBootstrap() {
 func (s *Server) Options() *Options {
 	return s.opts
 }
-
-func (s *Server) PeerCount() int {
-	return s.srv.PeerCount()
-}

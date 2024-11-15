@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -319,12 +318,7 @@ func soloAction(ctx *cli.Context) error {
 	if blockProductionInterval == 0 {
 		return errors.New("block-interval cannot be zero")
 	}
-
 	blockProductionHealthCheck := time.Duration(blockProductionInterval) * time.Second
-	if onDemandBlockProduction {
-		blockProductionHealthCheck = math.MaxUint16 * time.Second
-	}
-	healthStatus := health.NewSolo(blockProductionHealthCheck)
 
 	// enable metrics as soon as possible
 	metricsURL := ""
@@ -336,16 +330,6 @@ func soloAction(ctx *cli.Context) error {
 		}
 		metricsURL = url
 		defer func() { log.Info("stopping metrics server..."); closeFunc() }()
-	}
-
-	adminURL := ""
-	if ctx.Bool(enableAdminFlag.Name) {
-		url, closeFunc, err := api.StartAdminServer(ctx.String(adminAddrFlag.Name), logLevel, healthStatus)
-		if err != nil {
-			return fmt.Errorf("unable to start admin server - %w", err)
-		}
-		adminURL = url
-		defer func() { log.Info("stopping admin server..."); closeFunc() }()
 	}
 
 	var (
@@ -390,6 +374,18 @@ func soloAction(ctx *cli.Context) error {
 	repo, err := initChainRepository(gene, mainDB, logDB)
 	if err != nil {
 		return err
+	}
+
+	healthStatus := health.New(repo, nil, blockProductionHealthCheck)
+
+	adminURL := ""
+	if ctx.Bool(enableAdminFlag.Name) {
+		url, closeFunc, err := api.StartAdminServer(ctx.String(adminAddrFlag.Name), logLevel, healthStatus)
+		if err != nil {
+			return fmt.Errorf("unable to start admin server - %w", err)
+		}
+		adminURL = url
+		defer func() { log.Info("stopping admin server..."); closeFunc() }()
 	}
 
 	printStartupMessage1(gene, repo, nil, instanceDir, forkConfig)
