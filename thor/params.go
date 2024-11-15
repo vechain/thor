@@ -54,7 +54,7 @@ var (
 
 	EnergyGrowthRate          = big.NewInt(1000000000) // WEI THOR per token(VET) per second. about 0.000432 THOR per token per day.
 	ValidatorEnergyGrowthRate = big.NewInt(5000000000)
-	TotalSupply               = new(big.Int).Mul(big.NewInt(1000000000), big.NewInt(1e18))
+	TotalVETSupply            = new(big.Int).Mul(big.NewInt(2000000000), big.NewInt(1e18))
 	ValidatorRewardRatio      = big.NewInt(20)
 	VthoGenerationPerBlock    = new(big.Int).Mul(big.NewInt(4300), big.NewInt(1e18)) // Generate 4300 VTHO per block (for now)
 )

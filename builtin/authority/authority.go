@@ -6,7 +6,6 @@
 package authority
 
 import (
-	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -289,7 +288,7 @@ func (a *Authority) GetVetDistribution(state *state.State) (*big.Int, *big.Int, 
 
 	}
 
-	restOfVet := thor.TotalSupply.Sub(thor.TotalSupply, validatorVet)
+	restOfVet := new(big.Int).Sub(thor.TotalVETSupply, validatorVet)
 
 	// Divide to get actual VET and not WEI
 	validatorVet = validatorVet.Div(validatorVet, big.NewInt(1e18))
@@ -316,11 +315,12 @@ func (a *Authority) CalcGenerationRates(state *state.State) (*big.Int, *big.Int,
 	userVtho := new(big.Int).Mul(thor.VthoGenerationPerBlock, remainingRatio)
 	userVtho = new(big.Int).Div(userVtho, hundred)
 
-	fmt.Println("validatorVet: ", validatorVet)
-	fmt.Println("userVet: ", userVet)
+	// fmt.Println("totalSupply: ", thor.TotalVETSupply)
+	// fmt.Println("validatorVet: ", validatorVet)
+	// fmt.Println("userVet: ", userVet)
 
-	fmt.Println("userVtho: (WEI)", userVtho)
-	fmt.Println("validatorVtho: (WEI)", validatorVtho)
+	// fmt.Println("userVtho: (WEI)", userVtho)
+	// fmt.Println("validatorVtho: (WEI)", validatorVtho)
 
 	// todo: Actualy get the correct total supply of VET for solo
 
@@ -340,7 +340,7 @@ func (a *Authority) CalcGenerationRates(state *state.State) (*big.Int, *big.Int,
 		userGenerationRate = new(big.Int).Div(userVtho, userVet)
 	}
 
-	fmt.Println("validatorGenerationRate: ", validatorGenerationRate, " userGenerationRate: ", userGenerationRate)
+	// fmt.Println("validatorGenerationRate: ", validatorGenerationRate, " userGenerationRate: ", userGenerationRate)
 
 	return validatorGenerationRate, userGenerationRate, nil
 }

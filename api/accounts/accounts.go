@@ -88,9 +88,9 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 
 func getHistoricGenerationRates(repo *chain.Repository, stater *state.Stater, account state.Account, header *block.Header, authorityContract *authority.Authority) (*big.Int, error) {
 
-	bestBlock := header.Number()
-
 	// account.BlockTime = last state update time in seconds
+
+	bestBlock := header.Number()
 
 	// Want to get last block an account was updated
 	// account.BlockTime --> needs to be actual block and not time
@@ -104,10 +104,9 @@ func getHistoricGenerationRates(repo *chain.Repository, stater *state.Stater, ac
 
 	lastAccountChangeBlock := header.Number()
 
-	sum := big.NewInt(0)
+	sum := account.Energy
 
 	for i := lastAccountChangeBlock; i <= bestBlock; i++ {
-		fmt.Println(i)
 
 		b, err := chain.GetBlock(i)
 
@@ -119,6 +118,10 @@ func getHistoricGenerationRates(repo *chain.Repository, stater *state.Stater, ac
 		state := stater.NewState(b.Header().StateRoot(), i, 0, 0)
 
 		validatorGenRate, _, err := authorityContract.CalcGenerationRates(state)
+
+		if err != nil {
+			return nil, err
+		}
 
 		sum = new(big.Int).Add(sum, validatorGenRate)
 
@@ -138,13 +141,10 @@ func (a *Accounts) getAccount(addr thor.Address, header *block.Header, state *st
 	}
 
 	authorityContract := builtin.Authority.Native(state)
-	energyGrowthRate, err := authorityContract.GetEnergyGrowthRate(addr)
 
 	if err != nil {
 		return nil, err
 	}
-
-	validatorGenRate, userGenRate, err := authorityContract.CalcGenerationRates(state)
 
 	userAccount, err := state.GetAccountCopy(addr)
 
@@ -152,21 +152,17 @@ func (a *Accounts) getAccount(addr thor.Address, header *block.Header, state *st
 		return nil, err
 	}
 
-	// makis
-	accountEnergy, err := getHistoricGenerationRates(a.repo, a.stater, userAccount, header, authorityContract)
+	// Simple idea: Sum historic generation rates to get current energy
+	energy, err := getHistoricGenerationRates(a.repo, a.stater, userAccount, header, authorityContract)
 
 	if err != nil {
 		return nil, err
 	}
 
-	// Todo: Store these somewhere
-	_ = validatorGenRate
-	_ = userGenRate
-
-	energy, err := state.GetEnergy(addr, header.Timestamp(), energyGrowthRate)
-	if err != nil {
-		return nil, err
-	}
+	// energy, err := state.GetEnergy(addr, header.Timestamp(), energyGrowthRate)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	return &Account{
 		Balance: math.HexOrDecimal256(*b),
