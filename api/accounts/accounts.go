@@ -19,6 +19,7 @@ import (
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/builtin/authority"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
@@ -85,6 +86,47 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 	return utils.WriteJSON(w, map[string]string{"code": hexutil.Encode(code)})
 }
 
+func getHistoricGenerationRates(repo *chain.Repository, stater *state.Stater, account state.Account, header *block.Header, authorityContract *authority.Authority) (*big.Int, error) {
+
+	bestBlock := header.Number()
+
+	// account.BlockTime = last state update time in seconds
+
+	// Want to get last block an account was updated
+	// account.BlockTime --> needs to be actual block and not time
+
+	chain := repo.NewChain(header.ID())
+	header, err := chain.FindBlockHeaderByTimestamp(account.BlockTime, 1)
+
+	if err != nil {
+		return nil, err
+	}
+
+	lastAccountChangeBlock := header.Number()
+
+	sum := big.NewInt(0)
+
+	for i := lastAccountChangeBlock; i <= bestBlock; i++ {
+		fmt.Println(i)
+
+		b, err := chain.GetBlock(i)
+
+		if err != nil {
+			return nil, err
+		}
+
+		// Need to get state of blocks one by one
+		state := stater.NewState(b.Header().StateRoot(), i, 0, 0)
+
+		validatorGenRate, _, err := authorityContract.CalcGenerationRates(state)
+
+		sum = new(big.Int).Add(sum, validatorGenRate)
+
+	}
+
+	return sum, nil
+}
+
 func (a *Accounts) getAccount(addr thor.Address, header *block.Header, state *state.State) (*Account, error) {
 	b, err := state.GetBalance(addr)
 	if err != nil {
@@ -103,6 +145,15 @@ func (a *Accounts) getAccount(addr thor.Address, header *block.Header, state *st
 	}
 
 	validatorGenRate, userGenRate, err := authorityContract.CalcGenerationRates(state)
+
+	userAccount, err := state.GetAccountCopy(addr)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// makis
+	accountEnergy, err := getHistoricGenerationRates(a.repo, a.stater, userAccount, header, authorityContract)
 
 	if err != nil {
 		return nil, err

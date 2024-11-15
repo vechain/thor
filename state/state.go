@@ -135,8 +135,8 @@ func (s *State) getAccount(addr thor.Address) (*Account, error) {
 	return v.(*Account), nil
 }
 
-// getAccountCopy get a copy of account by address.
-func (s *State) getAccountCopy(addr thor.Address) (Account, error) {
+// GetAccountCopy get a copy of account by address.
+func (s *State) GetAccountCopy(addr thor.Address) (Account, error) {
 	acc, err := s.getAccount(addr)
 	if err != nil {
 		return Account{}, err
@@ -168,7 +168,7 @@ func (s *State) GetBalance(addr thor.Address) (*big.Int, error) {
 
 // SetBalance set balance for the given address.
 func (s *State) SetBalance(addr thor.Address, balance *big.Int) error {
-	cpy, err := s.getAccountCopy(addr)
+	cpy, err := s.GetAccountCopy(addr)
 	if err != nil {
 		return &Error{err}
 	}
@@ -189,7 +189,7 @@ func (s *State) GetEnergy(addr thor.Address, blockTime uint64, energyGrowthRate 
 
 // SetEnergy set energy at block number for the given address.
 func (s *State) SetEnergy(addr thor.Address, energy *big.Int, blockTime uint64) error {
-	cpy, err := s.getAccountCopy(addr)
+	cpy, err := s.GetAccountCopy(addr)
 	if err != nil {
 		return &Error{err}
 	}
@@ -210,7 +210,7 @@ func (s *State) GetMaster(addr thor.Address) (thor.Address, error) {
 
 // SetMaster set master for the given address.
 func (s *State) SetMaster(addr thor.Address, master thor.Address) error {
-	cpy, err := s.getAccountCopy(addr)
+	cpy, err := s.GetAccountCopy(addr)
 	if err != nil {
 		return &Error{err}
 	}
@@ -320,7 +320,7 @@ func (s *State) SetCode(addr thor.Address, code []byte) error {
 	} else {
 		s.sm.Put(codeKey(addr), []byte(nil))
 	}
-	cpy, err := s.getAccountCopy(addr)
+	cpy, err := s.GetAccountCopy(addr)
 	if err != nil {
 		return &Error{err}
 	}
