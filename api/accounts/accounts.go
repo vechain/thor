@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -86,26 +87,27 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 	return utils.WriteJSON(w, map[string]string{"code": hexutil.Encode(code)})
 }
 
-func getHistoricGenerationRates(repo *chain.Repository, stater *state.Stater, account state.Account, header *block.Header, authorityContract *authority.Authority) (*big.Int, error) {
-
-	// account.BlockTime = last state update time in seconds
-
-	bestBlock := header.Number()
-
-	// Want to get last block an account was updated
-	// account.BlockTime --> needs to be actual block and not time
-
-	chain := repo.NewChain(header.ID())
+func GetHistoricGenerationRates(chain *chain.Chain, stater *state.Stater, account state.Account, authorityContract *authority.Authority) (*big.Int, error) {
+	// Get Account last state change from chain
 	header, err := chain.FindBlockHeaderByTimestamp(account.BlockTime, 1)
 
 	if err != nil {
 		return nil, err
 	}
-
 	lastAccountChangeBlock := header.Number()
+
+	// Get Best Block from chain
+	bestBlockHeader, err := chain.FindBlockHeaderByTimestamp(uint64(time.Now().Unix()), 1)
+
+	if err != nil {
+		return nil, err
+	}
+
+	bestBlock := bestBlockHeader.Number()
 
 	sum := account.Energy
 
+	// Aggregate generation rates
 	for i := lastAccountChangeBlock; i <= bestBlock; i++ {
 
 		b, err := chain.GetBlock(i)
@@ -152,8 +154,10 @@ func (a *Accounts) getAccount(addr thor.Address, header *block.Header, state *st
 		return nil, err
 	}
 
+	chain := a.repo.NewChain(header.ID())
+
 	// Simple idea: Sum historic generation rates to get current energy
-	energy, err := getHistoricGenerationRates(a.repo, a.stater, userAccount, header, authorityContract)
+	energy, err := GetHistoricGenerationRates(chain, a.stater, userAccount, authorityContract)
 
 	if err != nil {
 		return nil, err
