@@ -6,56 +6,99 @@
 package health
 
 import (
-	"encoding/json"
-	"io"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"github.com/vechain/thor/v2/comm"
-	"github.com/vechain/thor/v2/health"
-	"github.com/vechain/thor/v2/test/testchain"
-	"github.com/vechain/thor/v2/txpool"
+	"github.com/vechain/thor/v2/thor"
 )
 
-var ts *httptest.Server
+func TestHealth_isNetworkProgressing(t *testing.T) {
+	h := &Health{
+		timeBetweenBlocks: 10 * time.Second,
+	}
 
-func TestHealth(t *testing.T) {
-	initAPIServer(t)
+	now := time.Now()
 
-	var healthStatus health.Status
-	respBody, statusCode := httpGet(t, ts.URL+"/health")
-	require.NoError(t, json.Unmarshal(respBody, &healthStatus))
-	assert.False(t, healthStatus.Healthy)
-	assert.Equal(t, http.StatusServiceUnavailable, statusCode)
+	tests := []struct {
+		name                string
+		bestBlockTimestamp  time.Time
+		expectedProgressing bool
+	}{
+		{
+			name:                "Progressing - block within timeBetweenBlocks",
+			bestBlockTimestamp:  now.Add(-5 * time.Second),
+			expectedProgressing: true,
+		},
+		{
+			name:                "Not Progressing - block outside timeBetweenBlocks",
+			bestBlockTimestamp:  now.Add(-15 * time.Second),
+			expectedProgressing: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			isProgressing := h.isNetworkProgressing(now, tt.bestBlockTimestamp)
+			assert.Equal(t, tt.expectedProgressing, isProgressing, "isNetworkProgressing result mismatch")
+		})
+	}
 }
 
-func initAPIServer(t *testing.T) {
-	thorChain, err := testchain.NewIntegrationTestChain()
-	require.NoError(t, err)
+func TestHealth_hasNodeBootstrapped(t *testing.T) {
+	h := &Health{}
+	blockInterval := time.Duration(thor.BlockInterval) * time.Second
+	now := time.Now()
 
-	router := mux.NewRouter()
-	New(
-		health.New(thorChain.Repo(), comm.New(thorChain.Repo(), txpool.New(thorChain.Repo(), nil, txpool.Options{})), time.Second),
-	).Mount(router, "/health")
+	tests := []struct {
+		name               string
+		bestBlockTimestamp time.Time
+		expectedBootstrap  bool
+	}{
+		{
+			name:               "Bootstrapped - block timestamp within interval",
+			bestBlockTimestamp: now.Add(-blockInterval + 1*time.Second),
+			expectedBootstrap:  true,
+		},
+		{
+			name:               "Not Bootstrapped - block timestamp outside interval",
+			bestBlockTimestamp: now.Add(-blockInterval - 1*time.Second),
+			expectedBootstrap:  false,
+		},
+	}
 
-	ts = httptest.NewServer(router)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			isBootstrapped := h.hasNodeBootstrapped(now, tt.bestBlockTimestamp)
+			assert.Equal(t, tt.expectedBootstrap, isBootstrapped, "hasNodeBootstrapped result mismatch")
+		})
+	}
 }
 
-func httpGet(t *testing.T, url string) ([]byte, int) {
-	res, err := http.Get(url) //#nosec G107
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer res.Body.Close()
+func TestHealth_isNodeConnectedP2P(t *testing.T) {
+	h := &Health{}
 
-	r, err := io.ReadAll(res.Body)
-	if err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		name              string
+		peerCount         int
+		expectedConnected bool
+	}{
+		{
+			name:              "Connected - more than one peer",
+			peerCount:         2,
+			expectedConnected: true,
+		},
+		{
+			name:              "Not Connected - one or fewer peers",
+			peerCount:         1,
+			expectedConnected: false,
+		},
 	}
-	return r, res.StatusCode
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			isConnected := h.isNodeConnectedP2P(tt.peerCount)
+			assert.Equal(t, tt.expectedConnected, isConnected, "isNodeConnectedP2P result mismatch")
+		})
+	}
 }

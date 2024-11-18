@@ -25,7 +25,6 @@ import (
 	"github.com/vechain/thor/v2/cmd/thor/optimizer"
 	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/health"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/metrics"
@@ -233,10 +232,15 @@ func defaultAction(ctx *cli.Context) error {
 		return err
 	}
 
-	healthStatus := health.New(repo, p2pCommunicator.Communicator(), time.Duration(thor.BlockInterval))
 	adminURL := ""
 	if ctx.Bool(enableAdminFlag.Name) {
-		url, closeFunc, err := api.StartAdminServer(ctx.String(adminAddrFlag.Name), logLevel, healthStatus)
+		url, closeFunc, err := api.StartAdminServer(
+			ctx.String(adminAddrFlag.Name),
+			logLevel,
+			repo,
+			p2pCommunicator.Communicator(),
+			time.Duration(thor.BlockInterval),
+		)
 		if err != nil {
 			return fmt.Errorf("unable to start admin server - %w", err)
 		}
@@ -376,11 +380,9 @@ func soloAction(ctx *cli.Context) error {
 		return err
 	}
 
-	healthStatus := health.New(repo, nil, blockProductionHealthCheck)
-
 	adminURL := ""
 	if ctx.Bool(enableAdminFlag.Name) {
-		url, closeFunc, err := api.StartAdminServer(ctx.String(adminAddrFlag.Name), logLevel, healthStatus)
+		url, closeFunc, err := api.StartAdminServer(ctx.String(adminAddrFlag.Name), logLevel, repo, nil, blockProductionHealthCheck)
 		if err != nil {
 			return fmt.Errorf("unable to start admin server - %w", err)
 		}

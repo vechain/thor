@@ -11,18 +11,16 @@ import (
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
-	"github.com/vechain/thor/v2/api/admin/loglevel"
-	"github.com/vechain/thor/v2/health"
-
 	healthAPI "github.com/vechain/thor/v2/api/admin/health"
+	"github.com/vechain/thor/v2/api/admin/loglevel"
 )
 
-func New(logLevel *slog.LevelVar, health *health.Health) http.HandlerFunc {
+func New(logLevel *slog.LevelVar, health *healthAPI.Health) http.HandlerFunc {
 	router := mux.NewRouter()
 	subRouter := router.PathPrefix("/admin").Subrouter()
 
 	loglevel.New(logLevel).Mount(subRouter, "/loglevel")
-	healthAPI.New(health).Mount(subRouter, "/health")
+	healthAPI.NewAPI(health).Mount(subRouter, "/health")
 
 	handler := handlers.CompressHandler(router)
 
