@@ -21,10 +21,10 @@ import (
 )
 
 const (
-	hdrStoreName     = "chain.hdr"  // for block headers
-	bodyStoreName    = "chain.body" // for block bodies and receipts
-	propStoreName    = "chain.props"
-	headStoreName    = "chain.heads" // for chain heads
+	hdrStoreName     = "chain.hdr"   // for block headers
+	bodyStoreName    = "chain.body"  // for block bodies and receipts
+	propStoreName    = "chain.props" // for property-named blocks such as best block
+	headStoreName    = "chain.heads" // for chain heads ( including uncles )
 	txIndexStoreName = "chain.txi"   // for tx metadata
 
 	txFlag         = byte(0) // flag byte of the key for saving tx blob
