@@ -51,13 +51,8 @@ func (c *cache) log() {
 	last := c.lastLogTime.Swap(now)
 
 	if now-last > int64(time.Second*20) {
-		log1, ok1 := c.nodeStats.ShouldLog("node cache stats")
-		log2, ok2 := c.rootStats.ShouldLog("root cache stats")
-
-		if ok1 || ok2 {
-			log1()
-			log2()
-		}
+		c.nodeStats.Log("node cache stats")
+		c.rootStats.Log("root cache stats")
 	} else {
 		c.lastLogTime.CompareAndSwap(now, last)
 	}
@@ -177,26 +172,33 @@ type cacheStats struct {
 func (cs *cacheStats) Hit() int64  { return cs.hit.Add(1) }
 func (cs *cacheStats) Miss() int64 { return cs.miss.Add(1) }
 
-func (cs *cacheStats) ShouldLog(msg string) (func(), bool) {
+func (cs *cacheStats) Log(msg string) {
 	hit := cs.hit.Load()
 	miss := cs.miss.Load()
 	lookups := hit + miss
 
+	// Calculate hitrate
 	hitrate := float64(hit) / float64(lookups)
 	flag := int32(hitrate * 1000)
-	return func() {
-		var str string
-		if lookups > 0 {
-			str = fmt.Sprintf("%.3f", hitrate)
-		} else {
-			str = "n/a"
-		}
 
-		logger.Info(msg,
-			"lookups", lookups,
-			"hitrate", str,
-		)
+	// Log the current state unless the flag is unchanged
+	if cs.flag.Load() == flag {
+		return
+	}
 
-		cs.flag.Store(flag)
-	}, cs.flag.Load() != flag
+	// Log cache stats
+	var str string
+	if lookups > 0 {
+		str = fmt.Sprintf("%.3f", hitrate)
+	} else {
+		str = "n/a"
+	}
+
+	logger.Info(msg,
+		"lookups", lookups,
+		"hitrate", str,
+	)
+
+	// Update the flag
+	cs.flag.Store(flag)
 }
