@@ -117,6 +117,9 @@ FROM (%v) e
 
 	if filter.Range != nil {
 		subQuery += " AND seq >= ?"
+		if filter.Range.To > blockNumMask {
+			filter.Range.To = blockNumMask
+		}
 		args = append(args, newSequence(filter.Range.From, 0, 0))
 		if filter.Range.To >= filter.Range.From {
 			subQuery += " AND seq <= ?"
@@ -183,6 +186,9 @@ FROM (%v) t
 
 	if filter.Range != nil {
 		subQuery += " AND seq >= ?"
+		if filter.Range.To > blockNumMask {
+			filter.Range.To = blockNumMask
+		}
 		args = append(args, newSequence(filter.Range.From, 0, 0))
 		if filter.Range.To >= filter.Range.From {
 			subQuery += " AND seq <= ?"
