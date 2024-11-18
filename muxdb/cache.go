@@ -174,8 +174,14 @@ type cacheStats struct {
 	flag      atomic.Int32
 }
 
-func (cs *cacheStats) Hit() int64  { return cs.hit.Add(1) }
-func (cs *cacheStats) Miss() int64 { return cs.miss.Add(1) }
+func (cs *cacheStats) Hit() int64  {
+	metricCacheHitMissGauge().AddWithLabel(1, map[string]string{"type": "hit"})
+	return cs.hit.Add(1) 
+}
+func (cs *cacheStats) Miss() int64 {
+	metricCacheHitMissGauge().AddWithLabel(1, map[string]string{"type": "miss"})
+	return cs.miss.Add(1) 
+}
 
 func (cs *cacheStats) ShouldLog(msg string) (func(), bool) {
 	hit := cs.hit.Load()
