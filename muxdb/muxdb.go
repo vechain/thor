@@ -127,7 +127,7 @@ func NewMem() *MuxDB {
 		engine: engine,
 		trieBackend: &backend{
 			Store:            engine,
-			Cache:            nil,
+			Cache:            &emptyCache{},
 			HistPtnFactor:    1,
 			DedupedPtnFactor: 1,
 			CachedNodeTTL:    32,

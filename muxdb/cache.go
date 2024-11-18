@@ -17,6 +17,13 @@ import (
 	"github.com/vechain/thor/v2/trie"
 )
 
+type Cache interface {
+	AddNodeBlob(keyBuf *[]byte, name string, path []byte, ver trie.Version, blob []byte, isCommitting bool)
+	GetNodeBlob(keyBuf *[]byte, name string, path []byte, ver trie.Version, peek bool) []byte
+	AddRootNode(name string, n trie.Node)
+	GetRootNode(name string, ver trie.Version) trie.Node
+}
+
 // cache is the cache layer for trie.
 type cache struct {
 	queriedNodes   *directcache.Cache // caches recently queried node blobs.
@@ -34,7 +41,7 @@ type cache struct {
 }
 
 // newCache creates a cache object with the given cache size.
-func newCache(sizeMB int, rootTTL uint32) *cache {
+func newCache(sizeMB int, rootTTL uint32) Cache {
 	sizeBytes := sizeMB * 1024 * 1024
 	cache := &cache{
 		queriedNodes:   directcache.New(sizeBytes / 4),
@@ -65,10 +72,6 @@ func (c *cache) log() {
 
 // AddNodeBlob adds encoded node blob into the cache.
 func (c *cache) AddNodeBlob(keyBuf *[]byte, name string, path []byte, ver trie.Version, blob []byte, isCommitting bool) {
-	if c == nil {
-		return
-	}
-
 	// the version part
 	v := binary.AppendUvarint((*keyBuf)[:0], uint64(ver.Major))
 	v = binary.AppendUvarint(v, uint64(ver.Minor))
@@ -89,9 +92,6 @@ func (c *cache) AddNodeBlob(keyBuf *[]byte, name string, path []byte, ver trie.V
 
 // GetNodeBlob returns the cached node blob.
 func (c *cache) GetNodeBlob(keyBuf *[]byte, name string, path []byte, ver trie.Version, peek bool) []byte {
-	if c == nil {
-		return nil
-	}
 	// the version part
 	v := binary.AppendUvarint((*keyBuf)[:0], uint64(ver.Major))
 	v = binary.AppendUvarint(v, uint64(ver.Minor))
@@ -130,7 +130,7 @@ func (c *cache) GetNodeBlob(keyBuf *[]byte, name string, path []byte, ver trie.V
 
 // AddRootNode add the root node into the cache.
 func (c *cache) AddRootNode(name string, n trie.Node) {
-	if c == nil || n == nil {
+	if n == nil {
 		return
 	}
 	c.roots.lock.Lock()
@@ -151,9 +151,6 @@ func (c *cache) AddRootNode(name string, n trie.Node) {
 
 // GetRootNode returns the cached root node.
 func (c *cache) GetRootNode(name string, ver trie.Version) trie.Node {
-	if c == nil {
-		return nil
-	}
 	c.roots.lock.RLock()
 	defer c.roots.lock.RUnlock()
 
