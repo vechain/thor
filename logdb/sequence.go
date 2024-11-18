@@ -12,8 +12,8 @@ const (
 	blockNumBits = 28
 	txIndexBits  = 15
 	logIndexBits = 21
-	// Max = 2^28 - 1 = 268,435,455
-	blockNumMask = (1 << blockNumBits) - 1
+	// BlockNumMask Max = 2^28 - 1 = 268,435,455 (unsigned int 28)
+	BlockNumMask = (1 << blockNumBits) - 1
 	// Max = 2^15 - 1 = 32,767
 	txIndexMask = (1 << txIndexBits) - 1
 	// Max = 2^21 - 1 = 2,097,151
@@ -21,7 +21,7 @@ const (
 )
 
 func newSequence(blockNum uint32, txIndex uint32, logIndex uint32) sequence {
-	if blockNum > blockNumMask {
+	if blockNum > BlockNumMask {
 		panic("block number too large")
 	}
 	if txIndex > txIndexMask {
@@ -36,7 +36,7 @@ func newSequence(blockNum uint32, txIndex uint32, logIndex uint32) sequence {
 }
 
 func (s sequence) BlockNumber() uint32 {
-	return uint32(s>>(txIndexBits+logIndexBits)) & blockNumMask
+	return uint32(s>>(txIndexBits+logIndexBits)) & BlockNumMask
 }
 
 func (s sequence) TxIndex() uint32 {

@@ -117,7 +117,7 @@ FROM (%v) e
 
 	if filter.Range != nil {
 		subQuery += " AND seq >= ?"
-		if filter.Range.To > blockNumMask {
+		if filter.Range.To > BlockNumMask {
 			return nil, fmt.Errorf("invalid block number range")
 		}
 		args = append(args, newSequence(filter.Range.From, 0, 0))
@@ -186,7 +186,7 @@ FROM (%v) t
 
 	if filter.Range != nil {
 		subQuery += " AND seq >= ?"
-		if filter.Range.To > blockNumMask {
+		if filter.Range.To > BlockNumMask {
 			return nil, fmt.Errorf("invalid block number range")
 		}
 		args = append(args, newSequence(filter.Range.From, 0, 0))
