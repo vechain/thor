@@ -20,10 +20,10 @@ func TestSequence(t *testing.T) {
 		args args
 	}{
 		{"regular", args{1, 2, 3}},
-		{"max bn", args{blockNumMask, 1, 2}},
+		{"max bn", args{BlockNumMask, 1, 2}},
 		{"max tx index", args{5, txIndexMask, 4}},
 		{"max log index", args{5, 4, logIndexMask}},
-		{"both max", args{blockNumMask, txIndexMask, logIndexMask}},
+		{"both max", args{BlockNumMask, txIndexMask, logIndexMask}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
