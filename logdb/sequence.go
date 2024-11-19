@@ -7,7 +7,7 @@ package logdb
 
 import "errors"
 
-type sequence uint64
+type sequence int64
 
 // Adjust these constants based on your bit allocation requirements
 const (

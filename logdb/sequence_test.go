@@ -20,14 +20,18 @@ func TestSequence(t *testing.T) {
 		args args
 	}{
 		{"regular", args{1, 2, 3}},
-		{"max bn", args{BlockNumMask, 1, 2}},
+		{"max bn", args{blockNumMask, 1, 2}},
 		{"max tx index", args{5, txIndexMask, 4}},
 		{"max log index", args{5, 4, logIndexMask}},
-		{"both max", args{BlockNumMask, txIndexMask, logIndexMask}},
+		{"close to max", args{blockNumMask - 5, txIndexMask - 5, logIndexMask - 5}},
+		{"both max", args{blockNumMask, txIndexMask, logIndexMask}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := newSequence(tt.args.blockNum, tt.args.txIndex, tt.args.logIndex)
+			got, err := newSequence(tt.args.blockNum, tt.args.txIndex, tt.args.logIndex)
+			if err != nil {
+				t.Error(err)
+			}
 			if bn := got.BlockNumber(); bn != tt.args.blockNum {
 				t.Errorf("seq.blockNum() = %v, want %v", bn, tt.args.blockNum)
 			}
@@ -39,18 +43,4 @@ func TestSequence(t *testing.T) {
 			}
 		})
 	}
-
-	defer func() {
-		if e := recover(); e == nil {
-			t.Errorf("newSequence should panic on 2nd arg > math.MaxInt32")
-		}
-	}()
-	newSequence(1, txIndexMask+1, 5)
-
-	defer func() {
-		if e := recover(); e == nil {
-			t.Errorf("newSequence should panic on 3rd arg > math.MaxInt32")
-		}
-	}()
-	newSequence(1, 5, logIndexMask+1)
 }
