@@ -7,6 +7,8 @@ package logdb
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSequence(t *testing.T) {
@@ -32,6 +34,8 @@ func TestSequence(t *testing.T) {
 			if err != nil {
 				t.Error(err)
 			}
+
+			assert.True(t, got > 0, "sequence should be positive")
 			if bn := got.BlockNumber(); bn != tt.args.blockNum {
 				t.Errorf("seq.blockNum() = %v, want %v", bn, tt.args.blockNum)
 			}
