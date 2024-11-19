@@ -173,8 +173,21 @@ func ConvertRange(chain *chain.Chain, r *Range) (*logdb.Range, error) {
 			To:   toHeader.Number(),
 		}, nil
 	}
+
+	// Units are block numbers - numbers will have a max ceiling at chain head block number
+	headNum := block.Number(chain.HeadID())
+	from := uint32(r.From)
+	to := uint32(r.To)
+
+	if from > headNum {
+		from = headNum
+	}
+	if to > headNum {
+		to = headNum
+	}
+
 	return &logdb.Range{
-		From: uint32(r.From),
-		To:   uint32(r.To),
+		From: from,
+		To:   to,
 	}, nil
 }
