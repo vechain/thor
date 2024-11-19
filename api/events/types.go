@@ -174,19 +174,18 @@ func ConvertRange(chain *chain.Chain, r *Range) (*logdb.Range, error) {
 		}, nil
 	}
 
-	// Units are blocks, locked a max of 28bits in the logdb
-	from := uint32(r.From)
-	to := uint32(r.To)
+	rng := logdb.Range{
+		From: uint32(r.From),
+		To:   uint32(r.To),
+	}
 
-	// Ensure the values are capped at the 28-bit maximum
-	if uint32(r.From) > logdb.BlockNumMask {
-		from = logdb.BlockNumMask
+	headNum := block.Number(chain.HeadID())
+	if rng.From > headNum {
+		rng.From = headNum
 	}
-	if uint32(r.To) > logdb.BlockNumMask {
-		to = logdb.BlockNumMask
+	if rng.To > headNum {
+		rng.To = headNum
 	}
-	return &logdb.Range{
-		From: from,
-		To:   to,
-	}, nil
+
+	return &rng, nil
 }
