@@ -26,7 +26,7 @@ func newTestBackend() *backend {
 	engine := newTestEngine()
 	return &backend{
 		Store:            engine,
-		Cache:            &emptyCache{},
+		Cache:            &dummyCache{},
 		HistPtnFactor:    1,
 		DedupedPtnFactor: 1,
 		CachedNodeTTL:    100,

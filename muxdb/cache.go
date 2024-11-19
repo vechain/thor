@@ -197,3 +197,21 @@ func (cs *cacheStats) ShouldLog(msg string) (func(), bool) {
 		cs.flag.Store(flag)
 	}, cs.flag.Load() != flag
 }
+
+type dummyCache struct{}
+
+// AddNodeBlob is a no-op.
+func (*dummyCache) AddNodeBlob(_ *[]byte, _ string, _ []byte, _ trie.Version, _ []byte, _ bool) {}
+
+// GetNodeBlob always returns nil.
+func (*dummyCache) GetNodeBlob(_ *[]byte, _ string, _ []byte, _ trie.Version, _ bool) []byte {
+	return nil
+}
+
+// AddRootNode is a no-op.
+func (*dummyCache) AddRootNode(_ string, _ trie.Node) {}
+
+// GetRootNode always returns nil.
+func (*dummyCache) GetRootNode(_ string, _ trie.Version) trie.Node {
+	return nil
+}
