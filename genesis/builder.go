@@ -92,7 +92,7 @@ func (b *Builder) Build(stater *state.Stater) (blk *block.Block, events tx.Event
 		}
 	}
 
-	rt := runtime.New(nil, state, &xenv.BlockContext{
+	rt := runtime.New(nil, state, stater, &xenv.BlockContext{
 		Time:     b.timestamp,
 		GasLimit: b.gasLimit,
 	}, b.forkConfig)

@@ -265,6 +265,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 	rt := runtime.New(
 		chain,
 		state,
+		c.stater,
 		&xenv.BlockContext{
 			Beneficiary: header.Beneficiary(),
 			Signer:      signer,

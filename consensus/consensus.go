@@ -89,6 +89,7 @@ func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipPoA bool) (*ru
 	return runtime.New(
 		c.repo.NewChain(header.ParentID()),
 		state,
+		c.stater,
 		&xenv.BlockContext{
 			Beneficiary: header.Beneficiary(),
 			Signer:      signer,

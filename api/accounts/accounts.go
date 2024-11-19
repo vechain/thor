@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -20,8 +19,8 @@ import (
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/builtin/authority"
 	"github.com/vechain/thor/v2/chain"
+	historic_energy "github.com/vechain/thor/v2/historicenergy"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -87,51 +86,6 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 	return utils.WriteJSON(w, map[string]string{"code": hexutil.Encode(code)})
 }
 
-func GetHistoricGenerationRates(chain *chain.Chain, stater *state.Stater, account state.Account, authorityContract *authority.Authority) (*big.Int, error) {
-	// Get Account last state change from chain
-	header, err := chain.FindBlockHeaderByTimestamp(account.BlockTime, 1)
-
-	if err != nil {
-		return nil, err
-	}
-	lastAccountChangeBlock := header.Number()
-
-	// Get Best Block from chain
-	bestBlockHeader, err := chain.FindBlockHeaderByTimestamp(uint64(time.Now().Unix()), 1)
-
-	if err != nil {
-		return nil, err
-	}
-
-	bestBlock := bestBlockHeader.Number()
-
-	sum := account.Energy
-
-	// Aggregate generation rates
-	for i := lastAccountChangeBlock; i <= bestBlock; i++ {
-
-		b, err := chain.GetBlock(i)
-
-		if err != nil {
-			return nil, err
-		}
-
-		// Need to get state of blocks one by one
-		state := stater.NewState(b.Header().StateRoot(), i, 0, 0)
-
-		validatorGenRate, _, err := authorityContract.CalcGenerationRates(state)
-
-		if err != nil {
-			return nil, err
-		}
-
-		sum = new(big.Int).Add(sum, validatorGenRate)
-
-	}
-
-	return sum, nil
-}
-
 func (a *Accounts) getAccount(addr thor.Address, header *block.Header, state *state.State) (*Account, error) {
 	b, err := state.GetBalance(addr)
 	if err != nil {
@@ -157,7 +111,7 @@ func (a *Accounts) getAccount(addr thor.Address, header *block.Header, state *st
 	chain := a.repo.NewChain(header.ID())
 
 	// Simple idea: Sum historic generation rates to get current energy
-	energy, err := GetHistoricGenerationRates(chain, a.stater, userAccount, authorityContract)
+	energy, err := historic_energy.GetHistoricGenerationRates(chain, a.stater, userAccount, authorityContract)
 
 	if err != nil {
 		return nil, err
@@ -315,7 +269,7 @@ func (a *Accounts) batchCall(
 	}
 
 	signer, _ := header.Signer()
-	rt := runtime.New(a.repo.NewChain(header.ParentID()), st,
+	rt := runtime.New(a.repo.NewChain(header.ParentID()), st, a.stater,
 		&xenv.BlockContext{
 			Beneficiary: header.Beneficiary(),
 			Signer:      signer,

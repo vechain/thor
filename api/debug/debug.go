@@ -254,6 +254,7 @@ func (d *Debug) traceCall(ctx context.Context, tracer tracers.Tracer, header *bl
 	rt := runtime.New(
 		d.repo.NewChain(header.ParentID()),
 		st,
+		d.stater,
 		&xenv.BlockContext{
 			Beneficiary: header.Beneficiary(),
 			Signer:      signer,

@@ -124,6 +124,7 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (flow
 	rt := runtime.New(
 		p.repo.NewChain(parent.Header.ID()),
 		state,
+		p.stater,
 		&xenv.BlockContext{
 			Beneficiary: beneficiary,
 			Signer:      p.nodeMaster,
@@ -156,6 +157,7 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 	rt := runtime.New(
 		p.repo.NewChain(parent.Header.ID()),
 		state,
+		p.stater,
 		&xenv.BlockContext{
 			Beneficiary: p.nodeMaster,
 			Signer:      p.nodeMaster,

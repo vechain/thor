@@ -16,6 +16,7 @@ import (
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
+	historic_energy "github.com/vechain/thor/v2/historicenergy"
 	"github.com/vechain/thor/v2/runtime/statedb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -83,6 +84,7 @@ type Runtime struct {
 	vmConfig    vm.Config
 	chain       *chain.Chain
 	state       *state.State
+	stater      *state.Stater
 	ctx         *xenv.BlockContext
 	chainConfig vm.ChainConfig
 }
@@ -91,6 +93,7 @@ type Runtime struct {
 func New(
 	chain *chain.Chain,
 	state *state.State,
+	stater *state.Stater,
 	ctx *xenv.BlockContext,
 	forkConfig thor.ForkConfig,
 ) *Runtime {
@@ -128,6 +131,7 @@ func New(
 	rt := Runtime{
 		chain:       chain,
 		state:       state,
+		stater:      stater,
 		ctx:         ctx,
 		chainConfig: currentChainConfig,
 	}
@@ -159,18 +163,29 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 			// SHOULD be performed before transfer
 
 			authorityContract := builtin.Authority.Native(rt.state)
-			energyGrowthRate, err := authorityContract.GetEnergyGrowthRate(thor.Address(sender))
-			_, _, _ = authorityContract.CalcGenerationRates(rt.state)
+			senderAccount, err := rt.state.GetAccountCopy(thor.Address(sender))
 
 			if err != nil {
 				return
 			}
 
-			senderEnergy, err := rt.state.GetEnergy(thor.Address(sender), rt.ctx.Time, energyGrowthRate)
+			recipientAccount, err := rt.state.GetAccountCopy(thor.Address(recipient))
+			if err != nil {
+				return
+			}
+
+			// senderEnergy, err := rt.state.GetEnergy(thor.Address(sender), rt.ctx.Time, energyGrowthRate)
+			senderEnergy, err := historic_energy.GetHistoricGenerationRates(rt.chain, rt.stater, senderAccount, authorityContract)
 			if err != nil {
 				panic(err)
 			}
-			recipientEnergy, err := rt.state.GetEnergy(thor.Address(recipient), rt.ctx.Time, energyGrowthRate)
+
+			if err != nil {
+				panic(err)
+			}
+
+			// recipientEnergy, err := rt.state.GetEnergy(thor.Address(recipient), rt.ctx.Time, energyGrowthRate)
+			recipientEnergy, err := historic_energy.GetHistoricGenerationRates(rt.chain, rt.stater, recipientAccount, authorityContract)
 			if err != nil {
 				panic(err)
 			}
@@ -259,11 +274,17 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 		OnSuicideContract: func(_ *vm.EVM, contractAddr, tokenReceiver common.Address) {
 
 			authorityContract := builtin.Authority.Native(rt.state)
-			energyGrowthRate, err := authorityContract.GetEnergyGrowthRate(thor.Address(contractAddr))
-			_, _, _ = authorityContract.CalcGenerationRates(rt.state)
+			// energyGrowthRate, err := authorityContract.GetEnergyGrowthRate(thor.Address(contractAddr))
+			// _, _, _ = authorityContract.CalcGenerationRates(rt.state)
+
+			account, err := rt.state.GetAccountCopy(thor.Address(contractAddr))
+			if err != nil {
+				return
+			}
 
 			// it's IMPORTANT to process energy before token
-			amount, err := rt.state.GetEnergy(thor.Address(contractAddr), rt.ctx.Time, energyGrowthRate)
+			// amount, err := rt.state.GetEnergy(thor.Address(contractAddr), rt.ctx.Time, energyGrowthRate)
+			amount, err := historic_energy.GetHistoricGenerationRates(rt.chain, rt.stater, account, authorityContract)
 			if err != nil {
 				panic(err)
 			}
@@ -271,10 +292,16 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 				// add remained energy of suiciding contract to receiver.
 				// no need to clear contract's energy, vm will delete the whole contract later.
 				authorityContract := builtin.Authority.Native(rt.state)
-				energyGrowthRate, err := authorityContract.GetEnergyGrowthRate(thor.Address(tokenReceiver))
-				_, _, _ = authorityContract.CalcGenerationRates(rt.state)
+				// energyGrowthRate, err := authorityContract.GetEnergyGrowthRate(thor.Address(tokenReceiver))
+				// _, _, _ = authorityContract.CalcGenerationRates(rt.state)
 
-				receiverEnergy, err := rt.state.GetEnergy(thor.Address(tokenReceiver), rt.ctx.Time, energyGrowthRate)
+				account, err := rt.state.GetAccountCopy(thor.Address(tokenReceiver))
+				if err != nil {
+					return
+				}
+
+				// receiverEnergy, err := rt.state.GetEnergy(thor.Address(tokenReceiver), rt.ctx.Time, energyGrowthRate)
+				receiverEnergy, err := historic_energy.GetHistoricGenerationRates(rt.chain, rt.stater, account, authorityContract)
 				if err != nil {
 					panic(err)
 				}
