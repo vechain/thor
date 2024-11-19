@@ -179,12 +179,8 @@ type cacheStats struct {
 	flag      atomic.Int32
 }
 
-func (cs *cacheStats) Hit() int64  {
-	return cs.hit.Add(1) 
-}
-func (cs *cacheStats) Miss() int64 {
-	return cs.miss.Add(1) 
-}
+func (cs *cacheStats) Hit() int64  { return cs.hit.Add(1) }
+func (cs *cacheStats) Miss() int64 { return cs.miss.Add(1) }
 
 func (cs *cacheStats) shouldLog(msg string) (func(), bool) {
 	hit := cs.hit.Load()
