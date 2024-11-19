@@ -11,17 +11,17 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/v2/chain"
+	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
-	"github.com/vechain/thor/v2/muxdb"
-	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
 
 func TestEventsTypes(t *testing.T) {
 	c := initChain(t)
-	for name, tt := range map[string]func(*testing.T, *chain.Chain){
+	for name, tt := range map[string]func(*testing.T, *testchain.Chain){
 		"testConvertRangeWithBlockRangeType":               testConvertRangeWithBlockRangeType,
 		"testConvertRangeWithTimeRangeTypeLessThenGenesis": testConvertRangeWithTimeRangeTypeLessThenGenesis,
 		"testConvertRangeWithTimeRangeType":                testConvertRangeWithTimeRangeType,
@@ -33,21 +33,38 @@ func TestEventsTypes(t *testing.T) {
 	}
 }
 
-func testConvertRangeWithBlockRangeType(t *testing.T, chain *chain.Chain) {
+func testConvertRangeWithBlockRangeType(t *testing.T, chain *testchain.Chain) {
 	rng := &Range{
 		Unit: BlockRangeType,
 		From: 1,
 		To:   2,
 	}
 
-	convertedRng, err := ConvertRange(chain, rng)
+	convertedRng, err := ConvertRange(chain.Repo().NewBestChain(), rng)
 
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(rng.From), convertedRng.From)
 	assert.Equal(t, uint32(rng.To), convertedRng.To)
+
+	// ensure wild block numbers have a max ceiling of chain.head
+	rng = &Range{
+		Unit: BlockRangeType,
+		From: 100,
+		To:   200,
+	}
+
+	convertedRng, err = ConvertRange(chain.Repo().NewBestChain(), rng)
+	require.NoError(t, err)
+
+	bestBlock, err := chain.BestBlock()
+	require.NoError(t, err)
+
+	assert.NoError(t, err)
+	assert.Equal(t, bestBlock.Header().Number(), convertedRng.From)
+	assert.Equal(t, bestBlock.Header().Number(), convertedRng.To)
 }
 
-func testConvertRangeWithTimeRangeTypeLessThenGenesis(t *testing.T, chain *chain.Chain) {
+func testConvertRangeWithTimeRangeTypeLessThenGenesis(t *testing.T, chain *testchain.Chain) {
 	rng := &Range{
 		Unit: TimeRangeType,
 		From: 1,
@@ -58,17 +75,15 @@ func testConvertRangeWithTimeRangeTypeLessThenGenesis(t *testing.T, chain *chain
 		To:   math.MaxUint32,
 	}
 
-	convRng, err := ConvertRange(chain, rng)
+	convRng, err := ConvertRange(chain.Repo().NewBestChain(), rng)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedEmptyRange, convRng)
 }
 
-func testConvertRangeWithTimeRangeType(t *testing.T, chain *chain.Chain) {
-	genesis, err := chain.GetBlockHeader(0)
-	if err != nil {
-		t.Fatal(err)
-	}
+func testConvertRangeWithTimeRangeType(t *testing.T, chain *testchain.Chain) {
+	genesis := chain.GenesisBlock().Header()
+
 	rng := &Range{
 		Unit: TimeRangeType,
 		From: 1,
@@ -79,17 +94,15 @@ func testConvertRangeWithTimeRangeType(t *testing.T, chain *chain.Chain) {
 		To:   0,
 	}
 
-	convRng, err := ConvertRange(chain, rng)
+	convRng, err := ConvertRange(chain.Repo().NewBestChain(), rng)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedZeroRange, convRng)
 }
 
-func testConvertRangeWithFromGreaterThanGenesis(t *testing.T, chain *chain.Chain) {
-	genesis, err := chain.GetBlockHeader(0)
-	if err != nil {
-		t.Fatal(err)
-	}
+func testConvertRangeWithFromGreaterThanGenesis(t *testing.T, chain *testchain.Chain) {
+	genesis := chain.GenesisBlock().Header()
+
 	rng := &Range{
 		Unit: TimeRangeType,
 		From: genesis.Timestamp() + 1_000,
@@ -100,29 +113,21 @@ func testConvertRangeWithFromGreaterThanGenesis(t *testing.T, chain *chain.Chain
 		To:   math.MaxUint32,
 	}
 
-	convRng, err := ConvertRange(chain, rng)
+	convRng, err := ConvertRange(chain.Repo().NewBestChain(), rng)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedEmptyRange, convRng)
 }
 
 // Init functions
-func initChain(t *testing.T) *chain.Chain {
-	muxDb := muxdb.NewMem()
-	stater := state.NewStater(muxDb)
-	gene := genesis.NewDevnet()
+func initChain(t *testing.T) *testchain.Chain {
+	thorChain, err := testchain.NewIntegrationTestChain()
+	require.NoError(t, err)
 
-	b, _, _, err := gene.Build(stater)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0], []*tx.Transaction{}...))
+	require.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0], []*tx.Transaction{}...))
 
-	repo, err := chain.NewRepository(muxDb, b)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return repo.NewBestChain()
+	return thorChain
 }
 
 func TestConvertEvent(t *testing.T) {
