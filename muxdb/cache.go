@@ -58,12 +58,16 @@ func (c *cache) log() {
 	last := c.lastLogTime.Swap(now)
 
 	if now-last > int64(time.Second*20) {
-		log1, ok1 := c.nodeStats.shouldLog("node cache stats")
-		log2, ok2 := c.rootStats.shouldLog("root cache stats")
+		logNode, hitNode, missNode, okNode := c.nodeStats.shouldLog("node cache stats")
+		logRoot, hitRoot, missRoot, okRoot := c.rootStats.shouldLog("root cache stats")
 
-		if ok1 || ok2 {
-			log1()
-			log2()
+		if okNode || okRoot {
+			logNode()
+			metricCacheHitMissGaugeVec().SetWithLabel(hitNode, map[string]string{"type": "node", "event": "hit"})
+			metricCacheHitMissGaugeVec().SetWithLabel(missNode, map[string]string{"type": "node", "event": "miss"})
+			logRoot()
+			metricCacheHitMissGaugeVec().SetWithLabel(hitRoot, map[string]string{"type": "root", "event": "hit"})
+			metricCacheHitMissGaugeVec().SetWithLabel(missRoot, map[string]string{"type": "root", "event": "miss"})
 		}
 	} else {
 		c.lastLogTime.CompareAndSwap(now, last)
@@ -174,7 +178,7 @@ type cacheStats struct {
 func (cs *cacheStats) Hit() int64  { return cs.hit.Add(1) }
 func (cs *cacheStats) Miss() int64 { return cs.miss.Add(1) }
 
-func (cs *cacheStats) shouldLog(msg string) (func(), bool) {
+func (cs *cacheStats) shouldLog(msg string) (func(), int64, int64, bool) {
 	hit := cs.hit.Load()
 	miss := cs.miss.Load()
 	lookups := hit + miss
@@ -182,9 +186,6 @@ func (cs *cacheStats) shouldLog(msg string) (func(), bool) {
 	hitrate := float64(hit) / float64(lookups)
 	flag := int32(hitrate * 1000)
 	return func() {
-		metricCacheHitMissGaugeVec().SetWithLabel(hit, map[string]string{"type": "root", "event": "hit"})
-		metricCacheHitMissGaugeVec().SetWithLabel(miss, map[string]string{"type": "root", "event": "miss"})
-
 		var str string
 		if lookups > 0 {
 			str = fmt.Sprintf("%.3f", hitrate)
@@ -198,7 +199,7 @@ func (cs *cacheStats) shouldLog(msg string) (func(), bool) {
 		)
 
 		cs.flag.Store(flag)
-	}, cs.flag.Load() != flag
+	}, hit, miss, cs.flag.Load() != flag
 }
 
 type dummyCache struct{}
