@@ -46,6 +46,7 @@ func New(
 	stater *state.Stater,
 	genesisBlock *block.Block,
 	logDB *logdb.LogDB,
+	forkConfig thor.ForkConfig,
 ) *Chain {
 	return &Chain{
 		db:           db,
@@ -55,7 +56,7 @@ func New(
 		stater:       stater,
 		genesisBlock: genesisBlock,
 		logDB:        logDB,
-		forkConfig:   thor.GetForkConfig(genesisBlock.Header().ID()),
+		forkConfig:   forkConfig,
 	}
 }
 
@@ -95,6 +96,7 @@ func NewIntegrationTestChain() (*Chain, error) {
 		stater,
 		geneBlk,
 		logDb,
+		thor.NoFork,
 	), nil
 }
 
