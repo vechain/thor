@@ -6,6 +6,7 @@
 package logdb
 
 import (
+	"math/rand/v2"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -46,5 +47,41 @@ func TestSequence(t *testing.T) {
 				t.Errorf("seq.index() = %v, want %v", i, tt.args.logIndex)
 			}
 		})
+	}
+}
+
+// In case some one messes up the bit allocation
+func TestSequenceValue(t *testing.T) {
+	//#nosec G404
+	for i := 0; i < 2; i++ {
+		blk := rand.Uint32N(blockNumMask)
+		txIndex := rand.Uint32N(txIndexMask)
+		logIndex := rand.Uint32N(logIndexMask)
+
+		seq, err := newSequence(blk, txIndex, logIndex)
+		assert.Nil(t, err)
+		assert.True(t, seq > 0, "sequence should be positive")
+
+		a := rand.Uint32N(blockNumMask)
+		b := rand.Uint32N(txIndexMask)
+		c := rand.Uint32N(logIndexMask)
+
+		seq1, err := newSequence(a, b, c)
+		assert.Nil(t, err)
+		assert.True(t, seq1 > 0, "sequence should be positive")
+
+		expected := func() bool {
+			if blk != a {
+				return blk > a
+			}
+			if txIndex != b {
+				return txIndex > b
+			}
+			if logIndex != c {
+				return logIndex > c
+			}
+			return false
+		}()
+		assert.Equal(t, expected, seq > seq1)
 	}
 }
