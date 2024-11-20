@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
@@ -39,7 +38,7 @@ func initAPIServer(t *testing.T) {
 
 	router := mux.NewRouter()
 	NewAPI(
-		New(thorChain.Repo(), comm.New(thorChain.Repo(), txpool.New(thorChain.Repo(), nil, txpool.Options{})), time.Second),
+		New(thorChain.Repo(), comm.New(thorChain.Repo(), txpool.New(thorChain.Repo(), nil, txpool.Options{}))),
 	).Mount(router, "/health")
 
 	ts = httptest.NewServer(router)

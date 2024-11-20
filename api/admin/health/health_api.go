@@ -7,6 +7,8 @@ package health
 
 import (
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/v2/api/utils"
@@ -22,8 +24,28 @@ func NewAPI(healthStatus *Health) *API {
 	}
 }
 
-func (h *API) handleGetHealth(w http.ResponseWriter, _ *http.Request) error {
-	acc, err := h.healthStatus.Status()
+func (h *API) handleGetHealth(w http.ResponseWriter, r *http.Request) error {
+	// Parse query parameters
+	query := r.URL.Query()
+
+	// Default to constants if query parameters are not provided
+	maxTimeBetweenSlots := defaultMaxTimeBetweenSlots
+	minPeerCount := defaultMinPeerCount
+
+	// Override with query parameters if they exist
+	if queryMaxTimeBetweenSlots := query.Get("maxTimeBetweenSlots"); queryMaxTimeBetweenSlots != "" {
+		if parsed, err := time.ParseDuration(queryMaxTimeBetweenSlots); err == nil {
+			maxTimeBetweenSlots = parsed
+		}
+	}
+
+	if queryMinPeerCount := query.Get("minPeerCount"); queryMinPeerCount != "" {
+		if parsed, err := strconv.Atoi(queryMinPeerCount); err == nil {
+			minPeerCount = parsed
+		}
+	}
+
+	acc, err := h.healthStatus.Status(maxTimeBetweenSlots, minPeerCount)
 	if err != nil {
 		return err
 	}

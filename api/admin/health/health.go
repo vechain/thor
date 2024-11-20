@@ -27,39 +27,50 @@ type Status struct {
 }
 
 type Health struct {
-	lock              sync.RWMutex
-	timeBetweenBlocks time.Duration
-	repo              *chain.Repository
-	p2p               *comm.Communicator
+	lock               sync.RWMutex
+	repo               *chain.Repository
+	p2p                *comm.Communicator
+	isNodeBootstrapped bool
 }
 
-const delayBuffer = 5 * time.Second
+const (
+	defaultMaxTimeBetweenSlots = time.Duration(2*thor.BlockInterval) * time.Second
+	defaultMinPeerCount        = 2
+)
 
-func New(repo *chain.Repository, p2p *comm.Communicator, timeBetweenBlocks time.Duration) *Health {
+func New(repo *chain.Repository, p2p *comm.Communicator) *Health {
 	return &Health{
-		repo:              repo,
-		timeBetweenBlocks: timeBetweenBlocks + delayBuffer,
-		p2p:               p2p,
+		repo: repo,
+		p2p:  p2p,
 	}
 }
 
 // isNetworkProgressing checks if the network is producing new blocks within the allowed interval.
-func (h *Health) isNetworkProgressing(now time.Time, bestBlockTimestamp time.Time) bool {
-	return now.Sub(bestBlockTimestamp) <= h.timeBetweenBlocks
+func (h *Health) isNetworkProgressing(now time.Time, bestBlockTimestamp time.Time, maxTimeBetweenSlots time.Duration) bool {
+	return now.Sub(bestBlockTimestamp) <= maxTimeBetweenSlots
 }
 
 // hasNodeBootstrapped checks if the node has bootstrapped by comparing the block interval.
+// Once it's marked as done, it never reverts.
 func (h *Health) hasNodeBootstrapped(now time.Time, bestBlockTimestamp time.Time) bool {
+	if h.isNodeBootstrapped {
+		return true
+	}
+
 	blockInterval := time.Duration(thor.BlockInterval) * time.Second
-	return bestBlockTimestamp.Add(blockInterval).After(now)
+	if bestBlockTimestamp.Add(blockInterval).After(now) {
+		h.isNodeBootstrapped = true
+	}
+
+	return h.isNodeBootstrapped
 }
 
 // isNodeConnectedP2P checks if the node is connected to peers
-func (h *Health) isNodeConnectedP2P(peerCount int) bool {
-	return peerCount > 1
+func (h *Health) isNodeConnectedP2P(peerCount int, minPeerCount int) bool {
+	return peerCount >= minPeerCount
 }
 
-func (h *Health) Status() (*Status, error) {
+func (h *Health) Status(maxTimeBetweenSlots time.Duration, minPeerCount int) (*Status, error) {
 	h.lock.RLock()
 	defer h.lock.RUnlock()
 
@@ -71,7 +82,7 @@ func (h *Health) Status() (*Status, error) {
 	// Fetch the current connected peers
 	var connectedPeerCount int
 	if h.p2p == nil {
-		connectedPeerCount = 5010 // ignore peers in solo mode
+		connectedPeerCount = minPeerCount // ignore peers in solo mode
 	} else {
 		connectedPeerCount = h.p2p.PeerCount()
 	}
@@ -79,9 +90,9 @@ func (h *Health) Status() (*Status, error) {
 	now := time.Now()
 
 	// Perform the checks
-	networkProgressing := h.isNetworkProgressing(now, bestBlockTimestamp)
+	networkProgressing := h.isNetworkProgressing(now, bestBlockTimestamp, maxTimeBetweenSlots)
 	nodeBootstrapped := h.hasNodeBootstrapped(now, bestBlockTimestamp)
-	nodeConnected := h.isNodeConnectedP2P(connectedPeerCount)
+	nodeConnected := h.isNodeConnectedP2P(connectedPeerCount, minPeerCount)
 
 	// Calculate overall health status
 	healthy := networkProgressing && nodeBootstrapped && nodeConnected

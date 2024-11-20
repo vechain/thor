@@ -239,7 +239,6 @@ func defaultAction(ctx *cli.Context) error {
 			logLevel,
 			repo,
 			p2pCommunicator.Communicator(),
-			time.Duration(thor.BlockInterval),
 		)
 		if err != nil {
 			return fmt.Errorf("unable to start admin server - %w", err)
@@ -319,10 +318,6 @@ func soloAction(ctx *cli.Context) error {
 
 	onDemandBlockProduction := ctx.Bool(onDemandFlag.Name)
 	blockProductionInterval := ctx.Uint64(blockInterval.Name)
-	if blockProductionInterval == 0 {
-		return errors.New("block-interval cannot be zero")
-	}
-	blockProductionHealthCheck := time.Duration(blockProductionInterval) * time.Second
 
 	// enable metrics as soon as possible
 	metricsURL := ""
@@ -382,7 +377,7 @@ func soloAction(ctx *cli.Context) error {
 
 	adminURL := ""
 	if ctx.Bool(enableAdminFlag.Name) {
-		url, closeFunc, err := api.StartAdminServer(ctx.String(adminAddrFlag.Name), logLevel, repo, nil, blockProductionHealthCheck)
+		url, closeFunc, err := api.StartAdminServer(ctx.String(adminAddrFlag.Name), logLevel, repo, nil)
 		if err != nil {
 			return fmt.Errorf("unable to start admin server - %w", err)
 		}

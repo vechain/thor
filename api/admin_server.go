@@ -24,14 +24,13 @@ func StartAdminServer(
 	logLevel *slog.LevelVar,
 	repo *chain.Repository,
 	p2p *comm.Communicator,
-	timeBetweenBlocks time.Duration,
 ) (string, func(), error) {
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return "", nil, errors.Wrapf(err, "listen admin API addr [%v]", addr)
 	}
 
-	adminHandler := admin.New(logLevel, health.New(repo, p2p, timeBetweenBlocks))
+	adminHandler := admin.New(logLevel, health.New(repo, p2p))
 
 	srv := &http.Server{Handler: adminHandler, ReadHeaderTimeout: time.Second, ReadTimeout: 5 * time.Second}
 	var goes co.Goes

@@ -10,13 +10,10 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/v2/thor"
 )
 
 func TestHealth_isNetworkProgressing(t *testing.T) {
-	h := &Health{
-		timeBetweenBlocks: 10 * time.Second,
-	}
+	h := &Health{}
 
 	now := time.Now()
 
@@ -32,14 +29,14 @@ func TestHealth_isNetworkProgressing(t *testing.T) {
 		},
 		{
 			name:                "Not Progressing - block outside timeBetweenBlocks",
-			bestBlockTimestamp:  now.Add(-15 * time.Second),
+			bestBlockTimestamp:  now.Add(-25 * time.Second),
 			expectedProgressing: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			isProgressing := h.isNetworkProgressing(now, tt.bestBlockTimestamp)
+			isProgressing := h.isNetworkProgressing(now, tt.bestBlockTimestamp, defaultMaxTimeBetweenSlots)
 			assert.Equal(t, tt.expectedProgressing, isProgressing, "isNetworkProgressing result mismatch")
 		})
 	}
@@ -47,7 +44,6 @@ func TestHealth_isNetworkProgressing(t *testing.T) {
 
 func TestHealth_hasNodeBootstrapped(t *testing.T) {
 	h := &Health{}
-	blockInterval := time.Duration(thor.BlockInterval) * time.Second
 	now := time.Now()
 
 	tests := []struct {
@@ -55,15 +51,21 @@ func TestHealth_hasNodeBootstrapped(t *testing.T) {
 		bestBlockTimestamp time.Time
 		expectedBootstrap  bool
 	}{
+		// keep the order as it matters for health state
+		{
+			name:               "Not Bootstrapped - block timestamp outside interval",
+			bestBlockTimestamp: now.Add(-defaultMaxTimeBetweenSlots + 1),
+			expectedBootstrap:  false,
+		},
 		{
 			name:               "Bootstrapped - block timestamp within interval",
-			bestBlockTimestamp: now.Add(-blockInterval + 1*time.Second),
+			bestBlockTimestamp: now.Add(defaultMaxTimeBetweenSlots),
 			expectedBootstrap:  true,
 		},
 		{
-			name:               "Not Bootstrapped - block timestamp outside interval",
-			bestBlockTimestamp: now.Add(-blockInterval - 1*time.Second),
-			expectedBootstrap:  false,
+			name:               "Bootstrapped only once",
+			bestBlockTimestamp: now.Add(-defaultMaxTimeBetweenSlots + 1),
+			expectedBootstrap:  true,
 		},
 	}
 
@@ -85,7 +87,7 @@ func TestHealth_isNodeConnectedP2P(t *testing.T) {
 	}{
 		{
 			name:              "Connected - more than one peer",
-			peerCount:         2,
+			peerCount:         3,
 			expectedConnected: true,
 		},
 		{
@@ -97,7 +99,7 @@ func TestHealth_isNodeConnectedP2P(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			isConnected := h.isNodeConnectedP2P(tt.peerCount)
+			isConnected := h.isNodeConnectedP2P(tt.peerCount, defaultMinPeerCount)
 			assert.Equal(t, tt.expectedConnected, isConnected, "isNodeConnectedP2P result mismatch")
 		})
 	}
