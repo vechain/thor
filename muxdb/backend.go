@@ -17,7 +17,7 @@ import (
 // backend is the backend of the trie.
 type backend struct {
 	Store                           kv.Store
-	Cache                           *cache
+	Cache                           Cache
 	HistPtnFactor, DedupedPtnFactor uint32
 	CachedNodeTTL                   uint16
 }
