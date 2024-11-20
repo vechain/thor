@@ -109,7 +109,6 @@ func (c *cache) GetNodeBlob(keyBuf *[]byte, name string, path []byte, ver trie.V
 	}, peek) && len(blob) > 0 {
 		if !peek {
 			c.nodeStats.Hit()
-			metricCacheHitMissCounterVec().AddWithLabel(1, map[string]string{"type": "node", "event": "hit"})
 		}
 		return blob
 	}
@@ -120,13 +119,11 @@ func (c *cache) GetNodeBlob(keyBuf *[]byte, name string, path []byte, ver trie.V
 	}, peek) && len(blob) > 0 {
 		if !peek {
 			c.nodeStats.Hit()
-			metricCacheHitMissCounterVec().AddWithLabel(1, map[string]string{"type": "node", "event": "hit"})
 		}
 		return blob
 	}
 	if !peek {
 		c.nodeStats.Miss()
-		metricCacheHitMissCounterVec().AddWithLabel(1, map[string]string{"type": "node", "event": "miss"})
 	}
 	return nil
 }
@@ -162,12 +159,10 @@ func (c *cache) GetRootNode(name string, ver trie.Version) trie.Node {
 			if c.rootStats.Hit()%2000 == 0 {
 				c.log()
 			}
-			metricCacheHitMissCounterVec().AddWithLabel(1, map[string]string{"type": "root", "event": "hit"})
 			return r
 		}
 	}
 	c.rootStats.Miss()
-	metricCacheHitMissCounterVec().AddWithLabel(1, map[string]string{"type": "root", "event": "miss"})
 	return nil
 }
 
@@ -187,6 +182,9 @@ func (cs *cacheStats) shouldLog(msg string) (func(), bool) {
 	hitrate := float64(hit) / float64(lookups)
 	flag := int32(hitrate * 1000)
 	return func() {
+		metricCacheHitMissGaugeVec().SetWithLabel(hit, map[string]string{"type": "root", "event": "hit"})
+		metricCacheHitMissGaugeVec().SetWithLabel(miss, map[string]string{"type": "root", "event": "miss"})
+
 		var str string
 		if lookups > 0 {
 			str = fmt.Sprintf("%.3f", hitrate)
