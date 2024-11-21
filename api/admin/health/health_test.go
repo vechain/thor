@@ -36,7 +36,7 @@ func TestHealth_isNetworkProgressing(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			isProgressing := h.isNetworkProgressing(now, tt.bestBlockTimestamp, defaultMaxTimeBetweenSlots)
+			isProgressing := h.isNetworkProgressing(now, tt.bestBlockTimestamp, defaultBlockTolerance)
 			assert.Equal(t, tt.expectedProgressing, isProgressing, "isNetworkProgressing result mismatch")
 		})
 	}
@@ -54,17 +54,17 @@ func TestHealth_hasNodeBootstrapped(t *testing.T) {
 		// keep the order as it matters for health state
 		{
 			name:               "Not Bootstrapped - block timestamp outside interval",
-			bestBlockTimestamp: now.Add(-defaultMaxTimeBetweenSlots + 1),
+			bestBlockTimestamp: now.Add(-defaultBlockTolerance + 1),
 			expectedBootstrap:  false,
 		},
 		{
 			name:               "Bootstrapped - block timestamp within interval",
-			bestBlockTimestamp: now.Add(defaultMaxTimeBetweenSlots),
+			bestBlockTimestamp: now.Add(defaultBlockTolerance),
 			expectedBootstrap:  true,
 		},
 		{
 			name:               "Bootstrapped only once",
-			bestBlockTimestamp: now.Add(-defaultMaxTimeBetweenSlots + 1),
+			bestBlockTimestamp: now.Add(-defaultBlockTolerance + 1),
 			expectedBootstrap:  true,
 		},
 	}

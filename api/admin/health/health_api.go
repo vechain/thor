@@ -29,13 +29,13 @@ func (h *API) handleGetHealth(w http.ResponseWriter, r *http.Request) error {
 	query := r.URL.Query()
 
 	// Default to constants if query parameters are not provided
-	maxTimeBetweenSlots := defaultMaxTimeBetweenSlots
+	blockTolerance := defaultBlockTolerance
 	minPeerCount := defaultMinPeerCount
 
 	// Override with query parameters if they exist
-	if queryMaxTimeBetweenSlots := query.Get("maxTimeBetweenSlots"); queryMaxTimeBetweenSlots != "" {
-		if parsed, err := time.ParseDuration(queryMaxTimeBetweenSlots); err == nil {
-			maxTimeBetweenSlots = parsed
+	if queryBlockTolerance := query.Get("blockTolerance"); queryBlockTolerance != "" {
+		if parsed, err := time.ParseDuration(queryBlockTolerance); err == nil {
+			blockTolerance = parsed
 		}
 	}
 
@@ -45,7 +45,7 @@ func (h *API) handleGetHealth(w http.ResponseWriter, r *http.Request) error {
 		}
 	}
 
-	acc, err := h.healthStatus.Status(maxTimeBetweenSlots, minPeerCount)
+	acc, err := h.healthStatus.Status(blockTolerance, minPeerCount)
 	if err != nil {
 		return err
 	}

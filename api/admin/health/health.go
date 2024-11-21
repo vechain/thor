@@ -34,8 +34,8 @@ type Health struct {
 }
 
 const (
-	defaultMaxTimeBetweenSlots = time.Duration(2*thor.BlockInterval) * time.Second
-	defaultMinPeerCount        = 2
+	defaultBlockTolerance = time.Duration(2*thor.BlockInterval) * time.Second // 2 blocks tolerance
+	defaultMinPeerCount   = 2
 )
 
 func New(repo *chain.Repository, p2p *comm.Communicator) *Health {
@@ -46,8 +46,8 @@ func New(repo *chain.Repository, p2p *comm.Communicator) *Health {
 }
 
 // isNetworkProgressing checks if the network is producing new blocks within the allowed interval.
-func (h *Health) isNetworkProgressing(now time.Time, bestBlockTimestamp time.Time, maxTimeBetweenSlots time.Duration) bool {
-	return now.Sub(bestBlockTimestamp) <= maxTimeBetweenSlots
+func (h *Health) isNetworkProgressing(now time.Time, bestBlockTimestamp time.Time, blockTolerance time.Duration) bool {
+	return now.Sub(bestBlockTimestamp) <= blockTolerance
 }
 
 // hasNodeBootstrapped checks if the node has bootstrapped by comparing the block interval.
@@ -70,7 +70,7 @@ func (h *Health) isNodeConnectedP2P(peerCount int, minPeerCount int) bool {
 	return peerCount >= minPeerCount
 }
 
-func (h *Health) Status(maxTimeBetweenSlots time.Duration, minPeerCount int) (*Status, error) {
+func (h *Health) Status(blockTolerance time.Duration, minPeerCount int) (*Status, error) {
 	h.lock.RLock()
 	defer h.lock.RUnlock()
 
@@ -90,7 +90,7 @@ func (h *Health) Status(maxTimeBetweenSlots time.Duration, minPeerCount int) (*S
 	now := time.Now()
 
 	// Perform the checks
-	networkProgressing := h.isNetworkProgressing(now, bestBlockTimestamp, maxTimeBetweenSlots)
+	networkProgressing := h.isNetworkProgressing(now, bestBlockTimestamp, blockTolerance)
 	nodeBootstrapped := h.hasNodeBootstrapped(now, bestBlockTimestamp)
 	nodeConnected := h.isNodeConnectedP2P(connectedPeerCount, minPeerCount)
 
