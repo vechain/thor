@@ -58,12 +58,16 @@ func (c *cache) log() {
 	last := c.lastLogTime.Swap(now)
 
 	if now-last > int64(time.Second*20) {
-		log1, ok1 := c.nodeStats.shouldLog("node cache stats")
-		log2, ok2 := c.rootStats.shouldLog("root cache stats")
+		logNode, hitNode, missNode, okNode := c.nodeStats.shouldLog("node cache stats")
+		logRoot, hitRoot, missRoot, okRoot := c.rootStats.shouldLog("root cache stats")
 
-		if ok1 || ok2 {
-			log1()
-			log2()
+		if okNode || okRoot {
+			logNode()
+			metricCacheHitMissGaugeVec().SetWithLabel(hitNode, map[string]string{"type": "node", "event": "hit"})
+			metricCacheHitMissGaugeVec().SetWithLabel(missNode, map[string]string{"type": "node", "event": "miss"})
+			logRoot()
+			metricCacheHitMissGaugeVec().SetWithLabel(hitRoot, map[string]string{"type": "root", "event": "hit"})
+			metricCacheHitMissGaugeVec().SetWithLabel(missRoot, map[string]string{"type": "root", "event": "miss"})
 		}
 	} else {
 		c.lastLogTime.CompareAndSwap(now, last)
@@ -109,7 +113,6 @@ func (c *cache) GetNodeBlob(keyBuf *[]byte, name string, path []byte, ver trie.V
 	}, peek) && len(blob) > 0 {
 		if !peek {
 			c.nodeStats.Hit()
-			metricCacheHitMissCounterVec().AddWithLabel(1, map[string]string{"type": "node", "event": "hit"})
 		}
 		return blob
 	}
@@ -120,13 +123,11 @@ func (c *cache) GetNodeBlob(keyBuf *[]byte, name string, path []byte, ver trie.V
 	}, peek) && len(blob) > 0 {
 		if !peek {
 			c.nodeStats.Hit()
-			metricCacheHitMissCounterVec().AddWithLabel(1, map[string]string{"type": "node", "event": "hit"})
 		}
 		return blob
 	}
 	if !peek {
 		c.nodeStats.Miss()
-		metricCacheHitMissCounterVec().AddWithLabel(1, map[string]string{"type": "node", "event": "miss"})
 	}
 	return nil
 }
@@ -162,12 +163,10 @@ func (c *cache) GetRootNode(name string, ver trie.Version) trie.Node {
 			if c.rootStats.Hit()%2000 == 0 {
 				c.log()
 			}
-			metricCacheHitMissCounterVec().AddWithLabel(1, map[string]string{"type": "root", "event": "hit"})
 			return r
 		}
 	}
 	c.rootStats.Miss()
-	metricCacheHitMissCounterVec().AddWithLabel(1, map[string]string{"type": "root", "event": "miss"})
 	return nil
 }
 
@@ -179,7 +178,7 @@ type cacheStats struct {
 func (cs *cacheStats) Hit() int64  { return cs.hit.Add(1) }
 func (cs *cacheStats) Miss() int64 { return cs.miss.Add(1) }
 
-func (cs *cacheStats) shouldLog(msg string) (func(), bool) {
+func (cs *cacheStats) shouldLog(msg string) (func(), int64, int64, bool) {
 	hit := cs.hit.Load()
 	miss := cs.miss.Load()
 	lookups := hit + miss
@@ -200,7 +199,7 @@ func (cs *cacheStats) shouldLog(msg string) (func(), bool) {
 		)
 
 		cs.flag.Store(flag)
-	}, cs.flag.Load() != flag
+	}, hit, miss, cs.flag.Load() != flag
 }
 
 type dummyCache struct{}
