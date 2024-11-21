@@ -85,3 +85,7 @@ func TestSequenceValue(t *testing.T) {
 		assert.Equal(t, expected, seq > seq1)
 	}
 }
+
+func TestBitDistribution(t *testing.T) {
+	assert.Less(t, blockNumBits+txIndexBits+logIndexBits, 64, "total bits in sequence should be less than 64")
+}

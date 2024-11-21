@@ -23,12 +23,6 @@ const (
 	logIndexMask = (1 << logIndexBits) - 1
 )
 
-func init() {
-	if blockNumBits+txIndexBits+logIndexBits > 63 {
-		panic("total bits in sequence exceeds max bit allowed")
-	}
-}
-
 func newSequence(blockNum uint32, txIndex uint32, logIndex uint32) (sequence, error) {
 	if blockNum > blockNumMask {
 		return 0, errors.New("block number out of range: uint28")
