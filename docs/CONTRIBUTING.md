@@ -1,7 +1,7 @@
 # Contributing to VechainThor
 
 Welcome to VechainThor! We appreciate your interest in contributing. By participating in this project, you agree to
-abide by our [Code of Conduct](https://github.com/vechain/thor/blob/master/CODE_OF_CONDUCT.md).
+abide by our [Code of Conduct](https://github.com/vechain/thor/blob/master/docs/CODE_OF_CONDUCT.md).
 
 ## VeChain Improvement Proposals (VIPs)
 
