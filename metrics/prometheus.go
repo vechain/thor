@@ -200,8 +200,6 @@ func (o *prometheusMetrics) collectDiskIO(refresh time.Duration) {
 			continue
 		}
 
-		logger.Info("LLEGA", "reads", reads, "writes", writes)
-
 		readsMeter := o.GetOrCreateGaugeMeter("disk_reads")
 		readsMeter.Set(reads)
 
