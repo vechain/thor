@@ -198,13 +198,13 @@ func (o *prometheusMetrics) collectDiskIO(refresh time.Duration) {
 		reads, writes, err := getDiskIOData()
 		if err != nil {
 			continue
+		} else {
+			readsMeter := o.GetOrCreateGaugeMeter("disk_reads")
+			readsMeter.Set(reads)
+
+			writesMeter := o.GetOrCreateGaugeMeter("disk_writes")
+			writesMeter.Set(writes)
 		}
-
-		readsMeter := o.GetOrCreateGaugeMeter("disk_reads")
-		readsMeter.Set(reads)
-
-		writesMeter := o.GetOrCreateGaugeMeter("disk_writes")
-		writesMeter.Set(writes)
 
 		time.Sleep(refresh)
 	}
