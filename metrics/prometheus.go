@@ -196,9 +196,7 @@ func getDiskIOData() (int64, int64, error) {
 func (o *prometheusMetrics) collectDiskIO(refresh time.Duration) {
 	for {
 		reads, writes, err := getDiskIOData()
-		if err != nil {
-			continue
-		} else {
+		if err == nil {
 			readsMeter := o.GetOrCreateGaugeMeter("disk_reads")
 			readsMeter.Set(reads)
 
