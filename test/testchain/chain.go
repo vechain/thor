@@ -88,6 +88,11 @@ func NewIntegrationTestChain() (*Chain, error) {
 		return nil, err
 	}
 
+	forkConfig := thor.NoFork
+	forkConfig.VIP191 = 1
+	forkConfig.BLOCKLIST = 0
+	forkConfig.VIP214 = 2
+
 	return New(
 		db,
 		gene,

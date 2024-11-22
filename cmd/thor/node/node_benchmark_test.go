@@ -2,151 +2,125 @@ package node
 
 import (
 	"crypto/ecdsa"
+	"crypto/rand"
 	"fmt"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/cmd/thor/solo"
+	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/state"
+	"math"
+	"math/big"
+	"sync"
+	"testing"
+
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/runtime"
-	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
-	"github.com/vechain/thor/v2/vrf"
-	"github.com/vechain/thor/v2/xenv"
-	"math"
-	"math/big"
-	"testing"
 )
 
-func BenchmarkProcessBlock(b *testing.B) {
+var (
+	cachedAccounts []genesis.DevAccount
+	once           sync.Once
+)
+
+func getCachedAccounts(b *testing.B) []genesis.DevAccount {
+	once.Do(func() {
+		cachedAccounts = createAccounts(b, 1_000)
+	})
+	return cachedAccounts
+}
+
+func BenchmarkBlockProcess_RandomSigners_ManyClausesPerTx(b *testing.B) {
+	// create state accounts
+	accounts := getCachedAccounts(b)
+
+	// randomly pick a signer for signing the transactions
+	randomSignerFunc := randomPickSignerFunc(accounts, createOneClausePerTx)
+
+	// create blocks
+	blocks := createBlocks(b, b.N, accounts, randomSignerFunc)
+
+	// run the benchmark
+	benchmarkBlockProcess(b, accounts, blocks)
+}
+
+func BenchmarkBlockProcess_RandomSigners_OneClausePerTx(b *testing.B) {
+	// create state accounts
+	accounts := getCachedAccounts(b)
+
+	// randomly pick a signer for signing the transactions
+	randomSignerFunc := randomPickSignerFunc(accounts, createManyClausesPerTx)
+
+	// create blocks
+	blocks := createBlocks(b, b.N, accounts, randomSignerFunc)
+
+	// run the benchmark
+	benchmarkBlockProcess(b, accounts, blocks)
+}
+
+func BenchmarkBlockProcess_ManyClausesPerTx(b *testing.B) {
+	// create state accounts
+	accounts := getCachedAccounts(b)
+
+	// Use one signer for signing the transactions
+	singleSignerFun := randomPickSignerFunc([]genesis.DevAccount{accounts[0]}, createManyClausesPerTx)
+
+	// create blocks
+	blocks := createBlocks(b, b.N, accounts, singleSignerFun)
+
+	// run the benchmark
+	benchmarkBlockProcess(b, accounts, blocks)
+}
+
+func BenchmarkBlockProcess_OneClausePerTx(b *testing.B) {
+	// create state accounts
+	accounts := getCachedAccounts(b)
+
+	// Use one signer for signing the transactions
+	singleSignerFun := randomPickSignerFunc([]genesis.DevAccount{accounts[0]}, createOneClausePerTx)
+
+	// create blocks
+	blocks := createBlocks(b, b.N, accounts, singleSignerFun)
+
+	// run the benchmark
+	benchmarkBlockProcess(b, accounts, blocks)
+}
+
+func benchmarkBlockProcess(b *testing.B, accounts []genesis.DevAccount, blocks []*block.Block) {
 	// Initialize the test chain and dependencies
-	thorChain, err := testchain.NewIntegrationTestChain()
+	thorChain, err := createChain(accounts)
 	require.NoError(b, err)
 
-	privateKey := genesis.DevAccounts()[0].PrivateKey
-	require.NoError(b, err)
-	master := &Master{
-		PrivateKey: privateKey,
-	}
-	repo := thorChain.Repo()
-	stater := thorChain.Stater()
-	engine, err := bft.NewEngine(thorChain.Repo(), thorChain.Database(), thorChain.GetForkConfig(), master.Address())
-	require.NoError(b, err)
+	proposer := &accounts[0]
 
-	forkConfig := thor.NoFork
-	forkConfig.VIP191 = 1
-	forkConfig.BLOCKLIST = 0
-	forkConfig.VIP214 = 2
+	engine, err := bft.NewEngine(thorChain.Repo(), thorChain.Database(), thorChain.GetForkConfig(), proposer.Address)
+	require.NoError(b, err)
 
 	node := New(
-		master,
-		repo,
+		&Master{
+			PrivateKey: proposer.PrivateKey,
+		},
+		thorChain.Repo(),
 		engine,
-		stater,
-		nil, // logDB (optional)
+		thorChain.Stater(),
 		nil,
-		"",         // txStashPath
-		nil,        // communicator
-		10_000_000, // targetGasLimit
-		true,       // skipLogs
-		forkConfig,
+		nil,
+		"",
+		nil,
+		10_000_000,
+		true,
+		thor.NoFork,
 	)
 
-	// Start with the Genesis block
-	genesisBlock := thorChain.GenesisBlock()
-	previousBlock := genesisBlock
 	stats := &blockStats{}
-
-	// Helper function to create sequential blocks
-	createMockBlock := func(parentBlock *block.Block, currentChain *testchain.Chain) *block.Block {
-		executionChain := currentChain.Repo().NewBestChain()
-		fmt.Println(currentChain.Repo().BestBlockSummary().Header.ID().String())
-		executionStater := currentChain.Stater()
-		executionState := executionStater.NewState(trie.Root{
-			Hash: previousBlock.Header().StateRoot(),
-			Ver: trie.Version{
-				Major: previousBlock.Header().Number(),
-				Minor: 0,
-			},
-		})
-		execEngine := newExecutionEngine(currentChain, parentBlock, executionChain, executionState)
-
-		builder := new(block.Builder)
-
-		var receipts tx.Receipts
-		gasUsed := uint64(0)
-		for gasUsed < 9_500_000 {
-			toAddr := datagen.RandAddress()
-			cla := tx.NewClause(&toAddr).WithValue(big.NewInt(10000))
-			transaction := new(tx.Builder).
-				ChainTag(currentChain.Repo().ChainTag()).
-				GasPriceCoef(1).
-				Expiration(math.MaxUint32 - 1).
-				Gas(21_000).
-				Nonce(uint64(datagen.RandInt())).
-				Clause(cla).
-				BlockRef(tx.NewBlockRef(0)).
-				Build()
-
-			sig, err := crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-			require.NoError(b, err)
-			transaction = transaction.WithSignature(sig)
-			builder.Transaction(transaction)
-
-			// calculate the receipt hash root
-			receipt, err := execEngine.rt.ExecuteTransaction(transaction)
-			require.NoError(b, err)
-			receipts = append(receipts, receipt)
-
-			gasUsed += 21_000 // Gas per transaction
-		}
-
-		prevblockRoot := trie.Root{
-			Hash: previousBlock.Header().StateRoot(),
-			Ver: trie.Version{
-				Major: previousBlock.Header().Number(),
-				Minor: 0,
-			},
-		}
-		fmt.Println("PrevBlock StateRoot: ", prevblockRoot.Hash.String())
-
-		stage, err := executionState.Stage(trie.Version{Major: parentBlock.Header().Number() + 1, Minor: 0})
-		require.NoError(b, err)
-		stateRoot, err := stage.Commit()
-		fmt.Println("Mocked StateRoot: ", stateRoot.String())
-		require.NoError(b, err)
-
-		builder.ParentID(parentBlock.Header().ID()).
-			Timestamp(parentBlock.Header().Timestamp() + 100).
-			GasLimit(10_000_000).
-			TotalScore(parentBlock.Header().TotalScore() + 1).
-			TransactionFeatures(1).
-			GasUsed(gasUsed).
-			ReceiptsRoot(receipts.RootHash()).
-			StateRoot(stateRoot)
-
-		blk, err := signWithKeyAndBuild(parentBlock, builder, privateKey, forkConfig)
-		require.NoError(b, err)
-
-		require.NoError(b, currentChain.Repo().AddBlock(blk, receipts, 0, true))
-		return blk
-	}
-
-	// pre-alloc blocks
-	var blocks []*block.Block
-	currentChain, err := testchain.NewIntegrationTestChain()
-	require.NoError(b, err)
-
-	for i := 0; i < 10; i++ {
-		mockBlock := createMockBlock(previousBlock, currentChain)
-		blocks = append(blocks, mockBlock)
-		previousBlock = mockBlock
-	}
 
 	// Measure memory usage
 	b.ReportAllocs()
@@ -161,125 +135,240 @@ func BenchmarkProcessBlock(b *testing.B) {
 	}
 }
 
-func signWithKeyAndBuild(parentBlk *block.Block, builder *block.Builder, pk *ecdsa.PrivateKey, forkConfig thor.ForkConfig) (*block.Block, error) {
-	h := builder.Build().Header()
+func createBlocks(b *testing.B, noBlocks int, accounts []genesis.DevAccount, createTxFunc func(chain *testchain.Chain) (tx.Transactions, error)) []*block.Block {
+	proposer := &accounts[0]
 
-	if h.Number() >= forkConfig.VIP214 {
-		var alpha []byte
-		if h.Number() == forkConfig.VIP214 {
-			alpha = parentBlk.Header().StateRoot().Bytes()
-		} else {
-			beta, err := parentBlk.Header().Beta()
-			if err != nil {
-				return nil, err
-			}
-			alpha = beta
-		}
-		_, proof, err := vrf.Prove(pk, alpha)
-		if err != nil {
-			return nil, err
-		}
+	// mock a fake chain for block production
+	fakeChain, err := createChain(accounts)
+	require.NoError(b, err)
 
-		blk := builder.Alpha(alpha).Build()
+	// pre-alloc blocks
+	var blocks []*block.Block
+	var transactions tx.Transactions
 
-		ec, err := crypto.Sign(blk.Header().SigningHash().Bytes(), pk)
-		if err != nil {
-			return nil, err
-		}
-
-		sig, err := block.NewComplexSignature(ec, proof)
-		if err != nil {
-			return nil, err
-		}
-		return blk.WithSignature(sig), nil
-	} else {
-		blk := builder.Build()
-
-		sig, err := crypto.Sign(blk.Header().SigningHash().Bytes(), pk)
-		if err != nil {
-			return nil, err
-		}
-
-		return blk.WithSignature(sig), nil
+	// Start from the Genesis block
+	previousBlock := fakeChain.GenesisBlock()
+	for i := 0; i < noBlocks; i++ {
+		transactions, err = createTxFunc(fakeChain)
+		require.NoError(b, err)
+		previousBlock, err = packTxsIntoBlock(
+			fakeChain,
+			proposer,
+			previousBlock,
+			transactions,
+		)
+		require.NoError(b, err)
+		blocks = append(blocks, previousBlock)
 	}
+
+	return blocks
 }
 
-type executionEngined struct {
-	rt *runtime.Runtime
+func createOneClausePerTx(signerPK *ecdsa.PrivateKey, thorChain *testchain.Chain) (tx.Transactions, error) {
+	var transactions tx.Transactions
+	gasUsed := uint64(0)
+	for gasUsed < 9_500_000 {
+		toAddr := datagen.RandAddress()
+		cla := tx.NewClause(&toAddr).WithValue(big.NewInt(10000))
+		transaction := new(tx.Builder).
+			ChainTag(thorChain.Repo().ChainTag()).
+			GasPriceCoef(1).
+			Expiration(math.MaxUint32 - 1).
+			Gas(21_000).
+			Nonce(uint64(datagen.RandInt())).
+			Clause(cla).
+			BlockRef(tx.NewBlockRef(0)).
+			Build()
+
+		sig, err := crypto.Sign(transaction.SigningHash().Bytes(), signerPK)
+		if err != nil {
+			return nil, err
+		}
+		transaction = transaction.WithSignature(sig)
+
+		gasUsed += 21_000 // Gas per transaction
+		transactions = append(transactions, transaction)
+	}
+	return transactions, nil
 }
 
-func newExecutionEngine(
-	thorChain *testchain.Chain,
-	parentBlk *block.Block,
-	executionChain *chain.Chain,
-	executionState *state.State,
-) *executionEngined {
-	signer, err := parentBlk.Header().Signer()
+func createManyClausesPerTx(signerPK *ecdsa.PrivateKey, thorChain *testchain.Chain) (tx.Transactions, error) {
+	var transactions tx.Transactions
+	gasUsed := uint64(0)
+	txGas := uint64(42_000)
+
+	transactionBuilder := new(tx.Builder).
+		ChainTag(thorChain.Repo().ChainTag()).
+		GasPriceCoef(1).
+		Expiration(math.MaxUint32 - 1).
+		Nonce(uint64(datagen.RandInt())).
+		BlockRef(tx.NewBlockRef(0))
+
+	for ; gasUsed < 9_500_000; gasUsed += txGas {
+		toAddr := datagen.RandAddress()
+		transactionBuilder.Clause(tx.NewClause(&toAddr).WithValue(big.NewInt(10000)))
+	}
+
+	transaction := transactionBuilder.Gas(gasUsed).Build()
+
+	sig, err := crypto.Sign(transaction.SigningHash().Bytes(), signerPK)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	return &executionEngined{
-		rt: runtime.New(
-			executionChain,
-			executionState,
-			&xenv.BlockContext{
-				Beneficiary: parentBlk.Header().Beneficiary(),
-				Signer:      signer,
-				Number:      parentBlk.Header().Number(),
-				Time:        parentBlk.Header().Timestamp(),
-				GasLimit:    parentBlk.Header().GasLimit(),
-				TotalScore:  parentBlk.Header().TotalScore(),
-			},
-			thorChain.GetForkConfig()),
+	transaction = transaction.WithSignature(sig)
+
+	transactions = append(transactions, transaction)
+
+	return transactions, nil
+}
+
+func packTxsIntoBlock(thorChain *testchain.Chain, proposerAccount *genesis.DevAccount, parentBlk *block.Block, transactions tx.Transactions) (*block.Block, error) {
+	p := packer.New(thorChain.Repo(), thorChain.Stater(), proposerAccount.Address, &proposerAccount.Address, thorChain.GetForkConfig())
+
+	parentSum, err := thorChain.Repo().GetBlockSummary(parentBlk.Header().ID())
+	if err != nil {
+		return nil, err
+	}
+
+	flow, err := p.Schedule(parentSum, parentBlk.Header().Timestamp()+1)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, transaction := range transactions {
+		err = flow.Adopt(transaction)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	b1, stage, receipts, err := flow.Pack(proposerAccount.PrivateKey, 0, false)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := stage.Commit(); err != nil {
+		return nil, err
+	}
+
+	if err := thorChain.Repo().AddBlock(b1, receipts, 0, true); err != nil {
+		return nil, err
+	}
+
+	return b1, nil
+}
+
+func createChain(accounts []genesis.DevAccount) (*testchain.Chain, error) {
+	forkConfig := thor.NoFork
+	forkConfig.VIP191 = 1
+	forkConfig.BLOCKLIST = 0
+	forkConfig.VIP214 = 2
+
+	// Initialize the database
+	db := muxdb.NewMem()
+
+	// Create the state manager (Stater) with the initialized database.
+	stater := state.NewStater(db)
+
+	authAccs := make([]genesis.Authority, 0, len(accounts))
+	stateAccs := make([]genesis.Account, 0, len(accounts))
+
+	for _, acc := range accounts {
+		authAccs = append(authAccs, genesis.Authority{
+			MasterAddress:   acc.Address,
+			EndorsorAddress: acc.Address,
+			Identity:        thor.BytesToBytes32([]byte("master")),
+		})
+		bal, _ := new(big.Int).SetString("1000000000000000000000000000", 10)
+		stateAccs = append(stateAccs, genesis.Account{
+			Address: acc.Address,
+			Balance: (*genesis.HexOrDecimal256)(bal),
+			Energy:  (*genesis.HexOrDecimal256)(bal),
+			Code:    "",
+			Storage: nil,
+		})
+	}
+	mbp := uint64(1_000)
+	genConfig := genesis.CustomGenesis{
+		LaunchTime: 1526400000,
+		GasLimit:   thor.InitialGasLimit,
+		ExtraData:  "",
+		ForkConfig: &forkConfig,
+		Authority:  authAccs,
+		Accounts:   stateAccs,
+		Params: genesis.Params{
+			MaxBlockProposers: &mbp,
+		},
+	}
+
+	builder, err := genesis.NewCustomNet(&genConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	// Initialize the genesis and retrieve the genesis block
+	//gene := genesis.NewDevnet()
+	geneBlk, _, _, err := builder.Build(stater)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create the repository which manages chain data, using the database and genesis block.
+	repo, err := chain.NewRepository(db, geneBlk)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create an inMemory logdb
+	logDb, err := logdb.NewMem()
+	if err != nil {
+		return nil, err
+	}
+
+	return testchain.New(
+		db,
+		builder,
+		solo.NewBFTEngine(repo),
+		repo,
+		stater,
+		geneBlk,
+		logDb,
+		thor.NoFork,
+	), nil
+}
+
+func randomPickSignerFunc(
+	accounts []genesis.DevAccount,
+	createTxFun func(signerPK *ecdsa.PrivateKey, thorChain *testchain.Chain) (tx.Transactions, error),
+) func(chain *testchain.Chain) (tx.Transactions, error) {
+	return func(chain *testchain.Chain) (tx.Transactions, error) {
+		// Ensure there are accounts available
+		if len(accounts) == 0 {
+			return nil, fmt.Errorf("no accounts available to pick a random sender")
+		}
+
+		// Securely pick a random index
+		maxLen := big.NewInt(int64(len(accounts)))
+		randomIndex, err := rand.Int(rand.Reader, maxLen)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate random index: %v", err)
+		}
+
+		// Use the selected account to create transactions
+		sender := accounts[randomIndex.Int64()]
+		return createTxFun(sender.PrivateKey, chain)
 	}
 }
 
-//func BuildBlock(stater *state.Stater) (blk *block.Block, events tx.Events, transfers tx.Transfers, err error) {
-//	state := stater.NewState(trie.Root{})
-//
-//	for _, proc := range b.stateProcs {
-//		if err := proc(state); err != nil {
-//			return nil, nil, nil, errors.Wrap(err, "state process")
-//		}
-//	}
-//
-//	rt := runtime.New(nil, state, &xenv.BlockContext{
-//		Time:     b.timestamp,
-//		GasLimit: b.gasLimit,
-//	}, b.forkConfig)
-//
-//	for _, call := range b.calls {
-//		exec, _ := rt.PrepareClause(call.clause, 0, math.MaxUint64, &xenv.TransactionContext{
-//			Origin: call.caller,
-//		})
-//		out, _, err := exec()
-//		if err != nil {
-//			return nil, nil, nil, errors.Wrap(err, "call")
-//		}
-//		if out.VMErr != nil {
-//			return nil, nil, nil, errors.Wrap(out.VMErr, "vm")
-//		}
-//		events = append(events, out.Events...)
-//		transfers = append(transfers, out.Transfers...)
-//	}
-//
-//	stage, err := state.Stage(trie.Version{})
-//	if err != nil {
-//		return nil, nil, nil, errors.Wrap(err, "stage")
-//	}
-//	stateRoot, err := stage.Commit()
-//	if err != nil {
-//		return nil, nil, nil, errors.Wrap(err, "commit state")
-//	}
-//
-//	parentID := thor.Bytes32{0xff, 0xff, 0xff, 0xff} //so, genesis number is 0
-//	copy(parentID[4:], b.extraData[:])
-//
-//	return new(block.Builder).
-//		ParentID(parentID).
-//		Timestamp(b.timestamp).
-//		GasLimit(b.gasLimit).
-//		StateRoot(stateRoot).
-//		ReceiptsRoot(tx.Transactions(nil).RootHash()).
-//		Build(), events, transfers, nil
-//}
+func createAccounts(b *testing.B, accountNo int) []genesis.DevAccount {
+	var accs []genesis.DevAccount
+
+	for i := 0; i < accountNo; i++ {
+		pk, err := crypto.GenerateKey()
+		require.NoError(b, err)
+		addr := crypto.PubkeyToAddress(pk.PublicKey)
+		accs = append(accs, genesis.DevAccount{Address: thor.Address(addr), PrivateKey: pk})
+	}
+
+	return accs
+}
