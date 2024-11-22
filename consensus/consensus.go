@@ -49,6 +49,7 @@ func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfi
 func (c *Consensus) Process(parentSummary *chain.BlockSummary, blk *block.Block, nowTimestamp uint64, blockConflicts uint32) (*state.Stage, tx.Receipts, error) {
 	header := blk.Header()
 	state := c.stater.NewState(parentSummary.Root())
+	fmt.Println("Consensus StateRoot: ", parentSummary.Root().Hash.String())
 
 	var features tx.Features
 	if header.Number() >= c.forkConfig.VIP191 {
