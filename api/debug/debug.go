@@ -472,8 +472,8 @@ func (d *Debug) Mount(root *mux.Router, pathPrefix string) {
 		Methods(http.MethodPost).
 		Name("POST /debug/tracers/call").
 		HandlerFunc(utils.WrapHandlerFunc(d.handleTraceCall))
-	sub.Path("POST /debug/storage-range").
+	sub.Path("/storage-range").
 		Methods(http.MethodPost).
-		Name("debug_trace_storage").
+		Name("POST /debug/storage-range").
 		HandlerFunc(utils.WrapHandlerFunc(d.handleDebugStorage))
 }

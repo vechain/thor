@@ -77,7 +77,7 @@ func TestMetricsMiddleware(t *testing.T) {
 	assert.Equal(t, "method", labels[1].GetName())
 	assert.Equal(t, "GET", labels[1].GetValue())
 	assert.Equal(t, "name", labels[2].GetName())
-	assert.Equal(t, "accounts_get_account", labels[2].GetValue())
+	assert.Equal(t, "GET /accounts/{address}", labels[2].GetValue())
 
 	labels = m[1].GetLabel()
 	assert.Equal(t, 3, len(labels))
@@ -86,7 +86,7 @@ func TestMetricsMiddleware(t *testing.T) {
 	assert.Equal(t, "method", labels[1].GetName())
 	assert.Equal(t, "GET", labels[1].GetValue())
 	assert.Equal(t, "name", labels[2].GetName())
-	assert.Equal(t, "accounts_get_account", labels[2].GetValue())
+	assert.Equal(t, "GET /accounts/{address}", labels[2].GetValue())
 
 	labels = m[2].GetLabel()
 	assert.Equal(t, 3, len(labels))
@@ -95,7 +95,7 @@ func TestMetricsMiddleware(t *testing.T) {
 	assert.Equal(t, "method", labels[1].GetName())
 	assert.Equal(t, "GET", labels[1].GetValue())
 	assert.Equal(t, "name", labels[2].GetName())
-	assert.Equal(t, "accounts_get_account", labels[2].GetValue())
+	assert.Equal(t, "GET /accounts/{address}", labels[2].GetValue())
 }
 
 func TestWebsocketMetrics(t *testing.T) {
