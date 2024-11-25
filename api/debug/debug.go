@@ -466,13 +466,13 @@ func (d *Debug) Mount(root *mux.Router, pathPrefix string) {
 
 	sub.Path("/tracers").
 		Methods(http.MethodPost).
-		Name("debug_trace_clause").
+		Name("POST /debug/tracers").
 		HandlerFunc(utils.WrapHandlerFunc(d.handleTraceClause))
 	sub.Path("/tracers/call").
 		Methods(http.MethodPost).
-		Name("debug_trace_call").
+		Name("POST /debug/tracers/call").
 		HandlerFunc(utils.WrapHandlerFunc(d.handleTraceCall))
-	sub.Path("/storage-range").
+	sub.Path("POST /debug/storage-range").
 		Methods(http.MethodPost).
 		Name("debug_trace_storage").
 		HandlerFunc(utils.WrapHandlerFunc(d.handleDebugStorage))

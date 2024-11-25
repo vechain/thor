@@ -30,7 +30,11 @@ func HTTPHandler() http.Handler {
 // Define standard buckets for histograms
 var (
 	Bucket10s      = []int64{0, 500, 1000, 2000, 3000, 4000, 5000, 7500, 10_000}
-	BucketHTTPReqs = []int64{0, 150, 300, 450, 600, 900, 1200, 1500, 3000}
+	BucketHTTPReqs = []int64{
+		0, 1, 2, 5, 10, 20, 30, 50, 75, 100,
+		150, 200, 300, 400, 500, 750, 1000,
+		1500, 2000, 3000, 4000, 5000, 10000,
+	}
 )
 
 // HistogramMeter represents the type of metric that is calculated by aggregating
