@@ -1,3 +1,8 @@
+// Copyright (c) 2024 The VeChainThor developers
+
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
 package node
 
 import (
@@ -6,10 +11,15 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"path/filepath"
+	"runtime/debug"
 	"sync"
 	"testing"
 
+	"github.com/elastic/gosigar"
+	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
@@ -29,6 +39,7 @@ import (
 var (
 	cachedAccounts []genesis.DevAccount
 	once           sync.Once
+	blockCount     = 1_000
 )
 
 func getCachedAccounts(b *testing.B) []genesis.DevAccount {
@@ -36,6 +47,75 @@ func getCachedAccounts(b *testing.B) []genesis.DevAccount {
 		cachedAccounts = createAccounts(b, 1_000)
 	})
 	return cachedAccounts
+}
+
+func BenchmarkBlockProcess_RandomSigners_ManyClausesPerTx_RealDB(b *testing.B) {
+	// create state accounts
+	accounts := getCachedAccounts(b)
+
+	// randomly pick a signer for signing the transactions
+	randomSignerFunc := randomPickSignerFunc(accounts, createOneClausePerTx)
+
+	// create blocks
+	blocks := createBlocks(b, blockCount, accounts, randomSignerFunc)
+
+	// create test db - will be automagically removed when the benchmark ends
+	db, err := openTempMainDB(b.TempDir())
+	require.NoError(b, err)
+
+	// run the benchmark
+	benchmarkBlockProcess(b, db, accounts, blocks)
+}
+func BenchmarkBlockProcess_RandomSigners_OneClausePerTx_RealDB(b *testing.B) {
+	// create state accounts
+	accounts := getCachedAccounts(b)
+
+	// randomly pick a signer for signing the transactions
+	randomSignerFunc := randomPickSignerFunc(accounts, createManyClausesPerTx)
+
+	// create blocks
+	blocks := createBlocks(b, blockCount, accounts, randomSignerFunc)
+
+	// create test db - will be automagically removed when the benchmark ends
+	db, err := openTempMainDB(b.TempDir())
+	require.NoError(b, err)
+
+	// run the benchmark
+	benchmarkBlockProcess(b, db, accounts, blocks)
+}
+func BenchmarkBlockProcess_ManyClausesPerTx_RealDB(b *testing.B) {
+	// create state accounts
+	accounts := getCachedAccounts(b)
+
+	// Use one signer for signing the transactions
+	singleSignerFun := randomPickSignerFunc([]genesis.DevAccount{accounts[0]}, createManyClausesPerTx)
+
+	// create blocks
+	blocks := createBlocks(b, blockCount, accounts, singleSignerFun)
+
+	// create test db - will be automagically removed when the benchmark ends
+	db, err := openTempMainDB(b.TempDir())
+	require.NoError(b, err)
+
+	// run the benchmark
+	benchmarkBlockProcess(b, db, accounts, blocks)
+}
+func BenchmarkBlockProcess_OneClausePerTx_RealDB(b *testing.B) {
+	// create state accounts
+	accounts := getCachedAccounts(b)
+
+	// Use one signer for signing the transactions
+	singleSignerFun := randomPickSignerFunc([]genesis.DevAccount{accounts[0]}, createOneClausePerTx)
+
+	// create blocks
+	blocks := createBlocks(b, blockCount, accounts, singleSignerFun)
+
+	// create test db - will be automagically removed when the benchmark ends
+	db, err := openTempMainDB(b.TempDir())
+	require.NoError(b, err)
+
+	// run the benchmark
+	benchmarkBlockProcess(b, db, accounts, blocks)
 }
 
 func BenchmarkBlockProcess_RandomSigners_ManyClausesPerTx(b *testing.B) {
@@ -46,10 +126,13 @@ func BenchmarkBlockProcess_RandomSigners_ManyClausesPerTx(b *testing.B) {
 	randomSignerFunc := randomPickSignerFunc(accounts, createOneClausePerTx)
 
 	// create blocks
-	blocks := createBlocks(b, b.N, accounts, randomSignerFunc)
+	blocks := createBlocks(b, blockCount, accounts, randomSignerFunc)
+
+	// create test db
+	db := muxdb.NewMem()
 
 	// run the benchmark
-	benchmarkBlockProcess(b, accounts, blocks)
+	benchmarkBlockProcess(b, db, accounts, blocks)
 }
 
 func BenchmarkBlockProcess_RandomSigners_OneClausePerTx(b *testing.B) {
@@ -60,10 +143,13 @@ func BenchmarkBlockProcess_RandomSigners_OneClausePerTx(b *testing.B) {
 	randomSignerFunc := randomPickSignerFunc(accounts, createManyClausesPerTx)
 
 	// create blocks
-	blocks := createBlocks(b, b.N, accounts, randomSignerFunc)
+	blocks := createBlocks(b, blockCount, accounts, randomSignerFunc)
+
+	// create test db
+	db := muxdb.NewMem()
 
 	// run the benchmark
-	benchmarkBlockProcess(b, accounts, blocks)
+	benchmarkBlockProcess(b, db, accounts, blocks)
 }
 
 func BenchmarkBlockProcess_ManyClausesPerTx(b *testing.B) {
@@ -74,10 +160,13 @@ func BenchmarkBlockProcess_ManyClausesPerTx(b *testing.B) {
 	singleSignerFun := randomPickSignerFunc([]genesis.DevAccount{accounts[0]}, createManyClausesPerTx)
 
 	// create blocks
-	blocks := createBlocks(b, b.N, accounts, singleSignerFun)
+	blocks := createBlocks(b, blockCount, accounts, singleSignerFun)
+
+	// create test db
+	db := muxdb.NewMem()
 
 	// run the benchmark
-	benchmarkBlockProcess(b, accounts, blocks)
+	benchmarkBlockProcess(b, db, accounts, blocks)
 }
 
 func BenchmarkBlockProcess_OneClausePerTx(b *testing.B) {
@@ -88,15 +177,18 @@ func BenchmarkBlockProcess_OneClausePerTx(b *testing.B) {
 	singleSignerFun := randomPickSignerFunc([]genesis.DevAccount{accounts[0]}, createOneClausePerTx)
 
 	// create blocks
-	blocks := createBlocks(b, b.N, accounts, singleSignerFun)
+	blocks := createBlocks(b, blockCount, accounts, singleSignerFun)
+
+	// create test db
+	db := muxdb.NewMem()
 
 	// run the benchmark
-	benchmarkBlockProcess(b, accounts, blocks)
+	benchmarkBlockProcess(b, db, accounts, blocks)
 }
 
-func benchmarkBlockProcess(b *testing.B, accounts []genesis.DevAccount, blocks []*block.Block) {
+func benchmarkBlockProcess(b *testing.B, db *muxdb.MuxDB, accounts []genesis.DevAccount, blocks []*block.Block) {
 	// Initialize the test chain and dependencies
-	thorChain, err := createChain(accounts)
+	thorChain, err := createChain(db, accounts)
 	require.NoError(b, err)
 
 	proposer := &accounts[0]
@@ -128,7 +220,7 @@ func benchmarkBlockProcess(b *testing.B, accounts []genesis.DevAccount, blocks [
 	// Benchmark execution
 	b.ResetTimer()
 	for _, blk := range blocks {
-		_, err := node.processBlock(blk, stats)
+		_, err = node.processBlock(blk, stats)
 		if err != nil {
 			b.Fatalf("processBlock failed: %v", err)
 		}
@@ -139,7 +231,7 @@ func createBlocks(b *testing.B, noBlocks int, accounts []genesis.DevAccount, cre
 	proposer := &accounts[0]
 
 	// mock a fake chain for block production
-	fakeChain, err := createChain(accounts)
+	fakeChain, err := createChain(muxdb.NewMem(), accounts)
 	require.NoError(b, err)
 
 	// pre-alloc blocks
@@ -258,14 +350,11 @@ func packTxsIntoBlock(thorChain *testchain.Chain, proposerAccount *genesis.DevAc
 	return b1, nil
 }
 
-func createChain(accounts []genesis.DevAccount) (*testchain.Chain, error) {
+func createChain(db *muxdb.MuxDB, accounts []genesis.DevAccount) (*testchain.Chain, error) {
 	forkConfig := thor.NoFork
 	forkConfig.VIP191 = 1
 	forkConfig.BLOCKLIST = 0
 	forkConfig.VIP214 = 2
-
-	// Initialize the database
-	db := muxdb.NewMem()
 
 	// Create the state manager (Stater) with the initialized database.
 	stater := state.NewStater(db)
@@ -371,4 +460,82 @@ func createAccounts(b *testing.B, accountNo int) []genesis.DevAccount {
 	}
 
 	return accs
+}
+
+func openTempMainDB(dir string) (*muxdb.MuxDB, error) {
+	cacheMB := normalizeCacheSize(4096)
+
+	fdCache := suggestFDCache()
+
+	opts := muxdb.Options{
+		TrieNodeCacheSizeMB:        cacheMB,
+		TrieCachedNodeTTL:          30, // 5min
+		TrieDedupedPartitionFactor: math.MaxUint32,
+		TrieWillCleanHistory:       true,
+		OpenFilesCacheCapacity:     fdCache,
+		ReadCacheMB:                256, // rely on os page cache other than huge db read cache.
+		WriteBufferMB:              128,
+	}
+
+	// go-ethereum stuff
+	// Ensure Go's GC ignores the database cache for trigger percentage
+	totalCacheMB := cacheMB + opts.ReadCacheMB + opts.WriteBufferMB*2
+	gogc := math.Max(10, math.Min(100, 50/(float64(totalCacheMB)/1024)))
+
+	debug.SetGCPercent(int(gogc))
+
+	if opts.TrieWillCleanHistory {
+		opts.TrieHistPartitionFactor = 256
+	} else {
+		opts.TrieHistPartitionFactor = 524288
+	}
+
+	db, err := muxdb.Open(filepath.Join(dir, "maindb"), &opts)
+	if err != nil {
+		return nil, errors.Wrapf(err, "open main database [%v]", dir)
+	}
+	return db, nil
+}
+
+func normalizeCacheSize(sizeMB int) int {
+	if sizeMB < 128 {
+		sizeMB = 128
+	}
+
+	var mem gosigar.Mem
+	if err := mem.Get(); err != nil {
+		fmt.Println("failed to get total mem:", "err", err)
+	} else {
+		total := int(mem.Total / 1024 / 1024)
+		half := total / 2
+
+		// limit to not less than total/2 and up to total-2GB
+		limitMB := total - 2048
+		if limitMB < half {
+			limitMB = half
+		}
+
+		if sizeMB > limitMB {
+			sizeMB = limitMB
+			fmt.Println("cache size(MB) limited", "limit", limitMB)
+		}
+	}
+	return sizeMB
+}
+
+func suggestFDCache() int {
+	limit, err := fdlimit.Current()
+	if err != nil {
+		fmt.Println("unable to get fdlimit", "error", err)
+		return 500
+	}
+	if limit <= 1024 {
+		fmt.Println("low fd limit, increase it if possible", "limit", limit)
+	}
+
+	n := limit / 2
+	if n > 5120 {
+		return 5120
+	}
+	return n
 }
