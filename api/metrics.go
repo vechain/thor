@@ -64,7 +64,7 @@ func metricsMiddleware(next http.Handler) http.Handler {
 			name         = ""
 			subscription = ""
 		)
-		
+
 		// all named route will be recorded
 		if rt != nil && rt.GetName() != "" {
 			enabled = true
