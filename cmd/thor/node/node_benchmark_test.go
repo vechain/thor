@@ -6,17 +6,16 @@
 package node
 
 import (
+	"crypto/ecdsa"
+	"crypto/rand"
 	"fmt"
 	"math"
 	"math/big"
-	"os"
 	"path/filepath"
 	"runtime/debug"
 	"sync"
 	"testing"
 
-	"crypto/ecdsa"
-	"crypto/rand"
 	"github.com/elastic/gosigar"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -60,16 +59,9 @@ func BenchmarkBlockProcess_RandomSigners_ManyClausesPerTx_RealDB(b *testing.B) {
 	// create blocks
 	blocks := createBlocks(b, blockCount, accounts, randomSignerFunc)
 
-	// create test db
-	dbDir := "./bench-RandomSigners_ManyClauses/"
-	db, err := openTempMainDB(dbDir)
+	// create test db - will be automagically removed when the benchmark ends
+	db, err := openTempMainDB(b.TempDir())
 	require.NoError(b, err)
-
-	// Ensure database cleanup after benchmark
-	defer func() {
-		err := os.RemoveAll(dbDir)
-		require.NoError(b, err, "failed to delete test database")
-	}()
 
 	// run the benchmark
 	benchmarkBlockProcess(b, db, accounts, blocks)
@@ -84,16 +76,9 @@ func BenchmarkBlockProcess_RandomSigners_OneClausePerTx_RealDB(b *testing.B) {
 	// create blocks
 	blocks := createBlocks(b, blockCount, accounts, randomSignerFunc)
 
-	// create test db
-	dbDir := "./bench-RandomSigners_OneClause/"
-	db, err := openTempMainDB(dbDir)
+	// create test db - will be automagically removed when the benchmark ends
+	db, err := openTempMainDB(b.TempDir())
 	require.NoError(b, err)
-
-	// Ensure database cleanup after benchmark
-	defer func() {
-		err := os.RemoveAll(dbDir)
-		require.NoError(b, err, "failed to delete test database")
-	}()
 
 	// run the benchmark
 	benchmarkBlockProcess(b, db, accounts, blocks)
@@ -108,16 +93,9 @@ func BenchmarkBlockProcess_ManyClausesPerTx_RealDB(b *testing.B) {
 	// create blocks
 	blocks := createBlocks(b, blockCount, accounts, singleSignerFun)
 
-	// create test db
-	dbDir := "./bench-ManyClauses/"
-	db, err := openTempMainDB(dbDir)
+	// create test db - will be automagically removed when the benchmark ends
+	db, err := openTempMainDB(b.TempDir())
 	require.NoError(b, err)
-
-	// Ensure database cleanup after benchmark
-	defer func() {
-		err := os.RemoveAll(dbDir)
-		require.NoError(b, err, "failed to delete test database")
-	}()
 
 	// run the benchmark
 	benchmarkBlockProcess(b, db, accounts, blocks)
@@ -132,16 +110,9 @@ func BenchmarkBlockProcess_OneClausePerTx_RealDB(b *testing.B) {
 	// create blocks
 	blocks := createBlocks(b, blockCount, accounts, singleSignerFun)
 
-	// create test db
-	dbDir := "./bench-OneClause/"
-	db, err := openTempMainDB(dbDir)
+	// create test db - will be automagically removed when the benchmark ends
+	db, err := openTempMainDB(b.TempDir())
 	require.NoError(b, err)
-
-	// Ensure database cleanup after benchmark
-	defer func() {
-		err := os.RemoveAll(dbDir)
-		require.NoError(b, err, "failed to delete test database")
-	}()
 
 	// run the benchmark
 	benchmarkBlockProcess(b, db, accounts, blocks)
