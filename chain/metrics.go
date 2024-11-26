@@ -5,3 +5,4 @@ import (
 )
 
 var metricBlockWriteCounter = metrics.LazyLoadCounter("block_write_count")
+var metricBlockReadCounter = metrics.LazyLoadCounterVec("block_read_count", []string{"type"})
