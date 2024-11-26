@@ -90,6 +90,6 @@ func loadBlockSummary(r kv.Getter, id thor.Bytes32) (*BlockSummary, error) {
 	if err := loadRLP(r, id[:], &summary); err != nil {
 		return nil, err
 	}
-	metricBlockReadCounter().AddWithLabel(1, map[string]string{"type": "hdrStore"})
+	metricBlockReadCounter().AddWithLabel(1, map[string]string{"type": "disk"})
 	return &summary, nil
 }
