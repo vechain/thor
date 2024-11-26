@@ -210,6 +210,7 @@ func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, conflic
 	if err := saveBlockSummary(hdrPutter, &summary); err != nil {
 		return nil, err
 	}
+	metricBlockWriteCounter().Add(1)
 
 	if asBest {
 		if err := propPutter.Put(bestBlockIDKey, id[:]); err != nil {
