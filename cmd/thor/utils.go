@@ -37,6 +37,7 @@ import (
 	"github.com/mattn/go-isatty"
 	"github.com/mattn/go-tty"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/doc"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/node"
@@ -272,6 +273,23 @@ func parseGenesisFile(filePath string) (*genesis.Genesis, thor.ForkConfig, error
 	}
 
 	return customGen, forkConfig, nil
+}
+
+func makeAPIConfig(ctx *cli.Context, soloMode bool) api.Config {
+	return api.Config{
+		AllowedOrigins:    ctx.String(apiCorsFlag.Name),
+		BacktraceLimit:    uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
+		CallGasLimit:      ctx.Uint64(apiCallGasLimitFlag.Name),
+		PprofOn:           ctx.Bool(pprofFlag.Name),
+		SkipLogs:          ctx.Bool(skipLogsFlag.Name),
+		AllowCustomTracer: ctx.Bool(apiAllowCustomTracerFlag.Name),
+		EnableReqLogger:   ctx.Bool(enableAPILogsFlag.Name),
+		EnableMetrics:     ctx.Bool(enableMetricsFlag.Name),
+		LogsLimit:         ctx.Uint64(apiLogsLimitFlag.Name),
+		AllowedTracers:    parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
+		EnableDeprecated:  ctx.Bool(apiEnabledDeprecatedFlag.Name),
+		SoloMode:          soloMode,
+	}
 }
 
 func makeConfigDir(ctx *cli.Context) (string, error) {

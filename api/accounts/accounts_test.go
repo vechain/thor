@@ -103,7 +103,7 @@ var (
 )
 
 func TestAccount(t *testing.T) {
-	initAccountServer(t)
+	initAccountServer(t, true)
 	defer ts.Close()
 
 	tclient = thorclient.New(ts.URL)
@@ -124,6 +124,21 @@ func TestAccount(t *testing.T) {
 	} {
 		t.Run(name, tt)
 	}
+}
+
+func TestDeprecated(t *testing.T) {
+	initAccountServer(t, false)
+	defer ts.Close()
+
+	tclient = thorclient.New(ts.URL)
+
+	body := &accounts.CallData{}
+
+	_, statusCode, _ := tclient.RawHTTPClient().RawHTTPPost("/accounts", body)
+	assert.Equal(t, http.StatusGone, statusCode, "invalid address")
+
+	_, statusCode, _ = tclient.RawHTTPClient().RawHTTPPost("/accounts/"+contractAddr.String(), body)
+	assert.Equal(t, http.StatusGone, statusCode, "invalid address")
 }
 
 func getAccount(t *testing.T) {
@@ -264,7 +279,7 @@ func getStorageWithNonExistingRevision(t *testing.T) {
 	assert.Equal(t, "revision: leveldb: not found\n", string(res), "revision not found")
 }
 
-func initAccountServer(t *testing.T) {
+func initAccountServer(t *testing.T, deprecatedEnabled bool) {
 	thorChain, err := testchain.NewIntegrationTestChain()
 	require.NoError(t, err)
 
@@ -291,7 +306,7 @@ func initAccountServer(t *testing.T) {
 	)
 
 	router := mux.NewRouter()
-	accounts.New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), thor.NoFork, thorChain.Engine()).
+	accounts.New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), thor.NoFork, thorChain.Engine(), deprecatedEnabled).
 		Mount(router, "/accounts")
 
 	ts = httptest.NewServer(router)

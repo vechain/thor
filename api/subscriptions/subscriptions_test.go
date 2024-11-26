@@ -36,7 +36,7 @@ var ts *httptest.Server
 var blocks []*block.Block
 
 func TestSubscriptions(t *testing.T) {
-	initSubscriptionsServer(t)
+	initSubscriptionsServer(t, true)
 	defer ts.Close()
 
 	for name, tt := range map[string]func(*testing.T){
@@ -49,6 +49,17 @@ func TestSubscriptions(t *testing.T) {
 	} {
 		t.Run(name, tt)
 	}
+}
+
+func TestDeprecatedSubscriptions(t *testing.T) {
+	initSubscriptionsServer(t, false)
+	defer ts.Close()
+
+	u := url.URL{Scheme: "ws", Host: strings.TrimPrefix(ts.URL, "http://"), Path: "/subscriptions/beat"}
+
+	_, resp, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	assert.Error(t, err)
+	assert.Equal(t, http.StatusGone, resp.StatusCode)
 }
 
 func testHandleSubjectWithBlock(t *testing.T) {
@@ -216,7 +227,7 @@ func TestParseAddress(t *testing.T) {
 	assert.Equal(t, expectedAddr, *result)
 }
 
-func initSubscriptionsServer(t *testing.T) {
+func initSubscriptionsServer(t *testing.T, deprecatedEnabled bool) {
 	thorChain, err := testchain.NewIntegrationTestChain()
 	require.NoError(t, err)
 
@@ -263,7 +274,7 @@ func initSubscriptionsServer(t *testing.T) {
 	require.NoError(t, err)
 
 	router := mux.NewRouter()
-	New(thorChain.Repo(), []string{}, 5, txPool).
+	New(thorChain.Repo(), []string{}, 5, txPool, deprecatedEnabled).
 		Mount(router, "/subscriptions")
 	ts = httptest.NewServer(router)
 }
@@ -319,7 +330,7 @@ func TestSubscriptionsBacktrace(t *testing.T) {
 	require.NoError(t, err)
 
 	router := mux.NewRouter()
-	New(thorChain.Repo(), []string{}, 5, txPool).Mount(router, "/subscriptions")
+	New(thorChain.Repo(), []string{}, 5, txPool, true).Mount(router, "/subscriptions")
 	ts = httptest.NewServer(router)
 
 	defer ts.Close()

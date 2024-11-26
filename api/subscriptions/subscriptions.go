@@ -25,14 +25,15 @@ import (
 const txQueueSize = 20
 
 type Subscriptions struct {
-	backtraceLimit uint32
-	repo           *chain.Repository
-	upgrader       *websocket.Upgrader
-	pendingTx      *pendingTx
-	done           chan struct{}
-	wg             sync.WaitGroup
-	beat2Cache     *messageCache[Beat2Message]
-	beatCache      *messageCache[BeatMessage]
+	backtraceLimit    uint32
+	deprecatedEnabled bool
+	repo              *chain.Repository
+	upgrader          *websocket.Upgrader
+	pendingTx         *pendingTx
+	done              chan struct{}
+	wg                sync.WaitGroup
+	beat2Cache        *messageCache[Beat2Message]
+	beatCache         *messageCache[BeatMessage]
 }
 
 type msgReader interface {
@@ -50,10 +51,11 @@ const (
 	pingPeriod = (pongWait * 7) / 10
 )
 
-func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32, txpool *txpool.TxPool) *Subscriptions {
+func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32, txpool *txpool.TxPool, deprecatedEnabled bool) *Subscriptions {
 	sub := &Subscriptions{
-		backtraceLimit: backtraceLimit,
-		repo:           repo,
+		backtraceLimit:    backtraceLimit,
+		repo:              repo,
+		deprecatedEnabled: deprecatedEnabled,
 		upgrader: &websocket.Upgrader{
 			EnableCompression: true,
 			CheckOrigin: func(r *http.Request) bool {
@@ -195,6 +197,9 @@ func (s *Subscriptions) handleSubject(w http.ResponseWriter, req *http.Request) 
 			return err
 		}
 	case "beat":
+		if !s.deprecatedEnabled {
+			return utils.HTTPError(nil, http.StatusGone)
+		}
 		if reader, err = s.handleBeatReader(w, req); err != nil {
 			return err
 		}
