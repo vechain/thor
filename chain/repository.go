@@ -171,7 +171,7 @@ func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, conflic
 				return nil, err
 			}
 		}
-		metricTransactionRepositoryCounter().AddWithLabel(int64(len(txs)), map[string]string{"type": "write"})
+		metricTransactionRepositoryCounter().AddWithLabel(int64(len(txs)), map[string]string{"type": "write", "target": "disk"})
 
 		// save receipts
 		for i, receipt := range receipts {
@@ -180,7 +180,7 @@ func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, conflic
 				return nil, err
 			}
 		}
-		metricReceiptRepositoryCounter().AddWithLabel(int64(len(receipts)), map[string]string{"type": "write"})
+		metricReceiptRepositoryCounter().AddWithLabel(int64(len(receipts)), map[string]string{"type": "write", "target": "disk"})
 	}
 	if err := indexChainHead(headPutter, header); err != nil {
 		return nil, err
@@ -314,7 +314,7 @@ func (r *Repository) GetBlockTransactions(id thor.Bytes32) (tx.Transactions, err
 				return nil, err
 			}
 		}
-		metricTransactionRepositoryCounter().AddWithLabel(int64(len(txs)), map[string]string{"type": "read"})
+		metricTransactionRepositoryCounter().AddWithLabel(int64(len(txs)), map[string]string{"type": "read", "target": "disk"})
 		return txs, nil
 	}
 	return nil, nil
@@ -358,7 +358,7 @@ func (r *Repository) GetBlockReceipts(id thor.Bytes32) (tx.Receipts, error) {
 				return nil, err
 			}
 		}
-		metricReceiptRepositoryCounter().AddWithLabel(int64(len(receipts)), map[string]string{"type": "read"})
+		metricReceiptRepositoryCounter().AddWithLabel(int64(len(receipts)), map[string]string{"type": "read", "target": "disk"})
 		return receipts, nil
 	}
 	return nil, nil

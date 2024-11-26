@@ -6,6 +6,6 @@ import (
 
 var metricBlockRepositoryCounter = metrics.LazyLoadCounterVec("block_repository_count", []string{"type", "target"})
 
-var metricTransactionRepositoryCounter = metrics.LazyLoadCounterVec("transaction_repository_count", []string{"type"})
+var metricTransactionRepositoryCounter = metrics.LazyLoadCounterVec("transaction_repository_count", []string{"type", "target"})
 
-var metricReceiptRepositoryCounter = metrics.LazyLoadCounterVec("receipt_repository_count", []string{"type"})
+var metricReceiptRepositoryCounter = metrics.LazyLoadCounterVec("receipt_repository_count", []string{"type", "target"})
