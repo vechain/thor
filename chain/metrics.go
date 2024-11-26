@@ -4,11 +4,8 @@ import (
 	"github.com/vechain/thor/v2/metrics"
 )
 
-var metricBlockWriteCounter = metrics.LazyLoadCounter("block_write_count")
-var metricBlockReadCounter = metrics.LazyLoadCounterVec("block_read_count", []string{"type"})
+var metricBlockRepositoryCounter = metrics.LazyLoadCounterVec("block_repository_count", []string{"type", "target"})
 
-var metricTransactionWriteCounter = metrics.LazyLoadCounter("transaction_write_count")
-var metricTransactionReadCounter = metrics.LazyLoadCounter("transaction_read_count")
+var metricTransactionRepositoryCounter = metrics.LazyLoadCounterVec("transaction_repository_count", []string{"type"})
 
-var metricReceiptWriteCounter = metrics.LazyLoadCounter("receipt_write_count")
-var metricReceiptReadCounter = metrics.LazyLoadCounter("receipt_read_count")
+var metricReceiptRepositoryCounter = metrics.LazyLoadCounterVec("receipt_repository_count", []string{"type"})
