@@ -58,17 +58,21 @@ func (c *cache) log() {
 	last := c.lastLogTime.Swap(now)
 
 	if now-last > int64(time.Second*20) {
-		logNode, hitNode, missNode, okNode := c.nodeStats.shouldLog("node cache stats")
-		logRoot, hitRoot, missRoot, okRoot := c.rootStats.shouldLog("root cache stats")
+		shouldNode, hitNode, missNode := c.nodeStats.Stats()
+		shouldRoot, hitRoot, missRoot := c.rootStats.Stats()
 
-		if okNode || okRoot {
-			logNode()
-			metricCacheHitMissGaugeVec().SetWithLabel(hitNode, map[string]string{"type": "node", "event": "hit"})
-			metricCacheHitMissGaugeVec().SetWithLabel(missNode, map[string]string{"type": "node", "event": "miss"})
-			logRoot()
-			metricCacheHitMissGaugeVec().SetWithLabel(hitRoot, map[string]string{"type": "root", "event": "hit"})
-			metricCacheHitMissGaugeVec().SetWithLabel(missRoot, map[string]string{"type": "root", "event": "miss"})
+		// log two categories together only one of the hit rate has
+		// changed compared to the last run, to avoid too many logs.
+		if shouldNode || shouldRoot {
+			logStats("node cache stats", hitNode, missNode)
+			logStats("root cache stats", hitRoot, missRoot)
 		}
+
+		// metrics will reported every 20 seconds
+		metricCacheHitMissGaugeVec().SetWithLabel(hitRoot, map[string]string{"type": "root", "event": "hit"})
+		metricCacheHitMissGaugeVec().SetWithLabel(missRoot, map[string]string{"type": "root", "event": "miss"})
+		metricCacheHitMissGaugeVec().SetWithLabel(hitNode, map[string]string{"type": "node", "event": "hit"})
+		metricCacheHitMissGaugeVec().SetWithLabel(missNode, map[string]string{"type": "node", "event": "miss"})
 	} else {
 		c.lastLogTime.CompareAndSwap(now, last)
 	}
@@ -178,28 +182,33 @@ type cacheStats struct {
 func (cs *cacheStats) Hit() int64  { return cs.hit.Add(1) }
 func (cs *cacheStats) Miss() int64 { return cs.miss.Add(1) }
 
-func (cs *cacheStats) shouldLog(msg string) (func(), int64, int64, bool) {
+func (cs *cacheStats) Stats() (bool, int64, int64) {
 	hit := cs.hit.Load()
 	miss := cs.miss.Load()
 	lookups := hit + miss
 
-	hitrate := float64(hit) / float64(lookups)
-	flag := int32(hitrate * 1000)
-	return func() {
-		var str string
-		if lookups > 0 {
-			str = fmt.Sprintf("%.3f", hitrate)
-		} else {
-			str = "n/a"
-		}
+	hitRate := float64(0)
+	if lookups > 0 {
+		hitRate = float64(hit) / float64(lookups)
+	}
+	flag := int32(hitRate * 1000)
 
-		logger.Info(msg,
-			"lookups", lookups,
-			"hitrate", str,
-		)
+	return cs.flag.Swap(flag) != flag, hit, miss
+}
 
-		cs.flag.Store(flag)
-	}, hit, miss, cs.flag.Load() != flag
+func logStats(msg string, hit, miss int64) {
+	lookups := hit + miss
+	var str string
+	if lookups > 0 {
+		str = fmt.Sprintf("%.3f", float64(hit)/float64(lookups))
+	} else {
+		str = "n/a"
+	}
+
+	logger.Info(msg,
+		"lookups", lookups,
+		"hitrate", str,
+	)
 }
 
 type dummyCache struct{}

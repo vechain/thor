@@ -127,28 +127,6 @@ func (r *Repository) BestBlockSummary() *BlockSummary {
 	return r.bestSummary.Load().(*BlockSummary)
 }
 
-// SetBestBlockID set the given block id as best block id.
-func (r *Repository) SetBestBlockID(id thor.Bytes32) (err error) {
-	defer func() {
-		if err == nil {
-			r.tick.Broadcast()
-		}
-	}()
-	summary, err := r.GetBlockSummary(id)
-	if err != nil {
-		return err
-	}
-	return r.setBestBlockSummary(summary)
-}
-
-func (r *Repository) setBestBlockSummary(summary *BlockSummary) error {
-	if err := r.propStore.Put(bestBlockIDKey, summary.Header.ID().Bytes()); err != nil {
-		return err
-	}
-	r.bestSummary.Store(summary)
-	return nil
-}
-
 func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, conflicts uint32, asBest bool) (*BlockSummary, error) {
 	var (
 		header        = block.Header()

@@ -113,7 +113,7 @@ func (test *TestBFT) reCreateEngine() error {
 	return nil
 }
 
-func (test *TestBFT) newBlock(parentSummary *chain.BlockSummary, master genesis.DevAccount, shouldVote bool) (*chain.BlockSummary, error) {
+func (test *TestBFT) newBlock(parentSummary *chain.BlockSummary, master genesis.DevAccount, shouldVote bool, asBest bool) (*chain.BlockSummary, error) {
 	packer := packer.New(test.repo, test.stater, master.Address, &thor.Address{}, test.fc)
 	flow, err := packer.Mock(parentSummary, parentSummary.Header.Timestamp()+thor.BlockInterval, parentSummary.Header.GasLimit())
 	if err != nil {
@@ -134,7 +134,7 @@ func (test *TestBFT) newBlock(parentSummary *chain.BlockSummary, master genesis.
 		return nil, err
 	}
 
-	if err = test.repo.AddBlock(b, nil, conflicts, false); err != nil {
+	if err = test.repo.AddBlock(b, nil, conflicts, asBest); err != nil {
 		return nil, err
 	}
 
@@ -155,13 +155,13 @@ func (test *TestBFT) fastForward(cnt int) error {
 		acc := devAccounts[(int(parent.Header.Number())+1)%devCnt]
 
 		var err error
-		parent, err = test.newBlock(parent, acc, true)
+		parent, err = test.newBlock(parent, acc, true, true)
 		if err != nil {
 			return err
 		}
 	}
 
-	return test.repo.SetBestBlockID(parent.Header.ID())
+	return nil
 }
 
 func (test *TestBFT) fastForwardWithMinority(cnt int) error {
@@ -172,13 +172,13 @@ func (test *TestBFT) fastForwardWithMinority(cnt int) error {
 		acc := devAccounts[(int(parent.Header.Number())+1)%(devCnt/3)]
 
 		var err error
-		parent, err = test.newBlock(parent, acc, true)
+		parent, err = test.newBlock(parent, acc, true, true)
 		if err != nil {
 			return err
 		}
 	}
 
-	return test.repo.SetBestBlockID(parent.Header.ID())
+	return nil
 }
 
 func (test *TestBFT) buildBranch(cnt int) (*chain.Chain, error) {
@@ -189,7 +189,7 @@ func (test *TestBFT) buildBranch(cnt int) (*chain.Chain, error) {
 		acc := devAccounts[(int(parent.Header.Number())+1+4)%devCnt]
 
 		var err error
-		parent, err = test.newBlock(parent, acc, true)
+		parent, err = test.newBlock(parent, acc, true, false)
 		if err != nil {
 			return nil, err
 		}
@@ -197,26 +197,20 @@ func (test *TestBFT) buildBranch(cnt int) (*chain.Chain, error) {
 	return test.repo.NewChain(parent.Header.ID()), nil
 }
 
-func (test *TestBFT) pack(parentID thor.Bytes32, shouldVote bool, best bool) (*chain.BlockSummary, error) {
+func (test *TestBFT) pack(parentID thor.Bytes32, shouldVote bool, asBest bool) (*chain.BlockSummary, error) {
 	acc := devAccounts[len(devAccounts)-1]
 	parent, err := test.repo.GetBlockSummary(parentID)
 	if err != nil {
 		return nil, err
 	}
 
-	blk, err := test.newBlock(parent, acc, shouldVote)
+	blk, err := test.newBlock(parent, acc, shouldVote, asBest)
 	if err != nil {
 		return nil, err
 	}
 
 	if blk.Header.Number() >= test.fc.FINALITY {
 		if err := test.engine.CommitBlock(blk.Header, true); err != nil {
-			return nil, err
-		}
-	}
-
-	if best {
-		if err := test.repo.SetBestBlockID(blk.Header.ID()); err != nil {
 			return nil, err
 		}
 	}
@@ -255,7 +249,7 @@ func TestNewBlock(t *testing.T) {
 		PrivateKey: priv,
 	}
 
-	summary, err := testBFT.newBlock(testBFT.repo.BestBlockSummary(), master, true)
+	summary, err := testBFT.newBlock(testBFT.repo.BestBlockSummary(), master, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}

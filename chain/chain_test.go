@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package chain_test
+package chain
 
 import (
 	"testing"
@@ -12,7 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -31,7 +30,7 @@ func TestChain(t *testing.T) {
 	_, repo := newTestRepo()
 
 	b1 := newBlock(repo.GenesisBlock(), 10, tx1)
-	tx1Meta := &chain.TxMeta{BlockNum: 1, Index: 0, Reverted: false}
+	tx1Meta := &TxMeta{BlockNum: 1, Index: 0, Reverted: false}
 	tx1Receipt := &tx.Receipt{}
 	repo.AddBlock(b1, tx.Receipts{tx1Receipt}, 0, false)
 
