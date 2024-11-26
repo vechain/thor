@@ -21,8 +21,8 @@ import (
 var (
 	metricHTTPReqCounter       = metrics.LazyLoadCounterVec("api_request_count", []string{"name", "code", "method"})
 	metricHTTPReqDuration      = metrics.LazyLoadHistogramVec("api_duration_ms", []string{"name", "code", "method"}, metrics.BucketHTTPReqs)
-	metricActiveWebsocketGauge = metrics.LazyLoadGaugeVec("api_active_websocket_gauge", []string{"subject"})
-	metricWebsocketCounter     = metrics.LazyLoadCounterVec("api_websocket_counter", []string{"subject"})
+	metricActiveWebsocketGauge = metrics.LazyLoadGaugeVec("api_active_websocket_gauge", []string{"name"})
+	metricWebsocketCounter     = metrics.LazyLoadCounterVec("api_websocket_counter", []string{"name"})
 )
 
 // metricsResponseWriter is a wrapper around http.ResponseWriter that captures the status code.
@@ -79,14 +79,14 @@ func metricsMiddleware(next http.Handler) http.Handler {
 		now := time.Now()
 		mrw := newMetricsResponseWriter(w)
 		if subscription {
-			metricActiveWebsocketGauge().AddWithLabel(1, map[string]string{"subject": name})
-			metricWebsocketCounter().AddWithLabel(1, map[string]string{"subject": name})
+			metricActiveWebsocketGauge().AddWithLabel(1, map[string]string{"name": name})
+			metricWebsocketCounter().AddWithLabel(1, map[string]string{"name": name})
 		}
 
 		next.ServeHTTP(mrw, r)
 
 		if subscription {
-			metricActiveWebsocketGauge().AddWithLabel(-1, map[string]string{"subject": name})
+			metricActiveWebsocketGauge().AddWithLabel(-1, map[string]string{"name": name})
 		} else if enabled {
 			metricHTTPReqCounter().AddWithLabel(1, map[string]string{"name": name, "code": strconv.Itoa(mrw.statusCode), "method": r.Method})
 			metricHTTPReqDuration().ObserveWithLabels(time.Since(now).Milliseconds(), map[string]string{"name": name, "code": strconv.Itoa(mrw.statusCode), "method": r.Method})

@@ -125,7 +125,7 @@ func TestWebsocketMetrics(t *testing.T) {
 	assert.Equal(t, float64(1), m[0].GetGauge().GetValue())
 
 	labels := m[0].GetLabel()
-	assert.Equal(t, "subject", labels[0].GetName())
+	assert.Equal(t, "name", labels[0].GetName())
 	assert.Equal(t, "WS /subscriptions/beat", labels[0].GetValue())
 
 	// initiate 1 beat subscription, active websocket should be 2
@@ -157,9 +157,9 @@ func TestWebsocketMetrics(t *testing.T) {
 	assert.Equal(t, float64(2), m[0].GetGauge().GetValue())
 	assert.Equal(t, float64(1), m[1].GetGauge().GetValue())
 
-	// m[1] should have the subject of block
+	// m[1] should have the name of block
 	labels = m[1].GetLabel()
-	assert.Equal(t, "subject", labels[0].GetName())
+	assert.Equal(t, "name", labels[0].GetName())
 	assert.Equal(t, "WS /subscriptions/block", labels[0].GetValue())
 }
 
