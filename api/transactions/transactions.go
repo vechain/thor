@@ -222,10 +222,10 @@ func (t *Transactions) Mount(root *mux.Router, pathPrefix string) {
 		HandlerFunc(utils.WrapHandlerFunc(t.handleSendTransaction))
 	sub.Path("/{id}").
 		Methods(http.MethodGet).
-		Name("GET /transactions/${id}").
+		Name("GET /transactions/{id}").
 		HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionByID))
 	sub.Path("/{id}/receipt").
 		Methods(http.MethodGet).
-		Name("GET /transactions/${id}/receipt").
+		Name("GET /transactions/{id}/receipt").
 		HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionReceiptByID))
 }
