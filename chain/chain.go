@@ -241,6 +241,7 @@ func (c *Chain) GetTransaction(id thor.Bytes32) (*tx.Transaction, *TxMeta, error
 	if err != nil {
 		return nil, nil, err
 	}
+	metricTransactionReadCounter().Add(1)
 	return tx, txMeta, nil
 }
 
@@ -256,6 +257,7 @@ func (c *Chain) GetTransactionReceipt(txID thor.Bytes32) (*tx.Receipt, error) {
 	if err != nil {
 		return nil, err
 	}
+	metricReceiptReadCounter().Add(1)
 	return receipt, nil
 }
 

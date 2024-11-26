@@ -294,7 +294,6 @@ func (r *Repository) getTransaction(key []byte) (*tx.Transaction, error) {
 	if err := loadRLP(r.bodyStore, key, &tx); err != nil {
 		return nil, err
 	}
-	metricTransactionReadCounter().Add(1)
 	return &tx, nil
 }
 
@@ -315,6 +314,7 @@ func (r *Repository) GetBlockTransactions(id thor.Bytes32) (tx.Transactions, err
 				return nil, err
 			}
 		}
+		metricTransactionReadCounter().Add(int64(len(txs)))
 		return txs, nil
 	}
 	return nil, nil
@@ -338,7 +338,6 @@ func (r *Repository) getReceipt(key []byte) (*tx.Receipt, error) {
 	if err := loadRLP(r.bodyStore, key, &receipt); err != nil {
 		return nil, err
 	}
-	metricReceiptReadCounter().Add(1)
 	return &receipt, nil
 }
 
@@ -359,6 +358,7 @@ func (r *Repository) GetBlockReceipts(id thor.Bytes32) (tx.Receipts, error) {
 				return nil, err
 			}
 		}
+		metricReceiptReadCounter().Add(int64(len(receipts)))
 		return receipts, nil
 	}
 	return nil, nil
