@@ -88,7 +88,7 @@ func metricsMiddleware(next http.Handler) http.Handler {
 
 		if subscription {
 			metricActiveWebsocketGauge().AddWithLabel(-1, map[string]string{"name": name})
-			// record websocket duration in seconds, no MS
+			// record websocket duration in seconds, not MS
 			metricWebsocketDuration().ObserveWithLabels(time.Since(now).Milliseconds() / 1000, map[string]string{"name": name, "code": strconv.Itoa(mrw.statusCode)})
 		} else if enabled {
 			metricHTTPReqCounter().AddWithLabel(1, map[string]string{"name": name, "code": strconv.Itoa(mrw.statusCode), "method": r.Method})
