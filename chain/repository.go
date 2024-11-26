@@ -171,6 +171,7 @@ func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, conflic
 				return nil, err
 			}
 		}
+		metricTransactionWriteCounter().Add(int64(len(txs)))
 
 		// save receipts
 		for i, receipt := range receipts {
@@ -179,6 +180,7 @@ func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, conflic
 				return nil, err
 			}
 		}
+		metricReceiptWriteCounter().Add(int64(len(receipts)))
 	}
 	if err := indexChainHead(headPutter, header); err != nil {
 		return nil, err
@@ -292,6 +294,7 @@ func (r *Repository) getTransaction(key []byte) (*tx.Transaction, error) {
 	if err := loadRLP(r.bodyStore, key, &tx); err != nil {
 		return nil, err
 	}
+	metricTransactionReadCounter().Add(1)
 	return &tx, nil
 }
 
@@ -335,6 +338,7 @@ func (r *Repository) getReceipt(key []byte) (*tx.Receipt, error) {
 	if err := loadRLP(r.bodyStore, key, &receipt); err != nil {
 		return nil, err
 	}
+	metricReceiptReadCounter().Add(1)
 	return &receipt, nil
 }
 
