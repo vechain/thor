@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package chain_test
+package chain
 
 import (
 	"testing"
@@ -11,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -21,13 +20,13 @@ func M(args ...interface{}) []interface{} {
 	return args
 }
 
-func newTestRepo() (*muxdb.MuxDB, *chain.Repository) {
+func newTestRepo() (*muxdb.MuxDB, *Repository) {
 	db := muxdb.NewMem()
 	b0 := new(block.Builder).
 		ParentID(thor.Bytes32{0xff, 0xff, 0xff, 0xff}).
 		Build()
 
-	repo, err := chain.NewRepository(db, b0)
+	repo, err := NewRepository(db, b0)
 	if err != nil {
 		panic(err)
 	}
@@ -49,11 +48,11 @@ func newBlock(parent *block.Block, ts uint64, txs ...*tx.Transaction) *block.Blo
 	return b.WithSignature(sig)
 }
 
-func TestRepository(t *testing.T) {
+func TestRepositoryFunc(t *testing.T) {
 	db, repo1 := newTestRepo()
 	b0 := repo1.GenesisBlock()
 
-	repo1, err := chain.NewRepository(db, b0)
+	repo1, err := NewRepository(db, b0)
 	if err != nil {
 		panic(err)
 	}
@@ -69,11 +68,11 @@ func TestRepository(t *testing.T) {
 	// best block not set, so still 0
 	assert.Equal(t, uint32(0), repo1.BestBlockSummary().Header.Number())
 
-	repo1.SetBestBlockID(b1.Header().ID())
+	assert.Nil(t, repo1.AddBlock(b1, tx.Receipts{receipt1}, 0, true))
 	assert.Equal(t, uint32(1), repo1.BestBlockSummary().Header.Number())
 
-	repo2, _ := chain.NewRepository(db, b0)
-	for _, repo := range []*chain.Repository{repo1, repo2} {
+	repo2, _ := NewRepository(db, b0)
+	for _, repo := range []*Repository{repo1, repo2} {
 		assert.Equal(t, b1.Header().ID(), repo.BestBlockSummary().Header.ID())
 		s, err := repo.GetBlockSummary(b1.Header().ID())
 		assert.Nil(t, err)
