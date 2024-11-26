@@ -120,13 +120,13 @@ func TestWebsocketMetrics(t *testing.T) {
 	metrics, err := parser.TextToMetricFamilies(bytes.NewReader(body))
 	assert.Nil(t, err)
 
-	m := metrics["thor_metrics_api_active_websocket_count"].GetMetric()
+	m := metrics["thor_metrics_api_active_websocket_gauge"].GetMetric()
 	assert.Equal(t, 1, len(m), "should be 1 metric entries")
 	assert.Equal(t, float64(1), m[0].GetGauge().GetValue())
 
 	labels := m[0].GetLabel()
 	assert.Equal(t, "subject", labels[0].GetName())
-	assert.Equal(t, "beat", labels[0].GetValue())
+	assert.Equal(t, "WS /subscriptions/beat", labels[0].GetValue())
 
 	// initiate 1 beat subscription, active websocket should be 2
 	conn2, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
@@ -137,7 +137,7 @@ func TestWebsocketMetrics(t *testing.T) {
 	metrics, err = parser.TextToMetricFamilies(bytes.NewReader(body))
 	assert.Nil(t, err)
 
-	m = metrics["thor_metrics_api_active_websocket_count"].GetMetric()
+	m = metrics["thor_metrics_api_active_websocket_gauge"].GetMetric()
 	assert.Equal(t, 1, len(m), "should be 1 metric entries")
 	assert.Equal(t, float64(2), m[0].GetGauge().GetValue())
 
@@ -151,7 +151,7 @@ func TestWebsocketMetrics(t *testing.T) {
 	metrics, err = parser.TextToMetricFamilies(bytes.NewReader(body))
 	assert.Nil(t, err)
 
-	m = metrics["thor_metrics_api_active_websocket_count"].GetMetric()
+	m = metrics["thor_metrics_api_active_websocket_gauge"].GetMetric()
 	assert.Equal(t, 2, len(m), "should be 2 metric entries")
 	// both m[0] and m[1] should have the value of 1
 	assert.Equal(t, float64(2), m[0].GetGauge().GetValue())
@@ -160,7 +160,7 @@ func TestWebsocketMetrics(t *testing.T) {
 	// m[1] should have the subject of block
 	labels = m[1].GetLabel()
 	assert.Equal(t, "subject", labels[0].GetName())
-	assert.Equal(t, "block", labels[0].GetValue())
+	assert.Equal(t, "WS /subscriptions/block", labels[0].GetValue())
 }
 
 func httpGet(t *testing.T, url string) ([]byte, int) {
