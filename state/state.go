@@ -519,6 +519,11 @@ func (s *State) Stage(newVer trie.Version) (*Stage, error) {
 	root := trieCpy.Hash()
 	tries = append(tries, trieCpy)
 
+	if len(changes) > 0 {
+		// If gets here, there are addresses with changes and saveAccount was successful
+		metricAccountWriteCounter().AddWithLabel(int64(len(changes)), map[string]string{"type": "trie"})
+	}
+
 	return &Stage{
 		root: root,
 		commit: func() error {
@@ -538,6 +543,8 @@ func (s *State) Stage(newVer trie.Version) (*Stage, error) {
 					return err
 				}
 			}
+			// If gets here, all tries were committed successfully and the last one contains the updated accounts.
+			metricAccountWriteCounter().AddWithLabel(int64(len(changes)), map[string]string{"type": "state"})
 			return nil
 		},
 	}, nil
