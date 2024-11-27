@@ -227,7 +227,7 @@ func TestParseAddress(t *testing.T) {
 	assert.Equal(t, expectedAddr, *result)
 }
 
-func initSubscriptionsServer(t *testing.T, deprecatedEnabled bool) {
+func initSubscriptionsServer(t *testing.T, enabledDeprecated bool) {
 	thorChain, err := testchain.NewIntegrationTestChain()
 	require.NoError(t, err)
 
@@ -274,7 +274,7 @@ func initSubscriptionsServer(t *testing.T, deprecatedEnabled bool) {
 	require.NoError(t, err)
 
 	router := mux.NewRouter()
-	New(thorChain.Repo(), []string{}, 5, txPool, deprecatedEnabled).
+	New(thorChain.Repo(), []string{}, 5, txPool, enabledDeprecated).
 		Mount(router, "/subscriptions")
 	ts = httptest.NewServer(router)
 }

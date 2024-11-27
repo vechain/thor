@@ -26,7 +26,7 @@ const txQueueSize = 20
 
 type Subscriptions struct {
 	backtraceLimit    uint32
-	deprecatedEnabled bool
+	enabledDeprecated bool
 	repo              *chain.Repository
 	upgrader          *websocket.Upgrader
 	pendingTx         *pendingTx
@@ -51,11 +51,11 @@ const (
 	pingPeriod = (pongWait * 7) / 10
 )
 
-func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32, txpool *txpool.TxPool, deprecatedEnabled bool) *Subscriptions {
+func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32, txpool *txpool.TxPool, enabledDeprecated bool) *Subscriptions {
 	sub := &Subscriptions{
 		backtraceLimit:    backtraceLimit,
 		repo:              repo,
-		deprecatedEnabled: deprecatedEnabled,
+		enabledDeprecated: enabledDeprecated,
 		upgrader: &websocket.Upgrader{
 			EnableCompression: true,
 			CheckOrigin: func(r *http.Request) bool {
@@ -197,7 +197,7 @@ func (s *Subscriptions) handleSubject(w http.ResponseWriter, req *http.Request) 
 			return err
 		}
 	case "beat":
-		if !s.deprecatedEnabled {
+		if !s.enabledDeprecated {
 			return utils.HTTPError(nil, http.StatusGone)
 		}
 		if reader, err = s.handleBeatReader(w, req); err != nil {

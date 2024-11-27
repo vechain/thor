@@ -32,7 +32,7 @@ type Accounts struct {
 	callGasLimit      uint64
 	forkConfig        thor.ForkConfig
 	bft               bft.Committer
-	deprecatedEnabled bool
+	enabledDeprecated bool
 }
 
 func New(
@@ -41,7 +41,7 @@ func New(
 	callGasLimit uint64,
 	forkConfig thor.ForkConfig,
 	bft bft.Committer,
-	deprecatedEnabled bool,
+	enabledDeprecated bool,
 ) *Accounts {
 	return &Accounts{
 		repo,
@@ -49,7 +49,7 @@ func New(
 		callGasLimit,
 		forkConfig,
 		bft,
-		deprecatedEnabled,
+		enabledDeprecated,
 	}
 }
 
@@ -171,7 +171,7 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 }
 
 func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) error {
-	if !a.deprecatedEnabled {
+	if !a.enabledDeprecated {
 		return utils.HTTPError(nil, http.StatusGone)
 	}
 	callData := &CallData{}

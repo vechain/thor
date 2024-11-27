@@ -279,7 +279,7 @@ func getStorageWithNonExistingRevision(t *testing.T) {
 	assert.Equal(t, "revision: leveldb: not found\n", string(res), "revision not found")
 }
 
-func initAccountServer(t *testing.T, deprecatedEnabled bool) {
+func initAccountServer(t *testing.T, enabledDeprecated bool) {
 	thorChain, err := testchain.NewIntegrationTestChain()
 	require.NoError(t, err)
 
@@ -306,7 +306,7 @@ func initAccountServer(t *testing.T, deprecatedEnabled bool) {
 	)
 
 	router := mux.NewRouter()
-	accounts.New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), thor.NoFork, thorChain.Engine(), deprecatedEnabled).
+	accounts.New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), thor.NoFork, thorChain.Engine(), enabledDeprecated).
 		Mount(router, "/accounts")
 
 	ts = httptest.NewServer(router)
