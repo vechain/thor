@@ -71,7 +71,7 @@ var (
 	}
 	apiEnabledDeprecatedFlag = cli.BoolFlag{
 		Name:  "api-enabled-deprecated",
-		Usage: "enable deprecated APIs",
+		Usage: "enable deprecated API endpoints (POST /accounts/{address}, POST /accounts, WS /subscriptions/beat",
 	}
 	enableAPILogsFlag = cli.BoolFlag{
 		Name:  "enable-api-logs",
