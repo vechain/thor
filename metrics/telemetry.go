@@ -98,21 +98,16 @@ func GaugeVec(name string, labels []string) GaugeVecMeter {
 	return metrics.GetOrCreateGaugeVecMeter(name, labels)
 }
 
-var lazyLoadLock sync.Mutex
-
 // LazyLoad allows to defer the instantiation of the metric while allowing its definition. More clearly:
 // - it allow metrics to be defined and used package wide (using var)
 // - it avoid metrics definition to determine the singleton to use (noop vs prometheus)
 func LazyLoad[T any](f func() T) func() T {
 	var result T
-	var loaded bool
+	var once sync.Once
 	return func() T {
-		lazyLoadLock.Lock()
-		defer lazyLoadLock.Unlock()
-		if !loaded {
+		once.Do(func() {
 			result = f()
-			loaded = true
-		}
+		})
 		return result
 	}
 }
