@@ -20,10 +20,10 @@ type BlockIngestion struct {
 }
 
 type Status struct {
-	Healthy           bool            `json:"healthy"`
-	BlockIngestion    *BlockIngestion `json:"blockIngestion"`
-	ChainBootstrapped bool            `json:"chainBootstrapped"`
-	PeerCount         int             `json:"peerCount"`
+	Healthy            bool       `json:"healthy"`
+	BestBlockTimestamp *time.Time `json:"bestBlockTimestamp"`
+	WasChainSynced     bool       `json:"wasChainSynced"`
+	PeerCount          int        `json:"peerCount"`
 }
 
 type Health struct {
@@ -76,7 +76,6 @@ func (h *Health) Status(blockTolerance time.Duration, minPeerCount int) (*Status
 
 	// Fetch the best block details
 	bestBlock := h.repo.BestBlockSummary()
-	bestBlockID := bestBlock.Header.ID()
 	bestBlockTimestamp := time.Unix(int64(bestBlock.Header.Timestamp()), 0)
 
 	// Fetch the current connected peers
@@ -91,20 +90,17 @@ func (h *Health) Status(blockTolerance time.Duration, minPeerCount int) (*Status
 
 	// Perform the checks
 	networkProgressing := h.isNetworkProgressing(now, bestBlockTimestamp, blockTolerance)
-	nodeBootstrapped := h.hasNodeBootstrapped(now, bestBlockTimestamp)
+	wasChainSynced := h.hasNodeBootstrapped(now, bestBlockTimestamp)
 	nodeConnected := h.isNodeConnectedP2P(connectedPeerCount, minPeerCount)
 
 	// Calculate overall health status
-	healthy := networkProgressing && nodeBootstrapped && nodeConnected
+	healthy := networkProgressing && wasChainSynced && nodeConnected
 
 	// Return the current status
 	return &Status{
-		Healthy: healthy,
-		BlockIngestion: &BlockIngestion{
-			ID:        &bestBlockID,
-			Timestamp: &bestBlockTimestamp,
-		},
-		ChainBootstrapped: nodeBootstrapped,
-		PeerCount:         connectedPeerCount,
+		Healthy:            healthy,
+		BestBlockTimestamp: &bestBlockTimestamp,
+		WasChainSynced:     wasChainSynced,
+		PeerCount:          connectedPeerCount,
 	}, nil
 }
