@@ -146,12 +146,12 @@ func ConvertRange(chain *chain.Chain, r *Range) (*logdb.Range, error) {
 		return nil, nil
 	}
 	if r.From == nil {
-		r.From = new(uint64)
-		*r.From = 0
+		from := uint64(0)
+		r.From = &from
 	}
 	if r.To == nil {
-		r.To = new(uint64)
-		*r.To = math.MaxUint64
+		to := uint64(math.MaxUint64)
+		r.To = &to
 	}
 	if r.Unit == TimeRangeType {
 		emptyRange := logdb.Range{
