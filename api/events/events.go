@@ -84,6 +84,6 @@ func (e *Events) Mount(root *mux.Router, pathPrefix string) {
 
 	sub.Path("").
 		Methods(http.MethodPost).
-		Name("logs_filter_event").
+		Name("POST /logs/event").
 		HandlerFunc(utils.WrapHandlerFunc(e.handleFilter))
 }
