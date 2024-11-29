@@ -287,7 +287,7 @@ func makeAPIConfig(ctx *cli.Context, soloMode bool) api.Config {
 		EnableMetrics:     ctx.Bool(enableMetricsFlag.Name),
 		LogsLimit:         ctx.Uint64(apiLogsLimitFlag.Name),
 		AllowedTracers:    parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
-		EnableDeprecated:  ctx.Bool(apiEnabledDeprecatedFlag.Name),
+		EnableDeprecated:  ctx.Bool(apiEnableDeprecatedFlag.Name),
 		SoloMode:          soloMode,
 	}
 }
