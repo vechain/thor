@@ -16,7 +16,7 @@ import (
 func MockTransactions(n int) tx.Transactions {
 	txs := make(tx.Transactions, n)
 	for i := range txs {
-		mockTx := GetMockTx()
+		mockTx := GetMockLegacyTx()
 		txs[i] = &mockTx
 	}
 	return txs

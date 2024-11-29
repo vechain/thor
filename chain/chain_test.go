@@ -17,7 +17,7 @@ import (
 )
 
 func newTx() *tx.Transaction {
-	tx := new(tx.Builder).Build()
+	tx := new(tx.Builder).BuildLegacy()
 	pk, _ := crypto.GenerateKey()
 	sig, _ := crypto.Sign(tx.SigningHash().Bytes(), pk)
 	return tx.WithSignature(sig)

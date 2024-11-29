@@ -239,7 +239,7 @@ func initBlockServer(t *testing.T) {
 			Nonce(1).
 			Clause(cla).
 			BlockRef(tx.NewBlockRef(0)).
-			Build(),
+			BuildLegacy(),
 		genesis.DevAccounts()[0].PrivateKey,
 	)
 

@@ -71,7 +71,7 @@ func TestRepository(t *testing.T) {
 	assert.Equal(t, b0summary, repo1.BestBlockSummary())
 	assert.Equal(t, repo1.GenesisBlock().Header().ID()[31], repo1.ChainTag())
 
-	tx1 := new(tx.Builder).Build()
+	tx1 := new(tx.Builder).BuildLegacy()
 	receipt1 := &tx.Receipt{}
 
 	b1 := newBlock(repo1.GenesisBlock(), 10, tx1)
