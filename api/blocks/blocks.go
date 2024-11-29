@@ -60,7 +60,7 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 			return err
 		}
 		return utils.WriteJSON(w, &JSONRawBlockSummary{
-			fmt.Sprintf("0x%s", hex.EncodeToString(rlpEncodedSummary)),
+			fmt.Sprintf("0x%s", hex.EncodeToString(rlpEncoded)),
 		})
 	}
 
