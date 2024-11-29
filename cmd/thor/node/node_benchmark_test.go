@@ -270,7 +270,7 @@ func createOneClausePerTx(signerPK *ecdsa.PrivateKey, thorChain *testchain.Chain
 			Nonce(uint64(datagen.RandInt())).
 			Clause(cla).
 			BlockRef(tx.NewBlockRef(0)).
-			Build()
+			BuildLegacy()
 
 		sig, err := crypto.Sign(transaction.SigningHash().Bytes(), signerPK)
 		if err != nil {
@@ -301,7 +301,7 @@ func createManyClausesPerTx(signerPK *ecdsa.PrivateKey, thorChain *testchain.Cha
 		transactionBuilder.Clause(tx.NewClause(&toAddr).WithValue(big.NewInt(10000)))
 	}
 
-	transaction := transactionBuilder.Gas(gasUsed).Build()
+	transaction := transactionBuilder.Gas(gasUsed).BuildLegacy()
 
 	sig, err := crypto.Sign(transaction.SigningHash().Bytes(), signerPK)
 	if err != nil {

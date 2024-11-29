@@ -39,7 +39,7 @@ func txBuilder(tag byte) *tx.Builder {
 }
 
 func txSign(builder *tx.Builder) *tx.Transaction {
-	transaction := builder.Build()
+	transaction := builder.BuildLegacy()
 	sig, _ := crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
 	return transaction.WithSignature(sig)
 }
@@ -626,7 +626,7 @@ func TestValidateBlockBody(t *testing.T) {
 		{
 			"TxOriginBlocked", func(t *testing.T) {
 				thor.MockBlocklist([]string{genesis.DevAccounts()[9].Address.String()})
-				trx := txBuilder(tc.tag).Build()
+				trx := txBuilder(tc.tag).BuildLegacy()
 				trx = tx.MustSign(trx, genesis.DevAccounts()[9].PrivateKey)
 
 				blk, err := tc.sign(
@@ -644,7 +644,7 @@ func TestValidateBlockBody(t *testing.T) {
 		},
 		{
 			"TxSignerUnavailable", func(t *testing.T) {
-				tx := txBuilder(tc.tag).Build()
+				tx := txBuilder(tc.tag).BuildLegacy()
 				var sig [65]byte
 				tx = tx.WithSignature(sig[:])
 
@@ -663,7 +663,7 @@ func TestValidateBlockBody(t *testing.T) {
 		},
 		{
 			"UnsupportedFeatures", func(t *testing.T) {
-				tx := txBuilder(tc.tag).Features(tx.Features(2)).Build()
+				tx := txBuilder(tc.tag).Features(tx.Features(2)).BuildLegacy()
 				sig, _ := crypto.Sign(tx.SigningHash().Bytes(), genesis.DevAccounts()[2].PrivateKey)
 				tx = tx.WithSignature(sig)
 

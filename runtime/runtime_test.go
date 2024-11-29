@@ -670,7 +670,7 @@ func GetMockTx(repo *chain.Repository, t *testing.T) tx.Transaction {
 		Clause(tx.NewClause(&to).WithValue(big.NewInt(20000)).WithData([]byte{0, 0, 0, 0x60, 0x60, 0x60})).
 		Expiration(expiration).
 		Gas(gas).
-		Build()
+		BuildLegacy()
 	sig, err := crypto.Sign(tx.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
 		t.Fatal(err)
@@ -690,7 +690,7 @@ func GetMockFailedTx() tx.Transaction {
 		GasPriceCoef(128).
 		Gas(21000).
 		DependsOn(nil).
-		Nonce(12345678).Build()
+		Nonce(12345678).BuildLegacy()
 
 	return *trx
 }

@@ -102,7 +102,7 @@ func TestConvertTransfer(t *testing.T) {
 		Gas(21000).
 		Nonce(1).
 		BlockRef(tx.NewBlockRef(0)).
-		Build()
+		BuildLegacy()
 	transaction = tx.MustSign(transaction, genesis.DevAccounts()[0].PrivateKey)
 
 	// New block
@@ -150,7 +150,7 @@ func TestConvertEventWithBadSignature(t *testing.T) {
 		Gas(21000).
 		Nonce(1).
 		BlockRef(tx.NewBlockRef(0)).
-		Build().
+		BuildLegacy().
 		WithSignature(badSig[:])
 
 	// New block
@@ -190,7 +190,7 @@ func TestConvertEvent(t *testing.T) {
 			Gas(21000).
 			Nonce(1).
 			BlockRef(tx.NewBlockRef(0)).
-			Build(),
+			BuildLegacy(),
 		genesis.DevAccounts()[0].PrivateKey,
 	)
 

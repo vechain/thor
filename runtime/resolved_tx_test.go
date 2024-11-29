@@ -80,7 +80,7 @@ func (tr *testResolvedTransaction) TestResolveTransaction() {
 		return txBuilder(tr.repo.ChainTag())
 	}
 
-	_, err := runtime.ResolveTransaction(txBuild().Build())
+	_, err := runtime.ResolveTransaction(txBuild().BuildLegacy())
 	tr.assert.Equal(secp256k1.ErrInvalidSignatureLen.Error(), err.Error())
 
 	_, err = runtime.ResolveTransaction(txSign(txBuild().Gas(21000 - 1)))
@@ -185,6 +185,6 @@ func txBuilder(tag byte) *tx.Builder {
 }
 
 func txSign(builder *tx.Builder) *tx.Transaction {
-	transaction := builder.Build()
+	transaction := builder.BuildLegacy()
 	return tx.MustSign(transaction, genesis.DevAccounts()[0].PrivateKey)
 }
