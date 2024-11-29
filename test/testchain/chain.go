@@ -203,7 +203,6 @@ func (c *Chain) MintBlock(account genesis.DevAccount, transactions ...*tx.Transa
 	if err := w.Commit(); err != nil {
 		return err
 	}
-
 	return nil
 }
 
