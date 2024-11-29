@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/node"
 	"github.com/vechain/thor/v2/comm"
+	"github.com/vechain/thor/v2/health"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/txpool"
@@ -40,7 +41,9 @@ func initCommServer(t *testing.T) {
 			Limit:           10000,
 			LimitPerAccount: 16,
 			MaxLifetime:     10 * time.Minute,
-		}))
+		}),
+		&health.Health{},
+	)
 
 	router := mux.NewRouter()
 	node.New(communicator).Mount(router, "/node")
