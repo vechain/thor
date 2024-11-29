@@ -21,7 +21,7 @@ import (
 )
 
 func TestErrorWhileRetrievingTxOriginInConvertReceipt(t *testing.T) {
-	tr := &tx.Transaction{}
+	tr := new(tx.Builder).BuildLegacy()
 	header := &block.Header{}
 	receipt := &tx.Receipt{
 		Reward: big.NewInt(100),
@@ -102,7 +102,7 @@ func newReceipt() *tx.Receipt {
 func newTx(clause *tx.Clause) *tx.Transaction {
 	tx := new(tx.Builder).
 		Clause(clause).
-		Build()
+		BuildLegacy()
 	pk, _ := crypto.GenerateKey()
 	sig, _ := crypto.Sign(tx.SigningHash().Bytes(), pk)
 	return tx.WithSignature(sig)

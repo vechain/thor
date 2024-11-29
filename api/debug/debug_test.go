@@ -523,7 +523,7 @@ func initDebugServer(t *testing.T) {
 		ChainTag(thorChain.Repo().ChainTag()).
 		Expiration(10).
 		Gas(21000).
-		Build()
+		BuildLegacy()
 	noClausesTx = tx.MustSign(noClausesTx, genesis.DevAccounts()[0].PrivateKey)
 
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
@@ -537,7 +537,7 @@ func initDebugServer(t *testing.T) {
 		Clause(cla).
 		Clause(cla2).
 		BlockRef(tx.NewBlockRef(0)).
-		Build()
+		BuildLegacy()
 	transaction = tx.MustSign(transaction, genesis.DevAccounts()[0].PrivateKey)
 
 	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], transaction, noClausesTx))

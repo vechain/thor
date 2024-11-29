@@ -297,16 +297,16 @@ func initAccountServer(t *testing.T) {
 	ts = httptest.NewServer(router)
 }
 
-func buildTxWithClauses(chaiTag byte, clauses ...*tx.Clause) *tx.Transaction {
+func buildTxWithClauses(chainTag byte, clauses ...*tx.Clause) *tx.Transaction {
 	builder := new(tx.Builder).
-		ChainTag(chaiTag).
+		ChainTag(chainTag).
 		Expiration(10).
 		Gas(1000000)
 	for _, c := range clauses {
 		builder.Clause(c)
 	}
 
-	trx := builder.Build()
+	trx := builder.BuildLegacy()
 
 	return tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)
 }

@@ -72,7 +72,7 @@ func initChain(t *testing.T) *testchain.Chain {
 		Nonce(1).
 		Clause(cla).
 		BlockRef(tx.NewBlockRef(0)).
-		Build()
+		BuildLegacy()
 	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 
 	txDeploy := new(tx.Builder).
@@ -83,7 +83,7 @@ func initChain(t *testing.T) *testchain.Chain {
 		Nonce(3).
 		Clause(tx.NewClause(nil).WithData(common.Hex2Bytes(eventcontract.HexBytecode))).
 		BlockRef(tx.NewBlockRef(0)).
-		Build()
+		BuildLegacy()
 	sigTxDeploy, err := crypto.Sign(txDeploy.SigningHash().Bytes(), genesis.DevAccounts()[1].PrivateKey)
 	require.NoError(t, err)
 	txDeploy = txDeploy.WithSignature(sigTxDeploy)
