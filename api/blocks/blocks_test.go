@@ -87,7 +87,6 @@ func testMutuallyExclusiveQueries(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, statusCode)
 	assert.Equal(t, "raw&expanded: Raw and Expanded are mutually exclusive", strings.TrimSpace(string(res)))
-
 }
 
 func testGetBestBlock(t *testing.T) {
