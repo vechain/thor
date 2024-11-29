@@ -154,7 +154,7 @@ func createTx(repo *chain.Repository, addressNumber uint) *tx.Transaction {
 			Nonce(1).
 			Clause(cla).
 			BlockRef(tx.NewBlockRef(0)).
-			Build(),
+			BuildLegacy(),
 		genesis.DevAccounts()[addressNumber].PrivateKey,
 	)
 }
