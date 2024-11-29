@@ -7,6 +7,7 @@ package tx_test
 
 import (
 	"encoding/hex"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -17,7 +18,7 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func GetMockTx() tx.Transaction {
+func GetMockLegacyTx() tx.Transaction {
 	to, _ := thor.ParseAddress("0x7567d83b7b8d80addcb281a71d54fc7b3364ffed")
 	trx := new(tx.Builder).ChainTag(1).
 		BlockRef(tx.BlockRef{0, 0, 0, 0, 0xaa, 0xbb, 0xcc, 0xdd}).
@@ -27,61 +28,82 @@ func GetMockTx() tx.Transaction {
 		GasPriceCoef(128).
 		Gas(21000).
 		DependsOn(nil).
-		Nonce(12345678).Build()
+		Nonce(12345678).BuildLegacy()
+
+	return *trx
+}
+
+func getMockDynFeeTx() tx.Transaction {
+	to, _ := thor.ParseAddress("0x7567d83b7b8d80addcb281a71d54fc7b3364ffed")
+	trx := new(tx.Builder).ChainTag(1).
+		BlockRef(tx.BlockRef{0, 0, 0, 0, 0xaa, 0xbb, 0xcc, 0xdd}).
+		Expiration(32).
+		Clause(tx.NewClause(&to).WithValue(big.NewInt(10000)).WithData([]byte{0, 0, 0, 0x60, 0x60, 0x60})).
+		Clause(tx.NewClause(&to).WithValue(big.NewInt(20000)).WithData([]byte{0, 0, 0, 0x60, 0x60, 0x60})).
+		Gas(21000).
+		MaxFeePerGas(big.NewInt(10000000)).
+		MaxPriorityFeePerGas(big.NewInt(20000)).
+		DependsOn(nil).
+		Nonce(12345678).BuildDynamicFee()
 
 	return *trx
 }
 
 func TestIsExpired(t *testing.T) {
-	tx := GetMockTx()
+	tx := GetMockLegacyTx()
 	res := tx.IsExpired(10)
 	assert.Equal(t, res, false)
 }
 
-func TestHash(t *testing.T) {
-	tx := GetMockTx()
-	res := tx.Hash()
-	assert.Equal(t, res, thor.Bytes32{0x4b, 0xff, 0x70, 0x1, 0xfe, 0xc4, 0x2, 0x84, 0xd9, 0x3b, 0x4c, 0x45, 0x61, 0x7d, 0xc7, 0x41, 0xb9, 0xa8, 0x8e, 0xd5, 0x9d, 0xf, 0x1, 0xa3, 0x76, 0x39, 0x4c, 0x7b, 0xfe, 0xa6, 0xed, 0x24})
-}
-
 func TestDependsOn(t *testing.T) {
-	tx := GetMockTx()
+	tx := GetMockLegacyTx()
 	res := tx.DependsOn()
 	var expected *thor.Bytes32
 	assert.Equal(t, expected, res)
 }
 
 func TestTestFeatures(t *testing.T) {
-	txx := GetMockTx()
+	txx := GetMockLegacyTx()
 	supportedFeatures := tx.Features(1)
 	res := txx.TestFeatures(supportedFeatures)
 	assert.Equal(t, res, nil)
 }
 
 func TestToString(t *testing.T) {
-	tx := GetMockTx() // Ensure this mock transaction has all the necessary fields populated
+	// Legacy transaction
+	tx := GetMockLegacyTx() // Ensure this mock transaction has all the necessary fields populated
 
 	// Construct the expected string representation of the transaction
 	// This should match the format used in the String() method of the Transaction struct
 	// and should reflect the actual state of the mock transaction
-	expectedString := "\n\tTx(0x0000000000000000000000000000000000000000000000000000000000000000, 87 B)\n\tOrigin:         N/A\n\tClauses:        [\n\t\t(To:\t0x7567d83b7b8d80addcb281a71d54fc7b3364ffed\n\t\t Value:\t10000\n\t\t Data:\t0x000000606060) \n\t\t(To:\t0x7567d83b7b8d80addcb281a71d54fc7b3364ffed\n\t\t Value:\t20000\n\t\t Data:\t0x000000606060)]\n\tGasPriceCoef:   128\n\tGas:            21000\n\tChainTag:       1\n\tBlockRef:       0-aabbccdd\n\tExpiration:     32\n\tDependsOn:      nil\n\tNonce:          12345678\n\tUnprovedWork:   0\n\tDelegator:      N/A\n\tSignature:      0x\n"
+	expectedString := "\n\tTx(0x0000000000000000000000000000000000000000000000000000000000000000, 87 B)\n\tOrigin:         N/A\n\tClauses:        [\n\t\t(To:\t0x7567d83b7b8d80addcb281a71d54fc7b3364ffed\n\t\t Value:\t10000\n\t\t Data:\t0x000000606060) \n\t\t(To:\t0x7567d83b7b8d80addcb281a71d54fc7b3364ffed\n\t\t Value:\t20000\n\t\t Data:\t0x000000606060)]\n\tGas:            21000\n\tChainTag:       1\n\tBlockRef:       0-aabbccdd\n\tExpiration:     32\n\tDependsOn:      nil\n\tNonce:          12345678\n\tUnprovedWork:   0\n\tDelegator:      N/A\n\tSignature:      0x\n\n\t\tGasPriceCoef:   128\n\t\t"
 
 	res := tx.String()
 
 	// Use assert.Equal to compare the actual result with the expected string
 	assert.Equal(t, expectedString, res)
+
+	// Dynamic fee transaction
+	tx = getMockDynFeeTx()
+	expectedString = "\n\tTx(0x0000000000000000000000000000000000000000000000000000000000000000, 95 B)\n\tOrigin:         N/A\n\tClauses:        [\n\t\t(To:\t0x7567d83b7b8d80addcb281a71d54fc7b3364ffed\n\t\t Value:\t10000\n\t\t Data:\t0x000000606060) \n\t\t(To:\t0x7567d83b7b8d80addcb281a71d54fc7b3364ffed\n\t\t Value:\t20000\n\t\t Data:\t0x000000606060)]\n\tGas:            21000\n\tChainTag:       1\n\tBlockRef:       0-aabbccdd\n\tExpiration:     32\n\tDependsOn:      nil\n\tNonce:          12345678\n\tUnprovedWork:   0\n\tDelegator:      N/A\n\tSignature:      0x\n\n\t\tMaxFeePerGas:   10000000\n\t\tMaxPriorityFeePerGas: 20000\n\t\t"
+	res = tx.String()
+	assert.Equal(t, expectedString, res)
 }
 
 func TestTxSize(t *testing.T) {
-	tx := GetMockTx()
+	tx := GetMockLegacyTx()
 
 	size := tx.Size()
 	assert.Equal(t, size, thor.StorageSize(87))
+
+	tx = getMockDynFeeTx()
+	size = tx.Size()
+	assert.Equal(t, size, thor.StorageSize(95))
 }
 
 func TestProvedWork(t *testing.T) {
 	// Mock the transaction
-	tx := GetMockTx()
+	tx := GetMockLegacyTx()
 
 	// Define a head block number
 	headBlockNum := uint32(20)
@@ -102,20 +124,20 @@ func TestProvedWork(t *testing.T) {
 }
 
 func TestChainTag(t *testing.T) {
-	tx := GetMockTx()
+	tx := GetMockLegacyTx()
 	res := tx.ChainTag()
 	assert.Equal(t, res, uint8(0x1))
 }
 
 func TestNonce(t *testing.T) {
-	tx := GetMockTx()
+	tx := GetMockLegacyTx()
 	res := tx.Nonce()
 	assert.Equal(t, res, uint64(0xbc614e))
 }
 
 func TestOverallGasPrice(t *testing.T) {
 	// Mock or create a Transaction with necessary fields initialized
-	tx := GetMockTx()
+	tx := GetMockLegacyTx()
 
 	// Define test cases
 	testCases := []struct {
@@ -154,7 +176,7 @@ func TestOverallGasPrice(t *testing.T) {
 
 func TestEvaluateWork(t *testing.T) {
 	origin := thor.BytesToAddress([]byte("origin"))
-	tx := GetMockTx()
+	tx := GetMockLegacyTx()
 
 	// Returns a function
 	evaluate := tx.EvaluateWork(origin)
@@ -169,7 +191,7 @@ func TestEvaluateWork(t *testing.T) {
 	}
 }
 
-func TestTx(t *testing.T) {
+func LegacyTx(t *testing.T) {
 	to, _ := thor.ParseAddress("0x7567d83b7b8d80addcb281a71d54fc7b3364ffed")
 	trx := new(tx.Builder).ChainTag(1).
 		BlockRef(tx.BlockRef{0, 0, 0, 0, 0xaa, 0xbb, 0xcc, 0xdd}).
@@ -179,12 +201,12 @@ func TestTx(t *testing.T) {
 		GasPriceCoef(128).
 		Gas(21000).
 		DependsOn(nil).
-		Nonce(12345678).Build()
+		Nonce(12345678).BuildLegacy()
 
 	assert.Equal(t, "0x2a1c25ce0d66f45276a5f308b99bf410e2fc7d5b6ea37a49f2ab9f1da9446478", trx.SigningHash().String())
 	assert.Equal(t, thor.Bytes32{}, trx.ID())
 
-	assert.Equal(t, uint64(21000), func() uint64 { g, _ := new(tx.Builder).Build().IntrinsicGas(); return g }())
+	assert.Equal(t, uint64(21000), func() uint64 { g, _ := new(tx.Builder).BuildLegacy().IntrinsicGas(); return g }())
 	assert.Equal(t, uint64(37432), func() uint64 { g, _ := trx.IntrinsicGas(); return g }())
 
 	assert.Equal(t, big.NewInt(150), trx.GasPrice(big.NewInt(100)))
@@ -200,6 +222,7 @@ func TestTx(t *testing.T) {
 	sig, _ := crypto.Sign(trx.SigningHash().Bytes(), priv)
 
 	trx = trx.WithSignature(sig)
+	fmt.Println(trx.ID())
 	assert.Equal(t, "0xd989829d88b0ed1b06edf5c50174ecfa64f14a64", func() string { s, _ := trx.Origin(); return s.String() }())
 	assert.Equal(t, "0xda90eaea52980bc4bb8d40cb2ff84d78433b3b4a6e7d50b75736c5e3e77b71ec", trx.ID().String())
 
@@ -225,7 +248,7 @@ func TestDelegatedTx(t *testing.T) {
 		Gas(210000).
 		DependsOn(nil).
 		Features(feat).
-		Nonce(12345678).Build()
+		Nonce(12345678).BuildLegacy()
 
 	assert.Equal(t, "0x96c4cd08584994f337946f950eca5511abe15b152bc879bf47c2227901f9f2af", trx.SigningHash().String())
 	assert.Equal(t, true, trx.Features().IsDelegated())
@@ -251,8 +274,8 @@ func TestDelegatedTx(t *testing.T) {
 	)
 
 	raw, _ := hex.DecodeString("f8db81a484aabbccdd20f840df947567d83b7b8d80addcb281a71d54fc7b3364ffed82271086000000606060df947567d83b7b8d80addcb281a71d54fc7b3364ffed824e20860000006060608180830334508083bc614ec101b882bad4d4401b1fb1c41d61727d7fd2aeb2bb3e65a27638a5326ca98404c0209ab159eaeb37f0ac75ed1ac44d92c3d17402d7d64b4c09664ae2698e1102448040c000f043fafeaf60343248a37e4f1d2743b4ab9116df6d627b4d8a874e4f48d3ae671c4e8d136eb87c544bea1763673a5f1762c2266364d1b22166d16e3872b5a9c700")
-	var newTx *tx.Transaction
-	if err := rlp.DecodeBytes(raw, &newTx); err != nil {
+	newTx := new(tx.Transaction)
+	if err := newTx.UnmarshalBinary(raw); err != nil {
 		t.Error(err)
 	}
 	assert.Equal(t, true, newTx.Features().IsDelegated())
@@ -281,7 +304,7 @@ func TestIntrinsicGas(t *testing.T) {
 }
 
 func BenchmarkTxMining(b *testing.B) {
-	tx := new(tx.Builder).Build()
+	tx := new(tx.Builder).BuildLegacy()
 	signer := thor.BytesToAddress([]byte("acc1"))
 	maxWork := &big.Int{}
 	eval := tx.EvaluateWork(signer)

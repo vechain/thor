@@ -91,7 +91,7 @@ func mintTransactions(t *testing.T, thorChain *testchain.Chain) {
 		ChainTag(thorChain.Repo().ChainTag()).
 		Expiration(10).
 		Gas(21000).
-		Build()
+		BuildLegacy()
 	sig, err := crypto.Sign(noClausesTx.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
 		t.Fatal(err)
@@ -109,7 +109,7 @@ func mintTransactions(t *testing.T, thorChain *testchain.Chain) {
 		Clause(cla).
 		Clause(cla2).
 		BlockRef(tx.NewBlockRef(0)).
-		Build()
+		BuildLegacy()
 
 	sig, err = crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {

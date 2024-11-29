@@ -160,7 +160,7 @@ func createTx(repo *chain.Repository, addressNumber uint) *tx.Transaction {
 			Nonce(uint64(datagen.RandInt())).
 			Clause(cla).
 			BlockRef(tx.NewBlockRef(0)).
-			Build(),
+			BuildLegacy(),
 		genesis.DevAccounts()[addressNumber].PrivateKey,
 	)
 }
