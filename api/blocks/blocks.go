@@ -37,13 +37,17 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	raw := req.URL.Query().Get("raw")
-	if raw != "" && raw != "false" && raw != "true" {
-		return utils.BadRequest(errors.WithMessage(errors.New("should be boolean"), "raw"))
+	raw, err := utils.StringToBoolean(req.URL.Query().Get("raw"), false)
+	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "raw"))
 	}
-	expanded := req.URL.Query().Get("expanded")
-	if expanded != "" && expanded != "false" && expanded != "true" {
-		return utils.BadRequest(errors.WithMessage(errors.New("should be boolean"), "expanded"))
+	expanded, err := utils.StringToBoolean(req.URL.Query().Get("expanded"), false)
+	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "expanded"))
+	}
+
+	if raw && expanded {
+		return utils.BadRequest(errors.WithMessage(errors.New("Raw and Expanded are mutually exclusive"), "raw&expanded"))
 	}
 
 	summary, err := utils.GetSummary(revision, b.repo, b.bft)
@@ -54,7 +58,7 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 		return err
 	}
 
-	if raw == "true" {
+	if raw {
 		rlpEncoded, err := rlp.EncodeToBytes(summary.Header)
 		if err != nil {
 			return err
@@ -78,7 +82,7 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 	}
 
 	jSummary := buildJSONBlockSummary(summary, isTrunk, isFinalized)
-	if expanded == "true" {
+	if expanded {
 		txs, err := b.repo.GetBlockTransactions(summary.Header.ID())
 		if err != nil {
 			return err
