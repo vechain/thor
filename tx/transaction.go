@@ -174,6 +174,41 @@ func (t *Transaction) EvaluateWork(origin thor.Address) func(nonce uint64) *big.
 	}
 }
 
+func (t *Transaction) hashWithoutNonceLegacyTx(origin thor.Address) *thor.Bytes32 {
+	b := thor.Blake2bFn(func(w io.Writer) {
+		rlp.Encode(w, []interface{}{
+			t.body.chainTag(),
+			t.body.blockRef(),
+			t.body.expiration(),
+			t.body.clauses(),
+			t.body.gasPriceCoef(),
+			t.body.dependsOn(),
+			t.body.nonce(),
+			t.body.reserved(),
+			origin,
+		})
+	})
+	return &b
+}
+
+func (t *Transaction) hashWithoutNonceDynamicFeeTx(origin thor.Address) *thor.Bytes32 {
+	b := thor.Blake2bFn(func(w io.Writer) {
+		rlp.Encode(w, []interface{}{
+			t.body.chainTag(),
+			t.body.blockRef(),
+			t.body.expiration(),
+			t.body.clauses(),
+			t.body.maxFeePerGas(),
+			t.body.maxPriorityFeePerGas(),
+			t.body.dependsOn(),
+			t.body.nonce(),
+			t.body.reserved(),
+			origin,
+		})
+	})
+	return &b
+}
+
 // SigningHash returns hash of tx excludes signature.
 func (t *Transaction) SigningHash() (hash thor.Bytes32) {
 	if cached := t.cache.signingHash.Load(); cached != nil {

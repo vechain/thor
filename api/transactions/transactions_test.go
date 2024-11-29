@@ -18,6 +18,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vechain/go-ethereum/rlp"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/testchain"
@@ -94,6 +95,26 @@ func getLegacyTx(t *testing.T) {
 		t.Fatal(err)
 	}
 	rlpTx, err := legacyTx.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, hexutil.Encode(rlpTx), rawTx["raw"], "should be equal raw")
+}
+
+func getDynamicFeeTx(t *testing.T) {
+	res := httpGetAndCheckResponseStatus(t, "/transactions/"+dynFeeTx.ID().String(), 200)
+	var rtx *transactions.Transaction
+	if err := json.Unmarshal(res, &rtx); err != nil {
+		t.Fatal(err)
+	}
+	checkMatchingTx(t, dynFeeTx, rtx)
+
+	res = httpGetAndCheckResponseStatus(t, "/transactions/"+dynFeeTx.ID().String()+"?raw=true", 200)
+	var rawTx map[string]interface{}
+	if err := json.Unmarshal(res, &rawTx); err != nil {
+		t.Fatal(err)
+	}
+	rlpTx, err := rlp.EncodeToBytes(dynFeeTx)
 	if err != nil {
 		t.Fatal(err)
 	}
