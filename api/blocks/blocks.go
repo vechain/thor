@@ -6,8 +6,11 @@
 package blocks
 
 import (
+	"encoding/hex"
+	"fmt"
 	"net/http"
 
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/utils"
@@ -34,6 +37,10 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
+	raw := req.URL.Query().Get("raw")
+	if raw != "" && raw != "false" && raw != "true" {
+		return utils.BadRequest(errors.WithMessage(errors.New("should be boolean"), "raw"))
+	}
 	expanded := req.URL.Query().Get("expanded")
 	if expanded != "" && expanded != "false" && expanded != "true" {
 		return utils.BadRequest(errors.WithMessage(errors.New("should be boolean"), "expanded"))
@@ -45,6 +52,16 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 			return utils.WriteJSON(w, nil)
 		}
 		return err
+	}
+
+	if raw == "true" {
+		rlpEncodedSummary, err := rlp.EncodeToBytes(summary)
+		if err != nil {
+			return err
+		}
+		return utils.WriteJSON(w, &JSONRawBlockSummary{
+			fmt.Sprintf("0x%s", hex.EncodeToString(rlpEncodedSummary)),
+		})
 	}
 
 	isTrunk, err := b.isTrunk(summary.Header.ID(), summary.Header.Number())

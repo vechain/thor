@@ -33,6 +33,10 @@ type JSONBlockSummary struct {
 	IsFinalized  bool         `json:"isFinalized"`
 }
 
+type JSONRawBlockSummary struct {
+	Raw string `json:"raw"`
+}
+
 type JSONCollapsedBlock struct {
 	*JSONBlockSummary
 	Transactions []thor.Bytes32 `json:"transactions"`

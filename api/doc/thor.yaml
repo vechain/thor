@@ -292,6 +292,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/RevisionInPath'
         - $ref: '#/components/parameters/ExpandedInQuery'
+        - $ref: '#/components/parameters/RawBlockInQuery'
       tags:
         - Blocks
       summary: Retrieve a block
@@ -2349,6 +2350,18 @@ components:
         Whether the returned block is expanded. 
         - `true` returns `transactions` as an array of objects with the transaction details and outputs
         - `false` returns `transactions` as an array of transaction IDs (hex strings)
+      schema:
+        type: boolean
+      example: false
+
+    RawBlockInQuery:
+      name: raw
+      in: query
+      required: false
+      description: |
+        Whether the block should be returned in RLP encoding or not. 
+        - `true` returns `block` as an RLP encoded object
+        - `false` returns `block` as a structured JSON object
       schema:
         type: boolean
       example: false
