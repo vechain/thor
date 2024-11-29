@@ -55,7 +55,7 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 	}
 
 	if raw == "true" {
-		rlpEncodedSummary, err := rlp.EncodeToBytes(summary)
+		rlpEncoded, err := rlp.EncodeToBytes(summary.Header)
 		if err != nil {
 			return err
 		}
