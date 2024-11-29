@@ -19,6 +19,14 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
+func newRange(unit RangeType, from uint64, to uint64) *Range {
+	return &Range{
+		Unit: unit,
+		From: &from,
+		To:   &to,
+	}
+}
+
 func TestEventsTypes(t *testing.T) {
 	c := initChain(t)
 	for name, tt := range map[string]func(*testing.T, *testchain.Chain){
@@ -34,7 +42,7 @@ func TestEventsTypes(t *testing.T) {
 }
 
 func testConvertRangeWithBlockRangeType(t *testing.T, chain *testchain.Chain) {
-	rng := NewRange(BlockRangeType, 1, 2)
+	rng := newRange(BlockRangeType, 1, 2)
 
 	convertedRng, err := ConvertRange(chain.Repo().NewBestChain(), rng)
 
@@ -43,7 +51,7 @@ func testConvertRangeWithBlockRangeType(t *testing.T, chain *testchain.Chain) {
 	assert.Equal(t, uint32(*rng.To), convertedRng.To)
 
 	// ensure wild block numbers have a max ceiling of chain.head
-	rng = NewRange(BlockRangeType, 100, 2200)
+	rng = newRange(BlockRangeType, 100, 2200)
 
 	convertedRng, err = ConvertRange(chain.Repo().NewBestChain(), rng)
 	require.NoError(t, err)
@@ -57,7 +65,7 @@ func testConvertRangeWithBlockRangeType(t *testing.T, chain *testchain.Chain) {
 }
 
 func testConvertRangeWithTimeRangeTypeLessThenGenesis(t *testing.T, chain *testchain.Chain) {
-	rng := NewRange(TimeRangeType, 100, 2200)
+	rng := newRange(TimeRangeType, 100, 2200)
 	expectedEmptyRange := &logdb.Range{
 		From: math.MaxUint32,
 		To:   math.MaxUint32,
@@ -72,7 +80,7 @@ func testConvertRangeWithTimeRangeTypeLessThenGenesis(t *testing.T, chain *testc
 func testConvertRangeWithTimeRangeType(t *testing.T, chain *testchain.Chain) {
 	genesis := chain.GenesisBlock().Header()
 
-	rng := NewRange(TimeRangeType, 1, genesis.Timestamp())
+	rng := newRange(TimeRangeType, 1, genesis.Timestamp())
 	expectedZeroRange := &logdb.Range{
 		From: 0,
 		To:   0,
@@ -87,7 +95,7 @@ func testConvertRangeWithTimeRangeType(t *testing.T, chain *testchain.Chain) {
 func testConvertRangeWithFromGreaterThanGenesis(t *testing.T, chain *testchain.Chain) {
 	genesis := chain.GenesisBlock().Header()
 
-	rng := NewRange(TimeRangeType, genesis.Timestamp() + 1_000, genesis.Timestamp() + 10_000)
+	rng := newRange(TimeRangeType, genesis.Timestamp()+1_000, genesis.Timestamp()+10_000)
 	expectedEmptyRange := &logdb.Range{
 		From: math.MaxUint32,
 		To:   math.MaxUint32,

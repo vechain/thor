@@ -133,14 +133,6 @@ type Range struct {
 	To   *uint64 `json:"to,omitempty"`
 }
 
-func NewRange(unit RangeType, from uint64, to uint64) *Range {
-	return &Range{
-		Unit: unit,
-		From: &from,
-		To:   &to,
-	}
-}
-
 func ConvertRange(chain *chain.Chain, r *Range) (*logdb.Range, error) {
 	if r == nil {
 		return nil, nil

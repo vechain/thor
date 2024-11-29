@@ -52,4 +52,4 @@ func (n noopMeters) Observe(int64) {}
 
 func (n *noopMetrics) ObserveWithLabels(int64, map[string]string) {}
 
-func (n *noopMetrics) collectDiskIO(refresh time.Duration) {}
+func (n *noopMetrics) collectDiskIO(_ time.Duration) {}

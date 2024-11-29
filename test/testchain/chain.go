@@ -8,7 +8,7 @@ package testchain
 import (
 	"errors"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"slices"
 	"time"
 
@@ -140,7 +140,7 @@ func (c *Chain) MintClauses(account genesis.DevAccount, clauses []*tx.Clause) er
 		Expiration(1000).
 		ChainTag(c.Repo().ChainTag()).
 		Gas(10e6).
-		Nonce(rand.Uint64())
+		Nonce(rand.Uint64()) // nolint
 
 	for _, clause := range clauses {
 		builer.Clause(clause)
