@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
@@ -364,8 +363,8 @@ func TestAdd(t *testing.T) {
 	raw, _ := hex.DecodeString(fmt.Sprintf("f8dc81%v84aabbccdd20f840df947567d83b7b8d80addcb281a71d54fc7b3364ffed82271086000000606060df947567d83b7b8d80addcb281a71d54fc7b3364ffed824e20860000006060608180830334508083bc614ec20108b88256e32450c1907f627d2c11fe5a9d0216be1712f4938b5feb04e37edef236c56266c3378acf97994beff22698b70023f486645d29cb23b479a7b044f7c6b104d2000584fcb3964446d4d832dcc849e2d76ea7e04a4ebdc3a4b61e7997e93277363d4e7fe9315e7f6dd8d9c0a8bff5879503f5c04adab8b08772499e74d34f67923501",
 		hex.EncodeToString([]byte{pool.repo.ChainTag()}),
 	))
-	var badReserved *Tx.Transaction
-	if err := rlp.DecodeBytes(raw, &badReserved); err != nil {
+	badReserved := new(tx.Transaction)
+	if err := badReserved.UnmarshalBinary(raw); err != nil {
 		t.Error(err)
 	}
 

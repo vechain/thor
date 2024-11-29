@@ -40,7 +40,7 @@ func newTx(chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef
 		DependsOn(dependsOn).
 		Features(features).
 		Gas(gas).
-		Build(),
+		BuildLegacy(),
 		from.PrivateKey,
 	)
 }
@@ -60,7 +60,7 @@ func newDelegatedTx(chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx
 		DependsOn(dependsOn).
 		Features(features).
 		Gas(gas).
-		Build()
+		BuildLegacy()
 
 	trx = tx.MustSignDelegated(
 		trx,

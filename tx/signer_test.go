@@ -19,7 +19,7 @@ func TestSign(t *testing.T) {
 	pk, err := crypto.GenerateKey()
 	assert.NoError(t, err)
 
-	tx := new(Builder).Build()
+	tx := new(Builder).BuildLegacy()
 
 	// Sign the transaction
 	signedTx, err := Sign(tx, pk)
@@ -47,7 +47,7 @@ func TestSignDelegated(t *testing.T) {
 	originPK, err := crypto.GenerateKey()
 	assert.NoError(t, err)
 
-	tx := new(Builder).Build()
+	tx := new(Builder).BuildLegacy()
 
 	// Feature not enabled
 	signedTx, err := SignDelegated(tx, originPK, delegatorPK)
@@ -57,7 +57,7 @@ func TestSignDelegated(t *testing.T) {
 	// enable the feature
 	var features Features
 	features.SetDelegated(true)
-	tx = new(Builder).Features(features).Build()
+	tx = new(Builder).Features(features).BuildLegacy()
 
 	// Sign the transaction as a delegator
 	signedTx, err = SignDelegated(tx, originPK, delegatorPK)
