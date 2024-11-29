@@ -32,7 +32,7 @@ func createTx(chainTag byte, gasPriceCoef uint8, expiration uint32, gas uint64, 
 		Clause(clause).
 		BlockRef(br)
 
-	transaction := builder.Build()
+	transaction := builder.BuildLegacy()
 
 	signature, _ := crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
 

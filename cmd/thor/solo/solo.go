@@ -265,6 +265,6 @@ func (s *Solo) newTx(clauses []*tx.Clause, from genesis.DevAccount) (*tx.Transac
 		Nonce(rand.Uint64()). //#nosec G404
 		DependsOn(nil).
 		Gas(1_000_000).
-		Build()
+		BuildLegacy()
 	return tx.Sign(trx, from.PrivateKey)
 }
