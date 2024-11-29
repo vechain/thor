@@ -7,6 +7,7 @@ package tx_test
 
 import (
 	"encoding/hex"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -207,6 +208,7 @@ func TestLegacyTx(t *testing.T) {
 	sig, _ := crypto.Sign(trx.SigningHash().Bytes(), priv)
 
 	trx = trx.WithSignature(sig)
+	fmt.Println(trx.ID())
 	assert.Equal(t, "0xd989829d88b0ed1b06edf5c50174ecfa64f14a64", func() string { s, _ := trx.Origin(); return s.String() }())
 	assert.Equal(t, "0xda90eaea52980bc4bb8d40cb2ff84d78433b3b4a6e7d50b75736c5e3e77b71ec", trx.ID().String())
 
