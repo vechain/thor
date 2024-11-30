@@ -58,7 +58,7 @@ func UnpackRevert(data []byte) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		var pCode big.Int
+		var pCode *big.Int
 		if err := (ethabi.Arguments{{Type: typ}}).Unpack(&pCode, data[4:]); err != nil {
 			return "", err
 		}
