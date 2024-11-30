@@ -265,6 +265,26 @@ func testTraceClause(t *testing.T) {
 	assert.Equal(t, expectedExecutionResult, parsedExecutionRes)
 }
 
+func testTraceClauseWithoutBlockId(t *testing.T) {
+	traceClauseOption := &TraceClauseOption{
+		Name:   "structLogger",
+		Target: fmt.Sprintf("%s/1", transaction.ID()),
+	}
+	expectedExecutionResult := &logger.ExecutionResult{
+		Gas:         0,
+		Failed:      false,
+		ReturnValue: "",
+		StructLogs:  make([]logger.StructLogRes, 0),
+	}
+	res := httpPostAndCheckResponseStatus(t, "/debug/tracers", traceClauseOption, 200)
+
+	var parsedExecutionRes *logger.ExecutionResult
+	if err := json.Unmarshal([]byte(res), &parsedExecutionRes); err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, expectedExecutionResult, parsedExecutionRes)
+}
+
 func testTraceClauseWithTxIndexOutOfBound(t *testing.T) {
 	traceClauseOption := &TraceClauseOption{
 		Name:   "structLogger",
