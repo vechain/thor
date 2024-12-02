@@ -27,11 +27,12 @@ import (
 )
 
 type Accounts struct {
-	repo         *chain.Repository
-	stater       *state.Stater
-	callGasLimit uint64
-	forkConfig   thor.ForkConfig
-	bft          bft.Committer
+	repo              *chain.Repository
+	stater            *state.Stater
+	callGasLimit      uint64
+	forkConfig        thor.ForkConfig
+	bft               bft.Committer
+	enabledDeprecated bool
 }
 
 func New(
@@ -40,6 +41,7 @@ func New(
 	callGasLimit uint64,
 	forkConfig thor.ForkConfig,
 	bft bft.Committer,
+	enabledDeprecated bool,
 ) *Accounts {
 	return &Accounts{
 		repo,
@@ -47,6 +49,7 @@ func New(
 		callGasLimit,
 		forkConfig,
 		bft,
+		enabledDeprecated,
 	}
 }
 
@@ -168,6 +171,9 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 }
 
 func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) error {
+	if !a.enabledDeprecated {
+		return utils.HTTPError(nil, http.StatusGone)
+	}
 	callData := &CallData{}
 	if err := utils.ParseJSON(req.Body, &callData); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
