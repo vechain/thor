@@ -136,6 +136,7 @@ func (t *Transaction) Hash() (hash thor.Bytes32) {
 	}
 	defer func() { t.cache.hash.Store(hash) }()
 
+	// Legacy tx don't have type prefix.
 	if t.Type() == LegacyTxType {
 		return rlpHash(t)
 	}
