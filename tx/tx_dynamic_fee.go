@@ -7,6 +7,7 @@ package tx
 
 import (
 	"io"
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -76,8 +77,10 @@ func (t *DynamicFeeTransaction) gas() uint64 {
 }
 
 func (t *DynamicFeeTransaction) gasPriceCoef() uint8 {
-	// TODO: should this panic instead?
-	return 0
+	if t.MaxFeePerGas.Cmp(big.NewInt(math.MaxUint8)) > 0 {
+		return math.MaxUint8
+	}
+	return uint8(t.MaxFeePerGas.Uint64())
 }
 
 func (t *DynamicFeeTransaction) maxFeePerGas() *big.Int {
