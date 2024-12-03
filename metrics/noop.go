@@ -5,7 +5,10 @@
 
 package metrics
 
-import "net/http"
+import (
+	"net/http"
+	"time"
+)
 
 // noopMetrics implements a no operations metrics service
 type noopMetrics struct{}
@@ -48,3 +51,5 @@ func (n noopMeters) Set(int64) {}
 func (n noopMeters) Observe(int64) {}
 
 func (n *noopMetrics) ObserveWithLabels(int64, map[string]string) {}
+
+func (n *noopMetrics) collectDiskIO(time.Duration) {}

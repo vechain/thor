@@ -21,7 +21,7 @@ state, including the disk space required for various node types.
 
 ### Command Line Options
 
-Please refer to [Command Line Options](./usage.md#command-line-options) in the usage documentation to see a list of all
+Please refer to [Command Line Options](https://github.com/vechain/thor/blob/master/docs/usage.md#command-line-options) in the usage documentation to see a list of all
 available options.
 
 ---

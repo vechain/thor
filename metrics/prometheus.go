@@ -6,8 +6,14 @@
 package metrics
 
 import (
+	"bufio"
+	"fmt"
 	"net/http"
+	"os"
+	"strconv"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -24,6 +30,8 @@ func InitializePrometheusMetrics() {
 	// don't allow for reset
 	if _, ok := metrics.(*prometheusMetrics); !ok {
 		metrics = newPrometheusMetrics()
+		// collection disk io metrics every 5 seconds
+		go metrics.(*prometheusMetrics).collectDiskIO(5 * time.Second)
 	}
 }
 
@@ -144,6 +152,59 @@ func (o *prometheusMetrics) newHistogramMeter(name string, buckets []int64) Hist
 
 	return &promHistogramMeter{
 		histogram: meter,
+	}
+}
+
+func getIOLineValue(line string) int64 {
+	fields := strings.Fields(line)
+	if len(fields) != 2 {
+		logger.Warn("this io file line is malformed", "err", line)
+		return 0
+	}
+	value, err := strconv.ParseInt(fields[1], 10, 64)
+	if err != nil {
+		logger.Warn("unable to parse int", "err", err)
+		return 0
+	}
+
+	return value
+}
+
+func getDiskIOData() (int64, int64, error) {
+	pid := os.Getpid()
+	ioFilePath := fmt.Sprintf("/proc/%d/io", pid)
+	file, err := os.Open(ioFilePath)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	// Parse the file line by line
+	scanner := bufio.NewScanner(file)
+	var reads, writes int64
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "syscr") {
+			reads = getIOLineValue(line)
+		} else if strings.HasPrefix(line, "syscw") {
+			writes = getIOLineValue(line)
+		}
+	}
+
+	return reads, writes, nil
+}
+
+func (o *prometheusMetrics) collectDiskIO(refresh time.Duration) {
+	for {
+		reads, writes, err := getDiskIOData()
+		if err == nil {
+			readsMeter := o.GetOrCreateGaugeMeter("disk_reads")
+			readsMeter.Set(reads)
+
+			writesMeter := o.GetOrCreateGaugeMeter("disk_writes")
+			writesMeter.Set(writes)
+		}
+
+		time.Sleep(refresh)
 	}
 }
 

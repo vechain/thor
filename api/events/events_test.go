@@ -7,6 +7,7 @@ package events_test
 
 import (
 	"encoding/json"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -16,8 +17,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/events"
-	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
@@ -28,8 +31,6 @@ const defaultLogLimit uint64 = 1000
 
 var (
 	ts      *httptest.Server
-	addr    = thor.BytesToAddress([]byte("address"))
-	topic   = thor.BytesToBytes32([]byte("topic"))
 	tclient *thorclient.Client
 )
 
@@ -52,14 +53,14 @@ func TestEvents(t *testing.T) {
 
 	blocksToInsert := 5
 	tclient = thorclient.New(ts.URL)
-	insertBlocks(t, thorChain.LogDB(), blocksToInsert)
+	insertBlocks(t, thorChain, blocksToInsert)
 	testEventWithBlocks(t, blocksToInsert)
 }
 
 func TestOptionalIndexes(t *testing.T) {
 	thorChain := initEventServer(t, defaultLogLimit)
 	defer ts.Close()
-	insertBlocks(t, thorChain.LogDB(), 5)
+	insertBlocks(t, thorChain, 5)
 	tclient = thorclient.New(ts.URL)
 
 	testCases := []struct {
@@ -109,7 +110,7 @@ func TestOptionalIndexes(t *testing.T) {
 func TestOption(t *testing.T) {
 	thorChain := initEventServer(t, 5)
 	defer ts.Close()
-	insertBlocks(t, thorChain.LogDB(), 5)
+	insertBlocks(t, thorChain, 5)
 
 	tclient = thorclient.New(ts.URL)
 	filter := events.EventFilter{
@@ -143,11 +144,45 @@ func TestOption(t *testing.T) {
 	assert.Equal(t, 5, len(tLogs))
 
 	// when the filtered events exceed the limit, should return the forbidden
-	insertBlocks(t, thorChain.LogDB(), 6)
+	insertBlocks(t, thorChain, 6)
 	res, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/logs/event", filter)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusForbidden, statusCode)
 	assert.Equal(t, "the number of filtered logs exceeds the maximum allowed value of 5, please use pagination", strings.Trim(string(res), "\n"))
+}
+
+func TestZeroFrom(t *testing.T) {
+	thorChain := initEventServer(t, 5)
+	defer ts.Close()
+	insertBlocks(t, thorChain, 5)
+
+	tclient = thorclient.New(ts.URL)
+	transferTopic := thor.MustParseBytes32("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
+	criteria := []*events.EventCriteria{
+		{
+			TopicSet: events.TopicSet{
+				Topic0: &transferTopic,
+			},
+		},
+	}
+
+	from := uint64(0)
+	filter := events.EventFilter{
+		CriteriaSet: criteria,
+		Range:       &events.Range{From: &from},
+		Options:     nil,
+		Order:       logdb.DESC,
+	}
+
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/event", filter)
+	require.NoError(t, err)
+	var tLogs []*events.FilteredEvent
+	if err := json.Unmarshal(res, &tLogs); err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, http.StatusOK, statusCode)
+	assert.NotEmpty(t, tLogs)
 }
 
 // Test functions
@@ -199,16 +234,14 @@ func testEventWithBlocks(t *testing.T, expectedBlocks int) {
 		assert.NotEmpty(t, tLog)
 	}
 
+	transferEvent := thor.MustParseBytes32("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
+
 	// Test with matching filter
 	matchingFilter := events.EventFilter{
 		CriteriaSet: []*events.EventCriteria{{
-			Address: &addr,
+			Address: &builtin.Energy.Address,
 			TopicSet: events.TopicSet{
-				&topic,
-				&topic,
-				&topic,
-				&topic,
-				&topic,
+				Topic0: &transferEvent,
 			},
 		}},
 	}
@@ -239,41 +272,17 @@ func initEventServer(t *testing.T, limit uint64) *testchain.Chain {
 }
 
 // Utilities functions
-func insertBlocks(t *testing.T, db *logdb.LogDB, n int) {
-	b := new(block.Builder).Build()
+func insertBlocks(t *testing.T, chain *testchain.Chain, n int) {
+	transferABI, ok := builtin.Energy.ABI.MethodByName("transfer")
+	require.True(t, ok)
+
+	encoded, err := transferABI.EncodeInput(genesis.DevAccounts()[2].Address, new(big.Int).SetUint64(datagen.RandUint64()))
+	require.NoError(t, err)
+
+	transferClause := tx.NewClause(&builtin.Energy.Address).WithData(encoded)
+
 	for i := 0; i < n; i++ {
-		b = new(block.Builder).
-			ParentID(b.Header().ID()).
-			Build()
-		receipts := tx.Receipts{newReceipt()}
-
-		w := db.NewWriter()
-		if err := w.Write(b, receipts); err != nil {
-			t.Fatal(err)
-		}
-
-		if err := w.Commit(); err != nil {
-			t.Fatal(err)
-		}
-	}
-}
-
-func newReceipt() *tx.Receipt {
-	return &tx.Receipt{
-		Outputs: []*tx.Output{
-			{
-				Events: tx.Events{{
-					Address: addr,
-					Topics: []thor.Bytes32{
-						topic,
-						topic,
-						topic,
-						topic,
-						topic,
-					},
-					Data: []byte("0x0"),
-				}},
-			},
-		},
+		err := chain.MintClauses(genesis.DevAccounts()[0], []*tx.Clause{transferClause})
+		require.NoError(t, err)
 	}
 }
