@@ -215,7 +215,6 @@ func TestConvertEvent(t *testing.T) {
 	repo, _ := chain.NewRepository(db, b)
 
 	// New tx
-<<<<<<< HEAD
 	transaction := tx.NewTxBuilder(tx.LegacyTxType).
 		ChainTag(repo.ChainTag()).
 		GasPriceCoef(1).
@@ -224,19 +223,9 @@ func TestConvertEvent(t *testing.T) {
 		Nonce(1).
 		BlockRef(tx.NewBlockRef(0)).
 		MustBuild()
+
 	transaction = tx.MustSign(
 		transaction,
-=======
-	transaction := tx.MustSign(
-		new(tx.Builder).
-			ChainTag(repo.ChainTag()).
-			GasPriceCoef(1).
-			Expiration(10).
-			Gas(21000).
-			Nonce(1).
-			BlockRef(tx.NewBlockRef(0)).
-			BuildLegacy(),
->>>>>>> e6630db0 (feat: add the dynamic fee tx and support for typed txs)
 		genesis.DevAccounts()[0].PrivateKey,
 	)
 

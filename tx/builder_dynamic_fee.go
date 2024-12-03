@@ -94,7 +94,7 @@ func (b *Builder) Nonce(nonce uint64) *Builder {
 }
 
 // DependsOn set depended tx.
-func (b *Builder) DependsOn(txID *thor.Bytes32) *Builder {
+func (b *DynFeeBuilder) DependsOn(txID *thor.Bytes32) *DynFeeBuilder {
 	if txID == nil {
 		b.dependsOn = nil
 	} else {
