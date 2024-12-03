@@ -231,7 +231,7 @@ func initBlockServer(t *testing.T) {
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 	trx := tx.MustSign(
-		new(tx.Builder).
+		new(tx.LegacyBuilder).
 			ChainTag(thorChain.Repo().ChainTag()).
 			GasPriceCoef(1).
 			Expiration(10).
@@ -239,7 +239,7 @@ func initBlockServer(t *testing.T) {
 			Nonce(1).
 			Clause(cla).
 			BlockRef(tx.NewBlockRef(0)).
-			BuildLegacy(),
+			Build(),
 		genesis.DevAccounts()[0].PrivateKey,
 	)
 

@@ -18,8 +18,8 @@ import (
 )
 
 func TestBlock(t *testing.T) {
-	tx1 := new(tx.Builder).Clause(tx.NewClause(&thor.Address{})).Clause(tx.NewClause(&thor.Address{})).BuildLegacy()
-	tx2 := new(tx.Builder).Clause(tx.NewClause(nil)).BuildLegacy()
+	tx1 := new(tx.LegacyBuilder).Clause(tx.NewClause(&thor.Address{})).Clause(tx.NewClause(&thor.Address{})).Build()
+	tx2 := new(tx.LegacyBuilder).Clause(tx.NewClause(nil)).Build()
 
 	privKey := string("dce1443bd2ef0c2631adc1c67e5c93f13dc23a41c18b536effbbdcbcdb96fb65")
 

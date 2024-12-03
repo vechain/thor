@@ -23,9 +23,9 @@ func newTx(txType int) *tx.Transaction {
 	var trx *tx.Transaction
 	switch txType {
 	case tx.LegacyTxType:
-		trx = new(tx.Builder).BuildLegacy()
+		trx = new(tx.LegacyBuilder).Build()
 	case tx.DynamicFeeTxType:
-		trx = new(tx.Builder).BuildDynamicFee()
+		trx = new(tx.DynFeeBuilder).Build()
 	default:
 		panic(tx.ErrInvalidTxType)
 	}
