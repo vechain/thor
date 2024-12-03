@@ -152,7 +152,7 @@ func createTx(repo *chain.Repository, addressNumber uint) *tx.Transaction {
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 
 	return tx.MustSign(
-		new(tx.Builder).
+		new(tx.LegacyBuilder).
 			ChainTag(repo.ChainTag()).
 			GasPriceCoef(1).
 			Expiration(1000).
@@ -160,7 +160,7 @@ func createTx(repo *chain.Repository, addressNumber uint) *tx.Transaction {
 			Nonce(uint64(datagen.RandInt())).
 			Clause(cla).
 			BlockRef(tx.NewBlockRef(0)).
-			BuildLegacy(),
+			Build(),
 		genesis.DevAccounts()[addressNumber].PrivateKey,
 	)
 }
