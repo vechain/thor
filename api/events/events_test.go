@@ -7,7 +7,6 @@ package events_test
 
 import (
 	"encoding/json"
-	"log/slog"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -166,9 +165,6 @@ func TestZeroFrom(t *testing.T) {
 			},
 		},
 	}
-
-	summary := thorChain.Repo().BestBlockSummary()
-	slog.Info("BestBlockSummary", "summary", summary.Header.Number())
 
 	from := uint64(0)
 	filter := events.EventFilter{
