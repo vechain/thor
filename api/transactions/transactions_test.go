@@ -142,12 +142,12 @@ func sendLegacyTx(t *testing.T) {
 	var gas = uint64(21000)
 
 	trx := tx.MustSign(
-		new(tx.Builder).
+		new(tx.LegacyBuilder).
 			BlockRef(blockRef).
 			ChainTag(chainTag).
 			Expiration(expiration).
 			Gas(gas).
-			BuildLegacy(),
+			Build(),
 		genesis.DevAccounts()[0].PrivateKey,
 	)
 
@@ -171,13 +171,13 @@ func sendDynamicFeeTx(t *testing.T) {
 	var maxFeePerGas = big.NewInt(128)
 
 	trx := tx.MustSign(
-		new(tx.Builder).
+		new(tx.DynFeeBuilder).
 			BlockRef(blockRef).
 			ChainTag(chainTag).
 			Expiration(expiration).
 			Gas(gas).
 			MaxFeePerGas(maxFeePerGas).
-			BuildDynamicFee(),
+			Build(),
 		genesis.DevAccounts()[0].PrivateKey,
 	)
 
@@ -284,7 +284,7 @@ func sendTxWithBadFormat(t *testing.T) {
 }
 
 func sendTxThatCannotBeAcceptedInLocalMempool(t *testing.T) {
-	tx := new(tx.Builder).BuildLegacy()
+	tx := new(tx.LegacyBuilder).Build()
 	rlpTx, err := rlp.EncodeToBytes(tx)
 	if err != nil {
 		t.Fatal(err)
@@ -334,7 +334,7 @@ func initTransactionServer(t *testing.T) {
 
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	legacyTx = new(tx.Builder).
+	legacyTx = new(tx.LegacyBuilder).
 		ChainTag(chainTag).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -342,10 +342,10 @@ func initTransactionServer(t *testing.T) {
 		Nonce(1).
 		Clause(cla).
 		BlockRef(tx.NewBlockRef(0)).
-		BuildLegacy()
+		Build()
 	legacyTx = tx.MustSign(legacyTx, genesis.DevAccounts()[0].PrivateKey)
 
-	dynFeeTx = new(tx.Builder).
+	dynFeeTx = new(tx.DynFeeBuilder).
 		ChainTag(chainTag).
 		MaxFeePerGas(new(big.Int).SetInt64(1)).
 		MaxPriorityFeePerGas(new(big.Int).SetInt64(10)).
@@ -354,19 +354,19 @@ func initTransactionServer(t *testing.T) {
 		Nonce(1).
 		Clause(cla).
 		BlockRef(tx.NewBlockRef(0)).
-		BuildDynamicFee()
+		Build()
 	dynFeeTx = tx.MustSign(dynFeeTx, genesis.DevAccounts()[0].PrivateKey)
 
 	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], legacyTx, dynFeeTx))
 
 	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute})
 
-	mempoolTx = new(tx.Builder).
+	mempoolTx = new(tx.LegacyBuilder).
 		ChainTag(chainTag).
 		Expiration(10).
 		Gas(21000).
 		Nonce(1).
-		BuildLegacy()
+		Build()
 	mempoolTx = tx.MustSign(mempoolTx, genesis.DevAccounts()[0].PrivateKey)
 
 	// Add a tx to the mempool to have both pending and non-pending transactions

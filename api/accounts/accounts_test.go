@@ -313,7 +313,7 @@ func initAccountServer(t *testing.T, enabledDeprecated bool) {
 }
 
 func buildTxWithClauses(chainTag byte, clauses ...*tx.Clause) *tx.Transaction {
-	builder := new(tx.Builder).
+	builder := new(tx.LegacyBuilder).
 		ChainTag(chainTag).
 		Expiration(10).
 		Gas(1000000)
@@ -321,7 +321,7 @@ func buildTxWithClauses(chainTag byte, clauses ...*tx.Clause) *tx.Transaction {
 		builder.Clause(c)
 	}
 
-	trx := builder.BuildLegacy()
+	trx := builder.Build()
 
 	return tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)
 }

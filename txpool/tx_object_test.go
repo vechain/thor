@@ -29,49 +29,28 @@ func newChainRepo(db *muxdb.MuxDB) *chain.Repository {
 }
 
 func newTx(txType int, chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, features tx.Features, from genesis.DevAccount) *tx.Transaction {
-	builder := new(tx.Builder).ChainTag(chainTag)
-	for _, c := range clauses {
-		builder.Clause(c)
+	var trx *tx.Transaction
+	switch txType {
+	case tx.LegacyTxType:
+		trx = legacyTxBuilder(chainTag, clauses, gas, blockRef, expiration, dependsOn, features).Build()
+	case tx.DynamicFeeTxType:
+		trx = dynFeeTxBuilder(chainTag, clauses, gas, blockRef, expiration, dependsOn, features).Build()
+	default:
+		panic(tx.ErrInvalidTxType)
 	}
-
-	b := builder.BlockRef(blockRef).
-		Expiration(expiration).
-		Nonce(rand.Uint64()). //#nosec G404
-		DependsOn(dependsOn).
-		Features(features).
-		Gas(gas)
-
-	if txType == tx.LegacyTxType {
-		return tx.MustSign(b.
-			BuildLegacy(),
-			from.PrivateKey,
-		)
-	}
-	return tx.MustSign(b.BuildDynamicFee(), from.PrivateKey)
+	return tx.MustSign(trx, from.PrivateKey)
 }
 
 func newDelegatedTx(txType int, chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, from genesis.DevAccount, delegator genesis.DevAccount) *tx.Transaction {
-	builder := new(tx.Builder).ChainTag(chainTag)
-	for _, c := range clauses {
-		builder.Clause(c)
-	}
-
 	var features tx.Features
 	features.SetDelegated(true)
-
-	b := builder.BlockRef(blockRef).
-		Expiration(expiration).
-		Nonce(rand.Uint64()). //#nosec G404
-		DependsOn(dependsOn).
-		Features(features).
-		Gas(gas)
 
 	var trx *tx.Transaction
 	switch txType {
 	case tx.LegacyTxType:
-		trx = b.BuildLegacy()
+		trx = legacyTxBuilder(chainTag, clauses, gas, blockRef, expiration, dependsOn, features).Build()
 	case tx.DynamicFeeTxType:
-		trx = b.BuildDynamicFee()
+		trx = dynFeeTxBuilder(chainTag, clauses, gas, blockRef, expiration, dependsOn, features).Build()
 	default:
 		panic(tx.ErrInvalidTxType)
 	}
@@ -83,6 +62,34 @@ func newDelegatedTx(txType int, chainTag byte, clauses []*tx.Clause, gas uint64,
 	)
 
 	return trx
+}
+
+func legacyTxBuilder(chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, features tx.Features) *tx.LegacyBuilder {
+	builder := new(tx.LegacyBuilder).ChainTag(chainTag)
+	for _, c := range clauses {
+		builder.Clause(c)
+	}
+
+	return builder.BlockRef(blockRef).
+		Expiration(expiration).
+		Nonce(rand.Uint64()). //#nosec G404
+		DependsOn(dependsOn).
+		Features(features).
+		Gas(gas)
+}
+
+func dynFeeTxBuilder(chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, features tx.Features) *tx.DynFeeBuilder {
+	builder := new(tx.DynFeeBuilder).ChainTag(chainTag)
+	for _, c := range clauses {
+		builder.Clause(c)
+	}
+
+	return builder.BlockRef(blockRef).
+		Expiration(expiration).
+		Nonce(rand.Uint64()). //#nosec G404
+		DependsOn(dependsOn).
+		Features(features).
+		Gas(gas)
 }
 
 func SetupTest() (genesis.DevAccount, *chain.Repository, *block.Block, *state.State) {

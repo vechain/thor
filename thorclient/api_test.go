@@ -87,11 +87,11 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 func mintTransactions(t *testing.T, thorChain *testchain.Chain) {
 	toAddr := datagen.RandAddress()
 
-	noClausesTx := new(tx.Builder).
+	noClausesTx := new(tx.LegacyBuilder).
 		ChainTag(thorChain.Repo().ChainTag()).
 		Expiration(10).
 		Gas(21000).
-		BuildLegacy()
+		Build()
 	sig, err := crypto.Sign(noClausesTx.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
 		t.Fatal(err)
@@ -100,7 +100,7 @@ func mintTransactions(t *testing.T, thorChain *testchain.Chain) {
 
 	cla := tx.NewClause(&toAddr).WithValue(big.NewInt(10000))
 	cla2 := tx.NewClause(&toAddr).WithValue(big.NewInt(10000))
-	transaction := new(tx.Builder).
+	transaction := new(tx.LegacyBuilder).
 		ChainTag(thorChain.Repo().ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -109,7 +109,7 @@ func mintTransactions(t *testing.T, thorChain *testchain.Chain) {
 		Clause(cla).
 		Clause(cla2).
 		BlockRef(tx.NewBlockRef(0)).
-		BuildLegacy()
+		Build()
 
 	sig, err = crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
