@@ -27,9 +27,9 @@ import (
 	"github.com/vechain/thor/v2/vrf"
 )
 
-func txBuilder(tag byte) *tx.Builder {
+func txBuilder(tag byte) *tx.LegacyBuilder {
 	address := thor.BytesToAddress([]byte("addr"))
-	return new(tx.Builder).
+	return new(tx.LegacyBuilder).
 		GasPriceCoef(1).
 		Gas(1000000).
 		Expiration(100).
@@ -38,8 +38,8 @@ func txBuilder(tag byte) *tx.Builder {
 		ChainTag(tag)
 }
 
-func txSign(builder *tx.Builder) *tx.Transaction {
-	transaction := builder.BuildLegacy()
+func txSign(builder *tx.LegacyBuilder) *tx.Transaction {
+	transaction := builder.Build()
 	sig, _ := crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
 	return transaction.WithSignature(sig)
 }
@@ -626,7 +626,7 @@ func TestValidateBlockBody(t *testing.T) {
 		{
 			"TxOriginBlocked", func(t *testing.T) {
 				thor.MockBlocklist([]string{genesis.DevAccounts()[9].Address.String()})
-				trx := txBuilder(tc.tag).BuildLegacy()
+				trx := txBuilder(tc.tag).Build()
 				trx = tx.MustSign(trx, genesis.DevAccounts()[9].PrivateKey)
 
 				blk, err := tc.sign(
@@ -644,7 +644,7 @@ func TestValidateBlockBody(t *testing.T) {
 		},
 		{
 			"TxSignerUnavailable", func(t *testing.T) {
-				tx := txBuilder(tc.tag).BuildLegacy()
+				tx := txBuilder(tc.tag).Build()
 				var sig [65]byte
 				tx = tx.WithSignature(sig[:])
 
@@ -663,7 +663,7 @@ func TestValidateBlockBody(t *testing.T) {
 		},
 		{
 			"UnsupportedFeatures", func(t *testing.T) {
-				tx := txBuilder(tc.tag).Features(tx.Features(2)).BuildLegacy()
+				tx := txBuilder(tc.tag).Features(tx.Features(2)).Build()
 				sig, _ := crypto.Sign(tx.SigningHash().Bytes(), genesis.DevAccounts()[2].PrivateKey)
 				tx = tx.WithSignature(sig)
 
@@ -700,7 +700,7 @@ func TestValidateBlockBody(t *testing.T) {
 		},
 		{
 			"ZeroGasTx", func(t *testing.T) {
-				txBuilder := new(tx.Builder).
+				txBuilder := new(tx.LegacyBuilder).
 					GasPriceCoef(0).
 					Gas(0).
 					Expiration(100).
