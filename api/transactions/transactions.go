@@ -244,8 +244,17 @@ func (t *Transactions) txCall(
 		return nil, fmt.Errorf("unable to convert transaction: %w", err)
 	}
 
-	// validation from the mempool
-	// TODO add more validations that are mandatory
+	// Txpool Checks
+	origin, _ := txCallData.Origin()
+	if thor.IsOriginBlocked(origin) {
+		// tx origin blocked
+		return nil, fmt.Errorf("origin blocked")
+	}
+
+	if err := txCallData.TestFeatures(header.TxsFeatures()); err != nil {
+		return nil, fmt.Errorf("invalid features")
+	}
+
 	switch {
 	case txCallMsg.ChainTag != t.repo.ChainTag():
 		return nil, fmt.Errorf("chain tag mismatch")
