@@ -56,6 +56,8 @@ type Repository struct {
 
 	caches struct {
 		summaries *cache
+		txs       *cache
+		receipts  *cache
 	}
 }
 
@@ -81,6 +83,9 @@ func NewRepository(db *muxdb.MuxDB, genesis *block.Block) (*Repository, error) {
 	}
 
 	repo.caches.summaries = newCache(512)
+	repo.caches.txs = newCache(2048)
+	repo.caches.receipts = newCache(2048)
+
 	if val, err := repo.propStore.Get(bestBlockIDKey); err != nil {
 		if !repo.propStore.IsNotFound(err) {
 			return nil, err
@@ -170,6 +175,7 @@ func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, conflic
 			if err := saveRLP(bodyPutter, keyBuf[:], tx); err != nil {
 				return nil, err
 			}
+			r.caches.txs.Add(string(keyBuf), tx)
 		}
 
 		// save receipts
@@ -178,6 +184,7 @@ func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, conflic
 			if err := saveRLP(bodyPutter, keyBuf, receipt); err != nil {
 				return nil, err
 			}
+			r.caches.receipts.Add(string(keyBuf), receipt)
 		}
 	}
 	if err := indexChainHead(headPutter, header); err != nil {
@@ -287,8 +294,18 @@ func (r *Repository) GetBlockSummary(id thor.Bytes32) (summary *BlockSummary, er
 }
 
 func (r *Repository) getTransaction(key []byte) (*tx.Transaction, error) {
+	trx, err := r.caches.txs.GetOrLoad(string(key), func() (interface{}, error) {
+		return loadTransaction(r.bodyStore, key)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return trx.(*tx.Transaction), nil
+}
+
+func loadTransaction(r kv.Getter, key []byte) (*tx.Transaction, error) {
 	var tx tx.Transaction
-	if err := loadRLP(r.bodyStore, key, &tx); err != nil {
+	if err := loadRLP(r, key[:], &tx); err != nil {
 		return nil, err
 	}
 	return &tx, nil
@@ -330,8 +347,18 @@ func (r *Repository) GetBlock(id thor.Bytes32) (*block.Block, error) {
 }
 
 func (r *Repository) getReceipt(key []byte) (*tx.Receipt, error) {
+	cached, err := r.caches.receipts.GetOrLoad(string(key), func() (interface{}, error) {
+		return loadReceipt(r.bodyStore, key)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return cached.(*tx.Receipt), nil
+}
+
+func loadReceipt(r kv.Getter, key []byte) (*tx.Receipt, error) {
 	var receipt tx.Receipt
-	if err := loadRLP(r.bodyStore, key, &receipt); err != nil {
+	if err := loadRLP(r, key[:], &receipt); err != nil {
 		return nil, err
 	}
 	return &receipt, nil
