@@ -21,6 +21,8 @@ const (
 	txIndexMask = (1 << txIndexBits) - 1
 	// Max = 2^20 - 1 = 1,048,575
 	logIndexMask = (1 << logIndexBits) - 1
+
+	MaxBlockNumber = blockNumMask
 )
 
 func newSequence(blockNum uint32, txIndex uint32, logIndex uint32) (sequence, error) {
