@@ -20,14 +20,14 @@ import (
 
 func newLegacyTx() *tx.Transaction {
 	return tx.MustSign(
-		new(tx.Builder).Nonce(rand.Uint64()).BuildLegacy(), //#nosec
+		new(tx.LegacyBuilder).Nonce(rand.Uint64()).Build(), //#nosec
 		genesis.DevAccounts()[0].PrivateKey,
 	)
 }
 
 func newDynFeeTx() *tx.Transaction {
 	return tx.MustSign(
-		new(tx.Builder).Nonce(rand.Uint64()).BuildDynamicFee(), //#nosec
+		new(tx.DynFeeBuilder).Nonce(rand.Uint64()).Build(), //#nosec
 		genesis.DevAccounts()[0].PrivateKey,
 	)
 }
