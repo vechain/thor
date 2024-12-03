@@ -12,100 +12,78 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-// Builder to make it easy to build transaction.
-type Builder struct {
-	legacyTx     LegacyTransaction
+// DynFeeBuilder to make it easy to build transaction.
+type DynFeeBuilder struct {
 	dynamicFeeTx DynamicFeeTransaction
 }
 
 // ChainTag set chain tag.
-func (b *Builder) ChainTag(tag byte) *Builder {
-	b.legacyTx.ChainTag = tag
+func (b *DynFeeBuilder) ChainTag(tag byte) *DynFeeBuilder {
 	b.dynamicFeeTx.ChainTag = tag
 	return b
 }
 
 // Clause add a clause.
-func (b *Builder) Clause(c *Clause) *Builder {
-	b.legacyTx.Clauses = append(b.legacyTx.Clauses, c)
+func (b *DynFeeBuilder) Clause(c *Clause) *DynFeeBuilder {
 	b.dynamicFeeTx.Clauses = append(b.dynamicFeeTx.Clauses, c)
 	return b
 }
 
-// GasPriceCoef set gas price coef.
-func (b *Builder) GasPriceCoef(coef uint8) *Builder {
-	b.legacyTx.GasPriceCoef = coef
-	return b
-}
-
 // Gas set gas provision for tx.
-func (b *Builder) Gas(gas uint64) *Builder {
-	b.legacyTx.Gas = gas
+func (b *DynFeeBuilder) Gas(gas uint64) *DynFeeBuilder {
 	b.dynamicFeeTx.Gas = gas
 	return b
 }
 
 // MaxFeePerGas set max fee per gas.
-func (b *Builder) MaxFeePerGas(maxFeePerGas *big.Int) *Builder {
+func (b *DynFeeBuilder) MaxFeePerGas(maxFeePerGas *big.Int) *DynFeeBuilder {
 	b.dynamicFeeTx.MaxFeePerGas = maxFeePerGas
 	return b
 }
 
 // MaxPriorityFeePerGas set max priority fee per gas.
-func (b *Builder) MaxPriorityFeePerGas(maxPriorityFeePerGas *big.Int) *Builder {
+func (b *DynFeeBuilder) MaxPriorityFeePerGas(maxPriorityFeePerGas *big.Int) *DynFeeBuilder {
 	b.dynamicFeeTx.MaxPriorityFeePerGas = maxPriorityFeePerGas
 	return b
 }
 
 // BlockRef set block reference.
-func (b *Builder) BlockRef(br BlockRef) *Builder {
-	b.legacyTx.BlockRef = binary.BigEndian.Uint64(br[:])
+func (b *DynFeeBuilder) BlockRef(br BlockRef) *DynFeeBuilder {
 	b.dynamicFeeTx.BlockRef = binary.BigEndian.Uint64(br[:])
 	return b
 }
 
 // Expiration set expiration.
-func (b *Builder) Expiration(exp uint32) *Builder {
-	b.legacyTx.Expiration = exp
+func (b *DynFeeBuilder) Expiration(exp uint32) *DynFeeBuilder {
 	b.dynamicFeeTx.Expiration = exp
 	return b
 }
 
 // Nonce set nonce.
-func (b *Builder) Nonce(nonce uint64) *Builder {
-	b.legacyTx.Nonce = nonce
+func (b *DynFeeBuilder) Nonce(nonce uint64) *DynFeeBuilder {
 	b.dynamicFeeTx.Nonce = nonce
 	return b
 }
 
 // DependsOn set depended tx.
-func (b *Builder) DependsOn(txID *thor.Bytes32) *Builder {
+func (b *DynFeeBuilder) DependsOn(txID *thor.Bytes32) *DynFeeBuilder {
 	if txID == nil {
-		b.legacyTx.DependsOn = nil
 		b.dynamicFeeTx.DependsOn = nil
 	} else {
 		cpy := *txID
-		b.legacyTx.DependsOn = &cpy
 		b.dynamicFeeTx.DependsOn = &cpy
 	}
 	return b
 }
 
 // Features set features.
-func (b *Builder) Features(feat Features) *Builder {
-	b.legacyTx.Reserved.Features = feat
+func (b *DynFeeBuilder) Features(feat Features) *DynFeeBuilder {
 	b.dynamicFeeTx.Reserved.Features = feat
 	return b
 }
 
-// BuildLegacy builds legacy tx object.
-func (b *Builder) BuildLegacy() *Transaction {
-	tx := Transaction{body: &b.legacyTx}
-	return &tx
-}
-
 // BuildDynamicFee builds dynamic fee tx object.
-func (b *Builder) BuildDynamicFee() *Transaction {
+func (b *DynFeeBuilder) Build() *Transaction {
 	tx := Transaction{body: &b.dynamicFeeTx}
 	return &tx
 }

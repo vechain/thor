@@ -64,7 +64,7 @@ func initChain(t *testing.T) *testchain.Chain {
 
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	tr := new(tx.Builder).
+	tr := new(tx.LegacyBuilder).
 		ChainTag(thorChain.Repo().ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -72,10 +72,10 @@ func initChain(t *testing.T) *testchain.Chain {
 		Nonce(1).
 		Clause(cla).
 		BlockRef(tx.NewBlockRef(0)).
-		BuildLegacy()
+		Build()
 	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 
-	txDeploy := new(tx.Builder).
+	txDeploy := new(tx.LegacyBuilder).
 		ChainTag(thorChain.Repo().ChainTag()).
 		GasPriceCoef(1).
 		Expiration(100).
@@ -83,7 +83,7 @@ func initChain(t *testing.T) *testchain.Chain {
 		Nonce(3).
 		Clause(tx.NewClause(nil).WithData(common.Hex2Bytes(eventcontract.HexBytecode))).
 		BlockRef(tx.NewBlockRef(0)).
-		BuildLegacy()
+		Build()
 	sigTxDeploy, err := crypto.Sign(txDeploy.SigningHash().Bytes(), genesis.DevAccounts()[1].PrivateKey)
 	require.NoError(t, err)
 	txDeploy = txDeploy.WithSignature(sigTxDeploy)
