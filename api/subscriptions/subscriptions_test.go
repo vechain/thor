@@ -263,11 +263,8 @@ func initSubscriptionsServer(t *testing.T, enabledDeprecated bool) {
 		Nonce(3).
 		Clause(tx.NewClause(nil).WithData(common.Hex2Bytes(eventcontract.HexBytecode))).
 		BlockRef(tx.NewBlockRef(0)).
-<<<<<<< HEAD
 		MustBuild()
-=======
-		BuildLegacy()
->>>>>>> e6630db0 (feat: add the dynamic fee tx and support for typed txs)
+
 	sigTxDeploy, err := crypto.Sign(txDeploy.SigningHash().Bytes(), genesis.DevAccounts()[1].PrivateKey)
 	require.NoError(t, err)
 	txDeploy = txDeploy.WithSignature(sigTxDeploy)
@@ -303,11 +300,7 @@ func TestSubscriptionsBacktrace(t *testing.T) {
 		Nonce(1).
 		Clause(cla).
 		BlockRef(tx.NewBlockRef(0)).
-<<<<<<< HEAD
 		MustBuild()
-=======
-		BuildLegacy()
->>>>>>> e6630db0 (feat: add the dynamic fee tx and support for typed txs)
 
 	sig, err := crypto.Sign(tr.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
@@ -323,11 +316,7 @@ func TestSubscriptionsBacktrace(t *testing.T) {
 		Nonce(3).
 		Clause(tx.NewClause(nil).WithData(common.Hex2Bytes(eventcontract.HexBytecode))).
 		BlockRef(tx.NewBlockRef(0)).
-<<<<<<< HEAD
 		MustBuild()
-=======
-		BuildLegacy()
->>>>>>> e6630db0 (feat: add the dynamic fee tx and support for typed txs)
 	sigTxDeploy, err := crypto.Sign(txDeploy.SigningHash().Bytes(), genesis.DevAccounts()[1].PrivateKey)
 	require.NoError(t, err)
 	txDeploy = txDeploy.WithSignature(sigTxDeploy)

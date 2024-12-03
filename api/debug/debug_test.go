@@ -559,11 +559,8 @@ func initDebugServer(t *testing.T) {
 		Clause(cla).
 		Clause(cla2).
 		BlockRef(tx.NewBlockRef(0)).
-<<<<<<< HEAD
 		MustBuild()
-=======
-		BuildLegacy()
->>>>>>> e6630db0 (feat: add the dynamic fee tx and support for typed txs)
+
 	transaction = tx.MustSign(transaction, genesis.DevAccounts()[0].PrivateKey)
 
 	dynFeeTx := tx.NewTxBuilder(tx.DynamicFeeTxType).
