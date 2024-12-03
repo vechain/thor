@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -323,17 +324,17 @@ func convertErrorCallReceipt(
 
 // ConvertCallTransaction converts a transaction.Transaction into a tx.Transaction
 // note: tx.Transaction will not be signed
-func ConvertCallTransaction(incomingTx *Transaction) (*tx.Transaction, error) {
-	//blockRef, err := thor.ParseBytes32(incomingTx.BlockRef)
-	//if err != nil {
-	//	return nil, fmt.Errorf("unable to parse block ref: %w", err)
-	//}
+func ConvertCallTransaction(incomingTx *Transaction, header *block.Header) (*tx.Transaction, error) {
+	blockRef, err := tx.NewBlockRefFromHex(incomingTx.BlockRef)
+	if err != nil {
+		return nil, errors.WithMessage(err, "blockRef")
+	}
 
 	convertedTxBuilder := new(tx.Builder).
 		ChainTag(incomingTx.ChainTag).
-		//Features(incomingTx). // TODO hook in the future
+		Features(header.TxsFeatures()).
 		Nonce(uint64(incomingTx.Nonce)).
-		//BlockRef(tx.NewBlockRefFromID(blockRef)). // TODO hook in the future
+		BlockRef(blockRef).
 		Expiration(incomingTx.Expiration).
 		GasPriceCoef(incomingTx.GasPriceCoef).
 		Gas(incomingTx.Gas).

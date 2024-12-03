@@ -239,7 +239,7 @@ func (t *Transactions) txCall(
 	}
 
 	// todo handle the txCallMsg.Delegator
-	txCallData, err := ConvertCallTransaction(txCallMsg)
+	txCallData, err := ConvertCallTransaction(txCallMsg, header)
 	if err != nil {
 		return nil, fmt.Errorf("unable to convert transaction: %w", err)
 	}

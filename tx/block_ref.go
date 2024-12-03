@@ -7,7 +7,9 @@ package tx
 
 import (
 	"encoding/binary"
+	"fmt"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -29,4 +31,24 @@ func NewBlockRef(blockNum uint32) (br BlockRef) {
 func NewBlockRefFromID(blockID thor.Bytes32) (br BlockRef) {
 	copy(br[:], blockID[:])
 	return
+}
+
+// NewBlockRefFromHex creates a BlockRef from a hex string.
+func NewBlockRefFromHex(hexStr string) (BlockRef, error) {
+	var br BlockRef
+
+	// Decode hex string
+	bytes, err := hexutil.Decode(hexStr)
+	if err != nil {
+		return br, fmt.Errorf("invalid hex: %v", err)
+	}
+
+	// Check length
+	if len(bytes) != 8 {
+		return br, fmt.Errorf("invalid length: expected 8 bytes, got %d", len(bytes))
+	}
+
+	// Copy bytes to BlockRef
+	copy(br[:], bytes)
+	return br, nil
 }
