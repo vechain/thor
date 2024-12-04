@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -81,9 +82,10 @@ func TestTransaction(t *testing.T) {
 
 	// Call transaction
 	for name, tt := range map[string]func(*testing.T){
-		"callTx":         callTx,
-		"invalidCallTx":  invalidCallTx,
-		"callExistingTx": callExistingTx,
+		"callTx":                 callTx,
+		"invalidCallTx":          invalidCallTx,
+		"callExistingTx":         callExistingTx,
+		"callExistingTxOldBlock": callExistingTxOldBlock,
 	} {
 		t.Run(name, tt)
 	}
@@ -309,15 +311,45 @@ func callTx(t *testing.T) {
 	}
 }
 
-func callExistingTx(t *testing.T) {
+func calcNewBlockRef(currentBlockRef string) (*string, error) {
+	num, err := strconv.ParseInt(strings.TrimPrefix(currentBlockRef, "0x"), 16, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	// Subtract 10 blocks if we can
+	if num >= 10 {
+		num = num - 10
+	}
+
+	// Format with padding to 16 zeros (8 bytes)
+	newBlockRef := fmt.Sprintf("0x%016x", num)
+	return &newBlockRef, nil
+}
+
+func callExistingTxOldBlock(t *testing.T) {
 	// fetch an existing transaction
 	existingTxID := transaction.ID()
 	testTx, err := tclient.Transaction(&existingTxID)
 	require.NoError(t, err)
 
-	// todo hook the block reference
-	//blk, err := tclient.Block(testTx.BlockRef)
-	//require.NoError(t, err)
+	newBlockRef, err := calcNewBlockRef(testTx.BlockRef)
+	require.NoError(t, err)
+	testTx.BlockRef = *newBlockRef
+
+	// locally execute the transaction
+	callReceipt, err := tclient.CallTransaction(testTx)
+	require.NoError(t, err)
+
+	// evaluate call receipt response fields
+	validateTxCall(t, testTx, callReceipt, &genesis.DevAccounts()[0].Address, nil)
+}
+
+func callExistingTx(t *testing.T) {
+	// fetch an existing transaction
+	existingTxID := transaction.ID()
+	testTx, err := tclient.Transaction(&existingTxID)
+	require.NoError(t, err)
 
 	// locally execute the transaction
 	callReceipt, err := tclient.CallTransaction(testTx)
