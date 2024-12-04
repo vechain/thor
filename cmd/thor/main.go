@@ -399,7 +399,7 @@ func soloAction(ctx *cli.Context) error {
 		bftEngine,
 		&solo.Communicator{},
 		forkConfig,
-		makeAPIConfig(ctx, false),
+		makeAPIConfig(ctx, true),
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
