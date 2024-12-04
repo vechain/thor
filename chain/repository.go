@@ -56,6 +56,8 @@ type Repository struct {
 
 	caches struct {
 		summaries *cache
+		txs	   	  *cache
+		receipts  *cache
 	}
 }
 
@@ -353,7 +355,7 @@ func (r *Repository) getReceipt(key []byte) (*tx.Receipt, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &receipt, nil
+	return cached.(*tx.Receipt), nil
 }
 
 func loadReceipt(r kv.Getter, key []byte) (*tx.Receipt, error) {
