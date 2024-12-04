@@ -56,7 +56,7 @@ type Repository struct {
 
 	caches struct {
 		summaries *cache
-		txs	   	  *cache
+		txs       *cache
 		receipts  *cache
 	}
 }
