@@ -238,7 +238,6 @@ func (t *Transactions) txCall(
 		return nil, fmt.Errorf("no origin address specified")
 	}
 
-	// todo handle the txCallMsg.Delegator
 	txCallData, err := ConvertCallTransaction(txCallMsg, header)
 	if err != nil {
 		return nil, fmt.Errorf("unable to convert transaction: %w", err)
@@ -277,7 +276,7 @@ func (t *Transactions) txCall(
 		},
 		t.forkConfig)
 
-	receipt, err := rt.CallTransaction(txCallData, &callAddr, nil) // TODO hook delegator
+	receipt, err := rt.CallTransaction(txCallData, &callAddr, txCallMsg.Delegator)
 	if err != nil {
 		// TODO add some metric here
 		return convertErrorCallReceipt(err, txCallMsg, &callAddr)
