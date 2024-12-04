@@ -13,6 +13,10 @@ func RandInt() int {
 	return mathrand.Int() //#nosec G404
 }
 
+func RandUint64() uint64 {
+	return mathrand.Uint64() //#nosec G404
+}
+
 func RandIntN(n int) int {
 	return mathrand.N(n) //#nosec G404
 }

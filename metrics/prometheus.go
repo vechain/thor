@@ -155,7 +155,7 @@ func (o *prometheusMetrics) newHistogramMeter(name string, buckets []int64) Hist
 	}
 }
 
-func getIOLineValue(line string) (int64) {
+func getIOLineValue(line string) int64 {
 	fields := strings.Fields(line)
 	if len(fields) != 2 {
 		logger.Warn("this io file line is malformed", "err", line)

@@ -540,8 +540,6 @@ func (s *State) Stage(newVer trie.Version) (*Stage, error) {
 					return err
 				}
 			}
-			// If gets here, all tries were committed successfully and the last one contains the updated accounts.
-			metricAccountCounter().AddWithLabel(int64(len(changes)), map[string]string{"type": "write", "target": "trie"})
 			return nil
 		},
 	}, nil
