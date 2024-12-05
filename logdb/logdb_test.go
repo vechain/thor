@@ -129,6 +129,16 @@ func (logs transferLogs) Reverse() (ret transferLogs) {
 	return
 }
 
+func TestErrTxTypeNotSupported(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("Expected to panic")
+		}
+	}()
+	nonExistingTxType := 100
+	newTx(nonExistingTxType)
+}
+
 func TestEvents(t *testing.T) {
 	db, err := logdb.NewMem()
 	if err != nil {
