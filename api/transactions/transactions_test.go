@@ -206,6 +206,8 @@ func txWithBadHeader(t *testing.T) {
 	badHeaderURL := []string{
 		"/transactions/" + legacyTx.ID().String() + "?head=badHead",
 		"/transactions/" + legacyTx.ID().String() + "/receipt?head=badHead",
+		"/transactions/" + dynFeeTx.ID().String() + "?head=badHead",
+		"/transactions/" + dynFeeTx.ID().String() + "/receipt?head=badHead",
 	}
 
 	for _, url := range badHeaderURL {

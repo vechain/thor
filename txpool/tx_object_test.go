@@ -36,7 +36,7 @@ func newTx(txType int, chainTag byte, clauses []*tx.Clause, gas uint64, blockRef
 	case tx.DynamicFeeTxType:
 		trx = dynFeeTxBuilder(chainTag, clauses, gas, blockRef, expiration, dependsOn, features).Build()
 	default:
-		panic(tx.ErrInvalidTxType)
+		panic(tx.ErrTxTypeNotSupported)
 	}
 	return tx.MustSign(trx, from.PrivateKey)
 }
@@ -52,7 +52,7 @@ func newDelegatedTx(txType int, chainTag byte, clauses []*tx.Clause, gas uint64,
 	case tx.DynamicFeeTxType:
 		trx = dynFeeTxBuilder(chainTag, clauses, gas, blockRef, expiration, dependsOn, features).Build()
 	default:
-		panic(tx.ErrInvalidTxType)
+		panic(tx.ErrTxTypeNotSupported)
 	}
 
 	trx = tx.MustSignDelegated(
