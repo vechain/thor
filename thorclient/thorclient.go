@@ -11,6 +11,7 @@ package thorclient
 
 import (
 	"fmt"
+	"net/http"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -38,22 +39,22 @@ type Client struct {
 }
 
 // New creates a new Client using the provided HTTP URL.
-func New(url string) *Client {
+func New(url string, client *http.Client) *Client {
 	return &Client{
-		httpConn: httpclient.New(url),
+		httpConn: httpclient.New(url, client),
 	}
 }
 
 // NewWithWS creates a new Client using the provided HTTP and WebSocket URLs.
 // Returns an error if the WebSocket connection fails.
-func NewWithWS(url string) (*Client, error) {
+func NewWithWS(url string, client *http.Client) (*Client, error) {
 	wsClient, err := wsclient.NewClient(url)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Client{
-		httpConn: httpclient.New(url),
+		httpConn: httpclient.New(url, client),
 		wsConn:   wsClient,
 	}, nil
 }

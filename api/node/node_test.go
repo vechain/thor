@@ -5,6 +5,7 @@
 package node_test
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -23,7 +24,7 @@ var ts *httptest.Server
 
 func TestNode(t *testing.T) {
 	initCommServer(t)
-	tclient := thorclient.New(ts.URL)
+	tclient := thorclient.New(ts.URL, &http.Client{})
 
 	peersStats, err := tclient.Peers()
 	require.NoError(t, err)

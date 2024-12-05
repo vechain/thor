@@ -106,7 +106,7 @@ func TestAccount(t *testing.T) {
 	initAccountServer(t, true)
 	defer ts.Close()
 
-	tclient = thorclient.New(ts.URL)
+	tclient = thorclient.New(ts.URL, &http.Client{})
 	for name, tt := range map[string]func(*testing.T){
 		"getAccount":                          getAccount,
 		"getAccountWithNonExistingRevision":   getAccountWithNonExistingRevision,
@@ -130,7 +130,7 @@ func TestDeprecated(t *testing.T) {
 	initAccountServer(t, false)
 	defer ts.Close()
 
-	tclient = thorclient.New(ts.URL)
+	tclient = thorclient.New(ts.URL, &http.Client{})
 
 	body := &accounts.CallData{}
 

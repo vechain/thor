@@ -37,7 +37,7 @@ func TestEmptyEvents(t *testing.T) {
 	initEventServer(t, defaultLogLimit)
 	defer ts.Close()
 
-	tclient = thorclient.New(ts.URL)
+	tclient = thorclient.New(ts.URL, &http.Client{})
 	for name, tt := range map[string]func(*testing.T){
 		"testEventsBadRequest": testEventsBadRequest,
 		"testEventWithEmptyDb": testEventWithEmptyDb,
@@ -51,7 +51,7 @@ func TestEvents(t *testing.T) {
 	defer ts.Close()
 
 	blocksToInsert := 5
-	tclient = thorclient.New(ts.URL)
+	tclient = thorclient.New(ts.URL, &http.Client{})
 	insertBlocks(t, thorChain.LogDB(), blocksToInsert)
 	testEventWithBlocks(t, blocksToInsert)
 }
@@ -61,7 +61,7 @@ func TestOption(t *testing.T) {
 	defer ts.Close()
 	insertBlocks(t, thorChain.LogDB(), 5)
 
-	tclient = thorclient.New(ts.URL)
+	tclient = thorclient.New(ts.URL, &http.Client{})
 	filter := events.EventFilter{
 		CriteriaSet: make([]*events.EventCriteria, 0),
 		Range:       nil,

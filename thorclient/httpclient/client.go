@@ -32,10 +32,10 @@ type Client struct {
 }
 
 // New creates a new Client with the provided URL.
-func New(url string) *Client {
+func New(url string, client *http.Client) *Client {
 	return &Client{
 		url: url,
-		c:   &http.Client{},
+		c:   client,
 	}
 }
 

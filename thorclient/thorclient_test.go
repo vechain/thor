@@ -82,7 +82,7 @@ func TestRevision(t *testing.T) {
 			}))
 			defer ts.Close()
 
-			client := New(ts.URL)
+			client := New(ts.URL, &http.Client{})
 
 			fn := reflect.ValueOf(tc.function)
 			fn.Call([]reflect.Value{reflect.ValueOf(client)})
@@ -122,7 +122,7 @@ func TestGetTransaction(t *testing.T) {
 			}))
 			defer ts.Close()
 
-			client := New(ts.URL)
+			client := New(ts.URL, &http.Client{})
 			fn := reflect.ValueOf(tc.function)
 			fn.Call([]reflect.Value{reflect.ValueOf(client)})
 		})

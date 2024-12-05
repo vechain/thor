@@ -23,8 +23,7 @@ import (
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/api/transfers"
 	"github.com/vechain/thor/v2/thor"
-
-	tccommon "github.com/vechain/thor/v2/thorclient/common"
+	"github.com/vechain/thor/v2/thorclient/common"
 )
 
 func TestClient_GetTransactionReceipt(t *testing.T) {
@@ -47,7 +46,7 @@ func TestClient_GetTransactionReceipt(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := New(ts.URL)
+	client := New(ts.URL, &http.Client{})
 	receipt, err := client.GetTransactionReceipt(&txID, "")
 
 	assert.NoError(t, err)
@@ -72,7 +71,7 @@ func TestClient_InspectClauses(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := New(ts.URL)
+	client := New(ts.URL, &http.Client{})
 	results, err := client.InspectClauses(calldata, "")
 
 	assert.NoError(t, err)
@@ -91,7 +90,7 @@ func TestClient_SendTransaction(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := New(ts.URL)
+	client := New(ts.URL, &http.Client{})
 	result, err := client.SendTransaction(rawTx)
 
 	assert.NoError(t, err)
@@ -115,7 +114,7 @@ func TestClient_FilterTransfers(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := New(ts.URL)
+	client := New(ts.URL, &http.Client{})
 	transfers, err := client.FilterTransfers(req)
 
 	assert.NoError(t, err)
@@ -140,7 +139,7 @@ func TestClient_FilterEvents(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := New(ts.URL)
+	client := New(ts.URL, &http.Client{})
 	events, err := client.FilterEvents(req)
 
 	assert.NoError(t, err)
@@ -163,7 +162,7 @@ func TestClient_GetAccount(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := New(ts.URL)
+	client := New(ts.URL, &http.Client{})
 	account, err := client.GetAccount(&addr, "")
 
 	assert.NoError(t, err)
@@ -184,7 +183,7 @@ func TestClient_GetAccountCode(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := New(ts.URL)
+	client := New(ts.URL, &http.Client{})
 	byteCode, err := client.GetAccountCode(&addr, "")
 
 	assert.NoError(t, err)
@@ -206,8 +205,8 @@ func TestClient_GetStorage(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := New(ts.URL)
-	data, err := client.GetAccountStorage(&addr, &key, tccommon.BestRevision)
+	client := New(ts.URL, &http.Client{})
+	data, err := client.GetAccountStorage(&addr, &key, common.BestRevision)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedStorageRsp.Value, data.Value)
@@ -225,7 +224,7 @@ func TestClient_GetExpandedBlock(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := New(ts.URL)
+	client := New(ts.URL, &http.Client{})
 	block, err := client.GetExpandedBlock(blockID)
 
 	assert.NoError(t, err)
@@ -256,7 +255,7 @@ func TestClient_GetBlock(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := New(ts.URL)
+	client := New(ts.URL, &http.Client{})
 	block, err := client.GetBlock(blockID)
 
 	assert.NoError(t, err)
@@ -274,10 +273,10 @@ func TestClient_GetNilBlock(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := New(ts.URL)
+	client := New(ts.URL, &http.Client{})
 	block, err := client.GetBlock(blockID)
 
-	assert.Equal(t, tccommon.ErrNotFound, err)
+	assert.Equal(t, common.ErrNotFound, err)
 	assert.Equal(t, expectedBlock, block)
 }
 
@@ -293,8 +292,8 @@ func TestClient_GetTransaction(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := New(ts.URL)
-	tx, err := client.GetTransaction(&txID, tccommon.BestRevision, false)
+	client := New(ts.URL, &http.Client{})
+	tx, err := client.GetTransaction(&txID, common.BestRevision, false)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedTx, tx)
@@ -321,8 +320,8 @@ func TestClient_GetRawTransaction(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := New(ts.URL)
-	tx, err := client.GetRawTransaction(&txID, tccommon.BestRevision, false)
+	client := New(ts.URL, &http.Client{})
+	tx, err := client.GetRawTransaction(&txID, common.BestRevision, false)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedTx, tx)
@@ -340,7 +339,7 @@ func TestClient_RawHTTPPost(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := New(ts.URL)
+	client := New(ts.URL, &http.Client{})
 	response, statusCode, err := client.RawHTTPPost(url, calldata)
 
 	assert.NoError(t, err)
@@ -359,7 +358,7 @@ func TestClient_RawHTTPGet(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := New(ts.URL)
+	client := New(ts.URL, &http.Client{})
 	response, statusCode, err := client.RawHTTPGet(url)
 
 	assert.NoError(t, err)
@@ -386,7 +385,7 @@ func TestClient_GetPeers(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := New(ts.URL)
+	client := New(ts.URL, &http.Client{})
 	peers, err := client.GetPeers()
 
 	assert.NoError(t, err)
@@ -450,7 +449,7 @@ func TestClient_Errors(t *testing.T) {
 			name: "GetAccountStorage",
 			path: "/accounts/" + addr.String() + "/key/" + thor.Bytes32{}.String(),
 			function: func(client *Client) (*accounts.GetStorageResult, error) {
-				return client.GetAccountStorage(&addr, &thor.Bytes32{}, tccommon.BestRevision)
+				return client.GetAccountStorage(&addr, &thor.Bytes32{}, common.BestRevision)
 			},
 		},
 		{
@@ -467,7 +466,7 @@ func TestClient_Errors(t *testing.T) {
 			name: "Transaction",
 			path: "/transactions/" + txID.String(),
 			function: func(client *Client) (*transactions.Transaction, error) {
-				return client.GetTransaction(&txID, tccommon.BestRevision, false)
+				return client.GetTransaction(&txID, common.BestRevision, false)
 			},
 		},
 		{
@@ -484,7 +483,7 @@ func TestClient_Errors(t *testing.T) {
 			}))
 			defer ts.Close()
 
-			client := New(ts.URL)
+			client := New(ts.URL, &http.Client{})
 
 			fn := reflect.ValueOf(tc.function)
 			result := fn.Call([]reflect.Value{reflect.ValueOf(client)})

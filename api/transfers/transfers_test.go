@@ -38,7 +38,7 @@ func TestEmptyTransfers(t *testing.T) {
 	initTransferServer(t, db, defaultLogLimit)
 	defer ts.Close()
 
-	tclient = thorclient.New(ts.URL)
+	tclient = thorclient.New(ts.URL, &http.Client{})
 	testTransferBadRequest(t)
 	testTransferWithEmptyDb(t)
 }
@@ -48,7 +48,7 @@ func TestTransfers(t *testing.T) {
 	initTransferServer(t, db, defaultLogLimit)
 	defer ts.Close()
 
-	tclient = thorclient.New(ts.URL)
+	tclient = thorclient.New(ts.URL, &http.Client{})
 	blocksToInsert := 5
 	insertBlocks(t, db, blocksToInsert)
 
@@ -61,7 +61,7 @@ func TestOption(t *testing.T) {
 	defer ts.Close()
 	insertBlocks(t, db, 5)
 
-	tclient = thorclient.New(ts.URL)
+	tclient = thorclient.New(ts.URL, &http.Client{})
 	filter := transfers.TransferFilter{
 		CriteriaSet: make([]*logdb.TransferCriteria, 0),
 		Range:       nil,

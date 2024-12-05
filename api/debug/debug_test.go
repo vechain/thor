@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -49,7 +50,7 @@ func TestDebug(t *testing.T) {
 	defer ts.Close()
 
 	// /tracers endpoint
-	tclient = thorclient.New(ts.URL)
+	tclient = thorclient.New(ts.URL, &http.Client{})
 	for name, tt := range map[string]func(*testing.T){
 		"testTraceClauseWithInvalidTracerName":     testTraceClauseWithInvalidTracerName,
 		"testTraceClauseWithEmptyTracerTarget":     testTraceClauseWithEmptyTracerTarget,
