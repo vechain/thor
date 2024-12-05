@@ -252,7 +252,6 @@ func TestRemove(t *testing.T) {
 
 	// Check that the transaction is no longer in the pool
 	assert.Nil(t, pool.Get(trx.ID()), "Transaction should not exist in the pool after removal")
-
 }
 
 func TestRemoveWithError(t *testing.T) {
