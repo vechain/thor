@@ -233,7 +233,7 @@ func createOneClausePerTx(signerPK *ecdsa.PrivateKey, thorChain *testchain.Chain
 	for gasUsed < 9_500_000 {
 		toAddr := datagen.RandAddress()
 		cla := tx.NewClause(&toAddr).WithValue(big.NewInt(10000))
-		transaction := new(tx.Builder).
+		transaction := new(tx.LegacyBuilder).
 			ChainTag(thorChain.Repo().ChainTag()).
 			GasPriceCoef(1).
 			Expiration(math.MaxUint32 - 1).
@@ -260,7 +260,7 @@ func createManyClausesPerTx(signerPK *ecdsa.PrivateKey, thorChain *testchain.Cha
 	gasUsed := uint64(0)
 	txGas := uint64(42_000)
 
-	transactionBuilder := new(tx.Builder).
+	transactionBuilder := new(tx.LegacyBuilder).
 		ChainTag(thorChain.Repo().ChainTag()).
 		GasPriceCoef(1).
 		Expiration(math.MaxUint32 - 1).
