@@ -24,7 +24,6 @@ import (
 
 var (
 	errIntrinsicGasOverflow = errors.New("intrinsic gas overflow")
-	ErrInvalidTxType        = errors.New("transaction type not valid in this context")
 	ErrTxTypeNotSupported   = errors.New("transaction type not supported")
 	errEmptyTypedTx         = errors.New("empty typed transaction bytes")
 )
@@ -169,7 +168,7 @@ func (t *Transaction) EvaluateWork(origin thor.Address) func(nonce uint64) *big.
 	case DynamicFeeTxType:
 		hashWithoutNonce = t.hashWithoutNonceDynamicFeeTx(origin)
 	default:
-		panic(ErrInvalidTxType)
+		panic(ErrTxTypeNotSupported)
 	}
 
 	return func(nonce uint64) *big.Int {

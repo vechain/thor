@@ -134,6 +134,23 @@ func FillPoolWithDynFeeTxs(pool *TxPool, t *testing.T) {
 	assert.Equal(t, err.Error(), "tx rejected: pool is full")
 }
 
+func FillPoolWithMixedTxs(pool *TxPool, t *testing.T) {
+	// Create a slice of transactions to be added to the pool.
+	txs := make(Tx.Transactions, 0, 15)
+	for i := 0; i < 6; i++ {
+		trx := newTx(tx.LegacyTxType, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
+		txs = append(txs, trx)
+		trx = newTx(tx.DynamicFeeTxType, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
+		txs = append(txs, trx)
+	}
+
+	// Call the Fill method
+	pool.Fill(txs)
+
+	err := pool.Add(newTx(tx.DynamicFeeTxType, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(10), 100, nil, Tx.Features(0), devAccounts[0]))
+	assert.Equal(t, err.Error(), "tx rejected: pool is full")
+}
+
 func TestAddWithFullErrorUnsyncedChain(t *testing.T) {
 	// First fill the pool with legacy transactions
 	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT)
@@ -144,6 +161,10 @@ func TestAddWithFullErrorUnsyncedChain(t *testing.T) {
 	// Now fill the pool with dynamic fee transactions
 	pool = newPool(LIMIT, LIMIT_PER_ACCOUNT)
 	FillPoolWithDynFeeTxs(pool, t)
+
+	// Now fill the pool with mixed transactions
+	pool = newPool(LIMIT, LIMIT_PER_ACCOUNT)
+	FillPoolWithMixedTxs(pool, t)
 }
 
 func TestAddWithFullErrorSyncedChain(t *testing.T) {
@@ -154,6 +175,9 @@ func TestAddWithFullErrorSyncedChain(t *testing.T) {
 
 	pool = newPoolWithParams(LIMIT, LIMIT_PER_ACCOUNT, "./", "", uint64(time.Now().Unix()))
 	FillPoolWithDynFeeTxs(pool, t)
+
+	pool = newPoolWithParams(LIMIT, LIMIT_PER_ACCOUNT, "./", "", uint64(time.Now().Unix()))
+	FillPoolWithMixedTxs(pool, t)
 }
 
 func TestNewCloseWithError(t *testing.T) {
