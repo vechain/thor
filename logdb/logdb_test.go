@@ -27,7 +27,7 @@ func newTx(txType int) *tx.Transaction {
 	case tx.DynamicFeeTxType:
 		trx = new(tx.DynFeeBuilder).Build()
 	default:
-		panic(tx.ErrInvalidTxType)
+		panic(tx.ErrTxTypeNotSupported)
 	}
 
 	pk, _ := crypto.GenerateKey()
