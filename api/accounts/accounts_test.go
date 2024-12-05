@@ -286,7 +286,7 @@ func initAccountServer(t *testing.T, enabledDeprecated bool) {
 	genesisBlock = thorChain.GenesisBlock()
 	claTransfer := tx.NewClause(&addr).WithValue(value)
 	claDeploy := tx.NewClause(nil).WithData(bytecode)
-	transaction := buildTxWithClauses(thorChain.Repo().ChainTag(), claTransfer, claDeploy)
+	transaction := buildTxWithClauses(tx.LegacyTxType, thorChain.Repo().ChainTag(), claTransfer, claDeploy)
 	contractAddr = thor.CreateContractAddress(transaction.ID(), 1, 0)
 	method := "set"
 	abi, _ := ABI.New([]byte(abiJSON))
@@ -296,7 +296,7 @@ func initAccountServer(t *testing.T, enabledDeprecated bool) {
 		t.Fatal(err)
 	}
 	claCall := tx.NewClause(&contractAddr).WithData(input)
-	transactionCall := buildTxWithClauses(thorChain.Repo().ChainTag(), claCall)
+	transactionCall := buildTxWithClauses(tx.DynamicFeeTxType, thorChain.Repo().ChainTag(), claCall)
 	require.NoError(t,
 		thorChain.MintTransactions(
 			genesis.DevAccounts()[0],
@@ -312,17 +312,28 @@ func initAccountServer(t *testing.T, enabledDeprecated bool) {
 	ts = httptest.NewServer(router)
 }
 
-func buildTxWithClauses(chainTag byte, clauses ...*tx.Clause) *tx.Transaction {
-	builder := new(tx.LegacyBuilder).
-		ChainTag(chainTag).
-		Expiration(10).
-		Gas(1000000)
-	for _, c := range clauses {
-		builder.Clause(c)
+func buildTxWithClauses(txType int, chainTag byte, clauses ...*tx.Clause) *tx.Transaction {
+	var trx *tx.Transaction
+	switch txType {
+	case tx.LegacyTxType:
+		builder := new(tx.LegacyBuilder).
+			ChainTag(chainTag).
+			Expiration(10).
+			Gas(1000000)
+		for _, c := range clauses {
+			builder.Clause(c)
+		}
+		trx = builder.Build()
+	case tx.DynamicFeeTxType:
+		builder := new(tx.DynFeeBuilder).
+			ChainTag(chainTag).
+			Expiration(10).
+			Gas(1000000)
+		for _, c := range clauses {
+			builder.Clause(c)
+		}
+		trx = builder.Build()
 	}
-
-	trx := builder.Build()
-
 	return tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)
 }
 
