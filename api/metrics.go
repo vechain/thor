@@ -7,6 +7,7 @@ package api
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"net"
 	"net/http"
@@ -22,6 +23,7 @@ var (
 	metricHTTPReqCounter       = metrics.LazyLoadCounterVec("api_request_count", []string{"name", "code", "method"})
 	metricHTTPReqDuration      = metrics.LazyLoadHistogramVec("api_duration_ms", []string{"name", "code", "method"}, metrics.BucketHTTPReqs)
 	metricActiveWebsocketCount = metrics.LazyLoadGaugeVec("api_active_websocket_count", []string{"subject"})
+	metricTxCallVMErrors       = metrics.LazyLoadCounter("api_tx_call_vm_errors")
 )
 
 // metricsResponseWriter is a wrapper around http.ResponseWriter that captures the status code.
@@ -34,9 +36,33 @@ func newMetricsResponseWriter(w http.ResponseWriter) *metricsResponseWriter {
 	return &metricsResponseWriter{w, http.StatusOK}
 }
 
+type callTxResponseWriter struct {
+	http.ResponseWriter
+	statusCode int
+	vmError    bool
+}
+
+func newCallTxResponseWriter(w http.ResponseWriter) *callTxResponseWriter {
+	return &callTxResponseWriter{w, http.StatusOK, false}
+}
+
 func (m *metricsResponseWriter) WriteHeader(code int) {
 	m.statusCode = code
 	m.ResponseWriter.WriteHeader(code)
+}
+
+func (c *callTxResponseWriter) Write(b []byte) (int, error) {
+	var resp struct {
+		VmError string `json:"vmError"`
+	}
+
+	if err := json.Unmarshal(b, &resp); err == nil {
+		if resp.VmError != "" {
+			c.vmError = true
+		}
+	}
+
+	return c.ResponseWriter.Write(b)
 }
 
 // Hijack complies the writer with WS subscriptions interface
@@ -65,10 +91,22 @@ func metricsMiddleware(next http.Handler) http.Handler {
 			subscription = ""
 		)
 
-		// all named route will be recorded
 		if rt != nil && rt.GetName() != "" {
 			enabled = true
 			name = rt.GetName()
+
+			if name == "transactions_call_tx" {
+				ctxWriter := newCallTxResponseWriter(w)
+				next.ServeHTTP(ctxWriter, r)
+
+				// Record VM error if present
+				if ctxWriter.vmError {
+					metricTxCallVMErrors().Add(1)
+				}
+				return
+			}
+
+			// Handle subscriptions
 			if strings.HasPrefix(name, "subscriptions") {
 				// example path: /subscriptions/txpool -> subject = txpool
 				paths := strings.Split(r.URL.Path, "/")

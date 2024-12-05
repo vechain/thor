@@ -278,7 +278,6 @@ func (t *Transactions) txCall(
 
 	receipt, err := rt.CallTransaction(txCallData, &callAddr, txCallMsg.Delegator)
 	if err != nil {
-		// TODO add some metric here
 		return convertErrorCallReceipt(err, txCallMsg, &callAddr)
 	}
 
