@@ -61,6 +61,7 @@ func TestDebug(t *testing.T) {
 		"testTraceClauseWithClauseIndexOutOfBound": testTraceClauseWithClauseIndexOutOfBound,
 		"testTraceClauseWithCustomTracer":          testTraceClauseWithCustomTracer,
 		"testTraceClause":                          testTraceClause,
+		"testTraceClauseWithoutBlockID":            testTraceClauseWithoutBlockID,
 	} {
 		t.Run(name, tt)
 	}
@@ -266,7 +267,7 @@ func testTraceClause(t *testing.T) {
 	assert.Equal(t, expectedExecutionResult, parsedExecutionRes)
 }
 
-func testTraceClauseWithoutBlockId(t *testing.T) {
+func testTraceClauseWithoutBlockID(t *testing.T) {
 	traceClauseOption := &TraceClauseOption{
 		Name:   "structLogger",
 		Target: fmt.Sprintf("%s/1", transaction.ID()),
