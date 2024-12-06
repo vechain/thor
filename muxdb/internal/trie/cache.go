@@ -111,6 +111,7 @@ func (c *Cache) GetNodeBlob(name string, seq sequence, path []byte, peek bool, d
 	}, peek) && len(blob) > 0 {
 		if !peek {
 			c.nodeStats.Hit()
+			metricCacheHitMissCounterVec().AddWithLabel(1, map[string]string{"type": "node", "event": "hit"})
 		}
 		return blob
 	}
@@ -122,11 +123,13 @@ func (c *Cache) GetNodeBlob(name string, seq sequence, path []byte, peek bool, d
 	}, peek); len(blob) > 0 {
 		if !peek {
 			c.nodeStats.Hit()
+			metricCacheHitMissCounterVec().AddWithLabel(1, map[string]string{"type": "node", "event": "hit"})
 		}
 		return blob
 	}
 	if !peek {
 		c.nodeStats.Miss()
+		metricCacheHitMissCounterVec().AddWithLabel(1, map[string]string{"type": "node", "event": "miss"})
 	}
 	return nil
 }
@@ -171,12 +174,14 @@ func (c *Cache) GetRootNode(name string, seq uint64, peek bool) (trie.Node, bool
 				if c.rootStats.Hit()%2000 == 0 {
 					c.log()
 				}
+				metricCacheHitMissCounterVec().AddWithLabel(1, map[string]string{"type": "root", "event": "hit"})
 			}
 			return cached.(trie.Node), true
 		}
 	}
 	if !peek {
 		c.rootStats.Miss()
+		metricCacheHitMissCounterVec().AddWithLabel(1, map[string]string{"type": "root", "event": "miss"})
 	}
 	return trie.Node{}, false
 }
