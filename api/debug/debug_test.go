@@ -562,7 +562,21 @@ func initDebugServer(t *testing.T) {
 		Build()
 	transaction = tx.MustSign(transaction, genesis.DevAccounts()[0].PrivateKey)
 
-	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], transaction, noClausesTx))
+	dynFeeTx := tx.MustSign(
+		new(tx.DynFeeBuilder).
+			ChainTag(thorChain.Repo().ChainTag()).
+			Expiration(10).
+			Gas(21000).
+			MaxFeePerGas(big.NewInt(1000)).
+			MaxPriorityFeePerGas(big.NewInt(100000)).
+			Nonce(1).
+			Clause(cla).
+			BlockRef(tx.NewBlockRef(0)).
+			Build(),
+		genesis.DevAccounts()[0].PrivateKey,
+	)
+
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], transaction, noClausesTx, dynFeeTx))
 	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0]))
 
 	allBlocks, err := thorChain.GetAllBlocks()
