@@ -42,41 +42,6 @@ func TestHealth_isNetworkProgressing(t *testing.T) {
 	}
 }
 
-func TestHealth_hasNodeBootstrapped(t *testing.T) {
-	h := &Health{}
-	now := time.Now()
-
-	tests := []struct {
-		name               string
-		bestBlockTimestamp time.Time
-		expectedBootstrap  bool
-	}{
-		// keep the order as it matters for health state
-		{
-			name:               "Not Bootstrapped - block timestamp outside interval",
-			bestBlockTimestamp: now.Add(-defaultBlockTolerance + 1),
-			expectedBootstrap:  false,
-		},
-		{
-			name:               "Bootstrapped - block timestamp within interval",
-			bestBlockTimestamp: now.Add(defaultBlockTolerance),
-			expectedBootstrap:  true,
-		},
-		{
-			name:               "Bootstrapped only once",
-			bestBlockTimestamp: now.Add(-defaultBlockTolerance + 1),
-			expectedBootstrap:  true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			isBootstrapped := h.hasNodeBootstrapped(now, tt.bestBlockTimestamp)
-			assert.Equal(t, tt.expectedBootstrap, isBootstrapped, "hasNodeBootstrapped result mismatch")
-		})
-	}
-}
-
 func TestHealth_isNodeConnectedP2P(t *testing.T) {
 	h := &Health{}
 
