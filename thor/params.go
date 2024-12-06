@@ -38,6 +38,10 @@ const (
 
 	SeederInterval     = 8640 // blocks between two seeder epochs.
 	CheckpointInterval = 180  // blocks between two bft checkpoints.
+
+	ElasticityMultiplier     = 2
+	InitialBaseFee           = 1000000000
+	BaseFeeChangeDenominator = 8
 )
 
 // Keys of governance params.
