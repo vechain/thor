@@ -7,6 +7,7 @@ package block
 
 import (
 	"crypto/rand"
+	"math/big"
 	"sync/atomic"
 	"testing"
 
@@ -105,6 +106,41 @@ func TestHeaderEncoding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestGalacticaHeaderEncoding(t *testing.T) {
+	var sig [ComplexSigSize]byte
+	var alpha [32]byte
+	rand.Read(sig[:])
+	rand.Read(alpha[:])
+	baseFee := big.NewInt(10000)
+
+	block := new(Builder).BaseFee(baseFee).Alpha(alpha[:]).Build().WithSignature(sig[:])
+	h := block.Header()
+
+	bytes, err := rlp.EncodeToBytes(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var hh Header
+	err = rlp.DecodeBytes(bytes, &hh)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, *h, hh)
+	assert.Equal(t, baseFee, h.BaseFee())
+
+	data, _, err := rlp.SplitList(bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	count, err := rlp.CountValues(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.EqualValues(t, 12, count)
 }
 
 // type extension struct{Alpha []byte}
