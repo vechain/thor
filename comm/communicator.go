@@ -72,7 +72,7 @@ func (c *Communicator) Sync(ctx context.Context, handler HandleBlockStream) {
 	delay := initSyncInterval
 	syncCount := 0
 
-	shouldSynced := func() bool {
+	isSynced := func() bool {
 		bestBlockTime := c.repo.BestBlockSummary().Header.Timestamp()
 		now := uint64(time.Now().Unix())
 		if bestBlockTime+thor.BlockInterval >= now {
@@ -115,9 +115,10 @@ func (c *Communicator) Sync(ctx context.Context, handler HandleBlockStream) {
 			}
 			syncCount++
 
-			if shouldSynced() {
+			if isSynced() {
 				delay = syncInterval
 				c.onceSynced.Do(func() {
+					// once off - after a bootstrap the syncedCh trigger the peers.syncTxs
 					close(c.syncedCh)
 				})
 			}

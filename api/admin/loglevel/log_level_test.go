@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package api
+package loglevel
 
 import (
 	"bytes"
@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -76,15 +77,16 @@ func TestLogLevelHandler(t *testing.T) {
 			}
 
 			rr := httptest.NewRecorder()
-			handler := http.HandlerFunc(HTTPHandler(&logLevel).ServeHTTP)
-			handler.ServeHTTP(rr, req)
+			router := mux.NewRouter()
+			New(&logLevel).Mount(router, "/admin/loglevel")
+			router.ServeHTTP(rr, req)
 
 			if status := rr.Code; status != tt.expectedStatus {
 				t.Errorf("handler returned wrong status code: got %v want %v", status, tt.expectedStatus)
 			}
 
 			if tt.expectedLevel != "" {
-				var response logLevelResponse
+				var response Response
 				if err := json.NewDecoder(rr.Body).Decode(&response); err != nil {
 					t.Fatalf("could not decode response: %v", err)
 				}
