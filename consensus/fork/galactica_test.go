@@ -1,0 +1,97 @@
+// Copyright (c) 2024 The VeChainThor developers
+
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
+package fork
+
+import (
+	"math/big"
+	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/vm"
+)
+
+func config() *vm.ChainConfig {
+	return &vm.ChainConfig{
+		GalacticaBlock: big.NewInt(5),
+	}
+}
+
+// TestBlockGasLimits tests the gasLimit checks for blocks both across
+// the Galactica boundary and post-Galactica blocks
+func TestBlockGasLimits(t *testing.T) {
+	initial := new(big.Int).SetUint64(thor.InitialBaseFee)
+
+	for i, tc := range []struct {
+		pGasLimit uint64
+		pNum      int64
+		gasLimit  uint64
+		ok        bool
+	}{
+		// Transitions from non-Galactica to Galactica
+		{10000000, 4, 20000000, true},  // No change
+		{10000000, 4, 20019530, true},  // Upper limit
+		{10000000, 4, 20019531, false}, // Upper +1
+		{10000000, 4, 19980470, true},  // Lower limit
+		{10000000, 4, 19980469, false}, // Lower limit -1
+		// Galactica to Galactica
+		{20000000, 5, 20000000, true},
+		{20000000, 5, 20019530, true},  // Upper limit
+		{20000000, 5, 20019531, false}, // Upper limit +1
+		{20000000, 5, 19980470, true},  // Lower limit
+		{20000000, 5, 19980469, false}, // Lower limit -1
+		{40000000, 5, 40039061, true},  // Upper limit
+		{40000000, 5, 40039062, false}, // Upper limit +1
+		{40000000, 5, 39960939, true},  // lower limit
+		{40000000, 5, 39960938, false}, // Lower limit -1
+	} {
+		parent := &types.Header{
+			GasUsed:  tc.pGasLimit / 2,
+			GasLimit: tc.pGasLimit,
+			BaseFee:  initial,
+			Number:   big.NewInt(tc.pNum),
+		}
+		header := &types.Header{
+			GasUsed:  tc.gasLimit / 2,
+			GasLimit: tc.gasLimit,
+			BaseFee:  initial,
+			Number:   big.NewInt(tc.pNum + 1),
+		}
+		err := VerifyGalacticaHeader(config(), parent, header)
+		if tc.ok && err != nil {
+			t.Errorf("test %d: Expected valid header: %s", i, err)
+		}
+		if !tc.ok && err == nil {
+			t.Errorf("test %d: Expected invalid header", i)
+		}
+	}
+}
+
+// TestCalcBaseFee assumes all blocks are post Galactica blocks
+func TestCalcBaseFee(t *testing.T) {
+	tests := []struct {
+		parentBaseFee   int64
+		parentGasLimit  uint64
+		parentGasUsed   uint64
+		expectedBaseFee int64
+	}{
+		{thor.InitialBaseFee, 20000000, 10000000, thor.InitialBaseFee}, // usage == target
+		{thor.InitialBaseFee, 20000000, 9000000, 987500000},            // usage below target
+		{thor.InitialBaseFee, 20000000, 11000000, 1012500000},          // usage above target
+	}
+	for i, test := range tests {
+		parent := &types.Header{
+			Number:   common.Big32,
+			GasLimit: test.parentGasLimit,
+			GasUsed:  test.parentGasUsed,
+			BaseFee:  big.NewInt(test.parentBaseFee),
+		}
+		if have, want := CalcBaseFee(config(), parent), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
+			t.Errorf("test %d: have %d  want %d, ", i, have, want)
+		}
+	}
+}

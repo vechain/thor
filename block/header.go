@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -51,6 +52,7 @@ type headerBody struct {
 	Signature []byte
 
 	Extension extension
+	BaseFee   *big.Int `rlp:"optional"`
 }
 
 // ParentID returns id of parent block.
@@ -82,6 +84,14 @@ func (h *Header) GasLimit() uint64 {
 // GasUsed returns gas used by txs.
 func (h *Header) GasUsed() uint64 {
 	return h.body.GasUsed
+}
+
+// BaseFee returns base fee of this block.
+func (h *Header) BaseFee() *big.Int {
+	if h.body.BaseFee == nil {
+		return nil
+	}
+	return new(big.Int).Set(h.body.BaseFee)
 }
 
 // Beneficiary returns reward recipient.
@@ -137,7 +147,7 @@ func (h *Header) SigningHash() (hash thor.Bytes32) {
 	defer func() { h.cache.signingHash.Store(hash) }()
 
 	return thor.Blake2bFn(func(w io.Writer) {
-		rlp.Encode(w, []interface{}{
+		hashBody := []interface{}{
 			&h.body.ParentID,
 			h.body.Timestamp,
 			h.body.GasLimit,
@@ -149,7 +159,11 @@ func (h *Header) SigningHash() (hash thor.Bytes32) {
 			&h.body.TxsRootFeatures,
 			&h.body.StateRoot,
 			&h.body.ReceiptsRoot,
-		})
+		}
+		if h.body.BaseFee != nil {
+			hashBody = append(hashBody, &h.body.BaseFee)
+		}
+		rlp.Encode(w, hashBody)
 	})
 }
 
@@ -268,6 +282,7 @@ func (h *Header) String() string {
 	Beneficiary:    %v
 	GasLimit:       %v
 	GasUsed:        %v
+	BaseFee:		%v
 	TotalScore:     %v
 	TxsRoot:        %v
 	TxsFeatures:    %v
@@ -276,7 +291,7 @@ func (h *Header) String() string {
 	Alpha:          0x%x
 	COM:            %v
 	Signature:      0x%x`, h.ID(), h.Number(), h.body.ParentID, h.body.Timestamp, signerStr,
-		h.body.Beneficiary, h.body.GasLimit, h.body.GasUsed, h.body.TotalScore,
+		h.body.Beneficiary, h.body.GasLimit, h.body.GasUsed, h.body.BaseFee, h.body.TotalScore,
 		h.body.TxsRootFeatures.Root, h.body.TxsRootFeatures.Features, h.body.StateRoot, h.body.ReceiptsRoot, h.body.Extension.Alpha, h.body.Extension.COM, h.body.Signature)
 }
 

@@ -22,12 +22,18 @@ func isForked(s, head *big.Int) bool {
 // ChainConfig extends eth ChainConfig.
 type ChainConfig struct {
 	params.ChainConfig
-	IstanbulBlock *big.Int `json:"istanbulBlock,omitempty"` // Istanbul switch block (nil = no fork, 0 = already on istanbul)
+	IstanbulBlock  *big.Int `json:"istanbulBlock,omitempty"`  // Istanbul switch block (nil = no fork, 0 = already on istanbul)
+	GalacticaBlock *big.Int `json:"GalacticaBlock,omitempty"` // Galactica switch block (nil = no fork, 0 = already on galactica)
 }
 
 // IsIstanbul returns whether num is either equal to the Istanbul fork block or greater.
 func (c *ChainConfig) IsIstanbul(num *big.Int) bool {
 	return isForked(c.IstanbulBlock, num)
+}
+
+// IsGalactica returns whether num is either equal to the Istanbul fork block or greater.
+func (c *ChainConfig) IsGalactica(num *big.Int) bool {
+	return isForked(c.GalacticaBlock, num)
 }
 
 // Rules wraps ChainConfig and is merely syntatic sugar or can be used for functions
