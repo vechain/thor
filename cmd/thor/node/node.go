@@ -26,7 +26,6 @@ import (
 	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/consensus"
-	"github.com/vechain/thor/v2/health"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/packer"
@@ -65,8 +64,6 @@ type Node struct {
 	maxBlockNum uint32
 	processLock sync.Mutex
 	logWorker   *worker
-
-	health *health.Health
 }
 
 func New(
@@ -81,7 +78,6 @@ func New(
 	targetGasLimit uint64,
 	skipLogs bool,
 	forkConfig thor.ForkConfig,
-	health *health.Health,
 ) *Node {
 	return &Node{
 		packer:         packer.New(repo, stater, master.Address(), master.Beneficiary, forkConfig),
@@ -96,7 +92,6 @@ func New(
 		targetGasLimit: targetGasLimit,
 		skipLogs:       skipLogs,
 		forkConfig:     forkConfig,
-		health:         health,
 	}
 }
 
@@ -392,7 +387,6 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 				return err
 			}
 			n.processFork(newBlock, oldBest.Header.ID())
-			n.health.NewBestBlock(newBlock.Header().ID())
 		}
 
 		commitElapsed := mclock.Now() - startTime - execElapsed

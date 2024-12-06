@@ -15,15 +15,14 @@ import (
 	"github.com/vechain/thor/v2/api/admin/apilogs"
 	healthAPI "github.com/vechain/thor/v2/api/admin/health"
 	"github.com/vechain/thor/v2/api/admin/loglevel"
-	"github.com/vechain/thor/v2/health"
 )
 
-func New(logLevel *slog.LevelVar, health *health.Health, apiLogsToggle *atomic.Bool) http.HandlerFunc {
+func New(logLevel *slog.LevelVar, health *healthAPI.Health, apiLogsToggle *atomic.Bool) http.HandlerFunc {
 	router := mux.NewRouter()
 	subRouter := router.PathPrefix("/admin").Subrouter()
 
 	loglevel.New(logLevel).Mount(subRouter, "/loglevel")
-	healthAPI.New(health).Mount(subRouter, "/health")
+	healthAPI.NewAPI(health).Mount(subRouter, "/health")
 	apilogs.New(apiLogsToggle).Mount(subRouter, "/apilogs")
 
 	handler := handlers.CompressHandler(router)

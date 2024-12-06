@@ -24,7 +24,6 @@ import (
 	"github.com/vechain/thor/v2/api/node"
 	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/health"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/test/testchain"
@@ -70,7 +69,6 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 			LimitPerAccount: 16,
 			MaxLifetime:     10 * time.Minute,
 		}),
-		&health.Health{},
 	)
 	node.New(communicator).Mount(router, "/node")
 

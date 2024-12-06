@@ -14,17 +14,25 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/admin"
+	"github.com/vechain/thor/v2/api/admin/health"
+	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/co"
-	"github.com/vechain/thor/v2/health"
+	"github.com/vechain/thor/v2/comm"
 )
 
-func StartAdminServer(addr string, logLevel *slog.LevelVar, health *health.Health, apiLogs *atomic.Bool) (string, func(), error) {
+func StartAdminServer(
+	addr string,
+	logLevel *slog.LevelVar,
+	repo *chain.Repository,
+	p2p *comm.Communicator,
+	apiLogs *atomic.Bool,
+) (string, func(), error) {
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return "", nil, errors.Wrapf(err, "listen admin API addr [%v]", addr)
 	}
 
-	adminHandler := admin.New(logLevel, health, apiLogs)
+	adminHandler := admin.New(logLevel, health.New(repo, p2p), apiLogs)
 
 	srv := &http.Server{Handler: adminHandler, ReadHeaderTimeout: time.Second, ReadTimeout: 5 * time.Second}
 	var goes co.Goes
