@@ -52,6 +52,7 @@ type headerBody struct {
 	Signature []byte
 
 	Extension extension
+	BaseFee   *big.Int `rlp:"optional"`
 }
 
 // ParentID returns id of parent block.
