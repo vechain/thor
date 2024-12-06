@@ -210,7 +210,7 @@ func (c *Client) ChainTag() (byte, error) {
 }
 
 // SubscribeBlocks subscribes to block updates over WebSocket.
-func (c *Client) SubscribeBlocks(pos string) (*common.Subscription[*blocks.JSONCollapsedBlock], error) {
+func (c *Client) SubscribeBlocks(pos string) (*common.Subscription[*subscriptions.BlockMessage], error) {
 	if c.wsConn == nil {
 		return nil, fmt.Errorf("not a websocket typed client")
 	}

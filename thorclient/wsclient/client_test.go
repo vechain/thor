@@ -13,13 +13,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vechain/thor/v2/test/datagen"
-	"github.com/vechain/thor/v2/thor"
-
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/api/subscriptions"
+	"github.com/vechain/thor/v2/test/datagen"
+	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/common"
 )
 
@@ -50,7 +48,7 @@ func TestClient_SubscribeEvents(t *testing.T) {
 
 func TestClient_SubscribeBlocks(t *testing.T) {
 	pos := "best"
-	expectedBlock := &blocks.JSONCollapsedBlock{}
+	expectedBlock := &subscriptions.BlockMessage{}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/subscriptions/block", r.URL.Path)
@@ -288,7 +286,7 @@ func TestClient_SubscribeBlocks_ServerError(t *testing.T) {
 
 func TestClient_SubscribeBlocks_ServerShutdown(t *testing.T) {
 	pos := "best"
-	expectedBlock := &blocks.JSONCollapsedBlock{}
+	expectedBlock := &subscriptions.BlockMessage{}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/subscriptions/block", r.URL.Path)
@@ -325,7 +323,7 @@ func TestClient_SubscribeBlocks_ServerShutdown(t *testing.T) {
 
 func TestClient_SubscribeBlocks_ClientShutdown(t *testing.T) {
 	pos := "best"
-	expectedBlock := &blocks.JSONCollapsedBlock{}
+	expectedBlock := &subscriptions.BlockMessage{}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/subscriptions/block", r.URL.Path)
@@ -377,7 +375,7 @@ func TestClient_SubscribeBlocks_ClientShutdown(t *testing.T) {
 
 func TestClient_SubscribeBlocks_ClientShutdown_LongBlocks(t *testing.T) {
 	pos := "best"
-	expectedBlock := &blocks.JSONCollapsedBlock{}
+	expectedBlock := &subscriptions.BlockMessage{}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/subscriptions/block", r.URL.Path)
