@@ -5,7 +5,9 @@
 
 package metrics
 
-import "net/http"
+import (
+	"net/http"
+)
 
 // noopMetrics implements a no operations metrics service
 type noopMetrics struct{}

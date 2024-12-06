@@ -45,12 +45,16 @@ func (c *Cache) log() {
 	last := atomic.SwapInt64(&c.lastLogTime, now)
 
 	if now-last > int64(time.Second*20) {
-		log1, ok1 := c.nodeStats.ShouldLog("node cache stats")
-		log2, ok2 := c.rootStats.ShouldLog("root cache stats")
+		logNode, hitNode, missNode, okNode := c.nodeStats.shouldLog("node cache stats")
+		logRoot, hitRoot, missRoot, okRoot := c.rootStats.shouldLog("root cache stats")
 
-		if ok1 || ok2 {
-			log1()
-			log2()
+		if okNode || okRoot {
+			logNode()
+			metricCacheHitMissGaugeVec().SetWithLabel(hitNode, map[string]string{"type": "node", "event": "hit"})
+			metricCacheHitMissGaugeVec().SetWithLabel(missNode, map[string]string{"type": "node", "event": "miss"})
+			logRoot()
+			metricCacheHitMissGaugeVec().SetWithLabel(hitRoot, map[string]string{"type": "root", "event": "hit"})
+			metricCacheHitMissGaugeVec().SetWithLabel(missRoot, map[string]string{"type": "root", "event": "miss"})
 		}
 	} else {
 		atomic.CompareAndSwapInt64(&c.lastLogTime, now, last)
@@ -189,7 +193,7 @@ type cacheStats struct {
 func (cs *cacheStats) Hit() int64  { return atomic.AddInt64(&cs.hit, 1) }
 func (cs *cacheStats) Miss() int64 { return atomic.AddInt64(&cs.miss, 1) }
 
-func (cs *cacheStats) ShouldLog(msg string) (func(), bool) {
+func (cs *cacheStats) shouldLog(msg string) (func(), int64, int64, bool) {
 	hit := atomic.LoadInt64(&cs.hit)
 	miss := atomic.LoadInt64(&cs.miss)
 	lookups := hit + miss
@@ -209,5 +213,5 @@ func (cs *cacheStats) ShouldLog(msg string) (func(), bool) {
 			"hitrate", str,
 		)
 		atomic.StoreInt32(&cs.flag, flag)
-	}, atomic.LoadInt32(&cs.flag) != flag
+	}, hit, miss, atomic.LoadInt32(&cs.flag) != flag
 }
