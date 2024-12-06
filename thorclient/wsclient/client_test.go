@@ -445,27 +445,3 @@ func TestSubscribeBeats2WithServer(t *testing.T) {
 		t.Log(ev.Data)
 	}
 }
-
-func TestSubscriptThorSolo(t *testing.T) {
-	t.Skip("manual test")
-	client, err := NewClient("http://localhost:8669")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	sub, err := client.SubscribeBlocks("")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	for {
-		select {
-		case ev := <-sub.EventChan:
-			if ev.Error != nil {
-				t.Fatal(ev.Error)
-				return
-			}
-			t.Log(ev.Data.Obsolete)
-		}
-	}
-}
