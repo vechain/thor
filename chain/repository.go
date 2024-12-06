@@ -284,21 +284,32 @@ func (r *Repository) GetMaxBlockNum() (uint32, error) {
 
 // GetBlockSummary get block summary by block id.
 func (r *Repository) GetBlockSummary(id thor.Bytes32) (summary *BlockSummary, err error) {
-	var cached interface{}
-	if cached, err = r.caches.summaries.GetOrLoad(id, func() (interface{}, error) {
+	var blk interface{}
+	var cached bool
+	if blk, cached, err = r.caches.summaries.GetOrLoad(id, func() (interface{}, error) {
 		return loadBlockSummary(r.hdrStore, id)
 	}); err != nil {
 		return
 	}
-	return cached.(*BlockSummary), nil
+	if cached {
+		metricCacheHitMiss().AddWithLabel(1, map[string]string{"type": "blocks", "event": "hit"})
+	} else {
+		metricCacheHitMiss().AddWithLabel(1, map[string]string{"type": "blocks", "event": "miss"})
+	}
+	return blk.(*BlockSummary), nil
 }
 
 func (r *Repository) getTransaction(key []byte) (*tx.Transaction, error) {
-	trx, err := r.caches.txs.GetOrLoad(string(key), func() (interface{}, error) {
+	trx, cached, err := r.caches.txs.GetOrLoad(string(key), func() (interface{}, error) {
 		return loadTransaction(r.bodyStore, key)
 	})
 	if err != nil {
 		return nil, err
+	}
+	if cached {
+		metricCacheHitMiss().AddWithLabel(1, map[string]string{"type": "transaction", "event": "hit"})
+	} else {
+		metricCacheHitMiss().AddWithLabel(1, map[string]string{"type": "transaction", "event": "miss"})
 	}
 	return trx.(*tx.Transaction), nil
 }
@@ -346,14 +357,20 @@ func (r *Repository) GetBlock(id thor.Bytes32) (*block.Block, error) {
 	return block.Compose(summary.Header, txs), nil
 }
 
+
 func (r *Repository) getReceipt(key []byte) (*tx.Receipt, error) {
-	cached, err := r.caches.receipts.GetOrLoad(string(key), func() (interface{}, error) {
+	receipt, cached, err := r.caches.receipts.GetOrLoad(string(key), func() (interface{}, error) {
 		return loadReceipt(r.bodyStore, key)
 	})
 	if err != nil {
 		return nil, err
 	}
-	return cached.(*tx.Receipt), nil
+	if cached {
+		metricCacheHitMiss().AddWithLabel(1, map[string]string{"type": "receipt", "event": "hit"})
+	} else {
+		metricCacheHitMiss().AddWithLabel(1, map[string]string{"type": "receipt", "event": "miss"})
+	}
+	return receipt.(*tx.Receipt), nil
 }
 
 func loadReceipt(r kv.Getter, key []byte) (*tx.Receipt, error) {
