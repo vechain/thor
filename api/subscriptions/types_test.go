@@ -95,7 +95,7 @@ func TestConvertTransfer(t *testing.T) {
 	repo, _ := chain.NewRepository(db, b)
 
 	// New tx
-	transaction := new(tx.Builder).
+	transaction := new(tx.LegacyBuilder).
 		ChainTag(repo.ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -143,7 +143,7 @@ func TestConvertEventWithBadSignature(t *testing.T) {
 	badSig := bytes.Repeat([]byte{0xf}, 65)
 
 	// New tx
-	transaction := new(tx.Builder).
+	transaction := new(tx.LegacyBuilder).
 		ChainTag(1).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -183,7 +183,7 @@ func TestConvertEvent(t *testing.T) {
 
 	// New tx
 	transaction := tx.MustSign(
-		new(tx.Builder).
+		new(tx.LegacyBuilder).
 			ChainTag(repo.ChainTag()).
 			GasPriceCoef(1).
 			Expiration(10).

@@ -7,10 +7,10 @@ package transactions
 
 import (
 	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -47,19 +47,21 @@ func (c *Clause) String() string {
 
 // Transaction transaction
 type Transaction struct {
-	ID           thor.Bytes32        `json:"id"`
-	ChainTag     byte                `json:"chainTag"`
-	BlockRef     string              `json:"blockRef"`
-	Expiration   uint32              `json:"expiration"`
-	Clauses      Clauses             `json:"clauses"`
-	GasPriceCoef uint8               `json:"gasPriceCoef"`
-	Gas          uint64              `json:"gas"`
-	Origin       thor.Address        `json:"origin"`
-	Delegator    *thor.Address       `json:"delegator"`
-	Nonce        math.HexOrDecimal64 `json:"nonce"`
-	DependsOn    *thor.Bytes32       `json:"dependsOn"`
-	Size         uint32              `json:"size"`
-	Meta         *TxMeta             `json:"meta"`
+	ID                   thor.Bytes32        `json:"id"`
+	ChainTag             byte                `json:"chainTag"`
+	BlockRef             string              `json:"blockRef"`
+	Expiration           uint32              `json:"expiration"`
+	Clauses              Clauses             `json:"clauses"`
+	GasPriceCoef         uint8               `json:"gasPriceCoef"`
+	Gas                  uint64              `json:"gas"`
+	MaxFeePerGas         *big.Int            `json:"maxFeePerGas,omitempty"`
+	MaxPriorityFeePerGas *big.Int            `json:"maxPriorityFeePerGas,omitempty"`
+	Origin               thor.Address        `json:"origin"`
+	Delegator            *thor.Address       `json:"delegator"`
+	Nonce                math.HexOrDecimal64 `json:"nonce"`
+	DependsOn            *thor.Bytes32       `json:"dependsOn"`
+	Size                 uint32              `json:"size"`
+	Meta                 *TxMeta             `json:"meta"`
 }
 
 type RawTx struct {
@@ -71,8 +73,9 @@ func (rtx *RawTx) decode() (*tx.Transaction, error) {
 	if err != nil {
 		return nil, err
 	}
-	var tx *tx.Transaction
-	if err := rlp.DecodeBytes(data, &tx); err != nil {
+
+	tx := new(tx.Transaction)
+	if err := tx.UnmarshalBinary(data); err != nil {
 		return nil, err
 	}
 	return tx, nil
@@ -95,18 +98,20 @@ func convertTransaction(tx *tx.Transaction, header *block.Header) *Transaction {
 	}
 	br := tx.BlockRef()
 	t := &Transaction{
-		ChainTag:     tx.ChainTag(),
-		ID:           tx.ID(),
-		Origin:       origin,
-		BlockRef:     hexutil.Encode(br[:]),
-		Expiration:   tx.Expiration(),
-		Nonce:        math.HexOrDecimal64(tx.Nonce()),
-		Size:         uint32(tx.Size()),
-		GasPriceCoef: tx.GasPriceCoef(),
-		Gas:          tx.Gas(),
-		DependsOn:    tx.DependsOn(),
-		Clauses:      cls,
-		Delegator:    delegator,
+		ChainTag:             tx.ChainTag(),
+		ID:                   tx.ID(),
+		Origin:               origin,
+		BlockRef:             hexutil.Encode(br[:]),
+		Expiration:           tx.Expiration(),
+		Nonce:                math.HexOrDecimal64(tx.Nonce()),
+		Size:                 uint32(tx.Size()),
+		GasPriceCoef:         tx.GasPriceCoef(),
+		Gas:                  tx.Gas(),
+		DependsOn:            tx.DependsOn(),
+		Clauses:              cls,
+		Delegator:            delegator,
+		MaxFeePerGas:         tx.MaxFeePerGas(),
+		MaxPriorityFeePerGas: tx.MaxPriorityFeePerGas(),
 	}
 
 	if header != nil {
