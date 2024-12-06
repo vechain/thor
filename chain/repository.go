@@ -323,20 +323,31 @@ func (r *Repository) GetMaxBlockNum() (uint32, error) {
 // GetBlockSummary get block summary by block id.
 func (r *Repository) GetBlockSummary(id thor.Bytes32) (summary *BlockSummary, err error) {
 	var cached interface{}
-	if cached, err = r.caches.summaries.GetOrLoad(id, func() (interface{}, error) {
+	var loaded bool
+	if cached, loaded, err = r.caches.summaries.GetOrLoad(id, func() (interface{}, error) {
 		return loadBlockSummary(r.data, id)
 	}); err != nil {
 		return
+	}
+	if loaded {
+		metricCacheHitMiss().AddWithLabel(1, map[string]string{"type": "blocks", "event": "hit"})
+	} else {
+		metricCacheHitMiss().AddWithLabel(1, map[string]string{"type": "blocks", "event": "miss"})
 	}
 	return cached.(*BlockSummary), nil
 }
 
 func (r *Repository) getTransaction(key txKey) (*tx.Transaction, error) {
-	cached, err := r.caches.txs.GetOrLoad(key, func() (interface{}, error) {
+	cached, loaded, err := r.caches.txs.GetOrLoad(key, func() (interface{}, error) {
 		return loadTransaction(r.data, key)
 	})
 	if err != nil {
 		return nil, err
+	}
+	if loaded {
+		metricCacheHitMiss().AddWithLabel(1, map[string]string{"type": "transaction", "event": "hit"})
+	} else {
+		metricCacheHitMiss().AddWithLabel(1, map[string]string{"type": "transaction", "event": "miss"})
 	}
 	return cached.(*tx.Transaction), nil
 }
@@ -377,11 +388,16 @@ func (r *Repository) GetBlock(id thor.Bytes32) (*block.Block, error) {
 }
 
 func (r *Repository) getReceipt(key txKey) (*tx.Receipt, error) {
-	cached, err := r.caches.receipts.GetOrLoad(key, func() (interface{}, error) {
+	cached, loaded, err := r.caches.receipts.GetOrLoad(key, func() (interface{}, error) {
 		return loadReceipt(r.data, key)
 	})
 	if err != nil {
 		return nil, err
+	}
+	if loaded {
+		metricCacheHitMiss().AddWithLabel(1, map[string]string{"type": "receipt", "event": "hit"})
+	} else {
+		metricCacheHitMiss().AddWithLabel(1, map[string]string{"type": "receipt", "event": "miss"})
 	}
 	return cached.(*tx.Receipt), nil
 }

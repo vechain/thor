@@ -3,10 +3,10 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package trie
+package chain
 
-import (
-	"github.com/vechain/thor/v2/metrics"
+import "github.com/vechain/thor/v2/metrics"
+
+var (
+	metricCacheHitMiss = metrics.LazyLoadCounterVec("repo_cache_hit_miss_count", []string{"type", "event"})
 )
-
-var metricCacheHitMissGaugeVec = metrics.LazyLoadGaugeVec("cache_hit_miss_count", []string{"type", "event"})

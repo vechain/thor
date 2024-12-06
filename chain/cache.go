@@ -18,14 +18,17 @@ func newCache(maxSize int) *cache {
 	return &cache{c}
 }
 
-func (c *cache) GetOrLoad(key interface{}, load func() (interface{}, error)) (interface{}, error) {
+// GetOrLoad returns the value associated with the key if it exists in the cache.
+// Otherwise, it calls the load function to get the value and adds it to the cache.
+// It returns the value, a boolean indicating whether the value was loaded, and an error if any.
+func (c *cache) GetOrLoad(key interface{}, load func() (interface{}, error)) (interface{}, bool, error) {
 	if value, ok := c.Get(key); ok {
-		return value, nil
+		return value, false, nil
 	}
 	value, err := load()
 	if err != nil {
-		return nil, err
+		return nil, true, err
 	}
 	c.Add(key, value)
-	return value, nil
+	return value, true, nil
 }
