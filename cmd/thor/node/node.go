@@ -266,7 +266,7 @@ func (n *Node) txStashLoop(ctx context.Context) {
 			if err := stash.Save(txEv.Tx); err != nil {
 				logger.Warn("stash tx", "id", txEv.Tx.ID(), "err", err)
 			} else {
-				logger.Debug("stashed tx", "id", txEv.Tx.ID())
+				logger.Trace("stashed tx", "id", txEv.Tx.ID())
 			}
 		}
 	}
@@ -392,7 +392,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		commitElapsed := mclock.Now() - startTime - execElapsed
 
 		if v, updated := n.bandwidth.Update(newBlock.Header(), time.Duration(realElapsed)); updated {
-			logger.Debug("bandwidth updated", "gps", v)
+			logger.Trace("bandwidth updated", "gps", v)
 		}
 		stats.UpdateProcessed(1, len(receipts), execElapsed, commitElapsed, realElapsed, newBlock.Header().GasUsed())
 

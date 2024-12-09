@@ -17,12 +17,14 @@ import (
 type beatReader struct {
 	repo        *chain.Repository
 	blockReader chain.BlockReader
+	cache       *messageCache[BeatMessage]
 }
 
-func newBeatReader(repo *chain.Repository, position thor.Bytes32) *beatReader {
+func newBeatReader(repo *chain.Repository, position thor.Bytes32, cache *messageCache[BeatMessage]) *beatReader {
 	return &beatReader{
 		repo:        repo,
 		blockReader: repo.NewBlockReader(position),
+		cache:       cache,
 	}
 }
 
@@ -33,40 +35,51 @@ func (br *beatReader) Read() ([]interface{}, bool, error) {
 	}
 	var msgs []interface{}
 	for _, block := range blocks {
-		header := block.Header()
-		receipts, err := br.repo.GetBlockReceipts(header.ID())
+		msg, _, err := br.cache.GetOrAdd(block.Header().ID(), br.generateBeatMessage(block))
 		if err != nil {
 			return nil, false, err
 		}
+		msgs = append(msgs, msg)
+	}
+	return msgs, len(blocks) > 0, nil
+}
+
+func (br *beatReader) generateBeatMessage(block *chain.ExtendedBlock) func() (BeatMessage, error) {
+	return func() (BeatMessage, error) {
+		header := block.Header()
+		receipts, err := br.repo.GetBlockReceipts(header.ID())
+		if err != nil {
+			return BeatMessage{}, err
+		}
 		txs := block.Transactions()
-		bloomContent := &bloomContent{}
+		content := &bloomContent{}
 		for i, receipt := range receipts {
-			bloomContent.add(receipt.GasPayer.Bytes())
+			content.add(receipt.GasPayer.Bytes())
 			for _, output := range receipt.Outputs {
 				for _, event := range output.Events {
-					bloomContent.add(event.Address.Bytes())
+					content.add(event.Address.Bytes())
 					for _, topic := range event.Topics {
-						bloomContent.add(topic.Bytes())
+						content.add(topic.Bytes())
 					}
 				}
 				for _, transfer := range output.Transfers {
-					bloomContent.add(transfer.Sender.Bytes())
-					bloomContent.add(transfer.Recipient.Bytes())
+					content.add(transfer.Sender.Bytes())
+					content.add(transfer.Recipient.Bytes())
 				}
 			}
 			origin, _ := txs[i].Origin()
-			bloomContent.add(origin.Bytes())
+			content.add(origin.Bytes())
 		}
 		signer, _ := header.Signer()
-		bloomContent.add(signer.Bytes())
-		bloomContent.add(header.Beneficiary().Bytes())
+		content.add(signer.Bytes())
+		content.add(header.Beneficiary().Bytes())
 
-		k := bloom.LegacyEstimateBloomK(bloomContent.len())
+		k := bloom.LegacyEstimateBloomK(content.len())
 		bloom := bloom.NewLegacyBloom(k)
-		for _, item := range bloomContent.items {
+		for _, item := range content.items {
 			bloom.Add(item)
 		}
-		msgs = append(msgs, &BeatMessage{
+		beat := BeatMessage{
 			Number:      header.Number(),
 			ID:          header.ID(),
 			ParentID:    header.ParentID(),
@@ -75,9 +88,10 @@ func (br *beatReader) Read() ([]interface{}, bool, error) {
 			Bloom:       hexutil.Encode(bloom.Bits[:]),
 			K:           uint32(k),
 			Obsolete:    block.Obsolete,
-		})
+		}
+
+		return beat, nil
 	}
-	return msgs, len(blocks) > 0, nil
 }
 
 type bloomContent struct {

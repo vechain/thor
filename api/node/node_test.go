@@ -13,11 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/node"
-	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/comm"
-	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/muxdb"
-	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/txpool"
 )
@@ -34,21 +31,19 @@ func TestNode(t *testing.T) {
 }
 
 func initCommServer(t *testing.T) {
-	db := muxdb.NewMem()
-	stater := state.NewStater(db)
-	gene := genesis.NewDevnet()
+	thorChain, err := testchain.NewIntegrationTestChain()
+	require.NoError(t, err)
 
-	b, _, _, err := gene.Build(stater)
-	if err != nil {
-		t.Fatal(err)
-	}
-	repo, _ := chain.NewRepository(db, b)
-	comm := comm.New(repo, txpool.New(repo, stater, txpool.Options{
-		Limit:           10000,
-		LimitPerAccount: 16,
-		MaxLifetime:     10 * time.Minute,
-	}))
+	communicator := comm.New(
+		thorChain.Repo(),
+		txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
+			Limit:           10000,
+			LimitPerAccount: 16,
+			MaxLifetime:     10 * time.Minute,
+		}))
+
 	router := mux.NewRouter()
-	node.New(comm).Mount(router, "/node")
+	node.New(communicator).Mount(router, "/node")
+
 	ts = httptest.NewServer(router)
 }

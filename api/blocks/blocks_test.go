@@ -6,6 +6,7 @@
 package blocks_test
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"math"
 	"math/big"
@@ -14,19 +15,15 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/muxdb"
-	"github.com/vechain/thor/v2/packer"
-	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/tx"
@@ -60,6 +57,8 @@ func TestBlock(t *testing.T) {
 		"testGetFinalizedBlock":                 testGetFinalizedBlock,
 		"testGetJustifiedBlock":                 testGetJustifiedBlock,
 		"testGetBlockWithRevisionNumberTooHigh": testGetBlockWithRevisionNumberTooHigh,
+		"testMutuallyExclusiveQueries":          testMutuallyExclusiveQueries,
+		"testGetRawBlock":                       testGetRawBlock,
 	} {
 		t.Run(name, tt)
 	}
@@ -72,6 +71,22 @@ func testBadQueryParams(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, statusCode)
 	assert.Equal(t, "expanded: should be boolean", strings.TrimSpace(string(res)))
+
+	badQueryParams = "?raw=1"
+	res, statusCode, err = tclient.RawHTTPClient().RawHTTPGet("/blocks/best" + badQueryParams)
+	require.NoError(t, err)
+
+	assert.Equal(t, http.StatusBadRequest, statusCode)
+	assert.Equal(t, "raw: should be boolean", strings.TrimSpace(string(res)))
+}
+
+func testMutuallyExclusiveQueries(t *testing.T) {
+	badQueryParams := "?expanded=true&raw=true"
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/best" + badQueryParams)
+	require.NoError(t, err)
+
+	assert.Equal(t, http.StatusBadRequest, statusCode)
+	assert.Equal(t, "raw&expanded: Raw and Expanded are mutually exclusive", strings.TrimSpace(string(res)))
 }
 
 func testGetBestBlock(t *testing.T) {
@@ -82,6 +97,41 @@ func testGetBestBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 	checkCollapsedBlock(t, blk, rb)
+	assert.Equal(t, http.StatusOK, statusCode)
+}
+
+func testGetRawBlock(t *testing.T) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/best?raw=true")
+	require.NoError(t, err)
+	rawBlock := new(blocks.JSONRawBlockSummary)
+	if err := json.Unmarshal(res, &rawBlock); err != nil {
+		t.Fatal(err)
+	}
+
+	blockBytes, err := hex.DecodeString(rawBlock.Raw[2:len(rawBlock.Raw)])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	header := block.Header{}
+	err = rlp.DecodeBytes(blockBytes, &header)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expHeader := blk.Header()
+	assert.Equal(t, expHeader.Number(), header.Number(), "Number should be equal")
+	assert.Equal(t, expHeader.ID(), header.ID(), "Hash should be equal")
+	assert.Equal(t, expHeader.ParentID(), header.ParentID(), "ParentID should be equal")
+	assert.Equal(t, expHeader.Timestamp(), header.Timestamp(), "Timestamp should be equal")
+	assert.Equal(t, expHeader.TotalScore(), header.TotalScore(), "TotalScore should be equal")
+	assert.Equal(t, expHeader.GasLimit(), header.GasLimit(), "GasLimit should be equal")
+	assert.Equal(t, expHeader.GasUsed(), header.GasUsed(), "GasUsed should be equal")
+	assert.Equal(t, expHeader.Beneficiary(), header.Beneficiary(), "Beneficiary should be equal")
+	assert.Equal(t, expHeader.TxsRoot(), header.TxsRoot(), "TxsRoot should be equal")
+	assert.Equal(t, expHeader.StateRoot(), header.StateRoot(), "StateRoot should be equal")
+	assert.Equal(t, expHeader.ReceiptsRoot(), header.ReceiptsRoot(), "ReceiptsRoot should be equal")
+
 	assert.Equal(t, http.StatusOK, statusCode)
 }
 
@@ -175,22 +225,14 @@ func testGetBlockWithRevisionNumberTooHigh(t *testing.T) {
 }
 
 func initBlockServer(t *testing.T) {
-	db := muxdb.NewMem()
-	stater := state.NewStater(db)
-	gene := genesis.NewDevnet()
+	thorChain, err := testchain.NewIntegrationTestChain()
+	require.NoError(t, err)
 
-	b, _, _, err := gene.Build(stater)
-	if err != nil {
-		t.Fatal(err)
-	}
-	genesisBlock = b
-
-	repo, _ := chain.NewRepository(db, b)
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 	trx := tx.MustSign(
 		new(tx.Builder).
-			ChainTag(repo.ChainTag()).
+			ChainTag(thorChain.Repo().ChainTag()).
 			GasPriceCoef(1).
 			Expiration(10).
 			Gas(21000).
@@ -201,34 +243,17 @@ func initBlockServer(t *testing.T) {
 		genesis.DevAccounts()[0].PrivateKey,
 	)
 
-	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
-	sum, _ := repo.GetBlockSummary(b.Header().ID())
-	flow, err := packer.Schedule(sum, uint64(time.Now().Unix()))
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = flow.Adopt(trx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	block, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := stage.Commit(); err != nil {
-		t.Fatal(err)
-	}
-	if err := repo.AddBlock(block, receipts, 0); err != nil {
-		t.Fatal(err)
-	}
-	if err := repo.SetBestBlockID(block.Header().ID()); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], trx))
+
+	allBlocks, err := thorChain.GetAllBlocks()
+	require.NoError(t, err)
+
+	genesisBlock = allBlocks[0]
+	blk = allBlocks[1]
+
 	router := mux.NewRouter()
-	bftEngine := solo.NewBFTEngine(repo)
-	blocks.New(repo, bftEngine).Mount(router, "/blocks")
+	blocks.New(thorChain.Repo(), thorChain.Engine()).Mount(router, "/blocks")
 	ts = httptest.NewServer(router)
-	blk = block
 }
 
 func checkCollapsedBlock(t *testing.T, expBl *block.Block, actBl *blocks.JSONCollapsedBlock) {

@@ -11,6 +11,7 @@ package thorclient
 
 import (
 	"fmt"
+	"net/http"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -41,6 +42,13 @@ type Client struct {
 func New(url string) *Client {
 	return &Client{
 		httpConn: httpclient.New(url),
+	}
+}
+
+// NewWithHTTP creates a new Client using the provided HTTP URL and HTTP client.
+func NewWithHTTP(url string, c *http.Client) *Client {
+	return &Client{
+		httpConn: httpclient.NewWithHTTP(url, c),
 	}
 }
 
@@ -215,7 +223,7 @@ func (c *Client) ChainTag() (byte, error) {
 }
 
 // SubscribeBlocks subscribes to block updates over WebSocket.
-func (c *Client) SubscribeBlocks(pos string) (*common.Subscription[*blocks.JSONCollapsedBlock], error) {
+func (c *Client) SubscribeBlocks(pos string) (*common.Subscription[*subscriptions.BlockMessage], error) {
 	if c.wsConn == nil {
 		return nil, fmt.Errorf("not a websocket typed client")
 	}

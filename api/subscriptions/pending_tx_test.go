@@ -23,7 +23,14 @@ import (
 )
 
 func TestPendingTx_Subscribe(t *testing.T) {
-	_, _, txPool := initChain(t)
+	// Arrange
+	thorChain := initChain(t)
+	txPool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
+		Limit:           100,
+		LimitPerAccount: 16,
+		MaxLifetime:     time.Hour,
+	})
+
 	p := newPendingTx(txPool)
 
 	// When initialized, there should be no listeners
@@ -36,7 +43,13 @@ func TestPendingTx_Subscribe(t *testing.T) {
 }
 
 func TestPendingTx_Unsubscribe(t *testing.T) {
-	_, _, txPool := initChain(t)
+	// Arrange
+	thorChain := initChain(t)
+	txPool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
+		Limit:           100,
+		LimitPerAccount: 16,
+		MaxLifetime:     time.Hour,
+	})
 	p := newPendingTx(txPool)
 
 	ch := make(chan *tx.Transaction)

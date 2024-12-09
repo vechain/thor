@@ -95,6 +95,9 @@ jobs:
           annotations: true
           severity: LOW
           dockerfile: ./Dockerfile
+        env:
+          # See https://github.com/aquasecurity/trivy/discussions/7538
+          TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2
 
       - name: Internal CI
         uses: peter-evans/repository-dispatch@v3

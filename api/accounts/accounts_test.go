@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -20,19 +19,16 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	ABI "github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/muxdb"
-	"github.com/vechain/thor/v2/packer"
-	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
-	tccommon "github.com/vechain/thor/v2/thorclient/common"
 	"github.com/vechain/thor/v2/tx"
+
+	ABI "github.com/vechain/thor/v2/abi"
+	tccommon "github.com/vechain/thor/v2/thorclient/common"
 )
 
 // pragma solidity ^0.4.18;
@@ -94,7 +90,7 @@ const (
 )
 
 var (
-	gasLimit        uint64
+	gasLimit        = math.MaxUint32
 	addr            = thor.BytesToAddress([]byte("to"))
 	value           = big.NewInt(10000)
 	storageKey      = thor.Bytes32{}
@@ -102,13 +98,12 @@ var (
 	contractAddr    thor.Address
 	bytecode        = common.Hex2Bytes("608060405234801561001057600080fd5b50610125806100206000396000f3006080604052600436106049576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff16806324b8ba5f14604e578063bb4e3f4d14607b575b600080fd5b348015605957600080fd5b506079600480360381019080803560ff16906020019092919050505060cf565b005b348015608657600080fd5b5060b3600480360381019080803560ff169060200190929190803560ff16906020019092919050505060ec565b604051808260ff1660ff16815260200191505060405180910390f35b806000806101000a81548160ff021916908360ff16021790555050565b60008183019050929150505600a165627a7a723058201584add23e31d36c569b468097fe01033525686b59bbb263fb3ab82e9553dae50029")
 	runtimeBytecode = common.Hex2Bytes("6080604052600436106049576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff16806324b8ba5f14604e578063bb4e3f4d14607b575b600080fd5b348015605957600080fd5b506079600480360381019080803560ff16906020019092919050505060cf565b005b348015608657600080fd5b5060b3600480360381019080803560ff169060200190929190803560ff16906020019092919050505060ec565b604051808260ff1660ff16815260200191505060405180910390f35b806000806101000a81548160ff021916908360ff16021790555050565b60008183019050929150505600a165627a7a723058201584add23e31d36c569b468097fe01033525686b59bbb263fb3ab82e9553dae50029")
-	acc             *accounts.Accounts
 	ts              *httptest.Server
 	tclient         *thorclient.Client
 )
 
 func TestAccount(t *testing.T) {
-	initAccountServer(t)
+	initAccountServer(t, true)
 	defer ts.Close()
 
 	tclient = thorclient.New(ts.URL)
@@ -129,6 +124,21 @@ func TestAccount(t *testing.T) {
 	} {
 		t.Run(name, tt)
 	}
+}
+
+func TestDeprecated(t *testing.T) {
+	initAccountServer(t, false)
+	defer ts.Close()
+
+	tclient = thorclient.New(ts.URL)
+
+	body := &accounts.CallData{}
+
+	_, statusCode, _ := tclient.RawHTTPClient().RawHTTPPost("/accounts", body)
+	assert.Equal(t, http.StatusGone, statusCode, "invalid address")
+
+	_, statusCode, _ = tclient.RawHTTPClient().RawHTTPPost("/accounts/"+contractAddr.String(), body)
+	assert.Equal(t, http.StatusGone, statusCode, "invalid address")
 }
 
 func getAccount(t *testing.T) {
@@ -269,23 +279,15 @@ func getStorageWithNonExistingRevision(t *testing.T) {
 	assert.Equal(t, "revision: leveldb: not found\n", string(res), "revision not found")
 }
 
-func initAccountServer(t *testing.T) {
-	db := muxdb.NewMem()
-	stater := state.NewStater(db)
-	gene := genesis.NewDevnet()
+func initAccountServer(t *testing.T, enabledDeprecated bool) {
+	thorChain, err := testchain.NewIntegrationTestChain()
+	require.NoError(t, err)
 
-	b, _, _, err := gene.Build(stater)
-	if err != nil {
-		t.Fatal(err)
-	}
-	genesisBlock = b
-	repo, _ := chain.NewRepository(db, b)
+	genesisBlock = thorChain.GenesisBlock()
 	claTransfer := tx.NewClause(&addr).WithValue(value)
 	claDeploy := tx.NewClause(nil).WithData(bytecode)
-	transaction := buildTxWithClauses(repo.ChainTag(), claTransfer, claDeploy)
+	transaction := buildTxWithClauses(thorChain.Repo().ChainTag(), claTransfer, claDeploy)
 	contractAddr = thor.CreateContractAddress(transaction.ID(), 1, 0)
-	packTx(repo, stater, transaction, t)
-
 	method := "set"
 	abi, _ := ABI.New([]byte(abiJSON))
 	m, _ := abi.MethodByName(method)
@@ -294,13 +296,19 @@ func initAccountServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	claCall := tx.NewClause(&contractAddr).WithData(input)
-	transactionCall := buildTxWithClauses(repo.ChainTag(), claCall)
-	packTx(repo, stater, transactionCall, t)
+	transactionCall := buildTxWithClauses(thorChain.Repo().ChainTag(), claCall)
+	require.NoError(t,
+		thorChain.MintTransactions(
+			genesis.DevAccounts()[0],
+			transaction,
+			transactionCall,
+		),
+	)
 
 	router := mux.NewRouter()
-	gasLimit = math.MaxUint32
-	acc = accounts.New(repo, stater, gasLimit, thor.NoFork, solo.NewBFTEngine(repo))
-	acc.Mount(router, "/accounts")
+	accounts.New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), thor.NoFork, thorChain.Engine(), enabledDeprecated).
+		Mount(router, "/accounts")
+
 	ts = httptest.NewServer(router)
 }
 
@@ -316,31 +324,6 @@ func buildTxWithClauses(chaiTag byte, clauses ...*tx.Clause) *tx.Transaction {
 	trx := builder.Build()
 
 	return tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)
-}
-
-func packTx(repo *chain.Repository, stater *state.Stater, transaction *tx.Transaction, t *testing.T) {
-	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
-	flow, err := packer.Schedule(repo.BestBlockSummary(), uint64(time.Now().Unix()))
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = flow.Adopt(transaction)
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := stage.Commit(); err != nil {
-		t.Fatal(err)
-	}
-	if err := repo.AddBlock(b, receipts, 0); err != nil {
-		t.Fatal(err)
-	}
-	if err := repo.SetBestBlockID(b.Header().ID()); err != nil {
-		t.Fatal(err)
-	}
 }
 
 func deployContractWithCall(t *testing.T) {

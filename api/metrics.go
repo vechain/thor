@@ -20,10 +20,17 @@ import (
 )
 
 var (
+	websocketDurations = []int64{
+		0, 1, 2, 5, 10, 25, 50, 100, 250, 500, 1_000, 2_500, 5_000, 10_000, 25_000,
+		50_000, 100_000, 250_000, 500_000, 1000_000, 2_500_000, 5_000_000, 10_000_000,
+	}
 	metricHTTPReqCounter       = metrics.LazyLoadCounterVec("api_request_count", []string{"name", "code", "method"})
 	metricHTTPReqDuration      = metrics.LazyLoadHistogramVec("api_duration_ms", []string{"name", "code", "method"}, metrics.BucketHTTPReqs)
 	metricActiveWebsocketCount = metrics.LazyLoadGaugeVec("api_active_websocket_count", []string{"subject"})
 	metricTxCallVMErrors       = metrics.LazyLoadCounterVec("api_tx_call_vm_errors", []string{"error"})
+	metricWebsocketDuration    = metrics.LazyLoadHistogramVec("api_websocket_duration", []string{"name", "code"}, websocketDurations)
+	metricActiveWebsocketGauge = metrics.LazyLoadGaugeVec("api_active_websocket_gauge", []string{"name"})
+	metricWebsocketCounter     = metrics.LazyLoadCounterVec("api_websocket_counter", []string{"name"})
 )
 
 // metricsResponseWriter is a wrapper around http.ResponseWriter that captures the status code.
@@ -88,7 +95,7 @@ func metricsMiddleware(next http.Handler) http.Handler {
 		var (
 			enabled      = false
 			name         = ""
-			subscription = ""
+			subscription = false
 		)
 
 		if rt != nil && rt.GetName() != "" {
@@ -110,24 +117,24 @@ func metricsMiddleware(next http.Handler) http.Handler {
 
 			// Handle subscriptions
 			if strings.HasPrefix(name, "subscriptions") {
-				// example path: /subscriptions/txpool -> subject = txpool
-				paths := strings.Split(r.URL.Path, "/")
-				if len(paths) > 2 {
-					subscription = paths[2]
-				}
+				subscription = true
+				name = "WS " + r.URL.Path
 			}
 		}
 
 		now := time.Now()
 		mrw := newMetricsResponseWriter(w)
-		if subscription != "" {
-			metricActiveWebsocketCount().AddWithLabel(1, map[string]string{"subject": subscription})
+		if subscription {
+			metricActiveWebsocketGauge().AddWithLabel(1, map[string]string{"name": name})
+			metricWebsocketCounter().AddWithLabel(1, map[string]string{"name": name})
 		}
 
 		next.ServeHTTP(mrw, r)
 
-		if subscription != "" {
-			metricActiveWebsocketCount().AddWithLabel(-1, map[string]string{"subject": subscription})
+		if subscription {
+			metricActiveWebsocketGauge().AddWithLabel(-1, map[string]string{"name": name})
+			// record websocket duration in seconds, not MS
+			metricWebsocketDuration().ObserveWithLabels(time.Since(now).Milliseconds()/1000, map[string]string{"name": name, "code": strconv.Itoa(mrw.statusCode)})
 		} else if enabled {
 			metricHTTPReqCounter().AddWithLabel(1, map[string]string{"name": name, "code": strconv.Itoa(mrw.statusCode), "method": r.Method})
 			metricHTTPReqDuration().ObserveWithLabels(time.Since(now).Milliseconds(), map[string]string{"name": name, "code": strconv.Itoa(mrw.statusCode), "method": r.Method})

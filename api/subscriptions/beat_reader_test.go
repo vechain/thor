@@ -9,23 +9,26 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/thor"
 )
 
 func TestBeatReader_Read(t *testing.T) {
 	// Arrange
-	repo, generatedBlocks, _ := initChain(t)
-	genesisBlk := generatedBlocks[0]
-	newBlock := generatedBlocks[1]
+	thorChain := initChain(t)
+	allBlocks, err := thorChain.GetAllBlocks()
+	require.NoError(t, err)
+	genesisBlk := allBlocks[0]
+	newBlock := allBlocks[1]
 
 	// Act
-	beatReader := newBeatReader(repo, genesisBlk.Header().ID())
+	beatReader := newBeatReader(thorChain.Repo(), genesisBlk.Header().ID(), newMessageCache[BeatMessage](10))
 	res, ok, err := beatReader.Read()
 
 	// Assert
 	assert.NoError(t, err)
 	assert.True(t, ok)
-	if beatMsg, ok := res[0].(*BeatMessage); !ok {
+	if beatMsg, ok := res[0].(BeatMessage); !ok {
 		t.Fatal("unexpected type")
 	} else {
 		assert.Equal(t, newBlock.Header().Number(), beatMsg.Number)
@@ -38,11 +41,13 @@ func TestBeatReader_Read(t *testing.T) {
 
 func TestBeatReader_Read_NoNewBlocksToRead(t *testing.T) {
 	// Arrange
-	repo, generatedBlocks, _ := initChain(t)
-	newBlock := generatedBlocks[1]
+	thorChain := initChain(t)
+	allBlocks, err := thorChain.GetAllBlocks()
+	require.NoError(t, err)
+	newBlock := allBlocks[1]
 
 	// Act
-	beatReader := newBeatReader(repo, newBlock.Header().ID())
+	beatReader := newBeatReader(thorChain.Repo(), newBlock.Header().ID(), newMessageCache[BeatMessage](10))
 	res, ok, err := beatReader.Read()
 
 	// Assert
@@ -53,10 +58,10 @@ func TestBeatReader_Read_NoNewBlocksToRead(t *testing.T) {
 
 func TestBeatReader_Read_ErrorWhenReadingBlocks(t *testing.T) {
 	// Arrange
-	repo, _, _ := initChain(t)
+	thorChain := initChain(t)
 
 	// Act
-	beatReader := newBeatReader(repo, thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
+	beatReader := newBeatReader(thorChain.Repo(), thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), newMessageCache[BeatMessage](10))
 	res, ok, err := beatReader.Read()
 
 	// Assert
