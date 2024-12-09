@@ -5,9 +5,7 @@
 package trie
 
 import (
-	"bytes"
-
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/qianbin/drlp"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -19,12 +17,15 @@ type DerivableList interface {
 }
 
 func DeriveRoot(list DerivableList) thor.Bytes32 {
-	keybuf := new(bytes.Buffer)
-	trie := new(Trie)
+	var (
+		trie Trie
+		key  []byte
+	)
+
 	for i := 0; i < list.Len(); i++ {
-		keybuf.Reset()
-		rlp.Encode(keybuf, uint(i))
-		trie.Update(keybuf.Bytes(), list.GetRlp(i))
+		key = drlp.AppendUint(key[:0], uint64(i))
+		trie.Update(key, list.GetRlp(i), nil)
 	}
+
 	return trie.Hash()
 }

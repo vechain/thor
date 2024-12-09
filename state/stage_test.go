@@ -13,11 +13,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 )
 
 func TestStage(t *testing.T) {
 	db := muxdb.NewMem()
-	state := New(db, thor.Bytes32{}, 0, 0, 0)
+	state := New(db, trie.Root{})
 	addr := thor.BytesToAddress([]byte("acc1"))
 
 	balance := big.NewInt(10)
@@ -34,7 +35,7 @@ func TestStage(t *testing.T) {
 		state.SetStorage(addr, k, v)
 	}
 
-	stage, err := state.Stage(1, 0)
+	stage, err := state.Stage(trie.Version{Major: 1})
 	assert.Nil(t, err)
 
 	hash := stage.Hash()
@@ -44,7 +45,7 @@ func TestStage(t *testing.T) {
 
 	assert.Equal(t, hash, root)
 
-	state = New(db, root, 1, 0, 0)
+	state = New(db, trie.Root{Hash: root, Ver: trie.Version{Major: 1}})
 
 	assert.Equal(t, M(balance, nil), M(state.GetBalance(addr)))
 	assert.Equal(t, M(code, nil), M(state.GetCode(addr)))
@@ -56,8 +57,7 @@ func TestStage(t *testing.T) {
 }
 
 func TestStageCommitError(t *testing.T) {
-	db := muxdb.NewMem()
-	state := New(db, thor.Bytes32{}, 0, 0, 0)
+	state := New(muxdb.NewMem(), trie.Root{})
 
 	// Set up the state with an account, balance, code, and storage.
 	addr := thor.BytesToAddress([]byte("acc1"))
@@ -76,7 +76,7 @@ func TestStageCommitError(t *testing.T) {
 	}
 
 	// Prepare the stage with the current state.
-	stage, err := state.Stage(1, 0)
+	stage, err := state.Stage(trie.Version{Major: 1})
 	assert.Nil(t, err, "Stage should not return an error")
 
 	// Mock a commit function to simulate an error.
@@ -85,7 +85,7 @@ func TestStageCommitError(t *testing.T) {
 	}
 
 	// Include the error-producing commit function in the stage's commits.
-	stage.commits = append(stage.commits, commitFuncWithError)
+	stage.commit = commitFuncWithError
 
 	// Attempt to commit changes.
 	_, err = stage.Commit()

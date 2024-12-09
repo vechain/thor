@@ -315,7 +315,7 @@ func makeInstanceDir(ctx *cli.Context, gene *genesis.Genesis) (string, error) {
 		suffix = "-full"
 	}
 
-	instanceDir := filepath.Join(dataDir, fmt.Sprintf("instance-%x-v3", gene.ID().Bytes()[24:])+suffix)
+	instanceDir := filepath.Join(dataDir, fmt.Sprintf("instance-%x-v4", gene.ID().Bytes()[24:])+suffix)
 	if err := os.MkdirAll(instanceDir, 0700); err != nil {
 		return "", errors.Wrapf(err, "create instance dir [%v]", instanceDir)
 	}
@@ -331,9 +331,7 @@ func openMainDB(ctx *cli.Context, dir string) (*muxdb.MuxDB, error) {
 
 	opts := muxdb.Options{
 		TrieNodeCacheSizeMB:        cacheMB,
-		TrieRootCacheCapacity:      256,
 		TrieCachedNodeTTL:          30, // 5min
-		TrieLeafBankSlotCapacity:   256,
 		TrieDedupedPartitionFactor: math.MaxUint32,
 		TrieWillCleanHistory:       !ctx.Bool(disablePrunerFlag.Name),
 		OpenFilesCacheCapacity:     fdCache,
@@ -350,9 +348,9 @@ func openMainDB(ctx *cli.Context, dir string) (*muxdb.MuxDB, error) {
 	debug.SetGCPercent(int(gogc))
 
 	if opts.TrieWillCleanHistory {
-		opts.TrieHistPartitionFactor = 1000
+		opts.TrieHistPartitionFactor = 256
 	} else {
-		opts.TrieHistPartitionFactor = 500000
+		opts.TrieHistPartitionFactor = 524288
 	}
 
 	path := filepath.Join(dir, "main.db")

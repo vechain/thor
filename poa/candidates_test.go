@@ -14,6 +14,7 @@ import (
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 )
 
 func generateCandidateList(candidateCount int) []*authority.Candidate {
@@ -103,8 +104,7 @@ func TestCopy(t *testing.T) {
 }
 
 func TestPick(t *testing.T) {
-	db := muxdb.NewMem()
-	state := state.New(db, thor.Bytes32{}, 0, 0, 0)
+	state := state.New(muxdb.NewMem(), trie.Root{})
 
 	candidateList := generateCandidateList(5)
 
