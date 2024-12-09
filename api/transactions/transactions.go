@@ -51,7 +51,7 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, a
 		return nil, err
 	}
 
-	summary, err := t.repo.GetBlockSummary(meta.BlockID)
+	header, err := chain.GetBlockHeader(meta.BlockNum)
 	if err != nil {
 		return nil, err
 	}
@@ -62,9 +62,9 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, a
 	return &RawTransaction{
 		RawTx: RawTx{hexutil.Encode(raw)},
 		Meta: &TxMeta{
-			BlockID:        summary.Header.ID(),
-			BlockNumber:    summary.Header.Number(),
-			BlockTimestamp: summary.Header.Timestamp(),
+			BlockID:        header.ID(),
+			BlockNumber:    header.Number(),
+			BlockTimestamp: header.Timestamp(),
 		},
 	}, nil
 }
@@ -84,11 +84,11 @@ func (t *Transactions) getTransactionByID(txID thor.Bytes32, head thor.Bytes32, 
 		return nil, err
 	}
 
-	summary, err := t.repo.GetBlockSummary(meta.BlockID)
+	header, err := chain.GetBlockHeader(meta.BlockNum)
 	if err != nil {
 		return nil, err
 	}
-	return convertTransaction(tx, summary.Header), nil
+	return convertTransaction(tx, header), nil
 }
 
 // GetTransactionReceiptByID get tx's receipt
@@ -107,12 +107,12 @@ func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32, head thor.By
 		return nil, err
 	}
 
-	summary, err := t.repo.GetBlockSummary(meta.BlockID)
+	header, err := chain.GetBlockHeader(meta.BlockNum)
 	if err != nil {
 		return nil, err
 	}
 
-	return convertReceipt(receipt, summary.Header, tx)
+	return convertReceipt(receipt, header, tx)
 }
 func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Request) error {
 	var rawTx *RawTx
@@ -218,14 +218,14 @@ func (t *Transactions) Mount(root *mux.Router, pathPrefix string) {
 
 	sub.Path("").
 		Methods(http.MethodPost).
-		Name("transactions_send_tx").
+		Name("POST /transactions").
 		HandlerFunc(utils.WrapHandlerFunc(t.handleSendTransaction))
 	sub.Path("/{id}").
 		Methods(http.MethodGet).
-		Name("transactions_get_tx").
+		Name("GET /transactions/{id}").
 		HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionByID))
 	sub.Path("/{id}/receipt").
 		Methods(http.MethodGet).
-		Name("transactions_get_receipt").
+		Name("GET /transactions/{id}/receipt").
 		HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionReceiptByID))
 }

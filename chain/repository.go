@@ -16,20 +16,25 @@ import (
 	"github.com/vechain/thor/v2/kv"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
 )
 
 const (
-	dataStoreName    = "chain.data"
-	propStoreName    = "chain.props"
-	headStoreName    = "chain.heads"
-	txIndexStoreName = "chain.txi"
+	hdrStoreName     = "chain.hdr"   // for block headers
+	bodyStoreName    = "chain.body"  // for block bodies and receipts
+	propStoreName    = "chain.props" // for property-named blocks such as best block
+	headStoreName    = "chain.heads" // for chain heads ( including uncles )
+	txIndexStoreName = "chain.txi"   // for tx metadata
+
+	txFlag         = byte(0) // flag byte of the key for saving tx blob
+	receiptFlag    = byte(1) // flag byte fo the key for saving receipt blob
+	txFilterKeyLen = 8
 )
 
 var (
-	errNotFound      = errors.New("not found")
-	bestBlockIDKey   = []byte("best-block-id")
-	steadyBlockIDKey = []byte("steady-block-id")
+	errNotFound    = errors.New("not found")
+	bestBlockIDKey = []byte("best-block-id")
 )
 
 // Repository stores block headers, txs and receipts.
@@ -37,15 +42,16 @@ var (
 // It's thread-safe.
 type Repository struct {
 	db        *muxdb.MuxDB
-	data      kv.Store
-	head      kv.Store
-	props     kv.Store
+	hdrStore  kv.Store
+	bodyStore kv.Store
+	propStore kv.Store
+	headStore kv.Store
 	txIndexer kv.Store
 
-	genesis     *block.Block
+	genesis *block.Block
+	tag     byte
+
 	bestSummary atomic.Value
-	steadyID    atomic.Value
-	tag         byte
 	tick        co.Signal
 
 	caches struct {
@@ -67,9 +73,10 @@ func NewRepository(db *muxdb.MuxDB, genesis *block.Block) (*Repository, error) {
 	genesisID := genesis.Header().ID()
 	repo := &Repository{
 		db:        db,
-		data:      db.NewStore(dataStoreName),
-		head:      db.NewStore(headStoreName),
-		props:     db.NewStore(propStoreName),
+		hdrStore:  db.NewStore(hdrStoreName),
+		bodyStore: db.NewStore(bodyStoreName),
+		propStore: db.NewStore(propStoreName),
+		headStore: db.NewStore(headStoreName),
 		txIndexer: db.NewStore(txIndexStoreName),
 		genesis:   genesis,
 		tag:       genesisID[31],
@@ -79,17 +86,15 @@ func NewRepository(db *muxdb.MuxDB, genesis *block.Block) (*Repository, error) {
 	repo.caches.txs = newCache(2048)
 	repo.caches.receipts = newCache(2048)
 
-	if val, err := repo.props.Get(bestBlockIDKey); err != nil {
-		if !repo.props.IsNotFound(err) {
+	if val, err := repo.propStore.Get(bestBlockIDKey); err != nil {
+		if !repo.propStore.IsNotFound(err) {
 			return nil, err
 		}
 
-		if err := repo.indexBlock(0, genesis.Header().ID(), 0); err != nil {
+		if err := repo.indexBlock(trie.Root{}, genesis.Header().ID(), 0); err != nil {
 			return nil, err
 		}
-		if summary, err := repo.saveBlock(genesis, nil, 0, 0); err != nil {
-			return nil, err
-		} else if err := repo.setBestBlockSummary(summary); err != nil {
+		if _, err := repo.saveBlock(genesis, nil, 0, true); err != nil {
 			return nil, err
 		}
 	} else {
@@ -109,14 +114,6 @@ func NewRepository(db *muxdb.MuxDB, genesis *block.Block) (*Repository, error) {
 		repo.bestSummary.Store(summary)
 	}
 
-	if val, err := repo.props.Get(steadyBlockIDKey); err != nil {
-		if !repo.props.IsNotFound(err) {
-			return nil, err
-		}
-		repo.steadyID.Store(genesis.Header().ID())
-	} else {
-		repo.steadyID.Store(thor.BytesToBytes32(val))
-	}
 	return repo, nil
 }
 
@@ -135,115 +132,89 @@ func (r *Repository) BestBlockSummary() *BlockSummary {
 	return r.bestSummary.Load().(*BlockSummary)
 }
 
-// SetBestBlockID set the given block id as best block id.
-func (r *Repository) SetBestBlockID(id thor.Bytes32) (err error) {
-	defer func() {
-		if err == nil {
-			r.tick.Broadcast()
-		}
-	}()
-	summary, err := r.GetBlockSummary(id)
-	if err != nil {
-		return err
-	}
-	return r.setBestBlockSummary(summary)
-}
-
-func (r *Repository) setBestBlockSummary(summary *BlockSummary) error {
-	if err := r.props.Put(bestBlockIDKey, summary.Header.ID().Bytes()); err != nil {
-		return err
-	}
-	r.bestSummary.Store(summary)
-	return nil
-}
-
-// SteadyBlockID return the head block id of the steady chain.
-func (r *Repository) SteadyBlockID() thor.Bytes32 {
-	return r.steadyID.Load().(thor.Bytes32)
-}
-
-// SetSteadyBlockID set the given block id as the head block id of the steady chain.
-func (r *Repository) SetSteadyBlockID(id thor.Bytes32) error {
-	prev := r.steadyID.Load().(thor.Bytes32)
-
-	if has, err := r.NewChain(id).HasBlock(prev); err != nil {
-		return err
-	} else if !has {
-		// the previous steady id is not on the chain of the new id.
-		return errors.New("invalid new steady block id")
-	}
-	if err := r.props.Put(steadyBlockIDKey, id[:]); err != nil {
-		return err
-	}
-	r.steadyID.Store(id)
-	return nil
-}
-
-func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, conflicts, steadyNum uint32) (*BlockSummary, error) {
+func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, conflicts uint32, asBest bool) (*BlockSummary, error) {
 	var (
-		header      = block.Header()
-		id          = header.ID()
-		txs         = block.Transactions()
-		summary     = BlockSummary{header, []thor.Bytes32{}, uint64(block.Size()), conflicts, steadyNum}
-		bulk        = r.db.NewStore("").Bulk()
-		indexPutter = kv.Bucket(txIndexStoreName).NewPutter(bulk)
-		dataPutter  = kv.Bucket(dataStoreName).NewPutter(bulk)
-		headPutter  = kv.Bucket(headStoreName).NewPutter(bulk)
+		header        = block.Header()
+		id            = header.ID()
+		num           = header.Number()
+		txs           = block.Transactions()
+		txIDs         = []thor.Bytes32{}
+		bulk          = r.db.NewStore("").Bulk()
+		hdrPutter     = kv.Bucket(hdrStoreName).NewPutter(bulk)
+		bodyPutter    = kv.Bucket(bodyStoreName).NewPutter(bulk)
+		propPutter    = kv.Bucket(propStoreName).NewPutter(bulk)
+		headPutter    = kv.Bucket(headStoreName).NewPutter(bulk)
+		txIndexPutter = kv.Bucket(txIndexStoreName).NewPutter(bulk)
+		keyBuf        []byte
 	)
 
 	if len(txs) > 0 {
-		// index txs
-		buf := make([]byte, 64)
-		copy(buf[32:], id[:])
+		// index and save txs
 		for i, tx := range txs {
 			txid := tx.ID()
-			summary.Txs = append(summary.Txs, txid)
+			txIDs = append(txIDs, txid)
 
-			// to accelerate point access
-			if err := indexPutter.Put(txid[:], nil); err != nil {
+			// write the filter key
+			if err := txIndexPutter.Put(txid[:txFilterKeyLen], nil); err != nil {
 				return nil, err
 			}
+			// write tx metadata
+			keyBuf = append(keyBuf[:0], txid[:]...)
+			keyBuf = binary.AppendUvarint(keyBuf, uint64(header.Number()))
+			keyBuf = binary.AppendUvarint(keyBuf, uint64(conflicts))
 
-			copy(buf, txid[:])
-			if err := saveRLP(indexPutter, buf, &storageTxMeta{
+			if err := saveRLP(txIndexPutter, keyBuf, &storageTxMeta{
 				Index:    uint64(i),
 				Reverted: receipts[i].Reverted,
 			}); err != nil {
 				return nil, err
 			}
+
+			// write the tx blob
+			keyBuf = appendTxKey(keyBuf[:0], num, conflicts, uint64(i), txFlag)
+			if err := saveRLP(bodyPutter, keyBuf[:], tx); err != nil {
+				return nil, err
+			}
+			r.caches.txs.Add(string(keyBuf), tx)
 		}
 
-		// save tx & receipt data
-		key := makeTxKey(id, txInfix)
-		for i, tx := range txs {
-			key.SetIndex(uint64(i))
-			if err := saveTransaction(dataPutter, key, tx); err != nil {
-				return nil, err
-			}
-			r.caches.txs.Add(key, tx)
-		}
-		key = makeTxKey(id, receiptInfix)
+		// save receipts
 		for i, receipt := range receipts {
-			key.SetIndex(uint64(i))
-			if err := saveReceipt(dataPutter, key, receipt); err != nil {
+			keyBuf = appendTxKey(keyBuf[:0], num, conflicts, uint64(i), receiptFlag)
+			if err := saveRLP(bodyPutter, keyBuf, receipt); err != nil {
 				return nil, err
 			}
-			r.caches.receipts.Add(key, receipt)
+			r.caches.receipts.Add(string(keyBuf), receipt)
 		}
 	}
 	if err := indexChainHead(headPutter, header); err != nil {
 		return nil, err
 	}
 
-	if err := saveBlockSummary(dataPutter, &summary); err != nil {
+	summary := BlockSummary{header, txIDs, uint64(block.Size()), conflicts}
+	if err := saveBlockSummary(hdrPutter, &summary); err != nil {
+		return nil, err
+	}
+
+	if asBest {
+		if err := propPutter.Put(bestBlockIDKey, id[:]); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := bulk.Write(); err != nil {
 		return nil, err
 	}
 	r.caches.summaries.Add(id, &summary)
-	return &summary, bulk.Write()
+	if asBest {
+		r.bestSummary.Store(&summary)
+		r.tick.Broadcast()
+	}
+	return &summary, nil
 }
 
 // AddBlock add a new block with its receipts into repository.
-func (r *Repository) AddBlock(newBlock *block.Block, receipts tx.Receipts, conflicts uint32) error {
+func (r *Repository) AddBlock(newBlock *block.Block, receipts tx.Receipts, conflicts uint32, asBest bool) error {
 	parentSummary, err := r.GetBlockSummary(newBlock.Header().ParentID())
 	if err != nil {
 		if r.IsNotFound(err) {
@@ -251,21 +222,11 @@ func (r *Repository) AddBlock(newBlock *block.Block, receipts tx.Receipts, confl
 		}
 		return err
 	}
-	if err := r.indexBlock(parentSummary.Conflicts, newBlock.Header().ID(), conflicts); err != nil {
+	if err := r.indexBlock(parentSummary.IndexRoot(), newBlock.Header().ID(), conflicts); err != nil {
 		return err
 	}
-	steadyNum := parentSummary.SteadyNum // initially inherits parent's steady num.
-	newSteadyID := r.steadyID.Load().(thor.Bytes32)
-	if newSteadyNum := block.Number(newSteadyID); steadyNum != newSteadyNum {
-		if has, err := r.NewChain(parentSummary.Header.ID()).HasBlock(newSteadyID); err != nil {
-			return err
-		} else if has {
-			// the chain of the new block contains the new steady id,
-			steadyNum = newSteadyNum
-		}
-	}
 
-	if _, err := r.saveBlock(newBlock, receipts, conflicts, steadyNum); err != nil {
+	if _, err := r.saveBlock(newBlock, receipts, conflicts, asBest); err != nil {
 		return err
 	}
 	return nil
@@ -273,27 +234,28 @@ func (r *Repository) AddBlock(newBlock *block.Block, receipts tx.Receipts, confl
 
 // ScanConflicts returns the count of saved blocks with the given blockNum.
 func (r *Repository) ScanConflicts(blockNum uint32) (uint32, error) {
-	var prefix [4]byte
-	binary.BigEndian.PutUint32(prefix[:], blockNum)
+	prefix := binary.BigEndian.AppendUint32(nil, blockNum)
 
-	iter := r.data.Iterate(kv.Range(*util.BytesPrefix(prefix[:])))
+	iter := r.hdrStore.Iterate(kv.Range(*util.BytesPrefix(prefix)))
 	defer iter.Release()
 
 	count := uint32(0)
 	for iter.Next() {
-		if len(iter.Key()) == 32 {
-			count++
-		}
+		count++
 	}
 	return count, iter.Error()
 }
 
 // ScanHeads returns all head blockIDs from the given blockNum(included) in descending order.
+// It will return all fork's head block id stored in to local database after the given block number.
+// The following example will return B' and C.
+// A -> B -> C
+//
+//	\ -> B'
 func (r *Repository) ScanHeads(from uint32) ([]thor.Bytes32, error) {
-	var start [4]byte
-	binary.BigEndian.PutUint32(start[:], from)
+	start := binary.BigEndian.AppendUint32(nil, from)
 
-	iter := r.head.Iterate(kv.Range{Start: start[:]})
+	iter := r.headStore.Iterate(kv.Range{Start: start})
 	defer iter.Release()
 
 	heads := make([]thor.Bytes32, 0, 16)
@@ -311,7 +273,7 @@ func (r *Repository) ScanHeads(from uint32) ([]thor.Bytes32, error) {
 
 // GetMaxBlockNum returns the max committed block number.
 func (r *Repository) GetMaxBlockNum() (uint32, error) {
-	iter := r.data.Iterate(kv.Range{})
+	iter := r.hdrStore.Iterate(kv.Range{})
 	defer iter.Release()
 
 	if iter.Last() {
@@ -322,23 +284,37 @@ func (r *Repository) GetMaxBlockNum() (uint32, error) {
 
 // GetBlockSummary get block summary by block id.
 func (r *Repository) GetBlockSummary(id thor.Bytes32) (summary *BlockSummary, err error) {
-	var cached interface{}
-	if cached, err = r.caches.summaries.GetOrLoad(id, func() (interface{}, error) {
-		return loadBlockSummary(r.data, id)
+	var blk interface{}
+	result := "hit"
+	if blk, err = r.caches.summaries.GetOrLoad(id, func() (interface{}, error) {
+		result = "miss"
+		return loadBlockSummary(r.hdrStore, id)
 	}); err != nil {
 		return
 	}
-	return cached.(*BlockSummary), nil
+	metricCacheHitMiss().AddWithLabel(1, map[string]string{"type": "block-summary", "event": result})
+	return blk.(*BlockSummary), nil
 }
 
-func (r *Repository) getTransaction(key txKey) (*tx.Transaction, error) {
-	cached, err := r.caches.txs.GetOrLoad(key, func() (interface{}, error) {
-		return loadTransaction(r.data, key)
+func (r *Repository) getTransaction(key []byte) (*tx.Transaction, error) {
+	result := "hit"
+	trx, err := r.caches.txs.GetOrLoad(string(key), func() (interface{}, error) {
+		result = "miss"
+		return loadTransaction(r.bodyStore, key)
 	})
 	if err != nil {
 		return nil, err
 	}
-	return cached.(*tx.Transaction), nil
+	metricCacheHitMiss().AddWithLabel(1, map[string]string{"type": "transaction", "event": result})
+	return trx.(*tx.Transaction), nil
+}
+
+func loadTransaction(r kv.Getter, key []byte) (*tx.Transaction, error) {
+	var tx tx.Transaction
+	if err := loadRLP(r, key[:], &tx); err != nil {
+		return nil, err
+	}
+	return &tx, nil
 }
 
 // GetBlockTransactions get all transactions of the block for given block id.
@@ -350,9 +326,9 @@ func (r *Repository) GetBlockTransactions(id thor.Bytes32) (tx.Transactions, err
 
 	if n := len(summary.Txs); n > 0 {
 		txs := make(tx.Transactions, n)
-		key := makeTxKey(id, txInfix)
+		var key []byte
 		for i := range summary.Txs {
-			key.SetIndex(uint64(i))
+			key := appendTxKey(key[:0], summary.Header.Number(), summary.Conflicts, uint64(i), txFlag)
 			txs[i], err = r.getTransaction(key)
 			if err != nil {
 				return nil, err
@@ -376,14 +352,26 @@ func (r *Repository) GetBlock(id thor.Bytes32) (*block.Block, error) {
 	return block.Compose(summary.Header, txs), nil
 }
 
-func (r *Repository) getReceipt(key txKey) (*tx.Receipt, error) {
-	cached, err := r.caches.receipts.GetOrLoad(key, func() (interface{}, error) {
-		return loadReceipt(r.data, key)
+
+func (r *Repository) getReceipt(key []byte) (*tx.Receipt, error) {
+	result := "hit"
+	receipt, err := r.caches.receipts.GetOrLoad(string(key), func() (interface{}, error) {
+		result = "miss"
+		return loadReceipt(r.bodyStore, key)
 	})
 	if err != nil {
 		return nil, err
 	}
-	return cached.(*tx.Receipt), nil
+	metricCacheHitMiss().AddWithLabel(1, map[string]string{"type": "receipt", "event": result})
+	return receipt.(*tx.Receipt), nil
+}
+
+func loadReceipt(r kv.Getter, key []byte) (*tx.Receipt, error) {
+	var receipt tx.Receipt
+	if err := loadRLP(r, key[:], &receipt); err != nil {
+		return nil, err
+	}
+	return &receipt, nil
 }
 
 // GetBlockReceipts get all tx receipts of the block for given block id.
@@ -395,9 +383,9 @@ func (r *Repository) GetBlockReceipts(id thor.Bytes32) (tx.Receipts, error) {
 
 	if n := len(summary.Txs); n > 0 {
 		receipts := make(tx.Receipts, n)
-		key := makeTxKey(id, receiptInfix)
+		var key []byte
 		for i := range summary.Txs {
-			key.SetIndex(uint64(i))
+			key := appendTxKey(key[:0], summary.Header.Number(), summary.Conflicts, uint64(i), receiptFlag)
 			receipts[i], err = r.getReceipt(key)
 			if err != nil {
 				return nil, err

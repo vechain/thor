@@ -7,6 +7,7 @@ package chain
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math"
 	"sort"
 
@@ -34,8 +35,8 @@ type storageTxMeta struct {
 
 // TxMeta contains tx location and reversal state.
 type TxMeta struct {
-	// The block id this tx is involved.
-	BlockID thor.Bytes32
+	// The number of block this tx is involved.
+	BlockNum, BlockConflicts uint32
 
 	// Index the position of the tx in block's txs.
 	Index uint64 // rlp require uint64.
@@ -64,9 +65,9 @@ func newChain(repo *Repository, headID thor.Bytes32) *Chain {
 		func() (*muxdb.Trie, error) {
 			if indexTrie == nil && initErr == nil {
 				if summary, err := repo.GetBlockSummary(headID); err == nil {
-					indexTrie = repo.db.NewNonCryptoTrie(IndexTrieName, trie.NonCryptoNodeHash, summary.Header.Number(), summary.Conflicts)
+					indexTrie = repo.db.NewTrie(IndexTrieName, summary.IndexRoot())
 				} else {
-					initErr = errors.Wrap(err, "lazy init chain")
+					initErr = errors.Wrap(err, fmt.Sprintf("lazy init chain, head=%v", headID))
 				}
 			}
 			return indexTrie, initErr
@@ -106,35 +107,31 @@ func (c *Chain) GetBlockID(num uint32) (thor.Bytes32, error) {
 
 // GetTransactionMeta returns tx meta by given tx id.
 func (c *Chain) GetTransactionMeta(id thor.Bytes32) (*TxMeta, error) {
-	// precheck. point access is faster than range access.
-	if has, err := c.repo.txIndexer.Has(id[:]); err != nil {
-		return nil, err
-	} else if !has {
-		return nil, errNotFound
-	}
-
 	iter := c.repo.txIndexer.Iterate(kv.Range(*util.BytesPrefix(id[:])))
 	defer iter.Release()
 	for iter.Next() {
-		if len(iter.Key()) != 64 { // skip the pure txid key
+		ver := iter.Key()[32:]
+		blockNum, n := binary.Uvarint(ver)
+		conflicts, _ := binary.Uvarint(ver[n:])
+
+		if blockNum > uint64(block.Number(c.headID)) {
 			continue
 		}
 
-		blockID := thor.BytesToBytes32(iter.Key()[32:])
-
-		has, err := c.HasBlock(blockID)
+		s, err := c.GetBlockSummary(uint32(blockNum))
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "block missing")
 		}
-		if has {
+		if s.Conflicts == uint32(conflicts) {
 			var sMeta storageTxMeta
 			if err := rlp.DecodeBytes(iter.Value(), &sMeta); err != nil {
 				return nil, err
 			}
 			return &TxMeta{
-				BlockID:  blockID,
-				Index:    sMeta.Index,
-				Reverted: sMeta.Reverted,
+				BlockNum:       uint32(blockNum),
+				BlockConflicts: uint32(conflicts),
+				Index:          sMeta.Index,
+				Reverted:       sMeta.Reverted,
 			}, nil
 		}
 	}
@@ -152,30 +149,55 @@ func (c *Chain) HasTransaction(txid thor.Bytes32, txBlockRef uint32) (bool, erro
 	if txBlockRef > headNum {
 		return false, nil
 	}
-	// tx block ref too old, fallback to retrieve tx meta.
-	if headNum-txBlockRef > 100 {
-		if _, err := c.GetTransactionMeta(txid); err != nil {
-			if c.IsNotFound(err) {
-				return false, nil
+
+	// the tx is in recent blocks, if there is.
+	if headNum-txBlockRef < 100 {
+		// iterate block summaries from head block to ref block,
+		// to match tx id.
+		for nextID := c.headID; block.Number(nextID) >= txBlockRef && block.Number(nextID) != math.MaxUint32; {
+			s, err := c.repo.GetBlockSummary(nextID)
+			if err != nil {
+				return false, err
 			}
-			return false, err
+			for _, _txid := range s.Txs {
+				if _txid == txid {
+					return true, nil
+				}
+			}
+			nextID = s.Header.ParentID()
 		}
-		return true, nil
+		return false, nil
 	}
 
-	// iterate block summaries from head block to ref block,
-	// to match tx id.
-	for nextID := c.headID; block.Number(nextID) >= txBlockRef && block.Number(nextID) != math.MaxUint32; {
-		s, err := c.repo.GetBlockSummary(nextID)
+	// tx block ref too old, fallback to check tx meta.
+	if has, err := c.repo.txIndexer.Has(txid[:txFilterKeyLen]); err != nil {
+		return false, err
+	} else if !has {
+		return false, nil
+	}
+
+	iter := c.repo.txIndexer.Iterate(kv.Range(*util.BytesPrefix(txid[:])))
+	defer iter.Release()
+	for iter.Next() {
+		ver := iter.Key()[32:]
+		blockNum, n := binary.Uvarint(ver)
+		conflicts, _ := binary.Uvarint(ver[n:])
+
+		if blockNum > uint64(block.Number(c.headID)) {
+			continue
+		}
+
+		s, err := c.GetBlockSummary(uint32(blockNum))
 		if err != nil {
-			return false, err
+			return false, errors.Wrap(err, "block missing")
 		}
-		for _, _txid := range s.Txs {
-			if _txid == txid {
-				return true, nil
-			}
+
+		if s.Conflicts == uint32(conflicts) {
+			return true, nil
 		}
-		nextID = s.Header.ParentID()
+	}
+	if err := iter.Error(); err != nil {
+		return false, err
 	}
 	return false, nil
 }
@@ -190,7 +212,7 @@ func (c *Chain) GetBlockHeader(num uint32) (*block.Header, error) {
 }
 
 // GetBlockSummary returns block summary by given block number.
-func (c Chain) GetBlockSummary(num uint32) (*BlockSummary, error) {
+func (c *Chain) GetBlockSummary(num uint32) (*BlockSummary, error) {
 	id, err := c.GetBlockID(num)
 	if err != nil {
 		return nil, err
@@ -214,8 +236,7 @@ func (c *Chain) GetTransaction(id thor.Bytes32) (*tx.Transaction, *TxMeta, error
 		return nil, nil, err
 	}
 
-	key := makeTxKey(txMeta.BlockID, txInfix)
-	key.SetIndex(txMeta.Index)
+	key := appendTxKey(nil, txMeta.BlockNum, txMeta.BlockConflicts, txMeta.Index, txFlag)
 	tx, err := c.repo.getTransaction(key)
 	if err != nil {
 		return nil, nil, err
@@ -230,8 +251,7 @@ func (c *Chain) GetTransactionReceipt(txID thor.Bytes32) (*tx.Receipt, error) {
 		return nil, err
 	}
 
-	key := makeTxKey(txMeta.BlockID, receiptInfix)
-	key.SetIndex(txMeta.Index)
+	key := appendTxKey(nil, txMeta.BlockNum, txMeta.BlockConflicts, txMeta.Index, receiptFlag)
 	receipt, err := c.repo.getReceipt(key)
 	if err != nil {
 		return nil, err
@@ -352,22 +372,15 @@ func (r *Repository) NewChain(headID thor.Bytes32) *Chain {
 	return newChain(r, headID)
 }
 
-func (r *Repository) indexBlock(parentConflicts uint32, newBlockID thor.Bytes32, newConflicts uint32) error {
-	var (
-		newNum = block.Number(newBlockID)
-		root   thor.Bytes32
-	)
-
-	if newNum != 0 { // not a genesis block
-		root = trie.NonCryptoNodeHash
-	}
-
-	trie := r.db.NewNonCryptoTrie(IndexTrieName, root, newNum-1, parentConflicts)
+func (r *Repository) indexBlock(parentRoot trie.Root, newBlockID thor.Bytes32, newConflicts uint32) error {
+	t := r.db.NewTrie(IndexTrieName, parentRoot)
 	// map block number to block ID
-	if err := trie.Update(newBlockID[:4], newBlockID[:], nil); err != nil {
+	if err := t.Update(newBlockID[:4], newBlockID[:], nil); err != nil {
 		return err
 	}
-
-	_, commit := trie.Stage(newNum, newConflicts)
-	return commit()
+	return t.Commit(
+		trie.Version{
+			Major: block.Number(newBlockID),
+			Minor: newConflicts},
+		true)
 }

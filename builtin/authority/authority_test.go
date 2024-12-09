@@ -13,6 +13,7 @@ import (
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 )
 
 func M(a ...interface{}) []interface{} {
@@ -20,8 +21,7 @@ func M(a ...interface{}) []interface{} {
 }
 
 func TestAuthority(t *testing.T) {
-	db := muxdb.NewMem()
-	st := state.New(db, thor.Bytes32{}, 0, 0, 0)
+	st := state.New(muxdb.NewMem(), trie.Root{})
 
 	p1 := thor.BytesToAddress([]byte("p1"))
 	p2 := thor.BytesToAddress([]byte("p2"))

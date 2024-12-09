@@ -14,6 +14,7 @@ import (
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/xenv"
 )
@@ -73,9 +74,7 @@ func (b *Builder) ForkConfig(fc thor.ForkConfig) *Builder {
 
 // ComputeID compute genesis ID.
 func (b *Builder) ComputeID() (thor.Bytes32, error) {
-	db := muxdb.NewMem()
-
-	blk, _, _, err := b.Build(state.NewStater(db))
+	blk, _, _, err := b.Build(state.NewStater(muxdb.NewMem()))
 	if err != nil {
 		return thor.Bytes32{}, err
 	}
@@ -84,7 +83,7 @@ func (b *Builder) ComputeID() (thor.Bytes32, error) {
 
 // Build build genesis block according to presets.
 func (b *Builder) Build(stater *state.Stater) (blk *block.Block, events tx.Events, transfers tx.Transfers, err error) {
-	state := stater.NewState(thor.Bytes32{}, 0, 0, 0)
+	state := stater.NewState(trie.Root{})
 
 	for _, proc := range b.stateProcs {
 		if err := proc(state); err != nil {
@@ -112,7 +111,7 @@ func (b *Builder) Build(stater *state.Stater) (blk *block.Block, events tx.Event
 		transfers = append(transfers, out.Transfers...)
 	}
 
-	stage, err := state.Stage(0, 0)
+	stage, err := state.Stage(trie.Version{})
 	if err != nil {
 		return nil, nil, nil, errors.Wrap(err, "stage")
 	}

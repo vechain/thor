@@ -13,12 +13,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 )
 
 func TestStateReadWrite(t *testing.T) {
-	db := muxdb.NewMem()
-
-	state := New(db, thor.Bytes32{}, 0, 0, 0)
+	state := New(muxdb.NewMem(), trie.Root{})
 
 	addr := thor.BytesToAddress([]byte("account1"))
 	storageKey := thor.BytesToBytes32([]byte("storageKey"))
@@ -57,7 +56,7 @@ func TestStateReadWrite(t *testing.T) {
 
 func TestStateRevert(t *testing.T) {
 	db := muxdb.NewMem()
-	state := New(db, thor.Bytes32{}, 0, 0, 0)
+	state := New(muxdb.NewMem(), trie.Root{})
 
 	addr := thor.BytesToAddress([]byte("account1"))
 	storageKey := thor.BytesToBytes32([]byte("storageKey"))
@@ -92,15 +91,14 @@ func TestStateRevert(t *testing.T) {
 	assert.Equal(t, M(false, nil), M(state.Exists(addr)))
 
 	//
-	state = New(db, thor.Bytes32{}, 0, 0, 0)
+	state = New(db, trie.Root{})
 	assert.Equal(t, state.NewCheckpoint(), 1)
 	state.RevertTo(0)
 	assert.Equal(t, state.NewCheckpoint(), 0)
 }
 
 func TestEnergy(t *testing.T) {
-	db := muxdb.NewMem()
-	st := New(db, thor.Bytes32{}, 0, 0, 0)
+	st := New(muxdb.NewMem(), trie.Root{})
 
 	acc := thor.BytesToAddress([]byte("a1"))
 
@@ -119,8 +117,7 @@ func TestEnergy(t *testing.T) {
 }
 
 func TestEncodeDecodeStorage(t *testing.T) {
-	db := muxdb.NewMem()
-	state := New(db, thor.Bytes32{}, 0, 0, 0)
+	state := New(muxdb.NewMem(), trie.Root{})
 
 	// Create an account and key
 	addr := thor.BytesToAddress([]byte("account1"))
@@ -153,8 +150,7 @@ func TestEncodeDecodeStorage(t *testing.T) {
 }
 
 func TestBuildStorageTrie(t *testing.T) {
-	db := muxdb.NewMem()
-	state := New(db, thor.Bytes32{}, 0, 0, 0)
+	state := New(muxdb.NewMem(), trie.Root{})
 
 	// Create an account and set storage values
 	addr := thor.BytesToAddress([]byte("account1"))
@@ -174,8 +170,7 @@ func TestBuildStorageTrie(t *testing.T) {
 }
 
 func TestStorage(t *testing.T) {
-	db := muxdb.NewMem()
-	st := New(db, thor.Bytes32{}, 0, 0, 0)
+	st := New(muxdb.NewMem(), trie.Root{})
 
 	addr := thor.BytesToAddress([]byte("addr"))
 	key := thor.BytesToBytes32([]byte("key"))
@@ -202,7 +197,7 @@ func TestStorage(t *testing.T) {
 
 func TestStorageBarrier(t *testing.T) {
 	db := muxdb.NewMem()
-	st := New(db, thor.Bytes32{}, 0, 0, 0)
+	st := New(db, trie.Root{})
 
 	addr := thor.BytesToAddress([]byte("addr"))
 	key := thor.BytesToBytes32([]byte("key"))
@@ -215,14 +210,14 @@ func TestStorageBarrier(t *testing.T) {
 
 	st.SetCode(addr, []byte("code"))
 
-	stage, err := st.Stage(0, 0)
+	stage, err := st.Stage(trie.Version{})
 	assert.Nil(t, err)
 
 	root, err := stage.Commit()
 	assert.Nil(t, err)
 
-	tr := db.NewTrie(AccountTrieName, root, 0, 0)
-	acc, _, err := loadAccount(tr, addr, 0)
+	tr := db.NewTrie(AccountTrieName, trie.Root{Hash: root})
+	acc, _, err := loadAccount(tr, addr)
 	assert.Nil(t, err)
 	assert.Equal(t, 0, len(acc.StorageRoot), "should skip storage writes when account deleteed then recreated")
 }

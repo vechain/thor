@@ -6,8 +6,6 @@
 package events
 
 import (
-	"math"
-
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
@@ -129,43 +127,50 @@ const (
 
 type Range struct {
 	Unit RangeType
-	From uint64
-	To   uint64
+	From *uint64 `json:"from,omitempty"`
+	To   *uint64 `json:"to,omitempty"`
+}
+
+var emptyRange = logdb.Range{
+	From: logdb.MaxBlockNumber,
+	To:   logdb.MaxBlockNumber,
 }
 
 func ConvertRange(chain *chain.Chain, r *Range) (*logdb.Range, error) {
 	if r == nil {
 		return nil, nil
 	}
-	if r.Unit == TimeRangeType {
-		emptyRange := logdb.Range{
-			From: math.MaxUint32,
-			To:   math.MaxUint32,
-		}
 
+	if r.Unit == TimeRangeType {
 		genesis, err := chain.GetBlockHeader(0)
 		if err != nil {
 			return nil, err
 		}
-		if r.To < genesis.Timestamp() {
+		if r.To != nil && *r.To < genesis.Timestamp() {
 			return &emptyRange, nil
 		}
 		head, err := chain.GetBlockHeader(block.Number(chain.HeadID()))
 		if err != nil {
 			return nil, err
 		}
-		if r.From > head.Timestamp() {
+		if r.From != nil && *r.From > head.Timestamp() {
 			return &emptyRange, nil
 		}
 
-		fromHeader, err := chain.FindBlockHeaderByTimestamp(r.From, 1)
-		if err != nil {
-			return nil, err
+		fromHeader := genesis
+		if r.From != nil {
+			fromHeader, err = chain.FindBlockHeaderByTimestamp(*r.From, 1)
+			if err != nil {
+				return nil, err
+			}
 		}
 
-		toHeader, err := chain.FindBlockHeaderByTimestamp(r.To, -1)
-		if err != nil {
-			return nil, err
+		toHeader := head
+		if r.To != nil {
+			toHeader, err = chain.FindBlockHeaderByTimestamp(*r.From, -1)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		return &logdb.Range{
@@ -174,16 +179,19 @@ func ConvertRange(chain *chain.Chain, r *Range) (*logdb.Range, error) {
 		}, nil
 	}
 
-	// Units are block numbers - numbers will have a max ceiling at chain head block number
-	headNum := block.Number(chain.HeadID())
-	from := uint32(r.From)
-	to := uint32(r.To)
-
-	if from > headNum {
-		from = headNum
+	// Units are block numbers - numbers will have a max ceiling at logdb.MaxBlockNumbe
+	if r.From != nil && *r.From > logdb.MaxBlockNumber {
+		return &emptyRange, nil
 	}
-	if to > headNum {
-		to = headNum
+
+	from := uint32(0)
+	if r.From != nil {
+		from = uint32(*r.From)
+	}
+
+	to := uint32(logdb.MaxBlockNumber)
+	if r.To != nil && *r.To < logdb.MaxBlockNumber {
+		to = uint32(*r.To)
 	}
 
 	return &logdb.Range{
