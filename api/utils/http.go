@@ -9,6 +9,8 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+
+	"github.com/pkg/errors"
 )
 
 type httpError struct {
@@ -34,6 +36,17 @@ func BadRequest(cause error) error {
 		cause:  cause,
 		status: http.StatusBadRequest,
 	}
+}
+
+func StringToBoolean(boolStr string, defaultVal bool) (bool, error) {
+	if boolStr == "" {
+		return defaultVal, nil
+	} else if boolStr == "false" {
+		return false, nil
+	} else if boolStr == "true" {
+		return true, nil
+	}
+	return false, errors.New("should be boolean")
 }
 
 // Forbidden convenience method to create http forbidden error.

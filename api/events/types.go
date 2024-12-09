@@ -179,7 +179,7 @@ func ConvertRange(chain *chain.Chain, r *Range) (*logdb.Range, error) {
 		}, nil
 	}
 
-	// Units are block numbers - numbers will have a max ceiling at logdb.MaxBlockNumbe
+	// Units are block numbers - numbers will have a max ceiling at logdb.MaxBlockNumber
 	if r.From != nil && *r.From > logdb.MaxBlockNumber {
 		return &emptyRange, nil
 	}

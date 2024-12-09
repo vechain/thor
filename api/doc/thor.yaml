@@ -12,7 +12,7 @@ info:
   license:
     name: LGPL 3.0
     url: https://www.gnu.org/licenses/lgpl-3.0.en.html
-  version: 2.1.4
+  version: 2.1.5
 servers:
   - url: /
     description: Current Node
@@ -292,6 +292,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/RevisionInPath'
         - $ref: '#/components/parameters/ExpandedInQuery'
+        - $ref: '#/components/parameters/RawBlockInQuery'
       tags:
         - Blocks
       summary: Retrieve a block
@@ -2139,11 +2140,12 @@ components:
             The unified path of the target to be traced. Currently, only the clause is supported. 
             
             Format:
-            `blockID/(txIndex|txId)/clauseIndex`
+            `blockID/(txIndex|txId)/clauseIndex` or `txID/clauseIndex`
+
 
           example: '0x010709463c1f0c9aa66a31182fb36d1977d99bfb6526bae0564a0eac4006c31a/0/0'
           nullable: false
-          pattern: '^0x[0-9a-fA-F]{64}\/(0x[0-9a-fA-F]{64}|\d+)\/[0-9]+$'
+          pattern: '^0x[0-9a-fA-F]{64}(\/(0x[0-9a-fA-F]{64}|\d+))?\/[0-9]+$'
       example:
         target: '0x010709463c1f0c9aa66a31182fb36d1977d99bfb6526bae0564a0eac4006c31a/0/0'
 
@@ -2209,9 +2211,9 @@ components:
             The unified path of the transaction clause.
             
             Format:
-            `blockID/(txIndex|txId)/clauseIndex`
+            `blockID/(txIndex|txId)/clauseIndex` or `txID/clauseIndex`
           nullable: false
-          pattern: '^0x[0-9a-fA-F]{64}\/(0x[0-9a-fA-F]{64}|\d+)\/[0-9]+$'
+          pattern: '^0x[0-9a-fA-F]{64}(\/(0x[0-9a-fA-F]{64}|\d+))?\/[0-9]+$'
 
     StorageRange:
       type: object
@@ -2385,6 +2387,18 @@ components:
         Whether the returned block is expanded. 
         - `true` returns `transactions` as an array of objects with the transaction details and outputs
         - `false` returns `transactions` as an array of transaction IDs (hex strings)
+      schema:
+        type: boolean
+      example: false
+
+    RawBlockInQuery:
+      name: raw
+      in: query
+      required: false
+      description: |
+        Whether the block should be returned in RLP encoding or not. 
+        - `true` returns `block` as an RLP encoded object
+        - `false` returns `block` as a structured JSON object
       schema:
         type: boolean
       example: false

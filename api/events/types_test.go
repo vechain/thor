@@ -6,7 +6,6 @@
 package events
 
 import (
-	"math"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -49,26 +48,13 @@ func testConvertRangeWithBlockRangeType(t *testing.T, chain *testchain.Chain) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(*rng.From), convertedRng.From)
 	assert.Equal(t, uint32(*rng.To), convertedRng.To)
-
-	// ensure wild block numbers have a max ceiling of chain.head
-	rng = newRange(BlockRangeType, 100, 2200)
-
-	convertedRng, err = ConvertRange(chain.Repo().NewBestChain(), rng)
-	require.NoError(t, err)
-
-	bestBlock, err := chain.BestBlock()
-	require.NoError(t, err)
-
-	assert.NoError(t, err)
-	assert.Equal(t, bestBlock.Header().Number(), convertedRng.From)
-	assert.Equal(t, bestBlock.Header().Number(), convertedRng.To)
 }
 
 func testConvertRangeWithTimeRangeTypeLessThenGenesis(t *testing.T, chain *testchain.Chain) {
 	rng := newRange(TimeRangeType, 100, 2200)
 	expectedEmptyRange := &logdb.Range{
-		From: math.MaxUint32,
-		To:   math.MaxUint32,
+		From: logdb.MaxBlockNumber,
+		To:   logdb.MaxBlockNumber,
 	}
 
 	convRng, err := ConvertRange(chain.Repo().NewBestChain(), rng)
@@ -97,8 +83,8 @@ func testConvertRangeWithFromGreaterThanGenesis(t *testing.T, chain *testchain.C
 
 	rng := newRange(TimeRangeType, genesis.Timestamp()+1_000, genesis.Timestamp()+10_000)
 	expectedEmptyRange := &logdb.Range{
-		From: math.MaxUint32,
-		To:   math.MaxUint32,
+		From: logdb.MaxBlockNumber,
+		To:   logdb.MaxBlockNumber,
 	}
 
 	convRng, err := ConvertRange(chain.Repo().NewBestChain(), rng)
