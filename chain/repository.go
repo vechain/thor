@@ -177,6 +177,7 @@ func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, conflic
 			}
 			r.caches.txs.Add(string(keyBuf), tx)
 		}
+		metricTransactionRepositoryCounter().AddWithLabel(int64(len(txs)), map[string]string{"type": "write", "target": "db"})
 
 		// save receipts
 		for i, receipt := range receipts {
