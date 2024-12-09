@@ -6,6 +6,7 @@
 package blocks_test
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"math"
 	"math/big"
@@ -15,6 +16,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -55,6 +57,8 @@ func TestBlock(t *testing.T) {
 		"testGetFinalizedBlock":                 testGetFinalizedBlock,
 		"testGetJustifiedBlock":                 testGetJustifiedBlock,
 		"testGetBlockWithRevisionNumberTooHigh": testGetBlockWithRevisionNumberTooHigh,
+		"testMutuallyExclusiveQueries":          testMutuallyExclusiveQueries,
+		"testGetRawBlock":                       testGetRawBlock,
 	} {
 		t.Run(name, tt)
 	}
@@ -67,6 +71,22 @@ func testBadQueryParams(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, statusCode)
 	assert.Equal(t, "expanded: should be boolean", strings.TrimSpace(string(res)))
+
+	badQueryParams = "?raw=1"
+	res, statusCode, err = tclient.RawHTTPClient().RawHTTPGet("/blocks/best" + badQueryParams)
+	require.NoError(t, err)
+
+	assert.Equal(t, http.StatusBadRequest, statusCode)
+	assert.Equal(t, "raw: should be boolean", strings.TrimSpace(string(res)))
+}
+
+func testMutuallyExclusiveQueries(t *testing.T) {
+	badQueryParams := "?expanded=true&raw=true"
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/best" + badQueryParams)
+	require.NoError(t, err)
+
+	assert.Equal(t, http.StatusBadRequest, statusCode)
+	assert.Equal(t, "raw&expanded: Raw and Expanded are mutually exclusive", strings.TrimSpace(string(res)))
 }
 
 func testGetBestBlock(t *testing.T) {
@@ -77,6 +97,41 @@ func testGetBestBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 	checkCollapsedBlock(t, blk, rb)
+	assert.Equal(t, http.StatusOK, statusCode)
+}
+
+func testGetRawBlock(t *testing.T) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/best?raw=true")
+	require.NoError(t, err)
+	rawBlock := new(blocks.JSONRawBlockSummary)
+	if err := json.Unmarshal(res, &rawBlock); err != nil {
+		t.Fatal(err)
+	}
+
+	blockBytes, err := hex.DecodeString(rawBlock.Raw[2:len(rawBlock.Raw)])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	header := block.Header{}
+	err = rlp.DecodeBytes(blockBytes, &header)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expHeader := blk.Header()
+	assert.Equal(t, expHeader.Number(), header.Number(), "Number should be equal")
+	assert.Equal(t, expHeader.ID(), header.ID(), "Hash should be equal")
+	assert.Equal(t, expHeader.ParentID(), header.ParentID(), "ParentID should be equal")
+	assert.Equal(t, expHeader.Timestamp(), header.Timestamp(), "Timestamp should be equal")
+	assert.Equal(t, expHeader.TotalScore(), header.TotalScore(), "TotalScore should be equal")
+	assert.Equal(t, expHeader.GasLimit(), header.GasLimit(), "GasLimit should be equal")
+	assert.Equal(t, expHeader.GasUsed(), header.GasUsed(), "GasUsed should be equal")
+	assert.Equal(t, expHeader.Beneficiary(), header.Beneficiary(), "Beneficiary should be equal")
+	assert.Equal(t, expHeader.TxsRoot(), header.TxsRoot(), "TxsRoot should be equal")
+	assert.Equal(t, expHeader.StateRoot(), header.StateRoot(), "StateRoot should be equal")
+	assert.Equal(t, expHeader.ReceiptsRoot(), header.ReceiptsRoot(), "ReceiptsRoot should be equal")
+
 	assert.Equal(t, http.StatusOK, statusCode)
 }
 

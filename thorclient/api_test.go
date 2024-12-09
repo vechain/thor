@@ -50,7 +50,7 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 
 	router := mux.NewRouter()
 
-	accounts.New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), thor.NoFork, thorChain.Engine()).
+	accounts.New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), thor.NoFork, thorChain.Engine(), true).
 		Mount(router, "/accounts")
 
 	blocks.New(thorChain.Repo(), thorChain.Engine()).Mount(router, "/blocks")

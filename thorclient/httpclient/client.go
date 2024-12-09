@@ -33,9 +33,13 @@ type Client struct {
 
 // New creates a new Client with the provided URL.
 func New(url string) *Client {
+	return NewWithHTTP(url, http.DefaultClient)
+}
+
+func NewWithHTTP(url string, c *http.Client) *Client {
 	return &Client{
 		url: url,
-		c:   &http.Client{},
+		c:   c,
 	}
 }
 

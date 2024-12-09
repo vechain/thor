@@ -6,7 +6,6 @@
 package health
 
 import (
-	"sync"
 	"time"
 
 	"github.com/vechain/thor/v2/chain"
@@ -20,17 +19,15 @@ type BlockIngestion struct {
 }
 
 type Status struct {
-	Healthy            bool       `json:"healthy"`
-	BestBlockTimestamp *time.Time `json:"bestBlockTimestamp"`
-	WasChainSynced     bool       `json:"wasChainSynced"`
-	PeerCount          int        `json:"peerCount"`
+	Healthy              bool       `json:"healthy"`
+	BestBlockTime        *time.Time `json:"bestBlockTime"`
+	PeerCount            int        `json:"peerCount"`
+	IsNetworkProgressing bool       `json:"isNetworkProgressing"`
 }
 
 type Health struct {
-	lock               sync.RWMutex
-	repo               *chain.Repository
-	p2p                *comm.Communicator
-	isNodeBootstrapped bool
+	repo *chain.Repository
+	p2p  *comm.Communicator
 }
 
 const (
@@ -50,30 +47,12 @@ func (h *Health) isNetworkProgressing(now time.Time, bestBlockTimestamp time.Tim
 	return now.Sub(bestBlockTimestamp) <= blockTolerance
 }
 
-// hasNodeBootstrapped checks if the node has bootstrapped by comparing the block interval.
-// Once it's marked as done, it never reverts.
-func (h *Health) hasNodeBootstrapped(now time.Time, bestBlockTimestamp time.Time) bool {
-	if h.isNodeBootstrapped {
-		return true
-	}
-
-	blockInterval := time.Duration(thor.BlockInterval) * time.Second
-	if bestBlockTimestamp.Add(blockInterval).After(now) {
-		h.isNodeBootstrapped = true
-	}
-
-	return h.isNodeBootstrapped
-}
-
 // isNodeConnectedP2P checks if the node is connected to peers
 func (h *Health) isNodeConnectedP2P(peerCount int, minPeerCount int) bool {
 	return peerCount >= minPeerCount
 }
 
 func (h *Health) Status(blockTolerance time.Duration, minPeerCount int) (*Status, error) {
-	h.lock.RLock()
-	defer h.lock.RUnlock()
-
 	// Fetch the best block details
 	bestBlock := h.repo.BestBlockSummary()
 	bestBlockTimestamp := time.Unix(int64(bestBlock.Header.Timestamp()), 0)
@@ -90,17 +69,16 @@ func (h *Health) Status(blockTolerance time.Duration, minPeerCount int) (*Status
 
 	// Perform the checks
 	networkProgressing := h.isNetworkProgressing(now, bestBlockTimestamp, blockTolerance)
-	wasChainSynced := h.hasNodeBootstrapped(now, bestBlockTimestamp)
 	nodeConnected := h.isNodeConnectedP2P(connectedPeerCount, minPeerCount)
 
 	// Calculate overall health status
-	healthy := networkProgressing && wasChainSynced && nodeConnected
+	healthy := networkProgressing && nodeConnected
 
 	// Return the current status
 	return &Status{
-		Healthy:            healthy,
-		BestBlockTimestamp: &bestBlockTimestamp,
-		WasChainSynced:     wasChainSynced,
-		PeerCount:          connectedPeerCount,
+		Healthy:              healthy,
+		BestBlockTime:        &bestBlockTimestamp,
+		IsNetworkProgressing: networkProgressing,
+		PeerCount:            connectedPeerCount,
 	}, nil
 }

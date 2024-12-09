@@ -11,7 +11,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -81,6 +80,7 @@ func main() {
 			apiCallGasLimitFlag,
 			apiBacktraceLimitFlag,
 			apiAllowCustomTracerFlag,
+			apiEnableDeprecatedFlag,
 			enableAPILogsFlag,
 			apiLogsLimitFlag,
 			verbosityFlag,
@@ -116,6 +116,7 @@ func main() {
 					apiCallGasLimitFlag,
 					apiBacktraceLimitFlag,
 					apiAllowCustomTracerFlag,
+					apiEnableDeprecatedFlag,
 					enableAPILogsFlag,
 					apiLogsLimitFlag,
 					onDemandFlag,
@@ -167,6 +168,18 @@ func defaultAction(ctx *cli.Context) error {
 		return errors.Wrap(err, "parse verbosity flag")
 	}
 	logLevel := initLogger(lvl, ctx.Bool(jsonLogsFlag.Name))
+
+	// enable metrics as soon as possible
+	metricsURL := ""
+	if ctx.Bool(enableMetricsFlag.Name) {
+		metrics.InitializePrometheusMetrics()
+		url, closeFunc, err := api.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
+		if err != nil {
+			return fmt.Errorf("unable to start metrics server - %w", err)
+		}
+		metricsURL = url
+		defer func() { log.Info("stopping metrics server..."); closeFunc() }()
+	}
 
 	gene, forkConfig, err := selectGenesis(ctx)
 	if err != nil {
@@ -239,18 +252,6 @@ func defaultAction(ctx *cli.Context) error {
 		defer func() { log.Info("stopping admin server..."); closeFunc() }()
 	}
 
-	// enable metrics as soon as possible
-	metricsURL := ""
-	if ctx.Bool(enableMetricsFlag.Name) {
-		metrics.InitializePrometheusMetrics()
-		url, closeFunc, err := api.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
-		if err != nil {
-			return fmt.Errorf("unable to start metrics server - %w", err)
-		}
-		metricsURL = url
-		defer func() { log.Info("stopping metrics server..."); closeFunc() }()
-	}
-
 	bftEngine, err := bft.NewEngine(repo, mainDB, forkConfig, master.Address())
 	if err != nil {
 		return errors.Wrap(err, "init bft engine")
@@ -264,17 +265,7 @@ func defaultAction(ctx *cli.Context) error {
 		bftEngine,
 		p2pCommunicator.Communicator(),
 		forkConfig,
-		ctx.String(apiCorsFlag.Name),
-		uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
-		ctx.Uint64(apiCallGasLimitFlag.Name),
-		ctx.Bool(pprofFlag.Name),
-		skipLogs,
-		ctx.Bool(apiAllowCustomTracerFlag.Name),
-		logAPIRequests,
-		ctx.Bool(enableMetricsFlag.Name),
-		ctx.Uint64(apiLogsLimitFlag.Name),
-		parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
-		false,
+		makeAPIConfig(ctx, logAPIRequests, false),
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -322,6 +313,21 @@ func soloAction(ctx *cli.Context) error {
 
 	onDemandBlockProduction := ctx.Bool(onDemandFlag.Name)
 	blockProductionInterval := ctx.Uint64(blockInterval.Name)
+	if blockProductionInterval == 0 {
+		return errors.New("block-interval cannot be zero")
+	}
+
+	// enable metrics as soon as possible
+	metricsURL := ""
+	if ctx.Bool(enableMetricsFlag.Name) {
+		metrics.InitializePrometheusMetrics()
+		url, closeFunc, err := api.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
+		if err != nil {
+			return fmt.Errorf("unable to start metrics server - %w", err)
+		}
+		metricsURL = url
+		defer func() { log.Info("stopping metrics server..."); closeFunc() }()
+	}
 
 	var (
 		gene       *genesis.Genesis
@@ -385,18 +391,6 @@ func soloAction(ctx *cli.Context) error {
 		defer func() { log.Info("stopping admin server..."); closeFunc() }()
 	}
 
-	// enable metrics as soon as possible
-	metricsURL := ""
-	if ctx.Bool(enableMetricsFlag.Name) {
-		metrics.InitializePrometheusMetrics()
-		url, closeFunc, err := api.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
-		if err != nil {
-			return fmt.Errorf("unable to start metrics server - %w", err)
-		}
-		metricsURL = url
-		defer func() { log.Info("stopping metrics server..."); closeFunc() }()
-	}
-
 	printStartupMessage1(gene, repo, nil, instanceDir, forkConfig)
 
 	skipLogs := ctx.Bool(skipLogsFlag.Name)
@@ -429,17 +423,7 @@ func soloAction(ctx *cli.Context) error {
 		bftEngine,
 		&solo.Communicator{},
 		forkConfig,
-		ctx.String(apiCorsFlag.Name),
-		uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
-		ctx.Uint64(apiCallGasLimitFlag.Name),
-		ctx.Bool(pprofFlag.Name),
-		skipLogs,
-		ctx.Bool(apiAllowCustomTracerFlag.Name),
-		logAPIRequests,
-		ctx.Bool(enableMetricsFlag.Name),
-		ctx.Uint64(apiLogsLimitFlag.Name),
-		parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
-		true,
+		makeAPIConfig(ctx, logAPIRequests, true),
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -451,6 +435,11 @@ func soloAction(ctx *cli.Context) error {
 		log.Info("stopping API server...")
 		srvCloser()
 	}()
+
+	blockInterval := ctx.Uint64(blockInterval.Name)
+	if blockInterval == 0 {
+		return errors.New("block-interval cannot be zero")
+	}
 
 	printStartupMessage2(gene, apiURL, "", metricsURL, adminURL)
 
