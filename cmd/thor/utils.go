@@ -633,7 +633,7 @@ func printStartupMessage1(
 }
 
 func getOrCreateDevnetID() thor.Bytes32 {
-	if devNetGenesisID == (thor.Bytes32{}) {
+	if devNetGenesisID.IsZero() {
 		devNetGenesisID = genesis.NewDevnet().ID()
 	}
 	return devNetGenesisID
