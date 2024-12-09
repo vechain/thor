@@ -23,6 +23,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -275,7 +276,7 @@ func parseGenesisFile(filePath string) (*genesis.Genesis, thor.ForkConfig, error
 	return customGen, forkConfig, nil
 }
 
-func makeAPIConfig(ctx *cli.Context, soloMode bool) api.Config {
+func makeAPIConfig(ctx *cli.Context, logAPIRequests *atomic.Bool, soloMode bool) api.Config {
 	return api.Config{
 		AllowedOrigins:    ctx.String(apiCorsFlag.Name),
 		BacktraceLimit:    uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
@@ -283,7 +284,7 @@ func makeAPIConfig(ctx *cli.Context, soloMode bool) api.Config {
 		PprofOn:           ctx.Bool(pprofFlag.Name),
 		SkipLogs:          ctx.Bool(skipLogsFlag.Name),
 		AllowCustomTracer: ctx.Bool(apiAllowCustomTracerFlag.Name),
-		EnableReqLogger:   ctx.Bool(enableAPILogsFlag.Name),
+		EnableReqLogger:   logAPIRequests,
 		EnableMetrics:     ctx.Bool(enableMetricsFlag.Name),
 		LogsLimit:         ctx.Uint64(apiLogsLimitFlag.Name),
 		AllowedTracers:    parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),

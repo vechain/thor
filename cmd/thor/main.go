@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -234,12 +235,15 @@ func defaultAction(ctx *cli.Context) error {
 	}
 
 	adminURL := ""
+	logAPIRequests := &atomic.Bool{}
+	logAPIRequests.Store(ctx.Bool(enableAPILogsFlag.Name))
 	if ctx.Bool(enableAdminFlag.Name) {
 		url, closeFunc, err := api.StartAdminServer(
 			ctx.String(adminAddrFlag.Name),
 			logLevel,
 			repo,
 			p2pCommunicator.Communicator(),
+			logAPIRequests,
 		)
 		if err != nil {
 			return fmt.Errorf("unable to start admin server - %w", err)
@@ -261,7 +265,7 @@ func defaultAction(ctx *cli.Context) error {
 		bftEngine,
 		p2pCommunicator.Communicator(),
 		forkConfig,
-		makeAPIConfig(ctx, false),
+		makeAPIConfig(ctx, logAPIRequests, false),
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -370,8 +374,16 @@ func soloAction(ctx *cli.Context) error {
 	}
 
 	adminURL := ""
+	logAPIRequests := &atomic.Bool{}
+	logAPIRequests.Store(ctx.Bool(enableAPILogsFlag.Name))
 	if ctx.Bool(enableAdminFlag.Name) {
-		url, closeFunc, err := api.StartAdminServer(ctx.String(adminAddrFlag.Name), logLevel, repo, nil)
+		url, closeFunc, err := api.StartAdminServer(
+			ctx.String(adminAddrFlag.Name),
+			logLevel,
+			repo,
+			nil,
+			logAPIRequests,
+		)
 		if err != nil {
 			return fmt.Errorf("unable to start admin server - %w", err)
 		}
@@ -411,7 +423,7 @@ func soloAction(ctx *cli.Context) error {
 		bftEngine,
 		&solo.Communicator{},
 		forkConfig,
-		makeAPIConfig(ctx, true),
+		makeAPIConfig(ctx, logAPIRequests, true),
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -423,6 +435,11 @@ func soloAction(ctx *cli.Context) error {
 		log.Info("stopping API server...")
 		srvCloser()
 	}()
+
+	blockInterval := ctx.Uint64(blockInterval.Name)
+	if blockInterval == 0 {
+		return errors.New("block-interval cannot be zero")
+	}
 
 	printStartupMessage2(gene, apiURL, "", metricsURL, adminURL)
 

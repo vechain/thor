@@ -8,19 +8,23 @@ package admin
 import (
 	"log/slog"
 	"net/http"
+	"sync/atomic"
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
-	healthAPI "github.com/vechain/thor/v2/api/admin/health"
+	"github.com/vechain/thor/v2/api/admin/apilogs"
 	"github.com/vechain/thor/v2/api/admin/loglevel"
+
+	healthAPI "github.com/vechain/thor/v2/api/admin/health"
 )
 
-func New(logLevel *slog.LevelVar, health *healthAPI.Health) http.HandlerFunc {
+func New(logLevel *slog.LevelVar, health *healthAPI.Health, apiLogsToggle *atomic.Bool) http.HandlerFunc {
 	router := mux.NewRouter()
 	subRouter := router.PathPrefix("/admin").Subrouter()
 
 	loglevel.New(logLevel).Mount(subRouter, "/loglevel")
 	healthAPI.NewAPI(health).Mount(subRouter, "/health")
+	apilogs.New(apiLogsToggle).Mount(subRouter, "/apilogs")
 
 	handler := handlers.CompressHandler(router)
 
