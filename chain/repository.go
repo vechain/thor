@@ -284,22 +284,28 @@ func (r *Repository) GetMaxBlockNum() (uint32, error) {
 
 // GetBlockSummary get block summary by block id.
 func (r *Repository) GetBlockSummary(id thor.Bytes32) (summary *BlockSummary, err error) {
-	var cached interface{}
-	if cached, err = r.caches.summaries.GetOrLoad(id, func() (interface{}, error) {
+	var blk interface{}
+	result := "hit"
+	if blk, err = r.caches.summaries.GetOrLoad(id, func() (interface{}, error) {
+		result = "miss"
 		return loadBlockSummary(r.hdrStore, id)
 	}); err != nil {
 		return
 	}
-	return cached.(*BlockSummary), nil
+	metricCacheHitMiss().AddWithLabel(1, map[string]string{"type": "block-summary", "event": result})
+	return blk.(*BlockSummary), nil
 }
 
 func (r *Repository) getTransaction(key []byte) (*tx.Transaction, error) {
+	result := "hit"
 	trx, err := r.caches.txs.GetOrLoad(string(key), func() (interface{}, error) {
+		result = "miss"
 		return loadTransaction(r.bodyStore, key)
 	})
 	if err != nil {
 		return nil, err
 	}
+	metricCacheHitMiss().AddWithLabel(1, map[string]string{"type": "transaction", "event": result})
 	return trx.(*tx.Transaction), nil
 }
 
@@ -346,14 +352,18 @@ func (r *Repository) GetBlock(id thor.Bytes32) (*block.Block, error) {
 	return block.Compose(summary.Header, txs), nil
 }
 
+
 func (r *Repository) getReceipt(key []byte) (*tx.Receipt, error) {
-	cached, err := r.caches.receipts.GetOrLoad(string(key), func() (interface{}, error) {
+	result := "hit"
+	receipt, err := r.caches.receipts.GetOrLoad(string(key), func() (interface{}, error) {
+		result = "miss"
 		return loadReceipt(r.bodyStore, key)
 	})
 	if err != nil {
 		return nil, err
 	}
-	return cached.(*tx.Receipt), nil
+	metricCacheHitMiss().AddWithLabel(1, map[string]string{"type": "receipt", "event": result})
+	return receipt.(*tx.Receipt), nil
 }
 
 func loadReceipt(r kv.Getter, key []byte) (*tx.Receipt, error) {
