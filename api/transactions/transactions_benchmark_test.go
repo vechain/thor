@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package node
+package transactions
 
 import (
 	"crypto/ecdsa"
@@ -15,13 +15,13 @@ import (
 	"runtime/debug"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/elastic/gosigar"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
-	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/solo"
@@ -34,6 +34,7 @@ import (
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/txpool"
 )
 
 var (
@@ -44,29 +45,70 @@ var (
 
 func getCachedAccounts(b *testing.B) []genesis.DevAccount {
 	once.Do(func() {
-		cachedAccounts = createAccounts(b, 1_000)
+		now := time.Now()
+		cachedAccounts = createAccounts(b, 10_000)
+		b.Logf("Created accounts in: %f secs", time.Since(now).Seconds())
 	})
 	return cachedAccounts
 }
 
-func BenchmarkBlockProcess_RandomSigners_ManyClausesPerTx_RealDB(b *testing.B) {
+func BenchmarkFetchTx_RealDB_RandomSigners_ManyClausesPerTx(b *testing.B) {
+	// create state accounts
+	accounts := getCachedAccounts(b)
+
+	// randomly pick a signer for signing the transactions
+	randomSignerFunc := randomPickSignerFunc(accounts, createManyClausesPerTx)
+
+	// create test db - will be automagically removed when the benchmark ends
+	db, err := openTempMainDB(b.TempDir())
+	require.NoError(b, err)
+
+	// create blocks
+	newChain, transactions := createPackedChain(b, db, blockCount, accounts, randomSignerFunc)
+
+	// shuffle the transaction into a randomized order
+	randomizedTransactions := shuffleSlice(transactions)
+	b.Logf("About to process %d txs", len(randomizedTransactions))
+
+	// run the benchmarks
+	b.Run("getTransaction", func(b *testing.B) {
+		benchmarkGetTransaction(b, newChain, randomizedTransactions)
+	})
+
+	b.Run("getReceipt", func(b *testing.B) {
+		benchmarkGetReceipt(b, newChain, randomizedTransactions)
+	})
+}
+
+func BenchmarkFetchTx_RealDB_RandomSigners_OneClausePerTx(b *testing.B) {
 	// create state accounts
 	accounts := getCachedAccounts(b)
 
 	// randomly pick a signer for signing the transactions
 	randomSignerFunc := randomPickSignerFunc(accounts, createOneClausePerTx)
 
-	// create blocks
-	blocks := createBlocks(b, blockCount, accounts, randomSignerFunc)
-
 	// create test db - will be automagically removed when the benchmark ends
 	db, err := openTempMainDB(b.TempDir())
 	require.NoError(b, err)
 
-	// run the benchmark
-	benchmarkBlockProcess(b, db, accounts, blocks)
+	// create blocks
+	newChain, transactions := createPackedChain(b, db, blockCount, accounts, randomSignerFunc)
+
+	// shuffle the transaction into a randomized order
+	randomizedTransactions := shuffleSlice(transactions)
+	b.Logf("About to process %d txs", len(randomizedTransactions))
+
+	// run the benchmarks
+	b.Run("getTransaction", func(b *testing.B) {
+		benchmarkGetTransaction(b, newChain, randomizedTransactions)
+	})
+
+	b.Run("getReceipt", func(b *testing.B) {
+		benchmarkGetReceipt(b, newChain, randomizedTransactions)
+	})
 }
-func BenchmarkBlockProcess_RandomSigners_OneClausePerTx_RealDB(b *testing.B) {
+
+func BenchmarkFetchTx_RandomSigners_ManyClausesPerTx(b *testing.B) {
 	// create state accounts
 	accounts := getCachedAccounts(b)
 
@@ -74,51 +116,26 @@ func BenchmarkBlockProcess_RandomSigners_OneClausePerTx_RealDB(b *testing.B) {
 	randomSignerFunc := randomPickSignerFunc(accounts, createManyClausesPerTx)
 
 	// create blocks
-	blocks := createBlocks(b, blockCount, accounts, randomSignerFunc)
+	newChain, transactions := createPackedChain(b, muxdb.NewMem(), blockCount, accounts, randomSignerFunc)
 
-	// create test db - will be automagically removed when the benchmark ends
-	db, err := openTempMainDB(b.TempDir())
-	require.NoError(b, err)
+	// shuffle the transaction into a randomized order
+	randomizedTransactions := shuffleSlice(transactions)
+	b.Logf("About to process %d txs", len(randomizedTransactions))
 
-	// run the benchmark
-	benchmarkBlockProcess(b, db, accounts, blocks)
-}
-func BenchmarkBlockProcess_ManyClausesPerTx_RealDB(b *testing.B) {
-	// create state accounts
-	accounts := getCachedAccounts(b)
+	// run the benchmarks
+	b.Run("getTransaction", func(b *testing.B) {
+		benchmarkGetTransaction(b, newChain, randomizedTransactions)
+	})
 
-	// Use one signer for signing the transactions
-	singleSignerFun := randomPickSignerFunc([]genesis.DevAccount{accounts[0]}, createManyClausesPerTx)
-
-	// create blocks
-	blocks := createBlocks(b, blockCount, accounts, singleSignerFun)
-
-	// create test db - will be automagically removed when the benchmark ends
-	db, err := openTempMainDB(b.TempDir())
-	require.NoError(b, err)
-
-	// run the benchmark
-	benchmarkBlockProcess(b, db, accounts, blocks)
-}
-func BenchmarkBlockProcess_OneClausePerTx_RealDB(b *testing.B) {
-	// create state accounts
-	accounts := getCachedAccounts(b)
-
-	// Use one signer for signing the transactions
-	singleSignerFun := randomPickSignerFunc([]genesis.DevAccount{accounts[0]}, createOneClausePerTx)
-
-	// create blocks
-	blocks := createBlocks(b, blockCount, accounts, singleSignerFun)
-
-	// create test db - will be automagically removed when the benchmark ends
-	db, err := openTempMainDB(b.TempDir())
-	require.NoError(b, err)
-
-	// run the benchmark
-	benchmarkBlockProcess(b, db, accounts, blocks)
+	b.Run("getReceipt", func(b *testing.B) {
+		benchmarkGetReceipt(b, newChain, randomizedTransactions)
+	})
 }
 
-func BenchmarkBlockProcess_RandomSigners_ManyClausesPerTx(b *testing.B) {
+func BenchmarkFetchTx_RandomSigners_OneClausePerTx(b *testing.B) {
+	// Setup phase: Not part of the benchmark timing
+	b.StopTimer()
+
 	// create state accounts
 	accounts := getCachedAccounts(b)
 
@@ -126,134 +143,88 @@ func BenchmarkBlockProcess_RandomSigners_ManyClausesPerTx(b *testing.B) {
 	randomSignerFunc := randomPickSignerFunc(accounts, createOneClausePerTx)
 
 	// create blocks
-	blocks := createBlocks(b, blockCount, accounts, randomSignerFunc)
+	newChain, transactions := createPackedChain(b, muxdb.NewMem(), blockCount, accounts, randomSignerFunc)
 
-	// create test db
-	db := muxdb.NewMem()
+	// shuffle the transaction into a randomized order
+	randomizedTransactions := shuffleSlice(transactions)
+	b.Logf("About to process %d txs", len(randomizedTransactions))
 
-	// run the benchmark
-	benchmarkBlockProcess(b, db, accounts, blocks)
+	// run the benchmarks
+	b.Run("getTransaction", func(b *testing.B) {
+		benchmarkGetTransaction(b, newChain, randomizedTransactions)
+	})
+
+	b.Run("getReceipt", func(b *testing.B) {
+		benchmarkGetReceipt(b, newChain, randomizedTransactions)
+	})
 }
 
-func BenchmarkBlockProcess_RandomSigners_OneClausePerTx(b *testing.B) {
-	// create state accounts
-	accounts := getCachedAccounts(b)
-
-	// randomly pick a signer for signing the transactions
-	randomSignerFunc := randomPickSignerFunc(accounts, createManyClausesPerTx)
-
-	// create blocks
-	blocks := createBlocks(b, blockCount, accounts, randomSignerFunc)
-
-	// create test db
-	db := muxdb.NewMem()
-
-	// run the benchmark
-	benchmarkBlockProcess(b, db, accounts, blocks)
-}
-
-func BenchmarkBlockProcess_ManyClausesPerTx(b *testing.B) {
-	// create state accounts
-	accounts := getCachedAccounts(b)
-
-	// Use one signer for signing the transactions
-	singleSignerFun := randomPickSignerFunc([]genesis.DevAccount{accounts[0]}, createManyClausesPerTx)
-
-	// create blocks
-	blocks := createBlocks(b, blockCount, accounts, singleSignerFun)
-
-	// create test db
-	db := muxdb.NewMem()
-
-	// run the benchmark
-	benchmarkBlockProcess(b, db, accounts, blocks)
-}
-
-func BenchmarkBlockProcess_OneClausePerTx(b *testing.B) {
-	// create state accounts
-	accounts := getCachedAccounts(b)
-
-	// Use one signer for signing the transactions
-	singleSignerFun := randomPickSignerFunc([]genesis.DevAccount{accounts[0]}, createOneClausePerTx)
-
-	// create blocks
-	blocks := createBlocks(b, blockCount, accounts, singleSignerFun)
-
-	// create test db
-	db := muxdb.NewMem()
-
-	// run the benchmark
-	benchmarkBlockProcess(b, db, accounts, blocks)
-}
-
-func benchmarkBlockProcess(b *testing.B, db *muxdb.MuxDB, accounts []genesis.DevAccount, blocks []*block.Block) {
-	// Initialize the test chain and dependencies
-	thorChain, err := createChain(db, accounts)
-	require.NoError(b, err)
-
-	proposer := &accounts[0]
-
-	engine, err := bft.NewEngine(thorChain.Repo(), thorChain.Database(), thorChain.GetForkConfig(), proposer.Address)
-	require.NoError(b, err)
-
-	node := New(
-		&Master{
-			PrivateKey: proposer.PrivateKey,
-		},
-		thorChain.Repo(),
-		engine,
-		thorChain.Stater(),
-		nil,
-		nil,
-		"",
-		nil,
-		10_000_000,
-		true,
-		thor.NoFork,
-	)
-
-	stats := &blockStats{}
+func benchmarkGetTransaction(b *testing.B, thorChain *testchain.Chain, randTxs tx.Transactions) {
+	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute})
+	transactionAPI := New(thorChain.Repo(), mempool)
+	head := thorChain.Repo().BestBlockSummary().Header.ID()
+	var err error
 
 	// Measure memory usage
 	b.ReportAllocs()
 
 	// Benchmark execution
 	b.ResetTimer()
-	for _, blk := range blocks {
-		_, err = node.processBlock(blk, stats)
+
+	for _, randTx := range randTxs {
+		_, err = transactionAPI.getRawTransaction(randTx.ID(), head, false)
 		if err != nil {
-			b.Fatalf("processBlock failed: %v", err)
+			b.Fatalf("getRawTransaction failed: %v", err)
 		}
 	}
 }
 
-func createBlocks(b *testing.B, noBlocks int, accounts []genesis.DevAccount, createTxFunc func(chain *testchain.Chain) (tx.Transactions, error)) []*block.Block {
+func benchmarkGetReceipt(b *testing.B, thorChain *testchain.Chain, randTxs tx.Transactions) {
+	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute})
+	transactionAPI := New(thorChain.Repo(), mempool)
+	head := thorChain.Repo().BestBlockSummary().Header.ID()
+	var err error
+
+	// Measure memory usage
+	b.ReportAllocs()
+
+	// Benchmark execution
+	b.ResetTimer()
+
+	for _, randTx := range randTxs {
+		_, err = transactionAPI.getTransactionReceiptByID(randTx.ID(), head)
+		if err != nil {
+			b.Fatalf("getTransactionReceiptByID failed: %v", err)
+		}
+	}
+}
+
+func createPackedChain(b *testing.B, db *muxdb.MuxDB, noBlocks int, accounts []genesis.DevAccount, createTxFunc func(chain *testchain.Chain) (tx.Transactions, error)) (*testchain.Chain, tx.Transactions) {
 	proposer := &accounts[0]
 
 	// mock a fake chain for block production
-	fakeChain, err := createChain(muxdb.NewMem(), accounts)
+	fakeChain, err := createChain(db, accounts)
 	require.NoError(b, err)
 
 	// pre-alloc blocks
-	var blocks []*block.Block
 	var transactions tx.Transactions
 
 	// Start from the Genesis block
 	previousBlock := fakeChain.GenesisBlock()
 	for i := 0; i < noBlocks; i++ {
-		transactions, err = createTxFunc(fakeChain)
+		newTxs, err := createTxFunc(fakeChain)
 		require.NoError(b, err)
 		previousBlock, err = packTxsIntoBlock(
 			fakeChain,
 			proposer,
 			previousBlock,
-			transactions,
+			newTxs,
 		)
 		require.NoError(b, err)
-		blocks = append(blocks, previousBlock)
+		transactions = append(transactions, newTxs...)
 	}
 
-	return blocks
+	return fakeChain, transactions
 }
 
 func createOneClausePerTx(signerPK *ecdsa.PrivateKey, thorChain *testchain.Chain) (tx.Transactions, error) {
@@ -491,9 +462,9 @@ func openTempMainDB(dir string) (*muxdb.MuxDB, error) {
 	debug.SetGCPercent(int(gogc))
 
 	if opts.TrieWillCleanHistory {
-		opts.TrieHistPartitionFactor = 1000
+		opts.TrieHistPartitionFactor = 256
 	} else {
-		opts.TrieHistPartitionFactor = 500000
+		opts.TrieHistPartitionFactor = 524288
 	}
 
 	db, err := muxdb.Open(filepath.Join(dir, "maindb"), &opts)
@@ -544,4 +515,22 @@ func suggestFDCache() int {
 		return 5120
 	}
 	return n
+}
+
+func shuffleSlice(slice tx.Transactions) tx.Transactions {
+	shuffled := make(tx.Transactions, len(slice))
+	copy(shuffled, slice)
+
+	for i := len(shuffled) - 1; i > 0; i-- {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(i+1)))
+		if err != nil {
+			panic(err) // Handle errors appropriately in real code
+		}
+
+		// Swap the current element with the random index
+		j := int(n.Int64())
+		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
+	}
+
+	return shuffled
 }

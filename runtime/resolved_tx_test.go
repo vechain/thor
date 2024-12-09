@@ -76,7 +76,7 @@ func (tr *testResolvedTransaction) currentState() *state.State {
 }
 
 func (tr *testResolvedTransaction) TestResolveTransaction() {
-	txBuild := func() *tx.Builder {
+	txBuild := func() *tx.LegacyBuilder {
 		return txBuilder(tr.repo.ChainTag())
 	}
 
@@ -101,7 +101,7 @@ func (tr *testResolvedTransaction) TestResolveTransaction() {
 }
 
 func (tr *testResolvedTransaction) TestCommonTo() {
-	txBuild := func() *tx.Builder {
+	txBuild := func() *tx.LegacyBuilder {
 		return txBuilder(tr.repo.ChainTag())
 	}
 
@@ -132,7 +132,7 @@ func (tr *testResolvedTransaction) TestCommonTo() {
 func (tr *testResolvedTransaction) TestBuyGas() {
 	state := tr.currentState()
 
-	txBuild := func() *tx.Builder {
+	txBuild := func() *tx.LegacyBuilder {
 		return txBuilder(tr.repo.ChainTag())
 	}
 
@@ -175,8 +175,8 @@ func clause() *tx.Clause {
 	return tx.NewClause(&address).WithData(nil)
 }
 
-func txBuilder(tag byte) *tx.Builder {
-	return new(tx.Builder).
+func txBuilder(tag byte) *tx.LegacyBuilder {
+	return new(tx.LegacyBuilder).
 		GasPriceCoef(1).
 		Gas(1000000).
 		Expiration(100).
@@ -184,7 +184,7 @@ func txBuilder(tag byte) *tx.Builder {
 		ChainTag(tag)
 }
 
-func txSign(builder *tx.Builder) *tx.Transaction {
+func txSign(builder *tx.LegacyBuilder) *tx.Transaction {
 	transaction := builder.Build()
 	return tx.MustSign(transaction, genesis.DevAccounts()[0].PrivateKey)
 }

@@ -11,7 +11,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -80,6 +79,7 @@ func main() {
 			apiCallGasLimitFlag,
 			apiBacktraceLimitFlag,
 			apiAllowCustomTracerFlag,
+			apiEnableDeprecatedFlag,
 			enableAPILogsFlag,
 			apiLogsLimitFlag,
 			verbosityFlag,
@@ -115,6 +115,7 @@ func main() {
 					apiCallGasLimitFlag,
 					apiBacktraceLimitFlag,
 					apiAllowCustomTracerFlag,
+					apiEnableDeprecatedFlag,
 					enableAPILogsFlag,
 					apiLogsLimitFlag,
 					onDemandFlag,
@@ -255,17 +256,7 @@ func defaultAction(ctx *cli.Context) error {
 		bftEngine,
 		p2pCommunicator.Communicator(),
 		forkConfig,
-		ctx.String(apiCorsFlag.Name),
-		uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
-		ctx.Uint64(apiCallGasLimitFlag.Name),
-		ctx.Bool(pprofFlag.Name),
-		skipLogs,
-		ctx.Bool(apiAllowCustomTracerFlag.Name),
-		ctx.Bool(enableAPILogsFlag.Name),
-		ctx.Bool(enableMetricsFlag.Name),
-		ctx.Uint64(apiLogsLimitFlag.Name),
-		parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
-		false,
+		makeAPIConfig(ctx, false),
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -399,6 +390,7 @@ func soloAction(ctx *cli.Context) error {
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
 	bftEngine := solo.NewBFTEngine(repo)
+
 	apiHandler, apiCloser := api.New(
 		repo,
 		state.NewStater(mainDB),
@@ -407,17 +399,7 @@ func soloAction(ctx *cli.Context) error {
 		bftEngine,
 		&solo.Communicator{},
 		forkConfig,
-		ctx.String(apiCorsFlag.Name),
-		uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
-		ctx.Uint64(apiCallGasLimitFlag.Name),
-		ctx.Bool(pprofFlag.Name),
-		skipLogs,
-		ctx.Bool(apiAllowCustomTracerFlag.Name),
-		ctx.Bool(enableAPILogsFlag.Name),
-		ctx.Bool(enableMetricsFlag.Name),
-		ctx.Uint64(apiLogsLimitFlag.Name),
-		parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
-		true,
+		makeAPIConfig(ctx, true),
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 

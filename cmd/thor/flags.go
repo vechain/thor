@@ -69,6 +69,10 @@ var (
 		Value: 1000,
 		Usage: "limit the number of logs returned by /logs API",
 	}
+	apiEnableDeprecatedFlag = cli.BoolFlag{
+		Name:  "api-enable-deprecated",
+		Usage: "enable deprecated API endpoints (POST /accounts/{address}, POST /accounts, WS /subscriptions/beat",
+	}
 	enableAPILogsFlag = cli.BoolFlag{
 		Name:  "enable-api-logs",
 		Usage: "enables API requests logging",
