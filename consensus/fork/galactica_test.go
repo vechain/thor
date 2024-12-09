@@ -95,3 +95,33 @@ func TestCalcBaseFee(t *testing.T) {
 		}
 	}
 }
+
+func TestVerifyGaslimit(t *testing.T) {
+	for i, tc := range []struct {
+		parentGasLimit uint64
+		headerGasLimit uint64
+		ok             bool
+	}{
+		// Valid gas limits
+		{20000000, 20000000, true},
+		{20000000, 20019530, true}, // Upper limit
+		{20000000, 19980470, true}, // Lower limit
+		{40000000, 40039061, true}, // Upper limit
+		{40000000, 39960939, true}, // Lower limit
+
+		// Invalid gas limits
+		{20000000, 20019531, false}, // Upper limit +1
+		{20000000, 19980469, false}, // Lower limit -1
+		{40000000, 40039062, false}, // Upper limit +1
+		{40000000, 39960938, false}, // Lower limit -1
+		{20000000, 4999, false},     // Below minimum gas limit
+	} {
+		err := VerifyGaslimit(tc.parentGasLimit, tc.headerGasLimit)
+		if tc.ok && err != nil {
+			t.Errorf("test %d: Expected valid gas limit: %s", i, err)
+		}
+		if !tc.ok && err == nil {
+			t.Errorf("test %d: Expected invalid gas limit", i)
+		}
+	}
+}
