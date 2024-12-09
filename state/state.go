@@ -538,6 +538,8 @@ func (s *State) Stage(newVer trie.Version) (*Stage, error) {
 					return err
 				}
 			}
+			// Just once for the account trie.
+			metricAccountCounter().AddWithLabel(int64(len(changes)), map[string]string{"type": "write", "target": "trie"})
 			return nil
 		},
 	}, nil
