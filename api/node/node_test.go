@@ -40,7 +40,8 @@ func initCommServer(t *testing.T) {
 			Limit:           10000,
 			LimitPerAccount: 16,
 			MaxLifetime:     10 * time.Minute,
-		}))
+		}),
+	)
 
 	router := mux.NewRouter()
 	node.New(communicator).Mount(router, "/node")

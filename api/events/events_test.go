@@ -152,7 +152,7 @@ func TestOption(t *testing.T) {
 }
 
 func TestZeroFrom(t *testing.T) {
-	thorChain := initEventServer(t, 5)
+	thorChain := initEventServer(t, 100)
 	defer ts.Close()
 	insertBlocks(t, thorChain, 5)
 

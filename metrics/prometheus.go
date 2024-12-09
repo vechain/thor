@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -131,30 +132,6 @@ func (o *prometheusMetrics) GetOrCreateGaugeVecMeter(name string, labels []strin
 	return meter
 }
 
-func (o *prometheusMetrics) newHistogramMeter(name string, buckets []int64) HistogramMeter {
-	var floatBuckets []float64
-	for _, bucket := range buckets {
-		floatBuckets = append(floatBuckets, float64(bucket))
-	}
-
-	meter := prometheus.NewHistogram(
-		prometheus.HistogramOpts{
-			Namespace: namespace,
-			Name:      name,
-			Buckets:   floatBuckets,
-		},
-	)
-
-	err := prometheus.Register(meter)
-	if err != nil {
-		logger.Warn("unable to register metric", "err", err)
-	}
-
-	return &promHistogramMeter{
-		histogram: meter,
-	}
-}
-
 func getIOLineValue(line string) int64 {
 	fields := strings.Fields(line)
 	if len(fields) != 2 {
@@ -194,6 +171,9 @@ func getDiskIOData() (int64, int64, error) {
 }
 
 func (o *prometheusMetrics) collectDiskIO(refresh time.Duration) {
+	if runtime.GOOS != "linux" {
+		return
+	}
 	for {
 		reads, writes, err := getDiskIOData()
 		if err == nil {
@@ -205,6 +185,30 @@ func (o *prometheusMetrics) collectDiskIO(refresh time.Duration) {
 		}
 
 		time.Sleep(refresh)
+	}
+}
+
+func (o *prometheusMetrics) newHistogramMeter(name string, buckets []int64) HistogramMeter {
+	var floatBuckets []float64
+	for _, bucket := range buckets {
+		floatBuckets = append(floatBuckets, float64(bucket))
+	}
+
+	meter := prometheus.NewHistogram(
+		prometheus.HistogramOpts{
+			Namespace: namespace,
+			Name:      name,
+			Buckets:   floatBuckets,
+		},
+	)
+
+	err := prometheus.Register(meter)
+	if err != nil {
+		logger.Warn("unable to register metric", "err", err)
+	}
+
+	return &promHistogramMeter{
+		histogram: meter,
 	}
 }
 

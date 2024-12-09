@@ -16,7 +16,6 @@ import (
 	"github.com/vechain/thor/v2/thor"
 
 	"github.com/gorilla/websocket"
-	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/api/subscriptions"
 	"github.com/vechain/thor/v2/thorclient/common"
 )
@@ -89,7 +88,7 @@ func (c *Client) SubscribeEvents(pos string, filter *subscriptions.EventFilter) 
 
 // SubscribeBlocks subscribes to block updates based on the provided query.
 // It returns a Subscription that streams block messages or an error if the connection fails.
-func (c *Client) SubscribeBlocks(pos string) (*common.Subscription[*blocks.JSONCollapsedBlock], error) {
+func (c *Client) SubscribeBlocks(pos string) (*common.Subscription[*subscriptions.BlockMessage], error) {
 	queryValues := &url.Values{}
 	queryValues.Add("pos", pos)
 	conn, err := c.connect("/subscriptions/block", queryValues)
@@ -97,7 +96,7 @@ func (c *Client) SubscribeBlocks(pos string) (*common.Subscription[*blocks.JSONC
 		return nil, fmt.Errorf("unable to connect - %w", err)
 	}
 
-	return subscribe[blocks.JSONCollapsedBlock](conn), nil
+	return subscribe[subscriptions.BlockMessage](conn), nil
 }
 
 // SubscribeTransfers subscribes to transfer events based on the provided query.

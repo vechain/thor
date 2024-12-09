@@ -11,7 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -80,6 +80,7 @@ func main() {
 			apiCallGasLimitFlag,
 			apiBacktraceLimitFlag,
 			apiAllowCustomTracerFlag,
+			apiEnableDeprecatedFlag,
 			enableAPILogsFlag,
 			apiLogsLimitFlag,
 			verbosityFlag,
@@ -115,6 +116,7 @@ func main() {
 					apiCallGasLimitFlag,
 					apiBacktraceLimitFlag,
 					apiAllowCustomTracerFlag,
+					apiEnableDeprecatedFlag,
 					enableAPILogsFlag,
 					apiLogsLimitFlag,
 					onDemandFlag,
@@ -179,16 +181,6 @@ func defaultAction(ctx *cli.Context) error {
 		defer func() { log.Info("stopping metrics server..."); closeFunc() }()
 	}
 
-	adminURL := ""
-	if ctx.Bool(enableAdminFlag.Name) {
-		url, closeFunc, err := api.StartAdminServer(ctx.String(adminAddrFlag.Name), logLevel)
-		if err != nil {
-			return fmt.Errorf("unable to start admin server - %w", err)
-		}
-		adminURL = url
-		defer func() { log.Info("stopping admin server..."); closeFunc() }()
-	}
-
 	gene, forkConfig, err := selectGenesis(ctx)
 	if err != nil {
 		return err
@@ -242,6 +234,24 @@ func defaultAction(ctx *cli.Context) error {
 		return err
 	}
 
+	adminURL := ""
+	logAPIRequests := &atomic.Bool{}
+	logAPIRequests.Store(ctx.Bool(enableAPILogsFlag.Name))
+	if ctx.Bool(enableAdminFlag.Name) {
+		url, closeFunc, err := api.StartAdminServer(
+			ctx.String(adminAddrFlag.Name),
+			logLevel,
+			repo,
+			p2pCommunicator.Communicator(),
+			logAPIRequests,
+		)
+		if err != nil {
+			return fmt.Errorf("unable to start admin server - %w", err)
+		}
+		adminURL = url
+		defer func() { log.Info("stopping admin server..."); closeFunc() }()
+	}
+
 	bftEngine, err := bft.NewEngine(repo, mainDB, forkConfig, master.Address())
 	if err != nil {
 		return errors.Wrap(err, "init bft engine")
@@ -255,17 +265,7 @@ func defaultAction(ctx *cli.Context) error {
 		bftEngine,
 		p2pCommunicator.Communicator(),
 		forkConfig,
-		ctx.String(apiCorsFlag.Name),
-		uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
-		ctx.Uint64(apiCallGasLimitFlag.Name),
-		ctx.Bool(pprofFlag.Name),
-		skipLogs,
-		ctx.Bool(apiAllowCustomTracerFlag.Name),
-		ctx.Bool(enableAPILogsFlag.Name),
-		ctx.Bool(enableMetricsFlag.Name),
-		ctx.Uint64(apiLogsLimitFlag.Name),
-		parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
-		false,
+		makeAPIConfig(ctx, logAPIRequests, false),
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -298,7 +298,8 @@ func defaultAction(ctx *cli.Context) error {
 		p2pCommunicator.Communicator(),
 		ctx.Uint64(targetGasLimitFlag.Name),
 		skipLogs,
-		forkConfig).Run(exitSignal)
+		forkConfig,
+	).Run(exitSignal)
 }
 
 func soloAction(ctx *cli.Context) error {
@@ -312,6 +313,12 @@ func soloAction(ctx *cli.Context) error {
 
 	logLevel := initLogger(lvl, ctx.Bool(jsonLogsFlag.Name))
 
+	onDemandBlockProduction := ctx.Bool(onDemandFlag.Name)
+	blockProductionInterval := ctx.Uint64(blockInterval.Name)
+	if blockProductionInterval == 0 {
+		return errors.New("block-interval cannot be zero")
+	}
+
 	// enable metrics as soon as possible
 	metricsURL := ""
 	if ctx.Bool(enableMetricsFlag.Name) {
@@ -322,16 +329,6 @@ func soloAction(ctx *cli.Context) error {
 		}
 		metricsURL = url
 		defer func() { log.Info("stopping metrics server..."); closeFunc() }()
-	}
-
-	adminURL := ""
-	if ctx.Bool(enableAdminFlag.Name) {
-		url, closeFunc, err := api.StartAdminServer(ctx.String(adminAddrFlag.Name), logLevel)
-		if err != nil {
-			return fmt.Errorf("unable to start admin server - %w", err)
-		}
-		adminURL = url
-		defer func() { log.Info("stopping admin server..."); closeFunc() }()
 	}
 
 	var (
@@ -378,6 +375,24 @@ func soloAction(ctx *cli.Context) error {
 		return err
 	}
 
+	adminURL := ""
+	logAPIRequests := &atomic.Bool{}
+	logAPIRequests.Store(ctx.Bool(enableAPILogsFlag.Name))
+	if ctx.Bool(enableAdminFlag.Name) {
+		url, closeFunc, err := api.StartAdminServer(
+			ctx.String(adminAddrFlag.Name),
+			logLevel,
+			repo,
+			nil,
+			logAPIRequests,
+		)
+		if err != nil {
+			return fmt.Errorf("unable to start admin server - %w", err)
+		}
+		adminURL = url
+		defer func() { log.Info("stopping admin server..."); closeFunc() }()
+	}
+
 	printStartupMessage1(gene, repo, nil, instanceDir, forkConfig)
 
 	skipLogs := ctx.Bool(skipLogsFlag.Name)
@@ -401,6 +416,7 @@ func soloAction(ctx *cli.Context) error {
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
 	bftEngine := solo.NewBFTEngine(repo)
+
 	apiHandler, apiCloser := api.New(
 		repo,
 		state.NewStater(mainDB),
@@ -409,17 +425,7 @@ func soloAction(ctx *cli.Context) error {
 		bftEngine,
 		&solo.Communicator{},
 		forkConfig,
-		ctx.String(apiCorsFlag.Name),
-		uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
-		ctx.Uint64(apiCallGasLimitFlag.Name),
-		ctx.Bool(pprofFlag.Name),
-		skipLogs,
-		ctx.Bool(apiAllowCustomTracerFlag.Name),
-		ctx.Bool(enableAPILogsFlag.Name),
-		ctx.Bool(enableMetricsFlag.Name),
-		ctx.Uint64(apiLogsLimitFlag.Name),
-		parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
-		true,
+		makeAPIConfig(ctx, logAPIRequests, true),
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -449,9 +455,9 @@ func soloAction(ctx *cli.Context) error {
 		logDB,
 		txPool,
 		ctx.Uint64(gasLimitFlag.Name),
-		ctx.Bool(onDemandFlag.Name),
+		onDemandBlockProduction,
 		skipLogs,
-		blockInterval,
+		blockProductionInterval,
 		forkConfig).Run(exitSignal)
 }
 

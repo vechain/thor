@@ -352,7 +352,6 @@ func (r *Repository) GetBlock(id thor.Bytes32) (*block.Block, error) {
 	return block.Compose(summary.Header, txs), nil
 }
 
-
 func (r *Repository) getReceipt(key []byte) (*tx.Receipt, error) {
 	result := "hit"
 	receipt, err := r.caches.receipts.GetOrLoad(string(key), func() (interface{}, error) {
