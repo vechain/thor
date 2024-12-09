@@ -318,6 +318,9 @@ func soloAction(ctx *cli.Context) error {
 
 	onDemandBlockProduction := ctx.Bool(onDemandFlag.Name)
 	blockProductionInterval := ctx.Uint64(blockInterval.Name)
+	if blockProductionInterval == 0 {
+		return errors.New("block-interval cannot be zero")
+	}
 
 	// enable metrics as soon as possible
 	metricsURL := ""
