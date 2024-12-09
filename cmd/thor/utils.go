@@ -55,8 +55,6 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-var devNetGenesisID = genesis.NewDevnet().ID()
-
 func initLogger(lvl int, jsonLogs bool) *slog.LevelVar {
 	logLevel := log.FromLegacyLevel(lvl)
 	output := io.Writer(os.Stdout)
@@ -649,7 +647,7 @@ func printStartupMessage2(
 		}(),
 		func() string {
 			// print default dev net's dev accounts info
-			if gene.ID() == devNetGenesisID {
+			if gene.ID() == genesis.NewDevnet().ID() {
 				return `
 ┌──────────────────┬───────────────────────────────────────────────────────────────────────────────┐
 │  Mnemonic Words  │  denial kitchen pet squirrel other broom bar gas better priority spoil cross  │
