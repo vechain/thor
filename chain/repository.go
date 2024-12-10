@@ -231,6 +231,7 @@ func (r *Repository) AddBlock(newBlock *block.Block, receipts tx.Receipts, confl
 	if _, err := r.saveBlock(newBlock, receipts, conflicts, asBest); err != nil {
 		return err
 	}
+	metricBlockRepositoryCounter().AddWithLabel(1, map[string]string{"type": "write", "target": "db"})
 	return nil
 }
 
