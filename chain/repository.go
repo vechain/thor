@@ -393,6 +393,7 @@ func (r *Repository) GetBlockReceipts(id thor.Bytes32) (tx.Receipts, error) {
 				return nil, err
 			}
 		}
+		metricReceiptRepositoryCounter().AddWithLabel(int64(n), map[string]string{"type": "read", "target": "db"})
 		return receipts, nil
 	}
 	return nil, nil
