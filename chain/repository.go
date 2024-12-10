@@ -187,6 +187,7 @@ func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, conflic
 			}
 			r.caches.receipts.Add(string(keyBuf), receipt)
 		}
+		metricReceiptRepositoryCounter().AddWithLabel(int64(len(receipts)), map[string]string{"type": "write", "target": "db"})
 	}
 	if err := indexChainHead(headPutter, header); err != nil {
 		return nil, err
