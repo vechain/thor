@@ -120,6 +120,7 @@ func (s *State) getCachedObject(addr thor.Address) (*cachedObject, error) {
 	if err != nil {
 		return nil, err
 	}
+	metricAccountCounter().AddWithLabel(1, map[string]string{"type": "read", "target": "trie"})
 	co := newCachedObject(s.db, addr, a, am)
 	s.cache[addr] = co
 	return co, nil
