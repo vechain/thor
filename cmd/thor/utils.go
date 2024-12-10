@@ -57,7 +57,7 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-var devNetGenesisID = genesis.NewDevnet().ID()
+var devNetGenesisID thor.Bytes32
 
 func initLogger(lvl int, jsonLogs bool) *slog.LevelVar {
 	logLevel := log.FromLegacyLevel(lvl)
@@ -630,6 +630,13 @@ func printStartupMessage1(
 	)
 }
 
+func getOrCreateDevnetID() thor.Bytes32 {
+	if devNetGenesisID.IsZero() {
+		devNetGenesisID = genesis.NewDevnet().ID()
+	}
+	return devNetGenesisID
+}
+
 func printStartupMessage2(
 	gene *genesis.Genesis,
 	apiURL string,
@@ -668,7 +675,7 @@ func printStartupMessage2(
 		}(),
 		func() string {
 			// print default dev net's dev accounts info
-			if gene.ID() == devNetGenesisID {
+			if gene.ID() == getOrCreateDevnetID() {
 				return `
 ┌──────────────────┬───────────────────────────────────────────────────────────────────────────────┐
 │  Mnemonic Words  │  denial kitchen pet squirrel other broom bar gas better priority spoil cross  │
