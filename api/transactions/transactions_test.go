@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +21,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/transactions"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
@@ -74,6 +77,16 @@ func TestTransaction(t *testing.T) {
 	} {
 		t.Run(name, tt)
 	}
+
+	// Call transaction
+	for name, tt := range map[string]func(*testing.T){
+		"callTx":                 callTx,
+		"invalidCallTx":          invalidCallTx,
+		"callExistingTx":         callExistingTx,
+		"callExistingTxOldBlock": callExistingTxOldBlock,
+	} {
+		t.Run(name, tt)
+	}
 }
 
 func getTx(t *testing.T) {
@@ -125,12 +138,9 @@ func sendTx(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res := httpPostAndCheckResponseStatus(t, "/transactions", transactions.RawTx{Raw: hexutil.Encode(rlpTx)}, 200)
-	var txObj map[string]string
-	if err = json.Unmarshal(res, &txObj); err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, trx.ID().String(), txObj["id"], "should be the same transaction id")
+	res, err := tclient.SendRawTransaction(rlpTx)
+	require.NoError(t, err)
+	assert.Equal(t, res.ID.String(), trx.ID().String(), "should be the same transaction id")
 }
 
 func getTxWithBadID(t *testing.T) {
@@ -257,6 +267,163 @@ func handleGetTransactionReceiptByIDWithNonExistingHead(t *testing.T) {
 	assert.Equal(t, "head: leveldb: not found", strings.TrimSpace(string(res)))
 }
 
+func callTx(t *testing.T) {
+	var blockRef = tx.NewBlockRef(0)
+	var chainTag = repo.ChainTag()
+	var expiration = uint32(10)
+	var gas = uint64(21000)
+
+	for _, testTx := range []*tx.Transaction{
+		new(tx.Builder).
+			BlockRef(blockRef).
+			ChainTag(chainTag).
+			Expiration(expiration).
+			Gas(gas).
+			Build(),
+		new(tx.Builder).
+			BlockRef(blockRef).
+			ChainTag(chainTag).
+			Expiration(expiration).
+			Clause(tx.NewClause(&genesis.DevAccounts()[0].Address).WithValue(big.NewInt(1234))).
+			Gas(gas).
+			Build(),
+		new(tx.Builder).
+			BlockRef(blockRef).
+			ChainTag(chainTag).
+			Expiration(expiration).
+			Clause(
+				tx.NewClause(&genesis.DevAccounts()[0].Address).WithValue(big.NewInt(1234)),
+			).
+			Clause(
+				tx.NewClause(&genesis.DevAccounts()[0].Address).WithValue(big.NewInt(1234)),
+			).
+			Gas(2 * gas). // 2 clauses of value transfer
+			Build(),
+	} {
+		txCall := transactions.ConvertCoreTransaction(testTx, nil, &genesis.DevAccounts()[0].Address, nil)
+		callReceipt, err := tclient.CallTransaction(txCall, nil)
+		require.NoError(t, err)
+
+		validateCoreTxCall(t, testTx, callReceipt, &genesis.DevAccounts()[0].Address, nil)
+	}
+}
+
+func calcNewBlockRef(currentBlockRef string) (*string, error) {
+	num, err := strconv.ParseInt(strings.TrimPrefix(currentBlockRef, "0x"), 16, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	// Subtract 10 blocks if we can
+	if num >= 10 {
+		num = num - 10
+	}
+
+	// Format with padding to 16 zeros (8 bytes)
+	newBlockRef := fmt.Sprintf("0x%016x", num)
+	return &newBlockRef, nil
+}
+
+func callExistingTxOldBlock(t *testing.T) {
+	// fetch an existing transaction
+	existingTxID := transaction.ID()
+	testTx, err := tclient.Transaction(&existingTxID)
+	require.NoError(t, err)
+
+	newBlockRef, err := calcNewBlockRef(testTx.BlockRef)
+	require.NoError(t, err)
+	testTx.BlockRef = *newBlockRef
+
+	// locally execute the transaction
+	callReceipt, err := tclient.CallTransaction(testTx)
+	require.NoError(t, err)
+
+	// evaluate call receipt response fields
+	validateTxCall(t, testTx, callReceipt, &genesis.DevAccounts()[0].Address, nil)
+}
+
+func callExistingTx(t *testing.T) {
+	// fetch an existing transaction
+	existingTxID := transaction.ID()
+	testTx, err := tclient.Transaction(&existingTxID)
+	require.NoError(t, err)
+
+	// locally execute the transaction
+	callReceipt, err := tclient.CallTransaction(testTx)
+	require.NoError(t, err)
+
+	// evaluate call receipt response fields
+	validateTxCall(t, testTx, callReceipt, &genesis.DevAccounts()[0].Address, nil)
+}
+
+func invalidCallTx(t *testing.T) {
+	var chainTag = repo.ChainTag()
+	//var expiration = uint32(10)
+	var gas = uint64(21000)
+	var sendAddr = &genesis.DevAccounts()[0].Address
+
+	for _, tc := range []struct {
+		testTx *transactions.Transaction
+		errMsg string
+	}{
+		{
+			testTx: transactions.ConvertCoreTransaction(new(tx.Builder).
+				Gas(gas).
+				Build(),
+				nil, sendAddr, nil),
+			errMsg: "chain tag mismatch",
+		},
+		{
+			testTx: transactions.ConvertCoreTransaction(new(tx.Builder).
+				ChainTag(chainTag).
+				Gas(gas).
+				Build(),
+				nil, &thor.Address{}, nil),
+			errMsg: "no origin address specified",
+		},
+		{
+			testTx: transactions.ConvertCoreTransaction(new(tx.Builder).
+				ChainTag(chainTag).
+				Gas(gas).
+				Clause(tx.NewClause(nil).WithData(make([]byte, 64*1024+1))).
+				Build(),
+				nil, sendAddr, nil),
+			errMsg: "size too large",
+		},
+	} {
+		t.Run(tc.errMsg, func(t *testing.T) {
+			_, err := tclient.CallTransaction(tc.testTx, nil)
+			require.Error(t, err)
+			require.ErrorContains(t, err, tc.errMsg)
+		})
+	}
+}
+
+func validateTxCall(t *testing.T, callTx *transactions.Transaction, callRcpt *transactions.CallReceipt, callAddr, delegator *thor.Address) {
+	assert.Equal(t, *callAddr, callRcpt.TxOrigin)
+
+	if delegator != nil {
+		assert.Equal(t, delegator.String(), callRcpt.GasPayer.String())
+	} else {
+		assert.Equal(t, callAddr.String(), callRcpt.GasPayer.String())
+	}
+
+	assert.Equal(t, len(callTx.Clauses), len(callRcpt.Outputs))
+}
+
+func validateCoreTxCall(t *testing.T, callTx *tx.Transaction, callRcpt *transactions.CallReceipt, callAddr, delegator *thor.Address) {
+	assert.Equal(t, callTx.ID(), callRcpt.TxID)
+	assert.Equal(t, *callAddr, callRcpt.TxOrigin)
+
+	if delegator != nil {
+		assert.Equal(t, delegator.String(), callRcpt.GasPayer.String())
+	} else {
+		assert.Equal(t, callAddr.String(), callRcpt.GasPayer.String())
+	}
+
+	assert.Equal(t, len(callTx.Clauses()), len(callRcpt.Outputs))
+}
+
 func httpPostAndCheckResponseStatus(t *testing.T, url string, obj interface{}, responseStatusCode int) []byte {
 	body, statusCode, err := tclient.RawHTTPClient().RawHTTPPost(url, obj)
 	require.NoError(t, err)
@@ -302,8 +469,7 @@ func initTransactionServer(t *testing.T) {
 		t.Fatal(e)
 	}
 
-	router := mux.NewRouter()
-	transactions.New(thorChain.Repo(), mempool).Mount(router, "/transactions")
+	transactions.New(repo, stater, mempool, solo.NewBFTEngine(repo), thor.NoFork).Mount(router, "/transactions")
 
 	ts = httptest.NewServer(router)
 }
