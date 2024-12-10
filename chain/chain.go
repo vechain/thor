@@ -241,7 +241,7 @@ func (c *Chain) GetTransaction(id thor.Bytes32) (*tx.Transaction, *TxMeta, error
 	if err != nil {
 		return nil, nil, err
 	}
-	metricTransactionRepositoryCounter().AddWithLabel(1, map[string]string{"type": "read"})
+	metricTransactionRepositoryCounter().AddWithLabel(1, map[string]string{"type": "read", "target": "db"})
 	return tx, txMeta, nil
 }
 
@@ -257,7 +257,7 @@ func (c *Chain) GetTransactionReceipt(txID thor.Bytes32) (*tx.Receipt, error) {
 	if err != nil {
 		return nil, err
 	}
-	metricReceiptRepositoryCounter().AddWithLabel(1, map[string]string{"type": "read"})
+	metricReceiptRepositoryCounter().AddWithLabel(1, map[string]string{"type": "read", "target": "db"})
 	return receipt, nil
 }
 
