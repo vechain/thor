@@ -132,6 +132,7 @@ func (s *State) getAccount(addr thor.Address) (*Account, error) {
 	if err != nil {
 		return nil, err
 	}
+	metricAccountCounter().AddWithLabel(1, map[string]string{"type": "read", "target": "stackedmap"})
 	return v.(*Account), nil
 }
 
