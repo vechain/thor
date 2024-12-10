@@ -336,6 +336,7 @@ func (r *Repository) GetBlockTransactions(id thor.Bytes32) (tx.Transactions, err
 				return nil, err
 			}
 		}
+		metricTransactionRepositoryCounter().AddWithLabel(int64(n), map[string]string{"type": "read"})
 		return txs, nil
 	}
 	return nil, nil
