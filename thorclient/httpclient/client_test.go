@@ -22,6 +22,7 @@ import (
 	"github.com/vechain/thor/v2/api/node"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/api/transfers"
+	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 
 	tccommon "github.com/vechain/thor/v2/thorclient/common"
@@ -298,6 +299,25 @@ func TestClient_GetTransaction(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedTx, tx)
+}
+
+func TestClient_CallTransaction(t *testing.T) {
+	calledTx := &transactions.Transaction{ID: datagen.RandomHash()}
+	expectedCallReceipt := &transactions.CallReceipt{TxID: calledTx.ID}
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/transactions/call", r.URL.Path)
+
+		txBytes, _ := json.Marshal(expectedCallReceipt)
+		w.Write(txBytes)
+	}))
+	defer ts.Close()
+
+	client := New(ts.URL)
+	callReceipt, err := client.CallTransaction(calledTx, tccommon.BestRevision)
+
+	assert.NoError(t, err)
+	assert.Equal(t, expectedCallReceipt, callReceipt)
 }
 
 func TestClient_GetRawTransaction(t *testing.T) {
