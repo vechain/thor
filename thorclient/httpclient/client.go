@@ -104,7 +104,7 @@ func (c *Client) GetAccountCode(addr *thor.Address, revision string) (*accounts.
 
 // GetAccountStorage retrieves the storage value for the given address and key at the specified revision.
 func (c *Client) GetAccountStorage(addr *thor.Address, key *thor.Bytes32, revision string) (*accounts.GetStorageResult, error) {
-	url := c.url + "/accounts/" + addr.String() + "/key/" + key.String()
+	url := c.url + "/accounts/" + addr.String() + "/storage/" + key.String()
 	if revision != "" {
 		url += "?revision=" + revision
 	}
