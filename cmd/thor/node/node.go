@@ -360,8 +360,16 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 			return errors.Wrap(err, "commit state")
 		}
 
+		// sync the log-writing task
+		if logEnabled {
+			if err := n.logWorker.Sync(); err != nil {
+				log.Warn("failed to write logs", "err", err)
+				n.logDBFailed = true
+			}
+		}
+
 		// add the new block into repository
-		if err := n.repo.AddBlock(newBlock, receipts, conflicts); err != nil {
+		if err := n.repo.AddBlock(newBlock, receipts, conflicts, becomeNewBest); err != nil {
 			return errors.Wrap(err, "add block")
 		}
 
@@ -374,18 +382,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 
 		realElapsed := mclock.Now() - startTime
 
-		// sync the log-writing task
-		if logEnabled {
-			if err := n.logWorker.Sync(); err != nil {
-				logger.Warn("failed to write logs", "err", err)
-				n.logDBFailed = true
-			}
-		}
-
 		if becomeNewBest {
-			if err := n.repo.SetBestBlockID(newBlock.Header().ID()); err != nil {
-				return err
-			}
 			n.processFork(newBlock, oldBest.Header.ID())
 		}
 

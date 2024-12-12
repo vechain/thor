@@ -42,7 +42,7 @@ func TestInitSolo(t *testing.T) {
 
 	// check the gas price
 	best := solo.repo.BestBlockSummary()
-	newState := solo.stater.NewState(best.Header.StateRoot(), best.Header.Number(), best.Conflicts, best.SteadyNum)
+	newState := solo.stater.NewState(best.Root())
 	currentBGP, err := builtin.Params.Native(newState).Get(thor.KeyBaseGasPrice)
 	assert.Nil(t, err)
 	assert.Equal(t, baseGasPrice, currentBGP)

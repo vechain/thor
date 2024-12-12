@@ -89,8 +89,9 @@ func convertTransaction(tx *tx.Transaction, header *block.Header) *Transaction {
 	origin, _ := tx.Origin()
 	delegator, _ := tx.Delegator()
 
-	cls := make(Clauses, len(tx.Clauses()))
-	for i, c := range tx.Clauses() {
+	txClauses := tx.Clauses()
+	cls := make(Clauses, len(txClauses))
+	for i, c := range txClauses {
 		cls[i] = convertClause(c)
 	}
 	br := tx.BlockRef()
@@ -187,9 +188,10 @@ func convertReceipt(txReceipt *tx.Receipt, header *block.Header, tx *tx.Transact
 			origin,
 		},
 	}
+	txClauses := tx.Clauses()
 	receipt.Outputs = make([]*Output, len(txReceipt.Outputs))
 	for i, output := range txReceipt.Outputs {
-		clause := tx.Clauses()[i]
+		clause := txClauses[i]
 		var contractAddr *thor.Address
 		if clause.To() == nil {
 			cAddr := thor.CreateContractAddress(tx.ID(), uint32(i), 0)

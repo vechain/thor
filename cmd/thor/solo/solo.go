@@ -174,12 +174,6 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 		return errors.WithMessage(err, "commit state")
 	}
 
-	// ignore fork when solo
-	if err := s.repo.AddBlock(b, receipts, 0); err != nil {
-		return errors.WithMessage(err, "commit block")
-	}
-	realElapsed := mclock.Now() - startTime
-
 	if !s.skipLogs {
 		w := s.logDB.NewWriter()
 		if err := w.Write(b, receipts); err != nil {
@@ -191,9 +185,11 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 		}
 	}
 
-	if err := s.repo.SetBestBlockID(b.Header().ID()); err != nil {
-		return errors.WithMessage(err, "set best block")
+	// ignore fork when solo
+	if err := s.repo.AddBlock(b, receipts, 0, true); err != nil {
+		return errors.WithMessage(err, "commit block")
 	}
+	realElapsed := mclock.Now() - startTime
 
 	commitElapsed := mclock.Now() - startTime - execElapsed
 
@@ -216,7 +212,7 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 // The init function initializes the chain parameters.
 func (s *Solo) init(ctx context.Context) error {
 	best := s.repo.BestBlockSummary()
-	newState := s.stater.NewState(best.Header.StateRoot(), best.Header.Number(), best.Conflicts, best.SteadyNum)
+	newState := s.stater.NewState(best.Root())
 	currentBGP, err := builtin.Params.Native(newState).Get(thor.KeyBaseGasPrice)
 	if err != nil {
 		return errors.WithMessage(err, "failed to get the current base gas price")
