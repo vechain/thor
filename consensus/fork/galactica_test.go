@@ -6,11 +6,11 @@
 package fork
 
 import (
+	"encoding/binary"
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/vm"
 )
@@ -28,7 +28,7 @@ func TestBlockGasLimits(t *testing.T) {
 
 	for i, tc := range []struct {
 		pGasLimit uint64
-		pNum      int64
+		pNum      uint32
 		gasLimit  uint64
 		ok        bool
 	}{
@@ -49,18 +49,11 @@ func TestBlockGasLimits(t *testing.T) {
 		{40000000, 5, 39960939, true},  // lower limit
 		{40000000, 5, 39960938, false}, // Lower limit -1
 	} {
-		parent := &types.Header{
-			GasUsed:  tc.pGasLimit / 2,
-			GasLimit: tc.pGasLimit,
-			BaseFee:  initial,
-			Number:   big.NewInt(tc.pNum),
-		}
-		header := &types.Header{
-			GasUsed:  tc.gasLimit / 2,
-			GasLimit: tc.gasLimit,
-			BaseFee:  initial,
-			Number:   big.NewInt(tc.pNum + 1),
-		}
+		var parentID thor.Bytes32
+		binary.BigEndian.PutUint32(parentID[:], tc.pNum-1)
+
+		parent := new(block.Builder).ParentID(parentID).GasUsed(tc.pGasLimit / 2).GasLimit(tc.pGasLimit).BaseFee(initial).Build().Header()
+		header := new(block.Builder).ParentID(parent.ID()).GasUsed(tc.gasLimit / 2).GasLimit(tc.gasLimit).BaseFee(initial).Build().Header()
 		err := VerifyGalacticaHeader(config(), parent, header)
 		if tc.ok && err != nil {
 			t.Errorf("test %d: Expected valid header: %s", i, err)
@@ -84,12 +77,11 @@ func TestCalcBaseFee(t *testing.T) {
 		{thor.InitialBaseFee, 20000000, 11000000, 1012500000},          // usage above target
 	}
 	for i, test := range tests {
-		parent := &types.Header{
-			Number:   common.Big32,
-			GasLimit: test.parentGasLimit,
-			GasUsed:  test.parentGasUsed,
-			BaseFee:  big.NewInt(test.parentBaseFee),
+		b := new(block.Builder).Build()
+		for j := 0; j < 3; j++ {
+			b = new(block.Builder).ParentID(b.Header().ID()).GasUsed(test.parentGasUsed).GasLimit(test.parentGasLimit).BaseFee(big.NewInt(test.parentBaseFee)).Build()
 		}
+		parent := new(block.Builder).ParentID(b.Header().ID()).GasLimit(test.parentGasLimit).GasUsed(test.parentGasUsed).BaseFee(big.NewInt(test.parentBaseFee)).Build().Header()
 		if have, want := CalcBaseFee(config(), parent), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
 			t.Errorf("test %d: have %d  want %d, ", i, have, want)
 		}
