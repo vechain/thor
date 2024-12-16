@@ -52,7 +52,6 @@ type headerBody struct {
 	Signature []byte
 
 	Extension extension
-	BaseFee   *big.Int `rlp:"optional"`
 }
 
 // ParentID returns id of parent block.
@@ -88,10 +87,10 @@ func (h *Header) GasUsed() uint64 {
 
 // BaseFee returns base fee of this block.
 func (h *Header) BaseFee() *big.Int {
-	if h.body.BaseFee == nil {
+	if h.body.Extension.BaseFee == nil {
 		return nil
 	}
-	return new(big.Int).Set(h.body.BaseFee)
+	return new(big.Int).Set(h.body.Extension.BaseFee)
 }
 
 // Beneficiary returns reward recipient.
@@ -160,8 +159,8 @@ func (h *Header) SigningHash() (hash thor.Bytes32) {
 			&h.body.StateRoot,
 			&h.body.ReceiptsRoot,
 		}
-		if h.body.BaseFee != nil {
-			hashBody = append(hashBody, &h.body.BaseFee)
+		if h.body.Extension.BaseFee != nil {
+			hashBody = append(hashBody, &h.body.Extension.BaseFee)
 		}
 		rlp.Encode(w, hashBody)
 	})
@@ -291,7 +290,7 @@ func (h *Header) String() string {
 	Alpha:          0x%x
 	COM:            %v
 	Signature:      0x%x`, h.ID(), h.Number(), h.body.ParentID, h.body.Timestamp, signerStr,
-		h.body.Beneficiary, h.body.GasLimit, h.body.GasUsed, h.body.BaseFee, h.body.TotalScore,
+		h.body.Beneficiary, h.body.GasLimit, h.body.GasUsed, h.body.Extension.BaseFee, h.body.TotalScore,
 		h.body.TxsRootFeatures.Root, h.body.TxsRootFeatures.Features, h.body.StateRoot, h.body.ReceiptsRoot, h.body.Extension.Alpha, h.body.Extension.COM, h.body.Signature)
 }
 
