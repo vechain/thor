@@ -108,41 +108,6 @@ func TestHeaderEncoding(t *testing.T) {
 	}
 }
 
-func TestGalacticaHeaderEncoding(t *testing.T) {
-	var sig [ComplexSigSize]byte
-	var alpha [32]byte
-	rand.Read(sig[:])
-	rand.Read(alpha[:])
-	baseFee := big.NewInt(10000)
-
-	block := new(Builder).BaseFee(baseFee).Alpha(alpha[:]).Build().WithSignature(sig[:])
-	h := block.Header()
-
-	bytes, err := rlp.EncodeToBytes(h)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var hh Header
-	err = rlp.DecodeBytes(bytes, &hh)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	assert.Equal(t, *h, hh)
-	assert.Equal(t, baseFee, h.BaseFee())
-
-	data, _, err := rlp.SplitList(bytes)
-	if err != nil {
-		t.Fatal(err)
-	}
-	count, err := rlp.CountValues(data)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.EqualValues(t, 12, count)
-}
-
 // type extension struct{Alpha []byte}
 func TestEncodingBadExtension(t *testing.T) {
 	var sig [65]byte
@@ -326,6 +291,66 @@ func TestExtensionV2(t *testing.T) {
 				assert.EqualError(t, err, "rlp: extension must be trimmed")
 
 				assert.False(t, dst.Extension.COM)
+			},
+		},
+		{
+			name: "alpha, com and baseFee",
+			test: func(t *testing.T) {
+				baseFee := big.NewInt(123456)
+				bytes, err := rlp.EncodeToBytes(&v2{
+					Extension: extension{
+						Alpha:   thor.Bytes32{}.Bytes(),
+						COM:     true,
+						BaseFee: baseFee,
+					},
+				})
+				assert.Nil(t, err)
+
+				content, _, err := rlp.SplitList(bytes)
+				assert.Nil(t, err)
+
+				cnt, err := rlp.CountValues(content)
+				assert.Nil(t, err)
+
+				assert.Equal(t, 1, cnt)
+
+				var dst v2
+				err = rlp.DecodeBytes(bytes, &dst)
+				assert.Nil(t, err)
+
+				assert.Equal(t, thor.Bytes32{}.Bytes(), dst.Extension.Alpha)
+				assert.True(t, dst.Extension.COM)
+				assert.Equal(t, baseFee, dst.Extension.BaseFee)
+			},
+		},
+		{
+			name: "alpha, com is false and baseFee",
+			test: func(t *testing.T) {
+				baseFee := big.NewInt(123456)
+				bytes, err := rlp.EncodeToBytes(&v2{
+					Extension: extension{
+						Alpha:   thor.Bytes32{}.Bytes(),
+						COM:     false,
+						BaseFee: baseFee,
+					},
+				})
+				assert.Nil(t, err)
+
+				content, _, err := rlp.SplitList(bytes)
+				assert.Nil(t, err)
+
+				cnt, err := rlp.CountValues(content)
+				assert.Nil(t, err)
+
+				assert.Equal(t, 1, cnt)
+
+				var dst v2
+				err = rlp.DecodeBytes(bytes, &dst)
+				assert.Nil(t, err)
+
+				assert.Equal(t, thor.Bytes32{}.Bytes(), dst.Extension.Alpha)
+				assert.False(t, dst.Extension.COM)
+				assert.Equal(t, baseFee, dst.Extension.BaseFee)
 			},
 		},
 	}
