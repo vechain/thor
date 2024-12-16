@@ -92,7 +92,7 @@ func (b *Builder) COM() *Builder {
 
 // BaseFee sets base fee.
 func (b *Builder) BaseFee(baseFee *big.Int) *Builder {
-	b.headerBody.BaseFee = baseFee
+	b.headerBody.Extension.BaseFee = baseFee
 	return b
 }
 

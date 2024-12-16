@@ -77,11 +77,10 @@ func TestCalcBaseFee(t *testing.T) {
 		{thor.InitialBaseFee, 20000000, 11000000, 1012500000},          // usage above target
 	}
 	for i, test := range tests {
-		b := new(block.Builder).Build()
-		for j := 0; j < 3; j++ {
-			b = new(block.Builder).ParentID(b.Header().ID()).GasUsed(test.parentGasUsed).GasLimit(test.parentGasLimit).BaseFee(big.NewInt(test.parentBaseFee)).Build()
-		}
-		parent := new(block.Builder).ParentID(b.Header().ID()).GasLimit(test.parentGasLimit).GasUsed(test.parentGasUsed).BaseFee(big.NewInt(test.parentBaseFee)).Build().Header()
+		var parentID thor.Bytes32
+		binary.BigEndian.PutUint32(parentID[:], 5)
+
+		parent := new(block.Builder).ParentID(parentID).GasLimit(test.parentGasLimit).GasUsed(test.parentGasUsed).BaseFee(big.NewInt(test.parentBaseFee)).Build().Header()
 		if have, want := CalcBaseFee(config(), parent), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
 			t.Errorf("test %d: have %d  want %d, ", i, have, want)
 		}
