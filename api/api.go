@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"strings"
+	"sync/atomic"
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
@@ -39,7 +40,7 @@ type Config struct {
 	PprofOn           bool
 	SkipLogs          bool
 	AllowCustomTracer bool
-	EnableReqLogger   bool
+	EnableReqLogger   *atomic.Bool
 	EnableMetrics     bool
 	LogsLimit         uint64
 	AllowedTracers    []string
@@ -115,9 +116,7 @@ func New(
 		handlers.ExposedHeaders([]string{"x-genesis-id", "x-thorest-ver"}),
 	)(handler)
 
-	if config.EnableReqLogger {
-		handler = RequestLoggerHandler(handler, logger)
-	}
+	handler = RequestLoggerHandler(handler, logger, config.EnableReqLogger)
 
 	return handler.ServeHTTP, subs.Close // subscriptions handles hijacked conns, which need to be closed
 }

@@ -12,7 +12,7 @@ info:
   license:
     name: LGPL 3.0
     url: https://www.gnu.org/licenses/lgpl-3.0.en.html
-  version: 2.1.4
+  version: 2.1.5
 servers:
   - url: /
     description: Current Node
@@ -2275,11 +2275,12 @@ components:
             The unified path of the target to be traced. Currently, only the clause is supported. 
             
             Format:
-            `blockID/(txIndex|txId)/clauseIndex`
+            `blockID/(txIndex|txId)/clauseIndex` or `txID/clauseIndex`
+
 
           example: '0x010709463c1f0c9aa66a31182fb36d1977d99bfb6526bae0564a0eac4006c31a/0/0'
           nullable: false
-          pattern: '^0x[0-9a-fA-F]{64}\/(0x[0-9a-fA-F]{64}|\d+)\/[0-9]+$'
+          pattern: '^0x[0-9a-fA-F]{64}(\/(0x[0-9a-fA-F]{64}|\d+))?\/[0-9]+$'
       example:
         target: '0x010709463c1f0c9aa66a31182fb36d1977d99bfb6526bae0564a0eac4006c31a/0/0'
 
@@ -2345,9 +2346,9 @@ components:
             The unified path of the transaction clause.
             
             Format:
-            `blockID/(txIndex|txId)/clauseIndex`
+            `blockID/(txIndex|txId)/clauseIndex` or `txID/clauseIndex`
           nullable: false
-          pattern: '^0x[0-9a-fA-F]{64}\/(0x[0-9a-fA-F]{64}|\d+)\/[0-9]+$'
+          pattern: '^0x[0-9a-fA-F]{64}(\/(0x[0-9a-fA-F]{64}|\d+))?\/[0-9]+$'
 
     StorageRange:
       type: object

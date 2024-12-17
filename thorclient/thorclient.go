@@ -89,6 +89,18 @@ func applyOptions(opts []Option) *getOptions {
 	return options
 }
 
+// applyHeadOptions applies the given functional options to the default options.
+func applyHeadOptions(opts []Option) *getOptions {
+	options := &getOptions{
+		revision: "",
+		pending:  false,
+	}
+	for _, o := range opts {
+		o(options)
+	}
+	return options
+}
+
 // Revision returns an Option to specify the revision for requests.
 func Revision(revision string) Option {
 	return func(o *getOptions) {
@@ -163,13 +175,13 @@ func (c *Client) CallTransaction(transaction *transactions.Transaction, opts ...
 
 // RawTransaction retrieves the raw transaction data by its ID.
 func (c *Client) RawTransaction(id *thor.Bytes32, opts ...Option) (*transactions.RawTransaction, error) {
-	options := applyOptions(opts)
+	options := applyHeadOptions(opts)
 	return c.httpConn.GetRawTransaction(id, options.revision, options.pending)
 }
 
 // TransactionReceipt retrieves the receipt for a transaction by its ID.
 func (c *Client) TransactionReceipt(id *thor.Bytes32, opts ...Option) (*transactions.Receipt, error) {
-	options := applyOptions(opts)
+	options := applyHeadOptions(opts)
 	return c.httpConn.GetTransactionReceipt(id, options.revision)
 }
 

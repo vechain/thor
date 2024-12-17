@@ -6,7 +6,6 @@
 package debug
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -62,6 +61,7 @@ func TestDebug(t *testing.T) {
 		"testTraceClauseWithClauseIndexOutOfBound": testTraceClauseWithClauseIndexOutOfBound,
 		"testTraceClauseWithCustomTracer":          testTraceClauseWithCustomTracer,
 		"testTraceClause":                          testTraceClause,
+		"testTraceClauseWithoutBlockID":            testTraceClauseWithoutBlockID,
 	} {
 		t.Run(name, tt)
 	}
@@ -176,9 +176,11 @@ func testTraceClauseWithBadBlockID(t *testing.T) {
 }
 
 func testTraceClauseWithNonExistingBlockID(t *testing.T) {
-	_, _, _, err := debug.prepareClauseEnv(context.Background(), datagen.RandomHash(), 1, 1)
-
-	assert.Error(t, err)
+	traceClauseOption := &TraceClauseOption{
+		Name:   "structLogger",
+		Target: fmt.Sprintf("%s/x/x", datagen.RandomHash()),
+	}
+	httpPostAndCheckResponseStatus(t, "/debug/tracers", traceClauseOption, 500)
 }
 
 func testTraceClauseWithBadTxID(t *testing.T) {
@@ -249,6 +251,26 @@ func testTraceClause(t *testing.T) {
 	traceClauseOption := &TraceClauseOption{
 		Name:   "structLogger",
 		Target: fmt.Sprintf("%s/%s/1", blk.Header().ID(), transaction.ID()),
+	}
+	expectedExecutionResult := &logger.ExecutionResult{
+		Gas:         0,
+		Failed:      false,
+		ReturnValue: "",
+		StructLogs:  make([]logger.StructLogRes, 0),
+	}
+	res := httpPostAndCheckResponseStatus(t, "/debug/tracers", traceClauseOption, 200)
+
+	var parsedExecutionRes *logger.ExecutionResult
+	if err := json.Unmarshal([]byte(res), &parsedExecutionRes); err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, expectedExecutionResult, parsedExecutionRes)
+}
+
+func testTraceClauseWithoutBlockID(t *testing.T) {
+	traceClauseOption := &TraceClauseOption{
+		Name:   "structLogger",
+		Target: fmt.Sprintf("%s/1", transaction.ID()),
 	}
 	expectedExecutionResult := &logger.ExecutionResult{
 		Gas:         0,

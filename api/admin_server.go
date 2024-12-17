@@ -9,42 +9,32 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"sync/atomic"
 	"time"
 
-	"github.com/gorilla/handlers"
-	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/v2/api/utils"
+	"github.com/vechain/thor/v2/api/admin"
+	"github.com/vechain/thor/v2/api/admin/health"
+	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/co"
+	"github.com/vechain/thor/v2/comm"
 )
 
-func HTTPHandler(logLevel *slog.LevelVar) http.Handler {
-	router := mux.NewRouter()
-	sub := router.PathPrefix("/admin").Subrouter()
-	sub.Path("/loglevel").
-		Methods(http.MethodGet).
-		Name("get-log-level").
-		HandlerFunc(utils.WrapHandlerFunc(getLogLevelHandler(logLevel)))
-
-	sub.Path("/loglevel").
-		Methods(http.MethodPost).
-		Name("post-log-level").
-		HandlerFunc(utils.WrapHandlerFunc(postLogLevelHandler(logLevel)))
-
-	return handlers.CompressHandler(router)
-}
-
-func StartAdminServer(addr string, logLevel *slog.LevelVar) (string, func(), error) {
+func StartAdminServer(
+	addr string,
+	logLevel *slog.LevelVar,
+	repo *chain.Repository,
+	p2p *comm.Communicator,
+	apiLogs *atomic.Bool,
+) (string, func(), error) {
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return "", nil, errors.Wrapf(err, "listen admin API addr [%v]", addr)
 	}
 
-	router := mux.NewRouter()
-	router.PathPrefix("/admin").Handler(HTTPHandler(logLevel))
-	handler := handlers.CompressHandler(router)
+	adminHandler := admin.New(logLevel, health.New(repo, p2p), apiLogs)
 
-	srv := &http.Server{Handler: handler, ReadHeaderTimeout: time.Second, ReadTimeout: 5 * time.Second}
+	srv := &http.Server{Handler: adminHandler, ReadHeaderTimeout: time.Second, ReadTimeout: 5 * time.Second}
 	var goes co.Goes
 	goes.Go(func() {
 		srv.Serve(listener)
