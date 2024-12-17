@@ -88,6 +88,15 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
+      - name: Update Docker Hub
+        # official documentation docker: https://docs.docker.com/build/ci/github-actions/update-dockerhub-desc/
+        if: ${{ inputs.environment == 'docker-publish' && github.event_name != 'pull_request' }}
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ github.repository }}
+
       - name: Scan for vulnerabilities
         uses: crazy-max/ghaction-container-scan@v3
         if: ${{ github.event_name == 'pull_request' || github.ref_name == 'master' }}
