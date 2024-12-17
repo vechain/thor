@@ -14,17 +14,15 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/vm"
 )
 
 // VerifyGalacticaHeader verifies some header attributes which were changed in Galactica fork,
 // - gas limit check
 // - basefee check
-func VerifyGalacticaHeader(config *vm.ChainConfig, parent, header *block.Header) error {
+func VerifyGalacticaHeader(config *thor.ForkConfig, parent, header *block.Header) error {
 	// Verify that the gas limit remains within allowed bounds
-	parentBlockNum := big.NewInt(int64(parent.Number()))
 	parentGasLimit := parent.GasLimit()
-	if !config.IsGalactica(parentBlockNum) {
+	if parent.Number() < config.GALACTICA {
 		parentGasLimit = parent.GasLimit() * thor.ElasticityMultiplier
 	}
 	if err := VerifyGaslimit(parentGasLimit, header.GasLimit()); err != nil {
@@ -62,10 +60,9 @@ func VerifyGaslimit(parentGasLimit, headerGasLimit uint64) error {
 }
 
 // CalcBaseFee calculates the basefee of the header.
-func CalcBaseFee(config *vm.ChainConfig, parent *block.Header) *big.Int {
+func CalcBaseFee(config *thor.ForkConfig, parent *block.Header) *big.Int {
 	// If the current block is the first Galactica block, return the InitialBaseFee.
-	parentBlockNum := big.NewInt(int64(parent.Number()))
-	if !config.IsGalactica(parentBlockNum) {
+	if parent.Number() == config.GALACTICA {
 		return new(big.Int).SetUint64(thor.InitialBaseFee)
 	}
 
