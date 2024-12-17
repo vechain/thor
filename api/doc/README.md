@@ -11,7 +11,7 @@ curl https://unpkg.com/swagger-ui-dist@5.18.2/swagger-ui-standalone-preset.js > 
 ```
 
 ## Stoplight
-Spotlight UI from https://github.com/stoplightio/elements @v8.0.3
+Spotlight UI from https://github.com/stoplightio/elements @v8.5.2
 - Created [window-observer.js](./stoplight-ui/window-observer.js) to remove `Send API Request` functionality for subscription endpoints
 - See the latest version [here](https://unpkg.com/browse/@stoplight/elements-core@8.5.2/)
 
