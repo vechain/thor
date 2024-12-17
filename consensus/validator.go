@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/poa"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
@@ -153,6 +154,16 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 	if header.Number() < c.forkConfig.FINALITY {
 		if header.COM() {
 			return consensusError("invalid block: COM should not set before fork FINALITY")
+		}
+	}
+
+	if header.Number() < c.forkConfig.GALACTICA {
+		if header.BaseFee() != nil {
+			return consensusError("invalid block: baseFee should not set before fork GALACTICA")
+		}
+	} else {
+		if err := fork.VerifyGalacticaHeader(&c.forkConfig, parent, header); err != nil {
+			return consensusError(fmt.Sprintf("block header invalid: %v", err))
 		}
 	}
 

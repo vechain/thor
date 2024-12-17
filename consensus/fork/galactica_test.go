@@ -12,12 +12,11 @@ import (
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/vm"
 )
 
-func config() *vm.ChainConfig {
-	return &vm.ChainConfig{
-		GalacticaBlock: big.NewInt(5),
+func config() *thor.ForkConfig {
+	return &thor.ForkConfig{
+		GALACTICA: 5,
 	}
 }
 
