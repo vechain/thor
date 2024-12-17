@@ -88,6 +88,7 @@ func newTestConsensus() (*testConsensus, error) {
 	forkConfig.VIP191 = 1
 	forkConfig.BLOCKLIST = 0
 	forkConfig.VIP214 = 2
+	forkConfig.GALACTICA = 5
 
 	proposer := genesis.DevAccounts()[0]
 	p := packer.New(repo, stater, proposer.Address, &proposer.Address, forkConfig)
@@ -442,6 +443,18 @@ func TestValidateBlockHeader(t *testing.T) {
 
 				err = tc.consent(blk)
 				expected := consensusError(fmt.Sprintf("block VRF signature invalid: %v", theErr))
+				assert.Equal(t, expected, err)
+			},
+		},
+		{
+			"Invalid BaseFee", func(t *testing.T) {
+
+				builder := tc.builder(tc.original.Header())
+				blk, err := tc.sign(builder.BaseFee(big.NewInt(10000)))
+				assert.NoError(t, err)
+
+				err = tc.consent(blk)
+				expected := consensusError("invalid block: baseFee should not set before fork GALACTICA")
 				assert.Equal(t, expected, err)
 			},
 		},
