@@ -75,3 +75,32 @@ jobs:
           name: e2e-test-results-${{ github.sha }}
           path: ./junit.xml
           retention-days: 14
+
+  run-rosetta-tests:
+    runs-on: ubuntu-latest
+    needs: build-docker-image
+    env:
+      THOR_IMAGE: vechain/thor:${{ github.sha }}
+    name: Run Rosetta Tests
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          repository: vechain/rosetta
+          # https://github.com/vechain/rosetta/pull/26/commits/3c7be7d9027e370a0de8c398061b8847ec7bce4b
+          # TODO: update this ref if the PR is merged
+          ref: 3c7be7d9027e370a0de8c398061b8847ec7bce4b
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install
+        run: npm install
+
+      - name: Run Tests
+        run: npm run test
+        env:
+          THOR_VERSION: ${{ github.sha }}
