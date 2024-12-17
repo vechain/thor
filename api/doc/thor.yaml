@@ -12,7 +12,7 @@ info:
   license:
     name: LGPL 3.0
     url: https://www.gnu.org/licenses/lgpl-3.0.en.html
-  version: 2.1.5
+  version: 2.1.6
 servers:
   - url: /
     description: Current Node
@@ -43,8 +43,8 @@ paths:
   /accounts/{address}:
     get:
       parameters:
-        - $ref: '#/components/parameters/AddressPath'
-        - $ref: '#/components/parameters/RevisionQuery'
+        - $ref: '#/components/parameters/GetAddressInPath'
+        - $ref: '#/components/parameters/RevisionInQuery'
       tags:
         - Accounts
       summary: Retrieve account details
@@ -58,7 +58,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Account'
+                $ref: '#/components/schemas/GetAccountResponse'
         '400':
           description: Bad Request
           content:
@@ -70,7 +70,7 @@ paths:
   /accounts/*:
     post:
       parameters:
-        - $ref: '#/components/parameters/InspectRevision'
+        - $ref: '#/components/parameters/CallCodeRevisionInQuery'
       tags:
         - Accounts
       summary: Inspect clauses
@@ -92,14 +92,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/InspectRequest'
+              $ref: '#/components/schemas/ExecuteCodesRequest'
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InspectResponse'
+                $ref: '#/components/schemas/ExecuteCodesResponse'
         '400':
           description: Bad Request
           content:
@@ -110,8 +110,8 @@ paths:
 
   /accounts/{address}/code:
     parameters:
-      - $ref: '#/components/parameters/AddressPath'
-      - $ref: '#/components/parameters/RevisionQuery'
+      - $ref: '#/components/parameters/GetAddressInPath'
+      - $ref: '#/components/parameters/RevisionInQuery'
     get:
       tags:
         - Accounts
@@ -124,7 +124,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AccountCode'
+                $ref: '#/components/schemas/GetAccountCodeResponse'
         '400':
           description: Bad Request
           content:
@@ -135,9 +135,9 @@ paths:
 
   /accounts/{address}/storage/{key}:
     parameters:
-      - $ref: '#/components/parameters/KeyPath'
-      - $ref: '#/components/parameters/StoragePath'
-      - $ref: '#/components/parameters/RevisionQuery'
+      - $ref: '#/components/parameters/GetStorageAddressInPath'
+      - $ref: '#/components/parameters/StorageKeyInPath'
+      - $ref: '#/components/parameters/RevisionInQuery'
     get:
       tags:
         - Accounts
@@ -152,7 +152,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AccountStorage'
+                $ref: '#/components/schemas/GetStorageResponse'
         '400':
           description: Bad Request
           content:
@@ -164,10 +164,10 @@ paths:
   /transactions/{id}:
     get:
       parameters:
-        - $ref: '#/components/parameters/TxIDPath'
-        - $ref: '#/components/parameters/RawTxQuery'
-        - $ref: '#/components/parameters/HeadQuery'
-        - $ref: '#/components/parameters/PendingQuery'
+        - $ref: '#/components/parameters/TxIDInPath'
+        - $ref: '#/components/parameters/RawTxInQuery'
+        - $ref: '#/components/parameters/HeadInQuery'
+        - $ref: '#/components/parameters/PendingInQuery'
       tags:
         - Transactions
       summary: Retrieve a transaction by ID
@@ -182,7 +182,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Transaction'
+                $ref: '#/components/schemas/GetTxResponse'
         '400':
           description: Bad Request
           content:
@@ -194,8 +194,8 @@ paths:
   /transactions/{id}/receipt:
     get:
       parameters:
-        - $ref: '#/components/parameters/TxIDPath'
-        - $ref: '#/components/parameters/HeadQuery'
+        - $ref: '#/components/parameters/TxIDInPath'
+        - $ref: '#/components/parameters/HeadInQuery'
       tags:
         - Transactions
       summary: Retrieve transaction receipt
@@ -207,7 +207,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TransactionReceipt'
+                $ref: '#/components/schemas/GetTxReceiptResponse'
         '400':
           description: Bad Request
           content:
@@ -264,14 +264,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RawTransaction'
+              $ref: '#/components/schemas/RawTx'
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TransactionID'
+                $ref: '#/components/schemas/TXID'
         '400':
           description: Bad Request
           content:
@@ -290,9 +290,9 @@ paths:
   /blocks/{revision}:
     get:
       parameters:
-        - $ref: '#/components/parameters/RevisionPath'
-        - $ref: '#/components/parameters/ExpandedQuery'
-        - $ref: '#/components/parameters/RawBlockQuery'
+        - $ref: '#/components/parameters/RevisionInPath'
+        - $ref: '#/components/parameters/ExpandedInQuery'
+        - $ref: '#/components/parameters/RawBlockInQuery'
       tags:
         - Blocks
       summary: Retrieve a block
@@ -307,33 +307,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                description: |
-                  The response will contain information about the block identified by the provided `revision`.
-                title: Block
-                oneOf:
-                  - $ref: '#/components/schemas/Block'
-                  - $ref: '#/components/schemas/ExpandedBlock'
-                example:
-                  number: 325324
-                  id: '0x0004f6cc88bb4626a92907718e82f255b8fa511453a78e8797eb8cea3393b215'
-                  size: 373
-                  parentID: '0x0004f6cb730dbd90fed09d165bfdf33cc0eed47ec068938f6ee7b7c12a4ea98d'
-                  timestamp: 1533267900
-                  gasLimit: 11253579
-                  beneficiary: '0xb4094c25f86d628fdd571afc4077f0d0196afb48'
-                  gasUsed: 21000
-                  totalScore: 1029988
-                  txsRoot: '0x89dfd9fcd10c9e53d68592cf8b540b280b72d381b868523223992f3e09a806bb'
-                  txsFeatures: 0
-                  stateRoot: '0x86bcc6d214bc9d8d0dedba1012a63c8317d19ce97f60c8a2ef5c59bbd40d4261'
-                  receiptsRoot: '0x15787e2533c470e8a688e6cd17a1ee12d8457778d5f82d2c109e2d6226d8e54e'
-                  com: true
-                  signer: '0xab7b27fc9e7d29f9f2e5bd361747a5515d0cc2d1'
-                  isTrunk: true
-                  isFinalized: false
-                  transactions:
-                    - '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
+                $ref: '#/components/schemas/GetBlockResponse'
         '400':
           description: Bad Request
           content:
@@ -359,14 +333,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/EventFilter'
+              $ref: '#/components/schemas/EventLogFilterRequest'
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Events'
+                $ref: '#/components/schemas/EventLogsResponse'
         '400':
           description: Bad Request
           content:
@@ -389,14 +363,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TransferFilter'
+              $ref: '#/components/schemas/TransferLogFilterRequest'
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Transfers'
+                $ref: '#/components/schemas/TransferLogsResponse'
         '400':
           description: Bad Request
           content:
@@ -418,7 +392,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Peers'
+                $ref: '#/components/schemas/GetPeersResponse'
 
   /subscriptions/block:
     get:
@@ -441,14 +415,14 @@ paths:
         }
         ```
       parameters:
-        - $ref: '#/components/parameters/PositionQuery'
+        - $ref: '#/components/parameters/PositionInQuery'
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SubscriptionBlock'
+                $ref: '#/components/schemas/SubscriptionBlockResponse'
         '400':
           description: Bad Request
           content:
@@ -484,19 +458,19 @@ paths:
         }
         ```
       parameters:
-        - $ref: '#/components/parameters/PositionQuery'
-        - $ref: '#/components/parameters/AddrQuery'
-        - $ref: '#/components/parameters/Topic0Query'
-        - $ref: '#/components/parameters/Topic1Query'
-        - $ref: '#/components/parameters/Topic2Query'
-        - $ref: '#/components/parameters/Topic3Query'
+        - $ref: '#/components/parameters/PositionInQuery'
+        - $ref: '#/components/parameters/AddrInQuery'
+        - $ref: '#/components/parameters/Topic0InQuery'
+        - $ref: '#/components/parameters/Topic1InQuery'
+        - $ref: '#/components/parameters/Topic2InQuery'
+        - $ref: '#/components/parameters/Topic3InQuery'
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SubscriptionEvent'
+                $ref: '#/components/schemas/SubscriptionEventResponse'
         '400':
           description: Bad Request
           content:
@@ -530,17 +504,17 @@ paths:
         }
         ```
       parameters:
-        - $ref: '#/components/parameters/PositionQuery'
-        - $ref: '#/components/parameters/TxOriginQuery'
-        - $ref: '#/components/parameters/TransferRecipientQuery'
-        - $ref: '#/components/parameters/TransferSenderQuery'
+        - $ref: '#/components/parameters/PositionInQuery'
+        - $ref: '#/components/parameters/TxOriginInQuery'
+        - $ref: '#/components/parameters/TransferRecipientInQuery'
+        - $ref: '#/components/parameters/TransferSenderInQuery'
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SubscriptionTransfer'
+                $ref: '#/components/schemas/SubscriptionEventResponse'
         '400':
           description: Bad Request
           content:
@@ -574,14 +548,14 @@ paths:
         }
         ```
       parameters:
-        - $ref: '#/components/parameters/PositionQuery'
+        - $ref: '#/components/parameters/PositionInQuery'
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Beat2'
+                $ref: '#/components/schemas/SubscriptionBeat2Response'
         '400':
           description: Bad Request
           content:
@@ -601,7 +575,7 @@ paths:
     get:
       tags:
         - Subscriptions
-      summary: (Websocket) Transaction Pool
+      summary: (Websocket) Subscribe to new transactions
       description: |
         Establish a websocket connection to receive real-time updates on transactions that are pending inclusion in a future block.
         
@@ -620,7 +594,49 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TransactionID'
+                $ref: '#/components/schemas/TXID'
+        '400':
+          description: Bad Request
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: 'Invalid position'
+        '403':
+          description: Forbidden
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: '"pos" is out of range'
+
+  /subscriptions/beat:
+    get:
+      deprecated: true
+      tags:
+        - Subscriptions
+      summary: "(Websocket) Subscribe to Blockchain Beats"
+      description: |
+        Establish a websocket connection to receive blockchain beats, which contain a summary of new blocks and bloom filters composited with affected addresses.
+        
+        Example:
+        
+        ```javascript
+        const ws = new WebSocket('ws://localhost:8669/subscriptions/beat')
+        
+        ws.onmessage = (event) => {
+          console.log(event.data)
+        }
+        ```
+      parameters:
+        - $ref: '#/components/parameters/PositionInQuery'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionBeatResponse'
         '400':
           description: Bad Request
           content:
@@ -652,7 +668,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/DebugTracer'
+              $ref: '#/components/schemas/PostDebugTracerRequest'
       responses:
         '200':
           description: OK
@@ -681,13 +697,13 @@ paths:
         You can customize the tracer using various options to suit your debugging requirements.
 
       parameters:
-        - $ref: '#/components/parameters/InspectRevision'
+        - $ref: '#/components/parameters/CallCodeRevisionInQuery'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/DebugTracerCall'
+              $ref: '#/components/schemas/PostDebugTracerCallRequest'
       responses:
         '200':
           description: OK
@@ -738,9 +754,9 @@ paths:
 
 components:
   schemas:
-    Account:
+    GetAccountResponse:
       type: object
-      title: Account
+      title: GetAccountResponse
       properties:
         balance:
           type: string
@@ -762,9 +778,9 @@ components:
         energy: '0xcf624158d591398'
         hasCode: false
 
-    InspectRequest:
+    ExecuteCodesRequest:
       type: object
-      title: InspectRequest
+      title: ExecuteCodesRequest
       allOf:
         - $ref: '#/components/schemas/ExtendedCallData'
         - $ref: '#/components/schemas/BatchCallData'
@@ -790,9 +806,9 @@ components:
             value: '0x0'
             data: '0x6080604052348015600f57600080fd5b50609f8061001e6000396000f300608060405260043610603f576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff1680631820cabb146044575b600080fd5b348015604f57600080fd5b506056606c565b6040518082815260200191505060405180910390f35b62015180815600a165627a7a723058200ac7475da248e2fc26c057319e296e90c24d5f8b9bf956fb3b77545642cad3b10029'
 
-    InspectResponse:
+    ExecuteCodesResponse:
       type: array
-      title: InspectResponse
+      title: ExecuteCodesResponse
       items:
         $ref: '#/components/schemas/CallResult'
       example:
@@ -831,9 +847,9 @@ components:
           reverted: false
           vmError: ""
 
-    AccountCode:
+    GetAccountCodeResponse:
       type: object
-      title: AccountCode
+      title: GetAccountCodeResponse
       properties:
         code:
           type: string
@@ -844,9 +860,9 @@ components:
       example:
         code: '0x6060604052600080fd00a165627a7a72305820c23d3ae2dc86ad130561a2829d87c7cb8435365492bd1548eb7e7fc0f3632be90029'
 
-    AccountStorage:
+    GetStorageResponse:
       type: object
-      title: AccountStorage
+      title: GetStorageResponse
       properties:
         value:
           type: string
@@ -857,22 +873,22 @@ components:
       example:
         value: '0x0000000000000000000000000000000000000000000000000000000000000001'
 
-    Transaction:
+    GetTxResponse:
       type: object
-      title: Transaction
+      title: GetTxResponse
       oneOf:
         - allOf:
-            - $ref: '#/components/schemas/BaseTransaction'
+            - $ref: '#/components/schemas/Tx'
             - properties:
                 meta:
-                  $ref: '#/components/schemas/TransactionMetadata'
-          title: Transaction
+                  $ref: '#/components/schemas/TxMeta'
+          title: GetTxResponse
         - allOf:
-            - $ref: '#/components/schemas/RawTransaction'
+            - $ref: '#/components/schemas/RawTx'
             - properties:
                 meta:
-                  $ref: '#/components/schemas/TransactionMetadata'
-          title: RawTransaction
+                  $ref: '#/components/schemas/TxMeta'
+          title: GetRawTxResponse
       example:
         id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
         chainTag: 1
@@ -891,23 +907,52 @@ components:
           blockNumber: 1
           blockTimestamp: 1523156271
 
-    TransactionReceipt:
+    GetTxReceiptResponse:
       type: object
-      title: TransactionReceipt
+      title: GetTxReceiptResponse
       allOf:
         - $ref: '#/components/schemas/Receipt'
         - properties:
             meta:
-              $ref: '#/components/schemas/ReceiptMetadata'
+              $ref: '#/components/schemas/ReceiptMeta'
 
-    Block:
-      title: Block
+    GetBlockResponse:
+      type: object
+      description: |
+        The response will contain information about the block identified by the provided `revision`.
+      title: GetBlockResponse
+      oneOf:
+        - $ref: '#/components/schemas/RegularBlockResponse'
+        - $ref: '#/components/schemas/ExpandedBlockResponse'
+      example:
+        number: 325324
+        id: '0x0004f6cc88bb4626a92907718e82f255b8fa511453a78e8797eb8cea3393b215'
+        size: 373
+        parentID: '0x0004f6cb730dbd90fed09d165bfdf33cc0eed47ec068938f6ee7b7c12a4ea98d'
+        timestamp: 1533267900
+        gasLimit: 11253579
+        beneficiary: '0xb4094c25f86d628fdd571afc4077f0d0196afb48'
+        gasUsed: 21000
+        totalScore: 1029988
+        txsRoot: '0x89dfd9fcd10c9e53d68592cf8b540b280b72d381b868523223992f3e09a806bb'
+        txsFeatures: 0
+        stateRoot: '0x86bcc6d214bc9d8d0dedba1012a63c8317d19ce97f60c8a2ef5c59bbd40d4261'
+        receiptsRoot: '0x15787e2533c470e8a688e6cd17a1ee12d8457778d5f82d2c109e2d6226d8e54e'
+        com: true
+        signer: '0xab7b27fc9e7d29f9f2e5bd361747a5515d0cc2d1'
+        isTrunk: true
+        isFinalized: false
+        transactions:
+          - '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
+
+    RegularBlockResponse:
+      title: RegularBlockResponse
       type: object
       description: |
         The response will contain information about the block identified by the provided `revision`. The `transactions` 
         field contains an array of transaction IDs.
       allOf:
-        - $ref: '#/components/schemas/BaseBlock'
+        - $ref: '#/components/schemas/Block'
         - $ref: '#/components/schemas/IsTrunk'
         - $ref: '#/components/schemas/IsFinalized'
         - properties:
@@ -920,14 +965,14 @@ components:
                 type: string
                 example: '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
 
-    ExpandedBlock:
-      title: ExpandedBlock
+    ExpandedBlockResponse:
+      title: ExpandedBlockResponse
       type: object
       description: |
         The response will contain information about the block identified by the provided `revision`. The `transactions` 
         field contains an array of transactions, expanded to include their receipts.
       allOf:
-        - $ref: '#/components/schemas/BaseBlock'
+        - $ref: '#/components/schemas/Block'
         - $ref: '#/components/schemas/IsTrunk'
         - $ref: '#/components/schemas/IsFinalized'
         - properties:
@@ -938,12 +983,12 @@ components:
               minItems: 0
               items:
                 allOf:
-                  - $ref: '#/components/schemas/BaseTransaction'
+                  - $ref: '#/components/schemas/Tx'
                   - $ref: '#/components/schemas/Receipt'
 
-    EventFilter:
+    EventLogFilterRequest:
       type: object
-      title: EventFilter
+      title: EventLogFilterRequest
       properties:
         range:
           $ref: '#/components/schemas/FilterRange'
@@ -966,9 +1011,9 @@ components:
             - asc
             - desc
 
-    Events:
+    EventLogsResponse:
       type: array
-      title: Events
+      title: EventLogsResponse
       minItems: 0
       nullable: false
       items:
@@ -976,11 +1021,11 @@ components:
           - $ref: '#/components/schemas/Event'
           - properties:
               meta:
-                $ref: '#/components/schemas/LogMetadata'
+                $ref: '#/components/schemas/LogMeta'
 
-    TransferFilter:
+    TransferLogFilterRequest:
       type: object
-      title: TransferFilter
+      title: TransferLogFilterRequest
       properties:
         range:
           $ref: '#/components/schemas/FilterRange'
@@ -1001,9 +1046,9 @@ components:
             - asc
             - desc
 
-    Transfers:
+    TransferLogsResponse:
       type: array
-      title: Transfers
+      title: TransferLogsResponse
       minItems: 0
       nullable: false
       items:
@@ -1011,19 +1056,19 @@ components:
           - $ref: '#/components/schemas/Transfer'
           - properties:
               meta:
-                $ref: '#/components/schemas/LogMetadata'
+                $ref: '#/components/schemas/LogMeta'
 
-    Peers:
+    GetPeersResponse:
       type: array
-      title: Peers
+      title: GetPeersResponse
       minItems: 0
       nullable: false
       items:
         $ref: '#/components/schemas/PeerStats'
 
-    SubscriptionBlock:
+    SubscriptionBlockResponse:
       type: object
-      title: SubscriptionBlock
+      title: SubscriptionBlockResponse
       allOf:
         - $ref: '#/components/schemas/Block'
         - $ref: '#/components/schemas/Obsolete'
@@ -1038,106 +1083,115 @@ components:
                 example:
                   - '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
 
-    SubscriptionEvent:
+    SubscriptionEventResponse:
       type: object
-      title: SubscriptionEvent
+      title: SubscriptionEventResponse
       allOf:
         - $ref: '#/components/schemas/Event'
         - $ref: '#/components/schemas/Obsolete'
         - properties:
             meta:
-              $ref: '#/components/schemas/LogMetadata'
+              $ref: '#/components/schemas/LogMeta'
 
-    SubscriptionTransfer:
+    SubscriptionTransferResponse:
       type: object
-      title: SubscriptionTransfer
+      title: SubscriptionTransferResponse
       allOf:
         - $ref: '#/components/schemas/Transfer'
         - $ref: '#/components/schemas/Obsolete'
         - properties:
             meta:
-              $ref: '#/components/schemas/LogMetadata'
+              $ref: '#/components/schemas/LogMeta'
 
-    Beat2:
+    SubscriptionBeat2Response:
       type: object
-      title: Beat2
-      properties:
-        gasLimit:
-          type: integer
-          format: uint64
-          description: |
-            The gas limit of the block
-          example: 12000000
-          nullable: false
-        number:
-          type: integer
-          format: uint32
-          description: |
-            The block number (height)
-          example: 325324
-          nullable: false
-        id:
-          type: string
-          format: hex
-          description: |
-            The block identifier
-          example: '0x0004f6cc88bb4626a92907718e82f255b8fa511453a78e8797eb8cea3393b215'
-          nullable: false
-          pattern: '^0x[0-9a-f]{64}$'
-        parentID:
-          type: string
-          format: hex
-          description: |
-            The parent block identifier
-          example: '0x0004f6cb730dbd90fed09d165bfdf33cc0eed47ec068938f6ee7b7c12a4ea98d'
-          nullable: false
-          pattern: '^0x[0-9a-f]{64}$'
-        timestamp:
-          type: integer
-          format: uint64
-          description: |
-            The UNIX timestamp of the block
-          example: 1533267900
-          nullable: false
-        txsFeatures:
-          type: integer
-          format: uint32
-          description: |
-            The supported transaction features bitset
-          example: 0
-          nullable: false
-        bloom:
-          type: string
-          format: hex
-          description: |
-            A hexadecimal representation of the bloom filter composed with affected addresses & topics.
-            
-            The bloom filter is used to efficiently check whether an element is a member of a set,
-            providing a summary of affected addresses related to new blocks.
-          example: '0x0424c1ff47029280'
-          nullable: false
-          pattern: '^0x[0-9a-f]*$'
-        k:
-          type: integer
-          format: uint32
-          description: |
-            The number of hash functions for bloom filter
-          example: 13
-          nullable: false
+      title: SubscriptionBeat2Response
+      allOf:
+        - $ref: '#/components/schemas/SubscriptionBeatResponse'
+        - properties:
+            gasLimit:
+              type: integer
+              format: uint64
+              description: |
+                The gas limit of the block
+              example: 12000000
+              nullable: false
 
-    DebugTracer:
+    SubscriptionBeatResponse:
       type: object
-      title: DebugTracer
+      title: SubscriptionBeatResponse
+      allOf:
+        - $ref: '#/components/schemas/Obsolete'
+        - properties:
+            number:
+              type: integer
+              format: uint32
+              description: |
+                The block number (height)
+              example: 325324
+              nullable: false
+            id:
+              type: string
+              format: hex
+              description: |
+                The block identifier
+              example: '0x0004f6cc88bb4626a92907718e82f255b8fa511453a78e8797eb8cea3393b215'
+              nullable: false
+              pattern: '^0x[0-9a-f]{64}$'
+            parentID:
+              type: string
+              format: hex
+              description: |
+                The parent block identifier
+              example: '0x0004f6cb730dbd90fed09d165bfdf33cc0eed47ec068938f6ee7b7c12a4ea98d'
+              nullable: false
+              pattern: '^0x[0-9a-f]{64}$'
+            timestamp:
+              type: integer
+              format: uint64
+              description: |
+                The UNIX timestamp of the block
+              example: 1533267900
+              nullable: false
+            txsFeatures:
+              type: integer
+              format: uint32
+              description: |
+                The supported transaction features bitset
+              example: 0
+              nullable: false
+            bloom:
+              type: string
+              format: hex
+              description: |
+                A hexadecimal representation of the bloom filter composed with affected addresses & topics.
+
+                The bloom filter is used to efficiently check whether an element is a member of a set,
+                providing a summary of affected addresses related to new blocks.
+              example: '0x0424c1ff47029280'
+              nullable: false
+              pattern: '^0x[0-9a-f]*$'
+            k:
+              type: integer
+              format: uint32
+              description: |
+                The number of hash functions for bloom filter
+              example: 13
+              nullable: false
+
+    PostDebugTracerRequest:
+      type: object
+      title: PostDebugTracerRequest
       allOf:
         - $ref: '#/components/schemas/TracerOption'
-        - $ref: '#/components/schemas/Target'
+        - $ref: '#/components/schemas/ClauseTracerOption'
       example:
         target: '0x010709463c1f0c9aa66a31182fb36d1977d99bfb6526bae0564a0eac4006c31a/0/0'
         name: "call"
         config: { }
 
-    DebugTracerCall:
-      title: DebugTracerCall
+    PostDebugTracerCallRequest:
+      title: PostDebugTracerCallRequest
       type: object
       allOf:
         - $ref: '#/components/schemas/TracerOption'
@@ -1156,8 +1210,8 @@ components:
         blockRef: "0x00000000851caf3c"
         name: "call"
 
-    TransactionMetadata:
-      title: TransactionMetadata
+    TxMeta:
+      title: TxMeta
       type: object
       description: Transaction metadata such as block number, block timestamp, etc.
       properties:
@@ -1185,8 +1239,8 @@ components:
         blockNumber: 325324
         blockTimestamp: 1533267900
 
-    ReceiptMetadata:
-      title: ReceiptMetadata
+    ReceiptMeta:
+      title: ReceiptMeta
       type: object
       description: The transaction receipt metadata such as block number, block timestamp, etc.
       properties:
@@ -1229,8 +1283,8 @@ components:
         txID: '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
         txOrigin: '0xdb4027477b2a8fe4c83c6dafe7f86678bb1b8a8d'
 
-    LogMetadata:
-      title: LogMetadata
+    LogMeta:
+      title: LogMeta
       type: object
       description: The event or transfer log metadata such as block number, block timestamp, etc.
       properties:
@@ -1273,8 +1327,8 @@ components:
           example: 0
           nullable: false
 
-    BaseBlock:
-      title: BaseBlock
+    Block:
+      title: Block
       type: object
       properties:
         number:
@@ -1400,8 +1454,8 @@ components:
           nullable: false
           pattern: '^0x[0-9a-f]*$'
 
-    BaseTransaction:
-      title: BaseTransaction
+    Tx:
+      title: Tx
       type: object
       properties:
         id:
@@ -1479,8 +1533,8 @@ components:
             The transaction `nonce` is a 64-bit unsigned integer that is determined by the transaction sender.
           nullable: false
 
-    RawTransaction:
-      title: RawTransaction
+    RawTx:
+      title: RawTx
       type: object
       properties:
         raw:
@@ -2012,8 +2066,8 @@ components:
           example: 28
           nullable: false
 
-    TransactionID:
-      title: TransactionID
+    TXID:
+      title: TXID
       type: object
       properties:
         id:
@@ -2040,8 +2094,8 @@ components:
       example:
         obsolete: false
 
-    Target:
-      title: Target
+    ClauseTracerOption:
+      title: ClauseTracerOption
       type: object
       properties:
         target:
@@ -2167,7 +2221,7 @@ components:
           nullable: false
 
   parameters:
-    AddressPath:
+    GetAddressInPath:
       name: address
       in: path
       description: The address of the account/ contract
@@ -2178,7 +2232,7 @@ components:
         pattern: '^(0x)?[0-9a-fA-F]{40}$'
       example: '0x0000000000000000000000000000456E65726779'
 
-    KeyPath:
+    GetStorageAddressInPath:
       name: address
       in: path
       description: The address of the account/ contract
@@ -2189,7 +2243,7 @@ components:
         pattern: '^(0x)?[0-9a-fA-F]{40}$'
       example: '0x93Ae8aab337E58A6978E166f8132F59652cA6C56'
 
-    RawTxQuery:
+    RawTxInQuery:
       name: raw
       in: query
       description: Whether the response should include a raw transaction represented in hexadecimal format.
@@ -2198,14 +2252,14 @@ components:
         type: boolean
       example: false
 
-    RevisionQuery:
+    RevisionInQuery:
       name: revision
       in: query
       description: Specify either `best`, `justified`, `finalized`, a block number or block ID. If omitted, the `best` block is assumed.
       schema:
         type: string
 
-    InspectRevision:
+    CallCodeRevisionInQuery:
       name: revision
       in: query
       description: |
@@ -2219,7 +2273,7 @@ components:
       schema:
         type: string
 
-    RevisionPath:
+    RevisionInPath:
       name: revision
       in: path
       description: |
@@ -2235,14 +2289,14 @@ components:
         type: string
       example: best
 
-    HeadQuery:
+    HeadInQuery:
       name: head
       in: query
       description: Explicitly define the ID of the head block. Best block is assumed if omitted.
       schema:
         type: string
 
-    StoragePath:
+    StorageKeyInPath:
       in: path
       description: |
         The unique identifier (key) representing the specific position in the account storage.
@@ -2254,7 +2308,7 @@ components:
         pattern: '^(0x)?[0-9a-fA-F]{64}$'
       example: '0x0000000000000000000000000000000000000000000000000000000000000001'
 
-    FilterOrderQuery:
+    FilterOrderInQuery:
       name: order
       in: query
       description: |
@@ -2267,7 +2321,7 @@ components:
           - desc
       example: asc
 
-    TxIDPath:
+    TxIDInPath:
       in: path
       description: The transaction ID
       required: true
@@ -2276,7 +2330,7 @@ components:
         type: string
       example: '0xb6b5b47a5eee8b14e5222ac1bb957c0bbdc3d489850b033e3e544d9ca0cef934'
 
-    PositionQuery:
+    PositionInQuery:
       name: pos
       in: query
       description: |
@@ -2289,7 +2343,7 @@ components:
         pattern: '^(0x)?[0-9a-fA-F]{64}$'
         type: string
 
-    ExpandedQuery:
+    ExpandedInQuery:
       name: expanded
       in: query
       required: false
@@ -2301,7 +2355,7 @@ components:
         type: boolean
       example: false
 
-    RawBlockQuery:
+    RawBlockInQuery:
       name: raw
       in: query
       required: false
@@ -2313,7 +2367,7 @@ components:
         type: boolean
       example: false
 
-    PendingQuery:
+    PendingInQuery:
       name: pending
       in: query
       required: false
@@ -2323,7 +2377,7 @@ components:
         type: boolean
       example: false
 
-    AddrQuery:
+    AddrInQuery:
       name: addr
       in: query
       schema:
@@ -2332,7 +2386,7 @@ components:
         The address of the contract that emits the event.
       example: '0x0000000000000000000000000000456E65726779'
 
-    Topic0Query:
+    Topic0InQuery:
       name: t0
       in: query
       schema:
@@ -2343,7 +2397,7 @@ components:
         For example, the signature for the `Transfer` event is `keccak256("Transfer(address,address,uint256)")`.
 
 
-    Topic1Query:
+    Topic1InQuery:
       name: t1
       in: query
       schema:
@@ -2356,7 +2410,7 @@ components:
 
         For example, for the event `MySolidityEvent(address,uint256)`, use `t1` to match the `address` parameter.
 
-    Topic2Query:
+    Topic2InQuery:
       name: t2
       in: query
       schema:
@@ -2370,7 +2424,7 @@ components:
         For example, for the event `MySolidityEvent(address,uint256)`, use `t2` to match the `uint256` parameter.
 
 
-    Topic3Query:
+    Topic3InQuery:
       name: t3
       in: query
       schema:
@@ -2384,7 +2438,7 @@ components:
         For example, for the event `MySolidityEvent(address,address,uint256)`, use `t3` to match the `uint256` parameter.
 
 
-    Topic4Query:
+    Topic4InQuery:
       name: t4
       in: query
       schema:
@@ -2398,7 +2452,7 @@ components:
         For example, for the event `MySolidityEvent(address,address,address,uint256)`, use `t4` to match the `uint256` parameter.
 
 
-    TxOriginQuery:
+    TxOriginInQuery:
       name: txOrigin
       in: query
       schema:
@@ -2407,7 +2461,7 @@ components:
         The address from which the transaction was sent.
       example: '0x6d95e6dca01d109882fe1726a2fb9865fa41e7aa'
 
-    TransferSenderQuery:
+    TransferSenderInQuery:
       name: sender
       in: query
       schema:
@@ -2416,7 +2470,7 @@ components:
         The address that sent the VET. In most cases this is the same as `txOrigin`, but it may be different if the VET was sent by a contract.
       example: '0x6d95e6dca01d109882fe1726a2fb9865fa41e7aa'
 
-    TransferRecipientQuery:
+    TransferRecipientInQuery:
       name: recipient
       in: query
       schema:
