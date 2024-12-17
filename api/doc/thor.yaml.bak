@@ -927,7 +927,7 @@ components:
         The response will contain information about the block identified by the provided `revision`. The `transactions` 
         field contains an array of transactions, expanded to include their receipts.
       allOf:
-        - $ref: '#/components/schemas/BaseBlock'
+        - $ref: '#/components/schemas/Block'
         - $ref: '#/components/schemas/IsTrunk'
         - $ref: '#/components/schemas/IsFinalized'
         - properties:
