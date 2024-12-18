@@ -131,6 +131,7 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (flow
 			Time:        newBlockTime,
 			GasLimit:    p.gasLimit(parent.Header.GasLimit()),
 			TotalScore:  parent.Header.TotalScore() + score,
+			BaseFee:     parent.Header.BaseFee(),
 		},
 		p.forkConfig)
 
@@ -163,6 +164,7 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 			Time:        targetTime,
 			GasLimit:    gl,
 			TotalScore:  parent.Header.TotalScore() + 1,
+			BaseFee:     parent.Header.BaseFee(),
 		},
 		p.forkConfig)
 

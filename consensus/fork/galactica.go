@@ -6,7 +6,6 @@
 package fork
 
 import (
-	"errors"
 	"fmt"
 	"math/big"
 
@@ -25,8 +24,8 @@ func VerifyGalacticaHeader(config *thor.ForkConfig, parent, header *block.Header
 	if parent.Number() < config.GALACTICA {
 		parentGasLimit = parent.GasLimit() * thor.ElasticityMultiplier
 	}
-	if err := VerifyGaslimit(parentGasLimit, header.GasLimit()); err != nil {
-		return err
+	if err := block.GasLimit(header.GasLimit()).IsValid(parentGasLimit); !err {
+		return fmt.Errorf("invalid gas limit: have %d, want %d", header.GasLimit(), parentGasLimit)
 	}
 	// Verify the header is not malformed
 	if header.BaseFee() == nil {
@@ -37,24 +36,6 @@ func VerifyGalacticaHeader(config *thor.ForkConfig, parent, header *block.Header
 	if header.BaseFee().Cmp(expectedBaseFee) != 0 {
 		return fmt.Errorf("invalid baseFee: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
 			expectedBaseFee, header.BaseFee(), parent.BaseFee(), parent.GasUsed())
-	}
-	return nil
-}
-
-// VerifyGaslimit verifies the header gas limit according increase/decrease
-// in relation to the parent gas limit.
-func VerifyGaslimit(parentGasLimit, headerGasLimit uint64) error {
-	// Verify that the gas limit remains within allowed bounds
-	diff := int64(parentGasLimit) - int64(headerGasLimit)
-	if diff < 0 {
-		diff *= -1
-	}
-	limit := parentGasLimit / thor.GasLimitBoundDivisor
-	if uint64(diff) >= limit {
-		return fmt.Errorf("invalid gas limit: have %d, want %d +-= %d", headerGasLimit, parentGasLimit, limit-1)
-	}
-	if headerGasLimit < thor.MinGasLimit {
-		return errors.New("invalid gas limit below 5000")
 	}
 	return nil
 }

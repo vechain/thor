@@ -261,6 +261,7 @@ func (d *Debug) traceCall(ctx context.Context, tracer tracers.Tracer, header *bl
 			Time:        header.Timestamp(),
 			GasLimit:    header.GasLimit(),
 			TotalScore:  header.TotalScore(),
+			BaseFee:     header.BaseFee(),
 		},
 		d.forkConfig)
 

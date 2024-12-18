@@ -448,7 +448,6 @@ func TestValidateBlockHeader(t *testing.T) {
 		},
 		{
 			"Invalid BaseFee", func(t *testing.T) {
-
 				builder := tc.builder(tc.original.Header())
 				blk, err := tc.sign(builder.BaseFee(big.NewInt(10000)))
 				assert.NoError(t, err)
