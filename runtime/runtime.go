@@ -6,6 +6,7 @@
 package runtime
 
 import (
+	"fmt"
 	"math/big"
 	"sync/atomic"
 
@@ -249,50 +250,54 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 		},
 		OnSuicideContract: func(_ *vm.EVM, contractAddr, tokenReceiver common.Address) {
 			// it's IMPORTANT to process energy before token
-			amount, err := rt.state.GetEnergy(thor.Address(contractAddr), rt.ctx.Time)
+			energy, err := rt.state.GetEnergy(thor.Address(contractAddr), rt.ctx.Time)
 			if err != nil {
 				panic(err)
 			}
-			if amount.Sign() != 0 {
-				// add remained energy of suiciding contract to receiver.
-				// no need to clear contract's energy, vm will delete the whole contract later.
+			bal := stateDB.GetBalance(contractAddr)
+
+			if bal.Sign() != 0 || energy.Sign() != 0 {
 				receiverEnergy, err := rt.state.GetEnergy(thor.Address(tokenReceiver), rt.ctx.Time)
 				if err != nil {
 					panic(err)
 				}
+				// touch the receiver's energy
+				// no need to clear contract's energy, vm will delete the whole contract later.
 				if err := rt.state.SetEnergy(
 					thor.Address(tokenReceiver),
-					new(big.Int).Add(receiverEnergy, amount),
+					new(big.Int).Add(receiverEnergy, energy),
 					rt.ctx.Time); err != nil {
 					panic(err)
 				}
+				// emit event if there is energy in the account
+				if energy.Sign() != 0 {
+					// see ERC20's Transfer event
+					topics := []common.Hash{
+						common.Hash(energyTransferEvent.ID()),
+						common.BytesToHash(contractAddr[:]),
+						common.BytesToHash(tokenReceiver[:]),
+					}
 
-				// see ERC20's Transfer event
-				topics := []common.Hash{
-					common.Hash(energyTransferEvent.ID()),
-					common.BytesToHash(contractAddr[:]),
-					common.BytesToHash(tokenReceiver[:]),
+					data, err := energyTransferEvent.Encode(energy)
+					if err != nil {
+						panic(err)
+					}
+
+					stateDB.AddLog(&types.Log{
+						Address: common.Address(builtin.Energy.Address),
+						Topics:  topics,
+						Data:    data,
+					})
 				}
-
-				data, err := energyTransferEvent.Encode(amount)
-				if err != nil {
-					panic(err)
-				}
-
-				stateDB.AddLog(&types.Log{
-					Address: common.Address(builtin.Energy.Address),
-					Topics:  topics,
-					Data:    data,
-				})
 			}
 
-			if amount := stateDB.GetBalance(contractAddr); amount.Sign() != 0 {
-				stateDB.AddBalance(tokenReceiver, amount)
+			if bal.Sign() != 0 {
+				stateDB.AddBalance(tokenReceiver, bal)
 
 				stateDB.AddTransfer(&tx.Transfer{
 					Sender:    thor.Address(contractAddr),
 					Recipient: thor.Address(tokenReceiver),
-					Amount:    amount,
+					Amount:    bal,
 				})
 			}
 		},
@@ -328,7 +333,14 @@ func (rt *Runtime) PrepareClause(
 		defer func() {
 			if e := recover(); e != nil {
 				// caught state error
-				err = e.(error)
+				switch e := e.(type) {
+				case error:
+					err = e
+				case string:
+					err = errors.New(e)
+				default:
+					err = fmt.Errorf("runtime: unknown error: %v", e)
+				}
 			}
 		}()
 
