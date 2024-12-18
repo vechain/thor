@@ -75,9 +75,9 @@ func initChain(t *testing.T) *testchain.Chain {
 		Build()
 	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 
-	txDeploy := new(tx.LegacyBuilder).
+	txDeploy := new(tx.DynFeeBuilder).
 		ChainTag(thorChain.Repo().ChainTag()).
-		GasPriceCoef(1).
+		MaxFeePerGas(big.NewInt(1)).
 		Expiration(100).
 		Gas(1_000_000).
 		Nonce(3).
