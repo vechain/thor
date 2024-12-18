@@ -59,7 +59,7 @@ func TestDeprecatedSubscriptions(t *testing.T) {
 
 	_, resp, err := websocket.DefaultDialer.Dial(u.String(), nil)
 	assert.Error(t, err)
-	assert.Equal(t, http.StatusGone, resp.StatusCode)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
 func testHandleSubjectWithBlock(t *testing.T) {

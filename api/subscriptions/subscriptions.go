@@ -86,7 +86,7 @@ func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32,
 	return sub
 }
 
-func (s *Subscriptions) handleBlockReader(_ http.ResponseWriter, req *http.Request) (*blockReader, error) {
+func (s *Subscriptions) handleBlockReader(_ http.ResponseWriter, req *http.Request) (msgReader, error) {
 	position, err := s.parsePosition(req.URL.Query().Get("pos"))
 	if err != nil {
 		return nil, err
@@ -94,7 +94,7 @@ func (s *Subscriptions) handleBlockReader(_ http.ResponseWriter, req *http.Reque
 	return newBlockReader(s.repo, position), nil
 }
 
-func (s *Subscriptions) handleEventReader(w http.ResponseWriter, req *http.Request) (*eventReader, error) {
+func (s *Subscriptions) handleEventReader(w http.ResponseWriter, req *http.Request) (msgReader, error) {
 	position, err := s.parsePosition(req.URL.Query().Get("pos"))
 	if err != nil {
 		return nil, err
@@ -134,7 +134,7 @@ func (s *Subscriptions) handleEventReader(w http.ResponseWriter, req *http.Reque
 	return newEventReader(s.repo, position, eventFilter), nil
 }
 
-func (s *Subscriptions) handleTransferReader(_ http.ResponseWriter, req *http.Request) (*transferReader, error) {
+func (s *Subscriptions) handleTransferReader(_ http.ResponseWriter, req *http.Request) (msgReader, error) {
 	position, err := s.parsePosition(req.URL.Query().Get("pos"))
 	if err != nil {
 		return nil, err
@@ -159,7 +159,7 @@ func (s *Subscriptions) handleTransferReader(_ http.ResponseWriter, req *http.Re
 	return newTransferReader(s.repo, position, transferFilter), nil
 }
 
-func (s *Subscriptions) handleBeatReader(w http.ResponseWriter, req *http.Request) (*beatReader, error) {
+func (s *Subscriptions) handleBeatReader(w http.ResponseWriter, req *http.Request) (msgReader, error) {
 	position, err := s.parsePosition(req.URL.Query().Get("pos"))
 	if err != nil {
 		return nil, err
@@ -167,60 +167,12 @@ func (s *Subscriptions) handleBeatReader(w http.ResponseWriter, req *http.Reques
 	return newBeatReader(s.repo, position, s.beatCache), nil
 }
 
-func (s *Subscriptions) handleBeat2Reader(w http.ResponseWriter, req *http.Request) (*beat2Reader, error) {
+func (s *Subscriptions) handleBeat2Reader(_ http.ResponseWriter, req *http.Request) (msgReader, error) {
 	position, err := s.parsePosition(req.URL.Query().Get("pos"))
 	if err != nil {
 		return nil, err
 	}
 	return newBeat2Reader(s.repo, position, s.beat2Cache), nil
-}
-
-func (s *Subscriptions) handleSubject(w http.ResponseWriter, req *http.Request) error {
-	s.wg.Add(1)
-	defer s.wg.Done()
-
-	var (
-		reader msgReader
-		err    error
-	)
-	switch mux.Vars(req)["subject"] {
-	case "block":
-		if reader, err = s.handleBlockReader(w, req); err != nil {
-			return err
-		}
-	case "event":
-		if reader, err = s.handleEventReader(w, req); err != nil {
-			return err
-		}
-	case "transfer":
-		if reader, err = s.handleTransferReader(w, req); err != nil {
-			return err
-		}
-	case "beat":
-		if !s.enabledDeprecated {
-			return utils.HTTPError(nil, http.StatusGone)
-		}
-		if reader, err = s.handleBeatReader(w, req); err != nil {
-			return err
-		}
-	case "beat2":
-		if reader, err = s.handleBeat2Reader(w, req); err != nil {
-			return err
-		}
-	default:
-		return utils.HTTPError(errors.New("not found"), http.StatusNotFound)
-	}
-
-	conn, closed, err := s.setupConn(w, req)
-	// since the conn is hijacked here, no error should be returned in lines below
-	if err != nil {
-		logger.Debug("upgrade to websocket", "err", err)
-		return nil
-	}
-
-	err = s.pipe(conn, reader, closed)
-	s.closeConn(conn, err)
-	return nil
 }
 
 func (s *Subscriptions) handlePendingTransactions(w http.ResponseWriter, req *http.Request) error {
@@ -387,6 +339,41 @@ func (s *Subscriptions) Close() {
 	s.wg.Wait()
 }
 
+func (s *Subscriptions) websocket(readerFunc func(http.ResponseWriter, *http.Request) (msgReader, error)) utils.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) error {
+		s.wg.Add(1)
+		defer s.wg.Done()
+
+		// Call the provided reader function
+		reader, err := readerFunc(w, req)
+		if err != nil {
+			return err
+		}
+
+		// Ensure cleanup when the connection closes
+		defer func() {
+			if closer, ok := reader.(interface{ Close() }); ok {
+				closer.Close()
+			}
+		}()
+
+		// Setup WebSocket connection
+		conn, closed, err := s.setupConn(w, req)
+		if err != nil {
+			logger.Debug("upgrade to websocket", "err", err)
+			return err
+		}
+		defer s.closeConn(conn, err)
+
+		// Stream messages
+		err = s.pipe(conn, reader, closed)
+		if err != nil {
+			logger.Debug("error in websocket pipe", "err", err)
+		}
+		return err
+	}
+}
+
 func (s *Subscriptions) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
@@ -394,8 +381,31 @@ func (s *Subscriptions) Mount(root *mux.Router, pathPrefix string) {
 		Methods(http.MethodGet).
 		Name("subscriptions_pending_tx").
 		HandlerFunc(utils.WrapHandlerFunc(s.handlePendingTransactions))
-	sub.Path("/{subject:beat|beat2|block|event|transfer}").
+
+	sub.Path("/block").
 		Methods(http.MethodGet).
-		Name("subscriptions_subject").
-		HandlerFunc(utils.WrapHandlerFunc(s.handleSubject))
+		Name("subscriptions_block").
+		HandlerFunc(utils.WrapHandlerFunc(s.websocket(s.handleBlockReader)))
+
+	sub.Path("/event").
+		Methods(http.MethodGet).
+		Name("subscriptions_event").
+		HandlerFunc(utils.WrapHandlerFunc(s.websocket(s.handleEventReader)))
+
+	sub.Path("/transfer").
+		Methods(http.MethodGet).
+		Name("subscriptions_transfer").
+		HandlerFunc(utils.WrapHandlerFunc(s.websocket(s.handleTransferReader)))
+
+	sub.Path("/beat2").
+		Methods(http.MethodGet).
+		Name("subscriptions_beat2").
+		HandlerFunc(utils.WrapHandlerFunc(s.websocket(s.handleBeat2Reader)))
+
+	if s.enabledDeprecated {
+		sub.Path("/beat").
+			Methods(http.MethodGet).
+			Name("subscriptions_beat").
+			HandlerFunc(utils.WrapHandlerFunc(s.websocket(s.handleBeatReader)))
+	}
 }
