@@ -226,7 +226,9 @@ func TestPendingTx_UnsubscribeOnWebSocketClose(t *testing.T) {
 
 	// Wait to receive transaction
 	time.Sleep(500 * time.Millisecond)
+	sub.pendingTx.mu.Lock()
 	require.Equal(t, len(sub.pendingTx.listeners), 1)
+	sub.pendingTx.mu.Unlock()
 
 	// Simulate WebSocket closure
 	ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
@@ -236,5 +238,7 @@ func TestPendingTx_UnsubscribeOnWebSocketClose(t *testing.T) {
 	time.Sleep(5 * time.Second)
 
 	// Assert cleanup
+	sub.pendingTx.mu.Lock()
 	require.Equal(t, len(sub.pendingTx.listeners), 0)
+	sub.pendingTx.mu.Unlock()
 }
