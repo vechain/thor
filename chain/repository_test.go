@@ -98,7 +98,11 @@ func TestRepository(t *testing.T) {
 		assert.Equal(t, tx.Receipts{receipt1}.RootHash(), gotReceipts.RootHash())
 	}
 
+<<<<<<< HEAD
 	tx2 := tx.NewTxBuilder(tx.DynamicFeeTxType).MustBuild()
+=======
+	tx2 := new(tx.DynFeeBuilder).Build()
+>>>>>>> 8422b551 (test: add more dynFee txs to tests)
 	receipt2 := &tx.Receipt{}
 
 	b2 := newBlock(b1, 20, tx2)
