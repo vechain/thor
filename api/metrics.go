@@ -26,7 +26,6 @@ var (
 	}
 	metricHTTPReqCounter       = metrics.LazyLoadCounterVec("api_request_count", []string{"name", "code", "method"})
 	metricHTTPReqDuration      = metrics.LazyLoadHistogramVec("api_duration_ms", []string{"name", "code", "method"}, metrics.BucketHTTPReqs)
-	metricActiveWebsocketCount = metrics.LazyLoadGaugeVec("api_active_websocket_count", []string{"subject"})
 	metricTxCallVMErrors       = metrics.LazyLoadCounterVec("api_tx_call_vm_errors", []string{"error"})
 	metricWebsocketDuration    = metrics.LazyLoadHistogramVec("api_websocket_duration", []string{"name", "code"}, websocketDurations)
 	metricActiveWebsocketGauge = metrics.LazyLoadGaugeVec("api_active_websocket_gauge", []string{"name"})
@@ -46,7 +45,7 @@ func newMetricsResponseWriter(w http.ResponseWriter) *metricsResponseWriter {
 type callTxResponseWriter struct {
 	http.ResponseWriter
 	statusCode int
-	vmError    string
+	VMError    string
 }
 
 func newCallTxResponseWriter(w http.ResponseWriter) *callTxResponseWriter {
@@ -60,12 +59,12 @@ func (m *metricsResponseWriter) WriteHeader(code int) {
 
 func (c *callTxResponseWriter) Write(b []byte) (int, error) {
 	var resp struct {
-		VmError string `json:"vmError"`
+		VMError string `json:"VMError"`
 	}
 
 	if err := json.Unmarshal(b, &resp); err == nil {
-		if resp.VmError != "" {
-			c.vmError = resp.VmError
+		if resp.VMError != "" {
+			c.VMError = resp.VMError
 		}
 	}
 
@@ -107,9 +106,9 @@ func metricsMiddleware(next http.Handler) http.Handler {
 				next.ServeHTTP(ctxWriter, r)
 
 				// Record VM error if present
-				if ctxWriter.vmError != "" {
+				if ctxWriter.VMError != "" {
 					metricTxCallVMErrors().AddWithLabel(1, map[string]string{
-						"error": ctxWriter.vmError,
+						"error": ctxWriter.VMError,
 					})
 				}
 				return
