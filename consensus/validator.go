@@ -104,10 +104,6 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 		return errFutureBlock
 	}
 
-	if !block.GasLimit(header.GasLimit()).IsValid(parent.GasLimit()) {
-		return consensusError(fmt.Sprintf("block gas limit invalid: parent %v, current %v", parent.GasLimit(), header.GasLimit()))
-	}
-
 	if header.GasUsed() > header.GasLimit() {
 		return consensusError(fmt.Sprintf("block gas used exceeds limit: limit %v, used %v", header.GasLimit(), header.GasUsed()))
 	}
@@ -160,6 +156,10 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 	if header.Number() < c.forkConfig.GALACTICA {
 		if header.BaseFee() != nil {
 			return consensusError("invalid block: baseFee should not set before fork GALACTICA")
+		}
+
+		if !block.GasLimit(header.GasLimit()).IsValid(parent.GasLimit()) {
+			return consensusError(fmt.Sprintf("block gas limit invalid: parent %v, current %v", parent.GasLimit(), header.GasLimit()))
 		}
 	} else {
 		if err := fork.VerifyGalacticaHeader(&c.forkConfig, parent, header); err != nil {
@@ -283,6 +283,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 			Time:        header.Timestamp(),
 			GasLimit:    header.GasLimit(),
 			TotalScore:  header.TotalScore(),
+			BaseFee:     header.BaseFee(),
 		},
 		c.forkConfig)
 

@@ -256,6 +256,7 @@ func (a *Accounts) batchCall(
 			Time:        header.Timestamp(),
 			GasLimit:    header.GasLimit(),
 			TotalScore:  header.TotalScore(),
+			BaseFee:     header.BaseFee(),
 		},
 		a.forkConfig)
 	results = make(BatchCallResults, 0)

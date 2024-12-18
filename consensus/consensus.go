@@ -96,6 +96,7 @@ func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipPoA bool) (*ru
 			Time:        header.Timestamp(),
 			GasLimit:    header.GasLimit(),
 			TotalScore:  header.TotalScore(),
+			BaseFee:     header.BaseFee(),
 		},
 		c.forkConfig), nil
 }
