@@ -48,7 +48,7 @@ func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfi
 // Process process a block.
 func (c *Consensus) Process(parentSummary *chain.BlockSummary, blk *block.Block, nowTimestamp uint64, blockConflicts uint32) (*state.Stage, tx.Receipts, error) {
 	header := blk.Header()
-	state := c.stater.NewState(parentSummary.Header.StateRoot(), parentSummary.Header.Number(), parentSummary.Conflicts, parentSummary.SteadyNum)
+	state := c.stater.NewState(parentSummary.Root())
 
 	var features tx.Features
 	if header.Number() >= c.forkConfig.VIP191 {
@@ -79,7 +79,7 @@ func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipPoA bool) (*ru
 		}
 		return nil, errors.New("parent block is missing")
 	}
-	state := c.stater.NewState(parentSummary.Header.StateRoot(), parentSummary.Header.Number(), parentSummary.Conflicts, parentSummary.SteadyNum)
+	state := c.stater.NewState(parentSummary.Root())
 	if !skipPoA {
 		if _, err := c.validateProposer(header, parentSummary.Header, state); err != nil {
 			return nil, err
