@@ -19,24 +19,29 @@ func TestSign(t *testing.T) {
 	pk, err := crypto.GenerateKey()
 	assert.NoError(t, err)
 
-	tx := new(LegacyBuilder).Build()
+	txs := []*Transaction{
+		new(LegacyBuilder).Build(),
+		new(DynFeeBuilder).Build(),
+	}
 
-	// Sign the transaction
-	signedTx, err := Sign(tx, pk)
-	assert.NoError(t, err)
+	for _, tx := range txs {
+		// Sign the transaction
+		signedTx, err := Sign(tx, pk)
+		assert.NoError(t, err)
 
-	// Verify the transaction was signed
-	assert.NotNil(t, signedTx)
+		// Verify the transaction was signed
+		assert.NotNil(t, signedTx)
 
-	// Verify address from Origin
-	addr, err := signedTx.Origin()
-	require.NoError(t, err)
-	assert.Equal(t, thor.Address(crypto.PubkeyToAddress(pk.PublicKey)), addr)
+		// Verify address from Origin
+		addr, err := signedTx.Origin()
+		require.NoError(t, err)
+		assert.Equal(t, thor.Address(crypto.PubkeyToAddress(pk.PublicKey)), addr)
 
-	// Verify the delegator
-	delegator, err := signedTx.Delegator()
-	require.NoError(t, err)
-	assert.Nil(t, delegator)
+		// Verify the delegator
+		delegator, err := signedTx.Delegator()
+		require.NoError(t, err)
+		assert.Nil(t, delegator)
+	}
 }
 
 func TestSignDelegated(t *testing.T) {
@@ -47,30 +52,35 @@ func TestSignDelegated(t *testing.T) {
 	originPK, err := crypto.GenerateKey()
 	assert.NoError(t, err)
 
-	tx := new(LegacyBuilder).Build()
+	txs := []*Transaction{
+		new(LegacyBuilder).Build(),
+		new(DynFeeBuilder).Build(),
+	}
 
-	// Feature not enabled
-	signedTx, err := SignDelegated(tx, originPK, delegatorPK)
-	assert.ErrorContains(t, err, "transaction delegated feature is not enabled")
-	assert.Nil(t, signedTx)
+	for _, tx := range txs {
+		// Feature not enabled
+		signedTx, err := SignDelegated(tx, originPK, delegatorPK)
+		assert.ErrorContains(t, err, "transaction delegated feature is not enabled")
+		assert.Nil(t, signedTx)
 
-	// enable the feature
-	var features Features
-	features.SetDelegated(true)
-	tx = new(LegacyBuilder).Features(features).Build()
+		// enable the feature
+		var features Features
+		features.SetDelegated(true)
+		tx = new(LegacyBuilder).Features(features).Build()
 
-	// Sign the transaction as a delegator
-	signedTx, err = SignDelegated(tx, originPK, delegatorPK)
-	assert.NoError(t, err)
-	assert.NotNil(t, signedTx)
+		// Sign the transaction as a delegator
+		signedTx, err = SignDelegated(tx, originPK, delegatorPK)
+		assert.NoError(t, err)
+		assert.NotNil(t, signedTx)
 
-	// Verify address from Origin
-	origin, err := signedTx.Origin()
-	require.NoError(t, err)
-	assert.Equal(t, thor.Address(crypto.PubkeyToAddress(originPK.PublicKey)), origin)
+		// Verify address from Origin
+		origin, err := signedTx.Origin()
+		require.NoError(t, err)
+		assert.Equal(t, thor.Address(crypto.PubkeyToAddress(originPK.PublicKey)), origin)
 
-	// Verify the delegator
-	delegator, err := signedTx.Delegator()
-	require.NoError(t, err)
-	assert.Equal(t, thor.Address(crypto.PubkeyToAddress(delegatorPK.PublicKey)), *delegator)
+		// Verify the delegator
+		delegator, err := signedTx.Delegator()
+		require.NoError(t, err)
+		assert.Equal(t, thor.Address(crypto.PubkeyToAddress(delegatorPK.PublicKey)), *delegator)
+	}
 }
