@@ -386,32 +386,32 @@ func (s *Subscriptions) Mount(root *mux.Router, pathPrefix string) {
 
 	sub.Path("/txpool").
 		Methods(http.MethodGet).
-		Name("subscriptions_pending_tx").
+		Name("WS subscriptions/txpool").
 		HandlerFunc(utils.WrapHandlerFunc(s.handlePendingTransactions))
 
 	sub.Path("/block").
 		Methods(http.MethodGet).
-		Name("subscriptions_block").
+		Name("WS subscriptions/block").
 		HandlerFunc(utils.WrapHandlerFunc(s.websocket(s.handleBlockReader)))
 
 	sub.Path("/event").
 		Methods(http.MethodGet).
-		Name("subscriptions_event").
+		Name("WS subscriptions/event").
 		HandlerFunc(utils.WrapHandlerFunc(s.websocket(s.handleEventReader)))
 
 	sub.Path("/transfer").
 		Methods(http.MethodGet).
-		Name("subscriptions_transfer").
+		Name("WS subscriptions/transfer").
 		HandlerFunc(utils.WrapHandlerFunc(s.websocket(s.handleTransferReader)))
 
 	sub.Path("/beat2").
 		Methods(http.MethodGet).
-		Name("subscriptions_beat2").
+		Name("WS subscriptions/beat2").
 		HandlerFunc(utils.WrapHandlerFunc(s.websocket(s.handleBeat2Reader)))
 
 	deprecatedBeat := sub.Path("/beat").
 		Methods(http.MethodGet).
-		Name("subscriptions_beat")
+		Name("WS subscriptions/beat")
 
 	if s.enabledDeprecated {
 		deprecatedBeat.HandlerFunc(utils.WrapHandlerFunc(s.websocket(s.handleBeatReader)))
