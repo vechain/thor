@@ -159,8 +159,6 @@ func (c *Client) AccountStorage(addr *thor.Address, key *thor.Bytes32, opts ...O
 // Transaction retrieves a transaction by its ID.
 func (c *Client) Transaction(id *thor.Bytes32, opts ...Option) (*transactions.Transaction, error) {
 	options := applyOptions(opts)
-	// TODO review the revision vs head difference
-	// plus fix the finalizedRevision use, throw an error ?
 	if options.revision == tccommon.BestRevision {
 		options.revision = ""
 	}
