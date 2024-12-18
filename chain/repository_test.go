@@ -97,6 +97,26 @@ func TestRepository(t *testing.T) {
 
 		assert.Equal(t, tx.Receipts{receipt1}.RootHash(), gotReceipts.RootHash())
 	}
+
+	tx2 := new(tx.DynFeeBuilder).Build()
+	receipt2 := &tx.Receipt{}
+
+	b2 := newBlock(b1, 20, tx2)
+	assert.Nil(t, repo1.AddBlock(b2, tx.Receipts{receipt2}, 0))
+
+	repo1.SetBestBlockID(b2.Header().ID())
+	repo2, _ = chain.NewRepository(db, b0)
+	for _, repo := range []*chain.Repository{repo1, repo2} {
+		assert.Equal(t, b2.Header().ID(), repo.BestBlockSummary().Header.ID())
+		s, err := repo.GetBlockSummary(b2.Header().ID())
+		assert.Nil(t, err)
+		assert.Equal(t, b2.Header().ID(), s.Header.ID())
+		assert.Equal(t, 1, len(s.Txs))
+		assert.Equal(t, tx2.ID(), s.Txs[0])
+
+		gotb, _ := repo.GetBlock(b2.Header().ID())
+		assert.Equal(t, b2.Transactions().RootHash(), gotb.Transactions().RootHash())
+	}
 }
 
 func TestConflicts(t *testing.T) {
