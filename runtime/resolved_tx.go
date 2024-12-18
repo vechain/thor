@@ -67,6 +67,42 @@ func ResolveTransaction(tx *tx.Transaction) (*ResolvedTransaction, error) {
 	}, nil
 }
 
+// ResolveCallTransaction resolves the transaction and performs basic validation.
+// Signed tx's will be ignored
+func ResolveCallTransaction(tx *tx.Transaction, callAddr *thor.Address, delegator *thor.Address) (*ResolvedTransaction, error) {
+	var err error
+
+	intrinsicGas, err := tx.IntrinsicGas()
+	if err != nil {
+		return nil, err
+	}
+	if tx.Gas() < intrinsicGas {
+		return nil, errors.New("intrinsic gas exceeds provided gas")
+	}
+
+	clauses := tx.Clauses()
+	sumValue := new(big.Int)
+	for _, clause := range clauses {
+		value := clause.Value()
+		if value.Sign() < 0 {
+			return nil, errors.New("clause with negative value")
+		}
+
+		sumValue.Add(sumValue, value)
+		if sumValue.Cmp(math.MaxBig256) > 0 {
+			return nil, errors.New("tx value too large")
+		}
+	}
+
+	return &ResolvedTransaction{
+		tx,
+		*callAddr,
+		delegator,
+		intrinsicGas,
+		clauses,
+	}, nil
+}
+
 // CommonTo returns common 'To' field of clauses if any.
 // Nil returned if no common 'To'.
 func (r *ResolvedTransaction) CommonTo() *thor.Address {
