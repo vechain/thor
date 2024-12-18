@@ -190,7 +190,7 @@ func TestEvaluateWork(t *testing.T) {
 	}
 }
 
-func LegacyTx(t *testing.T) {
+func TestLegacyTx(t *testing.T) {
 	to, _ := thor.ParseAddress("0x7567d83b7b8d80addcb281a71d54fc7b3364ffed")
 	trx := new(tx.LegacyBuilder).ChainTag(1).
 		BlockRef(tx.BlockRef{0, 0, 0, 0, 0xaa, 0xbb, 0xcc, 0xdd}).

@@ -390,7 +390,7 @@ func TestCall(t *testing.T) {
 	assert.Nil(t, err)
 }
 
-func GetMockTx(repo *chain.Repository, t *testing.T) tx.Transaction {
+func getMockTx(repo *chain.Repository, txType int, t *testing.T) *tx.Transaction {
 	var blockRef = tx.NewBlockRef(0)
 	var chainTag = repo.ChainTag()
 	var expiration = uint32(10)
@@ -411,7 +411,7 @@ func GetMockTx(repo *chain.Repository, t *testing.T) tx.Transaction {
 	}
 	tx = tx.WithSignature(sig)
 
-	return *tx
+	return tx
 }
 
 func GetMockFailedTx() tx.Transaction {
@@ -467,15 +467,20 @@ func TestExecuteTransaction(t *testing.T) {
 	originEnergy.SetString("9000000000000000000000000000000000000", 10)
 	state.SetEnergy(origin.Address, originEnergy, 0)
 
-	tx := GetMockTx(repo, t)
-
-	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.NoFork)
-
-	receipt, err := rt.ExecuteTransaction(&tx)
-	if err != nil {
-		t.Fatal(err)
+	txs := []*tx.Transaction{
+		getMockTx(repo, tx.LegacyTxType, t),
+		getMockTx(repo, tx.DynamicFeeTxType, t),
 	}
-	_ = receipt
+
+	for _, trx := range txs {
+		rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.NoFork)
+
+		receipt, err := rt.ExecuteTransaction(trx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = receipt
+	}
 }
 
 func TestExecuteTransactionFailure(t *testing.T) {
