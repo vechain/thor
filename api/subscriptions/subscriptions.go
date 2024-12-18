@@ -374,6 +374,13 @@ func (s *Subscriptions) websocket(readerFunc func(http.ResponseWriter, *http.Req
 	}
 }
 
+// handleGone is a handler for deprecated endpoints that returns HTTP 410 Gone.
+func handleGone(w http.ResponseWriter, _ *http.Request) error {
+	w.WriteHeader(http.StatusGone)
+	_, _ = w.Write([]byte("This endpoint is no longer supported."))
+	return nil
+}
+
 func (s *Subscriptions) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
@@ -402,10 +409,13 @@ func (s *Subscriptions) Mount(root *mux.Router, pathPrefix string) {
 		Name("subscriptions_beat2").
 		HandlerFunc(utils.WrapHandlerFunc(s.websocket(s.handleBeat2Reader)))
 
+	deprecatedBeat := sub.Path("/beat").
+		Methods(http.MethodGet).
+		Name("subscriptions_beat")
+
 	if s.enabledDeprecated {
-		sub.Path("/beat").
-			Methods(http.MethodGet).
-			Name("subscriptions_beat").
-			HandlerFunc(utils.WrapHandlerFunc(s.websocket(s.handleBeatReader)))
+		deprecatedBeat.HandlerFunc(utils.WrapHandlerFunc(s.websocket(s.handleBeatReader)))
+	} else {
+		deprecatedBeat.HandlerFunc(utils.WrapHandlerFunc(handleGone))
 	}
 }
