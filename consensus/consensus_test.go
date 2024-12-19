@@ -27,9 +27,9 @@ import (
 	"github.com/vechain/thor/v2/vrf"
 )
 
-func txBuilder(tag byte) *tx.Builder {
+func txBuilder(tag byte) *tx.LegacyBuilder {
 	address := thor.BytesToAddress([]byte("addr"))
-	return new(tx.Builder).
+	return new(tx.LegacyBuilder).
 		GasPriceCoef(1).
 		Gas(1000000).
 		Expiration(100).
@@ -38,7 +38,7 @@ func txBuilder(tag byte) *tx.Builder {
 		ChainTag(tag)
 }
 
-func txSign(builder *tx.Builder) *tx.Transaction {
+func txSign(builder *tx.LegacyBuilder) *tx.Transaction {
 	transaction := builder.Build()
 	sig, _ := crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
 	return transaction.WithSignature(sig)
@@ -700,7 +700,7 @@ func TestValidateBlockBody(t *testing.T) {
 		},
 		{
 			"ZeroGasTx", func(t *testing.T) {
-				txBuilder := new(tx.Builder).
+				txBuilder := new(tx.LegacyBuilder).
 					GasPriceCoef(0).
 					Gas(0).
 					Expiration(100).
