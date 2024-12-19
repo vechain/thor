@@ -13,6 +13,7 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.4.1
 	github.com/hashicorp/golang-lru v0.0.0-20160813221303-0a025b7e63ad
+	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/holiman/uint256 v1.2.4
 	github.com/mattn/go-isatty v0.0.3
 	github.com/mattn/go-sqlite3 v1.14.22
@@ -48,7 +49,6 @@ require (
 	github.com/go-stack/stack v1.7.0 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/pprof v0.0.0-20230207041349-798e818bf904 // indirect
-	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/huin/goupnp v0.0.0-20171109214107-dceda08e705b // indirect
 	github.com/jackpal/go-nat-pmp v1.0.2-0.20160603034137-1fa385a6f458 // indirect
 	github.com/mattn/go-colorable v0.0.9 // indirect

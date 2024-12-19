@@ -7,7 +7,6 @@ package subscriptions
 
 import (
 	"fmt"
-
 	"github.com/hashicorp/golang-lru/v2"
 	"github.com/vechain/thor/v2/thor"
 )
