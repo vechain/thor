@@ -218,7 +218,7 @@ func testTransactionsEndpoint(t *testing.T, thorChain *testchain.Chain, ts *http
 	t.Run("SendTransaction", func(t *testing.T) {
 		toAddr := thor.MustParseAddress("0x0123456789abcdef0123456789abcdef01234567")
 		clause := tx.NewClause(&toAddr).WithValue(big.NewInt(10000))
-		trx := new(tx.Builder).
+		trx := new(tx.LegacyBuilder).
 			ChainTag(thorChain.Repo().ChainTag()).
 			Expiration(10).
 			Gas(21000).
@@ -227,6 +227,19 @@ func testTransactionsEndpoint(t *testing.T, thorChain *testchain.Chain, ts *http
 
 		trx = tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)
 		sendResult, err := c.SendTransaction(trx)
+		require.NoError(t, err)
+		require.NotNil(t, sendResult)
+		require.Equal(t, trx.ID().String(), sendResult.ID.String()) // Ensure transaction was successful
+
+		trx = new(tx.DynFeeBuilder).
+			ChainTag(thorChain.Repo().ChainTag()).
+			Expiration(10).
+			Gas(21000).
+			Clause(clause).
+			Build()
+
+		trx = tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)
+		sendResult, err = c.SendTransaction(trx)
 		require.NoError(t, err)
 		require.NotNil(t, sendResult)
 		require.Equal(t, trx.ID().String(), sendResult.ID.String()) // Ensure transaction was successful
