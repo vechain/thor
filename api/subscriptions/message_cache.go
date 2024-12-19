@@ -7,7 +7,8 @@ package subscriptions
 
 import (
 	"fmt"
-	"github.com/hashicorp/golang-lru/v2"
+
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -38,7 +39,6 @@ func newMessageCache[T any](cacheSize uint32) *messageCache[T] {
 // it will generate the message and add it to the cache. The second return value
 // indicates whether the message is newly generated.
 func (mc *messageCache[T]) GetOrAdd(id thor.Bytes32, createMessage func() (T, error)) (T, bool, error) {
-
 	msg, ok := mc.cache.Peek(id)
 	if ok {
 		return msg.(T), false, nil
