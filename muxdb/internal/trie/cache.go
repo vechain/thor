@@ -8,12 +8,12 @@ package trie
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/vechain/thor/v2/cache"
 	"sync/atomic"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/qianbin/directcache"
+	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/trie"
 )
 

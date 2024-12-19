@@ -7,12 +7,12 @@ package chain
 
 import (
 	"encoding/binary"
-	cache2 "github.com/vechain/thor/v2/cache"
 	"sync/atomic"
 
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"github.com/vechain/thor/v2/block"
+	cache2 "github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/kv"
 	"github.com/vechain/thor/v2/muxdb"
