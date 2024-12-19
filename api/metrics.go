@@ -75,9 +75,8 @@ func metricsMiddleware(next http.Handler) http.Handler {
 		if rt != nil && rt.GetName() != "" {
 			enabled = true
 			name = rt.GetName()
-			if strings.HasPrefix(name, "subscriptions") {
+			if strings.HasPrefix(name, "WS") {
 				subscription = true
-				name = "WS " + r.URL.Path
 			}
 		}
 

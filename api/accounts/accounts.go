@@ -171,9 +171,6 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 }
 
 func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) error {
-	if !a.enabledDeprecated {
-		return utils.HTTPError(nil, http.StatusGone)
-	}
 	callData := &CallData{}
 	if err := utils.ParseJSON(req.Body, &callData); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
@@ -378,13 +375,18 @@ func (a *Accounts) Mount(root *mux.Router, pathPrefix string) {
 		Methods("GET").
 		Name("GET /accounts/{address}/storage").
 		HandlerFunc(utils.WrapHandlerFunc(a.handleGetStorage))
+
 	// These two methods are currently deprecated
+	deprecatedHandler := utils.HandleGone
+	if a.enabledDeprecated {
+		deprecatedHandler = a.handleCallContract
+	}
 	sub.Path("").
 		Methods(http.MethodPost).
 		Name("POST /accounts").
-		HandlerFunc(utils.WrapHandlerFunc(a.handleCallContract))
+		HandlerFunc(utils.WrapHandlerFunc(deprecatedHandler))
 	sub.Path("/{address}").
 		Methods(http.MethodPost).
 		Name("POST /accounts/{address}").
-		HandlerFunc(utils.WrapHandlerFunc(a.handleCallContract))
+		HandlerFunc(utils.WrapHandlerFunc(deprecatedHandler))
 }
