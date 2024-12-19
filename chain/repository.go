@@ -7,6 +7,7 @@ package chain
 
 import (
 	"encoding/binary"
+	cache2 "github.com/vechain/thor/v2/cache"
 	"sync/atomic"
 
 	"github.com/pkg/errors"
@@ -54,9 +55,9 @@ type Repository struct {
 		receipts  *cache
 
 		stats struct {
-			summaries thor.CacheStats
-			txs       thor.CacheStats
-			receipts  thor.CacheStats
+			summaries cache2.Stats
+			txs       cache2.Stats
+			receipts  cache2.Stats
 		}
 	}
 }
