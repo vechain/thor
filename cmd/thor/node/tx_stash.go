@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"container/list"
 
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"github.com/vechain/thor/v2/thor"
@@ -37,7 +36,7 @@ func (ts *txStash) Save(tx *tx.Transaction) error {
 		return nil
 	}
 
-	data, err := rlp.EncodeToBytes(tx)
+	data, err := tx.MarshalBinary()
 	if err != nil {
 		return err
 	}
@@ -66,7 +65,7 @@ func (ts *txStash) LoadAll() tx.Transactions {
 
 	for it.Next() {
 		var tx tx.Transaction
-		if err := rlp.DecodeBytes(it.Value(), &tx); err != nil {
+		if err := tx.UnmarshalBinary(it.Value()); err != nil {
 			logger.Warn("decode stashed tx", "err", err)
 			batch.Delete(it.Key())
 		} else {

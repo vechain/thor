@@ -89,7 +89,7 @@ func TestPendingTx_DispatchLoop(t *testing.T) {
 	p.Subscribe(txCh)
 
 	// Add a new tx to the mempool
-	transaction := createTx(repo, 0)
+	transaction := createLegacyTx(repo, 0)
 	txPool.AddLocal(transaction)
 
 	// Start the dispatch loop
@@ -107,7 +107,7 @@ func TestPendingTx_DispatchLoop(t *testing.T) {
 	p.Unsubscribe(txCh)
 
 	// Add another tx to the mempool
-	tx2 := createTx(repo, 1)
+	tx2 := createDynFeeTx(repo, 1)
 	txPool.AddLocal(tx2)
 
 	// Assert that the channel did not receive the second transaction
@@ -141,14 +141,32 @@ func addNewBlock(repo *chain.Repository, stater *state.Stater, b0 *block.Block, 
 	}
 }
 
-func createTx(repo *chain.Repository, addressNumber uint) *tx.Transaction {
+func createLegacyTx(repo *chain.Repository, addressNumber uint) *tx.Transaction {
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 
 	return tx.MustSign(
-		new(tx.Builder).
+		new(tx.LegacyBuilder).
 			ChainTag(repo.ChainTag()).
 			GasPriceCoef(1).
+			Expiration(10).
+			Gas(21000).
+			Nonce(1).
+			Clause(cla).
+			BlockRef(tx.NewBlockRef(0)).
+			Build(),
+		genesis.DevAccounts()[addressNumber].PrivateKey,
+	)
+}
+
+func createDynFeeTx(repo *chain.Repository, addressNumber uint) *tx.Transaction {
+	addr := thor.BytesToAddress([]byte("to"))
+	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
+
+	return tx.MustSign(
+		new(tx.DynFeeBuilder).
+			ChainTag(repo.ChainTag()).
+			MaxFeePerGas(big.NewInt(1)).
 			Expiration(10).
 			Gas(21000).
 			Nonce(1).
