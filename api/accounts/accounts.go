@@ -377,16 +377,16 @@ func (a *Accounts) Mount(root *mux.Router, pathPrefix string) {
 		HandlerFunc(utils.WrapHandlerFunc(a.handleGetStorage))
 
 	// These two methods are currently deprecated
-	deprecatedHandler := utils.HandleGone
+	callContractHandler := utils.HandleGone
 	if a.enabledDeprecated {
-		deprecatedHandler = a.handleCallContract
+		callContractHandler = a.handleCallContract
 	}
 	sub.Path("").
 		Methods(http.MethodPost).
 		Name("POST /accounts").
-		HandlerFunc(utils.WrapHandlerFunc(deprecatedHandler))
+		HandlerFunc(utils.WrapHandlerFunc(callContractHandler))
 	sub.Path("/{address}").
 		Methods(http.MethodPost).
 		Name("POST /accounts/{address}").
-		HandlerFunc(utils.WrapHandlerFunc(deprecatedHandler))
+		HandlerFunc(utils.WrapHandlerFunc(callContractHandler))
 }

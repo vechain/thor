@@ -372,36 +372,36 @@ func (s *Subscriptions) Mount(root *mux.Router, pathPrefix string) {
 
 	sub.Path("/txpool").
 		Methods(http.MethodGet).
-		Name("WS /subscriptions/txpool").
+		Name("WS /subscriptions/txpool"). // metrics middleware relies on this name
 		HandlerFunc(utils.WrapHandlerFunc(s.handlePendingTransactions))
 
 	sub.Path("/block").
 		Methods(http.MethodGet).
-		Name("WS /subscriptions/block").
+		Name("WS /subscriptions/block"). // metrics middleware relies on this name
 		HandlerFunc(utils.WrapHandlerFunc(s.websocket(s.handleBlockReader)))
 
 	sub.Path("/event").
 		Methods(http.MethodGet).
-		Name("WS /subscriptions/event").
+		Name("WS /subscriptions/event"). // metrics middleware relies on this name
 		HandlerFunc(utils.WrapHandlerFunc(s.websocket(s.handleEventReader)))
 
 	sub.Path("/transfer").
 		Methods(http.MethodGet).
-		Name("WS /subscriptions/transfer").
+		Name("WS /subscriptions/transfer"). // metrics middleware relies on this name
 		HandlerFunc(utils.WrapHandlerFunc(s.websocket(s.handleTransferReader)))
 
 	sub.Path("/beat2").
 		Methods(http.MethodGet).
-		Name("WS /subscriptions/beat2").
+		Name("WS /subscriptions/beat2"). // metrics middleware relies on this name
 		HandlerFunc(utils.WrapHandlerFunc(s.websocket(s.handleBeat2Reader)))
 
 	// This method is currently deprecated
-	deprecatedBeatHandler := utils.HandleGone
+	beatHandler := utils.HandleGone
 	if s.enabledDeprecated {
-		deprecatedBeatHandler = s.websocket(s.handleBeatReader)
+		beatHandler = s.websocket(s.handleBeatReader)
 	}
 	sub.Path("/beat").
 		Methods(http.MethodGet).
-		Name("WS /subscriptions/beat").
-		HandlerFunc(utils.WrapHandlerFunc(deprecatedBeatHandler))
+		Name("WS /subscriptions/beat"). // metrics middleware relies on this name
+		HandlerFunc(utils.WrapHandlerFunc(beatHandler))
 }
