@@ -390,14 +390,21 @@ func checkMatchingTx(t *testing.T, expectedTx *tx.Transaction, actualTx *transac
 	}
 	assert.Equal(t, origin, actualTx.Origin)
 	assert.Equal(t, expectedTx.ID(), actualTx.ID)
-	assert.Equal(t, expectedTx.GasPriceCoef(), actualTx.GasPriceCoef)
-	assert.Equal(t, expectedTx.MaxFeePerGas(), actualTx.MaxFeePerGas)
-	assert.Equal(t, expectedTx.MaxPriorityFeePerGas(), actualTx.MaxPriorityFeePerGas)
 	assert.Equal(t, expectedTx.Gas(), actualTx.Gas)
 	for i, c := range expectedTx.Clauses() {
 		assert.Equal(t, hexutil.Encode(c.Data()), actualTx.Clauses[i].Data)
 		assert.Equal(t, *c.Value(), big.Int(actualTx.Clauses[i].Value))
 		assert.Equal(t, c.To(), actualTx.Clauses[i].To)
+	}
+	switch expectedTx.Type() {
+	case tx.LegacyTxType:
+		assert.Equal(t, expectedTx.GasPriceCoef(), actualTx.GasPriceCoef)
+		assert.Empty(t, actualTx.MaxFeePerGas)
+		assert.Empty(t, actualTx.MaxPriorityFeePerGas)
+	case tx.DynamicFeeTxType:
+		assert.Empty(t, actualTx.GasPriceCoef)
+		assert.Equal(t, expectedTx.MaxFeePerGas(), actualTx.MaxFeePerGas)
+		assert.Equal(t, expectedTx.MaxPriorityFeePerGas(), actualTx.MaxPriorityFeePerGas)
 	}
 }
 
