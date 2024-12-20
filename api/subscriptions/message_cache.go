@@ -43,10 +43,10 @@ func newMessageCache[T any](cacheSize uint32) *messageCache[T] {
 func (mc *messageCache[T]) GetOrAdd(id thor.Bytes32, createMessage func() (T, error)) (T, bool, error) {
 	mc.w.RLock()
 	msg, ok := mc.cache.Peek(id)
+	mc.w.RUnlock()
 	if ok {
 		return msg.(T), false, nil
 	}
-	mc.w.RUnlock()
 
 	mc.w.Lock()
 	defer mc.w.Unlock()
