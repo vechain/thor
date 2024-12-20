@@ -13,7 +13,6 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.4.1
 	github.com/hashicorp/golang-lru v0.0.0-20160813221303-0a025b7e63ad
-	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/holiman/uint256 v1.2.4
 	github.com/mattn/go-isatty v0.0.3
 	github.com/mattn/go-sqlite3 v1.14.22

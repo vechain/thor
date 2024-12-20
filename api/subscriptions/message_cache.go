@@ -7,14 +7,16 @@ package subscriptions
 
 import (
 	"fmt"
+	"sync"
 
-	lru "github.com/hashicorp/golang-lru/v2"
+	lru "github.com/hashicorp/golang-lru/simplelru"
 	"github.com/vechain/thor/v2/thor"
 )
 
 // messageCache is a generic cache that stores messages of any type.
 type messageCache[T any] struct {
-	cache *lru.Cache[thor.Bytes32, interface{}]
+	cache *lru.LRU
+	w     sync.RWMutex
 }
 
 // newMessageCache creates a new messageCache with the specified cache size.
@@ -25,7 +27,7 @@ func newMessageCache[T any](cacheSize uint32) *messageCache[T] {
 	if cacheSize == 0 {
 		cacheSize = 1
 	}
-	cache, err := lru.New[thor.Bytes32, interface{}](int(cacheSize))
+	cache, err := lru.NewLRU(int(cacheSize), nil)
 	if err != nil {
 		// lru.New only throws an error if the number is less than 1
 		panic(fmt.Errorf("failed to create message cache: %v", err))
@@ -39,7 +41,16 @@ func newMessageCache[T any](cacheSize uint32) *messageCache[T] {
 // it will generate the message and add it to the cache. The second return value
 // indicates whether the message is newly generated.
 func (mc *messageCache[T]) GetOrAdd(id thor.Bytes32, createMessage func() (T, error)) (T, bool, error) {
+	mc.w.RLock()
 	msg, ok := mc.cache.Peek(id)
+	if ok {
+		return msg.(T), false, nil
+	}
+	mc.w.RUnlock()
+
+	mc.w.Lock()
+	defer mc.w.Unlock()
+	msg, ok = mc.cache.Peek(id)
 	if ok {
 		return msg.(T), false, nil
 	}
@@ -49,6 +60,6 @@ func (mc *messageCache[T]) GetOrAdd(id thor.Bytes32, createMessage func() (T, er
 		var zero T
 		return zero, false, err
 	}
-	mc.cache.ContainsOrAdd(id, newMsg)
+	mc.cache.Add(id, newMsg)
 	return newMsg, true, nil
 }
