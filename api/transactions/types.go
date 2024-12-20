@@ -7,7 +7,6 @@ package transactions
 
 import (
 	"fmt"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -45,25 +44,6 @@ func (c *Clause) String() string {
 		c.Data)
 }
 
-// Transaction transaction
-type Transaction struct {
-	ID                   thor.Bytes32        `json:"id"`
-	ChainTag             byte                `json:"chainTag"`
-	BlockRef             string              `json:"blockRef"`
-	Expiration           uint32              `json:"expiration"`
-	Clauses              Clauses             `json:"clauses"`
-	GasPriceCoef         uint8               `json:"gasPriceCoef"`
-	Gas                  uint64              `json:"gas"`
-	MaxFeePerGas         *big.Int            `json:"maxFeePerGas,omitempty"`
-	MaxPriorityFeePerGas *big.Int            `json:"maxPriorityFeePerGas,omitempty"`
-	Origin               thor.Address        `json:"origin"`
-	Delegator            *thor.Address       `json:"delegator"`
-	Nonce                math.HexOrDecimal64 `json:"nonce"`
-	DependsOn            *thor.Bytes32       `json:"dependsOn"`
-	Size                 uint32              `json:"size"`
-	Meta                 *TxMeta             `json:"meta"`
-}
-
 type RawTx struct {
 	Raw string `json:"raw"`
 }
@@ -84,44 +64,6 @@ func (rtx *RawTx) decode() (*tx.Transaction, error) {
 type RawTransaction struct {
 	RawTx
 	Meta *TxMeta `json:"meta"`
-}
-
-// convertTransaction convert a raw transaction into a json format transaction
-func convertTransaction(tx *tx.Transaction, header *block.Header) *Transaction {
-	//tx origin
-	origin, _ := tx.Origin()
-	delegator, _ := tx.Delegator()
-
-	cls := make(Clauses, len(tx.Clauses()))
-	for i, c := range tx.Clauses() {
-		cls[i] = convertClause(c)
-	}
-	br := tx.BlockRef()
-	t := &Transaction{
-		ChainTag:             tx.ChainTag(),
-		ID:                   tx.ID(),
-		Origin:               origin,
-		BlockRef:             hexutil.Encode(br[:]),
-		Expiration:           tx.Expiration(),
-		Nonce:                math.HexOrDecimal64(tx.Nonce()),
-		Size:                 uint32(tx.Size()),
-		GasPriceCoef:         tx.GasPriceCoef(),
-		Gas:                  tx.Gas(),
-		DependsOn:            tx.DependsOn(),
-		Clauses:              cls,
-		Delegator:            delegator,
-		MaxFeePerGas:         tx.MaxFeePerGas(),
-		MaxPriorityFeePerGas: tx.MaxPriorityFeePerGas(),
-	}
-
-	if header != nil {
-		t.Meta = &TxMeta{
-			BlockID:        header.ID(),
-			BlockNumber:    header.Number(),
-			BlockTimestamp: header.Timestamp(),
-		}
-	}
-	return t
 }
 
 type TxMeta struct {
