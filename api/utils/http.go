@@ -98,5 +98,12 @@ func WriteJSON(w http.ResponseWriter, obj interface{}) error {
 	return json.NewEncoder(w).Encode(obj)
 }
 
+// HandleGone is a handler for deprecated endpoints that returns HTTP 410 Gone.
+func HandleGone(w http.ResponseWriter, _ *http.Request) error {
+	w.WriteHeader(http.StatusGone)
+	_, _ = w.Write([]byte("This endpoint is no longer supported."))
+	return nil
+}
+
 // M shortcut for type map[string]interface{}.
 type M map[string]interface{}

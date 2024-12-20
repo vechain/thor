@@ -183,10 +183,17 @@ func subscribe[T any](conn *websocket.Conn) *common.Subscription[*T] {
 
 	return &common.Subscription[*T]{
 		EventChan: eventChan,
-		Unsubscribe: func() {
+		Unsubscribe: func() error {
 			closed = true
-			conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-			conn.Close()
+			err := conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+			if err != nil {
+				return fmt.Errorf("failed to issue close message: %w", err)
+			}
+			err = conn.Close()
+			if err != nil {
+				return fmt.Errorf("failed to close connections: %w", err)
+			}
+			return nil
 		},
 	}
 }
