@@ -350,13 +350,6 @@ func (s *Subscriptions) websocket(readerFunc func(http.ResponseWriter, *http.Req
 			return err
 		}
 
-		// Ensure cleanup when the connection closes
-		defer func() {
-			if closer, ok := reader.(interface{ Close() }); ok {
-				closer.Close()
-			}
-		}()
-
 		// Setup WebSocket connection
 		conn, closed, err := s.setupConn(w, req)
 		if err != nil {
