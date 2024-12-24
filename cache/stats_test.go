@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package thor
+package cache
 
 import (
 	"testing"
@@ -12,7 +12,7 @@ import (
 )
 
 func TestCacheStats(t *testing.T) {
-	cs := &CacheStats{}
+	cs := &Stats{}
 	cs.Hit()
 	cs.Miss()
 	_, hit, miss := cs.Stats()
