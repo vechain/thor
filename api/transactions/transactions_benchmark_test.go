@@ -314,11 +314,7 @@ func packTxsIntoBlock(thorChain *testchain.Chain, proposerAccount *genesis.DevAc
 		return nil, err
 	}
 
-	if err := thorChain.Repo().AddBlock(b1, receipts, 0); err != nil {
-		return nil, err
-	}
-
-	if err := thorChain.Repo().SetBestBlockID(b1.Header().ID()); err != nil {
+	if err := thorChain.Repo().AddBlock(b1, receipts, 0, true); err != nil {
 		return nil, err
 	}
 
@@ -444,9 +440,7 @@ func openTempMainDB(dir string) (*muxdb.MuxDB, error) {
 
 	opts := muxdb.Options{
 		TrieNodeCacheSizeMB:        cacheMB,
-		TrieRootCacheCapacity:      256,
 		TrieCachedNodeTTL:          30, // 5min
-		TrieLeafBankSlotCapacity:   256,
 		TrieDedupedPartitionFactor: math.MaxUint32,
 		TrieWillCleanHistory:       true,
 		OpenFilesCacheCapacity:     fdCache,

@@ -22,6 +22,7 @@ import (
 	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
 )
 
@@ -101,10 +102,9 @@ func TestP(t *testing.T) {
 		_, _, err = consensus.New(repo, stater, thor.NoFork).Process(best, blk, uint64(time.Now().Unix()*2), 0)
 		assert.Nil(t, err)
 
-		if err := repo.AddBlock(blk, receipts, 0); err != nil {
+		if err := repo.AddBlock(blk, receipts, 0, true); err != nil {
 			t.Fatal(err)
 		}
-		repo.SetBestBlockID(blk.Header().ID())
 
 		if time.Now().UnixNano() > start+1000*1000*1000*1 {
 			break
@@ -166,15 +166,15 @@ func TestForkVIP191(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := repo.AddBlock(blk, receipts, 0); err != nil {
+	if err := repo.AddBlock(blk, receipts, 0, false); err != nil {
 		t.Fatal(err)
 	}
 
-	headState := state.New(db, blk.Header().StateRoot(), blk.Header().Number(), 0, 0)
+	headState := state.New(db, trie.Root{Hash: blk.Header().StateRoot(), Ver: trie.Version{Major: blk.Header().Number()}})
 
 	assert.Equal(t, M(builtin.Extension.V2.RuntimeBytecodes(), nil), M(headState.GetCode(builtin.Extension.Address)))
 
-	geneState := state.New(db, b0.Header().StateRoot(), 0, 0, 0)
+	geneState := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
 
 	assert.Equal(t, M(builtin.Extension.RuntimeBytecodes(), nil), M(geneState.GetCode(builtin.Extension.Address)))
 }
