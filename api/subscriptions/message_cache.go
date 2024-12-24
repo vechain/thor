@@ -16,7 +16,7 @@ import (
 // messageCache is a generic cache that stores messages of any type.
 type messageCache[T any] struct {
 	cache *lru.LRU
-	w     sync.RWMutex
+	w     sync.Mutex
 }
 
 // newMessageCache creates a new messageCache with the specified cache size.
@@ -41,16 +41,9 @@ func newMessageCache[T any](cacheSize uint32) *messageCache[T] {
 // it will generate the message and add it to the cache. The second return value
 // indicates whether the message is newly generated.
 func (mc *messageCache[T]) GetOrAdd(id thor.Bytes32, createMessage func() (T, error)) (T, bool, error) {
-	mc.w.RLock()
-	msg, ok := mc.cache.Peek(id)
-	mc.w.RUnlock()
-	if ok {
-		return msg.(T), false, nil
-	}
-
 	mc.w.Lock()
 	defer mc.w.Unlock()
-	msg, ok = mc.cache.Peek(id)
+	msg, ok := mc.cache.Get(id)
 	if ok {
 		return msg.(T), false, nil
 	}
