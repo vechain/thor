@@ -13,7 +13,7 @@ import (
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/qianbin/directcache"
-	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/trie"
 )
 
@@ -25,8 +25,8 @@ type Cache struct {
 	committedNodes *directcache.Cache
 	// caches root nodes.
 	roots       *lru.ARCCache
-	nodeStats   thor.CacheStats
-	rootStats   thor.CacheStats
+	nodeStats   cache.Stats
+	rootStats   cache.Stats
 	lastLogTime int64
 }
 
