@@ -12,6 +12,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"github.com/vechain/thor/v2/block"
+	cache2 "github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/kv"
 	"github.com/vechain/thor/v2/muxdb"
@@ -60,9 +61,9 @@ type Repository struct {
 		receipts  *cache
 
 		stats struct {
-			summaries thor.CacheStats
-			txs       thor.CacheStats
-			receipts  thor.CacheStats
+			summaries cache2.Stats
+			txs       cache2.Stats
+			receipts  cache2.Stats
 		}
 	}
 }
