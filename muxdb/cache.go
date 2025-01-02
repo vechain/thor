@@ -69,10 +69,10 @@ func (c *cache) log() {
 		}
 
 		// metrics will reported every 20 seconds
-		metricCacheHitMissGaugeVec().SetWithLabel(hitRoot, map[string]string{"type": "root", "event": "hit"})
-		metricCacheHitMissGaugeVec().SetWithLabel(missRoot, map[string]string{"type": "root", "event": "miss"})
-		metricCacheHitMissGaugeVec().SetWithLabel(hitNode, map[string]string{"type": "node", "event": "hit"})
-		metricCacheHitMissGaugeVec().SetWithLabel(missNode, map[string]string{"type": "node", "event": "miss"})
+		metricCacheHitMiss().SetWithLabel(hitRoot, map[string]string{"type": "root", "event": "hit"})
+		metricCacheHitMiss().SetWithLabel(missRoot, map[string]string{"type": "root", "event": "miss"})
+		metricCacheHitMiss().SetWithLabel(hitNode, map[string]string{"type": "node", "event": "hit"})
+		metricCacheHitMiss().SetWithLabel(missNode, map[string]string{"type": "node", "event": "miss"})
 	} else {
 		c.lastLogTime.CompareAndSwap(now, last)
 	}

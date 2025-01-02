@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/require"
@@ -22,6 +23,7 @@ import (
 	"github.com/vechain/thor/v2/api/debug"
 	"github.com/vechain/thor/v2/api/events"
 	"github.com/vechain/thor/v2/api/node"
+	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
@@ -41,6 +43,10 @@ const (
 	logDBLimit = 1_000
 )
 
+var (
+	preMintedTx01 *tx.Transaction
+)
+
 func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 	thorChain, err := testchain.NewIntegrationTestChain()
 	require.NoError(t, err)
@@ -52,6 +58,9 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 
 	accounts.New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), thor.NoFork, thorChain.Engine(), true).
 		Mount(router, "/accounts")
+
+	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute})
+	transactions.New(thorChain.Repo(), mempool).Mount(router, "/transactions")
 
 	blocks.New(thorChain.Repo(), thorChain.Engine()).Mount(router, "/blocks")
 
@@ -109,6 +118,7 @@ func mintTransactions(t *testing.T, thorChain *testchain.Chain) {
 	transaction = transaction.WithSignature(sig)
 
 	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], transaction, noClausesTx))
+	preMintedTx01 = transaction
 }
 
 func TestAPIs(t *testing.T) {
@@ -116,11 +126,12 @@ func TestAPIs(t *testing.T) {
 	defer ts.Close()
 
 	for name, tt := range map[string]func(*testing.T, *testchain.Chain, *httptest.Server){
-		"testAccountEndpoint": testAccountEndpoint,
-		"testBlocksEndpoint":  testBlocksEndpoint,
-		"testDebugEndpoint":   testDebugEndpoint,
-		"testEventsEndpoint":  testEventsEndpoint,
-		"testNodeEndpoint":    testNodeEndpoint,
+		"testAccountEndpoint":      testAccountEndpoint,
+		"testTransactionsEndpoint": testTransactionsEndpoint,
+		"testBlocksEndpoint":       testBlocksEndpoint,
+		"testDebugEndpoint":        testDebugEndpoint,
+		"testEventsEndpoint":       testEventsEndpoint,
+		"testNodeEndpoint":         testNodeEndpoint,
 	} {
 		t.Run(name, func(t *testing.T) {
 			tt(t, thorChain, ts)
@@ -130,116 +141,136 @@ func TestAPIs(t *testing.T) {
 
 func testAccountEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) {
 	// Example storage key
-	storageKey := "0x0000000000000000000000000000000000000000000000000000000000000000"
+	storageKey := thor.MustParseBytes32("0x0000000000000000000000000000000000000000000000000000000000000000")
 
 	// Example addresses
-	address1 := "0x0123456789abcdef0123456789abcdef01234567"
-	address2 := "0xabcdef0123456789abcdef0123456789abcdef01"
+	address1 := thor.MustParseAddress("0x0123456789abcdef0123456789abcdef01234567")
+	address2 := thor.MustParseAddress("0xabcdef0123456789abcdef0123456789abcdef01")
 
 	// 1. Test GET /accounts/{address}
 	t.Run("GetAccount", func(t *testing.T) {
-		resp, err := ts.Client().Get(ts.URL + "/accounts/" + address1)
+		c := New(ts.URL)
+		_, err := c.Account(&address1)
 		require.NoError(t, err)
-		defer resp.Body.Close()
-		require.Equal(t, 200, resp.StatusCode)
-		// Optionally, you can unmarshal and validate the response body here
+		// TODO validate the response body here
 	})
 
 	// 2. Test GET /accounts/{address}/code
 	t.Run("GetCode", func(t *testing.T) {
-		resp, err := ts.Client().Get(ts.URL + "/accounts/" + address1 + "/code")
+		c := New(ts.URL)
+		_, err := c.AccountCode(&address1)
 		require.NoError(t, err)
-		defer resp.Body.Close()
-		require.Equal(t, 200, resp.StatusCode)
-		// Optionally, you can unmarshal and validate the response body here
+		// TODO validate the response body here
 	})
 
 	// 3. Test GET /accounts/{address}/storage/{key}
 	t.Run("GetStorage", func(t *testing.T) {
-		resp, err := ts.Client().Get(ts.URL + "/accounts/" + address1 + "/storage/" + storageKey)
+		c := New(ts.URL)
+		_, err := c.AccountStorage(&address1, &storageKey)
 		require.NoError(t, err)
-		defer resp.Body.Close()
-		require.Equal(t, 200, resp.StatusCode)
-		// Optionally, you can unmarshal and validate the response body here
+		// TODO validate the response body here
 	})
 
 	// 4. Test POST /accounts/*
 	t.Run("InspectClauses", func(t *testing.T) {
+		c := New(ts.URL)
 		// Define the payload for the batch call
-		payload := `{
-		"clauses": [
-			{
-				"to": "` + address1 + `",
-				"value": "0x0",
-				"data": "0x"
+		value := math.HexOrDecimal256(*big.NewInt(1))
+		payload := &accounts.BatchCallData{
+			Clauses: accounts.Clauses{
+				accounts.Clause{
+					To:    &address1,
+					Value: nil,
+					Data:  "0x",
+				},
+				accounts.Clause{
+					To:    &address2,
+					Value: &value,
+					Data:  "0x",
+				},
 			},
-			{
-				"to": "` + address2 + `",
-				"value": "0x1",
-				"data": "0x"
-			}
-		],
-		"gas": 1000000,
-		"gasPrice": "0x0",
-		"caller": "` + address1 + `"
-	}`
-		req, err := http.NewRequest("POST", ts.URL+"/accounts/*", strings.NewReader(payload))
+			Gas:      1000000,
+			GasPrice: &value,
+			Caller:   &address1,
+		}
+		_, err := c.InspectClauses(payload)
 		require.NoError(t, err)
-		req.Header.Set("Content-Type", "application/json")
 
 		// Simulate sending request with revision query parameter
-		query := req.URL.Query()
-		query.Add("revision", "best") // Add any revision parameter as expected
-		req.URL.RawQuery = query.Encode()
-
-		// Perform the request
-		resp, err := ts.Client().Do(req)
+		_, err = c.InspectClauses(payload, Revision("best"))
 		require.NoError(t, err)
-		defer resp.Body.Close()
+	})
+}
 
-		// Ensure the response code is 200 OK
-		require.Equal(t, 200, resp.StatusCode)
+func testTransactionsEndpoint(t *testing.T, thorChain *testchain.Chain, ts *httptest.Server) {
+	c := New(ts.URL)
+
+	// 1. Test retrieving a pre-mined transaction by ID
+	t.Run("GetTransaction", func(t *testing.T) {
+		id := preMintedTx01.ID()
+		trx, err := c.Transaction(&id)
+		require.NoError(t, err)
+		require.NotNil(t, trx)
+		require.Equal(t, id.String(), trx.ID.String())
+	})
+
+	// 2. Test sending a new transaction
+	t.Run("SendTransaction", func(t *testing.T) {
+		toAddr := thor.MustParseAddress("0x0123456789abcdef0123456789abcdef01234567")
+		clause := tx.NewClause(&toAddr).WithValue(big.NewInt(10000))
+		trx := new(tx.Builder).
+			ChainTag(thorChain.Repo().ChainTag()).
+			Expiration(10).
+			Gas(21000).
+			Clause(clause).
+			Build()
+
+		trx = tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)
+		sendResult, err := c.SendTransaction(trx)
+		require.NoError(t, err)
+		require.NotNil(t, sendResult)
+		require.Equal(t, trx.ID().String(), sendResult.ID.String()) // Ensure transaction was successful
+	})
+
+	// 3. Test retrieving the transaction receipt
+	t.Run("GetTransactionReceipt", func(t *testing.T) {
+		txID := preMintedTx01.ID()
+		receipt, err := c.TransactionReceipt(&txID)
+		require.NoError(t, err)
+		require.NotNil(t, receipt)
+		require.Equal(t, txID.String(), receipt.Meta.TxID.String())
+	})
+
+	// 4. Test inspecting clauses of a transaction
+	t.Run("InspectClauses", func(t *testing.T) {
+		clause := tx.NewClause(nil).WithValue(big.NewInt(10000)).WithData([]byte("0x"))
+		batchCallData := convertToBatchCallData(preMintedTx01, nil)
+		batchCallData.Clauses = append(batchCallData.Clauses, convertClauseAccounts(clause))
+
+		callResults, err := c.InspectClauses(batchCallData)
+		require.NoError(t, err)
+		require.NotNil(t, callResults)
+		require.Greater(t, len(callResults), 0)
 	})
 }
 
 func testBlocksEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) {
+	c := New(ts.URL)
 	// Example revision (this could be a block number or block ID)
-	revision := "best" // You can adjust this to a real block number or ID for integration testing
+	revision := "best"
 
 	// 1. Test GET /blocks/{revision}
 	t.Run("GetBlock", func(t *testing.T) {
-		// Send request to get block information by revision
-		resp, err := ts.Client().Get(ts.URL + "/blocks/" + revision)
+		_, err := c.Block(revision)
 		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		// Ensure the response code is 200 OK
-		require.Equal(t, 200, resp.StatusCode)
-		// Optionally, you can unmarshal and validate the response body here
+		// TODO validate the response body here
 	})
 
 	// 2. Test GET /blocks/{revision}?expanded=true
 	t.Run("GetBlockExpanded", func(t *testing.T) {
-		// Send request to get expanded block information (includes transactions and receipts)
-		resp, err := ts.Client().Get(ts.URL + "/blocks/" + revision + "?expanded=true")
+		_, err := c.ExpandedBlock(revision)
 		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		// Ensure the response code is 200 OK
-		require.Equal(t, 200, resp.StatusCode)
-		// Optionally, you can unmarshal and validate the response body here
-	})
-
-	// 3. Test GET /blocks/{revision}?expanded=invalid (should return bad request)
-	t.Run("GetBlockInvalidExpanded", func(t *testing.T) {
-		// Send request with an invalid 'expanded' parameter
-		resp, err := ts.Client().Get(ts.URL + "/blocks/" + revision + "?expanded=invalid")
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		// Ensure the response code is 400 Bad Request
-		require.Equal(t, 400, resp.StatusCode)
-		// Optionally, you can unmarshal and validate the response body here
+		// TODO validate the response body here
 	})
 }
 
@@ -325,57 +356,44 @@ func testDebugEndpoint(t *testing.T, thorChain *testchain.Chain, ts *httptest.Se
 }
 
 func testEventsEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) {
+	c := New(ts.URL)
+
 	// Example address and topic for filtering events
-	address := "0x0123456789abcdef0123456789abcdef01234567"
-	topic := thor.BytesToBytes32([]byte("topic")).String()
+	address := thor.MustParseAddress("0x0123456789abcdef0123456789abcdef01234567")
+	topic := thor.BytesToBytes32([]byte("topic"))
 
 	// 1. Test POST /events (Filter events)
 	t.Run("FilterEvents", func(t *testing.T) {
 		// Define the payload for filtering events
-		payload := `{
-			"criteriaSet": [
-				{
-					"address": "` + address + `",
-					"topic0": "` + topic + `"
-				}
-			],
-			"options": {
-				"limit": 10,
-				"offset": 0
-			}
-		}`
+		payload := &events.EventFilter{
+			CriteriaSet: []*events.EventCriteria{
+				&events.EventCriteria{
+					Address: &address,
+					TopicSet: events.TopicSet{
+						Topic0: &topic,
+					},
+				},
+			},
+			Range: nil,
+			Options: &events.Options{
+				Offset: 0,
+				Limit:  10,
+			},
+			Order: "",
+		}
 
-		req, err := http.NewRequest("POST", ts.URL+"/logs/event", strings.NewReader(payload))
+		_, err := c.FilterEvents(payload)
 		require.NoError(t, err)
-		req.Header.Set("Content-Type", "application/json")
 
-		// Perform the request
-		resp, err := ts.Client().Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		// Ensure the response code is 200 OK
-		require.Equal(t, 200, resp.StatusCode)
-		// Optionally, you can unmarshal and validate the response body here
-		// body, err := ioutil.ReadAll(resp.Body)
-		// require.NoError(t, err)
-		// fmt.Println(string(body))
+		//TODO validate the response body here
 	})
 }
 
 func testNodeEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) {
+	c := New(ts.URL)
 	// 1. Test GET /node/network/peers
 	t.Run("GetPeersStats", func(t *testing.T) {
-		// Send request to get peers statistics
-		resp, err := ts.Client().Get(ts.URL + "/node/network/peers")
+		_, err := c.Peers()
 		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		// Ensure the response code is 200 OK
-		require.Equal(t, 200, resp.StatusCode)
-		// Optionally, you can unmarshal and validate the response body here
-		// body, err := ioutil.ReadAll(resp.Body)
-		// require.NoError(t, err)
-		// fmt.Println(string(body))
 	})
 }

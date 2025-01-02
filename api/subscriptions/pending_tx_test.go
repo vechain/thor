@@ -7,16 +7,22 @@ package subscriptions
 
 import (
 	"math/big"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
@@ -146,12 +152,90 @@ func createTx(repo *chain.Repository, addressNumber uint) *tx.Transaction {
 		new(tx.Builder).
 			ChainTag(repo.ChainTag()).
 			GasPriceCoef(1).
-			Expiration(10).
+			Expiration(1000).
 			Gas(21000).
-			Nonce(1).
+			Nonce(uint64(datagen.RandInt())).
 			Clause(cla).
 			BlockRef(tx.NewBlockRef(0)).
 			Build(),
 		genesis.DevAccounts()[addressNumber].PrivateKey,
 	)
+}
+
+func TestPendingTx_NoWriteAfterUnsubscribe(t *testing.T) {
+	// Arrange
+	thorChain := initChain(t)
+	txPool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
+		Limit:           100,
+		LimitPerAccount: 16,
+		MaxLifetime:     time.Hour,
+	})
+
+	p := newPendingTx(txPool)
+	txCh := make(chan *tx.Transaction, txQueueSize)
+
+	// Subscribe and then unsubscribe
+	p.Subscribe(txCh)
+	p.Unsubscribe(txCh)
+
+	done := make(chan struct{})
+	// Attempt to write a new transaction
+	trx := createTx(thorChain.Repo(), 0)
+	assert.NotPanics(t, func() {
+		p.dispatch(trx, done) // dispatch should not panic after unsubscribe
+	}, "Dispatching after unsubscribe should not panic")
+
+	select {
+	case <-txCh:
+		t.Fatal("Channel should not receive new transactions after unsubscribe")
+	default:
+		t.Log("No transactions sent to unsubscribed channel, as expected")
+	}
+}
+
+func TestPendingTx_UnsubscribeOnWebSocketClose(t *testing.T) {
+	// Arrange
+	thorChain := initChain(t)
+	txPool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
+		Limit:           100,
+		LimitPerAccount: 16,
+		MaxLifetime:     time.Hour,
+	})
+
+	// Subscriptions setup
+	sub := New(thorChain.Repo(), []string{"*"}, 100, txPool, false)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		utils.WrapHandlerFunc(sub.handlePendingTransactions)(w, r)
+	}))
+	defer server.Close()
+
+	require.Equal(t, len(sub.pendingTx.listeners), 0)
+
+	// Connect as WebSocket client
+	url := "ws" + server.URL[4:] + "/txpool"
+	ws, _, err := websocket.DefaultDialer.Dial(url, nil)
+	assert.NoError(t, err)
+	defer ws.Close()
+
+	// Add a transaction
+	trx := createTx(thorChain.Repo(), 0)
+	txPool.AddLocal(trx)
+
+	// Wait to receive transaction
+	time.Sleep(500 * time.Millisecond)
+	sub.pendingTx.mu.Lock()
+	require.Equal(t, len(sub.pendingTx.listeners), 1)
+	sub.pendingTx.mu.Unlock()
+
+	// Simulate WebSocket closure
+	ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+	ws.Close()
+
+	// Wait for cleanup
+	time.Sleep(5 * time.Second)
+
+	// Assert cleanup
+	sub.pendingTx.mu.Lock()
+	require.Equal(t, len(sub.pendingTx.listeners), 0)
+	sub.pendingTx.mu.Unlock()
 }

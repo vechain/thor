@@ -197,7 +197,7 @@ func TestClient_GetStorage(t *testing.T) {
 	expectedStorageRsp := &accounts.GetStorageResult{Value: hexutil.Encode([]byte{0x01, 0x03})}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/accounts/"+addr.String()+"/key/"+key.String(), r.URL.Path)
+		assert.Equal(t, "/accounts/"+addr.String()+"/storage/"+key.String(), r.URL.Path)
 
 		marshal, err := json.Marshal(expectedStorageRsp)
 		require.NoError(t, err)
@@ -448,7 +448,7 @@ func TestClient_Errors(t *testing.T) {
 		},
 		{
 			name: "GetAccountStorage",
-			path: "/accounts/" + addr.String() + "/key/" + thor.Bytes32{}.String(),
+			path: "/accounts/" + addr.String() + "/storage/" + thor.Bytes32{}.String(),
 			function: func(client *Client) (*accounts.GetStorageResult, error) {
 				return client.GetAccountStorage(&addr, &thor.Bytes32{}, tccommon.BestRevision)
 			},

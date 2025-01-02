@@ -18,15 +18,15 @@ func newCache(maxSize int) *cache {
 	return &cache{c}
 }
 
-func (c *cache) GetOrLoad(key interface{}, load func() (interface{}, error)) (interface{}, error) {
+func (c *cache) GetOrLoad(key interface{}, load func() (interface{}, error)) (interface{}, bool, error) {
 	if value, ok := c.Get(key); ok {
 		metricBlockRepositoryCounter().AddWithLabel(1, map[string]string{"type": "read", "target": "cache"})
-		return value, nil
+		return value, true, nil
 	}
 	value, err := load()
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	c.Add(key, value)
-	return value, nil
+	return value, false, nil
 }
