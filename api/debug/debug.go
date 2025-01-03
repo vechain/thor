@@ -376,14 +376,15 @@ func (d *Debug) parseTarget(target string) (block *block.Block, txID thor.Bytes3
 		if err != nil {
 			return nil, thor.Bytes32{}, 0, utils.BadRequest(errors.WithMessage(err, "target([0]"))
 		}
-		txMeta, err := d.repo.NewBestChain().GetTransactionMeta(txID)
+		bestChain := d.repo.NewBestChain()
+		txMeta, err := bestChain.GetTransactionMeta(txID)
 		if err != nil {
 			if d.repo.IsNotFound(err) {
 				return nil, thor.Bytes32{}, 0, utils.Forbidden(errors.New("transaction not found"))
 			}
 			return nil, thor.Bytes32{}, 0, err
 		}
-		block, err = d.repo.GetBlock(txMeta.BlockID)
+		block, err = bestChain.GetBlock(txMeta.BlockNum)
 		if err != nil {
 			return nil, thor.Bytes32{}, 0, err
 		}

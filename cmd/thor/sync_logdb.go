@@ -285,6 +285,8 @@ func verifyLogDBPerBlock(
 	n := block.Header().Number()
 	id := block.Header().ID()
 	ts := block.Header().Timestamp()
+	evCount := 0
+	trCount := 0
 
 	var expectedEvLogs []*logdb.Event
 	var expectedTrLogs []*logdb.Transfer
@@ -292,6 +294,8 @@ func verifyLogDBPerBlock(
 	for txIndex, r := range receipts {
 		tx := txs[txIndex]
 		origin, _ := tx.Origin()
+		evCount = 0
+		trCount = 0
 
 		for clauseIndex, output := range r.Outputs {
 			for _, ev := range output.Events {
@@ -301,7 +305,7 @@ func verifyLogDBPerBlock(
 				}
 				expectedEvLogs = append(expectedEvLogs, &logdb.Event{
 					BlockNumber: n,
-					Index:       uint32(len(expectedEvLogs)),
+					LogIndex:    uint32(evCount),
 					BlockID:     id,
 					BlockTime:   ts,
 					TxID:        tx.ID(),
@@ -310,12 +314,14 @@ func verifyLogDBPerBlock(
 					Address:     ev.Address,
 					Topics:      convertTopics(ev.Topics),
 					Data:        data,
+					TxIndex:     uint32(txIndex),
 				})
+				evCount++
 			}
 			for _, tr := range output.Transfers {
 				expectedTrLogs = append(expectedTrLogs, &logdb.Transfer{
 					BlockNumber: n,
-					Index:       uint32(len(expectedTrLogs)),
+					LogIndex:    uint32(trCount),
 					BlockID:     id,
 					BlockTime:   ts,
 					TxID:        tx.ID(),
@@ -324,7 +330,9 @@ func verifyLogDBPerBlock(
 					Sender:      tr.Sender,
 					Recipient:   tr.Recipient,
 					Amount:      tr.Amount,
+					TxIndex:     uint32(txIndex),
 				})
+				trCount++
 			}
 		}
 	}
