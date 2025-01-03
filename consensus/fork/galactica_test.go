@@ -74,6 +74,7 @@ func TestCalcBaseFee(t *testing.T) {
 		{thor.InitialBaseFee, 20000000, 10000000, thor.InitialBaseFee}, // usage == target
 		{thor.InitialBaseFee, 20000000, 9000000, 987500000},            // usage below target
 		{thor.InitialBaseFee, 20000000, 11000000, 1012500000},          // usage above target
+		{thor.InitialBaseFee, 20000000, 0, 875000000},                  // empty block
 	}
 	for i, test := range tests {
 		var parentID thor.Bytes32
@@ -84,4 +85,105 @@ func TestCalcBaseFee(t *testing.T) {
 			t.Errorf("test %d: have %d  want %d, ", i, have, want)
 		}
 	}
+}
+
+func TestBaseFeeLimits(t *testing.T) {
+	targetPercentage := new(big.Float).SetFloat64(0.125)
+	targetPercentage.SetPrec(24)
+	oneFloat := new(big.Float).SetInt64(1)
+
+	t.Run("EmptyBlocks", func(t *testing.T) {
+		// Post Galactica fork
+		var parentID thor.Bytes32
+		binary.BigEndian.PutUint32(parentID[:], 5)
+		parentGasLimit := uint64(20000000)
+		parentGasUsed := uint64(0)
+		tagetDelta := new(big.Float).SetFloat64(0.875)
+
+		tests := []struct {
+			name       string
+			blockRange int
+		}{
+			{
+				name:       "short",
+				blockRange: 10,
+			},
+			{
+				name:       "medium",
+				blockRange: 50,
+			},
+			{
+				name:       "long",
+				blockRange: 100,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				parentBaseFee := big.NewInt(thor.InitialBaseFee)
+
+				for i := 0; i < tt.blockRange; i++ {
+					parent := new(block.Builder).ParentID(parentID).GasLimit(parentGasLimit).GasUsed(parentGasUsed).BaseFee(parentBaseFee).Build().Header()
+					parentID = parent.ID()
+					baseFee := CalcBaseFee(config(), parent)
+
+					currentFloat, previousFloat := new(big.Float).SetInt(baseFee), new(big.Float).SetInt(parentBaseFee)
+					delta := new(big.Float).SetPrec(7).Quo(currentFloat, previousFloat)
+
+					percentage := new(big.Float).SetPrec(7).Sub(oneFloat, delta)
+					if delta.Cmp(tagetDelta) != 0 || percentage.Cmp(targetPercentage) != 0 {
+						t.Errorf("delta: %f, percentage: %f", delta, percentage)
+					}
+					parentBaseFee = baseFee
+				}
+			})
+		}
+	})
+
+	t.Run("FullBlocks", func(t *testing.T) {
+		// Post Galactica fork
+		var parentID thor.Bytes32
+		binary.BigEndian.PutUint32(parentID[:], 5)
+		parentGasLimit := uint64(20000000)
+		parentGasUsed := uint64(20000000)
+		tagetDelta := new(big.Float).SetFloat64(1.125)
+
+		tests := []struct {
+			name       string
+			blockRange int
+		}{
+			{
+				name:       "short",
+				blockRange: 10,
+			},
+			{
+				name:       "medium",
+				blockRange: 50,
+			},
+			{
+				name:       "long",
+				blockRange: 100,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				parentBaseFee := big.NewInt(thor.InitialBaseFee)
+				for i := 0; i < tt.blockRange; i++ {
+					parent := new(block.Builder).ParentID(parentID).GasLimit(parentGasLimit).GasUsed(parentGasUsed).BaseFee(parentBaseFee).Build().Header()
+					parentID = parent.ID()
+					baseFee := CalcBaseFee(config(), parent)
+
+					currentFloat, previousFloat := new(big.Float).SetInt(baseFee), new(big.Float).SetInt(parentBaseFee)
+					delta := new(big.Float).SetPrec(7).Quo(currentFloat, previousFloat)
+					percentage := new(big.Float).SetPrec(7).Sub(delta, oneFloat)
+
+					if delta.Cmp(tagetDelta) != 0 || percentage.Cmp(targetPercentage) != 0 {
+						t.Errorf("delta: %s, percentage: %s", delta, percentage)
+					}
+					parentBaseFee = baseFee
+				}
+			})
+		}
+	})
 }
