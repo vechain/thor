@@ -24,7 +24,6 @@ import (
 
 var (
 	errIntrinsicGasOverflow = errors.New("intrinsic gas overflow")
-	ErrInvalidTxType        = errors.New("transaction type not valid in this context")
 	ErrTxTypeNotSupported   = errors.New("transaction type not supported")
 	errEmptyTypedTx         = errors.New("empty typed transaction bytes")
 )
