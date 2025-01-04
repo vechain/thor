@@ -20,6 +20,7 @@ func newCache(maxSize int) *cache {
 
 func (c *cache) GetOrLoad(key interface{}, load func() (interface{}, error)) (interface{}, bool, error) {
 	if value, ok := c.Get(key); ok {
+		metricBlockRepositoryCounter().AddWithLabel(1, map[string]string{"type": "read", "target": "cache"})
 		return value, true, nil
 	}
 	value, err := load()
