@@ -33,6 +33,7 @@ type JSONBlockSummary struct {
 	Signer       thor.Address `json:"signer"`
 	IsTrunk      bool         `json:"isTrunk"`
 	IsFinalized  bool         `json:"isFinalized"`
+	BaseFee      *big.Int     `json:"baseFee,omitempty"`
 }
 
 type JSONRawBlockSummary struct {
@@ -120,6 +121,7 @@ func buildJSONBlockSummary(summary *chain.BlockSummary, isTrunk bool, isFinalize
 		COM:          header.COM(),
 		IsTrunk:      isTrunk,
 		IsFinalized:  isFinalized,
+		BaseFee:      summary.Header.BaseFee(),
 	}
 }
 
