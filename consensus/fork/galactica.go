@@ -43,7 +43,7 @@ func VerifyGalacticaHeader(config *thor.ForkConfig, parent, header *block.Header
 // CalcBaseFee calculates the basefee of the header.
 func CalcBaseFee(config *thor.ForkConfig, parent *block.Header) *big.Int {
 	// If the current block is the first Galactica block, return the InitialBaseFee.
-	if parent.Number() == config.GALACTICA {
+	if parent.Number()+1 == config.GALACTICA {
 		return new(big.Int).SetUint64(thor.InitialBaseFee)
 	}
 
