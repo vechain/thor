@@ -71,7 +71,11 @@ func TestRepository(t *testing.T) {
 	assert.Equal(t, b0summary, repo1.BestBlockSummary())
 	assert.Equal(t, repo1.GenesisBlock().Header().ID()[31], repo1.ChainTag())
 
+<<<<<<< HEAD
 	tx1 := tx.NewTxBuilder(tx.LegacyTxType).MustBuild()
+=======
+	tx1, _ := tx.NewTxBuilder(tx.LegacyTxType).Build()
+>>>>>>> 8a375f1e (refactor: merge tx builder into one builder)
 	receipt1 := &tx.Receipt{}
 
 	b1 := newBlock(repo1.GenesisBlock(), 10, tx1)
@@ -99,10 +103,14 @@ func TestRepository(t *testing.T) {
 	}
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 	tx2 := tx.NewTxBuilder(tx.DynamicFeeTxType).MustBuild()
 =======
 	tx2 := new(tx.DynFeeBuilder).Build()
 >>>>>>> 8422b551 (test: add more dynFee txs to tests)
+=======
+	tx2, _ := tx.NewTxBuilder(tx.DynamicFeeTxType).Build()
+>>>>>>> 8a375f1e (refactor: merge tx builder into one builder)
 	receipt2 := &tx.Receipt{}
 
 	b2 := newBlock(b1, 20, tx2)
