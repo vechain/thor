@@ -16,15 +16,8 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func newLegacyTx() *tx.Transaction {
-	tx := new(tx.LegacyBuilder).Build()
-	pk, _ := crypto.GenerateKey()
-	sig, _ := crypto.Sign(tx.SigningHash().Bytes(), pk)
-	return tx.WithSignature(sig)
-}
-
-func newDynFeeTx() *tx.Transaction {
-	tx := new(tx.LegacyBuilder).Build()
+func newTx(txType int) *tx.Transaction {
+	tx, _ := tx.NewTxBuilder(txType).Build()
 	pk, _ := crypto.GenerateKey()
 	sig, _ := crypto.Sign(tx.SigningHash().Bytes(), pk)
 	return tx.WithSignature(sig)
@@ -32,12 +25,10 @@ func newDynFeeTx() *tx.Transaction {
 
 func TestChain(t *testing.T) {
 	_, repo := newTestRepo()
-	txs := []*tx.Transaction{
-		newLegacyTx(),
-		newDynFeeTx(),
-	}
+	txTypes := []int{tx.LegacyTxType, tx.DynamicFeeTxType}
 
-	for _, tr := range txs {
+	for _, txType := range txTypes {
+		tr := newTx(txType)
 		b1 := newBlock(repo.GenesisBlock(), 10, tr)
 		tx1Meta := &chain.TxMeta{BlockID: b1.Header().ID(), Index: 0, Reverted: false}
 		tx1Receipt := &tx.Receipt{}

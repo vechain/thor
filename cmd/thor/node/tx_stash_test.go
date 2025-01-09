@@ -18,16 +18,10 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func newLegacyTx() *tx.Transaction {
+func newTx(txType int) *tx.Transaction {
+	trx, _ := tx.NewTxBuilder(txType).Nonce(rand.Uint64()).Build() //#nosec
 	return tx.MustSign(
-		new(tx.LegacyBuilder).Nonce(rand.Uint64()).Build(), //#nosec
-		genesis.DevAccounts()[0].PrivateKey,
-	)
-}
-
-func newDynFeeTx() *tx.Transaction {
-	return tx.MustSign(
-		new(tx.DynFeeBuilder).Nonce(rand.Uint64()).Build(), //#nosec
+		trx,
 		genesis.DevAccounts()[0].PrivateKey,
 	)
 }
@@ -40,13 +34,13 @@ func TestTxStash(t *testing.T) {
 
 	var saved tx.Transactions
 	for i := 0; i < 11; i++ {
-		tx := newLegacyTx()
+		tx := newTx(tx.LegacyTxType)
 		assert.Nil(t, stash.Save(tx))
 		saved = append(saved, tx)
 	}
 
 	for i := 0; i < 11; i++ {
-		tx := newDynFeeTx()
+		tx := newTx(tx.DynamicFeeTxType)
 		assert.Nil(t, stash.Save(tx))
 		saved = append(saved, tx)
 	}

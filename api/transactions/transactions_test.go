@@ -141,13 +141,14 @@ func sendLegacyTx(t *testing.T) {
 	var expiration = uint32(10)
 	var gas = uint64(21000)
 
-	trx := tx.MustSign(
-		new(tx.LegacyBuilder).
-			BlockRef(blockRef).
-			ChainTag(chainTag).
-			Expiration(expiration).
-			Gas(gas).
-			Build(),
+	trx, _ := tx.NewTxBuilder(tx.LegacyTxType).
+		BlockRef(blockRef).
+		ChainTag(chainTag).
+		Expiration(expiration).
+		Gas(gas).
+		Build()
+	trx = tx.MustSign(
+		trx,
 		genesis.DevAccounts()[0].PrivateKey,
 	)
 
@@ -170,14 +171,15 @@ func sendDynamicFeeTx(t *testing.T) {
 	var gas = uint64(21000)
 	var maxFeePerGas = big.NewInt(128)
 
-	trx := tx.MustSign(
-		new(tx.DynFeeBuilder).
-			BlockRef(blockRef).
-			ChainTag(chainTag).
-			Expiration(expiration).
-			Gas(gas).
-			MaxFeePerGas(maxFeePerGas).
-			Build(),
+	trx, _ := tx.NewTxBuilder(tx.DynamicFeeTxType).
+		BlockRef(blockRef).
+		ChainTag(chainTag).
+		Expiration(expiration).
+		Gas(gas).
+		MaxFeePerGas(maxFeePerGas).
+		Build()
+	trx = tx.MustSign(
+		trx,
 		genesis.DevAccounts()[0].PrivateKey,
 	)
 
@@ -286,7 +288,7 @@ func sendTxWithBadFormat(t *testing.T) {
 }
 
 func sendTxThatCannotBeAcceptedInLocalMempool(t *testing.T) {
-	tx := new(tx.LegacyBuilder).Build()
+	tx, _ := tx.NewTxBuilder(tx.LegacyTxType).Build()
 	rlpTx, err := rlp.EncodeToBytes(tx)
 	if err != nil {
 		t.Fatal(err)
@@ -336,7 +338,7 @@ func initTransactionServer(t *testing.T) {
 
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	legacyTx = new(tx.LegacyBuilder).
+	legacyTx, _ = tx.NewTxBuilder(tx.LegacyTxType).
 		ChainTag(chainTag).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -347,7 +349,7 @@ func initTransactionServer(t *testing.T) {
 		Build()
 	legacyTx = tx.MustSign(legacyTx, genesis.DevAccounts()[0].PrivateKey)
 
-	dynFeeTx = new(tx.DynFeeBuilder).
+	dynFeeTx, _ = tx.NewTxBuilder(tx.DynamicFeeTxType).
 		ChainTag(chainTag).
 		MaxFeePerGas(new(big.Int).SetInt64(1)).
 		MaxPriorityFeePerGas(new(big.Int).SetInt64(10)).
@@ -363,7 +365,7 @@ func initTransactionServer(t *testing.T) {
 
 	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute})
 
-	mempoolTx = new(tx.LegacyBuilder).
+	mempoolTx, _ = tx.NewTxBuilder(tx.LegacyTxType).
 		ChainTag(chainTag).
 		Expiration(10).
 		Gas(21000).
