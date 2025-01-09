@@ -30,8 +30,8 @@ var (
 
 // Starting from the max value allowed to avoid ambiguity with Ethereum tx type codes.
 const (
-	LegacyTxType     = 0x7f
-	DynamicFeeTxType = 0x7e
+	LegacyTxType     = 0x00
+	DynamicFeeTxType = 0x51
 )
 
 // Transaction is an immutable tx type.

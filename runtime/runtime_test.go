@@ -397,7 +397,7 @@ func getMockTx(repo *chain.Repository, txType int, t *testing.T) *tx.Transaction
 	var gas = uint64(210000)
 	to, _ := thor.ParseAddress("0x7567d83b7b8d80addcb281a71d54fc7b3364ffed")
 
-	tx := new(tx.LegacyBuilder).
+	tx, _ := tx.NewTxBuilder(txType).
 		BlockRef(blockRef).
 		ChainTag(chainTag).
 		Clause(tx.NewClause(&to).WithValue(big.NewInt(10000)).WithData([]byte{0, 0, 0, 0x60, 0x60, 0x60})).
@@ -414,9 +414,9 @@ func getMockTx(repo *chain.Repository, txType int, t *testing.T) *tx.Transaction
 	return tx
 }
 
-func GetMockFailedTx() tx.Transaction {
+func GetMockFailedTx(txType int) tx.Transaction {
 	to, _ := thor.ParseAddress("0x7567d83b7b8d80addcb281a71d54fc7b3364ffed")
-	trx := new(tx.LegacyBuilder).ChainTag(1).
+	trx, _ := tx.NewTxBuilder(txType).ChainTag(1).
 		BlockRef(tx.BlockRef{0, 0, 0, 0, 0xaa, 0xbb, 0xcc, 0xdd}).
 		Expiration(32).
 		Clause(tx.NewClause(&to).WithValue(big.NewInt(10000)).WithData([]byte{0, 0, 0, 0x60, 0x60, 0x60})).
@@ -500,7 +500,7 @@ func TestExecuteTransactionFailure(t *testing.T) {
 	originEnergy.SetString("9000000000000000000000000000000000000", 10)
 	state.SetEnergy(origin.Address, originEnergy, 0)
 
-	tx := GetMockFailedTx()
+	tx := GetMockFailedTx(tx.LegacyTxType)
 
 	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.NoFork)
 

@@ -19,14 +19,12 @@ func TestSign(t *testing.T) {
 	pk, err := crypto.GenerateKey()
 	assert.NoError(t, err)
 
-	txs := []*Transaction{
-		new(LegacyBuilder).Build(),
-		new(DynFeeBuilder).Build(),
-	}
+	txTypes := []int{LegacyTxType, DynamicFeeTxType}
 
-	for _, tx := range txs {
+	for _, txType := range txTypes {
+		trx, _ := NewTxBuilder(txType).Build()
 		// Sign the transaction
-		signedTx, err := Sign(tx, pk)
+		signedTx, err := Sign(trx, pk)
 		assert.NoError(t, err)
 
 		// Verify the transaction was signed
@@ -52,24 +50,22 @@ func TestSignDelegated(t *testing.T) {
 	originPK, err := crypto.GenerateKey()
 	assert.NoError(t, err)
 
-	txs := []*Transaction{
-		new(LegacyBuilder).Build(),
-		new(DynFeeBuilder).Build(),
-	}
+	txTypes := []int{LegacyTxType, DynamicFeeTxType}
 
-	for _, tx := range txs {
+	for _, txType := range txTypes {
 		// Feature not enabled
-		signedTx, err := SignDelegated(tx, originPK, delegatorPK)
+		trx, _ := NewTxBuilder(txType).Build()
+		signedTx, err := SignDelegated(trx, originPK, delegatorPK)
 		assert.ErrorContains(t, err, "transaction delegated feature is not enabled")
 		assert.Nil(t, signedTx)
 
 		// enable the feature
 		var features Features
 		features.SetDelegated(true)
-		tx = new(LegacyBuilder).Features(features).Build()
+		trx, _ = NewTxBuilder(txType).Features(features).Build()
 
 		// Sign the transaction as a delegator
-		signedTx, err = SignDelegated(tx, originPK, delegatorPK)
+		signedTx, err = SignDelegated(trx, originPK, delegatorPK)
 		assert.NoError(t, err)
 		assert.NotNil(t, signedTx)
 
