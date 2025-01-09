@@ -39,25 +39,6 @@ func createTx(txType int, chainTag byte, gasPriceCoef uint8, expiration uint32, 
 	return transaction.WithSignature(signature)
 }
 
-func createDynFeeTx(chainTag byte, expiration uint32, gas uint64, maxFeePerGas, maxPriorityFeePerGas *big.Int, nonce uint64, dependsOn *thor.Bytes32, clause *tx.Clause, br tx.BlockRef) *tx.Transaction {
-	builder := new(tx.DynFeeBuilder).
-		ChainTag(chainTag).
-		Expiration(expiration).
-		Gas(gas).
-		MaxFeePerGas(maxFeePerGas).
-		MaxPriorityFeePerGas(maxPriorityFeePerGas).
-		Nonce(nonce).
-		DependsOn(dependsOn).
-		Clause(clause).
-		BlockRef(br)
-
-	transaction := builder.Build()
-
-	signature, _ := crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-
-	return transaction.WithSignature(signature)
-}
-
 func TestAdopt(t *testing.T) {
 	// Setup environment
 	db := muxdb.NewMem()

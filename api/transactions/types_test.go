@@ -132,15 +132,6 @@ func newDynFeeTx(clause *tx.Clause) *tx.Transaction {
 	return tx.WithSignature(sig)
 }
 
-func newDynFeeTx(clause *tx.Clause) *tx.Transaction {
-	tx := new(tx.DynFeeBuilder).
-		Clause(clause).
-		Build()
-	pk, _ := crypto.GenerateKey()
-	sig, _ := crypto.Sign(tx.SigningHash().Bytes(), pk)
-	return tx.WithSignature(sig)
-}
-
 func randomBytes32() thor.Bytes32 {
 	var b32 thor.Bytes32
 

@@ -58,34 +58,6 @@ func txBuilder(txType int, chainTag byte, clauses []*tx.Clause, gas uint64, bloc
 		Gas(gas)
 }
 
-func legacyTxBuilder(chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, features tx.Features) *tx.LegacyBuilder {
-	builder := new(tx.LegacyBuilder).ChainTag(chainTag)
-	for _, c := range clauses {
-		builder.Clause(c)
-	}
-
-	return builder.BlockRef(blockRef).
-		Expiration(expiration).
-		Nonce(rand.Uint64()). //#nosec G404
-		DependsOn(dependsOn).
-		Features(features).
-		Gas(gas)
-}
-
-func dynFeeTxBuilder(chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, features tx.Features) *tx.DynFeeBuilder {
-	builder := new(tx.DynFeeBuilder).ChainTag(chainTag)
-	for _, c := range clauses {
-		builder.Clause(c)
-	}
-
-	return builder.BlockRef(blockRef).
-		Expiration(expiration).
-		Nonce(rand.Uint64()). //#nosec G404
-		DependsOn(dependsOn).
-		Features(features).
-		Gas(gas)
-}
-
 func SetupTest() (genesis.DevAccount, *chain.Repository, *block.Block, *state.State) {
 	acc := genesis.DevAccounts()[0]
 
