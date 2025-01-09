@@ -95,7 +95,7 @@ func TestPendingTx_DispatchLoop(t *testing.T) {
 	p.Subscribe(txCh)
 
 	// Add a new tx to the mempool
-	transaction := createLegacyTx(repo, 0)
+	transaction := createTx(repo, 0, tx.LegacyTxType)
 	txPool.AddLocal(transaction)
 
 	// Start the dispatch loop
@@ -113,7 +113,7 @@ func TestPendingTx_DispatchLoop(t *testing.T) {
 	p.Unsubscribe(txCh)
 
 	// Add another tx to the mempool
-	tx2 := createDynFeeTx(repo, 1)
+	tx2 := createTx(repo, 1, tx.DynamicFeeTxType)
 	txPool.AddLocal(tx2)
 
 	// Assert that the channel did not receive the second transaction
@@ -165,7 +165,7 @@ func TestPendingTx_NoWriteAfterUnsubscribe(t *testing.T) {
 
 	done := make(chan struct{})
 	// Attempt to write a new transaction
-	trx := createLegacyTx(thorChain.Repo(), 0)
+	trx := createTx(thorChain.Repo(), 0, tx.LegacyTxType)
 	assert.NotPanics(t, func() {
 		p.dispatch(trx, done) // dispatch should not panic after unsubscribe
 	}, "Dispatching after unsubscribe should not panic")
@@ -203,7 +203,7 @@ func TestPendingTx_UnsubscribeOnWebSocketClose(t *testing.T) {
 	defer ws.Close()
 
 	// Add a transaction
-	trx := createLegacyTx(thorChain.Repo(), 0)
+	trx := createTx(thorChain.Repo(), 0, tx.LegacyTxType)
 	txPool.AddLocal(trx)
 
 	// Wait to receive transaction
@@ -225,38 +225,21 @@ func TestPendingTx_UnsubscribeOnWebSocketClose(t *testing.T) {
 	sub.pendingTx.mu.Unlock()
 }
 
-func createLegacyTx(repo *chain.Repository, addressNumber uint) *tx.Transaction {
+func createTx(repo *chain.Repository, addressNumber uint, txType int) *tx.Transaction {
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 
+	trx, _ := tx.NewTxBuilder(txType).
+		ChainTag(repo.ChainTag()).
+		GasPriceCoef(1).
+		Expiration(1000).
+		Gas(21000).
+		Nonce(uint64(datagen.RandInt())).
+		Clause(cla).
+		BlockRef(tx.NewBlockRef(0)).
+		Build()
 	return tx.MustSign(
-		new(tx.LegacyBuilder).
-			ChainTag(repo.ChainTag()).
-			GasPriceCoef(1).
-			Expiration(1000).
-			Gas(21000).
-			Nonce(uint64(datagen.RandInt())).
-			Clause(cla).
-			BlockRef(tx.NewBlockRef(0)).
-			Build(),
-		genesis.DevAccounts()[addressNumber].PrivateKey,
-	)
-}
-
-func createDynFeeTx(repo *chain.Repository, addressNumber uint) *tx.Transaction {
-	addr := thor.BytesToAddress([]byte("to"))
-	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-
-	return tx.MustSign(
-		new(tx.DynFeeBuilder).
-			ChainTag(repo.ChainTag()).
-			MaxFeePerGas(big.NewInt(1)).
-			Expiration(10).
-			Gas(21000).
-			Nonce(1).
-			Clause(cla).
-			BlockRef(tx.NewBlockRef(0)).
-			Build(),
+		trx,
 		genesis.DevAccounts()[addressNumber].PrivateKey,
 	)
 }

@@ -29,15 +29,7 @@ func newChainRepo(db *muxdb.MuxDB) *chain.Repository {
 }
 
 func newTx(txType int, chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, features tx.Features, from genesis.DevAccount) *tx.Transaction {
-	var trx *tx.Transaction
-	switch txType {
-	case tx.LegacyTxType:
-		trx = legacyTxBuilder(chainTag, clauses, gas, blockRef, expiration, dependsOn, features).Build()
-	case tx.DynamicFeeTxType:
-		trx = dynFeeTxBuilder(chainTag, clauses, gas, blockRef, expiration, dependsOn, features).Build()
-	default:
-		panic(tx.ErrTxTypeNotSupported)
-	}
+	trx, _ := txBuilder(txType, chainTag, clauses, gas, blockRef, expiration, dependsOn, features).Build()
 	return tx.MustSign(trx, from.PrivateKey)
 }
 
@@ -45,15 +37,7 @@ func newDelegatedTx(txType int, chainTag byte, clauses []*tx.Clause, gas uint64,
 	var features tx.Features
 	features.SetDelegated(true)
 
-	var trx *tx.Transaction
-	switch txType {
-	case tx.LegacyTxType:
-		trx = legacyTxBuilder(chainTag, clauses, gas, blockRef, expiration, dependsOn, features).Build()
-	case tx.DynamicFeeTxType:
-		trx = dynFeeTxBuilder(chainTag, clauses, gas, blockRef, expiration, dependsOn, features).Build()
-	default:
-		panic(tx.ErrTxTypeNotSupported)
-	}
+	trx, _ := txBuilder(txType, chainTag, clauses, gas, blockRef, expiration, dependsOn, features).Build()
 
 	trx = tx.MustSignDelegated(
 		trx,
@@ -64,22 +48,8 @@ func newDelegatedTx(txType int, chainTag byte, clauses []*tx.Clause, gas uint64,
 	return trx
 }
 
-func legacyTxBuilder(chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, features tx.Features) *tx.LegacyBuilder {
-	builder := new(tx.LegacyBuilder).ChainTag(chainTag)
-	for _, c := range clauses {
-		builder.Clause(c)
-	}
-
-	return builder.BlockRef(blockRef).
-		Expiration(expiration).
-		Nonce(rand.Uint64()). //#nosec G404
-		DependsOn(dependsOn).
-		Features(features).
-		Gas(gas)
-}
-
-func dynFeeTxBuilder(chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, features tx.Features) *tx.DynFeeBuilder {
-	builder := new(tx.DynFeeBuilder).ChainTag(chainTag)
+func txBuilder(txType int, chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, features tx.Features) *tx.Builder {
+	builder := tx.NewTxBuilder(txType).ChainTag(chainTag)
 	for _, c := range clauses {
 		builder.Clause(c)
 	}
