@@ -65,7 +65,7 @@ type MuxDB struct {
 }
 
 // Adds metrics if the error is due to file/db lock.
-func addMetricsIfLocked(err error, event string) {
+func AddMetricsIfLocked(err error, event string) {
 	if err == nil {
 		return
 	}
@@ -102,10 +102,10 @@ func Open(path string, options *Options) (*MuxDB, error) {
 
 	// open leveldb
 	ldb, err := leveldb.OpenFile(path, &ldbOpts)
-	addMetricsIfLocked(err, "open-file")
+	AddMetricsIfLocked(err, "open-file")
 	if _, corrupted := err.(*dberrors.ErrCorrupted); corrupted {
 		ldb, err = leveldb.RecoverFile(path, &ldbOpts)
-		addMetricsIfLocked(err, "recover-file")
+		AddMetricsIfLocked(err, "recover-file")
 	}
 
 	if err != nil {
@@ -144,7 +144,7 @@ func Open(path string, options *Options) (*MuxDB, error) {
 func NewMem() *MuxDB {
 	storage := storage.NewMemStorage()
 	ldb, err := leveldb.Open(storage, nil)
-	addMetricsIfLocked(err, "open-memory-backed-db")
+	AddMetricsIfLocked(err, "open-memory-backed-db")
 
 	engine := engine.NewLevelEngine(ldb)
 	return &MuxDB{

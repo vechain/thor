@@ -28,6 +28,7 @@ import (
 	"github.com/vechain/thor/v2/consensus"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -235,6 +236,7 @@ func (n *Node) txStashLoop(ctx context.Context) {
 
 	db, err := leveldb.OpenFile(n.txStashPath, nil)
 	if err != nil {
+		muxdb.AddMetricsIfLocked(err, "open-file-tx-stash")
 		logger.Error("create tx stash", "err", err)
 		return
 	}
