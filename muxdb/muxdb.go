@@ -10,6 +10,7 @@ package muxdb
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/syndtr/goleveldb/leveldb"
 	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
@@ -62,6 +63,21 @@ type MuxDB struct {
 	trieBackend *backend
 }
 
+func collectCompactionMetrics(ldb *leveldb.DB) {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		// stats is a table in a single string, so we need to parse it
+		stats, err := ldb.GetProperty("leveldb.stats")
+		if err != nil {
+			logger.Error("Failed to get LevelDB stats: %v", err)
+		} else {
+			collectCompactionValues(stats)
+		}
+	}
+}
+
 // Open opens or creates DB at the given path.
 func Open(path string, options *Options) (*MuxDB, error) {
 	// prepare leveldb options
@@ -102,6 +118,8 @@ func Open(path string, options *Options) (*MuxDB, error) {
 		ldb.Close()
 		return nil, err
 	}
+
+	go collectCompactionMetrics(ldb)
 
 	return &MuxDB{
 		engine: engine,
