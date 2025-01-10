@@ -80,7 +80,7 @@ func TestBuilder_ReceiptsRoot(t *testing.T) {
 
 func TestBuilder_Transaction(t *testing.T) {
 	builder := &Builder{}
-	tx := new(tx.LegacyBuilder).Build()
+	tx, _ := tx.NewTxBuilder(tx.LegacyTxType).Build()
 	builder.Transaction(tx)
 	b := builder.Build()
 	assert.Contains(t, b.Transactions(), tx)
