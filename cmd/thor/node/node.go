@@ -280,8 +280,8 @@ func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts uint
 	defer func() {
 		n.processLock.Unlock()
 		metricBlockProcessingLockCount().AddWithLabel(1, map[string]string{"type": "released"})
-		timeElapsed := mclock.Now() - startTime
-		metricBlockProcessingLockDuration().Observe(time.Duration(timeElapsed).Milliseconds())
+		lockElapsed := mclock.Now() - startTime
+		metricBlockProcessingLockDuration().Observe(time.Duration(lockElapsed).Milliseconds())
 	}()
 
 	if blockNum > n.maxBlockNum {
