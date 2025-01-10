@@ -10,6 +10,8 @@ package muxdb
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"syscall"
 
 	"github.com/syndtr/goleveldb/leveldb"
 	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
@@ -62,6 +64,24 @@ type MuxDB struct {
 	trieBackend *backend
 }
 
+// Adds metrics if the error is due to file/db lock.
+func addMetricsIfLocked(err error, event string) {
+	if err == nil {
+		return
+	}
+
+	if pathErr, ok := err.(*os.PathError); ok {
+		// Eventually calls to openFileNoLog https://go.dev/src/os/file_unix.go
+		if errno, ok := pathErr.Err.(syscall.Errno); ok && errno == syscall.EWOULDBLOCK {
+			metricLeveldbLock().AddWithLabel(1, map[string]string{"event": event})
+		}
+	} else if err == syscall.EWOULDBLOCK { // setFileLock https://github.com/vechain/goleveldb/blob/master/leveldb/storage/file_storage_unix.go#L50
+		metricLeveldbLock().AddWithLabel(1, map[string]string{"event": event})
+	} else if err == storage.ErrLocked { // If using sessions
+		metricLeveldbLock().AddWithLabel(1, map[string]string{"event": event})
+	}
+}
+
 // Open opens or creates DB at the given path.
 func Open(path string, options *Options) (*MuxDB, error) {
 	// prepare leveldb options
@@ -82,9 +102,12 @@ func Open(path string, options *Options) (*MuxDB, error) {
 
 	// open leveldb
 	ldb, err := leveldb.OpenFile(path, &ldbOpts)
+	addMetricsIfLocked(err, "open-file")
 	if _, corrupted := err.(*dberrors.ErrCorrupted); corrupted {
 		ldb, err = leveldb.RecoverFile(path, &ldbOpts)
+		addMetricsIfLocked(err, "recover-file")
 	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +143,8 @@ func Open(path string, options *Options) (*MuxDB, error) {
 // NewMem creates a memory-backed DB.
 func NewMem() *MuxDB {
 	storage := storage.NewMemStorage()
-	ldb, _ := leveldb.Open(storage, nil)
+	ldb, err := leveldb.Open(storage, nil)
+	addMetricsIfLocked(err, "open-memory-backed-db")
 
 	engine := engine.NewLevelEngine(ldb)
 	return &MuxDB{
