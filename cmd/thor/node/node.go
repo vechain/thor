@@ -274,13 +274,13 @@ func (n *Node) txStashLoop(ctx context.Context) {
 
 // guardBlockProcessing adds lock on block processing and maintains block conflicts.
 func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts uint32) error) error {
-	startTime := mclock.Now()
 	n.processLock.Lock()
+	startTime := mclock.Now()
 	metricBlockProcessingLockCount().AddWithLabel(1, map[string]string{"type": "acquired"})
 	defer func() {
 		n.processLock.Unlock()
-		metricBlockProcessingLockCount().AddWithLabel(1, map[string]string{"type": "released"})
 		lockElapsed := mclock.Now() - startTime
+		metricBlockProcessingLockCount().AddWithLabel(1, map[string]string{"type": "released"})
 		metricBlockProcessingLockDuration().Observe(time.Duration(lockElapsed).Milliseconds())
 	}()
 
