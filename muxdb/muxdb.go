@@ -70,14 +70,27 @@ func AddMetricsIfLocked(err error, event string) {
 		return
 	}
 
-	if pathErr, ok := err.(*os.PathError); ok {
+	isLockError := false
+
+	switch e := err.(type) {
+	case *os.PathError:
 		// Eventually calls to openFileNoLog https://go.dev/src/os/file_unix.go
-		if errno, ok := pathErr.Err.(syscall.Errno); ok && errno == syscall.EWOULDBLOCK {
-			metricLeveldbLock().AddWithLabel(1, map[string]string{"event": event})
+		if errno, ok := e.Err.(syscall.Errno); ok && errno == syscall.EWOULDBLOCK {
+			isLockError = true
 		}
-	} else if err == syscall.EWOULDBLOCK { // setFileLock https://github.com/vechain/goleveldb/blob/master/leveldb/storage/file_storage_unix.go#L50
-		metricLeveldbLock().AddWithLabel(1, map[string]string{"event": event})
-	} else if err == storage.ErrLocked { // If using sessions
+	case syscall.Errno:
+		// setFileLock https://github.com/vechain/goleveldb/blob/master/leveldb/storage/file_storage_unix.go#L50
+		if e == syscall.EWOULDBLOCK {
+			isLockError = true
+		}
+	case error:
+		// If using sessions
+		if e == storage.ErrLocked {
+			isLockError = true
+		}
+	}
+
+	if isLockError {
 		metricLeveldbLock().AddWithLabel(1, map[string]string{"event": event})
 	}
 }
