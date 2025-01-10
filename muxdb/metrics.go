@@ -9,6 +9,8 @@ package muxdb
 
 import (
 	"fmt"
+	"math"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 
@@ -17,17 +19,17 @@ import (
 
 var (
 	metricCacheHitMiss = metrics.LazyLoadGaugeVec("cache_hit_miss_count", []string{"type", "event"})
-	// metricCompaction   = metrics.LazyLoadGaugeVec("cache_size", []string{"level", "number-of-tables", "size-mb", "time-sec", "read-mb", "write-mb"})
+	metricCompaction   = metrics.LazyLoadGaugeVec("compaction_stats_gauge", []string{"level", "type"})
 )
 
 // CompactionValues holds the values for a specific level.
 type CompactionValues struct {
 	Level   string
-	Tables  string
-	SizeMB  string
-	TimeSec string
-	ReadMB  string
-	WriteMB string
+	Tables  int64
+	SizeMB  int64
+	TimeSec int64
+	ReadMB  int64
+	WriteMB int64
 }
 
 // Collects the compaction values from the stats table.
@@ -45,7 +47,6 @@ Compactions
  Total |       7203 |   27425.29804 |      20.26837 |    5089.71648 |    6705.68758
 
 */
-
 func collectCompactionValues(stats string) {
 	// Create a new tabwriter
 	var sb strings.Builder
@@ -63,10 +64,29 @@ func collectCompactionValues(stats string) {
 		logger.Error("Failed to extract values for stats %s: %v", stats, err)
 	} else {
 		for _, value := range values {
-			fmt.Printf("Level %s - Tables: %s, Size(MB): %s, Time(sec): %s, Read(MB): %s, Write(MB): %s\n",
-				value.Level, value.Tables, value.SizeMB, value.TimeSec, value.ReadMB, value.WriteMB)
+			metricCompaction().SetWithLabel(value.Tables, map[string]string{"level": value.Level, "type": "tables"})
+			metricCompaction().SetWithLabel(value.SizeMB, map[string]string{"level": value.Level, "type": "size-mb"})
+			metricCompaction().SetWithLabel(value.TimeSec, map[string]string{"level": value.Level, "type": "time-sec"})
+			metricCompaction().SetWithLabel(value.ReadMB, map[string]string{"level": value.Level, "type": "read-mb"})
+			metricCompaction().SetWithLabel(value.WriteMB, map[string]string{"level": value.Level, "type": "write-mb"})
 		}
 	}
+}
+
+func parseAndRoundFloatToInt64(str string) (int64, error) {
+	// Parse the string to a float64
+	floatValue, err := strconv.ParseFloat(str, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	// Round the float64 value
+	roundedValue := math.Round(floatValue)
+
+	// Convert the rounded float64 to int64
+	intValue := int64(roundedValue)
+
+	return intValue, nil
 }
 
 func extractCompactionValues(stats string) ([]CompactionValues, error) {
@@ -76,14 +96,11 @@ func extractCompactionValues(stats string) ([]CompactionValues, error) {
 	for _, line := range lines[2 : len(lines)-3] {
 		columns := strings.Fields(line)
 		if len(columns) >= 6 {
-			values = append(values, CompactionValues{
-				Level:   columns[0],
-				Tables:  columns[2],
-				SizeMB:  columns[4],
-				TimeSec: columns[6],
-				ReadMB:  columns[8],
-				WriteMB: columns[10],
-			})
+			value, err := parseCompactionColumns(columns)
+			if err != nil {
+				return nil, err
+			}
+			values = append(values, value)
 		}
 	}
 
@@ -92,4 +109,35 @@ func extractCompactionValues(stats string) ([]CompactionValues, error) {
 	}
 
 	return values, nil
+}
+
+func parseCompactionColumns(columns []string) (CompactionValues, error) {
+	tables, err := strconv.ParseInt(columns[2], 10, 64)
+	if err != nil {
+		return CompactionValues{}, fmt.Errorf("error when parsing tables: %v", err)
+	}
+	sizeMb, err := parseAndRoundFloatToInt64(columns[4])
+	if err != nil {
+		return CompactionValues{}, fmt.Errorf("error when parsing sizeMb: %v", err)
+	}
+	timeSec, err := parseAndRoundFloatToInt64(columns[6])
+	if err != nil {
+		return CompactionValues{}, fmt.Errorf("error when parsing timeSec: %v", err)
+	}
+	readMb, err := parseAndRoundFloatToInt64(columns[8])
+	if err != nil {
+		return CompactionValues{}, fmt.Errorf("error when parsing readMb: %v", err)
+	}
+	writeMb, err := parseAndRoundFloatToInt64(columns[10])
+	if err != nil {
+		return CompactionValues{}, fmt.Errorf("error when parsing writeMb: %v", err)
+	}
+	return CompactionValues{
+		Level:   columns[0],
+		Tables:  tables,
+		SizeMB:  sizeMb,
+		TimeSec: timeSec,
+		ReadMB:  readMb,
+		WriteMB: writeMb,
+	}, nil
 }
