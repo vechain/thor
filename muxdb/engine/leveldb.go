@@ -8,7 +8,9 @@ package engine
 import (
 	"context"
 	"sync"
+	"time"
 
+	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
@@ -112,11 +114,16 @@ func (ldb *levelEngine) Bulk() kv.Bulk {
 		return batch
 	}
 	flush := func(minSize int) error {
-		if batch != nil && len(batch.Dump()) >= minSize {
+		batchBytesNo := len(batch.Dump())
+		if batch != nil && batchBytesNo >= minSize {
 			if batch.Len() > 0 {
+				startTime := mclock.Now()
 				if err := ldb.db.Write(batch, &writeOpt); err != nil {
 					return err
 				}
+				metricBatchWriteBytes().Set(int64(batchBytesNo))
+				batchWriteElapsed := mclock.Now() - startTime
+				metricBatchWriteDuration().Observe(time.Duration(batchWriteElapsed).Milliseconds())
 			}
 			ldb.batchPool.Put(batch)
 			batch = nil
