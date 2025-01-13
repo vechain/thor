@@ -114,19 +114,20 @@ func (ldb *levelEngine) Bulk() kv.Bulk {
 		return batch
 	}
 	flush := func(minSize int) error {
-		batchBytesNo := len(batch.Dump())
-		if batch != nil && batchBytesNo >= minSize {
-			if batch.Len() > 0 {
-				startTime := mclock.Now()
-				if err := ldb.db.Write(batch, &writeOpt); err != nil {
-					return err
+		if batch != nil {
+			if batchBytesNo := len(batch.Dump()); batchBytesNo >= minSize {
+				if batch.Len() > 0 {
+					startTime := mclock.Now()
+					if err := ldb.db.Write(batch, &writeOpt); err != nil {
+						return err
+					}
+					metricBatchWriteBytes().Set(int64(batchBytesNo))
+					batchWriteElapsed := mclock.Now() - startTime
+					metricBatchWriteDuration().Observe(time.Duration(batchWriteElapsed).Milliseconds())
 				}
-				metricBatchWriteBytes().Set(int64(batchBytesNo))
-				batchWriteElapsed := mclock.Now() - startTime
-				metricBatchWriteDuration().Observe(time.Duration(batchWriteElapsed).Milliseconds())
+				ldb.batchPool.Put(batch)
+				batch = nil
 			}
-			ldb.batchPool.Put(batch)
-			batch = nil
 		}
 		return nil
 	}
