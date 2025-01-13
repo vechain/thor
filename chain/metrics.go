@@ -8,8 +8,8 @@ package chain
 import "github.com/vechain/thor/v2/metrics"
 
 var (
-	metricCacheHitMiss = metrics.LazyLoadGaugeVec("repo_cache_hit_miss_count", []string{"type", "event"})
-	metricBlockRepositoryCounter = metrics.LazyLoadCounterVec("block_repository_count", []string{"type", "target"})
+	metricCacheHitMiss                 = metrics.LazyLoadGaugeVec("repo_cache_hit_miss_count", []string{"type", "event"})
+	metricBlockRepositoryCounter       = metrics.LazyLoadCounterVec("block_repository_count", []string{"type", "target"})
 	metricTransactionRepositoryCounter = metrics.LazyLoadCounterVec("transaction_repository_count", []string{"type", "target"})
-	metricReceiptRepositoryCounter = metrics.LazyLoadCounterVec("receipt_repository_count", []string{"type", "target"})
+	metricReceiptRepositoryCounter     = metrics.LazyLoadCounterVec("receipt_repository_count", []string{"type", "target"})
 )
