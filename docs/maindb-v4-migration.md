@@ -1,11 +1,11 @@
-# MainDB v4 Migration
+# MainDB v4 Migration Paths
 
 ## Introduction
 
-The `v2.2.0` release introduces database and SQLite changes to improve storage. This document outlines the possible
-migration techniques.
+The `v2.2.0` release introduces database and SQLite changes to improve performance and storage. This document outlines the possible
+migration paths.
 
-Note that the examples below assume you are operating a node on mainnet.
+**Note:** The examples below assume you are operating a node on mainnet.
 
 ## Table of Contents
 
@@ -19,22 +19,22 @@ Note that the examples below assume you are operating a node on mainnet.
 
 ## Blue / Green Deployment
 
-- If you have implemented a blue/green deployment strategy, you can simply start a new node with the new image and
-  allow it to sync. Once synced, you can switch the traffic to the new node and stop the old one.
+- For environments implementing a blue/green deployment strategy , starting a new node with the update image and allowing it to
+  sync before a switching traffic is a seamless approach. Once synced, traffic can be directed towards to the new node, and the
+  old node can be stopped.
 
 ## Sync in Parallel
 
-- Syncing in parallel allows for minimal downtime.
-- Note that syncing in parallel requires additional CPU, RAM and storage resources.
+- Syncing in parallel minimizes downtime but requires additional CPU, RAM and storage resources.
 
 ### 1. Docker Migration
 
-Prior to running `v2.2.0`, you may have mapped the Docker volumes to a location on your host machine. 
+For setups where Docker volumes are mapped to a location on the host machine.
 
-**Note**: These examples assume you used the default data directory within the container. If you have used a different
-directory, please adjust the examples accordingly.
+**Note**: The examples assume the default data directory within the container is used. If a cusom directory is configured,
+adjustments to the examples are required.
 
-Assuming you started your previous node with a host instance directory of `/path/to/thor`:
+For an existing node with a host instance directory of `/path/to/thor`:
 
 ```html
 docker run -d \
@@ -42,43 +42,39 @@ docker run -d \
    -p 8669:8669 \
    -p 11235:11235 \
    --name <your-container-name> \
-   vechain/thor:v2.1.4 --network main <your-additional-flags>
+   vechain/thor:v2.1.4 --network main <additional-flags>
 ```
 
-With `v2.2.0`, you can start a new docker container without exposing the ports:
+Start a new container with `v2.2.0`, without exposing the ports:
 
 ```html
 docker run -d \
    -v /path/to/thor:/home/thor/.org.vechain.thor 
    --name node-new \
-   vechain/thor:v2.2.0 --network main <your-additional-flags>
+   vechain/thor:v2.2.0 --network main <additional-flags>
 ```
 
-- The `v2.1.4` node will continue to operate and write data to the directory `/path/to/thor/instance-39627e6be7ec1b4a-v3`, while
-  `v2.2.0` will write the new databases to `/path/to/thor/instance-39627e6be7ec1b4a-v4`.
-- Allow some time for the new node to sync. You can inspect the logs using `docker logs --tail 25 node-new`.
-- Once the node is fully synced, it is time to switch the traffic to the new node.
-- Stop both of the nodes.
+- The `v2.1.4` node will continue to operate and write data to the directory `/path/to/thor/instance-39627e6be7ec1b4a-v3`, while the
+  `v2.2.0` node will write the new databases to `/path/to/thor/instance-39627e6be7ec1b4a-v4`.
+- Allow some time for the new node to sync.
+- You can inspect the logs using `docker logs --tail 25 node-new`.
+- After the new node is fully synced, stop both nodes and restart the original container with the updated image.
 
 ```html
 docker stop node-new
 docker rm node-new
-docker stop <your-container-name>
-docker rm <your-container-name>
-```
+docker stop <container-name>
+docker rm <container-name>
 
-- Start the original command that you used **with the new image**, E.g.:
-
-```html
 docker run -d \
    -v /path/to/thor:/home/thor/.org.vechain.thor 
    -p 8669:8669 \
    -p 11235:11235 \
    --name <your-container-name> \
-   vechain/thor:v2.2.0 --network main <your-additional-flags>
+   vechain/thor:v2.2.0 --network main <additional-flags>
 ```
 
-- Once you have confirmed that the node is functioning as expected, you can clean up the old databases:
+- Confirm that the node is functioning as expected, before cleaning up the old databases:
 
 ```bash
 rm -rf /path/to/thor/instance-39627e6be7ec1b4a-v3
@@ -86,17 +82,17 @@ rm -rf /path/to/thor/instance-39627e6be7ec1b4a-v3
 
 ### 2. Manual Migration
 
-If you installed the `thor` CLI from the source, you can follow the steps below.
+For nodes that installed from the source, follow the steps below:
 
-- Assuming you started the old version of the node with following command:
+- Assuming the old nodes was started with:
 
 ```html
-/previous/executable/thor --network main <your-additional-flags>
+/previous/executable/thor --network main <additional-flags>
 ```
 
-- Follow the steps below to build the new `thor` binary: [Install From Source](#install-from-source)
+- Build the new `thor` binary as outlined in [Install From Source](#install-from-source)
 
-- Start the new node. **Note** that it is important to run the node on different API, Metrics, and Admin addresses, as well as a different P2P port:
+- Start the new node with different API, Metrics, Admin and P2P ports:
 
 ```html
 ./bin/thor --network main \
@@ -104,43 +100,46 @@ If you installed the `thor` CLI from the source, you can follow the steps below.
     --metrics-addr localhost:2102 \
     --admin-addr localhost:2103 \
     --p2p-port 11222 \
-    <your-additional-flags>
+    <additional-flags>
 ```
 
-- The `v2.1.4` node will continue to operate and write data to the data directory under `/data/dir/instance-39627e6be7ec1b4a-v3`, while `v2.2.0` will write the new databases to `/data/dir/instance-39627e6be7ec1b4a-v4`.
-- Allow some time for the new node to sync. 
-- Once the node is fully synced, it is time to switch the traffic to the new node.
+- The `v2.1.4` node will continue to operate and write data to the data directory under `/data/dir/instance-39627e6be7ec1b4a-v3`, while
+  `v2.2.0` node writes to `/data/dir/instance-39627e6be7ec1b4a-v4`.
+- Allow the new node to sync before switching traffic.
 
-#### 1. Get the new nodes PID:
+#### Stopping and Switching Nodes
+
+##### 1. Get the PID of the new node:
 
 ```html
 lsof -n -i:8668
 ```
-#### 2. Stop the new node:
+
+##### 2. Stop the new node:
 
 ```html
 kill <pid>
 ```
 
-#### 3. Get the old nodes PID:
+##### 3. Get the PID of the old node:
 
 ```html
 lsof -n -i:8669
 ```
 
-#### 4. Stop the old node:
+##### 4. Stop the old node:
 
 ```html
 kill <pid>
 ```
 
-#### 5. Run the original command with the new binary:
+##### 5. Restart the original node command with the new binary:
 
 ```html
-/new/executable/thor --network main <your-additional-flags>
+/new/executable/thor --network main <additional-flags>
 ```
 
-#### 6. Remove the old databases:
+##### 6. Remove the old databases:
 
 ```bash
 rm -rf /data/dir/instance-39627e6be7ec1b4a-v3
@@ -175,7 +174,7 @@ make thor
 ./bin/thor --version
 ```
 
-- Optionally, you can copy the binary to a location in your `$PATH`, E.g.:
+- (Optional), Copy the binary to a location in your `$PATH`:
 
 ```bash
 sudo cp ./bin/thor /usr/local/bin
