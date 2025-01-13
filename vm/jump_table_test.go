@@ -15,7 +15,7 @@ import (
 func TestPush0OpCode(t *testing.T) {
 	// Arrange
 	mockStack := newstack()
-	jt := NewShanghaiInstructionSet()
+	jt := NewGalacticaInstructionSet()
 	push0 := jt[PUSH0]
 
 	// Check the stack is empty before executing PUSH0

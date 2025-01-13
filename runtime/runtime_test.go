@@ -236,9 +236,9 @@ func TestEVMFunction(t *testing.T) {
 		},
 	}
 
-	shanghaiTests := []testcase{
+	galacticaTests := []testcase{
 		{
-			name:       "pre ETH_SH deploy 0xEF started contract code",
+			name:       "pre GALACTICA deploy 0xEF started contract code",
 			code:       "",
 			abi:        "",
 			methodName: "",
@@ -254,7 +254,7 @@ func TestEVMFunction(t *testing.T) {
 			},
 		},
 		{
-			name:       "ETH_SH deploy 0xEF started contract code",
+			name:       "GALACTICA deploy 0xEF started contract code",
 			code:       "",
 			abi:        "",
 			methodName: "",
@@ -274,7 +274,7 @@ func TestEVMFunction(t *testing.T) {
 			},
 		},
 		{
-			name:       "ETH_SH deploy None 0xEF started contract code",
+			name:       "GALACTICA deploy None 0xEF started contract code",
 			code:       "",
 			abi:        "",
 			methodName: "",
@@ -290,7 +290,7 @@ func TestEVMFunction(t *testing.T) {
 			},
 		},
 		{
-			name:       "ETH_SH PUSH0 gas cost",
+			name:       "GALACTICA PUSH0 gas cost",
 			code:       "",
 			abi:        "",
 			methodName: "",
@@ -307,7 +307,7 @@ func TestEVMFunction(t *testing.T) {
 			},
 		},
 		{
-			name:       "ETH_SH BASEFEE output gas cost",
+			name:       "GALACTICA BASEFEE output gas cost",
 			code:       hex.EncodeToString([]byte{byte(vm.BASEFEE)}),
 			abi:        "",
 			methodName: "",
@@ -323,7 +323,7 @@ func TestEVMFunction(t *testing.T) {
 			},
 		},
 		{
-			name:       "ETH_SH BASEFEE",
+			name:       "GALACTICA BASEFEE",
 			code:       hex.EncodeToString([]byte{byte(vm.BASEFEE), byte(vm.PUSH1), 0x80, byte(vm.MSTORE), byte(vm.PUSH1), 0x20, byte(vm.PUSH1), 0x80, byte(vm.RETURN)}),
 			abi:        "",
 			methodName: "",
@@ -370,7 +370,7 @@ func TestEVMFunction(t *testing.T) {
 
 				gasBefore := math.MaxUint64 - out.LeftOverGas
 
-				forkConfig.ETH_SH = 0
+				forkConfig.GALACTICA = 0
 				exec, _ = runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, forkConfig).
 					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
 				out, _, err = exec()
@@ -415,7 +415,7 @@ func TestEVMFunction(t *testing.T) {
 
 				gasBefore := math.MaxUint64 - out.LeftOverGas
 
-				forkConfig.ETH_SH = 0
+				forkConfig.GALACTICA = 0
 				exec, _ = runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, forkConfig).
 					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
 				out, _, err = exec()
@@ -460,7 +460,7 @@ func TestEVMFunction(t *testing.T) {
 
 				gasBefore := math.MaxUint64 - out.LeftOverGas
 
-				forkConfig.ETH_SH = 0
+				forkConfig.GALACTICA = 0
 				exec, _ = runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, forkConfig).
 					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
 				out, _, err = exec()
@@ -506,7 +506,7 @@ func TestEVMFunction(t *testing.T) {
 
 				gasBefore := math.MaxUint64 - out.LeftOverGas
 
-				forkConfig.ETH_SH = 0
+				forkConfig.GALACTICA = 0
 				exec, _ = runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, forkConfig).
 					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
 				out, _, err = exec()
@@ -524,7 +524,7 @@ func TestEVMFunction(t *testing.T) {
 	var tests = []testcase{}
 
 	tests = append(tests, baseTests...)
-	tests = append(tests, shanghaiTests...)
+	tests = append(tests, galacticaTests...)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

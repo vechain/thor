@@ -50,14 +50,15 @@ var (
 	byzantiumInstructionSet      = NewByzantiumInstructionSet()
 	constantinopleInstructionSet = NewConstantinopleInstructionSet()
 	istanbulInstructionSet       = NewIstanbulInstructionSet()
-	shanghaiInstructionSet       = NewShanghaiInstructionSet()
+	galacticaInstructionSet      = NewGalacticaInstructionSet()
 )
 
 type JumpTable [256]*operation
 
-// NewShanghaiInstructionSet returns the frontier, homestead
-// byzantium, constantinople , istanbul and shanghai instructions.
-func NewShanghaiInstructionSet() *JumpTable {
+// NewGalacticaInstructionSet returns the frontier, homestead
+// byzantium, constantinople , istanbul and shanghai (included in galactica)
+// instructions.
+func NewGalacticaInstructionSet() *JumpTable {
 	instructionSet := NewIstanbulInstructionSet()
 	instructionSet[BASEFEE] = &operation{
 		execute:       opBaseFee,

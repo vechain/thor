@@ -77,11 +77,11 @@ var PrecompiledContractsIstanbul = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{9}): &blake2F{},
 }
 
-// PrecompiledContractsShanghai contains the default set of pre-compiled Ethereum
+// PrecompiledContractsGalactica contains the default set of pre-compiled Ethereum
 // contracts used in the Shanghai release.
-// NOTE: Shanghai release does not introduce any changes in precompiled contracts.
-// We are catching up from Istanbul, so Shanghai in thor includes eip1108 and eip2565.
-var PrecompiledContractsShanghai = map[common.Address]PrecompiledContract{
+// NOTE: Galactica release does not introduce any changes in precompiled contracts.
+// We are catching up from Istanbul, so Galactica in thor includes eip1108 and eip2565.
+var PrecompiledContractsGalactica = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{1}): &safeEcrecover{},
 	common.BytesToAddress([]byte{2}): &sha256hash{},
 	common.BytesToAddress([]byte{3}): &ripemd160hash{},
@@ -94,7 +94,7 @@ var PrecompiledContractsShanghai = map[common.Address]PrecompiledContract{
 }
 
 var (
-	PrecompiledAddressesShanghai  []common.Address
+	PrecompiledAddressesGalactica []common.Address
 	PrecompiledAddressesIstanbul  []common.Address
 	PrecompiledAddressesByzantium []common.Address
 	PrecompiledAddressesHomestead []common.Address
@@ -110,16 +110,16 @@ func init() {
 	for k := range PrecompiledContractsIstanbul {
 		PrecompiledAddressesIstanbul = append(PrecompiledAddressesIstanbul, k)
 	}
-	for k := range PrecompiledContractsShanghai {
-		PrecompiledAddressesShanghai = append(PrecompiledAddressesShanghai, k)
+	for k := range PrecompiledContractsGalactica {
+		PrecompiledAddressesGalactica = append(PrecompiledAddressesGalactica, k)
 	}
 }
 
 // ActivePrecompiles returns the precompiles enabled with the current configuration.
 func ActivePrecompiles(rules Rules) []common.Address {
 	switch {
-	case rules.IsShanghai:
-		return PrecompiledAddressesShanghai
+	case rules.IsGalactica:
+		return PrecompiledAddressesGalactica
 	case rules.IsIstanbul:
 		return PrecompiledAddressesIstanbul
 	default:
