@@ -312,7 +312,7 @@ func TestEVMFunction(t *testing.T) {
 			abi:        "",
 			methodName: "",
 			testFunc: func(ctx *context, t *testing.T) {
-				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, thor.ForkConfig{}).
+				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{BaseFee: big.NewInt(100000000)}, thor.ForkConfig{}).
 					PrepareClause(tx.NewClause(&target), 0, math.MaxUint64, &xenv.TransactionContext{})
 				out, _, err := exec()
 				assert.Nil(t, err)
@@ -328,7 +328,7 @@ func TestEVMFunction(t *testing.T) {
 			abi:        "",
 			methodName: "",
 			testFunc: func(ctx *context, t *testing.T) {
-				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, thor.ForkConfig{}).
+				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{BaseFee: big.NewInt(0)}, thor.ForkConfig{}).
 					PrepareClause(tx.NewClause(&target), 0, math.MaxUint64, &xenv.TransactionContext{})
 				out, _, err := exec()
 				assert.Nil(t, err)
@@ -597,7 +597,7 @@ func TestPreForkOpCode(t *testing.T) {
 			assert.Equal(t, fmt.Sprintf("invalid opcode 0x%x", int(tt.op)), out.VMErr.Error())
 
 			// this one applies a fork config that forks from the start
-			exec, _ = runtime.New(chain, state, &xenv.BlockContext{}, thor.ForkConfig{}).
+			exec, _ = runtime.New(chain, state, &xenv.BlockContext{BaseFee: big.NewInt(100000000)}, thor.ForkConfig{}).
 				PrepareClause(tx.NewClause(nil).WithData(tt.code), 0, math.MaxUint64, &xenv.TransactionContext{})
 			out, _, err = exec()
 			assert.Nil(t, err)
