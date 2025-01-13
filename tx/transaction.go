@@ -24,11 +24,19 @@ import (
 
 var (
 	errIntrinsicGasOverflow = errors.New("intrinsic gas overflow")
+	ErrTxTypeNotSupported   = errors.New("transaction type not supported")
+	errEmptyTypedTx         = errors.New("empty typed transaction bytes")
+)
+
+// Starting from the max value allowed to avoid ambiguity with Ethereum tx type codes.
+const (
+	LegacyTxType     = 0x00
+	DynamicFeeTxType = 0x51
 )
 
 // Transaction is an immutable tx type.
 type Transaction struct {
-	body body
+	body TxData
 
 	cache struct {
 		signingHash  atomic.Value
@@ -42,33 +50,53 @@ type Transaction struct {
 	}
 }
 
-// body describes details of a tx.
-type body struct {
-	ChainTag     byte
-	BlockRef     uint64
-	Expiration   uint32
-	Clauses      []*Clause
-	GasPriceCoef uint8
-	Gas          uint64
-	DependsOn    *thor.Bytes32 `rlp:"nil"`
-	Nonce        uint64
-	Reserved     reserved
-	Signature    []byte
+// TxData describes details of a tx.
+type TxData interface {
+	txType() byte
+	copy() TxData
+
+	chainTag() byte
+	blockRef() uint64
+	expiration() uint32
+	clauses() []*Clause
+	gasPriceCoef() uint8
+	gas() uint64
+	maxFeePerGas() *big.Int
+	maxPriorityFeePerGas() *big.Int
+	dependsOn() *thor.Bytes32
+	nonce() uint64
+	reserved() reserved
+	signature() []byte
+	setSignature(sig []byte)
+
+	encode(w io.Writer) error
+}
+
+// NewTx creates a new transaction.
+func NewTx(body TxData) *Transaction {
+	tx := new(Transaction)
+	tx.setDecoded(body.copy(), 0)
+	return tx
+}
+
+// Type returns the transaction type.
+func (tx *Transaction) Type() uint8 {
+	return tx.body.txType()
 }
 
 // ChainTag returns chain tag.
 func (t *Transaction) ChainTag() byte {
-	return t.body.ChainTag
+	return t.body.chainTag()
 }
 
 // Nonce returns nonce value.
 func (t *Transaction) Nonce() uint64 {
-	return t.body.Nonce
+	return t.body.nonce()
 }
 
 // BlockRef returns block reference, which is first 8 bytes of block hash.
 func (t *Transaction) BlockRef() (br BlockRef) {
-	binary.BigEndian.PutUint64(br[:], t.body.BlockRef)
+	binary.BigEndian.PutUint64(br[:], t.body.blockRef())
 	return
 }
 
@@ -76,12 +104,12 @@ func (t *Transaction) BlockRef() (br BlockRef) {
 // A valid transaction requires:
 // blockNum in [blockRef.Num... blockRef.Num + Expiration]
 func (t *Transaction) Expiration() uint32 {
-	return t.body.Expiration
+	return t.body.expiration()
 }
 
 // IsExpired returns whether the tx is expired according to the given blockNum.
 func (t *Transaction) IsExpired(blockNum uint32) bool {
-	return uint64(blockNum) > uint64(t.BlockRef().Number())+uint64(t.body.Expiration) // cast to uint64 to prevent potential overflow
+	return uint64(blockNum) > uint64(t.BlockRef().Number())+uint64(t.body.expiration()) // cast to uint64 to prevent potential overflow
 }
 
 // ID returns id of tx.
@@ -107,9 +135,12 @@ func (t *Transaction) Hash() (hash thor.Bytes32) {
 		return cached.(thor.Bytes32)
 	}
 	defer func() { t.cache.hash.Store(hash) }()
-	return thor.Blake2bFn(func(w io.Writer) {
-		rlp.Encode(w, t)
-	})
+
+	// Legacy tx don't have type prefix.
+	if t.Type() == LegacyTxType {
+		return rlpHash(t)
+	}
+	return prefixedRlpHash(t.Type(), t.body)
 }
 
 // UnprovedWork returns unproved work of this tx.
@@ -126,24 +157,20 @@ func (t *Transaction) UnprovedWork() (w *big.Int) {
 	if err != nil {
 		return &big.Int{}
 	}
-	return t.EvaluateWork(origin)(t.body.Nonce)
+	return t.EvaluateWork(origin)(t.body.nonce())
 }
 
 // EvaluateWork try to compute work when tx origin assumed.
 func (t *Transaction) EvaluateWork(origin thor.Address) func(nonce uint64) *big.Int {
-	hashWithoutNonce := thor.Blake2bFn(func(w io.Writer) {
-		rlp.Encode(w, []interface{}{
-			t.body.ChainTag,
-			t.body.BlockRef,
-			t.body.Expiration,
-			t.body.Clauses,
-			t.body.GasPriceCoef,
-			t.body.Gas,
-			t.body.DependsOn,
-			&t.body.Reserved,
-			origin,
-		})
-	})
+	var hashWithoutNonce *thor.Bytes32
+	switch t.Type() {
+	case LegacyTxType:
+		hashWithoutNonce = t.hashWithoutNonceLegacyTx(origin)
+	case DynamicFeeTxType:
+		hashWithoutNonce = t.hashWithoutNonceDynamicFeeTx(origin)
+	default:
+		panic(ErrTxTypeNotSupported)
+	}
 
 	return func(nonce uint64) *big.Int {
 		var nonceBytes [8]byte
@@ -154,6 +181,41 @@ func (t *Transaction) EvaluateWork(origin thor.Address) func(nonce uint64) *big.
 	}
 }
 
+func (t *Transaction) hashWithoutNonceLegacyTx(origin thor.Address) *thor.Bytes32 {
+	b := thor.Blake2bFn(func(w io.Writer) {
+		rlp.Encode(w, []interface{}{
+			t.body.chainTag(),
+			t.body.blockRef(),
+			t.body.expiration(),
+			t.body.clauses(),
+			t.body.gasPriceCoef(),
+			t.body.dependsOn(),
+			t.body.nonce(),
+			t.body.reserved(),
+			origin,
+		})
+	})
+	return &b
+}
+
+func (t *Transaction) hashWithoutNonceDynamicFeeTx(origin thor.Address) *thor.Bytes32 {
+	b := thor.Blake2bFn(func(w io.Writer) {
+		rlp.Encode(w, []interface{}{
+			t.body.chainTag(),
+			t.body.blockRef(),
+			t.body.expiration(),
+			t.body.clauses(),
+			t.body.maxFeePerGas(),
+			t.body.maxPriorityFeePerGas(),
+			t.body.dependsOn(),
+			t.body.nonce(),
+			t.body.reserved(),
+			origin,
+		})
+	})
+	return &b
+}
+
 // SigningHash returns hash of tx excludes signature.
 func (t *Transaction) SigningHash() (hash thor.Bytes32) {
 	if cached := t.cache.signingHash.Load(); cached != nil {
@@ -162,53 +224,51 @@ func (t *Transaction) SigningHash() (hash thor.Bytes32) {
 	defer func() { t.cache.signingHash.Store(hash) }()
 
 	return thor.Blake2bFn(func(w io.Writer) {
-		rlp.Encode(w, []interface{}{
-			t.body.ChainTag,
-			t.body.BlockRef,
-			t.body.Expiration,
-			t.body.Clauses,
-			t.body.GasPriceCoef,
-			t.body.Gas,
-			t.body.DependsOn,
-			t.body.Nonce,
-			&t.body.Reserved,
-		})
+		t.body.encode(w)
 	})
+}
+
+// Gas returns gas provision for this tx.
+func (t *Transaction) Gas() uint64 {
+	return t.body.gas()
 }
 
 // GasPriceCoef returns gas price coef.
 // gas price = bgp + bgp * gpc / 255.
 func (t *Transaction) GasPriceCoef() uint8 {
-	return t.body.GasPriceCoef
+	return t.body.gasPriceCoef()
 }
 
-// Gas returns gas provision for this tx.
-func (t *Transaction) Gas() uint64 {
-	return t.body.Gas
+func (t *Transaction) MaxFeePerGas() *big.Int {
+	return t.body.maxFeePerGas()
+}
+
+func (t *Transaction) MaxPriorityFeePerGas() *big.Int {
+	return t.body.maxPriorityFeePerGas()
 }
 
 // Clauses returns clauses in tx.
 func (t *Transaction) Clauses() []*Clause {
-	return append([]*Clause(nil), t.body.Clauses...)
+	return append([]*Clause(nil), t.body.clauses()...)
 }
 
 // DependsOn returns depended tx hash.
 func (t *Transaction) DependsOn() *thor.Bytes32 {
-	if t.body.DependsOn == nil {
+	if t.body.dependsOn() == nil {
 		return nil
 	}
-	cpy := *t.body.DependsOn
+	cpy := *t.body.dependsOn()
 	return &cpy
 }
 
 // Signature returns signature.
 func (t *Transaction) Signature() []byte {
-	return append([]byte(nil), t.body.Signature...)
+	return append([]byte(nil), t.body.signature()...)
 }
 
 // Features returns features.
 func (t *Transaction) Features() Features {
-	return t.body.Reserved.Features
+	return t.body.reserved().Features
 }
 
 // Origin extract address of tx originator from signature.
@@ -221,7 +281,7 @@ func (t *Transaction) Origin() (thor.Address, error) {
 		return cached.(thor.Address), nil
 	}
 
-	pub, err := crypto.SigToPub(t.SigningHash().Bytes(), t.body.Signature[:65])
+	pub, err := crypto.SigToPub(t.SigningHash().Bytes(), t.body.signature()[:65])
 	if err != nil {
 		return thor.Address{}, err
 	}
@@ -256,7 +316,7 @@ func (t *Transaction) Delegator() (*thor.Address, error) {
 		return nil, err
 	}
 
-	pub, err := crypto.SigToPub(t.DelegatorSigningHash(origin).Bytes(), t.body.Signature[65:])
+	pub, err := crypto.SigToPub(t.DelegatorSigningHash(origin).Bytes(), t.body.signature()[65:])
 	if err != nil {
 		return nil, err
 	}
@@ -271,17 +331,17 @@ func (t *Transaction) Delegator() (*thor.Address, error) {
 // For delegated tx, sig is joined with signatures of originator and delegator.
 func (t *Transaction) WithSignature(sig []byte) *Transaction {
 	newTx := Transaction{
-		body: t.body,
+		body: t.body.copy(),
 	}
 	// copy sig
-	newTx.body.Signature = append([]byte(nil), sig...)
+	newTx.body.setSignature(append([]byte(nil), sig...))
 	return &newTx
 }
 
 // TestFeatures test if the tx is compatible with given supported features.
 // An error returned if it is incompatible.
 func (t *Transaction) TestFeatures(supported Features) error {
-	r := &t.body.Reserved
+	r := t.body.reserved()
 	if r.Features&supported != r.Features {
 		return errors.New("unsupported features")
 	}
@@ -292,22 +352,115 @@ func (t *Transaction) TestFeatures(supported Features) error {
 	return nil
 }
 
+// encodeTyped writes the canonical encoding of a typed transaction to w.
+func (t *Transaction) encodeTyped(w *bytes.Buffer) error {
+	w.WriteByte(t.Type())
+	return rlp.Encode(w, t.body)
+}
+
+// MarshalBinary returns the canonical encoding of the transaction.
+// For legacy transactions, it returns the RLP encoding. For typed
+// transactions, it returns the type and the RLP encoding of the tx.
+func (tx *Transaction) MarshalBinary() ([]byte, error) {
+	if tx.Type() == LegacyTxType {
+		return rlp.EncodeToBytes(tx.body)
+	}
+	var buf bytes.Buffer
+	err := tx.encodeTyped(&buf)
+	return buf.Bytes(), err
+}
+
+// UnmarshalBinary decodes the canonical encoding of transactions.
+// It supports legacy RLP transactions and typed transactions.
+func (t *Transaction) UnmarshalBinary(b []byte) error {
+	if len(b) > 0 && b[0] > 0x7f {
+		// It's a legacy transaction.
+		var data LegacyTransaction
+		err := rlp.DecodeBytes(b, &data)
+		if err != nil {
+			return err
+		}
+		t.setDecoded(&data, len(b))
+		return nil
+	}
+	// It's a typed transaction envelope.
+	inner, err := t.decodeTyped(b)
+	if err != nil {
+		return err
+	}
+	t.setDecoded(inner, len(b))
+	return nil
+}
+
 // EncodeRLP implements rlp.Encoder
 func (t *Transaction) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, &t.body)
+	if t.Type() == LegacyTxType {
+		return rlp.Encode(w, &t.body)
+	}
+	buf := encodeBufferPool.Get().(*bytes.Buffer)
+	defer encodeBufferPool.Put(buf)
+	buf.Reset()
+
+	if err := t.encodeTyped(buf); err != nil {
+		return err
+	}
+	return rlp.Encode(w, buf.Bytes())
 }
 
 // DecodeRLP implements rlp.Decoder
 func (t *Transaction) DecodeRLP(s *rlp.Stream) error {
-	_, size, _ := s.Kind()
-	var body body
-	if err := s.Decode(&body); err != nil {
-		return err
-	}
-	*t = Transaction{body: body}
+	kind, size, err := s.Kind()
 
-	t.cache.size.Store(thor.StorageSize(rlp.ListSize(size)))
-	return nil
+	switch {
+	case err != nil:
+		return err
+	case kind == rlp.List:
+		// It's a legacy transaction.
+		var body LegacyTransaction
+		if err := s.Decode(&body); err != nil {
+			return err
+		}
+		*t = Transaction{body: &body}
+
+		t.cache.size.Store(thor.StorageSize(rlp.ListSize(size)))
+		return nil
+	case kind == rlp.String:
+		// It's a typed TX.
+		var b []byte
+		if b, err = s.Bytes(); err != nil {
+			return err
+		}
+		inner, err := t.decodeTyped(b)
+		if err == nil {
+			t.setDecoded(inner, len(b))
+		}
+		return err
+	default:
+		return rlp.ErrExpectedList
+	}
+}
+
+// decodeTyped decodes a typed transaction from the canonical format.
+func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
+	if len(b) == 0 {
+		return nil, errEmptyTypedTx
+	}
+	switch b[0] {
+	case DynamicFeeTxType:
+		var body DynamicFeeTransaction
+		err := rlp.DecodeBytes(b[1:], &body)
+		return &body, err
+	default:
+		return nil, ErrTxTypeNotSupported
+	}
+}
+
+// setDecoded sets the inner transaction and size after decoding.
+func (t *Transaction) setDecoded(body TxData, size int) {
+	t.body = body
+	if size > 0 {
+		t.cache.size.Store(thor.StorageSize(rlp.ListSize(uint64(size))))
+	}
 }
 
 // Size returns size in bytes when RLP encoded.
@@ -327,7 +480,7 @@ func (t *Transaction) IntrinsicGas() (uint64, error) {
 		return cached.(uint64), nil
 	}
 
-	gas, err := IntrinsicGas(t.body.Clauses...)
+	gas, err := IntrinsicGas(t.body.clauses()...)
 	if err != nil {
 		return 0, err
 	}
@@ -338,7 +491,7 @@ func (t *Transaction) IntrinsicGas() (uint64, error) {
 // GasPrice returns gas price.
 // gasPrice = baseGasPrice + baseGasPrice * gasPriceCoef / 255
 func (t *Transaction) GasPrice(baseGasPrice *big.Int) *big.Int {
-	x := big.NewInt(int64(t.body.GasPriceCoef))
+	x := new(big.Int).Set(t.body.maxFeePerGas())
 	x.Mul(x, baseGasPrice)
 	x.Div(x, big.NewInt(math.MaxUint8))
 	return x.Add(x, baseGasPrice)
@@ -381,13 +534,13 @@ func (t *Transaction) OverallGasPrice(baseGasPrice *big.Int, provedWork *big.Int
 	if wgas == 0 {
 		return gasPrice
 	}
-	if wgas > t.body.Gas {
-		wgas = t.body.Gas
+	if wgas > t.body.gas() {
+		wgas = t.body.gas()
 	}
 
 	x := new(big.Int).SetUint64(wgas)
 	x.Mul(x, baseGasPrice)
-	x.Div(x, new(big.Int).SetUint64(t.body.Gas))
+	x.Div(x, new(big.Int).SetUint64(t.body.gas()))
 	return x.Add(x, gasPrice)
 }
 
@@ -405,16 +558,15 @@ func (t *Transaction) String() string {
 		delegatorStr = delegator.String()
 	}
 
-	binary.BigEndian.PutUint64(br[:], t.body.BlockRef)
-	if t.body.DependsOn != nil {
-		dependsOn = t.body.DependsOn.String()
+	binary.BigEndian.PutUint64(br[:], t.body.blockRef())
+	if t.body.dependsOn() != nil {
+		dependsOn = t.body.dependsOn().String()
 	}
 
-	return fmt.Sprintf(`
+	s := fmt.Sprintf(`
 	Tx(%v, %v)
 	Origin:         %v
 	Clauses:        %v
-	GasPriceCoef:   %v
 	Gas:            %v
 	ChainTag:       %v
 	BlockRef:       %v-%x
@@ -424,8 +576,19 @@ func (t *Transaction) String() string {
 	UnprovedWork:   %v
 	Delegator:      %v
 	Signature:      0x%x
-`, t.ID(), t.Size(), originStr, t.body.Clauses, t.body.GasPriceCoef, t.body.Gas,
-		t.body.ChainTag, br.Number(), br[4:], t.body.Expiration, dependsOn, t.body.Nonce, t.UnprovedWork(), delegatorStr, t.body.Signature)
+`, t.ID(), t.Size(), originStr, t.body.clauses(), t.body.gas(),
+		t.body.chainTag(), br.Number(), br[4:], t.body.expiration(), dependsOn, t.body.nonce(), t.UnprovedWork(), delegatorStr, t.body.signature())
+
+	if t.Type() == LegacyTxType {
+		return fmt.Sprintf(`%v
+		GasPriceCoef:   %v
+		`, s, t.body.gasPriceCoef())
+	}
+
+	return fmt.Sprintf(`%v
+		MaxFeePerGas:   %v
+		MaxPriorityFeePerGas: %v
+		`, s, t.body.maxFeePerGas(), t.body.maxPriorityFeePerGas())
 }
 
 func (t *Transaction) validateSignatureLength() error {
@@ -434,7 +597,7 @@ func (t *Transaction) validateSignatureLength() error {
 		expectedSigLen *= 2
 	}
 
-	if len(t.body.Signature) != expectedSigLen {
+	if len(t.body.signature()) != expectedSigLen {
 		return secp256k1.ErrInvalidSignatureLen
 	}
 	return nil
