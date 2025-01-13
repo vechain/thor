@@ -6,6 +6,8 @@
 package block
 
 import (
+	"math/big"
+
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
@@ -85,6 +87,12 @@ func (b *Builder) Alpha(alpha []byte) *Builder {
 // COM enables COM.
 func (b *Builder) COM() *Builder {
 	b.headerBody.Extension.COM = true
+	return b
+}
+
+// BaseFee sets base fee.
+func (b *Builder) BaseFee(baseFee *big.Int) *Builder {
+	b.headerBody.Extension.BaseFee = baseFee
 	return b
 }
 

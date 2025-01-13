@@ -76,33 +76,60 @@ func (tr *testResolvedTransaction) currentState() *state.State {
 }
 
 func (tr *testResolvedTransaction) TestResolveTransaction() {
-	txBuild := func() *tx.Builder {
-		return txBuilder(tr.repo.ChainTag())
+	legacyTxBuild := func() *tx.Builder {
+		return txBuilder(tr.repo.ChainTag(), tx.LegacyTxType)
+	}
+	dynFeeTxBuild := func() *tx.Builder {
+		return txBuilder(tr.repo.ChainTag(), tx.DynamicFeeTxType)
 	}
 
-	_, err := runtime.ResolveTransaction(txBuild().Build())
+	trx, _ := legacyTxBuild().Build()
+	_, err := runtime.ResolveTransaction(trx)
+	tr.assert.Equal(secp256k1.ErrInvalidSignatureLen.Error(), err.Error())
+	trx, _ = dynFeeTxBuild().Build()
+	_, err = runtime.ResolveTransaction(trx)
 	tr.assert.Equal(secp256k1.ErrInvalidSignatureLen.Error(), err.Error())
 
-	_, err = runtime.ResolveTransaction(txSign(txBuild().Gas(21000 - 1)))
+	trx, _ = legacyTxBuild().Gas(21000 - 1).Build()
+	_, err = runtime.ResolveTransaction(txSign(trx))
+	tr.assert.NotNil(err)
+	trx, _ = dynFeeTxBuild().Gas(21000 - 1).Build()
+	_, err = runtime.ResolveTransaction(txSign(trx))
 	tr.assert.NotNil(err)
 
 	address := thor.BytesToAddress([]byte("addr"))
-	_, err = runtime.ResolveTransaction(txSign(txBuild().Clause(tx.NewClause(&address).WithValue(big.NewInt(-10)).WithData(nil))))
+	trx, _ = legacyTxBuild().Clause(tx.NewClause(&address).WithValue(big.NewInt(-10)).WithData(nil)).Build()
+	_, err = runtime.ResolveTransaction(txSign(trx))
+	tr.assert.NotNil(err)
+	trx, _ = dynFeeTxBuild().Clause(tx.NewClause(&address).WithValue(big.NewInt(-10)).WithData(nil)).Build()
+	_, err = runtime.ResolveTransaction(txSign(trx))
 	tr.assert.NotNil(err)
 
-	_, err = runtime.ResolveTransaction(txSign(txBuild().
+	trx, _ = legacyTxBuild().
 		Clause(tx.NewClause(&address).WithValue(math.MaxBig256).WithData(nil)).
-		Clause(tx.NewClause(&address).WithValue(math.MaxBig256).WithData(nil)),
-	))
+		Clause(tx.NewClause(&address).WithValue(math.MaxBig256).WithData(nil)).Build()
+	_, err = runtime.ResolveTransaction(txSign(trx))
+	tr.assert.NotNil(err)
+	trx, _ = dynFeeTxBuild().
+		Clause(tx.NewClause(&address).WithValue(math.MaxBig256).WithData(nil)).
+		Clause(tx.NewClause(&address).WithValue(math.MaxBig256).WithData(nil)).Build()
+	_, err = runtime.ResolveTransaction(txSign(trx))
 	tr.assert.NotNil(err)
 
-	_, err = runtime.ResolveTransaction(txSign(txBuild()))
+	trx, _ = legacyTxBuild().Build()
+	_, err = runtime.ResolveTransaction(txSign(trx))
+	tr.assert.Nil(err)
+	trx, _ = dynFeeTxBuild().Build()
+	_, err = runtime.ResolveTransaction(txSign(trx))
 	tr.assert.Nil(err)
 }
 
 func (tr *testResolvedTransaction) TestCommonTo() {
-	txBuild := func() *tx.Builder {
-		return txBuilder(tr.repo.ChainTag())
+	legacyTxBuild := func() *tx.Builder {
+		return txBuilder(tr.repo.ChainTag(), tx.LegacyTxType)
+	}
+	dynFeeTxBuild := func() *tx.Builder {
+		return txBuilder(tr.repo.ChainTag(), tx.DynamicFeeTxType)
 	}
 
 	commonTo := func(tx *tx.Transaction, assert func(interface{}, ...interface{}) bool) {
@@ -114,26 +141,43 @@ func (tr *testResolvedTransaction) TestCommonTo() {
 		assert(to)
 	}
 
-	commonTo(txSign(txBuild()), tr.assert.Nil)
+	legacyTx, _ := legacyTxBuild().Build()
+	dynFeeTx, _ := dynFeeTxBuild().Build()
+	commonTo(txSign(legacyTx), tr.assert.Nil)
+	commonTo(txSign(dynFeeTx), tr.assert.Nil)
 
-	commonTo(txSign(txBuild().Clause(tx.NewClause(nil))), tr.assert.Nil)
+	legacyTx, _ = legacyTxBuild().Clause(tx.NewClause(nil)).Build()
+	dynFeeTx, _ = dynFeeTxBuild().Clause(tx.NewClause(nil)).Build()
+	commonTo(txSign(legacyTx), tr.assert.Nil)
+	commonTo(txSign(dynFeeTx), tr.assert.Nil)
 
-	commonTo(txSign(txBuild().Clause(clause()).Clause(tx.NewClause(nil))), tr.assert.Nil)
+	legacyTx, _ = legacyTxBuild().Clause(clause()).Clause(tx.NewClause(nil)).Build()
+	dynFeeTx, _ = dynFeeTxBuild().Clause(clause()).Clause(tx.NewClause(nil)).Build()
+	commonTo(txSign(legacyTx), tr.assert.Nil)
+	commonTo(txSign(dynFeeTx), tr.assert.Nil)
 
 	address := thor.BytesToAddress([]byte("addr1"))
-	commonTo(txSign(txBuild().
+	legacyTx, _ = legacyTxBuild().
 		Clause(clause()).
-		Clause(tx.NewClause(&address)),
-	), tr.assert.Nil)
+		Clause(tx.NewClause(&address)).Build()
+	commonTo(txSign(legacyTx), tr.assert.Nil)
 
-	commonTo(txSign(txBuild().Clause(clause())), tr.assert.NotNil)
+	dynFeeTx, _ = dynFeeTxBuild().
+		Clause(clause()).
+		Clause(tx.NewClause(&address)).Build()
+	commonTo(txSign(dynFeeTx), tr.assert.Nil)
+
+	legacyTx, _ = legacyTxBuild().Clause(clause()).Build()
+	dynFeeTx, _ = dynFeeTxBuild().Clause(clause()).Build()
+	commonTo(txSign(legacyTx), tr.assert.NotNil)
+	commonTo(txSign(dynFeeTx), tr.assert.NotNil)
 }
 
 func (tr *testResolvedTransaction) TestBuyGas() {
 	state := tr.currentState()
 
 	txBuild := func() *tx.Builder {
-		return txBuilder(tr.repo.ChainTag())
+		return txBuilder(tr.repo.ChainTag(), tx.LegacyTxType)
 	}
 
 	targetTime := tr.repo.BestBlockSummary().Header.Timestamp() + thor.BlockInterval
@@ -149,24 +193,27 @@ func (tr *testResolvedTransaction) TestBuyGas() {
 		return payer
 	}
 
+	trx, _ := txBuild().Clause(clause().WithValue(big.NewInt(100))).Build()
 	tr.assert.Equal(
 		genesis.DevAccounts()[0].Address,
-		buyGas(txSign(txBuild().Clause(clause().WithValue(big.NewInt(100))))),
+		buyGas(txSign(trx)),
 	)
 
 	bind := builtin.Prototype.Native(state).Bind(genesis.DevAccounts()[1].Address)
 	bind.SetCreditPlan(math.MaxBig256, big.NewInt(1000))
 	bind.AddUser(genesis.DevAccounts()[0].Address, targetTime)
+	trx, _ = txBuild().Clause(clause().WithValue(big.NewInt(100))).Build()
 	tr.assert.Equal(
 		genesis.DevAccounts()[1].Address,
-		buyGas(txSign(txBuild().Clause(clause().WithValue(big.NewInt(100))))),
+		buyGas(txSign(trx)),
 	)
 
 	bind.Sponsor(genesis.DevAccounts()[2].Address, true)
 	bind.SelectSponsor(genesis.DevAccounts()[2].Address)
+	trx, _ = txBuild().Clause(clause().WithValue(big.NewInt(100))).Build()
 	tr.assert.Equal(
 		genesis.DevAccounts()[2].Address,
-		buyGas(txSign(txBuild().Clause(clause().WithValue(big.NewInt(100))))),
+		buyGas(txSign(trx)),
 	)
 }
 
@@ -175,8 +222,8 @@ func clause() *tx.Clause {
 	return tx.NewClause(&address).WithData(nil)
 }
 
-func txBuilder(tag byte) *tx.Builder {
-	return new(tx.Builder).
+func txBuilder(tag byte, txType int) *tx.Builder {
+	return tx.NewTxBuilder(txType).
 		GasPriceCoef(1).
 		Gas(1000000).
 		Expiration(100).
@@ -184,7 +231,6 @@ func txBuilder(tag byte) *tx.Builder {
 		ChainTag(tag)
 }
 
-func txSign(builder *tx.Builder) *tx.Transaction {
-	transaction := builder.Build()
-	return tx.MustSign(transaction, genesis.DevAccounts()[0].PrivateKey)
+func txSign(trx *tx.Transaction) *tx.Transaction {
+	return tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)
 }

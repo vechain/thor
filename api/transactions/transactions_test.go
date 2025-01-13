@@ -29,11 +29,12 @@ import (
 )
 
 var (
-	ts          *httptest.Server
-	transaction *tx.Transaction
-	mempoolTx   *tx.Transaction
-	tclient     *thorclient.Client
-	chainTag    byte
+	ts        *httptest.Server
+	legacyTx  *tx.Transaction
+	dynFeeTx  *tx.Transaction
+	mempoolTx *tx.Transaction
+	tclient   *thorclient.Client
+	chainTag  byte
 )
 
 func TestTransaction(t *testing.T) {
@@ -43,16 +44,18 @@ func TestTransaction(t *testing.T) {
 	// Send tx
 	tclient = thorclient.New(ts.URL)
 	for name, tt := range map[string]func(*testing.T){
-		"sendTx":              sendTx,
-		"sendTxWithBadFormat": sendTxWithBadFormat,
+		"sendLegacyTx":                             sendLegacyTx,
+		"sendTxWithBadFormat":                      sendTxWithBadFormat,
 		"sendTxThatCannotBeAcceptedInLocalMempool": sendTxThatCannotBeAcceptedInLocalMempool,
+
+		"sendDynamicFeeTx": sendDynamicFeeTx,
 	} {
 		t.Run(name, tt)
 	}
 
 	// Get tx
 	for name, tt := range map[string]func(*testing.T){
-		"getTx":           getTx,
+		"getLegacyTx":     getLegacyTx,
 		"getTxWithBadID":  getTxWithBadID,
 		"txWithBadHeader": txWithBadHeader,
 		"getNonExistingRawTransactionWhenTxStillInMempool": getNonExistingRawTransactionWhenTxStillInMempool,
@@ -62,6 +65,8 @@ func TestTransaction(t *testing.T) {
 		"getTransactionByIDPendingTxNotFound":              getTransactionByIDPendingTxNotFound,
 		"handleGetTransactionByIDWithBadQueryParams":       handleGetTransactionByIDWithBadQueryParams,
 		"handleGetTransactionByIDWithNonExistingHead":      handleGetTransactionByIDWithNonExistingHead,
+
+		"getDynamicFeeTx": getDynamicFeeTx,
 	} {
 		t.Run(name, tt)
 	}
@@ -76,20 +81,40 @@ func TestTransaction(t *testing.T) {
 	}
 }
 
-func getTx(t *testing.T) {
-	res := httpGetAndCheckResponseStatus(t, "/transactions/"+transaction.ID().String(), 200)
+func getLegacyTx(t *testing.T) {
+	res := httpGetAndCheckResponseStatus(t, "/transactions/"+legacyTx.ID().String(), 200)
 	var rtx *transactions.Transaction
 	if err := json.Unmarshal(res, &rtx); err != nil {
 		t.Fatal(err)
 	}
-	checkMatchingTx(t, transaction, rtx)
+	checkMatchingTx(t, legacyTx, rtx)
 
-	res = httpGetAndCheckResponseStatus(t, "/transactions/"+transaction.ID().String()+"?raw=true", 200)
+	res = httpGetAndCheckResponseStatus(t, "/transactions/"+legacyTx.ID().String()+"?raw=true", 200)
 	var rawTx map[string]interface{}
 	if err := json.Unmarshal(res, &rawTx); err != nil {
 		t.Fatal(err)
 	}
-	rlpTx, err := rlp.EncodeToBytes(transaction)
+	rlpTx, err := rlp.EncodeToBytes(legacyTx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, hexutil.Encode(rlpTx), rawTx["raw"], "should be equal raw")
+}
+
+func getDynamicFeeTx(t *testing.T) {
+	res := httpGetAndCheckResponseStatus(t, "/transactions/"+dynFeeTx.ID().String(), 200)
+	var rtx *transactions.Transaction
+	if err := json.Unmarshal(res, &rtx); err != nil {
+		t.Fatal(err)
+	}
+	checkMatchingTx(t, dynFeeTx, rtx)
+
+	res = httpGetAndCheckResponseStatus(t, "/transactions/"+dynFeeTx.ID().String()+"?raw=true", 200)
+	var rawTx map[string]interface{}
+	if err := json.Unmarshal(res, &rawTx); err != nil {
+		t.Fatal(err)
+	}
+	rlpTx, err := rlp.EncodeToBytes(dynFeeTx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,30 +122,68 @@ func getTx(t *testing.T) {
 }
 
 func getTxReceipt(t *testing.T) {
-	r := httpGetAndCheckResponseStatus(t, "/transactions/"+transaction.ID().String()+"/receipt", 200)
+	r := httpGetAndCheckResponseStatus(t, "/transactions/"+legacyTx.ID().String()+"/receipt", 200)
 	var receipt *transactions.Receipt
 	if err := json.Unmarshal(r, &receipt); err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, receipt.GasUsed, transaction.Gas(), "receipt gas used not equal to transaction gas")
+	assert.Equal(t, receipt.GasUsed, legacyTx.Gas(), "receipt gas used not equal to transaction gas")
+
+	r = httpGetAndCheckResponseStatus(t, "/transactions/"+dynFeeTx.ID().String()+"/receipt", 200)
+	if err := json.Unmarshal(r, &receipt); err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, receipt.GasUsed, legacyTx.Gas(), "receipt gas used not equal to transaction gas")
 }
 
-func sendTx(t *testing.T) {
+func sendLegacyTx(t *testing.T) {
 	var blockRef = tx.NewBlockRef(0)
 	var expiration = uint32(10)
 	var gas = uint64(21000)
 
-	trx := tx.MustSign(
-		new(tx.Builder).
-			BlockRef(blockRef).
-			ChainTag(chainTag).
-			Expiration(expiration).
-			Gas(gas).
-			Build(),
+	trx, _ := tx.NewTxBuilder(tx.LegacyTxType).
+		BlockRef(blockRef).
+		ChainTag(chainTag).
+		Expiration(expiration).
+		Gas(gas).
+		Build()
+	trx = tx.MustSign(
+		trx,
 		genesis.DevAccounts()[0].PrivateKey,
 	)
 
-	rlpTx, err := rlp.EncodeToBytes(trx)
+	rlpTx, err := trx.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res := httpPostAndCheckResponseStatus(t, "/transactions", transactions.RawTx{Raw: hexutil.Encode(rlpTx)}, 200)
+	var txObj map[string]string
+	if err = json.Unmarshal(res, &txObj); err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, trx.ID().String(), txObj["id"], "should be the same transaction id")
+}
+
+func sendDynamicFeeTx(t *testing.T) {
+	var blockRef = tx.NewBlockRef(0)
+	var expiration = uint32(10)
+	var gas = uint64(21000)
+	var maxFeePerGas = big.NewInt(128)
+
+	trx, _ := tx.NewTxBuilder(tx.DynamicFeeTxType).
+		BlockRef(blockRef).
+		ChainTag(chainTag).
+		Expiration(expiration).
+		Gas(gas).
+		MaxFeePerGas(maxFeePerGas).
+		Build()
+	trx = tx.MustSign(
+		trx,
+		genesis.DevAccounts()[0].PrivateKey,
+	)
+
+	rlpTx, err := trx.MarshalBinary()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,8 +206,10 @@ func getTxWithBadID(t *testing.T) {
 
 func txWithBadHeader(t *testing.T) {
 	badHeaderURL := []string{
-		"/transactions/" + transaction.ID().String() + "?head=badHead",
-		"/transactions/" + transaction.ID().String() + "/receipt?head=badHead",
+		"/transactions/" + legacyTx.ID().String() + "?head=badHead",
+		"/transactions/" + legacyTx.ID().String() + "/receipt?head=badHead",
+		"/transactions/" + dynFeeTx.ID().String() + "?head=badHead",
+		"/transactions/" + dynFeeTx.ID().String() + "/receipt?head=badHead",
 	}
 
 	for _, url := range badHeaderURL {
@@ -223,7 +288,7 @@ func sendTxWithBadFormat(t *testing.T) {
 }
 
 func sendTxThatCannotBeAcceptedInLocalMempool(t *testing.T) {
-	tx := new(tx.Builder).Build()
+	tx, _ := tx.NewTxBuilder(tx.LegacyTxType).Build()
 	rlpTx, err := rlp.EncodeToBytes(tx)
 	if err != nil {
 		t.Fatal(err)
@@ -242,18 +307,18 @@ func handleGetTransactionByIDWithBadQueryParams(t *testing.T) {
 	}
 
 	for _, badQueryParam := range badQueryParams {
-		res := httpGetAndCheckResponseStatus(t, "/transactions/"+transaction.ID().String()+badQueryParam, 400)
+		res := httpGetAndCheckResponseStatus(t, "/transactions/"+legacyTx.ID().String()+badQueryParam, 400)
 		assert.Contains(t, string(res), "should be boolean")
 	}
 }
 
 func handleGetTransactionByIDWithNonExistingHead(t *testing.T) {
-	res := httpGetAndCheckResponseStatus(t, "/transactions/"+transaction.ID().String()+"?head=0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 400)
+	res := httpGetAndCheckResponseStatus(t, "/transactions/"+legacyTx.ID().String()+"?head=0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 400)
 	assert.Equal(t, "head: leveldb: not found", strings.TrimSpace(string(res)))
 }
 
 func handleGetTransactionReceiptByIDWithNonExistingHead(t *testing.T) {
-	res := httpGetAndCheckResponseStatus(t, "/transactions/"+transaction.ID().String()+"/receipt?head=0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 400)
+	res := httpGetAndCheckResponseStatus(t, "/transactions/"+legacyTx.ID().String()+"/receipt?head=0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 400)
 	assert.Equal(t, "head: leveldb: not found", strings.TrimSpace(string(res)))
 }
 
@@ -273,7 +338,7 @@ func initTransactionServer(t *testing.T) {
 
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	transaction = new(tx.Builder).
+	legacyTx, _ = tx.NewTxBuilder(tx.LegacyTxType).
 		ChainTag(chainTag).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -282,13 +347,25 @@ func initTransactionServer(t *testing.T) {
 		Clause(cla).
 		BlockRef(tx.NewBlockRef(0)).
 		Build()
-	transaction = tx.MustSign(transaction, genesis.DevAccounts()[0].PrivateKey)
+	legacyTx = tx.MustSign(legacyTx, genesis.DevAccounts()[0].PrivateKey)
 
-	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], transaction))
+	dynFeeTx, _ = tx.NewTxBuilder(tx.DynamicFeeTxType).
+		ChainTag(chainTag).
+		MaxFeePerGas(new(big.Int).SetInt64(1)).
+		MaxPriorityFeePerGas(new(big.Int).SetInt64(10)).
+		Expiration(10).
+		Gas(21000).
+		Nonce(1).
+		Clause(cla).
+		BlockRef(tx.NewBlockRef(0)).
+		Build()
+	dynFeeTx = tx.MustSign(dynFeeTx, genesis.DevAccounts()[0].PrivateKey)
+
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], legacyTx, dynFeeTx))
 
 	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute})
 
-	mempoolTx = new(tx.Builder).
+	mempoolTx, _ = tx.NewTxBuilder(tx.LegacyTxType).
 		ChainTag(chainTag).
 		Expiration(10).
 		Gas(21000).
@@ -315,12 +392,21 @@ func checkMatchingTx(t *testing.T, expectedTx *tx.Transaction, actualTx *transac
 	}
 	assert.Equal(t, origin, actualTx.Origin)
 	assert.Equal(t, expectedTx.ID(), actualTx.ID)
-	assert.Equal(t, expectedTx.GasPriceCoef(), actualTx.GasPriceCoef)
 	assert.Equal(t, expectedTx.Gas(), actualTx.Gas)
 	for i, c := range expectedTx.Clauses() {
 		assert.Equal(t, hexutil.Encode(c.Data()), actualTx.Clauses[i].Data)
 		assert.Equal(t, *c.Value(), big.Int(actualTx.Clauses[i].Value))
 		assert.Equal(t, c.To(), actualTx.Clauses[i].To)
+	}
+	switch expectedTx.Type() {
+	case tx.LegacyTxType:
+		assert.Equal(t, expectedTx.GasPriceCoef(), actualTx.GasPriceCoef)
+		assert.Empty(t, actualTx.MaxFeePerGas)
+		assert.Empty(t, actualTx.MaxPriorityFeePerGas)
+	case tx.DynamicFeeTxType:
+		assert.Empty(t, actualTx.GasPriceCoef)
+		assert.Equal(t, expectedTx.MaxFeePerGas(), actualTx.MaxFeePerGas)
+		assert.Equal(t, expectedTx.MaxPriorityFeePerGas(), actualTx.MaxPriorityFeePerGas)
 	}
 }
 

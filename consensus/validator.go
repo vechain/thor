@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/poa"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
@@ -103,10 +104,6 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 		return errFutureBlock
 	}
 
-	if !block.GasLimit(header.GasLimit()).IsValid(parent.GasLimit()) {
-		return consensusError(fmt.Sprintf("block gas limit invalid: parent %v, current %v", parent.GasLimit(), header.GasLimit()))
-	}
-
 	if header.GasUsed() > header.GasLimit() {
 		return consensusError(fmt.Sprintf("block gas used exceeds limit: limit %v, used %v", header.GasLimit(), header.GasUsed()))
 	}
@@ -153,6 +150,20 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 	if header.Number() < c.forkConfig.FINALITY {
 		if header.COM() {
 			return consensusError("invalid block: COM should not set before fork FINALITY")
+		}
+	}
+
+	if header.Number() < c.forkConfig.GALACTICA {
+		if header.BaseFee() != nil {
+			return consensusError("invalid block: baseFee should not set before fork GALACTICA")
+		}
+
+		if !block.GasLimit(header.GasLimit()).IsValid(parent.GasLimit()) {
+			return consensusError(fmt.Sprintf("block gas limit invalid: parent %v, current %v", parent.GasLimit(), header.GasLimit()))
+		}
+	} else {
+		if err := fork.VerifyGalacticaHeader(&c.forkConfig, parent, header); err != nil {
+			return consensusError(fmt.Sprintf("block header invalid: %v", err))
 		}
 	}
 
@@ -272,6 +283,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 			Time:        header.Timestamp(),
 			GasLimit:    header.GasLimit(),
 			TotalScore:  header.TotalScore(),
+			BaseFee:     header.BaseFee(),
 		},
 		c.forkConfig)
 
