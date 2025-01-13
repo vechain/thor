@@ -17,19 +17,11 @@
 package vm
 
 import (
-	"errors"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 	"github.com/vechain/thor/v2/thor"
-)
-
-var (
-	errWriteProtection       = errors.New("evm: write protection")
-	errReturnDataOutOfBounds = errors.New("evm: return data out of bounds")
-	errMaxCodeSizeExceeded   = errors.New("evm: max code size exceeded")
 )
 
 func opAdd(_ *uint64, _ *EVM, _ *Contract, _ *Memory, stack *Stack) ([]byte, error) {
