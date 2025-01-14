@@ -99,14 +99,14 @@ func New(
 	currentChainConfig := baseChainConfig
 	currentChainConfig.ConstantinopleBlock = big.NewInt(int64(forkConfig.ETH_CONST))
 	currentChainConfig.IstanbulBlock = big.NewInt(int64(forkConfig.ETH_IST))
-	currentChainConfig.ShanghaiBlock = big.NewInt(int64(forkConfig.ETH_SH))
+	currentChainConfig.ShanghaiBlock = big.NewInt(int64(forkConfig.GALACTICA))
 	if chain != nil {
 		// use genesis id as chain id
 		currentChainConfig.ChainID = new(big.Int).SetBytes(chain.GenesisID().Bytes())
 	}
 
 	// alloc precompiled contracts
-	if forkConfig.ETH_SH == ctx.Number {
+	if forkConfig.GALACTICA == ctx.Number {
 		for addr := range vm.PrecompiledContractsShanghai {
 			if err := state.SetCode(thor.Address(addr), EmptyRuntimeBytecode); err != nil {
 				panic(err)
