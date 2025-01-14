@@ -217,14 +217,14 @@ func TestPrecompiledModExp(t *testing.T)      { testJSON("modexp", "05", t) }
 func BenchmarkPrecompiledModExp(b *testing.B) { benchJSON("modexp", "05", b) }
 
 func TestPrecompiledModExpEip2565(t *testing.T)      { testJSON("modexp_eip2565", "f5", t) }
-func BenchmarkPrecompiledModExpEip2565(b *testing.B) { testJSON("modexp_eip2565", "f5", b) }
+func BenchmarkPrecompiledModExpEip2565(b *testing.B) { benchJSON("modexp_eip2565", "f5", b) }
 
 // Tests the sample inputs from the elliptic curve addition EIP 213.
 func TestPrecompiledBn256Add(t *testing.T)      { testJSON("bn256Add", "06", t) }
 func BenchmarkPrecompiledBn256Add(b *testing.B) { benchJSON("bn256Add", "06", b) }
 
 func TestPrecompiledBn256AddEip1108(t *testing.T)      { testJSON("bn256Add_eip1108", "f6", t) }
-func BenchmarkPrecompiledBn256AddEip1108(b *testing.B) { testJSON("bn256Add_eip1108", "f6", b) }
+func BenchmarkPrecompiledBn256AddEip1108(b *testing.B) { benchJSON("bn256Add_eip1108", "f6", b) }
 
 // Tests OOG
 func TestPrecompiledModExpOOG(t *testing.T) {
