@@ -578,7 +578,7 @@ func TestVerifyBlock(t *testing.T) {
 	}
 }
 
-func TestValidateBlockBody(t *testing.T) {
+func TestConsent(t *testing.T) {
 	tc, err := newTestConsensus()
 	if err != nil {
 		t.Fatal(err)
