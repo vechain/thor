@@ -436,6 +436,46 @@ func TestPoolLimit(t *testing.T) {
 	assert.Equal(t, "tx rejected: account quota exceeded", err.Error())
 }
 
+func TestExecutableAndNonExecutableLimits(t *testing.T) {
+	// executable pool limit
+	pool := newPoolWithParams(10, 2, "", "", uint64(time.Now().Unix()))
+	defer pool.Close()
+
+	// Create a slice of transactions to be added to the pool.
+	txs := make(Tx.Transactions, 0, 11)
+	for i := 0; i < 11; i++ {
+		tx := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i%len(devAccounts)])
+		pool.add(tx, false, false)
+		txs = append(txs, tx)
+	}
+	pool.executables.Store(txs)
+
+	trx1 := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[1])
+
+	err := pool.add(trx1, false, false)
+	assert.Equal(t, "tx rejected: executable pool is full", err.Error())
+
+	trx2 := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(0), devAccounts[1])
+
+	err = pool.add(trx2, false, false)
+	assert.Nil(t, err)
+
+	// non-executable pool limit
+	pool = newPoolWithParams(5, 2, "", "", uint64(time.Now().Unix()))
+	defer pool.Close()
+
+	trx1 = newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(0), devAccounts[0])
+
+	err = pool.add(trx1, false, false)
+	assert.Nil(t, err)
+
+	trx2 = newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(0), devAccounts[2])
+
+	err = pool.add(trx2, false, false)
+
+	assert.Equal(t, "tx rejected: non executable pool is full", err.Error())
+}
+
 func TestBlocked(t *testing.T) {
 	acc := devAccounts[len(devAccounts)-1]
 

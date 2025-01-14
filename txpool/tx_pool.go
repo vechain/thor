@@ -255,6 +255,16 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 			return txRejectedError{"tx is not executable"}
 		}
 
+		if !executable {
+			if p.all.Len()-len(p.Executables()) >= p.options.Limit*2/10 {
+				return txRejectedError{"non executable pool is full"}
+			}
+		} else {
+			if len(p.Executables()) > p.options.Limit {
+				return txRejectedError{"executable pool is full"}
+			}
+		}
+
 		txObj.executable = executable
 		if err := p.all.Add(txObj, p.options.LimitPerAccount, func(payer thor.Address, needs *big.Int) error {
 			// check payer's balance
