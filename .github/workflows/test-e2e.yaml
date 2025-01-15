@@ -43,8 +43,10 @@ jobs:
       - name: Set e2e repo reference
         id: set-ref
         run: |
-          if [[ "${{ github.event.pull_request.base.ref }}" == release/* ]]; then
+          if [[ "${{ startsWith(github.event.pull_request.base.ref, 'release/*') }} ]]; then
             echo "ref=${{ github.event.pull_request.base.ref }}" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ startsWith(github.head_ref, 'release/*') }} ]]; then
+            echo "ref=${{ github.head_ref }}" >> "$GITHUB_OUTPUT"
           else
             echo "ref=956b34bcf5b0b072cd7c8fd2e546a9beb66a866a" >> "$GITHUB_OUTPUT"
           fi 
