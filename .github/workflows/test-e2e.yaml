@@ -38,13 +38,22 @@ jobs:
       THOR_IMAGE: vechain/thor:${{ github.sha }}
     name: Run Tests
     steps:
+      # Main: https://github.com/vechain/thor-e2e-tests/tree/956b34bcf5b0b072cd7c8fd2e546a9beb66a866a
+      # For release branches, names in the thor and thor-e2e-tests repo should match
+      - name: Set e2e repo reference
+        id: set-ref
+        run: |
+          if [[ "${{ github.event.pull_request.base.ref }}" == release/* ]]; then
+            echo "::set-output name=ref::${ github.event.pull_request.base.ref }"
+          else
+            echo "::set-output name=ref::956b34bcf5b0b072cd7c8fd2e546a9beb66a866a"
+          fi 
 
       - name: Checkout
         uses: actions/checkout@v4
         with:
           repository: vechain/thor-e2e-tests
-          # https://github.com/vechain/thor-e2e-tests/tree/956b34bcf5b0b072cd7c8fd2e546a9beb66a866a
-          ref: 956b34bcf5b0b072cd7c8fd2e546a9beb66a866a
+          ref: ${{ steps.set-ref.outputs.ref }}
 
       - name: Download artifact
         uses: actions/download-artifact@v4
