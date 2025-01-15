@@ -39,7 +39,7 @@ jobs:
     name: Run Tests
     steps:
       # Main: https://github.com/vechain/thor-e2e-tests/tree/956b34bcf5b0b072cd7c8fd2e546a9beb66a866a
-      # For release branches, names in the thor and thor-e2e-tests repo should match
+      # For release branches, names in the thor and thor-e2e-tests repos should match
       - name: Set e2e repo reference
         id: set-ref
         run: |
