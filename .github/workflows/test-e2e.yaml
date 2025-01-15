@@ -49,7 +49,10 @@ jobs:
             echo "ref=${{ github.head_ref }}" >> "$GITHUB_OUTPUT"
           else
             echo "ref=956b34bcf5b0b072cd7c8fd2e546a9beb66a866a" >> "$GITHUB_OUTPUT"
-          fi 
+          fi
+      
+      - name: Print ref
+        run:  echo ${{ steps.set-ref.outputs.ref }} 
 
       - name: Checkout
         uses: actions/checkout@v4
