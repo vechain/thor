@@ -1,8 +1,8 @@
 <p align="center">
   <a href="https://www.vechain.org/vechainthor/">
     <picture style="padding: 80px;">
-        <source srcset="docs/assets/banner-dark-mode.png"  media="(prefers-color-scheme: dark)" >
-        <img src="docs/assets/banner-light-mode.png" style="padding: 20px;">
+        <source srcset="https://github.com/vechain/thor/blob/master/docs/assets/banner-dark-mode.png"  media="(prefers-color-scheme: dark)" >
+        <img src="https://github.com/vechain/thor/blob/master/docs/assets/banner-light-mode.png" style="padding: 20px;">
     </picture>
   </a>
 </p>
@@ -44,9 +44,9 @@ ___
 
 ## Documentation
 
-- [Build](./docs/build.md) - How to build the `thor` binary.
-- [Usage](./docs/usage.md) - How to run thor with different configurations.
-- [Hosting a Node](./docs/hosting-a-node.md) - Considerations and requirements for hosting a node.
+- [Build](https://github.com/vechain/thor/blob/master/docs/build.md) - How to build the `thor` binary.
+- [Usage](https://github.com/vechain/thor/blob/master/docs/usage.md) - How to run thor with different configurations.
+- [Hosting a Node](https://github.com/vechain/thor/blob/master/docs/hosting-a-node.md) - Considerations and requirements for hosting a node.
 - [Core Concepts](https://docs.vechain.org/core-concepts) - Core concepts of the VeChainThor blockchain.
 - [API Reference](https://mainnet.vechain.org) - The API reference for the VeChainThor blockchain.
 
@@ -67,7 +67,7 @@ To chat with other community members you can join:
     <a href="https://www.reddit.com/r/Vechain"><img src="https://img.shields.io/badge/Reddit-FF4500?style=for-the-badge&logo=reddit&logoColor=white"/></a>
 </p>
 
-Do note that our [Code of Conduct](./docs/CODE_OF_CONDUCT.md) applies to all VeChain community channels. Users are
+Do note that our [Code of Conduct](https://github.com/vechain/thor/blob/master/docs/CODE_OF_CONDUCT.md) applies to all VeChain community channels. Users are
 **highly encouraged** to read and adhere to them to avoid repercussions.
 
 ---
@@ -75,7 +75,7 @@ Do note that our [Code of Conduct](./docs/CODE_OF_CONDUCT.md) applies to all VeC
 ## Contributing
 
 Contributions to VeChainThor are welcome and highly appreciated. However, before you jump right into it, we would like
-you to review our [Contribution Guidelines](./docs/CONTRIBUTING.md) to make sure you have a smooth experience
+you to review our [Contribution Guidelines](https://github.com/vechain/thor/blob/master/docs/CONTRIBUTING.md) to make sure you have a smooth experience
 contributing to VeChainThor.
 
 ---

@@ -23,6 +23,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -37,6 +38,7 @@ import (
 	"github.com/mattn/go-isatty"
 	"github.com/mattn/go-tty"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/doc"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/node"
@@ -55,7 +57,7 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-var devNetGenesisID = genesis.NewDevnet().ID()
+var devNetGenesisID thor.Bytes32
 
 func initLogger(lvl int, jsonLogs bool) *slog.LevelVar {
 	logLevel := log.FromLegacyLevel(lvl)
@@ -272,6 +274,23 @@ func parseGenesisFile(filePath string) (*genesis.Genesis, thor.ForkConfig, error
 	}
 
 	return customGen, forkConfig, nil
+}
+
+func makeAPIConfig(ctx *cli.Context, logAPIRequests *atomic.Bool, soloMode bool) api.Config {
+	return api.Config{
+		AllowedOrigins:    ctx.String(apiCorsFlag.Name),
+		BacktraceLimit:    uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
+		CallGasLimit:      ctx.Uint64(apiCallGasLimitFlag.Name),
+		PprofOn:           ctx.Bool(pprofFlag.Name),
+		SkipLogs:          ctx.Bool(skipLogsFlag.Name),
+		AllowCustomTracer: ctx.Bool(apiAllowCustomTracerFlag.Name),
+		EnableReqLogger:   logAPIRequests,
+		EnableMetrics:     ctx.Bool(enableMetricsFlag.Name),
+		LogsLimit:         ctx.Uint64(apiLogsLimitFlag.Name),
+		AllowedTracers:    parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
+		EnableDeprecated:  ctx.Bool(apiEnableDeprecatedFlag.Name),
+		SoloMode:          soloMode,
+	}
 }
 
 func makeConfigDir(ctx *cli.Context) (string, error) {
@@ -611,6 +630,13 @@ func printStartupMessage1(
 	)
 }
 
+func getOrCreateDevnetID() thor.Bytes32 {
+	if devNetGenesisID.IsZero() {
+		devNetGenesisID = genesis.NewDevnet().ID()
+	}
+	return devNetGenesisID
+}
+
 func printStartupMessage2(
 	gene *genesis.Genesis,
 	apiURL string,
@@ -649,7 +675,7 @@ func printStartupMessage2(
 		}(),
 		func() string {
 			// print default dev net's dev accounts info
-			if gene.ID() == devNetGenesisID {
+			if gene.ID() == getOrCreateDevnetID() {
 				return `
 ┌──────────────────┬───────────────────────────────────────────────────────────────────────────────┐
 │  Mnemonic Words  │  denial kitchen pet squirrel other broom bar gas better priority spoil cross  │

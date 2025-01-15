@@ -17,6 +17,13 @@ import (
 	"github.com/vechain/thor/v2/trie"
 )
 
+type Cache interface {
+	AddNodeBlob(keyBuf *[]byte, name string, path []byte, ver trie.Version, blob []byte, isCommitting bool)
+	GetNodeBlob(keyBuf *[]byte, name string, path []byte, ver trie.Version, peek bool) []byte
+	AddRootNode(name string, n trie.Node)
+	GetRootNode(name string, ver trie.Version) trie.Node
+}
+
 // cache is the cache layer for trie.
 type cache struct {
 	queriedNodes   *directcache.Cache // caches recently queried node blobs.
@@ -34,7 +41,7 @@ type cache struct {
 }
 
 // newCache creates a cache object with the given cache size.
-func newCache(sizeMB int, rootTTL uint32) *cache {
+func newCache(sizeMB int, rootTTL uint32) Cache {
 	sizeBytes := sizeMB * 1024 * 1024
 	cache := &cache{
 		queriedNodes:   directcache.New(sizeBytes / 4),
@@ -51,13 +58,21 @@ func (c *cache) log() {
 	last := c.lastLogTime.Swap(now)
 
 	if now-last > int64(time.Second*20) {
-		log1, ok1 := c.nodeStats.ShouldLog("node cache stats")
-		log2, ok2 := c.rootStats.ShouldLog("root cache stats")
+		shouldNode, hitNode, missNode := c.nodeStats.Stats()
+		shouldRoot, hitRoot, missRoot := c.rootStats.Stats()
 
-		if ok1 || ok2 {
-			log1()
-			log2()
+		// log two categories together only one of the hit rate has
+		// changed compared to the last run, to avoid too many logs.
+		if shouldNode || shouldRoot {
+			logStats("node cache stats", hitNode, missNode)
+			logStats("root cache stats", hitRoot, missRoot)
 		}
+
+		// metrics will reported every 20 seconds
+		metricCacheHitMiss().SetWithLabel(hitRoot, map[string]string{"type": "root", "event": "hit"})
+		metricCacheHitMiss().SetWithLabel(missRoot, map[string]string{"type": "root", "event": "miss"})
+		metricCacheHitMiss().SetWithLabel(hitNode, map[string]string{"type": "node", "event": "hit"})
+		metricCacheHitMiss().SetWithLabel(missNode, map[string]string{"type": "node", "event": "miss"})
 	} else {
 		c.lastLogTime.CompareAndSwap(now, last)
 	}
@@ -65,10 +80,6 @@ func (c *cache) log() {
 
 // AddNodeBlob adds encoded node blob into the cache.
 func (c *cache) AddNodeBlob(keyBuf *[]byte, name string, path []byte, ver trie.Version, blob []byte, isCommitting bool) {
-	if c == nil {
-		return
-	}
-
 	// the version part
 	v := binary.AppendUvarint((*keyBuf)[:0], uint64(ver.Major))
 	v = binary.AppendUvarint(v, uint64(ver.Minor))
@@ -89,9 +100,6 @@ func (c *cache) AddNodeBlob(keyBuf *[]byte, name string, path []byte, ver trie.V
 
 // GetNodeBlob returns the cached node blob.
 func (c *cache) GetNodeBlob(keyBuf *[]byte, name string, path []byte, ver trie.Version, peek bool) []byte {
-	if c == nil {
-		return nil
-	}
 	// the version part
 	v := binary.AppendUvarint((*keyBuf)[:0], uint64(ver.Major))
 	v = binary.AppendUvarint(v, uint64(ver.Minor))
@@ -130,7 +138,7 @@ func (c *cache) GetNodeBlob(keyBuf *[]byte, name string, path []byte, ver trie.V
 
 // AddRootNode add the root node into the cache.
 func (c *cache) AddRootNode(name string, n trie.Node) {
-	if c == nil || n == nil {
+	if n == nil {
 		return
 	}
 	c.roots.lock.Lock()
@@ -151,9 +159,6 @@ func (c *cache) AddRootNode(name string, n trie.Node) {
 
 // GetRootNode returns the cached root node.
 func (c *cache) GetRootNode(name string, ver trie.Version) trie.Node {
-	if c == nil {
-		return nil
-	}
 	c.roots.lock.RLock()
 	defer c.roots.lock.RUnlock()
 
@@ -177,26 +182,49 @@ type cacheStats struct {
 func (cs *cacheStats) Hit() int64  { return cs.hit.Add(1) }
 func (cs *cacheStats) Miss() int64 { return cs.miss.Add(1) }
 
-func (cs *cacheStats) ShouldLog(msg string) (func(), bool) {
+func (cs *cacheStats) Stats() (bool, int64, int64) {
 	hit := cs.hit.Load()
 	miss := cs.miss.Load()
 	lookups := hit + miss
 
-	hitrate := float64(hit) / float64(lookups)
-	flag := int32(hitrate * 1000)
-	return func() {
-		var str string
-		if lookups > 0 {
-			str = fmt.Sprintf("%.3f", hitrate)
-		} else {
-			str = "n/a"
-		}
+	hitRate := float64(0)
+	if lookups > 0 {
+		hitRate = float64(hit) / float64(lookups)
+	}
+	flag := int32(hitRate * 1000)
 
-		logger.Info(msg,
-			"lookups", lookups,
-			"hitrate", str,
-		)
+	return cs.flag.Swap(flag) != flag, hit, miss
+}
 
-		cs.flag.Store(flag)
-	}, cs.flag.Load() != flag
+func logStats(msg string, hit, miss int64) {
+	lookups := hit + miss
+	var str string
+	if lookups > 0 {
+		str = fmt.Sprintf("%.3f", float64(hit)/float64(lookups))
+	} else {
+		str = "n/a"
+	}
+
+	logger.Info(msg,
+		"lookups", lookups,
+		"hitrate", str,
+	)
+}
+
+type dummyCache struct{}
+
+// AddNodeBlob is a no-op.
+func (*dummyCache) AddNodeBlob(_ *[]byte, _ string, _ []byte, _ trie.Version, _ []byte, _ bool) {}
+
+// GetNodeBlob always returns nil.
+func (*dummyCache) GetNodeBlob(_ *[]byte, _ string, _ []byte, _ trie.Version, _ bool) []byte {
+	return nil
+}
+
+// AddRootNode is a no-op.
+func (*dummyCache) AddRootNode(_ string, _ trie.Node) {}
+
+// GetRootNode always returns nil.
+func (*dummyCache) GetRootNode(_ string, _ trie.Version) trie.Node {
+	return nil
 }

@@ -11,6 +11,7 @@ package thorclient
 
 import (
 	"fmt"
+	"net/http"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -44,6 +45,13 @@ func New(url string) *Client {
 	}
 }
 
+// NewWithHTTP creates a new Client using the provided HTTP URL and HTTP client.
+func NewWithHTTP(url string, c *http.Client) *Client {
+	return &Client{
+		httpConn: httpclient.NewWithHTTP(url, c),
+	}
+}
+
 // NewWithWS creates a new Client using the provided HTTP and WebSocket URLs.
 // Returns an error if the WebSocket connection fails.
 func NewWithWS(url string) (*Client, error) {
@@ -71,6 +79,18 @@ type getOptions struct {
 func applyOptions(opts []Option) *getOptions {
 	options := &getOptions{
 		revision: tccommon.BestRevision,
+		pending:  false,
+	}
+	for _, o := range opts {
+		o(options)
+	}
+	return options
+}
+
+// applyHeadOptions applies the given functional options to the default options.
+func applyHeadOptions(opts []Option) *getOptions {
+	options := &getOptions{
+		revision: "",
 		pending:  false,
 	}
 	for _, o := range opts {
@@ -136,19 +156,19 @@ func (c *Client) AccountStorage(addr *thor.Address, key *thor.Bytes32, opts ...O
 
 // Transaction retrieves a transaction by its ID.
 func (c *Client) Transaction(id *thor.Bytes32, opts ...Option) (*transactions.Transaction, error) {
-	options := applyOptions(opts)
+	options := applyHeadOptions(opts)
 	return c.httpConn.GetTransaction(id, options.revision, options.pending)
 }
 
 // RawTransaction retrieves the raw transaction data by its ID.
 func (c *Client) RawTransaction(id *thor.Bytes32, opts ...Option) (*transactions.RawTransaction, error) {
-	options := applyOptions(opts)
+	options := applyHeadOptions(opts)
 	return c.httpConn.GetRawTransaction(id, options.revision, options.pending)
 }
 
 // TransactionReceipt retrieves the receipt for a transaction by its ID.
 func (c *Client) TransactionReceipt(id *thor.Bytes32, opts ...Option) (*transactions.Receipt, error) {
-	options := applyOptions(opts)
+	options := applyHeadOptions(opts)
 	return c.httpConn.GetTransactionReceipt(id, options.revision)
 }
 
@@ -202,7 +222,7 @@ func (c *Client) ChainTag() (byte, error) {
 }
 
 // SubscribeBlocks subscribes to block updates over WebSocket.
-func (c *Client) SubscribeBlocks(pos string) (*common.Subscription[*blocks.JSONCollapsedBlock], error) {
+func (c *Client) SubscribeBlocks(pos string) (*common.Subscription[*subscriptions.BlockMessage], error) {
 	if c.wsConn == nil {
 		return nil, fmt.Errorf("not a websocket typed client")
 	}

@@ -117,10 +117,18 @@ FROM (%v) e
 
 	if filter.Range != nil {
 		subQuery += " AND seq >= ?"
-		args = append(args, newSequence(filter.Range.From, 0, 0))
+		from, err := newSequence(filter.Range.From, 0, 0)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, from)
 		if filter.Range.To >= filter.Range.From {
 			subQuery += " AND seq <= ?"
-			args = append(args, newSequence(filter.Range.To, txIndexMask, logIndexMask))
+			to, err := newSequence(filter.Range.To, txIndexMask, logIndexMask)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, to)
 		}
 	}
 
@@ -183,10 +191,18 @@ FROM (%v) t
 
 	if filter.Range != nil {
 		subQuery += " AND seq >= ?"
-		args = append(args, newSequence(filter.Range.From, 0, 0))
+		from, err := newSequence(filter.Range.From, 0, 0)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, from)
 		if filter.Range.To >= filter.Range.From {
 			subQuery += " AND seq <= ?"
-			args = append(args, newSequence(filter.Range.To, txIndexMask, logIndexMask))
+			to, err := newSequence(filter.Range.To, txIndexMask, logIndexMask)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, to)
 		}
 	}
 
@@ -377,7 +393,10 @@ func (db *LogDB) HasBlockID(id thor.Bytes32) (bool, error) {
 		UNION
 		SELECT * FROM (SELECT seq FROM event WHERE seq=? AND blockID=` + refIDQuery + ` LIMIT 1))`
 
-	seq := newSequence(block.Number(id), 0, 0)
+	seq, err := newSequence(block.Number(id), 0, 0)
+	if err != nil {
+		return false, err
+	}
 	row := db.stmtCache.MustPrepare(query).QueryRow(seq, id[:], seq, id[:])
 	var count int
 	if err := row.Scan(&count); err != nil {
@@ -427,7 +446,11 @@ type Writer struct {
 
 // Truncate truncates the database by deleting logs after blockNum (included).
 func (w *Writer) Truncate(blockNum uint32) error {
-	seq := newSequence(blockNum, 0, 0)
+	seq, err := newSequence(blockNum, 0, 0)
+	if err != nil {
+		return err
+	}
+
 	if err := w.exec("DELETE FROM event WHERE seq >= ?", seq); err != nil {
 		return err
 	}
@@ -520,9 +543,14 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 					eventData = ev.Data
 				}
 
+				seq, err := newSequence(blockNum, uint32(txIndex), eventCount)
+				if err != nil {
+					return err
+				}
+
 				if err := w.exec(
 					query,
-					newSequence(blockNum, uint32(txIndex), eventCount),
+					seq,
 					blockTimestamp,
 					clauseIndex,
 					eventData,
@@ -555,9 +583,14 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 					refIDQuery + "," +
 					refIDQuery + ")"
 
+				seq, err := newSequence(blockNum, uint32(txIndex), transferCount)
+				if err != nil {
+					return err
+				}
+
 				if err := w.exec(
 					query,
-					newSequence(blockNum, uint32(txIndex), transferCount),
+					seq,
 					blockTimestamp,
 					clauseIndex,
 					tr.Amount.Bytes(),

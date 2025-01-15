@@ -8,9 +8,11 @@ package testchain
 import (
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"slices"
 	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
@@ -46,6 +48,7 @@ func New(
 	stater *state.Stater,
 	genesisBlock *block.Block,
 	logDB *logdb.LogDB,
+	forkConfig thor.ForkConfig,
 ) *Chain {
 	return &Chain{
 		db:           db,
@@ -55,7 +58,7 @@ func New(
 		stater:       stater,
 		genesisBlock: genesisBlock,
 		logDB:        logDB,
-		forkConfig:   thor.GetForkConfig(genesisBlock.Header().ID()),
+		forkConfig:   forkConfig,
 	}
 }
 
@@ -87,6 +90,11 @@ func NewIntegrationTestChain() (*Chain, error) {
 		return nil, err
 	}
 
+	forkConfig := thor.NoFork
+	forkConfig.VIP191 = 1
+	forkConfig.BLOCKLIST = 0
+	forkConfig.VIP214 = 2
+
 	return New(
 		db,
 		gene,
@@ -95,6 +103,7 @@ func NewIntegrationTestChain() (*Chain, error) {
 		stater,
 		geneBlk,
 		logDb,
+		thor.NoFork,
 	), nil
 }
 
@@ -122,6 +131,29 @@ func (c *Chain) GenesisBlock() *block.Block {
 // It wraps the transactions with receipts and passes them to MintTransactionsWithReceiptFunc.
 func (c *Chain) MintTransactions(account genesis.DevAccount, transactions ...*tx.Transaction) error {
 	return c.MintBlock(account, transactions...)
+}
+
+// MintClauses creates a transaction with the provided clauses and adds it to the blockchain.
+func (c *Chain) MintClauses(account genesis.DevAccount, clauses []*tx.Clause) error {
+	builer := new(tx.Builder).GasPriceCoef(255).
+		BlockRef(tx.NewBlockRef(c.Repo().BestBlockSummary().Header.Number())).
+		Expiration(1000).
+		ChainTag(c.Repo().ChainTag()).
+		Gas(10e6).
+		Nonce(rand.Uint64()) // nolint
+
+	for _, clause := range clauses {
+		builer.Clause(clause)
+	}
+
+	tx := builer.Build()
+	signature, err := crypto.Sign(tx.SigningHash().Bytes(), account.PrivateKey)
+	if err != nil {
+		return fmt.Errorf("unable to sign tx: %w", err)
+	}
+	tx = tx.WithSignature(signature)
+
+	return c.MintBlock(account, tx)
 }
 
 // MintBlock creates and finalizes a new block with the given transactions.
@@ -163,6 +195,14 @@ func (c *Chain) MintBlock(account genesis.DevAccount, transactions ...*tx.Transa
 		return fmt.Errorf("unable to add tx to repo: %w", err)
 	}
 
+	// Write the new block and receipts to the logdb.
+	w := c.LogDB().NewWriter()
+	if err := w.Write(newBlk, receipts); err != nil {
+		return err
+	}
+	if err := w.Commit(); err != nil {
+		return err
+	}
 	return nil
 }
 
