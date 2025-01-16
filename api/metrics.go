@@ -100,7 +100,6 @@ func metricsMiddleware(next http.Handler) http.Handler {
 		if rt != nil && rt.GetName() != "" {
 			enabled = true
 			name = rt.GetName()
-
 			if name == "transactions_call_tx" {
 				ctxWriter := newCallTxResponseWriter(w)
 				next.ServeHTTP(ctxWriter, r)
@@ -115,9 +114,8 @@ func metricsMiddleware(next http.Handler) http.Handler {
 			}
 
 			// Handle subscriptions
-			if strings.HasPrefix(name, "subscriptions") {
+			if strings.HasPrefix(name, "WS") {
 				subscription = true
-				name = "WS " + r.URL.Path
 			}
 		}
 
