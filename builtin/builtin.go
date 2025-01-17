@@ -28,6 +28,7 @@ var (
 	Extension = &extensionContract{
 		mustLoadContract("Extension"),
 		mustLoadContract("ExtensionV2"),
+		mustLoadContract("ExtensionV3"),
 	}
 	Measure = mustLoadContract("Measure")
 )
@@ -41,6 +42,7 @@ type (
 	extensionContract struct {
 		*contract
 		V2 *contract
+		V3 *contract
 	}
 )
 

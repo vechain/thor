@@ -236,7 +236,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 				panic("serious bug: native call returned gas over consumed")
 			}
 
-			ret, err := xenv.New(abi, rt.chain, rt.state, rt.ctx, txCtx, evm, contract).Call(run)
+			ret, err := xenv.New(abi, rt.chain, rt.state, rt.ctx, txCtx, evm, contract, clauseIndex).Call(run)
 			return ret, err, true
 		},
 		OnCreateContract: func(_ *vm.EVM, contractAddr, caller common.Address) {
