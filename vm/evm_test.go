@@ -19,20 +19,20 @@ var _ Logger = (*noopTracer)(nil)
 
 type noopTracer struct{}
 
-func (t *noopTracer) CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (t *noopTracer) CaptureStart(_ *EVM, _ common.Address, _ common.Address, _ bool, _ []byte, _ uint64, _ *big.Int) {
 }
-func (t *noopTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
+func (t *noopTracer) CaptureEnd(_ []byte, _ uint64, _ error) {
 }
-func (t *noopTracer) CaptureState(pc uint64, op OpCode, gas, cost uint64, memory *Memory, stack *Stack, contract *Contract, rData []byte, depth int, err error) {
+func (t *noopTracer) CaptureState(_ uint64, _ OpCode, _, _ uint64, _ *Memory, _ *Stack, _ *Contract, _ []byte, _ int, _ error) {
 }
-func (t *noopTracer) CaptureFault(pc uint64, op OpCode, gas, cost uint64, memory *Memory, stack *Stack, contract *Contract, depth int, err error) {
+func (t *noopTracer) CaptureFault(_ uint64, _ OpCode, _, _ uint64, _ *Memory, _ *Stack, _ *Contract, _ int, _ error) {
 }
-func (t *noopTracer) CaptureEnter(typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *noopTracer) CaptureEnter(_ OpCode, _ common.Address, _ common.Address, _ []byte, _ uint64, _ *big.Int) {
 }
-func (t *noopTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
+func (t *noopTracer) CaptureExit(_ []byte, _ uint64, _ error) {
 }
-func (*noopTracer) CaptureClauseStart(gasLimit uint64) {}
-func (*noopTracer) CaptureClauseEnd(restGas uint64)    {}
+func (*noopTracer) CaptureClauseStart(_ uint64) {}
+func (*noopTracer) CaptureClauseEnd(_ uint64)   {}
 
 func setupEvmTestContract(codeAddr *common.Address) (*EVM, *Contract) {
 	statedb := NoopStateDB{}

@@ -72,7 +72,7 @@ func (c *Communicator) Sync(ctx context.Context, handler HandleBlockStream) {
 	delay := initSyncInterval
 	syncCount := 0
 
-	shouldSynced := func() bool {
+	isSynced := func() bool {
 		bestBlockTime := c.repo.BestBlockSummary().Header.Timestamp()
 		now := uint64(time.Now().Unix())
 		if bestBlockTime+thor.BlockInterval >= now {
@@ -115,9 +115,10 @@ func (c *Communicator) Sync(ctx context.Context, handler HandleBlockStream) {
 			}
 			syncCount++
 
-			if shouldSynced() {
+			if isSynced() {
 				delay = syncInterval
 				c.onceSynced.Do(func() {
+					// once off - after a bootstrap the syncedCh trigger the peers.syncTxs
 					close(c.syncedCh)
 				})
 			}
@@ -238,7 +239,6 @@ func (c *Communicator) BroadcastBlock(blk *block.Block) {
 	toAnnounce := peers[p:]
 
 	for _, peer := range toPropagate {
-		peer := peer
 		peer.MarkBlock(blk.Header().ID())
 		c.goes.Go(func() {
 			if err := proto.NotifyNewBlock(c.ctx, peer, blk); err != nil {
@@ -248,7 +248,6 @@ func (c *Communicator) BroadcastBlock(blk *block.Block) {
 	}
 
 	for _, peer := range toAnnounce {
-		peer := peer
 		peer.MarkBlock(blk.Header().ID())
 		c.goes.Go(func() {
 			if err := proto.NotifyNewBlockID(c.ctx, peer, blk.Header().ID()); err != nil {

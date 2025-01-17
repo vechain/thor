@@ -8,30 +8,35 @@ package subscriptions
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/test/eventcontract"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
 )
 
 var ts *httptest.Server
-var client *http.Client
-var sub *Subscriptions
-var txPool *txpool.TxPool
-var repo *chain.Repository
 var blocks []*block.Block
 
 func TestSubscriptions(t *testing.T) {
-	initSubscriptionsServer(t)
+	initSubscriptionsServer(t, true)
 	defer ts.Close()
 
 	for name, tt := range map[string]func(*testing.T){
@@ -44,6 +49,17 @@ func TestSubscriptions(t *testing.T) {
 	} {
 		t.Run(name, tt)
 	}
+}
+
+func TestDeprecatedSubscriptions(t *testing.T) {
+	initSubscriptionsServer(t, false)
+	defer ts.Close()
+
+	u := url.URL{Scheme: "ws", Host: strings.TrimPrefix(ts.URL, "http://"), Path: "/subscriptions/beat"}
+
+	_, resp, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	assert.Error(t, err)
+	assert.Equal(t, http.StatusGone, resp.StatusCode)
 }
 
 func testHandleSubjectWithBlock(t *testing.T) {
@@ -211,14 +227,131 @@ func TestParseAddress(t *testing.T) {
 	assert.Equal(t, expectedAddr, *result)
 }
 
-func initSubscriptionsServer(t *testing.T) {
-	r, generatedBlocks, pool := initChain(t)
-	repo = r
-	txPool = pool
-	blocks = generatedBlocks
+func initSubscriptionsServer(t *testing.T, enabledDeprecated bool) {
+	thorChain, err := testchain.NewIntegrationTestChain()
+	require.NoError(t, err)
+
+	txPool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
+		Limit:           100,
+		LimitPerAccount: 16,
+		MaxLifetime:     time.Hour,
+	})
+
+	addr := thor.BytesToAddress([]byte("to"))
+	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
+	tr := new(tx.Builder).
+		ChainTag(thorChain.Repo().ChainTag()).
+		GasPriceCoef(1).
+		Expiration(10).
+		Gas(21000).
+		Nonce(1).
+		Clause(cla).
+		BlockRef(tx.NewBlockRef(0)).
+		Build()
+
+	sig, err := crypto.Sign(tr.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr = tr.WithSignature(sig)
+
+	txDeploy := new(tx.Builder).
+		ChainTag(thorChain.Repo().ChainTag()).
+		GasPriceCoef(1).
+		Expiration(100).
+		Gas(1_000_000).
+		Nonce(3).
+		Clause(tx.NewClause(nil).WithData(common.Hex2Bytes(eventcontract.HexBytecode))).
+		BlockRef(tx.NewBlockRef(0)).
+		Build()
+	sigTxDeploy, err := crypto.Sign(txDeploy.SigningHash().Bytes(), genesis.DevAccounts()[1].PrivateKey)
+	require.NoError(t, err)
+	txDeploy = txDeploy.WithSignature(sigTxDeploy)
+
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], tr, txDeploy))
+
+	blocks, err = thorChain.GetAllBlocks()
+	require.NoError(t, err)
+
 	router := mux.NewRouter()
-	sub = New(repo, []string{}, 5, txPool)
-	sub.Mount(router, "/subscriptions")
+	New(thorChain.Repo(), []string{}, 5, txPool, enabledDeprecated).
+		Mount(router, "/subscriptions")
 	ts = httptest.NewServer(router)
-	client = &http.Client{}
+}
+
+func TestSubscriptionsBacktrace(t *testing.T) {
+	thorChain, err := testchain.NewIntegrationTestChain()
+	require.NoError(t, err)
+
+	txPool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
+		Limit:           100,
+		LimitPerAccount: 16,
+		MaxLifetime:     time.Hour,
+	})
+
+	addr := thor.BytesToAddress([]byte("to"))
+	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
+	tr := new(tx.Builder).
+		ChainTag(thorChain.Repo().ChainTag()).
+		GasPriceCoef(1).
+		Expiration(10).
+		Gas(21000).
+		Nonce(1).
+		Clause(cla).
+		BlockRef(tx.NewBlockRef(0)).
+		Build()
+
+	sig, err := crypto.Sign(tr.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr = tr.WithSignature(sig)
+
+	txDeploy := new(tx.Builder).
+		ChainTag(thorChain.Repo().ChainTag()).
+		GasPriceCoef(1).
+		Expiration(100).
+		Gas(1_000_000).
+		Nonce(3).
+		Clause(tx.NewClause(nil).WithData(common.Hex2Bytes(eventcontract.HexBytecode))).
+		BlockRef(tx.NewBlockRef(0)).
+		Build()
+	sigTxDeploy, err := crypto.Sign(txDeploy.SigningHash().Bytes(), genesis.DevAccounts()[1].PrivateKey)
+	require.NoError(t, err)
+	txDeploy = txDeploy.WithSignature(sigTxDeploy)
+
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], tr, txDeploy))
+
+	for i := 0; i < 10; i++ {
+		require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0]))
+	}
+
+	blocks, err = thorChain.GetAllBlocks()
+	require.NoError(t, err)
+
+	router := mux.NewRouter()
+	New(thorChain.Repo(), []string{}, 5, txPool, true).Mount(router, "/subscriptions")
+	ts = httptest.NewServer(router)
+
+	defer ts.Close()
+
+	t.Run("testHandleSubjectWithTransferBacktraceLimit", testHandleSubjectWithTransferBacktraceLimit)
+}
+func testHandleSubjectWithTransferBacktraceLimit(t *testing.T) {
+	genesisBlock := blocks[0]
+	queryArg := fmt.Sprintf("pos=%s", genesisBlock.Header().ID().String())
+	u := url.URL{Scheme: "ws", Host: strings.TrimPrefix(ts.URL, "http://"), Path: "/subscriptions/transfer", RawQuery: queryArg}
+
+	conn, resp, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	assert.Error(t, err)
+	assert.Equal(t, "websocket: bad handshake", err.Error())
+	defer resp.Body.Close() // Ensure body is closed after reading
+
+	// Read the response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("failed to read response body: %v", err)
+	}
+	assert.Equal(t, body, []byte("pos: backtrace limit exceeded\n"))
+	assert.Nil(t, conn)
 }

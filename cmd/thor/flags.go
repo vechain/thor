@@ -69,6 +69,10 @@ var (
 		Value: 1000,
 		Usage: "limit the number of logs returned by /logs API",
 	}
+	apiEnableDeprecatedFlag = cli.BoolFlag{
+		Name:  "api-enable-deprecated",
+		Usage: "enable deprecated API endpoints (POST /accounts/{address}, POST /accounts, WS /subscriptions/beat",
+	}
 	enableAPILogsFlag = cli.BoolFlag{
 		Name:  "enable-api-logs",
 		Usage: "enables API requests logging",
@@ -151,6 +155,27 @@ var (
 		Usage: "metrics service listening address",
 	}
 
+	enableAdminFlag = cli.BoolFlag{
+		Name:  "enable-admin",
+		Usage: "enables admin server",
+	}
+	adminAddrFlag = cli.StringFlag{
+		Name:  "admin-addr",
+		Value: "localhost:2113",
+		Usage: "admin service listening address",
+	}
+	txPoolLimitPerAccountFlag = cli.Uint64Flag{
+		Name:  "txpool-limit-per-account",
+		Value: 16,
+		Usage: "set tx limit per account in pool",
+	}
+
+	allowedTracersFlag = cli.StringFlag{
+		Name:  "api-allowed-tracers",
+		Value: "none",
+		Usage: "comma separated list of allowed API tracers(none,all,call,prestate etc.)",
+	}
+
 	// solo mode only flags
 	onDemandFlag = cli.BoolFlag{
 		Name:  "on-demand",
@@ -174,11 +199,6 @@ var (
 		Name:  "txpool-limit",
 		Value: 10000,
 		Usage: "set tx limit in pool",
-	}
-	txPoolLimitPerAccountFlag = cli.Uint64Flag{
-		Name:  "txpool-limit-per-account",
-		Value: 16,
-		Usage: "set tx limit per account in pool",
 	}
 	genesisFlag = cli.StringFlag{
 		Name:  "genesis",

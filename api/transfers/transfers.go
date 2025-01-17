@@ -90,6 +90,6 @@ func (t *Transfers) Mount(root *mux.Router, pathPrefix string) {
 
 	sub.Path("").
 		Methods(http.MethodPost).
-		Name("logs_filter_transfer").
+		Name("POST /logs/transfer").
 		HandlerFunc(utils.WrapHandlerFunc(t.handleFilterTransferLogs))
 }

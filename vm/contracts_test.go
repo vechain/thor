@@ -49,7 +49,7 @@ type precompiledFailureTest struct {
 // allPrecompiles does not map to the actual set of precompiles, as it also contains
 // repriced versions of precompiles at certain slots
 var allPrecompiles = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}):    &safe_ecrecover{},
+	common.BytesToAddress([]byte{1}):    &safeEcrecover{},
 	common.BytesToAddress([]byte{2}):    &sha256hash{},
 	common.BytesToAddress([]byte{3}):    &ripemd160hash{},
 	common.BytesToAddress([]byte{4}):    &dataCopy{},
@@ -213,22 +213,22 @@ func BenchmarkPrecompiledIdentity(bench *testing.B) {
 }
 
 // Tests the sample inputs from the ModExp EIP 198.
-func TestPrecompiledModExp(t *testing.T)      { testJson("modexp", "05", t) }
-func BenchmarkPrecompiledModExp(b *testing.B) { benchJson("modexp", "05", b) }
+func TestPrecompiledModExp(t *testing.T)      { testJSON("modexp", "05", t) }
+func BenchmarkPrecompiledModExp(b *testing.B) { benchJSON("modexp", "05", b) }
 
-func TestPrecompiledModExpEip2565(t *testing.T)      { testJson("modexp_eip2565", "f5", t) }
-func BenchmarkPrecompiledModExpEip2565(b *testing.B) { benchJson("modexp_eip2565", "f5", b) }
+func TestPrecompiledModExpEip2565(t *testing.T)      { testJSON("modexp_eip2565", "f5", t) }
+func BenchmarkPrecompiledModExpEip2565(b *testing.B) { benchJSON("modexp_eip2565", "f5", b) }
 
 // Tests the sample inputs from the elliptic curve addition EIP 213.
-func TestPrecompiledBn256Add(t *testing.T)      { testJson("bn256Add", "06", t) }
-func BenchmarkPrecompiledBn256Add(b *testing.B) { benchJson("bn256Add", "06", b) }
+func TestPrecompiledBn256Add(t *testing.T)      { testJSON("bn256Add", "06", t) }
+func BenchmarkPrecompiledBn256Add(b *testing.B) { benchJSON("bn256Add", "06", b) }
 
-func TestPrecompiledBn256AddEip1108(t *testing.T)      { testJson("bn256Add_eip1108", "f6", t) }
-func BenchmarkPrecompiledBn256AddEip1108(b *testing.B) { benchJson("bn256Add_eip1108", "f6", b) }
+func TestPrecompiledBn256AddEip1108(t *testing.T)      { testJSON("bn256Add_eip1108", "f6", t) }
+func BenchmarkPrecompiledBn256AddEip1108(b *testing.B) { benchJSON("bn256Add_eip1108", "f6", b) }
 
 // Tests OOG
 func TestPrecompiledModExpOOG(t *testing.T) {
-	modexpTests, err := loadJson("modexp")
+	modexpTests, err := loadJSON("modexp")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,33 +238,33 @@ func TestPrecompiledModExpOOG(t *testing.T) {
 }
 
 // Tests the sample inputs from the elliptic curve scalar multiplication EIP 213.
-func TestPrecompiledBn256ScalarMul(t *testing.T)      { testJson("bn256ScalarMul", "07", t) }
-func BenchmarkPrecompiledBn256ScalarMul(b *testing.B) { benchJson("bn256ScalarMul", "07", b) }
+func TestPrecompiledBn256ScalarMul(t *testing.T)      { testJSON("bn256ScalarMul", "07", t) }
+func BenchmarkPrecompiledBn256ScalarMul(b *testing.B) { benchJSON("bn256ScalarMul", "07", b) }
 
-func TestPrecompiledBn256ScalarMulEip1108(t *testing.T) { testJson("bn256ScalarMul_eip1108", "f7", t) }
+func TestPrecompiledBn256ScalarMulEip1108(t *testing.T) { testJSON("bn256ScalarMul_eip1108", "f7", t) }
 func BenchmarkPrecompiledBn256ScalarMulEip1108(b *testing.B) {
-	benchJson("bn256ScalarMul_eip1108", "f7", b)
+	benchJSON("bn256ScalarMul_eip1108", "f7", b)
 }
 
 // Tests the sample inputs from the elliptic curve pairing check EIP 197.
-func TestPrecompiledBn256Pairing(t *testing.T)      { testJson("bn256Pairing", "08", t) }
-func BenchmarkPrecompiledBn256Pairing(b *testing.B) { benchJson("bn256Pairing", "08", b) }
+func TestPrecompiledBn256Pairing(t *testing.T)      { testJSON("bn256Pairing", "08", t) }
+func BenchmarkPrecompiledBn256Pairing(b *testing.B) { benchJSON("bn256Pairing", "08", b) }
 
-func TestPrecompiledBn256PairingEip1108(t *testing.T) { testJson("bn256Pairing_eip1108", "f8", t) }
+func TestPrecompiledBn256PairingEip1108(t *testing.T) { testJSON("bn256Pairing_eip1108", "f8", t) }
 func BenchmarkPrecompiledBn256PairingEip1108(b *testing.B) {
-	benchJson("bn256Pairing_eip1108", "f8", b)
+	benchJSON("bn256Pairing_eip1108", "f8", b)
 }
 
-func TestPrecompiledBlake2F(t *testing.T)      { testJson("blake2F", "09", t) }
-func BenchmarkPrecompiledBlake2F(b *testing.B) { benchJson("blake2F", "09", b) }
+func TestPrecompiledBlake2F(t *testing.T)      { testJSON("blake2F", "09", t) }
+func BenchmarkPrecompiledBlake2F(b *testing.B) { benchJSON("blake2F", "09", b) }
 
-func TestPrecompiledEcrecover(t *testing.T) { testJson("ecRecover", "01", t) }
+func TestPrecompiledEcrecover(t *testing.T) { testJSON("ecRecover", "01", t) }
 
 // Failure tests
-func TestPrecompiledBlake2FFailure(t *testing.T) { testJsonFail("blake2F", "09", t) }
+func TestPrecompiledBlake2FFailure(t *testing.T) { testJSONFail("blake2F", "09", t) }
 
-func testJson(name, addr string, t *testing.T) {
-	tests, err := loadJson(name)
+func testJSON(name, addr string, t *testing.T) {
+	tests, err := loadJSON(name)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -273,8 +273,8 @@ func testJson(name, addr string, t *testing.T) {
 	}
 }
 
-func testJsonFail(name, addr string, t *testing.T) {
-	tests, err := loadJsonFail(name)
+func testJSONFail(name, addr string, t *testing.T) {
+	tests, err := loadJSONFail(name)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -283,8 +283,8 @@ func testJsonFail(name, addr string, t *testing.T) {
 	}
 }
 
-func benchJson(name, addr string, b *testing.B) {
-	tests, err := loadJson(name)
+func benchJSON(name, addr string, b *testing.B) {
+	tests, err := loadJSON(name)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -293,7 +293,7 @@ func benchJson(name, addr string, b *testing.B) {
 	}
 }
 
-func loadJson(name string) ([]precompiledTest, error) {
+func loadJSON(name string) ([]precompiledTest, error) {
 	data, err := os.ReadFile(fmt.Sprintf("testdata/precompiles/%v.json", name))
 	if err != nil {
 		return nil, err
@@ -303,7 +303,7 @@ func loadJson(name string) ([]precompiledTest, error) {
 	return testcases, err
 }
 
-func loadJsonFail(name string) ([]precompiledFailureTest, error) {
+func loadJSONFail(name string) ([]precompiledFailureTest, error) {
 	data, err := os.ReadFile(fmt.Sprintf("testdata/precompiles/fail-%v.json", name))
 	if err != nil {
 		return nil, err

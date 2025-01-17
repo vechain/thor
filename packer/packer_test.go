@@ -34,7 +34,7 @@ type txIterator struct {
 	i        int
 }
 
-var nonce uint64 = uint64(time.Now().UnixNano())
+var nonce = uint64(time.Now().UnixNano())
 
 func (ti *txIterator) HasNext() bool {
 	return ti.i < 100
@@ -50,18 +50,17 @@ func (ti *txIterator) Next() *tx.Transaction {
 
 	data, _ := method.EncodeInput(a1.Address, big.NewInt(1))
 
-	tx := new(tx.Builder).
+	trx := new(tx.Builder).
 		ChainTag(ti.chainTag).
 		Clause(tx.NewClause(&builtin.Energy.Address).WithData(data)).
 		Gas(300000).GasPriceCoef(0).Nonce(nonce).Expiration(math.MaxUint32).Build()
+	trx = tx.MustSign(trx, a0.PrivateKey)
 	nonce++
-	sig, _ := crypto.Sign(tx.SigningHash().Bytes(), a0.PrivateKey)
-	tx = tx.WithSignature(sig)
 
-	return tx
+	return trx
 }
 
-func (ti *txIterator) OnProcessed(txID thor.Bytes32, err error) {
+func (ti *txIterator) OnProcessed(_ thor.Bytes32, _ error) {
 }
 
 func TestP(t *testing.T) {

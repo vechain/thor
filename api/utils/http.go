@@ -9,6 +9,8 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+
+	"github.com/pkg/errors"
 )
 
 type httpError struct {
@@ -34,6 +36,17 @@ func BadRequest(cause error) error {
 		cause:  cause,
 		status: http.StatusBadRequest,
 	}
+}
+
+func StringToBoolean(boolStr string, defaultVal bool) (bool, error) {
+	if boolStr == "" {
+		return defaultVal, nil
+	} else if boolStr == "false" {
+		return false, nil
+	} else if boolStr == "true" {
+		return true, nil
+	}
+	return false, errors.New("should be boolean")
 }
 
 // Forbidden convenience method to create http forbidden error.
@@ -83,6 +96,13 @@ func ParseJSON(r io.Reader, v interface{}) error {
 func WriteJSON(w http.ResponseWriter, obj interface{}) error {
 	w.Header().Set("Content-Type", JSONContentType)
 	return json.NewEncoder(w).Encode(obj)
+}
+
+// HandleGone is a handler for deprecated endpoints that returns HTTP 410 Gone.
+func HandleGone(w http.ResponseWriter, _ *http.Request) error {
+	w.WriteHeader(http.StatusGone)
+	_, _ = w.Write([]byte("This endpoint is no longer supported."))
+	return nil
 }
 
 // M shortcut for type map[string]interface{}.

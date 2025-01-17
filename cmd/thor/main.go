@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -35,6 +36,7 @@ import (
 
 	// Force-load the tracer engines to trigger registration
 	_ "github.com/vechain/thor/v2/tracers/js"
+	_ "github.com/vechain/thor/v2/tracers/logger"
 	_ "github.com/vechain/thor/v2/tracers/native"
 )
 
@@ -78,6 +80,7 @@ func main() {
 			apiCallGasLimitFlag,
 			apiBacktraceLimitFlag,
 			apiAllowCustomTracerFlag,
+			apiEnableDeprecatedFlag,
 			enableAPILogsFlag,
 			apiLogsLimitFlag,
 			verbosityFlag,
@@ -93,6 +96,10 @@ func main() {
 			disablePrunerFlag,
 			enableMetricsFlag,
 			metricsAddrFlag,
+			adminAddrFlag,
+			enableAdminFlag,
+			txPoolLimitPerAccountFlag,
+			allowedTracersFlag,
 		},
 		Action: defaultAction,
 		Commands: []cli.Command{
@@ -109,6 +116,7 @@ func main() {
 					apiCallGasLimitFlag,
 					apiBacktraceLimitFlag,
 					apiAllowCustomTracerFlag,
+					apiEnableDeprecatedFlag,
 					enableAPILogsFlag,
 					apiLogsLimitFlag,
 					onDemandFlag,
@@ -125,6 +133,9 @@ func main() {
 					disablePrunerFlag,
 					enableMetricsFlag,
 					metricsAddrFlag,
+					adminAddrFlag,
+					enableAdminFlag,
+					allowedTracersFlag,
 				},
 				Action: soloAction,
 			},
@@ -156,18 +167,18 @@ func defaultAction(ctx *cli.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "parse verbosity flag")
 	}
-	initLogger(lvl, ctx.Bool(jsonLogsFlag.Name))
+	logLevel := initLogger(lvl, ctx.Bool(jsonLogsFlag.Name))
 
 	// enable metrics as soon as possible
 	metricsURL := ""
 	if ctx.Bool(enableMetricsFlag.Name) {
 		metrics.InitializePrometheusMetrics()
-		url, close, err := startMetricsServer(ctx.String(metricsAddrFlag.Name))
+		url, closeFunc, err := api.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
 		if err != nil {
 			return fmt.Errorf("unable to start metrics server - %w", err)
 		}
 		metricsURL = url
-		defer func() { log.Info("stopping metrics server..."); close() }()
+		defer func() { log.Info("stopping metrics server..."); closeFunc() }()
 	}
 
 	gene, forkConfig, err := selectGenesis(ctx)
@@ -184,8 +195,6 @@ func defaultAction(ctx *cli.Context) error {
 		return err
 	}
 	defer func() { log.Info("closing main database..."); mainDB.Close() }()
-
-	skipLogs := ctx.Bool(skipLogsFlag.Name)
 
 	logDB, err := openLogDB(instanceDir)
 	if err != nil {
@@ -205,6 +214,7 @@ func defaultAction(ctx *cli.Context) error {
 
 	printStartupMessage1(gene, repo, master, instanceDir, forkConfig)
 
+	skipLogs := ctx.Bool(skipLogsFlag.Name)
 	if !skipLogs {
 		if err := syncLogDB(exitSignal, repo, logDB, ctx.Bool(verifyLogsFlag.Name)); err != nil {
 			return err
@@ -212,12 +222,34 @@ func defaultAction(ctx *cli.Context) error {
 	}
 
 	txpoolOpt := defaultTxPoolOptions
+	txpoolOpt.LimitPerAccount, err = readIntFromUInt64Flag(ctx.Uint64(txPoolLimitPerAccountFlag.Name))
+	if err != nil {
+		return errors.Wrap(err, "parse txpool-limit-per-account flag")
+	}
 	txPool := txpool.New(repo, state.NewStater(mainDB), txpoolOpt)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
 	p2pCommunicator, err := newP2PCommunicator(ctx, repo, txPool, instanceDir)
 	if err != nil {
 		return err
+	}
+
+	adminURL := ""
+	logAPIRequests := &atomic.Bool{}
+	logAPIRequests.Store(ctx.Bool(enableAPILogsFlag.Name))
+	if ctx.Bool(enableAdminFlag.Name) {
+		url, closeFunc, err := api.StartAdminServer(
+			ctx.String(adminAddrFlag.Name),
+			logLevel,
+			repo,
+			p2pCommunicator.Communicator(),
+			logAPIRequests,
+		)
+		if err != nil {
+			return fmt.Errorf("unable to start admin server - %w", err)
+		}
+		adminURL = url
+		defer func() { log.Info("stopping admin server..."); closeFunc() }()
 	}
 
 	bftEngine, err := bft.NewEngine(repo, mainDB, forkConfig, master.Address())
@@ -233,15 +265,7 @@ func defaultAction(ctx *cli.Context) error {
 		bftEngine,
 		p2pCommunicator.Communicator(),
 		forkConfig,
-		ctx.String(apiCorsFlag.Name),
-		uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
-		ctx.Uint64(apiCallGasLimitFlag.Name),
-		ctx.Bool(pprofFlag.Name),
-		skipLogs,
-		ctx.Bool(apiAllowCustomTracerFlag.Name),
-		ctx.Bool(enableAPILogsFlag.Name),
-		ctx.Bool(enableMetricsFlag.Name),
-		ctx.Uint64(apiLogsLimitFlag.Name),
+		makeAPIConfig(ctx, logAPIRequests, false),
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -251,7 +275,7 @@ func defaultAction(ctx *cli.Context) error {
 	}
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
-	printStartupMessage2(gene, apiURL, p2pCommunicator.Enode(), metricsURL)
+	printStartupMessage2(gene, apiURL, p2pCommunicator.Enode(), metricsURL, adminURL)
 
 	if err := p2pCommunicator.Start(); err != nil {
 		return err
@@ -272,7 +296,8 @@ func defaultAction(ctx *cli.Context) error {
 		p2pCommunicator.Communicator(),
 		ctx.Uint64(targetGasLimitFlag.Name),
 		skipLogs,
-		forkConfig).Run(exitSignal)
+		forkConfig,
+	).Run(exitSignal)
 }
 
 func soloAction(ctx *cli.Context) error {
@@ -283,18 +308,25 @@ func soloAction(ctx *cli.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "parse verbosity flag")
 	}
-	initLogger(lvl, ctx.Bool(jsonLogsFlag.Name))
+
+	logLevel := initLogger(lvl, ctx.Bool(jsonLogsFlag.Name))
+
+	onDemandBlockProduction := ctx.Bool(onDemandFlag.Name)
+	blockProductionInterval := ctx.Uint64(blockInterval.Name)
+	if blockProductionInterval == 0 {
+		return errors.New("block-interval cannot be zero")
+	}
 
 	// enable metrics as soon as possible
 	metricsURL := ""
 	if ctx.Bool(enableMetricsFlag.Name) {
 		metrics.InitializePrometheusMetrics()
-		url, close, err := startMetricsServer(ctx.String(metricsAddrFlag.Name))
+		url, closeFunc, err := api.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
 		if err != nil {
 			return fmt.Errorf("unable to start metrics server - %w", err)
 		}
 		metricsURL = url
-		defer func() { log.Info("stopping metrics server..."); close() }()
+		defer func() { log.Info("stopping metrics server..."); closeFunc() }()
 	}
 
 	var (
@@ -341,8 +373,27 @@ func soloAction(ctx *cli.Context) error {
 		return err
 	}
 
-	skipLogs := ctx.Bool(skipLogsFlag.Name)
+	adminURL := ""
+	logAPIRequests := &atomic.Bool{}
+	logAPIRequests.Store(ctx.Bool(enableAPILogsFlag.Name))
+	if ctx.Bool(enableAdminFlag.Name) {
+		url, closeFunc, err := api.StartAdminServer(
+			ctx.String(adminAddrFlag.Name),
+			logLevel,
+			repo,
+			nil,
+			logAPIRequests,
+		)
+		if err != nil {
+			return fmt.Errorf("unable to start admin server - %w", err)
+		}
+		adminURL = url
+		defer func() { log.Info("stopping admin server..."); closeFunc() }()
+	}
 
+	printStartupMessage1(gene, repo, nil, instanceDir, forkConfig)
+
+	skipLogs := ctx.Bool(skipLogsFlag.Name)
 	if !skipLogs {
 		if err := syncLogDB(exitSignal, repo, logDB, ctx.Bool(verifyLogsFlag.Name)); err != nil {
 			return err
@@ -363,6 +414,7 @@ func soloAction(ctx *cli.Context) error {
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
 	bftEngine := solo.NewBFTEngine(repo)
+
 	apiHandler, apiCloser := api.New(
 		repo,
 		state.NewStater(mainDB),
@@ -371,15 +423,7 @@ func soloAction(ctx *cli.Context) error {
 		bftEngine,
 		&solo.Communicator{},
 		forkConfig,
-		ctx.String(apiCorsFlag.Name),
-		uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
-		ctx.Uint64(apiCallGasLimitFlag.Name),
-		ctx.Bool(pprofFlag.Name),
-		skipLogs,
-		ctx.Bool(apiAllowCustomTracerFlag.Name),
-		ctx.Bool(enableAPILogsFlag.Name),
-		ctx.Bool(enableMetricsFlag.Name),
-		ctx.Uint64(apiLogsLimitFlag.Name),
+		makeAPIConfig(ctx, logAPIRequests, true),
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -397,7 +441,7 @@ func soloAction(ctx *cli.Context) error {
 		return errors.New("block-interval cannot be zero")
 	}
 
-	printSoloStartupMessage(gene, repo, instanceDir, apiURL, forkConfig, metricsURL)
+	printStartupMessage2(gene, apiURL, "", metricsURL, adminURL)
 
 	optimizer := optimizer.New(mainDB, repo, !ctx.Bool(disablePrunerFlag.Name))
 	defer func() { log.Info("stopping optimizer..."); optimizer.Stop() }()
@@ -407,9 +451,9 @@ func soloAction(ctx *cli.Context) error {
 		logDB,
 		txPool,
 		ctx.Uint64(gasLimitFlag.Name),
-		ctx.Bool(onDemandFlag.Name),
+		onDemandBlockProduction,
 		skipLogs,
-		blockInterval,
+		blockProductionInterval,
 		forkConfig).Run(exitSignal)
 }
 

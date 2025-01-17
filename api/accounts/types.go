@@ -29,6 +29,14 @@ type CallData struct {
 	Caller   *thor.Address         `json:"caller"`
 }
 
+type GetCodeResult struct {
+	Code string `json:"code"`
+}
+
+type GetStorageResult struct {
+	Value string `json:"value"`
+}
+
 type CallResult struct {
 	Data      string                   `json:"data"`
 	Events    []*transactions.Event    `json:"events"`

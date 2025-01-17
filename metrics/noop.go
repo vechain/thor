@@ -5,7 +5,9 @@
 
 package metrics
 
-import "net/http"
+import (
+	"net/http"
+)
 
 // noopMetrics implements a no operations metrics service
 type noopMetrics struct{}
@@ -35,7 +37,7 @@ var noopMetric = noopMeters{}
 
 type noopMeters struct{}
 
-func (n noopMeters) ObserveWithLabels(i int64, m map[string]string) {}
+func (n noopMeters) ObserveWithLabels(_ int64, _ map[string]string) {}
 
 func (n noopMeters) AddWithLabel(int64, map[string]string) {}
 

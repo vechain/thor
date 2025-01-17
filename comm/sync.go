@@ -81,13 +81,11 @@ func warmupBlocks(ctx context.Context, fetched <-chan []*block.Block, warmedUp c
 	<-co.Parallel(func(queue chan<- func()) {
 		for blocks := range fetched {
 			for _, blk := range blocks {
-				h := blk.Header()
 				queue <- func() {
-					h.ID()
-					h.Beta()
+					blk.Header().ID()
+					blk.Header().Beta()
 				}
 				for _, tx := range blk.Transactions() {
-					tx := tx
 					queue <- func() {
 						tx.ID()
 						tx.UnprovedWork()
@@ -198,7 +196,7 @@ func findCommonAncestor(ctx context.Context, repo *chain.Repository, peer *Peer,
 
 func (c *Communicator) syncTxs(peer *Peer) {
 	for i := 0; ; i++ {
-		peer.logger.Debug(fmt.Sprintf("sync txs loop %v", i))
+		peer.logger.Trace(fmt.Sprintf("sync txs loop %v", i))
 		result, err := proto.GetTxs(c.ctx, peer)
 		if err != nil {
 			peer.logger.Debug("failed to request txs", "err", err)

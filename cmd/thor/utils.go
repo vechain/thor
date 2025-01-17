@@ -23,6 +23,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -34,11 +35,10 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/gorilla/handlers"
-	"github.com/gorilla/mux"
 	"github.com/mattn/go-isatty"
 	"github.com/mattn/go-tty"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/doc"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/node"
@@ -48,7 +48,6 @@ import (
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
-	"github.com/vechain/thor/v2/metrics"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/p2psrv"
 	"github.com/vechain/thor/v2/state"
@@ -58,23 +57,27 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-var devNetGenesisID = genesis.NewDevnet().ID()
+var devNetGenesisID thor.Bytes32
 
-func initLogger(lvl int, jsonLogs bool) {
+func initLogger(lvl int, jsonLogs bool) *slog.LevelVar {
 	logLevel := log.FromLegacyLevel(lvl)
 	output := io.Writer(os.Stdout)
+	var level slog.LevelVar
+	level.Set(logLevel)
 
 	var handler slog.Handler
 	if jsonLogs {
-		handler = log.JSONHandlerWithLevel(output, logLevel)
+		handler = log.JSONHandlerWithLevel(output, &level)
 	} else {
 		useColor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
-		handler = log.NewTerminalHandlerWithLevel(output, logLevel, useColor)
+		handler = log.NewTerminalHandlerWithLevel(output, &level, useColor)
 	}
 	log.SetDefault(log.NewLogger(handler))
 	ethlog.Root().SetHandler(ethlog.LvlFilterHandler(ethlog.LvlWarn, &ethLogger{
 		logger: log.WithContext("pkg", "geth"),
 	}))
+
+	return &level
 }
 
 type ethLogger struct {
@@ -271,6 +274,23 @@ func parseGenesisFile(filePath string) (*genesis.Genesis, thor.ForkConfig, error
 	}
 
 	return customGen, forkConfig, nil
+}
+
+func makeAPIConfig(ctx *cli.Context, logAPIRequests *atomic.Bool, soloMode bool) api.Config {
+	return api.Config{
+		AllowedOrigins:    ctx.String(apiCorsFlag.Name),
+		BacktraceLimit:    uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
+		CallGasLimit:      ctx.Uint64(apiCallGasLimitFlag.Name),
+		PprofOn:           ctx.Bool(pprofFlag.Name),
+		SkipLogs:          ctx.Bool(skipLogsFlag.Name),
+		AllowCustomTracer: ctx.Bool(apiAllowCustomTracerFlag.Name),
+		EnableReqLogger:   logAPIRequests,
+		EnableMetrics:     ctx.Bool(enableMetricsFlag.Name),
+		LogsLimit:         ctx.Uint64(apiLogsLimitFlag.Name),
+		AllowedTracers:    parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
+		EnableDeprecated:  ctx.Bool(apiEnableDeprecatedFlag.Name),
+		SoloMode:          soloMode,
+	}
 }
 
 func makeConfigDir(ctx *cli.Context) (string, error) {
@@ -566,27 +586,6 @@ func startAPIServer(ctx *cli.Context, handler http.Handler, genesisID thor.Bytes
 	}, nil
 }
 
-func startMetricsServer(addr string) (string, func(), error) {
-	listener, err := net.Listen("tcp", addr)
-	if err != nil {
-		return "", nil, errors.Wrapf(err, "listen metrics API addr [%v]", addr)
-	}
-
-	router := mux.NewRouter()
-	router.PathPrefix("/metrics").Handler(metrics.HTTPHandler())
-	handler := handlers.CompressHandler(router)
-
-	srv := &http.Server{Handler: handler, ReadHeaderTimeout: time.Second, ReadTimeout: 5 * time.Second}
-	var goes co.Goes
-	goes.Go(func() {
-		srv.Serve(listener)
-	})
-	return "http://" + listener.Addr().String() + "/metrics", func() {
-		srv.Close()
-		goes.Wait()
-	}, nil
-}
-
 func printStartupMessage1(
 	gene *genesis.Genesis,
 	repo *chain.Repository,
@@ -633,13 +632,21 @@ func printStartupMessage1(
 	)
 }
 
+func getOrCreateDevnetID() thor.Bytes32 {
+	if devNetGenesisID.IsZero() {
+		devNetGenesisID = genesis.NewDevnet().ID()
+	}
+	return devNetGenesisID
+}
+
 func printStartupMessage2(
 	gene *genesis.Genesis,
 	apiURL string,
 	nodeID string,
 	metricsURL string,
+	adminURL string,
 ) {
-	fmt.Printf(`%v    API portal   [ %v ]%v%v`,
+	fmt.Printf(`%v    API portal   [ %v ]%v%v%v`,
 		func() string { // node ID
 			if nodeID == "" {
 				return ""
@@ -659,9 +666,18 @@ func printStartupMessage2(
 					metricsURL)
 			}
 		}(),
+		func() string { // admin URL
+			if adminURL == "" {
+				return ""
+			} else {
+				return fmt.Sprintf(`
+    Admin        [ %v ]`,
+					adminURL)
+			}
+		}(),
 		func() string {
 			// print default dev net's dev accounts info
-			if gene.ID() == devNetGenesisID {
+			if gene.ID() == getOrCreateDevnetID() {
 				return `
 ┌──────────────────┬───────────────────────────────────────────────────────────────────────────────┐
 │  Mnemonic Words  │  denial kitchen pet squirrel other broom bar gas better priority spoil cross  │
@@ -672,48 +688,6 @@ func printStartupMessage2(
 			}
 		}(),
 	)
-}
-
-func printSoloStartupMessage(
-	gene *genesis.Genesis,
-	repo *chain.Repository,
-	dataDir string,
-	apiURL string,
-	forkConfig thor.ForkConfig,
-	metricsURL string,
-) {
-	bestBlock := repo.BestBlockSummary()
-
-	info := fmt.Sprintf(`Starting %v
-    Network     [ %v %v ]    
-    Best block  [ %v #%v @%v ]
-    Forks       [ %v ]
-    Data dir    [ %v ]
-    API portal  [ %v ]
-    Metrics     [ %v ]
-`,
-		common.MakeName("Thor solo", fullVersion()),
-		gene.ID(), gene.Name(),
-		bestBlock.Header.ID(), bestBlock.Header.Number(), time.Unix(int64(bestBlock.Header.Timestamp()), 0),
-		forkConfig,
-		dataDir,
-		apiURL,
-		func() string {
-			if metricsURL == "" {
-				return "Disabled"
-			}
-			return metricsURL
-		}(),
-	)
-
-	if gene.ID() == devNetGenesisID {
-		info += `┌──────────────────┬───────────────────────────────────────────────────────────────────────────────┐
-│  Mnemonic Words  │  denial kitchen pet squirrel other broom bar gas better priority spoil cross  │
-└──────────────────┴───────────────────────────────────────────────────────────────────────────────┘
-`
-	}
-
-	fmt.Print(info)
 }
 
 func openMemMainDB() *muxdb.MuxDB {
@@ -753,4 +727,26 @@ func readIntFromUInt64Flag(val uint64) (int, error) {
 	}
 
 	return i, nil
+}
+
+func parseTracerList(list string) []string {
+	inputs := strings.Split(list, ",")
+	tracers := make([]string, 0, len(inputs))
+
+	for _, i := range inputs {
+		name := strings.TrimSpace(i)
+		if name == "" {
+			continue
+		}
+		if name == "none" {
+			return []string{}
+		}
+		if name == "all" {
+			return []string{"all"}
+		}
+
+		tracers = append(tracers, i)
+	}
+
+	return tracers
 }

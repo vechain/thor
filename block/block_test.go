@@ -12,7 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
-	. "github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
@@ -33,7 +33,7 @@ func TestBlock(t *testing.T) {
 		beneficiary thor.Address = thor.BytesToAddress([]byte("abc"))
 	)
 
-	block := new(Builder).
+	blk := new(block.Builder).
 		GasUsed(gasUsed).
 		Transaction(tx1).
 		Transaction(tx2).
@@ -46,12 +46,12 @@ func TestBlock(t *testing.T) {
 		Beneficiary(beneficiary).
 		Build()
 
-	h := block.Header()
+	h := blk.Header()
 
-	txs := block.Transactions()
+	txs := blk.Transactions()
 	txsRootHash := txs.RootHash()
 
-	assert.Equal(t, Compose(h, txs), block)
+	assert.Equal(t, block.Compose(h, txs), blk)
 	assert.Equal(t, gasLimit, h.GasLimit())
 	assert.Equal(t, gasUsed, h.GasUsed())
 	assert.Equal(t, totalScore, h.TotalScore())
@@ -63,16 +63,16 @@ func TestBlock(t *testing.T) {
 	assert.Equal(t, txsRootHash, h.TxsRoot())
 
 	key, _ := crypto.HexToECDSA(privKey)
-	sig, _ := crypto.Sign(block.Header().SigningHash().Bytes(), key)
+	sig, _ := crypto.Sign(blk.Header().SigningHash().Bytes(), key)
 
-	block = block.WithSignature(sig)
+	blk = blk.WithSignature(sig)
 
-	data, _ := rlp.EncodeToBytes(block)
+	data, _ := rlp.EncodeToBytes(blk)
 
-	b := Block{}
+	b := block.Block{}
 	rlp.DecodeBytes(data, &b)
 
-	block = new(Builder).
+	blk = new(block.Builder).
 		GasUsed(gasUsed).
 		GasLimit(gasLimit).
 		TotalScore(totalScore).
@@ -84,13 +84,13 @@ func TestBlock(t *testing.T) {
 		TransactionFeatures(1).
 		Build()
 
-	sig, _ = crypto.Sign(block.Header().SigningHash().Bytes(), key)
-	block = block.WithSignature(sig)
+	sig, _ = crypto.Sign(blk.Header().SigningHash().Bytes(), key)
+	blk = blk.WithSignature(sig)
 
-	assert.Equal(t, tx.Features(1), block.Header().TxsFeatures())
-	data, _ = rlp.EncodeToBytes(block)
-	var bx Block
+	assert.Equal(t, tx.Features(1), blk.Header().TxsFeatures())
+	data, _ = rlp.EncodeToBytes(blk)
+	var bx block.Block
 	assert.Nil(t, rlp.DecodeBytes(data, &bx))
-	assert.Equal(t, block.Header().ID(), bx.Header().ID())
-	assert.Equal(t, block.Header().TxsFeatures(), bx.Header().TxsFeatures())
+	assert.Equal(t, blk.Header().ID(), bx.Header().ID())
+	assert.Equal(t, blk.Header().TxsFeatures(), bx.Header().TxsFeatures())
 }

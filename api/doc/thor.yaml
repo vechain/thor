@@ -12,7 +12,7 @@ info:
   license:
     name: LGPL 3.0
     url: https://www.gnu.org/licenses/lgpl-3.0.en.html
-  version: 2.1.3
+  version: 2.1.6
 servers:
   - url: /
     description: Current Node
@@ -292,6 +292,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/RevisionInPath'
         - $ref: '#/components/parameters/ExpandedInQuery'
+        - $ref: '#/components/parameters/RawBlockInQuery'
       tags:
         - Blocks
       summary: Retrieve a block
@@ -689,9 +690,9 @@ paths:
     post:
       tags:
         - Debug
-      summary: Trace a contract call
+      summary: Trace a call
       description: |
-        This endpoint enables clients to create a tracer for a specific vechain function call. 
+        This endpoint enables clients to create a tracer for a specific vechain clause. 
         
         You can customize the tracer using various options to suit your debugging requirements.
 
@@ -1186,7 +1187,7 @@ components:
         - $ref: '#/components/schemas/ClauseTracerOption'
       example:
         target: '0x010709463c1f0c9aa66a31182fb36d1977d99bfb6526bae0564a0eac4006c31a/0/0'
-        name: "prestate"
+        name: "call"
         config: { }
 
     PostDebugTracerCallRequest:
@@ -1207,6 +1208,7 @@ components:
         gasPayer: "0xd3ae78222beadb038203be21ed5ce7c9b1bff602"
         expiration: 1000
         blockRef: "0x00000000851caf3c"
+        name: "call"
 
     TxMeta:
       title: TxMeta
@@ -2102,11 +2104,12 @@ components:
             The unified path of the target to be traced. Currently, only the clause is supported. 
             
             Format:
-            `blockID/(txIndex|txId)/clauseIndex`
+            `blockID/(txIndex|txId)/clauseIndex` or `txID/clauseIndex`
+
 
           example: '0x010709463c1f0c9aa66a31182fb36d1977d99bfb6526bae0564a0eac4006c31a/0/0'
           nullable: false
-          pattern: '^0x[0-9a-fA-F]{64}\/(0x[0-9a-fA-F]{64}|\d+)\/[0-9]+$'
+          pattern: '^0x[0-9a-fA-F]{64}(\/(0x[0-9a-fA-F]{64}|\d+))?\/[0-9]+$'
       example:
         target: '0x010709463c1f0c9aa66a31182fb36d1977d99bfb6526bae0564a0eac4006c31a/0/0'
 
@@ -2117,7 +2120,7 @@ components:
         name:
           type: string
           enum:
-            - ""
+            - structLogger
             - 4byte
             - call
             - noop
@@ -2172,9 +2175,9 @@ components:
             The unified path of the transaction clause.
             
             Format:
-            `blockID/(txIndex|txId)/clauseIndex`
+            `blockID/(txIndex|txId)/clauseIndex` or `txID/clauseIndex`
           nullable: false
-          pattern: '^0x[0-9a-fA-F]{64}\/(0x[0-9a-fA-F]{64}|\d+)\/[0-9]+$'
+          pattern: '^0x[0-9a-fA-F]{64}(\/(0x[0-9a-fA-F]{64}|\d+))?\/[0-9]+$'
 
     StorageRange:
       type: object
@@ -2252,7 +2255,7 @@ components:
     RevisionInQuery:
       name: revision
       in: query
-      description: Specify either `best`, `finalized`, a block number or block ID. If omitted, the `best` block is assumed.
+      description: Specify either `best`, `justified`, `finalized`, a block number or block ID. If omitted, the `best` block is assumed.
       schema:
         type: string
 
@@ -2260,7 +2263,7 @@ components:
       name: revision
       in: query
       description: |
-        Specify either `best`,`next`, `finalized`, a block number or block ID. If omitted, the `best` block is assumed.
+        Specify either `best`, `next`, `justified`, `finalized`, a block number or block ID. If omitted, the `best` block is assumed.
         
         If the `next` block is specified, the call code will be executed on the next block, with the following:
         - The block number is the `best` block number plus one.
@@ -2279,6 +2282,7 @@ components:
         - a block ID (hex string)
         - a block number (integer)
         - `best` stands for latest block
+        - `justified` stands for the justified block
         - `finalized` stands for the finalized block
       required: true
       schema:
@@ -2347,6 +2351,18 @@ components:
         Whether the returned block is expanded. 
         - `true` returns `transactions` as an array of objects with the transaction details and outputs
         - `false` returns `transactions` as an array of transaction IDs (hex strings)
+      schema:
+        type: boolean
+      example: false
+
+    RawBlockInQuery:
+      name: raw
+      in: query
+      required: false
+      description: |
+        Whether the block should be returned in RLP encoding or not. 
+        - `true` returns `block` as an RLP encoded object
+        - `false` returns `block` as a structured JSON object
       schema:
         type: boolean
       example: false

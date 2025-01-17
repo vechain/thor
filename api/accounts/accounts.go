@@ -27,11 +27,12 @@ import (
 )
 
 type Accounts struct {
-	repo         *chain.Repository
-	stater       *state.Stater
-	callGasLimit uint64
-	forkConfig   thor.ForkConfig
-	bft          bft.Finalizer
+	repo              *chain.Repository
+	stater            *state.Stater
+	callGasLimit      uint64
+	forkConfig        thor.ForkConfig
+	bft               bft.Committer
+	enabledDeprecated bool
 }
 
 func New(
@@ -39,7 +40,8 @@ func New(
 	stater *state.Stater,
 	callGasLimit uint64,
 	forkConfig thor.ForkConfig,
-	bft bft.Finalizer,
+	bft bft.Committer,
+	enabledDeprecated bool,
 ) *Accounts {
 	return &Accounts{
 		repo,
@@ -47,6 +49,7 @@ func New(
 		callGasLimit,
 		forkConfig,
 		bft,
+		enabledDeprecated,
 	}
 }
 
@@ -81,7 +84,7 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 		return err
 	}
 
-	return utils.WriteJSON(w, map[string]string{"code": hexutil.Encode(code)})
+	return utils.WriteJSON(w, &GetCodeResult{Code: hexutil.Encode(code)})
 }
 
 func (a *Accounts) getAccount(addr thor.Address, header *block.Header, state *state.State) (*Account, error) {
@@ -164,7 +167,7 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 	if err != nil {
 		return err
 	}
-	return utils.WriteJSON(w, map[string]string{"value": storage.String()})
+	return utils.WriteJSON(w, &GetStorageResult{Value: storage.String()})
 }
 
 func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) error {
@@ -360,27 +363,32 @@ func (a *Accounts) Mount(root *mux.Router, pathPrefix string) {
 
 	sub.Path("/*").
 		Methods(http.MethodPost).
-		Name("accounts_call_batch_code").
+		Name("POST /accounts/*").
 		HandlerFunc(utils.WrapHandlerFunc(a.handleCallBatchCode))
 	sub.Path("/{address}").
 		Methods(http.MethodGet).
-		Name("accounts_get_account").
+		Name("GET /accounts/{address}").
 		HandlerFunc(utils.WrapHandlerFunc(a.handleGetAccount))
 	sub.Path("/{address}/code").
 		Methods(http.MethodGet).
-		Name("accounts_get_code").
+		Name("GET /accounts/{address}/code").
 		HandlerFunc(utils.WrapHandlerFunc(a.handleGetCode))
 	sub.Path("/{address}/storage/{key}").
 		Methods("GET").
-		Name("accounts_get_storage").
+		Name("GET /accounts/{address}/storage").
 		HandlerFunc(utils.WrapHandlerFunc(a.handleGetStorage))
+
 	// These two methods are currently deprecated
+	callContractHandler := utils.HandleGone
+	if a.enabledDeprecated {
+		callContractHandler = a.handleCallContract
+	}
 	sub.Path("").
 		Methods(http.MethodPost).
-		Name("accounts_call_contract").
-		HandlerFunc(utils.WrapHandlerFunc(a.handleCallContract))
+		Name("POST /accounts").
+		HandlerFunc(utils.WrapHandlerFunc(callContractHandler))
 	sub.Path("/{address}").
 		Methods(http.MethodPost).
-		Name("accounts_call_contract_address").
-		HandlerFunc(utils.WrapHandlerFunc(a.handleCallContract))
+		Name("POST /accounts/{address}").
+		HandlerFunc(utils.WrapHandlerFunc(callContractHandler))
 }

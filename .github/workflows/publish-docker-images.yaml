@@ -83,9 +83,19 @@ jobs:
           platforms: ${{ github.event_name != 'pull_request' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
           push: ${{ github.event_name != 'pull_request' }}
           load: ${{ github.event_name == 'pull_request' }}
-          provenance: false
+          provenance: ${{ github.event_name != 'pull_request' }}
+          sbom: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Update Docker Hub
+        # official documentation docker: https://docs.docker.com/build/ci/github-actions/update-dockerhub-desc/
+        if: ${{ inputs.environment == 'docker-publish' && github.event_name != 'pull_request' }}
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ github.repository }}
 
       - name: Scan for vulnerabilities
         uses: crazy-max/ghaction-container-scan@v3
@@ -95,6 +105,9 @@ jobs:
           annotations: true
           severity: LOW
           dockerfile: ./Dockerfile
+        env:
+          # See https://github.com/aquasecurity/trivy/discussions/7538
+          TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2
 
       - name: Internal CI
         uses: peter-evans/repository-dispatch@v3

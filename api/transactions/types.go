@@ -78,7 +78,7 @@ func (rtx *RawTx) decode() (*tx.Transaction, error) {
 	return tx, nil
 }
 
-type rawTransaction struct {
+type RawTransaction struct {
 	RawTx
 	Meta *TxMeta `json:"meta"`
 }
@@ -219,4 +219,9 @@ func convertReceipt(txReceipt *tx.Receipt, header *block.Header, tx *tx.Transact
 		receipt.Outputs[i] = otp
 	}
 	return receipt, nil
+}
+
+// SendTxResult is the response to the Send Tx method
+type SendTxResult struct {
+	ID *thor.Bytes32 `json:"id"`
 }

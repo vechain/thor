@@ -13,6 +13,7 @@ import (
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/qianbin/directcache"
+	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/trie"
 )
 
@@ -24,8 +25,8 @@ type Cache struct {
 	committedNodes *directcache.Cache
 	// caches root nodes.
 	roots       *lru.ARCCache
-	nodeStats   cacheStats
-	rootStats   cacheStats
+	nodeStats   cache.Stats
+	rootStats   cache.Stats
 	lastLogTime int64
 }
 
@@ -45,13 +46,21 @@ func (c *Cache) log() {
 	last := atomic.SwapInt64(&c.lastLogTime, now)
 
 	if now-last > int64(time.Second*20) {
-		log1, ok1 := c.nodeStats.ShouldLog("node cache stats")
-		log2, ok2 := c.rootStats.ShouldLog("root cache stats")
+		shouldNode, hitNode, missNode := c.nodeStats.Stats()
+		shouldRoot, hitRoot, missRoot := c.rootStats.Stats()
 
-		if ok1 || ok2 {
-			log1()
-			log2()
+		// log two categories together only one of the hit rate has
+		// changed compared to the last run, to avoid too many logs.
+		if shouldNode || shouldRoot {
+			logStats("node cache stats", hitNode, missNode)
+			logStats("root cache stats", hitRoot, missRoot)
 		}
+
+		// metrics will reported every 20 seconds
+		metricCacheHitMiss().SetWithLabel(hitNode, map[string]string{"type": "node", "event": "hit"})
+		metricCacheHitMiss().SetWithLabel(missNode, map[string]string{"type": "node", "event": "miss"})
+		metricCacheHitMiss().SetWithLabel(hitRoot, map[string]string{"type": "root", "event": "hit"})
+		metricCacheHitMiss().SetWithLabel(missRoot, map[string]string{"type": "root", "event": "miss"})
 	} else {
 		atomic.CompareAndSwapInt64(&c.lastLogTime, now, last)
 	}
@@ -181,33 +190,17 @@ func (c *Cache) GetRootNode(name string, seq uint64, peek bool) (trie.Node, bool
 	return trie.Node{}, false
 }
 
-type cacheStats struct {
-	hit, miss int64
-	flag      int32
-}
-
-func (cs *cacheStats) Hit() int64  { return atomic.AddInt64(&cs.hit, 1) }
-func (cs *cacheStats) Miss() int64 { return atomic.AddInt64(&cs.miss, 1) }
-
-func (cs *cacheStats) ShouldLog(msg string) (func(), bool) {
-	hit := atomic.LoadInt64(&cs.hit)
-	miss := atomic.LoadInt64(&cs.miss)
+func logStats(msg string, hit, miss int64) {
 	lookups := hit + miss
+	var str string
+	if lookups > 0 {
+		str = fmt.Sprintf("%.3f", float64(hit)/float64(lookups))
+	} else {
+		str = "n/a"
+	}
 
-	hitrate := float64(hit) / float64(lookups)
-	flag := int32(hitrate * 1000)
-	return func() {
-		var str string
-		if lookups > 0 {
-			str = fmt.Sprintf("%.3f", hitrate)
-		} else {
-			str = "n/a"
-		}
-
-		logger.Info(msg,
-			"lookups", lookups,
-			"hitrate", str,
-		)
-		atomic.StoreInt32(&cs.flag, flag)
-	}, atomic.LoadInt32(&cs.flag) != flag
+	logger.Info(msg,
+		"lookups", lookups,
+		"hitrate", str,
+	)
 }

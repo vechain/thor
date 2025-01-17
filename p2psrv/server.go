@@ -87,7 +87,7 @@ func (s *Server) Start(protocols []*p2p.Protocol, topic discv5.Topic) error {
 			}
 			log := logger.New("peer", peer, "dir", dir)
 
-			log.Debug("peer connected")
+			log.Trace("peer connected")
 			metricConnectedPeers().Add(1)
 
 			startTime := mclock.Now()
@@ -252,7 +252,7 @@ func (s *Server) discoverLoop(topic discv5.Topic) {
 			if _, found := s.discoveredNodes.Get(node.ID); !found {
 				metricDiscoveredNodes().Add(1)
 				s.discoveredNodes.Set(node.ID, node)
-				logger.Debug("discovered node", "node", node)
+				logger.Trace("discovered node", "node", node)
 			}
 		case <-s.done:
 			close(setPeriod)
@@ -356,11 +356,11 @@ func (s *Server) fetchBootstrap() {
 	}
 
 	for {
-		if err := f(); err == nil || errors.Is(err, context.Canceled) {
+		err := f()
+		if err == nil || errors.Is(err, context.Canceled) {
 			return
-		} else {
-			logger.Warn("update bootstrap nodes from remote failed", "err", err)
 		}
+		logger.Warn("update bootstrap nodes from remote failed", "err", err)
 
 		select {
 		case <-ctx.Done():

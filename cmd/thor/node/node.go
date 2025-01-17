@@ -50,7 +50,7 @@ type Node struct {
 	cons           *consensus.Consensus
 	master         *Master
 	repo           *chain.Repository
-	bft            *bft.BFTEngine
+	bft            *bft.Engine
 	logDB          *logdb.LogDB
 	txPool         *txpool.TxPool
 	txStashPath    string
@@ -69,7 +69,7 @@ type Node struct {
 func New(
 	master *Master,
 	repo *chain.Repository,
-	bft *bft.BFTEngine,
+	bft *bft.Engine,
 	stater *state.Stater,
 	logDB *logdb.LogDB,
 	txPool *txpool.TxPool,
@@ -266,7 +266,7 @@ func (n *Node) txStashLoop(ctx context.Context) {
 			if err := stash.Save(txEv.Tx); err != nil {
 				logger.Warn("stash tx", "id", txEv.Tx.ID(), "err", err)
 			} else {
-				logger.Debug("stashed tx", "id", txEv.Tx.ID())
+				logger.Trace("stashed tx", "id", txEv.Tx.ID())
 			}
 		}
 	}
@@ -392,7 +392,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		commitElapsed := mclock.Now() - startTime - execElapsed
 
 		if v, updated := n.bandwidth.Update(newBlock.Header(), time.Duration(realElapsed)); updated {
-			logger.Debug("bandwidth updated", "gps", v)
+			logger.Trace("bandwidth updated", "gps", v)
 		}
 		stats.UpdateProcessed(1, len(receipts), execElapsed, commitElapsed, realElapsed, newBlock.Header().GasUsed())
 
@@ -484,28 +484,28 @@ func (n *Node) processFork(newBlock *block.Block, oldBestBlockID thor.Bytes32) {
 	oldTrunk := n.repo.NewChain(oldBestBlockID)
 	newTrunk := n.repo.NewChain(newBlock.Header().ParentID())
 
-	sideIds, err := oldTrunk.Exclude(newTrunk)
+	sideIDs, err := oldTrunk.Exclude(newTrunk)
 	if err != nil {
 		logger.Warn("failed to process fork", "err", err)
 		return
 	}
 
 	// Set the gauge metric to the size of the fork (0 if there are no forks)
-	metricChainForkSize().Set(int64(len(sideIds)))
+	metricChainForkSize().Set(int64(len(sideIDs)))
 
-	if len(sideIds) == 0 {
+	if len(sideIDs) == 0 {
 		return
 	}
 
-	if n := len(sideIds); n >= 2 {
+	if n := len(sideIDs); n >= 2 {
 		metricChainForkCount().Add(1)
 		logger.Warn(fmt.Sprintf(
 			`⑂⑂⑂⑂⑂⑂⑂⑂ FORK HAPPENED ⑂⑂⑂⑂⑂⑂⑂⑂
 side-chain:   %v  %v`,
-			n, sideIds[n-1]))
+			n, sideIDs[n-1]))
 	}
 
-	for _, id := range sideIds {
+	for _, id := range sideIDs {
 		b, err := n.repo.GetBlock(id)
 		if err != nil {
 			logger.Warn("failed to process fork", "err", err)

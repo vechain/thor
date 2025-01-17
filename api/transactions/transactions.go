@@ -30,7 +30,7 @@ func New(repo *chain.Repository, pool *txpool.TxPool) *Transactions {
 	}
 }
 
-func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, allowPending bool) (*rawTransaction, error) {
+func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, allowPending bool) (*RawTransaction, error) {
 	chain := t.repo.NewChain(head)
 	tx, meta, err := chain.GetTransaction(txID)
 	if err != nil {
@@ -41,7 +41,7 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, a
 					if err != nil {
 						return nil, err
 					}
-					return &rawTransaction{
+					return &RawTransaction{
 						RawTx: RawTx{hexutil.Encode(raw)},
 					}, nil
 				}
@@ -59,7 +59,7 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, a
 	if err != nil {
 		return nil, err
 	}
-	return &rawTransaction{
+	return &RawTransaction{
 		RawTx: RawTx{hexutil.Encode(raw)},
 		Meta: &TxMeta{
 			BlockID:        summary.Header.ID(),
@@ -133,9 +133,8 @@ func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Re
 		}
 		return err
 	}
-	return utils.WriteJSON(w, map[string]string{
-		"id": tx.ID().String(),
-	})
+	txID := tx.ID()
+	return utils.WriteJSON(w, &SendTxResult{ID: &txID})
 }
 
 func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http.Request) error {
@@ -219,14 +218,14 @@ func (t *Transactions) Mount(root *mux.Router, pathPrefix string) {
 
 	sub.Path("").
 		Methods(http.MethodPost).
-		Name("transactions_send_tx").
+		Name("POST /transactions").
 		HandlerFunc(utils.WrapHandlerFunc(t.handleSendTransaction))
 	sub.Path("/{id}").
 		Methods(http.MethodGet).
-		Name("transactions_get_tx").
+		Name("GET /transactions/{id}").
 		HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionByID))
 	sub.Path("/{id}/receipt").
 		Methods(http.MethodGet).
-		Name("transactions_get_receipt").
+		Name("GET /transactions/{id}/receipt").
 		HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionReceiptByID))
 }

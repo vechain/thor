@@ -7,7 +7,8 @@ package txpool
 
 import (
 	"context"
-	"math/rand"
+	"math/big"
+	"math/rand/v2"
 	"os"
 	"sync/atomic"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/co"
@@ -133,7 +135,7 @@ func (p *TxPool) housekeeping() {
 				}
 
 				metricTxPoolGauge().AddWithLabel(0-int64(removed), map[string]string{"source": "washed", "total": "true"})
-				logger.Debug("wash done", ctx...)
+				logger.Trace("wash done", ctx...)
 			}
 		}
 	}
@@ -181,7 +183,7 @@ func (p *TxPool) fetchBlocklistLoop() {
 
 	for {
 		// delay 1~2 min
-		delay := time.Second * time.Duration(rand.Int()%60+60) // nolint:gosec
+		delay := time.Second * time.Duration(rand.Int()%60+60) //#nosec G404
 		select {
 		case <-p.ctx.Done():
 			return
@@ -254,14 +256,26 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		}
 
 		txObj.executable = executable
-		if err := p.all.Add(txObj, p.options.LimitPerAccount); err != nil {
+		if err := p.all.Add(txObj, p.options.LimitPerAccount, func(payer thor.Address, needs *big.Int) error {
+			// check payer's balance
+			balance, err := state.GetEnergy(payer, headSummary.Header.Timestamp()+thor.BlockInterval)
+			if err != nil {
+				return err
+			}
+
+			if balance.Cmp(needs) < 0 {
+				return errors.New("insufficient energy for overall pending cost")
+			}
+
+			return nil
+		}); err != nil {
 			return txRejectedError{err.Error()}
 		}
 
 		p.goes.Go(func() {
 			p.txFeed.Send(&TxEvent{newTx, &executable})
 		})
-		logger.Debug("tx added", "id", newTx.ID(), "executable", executable)
+		logger.Trace("tx added", "id", newTx.ID(), "executable", executable)
 	} else {
 		// we skip steps that rely on head block when chain is not synced,
 		// but check the pool's limit
@@ -269,10 +283,11 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 			return txRejectedError{"pool is full"}
 		}
 
-		if err := p.all.Add(txObj, p.options.LimitPerAccount); err != nil {
+		// skip pending cost check when chain is not synced
+		if err := p.all.Add(txObj, p.options.LimitPerAccount, func(_ thor.Address, _ *big.Int) error { return nil }); err != nil {
 			return txRejectedError{err.Error()}
 		}
-		logger.Debug("tx added", "id", newTx.ID())
+		logger.Trace("tx added", "id", newTx.ID())
 		p.goes.Go(func() {
 			p.txFeed.Send(&TxEvent{newTx, nil})
 		})
@@ -351,6 +366,7 @@ func (p *TxPool) Dump() tx.Transactions {
 func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transactions, removed int, err error) {
 	all := p.all.ToTxObjects()
 	var toRemove []*txObject
+	var toUpdateCost []*txObject
 	defer func() {
 		if err != nil {
 			// in case of error, simply cut pool size to limit
@@ -366,6 +382,10 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 				p.all.RemoveByHash(txObj.Hash())
 			}
 			removed = len(toRemove)
+		}
+		// update pending cost
+		for _, txObj := range toUpdateCost {
+			p.all.UpdatePendingCost(txObj)
 		}
 	}()
 
@@ -388,21 +408,21 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 	for _, txObj := range all {
 		if thor.IsOriginBlocked(txObj.Origin()) || p.blocklist.Contains(txObj.Origin()) {
 			toRemove = append(toRemove, txObj)
-			logger.Debug("tx washed out", "id", txObj.ID(), "err", "blocked")
+			logger.Trace("tx washed out", "id", txObj.ID(), "err", "blocked")
 			continue
 		}
 
 		// out of lifetime
 		if !txObj.localSubmitted && now > txObj.timeAdded+int64(p.options.MaxLifetime) {
 			toRemove = append(toRemove, txObj)
-			logger.Debug("tx washed out", "id", txObj.ID(), "err", "out of lifetime")
+			logger.Trace("tx washed out", "id", txObj.ID(), "err", "out of lifetime")
 			continue
 		}
 		// settled, out of energy or dep broken
 		executable, err := txObj.Executable(chain, newState(), headSummary.Header)
 		if err != nil {
 			toRemove = append(toRemove, txObj)
-			logger.Debug("tx washed out", "id", txObj.ID(), "err", err)
+			logger.Trace("tx washed out", "id", txObj.ID(), "err", err)
 			continue
 		}
 
@@ -410,7 +430,7 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 			provedWork, err := txObj.ProvedWork(headSummary.Header.Number(), chain.GetBlockID)
 			if err != nil {
 				toRemove = append(toRemove, txObj)
-				logger.Debug("tx washed out", "id", txObj.ID(), "err", err)
+				logger.Trace("tx washed out", "id", txObj.ID(), "err", err)
 				continue
 			}
 			txObj.overallGasPrice = txObj.OverallGasPrice(baseGasPrice, provedWork)
@@ -460,8 +480,13 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 
 	for _, obj := range executableObjs {
 		executables = append(executables, obj.Transaction)
-		if !obj.executable || obj.localSubmitted {
+		// the tx is not executable previously
+		if !obj.executable {
 			obj.executable = true
+			toUpdateCost = append(toUpdateCost, obj)
+			toBroadcast = append(toBroadcast, obj.Transaction)
+		} else if obj.localSubmitted {
+			// broadcast local submitted even it's already executable
 			toBroadcast = append(toBroadcast, obj.Transaction)
 		}
 	}

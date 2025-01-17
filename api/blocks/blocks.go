@@ -6,8 +6,11 @@
 package blocks
 
 import (
+	"encoding/hex"
+	"fmt"
 	"net/http"
 
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/utils"
@@ -19,10 +22,10 @@ import (
 
 type Blocks struct {
 	repo *chain.Repository
-	bft  bft.Finalizer
+	bft  bft.Committer
 }
 
-func New(repo *chain.Repository, bft bft.Finalizer) *Blocks {
+func New(repo *chain.Repository, bft bft.Committer) *Blocks {
 	return &Blocks{
 		repo,
 		bft,
@@ -34,9 +37,17 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	expanded := req.URL.Query().Get("expanded")
-	if expanded != "" && expanded != "false" && expanded != "true" {
-		return utils.BadRequest(errors.WithMessage(errors.New("should be boolean"), "expanded"))
+	raw, err := utils.StringToBoolean(req.URL.Query().Get("raw"), false)
+	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "raw"))
+	}
+	expanded, err := utils.StringToBoolean(req.URL.Query().Get("expanded"), false)
+	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "expanded"))
+	}
+
+	if raw && expanded {
+		return utils.BadRequest(errors.WithMessage(errors.New("Raw and Expanded are mutually exclusive"), "raw&expanded"))
 	}
 
 	summary, err := utils.GetSummary(revision, b.repo, b.bft)
@@ -45,6 +56,16 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 			return utils.WriteJSON(w, nil)
 		}
 		return err
+	}
+
+	if raw {
+		rlpEncoded, err := rlp.EncodeToBytes(summary.Header)
+		if err != nil {
+			return err
+		}
+		return utils.WriteJSON(w, &JSONRawBlockSummary{
+			fmt.Sprintf("0x%s", hex.EncodeToString(rlpEncoded)),
+		})
 	}
 
 	isTrunk, err := b.isTrunk(summary.Header.ID(), summary.Header.Number())
@@ -61,7 +82,7 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 	}
 
 	jSummary := buildJSONBlockSummary(summary, isTrunk, isFinalized)
-	if expanded == "true" {
+	if expanded {
 		txs, err := b.repo.GetBlockTransactions(summary.Header.ID())
 		if err != nil {
 			return err
@@ -95,6 +116,6 @@ func (b *Blocks) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 	sub.Path("/{revision}").
 		Methods(http.MethodGet).
-		Name("blocks_get_block").
+		Name("GET /blocks/{revision}").
 		HandlerFunc(utils.WrapHandlerFunc(b.handleGetBlock))
 }

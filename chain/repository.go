@@ -12,6 +12,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"github.com/vechain/thor/v2/block"
+	cache2 "github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/kv"
 	"github.com/vechain/thor/v2/muxdb"
@@ -52,6 +53,12 @@ type Repository struct {
 		summaries *cache
 		txs       *cache
 		receipts  *cache
+
+		stats struct {
+			summaries cache2.Stats
+			txs       cache2.Stats
+			receipts  cache2.Stats
+		}
 	}
 }
 
@@ -102,11 +109,11 @@ func NewRepository(db *muxdb.MuxDB, genesis *block.Block) (*Repository, error) {
 			return nil, errors.New("genesis mismatch")
 		}
 
-		if summary, err := repo.GetBlockSummary(bestID); err != nil {
+		summary, err := repo.GetBlockSummary(bestID)
+		if err != nil {
 			return nil, errors.Wrap(err, "get best block")
-		} else {
-			repo.bestSummary.Store(summary)
 		}
+		repo.bestSummary.Store(summary)
 	}
 
 	if val, err := repo.props.Get(steadyBlockIDKey); err != nil {
@@ -321,24 +328,45 @@ func (r *Repository) GetMaxBlockNum() (uint32, error) {
 }
 
 // GetBlockSummary get block summary by block id.
-func (r *Repository) GetBlockSummary(id thor.Bytes32) (summary *BlockSummary, err error) {
-	var cached interface{}
-	if cached, err = r.caches.summaries.GetOrLoad(id, func() (interface{}, error) {
+func (r *Repository) GetBlockSummary(id thor.Bytes32) (*BlockSummary, error) {
+	blk, cached, err := r.caches.summaries.GetOrLoad(id, func() (interface{}, error) {
 		return loadBlockSummary(r.data, id)
-	}); err != nil {
-		return
+	})
+	if err != nil {
+		return nil, err
 	}
-	return cached.(*BlockSummary), nil
+
+	if cached {
+		if r.caches.stats.summaries.Hit()%2000 == 0 {
+			_, hit, miss := r.caches.stats.summaries.Stats()
+			metricCacheHitMiss().SetWithLabel(hit, map[string]string{"type": "blocks", "event": "hit"})
+			metricCacheHitMiss().SetWithLabel(miss, map[string]string{"type": "blocks", "event": "miss"})
+		}
+	} else {
+		r.caches.stats.summaries.Miss()
+	}
+
+	return blk.(*BlockSummary), nil
 }
 
 func (r *Repository) getTransaction(key txKey) (*tx.Transaction, error) {
-	cached, err := r.caches.txs.GetOrLoad(key, func() (interface{}, error) {
+	trx, cached, err := r.caches.txs.GetOrLoad(key, func() (interface{}, error) {
 		return loadTransaction(r.data, key)
 	})
 	if err != nil {
 		return nil, err
 	}
-	return cached.(*tx.Transaction), nil
+
+	if cached {
+		if r.caches.stats.txs.Hit()%2000 == 0 {
+			_, hit, miss := r.caches.stats.txs.Stats()
+			metricCacheHitMiss().SetWithLabel(hit, map[string]string{"type": "transaction", "event": "hit"})
+			metricCacheHitMiss().SetWithLabel(miss, map[string]string{"type": "transaction", "event": "miss"})
+		}
+	} else {
+		r.caches.stats.txs.Miss()
+	}
+	return trx.(*tx.Transaction), nil
 }
 
 // GetBlockTransactions get all transactions of the block for given block id.
@@ -377,13 +405,23 @@ func (r *Repository) GetBlock(id thor.Bytes32) (*block.Block, error) {
 }
 
 func (r *Repository) getReceipt(key txKey) (*tx.Receipt, error) {
-	cached, err := r.caches.receipts.GetOrLoad(key, func() (interface{}, error) {
+	receipt, cached, err := r.caches.receipts.GetOrLoad(key, func() (interface{}, error) {
 		return loadReceipt(r.data, key)
 	})
 	if err != nil {
 		return nil, err
 	}
-	return cached.(*tx.Receipt), nil
+	if cached {
+		if r.caches.stats.receipts.Hit()%2000 == 0 {
+			_, hit, miss := r.caches.stats.receipts.Stats()
+			metricCacheHitMiss().SetWithLabel(hit, map[string]string{"type": "receipt", "event": "hit"})
+			metricCacheHitMiss().SetWithLabel(miss, map[string]string{"type": "receipt", "event": "miss"})
+		}
+	} else {
+		r.caches.stats.receipts.Miss()
+	}
+
+	return receipt.(*tx.Receipt), nil
 }
 
 // GetBlockReceipts get all tx receipts of the block for given block id.

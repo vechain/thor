@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -21,35 +22,35 @@ type mockLogger struct {
 	loggedData []interface{}
 }
 
-func (m *mockLogger) With(ctx ...interface{}) log.Logger {
+func (m *mockLogger) With(_ ...interface{}) log.Logger {
 	return m
 }
 
-func (m *mockLogger) Log(level slog.Level, msg string, ctx ...interface{}) {}
+func (m *mockLogger) Log(_ slog.Level, _ string, _ ...interface{}) {}
 
-func (m *mockLogger) Trace(msg string, ctx ...interface{}) {}
+func (m *mockLogger) Trace(_ string, _ ...interface{}) {}
 
-func (m *mockLogger) Write(level slog.Level, msg string, attrs ...any) {}
+func (m *mockLogger) Write(_ slog.Level, _ string, _ ...any) {}
 
-func (m *mockLogger) Enabled(ctx context.Context, level slog.Level) bool {
+func (m *mockLogger) Enabled(_ context.Context, _ slog.Level) bool {
 	return true
 }
 
 func (m *mockLogger) Handler() slog.Handler { return nil }
 
-func (m *mockLogger) New(ctx ...interface{}) log.Logger { return m }
+func (m *mockLogger) New(_ ...interface{}) log.Logger { return m }
 
-func (m *mockLogger) Debug(msg string, ctx ...interface{}) {}
+func (m *mockLogger) Debug(_ string, _ ...interface{}) {}
 
-func (m *mockLogger) Error(msg string, ctx ...interface{}) {}
+func (m *mockLogger) Error(_ string, _ ...interface{}) {}
 
-func (m *mockLogger) Crit(msg string, ctx ...interface{}) {}
+func (m *mockLogger) Crit(_ string, _ ...interface{}) {}
 
-func (m *mockLogger) Info(msg string, ctx ...interface{}) {
+func (m *mockLogger) Info(_ string, ctx ...interface{}) {
 	m.loggedData = append(m.loggedData, ctx...)
 }
 
-func (m *mockLogger) Warn(msg string, ctx ...interface{}) {
+func (m *mockLogger) Warn(_ string, ctx ...interface{}) {
 	m.loggedData = append(m.loggedData, ctx...)
 }
 
@@ -59,15 +60,17 @@ func (m *mockLogger) GetLoggedData() []interface{} {
 
 func TestRequestLoggerHandler(t *testing.T) {
 	mockLog := &mockLogger{}
+	enabled := atomic.Bool{}
+	enabled.Store(true)
 
 	// Define a test handler to wrap
-	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	testHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})
 
 	// Create the RequestLoggerHandler
-	loggerHandler := RequestLoggerHandler(testHandler, mockLog)
+	loggerHandler := RequestLoggerHandler(testHandler, mockLog, &enabled)
 
 	// Create a test HTTP request
 	reqBody := "test body"

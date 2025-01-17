@@ -58,7 +58,7 @@ func TestStackedMap(t *testing.T) {
 
 func TestStackedMapPuts(t *testing.T) {
 	assert := assert.New(t)
-	sm := stackedmap.New(func(key interface{}) (interface{}, bool, error) {
+	sm := stackedmap.New(func(_ interface{}) (interface{}, bool, error) {
 		return nil, false, nil
 	})
 
@@ -87,7 +87,7 @@ func TestStackedMapPuts(t *testing.T) {
 	assert.Equal(len(kvs), i, "Journal traverse should abort")
 
 	i = 0
-	sm.Journal(func(k, v interface{}) bool {
+	sm.Journal(func(_, _ interface{}) bool {
 		i++
 		return false
 	})
