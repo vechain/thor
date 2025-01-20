@@ -73,7 +73,7 @@ func collectCompactionMetrics(ctx context.Context, ldb *leveldb.DB) {
 		// We avoid calling the db if metrics are disabled
 		return
 	}
-	
+
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
