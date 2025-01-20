@@ -9,8 +9,8 @@ import "github.com/vechain/thor/v2/thor"
 
 // Stage abstracts changes on the main accounts trie.
 type Stage struct {
-	root    thor.Bytes32
-	commits []func() error
+	root   thor.Bytes32
+	commit func() error
 }
 
 // Hash computes hash of the main accounts trie.
@@ -20,11 +20,9 @@ func (s *Stage) Hash() thor.Bytes32 {
 
 // Commit commits all changes into main accounts trie and storage tries.
 func (s *Stage) Commit() (root thor.Bytes32, err error) {
-	for _, c := range s.commits {
-		if err = c(); err != nil {
-			err = &Error{err}
-			return
-		}
+	if err = s.commit(); err != nil {
+		err = &Error{err}
+		return
 	}
 	return s.root, nil
 }

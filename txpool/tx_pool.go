@@ -245,7 +245,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 			}
 		}
 
-		state := p.stater.NewState(headSummary.Header.StateRoot(), headSummary.Header.Number(), headSummary.Conflicts, headSummary.SteadyNum)
+		state := p.stater.NewState(headSummary.Root())
 		executable, err := txObj.Executable(p.repo.NewChain(headSummary.Header.ID()), state, headSummary.Header)
 		if err != nil {
 			return txRejectedError{err.Error()}
@@ -391,7 +391,7 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 
 	// recreate state every time to avoid high RAM usage when the pool at hight water-mark.
 	newState := func() *state.State {
-		return p.stater.NewState(headSummary.Header.StateRoot(), headSummary.Header.Number(), headSummary.Conflicts, headSummary.SteadyNum)
+		return p.stater.NewState(headSummary.Root())
 	}
 	baseGasPrice, err := builtin.Params.Native(newState()).Get(thor.KeyBaseGasPrice)
 	if err != nil {

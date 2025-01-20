@@ -14,6 +14,7 @@ import (
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 )
 
 func M(a ...interface{}) []interface{} {
@@ -21,8 +22,7 @@ func M(a ...interface{}) []interface{} {
 }
 
 func TestPrototype(t *testing.T) {
-	db := muxdb.NewMem()
-	st := state.New(db, thor.Bytes32{}, 0, 0, 0)
+	st := state.New(muxdb.NewMem(), trie.Root{})
 
 	proto := prototype.New(thor.BytesToAddress([]byte("proto")), st)
 	binding := proto.Bind(thor.BytesToAddress([]byte("binding")))

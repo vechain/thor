@@ -375,7 +375,7 @@ func testEventsEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) {
 				},
 			},
 			Range: nil,
-			Options: &logdb.Options{
+			Options: &events.Options{
 				Offset: 0,
 				Limit:  10,
 			},

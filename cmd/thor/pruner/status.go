@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package optimizer
+package pruner
 
 import (
 	"encoding/json"
@@ -12,8 +12,7 @@ import (
 )
 
 type status struct {
-	Base      uint32
-	PruneBase uint32
+	Base uint32
 }
 
 func (s *status) Load(getter kv.Getter) error {
