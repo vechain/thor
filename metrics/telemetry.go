@@ -31,8 +31,8 @@ func HTTPHandler() http.Handler {
 }
 
 func NoOp() bool {
-	_, ok := metrics.(*noopMetrics)
-	return ok
+	_, isNoOp := metrics.(*noopMetrics)
+	return isNoOp
 }
 
 // Define standard buckets for histograms
