@@ -36,8 +36,6 @@ const (
 
 var logger = log.WithContext("pkg", "muxdb")
 
-var cancelFunc context.CancelFunc
-
 // Options optional parameters for MuxDB.
 type Options struct {
 	// TrieNodeCacheSizeMB is the size of the cache for trie node blobs.
@@ -63,6 +61,7 @@ type Options struct {
 type MuxDB struct {
 	engine      engine.Engine
 	trieBackend *backend
+	cancelFunc  context.CancelFunc
 }
 
 // collectCompactionMetrics collects compaction metrics periodically.
@@ -127,8 +126,7 @@ func Open(path string, options *Options) (*MuxDB, error) {
 		return nil, err
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancelFunc = cancel
+	ctx, cancelFunc := context.WithCancel(context.Background())
 	go collectCompactionMetrics(ctx, ldb)
 
 	return &MuxDB{
@@ -142,6 +140,7 @@ func Open(path string, options *Options) (*MuxDB, error) {
 			DedupedPtnFactor: cfg.DedupedPtnFactor,
 			CachedNodeTTL:    options.TrieCachedNodeTTL,
 		},
+		cancelFunc: cancelFunc,
 	}, nil
 }
 
@@ -165,8 +164,8 @@ func NewMem() *MuxDB {
 
 // Close closes the DB.
 func (db *MuxDB) Close() error {
-	if cancelFunc != nil {
-		cancelFunc()
+	if db.cancelFunc != nil {
+		db.cancelFunc()
 	}
 	return db.engine.Close()
 }
