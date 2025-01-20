@@ -93,6 +93,10 @@ func extractCompactionValues(stats string) ([]CompactionValues, error) {
 	lines := strings.Split(stats, "\n")
 	var values []CompactionValues
 
+	if len(lines) < 6 {
+		return nil, fmt.Errorf("not enough lines in stats %s", stats)
+	}
+
 	for _, line := range lines[2 : len(lines)-3] {
 		columns := strings.Fields(line)
 		if len(columns) >= 6 {
