@@ -30,6 +30,11 @@ func HTTPHandler() http.Handler {
 	return metrics.GetOrCreateHandler()
 }
 
+func NoOp() bool {
+	_, isNoOp := metrics.(*noopMetrics)
+	return isNoOp
+}
+
 // Define standard buckets for histograms
 var (
 	Bucket10s      = []int64{0, 500, 1000, 2000, 3000, 4000, 5000, 7500, 10_000}
