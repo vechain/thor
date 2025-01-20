@@ -10,6 +10,8 @@ package muxdb
 import (
 	"context"
 	"encoding/json"
+	"sync"
+	"time"
 
 	"github.com/syndtr/goleveldb/leveldb"
 	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
@@ -60,6 +62,29 @@ type Options struct {
 type MuxDB struct {
 	engine      engine.Engine
 	trieBackend *backend
+	cancelFunc  context.CancelFunc
+	wg          sync.WaitGroup
+}
+
+// collectCompactionMetrics collects compaction metrics periodically.
+func collectCompactionMetrics(ctx context.Context, ldb *leveldb.DB) {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			// stats is a table in a single string, so we need to parse it
+			stats, err := ldb.GetProperty("leveldb.stats")
+			if err != nil {
+				logger.Error("Failed to get LevelDB stats: %v", err)
+			} else {
+				collectCompactionValues(stats)
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
 // Open opens or creates DB at the given path.
@@ -103,7 +128,9 @@ func Open(path string, options *Options) (*MuxDB, error) {
 		return nil, err
 	}
 
-	return &MuxDB{
+	ctx, cancelFunc := context.WithCancel(context.Background())
+
+	muxdb := &MuxDB{
 		engine: engine,
 		trieBackend: &backend{
 			Store: engine,
@@ -114,7 +141,16 @@ func Open(path string, options *Options) (*MuxDB, error) {
 			DedupedPtnFactor: cfg.DedupedPtnFactor,
 			CachedNodeTTL:    options.TrieCachedNodeTTL,
 		},
-	}, nil
+		cancelFunc: cancelFunc,
+	}
+
+	muxdb.wg.Add(1)
+	go func() {
+		defer muxdb.wg.Done()
+		collectCompactionMetrics(ctx, ldb)
+	}()
+
+	return muxdb, nil
 }
 
 // NewMem creates a memory-backed DB.
@@ -137,6 +173,13 @@ func NewMem() *MuxDB {
 
 // Close closes the DB.
 func (db *MuxDB) Close() error {
+	if db.cancelFunc != nil {
+		db.cancelFunc()
+	}
+
+	// Wait for all goroutines to finish
+	db.wg.Wait()
+
 	return db.engine.Close()
 }
 
