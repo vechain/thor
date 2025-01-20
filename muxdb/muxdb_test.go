@@ -142,5 +142,3 @@ func TestMuxdbTrie(t *testing.T) {
 
 	db.Close()
 }
-
-
