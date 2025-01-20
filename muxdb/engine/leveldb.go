@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
@@ -117,13 +116,12 @@ func (ldb *levelEngine) Bulk() kv.Bulk {
 		if batch != nil {
 			if batchBytesNo := len(batch.Dump()); batchBytesNo >= minSize {
 				if batch.Len() > 0 {
-					startTime := mclock.Now()
+					startTime := time.Now()
 					if err := ldb.db.Write(batch, &writeOpt); err != nil {
 						return err
 					}
-					batchWriteElapsed := mclock.Now() - startTime
 					metricBatchWriteBytes().Set(int64(batchBytesNo))
-					metricBatchWriteDuration().Observe(time.Duration(batchWriteElapsed).Milliseconds())
+					metricBatchWriteDuration().Observe(time.Since(startTime).Milliseconds())
 				}
 				ldb.batchPool.Put(batch)
 				batch = nil
