@@ -114,7 +114,7 @@ func extractCompactionValues(stats string) ([]CompactionValues, error) {
 func parseCompactionColumns(columns []string) (*CompactionValues, error) {
 	tables, err := strconv.ParseInt(columns[2], 10, 64)
 	if err != nil {
-		return CompactionValues{}, fmt.Errorf("error when parsing tables: %v", err)
+		return nil, fmt.Errorf("error when parsing tables: %v", err)
 	}
 	sizeMb, err := parseAndRoundFloatToInt64(columns[4])
 	if err != nil {
