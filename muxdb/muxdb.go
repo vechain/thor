@@ -36,6 +36,8 @@ const (
 
 var logger = log.WithContext("pkg", "muxdb")
 
+var cancelFunc context.CancelFunc
+
 // Options optional parameters for MuxDB.
 type Options struct {
 	// TrieNodeCacheSizeMB is the size of the cache for trie node blobs.
@@ -63,17 +65,23 @@ type MuxDB struct {
 	trieBackend *backend
 }
 
-func collectCompactionMetrics(ldb *leveldb.DB) {
+// collectCompactionMetrics collects compaction metrics periodically.
+func collectCompactionMetrics(ctx context.Context, ldb *leveldb.DB) {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		// stats is a table in a single string, so we need to parse it
-		stats, err := ldb.GetProperty("leveldb.stats")
-		if err != nil {
-			logger.Error("Failed to get LevelDB stats: %v", err)
-		} else {
-			collectCompactionValues(stats)
+	for {
+		select {
+		case <-ticker.C:
+			// stats is a table in a single string, so we need to parse it
+			stats, err := ldb.GetProperty("leveldb.stats")
+			if err != nil {
+				logger.Error("Failed to get LevelDB stats: %v", err)
+			} else {
+				collectCompactionValues(stats)
+			}
+		case <-ctx.Done():
+			return
 		}
 	}
 }
@@ -119,7 +127,9 @@ func Open(path string, options *Options) (*MuxDB, error) {
 		return nil, err
 	}
 
-	go collectCompactionMetrics(ldb)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancelFunc = cancel
+	go collectCompactionMetrics(ctx, ldb)
 
 	return &MuxDB{
 		engine: engine,
@@ -155,6 +165,9 @@ func NewMem() *MuxDB {
 
 // Close closes the DB.
 func (db *MuxDB) Close() error {
+	if cancelFunc != nil {
+		cancelFunc()
+	}
 	return db.engine.Close()
 }
 
