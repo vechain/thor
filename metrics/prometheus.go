@@ -204,7 +204,7 @@ func (o *prometheusMetrics) newHistogramMeter(name string, buckets []int64) Hist
 
 	err := prometheus.Register(meter)
 	if err != nil {
-		logger.Warn(fmt.Sprintf("unable to register metric %s", name), "err", err)
+		logger.Warn("unable to register metric", "metric", name, "err", err)
 	}
 
 	return &promHistogramMeter{
