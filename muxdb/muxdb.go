@@ -10,6 +10,7 @@ package muxdb
 import (
 	"context"
 	"encoding/json"
+	"sync"
 	"time"
 
 	"github.com/syndtr/goleveldb/leveldb"
@@ -62,6 +63,7 @@ type MuxDB struct {
 	engine      engine.Engine
 	trieBackend *backend
 	cancelFunc  context.CancelFunc
+	wg          sync.WaitGroup
 }
 
 // collectCompactionMetrics collects compaction metrics periodically.
@@ -127,9 +129,8 @@ func Open(path string, options *Options) (*MuxDB, error) {
 	}
 
 	ctx, cancelFunc := context.WithCancel(context.Background())
-	go collectCompactionMetrics(ctx, ldb)
 
-	return &MuxDB{
+	muxdb := &MuxDB{
 		engine: engine,
 		trieBackend: &backend{
 			Store: engine,
@@ -141,7 +142,15 @@ func Open(path string, options *Options) (*MuxDB, error) {
 			CachedNodeTTL:    options.TrieCachedNodeTTL,
 		},
 		cancelFunc: cancelFunc,
-	}, nil
+	}
+
+	muxdb.wg.Add(1)
+	go func() {
+		defer muxdb.wg.Done()
+		collectCompactionMetrics(ctx, ldb)
+	}()
+
+	return muxdb, nil
 }
 
 // NewMem creates a memory-backed DB.
@@ -167,6 +176,10 @@ func (db *MuxDB) Close() error {
 	if db.cancelFunc != nil {
 		db.cancelFunc()
 	}
+
+	// Wait for all goroutines to finish
+	db.wg.Wait()
+
 	return db.engine.Close()
 }
 
