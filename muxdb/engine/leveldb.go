@@ -121,8 +121,8 @@ func (ldb *levelEngine) Bulk() kv.Bulk {
 					if err := ldb.db.Write(batch, &writeOpt); err != nil {
 						return err
 					}
-					metricBatchWriteBytes().Set(int64(batchBytesNo))
-					batchWriteElapsed := mclock.Now() - startTime
+batchWriteElapsed := mclock.Now() - startTime
+metricBatchWriteBytes().Set(int64(batchBytesNo))
 					metricBatchWriteDuration().Observe(time.Duration(batchWriteElapsed).Milliseconds())
 				}
 				ldb.batchPool.Put(batch)
