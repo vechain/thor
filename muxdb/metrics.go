@@ -61,7 +61,7 @@ func collectCompactionValues(stats string) {
 	logger.Debug(formattedStats)
 	values, err := extractCompactionValues(formattedStats)
 	if err != nil {
-		logger.Error("Failed to extract values for stats %s: %v", stats, err)
+		logger.Error("Failed to extract values for stats %s: %s", stats, err.Error())
 	} else {
 		for _, value := range values {
 			metricCompaction().SetWithLabel(value.Tables, map[string]string{"level": value.Level, "type": "tables"})
