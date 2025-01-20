@@ -100,7 +100,7 @@ func extractCompactionValues(stats string) ([]CompactionValues, error) {
 			if err != nil {
 				return nil, err
 			}
-			values = append(values, value)
+			values = append(values, *value)
 		}
 	}
 
@@ -118,21 +118,21 @@ func parseCompactionColumns(columns []string) (*CompactionValues, error) {
 	}
 	sizeMb, err := parseAndRoundFloatToInt64(columns[4])
 	if err != nil {
-		return CompactionValues{}, fmt.Errorf("error when parsing sizeMb: %v", err)
+		return nil, fmt.Errorf("error when parsing sizeMb: %v", err)
 	}
 	timeSec, err := parseAndRoundFloatToInt64(columns[6])
 	if err != nil {
-		return CompactionValues{}, fmt.Errorf("error when parsing timeSec: %v", err)
+		return nil, fmt.Errorf("error when parsing timeSec: %v", err)
 	}
 	readMb, err := parseAndRoundFloatToInt64(columns[8])
 	if err != nil {
-		return CompactionValues{}, fmt.Errorf("error when parsing readMb: %v", err)
+		return nil, fmt.Errorf("error when parsing readMb: %v", err)
 	}
 	writeMb, err := parseAndRoundFloatToInt64(columns[10])
 	if err != nil {
-		return CompactionValues{}, fmt.Errorf("error when parsing writeMb: %v", err)
+		return nil, fmt.Errorf("error when parsing writeMb: %v", err)
 	}
-	return CompactionValues{
+	return &CompactionValues{
 		Level:   columns[0],
 		Tables:  tables,
 		SizeMB:  sizeMb,
