@@ -8,15 +8,12 @@
 package muxdb
 
 import (
-	"context"
 	"fmt"
 	"math"
 	"strconv"
 	"strings"
 	"text/tabwriter"
-	"time"
 
-	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/vechain/thor/v2/metrics"
 )
 
@@ -50,32 +47,6 @@ Compactions
  Total |       7203 |   27425.29804 |      20.26837 |    5089.71648 |    6705.68758
 
 */
-// collectCompactionMetrics collects compaction metrics periodically.
-func collectCompactionMetrics(ctx context.Context, ldb *leveldb.DB) {
-	if metrics.NoOp() {
-		// We avoid calling the db if metrics are disabled
-		return
-	}
-
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			// stats is a table in a single string, so we need to parse it
-			stats, err := ldb.GetProperty("leveldb.stats")
-			if err != nil {
-				logger.Error("Failed to get LevelDB stats: %v", err)
-			} else {
-				collectCompactionValues(stats)
-			}
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
 func collectCompactionValues(stats string) {
 	// Create a new tabwriter
 	var sb strings.Builder
