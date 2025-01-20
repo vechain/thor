@@ -11,7 +11,6 @@ import (
 	"context"
 	"encoding/json"
 	"sync"
-	"time"
 
 	"github.com/syndtr/goleveldb/leveldb"
 	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
@@ -64,27 +63,6 @@ type MuxDB struct {
 	trieBackend *backend
 	cancelFunc  context.CancelFunc
 	wg          sync.WaitGroup
-}
-
-// collectCompactionMetrics collects compaction metrics periodically.
-func collectCompactionMetrics(ctx context.Context, ldb *leveldb.DB) {
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			// stats is a table in a single string, so we need to parse it
-			stats, err := ldb.GetProperty("leveldb.stats")
-			if err != nil {
-				logger.Error("Failed to get LevelDB stats: %v", err)
-			} else {
-				collectCompactionValues(stats)
-			}
-		case <-ctx.Done():
-			return
-		}
-	}
 }
 
 // Open opens or creates DB at the given path.
