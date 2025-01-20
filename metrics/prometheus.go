@@ -204,7 +204,7 @@ func (o *prometheusMetrics) newHistogramMeter(name string, buckets []int64) Hist
 
 	err := prometheus.Register(meter)
 	if err != nil {
-		logger.Warn("unable to register metric", "metric", name, "err", err)
+		logger.Warn("unable to register metric", "err", err)
 	}
 
 	return &promHistogramMeter{
@@ -237,7 +237,7 @@ func (o *prometheusMetrics) newHistogramVecMeter(name string, labels []string, b
 
 	err := prometheus.Register(meter)
 	if err != nil {
-		logger.Warn(fmt.Sprintf("unable to register metric %s", name), "err", err)
+		logger.Warn("unable to register metric", "err", err)
 	}
 
 	return &promHistogramVecMeter{
@@ -263,7 +263,7 @@ func (o *prometheusMetrics) newCountMeter(name string) CountMeter {
 
 	err := prometheus.Register(meter)
 	if err != nil {
-		logger.Warn(fmt.Sprintf("unable to register metric %s", name), "err", err)
+		logger.Warn("unable to register metric", "err", err)
 	}
 	return &promCountMeter{
 		counter: meter,
@@ -281,7 +281,7 @@ func (o *prometheusMetrics) newCountVecMeter(name string, labels []string) Count
 
 	err := prometheus.Register(meter)
 	if err != nil {
-		logger.Warn(fmt.Sprintf("unable to register metric %s", name), "err", err)
+		logger.Warn("unable to register metric", "err", err)
 	}
 	return &promCountVecMeter{
 		counter: meter,
@@ -298,7 +298,7 @@ func (o *prometheusMetrics) newGaugeMeter(name string) GaugeMeter {
 
 	err := prometheus.Register(meter)
 	if err != nil {
-		logger.Warn(fmt.Sprintf("unable to register metric %s", name), "err", err)
+		logger.Warn("unable to register metric", "err", err)
 	}
 	return &promGaugeMeter{
 		gauge: meter,
@@ -316,7 +316,7 @@ func (o *prometheusMetrics) newGaugeVecMeter(name string, labels []string) Gauge
 
 	err := prometheus.Register(meter)
 	if err != nil {
-		logger.Warn(fmt.Sprintf("unable to register metric %s", name), "err", err)
+		logger.Warn("unable to register metric", "err", err)
 	}
 	return &promGaugeVecMeter{
 		gauge: meter,
