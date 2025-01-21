@@ -120,7 +120,7 @@ func ConvertCoreTransaction(tx *tx.Transaction, header *block.Header, origin *th
 
 // convertSignedCoreTransaction converts a core type transaction into an api tx (json format transaction)
 // retrieves the origin and delegator from signature
-func convertSignedCoreTransaction(tx *tx.Transaction, header *block.Header) *Transaction {
+func convertTransaction(tx *tx.Transaction, header *block.Header) *Transaction {
 	//tx origin
 	origin, _ := tx.Origin()
 	delegator, _ := tx.Delegator()
@@ -208,9 +208,10 @@ func convertReceipt(txReceipt *tx.Receipt, header *block.Header, tx *tx.Transact
 			origin,
 		},
 	}
+	txClauses := tx.Clauses()
 	receipt.Outputs = make([]*Output, len(txReceipt.Outputs))
 	for i, output := range txReceipt.Outputs {
-		clause := tx.Clauses()[i]
+		clause := txClauses[i]
 		var contractAddr *thor.Address
 		if clause.To() == nil {
 			cAddr := thor.CreateContractAddress(tx.ID(), uint32(i), 0)

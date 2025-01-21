@@ -65,7 +65,7 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, a
 		return nil, err
 	}
 
-	summary, err := t.repo.GetBlockSummary(meta.BlockID)
+	header, err := chain.GetBlockHeader(meta.BlockNum)
 	if err != nil {
 		return nil, err
 	}
@@ -76,9 +76,9 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, a
 	return &RawTransaction{
 		RawTx: RawTx{hexutil.Encode(raw)},
 		Meta: &TxMeta{
-			BlockID:        summary.Header.ID(),
-			BlockNumber:    summary.Header.Number(),
-			BlockTimestamp: summary.Header.Timestamp(),
+			BlockID:        header.ID(),
+			BlockNumber:    header.Number(),
+			BlockTimestamp: header.Timestamp(),
 		},
 	}, nil
 }
@@ -90,7 +90,7 @@ func (t *Transactions) getTransactionByID(txID thor.Bytes32, head thor.Bytes32, 
 		if t.repo.IsNotFound(err) {
 			if allowPending {
 				if pending := t.pool.Get(txID); pending != nil {
-					return convertSignedCoreTransaction(pending, nil), nil
+					return convertTransaction(pending, nil), nil
 				}
 			}
 			return nil, nil
@@ -98,11 +98,11 @@ func (t *Transactions) getTransactionByID(txID thor.Bytes32, head thor.Bytes32, 
 		return nil, err
 	}
 
-	summary, err := t.repo.GetBlockSummary(meta.BlockID)
+	header, err := chain.GetBlockHeader(meta.BlockNum)
 	if err != nil {
 		return nil, err
 	}
-	return convertSignedCoreTransaction(tx, summary.Header), nil
+	return convertTransaction(tx, header), nil
 }
 
 // GetTransactionReceiptByID get tx's receipt
@@ -121,12 +121,12 @@ func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32, head thor.By
 		return nil, err
 	}
 
-	summary, err := t.repo.GetBlockSummary(meta.BlockID)
+	header, err := chain.GetBlockHeader(meta.BlockNum)
 	if err != nil {
 		return nil, err
 	}
 
-	return convertReceipt(receipt, summary.Header, tx)
+	return convertReceipt(receipt, header, tx)
 }
 
 func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Request) error {
