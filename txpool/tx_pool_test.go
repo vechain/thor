@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -47,6 +48,10 @@ func newPool(limit int, limitPerAccount int) *TxPool {
 }
 
 func newPoolWithParams(limit int, limitPerAccount int, BlocklistCacheFilePath string, BlocklistFetchURL string, timestamp uint64) *TxPool {
+	return newPoolWithMaxLifetime(limit, limitPerAccount, BlocklistCacheFilePath, BlocklistFetchURL, timestamp, time.Hour)
+}
+
+func newPoolWithMaxLifetime(limit int, limitPerAccount int, BlocklistCacheFilePath string, BlocklistFetchURL string, timestamp uint64, maxLifetime time.Duration) *TxPool {
 	db := muxdb.NewMem()
 	gene := new(genesis.Builder).
 		GasLimit(thor.InitialGasLimit).
@@ -64,7 +69,7 @@ func newPoolWithParams(limit int, limitPerAccount int, BlocklistCacheFilePath st
 	return New(repo, state.NewStater(db), Options{
 		Limit:                  limit,
 		LimitPerAccount:        limitPerAccount,
-		MaxLifetime:            time.Hour,
+		MaxLifetime:            maxLifetime,
 		BlocklistCacheFilePath: BlocklistCacheFilePath,
 		BlocklistFetchURL:      BlocklistFetchURL,
 	})
@@ -433,6 +438,115 @@ func TestPoolLimit(t *testing.T) {
 	pool.add(trx1, false, false)
 	err = pool.add(trx2, false, false)
 	assert.Equal(t, "tx rejected: account quota exceeded", err.Error())
+}
+
+func TestExecutableAndNonExecutableLimits(t *testing.T) {
+	// executable pool limit
+	pool := newPoolWithParams(10, 2, "", "", uint64(time.Now().Unix()))
+	defer pool.Close()
+
+	// Create a slice of transactions to be added to the pool.
+	txs := make(Tx.Transactions, 0, 11)
+	for i := 0; i < 12; i++ {
+		tx := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i%len(devAccounts)])
+		pool.add(tx, false, false)
+		txs = append(txs, tx)
+	}
+	pool.executables.Store(txs)
+
+	trx1 := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[1])
+
+	err := pool.add(trx1, false, false)
+	assert.Equal(t, "tx rejected: pool is full", err.Error())
+
+	trx2 := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(0), devAccounts[1])
+
+	err = pool.add(trx2, false, false)
+	assert.Equal(t, "tx rejected: pool is full", err.Error())
+
+	// non-executable pool limit
+	pool = newPoolWithParams(5, 2, "", "", uint64(time.Now().Unix()))
+	defer pool.Close()
+
+	trx1 = newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(0), devAccounts[0])
+
+	err = pool.add(trx1, false, false)
+	assert.Nil(t, err)
+
+	// dependant fails
+	trx2 = newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(0), devAccounts[2])
+
+	err = pool.add(trx2, false, false)
+
+	assert.Equal(t, "tx rejected: non executable pool is full", err.Error())
+
+	// higher block fails
+	trx2 = newTx(pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(tx.BlockRef{}.Number()+2), 100, nil, tx.Features(0), devAccounts[2])
+
+	err = pool.add(trx2, false, false)
+
+	assert.Equal(t, "tx rejected: non executable pool is full", err.Error())
+}
+
+func TestNonExecutables(t *testing.T) {
+	pool := newPoolWithParams(100, 100, "", "", uint64(time.Now().Unix()))
+
+	// loop 90 times
+	for i := 0; i < 90; i++ {
+		assert.NoError(t, pool.AddLocal(newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i%len(devAccounts)])))
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+		pool.housekeeping()
+	}()
+
+	time.Sleep(2 * time.Second)
+	pool.cancel()
+
+	wg.Wait()
+	// add 1 non-executable
+	assert.NoError(t, pool.AddLocal(newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(0), devAccounts[2])))
+}
+
+func TestExpiredTxs(t *testing.T) {
+	pool := newPoolWithMaxLifetime(100, 100, "", "", uint64(time.Now().Unix()), 3*time.Second)
+
+	// loop 90 times
+	for i := 0; i < 90; i++ {
+		assert.NoError(t, pool.Add(newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i%len(devAccounts)])))
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+		pool.housekeeping()
+	}()
+
+	time.Sleep(1 * time.Second)
+	pool.cancel()
+
+	wg.Wait()
+	// add 1 non-executable
+	assert.NoError(t, pool.Add(newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(0), devAccounts[2])))
+
+	executables, washed, err := pool.wash(pool.repo.BestBlockSummary())
+	assert.Nil(t, err)
+	assert.Equal(t, 90, len(executables))
+	assert.Equal(t, 0, washed)
+	assert.Equal(t, 91, pool.all.Len())
+
+	time.Sleep(3 * time.Second)
+	executables, washed, err = pool.wash(pool.repo.BestBlockSummary())
+	assert.Nil(t, err)
+	assert.Equal(t, 0, len(executables))
+	assert.Equal(t, 91, washed)
+	assert.Equal(t, 0, pool.all.Len())
 }
 
 func TestBlocked(t *testing.T) {
