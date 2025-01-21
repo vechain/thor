@@ -20,6 +20,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/storage"
 	"github.com/vechain/thor/v2/kv"
 	"github.com/vechain/thor/v2/log"
+	"github.com/vechain/thor/v2/metrics"
 	"github.com/vechain/thor/v2/muxdb/engine"
 	"github.com/vechain/thor/v2/trie"
 )
@@ -68,6 +69,11 @@ type MuxDB struct {
 
 // collectCompactionMetrics collects compaction metrics periodically.
 func collectCompactionMetrics(ctx context.Context, ldb *leveldb.DB) {
+	if metrics.NoOp() {
+		// We avoid calling the db if metrics are disabled
+		return
+	}
+
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
