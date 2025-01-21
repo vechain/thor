@@ -3,6 +3,10 @@ FROM golang:1.22-alpine3.20 AS builder
 
 RUN apk add --no-cache make gcc musl-dev linux-headers git
 WORKDIR  /go/thor
+
+COPY go.mod go.sum ./
+RUN go mod download
+
 COPY . /go/thor
 RUN make all
 

@@ -112,9 +112,6 @@ func New(
 				panic(err)
 			}
 		}
-		if err := state.SetCode(builtin.Extension.Address, builtin.Extension.V3.RuntimeBytecodes()); err != nil {
-			panic(err)
-		}
 	} else if forkConfig.ETH_IST == ctx.Number {
 		for addr := range vm.PrecompiledContractsIstanbul {
 			if err := state.SetCode(thor.Address(addr), EmptyRuntimeBytecode); err != nil {
@@ -129,8 +126,12 @@ func New(
 		}
 	}
 
-	// VIP191
-	if forkConfig.VIP191 == ctx.Number {
+	if forkConfig.GALACTICA == ctx.Number {
+		// upgrade extension contract to V3
+		if err := state.SetCode(builtin.Extension.Address, builtin.Extension.V3.RuntimeBytecodes()); err != nil {
+			panic(err)
+		}
+	} else if forkConfig.VIP191 == ctx.Number {
 		// upgrade extension contract to V2
 		if err := state.SetCode(builtin.Extension.Address, builtin.Extension.V2.RuntimeBytecodes()); err != nil {
 			panic(err)
