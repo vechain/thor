@@ -21,14 +21,14 @@ var (
 	scanOpt  = opt.ReadOptions{DontFillCache: true}
 )
 
-type levelEngine struct {
+type LevelEngine struct {
 	db        *leveldb.DB
 	batchPool *sync.Pool
 }
 
 // NewLevelEngine creates leveldb instance which implements the Engine interface.
 func NewLevelEngine(db *leveldb.DB) Engine {
-	return &levelEngine{
+	return &LevelEngine{
 		db,
 		&sync.Pool{
 			New: func() interface{} {
@@ -38,15 +38,15 @@ func NewLevelEngine(db *leveldb.DB) Engine {
 	}
 }
 
-func (ldb *levelEngine) Close() error {
+func (ldb *LevelEngine) Close() error {
 	return ldb.db.Close()
 }
 
-func (ldb *levelEngine) IsNotFound(err error) bool {
+func (ldb *LevelEngine) IsNotFound(err error) bool {
 	return err == leveldb.ErrNotFound
 }
 
-func (ldb *levelEngine) Get(key []byte) ([]byte, error) {
+func (ldb *LevelEngine) Get(key []byte) ([]byte, error) {
 	val, err := ldb.db.Get(key, &readOpt)
 	// val will be []byte{} if error occurs, which is not expected
 	if err != nil {
@@ -55,19 +55,19 @@ func (ldb *levelEngine) Get(key []byte) ([]byte, error) {
 	return val, nil
 }
 
-func (ldb *levelEngine) Has(key []byte) (bool, error) {
+func (ldb *LevelEngine) Has(key []byte) (bool, error) {
 	return ldb.db.Has(key, &readOpt)
 }
 
-func (ldb *levelEngine) Put(key, val []byte) error {
+func (ldb *LevelEngine) Put(key, val []byte) error {
 	return ldb.db.Put(key, val, &writeOpt)
 }
 
-func (ldb *levelEngine) Delete(key []byte) error {
+func (ldb *LevelEngine) Delete(key []byte) error {
 	return ldb.db.Delete(key, &writeOpt)
 }
 
-func (ldb *levelEngine) Snapshot() kv.Snapshot {
+func (ldb *LevelEngine) Snapshot() kv.Snapshot {
 	s, err := ldb.db.GetSnapshot()
 	return &struct {
 		kv.GetFunc
@@ -100,7 +100,7 @@ func (ldb *levelEngine) Snapshot() kv.Snapshot {
 	}
 }
 
-func (ldb *levelEngine) Bulk() kv.Bulk {
+func (ldb *LevelEngine) Bulk() kv.Bulk {
 	const idealBatchSize = 128 * 1024
 	var batch *leveldb.Batch
 
@@ -150,11 +150,11 @@ func (ldb *levelEngine) Bulk() kv.Bulk {
 	}
 }
 
-func (ldb *levelEngine) Iterate(r kv.Range) kv.Iterator {
+func (ldb *LevelEngine) Iterate(r kv.Range) kv.Iterator {
 	return ldb.db.NewIterator((*util.Range)(&r), &scanOpt)
 }
 
-func (ldb *levelEngine) DeleteRange(ctx context.Context, r kv.Range) error {
+func (ldb *LevelEngine) DeleteRange(ctx context.Context, r kv.Range) error {
 	iter := ldb.Iterate(r)
 	defer iter.Release()
 
@@ -182,4 +182,8 @@ func (ldb *levelEngine) DeleteRange(ctx context.Context, r kv.Range) error {
 		return err
 	}
 	return bulk.Write()
+}
+
+func (ldb *LevelEngine) Stats(s *leveldb.DBStats) error {
+	return ldb.db.Stats(s)
 }

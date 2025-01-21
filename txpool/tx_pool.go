@@ -255,6 +255,12 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 			return txRejectedError{"tx is not executable"}
 		}
 
+		if !executable {
+			if p.all.Len()-len(p.Executables()) >= p.options.Limit*2/10 {
+				return txRejectedError{"non executable pool is full"}
+			}
+		}
+
 		txObj.executable = executable
 		if err := p.all.Add(txObj, p.options.LimitPerAccount, func(payer thor.Address, needs *big.Int) error {
 			// check payer's balance
@@ -467,6 +473,12 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 		for _, txObj := range nonExecutableObjs[limit-len(executableObjs):] {
 			toRemove = append(toRemove, txObj)
 			logger.Debug("non-executable tx washed out due to pool limit", "id", txObj.ID())
+		}
+	} else if len(nonExecutableObjs) > limit*2/10 {
+		// nonExecutableObjs over pool limit
+		for _, txObj := range nonExecutableObjs[limit*2/10:] {
+			toRemove = append(toRemove, txObj)
+			logger.Debug("non-executable tx washed out due to non-executable limit", "id", txObj.ID())
 		}
 	}
 
