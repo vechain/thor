@@ -11,8 +11,11 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/storage"
 	"github.com/vechain/thor/v2/trie"
 )
 
@@ -43,6 +46,80 @@ func TestMuxdb(t *testing.T) {
 	os.RemoveAll(path)
 }
 
+func TestConfigLoadSave(t *testing.T) {
+	db := NewMem()
+	defer db.Close()
+
+	store := db.NewStore(propStoreName)
+
+	cfg := config{
+		HistPtnFactor:    1000,
+		DedupedPtnFactor: 2000,
+	}
+	err := cfg.LoadOrSave(store)
+	assert.Nil(t, err)
+
+	cfg2 := config{}
+	err = cfg2.LoadOrSave(store)
+	assert.Nil(t, err)
+	assert.Equal(t, cfg.HistPtnFactor, cfg2.HistPtnFactor)
+	assert.Equal(t, cfg.DedupedPtnFactor, cfg2.DedupedPtnFactor)
+}
+
+func TestCompactionMetrics(t *testing.T) {
+	stor := storage.NewMemStorage()
+	ldb, _ := leveldb.Open(stor, nil)
+	defer ldb.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	done := make(chan struct{})
+	go func() {
+		collectCompactionMetrics(ctx, ldb)
+		close(done)
+	}()
+
+	// Wait for collection to finish
+	select {
+	case <-done:
+		// Collection finished as expected
+	case <-time.After(3 * time.Second):
+		t.Fatal("Collection didn't finish in time")
+	}
+}
+
+func TestCorruptedDB(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "corrupted.db")
+
+	opts := &Options{
+		TrieNodeCacheSizeMB:        128,
+		TrieHistPartitionFactor:    1000,
+		TrieDedupedPartitionFactor: 2000,
+		OpenFilesCacheCapacity:     16,
+		ReadCacheMB:                32,
+		WriteBufferMB:              16,
+	}
+
+	db, err := Open(dbPath, opts)
+	assert.Nil(t, err)
+	db.Close()
+
+	// Corrupt the database by writing invalid data
+	f, _ := os.OpenFile(filepath.Join(dbPath, "CURRENT"), os.O_WRONLY|os.O_TRUNC, 0644)
+	f.WriteString("invalid data")
+	f.Close()
+
+	// Try to open corrupted database
+	db, err = Open(dbPath, opts)
+	if assert.Error(t, err) {
+		assert.IsType(t, &storage.ErrCorrupted{}, err)
+		return
+	}
+	db.Close()
+}
+
 func TestStore(t *testing.T) {
 	db := NewMem()
 
@@ -60,6 +137,52 @@ func TestStore(t *testing.T) {
 	assert.True(t, db.IsNotFound(err))
 
 	db.Close()
+}
+
+func TestAdvancedTrie(t *testing.T) {
+	db := NewMem()
+	defer db.Close()
+
+	tr := db.NewTrie("advanced-test", trie.Root{})
+
+	updates := map[string][]byte{
+		"key1": []byte("val1"),
+		"key2": []byte("val2"),
+		"key3": []byte("val3"),
+	}
+
+	for k, v := range updates {
+		err := tr.Update([]byte(k), v, nil)
+		assert.Nil(t, err)
+	}
+
+	ver := trie.Version{Major: 1, Minor: 0}
+	err := tr.Commit(ver, false)
+	assert.Nil(t, err)
+
+	// Verify all values
+	for k, v := range updates {
+		val, _, err := tr.Get([]byte(k))
+		assert.Nil(t, err)
+		assert.Equal(t, v, val)
+	}
+
+	// Test deletion
+	for k := range updates {
+		err := tr.Update([]byte(k), nil, nil)
+		assert.Nil(t, err)
+	}
+
+	ver = trie.Version{Major: 2, Minor: 0}
+	err = tr.Commit(ver, false)
+	assert.Nil(t, err)
+
+	// Verify deletions
+	for k := range updates {
+		val, _, err := tr.Get([]byte(k))
+		assert.Nil(t, err)
+		assert.Nil(t, val)
+	}
 }
 
 func TestMuxdbTrie(t *testing.T) {
