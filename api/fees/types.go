@@ -22,7 +22,7 @@ type blockData struct {
 }
 
 type GetFeesHistory struct {
-	OldestBlock   *uint32   `json:"oldestBlock"`
+	OldestBlock   *uint32    `json:"oldestBlock"`
 	BaseFees      []*big.Int `json:"baseFees"`
 	GasUsedRatios []float64  `json:"gasUsedRatios"`
 }
