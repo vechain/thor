@@ -64,6 +64,7 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 	for i := 0; i < maxBlockFetchers && i < int(blockCount); i++ {
 		go func() {
 			for {
+				// Processing current block and incrementing next block number at the same time
 				blockNumber := next.Add(1) - 1
 				if blockNumber > lastBlock {
 					return
@@ -86,6 +87,9 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 	// Collect results from the channel
 	for i := 0; i < int(blockCount); i++ {
 		blockData := <-blockDataChan
+		if blockData.err != nil {
+			return blockData.err
+		}
 		baseFees[i] = blockData.blockSummary.Header.BaseFee()
 		gasUsedRatios[i] = float64(blockData.blockSummary.Header.GasUsed()) / float64(blockData.blockSummary.Header.GasLimit())
 	}
