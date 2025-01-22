@@ -526,7 +526,7 @@ func TestExpiredTxs(t *testing.T) {
 	// add 1 non-executable
 	assert.NoError(t, pool.Add(newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(0), devAccounts[2])))
 
-	executables, washed, err = pool.wash(pool.repo.BestBlockSummary())
+	executables, washed, err := pool.wash(pool.repo.BestBlockSummary())
 	assert.Nil(t, err)
 	assert.Equal(t, 90, len(executables))
 	assert.Equal(t, 0, washed)
