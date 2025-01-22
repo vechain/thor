@@ -25,7 +25,7 @@ func New(repo *chain.Repository, bft bft.Committer) *Fees {
 	}
 }
 
-func validateGetFeesHistoryParams(w http.ResponseWriter, req *http.Request) (uint32, *utils.Revision, error) {
+func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.BlockSummary, error) {
 	blockCountParam := req.URL.Query().Get("blockCount")
 	blockCount, err := strconv.ParseUint(blockCountParam, 10, 32)
 	if err != nil {
@@ -38,20 +38,20 @@ func validateGetFeesHistoryParams(w http.ResponseWriter, req *http.Request) (uin
 	if err != nil {
 		return 0, nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
 	}
-
-	return uint32(blockCount), newestBlockRevision, nil
-}
-
-func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) error {
-	blockCount, newestBlockRevision, error := validateGetFeesHistoryParams(w, req)
-	if error != nil {
-		return error
-	}
 	newestBlockSummary, err := utils.GetSummary(newestBlockRevision, f.repo, f.bft)
 	if err != nil {
 		if f.repo.IsNotFound(err) {
-			return utils.BadRequest(errors.WithMessage(err, "newestBlock"))
+			return 0, nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
 		}
+		return 0, nil, err
+	}
+
+	return uint32(blockCount), newestBlockSummary, nil
+}
+
+func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) error {
+	blockCount, newestBlockSummary, err := f.validateGetFeesHistoryParams(req)
+	if err != nil {
 		return err
 	}
 	lastBlock := newestBlockSummary.Header.Number()
