@@ -2,6 +2,7 @@ package fees
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
@@ -23,6 +24,14 @@ func New(repo *chain.Repository, bft bft.Committer) *Fees {
 }
 
 func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) error {
+	blockCountParam := req.URL.Query().Get("blockCount")
+	blockCount, err := strconv.Atoi(blockCountParam)
+	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "invalid blockCount, it should represent an integer"))
+	}
+	if blockCount < 1 || blockCount > 1024 {
+		return utils.BadRequest(errors.New("blockCount must be between 1 and 1024"))
+	}
 	newestBlock, err := utils.ParseRevision(req.URL.Query().Get("newestBlock"), false)
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "newestBlock"))
