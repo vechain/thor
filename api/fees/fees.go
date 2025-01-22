@@ -95,7 +95,7 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 	}
 
 	return utils.WriteJSON(w, &GetFeesHistory{
-		OldestBlock:   new(big.Int).SetUint64(uint64(oldestBlock)),
+		OldestBlock:   &oldestBlock,
 		BaseFees:      baseFees,
 		GasUsedRatios: gasUsedRatios,
 	})
