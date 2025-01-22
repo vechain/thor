@@ -11,10 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/storage"
 	"github.com/vechain/thor/v2/trie"
 )
@@ -66,28 +64,28 @@ func TestConfigLoadSave(t *testing.T) {
 	assert.Equal(t, cfg.DedupedPtnFactor, cfg2.DedupedPtnFactor)
 }
 
-func TestCompactionMetrics(t *testing.T) {
-	stor := storage.NewMemStorage()
-	ldb, _ := leveldb.Open(stor, nil)
-	defer ldb.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	done := make(chan struct{})
-	go func() {
-		collectCompactionMetrics(ctx, ldb)
-		close(done)
-	}()
-
-	// Wait for collection to finish
-	select {
-	case <-done:
-		// Collection finished as expected
-	case <-time.After(3 * time.Second):
-		t.Fatal("Collection didn't finish in time")
-	}
-}
+//func TestCompactionMetrics(t *testing.T) {
+//	stor := storage.NewMemStorage()
+//	ldb, _ := leveldb.Open(stor, nil)
+//	defer ldb.Close()
+//
+//	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+//	defer cancel()
+//
+//	done := make(chan struct{})
+//	go func() {
+//		collectCompactionMetrics(ctx, ldb)
+//		close(done)
+//	}()
+//
+//	// Wait for collection to finish
+//	select {
+//	case <-done:
+//		// Collection finished as expected
+//	case <-time.After(3 * time.Second):
+//		t.Fatal("Collection didn't finish in time")
+//	}
+//}
 
 func TestCorruptedDB(t *testing.T) {
 	tmpDir := t.TempDir()

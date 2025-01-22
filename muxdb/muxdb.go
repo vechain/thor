@@ -10,7 +10,6 @@ package muxdb
 import (
 	"context"
 	"encoding/json"
-	"sync"
 	"time"
 
 	"github.com/syndtr/goleveldb/leveldb"
@@ -20,7 +19,6 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/storage"
 	"github.com/vechain/thor/v2/kv"
 	"github.com/vechain/thor/v2/log"
-	"github.com/vechain/thor/v2/metrics"
 	"github.com/vechain/thor/v2/muxdb/engine"
 	"github.com/vechain/thor/v2/trie"
 )
@@ -29,6 +27,8 @@ const (
 	trieHistSpace    = byte(0) // the key space for historical trie nodes.
 	trieDedupedSpace = byte(1) // the key space for deduped trie nodes.
 	namedStoreSpace  = byte(2) // the key space for named store.
+
+	metricsSampleInterval = 10 * time.Second
 )
 
 const (
@@ -63,34 +63,8 @@ type Options struct {
 type MuxDB struct {
 	engine      engine.Engine
 	trieBackend *backend
-	cancelFunc  context.CancelFunc
-	wg          sync.WaitGroup
-}
 
-// collectCompactionMetrics collects compaction metrics periodically.
-func collectCompactionMetrics(ctx context.Context, ldb *leveldb.DB) {
-	if metrics.NoOp() {
-		// We avoid calling the db if metrics are disabled
-		return
-	}
-
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			// stats is a table in a single string, so we need to parse it
-			stats, err := ldb.GetProperty("leveldb.stats")
-			if err != nil {
-				logger.Error("Failed to get LevelDB stats: %v", err)
-			} else {
-				collectCompactionValues(stats)
-			}
-		case <-ctx.Done():
-			return
-		}
-	}
+	done chan struct{}
 }
 
 // Open opens or creates DB at the given path.
@@ -134,9 +108,7 @@ func Open(path string, options *Options) (*MuxDB, error) {
 		return nil, err
 	}
 
-	ctx, cancelFunc := context.WithCancel(context.Background())
-
-	muxdb := &MuxDB{
+	return &MuxDB{
 		engine: engine,
 		trieBackend: &backend{
 			Store: engine,
@@ -147,16 +119,8 @@ func Open(path string, options *Options) (*MuxDB, error) {
 			DedupedPtnFactor: cfg.DedupedPtnFactor,
 			CachedNodeTTL:    options.TrieCachedNodeTTL,
 		},
-		cancelFunc: cancelFunc,
-	}
-
-	muxdb.wg.Add(1)
-	go func() {
-		defer muxdb.wg.Done()
-		collectCompactionMetrics(ctx, ldb)
-	}()
-
-	return muxdb, nil
+		done: make(chan struct{}),
+	}, nil
 }
 
 // NewMem creates a memory-backed DB.
@@ -174,18 +138,13 @@ func NewMem() *MuxDB {
 			DedupedPtnFactor: 1,
 			CachedNodeTTL:    32,
 		},
+		done: make(chan struct{}),
 	}
 }
 
 // Close closes the DB.
 func (db *MuxDB) Close() error {
-	if db.cancelFunc != nil {
-		db.cancelFunc()
-	}
-
-	// Wait for all goroutines to finish
-	db.wg.Wait()
-
+	close(db.done)
 	return db.engine.Close()
 }
 
@@ -212,6 +171,34 @@ func (db *MuxDB) NewStore(name string) kv.Store {
 // IsNotFound returns if the error indicates key not found.
 func (db *MuxDB) IsNotFound(err error) bool {
 	return db.engine.IsNotFound(err)
+}
+
+func (db *MuxDB) EnableMetrics() {
+	go func() {
+		ticker := time.NewTicker(metricsSampleInterval)
+		defer ticker.Stop()
+
+		var (
+			stats leveldb.DBStats
+			err   error
+		)
+		for {
+			select {
+			case <-ticker.C:
+				// we only have one engine implementation for now, put the type assertion just for safety
+				lvl, ok := db.engine.(*engine.LevelEngine)
+				if ok {
+					err = lvl.Stats(&stats)
+					if err != nil {
+						logger.Warn("Failed to get LevelDB stats: %v", err)
+					}
+					registerCompactionMetrics(&stats)
+				}
+			case <-db.done:
+				return
+			}
+		}
+	}()
 }
 
 type config struct {
