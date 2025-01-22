@@ -49,11 +49,7 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 	return uint32(blockCount), newestBlockSummary, nil
 }
 
-func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) error {
-	blockCount, newestBlockSummary, err := f.validateGetFeesHistoryParams(req)
-	if err != nil {
-		return err
-	}
+func (f *Fees) processBlockRange(blockCount uint32, newestBlockSummary *chain.BlockSummary) (uint32, chan *blockData) {
 	lastBlock := newestBlockSummary.Header.Number()
 	oldestBlock := lastBlock + 1 - blockCount
 	var next atomic.Uint32
@@ -78,6 +74,17 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 			}
 		}()
 	}
+
+	return oldestBlock, blockDataChan
+}
+
+func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) error {
+	blockCount, newestBlockSummary, err := f.validateGetFeesHistoryParams(req)
+	if err != nil {
+		return err
+	}
+	
+	oldestBlock, blockDataChan := f.processBlockRange(blockCount, newestBlockSummary)
 
 	var (
 		baseFees      = make([]*big.Int, blockCount)
