@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/storage"
 	"github.com/vechain/thor/v2/kv"
 	"github.com/vechain/thor/v2/trie"
@@ -168,7 +167,7 @@ func TestCorruptDBRecovery(t *testing.T) {
 	db.Close()
 
 	corruptFile := filepath.Join(path, "CURRENT")
-	err = os.WriteFile(corruptFile, []byte("corrupted"), 0644)
+	err = os.WriteFile(corruptFile, []byte("corrupted"), 0600)
 	assert.Nil(t, err)
 
 	db, err = Open(path, opts)
@@ -234,20 +233,6 @@ func TestMultipleStores(t *testing.T) {
 	got2, err := store2.Get(key)
 	assert.Nil(t, err)
 	assert.Equal(t, val2, got2)
-}
-
-type mockEngine struct {
-	kv.Store
-	statsCalled bool
-}
-
-func (m *mockEngine) Stats(stats *leveldb.DBStats) error {
-	m.statsCalled = true
-	return errors.New("mock stats error")
-}
-
-func (m *mockEngine) Close() error {
-	return nil
 }
 
 func TestDeleteTrieHistory(t *testing.T) {

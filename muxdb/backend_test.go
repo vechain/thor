@@ -1,3 +1,7 @@
+// Copyright (c) 2024 The VeChainThor developers
+
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 package muxdb
 
 import (
@@ -70,7 +74,7 @@ func TestAppendHistNodeKey(t *testing.T) {
 			var buf []byte
 			result := b.AppendHistNodeKey(buf, tt.trieName, tt.path, tt.ver)
 
-			assert.Equal(t, byte(trieHistSpace), result[0])
+			assert.Equal(t, trieHistSpace, result[0])
 
 			if b.HistPtnFactor != math.MaxUint32 {
 				ptnBytes := result[1:5]
@@ -119,7 +123,7 @@ func TestAppendDedupedNodeKey(t *testing.T) {
 			var buf []byte
 			result := b.AppendDedupedNodeKey(buf, tt.trieName, tt.path, tt.ver)
 
-			assert.Equal(t, byte(trieDedupedSpace), result[0])
+			assert.Equal(t, trieDedupedSpace, result[0])
 
 			if b.DedupedPtnFactor != math.MaxUint32 {
 				ptnBytes := result[1:5]
