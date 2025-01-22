@@ -83,7 +83,7 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 	if err != nil {
 		return err
 	}
-	
+
 	oldestBlock, blockDataChan := f.processBlockRange(blockCount, newestBlockSummary)
 
 	var (
