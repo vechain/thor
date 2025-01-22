@@ -1,6 +1,7 @@
 package fees
 
 import (
+	"math/big"
 	"net/http"
 	"strconv"
 
@@ -45,9 +46,14 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 		return err
 	}
 
-	baseFee := summary.Header.BaseFee()
+	baseFees := make([]*big.Int, blockCount)
+	baseFees[0] = summary.Header.BaseFee()
 
-	return utils.WriteJSON(w, baseFee)
+	return utils.WriteJSON(w, &GetFeesHistory{
+		OldestBlock:  nil,
+		BaseFees:     baseFees,
+		GasUsedRatio: nil,
+	})
 }
 
 func (f *Fees) Mount(root *mux.Router, pathPrefix string) {
