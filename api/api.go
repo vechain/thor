@@ -18,6 +18,7 @@ import (
 	"github.com/vechain/thor/v2/api/debug"
 	"github.com/vechain/thor/v2/api/doc"
 	"github.com/vechain/thor/v2/api/events"
+	"github.com/vechain/thor/v2/api/fees"
 	"github.com/vechain/thor/v2/api/node"
 	"github.com/vechain/thor/v2/api/subscriptions"
 	"github.com/vechain/thor/v2/api/transactions"
@@ -96,6 +97,8 @@ func New(
 		Mount(router, "/node")
 	subs := subscriptions.New(repo, origins, config.BacktraceLimit, txPool, config.EnableDeprecated)
 	subs.Mount(router, "/subscriptions")
+
+	fees.New(repo).Mount(router, "/fees")
 
 	if config.PprofOn {
 		router.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
