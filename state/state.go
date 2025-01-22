@@ -538,6 +538,8 @@ func (s *State) Stage(newVer trie.Version) (*Stage, error) {
 					return err
 				}
 			}
+			// Just once for the account trie.
+			metricAccountChanges().Add(int64(len(changes)))
 			return nil
 		},
 	}, nil
