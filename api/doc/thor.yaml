@@ -2548,14 +2548,10 @@ components:
       name: blockCount
       in: query
       schema:
-        oneOf:
-          - type: integer
-          - type: string
-            pattern: '^0x[0-9a-fA-F]+$'
+        type: integer
+        format: uint32
+        minimum: 1
+        maximum: 1024
       description: |
-        The number of blocks to be returned. The range is from 1 to 1024.
-      examples:
-        integerExample:
-          value: 10
-        stringExample:
-          value: "0xA"
+        The number of blocks to be returned.
+      example: 10
