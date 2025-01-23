@@ -38,6 +38,9 @@ tags:
   - name: Debug
     description: |
       Offers a set of debugging utilities.
+  - name: Fees
+    description: |
+      Provides access to fee data, like historical values and the estimated priority fee for a transaction to be included in a block.
 
 paths:
   /accounts/{address}:
@@ -752,6 +755,31 @@ paths:
                 type: string
                 example: 'Invalid address'
 
+  /fees/history:
+    parameters:
+      - $ref: '#/components/parameters/BlockCountInQuery'
+      - $ref: '#/components/parameters/RevisionInQuery'
+    get:
+      tags:
+        - Fees
+      summary: Retrieve historical fee data
+      description: |
+        Retrieve historical fee data, including the gas used ratio per block.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetFeesHistoryResponse'
+        '400':
+          description: Bad Request
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: 'Invalid revision'
+
 components:
   schemas:
     GetAccountResponse:
@@ -1209,6 +1237,43 @@ components:
         expiration: 1000
         blockRef: "0x00000000851caf3c"
         name: "call"
+
+    GetFeesHistoryResponse:
+      type: object
+      title: GetFeesHistoryResponse
+      allOf:
+        - properties:
+            oldestBlock:
+              type: integer
+              format: uint32
+              description: |
+                The oldest block in the range
+              example: 325324
+              nullable: false
+            baseFees:
+              type: array
+              description: |
+                An array of base fees per block as hexadecimal strings.
+              nullable: false
+              items:
+                type: string
+                format: hex
+                description: |
+              example:
+                - '0x0'
+                - '0x98'
+            gasUsedRatios:
+              type: array
+              description: |
+                An array of gas used ratios per block as hexadecimal strings.
+              nullable: false
+              items:
+                type: number
+                format: float
+                description: |
+              example:
+                - 0.75
+                - 0.22
 
     TxMeta:
       title: TxMeta
@@ -2478,3 +2543,19 @@ components:
       description: |
         The address that received the VET.
       example: '0x45429a2255e7248e57fce99e7239aed3f84b7a53'
+
+    BlockCountInQuery:
+      name: blockCount
+      in: query
+      schema:
+        oneOf:
+          - type: integer
+          - type: string
+            pattern: '^0x[0-9a-fA-F]+$'
+      description: |
+        The number of blocks to be returned. The range is from 1 to 1024.
+      examples:
+        integerExample:
+          value: 10
+        stringExample:
+          value: "0xA"
