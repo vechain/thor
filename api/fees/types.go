@@ -1,8 +1,7 @@
 package fees
 
 import (
-	"math/big"
-
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/chain"
 )
@@ -22,7 +21,7 @@ type blockData struct {
 }
 
 type GetFeesHistory struct {
-	OldestBlock   *uint32    `json:"oldestBlock"`
-	BaseFees      []*big.Int `json:"baseFees"`
-	GasUsedRatios []float64  `json:"gasUsedRatios"`
+	OldestBlock   *uint32        `json:"oldestBlock"`
+	BaseFees      []*hexutil.Big `json:"baseFees"`
+	GasUsedRatios []float64      `json:"gasUsedRatios"`
 }

@@ -1,11 +1,11 @@
 package fees
 
 import (
-	"math/big"
 	"net/http"
 	"strconv"
 	"sync/atomic"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/utils"
@@ -87,7 +87,7 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 	oldestBlock, blockDataChan := f.processBlockRange(blockCount, summary)
 
 	var (
-		baseFees      = make([]*big.Int, blockCount)
+		baseFees      = make([]*hexutil.Big, blockCount)
 		gasUsedRatios = make([]float64, blockCount)
 	)
 
@@ -97,7 +97,7 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 		if blockData.err != nil {
 			return blockData.err
 		}
-		baseFees[i] = blockData.blockSummary.Header.BaseFee()
+		baseFees[i] = (*hexutil.Big)(blockData.blockSummary.Header.BaseFee())
 		gasUsedRatios[i] = float64(blockData.blockSummary.Header.GasUsed()) / float64(blockData.blockSummary.Header.GasLimit())
 	}
 
