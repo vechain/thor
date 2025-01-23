@@ -560,7 +560,6 @@ func initDebugServer(t *testing.T) {
 		Clause(cla2).
 		BlockRef(tx.NewBlockRef(0)).
 		MustBuild()
-
 	transaction = tx.MustSign(transaction, genesis.DevAccounts()[0].PrivateKey)
 
 	dynFeeTx := tx.NewTxBuilder(tx.DynamicFeeTxType).
