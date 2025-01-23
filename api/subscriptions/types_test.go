@@ -223,7 +223,6 @@ func TestConvertEvent(t *testing.T) {
 		Nonce(1).
 		BlockRef(tx.NewBlockRef(0)).
 		MustBuild()
-
 	transaction = tx.MustSign(
 		transaction,
 		genesis.DevAccounts()[0].PrivateKey,

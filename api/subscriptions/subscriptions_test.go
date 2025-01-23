@@ -264,7 +264,6 @@ func initSubscriptionsServer(t *testing.T, enabledDeprecated bool) {
 		Clause(tx.NewClause(nil).WithData(common.Hex2Bytes(eventcontract.HexBytecode))).
 		BlockRef(tx.NewBlockRef(0)).
 		MustBuild()
-
 	sigTxDeploy, err := crypto.Sign(txDeploy.SigningHash().Bytes(), genesis.DevAccounts()[1].PrivateKey)
 	require.NoError(t, err)
 	txDeploy = txDeploy.WithSignature(sigTxDeploy)
