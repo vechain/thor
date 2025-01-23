@@ -104,7 +104,7 @@ func TestStatus(t *testing.T) {
 func TestNewPruner(t *testing.T) {
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
-	gene := genesis.NewDevnet()
+	gene := genesis.NewDevnet(thor.SoloFork)
 	b0, _, _, _ := gene.Build(stater)
 	repo, _ := chain.NewRepository(db, b0)
 
@@ -149,7 +149,7 @@ func newTempFileDB() (*muxdb.MuxDB, func() error, error) {
 func TestWaitUntil(t *testing.T) {
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
-	gene := genesis.NewDevnet()
+	gene := genesis.NewDevnet(thor.SoloFork)
 	b0, _, _, _ := gene.Build(stater)
 	repo, _ := chain.NewRepository(db, b0)
 	devAccounts := genesis.DevAccounts()
@@ -224,7 +224,7 @@ func TestPrune(t *testing.T) {
 	assert.Nil(t, err)
 
 	stater := state.NewStater(db)
-	gene := genesis.NewDevnet()
+	gene := genesis.NewDevnet(thor.SoloFork)
 	b0, _, _, _ := gene.Build(stater)
 	repo, _ := chain.NewRepository(db, b0)
 	devAccounts := genesis.DevAccounts()

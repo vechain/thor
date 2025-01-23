@@ -86,7 +86,7 @@ func TestConvertTransfer(t *testing.T) {
 	// Arrange
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
-	gene := genesis.NewDevnet()
+	gene := genesis.NewDevnet(thor.SoloFork)
 
 	b, _, _, err := gene.Build(stater)
 	if err != nil {
@@ -173,7 +173,7 @@ func TestConvertEvent(t *testing.T) {
 	// Arrange
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
-	gene := genesis.NewDevnet()
+	gene := genesis.NewDevnet(thor.SoloFork)
 
 	b, _, _, err := gene.Build(stater)
 	if err != nil {

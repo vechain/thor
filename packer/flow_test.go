@@ -43,7 +43,7 @@ func TestAdopt(t *testing.T) {
 	// Setup environment
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
-	g := genesis.NewDevnet()
+	g := genesis.NewDevnet(thor.SoloFork)
 
 	// Build genesis block
 	b, _, _, _ := g.Build(stater)
@@ -97,7 +97,7 @@ func TestAdopt(t *testing.T) {
 
 func TestPack(t *testing.T) {
 	db := muxdb.NewMem()
-	g := genesis.NewDevnet()
+	g := genesis.NewDevnet(thor.SoloFork)
 
 	stater := state.NewStater(db)
 	parent, _, _, _ := g.Build(stater)

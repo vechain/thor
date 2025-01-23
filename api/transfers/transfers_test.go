@@ -22,6 +22,7 @@ import (
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/test/testchain"
+	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/tx"
 )
@@ -222,7 +223,7 @@ func insertBlocks(t *testing.T, db *logdb.LogDB, n int) {
 }
 
 func initTransferServer(t *testing.T, logDb *logdb.LogDB, limit uint64) {
-	thorChain, err := testchain.NewIntegrationTestChain()
+	thorChain, err := testchain.NewIntegrationTestChain(thor.ForkConfig{})
 	require.NoError(t, err)
 
 	router := mux.NewRouter()

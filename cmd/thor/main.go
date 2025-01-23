@@ -333,13 +333,12 @@ func soloAction(ctx *cli.Context) error {
 
 	var (
 		gene       *genesis.Genesis
-		forkConfig thor.ForkConfig
+		forkConfig = thor.SoloFork
 	)
 
 	flagGenesis := ctx.String(genesisFlag.Name)
 	if flagGenesis == "" {
-		gene = genesis.NewDevnet()
-		forkConfig = thor.ForkConfig{} // Devnet forks from the start
+		gene = genesis.NewDevnet(forkConfig)
 	} else {
 		gene, forkConfig, err = parseGenesisFile(flagGenesis)
 		if err != nil {

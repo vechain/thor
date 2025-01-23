@@ -23,7 +23,7 @@ import (
 )
 
 func newChainRepo(db *muxdb.MuxDB) *chain.Repository {
-	gene := genesis.NewDevnet()
+	gene := genesis.NewDevnet(thor.SoloFork)
 	b0, _, _, _ := gene.Build(state.NewStater(db))
 	repo, _ := chain.NewRepository(db, b0)
 	return repo

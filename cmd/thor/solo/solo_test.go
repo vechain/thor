@@ -24,7 +24,7 @@ import (
 func newSolo() *Solo {
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
-	gene := genesis.NewDevnet()
+	gene := genesis.NewDevnet(thor.SoloFork)
 	logDb, _ := logdb.NewMem()
 	b, _, _, _ := gene.Build(stater)
 	repo, _ := chain.NewRepository(db, b)

@@ -57,7 +57,7 @@ func DevAccounts() []DevAccount {
 }
 
 // NewDevnet create genesis for solo mode.
-func NewDevnet() *Genesis {
+func NewDevnet(config thor.ForkConfig) *Genesis {
 	launchTime := uint64(1526400000) // 'Wed May 16 2018 00:00:00 GMT+0800 (CST)'
 
 	executor := DevAccounts()[0].Address
@@ -66,6 +66,7 @@ func NewDevnet() *Genesis {
 	builder := new(Builder).
 		GasLimit(thor.InitialGasLimit).
 		Timestamp(launchTime).
+		ForkConfig(config).
 		State(func(state *state.State) error {
 			// setup builtin contracts
 			if err := state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes()); err != nil {

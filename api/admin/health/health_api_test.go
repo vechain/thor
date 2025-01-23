@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/test/testchain"
+	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/txpool"
 )
 
@@ -33,7 +34,7 @@ func TestHealth(t *testing.T) {
 }
 
 func initAPIServer(t *testing.T) {
-	thorChain, err := testchain.NewIntegrationTestChain()
+	thorChain, err := testchain.NewIntegrationTestChain(thor.ForkConfig{})
 	require.NoError(t, err)
 
 	router := mux.NewRouter()

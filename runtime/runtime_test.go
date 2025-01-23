@@ -34,7 +34,7 @@ func M(a ...interface{}) []interface{} {
 func TestContractSuicide(t *testing.T) {
 	db := muxdb.NewMem()
 
-	g := genesis.NewDevnet()
+	g := genesis.NewDevnet(thor.SoloFork)
 	stater := state.NewStater(db)
 	b0, _, _, err := g.Build(stater)
 	assert.Nil(t, err)
@@ -109,7 +109,7 @@ func TestContractSuicide(t *testing.T) {
 func TestChainID(t *testing.T) {
 	db := muxdb.NewMem()
 
-	g := genesis.NewDevnet()
+	g := genesis.NewDevnet(thor.SoloFork)
 
 	stater := state.NewStater(db)
 	b0, _, _, err := g.Build(stater)
@@ -161,7 +161,7 @@ func TestChainID(t *testing.T) {
 func TestSelfBalance(t *testing.T) {
 	db := muxdb.NewMem()
 
-	g := genesis.NewDevnet()
+	g := genesis.NewDevnet(thor.SoloFork)
 
 	stater := state.NewStater(db)
 	b0, _, _, err := g.Build(stater)
@@ -215,7 +215,7 @@ func TestSelfBalance(t *testing.T) {
 func TestBlake2(t *testing.T) {
 	db := muxdb.NewMem()
 
-	g := genesis.NewDevnet()
+	g := genesis.NewDevnet(thor.SoloFork)
 
 	stater := state.NewStater(db)
 	b0, _, _, err := g.Build(stater)
@@ -344,7 +344,7 @@ func TestBlake2(t *testing.T) {
 func TestCall(t *testing.T) {
 	db := muxdb.NewMem()
 
-	g := genesis.NewDevnet()
+	g := genesis.NewDevnet(thor.SoloFork)
 	b0, _, _, err := g.Build(state.NewStater(db))
 	assert.Nil(t, err)
 
@@ -433,7 +433,7 @@ func GetMockFailedTx() tx.Transaction {
 func TestGetValues(t *testing.T) {
 	db := muxdb.NewMem()
 
-	g := genesis.NewDevnet()
+	g := genesis.NewDevnet(thor.SoloFork)
 	b0, _, _, err := g.Build(state.NewStater(db))
 	assert.Nil(t, err)
 
@@ -456,7 +456,7 @@ func TestExecuteTransaction(t *testing.T) {
 
 	db := muxdb.NewMem()
 
-	g := genesis.NewDevnet()
+	g := genesis.NewDevnet(thor.SoloFork)
 	b0, _, _, err := g.Build(state.NewStater(db))
 	assert.Nil(t, err)
 
@@ -484,7 +484,7 @@ func TestExecuteTransactionFailure(t *testing.T) {
 
 	db := muxdb.NewMem()
 
-	g := genesis.NewDevnet()
+	g := genesis.NewDevnet(thor.SoloFork)
 	b0, _, _, err := g.Build(state.NewStater(db))
 	assert.Nil(t, err)
 

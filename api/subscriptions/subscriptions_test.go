@@ -228,7 +228,7 @@ func TestParseAddress(t *testing.T) {
 }
 
 func initSubscriptionsServer(t *testing.T, enabledDeprecated bool) {
-	thorChain, err := testchain.NewIntegrationTestChain()
+	thorChain, err := testchain.NewIntegrationTestChain(thor.ForkConfig{})
 	require.NoError(t, err)
 
 	txPool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
@@ -280,7 +280,7 @@ func initSubscriptionsServer(t *testing.T, enabledDeprecated bool) {
 }
 
 func TestSubscriptionsBacktrace(t *testing.T) {
-	thorChain, err := testchain.NewIntegrationTestChain()
+	thorChain, err := testchain.NewIntegrationTestChain(thor.ForkConfig{})
 	require.NoError(t, err)
 
 	txPool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{

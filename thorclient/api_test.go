@@ -48,7 +48,7 @@ var (
 )
 
 func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
-	thorChain, err := testchain.NewIntegrationTestChain()
+	thorChain, err := testchain.NewIntegrationTestChain(thor.ForkConfig{})
 	require.NoError(t, err)
 
 	// mint some transactions to be used in the endpoints

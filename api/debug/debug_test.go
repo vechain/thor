@@ -533,7 +533,7 @@ func testStorageRangeDefaultOption(t *testing.T) {
 }
 
 func initDebugServer(t *testing.T) {
-	thorChain, err := testchain.NewIntegrationTestChain()
+	thorChain, err := testchain.NewIntegrationTestChain(thor.ForkConfig{})
 	require.NoError(t, err)
 
 	addr := thor.BytesToAddress([]byte("to"))

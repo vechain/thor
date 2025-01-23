@@ -29,9 +29,16 @@ func TestDevAccounts(t *testing.T) {
 
 // TestNewDevnet checks if NewDevnet function returns a correctly initialized Genesis object
 func TestNewDevnet(t *testing.T) {
-	genesisObj := genesis.NewDevnet()
+	genesisObj := genesis.NewDevnet(thor.SoloFork)
 
 	assert.NotNil(t, genesisObj, "NewDevnet should return a non-nil Genesis object")
 	assert.NotEqual(t, thor.Bytes32{}, genesisObj.ID(), "Genesis ID should be valid")
 	assert.Equal(t, "devnet", genesisObj.Name(), "Genesis name should be 'devnet'")
+}
+
+func TestNewDevnet_SoloConfig(t *testing.T) {
+	id := genesis.NewDevnet(thor.SoloFork).ID()
+
+	// Thor Solo Genesis ID should never change
+	assert.Equal(t, thor.MustParseBytes32("0x00000000c05a20fbca2bf6ae3affba6af4a74b800b585bf7a4988aba7aea69f6"), id)
 }

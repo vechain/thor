@@ -367,7 +367,7 @@ func createChain(db *muxdb.MuxDB, accounts []genesis.DevAccount) (*testchain.Cha
 	}
 
 	// Initialize the genesis and retrieve the genesis block
-	//gene := genesis.NewDevnet()
+	//gene := genesis.NewDevnet(thor.SoloFork)
 	geneBlk, _, _, err := builder.Build(stater)
 	if err != nil {
 		return nil, err
