@@ -135,7 +135,7 @@ func (c *Chain) MintClauses(account genesis.DevAccount, clauses []*tx.Clause) er
 		Expiration(1000).
 		ChainTag(c.Repo().ChainTag()).
 		Gas(10e6).
-		Nonce(rand.Uint64()) // nolint
+		Nonce(rand.Uint64()) //#nosec G404
 
 	for _, clause := range clauses {
 		builer.Clause(clause)
