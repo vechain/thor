@@ -29,7 +29,7 @@ func newChainRepo(db *muxdb.MuxDB) *chain.Repository {
 }
 
 func newTx(txType int, chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, features tx.Features, from genesis.DevAccount) *tx.Transaction {
-	trx, _ := txBuilder(txType, chainTag, clauses, gas, blockRef, expiration, dependsOn, features).Build()
+	trx := txBuilder(txType, chainTag, clauses, gas, blockRef, expiration, dependsOn, features).MustBuild()
 	return tx.MustSign(trx, from.PrivateKey)
 }
 
@@ -37,15 +37,11 @@ func newDelegatedTx(txType int, chainTag byte, clauses []*tx.Clause, gas uint64,
 	var features tx.Features
 	features.SetDelegated(true)
 
-	trx, _ := txBuilder(txType, chainTag, clauses, gas, blockRef, expiration, dependsOn, features).Build()
-
-	trx = tx.MustSignDelegated(
-		trx,
+	return tx.MustSignDelegated(
+		txBuilder(txType, chainTag, clauses, gas, blockRef, expiration, dependsOn, features).MustBuild(),
 		from.PrivateKey,
 		delegator.PrivateKey,
 	)
-
-	return trx
 }
 
 func txBuilder(txType int, chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, features tx.Features) *tx.Builder {

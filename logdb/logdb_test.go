@@ -20,7 +20,7 @@ import (
 )
 
 func newTx(txType int) *tx.Transaction {
-	trx, _ := tx.NewTxBuilder(txType).Build()
+	trx := tx.NewTxBuilder(txType).MustBuild()
 
 	pk, _ := crypto.GenerateKey()
 

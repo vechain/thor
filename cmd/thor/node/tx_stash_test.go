@@ -19,9 +19,8 @@ import (
 )
 
 func newTx(txType int) *tx.Transaction {
-	trx, _ := tx.NewTxBuilder(txType).Nonce(rand.Uint64()).Build() //#nosec
 	return tx.MustSign(
-		trx,
+		tx.NewTxBuilder(txType).Nonce(rand.Uint64()).MustBuild(), //#nosec
 		genesis.DevAccounts()[0].PrivateKey,
 	)
 }

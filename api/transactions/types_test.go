@@ -24,7 +24,7 @@ func TestErrorWhileRetrievingTxOriginInConvertReceipt(t *testing.T) {
 	txTypes := []int{tx.LegacyTxType, tx.DynamicFeeTxType}
 
 	for _, txType := range txTypes {
-		tr, _ := tx.NewTxBuilder(txType).Build()
+		tr := tx.NewTxBuilder(txType).MustBuild()
 		header := &block.Header{}
 		receipt := &tx.Receipt{
 			Reward: big.NewInt(100),
@@ -115,18 +115,18 @@ func newReceipt() *tx.Receipt {
 }
 
 func newLegacyTx(clause *tx.Clause) *tx.Transaction {
-	tx, _ := tx.NewTxBuilder(tx.LegacyTxType).
+	tx := tx.NewTxBuilder(tx.LegacyTxType).
 		Clause(clause).
-		Build()
+		MustBuild()
 	pk, _ := crypto.GenerateKey()
 	sig, _ := crypto.Sign(tx.SigningHash().Bytes(), pk)
 	return tx.WithSignature(sig)
 }
 
 func newDynFeeTx(clause *tx.Clause) *tx.Transaction {
-	tx, _ := tx.NewTxBuilder(tx.DynamicFeeTxType).
+	tx := tx.NewTxBuilder(tx.DynamicFeeTxType).
 		Clause(clause).
-		Build()
+		MustBuild()
 	pk, _ := crypto.GenerateKey()
 	sig, _ := crypto.Sign(tx.SigningHash().Bytes(), pk)
 	return tx.WithSignature(sig)

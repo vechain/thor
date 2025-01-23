@@ -17,7 +17,7 @@ func MockTransactions(n int) tx.Transactions {
 	txs := make(tx.Transactions, n)
 	for i := range txs {
 		mockTx := GetMockTx(tx.LegacyTxType)
-		txs[i] = &mockTx
+		txs[i] = mockTx
 	}
 	return txs
 }

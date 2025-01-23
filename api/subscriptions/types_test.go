@@ -95,24 +95,24 @@ func TestConvertTransfer(t *testing.T) {
 	repo, _ := chain.NewRepository(db, b)
 
 	// New tx
-	legacyTx, _ := tx.NewTxBuilder(tx.LegacyTxType).
+	legacyTx := tx.NewTxBuilder(tx.LegacyTxType).
 		ChainTag(repo.ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
 		Gas(21000).
 		Nonce(1).
 		BlockRef(tx.NewBlockRef(0)).
-		Build()
+		MustBuild()
 	legacyTx = tx.MustSign(legacyTx, genesis.DevAccounts()[0].PrivateKey)
 
-	dynFeeTx, _ := tx.NewTxBuilder(tx.DynamicFeeTxType).
+	dynFeeTx := tx.NewTxBuilder(tx.DynamicFeeTxType).
 		ChainTag(repo.ChainTag()).
 		MaxFeePerGas(big.NewInt(1)).
 		Expiration(10).
 		Gas(21000).
 		Nonce(1).
 		BlockRef(tx.NewBlockRef(0)).
-		Build()
+		MustBuild()
 	dynFeeTx = tx.MustSign(dynFeeTx, genesis.DevAccounts()[0].PrivateKey)
 
 	// New block
@@ -175,14 +175,14 @@ func TestConvertEventWithBadSignature(t *testing.T) {
 	badSig := bytes.Repeat([]byte{0xf}, 65)
 
 	// New tx
-	transaction, _ := tx.NewTxBuilder(tx.LegacyTxType).
+	transaction := tx.NewTxBuilder(tx.LegacyTxType).
 		ChainTag(1).
 		GasPriceCoef(1).
 		Expiration(10).
 		Gas(21000).
 		Nonce(1).
 		BlockRef(tx.NewBlockRef(0)).
-		Build()
+		MustBuild()
 	transaction = transaction.
 		WithSignature(badSig[:])
 
@@ -215,14 +215,14 @@ func TestConvertEvent(t *testing.T) {
 	repo, _ := chain.NewRepository(db, b)
 
 	// New tx
-	transaction, _ := tx.NewTxBuilder(tx.LegacyTxType).
+	transaction := tx.NewTxBuilder(tx.LegacyTxType).
 		ChainTag(repo.ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
 		Gas(21000).
 		Nonce(1).
 		BlockRef(tx.NewBlockRef(0)).
-		Build()
+		MustBuild()
 	transaction = tx.MustSign(
 		transaction,
 		genesis.DevAccounts()[0].PrivateKey,

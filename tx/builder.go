@@ -110,7 +110,7 @@ func (b *Builder) Features(feat Features) *Builder {
 	return b
 }
 
-// BuildLegacy builds legacy tx object.
+// Build builds a tx object.
 func (b *Builder) Build() (*Transaction, error) {
 	var tx *Transaction
 	switch b.txType {
@@ -147,4 +147,13 @@ func (b *Builder) Build() (*Transaction, error) {
 		return nil, ErrTxTypeNotSupported
 	}
 	return tx, nil
+}
+
+// MustBuild builds a tx object, it panics if an error is returned.
+func (b *Builder) MustBuild() *Transaction {
+	tx, err := b.Build()
+	if err != nil {
+		panic(err)
+	}
+	return tx
 }
