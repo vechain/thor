@@ -237,8 +237,8 @@ func (s *Solo) init(ctx context.Context) error {
 		return err
 	}
 
-	if !s.onDemand {
-		// wait for the next block interval if not on-demand
+	// if we're at the genesis block, instantly perform all forks at block 1, else wait for next block time
+	if s.repo.BestBlockSummary().Header.Number() != 0 && !s.onDemand {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
