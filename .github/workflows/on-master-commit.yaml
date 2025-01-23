@@ -1,9 +1,11 @@
-name: Master branch CI
+name: Master / Release CI
 
 on:
   push:
     branches:
       - 'master'
+      - 'release/*'
+      - 'releases/*'
 
 jobs:
   run-unit-tests:
@@ -34,6 +36,7 @@ jobs:
     outputs:
       tag_date: ${{ steps.tag_date.outputs.tag_date }}
       short_sha: ${{ steps.short_sha.outputs.short_sha }}
+      clean_ref_name: ${{ steps.clean_ref_name.outputs.clean_ref_name }}
     steps:
       - name: Generate Tag Date
         id: tag_date
@@ -41,6 +44,10 @@ jobs:
       - name: Generate Short SHA
         id: short_sha
         run: echo "short_sha=$(echo $GITHUB_SHA | cut -c1-7)" >> "$GITHUB_OUTPUT"
+      - name: Clean Ref Name
+        id: clean_ref_name
+        # replace '/' with '-' in the case of release branches
+        run: echo "cleaned_ref_name=$(echo $GITHUB_REF_NAME | sed 's/\//-/g')" >> "$GITHUB_OUTPUT"
 
   publish-docker-image:
     name: Publish Docker Image
@@ -58,12 +65,10 @@ jobs:
     with:
       images: |
         ghcr.io/${{ github.repository }}
-      # eg: master-20240321-7d8e9f2
       tags: |
-        type=raw,value=master-${{ needs.generate-tags.outputs.tag_date }}-${{ needs.generate-tags.outputs.short_sha }}
-        type=raw,value=master-latest
+        type=raw,value=${{ needs.generate-tags.outputs.clean_ref_name }}-${{ needs.generate-tags.outputs.tag_date }}-${{ needs.generate-tags.outputs.short_sha }}
+        type=raw,value=${{ needs.generate-tags.outputs.clean_ref_name }}-latest
       trigger_internal_ci: true
-
   notify-slack:
     name: Notify Slack
     needs:
