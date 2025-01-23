@@ -1,6 +1,7 @@
 package fees
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"sync/atomic"
@@ -32,7 +33,7 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 		return 0, nil, utils.BadRequest(errors.WithMessage(err, "invalid blockCount, it should represent an integer"))
 	}
 	if blockCount < 1 || blockCount > maxNumberOfBlocks {
-		return 0, nil, utils.BadRequest(errors.New("blockCount must be between 1 and 1024"))
+		return 0, nil, utils.BadRequest(errors.New(fmt.Sprintf("blockCount must be between 1 and %d", maxNumberOfBlocks)))
 	}
 	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"), false)
 	if err != nil {
