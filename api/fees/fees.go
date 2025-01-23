@@ -34,23 +34,23 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 	if blockCount < 1 || blockCount > maxNumberOfBlocks {
 		return 0, nil, utils.BadRequest(errors.New("blockCount must be between 1 and 1024"))
 	}
-	newestBlockRevision, err := utils.ParseRevision(req.URL.Query().Get("newestBlock"), false)
+	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"), false)
 	if err != nil {
-		return 0, nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
+		return 0, nil, utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	newestBlockSummary, err := utils.GetSummary(newestBlockRevision, f.repo, f.bft)
+	summary, err := utils.GetSummary(revision, f.repo, f.bft)
 	if err != nil {
 		if f.repo.IsNotFound(err) {
-			return 0, nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
+			return 0, nil, utils.BadRequest(errors.WithMessage(err, "revision"))
 		}
 		return 0, nil, err
 	}
 
-	return uint32(blockCount), newestBlockSummary, nil
+	return uint32(blockCount), summary, nil
 }
 
-func (f *Fees) processBlockRange(blockCount uint32, newestBlockSummary *chain.BlockSummary) (uint32, chan *blockData) {
-	lastBlock := newestBlockSummary.Header.Number()
+func (f *Fees) processBlockRange(blockCount uint32, summary *chain.BlockSummary) (uint32, chan *blockData) {
+	lastBlock := summary.Header.Number()
 	oldestBlock := lastBlock + 1 - blockCount
 	var next atomic.Uint32
 	next.Store(oldestBlock)
@@ -79,12 +79,12 @@ func (f *Fees) processBlockRange(blockCount uint32, newestBlockSummary *chain.Bl
 }
 
 func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) error {
-	blockCount, newestBlockSummary, err := f.validateGetFeesHistoryParams(req)
+	blockCount, summary, err := f.validateGetFeesHistoryParams(req)
 	if err != nil {
 		return err
 	}
 
-	oldestBlock, blockDataChan := f.processBlockRange(blockCount, newestBlockSummary)
+	oldestBlock, blockDataChan := f.processBlockRange(blockCount, summary)
 
 	var (
 		baseFees      = make([]*big.Int, blockCount)
