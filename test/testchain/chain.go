@@ -8,9 +8,11 @@ package testchain
 import (
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"slices"
 	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
@@ -131,6 +133,29 @@ func (c *Chain) MintTransactions(account genesis.DevAccount, transactions ...*tx
 	return c.MintBlock(account, transactions...)
 }
 
+// MintClauses creates a transaction with the provided clauses and adds it to the blockchain.
+func (c *Chain) MintClauses(account genesis.DevAccount, clauses []*tx.Clause) error {
+	builer := new(tx.Builder).GasPriceCoef(255).
+		BlockRef(tx.NewBlockRef(c.Repo().BestBlockSummary().Header.Number())).
+		Expiration(1000).
+		ChainTag(c.Repo().ChainTag()).
+		Gas(10e6).
+		Nonce(rand.Uint64()) // nolint
+
+	for _, clause := range clauses {
+		builer.Clause(clause)
+	}
+
+	tx := builer.Build()
+	signature, err := crypto.Sign(tx.SigningHash().Bytes(), account.PrivateKey)
+	if err != nil {
+		return fmt.Errorf("unable to sign tx: %w", err)
+	}
+	tx = tx.WithSignature(signature)
+
+	return c.MintBlock(account, tx)
+}
+
 // MintBlock creates and finalizes a new block with the given transactions.
 // It schedules a new block, adopts transactions, packs them into a block, and commits it to the chain.
 func (c *Chain) MintBlock(account genesis.DevAccount, transactions ...*tx.Transaction) error {
@@ -166,15 +191,18 @@ func (c *Chain) MintBlock(account genesis.DevAccount, transactions ...*tx.Transa
 	}
 
 	// Add the block to the repository.
-	if err := c.Repo().AddBlock(newBlk, receipts, 0); err != nil {
+	if err := c.Repo().AddBlock(newBlk, receipts, 0, true); err != nil {
 		return fmt.Errorf("unable to add tx to repo: %w", err)
 	}
 
-	// Set the new block as the best (latest) block in the repository.
-	if err := c.Repo().SetBestBlockID(newBlk.Header().ID()); err != nil {
-		return fmt.Errorf("unable to set best block: %w", err)
+	// Write the new block and receipts to the logdb.
+	w := c.LogDB().NewWriter()
+	if err := w.Write(newBlk, receipts); err != nil {
+		return err
 	}
-
+	if err := w.Commit(); err != nil {
+		return err
+	}
 	return nil
 }
 

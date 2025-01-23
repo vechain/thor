@@ -22,7 +22,7 @@ import (
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/cmd/thor/node"
-	"github.com/vechain/thor/v2/cmd/thor/optimizer"
+	"github.com/vechain/thor/v2/cmd/thor/pruner"
 	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/log"
@@ -170,8 +170,9 @@ func defaultAction(ctx *cli.Context) error {
 	logLevel := initLogger(lvl, ctx.Bool(jsonLogsFlag.Name))
 
 	// enable metrics as soon as possible
+	enableMetrics := ctx.Bool(enableMetricsFlag.Name)
 	metricsURL := ""
-	if ctx.Bool(enableMetricsFlag.Name) {
+	if enableMetrics {
 		metrics.InitializePrometheusMetrics()
 		url, closeFunc, err := api.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
 		if err != nil {
@@ -193,6 +194,9 @@ func defaultAction(ctx *cli.Context) error {
 	mainDB, err := openMainDB(ctx, instanceDir)
 	if err != nil {
 		return err
+	}
+	if enableMetrics {
+		mainDB.EnableMetrics()
 	}
 	defer func() { log.Info("closing main database..."); mainDB.Close() }()
 
@@ -282,8 +286,10 @@ func defaultAction(ctx *cli.Context) error {
 	}
 	defer p2pCommunicator.Stop()
 
-	optimizer := optimizer.New(mainDB, repo, !ctx.Bool(disablePrunerFlag.Name))
-	defer func() { log.Info("stopping optimizer..."); optimizer.Stop() }()
+	if !ctx.Bool(disablePrunerFlag.Name) {
+		pruner := pruner.New(mainDB, repo)
+		defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
+	}
 
 	return node.New(
 		master,
@@ -318,8 +324,9 @@ func soloAction(ctx *cli.Context) error {
 	}
 
 	// enable metrics as soon as possible
+	enableMetrics := ctx.Bool(enableMetricsFlag.Name)
 	metricsURL := ""
-	if ctx.Bool(enableMetricsFlag.Name) {
+	if enableMetrics {
 		metrics.InitializePrometheusMetrics()
 		url, closeFunc, err := api.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
 		if err != nil {
@@ -356,6 +363,9 @@ func soloAction(ctx *cli.Context) error {
 		if mainDB, err = openMainDB(ctx, instanceDir); err != nil {
 			return err
 		}
+		if enableMetrics {
+			mainDB.EnableMetrics()
+		}
 		defer func() { log.Info("closing main database..."); mainDB.Close() }()
 
 		if logDB, err = openLogDB(instanceDir); err != nil {
@@ -364,7 +374,7 @@ func soloAction(ctx *cli.Context) error {
 		defer func() { log.Info("closing log database..."); logDB.Close() }()
 	} else {
 		instanceDir = "Memory"
-		mainDB = openMemMainDB()
+		mainDB = openMemMainDB() // Skip metrics of in-memory DB
 		logDB = openMemLogDB()
 	}
 
@@ -443,8 +453,10 @@ func soloAction(ctx *cli.Context) error {
 
 	printStartupMessage2(gene, apiURL, "", metricsURL, adminURL)
 
-	optimizer := optimizer.New(mainDB, repo, !ctx.Bool(disablePrunerFlag.Name))
-	defer func() { log.Info("stopping optimizer..."); optimizer.Stop() }()
+	if !ctx.Bool(disablePrunerFlag.Name) {
+		pruner := pruner.New(mainDB, repo)
+		defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
+	}
 
 	return solo.New(repo,
 		state.NewStater(mainDB),

@@ -10,6 +10,7 @@ package muxdb
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/syndtr/goleveldb/leveldb"
 	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
@@ -17,16 +18,17 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/storage"
 	"github.com/vechain/thor/v2/kv"
-	"github.com/vechain/thor/v2/muxdb/internal/engine"
-	"github.com/vechain/thor/v2/muxdb/internal/trie"
-	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/log"
+	"github.com/vechain/thor/v2/muxdb/engine"
+	"github.com/vechain/thor/v2/trie"
 )
 
 const (
-	trieHistSpace     = byte(0) // the key space for historical trie nodes.
-	trieDedupedSpace  = byte(1) // the key space for deduped trie nodes.
-	trieLeafBankSpace = byte(2) // the key space for the trie leaf bank.
-	namedStoreSpace   = byte(3) // the key space for named store.
+	trieHistSpace    = byte(0) // the key space for historical trie nodes.
+	trieDedupedSpace = byte(1) // the key space for deduped trie nodes.
+	namedStoreSpace  = byte(2) // the key space for named store.
+
+	metricsSampleInterval = 10 * time.Second
 )
 
 const (
@@ -34,19 +36,14 @@ const (
 	configKey     = "config"
 )
 
-// Trie is the managed trie.
-type Trie = trie.Trie
+var logger = log.WithContext("pkg", "muxdb")
 
 // Options optional parameters for MuxDB.
 type Options struct {
 	// TrieNodeCacheSizeMB is the size of the cache for trie node blobs.
 	TrieNodeCacheSizeMB int
-	// TrieRootCacheCapacity is the capacity of the cache for trie root nodes.
-	TrieRootCacheCapacity int
 	// TrieCachedNodeTTL defines the life time(times of commit) of cached trie nodes.
 	TrieCachedNodeTTL uint16
-	// TrieLeafBankSlotCapacity defines max count of cached slot for leaf bank.
-	TrieLeafBankSlotCapacity int
 	// TrieHistPartitionFactor is the partition factor for historical trie nodes.
 	TrieHistPartitionFactor uint32
 	// TrieDedupedPartitionFactor is the partition factor for deduped trie nodes.
@@ -65,7 +62,9 @@ type Options struct {
 // MuxDB is the database to efficiently store state trie and block-chain data.
 type MuxDB struct {
 	engine      engine.Engine
-	trieBackend *trie.Backend
+	trieBackend *backend
+
+	done chan struct{}
 }
 
 // Open opens or creates DB at the given path.
@@ -109,27 +108,18 @@ func Open(path string, options *Options) (*MuxDB, error) {
 		return nil, err
 	}
 
-	trieCache := trie.NewCache(
-		options.TrieNodeCacheSizeMB,
-		options.TrieRootCacheCapacity)
-
-	trieLeafBank := trie.NewLeafBank(
-		engine,
-		trieLeafBankSpace,
-		options.TrieLeafBankSlotCapacity)
-
 	return &MuxDB{
 		engine: engine,
-		trieBackend: &trie.Backend{
-			Store:            engine,
-			Cache:            trieCache,
-			LeafBank:         trieLeafBank,
-			HistSpace:        trieHistSpace,
-			DedupedSpace:     trieDedupedSpace,
+		trieBackend: &backend{
+			Store: engine,
+			Cache: newCache(
+				options.TrieNodeCacheSizeMB,
+				uint32(options.TrieCachedNodeTTL)),
 			HistPtnFactor:    cfg.HistPtnFactor,
 			DedupedPtnFactor: cfg.DedupedPtnFactor,
 			CachedNodeTTL:    options.TrieCachedNodeTTL,
 		},
+		done: make(chan struct{}),
 	}, nil
 }
 
@@ -141,57 +131,36 @@ func NewMem() *MuxDB {
 	engine := engine.NewLevelEngine(ldb)
 	return &MuxDB{
 		engine: engine,
-		trieBackend: &trie.Backend{
+		trieBackend: &backend{
 			Store:            engine,
-			Cache:            nil,
-			LeafBank:         nil,
-			HistSpace:        trieHistSpace,
-			DedupedSpace:     trieDedupedSpace,
+			Cache:            &dummyCache{},
 			HistPtnFactor:    1,
 			DedupedPtnFactor: 1,
 			CachedNodeTTL:    32,
 		},
+		done: make(chan struct{}),
 	}
 }
 
 // Close closes the DB.
 func (db *MuxDB) Close() error {
+	close(db.done)
 	return db.engine.Close()
 }
 
 // NewTrie creates trie with existing root node.
-//
-// If root is zero or blake2b hash of an empty string, the trie is
-// initially empty.
-func (db *MuxDB) NewTrie(name string, root thor.Bytes32, commitNum, distinctNum uint32) *Trie {
-	return trie.New(
-		db.trieBackend,
+// If root is zero value, the trie is initially empty.
+func (db *MuxDB) NewTrie(name string, root trie.Root) *Trie {
+	return newTrie(
 		name,
+		db.trieBackend,
 		root,
-		commitNum,
-		distinctNum,
-		false,
 	)
 }
 
-// NewNonCryptoTrie creates non-crypto trie with existing root node.
-//
-// If root is zero or blake2b hash of an empty string, the trie is
-// initially empty.
-func (db *MuxDB) NewNonCryptoTrie(name string, root thor.Bytes32, commitNum, distinctNum uint32) *Trie {
-	return trie.New(
-		db.trieBackend,
-		name,
-		root,
-		commitNum,
-		distinctNum,
-		true,
-	)
-}
-
-// CleanTrieHistory clean trie history within [startCommitNum, limitCommitNum).
-func (db *MuxDB) CleanTrieHistory(ctx context.Context, startCommitNum, limitCommitNum uint32) error {
-	return trie.CleanHistory(ctx, db.trieBackend, startCommitNum, limitCommitNum)
+// DeleteTrieHistoryNodes deletes trie history nodes within partitions of [startMajorVer, limitMajorVer).
+func (db *MuxDB) DeleteTrieHistoryNodes(ctx context.Context, startMajorVer, limitMajorVer uint32) error {
+	return db.trieBackend.DeleteHistoryNodes(ctx, startMajorVer, limitMajorVer)
 }
 
 // NewStore creates named kv-store.
@@ -202,6 +171,34 @@ func (db *MuxDB) NewStore(name string) kv.Store {
 // IsNotFound returns if the error indicates key not found.
 func (db *MuxDB) IsNotFound(err error) bool {
 	return db.engine.IsNotFound(err)
+}
+
+func (db *MuxDB) EnableMetrics() {
+	go func() {
+		ticker := time.NewTicker(metricsSampleInterval)
+		defer ticker.Stop()
+
+		var (
+			stats leveldb.DBStats
+			err   error
+		)
+		for {
+			select {
+			case <-ticker.C:
+				// we only have one engine implementation for now, put the type assertion just for safety
+				lvl, ok := db.engine.(*engine.LevelEngine)
+				if ok {
+					err = lvl.Stats(&stats)
+					if err != nil {
+						logger.Warn("Failed to get LevelDB stats: %v", err)
+					}
+					registerCompactionMetrics(&stats)
+				}
+			case <-db.done:
+				return
+			}
+		}
+	}()
 }
 
 type config struct {

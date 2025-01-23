@@ -7,14 +7,15 @@ package state
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/thor/v2/lowrlp"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/stackedmap"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 )
 
 const (
@@ -45,20 +46,18 @@ func (e *Error) Error() string {
 
 // State manages the world state.
 type State struct {
-	db             *muxdb.MuxDB
-	trie           *muxdb.Trie                    // the accounts trie reader
-	cache          map[thor.Address]*cachedObject // cache of accounts trie
-	sm             *stackedmap.StackedMap         // keeps revisions of accounts state
-	steadyBlockNum uint32
+	db    *muxdb.MuxDB
+	trie  *muxdb.Trie                    // the accounts trie reader
+	cache map[thor.Address]*cachedObject // cache of accounts trie
+	sm    *stackedmap.StackedMap         // keeps revisions of accounts state
 }
 
 // New create state object.
-func New(db *muxdb.MuxDB, root thor.Bytes32, blockNum, blockConflicts, steadyBlockNum uint32) *State {
+func New(db *muxdb.MuxDB, root trie.Root) *State {
 	state := State{
-		db:             db,
-		trie:           db.NewTrie(AccountTrieName, root, blockNum, blockConflicts),
-		cache:          make(map[thor.Address]*cachedObject),
-		steadyBlockNum: steadyBlockNum,
+		db:    db,
+		trie:  db.NewTrie(AccountTrieName, root),
+		cache: make(map[thor.Address]*cachedObject),
 	}
 
 	state.sm = stackedmap.New(func(key interface{}) (interface{}, bool, error) {
@@ -68,8 +67,8 @@ func New(db *muxdb.MuxDB, root thor.Bytes32, blockNum, blockConflicts, steadyBlo
 }
 
 // Checkout checkouts to another state.
-func (s *State) Checkout(root thor.Bytes32, blockNum, blockConflicts, steadyBlockNum uint32) *State {
-	return New(s.db, root, blockNum, blockConflicts, steadyBlockNum)
+func (s *State) Checkout(root trie.Root) *State {
+	return New(s.db, root)
 }
 
 // cacheGetter implements stackedmap.MapGetter.
@@ -102,7 +101,7 @@ func (s *State) cacheGetter(key interface{}) (value interface{}, exist bool, err
 		if err != nil {
 			return nil, false, err
 		}
-		v, err := obj.GetStorage(k.key, s.steadyBlockNum)
+		v, err := obj.GetStorage(k.key)
 		if err != nil {
 			return nil, false, err
 		}
@@ -117,7 +116,7 @@ func (s *State) getCachedObject(addr thor.Address) (*cachedObject, error) {
 	if co, ok := s.cache[addr]; ok {
 		return co, nil
 	}
-	a, am, err := loadAccount(s.trie, addr, s.steadyBlockNum)
+	a, am, err := loadAccount(s.trie, addr)
 	if err != nil {
 		return nil, err
 	}
@@ -359,28 +358,27 @@ func (s *State) RevertTo(revision int) {
 }
 
 // BuildStorageTrie build up storage trie for given address with cumulative changes.
-func (s *State) BuildStorageTrie(addr thor.Address) (trie *muxdb.Trie, err error) {
-	acc, err := s.getAccount(addr)
+func (s *State) BuildStorageTrie(addr thor.Address) (t *muxdb.Trie, err error) {
+	obj, err := s.getCachedObject(addr)
 	if err != nil {
 		return nil, &Error{err}
 	}
 
-	if len(acc.StorageRoot) > 0 {
-		obj, err := s.getCachedObject(addr)
-		if err != nil {
-			return nil, &Error{err}
-		}
-		trie = s.db.NewTrie(
+	if len(obj.data.StorageRoot) > 0 {
+		t = s.db.NewTrie(
 			StorageTrieName(obj.meta.StorageID),
-			thor.BytesToBytes32(acc.StorageRoot),
-			obj.meta.StorageCommitNum,
-			obj.meta.StorageDistinctNum)
+			trie.Root{
+				Hash: thor.BytesToBytes32(obj.data.StorageRoot),
+				Ver: trie.Version{
+					Major: obj.meta.StorageMajorVer,
+					Minor: obj.meta.StorageMinorVer,
+				},
+			},
+		)
 	} else {
-		trie = s.db.NewTrie(
+		t = s.db.NewTrie(
 			"",
-			thor.Bytes32{},
-			0,
-			0,
+			trie.Root{},
 		)
 	}
 
@@ -391,8 +389,7 @@ func (s *State) BuildStorageTrie(addr thor.Address) (trie *muxdb.Trie, err error
 		switch key := k.(type) {
 		case storageKey:
 			if key.barrier == barrier && key.addr == addr {
-				err = saveStorage(trie, key.key, v.(rlp.RawValue))
-				if err != nil {
+				if err = saveStorage(t, key.key, v.(rlp.RawValue)); err != nil {
 					return false
 				}
 			}
@@ -402,11 +399,11 @@ func (s *State) BuildStorageTrie(addr thor.Address) (trie *muxdb.Trie, err error
 	if err != nil {
 		return nil, &Error{err}
 	}
-	return trie, nil
+	return t, nil
 }
 
 // Stage makes a stage object to compute hash of trie or commit all changes.
-func (s *State) Stage(newBlockNum, newBlockConflicts uint32) (*Stage, error) {
+func (s *State) Stage(newVer trie.Version) (*Stage, error) {
 	type changed struct {
 		data            Account
 		meta            AccountMetadata
@@ -460,13 +457,12 @@ func (s *State) Stage(newBlockNum, newBlockConflicts uint32) (*Stage, error) {
 			}
 			c.storage[key.key] = v.(rlp.RawValue)
 			if len(c.meta.StorageID) == 0 {
-				// generate storage id for the new storage trie.
-				var enc lowrlp.Encoder
-				enc.EncodeUint(uint64(newBlockNum))
-				enc.EncodeUint(uint64(newBlockConflicts))
-				enc.EncodeUint(storageTrieCreationCount)
+				id := binary.BigEndian.AppendUint32(nil, newVer.Major)
+				id = binary.AppendUvarint(id, uint64(newVer.Minor))
+				id = binary.AppendUvarint(id, storageTrieCreationCount)
+
+				c.meta.StorageID = id
 				storageTrieCreationCount++
-				c.meta.StorageID = enc.ToBytes()
 			}
 		case storageBarrierKey:
 			if c, jerr = getChanged(thor.Address(key)); jerr != nil {
@@ -484,7 +480,7 @@ func (s *State) Stage(newBlockNum, newBlockConflicts uint32) (*Stage, error) {
 	}
 
 	trieCpy := s.trie.Copy()
-	commits := make([]func() error, 0, len(changes)+2)
+	tries := make([]*muxdb.Trie, 0, len(changes)+2)
 
 	for addr, c := range changes {
 		// skip storage changes if account is empty
@@ -496,44 +492,56 @@ func (s *State) Stage(newBlockNum, newBlockConflicts uint32) (*Stage, error) {
 				} else {
 					sTrie = s.db.NewTrie(
 						StorageTrieName(c.meta.StorageID),
-						thor.BytesToBytes32(c.data.StorageRoot),
-						c.meta.StorageCommitNum,
-						c.meta.StorageDistinctNum)
+						trie.Root{
+							Hash: thor.BytesToBytes32(c.data.StorageRoot),
+							Ver: trie.Version{
+								Major: c.meta.StorageMajorVer,
+								Minor: c.meta.StorageMinorVer,
+							},
+						})
 				}
 				for k, v := range c.storage {
 					if err := saveStorage(sTrie, k, v); err != nil {
 						return nil, &Error{err}
 					}
 				}
-				sRoot, commit := sTrie.Stage(newBlockNum, newBlockConflicts)
+				sRoot := sTrie.Hash()
 				c.data.StorageRoot = sRoot[:]
-				c.meta.StorageCommitNum = newBlockNum
-				c.meta.StorageDistinctNum = newBlockConflicts
-				commits = append(commits, commit)
+				c.meta.StorageMajorVer = newVer.Major
+				c.meta.StorageMinorVer = newVer.Minor
+				tries = append(tries, sTrie)
 			}
 		}
 		if err := saveAccount(trieCpy, addr, &c.data, &c.meta); err != nil {
 			return nil, &Error{err}
 		}
 	}
-	root, commitAcc := trieCpy.Stage(newBlockNum, newBlockConflicts)
-	commitCodes := func() error {
-		if len(codes) > 0 {
-			bulk := s.db.NewStore(codeStoreName).Bulk()
-			for hash, code := range codes {
-				if err := bulk.Put(hash[:], code); err != nil {
+	root := trieCpy.Hash()
+	tries = append(tries, trieCpy)
+
+	return &Stage{
+		root: root,
+		commit: func() error {
+			if len(codes) > 0 {
+				bulk := s.db.NewStore(codeStoreName).Bulk()
+				for hash, code := range codes {
+					if err := bulk.Put(hash[:], code); err != nil {
+						return err
+					}
+				}
+				if err := bulk.Write(); err != nil {
 					return err
 				}
 			}
-			return bulk.Write()
-		}
-		return nil
-	}
-	commits = append(commits, commitAcc, commitCodes)
-
-	return &Stage{
-		root:    root,
-		commits: commits,
+			for _, t := range tries {
+				if err := t.Commit(newVer, false); err != nil {
+					return err
+				}
+			}
+			// Just once for the account trie.
+			metricAccountChanges().Add(int64(len(changes)))
+			return nil
+		},
 	}, nil
 }
 

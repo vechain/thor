@@ -245,7 +245,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 			}
 		}
 
-		state := p.stater.NewState(headSummary.Header.StateRoot(), headSummary.Header.Number(), headSummary.Conflicts, headSummary.SteadyNum)
+		state := p.stater.NewState(headSummary.Root())
 		executable, err := txObj.Executable(p.repo.NewChain(headSummary.Header.ID()), state, headSummary.Header)
 		if err != nil {
 			return txRejectedError{err.Error()}
@@ -253,6 +253,12 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 
 		if rejectNonExecutable && !executable {
 			return txRejectedError{"tx is not executable"}
+		}
+
+		if !executable {
+			if p.all.Len()-len(p.Executables()) >= p.options.Limit*2/10 {
+				return txRejectedError{"non executable pool is full"}
+			}
 		}
 
 		txObj.executable = executable
@@ -391,7 +397,7 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 
 	// recreate state every time to avoid high RAM usage when the pool at hight water-mark.
 	newState := func() *state.State {
-		return p.stater.NewState(headSummary.Header.StateRoot(), headSummary.Header.Number(), headSummary.Conflicts, headSummary.SteadyNum)
+		return p.stater.NewState(headSummary.Root())
 	}
 	baseGasPrice, err := builtin.Params.Native(newState()).Get(thor.KeyBaseGasPrice)
 	if err != nil {
@@ -467,6 +473,12 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 		for _, txObj := range nonExecutableObjs[limit-len(executableObjs):] {
 			toRemove = append(toRemove, txObj)
 			logger.Debug("non-executable tx washed out due to pool limit", "id", txObj.ID())
+		}
+	} else if len(nonExecutableObjs) > limit*2/10 {
+		// nonExecutableObjs over pool limit
+		for _, txObj := range nonExecutableObjs[limit*2/10:] {
+			toRemove = append(toRemove, txObj)
+			logger.Debug("non-executable tx washed out due to non-executable limit", "id", txObj.ID())
 		}
 	}
 
