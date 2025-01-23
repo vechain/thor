@@ -44,5 +44,5 @@ jobs:
             {
               "commit-url": "${{ github.event.head_commit.url }}",
               "branch": "${{ github.ref }}",
-              "repository": "${{ github.repository }}",
+              "repository": "${{ github.repository }}"
             }
