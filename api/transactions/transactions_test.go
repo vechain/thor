@@ -8,6 +8,7 @@ package transactions_test
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/big"
 	"net/http/httptest"
 	"strconv"
@@ -466,7 +467,15 @@ func initTransactionServer(t *testing.T) {
 		Build()
 	mempoolTx = tx.MustSign(mempoolTx, genesis.DevAccounts()[0].PrivateKey)
 
-	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
+	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.ForkConfig{
+		VIP191:    0,
+		ETH_CONST: math.MaxUint32,
+		BLOCKLIST: math.MaxUint32,
+		ETH_IST:   math.MaxUint32,
+		VIP214:    math.MaxUint32,
+		FINALITY:  math.MaxUint32,
+	},
+	)
 	sum, _ := repo.GetBlockSummary(b.Header().ID())
 	flow, err := packer.Schedule(sum, uint64(time.Now().Unix()))
 	if err != nil {
