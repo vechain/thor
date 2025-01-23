@@ -101,6 +101,23 @@ func (t *LegacyTransaction) setSignature(sig []byte) {
 	t.Signature = sig
 }
 
+func (t *LegacyTransaction) hashWithoutNonce(origin thor.Address) *thor.Bytes32 {
+	b := thor.Blake2bFn(func(w io.Writer) {
+		rlp.Encode(w, []interface{}{
+			t.chainTag(),
+			t.blockRef(),
+			t.expiration(),
+			t.clauses(),
+			t.gasPriceCoef(),
+			t.dependsOn(),
+			t.nonce(),
+			t.reserved(),
+			origin,
+		})
+	})
+	return &b
+}
+
 func (t *LegacyTransaction) encode(w io.Writer) error {
 	return rlp.Encode(w, []interface{}{
 		t.ChainTag,

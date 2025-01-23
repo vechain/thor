@@ -68,6 +68,7 @@ type TxData interface {
 	reserved() reserved
 	signature() []byte
 	setSignature(sig []byte)
+	hashWithoutNonce(origin thor.Address) *thor.Bytes32
 
 	encode(w io.Writer) error
 }
@@ -162,15 +163,7 @@ func (t *Transaction) UnprovedWork() (w *big.Int) {
 
 // EvaluateWork try to compute work when tx origin assumed.
 func (t *Transaction) EvaluateWork(origin thor.Address) func(nonce uint64) *big.Int {
-	var hashWithoutNonce *thor.Bytes32
-	switch t.Type() {
-	case LegacyTxType:
-		hashWithoutNonce = t.hashWithoutNonceLegacyTx(origin)
-	case DynamicFeeTxType:
-		hashWithoutNonce = t.hashWithoutNonceDynamicFeeTx(origin)
-	default:
-		panic(ErrTxTypeNotSupported)
-	}
+	hashWithoutNonce := t.body.hashWithoutNonce(origin)
 
 	return func(nonce uint64) *big.Int {
 		var nonceBytes [8]byte
@@ -179,41 +172,6 @@ func (t *Transaction) EvaluateWork(origin thor.Address) func(nonce uint64) *big.
 		r := new(big.Int).SetBytes(hash[:])
 		return r.Div(math.MaxBig256, r)
 	}
-}
-
-func (t *Transaction) hashWithoutNonceLegacyTx(origin thor.Address) *thor.Bytes32 {
-	b := thor.Blake2bFn(func(w io.Writer) {
-		rlp.Encode(w, []interface{}{
-			t.body.chainTag(),
-			t.body.blockRef(),
-			t.body.expiration(),
-			t.body.clauses(),
-			t.body.gasPriceCoef(),
-			t.body.dependsOn(),
-			t.body.nonce(),
-			t.body.reserved(),
-			origin,
-		})
-	})
-	return &b
-}
-
-func (t *Transaction) hashWithoutNonceDynamicFeeTx(origin thor.Address) *thor.Bytes32 {
-	b := thor.Blake2bFn(func(w io.Writer) {
-		rlp.Encode(w, []interface{}{
-			t.body.chainTag(),
-			t.body.blockRef(),
-			t.body.expiration(),
-			t.body.clauses(),
-			t.body.maxFeePerGas(),
-			t.body.maxPriorityFeePerGas(),
-			t.body.dependsOn(),
-			t.body.nonce(),
-			t.body.reserved(),
-			origin,
-		})
-	})
-	return &b
 }
 
 // SigningHash returns hash of tx excludes signature.

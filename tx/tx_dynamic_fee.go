@@ -111,6 +111,24 @@ func (t *DynamicFeeTransaction) setSignature(sig []byte) {
 	t.Signature = sig
 }
 
+func (t *DynamicFeeTransaction) hashWithoutNonce(origin thor.Address) *thor.Bytes32 {
+	b := thor.Blake2bFn(func(w io.Writer) {
+		rlp.Encode(w, []interface{}{
+			t.chainTag(),
+			t.blockRef(),
+			t.expiration(),
+			t.clauses(),
+			t.maxFeePerGas(),
+			t.maxPriorityFeePerGas(),
+			t.dependsOn(),
+			t.nonce(),
+			t.reserved(),
+			origin,
+		})
+	})
+	return &b
+}
+
 func (t *DynamicFeeTransaction) encode(w io.Writer) error {
 	return rlp.Encode(w, []interface{}{
 		t.ChainTag,
