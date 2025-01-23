@@ -10,6 +10,7 @@ package muxdb
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/syndtr/goleveldb/leveldb"
 	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
@@ -26,6 +27,8 @@ const (
 	trieHistSpace    = byte(0) // the key space for historical trie nodes.
 	trieDedupedSpace = byte(1) // the key space for deduped trie nodes.
 	namedStoreSpace  = byte(2) // the key space for named store.
+
+	metricsSampleInterval = 10 * time.Second
 )
 
 const (
@@ -60,6 +63,8 @@ type Options struct {
 type MuxDB struct {
 	engine      engine.Engine
 	trieBackend *backend
+
+	done chan struct{}
 }
 
 // Open opens or creates DB at the given path.
@@ -114,6 +119,7 @@ func Open(path string, options *Options) (*MuxDB, error) {
 			DedupedPtnFactor: cfg.DedupedPtnFactor,
 			CachedNodeTTL:    options.TrieCachedNodeTTL,
 		},
+		done: make(chan struct{}),
 	}, nil
 }
 
@@ -132,11 +138,13 @@ func NewMem() *MuxDB {
 			DedupedPtnFactor: 1,
 			CachedNodeTTL:    32,
 		},
+		done: make(chan struct{}),
 	}
 }
 
 // Close closes the DB.
 func (db *MuxDB) Close() error {
+	close(db.done)
 	return db.engine.Close()
 }
 
@@ -163,6 +171,34 @@ func (db *MuxDB) NewStore(name string) kv.Store {
 // IsNotFound returns if the error indicates key not found.
 func (db *MuxDB) IsNotFound(err error) bool {
 	return db.engine.IsNotFound(err)
+}
+
+func (db *MuxDB) EnableMetrics() {
+	go func() {
+		ticker := time.NewTicker(metricsSampleInterval)
+		defer ticker.Stop()
+
+		var (
+			stats leveldb.DBStats
+			err   error
+		)
+		for {
+			select {
+			case <-ticker.C:
+				// we only have one engine implementation for now, put the type assertion just for safety
+				lvl, ok := db.engine.(*engine.LevelEngine)
+				if ok {
+					err = lvl.Stats(&stats)
+					if err != nil {
+						logger.Warn("Failed to get LevelDB stats: %v", err)
+					}
+					registerCompactionMetrics(&stats)
+				}
+			case <-db.done:
+				return
+			}
+		}
+	}()
 }
 
 type config struct {
