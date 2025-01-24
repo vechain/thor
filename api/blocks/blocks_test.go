@@ -230,20 +230,30 @@ func initBlockServer(t *testing.T) {
 
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	trx := tx.MustSign(
-		new(tx.Builder).
-			ChainTag(thorChain.Repo().ChainTag()).
-			GasPriceCoef(1).
-			Expiration(10).
-			Gas(21000).
-			Nonce(1).
-			Clause(cla).
-			BlockRef(tx.NewBlockRef(0)).
-			Build(),
-		genesis.DevAccounts()[0].PrivateKey,
-	)
+	legacyTx := tx.NewTxBuilder(tx.LegacyTxType).
+		ChainTag(thorChain.Repo().ChainTag()).
+		GasPriceCoef(1).
+		Expiration(10).
+		Gas(21000).
+		Nonce(1).
+		Clause(cla).
+		BlockRef(tx.NewBlockRef(0)).
+		MustBuild()
+	legacyTx = tx.MustSign(legacyTx, genesis.DevAccounts()[0].PrivateKey)
 
-	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], trx))
+	dynFeeTx := tx.NewTxBuilder(tx.DynamicFeeTxType).
+		ChainTag(thorChain.Repo().ChainTag()).
+		MaxFeePerGas(big.NewInt(100000)).
+		MaxPriorityFeePerGas(big.NewInt(100)).
+		Expiration(10).
+		Gas(21000).
+		Nonce(2).
+		Clause(cla).
+		BlockRef(tx.NewBlockRef(0)).
+		MustBuild()
+	dynFeeTx = tx.MustSign(dynFeeTx, genesis.DevAccounts()[0].PrivateKey)
+
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], legacyTx, dynFeeTx))
 
 	allBlocks, err := thorChain.GetAllBlocks()
 	require.NoError(t, err)
