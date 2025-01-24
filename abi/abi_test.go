@@ -125,4 +125,31 @@ func TestStakerABI(t *testing.T) {
 
 		assert.True(t, method.Const())
 	}
+
+	{
+		name := "addValidator"
+		method, found := abi.MethodByName(name)
+		assert.True(t, found)
+		assert.NotNil(t, method)
+
+		assert.False(t, method.Const())
+	}
+
+	{
+		name := "removeValidator"
+		method, found := abi.MethodByName(name)
+		assert.True(t, found)
+		assert.NotNil(t, method)
+
+		assert.False(t, method.Const())
+	}
+
+	{
+		name := "listValidators"
+		method, found := abi.MethodByName(name)
+		assert.True(t, found)
+		assert.NotNil(t, method)
+
+		assert.True(t, method.Const())
+	}
 }

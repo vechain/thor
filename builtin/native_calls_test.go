@@ -1062,6 +1062,8 @@ func TestStakerNative(t *testing.T) {
 	}
 
 	acc1 := thor.BytesToAddress([]byte("acc1"))
+	validatorAcc1 := thor.BytesToAddress([]byte("vAcc1"))
+	stakeAmount := big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
 
 	b0 := genesisBlock
 	b1 := newBlock(b0, 123, 456, privKeys[0])
@@ -1070,27 +1072,41 @@ func TestStakerNative(t *testing.T) {
 
 	err := repo.AddBlock(b1, nil, 0, false)
 	assert.Equal(t, err, nil)
-	err = repo.AddBlock(b1, nil, 0, false)
+	err = repo.AddBlock(b2, nil, 0, false)
 	assert.Equal(t, err, nil)
 
 	chain := repo.NewChain(b2.Header().ID())
 
-	stakedEvent := func(staker thor.Address, amount *big.Int) *tx.Event {
+	stakedEvent := func(staker thor.Address, amount *big.Int, validator thor.Address) *tx.Event {
 		ev, _ := builtin.Staker.ABI.EventByName("Staked")
 		data, _ := ev.Encode(amount)
 		return &tx.Event{
 			Address: builtin.Staker.Address,
-			Topics:  []thor.Bytes32{ev.ID(), thor.BytesToBytes32(staker[:])},
+			Topics:  []thor.Bytes32{ev.ID(), thor.BytesToBytes32(staker[:]), thor.BytesToBytes32(validator[:])},
 			Data:    data,
 		}
 	}
-	unstakedEvent := func(staker thor.Address, amount *big.Int) *tx.Event {
+	unstakedEvent := func(staker thor.Address, amount *big.Int, validator thor.Address) *tx.Event {
 		ev, _ := builtin.Staker.ABI.EventByName("Unstaked")
 		data, _ := ev.Encode(amount)
 		return &tx.Event{
 			Address: builtin.Staker.Address,
-			Topics:  []thor.Bytes32{ev.ID(), thor.BytesToBytes32(staker[:])},
+			Topics:  []thor.Bytes32{ev.ID(), thor.BytesToBytes32(staker[:]), thor.BytesToBytes32(validator[:])},
 			Data:    data,
+		}
+	}
+	validatorAddedEvent := func(validator thor.Address) *tx.Event {
+		ev, _ := builtin.Staker.ABI.EventByName("ValidatorAdded")
+		return &tx.Event{
+			Address: builtin.Staker.Address,
+			Topics:  []thor.Bytes32{ev.ID(), thor.BytesToBytes32(validator[:])},
+		}
+	}
+	validatorRemovedEvent := func(validator thor.Address) *tx.Event {
+		ev, _ := builtin.Staker.ABI.EventByName("ValidatorRemoved")
+		return &tx.Event{
+			Address: builtin.Staker.Address,
+			Topics:  []thor.Bytes32{ev.ID(), thor.BytesToBytes32(validator[:])},
 		}
 	}
 	rt := runtime.New(chain, st, &xenv.BlockContext{Number: 2, Time: b2.Header().Timestamp(), TotalScore: b2.Header().TotalScore(), Signer: b2_singer}, thor.ForkConfig{})
@@ -1101,38 +1117,73 @@ func TestStakerNative(t *testing.T) {
 		to:  builtin.Staker.Address,
 	}
 
+	st.SetBalance(validatorAcc1, stakeAmount)
+	st.SetEnergy(validatorAcc1, big.NewInt(100000000), b2.Header().Timestamp())
+
 	st.SetBalance(acc1, big.NewInt(10000))
 	st.SetEnergy(acc1, big.NewInt(100000000), b2.Header().Timestamp())
 
 	test.Case("totalStake").ShouldOutput(big.NewInt(0)).Assert(t)
 
-	test.Case("getStake", acc1).ShouldOutput(big.NewInt(0)).Assert(t)
+	test.Case("getStake", acc1, validatorAcc1).ShouldOutput(big.NewInt(0)).Assert(t)
 
-	test.Case("stake").Caller(acc1).Value(big.NewInt(1000)).ShouldLog(stakedEvent(acc1, big.NewInt(1000))).Assert(t)
+	test.Case("addValidator").Caller(validatorAcc1).Value(stakeAmount).ShouldLog(validatorAddedEvent(validatorAcc1)).Assert(t)
 
-	test.Case("totalStake").ShouldOutput(big.NewInt(1000)).Assert(t)
+	test.Case("listValidators").ShouldOutput([]thor.Address{validatorAcc1}).Assert(t)
 
-	test.Case("getStake", acc1).ShouldOutput(big.NewInt(1000)).Assert(t)
+	test.Case("stake", validatorAcc1).Caller(acc1).Value(big.NewInt(10000)).ShouldLog(stakedEvent(acc1, big.NewInt(10000), validatorAcc1)).Assert(t)
+
+	test.Case("totalStake").ShouldOutput(big.NewInt(0).Add(stakeAmount, big.NewInt(10000))).Assert(t)
+
+	test.Case("getStake", acc1, validatorAcc1).ShouldOutput(big.NewInt(10000)).Assert(t)
 
 	acc1Balance, err := st.GetBalance(acc1)
 	assert.Nil(t, err)
-	assert.Equal(t, big.NewInt(9000), acc1Balance)
+	assert.Equal(t, big.NewInt(0).Int64(), acc1Balance.Int64())
 
 	ctrBalance, err := st.GetBalance(builtin.Staker.Address)
 	assert.Nil(t, err)
-	assert.Equal(t, big.NewInt(1000), ctrBalance)
+	assert.Equal(t, big.NewInt(0).Add(stakeAmount, big.NewInt(10000)), ctrBalance)
 
-	test.Case("unstake", big.NewInt(300)).Caller(acc1).ShouldLog(unstakedEvent(acc1, big.NewInt(300))).Assert(t)
+	test.Case("unstake", big.NewInt(300), validatorAcc1).Caller(acc1).ShouldLog(unstakedEvent(acc1, big.NewInt(300), validatorAcc1)).Assert(t)
 
-	test.Case("totalStake").ShouldOutput(big.NewInt(700)).Assert(t)
+	test.Case("totalStake").ShouldOutput(big.NewInt(0).Add(stakeAmount, big.NewInt(9700))).Assert(t)
 
-	test.Case("getStake", acc1).ShouldOutput(big.NewInt(700)).Assert(t)
+	test.Case("getStake", acc1, validatorAcc1).ShouldOutput(big.NewInt(9700)).Assert(t)
+
+	test.Case("getStake", validatorAcc1, validatorAcc1).ShouldOutput(stakeAmount).Assert(t)
 
 	acc1Balance, err = st.GetBalance(acc1)
 	assert.Nil(t, err)
-	assert.Equal(t, big.NewInt(9300), acc1Balance)
+	assert.Equal(t, big.NewInt(300), acc1Balance)
 
 	ctrBalance, err = st.GetBalance(builtin.Staker.Address)
 	assert.Nil(t, err)
-	assert.Equal(t, big.NewInt(700), ctrBalance)
+	assert.Equal(t, big.NewInt(0).Add(stakeAmount, big.NewInt(9700)), ctrBalance)
+
+	valBalance, err := st.GetBalance(validatorAcc1)
+	assert.Nil(t, err)
+	assert.Equal(t, big.NewInt(0).Int64(), valBalance.Int64())
+
+	test.Case("removeValidator").Caller(validatorAcc1).ShouldLog(validatorRemovedEvent(validatorAcc1)).Assert(t)
+
+	test.Case("listValidators").ShouldOutput([]thor.Address{}).Assert(t)
+
+	test.Case("totalStake").ShouldOutput(big.NewInt(0)).Assert(t)
+
+	test.Case("getStake", acc1, validatorAcc1).ShouldOutput(big.NewInt(0)).Assert(t)
+
+	test.Case("getStake", validatorAcc1, validatorAcc1).ShouldOutput(big.NewInt(0)).Assert(t)
+
+	acc1Balance, err = st.GetBalance(acc1)
+	assert.Nil(t, err)
+	assert.Equal(t, big.NewInt(10000), acc1Balance)
+
+	ctrBalance, err = st.GetBalance(builtin.Staker.Address)
+	assert.Nil(t, err)
+	assert.Equal(t, big.NewInt(0).Int64(), ctrBalance.Int64())
+
+	valBalance, err = st.GetBalance(validatorAcc1)
+	assert.Nil(t, err)
+	assert.Equal(t, stakeAmount, valBalance)
 }
