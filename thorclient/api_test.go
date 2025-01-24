@@ -87,11 +87,11 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 func mintTransactions(t *testing.T, thorChain *testchain.Chain) {
 	toAddr := datagen.RandAddress()
 
-	noClausesTx := new(tx.Builder).
+	noClausesTx := tx.NewTxBuilder(tx.LegacyTxType).
 		ChainTag(thorChain.Repo().ChainTag()).
 		Expiration(10).
 		Gas(21000).
-		Build()
+		MustBuild()
 	sig, err := crypto.Sign(noClausesTx.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
 		t.Fatal(err)
@@ -100,7 +100,7 @@ func mintTransactions(t *testing.T, thorChain *testchain.Chain) {
 
 	cla := tx.NewClause(&toAddr).WithValue(big.NewInt(10000))
 	cla2 := tx.NewClause(&toAddr).WithValue(big.NewInt(10000))
-	transaction := new(tx.Builder).
+	transaction := tx.NewTxBuilder(tx.LegacyTxType).
 		ChainTag(thorChain.Repo().ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -109,7 +109,7 @@ func mintTransactions(t *testing.T, thorChain *testchain.Chain) {
 		Clause(cla).
 		Clause(cla2).
 		BlockRef(tx.NewBlockRef(0)).
-		Build()
+		MustBuild()
 
 	sig, err = crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
@@ -218,15 +218,28 @@ func testTransactionsEndpoint(t *testing.T, thorChain *testchain.Chain, ts *http
 	t.Run("SendTransaction", func(t *testing.T) {
 		toAddr := thor.MustParseAddress("0x0123456789abcdef0123456789abcdef01234567")
 		clause := tx.NewClause(&toAddr).WithValue(big.NewInt(10000))
-		trx := new(tx.Builder).
+		trx := tx.NewTxBuilder(tx.LegacyTxType).
 			ChainTag(thorChain.Repo().ChainTag()).
 			Expiration(10).
 			Gas(21000).
 			Clause(clause).
-			Build()
+			MustBuild()
 
 		trx = tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)
 		sendResult, err := c.SendTransaction(trx)
+		require.NoError(t, err)
+		require.NotNil(t, sendResult)
+		require.Equal(t, trx.ID().String(), sendResult.ID.String()) // Ensure transaction was successful
+
+		trx = tx.NewTxBuilder(tx.DynamicFeeTxType).
+			ChainTag(thorChain.Repo().ChainTag()).
+			Expiration(10).
+			Gas(21000).
+			Clause(clause).
+			MustBuild()
+
+		trx = tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)
+		sendResult, err = c.SendTransaction(trx)
 		require.NoError(t, err)
 		require.NotNil(t, sendResult)
 		require.Equal(t, trx.ID().String(), sendResult.ID.String()) // Ensure transaction was successful
@@ -367,7 +380,7 @@ func testEventsEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) {
 		// Define the payload for filtering events
 		payload := &events.EventFilter{
 			CriteriaSet: []*events.EventCriteria{
-				&events.EventCriteria{
+				{
 					Address: &address,
 					TopicSet: events.TopicSet{
 						Topic0: &topic,

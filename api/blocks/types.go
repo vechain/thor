@@ -6,6 +6,8 @@
 package blocks
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/vechain/thor/v2/chain"
@@ -67,18 +69,20 @@ type JSONOutput struct {
 }
 
 type JSONEmbeddedTx struct {
-	ID           thor.Bytes32        `json:"id"`
-	ChainTag     byte                `json:"chainTag"`
-	BlockRef     string              `json:"blockRef"`
-	Expiration   uint32              `json:"expiration"`
-	Clauses      []*JSONClause       `json:"clauses"`
-	GasPriceCoef uint8               `json:"gasPriceCoef"`
-	Gas          uint64              `json:"gas"`
-	Origin       thor.Address        `json:"origin"`
-	Delegator    *thor.Address       `json:"delegator"`
-	Nonce        math.HexOrDecimal64 `json:"nonce"`
-	DependsOn    *thor.Bytes32       `json:"dependsOn"`
-	Size         uint32              `json:"size"`
+	ID                   thor.Bytes32        `json:"id"`
+	ChainTag             byte                `json:"chainTag"`
+	BlockRef             string              `json:"blockRef"`
+	Expiration           uint32              `json:"expiration"`
+	Clauses              []*JSONClause       `json:"clauses"`
+	GasPriceCoef         uint8               `json:"gasPriceCoef"`
+	MaxFeePerGas         *big.Int            `json:"maxFeePerGas,omitempty"`
+	MaxPriorityFeePerGas *big.Int            `json:"maxPriorityFeePerGas,omitempty"`
+	Gas                  uint64              `json:"gas"`
+	Origin               thor.Address        `json:"origin"`
+	Delegator            *thor.Address       `json:"delegator"`
+	Nonce                math.HexOrDecimal64 `json:"nonce"`
+	DependsOn            *thor.Bytes32       `json:"dependsOn"`
+	Size                 uint32              `json:"size"`
 
 	// receipt part
 	GasUsed  uint64                `json:"gasUsed"`
@@ -148,13 +152,13 @@ func buildJSONOutput(txID thor.Bytes32, index uint32, c *tx.Clause, o *tx.Output
 
 func buildJSONEmbeddedTxs(txs tx.Transactions, receipts tx.Receipts) []*JSONEmbeddedTx {
 	jTxs := make([]*JSONEmbeddedTx, 0, len(txs))
-	for itx, tx := range txs {
+	for itx, trx := range txs {
 		receipt := receipts[itx]
 
-		clauses := tx.Clauses()
-		blockRef := tx.BlockRef()
-		origin, _ := tx.Origin()
-		delegator, _ := tx.Delegator()
+		clauses := trx.Clauses()
+		blockRef := trx.BlockRef()
+		origin, _ := trx.Origin()
+		delegator, _ := trx.Delegator()
 
 		jcs := make([]*JSONClause, 0, len(clauses))
 		jos := make([]*JSONOutput, 0, len(receipt.Outputs))
@@ -166,23 +170,22 @@ func buildJSONEmbeddedTxs(txs tx.Transactions, receipts tx.Receipts) []*JSONEmbe
 				hexutil.Encode(c.Data()),
 			})
 			if !receipt.Reverted {
-				jos = append(jos, buildJSONOutput(tx.ID(), uint32(i), c, receipt.Outputs[i]))
+				jos = append(jos, buildJSONOutput(trx.ID(), uint32(i), c, receipt.Outputs[i]))
 			}
 		}
 
-		jTxs = append(jTxs, &JSONEmbeddedTx{
-			ID:           tx.ID(),
-			ChainTag:     tx.ChainTag(),
-			BlockRef:     hexutil.Encode(blockRef[:]),
-			Expiration:   tx.Expiration(),
-			Clauses:      jcs,
-			GasPriceCoef: tx.GasPriceCoef(),
-			Gas:          tx.Gas(),
-			Origin:       origin,
-			Delegator:    delegator,
-			Nonce:        math.HexOrDecimal64(tx.Nonce()),
-			DependsOn:    tx.DependsOn(),
-			Size:         uint32(tx.Size()),
+		embedTx := &JSONEmbeddedTx{
+			ID:         trx.ID(),
+			ChainTag:   trx.ChainTag(),
+			BlockRef:   hexutil.Encode(blockRef[:]),
+			Expiration: trx.Expiration(),
+			Clauses:    jcs,
+			Gas:        trx.Gas(),
+			Origin:     origin,
+			Delegator:  delegator,
+			Nonce:      math.HexOrDecimal64(trx.Nonce()),
+			DependsOn:  trx.DependsOn(),
+			Size:       uint32(trx.Size()),
 
 			GasUsed:  receipt.GasUsed,
 			GasPayer: receipt.GasPayer,
@@ -190,7 +193,14 @@ func buildJSONEmbeddedTxs(txs tx.Transactions, receipts tx.Receipts) []*JSONEmbe
 			Reward:   (*math.HexOrDecimal256)(receipt.Reward),
 			Reverted: receipt.Reverted,
 			Outputs:  jos,
-		})
+		}
+		if trx.Type() == tx.LegacyTxType {
+			embedTx.GasPriceCoef = trx.GasPriceCoef()
+		} else {
+			embedTx.MaxFeePerGas = trx.MaxFeePerGas()
+			embedTx.MaxPriorityFeePerGas = trx.MaxPriorityFeePerGas()
+		}
+		jTxs = append(jTxs, embedTx)
 	}
 	return jTxs
 }
