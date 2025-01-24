@@ -21,55 +21,70 @@ import (
 )
 
 func TestErrorWhileRetrievingTxOriginInConvertReceipt(t *testing.T) {
-	tr := &tx.Transaction{}
-	header := &block.Header{}
-	receipt := &tx.Receipt{
-		Reward: big.NewInt(100),
-		Paid:   big.NewInt(10),
+	txTypes := []int{tx.LegacyTxType, tx.DynamicFeeTxType}
+
+	for _, txType := range txTypes {
+		tr := tx.NewTxBuilder(txType).MustBuild()
+		header := &block.Header{}
+		receipt := &tx.Receipt{
+			Reward: big.NewInt(100),
+			Paid:   big.NewInt(10),
+		}
+
+		convRec, err := convertReceipt(receipt, header, tr)
+
+		assert.Error(t, err)
+		assert.Equal(t, err, secp256k1.ErrInvalidSignatureLen)
+		assert.Nil(t, convRec)
 	}
-
-	convRec, err := convertReceipt(receipt, header, tr)
-
-	assert.Error(t, err)
-	assert.Equal(t, err, secp256k1.ErrInvalidSignatureLen)
-	assert.Nil(t, convRec)
 }
 
 func TestConvertReceiptWhenTxHasNoClauseTo(t *testing.T) {
 	value := big.NewInt(100)
-	tr := newTx(tx.NewClause(nil).WithValue(value))
-	b := new(block.Builder).Build()
-	header := b.Header()
-	receipt := newReceipt()
-	expectedOutputAddress := thor.CreateContractAddress(tr.ID(), uint32(0), 0)
+	txs := []*tx.Transaction{
+		newLegacyTx(tx.NewClause(nil).WithValue(value)),
+		newDynFeeTx(tx.NewClause(nil).WithValue(value)),
+	}
+	for _, tr := range txs {
+		b := new(block.Builder).Build()
+		header := b.Header()
+		receipt := newReceipt()
+		expectedOutputAddress := thor.CreateContractAddress(tr.ID(), uint32(0), 0)
 
-	convRec, err := convertReceipt(receipt, header, tr)
+		convRec, err := convertReceipt(receipt, header, tr)
 
-	assert.NoError(t, err)
-	assert.Equal(t, 1, len(convRec.Outputs))
-	assert.Equal(t, &expectedOutputAddress, convRec.Outputs[0].ContractAddress)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(convRec.Outputs))
+		assert.Equal(t, &expectedOutputAddress, convRec.Outputs[0].ContractAddress)
+	}
 }
 
 func TestConvertReceipt(t *testing.T) {
 	value := big.NewInt(100)
 	addr := randAddress()
-	tr := newTx(tx.NewClause(&addr).WithValue(value))
-	b := new(block.Builder).Build()
-	header := b.Header()
-	receipt := newReceipt()
 
-	convRec, err := convertReceipt(receipt, header, tr)
+	txs := []*tx.Transaction{
+		newLegacyTx(tx.NewClause(&addr).WithValue(value)),
+		newDynFeeTx(tx.NewClause(&addr).WithValue(value)),
+	}
+	for _, tr := range txs {
+		b := new(block.Builder).Build()
+		header := b.Header()
+		receipt := newReceipt()
 
-	assert.NoError(t, err)
-	assert.Equal(t, 1, len(convRec.Outputs))
-	assert.Equal(t, 1, len(convRec.Outputs[0].Events))
-	assert.Equal(t, 1, len(convRec.Outputs[0].Transfers))
-	assert.Nil(t, convRec.Outputs[0].ContractAddress)
-	assert.Equal(t, receipt.Outputs[0].Events[0].Address, convRec.Outputs[0].Events[0].Address)
-	assert.Equal(t, hexutil.Encode(receipt.Outputs[0].Events[0].Data), convRec.Outputs[0].Events[0].Data)
-	assert.Equal(t, receipt.Outputs[0].Transfers[0].Sender, convRec.Outputs[0].Transfers[0].Sender)
-	assert.Equal(t, receipt.Outputs[0].Transfers[0].Recipient, convRec.Outputs[0].Transfers[0].Recipient)
-	assert.Equal(t, (*math.HexOrDecimal256)(receipt.Outputs[0].Transfers[0].Amount), convRec.Outputs[0].Transfers[0].Amount)
+		convRec, err := convertReceipt(receipt, header, tr)
+
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(convRec.Outputs))
+		assert.Equal(t, 1, len(convRec.Outputs[0].Events))
+		assert.Equal(t, 1, len(convRec.Outputs[0].Transfers))
+		assert.Nil(t, convRec.Outputs[0].ContractAddress)
+		assert.Equal(t, receipt.Outputs[0].Events[0].Address, convRec.Outputs[0].Events[0].Address)
+		assert.Equal(t, hexutil.Encode(receipt.Outputs[0].Events[0].Data), convRec.Outputs[0].Events[0].Data)
+		assert.Equal(t, receipt.Outputs[0].Transfers[0].Sender, convRec.Outputs[0].Transfers[0].Sender)
+		assert.Equal(t, receipt.Outputs[0].Transfers[0].Recipient, convRec.Outputs[0].Transfers[0].Recipient)
+		assert.Equal(t, (*math.HexOrDecimal256)(receipt.Outputs[0].Transfers[0].Amount), convRec.Outputs[0].Transfers[0].Amount)
+	}
 }
 
 // Utilities functions
@@ -99,10 +114,19 @@ func newReceipt() *tx.Receipt {
 	}
 }
 
-func newTx(clause *tx.Clause) *tx.Transaction {
-	tx := new(tx.Builder).
+func newLegacyTx(clause *tx.Clause) *tx.Transaction {
+	tx := tx.NewTxBuilder(tx.LegacyTxType).
 		Clause(clause).
-		Build()
+		MustBuild()
+	pk, _ := crypto.GenerateKey()
+	sig, _ := crypto.Sign(tx.SigningHash().Bytes(), pk)
+	return tx.WithSignature(sig)
+}
+
+func newDynFeeTx(clause *tx.Clause) *tx.Transaction {
+	tx := tx.NewTxBuilder(tx.DynamicFeeTxType).
+		Clause(clause).
+		MustBuild()
 	pk, _ := crypto.GenerateKey()
 	sig, _ := crypto.Sign(tx.SigningHash().Bytes(), pk)
 	return tx.WithSignature(sig)
