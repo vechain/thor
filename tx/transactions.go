@@ -6,7 +6,6 @@
 package tx
 
 import (
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
 )
@@ -35,7 +34,7 @@ func (txs derivableTxs) Len() int {
 }
 
 func (txs derivableTxs) GetRlp(i int) []byte {
-	data, err := rlp.EncodeToBytes(txs[i])
+	data, err := txs[i].MarshalBinary()
 	if err != nil {
 		panic(err)
 	}

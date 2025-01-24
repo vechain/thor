@@ -18,9 +18,9 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func newTx() *tx.Transaction {
+func newTx(txType int) *tx.Transaction {
 	return tx.MustSign(
-		new(tx.Builder).Nonce(rand.Uint64()).Build(), //#nosec
+		tx.NewTxBuilder(txType).Nonce(rand.Uint64()).MustBuild(), //#nosec
 		genesis.DevAccounts()[0].PrivateKey,
 	)
 }
@@ -29,18 +29,24 @@ func TestTxStash(t *testing.T) {
 	db, _ := leveldb.Open(storage.NewMemStorage(), nil)
 	defer db.Close()
 
-	stash := newTxStash(db, 10)
+	stash := newTxStash(db, 20)
 
 	var saved tx.Transactions
 	for range 11 {
-		tx := newTx()
+		tx := newTx(tx.LegacyTxType)
 		assert.Nil(t, stash.Save(tx))
 		saved = append(saved, tx)
 	}
 
-	loaded := newTxStash(db, 10).LoadAll()
+	for range 11 {
+		tx := newTx(tx.DynamicFeeTxType)
+		assert.Nil(t, stash.Save(tx))
+		saved = append(saved, tx)
+	}
 
-	saved = saved[1:]
+	loaded := newTxStash(db, 20).LoadAll()
+
+	saved = saved[2:]
 	sort.Slice(saved, func(i, j int) bool {
 		return bytes.Compare(saved[i].ID().Bytes(), saved[j].ID().Bytes()) < 0
 	})
