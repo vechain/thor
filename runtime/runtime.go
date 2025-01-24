@@ -126,6 +126,12 @@ func New(
 		}
 	}
 
+	if forkConfig.HAYABUSA == ctx.Number {
+		if err := state.SetCode(builtin.Staker.Address, builtin.Staker.RuntimeBytecodes()); err != nil {
+			panic(err)
+		}
+	}
+
 	rt := Runtime{
 		chain:       chain,
 		state:       state,

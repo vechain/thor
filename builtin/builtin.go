@@ -29,6 +29,7 @@ var (
 		mustLoadContract("Extension"),
 		mustLoadContract("ExtensionV2"),
 	}
+	Staker  = &stakerContract{mustLoadContract("Staker")}
 	Measure = mustLoadContract("Measure")
 )
 
@@ -42,6 +43,7 @@ type (
 		*contract
 		V2 *contract
 	}
+	stakerContract struct{ *contract }
 )
 
 func (p *paramsContract) Native(state *state.State) *params.Params {
@@ -62,7 +64,7 @@ func (p *prototypeContract) Native(state *state.State) *prototype.Prototype {
 
 func (p *prototypeContract) Events() *abi.ABI {
 	asset := "compiled/PrototypeEvent.abi"
-	data := gen.MustAsset(asset)
+	data := gen.MustABI(asset)
 	abi, err := abi.New(data)
 	if err != nil {
 		panic(errors.Wrap(err, "load ABI for "+asset))

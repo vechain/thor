@@ -17,7 +17,7 @@ import (
 )
 
 func TestABI(t *testing.T) {
-	data := gen.MustAsset("compiled/Params.abi")
+	data := gen.MustABI("compiled/Params.abi")
 	abi, err := abi.New(data)
 	assert.Nil(t, err)
 

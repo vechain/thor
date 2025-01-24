@@ -94,6 +94,7 @@ func NewIntegrationTestChain() (*Chain, error) {
 	forkConfig.VIP191 = 1
 	forkConfig.BLOCKLIST = 0
 	forkConfig.VIP214 = 2
+	forkConfig.HAYABUSA = 2
 
 	return New(
 		db,

@@ -32,7 +32,7 @@ jobs:
           retention-days: 7
 
   run-tests:
-    runs-on: ubuntu-latest
+    runs-on: 8-core-10-jobs
     needs: build-docker-image
     env:
       THOR_IMAGE: vechain/thor:${{ github.sha }}
@@ -54,8 +54,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          repository: vechain/thor-e2e-tests
+          repository: vechain/hayabusa-e2e
           ref: ${{ steps.set-ref.outputs.ref }}
+          token: ${{ secrets.GHA_REPO_ACCESS }}
 
       - name: Download artifact
         uses: actions/download-artifact@v4

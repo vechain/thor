@@ -702,7 +702,7 @@ func TestValidateBlockBody(t *testing.T) {
 					Expiration(100).
 					Clause(tx.NewClause(&thor.Address{}).WithValue(big.NewInt(0)).WithData(nil)).
 					Nonce(0).
-					ChainTag(30)
+					ChainTag(tc.tag)
 
 				tx := txSign(txBuilder)
 
