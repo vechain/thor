@@ -233,7 +233,7 @@ func createOneClausePerTx(signerPK *ecdsa.PrivateKey, thorChain *testchain.Chain
 	for gasUsed < 9_500_000 {
 		toAddr := datagen.RandAddress()
 		cla := tx.NewClause(&toAddr).WithValue(big.NewInt(10000))
-		transaction := new(tx.Builder).
+		transaction := tx.NewTxBuilder(tx.LegacyTxType).
 			ChainTag(thorChain.Repo().ChainTag()).
 			GasPriceCoef(1).
 			Expiration(math.MaxUint32 - 1).
@@ -241,7 +241,7 @@ func createOneClausePerTx(signerPK *ecdsa.PrivateKey, thorChain *testchain.Chain
 			Nonce(uint64(datagen.RandInt())).
 			Clause(cla).
 			BlockRef(tx.NewBlockRef(0)).
-			Build()
+			MustBuild()
 
 		sig, err := crypto.Sign(transaction.SigningHash().Bytes(), signerPK)
 		if err != nil {
@@ -260,7 +260,7 @@ func createManyClausesPerTx(signerPK *ecdsa.PrivateKey, thorChain *testchain.Cha
 	gasUsed := uint64(0)
 	txGas := uint64(42_000)
 
-	transactionBuilder := new(tx.Builder).
+	transactionBuilder := tx.NewTxBuilder(tx.LegacyTxType).
 		ChainTag(thorChain.Repo().ChainTag()).
 		GasPriceCoef(1).
 		Expiration(math.MaxUint32 - 1).
@@ -272,7 +272,7 @@ func createManyClausesPerTx(signerPK *ecdsa.PrivateKey, thorChain *testchain.Cha
 		transactionBuilder.Clause(tx.NewClause(&toAddr).WithValue(big.NewInt(10000)))
 	}
 
-	transaction := transactionBuilder.Gas(gasUsed).Build()
+	transaction := transactionBuilder.Gas(gasUsed).MustBuild()
 
 	sig, err := crypto.Sign(transaction.SigningHash().Bytes(), signerPK)
 	if err != nil {
