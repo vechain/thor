@@ -52,6 +52,7 @@ type ccase struct {
 	blockRef   tx.BlockRef
 	gasPayer   thor.Address
 	expiration uint32
+	value      *big.Int
 
 	output *[]interface{}
 	vmerr  error
@@ -75,6 +76,11 @@ func (c *ccase) To(to thor.Address) *ccase {
 
 func (c *ccase) Caller(caller thor.Address) *ccase {
 	c.caller = caller
+	return c
+}
+
+func (c *ccase) Value(value *big.Int) *ccase {
+	c.value = value
 	return c
 }
 
@@ -129,7 +135,12 @@ func (c *ccase) Assert(t *testing.T) *ccase {
 	data, err := method.EncodeInput(c.args...)
 	assert.Nil(t, err, "should encode input")
 
-	exec, _ := c.rt.PrepareClause(tx.NewClause(&c.to).WithData(data),
+	clause := tx.NewClause(&c.to).WithData(data)
+	if c.value != nil {
+		clause = clause.WithValue(c.value)
+	}
+
+	exec, _ := c.rt.PrepareClause(clause,
 		0, math.MaxUint64, &xenv.TransactionContext{
 			ID:         c.txID,
 			Origin:     c.caller,
@@ -1034,4 +1045,94 @@ func TestExtensionNative(t *testing.T) {
 		ShouldOutput(gasPayer).
 		Assert(t)
 
+}
+
+func TestStakerNative(t *testing.T) {
+	db := muxdb.NewMem()
+	st := state.New(db, trie.Root{})
+	gene := genesis.NewDevnet()
+	genesisBlock, _, _, _ := gene.Build(state.NewStater(db))
+	repo, _ := chain.NewRepository(db, genesisBlock)
+	st.SetCode(builtin.Staker.Address, builtin.Staker.RuntimeBytecodes())
+
+	privKeys := make([]*ecdsa.PrivateKey, 2)
+	for i := 0; i < 2; i++ {
+		privateKey, _ := crypto.GenerateKey()
+		privKeys[i] = privateKey
+	}
+
+	acc1 := thor.BytesToAddress([]byte("acc1"))
+
+	b0 := genesisBlock
+	b1 := newBlock(b0, 123, 456, privKeys[0])
+	b2 := newBlock(b1, 789, 321, privKeys[1])
+	b2_singer, _ := b2.Header().Signer()
+
+	err := repo.AddBlock(b1, nil, 0, false)
+	assert.Equal(t, err, nil)
+	err = repo.AddBlock(b1, nil, 0, false)
+	assert.Equal(t, err, nil)
+
+	chain := repo.NewChain(b2.Header().ID())
+
+	stakedEvent := func(staker thor.Address, amount *big.Int) *tx.Event {
+		ev, _ := builtin.Staker.ABI.EventByName("Staked")
+		data, _ := ev.Encode(amount)
+		return &tx.Event{
+			Address: builtin.Staker.Address,
+			Topics:  []thor.Bytes32{ev.ID(), thor.BytesToBytes32(staker[:])},
+			Data:    data,
+		}
+	}
+	unstakedEvent := func(staker thor.Address, amount *big.Int) *tx.Event {
+		ev, _ := builtin.Staker.ABI.EventByName("Unstaked")
+		data, _ := ev.Encode(amount)
+		return &tx.Event{
+			Address: builtin.Staker.Address,
+			Topics:  []thor.Bytes32{ev.ID(), thor.BytesToBytes32(staker[:])},
+			Data:    data,
+		}
+	}
+	rt := runtime.New(chain, st, &xenv.BlockContext{Number: 2, Time: b2.Header().Timestamp(), TotalScore: b2.Header().TotalScore(), Signer: b2_singer}, thor.ForkConfig{})
+
+	test := &ctest{
+		rt:  rt,
+		abi: builtin.Staker.ABI,
+		to:  builtin.Staker.Address,
+	}
+
+	st.SetBalance(acc1, big.NewInt(10000))
+	st.SetEnergy(acc1, big.NewInt(100000000), b2.Header().Timestamp())
+
+	test.Case("totalStake").ShouldOutput(big.NewInt(0)).Assert(t)
+
+	test.Case("getStake", acc1).ShouldOutput(big.NewInt(0)).Assert(t)
+
+	test.Case("stake").Caller(acc1).Value(big.NewInt(1000)).ShouldLog(stakedEvent(acc1, big.NewInt(1000))).Assert(t)
+
+	test.Case("totalStake").ShouldOutput(big.NewInt(1000)).Assert(t)
+
+	test.Case("getStake", acc1).ShouldOutput(big.NewInt(1000)).Assert(t)
+
+	acc1Balance, err := st.GetBalance(acc1)
+	assert.Nil(t, err)
+	assert.Equal(t, big.NewInt(9000), acc1Balance)
+
+	ctrBalance, err := st.GetBalance(builtin.Staker.Address)
+	assert.Nil(t, err)
+	assert.Equal(t, big.NewInt(1000), ctrBalance)
+
+	test.Case("unstake", big.NewInt(300)).Caller(acc1).ShouldLog(unstakedEvent(acc1, big.NewInt(300))).Assert(t)
+
+	test.Case("totalStake").ShouldOutput(big.NewInt(700)).Assert(t)
+
+	test.Case("getStake", acc1).ShouldOutput(big.NewInt(700)).Assert(t)
+
+	acc1Balance, err = st.GetBalance(acc1)
+	assert.Nil(t, err)
+	assert.Equal(t, big.NewInt(9300), acc1Balance)
+
+	ctrBalance, err = st.GetBalance(builtin.Staker.Address)
+	assert.Nil(t, err)
+	assert.Equal(t, big.NewInt(700), ctrBalance)
 }

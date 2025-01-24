@@ -13,6 +13,7 @@ import (
 	"github.com/vechain/thor/v2/builtin/gen"
 	"github.com/vechain/thor/v2/builtin/params"
 	"github.com/vechain/thor/v2/builtin/prototype"
+	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/xenv"
@@ -64,6 +65,20 @@ func (p *prototypeContract) Native(state *state.State) *prototype.Prototype {
 
 func (p *prototypeContract) Events() *abi.ABI {
 	asset := "compiled/PrototypeEvent.abi"
+	data := gen.MustABI(asset)
+	abi, err := abi.New(data)
+	if err != nil {
+		panic(errors.Wrap(err, "load ABI for "+asset))
+	}
+	return abi
+}
+
+func (s *stakerContract) Native(state *state.State, blockTime uint64) *staker.Staker {
+	return staker.New(s.Address, state, blockTime)
+}
+
+func (s *stakerContract) Events() *abi.ABI {
+	asset := "compiled/Staker.abi"
 	data := gen.MustABI(asset)
 	abi, err := abi.New(data)
 	if err != nil {

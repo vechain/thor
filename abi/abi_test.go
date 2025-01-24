@@ -83,3 +83,46 @@ func TestABI(t *testing.T) {
 		assert.Equal(t, value, d)
 	}
 }
+
+func TestStakerABI(t *testing.T) {
+	data := gen.MustABI("compiled/Staker.abi")
+	abi, err := abi.New(data)
+	assert.Nil(t, err)
+
+	{
+		name := "stake"
+		method, found := abi.MethodByName(name)
+		assert.True(t, found)
+		assert.NotNil(t, method)
+		assert.Equal(t, name, method.Name())
+
+		assert.False(t, method.Const())
+	}
+
+	{
+		name := "getStake"
+		method, found := abi.MethodByName(name)
+		assert.True(t, found)
+		assert.NotNil(t, method)
+
+		assert.True(t, method.Const())
+	}
+
+	{
+		name := "unstake"
+		method, found := abi.MethodByName(name)
+		assert.True(t, found)
+		assert.NotNil(t, method)
+
+		assert.False(t, method.Const())
+	}
+
+	{
+		name := "totalStake"
+		method, found := abi.MethodByName(name)
+		assert.True(t, found)
+		assert.NotNil(t, method)
+
+		assert.True(t, method.Const())
+	}
+}

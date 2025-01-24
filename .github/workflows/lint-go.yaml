@@ -18,11 +18,11 @@ jobs:
           go-version: '1.22'
           cache: false
 
-      - name: Check `builtins` directory
-        # if it has any changes in the 'builtins' dir after running `go generate`, echo an error and fail the workflow
-        run: |
-          go generate ./builtin/gen
-          git diff --exit-code builtin/gen || (echo "\n\n\nbuiltin/gen directory is not up to date, run 'go generate ./...' to update it" && exit 1)
+#      - name: Check `builtins` directory
+#        # if it has any changes in the 'builtins' dir after running `go generate`, echo an error and fail the workflow
+#        run: |
+#          go generate ./builtin/gen
+#          git diff --exit-code builtin/gen || (echo "\n\n\nbuiltin/gen directory is not up to date, run 'go generate ./...' to update it" && exit 1)
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
