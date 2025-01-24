@@ -15,5 +15,4 @@ var (
 	metricBlockProcessedGas      = metrics.LazyLoadGaugeVec("block_processed_gas_gauge", []string{"type"})
 	metricBlockProcessedDuration = metrics.LazyLoadHistogram("block_processed_duration_ms", metrics.Bucket10s)
 	metricChainForkCount         = metrics.LazyLoadCounter("chain_fork_count")
-	metricChainForkSize          = metrics.LazyLoadGauge("chain_fork_gauge")
 )
