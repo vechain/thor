@@ -21,8 +21,8 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func createTx(chainTag byte, gasPriceCoef uint8, expiration uint32, gas uint64, nonce uint64, dependsOn *thor.Bytes32, clause *tx.Clause, br tx.BlockRef) *tx.Transaction {
-	builder := new(tx.Builder).
+func createTx(txType int, chainTag byte, gasPriceCoef uint8, expiration uint32, gas uint64, nonce uint64, dependsOn *thor.Bytes32, clause *tx.Clause, br tx.BlockRef) *tx.Transaction {
+	builder := tx.NewTxBuilder(txType).
 		ChainTag(chainTag).
 		GasPriceCoef(gasPriceCoef).
 		Expiration(expiration).
@@ -32,7 +32,7 @@ func createTx(chainTag byte, gasPriceCoef uint8, expiration uint32, gas uint64, 
 		Clause(clause).
 		BlockRef(br)
 
-	transaction := builder.Build()
+	transaction := builder.MustBuild()
 
 	signature, _ := crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
 
@@ -66,12 +66,12 @@ func TestAdopt(t *testing.T) {
 		t.Fatal("Error scheduling:", err)
 	}
 
-	tx1 := createTx(chainTag, 1, 10, 21000, 1, nil, clause, tx.NewBlockRef(0))
+	tx1 := createTx(tx.LegacyTxType, chainTag, 1, 10, 21000, 1, nil, clause, tx.NewBlockRef(0))
 	if err := flow.Adopt(tx1); err != nil {
 		t.Fatal("Error adopting tx1:", err)
 	}
 
-	tx2 := createTx(chainTag, 1, 10, 21000, 2, (*thor.Bytes32)(tx1.ID().Bytes()), clause, tx.NewBlockRef(0))
+	tx2 := createTx(tx.LegacyTxType, chainTag, 1, 10, 21000, 2, (*thor.Bytes32)(tx1.ID().Bytes()), clause, tx.NewBlockRef(0))
 	if err := flow.Adopt(tx2); err != nil {
 		t.Fatal("Error adopting tx2:", err)
 	}
@@ -83,7 +83,7 @@ func TestAdopt(t *testing.T) {
 	}
 
 	// Test dependency that does not exist
-	tx3 := createTx(chainTag, 1, 10, 21000, 2, (*thor.Bytes32)((thor.Bytes32{0x1}).Bytes()), clause, tx.NewBlockRef(0))
+	tx3 := createTx(tx.LegacyTxType, chainTag, 1, 10, 21000, 2, (*thor.Bytes32)((thor.Bytes32{0x1}).Bytes()), clause, tx.NewBlockRef(0))
 	expectedErrorMessage = "tx not adoptable now"
 	if err := flow.Adopt(tx3); err.Error() != expectedErrorMessage {
 		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
@@ -93,6 +93,57 @@ func TestAdopt(t *testing.T) {
 	flow.ParentHeader()
 	flow.When()
 	flow.TotalScore()
+}
+
+func TestAdoptTypedTxs(t *testing.T) {
+	// Setup environment
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+	g := genesis.NewDevnet()
+
+	// Build genesis block
+	b, _, _, _ := g.Build(stater)
+	repo, _ := chain.NewRepository(db, b)
+
+	// Common transaction setup
+	chainTag := repo.ChainTag()
+	addr := thor.BytesToAddress([]byte("to"))
+	clause := tx.NewClause(&addr).WithValue(big.NewInt(10000))
+
+	// Create and adopt two transactions
+	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
+	sum, err := repo.GetBlockSummary(b.Header().ID())
+	if err != nil {
+		t.Fatal("Error getting block summary:", err)
+	}
+
+	flow, err := pkr.Schedule(sum, uint64(time.Now().Unix()))
+	if err != nil {
+		t.Fatal("Error scheduling:", err)
+	}
+
+	tx1 := createTx(tx.LegacyTxType, chainTag, 1, 10, 21000, 1, nil, clause, tx.NewBlockRef(0))
+	if err := flow.Adopt(tx1); err != nil {
+		t.Fatal("Error adopting tx1:", err)
+	}
+
+	tx2 := createTx(tx.DynamicFeeTxType, chainTag, 1, 10, 21000, 2, (*thor.Bytes32)(tx1.ID().Bytes()), clause, tx.NewBlockRef(0))
+	if err := flow.Adopt(tx2); err != nil {
+		t.Fatal("Error adopting tx2:", err)
+	}
+
+	//Repeat transaction
+	expectedErrorMessage := "known tx"
+	if err := flow.Adopt(tx2); err.Error() != expectedErrorMessage {
+		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
+	}
+
+	// Test dependency that does not exist
+	tx3 := createTx(tx.DynamicFeeTxType, chainTag, 1, 10, 21000, 2, (*thor.Bytes32)((thor.Bytes32{0x1}).Bytes()), clause, tx.NewBlockRef(0))
+	expectedErrorMessage = "tx not adoptable now"
+	if err := flow.Adopt(tx3); err.Error() != expectedErrorMessage {
+		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
+	}
 }
 
 func TestPack(t *testing.T) {
@@ -160,21 +211,21 @@ func TestAdoptErr(t *testing.T) {
 	flow, _ := pkr.Schedule(sum, uint64(time.Now().Unix()))
 
 	// Test chain tag mismatch
-	tx1 := createTx(byte(0xFF), 1, 10, 21000, 1, nil, clause, tx.NewBlockRef(0))
+	tx1 := createTx(tx.LegacyTxType, byte(0xFF), 1, 10, 21000, 1, nil, clause, tx.NewBlockRef(0))
 	expectedErrorMessage := "bad tx: chain tag mismatch"
 	if err := flow.Adopt(tx1); err.Error() != expectedErrorMessage {
 		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
 	}
 
 	// Test wrong block reference
-	tx2 := createTx(repo.ChainTag(), 1, 10, 1, 21000, nil, clause, tx.NewBlockRef(1000))
+	tx2 := createTx(tx.LegacyTxType, repo.ChainTag(), 1, 10, 21000, 1, nil, clause, tx.NewBlockRef(1000))
 	expectedErrorMessage = "tx not adoptable now"
 	if err := flow.Adopt(tx2); err.Error() != expectedErrorMessage {
 		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
 	}
 
 	// Test exceeded gas limit
-	tx3 := createTx(repo.ChainTag(), 1, 0, 1, 1, nil, clause, tx.NewBlockRef(1))
+	tx3 := createTx(tx.LegacyTxType, repo.ChainTag(), 1, 0, 1, 1, nil, clause, tx.NewBlockRef(1))
 	expectedErrorMessage = "gas limit reached"
 	if err := flow.Adopt(tx3); err.Error() != expectedErrorMessage {
 		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())

@@ -22,17 +22,20 @@ func TestGetByID(t *testing.T) {
 	repo := newChainRepo(muxdb.NewMem())
 
 	// Creating transactions
-	tx1 := newTx(repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
-	tx2 := newTx(repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[1])
+	tx1 := newTx(tx.LegacyTxType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
+	tx2 := newTx(tx.LegacyTxType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[1])
+	tx3 := newTx(tx.DynamicFeeTxType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[2])
 
 	// Resolving transactions into txObjects
 	txObj1, _ := resolveTx(tx1, false)
 	txObj2, _ := resolveTx(tx2, false)
+	txObj3, _ := resolveTx(tx3, false)
 
 	// Creating a new txObjectMap and adding transactions
 	m := newTxObjectMap()
 	assert.Nil(t, m.Add(txObj1, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
 	assert.Nil(t, m.Add(txObj2, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
+	assert.Nil(t, m.Add(txObj3, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
 
 	// Testing GetByID
 	retrievedTxObj1 := m.GetByID(txObj1.ID())
@@ -41,51 +44,60 @@ func TestGetByID(t *testing.T) {
 	retrievedTxObj2 := m.GetByID(txObj2.ID())
 	assert.Equal(t, txObj2, retrievedTxObj2, "The retrieved transaction object should match the original for tx2")
 
+	retrievedTxObj3 := m.GetByID(txObj3.ID())
+	assert.Equal(t, txObj3, retrievedTxObj3, "The retrieved transaction object should match the original for tx3")
+
 	// Testing retrieval of a non-existing transaction
 	nonExistingTxID := thor.Bytes32{} // An arbitrary non-existing ID
-	retrievedTxObj3 := m.GetByID(nonExistingTxID)
-	assert.Nil(t, retrievedTxObj3, "Retrieving a non-existing transaction should return nil")
+	retrievedNonExistingTxObj3 := m.GetByID(nonExistingTxID)
+	assert.Nil(t, retrievedNonExistingTxObj3, "Retrieving a non-existing transaction should return nil")
 }
 
 func TestFill(t *testing.T) {
 	repo := newChainRepo(muxdb.NewMem())
 
 	// Creating transactions
-	tx1 := newTx(repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
-	tx2 := newDelegatedTx(repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[1], genesis.DevAccounts()[2])
+	tx1 := newTx(tx.LegacyTxType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
+	tx2 := newDelegatedTx(tx.LegacyTxType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[1], genesis.DevAccounts()[2])
+	tx3 := newDelegatedTx(tx.DynamicFeeTxType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[3], genesis.DevAccounts()[4])
 
 	// Resolving transactions into txObjects
 	txObj1, _ := resolveTx(tx1, false)
 	txObj2, _ := resolveTx(tx2, false)
+	txObj3, _ := resolveTx(tx3, false)
 
 	// Creating a new txObjectMap
 	m := newTxObjectMap()
 
 	// Filling the map with transactions
-	m.Fill([]*txObject{txObj1, txObj2, txObj1})
+	m.Fill([]*txObject{txObj1, txObj2, txObj1, txObj3})
 
 	// Asserting the length of the map
-	assert.Equal(t, 2, m.Len(), "Map should contain only 2 unique transactions")
+	assert.Equal(t, 3, m.Len(), "Map should contain only 2 unique transactions")
 
 	// Asserting the transactions are correctly added
 	assert.True(t, m.ContainsHash(txObj1.Hash()), "Map should contain txObj1")
 	assert.True(t, m.ContainsHash(txObj2.Hash()), "Map should contain txObj2")
+	assert.True(t, m.ContainsHash(txObj3.Hash()), "Map should contain txObj3")
 
 	// Asserting duplicate handling
 	assert.Equal(t, m.GetByID(txObj1.ID()), txObj1, "Duplicate tx1 should not be added again")
 	assert.Equal(t, m.GetByID(txObj2.ID()), txObj2, "txObj2 should be retrievable by ID")
+	assert.Equal(t, m.GetByID(txObj3.ID()), txObj3, "txObj3 should be retrievable by ID")
 
 	assert.Equal(t, 1, m.quota[genesis.DevAccounts()[0].Address], "Account quota should be 1 for account 0")
 	assert.Equal(t, 1, m.quota[genesis.DevAccounts()[1].Address], "Account quota should be 1 for account 1")
 	assert.Equal(t, 1, m.quota[genesis.DevAccounts()[2].Address], "Delegator quota should be 1 for account 2")
+	assert.Equal(t, 1, m.quota[genesis.DevAccounts()[3].Address], "Account quota should be 1 for account 3")
+	assert.Equal(t, 1, m.quota[genesis.DevAccounts()[4].Address], "Delegator quota should be 1 for account 4")
 }
 
 func TestTxObjMap(t *testing.T) {
 	repo := newChainRepo(muxdb.NewMem())
 
-	tx1 := newTx(repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
-	tx2 := newTx(repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
-	tx3 := newTx(repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[1])
+	tx1 := newTx(tx.LegacyTxType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
+	tx2 := newTx(tx.DynamicFeeTxType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
+	tx3 := newTx(tx.LegacyTxType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[1])
 
 	txObj1, _ := resolveTx(tx1, false)
 	txObj2, _ := resolveTx(tx2, false)
@@ -119,9 +131,9 @@ func TestTxObjMap(t *testing.T) {
 func TestLimitByDelegator(t *testing.T) {
 	repo := newChainRepo(muxdb.NewMem())
 
-	tx1 := newTx(repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
-	tx2 := newDelegatedTx(repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[0], genesis.DevAccounts()[1])
-	tx3 := newDelegatedTx(repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[2], genesis.DevAccounts()[1])
+	tx1 := newTx(tx.LegacyTxType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
+	tx2 := newDelegatedTx(tx.DynamicFeeTxType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[0], genesis.DevAccounts()[1])
+	tx3 := newDelegatedTx(tx.LegacyTxType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[2], genesis.DevAccounts()[1])
 
 	txObj1, _ := resolveTx(tx1, false)
 	txObj2, _ := resolveTx(tx2, false)
@@ -143,9 +155,9 @@ func TestPendingCost(t *testing.T) {
 	stater := state.NewStater(db)
 
 	// Creating transactions
-	tx1 := newTx(repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
-	tx2 := newDelegatedTx(repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[1], genesis.DevAccounts()[2])
-	tx3 := newDelegatedTx(repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[1], genesis.DevAccounts()[2])
+	tx1 := newTx(tx.LegacyTxType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
+	tx2 := newDelegatedTx(tx.LegacyTxType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[1], genesis.DevAccounts()[2])
+	tx3 := newDelegatedTx(tx.DynamicFeeTxType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[1], genesis.DevAccounts()[2])
 
 	// Resolving transactions into txObjects
 	txObj1, _ := resolveTx(tx1, false)
