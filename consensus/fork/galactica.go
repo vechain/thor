@@ -21,9 +21,6 @@ import (
 func VerifyGalacticaHeader(config *thor.ForkConfig, parent, header *block.Header) error {
 	// Verify that the gas limit remains within allowed bounds
 	parentGasLimit := parent.GasLimit()
-	if parent.Number() < config.GALACTICA {
-		parentGasLimit = parent.GasLimit() * thor.ElasticityMultiplier
-	}
 	if err := block.GasLimit(header.GasLimit()).IsValid(parentGasLimit); !err {
 		return fmt.Errorf("invalid gas limit: have %d, want %d", header.GasLimit(), parentGasLimit)
 	}

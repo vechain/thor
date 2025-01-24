@@ -32,24 +32,24 @@ func TestBlockGasLimits(t *testing.T) {
 		ok        bool
 	}{
 		// Transitions from non-Galactica to Galactica
-		{10000000, 4, 20000000, true},  // No change
-		{10000000, 4, 20019531, true},  // Upper limit
-		{10000000, 4, 20019532, false}, // Upper +1
-		{10000000, 4, 19980469, true},  // Lower limit
-		{10000000, 4, 19980468, false}, // Lower limit -1
-		// Galactica to Galactica
-		{20000000, 5, 20000000, true},
+		{20000000, 5, 20000000, true},  // No change
 		{20000000, 5, 20019531, true},  // Upper limit
-		{20000000, 5, 20019532, false}, // Upper limit +1
+		{20000000, 5, 20019532, false}, // Upper +1
 		{20000000, 5, 19980469, true},  // Lower limit
 		{20000000, 5, 19980468, false}, // Lower limit -1
-		{40000000, 5, 40039062, true},  // Upper limit
-		{40000000, 5, 40039063, false}, // Upper limit +1
-		{40000000, 5, 39960938, true},  // lower limit
-		{40000000, 5, 39960937, false}, // Lower limit -1
+		// Galactica to Galactica
+		{20000000, 6, 20000000, true},
+		{20000000, 6, 20019531, true},  // Upper limit
+		{20000000, 6, 20019532, false}, // Upper limit +1
+		{20000000, 6, 19980469, true},  // Lower limit
+		{20000000, 6, 19980468, false}, // Lower limit -1
+		{40000000, 6, 40039062, true},  // Upper limit
+		{40000000, 6, 40039063, false}, // Upper limit +1
+		{40000000, 6, 39960938, true},  // lower limit
+		{40000000, 6, 39960937, false}, // Lower limit -1
 	} {
 		var parentID thor.Bytes32
-		binary.BigEndian.PutUint32(parentID[:], tc.pNum-1)
+		binary.BigEndian.PutUint32(parentID[:], tc.pNum-2)
 
 		parent := new(block.Builder).ParentID(parentID).GasUsed(tc.pGasLimit / 2).GasLimit(tc.pGasLimit).BaseFee(initial).Build().Header()
 		header := new(block.Builder).ParentID(parent.ID()).GasUsed(tc.gasLimit / 2).GasLimit(tc.gasLimit).BaseFee(initial).Build().Header()
