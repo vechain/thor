@@ -487,15 +487,13 @@ func (n *Node) processFork(newBlock *block.Block, oldBestBlockID thor.Bytes32) {
 		return
 	}
 
-	// Set the gauge metric to the size of the fork (0 if there are no forks)
-	metricChainForkSize().Set(int64(len(sideIDs)))
+	metricChainForkCount().Add(int64(len(sideIDs)))
 
 	if len(sideIDs) == 0 {
 		return
 	}
 
 	if n := len(sideIDs); n >= 2 {
-		metricChainForkCount().Add(1)
 		logger.Warn(fmt.Sprintf(
 			`⑂⑂⑂⑂⑂⑂⑂⑂ FORK HAPPENED ⑂⑂⑂⑂⑂⑂⑂⑂
 side-chain:   %v  %v`,
