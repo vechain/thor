@@ -9,7 +9,6 @@ import (
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/utils"
@@ -37,7 +36,7 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, a
 		if t.repo.IsNotFound(err) {
 			if allowPending {
 				if pending := t.pool.Get(txID); pending != nil {
-					raw, err := rlp.EncodeToBytes(pending)
+					raw, err := pending.MarshalBinary()
 					if err != nil {
 						return nil, err
 					}
@@ -55,7 +54,7 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, a
 	if err != nil {
 		return nil, err
 	}
-	raw, err := rlp.EncodeToBytes(tx)
+	raw, err := tx.MarshalBinary()
 	if err != nil {
 		return nil, err
 	}

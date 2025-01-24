@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -94,7 +93,7 @@ func getLegacyTx(t *testing.T) {
 	if err := json.Unmarshal(res, &rawTx); err != nil {
 		t.Fatal(err)
 	}
-	rlpTx, err := rlp.EncodeToBytes(legacyTx)
+	rlpTx, err := legacyTx.MarshalBinary()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,11 +113,11 @@ func getDynamicFeeTx(t *testing.T) {
 	if err := json.Unmarshal(res, &rawTx); err != nil {
 		t.Fatal(err)
 	}
-	rlpTx, err := rlp.EncodeToBytes(dynFeeTx)
+	encTx, err := dynFeeTx.MarshalBinary()
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, hexutil.Encode(rlpTx), rawTx["raw"], "should be equal raw")
+	assert.Equal(t, hexutil.Encode(encTx), rawTx["raw"], "should be equal raw")
 }
 
 func getTxReceipt(t *testing.T) {
@@ -254,7 +253,7 @@ func getRawTransactionWhenTxStillInMempool(t *testing.T) {
 	if err := json.Unmarshal(res, &rawTx); err != nil {
 		t.Fatal(err)
 	}
-	rlpTx, err := rlp.EncodeToBytes(mempoolTx)
+	rlpTx, err := mempoolTx.MarshalBinary()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,7 +288,7 @@ func sendTxWithBadFormat(t *testing.T) {
 
 func sendTxThatCannotBeAcceptedInLocalMempool(t *testing.T) {
 	tx := tx.NewTxBuilder(tx.LegacyTxType).MustBuild()
-	rlpTx, err := rlp.EncodeToBytes(tx)
+	rlpTx, err := tx.MarshalBinary()
 	if err != nil {
 		t.Fatal(err)
 	}
