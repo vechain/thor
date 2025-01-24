@@ -1,0 +1,24 @@
+services:
+
+  inspector:
+    build:
+        context: .
+        dockerfile: local/inspector.Dockerfile
+    hostname: inspector
+    container_name: inspector
+    environment:
+      - VUE_APP_SOLO_URL=http://localhost:8669
+      - VUE_APP_IS_DOCKER=true
+    ports:
+      - "8080:80"
+
+  insight:
+    build:
+      context: .
+      dockerfile: local/insights.Dockerfile
+    hostname: insight
+    container_name: insight
+    environment:
+      - VUE_APP_SOLO_URL=http://localhost:8669
+    ports:
+      - "8081:80"
