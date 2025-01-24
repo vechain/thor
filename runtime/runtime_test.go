@@ -763,11 +763,13 @@ func TestExecuteTransactionFailure(t *testing.T) {
 	originEnergy.SetString("9000000000000000000000000000000000000", 10)
 	state.SetEnergy(origin.Address, originEnergy, 0)
 
-	tx := GetMockFailedTx(tx.LegacyTxType)
+	for _, txType := range []int{tx.LegacyTxType, tx.DynamicFeeTxType} {
+		tx := GetMockFailedTx(txType)
 
-	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.NoFork)
+		rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.NoFork)
 
-	_, err = rt.ExecuteTransaction(tx)
+		_, err := rt.ExecuteTransaction(tx)
 
-	assert.NotNil(t, err)
+		assert.NotNil(t, err)
+	}
 }
