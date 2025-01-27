@@ -178,7 +178,7 @@ func (tr *testResolvedTransaction) TestBuyGas() {
 		if err != nil {
 			tr.t.Fatal(err)
 		}
-		_, _, payer, _, returnGas, err := resolve.BuyGas(state, targetTime)
+		_, _, payer, _, returnGas, err := resolve.BuyGas(state, targetTime, &runtime.GalacticaItems{false, nil})
 		tr.assert.Nil(err)
 		returnGas(100)
 		return payer

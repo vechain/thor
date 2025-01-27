@@ -40,7 +40,8 @@ const (
 	CheckpointInterval = 180  // blocks between two bft checkpoints.
 
 	ElasticityMultiplier     = 2
-	InitialBaseFee           = 1000000000
+	InitialBaseFee           = 10_000_000_000_000
+	MinBaseFee               = 10_000_000_000_000 // 10^13 wei, 0.00001 VTHO
 	BaseFeeChangeDenominator = 8
 )
 

@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/abi"
+	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
@@ -327,13 +328,12 @@ func TestEVMFunction(t *testing.T) {
 			abi:        "",
 			methodName: "",
 			testFunc: func(ctx *context, t *testing.T) {
-				expectedBaseFee := big.NewInt(100_000)
-				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{BaseFee: expectedBaseFee}, thor.ForkConfig{GALACTICA: 0}).
+				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, thor.ForkConfig{GALACTICA: 0}).
 					PrepareClause(tx.NewClause(&target), 0, math.MaxUint64, &xenv.TransactionContext{})
 				out, _, err := exec()
 				assert.Nil(t, err)
 				assert.Nil(t, out.VMErr)
-				assert.True(t, new(big.Int).SetBytes(out.Data).Cmp(expectedBaseFee) == 0)
+				assert.True(t, new(big.Int).SetBytes(out.Data).Cmp(big.NewInt(thor.InitialBaseFee)) == 0)
 			},
 		},
 		{
@@ -713,37 +713,43 @@ func TestGetValues(t *testing.T) {
 	assert.NotNil(t, runtimeContext)
 }
 
-func TestExecuteTransaction(t *testing.T) {
-	origin := genesis.DevAccounts()[0]
-
+func TestTransactionsWithNotEnoughGasFee(t *testing.T) {
+	// Arrange
 	db := muxdb.NewMem()
-
 	g := genesis.NewDevnet()
 	b0, _, _, err := g.Build(state.NewStater(db))
 	assert.Nil(t, err)
-
 	repo, _ := chain.NewRepository(db, b0)
-
+	chain := repo.NewChain(b0.Header().ID())
 	state := state.New(db, b0.Header().StateRoot(), 0, 0, 0)
+	baseFee := int64(1000000000)
 
-	originEnergy := new(big.Int)
-	originEnergy.SetString("9000000000000000000000000000000000000", 10)
-	state.SetEnergy(origin.Address, originEnergy, 0)
+	b := new(block.Builder).
+		ParentID(repo.BestBlockSummary().Header.ID()).
+		TotalScore(repo.BestBlockSummary().Header.TotalScore() + 1).
+		Timestamp(repo.BestBlockSummary().Header.Timestamp() + 10).
+		BaseFee(big.NewInt(baseFee)).
+		Build()
+	repo.AddBlock(b, tx.Receipts{}, 0)
+	repo.SetBestBlockID(b.Header().ID())
 
-	txs := []*tx.Transaction{
-		getMockTx(repo, tx.LegacyTxType, t),
-		getMockTx(repo, tx.DynamicFeeTxType, t),
-	}
+	rt := runtime.New(chain, state, &xenv.BlockContext{BaseFee: big.NewInt(baseFee)}, thor.ForkConfig{GALACTICA: 0})
+	illegalTx, err := tx.NewTxBuilder(tx.DynamicFeeTxType).
+		ChainTag(repo.ChainTag()).
+		MaxPriorityFeePerGas(big.NewInt(baseFee / 10000)).
+		MaxFeePerGas(big.NewInt(baseFee / 100)).
+		Gas(21000).
+		Build()
+	assert.NoError(t, err)
+	illegalTx = tx.MustSign(illegalTx, genesis.DevAccounts()[0].PrivateKey)
 
-	for _, trx := range txs {
-		rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.NoFork)
+	// Act
+	receipt, err := rt.ExecuteTransaction(illegalTx)
 
-		receipt, err := rt.ExecuteTransaction(trx)
-		if err != nil {
-			t.Fatal(err)
-		}
-		_ = receipt
-	}
+	// Assert
+	assert.Error(t, err)
+	assert.Equal(t, runtime.ErrMaxFeePerGasTooLow, err)
+	assert.Nil(t, receipt)
 }
 
 func TestExecuteTransactionFailure(t *testing.T) {
@@ -771,5 +777,213 @@ func TestExecuteTransactionFailure(t *testing.T) {
 		_, err := rt.ExecuteTransaction(tx)
 
 		assert.NotNil(t, err)
+	}
+}
+
+func TestExecuteTransaction(t *testing.T) {
+	db := muxdb.NewMem()
+	g := genesis.NewDevnet()
+	b0, _, _, err := g.Build(state.NewStater(db))
+	assert.Nil(t, err)
+	repo, _ := chain.NewRepository(db, b0)
+	state := state.New(db, b0.Header().StateRoot(), 0, 0, 0)
+
+	maxFee := int64(thor.InitialBaseFee * 1000)
+	maxPriorityFee := maxFee / 100
+	gas := uint64(42000)
+	dynTx, err := tx.NewTxBuilder(tx.DynamicFeeTxType).
+		ChainTag(repo.ChainTag()).
+		Gas(gas).
+		MaxFeePerGas(big.NewInt(maxFee)).
+		MaxPriorityFeePerGas(big.NewInt(maxPriorityFee)).
+		Build()
+	assert.Nil(t, err)
+	dynTx = tx.MustSign(dynTx, genesis.DevAccounts()[0].PrivateKey)
+
+	legacyTx, err := tx.NewTxBuilder(tx.LegacyTxType).
+		ChainTag(repo.ChainTag()).
+		Gas(gas).
+		GasPriceCoef(128).
+		Build()
+	assert.Nil(t, err)
+	legacyTx = tx.MustSign(legacyTx, genesis.DevAccounts()[0].PrivateKey)
+
+	t.Run("Receipt check with legacy tx before galactica fork", func(t *testing.T) {
+		prevPayerEnergy, err := state.GetEnergy(genesis.DevAccounts()[0].Address, b0.Header().Timestamp())
+		assert.Nil(t, err)
+		prevEndorserEnergy, err := state.GetEnergy(thor.Address{}, b0.Header().Timestamp())
+		assert.Nil(t, err)
+
+		rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{BaseFee: big.NewInt(thor.InitialBaseFee)}, thor.NoFork)
+		receipt, err := rt.ExecuteTransaction(legacyTx)
+		assert.Nil(t, err)
+
+		// Assert
+		assert.False(t, receipt.Reverted)
+		assert.NotNil(t, receipt)
+
+		currentPayerEnergy, err := state.GetEnergy(genesis.DevAccounts()[0].Address, b0.Header().Timestamp()+10)
+		assert.Nil(t, err)
+		currentEndorserEnergy, err := state.GetEnergy(thor.Address{}, b0.Header().Timestamp()+10)
+		assert.Nil(t, err)
+
+		// Expecting to consume just the intrinsic gas portion
+		assert.Equal(t, gas-21000, receipt.GasUsed)
+
+		// Payer
+		balanceDelta := new(big.Int).Sub(prevPayerEnergy, currentPayerEnergy)
+		assert.True(t, balanceDelta.Cmp(receipt.Paid) == 0)
+		assert.True(t, receipt.Paid.Cmp(common.Big0) > 0)
+
+		// Endorser
+		assert.True(t, currentEndorserEnergy.Cmp(prevEndorserEnergy) > 0)
+		endorserEnergyDelta := new(big.Int).Sub(currentEndorserEnergy, prevEndorserEnergy)
+		assert.True(t, endorserEnergyDelta.Cmp(receipt.Reward) == 0)
+	})
+
+	t.Run("Receipt check with legacy tx after galactica fork", func(t *testing.T) {
+		prevPayerEnergy, err := state.GetEnergy(genesis.DevAccounts()[0].Address, b0.Header().Timestamp())
+		assert.Nil(t, err)
+		prevEndorserEnergy, err := state.GetEnergy(thor.Address{}, b0.Header().Timestamp())
+		assert.Nil(t, err)
+
+		rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{BaseFee: big.NewInt(thor.InitialBaseFee)}, thor.ForkConfig{GALACTICA: 0})
+		receipt, err := rt.ExecuteTransaction(legacyTx)
+		assert.Nil(t, err)
+
+		// Assert
+		assert.False(t, receipt.Reverted)
+		assert.NotNil(t, receipt)
+
+		currentPayerEnergy, err := state.GetEnergy(genesis.DevAccounts()[0].Address, b0.Header().Timestamp()+10)
+		assert.Nil(t, err)
+		currentEndorserEnergy, err := state.GetEnergy(thor.Address{}, b0.Header().Timestamp()+10)
+		assert.Nil(t, err)
+
+		// Expecting to consume just the intrinsic gas portion
+		assert.Equal(t, gas-21000, receipt.GasUsed)
+
+		// Payer
+		balanceDelta := new(big.Int).Sub(prevPayerEnergy, currentPayerEnergy)
+		assert.True(t, balanceDelta.Cmp(receipt.Paid) == 0)
+		assert.True(t, receipt.Paid.Cmp(common.Big0) > 0)
+
+		// Endorser
+		assert.True(t, currentEndorserEnergy.Cmp(prevEndorserEnergy) > 0)
+		endorserEnergyDelta := new(big.Int).Sub(currentEndorserEnergy, prevEndorserEnergy)
+		assert.True(t, endorserEnergyDelta.Cmp(receipt.Reward) == 0)
+	})
+
+	t.Run("Receipt check with dyn fee tx after galactica fork", func(t *testing.T) {
+		prevPayerEnergy, err := state.GetEnergy(genesis.DevAccounts()[0].Address, b0.Header().Timestamp())
+		assert.Nil(t, err)
+		prevEndorserEnergy, err := state.GetEnergy(thor.Address{}, b0.Header().Timestamp())
+		assert.Nil(t, err)
+
+		rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{BaseFee: big.NewInt(thor.InitialBaseFee)}, thor.ForkConfig{GALACTICA: 0})
+		receipt, err := rt.ExecuteTransaction(dynTx)
+		assert.Nil(t, err)
+
+		// Assert
+		assert.False(t, receipt.Reverted)
+		assert.NotNil(t, receipt)
+
+		currentPayerEnergy, err := state.GetEnergy(genesis.DevAccounts()[0].Address, b0.Header().Timestamp()+10)
+		assert.Nil(t, err)
+		currentEndorserEnergy, err := state.GetEnergy(thor.Address{}, b0.Header().Timestamp()+10)
+		assert.Nil(t, err)
+
+		// Expecting to consume just the intrinsic gas portion
+		assert.Equal(t, gas-21000, receipt.GasUsed)
+
+		// Payer
+		balanceDelta := new(big.Int).Sub(prevPayerEnergy, currentPayerEnergy)
+		assert.True(t, balanceDelta.Cmp(receipt.Paid) == 0)
+		assert.True(t, receipt.Paid.Cmp(common.Big0) > 0)
+
+		// Endorser
+		assert.True(t, currentEndorserEnergy.Cmp(prevEndorserEnergy) > 0)
+		endorserEnergyDelta := new(big.Int).Sub(currentEndorserEnergy, prevEndorserEnergy)
+		assert.True(t, endorserEnergyDelta.Cmp(receipt.Reward) == 0)
+	})
+
+	t.Run("Test mixed txs", func(t *testing.T) {
+		txs := []*tx.Transaction{
+			getMockTx(repo, tx.LegacyTxType, t),
+			getMockTx(repo, tx.DynamicFeeTxType, t),
+		}
+
+		for _, trx := range txs {
+			rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.NoFork)
+
+			receipt, err := rt.ExecuteTransaction(trx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_ = receipt
+		}
+	})
+}
+
+func TestNoRewards(t *testing.T) {
+	db := muxdb.NewMem()
+	g := genesis.NewDevnet()
+	b0, _, _, err := g.Build(state.NewStater(db))
+	assert.Nil(t, err)
+	repo, _ := chain.NewRepository(db, b0)
+	state := state.New(db, b0.Header().StateRoot(), 0, 0, 0)
+
+	tests := []struct {
+		name  string
+		getTx func() *tx.Transaction
+	}{
+		{
+			name: "Dyn tx with maxFeePerGas = 0",
+			getTx: func() *tx.Transaction {
+				dt, err := tx.NewTxBuilder(tx.DynamicFeeTxType).
+					ChainTag(repo.ChainTag()).
+					Gas(21000).
+					MaxFeePerGas(big.NewInt(thor.InitialBaseFee * 1000)).
+					MaxPriorityFeePerGas(common.Big0).
+					Build()
+				assert.Nil(t, err)
+				return tx.MustSign(dt, genesis.DevAccounts()[0].PrivateKey)
+			},
+		},
+		{
+			name: "Dyn tx with maxFee equals to baseFee",
+			getTx: func() *tx.Transaction {
+				dt, err := tx.NewTxBuilder(tx.DynamicFeeTxType).
+					ChainTag(repo.ChainTag()).
+					Gas(21000).
+					MaxFeePerGas(big.NewInt(thor.InitialBaseFee)).
+					MaxPriorityFeePerGas(big.NewInt(thor.InitialBaseFee)).
+					Build()
+				assert.Nil(t, err)
+				return tx.MustSign(dt, genesis.DevAccounts()[0].PrivateKey)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			prevEndorserEnergy, err := state.GetEnergy(thor.Address{}, b0.Header().Timestamp())
+			assert.Nil(t, err)
+
+			rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{BaseFee: big.NewInt(thor.InitialBaseFee)}, thor.ForkConfig{GALACTICA: 0})
+			receipt, err := rt.ExecuteTransaction(tt.getTx())
+
+			// Assert
+			assert.Nil(t, err)
+			assert.False(t, receipt.Reverted)
+			assert.NotNil(t, receipt)
+
+			currentEndorserEnergy, err := state.GetEnergy(thor.Address{}, b0.Header().Timestamp()+10)
+			assert.Nil(t, err)
+
+			// Endorser gets no rewards
+			assert.True(t, currentEndorserEnergy.Cmp(prevEndorserEnergy) == 0)
+			assert.True(t, receipt.Reward.Cmp(common.Big0) == 0)
+		})
 	}
 }

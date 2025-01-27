@@ -317,6 +317,7 @@ func buildTxWithClauses(txType int, chainTag byte, clauses ...*tx.Clause) *tx.Tr
 		ChainTag(chainTag).
 		Expiration(10).
 		Gas(1000000).
+		MaxFeePerGas(big.NewInt(1000)).
 		Clauses(clauses).
 		MustBuild()
 	return tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)

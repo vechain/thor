@@ -62,7 +62,7 @@ func (o *txObject) Payer() *thor.Address {
 	return o.payer
 }
 
-func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock *block.Header) (bool, error) {
+func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock *block.Header, forkConfig *thor.ForkConfig) (bool, error) {
 	switch {
 	case o.Gas() > headBlock.GasLimit():
 		return false, errors.New("gas too large")
@@ -100,7 +100,15 @@ func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 	checkpoint := state.NewCheckpoint()
 	defer state.RevertTo(checkpoint)
 
-	_, _, payer, prepaid, _, err := o.resolved.BuyGas(state, headBlock.Timestamp()+thor.BlockInterval)
+	isGalactica := headBlock.Number() >= forkConfig.GALACTICA
+
+	baseFee := headBlock.BaseFee()
+	// The block header before GALACTICA has no base fee, so it's initialized with InitialBaseFee.
+	if headBlock.Number() == forkConfig.GALACTICA {
+		baseFee = big.NewInt(thor.InitialBaseFee)
+	}
+	galacticaItems := &runtime.GalacticaItems{IsActive: isGalactica, BaseFee: baseFee}
+	_, _, payer, prepaid, _, err := o.resolved.BuyGas(state, headBlock.Timestamp()+thor.BlockInterval, galacticaItems)
 	if err != nil {
 		return false, err
 	}
@@ -115,6 +123,13 @@ func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 func sortTxObjsByOverallGasPriceDesc(txObjs []*txObject) {
 	sort.Slice(txObjs, func(i, j int) bool {
 		gp1, gp2 := txObjs[i].overallGasPrice, txObjs[j].overallGasPrice
+		// This is to make sure the zero gas price txs are always at the end of the list.
+		if gp1.Sign() == 0 {
+			return false
+		}
+		if gp2.Sign() == 0 {
+			return true
+		}
 		return gp1.Cmp(gp2) >= 0
 	})
 }

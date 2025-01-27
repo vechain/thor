@@ -173,15 +173,15 @@ func TestPendingCost(t *testing.T) {
 	state := stater.NewState(best.Header.StateRoot(), best.Header.Number(), best.Conflicts, best.SteadyNum)
 
 	var err error
-	txObj1.executable, err = txObj1.Executable(chain, state, best.Header)
+	txObj1.executable, err = txObj1.Executable(chain, state, best.Header, &thor.NoFork)
 	assert.Nil(t, err)
 	assert.True(t, txObj1.executable)
 
-	txObj2.executable, err = txObj2.Executable(chain, state, best.Header)
+	txObj2.executable, err = txObj2.Executable(chain, state, best.Header, &thor.NoFork)
 	assert.Nil(t, err)
 	assert.True(t, txObj2.executable)
 
-	txObj3.executable, err = txObj3.Executable(chain, state, best.Header)
+	txObj3.executable, err = txObj3.Executable(chain, state, best.Header, &thor.NoFork)
 	assert.Nil(t, err)
 	assert.True(t, txObj3.executable)
 

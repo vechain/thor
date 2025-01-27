@@ -35,7 +35,7 @@ func TestPendingTx_Subscribe(t *testing.T) {
 		Limit:           100,
 		LimitPerAccount: 16,
 		MaxLifetime:     time.Hour,
-	})
+	}, &thor.NoFork)
 
 	p := newPendingTx(txPool)
 
@@ -55,7 +55,7 @@ func TestPendingTx_Unsubscribe(t *testing.T) {
 		Limit:           100,
 		LimitPerAccount: 16,
 		MaxLifetime:     time.Hour,
-	})
+	}, &thor.NoFork)
 	p := newPendingTx(txPool)
 
 	ch := make(chan *tx.Transaction)
@@ -80,7 +80,7 @@ func TestPendingTx_DispatchLoop(t *testing.T) {
 		Limit:           100,
 		LimitPerAccount: 16,
 		MaxLifetime:     time.Hour,
-	})
+	}, &thor.NoFork)
 	p := newPendingTx(txPool)
 
 	// Add new block to be in a sync state
@@ -154,7 +154,7 @@ func TestPendingTx_NoWriteAfterUnsubscribe(t *testing.T) {
 		Limit:           100,
 		LimitPerAccount: 16,
 		MaxLifetime:     time.Hour,
-	})
+	}, &thor.NoFork)
 
 	p := newPendingTx(txPool)
 	txCh := make(chan *tx.Transaction, txQueueSize)
@@ -185,7 +185,7 @@ func TestPendingTx_UnsubscribeOnWebSocketClose(t *testing.T) {
 		Limit:           100,
 		LimitPerAccount: 16,
 		MaxLifetime:     time.Hour,
-	})
+	}, &thor.NoFork)
 
 	// Subscriptions setup
 	sub := New(thorChain.Repo(), []string{"*"}, 100, txPool, false)
