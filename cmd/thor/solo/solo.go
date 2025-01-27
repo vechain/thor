@@ -237,7 +237,6 @@ func (s *Solo) init(ctx context.Context) error {
 		return err
 	}
 
-	// if we're at the genesis block, instantly perform all forks at block 1, else wait for next block time
 	if !s.onDemand {
 		select {
 		case <-ctx.Done():
