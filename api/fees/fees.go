@@ -107,25 +107,24 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 	}
 
 	oldestBlock, blockDataChan := f.processBlockRange(blockCount, summary)
+	numberOfProcessedBlocks := len(blockDataChan)
 
 	var (
-		baseFees      = make([]*hexutil.Big, blockCount)
-		gasUsedRatios = make([]float64, blockCount)
+		baseFees      = make([]*hexutil.Big, numberOfProcessedBlocks)
+		gasUsedRatios = make([]float64, numberOfProcessedBlocks)
 	)
 
 	// Collect results from the channel
-	i := 0
 	for blockData := range blockDataChan {
 		if blockData.err != nil {
 			return blockData.err
 		}
 		if baseFee := blockData.blockSummary.Header.BaseFee(); baseFee != nil {
-			baseFees[i] = (*hexutil.Big)(baseFee)
+			baseFees = append(baseFees, (*hexutil.Big)(baseFee))
 		} else {
-			baseFees[i] = (*hexutil.Big)(big.NewInt(0))
+			baseFees = append(baseFees, (*hexutil.Big)(big.NewInt(0)))
 		}
-		gasUsedRatios[i] = float64(blockData.blockSummary.Header.GasUsed()) / float64(blockData.blockSummary.Header.GasLimit())
-		i++
+		gasUsedRatios = append(gasUsedRatios, float64(blockData.blockSummary.Header.GasUsed())/float64(blockData.blockSummary.Header.GasLimit()))
 	}
 
 	return utils.WriteJSON(w, &GetFeesHistory{
