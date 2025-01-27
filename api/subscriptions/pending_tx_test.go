@@ -71,7 +71,7 @@ func TestPendingTx_Unsubscribe(t *testing.T) {
 
 func TestPendingTx_DispatchLoop(t *testing.T) {
 	db := muxdb.NewMem()
-	gene := genesis.NewDevnet(thor.SoloFork)
+	gene := genesis.NewDevnet()
 	stater := state.NewStater(db)
 	b0, _, _, _ := gene.Build(stater)
 	repo, _ := chain.NewRepository(db, b0)

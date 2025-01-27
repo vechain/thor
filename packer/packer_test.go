@@ -67,7 +67,7 @@ func (ti *txIterator) OnProcessed(_ thor.Bytes32, _ error) {
 func TestP(t *testing.T) {
 	db := muxdb.NewMem()
 
-	g := genesis.NewDevnet(thor.SoloFork)
+	g := genesis.NewDevnet()
 	b0, _, _, _ := g.Build(state.NewStater(db))
 
 	repo, _ := chain.NewRepository(db, b0)
@@ -182,7 +182,7 @@ func TestForkVIP191(t *testing.T) {
 func TestBlocklist(t *testing.T) {
 	db := muxdb.NewMem()
 
-	g := genesis.NewDevnet(thor.SoloFork)
+	g := genesis.NewDevnet()
 	b0, _, _, _ := g.Build(state.NewStater(db))
 
 	repo, _ := chain.NewRepository(db, b0)
@@ -230,7 +230,7 @@ func TestBlocklist(t *testing.T) {
 func TestMock(t *testing.T) {
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
-	g := genesis.NewDevnet(thor.SoloFork)
+	g := genesis.NewDevnet()
 
 	b0, _, _, _ := g.Build(stater)
 	repo, _ := chain.NewRepository(db, b0)
@@ -257,7 +257,7 @@ func TestMock(t *testing.T) {
 func TestSetGasLimit(t *testing.T) {
 	db := muxdb.NewMem()
 
-	g := genesis.NewDevnet(thor.SoloFork)
+	g := genesis.NewDevnet()
 	stater := state.NewStater(db)
 	b0, _, _, _ := g.Build(stater)
 	repo, _ := chain.NewRepository(db, b0)

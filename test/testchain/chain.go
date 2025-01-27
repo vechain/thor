@@ -73,7 +73,7 @@ func NewIntegrationTestChain() (*Chain, error) {
 	stater := state.NewStater(db)
 
 	// Initialize the genesis and retrieve the genesis block
-	gene := genesis.NewDevnet(forkConfig)
+	gene := genesis.NewDevnetWithConfig(forkConfig)
 	geneBlk, _, _, err := gene.Build(stater)
 	if err != nil {
 		return nil, err
