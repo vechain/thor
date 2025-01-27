@@ -756,15 +756,15 @@ paths:
                 example: 'Invalid address'
 
   /fees/history:
-    parameters:
-      - $ref: '#/components/parameters/BlockCountInQuery'
-      - $ref: '#/components/parameters/RevisionInQuery'
     get:
       tags:
         - Fees
       summary: Retrieve historical fee data
       description: |
         Retrieve historical fee data, including the gas used ratio per block.
+      parameters:
+        - $ref: '#/components/parameters/BlockCountInQuery'
+        - $ref: '#/components/parameters/NewestBlockInQuery'
       responses:
         '200':
           description: OK
@@ -2319,6 +2319,13 @@ components:
 
     RevisionInQuery:
       name: revision
+      in: query
+      description: Specify either `best`, `justified`, `finalized`, a block number or block ID. If omitted, the `best` block is assumed.
+      schema:
+        type: string
+
+    NewestBlockInQuery:
+      name: newestBlock
       in: query
       description: Specify either `best`, `justified`, `finalized`, a block number or block ID. If omitted, the `best` block is assumed.
       schema:

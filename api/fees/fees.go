@@ -37,14 +37,14 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 	if blockCount < 1 || blockCount > maxNumberOfBlocks {
 		return 0, nil, utils.BadRequest(errors.New(fmt.Sprintf("blockCount must be between 1 and %d", maxNumberOfBlocks)))
 	}
-	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"), false)
+	newestBlock, err := utils.ParseRevision(req.URL.Query().Get("newestBlock"), false)
 	if err != nil {
-		return 0, nil, utils.BadRequest(errors.WithMessage(err, "revision"))
+		return 0, nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
 	}
-	summary, err := utils.GetSummary(revision, f.repo, f.bft)
+	summary, err := utils.GetSummary(newestBlock, f.repo, f.bft)
 	if err != nil {
 		if f.repo.IsNotFound(err) {
-			return 0, nil, utils.BadRequest(errors.WithMessage(err, "revision"))
+			return 0, nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
 		}
 		return 0, nil, err
 	}
