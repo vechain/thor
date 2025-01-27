@@ -34,7 +34,7 @@ func init() {
 }
 
 func TestMetricsMiddleware(t *testing.T) {
-	thorChain, err := testchain.NewIntegrationTestChain(thor.ForkConfig{})
+	thorChain, err := testchain.NewIntegrationTestChain()
 	require.NoError(t, err)
 
 	// inject some invalid data to db
@@ -99,7 +99,7 @@ func TestMetricsMiddleware(t *testing.T) {
 }
 
 func TestWebsocketMetrics(t *testing.T) {
-	thorChain, err := testchain.NewIntegrationTestChain(thor.ForkConfig{})
+	thorChain, err := testchain.NewIntegrationTestChain()
 	require.NoError(t, err)
 
 	router := mux.NewRouter()

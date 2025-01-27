@@ -95,7 +95,7 @@ func testConvertRangeWithFromGreaterThanGenesis(t *testing.T, chain *testchain.C
 
 // Init functions
 func initChain(t *testing.T) *testchain.Chain {
-	thorChain, err := testchain.NewIntegrationTestChain(thor.ForkConfig{})
+	thorChain, err := testchain.NewIntegrationTestChain()
 	require.NoError(t, err)
 
 	require.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0], []*tx.Transaction{}...))

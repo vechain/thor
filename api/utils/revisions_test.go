@@ -98,7 +98,7 @@ func TestAllowNext(t *testing.T) {
 }
 
 func TestGetSummary(t *testing.T) {
-	thorChain, err := testchain.NewIntegrationTestChain(thor.ForkConfig{})
+	thorChain, err := testchain.NewIntegrationTestChain()
 	require.NoError(t, err)
 
 	// Test cases
@@ -153,7 +153,7 @@ func TestGetSummary(t *testing.T) {
 }
 
 func TestGetSummaryAndState(t *testing.T) {
-	thorChain, err := testchain.NewIntegrationTestChain(thor.ForkConfig{})
+	thorChain, err := testchain.NewIntegrationTestChain()
 	require.NoError(t, err)
 
 	b := thorChain.GenesisBlock()

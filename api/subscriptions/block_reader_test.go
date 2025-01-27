@@ -59,7 +59,7 @@ func TestBlockReader_Read(t *testing.T) {
 }
 
 func initChain(t *testing.T) *testchain.Chain {
-	thorChain, err := testchain.NewIntegrationTestChain(thor.ForkConfig{})
+	thorChain, err := testchain.NewIntegrationTestChain()
 	require.NoError(t, err)
 
 	addr := thor.BytesToAddress([]byte("to"))
