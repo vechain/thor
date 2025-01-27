@@ -2,10 +2,12 @@ services:
 
   inspector:
     build:
-        context: .
-        dockerfile: local/inspector.Dockerfile
+        context: local
+        dockerfile: inspector.Dockerfile
     hostname: inspector
     container_name: inspector
+    volumes:
+      - ./builtin/gen/compiled:/usr/app/builtin/gen/compiled
     environment:
       - VUE_APP_SOLO_URL=http://localhost:8669
       - VUE_APP_IS_DOCKER=true
@@ -14,8 +16,8 @@ services:
 
   insight:
     build:
-      context: .
-      dockerfile: local/insights.Dockerfile
+      context: local
+      dockerfile: insights.Dockerfile
     hostname: insight
     container_name: insight
     environment:
