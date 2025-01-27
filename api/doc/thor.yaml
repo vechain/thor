@@ -1265,7 +1265,7 @@ components:
             gasUsedRatios:
               type: array
               description: |
-                An array of gas used ratios per block as hexadecimal strings.
+                An array of gas used ratios per block as float numbers.
               nullable: false
               items:
                 type: number
