@@ -2,8 +2,10 @@ package fees
 
 import (
 	"fmt"
+	"math/big"
 	"net/http"
 	"strconv"
+	"sync"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -50,31 +52,50 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 	return uint32(blockCount), summary, nil
 }
 
+func (f *Fees) processBlockSummaries(next *atomic.Uint32, lastBlock uint32, blockDataChan chan *blockData) {
+	for {
+		// Processing current block and incrementing next block number at the same time
+		blockNumber := next.Add(1) - 1
+		if blockNumber > lastBlock {
+			return
+		}
+		blockFee := &blockData{}
+		blockFee.blockRevision, blockFee.err = utils.ParseRevision(strconv.FormatUint(uint64(blockNumber), 10), false)
+		if blockFee.err == nil {
+			blockFee.blockSummary, blockFee.err = utils.GetSummary(blockFee.blockRevision, f.repo, f.bft)
+			if blockFee.blockSummary == nil {
+				blockFee.err = fmt.Errorf("block summary is nil for block number %d", blockNumber)
+			}
+		}
+		blockDataChan <- blockFee
+	}
+}
+
 func (f *Fees) processBlockRange(blockCount uint32, summary *chain.BlockSummary) (uint32, chan *blockData) {
 	lastBlock := summary.Header.Number()
-	oldestBlock := lastBlock + 1 - blockCount
+	oldestBlockInt32 := int32(lastBlock) + 1 - int32(blockCount)
+	oldestBlock := uint32(0)
+	if oldestBlockInt32 >= 0 {
+		oldestBlock = uint32(oldestBlockInt32)
+	}
 	var next atomic.Uint32
 	next.Store(oldestBlock)
 
 	blockDataChan := make(chan *blockData, blockCount)
+	var wg sync.WaitGroup
 
 	for i := 0; i < maxBlockFetchers && i < int(blockCount); i++ {
+		wg.Add(1)
 		go func() {
-			for {
-				// Processing current block and incrementing next block number at the same time
-				blockNumber := next.Add(1) - 1
-				if blockNumber > lastBlock {
-					return
-				}
-				blockFee := &blockData{}
-				blockFee.blockRevision, blockFee.err = utils.ParseRevision(strconv.FormatUint(uint64(blockNumber), 10), false)
-				if blockFee.err != nil {
-					blockFee.blockSummary, blockFee.err = utils.GetSummary(blockFee.blockRevision, f.repo, f.bft)
-				}
-				blockDataChan <- blockFee
-			}
+			defer wg.Done()
+			f.processBlockSummaries(&next, lastBlock, blockDataChan)
 		}()
 	}
+
+	go func() {
+		wg.Wait()
+		close(blockDataChan)
+	}()
 
 	return oldestBlock, blockDataChan
 }
@@ -93,13 +114,18 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 	)
 
 	// Collect results from the channel
-	for i := 0; i < int(blockCount); i++ {
-		blockData := <-blockDataChan
+	i := 0
+	for blockData := range blockDataChan {
 		if blockData.err != nil {
 			return blockData.err
 		}
-		baseFees[i] = (*hexutil.Big)(blockData.blockSummary.Header.BaseFee())
+		if baseFee := blockData.blockSummary.Header.BaseFee(); baseFee != nil {
+			baseFees[i] = (*hexutil.Big)(baseFee)
+		} else {
+			baseFees[i] = (*hexutil.Big)(big.NewInt(0))
+		}
 		gasUsedRatios[i] = float64(blockData.blockSummary.Header.GasUsed()) / float64(blockData.blockSummary.Header.GasLimit())
+		i++
 	}
 
 	return utils.WriteJSON(w, &GetFeesHistory{
