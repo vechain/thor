@@ -11,12 +11,14 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/runtime/statedb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -89,6 +91,12 @@ type Runtime struct {
 	chainConfig vm.ChainConfig
 }
 
+var (
+	// ErrMaxFeePerGasTooLow is returned if the transaction fee cap is less than the
+	// the base fee of the block.
+	ErrMaxFeePerGasTooLow = errors.New("max fee per gas is less than block base fee")
+)
+
 // New create a Runtime object.
 func New(
 	chain *chain.Chain,
@@ -134,6 +142,10 @@ func New(
 		}
 	}
 
+	if forkConfig.GALACTICA == ctx.Number {
+		ctx.BaseFee = big.NewInt(thor.InitialBaseFee)
+	}
+
 	rt := Runtime{
 		chain:       chain,
 		state:       state,
@@ -160,7 +172,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 		baseFee              *big.Int
 	)
 	if rt.ctx.BaseFee != nil {
-		baseFee = new(big.Int).Set(rt.ctx.BaseFee)
+		baseFee = math.BigMax(new(big.Int).SetInt64(thor.MinBaseFee), new(big.Int).Set(rt.ctx.BaseFee))
 	}
 	return vm.NewEVM(vm.Context{
 		CanTransfer: func(_ vm.StateDB, addr common.Address, amount *big.Int) bool {
@@ -409,9 +421,20 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 		return nil, err
 	}
 
-	baseGasPrice, gasPrice, payer, _, returnGas, err := resolvedTx.BuyGas(rt.state, rt.ctx.Time)
+	galactica := rt.chainConfig.IsGalactica(big.NewInt(int64(rt.ctx.Number)))
+	if galactica && rt.ctx.BaseFee == nil {
+		return nil, errors.New("base fee not set after galactica")
+	}
+	baseGasPrice, gasPrice, payer, _, returnGas, err := resolvedTx.BuyGas(rt.state, rt.ctx.Time, &GalacticaItems{galactica, rt.ctx.BaseFee})
 	if err != nil {
 		return nil, err
+	}
+
+	if galactica {
+		feeItems := fork.GalacticaTxGasPriceAdapater(tx, gasPrice)
+		if rt.ctx.BaseFee == nil || feeItems.MaxFee.Cmp(rt.ctx.BaseFee) < 0 {
+			return nil, ErrMaxFeePerGasTooLow
+		}
 	}
 
 	txCtx, err := resolvedTx.ToContext(gasPrice, payer, rt.ctx.Number, rt.chain.GetBlockID)
@@ -508,6 +531,10 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 				return nil, err
 			}
 			overallGasPrice := tx.OverallGasPrice(baseGasPrice, provedWork)
+			if galactica {
+				feeItems := fork.GalacticaTxGasPriceAdapater(tx, overallGasPrice)
+				overallGasPrice = math.BigMin(feeItems.MaxPriorityFee, new(big.Int).Sub(feeItems.MaxFee, rt.ctx.BaseFee))
+			}
 
 			reward := new(big.Int).SetUint64(receipt.GasUsed)
 			reward.Mul(reward, overallGasPrice)

@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package statedb_test
+package statedb
 
 import (
 	"bytes"
@@ -20,7 +20,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/vechain/thor/v2/muxdb"
-	"github.com/vechain/thor/v2/runtime/statedb"
 	State "github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -56,7 +55,7 @@ type snapshotTest struct {
 
 type testAction struct {
 	name   string
-	fn     func(testAction, *statedb.StateDB)
+	fn     func(testAction, *StateDB)
 	args   []int64
 	noAddr bool
 }
@@ -66,21 +65,21 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 	actions := []testAction{
 		{
 			name: "AddBalance",
-			fn: func(a testAction, s *statedb.StateDB) {
+			fn: func(a testAction, s *StateDB) {
 				s.AddBalance(addr, big.NewInt(a.args[0]))
 			},
 			args: make([]int64, 1),
 		},
 		{
 			name: "SetNonce",
-			fn: func(a testAction, s *statedb.StateDB) {
+			fn: func(a testAction, s *StateDB) {
 				s.SetNonce(addr, uint64(a.args[0]))
 			},
 			args: make([]int64, 1),
 		},
 		{
 			name: "SetState",
-			fn: func(a testAction, s *statedb.StateDB) {
+			fn: func(a testAction, s *StateDB) {
 				var key, val common.Hash
 				binary.BigEndian.PutUint16(key[:], uint16(a.args[0]))
 				binary.BigEndian.PutUint16(val[:], uint16(a.args[1]))
@@ -90,7 +89,7 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 		},
 		{
 			name: "SetCode",
-			fn: func(a testAction, s *statedb.StateDB) {
+			fn: func(a testAction, s *StateDB) {
 				code := make([]byte, 16)
 				binary.BigEndian.PutUint64(code, uint64(a.args[0]))
 				binary.BigEndian.PutUint64(code[8:], uint64(a.args[1]))
@@ -100,19 +99,19 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 		},
 		{
 			name: "CreateAccount",
-			fn: func(_ testAction, s *statedb.StateDB) {
+			fn: func(_ testAction, s *StateDB) {
 				s.CreateAccount(addr)
 			},
 		},
 		{
 			name: "Suicide",
-			fn: func(_ testAction, s *statedb.StateDB) {
+			fn: func(_ testAction, s *StateDB) {
 				s.Suicide(addr)
 			},
 		},
 		{
 			name: "AddRefund",
-			fn: func(a testAction, s *statedb.StateDB) {
+			fn: func(a testAction, s *StateDB) {
 				s.AddRefund(uint64(a.args[0]))
 			},
 			args:   make([]int64, 1),
@@ -120,7 +119,7 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 		},
 		{
 			name: "AddLog",
-			fn: func(a testAction, s *statedb.StateDB) {
+			fn: func(a testAction, s *StateDB) {
 				data := make([]byte, 2)
 				binary.BigEndian.PutUint16(data, uint16(a.args[0]))
 				s.AddLog(&types.Log{Address: addr, Data: data})
@@ -186,7 +185,7 @@ func (test *snapshotTest) run() bool {
 	var (
 		db           = muxdb.NewMem()
 		state        = State.New(db, thor.Bytes32{}, 0, 0, 0)
-		stateDB      = statedb.New(state)
+		stateDB      = New(state)
 		snapshotRevs = make([]int, len(test.snapshots))
 		sindex       = 0
 	)
@@ -201,7 +200,7 @@ func (test *snapshotTest) run() bool {
 	// that is equivalent to fresh state with all actions up the snapshot applied.
 	for sindex--; sindex >= 0; sindex-- {
 		state := State.New(db, thor.Bytes32{}, 0, 0, 0)
-		checkStateDB := statedb.New(state)
+		checkStateDB := New(state)
 		for _, action := range test.actions[:test.snapshots[sindex]] {
 			action.fn(action, checkStateDB)
 		}
@@ -215,7 +214,7 @@ func (test *snapshotTest) run() bool {
 }
 
 // checkEqual checks that methods of state and checkstate return the same values.
-func (test *snapshotTest) checkEqual(state, checkstate *statedb.StateDB) error {
+func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 	for _, addr := range test.addrs {
 		var err error
 		checkeq := func(op string, a, b interface{}) bool {

@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
 
 // VerifyGalacticaHeader verifies some header attributes which were changed in Galactica fork,
@@ -79,4 +80,22 @@ func CalcBaseFee(config *thor.ForkConfig, parent *block.Header) *big.Int {
 			common.Big0,
 		)
 	}
+}
+
+func GalacticaTxGasPriceAdapater(tr *tx.Transaction, gasPrice *big.Int) *GalacticaFeeMarketItems {
+	var maxPriorityFee, maxFee *big.Int
+	switch tr.Type() {
+	case tx.LegacyTxType:
+		maxPriorityFee = gasPrice
+		maxFee = gasPrice
+	case tx.DynamicFeeTxType:
+		maxPriorityFee = tr.MaxPriorityFeePerGas()
+		maxFee = tr.MaxFeePerGas()
+	}
+	return &GalacticaFeeMarketItems{maxFee, maxPriorityFee}
+}
+
+type GalacticaFeeMarketItems struct {
+	MaxFee         *big.Int
+	MaxPriorityFee *big.Int
 }

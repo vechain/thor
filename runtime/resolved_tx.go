@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -91,8 +92,13 @@ func (r *ResolvedTransaction) CommonTo() *thor.Address {
 	return firstTo
 }
 
+type GalacticaItems struct {
+	IsActive bool
+	BaseFee  *big.Int
+}
+
 // BuyGas consumes energy to buy gas, to prepare for execution.
-func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64) (
+func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64, galacticaItem *GalacticaItems) (
 	baseGasPrice *big.Int,
 	gasPrice *big.Int,
 	payer thor.Address,
@@ -104,6 +110,10 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64) (
 		return
 	}
 	gasPrice = r.tx.GasPrice(baseGasPrice)
+	if galacticaItem.IsActive {
+		feeItems := fork.GalacticaTxGasPriceAdapater(r.tx, gasPrice)
+		gasPrice = math.BigMin(gasPrice.Add(feeItems.MaxPriorityFee, galacticaItem.BaseFee), feeItems.MaxFee)
+	}
 
 	energy := builtin.Energy.Native(state, blockTime)
 	doReturnGas := func(rgas uint64) (*big.Int, error) {

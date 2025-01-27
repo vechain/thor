@@ -26,6 +26,12 @@ var (
 	errIntrinsicGasOverflow = errors.New("intrinsic gas overflow")
 	ErrTxTypeNotSupported   = errors.New("transaction type not supported")
 	errEmptyTypedTx         = errors.New("empty typed transaction bytes")
+	// ErrMaxPriorityFeeVeryHigh is a sanity error to avoid extremely big numbers specified
+	// in the priority fee field.
+	ErrMaxPriorityFeeVeryHigh = errors.New("max priority fee per gas higher than 2^256-1")
+	// ErrMaxFeeVeryHigh is a sanity error to avoid extremely big numbers specified
+	// in the max fee field.
+	ErrMaxFeeVeryHigh = errors.New("max fee per gas higher than 2^256-1")
 )
 
 // Starting from the max value allowed to avoid ambiguity with Ethereum tx type codes.
@@ -449,7 +455,7 @@ func (t *Transaction) IntrinsicGas() (uint64, error) {
 // GasPrice returns gas price.
 // gasPrice = baseGasPrice + baseGasPrice * gasPriceCoef / 255
 func (t *Transaction) GasPrice(baseGasPrice *big.Int) *big.Int {
-	x := new(big.Int).Set(t.body.maxFeePerGas())
+	x := big.NewInt(int64(t.body.gasPriceCoef()))
 	x.Mul(x, baseGasPrice)
 	x.Div(x, big.NewInt(math.MaxUint8))
 	return x.Add(x, baseGasPrice)

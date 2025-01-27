@@ -63,6 +63,15 @@ func New(
 // NewIntegrationTestChain is a convenience function that creates a Chain for testing.
 // It uses an in-memory database, development network genesis, and a solo BFT engine.
 func NewIntegrationTestChain() (*Chain, error) {
+	forkConfig := thor.NoFork
+	forkConfig.VIP191 = 1
+	forkConfig.BLOCKLIST = 0
+	forkConfig.VIP214 = 2
+
+	return NewIntegrationTestChainWithFork(forkConfig)
+}
+
+func NewIntegrationTestChainWithFork(forkConfig thor.ForkConfig) (*Chain, error) {
 	// Initialize the database
 	db := muxdb.NewMem()
 
@@ -88,11 +97,6 @@ func NewIntegrationTestChain() (*Chain, error) {
 		return nil, err
 	}
 
-	forkConfig := thor.NoFork
-	forkConfig.VIP191 = 1
-	forkConfig.BLOCKLIST = 0
-	forkConfig.VIP214 = 2
-
 	return New(
 		db,
 		gene,
@@ -101,7 +105,7 @@ func NewIntegrationTestChain() (*Chain, error) {
 		stater,
 		geneBlk,
 		logDb,
-		thor.NoFork,
+		forkConfig,
 	), nil
 }
 

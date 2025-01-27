@@ -59,7 +59,7 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 	accounts.New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), thor.NoFork, thorChain.Engine(), true).
 		Mount(router, "/accounts")
 
-	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute})
+	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute}, &thor.NoFork)
 	transactions.New(thorChain.Repo(), mempool).Mount(router, "/transactions")
 
 	blocks.New(thorChain.Repo(), thorChain.Engine()).Mount(router, "/blocks")
@@ -77,7 +77,7 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 			Limit:           10000,
 			LimitPerAccount: 16,
 			MaxLifetime:     10 * time.Minute,
-		}),
+		}, &thor.NoFork),
 	)
 	node.New(communicator).Mount(router, "/node")
 
@@ -231,7 +231,7 @@ func testTransactionsEndpoint(t *testing.T, thorChain *testchain.Chain, ts *http
 		require.NotNil(t, sendResult)
 		require.Equal(t, trx.ID().String(), sendResult.ID.String()) // Ensure transaction was successful
 
-		trx = tx.NewTxBuilder(tx.DynamicFeeTxType).
+		trx = tx.NewTxBuilder(tx.LegacyTxType).
 			ChainTag(thorChain.Repo().ChainTag()).
 			Expiration(10).
 			Gas(21000).

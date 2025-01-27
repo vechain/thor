@@ -14,12 +14,14 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/co"
+	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -66,19 +68,22 @@ type TxPool struct {
 	txFeed event.Feed
 	scope  event.SubscriptionScope
 	goes   co.Goes
+
+	forkConfig *thor.ForkConfig
 }
 
 // New create a new TxPool instance.
 // Shutdown is required to be called at end.
-func New(repo *chain.Repository, stater *state.Stater, options Options) *TxPool {
+func New(repo *chain.Repository, stater *state.Stater, options Options, forkConfig *thor.ForkConfig) *TxPool {
 	ctx, cancel := context.WithCancel(context.Background())
 	pool := &TxPool{
-		options: options,
-		repo:    repo,
-		stater:  stater,
-		all:     newTxObjectMap(),
-		ctx:     ctx,
-		cancel:  cancel,
+		options:    options,
+		repo:       repo,
+		stater:     stater,
+		all:        newTxObjectMap(),
+		ctx:        ctx,
+		cancel:     cancel,
+		forkConfig: forkConfig,
 	}
 
 	pool.goes.Go(pool.housekeeping)
@@ -220,16 +225,8 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 
 	headSummary := p.repo.BestBlockSummary()
 
-	// validation
-	switch {
-	case newTx.ChainTag() != p.repo.ChainTag():
-		return badTxError{"chain tag mismatch"}
-	case newTx.Size() > maxTxSize:
-		return txRejectedError{"size too large"}
-	}
-
-	if err := newTx.TestFeatures(headSummary.Header.TxsFeatures()); err != nil {
-		return txRejectedError{err.Error()}
+	if err := ValidateTransaction(newTx, p.repo, headSummary, p.forkConfig); err != nil {
+		return err
 	}
 
 	txObj, err := resolveTx(newTx, localSubmitted)
@@ -246,7 +243,10 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		}
 
 		state := p.stater.NewState(headSummary.Header.StateRoot(), headSummary.Header.Number(), headSummary.Conflicts, headSummary.SteadyNum)
-		executable, err := txObj.Executable(p.repo.NewChain(headSummary.Header.ID()), state, headSummary.Header)
+		if err := ValidateTransactionWithState(newTx, headSummary, p.forkConfig, state); err != nil {
+			return err
+		}
+		executable, err := txObj.Executable(p.repo.NewChain(headSummary.Header.ID()), state, headSummary.Header, p.forkConfig)
 		if err != nil {
 			return txRejectedError{err.Error()}
 		}
@@ -419,7 +419,7 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 			continue
 		}
 		// settled, out of energy or dep broken
-		executable, err := txObj.Executable(chain, newState(), headSummary.Header)
+		executable, err := txObj.Executable(chain, newState(), headSummary.Header, p.forkConfig)
 		if err != nil {
 			toRemove = append(toRemove, txObj)
 			logger.Trace("tx washed out", "id", txObj.ID(), "err", err)
@@ -434,6 +434,17 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 				continue
 			}
 			txObj.overallGasPrice = txObj.OverallGasPrice(baseGasPrice, provedWork)
+
+			if headSummary.Header.Number() >= p.forkConfig.GALACTICA {
+				baseFee := headSummary.Header.BaseFee()
+				// The block header before GALACTICA has no base fee, so it's initialized with InitialBaseFee.
+				if headSummary.Header.Number() == p.forkConfig.GALACTICA {
+					baseFee = big.NewInt(thor.InitialBaseFee)
+				}
+				feeItems := fork.GalacticaTxGasPriceAdapater(txObj.Transaction, txObj.overallGasPrice)
+				txObj.overallGasPrice = math.BigMin(new(big.Int).Sub(feeItems.MaxFee, baseFee), feeItems.MaxPriorityFee)
+			}
+
 			if txObj.localSubmitted {
 				localExecutableObjs = append(localExecutableObjs, txObj)
 			} else {

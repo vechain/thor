@@ -54,6 +54,8 @@ func txBuilder(txType int, chainTag byte, clauses []*tx.Clause, gas uint64, bloc
 		Expiration(expiration).
 		Nonce(rand.Uint64()). //#nosec G404
 		DependsOn(dependsOn).
+		MaxFeePerGas(big.NewInt(thor.InitialBaseFee)).
+		MaxPriorityFeePerGas(big.NewInt(10000)).
 		Features(features).
 		Gas(gas)
 }
@@ -90,7 +92,7 @@ func TestExecutableWithError(t *testing.T) {
 		// pass custom headID
 		chain := repo.NewChain(thor.Bytes32{0})
 
-		exe, err := txObj.Executable(chain, st, b1.Header())
+		exe, err := txObj.Executable(chain, st, b1.Header(), &thor.NoFork)
 		if tt.expectedErr != "" {
 			assert.Equal(t, tt.expectedErr, err.Error())
 		} else {
@@ -102,6 +104,7 @@ func TestExecutableWithError(t *testing.T) {
 
 func TestSort(t *testing.T) {
 	objs := []*txObject{
+		{overallGasPrice: big.NewInt(0)},
 		{overallGasPrice: big.NewInt(10)},
 		{overallGasPrice: big.NewInt(20)},
 		{overallGasPrice: big.NewInt(30)},
@@ -111,6 +114,7 @@ func TestSort(t *testing.T) {
 	assert.Equal(t, big.NewInt(30), objs[0].overallGasPrice)
 	assert.Equal(t, big.NewInt(20), objs[1].overallGasPrice)
 	assert.Equal(t, big.NewInt(10), objs[2].overallGasPrice)
+	assert.Equal(t, big.NewInt(0), objs[3].overallGasPrice)
 }
 
 func TestResolve(t *testing.T) {
@@ -154,7 +158,7 @@ func TestExecutable(t *testing.T) {
 		txObj, err := resolveTx(tt.tx, false)
 		assert.Nil(t, err)
 
-		exe, err := txObj.Executable(repo.NewChain(b1.Header().ID()), st, b1.Header())
+		exe, err := txObj.Executable(repo.NewChain(b1.Header().ID()), st, b1.Header(), &thor.NoFork)
 		if tt.expectedErr != "" {
 			assert.Equal(t, tt.expectedErr, err.Error())
 		} else {

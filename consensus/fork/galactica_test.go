@@ -72,9 +72,9 @@ func TestCalcBaseFee(t *testing.T) {
 		expectedBaseFee int64
 	}{
 		{thor.InitialBaseFee, 20000000, 10000000, thor.InitialBaseFee}, // usage == target
-		{thor.InitialBaseFee, 20000000, 9000000, 987500000},            // usage below target
-		{thor.InitialBaseFee, 20000000, 11000000, 1012500000},          // usage above target
-		{thor.InitialBaseFee, 20000000, 0, 875000000},                  // empty block
+		{thor.InitialBaseFee, 20000000, 9000000, 9875000000000},        // usage below target
+		{thor.InitialBaseFee, 20000000, 11000000, 10125000000000},      // usage above target
+		{thor.InitialBaseFee, 20000000, 0, 8750000000000},              // empty block
 	}
 	for i, test := range tests {
 		var parentID thor.Bytes32
