@@ -47,7 +47,7 @@ jobs:
       - name: Clean Ref Name
         id: clean_ref_name
         # replace '/' with '-' in the case of release branches
-        run: echo "cleaned_ref_name=$(echo $GITHUB_REF_NAME | sed 's/\//-/g')" >> "$GITHUB_OUTPUT"
+        run: echo "clean_ref_name=$(echo $GITHUB_REF_NAME | sed 's/\//-/g')" >> "$GITHUB_OUTPUT"
 
   publish-docker-image:
     name: Publish Docker Image
