@@ -6,10 +6,9 @@ COPY --from=insight-base /usr/share/nginx/html /usr/app/html
 
 WORKDIR /usr/app
 
-COPY local/modify-insight.js /usr/app/modify-insight.js
+COPY modify-insight.js /usr/app/modify-insight.js
+COPY insights-entrypoint.sh /usr/app/entrypoint.sh
 
-RUN node /usr/app/modify-insight.js
+RUN npm install --global serve
 
-FROM ghcr.io/vechain/insight-app:master
-
-COPY --from=builder /usr/app/html /usr/share/nginx/html
+ENTRYPOINT ["/usr/app/entrypoint.sh"]

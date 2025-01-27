@@ -25,6 +25,8 @@ func init() {
 
 	stakedEvent := mustEventByName("Staked")
 	unstakedEvent := mustEventByName("Unstaked")
+	validatorAddedEvent := mustEventByName("ValidatorAdded")
+	validatorRemovedEvent := mustEventByName("ValidatorRemoved")
 
 	defines := []struct {
 		name string
@@ -32,6 +34,7 @@ func init() {
 	}{
 		{"native_totalStake", func(env *xenv.Environment) []interface{} {
 			env.UseGas(thor.SloadGas)
+			env.UseGas(thor.GetBalanceGas)
 			staked, err := Staker.Native(env.State(), env.BlockContext().Time).TotalStake()
 			if err != nil {
 				panic(err)
@@ -39,12 +42,16 @@ func init() {
 			return []interface{}{staked}
 		}},
 		{"native_getStake", func(env *xenv.Environment) []interface{} {
+			var args struct {
+				Staker    common.Address
+				Validator common.Address
+			}
+			env.ParseArgs(&args)
+
+			env.UseGas(thor.SloadGas)
 			env.UseGas(thor.SloadGas)
 
-			var staker common.Address
-			env.ParseArgs(&staker)
-
-			staked, err := Staker.Native(env.State(), env.BlockContext().Time).GetStake(thor.Address(staker))
+			staked, err := Staker.Native(env.State(), env.BlockContext().Time).GetStake(thor.Address(args.Staker), thor.Address(args.Validator))
 			if err != nil {
 				panic(err)
 			}
@@ -52,39 +59,86 @@ func init() {
 		}},
 		{"native_stake", func(env *xenv.Environment) []interface{} {
 			var args struct {
-				Staker common.Address
-				Amount *big.Int
+				Staker    common.Address
+				Amount    *big.Int
+				Validator common.Address
 			}
 			env.ParseArgs(&args)
 
 			env.UseGas(thor.SloadGas)
 			env.UseGas(thor.GetBalanceGas)
-			err := Staker.Native(env.State(), env.BlockContext().Time).Stake(thor.BytesToAddress(args.Staker.Bytes()), args.Amount)
+			err := Staker.Native(env.State(), env.BlockContext().Time).Stake(thor.Address(args.Staker), thor.Address(args.Validator), args.Amount)
 			if err != nil {
 				panic(err)
 			}
 			env.UseGas(thor.SstoreSetGas)
 			env.UseGas(thor.SstoreResetGas)
-			env.Log(stakedEvent, env.To(), []thor.Bytes32{thor.BytesToBytes32(args.Staker[:])}, args.Amount)
+			env.Log(stakedEvent, env.To(), []thor.Bytes32{thor.BytesToBytes32(args.Staker[:]), thor.BytesToBytes32(args.Validator[:])}, args.Amount)
 			return nil
 		}},
 		{"native_unstake", func(env *xenv.Environment) []interface{} {
 			var args struct {
-				Staker common.Address
-				Amount *big.Int
+				Staker    common.Address
+				Amount    *big.Int
+				Validator common.Address
 			}
 			env.ParseArgs(&args)
 
 			env.UseGas(thor.SloadGas)
 			env.UseGas(thor.GetBalanceGas)
 			env.UseGas(thor.GetBalanceGas)
-			err := Staker.Native(env.State(), env.BlockContext().Time).Unstake(thor.BytesToAddress(args.Staker.Bytes()), args.Amount)
+			err := Staker.Native(env.State(), env.BlockContext().Time).Unstake(thor.Address(args.Staker), args.Amount, thor.Address(args.Validator))
 			if err != nil {
 				panic(err)
 			}
 			env.UseGas(thor.SstoreSetGas)
 			env.UseGas(thor.SstoreResetGas)
-			env.Log(unstakedEvent, env.To(), []thor.Bytes32{thor.BytesToBytes32(args.Staker[:])}, args.Amount)
+			env.Log(unstakedEvent, env.To(), []thor.Bytes32{thor.BytesToBytes32(args.Staker[:]), thor.BytesToBytes32(args.Validator[:])}, args.Amount)
+			return nil
+		}},
+		{"native_listValidators", func(env *xenv.Environment) []interface{} {
+
+			env.UseGas(thor.SloadGas)
+			env.UseGas(thor.SstoreResetGas)
+			validators, err := Staker.Native(env.State(), env.BlockContext().Time).ListValidators()
+			if err != nil {
+				panic(err)
+			}
+			return []interface{}{validators}
+		}},
+		{"native_addValidator", func(env *xenv.Environment) []interface{} {
+			var args struct {
+				Amount    *big.Int
+				Validator common.Address
+			}
+			env.ParseArgs(&args)
+
+			env.UseGas(thor.SloadGas)
+			env.UseGas(thor.GetBalanceGas)
+			err := Staker.Native(env.State(), env.BlockContext().Time).AddValidator(args.Amount, thor.Address(args.Validator))
+			if err != nil {
+				panic(err)
+			}
+			env.UseGas(thor.SstoreSetGas)
+			env.UseGas(thor.SstoreResetGas)
+			env.Log(validatorAddedEvent, env.To(), []thor.Bytes32{thor.BytesToBytes32(args.Validator[:])})
+			return nil
+		}},
+		{"native_removeValidator", func(env *xenv.Environment) []interface{} {
+			var args struct {
+				Validator common.Address
+			}
+			env.ParseArgs(&args)
+
+			env.UseGas(thor.SloadGas)
+			env.UseGas(thor.GetBalanceGas)
+			err := Staker.Native(env.State(), env.BlockContext().Time).RemoveValidator(thor.Address(args.Validator))
+			if err != nil {
+				panic(err)
+			}
+			env.UseGas(thor.SstoreSetGas)
+			env.UseGas(thor.SstoreResetGas)
+			env.Log(validatorRemovedEvent, env.To(), []thor.Bytes32{thor.BytesToBytes32(args.Validator[:])})
 			return nil
 		}},
 	}

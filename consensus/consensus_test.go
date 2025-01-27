@@ -88,6 +88,7 @@ func newTestConsensus() (*testConsensus, error) {
 	forkConfig.VIP191 = 1
 	forkConfig.BLOCKLIST = 0
 	forkConfig.VIP214 = 2
+	forkConfig.HAYABUSA = 3
 
 	proposer := genesis.DevAccounts()[0]
 	p := packer.New(repo, stater, proposer.Address, &proposer.Address, forkConfig)

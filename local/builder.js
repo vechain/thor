@@ -1,8 +1,8 @@
 import * as fs from 'fs'
 
 const thorURLs = [
-    'http://thor:8669',
     'http://host.docker.internal:8669',
+    'http://thor:8669',
     'http://localhost:8669',
 ]
 
@@ -10,7 +10,9 @@ const getGenesis = async () => {
     // retry all the thorURLs to get the genesisID
     for (const url of thorURLs) {
         try {
+            console.log(`Trying to get genesisID from: ${url}`)
             const genesis = await fetch(`${url}/blocks/0`)
+            console.log(`Got genesisID from: ${url}`)
             return await genesis.json()
         } catch (e) {
             console.error(`Failed to get genesisID from: ${url}`)
@@ -51,8 +53,8 @@ const main = async () => {
         }
     })
 
-    fs.mkdirSync("/usr/app/builtin/gen/abis", { recursive: true })
-    fs.writeFileSync("/usr/app/builtin/gen/abis/contracts.json", JSON.stringify(abiConfig))
+    fs.mkdirSync("/usr/app/html/abis", { recursive: true })
+    fs.writeFileSync("/usr/app/html/abis/contracts.json", JSON.stringify(abiConfig))
     fs.writeFileSync('/usr/app/genesis.json', JSON.stringify(genesis))
 
     console.log("ABI config file generated successfully")

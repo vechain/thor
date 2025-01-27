@@ -6,8 +6,8 @@ const OLD_GENESIS = '{number:0,id:"0x00000000c05a20fbca2bf6ae3affba6af4a74b800b5
 
 
 const thorURLs = [
-    'http://thor:8669',
     'http://host.docker.internal:8669',
+    'http://thor:8669',
     'http://localhost:8669',
 ]
 
@@ -15,7 +15,9 @@ const getGenesis = async () => {
     // retry all the thorURLs to get the genesisID
     for (const url of thorURLs) {
         try {
+            console.log(`Trying to get genesisID from: ${url}`)
             const genesis = await fetch(`${url}/blocks/0`)
+            console.log(`Got genesisID from: ${url}`)
             return await genesis.json()
         } catch (e) {
             console.error(`Failed to get genesisID from: ${url}`)
