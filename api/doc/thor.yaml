@@ -1253,7 +1253,7 @@ components:
             baseFees:
               type: array
               description: |
-                An array of base fees per block as hexadecimal strings.
+                An array of base fees per block as hexadecimal strings. They will be 0x0 for blocks previous to the Galactic fork.
               nullable: false
               items:
                 type: string
