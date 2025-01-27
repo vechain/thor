@@ -65,6 +65,7 @@ func New(
 // NewIntegrationTestChain is a convenience function that creates a Chain for testing.
 // It uses an in-memory database, development network genesis, and a solo BFT engine.
 func NewIntegrationTestChain() (*Chain, error) {
+	forkConfig := thor.SoloFork // using SoloFork prevents tests depending on IDs of the genesis block from failing
 	// Initialize the database
 	db := muxdb.NewMem()
 
@@ -72,7 +73,7 @@ func NewIntegrationTestChain() (*Chain, error) {
 	stater := state.NewStater(db)
 
 	// Initialize the genesis and retrieve the genesis block
-	gene := genesis.NewDevnet()
+	gene := genesis.NewDevnetWithConfig(forkConfig)
 	geneBlk, _, _, err := gene.Build(stater)
 	if err != nil {
 		return nil, err
@@ -90,12 +91,6 @@ func NewIntegrationTestChain() (*Chain, error) {
 		return nil, err
 	}
 
-	forkConfig := thor.NoFork
-	forkConfig.VIP191 = 1
-	forkConfig.BLOCKLIST = 0
-	forkConfig.VIP214 = 2
-	forkConfig.HAYABUSA = 2
-
 	return New(
 		db,
 		gene,
@@ -104,7 +99,7 @@ func NewIntegrationTestChain() (*Chain, error) {
 		stater,
 		geneBlk,
 		logDb,
-		thor.NoFork,
+		forkConfig,
 	), nil
 }
 

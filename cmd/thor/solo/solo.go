@@ -238,7 +238,6 @@ func (s *Solo) init(ctx context.Context) error {
 	}
 
 	if !s.onDemand {
-		// wait for the next block interval if not on-demand
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
