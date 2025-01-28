@@ -129,7 +129,6 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 			baseFeesWithNil[blockPosition] = (*hexutil.Big)(baseFee)
 		} else {
 			baseFeesWithNil[blockPosition] = (*hexutil.Big)(big.NewInt(0))
-			fmt.Printf("LLEGA blockPosition: %+v\n", baseFeesWithNil[blockPosition])
 		}
 		gasUsedRatios[blockPosition] = float64(blockData.blockSummary.Header.GasUsed()) / float64(blockData.blockSummary.Header.GasLimit())
 	}

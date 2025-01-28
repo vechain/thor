@@ -29,11 +29,12 @@ func TestFees(t *testing.T) {
 
 	tclient := thorclient.New(ts.URL)
 	for name, tt := range map[string]func(*testing.T, *thorclient.Client){
-		"getFeeHistory":                       getFeeHistory,
-		"getFeeHistoryWrongBlockCount":        getFeeHistoryWrongBlockCount,
-		"getFeeHistoryWrongNewestBlock":       getFeeHistoryWrongNewestBlock,
-		"getFeeHistoryNewestBlockNotIncluded": getFeeHistoryNewestBlockNotIncluded,
-		"getFeeHistoryBlockCountZero":         getFeeHistoryBlockCountZero,
+		"getFeeHistory":                        getFeeHistory,
+		"getFeeHistoryWrongBlockCount":         getFeeHistoryWrongBlockCount,
+		"getFeeHistoryWrongNewestBlock":        getFeeHistoryWrongNewestBlock,
+		"getFeeHistoryNewestBlockNotIncluded":  getFeeHistoryNewestBlockNotIncluded,
+		"getFeeHistoryBlockCountZero":          getFeeHistoryBlockCountZero,
+		"getFeeHistoryBlockCountBiggerThanMax": getFeeHistoryBlockCountBiggerThanMax,
 	} {
 		t.Run(name, func(t *testing.T) {
 			tt(t, tclient)
@@ -137,4 +138,11 @@ func getFeeHistoryBlockCountZero(t *testing.T, tclient *thorclient.Client) {
 	require.Equal(t, expectedFeesHistory.BaseFees[0].String(), feesHistory.BaseFees[0].String())
 	require.Equal(t, expectedFeesHistory.BaseFees[1], feesHistory.BaseFees[1])
 	require.Equal(t, expectedFeesHistory.GasUsedRatios, feesHistory.GasUsedRatios)
+}
+
+func getFeeHistoryBlockCountBiggerThanMax(t *testing.T, tclient *thorclient.Client) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=1025&newestBlock=1")
+	require.NoError(t, err)
+	require.Equal(t, 400, statusCode)
+	require.NotNil(t, res)
 }
