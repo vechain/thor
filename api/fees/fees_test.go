@@ -23,23 +23,21 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-var (
-	tclient *thorclient.Client
-)
-
 func TestFees(t *testing.T) {
 	ts := initFeesServer(t)
 	defer ts.Close()
 
-	tclient = thorclient.New(ts.URL)
-	for name, tt := range map[string]func(*testing.T){
+	tclient := thorclient.New(ts.URL)
+	for name, tt := range map[string]func(*testing.T, *thorclient.Client){
 		"getFeeHistory":                       getFeeHistory,
 		"getFeeHistoryWrongBlockCount":        getFeeHistoryWrongBlockCount,
 		"getFeeHistoryWrongNewestBlock":       getFeeHistoryWrongNewestBlock,
 		"getFeeHistoryNewestBlockNotIncluded": getFeeHistoryNewestBlockNotIncluded,
 		"getFeeHistoryBlockCountZero":         getFeeHistoryBlockCountZero,
 	} {
-		t.Run(name, tt)
+		t.Run(name, func(t *testing.T) {
+			tt(t, tclient)
+		})
 	}
 }
 
@@ -80,7 +78,7 @@ func initFeesServer(t *testing.T) *httptest.Server {
 	return httptest.NewServer(router)
 }
 
-func getFeeHistory(t *testing.T) {
+func getFeeHistory(t *testing.T, tclient *thorclient.Client) {
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=3&newestBlock=best")
 	require.NoError(t, err)
 	require.Equal(t, 200, statusCode)
@@ -98,28 +96,28 @@ func getFeeHistory(t *testing.T) {
 	assert.Equal(t, expectedFeesHistory, feesHistory)
 }
 
-func getFeeHistoryWrongBlockCount(t *testing.T) {
+func getFeeHistoryWrongBlockCount(t *testing.T, tclient *thorclient.Client) {
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=wrong&newestBlock=best")
 	require.NoError(t, err)
 	require.Equal(t, 400, statusCode)
 	require.NotNil(t, res)
 }
 
-func getFeeHistoryWrongNewestBlock(t *testing.T) {
+func getFeeHistoryWrongNewestBlock(t *testing.T, tclient *thorclient.Client) {
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=3&newestBlock=wrong")
 	require.NoError(t, err)
 	require.Equal(t, 400, statusCode)
 	require.NotNil(t, res)
 }
 
-func getFeeHistoryNewestBlockNotIncluded(t *testing.T) {
+func getFeeHistoryNewestBlockNotIncluded(t *testing.T, tclient *thorclient.Client) {
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=3&newestBlock=20")
 	require.NoError(t, err)
 	require.Equal(t, 400, statusCode)
 	require.NotNil(t, res)
 }
 
-func getFeeHistoryBlockCountZero(t *testing.T) {
+func getFeeHistoryBlockCountZero(t *testing.T, tclient *thorclient.Client) {
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=4&newestBlock=1")
 	require.NoError(t, err)
 	require.Equal(t, 200, statusCode)
