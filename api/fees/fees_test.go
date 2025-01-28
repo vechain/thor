@@ -1,11 +1,14 @@
 package fees_test
 
 import (
+	"encoding/json"
 	"math/big"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/gorilla/mux"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/fees"
 	"github.com/vechain/thor/v2/genesis"
@@ -69,5 +72,14 @@ func initFeesServer(t *testing.T) *httptest.Server {
 }
 
 func getFeeHistory(t *testing.T) {
-	// Test cases
+	const blockCount = 5
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=" + strconv.Itoa(blockCount) + "&newestBlock=best")
+	require.NoError(t, err)
+	require.Equal(t, 200, statusCode)
+	require.NotNil(t, res)
+	var feesHistory fees.GetFeesHistory
+	if err := json.Unmarshal(res, &feesHistory); err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, blockCount, len(feesHistory.BaseFees))
 }
