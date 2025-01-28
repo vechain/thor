@@ -128,8 +128,8 @@ func TestGetSummary(t *testing.T) {
 			err:      nil,
 		},
 		{
-			name:     "0x000000007182993663e3168e8658eb241e58db26ff4174fc0c35661ce4e1c6a9",
-			revision: &Revision{thor.MustParseBytes32("0x000000007182993663e3168e8658eb241e58db26ff4174fc0c35661ce4e1c6a9")},
+			name:     "0x00000000c05a20fbca2bf6ae3affba6af4a74b800b585bf7a4988aba7aea69f6",
+			revision: &Revision{thor.MustParseBytes32("0x00000000c05a20fbca2bf6ae3affba6af4a74b800b585bf7a4988aba7aea69f6")},
 			err:      nil,
 		},
 		{
