@@ -50,6 +50,17 @@ var NoFork = ForkConfig{
 	FINALITY:  math.MaxUint32,
 }
 
+// SoloFork is used to retain the solo genesis ID.
+// Any forks that modify the chain state should be placed in block 1.
+var SoloFork = ForkConfig{
+	VIP191:    0,
+	ETH_CONST: 0,
+	BLOCKLIST: 0,
+	ETH_IST:   0,
+	VIP214:    0,
+	FINALITY:  0,
+}
+
 // for well-known networks
 var forkConfigs = map[Bytes32]ForkConfig{
 	// mainnet

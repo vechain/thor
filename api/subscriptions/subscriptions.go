@@ -219,6 +219,7 @@ func (s *Subscriptions) setupConn(w http.ResponseWriter, req *http.Request) (*we
 	if err != nil {
 		return nil, nil, err
 	}
+	conn.SetReadLimit(100 * 1024) // 100 KB
 
 	closed := make(chan struct{})
 	// start read loop to handle close event

@@ -344,7 +344,7 @@ func soloAction(ctx *cli.Context) error {
 	flagGenesis := ctx.String(genesisFlag.Name)
 	if flagGenesis == "" {
 		gene = genesis.NewDevnet()
-		forkConfig = thor.ForkConfig{} // Devnet forks from the start
+		forkConfig = thor.SoloFork
 	} else {
 		gene, forkConfig, err = parseGenesisFile(flagGenesis)
 		if err != nil {
