@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -72,7 +73,7 @@ func initFeesServer(t *testing.T) *httptest.Server {
 }
 
 func getFeeHistory(t *testing.T) {
-	const blockCount = 5
+	const blockCount = 3
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=" + strconv.Itoa(blockCount) + "&newestBlock=best")
 	require.NoError(t, err)
 	require.Equal(t, 200, statusCode)
@@ -82,4 +83,11 @@ func getFeeHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, blockCount, len(feesHistory.BaseFees))
+	expectedOldestBlock := uint32(7)
+	expectedFeesHistory := fees.GetFeesHistory{
+		OldestBlock:   &expectedOldestBlock,
+		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(450413409)), (*hexutil.Big)(big.NewInt(345261708)), (*hexutil.Big)(big.NewInt(394348200))},
+		GasUsedRatios: []float64{0.0021, 0.0021, 0.0021},
+	}
+	assert.Equal(t, expectedFeesHistory, feesHistory)
 }
