@@ -30,6 +30,7 @@ func TestFees(t *testing.T) {
 	tclient = thorclient.New(ts.URL)
 	for name, tt := range map[string]func(*testing.T){
 		"getFeeHistory": getFeeHistory,
+		"getFeeHistoryWrongBlockCount": getFeeHistoryWrongBlockCount,
 	} {
 		t.Run(name, tt)
 	}
@@ -90,4 +91,11 @@ func getFeeHistory(t *testing.T) {
 		GasUsedRatios: []float64{0.0021, 0.0021, 0.0021},
 	}
 	assert.Equal(t, expectedFeesHistory, feesHistory)
+}
+
+func getFeeHistoryWrongBlockCount(t *testing.T) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=wrong&newestBlock=best")
+	require.NoError(t, err)
+	require.Equal(t, 400, statusCode)
+	require.NotNil(t, res)
 }
