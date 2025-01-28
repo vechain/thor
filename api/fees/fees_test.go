@@ -102,6 +102,7 @@ func getFeeHistoryWrongBlockCount(t *testing.T, tclient *thorclient.Client) {
 	require.NoError(t, err)
 	require.Equal(t, 400, statusCode)
 	require.NotNil(t, res)
+	assert.Equal(t, "invalid blockCount, it should represent an integer: strconv.ParseUint: parsing \"wrong\": invalid syntax\n", string(res))
 }
 
 func getFeeHistoryWrongNewestBlock(t *testing.T, tclient *thorclient.Client) {
@@ -109,6 +110,7 @@ func getFeeHistoryWrongNewestBlock(t *testing.T, tclient *thorclient.Client) {
 	require.NoError(t, err)
 	require.Equal(t, 400, statusCode)
 	require.NotNil(t, res)
+	assert.Equal(t, "newestBlock: strconv.ParseUint: parsing \"wrong\": invalid syntax\n", string(res))
 }
 
 func getFeeHistoryNewestBlockNotIncluded(t *testing.T, tclient *thorclient.Client) {
@@ -116,6 +118,7 @@ func getFeeHistoryNewestBlockNotIncluded(t *testing.T, tclient *thorclient.Clien
 	require.NoError(t, err)
 	require.Equal(t, 400, statusCode)
 	require.NotNil(t, res)
+	assert.Equal(t, "newestBlock: not found\n", string(res))
 }
 
 func getFeeHistoryBlockCountZero(t *testing.T, tclient *thorclient.Client) {
@@ -145,4 +148,5 @@ func getFeeHistoryBlockCountBiggerThanMax(t *testing.T, tclient *thorclient.Clie
 	require.NoError(t, err)
 	require.Equal(t, 400, statusCode)
 	require.NotNil(t, res)
+	assert.Equal(t, "blockCount must be between 1 and 1024\n", string(res))
 }
