@@ -1,3 +1,8 @@
+// Copyright (c) 2025 The VeChainThor developers
+
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
 package fees_test
 
 import (
@@ -28,11 +33,11 @@ func TestFees(t *testing.T) {
 
 	tclient = thorclient.New(ts.URL)
 	for name, tt := range map[string]func(*testing.T){
-		"getFeeHistory": getFeeHistory,
+		"getFeeHistory":                       getFeeHistory,
 		"getFeeHistoryWrongBlockCount":        getFeeHistoryWrongBlockCount,
 		"getFeeHistoryWrongNewestBlock":       getFeeHistoryWrongNewestBlock,
 		"getFeeHistoryNewestBlockNotIncluded": getFeeHistoryNewestBlockNotIncluded,
-		"getFeeHistoryBlockCountZero": getFeeHistoryBlockCountZero,
+		"getFeeHistoryBlockCountZero":         getFeeHistoryBlockCountZero,
 	} {
 		t.Run(name, tt)
 	}

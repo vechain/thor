@@ -1,3 +1,8 @@
+// Copyright (c) 2025 The VeChainThor developers
+
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
 package fees
 
 import (
@@ -109,8 +114,8 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 	oldestBlock, blockDataChan := f.processBlockRange(blockCount, summary)
 
 	var (
-		baseFeesWithNil      = make([]*hexutil.Big, blockCount)
-		gasUsedRatios = make([]float64, blockCount)
+		baseFeesWithNil = make([]*hexutil.Big, blockCount)
+		gasUsedRatios   = make([]float64, blockCount)
 	)
 
 	// Collect results from the channel
@@ -126,7 +131,7 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 			baseFeesWithNil[blockPosition] = (*hexutil.Big)(big.NewInt(0))
 			fmt.Printf("LLEGA blockPosition: %+v\n", baseFeesWithNil[blockPosition])
 		}
-		gasUsedRatios[blockPosition] = float64(blockData.blockSummary.Header.GasUsed())/float64(blockData.blockSummary.Header.GasLimit())
+		gasUsedRatios[blockPosition] = float64(blockData.blockSummary.Header.GasUsed()) / float64(blockData.blockSummary.Header.GasLimit())
 	}
 
 	// Remove nil values from baseFees
