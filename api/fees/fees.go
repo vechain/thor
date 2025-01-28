@@ -107,11 +107,10 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 	}
 
 	oldestBlock, blockDataChan := f.processBlockRange(blockCount, summary)
-	numberOfProcessedBlocks := len(blockDataChan)
 
 	var (
-		baseFees      = make([]*hexutil.Big, numberOfProcessedBlocks)
-		gasUsedRatios = make([]float64, numberOfProcessedBlocks)
+		baseFeesWithNil      = make([]*hexutil.Big, blockCount)
+		gasUsedRatios = make([]float64, blockCount)
 	)
 
 	// Collect results from the channel
@@ -119,18 +118,29 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 		if blockData.err != nil {
 			return blockData.err
 		}
+		// Ensure the order of the baseFees and gasUsedRatios is correct
+		blockPosition := blockData.blockSummary.Header.Number() - oldestBlock
 		if baseFee := blockData.blockSummary.Header.BaseFee(); baseFee != nil {
-			baseFees = append(baseFees, (*hexutil.Big)(baseFee))
+			baseFeesWithNil[blockPosition] = (*hexutil.Big)(baseFee)
 		} else {
-			baseFees = append(baseFees, (*hexutil.Big)(big.NewInt(0)))
+			baseFeesWithNil[blockPosition] = (*hexutil.Big)(big.NewInt(0))
+			fmt.Printf("LLEGA blockPosition: %+v\n", baseFeesWithNil[blockPosition])
 		}
-		gasUsedRatios = append(gasUsedRatios, float64(blockData.blockSummary.Header.GasUsed())/float64(blockData.blockSummary.Header.GasLimit()))
+		gasUsedRatios[blockPosition] = float64(blockData.blockSummary.Header.GasUsed())/float64(blockData.blockSummary.Header.GasLimit())
+	}
+
+	// Remove nil values from baseFees
+	var baseFees []*hexutil.Big
+	for _, baseFee := range baseFeesWithNil {
+		if baseFee != nil {
+			baseFees = append(baseFees, baseFee)
+		}
 	}
 
 	return utils.WriteJSON(w, &GetFeesHistory{
 		OldestBlock:   &oldestBlock,
 		BaseFees:      baseFees,
-		GasUsedRatios: gasUsedRatios,
+		GasUsedRatios: gasUsedRatios[:len(baseFees)],
 	})
 }
 

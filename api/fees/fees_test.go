@@ -32,7 +32,7 @@ func TestFees(t *testing.T) {
 		"getFeeHistoryWrongBlockCount":        getFeeHistoryWrongBlockCount,
 		"getFeeHistoryWrongNewestBlock":       getFeeHistoryWrongNewestBlock,
 		"getFeeHistoryNewestBlockNotIncluded": getFeeHistoryNewestBlockNotIncluded,
-		// "getFeeHistoryBlockCountZero":         getFeeHistoryBlockCountZero,
+		"getFeeHistoryBlockCountZero": getFeeHistoryBlockCountZero,
 	} {
 		t.Run(name, tt)
 	}
@@ -87,7 +87,7 @@ func getFeeHistory(t *testing.T) {
 	expectedOldestBlock := uint32(7)
 	expectedFeesHistory := fees.GetFeesHistory{
 		OldestBlock:   &expectedOldestBlock,
-		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(450413409)), (*hexutil.Big)(big.NewInt(345261708)), (*hexutil.Big)(big.NewInt(394348200))},
+		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(450413409)), (*hexutil.Big)(big.NewInt(394348200)), (*hexutil.Big)(big.NewInt(345261708))},
 		GasUsedRatios: []float64{0.0021, 0.0021, 0.0021},
 	}
 	assert.Equal(t, expectedFeesHistory, feesHistory)
@@ -128,5 +128,10 @@ func getFeeHistoryBlockCountZero(t *testing.T) {
 		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(0)), (*hexutil.Big)(big.NewInt(1000000000))},
 		GasUsedRatios: []float64{0, 0.0021},
 	}
-	assert.Equal(t, expectedFeesHistory, feesHistory)
+
+	require.Equal(t, expectedFeesHistory.OldestBlock, feesHistory.OldestBlock)
+	require.Equal(t, len(expectedFeesHistory.BaseFees), len(feesHistory.BaseFees))
+	require.Equal(t, expectedFeesHistory.BaseFees[0].String(), feesHistory.BaseFees[0].String())
+	require.Equal(t, expectedFeesHistory.BaseFees[1], feesHistory.BaseFees[1])
+	require.Equal(t, expectedFeesHistory.GasUsedRatios, feesHistory.GasUsedRatios)
 }
