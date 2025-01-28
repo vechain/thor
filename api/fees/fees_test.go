@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"math/big"
 	"net/http/httptest"
-	"strconv"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -30,7 +29,10 @@ func TestFees(t *testing.T) {
 	tclient = thorclient.New(ts.URL)
 	for name, tt := range map[string]func(*testing.T){
 		"getFeeHistory": getFeeHistory,
-		"getFeeHistoryWrongBlockCount": getFeeHistoryWrongBlockCount,
+		"getFeeHistoryWrongBlockCount":        getFeeHistoryWrongBlockCount,
+		"getFeeHistoryWrongNewestBlock":       getFeeHistoryWrongNewestBlock,
+		"getFeeHistoryNewestBlockNotIncluded": getFeeHistoryNewestBlockNotIncluded,
+		// "getFeeHistoryBlockCountZero":         getFeeHistoryBlockCountZero,
 	} {
 		t.Run(name, tt)
 	}
@@ -74,8 +76,7 @@ func initFeesServer(t *testing.T) *httptest.Server {
 }
 
 func getFeeHistory(t *testing.T) {
-	const blockCount = 3
-	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=" + strconv.Itoa(blockCount) + "&newestBlock=best")
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=3&newestBlock=best")
 	require.NoError(t, err)
 	require.Equal(t, 200, statusCode)
 	require.NotNil(t, res)
@@ -83,7 +84,6 @@ func getFeeHistory(t *testing.T) {
 	if err := json.Unmarshal(res, &feesHistory); err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, blockCount, len(feesHistory.BaseFees))
 	expectedOldestBlock := uint32(7)
 	expectedFeesHistory := fees.GetFeesHistory{
 		OldestBlock:   &expectedOldestBlock,
@@ -98,4 +98,35 @@ func getFeeHistoryWrongBlockCount(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 400, statusCode)
 	require.NotNil(t, res)
+}
+
+func getFeeHistoryWrongNewestBlock(t *testing.T) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=3&newestBlock=wrong")
+	require.NoError(t, err)
+	require.Equal(t, 400, statusCode)
+	require.NotNil(t, res)
+}
+
+func getFeeHistoryNewestBlockNotIncluded(t *testing.T) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=3&newestBlock=20")
+	require.NoError(t, err)
+	require.Equal(t, 400, statusCode)
+	require.NotNil(t, res)
+}
+
+func getFeeHistoryBlockCountZero(t *testing.T) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=4&newestBlock=1")
+	require.NoError(t, err)
+	require.Equal(t, 200, statusCode)
+	require.NotNil(t, res)
+	var feesHistory fees.GetFeesHistory
+	if err := json.Unmarshal(res, &feesHistory); err != nil {
+		t.Fatal(err)
+	}
+	expectedFeesHistory := fees.GetFeesHistory{
+		OldestBlock:   new(uint32),
+		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(0)), (*hexutil.Big)(big.NewInt(1000000000))},
+		GasUsedRatios: []float64{0, 0.0021},
+	}
+	assert.Equal(t, expectedFeesHistory, feesHistory)
 }
