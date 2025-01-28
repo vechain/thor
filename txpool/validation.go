@@ -6,6 +6,8 @@
 package txpool
 
 import (
+	"fmt"
+
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus/fork"
@@ -22,8 +24,21 @@ func ValidateTransaction(tr *tx.Transaction, repo *chain.Repository, head *chain
 		return txRejectedError{"size too large"}
 	}
 	if head.Header.Number() < forkConfig.GALACTICA {
+		// Pre-Galactica, only support legacy tx
 		if tr.Type() != tx.LegacyTxType {
 			return tx.ErrTxTypeNotSupported
+		}
+	} else {
+		// Post-Galactica
+		if tr.MaxFeePerGas().Cmp(tr.MaxPriorityFeePerGas()) < 0 {
+			return txRejectedError{fmt.Sprintf("max fee per gas (%v) must be greater than max priority fee per gas (%v)\n", tr.MaxFeePerGas(), tr.MaxPriorityFeePerGas())}
+		}
+
+		if tr.MaxFeePerGas().Sign() < 0 {
+			return txRejectedError{"max fee per gas must be positive"}
+		}
+		if tr.MaxPriorityFeePerGas().Sign() < 0 {
+			return txRejectedError{"max priority fee per gas must be positive"}
 		}
 	}
 	if err := tr.TestFeatures(head.Header.TxsFeatures()); err != nil {

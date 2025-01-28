@@ -127,7 +127,7 @@ func TestValidateTransaction(t *testing.T) {
 		{
 			name: "dyn fee transaction with unsupported features",
 			getTx: func() *tx.Transaction {
-				t, _ := tx.NewTxBuilder(tx.DynamicFeeTxType).ChainTag(repo.ChainTag()).Features(tx.Features(4)).Build()
+				t, _ := tx.NewTxBuilder(tx.DynamicFeeTxType).ChainTag(repo.ChainTag()).MaxFeePerGas(big.NewInt(10_000)).MaxPriorityFeePerGas(big.NewInt(100)).Features(tx.Features(4)).Build()
 				return t
 			},
 			head:        &chain.BlockSummary{Header: new(block.Builder).TransactionFeatures(tx.Features(1)).Build().Header()},
@@ -153,6 +153,36 @@ func TestValidateTransaction(t *testing.T) {
 			head:        &chain.BlockSummary{Header: getHeader(1)},
 			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
 			expectedErr: nil,
+		},
+		{
+			name: "max fee per gas less than max priority fee per gas",
+			getTx: func() *tx.Transaction {
+				t, _ := tx.NewTxBuilder(tx.DynamicFeeTxType).ChainTag(repo.ChainTag()).MaxFeePerGas(big.NewInt(10)).MaxPriorityFeePerGas(big.NewInt(100)).Build()
+				return t
+			},
+			head:        &chain.BlockSummary{Header: getHeader(1)},
+			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
+			expectedErr: txRejectedError{"max fee per gas (10) must be greater than max priority fee per gas (100)\n"},
+		},
+		{
+			name: "max fee per gas is negative",
+			getTx: func() *tx.Transaction {
+				t, _ := tx.NewTxBuilder(tx.DynamicFeeTxType).ChainTag(repo.ChainTag()).MaxFeePerGas(big.NewInt(-10)).MaxPriorityFeePerGas(big.NewInt(-100)).Build()
+				return t
+			},
+			head:        &chain.BlockSummary{Header: getHeader(1)},
+			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
+			expectedErr: txRejectedError{"max fee per gas must be positive"},
+		},
+		{
+			name: "max priority fee per gas is negative",
+			getTx: func() *tx.Transaction {
+				t, _ := tx.NewTxBuilder(tx.DynamicFeeTxType).ChainTag(repo.ChainTag()).MaxFeePerGas(big.NewInt(10)).MaxPriorityFeePerGas(big.NewInt(-100)).Build()
+				return t
+			},
+			head:        &chain.BlockSummary{Header: getHeader(1)},
+			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
+			expectedErr: txRejectedError{"max priority fee per gas must be positive"},
 		},
 	}
 
