@@ -430,16 +430,16 @@ func TestOrderTxsAfterGalacticaFork(t *testing.T) {
 	repo.AddBlock(b1, tx.Receipts{}, 0)
 	repo.SetBestBlockID(b1.Header().ID())
 
-	total_pool_txs := 10_000
+	totalPoolTxs := 10_000
 	pool := New(repo, state.NewStater(db), Options{
-		Limit:           total_pool_txs,
-		LimitPerAccount: total_pool_txs,
+		Limit:           totalPoolTxs,
+		LimitPerAccount: totalPoolTxs,
 		MaxLifetime:     time.Hour,
 	}, &thor.ForkConfig{GALACTICA: 1})
 	defer pool.Close()
 
 	txs := make(map[thor.Bytes32]*tx.Transaction)
-	for i := 0; i < total_pool_txs; i++ {
+	for i := 0; i < totalPoolTxs; i++ {
 		tx := tx.MustSign(generateRandomTx(t, i, repo.ChainTag()), devAccounts[i%len(devAccounts)].PrivateKey)
 		txs[tx.ID()] = tx
 		assert.Nil(t, pool.Add(tx))
@@ -449,7 +449,7 @@ func TestOrderTxsAfterGalacticaFork(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Zero(t, removed)
 	assert.Equal(t, len(txs), len(execTxs))
-	assert.Equal(t, total_pool_txs, len(execTxs))
+	assert.Equal(t, totalPoolTxs, len(execTxs))
 	baseGasPrice, err := builtin.Params.Native(st).Get(thor.KeyBaseGasPrice)
 	assert.Nil(t, err)
 	for i := 1; i < len(txs); i++ {
@@ -467,8 +467,8 @@ func generateRandomTx(t *testing.T, seed int, chainTag byte) *tx.Transaction {
 		txType = tx.LegacyTxType
 	}
 
-	maxFeePerGas := int64(thor.InitialBaseFee + r.IntN(thor.InitialBaseFee))
-	maxPriorityFeePerGas := int64(maxFeePerGas / int64(r.IntN(10)+1))
+	maxFeePerGas := int64(thor.InitialBaseFee + r.IntN(thor.InitialBaseFee)) // #nosec G404
+	maxPriorityFeePerGas := maxFeePerGas / int64(r.IntN(10)+1)               // #nosec G404
 
 	tx, err := tx.NewTxBuilder(txType).
 		ChainTag(chainTag).
