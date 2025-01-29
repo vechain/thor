@@ -6,6 +6,8 @@
 package subscriptions
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -200,8 +202,8 @@ func (s *Subscriptions) handlePendingTransactions(w http.ResponseWriter, req *ht
 	for {
 		select {
 		case tx := <-txCh:
-			err = conn.WriteJSON(&PendingTxIDMessage{ID: tx.ID()})
-			if err != nil {
+			if err = conn.WriteJSON(&PendingTxIDMessage{ID: tx.ID()}); err != nil {
+				// likely conn has failed
 				return nil
 			}
 		case <-s.done:
@@ -209,7 +211,10 @@ func (s *Subscriptions) handlePendingTransactions(w http.ResponseWriter, req *ht
 		case <-closed:
 			return nil
 		case <-pingTicker.C:
-			conn.WriteMessage(websocket.PingMessage, nil)
+			if err = conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				// likely conn has failed
+				return nil
+			}
 		}
 	}
 }
@@ -221,20 +226,30 @@ func (s *Subscriptions) setupConn(w http.ResponseWriter, req *http.Request) (*we
 	}
 	conn.SetReadLimit(100 * 1024) // 100 KB
 
+	// Mark in context that the connection is hijacked
+	req = req.WithContext(context.WithValue(req.Context(), "websocketHijacked", true))
+
 	closed := make(chan struct{})
 	// start read loop to handle close event
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		conn.SetReadDeadline(time.Now().Add(pongWait))
+		// close connections if not closed already
+		defer close(closed)
+
+		if err = conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
+			logger.Debug("failed to set initial read deadline", "err", err)
+			return
+		}
 		conn.SetPongHandler(func(string) error {
-			conn.SetReadDeadline(time.Now().Add(pongWait))
+			if err = conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
+				logger.Debug("failed to set pong read deadline", "err", err)
+			}
 			return nil
 		})
 		for {
 			if _, _, err := conn.ReadMessage(); err != nil {
 				logger.Debug("websocket read err", "err", err)
-				close(closed)
 				break
 			}
 		}
@@ -267,11 +282,11 @@ func (s *Subscriptions) pipe(conn *websocket.Conn, reader msgReader, closed chan
 	for {
 		msgs, hasMore, err := reader.Read()
 		if err != nil {
-			return err
+			return fmt.Errorf("unable to read subscription message: %w", err)
 		}
 		for _, msg := range msgs {
 			if err := conn.WriteJSON(msg); err != nil {
-				return err
+				return fmt.Errorf("unable to write subscription json: %w", err)
 			}
 		}
 		if hasMore {
@@ -281,7 +296,9 @@ func (s *Subscriptions) pipe(conn *websocket.Conn, reader msgReader, closed chan
 			case <-closed:
 				return nil
 			case <-pingTicker.C:
-				conn.WriteMessage(websocket.PingMessage, nil)
+				if err = conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					return fmt.Errorf("failed to write ping message: %w", err)
+				}
 			default:
 			}
 		} else {
@@ -292,7 +309,9 @@ func (s *Subscriptions) pipe(conn *websocket.Conn, reader msgReader, closed chan
 				return nil
 			case <-ticker.C():
 			case <-pingTicker.C:
-				conn.WriteMessage(websocket.PingMessage, nil)
+				if err = conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					return fmt.Errorf("failed to write ping message: %w", err)
+				}
 			}
 		}
 	}

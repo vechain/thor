@@ -7,11 +7,14 @@ package utils
 
 import (
 	"encoding/json"
+	"github.com/vechain/thor/v2/log"
 	"io"
 	"net/http"
 
 	"github.com/pkg/errors"
 )
+
+var logger = log.WithContext("pkg", "http-utils")
 
 type httpError struct {
 	cause  error
@@ -66,16 +69,27 @@ type HandlerFunc func(http.ResponseWriter, *http.Request) error
 func WrapHandlerFunc(f HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		err := f(w, r)
-		if err != nil {
-			if he, ok := err.(*httpError); ok {
-				if he.cause != nil {
-					http.Error(w, he.cause.Error(), he.status)
-				} else {
-					w.WriteHeader(he.status)
-				}
+		if err == nil {
+			return // No error, nothing to do
+		}
+
+		// If the connection was upgraded to WebSocket, do not write an HTTP response.
+		// (The connection is already hijacked, so writing an HTTP response is invalid.)
+		value := r.Context().Value("websocketHijacked")
+		if hijacked, ok := value.(bool); ok && hijacked {
+			return
+		}
+
+		// Otherwise, proceed with normal HTTP error handling
+		if he, ok := err.(*httpError); ok {
+			if he.cause != nil {
+				http.Error(w, he.cause.Error(), he.status)
 			} else {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				w.WriteHeader(he.status)
 			}
+		} else {
+			logger.Error("all errors should be wrapped in httpError", "err", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}
 }
