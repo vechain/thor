@@ -30,6 +30,7 @@ func TestFees(t *testing.T) {
 	tclient := thorclient.New(ts.URL)
 	for name, tt := range map[string]func(*testing.T, *thorclient.Client){
 		"getFeeHistory":                        getFeeHistory,
+		"getFeeHistoryFinalized":               getFeeHistoryFinalized,
 		"getFeeHistoryWrongBlockCount":         getFeeHistoryWrongBlockCount,
 		"getFeeHistoryWrongNewestBlock":        getFeeHistoryWrongNewestBlock,
 		"getFeeHistoryNewestBlockNotIncluded":  getFeeHistoryNewestBlockNotIncluded,
@@ -95,6 +96,26 @@ func getFeeHistory(t *testing.T, tclient *thorclient.Client) {
 		GasUsedRatios: []float64{0.0021, 0.0021, 0.0021},
 	}
 	assert.Equal(t, expectedFeesHistory, feesHistory)
+}
+
+func getFeeHistoryFinalized(t *testing.T, tclient *thorclient.Client) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=3&newestBlock=finalized")
+	require.NoError(t, err)
+	require.Equal(t, 200, statusCode)
+	require.NotNil(t, res)
+	var feesHistory fees.GetFeesHistory
+	if err := json.Unmarshal(res, &feesHistory); err != nil {
+		t.Fatal(err)
+	}
+	expectedFeesHistory := fees.GetFeesHistory{
+		OldestBlock:   new(uint32),
+		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(0))},
+		GasUsedRatios: []float64{0},
+	}
+	require.Equal(t, expectedFeesHistory.OldestBlock, feesHistory.OldestBlock)
+	require.Equal(t, len(expectedFeesHistory.BaseFees), len(feesHistory.BaseFees))
+	require.Equal(t, expectedFeesHistory.BaseFees[0].String(), feesHistory.BaseFees[0].String())
+	require.Equal(t, expectedFeesHistory.GasUsedRatios, feesHistory.GasUsedRatios)
 }
 
 func getFeeHistoryWrongBlockCount(t *testing.T, tclient *thorclient.Client) {
