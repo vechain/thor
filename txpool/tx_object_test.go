@@ -104,17 +104,17 @@ func TestExecutableWithError(t *testing.T) {
 
 func TestSort(t *testing.T) {
 	objs := []*txObject{
-		{overallGasPrice: big.NewInt(0)},
-		{overallGasPrice: big.NewInt(10)},
-		{overallGasPrice: big.NewInt(20)},
-		{overallGasPrice: big.NewInt(30)},
+		{priorityGasPrice: big.NewInt(0)},
+		{priorityGasPrice: big.NewInt(10)},
+		{priorityGasPrice: big.NewInt(20)},
+		{priorityGasPrice: big.NewInt(30)},
 	}
 	sortTxObjsByOverallGasPriceDesc(objs)
 
-	assert.Equal(t, big.NewInt(30), objs[0].overallGasPrice)
-	assert.Equal(t, big.NewInt(20), objs[1].overallGasPrice)
-	assert.Equal(t, big.NewInt(10), objs[2].overallGasPrice)
-	assert.Equal(t, big.NewInt(0), objs[3].overallGasPrice)
+	assert.Equal(t, big.NewInt(30), objs[0].priorityGasPrice)
+	assert.Equal(t, big.NewInt(20), objs[1].priorityGasPrice)
+	assert.Equal(t, big.NewInt(10), objs[2].priorityGasPrice)
+	assert.Equal(t, big.NewInt(0), objs[3].priorityGasPrice)
 }
 
 func TestResolve(t *testing.T) {

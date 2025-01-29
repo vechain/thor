@@ -433,7 +433,7 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 				logger.Trace("tx washed out", "id", txObj.ID(), "err", err)
 				continue
 			}
-			txObj.overallGasPrice = txObj.OverallGasPrice(baseGasPrice, provedWork)
+			txObj.priorityGasPrice = txObj.OverallGasPrice(baseGasPrice, provedWork)
 
 			if headSummary.Header.Number() >= p.forkConfig.GALACTICA {
 				baseFee := headSummary.Header.BaseFee()
@@ -441,8 +441,9 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 				if headSummary.Header.Number() == p.forkConfig.GALACTICA {
 					baseFee = big.NewInt(thor.InitialBaseFee)
 				}
-				feeItems := fork.GalacticaTxGasPriceAdapater(txObj.Transaction, txObj.overallGasPrice)
-				txObj.overallGasPrice = math.BigMin(new(big.Int).Sub(feeItems.MaxFee, baseFee), feeItems.MaxPriorityFee)
+				feeItems := fork.GalacticaTxGasPriceAdapater(txObj.Transaction, txObj.priorityGasPrice)
+				// This gasPrice is used to prioritize txs in the pool
+				txObj.priorityGasPrice = math.BigMin(new(big.Int).Sub(feeItems.MaxFee, baseFee), feeItems.MaxPriorityFee)
 			}
 
 			if txObj.localSubmitted {

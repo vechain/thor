@@ -28,8 +28,8 @@ type txObject struct {
 	payer          *thor.Address // payer of the tx, either origin, delegator, or on-chain delegation payer
 	cost           *big.Int      // total tx cost the payer needs to pay before execution(gas price * gas)
 
-	executable      bool     // don't touch this value, will be updated by the pool
-	overallGasPrice *big.Int // don't touch this value, it's only be used in pool's housekeeping
+	executable       bool     // don't touch this value, will be updated by the pool
+	priorityGasPrice *big.Int // don't touch this value, it's only be used in pool's housekeeping
 }
 
 func resolveTx(tx *tx.Transaction, localSubmitted bool) (*txObject, error) {
@@ -122,7 +122,7 @@ func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 
 func sortTxObjsByOverallGasPriceDesc(txObjs []*txObject) {
 	sort.Slice(txObjs, func(i, j int) bool {
-		gp1, gp2 := txObjs[i].overallGasPrice, txObjs[j].overallGasPrice
+		gp1, gp2 := txObjs[i].priorityGasPrice, txObjs[j].priorityGasPrice
 		// This is to make sure the zero gas price txs are always at the end of the list.
 		if gp1.Sign() == 0 {
 			return false

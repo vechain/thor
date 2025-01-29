@@ -736,8 +736,8 @@ func TestTransactionsWithNotEnoughGasFee(t *testing.T) {
 	rt := runtime.New(chain, state, &xenv.BlockContext{BaseFee: big.NewInt(baseFee)}, thor.ForkConfig{GALACTICA: 0})
 	illegalTx, err := tx.NewTxBuilder(tx.DynamicFeeTxType).
 		ChainTag(repo.ChainTag()).
-		MaxPriorityFeePerGas(big.NewInt(baseFee / 10000)).
-		MaxFeePerGas(big.NewInt(baseFee / 100)).
+		MaxFeePerGas(big.NewInt(baseFee / 10000)).
+		MaxPriorityFeePerGas(big.NewInt(baseFee / 100)).
 		Gas(21000).
 		Build()
 	assert.NoError(t, err)

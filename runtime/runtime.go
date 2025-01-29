@@ -530,14 +530,15 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 			if err != nil {
 				return nil, err
 			}
-			overallGasPrice := tx.OverallGasPrice(baseGasPrice, provedWork)
+			rewardGasPrice := tx.OverallGasPrice(baseGasPrice, provedWork)
 			if galactica {
-				feeItems := fork.GalacticaTxGasPriceAdapater(tx, overallGasPrice)
-				overallGasPrice = math.BigMin(feeItems.MaxPriorityFee, new(big.Int).Sub(feeItems.MaxFee, rt.ctx.BaseFee))
+				feeItems := fork.GalacticaTxGasPriceAdapater(tx, rewardGasPrice)
+				// This gasPrice will be used to compensate the validator
+				rewardGasPrice = math.BigMin(feeItems.MaxPriorityFee, new(big.Int).Sub(feeItems.MaxFee, rt.ctx.BaseFee))
 			}
 
 			reward := new(big.Int).SetUint64(receipt.GasUsed)
-			reward.Mul(reward, overallGasPrice)
+			reward.Mul(reward, rewardGasPrice)
 			reward.Mul(reward, rewardRatio)
 			reward.Div(reward, big.NewInt(1e18))
 			if err := builtin.Energy.Native(rt.state, rt.ctx.Time).Add(rt.ctx.Beneficiary, reward); err != nil {
