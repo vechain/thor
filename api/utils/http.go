@@ -73,13 +73,6 @@ func WrapHandlerFunc(f HandlerFunc) http.HandlerFunc {
 			return // No error, nothing to do
 		}
 
-		// If the connection was upgraded to WebSocket, do not write an HTTP response.
-		// (The connection is already hijacked, so writing an HTTP response is invalid.)
-		value := r.Context().Value("websocketHijacked")
-		if hijacked, ok := value.(bool); ok && hijacked {
-			return
-		}
-
 		// Otherwise, proceed with normal HTTP error handling
 		if he, ok := err.(*httpError); ok {
 			if he.cause != nil {
@@ -88,7 +81,7 @@ func WrapHandlerFunc(f HandlerFunc) http.HandlerFunc {
 				w.WriteHeader(he.status)
 			}
 		} else {
-			logger.Error("all errors should be wrapped in httpError", "err", err)
+			logger.Debug("all errors should be wrapped in httpError", "err", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}

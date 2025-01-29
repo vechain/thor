@@ -6,7 +6,6 @@
 package subscriptions
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"sync"
@@ -185,6 +184,7 @@ func (s *Subscriptions) handlePendingTransactions(w http.ResponseWriter, req *ht
 	// since the conn is hijacked here, no error should be returned in lines below
 	if err != nil {
 		logger.Debug("upgrade to websocket", "err", err)
+		// websocket connection do not return errors to the wrapHandler
 		return nil
 	}
 	defer s.closeConn(conn, err)
@@ -225,9 +225,6 @@ func (s *Subscriptions) setupConn(w http.ResponseWriter, req *http.Request) (*we
 		return nil, nil, err
 	}
 	conn.SetReadLimit(100 * 1024) // 100 KB
-
-	// Mark in context that the connection is hijacked
-	req = req.WithContext(context.WithValue(req.Context(), "websocketHijacked", true))
 
 	closed := make(chan struct{})
 	// start read loop to handle close event
@@ -367,6 +364,7 @@ func (s *Subscriptions) websocket(readerFunc func(http.ResponseWriter, *http.Req
 		// Call the provided reader function
 		reader, err := readerFunc(w, req)
 		if err != nil {
+			// it's not yet a websocket connection, this is likely a setup error in the original http request
 			return err
 		}
 
@@ -374,7 +372,8 @@ func (s *Subscriptions) websocket(readerFunc func(http.ResponseWriter, *http.Req
 		conn, closed, err := s.setupConn(w, req)
 		if err != nil {
 			logger.Debug("upgrade to websocket", "err", err)
-			return err
+			// websocket connection do not return errors to the wrapHandler
+			return nil
 		}
 		defer s.closeConn(conn, err)
 
@@ -382,8 +381,9 @@ func (s *Subscriptions) websocket(readerFunc func(http.ResponseWriter, *http.Req
 		err = s.pipe(conn, reader, closed)
 		if err != nil {
 			logger.Debug("error in websocket pipe", "err", err)
+			// websocket connection do not return errors to the wrapHandler
 		}
-		return err
+		return nil
 	}
 }
 
