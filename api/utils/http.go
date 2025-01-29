@@ -7,11 +7,11 @@ package utils
 
 import (
 	"encoding/json"
-	"github.com/vechain/thor/v2/log"
 	"io"
 	"net/http"
 
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/log"
 )
 
 var logger = log.WithContext("pkg", "http-utils")
