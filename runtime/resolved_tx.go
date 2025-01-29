@@ -112,6 +112,7 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64, galac
 	gasPrice = r.tx.GasPrice(baseGasPrice)
 	if galacticaItem.IsActive {
 		feeItems := fork.GalacticaTxGasPriceAdapater(r.tx, gasPrice)
+		// This gasPrice is the same that will be used when refunding the user
 		gasPrice = math.BigMin(gasPrice.Add(feeItems.MaxPriorityFee, galacticaItem.BaseFee), feeItems.MaxFee)
 	}
 
