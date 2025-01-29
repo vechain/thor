@@ -6,10 +6,12 @@
 package packer_test
 
 import (
+	"fmt"
 	"math/big"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/builtin"
@@ -17,6 +19,7 @@ import (
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/packer"
+	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -221,6 +224,14 @@ func TestPackAfterGalacticaFork(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, uint32(2), block.Header().Number())
 	assert.Equal(t, big.NewInt(thor.InitialBaseFee), block.Header().BaseFee())
+
+	// Adopt a tx which has not enough max fee to cover for base fee
+	badTx := tx.NewTxBuilder(tx.DynamicFeeTxType).ChainTag(repo.ChainTag()).Gas(21000).MaxFeePerGas(big.NewInt(thor.InitialBaseFee - 1)).MaxPriorityFeePerGas(common.Big1).Expiration(100).MustBuild()
+	badTx = tx.MustSign(badTx, genesis.DevAccounts()[0].PrivateKey)
+	expectedErrorMessage := fmt.Sprintf("bad tx: %s", runtime.ErrMaxFeePerGasTooLow.Error())
+	if err := flow.Adopt(badTx); err.Error() != expectedErrorMessage {
+		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
+	}
 }
 
 func TestAdoptErr(t *testing.T) {
