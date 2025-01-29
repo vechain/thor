@@ -11,7 +11,10 @@ import (
 	"net/http"
 
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/log"
 )
+
+var logger = log.WithContext("pkg", "http-utils")
 
 type httpError struct {
 	cause  error
@@ -66,16 +69,20 @@ type HandlerFunc func(http.ResponseWriter, *http.Request) error
 func WrapHandlerFunc(f HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		err := f(w, r)
-		if err != nil {
-			if he, ok := err.(*httpError); ok {
-				if he.cause != nil {
-					http.Error(w, he.cause.Error(), he.status)
-				} else {
-					w.WriteHeader(he.status)
-				}
+		if err == nil {
+			return // No error, nothing to do
+		}
+
+		// Otherwise, proceed with normal HTTP error handling
+		if he, ok := err.(*httpError); ok {
+			if he.cause != nil {
+				http.Error(w, he.cause.Error(), he.status)
 			} else {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				w.WriteHeader(he.status)
 			}
+		} else {
+			logger.Debug("all errors should be wrapped in httpError", "err", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}
 }
