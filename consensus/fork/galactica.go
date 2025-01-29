@@ -19,15 +19,17 @@ import (
 // - gas limit check
 // - basefee check
 func VerifyGalacticaHeader(config *thor.ForkConfig, parent, header *block.Header) error {
+	// Verify the header is not malformed
+	if header.BaseFee() == nil {
+		return fmt.Errorf("header is missing baseFee")
+	}
+
 	// Verify that the gas limit remains within allowed bounds
 	parentGasLimit := parent.GasLimit()
 	if err := block.GasLimit(header.GasLimit()).IsValid(parentGasLimit); !err {
 		return fmt.Errorf("invalid gas limit: have %d, want %d", header.GasLimit(), parentGasLimit)
 	}
-	// Verify the header is not malformed
-	if header.BaseFee() == nil {
-		return fmt.Errorf("header is missing baseFee")
-	}
+
 	// Verify the baseFee is correct based on the parent header.
 	expectedBaseFee := CalcBaseFee(config, parent)
 	if header.BaseFee().Cmp(expectedBaseFee) != 0 {
@@ -58,6 +60,7 @@ func CalcBaseFee(config *thor.ForkConfig, parent *block.Header) *big.Int {
 	}
 	if parentGasUsed > parentGasTarget {
 		// If the parent block used more gas than its target, the baseFee should increase.
+		// newBaseFee := parentBaseFee + max(1, parentBaseFee * (parentGasUsed - parentGasTarget) / parentGasTarget / baseFeeChangeDenominator)
 		gasUsedDelta := new(big.Int).SetUint64(parentGasUsed - parentGasTarget)
 		x := new(big.Int).Mul(parentBaseFee, gasUsedDelta)
 		y := x.Div(x, parentGasTargetBig)
@@ -68,7 +71,8 @@ func CalcBaseFee(config *thor.ForkConfig, parent *block.Header) *big.Int {
 
 		return x.Add(parentBaseFee, baseFeeDelta)
 	} else {
-		// Otherwise if the parent block used less gas than its target, the baseFee should decrease.
+		// Otherwise if the parent block used less or equal gas than its target, the baseFee should decrease.
+		// newBaseFee := max(0, parentBaseFee - parentBaseFee * (parentGasTarget - parentGasUsed) / parentGasTarget / baseFeeChangeDenominator)
 		gasUsedDelta := new(big.Int).SetUint64(parentGasTarget - parentGasUsed)
 		x := new(big.Int).Mul(parentBaseFee, gasUsedDelta)
 		y := x.Div(x, parentGasTargetBig)
