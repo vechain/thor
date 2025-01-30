@@ -53,8 +53,8 @@ func testConvertRangeWithBlockRangeType(t *testing.T, chain *testchain.Chain) {
 func testConvertRangeWithTimeRangeTypeLessThenGenesis(t *testing.T, chain *testchain.Chain) {
 	rng := newRange(TimeRangeType, 100, 2200)
 	expectedEmptyRange := &logdb.Range{
-		From: logdb.MaxBlockNumber,
-		To:   logdb.MaxBlockNumber,
+		From: 0,
+		To:   0,
 	}
 
 	convRng, err := ConvertRange(chain.Repo().NewBestChain(), rng)
@@ -80,11 +80,12 @@ func testConvertRangeWithTimeRangeType(t *testing.T, chain *testchain.Chain) {
 
 func testConvertRangeWithFromGreaterThanGenesis(t *testing.T, chain *testchain.Chain) {
 	genesis := chain.GenesisBlock().Header()
+	best, _ := chain.BestBlock()
 
 	rng := newRange(TimeRangeType, genesis.Timestamp()+1_000, genesis.Timestamp()+10_000)
 	expectedEmptyRange := &logdb.Range{
-		From: logdb.MaxBlockNumber,
-		To:   logdb.MaxBlockNumber,
+		From: best.Header().Number(),
+		To:   best.Header().Number(),
 	}
 
 	convRng, err := ConvertRange(chain.Repo().NewBestChain(), rng)
