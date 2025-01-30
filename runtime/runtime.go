@@ -59,8 +59,8 @@ var baseChainConfig = vm.ChainConfig{
 		Ethash:              nil,
 		Clique:              nil,
 	},
-	IstanbulBlock: nil,
-	ShanghaiBlock: nil,
+	IstanbulBlock:  nil,
+	GalacticaBlock: nil,
 }
 
 // Output output of clause execution.
@@ -99,7 +99,7 @@ func New(
 	currentChainConfig := baseChainConfig
 	currentChainConfig.ConstantinopleBlock = big.NewInt(int64(forkConfig.ETH_CONST))
 	currentChainConfig.IstanbulBlock = big.NewInt(int64(forkConfig.ETH_IST))
-	currentChainConfig.ShanghaiBlock = big.NewInt(int64(forkConfig.GALACTICA))
+	currentChainConfig.GalacticaBlock = big.NewInt(int64(forkConfig.GALACTICA))
 	if chain != nil {
 		// use genesis id as chain id
 		currentChainConfig.ChainID = new(big.Int).SetBytes(chain.GenesisID().Bytes())
@@ -107,7 +107,7 @@ func New(
 
 	// alloc precompiled contracts
 	if forkConfig.GALACTICA == ctx.Number {
-		for addr := range vm.PrecompiledContractsShanghai {
+		for addr := range vm.PrecompiledContractsGalactica {
 			if err := state.SetCode(thor.Address(addr), EmptyRuntimeBytecode); err != nil {
 				panic(err)
 			}
@@ -155,7 +155,13 @@ func (rt *Runtime) SetVMConfig(config vm.Config) *Runtime {
 }
 
 func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *xenv.TransactionContext) *vm.EVM {
-	var lastNonNativeCallGas uint64
+	var (
+		lastNonNativeCallGas uint64
+		baseFee              *big.Int
+	)
+	if rt.ctx.BaseFee != nil {
+		baseFee = new(big.Int).Set(rt.ctx.BaseFee)
+	}
 	return vm.NewEVM(vm.Context{
 		CanTransfer: func(_ vm.StateDB, addr common.Address, amount *big.Int) bool {
 			return stateDB.GetBalance(addr).Cmp(amount) >= 0
@@ -316,7 +322,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 		BlockNumber: new(big.Int).SetUint64(uint64(rt.ctx.Number)),
 		Time:        new(big.Int).SetUint64(rt.ctx.Time),
 		Difficulty:  &big.Int{},
-		BaseFee:     &big.Int{},
+		BaseFee:     baseFee,
 	}, stateDB, &rt.chainConfig, rt.vmConfig)
 }
 

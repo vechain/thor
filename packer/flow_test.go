@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
@@ -175,6 +176,48 @@ func TestPack(t *testing.T) {
 	if _, _, _, err := flow.Pack(genesis.DevAccounts()[1].PrivateKey, 0, false); err.Error() != expectedErrorMessage {
 		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
 	}
+}
+
+func TestPackAfterGalacticaFork(t *testing.T) {
+	db := muxdb.NewMem()
+	g := genesis.NewDevnet()
+
+	stater := state.NewStater(db)
+	parent, _, _, _ := g.Build(stater)
+
+	repo, _ := chain.NewRepository(db, parent)
+
+	forkConfig := thor.NoFork
+	forkConfig.BLOCKLIST = 0
+	forkConfig.VIP214 = 0
+	forkConfig.FINALITY = 0
+	forkConfig.GALACTICA = 2
+
+	proposer := genesis.DevAccounts()[0]
+	p := packer.New(repo, stater, proposer.Address, &proposer.Address, &forkConfig)
+	parentSum, _ := repo.GetBlockSummary(parent.Header().ID())
+	flow, _ := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval)
+
+	// Block 1: Galactica is not enabled
+	block, stg, receipts, err := flow.Pack(proposer.PrivateKey, 0, false)
+	assert.Nil(t, err)
+	assert.Equal(t, uint32(1), block.Header().Number())
+	assert.Nil(t, block.Header().BaseFee())
+
+	if _, err := stg.Commit(); err != nil {
+		t.Fatal("Error committing state:", err)
+	}
+	if err := repo.AddBlock(block, receipts, 0, true); err != nil {
+		t.Fatal("Error adding block:", err)
+	}
+
+	// Block 2: Galactica is enabled
+	parentSum, _ = repo.GetBlockSummary(block.Header().ID())
+	flow, _ = p.Schedule(parentSum, block.Header().Timestamp()+100*thor.BlockInterval)
+	block, _, _, err = flow.Pack(proposer.PrivateKey, 0, false)
+	assert.Nil(t, err)
+	assert.Equal(t, uint32(2), block.Header().Number())
+	assert.Equal(t, big.NewInt(thor.InitialBaseFee), block.Header().BaseFee())
 }
 
 func TestAdoptErr(t *testing.T) {

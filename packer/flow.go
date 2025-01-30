@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -188,6 +189,10 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 
 	if f.Number() >= f.packer.forkConfig.FINALITY && shouldVote {
 		builder.COM()
+	}
+
+	if f.Number() >= f.packer.forkConfig.GALACTICA {
+		builder.BaseFee(fork.CalcBaseFee(f.packer.forkConfig, f.parentHeader))
 	}
 
 	if f.Number() < f.packer.forkConfig.VIP214 {
