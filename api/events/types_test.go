@@ -29,10 +29,13 @@ func TestEventsTypes(t *testing.T) {
 	c := initChain(t)
 	for name, tt := range map[string]func(*testing.T, *testchain.Chain){
 		"testConvertRangeWithBlockRangeType":                          testConvertRangeWithBlockRangeType,
+		"testConvertRangeWithBlockRangeTypeMoreThanMaxBlockNumber":    testConvertRangeWithBlockRangeTypeMoreThanMaxBlockNumber,
+		"testConvertRangeWithBlockRangeTypeWithSwitchedFromAndTo":     testConvertRangeWithBlockRangeTypeWithSwitchedFromAndTo,
 		"testConvertRangeWithTimeRangeTypeLessThenGenesis":            testConvertRangeWithTimeRangeTypeLessThenGenesis,
 		"testConvertRangeWithTimeRangeType":                           testConvertRangeWithTimeRangeType,
 		"testConvertRangeWithFromGreaterThanGenesis":                  testConvertRangeWithFromGreaterThanGenesis,
 		"testConvertRangeWithTimeRangeLessThanGenesisGreaterThanBest": testConvertRangeWithTimeRangeLessThanGenesisGreaterThanBest,
+		"testConvertRangeWithTimeRangeTypeWithSwitchedFromAndTo":      testConvertRangeWithTimeRangeTypeWithSwitchedFromAndTo,
 	} {
 		t.Run(name, func(t *testing.T) {
 			tt(t, c)
@@ -56,6 +59,22 @@ func testConvertRangeWithTimeRangeLessThanGenesisGreaterThanBest(t *testing.T, c
 	assert.Equal(t, expectedRange, convRng)
 }
 
+func testConvertRangeWithTimeRangeTypeWithSwitchedFromAndTo(t *testing.T, chain *testchain.Chain) {
+	genesis := chain.GenesisBlock().Header()
+	bestBlock := chain.Repo().BestBlockSummary()
+
+	rng := newRange(TimeRangeType, bestBlock.Header.Timestamp(), genesis.Timestamp())
+	expectedRange := &logdb.Range{
+		From: bestBlock.Header.Number(),
+		To:   genesis.Number(),
+	}
+
+	convRng, err := ConvertRange(chain.Repo().NewBestChain(), rng)
+
+	assert.NoError(t, err)
+	assert.Equal(t, expectedRange, convRng)
+}
+
 func testConvertRangeWithBlockRangeType(t *testing.T, chain *testchain.Chain) {
 	rng := newRange(BlockRangeType, 1, 2)
 
@@ -63,6 +82,25 @@ func testConvertRangeWithBlockRangeType(t *testing.T, chain *testchain.Chain) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(*rng.From), convertedRng.From)
+	assert.Equal(t, uint32(*rng.To), convertedRng.To)
+}
+
+func testConvertRangeWithBlockRangeTypeMoreThanMaxBlockNumber(t *testing.T, chain *testchain.Chain) {
+	rng := newRange(BlockRangeType, logdb.MaxBlockNumber+1, logdb.MaxBlockNumber+2)
+
+	convertedRng, err := ConvertRange(chain.Repo().NewBestChain(), rng)
+
+	assert.NoError(t, err)
+	assert.Equal(t, &emptyRange, convertedRng)
+}
+
+func testConvertRangeWithBlockRangeTypeWithSwitchedFromAndTo(t *testing.T, chain *testchain.Chain) {
+	rng := newRange(BlockRangeType, logdb.MaxBlockNumber, 0)
+
+	convertedRng, err := ConvertRange(chain.Repo().NewBestChain(), rng)
+
+	assert.NoError(t, err)
+	assert.Equal(t, emptyRange.From, convertedRng.From)
 	assert.Equal(t, uint32(*rng.To), convertedRng.To)
 }
 
