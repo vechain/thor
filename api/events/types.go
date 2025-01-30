@@ -146,19 +146,13 @@ func ConvertRange(chain *chain.Chain, r *Range) (*logdb.Range, error) {
 		if err != nil {
 			return nil, err
 		}
-		if r.To != nil && *r.To < genesis.Timestamp() {
-			return &emptyRange, nil
-		}
 		head, err := chain.GetBlockHeader(block.Number(chain.HeadID()))
 		if err != nil {
 			return nil, err
 		}
-		if r.From != nil && *r.From > head.Timestamp() {
-			return &emptyRange, nil
-		}
 
 		fromHeader := genesis
-		if r.From != nil {
+		if r.From != nil && *r.From > genesis.Timestamp() {
 			fromHeader, err = chain.FindBlockHeaderByTimestamp(*r.From, 1)
 			if err != nil {
 				return nil, err
@@ -166,7 +160,7 @@ func ConvertRange(chain *chain.Chain, r *Range) (*logdb.Range, error) {
 		}
 
 		toHeader := head
-		if r.To != nil {
+		if r.To != nil && *r.To < head.Timestamp() {
 			toHeader, err = chain.FindBlockHeaderByTimestamp(*r.From, -1)
 			if err != nil {
 				return nil, err
