@@ -7,6 +7,7 @@ package block
 
 import (
 	"crypto/rand"
+	"math/big"
 	"sync/atomic"
 	"testing"
 
@@ -290,6 +291,66 @@ func TestExtensionV2(t *testing.T) {
 				assert.EqualError(t, err, "rlp: extension must be trimmed")
 
 				assert.False(t, dst.Extension.COM)
+			},
+		},
+		{
+			name: "alpha, com and baseFee",
+			test: func(t *testing.T) {
+				baseFee := big.NewInt(123456)
+				bytes, err := rlp.EncodeToBytes(&v2{
+					Extension: extension{
+						Alpha:   thor.Bytes32{}.Bytes(),
+						COM:     true,
+						BaseFee: baseFee,
+					},
+				})
+				assert.Nil(t, err)
+
+				content, _, err := rlp.SplitList(bytes)
+				assert.Nil(t, err)
+
+				cnt, err := rlp.CountValues(content)
+				assert.Nil(t, err)
+
+				assert.Equal(t, 1, cnt)
+
+				var dst v2
+				err = rlp.DecodeBytes(bytes, &dst)
+				assert.Nil(t, err)
+
+				assert.Equal(t, thor.Bytes32{}.Bytes(), dst.Extension.Alpha)
+				assert.True(t, dst.Extension.COM)
+				assert.Equal(t, baseFee, dst.Extension.BaseFee)
+			},
+		},
+		{
+			name: "alpha, com is false and baseFee",
+			test: func(t *testing.T) {
+				baseFee := big.NewInt(123456)
+				bytes, err := rlp.EncodeToBytes(&v2{
+					Extension: extension{
+						Alpha:   thor.Bytes32{}.Bytes(),
+						COM:     false,
+						BaseFee: baseFee,
+					},
+				})
+				assert.Nil(t, err)
+
+				content, _, err := rlp.SplitList(bytes)
+				assert.Nil(t, err)
+
+				cnt, err := rlp.CountValues(content)
+				assert.Nil(t, err)
+
+				assert.Equal(t, 1, cnt)
+
+				var dst v2
+				err = rlp.DecodeBytes(bytes, &dst)
+				assert.Nil(t, err)
+
+				assert.Equal(t, thor.Bytes32{}.Bytes(), dst.Extension.Alpha)
+				assert.False(t, dst.Extension.COM)
+				assert.Equal(t, baseFee, dst.Extension.BaseFee)
 			},
 		},
 	}
