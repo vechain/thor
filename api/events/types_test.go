@@ -6,16 +6,15 @@
 package events
 
 import (
+	"github.com/vechain/thor/v2/genesis"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/tx"
 )
 
 func newRange(unit RangeType, from uint64, to uint64) *Range {
@@ -29,15 +28,32 @@ func newRange(unit RangeType, from uint64, to uint64) *Range {
 func TestEventsTypes(t *testing.T) {
 	c := initChain(t)
 	for name, tt := range map[string]func(*testing.T, *testchain.Chain){
-		"testConvertRangeWithBlockRangeType":               testConvertRangeWithBlockRangeType,
-		"testConvertRangeWithTimeRangeTypeLessThenGenesis": testConvertRangeWithTimeRangeTypeLessThenGenesis,
-		"testConvertRangeWithTimeRangeType":                testConvertRangeWithTimeRangeType,
-		"testConvertRangeWithFromGreaterThanGenesis":       testConvertRangeWithFromGreaterThanGenesis,
+		"testConvertRangeWithBlockRangeType":                          testConvertRangeWithBlockRangeType,
+		"testConvertRangeWithTimeRangeTypeLessThenGenesis":            testConvertRangeWithTimeRangeTypeLessThenGenesis,
+		"testConvertRangeWithTimeRangeType":                           testConvertRangeWithTimeRangeType,
+		"testConvertRangeWithFromGreaterThanGenesis":                  testConvertRangeWithFromGreaterThanGenesis,
+		"testConvertRangeWithTimeRangeLessThanGenesisGreaterThanBest": testConvertRangeWithTimeRangeLessThanGenesisGreaterThanBest,
 	} {
 		t.Run(name, func(t *testing.T) {
 			tt(t, c)
 		})
 	}
+}
+
+func testConvertRangeWithTimeRangeLessThanGenesisGreaterThanBest(t *testing.T, chain *testchain.Chain) {
+	genesis := chain.GenesisBlock().Header()
+	bestBlock := chain.Repo().BestBlockSummary()
+
+	rng := newRange(TimeRangeType, genesis.Timestamp()-1_000, bestBlock.Header.Timestamp()+1_000)
+	expectedRange := &logdb.Range{
+		From: genesis.Number(),
+		To:   bestBlock.Header.Number(),
+	}
+
+	convRng, err := ConvertRange(chain.Repo().NewBestChain(), rng)
+
+	assert.NoError(t, err)
+	assert.Equal(t, expectedRange, convRng)
 }
 
 func testConvertRangeWithBlockRangeType(t *testing.T, chain *testchain.Chain) {
@@ -51,7 +67,7 @@ func testConvertRangeWithBlockRangeType(t *testing.T, chain *testchain.Chain) {
 }
 
 func testConvertRangeWithTimeRangeTypeLessThenGenesis(t *testing.T, chain *testchain.Chain) {
-	rng := newRange(TimeRangeType, 100, 2200)
+	rng := newRange(TimeRangeType, chain.GenesisBlock().Header().Timestamp()-1000, chain.GenesisBlock().Header().Timestamp()-100)
 	expectedEmptyRange := &logdb.Range{
 		From: logdb.MaxBlockNumber,
 		To:   logdb.MaxBlockNumber,
@@ -98,8 +114,9 @@ func initChain(t *testing.T) *testchain.Chain {
 	thorChain, err := testchain.NewIntegrationTestChain()
 	require.NoError(t, err)
 
-	require.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0], []*tx.Transaction{}...))
-	require.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0], []*tx.Transaction{}...))
+	for i := 0; i < 10; i++ {
+		require.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
+	}
 
 	return thorChain
 }
