@@ -6,6 +6,6 @@
 package gen
 
 //go:generate rm -rf ./compiled/
-//go:generate docker run -v ./:/solidity ethereum/solc:0.4.24 --optimize-runs 200 --overwrite --bin-runtime --abi -o /solidity/compiled authority.sol energy.sol executor.sol extension.sol extension-v2.sol measure.sol params.sol prototype.sol
+//go:generate docker run -v ./:/solidity ethereum/solc:0.4.24 --optimize-runs 200 --overwrite --bin-runtime --abi -o /solidity/compiled authority.sol energy.sol executor.sol extension.sol extension-v2.sol extension-v3.sol measure.sol params.sol prototype.sol
 //go:generate go run github.com/go-bindata/go-bindata/go-bindata@v1.0.0 -nometadata -ignore=_ -pkg gen -o bindata.go compiled/
 //go:generate go fmt

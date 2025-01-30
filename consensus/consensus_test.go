@@ -717,7 +717,7 @@ func TestConsent(t *testing.T) {
 					Expiration(100).
 					Clause(tx.NewClause(&thor.Address{}).WithValue(big.NewInt(0)).WithData(nil)).
 					Nonce(0).
-					ChainTag(30)
+					ChainTag(208)
 
 				tx := txSign(txBuilder)
 

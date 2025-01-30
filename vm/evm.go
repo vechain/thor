@@ -75,6 +75,8 @@ type Context struct {
 	Transfer TransferFunc
 	// GetHash returns the hash corresponding to n
 	GetHash GetHashFunc
+	// ClauseIndex is the index of the clause in the transaction.
+	ClauseIndex uint64
 
 	NewContractAddress    NewContractAddressFunc
 	InterceptContractCall InterceptContractCallFunc
