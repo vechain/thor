@@ -28,6 +28,7 @@ type BlockContext struct {
 	Time        uint64
 	GasLimit    uint64
 	TotalScore  uint64
+	BaseFee     *big.Int
 }
 
 // TransactionContext transaction context.

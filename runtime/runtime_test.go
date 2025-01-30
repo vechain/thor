@@ -313,13 +313,12 @@ func TestEVMFunction(t *testing.T) {
 			abi:        "",
 			methodName: "",
 			testFunc: func(ctx *context, t *testing.T) {
-				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, &thor.ForkConfig{}).
+				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{BaseFee: common.Big0}, &thor.ForkConfig{GALACTICA: 0}).
 					PrepareClause(tx.NewClause(&target), 0, math.MaxUint64, &xenv.TransactionContext{})
 				out, _, err := exec()
 				assert.Nil(t, err)
 				assert.Nil(t, out.VMErr)
 
-				assert.True(t, new(big.Int).SetBytes(out.Data).Cmp(big.NewInt(0)) == 0)
 				assert.Equal(t, uint64(2), math.MaxUint64-out.LeftOverGas)
 			},
 		},
@@ -329,13 +328,13 @@ func TestEVMFunction(t *testing.T) {
 			abi:        "",
 			methodName: "",
 			testFunc: func(ctx *context, t *testing.T) {
-				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, &thor.ForkConfig{}).
+				expectedBaseFee := big.NewInt(100_000)
+				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{BaseFee: expectedBaseFee}, &thor.ForkConfig{GALACTICA: 0}).
 					PrepareClause(tx.NewClause(&target), 0, math.MaxUint64, &xenv.TransactionContext{})
 				out, _, err := exec()
 				assert.Nil(t, err)
 				assert.Nil(t, out.VMErr)
-
-				assert.True(t, new(big.Int).SetBytes(out.Data).Cmp(big.NewInt(0)) == 0)
+				assert.True(t, new(big.Int).SetBytes(out.Data).Cmp(expectedBaseFee) == 0)
 			},
 		},
 		{
@@ -590,7 +589,7 @@ func TestPreForkOpCode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			exec, _ := runtime.New(chain, state, &xenv.BlockContext{}, &thor.NoFork).
+			exec, _ := runtime.New(chain, state, &xenv.BlockContext{BaseFee: common.Big0}, &thor.NoFork).
 				PrepareClause(tx.NewClause(nil).WithData(tt.code), 0, math.MaxUint64, &xenv.TransactionContext{})
 			out, _, err := exec()
 			assert.Nil(t, err)
@@ -598,7 +597,7 @@ func TestPreForkOpCode(t *testing.T) {
 			assert.Equal(t, fmt.Sprintf("invalid opcode 0x%x", int(tt.op)), out.VMErr.Error())
 
 			// this one applies a fork config that forks from the start
-			exec, _ = runtime.New(chain, state, &xenv.BlockContext{}, &thor.ForkConfig{}).
+			exec, _ = runtime.New(chain, state, &xenv.BlockContext{BaseFee: common.Big0}, &thor.ForkConfig{}).
 				PrepareClause(tx.NewClause(nil).WithData(tt.code), 0, math.MaxUint64, &xenv.TransactionContext{})
 			out, _, err = exec()
 			assert.Nil(t, err)
@@ -764,11 +763,13 @@ func TestExecuteTransactionFailure(t *testing.T) {
 	originEnergy.SetString("9000000000000000000000000000000000000", 10)
 	state.SetEnergy(origin.Address, originEnergy, 0)
 
-	tx := GetMockFailedTx(tx.LegacyTxType)
+	for _, txType := range []int{tx.LegacyTxType, tx.DynamicFeeTxType} {
+		tx := GetMockFailedTx(txType)
 
-	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, &thor.NoFork)
+		rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, &thor.NoFork)
 
-	_, err = rt.ExecuteTransaction(tx)
+		_, err := rt.ExecuteTransaction(tx)
 
-	assert.NotNil(t, err)
+		assert.NotNil(t, err)
+	}
 }
