@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/poa"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
@@ -103,10 +104,6 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 		return errFutureBlock
 	}
 
-	if !block.GasLimit(header.GasLimit()).IsValid(parent.GasLimit()) {
-		return consensusError(fmt.Sprintf("block gas limit invalid: parent %v, current %v", parent.GasLimit(), header.GasLimit()))
-	}
-
 	if header.GasUsed() > header.GasLimit() {
 		return consensusError(fmt.Sprintf("block gas used exceeds limit: limit %v, used %v", header.GasLimit(), header.GasUsed()))
 	}
@@ -153,6 +150,20 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 	if header.Number() < c.forkConfig.FINALITY {
 		if header.COM() {
 			return consensusError("invalid block: COM should not set before fork FINALITY")
+		}
+	}
+
+	if header.Number() < c.forkConfig.GALACTICA {
+		if header.BaseFee() != nil {
+			return consensusError("invalid block: baseFee should not set before fork GALACTICA")
+		}
+
+		if !block.GasLimit(header.GasLimit()).IsValid(parent.GasLimit()) {
+			return consensusError(fmt.Sprintf("block gas limit invalid: parent %v, current %v", parent.GasLimit(), header.GasLimit()))
+		}
+	} else {
+		if err := fork.VerifyGalacticaHeader(&c.forkConfig, parent, header); err != nil {
+			return consensusError(fmt.Sprintf("block header invalid: %v", err))
 		}
 	}
 
@@ -226,8 +237,8 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 		return consensusError(fmt.Sprintf("block txs root mismatch: want %v, have %v", header.TxsRoot(), txs.RootHash()))
 	}
 
-	for _, tx := range txs {
-		origin, err := tx.Origin()
+	for _, tr := range txs {
+		origin, err := tr.Origin()
 		if err != nil {
 			return consensusError(fmt.Sprintf("tx signer unavailable: %v", err))
 		}
@@ -237,15 +248,17 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 		}
 
 		switch {
-		case tx.ChainTag() != c.repo.ChainTag():
-			return consensusError(fmt.Sprintf("tx chain tag mismatch: want %v, have %v", c.repo.ChainTag(), tx.ChainTag()))
-		case header.Number() < tx.BlockRef().Number():
-			return consensusError(fmt.Sprintf("tx ref future block: ref %v, current %v", tx.BlockRef().Number(), header.Number()))
-		case tx.IsExpired(header.Number()):
-			return consensusError(fmt.Sprintf("tx expired: ref %v, current %v, expiration %v", tx.BlockRef().Number(), header.Number(), tx.Expiration()))
+		case tr.ChainTag() != c.repo.ChainTag():
+			return consensusError(fmt.Sprintf("tx chain tag mismatch: want %v, have %v", c.repo.ChainTag(), tr.ChainTag()))
+		case header.Number() < tr.BlockRef().Number():
+			return consensusError(fmt.Sprintf("tx ref future block: ref %v, current %v", tr.BlockRef().Number(), header.Number()))
+		case tr.IsExpired(header.Number()):
+			return consensusError(fmt.Sprintf("tx expired: ref %v, current %v, expiration %v", tr.BlockRef().Number(), header.Number(), tr.Expiration()))
+		case header.Number() < c.forkConfig.GALACTICA && tr.Type() != tx.LegacyTxType:
+			return consensusError(tx.ErrTxTypeNotSupported.Error())
 		}
 
-		if err := tx.TestFeatures(header.TxsFeatures()); err != nil {
+		if err := tr.TestFeatures(header.TxsFeatures()); err != nil {
 			return consensusError("invalid tx: " + err.Error())
 		}
 	}
@@ -272,6 +285,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 			Time:        header.Timestamp(),
 			GasLimit:    header.GasLimit(),
 			TotalScore:  header.TotalScore(),
+			BaseFee:     header.BaseFee(),
 		},
 		c.forkConfig)
 
