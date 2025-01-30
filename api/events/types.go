@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -161,7 +162,7 @@ func ConvertRange(chain *chain.Chain, r *Range) (*logdb.Range, error) {
 
 		toHeader := head
 		if r.To != nil && *r.To < head.Timestamp() {
-			toHeader, err = chain.FindBlockHeaderByTimestamp(*r.From, -1)
+			toHeader, err = chain.FindBlockHeaderByTimestamp(*r.To, -1)
 			if err != nil {
 				return nil, err
 			}
