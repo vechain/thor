@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/pkg/errors"
@@ -441,9 +440,7 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 				if headSummary.Header.Number() == p.forkConfig.GALACTICA {
 					baseFee = big.NewInt(thor.InitialBaseFee)
 				}
-				feeItems := fork.GalacticaTxGasPriceAdapater(txObj.Transaction, txObj.priorityGasPrice)
-				// This gasPrice is used to prioritize txs in the pool
-				txObj.priorityGasPrice = math.BigMin(new(big.Int).Sub(feeItems.MaxFee, baseFee), feeItems.MaxPriorityFee)
+				txObj.priorityGasPrice = fork.GalacticaPriorityPrice(txObj.Transaction, baseGasPrice, provedWork, &fork.GalacticaItems{IsActive: true, BaseFee: baseFee})
 			}
 
 			if txObj.localSubmitted {

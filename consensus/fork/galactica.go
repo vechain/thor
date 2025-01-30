@@ -6,6 +6,7 @@
 package fork
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -14,6 +15,10 @@ import (
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
+)
+
+var (
+	BaseFeeNotSetError = errors.New("base fee not set after galactica")
 )
 
 // VerifyGalacticaHeader verifies some header attributes which were changed in Galactica fork,
@@ -102,4 +107,33 @@ func GalacticaTxGasPriceAdapater(tr *tx.Transaction, gasPrice *big.Int) *Galacti
 type GalacticaFeeMarketItems struct {
 	MaxFee         *big.Int
 	MaxPriorityFee *big.Int
+}
+
+type GalacticaItems struct {
+	IsActive bool
+	BaseFee  *big.Int
+}
+
+func GalacticaGasPrice(tr *tx.Transaction, baseGasPrice *big.Int, galacticaItems *GalacticaItems) *big.Int {
+	gasPrice := tr.GasPrice(baseGasPrice)
+
+	if !galacticaItems.IsActive {
+		return gasPrice
+	}
+
+	feeItems := GalacticaTxGasPriceAdapater(tr, gasPrice)
+	// This gasPrice is the same that will be used when refunding the user
+	return math.BigMin(new(big.Int).Add(feeItems.MaxPriorityFee, galacticaItems.BaseFee), feeItems.MaxFee)
+}
+
+func GalacticaPriorityPrice(tr *tx.Transaction, baseGasPrice, provedWork *big.Int, galacticaItems *GalacticaItems) *big.Int {
+	priorityPrice := tr.OverallGasPrice(baseGasPrice, provedWork)
+
+	if !galacticaItems.IsActive {
+		return priorityPrice
+	}
+
+	feeItems := GalacticaTxGasPriceAdapater(tr, priorityPrice)
+	// This gasPrice will be used to compensate the validator
+	return math.BigMin(feeItems.MaxPriorityFee, new(big.Int).Sub(feeItems.MaxFee, galacticaItems.BaseFee))
 }

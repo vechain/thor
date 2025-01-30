@@ -45,6 +45,13 @@ func ResolveTransaction(tx *tx.Transaction) (*ResolvedTransaction, error) {
 		return nil, err
 	}
 
+	if tx.MaxFeePerGas() == nil {
+		return nil, errors.New("max fee per gas is required")
+	}
+	if tx.MaxPriorityFeePerGas() == nil {
+		return nil, errors.New("max priority fee per gas is required")
+	}
+
 	clauses := tx.Clauses()
 	sumValue := new(big.Int)
 	for _, clause := range clauses {
@@ -92,13 +99,8 @@ func (r *ResolvedTransaction) CommonTo() *thor.Address {
 	return firstTo
 }
 
-type GalacticaItems struct {
-	IsActive bool
-	BaseFee  *big.Int
-}
-
 // BuyGas consumes energy to buy gas, to prepare for execution.
-func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64, galacticaItem *GalacticaItems) (
+func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64, galacticaItems *fork.GalacticaItems) (
 	baseGasPrice *big.Int,
 	gasPrice *big.Int,
 	payer thor.Address,
@@ -109,12 +111,8 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64, galac
 	if baseGasPrice, err = builtin.Params.Native(state).Get(thor.KeyBaseGasPrice); err != nil {
 		return
 	}
-	gasPrice = r.tx.GasPrice(baseGasPrice)
-	if galacticaItem.IsActive {
-		feeItems := fork.GalacticaTxGasPriceAdapater(r.tx, gasPrice)
-		// This gasPrice is the same that will be used when refunding the user
-		gasPrice = math.BigMin(gasPrice.Add(feeItems.MaxPriorityFee, galacticaItem.BaseFee), feeItems.MaxFee)
-	}
+
+	gasPrice = fork.GalacticaGasPrice(r.tx, baseGasPrice, galacticaItems)
 
 	energy := builtin.Energy.Native(state, blockTime)
 	doReturnGas := func(rgas uint64) (*big.Int, error) {

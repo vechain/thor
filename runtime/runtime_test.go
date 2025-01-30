@@ -19,6 +19,7 @@ import (
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/runtime"
@@ -313,7 +314,7 @@ func TestEVMFunction(t *testing.T) {
 			abi:        "",
 			methodName: "",
 			testFunc: func(ctx *context, t *testing.T) {
-				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{BaseFee: common.Big0}, thor.ForkConfig{GALACTICA: 0}).
+				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{BaseFee: big.NewInt(thor.InitialBaseFee)}, thor.ForkConfig{}).
 					PrepareClause(tx.NewClause(&target), 0, math.MaxUint64, &xenv.TransactionContext{})
 				out, _, err := exec()
 				assert.Nil(t, err)
@@ -328,7 +329,7 @@ func TestEVMFunction(t *testing.T) {
 			abi:        "",
 			methodName: "",
 			testFunc: func(ctx *context, t *testing.T) {
-				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, thor.ForkConfig{GALACTICA: 0}).
+				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{BaseFee: big.NewInt(thor.InitialBaseFee)}, thor.ForkConfig{}).
 					PrepareClause(tx.NewClause(&target), 0, math.MaxUint64, &xenv.TransactionContext{})
 				out, _, err := exec()
 				assert.Nil(t, err)
@@ -588,7 +589,7 @@ func TestPreForkOpCode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			exec, _ := runtime.New(chain, state, &xenv.BlockContext{BaseFee: common.Big0}, thor.NoFork).
+			exec, _ := runtime.New(chain, state, &xenv.BlockContext{}, thor.NoFork).
 				PrepareClause(tx.NewClause(nil).WithData(tt.code), 0, math.MaxUint64, &xenv.TransactionContext{})
 			out, _, err := exec()
 			assert.Nil(t, err)
@@ -596,7 +597,7 @@ func TestPreForkOpCode(t *testing.T) {
 			assert.Equal(t, fmt.Sprintf("invalid opcode 0x%x", int(tt.op)), out.VMErr.Error())
 
 			// this one applies a fork config that forks from the start
-			exec, _ = runtime.New(chain, state, &xenv.BlockContext{BaseFee: common.Big0}, thor.ForkConfig{}).
+			exec, _ = runtime.New(chain, state, &xenv.BlockContext{BaseFee: big.NewInt(thor.InitialBaseFee)}, thor.ForkConfig{}).
 				PrepareClause(tx.NewClause(nil).WithData(tt.code), 0, math.MaxUint64, &xenv.TransactionContext{})
 			out, _, err = exec()
 			assert.Nil(t, err)
@@ -733,7 +734,7 @@ func TestTransactionsWithNotEnoughGasFee(t *testing.T) {
 	repo.AddBlock(b, tx.Receipts{}, 0)
 	repo.SetBestBlockID(b.Header().ID())
 
-	rt := runtime.New(chain, state, &xenv.BlockContext{BaseFee: big.NewInt(baseFee)}, thor.ForkConfig{GALACTICA: 0})
+	rt := runtime.New(chain, state, &xenv.BlockContext{BaseFee: big.NewInt(baseFee)}, thor.ForkConfig{})
 	illegalTx, err := tx.NewTxBuilder(tx.DynamicFeeTxType).
 		ChainTag(repo.ChainTag()).
 		MaxFeePerGas(big.NewInt(baseFee / 10000)).
@@ -808,13 +809,20 @@ func TestExecuteTransaction(t *testing.T) {
 	assert.Nil(t, err)
 	legacyTx = tx.MustSign(legacyTx, genesis.DevAccounts()[0].PrivateKey)
 
+	t.Run("Galactica is active but baseFee is not set", func(t *testing.T) {
+		rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{Number: 1}, thor.ForkConfig{GALACTICA: 0})
+		receipt, err := rt.ExecuteTransaction(legacyTx)
+		assert.Equal(t, fork.BaseFeeNotSetError, err)
+		assert.Nil(t, receipt)
+	})
+
 	t.Run("Receipt check with legacy tx before galactica fork", func(t *testing.T) {
 		prevPayerEnergy, err := state.GetEnergy(genesis.DevAccounts()[0].Address, b0.Header().Timestamp())
 		assert.Nil(t, err)
 		prevEndorserEnergy, err := state.GetEnergy(thor.Address{}, b0.Header().Timestamp())
 		assert.Nil(t, err)
 
-		rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{BaseFee: big.NewInt(thor.InitialBaseFee)}, thor.NoFork)
+		rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.NoFork)
 		receipt, err := rt.ExecuteTransaction(legacyTx)
 		assert.Nil(t, err)
 
@@ -880,7 +888,7 @@ func TestExecuteTransaction(t *testing.T) {
 		prevEndorserEnergy, err := state.GetEnergy(thor.Address{}, b0.Header().Timestamp())
 		assert.Nil(t, err)
 
-		rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{BaseFee: big.NewInt(thor.InitialBaseFee)}, thor.ForkConfig{GALACTICA: 0})
+		rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{BaseFee: big.NewInt(thor.InitialBaseFee)}, thor.ForkConfig{})
 		receipt, err := rt.ExecuteTransaction(dynTx)
 		assert.Nil(t, err)
 
@@ -970,7 +978,7 @@ func TestNoRewards(t *testing.T) {
 			prevEndorserEnergy, err := state.GetEnergy(thor.Address{}, b0.Header().Timestamp())
 			assert.Nil(t, err)
 
-			rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{BaseFee: big.NewInt(thor.InitialBaseFee)}, thor.ForkConfig{GALACTICA: 0})
+			rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{BaseFee: big.NewInt(thor.InitialBaseFee)}, thor.ForkConfig{})
 			receipt, err := rt.ExecuteTransaction(tt.getTx())
 
 			// Assert

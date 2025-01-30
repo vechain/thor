@@ -13,6 +13,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -107,7 +108,7 @@ func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 	if headBlock.Number() == forkConfig.GALACTICA {
 		baseFee = big.NewInt(thor.InitialBaseFee)
 	}
-	galacticaItems := &runtime.GalacticaItems{IsActive: isGalactica, BaseFee: baseFee}
+	galacticaItems := &fork.GalacticaItems{IsActive: isGalactica, BaseFee: baseFee}
 	_, _, payer, prepaid, _, err := o.resolved.BuyGas(state, headBlock.Timestamp()+thor.BlockInterval, galacticaItems)
 	if err != nil {
 		return false, err

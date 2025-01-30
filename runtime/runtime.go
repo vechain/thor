@@ -142,10 +142,6 @@ func New(
 		}
 	}
 
-	if forkConfig.GALACTICA == ctx.Number {
-		ctx.BaseFee = big.NewInt(thor.InitialBaseFee)
-	}
-
 	rt := Runtime{
 		chain:       chain,
 		state:       state,
@@ -423,16 +419,16 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 
 	galactica := rt.chainConfig.IsGalactica(big.NewInt(int64(rt.ctx.Number)))
 	if galactica && rt.ctx.BaseFee == nil {
-		return nil, errors.New("base fee not set after galactica")
+		return nil, fork.BaseFeeNotSetError
 	}
-	baseGasPrice, gasPrice, payer, _, returnGas, err := resolvedTx.BuyGas(rt.state, rt.ctx.Time, &GalacticaItems{galactica, rt.ctx.BaseFee})
+	baseGasPrice, gasPrice, payer, _, returnGas, err := resolvedTx.BuyGas(rt.state, rt.ctx.Time, &fork.GalacticaItems{IsActive: galactica, BaseFee: rt.ctx.BaseFee})
 	if err != nil {
 		return nil, err
 	}
 
 	if galactica {
 		feeItems := fork.GalacticaTxGasPriceAdapater(tx, gasPrice)
-		if rt.ctx.BaseFee == nil || feeItems.MaxFee.Cmp(rt.ctx.BaseFee) < 0 {
+		if feeItems.MaxFee.Cmp(rt.ctx.BaseFee) < 0 {
 			return nil, ErrMaxFeePerGasTooLow
 		}
 	}
@@ -530,12 +526,8 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 			if err != nil {
 				return nil, err
 			}
-			rewardGasPrice := tx.OverallGasPrice(baseGasPrice, provedWork)
-			if galactica {
-				feeItems := fork.GalacticaTxGasPriceAdapater(tx, rewardGasPrice)
-				// This gasPrice will be used to compensate the validator
-				rewardGasPrice = math.BigMin(feeItems.MaxPriorityFee, new(big.Int).Sub(feeItems.MaxFee, rt.ctx.BaseFee))
-			}
+
+			rewardGasPrice := fork.GalacticaPriorityPrice(tx, baseGasPrice, provedWork, &fork.GalacticaItems{IsActive: galactica, BaseFee: rt.ctx.BaseFee})
 
 			reward := new(big.Int).SetUint64(receipt.GasUsed)
 			reward.Mul(reward, rewardGasPrice)

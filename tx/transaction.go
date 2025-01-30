@@ -75,6 +75,7 @@ type TxData interface {
 	signature() []byte
 	setSignature(sig []byte)
 	hashWithoutNonce(origin thor.Address) *thor.Bytes32
+	evaluateWork(origin thor.Address) func(nonce uint64) *big.Int
 
 	encode(w io.Writer) error
 }
@@ -148,36 +149,6 @@ func (t *Transaction) Hash() (hash thor.Bytes32) {
 		return rlpHash(t)
 	}
 	return prefixedRlpHash(t.Type(), t.body)
-}
-
-// UnprovedWork returns unproved work of this tx.
-// It returns 0, if tx is not signed.
-func (t *Transaction) UnprovedWork() (w *big.Int) {
-	if cached := t.cache.unprovedWork.Load(); cached != nil {
-		return cached.(*big.Int)
-	}
-	defer func() {
-		t.cache.unprovedWork.Store(w)
-	}()
-
-	origin, err := t.Origin()
-	if err != nil {
-		return &big.Int{}
-	}
-	return t.EvaluateWork(origin)(t.body.nonce())
-}
-
-// EvaluateWork try to compute work when tx origin assumed.
-func (t *Transaction) EvaluateWork(origin thor.Address) func(nonce uint64) *big.Int {
-	hashWithoutNonce := t.body.hashWithoutNonce(origin)
-
-	return func(nonce uint64) *big.Int {
-		var nonceBytes [8]byte
-		binary.BigEndian.PutUint64(nonceBytes[:], nonce)
-		hash := thor.Blake2b(hashWithoutNonce[:], nonceBytes[:])
-		r := new(big.Int).SetBytes(hash[:])
-		return r.Div(math.MaxBig256, r)
-	}
 }
 
 // SigningHash returns hash of tx excludes signature.
@@ -483,6 +454,28 @@ func (t *Transaction) ProvedWork(headBlockNum uint32, getBlockID func(uint32) (t
 		return t.UnprovedWork(), nil
 	}
 	return &big.Int{}, nil
+}
+
+// UnprovedWork returns unproved work of this tx.
+// It returns 0, if tx is not signed or is not a legacy tx type.
+func (t *Transaction) UnprovedWork() (w *big.Int) {
+	if cached := t.cache.unprovedWork.Load(); cached != nil {
+		return cached.(*big.Int)
+	}
+	defer func() {
+		t.cache.unprovedWork.Store(w)
+	}()
+
+	origin, err := t.Origin()
+	if err != nil {
+		return &big.Int{}
+	}
+	return t.EvaluateWork(origin)(t.body.nonce())
+}
+
+// EvaluateWork try to compute work when tx origin assumed.
+func (t *Transaction) EvaluateWork(origin thor.Address) func(nonce uint64) *big.Int {
+	return t.body.evaluateWork(origin)
 }
 
 // OverallGasPrice calculate overall gas price.
