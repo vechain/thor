@@ -27,7 +27,7 @@ func New(repo *chain.Repository, bft bft.Committer, backtraceLimit uint32, fixed
 	return &Fees{
 		repo:  repo,
 		bft:   bft,
-		cache: NewFeesCache(repo, backtraceLimit, fixedCacheSize),
+		cache: newFeesCache(repo, backtraceLimit, fixedCacheSize),
 		done:  make(chan struct{}),
 	}
 }
@@ -205,7 +205,7 @@ func (f *Fees) pushBestBlockToCache() {
 		select {
 		case <-ticker.C():
 			bestBlockSummary := f.repo.BestBlockSummary()
-			f.cache.Push(bestBlockSummary.Header)
+			f.cache.push(bestBlockSummary.Header)
 		case <-f.done:
 			return
 		}

@@ -19,7 +19,7 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-func NewFeesCache(repo *chain.Repository, backtraceLimit uint32, fixedSize uint32) *FeesCache {
+func newFeesCache(repo *chain.Repository, backtraceLimit uint32, fixedSize uint32) *FeesCache {
 	size := int(math.Min(float64(backtraceLimit), float64(fixedSize)))
 	return &FeesCache{
 		repo:           repo,
@@ -53,7 +53,7 @@ func (fc *FeesCache) getByRevision(rev *utils.Revision, bft bft.Committer) (*Fee
 	return fc.get(id)
 }
 
-func (fc *FeesCache) Push(header *block.Header) {
+func (fc *FeesCache) push(header *block.Header) {
 	fc.cache.Set(header.ID(), newFeesCacheEntry(header), float64(header.Number()))
 }
 
