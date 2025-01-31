@@ -779,6 +779,13 @@ paths:
               schema:
                 type: string
                 example: 'Invalid revision'
+        '404':
+          description: Not Found
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: 'Newest block not found'
 
 components:
   schemas:

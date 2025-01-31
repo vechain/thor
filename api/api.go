@@ -98,7 +98,8 @@ func New(
 	subs := subscriptions.New(repo, origins, config.BacktraceLimit, txPool, config.EnableDeprecated)
 	subs.Mount(router, "/subscriptions")
 
-	fees.New(repo, bft).Mount(router, "/fees")
+	fees := fees.New(repo, bft, config.BacktraceLimit, 1024)
+	fees.Mount(router, "/fees")
 
 	if config.PprofOn {
 		router.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
@@ -121,5 +122,5 @@ func New(
 
 	handler = RequestLoggerHandler(handler, logger, config.EnableReqLogger)
 
-	return handler.ServeHTTP, subs.Close // subscriptions handles hijacked conns, which need to be closed
+	return handler.ServeHTTP, func() { subs.Close(); fees.Close() } // subscriptions handles hijacked conns, which need to be closed
 }

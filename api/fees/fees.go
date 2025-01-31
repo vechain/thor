@@ -18,43 +18,59 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/bft"
+	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/thor"
 )
 
-type Fees struct {
-	repo *chain.Repository
-	bft  bft.Committer
-}
-
-func New(repo *chain.Repository, bft bft.Committer) *Fees {
+func New(repo *chain.Repository, bft bft.Committer, backtraceLimit uint32, fixedCacheSize uint32) *Fees {
 	return &Fees{
-		repo,
-		bft,
+		repo:  repo,
+		bft:   bft,
+		cache: NewFeesCache(repo, backtraceLimit, fixedCacheSize),
+		done:  make(chan struct{}),
 	}
 }
 
-func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.BlockSummary, error) {
+func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, uint32, error) {
 	blockCountParam := req.URL.Query().Get("blockCount")
 	blockCount, err := strconv.ParseUint(blockCountParam, 10, 32)
 	if err != nil {
-		return 0, nil, utils.BadRequest(errors.WithMessage(err, "invalid blockCount, it should represent an integer"))
+		return 0, 0, utils.BadRequest(errors.WithMessage(err, "invalid blockCount, it should represent an integer"))
 	}
-	if blockCount < 1 || blockCount > maxNumberOfBlocks {
-		return 0, nil, utils.BadRequest(errors.New(fmt.Sprintf("blockCount must be between 1 and %d", maxNumberOfBlocks)))
+	if blockCount < 1 || blockCount > uint64(f.cache.size) {
+		return 0, 0, utils.BadRequest(errors.New(fmt.Sprintf("blockCount must be between 1 and %d", f.cache.size)))
 	}
 	newestBlock, err := utils.ParseRevision(req.URL.Query().Get("newestBlock"), false)
 	if err != nil {
-		return 0, nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
-	}
-	summary, err := utils.GetSummary(newestBlock, f.repo, f.bft)
-	if err != nil {
-		if f.repo.IsNotFound(err) {
-			return 0, nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
-		}
-		return 0, nil, err
+		return 0, 0, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
 	}
 
-	return uint32(blockCount), summary, nil
+	// Newest block should always be in the cache
+	_, newestBlockNumber, err := f.cache.getByRevision(newestBlock, f.bft)
+	if err != nil {
+		return 0, 0, utils.NotFound(errors.WithMessage(err, "newestBlock"))
+	}
+
+	return uint32(blockCount), newestBlockNumber, nil
+}
+
+func getOldestBlockNumber(blockCount uint32, newestBlock uint32) uint32 {
+	oldestBlockInt32 := int32(newestBlock) + 1 - int32(blockCount)
+	oldestBlock := uint32(0)
+	if oldestBlockInt32 >= 0 {
+		oldestBlock = uint32(oldestBlockInt32)
+	}
+	return oldestBlock
+}
+
+func (f *Fees) getOldestBlockIDByNumber(oldestBlock uint32) (thor.Bytes32, error) {
+	oldestBlockRevision := utils.ParseNumberRevision(oldestBlock)
+	oldestFeeCacheEntry, err := utils.ParseBlockID(oldestBlockRevision, f.cache.repo, f.bft)
+	if err != nil {
+		return thor.Bytes32{}, err
+	}
+	return oldestFeeCacheEntry, nil
 }
 
 func (f *Fees) processBlockSummaries(next *atomic.Uint32, lastBlock uint32, blockDataChan chan *blockData) {
@@ -105,13 +121,14 @@ func (f *Fees) processBlockRange(blockCount uint32, summary *chain.BlockSummary)
 	return oldestBlock, blockDataChan
 }
 
-func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) error {
-	blockCount, summary, err := f.validateGetFeesHistoryParams(req)
+func (f *Fees) getBlockSummaries(newestBlockSummaryNumber uint32, blockCount uint32) ([]*hexutil.Big, []float64, error) {
+	newestBlockRevision := utils.ParseNumberRevision(newestBlockSummaryNumber)
+	summary, err := utils.GetSummary(newestBlockRevision, f.repo, f.bft)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
-	oldestBlock, blockDataChan := f.processBlockRange(blockCount, summary)
+	oldestBlock, blockDataChan := f.processBlockRange(f.cache.backtraceLimit-f.cache.fixedSize, summary)
 
 	var (
 		baseFeesWithNil = make([]*hexutil.Big, blockCount)
@@ -121,7 +138,7 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 	// Collect results from the channel
 	for blockData := range blockDataChan {
 		if blockData.err != nil {
-			return blockData.err
+			return nil, nil, blockData.err
 		}
 		// Ensure the order of the baseFees and gasUsedRatios is correct
 		blockPosition := blockData.blockSummary.Header.Number() - oldestBlock
@@ -141,14 +158,79 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 		}
 	}
 
-	return utils.WriteJSON(w, &GetFeesHistory{
-		OldestBlock:   &oldestBlock,
-		BaseFees:      baseFees,
-		GasUsedRatios: gasUsedRatios[:len(baseFees)],
+	return baseFees, gasUsedRatios[:len(baseFees)], nil
+}
+
+func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) error {
+	blockCount, newestBlockNumber, err := f.validateGetFeesHistoryParams(req)
+	if err != nil {
+		return err
+	}
+
+	oldestBlockNumber := getOldestBlockNumber(blockCount, newestBlockNumber)
+	oldestBlockID, err := f.getOldestBlockIDByNumber(oldestBlockNumber)
+	if err != nil {
+		return utils.BadRequest(err)
+	}
+
+	cacheOldestBlockNumber, cacheBaseFees, cacheGasUsedRatios, shouldGetBlockSummaries, err := f.cache.resolveRange(oldestBlockID, newestBlockNumber)
+	if err != nil {
+		return utils.HTTPError(err, http.StatusInternalServerError)
+	}
+
+	if shouldGetBlockSummaries {
+		// Get block summaries for the missing blocks
+		newestBlockSummaryNumber := cacheOldestBlockNumber - 1
+		summariesGasFees, summariesGasUsedRatios, err := f.getBlockSummaries(newestBlockSummaryNumber, blockCount)
+		if err != nil {
+			return utils.HTTPError(err, http.StatusInternalServerError)
+		}
+		return utils.WriteJSON(w, &GetFeesHistory{
+			OldestBlock:   &oldestBlockNumber,
+			BaseFees:      append(summariesGasFees, cacheBaseFees...),
+			GasUsedRatios: append(summariesGasUsedRatios, cacheGasUsedRatios...),
+		})
+	} else {
+		return utils.WriteJSON(w, &GetFeesHistory{
+			OldestBlock:   &cacheOldestBlockNumber,
+			BaseFees:      cacheBaseFees,
+			GasUsedRatios: cacheGasUsedRatios,
+		})
+	}
+}
+
+func (f *Fees) pushBestBlockToCache() {
+	ticker := f.repo.NewTicker()
+	for {
+		select {
+		case <-ticker.C():
+			bestBlockSummary := f.repo.BestBlockSummary()
+			f.cache.Push(bestBlockSummary.Header)
+		case <-f.done:
+			return
+		}
+	}
+}
+
+func (f *Fees) Close() {
+	close(f.done)
+}
+
+func (f *Fees) CacheLen() int {
+	return f.cache.cache.Len()
+}
+
+func (f *Fees) CachePriorities() []float64 {
+	priorities := make([]float64, 0, f.cache.cache.Len())
+	f.cache.cache.ForEach(func(ent *cache.PrioEntry) bool {
+		priorities = append(priorities, ent.Priority)
+		return true
 	})
+	return priorities
 }
 
 func (f *Fees) Mount(root *mux.Router, pathPrefix string) {
+	go f.pushBestBlockToCache()
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 	sub.Path("/history").
 		Methods(http.MethodGet).
