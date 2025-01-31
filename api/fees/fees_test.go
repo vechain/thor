@@ -23,8 +23,14 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func TestFees(t *testing.T) {
+const expectedGasPriceUsedRatio = 0.0021
+
+func TestFeesBacktraceGreatherThanFixedSize(t *testing.T) {
 	ts, closeFunc := initFeesServer(t, 8, 10, 10)
+	t.Cleanup(func() {
+		closeFunc()
+		ts.Close()
+	})
 
 	tclient := thorclient.New(ts.URL)
 	for name, tt := range map[string]func(*testing.T, *thorclient.Client){
@@ -39,18 +45,36 @@ func TestFees(t *testing.T) {
 			tt(t, tclient)
 		})
 	}
-	closeFunc()
-	ts.Close()
+}
 
-	ts, closeFunc = initFeesServer(t, 8, 6, 10)
+func TestFeesFixedSizeGreatherThanBacktrace(t *testing.T) {
+	ts, closeFunc := initFeesServer(t, 8, 6, 10)
 	defer func() {
 		closeFunc()
 		ts.Close()
 	}()
-	tclient = thorclient.New(ts.URL)
+	tclient := thorclient.New(ts.URL)
 	for name, tt := range map[string]func(*testing.T, *thorclient.Client){
 		"getFeeHistoryWithSummaries": getFeeHistoryWithSummaries,
 		"getFeeHistoryOnlySummaries": getFeeHistoryOnlySummaries,
+	} {
+		t.Run(name, func(t *testing.T) {
+			tt(t, tclient)
+		})
+	}
+}
+
+func TestFeesFixedSizeSameAsBacktrace(t *testing.T) {
+	// Less blocks than the backtrace limit
+	ts, closeFunc := initFeesServer(t, 11, 11, 10)
+	defer func() {
+		closeFunc()
+		ts.Close()
+	}()
+	tclient := thorclient.New(ts.URL)
+	for name, tt := range map[string]func(*testing.T, *thorclient.Client){
+		"getFeeHistoryBestBlock":                        getFeeHistoryBestBlock,
+		"getFeeHistoryMoreBlocksRequestedThanAvailable": getFeeHistoryMoreBlocksRequestedThanAvailable,
 	} {
 		t.Run(name, func(t *testing.T) {
 			tt(t, tclient)
@@ -108,7 +132,7 @@ func getFeeHistoryWithSummaries(t *testing.T, tclient *thorclient.Client) {
 	expectedFeesHistory := fees.GetFeesHistory{
 		OldestBlock:   &expectedOldestBlock,
 		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(875525000)), (*hexutil.Big)(big.NewInt(766544026)), (*hexutil.Big)(big.NewInt(671128459))},
-		GasUsedRatios: []float64{0.0021, 0.0021, 0.0021},
+		GasUsedRatios: []float64{expectedGasPriceUsedRatio, expectedGasPriceUsedRatio, expectedGasPriceUsedRatio},
 	}
 	assert.Equal(t, expectedFeesHistory, feesHistory)
 }
@@ -134,7 +158,7 @@ func getFeeHistoryBestBlock(t *testing.T, tclient *thorclient.Client) {
 	expectedFeesHistory := fees.GetFeesHistory{
 		OldestBlock:   &expectedOldestBlock,
 		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(514449512)), (*hexutil.Big)(big.NewInt(450413409)), (*hexutil.Big)(big.NewInt(394348200)), (*hexutil.Big)(big.NewInt(345261708))},
-		GasUsedRatios: []float64{0.0021, 0.0021, 0.0021, 0.0021},
+		GasUsedRatios: []float64{expectedGasPriceUsedRatio, expectedGasPriceUsedRatio, expectedGasPriceUsedRatio, expectedGasPriceUsedRatio},
 	}
 
 	assert.Equal(t, expectedFeesHistory, feesHistory)
@@ -183,7 +207,7 @@ func getFeeHistoryCacheLimit(t *testing.T, tclient *thorclient.Client) {
 	expectedFeesHistory := fees.GetFeesHistory{
 		OldestBlock:   &expectedOldestBlock,
 		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(875525000))},
-		GasUsedRatios: []float64{0.0021},
+		GasUsedRatios: []float64{expectedGasPriceUsedRatio},
 	}
 
 	require.Equal(t, expectedFeesHistory, feesHistory)
@@ -195,4 +219,42 @@ func getFeeHistoryBlockCountBiggerThanMax(t *testing.T, tclient *thorclient.Clie
 	require.Equal(t, 400, statusCode)
 	require.NotNil(t, res)
 	assert.Equal(t, "blockCount must be between 1 and 8\n", string(res))
+}
+
+func getFeeHistoryMoreBlocksRequestedThanAvailable(t *testing.T, tclient *thorclient.Client) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=11&newestBlock=best")
+	require.NoError(t, err)
+	require.Equal(t, 200, statusCode)
+	require.NotNil(t, res)
+	var feesHistory fees.GetFeesHistory
+	if err := json.Unmarshal(res, &feesHistory); err != nil {
+		t.Fatal(err)
+	}
+	expectedOldestBlock := uint32(1)
+	expectedFeesHistory := fees.GetFeesHistory{
+		OldestBlock: &expectedOldestBlock,
+		BaseFees: []*hexutil.Big{
+			(*hexutil.Big)(big.NewInt(1000000000)),
+			(*hexutil.Big)(big.NewInt(875525000)),
+			(*hexutil.Big)(big.NewInt(766544026)),
+			(*hexutil.Big)(big.NewInt(671128459)),
+			(*hexutil.Big)(big.NewInt(587589745)),
+			(*hexutil.Big)(big.NewInt(514449512)),
+			(*hexutil.Big)(big.NewInt(450413409)),
+			(*hexutil.Big)(big.NewInt(394348200)),
+			(*hexutil.Big)(big.NewInt(345261708))},
+		GasUsedRatios: []float64{
+			expectedGasPriceUsedRatio,
+			expectedGasPriceUsedRatio,
+			expectedGasPriceUsedRatio,
+			expectedGasPriceUsedRatio,
+			expectedGasPriceUsedRatio,
+			expectedGasPriceUsedRatio,
+			expectedGasPriceUsedRatio,
+			expectedGasPriceUsedRatio,
+			expectedGasPriceUsedRatio,
+		},
+	}
+
+	assert.Equal(t, expectedFeesHistory, feesHistory)
 }
