@@ -25,7 +25,7 @@ import (
 
 const expectedGasPriceUsedRatio = 0.0021
 
-func TestFeesBacktraceGreatherThanFixedSize(t *testing.T) {
+func TestFeesBacktraceGreaterThanFixedSize(t *testing.T) {
 	ts, closeFunc := initFeesServer(t, 8, 10, 10)
 	t.Cleanup(func() {
 		closeFunc()
@@ -47,7 +47,7 @@ func TestFeesBacktraceGreatherThanFixedSize(t *testing.T) {
 	}
 }
 
-func TestFeesFixedSizeGreatherThanBacktrace(t *testing.T) {
+func TestFeesFixedSizeGreaterThanBacktrace(t *testing.T) {
 	ts, closeFunc := initFeesServer(t, 8, 6, 10)
 	defer func() {
 		closeFunc()
