@@ -10,7 +10,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
-	r "math/rand/v2"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -461,14 +460,72 @@ func TestOrderTxsAfterGalacticaFork(t *testing.T) {
 	}
 }
 
+func TestOrderTxsAfterGalacticaForkSameValues(t *testing.T) {
+	now := uint64(time.Now().Unix() - time.Now().Unix()%10 - 10)
+	db := muxdb.NewMem()
+	builder := genesis.NewDevnet()
+
+	b0, _, _, err := builder.Build(state.NewStater(db))
+	assert.Nil(t, err)
+
+	st := state.New(db, b0.Header().StateRoot(), 0, 0, 0)
+	stage, err := st.Stage(1, 0)
+	assert.Nil(t, err)
+	root, err := stage.Commit()
+	assert.Nil(t, err)
+
+	b1 := new(block.Builder).
+		ParentID(b0.Header().ID()).
+		StateRoot(root).
+		TotalScore(100).
+		Timestamp(now + 10).
+		BaseFee(big.NewInt(thor.InitialBaseFee)).
+		GasLimit(thor.InitialGasLimit).
+		Build()
+
+	repo, _ := chain.NewRepository(db, b0)
+	repo.AddBlock(b1, tx.Receipts{}, 0)
+	repo.SetBestBlockID(b1.Header().ID())
+
+	totalPoolTxs := 10
+	pool := New(repo, state.NewStater(db), Options{
+		Limit:           totalPoolTxs,
+		LimitPerAccount: totalPoolTxs,
+		MaxLifetime:     time.Hour,
+	}, &thor.ForkConfig{GALACTICA: 1})
+	defer pool.Close()
+
+	txs := make(map[thor.Bytes32]*tx.Transaction)
+	for i := 0; i < totalPoolTxs; i++ {
+		tx := tx.MustSign(generateRandomTx(t, i, repo.ChainTag()), devAccounts[i%len(devAccounts)].PrivateKey)
+		txs[tx.ID()] = tx
+		assert.Nil(t, pool.Add(tx))
+	}
+
+	execTxs, removed, err := pool.wash(pool.repo.BestBlockSummary())
+	assert.Nil(t, err)
+	assert.Zero(t, removed)
+	assert.Equal(t, len(txs), len(execTxs))
+	assert.Equal(t, totalPoolTxs, len(execTxs))
+	baseGasPrice, err := builtin.Params.Native(st).Get(thor.KeyBaseGasPrice)
+	assert.Nil(t, err)
+	for i := 1; i < len(txs); i++ {
+		prevGalacticaFee := fork.GalacticaTxGasPriceAdapater(execTxs[i-1], baseGasPrice)
+		currGalacticaFee := fork.GalacticaTxGasPriceAdapater(execTxs[i], baseGasPrice)
+		prevEffectiveFee := math.BigMin(new(big.Int).Sub(prevGalacticaFee.MaxFee, b1.Header().BaseFee()), prevGalacticaFee.MaxPriorityFee)
+		currEffectiveFee := math.BigMin(new(big.Int).Sub(currGalacticaFee.MaxFee, b1.Header().BaseFee()), currGalacticaFee.MaxPriorityFee)
+		assert.True(t, prevEffectiveFee.Cmp(currEffectiveFee) >= 0)
+	}
+}
+
 func generateRandomTx(t *testing.T, seed int, chainTag byte) *tx.Transaction {
 	txType := tx.DynamicFeeTxType
 	if (seed % 2) == 0 {
-		txType = tx.LegacyTxType
+		txType = tx.DynamicFeeTxType
 	}
 
-	maxFeePerGas := int64(thor.InitialBaseFee + r.IntN(thor.InitialBaseFee)) // #nosec G404
-	maxPriorityFeePerGas := maxFeePerGas / int64(r.IntN(10)+1)               // #nosec G404
+	maxFeePerGas := int64(thor.InitialBaseFee) // #nosec G404
+	maxPriorityFeePerGas := maxFeePerGas / 100 // #nosec G404
 
 	tx, err := tx.NewTxBuilder(txType).
 		ChainTag(chainTag).

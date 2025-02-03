@@ -20,7 +20,7 @@ func TestEventReader_Read(t *testing.T) {
 	allBlocks, err := thorChain.GetAllBlocks()
 	require.NoError(t, err)
 	genesisBlk := allBlocks[0]
-	newBlock := allBlocks[1]
+	newBlock := allBlocks[len(allBlocks)-1]
 
 	er := &eventReader{
 		repo:        thorChain.Repo(),
@@ -34,13 +34,19 @@ func TestEventReader_Read(t *testing.T) {
 	assert.Empty(t, events)
 	assert.False(t, ok)
 
-	// Test case 2: Events are available to read
+	// Test case 2: There are no events available to read
 	er = newEventReader(thorChain.Repo(), genesisBlk.Header().ID(), &EventFilter{})
 
 	events, ok, err = er.Read()
-
 	assert.NoError(t, err)
 	assert.True(t, ok)
+	assert.Zero(t, len(events))
+
+	// Test case 3: There are no events available to read
+	events, ok, err = er.Read()
+	assert.NoError(t, err)
+	assert.True(t, ok)
+
 	var eventMessages []*EventMessage
 	for _, event := range events {
 		if msg, ok := event.(*EventMessage); ok {

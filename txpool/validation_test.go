@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
@@ -258,6 +259,58 @@ func TestValidateTransactionWithState(t *testing.T) {
 			head:        &chain.BlockSummary{Header: getHeader(1)},
 			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
 			expectedErr: nil,
+		},
+		{
+			name: "legacy tx with gasPriceCoef 0",
+			getTx: func() *tx.Transaction {
+				t, _ := tx.NewTxBuilder(tx.LegacyTxType).ChainTag(repo.ChainTag()).GasPriceCoef(0).Build()
+				return t
+			},
+			head:        &chain.BlockSummary{Header: getHeader(1)},
+			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
+			expectedErr: nil,
+		},
+		{
+			name: "dyn fee tx not accepted with maxFeePerGas equals to zero",
+			getTx: func() *tx.Transaction {
+				t, _ := tx.NewTxBuilder(tx.DynamicFeeTxType).ChainTag(repo.ChainTag()).MaxFeePerGas(common.Big0).Build()
+				return t
+			},
+			head:        &chain.BlockSummary{Header: getHeader(1)},
+			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
+			expectedErr: txRejectedError{"max fee per gas too low to cover for base fee"},
+		},
+		{
+			name: "dyn fee tx with maxPriorityFeePerGas = 0, maxFeePerGas > baseFee",
+			getTx: func() *tx.Transaction {
+				baseFee := new(big.Int).Add(getHeader(1).BaseFee(), common.Big1)
+				t, _ := tx.NewTxBuilder(tx.DynamicFeeTxType).ChainTag(repo.ChainTag()).MaxFeePerGas(baseFee).MaxPriorityFeePerGas(common.Big0).Build()
+				return t
+			},
+			head:        &chain.BlockSummary{Header: getHeader(1)},
+			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
+			expectedErr: nil,
+		},
+		{
+			name: "dyn fee tx with maxPriorityFeePerGas = 0, maxFeePerGas > baseFee",
+			getTx: func() *tx.Transaction {
+				t, _ := tx.NewTxBuilder(tx.DynamicFeeTxType).ChainTag(repo.ChainTag()).MaxFeePerGas(getHeader(1).BaseFee()).MaxPriorityFeePerGas(common.Big0).Build()
+				return t
+			},
+			head:        &chain.BlockSummary{Header: getHeader(1)},
+			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
+			expectedErr: nil,
+		},
+		{
+			name: "dyn fee tx with maxPriorityFeePerGas = 0, maxFeePerGas > baseFee",
+			getTx: func() *tx.Transaction {
+				baseFee := new(big.Int).Sub(getHeader(1).BaseFee(), common.Big1)
+				t, _ := tx.NewTxBuilder(tx.DynamicFeeTxType).ChainTag(repo.ChainTag()).MaxFeePerGas(baseFee).MaxPriorityFeePerGas(common.Big0).Build()
+				return t
+			},
+			head:        &chain.BlockSummary{Header: getHeader(1)},
+			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
+			expectedErr: txRejectedError{"max fee per gas too low to cover for base fee"},
 		},
 	}
 

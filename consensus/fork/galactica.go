@@ -84,9 +84,10 @@ func CalcBaseFee(config *thor.ForkConfig, parent *block.Header) *big.Int {
 		y := x.Div(x, parentGasTargetBig)
 		baseFeeDelta := x.Div(y, baseFeeChangeDenominator)
 
+		// Setting the minimun baseFee to InitialBaseFee
 		return math.BigMax(
 			x.Sub(parentBaseFee, baseFeeDelta),
-			common.Big0,
+			big.NewInt(thor.InitialBaseFee),
 		)
 	}
 }

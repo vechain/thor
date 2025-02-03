@@ -11,7 +11,6 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/pkg/errors"
@@ -168,7 +167,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 		baseFee              *big.Int
 	)
 	if rt.ctx.BaseFee != nil {
-		baseFee = math.BigMax(new(big.Int).SetInt64(thor.MinBaseFee), new(big.Int).Set(rt.ctx.BaseFee))
+		baseFee = new(big.Int).Set(rt.ctx.BaseFee)
 	}
 	return vm.NewEVM(vm.Context{
 		CanTransfer: func(_ vm.StateDB, addr common.Address, amount *big.Int) bool {

@@ -239,9 +239,9 @@ func initSubscriptionsServer(t *testing.T, enabledDeprecated bool) {
 
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	tr := tx.NewTxBuilder(tx.DynamicFeeTxType).
+	tr := tx.NewTxBuilder(tx.LegacyTxType).
 		ChainTag(thorChain.Repo().ChainTag()).
-		MaxFeePerGas(big.NewInt(1)).
+		GasPriceCoef(1).
 		Expiration(10).
 		Gas(21000).
 		Nonce(1).

@@ -296,7 +296,7 @@ func initAccountServer(t *testing.T, enabledDeprecated bool) {
 		t.Fatal(err)
 	}
 	claCall := tx.NewClause(&contractAddr).WithData(input)
-	transactionCall := buildTxWithClauses(tx.DynamicFeeTxType, thorChain.Repo().ChainTag(), claCall)
+	transactionCall := buildTxWithClauses(tx.LegacyTxType, thorChain.Repo().ChainTag(), claCall)
 	require.NoError(t,
 		thorChain.MintTransactions(
 			genesis.DevAccounts()[0],

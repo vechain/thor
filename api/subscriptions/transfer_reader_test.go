@@ -45,7 +45,7 @@ func TestTransferReader_Read_NoNewBlocksToRead(t *testing.T) {
 	thorChain := initChain(t)
 	allBlocks, err := thorChain.GetAllBlocks()
 	require.NoError(t, err)
-	newBlock := allBlocks[1]
+	newBlock := allBlocks[len(allBlocks)-1]
 	filter := &TransferFilter{}
 
 	// Act

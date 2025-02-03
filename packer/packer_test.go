@@ -113,7 +113,6 @@ func TestP(t *testing.T) {
 
 	best := repo.BestBlockSummary()
 	fmt.Println(best.Header.Number(), best.Header.GasUsed())
-	//	fmt.Println(best)
 }
 
 func TestForkVIP191(t *testing.T) {

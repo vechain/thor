@@ -47,7 +47,7 @@ func TestBeat2Reader_Read_NoNewBlocksToRead(t *testing.T) {
 	thorChain := initChain(t)
 	allBlocks, err := thorChain.GetAllBlocks()
 	require.NoError(t, err)
-	newBlock := allBlocks[1]
+	newBlock := allBlocks[2]
 
 	// Act
 	beatReader := newBeat2Reader(thorChain.Repo(), newBlock.Header().ID(), newMessageCache[Beat2Message](10))

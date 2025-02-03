@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/genesis"
@@ -26,7 +25,8 @@ func TestBlockReader_Read(t *testing.T) {
 	allBlocks, err := thorChain.GetAllBlocks()
 	require.NoError(t, err)
 	genesisBlk := allBlocks[0]
-	newBlock := allBlocks[1]
+	firstBlk := allBlocks[1]
+	bestBlk := allBlocks[len(allBlocks)-1]
 
 	// Test case 1: Successful read next blocks
 	br := newBlockReader(thorChain.Repo(), genesisBlk.Header().ID())
@@ -37,12 +37,22 @@ func TestBlockReader_Read(t *testing.T) {
 	if resBlock, ok := res[0].(*BlockMessage); !ok {
 		t.Fatal("unexpected type")
 	} else {
-		assert.Equal(t, newBlock.Header().Number(), resBlock.Number)
-		assert.Equal(t, newBlock.Header().ParentID(), resBlock.ParentID)
+		assert.Equal(t, firstBlk.Header().Number(), resBlock.Number)
+		assert.Equal(t, firstBlk.Header().ParentID(), resBlock.ParentID)
+	}
+
+	res, ok, err = br.Read()
+	assert.NoError(t, err)
+	assert.True(t, ok)
+	if resBlock, ok := res[0].(*BlockMessage); !ok {
+		t.Fatal("unexpected type")
+	} else {
+		assert.Equal(t, bestBlk.Header().Number(), resBlock.Number)
+		assert.Equal(t, bestBlk.Header().ParentID(), resBlock.ParentID)
 	}
 
 	// Test case 2: There is no new block
-	br = newBlockReader(thorChain.Repo(), newBlock.Header().ID())
+	br = newBlockReader(thorChain.Repo(), bestBlk.Header().ID())
 	res, ok, err = br.Read()
 
 	assert.NoError(t, err)
@@ -59,7 +69,13 @@ func TestBlockReader_Read(t *testing.T) {
 }
 
 func initChain(t *testing.T) *testchain.Chain {
-	thorChain, err := testchain.NewIntegrationTestChain()
+	forks := thor.ForkConfig{
+		BLOCKLIST: 0,
+		VIP191:    1,
+		GALACTICA: 1,
+		VIP214:    2,
+	}
+	thorChain, err := testchain.NewIntegrationTestChainWithFork(forks)
 	require.NoError(t, err)
 
 	addr := thor.BytesToAddress([]byte("to"))
@@ -74,21 +90,19 @@ func initChain(t *testing.T) *testchain.Chain {
 		BlockRef(tx.NewBlockRef(0)).
 		MustBuild()
 	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], tr))
 
 	txDeploy := tx.NewTxBuilder(tx.DynamicFeeTxType).
 		ChainTag(thorChain.Repo().ChainTag()).
-		MaxFeePerGas(big.NewInt(1)).
+		MaxFeePerGas(big.NewInt(thor.InitialBaseFee)).
 		Expiration(100).
 		Gas(1_000_000).
 		Nonce(3).
 		Clause(tx.NewClause(nil).WithData(common.Hex2Bytes(eventcontract.HexBytecode))).
 		BlockRef(tx.NewBlockRef(0)).
 		MustBuild()
-	sigTxDeploy, err := crypto.Sign(txDeploy.SigningHash().Bytes(), genesis.DevAccounts()[1].PrivateKey)
-	require.NoError(t, err)
-	txDeploy = txDeploy.WithSignature(sigTxDeploy)
-
-	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], tr, txDeploy))
+	txDeploy = tx.MustSign(txDeploy, genesis.DevAccounts()[0].PrivateKey)
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], txDeploy))
 
 	return thorChain
 }
