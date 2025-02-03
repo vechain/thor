@@ -27,7 +27,7 @@ var logger = log.WithContext("pkg", "p2psrv")
 // Server p2p server wraps ethereum's p2p.Server, and handles discovery v5 stuff.
 type Server struct {
 	opts            *Options
-	srv             *p2p.Server
+	Srv             *p2p.Server
 	discv5          *discv5.Network
 	goes            co.Goes
 	done            chan struct{}
@@ -48,7 +48,7 @@ func New(opts *Options) *Server {
 
 	return &Server{
 		opts: opts,
-		srv: &p2p.Server{
+		Srv: &p2p.Server{
 			Config: p2p.Config{
 				Name:        opts.Name,
 				PrivateKey:  opts.PrivateKey,
@@ -72,7 +72,7 @@ func New(opts *Options) *Server {
 // Self returns self enode url.
 // Only available when server is running.
 func (s *Server) Self() *discover.Node {
-	return s.srv.Self()
+	return s.Srv.Self()
 }
 
 // Start start the server.
@@ -101,10 +101,10 @@ func (s *Server) Start(protocols []*p2p.Protocol, topic discv5.Topic) error {
 			}()
 			return run(peer, rw)
 		}
-		s.srv.Protocols = append(s.srv.Protocols, cpy)
+		s.Srv.Protocols = append(s.Srv.Protocols, cpy)
 	}
 
-	if err := s.srv.Start(); err != nil {
+	if err := s.Srv.Start(); err != nil {
 		return err
 	}
 	if !s.opts.NoDiscovery {
@@ -135,7 +135,7 @@ func (s *Server) Stop() {
 	if s.discv5 != nil {
 		s.discv5.Close()
 	}
-	s.srv.Stop()
+	s.Srv.Stop()
 	close(s.done)
 	s.goes.Wait()
 }
@@ -154,17 +154,17 @@ func (s *Server) KnownNodes() Nodes {
 // server is shut down. If the connection fails for any reason, the server will
 // attempt to reconnect the peer.
 func (s *Server) AddStatic(node *discover.Node) {
-	s.srv.AddPeer(node)
+	s.Srv.AddPeer(node)
 }
 
 // RemoveStatic disconnects from the given node
 func (s *Server) RemoveStatic(node *discover.Node) {
-	s.srv.RemovePeer(node)
+	s.Srv.RemovePeer(node)
 }
 
 // NodeInfo gathers and returns a collection of metadata known about the host.
 func (s *Server) NodeInfo() *p2p.NodeInfo {
-	return s.srv.NodeInfo()
+	return s.Srv.NodeInfo()
 }
 
 func (s *Server) listenDiscV5() (err error) {
@@ -272,7 +272,7 @@ func (s *Server) dialLoop() {
 		if dialCount == 20 {
 			delay = nonFastDialDur
 		} else if dialCount > 20 {
-			if s.srv.PeerCount() > s.srv.MaxPeers/2 {
+			if s.Srv.PeerCount() > s.Srv.MaxPeers/2 {
 				delay = stableDialDur
 			} else {
 				delay = nonFastDialDur
@@ -281,11 +281,11 @@ func (s *Server) dialLoop() {
 
 		select {
 		case <-time.After(delay):
-			if s.srv.DialRatio < 1 {
+			if s.Srv.DialRatio < 1 {
 				continue
 			}
 
-			if s.dialingNodes.Len() >= s.srv.MaxPeers/s.srv.DialRatio {
+			if s.dialingNodes.Len() >= s.Srv.MaxPeers/s.Srv.DialRatio {
 				continue
 			}
 
@@ -307,7 +307,7 @@ func (s *Server) dialLoop() {
 				metricDialingNewNode().Add(1)
 				defer metricDialingNewNode().Add(-1)
 
-				if err := s.tryDial(node); err != nil {
+				if err := s.TryDial(node); err != nil {
 					s.dialingNodes.Remove(node.ID)
 					log.Debug("failed to dial node", "err", err)
 				}
@@ -322,12 +322,12 @@ func (s *Server) dialLoop() {
 	}
 }
 
-func (s *Server) tryDial(node *discover.Node) error {
-	conn, err := s.srv.Dialer.Dial(node)
+func (s *Server) TryDial(node *discover.Node) error {
+	conn, err := s.Srv.Dialer.Dial(node)
 	if err != nil {
 		return err
 	}
-	return s.srv.SetupConn(conn, 1, node)
+	return s.Srv.SetupConn(conn, 1, node)
 }
 
 func (s *Server) fetchBootstrap() {
