@@ -785,7 +785,7 @@ paths:
             text/plain:
               schema:
                 type: string
-                example: 'Newest block not found'
+                example: 'Block not found'
 
 components:
   schemas:
