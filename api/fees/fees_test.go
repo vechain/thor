@@ -140,9 +140,8 @@ func getFeeHistoryWithSummaries(t *testing.T, tclient *thorclient.Client) {
 func getFeeHistoryOnlySummaries(t *testing.T, tclient *thorclient.Client) {
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=4&newestBlock=3")
 	require.NoError(t, err)
-	// We are enforcing to search at least partially in the cache, so newestBlock should always be there
-	require.Equal(t, 404, statusCode)
-	require.Equal(t, "newestBlock: blocks fees not found\n", string(res))
+	require.Equal(t, 400, statusCode)
+	require.Equal(t, "newestBlock must be between 4 and 9\n", string(res))
 }
 
 func getFeeHistoryBestBlock(t *testing.T, tclient *thorclient.Client) {

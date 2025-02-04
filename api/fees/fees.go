@@ -24,30 +24,6 @@ func New(repo *chain.Repository, bft bft.Committer, backtraceLimit uint32, fixed
 	}
 }
 
-func (f *Fees) validateGetFeesHistoryParams(w http.ResponseWriter, req *http.Request) (uint32, *chain.BlockSummary, error) {
-	blockCountParam := req.URL.Query().Get("blockCount")
-	blockCount, err := strconv.ParseUint(blockCountParam, 10, 32)
-	if err != nil {
-		return 0, nil, utils.BadRequest(errors.WithMessage(err, "invalid blockCount, it should represent an integer"))
-	}
-	if blockCount < 1 || blockCount > uint64(f.data.size) {
-		return 0, nil, utils.BadRequest(errors.New(fmt.Sprintf("blockCount must be between 1 and %d", f.data.size)))
-	}
-	newestBlock, err := utils.ParseRevision(req.URL.Query().Get("newestBlock"), false)
-	if err != nil {
-		return 0, nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
-	}
-	newestBlockSummary, err := utils.GetSummary(newestBlock, f.data.repo, f.data.bft)
-	if err != nil {
-		if f.data.repo.IsNotFound(err) {
-			return 0, nil, utils.WriteJSON(w, nil)
-		}
-		return 0, nil, err
-	}
-
-	return uint32(blockCount), newestBlockSummary, nil
-}
-
 func getOldestBlockNumber(blockCount uint32, newestBlock uint32) uint32 {
 	oldestBlockInt32 := int32(newestBlock) + 1 - int32(blockCount)
 	oldestBlock := uint32(0)
@@ -66,8 +42,42 @@ func (f *Fees) getOldestBlockSummaryByNumber(oldestBlock uint32) (*chain.BlockSu
 	return oldestBlockSummary, nil
 }
 
+func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.BlockSummary, error) {
+	blockCountParam := req.URL.Query().Get("blockCount")
+	blockCount, err := strconv.ParseUint(blockCountParam, 10, 32)
+	if err != nil {
+		return 0, nil, utils.BadRequest(errors.WithMessage(err, "invalid blockCount, it should represent an integer"))
+	}
+	if blockCount < 1 || blockCount > uint64(f.data.size) {
+		return 0, nil, utils.BadRequest(errors.New(fmt.Sprintf("blockCount must be between 1 and %d", f.data.size)))
+	}
+	newestBlock, err := utils.ParseRevision(req.URL.Query().Get("newestBlock"), false)
+	if err != nil {
+		return 0, nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
+	}
+
+	newestBlockSummary, err := utils.GetSummary(newestBlock, f.data.repo, f.data.bft)
+	if err != nil {
+		if f.data.repo.IsNotFound(err) {
+			return 0, nil, utils.NotFound(errors.WithMessage(err, "newestBlock"))
+		}
+		return 0, nil, err
+	}
+
+	bestBlockSummary := f.data.repo.BestBlockSummary()
+	if bestBlockSummary == nil {
+		return 0, nil, utils.HTTPError(errors.New("best block not found"), http.StatusInternalServerError)
+	}
+	oldestBlockNumberSupported := getOldestBlockNumber(uint32(f.data.size), bestBlockSummary.Header.Number())
+	if newestBlockSummary.Header.Number() < oldestBlockNumberSupported {
+		return 0, nil, utils.BadRequest(errors.New(fmt.Sprintf("newestBlock must be between %d and %d", oldestBlockNumberSupported, bestBlockSummary.Header.Number())))
+	}
+
+	return uint32(blockCount), newestBlockSummary, nil
+}
+
 func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) error {
-	blockCount, newestBlockSummary, err := f.validateGetFeesHistoryParams(w, req)
+	blockCount, newestBlockSummary, err := f.validateGetFeesHistoryParams(req)
 	if err != nil {
 		return err
 	}
