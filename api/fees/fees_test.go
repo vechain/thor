@@ -55,7 +55,7 @@ func TestFeesFixedSizeGreaterThanBacktrace(t *testing.T) {
 	}()
 	tclient := thorclient.New(ts.URL)
 	for name, tt := range map[string]func(*testing.T, *thorclient.Client){
-		// "getFeeHistoryWithSummaries": getFeeHistoryWithSummaries,
+		"getFeeHistoryWithSummaries": getFeeHistoryWithSummaries,
 		"getFeeHistoryOnlySummaries": getFeeHistoryOnlySummaries,
 	} {
 		t.Run(name, func(t *testing.T) {

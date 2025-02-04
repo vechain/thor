@@ -57,6 +57,15 @@ func getOldestBlockNumber(blockCount uint32, newestBlock uint32) uint32 {
 	return oldestBlock
 }
 
+func (f *Fees) getOldestBlockSummaryByNumber(oldestBlock uint32) (*chain.BlockSummary, error) {
+	oldestBlockRevision := utils.NewRevision(oldestBlock)
+	oldestBlockSummary, err := utils.GetSummary(oldestBlockRevision, f.data.repo, f.data.bft)
+	if err != nil {
+		return nil, err
+	}
+	return oldestBlockSummary, nil
+}
+
 func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) error {
 	blockCount, newestBlockSummary, err := f.validateGetFeesHistoryParams(w, req)
 	if err != nil {
@@ -64,8 +73,12 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 	}
 
 	oldestBlockNumber := getOldestBlockNumber(blockCount, newestBlockSummary.Header.Number())
+	oldestBlockSummary, err := f.getOldestBlockSummaryByNumber(oldestBlockNumber)
+	if err != nil {
+		return utils.BadRequest(err)
+	}
 
-	cacheOldestBlockNumber, cacheBaseFees, cacheGasUsedRatios, shouldGetBlockSummaries, err := f.data.resolveRange(newestBlockSummary.Header.ID(), newestBlockSummary.Header.Number())
+	cacheOldestBlockNumber, cacheBaseFees, cacheGasUsedRatios, shouldGetBlockSummaries, err := f.data.resolveRange(oldestBlockSummary.Header.ID(), newestBlockSummary.Header.Number())
 	if err != nil {
 		return utils.HTTPError(err, http.StatusInternalServerError)
 	}
