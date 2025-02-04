@@ -28,6 +28,10 @@ type Revision struct {
 	val interface{}
 }
 
+func NewRevision(revision uint32) *Revision {
+	return &Revision{revision}
+}
+
 func (rev *Revision) IsNext() bool {
 	return rev.val == revNext
 }
@@ -68,10 +72,6 @@ func ParseRevision(revision string, allowNext bool) (*Revision, error) {
 		return nil, errors.New("block number out of max uint32")
 	}
 	return &Revision{uint32(n)}, err
-}
-
-func ParseNumberRevision(revision uint32) *Revision {
-	return &Revision{revision}
 }
 
 func ParseBlockID(rev *Revision, repo *chain.Repository, bft bft.Committer) (thor.Bytes32, error) {

@@ -64,7 +64,7 @@ func getOldestBlockNumber(blockCount uint32, newestBlock uint32) uint32 {
 }
 
 func (f *Fees) getOldestBlockIDByNumber(oldestBlock uint32) (thor.Bytes32, error) {
-	oldestBlockRevision := utils.ParseNumberRevision(oldestBlock)
+	oldestBlockRevision := utils.NewRevision(oldestBlock)
 	oldestFeeCacheEntry, err := utils.ParseBlockID(oldestBlockRevision, f.cache.repo, f.bft)
 	if err != nil {
 		return thor.Bytes32{}, err
@@ -121,7 +121,7 @@ func (f *Fees) processBlockRange(blockCount uint32, summary *chain.BlockSummary)
 }
 
 func (f *Fees) getBlockSummaries(newestBlockSummaryNumber uint32, blockCount uint32) ([]*hexutil.Big, []float64, error) {
-	newestBlockRevision := utils.ParseNumberRevision(newestBlockSummaryNumber)
+	newestBlockRevision := utils.NewRevision(newestBlockSummaryNumber)
 	summary, err := utils.GetSummary(newestBlockRevision, f.repo, f.bft)
 	if err != nil {
 		return nil, nil, err
