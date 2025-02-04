@@ -18,7 +18,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/bft"
-	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -214,19 +213,6 @@ func (f *Fees) pushBestBlockToCache() {
 
 func (f *Fees) Close() {
 	close(f.done)
-}
-
-func (f *Fees) CacheLen() int {
-	return f.cache.cache.Len()
-}
-
-func (f *Fees) CachePriorities() []float64 {
-	priorities := make([]float64, 0, f.cache.cache.Len())
-	f.cache.cache.ForEach(func(ent *cache.PrioEntry) bool {
-		priorities = append(priorities, ent.Priority)
-		return true
-	})
-	return priorities
 }
 
 func (f *Fees) Mount(root *mux.Router, pathPrefix string) {
