@@ -84,7 +84,7 @@ func GetSummary(rev *Revision, repo *chain.Repository, bft bft.Committer) (sum *
 	case uint32:
 		id, err = repo.NewBestChain().GetBlockID(rev)
 		if err != nil {
-			return nil, err
+			return
 		}
 	case int64:
 		switch rev {
@@ -101,9 +101,6 @@ func GetSummary(rev *Revision, repo *chain.Repository, bft bft.Committer) (sum *
 	}
 	if id.IsZero() {
 		return nil, errors.New("invalid revision")
-	}
-	if err != nil {
-		return nil, err
 	}
 	summary, err := repo.GetBlockSummary(id)
 	if err != nil {
