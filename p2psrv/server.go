@@ -27,7 +27,7 @@ var logger = log.WithContext("pkg", "p2psrv")
 // Server p2p server wraps ethereum's p2p.Server, and handles discovery v5 stuff.
 type Server struct {
 	opts            *Options
-	Srv             *p2p.Server
+	srv             *p2p.Server
 	discv5          *discv5.Network
 	goes            co.Goes
 	done            chan struct{}
@@ -37,8 +37,26 @@ type Server struct {
 	dialingNodes    *nodeMap
 }
 
-// New create a p2p server.
+// New creates a server with a default p2p.Server.
 func New(opts *Options) *Server {
+	return NewWithServer(opts, &p2p.Server{
+		Config: p2p.Config{
+			Name:        opts.Name,
+			PrivateKey:  opts.PrivateKey,
+			MaxPeers:    opts.MaxPeers,
+			NoDiscovery: true,  // disable discovery inside p2p.Server instance(we use our own)
+			DiscoveryV5: false, // disable discovery inside p2p.Server instance(we use our own)
+			ListenAddr:  opts.ListenAddr,
+			NetRestrict: opts.NetRestrict,
+			NAT:         opts.NAT,
+			NoDial:      opts.NoDial,
+			DialRatio:   int(math.Sqrt(float64(opts.MaxPeers))),
+		},
+	})
+}
+
+// NewWithServer creates a server with a provided p2p.Server.
+func NewWithServer(opts *Options, srv *p2p.Server) *Server {
 	knownNodes := cache.NewPrioCache(5)
 	discoveredNodes := cache.NewRandCache(128)
 	for _, node := range opts.KnownNodes {
@@ -47,21 +65,8 @@ func New(opts *Options) *Server {
 	}
 
 	return &Server{
-		opts: opts,
-		Srv: &p2p.Server{
-			Config: p2p.Config{
-				Name:        opts.Name,
-				PrivateKey:  opts.PrivateKey,
-				MaxPeers:    opts.MaxPeers,
-				NoDiscovery: true,  // disable discovery inside p2p.Server instance(we use our own)
-				DiscoveryV5: false, // disable discovery inside p2p.Server instance(we use our own)
-				ListenAddr:  opts.ListenAddr,
-				NetRestrict: opts.NetRestrict,
-				NAT:         opts.NAT,
-				NoDial:      opts.NoDial,
-				DialRatio:   int(math.Sqrt(float64(opts.MaxPeers))),
-			},
-		},
+		opts:            opts,
+		srv:             srv,
 		done:            make(chan struct{}),
 		knownNodes:      knownNodes,
 		discoveredNodes: discoveredNodes,
@@ -72,7 +77,7 @@ func New(opts *Options) *Server {
 // Self returns self enode url.
 // Only available when server is running.
 func (s *Server) Self() *discover.Node {
-	return s.Srv.Self()
+	return s.srv.Self()
 }
 
 // Start start the server.
@@ -101,10 +106,10 @@ func (s *Server) Start(protocols []*p2p.Protocol, topic discv5.Topic) error {
 			}()
 			return run(peer, rw)
 		}
-		s.Srv.Protocols = append(s.Srv.Protocols, cpy)
+		s.srv.Protocols = append(s.srv.Protocols, cpy)
 	}
 
-	if err := s.Srv.Start(); err != nil {
+	if err := s.srv.Start(); err != nil {
 		return err
 	}
 	if !s.opts.NoDiscovery {
@@ -135,7 +140,7 @@ func (s *Server) Stop() {
 	if s.discv5 != nil {
 		s.discv5.Close()
 	}
-	s.Srv.Stop()
+	s.srv.Stop()
 	close(s.done)
 	s.goes.Wait()
 }
@@ -154,17 +159,17 @@ func (s *Server) KnownNodes() Nodes {
 // server is shut down. If the connection fails for any reason, the server will
 // attempt to reconnect the peer.
 func (s *Server) AddStatic(node *discover.Node) {
-	s.Srv.AddPeer(node)
+	s.srv.AddPeer(node)
 }
 
 // RemoveStatic disconnects from the given node
 func (s *Server) RemoveStatic(node *discover.Node) {
-	s.Srv.RemovePeer(node)
+	s.srv.RemovePeer(node)
 }
 
 // NodeInfo gathers and returns a collection of metadata known about the host.
 func (s *Server) NodeInfo() *p2p.NodeInfo {
-	return s.Srv.NodeInfo()
+	return s.srv.NodeInfo()
 }
 
 func (s *Server) listenDiscV5() (err error) {
@@ -272,7 +277,7 @@ func (s *Server) dialLoop() {
 		if dialCount == 20 {
 			delay = nonFastDialDur
 		} else if dialCount > 20 {
-			if s.Srv.PeerCount() > s.Srv.MaxPeers/2 {
+			if s.srv.PeerCount() > s.srv.MaxPeers/2 {
 				delay = stableDialDur
 			} else {
 				delay = nonFastDialDur
@@ -281,11 +286,11 @@ func (s *Server) dialLoop() {
 
 		select {
 		case <-time.After(delay):
-			if s.Srv.DialRatio < 1 {
+			if s.srv.DialRatio < 1 {
 				continue
 			}
 
-			if s.dialingNodes.Len() >= s.Srv.MaxPeers/s.Srv.DialRatio {
+			if s.dialingNodes.Len() >= s.srv.MaxPeers/s.srv.DialRatio {
 				continue
 			}
 
@@ -323,11 +328,11 @@ func (s *Server) dialLoop() {
 }
 
 func (s *Server) TryDial(node *discover.Node) error {
-	conn, err := s.Srv.Dialer.Dial(node)
+	conn, err := s.srv.Dialer.Dial(node)
 	if err != nil {
 		return err
 	}
-	return s.Srv.SetupConn(conn, 1, node)
+	return s.srv.SetupConn(conn, 1, node)
 }
 
 func (s *Server) fetchBootstrap() {
