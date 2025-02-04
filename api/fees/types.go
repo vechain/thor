@@ -16,18 +16,17 @@ import (
 const maxBlockFetchers = 8 // Maximum number of concurrent block fetchers.
 
 type Fees struct {
-	repo  *chain.Repository
-	bft   bft.Committer
-	cache *FeesCache
-	done  chan struct{}
+	data *FeesData
+	done chan struct{}
 }
 type FeeCacheEntry struct {
 	baseFee      *hexutil.Big
 	gasUsedRatio float64
 }
-type FeesCache struct {
+type FeesData struct {
 	repo           *chain.Repository
 	cache          *cache.PrioCache
+	bft            bft.Committer
 	size           int    // The max size of the cache when full.
 	backtraceLimit uint32 // The max number of blocks to backtrace.
 	fixedSize      uint32 // The max size of the cache (fixed in the code).

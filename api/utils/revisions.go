@@ -74,16 +74,17 @@ func ParseRevision(revision string, allowNext bool) (*Revision, error) {
 	return &Revision{uint32(n)}, err
 }
 
-func ParseBlockID(rev *Revision, repo *chain.Repository, bft bft.Committer) (thor.Bytes32, error) {
+// GetSummary returns the block summary for the given revision,
+// revision required to be a deterministic block other than "next".
+func GetSummary(rev *Revision, repo *chain.Repository, bft bft.Committer) (sum *chain.BlockSummary, err error) {
 	var id thor.Bytes32
-	var err error
 	switch rev := rev.val.(type) {
 	case thor.Bytes32:
 		id = rev
 	case uint32:
 		id, err = repo.NewBestChain().GetBlockID(rev)
 		if err != nil {
-			return thor.Bytes32{}, err
+			return nil, err
 		}
 	case int64:
 		switch rev {
@@ -94,21 +95,13 @@ func ParseBlockID(rev *Revision, repo *chain.Repository, bft bft.Committer) (tho
 		case revJustified:
 			id, err = bft.Justified()
 			if err != nil {
-				return thor.Bytes32{}, err
+				return nil, err
 			}
 		}
 	}
 	if id.IsZero() {
-		return thor.Bytes32{}, errors.New("invalid revision")
+		return nil, errors.New("invalid revision")
 	}
-
-	return id, nil
-}
-
-// GetSummary returns the block summary for the given revision,
-// revision required to be a deterministic block other than "next".
-func GetSummary(rev *Revision, repo *chain.Repository, bft bft.Committer) (sum *chain.BlockSummary, err error) {
-	id, err := ParseBlockID(rev, repo, bft)
 	if err != nil {
 		return nil, err
 	}
