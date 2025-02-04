@@ -42,50 +42,56 @@ func (f *Fees) getOldestBlockSummaryByNumber(oldestBlock uint32) (*chain.BlockSu
 	return oldestBlockSummary, nil
 }
 
-func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.BlockSummary, error) {
+func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.BlockSummary, *chain.BlockSummary, error) {
+	//blockCount validation
 	blockCountParam := req.URL.Query().Get("blockCount")
 	blockCount, err := strconv.ParseUint(blockCountParam, 10, 32)
 	if err != nil {
-		return 0, nil, utils.BadRequest(errors.WithMessage(err, "invalid blockCount, it should represent an integer"))
+		return 0, nil, nil, utils.BadRequest(errors.WithMessage(err, "invalid blockCount, it should represent an integer"))
 	}
 	if blockCount < 1 || blockCount > uint64(f.data.size) {
-		return 0, nil, utils.BadRequest(errors.New(fmt.Sprintf("blockCount must be between 1 and %d", f.data.size)))
-	}
-	newestBlock, err := utils.ParseRevision(req.URL.Query().Get("newestBlock"), false)
-	if err != nil {
-		return 0, nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
+		return 0, nil, nil, utils.BadRequest(errors.New(fmt.Sprintf("blockCount must be between 1 and %d", f.data.size)))
 	}
 
+	//newestBlock validation
+
+	newestBlock, err := utils.ParseRevision(req.URL.Query().Get("newestBlock"), false)
+	if err != nil {
+		return 0, nil, nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
+	}
+	// Too new
 	newestBlockSummary, err := utils.GetSummary(newestBlock, f.data.repo, f.data.bft)
 	if err != nil {
 		if f.data.repo.IsNotFound(err) {
-			return 0, nil, utils.NotFound(errors.WithMessage(err, "newestBlock"))
+			return 0, nil, nil, utils.NotFound(errors.WithMessage(err, "newestBlock"))
 		}
-		return 0, nil, err
+		return 0, nil, nil, err
 	}
-
+	// Too old
 	bestBlockSummary := f.data.repo.BestBlockSummary()
 	if bestBlockSummary == nil {
-		return 0, nil, utils.HTTPError(errors.New("best block not found"), http.StatusInternalServerError)
+		return 0, nil, nil, utils.HTTPError(errors.New("best block not found"), http.StatusInternalServerError)
 	}
 	oldestBlockNumberSupported := getOldestBlockNumber(uint32(f.data.size), bestBlockSummary.Header.Number())
 	if newestBlockSummary.Header.Number() < oldestBlockNumberSupported {
-		return 0, nil, utils.BadRequest(errors.New(fmt.Sprintf("newestBlock must be between %d and %d", oldestBlockNumberSupported, bestBlockSummary.Header.Number())))
+		return 0, nil, nil, utils.BadRequest(errors.New(fmt.Sprintf("newestBlock must be between %d and %d", oldestBlockNumberSupported, bestBlockSummary.Header.Number())))
 	}
 
-	return uint32(blockCount), newestBlockSummary, nil
+	// Get oldest block summary after subtracting blockCount
+	// We do not return error, just less blocks, in case this limit goes beyond the backtrace limit
+	oldestBlockNumber := getOldestBlockNumber(uint32(blockCount), newestBlockSummary.Header.Number())
+	oldestBlockSummary, err := f.getOldestBlockSummaryByNumber(oldestBlockNumber)
+	if err != nil {
+		return 0, nil, nil, utils.BadRequest(err)
+	}
+
+	return uint32(blockCount), oldestBlockSummary, newestBlockSummary, nil
 }
 
 func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) error {
-	blockCount, newestBlockSummary, err := f.validateGetFeesHistoryParams(req)
+	blockCount, oldestBlockSummary, newestBlockSummary, err := f.validateGetFeesHistoryParams(req)
 	if err != nil {
 		return err
-	}
-
-	oldestBlockNumber := getOldestBlockNumber(blockCount, newestBlockSummary.Header.Number())
-	oldestBlockSummary, err := f.getOldestBlockSummaryByNumber(oldestBlockNumber)
-	if err != nil {
-		return utils.BadRequest(err)
 	}
 
 	cacheOldestBlockNumber, cacheBaseFees, cacheGasUsedRatios, shouldGetBlockSummaries, err := f.data.resolveRange(oldestBlockSummary.Header.ID(), newestBlockSummary.Header.Number())
@@ -100,8 +106,9 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 		if err != nil {
 			return utils.HTTPError(err, http.StatusInternalServerError)
 		}
+		oldestBlockSummary := oldestBlockSummary.Header.Number()
 		return utils.WriteJSON(w, &GetFeesHistory{
-			OldestBlock:   &oldestBlockNumber,
+			OldestBlock:   &oldestBlockSummary,
 			BaseFees:      append(summariesGasFees, cacheBaseFees...),
 			GasUsedRatios: append(summariesGasUsedRatios, cacheGasUsedRatios...),
 		})
