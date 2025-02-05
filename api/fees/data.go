@@ -173,7 +173,7 @@ func (fd *FeesData) getBlockSummaries(newestBlockSummaryNumber uint32, blockCoun
 		return nil, nil, err
 	}
 
-	oldestBlock, blockDataChan := fd.processBlockRange(fd.backtraceLimit-fd.fixedSize, summary)
+	oldestBlock, blockDataChan := fd.processBlockRange(blockCount, summary)
 
 	var (
 		baseFeesWithNil = make([]*hexutil.Big, blockCount)
