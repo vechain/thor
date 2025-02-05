@@ -53,7 +53,7 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 	blockCount := uint32(blockCountUInt64)
 	maxBlocks := uint32(math.Max(float64(f.data.backtraceLimit), float64(f.data.size)))
 	if blockCount < 1 || blockCount > maxBlocks {
-		return 0, nil, nil, utils.BadRequest(errors.New(fmt.Sprintf("blockCount must be between 1 and %d", f.data.size)))
+		return 0, nil, nil, utils.BadRequest(errors.New(fmt.Sprintf("blockCount must be between 1 and %d", maxBlocks)))
 	}
 
 	//newestBlock validation
