@@ -20,13 +20,13 @@ import (
 
 func newFeesData(repo *chain.Repository, bft bft.Committer, backtraceLimit uint32, fixedSize uint32) *FeesData {
 	cacheSize := int(math.Min(float64(backtraceLimit), float64(fixedSize)))
-	maxBlocks := uint32(math.Max(float64(backtraceLimit), float64(cacheSize)))
+	maxBacktraceLimit := uint32(math.Max(float64(backtraceLimit), float64(cacheSize)))
 	return &FeesData{
-		repo:      repo,
-		cache:     cache.NewPrioCache(cacheSize),
-		bft:       bft,
-		cacheSize: uint32(cacheSize),
-		maxBlocks: maxBlocks,
+		repo:              repo,
+		cache:             cache.NewPrioCache(cacheSize),
+		bft:               bft,
+		cacheSize:         uint32(cacheSize),
+		maxBacktraceLimit: maxBacktraceLimit,
 	}
 }
 
@@ -56,7 +56,7 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 		return true
 	})
 
-	backtraceBlockNumber := uint32(math.Max(0, float64(int(fd.repo.BestBlockSummary().Header.Number())-int(fd.maxBlocks)+1)))
+	backtraceBlockNumber := uint32(math.Max(0, float64(int(fd.repo.BestBlockSummary().Header.Number())-int(fd.maxBacktraceLimit)+1)))
 	baseFees := make([]*hexutil.Big, blockCount)
 	gasUsedRatios := make([]float64, blockCount)
 	for i, ent := range entries {
