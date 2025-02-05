@@ -71,9 +71,6 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 	}
 	// Too old
 	bestBlockSummary := f.data.repo.BestBlockSummary()
-	if bestBlockSummary == nil {
-		return 0, nil, nil, utils.HTTPError(errors.New("best block not found"), http.StatusInternalServerError)
-	}
 	newestBlockNumberSupported := getOldestBlockNumber(uint32(f.data.size), bestBlockSummary.Header.Number())
 	if newestBlockNumberSupported > newestBlockSummary.Header.Number() {
 		return 0, nil, nil, utils.BadRequest(errors.New(fmt.Sprintf("newestBlock must be between %d and %d", newestBlockNumberSupported, bestBlockSummary.Header.Number())))
