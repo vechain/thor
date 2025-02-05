@@ -93,31 +93,16 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 		return err
 	}
 
-	cacheOldestBlockNumber, cacheBaseFees, cacheGasUsedRatios, shouldGetBlockSummaries, err := f.data.resolveRange(oldestBlockSummary.Header.ID(), newestBlockSummary.Header.Number())
+	oldestBlockNumber, baseFees, gasUsedRatios, err := f.data.resolveRange(oldestBlockSummary, newestBlockSummary, blockCount)
 	if err != nil {
 		return utils.HTTPError(err, http.StatusInternalServerError)
 	}
 
-	if shouldGetBlockSummaries {
-		// Get block summaries for the missing blocks
-		newestBlockSummaryNumber := cacheOldestBlockNumber - 1
-		summariesGasFees, summariesGasUsedRatios, err := f.data.getBlockSummaries(newestBlockSummaryNumber, blockCount)
-		if err != nil {
-			return utils.HTTPError(err, http.StatusInternalServerError)
-		}
-		oldestBlockSummary := oldestBlockSummary.Header.Number()
-		return utils.WriteJSON(w, &GetFeesHistory{
-			OldestBlock:   &oldestBlockSummary,
-			BaseFees:      append(summariesGasFees, cacheBaseFees...),
-			GasUsedRatios: append(summariesGasUsedRatios, cacheGasUsedRatios...),
-		})
-	} else {
-		return utils.WriteJSON(w, &GetFeesHistory{
-			OldestBlock:   &cacheOldestBlockNumber,
-			BaseFees:      cacheBaseFees,
-			GasUsedRatios: cacheGasUsedRatios,
-		})
-	}
+	return utils.WriteJSON(w, &GetFeesHistory{
+		OldestBlock:   &oldestBlockNumber,
+		BaseFees:      baseFees,
+		GasUsedRatios: gasUsedRatios,
+	})
 }
 
 func (f *Fees) pushBestBlockToCache() {

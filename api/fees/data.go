@@ -47,7 +47,27 @@ func (fd *FeesData) pushToCache(header *block.Header) {
 	fd.cache.Set(header.ID(), newFeesCacheEntry(header), float64(header.Number()))
 }
 
-func (fd *FeesData) resolveRange(oldestBlockID thor.Bytes32, lastBlockNumber uint32) (uint32, []*hexutil.Big, []float64, bool, error) {
+func (fd *FeesData) resolveRange(oldestBlockSummary *chain.BlockSummary, newestBlockSummary *chain.BlockSummary, blockCount uint32) (uint32, []*hexutil.Big, []float64, error) {
+	cacheOldestBlockNumber, cacheBaseFees, cacheGasUsedRatios, shouldGetBlockSummaries, err := fd.resolveRangeCache(oldestBlockSummary.Header.ID(), newestBlockSummary.Header.Number())
+	if err != nil {
+		return 0, nil, nil, err
+	}
+
+	if shouldGetBlockSummaries {
+		// Get block summaries for the missing blocks
+		newestBlockSummaryNumber := cacheOldestBlockNumber - 1
+		summariesGasFees, summariesGasUsedRatios, err := fd.getBlockSummaries(newestBlockSummaryNumber, blockCount)
+		if err != nil {
+			return 0, nil, nil, err
+		}
+		oldestBlockSummary := oldestBlockSummary.Header.Number()
+		return oldestBlockSummary, append(summariesGasFees, cacheBaseFees...), append(summariesGasUsedRatios, cacheGasUsedRatios...), nil
+	}
+
+	return cacheOldestBlockNumber, cacheBaseFees, cacheGasUsedRatios, nil
+}
+
+func (fd *FeesData) resolveRangeCache(oldestBlockID thor.Bytes32, lastBlockNumber uint32) (uint32, []*hexutil.Big, []float64, bool, error) {
 	// The newest block will also be in the cache, so we do not check it at this stage
 	shouldGetBlockSummaries := false
 
