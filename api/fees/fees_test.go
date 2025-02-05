@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"math/big"
 	"net/http/httptest"
-	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -231,7 +230,7 @@ func getFeeHistoryMoreBlocksRequestedThanAvailable(t *testing.T, tclient *thorcl
 	if err := json.Unmarshal(res, &feesHistory); err != nil {
 		t.Fatal(err)
 	}
-	expectedOldestBlock := uint32(1)
+	expectedOldestBlock := uint32(0)
 	expectedFeesHistory := fees.GetFeesHistory{
 		OldestBlock: &expectedOldestBlock,
 		BaseFees: []*hexutil.Big{
@@ -259,11 +258,14 @@ func getFeeHistoryMoreBlocksRequestedThanAvailable(t *testing.T, tclient *thorcl
 		},
 	}
 
-	reflect.DeepEqual(expectedFeesHistory, feesHistory)
+	assert.Equal(t, expectedFeesHistory.OldestBlock, feesHistory.OldestBlock)
+	assert.Equal(t, expectedFeesHistory.BaseFees[0].String(), feesHistory.BaseFees[0].String())
+	assert.Equal(t, expectedFeesHistory.BaseFees[1:], feesHistory.BaseFees[1:])
+	assert.Equal(t, expectedFeesHistory.GasUsedRatios, feesHistory.GasUsedRatios)
 }
 
 func getFeeHistoryBlock0(t *testing.T, tclient *thorclient.Client) {
-	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=1&newestBlock=1")
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=1&newestBlock=0")
 	require.NoError(t, err)
 	require.Equal(t, 200, statusCode)
 	require.NotNil(t, res)
@@ -278,5 +280,7 @@ func getFeeHistoryBlock0(t *testing.T, tclient *thorclient.Client) {
 		GasUsedRatios: []float64{0},
 	}
 
-	reflect.DeepEqual(expectedFeesHistory, feesHistory)
+	assert.Equal(t, expectedFeesHistory.OldestBlock, feesHistory.OldestBlock)
+	assert.Equal(t, expectedFeesHistory.BaseFees[0].String(), feesHistory.BaseFees[0].String())
+	assert.Equal(t, expectedFeesHistory.GasUsedRatios, feesHistory.GasUsedRatios)
 }

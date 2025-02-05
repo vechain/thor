@@ -36,8 +36,12 @@ func newFeesData(repo *chain.Repository, bft bft.Committer, backtraceLimit uint3
 }
 
 func newFeesCacheEntry(header *block.Header) *FeeCacheEntry {
+	baseFee := header.BaseFee()
+	if baseFee == nil {
+		baseFee = big.NewInt(0)
+	}
 	return &FeeCacheEntry{
-		baseFee:      (*hexutil.Big)(header.BaseFee()),
+		baseFee:      (*hexutil.Big)(baseFee),
 		gasUsedRatio: float64(header.GasUsed()) / float64(header.GasLimit()),
 	}
 }
