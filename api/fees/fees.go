@@ -45,11 +45,12 @@ func (f *Fees) getOldestBlockSummaryByNumber(oldestBlock uint32) (*chain.BlockSu
 func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.BlockSummary, *chain.BlockSummary, error) {
 	//blockCount validation
 	blockCountParam := req.URL.Query().Get("blockCount")
-	blockCount, err := strconv.ParseUint(blockCountParam, 10, 32)
+	blockCountUInt64, err := strconv.ParseUint(blockCountParam, 10, 32)
 	if err != nil {
 		return 0, nil, nil, utils.BadRequest(errors.WithMessage(err, "invalid blockCount, it should represent an integer"))
 	}
-	if blockCount < 1 || blockCount > uint64(f.data.size) {
+	blockCount := uint32(blockCountUInt64)
+	if blockCount < 1 || blockCount > uint32(f.data.size) {
 		return 0, nil, nil, utils.BadRequest(errors.New(fmt.Sprintf("blockCount must be between 1 and %d", f.data.size)))
 	}
 
@@ -78,17 +79,18 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 
 	// Get oldest block summary after subtracting blockCount
 	// We do not return error, just less blocks, in case this limit goes beyond the backtrace limit
-	oldestBlockNumber := getOldestBlockNumber(uint32(blockCount), newestBlockSummary.Header.Number())
+	oldestBlockNumber := getOldestBlockNumber(blockCount, newestBlockSummary.Header.Number())
 	oldestBlockNumberSupported := getOldestBlockNumber(f.data.backtraceLimit, bestBlockSummary.Header.Number())
 	if oldestBlockNumberSupported > oldestBlockNumber {
 		oldestBlockNumber = oldestBlockNumberSupported
+		blockCount = newestBlockSummary.Header.Number() - oldestBlockNumber + 1
 	}
 	oldestBlockSummary, err := f.getOldestBlockSummaryByNumber(oldestBlockNumber)
 	if err != nil {
 		return 0, nil, nil, utils.BadRequest(err)
 	}
 
-	return uint32(blockCount), oldestBlockSummary, newestBlockSummary, nil
+	return blockCount, oldestBlockSummary, newestBlockSummary, nil
 }
 
 func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) error {
