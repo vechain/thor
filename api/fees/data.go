@@ -56,7 +56,7 @@ func (fd *FeesData) resolveRange(oldestBlockSummary *chain.BlockSummary, newestB
 	if shouldGetBlockSummaries {
 		// Get block summaries for the missing blocks
 		newestBlockSummaryNumber := cacheOldestBlockNumber - 1
-		summariesGasFees, summariesGasUsedRatios, err := fd.getBlockSummaries(newestBlockSummaryNumber, blockCount)
+		summariesGasFees, summariesGasUsedRatios, err := fd.getBlockSummaries(newestBlockSummaryNumber, blockCount-uint32(len(cacheBaseFees)))
 		if err != nil {
 			return 0, nil, nil, err
 		}
