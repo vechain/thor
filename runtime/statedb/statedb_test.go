@@ -22,7 +22,7 @@ import (
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/runtime/statedb"
 	State "github.com/vechain/thor/v2/state"
-	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 )
 
 func TestSnapshotRandom(t *testing.T) {
@@ -185,7 +185,7 @@ func (test *snapshotTest) run() bool {
 	// Run all actions and create snapshots.
 	var (
 		db           = muxdb.NewMem()
-		state        = State.New(db, thor.Bytes32{}, 0, 0, 0)
+		state        = State.New(db, trie.Root{})
 		stateDB      = statedb.New(state)
 		snapshotRevs = make([]int, len(test.snapshots))
 		sindex       = 0
@@ -200,7 +200,7 @@ func (test *snapshotTest) run() bool {
 	// Revert all snapshots in reverse order. Each revert must yield a state
 	// that is equivalent to fresh state with all actions up the snapshot applied.
 	for sindex--; sindex >= 0; sindex-- {
-		state := State.New(db, thor.Bytes32{}, 0, 0, 0)
+		state := State.New(db, trie.Root{})
 		checkStateDB := statedb.New(state)
 		for _, action := range test.actions[:test.snapshots[sindex]] {
 			action.fn(action, checkStateDB)

@@ -38,7 +38,7 @@ func TestMetricsMiddleware(t *testing.T) {
 	require.NoError(t, err)
 
 	// inject some invalid data to db
-	data := thorChain.Database().NewStore("chain.data")
+	data := thorChain.Database().NewStore("chain.hdr")
 	var blkID thor.Bytes32
 	rand.Read(blkID[:])
 	data.Put(blkID[:], []byte("invalid data"))

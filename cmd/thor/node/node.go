@@ -360,8 +360,16 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 			return errors.Wrap(err, "commit state")
 		}
 
+		// sync the log-writing task
+		if logEnabled {
+			if err := n.logWorker.Sync(); err != nil {
+				log.Warn("failed to write logs", "err", err)
+				n.logDBFailed = true
+			}
+		}
+
 		// add the new block into repository
-		if err := n.repo.AddBlock(newBlock, receipts, conflicts); err != nil {
+		if err := n.repo.AddBlock(newBlock, receipts, conflicts, becomeNewBest); err != nil {
 			return errors.Wrap(err, "add block")
 		}
 
@@ -374,18 +382,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 
 		realElapsed := mclock.Now() - startTime
 
-		// sync the log-writing task
-		if logEnabled {
-			if err := n.logWorker.Sync(); err != nil {
-				logger.Warn("failed to write logs", "err", err)
-				n.logDBFailed = true
-			}
-		}
-
 		if becomeNewBest {
-			if err := n.repo.SetBestBlockID(newBlock.Header().ID()); err != nil {
-				return err
-			}
 			n.processFork(newBlock, oldBest.Header.ID())
 		}
 
@@ -490,15 +487,13 @@ func (n *Node) processFork(newBlock *block.Block, oldBestBlockID thor.Bytes32) {
 		return
 	}
 
-	// Set the gauge metric to the size of the fork (0 if there are no forks)
-	metricChainForkSize().Set(int64(len(sideIDs)))
+	metricChainForkCount().Add(int64(len(sideIDs)))
 
 	if len(sideIDs) == 0 {
 		return
 	}
 
 	if n := len(sideIDs); n >= 2 {
-		metricChainForkCount().Add(1)
 		logger.Warn(fmt.Sprintf(
 			`⑂⑂⑂⑂⑂⑂⑂⑂ FORK HAPPENED ⑂⑂⑂⑂⑂⑂⑂⑂
 side-chain:   %v  %v`,

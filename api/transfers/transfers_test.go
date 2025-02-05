@@ -65,7 +65,7 @@ func TestOption(t *testing.T) {
 	filter := transfers.TransferFilter{
 		CriteriaSet: make([]*logdb.TransferCriteria, 0),
 		Range:       nil,
-		Options:     &logdb.Options{Limit: 6},
+		Options:     &events.Options{Limit: 6},
 		Order:       logdb.DESC,
 	}
 
@@ -98,6 +98,57 @@ func TestOption(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusForbidden, statusCode)
 	assert.Equal(t, "the number of filtered logs exceeds the maximum allowed value of 5, please use pagination", strings.Trim(string(res), "\n"))
+}
+
+func TestOptionalData(t *testing.T) {
+	db := createDb(t)
+	initTransferServer(t, db, defaultLogLimit)
+	defer ts.Close()
+	insertBlocks(t, db, 5)
+	tclient = thorclient.New(ts.URL)
+
+	testCases := []struct {
+		name           string
+		includeIndexes bool
+		expected       *uint32
+	}{
+		{
+			name:           "do not include indexes",
+			includeIndexes: false,
+			expected:       nil,
+		},
+		{
+			name:           "include indexes",
+			includeIndexes: true,
+			expected:       new(uint32),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			filter := transfers.TransferFilter{
+				CriteriaSet: make([]*logdb.TransferCriteria, 0),
+				Range:       nil,
+				Options:     &events.Options{Limit: 5, IncludeIndexes: tc.includeIndexes},
+				Order:       logdb.DESC,
+			}
+
+			res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfers", filter)
+			assert.NoError(t, err)
+			assert.Equal(t, http.StatusOK, statusCode)
+			var tLogs []*transfers.FilteredTransfer
+			if err := json.Unmarshal(res, &tLogs); err != nil {
+				t.Fatal(err)
+			}
+			assert.Equal(t, http.StatusOK, statusCode)
+			assert.Equal(t, 5, len(tLogs))
+
+			for _, tLog := range tLogs {
+				assert.Equal(t, tc.expected, tLog.Meta.TxIndex)
+				assert.Equal(t, tc.expected, tLog.Meta.LogIndex)
+			}
+		})
+	}
 }
 
 // Test functions

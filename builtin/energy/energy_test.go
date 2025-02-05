@@ -13,6 +13,7 @@ import (
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 )
 
 func M(a ...interface{}) []interface{} {
@@ -20,8 +21,7 @@ func M(a ...interface{}) []interface{} {
 }
 
 func TestEnergy(t *testing.T) {
-	db := muxdb.NewMem()
-	st := state.New(db, thor.Bytes32{}, 0, 0, 0)
+	st := state.New(muxdb.NewMem(), trie.Root{})
 
 	acc := thor.BytesToAddress([]byte("a1"))
 
@@ -45,8 +45,7 @@ func TestEnergy(t *testing.T) {
 }
 
 func TestInitialSupply(t *testing.T) {
-	db := muxdb.NewMem()
-	st := state.New(db, thor.Bytes32{}, 0, 0, 0)
+	st := state.New(muxdb.NewMem(), trie.Root{})
 
 	eng := New(thor.BytesToAddress([]byte("eng")), st, 0)
 
@@ -63,8 +62,7 @@ func TestInitialSupply(t *testing.T) {
 }
 
 func TestInitialSupplyError(t *testing.T) {
-	db := muxdb.NewMem()
-	st := state.New(db, thor.Bytes32{}, 0, 0, 0)
+	st := state.New(muxdb.NewMem(), trie.Root{})
 
 	eng := New(thor.BytesToAddress([]byte("a1")), st, 0)
 
@@ -77,8 +75,7 @@ func TestInitialSupplyError(t *testing.T) {
 }
 
 func TestTotalSupply(t *testing.T) {
-	db := muxdb.NewMem()
-	st := state.New(db, thor.Bytes32{}, 0, 0, 0)
+	st := state.New(muxdb.NewMem(), trie.Root{})
 
 	eng := New(thor.BytesToAddress([]byte("eng")), st, 0)
 
@@ -91,8 +88,7 @@ func TestTotalSupply(t *testing.T) {
 }
 
 func TestTokenTotalSupply(t *testing.T) {
-	db := muxdb.NewMem()
-	st := state.New(db, thor.Bytes32{}, 0, 0, 0)
+	st := state.New(muxdb.NewMem(), trie.Root{})
 
 	eng := New(thor.BytesToAddress([]byte("eng")), st, 0)
 
@@ -105,8 +101,7 @@ func TestTokenTotalSupply(t *testing.T) {
 }
 
 func TestTotalBurned(t *testing.T) {
-	db := muxdb.NewMem()
-	st := state.New(db, thor.Bytes32{}, 0, 0, 0)
+	st := state.New(muxdb.NewMem(), trie.Root{})
 
 	eng := New(thor.BytesToAddress([]byte("eng")), st, 0)
 
@@ -119,8 +114,7 @@ func TestTotalBurned(t *testing.T) {
 }
 
 func TestEnergyGrowth(t *testing.T) {
-	db := muxdb.NewMem()
-	st := state.New(db, thor.Bytes32{}, 0, 0, 0)
+	st := state.New(muxdb.NewMem(), trie.Root{})
 
 	acc := thor.BytesToAddress([]byte("a1"))
 

@@ -15,10 +15,11 @@ import (
 // Event represents tx.Event that can be stored in db.
 type Event struct {
 	BlockNumber uint32
-	Index       uint32
+	LogIndex    uint32
 	BlockID     thor.Bytes32
 	BlockTime   uint64
 	TxID        thor.Bytes32
+	TxIndex     uint32
 	TxOrigin    thor.Address //contract caller
 	ClauseIndex uint32
 	Address     thor.Address // always a contract address
@@ -29,10 +30,11 @@ type Event struct {
 // Transfer represents tx.Transfer that can be stored in db.
 type Transfer struct {
 	BlockNumber uint32
-	Index       uint32
+	LogIndex    uint32
 	BlockID     thor.Bytes32
 	BlockTime   uint64
 	TxID        thor.Bytes32
+	TxIndex     uint32
 	TxOrigin    thor.Address
 	ClauseIndex uint32
 	Sender      thor.Address
@@ -71,7 +73,7 @@ func (c *EventCriteria) toWhereCondition() (cond string, args []interface{}) {
 	for i, topic := range c.Topics {
 		if topic != nil {
 			cond += fmt.Sprintf(" AND topic%v = ", i) + refIDQuery
-			args = append(args, topic.Bytes())
+			args = append(args, removeLeadingZeros(topic.Bytes()))
 		}
 	}
 	return

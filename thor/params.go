@@ -12,6 +12,11 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+/*
+ NOTE: any changes to gas limit or block interval may affect how the txIndex and blockNumber are stored in logdb/sequence.go:
+  - an increase in gas limit may require more bits for txIndex;
+  - if block frequency is increased, blockNumber will increment faster, potentially exhausting the allocated bits sooner than expected.
+*/
 // Constants of block chain.
 const (
 	BlockInterval uint64 = 10 // time interval between two consecutive blocks.

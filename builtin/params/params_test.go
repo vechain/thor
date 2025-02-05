@@ -13,11 +13,11 @@ import (
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 )
 
 func TestParamsGetSet(t *testing.T) {
-	db := muxdb.NewMem()
-	st := state.New(db, thor.Bytes32{}, 0, 0, 0)
+	st := state.New(muxdb.NewMem(), trie.Root{})
 	setv := big.NewInt(10)
 	key := thor.BytesToBytes32([]byte("key"))
 	p := New(thor.BytesToAddress([]byte("par")), st)
