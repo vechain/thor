@@ -32,7 +32,6 @@ func newFeesData(repo *chain.Repository, bft bft.Committer, backtraceLimit uint3
 		bft:            bft,
 		size:           size,
 		backtraceLimit: backtraceLimit,
-		fixedSize:      fixedSize,
 	}
 }
 

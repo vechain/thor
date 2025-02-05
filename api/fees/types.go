@@ -29,7 +29,6 @@ type FeesData struct {
 	bft            bft.Committer
 	size           int    // The max size of the cache when full.
 	backtraceLimit uint32 // The max number of blocks to backtrace.
-	fixedSize      uint32 // The max size of the cache (fixed in the code).
 }
 type GetFeesHistory struct {
 	OldestBlock   *uint32        `json:"oldestBlock"`
