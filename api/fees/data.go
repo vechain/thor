@@ -48,7 +48,7 @@ func (fd *FeesData) pushToCache(header *block.Header) {
 
 func (fd *FeesData) resolveRange(oldestBlockSummary *chain.BlockSummary, newestBlockSummary *chain.BlockSummary, blockCount uint32) (uint32, []*hexutil.Big, []float64, error) {
 	cacheOldestBlockNumber, cacheBaseFees, cacheGasUsedRatios, shouldGetBlockSummaries, err := fd.resolveRangeCache(oldestBlockSummary.Header.ID(), newestBlockSummary.Header.Number())
-	if err != nil {
+	if !shouldGetBlockSummaries && err != nil {
 		return 0, nil, nil, err
 	}
 
@@ -94,7 +94,7 @@ func (fd *FeesData) resolveRangeCache(oldestBlockID thor.Bytes32, lastBlockNumbe
 
 		// Only check block summaries if the backtrace limit is higher
 		// We should get the block summaries from the oldest block to oldest block - 1 in the cache
-		shouldGetBlockSummaries = fd.size < int(fd.backtraceLimit)
+		shouldGetBlockSummaries = fd.cache.Len() < fd.size || fd.size < int(fd.backtraceLimit)
 	}
 
 	if len(entries) > 0 {
@@ -114,7 +114,7 @@ func (fd *FeesData) resolveRangeCache(oldestBlockID thor.Bytes32, lastBlockNumbe
 		return oldestBlockNumber, baseFees, gasUsedRatios, shouldGetBlockSummaries, nil
 	}
 
-	return 0, nil, nil, shouldGetBlockSummaries, errors.New("block fees could not be resolved for the given range")
+	return 1, nil, nil, shouldGetBlockSummaries, errors.New("no block fees found in cache for the given range")
 }
 
 func (fd *FeesData) processBlockSummaries(next *atomic.Uint32, lastBlock uint32, blockDataChan chan *blockData) {

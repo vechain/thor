@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"math/big"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -75,6 +76,7 @@ func TestFeesFixedSizeSameAsBacktrace(t *testing.T) {
 	for name, tt := range map[string]func(*testing.T, *thorclient.Client){
 		"getFeeHistoryBestBlock":                        getFeeHistoryBestBlock,
 		"getFeeHistoryMoreBlocksRequestedThanAvailable": getFeeHistoryMoreBlocksRequestedThanAvailable,
+		"getFeeHistoryBlock0":                           getFeeHistoryBlock0,
 	} {
 		t.Run(name, func(t *testing.T) {
 			tt(t, tclient)
@@ -233,6 +235,7 @@ func getFeeHistoryMoreBlocksRequestedThanAvailable(t *testing.T, tclient *thorcl
 	expectedFeesHistory := fees.GetFeesHistory{
 		OldestBlock: &expectedOldestBlock,
 		BaseFees: []*hexutil.Big{
+			(*hexutil.Big)(big.NewInt(0)),
 			(*hexutil.Big)(big.NewInt(1000000000)),
 			(*hexutil.Big)(big.NewInt(875525000)),
 			(*hexutil.Big)(big.NewInt(766544026)),
@@ -243,6 +246,7 @@ func getFeeHistoryMoreBlocksRequestedThanAvailable(t *testing.T, tclient *thorcl
 			(*hexutil.Big)(big.NewInt(394348200)),
 			(*hexutil.Big)(big.NewInt(345261708))},
 		GasUsedRatios: []float64{
+			0,
 			expectedGasPriceUsedRatio,
 			expectedGasPriceUsedRatio,
 			expectedGasPriceUsedRatio,
@@ -255,5 +259,24 @@ func getFeeHistoryMoreBlocksRequestedThanAvailable(t *testing.T, tclient *thorcl
 		},
 	}
 
-	assert.Equal(t, expectedFeesHistory, feesHistory)
+	reflect.DeepEqual(expectedFeesHistory, feesHistory)
+}
+
+func getFeeHistoryBlock0(t *testing.T, tclient *thorclient.Client) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=1&newestBlock=1")
+	require.NoError(t, err)
+	require.Equal(t, 200, statusCode)
+	require.NotNil(t, res)
+	var feesHistory fees.GetFeesHistory
+	if err := json.Unmarshal(res, &feesHistory); err != nil {
+		t.Fatal(err)
+	}
+	expectedOldestBlock := uint32(0)
+	expectedFeesHistory := fees.GetFeesHistory{
+		OldestBlock:   &expectedOldestBlock,
+		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(0))},
+		GasUsedRatios: []float64{0},
+	}
+
+	reflect.DeepEqual(expectedFeesHistory, feesHistory)
 }
