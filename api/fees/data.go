@@ -185,6 +185,9 @@ func (fd *FeesData) getBlockSummaries(newestBlockSummaryNumber uint32, blockCoun
 		if blockData.err != nil {
 			return nil, nil, blockData.err
 		}
+		// Since it is a priority cache, we will store only the top blocks
+		// So the cache is rebuilt when calling the endpoint if the node went down
+		fd.pushToCache(blockData.blockSummary.Header)
 		// Ensure the order of the baseFees and gasUsedRatios is correct
 		blockPosition := blockData.blockSummary.Header.Number() - oldestBlock
 		if baseFee := blockData.blockSummary.Header.BaseFee(); baseFee != nil {
