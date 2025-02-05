@@ -140,7 +140,7 @@ func (fd *FeesData) processBlockSummaries(next *atomic.Uint32, lastBlock uint32,
 	}
 }
 
-func (fd *FeesData) processBlockRange(blockCount uint32, summary *chain.BlockSummary) (uint32, chan *blockData) {
+func (fd *FeesData) processBlockSummaryRange(blockCount uint32, summary *chain.BlockSummary) (uint32, chan *blockData) {
 	lastBlock := summary.Header.Number()
 	oldestBlockInt32 := int32(lastBlock) + 1 - int32(blockCount)
 	oldestBlock := uint32(0)
@@ -176,7 +176,7 @@ func (fd *FeesData) getBlockSummaries(newestBlockSummaryNumber uint32, blockCoun
 		return nil, nil, err
 	}
 
-	oldestBlock, blockDataChan := fd.processBlockRange(blockCount, summary)
+	oldestBlock, blockDataChan := fd.processBlockSummaryRange(blockCount, summary)
 
 	var (
 		baseFeesWithNil = make([]*hexutil.Big, blockCount)
