@@ -7,6 +7,7 @@ package fees
 
 import (
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 
@@ -50,7 +51,8 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 		return 0, nil, nil, utils.BadRequest(errors.WithMessage(err, "invalid blockCount, it should represent an integer"))
 	}
 	blockCount := uint32(blockCountUInt64)
-	if blockCount < 1 || blockCount > uint32(f.data.size) {
+	maxBlocks := uint32(math.Max(float64(f.data.backtraceLimit), float64(f.data.size)))
+	if blockCount < 1 || blockCount > maxBlocks {
 		return 0, nil, nil, utils.BadRequest(errors.New(fmt.Sprintf("blockCount must be between 1 and %d", f.data.size)))
 	}
 
@@ -80,7 +82,7 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 	// Get oldest block summary after subtracting blockCount
 	// We do not return error, just less blocks, in case this limit goes beyond the backtrace limit
 	oldestBlockNumber := getOldestBlockNumber(blockCount, newestBlockSummary.Header.Number())
-	oldestBlockNumberSupported := getOldestBlockNumber(f.data.backtraceLimit, bestBlockSummary.Header.Number())
+	oldestBlockNumberSupported := getOldestBlockNumber(maxBlocks, bestBlockSummary.Header.Number())
 	if oldestBlockNumberSupported > oldestBlockNumber {
 		oldestBlockNumber = oldestBlockNumberSupported
 		blockCount = newestBlockSummary.Header.Number() - oldestBlockNumber + 1

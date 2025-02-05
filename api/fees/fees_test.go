@@ -55,8 +55,9 @@ func TestFeesFixedSizeGreaterThanBacktrace(t *testing.T) {
 	}()
 	tclient := thorclient.New(ts.URL)
 	for name, tt := range map[string]func(*testing.T, *thorclient.Client){
-		"getFeeHistoryWithSummaries": getFeeHistoryWithSummaries,
-		"getFeeHistoryOnlySummaries": getFeeHistoryOnlySummaries,
+		"getFeeHistoryWithSummaries":          getFeeHistoryWithSummaries,
+		"getFeeHistoryOnlySummaries":          getFeeHistoryOnlySummaries,
+		"getFeeHistoryMoreThanBacktraceLimit": getFeeHistoryMoreThanBacktraceLimit,
 	} {
 		t.Run(name, func(t *testing.T) {
 			tt(t, tclient)
@@ -283,4 +284,29 @@ func getFeeHistoryBlock0(t *testing.T, tclient *thorclient.Client) {
 	assert.Equal(t, expectedFeesHistory.OldestBlock, feesHistory.OldestBlock)
 	assert.Equal(t, expectedFeesHistory.BaseFees[0].String(), feesHistory.BaseFees[0].String())
 	assert.Equal(t, expectedFeesHistory.GasUsedRatios, feesHistory.GasUsedRatios)
+}
+
+func getFeeHistoryMoreThanBacktraceLimit(t *testing.T, tclient *thorclient.Client) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=5&newestBlock=4")
+	require.NoError(t, err)
+	require.Equal(t, 200, statusCode)
+	require.NotNil(t, res)
+	var feesHistory fees.GetFeesHistory
+	if err := json.Unmarshal(res, &feesHistory); err != nil {
+		t.Fatal(err)
+	}
+	expectedOldestBlock := uint32(2)
+	expectedFeesHistory := fees.GetFeesHistory{
+		OldestBlock: &expectedOldestBlock,
+		BaseFees: []*hexutil.Big{
+			(*hexutil.Big)(big.NewInt(875525000)),
+			(*hexutil.Big)(big.NewInt(766544026)),
+			(*hexutil.Big)(big.NewInt(671128459))},
+		GasUsedRatios: []float64{
+			expectedGasPriceUsedRatio,
+			expectedGasPriceUsedRatio,
+			expectedGasPriceUsedRatio},
+	}
+
+	assert.Equal(t, expectedFeesHistory, feesHistory)
 }
