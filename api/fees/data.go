@@ -6,7 +6,6 @@
 package fees
 
 import (
-	"fmt"
 	"math"
 	"math/big"
 	"strconv"
@@ -20,13 +19,14 @@ import (
 )
 
 func newFeesData(repo *chain.Repository, bft bft.Committer, backtraceLimit uint32, fixedSize uint32) *FeesData {
-	size := int(math.Min(float64(backtraceLimit), float64(fixedSize)))
+	cacheSize := int(math.Min(float64(backtraceLimit), float64(fixedSize)))
+	maxBlocks := uint32(math.Max(float64(backtraceLimit), float64(cacheSize)))
 	return &FeesData{
-		repo:           repo,
-		cache:          cache.NewPrioCache(size),
-		bft:            bft,
-		size:           size,
-		backtraceLimit: backtraceLimit,
+		repo:      repo,
+		cache:     cache.NewPrioCache(cacheSize),
+		bft:       bft,
+		cacheSize: uint32(cacheSize),
+		maxBlocks: maxBlocks,
 	}
 }
 
@@ -48,19 +48,21 @@ func (fd *FeesData) pushToCache(header *block.Header) {
 func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCount uint32) (uint32, []*hexutil.Big, []float64, error) {
 	newestBlockSummaryNumber := newestBlockSummary.Header.Number()
 	entries := make([]*cache.PrioEntry, blockCount)
-	oldestBlockNumber := uint32(math.Max(float64(0), float64(int(newestBlockSummaryNumber)+1-int(blockCount))))
+	oldestBlockNumber := uint32(math.Max(0, float64(int(newestBlockSummaryNumber)+1-int(blockCount))))
 	fd.cache.ForEach(func(ent *cache.PrioEntry) bool {
 		if ent.Priority >= float64(oldestBlockNumber) && ent.Priority <= float64(newestBlockSummaryNumber) {
-			fmt.Printf("1: ent: %+v\n", ent)
 			entries[uint32(ent.Priority)-oldestBlockNumber] = ent
 		}
 		return true
 	})
 
+	backtraceBlockNumber := uint32(math.Max(0, float64(int(fd.repo.BestBlockSummary().Header.Number())-int(fd.maxBlocks)+1)))
 	baseFees := make([]*hexutil.Big, blockCount)
 	gasUsedRatios := make([]float64, blockCount)
 	for i, ent := range entries {
-		fmt.Printf("2: i: %d, ent: %+v\n", i, ent)
+		if oldestBlockNumber+uint32(i) < backtraceBlockNumber {
+			continue
+		}
 		if ent == nil {
 			blockRevision, err := utils.ParseRevision(strconv.FormatUint(uint64(i+int(oldestBlockNumber)), 10), false)
 			if err != nil {
@@ -92,9 +94,8 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 		}
 	}
 
+	numberOfEntriesToOmit := uint32(math.Max(0, float64(int(backtraceBlockNumber)-int(oldestBlockNumber))))
 	numElements := newestBlockSummaryNumber - oldestBlockNumber + 1
 
-	fmt.Printf("oldestBlockNumber: %d, baseFees: %v, gasUsedRatios: %v\n", oldestBlockNumber, baseFees[:numElements], gasUsedRatios[:numElements])
-
-	return oldestBlockNumber, baseFees[:numElements], gasUsedRatios[:numElements], nil
+	return oldestBlockNumber + numberOfEntriesToOmit, baseFees[numberOfEntriesToOmit:numElements], gasUsedRatios[numberOfEntriesToOmit:numElements], nil
 }

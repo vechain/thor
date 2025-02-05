@@ -7,7 +7,6 @@ package fees
 
 import (
 	"fmt"
-	"math"
 	"net/http"
 	"strconv"
 
@@ -42,9 +41,8 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 		return 0, nil, utils.BadRequest(errors.WithMessage(err, "invalid blockCount, it should represent an integer"))
 	}
 	blockCount := uint32(blockCountUInt64)
-	maxBlocks := uint32(math.Max(float64(f.data.backtraceLimit), float64(f.data.size)))
-	if blockCount < 1 || blockCount > maxBlocks {
-		return 0, nil, utils.BadRequest(errors.New(fmt.Sprintf("blockCount must be between 1 and %d", maxBlocks)))
+	if blockCount < 1 || blockCount > f.data.maxBlocks {
+		return 0, nil, utils.BadRequest(errors.New(fmt.Sprintf("blockCount must be between 1 and %d", f.data.maxBlocks)))
 	}
 
 	//newestBlock validation
@@ -62,7 +60,7 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 	}
 	// Too old
 	bestBlockSummary := f.data.repo.BestBlockSummary()
-	newestBlockNumberSupported := getOldestBlockNumber(uint32(f.data.size), bestBlockSummary.Header.Number())
+	newestBlockNumberSupported := getOldestBlockNumber(f.data.cacheSize, bestBlockSummary.Header.Number())
 	if newestBlockNumberSupported > newestBlockSummary.Header.Number() {
 		return 0, nil, utils.BadRequest(errors.New(fmt.Sprintf("newestBlock must be between %d and %d", newestBlockNumberSupported, bestBlockSummary.Header.Number())))
 	}
@@ -70,7 +68,7 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 	// Get oldest block summary after subtracting blockCount
 	// We do not return error, just less blocks, in case this limit goes beyond the backtrace limit
 	oldestBlockNumber := getOldestBlockNumber(blockCount, newestBlockSummary.Header.Number())
-	oldestBlockNumberSupported := getOldestBlockNumber(maxBlocks, bestBlockSummary.Header.Number())
+	oldestBlockNumberSupported := getOldestBlockNumber(f.data.maxBlocks, bestBlockSummary.Header.Number())
 	if oldestBlockNumberSupported > oldestBlockNumber {
 		blockCount = newestBlockSummary.Header.Number() - oldestBlockNumber + 1
 	}

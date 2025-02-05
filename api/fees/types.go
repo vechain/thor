@@ -21,11 +21,11 @@ type FeeCacheEntry struct {
 	gasUsedRatio float64
 }
 type FeesData struct {
-	repo           *chain.Repository
-	cache          *cache.PrioCache
-	bft            bft.Committer
-	size           int    // The max size of the cache when full.
-	backtraceLimit uint32 // The max number of blocks to backtrace.
+	repo      *chain.Repository
+	cache     *cache.PrioCache
+	bft       bft.Committer
+	cacheSize uint32 // The max size of the cache when full.
+	maxBlocks uint32 // The max number of blocks to backtrace.
 }
 type GetFeesHistory struct {
 	OldestBlock   *uint32        `json:"oldestBlock"`
