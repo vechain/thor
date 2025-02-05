@@ -34,46 +34,37 @@ func getOldestBlockNumber(blockCount uint32, newestBlock uint32) uint32 {
 	return oldestBlock
 }
 
-func (f *Fees) getOldestBlockSummaryByNumber(oldestBlock uint32) (*chain.BlockSummary, error) {
-	oldestBlockRevision := utils.NewRevision(oldestBlock)
-	oldestBlockSummary, err := utils.GetSummary(oldestBlockRevision, f.data.repo, f.data.bft)
-	if err != nil {
-		return nil, err
-	}
-	return oldestBlockSummary, nil
-}
-
-func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.BlockSummary, *chain.BlockSummary, error) {
+func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.BlockSummary, error) {
 	//blockCount validation
 	blockCountParam := req.URL.Query().Get("blockCount")
 	blockCountUInt64, err := strconv.ParseUint(blockCountParam, 10, 32)
 	if err != nil {
-		return 0, nil, nil, utils.BadRequest(errors.WithMessage(err, "invalid blockCount, it should represent an integer"))
+		return 0, nil, utils.BadRequest(errors.WithMessage(err, "invalid blockCount, it should represent an integer"))
 	}
 	blockCount := uint32(blockCountUInt64)
 	maxBlocks := uint32(math.Max(float64(f.data.backtraceLimit), float64(f.data.size)))
 	if blockCount < 1 || blockCount > maxBlocks {
-		return 0, nil, nil, utils.BadRequest(errors.New(fmt.Sprintf("blockCount must be between 1 and %d", maxBlocks)))
+		return 0, nil, utils.BadRequest(errors.New(fmt.Sprintf("blockCount must be between 1 and %d", maxBlocks)))
 	}
 
 	//newestBlock validation
 	newestBlock, err := utils.ParseRevision(req.URL.Query().Get("newestBlock"), false)
 	if err != nil {
-		return 0, nil, nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
+		return 0, nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
 	}
 	// Too new
 	newestBlockSummary, err := utils.GetSummary(newestBlock, f.data.repo, f.data.bft)
 	if err != nil {
 		if f.data.repo.IsNotFound(err) {
-			return 0, nil, nil, utils.NotFound(errors.WithMessage(err, "newestBlock"))
+			return 0, nil, utils.NotFound(errors.WithMessage(err, "newestBlock"))
 		}
-		return 0, nil, nil, err
+		return 0, nil, err
 	}
 	// Too old
 	bestBlockSummary := f.data.repo.BestBlockSummary()
 	newestBlockNumberSupported := getOldestBlockNumber(uint32(f.data.size), bestBlockSummary.Header.Number())
 	if newestBlockNumberSupported > newestBlockSummary.Header.Number() {
-		return 0, nil, nil, utils.BadRequest(errors.New(fmt.Sprintf("newestBlock must be between %d and %d", newestBlockNumberSupported, bestBlockSummary.Header.Number())))
+		return 0, nil, utils.BadRequest(errors.New(fmt.Sprintf("newestBlock must be between %d and %d", newestBlockNumberSupported, bestBlockSummary.Header.Number())))
 	}
 
 	// Get oldest block summary after subtracting blockCount
@@ -81,24 +72,19 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 	oldestBlockNumber := getOldestBlockNumber(blockCount, newestBlockSummary.Header.Number())
 	oldestBlockNumberSupported := getOldestBlockNumber(maxBlocks, bestBlockSummary.Header.Number())
 	if oldestBlockNumberSupported > oldestBlockNumber {
-		oldestBlockNumber = oldestBlockNumberSupported
 		blockCount = newestBlockSummary.Header.Number() - oldestBlockNumber + 1
 	}
-	oldestBlockSummary, err := f.getOldestBlockSummaryByNumber(oldestBlockNumber)
-	if err != nil {
-		return 0, nil, nil, utils.BadRequest(err)
-	}
 
-	return blockCount, oldestBlockSummary, newestBlockSummary, nil
+	return blockCount, newestBlockSummary, nil
 }
 
 func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) error {
-	blockCount, oldestBlockSummary, newestBlockSummary, err := f.validateGetFeesHistoryParams(req)
+	blockCount, newestBlockSummary, err := f.validateGetFeesHistoryParams(req)
 	if err != nil {
 		return err
 	}
 
-	oldestBlockNumber, baseFees, gasUsedRatios, err := f.data.resolveRange(oldestBlockSummary, newestBlockSummary, blockCount)
+	oldestBlockNumber, baseFees, gasUsedRatios, err := f.data.resolveRange(newestBlockSummary, blockCount)
 	if err != nil {
 		return utils.HTTPError(err, http.StatusInternalServerError)
 	}

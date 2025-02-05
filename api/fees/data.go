@@ -6,14 +6,10 @@
 package fees
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"math/big"
-	"sort"
 	"strconv"
-	"sync"
-	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/v2/api/utils"
@@ -21,7 +17,6 @@ import (
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/thor"
 )
 
 func newFeesData(repo *chain.Repository, bft bft.Committer, backtraceLimit uint32, fixedSize uint32) *FeesData {
@@ -50,164 +45,56 @@ func (fd *FeesData) pushToCache(header *block.Header) {
 	fd.cache.Set(header.ID(), newFeesCacheEntry(header), float64(header.Number()))
 }
 
-func (fd *FeesData) resolveRange(oldestBlockSummary *chain.BlockSummary, newestBlockSummary *chain.BlockSummary, blockCount uint32) (uint32, []*hexutil.Big, []float64, error) {
-	cacheOldestBlockNumber, cacheBaseFees, cacheGasUsedRatios, shouldGetBlockSummaries, err := fd.resolveRangeCache(oldestBlockSummary.Header.ID(), newestBlockSummary.Header.Number())
-	if !shouldGetBlockSummaries && err != nil {
-		return 0, nil, nil, err
-	}
-
-	if shouldGetBlockSummaries {
-		// Get block summaries for the missing blocks
-		newestBlockSummaryNumber := cacheOldestBlockNumber - 1
-		summariesGasFees, summariesGasUsedRatios, err := fd.getBlockSummaries(newestBlockSummaryNumber, blockCount-uint32(len(cacheBaseFees)))
-		if err != nil {
-			return 0, nil, nil, err
+func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCount uint32) (uint32, []*hexutil.Big, []float64, error) {
+	newestBlockSummaryNumber := newestBlockSummary.Header.Number()
+	entries := make([]*cache.PrioEntry, blockCount)
+	oldestBlockNumber := uint32(math.Max(float64(0), float64(int(newestBlockSummaryNumber)+1-int(blockCount))))
+	fd.cache.ForEach(func(ent *cache.PrioEntry) bool {
+		if ent.Priority >= float64(oldestBlockNumber) && ent.Priority <= float64(newestBlockSummaryNumber) {
+			fmt.Printf("1: ent: %+v\n", ent)
+			entries[uint32(ent.Priority)-oldestBlockNumber] = ent
 		}
-		oldestBlockSummary := oldestBlockSummary.Header.Number()
-		return oldestBlockSummary, append(summariesGasFees, cacheBaseFees...), append(summariesGasUsedRatios, cacheGasUsedRatios...), nil
-	}
+		return true
+	})
 
-	return cacheOldestBlockNumber, cacheBaseFees, cacheGasUsedRatios, nil
-}
-
-func (fd *FeesData) resolveRangeCache(oldestBlockID thor.Bytes32, lastBlockNumber uint32) (uint32, []*hexutil.Big, []float64, bool, error) {
-	// The newest block will also be in the cache, so we do not check it at this stage
-	shouldGetBlockSummaries := false
-
-	// First case: the oldest block is in the cache
-	_, oldestBlockNumberFloat64, oldestBlockInCache := fd.cache.Get(oldestBlockID)
-	var oldestBlockNumber uint32
-	entries := make([]*cache.PrioEntry, 0, fd.cache.Len())
-	if oldestBlockInCache {
-		fd.cache.ForEach(func(ent *cache.PrioEntry) bool {
-			if ent.Priority >= oldestBlockNumberFloat64 && ent.Priority <= float64(lastBlockNumber) {
-				entries = append(entries, ent)
+	baseFees := make([]*hexutil.Big, blockCount)
+	gasUsedRatios := make([]float64, blockCount)
+	for i, ent := range entries {
+		fmt.Printf("2: i: %d, ent: %+v\n", i, ent)
+		if ent == nil {
+			blockRevision, err := utils.ParseRevision(strconv.FormatUint(uint64(i+int(oldestBlockNumber)), 10), false)
+			if err != nil {
+				return 0, nil, nil, err
 			}
-			return true
-		})
-		oldestBlockNumber = uint32(oldestBlockNumberFloat64)
-	} else {
-		// Second case: the oldest block is not in the cache
-		// Meaning that we should get everything from the last block downwards
-		fd.cache.ForEach(func(ent *cache.PrioEntry) bool {
-			if ent.Priority <= float64(lastBlockNumber) {
-				entries = append(entries, ent)
+			blockSummary, err := utils.GetSummary(blockRevision, fd.repo, fd.bft)
+			if err != nil {
+				if !fd.repo.IsNotFound(err) {
+					return 0, nil, nil, err
+				}
+			} else {
+				fd.pushToCache(blockSummary.Header)
+
+				if baseFee := blockSummary.Header.BaseFee(); baseFee != nil {
+					baseFees[i] = (*hexutil.Big)(baseFee)
+				} else {
+					baseFees[i] = (*hexutil.Big)(big.NewInt(0))
+				}
+
+				gasUsedRatios[i] = float64(blockSummary.Header.GasUsed()) / float64(blockSummary.Header.GasLimit())
 			}
-			return true
-		})
-
-		// Only check block summaries if the backtrace limit is higher
-		// We should get the block summaries from the oldest block to oldest block - 1 in the cache
-		shouldGetBlockSummaries = fd.cache.Len() < fd.size || fd.size < int(fd.backtraceLimit)
-	}
-
-	if len(entries) > 0 {
-		// Even though  we have the last blocks in the cache, we need to sort them
-		sort.Slice(entries, func(i, j int) bool {
-			return entries[i].Priority < entries[j].Priority
-		})
-		baseFees := make([]*hexutil.Big, 0, len(entries))
-		gasUsedRatios := make([]float64, 0, len(entries))
-		for i, ent := range entries {
-			if i == 0 {
-				oldestBlockNumber = uint32(ent.Priority)
-			}
-			baseFees = append(baseFees, ent.Value.(*FeeCacheEntry).baseFee)
-			gasUsedRatios = append(gasUsedRatios, ent.Value.(*FeeCacheEntry).gasUsedRatio)
-		}
-		return oldestBlockNumber, baseFees, gasUsedRatios, shouldGetBlockSummaries, nil
-	}
-
-	return 1, nil, nil, shouldGetBlockSummaries, errors.New("no block fees found in cache for the given range")
-}
-
-func (fd *FeesData) processBlockSummaries(next *atomic.Uint32, lastBlock uint32, blockDataChan chan *blockData) {
-	for {
-		// Processing current block and incrementing next block number at the same time
-		blockNumber := next.Add(1) - 1
-		if blockNumber > lastBlock {
-			return
-		}
-		blockFee := &blockData{}
-		blockFee.blockRevision, blockFee.err = utils.ParseRevision(strconv.FormatUint(uint64(blockNumber), 10), false)
-		if blockFee.err == nil {
-			blockFee.blockSummary, blockFee.err = utils.GetSummary(blockFee.blockRevision, fd.repo, fd.bft)
-			if blockFee.blockSummary == nil {
-				blockFee.err = fmt.Errorf("block summary is nil for block number %d", blockNumber)
-			}
-		}
-		blockDataChan <- blockFee
-	}
-}
-
-func (fd *FeesData) processBlockSummaryRange(blockCount uint32, summary *chain.BlockSummary) (uint32, chan *blockData) {
-	lastBlock := summary.Header.Number()
-	oldestBlockInt32 := int32(lastBlock) + 1 - int32(blockCount)
-	oldestBlock := uint32(0)
-	if oldestBlockInt32 >= 0 {
-		oldestBlock = uint32(oldestBlockInt32)
-	}
-	var next atomic.Uint32
-	next.Store(oldestBlock)
-
-	blockDataChan := make(chan *blockData, blockCount)
-	var wg sync.WaitGroup
-
-	for i := 0; i < maxBlockFetchers && i < int(blockCount); i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			fd.processBlockSummaries(&next, lastBlock, blockDataChan)
-		}()
-	}
-
-	go func() {
-		wg.Wait()
-		close(blockDataChan)
-	}()
-
-	return oldestBlock, blockDataChan
-}
-
-func (fd *FeesData) getBlockSummaries(newestBlockSummaryNumber uint32, blockCount uint32) ([]*hexutil.Big, []float64, error) {
-	newestBlockRevision := utils.NewRevision(newestBlockSummaryNumber)
-	summary, err := utils.GetSummary(newestBlockRevision, fd.repo, fd.bft)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	oldestBlock, blockDataChan := fd.processBlockSummaryRange(blockCount, summary)
-
-	var (
-		baseFeesWithNil = make([]*hexutil.Big, blockCount)
-		gasUsedRatios   = make([]float64, blockCount)
-	)
-
-	// Collect results from the channel
-	for blockData := range blockDataChan {
-		if blockData.err != nil {
-			return nil, nil, blockData.err
-		}
-		// Since it is a priority cache, we will store only the top blocks
-		// So the cache is rebuilt when calling the endpoint if the node went down
-		fd.pushToCache(blockData.blockSummary.Header)
-		// Ensure the order of the baseFees and gasUsedRatios is correct
-		blockPosition := blockData.blockSummary.Header.Number() - oldestBlock
-		if baseFee := blockData.blockSummary.Header.BaseFee(); baseFee != nil {
-			baseFeesWithNil[blockPosition] = (*hexutil.Big)(baseFee)
 		} else {
-			baseFeesWithNil[blockPosition] = (*hexutil.Big)(big.NewInt(0))
-		}
-		gasUsedRatios[blockPosition] = float64(blockData.blockSummary.Header.GasUsed()) / float64(blockData.blockSummary.Header.GasLimit())
-	}
-
-	// Remove nil values from baseFees
-	var baseFees []*hexutil.Big
-	for _, baseFee := range baseFeesWithNil {
-		if baseFee != nil {
-			baseFees = append(baseFees, baseFee)
+			if baseFee := ent.Value.(*FeeCacheEntry).baseFee; baseFee != nil {
+				baseFees[i] = baseFee
+			} else {
+				baseFees[i] = (*hexutil.Big)(big.NewInt(0))
+			}
+			gasUsedRatios[i] = ent.Value.(*FeeCacheEntry).gasUsedRatio
 		}
 	}
 
-	return baseFees, gasUsedRatios[:len(baseFees)], nil
+	numElements := newestBlockSummaryNumber - oldestBlockNumber + 1
+
+	fmt.Printf("oldestBlockNumber: %d, baseFees: %v, gasUsedRatios: %v\n", oldestBlockNumber, baseFees[:numElements], gasUsedRatios[:numElements])
+
+	return oldestBlockNumber, baseFees[:numElements], gasUsedRatios[:numElements], nil
 }

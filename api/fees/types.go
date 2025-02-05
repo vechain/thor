@@ -7,13 +7,10 @@ package fees
 
 import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/chain"
 )
-
-const maxBlockFetchers = 8 // Maximum number of concurrent block fetchers.
 
 type Fees struct {
 	data *FeesData
@@ -34,10 +31,4 @@ type GetFeesHistory struct {
 	OldestBlock   *uint32        `json:"oldestBlock"`
 	BaseFees      []*hexutil.Big `json:"baseFees"`
 	GasUsedRatios []float64      `json:"gasUsedRatios"`
-}
-
-type blockData struct {
-	blockRevision *utils.Revision
-	blockSummary  *chain.BlockSummary
-	err           error
 }
