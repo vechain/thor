@@ -82,7 +82,6 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 }
 
 func (f *Fees) pushBestBlockToCache() {
-	defer f.wg.Done()
 	ticker := f.data.repo.NewTicker()
 	for {
 		select {
@@ -102,7 +101,10 @@ func (f *Fees) Close() {
 
 func (f *Fees) Mount(root *mux.Router, pathPrefix string) {
 	f.wg.Add(1)
-	go f.pushBestBlockToCache()
+	go func() {
+		defer f.wg.Done()
+		f.pushBestBlockToCache()
+	}()
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 	sub.Path("/history").
 		Methods(http.MethodGet).
