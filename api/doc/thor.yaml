@@ -762,6 +762,9 @@ paths:
       summary: Retrieve historical fee data
       description: |
         Retrieve historical fee data, including the gas used ratio per block.
+        Will return only fees for accessible blocks.
+        Max accessible blocks = BestBlock - api-backtrace-limit-flag .
+        api-backtrace-limit defaults to 1000 blocks.
       parameters:
         - $ref: '#/components/parameters/BlockCountInQuery'
         - $ref: '#/components/parameters/NewestBlockInQuery'
@@ -779,13 +782,6 @@ paths:
               schema:
                 type: string
                 example: 'Invalid revision'
-        '404':
-          description: Not Found
-          content:
-            text/plain:
-              schema:
-                type: string
-                example: 'Block not found'
 
 components:
   schemas:

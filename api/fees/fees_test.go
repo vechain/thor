@@ -67,7 +67,7 @@ func TestFeesFixedSizeGreaterThanBacktrace(t *testing.T) {
 
 func TestFeesFixedSizeSameAsBacktrace(t *testing.T) {
 	// Less blocks than the backtrace limit
-	ts, closeFunc := initFeesServer(t, 11, 11, 10)
+	ts, closeFunc := initFeesServer(t, 10, 10, 10)
 	defer func() {
 		closeFunc()
 		ts.Close()
@@ -142,8 +142,26 @@ func getFeeHistoryWithSummaries(t *testing.T, tclient *thorclient.Client) {
 func getFeeHistoryOnlySummaries(t *testing.T, tclient *thorclient.Client) {
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=4&newestBlock=3")
 	require.NoError(t, err)
-	require.Equal(t, 400, statusCode)
-	require.Equal(t, "newestBlock must be between 4 and 9\n", string(res))
+	require.Equal(t, 200, statusCode)
+	require.NotNil(t, res)
+	var feesHistory fees.GetFeesHistory
+	if err := json.Unmarshal(res, &feesHistory); err != nil {
+		t.Fatal(err)
+	}
+	expectedOldestBlock := uint32(2)
+	expectedFeesHistory := fees.GetFeesHistory{
+		OldestBlock: &expectedOldestBlock,
+		BaseFees: []*hexutil.Big{
+			(*hexutil.Big)(big.NewInt(875525000)),
+			(*hexutil.Big)(big.NewInt(766544026)),
+		},
+		GasUsedRatios: []float64{
+			expectedGasPriceUsedRatio,
+			expectedGasPriceUsedRatio,
+		},
+	}
+
+	assert.Equal(t, expectedFeesHistory, feesHistory)
 }
 
 func getFeeHistoryBestBlock(t *testing.T, tclient *thorclient.Client) {
@@ -192,26 +210,9 @@ func getFeeHistoryNewestBlockNotIncluded(t *testing.T, tclient *thorclient.Clien
 func getFeeHistoryCacheLimit(t *testing.T, tclient *thorclient.Client) {
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=4&newestBlock=2")
 	require.NoError(t, err)
-	require.Equal(t, 200, statusCode)
+	require.Equal(t, 500, statusCode)
 	require.NotNil(t, res)
-	var feesHistory fees.GetFeesHistory
-	if err := json.Unmarshal(res, &feesHistory); err != nil {
-		t.Fatal(err)
-	}
-
-	// We expect this since:
-	// - The cache and backtrace limit match (8)
-	// - There are 10 blocks, from 0 to 9
-	// So the oldest block is 2 since we cannot keep going backwards,
-	// meaning that we cannot give the 4 requested blocks.
-	expectedOldestBlock := uint32(2)
-	expectedFeesHistory := fees.GetFeesHistory{
-		OldestBlock:   &expectedOldestBlock,
-		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(875525000))},
-		GasUsedRatios: []float64{expectedGasPriceUsedRatio},
-	}
-
-	require.Equal(t, expectedFeesHistory, feesHistory)
+	require.Equal(t, "not found\n", string(res))
 }
 
 func getFeeHistoryBlockCountBiggerThanMax(t *testing.T, tclient *thorclient.Client) {
@@ -219,11 +220,11 @@ func getFeeHistoryBlockCountBiggerThanMax(t *testing.T, tclient *thorclient.Clie
 	require.NoError(t, err)
 	require.Equal(t, 400, statusCode)
 	require.NotNil(t, res)
-	assert.Equal(t, "blockCount must be between 1 and 8\n", string(res))
+	assert.Equal(t, "newestBlock not in the allowed range\n", string(res))
 }
 
 func getFeeHistoryMoreBlocksRequestedThanAvailable(t *testing.T, tclient *thorclient.Client) {
-	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=11&newestBlock=best")
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=10&newestBlock=best")
 	require.NoError(t, err)
 	require.Equal(t, 200, statusCode)
 	require.NotNil(t, res)

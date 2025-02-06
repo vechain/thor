@@ -6,6 +6,8 @@
 package fees
 
 import (
+	"sync"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/cache"
@@ -15,17 +17,17 @@ import (
 type Fees struct {
 	data *FeesData
 	done chan struct{}
+	wg   sync.WaitGroup
 }
 type FeeCacheEntry struct {
 	baseFee      *hexutil.Big
 	gasUsedRatio float64
 }
 type FeesData struct {
-	repo              *chain.Repository
-	cache             *cache.PrioCache
-	bft               bft.Committer
-	cacheSize         uint32 // The max size of the cache when full.
-	maxBacktraceLimit uint32 // The max number of blocks to backtrace.
+	repo           *chain.Repository
+	cache          *cache.PrioCache
+	bft            bft.Committer
+	backtraceLimit uint32 // The max number of blocks to backtrace.
 }
 type GetFeesHistory struct {
 	OldestBlock   *uint32        `json:"oldestBlock"`

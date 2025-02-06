@@ -38,14 +38,6 @@ func BadRequest(cause error) error {
 	}
 }
 
-// Forbidden convenience method to create http forbidden error.
-func Forbidden(cause error) error {
-	return &httpError{
-		cause:  cause,
-		status: http.StatusForbidden,
-	}
-}
-
 func StringToBoolean(boolStr string, defaultVal bool) (bool, error) {
 	if boolStr == "" {
 		return defaultVal, nil
@@ -55,6 +47,14 @@ func StringToBoolean(boolStr string, defaultVal bool) (bool, error) {
 		return true, nil
 	}
 	return false, errors.New("should be boolean")
+}
+
+// Forbidden convenience method to create http forbidden error.
+func Forbidden(cause error) error {
+	return &httpError{
+		cause:  cause,
+		status: http.StatusForbidden,
+	}
 }
 
 // HandlerFunc like http.HandlerFunc, bu it returns an error.

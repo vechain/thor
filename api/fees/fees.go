@@ -6,7 +6,6 @@
 package fees
 
 import (
-	"fmt"
 	"net/http"
 	"strconv"
 
@@ -24,15 +23,6 @@ func New(repo *chain.Repository, bft bft.Committer, backtraceLimit uint32, fixed
 	}
 }
 
-func getOldestBlockNumber(blockCount uint32, newestBlock uint32) uint32 {
-	oldestBlockInt32 := int32(newestBlock) + 1 - int32(blockCount)
-	oldestBlock := uint32(0)
-	if oldestBlockInt32 >= 0 {
-		oldestBlock = uint32(oldestBlockInt32)
-	}
-	return oldestBlock
-}
-
 func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.BlockSummary, error) {
 	//blockCount validation
 	blockCountParam := req.URL.Query().Get("blockCount")
@@ -41,8 +31,8 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 		return 0, nil, utils.BadRequest(errors.WithMessage(err, "invalid blockCount, it should represent an integer"))
 	}
 	blockCount := uint32(blockCountUInt64)
-	if blockCount < 1 || blockCount > f.data.maxBacktraceLimit {
-		return 0, nil, utils.BadRequest(errors.New(fmt.Sprintf("blockCount must be between 1 and %d", f.data.maxBacktraceLimit)))
+	if blockCount == 0 {
+		return 0, f.data.repo.BestBlockSummary(), nil
 	}
 
 	//newestBlock validation
@@ -56,20 +46,16 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 		return 0, nil, err
 	}
 	// Too old
-	bestBlockSummary := f.data.repo.BestBlockSummary()
-	newestBlockNumberSupported := getOldestBlockNumber(f.data.cacheSize, bestBlockSummary.Header.Number())
-	if newestBlockNumberSupported > newestBlockSummary.Header.Number() {
-		return 0, nil, utils.BadRequest(errors.New(fmt.Sprintf("newestBlock must be between %d and %d", newestBlockNumberSupported, bestBlockSummary.Header.Number())))
+	minAllowedBlock := f.data.repo.BestBlockSummary().Header.Number() - f.data.backtraceLimit + 1
+	if newestBlockSummary.Header.Number() < minAllowedBlock {
+		// If the starting block is below the allowed range, return-fast.
+		return 0, nil, utils.BadRequest(errors.New("newestBlock not in the allowed range"))
 	}
 
-	// Get oldest block summary after subtracting blockCount
-	// We do not return error, just less blocks, in case this limit goes beyond the backtrace limit
-	oldestBlockNumber := getOldestBlockNumber(blockCount, newestBlockSummary.Header.Number())
-	oldestBlockNumberSupported := getOldestBlockNumber(f.data.maxBacktraceLimit, bestBlockSummary.Header.Number())
-	if oldestBlockNumberSupported > oldestBlockNumber {
-		blockCount = newestBlockSummary.Header.Number() - oldestBlockNumber + 1
+	// If the oldest block is below the allowed range, then adjust blockCount
+	if newestBlockSummary.Header.Number()-(blockCount-1) < minAllowedBlock {
+		blockCount = newestBlockSummary.Header.Number() - minAllowedBlock + 1
 	}
-
 	return blockCount, newestBlockSummary, nil
 }
 
@@ -95,6 +81,7 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 }
 
 func (f *Fees) pushBestBlockToCache() {
+	defer f.wg.Done()
 	ticker := f.data.repo.NewTicker()
 	for {
 		select {
@@ -109,9 +96,11 @@ func (f *Fees) pushBestBlockToCache() {
 
 func (f *Fees) Close() {
 	close(f.done)
+	f.wg.Wait()
 }
 
 func (f *Fees) Mount(root *mux.Router, pathPrefix string) {
+	f.wg.Add(1)
 	go f.pushBestBlockToCache()
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 	sub.Path("/history").
