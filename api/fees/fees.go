@@ -6,6 +6,7 @@
 package fees
 
 import (
+	"math"
 	"net/http"
 	"strconv"
 
@@ -46,7 +47,7 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 		return 0, nil, err
 	}
 	// Too old
-	minAllowedBlock := f.data.repo.BestBlockSummary().Header.Number() - f.data.backtraceLimit + 1
+	minAllowedBlock := uint32(math.Max(0, float64(int(f.data.repo.BestBlockSummary().Header.Number())-int(f.data.backtraceLimit)+1)))
 	if newestBlockSummary.Header.Number() < minAllowedBlock {
 		// If the starting block is below the allowed range, return-fast.
 		return 0, nil, utils.BadRequest(errors.New("newestBlock not in the allowed range"))
