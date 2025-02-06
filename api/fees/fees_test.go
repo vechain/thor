@@ -184,9 +184,9 @@ func getFeeHistoryWrongNewestBlock(t *testing.T, tclient *thorclient.Client) {
 func getFeeHistoryNewestBlockNotIncluded(t *testing.T, tclient *thorclient.Client) {
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=3&newestBlock=20")
 	require.NoError(t, err)
-	require.Equal(t, 404, statusCode)
+	require.Equal(t, 200, statusCode)
 	require.NotNil(t, res)
-	assert.Equal(t, "newestBlock: not found\n", string(res))
+	assert.Equal(t, "null\n", string(res))
 }
 
 func getFeeHistoryCacheLimit(t *testing.T, tclient *thorclient.Client) {

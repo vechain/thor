@@ -53,9 +53,6 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 	// Too new
 	newestBlockSummary, err := utils.GetSummary(newestBlock, f.data.repo, f.data.bft)
 	if err != nil {
-		if f.data.repo.IsNotFound(err) {
-			return 0, nil, utils.NotFound(errors.WithMessage(err, "newestBlock"))
-		}
 		return 0, nil, err
 	}
 	// Too old
@@ -79,6 +76,9 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) error {
 	blockCount, newestBlockSummary, err := f.validateGetFeesHistoryParams(req)
 	if err != nil {
+		if f.data.repo.IsNotFound(err) {
+			return utils.WriteJSON(w, nil)
+		}
 		return err
 	}
 
