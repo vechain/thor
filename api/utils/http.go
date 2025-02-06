@@ -46,14 +46,6 @@ func Forbidden(cause error) error {
 	}
 }
 
-// NotFound convenience method to create http not found error.
-func NotFound(cause error) error {
-	return &httpError{
-		cause:  cause,
-		status: http.StatusNotFound,
-	}
-}
-
 func StringToBoolean(boolStr string, defaultVal bool) (bool, error) {
 	if boolStr == "" {
 		return defaultVal, nil
