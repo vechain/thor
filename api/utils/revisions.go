@@ -28,10 +28,6 @@ type Revision struct {
 	val interface{}
 }
 
-func NewRevision(revision uint32) *Revision {
-	return &Revision{revision}
-}
-
 func (rev *Revision) IsNext() bool {
 	return rev.val == revNext
 }
