@@ -56,7 +56,7 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 	}
 
 	//newestBlock validation
-	newestBlock, err := utils.ParseRevision(req.URL.Query().Get("newestBlock"), false)
+	newestBlock, err := utils.ParseRevisionWithoutBlockID(req.URL.Query().Get("newestBlock"), false)
 	if err != nil {
 		return 0, nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
 	}

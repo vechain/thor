@@ -32,8 +32,7 @@ func (rev *Revision) IsNext() bool {
 	return rev.val == revNext
 }
 
-// ParseRevision parses a query parameter into a block number or block ID.
-func ParseRevision(revision string, allowNext bool) (*Revision, error) {
+func ParseRevisionWithoutBlockID(revision string, allowNext bool) (*Revision, error) {
 	if revision == "" || revision == "best" {
 		return &Revision{revBest}, nil
 	}
@@ -53,13 +52,6 @@ func ParseRevision(revision string, allowNext bool) (*Revision, error) {
 		return &Revision{revNext}, nil
 	}
 
-	if len(revision) == 66 || len(revision) == 64 {
-		blockID, err := thor.ParseBytes32(revision)
-		if err != nil {
-			return nil, err
-		}
-		return &Revision{blockID}, nil
-	}
 	n, err := strconv.ParseUint(revision, 0, 0)
 	if err != nil {
 		return nil, err
@@ -68,6 +60,19 @@ func ParseRevision(revision string, allowNext bool) (*Revision, error) {
 		return nil, errors.New("block number out of max uint32")
 	}
 	return &Revision{uint32(n)}, err
+}
+
+// ParseRevision parses a query parameter into a block number or block ID.
+func ParseRevision(revision string, allowNext bool) (*Revision, error) {
+	if len(revision) == 66 || len(revision) == 64 {
+		blockID, err := thor.ParseBytes32(revision)
+		if err != nil {
+			return nil, err
+		}
+		return &Revision{blockID}, nil
+	}
+
+	return ParseRevisionWithoutBlockID(revision, allowNext)
 }
 
 // GetSummary returns the block summary for the given revision,
