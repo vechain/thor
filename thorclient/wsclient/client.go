@@ -78,7 +78,7 @@ func (c *Client) SubscribeEvents(pos string, filter *subscriptions.EventFilter) 
 			queryValues.Add("topic4", filter.Topic4.String())
 		}
 	}
-	conn, err := c.connect("/subscriptions/event", queryValues)
+	conn, _, err := c.Connect("/subscriptions/event", queryValues)
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect - %w", err)
 	}
@@ -91,7 +91,7 @@ func (c *Client) SubscribeEvents(pos string, filter *subscriptions.EventFilter) 
 func (c *Client) SubscribeBlocks(pos string) (*common.Subscription[*subscriptions.BlockMessage], error) {
 	queryValues := &url.Values{}
 	queryValues.Add("pos", pos)
-	conn, err := c.connect("/subscriptions/block", queryValues)
+	conn, _, err := c.Connect("/subscriptions/block", queryValues)
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect - %w", err)
 	}
@@ -115,7 +115,7 @@ func (c *Client) SubscribeTransfers(pos string, filter *subscriptions.TransferFi
 			queryValues.Add("recipient", filter.Recipient.String())
 		}
 	}
-	conn, err := c.connect("/subscriptions/transfer", queryValues)
+	conn, _, err := c.Connect("/subscriptions/transfer", queryValues)
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect - %w", err)
 	}
@@ -131,7 +131,7 @@ func (c *Client) SubscribeTxPool(txID *thor.Bytes32) (*common.Subscription[*subs
 		queryValues.Add("id", txID.String())
 	}
 
-	conn, err := c.connect("/subscriptions/txpool", queryValues)
+	conn, _, err := c.Connect("/subscriptions/txpool", queryValues)
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect - %w", err)
 	}
@@ -144,7 +144,7 @@ func (c *Client) SubscribeTxPool(txID *thor.Bytes32) (*common.Subscription[*subs
 func (c *Client) SubscribeBeats2(pos string) (*common.Subscription[*subscriptions.Beat2Message], error) {
 	queryValues := &url.Values{}
 	queryValues.Add("pos", pos)
-	conn, err := c.connect("/subscriptions/beat2", queryValues)
+	conn, _, err := c.Connect("/subscriptions/beat2", queryValues)
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect - %w", err)
 	}
@@ -198,9 +198,9 @@ func subscribe[T any](conn *websocket.Conn) *common.Subscription[*T] {
 	}
 }
 
-// connect establishes a WebSocket connection to the specified endpoint and query.
+// Connect establishes a WebSocket connection to the specified endpoint and query.
 // It returns the connection or an error if the connection fails.
-func (c *Client) connect(endpoint string, queryValues *url.Values) (*websocket.Conn, error) {
+func (c *Client) Connect(endpoint string, queryValues *url.Values) (*websocket.Conn, int, error) {
 	u := url.URL{
 		Scheme:   c.scheme,
 		Host:     c.host,
@@ -208,9 +208,9 @@ func (c *Client) connect(endpoint string, queryValues *url.Values) (*websocket.C
 		RawQuery: queryValues.Encode(),
 	}
 
-	conn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	conn, res, err := websocket.DefaultDialer.Dial(u.String(), nil)
 	if err != nil {
-		return nil, err
+		return nil, res.StatusCode, err
 	}
 
 	conn.SetPingHandler(func(payload string) error {
@@ -220,5 +220,5 @@ func (c *Client) connect(endpoint string, queryValues *url.Values) (*websocket.C
 		return nil
 	})
 	// TODO append to the connection pool
-	return conn, nil
+	return conn, res.StatusCode, nil
 }
