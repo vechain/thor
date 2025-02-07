@@ -18,7 +18,7 @@ import (
 )
 
 var (
-	BaseFeeNotSetError = errors.New("base fee not set after galactica")
+	ErrBaseFeeNotSet = errors.New("base fee not set after galactica")
 )
 
 // VerifyGalacticaHeader verifies some header attributes which were changed in Galactica fork,

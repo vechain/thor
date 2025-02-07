@@ -418,7 +418,7 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 
 	galactica := rt.chainConfig.IsGalactica(big.NewInt(int64(rt.ctx.Number)))
 	if galactica && rt.ctx.BaseFee == nil {
-		return nil, fork.BaseFeeNotSetError
+		return nil, fork.ErrBaseFeeNotSet
 	}
 	baseGasPrice, gasPrice, payer, _, returnGas, err := resolvedTx.BuyGas(rt.state, rt.ctx.Time, &fork.GalacticaItems{IsActive: galactica, BaseFee: rt.ctx.BaseFee})
 	if err != nil {

@@ -812,7 +812,7 @@ func TestExecuteTransaction(t *testing.T) {
 	t.Run("Galactica is active but baseFee is not set", func(t *testing.T) {
 		rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{Number: 1}, thor.ForkConfig{GALACTICA: 0})
 		receipt, err := rt.ExecuteTransaction(legacyTx)
-		assert.Equal(t, fork.BaseFeeNotSetError, err)
+		assert.Equal(t, fork.ErrBaseFeeNotSet, err)
 		assert.Nil(t, receipt)
 	})
 

@@ -7,12 +7,14 @@ package fork
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
 
 func config() *thor.ForkConfig {
@@ -86,6 +88,29 @@ func TestCalcBaseFee(t *testing.T) {
 		if have, want := CalcBaseFee(config(), parent), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
 			t.Errorf("test %d: have %d  want %d, ", i, have, want)
 		}
+	}
+}
+
+func TestCalcBaseFeeEdgeCases(t *testing.T) {
+	tests := []struct {
+		name string
+		f    func(*testing.T)
+	}{
+		{
+			name: "First galactica block",
+			f: func(t *testing.T) {
+				var parentID thor.Bytes32
+				binary.BigEndian.PutUint32(parentID[:], 3)
+
+				parent := new(block.Builder).ParentID(parentID).Build().Header()
+				baseFee := CalcBaseFee(config(), parent)
+				assert.True(t, baseFee.Cmp(big.NewInt(thor.InitialBaseFee)) == 0)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, tt.f)
 	}
 }
 
@@ -230,4 +255,129 @@ func TestBaseFeeLimits(t *testing.T) {
 			parentBaseFee = baseFee
 		}
 	})
+}
+
+func TestGalacticaGasPrice(t *testing.T) {
+	baseGasPrice := big.NewInt(1_000_000_000)
+	baseFee := big.NewInt(20_000_000)
+	legacyTr := tx.NewTxBuilder(tx.LegacyTxType).GasPriceCoef(255).MustBuild()
+
+	tests := []struct {
+		name string
+		f    func(*testing.T)
+	}{
+		{
+			name: "galactica is not yet activated",
+			f: func(t *testing.T) {
+				res := GalacticaGasPrice(legacyTr, baseGasPrice, &GalacticaItems{
+					IsActive: false,
+					BaseFee:  nil,
+				})
+				assert.True(t, res.Cmp(legacyTr.GasPrice(baseGasPrice)) == 0)
+			},
+		},
+		{
+			name: "galactica is activated",
+			f: func(t *testing.T) {
+				res := GalacticaGasPrice(legacyTr, baseGasPrice, &GalacticaItems{
+					IsActive: true,
+					BaseFee:  baseFee,
+				})
+				assert.True(t, res.Cmp(legacyTr.GasPrice(baseGasPrice)) == 0)
+			},
+		},
+		{
+			name: "galactica is activated, dynamic fee transaction with maxPriorityFee+baseFee as price",
+			f: func(t *testing.T) {
+				tr := tx.NewTxBuilder(tx.DynamicFeeTxType).MaxFeePerGas(big.NewInt(250_000_000)).MaxPriorityFeePerGas(big.NewInt(15_000)).MustBuild()
+				res := GalacticaGasPrice(tr, baseGasPrice, &GalacticaItems{
+					IsActive: true,
+					BaseFee:  baseFee,
+				})
+				expectedRes := new(big.Int).Add(tr.MaxPriorityFeePerGas(), baseFee)
+				assert.True(t, res.Cmp(expectedRes) == 0)
+			},
+		},
+		{
+			name: "galactica is activated, dynamic fee transaction with maxFee as price",
+			f: func(t *testing.T) {
+				tr := tx.NewTxBuilder(tx.DynamicFeeTxType).MaxFeePerGas(big.NewInt(20_500_000)).MaxPriorityFeePerGas(big.NewInt(1_000_000)).MustBuild()
+				res := GalacticaGasPrice(tr, baseGasPrice, &GalacticaItems{
+					IsActive: true,
+					BaseFee:  baseFee,
+				})
+				assert.True(t, res.Cmp(tr.MaxFeePerGas()) == 0)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.f(t)
+		})
+	}
+}
+
+func TestGalacticaPriorityPrice(t *testing.T) {
+	baseGasPrice := big.NewInt(1_000_000_000)
+	baseFee := big.NewInt(20_000_000)
+	provedWork := big.NewInt(1)
+	legacyTr := tx.NewTxBuilder(tx.LegacyTxType).GasPriceCoef(255).MustBuild()
+
+	tests := []struct {
+		name string
+		f    func(*testing.T)
+	}{
+		{
+			name: "galactica is not yet activated",
+			f: func(t *testing.T) {
+				res := GalacticaPriorityPrice(legacyTr, baseGasPrice, provedWork, &GalacticaItems{
+					IsActive: false,
+					BaseFee:  nil,
+				})
+				assert.True(t, res.Cmp(legacyTr.OverallGasPrice(baseGasPrice, provedWork)) == 0)
+			},
+		},
+		{
+			name: "galactica is activated",
+			f: func(t *testing.T) {
+				res := GalacticaPriorityPrice(legacyTr, baseGasPrice, provedWork, &GalacticaItems{
+					IsActive: true,
+					BaseFee:  baseFee,
+				})
+				fmt.Println(res)
+				expected := new(big.Int).Sub(legacyTr.OverallGasPrice(baseGasPrice, provedWork), baseFee)
+				assert.True(t, res.Cmp(expected) == 0)
+			},
+		},
+		{
+			name: "galactica is activated, dynamic fee transaction with maxPriorityFee as priority fee",
+			f: func(t *testing.T) {
+				tr := tx.NewTxBuilder(tx.DynamicFeeTxType).MaxFeePerGas(big.NewInt(250_000_000)).MaxPriorityFeePerGas(big.NewInt(15_000)).MustBuild()
+				res := GalacticaPriorityPrice(tr, baseGasPrice, provedWork, &GalacticaItems{
+					IsActive: true,
+					BaseFee:  baseFee,
+				})
+				assert.True(t, res.Cmp(tr.MaxPriorityFeePerGas()) == 0)
+			},
+		},
+		{
+			name: "galactica is activated, dynamic fee transaction with maxFee-baseFee as priority fee",
+			f: func(t *testing.T) {
+				tr := tx.NewTxBuilder(tx.DynamicFeeTxType).MaxFeePerGas(big.NewInt(20_500_000)).MaxPriorityFeePerGas(big.NewInt(1_000_000)).MustBuild()
+				res := GalacticaPriorityPrice(tr, baseGasPrice, provedWork, &GalacticaItems{
+					IsActive: true,
+					BaseFee:  baseFee,
+				})
+				expectedRes := new(big.Int).Sub(tr.MaxFeePerGas(), baseFee)
+				assert.True(t, res.Cmp(expectedRes) == 0)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.f(t)
+		})
+	}
 }
