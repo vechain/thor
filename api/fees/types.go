@@ -29,7 +29,7 @@ type FeesData struct {
 	bft            bft.Committer
 	backtraceLimit uint32 // The max number of blocks to backtrace.
 }
-type GetFeesHistory struct {
+type FeesHistory struct {
 	OldestBlock   *uint32        `json:"oldestBlock"`
 	BaseFees      []*hexutil.Big `json:"baseFees"`
 	GasUsedRatios []float64      `json:"gasUsedRatios"`
