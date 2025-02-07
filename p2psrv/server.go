@@ -37,26 +37,8 @@ type Server struct {
 	dialingNodes    *nodeMap
 }
 
-// New creates a server with a default p2p.Server.
+// New create a p2p server.
 func New(opts *Options) *Server {
-	return NewWithServer(opts, &p2p.Server{
-		Config: p2p.Config{
-			Name:        opts.Name,
-			PrivateKey:  opts.PrivateKey,
-			MaxPeers:    opts.MaxPeers,
-			NoDiscovery: true,  // disable discovery inside p2p.Server instance(we use our own)
-			DiscoveryV5: false, // disable discovery inside p2p.Server instance(we use our own)
-			ListenAddr:  opts.ListenAddr,
-			NetRestrict: opts.NetRestrict,
-			NAT:         opts.NAT,
-			NoDial:      opts.NoDial,
-			DialRatio:   int(math.Sqrt(float64(opts.MaxPeers))),
-		},
-	})
-}
-
-// NewWithServer creates a server with a provided p2p.Server.
-func NewWithServer(opts *Options, srv *p2p.Server) *Server {
 	knownNodes := cache.NewPrioCache(5)
 	discoveredNodes := cache.NewRandCache(128)
 	for _, node := range opts.KnownNodes {
@@ -65,8 +47,21 @@ func NewWithServer(opts *Options, srv *p2p.Server) *Server {
 	}
 
 	return &Server{
-		opts:            opts,
-		srv:             srv,
+		opts: opts,
+		srv: &p2p.Server{
+			Config: p2p.Config{
+				Name:        opts.Name,
+				PrivateKey:  opts.PrivateKey,
+				MaxPeers:    opts.MaxPeers,
+				NoDiscovery: true,  // disable discovery inside p2p.Server instance(we use our own)
+				DiscoveryV5: false, // disable discovery inside p2p.Server instance(we use our own)
+				ListenAddr:  opts.ListenAddr,
+				NetRestrict: opts.NetRestrict,
+				NAT:         opts.NAT,
+				NoDial:      opts.NoDial,
+				DialRatio:   int(math.Sqrt(float64(opts.MaxPeers))),
+			},
+		},
 		done:            make(chan struct{}),
 		knownNodes:      knownNodes,
 		discoveredNodes: discoveredNodes,
@@ -170,6 +165,29 @@ func (s *Server) RemoveStatic(node *discover.Node) {
 // NodeInfo gathers and returns a collection of metadata known about the host.
 func (s *Server) NodeInfo() *p2p.NodeInfo {
 	return s.srv.NodeInfo()
+}
+
+// Options returns the options.
+func (s *Server) Options() *Options {
+	return s.opts
+}
+
+// TryDial tries to establish a connection with the  the given node.
+func (s *Server) TryDial(node *discover.Node) error {
+	if s.dialingNodes.Contains(node.ID) {
+		return nil
+	}
+
+	metricDialingNewNode().Add(1)
+	defer metricDialingNewNode().Add(-1)
+
+	s.dialingNodes.Add(node)
+	err := s.tryDial(node)
+	if err != nil {
+		s.dialingNodes.Remove(node.ID)
+	}
+
+	return err
 }
 
 func (s *Server) listenDiscV5() (err error) {
@@ -312,7 +330,7 @@ func (s *Server) dialLoop() {
 				metricDialingNewNode().Add(1)
 				defer metricDialingNewNode().Add(-1)
 
-				if err := s.TryDial(node); err != nil {
+				if err := s.tryDial(node); err != nil {
 					s.dialingNodes.Remove(node.ID)
 					log.Debug("failed to dial node", "err", err)
 				}
@@ -327,7 +345,7 @@ func (s *Server) dialLoop() {
 	}
 }
 
-func (s *Server) TryDial(node *discover.Node) error {
+func (s *Server) tryDial(node *discover.Node) error {
 	conn, err := s.srv.Dialer.Dial(node)
 	if err != nil {
 		return err
@@ -373,8 +391,4 @@ func (s *Server) fetchBootstrap() {
 		case <-time.After(time.Second * 10):
 		}
 	}
-}
-
-func (s *Server) Options() *Options {
-	return s.opts
 }
