@@ -452,8 +452,8 @@ func TestOrderTxsAfterGalacticaFork(t *testing.T) {
 	baseGasPrice, err := builtin.Params.Native(st).Get(thor.KeyBaseGasPrice)
 	assert.Nil(t, err)
 	for i := 1; i < len(txs); i++ {
-		prevGalacticaFee := fork.GalacticaTxGasPriceAdapater(execTxs[i-1], baseGasPrice)
-		currGalacticaFee := fork.GalacticaTxGasPriceAdapater(execTxs[i], baseGasPrice)
+		prevGalacticaFee := fork.GalacticaTxGasPriceAdapter(execTxs[i-1], baseGasPrice)
+		currGalacticaFee := fork.GalacticaTxGasPriceAdapter(execTxs[i], baseGasPrice)
 		prevEffectiveFee := math.BigMin(new(big.Int).Sub(prevGalacticaFee.MaxFee, b1.Header().BaseFee()), prevGalacticaFee.MaxPriorityFee)
 		currEffectiveFee := math.BigMin(new(big.Int).Sub(currGalacticaFee.MaxFee, b1.Header().BaseFee()), currGalacticaFee.MaxPriorityFee)
 		assert.True(t, prevEffectiveFee.Cmp(currEffectiveFee) >= 0)
@@ -510,8 +510,8 @@ func TestOrderTxsAfterGalacticaForkSameValues(t *testing.T) {
 	baseGasPrice, err := builtin.Params.Native(st).Get(thor.KeyBaseGasPrice)
 	assert.Nil(t, err)
 	for i := 1; i < len(txs); i++ {
-		prevGalacticaFee := fork.GalacticaTxGasPriceAdapater(execTxs[i-1], baseGasPrice)
-		currGalacticaFee := fork.GalacticaTxGasPriceAdapater(execTxs[i], baseGasPrice)
+		prevGalacticaFee := fork.GalacticaTxGasPriceAdapter(execTxs[i-1], baseGasPrice)
+		currGalacticaFee := fork.GalacticaTxGasPriceAdapter(execTxs[i], baseGasPrice)
 		prevEffectiveFee := math.BigMin(new(big.Int).Sub(prevGalacticaFee.MaxFee, b1.Header().BaseFee()), prevGalacticaFee.MaxPriorityFee)
 		currEffectiveFee := math.BigMin(new(big.Int).Sub(currGalacticaFee.MaxFee, b1.Header().BaseFee()), currGalacticaFee.MaxPriorityFee)
 		assert.True(t, prevEffectiveFee.Cmp(currEffectiveFee) >= 0)

@@ -34,7 +34,7 @@ func TestHealth(t *testing.T) {
 }
 
 func initAPIServer(t *testing.T) {
-	thorChain, err := testchain.NewIntegrationTestChain()
+	thorChain, err := testchain.NewIntegrationTestChain(testchain.IntTestChainForkConfig)
 	require.NoError(t, err)
 
 	router := mux.NewRouter()

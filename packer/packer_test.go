@@ -6,7 +6,6 @@
 package packer_test
 
 import (
-	"fmt"
 	"math"
 	"math/big"
 	"testing"
@@ -112,7 +111,9 @@ func TestP(t *testing.T) {
 	}
 
 	best := repo.BestBlockSummary()
-	fmt.Println(best.Header.Number(), best.Header.GasUsed())
+	assert.NotNil(t, best)
+	assert.True(t, best.Header.Number() > 0)
+	assert.True(t, best.Header.GasUsed() > 0)
 }
 
 func TestForkVIP191(t *testing.T) {

@@ -368,11 +368,6 @@ func packTxsIntoBlock(thorChain *testchain.Chain, proposerAccount *genesis.DevAc
 }
 
 func createChain(db *muxdb.MuxDB, accounts []genesis.DevAccount) (*testchain.Chain, error) {
-	forkConfig := thor.NoFork
-	forkConfig.VIP191 = 1
-	forkConfig.BLOCKLIST = 0
-	forkConfig.VIP214 = 2
-
 	// Create the state manager (Stater) with the initialized database.
 	stater := state.NewStater(db)
 
@@ -399,7 +394,7 @@ func createChain(db *muxdb.MuxDB, accounts []genesis.DevAccount) (*testchain.Cha
 		LaunchTime: 1526400000,
 		GasLimit:   thor.InitialGasLimit,
 		ExtraData:  "",
-		ForkConfig: &forkConfig,
+		ForkConfig: &testchain.IntTestChainForkConfig,
 		Authority:  authAccs,
 		Accounts:   stateAccs,
 		Params: genesis.Params{

@@ -20,7 +20,8 @@ func TestEventReader_Read(t *testing.T) {
 	allBlocks, err := thorChain.GetAllBlocks()
 	require.NoError(t, err)
 	genesisBlk := allBlocks[0]
-	newBlock := allBlocks[len(allBlocks)-1]
+	// taking best block to include also galactica block
+	bestBlk := allBlocks[len(allBlocks)-1]
 
 	er := &eventReader{
 		repo:        thorChain.Repo(),
@@ -57,8 +58,8 @@ func TestEventReader_Read(t *testing.T) {
 	}
 	assert.Equal(t, 2, len(eventMessages))
 	eventMsg := eventMessages[0]
-	assert.Equal(t, newBlock.Header().ID(), eventMsg.Meta.BlockID)
-	assert.Equal(t, newBlock.Header().Number(), eventMsg.Meta.BlockNumber)
+	assert.Equal(t, bestBlk.Header().ID(), eventMsg.Meta.BlockID)
+	assert.Equal(t, bestBlk.Header().Number(), eventMsg.Meta.BlockNumber)
 }
 
 type mockBlockReaderWithError struct{}

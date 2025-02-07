@@ -540,7 +540,7 @@ func initDebugServer(t *testing.T) {
 		GALACTICA: 1,
 		VIP214:    2,
 	}
-	thorChain, err := testchain.NewIntegrationTestChainWithFork(forkConf)
+	thorChain, err := testchain.NewIntegrationTestChain(forkConf)
 	require.NoError(t, err)
 
 	addr := thor.BytesToAddress([]byte("to"))

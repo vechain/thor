@@ -84,7 +84,7 @@ func CalcBaseFee(config *thor.ForkConfig, parent *block.Header) *big.Int {
 		y := x.Div(x, parentGasTargetBig)
 		baseFeeDelta := x.Div(y, baseFeeChangeDenominator)
 
-		// Setting the minimun baseFee to InitialBaseFee
+		// Setting the minimum baseFee to InitialBaseFee
 		return math.BigMax(
 			x.Sub(parentBaseFee, baseFeeDelta),
 			big.NewInt(thor.InitialBaseFee),
@@ -92,7 +92,7 @@ func CalcBaseFee(config *thor.ForkConfig, parent *block.Header) *big.Int {
 	}
 }
 
-func GalacticaTxGasPriceAdapater(tr *tx.Transaction, gasPrice *big.Int) *GalacticaFeeMarketItems {
+func GalacticaTxGasPriceAdapter(tr *tx.Transaction, gasPrice *big.Int) *GalacticaFeeMarketItems {
 	var maxPriorityFee, maxFee *big.Int
 	switch tr.Type() {
 	case tx.LegacyTxType:
@@ -122,8 +122,9 @@ func GalacticaGasPrice(tr *tx.Transaction, baseGasPrice *big.Int, galacticaItems
 		return gasPrice
 	}
 
-	feeItems := GalacticaTxGasPriceAdapater(tr, gasPrice)
+	feeItems := GalacticaTxGasPriceAdapter(tr, gasPrice)
 	// This gasPrice is the same that will be used when refunding the user
+	// it takes into account the priority fee that will be paid to the validator
 	return math.BigMin(new(big.Int).Add(feeItems.MaxPriorityFee, galacticaItems.BaseFee), feeItems.MaxFee)
 }
 
@@ -134,7 +135,7 @@ func GalacticaPriorityPrice(tr *tx.Transaction, baseGasPrice, provedWork *big.In
 		return priorityPrice
 	}
 
-	feeItems := GalacticaTxGasPriceAdapater(tr, priorityPrice)
+	feeItems := GalacticaTxGasPriceAdapter(tr, priorityPrice)
 	// This gasPrice will be used to compensate the validator
 	return math.BigMin(feeItems.MaxPriorityFee, new(big.Int).Sub(feeItems.MaxFee, galacticaItems.BaseFee))
 }

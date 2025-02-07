@@ -67,7 +67,7 @@ func ValidateTransactionWithState(tr *tx.Transaction, head *chain.BlockSummary, 
 		if err != nil {
 			return txRejectedError{err.Error()}
 		}
-		galacticaItems := fork.GalacticaTxGasPriceAdapater(tr, baseGasPrice)
+		galacticaItems := fork.GalacticaTxGasPriceAdapter(tr, baseGasPrice)
 		if galacticaItems.MaxFee.Cmp(head.Header.BaseFee()) < 0 {
 			return txRejectedError{"max fee per gas too low to cover for base fee"}
 		}

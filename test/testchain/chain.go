@@ -60,18 +60,17 @@ func New(
 	}
 }
 
-// NewIntegrationTestChain is a convenience function that creates a Chain for testing.
-// It uses an in-memory database, development network genesis, and a solo BFT engine.
-func NewIntegrationTestChain() (*Chain, error) {
-	forkConfig := thor.NoFork
-	forkConfig.VIP191 = 1
-	forkConfig.BLOCKLIST = 0
-	forkConfig.VIP214 = 2
+var IntTestChainForkConfig = thor.NoFork
 
-	return NewIntegrationTestChainWithFork(forkConfig)
+func init() {
+	IntTestChainForkConfig.BLOCKLIST = 0
+	IntTestChainForkConfig.VIP191 = 1
+	IntTestChainForkConfig.VIP214 = 2
 }
 
-func NewIntegrationTestChainWithFork(forkConfig thor.ForkConfig) (*Chain, error) {
+// NewIntegrationTestChain is a convenience function that creates a Chain for testing.
+// It uses an in-memory database, development network genesis, and a solo BFT engine.
+func NewIntegrationTestChain(forkConfig thor.ForkConfig) (*Chain, error) {
 	// Initialize the database
 	db := muxdb.NewMem()
 

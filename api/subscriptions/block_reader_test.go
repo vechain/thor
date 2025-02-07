@@ -75,7 +75,7 @@ func initChain(t *testing.T) *testchain.Chain {
 		GALACTICA: 1,
 		VIP214:    2,
 	}
-	thorChain, err := testchain.NewIntegrationTestChainWithFork(forks)
+	thorChain, err := testchain.NewIntegrationTestChain(forks)
 	require.NoError(t, err)
 
 	addr := thor.BytesToAddress([]byte("to"))

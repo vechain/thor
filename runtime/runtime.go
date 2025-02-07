@@ -91,7 +91,7 @@ type Runtime struct {
 }
 
 var (
-	// ErrMaxFeePerGasTooLow is returned if the transaction fee cap is less than the
+	// ErrMaxFeePerGasTooLow is returned if the transaction fee cap is less than
 	// the base fee of the block.
 	ErrMaxFeePerGasTooLow = errors.New("max fee per gas is less than block base fee")
 )
@@ -426,7 +426,7 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 	}
 
 	if galactica {
-		feeItems := fork.GalacticaTxGasPriceAdapater(tx, gasPrice)
+		feeItems := fork.GalacticaTxGasPriceAdapter(tx, gasPrice)
 		if feeItems.MaxFee.Cmp(rt.ctx.BaseFee) < 0 {
 			return nil, ErrMaxFeePerGasTooLow
 		}
