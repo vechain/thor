@@ -178,9 +178,6 @@ func (s *Server) TryDial(node *discover.Node) error {
 		return nil
 	}
 
-	metricDialingNewNode().Add(1)
-	defer metricDialingNewNode().Add(-1)
-
 	s.dialingNodes.Add(node)
 	err := s.tryDial(node)
 	if err != nil {
@@ -327,9 +324,6 @@ func (s *Server) dialLoop() {
 			s.dialingNodes.Add(node)
 			// don't use goes.Go, since the dial process can't be interrupted
 			go func() {
-				metricDialingNewNode().Add(1)
-				defer metricDialingNewNode().Add(-1)
-
 				if err := s.tryDial(node); err != nil {
 					s.dialingNodes.Remove(node.ID)
 					log.Debug("failed to dial node", "err", err)
@@ -346,6 +340,9 @@ func (s *Server) dialLoop() {
 }
 
 func (s *Server) tryDial(node *discover.Node) error {
+	metricDialingNewNode().Add(1)
+	defer metricDialingNewNode().Add(-1)
+
 	conn, err := s.srv.Dialer.Dial(node)
 	if err != nil {
 		return err
