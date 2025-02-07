@@ -178,6 +178,8 @@ func (s *Server) TryDial(node *discover.Node) error {
 		return nil
 	}
 
+	// Record the manual dialing node for future dial ratio calculation.
+	// But the dial ratio limit is not applied to manual dialing.
 	s.dialingNodes.Add(node)
 	err := s.tryDial(node)
 	if err != nil {
