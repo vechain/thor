@@ -126,12 +126,12 @@ func getFeeHistoryWithSummaries(t *testing.T, tclient *thorclient.Client) {
 	require.NoError(t, err)
 	require.Equal(t, 200, statusCode)
 	require.NotNil(t, res)
-	var feesHistory fees.GetFeesHistory
+	var feesHistory fees.FeesHistory
 	if err := json.Unmarshal(res, &feesHistory); err != nil {
 		t.Fatal(err)
 	}
 	expectedOldestBlock := uint32(2)
-	expectedFeesHistory := fees.GetFeesHistory{
+	expectedFeesHistory := fees.FeesHistory{
 		OldestBlock:   &expectedOldestBlock,
 		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(875525000)), (*hexutil.Big)(big.NewInt(766544026)), (*hexutil.Big)(big.NewInt(671128459))},
 		GasUsedRatios: []float64{expectedGasPriceUsedRatio, expectedGasPriceUsedRatio, expectedGasPriceUsedRatio},
@@ -144,12 +144,12 @@ func getFeeHistoryOnlySummaries(t *testing.T, tclient *thorclient.Client) {
 	require.NoError(t, err)
 	require.Equal(t, 200, statusCode)
 	require.NotNil(t, res)
-	var feesHistory fees.GetFeesHistory
+	var feesHistory fees.FeesHistory
 	if err := json.Unmarshal(res, &feesHistory); err != nil {
 		t.Fatal(err)
 	}
 	expectedOldestBlock := uint32(2)
-	expectedFeesHistory := fees.GetFeesHistory{
+	expectedFeesHistory := fees.FeesHistory{
 		OldestBlock: &expectedOldestBlock,
 		BaseFees: []*hexutil.Big{
 			(*hexutil.Big)(big.NewInt(875525000)),
@@ -169,12 +169,12 @@ func getFeeHistoryBestBlock(t *testing.T, tclient *thorclient.Client) {
 	require.NoError(t, err)
 	require.Equal(t, 200, statusCode)
 	require.NotNil(t, res)
-	var feesHistory fees.GetFeesHistory
+	var feesHistory fees.FeesHistory
 	if err := json.Unmarshal(res, &feesHistory); err != nil {
 		t.Fatal(err)
 	}
 	expectedOldestBlock := uint32(6)
-	expectedFeesHistory := fees.GetFeesHistory{
+	expectedFeesHistory := fees.FeesHistory{
 		OldestBlock:   &expectedOldestBlock,
 		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(514449512)), (*hexutil.Big)(big.NewInt(450413409)), (*hexutil.Big)(big.NewInt(394348200)), (*hexutil.Big)(big.NewInt(345261708))},
 		GasUsedRatios: []float64{expectedGasPriceUsedRatio, expectedGasPriceUsedRatio, expectedGasPriceUsedRatio, expectedGasPriceUsedRatio},
@@ -228,12 +228,12 @@ func getFeeHistoryMoreBlocksRequestedThanAvailable(t *testing.T, tclient *thorcl
 	require.NoError(t, err)
 	require.Equal(t, 200, statusCode)
 	require.NotNil(t, res)
-	var feesHistory fees.GetFeesHistory
+	var feesHistory fees.FeesHistory
 	if err := json.Unmarshal(res, &feesHistory); err != nil {
 		t.Fatal(err)
 	}
 	expectedOldestBlock := uint32(0)
-	expectedFeesHistory := fees.GetFeesHistory{
+	expectedFeesHistory := fees.FeesHistory{
 		OldestBlock: &expectedOldestBlock,
 		BaseFees: []*hexutil.Big{
 			(*hexutil.Big)(big.NewInt(0)),
@@ -271,12 +271,12 @@ func getFeeHistoryBlock0(t *testing.T, tclient *thorclient.Client) {
 	require.NoError(t, err)
 	require.Equal(t, 200, statusCode)
 	require.NotNil(t, res)
-	var feesHistory fees.GetFeesHistory
+	var feesHistory fees.FeesHistory
 	if err := json.Unmarshal(res, &feesHistory); err != nil {
 		t.Fatal(err)
 	}
 	expectedOldestBlock := uint32(0)
-	expectedFeesHistory := fees.GetFeesHistory{
+	expectedFeesHistory := fees.FeesHistory{
 		OldestBlock:   &expectedOldestBlock,
 		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(0))},
 		GasUsedRatios: []float64{0},
@@ -292,12 +292,12 @@ func getFeeHistoryMoreThanBacktraceLimit(t *testing.T, tclient *thorclient.Clien
 	require.NoError(t, err)
 	require.Equal(t, 200, statusCode)
 	require.NotNil(t, res)
-	var feesHistory fees.GetFeesHistory
+	var feesHistory fees.FeesHistory
 	if err := json.Unmarshal(res, &feesHistory); err != nil {
 		t.Fatal(err)
 	}
 	expectedOldestBlock := uint32(2)
-	expectedFeesHistory := fees.GetFeesHistory{
+	expectedFeesHistory := fees.FeesHistory{
 		OldestBlock: &expectedOldestBlock,
 		BaseFees: []*hexutil.Big{
 			(*hexutil.Big)(big.NewInt(875525000)),

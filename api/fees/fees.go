@@ -9,13 +9,32 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"sync"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/bft"
+	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/chain"
 )
+
+type Fees struct {
+	data *FeesData
+	done chan struct{}
+	wg   sync.WaitGroup
+}
+type FeeCacheEntry struct {
+	baseFee      *hexutil.Big
+	gasUsedRatio float64
+}
+type FeesData struct {
+	repo           *chain.Repository
+	cache          *cache.PrioCache
+	bft            bft.Committer
+	backtraceLimit uint32 // The max number of blocks to backtrace.
+}
 
 func New(repo *chain.Repository, bft bft.Committer, backtraceLimit uint32, fixedCacheSize uint32) *Fees {
 	return &Fees{
@@ -74,7 +93,7 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 		return utils.HTTPError(err, http.StatusInternalServerError)
 	}
 
-	return utils.WriteJSON(w, &GetFeesHistory{
+	return utils.WriteJSON(w, &FeesHistory{
 		OldestBlock:   &oldestBlockNumber,
 		BaseFees:      baseFees,
 		GasUsedRatios: gasUsedRatios,
