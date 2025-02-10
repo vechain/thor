@@ -167,6 +167,28 @@ func (s *Server) NodeInfo() *p2p.NodeInfo {
 	return s.srv.NodeInfo()
 }
 
+// Options returns the options.
+func (s *Server) Options() *Options {
+	return s.opts
+}
+
+// TryDial tries to establish a connection with the  the given node.
+func (s *Server) TryDial(node *discover.Node) error {
+	if s.dialingNodes.Contains(node.ID) {
+		return nil
+	}
+
+	// Record the manual dialing node for future dial ratio calculation.
+	// But the dial ratio limit is not applied to manual dialing.
+	s.dialingNodes.Add(node)
+	err := s.tryDial(node)
+	if err != nil {
+		s.dialingNodes.Remove(node.ID)
+	}
+
+	return err
+}
+
 func (s *Server) listenDiscV5() (err error) {
 	// borrowed from ethereum/p2p.Server.Start
 	addr, err := net.ResolveUDPAddr("udp", s.opts.ListenAddr)
@@ -304,9 +326,6 @@ func (s *Server) dialLoop() {
 			s.dialingNodes.Add(node)
 			// don't use goes.Go, since the dial process can't be interrupted
 			go func() {
-				metricDialingNewNode().Add(1)
-				defer metricDialingNewNode().Add(-1)
-
 				if err := s.tryDial(node); err != nil {
 					s.dialingNodes.Remove(node.ID)
 					log.Debug("failed to dial node", "err", err)
@@ -323,6 +342,9 @@ func (s *Server) dialLoop() {
 }
 
 func (s *Server) tryDial(node *discover.Node) error {
+	metricDialingNewNode().Add(1)
+	defer metricDialingNewNode().Add(-1)
+
 	conn, err := s.srv.Dialer.Dial(node)
 	if err != nil {
 		return err
@@ -368,8 +390,4 @@ func (s *Server) fetchBootstrap() {
 		case <-time.After(time.Second * 10):
 		}
 	}
-}
-
-func (s *Server) Options() *Options {
-	return s.opts
 }
