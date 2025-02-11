@@ -7,6 +7,7 @@ package api
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"net"
 	"net/http"
@@ -25,6 +26,7 @@ var (
 	}
 	metricHTTPReqCounter       = metrics.LazyLoadCounterVec("api_request_count", []string{"name", "code", "method"})
 	metricHTTPReqDuration      = metrics.LazyLoadHistogramVec("api_duration_ms", []string{"name", "code", "method"}, metrics.BucketHTTPReqs)
+	metricTxCallVMErrors       = metrics.LazyLoadCounterVec("api_tx_call_vm_errors", []string{"error"})
 	metricWebsocketDuration    = metrics.LazyLoadHistogramVec("api_websocket_duration", []string{"name", "code"}, websocketDurations)
 	metricActiveWebsocketGauge = metrics.LazyLoadGaugeVec("api_active_websocket_gauge", []string{"name"})
 	metricWebsocketCounter     = metrics.LazyLoadCounterVec("api_websocket_counter", []string{"name"})
@@ -40,9 +42,33 @@ func newMetricsResponseWriter(w http.ResponseWriter) *metricsResponseWriter {
 	return &metricsResponseWriter{w, http.StatusOK}
 }
 
+type callTxResponseWriter struct {
+	http.ResponseWriter
+	statusCode int
+	VMError    string
+}
+
+func newCallTxResponseWriter(w http.ResponseWriter) *callTxResponseWriter {
+	return &callTxResponseWriter{w, http.StatusOK, ""}
+}
+
 func (m *metricsResponseWriter) WriteHeader(code int) {
 	m.statusCode = code
 	m.ResponseWriter.WriteHeader(code)
+}
+
+func (c *callTxResponseWriter) Write(b []byte) (int, error) {
+	var resp struct {
+		VMError string `json:"VMError"`
+	}
+
+	if err := json.Unmarshal(b, &resp); err == nil {
+		if resp.VMError != "" {
+			c.VMError = resp.VMError
+		}
+	}
+
+	return c.ResponseWriter.Write(b)
 }
 
 // Hijack complies the writer with WS subscriptions interface
@@ -71,10 +97,23 @@ func metricsMiddleware(next http.Handler) http.Handler {
 			subscription = false
 		)
 
-		// all named route will be recorded
 		if rt != nil && rt.GetName() != "" {
 			enabled = true
 			name = rt.GetName()
+			if name == "transactions_call_tx" {
+				ctxWriter := newCallTxResponseWriter(w)
+				next.ServeHTTP(ctxWriter, r)
+
+				// Record VM error if present
+				if ctxWriter.VMError != "" {
+					metricTxCallVMErrors().AddWithLabel(1, map[string]string{
+						"error": ctxWriter.VMError,
+					})
+				}
+				return
+			}
+
+			// Handle subscriptions
 			if strings.HasPrefix(name, "WS") {
 				subscription = true
 			}

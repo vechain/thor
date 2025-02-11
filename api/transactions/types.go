@@ -7,10 +7,12 @@ package transactions
 
 import (
 	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -83,22 +85,18 @@ type RawTransaction struct {
 	Meta *TxMeta `json:"meta"`
 }
 
-// convertTransaction convert a raw transaction into a json format transaction
-func convertTransaction(tx *tx.Transaction, header *block.Header) *Transaction {
-	//tx origin
-	origin, _ := tx.Origin()
-	delegator, _ := tx.Delegator()
-
-	txClauses := tx.Clauses()
-	cls := make(Clauses, len(txClauses))
-	for i, c := range txClauses {
+// ConvertCoreTransaction converts a core type transaction into an api tx (json format transaction)
+// allows to specify the origin and delegator
+func ConvertCoreTransaction(tx *tx.Transaction, header *block.Header, origin *thor.Address, delegator *thor.Address) *Transaction {
+	cls := make(Clauses, len(tx.Clauses()))
+	for i, c := range tx.Clauses() {
 		cls[i] = convertClause(c)
 	}
 	br := tx.BlockRef()
 	t := &Transaction{
 		ChainTag:     tx.ChainTag(),
 		ID:           tx.ID(),
-		Origin:       origin,
+		Origin:       *origin,
 		BlockRef:     hexutil.Encode(br[:]),
 		Expiration:   tx.Expiration(),
 		Nonce:        math.HexOrDecimal64(tx.Nonce()),
@@ -118,6 +116,15 @@ func convertTransaction(tx *tx.Transaction, header *block.Header) *Transaction {
 		}
 	}
 	return t
+}
+
+// convertSignedCoreTransaction converts a core type transaction into an api tx (json format transaction)
+// retrieves the origin and delegator from signature
+func convertTransaction(tx *tx.Transaction, header *block.Header) *Transaction {
+	//tx origin
+	origin, _ := tx.Origin()
+	delegator, _ := tx.Delegator()
+	return ConvertCoreTransaction(tx, header, &origin, delegator)
 }
 
 type TxMeta struct {
@@ -145,6 +152,19 @@ type Receipt struct {
 	Outputs  []*Output             `json:"outputs"`
 }
 
+// CallReceipt for json marshal
+type CallReceipt struct {
+	GasUsed  uint64                `json:"gasUsed"`
+	GasPayer thor.Address          `json:"gasPayer"`
+	Paid     *math.HexOrDecimal256 `json:"paid"`
+	Reward   *math.HexOrDecimal256 `json:"reward"`
+	Reverted bool                  `json:"reverted"`
+	TxID     thor.Bytes32          `json:"txID"`
+	TxOrigin thor.Address          `json:"txOrigin"`
+	Outputs  []*Output             `json:"outputs"`
+	VMError  string                `json:"vmError"`
+}
+
 // Output output of clause execution.
 type Output struct {
 	ContractAddress *thor.Address `json:"contractAddress"`
@@ -166,7 +186,7 @@ type Transfer struct {
 	Amount    *math.HexOrDecimal256 `json:"amount"`
 }
 
-// ConvertReceipt convert a raw clause into a jason format clause
+// ConvertReceipt convert a raw clause into a json format clause
 func convertReceipt(txReceipt *tx.Receipt, header *block.Header, tx *tx.Transaction) (*Receipt, error) {
 	reward := math.HexOrDecimal256(*txReceipt.Reward)
 	paid := math.HexOrDecimal256(*txReceipt.Paid)
@@ -221,6 +241,116 @@ func convertReceipt(txReceipt *tx.Receipt, header *block.Header, tx *tx.Transact
 		receipt.Outputs[i] = otp
 	}
 	return receipt, nil
+}
+
+// convertCallReceipt converts a tx.Receipt into a transaction.CallReceipt
+func convertCallReceipt(
+	txReceipt *tx.Receipt,
+	tx *Transaction,
+	callAddr *thor.Address,
+) (*CallReceipt, error) {
+	reward := math.HexOrDecimal256(*txReceipt.Reward)
+	paid := math.HexOrDecimal256(*txReceipt.Paid)
+	origin := callAddr
+
+	receipt := &CallReceipt{
+		GasUsed:  txReceipt.GasUsed,
+		GasPayer: txReceipt.GasPayer,
+		Paid:     &paid,
+		Reward:   &reward,
+		Reverted: txReceipt.Reverted,
+		TxOrigin: *origin,
+		TxID:     tx.ID,
+	}
+	receipt.Outputs = make([]*Output, len(txReceipt.Outputs))
+	for i, output := range txReceipt.Outputs {
+		clause := tx.Clauses[i]
+		var contractAddr *thor.Address
+		if clause.To == nil {
+			cAddr := thor.CreateContractAddress(tx.ID, uint32(i), 0)
+			contractAddr = &cAddr
+		}
+		otp := &Output{contractAddr,
+			make([]*Event, len(output.Events)),
+			make([]*Transfer, len(output.Transfers)),
+		}
+		for j, txEvent := range output.Events {
+			event := &Event{
+				Address: txEvent.Address,
+				Data:    hexutil.Encode(txEvent.Data),
+			}
+			event.Topics = make([]thor.Bytes32, len(txEvent.Topics))
+			copy(event.Topics, txEvent.Topics)
+			otp.Events[j] = event
+		}
+		for j, txTransfer := range output.Transfers {
+			transfer := &Transfer{
+				Sender:    txTransfer.Sender,
+				Recipient: txTransfer.Recipient,
+				Amount:    (*math.HexOrDecimal256)(txTransfer.Amount),
+			}
+			otp.Transfers[j] = transfer
+		}
+		receipt.Outputs[i] = otp
+	}
+	return receipt, nil
+}
+
+func convertErrorCallReceipt(
+	vmErr error,
+	tx *Transaction,
+	callAddr *thor.Address,
+) (*CallReceipt, error) {
+	origin := callAddr
+
+	receipt := &CallReceipt{
+		Reverted: true,
+		TxOrigin: *origin,
+		TxID:     tx.ID,
+		VMError:  vmErr.Error(),
+	}
+	receipt.Outputs = make([]*Output, len(tx.Clauses))
+	for i := range tx.Clauses {
+		clause := tx.Clauses[i]
+		var contractAddr *thor.Address
+		if clause.To == nil {
+			cAddr := thor.CreateContractAddress(tx.ID, uint32(i), 0)
+			contractAddr = &cAddr
+		}
+
+		receipt.Outputs[i] = &Output{ContractAddress: contractAddr}
+	}
+	return receipt, nil
+}
+
+// ConvertCallTransaction converts a transaction.Transaction into a tx.Transaction
+// note: tx.Transaction will not be signed
+func ConvertCallTransaction(incomingTx *Transaction, header *block.Header) (*tx.Transaction, error) {
+	blockRef, err := tx.NewBlockRefFromHex(incomingTx.BlockRef)
+	if err != nil {
+		return nil, errors.WithMessage(err, "blockRef")
+	}
+
+	convertedTxBuilder := new(tx.Builder).
+		ChainTag(incomingTx.ChainTag).
+		Features(header.TxsFeatures()).
+		Nonce(uint64(incomingTx.Nonce)).
+		BlockRef(blockRef).
+		Expiration(incomingTx.Expiration).
+		GasPriceCoef(incomingTx.GasPriceCoef).
+		Gas(incomingTx.Gas).
+		DependsOn(incomingTx.DependsOn)
+
+	for _, c := range incomingTx.Clauses {
+		value := big.Int(c.Value)
+		dataVal, err := hexutil.Decode(c.Data)
+		if err != nil {
+			return nil, fmt.Errorf("unable to decode clause data: %w", err)
+		}
+		convertedTxBuilder.Clause(tx.NewClause(c.To).WithValue(&value).WithData(dataVal))
+	}
+
+	return convertedTxBuilder.Build(), nil
 }
 
 // SendTxResult is the response to the Send Tx method

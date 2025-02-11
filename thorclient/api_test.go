@@ -60,7 +60,7 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 		Mount(router, "/accounts")
 
 	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute})
-	transactions.New(thorChain.Repo(), mempool).Mount(router, "/transactions")
+	transactions.New(thorChain.Repo(), thorChain.Stater(), mempool, thorChain.Engine(), thor.GetForkConfig(thorChain.GenesisBlock().Header().ID())).Mount(router, "/transactions")
 
 	blocks.New(thorChain.Repo(), thorChain.Engine()).Mount(router, "/blocks")
 
