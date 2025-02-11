@@ -202,15 +202,21 @@ func subscribe[T any](conn *websocket.Conn) *common.Subscription[*T] {
 // It returns the connection or an error if the connection fails.
 func (c *Client) Connect(endpoint string, queryValues *url.Values) (*websocket.Conn, int, error) {
 	u := url.URL{
-		Scheme:   c.scheme,
-		Host:     c.host,
-		Path:     endpoint,
-		RawQuery: queryValues.Encode(),
+		Scheme: c.scheme,
+		Host:   c.host,
+		Path:   endpoint,
+	}
+
+	if queryValues != nil {
+		u.RawQuery = queryValues.Encode()
 	}
 
 	conn, res, err := websocket.DefaultDialer.Dial(u.String(), nil)
 	if err != nil {
-		return nil, res.StatusCode, err
+		if res != nil {
+			return nil, res.StatusCode, err
+		}
+		return nil, 0, err
 	}
 
 	conn.SetPingHandler(func(payload string) error {

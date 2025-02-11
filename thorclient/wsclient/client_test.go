@@ -445,3 +445,65 @@ func TestSubscribeBeats2WithServer(t *testing.T) {
 		t.Log(ev.Data)
 	}
 }
+
+func TestClient_ConnectErrors(t *testing.T) {
+	t.Run("success, HTTP error, and dial error", func(t *testing.T) {
+		// 1) Create a test server with two endpoints:
+		//    - /ok for a normal WebSocket upgrade (success).
+		//    - /forbidden for returning 403 (HTTP error).
+		upgrader := websocket.Upgrader{}
+		testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/ok":
+				// Perform the WebSocket upgrade
+				_, err := upgrader.Upgrade(w, r, nil)
+				if err != nil {
+					http.Error(w, "Failed to upgrade", http.StatusInternalServerError)
+				}
+			case "/forbidden":
+				http.Error(w, "Forbidden", http.StatusForbidden)
+			default:
+				http.NotFound(w, r)
+			}
+		}))
+		defer testServer.Close()
+
+		// Parse the test server URL and swap to "ws" for the test
+		serverURL := testServer.URL
+		client, err := NewClient(serverURL) // uses your existing NewClient
+		assert.NoError(t, err, "NewClient should succeed with a valid URL")
+
+		// Subtest A) Successful Connect
+		t.Run("success", func(t *testing.T) {
+			conn, status, err := client.Connect("/ok", nil)
+			assert.NoError(t, err, "expected no error on successful connect")
+			assert.NotNil(t, conn, "expected a non-nil connection")
+			assert.Equal(t, http.StatusSwitchingProtocols, status, "status should be 101 for successful websocket upgrade")
+
+			// Clean up connection
+			if conn != nil {
+				_ = conn.Close()
+			}
+		})
+
+		// Subtest B) HTTP error (403 Forbidden)
+		t.Run("forbidden", func(t *testing.T) {
+			conn, status, err := client.Connect("/forbidden", nil)
+			assert.Error(t, err, "expected an error for 403 response")
+			assert.Nil(t, conn, "connection should be nil on HTTP error")
+			assert.Equal(t, http.StatusForbidden, status, "status should be 403 on forbidden endpoint")
+		})
+
+		// Subtest C) Dial error (invalid host => no HTTP response)
+		t.Run("dial error no response", func(t *testing.T) {
+			// Create a client with a deliberately invalid host
+			badClient, err := NewClient("ws://localhost:0")
+			assert.NoError(t, err, "creating a client with an invalid port should succeed at parse time")
+
+			conn, status, err := badClient.Connect("/ignored", nil)
+			assert.Error(t, err, "expected an error for dial failure")
+			assert.Nil(t, conn, "connection should be nil when no response is returned")
+			assert.Equal(t, 0, status, "status should be 0 when no HTTP response is received")
+		})
+	})
+}
