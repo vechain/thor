@@ -33,8 +33,8 @@ func (rev *Revision) IsNext() bool {
 	return rev.val == revNext
 }
 
-func NewRevision(number uint32) *Revision {
-	return &Revision{number}
+func NewRevision(val interface{}) *Revision {
+	return &Revision{val}
 }
 
 func ParseRevisionWithoutBlockID(revision string, allowNext bool) (*Revision, error) {

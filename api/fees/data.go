@@ -54,7 +54,7 @@ func (fd *FeesData) computeOldestBlockRevision(oldestBlockNumber uint32) (*utils
 		fd.pushToCache(blockSummary.Header)
 	}
 
-	return utils.NewRevision(oldestBlockNumber), nil
+	return utils.NewRevision(blockID), nil
 }
 
 func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCount uint32) (*utils.Revision, []*hexutil.Big, []float64, error) {
