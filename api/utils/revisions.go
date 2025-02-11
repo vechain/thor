@@ -188,6 +188,12 @@ func (r *Revision) MarshalJSON() ([]byte, error) {
 }
 
 func (r *Revision) UnmarshalJSON(data []byte) error {
+	var n uint32
+	if err := json.Unmarshal(data, &n); err == nil {
+		r.val = n
+		return nil
+	}
+
 	var s string
 	if err := json.Unmarshal(data, &s); err == nil {
 		switch s {
@@ -210,12 +216,6 @@ func (r *Revision) UnmarshalJSON(data []byte) error {
 				return errors.New("invalid string for Revision")
 			}
 		}
-		return nil
-	}
-
-	var n uint32
-	if err := json.Unmarshal(data, &n); err == nil {
-		r.val = n
 		return nil
 	}
 
