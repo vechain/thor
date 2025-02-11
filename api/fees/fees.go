@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
+	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/cache"
@@ -51,8 +52,9 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 		return 0, nil, utils.BadRequest(errors.WithMessage(err, "invalid blockCount, it should represent an integer"))
 	}
 	blockCount := uint32(blockCountUInt64)
+	bestBlockSummary := f.data.repo.BestBlockSummary()
 	if blockCount == 0 {
-		return 0, f.data.repo.BestBlockSummary(), nil
+		return 0, bestBlockSummary, nil
 	}
 
 	//newestBlock validation
@@ -66,16 +68,28 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 		return 0, nil, err
 	}
 	// Too old
-	minAllowedBlock := uint32(math.Max(0, float64(int(f.data.repo.BestBlockSummary().Header.Number())-int(f.data.backtraceLimit)+1)))
+	minAllowedBlockInt := int(bestBlockSummary.Header.Number()) - int(f.data.backtraceLimit) + 1
+	var minAllowedBlock uint32
+	if minAllowedBlockInt < 0 {
+		minAllowedBlock = 0
+		// If we get to this point, there are less blocks than the backtrace limit.
+		// So in case the block count is higher than the number of blocks, we should adjust it.
+		blockCount = uint32(math.Min(float64(blockCount), float64(bestBlockSummary.Header.Number()+1)))
+	} else {
+		minAllowedBlock = uint32(minAllowedBlockInt)
+	}
+
 	if newestBlockSummary.Header.Number() < minAllowedBlock {
 		// If the starting block is below the allowed range, return-fast.
-		return 0, nil, utils.BadRequest(errors.New("newestBlock not in the allowed range"))
+		return 0, nil, leveldb.ErrNotFound
 	}
 
 	// If the oldest block is below the allowed range, then adjust blockCount
-	if newestBlockSummary.Header.Number()-(blockCount-1) < minAllowedBlock {
+	minBlockInt := int(newestBlockSummary.Header.Number()) - int(blockCount) - 1
+	if minBlockInt < minAllowedBlockInt {
 		blockCount = newestBlockSummary.Header.Number() - minAllowedBlock + 1
 	}
+
 	return blockCount, newestBlockSummary, nil
 }
 
@@ -83,6 +97,7 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 	blockCount, newestBlockSummary, err := f.validateGetFeesHistoryParams(req)
 	if err != nil {
 		if f.data.repo.IsNotFound(err) {
+			// This returns 200 null
 			return utils.WriteJSON(w, nil)
 		}
 		return err

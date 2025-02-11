@@ -67,7 +67,7 @@ func TestFeesFixedSizeGreaterThanBacktrace(t *testing.T) {
 
 func TestFeesFixedSizeSameAsBacktrace(t *testing.T) {
 	// Less blocks than the backtrace limit
-	ts, closeFunc := initFeesServer(t, 10, 10, 10)
+	ts, closeFunc := initFeesServer(t, 11, 11, 10)
 	defer func() {
 		closeFunc()
 		ts.Close()
@@ -210,21 +210,38 @@ func getFeeHistoryNewestBlockNotIncluded(t *testing.T, tclient *thorclient.Clien
 func getFeeHistoryCacheLimit(t *testing.T, tclient *thorclient.Client) {
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=4&newestBlock=2")
 	require.NoError(t, err)
-	require.Equal(t, 500, statusCode)
+	require.Equal(t, 200, statusCode)
 	require.NotNil(t, res)
-	require.Equal(t, "not found\n", string(res))
+	var feesHistory fees.FeesHistory
+	if err := json.Unmarshal(res, &feesHistory); err != nil {
+		t.Fatal(err)
+	}
+
+	// We expect this since:
+	// - The cache and backtrace limit match (8)
+	// - There are 10 blocks, from 0 to 9
+	// So the oldest block is 2 since we cannot keep going backwards,
+	// meaning that we cannot give the 4 requested blocks.
+	expectedOldestBlock := uint32(2)
+	expectedFeesHistory := fees.FeesHistory{
+		OldestBlock:   &expectedOldestBlock,
+		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(875525000))},
+		GasUsedRatios: []float64{expectedGasPriceUsedRatio},
+	}
+
+	require.Equal(t, expectedFeesHistory, feesHistory)
 }
 
 func getFeeHistoryBlockCountBiggerThanMax(t *testing.T, tclient *thorclient.Client) {
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=1025&newestBlock=1")
 	require.NoError(t, err)
-	require.Equal(t, 400, statusCode)
+	require.Equal(t, 200, statusCode)
 	require.NotNil(t, res)
-	assert.Equal(t, "newestBlock not in the allowed range\n", string(res))
+	assert.Equal(t, "null\n", string(res))
 }
 
 func getFeeHistoryMoreBlocksRequestedThanAvailable(t *testing.T, tclient *thorclient.Client) {
-	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=10&newestBlock=best")
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=11&newestBlock=best")
 	require.NoError(t, err)
 	require.Equal(t, 200, statusCode)
 	require.NotNil(t, res)
