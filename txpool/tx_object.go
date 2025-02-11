@@ -101,12 +101,12 @@ func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 	checkpoint := state.NewCheckpoint()
 	defer state.RevertTo(checkpoint)
 
-	isGalactica := headBlock.Number() >= forkConfig.GALACTICA
+	isGalactica := headBlock.Number()+1 >= forkConfig.GALACTICA
 
-	baseFee := headBlock.BaseFee()
-	// The block header before GALACTICA has no base fee, so it's initialized with InitialBaseFee.
-	if headBlock.Number() == forkConfig.GALACTICA {
-		baseFee = big.NewInt(thor.InitialBaseFee)
+	var baseFee *big.Int
+	// If the best block is the last block before galactica, we need to estimate the new block's base fee.
+	if isGalactica {
+		baseFee = fork.CalcBaseFee(forkConfig, headBlock)
 	}
 	galacticaItems := &fork.GalacticaItems{IsActive: isGalactica, BaseFee: baseFee}
 	_, _, payer, prepaid, _, err := o.resolved.BuyGas(state, headBlock.Timestamp()+thor.BlockInterval, galacticaItems)
@@ -124,13 +124,6 @@ func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 func sortTxObjsByOverallGasPriceDesc(txObjs []*txObject) {
 	sort.Slice(txObjs, func(i, j int) bool {
 		gp1, gp2 := txObjs[i].priorityGasPrice, txObjs[j].priorityGasPrice
-		// This is to make sure the zero gas price txs are always at the end of the list.
-		if gp1.Sign() == 0 {
-			return false
-		}
-		if gp2.Sign() == 0 {
-			return true
-		}
 		return gp1.Cmp(gp2) >= 0
 	})
 }

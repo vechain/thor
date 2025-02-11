@@ -143,6 +143,8 @@ func TestExecutable(t *testing.T) {
 		expectedErr string
 	}{
 		{newTx(tx.LegacyTxType, 0, nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), acc), true, ""},
+		{newTx(tx.LegacyTxType, 0, nil, b1.Header().GasLimit(), tx.BlockRef{}, 100, nil, tx.Features(0), acc), true, ""},
+		{newTx(tx.LegacyTxType, 0, nil, b1.Header().GasLimit()+1, tx.BlockRef{}, 100, nil, tx.Features(0), acc), false, "gas too large"},
 		{newTx(tx.LegacyTxType, 0, nil, math.MaxUint64, tx.BlockRef{}, 100, nil, tx.Features(0), acc), false, "gas too large"},
 		{newTx(tx.LegacyTxType, 0, nil, 21000, tx.BlockRef{1}, 100, nil, tx.Features(0), acc), true, "block ref out of schedule"},
 		{newTx(tx.LegacyTxType, 0, nil, 21000, tx.BlockRef{0}, 0, nil, tx.Features(0), acc), true, "expired"},

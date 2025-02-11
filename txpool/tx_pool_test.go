@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	r "math/rand/v2"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -122,6 +123,9 @@ func FillPoolWithLegacyTxs(pool *TxPool, t *testing.T) {
 }
 
 func FillPoolWithDynFeeTxs(pool *TxPool, t *testing.T) {
+	// Advance one block to activate galactica and accept dynamic fee transactions
+	addOneBlock(t, pool)
+
 	// Create a slice of transactions to be added to the pool.
 	txs := make(Tx.Transactions, 0, 15)
 	for i := 0; i < 12; i++ {
@@ -138,6 +142,9 @@ func FillPoolWithDynFeeTxs(pool *TxPool, t *testing.T) {
 }
 
 func FillPoolWithMixedTxs(pool *TxPool, t *testing.T) {
+	// Advance one block to activate galactica and accept dynamic fee transactions
+	addOneBlock(t, pool)
+
 	// Create a slice of transactions to be added to the pool.
 	txs := make(Tx.Transactions, 0, 15)
 	for i := 0; i < 6; i++ {
@@ -155,6 +162,24 @@ func FillPoolWithMixedTxs(pool *TxPool, t *testing.T) {
 	assert.Equal(t, "tx rejected: pool is full", err.Error())
 }
 
+func addOneBlock(t *testing.T, pool *TxPool) {
+	var sig [65]byte
+	rand.Read(sig[:])
+
+	b1 := new(block.Builder).
+		ParentID(pool.repo.GenesisBlock().Header().ID()).
+		Timestamp(uint64(time.Now().Unix())).
+		TotalScore(100).
+		GasLimit(10000000).
+		StateRoot(pool.Dump().RootHash()).
+		BaseFee(big.NewInt(thor.InitialBaseFee)).
+		Build().WithSignature(sig[:])
+	if err := pool.repo.AddBlock(b1, nil, 0); err != nil {
+		t.Fatal(err)
+	}
+	pool.repo.SetBestBlockID(b1.Header().ID())
+}
+
 func TestAddWithFullErrorUnsyncedChain(t *testing.T) {
 	// First fill the pool with legacy transactions
 	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.NoFork)
@@ -163,11 +188,11 @@ func TestAddWithFullErrorUnsyncedChain(t *testing.T) {
 	FillPoolWithLegacyTxs(pool, t)
 
 	// Now fill the pool with dynamic fee transactions
-	pool = newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.ForkConfig{GALACTICA: 0})
+	pool = newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.ForkConfig{GALACTICA: 1})
 	FillPoolWithDynFeeTxs(pool, t)
 
 	// Now fill the pool with mixed transactions
-	pool = newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.ForkConfig{GALACTICA: 0})
+	pool = newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.ForkConfig{GALACTICA: 1})
 	FillPoolWithMixedTxs(pool, t)
 }
 
@@ -177,10 +202,10 @@ func TestAddWithFullErrorSyncedChain(t *testing.T) {
 
 	FillPoolWithLegacyTxs(pool, t)
 
-	pool = newPoolWithParams(LIMIT, LIMIT_PER_ACCOUNT, "./", "", uint64(time.Now().Unix()), &thor.ForkConfig{GALACTICA: 0})
+	pool = newPoolWithParams(LIMIT, LIMIT_PER_ACCOUNT, "./", "", uint64(time.Now().Unix()), &thor.ForkConfig{GALACTICA: 1})
 	FillPoolWithDynFeeTxs(pool, t)
 
-	pool = newPoolWithParams(LIMIT, LIMIT_PER_ACCOUNT, "./", "", uint64(time.Now().Unix()), &thor.ForkConfig{GALACTICA: 0})
+	pool = newPoolWithParams(LIMIT, LIMIT_PER_ACCOUNT, "./", "", uint64(time.Now().Unix()), &thor.ForkConfig{GALACTICA: 1})
 	FillPoolWithMixedTxs(pool, t)
 }
 
@@ -487,7 +512,7 @@ func TestOrderTxsAfterGalacticaForkSameValues(t *testing.T) {
 	repo.AddBlock(b1, tx.Receipts{}, 0)
 	repo.SetBestBlockID(b1.Header().ID())
 
-	totalPoolTxs := 10
+	totalPoolTxs := 10_000
 	pool := New(repo, state.NewStater(db), Options{
 		Limit:           totalPoolTxs,
 		LimitPerAccount: totalPoolTxs,
@@ -524,8 +549,8 @@ func generateRandomTx(t *testing.T, seed int, chainTag byte) *tx.Transaction {
 		txType = tx.DynamicFeeTxType
 	}
 
-	maxFeePerGas := int64(thor.InitialBaseFee) // #nosec G404
-	maxPriorityFeePerGas := maxFeePerGas / 100 // #nosec G404
+	maxFeePerGas := int64(thor.InitialBaseFee + r.IntN(thor.InitialBaseFee)) // #nosec G404
+	maxPriorityFeePerGas := maxFeePerGas / int64(r.IntN(10)+1)               // #nosec G404
 
 	tx, err := tx.NewTxBuilder(txType).
 		ChainTag(chainTag).

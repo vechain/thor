@@ -12,6 +12,7 @@ import (
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus/fork"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/poa"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
@@ -19,6 +20,8 @@ import (
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/xenv"
 )
+
+var logger = log.WithContext("pkg", "packer")
 
 // Packer to pack txs and build new blocks.
 type Packer struct {
@@ -126,6 +129,12 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (flow
 
 	var baseFee *big.Int
 	if parent.Header.Number()+1 >= p.forkConfig.GALACTICA {
+		// TODO: log to be removed when fork is stable
+		if parent.Header.Number()-1 == p.forkConfig.GALACTICA {
+			logger.Info("Last block before Galactica fork activates")
+		} else if parent.Header.Number() == p.forkConfig.GALACTICA {
+			logger.Info("Galactica fork activated")
+		}
 		baseFee = fork.CalcBaseFee(&p.forkConfig, parent.Header)
 	}
 
@@ -164,6 +173,12 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 
 	var baseFee *big.Int
 	if parent.Header.Number()+1 >= p.forkConfig.GALACTICA {
+		// TODO: log to be removed when fork is stable
+		if parent.Header.Number()-1 == p.forkConfig.GALACTICA {
+			logger.Info("Last block before Galactica fork activates")
+		} else if parent.Header.Number() == p.forkConfig.GALACTICA {
+			logger.Info("Galactica fork activated")
+		}
 		baseFee = fork.CalcBaseFee(&p.forkConfig, parent.Header)
 	}
 
