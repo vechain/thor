@@ -6,6 +6,7 @@
 package utils
 
 import (
+	"encoding/json"
 	"errors"
 	"math"
 	"strconv"
@@ -30,6 +31,10 @@ type Revision struct {
 
 func (rev *Revision) IsNext() bool {
 	return rev.val == revNext
+}
+
+func NewRevision(number uint32) *Revision {
+	return &Revision{number}
 }
 
 func ParseRevisionWithoutBlockID(revision string, allowNext bool) (*Revision, error) {
@@ -159,4 +164,60 @@ func GetSummaryAndState(rev *Revision, repo *chain.Repository, bft bft.Committer
 
 	st := stater.NewState(sum.Header.StateRoot(), sum.Header.Number(), sum.Conflicts, sum.SteadyNum)
 	return sum, st, nil
+}
+
+func (r *Revision) MarshalJSON() ([]byte, error) {
+	switch v := r.val.(type) {
+	case int64:
+		switch v {
+		case revBest:
+			return json.Marshal("best")
+		case revFinalized:
+			return json.Marshal("finalized")
+		case revNext:
+			return json.Marshal("next")
+		case revJustified:
+			return json.Marshal("justified")
+		}
+	case thor.Bytes32:
+		return json.Marshal(v.String())
+	case uint32:
+		return json.Marshal(v)
+	}
+	return nil, errors.New("unsupported type for Revision")
+}
+
+func (r *Revision) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		switch s {
+		case "best":
+			r.val = revBest
+		case "finalized":
+			r.val = revFinalized
+		case "next":
+			r.val = revNext
+		case "justified":
+			r.val = revJustified
+		default:
+			if len(s) == 66 || len(s) == 64 {
+				blockID, err := thor.ParseBytes32(s)
+				if err != nil {
+					return err
+				}
+				r.val = blockID
+			} else {
+				return errors.New("invalid string for Revision")
+			}
+		}
+		return nil
+	}
+
+	var n uint32
+	if err := json.Unmarshal(data, &n); err == nil {
+		r.val = n
+		return nil
+	}
+
+	return errors.New("unsupported type for Revision")
 }

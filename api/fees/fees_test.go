@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/fees"
+	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
@@ -130,9 +131,9 @@ func getFeeHistoryWithSummaries(t *testing.T, tclient *thorclient.Client) {
 	if err := json.Unmarshal(res, &feesHistory); err != nil {
 		t.Fatal(err)
 	}
-	expectedOldestBlock := uint32(2)
+	expectedOldestBlock := utils.NewRevision(2)
 	expectedFeesHistory := fees.FeesHistory{
-		OldestBlock:   &expectedOldestBlock,
+		OldestBlock:   expectedOldestBlock,
 		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(875525000)), (*hexutil.Big)(big.NewInt(766544026)), (*hexutil.Big)(big.NewInt(671128459))},
 		GasUsedRatios: []float64{expectedGasPriceUsedRatio, expectedGasPriceUsedRatio, expectedGasPriceUsedRatio},
 	}
@@ -148,9 +149,9 @@ func getFeeHistoryOnlySummaries(t *testing.T, tclient *thorclient.Client) {
 	if err := json.Unmarshal(res, &feesHistory); err != nil {
 		t.Fatal(err)
 	}
-	expectedOldestBlock := uint32(2)
+	expectedOldestBlock := utils.NewRevision(2)
 	expectedFeesHistory := fees.FeesHistory{
-		OldestBlock: &expectedOldestBlock,
+		OldestBlock: expectedOldestBlock,
 		BaseFees: []*hexutil.Big{
 			(*hexutil.Big)(big.NewInt(875525000)),
 			(*hexutil.Big)(big.NewInt(766544026)),
@@ -173,9 +174,9 @@ func getFeeHistoryBestBlock(t *testing.T, tclient *thorclient.Client) {
 	if err := json.Unmarshal(res, &feesHistory); err != nil {
 		t.Fatal(err)
 	}
-	expectedOldestBlock := uint32(6)
+	expectedOldestBlock := utils.NewRevision(6)
 	expectedFeesHistory := fees.FeesHistory{
-		OldestBlock:   &expectedOldestBlock,
+		OldestBlock:   expectedOldestBlock,
 		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(514449512)), (*hexutil.Big)(big.NewInt(450413409)), (*hexutil.Big)(big.NewInt(394348200)), (*hexutil.Big)(big.NewInt(345261708))},
 		GasUsedRatios: []float64{expectedGasPriceUsedRatio, expectedGasPriceUsedRatio, expectedGasPriceUsedRatio, expectedGasPriceUsedRatio},
 	}
@@ -222,9 +223,9 @@ func getFeeHistoryCacheLimit(t *testing.T, tclient *thorclient.Client) {
 	// - There are 10 blocks, from 0 to 9
 	// So the oldest block is 2 since we cannot keep going backwards,
 	// meaning that we cannot give the 4 requested blocks.
-	expectedOldestBlock := uint32(2)
+	expectedOldestBlock := utils.NewRevision(2)
 	expectedFeesHistory := fees.FeesHistory{
-		OldestBlock:   &expectedOldestBlock,
+		OldestBlock:   expectedOldestBlock,
 		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(875525000))},
 		GasUsedRatios: []float64{expectedGasPriceUsedRatio},
 	}
@@ -249,9 +250,9 @@ func getFeeHistoryMoreBlocksRequestedThanAvailable(t *testing.T, tclient *thorcl
 	if err := json.Unmarshal(res, &feesHistory); err != nil {
 		t.Fatal(err)
 	}
-	expectedOldestBlock := uint32(0)
+	expectedOldestBlock := utils.NewRevision(0)
 	expectedFeesHistory := fees.FeesHistory{
-		OldestBlock: &expectedOldestBlock,
+		OldestBlock: expectedOldestBlock,
 		BaseFees: []*hexutil.Big{
 			(*hexutil.Big)(big.NewInt(0)),
 			(*hexutil.Big)(big.NewInt(1000000000)),
@@ -292,9 +293,9 @@ func getFeeHistoryBlock0(t *testing.T, tclient *thorclient.Client) {
 	if err := json.Unmarshal(res, &feesHistory); err != nil {
 		t.Fatal(err)
 	}
-	expectedOldestBlock := uint32(0)
+	expectedOldestBlock := utils.NewRevision(0)
 	expectedFeesHistory := fees.FeesHistory{
-		OldestBlock:   &expectedOldestBlock,
+		OldestBlock:   expectedOldestBlock,
 		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(0))},
 		GasUsedRatios: []float64{0},
 	}
@@ -313,9 +314,9 @@ func getFeeHistoryMoreThanBacktraceLimit(t *testing.T, tclient *thorclient.Clien
 	if err := json.Unmarshal(res, &feesHistory); err != nil {
 		t.Fatal(err)
 	}
-	expectedOldestBlock := uint32(2)
+	expectedOldestBlock := utils.NewRevision(2)
 	expectedFeesHistory := fees.FeesHistory{
-		OldestBlock: &expectedOldestBlock,
+		OldestBlock: expectedOldestBlock,
 		BaseFees: []*hexutil.Big{
 			(*hexutil.Big)(big.NewInt(875525000)),
 			(*hexutil.Big)(big.NewInt(766544026)),

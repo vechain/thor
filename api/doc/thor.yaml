@@ -1241,18 +1241,18 @@ components:
         blockRef: "0x00000000851caf3c"
         name: "call"
 
+    RevisionResponse:
+      type: string
+      description: Returns `best`, `justified`, `finalized`, a block number or block ID.
+      example: 'best'
+
     GetFeesHistoryResponse:
       type: object
       title: GetFeesHistoryResponse
       allOf:
         - properties:
             oldestBlock:
-              type: integer
-              format: uint32
-              description: |
-                The oldest block in the range
-              example: 325324
-              nullable: false
+              $ref: '#/components/schemas/RevisionResponse'
             baseFees:
               type: array
               description: |

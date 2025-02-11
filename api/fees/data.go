@@ -9,6 +9,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/cache"
@@ -39,10 +40,32 @@ func (fd *FeesData) pushToCache(header *block.Header) {
 	fd.cache.Set(header.ID(), feeCacheEntry, float64(header.Number()))
 }
 
-func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCount uint32) (uint32, []*hexutil.Big, []float64, error) {
+func (fd *FeesData) computeOldestBlockRevision(oldestBlockNumber uint32) (*utils.Revision, error) {
+	bestChain := fd.repo.NewBestChain()
+	blockID, err := bestChain.GetBlockID(oldestBlockNumber)
+	if err != nil {
+		return nil, err
+	}
+	if _, _, found := fd.cache.Get(blockID); !found {
+		blockSummary, err := bestChain.GetBlockSummary(oldestBlockNumber)
+		if err != nil {
+			return nil, err
+		}
+		fd.pushToCache(blockSummary.Header)
+	}
+
+	return utils.NewRevision(oldestBlockNumber), nil
+}
+
+func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCount uint32) (*utils.Revision, []*hexutil.Big, []float64, error) {
 	// assumed these are always valid ranges
 	newestBlockNumber := newestBlockSummary.Header.Number()
 	oldestBlockNumber := newestBlockNumber - blockCount + 1
+
+	oldestBlockRevision, err := fd.computeOldestBlockRevision(oldestBlockNumber)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
 	// fetch entries from cache
 	entries := make([]*cache.PrioEntry, blockCount)
@@ -62,7 +85,7 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 			// retrieve from db + retro-populate cache
 			blockSummary, err := fd.repo.NewBestChain().GetBlockSummary(oldestBlockNumber + uint32(i))
 			if err != nil {
-				return 0, nil, nil, err
+				return nil, nil, nil, err
 			}
 			fd.pushToCache(blockSummary.Header)
 
@@ -76,5 +99,5 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 		gasUsedRatios[i] = ent.Value.(*FeeCacheEntry).gasUsedRatio
 	}
 
-	return oldestBlockNumber, baseFees, gasUsedRatios, nil
+	return oldestBlockRevision, baseFees, gasUsedRatios, nil
 }

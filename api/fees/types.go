@@ -7,10 +7,11 @@ package fees
 
 import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/vechain/thor/v2/api/utils"
 )
 
 type FeesHistory struct {
-	OldestBlock   *uint32        `json:"oldestBlock"`
-	BaseFees      []*hexutil.Big `json:"baseFees"`
-	GasUsedRatios []float64      `json:"gasUsedRatios"`
+	OldestBlock   *utils.Revision `json:"oldestBlock"`
+	BaseFees      []*hexutil.Big  `json:"baseFees"`
+	GasUsedRatios []float64       `json:"gasUsedRatios"`
 }
