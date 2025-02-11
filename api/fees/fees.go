@@ -45,52 +45,47 @@ func New(repo *chain.Repository, bft bft.Committer, backtraceLimit uint32, fixed
 }
 
 func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.BlockSummary, error) {
-	//blockCount validation
+	// Validate blockCount
 	blockCountParam := req.URL.Query().Get("blockCount")
-	blockCountUInt64, err := strconv.ParseUint(blockCountParam, 10, 32)
+	blockCount, err := strconv.ParseUint(blockCountParam, 10, 32)
 	if err != nil {
 		return 0, nil, utils.BadRequest(errors.WithMessage(err, "invalid blockCount, it should represent an integer"))
 	}
-	blockCount := uint32(blockCountUInt64)
+
 	bestBlockSummary := f.data.repo.BestBlockSummary()
 	if blockCount == 0 {
 		return 0, bestBlockSummary, nil
 	}
 
-	//newestBlock validation
+	// Validate newestBlock
 	newestBlock, err := utils.ParseRevisionWithoutBlockID(req.URL.Query().Get("newestBlock"), false)
 	if err != nil {
 		return 0, nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
 	}
-	// Too new
+
 	newestBlockSummary, err := utils.GetSummary(newestBlock, f.data.repo, f.data.bft)
 	if err != nil {
 		return 0, nil, err
 	}
-	// Too old
-	minAllowedBlockInt := int(bestBlockSummary.Header.Number()) - int(f.data.backtraceLimit) + 1
-	var minAllowedBlock uint32
-	if minAllowedBlockInt < 0 {
-		minAllowedBlock = 0
-		// If we get to this point, there are less blocks than the backtrace limit.
-		// So in case the block count is higher than the number of blocks, we should adjust it.
-		blockCount = uint32(math.Min(float64(blockCount), float64(bestBlockSummary.Header.Number()+1)))
-	} else {
-		minAllowedBlock = uint32(minAllowedBlockInt)
+
+	// Calculate minAllowedBlock
+	minAllowedBlock := uint32(math.Max(0, float64(int(bestBlockSummary.Header.Number())-int(f.data.backtraceLimit)+1)))
+
+	// Adjust blockCount if necessary
+	if int(bestBlockSummary.Header.Number()) < int(f.data.backtraceLimit) {
+		blockCount = uint64(math.Min(float64(blockCount), float64(bestBlockSummary.Header.Number()+1)))
 	}
 
 	if newestBlockSummary.Header.Number() < minAllowedBlock {
-		// If the starting block is below the allowed range, return-fast.
 		return 0, nil, leveldb.ErrNotFound
 	}
 
-	// If the oldest block is below the allowed range, then adjust blockCount
-	minBlockInt := int(newestBlockSummary.Header.Number()) - int(blockCount) - 1
-	if minBlockInt < minAllowedBlockInt {
-		blockCount = newestBlockSummary.Header.Number() - minAllowedBlock + 1
+	// Adjust blockCount if the oldest block is below the allowed range
+	if int(newestBlockSummary.Header.Number())-int(blockCount) < int(minAllowedBlock) {
+		blockCount = uint64(newestBlockSummary.Header.Number() - minAllowedBlock + 1)
 	}
 
-	return blockCount, newestBlockSummary, nil
+	return uint32(blockCount), newestBlockSummary, nil
 }
 
 func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) error {
