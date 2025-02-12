@@ -47,11 +47,6 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 		return nil, nil, nil, err
 	}
 
-	oldestBlockID, err := fd.repo.NewBestChain().GetBlockID(newestBlockSummary.Header.Number() - blockCount + 1)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
 	baseFees := make([]*hexutil.Big, blockCount)
 	gasUsedRatios := make([]float64, blockCount)
 
@@ -76,6 +71,11 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 
 			newestBlockID = fees.(*FeeCacheEntry).parentBlockID
 		}
+	}
+
+	oldestBlockID, err := fd.repo.NewBestChain().GetBlockID(newestBlockSummary.Header.Number() - blockCount + 1)
+	if err != nil {
+		return nil, nil, nil, err
 	}
 
 	return utils.NewRevision(oldestBlockID), baseFees, gasUsedRatios, nil
