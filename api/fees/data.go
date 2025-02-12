@@ -9,7 +9,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/cache"
@@ -42,10 +41,10 @@ func (fd *FeesData) pushToCache(header *block.Header) {
 	fd.cache.Set(header.ID(), feeCacheEntry, float64(header.Number()))
 }
 
-func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCount uint32) (*utils.Revision, []*hexutil.Big, []float64, error) {
+func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCount uint32) (thor.Bytes32, []*hexutil.Big, []float64, error) {
 	newestBlockID, err := fd.repo.NewBestChain().GetBlockID(newestBlockSummary.Header.Number())
 	if err != nil {
-		return nil, nil, nil, err
+		return thor.Bytes32{}, nil, nil, err
 	}
 
 	baseFees := make([]*hexutil.Big, blockCount)
@@ -59,7 +58,7 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 			// retrieve from db + retro-populate cache
 			blockSummary, err := fd.repo.GetBlockSummary(newestBlockID)
 			if err != nil {
-				return nil, nil, nil, err
+				return thor.Bytes32{}, nil, nil, err
 			}
 
 			fd.pushToCache(blockSummary.Header)
@@ -77,5 +76,5 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 		newestBlockID = fees.(*FeeCacheEntry).parentBlockID
 	}
 
-	return utils.NewRevision(oldestBlockID), baseFees, gasUsedRatios, nil
+	return oldestBlockID, baseFees, gasUsedRatios, nil
 }

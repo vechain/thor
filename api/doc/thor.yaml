@@ -1241,18 +1241,16 @@ components:
         blockRef: "0x00000000851caf3c"
         name: "call"
 
-    RevisionResponse:
-      type: string
-      description: Returns `best`, `justified`, `finalized`, a block number or block ID.
-      example: 'best'
-
     GetFeesHistoryResponse:
       type: object
       title: GetFeesHistoryResponse
       allOf:
         - properties:
             oldestBlock:
-              $ref: '#/components/schemas/RevisionResponse'
+              type: string
+              format: hex
+              description: |
+                The VeChain block identifier of the oldest block in the response.
             baseFees:
               type: array
               description: |

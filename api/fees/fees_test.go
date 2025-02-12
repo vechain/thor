@@ -16,7 +16,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/fees"
-	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/testchain"
@@ -125,9 +124,8 @@ func getFeeHistoryWithSummaries(t *testing.T, tclient *thorclient.Client, bestch
 	if err := json.Unmarshal(res, &feesHistory); err != nil {
 		t.Fatal(err)
 	}
-	parsedBytes, err := bestchain.GetBlockID(2)
+	expectedOldestBlock, err := bestchain.GetBlockID(2)
 	require.NoError(t, err)
-	expectedOldestBlock := utils.NewRevision(parsedBytes)
 	expectedFeesHistory := fees.FeesHistory{
 		OldestBlock:   expectedOldestBlock,
 		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(875525000)), (*hexutil.Big)(big.NewInt(766544026)), (*hexutil.Big)(big.NewInt(671128459))},
@@ -145,9 +143,8 @@ func getFeeHistoryOnlySummaries(t *testing.T, tclient *thorclient.Client, bestch
 	if err := json.Unmarshal(res, &feesHistory); err != nil {
 		t.Fatal(err)
 	}
-	parsedBytes, err := bestchain.GetBlockID(2)
+	expectedOldestBlock, err := bestchain.GetBlockID(2)
 	require.NoError(t, err)
-	expectedOldestBlock := utils.NewRevision(parsedBytes)
 	expectedFeesHistory := fees.FeesHistory{
 		OldestBlock: expectedOldestBlock,
 		BaseFees: []*hexutil.Big{
@@ -172,9 +169,8 @@ func getFeeHistoryBestBlock(t *testing.T, tclient *thorclient.Client, bestchain 
 	if err := json.Unmarshal(res, &feesHistory); err != nil {
 		t.Fatal(err)
 	}
-	parsedBytes, err := bestchain.GetBlockID(6)
+	expectedOldestBlock, err := bestchain.GetBlockID(6)
 	require.NoError(t, err)
-	expectedOldestBlock := utils.NewRevision(parsedBytes)
 	expectedFeesHistory := fees.FeesHistory{
 		OldestBlock:   expectedOldestBlock,
 		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(514449512)), (*hexutil.Big)(big.NewInt(450413409)), (*hexutil.Big)(big.NewInt(394348200)), (*hexutil.Big)(big.NewInt(345261708))},
@@ -223,9 +219,8 @@ func getFeeHistoryCacheLimit(t *testing.T, tclient *thorclient.Client, bestchain
 	// - There are 10 blocks, from 0 to 9
 	// So the oldest block is 2 since we cannot keep going backwards,
 	// meaning that we cannot give the 4 requested blocks.
-	parsedBytes, err := bestchain.GetBlockID(2)
+	expectedOldestBlock, err := bestchain.GetBlockID(2)
 	require.NoError(t, err)
-	expectedOldestBlock := utils.NewRevision(parsedBytes)
 	expectedFeesHistory := fees.FeesHistory{
 		OldestBlock:   expectedOldestBlock,
 		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(875525000))},
@@ -252,9 +247,8 @@ func getFeeHistoryMoreBlocksRequestedThanAvailable(t *testing.T, tclient *thorcl
 	if err := json.Unmarshal(res, &feesHistory); err != nil {
 		t.Fatal(err)
 	}
-	parsedBytes, err := bestchain.GetBlockID(0)
+	expectedOldestBlock, err := bestchain.GetBlockID(0)
 	require.NoError(t, err)
-	expectedOldestBlock := utils.NewRevision(parsedBytes)
 	expectedFeesHistory := fees.FeesHistory{
 		OldestBlock: expectedOldestBlock,
 		BaseFees: []*hexutil.Big{
@@ -297,9 +291,8 @@ func getFeeHistoryBlock0(t *testing.T, tclient *thorclient.Client, bestchain *ch
 	if err := json.Unmarshal(res, &feesHistory); err != nil {
 		t.Fatal(err)
 	}
-	parsedBytes, err := bestchain.GetBlockID(0)
+	expectedOldestBlock, err := bestchain.GetBlockID(0)
 	require.NoError(t, err)
-	expectedOldestBlock := utils.NewRevision(parsedBytes)
 	expectedFeesHistory := fees.FeesHistory{
 		OldestBlock:   expectedOldestBlock,
 		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(0))},
@@ -320,9 +313,8 @@ func getFeeHistoryMoreThanBacktraceLimit(t *testing.T, tclient *thorclient.Clien
 	if err := json.Unmarshal(res, &feesHistory); err != nil {
 		t.Fatal(err)
 	}
-	parsedBytes, err := bestchain.GetBlockID(2)
+	expectedOldestBlock, err := bestchain.GetBlockID(2)
 	require.NoError(t, err)
-	expectedOldestBlock := utils.NewRevision(parsedBytes)
 	expectedFeesHistory := fees.FeesHistory{
 		OldestBlock: expectedOldestBlock,
 		BaseFees: []*hexutil.Big{
