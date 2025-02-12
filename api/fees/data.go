@@ -53,6 +53,7 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 
 	var oldestBlockID thor.Bytes32
 	for i := blockCount; i > 0; i-- {
+		oldestBlockID = newestBlockID
 		fees, _, found := fd.cache.Get(newestBlockID)
 		if !found {
 			// retrieve from db + retro-populate cache
@@ -66,7 +67,6 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 			baseFees[i-1] = getBaseFee(blockSummary.Header.BaseFee())
 			gasUsedRatios[i-1] = float64(blockSummary.Header.GasUsed()) / float64(blockSummary.Header.GasLimit())
 
-			oldestBlockID = newestBlockID
 			newestBlockID = blockSummary.Header.ParentID()
 
 			continue
@@ -74,7 +74,6 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 		baseFees[i-1] = getBaseFee((*big.Int)(fees.(*FeeCacheEntry).baseFee))
 		gasUsedRatios[i-1] = fees.(*FeeCacheEntry).gasUsedRatio
 
-		oldestBlockID = newestBlockID
 		newestBlockID = fees.(*FeeCacheEntry).parentBlockID
 	}
 
