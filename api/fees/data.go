@@ -65,12 +65,13 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 			gasUsedRatios[i-1] = float64(blockSummary.Header.GasUsed()) / float64(blockSummary.Header.GasLimit())
 
 			newestBlockID = blockSummary.Header.ParentID()
-		} else {
-			baseFees[i-1] = getBaseFee((*big.Int)(fees.(*FeeCacheEntry).baseFee))
-			gasUsedRatios[i-1] = fees.(*FeeCacheEntry).gasUsedRatio
 
-			newestBlockID = fees.(*FeeCacheEntry).parentBlockID
+			continue
 		}
+		baseFees[i-1] = getBaseFee((*big.Int)(fees.(*FeeCacheEntry).baseFee))
+		gasUsedRatios[i-1] = fees.(*FeeCacheEntry).gasUsedRatio
+
+		newestBlockID = fees.(*FeeCacheEntry).parentBlockID
 	}
 
 	oldestBlockID, err := fd.repo.NewBestChain().GetBlockID(newestBlockSummary.Header.Number() - blockCount + 1)
