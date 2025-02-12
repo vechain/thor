@@ -14,6 +14,7 @@ import (
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/thor"
 )
 
 func newFeesData(repo *chain.Repository, bft bft.Committer, backtraceLimit uint32, fixedSize uint32) *FeesData {
@@ -50,6 +51,7 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 	baseFees := make([]*hexutil.Big, blockCount)
 	gasUsedRatios := make([]float64, blockCount)
 
+	var oldestBlockID thor.Bytes32
 	for i := blockCount; i > 0; i-- {
 		fees, _, found := fd.cache.Get(newestBlockID)
 		if !found {
@@ -64,6 +66,7 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 			baseFees[i-1] = getBaseFee(blockSummary.Header.BaseFee())
 			gasUsedRatios[i-1] = float64(blockSummary.Header.GasUsed()) / float64(blockSummary.Header.GasLimit())
 
+			oldestBlockID = newestBlockID
 			newestBlockID = blockSummary.Header.ParentID()
 
 			continue
@@ -71,12 +74,8 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 		baseFees[i-1] = getBaseFee((*big.Int)(fees.(*FeeCacheEntry).baseFee))
 		gasUsedRatios[i-1] = fees.(*FeeCacheEntry).gasUsedRatio
 
+		oldestBlockID = newestBlockID
 		newestBlockID = fees.(*FeeCacheEntry).parentBlockID
-	}
-
-	oldestBlockID, err := fd.repo.NewBestChain().GetBlockID(newestBlockSummary.Header.Number() - blockCount + 1)
-	if err != nil {
-		return nil, nil, nil, err
 	}
 
 	return utils.NewRevision(oldestBlockID), baseFees, gasUsedRatios, nil
