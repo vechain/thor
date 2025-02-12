@@ -41,11 +41,10 @@ func (fd *FeesData) pushToCache(header *block.Header) {
 	fd.cache.Set(header.ID(), feeCacheEntry, float64(header.Number()))
 }
 
+// resolveRange resolves the base fees and gas used ratios for the given block range.
+// Assumes that the boundaries (newest block - block count) are correct and validated beforehand.
 func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCount uint32) (thor.Bytes32, []*hexutil.Big, []float64, error) {
-	newestBlockID, err := fd.repo.NewBestChain().GetBlockID(newestBlockSummary.Header.Number())
-	if err != nil {
-		return thor.Bytes32{}, nil, nil, err
-	}
+	newestBlockID := newestBlockSummary.Header.ID()
 
 	baseFees := make([]*hexutil.Big, blockCount)
 	gasUsedRatios := make([]float64, blockCount)
