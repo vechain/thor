@@ -34,70 +34,49 @@ func getBaseFee(baseFee *big.Int) *hexutil.Big {
 
 func (fd *FeesData) pushToCache(header *block.Header) {
 	feeCacheEntry := &FeeCacheEntry{
-		baseFee:      getBaseFee(header.BaseFee()),
-		gasUsedRatio: float64(header.GasUsed()) / float64(header.GasLimit()),
+		baseFee:       getBaseFee(header.BaseFee()),
+		gasUsedRatio:  float64(header.GasUsed()) / float64(header.GasLimit()),
+		parentBlockID: header.ParentID(),
 	}
 	fd.cache.Set(header.ID(), feeCacheEntry, float64(header.Number()))
 }
 
-func (fd *FeesData) computeOldestBlockRevision(oldestBlockNumber uint32) (*utils.Revision, error) {
-	bestChain := fd.repo.NewBestChain()
-	blockID, err := bestChain.GetBlockID(oldestBlockNumber)
-	if err != nil {
-		return nil, err
-	}
-	if _, _, found := fd.cache.Get(blockID); !found {
-		blockSummary, err := bestChain.GetBlockSummary(oldestBlockNumber)
-		if err != nil {
-			return nil, err
-		}
-		fd.pushToCache(blockSummary.Header)
-	}
-
-	return utils.NewRevision(blockID), nil
-}
-
 func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCount uint32) (*utils.Revision, []*hexutil.Big, []float64, error) {
-	// assumed these are always valid ranges
-	newestBlockNumber := newestBlockSummary.Header.Number()
-	oldestBlockNumber := newestBlockNumber - blockCount + 1
-
-	oldestBlockRevision, err := fd.computeOldestBlockRevision(oldestBlockNumber)
+	newestBlockID, err := fd.repo.NewBestChain().GetBlockID(newestBlockSummary.Header.Number())
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	// fetch entries from cache
-	entries := make([]*cache.PrioEntry, blockCount)
-	fd.cache.ForEach(func(ent *cache.PrioEntry) bool {
-		if ent.Priority >= float64(oldestBlockNumber) && ent.Priority <= float64(newestBlockNumber) {
-			entries[uint32(ent.Priority)-oldestBlockNumber] = ent
-		}
-		return true
-	})
+	oldestBlockID, err := fd.repo.NewBestChain().GetBlockID(newestBlockSummary.Header.Number() - blockCount + 1)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
-	// return calculated fees and ratios
 	baseFees := make([]*hexutil.Big, blockCount)
 	gasUsedRatios := make([]float64, blockCount)
 
-	for i, ent := range entries {
-		if ent == nil { // value not in cache
+	for i := blockCount; i > 0; i-- {
+		fees, _, found := fd.cache.Get(newestBlockID)
+		if !found {
 			// retrieve from db + retro-populate cache
-			blockSummary, err := fd.repo.NewBestChain().GetBlockSummary(oldestBlockNumber + uint32(i))
+			blockSummary, err := fd.repo.GetBlockSummary(newestBlockID)
 			if err != nil {
 				return nil, nil, nil, err
 			}
+
 			fd.pushToCache(blockSummary.Header)
 
-			baseFees[i] = getBaseFee(blockSummary.Header.BaseFee())
-			gasUsedRatios[i] = float64(blockSummary.Header.GasUsed()) / float64(blockSummary.Header.GasLimit())
-			continue
-		}
+			baseFees[i-1] = getBaseFee(blockSummary.Header.BaseFee())
+			gasUsedRatios[i-1] = float64(blockSummary.Header.GasUsed()) / float64(blockSummary.Header.GasLimit())
 
-		// use cached values
-		baseFees[i] = getBaseFee((*big.Int)(ent.Value.(*FeeCacheEntry).baseFee))
-		gasUsedRatios[i] = ent.Value.(*FeeCacheEntry).gasUsedRatio
+			newestBlockID = blockSummary.Header.ParentID()
+		} else {
+			baseFees[i-1] = getBaseFee((*big.Int)(fees.(*FeeCacheEntry).baseFee))
+			gasUsedRatios[i-1] = fees.(*FeeCacheEntry).gasUsedRatio
+
+			newestBlockID = fees.(*FeeCacheEntry).parentBlockID
+		}
 	}
 
-	return oldestBlockRevision, baseFees, gasUsedRatios, nil
+	return utils.NewRevision(oldestBlockID), baseFees, gasUsedRatios, nil
 }

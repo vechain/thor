@@ -6,9 +6,7 @@ COPYRIGHT_YEAR = $(shell git --no-pager log -1 --format=%ad --date=format:%Y)
 THOR_VERSION = $(shell cat cmd/thor/VERSION)
 DISCO_VERSION = $(shell cat cmd/disco/VERSION)
 
-PACKAGES = $(shell go list ./... | grep -v '/vendor/' | grep -v 'github.com/vechain/thor/v2/api/fees')
-# Space-separated list of packages to run tests sequentially
-SEQUENTIAL_TEST_PACKAGES = github.com/vechain/thor/v2/api/fees 
+PACKAGES = `go list ./... | grep -v '/vendor/'`
 
 MAJOR = $(shell go version | cut -d' ' -f3 | cut -b 3- | cut -d. -f1)
 MINOR = $(shell go version | cut -d' ' -f3 | cut -b 3- | cut -d. -f2)
@@ -46,46 +44,16 @@ go_version_check:
 
 all: thor disco #@ Build the `thor` and `disco` executables
 
-clean-bins: #@ Clean the build artifacts
+clean: #@ Clean the build artifacts
 	-rm -rf \
 $(CURDIR)/bin/thor \
 $(CURDIR)/bin/disco
 
-clean: #@ Clean the test and build cache and remove binaries
-	@echo "cleaning test cache..."
-	@go clean -testcache
-	@echo "cleaning build cache and binaries..."
-	@go clean -cache -modcache -i -r
-	@rm -rf $(CURDIR)/bin/*
-	@echo "done. build cache and binaries removed."
-
-test-sequential:| go_version_check #@ Run the tests sequentially for SEQUENTIAL_TEST_PACKAGES
-	@for pkg in $(SEQUENTIAL_TEST_PACKAGES); do \
-    	echo "Running tests for $$pkg..."; \
-    	go test -cover $$pkg || exit 1; \
-	done
-
 test:| go_version_check #@ Run the tests
-	@$(MAKE) test-sequential
-	@echo "Running tests for all other packages..."
 	@go test -cover $(PACKAGES)
 
-test-coverage-sequential:| go_version_check #@ Run the test coverage sequentially for SEQUENTIAL_TEST_PACKAGES
-	@echo "mode: atomic" > coverage_seq.out
-	@for pkg in $(SEQUENTIAL_TEST_PACKAGES); do \
-    	echo "Running tests for $$pkg..."; \
-    	go test -race -coverprofile=coverage_tmp.out -covermode=atomic $$pkg || exit 1; \
-    	tail -n +2 coverage_tmp.out >> coverage_seq.out; \
-	done
-	@rm coverage_tmp.out
-
 test-coverage:| go_version_check #@ Run the tests with coverage
-	@$(MAKE) test-coverage-sequential
-	@echo "Running tests with coverage for all other packages..."
-	@go test -race -coverprofile=coverage_all.out -covermode=atomic $(PACKAGES)
-	@echo "Combining coverage reports..."
-	@echo "mode: atomic" > coverage.out && tail -n +2 coverage_seq.out >> coverage.out && tail -n +2 coverage_all.out >> coverage.out
-	@rm coverage_seq.out coverage_all.out
+	@go test -race -coverprofile=coverage.out -covermode=atomic $(PACKAGES)
 	@go tool cover -html=coverage.out
 
 lint_command_check:

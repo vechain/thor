@@ -9,7 +9,6 @@ import (
 	"math"
 	"net/http"
 	"strconv"
-	"sync"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/mux"
@@ -19,16 +18,16 @@ import (
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/thor"
 )
 
 type Fees struct {
 	data *FeesData
-	done chan struct{}
-	wg   sync.WaitGroup
 }
 type FeeCacheEntry struct {
-	baseFee      *hexutil.Big
-	gasUsedRatio float64
+	baseFee       *hexutil.Big
+	gasUsedRatio  float64
+	parentBlockID thor.Bytes32
 }
 type FeesData struct {
 	repo           *chain.Repository
@@ -40,7 +39,6 @@ type FeesData struct {
 func New(repo *chain.Repository, bft bft.Committer, backtraceLimit uint32, fixedCacheSize uint32) *Fees {
 	return &Fees{
 		data: newFeesData(repo, bft, backtraceLimit, fixedCacheSize),
-		done: make(chan struct{}),
 	}
 }
 
@@ -58,7 +56,7 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 	}
 
 	// Validate newestBlock
-	newestBlock, err := utils.ParseRevisionWithoutBlockID(req.URL.Query().Get("newestBlock"), false)
+	newestBlock, err := utils.ParseRevision(req.URL.Query().Get("newestBlock"), false)
 	if err != nil {
 		return 0, nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
 	}
@@ -110,30 +108,7 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 	})
 }
 
-func (f *Fees) pushBestBlockToCache() {
-	ticker := f.data.repo.NewTicker()
-	for {
-		select {
-		case <-ticker.C():
-			bestBlockSummary := f.data.repo.BestBlockSummary()
-			f.data.pushToCache(bestBlockSummary.Header)
-		case <-f.done:
-			return
-		}
-	}
-}
-
-func (f *Fees) Close() {
-	close(f.done)
-	f.wg.Wait()
-}
-
 func (f *Fees) Mount(root *mux.Router, pathPrefix string) {
-	f.wg.Add(1)
-	go func() {
-		defer f.wg.Done()
-		f.pushBestBlockToCache()
-	}()
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 	sub.Path("/history").
 		Methods(http.MethodGet).

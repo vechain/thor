@@ -28,11 +28,8 @@ import (
 const expectedGasPriceUsedRatio = 0.0021
 
 func TestFeesBacktraceGreaterThanFixedSize(t *testing.T) {
-	ts, bestchain, closeFunc := initFeesServer(t, 8, 10, 10)
-	t.Cleanup(func() {
-		closeFunc()
-		ts.Close()
-	})
+	ts, bestchain := initFeesServer(t, 8, 10, 10)
+	t.Cleanup(ts.Close)
 
 	tclient := thorclient.New(ts.URL)
 	for name, tt := range map[string]func(*testing.T, *thorclient.Client, *chain.Chain){
@@ -50,11 +47,9 @@ func TestFeesBacktraceGreaterThanFixedSize(t *testing.T) {
 }
 
 func TestFeesFixedSizeGreaterThanBacktrace(t *testing.T) {
-	ts, bestchain, closeFunc := initFeesServer(t, 8, 6, 10)
-	defer func() {
-		closeFunc()
-		ts.Close()
-	}()
+	ts, bestchain := initFeesServer(t, 8, 6, 10)
+	t.Cleanup(ts.Close)
+
 	tclient := thorclient.New(ts.URL)
 	for name, tt := range map[string]func(*testing.T, *thorclient.Client, *chain.Chain){
 		"getFeeHistoryWithSummaries":          getFeeHistoryWithSummaries,
@@ -69,11 +64,9 @@ func TestFeesFixedSizeGreaterThanBacktrace(t *testing.T) {
 
 func TestFeesFixedSizeSameAsBacktrace(t *testing.T) {
 	// Less blocks than the backtrace limit
-	ts, bestchain, closeFunc := initFeesServer(t, 11, 11, 10)
-	defer func() {
-		closeFunc()
-		ts.Close()
-	}()
+	ts, bestchain := initFeesServer(t, 11, 11, 10)
+	t.Cleanup(ts.Close)
+
 	tclient := thorclient.New(ts.URL)
 	for name, tt := range map[string]func(*testing.T, *thorclient.Client, *chain.Chain){
 		"getFeeHistoryBestBlock":                        getFeeHistoryBestBlock,
@@ -86,7 +79,7 @@ func TestFeesFixedSizeSameAsBacktrace(t *testing.T) {
 	}
 }
 
-func initFeesServer(t *testing.T, backtraceLimit uint32, fixedCacheSize uint32, numberOfBlocks int) (*httptest.Server, *chain.Chain, func()) {
+func initFeesServer(t *testing.T, backtraceLimit uint32, fixedCacheSize uint32, numberOfBlocks int) (*httptest.Server, *chain.Chain) {
 	forkConfig := thor.NoFork
 	forkConfig.GALACTICA = 1
 	thorChain, err := testchain.NewIntegrationTestChainWithFork(forkConfig)
@@ -120,7 +113,7 @@ func initFeesServer(t *testing.T, backtraceLimit uint32, fixedCacheSize uint32, 
 	require.NoError(t, err)
 	require.Len(t, allBlocks, numberOfBlocks)
 
-	return httptest.NewServer(router), thorChain.Repo().NewBestChain(), fees.Close
+	return httptest.NewServer(router), thorChain.Repo().NewBestChain()
 }
 
 func getFeeHistoryWithSummaries(t *testing.T, tclient *thorclient.Client, bestchain *chain.Chain) {
