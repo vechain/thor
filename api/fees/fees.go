@@ -83,7 +83,7 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 
 	oldestBlockRevision, baseFees, gasUsedRatios, err := f.data.resolveRange(newestBlockSummary, blockCount)
 	if err != nil {
-		return utils.HTTPError(err, http.StatusInternalServerError)
+		return err
 	}
 
 	return utils.WriteJSON(w, &FeesHistory{
