@@ -9,19 +9,26 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/thor"
 )
 
-func newFeesData(repo *chain.Repository, bft bft.Committer, backtraceLimit uint32, fixedSize uint32) *FeesData {
+type FeeCacheEntry struct {
+	baseFee       *hexutil.Big
+	gasUsedRatio  float64
+	parentBlockID thor.Bytes32
+}
+type FeesData struct {
+	repo  *chain.Repository
+	cache *cache.PrioCache
+}
+
+func newFeesData(repo *chain.Repository, fixedSize uint32) *FeesData {
 	return &FeesData{
-		repo:           repo,
-		cache:          cache.NewPrioCache(int(fixedSize)),
-		bft:            bft,
-		backtraceLimit: backtraceLimit,
+		repo:  repo,
+		cache: cache.NewPrioCache(int(fixedSize)),
 	}
 }
 

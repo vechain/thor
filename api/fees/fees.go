@@ -10,35 +10,24 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
-	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/bft"
-	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/thor"
 )
 
 type Fees struct {
-	data *FeesData
-}
-type FeeCacheEntry struct {
-	baseFee       *hexutil.Big
-	gasUsedRatio  float64
-	parentBlockID thor.Bytes32
-}
-type FeesData struct {
-	repo           *chain.Repository
-	cache          *cache.PrioCache
+	data           *FeesData
 	bft            bft.Committer
 	backtraceLimit uint32 // The max number of blocks to backtrace.
 }
 
 func New(repo *chain.Repository, bft bft.Committer, backtraceLimit uint32, fixedCacheSize uint32) *Fees {
 	return &Fees{
-		data: newFeesData(repo, bft, backtraceLimit, fixedCacheSize),
+		data:           newFeesData(repo, fixedCacheSize),
+		bft:            bft,
+		backtraceLimit: backtraceLimit,
 	}
 }
 
@@ -50,9 +39,8 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 		return 0, nil, utils.BadRequest(errors.WithMessage(err, "invalid blockCount, it should represent an integer"))
 	}
 
-	bestBlockSummary := f.data.repo.BestBlockSummary()
 	if blockCount == 0 {
-		return 0, bestBlockSummary, nil
+		return 0, nil, utils.BadRequest(errors.WithMessage(err, "invalid blockCount, it should not be 0"))
 	}
 
 	// Validate newestBlock
@@ -61,21 +49,22 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 		return 0, nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
 	}
 
-	newestBlockSummary, err := utils.GetSummary(newestBlock, f.data.repo, f.data.bft)
+	newestBlockSummary, err := utils.GetSummary(newestBlock, f.data.repo, f.bft)
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
 	}
 
+	bestBlockSummary := f.data.repo.BestBlockSummary()
 	// Calculate minAllowedBlock
-	minAllowedBlock := uint32(math.Max(0, float64(int(bestBlockSummary.Header.Number())-int(f.data.backtraceLimit)+1)))
+	minAllowedBlock := uint32(math.Max(0, float64(int(bestBlockSummary.Header.Number())-int(f.backtraceLimit)+1)))
 
 	// Adjust blockCount if necessary
-	if int(bestBlockSummary.Header.Number()) < int(f.data.backtraceLimit) {
+	if int(bestBlockSummary.Header.Number()) < int(f.backtraceLimit) {
 		blockCount = uint64(math.Min(float64(blockCount), float64(bestBlockSummary.Header.Number()+1)))
 	}
 
 	if newestBlockSummary.Header.Number() < minAllowedBlock {
-		return 0, nil, leveldb.ErrNotFound
+		return 0, nil, utils.BadRequest(errors.WithMessage(err, "invalid newestBlock, it is below the minimum allowed block"))
 	}
 
 	// Adjust blockCount if the oldest block is below the allowed range
@@ -89,10 +78,6 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) error {
 	blockCount, newestBlockSummary, err := f.validateGetFeesHistoryParams(req)
 	if err != nil {
-		if f.data.repo.IsNotFound(err) {
-			// This returns 200 null
-			return utils.WriteJSON(w, nil)
-		}
 		return err
 	}
 
