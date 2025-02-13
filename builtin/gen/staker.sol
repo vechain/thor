@@ -5,47 +5,78 @@ contract Staker {
     mapping(address => mapping(address => uint256)) private _stakes;
     address[] private _validators;
 
-    event Staked(address indexed staker, uint256 amount, address indexed validator);
-    event Unstaked(address indexed staker, uint256 amount, address indexed validator);
-    event ValidatorAdded(address indexed validator);
-    event ValidatorRemoved(address indexed validator);
+    event ValidatorQueued(address indexed validator, uint256 stake);
+    event ValidatorWithdrawn(address indexed validator, uint256 stake);
 
-    function stake(address validator) public payable {
-        StakerNative(address(this)).native_stake(msg.value, msg.sender, validator);
-    }
-
-    function getStake(address staker, address validator) public view returns (uint256) {
-        return StakerNative(address(this)).native_getStake(staker, validator);
-    }
-
-    function unstake(uint256 amount, address validator) public {
-        return StakerNative(address(this)).native_unstake(amount, msg.sender, validator);
-    }
-
+    /**
+    * @dev totalStake returns all stakes by queued and active validators.
+    */
     function totalStake() public view returns (uint256) {
         return StakerNative(address(this)).native_totalStake();
     }
+    /**
+    * @dev activeStake returns all stakes by active validators.
+    */
+    function activeStake() public view returns (uint256) {
+        return StakerNative(address(this)).native_activeStake();
+    }
 
+    /**
+    * @dev addValidator adds a validator to the queue.
+    */
     function addValidator() public payable {
-        return StakerNative(address(this)).native_addValidator(msg.value, msg.sender);
+        StakerNative(address(this)).native_addValidator(msg.sender, msg.value);
+        emit ValidatorQueued(msg.sender, msg.value);
     }
 
-    function removeValidator() public {
-        return StakerNative(address(this)).native_removeValidator(msg.sender);
+    /**
+    * @dev allows the caller to withdraw a stake when their status is set to exited
+    */
+    function withdraw() public {
+        uint256 stake = StakerNative(address(this)).native_withdraw();
+        emit ValidatorWithdrawn(msg.sender, stake);
+        payable(msg.sender).transfer(stake);
     }
 
-    function listValidators() public view returns (address[] memory) {
-        return StakerNative(address(this)).native_listValidators();
+    /**
+    * @dev get returns the stake, weight and status of a validator.
+    */
+    function get(address validator) public view returns (uint256, uint256, uint8) {
+        return StakerNative(address(this)).native_get(validator);
+    }
+
+    /**
+    * @dev firstActive returns the head address of the active validators.
+    */
+    function firstActive() public view returns (address) {
+        return StakerNative(address(this)).native_firstActive();
+    }
+
+    /**
+    * @dev firstQueued returns the head address of the queued validators.
+    */
+    function firstQueued() public view returns (address) {
+        return StakerNative(address(this)).native_firstQueued();
+    }
+
+    /**
+    * @dev next returns the validator in a linked list
+    */
+    function next(address prev) public view returns (address) {
+        return StakerNative(address(this)).native_next(prev);
     }
 }
 
-// TODO: Implement the native integration
 interface StakerNative {
+    // Write methods
+    function native_addValidator(address validator, uint256 stake) external;
+    function native_withdraw() external returns (uint256);
+
+    // Read methods
     function native_totalStake() external pure returns(uint256);
-    function native_stake(uint256 amount, address staker, address validator) external;
-    function native_unstake(uint256 amount, address staker, address validator) external;
-    function native_getStake(address staker, address validator) external pure returns(uint256);
-    function native_addValidator(uint256 amount, address validator) external;
-    function native_removeValidator(address validator) external;
-    function native_listValidators() external view returns (address[] memory);
+    function native_activeStake() external view returns(uint256);
+    function native_get(address validator) external view returns (uint256, uint256, uint8);
+    function native_firstActive() external view returns (address);
+    function native_firstQueued() external view returns (address);
+    function native_next(address prev) external view returns (address);
 }

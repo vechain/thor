@@ -6,48 +6,60 @@
 package staker
 
 import (
-	"github.com/vechain/thor/v2/trie"
 	"math/big"
+	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 )
 
 func M(a ...interface{}) []interface{} {
 	return a
 }
 
-func TestStaker(t *testing.T) {
+// RandomStake returns a random number between minStake and maxStake
+func RandomStake() *big.Int {
+	rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	// Calculate the range (maxStake - minStake)
+	rangeStake := new(big.Int).Sub(maxStake, minStake)
+
+	// Generate a random number within the range
+	randomOffset := new(big.Int).Rand(rand.New(rand.NewSource(time.Now().UnixNano())), rangeStake)
+
+	// Add minStake to ensure the value is within the desired range
+	return new(big.Int).Add(minStake, randomOffset)
+}
+
+func newStaker() *Staker {
 	db := muxdb.NewMem()
 	st := state.New(db, trie.Root{})
-	acc := thor.BytesToAddress([]byte("a1"))
+	return New(thor.BytesToAddress([]byte("stkr")), st)
+}
+
+func TestStaker(t *testing.T) {
 	validatorAcc := thor.BytesToAddress([]byte("v1"))
 	stakeAmount := big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
+	zeroStake := big.NewInt(0).SetBytes(thor.Bytes32{}.Bytes())
 
-	stkr := New(thor.BytesToAddress([]byte("stkr")), st, 0)
+	stkr := newStaker()
+
 	tests := []struct {
 		ret      interface{}
 		expected interface{}
 	}{
-		{M(stkr.TotalStake()), M(&big.Int{}, nil)},
-		{st.SetBalance(validatorAcc, stakeAmount), nil},
-		{stkr.AddValidator(stakeAmount, validatorAcc), nil},
-		{st.SetBalance(stkr.addr, stakeAmount), nil},
+		{M(stkr.TotalStake()), M(zeroStake, nil)},
+		{stkr.AddValidator(validatorAcc, stakeAmount), nil},
 		{M(stkr.TotalStake()), M(stakeAmount, nil)},
-		{st.SetBalance(acc, big.NewInt(12)), nil},
-		{stkr.Stake(acc, validatorAcc, big.NewInt(10)), nil},
-		{st.SetBalance(stkr.addr, big.NewInt(0).Add(stakeAmount, big.NewInt(10))), nil},
-		{M(stkr.TotalStake()), M(big.NewInt(0).Add(stakeAmount, big.NewInt(10)), nil)},
-		{st.SetBalance(acc, big.NewInt(2)), nil},
-		{st.SetBalance(stkr.addr, big.NewInt(10)), nil},
-		{M(stkr.GetStake(acc, validatorAcc)), M(big.NewInt(10), nil)},
-		{stkr.Unstake(acc, big.NewInt(3), validatorAcc), nil},
-		{M(stkr.GetStake(acc, validatorAcc)), M(big.NewInt(7), nil)},
-		{M(st.GetBalance(acc)), M(big.NewInt(5), nil)},
-		{M(st.GetBalance(stkr.addr)), M(big.NewInt(7), nil)},
+		{M(stkr.FirstQueued()), M(validatorAcc, nil)},
+		{M(stkr.ActivateNextValidator()), M(nil)},
+		{M(stkr.FirstActive()), M(validatorAcc, nil)},
 	}
 
 	for _, tt := range tests {
@@ -55,427 +67,348 @@ func TestStaker(t *testing.T) {
 	}
 }
 
-func TestTotalStaked(t *testing.T) {
-	db := muxdb.NewMem()
-	st := state.New(db, trie.Root{})
-	acc1 := thor.BytesToAddress([]byte("a1"))
-	acc2 := thor.BytesToAddress([]byte("a2"))
-	validatorAcc1 := thor.BytesToAddress([]byte("v1"))
-	validatorAcc2 := thor.BytesToAddress([]byte("v2"))
-	stakeAmount := big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
+func TestStaker_TotalStake(t *testing.T) {
+	staker := newStaker()
 
-	stkr := New(thor.BytesToAddress([]byte("stkr")), st, 0)
+	totalStaked := big.NewInt(0)
+	stakers := datagen.RandAddresses(10)
+	stakes := make(map[thor.Address]*big.Int)
 
-	err := st.SetBalance(acc1, big.NewInt(11))
-	err = st.SetBalance(acc2, big.NewInt(3))
-	err = st.SetBalance(validatorAcc1, stakeAmount)
-	err = st.SetBalance(validatorAcc2, stakeAmount)
+	for _, addr := range stakers {
+		stakeAmount := RandomStake()
+		stakes[addr] = stakeAmount
+		assert.NoError(t, staker.AddValidator(addr, stakeAmount))
+		//assert.NoError(t, staker.ActivateNextValidator())
+		totalStaked = totalStaked.Add(totalStaked, stakeAmount)
+		staked, err := staker.TotalStake()
+		assert.Nil(t, err)
+		assert.Equal(t, totalStaked, staked)
+	}
 
-	// get initial supply before set should return 0
-	staked, err := stkr.TotalStake()
-	assert.Nil(t, err)
-	assert.Equal(t, staked, big.NewInt(0))
+	for _ = range stakes {
+		assert.NoError(t, staker.ActivateNextValidator())
+		staked, err := staker.TotalStake()
+		assert.Nil(t, err)
+		assert.Equal(t, totalStaked, staked)
+	}
 
-	err = stkr.AddValidator(stakeAmount, validatorAcc1)
-	err = stkr.AddValidator(stakeAmount, validatorAcc2)
-
-	err = stkr.Stake(acc1, validatorAcc1, big.NewInt(7))
-	assert.Nil(t, err)
-
-	err = stkr.Stake(acc2, validatorAcc2, big.NewInt(3))
-	assert.Nil(t, err)
-
-	st.SetBalance(stkr.addr, big.NewInt(0).Add(big.NewInt(10), big.NewInt(0).Mul(stakeAmount, big.NewInt(2))))
-	staked, err = stkr.TotalStake()
-	assert.Nil(t, err)
-	assert.Equal(t, staked, big.NewInt(0).Add(big.NewInt(10), big.NewInt(0).Mul(stakeAmount, big.NewInt(2))))
+	for addr, stake := range stakes {
+		assert.NoError(t, staker.RemoveValidator(addr))
+		totalStaked = totalStaked.Sub(totalStaked, stake)
+		staked, err := staker.TotalStake()
+		assert.Nil(t, err)
+		assert.Equal(t, totalStaked, staked)
+	}
 }
 
-func TestStake(t *testing.T) {
-	db := muxdb.NewMem()
-	st := state.New(db, trie.Root{})
-	validatorAcc := thor.BytesToAddress([]byte("v1"))
-	acc := thor.BytesToAddress([]byte("a1"))
-	stakeAmount := big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
+func TestStaker_ActiveStake(t *testing.T) {
+	staker := newStaker()
 
-	stkr := New(thor.BytesToAddress([]byte("stkr")), st, 0)
+	totalStaked := big.NewInt(0)
+	activeStaked := big.NewInt(0)
 
-	err := st.SetBalance(acc, big.NewInt(11))
-	err = st.SetBalance(validatorAcc, stakeAmount)
+	stakers := datagen.RandAddresses(10)
+	stakes := make(map[thor.Address]*big.Int)
 
-	// get initial supply before set should return 0
-	staked, err := stkr.TotalStake()
+	for _, addr := range stakers {
+		stakeAmount := RandomStake()
+		stakes[addr] = stakeAmount
+		assert.NoError(t, staker.AddValidator(addr, stakeAmount))
+		totalStaked = totalStaked.Add(totalStaked, stakeAmount)
+	}
+
+	actual, err := staker.ActiveStake()
 	assert.Nil(t, err)
-	assert.Equal(t, staked, big.NewInt(0))
+	assert.True(t, activeStaked.Cmp(actual) == 0)
 
-	err = stkr.AddValidator(stakeAmount, validatorAcc)
-	err = stkr.Stake(acc, validatorAcc, big.NewInt(10))
-	assert.Nil(t, err)
-
-	st.SetBalance(stkr.addr, big.NewInt(0).Add(stakeAmount, big.NewInt(10)))
-	newStake, err := stkr.TotalStake()
-	assert.Nil(t, err)
-	assert.Equal(t, newStake, big.NewInt(0).Add(stakeAmount, big.NewInt(10)))
-
-	afterStaking, err := stkr.GetStake(thor.BytesToAddress([]byte("a1")), validatorAcc)
-
-	assert.Nil(t, err)
-	assert.Equal(t, afterStaking, big.NewInt(10))
+	for _ = range stakers {
+		head, err := staker.FirstQueued()
+		assert.NoError(t, err)
+		stake := stakes[head]
+		assert.NoError(t, staker.ActivateNextValidator())
+		activeStaked = activeStaked.Add(activeStaked, stake)
+		actual, err = staker.ActiveStake()
+		assert.Nil(t, err)
+		assert.True(t, activeStaked.Cmp(actual) == 0)
+	}
 }
 
-func TestUnstakeValidator(t *testing.T) {
-	db := muxdb.NewMem()
-	st := state.New(db, trie.Root{})
-	acc := thor.BytesToAddress([]byte("a1"))
-	validatorAcc := thor.BytesToAddress([]byte("v1"))
-	stakeAmount := big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
+func TestStaker_AddValidator_MinimumStake(t *testing.T) {
+	staker := newStaker()
 
-	stkr := New(thor.BytesToAddress([]byte("stkr")), st, 0)
-
-	err := st.SetBalance(acc, big.NewInt(5))
-	err = st.SetBalance(validatorAcc, stakeAmount)
-
-	// get initial supply before set should return 0
-	staked, err := stkr.TotalStake()
-	assert.Nil(t, err)
-	assert.Equal(t, staked, big.NewInt(0))
-
-	err = stkr.AddValidator(stakeAmount, validatorAcc)
-
-	err = stkr.Unstake(validatorAcc, big.NewInt(0).Add(stakeAmount, big.NewInt(1)), validatorAcc)
-	assert.Equal(t, "validator cannot unstake from itself", err.Error())
+	tooLow := big.NewInt(0).Sub(minStake, big.NewInt(1))
+	assert.Error(t, staker.AddValidator(datagen.RandAddress(), tooLow))
+	assert.NoError(t, staker.AddValidator(datagen.RandAddress(), minStake))
 }
 
-func TestStakeNonExistingValidator(t *testing.T) {
-	db := muxdb.NewMem()
-	st := state.New(db, trie.Root{})
-	acc := thor.BytesToAddress([]byte("a1"))
-	validatorAcc1 := thor.BytesToAddress([]byte("v1"))
-	validatorAcc2 := thor.BytesToAddress([]byte("v2"))
-	stakeAmount := big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
+func TestStaker_AddValidator_MaximumStake(t *testing.T) {
+	staker := newStaker()
 
-	stkr := New(thor.BytesToAddress([]byte("stkr")), st, 0)
-
-	err := st.SetBalance(acc, big.NewInt(10))
-
-	// get initial supply before set should return 0
-	staked, err := stkr.TotalStake()
-	assert.Nil(t, err)
-	assert.Equal(t, staked, big.NewInt(0))
-
-	err = stkr.Stake(acc, validatorAcc2, big.NewInt(10))
-	assert.Equal(t, "validator 0x0000000000000000000000000000000000007632 does not exist", err.Error())
-
-	st.SetBalance(validatorAcc1, stakeAmount)
-	err = stkr.AddValidator(stakeAmount, validatorAcc1)
-	assert.Nil(t, err)
-
-	err = stkr.Stake(acc, validatorAcc2, big.NewInt(10))
-	assert.Equal(t, "validator 0x0000000000000000000000000000000000007632 does not exist", err.Error())
+	tooHigh := big.NewInt(0).Add(maxStake, big.NewInt(1))
+	assert.Error(t, staker.AddValidator(datagen.RandAddress(), tooHigh))
+	assert.NoError(t, staker.AddValidator(datagen.RandAddress(), maxStake))
 }
 
-func TestUnstakeInsufficientBalance(t *testing.T) {
-	db := muxdb.NewMem()
-	st := state.New(db, trie.Root{})
-	acc1 := thor.BytesToAddress([]byte("a1"))
-	acc2 := thor.BytesToAddress([]byte("a2"))
-	validatorAcc1 := thor.BytesToAddress([]byte("v1"))
-	stakeAmount := big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
+func TestStaker_AddValidator_Duplicate(t *testing.T) {
+	staker := newStaker()
 
-	stkr := New(thor.BytesToAddress([]byte("stkr")), st, 0)
-
-	err := st.SetBalance(acc1, big.NewInt(5))
-	err = st.SetBalance(acc2, big.NewInt(10))
-	err = st.SetBalance(validatorAcc1, stakeAmount)
-
-	// get initial supply before set should return 0
-	staked, err := stkr.TotalStake()
-	assert.Nil(t, err)
-	assert.Equal(t, staked, big.NewInt(0))
-
-	st.SetBalance(stkr.addr, big.NewInt(6))
-	err = stkr.AddValidator(stakeAmount, validatorAcc1)
-
-	err = stkr.Stake(acc1, validatorAcc1, big.NewInt(5))
-	err = stkr.Stake(acc2, validatorAcc1, big.NewInt(3))
-
-	err = stkr.Unstake(acc1, big.NewInt(6), validatorAcc1)
-	assert.Equal(t, "insufficient stake: account stake 5 is less than amount 6", err.Error())
+	addr := datagen.RandAddress()
+	stake := big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
+	assert.NoError(t, staker.AddValidator(addr, stake))
+	assert.Error(t, staker.AddValidator(addr, stake))
 }
 
-func TestUnstakeInsufficientContractBalance(t *testing.T) {
-	db := muxdb.NewMem()
-	st := state.New(db, trie.Root{})
-	acc1 := thor.BytesToAddress([]byte("a1"))
-	acc2 := thor.BytesToAddress([]byte("a2"))
-	validatorAcc1 := thor.BytesToAddress([]byte("v1"))
-	stakeAmount := big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
+func TestStaker_AddValidator_QueueOrder(t *testing.T) {
+	staker := newStaker()
 
-	stkr := New(thor.BytesToAddress([]byte("stkr")), st, 0)
+	// add 100 validators to the queue
+	stakers := make([]thor.Address, 0)
+	for i := 0; i < 100; i++ {
+		addr := datagen.RandAddress()
+		stake := RandomStake()
+		assert.NoError(t, staker.AddValidator(addr, stake))
+		stakers = append(stakers, addr)
+	}
 
-	err := st.SetBalance(acc1, big.NewInt(5))
-	err = st.SetBalance(acc2, big.NewInt(10))
-	err = st.SetBalance(validatorAcc1, stakeAmount)
+	first, err := staker.FirstQueued()
+	assert.NoError(t, err)
+	assert.Equal(t, stakers[0], first)
 
-	// get initial supply before set should return 0
-	staked, err := stkr.TotalStake()
-	assert.Nil(t, err)
-	assert.Equal(t, staked, big.NewInt(0))
+	// iterating using the `Next` method should return the same order
+	loopAddr := first
+	for i := 1; i < 100; i++ {
+		next, err := staker.Next(loopAddr)
+		assert.NoError(t, err)
+		assert.Equal(t, stakers[i], *next)
+		loopAddr = *next
+	}
 
-	st.SetBalance(stkr.addr, big.NewInt(4))
-	err = stkr.AddValidator(stakeAmount, validatorAcc1)
-
-	err = stkr.Stake(acc1, validatorAcc1, big.NewInt(5))
-	err = stkr.Stake(acc2, validatorAcc1, big.NewInt(3))
-
-	st.SetBalance(stkr.addr, big.NewInt(4))
-	err = stkr.Unstake(acc1, big.NewInt(5), validatorAcc1)
-	assert.Equal(t, "insufficient total staked: total staked 4 is less than amount 5", err.Error())
+	// activating validators should continue to set the correct head of the queue
+	for i := 0; i < 99; i++ {
+		assert.NoError(t, staker.ActivateNextValidator())
+		first, err = staker.FirstQueued()
+		assert.NoError(t, err)
+		assert.Equal(t, stakers[i+1], first)
+	}
 }
 
-func TestUnstake(t *testing.T) {
-	db := muxdb.NewMem()
-	st := state.New(db, trie.Root{})
-	acc := thor.BytesToAddress([]byte("a1"))
-	validatorAcc1 := thor.BytesToAddress([]byte("v1"))
-	validatorAcc2 := thor.BytesToAddress([]byte("v2"))
-	stakeAmount := big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
+func TestStaker_AddValidator(t *testing.T) {
+	staker := newStaker()
 
-	stkr := New(thor.BytesToAddress([]byte("stkr")), st, 0)
-	err := st.SetBalance(acc, big.NewInt(11))
-	err = st.SetBalance(validatorAcc1, stakeAmount)
-	err = st.SetBalance(validatorAcc2, stakeAmount)
+	addr := datagen.RandAddress()
+	stake := RandomStake()
+	assert.NoError(t, staker.AddValidator(addr, stake))
 
-	err = stkr.AddValidator(stakeAmount, validatorAcc1)
-	err = stkr.AddValidator(stakeAmount, validatorAcc2)
-	err = stkr.Stake(acc, validatorAcc1, big.NewInt(10))
-	assert.Nil(t, err)
-
-	err = st.SetBalance(acc, big.NewInt(1))
-	err = st.SetBalance(stkr.addr, big.NewInt(0).Add(big.NewInt(10), big.NewInt(0).Mul(stakeAmount, big.NewInt(2))))
-
-	newStake, err := stkr.TotalStake()
-	assert.Nil(t, err)
-	assert.Equal(t, newStake, big.NewInt(0).Add(big.NewInt(0).Mul(big.NewInt(2), stakeAmount), big.NewInt(10)))
-
-	afterStaking, err := stkr.GetStake(thor.BytesToAddress([]byte("a1")), validatorAcc1)
-	assert.Nil(t, err)
-	assert.Equal(t, afterStaking, big.NewInt(10))
-
-	accBalance, err := st.GetBalance(acc)
-	assert.Nil(t, err)
-	assert.Equal(t, accBalance, big.NewInt(1))
-
-	conBalance, err := st.GetBalance(stkr.addr)
-	assert.Nil(t, err)
-	assert.Equal(t, conBalance, big.NewInt(0).Add(big.NewInt(0).Mul(big.NewInt(2), stakeAmount), big.NewInt(10)))
-
-	err = stkr.Unstake(acc, big.NewInt(5), validatorAcc2)
-	assert.Equal(t, "insufficient stake: account stake 0 is less than amount 5", err.Error())
-
-	err = stkr.Unstake(acc, big.NewInt(5), validatorAcc1)
-	assert.Nil(t, err)
-
-	newStake, err = stkr.TotalStake()
-	assert.Nil(t, err)
-	assert.Equal(t, newStake, big.NewInt(0).Add(big.NewInt(0).Mul(big.NewInt(2), stakeAmount), big.NewInt(5)))
-
-	afterUnStaking, err := stkr.GetStake(thor.BytesToAddress([]byte("a1")), validatorAcc1)
-	assert.Nil(t, err)
-	assert.Equal(t, afterUnStaking, big.NewInt(5))
-
-	accBalance, err = st.GetBalance(acc)
-	assert.Nil(t, err)
-	assert.Equal(t, accBalance, big.NewInt(6))
-
-	conBalance, err = st.GetBalance(stkr.addr)
-	assert.Nil(t, err)
-	assert.Equal(t, conBalance, big.NewInt(0).Add(big.NewInt(0).Mul(big.NewInt(2), stakeAmount), big.NewInt(5)))
+	validator, err := staker.Get(addr)
+	assert.NoError(t, err)
+	assert.False(t, validator.IsEmpty())
+	assert.Equal(t, stake, validator.Stake)
+	assert.Equal(t, StatusQueued, validator.Status)
 }
 
-func TestGetStake(t *testing.T) {
-	db := muxdb.NewMem()
-	st := state.New(db, trie.Root{})
-	acc1 := thor.BytesToAddress([]byte("a1"))
-	acc2 := thor.BytesToAddress([]byte("a2"))
-	validatorAcc1 := thor.BytesToAddress([]byte("v1"))
-	validatorAcc2 := thor.BytesToAddress([]byte("v2"))
-	stakeAmount := big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
+func TestStaker_Get_NonExistent(t *testing.T) {
+	staker := newStaker()
 
-	stkr := New(thor.BytesToAddress([]byte("stkr")), st, 0)
-
-	err := st.SetBalance(acc1, big.NewInt(11))
-	err = st.SetBalance(acc2, big.NewInt(3))
-	err = st.SetBalance(validatorAcc1, stakeAmount)
-	err = st.SetBalance(validatorAcc2, stakeAmount)
-
-	// get initial stake should return 0
-	staked1, err := stkr.GetStake(acc1, validatorAcc1)
-	assert.Nil(t, err)
-	assert.Equal(t, staked1, big.NewInt(0))
-
-	staked2, err := stkr.GetStake(acc1, validatorAcc2)
-	assert.Nil(t, err)
-	assert.Equal(t, staked2, big.NewInt(0))
-
-	staked3, err := stkr.GetStake(acc2, validatorAcc1)
-	assert.Nil(t, err)
-	assert.Equal(t, staked3, big.NewInt(0))
-
-	staked4, err := stkr.GetStake(acc2, validatorAcc2)
-	assert.Nil(t, err)
-	assert.Equal(t, staked4, big.NewInt(0))
-
-	err = stkr.AddValidator(stakeAmount, validatorAcc1)
-	err = stkr.AddValidator(stakeAmount, validatorAcc2)
-	err = stkr.Stake(acc1, validatorAcc1, big.NewInt(7))
-	assert.Nil(t, err)
-
-	err = stkr.Stake(acc2, validatorAcc2, big.NewInt(3))
-	assert.Nil(t, err)
-
-	staked1, err = stkr.GetStake(acc1, validatorAcc1)
-	assert.Nil(t, err)
-	assert.Equal(t, staked1, big.NewInt(7))
-
-	staked2, err = stkr.GetStake(acc1, validatorAcc2)
-	assert.Nil(t, err)
-	assert.Equal(t, staked2, big.NewInt(0))
-
-	staked3, err = stkr.GetStake(acc2, validatorAcc2)
-	assert.Nil(t, err)
-	assert.Equal(t, staked3, big.NewInt(3))
-
-	staked4, err = stkr.GetStake(acc2, validatorAcc1)
-	assert.Nil(t, err)
-	assert.Equal(t, staked4, big.NewInt(0))
+	addr := datagen.RandAddress()
+	validator, err := staker.Get(addr)
+	assert.NoError(t, err)
+	assert.True(t, validator.IsEmpty())
 }
 
-func TestAddValidator(t *testing.T) {
-	db := muxdb.NewMem()
-	st := state.New(db, trie.Root{})
-	stakeAmount := big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
-	validatorAcc1 := thor.BytesToAddress([]byte("v1"))
-	validatorAcc2 := thor.BytesToAddress([]byte("v2"))
+func TestStaker_Get(t *testing.T) {
+	staker := newStaker()
 
-	stkr := New(thor.BytesToAddress([]byte("stkr")), st, 0)
+	addr := datagen.RandAddress()
+	stake := RandomStake()
+	assert.NoError(t, staker.AddValidator(addr, stake))
 
-	validators, err := stkr.ListValidators()
-	assert.Nil(t, err)
-	assert.Equal(t, len(validators), 0)
+	validator, err := staker.Get(addr)
+	assert.NoError(t, err)
+	assert.False(t, validator.IsEmpty())
+	assert.Equal(t, stake, validator.Stake)
+	assert.Equal(t, StatusQueued, validator.Status)
 
-	st.SetBalance(validatorAcc1, stakeAmount)
-	err = stkr.AddValidator(stakeAmount, validatorAcc1)
-	assert.Nil(t, err)
-	validators, err = stkr.ListValidators()
-	assert.Nil(t, err)
-	assert.Equal(t, len(validators), 1)
-	assert.Equal(t, validators[0], validatorAcc1)
+	assert.NoError(t, staker.ActivateNextValidator())
 
-	err = stkr.AddValidator(big.NewInt(1000000000), validatorAcc2)
-	assert.Equal(t, err.Error(), "amount is less than minimum stake")
-
-	st.SetBalance(validatorAcc2, stakeAmount)
-	err = stkr.AddValidator(stakeAmount, validatorAcc2)
-	assert.Nil(t, err)
-
-	validators, err = stkr.ListValidators()
-	assert.Nil(t, err)
-	assert.Equal(t, len(validators), 2)
-	assert.Equal(t, validators[0], validatorAcc1)
-	assert.Equal(t, validators[1], validatorAcc2)
-
-	err = stkr.AddValidator(stakeAmount, validatorAcc1)
-	assert.Equal(t, err.Error(), "validator already exists")
-
-	validators, err = stkr.ListValidators()
-	assert.Nil(t, err)
-	assert.Equal(t, len(validators), 2)
-	assert.Equal(t, validators[0], validatorAcc1)
-	assert.Equal(t, validators[1], validatorAcc2)
+	validator, err = staker.Get(addr)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusActive, validator.Status)
+	assert.Equal(t, stake, validator.Stake)
 }
 
-func TestRemoveValidator(t *testing.T) {
-	db := muxdb.NewMem()
-	st := state.New(db, trie.Root{})
-	stakeAmount := big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
-	validatorAcc1 := thor.BytesToAddress([]byte("v1"))
-	validatorAcc2 := thor.BytesToAddress([]byte("v2"))
-	validatorAcc3 := thor.BytesToAddress([]byte("v3"))
-	acc1 := thor.BytesToAddress([]byte("a1"))
-	acc2 := thor.BytesToAddress([]byte("a2"))
+func TestStaker_ActivateNextValidator_LeaderGroupFull(t *testing.T) {
+	staker := newStaker()
 
-	stkr := New(thor.BytesToAddress([]byte("stkr")), st, 0)
+	// fill 101 validators to leader group
+	for i := 0; i < 101; i++ {
+		assert.NoError(t, staker.AddValidator(datagen.RandAddress(), RandomStake()))
+		assert.NoError(t, staker.ActivateNextValidator())
+	}
 
-	st.SetBalance(acc1, big.NewInt(7))
-	st.SetBalance(acc2, big.NewInt(3))
+	// try to add one more to the leadergroup
+	assert.NoError(t, staker.AddValidator(datagen.RandAddress(), RandomStake()))
+	assert.Error(t, staker.ActivateNextValidator())
+}
 
-	st.SetBalance(validatorAcc1, stakeAmount)
-	err := stkr.AddValidator(stakeAmount, validatorAcc1)
-	assert.Nil(t, err)
+func TestStaker_ActivateNextValidator_EmptyQueue(t *testing.T) {
+	staker := newStaker()
+	assert.Error(t, staker.ActivateNextValidator())
+}
 
-	stkr.Stake(acc1, validatorAcc1, big.NewInt(7))
-	stkr.Stake(acc2, validatorAcc1, big.NewInt(3))
-	st.SetBalance(stkr.addr, big.NewInt(0).Add(big.NewInt(10), stakeAmount))
+func TestStaker_ActivateNextValidator(t *testing.T) {
+	staker := newStaker()
 
-	totalStaked, err := stkr.TotalStake()
-	assert.Nil(t, err)
-	assert.Equal(t, totalStaked, big.NewInt(0).Add(stakeAmount, big.NewInt(10)))
+	addr := datagen.RandAddress()
+	stake := RandomStake()
+	assert.NoError(t, staker.AddValidator(addr, stake))
+	assert.NoError(t, staker.ActivateNextValidator())
 
-	st.SetBalance(validatorAcc2, stakeAmount)
-	err = stkr.AddValidator(stakeAmount, validatorAcc2)
-	assert.Nil(t, err)
+	validator, err := staker.Get(addr)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusActive, validator.Status)
+}
 
-	st.SetBalance(validatorAcc3, stakeAmount)
-	err = stkr.AddValidator(stakeAmount, validatorAcc3)
-	assert.Nil(t, err)
+func TestStaker_RemoveValidator_NonExistent(t *testing.T) {
+	staker := newStaker()
 
-	st.SetBalance(stkr.addr, big.NewInt(0).Add(big.NewInt(10), big.NewInt(0).Mul(stakeAmount, big.NewInt(3))))
-	validators, err := stkr.ListValidators()
-	assert.Nil(t, err)
-	assert.Equal(t, len(validators), 3)
-	assert.Equal(t, validators[0], validatorAcc1)
-	assert.Equal(t, validators[1], validatorAcc2)
-	assert.Equal(t, validators[2], validatorAcc3)
+	addr := datagen.RandAddress()
+	assert.Error(t, staker.RemoveValidator(addr))
+}
 
-	err = stkr.RemoveValidator(validatorAcc1)
-	assert.Nil(t, err)
-	validators, err = stkr.ListValidators()
-	assert.Nil(t, err)
-	assert.Equal(t, len(validators), 2)
-	assert.Equal(t, validators[0], validatorAcc2)
-	assert.Equal(t, validators[1], validatorAcc3)
+func TestStaker_RemoveValidator(t *testing.T) {
+	staker := newStaker()
 
-	balance, err := st.GetBalance(validatorAcc1)
-	assert.Equal(t, stakeAmount, balance)
+	addr := datagen.RandAddress()
+	stake := RandomStake()
+	assert.NoError(t, staker.AddValidator(addr, stake))
+	assert.NoError(t, staker.ActivateNextValidator())
+	assert.NoError(t, staker.RemoveValidator(addr))
 
-	totalStaked, err = stkr.TotalStake()
-	assert.Nil(t, err)
-	assert.Equal(t, totalStaked, stakeAmount)
+	validator, err := staker.Get(addr)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusExit, validator.Status)
+	assert.Equal(t, stake, validator.Stake)
+}
 
-	err = stkr.RemoveValidator(validatorAcc1)
-	assert.Equal(t, "validator does not exist", err.Error())
+func TestStaker_LeaderGroup(t *testing.T) {
+	staker := newStaker()
 
-	validators, err = stkr.ListValidators()
-	assert.Nil(t, err)
-	assert.Equal(t, len(validators), 2)
-	assert.Equal(t, validators[0], validatorAcc2)
-	assert.Equal(t, validators[1], validatorAcc3)
+	stakes := make(map[thor.Address]*big.Int)
+	for i := 0; i < 10; i++ {
+		addr := datagen.RandAddress()
+		stake := RandomStake()
+		assert.NoError(t, staker.AddValidator(addr, stake))
+		assert.NoError(t, staker.ActivateNextValidator())
+		stakes[addr] = stake
+	}
 
-	err = stkr.RemoveValidator(validatorAcc3)
-	assert.Nil(t, err)
-	validators, err = stkr.ListValidators()
-	assert.Nil(t, err)
-	assert.Equal(t, len(validators), 1)
-	assert.Equal(t, validators[0], validatorAcc2)
+	leaderGroup, err := staker.LeaderGroup()
+	assert.NoError(t, err)
 
-	err = stkr.RemoveValidator(validatorAcc2)
-	assert.Nil(t, err)
-	validators, err = stkr.ListValidators()
-	assert.Nil(t, err)
-	assert.Equal(t, len(validators), 0)
+	for addr, stake := range stakes {
+		assert.Contains(t, leaderGroup, addr)
+		assert.Equal(t, stake, leaderGroup[addr].Stake)
+	}
+}
 
-	totalStaked, err = stkr.TotalStake()
-	assert.Nil(t, err)
-	assert.Equal(t, totalStaked.Int64(), big.NewInt(0).Int64())
+func TestStaker_Next_Empty(t *testing.T) {
+	staker := newStaker()
+
+	addr := datagen.RandAddress()
+	next, err := staker.Next(addr)
+	assert.Error(t, err)
+	assert.Nil(t, next)
+}
+
+func TestStaker_Next(t *testing.T) {
+	staker := newStaker()
+
+	leaderGroup := make([]thor.Address, 0)
+	for i := 0; i < 100; i++ {
+		addr := datagen.RandAddress()
+		stake := RandomStake()
+		assert.NoError(t, staker.AddValidator(addr, stake))
+		assert.NoError(t, staker.ActivateNextValidator())
+		leaderGroup = append(leaderGroup, addr)
+	}
+
+	queued := make([]thor.Address, 0)
+	for i := 0; i < 100; i++ {
+		addr := datagen.RandAddress()
+		stake := RandomStake()
+		assert.NoError(t, staker.AddValidator(addr, stake))
+		queued = append(queued, addr)
+	}
+
+	firstLeader, err := staker.FirstActive()
+	assert.NoError(t, err)
+	assert.Equal(t, leaderGroup[0], firstLeader)
+
+	for i := 0; i < 99; i++ {
+		next, err := staker.Next(leaderGroup[i])
+		assert.NoError(t, err)
+		assert.Equal(t, leaderGroup[i+1], *next)
+	}
+
+	firstQueued, err := staker.FirstQueued()
+	assert.NoError(t, err)
+	assert.Equal(t, queued[0], firstQueued)
+
+	for i := 0; i < 99; i++ {
+		next, err := staker.Next(queued[i])
+		assert.NoError(t, err)
+		assert.Equal(t, queued[i+1], *next)
+	}
+}
+
+func TestStaker_GetStake(t *testing.T) {
+	staker := newStaker()
+
+	addr := datagen.RandAddress()
+	stake := RandomStake()
+
+	balance, err := staker.GetStake(addr)
+	assert.NoError(t, err)
+	assert.Nil(t, balance)
+
+	assert.NoError(t, staker.AddValidator(addr, stake))
+	balance, err = staker.GetStake(addr)
+	assert.NoError(t, err)
+	assert.Equal(t, stake, balance)
+
+	assert.NoError(t, staker.ActivateNextValidator())
+	balance, err = staker.GetStake(addr)
+	assert.NoError(t, err)
+	assert.Equal(t, stake, balance)
+
+	assert.NoError(t, staker.RemoveValidator(addr))
+	balance, err = staker.GetStake(addr)
+	assert.NoError(t, err)
+	assert.Equal(t, stake, balance)
+}
+
+func TestStaker_WithdrawStake(t *testing.T) {
+	staker := newStaker()
+	addr := datagen.RandAddress()
+
+	withdrawAmount, err := staker.WithdrawStake(addr)
+	assert.NoError(t, err)
+	assert.Nil(t, withdrawAmount)
+
+	stake := RandomStake()
+
+	assert.NoError(t, staker.AddValidator(addr, stake))
+	withdrawAmount, err = staker.WithdrawStake(addr)
+	assert.Error(t, err)
+	assert.Nil(t, withdrawAmount)
+
+	assert.NoError(t, staker.ActivateNextValidator())
+	withdrawAmount, err = staker.WithdrawStake(addr)
+	assert.Error(t, err)
+	assert.Nil(t, withdrawAmount)
+
+	assert.NoError(t, staker.RemoveValidator(addr))
+	withdrawAmount, err = staker.WithdrawStake(addr)
+	assert.NoError(t, err)
+	assert.Equal(t, stake, withdrawAmount)
 }

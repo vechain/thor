@@ -89,67 +89,30 @@ func TestStakerABI(t *testing.T) {
 	abi, err := abi.New(data)
 	assert.Nil(t, err)
 
-	{
-		name := "stake"
-		method, found := abi.MethodByName(name)
-		assert.True(t, found)
-		assert.NotNil(t, method)
-		assert.Equal(t, name, method.Name())
-
-		assert.False(t, method.Const())
+	type testCase struct {
+		name     string
+		constant bool
 	}
 
-	{
-		name := "getStake"
-		method, found := abi.MethodByName(name)
-		assert.True(t, found)
-		assert.NotNil(t, method)
-
-		assert.True(t, method.Const())
+	testCases := []testCase{
+		{"totalStake", true},
+		{"activeStake", true},
+		{"addValidator", false},
+		{"withdraw", false},
+		{"get", true},
+		{"firstActive", true},
+		{"firstQueued", true},
+		{"next", true},
 	}
 
-	{
-		name := "unstake"
-		method, found := abi.MethodByName(name)
-		assert.True(t, found)
-		assert.NotNil(t, method)
+	assert.Equal(t, len(testCases), len(abi.Methods()))
 
-		assert.False(t, method.Const())
-	}
-
-	{
-		name := "totalStake"
-		method, found := abi.MethodByName(name)
-		assert.True(t, found)
-		assert.NotNil(t, method)
-
-		assert.True(t, method.Const())
-	}
-
-	{
-		name := "addValidator"
-		method, found := abi.MethodByName(name)
-		assert.True(t, found)
-		assert.NotNil(t, method)
-
-		assert.False(t, method.Const())
-	}
-
-	{
-		name := "removeValidator"
-		method, found := abi.MethodByName(name)
-		assert.True(t, found)
-		assert.NotNil(t, method)
-
-		assert.False(t, method.Const())
-	}
-
-	{
-		name := "listValidators"
-		method, found := abi.MethodByName(name)
-		assert.True(t, found)
-		assert.NotNil(t, method)
-
-		assert.True(t, method.Const())
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			method, found := abi.MethodByName(tc.name)
+			assert.True(t, found)
+			assert.NotNil(t, method)
+			assert.Equal(t, tc.constant, method.Const())
+		})
 	}
 }
