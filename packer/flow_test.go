@@ -294,7 +294,7 @@ func TestAdoptErr(t *testing.T) {
 
 func TestAdoptErrorAfterGalactica(t *testing.T) {
 	forks := thor.ForkConfig{GALACTICA: 2}
-	chain, err := testchain.NewIntegrationTestChain(forks)
+	chain, err := testchain.NewWithFork(forks)
 	assert.NoError(t, err)
 
 	// Try to adopt a dyn fee tx before galactica fork activates - FAILS
@@ -348,7 +348,7 @@ func TestAdoptErrorAfterGalactica(t *testing.T) {
 }
 
 func TestAdoptAfterGalacticaLowerBaseFeeThreshold(t *testing.T) {
-	chain, err := testchain.NewIntegrationTestChain(thor.ForkConfig{GALACTICA: 1})
+	chain, err := testchain.NewWithFork(thor.ForkConfig{GALACTICA: 1})
 	assert.NoError(t, err)
 
 	tr := tx.NewTxBuilder(tx.LegacyTxType).ChainTag(chain.Repo().ChainTag()).Gas(21000).Expiration(100).MustBuild()

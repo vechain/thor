@@ -330,10 +330,10 @@ func httpPostAndCheckResponseStatus(t *testing.T, url string, obj interface{}, r
 }
 
 func initTransactionServer(t *testing.T) {
-	forkConfig := testchain.IntTestChainForkConfig
+	forkConfig := testchain.DefaultForkConfig
 	forkConfig.GALACTICA = 2
 
-	thorChain, err := testchain.NewIntegrationTestChain(forkConfig)
+	thorChain, err := testchain.NewWithFork(forkConfig)
 	require.NoError(t, err)
 
 	chainTag = thorChain.Repo().ChainTag()

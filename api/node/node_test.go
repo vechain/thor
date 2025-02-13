@@ -32,7 +32,7 @@ func TestNode(t *testing.T) {
 }
 
 func initCommServer(t *testing.T) {
-	thorChain, err := testchain.NewIntegrationTestChain(testchain.IntTestChainForkConfig)
+	thorChain, err := testchain.NewDefault()
 	require.NoError(t, err)
 
 	communicator := comm.New(

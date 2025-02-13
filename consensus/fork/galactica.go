@@ -136,6 +136,11 @@ func GalacticaPriorityPrice(tr *tx.Transaction, baseGasPrice, provedWork *big.In
 	}
 
 	feeItems := GalacticaTxGasPriceAdapter(tr, priorityPrice)
-	// This gasPrice will be used to compensate the validator
+	/** This gasPrice will be used to compensate the validator
+	* baseFee=1000; maxFee = 1000; maxPriorityFee = 100 -> validator gets  0
+	* baseFee=900;  maxFee = 1000; maxPriorityFee = 0   -> validator get   0; user gets back 100
+	* baseFee=900;  maxFee = 1000; maxPriorityFee = 50  -> validator gets 50
+	* baseFee=1100; maxFee = 1000; maxPriorityFee = 100 -> tx rejected, maxFee < baseFee
+	 */
 	return math.BigMin(feeItems.MaxPriorityFee, new(big.Int).Sub(feeItems.MaxFee, galacticaItems.BaseFee))
 }

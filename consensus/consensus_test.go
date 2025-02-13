@@ -85,7 +85,7 @@ func newTestConsensus() (*testConsensus, error) {
 		return nil, err
 	}
 
-	forkConfig := testchain.IntTestChainForkConfig
+	forkConfig := testchain.DefaultForkConfig
 	forkConfig.GALACTICA = 5
 
 	proposer := genesis.DevAccounts()[0]
