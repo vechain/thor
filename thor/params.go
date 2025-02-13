@@ -39,9 +39,9 @@ const (
 	SeederInterval     = 8640 // blocks between two seeder epochs.
 	CheckpointInterval = 180  // blocks between two bft checkpoints.
 
-	ElasticityMultiplier     = 2
-	InitialBaseFee           = 1000000000
-	BaseFeeChangeDenominator = 8
+	ElasticityMultiplier     = 2                  // determines the target gas limit as a fraction of the maximum block gas limit
+	InitialBaseFee           = 10_000_000_000_000 // 10^13 wei, 0.00001 VTHO
+	BaseFeeChangeDenominator = 8                  // determines the percentage change in the base fee per block based on network utilization
 )
 
 // Keys of governance params.

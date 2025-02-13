@@ -7,11 +7,14 @@ package fork
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
 
 func config() *thor.ForkConfig {
@@ -65,16 +68,17 @@ func TestBlockGasLimits(t *testing.T) {
 
 // TestCalcBaseFee assumes all blocks are post Galactica blocks
 func TestCalcBaseFee(t *testing.T) {
+	startingBaseFee := int64(thor.InitialBaseFee * 10)
 	tests := []struct {
 		parentBaseFee   int64
 		parentGasLimit  uint64
 		parentGasUsed   uint64
 		expectedBaseFee int64
 	}{
-		{thor.InitialBaseFee, 20000000, 10000000, thor.InitialBaseFee}, // usage == target
-		{thor.InitialBaseFee, 20000000, 9000000, 987500000},            // usage below target
-		{thor.InitialBaseFee, 20000000, 11000000, 1012500000},          // usage above target
-		{thor.InitialBaseFee, 20000000, 0, 875000000},                  // empty block
+		{startingBaseFee, 20000000, 10000000, startingBaseFee}, // usage == target
+		{startingBaseFee, 20000000, 9000000, 98750000000000},   // usage below target
+		{startingBaseFee, 20000000, 11000000, 101250000000000}, // usage above target
+		{startingBaseFee, 20000000, 0, 87500000000000},         // empty block
 	}
 	for i, test := range tests {
 		var parentID thor.Bytes32
@@ -85,6 +89,49 @@ func TestCalcBaseFee(t *testing.T) {
 			t.Errorf("test %d: have %d  want %d, ", i, have, want)
 		}
 	}
+}
+
+func TestCalcBaseFeeEdgeCases(t *testing.T) {
+	tests := []struct {
+		name string
+		f    func(*testing.T)
+	}{
+		{
+			name: "First galactica block",
+			f: func(t *testing.T) {
+				var parentID thor.Bytes32
+				binary.BigEndian.PutUint32(parentID[:], 3)
+
+				parent := new(block.Builder).ParentID(parentID).Build().Header()
+				baseFee := CalcBaseFee(config(), parent)
+				assert.True(t, baseFee.Cmp(big.NewInt(thor.InitialBaseFee)) == 0)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, tt.f)
+	}
+}
+
+func TestBaseFeeLowerBound(t *testing.T) {
+	// Post Galactica fork
+	var parentID thor.Bytes32
+	binary.BigEndian.PutUint32(parentID[:], 5)
+	parentGasLimit := uint64(20000000)
+	parentGasUsed := uint64(0)
+	// Setting the parentBaseFee exactly at 12.5% more, expecting the next base fee to be at the InitialBaseFee level
+	parentBaseFee := big.NewInt(thor.InitialBaseFee * 1.125)
+
+	// Generate new block with no gas utilization
+	parent := new(block.Builder).ParentID(parentID).GasLimit(parentGasLimit).GasUsed(parentGasUsed).BaseFee(parentBaseFee).Build().Header()
+	baseFee := CalcBaseFee(config(), parent)
+	assert.True(t, baseFee.Cmp(big.NewInt(thor.InitialBaseFee)) == 0)
+
+	// Generate new block again with no gas utitlization
+	parent = new(block.Builder).ParentID(parent.ID()).GasLimit(parentGasLimit).GasUsed(parentGasUsed).BaseFee(baseFee).Build().Header()
+	baseFee = CalcBaseFee(config(), parent)
+	assert.True(t, baseFee.Cmp(big.NewInt(thor.InitialBaseFee)) == 0)
 }
 
 func TestBaseFeeLimits(t *testing.T) {
@@ -101,27 +148,30 @@ func TestBaseFeeLimits(t *testing.T) {
 		tagetDelta := new(big.Float).SetFloat64(0.875)
 
 		tests := []struct {
-			name       string
-			blockRange int
+			name            string
+			blockRange      int
+			startingBaseFee *big.Int
 		}{
 			{
-				name:       "short",
-				blockRange: 10,
+				name:            "short",
+				blockRange:      10,
+				startingBaseFee: big.NewInt(thor.InitialBaseFee * 10),
 			},
 			{
-				name:       "medium",
-				blockRange: 50,
+				name:            "medium",
+				blockRange:      50,
+				startingBaseFee: big.NewInt(thor.InitialBaseFee * 1000),
 			},
 			{
-				name:       "long",
-				blockRange: 100,
+				name:            "long",
+				blockRange:      100,
+				startingBaseFee: new(big.Int).Mul(big.NewInt(thor.InitialBaseFee*100000), big.NewInt(10000)),
 			},
 		}
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				parentBaseFee := big.NewInt(thor.InitialBaseFee)
-
+				parentBaseFee := tt.startingBaseFee
 				for i := 0; i < tt.blockRange; i++ {
 					parent := new(block.Builder).ParentID(parentID).GasLimit(parentGasLimit).GasUsed(parentGasUsed).BaseFee(parentBaseFee).Build().Header()
 					parentID = parent.ID()
@@ -168,7 +218,7 @@ func TestBaseFeeLimits(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				parentBaseFee := big.NewInt(thor.InitialBaseFee)
+				parentBaseFee := big.NewInt(thor.InitialBaseFee * 10)
 				for i := 0; i < tt.blockRange; i++ {
 					parent := new(block.Builder).ParentID(parentID).GasLimit(parentGasLimit).GasUsed(parentGasUsed).BaseFee(parentBaseFee).Build().Header()
 					parentID = parent.ID()
@@ -186,4 +236,148 @@ func TestBaseFeeLimits(t *testing.T) {
 			})
 		}
 	})
+
+	t.Run("Blocks used only halfed, baseFee remains unchanged", func(t *testing.T) {
+		// Post Galactica fork
+		var parentID thor.Bytes32
+		binary.BigEndian.PutUint32(parentID[:], 5)
+		parentGasLimit := uint64(20000000)
+		parentGasUsed := parentGasLimit / thor.ElasticityMultiplier
+
+		parentBaseFee := big.NewInt(thor.InitialBaseFee * 10)
+		for i := 0; i < 100; i++ {
+			parent := new(block.Builder).ParentID(parentID).GasLimit(parentGasLimit).GasUsed(parentGasUsed).BaseFee(parentBaseFee).Build().Header()
+			parentID = parent.ID()
+			baseFee := CalcBaseFee(config(), parent)
+
+			assert.True(t, baseFee.Cmp(parentBaseFee) == 0)
+
+			parentBaseFee = baseFee
+		}
+	})
+}
+
+func TestGalacticaGasPrice(t *testing.T) {
+	baseGasPrice := big.NewInt(1_000_000_000)
+	baseFee := big.NewInt(20_000_000)
+	legacyTr := tx.NewTxBuilder(tx.LegacyTxType).GasPriceCoef(255).MustBuild()
+
+	tests := []struct {
+		name string
+		f    func(*testing.T)
+	}{
+		{
+			name: "galactica is not yet activated",
+			f: func(t *testing.T) {
+				res := GalacticaGasPrice(legacyTr, baseGasPrice, &GalacticaItems{
+					IsActive: false,
+					BaseFee:  nil,
+				})
+				assert.True(t, res.Cmp(legacyTr.GasPrice(baseGasPrice)) == 0)
+			},
+		},
+		{
+			name: "galactica is activated",
+			f: func(t *testing.T) {
+				res := GalacticaGasPrice(legacyTr, baseGasPrice, &GalacticaItems{
+					IsActive: true,
+					BaseFee:  baseFee,
+				})
+				assert.True(t, res.Cmp(legacyTr.GasPrice(baseGasPrice)) == 0)
+			},
+		},
+		{
+			name: "galactica is activated, dynamic fee transaction with maxPriorityFee+baseFee as price",
+			f: func(t *testing.T) {
+				tr := tx.NewTxBuilder(tx.DynamicFeeTxType).MaxFeePerGas(big.NewInt(250_000_000)).MaxPriorityFeePerGas(big.NewInt(15_000)).MustBuild()
+				res := GalacticaGasPrice(tr, baseGasPrice, &GalacticaItems{
+					IsActive: true,
+					BaseFee:  baseFee,
+				})
+				expectedRes := new(big.Int).Add(tr.MaxPriorityFeePerGas(), baseFee)
+				assert.True(t, res.Cmp(expectedRes) == 0)
+			},
+		},
+		{
+			name: "galactica is activated, dynamic fee transaction with maxFee as price",
+			f: func(t *testing.T) {
+				tr := tx.NewTxBuilder(tx.DynamicFeeTxType).MaxFeePerGas(big.NewInt(20_500_000)).MaxPriorityFeePerGas(big.NewInt(1_000_000)).MustBuild()
+				res := GalacticaGasPrice(tr, baseGasPrice, &GalacticaItems{
+					IsActive: true,
+					BaseFee:  baseFee,
+				})
+				assert.True(t, res.Cmp(tr.MaxFeePerGas()) == 0)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.f(t)
+		})
+	}
+}
+
+func TestGalacticaPriorityPrice(t *testing.T) {
+	baseGasPrice := big.NewInt(1_000_000_000)
+	baseFee := big.NewInt(20_000_000)
+	provedWork := big.NewInt(1)
+	legacyTr := tx.NewTxBuilder(tx.LegacyTxType).GasPriceCoef(255).MustBuild()
+
+	tests := []struct {
+		name string
+		f    func(*testing.T)
+	}{
+		{
+			name: "galactica is not yet activated",
+			f: func(t *testing.T) {
+				res := GalacticaPriorityPrice(legacyTr, baseGasPrice, provedWork, &GalacticaItems{
+					IsActive: false,
+					BaseFee:  nil,
+				})
+				assert.True(t, res.Cmp(legacyTr.OverallGasPrice(baseGasPrice, provedWork)) == 0)
+			},
+		},
+		{
+			name: "galactica is activated",
+			f: func(t *testing.T) {
+				res := GalacticaPriorityPrice(legacyTr, baseGasPrice, provedWork, &GalacticaItems{
+					IsActive: true,
+					BaseFee:  baseFee,
+				})
+				fmt.Println(res)
+				expected := new(big.Int).Sub(legacyTr.OverallGasPrice(baseGasPrice, provedWork), baseFee)
+				assert.True(t, res.Cmp(expected) == 0)
+			},
+		},
+		{
+			name: "galactica is activated, dynamic fee transaction with maxPriorityFee as priority fee",
+			f: func(t *testing.T) {
+				tr := tx.NewTxBuilder(tx.DynamicFeeTxType).MaxFeePerGas(big.NewInt(250_000_000)).MaxPriorityFeePerGas(big.NewInt(15_000)).MustBuild()
+				res := GalacticaPriorityPrice(tr, baseGasPrice, provedWork, &GalacticaItems{
+					IsActive: true,
+					BaseFee:  baseFee,
+				})
+				assert.True(t, res.Cmp(tr.MaxPriorityFeePerGas()) == 0)
+			},
+		},
+		{
+			name: "galactica is activated, dynamic fee transaction with maxFee-baseFee as priority fee",
+			f: func(t *testing.T) {
+				tr := tx.NewTxBuilder(tx.DynamicFeeTxType).MaxFeePerGas(big.NewInt(20_500_000)).MaxPriorityFeePerGas(big.NewInt(1_000_000)).MustBuild()
+				res := GalacticaPriorityPrice(tr, baseGasPrice, provedWork, &GalacticaItems{
+					IsActive: true,
+					BaseFee:  baseFee,
+				})
+				expectedRes := new(big.Int).Sub(tr.MaxFeePerGas(), baseFee)
+				assert.True(t, res.Cmp(expectedRes) == 0)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.f(t)
+		})
+	}
 }

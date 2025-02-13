@@ -45,11 +45,12 @@ func TestTransferReader_Read_NoNewBlocksToRead(t *testing.T) {
 	thorChain := initChain(t)
 	allBlocks, err := thorChain.GetAllBlocks()
 	require.NoError(t, err)
-	newBlock := allBlocks[1]
+	// taking best block to include also galactica block
+	bestBlk := allBlocks[len(allBlocks)-1]
 	filter := &TransferFilter{}
 
 	// Act
-	br := newTransferReader(thorChain.Repo(), newBlock.Header().ID(), filter)
+	br := newTransferReader(thorChain.Repo(), bestBlk.Header().ID(), filter)
 	res, ok, err := br.Read()
 
 	// Assert
