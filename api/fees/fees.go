@@ -54,13 +54,13 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 		return 0, nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
 	}
 
-	bestBlockSummary := f.data.repo.BestBlockSummary()
+	bestBlockNumber := f.data.repo.BestBlockSummary().Header.Number()
 	// Calculate minAllowedBlock
-	minAllowedBlock := uint32(math.Max(0, float64(int(bestBlockSummary.Header.Number())-int(f.backtraceLimit)+1)))
+	minAllowedBlock := uint32(math.Max(0, float64(int(bestBlockNumber)-int(f.backtraceLimit)+1)))
 
 	// Adjust blockCount if necessary
-	if int(bestBlockSummary.Header.Number()) < int(f.backtraceLimit) {
-		blockCount = uint64(math.Min(float64(blockCount), float64(bestBlockSummary.Header.Number()+1)))
+	if int(bestBlockNumber) < int(f.backtraceLimit) {
+		blockCount = uint64(math.Min(float64(blockCount), float64(bestBlockNumber+1)))
 	}
 
 	if newestBlockSummary.Header.Number() < minAllowedBlock {
