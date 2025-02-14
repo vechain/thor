@@ -9,7 +9,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/thor"
@@ -39,15 +38,6 @@ func getBaseFee(baseFee *big.Int) *hexutil.Big {
 	return (*hexutil.Big)(big.NewInt(0))
 }
 
-func (fd *FeesData) pushToCache(header *block.Header) {
-	feeCacheEntry := &FeeCacheEntry{
-		baseFee:       getBaseFee(header.BaseFee()),
-		gasUsedRatio:  float64(header.GasUsed()) / float64(header.GasLimit()),
-		parentBlockID: header.ParentID(),
-	}
-	fd.cache.Set(header.ID(), feeCacheEntry, float64(header.Number()))
-}
-
 // resolveRange resolves the base fees and gas used ratios for the given block range.
 // Assumes that the boundaries (newest block - block count) are correct and validated beforehand.
 func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCount uint32) (thor.Bytes32, []*hexutil.Big, []float64, error) {
@@ -67,16 +57,15 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 				return thor.Bytes32{}, nil, nil, err
 			}
 
-			fd.pushToCache(blockSummary.Header)
-
-			baseFees[i-1] = getBaseFee(blockSummary.Header.BaseFee())
-			gasUsedRatios[i-1] = float64(blockSummary.Header.GasUsed()) / float64(blockSummary.Header.GasLimit())
-
-			newestBlockID = blockSummary.Header.ParentID()
-
-			continue
+			header := blockSummary.Header
+			fees = &FeeCacheEntry{
+				baseFee:       getBaseFee(header.BaseFee()),
+				gasUsedRatio:  float64(header.GasUsed()) / float64(header.GasLimit()),
+				parentBlockID: header.ParentID(),
+			}
+			fd.cache.Set(header.ID(), fees, float64(header.Number()))
 		}
-		baseFees[i-1] = getBaseFee((*big.Int)(fees.(*FeeCacheEntry).baseFee))
+		baseFees[i-1] = fees.(*FeeCacheEntry).baseFee
 		gasUsedRatios[i-1] = fees.(*FeeCacheEntry).gasUsedRatio
 
 		newestBlockID = fees.(*FeeCacheEntry).parentBlockID
