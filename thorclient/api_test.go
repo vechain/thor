@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gorilla/mux"
@@ -22,6 +23,7 @@ import (
 	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/api/debug"
 	"github.com/vechain/thor/v2/api/events"
+	"github.com/vechain/thor/v2/api/fees"
 	"github.com/vechain/thor/v2/api/node"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/comm"
@@ -81,6 +83,8 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 	)
 	node.New(communicator, mempool, false).Mount(router, "/node")
 
+	fees.New(thorChain.Repo(), thorChain.Engine(), 6, 6).Mount(router, "/fees")
+
 	return thorChain, httptest.NewServer(router)
 }
 
@@ -132,6 +136,7 @@ func TestAPIs(t *testing.T) {
 		"testDebugEndpoint":        testDebugEndpoint,
 		"testEventsEndpoint":       testEventsEndpoint,
 		"testNodeEndpoint":         testNodeEndpoint,
+		"testFeesEndpoint":         testFeesEndpoint,
 	} {
 		t.Run(name, func(t *testing.T) {
 			tt(t, thorChain, ts)
@@ -408,5 +413,31 @@ func testNodeEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) {
 	t.Run("GetPeersStats", func(t *testing.T) {
 		_, err := c.Peers()
 		require.NoError(t, err)
+	})
+}
+
+func testFeesEndpoint(t *testing.T, testchain *testchain.Chain, ts *httptest.Server) {
+	c := New(ts.URL)
+	// 1. Test GET /fees/history
+	t.Run("GetFeesHistory", func(t *testing.T) {
+		blockCount := uint32(1)
+		newestBlock := "best"
+		feesHistory, err := c.FeesHistory(blockCount, newestBlock)
+		require.NoError(t, err)
+		require.NotNil(t, feesHistory)
+
+		expectedOldestBlock, err := testchain.Repo().NewBestChain().GetBlockID(1)
+		require.NoError(t, err)
+		expectedFeesHistory := &fees.FeesHistory{
+			OldestBlock: expectedOldestBlock,
+			BaseFees: []*hexutil.Big{
+				(*hexutil.Big)(big.NewInt(1000000000)),
+			},
+			GasUsedRatios: []float64{
+				0.0058,
+			},
+		}
+
+		require.Equal(t, expectedFeesHistory, feesHistory)
 	})
 }
