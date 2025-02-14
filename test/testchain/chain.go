@@ -8,6 +8,7 @@ package testchain
 import (
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"time"
 
@@ -60,18 +61,29 @@ func New(
 	}
 }
 
-func NewIntegrationTestChain() (*Chain, error) {
-	forkConfig := thor.NoFork
-	forkConfig.VIP191 = 1
-	forkConfig.BLOCKLIST = 0
-	forkConfig.VIP214 = 2
-
-	return NewIntegrationTestChainWithFork(forkConfig)
+var DefaultForkConfig = thor.ForkConfig{
+	BLOCKLIST: 0,
+	VIP191:    1,
+	VIP214:    2,
+	ETH_CONST: math.MaxUint32,
+	ETH_IST:   math.MaxUint32,
+	FINALITY:  math.MaxUint32,
+	GALACTICA: math.MaxUint32,
 }
 
-// NewIntegrationTestChain is a convenience function that creates a Chain for testing.
+// NewDefault is a wrapper function that creates a Chain for testing with the default fork config.
+func NewDefault() (*Chain, error) {
+	return newIntegrationTestChain(DefaultForkConfig)
+}
+
+// NewWithFork is a wrapper function that creates a Chain for testing with custom forkConfig.
+func NewWithFork(forkConfig thor.ForkConfig) (*Chain, error) {
+	return newIntegrationTestChain(forkConfig)
+}
+
+// newIntegrationTestChain is a convenience function that creates a Chain for testing.
 // It uses an in-memory database, development network genesis, and a solo BFT engine.
-func NewIntegrationTestChainWithFork(forkConfig thor.ForkConfig) (*Chain, error) {
+func newIntegrationTestChain(forkConfig thor.ForkConfig) (*Chain, error) {
 	// Initialize the database
 	db := muxdb.NewMem()
 

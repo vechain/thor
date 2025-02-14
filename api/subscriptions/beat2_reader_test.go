@@ -47,10 +47,11 @@ func TestBeat2Reader_Read_NoNewBlocksToRead(t *testing.T) {
 	thorChain := initChain(t)
 	allBlocks, err := thorChain.GetAllBlocks()
 	require.NoError(t, err)
-	newBlock := allBlocks[1]
+	// taking best block to include also galactica block
+	bestBlk := allBlocks[len(allBlocks)-1]
 
 	// Act
-	beatReader := newBeat2Reader(thorChain.Repo(), newBlock.Header().ID(), newMessageCache[Beat2Message](10))
+	beatReader := newBeat2Reader(thorChain.Repo(), bestBlk.Header().ID(), newMessageCache[Beat2Message](10))
 	res, ok, err := beatReader.Read()
 
 	// Assert

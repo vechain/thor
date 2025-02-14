@@ -6,6 +6,7 @@
 package fork
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -13,6 +14,11 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
+)
+
+var (
+	ErrBaseFeeNotSet = errors.New("base fee not set after galactica")
 )
 
 // VerifyGalacticaHeader verifies some header attributes which were changed in Galactica fork,
@@ -47,7 +53,7 @@ func CalcBaseFee(config *thor.ForkConfig, parent *block.Header) *big.Int {
 	}
 
 	var (
-		parentGasTarget          = parent.GasLimit() / thor.ElasticityMultiplier
+		parentGasTarget          = parent.GasLimit() * thor.ElasticityMultiplierNum / thor.ElasticityMultiplierDen
 		parentGasTargetBig       = new(big.Int).SetUint64(parentGasTarget)
 		baseFeeChangeDenominator = new(big.Int).SetUint64(thor.BaseFeeChangeDenominator)
 	)
@@ -72,15 +78,69 @@ func CalcBaseFee(config *thor.ForkConfig, parent *block.Header) *big.Int {
 		return x.Add(parentBaseFee, baseFeeDelta)
 	} else {
 		// Otherwise if the parent block used less or equal gas than its target, the baseFee should decrease.
-		// newBaseFee := max(0, parentBaseFee - parentBaseFee * (parentGasTarget - parentGasUsed) / parentGasTarget / baseFeeChangeDenominator)
+		// newBaseFee := max(InitialBaseFee, parentBaseFee - parentBaseFee * (parentGasTarget - parentGasUsed) / parentGasTarget / baseFeeChangeDenominator)
 		gasUsedDelta := new(big.Int).SetUint64(parentGasTarget - parentGasUsed)
 		x := new(big.Int).Mul(parentBaseFee, gasUsedDelta)
 		y := x.Div(x, parentGasTargetBig)
 		baseFeeDelta := x.Div(y, baseFeeChangeDenominator)
 
+		// Setting the minimum baseFee to InitialBaseFee
 		return math.BigMax(
 			x.Sub(parentBaseFee, baseFeeDelta),
-			common.Big0,
+			big.NewInt(thor.InitialBaseFee),
 		)
 	}
+}
+
+func GalacticaTxGasPriceAdapter(tr *tx.Transaction, gasPrice *big.Int) *GalacticaFeeMarketItems {
+	var maxPriorityFee, maxFee *big.Int
+	switch tr.Type() {
+	case tx.LegacyTxType:
+		maxPriorityFee = gasPrice
+		maxFee = gasPrice
+	case tx.DynamicFeeTxType:
+		maxPriorityFee = tr.MaxPriorityFeePerGas()
+		maxFee = tr.MaxFeePerGas()
+	}
+	return &GalacticaFeeMarketItems{maxFee, maxPriorityFee}
+}
+
+type GalacticaFeeMarketItems struct {
+	MaxFee         *big.Int
+	MaxPriorityFee *big.Int
+}
+
+type GalacticaItems struct {
+	IsActive bool
+	BaseFee  *big.Int
+}
+
+func GalacticaGasPrice(tr *tx.Transaction, baseGasPrice *big.Int, galacticaItems *GalacticaItems) *big.Int {
+	gasPrice := tr.GasPrice(baseGasPrice)
+
+	if !galacticaItems.IsActive {
+		return gasPrice
+	}
+
+	feeItems := GalacticaTxGasPriceAdapter(tr, gasPrice)
+	// This gasPrice is the same that will be used when refunding the user
+	// it takes into account the priority fee that will be paid to the validator
+	return math.BigMin(new(big.Int).Add(feeItems.MaxPriorityFee, galacticaItems.BaseFee), feeItems.MaxFee)
+}
+
+func GalacticaPriorityPrice(tr *tx.Transaction, baseGasPrice, provedWork *big.Int, galacticaItems *GalacticaItems) *big.Int {
+	priorityPrice := tr.OverallGasPrice(baseGasPrice, provedWork)
+
+	if !galacticaItems.IsActive {
+		return priorityPrice
+	}
+
+	feeItems := GalacticaTxGasPriceAdapter(tr, priorityPrice)
+	/** This gasPrice will be used to compensate the validator
+	* baseFee=1000; maxFee = 1000; maxPriorityFee = 100 -> validator gets  0
+	* baseFee=900;  maxFee = 1000; maxPriorityFee = 0   -> validator get   0; user gets back 100
+	* baseFee=900;  maxFee = 1000; maxPriorityFee = 50  -> validator gets 50
+	* baseFee=1100; maxFee = 1000; maxPriorityFee = 100 -> tx rejected, maxFee < baseFee
+	 */
+	return math.BigMin(feeItems.MaxPriorityFee, new(big.Int).Sub(feeItems.MaxFee, galacticaItems.BaseFee))
 }
