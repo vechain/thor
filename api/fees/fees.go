@@ -51,7 +51,12 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 
 	newestBlockSummary, err := utils.GetSummary(newestBlock, f.data.repo, f.bft)
 	if err != nil {
-		return 0, nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
+		if f.data.repo.IsNotFound(err) {
+			// return 400 for the parameter validation
+			return 0, nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
+		}
+		// all other unexpected errors will fall to 500 error
+		return 0, nil, err
 	}
 
 	bestBlockNumber := f.data.repo.BestBlockSummary().Header.Number()
