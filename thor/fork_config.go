@@ -53,8 +53,7 @@ var NoFork = ForkConfig{
 	GALACTICA: math.MaxUint32,
 }
 
-// SoloFork is used to retain the solo genesis ID.
-// Any forks that modify the chain state should be placed in block 1.
+// SoloFork is used to define the solo fork config.
 var SoloFork = ForkConfig{
 	VIP191:    0,
 	ETH_CONST: 0,
@@ -62,6 +61,8 @@ var SoloFork = ForkConfig{
 	ETH_IST:   0,
 	VIP214:    0,
 	FINALITY:  0,
+	// Any subsequent fork should be started from block 1.
+	GALACTICA: 1,
 }
 
 // for well-known networks

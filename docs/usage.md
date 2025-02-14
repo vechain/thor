@@ -166,7 +166,7 @@ bin/thor -h
 | `--api-cors`                | Comma-separated list of domains from which to accept cross-origin requests to API           |
 | `--api-timeout`             | API request timeout value in milliseconds (default: 10000)                                  |
 | `--api-call-gas-limit`      | Limit contract call gas (default: 50000000)                                                 |
-| `--api-backtrace-limit`     | Limit the distance between 'position' and best block for subscriptions APIs (default: 1000) |
+| `--api-backtrace-limit`     | Limit the distance between 'position' and best block for subscriptions and fees APIs (default: 1000) |
 | `--api-allow-custom-tracer` | Allow custom JS tracer to be used for the tracer API                                        |
 | `--api-allowed-tracers`     | Comma-separated list of allowed tracers (default: "none")                                   |
 | `--enable-api-logs`         | Enables API requests logging                                                                |
