@@ -18,6 +18,7 @@ import (
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/api/events"
+	"github.com/vechain/thor/v2/api/fees"
 	"github.com/vechain/thor/v2/api/node"
 	"github.com/vechain/thor/v2/api/subscriptions"
 	"github.com/vechain/thor/v2/api/transactions"
@@ -218,6 +219,11 @@ func (c *Client) ChainTag() (byte, error) {
 		return 0, err
 	}
 	return genesisBlock.ID[31], nil
+}
+
+// FeesHistory retrieves the fee history for the range newest block - block count.
+func (c *Client) FeesHistory(blockCount uint32, newestBlock string) (feesHistory *fees.FeesHistory, err error) {
+	return c.httpConn.GetFeesHistory(blockCount, newestBlock)
 }
 
 // SubscribeBlocks subscribes to block updates over WebSocket.
