@@ -53,7 +53,7 @@ func CalcBaseFee(config *thor.ForkConfig, parent *block.Header) *big.Int {
 	}
 
 	var (
-		parentGasTarget          = parent.GasLimit() / thor.ElasticityMultiplier
+		parentGasTarget          = parent.GasLimit() * thor.ElasticityMultiplierNum / thor.ElasticityMultiplierDen
 		parentGasTargetBig       = new(big.Int).SetUint64(parentGasTarget)
 		baseFeeChangeDenominator = new(big.Int).SetUint64(thor.BaseFeeChangeDenominator)
 	)
@@ -78,7 +78,7 @@ func CalcBaseFee(config *thor.ForkConfig, parent *block.Header) *big.Int {
 		return x.Add(parentBaseFee, baseFeeDelta)
 	} else {
 		// Otherwise if the parent block used less or equal gas than its target, the baseFee should decrease.
-		// newBaseFee := max(0, parentBaseFee - parentBaseFee * (parentGasTarget - parentGasUsed) / parentGasTarget / baseFeeChangeDenominator)
+		// newBaseFee := max(InitialBaseFee, parentBaseFee - parentBaseFee * (parentGasTarget - parentGasUsed) / parentGasTarget / baseFeeChangeDenominator)
 		gasUsedDelta := new(big.Int).SetUint64(parentGasTarget - parentGasUsed)
 		x := new(big.Int).Mul(parentBaseFee, gasUsedDelta)
 		y := x.Div(x, parentGasTargetBig)

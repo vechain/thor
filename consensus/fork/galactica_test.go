@@ -75,10 +75,10 @@ func TestCalcBaseFee(t *testing.T) {
 		parentGasUsed   uint64
 		expectedBaseFee int64
 	}{
-		{startingBaseFee, 20000000, 10000000, startingBaseFee}, // usage == target
-		{startingBaseFee, 20000000, 9000000, 98750000000000},   // usage below target
-		{startingBaseFee, 20000000, 11000000, 101250000000000}, // usage above target
-		{startingBaseFee, 20000000, 0, 87500000000000},         // empty block
+		{startingBaseFee, 20_000_000, 15_000_000, startingBaseFee},     // usage == target
+		{startingBaseFee, 20_000_000, 14_000_000, 99_166_666_666_667},  // usage below target
+		{startingBaseFee, 20_000_000, 16_000_000, 100_833_333_333_333}, // usage above target
+		{startingBaseFee, 20_000_000, 0, 87_500_000_000_000},           // empty block
 	}
 	for i, test := range tests {
 		var parentID thor.Bytes32
@@ -135,17 +135,13 @@ func TestBaseFeeLowerBound(t *testing.T) {
 }
 
 func TestBaseFeeLimits(t *testing.T) {
-	targetPercentage := new(big.Float).SetFloat64(0.125)
-	targetPercentage.SetPrec(24)
-	oneFloat := new(big.Float).SetInt64(1)
-
 	t.Run("EmptyBlocks", func(t *testing.T) {
 		// Post Galactica fork
 		var parentID thor.Bytes32
 		binary.BigEndian.PutUint32(parentID[:], 5)
 		parentGasLimit := uint64(20000000)
 		parentGasUsed := uint64(0)
-		tagetDelta := new(big.Float).SetFloat64(0.875)
+		targetDelta := float32(0.875)
 
 		tests := []struct {
 			name            string
@@ -178,11 +174,11 @@ func TestBaseFeeLimits(t *testing.T) {
 					baseFee := CalcBaseFee(config(), parent)
 
 					currentFloat, previousFloat := new(big.Float).SetInt(baseFee), new(big.Float).SetInt(parentBaseFee)
-					delta := new(big.Float).SetPrec(7).Quo(currentFloat, previousFloat)
+					delta := new(big.Float).Quo(currentFloat, previousFloat)
+					deltaFloat, _ := delta.Float32()
 
-					percentage := new(big.Float).SetPrec(7).Sub(oneFloat, delta)
-					if delta.Cmp(tagetDelta) != 0 || percentage.Cmp(targetPercentage) != 0 {
-						t.Errorf("delta: %f, percentage: %f", delta, percentage)
+					if deltaFloat != targetDelta {
+						t.Errorf("delta: %f, targetDelta: %f", delta, targetDelta)
 					}
 					parentBaseFee = baseFee
 				}
@@ -196,7 +192,7 @@ func TestBaseFeeLimits(t *testing.T) {
 		binary.BigEndian.PutUint32(parentID[:], 5)
 		parentGasLimit := uint64(20000000)
 		parentGasUsed := uint64(20000000)
-		tagetDelta := new(big.Float).SetFloat64(1.125)
+		targetDelta := float32(1.0416666)
 
 		tests := []struct {
 			name       string
@@ -218,18 +214,18 @@ func TestBaseFeeLimits(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				parentBaseFee := big.NewInt(thor.InitialBaseFee * 10)
+				parentBaseFee := big.NewInt(thor.InitialBaseFee)
 				for i := 0; i < tt.blockRange; i++ {
 					parent := new(block.Builder).ParentID(parentID).GasLimit(parentGasLimit).GasUsed(parentGasUsed).BaseFee(parentBaseFee).Build().Header()
 					parentID = parent.ID()
 					baseFee := CalcBaseFee(config(), parent)
 
 					currentFloat, previousFloat := new(big.Float).SetInt(baseFee), new(big.Float).SetInt(parentBaseFee)
-					delta := new(big.Float).SetPrec(7).Quo(currentFloat, previousFloat)
-					percentage := new(big.Float).SetPrec(7).Sub(delta, oneFloat)
+					delta := new(big.Float).Quo(currentFloat, previousFloat)
+					deltaFloat, _ := delta.Float32()
 
-					if delta.Cmp(tagetDelta) != 0 || percentage.Cmp(targetPercentage) != 0 {
-						t.Errorf("delta: %s, percentage: %s", delta, percentage)
+					if deltaFloat != targetDelta {
+						t.Errorf("delta: %f, targetDelta: %f", delta, targetDelta)
 					}
 					parentBaseFee = baseFee
 				}
@@ -242,7 +238,7 @@ func TestBaseFeeLimits(t *testing.T) {
 		var parentID thor.Bytes32
 		binary.BigEndian.PutUint32(parentID[:], 5)
 		parentGasLimit := uint64(20000000)
-		parentGasUsed := parentGasLimit / thor.ElasticityMultiplier
+		parentGasUsed := parentGasLimit * thor.ElasticityMultiplierNum / thor.ElasticityMultiplierDen
 
 		parentBaseFee := big.NewInt(thor.InitialBaseFee * 10)
 		for i := 0; i < 100; i++ {
