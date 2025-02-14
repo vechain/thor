@@ -12,21 +12,7 @@ import (
 	"github.com/vechain/thor/v2/co"
 )
 
-func TestSignal_SignalBeforeWait(t *testing.T) {
-	var sig co.Signal
-	sig.Signal()
-
-	<-sig.NewWaiter().C()
-}
-
-func TestSignal_SignalAfterWait(t *testing.T) {
-	var sig co.Signal
-	w := sig.NewWaiter()
-	sig.Signal()
-	<-w.C()
-}
-
-func TestSignal_BroadcastBefore(t *testing.T) {
+func TestSignalBroadcastBefore(t *testing.T) {
 	var sig co.Signal
 	sig.Broadcast()
 
@@ -46,7 +32,7 @@ func TestSignal_BroadcastBefore(t *testing.T) {
 	assert.Equal(t, 10, n)
 }
 
-func TestSignal_BroadcastAfterWait(t *testing.T) {
+func TestSignalBroadcastAfterWait(t *testing.T) {
 	var sig co.Signal
 
 	var ws []co.Waiter

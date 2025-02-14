@@ -167,7 +167,7 @@ func ConvertRange(chain *chain.Chain, r *Range) (*logdb.Range, error) {
 
 		toHeader := head
 		if r.To != nil {
-			toHeader, err = chain.FindBlockHeaderByTimestamp(*r.From, -1)
+			toHeader, err = chain.FindBlockHeaderByTimestamp(*r.To, -1)
 			if err != nil {
 				return nil, err
 			}

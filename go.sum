@@ -156,8 +156,8 @@ github.com/stretchr/testify v1.8.4 h1:CcVxjf3Q8PM0mHUKJCdn+eZZtm5yQwehR5yeSVQQcU
 github.com/stretchr/testify v1.8.4/go.mod h1:sz/lmYIOXD/1dqDmKjjqLyZ2RngseejIcXlSw2iwfAo=
 github.com/vechain/go-ecvrf v0.0.0-20220525125849-96fa0442e765 h1:jvr+TSivjObZmOKVdqlgeLtRhaDG27gE39PMuE2IJ24=
 github.com/vechain/go-ecvrf v0.0.0-20220525125849-96fa0442e765/go.mod h1:cwnTMgAVzMb30xMKnGI1LdU1NjMiPllYb7i3ibj/fzE=
-github.com/vechain/go-ethereum v1.8.15-0.20241126085506-c74017ec91b2 h1:ch3DqXvl1ApfJut768bf5Vlhqtw+bxAWTyPDYXQkQZk=
-github.com/vechain/go-ethereum v1.8.15-0.20241126085506-c74017ec91b2/go.mod h1:yPUCNmntAh1PritrMfSi7noK+9vVPStZX3wgh3ieaY0=
+github.com/vechain/go-ethereum v1.8.15-0.20250203151135-b4d97bda6bc9 h1:dkF3gD0LQPAD3ajR5XEtddDN0ffLZwflgRt6YKe5Deg=
+github.com/vechain/go-ethereum v1.8.15-0.20250203151135-b4d97bda6bc9/go.mod h1:yPUCNmntAh1PritrMfSi7noK+9vVPStZX3wgh3ieaY0=
 github.com/vechain/goleveldb v1.0.1-0.20220809091043-51eb019c8655 h1:CbHcWpCi7wOYfpoErRABh3Slyq9vO0Ay/EHN5GuJSXQ=
 github.com/vechain/goleveldb v1.0.1-0.20220809091043-51eb019c8655/go.mod h1:RRCYJbIwD5jmqPI9XoAFR0OcDxqUctll6zUj/+B4S48=
 github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
