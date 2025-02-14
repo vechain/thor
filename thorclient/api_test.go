@@ -441,7 +441,7 @@ func testFeesEndpoint(t *testing.T, testchain *testchain.Chain, ts *httptest.Ser
 		}
 
 		require.Equal(t, expectedFeesHistory.OldestBlock, feesHistory.OldestBlock)
-		require.Equal(t, expectedFeesHistory.BaseFees[0].String(), feesHistory.BaseFees[0].String())
+		require.Equal(t, 0, expectedFeesHistory.BaseFees[0].ToInt().Cmp(feesHistory.BaseFees[0].ToInt()))
 		require.Equal(t, expectedFeesHistory.BaseFees[1], feesHistory.BaseFees[1])
 		require.Equal(t, expectedFeesHistory.GasUsedRatios, feesHistory.GasUsedRatios)
 	})
