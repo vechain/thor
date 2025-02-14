@@ -8,7 +8,6 @@ package staker
 import (
 	"errors"
 	"math/big"
-	"time"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/state"
@@ -20,9 +19,6 @@ var (
 	maxLeaderGroupSize = big.NewInt(101)
 	minStake           = big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
 	maxStake           = big.NewInt(0).Mul(big.NewInt(400e6), big.NewInt(1e18))
-	minStakingPeriod   = time.Hour * 24 * 14  //2 weeks
-	maxStakingPeriod   = time.Hour * 24 * 365 // 1 year
-	cooldownPeriod     = time.Hour * 24 * 1   // a
 )
 
 type slot = byte

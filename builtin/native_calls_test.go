@@ -6,25 +6,27 @@
 package builtin_test
 
 import (
-	"crypto/ecdsa"
-	"crypto/rand"
+	"bytes"
+	"encoding/binary"
 	"encoding/hex"
+	"fmt"
 	"math"
 	"math/big"
 	"reflect"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
@@ -33,6 +35,10 @@ import (
 )
 
 var errReverted = vm.ErrExecutionReverted
+
+var (
+	thorChain *testchain.Chain
+)
 
 type ctest struct {
 	rt         *runtime.Runtime
@@ -56,6 +62,16 @@ type ccase struct {
 
 	output *[]interface{}
 	vmerr  error
+}
+
+type TestTxDescription struct {
+	t          *testing.T
+	abi        *abi.ABI
+	methodName string
+	address    thor.Address
+	acc        genesis.DevAccount
+	args       []interface{}
+	duplicate  bool
 }
 
 func (c *ctest) Case(name string, args ...interface{}) *ccase {
@@ -198,993 +214,1202 @@ func buildGenesis(db *muxdb.MuxDB, proc func(state *state.State) error) *block.B
 	return blk
 }
 
-func TestParamsNative(t *testing.T) {
-	executor := thor.BytesToAddress([]byte("e"))
-	db := muxdb.NewMem()
-	b0 := buildGenesis(db, func(state *state.State) error {
-		state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
-		builtin.Params.Native(state).Set(thor.KeyExecutorAddress, new(big.Int).SetBytes(executor[:]))
-		return nil
-	})
-	repo, _ := chain.NewRepository(db, b0)
-	st := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
-	chain := repo.NewChain(b0.Header().ID())
+func inspectClauseWithBlockRef(clause *tx.Clause, blockRef *tx.BlockRef) ([]byte, error) {
+	builder := new(tx.Builder).
+		ChainTag(thorChain.Repo().ChainTag()).
+		Expiration(50).
+		Gas(42000).
+		Clause(clause)
 
-	rt := runtime.New(chain, st, &xenv.BlockContext{}, thor.NoFork)
-
-	test := &ctest{
-		rt:  rt,
-		abi: builtin.Params.ABI,
-		to:  builtin.Params.Address,
+	if blockRef != nil {
+		builder.BlockRef(*blockRef)
 	}
+
+	trx := builder.Build()
+	return thorChain.ClauseCall(genesis.DevAccounts()[0], trx, 0)
+}
+
+func getClause(abi *abi.ABI, methodName string, address thor.Address, args ...interface{}) (*tx.Clause, *abi.Method, error) {
+	m, ok := abi.MethodByName(methodName)
+	if !ok {
+		return nil, nil, fmt.Errorf("method %s not found", methodName)
+	}
+	input, err := m.EncodeInput(args...)
+	return tx.NewClause(&address).WithData(input), m, err
+}
+
+func callContractAndGetOutput(abi *abi.ABI, methodName string, address thor.Address, output interface{}, args ...interface{}) error {
+	clause, m, err := getClause(abi, methodName, address, args...)
+	if err != nil {
+		return err
+	}
+	decoded, err := inspectClauseWithBlockRef(clause, nil)
+	if err != nil {
+		return err
+	}
+	return m.DecodeOutput(decoded, output)
+}
+
+func executeTxAndGetReceipt(description TestTxDescription) (*tx.Receipt, *thor.Bytes32, error) {
+	m, ok := description.abi.MethodByName(description.methodName)
+	if !ok {
+		return nil, nil, fmt.Errorf("method %s not found", description.methodName)
+	}
+	input, err := m.EncodeInput(description.args...)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	clause := tx.NewClause(&description.address).WithData(input)
+	trx := new(tx.Builder).
+		ChainTag(thorChain.Repo().ChainTag()).
+		Expiration(50).
+		Gas(100000).
+		Clause(clause).
+		Build()
+
+	if description.duplicate {
+		trx = new(tx.Builder).
+			ChainTag(thorChain.Repo().ChainTag()).
+			Expiration(50).
+			Gas(100000).
+			Clause(clause).
+			Nonce(2).
+			Build()
+	}
+
+	trx = tx.MustSign(trx, description.acc.PrivateKey)
+	err = thorChain.MintTransactions(description.acc, trx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	id := trx.ID()
+	fetchedTx, err := thorChain.GetTxReceipt(id)
+
+	return fetchedTx, &id, err
+}
+
+func TestParamsNative(t *testing.T) {
+	thorChain, _ = testchain.NewIntegrationTestChain()
+
+	toAddr := builtin.Params.Address
+	abi := builtin.Params.ABI
+
+	var addr common.Address
+	err := callContractAndGetOutput(abi, "executor", toAddr, &addr)
+
+	require.NoError(t, err)
+	require.Equal(t, genesis.DevAccounts()[0].Address.Bytes(), addr.Bytes())
 
 	key := thor.BytesToBytes32([]byte("key"))
 	value := big.NewInt(999)
-	setEvent := func(key thor.Bytes32, value *big.Int) *tx.Event {
-		ev, _ := builtin.Params.ABI.EventByName("Set")
-		data, _ := ev.Encode(value)
-		return &tx.Event{
-			Address: builtin.Params.Address,
-			Topics:  []thor.Bytes32{ev.ID(), key},
-			Data:    data,
-		}
-	}
+	fetchedTx, _, err := executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "set",
+		address:    toAddr,
+		acc:        genesis.DevAccounts()[0],
+		args:       []interface{}{key, value},
+		duplicate:  false,
+	})
 
-	test.Case("executor").
-		ShouldOutput(executor).
-		Assert(t)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(fetchedTx.Outputs))
+	require.Equal(t, builtin.Params.Address, fetchedTx.Outputs[0].Events[0].Address)
+	require.Equal(t, key, fetchedTx.Outputs[0].Events[0].Topics[1])
 
-	test.Case("set", key, value).
-		Caller(executor).
-		ShouldLog(setEvent(key, value)).
-		Assert(t)
+	require.NoError(t, err)
+	require.Equal(t, value, big.NewInt(0).SetBytes(fetchedTx.Outputs[0].Events[0].Data))
 
-	test.Case("set", key, value).
-		ShouldVMError(errReverted).
-		Assert(t)
+	fetchedTx, _, err = executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "set",
+		address:    toAddr,
+		acc:        genesis.DevAccounts()[1],
+		args:       []interface{}{key, value},
+		duplicate:  false,
+	})
+	require.NoError(t, err)
+	require.True(t, fetchedTx.Reverted)
 
-	test.Case("get", key).
-		ShouldOutput(value).
-		Assert(t)
-
+	var decodedVal *big.Int
+	err = callContractAndGetOutput(abi, "get", toAddr, &decodedVal, key)
+	require.NoError(t, err)
+	require.Equal(t, value, decodedVal)
 }
 
 func TestAuthorityNative(t *testing.T) {
+	thorChain, _ = testchain.NewIntegrationTestChain()
 	var (
-		master1   = thor.BytesToAddress([]byte("master1"))
-		endorsor1 = thor.BytesToAddress([]byte("endorsor1"))
-		identity1 = thor.BytesToBytes32([]byte("identity1"))
+		master1   = genesis.DevAccounts()[1]
+		endorsor1 = genesis.DevAccounts()[2]
+		identity1 = genesis.DevAccounts()[3]
 
-		master2   = thor.BytesToAddress([]byte("master2"))
-		endorsor2 = thor.BytesToAddress([]byte("endorsor2"))
-		identity2 = thor.BytesToBytes32([]byte("identity2"))
+		master2   = genesis.DevAccounts()[4]
+		endorsor2 = genesis.DevAccounts()[5]
+		identity2 = genesis.DevAccounts()[6]
 
-		master3   = thor.BytesToAddress([]byte("master3"))
-		endorsor3 = thor.BytesToAddress([]byte("endorsor3"))
-		identity3 = thor.BytesToBytes32([]byte("identity3"))
-		executor  = thor.BytesToAddress([]byte("e"))
+		master3   = genesis.DevAccounts()[7]
+		endorsor3 = genesis.DevAccounts()[8]
+		identity3 = genesis.DevAccounts()[9]
 	)
+	toAddr := builtin.Authority.Address
 
-	db := muxdb.NewMem()
-	b0 := buildGenesis(db, func(state *state.State) error {
-		state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
-		state.SetBalance(thor.Address(endorsor1), thor.InitialProposerEndorsement)
-		state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
-		builtin.Params.Native(state).Set(thor.KeyExecutorAddress, new(big.Int).SetBytes(executor[:]))
-		builtin.Params.Native(state).Set(thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)
-		return nil
+	abi := builtin.Authority.ABI
+
+	var addr common.Address
+	err := callContractAndGetOutput(abi, "first", toAddr, &addr)
+
+	require.NoError(t, err)
+	require.Equal(t, genesis.DevAccounts()[0].Address.Bytes(), addr.Bytes())
+
+	var b32 [32]uint8
+	copy(b32[12:], identity1.Address.Bytes())
+	fetchedTx, _, err := executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "add",
+		address:    toAddr,
+		acc:        genesis.DevAccounts()[0],
+		args:       []interface{}{master1.Address, endorsor1.Address, b32},
+		duplicate:  false,
 	})
-	repo, _ := chain.NewRepository(db, b0)
-	st := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
-	chain := repo.NewChain(b0.Header().ID())
 
-	rt := runtime.New(chain, st, &xenv.BlockContext{}, thor.NoFork)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(fetchedTx.Outputs))
+	require.Equal(t, builtin.Authority.Address, fetchedTx.Outputs[0].Events[0].Address)
+	require.Equal(t, master1.Address, thor.BytesToAddress(fetchedTx.Outputs[0].Events[0].Topics[1].Bytes()))
 
-	candidateEvent := func(nodeMaster thor.Address, action string) *tx.Event {
-		ev, _ := builtin.Authority.ABI.EventByName("Candidate")
-		var b32 thor.Bytes32
-		copy(b32[:], action)
-		data, _ := ev.Encode(b32)
-		return &tx.Event{
-			Address: builtin.Authority.Address,
-			Topics:  []thor.Bytes32{ev.ID(), thor.BytesToBytes32(nodeMaster[:])},
-			Data:    data,
-		}
-	}
+	added := "added"
+	require.NoError(t, err)
+	require.Equal(t, added, string(bytes.Trim(fetchedTx.Outputs[0].Events[0].Data, "\x00")))
 
-	test := &ctest{
-		rt:     rt,
-		abi:    builtin.Authority.ABI,
-		to:     builtin.Authority.Address,
-		caller: executor,
-	}
+	copy(b32[12:], identity2.Address.Bytes())
+	fetchedTx, _, err = executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "add",
+		address:    toAddr,
+		acc:        genesis.DevAccounts()[0],
+		args:       []interface{}{master2.Address, endorsor2.Address, b32},
+		duplicate:  false,
+	})
 
-	test.Case("executor").
-		ShouldOutput(executor).
-		Assert(t)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(fetchedTx.Outputs))
+	require.Equal(t, builtin.Authority.Address, fetchedTx.Outputs[0].Events[0].Address)
+	require.Equal(t, master2.Address, thor.BytesToAddress(fetchedTx.Outputs[0].Events[0].Topics[1].Bytes()))
 
-	test.Case("first").
-		ShouldOutput(thor.Address{}).
-		Assert(t)
+	require.NoError(t, err)
+	require.Equal(t, added, string(bytes.Trim(fetchedTx.Outputs[0].Events[0].Data, "\x00")))
 
-	test.Case("add", master1, endorsor1, identity1).
-		ShouldLog(candidateEvent(master1, "added")).
-		Assert(t)
+	copy(b32[12:], identity3.Address.Bytes())
+	fetchedTx, _, err = executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "add",
+		address:    toAddr,
+		acc:        genesis.DevAccounts()[0],
+		args:       []interface{}{master3.Address, endorsor3.Address, b32},
+		duplicate:  false,
+	})
 
-	test.Case("add", master2, endorsor2, identity2).
-		ShouldLog(candidateEvent(master2, "added")).
-		Assert(t)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(fetchedTx.Outputs))
+	require.Equal(t, builtin.Authority.Address, fetchedTx.Outputs[0].Events[0].Address)
+	require.Equal(t, master3.Address, thor.BytesToAddress(fetchedTx.Outputs[0].Events[0].Topics[1].Bytes()))
 
-	test.Case("add", master3, endorsor3, identity3).
-		ShouldLog(candidateEvent(master3, "added")).
-		Assert(t)
+	require.NoError(t, err)
+	require.Equal(t, added, string(bytes.Trim(fetchedTx.Outputs[0].Events[0].Data, "\x00")))
 
-	test.Case("get", master1).
-		ShouldOutput(true, endorsor1, identity1, true).
-		Assert(t)
+	err = callContractAndGetOutput(abi, "first", toAddr, &addr)
+	require.NoError(t, err)
+	require.Equal(t, genesis.DevAccounts()[0].Address.Bytes(), addr.Bytes())
 
-	test.Case("first").
-		ShouldOutput(master1).
-		Assert(t)
+	err = callContractAndGetOutput(abi, "next", toAddr, &addr, genesis.DevAccounts()[0].Address)
+	require.NoError(t, err)
+	require.Equal(t, master1.Address.Bytes(), addr.Bytes())
 
-	test.Case("next", master1).
-		ShouldOutput(master2).
-		Assert(t)
+	err = callContractAndGetOutput(abi, "next", toAddr, &addr, master1.Address)
+	require.NoError(t, err)
+	require.Equal(t, master2.Address.Bytes(), addr.Bytes())
 
-	test.Case("next", master2).
-		ShouldOutput(master3).
-		Assert(t)
+	err = callContractAndGetOutput(abi, "next", toAddr, &addr, master2.Address)
+	require.NoError(t, err)
+	require.Equal(t, master3.Address.Bytes(), addr.Bytes())
 
-	test.Case("next", master3).
-		ShouldOutput(thor.Address{}).
-		Assert(t)
+	err = callContractAndGetOutput(abi, "next", toAddr, &addr, master3.Address)
+	require.NoError(t, err)
+	require.Equal(t, thor.Address{}.Bytes(), addr.Bytes())
 
-	test.Case("add", master1, endorsor1, identity1).
-		Caller(thor.BytesToAddress([]byte("other"))).
-		ShouldVMError(errReverted).
-		Assert(t)
+	copy(b32[12:], identity1.Address.Bytes())
+	fetchedTx, _, err = executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "add",
+		address:    toAddr,
+		acc:        master2,
+		args:       []interface{}{master1.Address, endorsor1.Address, b32},
+		duplicate:  false,
+	})
 
-	test.Case("add", master1, endorsor1, identity1).
-		ShouldVMError(errReverted).
-		Assert(t)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(fetchedTx.Outputs))
+	require.True(t, fetchedTx.Reverted)
 
-	test.Case("revoke", master1).
-		ShouldLog(candidateEvent(master1, "revoked")).
-		Assert(t)
+	fetchedTx, _, err = executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "add",
+		address:    toAddr,
+		acc:        master1,
+		args:       []interface{}{master1.Address, endorsor1.Address, b32},
+		duplicate:  false,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 0, len(fetchedTx.Outputs))
+	require.True(t, fetchedTx.Reverted)
 
-	// duped even revoked
-	test.Case("add", master1, endorsor1, identity1).
-		ShouldVMError(errReverted).
-		Assert(t)
+	fetchedTx, _, err = executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "revoke",
+		address:    toAddr,
+		acc:        genesis.DevAccounts()[0],
+		args:       []interface{}{master1.Address},
+		duplicate:  false,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, len(fetchedTx.Outputs))
+	require.Equal(t, builtin.Authority.Address, fetchedTx.Outputs[0].Events[0].Address)
+	require.Equal(t, master1.Address, thor.BytesToAddress(fetchedTx.Outputs[0].Events[0].Topics[1].Bytes()))
 
-	// any one can revoke a candidate if out of endorsement
-	st.SetBalance(endorsor2, big.NewInt(1))
-	test.Case("revoke", master2).
-		Caller(thor.BytesToAddress([]byte("some one"))).
-		Assert(t)
+	revoked := "revoked"
+	require.NoError(t, err)
+	require.Equal(t, revoked, string(bytes.Trim(fetchedTx.Outputs[0].Events[0].Data, "\x00")))
 
+	fetchedTx, _, err = executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "revoke",
+		address:    toAddr,
+		acc:        genesis.DevAccounts()[0],
+		args:       []interface{}{master1.Address},
+		duplicate:  true,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 0, len(fetchedTx.Outputs))
+	require.True(t, fetchedTx.Reverted)
+
+	f := new(big.Float).SetFloat64(9.976e26)
+	i := new(big.Int)
+	f.Int(i)
+
+	clause := tx.NewClause(&endorsor3.Address).WithValue(i)
+	trx := new(tx.Builder).
+		ChainTag(thorChain.Repo().ChainTag()).
+		Expiration(10).
+		Gas(100000).
+		Clause(clause).
+		Nonce(2).
+		Build()
+
+	trx = tx.MustSign(trx, endorsor2.PrivateKey)
+	require.NoError(t, thorChain.MintTransactions(endorsor2, trx))
+
+	fetchedTx, _, err = executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "revoke",
+		address:    toAddr,
+		acc:        master3,
+		args:       []interface{}{master2.Address},
+		duplicate:  false,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 1, len(fetchedTx.Outputs))
+	require.Equal(t, builtin.Authority.Address, fetchedTx.Outputs[0].Events[0].Address)
+	require.Equal(t, master2.Address, thor.BytesToAddress(fetchedTx.Outputs[0].Events[0].Topics[1].Bytes()))
+
+	require.NoError(t, err)
+	require.Equal(t, revoked, string(bytes.Trim(fetchedTx.Outputs[0].Events[0].Data, "\x00")))
 }
 
 func TestEnergyNative(t *testing.T) {
 	var (
-		addr   = thor.BytesToAddress([]byte("addr"))
-		to     = thor.BytesToAddress([]byte("to"))
-		master = thor.BytesToAddress([]byte("master"))
-		eng    = big.NewInt(1000)
+		acc1 = genesis.DevAccounts()[0]
+		acc2 = genesis.DevAccounts()[1]
+		acc3 = thor.BytesToAddress([]byte("some acc"))
 	)
 
-	db := muxdb.NewMem()
-	b0 := buildGenesis(db, func(state *state.State) error {
-		state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
-		state.SetMaster(addr, master)
-		return nil
+	toAddr := builtin.Energy.Address
+
+	abi := builtin.Energy.ABI
+	thorChain, _ = testchain.NewIntegrationTestChain()
+
+	var stringOutput string
+	err := callContractAndGetOutput(abi, "name", toAddr, &stringOutput)
+
+	veThor := "VeThor"
+	require.NoError(t, err)
+	require.Equal(t, veThor, stringOutput)
+
+	var uint8Output uint8
+	err = callContractAndGetOutput(abi, "decimals", toAddr, &uint8Output)
+
+	exDecimals := uint8(18)
+	require.NoError(t, err)
+	require.Equal(t, exDecimals, uint8Output)
+
+	err = callContractAndGetOutput(abi, "symbol", toAddr, &stringOutput)
+
+	exSymbol := "VTHO"
+	require.NoError(t, err)
+	require.Equal(t, exSymbol, stringOutput)
+
+	var bigIntOutput *big.Int
+	err = callContractAndGetOutput(abi, "totalSupply", toAddr, &bigIntOutput)
+
+	exSupply := new(big.Int)
+	exSupply.SetString("10000000000000000000000000000", 10)
+	require.NoError(t, err)
+	require.Equal(t, exSupply, bigIntOutput)
+
+	err = callContractAndGetOutput(abi, "totalBurned", toAddr, &bigIntOutput)
+
+	exBurned := big.Int{}
+	require.NoError(t, err)
+	require.Equal(t, exBurned.String(), bigIntOutput.String())
+
+	fetchedTx, _, err := executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "transfer",
+		address:    toAddr,
+		acc:        acc1,
+		args:       []interface{}{acc3, big.NewInt(1000)},
+		duplicate:  false,
 	})
 
-	repo, _ := chain.NewRepository(db, b0)
-	st := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
-	chain := repo.NewChain(b0.Header().ID())
+	require.NoError(t, err)
+	require.Equal(t, 1, len(fetchedTx.Outputs))
+	require.Equal(t, builtin.Energy.Address, fetchedTx.Outputs[0].Events[0].Address)
+	require.Equal(t, acc1.Address, thor.BytesToAddress(fetchedTx.Outputs[0].Events[0].Topics[1].Bytes()))
+	require.Equal(t, acc3, thor.BytesToAddress(fetchedTx.Outputs[0].Events[0].Topics[2].Bytes()))
 
-	st.SetEnergy(addr, eng, b0.Header().Timestamp())
-	builtin.Energy.Native(st, b0.Header().Timestamp()).SetInitialSupply(&big.Int{}, eng)
+	require.NoError(t, err)
+	require.Equal(t, big.NewInt(1000).Bytes(), bytes.Trim(fetchedTx.Outputs[0].Events[0].Data, "\x00"))
 
-	transferEvent := func(from, to thor.Address, value *big.Int) *tx.Event {
-		ev, _ := builtin.Energy.ABI.EventByName("Transfer")
-		data, _ := ev.Encode(value)
-		return &tx.Event{
-			Address: builtin.Energy.Address,
-			Topics:  []thor.Bytes32{ev.ID(), thor.BytesToBytes32(from[:]), thor.BytesToBytes32(to[:])},
-			Data:    data,
-		}
-	}
-	approvalEvent := func(owner, spender thor.Address, value *big.Int) *tx.Event {
-		ev, _ := builtin.Energy.ABI.EventByName("Approval")
-		data, _ := ev.Encode(value)
-		return &tx.Event{
-			Address: builtin.Energy.Address,
-			Topics:  []thor.Bytes32{ev.ID(), thor.BytesToBytes32(owner[:]), thor.BytesToBytes32(spender[:])},
-			Data:    data,
-		}
-	}
+	f := new(big.Float).SetFloat64(1e30)
+	i := new(big.Int)
+	f.Int(i)
+	fetchedTx, _, err = executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "transfer",
+		address:    toAddr,
+		acc:        acc2,
+		args:       []interface{}{acc3, i},
+		duplicate:  false,
+	})
 
-	rt := runtime.New(chain, st, &xenv.BlockContext{Time: b0.Header().Timestamp()}, thor.NoFork)
-	test := &ctest{
-		rt:     rt,
-		abi:    builtin.Energy.ABI,
-		to:     builtin.Energy.Address,
-		caller: builtin.Energy.Address,
-	}
+	require.NoError(t, err)
+	require.Equal(t, 0, len(fetchedTx.Outputs))
+	require.True(t, fetchedTx.Reverted)
 
-	test.Case("name").
-		ShouldOutput("VeThor").
-		Assert(t)
+	fetchedTx, _, err = executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "move",
+		address:    toAddr,
+		acc:        acc1,
+		args:       []interface{}{acc1.Address, acc3, big.NewInt(1001)},
+		duplicate:  false,
+	})
 
-	test.Case("decimals").
-		ShouldOutput(uint8(18)).
-		Assert(t)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(fetchedTx.Outputs))
+	require.Equal(t, builtin.Energy.Address, fetchedTx.Outputs[0].Events[0].Address)
+	require.Equal(t, acc1.Address, thor.BytesToAddress(fetchedTx.Outputs[0].Events[0].Topics[1].Bytes()))
+	require.Equal(t, acc3, thor.BytesToAddress(fetchedTx.Outputs[0].Events[0].Topics[2].Bytes()))
 
-	test.Case("symbol").
-		ShouldOutput("VTHO").
-		Assert(t)
+	require.NoError(t, err)
+	require.Equal(t, big.NewInt(1001).Bytes(), bytes.Trim(fetchedTx.Outputs[0].Events[0].Data, "\x00"))
 
-	test.Case("totalSupply").
-		ShouldOutput(eng).
-		Assert(t)
+	fetchedTx, _, err = executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "move",
+		address:    toAddr,
+		acc:        acc2,
+		args:       []interface{}{acc1.Address, acc3, big.NewInt(1001)},
+		duplicate:  false,
+	})
 
-	test.Case("totalBurned").
-		ShouldOutput(&big.Int{}).
-		Assert(t)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(fetchedTx.Outputs))
+	require.True(t, fetchedTx.Reverted)
 
-	test.Case("balanceOf", addr).
-		ShouldOutput(eng).
-		Assert(t)
+	fetchedTx, _, err = executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "approve",
+		address:    toAddr,
+		acc:        acc1,
+		args:       []interface{}{acc2.Address, big.NewInt(1001)},
+		duplicate:  false,
+	})
 
-	test.Case("transfer", to, big.NewInt(10)).
-		Caller(addr).
-		ShouldLog(transferEvent(addr, to, big.NewInt(10))).
-		ShouldOutput(true).
-		Assert(t)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(fetchedTx.Outputs))
+	require.Equal(t, builtin.Energy.Address, fetchedTx.Outputs[0].Events[0].Address)
+	require.Equal(t, acc1.Address, thor.BytesToAddress(fetchedTx.Outputs[0].Events[0].Topics[1].Bytes()))
+	require.Equal(t, acc2.Address, thor.BytesToAddress(fetchedTx.Outputs[0].Events[0].Topics[2].Bytes()))
 
-	test.Case("transfer", to, big.NewInt(10)).
-		Caller(thor.BytesToAddress([]byte("some one"))).
-		ShouldVMError(errReverted).
-		Assert(t)
+	require.NoError(t, err)
+	require.Equal(t, big.NewInt(1001).Bytes(), bytes.Trim(fetchedTx.Outputs[0].Events[0].Data, "\x00"))
 
-	test.Case("move", addr, to, big.NewInt(10)).
-		Caller(addr).
-		ShouldLog(transferEvent(addr, to, big.NewInt(10))).
-		ShouldOutput(true).
-		Assert(t)
+	err = callContractAndGetOutput(abi, "allowance", toAddr, &bigIntOutput, acc1.Address, acc2.Address)
 
-	test.Case("move", addr, to, big.NewInt(10)).
-		Caller(thor.BytesToAddress([]byte("some one"))).
-		ShouldVMError(errReverted).
-		Assert(t)
+	exAllowance := big.NewInt(1001)
+	require.NoError(t, err)
+	require.Equal(t, exAllowance, bigIntOutput)
 
-	test.Case("approve", to, big.NewInt(10)).
-		Caller(addr).
-		ShouldLog(approvalEvent(addr, to, big.NewInt(10))).
-		ShouldOutput(true).
-		Assert(t)
+	fetchedTx, _, err = executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "transferFrom",
+		address:    toAddr,
+		acc:        acc2,
+		args:       []interface{}{acc1.Address, acc3, big.NewInt(1000)},
+		duplicate:  false,
+	})
 
-	test.Case("allowance", addr, to).
-		ShouldOutput(big.NewInt(10)).
-		Assert(t)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(fetchedTx.Outputs))
+	require.Equal(t, builtin.Energy.Address, fetchedTx.Outputs[0].Events[0].Address)
+	require.Equal(t, acc1.Address, thor.BytesToAddress(fetchedTx.Outputs[0].Events[0].Topics[1].Bytes()))
+	require.Equal(t, acc3, thor.BytesToAddress(fetchedTx.Outputs[0].Events[0].Topics[2].Bytes()))
 
-	test.Case("transferFrom", addr, thor.BytesToAddress([]byte("some one")), big.NewInt(10)).
-		Caller(to).
-		ShouldLog(transferEvent(addr, thor.BytesToAddress([]byte("some one")), big.NewInt(10))).
-		ShouldOutput(true).
-		Assert(t)
+	require.NoError(t, err)
+	require.Equal(t, big.NewInt(1000).Bytes(), bytes.Trim(fetchedTx.Outputs[0].Events[0].Data, "\x00"))
 
-	test.Case("transferFrom", addr, to, big.NewInt(10)).
-		Caller(thor.BytesToAddress([]byte("some one"))).
-		ShouldVMError(errReverted).
-		Assert(t)
+	fetchedTx, _, err = executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "transferFrom",
+		address:    toAddr,
+		acc:        acc2,
+		args:       []interface{}{acc1.Address, acc3, big.NewInt(1000)},
+		duplicate:  true,
+	})
 
+	require.NoError(t, err)
+	require.Equal(t, 0, len(fetchedTx.Outputs))
+	require.True(t, fetchedTx.Reverted)
 }
 
 func TestPrototypeNative(t *testing.T) {
 	var (
-		acc1 = thor.BytesToAddress([]byte("acc1"))
-		acc2 = thor.BytesToAddress([]byte("acc2"))
-
-		master    = thor.BytesToAddress([]byte("master"))
-		notmaster = thor.BytesToAddress([]byte("notmaster"))
-		user      = thor.BytesToAddress([]byte("user"))
-		notuser   = thor.BytesToAddress([]byte("notuser"))
-
+		acc1         = thor.BytesToAddress([]byte("acc1"))
+		master1      = genesis.DevAccounts()[0]
+		master2      = genesis.DevAccounts()[1]
+		sponsor      = genesis.DevAccounts()[2]
 		credit       = big.NewInt(1000)
 		recoveryRate = big.NewInt(10)
-		sponsor      = thor.BytesToAddress([]byte("sponsor"))
-		notsponsor   = thor.BytesToAddress([]byte("notsponsor"))
-
-		key      = thor.BytesToBytes32([]byte("account-key"))
-		value    = thor.BytesToBytes32([]byte("account-value"))
-		contract thor.Address
 	)
 
-	db := muxdb.NewMem()
-	gene := genesis.NewDevnet()
-	genesisBlock, _, _, _ := gene.Build(state.NewStater(db))
-	repo, _ := chain.NewRepository(db, genesisBlock)
-	st := state.New(db, trie.Root{Hash: genesisBlock.Header().StateRoot()})
-	chain := repo.NewChain(genesisBlock.Header().ID())
-
-	st.SetStorage(thor.Address(acc1), key, value)
-	st.SetBalance(thor.Address(acc1), big.NewInt(1))
-
-	masterEvent := func(self, newMaster thor.Address) *tx.Event {
-		ev, _ := builtin.Prototype.Events().EventByName("$Master")
-		data, _ := ev.Encode(newMaster)
-		return &tx.Event{
-			Address: self,
-			Topics:  []thor.Bytes32{ev.ID()},
-			Data:    data,
-		}
-	}
-
-	creditPlanEvent := func(self thor.Address, credit, recoveryRate *big.Int) *tx.Event {
-		ev, _ := builtin.Prototype.Events().EventByName("$CreditPlan")
-		data, _ := ev.Encode(credit, recoveryRate)
-		return &tx.Event{
-			Address: self,
-			Topics:  []thor.Bytes32{ev.ID()},
-			Data:    data,
-		}
-	}
-
-	userEvent := func(self, user thor.Address, action string) *tx.Event {
-		ev, _ := builtin.Prototype.Events().EventByName("$User")
-		var b32 thor.Bytes32
-		copy(b32[:], action)
-		data, _ := ev.Encode(b32)
-		return &tx.Event{
-			Address: self,
-			Topics:  []thor.Bytes32{ev.ID(), thor.BytesToBytes32(user.Bytes())},
-			Data:    data,
-		}
-	}
-
-	sponsorEvent := func(self, sponsor thor.Address, action string) *tx.Event {
-		ev, _ := builtin.Prototype.Events().EventByName("$Sponsor")
-		var b32 thor.Bytes32
-		copy(b32[:], action)
-		data, _ := ev.Encode(b32)
-		return &tx.Event{
-			Address: self,
-			Topics:  []thor.Bytes32{ev.ID(), thor.BytesToBytes32(sponsor.Bytes())},
-			Data:    data,
-		}
-	}
-
-	rt := runtime.New(chain, st, &xenv.BlockContext{
-		Time:   genesisBlock.Header().Timestamp(),
-		Number: genesisBlock.Header().Number(),
-	}, thor.NoFork)
+	thorChain, _ = testchain.NewIntegrationTestChain()
+	abi := builtin.Prototype.ABI
+	toAddr := builtin.Prototype.Address
 
 	code, _ := hex.DecodeString("60606040523415600e57600080fd5b603580601b6000396000f3006060604052600080fd00a165627a7a72305820edd8a93b651b5aac38098767f0537d9b25433278c9d155da2135efc06927fc960029")
-	exec, _ := rt.PrepareClause(tx.NewClause(nil).WithData(code), 0, math.MaxUint64, &xenv.TransactionContext{
-		ID:         thor.Bytes32{},
-		Origin:     master,
-		GasPrice:   &big.Int{},
-		ProvedWork: &big.Int{}})
-	out, _, _ := exec()
+	clause := tx.NewClause(nil).WithData(code)
+	trx := new(tx.Builder).
+		ChainTag(thorChain.Repo().ChainTag()).
+		Expiration(10).
+		Gas(100000).
+		Clause(clause).
+		Build()
 
-	contract = *out.ContractAddress
+	trx = tx.MustSign(trx, master1.PrivateKey)
+	require.NoError(t, thorChain.MintTransactions(master1, trx))
 
-	energy := big.NewInt(1000)
-	st.SetEnergy(acc1, energy, genesisBlock.Header().Timestamp())
+	id := trx.ID()
+	fetchedTx, err := thorChain.GetTxReceipt(id)
+	assert.NoError(t, err)
+	contractAddr := fetchedTx.Outputs[0].Events[0].Address
 
-	test := &ctest{
-		rt:     rt,
-		abi:    builtin.Prototype.ABI,
-		to:     builtin.Prototype.Address,
-		caller: builtin.Prototype.Address,
+	var outputAddr common.Address
+	err = callContractAndGetOutput(abi, "master", toAddr, &outputAddr, acc1)
+
+	exMaster := thor.Address{}
+	require.NoError(t, err)
+	require.Equal(t, exMaster.Bytes(), outputAddr.Bytes())
+
+	err = callContractAndGetOutput(abi, "master", toAddr, &outputAddr, contractAddr)
+	require.NoError(t, err)
+	require.Equal(t, master1.Address.Bytes(), outputAddr.Bytes())
+
+	fetchedTx, _, err = executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "setMaster",
+		address:    toAddr,
+		acc:        master2,
+		args:       []interface{}{master2.Address, master1.Address},
+		duplicate:  false,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 1, len(fetchedTx.Outputs))
+	require.Equal(t, master2.Address, fetchedTx.Outputs[0].Events[0].Address)
+
+	require.NoError(t, err)
+	require.Equal(t, master1.Address.Bytes(), bytes.Trim(fetchedTx.Outputs[0].Events[0].Data, "\x00"))
+
+	fetchedTx, _, err = executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "setMaster",
+		address:    toAddr,
+		acc:        master2,
+		args:       []interface{}{master1.Address, acc1},
+		duplicate:  false,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 0, len(fetchedTx.Outputs))
+	require.True(t, fetchedTx.Reverted)
+
+	err = callContractAndGetOutput(abi, "master", toAddr, &outputAddr, master2.Address)
+	require.NoError(t, err)
+	require.Equal(t, master1.Address.Bytes(), outputAddr.Bytes())
+
+	var outputBool bool
+	err = callContractAndGetOutput(abi, "hasCode", toAddr, &outputBool, master1.Address)
+	require.NoError(t, err)
+	require.Equal(t, false, outputBool)
+
+	err = callContractAndGetOutput(abi, "hasCode", toAddr, &outputBool, contractAddr)
+	require.NoError(t, err)
+	require.Equal(t, true, outputBool)
+
+	fetchedTx, _, err = executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "setCreditPlan",
+		address:    toAddr,
+		acc:        master1,
+		args:       []interface{}{contractAddr, credit, recoveryRate},
+		duplicate:  false,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 1, len(fetchedTx.Outputs))
+	require.Equal(t, contractAddr, fetchedTx.Outputs[0].Events[0].Address)
+
+	decodedVal := fetchedTx.Outputs[0].Events[0].Data
+
+	require.NoError(t, err)
+	require.Equal(t, credit.Bytes(), bytes.Trim(decodedVal[:32], "\x00"))
+	require.Equal(t, recoveryRate.Bytes(), bytes.Trim(decodedVal[32:], "\x00"))
+
+	fetchedTx, _, err = executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "setCreditPlan",
+		address:    toAddr,
+		acc:        master2,
+		args:       []interface{}{contractAddr, credit, recoveryRate},
+		duplicate:  false,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 0, len(fetchedTx.Outputs))
+	require.True(t, fetchedTx.Reverted)
+
+	type CreditPlan struct {
+		Credit       *big.Int
+		RecoveryRate *big.Int
 	}
+	plan := &CreditPlan{}
+	err = callContractAndGetOutput(abi, "creditPlan", toAddr, plan, contractAddr)
 
-	test.Case("master", acc1).
-		ShouldOutput(thor.Address{}).
-		Assert(t)
+	require.NoError(t, err)
+	require.Equal(t, credit.String(), plan.Credit.String())
+	require.Equal(t, recoveryRate, plan.RecoveryRate)
 
-	test.Case("master", contract).
-		ShouldOutput(master).
-		Assert(t)
+	err = callContractAndGetOutput(abi, "isUser", toAddr, &outputBool, contractAddr, acc1)
+	require.NoError(t, err)
+	require.Equal(t, false, outputBool)
 
-	test.Case("setMaster", acc1, acc2).
-		Caller(acc1).
-		ShouldOutput().
-		ShouldLog(masterEvent(acc1, acc2)).
-		Assert(t)
+	fetchedTx, _, err = executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "addUser",
+		address:    toAddr,
+		acc:        master1,
+		args:       []interface{}{contractAddr, acc1},
+		duplicate:  false,
+	})
 
-	test.Case("setMaster", acc1, acc2).
-		Caller(notmaster).
-		ShouldVMError(errReverted).
-		Assert(t)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(fetchedTx.Outputs))
+	require.Equal(t, contractAddr, fetchedTx.Outputs[0].Events[0].Address)
+	require.Equal(t, acc1, thor.BytesToAddress(fetchedTx.Outputs[0].Events[0].Topics[1].Bytes()))
 
-	test.Case("master", acc1).
-		ShouldOutput(acc2).
-		Assert(t)
+	added := "added"
+	require.NoError(t, err)
+	require.Equal(t, added, string(bytes.Trim(fetchedTx.Outputs[0].Events[0].Data, "\x00")))
 
-	test.Case("hasCode", acc1).
-		ShouldOutput(false).
-		Assert(t)
+	fetchedTx, _, err = executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "addUser",
+		address:    toAddr,
+		acc:        master2,
+		args:       []interface{}{contractAddr, acc1},
+		duplicate:  false,
+	})
 
-	test.Case("hasCode", contract).
-		ShouldOutput(true).
-		Assert(t)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(fetchedTx.Outputs))
+	require.True(t, fetchedTx.Reverted)
 
-	test.Case("setCreditPlan", contract, credit, recoveryRate).
-		Caller(master).
-		ShouldOutput().
-		ShouldLog(creditPlanEvent(contract, credit, recoveryRate)).
-		Assert(t)
+	fetchedTx, _, err = executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "addUser",
+		address:    toAddr,
+		acc:        master1,
+		args:       []interface{}{contractAddr, acc1},
+		duplicate:  true,
+	})
 
-	test.Case("setCreditPlan", contract, credit, recoveryRate).
-		Caller(notmaster).
-		ShouldVMError(errReverted).
-		Assert(t)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(fetchedTx.Outputs))
+	require.True(t, fetchedTx.Reverted)
 
-	test.Case("creditPlan", contract).
-		ShouldOutput(credit, recoveryRate).
-		Assert(t)
+	err = callContractAndGetOutput(abi, "isUser", toAddr, &outputBool, contractAddr, acc1)
+	require.NoError(t, err)
+	require.Equal(t, true, outputBool)
 
-	test.Case("isUser", contract, user).
-		ShouldOutput(false).
-		Assert(t)
+	var outputBigInt *big.Int
+	err = callContractAndGetOutput(abi, "userCredit", toAddr, &outputBigInt, contractAddr, acc1)
+	require.NoError(t, err)
+	require.Equal(t, credit, outputBigInt)
 
-	test.Case("addUser", contract, user).
-		Caller(master).
-		ShouldOutput().
-		ShouldLog(userEvent(contract, user, "added")).
-		Assert(t)
+	err = callContractAndGetOutput(abi, "isSponsor", toAddr, &outputBool, contractAddr, sponsor.Address)
+	require.NoError(t, err)
+	require.Equal(t, false, outputBool)
 
-	test.Case("addUser", contract, user).
-		Caller(notmaster).
-		ShouldVMError(errReverted).
-		Assert(t)
+	fetchedTx, _, err = executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "sponsor",
+		address:    toAddr,
+		acc:        sponsor,
+		args:       []interface{}{contractAddr},
+		duplicate:  false,
+	})
 
-	test.Case("addUser", contract, user).
-		Caller(master).
-		ShouldVMError(errReverted).
-		Assert(t)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(fetchedTx.Outputs))
+	require.Equal(t, contractAddr, fetchedTx.Outputs[0].Events[0].Address)
+	require.Equal(t, sponsor.Address, thor.BytesToAddress(fetchedTx.Outputs[0].Events[0].Topics[1].Bytes()))
 
-	test.Case("isUser", contract, user).
-		ShouldOutput(true).
-		Assert(t)
+	sponsored := "sponsored"
+	require.NoError(t, err)
+	require.Equal(t, sponsored, string(bytes.Trim(fetchedTx.Outputs[0].Events[0].Data, "\x00")))
 
-	test.Case("userCredit", contract, user).
-		ShouldOutput(credit).
-		Assert(t)
+	fetchedTx, _, err = executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "sponsor",
+		address:    toAddr,
+		acc:        sponsor,
+		args:       []interface{}{contractAddr},
+		duplicate:  true,
+	})
 
-	test.Case("removeUser", contract, user).
-		Caller(master).
-		ShouldOutput().
-		ShouldLog(userEvent(contract, user, "removed")).
-		Assert(t)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(fetchedTx.Outputs))
+	require.True(t, fetchedTx.Reverted)
 
-	test.Case("removeUser", contract, user).
-		Caller(notmaster).
-		ShouldVMError(errReverted).
-		Assert(t)
+	err = callContractAndGetOutput(abi, "isSponsor", toAddr, &outputBool, contractAddr, sponsor.Address)
+	require.NoError(t, err)
+	require.Equal(t, true, outputBool)
 
-	test.Case("removeUser", contract, notuser).
-		Caller(master).
-		ShouldVMError(errReverted).
-		Assert(t)
+	err = callContractAndGetOutput(abi, "currentSponsor", toAddr, &outputAddr, contractAddr)
+	require.NoError(t, err)
+	require.Equal(t, common.Address{}, outputAddr)
 
-	test.Case("userCredit", contract, user).
-		ShouldOutput(&big.Int{}).
-		Assert(t)
+	fetchedTx, _, err = executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "selectSponsor",
+		address:    toAddr,
+		acc:        master1,
+		args:       []interface{}{contractAddr, sponsor.Address},
+		duplicate:  false,
+	})
 
-	test.Case("isSponsor", contract, sponsor).
-		ShouldOutput(false).
-		Assert(t)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(fetchedTx.Outputs))
+	require.Equal(t, contractAddr, fetchedTx.Outputs[0].Events[0].Address)
+	require.Equal(t, sponsor.Address, thor.BytesToAddress(fetchedTx.Outputs[0].Events[0].Topics[1].Bytes()))
 
-	test.Case("sponsor", contract).
-		Caller(sponsor).
-		ShouldOutput().
-		ShouldLog(sponsorEvent(contract, sponsor, "sponsored")).
-		Assert(t)
+	selected := "selected"
+	require.NoError(t, err)
+	require.Equal(t, selected, string(bytes.Trim(fetchedTx.Outputs[0].Events[0].Data, "\x00")))
 
-	test.Case("sponsor", contract).
-		Caller(sponsor).
-		ShouldVMError(errReverted).
-		Assert(t)
+	fetchedTx, _, err = executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "selectSponsor",
+		address:    toAddr,
+		acc:        master1,
+		args:       []interface{}{contractAddr, acc1},
+		duplicate:  false,
+	})
 
-	test.Case("isSponsor", contract, sponsor).
-		ShouldOutput(true).
-		Assert(t)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(fetchedTx.Outputs))
+	require.True(t, fetchedTx.Reverted)
 
-	test.Case("currentSponsor", contract).
-		ShouldOutput(thor.Address{}).
-		Assert(t)
+	fetchedTx, _, err = executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "selectSponsor",
+		address:    toAddr,
+		acc:        master2,
+		args:       []interface{}{contractAddr, sponsor.Address},
+		duplicate:  false,
+	})
 
-	test.Case("selectSponsor", contract, sponsor).
-		Caller(master).
-		ShouldOutput().
-		ShouldLog(sponsorEvent(contract, sponsor, "selected")).
-		Assert(t)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(fetchedTx.Outputs))
+	require.True(t, fetchedTx.Reverted)
 
-	test.Case("selectSponsor", contract, notsponsor).
-		Caller(master).
-		ShouldVMError(errReverted).
-		Assert(t)
+	err = callContractAndGetOutput(abi, "currentSponsor", toAddr, &outputAddr, contractAddr)
+	require.NoError(t, err)
+	require.Equal(t, sponsor.Address.Bytes(), outputAddr.Bytes())
 
-	test.Case("selectSponsor", contract, notsponsor).
-		Caller(notmaster).
-		ShouldVMError(errReverted).
-		Assert(t)
-	test.Case("currentSponsor", contract).
-		ShouldOutput(sponsor).
-		Assert(t)
+	fetchedTx, _, err = executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "unsponsor",
+		address:    toAddr,
+		acc:        sponsor,
+		args:       []interface{}{contractAddr},
+		duplicate:  false,
+	})
 
-	test.Case("unsponsor", contract).
-		Caller(sponsor).
-		ShouldOutput().
-		Assert(t)
-	test.Case("currentSponsor", contract).
-		ShouldOutput(sponsor).
-		Assert(t)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(fetchedTx.Outputs))
+	require.False(t, fetchedTx.Reverted)
 
-	test.Case("unsponsor", contract).
-		Caller(sponsor).
-		ShouldVMError(errReverted).
-		Assert(t)
+	err = callContractAndGetOutput(abi, "currentSponsor", toAddr, &outputAddr, contractAddr)
+	require.NoError(t, err)
+	require.Equal(t, sponsor.Address.Bytes(), outputAddr.Bytes())
 
-	test.Case("isSponsor", contract, sponsor).
-		ShouldOutput(false).
-		Assert(t)
+	fetchedTx, _, err = executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "unsponsor",
+		address:    toAddr,
+		acc:        sponsor,
+		args:       []interface{}{contractAddr},
+		duplicate:  true,
+	})
 
-	test.Case("storageFor", acc1, key).
-		ShouldOutput(value).
-		Assert(t)
-	test.Case("storageFor", acc1, thor.BytesToBytes32([]byte("some-key"))).
-		ShouldOutput(thor.Bytes32{}).
-		Assert(t)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(fetchedTx.Outputs))
+	require.True(t, fetchedTx.Reverted)
 
-	// should be hash of rlp raw
-	expected, err := st.GetStorage(builtin.Prototype.Address, thor.Blake2b(contract.Bytes(), []byte("credit-plan")))
-	assert.Nil(t, err)
-	test.Case("storageFor", builtin.Prototype.Address, thor.Blake2b(contract.Bytes(), []byte("credit-plan"))).
-		ShouldOutput(expected).
-		Assert(t)
+	err = callContractAndGetOutput(abi, "isSponsor", toAddr, &outputBool, contractAddr, sponsor.Address)
+	require.NoError(t, err)
+	require.Equal(t, false, outputBool)
 
-	test.Case("balance", acc1, big.NewInt(0)).
-		ShouldOutput(big.NewInt(1)).
-		Assert(t)
+	storageKey := thor.Blake2b(contractAddr.Bytes(), []byte("credit-plan"))
+	ch := thorChain.Repo().NewBestChain()
+	summary, err := thorChain.Repo().GetBlockSummary(ch.HeadID())
+	assert.NoError(t, err)
+	st := state.New(thorChain.Database(), trie.Root{Hash: summary.Header.StateRoot(), Ver: trie.Version{Major: summary.Header.Number()}})
+	storageValDecoded, err := st.GetStorage(toAddr, storageKey)
+	assert.NoError(t, err)
 
-	test.Case("balance", acc1, big.NewInt(100)).
-		ShouldOutput(big.NewInt(0)).
-		Assert(t)
+	var uint8Array [32]uint8
+	err = callContractAndGetOutput(abi, "storageFor", toAddr, &uint8Array, builtin.Prototype.Address, thor.Blake2b([]byte("credit-plan")))
 
-	test.Case("energy", acc1, big.NewInt(0)).
-		ShouldOutput(energy).
-		Assert(t)
+	require.NoError(t, err)
+	require.Equal(t, thor.Bytes32{}.Bytes(), uint8Array[:])
 
-	test.Case("energy", acc1, big.NewInt(100)).
-		ShouldOutput(big.NewInt(0)).
-		Assert(t)
-	{
-		hash, _ := st.GetCodeHash(builtin.Prototype.Address)
-		assert.False(t, hash.IsZero())
-	}
+	err = callContractAndGetOutput(abi, "storageFor", toAddr, &uint8Array, builtin.Prototype.Address, thor.Blake2b(contractAddr.Bytes(), []byte("credit-plan")))
+
+	require.NoError(t, err)
+	require.Equal(t, storageValDecoded.Bytes(), uint8Array[:])
+
+	var outputInt *big.Int
+	err = callContractAndGetOutput(abi, "balance", toAddr, &outputInt, acc1, big.NewInt(0))
+
+	require.NoError(t, err)
+	require.Equal(t, big.NewInt(0).String(), outputInt.String())
+
+	clause = tx.NewClause(&acc1).WithValue(big.NewInt(1001))
+	trx = new(tx.Builder).
+		ChainTag(thorChain.Repo().ChainTag()).
+		Expiration(50).
+		Gas(100000).
+		Clause(clause).
+		Build()
+
+	trx = tx.MustSign(trx, master1.PrivateKey)
+	require.NoError(t, thorChain.MintTransactions(master1, trx))
+	bestBlock, err := thorChain.BestBlock()
+	assert.NoError(t, err)
+
+	err = callContractAndGetOutput(abi, "balance", toAddr, &outputInt, acc1, big.NewInt(int64(bestBlock.Header().Number())))
+
+	require.NoError(t, err)
+	require.Equal(t, big.NewInt(1001), outputInt)
+
+	err = callContractAndGetOutput(abi, "energy", toAddr, &outputInt, acc1, big.NewInt(0))
+
+	require.NoError(t, err)
+	require.Equal(t, big.NewInt(0).String(), outputInt.String())
+
+	fetchedTx, _, err = executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        builtin.Energy.ABI,
+		methodName: "transfer",
+		address:    builtin.Energy.Address,
+		acc:        master1,
+		args:       []interface{}{acc1, big.NewInt(1000)},
+		duplicate:  false,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 1, len(fetchedTx.Outputs))
+	require.False(t, fetchedTx.Reverted)
+
+	bestBlock, err = thorChain.BestBlock()
+	assert.NoError(t, err)
+	err = callContractAndGetOutput(abi, "energy", toAddr, &outputInt, acc1, big.NewInt(int64(bestBlock.Header().Number())))
+
+	require.NoError(t, err)
+	require.Equal(t, big.NewInt(1000), outputInt)
 }
 
 func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 	var (
-		acc1 = thor.BytesToAddress([]byte("acc1"))
-		sig  [65]byte
+		acc1   = genesis.DevAccounts()[1]
+		acc2   = thor.BytesToAddress([]byte("acc2"))
+		toAddr = builtin.Prototype.Address
+		abi    = builtin.Prototype.ABI
 	)
-	rand.Read(sig[:])
+	thorChain, _ = testchain.NewIntegrationTestChain()
 
-	db := muxdb.NewMem()
-	gene := genesis.NewDevnet()
-	genesisBlock, _, _, _ := gene.Build(state.NewStater(db))
-	st := state.New(db, trie.Root{Hash: genesisBlock.Header().StateRoot()})
-	repo, _ := chain.NewRepository(db, genesisBlock)
-	launchTime := genesisBlock.Header().Timestamp()
+	var outputBigInt *big.Int
+	err := callContractAndGetOutput(abi, "balance", toAddr, &outputBigInt, acc2, big.NewInt(0))
 
-	for i := 1; i < 100; i++ {
-		st.SetBalance(acc1, big.NewInt(int64(i)))
-		st.SetEnergy(acc1, big.NewInt(int64(i)), launchTime+uint64(i)*10)
-		stage, _ := st.Stage(trie.Version{Major: uint32(i)})
-		stateRoot, _ := stage.Commit()
-		b := new(block.Builder).
-			ParentID(repo.BestBlockSummary().Header.ID()).
-			TotalScore(repo.BestBlockSummary().Header.TotalScore() + 1).
-			Timestamp(launchTime + uint64(i)*10).
-			StateRoot(stateRoot).
-			Build().
-			WithSignature(sig[:])
-		repo.AddBlock(b, tx.Receipts{}, 0, true)
-	}
+	require.NoError(t, err)
+	require.Equal(t, big.NewInt(0).String(), outputBigInt.String())
 
-	st = state.New(db, repo.BestBlockSummary().Root())
-	chain := repo.NewBestChain()
+	clause := tx.NewClause(&acc2).WithValue(big.NewInt(1))
+	trx := new(tx.Builder).
+		ChainTag(thorChain.Repo().ChainTag()).
+		Expiration(50).
+		Gas(100000).
+		Clause(clause).
+		Build()
 
-	rt := runtime.New(chain, st, &xenv.BlockContext{
-		Number: thor.MaxStateHistory + 1,
-		Time:   repo.BestBlockSummary().Header.Timestamp(),
-	}, thor.NoFork)
+	trx = tx.MustSign(trx, acc1.PrivateKey)
+	require.NoError(t, thorChain.MintTransactions(acc1, trx))
+	bestBlock, err := thorChain.BestBlock()
+	assert.NoError(t, err)
 
-	test := &ctest{
-		rt:     rt,
-		abi:    builtin.Prototype.ABI,
-		to:     builtin.Prototype.Address,
-		caller: builtin.Prototype.Address,
-	}
+	err = callContractAndGetOutput(abi, "balance", toAddr, &outputBigInt, acc2, big.NewInt(int64(bestBlock.Header().Number())))
 
-	test.Case("balance", acc1, big.NewInt(0)).
-		ShouldOutput(big.NewInt(0)).
-		Assert(t)
+	require.NoError(t, err)
+	require.Equal(t, big.NewInt(1), outputBigInt)
 
-	test.Case("energy", acc1, big.NewInt(0)).
-		ShouldOutput(big.NewInt(0)).
-		Assert(t)
+	err = callContractAndGetOutput(abi, "energy", toAddr, &outputBigInt, acc2, big.NewInt(0))
 
-	test.Case("balance", acc1, big.NewInt(1)).
-		ShouldOutput(big.NewInt(1)).
-		Assert(t)
+	require.NoError(t, err)
+	require.Equal(t, big.NewInt(0).String(), outputBigInt.String())
 
-	test.Case("energy", acc1, big.NewInt(1)).
-		ShouldOutput(big.NewInt(1)).
-		Assert(t)
+	fetchedTx, _, err := executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        builtin.Energy.ABI,
+		methodName: "transfer",
+		address:    builtin.Energy.Address,
+		acc:        acc1,
+		args:       []interface{}{acc2, big.NewInt(1)},
+		duplicate:  false,
+	})
 
-	test.Case("balance", acc1, big.NewInt(2)).
-		ShouldOutput(big.NewInt(2)).
-		Assert(t)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(fetchedTx.Outputs))
+	require.False(t, fetchedTx.Reverted)
 
-	test.Case("energy", acc1, big.NewInt(2)).
-		ShouldOutput(big.NewInt(2)).
-		Assert(t)
-}
+	bestBlock, err = thorChain.BestBlock()
+	assert.NoError(t, err)
+	err = callContractAndGetOutput(abi, "energy", toAddr, &outputBigInt, acc2, big.NewInt(int64(bestBlock.Header().Number())))
 
-func TestPrototypeNativeWithBlockNumber(t *testing.T) {
-	var (
-		acc1 = thor.BytesToAddress([]byte("acc1"))
-		sig  [65]byte
-	)
-	rand.Read(sig[:])
+	require.NoError(t, err)
+	require.Equal(t, big.NewInt(1), outputBigInt)
 
-	db := muxdb.NewMem()
-	gene := genesis.NewDevnet()
-	genesisBlock, _, _, _ := gene.Build(state.NewStater(db))
-	st := state.New(db, trie.Root{Hash: genesisBlock.Header().StateRoot()})
-	repo, _ := chain.NewRepository(db, genesisBlock)
-	launchTime := genesisBlock.Header().Timestamp()
+	clause = tx.NewClause(&acc2).WithValue(big.NewInt(1))
+	trx = new(tx.Builder).
+		ChainTag(thorChain.Repo().ChainTag()).
+		Expiration(50).
+		Gas(100000).
+		Clause(clause).
+		Nonce(2).
+		Build()
 
-	for i := 1; i < 100; i++ {
-		st.SetBalance(acc1, big.NewInt(int64(i)))
-		st.SetEnergy(acc1, big.NewInt(int64(i)), launchTime+uint64(i)*10)
-		stage, _ := st.Stage(trie.Version{Major: uint32(i)})
-		stateRoot, _ := stage.Commit()
-		b := new(block.Builder).
-			ParentID(repo.BestBlockSummary().Header.ID()).
-			TotalScore(repo.BestBlockSummary().Header.TotalScore() + 1).
-			Timestamp(launchTime + uint64(i)*10).
-			StateRoot(stateRoot).
-			Build().
-			WithSignature(sig[:])
-		repo.AddBlock(b, tx.Receipts{}, 0, true)
-	}
+	trx = tx.MustSign(trx, acc1.PrivateKey)
+	require.NoError(t, thorChain.MintTransactions(acc1, trx))
+	bestBlock, err = thorChain.BestBlock()
+	assert.NoError(t, err)
 
-	st = state.New(db, repo.BestBlockSummary().Root())
-	chain := repo.NewBestChain()
+	err = callContractAndGetOutput(abi, "balance", toAddr, &outputBigInt, acc2, big.NewInt(int64(bestBlock.Header().Number())))
 
-	rt := runtime.New(chain, st, &xenv.BlockContext{
-		Number: repo.BestBlockSummary().Header.Number(),
-		Time:   repo.BestBlockSummary().Header.Timestamp(),
-	}, thor.NoFork)
+	require.NoError(t, err)
+	require.Equal(t, big.NewInt(2), outputBigInt)
 
-	test := &ctest{
-		rt:     rt,
-		abi:    builtin.Prototype.ABI,
-		to:     builtin.Prototype.Address,
-		caller: builtin.Prototype.Address,
-	}
+	fetchedTx, _, err = executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        builtin.Energy.ABI,
+		methodName: "transfer",
+		address:    builtin.Energy.Address,
+		acc:        acc1,
+		args:       []interface{}{acc2, big.NewInt(1)},
+		duplicate:  true,
+	})
 
-	test.Case("balance", acc1, big.NewInt(10)).
-		ShouldOutput(big.NewInt(10)).
-		Assert(t)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(fetchedTx.Outputs))
+	require.False(t, fetchedTx.Reverted)
 
-	test.Case("energy", acc1, big.NewInt(10)).
-		ShouldOutput(big.NewInt(10)).
-		Assert(t)
+	bestBlock, err = thorChain.BestBlock()
+	assert.NoError(t, err)
+	err = callContractAndGetOutput(abi, "energy", toAddr, &outputBigInt, acc2, big.NewInt(int64(bestBlock.Header().Number())))
 
-	test.Case("balance", acc1, big.NewInt(99)).
-		ShouldOutput(big.NewInt(99)).
-		Assert(t)
-
-	test.Case("energy", acc1, big.NewInt(99)).
-		ShouldOutput(big.NewInt(99)).
-		Assert(t)
-}
-
-func newBlock(parent *block.Block, score uint64, timestamp uint64, privateKey *ecdsa.PrivateKey) *block.Block {
-	b := new(block.Builder).ParentID(parent.Header().ID()).TotalScore(parent.Header().TotalScore() + score).Timestamp(timestamp).Build()
-	sig, _ := crypto.Sign(b.Header().SigningHash().Bytes(), privateKey)
-	return b.WithSignature(sig)
+	require.NoError(t, err)
+	require.Equal(t, big.NewInt(2), outputBigInt)
 }
 
 func TestExtensionNative(t *testing.T) {
-	db := muxdb.NewMem()
-	st := state.New(db, trie.Root{})
-	gene := genesis.NewDevnet()
-	genesisBlock, _, _, _ := gene.Build(state.NewStater(db))
-	repo, _ := chain.NewRepository(db, genesisBlock)
-	st.SetCode(builtin.Extension.Address, builtin.Extension.V2.RuntimeBytecodes())
+	thorChain, _ = testchain.NewIntegrationTestChain()
 
-	privKeys := make([]*ecdsa.PrivateKey, 2)
+	master1 := genesis.DevAccounts()[0]
+	master2 := genesis.DevAccounts()[1]
+	b0 := thorChain.GenesisBlock()
+	abi := builtin.Extension.V2.ABI
+	toAddr := builtin.Extension.Address
 
-	for i := 0; i < 2; i++ {
-		privateKey, _ := crypto.GenerateKey()
-		privKeys[i] = privateKey
+	var uint8Array [32]uint8
+	err := callContractAndGetOutput(abi, "blake2b256", toAddr, &uint8Array, []byte("hello world"))
+
+	require.NoError(t, err)
+	require.Equal(t, thor.Blake2b([]byte("hello world")).Bytes(), uint8Array[:])
+
+	var expected *big.Int
+	var bigIntOutput *big.Int
+	err = callContractAndGetOutput(builtin.Energy.ABI, "totalSupply", builtin.Energy.Address, &expected)
+	assert.NoError(t, err)
+	err = callContractAndGetOutput(abi, "totalSupply", toAddr, &bigIntOutput)
+
+	require.NoError(t, err)
+	require.Equal(t, expected, bigIntOutput)
+
+	m, _ := abi.MethodByName("txBlockRef")
+	input, err := m.EncodeInput()
+	assert.NoError(t, err)
+	clause := tx.NewClause(&toAddr).WithData(input)
+	blkRef := tx.NewBlockRef(1)
+
+	outBytes, err := inspectClauseWithBlockRef(clause, &blkRef)
+
+	require.NoError(t, err)
+	require.Equal(t, tx.NewBlockRef(1).Number(), binary.BigEndian.Uint32(outBytes))
+
+	err = callContractAndGetOutput(abi, "txExpiration", toAddr, &bigIntOutput)
+
+	require.NoError(t, err)
+	require.Equal(t, big.NewInt(50), bigIntOutput)
+
+	m, _ = abi.MethodByName("txProvedWork")
+	input, err = m.EncodeInput()
+	assert.NoError(t, err)
+	clause = tx.NewClause(&toAddr).WithData(input)
+
+	builder := new(tx.Builder).
+		ChainTag(thorChain.Repo().ChainTag()).
+		Expiration(50).
+		Gas(42000).
+		Clause(clause)
+
+	trx := builder.Build()
+	outBytes, err = thorChain.ClauseCall(master1, trx, 0)
+	assert.NoError(t, err)
+
+	block, err := thorChain.BestBlock()
+	assert.NoError(t, err)
+
+	getBlockID := func(_ uint32) (thor.Bytes32, error) {
+		return thor.Bytes32{}, nil
 	}
+	provedWork, err := trx.ProvedWork(block.Header().Number(), getBlockID)
 
-	b0 := genesisBlock
-	b1 := newBlock(b0, 123, 456, privKeys[0])
-	b2 := newBlock(b1, 789, 321, privKeys[1])
+	require.NoError(t, err)
+	require.Equal(t, provedWork.String(), new(big.Int).SetBytes(outBytes).String())
 
-	b1_singer, _ := b1.Header().Signer()
-	b2_singer, _ := b2.Header().Signer()
+	m, _ = abi.MethodByName("txID")
+	input, err = m.EncodeInput()
+	assert.NoError(t, err)
+	clause = tx.NewClause(&toAddr).WithData(input)
 
-	gasPayer := thor.BytesToAddress([]byte("gasPayer"))
+	builder = new(tx.Builder).
+		ChainTag(thorChain.Repo().ChainTag()).
+		Expiration(50).
+		Gas(42000).
+		Clause(clause)
 
-	err := repo.AddBlock(b1, nil, 0, false)
-	assert.Equal(t, err, nil)
-	err = repo.AddBlock(b2, nil, 0, false)
-	assert.Equal(t, err, nil)
+	trx = builder.Build()
+	trxID, err := thorChain.ClauseCall(master1, trx, 0)
+	assert.NoError(t, err)
 
-	assert.Equal(t, builtin.Extension.Address, builtin.Extension.Address)
+	require.NoError(t, err)
+	require.Equal(t, trx.ID().Bytes(), trxID)
 
-	chain := repo.NewChain(b2.Header().ID())
+	fetchedTx, id, err := executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        builtin.Energy.ABI,
+		methodName: "transfer",
+		address:    builtin.Energy.Address,
+		acc:        master1,
+		args:       []interface{}{master2.Address, big.NewInt(1000)},
+		duplicate:  false,
+	})
 
-	rt := runtime.New(chain, st, &xenv.BlockContext{Number: 2, Time: b2.Header().Timestamp(), TotalScore: b2.Header().TotalScore(), Signer: b2_singer}, thor.NoFork)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(fetchedTx.Outputs))
+	require.False(t, fetchedTx.Reverted)
 
-	test := &ctest{
-		rt:  rt,
-		abi: builtin.Extension.V2.ABI,
-		to:  builtin.Extension.Address,
-	}
+	fetchedTx2, id2, err := executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        builtin.Energy.ABI,
+		methodName: "transfer",
+		address:    builtin.Energy.Address,
+		acc:        master1,
+		args:       []interface{}{master2.Address, big.NewInt(1001)},
+		duplicate:  false,
+	})
 
-	test.Case("blake2b256", []byte("hello world")).
-		ShouldOutput(thor.Blake2b([]byte("hello world"))).
-		Assert(t)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(fetchedTx2.Outputs))
+	require.False(t, fetchedTx2.Reverted)
 
-	expected, _ := builtin.Energy.Native(st, 0).TokenTotalSupply()
-	test.Case("totalSupply").
-		ShouldOutput(expected).
-		Assert(t)
-
-	test.Case("txBlockRef").
-		BlockRef(tx.NewBlockRef(1)).
-		ShouldOutput(tx.NewBlockRef(1)).
-		Assert(t)
-
-	test.Case("txExpiration").
-		Expiration(100).
-		ShouldOutput(big.NewInt(100)).
-		Assert(t)
-
-	test.Case("txProvedWork").
-		ProvedWork(big.NewInt(1e12)).
-		ShouldOutput(big.NewInt(1e12)).
-		Assert(t)
-
-	test.Case("txID").
-		TxID(thor.BytesToBytes32([]byte("txID"))).
-		ShouldOutput(thor.BytesToBytes32([]byte("txID"))).
-		Assert(t)
-
-	test.Case("blockID", big.NewInt(3)).
-		ShouldOutput(thor.Bytes32{}).
-		Assert(t)
-
-	test.Case("blockID", big.NewInt(2)).
-		ShouldOutput(thor.Bytes32{}).
-		Assert(t)
-
-	test.Case("blockID", big.NewInt(1)).
-		ShouldOutput(b1.Header().ID()).
-		Assert(t)
-
-	test.Case("blockID", big.NewInt(0)).
-		ShouldOutput(b0.Header().ID()).
-		Assert(t)
-
-	test.Case("blockTotalScore", big.NewInt(3)).
-		ShouldOutput(uint64(0)).
-		Assert(t)
-
-	test.Case("blockTotalScore", big.NewInt(2)).
-		ShouldOutput(b2.Header().TotalScore()).
-		Assert(t)
-
-	test.Case("blockTotalScore", big.NewInt(1)).
-		ShouldOutput(b1.Header().TotalScore()).
-		Assert(t)
-
-	test.Case("blockTotalScore", big.NewInt(0)).
-		ShouldOutput(b0.Header().TotalScore()).
-		Assert(t)
-
-	test.Case("blockTime", big.NewInt(3)).
-		ShouldOutput(&big.Int{}).
-		Assert(t)
-
-	test.Case("blockTime", big.NewInt(2)).
-		ShouldOutput(new(big.Int).SetUint64(b2.Header().Timestamp())).
-		Assert(t)
-
-	test.Case("blockTime", big.NewInt(1)).
-		ShouldOutput(new(big.Int).SetUint64(b1.Header().Timestamp())).
-		Assert(t)
-
-	test.Case("blockTime", big.NewInt(0)).
-		ShouldOutput(new(big.Int).SetUint64(b0.Header().Timestamp())).
-		Assert(t)
-
-	test.Case("blockSigner", big.NewInt(3)).
-		ShouldOutput(thor.Address{}).
-		Assert(t)
-
-	test.Case("blockSigner", big.NewInt(2)).
-		ShouldOutput(b2_singer).
-		Assert(t)
-
-	test.Case("blockSigner", big.NewInt(1)).
-		ShouldOutput(b1_singer).
-		Assert(t)
-
-	test.Case("txGasPayer").
-		ShouldOutput(thor.Address{}).
-		Assert(t)
-
-	test.Case("txGasPayer").
-		GasPayer(gasPayer).
-		ShouldOutput(gasPayer).
-		Assert(t)
-
-}
-
-func TestStakerNative(t *testing.T) {
-	t.Skip() // TODO: Resolve conflicts with other PR later
-	db := muxdb.NewMem()
-	st := state.New(db, trie.Root{})
-	gene := genesis.NewDevnet()
-	genesisBlock, _, _, _ := gene.Build(state.NewStater(db))
-	repo, _ := chain.NewRepository(db, genesisBlock)
-	st.SetCode(builtin.Staker.Address, builtin.Staker.RuntimeBytecodes())
-
-	privKeys := make([]*ecdsa.PrivateKey, 2)
-	for i := 0; i < 2; i++ {
-		privateKey, _ := crypto.GenerateKey()
-		privKeys[i] = privateKey
-	}
-
-	acc1 := thor.BytesToAddress([]byte("acc1"))
-	validatorAcc1 := thor.BytesToAddress([]byte("vAcc1"))
-	stakeAmount := big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
-
-	b0 := genesisBlock
-	b1 := newBlock(b0, 123, 456, privKeys[0])
-	b2 := newBlock(b1, 789, 321, privKeys[1])
-	b2_singer, _ := b2.Header().Signer()
-
-	err := repo.AddBlock(b1, nil, 0, false)
-	assert.Equal(t, err, nil)
-	err = repo.AddBlock(b2, nil, 0, false)
-	assert.Equal(t, err, nil)
-
-	chain := repo.NewChain(b2.Header().ID())
-
-	stakedEvent := func(staker thor.Address, amount *big.Int, validator thor.Address) *tx.Event {
-		ev, _ := builtin.Staker.ABI.EventByName("Staked")
-		data, _ := ev.Encode(amount)
-		return &tx.Event{
-			Address: builtin.Staker.Address,
-			Topics:  []thor.Bytes32{ev.ID(), thor.BytesToBytes32(staker[:]), thor.BytesToBytes32(validator[:])},
-			Data:    data,
-		}
-	}
-	unstakedEvent := func(staker thor.Address, amount *big.Int, validator thor.Address) *tx.Event {
-		ev, _ := builtin.Staker.ABI.EventByName("Unstaked")
-		data, _ := ev.Encode(amount)
-		return &tx.Event{
-			Address: builtin.Staker.Address,
-			Topics:  []thor.Bytes32{ev.ID(), thor.BytesToBytes32(staker[:]), thor.BytesToBytes32(validator[:])},
-			Data:    data,
-		}
-	}
-	validatorAddedEvent := func(validator thor.Address) *tx.Event {
-		ev, _ := builtin.Staker.ABI.EventByName("ValidatorAdded")
-		return &tx.Event{
-			Address: builtin.Staker.Address,
-			Topics:  []thor.Bytes32{ev.ID(), thor.BytesToBytes32(validator[:])},
-		}
-	}
-	validatorRemovedEvent := func(validator thor.Address) *tx.Event {
-		ev, _ := builtin.Staker.ABI.EventByName("ValidatorRemoved")
-		return &tx.Event{
-			Address: builtin.Staker.Address,
-			Topics:  []thor.Bytes32{ev.ID(), thor.BytesToBytes32(validator[:])},
-		}
-	}
-	rt := runtime.New(chain, st, &xenv.BlockContext{Number: 2, Time: b2.Header().Timestamp(), TotalScore: b2.Header().TotalScore(), Signer: b2_singer}, thor.ForkConfig{})
-
-	test := &ctest{
-		rt:  rt,
-		abi: builtin.Staker.ABI,
-		to:  builtin.Staker.Address,
-	}
-
-	st.SetBalance(validatorAcc1, stakeAmount)
-	st.SetEnergy(validatorAcc1, big.NewInt(100000000), b2.Header().Timestamp())
-
-	st.SetBalance(acc1, big.NewInt(10000))
-	st.SetEnergy(acc1, big.NewInt(100000000), b2.Header().Timestamp())
-
-	test.Case("totalStake").ShouldOutput(big.NewInt(0)).Assert(t)
-
-	test.Case("getStake", acc1, validatorAcc1).ShouldOutput(big.NewInt(0)).Assert(t)
-
-	test.Case("addValidator").Caller(validatorAcc1).Value(stakeAmount).ShouldLog(validatorAddedEvent(validatorAcc1)).Assert(t)
-
-	test.Case("listValidators").ShouldOutput([]thor.Address{validatorAcc1}).Assert(t)
-
-	test.Case("stake", validatorAcc1).Caller(acc1).Value(big.NewInt(10000)).ShouldLog(stakedEvent(acc1, big.NewInt(10000), validatorAcc1)).Assert(t)
-
-	test.Case("totalStake").ShouldOutput(big.NewInt(0).Add(stakeAmount, big.NewInt(10000))).Assert(t)
-
-	test.Case("getStake", acc1, validatorAcc1).ShouldOutput(big.NewInt(10000)).Assert(t)
-
-	acc1Balance, err := st.GetBalance(acc1)
-	assert.Nil(t, err)
-	assert.Equal(t, big.NewInt(0).Int64(), acc1Balance.Int64())
-
-	ctrBalance, err := st.GetBalance(builtin.Staker.Address)
-	assert.Nil(t, err)
-	assert.Equal(t, big.NewInt(0).Add(stakeAmount, big.NewInt(10000)), ctrBalance)
-
-	test.Case("unstake", big.NewInt(300), validatorAcc1).Caller(acc1).ShouldLog(unstakedEvent(acc1, big.NewInt(300), validatorAcc1)).Assert(t)
-
-	test.Case("totalStake").ShouldOutput(big.NewInt(0).Add(stakeAmount, big.NewInt(9700))).Assert(t)
-
-	test.Case("getStake", acc1, validatorAcc1).ShouldOutput(big.NewInt(9700)).Assert(t)
-
-	test.Case("getStake", validatorAcc1, validatorAcc1).ShouldOutput(stakeAmount).Assert(t)
-
-	acc1Balance, err = st.GetBalance(acc1)
-	assert.Nil(t, err)
-	assert.Equal(t, big.NewInt(300), acc1Balance)
-
-	ctrBalance, err = st.GetBalance(builtin.Staker.Address)
-	assert.Nil(t, err)
-	assert.Equal(t, big.NewInt(0).Add(stakeAmount, big.NewInt(9700)), ctrBalance)
-
-	valBalance, err := st.GetBalance(validatorAcc1)
-	assert.Nil(t, err)
-	assert.Equal(t, big.NewInt(0).Int64(), valBalance.Int64())
-
-	test.Case("removeValidator").Caller(validatorAcc1).ShouldLog(validatorRemovedEvent(validatorAcc1)).Assert(t)
-
-	test.Case("listValidators").ShouldOutput([]thor.Address{}).Assert(t)
-
-	test.Case("totalStake").ShouldOutput(big.NewInt(0)).Assert(t)
-
-	test.Case("getStake", acc1, validatorAcc1).ShouldOutput(big.NewInt(0)).Assert(t)
-
-	test.Case("getStake", validatorAcc1, validatorAcc1).ShouldOutput(big.NewInt(0)).Assert(t)
-
-	acc1Balance, err = st.GetBalance(acc1)
-	assert.Nil(t, err)
-	assert.Equal(t, big.NewInt(10000), acc1Balance)
-
-	ctrBalance, err = st.GetBalance(builtin.Staker.Address)
-	assert.Nil(t, err)
-	assert.Equal(t, big.NewInt(0).Int64(), ctrBalance.Int64())
-
-	valBalance, err = st.GetBalance(validatorAcc1)
-	assert.Nil(t, err)
-	assert.Equal(t, stakeAmount, valBalance)
+	err = callContractAndGetOutput(abi, "blockID", toAddr, &uint8Array, big.NewInt(3))
+
+	require.NoError(t, err)
+	require.Equal(t, thor.Bytes32{}.Bytes(), uint8Array[:])
+
+	err = callContractAndGetOutput(abi, "blockID", toAddr, &uint8Array, big.NewInt(2))
+
+	require.NoError(t, err)
+	require.Equal(t, thor.Bytes32{}.Bytes(), uint8Array[:])
+
+	err = callContractAndGetOutput(abi, "blockID", toAddr, &uint8Array, big.NewInt(1))
+	require.NoError(t, err)
+
+	bl, err := thorChain.GetTxBlock(id)
+	require.NoError(t, err)
+	require.Equal(t, bl.Header().ID().Bytes(), uint8Array[:])
+
+	err = callContractAndGetOutput(abi, "blockID", toAddr, &uint8Array, big.NewInt(0))
+
+	require.NoError(t, err)
+	require.Equal(t, b0.Header().ID().Bytes(), uint8Array[:])
+
+	var uint64Output uint64
+	err = callContractAndGetOutput(abi, "blockTotalScore", toAddr, &uint64Output, big.NewInt(3))
+
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), uint64Output)
+
+	err = callContractAndGetOutput(abi, "blockTotalScore", toAddr, &uint64Output, big.NewInt(2))
+	assert.NoError(t, err)
+
+	bl2, err := thorChain.GetTxBlock(id2)
+	require.NoError(t, err)
+	block2, err := thorChain.Repo().GetBlock(bl2.Header().ID())
+
+	require.NoError(t, err)
+	require.Equal(t, block2.Header().TotalScore(), uint64Output)
+
+	err = callContractAndGetOutput(abi, "blockTotalScore", toAddr, &uint64Output, big.NewInt(1))
+	assert.NoError(t, err)
+	block1, err := thorChain.Repo().GetBlock(bl.Header().ID())
+
+	require.NoError(t, err)
+	require.Equal(t, block1.Header().TotalScore(), uint64Output)
+
+	err = callContractAndGetOutput(abi, "blockTotalScore", toAddr, &uint64Output, big.NewInt(0))
+
+	require.NoError(t, err)
+	require.Equal(t, b0.Header().TotalScore(), uint64Output)
+
+	err = callContractAndGetOutput(abi, "blockTime", toAddr, &bigIntOutput, big.NewInt(3))
+
+	require.NoError(t, err)
+	require.Equal(t, big.NewInt(0).String(), bigIntOutput.String())
+
+	err = callContractAndGetOutput(abi, "blockTime", toAddr, &bigIntOutput, big.NewInt(2))
+
+	require.NoError(t, err)
+	require.Equal(t, new(big.Int).SetUint64(block2.Header().Timestamp()), bigIntOutput)
+
+	err = callContractAndGetOutput(abi, "blockTime", toAddr, &bigIntOutput, big.NewInt(1))
+
+	require.NoError(t, err)
+	require.Equal(t, new(big.Int).SetUint64(block1.Header().Timestamp()), bigIntOutput)
+
+	err = callContractAndGetOutput(abi, "blockTime", toAddr, &bigIntOutput, big.NewInt(0))
+
+	require.NoError(t, err)
+	require.Equal(t, new(big.Int).SetUint64(b0.Header().Timestamp()), bigIntOutput)
+
+	var addressOutput common.Address
+	err = callContractAndGetOutput(abi, "blockSigner", toAddr, &addressOutput, big.NewInt(3))
+
+	require.NoError(t, err)
+	require.Equal(t, common.Address{}, addressOutput)
+
+	err = callContractAndGetOutput(abi, "blockSigner", toAddr, &addressOutput, big.NewInt(2))
+
+	require.NoError(t, err)
+	require.Equal(t, master1.Address.Bytes(), addressOutput.Bytes())
+
+	err = callContractAndGetOutput(abi, "blockSigner", toAddr, &addressOutput, big.NewInt(1))
+
+	require.NoError(t, err)
+	require.Equal(t, master1.Address.Bytes(), addressOutput.Bytes())
+
+	err = callContractAndGetOutput(abi, "blockSigner", toAddr, &addressOutput, big.NewInt(0))
+
+	require.NoError(t, err)
+	require.Equal(t, common.Address{}, addressOutput)
+
+	err = callContractAndGetOutput(abi, "txGasPayer", toAddr, &addressOutput)
+
+	require.NoError(t, err)
+	require.Equal(t, master1.Address.Bytes(), addressOutput.Bytes())
 }

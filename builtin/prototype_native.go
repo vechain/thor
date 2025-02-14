@@ -15,7 +15,6 @@ import (
 )
 
 func init() {
-
 	events := Prototype.Events()
 
 	mustEventByName := func(name string) *abi.Event {

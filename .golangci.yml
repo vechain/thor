@@ -57,6 +57,7 @@ linters-settings:
 
 issues:
   max-issues-per-linter: 1000
+  exclude-dirs-use-default: false
   exclude-rules:
     - path: vm/contracts.go
       text: 'SA1019: "golang.org/x/crypto/ripemd160" is deprecated: RIPEMD-160 is a legacy hash and should not be used for new applications.'

@@ -3,6 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
+// #nosec G404
 package staker
 
 import (
@@ -85,7 +86,7 @@ func TestStaker_TotalStake(t *testing.T) {
 		assert.Equal(t, totalStaked, staked)
 	}
 
-	for _ = range stakes {
+	for range stakes {
 		assert.NoError(t, staker.ActivateNextValidator())
 		staked, err := staker.TotalStake()
 		assert.Nil(t, err)
@@ -121,7 +122,7 @@ func TestStaker_ActiveStake(t *testing.T) {
 	assert.Nil(t, err)
 	assert.True(t, activeStaked.Cmp(actual) == 0)
 
-	for _ = range stakers {
+	for range stakers {
 		head, err := staker.FirstQueued()
 		assert.NoError(t, err)
 		stake := stakes[head]

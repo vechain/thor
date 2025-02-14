@@ -8,6 +8,8 @@ package testchain
 import (
 	"errors"
 	"fmt"
+	"math"
+	"math/big"
 	"math/rand/v2"
 	"slices"
 	"time"
@@ -21,9 +23,12 @@ import (
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/packer"
+	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/xenv"
 )
 
 // Chain represents the blockchain structure.
@@ -200,6 +205,42 @@ func (c *Chain) MintBlock(account genesis.DevAccount, transactions ...*tx.Transa
 		return err
 	}
 	return nil
+}
+
+// ClauseCall executes contract call with clause referenced by the clauseIdx parameter, the rest of tx is passed as is.
+func (c *Chain) ClauseCall(account genesis.DevAccount, trx *tx.Transaction, clauseIdx int) ([]byte, error) {
+	ch := c.repo.NewBestChain()
+	summary, err := c.repo.GetBlockSummary(ch.HeadID())
+	if err != nil {
+		return nil, err
+	}
+	st := state.New(c.db, trie.Root{Hash: summary.Header.StateRoot(), Ver: trie.Version{Major: summary.Header.Number()}})
+	rt := runtime.New(ch, st, &xenv.BlockContext{Number: summary.Header.Number(), Time: summary.Header.Timestamp(), TotalScore: summary.Header.TotalScore(), Signer: account.Address}, thor.SoloFork)
+	exec, _ := rt.PrepareClause(trx.Clauses()[clauseIdx],
+		0, math.MaxUint64, &xenv.TransactionContext{
+			ID:         trx.ID(),
+			Origin:     account.Address,
+			GasPrice:   &big.Int{},
+			GasPayer:   account.Address,
+			ProvedWork: trx.UnprovedWork(),
+			BlockRef:   trx.BlockRef(),
+			Expiration: trx.Expiration()})
+
+	out, _, err := exec()
+	return out.Data, err
+}
+
+func (c *Chain) GetTxReceipt(txID thor.Bytes32) (*tx.Receipt, error) {
+	return c.repo.NewBestChain().GetTransactionReceipt(txID)
+}
+
+func (c *Chain) GetTxBlock(txID *thor.Bytes32) (*block.Block, error) {
+	_, meta, err := c.repo.NewBestChain().GetTransaction(*txID)
+	if err != nil {
+		return nil, err
+	}
+	block, err := c.repo.NewBestChain().GetBlock(meta.BlockNum)
+	return block, err
 }
 
 // GetAllBlocks retrieves all blocks from the blockchain, starting from the best block and moving backward to the genesis block.
