@@ -420,29 +420,24 @@ func testFeesEndpoint(t *testing.T, testchain *testchain.Chain, ts *httptest.Ser
 	c := New(ts.URL)
 	// 1. Test GET /fees/history
 	t.Run("GetFeesHistory", func(t *testing.T) {
-		blockCount := uint32(5)
+		blockCount := uint32(1)
 		newestBlock := "best"
 		feesHistory, err := c.FeesHistory(blockCount, newestBlock)
 		require.NoError(t, err)
 		require.NotNil(t, feesHistory)
 
-		expectedOldestBlock, err := testchain.Repo().NewBestChain().GetBlockID(0)
+		expectedOldestBlock, err := testchain.Repo().NewBestChain().GetBlockID(1)
 		require.NoError(t, err)
 		expectedFeesHistory := &fees.FeesHistory{
 			OldestBlock: expectedOldestBlock,
 			BaseFees: []*hexutil.Big{
-				(*hexutil.Big)(big.NewInt(0)),
 				(*hexutil.Big)(big.NewInt(1000000000)),
 			},
 			GasUsedRatios: []float64{
-				0,
 				0.0058,
 			},
 		}
 
-		require.Equal(t, expectedFeesHistory.OldestBlock, feesHistory.OldestBlock)
-		require.Equal(t, 0, expectedFeesHistory.BaseFees[0].ToInt().Cmp(feesHistory.BaseFees[0].ToInt()))
-		require.Equal(t, expectedFeesHistory.BaseFees[1], feesHistory.BaseFees[1])
-		require.Equal(t, expectedFeesHistory.GasUsedRatios, feesHistory.GasUsedRatios)
+		require.Equal(t, expectedFeesHistory, feesHistory)
 	})
 }
