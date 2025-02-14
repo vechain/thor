@@ -1,0 +1,116 @@
+{
+    "launchTime": 1703180212,
+    "gasLimit": 40000000,
+    "extraData": "My custom VeChain",
+    "forkConfig": {
+        "VIP191": 0,
+        "ETH_CONST": 0,
+        "BLOCKLIST": 0,
+        "ETH_IST": 0,
+        "VIP214": 0,
+        "FINALITY": 0,
+        "HAYABUSA": 1
+    },
+    "accounts": [
+        {
+            "address": "0x7567d83b7b8d80addcb281a71d54fc7b3364ffed",
+            "balance": "0xfffffffffffffffffffff",
+            "energy": 0,
+            "code": "0x6060604052600256",
+            "storage": {
+                "0x0000000000000000000000000000000000000000000000000000000000000001": "0x0000000000000000000000000000000000000000000000000000000000000002"
+            }
+        },
+        {
+            "address": "0xf077b491b355e64048ce21e3a6fc4751eeea77fa",
+            "balance": "0xfffffffffffffffffffff",
+            "energy": "0xfffffffffffffffffff"
+        },
+        {
+            "address": "0xa57a1cd36958d94d46a00f69d1e4f6be8670e8dd",
+            "balance": "0xfffffffffffffffffffff",
+            "energy": "0xfffffffffffffffffff"
+        },
+        {
+            "address": "0xfc07ecabc4ac6572d03bb053fb6c41179950a5f0",
+            "balance": "0xfffffffffffffffffffff",
+            "energy": "0xfffffffffffffffffff"
+        },
+        {
+            "address": "0x435933c8064b4ae76be665428e0307ef2ccfbd68",
+            "balance": "0xfffffffffffffffffffff",
+            "energy": "0xfffffffffffffffffff"
+        },
+        {
+            "address": "0x0f872421dc479f3c11edd89512731814d0598db5",
+            "balance": "0xfffffffffffffffffffff",
+            "energy": "0xfffffffffffffffffff"
+        },
+        {
+            "address": "0xf370940abdbd2583bc80bfc19d19bc216c88ccf0",
+            "balance": "0xfffffffffffffffffffff",
+            "energy": "0xfffffffffffffffffff"
+        },
+        {
+            "address": "0x99602e4bbc0503b8ff4432bb1857f916c3653b85",
+            "balance": "0xfffffffffffffffffffff",
+            "energy": "0xfffffffffffffffffff"
+        },
+        {
+            "address": "0x61e7d0c2b25706be3485980f39a3a994a8207acf",
+            "balance": "0xfffffffffffffffffffff",
+            "energy": "0xfffffffffffffffffff"
+        },
+        {
+            "address": "0x361277d1b27504f36a3b33d3a52d1f8270331b8c",
+            "balance": "0xfffffffffffffffffffff",
+            "energy": "0xfffffffffffffffffff"
+        },
+        {
+            "address": "0xd7f75a0a1287ab2916848909c8531a0ea9412800",
+            "balance": "0xfffffffffffffffffffff",
+            "energy": "0xfffffffffffffffffff"
+        },
+        {
+            "address": "0xabef6032b9176c186f6bf984f548bda53349f70a",
+            "balance": "0xfffffffffffffffffffff",
+            "energy": "0xfffffffffffffffffff"
+        },
+        {
+            "address": "0x865306084235bf804c8bba8a8d56890940ca8f0b",
+            "balance": "0xfffffffffffffffffffff",
+            "energy": "0xfffffffffffffffffff"
+        }
+    ],
+    "authority": [
+        {
+            "masterAddress": "0x435933c8064b4ae76be665428e0307ef2ccfbd68",
+            "endorsorAddress": "0x7567d83b7b8d80addcb281a71d54fc7b3364ffed",
+            "identity": "0x000000000000000068747470733a2f2f636f6e6e65782e76656368612e696e2f"
+        },
+        {
+            "masterAddress": "0xf370940abdbd2583bc80bfc19d19bc216c88ccf0",
+            "endorsorAddress": "0x7567d83b7b8d80addcb281a71d54fc7b3364ffed",
+            "identity": "0x000000000000000068747470733a2f2f656e762e7665636861696e2e6f72672f"
+        },
+        {
+            "masterAddress": "0x0f872421dc479f3c11edd89512731814d0598db5",
+            "endorsorAddress": "0x7567d83b7b8d80addcb281a71d54fc7b3364ffed",
+            "identity": "0x0000000000000068747470733a2f2f617070732e7665636861696e2e6f72672f"
+        }
+    ],
+    "params": {
+        "rewardRatio": 300000000000000000,
+        "baseGasPrice": 1000000000000000,
+        "proposerEndorsement": "0xfffffffffffffffffffff",
+        "executorAddress": "0x0000000000000000000000004578656375746f72"
+    },
+    "executor": {
+        "approvers": [
+            {
+                "address": "0x199b836d8a57365baccd4f371c1fabb7be77d389",
+                "identity": "0x00000000000067656e6572616c20707572706f736520626c6f636b636861696e"
+            }
+        ]
+    }
+}
