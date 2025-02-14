@@ -207,11 +207,8 @@ func TestPackAfterGalacticaFork(t *testing.T) {
 	if _, err := stg.Commit(); err != nil {
 		t.Fatal("Error committing state:", err)
 	}
-	if err := repo.AddBlock(block, receipts, 0); err != nil {
+	if err := repo.AddBlock(block, receipts, 0, true); err != nil {
 		t.Fatal("Error adding block:", err)
-	}
-	if err := repo.SetBestBlockID(block.Header().ID()); err != nil {
-		t.Fatal("Error setting best block ID:", err)
 	}
 
 	// Block 2: Galactica is enabled
