@@ -58,7 +58,7 @@ var (
 	apiBacktraceLimitFlag = cli.Uint64Flag{
 		Name:  "api-backtrace-limit",
 		Value: 1000,
-		Usage: "limit the distance between 'position' and best block for subscriptions APIs",
+		Usage: "limit the distance between 'position' and best block for subscriptions and fees APIs",
 	}
 	apiAllowCustomTracerFlag = cli.BoolFlag{
 		Name:  "api-allow-custom-tracer",
