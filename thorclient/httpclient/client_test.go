@@ -349,10 +349,10 @@ func TestClient_GetFeesHistory(t *testing.T) {
 	defer ts.Close()
 
 	client := New(ts.URL)
-	block, err := client.GetFeesHistory(blockCount, newestBlock)
+	feesHistory, err := client.GetFeesHistory(blockCount, newestBlock)
 
 	assert.NoError(t, err)
-	assert.Equal(t, expectedFeesHistory, block)
+	assert.Equal(t, expectedFeesHistory, feesHistory)
 }
 
 func TestClient_RawHTTPPost(t *testing.T) {
