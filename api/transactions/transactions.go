@@ -6,6 +6,7 @@
 package transactions
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -13,20 +14,33 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/utils"
+	"github.com/vechain/thor/v2/bft"
+	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/runtime"
+	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/txpool"
+	"github.com/vechain/thor/v2/xenv"
 )
 
+const maxTxSize = 64 * 1024
+
 type Transactions struct {
-	repo *chain.Repository
-	pool *txpool.TxPool
+	repo       *chain.Repository
+	pool       *txpool.TxPool
+	stater     *state.Stater
+	bft        bft.Committer
+	forkConfig thor.ForkConfig
 }
 
-func New(repo *chain.Repository, pool *txpool.TxPool) *Transactions {
+func New(repo *chain.Repository, stater *state.Stater, pool *txpool.TxPool, bft bft.Committer, forkConfig thor.ForkConfig) *Transactions {
 	return &Transactions{
-		repo,
-		pool,
+		repo:       repo,
+		stater:     stater,
+		pool:       pool,
+		bft:        bft,
+		forkConfig: forkConfig,
 	}
 }
 
@@ -114,6 +128,7 @@ func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32, head thor.By
 
 	return convertReceipt(receipt, header, tx)
 }
+
 func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Request) error {
 	var rawTx *RawTx
 	if err := utils.ParseJSON(req.Body, &rawTx); err != nil {
@@ -213,6 +228,81 @@ func (t *Transactions) parseHead(head string) (thor.Bytes32, error) {
 	return h, nil
 }
 
+func (t *Transactions) txCall(
+	txCallMsg *Transaction,
+	header *block.Header,
+	st *state.State,
+) (*CallReceipt, error) {
+	callAddr := txCallMsg.Origin
+	if callAddr.String() == (thor.Address{}).String() {
+		return nil, fmt.Errorf("no origin address specified")
+	}
+
+	txCallData, err := ConvertCallTransaction(txCallMsg, header)
+	if err != nil {
+		return nil, fmt.Errorf("unable to convert transaction: %w", err)
+	}
+
+	// Txpool Checks
+	origin, _ := txCallData.Origin()
+	if thor.IsOriginBlocked(origin) {
+		// tx origin blocked
+		return nil, fmt.Errorf("origin blocked")
+	}
+
+	switch {
+	case txCallMsg.ChainTag != t.repo.ChainTag():
+		return nil, fmt.Errorf("chain tag mismatch")
+	case txCallMsg.Size > maxTxSize:
+		return nil, fmt.Errorf("size too large")
+	}
+	if err = txCallData.TestFeatures(header.TxsFeatures()); err != nil {
+		return nil, err
+	}
+
+	signer, _ := header.Signer()
+	rt := runtime.New(t.repo.NewChain(header.ParentID()), st,
+		&xenv.BlockContext{
+			Beneficiary: header.Beneficiary(),
+			Signer:      signer,
+			Number:      header.Number(),
+			Time:        header.Timestamp(),
+			GasLimit:    header.GasLimit(),
+			TotalScore:  header.TotalScore(),
+		},
+		t.forkConfig)
+
+	receipt, err := rt.CallTransaction(txCallData, &callAddr, txCallMsg.Delegator)
+	if err != nil {
+		return convertErrorCallReceipt(err, txCallMsg, &callAddr)
+	}
+
+	return convertCallReceipt(receipt, txCallMsg, &callAddr)
+}
+
+func (t *Transactions) handleCallTransaction(w http.ResponseWriter, req *http.Request) error {
+	txCallMsg := &Transaction{}
+	if err := utils.ParseJSON(req.Body, &txCallMsg); err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "body"))
+	}
+	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"), true)
+	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "revision"))
+	}
+	summary, st, err := utils.GetSummaryAndState(revision, t.repo, t.bft, t.stater)
+	if err != nil {
+		if t.repo.IsNotFound(err) {
+			return utils.BadRequest(errors.WithMessage(err, "revision"))
+		}
+		return err
+	}
+
+	results, err := t.txCall(txCallMsg, summary.Header, st)
+	if err != nil {
+		return err
+	}
+	return utils.WriteJSON(w, results)
+}
 func (t *Transactions) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
@@ -228,4 +318,8 @@ func (t *Transactions) Mount(root *mux.Router, pathPrefix string) {
 		Methods(http.MethodGet).
 		Name("GET /transactions/{id}/receipt").
 		HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionReceiptByID))
+	sub.Path("/call").
+		Methods(http.MethodPost).
+		Name("transactions_call_tx").
+		HandlerFunc(utils.WrapHandlerFunc(t.handleCallTransaction))
 }
