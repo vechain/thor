@@ -7,9 +7,11 @@ package fees
 
 import (
 	"math"
+	"math/big"
 	"net/http"
 	"strconv"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/utils"
@@ -98,10 +100,20 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 	})
 }
 
+func (f *Fees) handleGetPriority(w http.ResponseWriter, req *http.Request) error {
+	return utils.WriteJSON(w, &FeesPriority{
+		MaxPriorityFeePerGas: (*hexutil.Big)(big.NewInt(0)),
+	})
+}
+
 func (f *Fees) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 	sub.Path("/history").
 		Methods(http.MethodGet).
 		Name("GET /fees/history").
 		HandlerFunc(utils.WrapHandlerFunc(f.handleGetFeesHistory))
+	sub.Path("/priority").
+		Methods(http.MethodGet).
+		Name("GET /fees/priority").
+		HandlerFunc(utils.WrapHandlerFunc(f.handleGetPriority))
 }
