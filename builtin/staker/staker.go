@@ -7,8 +7,10 @@ package staker
 
 import (
 	"errors"
+	"math"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -19,6 +21,12 @@ var (
 	maxLeaderGroupSize = big.NewInt(101)
 	minStake           = big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
 	maxStake           = big.NewInt(0).Mul(big.NewInt(400e6), big.NewInt(1e18))
+
+	minStakingPeriod = uint64(360) * 24 * 14  // 2 weeks
+	maxStakingPeriod = uint64(360) * 24 * 365 // 1 year
+	_                = uint64(360) * 24 * 1   // 1 day
+
+	slotPreviousExitKey = thor.Blake2b(thor.Bytes32{slotPreviousExit}.Bytes())
 )
 
 type slot = byte
@@ -32,6 +40,7 @@ const (
 	slotActiveTail
 	slotQueuedHead
 	slotQueuedTail
+	slotPreviousExit
 )
 
 // Staker implements native methods of `Staker` contract.
@@ -62,7 +71,13 @@ func New(addr thor.Address, state *state.State) *Staker {
 }
 
 // AddValidator queues a new validator.
-func (a *Staker) AddValidator(addr thor.Address, stake *big.Int) error {
+func (a *Staker) AddValidator(
+	currentBlock uint64,
+	addr thor.Address,
+	beneficiary thor.Address,
+	expiry uint64,
+	stake *big.Int,
+) error {
 	if stake.Cmp(minStake) < 0 || stake.Cmp(maxStake) > 0 {
 		return errors.New("stake is out of range")
 	}
@@ -74,9 +89,18 @@ func (a *Staker) AddValidator(addr thor.Address, stake *big.Int) error {
 		return errors.New("validator already exists")
 	}
 
+	period := expiry - currentBlock
+	if expiry <= currentBlock ||
+		period < minStakingPeriod ||
+		period > maxStakingPeriod {
+		return errors.New("expiry is out of boundaries")
+	}
+
 	entry.Stake = stake
 	entry.Weight = stake
 	entry.Status = StatusQueued
+	entry.Beneficiary = beneficiary
+	entry.Expiry = expiry
 
 	if err := a.validatorQueue.Add(entry, addr); err != nil {
 		return err
@@ -90,6 +114,26 @@ func (a *Staker) AddValidator(addr thor.Address, stake *big.Int) error {
 
 func (a *Staker) Get(validator thor.Address) (*Validator, error) {
 	return a.validators.Get(validator)
+}
+
+func (a *Staker) PreviousExit() (uint64, error) {
+	value := previousExit{}
+	err := a.state.DecodeStorage(a.addr, slotPreviousExitKey, func(raw []byte) error {
+		if len(raw) == 0 {
+			return nil
+		}
+		return rlp.DecodeBytes(raw, &value)
+	})
+	return value.PreviousExit, err
+}
+
+func (a *Staker) setPreviousExit(blockNumber uint64) error {
+	value := previousExit{
+		PreviousExit: blockNumber,
+	}
+	return a.state.EncodeStorage(a.addr, slotPreviousExitKey, func() ([]byte, error) {
+		return rlp.EncodeToBytes(value)
+	})
 }
 
 // ActivateNextValidator pops the head of the queue and adds it to the leader group.
@@ -126,6 +170,55 @@ func (a *Staker) ActivateNextValidator() error {
 	return nil
 }
 
+// Iterate over validators, move to cooldown
+// take the oldest validator and move to exited
+func (a *Staker) Housekeep(currentBlock uint64) error {
+	ptr, err := a.FirstActive()
+	if err != nil {
+		return err
+	}
+	next := &ptr
+
+	toExit := thor.Address{}
+	toExitExp := uint64(math.MaxUint64)
+	for next != nil {
+		entry, err := a.validators.Get(*next)
+		if err != nil {
+			return err
+		}
+
+		if currentBlock >= entry.Expiry {
+			if entry.Status == StatusActive {
+				// Put to cooldown
+				entry.Status = StatusCooldown
+				if err := a.validators.Set(*next, entry); err != nil {
+					return err
+				}
+			}
+
+			// Find calidator with the lowest expiry
+			if entry.Status == StatusCooldown && toExitExp > entry.Expiry {
+				toExit = *next
+				toExitExp = entry.Expiry
+			}
+		}
+
+		next = entry.Next
+	}
+
+	// should the protocol handle this case? `((currentBlock-forkBlock)%cooldownPeriod) == 0`
+	if !toExit.IsZero() {
+		if err := a.RemoveValidator(toExit); err != nil {
+			return err
+		}
+		if err := a.setPreviousExit(currentBlock); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // RemoveValidator sets a validators status to exited and removes it from the active list.
 // It will also decrease the total stake. Exited validators can then withdraw their stake.
 func (a *Staker) RemoveValidator(validator thor.Address) error {
@@ -133,9 +226,15 @@ func (a *Staker) RemoveValidator(validator thor.Address) error {
 	if err != nil {
 		return err
 	}
-	if entry.Status != StatusActive {
-		return errors.New("validator is not active")
+
+	if entry.IsEmpty() {
+		return nil
 	}
+
+	// not sure if this check is even needed
+	//if entry.Status != StatusCooldown {
+	//	return errors.New("validator is not on cooldown")
+	//}
 
 	if err := a.totalStake.Sub(entry.Stake); err != nil {
 		return err
@@ -144,7 +243,6 @@ func (a *Staker) RemoveValidator(validator thor.Address) error {
 		return err
 	}
 
-	entry.Weight = big.NewInt(0)
 	entry.Status = StatusExit
 
 	return a.leaderGroup.Remove(validator, entry)
@@ -230,4 +328,11 @@ func (a *Staker) WithdrawStake(validator thor.Address) (*big.Int, error) {
 		return nil, err
 	}
 	return entry.Stake, nil
+}
+
+func IsExitingSlot(blockNumber uint64) bool {
+	if blockNumber == math.MaxUint64 {
+		return false
+	}
+	return (((blockNumber+1)/180)*180)-1 == blockNumber
 }

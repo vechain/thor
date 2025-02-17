@@ -87,12 +87,14 @@ func init() {
 		}},
 		{"native_addValidator", func(env *xenv.Environment) []interface{} {
 			var args struct {
-				Validator common.Address
-				Stake     *big.Int
+				Validator   common.Address
+				Beneficiary common.Address
+				Expiry      uint64
+				Stake       *big.Int
 			}
 			env.ParseArgs(&args)
 
-			err := Staker.Native(env.State(), env.BlockContext().Time).AddValidator(thor.Address(args.Validator), args.Stake)
+			err := Staker.Native(env.State(), env.BlockContext().Time).AddValidator(uint64(env.BlockContext().Number), thor.Address(args.Validator), thor.Address(args.Beneficiary), args.Expiry, args.Stake)
 			if err != nil {
 				panic(err)
 			}
