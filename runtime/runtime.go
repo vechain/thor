@@ -113,6 +113,9 @@ func New(
 				panic(err)
 			}
 		}
+		if err := state.SetCode(builtin.Extension.Address, builtin.Extension.V3.RuntimeBytecodes()); err != nil {
+			panic(err)
+		}
 	} else if forkConfig.ETH_IST == ctx.Number {
 		for addr := range vm.PrecompiledContractsIstanbul {
 			if err := state.SetCode(thor.Address(addr), EmptyRuntimeBytecode); err != nil {
@@ -243,7 +246,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 				panic("serious bug: native call returned gas over consumed")
 			}
 
-			ret, err := xenv.New(abi, rt.chain, rt.state, rt.ctx, txCtx, evm, contract).Call(run)
+			ret, err := xenv.New(abi, rt.chain, rt.state, rt.ctx, txCtx, evm, contract, clauseIndex).Call(run)
 			return ret, err, true
 		},
 		OnCreateContract: func(_ *vm.EVM, contractAddr, caller common.Address) {

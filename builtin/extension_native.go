@@ -121,7 +121,6 @@ func init() {
 			output := env.TransactionContext().ID
 			return []any{output}
 		}},
-
 		{"native_txBlockRef", func(env *xenv.Environment) []any {
 			output := env.TransactionContext().BlockRef
 			return []any{output}
@@ -133,6 +132,14 @@ func init() {
 		{"native_txGasPayer", func(env *xenv.Environment) []any {
 			output := env.TransactionContext().GasPayer
 			return []any{output}
+		}},
+		{"native_txClauseIndex", func(env *xenv.Environment) []interface{} {
+			output := env.ClauseIndex()
+			return []interface{}{output}
+		}},
+		{"native_txClauseCount", func(env *xenv.Environment) []interface{} {
+			count := env.TransactionContext().ClauseCount
+			return []interface{}{count}
 		}},
 	}
 
