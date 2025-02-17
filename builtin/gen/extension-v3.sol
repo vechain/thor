@@ -13,20 +13,20 @@ contract ExtensionV3 is ExtensionV2 {
     /**
     * @dev Get the index of the current clause in the transaction.
     */
-    function txClauseIndex() public view returns (uint256) {
+    function txClauseIndex() public view returns (uint32) {
         return ExtensionV3Native(this).native_txClauseIndex();
     }
 
     /**
     * @dev Get the total number of clauses in the transaction.
     */
-    function txClauseCount() public view returns (uint) {
+    function txClauseCount() public view returns (uint32) {
         return ExtensionV3Native(this).native_txClauseCount();
     }
 }
 
 contract ExtensionV3Native is ExtensionV2Native {
-    function native_txClauseCount() public view returns (uint);
+    function native_txClauseCount() public view returns (uint32);
 
     function native_txClauseIndex()public view returns(uint32);
 }
