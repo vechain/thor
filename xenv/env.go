@@ -33,25 +33,25 @@ type BlockContext struct {
 
 // TransactionContext transaction context.
 type TransactionContext struct {
-	ID         thor.Bytes32
-	Origin     thor.Address
-	GasPayer   thor.Address
-	GasPrice   *big.Int
-	ProvedWork *big.Int
-	BlockRef   tx.BlockRef
-	Expiration uint32
+	ID          thor.Bytes32
+	Origin      thor.Address
+	GasPayer    thor.Address
+	GasPrice    *big.Int
+	ProvedWork  *big.Int
+	BlockRef    tx.BlockRef
+	Expiration  uint32
 	ClauseCount uint32
 }
 
 // Environment an env to execute native method.
 type Environment struct {
-	abi      *abi.Method
-	chain    *chain.Chain
-	state    *state.State
-	blockCtx *BlockContext
-	txCtx    *TransactionContext
-	evm      *vm.EVM
-	contract *vm.Contract
+	abi         *abi.Method
+	chain       *chain.Chain
+	state       *state.State
+	blockCtx    *BlockContext
+	txCtx       *TransactionContext
+	evm         *vm.EVM
+	contract    *vm.Contract
 	clauseIndex uint32
 }
 
@@ -67,13 +67,13 @@ func New(
 	clauseIndex uint32,
 ) *Environment {
 	return &Environment{
-		abi:      abi,
-		chain:    chain,
-		state:    state,
-		blockCtx: blockCtx,
-		txCtx:    txCtx,
-		evm:      evm,
-		contract: contract,
+		abi:         abi,
+		chain:       chain,
+		state:       state,
+		blockCtx:    blockCtx,
+		txCtx:       txCtx,
+		evm:         evm,
+		contract:    contract,
 		clauseIndex: clauseIndex,
 	}
 }

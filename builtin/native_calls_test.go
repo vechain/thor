@@ -25,6 +25,7 @@ import (
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
@@ -1052,5 +1053,48 @@ func TestExtensionNative(t *testing.T) {
 		GasPayer(gasPayer).
 		ShouldOutput(gasPayer).
 		Assert(t)
+}
 
+func TestExtensionV3(t *testing.T) {
+	chain, err := testchain.NewIntegrationTestChain()
+	assert.Nil(t, err)
+	assert.NoError(t, chain.MintBlock(genesis.DevAccounts()[0]))
+
+	// setup txClauseIndex call data
+	txClauseIndexABI, ok := builtin.Extension.V3.ABI.MethodByName("txClauseIndex")
+	assert.True(t, ok)
+	txClauseIndex, err := txClauseIndexABI.EncodeInput()
+	assert.Nil(t, err)
+	txClauseIndexClause := tx.NewClause(&builtin.Extension.Address).WithData(txClauseIndex)
+
+	// setup txClauseCount call data
+	txClauseCountABI, ok := builtin.Extension.V3.ABI.MethodByName("txClauseCount")
+	assert.True(t, ok)
+	txClauseCount, err := txClauseCountABI.EncodeInput()
+	assert.Nil(t, err)
+	txClauseCountClause := tx.NewClause(&builtin.Extension.Address).WithData(txClauseCount)
+
+	// init the runtime
+	best := chain.Repo().BestBlockSummary()
+	rtChain := chain.Repo().NewChain(best.Header.ParentID())
+	rtStater := chain.Stater().NewState(best.Root())
+	rt := runtime.New(rtChain, rtStater, &xenv.BlockContext{Number: best.Header.Number(), Time: best.Header.Timestamp(), TotalScore: 1}, thor.ForkConfig{})
+
+	// test txClauseIndex
+	clauseIndex := uint32(934)
+	exec, _ := rt.PrepareClause(txClauseIndexClause, clauseIndex, math.MaxUint64, &xenv.TransactionContext{})
+	out, _, err := exec()
+	assert.Nil(t, err)
+	val := new(big.Int).SetBytes(out.Data)
+	assert.Equal(t, uint64(clauseIndex), val.Uint64())
+
+	// test txClauseCount
+	clauseCount := uint32(712)
+	exec, _ = rt.PrepareClause(txClauseCountClause, 0, math.MaxUint64, &xenv.TransactionContext{
+		ClauseCount: clauseCount,
+	})
+	out, _, err = exec()
+	assert.Nil(t, err)
+	val = new(big.Int).SetBytes(out.Data)
+	assert.Equal(t, uint64(clauseCount), val.Uint64())
 }
