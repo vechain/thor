@@ -42,7 +42,7 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 	}
 
 	if blockCount == 0 {
-		return 0, nil, utils.BadRequest(errors.WithMessage(err, "invalid blockCount, it should not be 0"))
+		return 0, nil, utils.BadRequest(errors.New("invalid blockCount, it should not be 0"))
 	}
 
 	// Validate newestBlock
@@ -71,7 +71,7 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 	}
 
 	if newestBlockSummary.Header.Number() < minAllowedBlock {
-		return 0, nil, utils.BadRequest(errors.WithMessage(err, "invalid newestBlock, it is below the minimum allowed block"))
+		return 0, nil, utils.BadRequest(errors.New("invalid newestBlock, it is below the minimum allowed block"))
 	}
 
 	// Adjust blockCount if the oldest block is below the allowed range
