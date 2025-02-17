@@ -52,6 +52,7 @@ type ccase struct {
 	blockRef   tx.BlockRef
 	gasPayer   thor.Address
 	expiration uint32
+	expectedGas uint64
 
 	output *[]interface{}
 	vmerr  error
@@ -117,6 +118,11 @@ func (c *ccase) ShouldOutput(outputs ...interface{}) *ccase {
 	return c
 }
 
+func (c *ccase) ExpectedGas(gas uint64) *ccase {
+	c.expectedGas = gas
+	return c
+}
+
 func (c *ccase) Assert(t *testing.T) *ccase {
 	method, ok := c.abi.MethodByName(c.name)
 	assert.True(t, ok, "should have method")
@@ -150,6 +156,10 @@ func (c *ccase) Assert(t *testing.T) *ccase {
 		assert.Equal(t, c.vmerr, vmout.VMErr)
 	} else {
 		assert.Nil(t, vmout.VMErr)
+	}
+
+	if c.expectedGas != 0 {
+		assert.Equal(t, c.expectedGas,  math.MaxUint64 - vmout.LeftOverGas)
 	}
 
 	if c.output != nil {
@@ -938,35 +948,42 @@ func TestExtensionNative(t *testing.T) {
 
 	test.Case("blake2b256", []byte("hello world")).
 		ShouldOutput(thor.Blake2b([]byte("hello world"))).
+		ExpectedGas(913).
 		Assert(t)
 
 	expected, _ := builtin.Energy.Native(st, 0).TokenTotalSupply()
 	test.Case("totalSupply").
 		ShouldOutput(expected).
+		ExpectedGas(450).
 		Assert(t)
 
 	test.Case("txBlockRef").
 		BlockRef(tx.NewBlockRef(1)).
 		ShouldOutput(tx.NewBlockRef(1)).
+		ExpectedGas(488).
 		Assert(t)
 
 	test.Case("txExpiration").
 		Expiration(100).
 		ShouldOutput(big.NewInt(100)).
+		ExpectedGas(388).
 		Assert(t)
 
 	test.Case("txProvedWork").
 		ProvedWork(big.NewInt(1e12)).
 		ShouldOutput(big.NewInt(1e12)).
+		ExpectedGas(426).
 		Assert(t)
 
 	test.Case("txID").
 		TxID(thor.BytesToBytes32([]byte("txID"))).
 		ShouldOutput(thor.BytesToBytes32([]byte("txID"))).
+		ExpectedGas(422).
 		Assert(t)
 
 	test.Case("blockID", big.NewInt(3)).
 		ShouldOutput(thor.Bytes32{}).
+		ExpectedGas(570).
 		Assert(t)
 
 	test.Case("blockID", big.NewInt(2)).
@@ -983,6 +1000,7 @@ func TestExtensionNative(t *testing.T) {
 
 	test.Case("blockTotalScore", big.NewInt(3)).
 		ShouldOutput(uint64(0)).
+		ExpectedGas(454).
 		Assert(t)
 
 	test.Case("blockTotalScore", big.NewInt(2)).
@@ -999,6 +1017,7 @@ func TestExtensionNative(t *testing.T) {
 
 	test.Case("blockTime", big.NewInt(3)).
 		ShouldOutput(&big.Int{}).
+		ExpectedGas(404).
 		Assert(t)
 
 	test.Case("blockTime", big.NewInt(2)).
