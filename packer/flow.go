@@ -121,6 +121,10 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 		if t.Type() != tx.LegacyTxType {
 			return badTxError{"invalid tx type"}
 		}
+	} else {
+		if f.runtime.Context().BaseFee == nil {
+			return fork.ErrBaseFeeNotSet
+		}
 	}
 
 	// check if tx already there

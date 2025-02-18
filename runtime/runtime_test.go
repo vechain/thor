@@ -19,7 +19,6 @@ import (
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/runtime"
@@ -808,13 +807,6 @@ func TestExecuteTransaction(t *testing.T) {
 		Build()
 	assert.Nil(t, err)
 	legacyTx = tx.MustSign(legacyTx, genesis.DevAccounts()[0].PrivateKey)
-
-	t.Run("Galactica is active but baseFee is not set", func(t *testing.T) {
-		rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{Number: 1}, thor.ForkConfig{GALACTICA: 0})
-		receipt, err := rt.ExecuteTransaction(legacyTx)
-		assert.Equal(t, fork.ErrBaseFeeNotSet, err)
-		assert.Nil(t, receipt)
-	})
 
 	t.Run("Receipt check with legacy tx before galactica fork", func(t *testing.T) {
 		prevPayerEnergy, err := state.GetEnergy(genesis.DevAccounts()[0].Address, b0.Header().Timestamp())
