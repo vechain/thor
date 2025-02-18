@@ -25,6 +25,7 @@ import (
 )
 
 const expectedGasPriceUsedRatio = 0.0021
+const expectedBaseFee = 10_000_000_000_000
 
 func TestFeesBacktraceGreaterThanFixedSize(t *testing.T) {
 	ts, bestchain := initFeesServer(t, 8, 10, 10)
@@ -81,7 +82,7 @@ func TestFeesFixedSizeSameAsBacktrace(t *testing.T) {
 func initFeesServer(t *testing.T, backtraceLimit uint32, fixedCacheSize uint32, numberOfBlocks int) (*httptest.Server, *chain.Chain) {
 	forkConfig := thor.NoFork
 	forkConfig.GALACTICA = 1
-	thorChain, err := testchain.NewIntegrationTestChainWithFork(forkConfig)
+	thorChain, err := testchain.NewWithFork(forkConfig)
 	require.NoError(t, err)
 
 	router := mux.NewRouter()
@@ -96,7 +97,7 @@ func initFeesServer(t *testing.T, backtraceLimit uint32, fixedCacheSize uint32, 
 	for i := 0; i < numberOfBlocks-1; i++ {
 		dynFeeTx = tx.NewTxBuilder(tx.DynamicFeeTxType).
 			ChainTag(thorChain.Repo().ChainTag()).
-			MaxFeePerGas(big.NewInt(100000)).
+			MaxFeePerGas(big.NewInt(250_000_000_000_000)).
 			MaxPriorityFeePerGas(big.NewInt(100)).
 			Expiration(10).
 			Gas(21000).
@@ -128,7 +129,7 @@ func getFeeHistoryWithSummaries(t *testing.T, tclient *thorclient.Client, bestch
 	require.NoError(t, err)
 	expectedFeesHistory := fees.FeesHistory{
 		OldestBlock:   expectedOldestBlock,
-		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(875525000)), (*hexutil.Big)(big.NewInt(766544026)), (*hexutil.Big)(big.NewInt(671128459))},
+		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(expectedBaseFee)), (*hexutil.Big)(big.NewInt(expectedBaseFee)), (*hexutil.Big)(big.NewInt(expectedBaseFee))},
 		GasUsedRatios: []float64{expectedGasPriceUsedRatio, expectedGasPriceUsedRatio, expectedGasPriceUsedRatio},
 	}
 	assert.Equal(t, expectedFeesHistory, feesHistory)
@@ -148,8 +149,8 @@ func getFeeHistoryOnlySummaries(t *testing.T, tclient *thorclient.Client, bestch
 	expectedFeesHistory := fees.FeesHistory{
 		OldestBlock: expectedOldestBlock,
 		BaseFees: []*hexutil.Big{
-			(*hexutil.Big)(big.NewInt(875525000)),
-			(*hexutil.Big)(big.NewInt(766544026)),
+			(*hexutil.Big)(big.NewInt(expectedBaseFee)),
+			(*hexutil.Big)(big.NewInt(expectedBaseFee)),
 		},
 		GasUsedRatios: []float64{
 			expectedGasPriceUsedRatio,
@@ -173,7 +174,7 @@ func getFeeHistoryBestBlock(t *testing.T, tclient *thorclient.Client, bestchain 
 	require.NoError(t, err)
 	expectedFeesHistory := fees.FeesHistory{
 		OldestBlock:   expectedOldestBlock,
-		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(514449512)), (*hexutil.Big)(big.NewInt(450413409)), (*hexutil.Big)(big.NewInt(394348200)), (*hexutil.Big)(big.NewInt(345261708))},
+		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(expectedBaseFee)), (*hexutil.Big)(big.NewInt(expectedBaseFee)), (*hexutil.Big)(big.NewInt(expectedBaseFee)), (*hexutil.Big)(big.NewInt(expectedBaseFee))},
 		GasUsedRatios: []float64{expectedGasPriceUsedRatio, expectedGasPriceUsedRatio, expectedGasPriceUsedRatio, expectedGasPriceUsedRatio},
 	}
 
@@ -222,7 +223,7 @@ func getFeeHistoryCacheLimit(t *testing.T, tclient *thorclient.Client, bestchain
 	require.NoError(t, err)
 	expectedFeesHistory := fees.FeesHistory{
 		OldestBlock:   expectedOldestBlock,
-		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(875525000))},
+		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(expectedBaseFee))},
 		GasUsedRatios: []float64{expectedGasPriceUsedRatio},
 	}
 
@@ -251,15 +252,15 @@ func getFeeHistoryMoreBlocksRequestedThanAvailable(t *testing.T, tclient *thorcl
 		OldestBlock: expectedOldestBlock,
 		BaseFees: []*hexutil.Big{
 			(*hexutil.Big)(big.NewInt(0)),
-			(*hexutil.Big)(big.NewInt(1000000000)),
-			(*hexutil.Big)(big.NewInt(875525000)),
-			(*hexutil.Big)(big.NewInt(766544026)),
-			(*hexutil.Big)(big.NewInt(671128459)),
-			(*hexutil.Big)(big.NewInt(587589745)),
-			(*hexutil.Big)(big.NewInt(514449512)),
-			(*hexutil.Big)(big.NewInt(450413409)),
-			(*hexutil.Big)(big.NewInt(394348200)),
-			(*hexutil.Big)(big.NewInt(345261708))},
+			(*hexutil.Big)(big.NewInt(expectedBaseFee)),
+			(*hexutil.Big)(big.NewInt(expectedBaseFee)),
+			(*hexutil.Big)(big.NewInt(expectedBaseFee)),
+			(*hexutil.Big)(big.NewInt(expectedBaseFee)),
+			(*hexutil.Big)(big.NewInt(expectedBaseFee)),
+			(*hexutil.Big)(big.NewInt(expectedBaseFee)),
+			(*hexutil.Big)(big.NewInt(expectedBaseFee)),
+			(*hexutil.Big)(big.NewInt(expectedBaseFee)),
+			(*hexutil.Big)(big.NewInt(expectedBaseFee))},
 		GasUsedRatios: []float64{
 			0,
 			expectedGasPriceUsedRatio,
@@ -316,9 +317,9 @@ func getFeeHistoryMoreThanBacktraceLimit(t *testing.T, tclient *thorclient.Clien
 	expectedFeesHistory := fees.FeesHistory{
 		OldestBlock: expectedOldestBlock,
 		BaseFees: []*hexutil.Big{
-			(*hexutil.Big)(big.NewInt(875525000)),
-			(*hexutil.Big)(big.NewInt(766544026)),
-			(*hexutil.Big)(big.NewInt(671128459))},
+			(*hexutil.Big)(big.NewInt(expectedBaseFee)),
+			(*hexutil.Big)(big.NewInt(expectedBaseFee)),
+			(*hexutil.Big)(big.NewInt(expectedBaseFee))},
 		GasUsedRatios: []float64{
 			expectedGasPriceUsedRatio,
 			expectedGasPriceUsedRatio,

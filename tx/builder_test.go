@@ -118,7 +118,7 @@ func TestBuilder_Build_DynamicFee(t *testing.T) {
 		ChainTag(0x4a).
 		Clause(&Clause{}).
 		MaxFeePerGas(big.NewInt(1000000000)).
-		MaxPriorityFeePerGas(big.NewInt(2000000000)).
+		MaxPriorityFeePerGas(big.NewInt(20000)).
 		Gas(21000).
 		BlockRef(BlockRef{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}).
 		Expiration(100).

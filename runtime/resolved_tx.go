@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -42,6 +43,13 @@ func ResolveTransaction(tx *tx.Transaction) (*ResolvedTransaction, error) {
 	delegator, err := tx.Delegator()
 	if err != nil {
 		return nil, err
+	}
+
+	if tx.MaxFeePerGas() == nil {
+		return nil, errors.New("max fee per gas is required")
+	}
+	if tx.MaxPriorityFeePerGas() == nil {
+		return nil, errors.New("max priority fee per gas is required")
 	}
 
 	clauses := tx.Clauses()
@@ -92,7 +100,7 @@ func (r *ResolvedTransaction) CommonTo() *thor.Address {
 }
 
 // BuyGas consumes energy to buy gas, to prepare for execution.
-func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64) (
+func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64, galacticaItems *fork.GalacticaItems) (
 	baseGasPrice *big.Int,
 	gasPrice *big.Int,
 	payer thor.Address,
@@ -103,7 +111,7 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64) (
 	if baseGasPrice, err = builtin.Params.Native(state).Get(thor.KeyBaseGasPrice); err != nil {
 		return
 	}
-	gasPrice = r.tx.GasPrice(baseGasPrice)
+	gasPrice = fork.GalacticaGasPrice(r.tx, baseGasPrice, galacticaItems)
 
 	energy := builtin.Energy.Native(state, blockTime)
 	doReturnGas := func(rgas uint64) (*big.Int, error) {

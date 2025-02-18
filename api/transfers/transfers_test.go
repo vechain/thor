@@ -222,7 +222,7 @@ func insertBlocks(t *testing.T, db *logdb.LogDB, n int) {
 }
 
 func initTransferServer(t *testing.T, logDb *logdb.LogDB, limit uint64) {
-	thorChain, err := testchain.NewIntegrationTestChain()
+	thorChain, err := testchain.NewDefault()
 	require.NoError(t, err)
 
 	router := mux.NewRouter()

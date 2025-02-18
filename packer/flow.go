@@ -91,24 +91,24 @@ func (f *Flow) hasTx(txid thor.Bytes32, txBlockRef uint32) (bool, error) {
 // Adopt try to execute the given transaction.
 // If the tx is valid and can be executed on current state (regardless of VM error),
 // it will be adopted by the new block.
-func (f *Flow) Adopt(tx *tx.Transaction) error {
-	origin, _ := tx.Origin()
+func (f *Flow) Adopt(t *tx.Transaction) error {
+	origin, _ := t.Origin()
 	if f.Number() >= f.packer.forkConfig.BLOCKLIST && thor.IsOriginBlocked(origin) {
 		return badTxError{"tx origin blocked"}
 	}
 
-	if err := tx.TestFeatures(f.features); err != nil {
+	if err := t.TestFeatures(f.features); err != nil {
 		return badTxError{err.Error()}
 	}
 
 	switch {
-	case tx.ChainTag() != f.packer.repo.ChainTag():
+	case t.ChainTag() != f.packer.repo.ChainTag():
 		return badTxError{"chain tag mismatch"}
-	case f.Number() < tx.BlockRef().Number():
+	case f.Number() < t.BlockRef().Number():
 		return errTxNotAdoptableNow
-	case tx.IsExpired(f.Number()):
+	case t.IsExpired(f.Number()):
 		return badTxError{"expired"}
-	case f.gasUsed+tx.Gas() > f.runtime.Context().GasLimit:
+	case f.gasUsed+t.Gas() > f.runtime.Context().GasLimit:
 		// has enough space to adopt minimum tx
 		if f.gasUsed+thor.TxGas+thor.ClauseGas <= f.runtime.Context().GasLimit {
 			// try to find a lower gas tx
@@ -117,14 +117,20 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 		return errGasLimitReached
 	}
 
+	if f.Number() < f.packer.forkConfig.GALACTICA {
+		if t.Type() != tx.LegacyTxType {
+			return badTxError{"invalid tx type"}
+		}
+	}
+
 	// check if tx already there
-	if found, err := f.hasTx(tx.ID(), tx.BlockRef().Number()); err != nil {
+	if found, err := f.hasTx(t.ID(), t.BlockRef().Number()); err != nil {
 		return err
 	} else if found {
 		return errKnownTx
 	}
 
-	if dependsOn := tx.DependsOn(); dependsOn != nil {
+	if dependsOn := t.DependsOn(); dependsOn != nil {
 		// check if deps exists
 		found, reverted, err := f.findDep(*dependsOn)
 		if err != nil {
@@ -139,16 +145,16 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 	}
 
 	checkpoint := f.runtime.State().NewCheckpoint()
-	receipt, err := f.runtime.ExecuteTransaction(tx)
+	receipt, err := f.runtime.ExecuteTransaction(t)
 	if err != nil {
 		// skip and revert state
 		f.runtime.State().RevertTo(checkpoint)
 		return badTxError{err.Error()}
 	}
-	f.processedTxs[tx.ID()] = receipt.Reverted
+	f.processedTxs[t.ID()] = receipt.Reverted
 	f.gasUsed += receipt.GasUsed
 	f.receipts = append(f.receipts, receipt)
-	f.txs = append(f.txs, tx)
+	f.txs = append(f.txs, t)
 	return nil
 }
 

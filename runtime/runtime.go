@@ -17,6 +17,7 @@ import (
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/runtime/statedb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -32,6 +33,12 @@ var (
 	nativeCallReturnGas     uint64 = 1562 // see test case for calculation
 
 	EmptyRuntimeBytecode = []byte{0x60, 0x60, 0x60, 0x40, 0x52, 0x60, 0x02, 0x56}
+)
+
+var (
+	// ErrMaxFeePerGasTooLow is returned if the transaction fee cap is less than
+	// the base fee of the block.
+	ErrMaxFeePerGasTooLow = errors.New("max fee per gas is less than block base fee")
 )
 
 func init() {
@@ -409,9 +416,21 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 		return nil, err
 	}
 
-	baseGasPrice, gasPrice, payer, _, returnGas, err := resolvedTx.BuyGas(rt.state, rt.ctx.Time)
+	galactica := rt.chainConfig.IsGalactica(big.NewInt(int64(rt.ctx.Number)))
+	// TODO: is this useful?
+	if galactica && rt.ctx.BaseFee == nil {
+		return nil, fork.ErrBaseFeeNotSet
+	}
+	baseGasPrice, gasPrice, payer, _, returnGas, err := resolvedTx.BuyGas(rt.state, rt.ctx.Time, &fork.GalacticaItems{IsActive: galactica, BaseFee: rt.ctx.BaseFee})
 	if err != nil {
 		return nil, err
+	}
+	// TODO: should this be moved elsewhere?
+	if galactica {
+		feeItems := fork.GalacticaTxGasPriceAdapter(tx, gasPrice)
+		if feeItems.MaxFee.Cmp(rt.ctx.BaseFee) < 0 {
+			return nil, ErrMaxFeePerGasTooLow
+		}
 	}
 
 	txCtx, err := resolvedTx.ToContext(gasPrice, payer, rt.ctx.Number, rt.chain.GetBlockID)
@@ -507,10 +526,10 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 			if err != nil {
 				return nil, err
 			}
-			overallGasPrice := tx.OverallGasPrice(baseGasPrice, provedWork)
+			rewardGasPrice := fork.GalacticaPriorityPrice(tx, baseGasPrice, provedWork, &fork.GalacticaItems{IsActive: galactica, BaseFee: rt.ctx.BaseFee})
 
 			reward := new(big.Int).SetUint64(receipt.GasUsed)
-			reward.Mul(reward, overallGasPrice)
+			reward.Mul(reward, rewardGasPrice)
 			reward.Mul(reward, rewardRatio)
 			reward.Div(reward, big.NewInt(1e18))
 			if err := builtin.Energy.Native(rt.state, rt.ctx.Time).Add(rt.ctx.Beneficiary, reward); err != nil {

@@ -22,6 +22,7 @@ import (
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/vrf"
@@ -84,10 +85,7 @@ func newTestConsensus() (*testConsensus, error) {
 		return nil, err
 	}
 
-	forkConfig := thor.NoFork
-	forkConfig.VIP191 = 1
-	forkConfig.BLOCKLIST = 0
-	forkConfig.VIP214 = 2
+	forkConfig := testchain.DefaultForkConfig
 	forkConfig.GALACTICA = 5
 
 	proposer := genesis.DevAccounts()[0]
@@ -443,7 +441,7 @@ func TestValidateBlockHeader(t *testing.T) {
 			},
 		},
 		{
-			"Invalid BaseFee", func(t *testing.T) {
+			"Illegal BaseFee before galactica", func(t *testing.T) {
 				builder := tc.builder(tc.original.Header())
 				blk, err := tc.sign(builder.BaseFee(big.NewInt(10000)))
 				assert.NoError(t, err)
