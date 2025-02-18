@@ -22,7 +22,7 @@ func NewAddress(contract thor.Address, state *state.State, pos thor.Bytes32) *Ad
 	return &Address{contract: contract, state: state, pos: pos}
 }
 
-func (a *Address) Get() (addr thor.Address, err error) {
+func (a *Address) Get() (thor.Address, error) {
 	storage, err := a.state.GetStorage(a.contract, a.pos)
 	if err != nil {
 		return thor.Address{}, err

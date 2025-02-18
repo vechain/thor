@@ -9,7 +9,7 @@ contract Staker {
     event ValidatorQueued(
         address indexed validator,
         address indexed beneficiary,
-        uint64 indexed expiry,
+        uint32 indexed expiry,
         uint256 stake
     );
     event ValidatorWithdrawn(address indexed validator, uint256 stake);
@@ -30,7 +30,7 @@ contract Staker {
     /**
      * @dev addValidator adds a validator to the queue.
      */
-    function addValidator(address beneficiary, uint64 expiry) public payable {
+    function addValidator(address beneficiary, uint32 expiry) public payable {
         StakerNative(address(this)).native_addValidator(
             msg.sender,
             beneficiary,
@@ -85,7 +85,7 @@ interface StakerNative {
     function native_addValidator(
         address validator,
         address beneficiary,
-        uint64 expiry,
+        uint32 expiry,
         uint256 stake
     ) external;
 

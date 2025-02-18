@@ -9,6 +9,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/xenv"
 )
@@ -21,7 +22,16 @@ func init() {
 		{"native_totalStake", func(env *xenv.Environment) []interface{} {
 			env.UseGas(thor.SloadGas)
 			env.UseGas(thor.GetBalanceGas)
-			staked, err := Staker.Native(env.State(), env.BlockContext().Time).TotalStake()
+			staked, err := Staker.Native(env.State()).TotalStake()
+			if err != nil {
+				panic(err)
+			}
+			return []interface{}{staked}
+		}},
+		{"native_activeStake", func(env *xenv.Environment) []interface{} {
+			env.UseGas(thor.SloadGas)
+			env.UseGas(thor.GetBalanceGas)
+			staked, err := Staker.Native(env.State()).ActiveStake()
 			if err != nil {
 				panic(err)
 			}
@@ -36,15 +46,18 @@ func init() {
 			env.UseGas(thor.SloadGas)
 			env.UseGas(thor.SloadGas)
 
-			validator, err := Staker.Native(env.State(), env.BlockContext().Time).Get(thor.Address(args.Validator))
+			validator, err := Staker.Native(env.State()).Get(thor.Address(args.Validator))
 			if err != nil {
 				panic(err)
+			}
+			if validator.IsEmpty() {
+				return []interface{}{big.NewInt(0), big.NewInt(0), staker.StatusUnknown}
 			}
 			return []interface{}{validator.Stake, validator.Weight, validator.Status}
 		}},
 		{"native_firstActive", func(env *xenv.Environment) []interface{} {
 			env.UseGas(thor.SloadGas)
-			first, err := Staker.Native(env.State(), env.BlockContext().Time).FirstActive()
+			first, err := Staker.Native(env.State()).FirstActive()
 			if err != nil {
 				panic(err)
 			}
@@ -52,7 +65,7 @@ func init() {
 		}},
 		{"native_firstQueued", func(env *xenv.Environment) []interface{} {
 			env.UseGas(thor.SloadGas)
-			first, err := Staker.Native(env.State(), env.BlockContext().Time).FirstQueued()
+			first, err := Staker.Native(env.State()).FirstQueued()
 			if err != nil {
 				panic(err)
 			}
@@ -60,12 +73,12 @@ func init() {
 		}},
 		{"native_next", func(env *xenv.Environment) []interface{} {
 			var args struct {
-				Validator common.Address
+				Prev common.Address
 			}
 			env.ParseArgs(&args)
 
 			env.UseGas(thor.SloadGas)
-			next, err := Staker.Native(env.State(), env.BlockContext().Time).Next(thor.Address(args.Validator))
+			next, err := Staker.Native(env.State()).Next(thor.Address(args.Prev))
 			if err != nil {
 				panic(err)
 			}
@@ -77,7 +90,7 @@ func init() {
 			}
 			env.ParseArgs(&args)
 
-			stake, err := Staker.Native(env.State(), env.BlockContext().Time).WithdrawStake(thor.Address(args.Validator))
+			stake, err := Staker.Native(env.State()).WithdrawStake(thor.Address(args.Validator))
 			if err != nil {
 				panic(err)
 			}
@@ -89,12 +102,12 @@ func init() {
 			var args struct {
 				Validator   common.Address
 				Beneficiary common.Address
-				Expiry      uint64
+				Expiry      uint32
 				Stake       *big.Int
 			}
 			env.ParseArgs(&args)
 
-			err := Staker.Native(env.State(), env.BlockContext().Time).AddValidator(uint64(env.BlockContext().Number), thor.Address(args.Validator), thor.Address(args.Beneficiary), args.Expiry, args.Stake)
+			err := Staker.Native(env.State()).AddValidator(env.BlockContext().Number, thor.Address(args.Validator), thor.Address(args.Beneficiary), args.Expiry, args.Stake)
 			if err != nil {
 				panic(err)
 			}

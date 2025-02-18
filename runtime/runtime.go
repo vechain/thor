@@ -130,6 +130,12 @@ func New(
 		if err := state.SetCode(builtin.Staker.Address, builtin.Staker.RuntimeBytecodes()); err != nil {
 			panic(err)
 		}
+		staker := builtin.Staker.Native(state)
+		authority := builtin.Authority.Native(state)
+		params := builtin.Params.Native(state)
+		if err := staker.Initialise(authority, params, ctx.Number); err != nil {
+			panic(err)
+		}
 	}
 
 	rt := Runtime{

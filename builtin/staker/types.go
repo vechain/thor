@@ -24,7 +24,7 @@ const (
 type (
 	Validator struct {
 		Beneficiary thor.Address
-		Expiry      uint64
+		Expiry      uint32
 		Stake       *big.Int      // the stake of the validator
 		Weight      *big.Int      // stake + total stake from delegators
 		Next        *thor.Address `rlp:"nil"` // doubly linked list
@@ -33,16 +33,16 @@ type (
 	}
 
 	previousExit struct {
-		PreviousExit uint64
+		PreviousExit uint32
 	}
 )
 
 // IsEmpty returns whether the entry can be treated as empty.
 func (v *Validator) IsEmpty() bool {
-	return v.Stake == nil &&
-		v.Weight == nil &&
-		v.Prev == nil &&
-		v.Next == nil
+	emptyStake := v.Stake == nil || v.Stake.Sign() == 0
+	emptyWeight := v.Weight == nil || v.Weight.Sign() == 0
+
+	return emptyStake && emptyWeight && v.Status == StatusUnknown && v.Prev == nil && v.Next == nil
 }
 
 // IsLinked returns whether the entry is linked.

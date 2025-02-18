@@ -11,6 +11,8 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/vechain/thor/v2/builtin/authority"
+	"github.com/vechain/thor/v2/builtin/params"
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -18,13 +20,11 @@ import (
 
 // TODO: Do these need to be set in params.sol, or some other dynamic way?
 var (
-	maxLeaderGroupSize = big.NewInt(101)
-	minStake           = big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
-	maxStake           = big.NewInt(0).Mul(big.NewInt(400e6), big.NewInt(1e18))
+	minStake = big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
+	maxStake = big.NewInt(0).Mul(big.NewInt(400e6), big.NewInt(1e18))
 
-	minStakingPeriod = uint64(360) * 24 * 14  // 2 weeks
-	maxStakingPeriod = uint64(360) * 24 * 365 // 1 year
-	_                = uint64(360) * 24 * 1   // 1 day
+	minStakingPeriod = uint32(360) * 24 * 14  // 2 weeks
+	maxStakingPeriod = uint32(360) * 24 * 365 // 1 year
 
 	slotPreviousExitKey = thor.Blake2b(thor.Bytes32{slotPreviousExit}.Bytes())
 )
@@ -35,6 +35,7 @@ const (
 	slotTotalStake slot = iota
 	slotActiveStake
 	slotLeaderGroupSize
+	slotMaxLeaderGroupSize
 	slotValidators
 	slotActiveHead
 	slotActiveTail
@@ -45,37 +46,39 @@ const (
 
 // Staker implements native methods of `Staker` contract.
 type Staker struct {
-	addr            thor.Address
-	state           *state.State
-	totalStake      *solidity.Uint256
-	activeStake     *solidity.Uint256
-	leaderGroupSize *solidity.Uint256
-	validators      *solidity.Mapping[thor.Address, *Validator]
-	leaderGroup     *linkedList
-	validatorQueue  *linkedList
+	addr               thor.Address
+	state              *state.State
+	totalStake         *solidity.Uint256
+	activeStake        *solidity.Uint256
+	leaderGroupSize    *solidity.Uint256
+	maxLeaderGroupSize *solidity.Uint256
+	validators         *solidity.Mapping[thor.Address, *Validator]
+	leaderGroup        *linkedList
+	validatorQueue     *linkedList
 }
 
 // New create a new instance.
 func New(addr thor.Address, state *state.State) *Staker {
 	validators := solidity.NewMapping[thor.Address, *Validator](addr, state, thor.Bytes32{slotValidators})
 	return &Staker{
-		addr:            addr,
-		state:           state,
-		totalStake:      solidity.NewUint256(addr, state, thor.Bytes32{slotTotalStake}),
-		activeStake:     solidity.NewUint256(addr, state, thor.Bytes32{slotActiveStake}),
-		leaderGroupSize: solidity.NewUint256(addr, state, thor.Bytes32{slotLeaderGroupSize}),
-		validators:      validators,
-		leaderGroup:     newLinkedList(addr, state, validators, thor.Bytes32{slotActiveHead}, thor.Bytes32{slotActiveTail}),
-		validatorQueue:  newLinkedList(addr, state, validators, thor.Bytes32{slotQueuedHead}, thor.Bytes32{slotQueuedTail}),
+		addr:               addr,
+		state:              state,
+		totalStake:         solidity.NewUint256(addr, state, thor.Bytes32{slotTotalStake}),
+		activeStake:        solidity.NewUint256(addr, state, thor.Bytes32{slotActiveStake}),
+		leaderGroupSize:    solidity.NewUint256(addr, state, thor.Bytes32{slotLeaderGroupSize}),
+		validators:         validators,
+		maxLeaderGroupSize: solidity.NewUint256(addr, state, thor.Bytes32{slotMaxLeaderGroupSize}),
+		leaderGroup:        newLinkedList(addr, state, validators, thor.Bytes32{slotActiveHead}, thor.Bytes32{slotActiveTail}),
+		validatorQueue:     newLinkedList(addr, state, validators, thor.Bytes32{slotQueuedHead}, thor.Bytes32{slotQueuedTail}),
 	}
 }
 
 // AddValidator queues a new validator.
 func (a *Staker) AddValidator(
-	currentBlock uint64,
+	currentBlock uint32,
 	addr thor.Address,
 	beneficiary thor.Address,
-	expiry uint64,
+	expiry uint32,
 	stake *big.Int,
 ) error {
 	if stake.Cmp(minStake) < 0 || stake.Cmp(maxStake) > 0 {
@@ -116,7 +119,7 @@ func (a *Staker) Get(validator thor.Address) (*Validator, error) {
 	return a.validators.Get(validator)
 }
 
-func (a *Staker) PreviousExit() (uint64, error) {
+func (a *Staker) PreviousExit() (uint32, error) {
 	value := previousExit{}
 	err := a.state.DecodeStorage(a.addr, slotPreviousExitKey, func(raw []byte) error {
 		if len(raw) == 0 {
@@ -127,7 +130,7 @@ func (a *Staker) PreviousExit() (uint64, error) {
 	return value.PreviousExit, err
 }
 
-func (a *Staker) setPreviousExit(blockNumber uint64) error {
+func (a *Staker) setPreviousExit(blockNumber uint32) error {
 	value := previousExit{
 		PreviousExit: blockNumber,
 	}
@@ -141,6 +144,10 @@ func (a *Staker) setPreviousExit(blockNumber uint64) error {
 // If there is no validator in the queue, it will return an error.
 func (a *Staker) ActivateNextValidator() error {
 	leaderGroupLength, err := a.leaderGroupSize.Get()
+	if err != nil {
+		return err
+	}
+	maxLeaderGroupSize, err := a.maxLeaderGroupSize.Get()
 	if err != nil {
 		return err
 	}
@@ -172,7 +179,7 @@ func (a *Staker) ActivateNextValidator() error {
 
 // Iterate over validators, move to cooldown
 // take the oldest validator and move to exited
-func (a *Staker) Housekeep(currentBlock uint64) error {
+func (a *Staker) Housekeep(currentBlock uint32) error {
 	ptr, err := a.FirstActive()
 	if err != nil {
 		return err
@@ -180,7 +187,7 @@ func (a *Staker) Housekeep(currentBlock uint64) error {
 	next := &ptr
 
 	toExit := thor.Address{}
-	toExitExp := uint64(math.MaxUint64)
+	toExitExp := uint32(math.MaxUint32)
 	for next != nil {
 		entry, err := a.validators.Get(*next)
 		if err != nil {
@@ -231,11 +238,6 @@ func (a *Staker) RemoveValidator(validator thor.Address) error {
 		return nil
 	}
 
-	// not sure if this check is even needed
-	//if entry.Status != StatusCooldown {
-	//	return errors.New("validator is not on cooldown")
-	//}
-
 	if err := a.totalStake.Sub(entry.Stake); err != nil {
 		return err
 	}
@@ -244,6 +246,7 @@ func (a *Staker) RemoveValidator(validator thor.Address) error {
 	}
 
 	entry.Status = StatusExit
+	entry.Weight = big.NewInt(0)
 
 	return a.leaderGroup.Remove(validator, entry)
 }
@@ -289,15 +292,15 @@ func (a *Staker) FirstQueued() (thor.Address, error) {
 
 // Next returns the next validator in a a linked list.
 // If the provided address is not in a list, it will return a zero address.
-func (a *Staker) Next(prev thor.Address) (*thor.Address, error) {
-	entry, err := a.validators.Get(prev)
+func (a *Staker) Next(prev thor.Address) (thor.Address, error) {
+	entry, err := a.Get(prev)
 	if err != nil {
-		return nil, err
+		return thor.Address{}, err
 	}
-	if entry.IsEmpty() {
-		return nil, errors.New("provided address is not in a linked list")
+	if entry.IsEmpty() || entry.Next == nil {
+		return thor.Address{}, nil
 	}
-	return entry.Next, nil
+	return *entry.Next, nil
 }
 
 // GetStake returns the stake of a validator.
@@ -316,18 +319,74 @@ func (a *Staker) WithdrawStake(validator thor.Address) (*big.Int, error) {
 		return nil, err
 	}
 	if entry.IsEmpty() {
-		return nil, nil
+		return big.NewInt(0), nil
 	}
 	if entry.Status != StatusExit {
 		return nil, errors.New("validator is not inactive")
-	}
-	if err := a.totalStake.Sub(entry.Stake); err != nil {
-		return nil, err
 	}
 	if err := a.validators.Set(validator, &Validator{}); err != nil {
 		return nil, err
 	}
 	return entry.Stake, nil
+}
+
+// Initialise the staker contract with the PoA candidates.
+func (a *Staker) Initialise(auth *authority.Authority, params *params.Params, currentBlock uint32) error {
+	currentSize, err := a.leaderGroupSize.Get()
+	if err != nil {
+		return err
+	}
+	if currentSize.Cmp(big.NewInt(0)) != 0 {
+		// TODO: Runtime has small edge case/bug for accounts/debug endpoints. Runtime is accepting state of completed
+		// block N and block context of N. Block context should have been N+1 to avoid this issue.
+		// Once we decide how we will bootstrap the Staker contract we should resolve this issue
+		return nil
+	}
+
+	// init max validators
+	maxProposers, err := params.Get(thor.KeyMaxBlockProposers)
+	if err != nil || maxProposers.Cmp(big.NewInt(0)) == 0 {
+		maxProposers = big.NewInt(0).SetUint64(thor.InitialMaxBlockProposers)
+	}
+	a.maxLeaderGroupSize.Set(maxProposers)
+
+	// init validators
+	stake := big.NewInt(0) // validators have soft staked minimum 25M VET
+	weight := big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
+
+	poaCandidates, err := auth.AllCandidates()
+	if err != nil {
+		panic(err)
+	}
+	validators := make([]*Validator, 0, len(poaCandidates))
+
+	var previous *thor.Address
+	for i, candidate := range poaCandidates {
+		validator := &Validator{
+			Expiry:      currentBlock + minStakingPeriod,
+			Stake:       stake,
+			Weight:      weight,
+			Status:      StatusActive,
+			Prev:        previous,
+			Beneficiary: candidate.Endorsor, // TODO: Pending question on confluence
+		}
+		if i < len(poaCandidates)-1 {
+			validator.Next = &poaCandidates[i+1].NodeMaster
+		}
+
+		validators = append(validators, validator)
+		previous = &candidate.NodeMaster
+		if err := a.leaderGroup.Add(validators[i], candidate.NodeMaster); err != nil {
+			return err
+		}
+	}
+
+	total := big.NewInt(0).Mul(stake, big.NewInt(int64(len(poaCandidates))))
+	a.activeStake.Set(total)
+	a.totalStake.Set(total)
+	a.leaderGroupSize.Set(big.NewInt(int64(len(poaCandidates))))
+
+	return nil
 }
 
 func IsExitingSlot(blockNumber uint64) bool {

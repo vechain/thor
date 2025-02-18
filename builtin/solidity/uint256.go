@@ -25,7 +25,7 @@ func NewUint256(addr thor.Address, state *state.State, slot thor.Bytes32) *Uint2
 	return &Uint256{addr: addr, state: state, pos: slot}
 }
 
-func (u *Uint256) Get() (value *big.Int, err error) {
+func (u *Uint256) Get() (*big.Int, error) {
 	storage, err := u.state.GetStorage(u.addr, u.pos)
 	if err != nil {
 		return nil, err
