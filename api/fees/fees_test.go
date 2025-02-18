@@ -25,7 +25,7 @@ import (
 )
 
 const expectedGasPriceUsedRatio = 0.0021
-const expectedBaseFee = 10_000_000_000_000
+const expectedBaseFee = thor.InitialBaseFee
 
 func TestFeesBacktraceGreaterThanFixedSize(t *testing.T) {
 	ts, bestchain := initFeesServer(t, 8, 10, 10)
