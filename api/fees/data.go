@@ -100,6 +100,7 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 
 			for _, tx := range transactions {
 				fee := tx.MaxPriorityFeePerGas()
+				// TODO: explore other cases where maxPriorityFeePerGas is smaller than baseFee
 				fee.Sub(fee, header.BaseFee())
 				heap.Push(priorityFees, fee)
 				if priorityFees.Len() > priorityNumberOfTxsPerBlock {
