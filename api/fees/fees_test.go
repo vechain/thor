@@ -72,6 +72,7 @@ func TestFeesFixedSizeSameAsBacktrace(t *testing.T) {
 		"getFeeHistoryBestBlock":                        getFeeHistoryBestBlock,
 		"getFeeHistoryMoreBlocksRequestedThanAvailable": getFeeHistoryMoreBlocksRequestedThanAvailable,
 		"getFeeHistoryBlock0":                           getFeeHistoryBlock0,
+		"getFeeHistoryBlockCount0":                      getFeeHistoryBlockCount0,
 	} {
 		t.Run(name, func(t *testing.T) {
 			tt(t, tclient, bestchain)
@@ -202,6 +203,7 @@ func getFeeHistoryNewestBlockNotIncluded(t *testing.T, tclient *thorclient.Clien
 	require.NoError(t, err)
 	require.Equal(t, 400, statusCode)
 	require.NotNil(t, res)
+	assert.Equal(t, "newestBlock: not found\n", string(res))
 }
 
 func getFeeHistoryCacheLimit(t *testing.T, tclient *thorclient.Client, bestchain *chain.Chain) {
@@ -235,6 +237,7 @@ func getFeeHistoryBlockCountBiggerThanMax(t *testing.T, tclient *thorclient.Clie
 	require.NoError(t, err)
 	require.Equal(t, 400, statusCode)
 	require.NotNil(t, res)
+	assert.Equal(t, "invalid newestBlock, it is below the minimum allowed block\n", string(res))
 }
 
 func getFeeHistoryMoreBlocksRequestedThanAvailable(t *testing.T, tclient *thorclient.Client, bestchain *chain.Chain) {
@@ -327,4 +330,12 @@ func getFeeHistoryMoreThanBacktraceLimit(t *testing.T, tclient *thorclient.Clien
 	}
 
 	assert.Equal(t, expectedFeesHistory, feesHistory)
+}
+
+func getFeeHistoryBlockCount0(t *testing.T, tclient *thorclient.Client, bestchain *chain.Chain) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=0&newestBlock=best")
+	require.NoError(t, err)
+	require.Equal(t, 400, statusCode)
+	require.NotNil(t, res)
+	assert.Equal(t, "invalid blockCount, it should not be 0\n", string(res))
 }
