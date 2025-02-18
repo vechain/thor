@@ -50,7 +50,9 @@ var (
 )
 
 func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
-	thorChain, err := testchain.NewDefault()
+	forks := testchain.DefaultForkConfig
+	forks.GALACTICA = 1
+	thorChain, err := testchain.NewWithFork(forks)
 	require.NoError(t, err)
 
 	// mint some transactions to be used in the endpoints
@@ -61,7 +63,7 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 	accounts.New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), thor.NoFork, thorChain.Engine(), true).
 		Mount(router, "/accounts")
 
-	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute}, &thor.NoFork)
+	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute}, &forks)
 	transactions.New(thorChain.Repo(), mempool).Mount(router, "/transactions")
 
 	blocks.New(thorChain.Repo(), thorChain.Engine()).Mount(router, "/blocks")
@@ -431,7 +433,7 @@ func testFeesEndpoint(t *testing.T, testchain *testchain.Chain, ts *httptest.Ser
 		expectedFeesHistory := &fees.FeesHistory{
 			OldestBlock: expectedOldestBlock,
 			BaseFees: []*hexutil.Big{
-				(*hexutil.Big)(big.NewInt(1000000000)),
+				(*hexutil.Big)(big.NewInt(thor.InitialBaseFee)),
 			},
 			GasUsedRatios: []float64{
 				0.0058,
