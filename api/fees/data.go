@@ -6,6 +6,7 @@
 package fees
 
 import (
+	"container/heap"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -14,10 +15,42 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
+const (
+	priorityNumberOfBlocks      = 20
+	priorityNumberOfTxsPerBlock = 3
+	priorityPercentile          = 0.6
+)
+
+// minPriorityHeap is a min-heap of *big.Int values.
+type minPriorityHeap []*big.Int
+
+func (h minPriorityHeap) Len() int           { return len(h) }
+func (h minPriorityHeap) Less(i, j int) bool { return h[i].Cmp(h[j]) < 0 }
+func (h minPriorityHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+
+func (h *minPriorityHeap) Push(x interface{}) {
+	*h = append(*h, x.(*big.Int))
+}
+
+func (h *minPriorityHeap) Pop() interface{} {
+	old := *h
+	n := len(old)
+	x := old[n-1]
+	*h = old[0 : n-1]
+	return x
+}
+
+func (h minPriorityHeap) GetAllValues() []*big.Int {
+    values := make([]*big.Int, len(h))
+    copy(values, h)
+    return values
+}
+
 type FeeCacheEntry struct {
+	parentBlockID thor.Bytes32
 	baseFee       *hexutil.Big
 	gasUsedRatio  float64
-	parentBlockID thor.Bytes32
+	priorityFees  *minPriorityHeap
 }
 type FeesData struct {
 	repo  *chain.Repository
@@ -45,6 +78,7 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 
 	baseFees := make([]*hexutil.Big, blockCount)
 	gasUsedRatios := make([]float64, blockCount)
+	priorityFees := make([][]*big.Int, priorityNumberOfTxsPerBlock)
 
 	var oldestBlockID thor.Bytes32
 	for i := blockCount; i > 0; i-- {
@@ -52,21 +86,37 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 		fees, _, found := fd.cache.Get(newestBlockID)
 		if !found {
 			// retrieve from db + retro-populate cache
-			blockSummary, err := fd.repo.GetBlockSummary(newestBlockID)
+			block, err := fd.repo.GetBlock(newestBlockID)
 			if err != nil {
 				return thor.Bytes32{}, nil, nil, err
 			}
 
-			header := blockSummary.Header
+			header := block.Header()
+			transactions := block.Transactions()
+
+			// Use a min-heap to keep track of the lowest values
+			priorityFees := &minPriorityHeap{}
+			heap.Init(priorityFees)
+
+			for _, tx := range transactions {
+				fee := tx.MaxPriorityFeePerGas()
+				fee.Sub(fee, header.BaseFee())
+				heap.Push(priorityFees, fee)
+				if priorityFees.Len() > priorityNumberOfTxsPerBlock {
+					heap.Pop(priorityFees)
+				}
+			}
 			fees = &FeeCacheEntry{
 				baseFee:       getBaseFee(header.BaseFee()),
 				gasUsedRatio:  float64(header.GasUsed()) / float64(header.GasLimit()),
 				parentBlockID: header.ParentID(),
+				priorityFees:  priorityFees,
 			}
 			fd.cache.Set(header.ID(), fees, float64(header.Number()))
 		}
 		baseFees[i-1] = fees.(*FeeCacheEntry).baseFee
 		gasUsedRatios[i-1] = fees.(*FeeCacheEntry).gasUsedRatio
+		priorityFees[i-1] = fees.(*FeeCacheEntry).priorityFees.GetAllValues()
 
 		newestBlockID = fees.(*FeeCacheEntry).parentBlockID
 	}
