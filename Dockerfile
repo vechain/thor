@@ -1,5 +1,5 @@
 # Build thor in a stock Go builder container
-FROM golang:1.22-alpine3.20 AS builder
+FROM golang:1.23-alpine3.21 AS builder
 
 RUN apk add --no-cache make gcc musl-dev linux-headers git
 WORKDIR  /go/thor
@@ -7,7 +7,7 @@ COPY . /go/thor
 RUN make all
 
 # Pull thor into a second stage deploy alpine container
-FROM alpine:3.20
+FROM alpine:3.21.3
 
 RUN apk add --no-cache ca-certificates
 RUN apk upgrade libssl3 libcrypto3
