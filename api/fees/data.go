@@ -87,7 +87,7 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 	var oldestBlockID thor.Bytes32
 	for i := blockCount; i > 0; i-- {
 		oldestBlockID = newestBlockID
-		fees, err := fd.getFees(newestBlockID, priorityFees)
+		fees, err := fd.getFees(newestBlockID, priorityFees, int(blockCount))
 		if err != nil {
 			return thor.Bytes32{}, nil, nil, nil, err
 		}
@@ -107,7 +107,7 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 	return oldestBlockID, baseFees, gasUsedRatios, nil, nil
 }
 
-func (fd *FeesData) getFees(blockID thor.Bytes32, priorityFees *minPriorityHeap) (*FeeCacheEntry, error) {
+func (fd *FeesData) getFees(blockID thor.Bytes32, priorityFees *minPriorityHeap, blockCount int) (*FeeCacheEntry, error) {
 	fees, _, found := fd.cache.Get(blockID)
 	if found {
 		return fees.(*FeeCacheEntry), nil
@@ -125,12 +125,7 @@ func (fd *FeesData) getFees(blockID thor.Bytes32, priorityFees *minPriorityHeap)
 	heap.Init(blockPriorityFees)
 
 	for _, tx := range transactions {
-		maxPriorityFeePerGas, err := fd.EffectiveMaxPriorityFeePerGas(tx, header.BaseFee())
-		if err != nil {
-			// maxFeePerGas less than base fee, skip this tx
-			// TODO: review whether it makes sense this behaviour
-			continue
-		}
+		maxPriorityFeePerGas, _ := fd.EffectiveMaxPriorityFeePerGas(tx, header.BaseFee())
 		heap.Push(blockPriorityFees, maxPriorityFeePerGas)
 		if blockPriorityFees.Len() > priorityNumberOfTxsPerBlock {
 			heap.Pop(blockPriorityFees)
@@ -139,7 +134,7 @@ func (fd *FeesData) getFees(blockID thor.Bytes32, priorityFees *minPriorityHeap)
 
 	for _, blockPriorityFee := range blockPriorityFees.GetAllValues() {
 		heap.Push(priorityFees, blockPriorityFee)
-		if priorityFees.Len() > priorityNumberOfTxsPerBlock*priorityNumberOfBlocks {
+		if priorityFees.Len() > priorityNumberOfTxsPerBlock*blockCount {
 			heap.Pop(priorityFees)
 		}
 	}

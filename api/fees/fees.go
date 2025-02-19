@@ -100,9 +100,12 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 	})
 }
 
-func (f *Fees) handleGetPriority(w http.ResponseWriter, req *http.Request) error {
+func (f *Fees) handleGetPriority(w http.ResponseWriter, _ *http.Request) error {
 	bestBlockSummary := f.data.repo.BestBlockSummary()
-	_, _, _, priorityFee, err := f.data.resolveRange(bestBlockSummary, priorityNumberOfBlocks)
+	blockCount := uint32(math.Min(float64(priorityNumberOfBlocks), float64(f.backtraceLimit)))
+	blockCount = uint32(math.Min(float64(blockCount), float64(bestBlockSummary.Header.Number()+1)))
+
+	_, _, _, priorityFee, err := f.data.resolveRange(bestBlockSummary, blockCount)
 	if err != nil {
 		return err
 	}
