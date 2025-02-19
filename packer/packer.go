@@ -6,9 +6,13 @@
 package packer
 
 import (
+	"math/big"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/consensus/fork"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/poa"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
@@ -16,6 +20,8 @@ import (
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/xenv"
 )
+
+var logger = log.WithContext("pkg", "packer")
 
 // Packer to pack txs and build new blocks.
 type Packer struct {
@@ -121,6 +127,18 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (flow
 		}
 	}
 
+	var baseFee *big.Int
+
+	if parent.Header.Number()+1 >= p.forkConfig.GALACTICA {
+		// TODO: log to be removed when fork is stable
+		if parent.Header.Number()-1 == p.forkConfig.GALACTICA {
+			logger.Info("Last block before Galactica fork activates")
+		} else if parent.Header.Number() == p.forkConfig.GALACTICA {
+			logger.Info("Galactica fork activated")
+		}
+		baseFee = fork.CalcBaseFee(&p.forkConfig, parent.Header)
+	}
+
 	rt := runtime.New(
 		p.repo.NewChain(parent.Header.ID()),
 		state,
@@ -131,7 +149,7 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (flow
 			Time:        newBlockTime,
 			GasLimit:    p.gasLimit(parent.Header.GasLimit()),
 			TotalScore:  parent.Header.TotalScore() + score,
-			BaseFee:     parent.Header.BaseFee(),
+			BaseFee:     baseFee,
 		},
 		p.forkConfig)
 
@@ -154,6 +172,17 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 		gl = p.gasLimit(parent.Header.GasLimit())
 	}
 
+	var baseFee *big.Int
+	if parent.Header.Number()+1 >= p.forkConfig.GALACTICA {
+		// TODO: log to be removed when fork is stable
+		if parent.Header.Number()-1 == p.forkConfig.GALACTICA {
+			logger.Info("Last block before Galactica fork activates")
+		} else if parent.Header.Number() == p.forkConfig.GALACTICA {
+			logger.Info("Galactica fork activated")
+		}
+		baseFee = fork.CalcBaseFee(&p.forkConfig, parent.Header)
+	}
+
 	rt := runtime.New(
 		p.repo.NewChain(parent.Header.ID()),
 		state,
@@ -164,7 +193,7 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 			Time:        targetTime,
 			GasLimit:    gl,
 			TotalScore:  parent.Header.TotalScore() + 1,
-			BaseFee:     parent.Header.BaseFee(),
+			BaseFee:     baseFee,
 		},
 		p.forkConfig)
 

@@ -228,20 +228,20 @@ func TestParseAddress(t *testing.T) {
 }
 
 func initSubscriptionsServer(t *testing.T, enabledDeprecated bool) {
-	thorChain, err := testchain.NewIntegrationTestChain()
+	thorChain, err := testchain.NewDefault()
 	require.NoError(t, err)
 
 	txPool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
 		Limit:           100,
 		LimitPerAccount: 16,
 		MaxLifetime:     time.Hour,
-	})
+	}, &thor.NoFork)
 
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	tr := tx.NewTxBuilder(tx.DynamicFeeTxType).
+	tr := tx.NewTxBuilder(tx.LegacyTxType).
 		ChainTag(thorChain.Repo().ChainTag()).
-		MaxFeePerGas(big.NewInt(1)).
+		GasPriceCoef(1).
 		Expiration(10).
 		Gas(21000).
 		Nonce(1).
@@ -280,14 +280,14 @@ func initSubscriptionsServer(t *testing.T, enabledDeprecated bool) {
 }
 
 func TestSubscriptionsBacktrace(t *testing.T) {
-	thorChain, err := testchain.NewIntegrationTestChain()
+	thorChain, err := testchain.NewDefault()
 	require.NoError(t, err)
 
 	txPool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
 		Limit:           100,
 		LimitPerAccount: 16,
 		MaxLifetime:     time.Hour,
-	})
+	}, &thor.NoFork)
 
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))

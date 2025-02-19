@@ -136,7 +136,7 @@ func testGetRawBlock(t *testing.T) {
 }
 
 func testGetBlockByHeight(t *testing.T) {
-	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/1")
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/2")
 	require.NoError(t, err)
 	rb := new(blocks.JSONCollapsedBlock)
 	if err := json.Unmarshal(res, &rb); err != nil {
@@ -225,7 +225,13 @@ func testGetBlockWithRevisionNumberTooHigh(t *testing.T) {
 }
 
 func initBlockServer(t *testing.T) {
-	thorChain, err := testchain.NewIntegrationTestChain()
+	forks := thor.ForkConfig{
+		BLOCKLIST: 0,
+		VIP191:    1,
+		GALACTICA: 1,
+		VIP214:    2,
+	}
+	thorChain, err := testchain.NewWithFork(forks)
 	require.NoError(t, err)
 
 	addr := thor.BytesToAddress([]byte("to"))
@@ -240,10 +246,11 @@ func initBlockServer(t *testing.T) {
 		BlockRef(tx.NewBlockRef(0)).
 		MustBuild()
 	legacyTx = tx.MustSign(legacyTx, genesis.DevAccounts()[0].PrivateKey)
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], legacyTx))
 
 	dynFeeTx := tx.NewTxBuilder(tx.DynamicFeeTxType).
 		ChainTag(thorChain.Repo().ChainTag()).
-		MaxFeePerGas(big.NewInt(100000)).
+		MaxFeePerGas(big.NewInt(thor.InitialBaseFee)).
 		MaxPriorityFeePerGas(big.NewInt(100)).
 		Expiration(10).
 		Gas(21000).
@@ -253,13 +260,14 @@ func initBlockServer(t *testing.T) {
 		MustBuild()
 	dynFeeTx = tx.MustSign(dynFeeTx, genesis.DevAccounts()[0].PrivateKey)
 
-	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], legacyTx, dynFeeTx))
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], dynFeeTx))
 
 	allBlocks, err := thorChain.GetAllBlocks()
 	require.NoError(t, err)
 
 	genesisBlock = allBlocks[0]
-	blk = allBlocks[1]
+	// taking best block to include also galactica block
+	blk = allBlocks[len(allBlocks)-1]
 
 	router := mux.NewRouter()
 	blocks.New(thorChain.Repo(), thorChain.Engine()).Mount(router, "/blocks")

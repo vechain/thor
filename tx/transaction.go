@@ -27,6 +27,12 @@ var (
 	errIntrinsicGasOverflow = errors.New("intrinsic gas overflow")
 	ErrTxTypeNotSupported   = errors.New("transaction type not supported")
 	errEmptyTypedTx         = errors.New("empty typed transaction bytes")
+	// ErrMaxPriorityFeeVeryHigh is a sanity error to avoid extremely big numbers specified
+	// in the priority fee field.
+	ErrMaxPriorityFeeVeryHigh = errors.New("max priority fee per gas higher than 2^256-1")
+	// ErrMaxFeeVeryHigh is a sanity error to avoid extremely big numbers specified
+	// in the max fee field.
+	ErrMaxFeeVeryHigh = errors.New("max fee per gas higher than 2^256-1")
 )
 
 // Starting from the max value allowed to avoid ambiguity with Ethereum tx type codes.
@@ -70,6 +76,7 @@ type TxData interface {
 	signature() []byte
 	setSignature(sig []byte)
 	hashWithoutNonce(origin thor.Address) *thor.Bytes32
+	evaluateWork(origin thor.Address) func(nonce uint64) *big.Int
 
 	encode(w io.Writer) error
 }
@@ -143,36 +150,6 @@ func (t *Transaction) Hash() (hash thor.Bytes32) {
 		return rlpHash(t)
 	}
 	return prefixedRlpHash(t.Type(), t.body)
-}
-
-// UnprovedWork returns unproved work of this tx.
-// It returns 0, if tx is not signed.
-func (t *Transaction) UnprovedWork() (w *big.Int) {
-	if cached := t.cache.unprovedWork.Load(); cached != nil {
-		return cached.(*big.Int)
-	}
-	defer func() {
-		t.cache.unprovedWork.Store(w)
-	}()
-
-	origin, err := t.Origin()
-	if err != nil {
-		return &big.Int{}
-	}
-	return t.EvaluateWork(origin)(t.body.nonce())
-}
-
-// EvaluateWork try to compute work when tx origin assumed.
-func (t *Transaction) EvaluateWork(origin thor.Address) func(nonce uint64) *big.Int {
-	hashWithoutNonce := t.body.hashWithoutNonce(origin)
-
-	return func(nonce uint64) *big.Int {
-		var nonceBytes [8]byte
-		binary.BigEndian.PutUint64(nonceBytes[:], nonce)
-		hash := thor.Blake2b(hashWithoutNonce[:], nonceBytes[:])
-		r := new(big.Int).SetBytes(hash[:])
-		return r.Div(math.MaxBig256, r)
-	}
 }
 
 // SigningHash returns hash of tx excludes signature.
@@ -450,7 +427,7 @@ func (t *Transaction) IntrinsicGas() (uint64, error) {
 // GasPrice returns gas price.
 // gasPrice = baseGasPrice + baseGasPrice * gasPriceCoef / 255
 func (t *Transaction) GasPrice(baseGasPrice *big.Int) *big.Int {
-	x := new(big.Int).Set(t.body.maxFeePerGas())
+	x := big.NewInt(int64(t.body.gasPriceCoef()))
 	x.Mul(x, baseGasPrice)
 	x.Div(x, big.NewInt(math.MaxUint8))
 	return x.Add(x, baseGasPrice)
@@ -478,6 +455,28 @@ func (t *Transaction) ProvedWork(headBlockNum uint32, getBlockID func(uint32) (t
 		return t.UnprovedWork(), nil
 	}
 	return &big.Int{}, nil
+}
+
+// UnprovedWork returns unproved work of this tx.
+// It returns 0, if tx is not signed or is not a legacy tx type.
+func (t *Transaction) UnprovedWork() (w *big.Int) {
+	if cached := t.cache.unprovedWork.Load(); cached != nil {
+		return cached.(*big.Int)
+	}
+	defer func() {
+		t.cache.unprovedWork.Store(w)
+	}()
+
+	origin, err := t.Origin()
+	if err != nil {
+		return &big.Int{}
+	}
+	return t.EvaluateWork(origin)(t.body.nonce())
+}
+
+// EvaluateWork try to compute work when tx origin assumed.
+func (t *Transaction) EvaluateWork(origin thor.Address) func(nonce uint64) *big.Int {
+	return t.body.evaluateWork(origin)
 }
 
 // OverallGasPrice calculate overall gas price.
