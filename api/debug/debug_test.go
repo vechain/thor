@@ -533,7 +533,13 @@ func testStorageRangeDefaultOption(t *testing.T) {
 }
 
 func initDebugServer(t *testing.T) {
-	thorChain, err := testchain.NewIntegrationTestChain()
+	forkConfig := thor.ForkConfig{
+		BLOCKLIST: 0,
+		VIP191:    1,
+		GALACTICA: 1,
+		VIP214:    2,
+	}
+	thorChain, err := testchain.NewWithFork(forkConfig)
 	require.NoError(t, err)
 
 	addr := thor.BytesToAddress([]byte("to"))
@@ -560,6 +566,7 @@ func initDebugServer(t *testing.T) {
 		BlockRef(tx.NewBlockRef(0)).
 		MustBuild()
 	transaction = tx.MustSign(transaction, genesis.DevAccounts()[0].PrivateKey)
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], transaction, noClausesTx))
 
 	dynFeeTx := tx.NewTxBuilder(tx.DynamicFeeTxType).
 		ChainTag(thorChain.Repo().ChainTag()).
@@ -575,9 +582,7 @@ func initDebugServer(t *testing.T) {
 		dynFeeTx,
 		genesis.DevAccounts()[0].PrivateKey,
 	)
-
-	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], transaction, noClausesTx, dynFeeTx))
-	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0]))
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0]), dynFeeTx)
 
 	allBlocks, err := thorChain.GetAllBlocks()
 	require.NoError(t, err)

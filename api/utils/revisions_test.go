@@ -99,7 +99,15 @@ func TestAllowNext(t *testing.T) {
 }
 
 func TestGetSummary(t *testing.T) {
-	thorChain, err := testchain.NewIntegrationTestChain()
+	forks := thor.ForkConfig{
+		VIP191:    0,
+		ETH_CONST: 0,
+		BLOCKLIST: 0,
+		ETH_IST:   0,
+		VIP214:    0,
+		FINALITY:  0,
+	}
+	thorChain, err := testchain.NewWithFork(forks)
 	require.NoError(t, err)
 
 	customRevision := thorChain.Repo().BestBlockSummary().Header.ID()
@@ -155,7 +163,7 @@ func TestGetSummary(t *testing.T) {
 }
 
 func TestGetSummaryAndState(t *testing.T) {
-	thorChain, err := testchain.NewIntegrationTestChain()
+	thorChain, err := testchain.NewDefault()
 	require.NoError(t, err)
 
 	b := thorChain.GenesisBlock()

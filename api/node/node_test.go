@@ -20,6 +20,7 @@ import (
 	"github.com/vechain/thor/v2/tx"
 
 	"github.com/vechain/thor/v2/test/testchain"
+	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/txpool"
 )
@@ -46,7 +47,7 @@ func TestNode(t *testing.T) {
 }
 
 func initCommServer(t *testing.T) {
-	thorChain, err := testchain.NewIntegrationTestChain()
+	thorChain, err := testchain.NewDefault()
 	require.NoError(t, err)
 
 	chainTag := thorChain.Repo().ChainTag()
@@ -55,7 +56,7 @@ func initCommServer(t *testing.T) {
 		Limit:           10000,
 		LimitPerAccount: 16,
 		MaxLifetime:     10 * time.Minute,
-	})
+	}, &thor.NoFork)
 
 	for i := range 3 {
 		transaction := new(tx.Builder).
@@ -76,7 +77,7 @@ func initCommServer(t *testing.T) {
 			Limit:           10000,
 			LimitPerAccount: 16,
 			MaxLifetime:     10 * time.Minute,
-		}),
+		}, &thor.NoFork),
 	)
 
 	router := mux.NewRouter()
