@@ -10,6 +10,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -84,11 +85,17 @@ func (t *DynamicFeeTransaction) gasPriceCoef() uint8 {
 }
 
 func (t *DynamicFeeTransaction) maxFeePerGas() *big.Int {
-	return t.MaxFeePerGas
+	if t.MaxFeePerGas == nil {
+		return nil
+	}
+	return new(big.Int).Set(t.MaxFeePerGas)
 }
 
 func (t *DynamicFeeTransaction) maxPriorityFeePerGas() *big.Int {
-	return t.MaxPriorityFeePerGas
+	if t.MaxPriorityFeePerGas == nil {
+		return nil
+	}
+	return new(big.Int).Set(t.MaxPriorityFeePerGas)
 }
 
 func (t *DynamicFeeTransaction) dependsOn() *thor.Bytes32 {
@@ -142,4 +149,8 @@ func (t *DynamicFeeTransaction) encode(w io.Writer) error {
 		t.Nonce,
 		&t.Reserved,
 	})
+}
+
+func (t *DynamicFeeTransaction) evaluateWork(origin thor.Address) func(nonce uint64) *big.Int {
+	return func(nonce uint64) *big.Int { return common.Big0 }
 }

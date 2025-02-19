@@ -29,7 +29,7 @@ func newSolo() *Solo {
 	logDb, _ := logdb.NewMem()
 	b, _, _, _ := gene.Build(stater)
 	repo, _ := chain.NewRepository(db, b)
-	mempool := txpool.New(repo, stater, txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute})
+	mempool := txpool.New(repo, stater, txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute}, &thor.NoFork)
 
 	return New(repo, stater, logDb, mempool, 0, true, false, thor.BlockInterval, &thor.ForkConfig{GALACTICA: math.MaxUint32})
 }

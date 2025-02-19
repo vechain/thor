@@ -280,7 +280,7 @@ func getStorageWithNonExistingRevision(t *testing.T) {
 }
 
 func initAccountServer(t *testing.T, enabledDeprecated bool) {
-	thorChain, err := testchain.NewIntegrationTestChain()
+	thorChain, err := testchain.NewDefault()
 	require.NoError(t, err)
 
 	genesisBlock = thorChain.GenesisBlock()
@@ -296,7 +296,7 @@ func initAccountServer(t *testing.T, enabledDeprecated bool) {
 		t.Fatal(err)
 	}
 	claCall := tx.NewClause(&contractAddr).WithData(input)
-	transactionCall := buildTxWithClauses(tx.DynamicFeeTxType, thorChain.Repo().ChainTag(), claCall)
+	transactionCall := buildTxWithClauses(tx.LegacyTxType, thorChain.Repo().ChainTag(), claCall)
 	require.NoError(t,
 		thorChain.MintTransactions(
 			genesis.DevAccounts()[0],
@@ -317,6 +317,7 @@ func buildTxWithClauses(txType int, chainTag byte, clauses ...*tx.Clause) *tx.Tr
 		ChainTag(chainTag).
 		Expiration(10).
 		Gas(1000000).
+		MaxFeePerGas(big.NewInt(1000)).
 		Clauses(clauses).
 		MustBuild()
 	return tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)
