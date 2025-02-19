@@ -85,50 +85,15 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 	var oldestBlockID thor.Bytes32
 	for i := blockCount; i > 0; i-- {
 		oldestBlockID = newestBlockID
-		fees, _, found := fd.cache.Get(newestBlockID)
-		if !found {
-			// retrieve from db + retro-populate cache
-			block, err := fd.repo.GetBlock(newestBlockID)
-			if err != nil {
-				return thor.Bytes32{}, nil, nil, nil, err
-			}
-
-			header := block.Header()
-			transactions := block.Transactions()
-
-			// Use a min-heap to keep track of the lowest values
-			blockPriorityFees := &minPriorityHeap{}
-			heap.Init(blockPriorityFees)
-
-			for _, tx := range transactions {
-				maxPriorityFeePerGas := tx.MaxPriorityFeePerGas()
-				maxPriorityFeePerGas.Sub(maxPriorityFeePerGas, header.BaseFee())
-				heap.Push(blockPriorityFees, maxPriorityFeePerGas)
-				if blockPriorityFees.Len() > priorityNumberOfTxsPerBlock {
-					heap.Pop(blockPriorityFees)
-				}
-			}
-
-			for _, blockPriorityFee := range blockPriorityFees.GetAllValues() {
-				heap.Push(priorityFees, blockPriorityFee)
-				if priorityFees.Len() > priorityNumberOfTxsPerBlock*priorityNumberOfBlocks {
-					heap.Pop(priorityFees)
-				}
-			}
-
-			fees = &FeeCacheEntry{
-				baseFee:       getBaseFee(header.BaseFee()),
-				gasUsedRatio:  float64(header.GasUsed()) / float64(header.GasLimit()),
-				parentBlockID: header.ParentID(),
-				priorityFees:  priorityFees,
-			}
-			fd.cache.Set(header.ID(), fees, float64(header.Number()))
+		fees, err := fd.getFees(newestBlockID, priorityFees)
+		if err != nil {
+			return thor.Bytes32{}, nil, nil, nil, err
 		}
-		baseFees[i-1] = fees.(*FeeCacheEntry).baseFee
-		gasUsedRatios[i-1] = fees.(*FeeCacheEntry).gasUsedRatio
-		priorityFees = fees.(*FeeCacheEntry).priorityFees
+		baseFees[i-1] = fees.baseFee
+		gasUsedRatios[i-1] = fees.gasUsedRatio
+		priorityFees = fees.priorityFees
 
-		newestBlockID = fees.(*FeeCacheEntry).parentBlockID
+		newestBlockID = fees.parentBlockID
 	}
 
 	priorityFeesValues := priorityFees.GetAllValues()
@@ -139,4 +104,48 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 	}
 
 	return oldestBlockID, baseFees, gasUsedRatios, nil, nil
+}
+
+func (fd *FeesData) getFees(blockID thor.Bytes32, priorityFees *minPriorityHeap) (*FeeCacheEntry, error) {
+	fees, _, found := fd.cache.Get(blockID)
+	if found {
+		return fees.(*FeeCacheEntry), nil
+	}
+
+	block, err := fd.repo.GetBlock(blockID)
+	if err != nil {
+		return nil, err
+	}
+
+	header := block.Header()
+	transactions := block.Transactions()
+
+	blockPriorityFees := &minPriorityHeap{}
+	heap.Init(blockPriorityFees)
+
+	for _, tx := range transactions {
+		maxPriorityFeePerGas := tx.MaxPriorityFeePerGas()
+		maxPriorityFeePerGas.Sub(maxPriorityFeePerGas, header.BaseFee())
+		heap.Push(blockPriorityFees, maxPriorityFeePerGas)
+		if blockPriorityFees.Len() > priorityNumberOfTxsPerBlock {
+			heap.Pop(blockPriorityFees)
+		}
+	}
+
+	for _, blockPriorityFee := range blockPriorityFees.GetAllValues() {
+		heap.Push(priorityFees, blockPriorityFee)
+		if priorityFees.Len() > priorityNumberOfTxsPerBlock*priorityNumberOfBlocks {
+			heap.Pop(priorityFees)
+		}
+	}
+
+	fees = &FeeCacheEntry{
+		baseFee:       getBaseFee(header.BaseFee()),
+		gasUsedRatio:  float64(header.GasUsed()) / float64(header.GasLimit()),
+		parentBlockID: header.ParentID(),
+		priorityFees:  priorityFees,
+	}
+	fd.cache.Set(header.ID(), fees, float64(header.Number()))
+
+	return fees.(*FeeCacheEntry), nil
 }
