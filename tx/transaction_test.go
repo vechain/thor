@@ -182,21 +182,44 @@ func TestOverallGasPrice(t *testing.T) {
 }
 
 func TestEvaluateWork(t *testing.T) {
-	for _, txType := range []int{tx.LegacyTxType, tx.DynamicFeeTxType} {
-		origin := thor.BytesToAddress([]byte("origin"))
-		tx := GetMockTx(txType)
+	tests := []struct {
+		name         string
+		txType       int
+		expectedFunc func(b *big.Int) bool
+	}{
+		{
+			name:   "LegacyTxType",
+			txType: tx.LegacyTxType,
+			expectedFunc: func(res *big.Int) bool {
+				return res.Cmp(big.NewInt(0)) > 0
+			},
+		},
+		{
+			name:   "DynamicFeeTxType",
+			txType: tx.DynamicFeeTxType,
+			expectedFunc: func(res *big.Int) bool {
+				return res.Cmp(common.Big0) == 0
+			},
+		},
+	}
 
-		// Returns a function
-		evaluate := tx.EvaluateWork(origin)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			origin := thor.BytesToAddress([]byte("origin"))
+			tx := GetMockTx(tt.txType)
 
-		// Test with a range of nonce values
-		for nonce := uint64(0); nonce < 10; nonce++ {
-			work := evaluate(nonce)
+			// Returns a function
+			evaluate := tx.EvaluateWork(origin)
 
-			// Basic Assertions
-			assert.NotNil(t, work)
-			assert.True(t, work.Cmp(big.NewInt(0)) > 0, "Work should be positive")
-		}
+			// Test with a range of nonce values
+			for nonce := uint64(0); nonce < 100; nonce++ {
+				work := evaluate(nonce)
+
+				// Basic Assertions
+				assert.NotNil(t, work)
+				assert.True(t, tt.expectedFunc(work), "Work does not match")
+			}
+		})
 	}
 }
 

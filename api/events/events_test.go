@@ -261,7 +261,7 @@ func testEventWithBlocks(t *testing.T, expectedBlocks int) {
 
 // Init functions
 func initEventServer(t *testing.T, limit uint64) *testchain.Chain {
-	thorChain, err := testchain.NewIntegrationTestChain()
+	thorChain, err := testchain.NewDefault()
 	require.NoError(t, err)
 
 	router := mux.NewRouter()

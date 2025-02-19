@@ -230,7 +230,7 @@ func defaultAction(ctx *cli.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "parse txpool-limit-per-account flag")
 	}
-	txPool := txpool.New(repo, state.NewStater(mainDB), txpoolOpt)
+	txPool := txpool.New(repo, state.NewStater(mainDB), txpoolOpt, &forkConfig)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
 	p2pCommunicator, err := newP2PCommunicator(ctx, repo, txPool, instanceDir)
@@ -420,7 +420,7 @@ func soloAction(ctx *cli.Context) error {
 		return errors.Wrap(err, "parse txpool-limit-per-account flag")
 	}
 
-	txPool := txpool.New(repo, state.NewStater(mainDB), txPoolOption)
+	txPool := txpool.New(repo, state.NewStater(mainDB), txPoolOption, &forkConfig)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
 	bftEngine := solo.NewBFTEngine(repo)
