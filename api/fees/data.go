@@ -16,7 +16,6 @@ import (
 )
 
 const (
-	priorityNumberOfBlocks      = 20
 	priorityNumberOfTxsPerBlock = 3
 	priorityPercentile          = 60
 )
@@ -40,34 +39,29 @@ func (h *minPriorityHeap) Pop() interface{} {
 	return x
 }
 
+// GetAllValues returns all the values in the heap.
 func (h minPriorityHeap) GetAllValues() []*big.Int {
 	values := make([]*big.Int, len(h))
 	copy(values, h)
 	return values
 }
 
-type FeeHistoryCacheEntry struct {
+type FeeCacheEntry struct {
 	parentBlockID thor.Bytes32
 	baseFee       *hexutil.Big
 	gasUsedRatio  float64
-}
-
-type FeePriorityCacheEntry struct {
-	parentBlockID thor.Bytes32
-	priorityFee   *hexutil.Big
+	priorityFees  *minPriorityHeap
 }
 
 type FeesData struct {
-	repo          *chain.Repository
-	historyCache  *cache.PrioCache
-	priorityCache *cache.PrioCache
+	repo  *chain.Repository
+	cache *cache.PrioCache
 }
 
 func newFeesData(repo *chain.Repository, fixedSize uint32) *FeesData {
 	return &FeesData{
-		repo:          repo,
-		historyCache:  cache.NewPrioCache(int(fixedSize)),
-		priorityCache: cache.NewPrioCache(int(priorityNumberOfBlocks) * int(priorityNumberOfTxsPerBlock)),
+		repo:  repo,
+		cache: cache.NewPrioCache(int(fixedSize)),
 	}
 }
 
@@ -78,96 +72,71 @@ func getBaseFee(baseFee *big.Int) *hexutil.Big {
 	return (*hexutil.Big)(big.NewInt(0))
 }
 
-// resolveRange resolves the base fees and gas used ratios for the given block range.
+// resolveRange resolves the base fees, gas used ratios and priority fees for the given block range.
 // Assumes that the boundaries (newest block - block count) are correct and validated beforehand.
-func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCount uint32) (thor.Bytes32, []*hexutil.Big, []float64, error) {
+func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCount uint32) (thor.Bytes32, []*hexutil.Big, []float64, *hexutil.Big, error) {
 	newestBlockID := newestBlockSummary.Header.ID()
 
 	baseFees := make([]*hexutil.Big, blockCount)
 	gasUsedRatios := make([]float64, blockCount)
+	priorityFees := &minPriorityHeap{}
+	heap.Init(priorityFees)
 
 	var oldestBlockID thor.Bytes32
 	for i := blockCount; i > 0; i-- {
 		oldestBlockID = newestBlockID
-		fees, _, found := fd.historyCache.Get(newestBlockID)
+		fees, _, found := fd.cache.Get(newestBlockID)
 		if !found {
 			// retrieve from db + retro-populate cache
-			blockSummary, err := fd.repo.GetBlockSummary(newestBlockID)
+			block, err := fd.repo.GetBlock(newestBlockID)
 			if err != nil {
-				return thor.Bytes32{}, nil, nil, err
+				return thor.Bytes32{}, nil, nil, nil, err
 			}
 
-			header := blockSummary.Header
-			fees = &FeeHistoryCacheEntry{
+			header := block.Header()
+			transactions := block.Transactions()
+
+			// Use a min-heap to keep track of the lowest values
+			blockPriorityFees := &minPriorityHeap{}
+			heap.Init(blockPriorityFees)
+
+			for _, tx := range transactions {
+				maxPriorityFeePerGas := tx.MaxPriorityFeePerGas()
+				maxPriorityFeePerGas.Sub(maxPriorityFeePerGas, header.BaseFee())
+				heap.Push(blockPriorityFees, maxPriorityFeePerGas)
+				if blockPriorityFees.Len() > priorityNumberOfTxsPerBlock {
+					heap.Pop(blockPriorityFees)
+				}
+			}
+
+			for _, blockPriorityFee := range blockPriorityFees.GetAllValues() {
+				heap.Push(priorityFees, blockPriorityFee)
+				if priorityFees.Len() > priorityNumberOfTxsPerBlock*priorityNumberOfBlocks {
+					heap.Pop(priorityFees)
+				}
+			}
+
+			fees = &FeeCacheEntry{
 				baseFee:       getBaseFee(header.BaseFee()),
 				gasUsedRatio:  float64(header.GasUsed()) / float64(header.GasLimit()),
 				parentBlockID: header.ParentID(),
+				priorityFees:  priorityFees,
 			}
-			fd.historyCache.Set(header.ID(), fees, float64(header.Number()))
+			fd.cache.Set(header.ID(), fees, float64(header.Number()))
 		}
-		baseFees[i-1] = fees.(*FeeHistoryCacheEntry).baseFee
-		gasUsedRatios[i-1] = fees.(*FeeHistoryCacheEntry).gasUsedRatio
+		baseFees[i-1] = fees.(*FeeCacheEntry).baseFee
+		gasUsedRatios[i-1] = fees.(*FeeCacheEntry).gasUsedRatio
+		priorityFees = fees.(*FeeCacheEntry).priorityFees
 
-		newestBlockID = fees.(*FeeHistoryCacheEntry).parentBlockID
-	}
-
-	return oldestBlockID, baseFees, gasUsedRatios, nil
-}
-
-// getPriorityFee returns the priority fee from best block - the priorityNumberOfBlocks constant.
-func (fd *FeesData) getPriorityFee() (*hexutil.Big, error) {
-	currentBlockHeader := fd.repo.BestBlockSummary().Header
-	currentBlockID := currentBlockHeader.ID()
-	priorityFeeEntry, _, found := fd.priorityCache.Get(currentBlockID)
-	if found {
-		return priorityFeeEntry.(*FeePriorityCacheEntry).priorityFee, nil
-	}
-
-	priorityFees := &minPriorityHeap{}
-	heap.Init(priorityFees)
-
-	for i := priorityNumberOfBlocks; i > 0; i-- {
-		// retrieve from db + retro-populate cache
-		block, err := fd.repo.GetBlock(currentBlockID)
-		if err != nil {
-			return nil, err
-		}
-
-		header := block.Header()
-		transactions := block.Transactions()
-
-		// Use a min-heap to keep track of the lowest values
-		blockPriorityFees := &minPriorityHeap{}
-		heap.Init(blockPriorityFees)
-
-		for _, tx := range transactions {
-			maxPriorityFeePerGas := tx.MaxPriorityFeePerGas()
-			// TODO: explore other cases where maxPriorityFeePerGas is smaller than baseFee
-			maxPriorityFeePerGas.Sub(maxPriorityFeePerGas, header.BaseFee())
-			heap.Push(blockPriorityFees, maxPriorityFeePerGas)
-			if blockPriorityFees.Len() > priorityNumberOfTxsPerBlock {
-				heap.Pop(blockPriorityFees)
-			}
-		}
-
-		for _, blockPriorityFee := range blockPriorityFees.GetAllValues() {
-			heap.Push(priorityFees, blockPriorityFee)
-			if priorityFees.Len() > priorityNumberOfTxsPerBlock*priorityNumberOfBlocks {
-				heap.Pop(priorityFees)
-			}
-		}
-
-		currentBlockID = header.ParentID()
+		newestBlockID = fees.(*FeeCacheEntry).parentBlockID
 	}
 
 	priorityFeesValues := priorityFees.GetAllValues()
-	priorityFeeEntry = priorityFeesValues[(len(priorityFeesValues)-1)*priorityPercentile/100]
-	priorityFee := (*hexutil.Big)(priorityFeeEntry.(*big.Int))
+	if len(priorityFeesValues) > 0 {
+		priorityFeeEntry := priorityFeesValues[(len(priorityFeesValues)-1)*priorityPercentile/100]
+		priorityFee := (*hexutil.Big)(priorityFeeEntry)
+		return oldestBlockID, baseFees, gasUsedRatios, priorityFee, nil
+	}
 
-	fd.priorityCache.Set(currentBlockID, &FeePriorityCacheEntry{
-		parentBlockID: currentBlockHeader.ParentID(),
-		priorityFee:   priorityFee,
-	}, float64(currentBlockHeader.Number()))
-
-	return priorityFee, nil
+	return oldestBlockID, baseFees, gasUsedRatios, nil, nil
 }

@@ -17,6 +17,8 @@ import (
 	"github.com/vechain/thor/v2/chain"
 )
 
+const priorityNumberOfBlocks = 20
+
 type Fees struct {
 	data           *FeesData
 	bft            bft.Committer
@@ -86,7 +88,7 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 		return err
 	}
 
-	oldestBlockRevision, baseFees, gasUsedRatios, err := f.data.resolveRange(newestBlockSummary, blockCount)
+	oldestBlockRevision, baseFees, gasUsedRatios, _, err := f.data.resolveRange(newestBlockSummary, blockCount)
 	if err != nil {
 		return err
 	}
@@ -99,7 +101,8 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 }
 
 func (f *Fees) handleGetPriority(w http.ResponseWriter, req *http.Request) error {
-	priorityFee, err := f.data.getPriorityFee()
+	bestBlockSummary := f.data.repo.BestBlockSummary()
+	_, _, _, priorityFee, err := f.data.resolveRange(bestBlockSummary, priorityNumberOfBlocks)
 	if err != nil {
 		return err
 	}
