@@ -7,11 +7,9 @@ package fees
 
 import (
 	"math"
-	"math/big"
 	"net/http"
 	"strconv"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/utils"
@@ -101,8 +99,12 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 }
 
 func (f *Fees) handleGetPriority(w http.ResponseWriter, req *http.Request) error {
+	priorityFee, err := f.data.getPriorityFee()
+	if err != nil {
+		return err
+	}
 	return utils.WriteJSON(w, &FeesPriority{
-		MaxPriorityFeePerGas: (*hexutil.Big)(big.NewInt(0)),
+		MaxPriorityFeePerGas: priorityFee,
 	})
 }
 
