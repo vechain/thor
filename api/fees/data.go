@@ -96,9 +96,8 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 		newestBlockID = fees.parentBlockID
 	}
 
-	priorityFeesValues := priorityFees.GetAllValues()
-	if len(priorityFeesValues) > 0 {
-		priorityFeeEntry := priorityFeesValues[(len(priorityFeesValues)-1)*priorityPercentile/100]
+	if priorityFees.Len() > 0 {
+		priorityFeeEntry := priorityFees.GetAllValues()[(priorityFees.Len()-1)*priorityPercentile/100]
 		priorityFee := (*hexutil.Big)(priorityFeeEntry)
 		return oldestBlockID, baseFees, gasUsedRatios, priorityFee, nil
 	}
