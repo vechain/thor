@@ -149,7 +149,7 @@ func testConvertRangeWithFromGreaterThanGenesis(t *testing.T, chain *testchain.C
 
 // Init functions
 func initChain(t *testing.T) *testchain.Chain {
-	thorChain, err := testchain.NewIntegrationTestChain()
+	thorChain, err := testchain.NewDefault()
 	require.NoError(t, err)
 
 	for i := 0; i < 10; i++ {

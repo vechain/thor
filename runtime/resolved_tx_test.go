@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/runtime"
@@ -178,7 +179,7 @@ func (tr *testResolvedTransaction) TestBuyGas() {
 		if err != nil {
 			tr.t.Fatal(err)
 		}
-		_, _, payer, _, returnGas, err := resolve.BuyGas(state, targetTime)
+		_, _, payer, _, returnGas, err := resolve.BuyGas(state, targetTime, &fork.GalacticaItems{IsActive: false, BaseFee: nil})
 		tr.assert.Nil(err)
 		returnGas(100)
 		return payer
