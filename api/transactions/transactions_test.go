@@ -168,14 +168,14 @@ func sendDynamicFeeTx(t *testing.T) {
 	var blockRef = tx.NewBlockRef(0)
 	var expiration = uint32(10)
 	var gas = uint64(21000)
-	var maxFeePerGas = big.NewInt(128)
 
 	trx := tx.NewTxBuilder(tx.DynamicFeeTxType).
 		BlockRef(blockRef).
 		ChainTag(chainTag).
 		Expiration(expiration).
 		Gas(gas).
-		MaxFeePerGas(maxFeePerGas).
+		MaxFeePerGas(big.NewInt(10_000)).
+		MaxPriorityFeePerGas(big.NewInt(10)).
 		MustBuild()
 	trx = tx.MustSign(
 		trx,
@@ -330,11 +330,15 @@ func httpPostAndCheckResponseStatus(t *testing.T, url string, obj interface{}, r
 }
 
 func initTransactionServer(t *testing.T) {
-	thorChain, err := testchain.NewIntegrationTestChain()
+	forkConfig := testchain.DefaultForkConfig
+	forkConfig.GALACTICA = 2
+
+	thorChain, err := testchain.NewWithFork(forkConfig)
 	require.NoError(t, err)
 
 	chainTag = thorChain.Repo().ChainTag()
 
+	// Creating first block with legacy tx
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 	legacyTx = tx.NewTxBuilder(tx.LegacyTxType).
@@ -347,11 +351,12 @@ func initTransactionServer(t *testing.T) {
 		BlockRef(tx.NewBlockRef(0)).
 		MustBuild()
 	legacyTx = tx.MustSign(legacyTx, genesis.DevAccounts()[0].PrivateKey)
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], legacyTx))
 
 	dynFeeTx = tx.NewTxBuilder(tx.DynamicFeeTxType).
 		ChainTag(chainTag).
-		MaxFeePerGas(new(big.Int).SetInt64(1)).
-		MaxPriorityFeePerGas(new(big.Int).SetInt64(10)).
+		MaxFeePerGas(big.NewInt(thor.InitialBaseFee * 10)).
+		MaxPriorityFeePerGas(big.NewInt(10)).
 		Expiration(10).
 		Gas(21000).
 		Nonce(1).
@@ -360,14 +365,16 @@ func initTransactionServer(t *testing.T) {
 		MustBuild()
 	dynFeeTx = tx.MustSign(dynFeeTx, genesis.DevAccounts()[0].PrivateKey)
 
-	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], legacyTx, dynFeeTx))
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], dynFeeTx))
 
-	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute})
+	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute}, &forkConfig)
 
-	mempoolTx = tx.NewTxBuilder(tx.LegacyTxType).
+	mempoolTx = tx.NewTxBuilder(tx.DynamicFeeTxType).
 		ChainTag(chainTag).
 		Expiration(10).
 		Gas(21000).
+		MaxFeePerGas(big.NewInt(thor.InitialBaseFee * 10)).
+		MaxPriorityFeePerGas(big.NewInt(10)).
 		Nonce(1).
 		MustBuild()
 	mempoolTx = tx.MustSign(mempoolTx, genesis.DevAccounts()[0].PrivateKey)
