@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -46,10 +47,11 @@ func (e *Error) Error() string {
 
 // State manages the world state.
 type State struct {
-	db    *muxdb.MuxDB
-	trie  *muxdb.Trie                    // the accounts trie reader
-	cache map[thor.Address]*cachedObject // cache of accounts trie
-	sm    *stackedmap.StackedMap         // keeps revisions of accounts state
+	db                    *muxdb.MuxDB
+	trie                  *muxdb.Trie                    // the accounts trie reader
+	cache                 map[thor.Address]*cachedObject // cache of accounts trie
+	sm                    *stackedmap.StackedMap         // keeps revisions of accounts state
+	hayabusaForkTimestamp *uint64                        // the timestamp of the hayabusa fork block
 }
 
 // New create state object.
@@ -182,7 +184,13 @@ func (s *State) GetEnergy(addr thor.Address, blockTime uint64) (*big.Int, error)
 	if err != nil {
 		return nil, &Error{err}
 	}
-	return acc.CalcEnergy(blockTime), nil
+
+	hayabusaForkTime, err := s.GetHayabusaForkTime()
+	if err != nil {
+		// TODO: revisit the error handling
+		return nil, &Error{err}
+	}
+	return acc.CalcEnergy(blockTime, *hayabusaForkTime), nil
 }
 
 // SetEnergy set energy at block number for the given address.
@@ -543,6 +551,24 @@ func (s *State) Stage(newVer trie.Version) (*Stage, error) {
 			return nil
 		},
 	}, nil
+}
+
+func (s *State) GetHayabusaForkTime() (*uint64, error) {
+	if s.hayabusaForkTimestamp != nil {
+		return s.hayabusaForkTimestamp, nil
+	}
+
+	forkTime, err := s.GetStorage(thor.BytesToAddress([]byte("Energy")), thor.HayabusaEnergyGrowthStopTime)
+	if err != nil {
+		return nil, err
+	}
+	// return impossible time if not set
+	hayabusaForkTime := uint64(math.MaxUint64)
+	if !forkTime.IsZero() {
+		hayabusaForkTime = new(big.Int).SetBytes(forkTime.Bytes()).Uint64()
+		s.hayabusaForkTimestamp = &hayabusaForkTime
+	}
+	return &hayabusaForkTime, nil
 }
 
 type (

@@ -89,7 +89,12 @@ func (e *Energy) TotalSupply() (*big.Int, error) {
 		Balance:   initialSupply.Token,
 		Energy:    initialSupply.Energy,
 		BlockTime: initialSupply.BlockTime}
-	return acc.CalcEnergy(e.blockTime), nil
+
+	hayabusaForkTime, err := e.state.GetHayabusaForkTime()
+	if err != nil {
+		return nil, err
+	}
+	return acc.CalcEnergy(e.blockTime, *hayabusaForkTime), nil
 }
 
 // TotalBurned returns energy totally burned.
@@ -154,4 +159,9 @@ func (e *Energy) Sub(addr thor.Address, amount *big.Int) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+func (e *Energy) StopEnergyGrowth(blockTime uint64) {
+	bt := big.NewInt(int64(blockTime))
+	e.state.SetStorage(thor.BytesToAddress([]byte("Energy")), thor.HayabusaEnergyGrowthStopTime, thor.BytesToBytes32(bt.Bytes()))
 }

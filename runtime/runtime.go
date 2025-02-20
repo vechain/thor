@@ -136,6 +136,8 @@ func New(
 		if err := staker.Initialise(authority, params, ctx.Number); err != nil {
 			panic(err)
 		}
+
+		builtin.Energy.Native(state, ctx.Time).StopEnergyGrowth(ctx.Time)
 	}
 
 	rt := Runtime{
