@@ -226,6 +226,11 @@ func (c *Client) FeesHistory(blockCount uint32, newestBlock string) (feesHistory
 	return c.httpConn.GetFeesHistory(blockCount, newestBlock)
 }
 
+// FeesPriority retrieves the suggested maxPriorityFeePerGas for a transaction to be included in the next blocks.
+func (c *Client) FeesPriority() (feesPriority *fees.FeesPriority, err error) {
+	return c.httpConn.GetFeesPriority()
+}
+
 // SubscribeBlocks subscribes to block updates over WebSocket.
 func (c *Client) SubscribeBlocks(pos string) (*common.Subscription[*subscriptions.BlockMessage], error) {
 	if c.wsConn == nil {

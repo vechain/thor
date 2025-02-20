@@ -442,4 +442,17 @@ func testFeesEndpoint(t *testing.T, testchain *testchain.Chain, ts *httptest.Ser
 
 		require.Equal(t, expectedFeesHistory, feesHistory)
 	})
+
+	// 2. Test GET /fees/priority
+	t.Run("GetFeesPriority", func(t *testing.T) {
+		feesPriority, err := c.FeesPriority()
+		require.NoError(t, err)
+		require.NotNil(t, feesPriority)
+
+		expectedFeesPriority := &fees.FeesPriority{
+			MaxPriorityFeePerGas: (*hexutil.Big)(big.NewInt(2)),
+		}
+
+		require.Equal(t, expectedFeesPriority, feesPriority)
+	})
 }
