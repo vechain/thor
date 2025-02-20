@@ -21,7 +21,7 @@ const (
 	priorityPercentile          = 60
 )
 
-// minPriorityHeap is a min-heap of *big.Int values.
+// minPriorityHeap is a min-heap of priority fee values.
 type minPriorityHeap []*big.Int
 
 func (h minPriorityHeap) Len() int           { return len(h) }
@@ -38,13 +38,6 @@ func (h *minPriorityHeap) Pop() interface{} {
 	x := old[n-1]
 	*h = old[0 : n-1]
 	return x
-}
-
-// GetAllValues returns all the values in the heap.
-func (h minPriorityHeap) GetAllValues() []*big.Int {
-	values := make([]*big.Int, len(h))
-	copy(values, h)
-	return values
 }
 
 type FeeCacheEntry struct {
@@ -92,18 +85,13 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 		}
 		baseFees[i-1] = fees.baseFee
 		gasUsedRatios[i-1] = fees.gasUsedRatio
-		for _, blockPriorityFee := range *fees.priorityFees {
-			heap.Push(priorityFees, blockPriorityFee)
-			if priorityFees.Len() > priorityNumberOfTxsPerBlock*int(blockCount) {
-				heap.Pop(priorityFees)
-			}
-		}
+		fd.updatePriorityFees(priorityFees, fees.priorityFees, priorityNumberOfTxsPerBlock*int(blockCount))
 
 		newestBlockID = fees.parentBlockID
 	}
 
 	if priorityFees.Len() > 0 {
-		priorityFeeEntry := priorityFees.GetAllValues()[(priorityFees.Len()-1)*priorityPercentile/100]
+		priorityFeeEntry := (*priorityFees)[(priorityFees.Len()-1)*priorityPercentile/100]
 		priorityFee := (*hexutil.Big)(priorityFeeEntry)
 		return oldestBlockID, baseFees, gasUsedRatios, priorityFee, nil
 	}
@@ -130,10 +118,7 @@ func (fd *FeesData) pushFeesToCache(blockID thor.Bytes32) (*FeeCacheEntry, error
 
 	for _, tx := range transactions {
 		maxPriorityFeePerGas := fd.effectiveMaxPriorityFeePerGas(tx, header.BaseFee())
-		heap.Push(blockPriorityFees, maxPriorityFeePerGas)
-		if blockPriorityFees.Len() > priorityNumberOfTxsPerBlock {
-			heap.Pop(blockPriorityFees)
-		}
+		fd.updatePriorityFees(blockPriorityFees, &minPriorityHeap{maxPriorityFeePerGas}, priorityNumberOfTxsPerBlock)
 	}
 
 	fees = &FeeCacheEntry{
@@ -159,4 +144,13 @@ func (fd *FeesData) effectiveMaxPriorityFeePerGas(tx *tx.Transaction, baseFee *b
 		return maxPriorityFeePerGas
 	}
 	return maxPriorityFeePerGas
+}
+
+func (fd *FeesData) updatePriorityFees(priorityFees, newFees *minPriorityHeap, maxLen int) {
+	for _, fee := range *newFees {
+		heap.Push(priorityFees, fee)
+		if priorityFees.Len() > maxLen {
+			heap.Pop(priorityFees)
+		}
+	}
 }
