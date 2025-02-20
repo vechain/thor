@@ -291,7 +291,7 @@ func executeTxAndGetReceipt(description TestTxDescription) (*tx.Receipt, *thor.B
 }
 
 func TestParamsNative(t *testing.T) {
-	thorChain, _ = testchain.NewIntegrationTestChain()
+	thorChain, _ = testchain.NewDefault()
 
 	toAddr := builtin.Params.Address
 	abi := builtin.Params.ABI
@@ -341,7 +341,7 @@ func TestParamsNative(t *testing.T) {
 }
 
 func TestAuthorityNative(t *testing.T) {
-	thorChain, _ = testchain.NewIntegrationTestChain()
+	thorChain, _ = testchain.NewDefault()
 	var (
 		master1   = genesis.DevAccounts()[1]
 		endorsor1 = genesis.DevAccounts()[2]
@@ -548,7 +548,7 @@ func TestEnergyNative(t *testing.T) {
 	toAddr := builtin.Energy.Address
 
 	abi := builtin.Energy.ABI
-	thorChain, _ = testchain.NewIntegrationTestChain()
+	thorChain, _ = testchain.NewDefault()
 
 	var stringOutput string
 	err := callContractAndGetOutput(abi, "name", toAddr, &stringOutput)
@@ -722,7 +722,7 @@ func TestPrototypeNative(t *testing.T) {
 		recoveryRate = big.NewInt(10)
 	)
 
-	thorChain, _ = testchain.NewIntegrationTestChain()
+	thorChain, _ = testchain.NewDefault()
 	abi := builtin.Prototype.ABI
 	toAddr := builtin.Prototype.Address
 
@@ -1112,7 +1112,7 @@ func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 		toAddr = builtin.Prototype.Address
 		abi    = builtin.Prototype.ABI
 	)
-	thorChain, _ = testchain.NewIntegrationTestChain()
+	thorChain, _ = testchain.NewDefault()
 
 	var outputBigInt *big.Int
 	err := callContractAndGetOutput(abi, "balance", toAddr, &outputBigInt, acc2, big.NewInt(0))
@@ -1206,7 +1206,7 @@ func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 }
 
 func TestExtensionNative(t *testing.T) {
-	thorChain, _ = testchain.NewIntegrationTestChain()
+	thorChain, _ = testchain.NewDefault()
 
 	master1 := genesis.DevAccounts()[0]
 	master2 := genesis.DevAccounts()[1]

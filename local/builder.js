@@ -1,24 +1,18 @@
 import * as fs from 'fs'
 
-const thorURLs = [
-    'http://host.docker.internal:8669',
-    'http://thor:8669',
-    'http://localhost:8669',
-]
+const thorURL = process.env.VUE_APP_SOLO_URL
 
 const getGenesis = async () => {
     // retry all the thorURLs to get the genesisID
-    for (const url of thorURLs) {
-        try {
-            console.log(`Trying to get genesisID from: ${url}`)
-            const genesis = await fetch(`${url}/blocks/0`)
-            console.log(`Got genesisID from: ${url}`)
-            return await genesis.json()
-        } catch (e) {
-            console.error(`Failed to get genesisID from: ${url}`)
-        }
+    try {
+        console.log(`Trying to get genesisID from: ${thorURL}`)
+        const genesis = await fetch(`${thorURL}/blocks/0`)
+        console.log(`Got genesisID from: ${thorURL}`)
+        return await genesis.json()
+    } catch (e) {
+        console.error(`Failed to get genesisID from: ${thorURL}`)
+        throw new Error("Failed to get genesisID from all thorURLs")
     }
-    throw new Error("Failed to get genesisID from any thor URL")
 }
 
 const main = async () => {

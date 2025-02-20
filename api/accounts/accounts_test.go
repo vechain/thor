@@ -280,7 +280,7 @@ func getStorageWithNonExistingRevision(t *testing.T) {
 }
 
 func initAccountServer(t *testing.T, enabledDeprecated bool) {
-	thorChain, err := testchain.NewIntegrationTestChain()
+	thorChain, err := testchain.NewDefault()
 	require.NoError(t, err)
 
 	genesisBlock = thorChain.GenesisBlock()

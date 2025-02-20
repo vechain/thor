@@ -266,7 +266,7 @@ func httpPostAndCheckResponseStatus(t *testing.T, url string, obj interface{}, r
 }
 
 func initTransactionServer(t *testing.T) {
-	thorChain, err := testchain.NewIntegrationTestChain()
+	thorChain, err := testchain.NewDefault()
 	require.NoError(t, err)
 
 	chainTag = thorChain.Repo().ChainTag()

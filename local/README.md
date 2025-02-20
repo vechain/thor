@@ -47,7 +47,7 @@ cd local
 make node2
 ```
 
-Optionally, start only node 2, and you can debug node1 by adding these args to the start command:
+Optionally, start only node 2, and you can debug node1:
 
 1. Click `Modify Run Configuration`
 

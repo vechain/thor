@@ -98,7 +98,7 @@ func TestAllowNext(t *testing.T) {
 }
 
 func TestGetSummary(t *testing.T) {
-	thorChain, err := testchain.NewIntegrationTestChain()
+	thorChain, err := testchain.NewDefault()
 	require.NoError(t, err)
 
 	// Test cases
@@ -128,8 +128,8 @@ func TestGetSummary(t *testing.T) {
 			err:      nil,
 		},
 		{
-			name:     "0x00000000c05a20fbca2bf6ae3affba6af4a74b800b585bf7a4988aba7aea69f6",
-			revision: &Revision{thor.MustParseBytes32("0x00000000c05a20fbca2bf6ae3affba6af4a74b800b585bf7a4988aba7aea69f6")},
+			name:     "0x00000000d37cc1d819ba65a7342fc8f82549450618e34185a58eb13e73fbf549",
+			revision: &Revision{thor.MustParseBytes32("0x00000000d37cc1d819ba65a7342fc8f82549450618e34185a58eb13e73fbf549")},
 			err:      nil,
 		},
 		{
@@ -153,7 +153,7 @@ func TestGetSummary(t *testing.T) {
 }
 
 func TestGetSummaryAndState(t *testing.T) {
-	thorChain, err := testchain.NewIntegrationTestChain()
+	thorChain, err := testchain.NewDefault()
 	require.NoError(t, err)
 
 	b := thorChain.GenesisBlock()

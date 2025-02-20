@@ -225,7 +225,7 @@ func testGetBlockWithRevisionNumberTooHigh(t *testing.T) {
 }
 
 func initBlockServer(t *testing.T) {
-	thorChain, err := testchain.NewIntegrationTestChain()
+	thorChain, err := testchain.NewDefault()
 	require.NoError(t, err)
 
 	addr := thor.BytesToAddress([]byte("to"))

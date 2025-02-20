@@ -67,10 +67,29 @@ func New(
 	}
 }
 
-// NewIntegrationTestChain is a convenience function that creates a Chain for testing.
+var DefaultForkConfig = thor.ForkConfig{
+	BLOCKLIST: 0,
+	VIP191:    1,
+	VIP214:    2,
+	ETH_CONST: math.MaxUint32,
+	ETH_IST:   math.MaxUint32,
+	FINALITY:  math.MaxUint32,
+	HAYABUSA:  math.MaxUint32,
+}
+
+// NewDefault is a wrapper function that creates a Chain for testing with the default fork config.
+func NewDefault() (*Chain, error) {
+	return newIntegrationTestChain(DefaultForkConfig)
+}
+
+// NewWithFork is a wrapper function that creates a Chain for testing with custom forkConfig.
+func NewWithFork(forkConfig thor.ForkConfig) (*Chain, error) {
+	return newIntegrationTestChain(forkConfig)
+}
+
+// newIntegrationTestChain is a convenience function that creates a Chain for testing.
 // It uses an in-memory database, development network genesis, and a solo BFT engine.
-func NewIntegrationTestChain() (*Chain, error) {
-	forkConfig := thor.SoloFork // using SoloFork prevents tests depending on IDs of the genesis block from failing
+func newIntegrationTestChain(forkConfig thor.ForkConfig) (*Chain, error) {
 	// Initialize the database
 	db := muxdb.NewMem()
 
@@ -186,6 +205,11 @@ func (c *Chain) MintBlock(account genesis.DevAccount, transactions ...*tx.Transa
 		return fmt.Errorf("unable to pack tx: %w", err)
 	}
 
+	return c.AddBlock(newBlk, stage, receipts)
+}
+
+// AddBlock manually adds a new block to the chain.
+func (c *Chain) AddBlock(newBlk *block.Block, stage *state.Stage, receipts tx.Receipts) error {
 	// Commit the new block to the chain's state.
 	if _, err := stage.Commit(); err != nil {
 		return fmt.Errorf("unable to commit tx: %w", err)
