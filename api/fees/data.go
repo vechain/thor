@@ -79,7 +79,7 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 	var oldestBlockID thor.Bytes32
 	for i := blockCount; i > 0; i-- {
 		oldestBlockID = newestBlockID
-		fees, err := fd.pushFeesToCache(newestBlockID)
+		fees, err := fd.getOrLoadFees(newestBlockID)
 		if err != nil {
 			return thor.Bytes32{}, nil, nil, nil, err
 		}
@@ -93,7 +93,7 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 	return oldestBlockID, baseFees, gasUsedRatios, priorityFees, nil
 }
 
-func (fd *FeesData) pushFeesToCache(blockID thor.Bytes32) (*FeeCacheEntry, error) {
+func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32) (*FeeCacheEntry, error) {
 	fees, _, found := fd.cache.Get(blockID)
 	if found {
 		return fees.(*FeeCacheEntry), nil
