@@ -355,6 +355,26 @@ func TestClient_GetFeesHistory(t *testing.T) {
 	assert.Equal(t, expectedFeesHistory, feesHistory)
 }
 
+func TestClient_GetFeesPriority(t *testing.T) {
+	expectedFeesPriority := &fees.FeesPriority{
+		MaxPriorityFeePerGas: (*hexutil.Big)(big.NewInt(0x20)),
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/fees/priority", r.URL.Path)
+
+		feesPriorityBytes, _ := json.Marshal(expectedFeesPriority)
+		w.Write(feesPriorityBytes)
+	}))
+	defer ts.Close()
+
+	client := New(ts.URL)
+	feesPriority, err := client.GetFeesPriority()
+
+	assert.NoError(t, err)
+	assert.Equal(t, expectedFeesPriority, feesPriority)
+}
+
 func TestClient_RawHTTPPost(t *testing.T) {
 	url := "/test"
 	calldata := map[string]interface{}{}
