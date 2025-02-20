@@ -7,9 +7,11 @@ package fees
 
 import (
 	"math"
+	"math/big"
 	"net/http"
 	"strconv"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/utils"
@@ -18,6 +20,10 @@ import (
 )
 
 const priorityNumberOfBlocks = 20
+
+var (
+	priorityMinPriorityFee = big.NewInt(2)
+)
 
 type Fees struct {
 	data           *FeesData
@@ -105,10 +111,19 @@ func (f *Fees) handleGetPriority(w http.ResponseWriter, _ *http.Request) error {
 	blockCount := uint32(math.Min(float64(priorityNumberOfBlocks), float64(f.backtraceLimit)))
 	blockCount = uint32(math.Min(float64(blockCount), float64(bestBlockSummary.Header.Number()+1)))
 
-	_, _, _, priorityFee, err := f.data.resolveRange(bestBlockSummary, blockCount)
+	_, _, _, priorityFees, err := f.data.resolveRange(bestBlockSummary, blockCount)
 	if err != nil {
 		return err
 	}
+
+	priorityFee := (*hexutil.Big)(priorityMinPriorityFee)
+	if priorityFees.Len() > 0 {
+		priorityFeeEntry := (*priorityFees)[(priorityFees.Len()-1)*priorityPercentile/100]
+		if priorityFeeEntry.Cmp(priorityMinPriorityFee) > 0 {
+			priorityFee = (*hexutil.Big)(priorityFeeEntry)
+		}
+	}
+
 	return utils.WriteJSON(w, &FeesPriority{
 		MaxPriorityFeePerGas: priorityFee,
 	})

@@ -21,10 +21,6 @@ const (
 	priorityPercentile          = 60
 )
 
-var (
-	priorityMinPriorityFee = big.NewInt(2)
-)
-
 // minPriorityHeap is a min-heap of priority fee values.
 type minPriorityHeap []*big.Int
 
@@ -72,7 +68,7 @@ func getBaseFee(baseFee *big.Int) *hexutil.Big {
 
 // resolveRange resolves the base fees, gas used ratios and priority fees for the given block range.
 // Assumes that the boundaries (newest block - block count) are correct and validated beforehand.
-func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCount uint32) (thor.Bytes32, []*hexutil.Big, []float64, *hexutil.Big, error) {
+func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCount uint32) (thor.Bytes32, []*hexutil.Big, []float64, *minPriorityHeap, error) {
 	newestBlockID := newestBlockSummary.Header.ID()
 
 	baseFees := make([]*hexutil.Big, blockCount)
@@ -94,16 +90,7 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 		newestBlockID = fees.parentBlockID
 	}
 
-	if priorityFees.Len() > 0 {
-		priorityFeeEntry := (*priorityFees)[(priorityFees.Len()-1)*priorityPercentile/100]
-		if priorityFeeEntry.Cmp(priorityMinPriorityFee) < 0 {
-			priorityFeeEntry = priorityMinPriorityFee
-		}
-		priorityFee := (*hexutil.Big)(priorityFeeEntry)
-		return oldestBlockID, baseFees, gasUsedRatios, priorityFee, nil
-	}
-
-	return oldestBlockID, baseFees, gasUsedRatios, nil, nil
+	return oldestBlockID, baseFees, gasUsedRatios, priorityFees, nil
 }
 
 func (fd *FeesData) pushFeesToCache(blockID thor.Bytes32) (*FeeCacheEntry, error) {
