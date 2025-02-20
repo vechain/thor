@@ -7,7 +7,6 @@ package fees
 
 import (
 	"container/heap"
-	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -130,7 +129,7 @@ func (fd *FeesData) pushFeesToCache(blockID thor.Bytes32) (*FeeCacheEntry, error
 	heap.Init(blockPriorityFees)
 
 	for _, tx := range transactions {
-		maxPriorityFeePerGas, _ := fd.EffectiveMaxPriorityFeePerGas(tx, header.BaseFee())
+		maxPriorityFeePerGas := fd.effectiveMaxPriorityFeePerGas(tx, header.BaseFee())
 		heap.Push(blockPriorityFees, maxPriorityFeePerGas)
 		if blockPriorityFees.Len() > priorityNumberOfTxsPerBlock {
 			heap.Pop(blockPriorityFees)
@@ -148,20 +147,16 @@ func (fd *FeesData) pushFeesToCache(blockID thor.Bytes32) (*FeeCacheEntry, error
 	return fees.(*FeeCacheEntry), nil
 }
 
-func (fd *FeesData) EffectiveMaxPriorityFeePerGas(tx *tx.Transaction, baseFee *big.Int) (*big.Int, error) {
+func (fd *FeesData) effectiveMaxPriorityFeePerGas(tx *tx.Transaction, baseFee *big.Int) *big.Int {
 	if baseFee == nil {
-		return tx.MaxPriorityFeePerGas(), nil
+		return tx.MaxPriorityFeePerGas()
 	}
-	var err error
 	maxFeePerGas := tx.MaxFeePerGas()
-	if maxFeePerGas.Cmp(baseFee) < 0 {
-		err = errors.New("maxFeePerGas less than base fee")
-	}
 	maxFeePerGas.Sub(maxFeePerGas, baseFee)
 
 	maxPriorityFeePerGas := tx.MaxPriorityFeePerGas()
 	if maxPriorityFeePerGas.Cmp(maxFeePerGas) < 0 {
-		return maxPriorityFeePerGas, err
+		return maxPriorityFeePerGas
 	}
-	return maxPriorityFeePerGas, err
+	return maxPriorityFeePerGas
 }
