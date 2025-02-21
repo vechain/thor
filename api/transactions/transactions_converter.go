@@ -61,7 +61,7 @@ func convertTransaction(trx *tx.Transaction, header *block.Header) *Transaction 
 	}
 
 	switch trx.Type() {
-	case tx.LegacyTxType:
+	case tx.TypeLegacy:
 		t.GasPriceCoef = trx.GasPriceCoef()
 	default:
 		t.MaxFeePerGas = trx.MaxFeePerGas()

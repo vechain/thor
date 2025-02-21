@@ -50,7 +50,7 @@ func (ti *txIterator) Next() *tx.Transaction {
 
 	data, _ := method.EncodeInput(a1.Address, big.NewInt(1))
 
-	trx := tx.NewTxBuilder(tx.LegacyTxType).
+	trx := tx.NewTxBuilder(tx.TypeLegacy).
 		ChainTag(ti.chainTag).
 		Clause(tx.NewClause(&builtin.Energy.Address).WithData(data)).
 		Gas(300000).GasPriceCoef(0).Nonce(nonce).Expiration(math.MaxUint32).MustBuild()
@@ -208,7 +208,7 @@ func TestBlocklist(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tx0 := tx.NewTxBuilder(tx.LegacyTxType).
+	tx0 := tx.NewTxBuilder(tx.TypeLegacy).
 		ChainTag(repo.ChainTag()).
 		Clause(tx.NewClause(&a1.Address)).
 		Gas(300000).GasPriceCoef(0).Nonce(0).Expiration(math.MaxUint32).MustBuild()

@@ -95,10 +95,10 @@ func CalcBaseFee(config *thor.ForkConfig, parent *block.Header) *big.Int {
 func GalacticaTxGasPriceAdapter(tr *tx.Transaction, gasPrice *big.Int) *GalacticaFeeMarketItems {
 	var maxPriorityFee, maxFee *big.Int
 	switch tr.Type() {
-	case tx.LegacyTxType:
+	case tx.TypeLegacy:
 		maxPriorityFee = gasPrice
 		maxFee = gasPrice
-	case tx.DynamicFeeTxType:
+	case tx.TypeDynamicFee:
 		maxPriorityFee = tr.MaxPriorityFeePerGas()
 		maxFee = tr.MaxFeePerGas()
 	}
@@ -124,7 +124,8 @@ func GalacticaGasPrice(tr *tx.Transaction, baseGasPrice *big.Int, galacticaItems
 
 	feeItems := GalacticaTxGasPriceAdapter(tr, gasPrice)
 	// This gasPrice is the same that will be used when refunding the user
-	// it takes into account the priority fee that will be paid to the validator
+	// it takes into account the priority fee that will be paid to the validator and the base fee that will be implicitly burned
+	// tracked by Energy.TotalAddSub
 	return math.BigMin(new(big.Int).Add(feeItems.MaxPriorityFee, galacticaItems.BaseFee), feeItems.MaxFee)
 }
 
@@ -143,4 +144,16 @@ func GalacticaPriorityPrice(tr *tx.Transaction, baseGasPrice, provedWork *big.In
 	* baseFee=1100; maxFee = 1000; maxPriorityFee = 100 -> tx rejected, maxFee < baseFee
 	 */
 	return math.BigMin(feeItems.MaxPriorityFee, new(big.Int).Sub(feeItems.MaxFee, galacticaItems.BaseFee))
+}
+
+func CalculateReward(gasUsed uint64, rewardGasPrice, rewardRatio *big.Int, isGalactica bool) *big.Int {
+	reward := new(big.Int).SetUint64(gasUsed)
+	reward.Mul(reward, rewardGasPrice)
+	if isGalactica {
+		return reward
+	}
+	// Returning the 30% of the reward
+	reward.Mul(reward, rewardRatio)
+	reward.Div(reward, big.NewInt(1e18))
+	return reward
 }

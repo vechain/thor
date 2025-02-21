@@ -14,19 +14,19 @@ import (
 )
 
 func TestNewTxBuilder(t *testing.T) {
-	builder := NewTxBuilder(LegacyTxType)
+	builder := NewTxBuilder(TypeLegacy)
 	assert.NotNil(t, builder)
-	assert.Equal(t, LegacyTxType, builder.txType)
+	assert.Equal(t, TypeLegacy, builder.txType)
 }
 
 func TestBuilder_ChainTag(t *testing.T) {
-	builder := NewTxBuilder(LegacyTxType)
+	builder := NewTxBuilder(TypeLegacy)
 	builder.ChainTag(0x4a)
 	assert.Equal(t, byte(0x4a), builder.chainTag)
 }
 
 func TestBuilder_Clause(t *testing.T) {
-	builder := NewTxBuilder(LegacyTxType)
+	builder := NewTxBuilder(TypeLegacy)
 	addr := thor.BytesToAddress([]byte("to"))
 	clause := NewClause(&addr)
 	builder.Clause(clause)
@@ -35,52 +35,52 @@ func TestBuilder_Clause(t *testing.T) {
 }
 
 func TestBuilder_GasPriceCoef(t *testing.T) {
-	builder := NewTxBuilder(LegacyTxType)
+	builder := NewTxBuilder(TypeLegacy)
 	builder.GasPriceCoef(10)
 	assert.Equal(t, uint8(10), builder.gasPriceCoef)
 }
 
 func TestBuilder_MaxFeePerGas(t *testing.T) {
-	builder := NewTxBuilder(DynamicFeeTxType)
+	builder := NewTxBuilder(TypeDynamicFee)
 	maxFee := big.NewInt(1000000000)
 	builder.MaxFeePerGas(maxFee)
 	assert.Equal(t, maxFee, builder.maxFeePerGas)
 }
 
 func TestBuilder_MaxPriorityFeePerGas(t *testing.T) {
-	builder := NewTxBuilder(DynamicFeeTxType)
+	builder := NewTxBuilder(TypeDynamicFee)
 	maxPriorityFee := big.NewInt(2000000000)
 	builder.MaxPriorityFeePerGas(maxPriorityFee)
 	assert.Equal(t, maxPriorityFee, builder.maxPriorityFeePerGas)
 }
 
 func TestBuilder_Gas(t *testing.T) {
-	builder := NewTxBuilder(LegacyTxType)
+	builder := NewTxBuilder(TypeLegacy)
 	builder.Gas(21000)
 	assert.Equal(t, uint64(21000), builder.gas)
 }
 
 func TestBuilder_BlockRef(t *testing.T) {
-	builder := NewTxBuilder(LegacyTxType)
+	builder := NewTxBuilder(TypeLegacy)
 	blockRef := BlockRef{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
 	builder.BlockRef(blockRef)
 	assert.Equal(t, uint64(0x0102030405060708), builder.blockRef)
 }
 
 func TestBuilder_Expiration(t *testing.T) {
-	builder := NewTxBuilder(LegacyTxType)
+	builder := NewTxBuilder(TypeLegacy)
 	builder.Expiration(100)
 	assert.Equal(t, uint32(100), builder.expiration)
 }
 
 func TestBuilder_Nonce(t *testing.T) {
-	builder := NewTxBuilder(LegacyTxType)
+	builder := NewTxBuilder(TypeLegacy)
 	builder.Nonce(12345)
 	assert.Equal(t, uint64(12345), builder.nonce)
 }
 
 func TestBuilder_DependsOn(t *testing.T) {
-	builder := NewTxBuilder(LegacyTxType)
+	builder := NewTxBuilder(TypeLegacy)
 	txID := thor.Bytes32{0x01, 0x02, 0x03, 0x04}
 	builder.DependsOn(&txID)
 	assert.Equal(t, &txID, builder.dependsOn)
@@ -89,14 +89,14 @@ func TestBuilder_DependsOn(t *testing.T) {
 }
 
 func TestBuilder_Features(t *testing.T) {
-	builder := NewTxBuilder(LegacyTxType)
+	builder := NewTxBuilder(TypeLegacy)
 	features := Features(0x01)
 	builder.Features(features)
 	assert.Equal(t, features, builder.reserved.Features)
 }
 
 func TestBuilder_Build_Legacy(t *testing.T) {
-	builder := NewTxBuilder(LegacyTxType).
+	builder := NewTxBuilder(TypeLegacy).
 		ChainTag(0x4a).
 		Clause(&Clause{}).
 		GasPriceCoef(10).
@@ -114,7 +114,7 @@ func TestBuilder_Build_Legacy(t *testing.T) {
 }
 
 func TestBuilder_Build_DynamicFee(t *testing.T) {
-	builder := NewTxBuilder(DynamicFeeTxType).
+	builder := NewTxBuilder(TypeDynamicFee).
 		ChainTag(0x4a).
 		Clause(&Clause{}).
 		MaxFeePerGas(big.NewInt(1000000000)).

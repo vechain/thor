@@ -29,12 +29,12 @@ func newChainRepo(db *muxdb.MuxDB) *chain.Repository {
 	return repo
 }
 
-func newTx(txType int, chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, features tx.Features, from genesis.DevAccount) *tx.Transaction {
+func newTx(txType tx.TxType, chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, features tx.Features, from genesis.DevAccount) *tx.Transaction {
 	trx := txBuilder(txType, chainTag, clauses, gas, blockRef, expiration, dependsOn, features).MustBuild()
 	return tx.MustSign(trx, from.PrivateKey)
 }
 
-func newDelegatedTx(txType int, chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, from genesis.DevAccount, delegator genesis.DevAccount) *tx.Transaction {
+func newDelegatedTx(txType tx.TxType, chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, from genesis.DevAccount, delegator genesis.DevAccount) *tx.Transaction {
 	var features tx.Features
 	features.SetDelegated(true)
 
@@ -45,7 +45,7 @@ func newDelegatedTx(txType int, chainTag byte, clauses []*tx.Clause, gas uint64,
 	)
 }
 
-func txBuilder(txType int, chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, features tx.Features) *tx.Builder {
+func txBuilder(txType tx.TxType, chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, features tx.Features) *tx.Builder {
 	builder := tx.NewTxBuilder(txType).ChainTag(chainTag)
 	for _, c := range clauses {
 		builder.Clause(c)
@@ -82,8 +82,8 @@ func TestExecutableWithError(t *testing.T) {
 		expected    bool
 		expectedErr string
 	}{
-		{newTx(tx.LegacyTxType, 0, nil, 21000, tx.BlockRef{0}, 100, nil, tx.Features(0), acc), false, ""},
-		{newTx(tx.DynamicFeeTxType, 0, nil, 21000, tx.BlockRef{0}, 100, nil, tx.Features(0), acc), false, ""},
+		{newTx(tx.TypeLegacy, 0, nil, 21000, tx.BlockRef{0}, 100, nil, tx.Features(0), acc), false, ""},
+		{newTx(tx.TypeDynamicFee, 0, nil, 21000, tx.BlockRef{0}, 100, nil, tx.Features(0), acc), false, ""},
 	}
 
 	for _, tt := range tests {
@@ -120,7 +120,7 @@ func TestSort(t *testing.T) {
 
 func TestResolve(t *testing.T) {
 	acc := genesis.DevAccounts()[0]
-	trx := newTx(tx.LegacyTxType, 0, nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
+	trx := newTx(tx.TypeLegacy, 0, nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
 
 	txObj, err := resolveTx(trx, false)
 	assert.Nil(t, err)
@@ -128,7 +128,7 @@ func TestResolve(t *testing.T) {
 
 	assert.Equal(t, acc.Address, txObj.Origin())
 
-	trx = newTx(tx.DynamicFeeTxType, 0, nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
+	trx = newTx(tx.TypeDynamicFee, 0, nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
 	txObj, err = resolveTx(trx, false)
 	assert.Nil(t, err)
 	assert.Equal(t, trx, txObj.Transaction)
@@ -150,18 +150,18 @@ func TestExecutable(t *testing.T) {
 		expected    bool
 		expectedErr string
 	}{
-		{newTx(tx.LegacyTxType, 0, nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), acc), true, ""},
-		{newTx(tx.LegacyTxType, 0, nil, b1.Header().GasLimit(), tx.BlockRef{}, 100, nil, tx.Features(0), acc), true, ""},
-		{newTx(tx.LegacyTxType, 0, nil, b1.Header().GasLimit()+1, tx.BlockRef{}, 100, nil, tx.Features(0), acc), false, "gas too large"},
-		{newTx(tx.LegacyTxType, 0, nil, math.MaxUint64, tx.BlockRef{}, 100, nil, tx.Features(0), acc), false, "gas too large"},
-		{newTx(tx.LegacyTxType, 0, nil, 21000, tx.BlockRef{1}, 100, nil, tx.Features(0), acc), true, "block ref out of schedule"},
-		{newTx(tx.LegacyTxType, 0, nil, 21000, tx.BlockRef{0}, 0, nil, tx.Features(0), acc), true, "expired"},
-		{newTx(tx.LegacyTxType, 0, nil, 21000, tx.BlockRef{0}, 100, &thor.Bytes32{}, tx.Features(0), acc), false, ""},
-		{newTx(tx.DynamicFeeTxType, 0, nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), acc), true, ""},
-		{newTx(tx.DynamicFeeTxType, 0, nil, math.MaxUint64, tx.BlockRef{}, 100, nil, tx.Features(0), acc), false, "gas too large"},
-		{newTx(tx.DynamicFeeTxType, 0, nil, 21000, tx.BlockRef{1}, 100, nil, tx.Features(0), acc), true, "block ref out of schedule"},
-		{newTx(tx.DynamicFeeTxType, 0, nil, 21000, tx.BlockRef{0}, 0, nil, tx.Features(0), acc), true, "expired"},
-		{newTx(tx.DynamicFeeTxType, 0, nil, 21000, tx.BlockRef{0}, 100, &thor.Bytes32{}, tx.Features(0), acc), false, ""},
+		{newTx(tx.TypeLegacy, 0, nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), acc), true, ""},
+		{newTx(tx.TypeLegacy, 0, nil, b1.Header().GasLimit(), tx.BlockRef{}, 100, nil, tx.Features(0), acc), true, ""},
+		{newTx(tx.TypeLegacy, 0, nil, b1.Header().GasLimit()+1, tx.BlockRef{}, 100, nil, tx.Features(0), acc), false, "gas too large"},
+		{newTx(tx.TypeLegacy, 0, nil, math.MaxUint64, tx.BlockRef{}, 100, nil, tx.Features(0), acc), false, "gas too large"},
+		{newTx(tx.TypeLegacy, 0, nil, 21000, tx.BlockRef{1}, 100, nil, tx.Features(0), acc), true, "block ref out of schedule"},
+		{newTx(tx.TypeLegacy, 0, nil, 21000, tx.BlockRef{0}, 0, nil, tx.Features(0), acc), true, "expired"},
+		{newTx(tx.TypeLegacy, 0, nil, 21000, tx.BlockRef{0}, 100, &thor.Bytes32{}, tx.Features(0), acc), false, ""},
+		{newTx(tx.TypeDynamicFee, 0, nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), acc), true, ""},
+		{newTx(tx.TypeDynamicFee, 0, nil, math.MaxUint64, tx.BlockRef{}, 100, nil, tx.Features(0), acc), false, "gas too large"},
+		{newTx(tx.TypeDynamicFee, 0, nil, 21000, tx.BlockRef{1}, 100, nil, tx.Features(0), acc), true, "block ref out of schedule"},
+		{newTx(tx.TypeDynamicFee, 0, nil, 21000, tx.BlockRef{0}, 0, nil, tx.Features(0), acc), true, "expired"},
+		{newTx(tx.TypeDynamicFee, 0, nil, 21000, tx.BlockRef{0}, 100, &thor.Bytes32{}, tx.Features(0), acc), false, ""},
 	}
 
 	for _, tt := range tests {

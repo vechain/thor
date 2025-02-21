@@ -236,7 +236,7 @@ func initBlockServer(t *testing.T) {
 
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	legacyTx := tx.NewTxBuilder(tx.LegacyTxType).
+	legacyTx := tx.NewTxBuilder(tx.TypeLegacy).
 		ChainTag(thorChain.Repo().ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -248,7 +248,7 @@ func initBlockServer(t *testing.T) {
 	legacyTx = tx.MustSign(legacyTx, genesis.DevAccounts()[0].PrivateKey)
 	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], legacyTx))
 
-	dynFeeTx := tx.NewTxBuilder(tx.DynamicFeeTxType).
+	dynFeeTx := tx.NewTxBuilder(tx.TypeDynamicFee).
 		ChainTag(thorChain.Repo().ChainTag()).
 		MaxFeePerGas(big.NewInt(thor.InitialBaseFee)).
 		MaxPriorityFeePerGas(big.NewInt(100)).
