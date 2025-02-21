@@ -29,7 +29,7 @@ type LegacyTransaction struct {
 }
 
 func (t *LegacyTransaction) txType() byte {
-	return LegacyTxType
+	return TypeLegacy
 }
 
 func (t *LegacyTransaction) copy() TxData {

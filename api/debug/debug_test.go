@@ -546,7 +546,7 @@ func initDebugServer(t *testing.T) {
 
 	// Adding an empty clause transaction to the block to cover the case of
 	// scanning multiple txs before getting the right one
-	noClausesTx := tx.NewTxBuilder(tx.LegacyTxType).
+	noClausesTx := tx.NewTxBuilder(tx.TypeLegacy).
 		ChainTag(thorChain.Repo().ChainTag()).
 		Expiration(10).
 		Gas(21000).
@@ -555,7 +555,7 @@ func initDebugServer(t *testing.T) {
 
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 	cla2 := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	transaction = tx.NewTxBuilder(tx.LegacyTxType).
+	transaction = tx.NewTxBuilder(tx.TypeLegacy).
 		ChainTag(thorChain.Repo().ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -568,7 +568,7 @@ func initDebugServer(t *testing.T) {
 	transaction = tx.MustSign(transaction, genesis.DevAccounts()[0].PrivateKey)
 	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], transaction, noClausesTx))
 
-	dynFeeTx := tx.NewTxBuilder(tx.DynamicFeeTxType).
+	dynFeeTx := tx.NewTxBuilder(tx.TypeDynamicFee).
 		ChainTag(thorChain.Repo().ChainTag()).
 		Expiration(10).
 		Gas(21000).

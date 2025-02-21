@@ -28,7 +28,7 @@ import (
 	"github.com/vechain/thor/v2/vrf"
 )
 
-func txBuilder(tag byte, txType int) *tx.Builder {
+func txBuilder(tag byte, txType tx.TxType) *tx.Builder {
 	address := thor.BytesToAddress([]byte("addr"))
 	return tx.NewTxBuilder(txType).
 		GasPriceCoef(1).
@@ -99,7 +99,7 @@ func newTestConsensus() (*testConsensus, error) {
 
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	txBuilder := txBuilder(repo.ChainTag(), tx.LegacyTxType).Clause(cla)
+	txBuilder := txBuilder(repo.ChainTag(), tx.TypeLegacy).Clause(cla)
 	transaction := txSign(txBuilder)
 
 	err = flow.Adopt(transaction)
@@ -473,8 +473,8 @@ func TestVerifyBlock(t *testing.T) {
 	}{
 		{
 			"TxDepBroken", func(t *testing.T) {
-				txID := txSign(txBuilder(tc.tag, tx.LegacyTxType)).ID()
-				tx := txSign(txBuilder(tc.tag, tx.LegacyTxType).DependsOn(&txID))
+				txID := txSign(txBuilder(tc.tag, tx.TypeLegacy)).ID()
+				tx := txSign(txBuilder(tc.tag, tx.TypeLegacy).DependsOn(&txID))
 
 				blk, err := tc.sign(tc.builder(tc.original.Header()).Transaction(tx))
 				if err != nil {
@@ -488,7 +488,7 @@ func TestVerifyBlock(t *testing.T) {
 		},
 		{
 			"TxAlreadyExists", func(t *testing.T) {
-				tx := txSign(txBuilder(tc.tag, tx.LegacyTxType))
+				tx := txSign(txBuilder(tc.tag, tx.TypeLegacy))
 				blk, err := tc.sign(tc.builder(tc.original.Header()).Transaction(tx).Transaction(tx))
 				if err != nil {
 					t.Fatal(err)
@@ -585,7 +585,7 @@ func TestConsent(t *testing.T) {
 	}{
 		{
 			"ErrTxsRootMismatch", func(t *testing.T) {
-				transaction := txSign(txBuilder(tc.tag, tx.LegacyTxType))
+				transaction := txSign(txBuilder(tc.tag, tx.TypeLegacy))
 				transactions := tx.Transactions{transaction}
 				blk := block.Compose(tc.original.Header(), transactions)
 				expected := consensusError(
@@ -601,7 +601,7 @@ func TestConsent(t *testing.T) {
 		},
 		{
 			"ErrChainTagMismatch", func(t *testing.T) {
-				blk, err := tc.sign(tc.builder(tc.original.Header()).Transaction(txSign(txBuilder(tc.tag+1, tx.LegacyTxType))))
+				blk, err := tc.sign(tc.builder(tc.original.Header()).Transaction(txSign(txBuilder(tc.tag+1, tx.TypeLegacy))))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -620,7 +620,7 @@ func TestConsent(t *testing.T) {
 			"ErrRefFutureBlock", func(t *testing.T) {
 				blk, err := tc.sign(
 					tc.builder(tc.original.Header()).Transaction(
-						txSign(txBuilder(tc.tag, tx.LegacyTxType).BlockRef(tx.NewBlockRef(100))),
+						txSign(txBuilder(tc.tag, tx.TypeLegacy).BlockRef(tx.NewBlockRef(100))),
 					))
 				if err != nil {
 					t.Fatal(err)
@@ -633,7 +633,7 @@ func TestConsent(t *testing.T) {
 		{
 			"TxOriginBlocked", func(t *testing.T) {
 				thor.MockBlocklist([]string{genesis.DevAccounts()[9].Address.String()})
-				trx := tx.MustSign(txBuilder(tc.tag, tx.LegacyTxType).MustBuild(), genesis.DevAccounts()[9].PrivateKey)
+				trx := tx.MustSign(txBuilder(tc.tag, tx.TypeLegacy).MustBuild(), genesis.DevAccounts()[9].PrivateKey)
 
 				blk, err := tc.sign(
 					tc.builder(tc.original.Header()).Transaction(trx),
@@ -651,7 +651,7 @@ func TestConsent(t *testing.T) {
 		{
 			"TxDelegatorBlocked", func(t *testing.T) {
 				thor.MockBlocklist([]string{genesis.DevAccounts()[9].Address.String()})
-				builder := txBuilder(tc.tag, tx.LegacyTxType)
+				builder := txBuilder(tc.tag, tx.TypeLegacy)
 				builder = builder.Features(tx.Features(0x01))
 				trx := tx.MustSignDelegated(builder.MustBuild(), genesis.DevAccounts()[8].PrivateKey, genesis.DevAccounts()[9].PrivateKey)
 				blk, err := tc.sign(
@@ -669,7 +669,7 @@ func TestConsent(t *testing.T) {
 		},
 		{
 			"TxSignerUnavailable", func(t *testing.T) {
-				tx := txBuilder(tc.tag, tx.LegacyTxType).MustBuild()
+				tx := txBuilder(tc.tag, tx.TypeLegacy).MustBuild()
 				var sig [65]byte
 				tx = tx.WithSignature(sig[:])
 
@@ -688,7 +688,7 @@ func TestConsent(t *testing.T) {
 		},
 		{
 			"UnsupportedFeatures", func(t *testing.T) {
-				tx := txBuilder(tc.tag, tx.LegacyTxType).Features(tx.Features(2)).MustBuild()
+				tx := txBuilder(tc.tag, tx.TypeLegacy).Features(tx.Features(2)).MustBuild()
 				sig, _ := crypto.Sign(tx.SigningHash().Bytes(), genesis.DevAccounts()[2].PrivateKey)
 				tx = tx.WithSignature(sig)
 
@@ -705,7 +705,7 @@ func TestConsent(t *testing.T) {
 		},
 		{
 			"TxExpired", func(t *testing.T) {
-				tx := txSign(txBuilder(tc.tag, tx.LegacyTxType).BlockRef(tx.NewBlockRef(0)).Expiration(0))
+				tx := txSign(txBuilder(tc.tag, tx.TypeLegacy).BlockRef(tx.NewBlockRef(0)).Expiration(0))
 				blk, err := tc.sign(tc.builder(tc.original.Header()).Transaction(tx).Transaction(tx))
 				if err != nil {
 					t.Fatal(err)
@@ -725,7 +725,7 @@ func TestConsent(t *testing.T) {
 		},
 		{
 			"ZeroGasTx", func(t *testing.T) {
-				txBuilder := tx.NewTxBuilder(tx.LegacyTxType).
+				txBuilder := tx.NewTxBuilder(tx.TypeLegacy).
 					GasPriceCoef(0).
 					Gas(0).
 					Expiration(100).

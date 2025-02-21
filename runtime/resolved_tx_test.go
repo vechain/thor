@@ -82,12 +82,12 @@ func (tr *testResolvedTransaction) TestResolveTransaction() {
 	}{
 		{
 			getBuilder: func() *tx.Builder {
-				return txBuilder(tr.repo.ChainTag(), tx.LegacyTxType)
+				return txBuilder(tr.repo.ChainTag(), tx.TypeLegacy)
 			},
 		},
 		{
 			getBuilder: func() *tx.Builder {
-				return txBuilder(tr.repo.ChainTag(), tx.DynamicFeeTxType)
+				return txBuilder(tr.repo.ChainTag(), tx.TypeDynamicFee)
 			},
 		},
 	}
@@ -124,12 +124,12 @@ func (tr *testResolvedTransaction) TestCommonTo() {
 	}{
 		{
 			getBuilder: func() *tx.Builder {
-				return txBuilder(tr.repo.ChainTag(), tx.LegacyTxType)
+				return txBuilder(tr.repo.ChainTag(), tx.TypeLegacy)
 			},
 		},
 		{
 			getBuilder: func() *tx.Builder {
-				return txBuilder(tr.repo.ChainTag(), tx.DynamicFeeTxType)
+				return txBuilder(tr.repo.ChainTag(), tx.TypeDynamicFee)
 			},
 		},
 	}
@@ -169,7 +169,7 @@ func (tr *testResolvedTransaction) TestBuyGas() {
 	state := tr.currentState()
 
 	txBuild := func() *tx.Builder {
-		return txBuilder(tr.repo.ChainTag(), tx.LegacyTxType)
+		return txBuilder(tr.repo.ChainTag(), tx.TypeLegacy)
 	}
 
 	targetTime := tr.repo.BestBlockSummary().Header.Timestamp() + thor.BlockInterval
@@ -211,7 +211,7 @@ func clause() *tx.Clause {
 	return tx.NewClause(&address).WithData(nil)
 }
 
-func txBuilder(tag byte, txType int) *tx.Builder {
+func txBuilder(tag byte, txType tx.TxType) *tx.Builder {
 	return tx.NewTxBuilder(txType).
 		GasPriceCoef(1).
 		Gas(1000000).

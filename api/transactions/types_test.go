@@ -21,14 +21,16 @@ import (
 )
 
 func TestErrorWhileRetrievingTxOriginInConvertReceipt(t *testing.T) {
-	txTypes := []int{tx.LegacyTxType, tx.DynamicFeeTxType}
+	txTypes := []tx.TxType{tx.TypeLegacy, tx.TypeDynamicFee}
 
 	for _, txType := range txTypes {
 		tr := tx.NewTxBuilder(txType).MustBuild()
 		header := &block.Header{}
 		receipt := &tx.Receipt{
-			Reward: big.NewInt(100),
-			Paid:   big.NewInt(10),
+			ReceiptBody: tx.ReceiptBody{
+				Reward: big.NewInt(100),
+				Paid:   big.NewInt(10),
+			},
 		}
 
 		convRec, err := convertReceipt(receipt, header, tr)
@@ -42,8 +44,8 @@ func TestErrorWhileRetrievingTxOriginInConvertReceipt(t *testing.T) {
 func TestConvertReceiptWhenTxHasNoClauseTo(t *testing.T) {
 	value := big.NewInt(100)
 	txs := []*tx.Transaction{
-		newLegacyTx(tx.NewClause(nil).WithValue(value)),
-		newDynFeeTx(tx.NewClause(nil).WithValue(value)),
+		newTx(tx.NewClause(nil).WithValue(value), tx.TypeLegacy),
+		newTx(tx.NewClause(nil).WithValue(value), tx.TypeDynamicFee),
 	}
 	for _, tr := range txs {
 		b := new(block.Builder).Build()
@@ -64,8 +66,8 @@ func TestConvertReceipt(t *testing.T) {
 	addr := randAddress()
 
 	txs := []*tx.Transaction{
-		newLegacyTx(tx.NewClause(&addr).WithValue(value)),
-		newDynFeeTx(tx.NewClause(&addr).WithValue(value)),
+		newTx(tx.NewClause(&addr).WithValue(value), tx.TypeLegacy),
+		newTx(tx.NewClause(&addr).WithValue(value), tx.TypeDynamicFee),
 	}
 	for _, tr := range txs {
 		b := new(block.Builder).Build()
@@ -75,6 +77,7 @@ func TestConvertReceipt(t *testing.T) {
 		convRec, err := convertReceipt(receipt, header, tr)
 
 		assert.NoError(t, err)
+		assert.Equal(t, receipt.Type, convRec.Type)
 		assert.Equal(t, 1, len(convRec.Outputs))
 		assert.Equal(t, 1, len(convRec.Outputs[0].Events))
 		assert.Equal(t, 1, len(convRec.Outputs[0].Transfers))
@@ -95,36 +98,29 @@ func randAddress() (addr thor.Address) {
 
 func newReceipt() *tx.Receipt {
 	return &tx.Receipt{
-		Outputs: []*tx.Output{
-			{
-				Events: tx.Events{{
-					Address: randAddress(),
-					Topics:  []thor.Bytes32{randomBytes32()},
-					Data:    randomBytes32().Bytes(),
-				}},
-				Transfers: tx.Transfers{{
-					Sender:    randAddress(),
-					Recipient: randAddress(),
-					Amount:    new(big.Int).SetBytes(randAddress().Bytes()),
-				}},
+		ReceiptBody: tx.ReceiptBody{
+			Outputs: []*tx.Output{
+				{
+					Events: tx.Events{{
+						Address: randAddress(),
+						Topics:  []thor.Bytes32{randomBytes32()},
+						Data:    randomBytes32().Bytes(),
+					}},
+					Transfers: tx.Transfers{{
+						Sender:    randAddress(),
+						Recipient: randAddress(),
+						Amount:    new(big.Int).SetBytes(randAddress().Bytes()),
+					}},
+				},
 			},
+			Reward: big.NewInt(100),
+			Paid:   big.NewInt(10),
 		},
-		Reward: big.NewInt(100),
-		Paid:   big.NewInt(10),
 	}
 }
 
-func newLegacyTx(clause *tx.Clause) *tx.Transaction {
-	tx := tx.NewTxBuilder(tx.LegacyTxType).
-		Clause(clause).
-		MustBuild()
-	pk, _ := crypto.GenerateKey()
-	sig, _ := crypto.Sign(tx.SigningHash().Bytes(), pk)
-	return tx.WithSignature(sig)
-}
-
-func newDynFeeTx(clause *tx.Clause) *tx.Transaction {
-	tx := tx.NewTxBuilder(tx.DynamicFeeTxType).
+func newTx(clause *tx.Clause, txType tx.TxType) *tx.Transaction {
+	tx := tx.NewTxBuilder(txType).
 		Clause(clause).
 		MustBuild()
 	pk, _ := crypto.GenerateKey()

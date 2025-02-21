@@ -263,7 +263,7 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 			return consensusError(fmt.Sprintf("tx ref future block: ref %v, current %v", tr.BlockRef().Number(), header.Number()))
 		case tr.IsExpired(header.Number()):
 			return consensusError(fmt.Sprintf("tx expired: ref %v, current %v, expiration %v", tr.BlockRef().Number(), header.Number(), tr.Expiration()))
-		case header.Number() < c.forkConfig.GALACTICA && tr.Type() != tx.LegacyTxType:
+		case header.Number() < c.forkConfig.GALACTICA && tr.Type() != tx.TypeLegacy:
 			return consensusError(tx.ErrTxTypeNotSupported.Error())
 		}
 
