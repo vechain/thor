@@ -73,6 +73,7 @@ func TestFeesFixedSizeSameAsBacktrace(t *testing.T) {
 		"getFeeHistoryMoreBlocksRequestedThanAvailable": getFeeHistoryMoreBlocksRequestedThanAvailable,
 		"getFeeHistoryBlock0":                           getFeeHistoryBlock0,
 		"getFeeHistoryBlockCount0":                      getFeeHistoryBlockCount0,
+		"getFeePriority":                                getFeePriority,
 	} {
 		t.Run(name, func(t *testing.T) {
 			tt(t, tclient, bestchain)
@@ -338,4 +339,21 @@ func getFeeHistoryBlockCount0(t *testing.T, tclient *thorclient.Client, bestchai
 	require.Equal(t, 400, statusCode)
 	require.NotNil(t, res)
 	assert.Equal(t, "invalid blockCount, it should not be 0\n", string(res))
+}
+
+func getFeePriority(t *testing.T, tclient *thorclient.Client, bestchain *chain.Chain) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/priority")
+	require.NoError(t, err)
+	require.Equal(t, 200, statusCode)
+	require.NotNil(t, res)
+	var feesPriority fees.FeesPriority
+	if err := json.Unmarshal(res, &feesPriority); err != nil {
+		t.Fatal(err)
+	}
+
+	expectedFeesPriority := fees.FeesPriority{
+		MaxPriorityFeePerGas: (*hexutil.Big)(big.NewInt(100)),
+	}
+
+	assert.Equal(t, expectedFeesPriority, feesPriority)
 }
