@@ -95,7 +95,7 @@ func TestPendingTx_DispatchLoop(t *testing.T) {
 	p.Subscribe(txCh)
 
 	// Add a new tx to the mempool
-	transaction := createTx(repo, 0, tx.LegacyTxType)
+	transaction := createTx(repo, 0, tx.TypeLegacy)
 	txPool.AddLocal(transaction)
 
 	// Start the dispatch loop
@@ -113,7 +113,7 @@ func TestPendingTx_DispatchLoop(t *testing.T) {
 	p.Unsubscribe(txCh)
 
 	// Add another tx to the mempool
-	tx2 := createTx(repo, 1, tx.DynamicFeeTxType)
+	tx2 := createTx(repo, 1, tx.TypeDynamicFee)
 	txPool.AddLocal(tx2)
 
 	// Assert that the channel did not receive the second transaction
@@ -162,7 +162,7 @@ func TestPendingTx_NoWriteAfterUnsubscribe(t *testing.T) {
 
 	done := make(chan struct{})
 	// Attempt to write a new transaction
-	trx := createTx(thorChain.Repo(), 0, tx.LegacyTxType)
+	trx := createTx(thorChain.Repo(), 0, tx.TypeLegacy)
 	assert.NotPanics(t, func() {
 		p.dispatch(trx, done) // dispatch should not panic after unsubscribe
 	}, "Dispatching after unsubscribe should not panic")
@@ -200,7 +200,7 @@ func TestPendingTx_UnsubscribeOnWebSocketClose(t *testing.T) {
 	defer ws.Close()
 
 	// Add a transaction
-	trx := createTx(thorChain.Repo(), 0, tx.LegacyTxType)
+	trx := createTx(thorChain.Repo(), 0, tx.TypeLegacy)
 	txPool.AddLocal(trx)
 
 	// Wait to receive transaction
@@ -222,7 +222,7 @@ func TestPendingTx_UnsubscribeOnWebSocketClose(t *testing.T) {
 	sub.pendingTx.mu.Unlock()
 }
 
-func createTx(repo *chain.Repository, addressNumber uint, txType int) *tx.Transaction {
+func createTx(repo *chain.Repository, addressNumber uint, txType tx.TxType) *tx.Transaction {
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 

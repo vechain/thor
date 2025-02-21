@@ -130,12 +130,14 @@ func getTxReceipt(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, receipt.GasUsed, legacyTx.Gas(), "receipt gas used not equal to transaction gas")
+	assert.Equal(t, receipt.Type, legacyTx.Type())
 
 	r = httpGetAndCheckResponseStatus(t, "/transactions/"+dynFeeTx.ID().String()+"/receipt", 200)
 	if err := json.Unmarshal(r, &receipt); err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, receipt.GasUsed, legacyTx.Gas(), "receipt gas used not equal to transaction gas")
+	assert.Equal(t, receipt.Type, dynFeeTx.Type())
 }
 
 func sendLegacyTx(t *testing.T) {
@@ -143,7 +145,7 @@ func sendLegacyTx(t *testing.T) {
 	var expiration = uint32(10)
 	var gas = uint64(21000)
 
-	trx := tx.NewTxBuilder(tx.LegacyTxType).
+	trx := tx.NewTxBuilder(tx.TypeLegacy).
 		BlockRef(blockRef).
 		ChainTag(chainTag).
 		Expiration(expiration).
@@ -172,7 +174,7 @@ func sendDynamicFeeTx(t *testing.T) {
 	var expiration = uint32(10)
 	var gas = uint64(21000)
 
-	trx := tx.NewTxBuilder(tx.DynamicFeeTxType).
+	trx := tx.NewTxBuilder(tx.TypeDynamicFee).
 		BlockRef(blockRef).
 		ChainTag(chainTag).
 		Expiration(expiration).
@@ -314,7 +316,7 @@ func sendTxWithBadFormat(t *testing.T) {
 }
 
 func sendTxThatCannotBeAcceptedInLocalMempool(t *testing.T) {
-	tx := tx.NewTxBuilder(tx.LegacyTxType).MustBuild()
+	tx := tx.NewTxBuilder(tx.TypeLegacy).MustBuild()
 	rlpTx, err := tx.MarshalBinary()
 	if err != nil {
 		t.Fatal(err)
@@ -368,7 +370,7 @@ func initTransactionServer(t *testing.T) {
 	// Creating first block with legacy tx
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	legacyTx = tx.NewTxBuilder(tx.LegacyTxType).
+	legacyTx = tx.NewTxBuilder(tx.TypeLegacy).
 		ChainTag(chainTag).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -380,7 +382,7 @@ func initTransactionServer(t *testing.T) {
 	legacyTx = tx.MustSign(legacyTx, genesis.DevAccounts()[0].PrivateKey)
 	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], legacyTx))
 
-	dynFeeTx = tx.NewTxBuilder(tx.DynamicFeeTxType).
+	dynFeeTx = tx.NewTxBuilder(tx.TypeDynamicFee).
 		ChainTag(chainTag).
 		MaxFeePerGas(big.NewInt(thor.InitialBaseFee * 10)).
 		MaxPriorityFeePerGas(big.NewInt(10)).
@@ -396,7 +398,7 @@ func initTransactionServer(t *testing.T) {
 
 	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute}, &forkConfig)
 
-	mempoolTx = tx.NewTxBuilder(tx.DynamicFeeTxType).
+	mempoolTx = tx.NewTxBuilder(tx.TypeDynamicFee).
 		ChainTag(chainTag).
 		Expiration(10).
 		Gas(21000).
@@ -432,11 +434,11 @@ func checkMatchingTx(t *testing.T, expectedTx *tx.Transaction, actualTx *transac
 		assert.Equal(t, c.To(), actualTx.Clauses[i].To)
 	}
 	switch expectedTx.Type() {
-	case tx.LegacyTxType:
+	case tx.TypeLegacy:
 		assert.Equal(t, expectedTx.GasPriceCoef(), actualTx.GasPriceCoef)
 		assert.Empty(t, actualTx.MaxFeePerGas)
 		assert.Empty(t, actualTx.MaxPriorityFeePerGas)
-	case tx.DynamicFeeTxType:
+	case tx.TypeDynamicFee:
 		assert.Empty(t, actualTx.GasPriceCoef)
 		assert.Equal(t, expectedTx.MaxFeePerGas(), actualTx.MaxFeePerGas)
 		assert.Equal(t, expectedTx.MaxPriorityFeePerGas(), actualTx.MaxPriorityFeePerGas)
