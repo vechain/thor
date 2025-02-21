@@ -377,3 +377,50 @@ func TestGalacticaPriorityPrice(t *testing.T) {
 		})
 	}
 }
+
+func TestCalculateReward(t *testing.T) {
+	rewardRatio := thor.InitialRewardRatio
+	tests := []struct {
+		name           string
+		gasUsed        uint64
+		rewardGasPrice *big.Int
+		isGalactica    bool
+		expectedReward *big.Int
+	}{
+		{
+			name:           "Galactica active, full reward",
+			gasUsed:        1000,
+			rewardGasPrice: big.NewInt(100),
+			isGalactica:    true,
+			expectedReward: big.NewInt(100000),
+		},
+		{
+			name:           "Galactica inactive, 30% reward",
+			gasUsed:        1000,
+			rewardGasPrice: big.NewInt(100),
+			isGalactica:    false,
+			expectedReward: big.NewInt(30000),
+		},
+		{
+			name:           "Galactica active, zero gas used",
+			gasUsed:        0,
+			rewardGasPrice: big.NewInt(100),
+			isGalactica:    true,
+			expectedReward: big.NewInt(0),
+		},
+		{
+			name:           "Galactica inactive, zero gas used",
+			gasUsed:        0,
+			rewardGasPrice: big.NewInt(100),
+			isGalactica:    false,
+			expectedReward: big.NewInt(0),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reward := CalculateReward(tt.gasUsed, tt.rewardGasPrice, rewardRatio, tt.isGalactica)
+			assert.Equal(t, tt.expectedReward, reward)
+		})
+	}
+}

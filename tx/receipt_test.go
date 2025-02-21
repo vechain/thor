@@ -3,58 +3,129 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package tx_test
+package tx
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/tx"
 )
 
-func getMockReceipt() tx.Receipt {
-	receipt := tx.Receipt{
-		GasUsed:  1000,
-		GasPayer: thor.Address{},
-		Paid:     big.NewInt(100),
-		Reward:   big.NewInt(50),
-		Reverted: false,
-		Outputs:  []*tx.Output{},
+func getMockReceipt(txType byte) Receipt {
+	receipt := Receipt{
+		Type: txType,
+		ReceiptBody: ReceiptBody{GasUsed: 1000,
+			GasPayer: thor.Address{},
+			Paid:     big.NewInt(100),
+			Reward:   big.NewInt(50),
+			Reverted: false,
+			Outputs:  []*Output{},
+		},
 	}
 	return receipt
 }
 
 func TestReceipt(t *testing.T) {
-	var rs tx.Receipts
+	var rs Receipts
 	fmt.Println(rs.RootHash())
 
-	var txs tx.Transactions
+	var txs Transactions
 	fmt.Println(txs.RootHash())
 }
 
 func TestReceiptStructure(t *testing.T) {
-	receipt := getMockReceipt()
+	for _, txType := range []int{LegacyTxType, DynamicFeeTxType} {
+		receipt := getMockReceipt(byte(txType))
 
-	assert.Equal(t, uint64(1000), receipt.GasUsed)
-	assert.Equal(t, thor.Address{}, receipt.GasPayer)
-	assert.Equal(t, big.NewInt(100), receipt.Paid)
-	assert.Equal(t, big.NewInt(50), receipt.Reward)
-	assert.Equal(t, false, receipt.Reverted)
-	assert.Equal(t, []*tx.Output{}, receipt.Outputs)
+		// assert.Equal(t, byte(txType), receipt.Type)
+		assert.Equal(t, uint64(1000), receipt.GasUsed)
+		assert.Equal(t, thor.Address{}, receipt.GasPayer)
+		assert.Equal(t, big.NewInt(100), receipt.Paid)
+		assert.Equal(t, big.NewInt(50), receipt.Reward)
+		assert.Equal(t, false, receipt.Reverted)
+		assert.Equal(t, []*Output{}, receipt.Outputs)
+	}
 }
 
 func TestEmptyRootHash(t *testing.T) {
-	receipt1 := getMockReceipt()
-	receipt2 := getMockReceipt()
-
-	receipts := tx.Receipts{
-		&receipt1,
-		&receipt2,
+	tests := []struct {
+		name     string
+		receipt1 Receipt
+		receipt2 Receipt
+	}{
+		{
+			name:     "LegacyReceipts",
+			receipt1: getMockReceipt(byte(LegacyTxType)),
+			receipt2: getMockReceipt(byte(LegacyTxType)),
+		},
+		{
+			name:     "DynamicFeeReceipts",
+			receipt1: getMockReceipt(byte(DynamicFeeTxType)),
+			receipt2: getMockReceipt(byte(DynamicFeeTxType)),
+		},
+		{
+			name:     "MixedReceipts",
+			receipt1: getMockReceipt(byte(LegacyTxType)),
+			receipt2: getMockReceipt(byte(DynamicFeeTxType)),
+		},
 	}
 
-	rootHash := receipts.RootHash()
-	assert.NotEqual(t, thor.Bytes32{}, rootHash, "Root hash should not be empty")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			receipts := Receipts{
+				&tt.receipt1,
+				&tt.receipt2,
+			}
+
+			rootHash := receipts.RootHash()
+			assert.NotEmpty(t, rootHash, "Root hash should be empty")
+		})
+	}
+}
+
+func TestMarshalAndUnmarshalBinary(t *testing.T) {
+	for _, txType := range []int{LegacyTxType, DynamicFeeTxType} {
+		originalReceipt := getMockReceipt(byte(txType))
+
+		data, err := originalReceipt.MarshalBinary()
+		assert.Nil(t, err)
+
+		var unmarshalledReceipt Receipt
+		err = unmarshalledReceipt.UnmarshalBinary(data)
+		assert.Nil(t, err)
+
+		assert.Equal(t, originalReceipt, unmarshalledReceipt)
+	}
+}
+
+func TestEncodeAndDecodeReceipt(t *testing.T) {
+	for _, txType := range []int{LegacyTxType, DynamicFeeTxType} {
+		originalReceipt := getMockReceipt(byte(txType))
+		receiptBuf := new(bytes.Buffer)
+		// Encoding
+		err := originalReceipt.EncodeRLP(receiptBuf)
+		assert.Nil(t, err)
+
+		s := rlp.NewStream(receiptBuf, 0)
+		var decodedReceipt Receipt
+		// Decoding
+		err = decodedReceipt.DecodeRLP(s)
+		assert.Nil(t, err)
+
+		assert.Equal(t, originalReceipt, decodedReceipt)
+	}
+}
+
+func TestDecodeEmptyTypedReceipt(t *testing.T) {
+	input := []byte{0x80}
+	var r Receipt
+	err := rlp.DecodeBytes(input, &r)
+	if err != errEmptyTypedReceipt {
+		t.Fatal("wrong error:", err)
+	}
 }

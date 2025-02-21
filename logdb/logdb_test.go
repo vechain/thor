@@ -40,18 +40,20 @@ func randBytes32() (b thor.Bytes32) {
 
 func newReceipt() *tx.Receipt {
 	return &tx.Receipt{
-		Outputs: []*tx.Output{
-			{
-				Events: tx.Events{{
-					Address: randAddress(),
-					Topics:  []thor.Bytes32{randBytes32()},
-					Data:    randBytes32().Bytes(),
-				}},
-				Transfers: tx.Transfers{{
-					Sender:    randAddress(),
-					Recipient: randAddress(),
-					Amount:    new(big.Int).SetBytes(randAddress().Bytes()),
-				}},
+		ReceiptBody: tx.ReceiptBody{
+			Outputs: []*tx.Output{
+				{
+					Events: tx.Events{{
+						Address: randAddress(),
+						Topics:  []thor.Bytes32{randBytes32()},
+						Data:    randBytes32().Bytes(),
+					}},
+					Transfers: tx.Transfers{{
+						Sender:    randAddress(),
+						Recipient: randAddress(),
+						Amount:    new(big.Int).SetBytes(randAddress().Bytes()),
+					}},
+				},
 			},
 		},
 	}
@@ -59,13 +61,15 @@ func newReceipt() *tx.Receipt {
 
 func newEventOnlyReceipt() *tx.Receipt {
 	return &tx.Receipt{
-		Outputs: []*tx.Output{
-			{
-				Events: tx.Events{{
-					Address: randAddress(),
-					Topics:  []thor.Bytes32{randBytes32()},
-					Data:    randBytes32().Bytes(),
-				}},
+		ReceiptBody: tx.ReceiptBody{
+			Outputs: []*tx.Output{
+				{
+					Events: tx.Events{{
+						Address: randAddress(),
+						Topics:  []thor.Bytes32{randBytes32()},
+						Data:    randBytes32().Bytes(),
+					}},
+				},
 			},
 		},
 	}
@@ -73,13 +77,15 @@ func newEventOnlyReceipt() *tx.Receipt {
 
 func newTransferOnlyReceipt() *tx.Receipt {
 	return &tx.Receipt{
-		Outputs: []*tx.Output{
-			{
-				Transfers: tx.Transfers{{
-					Sender:    randAddress(),
-					Recipient: randAddress(),
-					Amount:    new(big.Int).SetBytes(randAddress().Bytes()),
-				}},
+		ReceiptBody: tx.ReceiptBody{
+			Outputs: []*tx.Output{
+				{
+					Transfers: tx.Transfers{{
+						Sender:    randAddress(),
+						Recipient: randAddress(),
+						Amount:    new(big.Int).SetBytes(randAddress().Bytes()),
+					}},
+				},
 			},
 		},
 	}
