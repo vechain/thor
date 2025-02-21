@@ -118,7 +118,7 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 	}
 
 	if f.Number() < f.packer.forkConfig.GALACTICA {
-		if t.Type() != tx.LegacyTxType {
+		if t.Type() != tx.TypeLegacy {
 			return badTxError{"invalid tx type"}
 		}
 	} else {

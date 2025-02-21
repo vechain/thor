@@ -95,7 +95,7 @@ func TestConvertTransfer(t *testing.T) {
 	repo, _ := chain.NewRepository(db, b)
 
 	// New tx
-	legacyTx := tx.NewTxBuilder(tx.LegacyTxType).
+	legacyTx := tx.NewTxBuilder(tx.TypeLegacy).
 		ChainTag(repo.ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -105,7 +105,7 @@ func TestConvertTransfer(t *testing.T) {
 		MustBuild()
 	legacyTx = tx.MustSign(legacyTx, genesis.DevAccounts()[0].PrivateKey)
 
-	dynFeeTx := tx.NewTxBuilder(tx.DynamicFeeTxType).
+	dynFeeTx := tx.NewTxBuilder(tx.TypeDynamicFee).
 		ChainTag(repo.ChainTag()).
 		MaxFeePerGas(big.NewInt(1)).
 		Expiration(10).
@@ -175,7 +175,7 @@ func TestConvertEventWithBadSignature(t *testing.T) {
 	badSig := bytes.Repeat([]byte{0xf}, 65)
 
 	// New tx
-	transaction := tx.NewTxBuilder(tx.LegacyTxType).
+	transaction := tx.NewTxBuilder(tx.TypeLegacy).
 		ChainTag(1).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -215,7 +215,7 @@ func TestConvertEvent(t *testing.T) {
 	repo, _ := chain.NewRepository(db, b)
 
 	// New tx
-	transaction := tx.NewTxBuilder(tx.LegacyTxType).
+	transaction := tx.NewTxBuilder(tx.TypeLegacy).
 		ChainTag(repo.ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).

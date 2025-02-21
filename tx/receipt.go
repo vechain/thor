@@ -83,7 +83,7 @@ func (r *Receipt) EncodeRLP(w io.Writer) error {
 	data := &ReceiptBody{
 		r.GasUsed, r.GasPayer, r.Paid, r.Reward, r.Reverted, r.Outputs,
 	}
-	if r.Type == LegacyTxType {
+	if r.Type == TypeLegacy {
 		return rlp.Encode(w, data)
 	}
 
@@ -110,7 +110,7 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 		if err := s.Decode(&dec); err != nil {
 			return err
 		}
-		r.Type = LegacyTxType
+		r.Type = TypeLegacy
 		r.setFromRLP(dec)
 	case kind == rlp.String:
 		// It's an EIP-2718 typed tx receipt.
@@ -123,7 +123,7 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 		}
 		r.Type = b[0]
 		switch r.Type {
-		case DynamicFeeTxType:
+		case TypeDynamicFee:
 			var dec ReceiptBody
 			if err := rlp.DecodeBytes(b[1:], &dec); err != nil {
 				return err
@@ -150,7 +150,7 @@ func (r *Receipt) setFromRLP(dec ReceiptBody) {
 
 // MarshalBinary returns the consensus encoding of the receipt.
 func (r *Receipt) MarshalBinary() ([]byte, error) {
-	if r.Type == LegacyTxType {
+	if r.Type == TypeLegacy {
 		return rlp.EncodeToBytes(r)
 	}
 	data := &ReceiptBody{
@@ -171,7 +171,7 @@ func (r *Receipt) UnmarshalBinary(b []byte) error {
 		if err != nil {
 			return err
 		}
-		r.Type = LegacyTxType
+		r.Type = TypeLegacy
 		r.setFromRLP(data)
 		return nil
 	}
@@ -191,7 +191,7 @@ func (r *Receipt) decodeTyped(b []byte) error {
 		return errShortTypedReceipt
 	}
 	switch b[0] {
-	case DynamicFeeTxType:
+	case TypeDynamicFee:
 		var data ReceiptBody
 		err := rlp.DecodeBytes(b[1:], &data)
 		if err != nil {

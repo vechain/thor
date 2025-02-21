@@ -95,10 +95,10 @@ func CalcBaseFee(config *thor.ForkConfig, parent *block.Header) *big.Int {
 func GalacticaTxGasPriceAdapter(tr *tx.Transaction, gasPrice *big.Int) *GalacticaFeeMarketItems {
 	var maxPriorityFee, maxFee *big.Int
 	switch tr.Type() {
-	case tx.LegacyTxType:
+	case tx.TypeLegacy:
 		maxPriorityFee = gasPrice
 		maxFee = gasPrice
-	case tx.DynamicFeeTxType:
+	case tx.TypeDynamicFee:
 		maxPriorityFee = tr.MaxPriorityFeePerGas()
 		maxFee = tr.MaxFeePerGas()
 	}

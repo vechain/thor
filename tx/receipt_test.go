@@ -39,8 +39,8 @@ func TestReceipt(t *testing.T) {
 }
 
 func TestReceiptStructure(t *testing.T) {
-	for _, txType := range []int{LegacyTxType, DynamicFeeTxType} {
-		receipt := getMockReceipt(byte(txType))
+	for _, txType := range []TxType{TypeLegacy, TypeDynamicFee} {
+		receipt := getMockReceipt(txType)
 
 		// assert.Equal(t, byte(txType), receipt.Type)
 		assert.Equal(t, uint64(1000), receipt.GasUsed)
@@ -60,18 +60,18 @@ func TestEmptyRootHash(t *testing.T) {
 	}{
 		{
 			name:     "LegacyReceipts",
-			receipt1: getMockReceipt(byte(LegacyTxType)),
-			receipt2: getMockReceipt(byte(LegacyTxType)),
+			receipt1: getMockReceipt(TypeLegacy),
+			receipt2: getMockReceipt(TypeLegacy),
 		},
 		{
 			name:     "DynamicFeeReceipts",
-			receipt1: getMockReceipt(byte(DynamicFeeTxType)),
-			receipt2: getMockReceipt(byte(DynamicFeeTxType)),
+			receipt1: getMockReceipt(TypeDynamicFee),
+			receipt2: getMockReceipt(TypeDynamicFee),
 		},
 		{
 			name:     "MixedReceipts",
-			receipt1: getMockReceipt(byte(LegacyTxType)),
-			receipt2: getMockReceipt(byte(DynamicFeeTxType)),
+			receipt1: getMockReceipt(TypeLegacy),
+			receipt2: getMockReceipt(TypeDynamicFee),
 		},
 	}
 
@@ -89,8 +89,8 @@ func TestEmptyRootHash(t *testing.T) {
 }
 
 func TestMarshalAndUnmarshalBinary(t *testing.T) {
-	for _, txType := range []int{LegacyTxType, DynamicFeeTxType} {
-		originalReceipt := getMockReceipt(byte(txType))
+	for _, txType := range []TxType{TypeLegacy, TypeDynamicFee} {
+		originalReceipt := getMockReceipt(txType)
 
 		data, err := originalReceipt.MarshalBinary()
 		assert.Nil(t, err)
@@ -104,8 +104,8 @@ func TestMarshalAndUnmarshalBinary(t *testing.T) {
 }
 
 func TestEncodeAndDecodeReceipt(t *testing.T) {
-	for _, txType := range []int{LegacyTxType, DynamicFeeTxType} {
-		originalReceipt := getMockReceipt(byte(txType))
+	for _, txType := range []TxType{TypeLegacy, TypeDynamicFee} {
+		originalReceipt := getMockReceipt(txType)
 		receiptBuf := new(bytes.Buffer)
 		// Encoding
 		err := originalReceipt.EncodeRLP(receiptBuf)

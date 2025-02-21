@@ -21,7 +21,7 @@ import (
 )
 
 func TestErrorWhileRetrievingTxOriginInConvertReceipt(t *testing.T) {
-	txTypes := []int{tx.LegacyTxType, tx.DynamicFeeTxType}
+	txTypes := []tx.TxType{tx.TypeLegacy, tx.TypeDynamicFee}
 
 	for _, txType := range txTypes {
 		tr := tx.NewTxBuilder(txType).MustBuild()
@@ -44,8 +44,8 @@ func TestErrorWhileRetrievingTxOriginInConvertReceipt(t *testing.T) {
 func TestConvertReceiptWhenTxHasNoClauseTo(t *testing.T) {
 	value := big.NewInt(100)
 	txs := []*tx.Transaction{
-		newTx(tx.NewClause(nil).WithValue(value), tx.LegacyTxType),
-		newTx(tx.NewClause(nil).WithValue(value), tx.DynamicFeeTxType),
+		newTx(tx.NewClause(nil).WithValue(value), tx.TypeLegacy),
+		newTx(tx.NewClause(nil).WithValue(value), tx.TypeDynamicFee),
 	}
 	for _, tr := range txs {
 		b := new(block.Builder).Build()
@@ -66,8 +66,8 @@ func TestConvertReceipt(t *testing.T) {
 	addr := randAddress()
 
 	txs := []*tx.Transaction{
-		newTx(tx.NewClause(&addr).WithValue(value), tx.LegacyTxType),
-		newTx(tx.NewClause(&addr).WithValue(value), tx.DynamicFeeTxType),
+		newTx(tx.NewClause(&addr).WithValue(value), tx.TypeLegacy),
+		newTx(tx.NewClause(&addr).WithValue(value), tx.TypeDynamicFee),
 	}
 	for _, tr := range txs {
 		b := new(block.Builder).Build()
@@ -119,7 +119,7 @@ func newReceipt() *tx.Receipt {
 	}
 }
 
-func newTx(clause *tx.Clause, txType int) *tx.Transaction {
+func newTx(clause *tx.Clause, txType tx.TxType) *tx.Transaction {
 	tx := tx.NewTxBuilder(txType).
 		Clause(clause).
 		MustBuild()

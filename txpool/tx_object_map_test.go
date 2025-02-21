@@ -22,9 +22,9 @@ func TestGetByID(t *testing.T) {
 	repo := newChainRepo(muxdb.NewMem())
 
 	// Creating transactions
-	tx1 := newTx(tx.LegacyTxType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
-	tx2 := newTx(tx.LegacyTxType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[1])
-	tx3 := newTx(tx.DynamicFeeTxType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[2])
+	tx1 := newTx(tx.TypeLegacy, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
+	tx2 := newTx(tx.TypeLegacy, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[1])
+	tx3 := newTx(tx.TypeDynamicFee, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[2])
 
 	// Resolving transactions into txObjects
 	txObj1, _ := resolveTx(tx1, false)
@@ -57,9 +57,9 @@ func TestFill(t *testing.T) {
 	repo := newChainRepo(muxdb.NewMem())
 
 	// Creating transactions
-	tx1 := newTx(tx.LegacyTxType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
-	tx2 := newDelegatedTx(tx.LegacyTxType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[1], genesis.DevAccounts()[2])
-	tx3 := newDelegatedTx(tx.DynamicFeeTxType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[3], genesis.DevAccounts()[4])
+	tx1 := newTx(tx.TypeLegacy, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
+	tx2 := newDelegatedTx(tx.TypeLegacy, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[1], genesis.DevAccounts()[2])
+	tx3 := newDelegatedTx(tx.TypeDynamicFee, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[3], genesis.DevAccounts()[4])
 
 	// Resolving transactions into txObjects
 	txObj1, _ := resolveTx(tx1, false)
@@ -95,9 +95,9 @@ func TestFill(t *testing.T) {
 func TestTxObjMap(t *testing.T) {
 	repo := newChainRepo(muxdb.NewMem())
 
-	tx1 := newTx(tx.LegacyTxType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
-	tx2 := newTx(tx.DynamicFeeTxType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
-	tx3 := newTx(tx.LegacyTxType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[1])
+	tx1 := newTx(tx.TypeLegacy, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
+	tx2 := newTx(tx.TypeDynamicFee, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
+	tx3 := newTx(tx.TypeLegacy, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[1])
 
 	txObj1, _ := resolveTx(tx1, false)
 	txObj2, _ := resolveTx(tx2, false)
@@ -131,9 +131,9 @@ func TestTxObjMap(t *testing.T) {
 func TestLimitByDelegator(t *testing.T) {
 	repo := newChainRepo(muxdb.NewMem())
 
-	tx1 := newTx(tx.LegacyTxType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
-	tx2 := newDelegatedTx(tx.DynamicFeeTxType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[0], genesis.DevAccounts()[1])
-	tx3 := newDelegatedTx(tx.LegacyTxType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[2], genesis.DevAccounts()[1])
+	tx1 := newTx(tx.TypeLegacy, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
+	tx2 := newDelegatedTx(tx.TypeDynamicFee, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[0], genesis.DevAccounts()[1])
+	tx3 := newDelegatedTx(tx.TypeLegacy, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[2], genesis.DevAccounts()[1])
 
 	txObj1, _ := resolveTx(tx1, false)
 	txObj2, _ := resolveTx(tx2, false)
@@ -155,9 +155,9 @@ func TestPendingCost(t *testing.T) {
 	stater := state.NewStater(db)
 
 	// Creating transactions
-	tx1 := newTx(tx.LegacyTxType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
-	tx2 := newDelegatedTx(tx.LegacyTxType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[1], genesis.DevAccounts()[2])
-	tx3 := newDelegatedTx(tx.DynamicFeeTxType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[1], genesis.DevAccounts()[2])
+	tx1 := newTx(tx.TypeLegacy, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
+	tx2 := newDelegatedTx(tx.TypeLegacy, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[1], genesis.DevAccounts()[2])
+	tx3 := newDelegatedTx(tx.TypeDynamicFee, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[1], genesis.DevAccounts()[2])
 
 	// Resolving transactions into txObjects
 	txObj1, _ := resolveTx(tx1, false)

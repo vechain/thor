@@ -19,7 +19,7 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func newTx(txType int) *tx.Transaction {
+func newTx(txType tx.TxType) *tx.Transaction {
 	trx := tx.NewTxBuilder(txType).MustBuild()
 
 	pk, _ := crypto.GenerateKey()
@@ -133,7 +133,7 @@ func TestErrTxTypeNotSupported(t *testing.T) {
 			t.Errorf("Expected to panic")
 		}
 	}()
-	nonExistingTxType := 100
+	nonExistingTxType := tx.TxType(100)
 	newTx(nonExistingTxType)
 }
 
@@ -152,8 +152,8 @@ func TestEvents(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		b = new(block.Builder).
 			ParentID(b.Header().ID()).
-			Transaction(newTx(tx.LegacyTxType)).
-			Transaction(newTx(tx.DynamicFeeTxType)).
+			Transaction(newTx(tx.TypeLegacy)).
+			Transaction(newTx(tx.TypeDynamicFee)).
 			Build()
 		receipts := tx.Receipts{newReceipt(), newReceipt()}
 
@@ -276,8 +276,8 @@ func TestLogDB_NewestBlockID(t *testing.T) {
 
 	b = new(block.Builder).
 		ParentID(b.Header().ID()).
-		Transaction(newTx(tx.LegacyTxType)).
-		Transaction(newTx(tx.DynamicFeeTxType)).
+		Transaction(newTx(tx.TypeLegacy)).
+		Transaction(newTx(tx.TypeDynamicFee)).
 		Build()
 	receipts := tx.Receipts{newReceipt()}
 
@@ -320,7 +320,7 @@ func TestLogDB_NewestBlockID(t *testing.T) {
 			func() (thor.Bytes32, error) {
 				b = new(block.Builder).
 					ParentID(b.Header().ID()).
-					Transaction(newTx(tx.LegacyTxType)).
+					Transaction(newTx(tx.TypeLegacy)).
 					Build()
 				receipts := tx.Receipts{newReceipt()}
 
@@ -339,7 +339,7 @@ func TestLogDB_NewestBlockID(t *testing.T) {
 			func() (thor.Bytes32, error) {
 				b = new(block.Builder).
 					ParentID(b.Header().ID()).
-					Transaction(newTx(tx.LegacyTxType)).
+					Transaction(newTx(tx.TypeLegacy)).
 					Build()
 				receipts := tx.Receipts{newEventOnlyReceipt()}
 
@@ -358,7 +358,7 @@ func TestLogDB_NewestBlockID(t *testing.T) {
 			func() (thor.Bytes32, error) {
 				b = new(block.Builder).
 					ParentID(b.Header().ID()).
-					Transaction(newTx(tx.LegacyTxType)).
+					Transaction(newTx(tx.TypeLegacy)).
 					Build()
 				receipts := tx.Receipts{newTransferOnlyReceipt()}
 
@@ -400,8 +400,8 @@ func TestLogDB_HasBlockID(t *testing.T) {
 
 	b := new(block.Builder).
 		ParentID(b0.Header().ID()).
-		Transaction(newTx(tx.LegacyTxType)).
-		Transaction(newTx(tx.DynamicFeeTxType)).
+		Transaction(newTx(tx.TypeLegacy)).
+		Transaction(newTx(tx.TypeDynamicFee)).
 		Build()
 	b1 := b.Header().ID()
 	receipts := tx.Receipts{newReceipt()}
@@ -418,7 +418,7 @@ func TestLogDB_HasBlockID(t *testing.T) {
 
 	b = new(block.Builder).
 		ParentID(b2).
-		Transaction(newTx(tx.LegacyTxType)).
+		Transaction(newTx(tx.TypeLegacy)).
 		Build()
 	b3 := b.Header().ID()
 	receipts = tx.Receipts{newEventOnlyReceipt()}

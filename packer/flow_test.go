@@ -27,7 +27,7 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func createTx(txType int, chainTag byte, gasPriceCoef uint8, expiration uint32, gas uint64, nonce uint64, dependsOn *thor.Bytes32, clause *tx.Clause, br tx.BlockRef) *tx.Transaction {
+func createTx(txType tx.TxType, chainTag byte, gasPriceCoef uint8, expiration uint32, gas uint64, nonce uint64, dependsOn *thor.Bytes32, clause *tx.Clause, br tx.BlockRef) *tx.Transaction {
 	builder := tx.NewTxBuilder(txType).
 		ChainTag(chainTag).
 		GasPriceCoef(gasPriceCoef).
@@ -73,12 +73,12 @@ func TestAdopt(t *testing.T) {
 		t.Fatal("Error scheduling:", err)
 	}
 
-	tx1 := createTx(tx.LegacyTxType, chainTag, 1, 10, 21000, 1, nil, clause, tx.NewBlockRef(0))
+	tx1 := createTx(tx.TypeLegacy, chainTag, 1, 10, 21000, 1, nil, clause, tx.NewBlockRef(0))
 	if err := flow.Adopt(tx1); err != nil {
 		t.Fatal("Error adopting tx1:", err)
 	}
 
-	tx2 := createTx(tx.LegacyTxType, chainTag, 1, 10, 21000, 2, (*thor.Bytes32)(tx1.ID().Bytes()), clause, tx.NewBlockRef(0))
+	tx2 := createTx(tx.TypeLegacy, chainTag, 1, 10, 21000, 2, (*thor.Bytes32)(tx1.ID().Bytes()), clause, tx.NewBlockRef(0))
 	if err := flow.Adopt(tx2); err != nil {
 		t.Fatal("Error adopting tx2:", err)
 	}
@@ -90,7 +90,7 @@ func TestAdopt(t *testing.T) {
 	}
 
 	// Test dependency that does not exist
-	tx3 := createTx(tx.LegacyTxType, chainTag, 1, 10, 21000, 2, (*thor.Bytes32)((thor.Bytes32{0x1}).Bytes()), clause, tx.NewBlockRef(0))
+	tx3 := createTx(tx.TypeLegacy, chainTag, 1, 10, 21000, 2, (*thor.Bytes32)((thor.Bytes32{0x1}).Bytes()), clause, tx.NewBlockRef(0))
 	expectedErrorMessage = "tx not adoptable now"
 	if err := flow.Adopt(tx3); err.Error() != expectedErrorMessage {
 		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
@@ -129,12 +129,12 @@ func TestAdoptTypedTxs(t *testing.T) {
 		t.Fatal("Error scheduling:", err)
 	}
 
-	tx1 := createTx(tx.LegacyTxType, chainTag, 1, 10, 21000, 1, nil, clause, tx.NewBlockRef(0))
+	tx1 := createTx(tx.TypeLegacy, chainTag, 1, 10, 21000, 1, nil, clause, tx.NewBlockRef(0))
 	if err := flow.Adopt(tx1); err != nil {
 		t.Fatal("Error adopting tx1:", err)
 	}
 
-	tx2 := createTx(tx.DynamicFeeTxType, chainTag, 1, 10, 21000, 2, (*thor.Bytes32)(tx1.ID().Bytes()), clause, tx.NewBlockRef(0))
+	tx2 := createTx(tx.TypeDynamicFee, chainTag, 1, 10, 21000, 2, (*thor.Bytes32)(tx1.ID().Bytes()), clause, tx.NewBlockRef(0))
 	if err := flow.Adopt(tx2); err != nil {
 		t.Fatal("Error adopting tx2:", err)
 	}
@@ -146,7 +146,7 @@ func TestAdoptTypedTxs(t *testing.T) {
 	}
 
 	// Test dependency that does not exist
-	tx3 := createTx(tx.DynamicFeeTxType, chainTag, 1, 10, 21000, 2, (*thor.Bytes32)((thor.Bytes32{0x1}).Bytes()), clause, tx.NewBlockRef(0))
+	tx3 := createTx(tx.TypeDynamicFee, chainTag, 1, 10, 21000, 2, (*thor.Bytes32)((thor.Bytes32{0x1}).Bytes()), clause, tx.NewBlockRef(0))
 	expectedErrorMessage = "tx not adoptable now"
 	if err := flow.Adopt(tx3); err.Error() != expectedErrorMessage {
 		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
@@ -226,7 +226,7 @@ func TestPackAfterGalacticaFork(t *testing.T) {
 	assert.Equal(t, big.NewInt(thor.InitialBaseFee), block.Header().BaseFee())
 
 	// Adopt a tx which has not enough max fee to cover for base fee
-	badTx := tx.NewTxBuilder(tx.DynamicFeeTxType).ChainTag(repo.ChainTag()).Gas(21000).MaxFeePerGas(big.NewInt(thor.InitialBaseFee - 1)).MaxPriorityFeePerGas(common.Big1).Expiration(100).MustBuild()
+	badTx := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).Gas(21000).MaxFeePerGas(big.NewInt(thor.InitialBaseFee - 1)).MaxPriorityFeePerGas(common.Big1).Expiration(100).MustBuild()
 	badTx = tx.MustSign(badTx, genesis.DevAccounts()[0].PrivateKey)
 	expectedErrorMessage := fmt.Sprintf("bad tx: %s", runtime.ErrMaxFeePerGasTooLow.Error())
 	if err := flow.Adopt(badTx); err.Error() != expectedErrorMessage {
@@ -268,21 +268,21 @@ func TestAdoptErr(t *testing.T) {
 	flow, _ := pkr.Schedule(sum, uint64(time.Now().Unix()))
 
 	// Test chain tag mismatch
-	tx1 := createTx(tx.LegacyTxType, byte(0xFF), 1, 10, 21000, 1, nil, clause, tx.NewBlockRef(0))
+	tx1 := createTx(tx.TypeLegacy, byte(0xFF), 1, 10, 21000, 1, nil, clause, tx.NewBlockRef(0))
 	expectedErrorMessage := "bad tx: chain tag mismatch"
 	if err := flow.Adopt(tx1); err.Error() != expectedErrorMessage {
 		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
 	}
 
 	// Test wrong block reference
-	tx2 := createTx(tx.LegacyTxType, repo.ChainTag(), 1, 10, 21000, 1, nil, clause, tx.NewBlockRef(1000))
+	tx2 := createTx(tx.TypeLegacy, repo.ChainTag(), 1, 10, 21000, 1, nil, clause, tx.NewBlockRef(1000))
 	expectedErrorMessage = "tx not adoptable now"
 	if err := flow.Adopt(tx2); err.Error() != expectedErrorMessage {
 		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
 	}
 
 	// Test exceeded gas limit
-	tx3 := createTx(tx.LegacyTxType, repo.ChainTag(), 1, 0, 1, 1, nil, clause, tx.NewBlockRef(1))
+	tx3 := createTx(tx.TypeLegacy, repo.ChainTag(), 1, 0, 1, 1, nil, clause, tx.NewBlockRef(1))
 	expectedErrorMessage = "gas limit reached"
 	if err := flow.Adopt(tx3); err.Error() != expectedErrorMessage {
 		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
@@ -295,7 +295,7 @@ func TestAdoptErrorAfterGalactica(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Try to adopt a dyn fee tx before galactica fork activates - FAILS
-	tr := tx.NewTxBuilder(tx.DynamicFeeTxType).ChainTag(chain.Repo().ChainTag()).Gas(21000).Expiration(100).MustBuild()
+	tr := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(chain.Repo().ChainTag()).Gas(21000).Expiration(100).MustBuild()
 	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 	err = chain.MintBlock(genesis.DevAccounts()[0], tr)
 
@@ -303,13 +303,13 @@ func TestAdoptErrorAfterGalactica(t *testing.T) {
 	assert.Equal(t, expectedErrMsg, err.Error())
 
 	// Try to adopt a legacy tx - SUCCESS
-	tr = tx.NewTxBuilder(tx.LegacyTxType).ChainTag(chain.Repo().ChainTag()).Gas(21000).Expiration(100).MustBuild()
+	tr = tx.NewTxBuilder(tx.TypeLegacy).ChainTag(chain.Repo().ChainTag()).Gas(21000).Expiration(100).MustBuild()
 	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 	err = chain.MintBlock(genesis.DevAccounts()[0], tr)
 	assert.NoError(t, err)
 
 	// Try to adopt a dyn fee tx after galactica fork activates - SUCCESS
-	tr = tx.NewTxBuilder(tx.DynamicFeeTxType).ChainTag(chain.Repo().ChainTag()).MaxFeePerGas(big.NewInt(thor.InitialBaseFee)).Gas(21000).Expiration(100).MustBuild()
+	tr = tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(chain.Repo().ChainTag()).MaxFeePerGas(big.NewInt(thor.InitialBaseFee)).Gas(21000).Expiration(100).MustBuild()
 	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 	err = chain.MintBlock(genesis.DevAccounts()[0], tr)
 	assert.NoError(t, err)
@@ -320,14 +320,14 @@ func TestAdoptErrorAfterGalactica(t *testing.T) {
 	expectedBaseFee := fork.CalcBaseFee(&forks, best.Header())
 	notEnoughBaseFee := new(big.Int).Sub(expectedBaseFee, common.Big1)
 
-	tr = tx.NewTxBuilder(tx.DynamicFeeTxType).ChainTag(chain.Repo().ChainTag()).Nonce(2).MaxFeePerGas(notEnoughBaseFee).Gas(21000).Expiration(100).MustBuild()
+	tr = tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(chain.Repo().ChainTag()).Nonce(2).MaxFeePerGas(notEnoughBaseFee).Gas(21000).Expiration(100).MustBuild()
 	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 	err = chain.MintBlock(genesis.DevAccounts()[0], tr)
 	expectedErrMsg = "unable to adopt tx into block: bad tx: max fee per gas is less than block base fee"
 	assert.Equal(t, expectedErrMsg, err.Error())
 
 	// Try to adopt a dyn fee with just the right amount of max fee per gas - SUCCESS
-	tr = tx.NewTxBuilder(tx.DynamicFeeTxType).ChainTag(chain.Repo().ChainTag()).Nonce(2).MaxFeePerGas(expectedBaseFee).Gas(21000).Expiration(100).MustBuild()
+	tr = tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(chain.Repo().ChainTag()).Nonce(2).MaxFeePerGas(expectedBaseFee).Gas(21000).Expiration(100).MustBuild()
 	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 	err = chain.MintBlock(genesis.DevAccounts()[0], tr)
 	assert.NoError(t, err)
@@ -338,7 +338,7 @@ func TestAdoptErrorAfterGalactica(t *testing.T) {
 	expectedBaseFee = fork.CalcBaseFee(&forks, best.Header())
 	maxPriorityFee := big.NewInt(10_000)
 	maxFee := new(big.Int).Add(expectedBaseFee, maxPriorityFee)
-	tr = tx.NewTxBuilder(tx.DynamicFeeTxType).ChainTag(chain.Repo().ChainTag()).Nonce(3).MaxFeePerGas(maxFee).MaxPriorityFeePerGas(maxPriorityFee).Gas(21000).Expiration(100).MustBuild()
+	tr = tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(chain.Repo().ChainTag()).Nonce(3).MaxFeePerGas(maxFee).MaxPriorityFeePerGas(maxPriorityFee).Gas(21000).Expiration(100).MustBuild()
 	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 	err = chain.MintBlock(genesis.DevAccounts()[0], tr)
 	assert.NoError(t, err)
@@ -348,7 +348,7 @@ func TestAdoptAfterGalacticaLowerBaseFeeThreshold(t *testing.T) {
 	chain, err := testchain.NewWithFork(thor.ForkConfig{GALACTICA: 1})
 	assert.NoError(t, err)
 
-	tr := tx.NewTxBuilder(tx.LegacyTxType).ChainTag(chain.Repo().ChainTag()).Gas(21000).Expiration(100).MustBuild()
+	tr := tx.NewTxBuilder(tx.TypeLegacy).ChainTag(chain.Repo().ChainTag()).Gas(21000).Expiration(100).MustBuild()
 	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 	err = chain.MintBlock(genesis.DevAccounts()[0], tr)
 	assert.NoError(t, err)
@@ -357,7 +357,7 @@ func TestAdoptAfterGalacticaLowerBaseFeeThreshold(t *testing.T) {
 		best, err := chain.BestBlock()
 		assert.NoError(t, err)
 		expectedBaseFee := fork.CalcBaseFee(&thor.ForkConfig{}, best.Header())
-		tr = tx.NewTxBuilder(tx.DynamicFeeTxType).ChainTag(chain.Repo().ChainTag()).Nonce(uint64(i + 2)).MaxFeePerGas(expectedBaseFee).Gas(21000).Expiration(1000000).MustBuild()
+		tr = tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(chain.Repo().ChainTag()).Nonce(uint64(i + 2)).MaxFeePerGas(expectedBaseFee).Gas(21000).Expiration(1000000).MustBuild()
 		tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 		err = chain.MintBlock(genesis.DevAccounts()[0], tr)
 		assert.NoError(t, err)
