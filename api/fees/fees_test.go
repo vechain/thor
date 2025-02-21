@@ -95,8 +95,8 @@ func initFeesServer(t *testing.T, backtraceLimit uint32, fixedCacheSize uint32, 
 
 	var dynFeeTx *tx.Transaction
 
-	for i := 0; i < numberOfBlocks-1; i++ {
-		dynFeeTx = tx.NewTxBuilder(tx.DynamicFeeTxType).
+	for i := range numberOfBlocks - 1 {
+		dynFeeTx = tx.NewTxBuilder(tx.TypeDynamicFee).
 			ChainTag(thorChain.Repo().ChainTag()).
 			MaxFeePerGas(big.NewInt(250_000_000_000_000)).
 			MaxPriorityFeePerGas(big.NewInt(100)).

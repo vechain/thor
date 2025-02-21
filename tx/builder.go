@@ -14,7 +14,7 @@ import (
 
 // Builder to make it easy to build transaction.
 type Builder struct {
-	txType               int
+	txType               TxType
 	chainTag             byte
 	clauses              []*Clause
 	gasPriceCoef         uint8
@@ -28,7 +28,7 @@ type Builder struct {
 	reserved             reserved
 }
 
-func NewTxBuilder(txType int) *Builder {
+func NewTxBuilder(txType TxType) *Builder {
 	return &Builder{txType: txType}
 }
 
@@ -114,7 +114,7 @@ func (b *Builder) Features(feat Features) *Builder {
 func (b *Builder) Build() (*Transaction, error) {
 	var tx *Transaction
 	switch b.txType {
-	case LegacyTxType:
+	case TypeLegacy:
 		tx = &Transaction{
 			body: &LegacyTransaction{
 				ChainTag:     b.chainTag,
@@ -128,7 +128,7 @@ func (b *Builder) Build() (*Transaction, error) {
 				Reserved:     b.reserved,
 			},
 		}
-	case DynamicFeeTxType:
+	case TypeDynamicFee:
 		tx = &Transaction{
 			body: &DynamicFeeTransaction{
 				ChainTag:             b.chainTag,

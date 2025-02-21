@@ -19,7 +19,7 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func newTx(txType int) *tx.Transaction {
+func newTx(txType tx.TxType) *tx.Transaction {
 	trx := tx.NewTxBuilder(txType).MustBuild()
 
 	pk, _ := crypto.GenerateKey()
@@ -40,18 +40,20 @@ func randBytes32() (b thor.Bytes32) {
 
 func newReceipt() *tx.Receipt {
 	return &tx.Receipt{
-		Outputs: []*tx.Output{
-			{
-				Events: tx.Events{{
-					Address: randAddress(),
-					Topics:  []thor.Bytes32{randBytes32()},
-					Data:    randBytes32().Bytes(),
-				}},
-				Transfers: tx.Transfers{{
-					Sender:    randAddress(),
-					Recipient: randAddress(),
-					Amount:    new(big.Int).SetBytes(randAddress().Bytes()),
-				}},
+		ReceiptBody: tx.ReceiptBody{
+			Outputs: []*tx.Output{
+				{
+					Events: tx.Events{{
+						Address: randAddress(),
+						Topics:  []thor.Bytes32{randBytes32()},
+						Data:    randBytes32().Bytes(),
+					}},
+					Transfers: tx.Transfers{{
+						Sender:    randAddress(),
+						Recipient: randAddress(),
+						Amount:    new(big.Int).SetBytes(randAddress().Bytes()),
+					}},
+				},
 			},
 		},
 	}
@@ -59,13 +61,15 @@ func newReceipt() *tx.Receipt {
 
 func newEventOnlyReceipt() *tx.Receipt {
 	return &tx.Receipt{
-		Outputs: []*tx.Output{
-			{
-				Events: tx.Events{{
-					Address: randAddress(),
-					Topics:  []thor.Bytes32{randBytes32()},
-					Data:    randBytes32().Bytes(),
-				}},
+		ReceiptBody: tx.ReceiptBody{
+			Outputs: []*tx.Output{
+				{
+					Events: tx.Events{{
+						Address: randAddress(),
+						Topics:  []thor.Bytes32{randBytes32()},
+						Data:    randBytes32().Bytes(),
+					}},
+				},
 			},
 		},
 	}
@@ -73,13 +77,15 @@ func newEventOnlyReceipt() *tx.Receipt {
 
 func newTransferOnlyReceipt() *tx.Receipt {
 	return &tx.Receipt{
-		Outputs: []*tx.Output{
-			{
-				Transfers: tx.Transfers{{
-					Sender:    randAddress(),
-					Recipient: randAddress(),
-					Amount:    new(big.Int).SetBytes(randAddress().Bytes()),
-				}},
+		ReceiptBody: tx.ReceiptBody{
+			Outputs: []*tx.Output{
+				{
+					Transfers: tx.Transfers{{
+						Sender:    randAddress(),
+						Recipient: randAddress(),
+						Amount:    new(big.Int).SetBytes(randAddress().Bytes()),
+					}},
+				},
 			},
 		},
 	}
@@ -127,7 +133,7 @@ func TestErrTxTypeNotSupported(t *testing.T) {
 			t.Errorf("Expected to panic")
 		}
 	}()
-	nonExistingTxType := 100
+	nonExistingTxType := tx.TxType(100)
 	newTx(nonExistingTxType)
 }
 
@@ -146,8 +152,8 @@ func TestEvents(t *testing.T) {
 	for range 100 {
 		b = new(block.Builder).
 			ParentID(b.Header().ID()).
-			Transaction(newTx(tx.LegacyTxType)).
-			Transaction(newTx(tx.DynamicFeeTxType)).
+			Transaction(newTx(tx.TypeLegacy)).
+			Transaction(newTx(tx.TypeDynamicFee)).
 			Build()
 		receipts := tx.Receipts{newReceipt(), newReceipt()}
 
@@ -270,8 +276,8 @@ func TestLogDB_NewestBlockID(t *testing.T) {
 
 	b = new(block.Builder).
 		ParentID(b.Header().ID()).
-		Transaction(newTx(tx.LegacyTxType)).
-		Transaction(newTx(tx.DynamicFeeTxType)).
+		Transaction(newTx(tx.TypeLegacy)).
+		Transaction(newTx(tx.TypeDynamicFee)).
 		Build()
 	receipts := tx.Receipts{newReceipt()}
 
@@ -314,7 +320,7 @@ func TestLogDB_NewestBlockID(t *testing.T) {
 			func() (thor.Bytes32, error) {
 				b = new(block.Builder).
 					ParentID(b.Header().ID()).
-					Transaction(newTx(tx.LegacyTxType)).
+					Transaction(newTx(tx.TypeLegacy)).
 					Build()
 				receipts := tx.Receipts{newReceipt()}
 
@@ -333,7 +339,7 @@ func TestLogDB_NewestBlockID(t *testing.T) {
 			func() (thor.Bytes32, error) {
 				b = new(block.Builder).
 					ParentID(b.Header().ID()).
-					Transaction(newTx(tx.LegacyTxType)).
+					Transaction(newTx(tx.TypeLegacy)).
 					Build()
 				receipts := tx.Receipts{newEventOnlyReceipt()}
 
@@ -352,7 +358,7 @@ func TestLogDB_NewestBlockID(t *testing.T) {
 			func() (thor.Bytes32, error) {
 				b = new(block.Builder).
 					ParentID(b.Header().ID()).
-					Transaction(newTx(tx.LegacyTxType)).
+					Transaction(newTx(tx.TypeLegacy)).
 					Build()
 				receipts := tx.Receipts{newTransferOnlyReceipt()}
 
@@ -394,8 +400,8 @@ func TestLogDB_HasBlockID(t *testing.T) {
 
 	b := new(block.Builder).
 		ParentID(b0.Header().ID()).
-		Transaction(newTx(tx.LegacyTxType)).
-		Transaction(newTx(tx.DynamicFeeTxType)).
+		Transaction(newTx(tx.TypeLegacy)).
+		Transaction(newTx(tx.TypeDynamicFee)).
 		Build()
 	b1 := b.Header().ID()
 	receipts := tx.Receipts{newReceipt()}
@@ -412,7 +418,7 @@ func TestLogDB_HasBlockID(t *testing.T) {
 
 	b = new(block.Builder).
 		ParentID(b2).
-		Transaction(newTx(tx.LegacyTxType)).
+		Transaction(newTx(tx.TypeLegacy)).
 		Build()
 	b3 := b.Header().ID()
 	receipts = tx.Receipts{newEventOnlyReceipt()}

@@ -77,7 +77,7 @@ func initChain(t *testing.T) *testchain.Chain {
 
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	tr := tx.NewTxBuilder(tx.LegacyTxType).
+	tr := tx.NewTxBuilder(tx.TypeLegacy).
 		ChainTag(thorChain.Repo().ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -89,7 +89,7 @@ func initChain(t *testing.T) *testchain.Chain {
 	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], tr))
 
-	txDeploy := tx.NewTxBuilder(tx.DynamicFeeTxType).
+	txDeploy := tx.NewTxBuilder(tx.TypeDynamicFee).
 		ChainTag(thorChain.Repo().ChainTag()).
 		MaxFeePerGas(big.NewInt(thor.InitialBaseFee)).
 		Expiration(100).

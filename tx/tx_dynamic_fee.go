@@ -30,7 +30,7 @@ type DynamicFeeTransaction struct {
 }
 
 func (t *DynamicFeeTransaction) txType() byte {
-	return DynamicFeeTxType
+	return TypeDynamicFee
 }
 
 func (t *DynamicFeeTransaction) copy() TxData {
