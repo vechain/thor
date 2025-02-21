@@ -17,7 +17,7 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func GetMockTx(txType int) *tx.Transaction {
+func GetMockTx(txType tx.TxType) *tx.Transaction {
 	to, _ := thor.ParseAddress("0x7567d83b7b8d80addcb281a71d54fc7b3364ffed")
 	return tx.NewTxBuilder(txType).ChainTag(1).
 		BlockRef(tx.BlockRef{0, 0, 0, 0, 0xaa, 0xbb, 0xcc, 0xdd}).
@@ -33,7 +33,7 @@ func GetMockTx(txType int) *tx.Transaction {
 }
 
 func TestIsExpired(t *testing.T) {
-	for _, txType := range []int{tx.LegacyTxType, tx.DynamicFeeTxType} {
+	for _, txType := range []tx.TxType{tx.TypeLegacy, tx.TypeDynamicFee} {
 		tx := GetMockTx(txType)
 		res := tx.IsExpired(10)
 		assert.Equal(t, res, false)
@@ -41,7 +41,7 @@ func TestIsExpired(t *testing.T) {
 }
 
 func TestDependsOn(t *testing.T) {
-	for _, txType := range []int{tx.LegacyTxType, tx.DynamicFeeTxType} {
+	for _, txType := range []tx.TxType{tx.TypeLegacy, tx.TypeDynamicFee} {
 		tx := GetMockTx(txType)
 		res := tx.DependsOn()
 		var expected *thor.Bytes32
@@ -50,7 +50,7 @@ func TestDependsOn(t *testing.T) {
 }
 
 func TestTestFeatures(t *testing.T) {
-	for _, txType := range []int{tx.LegacyTxType, tx.DynamicFeeTxType} {
+	for _, txType := range []tx.TxType{tx.TypeLegacy, tx.TypeDynamicFee} {
 		tx := GetMockTx(txType)
 		supportedFeatures := tx.Features()
 		res := tx.TestFeatures(supportedFeatures)
@@ -61,17 +61,17 @@ func TestTestFeatures(t *testing.T) {
 func TestToString(t *testing.T) {
 	test := []struct {
 		name           string
-		txType         int
+		txType         tx.TxType
 		expectedString string
 	}{
 		{
 			name:           "Legacy transaction",
-			txType:         tx.LegacyTxType,
+			txType:         tx.TypeLegacy,
 			expectedString: "\n\tTx(0x0000000000000000000000000000000000000000000000000000000000000000, 87 B)\n\tOrigin:         N/A\n\tClauses:        [\n\t\t(To:\t0x7567d83b7b8d80addcb281a71d54fc7b3364ffed\n\t\t Value:\t10000\n\t\t Data:\t0x000000606060) \n\t\t(To:\t0x7567d83b7b8d80addcb281a71d54fc7b3364ffed\n\t\t Value:\t20000\n\t\t Data:\t0x000000606060)]\n\tGas:            21000\n\tChainTag:       1\n\tBlockRef:       0-aabbccdd\n\tExpiration:     32\n\tDependsOn:      nil\n\tNonce:          12345678\n\tUnprovedWork:   0\n\tDelegator:      N/A\n\tSignature:      0x\n\n\t\tGasPriceCoef:   128\n\t\t",
 		},
 		{
 			name:           "Dynamic fee transaction",
-			txType:         tx.DynamicFeeTxType,
+			txType:         tx.TypeDynamicFee,
 			expectedString: "\n\tTx(0x0000000000000000000000000000000000000000000000000000000000000000, 95 B)\n\tOrigin:         N/A\n\tClauses:        [\n\t\t(To:\t0x7567d83b7b8d80addcb281a71d54fc7b3364ffed\n\t\t Value:\t10000\n\t\t Data:\t0x000000606060) \n\t\t(To:\t0x7567d83b7b8d80addcb281a71d54fc7b3364ffed\n\t\t Value:\t20000\n\t\t Data:\t0x000000606060)]\n\tGas:            21000\n\tChainTag:       1\n\tBlockRef:       0-aabbccdd\n\tExpiration:     32\n\tDependsOn:      nil\n\tNonce:          12345678\n\tUnprovedWork:   0\n\tDelegator:      N/A\n\tSignature:      0x\n\n\t\tMaxFeePerGas:   10000000\n\t\tMaxPriorityFeePerGas: 20000\n\t\t",
 		},
 	}
@@ -88,17 +88,17 @@ func TestToString(t *testing.T) {
 func TestTxSize(t *testing.T) {
 	test := []struct {
 		name         string
-		txType       int
+		txType       tx.TxType
 		expectedSize thor.StorageSize
 	}{
 		{
 			name:         "Legacy transaction",
-			txType:       tx.LegacyTxType,
+			txType:       tx.TypeLegacy,
 			expectedSize: thor.StorageSize(87),
 		},
 		{
 			name:         "Dynamic fee transaction",
-			txType:       tx.DynamicFeeTxType,
+			txType:       tx.TypeDynamicFee,
 			expectedSize: thor.StorageSize(95),
 		},
 	}
@@ -117,7 +117,7 @@ func TestProvedWork(t *testing.T) {
 		return thor.Bytes32{}, nil
 	}
 
-	for _, txType := range []int{tx.LegacyTxType, tx.DynamicFeeTxType} {
+	for _, txType := range []tx.TxType{tx.TypeLegacy, tx.TypeDynamicFee} {
 		trx := GetMockTx(txType)
 		headBlockNum := uint32(20)
 		provedWork, err := trx.ProvedWork(headBlockNum, getBlockID)
@@ -127,7 +127,7 @@ func TestProvedWork(t *testing.T) {
 }
 
 func TestChainTag(t *testing.T) {
-	for _, txType := range []int{tx.LegacyTxType, tx.DynamicFeeTxType} {
+	for _, txType := range []tx.TxType{tx.TypeLegacy, tx.TypeDynamicFee} {
 		tx := GetMockTx(txType)
 		res := tx.ChainTag()
 		assert.Equal(t, res, uint8(0x1))
@@ -135,7 +135,7 @@ func TestChainTag(t *testing.T) {
 }
 
 func TestNonce(t *testing.T) {
-	for _, txType := range []int{tx.LegacyTxType, tx.DynamicFeeTxType} {
+	for _, txType := range []tx.TxType{tx.TypeLegacy, tx.TypeDynamicFee} {
 		tx := GetMockTx(txType)
 		res := tx.Nonce()
 		assert.Equal(t, res, uint64(0xbc614e))
@@ -144,7 +144,7 @@ func TestNonce(t *testing.T) {
 
 func TestOverallGasPrice(t *testing.T) {
 	// Mock or create a Transaction with necessary fields initialized
-	tx := GetMockTx(tx.LegacyTxType)
+	tx := GetMockTx(tx.TypeLegacy)
 
 	// Define test cases
 	testCases := []struct {
@@ -184,19 +184,19 @@ func TestOverallGasPrice(t *testing.T) {
 func TestEvaluateWork(t *testing.T) {
 	tests := []struct {
 		name         string
-		txType       int
+		txType       tx.TxType
 		expectedFunc func(b *big.Int) bool
 	}{
 		{
 			name:   "LegacyTxType",
-			txType: tx.LegacyTxType,
+			txType: tx.TypeLegacy,
 			expectedFunc: func(res *big.Int) bool {
 				return res.Cmp(big.NewInt(0)) > 0
 			},
 		},
 		{
 			name:   "DynamicFeeTxType",
-			txType: tx.DynamicFeeTxType,
+			txType: tx.TypeDynamicFee,
 			expectedFunc: func(res *big.Int) bool {
 				return res.Cmp(common.Big0) == 0
 			},
@@ -225,7 +225,7 @@ func TestEvaluateWork(t *testing.T) {
 
 func TestLegacyTx(t *testing.T) {
 	to, _ := thor.ParseAddress("0x7567d83b7b8d80addcb281a71d54fc7b3364ffed")
-	trx := tx.NewTxBuilder(tx.LegacyTxType).ChainTag(1).
+	trx := tx.NewTxBuilder(tx.TypeLegacy).ChainTag(1).
 		BlockRef(tx.BlockRef{0, 0, 0, 0, 0xaa, 0xbb, 0xcc, 0xdd}).
 		Expiration(32).
 		Clause(tx.NewClause(&to).WithValue(big.NewInt(10000)).WithData([]byte{0, 0, 0, 0x60, 0x60, 0x60})).
@@ -238,7 +238,7 @@ func TestLegacyTx(t *testing.T) {
 	assert.Equal(t, "0x2a1c25ce0d66f45276a5f308b99bf410e2fc7d5b6ea37a49f2ab9f1da9446478", trx.SigningHash().String())
 	assert.Equal(t, thor.Bytes32{}, trx.ID())
 
-	assert.Equal(t, uint64(21000), func() uint64 { t := tx.NewTxBuilder(tx.LegacyTxType).MustBuild(); g, _ := t.IntrinsicGas(); return g }())
+	assert.Equal(t, uint64(21000), func() uint64 { t := tx.NewTxBuilder(tx.TypeLegacy).MustBuild(); g, _ := t.IntrinsicGas(); return g }())
 	assert.Equal(t, uint64(37432), func() uint64 { g, _ := trx.IntrinsicGas(); return g }())
 
 	assert.Equal(t, big.NewInt(150), trx.GasPrice(big.NewInt(100)))
@@ -270,7 +270,7 @@ func TestDelegatedTx(t *testing.T) {
 	var feat tx.Features
 	feat.SetDelegated(true)
 
-	trx := tx.NewTxBuilder(tx.LegacyTxType).ChainTag(0xa4).
+	trx := tx.NewTxBuilder(tx.TypeLegacy).ChainTag(0xa4).
 		BlockRef(tx.BlockRef{0, 0, 0, 0, 0xaa, 0xbb, 0xcc, 0xdd}).
 		Expiration(32).
 		Clause(tx.NewClause(&to).WithValue(big.NewInt(10000)).WithData([]byte{0, 0, 0, 0x60, 0x60, 0x60})).
@@ -335,7 +335,7 @@ func TestIntrinsicGas(t *testing.T) {
 }
 
 func BenchmarkTxMining(b *testing.B) {
-	for _, txType := range []int{tx.LegacyTxType, tx.DynamicFeeTxType} {
+	for _, txType := range []tx.TxType{tx.TypeLegacy, tx.TypeDynamicFee} {
 		trx := tx.NewTxBuilder(txType).MustBuild()
 		signer := thor.BytesToAddress([]byte("acc1"))
 		maxWork := &big.Int{}

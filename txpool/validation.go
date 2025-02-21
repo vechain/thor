@@ -25,7 +25,7 @@ func ValidateTransaction(tr *tx.Transaction, repo *chain.Repository, head *chain
 	}
 	if head.Header.Number() < forkConfig.GALACTICA {
 		// Pre-Galactica, only support legacy tx
-		if tr.Type() != tx.LegacyTxType {
+		if tr.Type() != tx.TypeLegacy {
 			return tx.ErrTxTypeNotSupported
 		}
 	} else {

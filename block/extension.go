@@ -32,7 +32,7 @@ func (ex *extension) EncodeRLP(w io.Writer) error {
 	}
 
 	if ex.COM {
-		return rlp.Encode(w, []interface{}{
+		return rlp.Encode(w, []any{
 			ex.Alpha,
 			ex.COM,
 		})
