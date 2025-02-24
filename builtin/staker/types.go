@@ -30,6 +30,7 @@ type (
 		Next        *thor.Address `rlp:"nil"` // doubly linked list
 		Prev        *thor.Address `rlp:"nil"` // doubly linked list
 		Status      Status        // status of the validator
+		MissedSlots uint64        // number of missed slots
 	}
 
 	previousExit struct {

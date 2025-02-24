@@ -140,7 +140,7 @@ func (a *Authority) Revoke(nodeMaster thor.Address) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if !entry.IsLinked() {
+	if !entry.IsLinked() && !entry.Active {
 		return false, nil
 	}
 

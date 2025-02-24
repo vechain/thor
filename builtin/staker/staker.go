@@ -73,6 +73,22 @@ func New(addr thor.Address, state *state.State) *Staker {
 	}
 }
 
+// IncrementMissedSlot increments the missed slot counter of a validator.
+// TODO: This is not currently doing anything with the missed slot counter. Should the validator be punished?
+// https://github.com/vechain/protocol-board-repo/issues/433
+func (a *Staker) IncrementMissedSlot(addr thor.Address) error {
+	entry, err := a.validators.Get(addr)
+	if err != nil {
+		return err
+	}
+	if entry.IsEmpty() {
+		return nil
+	}
+	entry.MissedSlots++
+
+	return a.validators.Set(addr, entry)
+}
+
 // AddValidator queues a new validator.
 func (a *Staker) AddValidator(
 	currentBlock uint32,
@@ -263,6 +279,9 @@ func (a *Staker) LeaderGroup() (map[thor.Address]*Validator, error) {
 		if err != nil {
 			return nil, err
 		}
+		if entry.IsEmpty() {
+			break
+		}
 		group[ptr] = entry
 		if entry.Next == nil || entry.Next.IsZero() {
 			break
@@ -372,6 +391,9 @@ func (a *Staker) Initialise(auth *authority.Authority, params *params.Params, cu
 		}
 		if i < len(poaCandidates)-1 {
 			validator.Next = &poaCandidates[i+1].NodeMaster
+		}
+		if ok, err := auth.Revoke(candidate.NodeMaster); err != nil || !ok {
+			return errors.New("failed to revoke authority candidate")
 		}
 
 		validators = append(validators, validator)

@@ -130,9 +130,13 @@ func TestAdoptErr(t *testing.T) {
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
 	launchTime := uint64(1526400000)
+
+	config := thor.NoFork
+
 	g := new(genesis.Builder).
 		GasLimit(0).
 		Timestamp(launchTime).
+		ForkConfig(config).
 		State(func(state *state.State) error {
 			bal, _ := new(big.Int).SetString("1000000000000000000000000000", 10)
 			state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
@@ -154,7 +158,7 @@ func TestAdoptErr(t *testing.T) {
 	addr := thor.BytesToAddress([]byte("to"))
 	clause := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 
-	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
+	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, config)
 	sum, _ := repo.GetBlockSummary(b.Header().ID())
 
 	flow, _ := pkr.Schedule(sum, uint64(time.Now().Unix()))

@@ -20,7 +20,6 @@ import (
 )
 
 func TestConsensus_PosFork(t *testing.T) {
-	t.Skip("not implemented")
 	config := thor.SoloFork
 	config.HAYABUSA = 2
 
@@ -46,8 +45,6 @@ func TestConsensus_PosFork(t *testing.T) {
 }
 
 func TestConsensus_POS_MissedSlots(t *testing.T) {
-	// TODO: Uncomment last assertions
-	t.Skip("not implemented")
 	config := thor.SoloFork
 	config.HAYABUSA = 2
 
@@ -70,14 +67,13 @@ func TestConsensus_POS_MissedSlots(t *testing.T) {
 
 	err = consensus.validateStakingProposer(blk.Header(), parent.Header, st)
 	assert.NoError(t, err)
-	//staker := builtin.Staker.Native(st)
-	//validator, err := staker.Get(signer.Address)
-	//assert.NoError(t, err)
-	//assert.Equal(t, uint64(1), validator.MissedSlots)
+	staker := builtin.Staker.Native(st)
+	validator, err := staker.Get(signer.Address)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), validator.MissedSlots)
 }
 
 func TestConsensus_POS_Unscheduled(t *testing.T) {
-	t.Skip("not implemented")
 	config := thor.SoloFork
 	config.HAYABUSA = 2
 
@@ -102,7 +98,6 @@ func TestConsensus_POS_Unscheduled(t *testing.T) {
 }
 
 func TestConsensus_POS_BadScore(t *testing.T) {
-	t.Skip("not implemented")
 	config := thor.SoloFork
 	config.HAYABUSA = 2
 

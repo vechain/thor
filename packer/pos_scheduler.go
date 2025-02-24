@@ -6,11 +6,48 @@
 package packer
 
 import (
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/pos"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 )
 
 func (p *Packer) schedulePOS(parent *chain.BlockSummary, nowTimestamp uint64, state *state.State) (thor.Address, uint64, uint64, error) {
-	panic("implement me")
+	staker := builtin.Staker.Native(state)
+	leaderGroup, err := staker.LeaderGroup()
+	if err != nil {
+		return thor.Address{}, 0, 0, err
+	}
+
+	// TODO: There has been a decision in confluence to store the beneficiary on chain. Follow up on this and resolve this issue.
+	// https://github.com/vechain/protocol-board-repo/issues/432
+	var beneficiary thor.Address
+	if p.beneficiary != nil {
+		beneficiary = *p.beneficiary
+	}
+
+	// TODO: We're copying the old validator selector, not based on weight. This is a temporary solution that will be iterated.
+	// TODO: See also consensus/pos_validator.go
+	// https://github.com/vechain/protocol-board-repo/issues/429
+	var seed []byte
+	seed, err = p.seeder.Generate(parent.Header.ID())
+	if err != nil {
+		return thor.Address{}, 0, 0, err
+	}
+	sched, err := pos.NewScheduler(p.nodeMaster, leaderGroup, parent.Header.Number(), parent.Header.Timestamp(), seed)
+	if err != nil {
+		return thor.Address{}, 0, 0, err
+	}
+
+	newBlockTime := sched.Schedule(nowTimestamp)
+	missedSlots, score := sched.Updates(newBlockTime)
+
+	for _, addr := range missedSlots {
+		if err := staker.IncrementMissedSlot(addr); err != nil {
+			return thor.Address{}, 0, 0, err
+		}
+	}
+
+	return beneficiary, newBlockTime, score, nil
 }

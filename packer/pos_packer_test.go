@@ -18,7 +18,6 @@ import (
 )
 
 func TestFlow_Schedule_POS(t *testing.T) {
-	t.Skip("not implemented")
 	config := thor.SoloFork
 	config.HAYABUSA = 2
 
@@ -42,8 +41,6 @@ func TestFlow_Schedule_POS(t *testing.T) {
 }
 
 func TestFlow_POS_MissedSlots(t *testing.T) {
-	// TODO: Uncomment bottom assertions
-	t.Skip("not implemented")
 	config := thor.SoloFork
 	config.HAYABUSA = 2
 
@@ -54,15 +51,14 @@ func TestFlow_POS_MissedSlots(t *testing.T) {
 	packNext(t, chain, thor.BlockInterval)   // mint block 2
 	packNext(t, chain, thor.BlockInterval*2) // mint block 3 with a gap
 
-	//st := chain.Stater().NewState(chain.Repo().BestBlockSummary().Root())
-	//staker := builtin.Staker.Native(st)
-	//validator, err := staker.Get(genesis.DevAccounts()[0].Address)
-	//assert.NoError(t, err)
-	//assert.Equal(t, uint64(1), validator.MissedSlots)
+	st := chain.Stater().NewState(chain.Repo().BestBlockSummary().Root())
+	staker := builtin.Staker.Native(st)
+	validator, err := staker.Get(genesis.DevAccounts()[0].Address)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), validator.MissedSlots)
 }
 
 func packNext(t *testing.T, chain *testchain.Chain, interval uint64) {
-	t.Skip("not implemented")
 	account := genesis.DevAccounts()[0]
 	p := packer.New(chain.Repo(), chain.Stater(), account.Address, &account.Address, chain.GetForkConfig())
 	parent := chain.Repo().BestBlockSummary()

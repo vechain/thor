@@ -9,6 +9,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"fmt"
+	"math"
 	"math/big"
 	"strings"
 	"testing"
@@ -57,10 +58,17 @@ type testConsensus struct {
 func newTestConsensus() (*testConsensus, error) {
 	db := muxdb.NewMem()
 
+	forkConfig := thor.NoFork
+	forkConfig.VIP191 = 1
+	forkConfig.BLOCKLIST = 0
+	forkConfig.VIP214 = 2
+	forkConfig.HAYABUSA = math.MaxUint32
+
 	launchTime := uint64(1526400000)
 	gen := new(genesis.Builder).
 		GasLimit(thor.InitialGasLimit).
 		Timestamp(launchTime).
+		ForkConfig(forkConfig).
 		State(func(state *state.State) error {
 			bal, _ := new(big.Int).SetString("1000000000000000000000000000", 10)
 			state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
@@ -83,12 +91,6 @@ func newTestConsensus() (*testConsensus, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	forkConfig := thor.NoFork
-	forkConfig.VIP191 = 1
-	forkConfig.BLOCKLIST = 0
-	forkConfig.VIP214 = 2
-	forkConfig.HAYABUSA = 3
 
 	proposer := genesis.DevAccounts()[0]
 	p := packer.New(repo, stater, proposer.Address, &proposer.Address, forkConfig)
