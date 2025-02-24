@@ -11,8 +11,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/poa"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -34,7 +32,7 @@ func (c *Consensus) validate(
 		return nil, nil, err
 	}
 
-	candidates, err := c.validateProposer(header, parent, state)
+	receiptsHandler, err := c.validateProposer(header, parent, state)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -48,47 +46,27 @@ func (c *Consensus) validate(
 		return nil, nil, err
 	}
 
-	hasAuthorityEvent := func() bool {
-		for _, r := range receipts {
-			for _, o := range r.Outputs {
-				for _, ev := range o.Events {
-					if ev.Address == builtin.Authority.Address {
-						return true
-					}
-				}
-			}
-		}
-		return false
-	}()
-
-	// if no event emitted from Authority contract, it's believed that the candidates list not changed
-	if !hasAuthorityEvent {
-		// if no endorsor related transfer, or no event emitted from Params contract, the proposers list
-		// can be reused
-		hasEndorsorEvent := func() bool {
-			for _, r := range receipts {
-				for _, o := range r.Outputs {
-					for _, ev := range o.Events {
-						if ev.Address == builtin.Params.Address {
-							return true
-						}
-					}
-					for _, t := range o.Transfers {
-						if candidates.IsEndorsor(t.Sender) || candidates.IsEndorsor(t.Recipient) {
-							return true
-						}
-					}
-				}
-			}
-			return false
-		}()
-
-		if hasEndorsorEvent {
-			candidates.InvalidateCache()
-		}
-		c.candidatesCache.Add(header.ID(), candidates)
+	if err = receiptsHandler(receipts); err != nil {
+		return nil, nil, err
 	}
+
 	return stage, receipts, nil
+}
+
+func (c *Consensus) validateProposer(header *block.Header, parent *block.Header, state *state.State) (func(receipts tx.Receipts) error, error) {
+	if header.Number() <= c.forkConfig.HAYABUSA {
+		candidates, err := c.validateAuthorityProposer(header, parent, state)
+		if err != nil {
+			return nil, err
+		}
+
+		return c.authorityReceiptsHandler(candidates, header), nil
+	}
+
+	if err := c.validateStakingProposer(header, parent, state); err != nil {
+		return nil, err
+	}
+	return c.stakerReceiptsHandler(), nil
 }
 
 func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Header, nowTimestamp uint64) error {
@@ -158,66 +136,6 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 	}
 
 	return nil
-}
-
-func (c *Consensus) validateProposer(header *block.Header, parent *block.Header, st *state.State) (*poa.Candidates, error) {
-	signer, err := header.Signer()
-	if err != nil {
-		return nil, consensusError(fmt.Sprintf("block signer unavailable: %v", err))
-	}
-
-	authority := builtin.Authority.Native(st)
-	var candidates *poa.Candidates
-	if entry, ok := c.candidatesCache.Get(parent.ID()); ok {
-		candidates = entry.(*poa.Candidates).Copy()
-	} else {
-		list, err := authority.AllCandidates()
-		if err != nil {
-			return nil, err
-		}
-		candidates = poa.NewCandidates(list)
-	}
-
-	proposers, err := candidates.Pick(st)
-	if err != nil {
-		return nil, err
-	}
-
-	var sched poa.Scheduler
-	if header.Number() < c.forkConfig.VIP214 {
-		sched, err = poa.NewSchedulerV1(signer, proposers, parent.Number(), parent.Timestamp())
-	} else {
-		var seed []byte
-		seed, err = c.seeder.Generate(header.ParentID())
-		if err != nil {
-			return nil, err
-		}
-		sched, err = poa.NewSchedulerV2(signer, proposers, parent.Number(), parent.Timestamp(), seed)
-	}
-	if err != nil {
-		return nil, consensusError(fmt.Sprintf("block signer invalid: %v %v", signer, err))
-	}
-
-	if !sched.IsTheTime(header.Timestamp()) {
-		return nil, consensusError(fmt.Sprintf("block timestamp unscheduled: t %v, s %v", header.Timestamp(), signer))
-	}
-
-	updates, score := sched.Updates(header.Timestamp())
-	if parent.TotalScore()+score != header.TotalScore() {
-		return nil, consensusError(fmt.Sprintf("block total score invalid: want %v, have %v", parent.TotalScore()+score, header.TotalScore()))
-	}
-
-	for _, u := range updates {
-		if _, err := authority.Update(u.Address, u.Active); err != nil {
-			return nil, err
-		}
-		if !candidates.Update(u.Address, u.Active) {
-			// should never happen
-			panic("something wrong with candidates list")
-		}
-	}
-
-	return candidates, nil
 }
 
 func (c *Consensus) validateBlockBody(blk *block.Block) error {

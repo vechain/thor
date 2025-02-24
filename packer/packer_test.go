@@ -196,6 +196,7 @@ func TestBlocklist(t *testing.T) {
 		VIP191:    math.MaxUint32,
 		ETH_CONST: math.MaxUint32,
 		BLOCKLIST: 0,
+		HAYABUSA:  math.MaxUint32,
 	}
 
 	thor.MockBlocklist([]string{a0.Address.String()})
