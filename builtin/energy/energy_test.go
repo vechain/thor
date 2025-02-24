@@ -77,14 +77,33 @@ func TestInitialSupplyError(t *testing.T) {
 func TestTotalSupply(t *testing.T) {
 	st := state.New(muxdb.NewMem(), trie.Root{})
 
-	eng := New(thor.BytesToAddress([]byte("eng")), st, 0)
+	eng := New(thor.BytesToAddress([]byte("eng")), st, 1)
 
-	eng.SetInitialSupply(big.NewInt(123), big.NewInt(456))
+	eng.SetInitialSupply(big.NewInt(100000000000000000), big.NewInt(456))
 
 	totalSupply, err := eng.TotalSupply()
 
 	assert.Nil(t, err)
-	assert.Equal(t, totalSupply, big.NewInt(456))
+	assert.Equal(t, big.NewInt(456), totalSupply)
+
+	eng.blockTime = 1000
+	totalSupply, err = eng.TotalSupply()
+
+	assert.Nil(t, err)
+	assert.Equal(t, big.NewInt(499500000456), totalSupply)
+
+	eng.blockTime = 1500
+	eng.StopEnergyGrowth(1250)
+	totalSupply, err = eng.TotalSupply()
+
+	assert.Nil(t, err)
+	assert.Equal(t, big.NewInt(624500000456), totalSupply)
+
+	eng.blockTime = 2000
+	totalSupply, err = eng.TotalSupply()
+
+	assert.Nil(t, err)
+	assert.Equal(t, big.NewInt(624500000456), totalSupply)
 }
 
 func TestTokenTotalSupply(t *testing.T) {

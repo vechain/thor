@@ -89,6 +89,7 @@ type Runtime struct {
 	state       *state.State
 	ctx         *xenv.BlockContext
 	chainConfig vm.ChainConfig
+	forkConfig  *thor.ForkConfig
 }
 
 // New create a Runtime object.
@@ -149,6 +150,7 @@ func New(
 		state:       state,
 		ctx:         ctx,
 		chainConfig: currentChainConfig,
+		forkConfig:  &forkConfig,
 	}
 	return &rt
 }
@@ -512,12 +514,19 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 			}
 			overallGasPrice := tx.OverallGasPrice(baseGasPrice, provedWork)
 
-			reward := new(big.Int).SetUint64(receipt.GasUsed)
-			reward.Mul(reward, overallGasPrice)
-			reward.Mul(reward, rewardRatio)
-			reward.Div(reward, big.NewInt(1e18))
-			if err := builtin.Energy.Native(rt.state, rt.ctx.Time).Add(rt.ctx.Beneficiary, reward); err != nil {
-				return nil, err
+			var reward *big.Int
+			if rt.ctx.Number <= rt.forkConfig.HAYABUSA {
+				reward = new(big.Int).SetUint64(receipt.GasUsed)
+				reward.Mul(reward, overallGasPrice)
+				reward.Mul(reward, rewardRatio)
+				reward.Div(reward, big.NewInt(1e18))
+				if err := builtin.Energy.Native(rt.state, rt.ctx.Time).Add(rt.ctx.Beneficiary, reward); err != nil {
+					return nil, err
+				}
+			} else {
+				// TODO: implement once merged with galactica, should set priority fee as reward
+				// https://github.com/vechain/protocol-board-repo/issues/441
+				reward = new(big.Int).SetUint64(0)
 			}
 
 			receipt.Reward = reward

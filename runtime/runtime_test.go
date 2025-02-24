@@ -504,3 +504,86 @@ func TestExecuteTransactionFailure(t *testing.T) {
 
 	assert.NotNil(t, err)
 }
+
+func TestExecuteTransactionPreHayabusa(t *testing.T) {
+	origin := genesis.DevAccounts()[0]
+	beneficiary := thor.Address{}
+
+	db := muxdb.NewMem()
+
+	g := genesis.NewDevnet()
+	b0, _, _, err := g.Build(state.NewStater(db))
+	assert.Nil(t, err)
+
+	repo, _ := chain.NewRepository(db, b0)
+
+	state := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
+
+	beneficiaryEnergyBalance, err := state.GetEnergy(beneficiary, b0.Header().Timestamp())
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0), beneficiaryEnergyBalance)
+
+	originEnergy := new(big.Int)
+	originEnergy.SetString("9000000000000000000000000000000000000", 10)
+	state.SetEnergy(origin.Address, originEnergy, 0)
+
+	tx := GetMockTx(repo, t)
+
+	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.NoFork)
+
+	receipt, err := rt.ExecuteTransaction(&tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = receipt
+
+	beneficiaryEnergyBalance, err = state.GetEnergy(beneficiary, b0.Header().Timestamp())
+	assert.NoError(t, err)
+	assert.Equal(t, receipt.Reward, beneficiaryEnergyBalance)
+
+	expectedReward, _ := new(big.Int).SetString("11229600000000000000", 10)
+	assert.Equal(t, expectedReward, beneficiaryEnergyBalance)
+}
+
+func TestExecuteTransactionAfterHayabusa(t *testing.T) {
+	origin := genesis.DevAccounts()[0]
+	beneficiary := thor.Address{}
+
+	db := muxdb.NewMem()
+
+	g := genesis.NewDevnet()
+	b0, _, _, err := g.Build(state.NewStater(db))
+	assert.Nil(t, err)
+
+	repo, _ := chain.NewRepository(db, b0)
+
+	state := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
+
+	beneficiaryEnergyBalance, err := state.GetEnergy(beneficiary, b0.Header().Timestamp())
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0), beneficiaryEnergyBalance)
+
+	originEnergy := new(big.Int)
+	originEnergy.SetString("9000000000000000000000000000000000000", 10)
+	state.SetEnergy(origin.Address, originEnergy, 0)
+
+	tx := GetMockTx(repo, t)
+	fc := thor.NoFork
+	fc.HAYABUSA = 0
+	bc := &xenv.BlockContext{}
+	bc.Number = 1
+
+	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, bc, fc)
+
+	receipt, err := rt.ExecuteTransaction(&tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = receipt
+
+	beneficiaryEnergyBalance, err = state.GetEnergy(beneficiary, b0.Header().Timestamp())
+	assert.NoError(t, err)
+	assert.Equal(t, receipt.Reward, beneficiaryEnergyBalance)
+
+	assert.Equal(t, new(big.Int), beneficiaryEnergyBalance)
+}

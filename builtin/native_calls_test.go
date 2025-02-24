@@ -548,7 +548,10 @@ func TestEnergyNative(t *testing.T) {
 	toAddr := builtin.Energy.Address
 
 	abi := builtin.Energy.ABI
-	thorChain, _ = testchain.NewDefault()
+
+	fc := testchain.DefaultForkConfig
+	fc.HAYABUSA = 1
+	thorChain, _ = testchain.NewWithFork(fc)
 
 	var stringOutput string
 	err := callContractAndGetOutput(abi, "name", toAddr, &stringOutput)
@@ -710,6 +713,14 @@ func TestEnergyNative(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 0, len(fetchedTx.Outputs))
 	require.True(t, fetchedTx.Reverted)
+
+	// hayabusa fork happens on block 2, growth is calculated for 1 block = 10 seconds
+	err = callContractAndGetOutput(abi, "totalSupply", toAddr, &bigIntOutput)
+
+	exSupply = new(big.Int)
+	exSupply.SetString("10000000500000000000000000000", 10)
+	require.NoError(t, err)
+	require.Equal(t, exSupply, bigIntOutput)
 }
 
 func TestPrototypeNative(t *testing.T) {

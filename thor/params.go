@@ -60,4 +60,8 @@ var (
 	HayabusaEnergyGrowthStopTime = BytesToBytes32([]byte("hayabusa-energy-growth-stop-time"))
 
 	EnergyGrowthRate = big.NewInt(5000000000) // WEI THOR per token(VET) per second. about 0.000432 THOR per token per day.
+
+	ScalingFactor         = big.NewInt(64)      // scaling factor for rewards curve
+	TargetFactor          = big.NewInt(1200)    // target factor for rewards curve
+	NumberOfBlocksPerYear = big.NewInt(3153600) // number of blocks per year, non leap
 )
