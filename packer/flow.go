@@ -125,6 +125,9 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 		if f.runtime.Context().BaseFee == nil {
 			return fork.ErrBaseFeeNotSet
 		}
+		if t.MaxPriorityFeePerGas() == nil {
+			return badTxError{"max priority fee per gas not set"}
+		}
 	}
 
 	// check if tx already there

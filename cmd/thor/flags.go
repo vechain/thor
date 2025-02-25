@@ -176,6 +176,11 @@ var (
 		Usage: "comma separated list of allowed API tracers(none,all,call,prestate etc.)",
 	}
 
+	requireMaxPriorityFeePerGasFlag = cli.BoolFlag{
+		Name:  "require-max-priority-fee-per-gas",
+		Usage: "require max priority fee per gas for all transactions",
+	}
+
 	// solo mode only flags
 	onDemandFlag = cli.BoolFlag{
 		Name:  "on-demand",
