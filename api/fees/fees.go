@@ -7,14 +7,22 @@ package fees
 
 import (
 	"math"
+	"math/big"
 	"net/http"
 	"strconv"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/chain"
+)
+
+const priorityNumberOfBlocks = 20
+
+var (
+	priorityMinPriorityFee = big.NewInt(2)
 )
 
 type Fees struct {
@@ -86,7 +94,7 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 		return err
 	}
 
-	oldestBlockRevision, baseFees, gasUsedRatios, err := f.data.resolveRange(newestBlockSummary, blockCount)
+	oldestBlockRevision, baseFees, gasUsedRatios, _, err := f.data.resolveRange(newestBlockSummary, blockCount)
 	if err != nil {
 		return err
 	}
@@ -98,10 +106,37 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 	})
 }
 
+func (f *Fees) handleGetPriority(w http.ResponseWriter, _ *http.Request) error {
+	bestBlockSummary := f.data.repo.BestBlockSummary()
+	blockCount := uint32(math.Min(float64(priorityNumberOfBlocks), float64(f.backtraceLimit)))
+	blockCount = uint32(math.Min(float64(blockCount), float64(bestBlockSummary.Header.Number()+1)))
+
+	_, _, _, priorityFees, err := f.data.resolveRange(bestBlockSummary, blockCount)
+	if err != nil {
+		return err
+	}
+
+	priorityFee := (*hexutil.Big)(priorityMinPriorityFee)
+	if priorityFees.Len() > 0 {
+		priorityFeeEntry := (*priorityFees)[(priorityFees.Len()-1)*priorityPercentile/100]
+		if priorityFeeEntry.Cmp(priorityMinPriorityFee) > 0 {
+			priorityFee = (*hexutil.Big)(priorityFeeEntry)
+		}
+	}
+
+	return utils.WriteJSON(w, &FeesPriority{
+		MaxPriorityFeePerGas: priorityFee,
+	})
+}
+
 func (f *Fees) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 	sub.Path("/history").
 		Methods(http.MethodGet).
 		Name("GET /fees/history").
 		HandlerFunc(utils.WrapHandlerFunc(f.handleGetFeesHistory))
+	sub.Path("/priority").
+		Methods(http.MethodGet).
+		Name("GET /fees/priority").
+		HandlerFunc(utils.WrapHandlerFunc(f.handleGetPriority))
 }
