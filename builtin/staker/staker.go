@@ -23,8 +23,8 @@ var (
 	minStake = big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
 	maxStake = big.NewInt(0).Mul(big.NewInt(400e6), big.NewInt(1e18))
 
-	minStakingPeriod = uint32(360) * 24 * 14  // 2 weeks
-	maxStakingPeriod = uint32(360) * 24 * 365 // 1 year
+	//minStakingPeriod = uint32(360) * 24 * 14  // 2 weeks
+	//maxStakingPeriod = uint32(360) * 24 * 365 // 1 year
 
 	slotPreviousExitKey = thor.Blake2b(thor.Bytes32{slotPreviousExit}.Bytes())
 )
@@ -55,11 +55,37 @@ type Staker struct {
 	validators         *solidity.Mapping[thor.Address, *Validator]
 	leaderGroup        *linkedList
 	validatorQueue     *linkedList
+	minStakingPeriod   uint32
+	maxStakingPeriod   uint32
+	epochLength        uint32
 }
 
 // New create a new instance.
 func New(addr thor.Address, state *state.State) *Staker {
 	validators := solidity.NewMapping[thor.Address, *Validator](addr, state, thor.Bytes32{slotValidators})
+
+	minStakingPeriod := uint32(360) * 24 * 14
+	if num, err := solidity.NewUint256(addr, state, thor.BytesToBytes32([]byte("staker-min-staking-period"))).Get(); err == nil {
+		numUint64 := num.Uint64()
+		if numUint64 != 0 {
+			minStakingPeriod = uint32(numUint64)
+		}
+	}
+	maxStakingPeriod := uint32(360) * 24 * 365
+	if num, err := solidity.NewUint256(addr, state, thor.BytesToBytes32([]byte("staker-max-staking-period"))).Get(); err == nil {
+		numUint64 := num.Uint64()
+		if numUint64 != 0 {
+			maxStakingPeriod = uint32(numUint64)
+		}
+	}
+	epochLength := uint32(180)
+	if num, err := solidity.NewUint256(addr, state, thor.BytesToBytes32([]byte("epoch-length"))).Get(); err == nil {
+		numUint64 := num.Uint64()
+		if numUint64 != 0 {
+			epochLength = uint32(numUint64)
+		}
+	}
+
 	return &Staker{
 		addr:               addr,
 		state:              state,
@@ -70,6 +96,9 @@ func New(addr thor.Address, state *state.State) *Staker {
 		maxLeaderGroupSize: solidity.NewUint256(addr, state, thor.Bytes32{slotMaxLeaderGroupSize}),
 		leaderGroup:        newLinkedList(addr, state, validators, thor.Bytes32{slotActiveHead}, thor.Bytes32{slotActiveTail}),
 		validatorQueue:     newLinkedList(addr, state, validators, thor.Bytes32{slotQueuedHead}, thor.Bytes32{slotQueuedTail}),
+		minStakingPeriod:   minStakingPeriod,
+		maxStakingPeriod:   maxStakingPeriod,
+		epochLength:        epochLength,
 	}
 }
 
@@ -110,8 +139,8 @@ func (a *Staker) AddValidator(
 
 	period := expiry - currentBlock
 	if expiry <= currentBlock ||
-		period < minStakingPeriod ||
-		period > maxStakingPeriod {
+		period < a.minStakingPeriod ||
+		period > a.maxStakingPeriod {
 		return errors.New("expiry is out of boundaries")
 	}
 
@@ -291,6 +320,10 @@ func (a *Staker) LeaderGroup() (map[thor.Address]*Validator, error) {
 	return group, nil
 }
 
+func (a *Staker) EpochLength() uint32 {
+	return a.epochLength
+}
+
 func (a *Staker) TotalStake() (*big.Int, error) {
 	return a.totalStake.Get()
 }
@@ -382,7 +415,7 @@ func (a *Staker) Initialise(auth *authority.Authority, params *params.Params, cu
 	var previous *thor.Address
 	for i, candidate := range poaCandidates {
 		validator := &Validator{
-			Expiry:      currentBlock + minStakingPeriod,
+			Expiry:      currentBlock + a.minStakingPeriod,
 			Stake:       stake,
 			Weight:      weight,
 			Status:      StatusActive,

@@ -564,7 +564,7 @@ func TestStaker_Initialise(t *testing.T) {
 
 	assert.NoError(t, staker.Initialise(auth, param, 0)) // should succeed
 	// should be able to add validators after initialisation
-	assert.NoError(t, staker.AddValidator(0, addr, beneficiary, minStakingPeriod, minStake))
+	assert.NoError(t, staker.AddValidator(0, addr, beneficiary, uint32(360)*24*14, minStake))
 
 	staker = newStaker(t, 101, 101)
 	first, err := staker.FirstActive()
