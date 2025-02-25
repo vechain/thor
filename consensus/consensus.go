@@ -28,19 +28,22 @@ type Consensus struct {
 	seeder               *poa.Seeder
 	forkConfig           thor.ForkConfig
 	correctReceiptsRoots map[string]string
-	candidatesCache      *simplelru.LRU
+	authorityCache       *simplelru.LRU
+	validatorCache       *simplelru.LRU
 }
 
 // New create a Consensus instance.
 func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfig) *Consensus {
-	candidatesCache, _ := simplelru.NewLRU(16, nil)
+	authorityCache, _ := simplelru.NewLRU(16, nil)
+	validatorCache, _ := simplelru.NewLRU(16, nil)
 	return &Consensus{
 		repo:                 repo,
 		stater:               stater,
 		seeder:               poa.NewSeeder(repo),
 		forkConfig:           forkConfig,
 		correctReceiptsRoots: thor.LoadCorrectReceiptsRoots(),
-		candidatesCache:      candidatesCache,
+		authorityCache:       authorityCache,
+		validatorCache:       validatorCache,
 	}
 }
 

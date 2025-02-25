@@ -56,5 +56,8 @@ func (p *Packer) schedulePOS(parent *chain.BlockSummary, nowTimestamp uint64, st
 		}
 	}
 
+	// TODO: Call the staker.Housekeeping function and tidy up the pos.Validators
+	// https://github.com/vechain/protocol-board-repo/issues/443
+
 	return beneficiary, newBlockTime, score, nil
 }

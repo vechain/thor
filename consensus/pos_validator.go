@@ -15,18 +15,30 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func (c *Consensus) validateStakingProposer(header *block.Header, parent *block.Header, st *state.State) error {
+func (c *Consensus) validateStakingProposer(header *block.Header, parent *block.Header, st *state.State) (cacheHandler, error) {
 	signer, err := header.Signer()
 	if err != nil {
-		return consensusError(fmt.Sprintf("block signer unavailable: %v", err))
+		return nil, consensusError(fmt.Sprintf("block signer unavailable: %v", err))
 	}
-	staker := builtin.Staker.Native(st)
-
-	// TODO: Add caching for leaderGroup, similar to candidatesCache & poa.NewCandidates(list)
-	// https://github.com/vechain/protocol-board-repo/issues/430
-	leaderGroup, err := staker.LeaderGroup()
+	stakerContract := builtin.Staker.Native(st)
+	activeStake, err := stakerContract.ActiveStake()
 	if err != nil {
-		return err
+		return nil, err
+	}
+
+	var validators *pos.Validators
+	if entry, ok := c.validatorCache.Get(parent.ID()); ok {
+		validators = entry.(*pos.Validators).Copy()
+	} else {
+		leaders, err := stakerContract.LeaderGroup()
+		if err != nil {
+			return nil, err
+		}
+		validators = pos.NewValidators(leaders)
+	}
+	proposers, err := validators.Pick(st)
+	if err != nil {
+		return nil, err
 	}
 
 	// TODO: We're using the same seed mechanism as PoA. Should we use a different one?
@@ -35,40 +47,36 @@ func (c *Consensus) validateStakingProposer(header *block.Header, parent *block.
 	var seed []byte
 	seed, err = c.seeder.Generate(header.ParentID())
 	if err != nil {
-		return err
-	}
-	activeStake, err := staker.ActiveStake()
-	if err != nil {
-		return err
+		return nil, err
 	}
 
-	sched, err := pos.NewScheduler(signer, leaderGroup, activeStake, parent.Number(), parent.Timestamp(), seed)
+	sched, err := pos.NewScheduler(signer, proposers, activeStake, parent.Number(), parent.Timestamp(), seed)
 	if err != nil {
-		return consensusError(fmt.Sprintf("block signer invalid: %v %v", signer, err))
+		return nil, consensusError(fmt.Sprintf("block signer invalid: %v %v", signer, err))
 	}
-
 	if !sched.IsTheTime(header.Timestamp()) {
-		return consensusError(fmt.Sprintf("block timestamp unscheduled: t %v, s %v", header.Timestamp(), signer))
+		return nil, consensusError(fmt.Sprintf("block timestamp unscheduled: t %v, s %v", header.Timestamp(), signer))
 	}
-
 	updates, score := sched.Updates(header.Timestamp())
 	if parent.TotalScore()+score != header.TotalScore() {
-		return consensusError(fmt.Sprintf("block total score invalid: want %v, have %v", parent.TotalScore()+score, header.TotalScore()))
+		return nil, consensusError(fmt.Sprintf("block total score invalid: want %v, have %v", parent.TotalScore()+score, header.TotalScore()))
 	}
 
 	for _, addr := range updates {
-		if err := staker.IncrementMissedSlot(addr); err != nil {
-			return err
+		if err := stakerContract.IncrementMissedSlot(addr); err != nil {
+			return nil, err
 		}
 	}
 
-	return nil
+	// TODO: Call the staker.Housekeeping function and tidy up the pos.Validators
+	// https://github.com/vechain/protocol-board-repo/issues/443
+
+	return c.validatorCacheHandler(validators, header), nil
 }
 
-func (c *Consensus) stakerReceiptsHandler() func(receipts tx.Receipts) error {
-	// TODO Check the queue if we're @ an epoch block and implement post block logic
-	// https://github.com/vechain/protocol-board-repo/issues/431
+func (c *Consensus) validatorCacheHandler(validators *pos.Validators, header *block.Header) cacheHandler {
 	return func(receipts tx.Receipts) error {
+		c.validatorCache.Add(header.ID(), validators)
 		return nil
 	}
 }

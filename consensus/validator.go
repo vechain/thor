@@ -22,6 +22,8 @@ import (
 	"github.com/vechain/thor/v2/xenv"
 )
 
+type cacheHandler func(receipts tx.Receipts) error
+
 func (c *Consensus) validate(
 	state *state.State,
 	block *block.Block,
@@ -35,7 +37,7 @@ func (c *Consensus) validate(
 		return nil, nil, err
 	}
 
-	receiptsHandler, err := c.validateProposer(header, parent, state)
+	cacheHandler, err := c.validateProposer(header, parent, state)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -49,27 +51,23 @@ func (c *Consensus) validate(
 		return nil, nil, err
 	}
 
-	if err = receiptsHandler(receipts); err != nil {
+	if err = cacheHandler(receipts); err != nil {
 		return nil, nil, err
 	}
 
 	return stage, receipts, nil
 }
 
-func (c *Consensus) validateProposer(header *block.Header, parent *block.Header, state *state.State) (func(receipts tx.Receipts) error, error) {
+func (c *Consensus) validateProposer(header *block.Header, parent *block.Header, state *state.State) (cacheHandler, error) {
 	if header.Number() <= c.forkConfig.HAYABUSA {
-		candidates, err := c.validateAuthorityProposer(header, parent, state)
-		if err != nil {
-			return nil, err
-		}
-
-		return c.authorityReceiptsHandler(candidates, header), nil
+		return c.validateAuthorityProposer(header, parent, state)
 	}
 
-	if err := c.validateStakingProposer(header, parent, state); err != nil {
-		return nil, err
+	if header.Number() == c.forkConfig.HAYABUSA+1 {
+		c.authorityCache.Purge()
 	}
-	return c.stakerReceiptsHandler(), nil
+
+	return c.validateStakingProposer(header, parent, state)
 }
 
 func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Header, nowTimestamp uint64) error {

@@ -7,9 +7,9 @@ WORKDIR /usr/app
 COPY --from=inspector-base /usr/share/nginx/html /usr/app/html
 
 # should be built from context of the root of the project
-COPY builder.js /usr/app/builder.js
-COPY modify-inspector.js /usr/app/modify-inspector.js
-COPY inspector-entrypoint.sh /usr/app/entrypoint.sh
+COPY scripts/abi-builder.js /usr/app/abi-builder.js
+COPY scripts/modify-inspector.js /usr/app/modify-inspector.js
+COPY scripts/inspector-entrypoint.sh /usr/app/entrypoint.sh
 
 RUN npm install --global serve
 

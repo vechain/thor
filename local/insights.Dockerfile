@@ -6,8 +6,8 @@ COPY --from=insight-base /usr/share/nginx/html /usr/app/html
 
 WORKDIR /usr/app
 
-COPY modify-insight.js /usr/app/modify-insight.js
-COPY insights-entrypoint.sh /usr/app/entrypoint.sh
+COPY scripts/modify-insight.js /usr/app/modify-insight.js
+COPY scripts/insights-entrypoint.sh /usr/app/entrypoint.sh
 
 RUN npm install --global serve
 

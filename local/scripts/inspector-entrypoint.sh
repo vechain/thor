@@ -1,6 +1,6 @@
 #!/bin/sh
 
-node /usr/app/builder.js
+node /usr/app/abi-builder.js
 node /usr/app/modify-inspector.js
 
 ROOT_DIR=/usr/app/html

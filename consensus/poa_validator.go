@@ -15,7 +15,7 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func (c *Consensus) validateAuthorityProposer(header *block.Header, parent *block.Header, st *state.State) (*poa.Candidates, error) {
+func (c *Consensus) validateAuthorityProposer(header *block.Header, parent *block.Header, st *state.State) (cacheHandler, error) {
 	signer, err := header.Signer()
 	if err != nil {
 		return nil, consensusError(fmt.Sprintf("block signer unavailable: %v", err))
@@ -23,7 +23,7 @@ func (c *Consensus) validateAuthorityProposer(header *block.Header, parent *bloc
 
 	authority := builtin.Authority.Native(st)
 	var candidates *poa.Candidates
-	if entry, ok := c.candidatesCache.Get(parent.ID()); ok {
+	if entry, ok := c.authorityCache.Get(parent.ID()); ok {
 		candidates = entry.(*poa.Candidates).Copy()
 	} else {
 		list, err := authority.AllCandidates()
@@ -72,11 +72,11 @@ func (c *Consensus) validateAuthorityProposer(header *block.Header, parent *bloc
 		}
 	}
 
-	return candidates, nil
+	return c.authorityCacheHandler(candidates, header), nil
 }
 
 // handleAuthorityEvents checks each block for authority related events, and updates the candidates list accordingly.
-func (c *Consensus) authorityReceiptsHandler(candidates *poa.Candidates, header *block.Header) func(receipts tx.Receipts) error {
+func (c *Consensus) authorityCacheHandler(candidates *poa.Candidates, header *block.Header) cacheHandler {
 	return func(receipts tx.Receipts) error {
 		hasAuthorityEvent := func() bool {
 			for _, r := range receipts {
@@ -116,7 +116,7 @@ func (c *Consensus) authorityReceiptsHandler(candidates *poa.Candidates, header 
 			if hasEndorsorEvent {
 				candidates.InvalidateCache()
 			}
-			c.candidatesCache.Add(header.ID(), candidates)
+			c.authorityCache.Add(header.ID(), candidates)
 		}
 
 		return nil

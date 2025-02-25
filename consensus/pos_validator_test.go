@@ -33,13 +33,15 @@ func TestConsensus_PosFork(t *testing.T) {
 
 	// mint block 2: chain should fork but still use PoA for consensus
 	best, parent, st := mintBlock(t, chain)
-	assert.Error(t, consensus.validateStakingProposer(best.Header, parent.Header, st))
+	_, err = consensus.validateStakingProposer(best.Header, parent.Header, st)
+	assert.Error(t, err)
 	_, err = consensus.validateAuthorityProposer(best.Header, parent.Header, st)
 	assert.NoError(t, err)
 
 	// mint block 3: chain should be using PoS for consensus
 	best, parent, st = mintBlock(t, chain)
-	assert.NoError(t, consensus.validateStakingProposer(best.Header, parent.Header, st))
+	_, err = consensus.validateStakingProposer(best.Header, parent.Header, st)
+	assert.NoError(t, err)
 	_, err = consensus.validateProposer(best.Header, parent.Header, st)
 	assert.NoError(t, err)
 	_, err = consensus.validateAuthorityProposer(best.Header, parent.Header, st)
@@ -67,7 +69,7 @@ func TestConsensus_POS_MissedSlots(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NoError(t, chain.AddBlock(blk, stage, receipts))
 
-	err = consensus.validateStakingProposer(blk.Header(), parent.Header, st)
+	_, err = consensus.validateStakingProposer(blk.Header(), parent.Header, st)
 	assert.NoError(t, err)
 	staker := builtin.Staker.Native(st)
 	validator, err := staker.Get(signer.Address)
@@ -95,7 +97,7 @@ func TestConsensus_POS_Unscheduled(t *testing.T) {
 	blk, _, _, err := flow.Pack(signer.PrivateKey, 0, false)
 	assert.NoError(t, err)
 
-	err = consensus.validateStakingProposer(blk.Header(), parent.Header, st)
+	_, err = consensus.validateStakingProposer(blk.Header(), parent.Header, st)
 	assert.ErrorContains(t, err, "block timestamp unscheduled")
 }
 
@@ -132,7 +134,7 @@ func TestConsensus_POS_BadScore(t *testing.T) {
 		big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))))
 	assert.NoError(t, staker.ActivateNextValidator())
 
-	err = consensus.validateStakingProposer(blk.Header(), parent.Header, st)
+	_, err = consensus.validateStakingProposer(blk.Header(), parent.Header, st)
 	assert.ErrorContains(t, err, "block total score invalid")
 }
 
