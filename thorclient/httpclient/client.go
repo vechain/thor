@@ -306,6 +306,21 @@ func (c *Client) GetFeesHistory(blockCount uint32, newestBlock string) (*fees.Fe
 	return &history, nil
 }
 
+// GetFeesPriority retrieves the suggested maxPriorityFeePerGas for a transaction to be included in the next blocks.
+func (c *Client) GetFeesPriority() (*fees.FeesPriority, error) {
+	body, err := c.httpGET(c.url + "/fees/priority")
+	if err != nil {
+		return nil, fmt.Errorf("unable to get the fees priority - %w", err)
+	}
+
+	var priority fees.FeesPriority
+	if err = json.Unmarshal(body, &priority); err != nil {
+		return nil, fmt.Errorf("unable to unmarshal the fees priority - %w", err)
+	}
+
+	return &priority, nil
+}
+
 // RawHTTPPost sends a raw HTTP POST request to the specified URL with the provided data.
 func (c *Client) RawHTTPPost(url string, calldata interface{}) ([]byte, int, error) {
 	var data []byte
