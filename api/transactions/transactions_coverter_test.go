@@ -37,6 +37,7 @@ func TestConvertLegacyTransaction_Success(t *testing.T) {
 
 	result := convertTransaction(transaction, header)
 	// Common fields
+	assert.Equal(t, (math.HexOrDecimal64)(transaction.Type()), result.TxType)
 	assert.Equal(t, hexutil.Encode(br[:]), result.BlockRef)
 	assert.Equal(t, transaction.ChainTag(), result.ChainTag)
 	assert.Equal(t, transaction.Expiration(), result.Expiration)
@@ -77,6 +78,7 @@ func TestConvertDynTransaction_Success(t *testing.T) {
 
 	result := convertTransaction(transaction, header)
 	// Common fields
+	assert.Equal(t, (math.HexOrDecimal64)(transaction.Type()), result.TxType)
 	assert.Equal(t, hexutil.Encode(br[:]), result.BlockRef)
 	assert.Equal(t, transaction.ChainTag(), result.ChainTag)
 	assert.Equal(t, transaction.Expiration(), result.Expiration)
@@ -88,8 +90,8 @@ func TestConvertDynTransaction_Success(t *testing.T) {
 	assert.Equal(t, addr, *result.Clauses[1].To)
 	assert.Equal(t, convertClause(cla2), result.Clauses[1])
 	// DynFee fields
-	assert.Equal(t, maxFeePerGas, result.MaxFeePerGas)
-	assert.Equal(t, maxPriorityFeePerGas, result.MaxPriorityFeePerGas)
+	assert.Equal(t, (*math.HexOrDecimal256)(maxFeePerGas), result.MaxFeePerGas)
+	assert.Equal(t, (*math.HexOrDecimal256)(maxPriorityFeePerGas), result.MaxPriorityFeePerGas)
 	// Non dynFee fields
 	assert.Empty(t, result.GasPriceCoef)
 }

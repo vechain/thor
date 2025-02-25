@@ -6,8 +6,6 @@
 package transactions
 
 import (
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/vechain/thor/v2/block"
@@ -16,22 +14,22 @@ import (
 )
 
 type Transaction struct {
-	ID                   thor.Bytes32        `json:"id"`
-	ChainTag             byte                `json:"chainTag"`
-	BlockRef             string              `json:"blockRef"`
-	Expiration           uint32              `json:"expiration"`
-	Clauses              Clauses             `json:"clauses"`
-	GasPriceCoef         uint8               `json:"gasPriceCoef"`
-	Gas                  uint64              `json:"gas"`
-	MaxFeePerGas         *big.Int            `json:"maxFeePerGas,omitempty"`
-	MaxPriorityFeePerGas *big.Int            `json:"maxPriorityFeePerGas,omitempty"`
-	TxType               math.HexOrDecimal64 `json:"txType"`
-	Origin               thor.Address        `json:"origin"`
-	Delegator            *thor.Address       `json:"delegator"`
-	Nonce                math.HexOrDecimal64 `json:"nonce"`
-	DependsOn            *thor.Bytes32       `json:"dependsOn"`
-	Size                 uint32              `json:"size"`
-	Meta                 *TxMeta             `json:"meta"`
+	ID                   thor.Bytes32          `json:"id"`
+	TxType               math.HexOrDecimal64   `json:"txType"`
+	ChainTag             byte                  `json:"chainTag"`
+	BlockRef             string                `json:"blockRef"`
+	Expiration           uint32                `json:"expiration"`
+	Clauses              Clauses               `json:"clauses"`
+	GasPriceCoef         uint8                 `json:"gasPriceCoef"`
+	Gas                  uint64                `json:"gas"`
+	MaxFeePerGas         *math.HexOrDecimal256 `json:"maxFeePerGas,omitempty"`
+	MaxPriorityFeePerGas *math.HexOrDecimal256 `json:"maxPriorityFeePerGas,omitempty"`
+	Origin               thor.Address          `json:"origin"`
+	Delegator            *thor.Address         `json:"delegator"`
+	Nonce                math.HexOrDecimal64   `json:"nonce"`
+	DependsOn            *thor.Bytes32         `json:"dependsOn"`
+	Size                 uint32                `json:"size"`
+	Meta                 *TxMeta               `json:"meta"`
 }
 
 // convertTransaction convert a raw transaction into a json format transaction
@@ -64,8 +62,8 @@ func convertTransaction(trx *tx.Transaction, header *block.Header) *Transaction 
 	case tx.TypeLegacy:
 		t.GasPriceCoef = trx.GasPriceCoef()
 	default:
-		t.MaxFeePerGas = trx.MaxFeePerGas()
-		t.MaxPriorityFeePerGas = trx.MaxPriorityFeePerGas()
+		t.MaxFeePerGas = (*math.HexOrDecimal256)(trx.MaxFeePerGas())
+		t.MaxPriorityFeePerGas = (*math.HexOrDecimal256)(trx.MaxPriorityFeePerGas())
 	}
 
 	if header != nil {
