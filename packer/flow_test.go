@@ -62,7 +62,7 @@ func TestAdopt(t *testing.T) {
 	clause := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 
 	// Create and adopt two transactions
-	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
+	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork, false)
 	sum, err := repo.GetBlockSummary(b.Header().ID())
 	if err != nil {
 		t.Fatal("Error getting block summary:", err)
@@ -118,7 +118,7 @@ func TestAdoptTypedTxs(t *testing.T) {
 	clause := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 
 	// Create and adopt two transactions
-	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.ForkConfig{GALACTICA: 1})
+	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.ForkConfig{GALACTICA: 1}, false)
 	sum, err := repo.GetBlockSummary(b.Header().ID())
 	if err != nil {
 		t.Fatal("Error getting block summary:", err)
@@ -168,7 +168,7 @@ func TestPack(t *testing.T) {
 	forkConfig.FINALITY = 0
 
 	proposer := genesis.DevAccounts()[0]
-	p := packer.New(repo, stater, proposer.Address, &proposer.Address, forkConfig)
+	p := packer.New(repo, stater, proposer.Address, &proposer.Address, forkConfig, false)
 	parentSum, _ := repo.GetBlockSummary(parent.Header().ID())
 	flow, _ := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval)
 
@@ -200,7 +200,7 @@ func TestPackAfterGalacticaFork(t *testing.T) {
 	forkConfig.GALACTICA = 2
 
 	proposer := genesis.DevAccounts()[0]
-	p := packer.New(repo, stater, proposer.Address, &proposer.Address, forkConfig)
+	p := packer.New(repo, stater, proposer.Address, &proposer.Address, forkConfig, false)
 	parentSum, _ := repo.GetBlockSummary(parent.Header().ID())
 	flow, _ := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval)
 
@@ -262,7 +262,7 @@ func TestAdoptErr(t *testing.T) {
 	addr := thor.BytesToAddress([]byte("to"))
 	clause := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 
-	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
+	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork, false)
 	sum, _ := repo.GetBlockSummary(b.Header().ID())
 
 	flow, _ := pkr.Schedule(sum, uint64(time.Now().Unix()))

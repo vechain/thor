@@ -25,13 +25,14 @@ var logger = log.WithContext("pkg", "packer")
 
 // Packer to pack txs and build new blocks.
 type Packer struct {
-	repo           *chain.Repository
-	stater         *state.Stater
-	nodeMaster     thor.Address
-	beneficiary    *thor.Address
-	targetGasLimit uint64
-	forkConfig     thor.ForkConfig
-	seeder         *poa.Seeder
+	repo                 *chain.Repository
+	stater               *state.Stater
+	nodeMaster           thor.Address
+	beneficiary          *thor.Address
+	targetGasLimit       uint64
+	forkConfig           thor.ForkConfig
+	seeder               *poa.Seeder
+	requireTxPriorityFee bool
 }
 
 // New create a new Packer instance.
@@ -42,6 +43,7 @@ func New(
 	nodeMaster thor.Address,
 	beneficiary *thor.Address,
 	forkConfig thor.ForkConfig,
+	requireTxPriorityFee bool,
 ) *Packer {
 	return &Packer{
 		repo,
@@ -51,6 +53,7 @@ func New(
 		0,
 		forkConfig,
 		poa.NewSeeder(repo),
+		requireTxPriorityFee,
 	}
 }
 

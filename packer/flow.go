@@ -7,6 +7,7 @@ package packer
 
 import (
 	"crypto/ecdsa"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
@@ -125,8 +126,10 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 		if f.runtime.Context().BaseFee == nil {
 			return fork.ErrBaseFeeNotSet
 		}
-		if t.Type() == tx.TypeDynamicFee && t.MaxPriorityFeePerGas() == nil {
-			return errTxRequiresPriorityFee
+		isLegacy := t.Type() == tx.TypeLegacy
+		maxPriorityFeeNotGreaterThan0 := t.MaxPriorityFeePerGas() == nil || t.MaxPriorityFeePerGas().Cmp(big.NewInt(0)) <= 0
+		if f.packer.requireTxPriorityFee && (isLegacy || maxPriorityFeeNotGreaterThan0) {
+			return badTxError{"max priority fee per gas is required"}
 		}
 	}
 

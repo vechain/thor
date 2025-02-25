@@ -84,7 +84,7 @@ func TestP(t *testing.T) {
 
 	for {
 		best := repo.BestBlockSummary()
-		p := packer.New(repo, stater, a1.Address, &a1.Address, thor.NoFork)
+		p := packer.New(repo, stater, a1.Address, &a1.Address, thor.NoFork, false)
 		flow, err := p.Schedule(best, uint64(time.Now().Unix()))
 		if err != nil {
 			t.Fatal(err)
@@ -151,7 +151,7 @@ func TestForkVIP191(t *testing.T) {
 	fc.VIP191 = 1
 
 	best := repo.BestBlockSummary()
-	p := packer.New(repo, stater, a1.Address, &a1.Address, fc)
+	p := packer.New(repo, stater, a1.Address, &a1.Address, fc, false)
 	flow, err := p.Schedule(best, uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)
@@ -202,7 +202,7 @@ func TestBlocklist(t *testing.T) {
 	thor.MockBlocklist([]string{a0.Address.String()})
 
 	best := repo.BestBlockSummary()
-	p := packer.New(repo, stater, a0.Address, &a0.Address, forkConfig)
+	p := packer.New(repo, stater, a0.Address, &a0.Address, forkConfig, false)
 	flow, err := p.Schedule(best, uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)
@@ -238,7 +238,7 @@ func TestMock(t *testing.T) {
 
 	a0 := genesis.DevAccounts()[0]
 
-	p := packer.New(repo, stater, a0.Address, &a0.Address, thor.NoFork)
+	p := packer.New(repo, stater, a0.Address, &a0.Address, thor.NoFork, false)
 
 	best := repo.BestBlockSummary()
 
@@ -265,7 +265,7 @@ func TestSetGasLimit(t *testing.T) {
 
 	a0 := genesis.DevAccounts()[0]
 
-	p := packer.New(repo, stater, a0.Address, &a0.Address, thor.NoFork)
+	p := packer.New(repo, stater, a0.Address, &a0.Address, thor.NoFork, false)
 
 	// This is just for code coverage purposes. There is no getter function for targetGasLimit to test the function.
 	p.SetTargetGasLimit(0xFFFF)

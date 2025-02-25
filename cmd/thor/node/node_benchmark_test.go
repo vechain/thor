@@ -316,7 +316,7 @@ func createManyClausesPerTx(signerPK *ecdsa.PrivateKey, thorChain *testchain.Cha
 }
 
 func packTxsIntoBlock(thorChain *testchain.Chain, proposerAccount *genesis.DevAccount, parentBlk *block.Block, transactions tx.Transactions) (*block.Block, error) {
-	p := packer.New(thorChain.Repo(), thorChain.Stater(), proposerAccount.Address, &proposerAccount.Address, thorChain.GetForkConfig())
+	p := packer.New(thorChain.Repo(), thorChain.Stater(), proposerAccount.Address, &proposerAccount.Address, thorChain.GetForkConfig(), false)
 
 	parentSum, err := thorChain.Repo().GetBlockSummary(parentBlk.Header().ID())
 	if err != nil {

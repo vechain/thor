@@ -46,19 +46,18 @@ var (
 )
 
 type Node struct {
-	packer               *packer.Packer
-	cons                 *consensus.Consensus
-	master               *Master
-	repo                 *chain.Repository
-	bft                  *bft.Engine
-	logDB                *logdb.LogDB
-	txPool               *txpool.TxPool
-	txStashPath          string
-	comm                 *comm.Communicator
-	targetGasLimit       uint64
-	skipLogs             bool
-	requireTxPriorityFee bool
-	forkConfig           thor.ForkConfig
+	packer         *packer.Packer
+	cons           *consensus.Consensus
+	master         *Master
+	repo           *chain.Repository
+	bft            *bft.Engine
+	logDB          *logdb.LogDB
+	txPool         *txpool.TxPool
+	txStashPath    string
+	comm           *comm.Communicator
+	targetGasLimit uint64
+	skipLogs       bool
+	forkConfig     thor.ForkConfig
 
 	logDBFailed bool
 	bandwidth   bandwidth.Bandwidth
@@ -82,19 +81,18 @@ func New(
 	forkConfig thor.ForkConfig,
 ) *Node {
 	return &Node{
-		packer:               packer.New(repo, stater, master.Address(), master.Beneficiary, forkConfig),
-		cons:                 consensus.New(repo, stater, forkConfig),
-		master:               master,
-		repo:                 repo,
-		bft:                  bft,
-		logDB:                logDB,
-		txPool:               txPool,
-		txStashPath:          txStashPath,
-		comm:                 comm,
-		targetGasLimit:       targetGasLimit,
-		skipLogs:             skipLogs,
-		requireTxPriorityFee: requireTxPriorityFee,
-		forkConfig:           forkConfig,
+		packer:         packer.New(repo, stater, master.Address(), master.Beneficiary, forkConfig, requireTxPriorityFee),
+		cons:           consensus.New(repo, stater, forkConfig),
+		master:         master,
+		repo:           repo,
+		bft:            bft,
+		logDB:          logDB,
+		txPool:         txPool,
+		txStashPath:    txStashPath,
+		comm:           comm,
+		targetGasLimit: targetGasLimit,
+		skipLogs:       skipLogs,
+		forkConfig:     forkConfig,
 	}
 }
 

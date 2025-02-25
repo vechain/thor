@@ -73,7 +73,9 @@ func New(
 			stater,
 			genesis.DevAccounts()[0].Address,
 			&genesis.DevAccounts()[0].Address,
-			forkConfig),
+			forkConfig,
+			requireTxPriorityFee,
+		),
 		logDB:                logDB,
 		gasLimit:             gasLimit,
 		blockInterval:        blockInterval,
@@ -156,9 +158,6 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 				break
 			}
 			if packer.IsTxNotAdoptableNow(err) {
-				continue
-			}
-			if packer.IsTxPriorityFeeRequired(err) && !s.requireTxPriorityFee {
 				continue
 			}
 			txsToRemove = append(txsToRemove, tx)

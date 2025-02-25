@@ -176,7 +176,7 @@ func (c *Chain) MintClauses(account genesis.DevAccount, clauses []*tx.Clause) er
 // It schedules a new block, adopts transactions, packs them into a block, and commits it to the chain.
 func (c *Chain) MintBlock(account genesis.DevAccount, transactions ...*tx.Transaction) error {
 	// Create a new block packer with the current chain state and account information.
-	blkPacker := packer.New(c.Repo(), c.Stater(), account.Address, &genesis.DevAccounts()[0].Address, c.forkConfig)
+	blkPacker := packer.New(c.Repo(), c.Stater(), account.Address, &genesis.DevAccounts()[0].Address, c.forkConfig, false)
 
 	// Create a new block
 	blkFlow, err := blkPacker.Mock(
