@@ -38,16 +38,17 @@ var (
 
 // Solo mode is the standalone client without p2p server
 type Solo struct {
-	repo          *chain.Repository
-	stater        *state.Stater
-	txPool        *txpool.TxPool
-	packer        *packer.Packer
-	logDB         *logdb.LogDB
-	gasLimit      uint64
-	bandwidth     bandwidth.Bandwidth
-	blockInterval uint64
-	onDemand      bool
-	skipLogs      bool
+	repo                 *chain.Repository
+	stater               *state.Stater
+	txPool               *txpool.TxPool
+	packer               *packer.Packer
+	logDB                *logdb.LogDB
+	gasLimit             uint64
+	bandwidth            bandwidth.Bandwidth
+	blockInterval        uint64
+	onDemand             bool
+	skipLogs             bool
+	requireTxPriorityFee bool
 }
 
 // New returns Solo instance
@@ -59,6 +60,7 @@ func New(
 	gasLimit uint64,
 	onDemand bool,
 	skipLogs bool,
+	requireTxPriorityFee bool,
 	blockInterval uint64,
 	forkConfig thor.ForkConfig,
 ) *Solo {
@@ -72,11 +74,12 @@ func New(
 			genesis.DevAccounts()[0].Address,
 			&genesis.DevAccounts()[0].Address,
 			forkConfig),
-		logDB:         logDB,
-		gasLimit:      gasLimit,
-		blockInterval: blockInterval,
-		skipLogs:      skipLogs,
-		onDemand:      onDemand,
+		logDB:                logDB,
+		gasLimit:             gasLimit,
+		blockInterval:        blockInterval,
+		onDemand:             onDemand,
+		skipLogs:             skipLogs,
+		requireTxPriorityFee: requireTxPriorityFee,
 	}
 }
 
@@ -153,6 +156,9 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 				break
 			}
 			if packer.IsTxNotAdoptableNow(err) {
+				continue
+			}
+			if packer.IsTxPriorityFeeRequired(err) && !s.requireTxPriorityFee {
 				continue
 			}
 			txsToRemove = append(txsToRemove, tx)

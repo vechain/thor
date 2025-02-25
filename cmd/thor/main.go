@@ -100,6 +100,7 @@ func main() {
 			enableAdminFlag,
 			txPoolLimitPerAccountFlag,
 			allowedTracersFlag,
+			requireMaxPriorityFeePerGasFlag,
 		},
 		Action: defaultAction,
 		Commands: []cli.Command{
@@ -136,6 +137,7 @@ func main() {
 					adminAddrFlag,
 					enableAdminFlag,
 					allowedTracersFlag,
+					requireMaxPriorityFeePerGasFlag,
 				},
 				Action: soloAction,
 			},
@@ -291,6 +293,11 @@ func defaultAction(ctx *cli.Context) error {
 		defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
 	}
 
+	requireTxPriorityFee := ctx.Bool(requireMaxPriorityFeePerGasFlag.Name)
+	if requireTxPriorityFee {
+		log.Info("max priority fee per gas is required in transactions")
+	}
+
 	return node.New(
 		master,
 		repo,
@@ -302,6 +309,7 @@ func defaultAction(ctx *cli.Context) error {
 		p2pCommunicator.Communicator(),
 		ctx.Uint64(targetGasLimitFlag.Name),
 		skipLogs,
+		requireTxPriorityFee,
 		forkConfig,
 	).Run(exitSignal)
 }
@@ -458,6 +466,11 @@ func soloAction(ctx *cli.Context) error {
 		defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
 	}
 
+	requireTxPriorityFee := ctx.Bool(requireMaxPriorityFeePerGasFlag.Name)
+	if requireTxPriorityFee {
+		log.Info("max priority fee per gas is required in transactions")
+	}
+
 	return solo.New(repo,
 		state.NewStater(mainDB),
 		logDB,
@@ -465,6 +478,7 @@ func soloAction(ctx *cli.Context) error {
 		ctx.Uint64(gasLimitFlag.Name),
 		onDemandBlockProduction,
 		skipLogs,
+		requireTxPriorityFee,
 		blockProductionInterval,
 		forkConfig).Run(exitSignal)
 }

@@ -209,6 +209,7 @@ func benchmarkBlockProcess(b *testing.B, db *muxdb.MuxDB, accounts []genesis.Dev
 		nil,
 		10_000_000,
 		true,
+		false,
 		thor.NoFork,
 	)
 

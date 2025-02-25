@@ -137,6 +137,9 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 				if packer.IsTxNotAdoptableNow(err) {
 					continue
 				}
+				if packer.IsTxPriorityFeeRequired(err) && !n.requireTxPriorityFee {
+					continue
+				}
 				txsToRemove = append(txsToRemove, tx)
 			}
 		}

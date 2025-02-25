@@ -126,7 +126,7 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 			return fork.ErrBaseFeeNotSet
 		}
 		if t.MaxPriorityFeePerGas() == nil {
-			return badTxError{"max priority fee per gas not set"}
+			return errTxRequiresPriorityFee
 		}
 	}
 

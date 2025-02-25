@@ -12,6 +12,7 @@ var (
 	errTxNotAdoptableNow     = errors.New("tx not adoptable now")
 	errTxNotAdoptableForever = errors.New("tx not adoptable forever")
 	errKnownTx               = errors.New("known tx")
+	errTxRequiresPriorityFee = errors.New("max priority fee per gas not set")
 )
 
 // IsGasLimitReached block if full of txs.
@@ -33,6 +34,11 @@ func IsBadTx(err error) bool {
 // IsKnownTx tx is already adopted, or in the chain.
 func IsKnownTx(err error) bool {
 	return errors.Cause(err) == errKnownTx
+}
+
+// IsTxPriorityFeeRequired maxPriorityFeePerGas not set.
+func IsTxPriorityFeeRequired(err error) bool {
+	return errors.Cause(err) == errTxRequiresPriorityFee
 }
 
 type badTxError struct {
