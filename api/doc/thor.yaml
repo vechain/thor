@@ -763,7 +763,7 @@ paths:
       description: |
         Retrieve historical fee data, including the gas used ratio per block.
         Will return only fees for accessible blocks.
-        Max accessible blocks = BestBlock - api-backtrace-limit-flag .
+        Max accessible blocks = BestBlock - api-backtrace-limit-flag.
         api-backtrace-limit defaults to 1000 blocks.
       parameters:
         - $ref: '#/components/parameters/BlockCountInQuery'
@@ -782,6 +782,21 @@ paths:
               schema:
                 type: string
                 example: 'Invalid revision'
+  
+  /fees/priority:
+    get:
+      tags:
+        - Fees
+      summary: Suggest a priority fee for a transaction to be included in a block
+      description: |
+        This endpoint allows you to estimate the priority fee for a transaction to be included in a block.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetFeesPriorityResponse'
 
 components:
   schemas:
@@ -1275,6 +1290,18 @@ components:
               example:
                 - 0.75
                 - 0.22
+
+    GetFeesPriorityResponse:
+      type: object
+      title: GetFeesPriorityResponse
+      allOf:
+        - properties:
+            maxPriorityFeePerGas:
+              type: string
+              format: hex
+              description: |
+                The suggested maximum priority fee per gas as an hexadecimal string.
+              example: '0x98'
 
     TxMeta:
       title: TxMeta
