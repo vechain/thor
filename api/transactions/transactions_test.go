@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -413,8 +414,8 @@ func checkMatchingTx(t *testing.T, expectedTx *tx.Transaction, actualTx *transac
 		assert.Empty(t, actualTx.MaxPriorityFeePerGas)
 	case tx.TypeDynamicFee:
 		assert.Empty(t, actualTx.GasPriceCoef)
-		assert.Equal(t, expectedTx.MaxFeePerGas(), actualTx.MaxFeePerGas)
-		assert.Equal(t, expectedTx.MaxPriorityFeePerGas(), actualTx.MaxPriorityFeePerGas)
+		assert.Equal(t, (*math.HexOrDecimal256)(expectedTx.MaxFeePerGas()), actualTx.MaxFeePerGas)
+		assert.Equal(t, (*math.HexOrDecimal256)(expectedTx.MaxPriorityFeePerGas()), actualTx.MaxPriorityFeePerGas)
 	}
 }
 

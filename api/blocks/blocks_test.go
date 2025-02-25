@@ -16,6 +16,7 @@ import (
 	"strings"
 	"testing"
 
+	hexMath "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
@@ -290,6 +291,7 @@ func checkCollapsedBlock(t *testing.T, expBl *block.Block, actBl *blocks.JSONCol
 	for i, tx := range expBl.Transactions() {
 		assert.Equal(t, tx.ID(), actBl.Transactions[i], "txid should be equal")
 	}
+	assert.Equal(t, (*hexMath.HexOrDecimal256)(header.BaseFee()), actBl.BaseFee, "BaseFee should be equal")
 }
 
 func checkExpandedBlock(t *testing.T, expBl *block.Block, actBl *blocks.JSONExpandedBlock) {
@@ -308,4 +310,5 @@ func checkExpandedBlock(t *testing.T, expBl *block.Block, actBl *blocks.JSONExpa
 	for i, tx := range expBl.Transactions() {
 		assert.Equal(t, tx.ID(), actBl.Transactions[i].ID, "txid should be equal")
 	}
+	assert.Equal(t, (*hexMath.HexOrDecimal256)(header.BaseFee()), actBl.BaseFee, "BaseFee should be equal")
 }
