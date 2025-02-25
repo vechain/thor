@@ -196,7 +196,7 @@ func buildJSONEmbeddedTxs(txs tx.Transactions, receipts tx.Receipts) []*JSONEmbe
 			Reverted: receipt.Reverted,
 			Outputs:  jos,
 		}
-		if trx.Type() == tx.LegacyTxType {
+		if trx.Type() == tx.TypeLegacy {
 			embedTx.GasPriceCoef = trx.GasPriceCoef()
 		} else {
 			embedTx.MaxFeePerGas = trx.MaxFeePerGas()

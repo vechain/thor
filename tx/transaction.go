@@ -34,10 +34,12 @@ var (
 	ErrMaxFeeVeryHigh = errors.New("max fee per gas higher than 2^256-1")
 )
 
-// Starting from the max value allowed to avoid ambiguity with Ethereum tx type codes.
+type TxType = byte
+
+// Starting from 0x51 to avoid ambiguity with Ethereum tx type codes.
 const (
-	LegacyTxType     = 0x00
-	DynamicFeeTxType = 0x51
+	TypeLegacy     = TxType(0x00)
+	TypeDynamicFee = TxType(0x51)
 )
 
 // Transaction is an immutable tx type.
@@ -145,7 +147,7 @@ func (t *Transaction) Hash() (hash thor.Bytes32) {
 	defer func() { t.cache.hash.Store(hash) }()
 
 	// Legacy tx don't have type prefix.
-	if t.Type() == LegacyTxType {
+	if t.Type() == TypeLegacy {
 		return rlpHash(t)
 	}
 	return prefixedRlpHash(t.Type(), t.body)
@@ -297,7 +299,7 @@ func (t *Transaction) encodeTyped(w *bytes.Buffer) error {
 // For legacy transactions, it returns the RLP encoding. For typed
 // transactions, it returns the type RLP encoding of the tx.
 func (t *Transaction) MarshalBinary() ([]byte, error) {
-	if t.Type() == LegacyTxType {
+	if t.Type() == TypeLegacy {
 		return rlp.EncodeToBytes(t.body)
 	}
 	var buf bytes.Buffer
@@ -329,7 +331,7 @@ func (t *Transaction) UnmarshalBinary(b []byte) error {
 
 // EncodeRLP implements rlp.Encoder
 func (t *Transaction) EncodeRLP(w io.Writer) error {
-	if t.Type() == LegacyTxType {
+	if t.Type() == TypeLegacy {
 		return rlp.Encode(w, &t.body)
 	}
 	buf := encodeBufferPool.Get().(*bytes.Buffer)
@@ -381,7 +383,7 @@ func (t *Transaction) decodeTyped(b []byte) (TxData, error) {
 		return nil, errEmptyTypedTx
 	}
 	switch b[0] {
-	case DynamicFeeTxType:
+	case TypeDynamicFee:
 		var body DynamicFeeTransaction
 		err := rlp.DecodeBytes(b[1:], &body)
 		return &body, err
@@ -536,7 +538,7 @@ func (t *Transaction) String() string {
 `, t.ID(), t.Size(), originStr, t.body.clauses(), t.body.gas(),
 		t.body.chainTag(), br.Number(), br[4:], t.body.expiration(), dependsOn, t.body.nonce(), t.UnprovedWork(), delegatorStr, t.body.signature())
 
-	if t.Type() == LegacyTxType {
+	if t.Type() == TypeLegacy {
 		return fmt.Sprintf(`%v
 		GasPriceCoef:   %v
 		`, s, t.body.gasPriceCoef())

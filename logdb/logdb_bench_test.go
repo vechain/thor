@@ -47,7 +47,7 @@ func BenchmarkFakeDB_NewestBlockID(t *testing.B) {
 
 	b := new(block.Builder).
 		ParentID(new(block.Builder).Build().Header().ID()).
-		Transaction(newTx(tx.LegacyTxType)).
+		Transaction(newTx(tx.TypeLegacy)).
 		Build()
 	receipts := tx.Receipts{newReceipt()}
 
@@ -112,7 +112,7 @@ func BenchmarkFakeDB_WriteBlocks(t *testing.B) {
 				for i := 0; i < writeCount; i++ {
 					blk = new(block.Builder).
 						ParentID(blk.Header().ID()).
-						Transaction(newTx(tx.LegacyTxType)).
+						Transaction(newTx(tx.TypeLegacy)).
 						Build()
 					receipts := tx.Receipts{newReceipt(), newReceipt()}
 					require.NoError(t, w.Write(blk, receipts))
@@ -126,7 +126,7 @@ func BenchmarkFakeDB_WriteBlocks(t *testing.B) {
 				for i := 0; i < writeCount; i++ {
 					blk = new(block.Builder).
 						ParentID(blk.Header().ID()).
-						Transaction(newTx(tx.LegacyTxType)).
+						Transaction(newTx(tx.TypeLegacy)).
 						Build()
 					receipts := tx.Receipts{newReceipt(), newReceipt()}
 					require.NoError(t, w.Write(blk, receipts))

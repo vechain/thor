@@ -238,9 +238,9 @@ func createOneClausePerTx(signerPK *ecdsa.PrivateKey, thorChain *testchain.Chain
 	for gasUsed < 9_500_000 {
 		toAddr := datagen.RandAddress()
 		cla := tx.NewClause(&toAddr).WithValue(big.NewInt(10000))
-		b := tx.NewTxBuilder(tx.LegacyTxType)
+		b := tx.NewTxBuilder(tx.TypeLegacy)
 		if gasUsed%2 == 0 {
-			b = tx.NewTxBuilder(tx.DynamicFeeTxType)
+			b = tx.NewTxBuilder(tx.TypeDynamicFee)
 		}
 		transaction := b.
 			ChainTag(thorChain.Repo().ChainTag()).
@@ -271,7 +271,7 @@ func createManyClausesPerTxLegacy(signerPK *ecdsa.PrivateKey, thorChain *testcha
 	gasUsed := uint64(0)
 	txGas := uint64(42_000)
 
-	transactionBuilder := tx.NewTxBuilder(tx.LegacyTxType).
+	transactionBuilder := tx.NewTxBuilder(tx.TypeLegacy).
 		ChainTag(thorChain.Repo().ChainTag()).
 		GasPriceCoef(1).
 		Expiration(math.MaxUint32 - 1).
@@ -301,7 +301,7 @@ func createManyClausesPerTxDynFee(signerPK *ecdsa.PrivateKey, thorChain *testcha
 	gasUsed := uint64(0)
 	txGas := uint64(42_000)
 
-	transactionBuilder := tx.NewTxBuilder(tx.DynamicFeeTxType).
+	transactionBuilder := tx.NewTxBuilder(tx.TypeDynamicFee).
 		ChainTag(thorChain.Repo().ChainTag()).
 		MaxFeePerGas(big.NewInt(1000000)).
 		MaxPriorityFeePerGas(big.NewInt(100)).

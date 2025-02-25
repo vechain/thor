@@ -19,7 +19,7 @@ func TestSign(t *testing.T) {
 	pk, err := crypto.GenerateKey()
 	assert.NoError(t, err)
 
-	txTypes := []int{LegacyTxType, DynamicFeeTxType}
+	txTypes := []TxType{TypeLegacy, TypeDynamicFee}
 
 	for _, txType := range txTypes {
 		trx := NewTxBuilder(txType).MustBuild()
@@ -50,7 +50,7 @@ func TestSignDelegated(t *testing.T) {
 	originPK, err := crypto.GenerateKey()
 	assert.NoError(t, err)
 
-	for _, txType := range []int{LegacyTxType, DynamicFeeTxType} {
+	for _, txType := range []TxType{TypeLegacy, TypeDynamicFee} {
 		// Feature not enabled
 		trx := NewTxBuilder(txType).MustBuild()
 		signedTx, err := SignDelegated(trx, originPK, delegatorPK)

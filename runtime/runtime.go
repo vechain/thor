@@ -501,10 +501,13 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 			finalized = true
 
 			receipt := &Tx.Receipt{
-				Reverted: reverted,
-				Outputs:  txOutputs,
-				GasUsed:  tx.Gas() - leftOverGas,
-				GasPayer: payer,
+				Type: tx.Type(),
+				ReceiptBody: Tx.ReceiptBody{
+					Reverted: reverted,
+					Outputs:  txOutputs,
+					GasUsed:  tx.Gas() - leftOverGas,
+					GasPayer: payer,
+				},
 			}
 
 			receipt.Paid = new(big.Int).Mul(new(big.Int).SetUint64(receipt.GasUsed), gasPrice)
@@ -523,11 +526,8 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 				return nil, err
 			}
 			rewardGasPrice := fork.GalacticaPriorityPrice(tx, baseGasPrice, provedWork, &fork.GalacticaItems{IsActive: galactica, BaseFee: rt.ctx.BaseFee})
+			reward := fork.CalculateReward(receipt.GasUsed, rewardGasPrice, rewardRatio, galactica)
 
-			reward := new(big.Int).SetUint64(receipt.GasUsed)
-			reward.Mul(reward, rewardGasPrice)
-			reward.Mul(reward, rewardRatio)
-			reward.Div(reward, big.NewInt(1e18))
 			if err := builtin.Energy.Native(rt.state, rt.ctx.Time).Add(rt.ctx.Beneficiary, reward); err != nil {
 				return nil, err
 			}

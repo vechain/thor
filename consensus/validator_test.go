@@ -38,7 +38,7 @@ func TestValidateBlockBody(t *testing.T) {
 		{
 			name: "supported legacy tx type before galactica fork",
 			getBlock: func() *block.Block {
-				tr, err := tx.NewTxBuilder(tx.LegacyTxType).ChainTag(repo.ChainTag()).Expiration(10).Build()
+				tr, err := tx.NewTxBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Expiration(10).Build()
 				assert.NoError(t, err)
 				tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 				return new(block.Builder).Transaction(tr).Build()
@@ -49,7 +49,7 @@ func TestValidateBlockBody(t *testing.T) {
 		{
 			name: "unsupported tx type before galactica fork",
 			getBlock: func() *block.Block {
-				tr, err := tx.NewTxBuilder(tx.DynamicFeeTxType).ChainTag(repo.ChainTag()).Expiration(10).Build()
+				tr, err := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).Expiration(10).Build()
 				assert.NoError(t, err)
 				tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 				return new(block.Builder).Transaction(tr).Build()
@@ -60,7 +60,7 @@ func TestValidateBlockBody(t *testing.T) {
 		{
 			name: "supported legacy tx type after galactica fork",
 			getBlock: func() *block.Block {
-				tr, err := tx.NewTxBuilder(tx.LegacyTxType).ChainTag(repo.ChainTag()).Expiration(10).Build()
+				tr, err := tx.NewTxBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Expiration(10).Build()
 				assert.NoError(t, err)
 				tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 				return new(block.Builder).Transaction(tr).Build()
@@ -71,7 +71,7 @@ func TestValidateBlockBody(t *testing.T) {
 		{
 			name: "supported tx type after galactica fork",
 			getBlock: func() *block.Block {
-				tr, err := tx.NewTxBuilder(tx.DynamicFeeTxType).ChainTag(repo.ChainTag()).Expiration(10).Build()
+				tr, err := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).Expiration(10).Build()
 				assert.NoError(t, err)
 				tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 				return new(block.Builder).Transaction(tr).Build()
