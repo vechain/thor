@@ -307,6 +307,11 @@ func (c *Chain) GetForkConfig() thor.ForkConfig {
 	return c.forkConfig
 }
 
+// ChainTag returns the chain tag of the genesis block.
+func (c *Chain) ChainTag() byte {
+	return c.Repo().ChainTag()
+}
+
 // Database returns the current database.
 func (c *Chain) Database() *muxdb.MuxDB {
 	return c.db

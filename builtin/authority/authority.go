@@ -140,8 +140,23 @@ func (a *Authority) Revoke(nodeMaster thor.Address) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if !entry.IsLinked() && !entry.Active {
-		return false, nil
+	if !entry.IsLinked() {
+		head, err := a.getAddressPtr(headKey)
+		if err != nil {
+			return false, err
+		}
+		if head != nil && *head != nodeMaster { // entry is not linked and not head
+			return false, nil
+		}
+
+		// entry is not linked and is the last one
+		if err := a.setAddressPtr(headKey, nil); err != nil {
+			return false, err
+		}
+		if err := a.setAddressPtr(tailKey, nil); err != nil {
+			return false, err
+		}
+		return true, nil
 	}
 
 	if entry.Prev == nil {

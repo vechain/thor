@@ -29,16 +29,20 @@ func (c *Consensus) validateStakingProposer(header *block.Header, parent *block.
 		return err
 	}
 
-	// TODO: We're copying the old validator selector, not based on weight. This is a temporary solution that will be iterated.
+	// TODO: We're using the same seed mechanism as PoA. Should we use a different one?
 	// TODO: See also packer/pos_scheduler.go
-	// https://github.com/vechain/protocol-board-repo/issues/429
+	// https://github.com/vechain/protocol-board-repo/issues/442
 	var seed []byte
 	seed, err = c.seeder.Generate(header.ParentID())
 	if err != nil {
 		return err
 	}
+	activeStake, err := staker.ActiveStake()
+	if err != nil {
+		return err
+	}
 
-	sched, err := pos.NewScheduler(signer, leaderGroup, parent.Number(), parent.Timestamp(), seed)
+	sched, err := pos.NewScheduler(signer, leaderGroup, activeStake, parent.Number(), parent.Timestamp(), seed)
 	if err != nil {
 		return consensusError(fmt.Sprintf("block signer invalid: %v %v", signer, err))
 	}

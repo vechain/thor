@@ -84,16 +84,6 @@
     ],
     "authority": [
         {
-            "masterAddress": "0x435933c8064b4ae76be665428e0307ef2ccfbd68",
-            "endorsorAddress": "0x7567d83b7b8d80addcb281a71d54fc7b3364ffed",
-            "identity": "0x000000000000000068747470733a2f2f636f6e6e65782e76656368612e696e2f"
-        },
-        {
-            "masterAddress": "0xf370940abdbd2583bc80bfc19d19bc216c88ccf0",
-            "endorsorAddress": "0x7567d83b7b8d80addcb281a71d54fc7b3364ffed",
-            "identity": "0x000000000000000068747470733a2f2f656e762e7665636861696e2e6f72672f"
-        },
-        {
             "masterAddress": "0x0f872421dc479f3c11edd89512731814d0598db5",
             "endorsorAddress": "0x7567d83b7b8d80addcb281a71d54fc7b3364ffed",
             "identity": "0x0000000000000068747470733a2f2f617070732e7665636861696e2e6f72672f"

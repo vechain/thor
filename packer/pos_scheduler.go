@@ -19,6 +19,10 @@ func (p *Packer) schedulePOS(parent *chain.BlockSummary, nowTimestamp uint64, st
 	if err != nil {
 		return thor.Address{}, 0, 0, err
 	}
+	activeStake, err := staker.ActiveStake()
+	if err != nil {
+		return thor.Address{}, 0, 0, err
+	}
 
 	// TODO: There has been a decision in confluence to store the beneficiary on chain. Follow up on this and resolve this issue.
 	// https://github.com/vechain/protocol-board-repo/issues/432
@@ -27,20 +31,23 @@ func (p *Packer) schedulePOS(parent *chain.BlockSummary, nowTimestamp uint64, st
 		beneficiary = *p.beneficiary
 	}
 
-	// TODO: We're copying the old validator selector, not based on weight. This is a temporary solution that will be iterated.
+	// TODO: We're using the same seed mechanism as PoA. Should we use a different one?
 	// TODO: See also consensus/pos_validator.go
-	// https://github.com/vechain/protocol-board-repo/issues/429
+	// https://github.com/vechain/protocol-board-repo/issues/442
 	var seed []byte
 	seed, err = p.seeder.Generate(parent.Header.ID())
 	if err != nil {
 		return thor.Address{}, 0, 0, err
 	}
-	sched, err := pos.NewScheduler(p.nodeMaster, leaderGroup, parent.Header.Number(), parent.Header.Timestamp(), seed)
+	sched, err := pos.NewScheduler(p.nodeMaster, leaderGroup, activeStake, parent.Header.Number(), parent.Header.Timestamp(), seed)
 	if err != nil {
 		return thor.Address{}, 0, 0, err
 	}
 
-	newBlockTime := sched.Schedule(nowTimestamp)
+	newBlockTime, err := sched.Schedule(nowTimestamp)
+	if err != nil {
+		return thor.Address{}, 0, 0, errNotScheduled
+	}
 	missedSlots, score := sched.Updates(newBlockTime)
 
 	for _, addr := range missedSlots {

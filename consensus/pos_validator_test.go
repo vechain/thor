@@ -15,8 +15,10 @@ import (
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
 
 func TestConsensus_PosFork(t *testing.T) {
@@ -105,19 +107,23 @@ func TestConsensus_POS_BadScore(t *testing.T) {
 	assert.NoError(t, err)
 
 	consensus := New(chain.Repo(), chain.Stater(), config)
-	signer := genesis.DevAccounts()[0]
+	signer := genesis.DevAccounts()[1]
 
-	mintBlock(t, chain)                  // mint block 1
-	mintBlock(t, chain)                  // mint block 2
-	_, parent, st := mintBlock(t, chain) // mint block 3
+	trx := addAuthorityTx(t, chain.ChainTag(), genesis.DevAccounts()[1].Address)
+
+	mintBlock(t, chain, trx)             // mint block 1 - PoA
+	mintBlock(t, chain)                  // mint block 2 - PoA - Fork Happens
+	_, parent, st := mintBlock(t, chain) // mint block 3 - PoS
 
 	blkPacker := packer.New(chain.Repo(), chain.Stater(), signer.Address, &signer.Address, config)
 	flow, err := blkPacker.Mock(parent, parent.Header.Timestamp()+thor.BlockInterval, 10_000_000)
 	assert.NoError(t, err)
 	blk, _, _, err := flow.Pack(signer.PrivateKey, 0, false)
 	assert.NoError(t, err)
+
+	// Add a new staker to the state, so that the block score is invalid
 	staker := builtin.Staker.Native(st)
-	signer2 := genesis.DevAccounts()[1]
+	signer2 := genesis.DevAccounts()[2]
 	assert.NoError(t, staker.AddValidator(
 		parent.Header.Number(),
 		signer2.Address,
@@ -130,13 +136,30 @@ func TestConsensus_POS_BadScore(t *testing.T) {
 	assert.ErrorContains(t, err, "block total score invalid")
 }
 
-func mintBlock(t *testing.T, chain *testchain.Chain) (*chain.BlockSummary, *chain.BlockSummary, *state.State) {
+func mintBlock(t *testing.T, chain *testchain.Chain, txs ...*tx.Transaction) (*chain.BlockSummary, *chain.BlockSummary, *state.State) {
 	signer := genesis.DevAccounts()[0]
-	assert.NoError(t, chain.MintBlock(signer))
+	assert.NoError(t, chain.MintBlock(signer, txs...))
 
 	best := chain.Repo().BestBlockSummary()
 	parent, err := chain.Repo().GetBlockSummary(best.Header.ParentID())
 	assert.NoError(t, err)
 
 	return best, parent, chain.Stater().NewState(parent.Root())
+}
+
+func addAuthorityTx(t *testing.T, chainTag byte, addr thor.Address) *tx.Transaction {
+	authAdd, ok := builtin.Authority.ABI.MethodByName("add")
+	assert.True(t, ok)
+	addData, err := authAdd.EncodeInput(addr, addr, datagen.RandomHash())
+	assert.NoError(t, err)
+	clause := tx.NewClause(&builtin.Authority.Address).WithData(addData)
+	trx := new(tx.Builder).
+		Clause(clause).
+		Gas(1_000_000).
+		ChainTag(chainTag).
+		Expiration(100000).
+		Build()
+	trx = tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)
+
+	return trx
 }

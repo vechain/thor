@@ -8,6 +8,7 @@ package pos
 import (
 	"bytes"
 	"encoding/binary"
+	"math/big"
 	"sort"
 
 	"github.com/pkg/errors"
@@ -19,8 +20,16 @@ type Scheduler struct {
 	validator       *staker.Validator
 	addr            thor.Address
 	parentBlockTime uint64
-	shuffled        []thor.Address
 	validators      map[thor.Address]*staker.Validator
+	placements      []placement
+	seed            []byte
+}
+
+type placement struct {
+	start *big.Rat
+	end   *big.Rat
+	addr  thor.Address
+	hash  thor.Bytes32
 }
 
 // NewScheduler is a placeholder implementation for Staked based consensus.
@@ -30,20 +39,25 @@ type Scheduler struct {
 func NewScheduler(
 	signer thor.Address,
 	validators map[thor.Address]*staker.Validator,
+	totalStake *big.Int,
 	parentBlockNumber uint32,
 	parentBlockTime uint64,
 	seed []byte,
 ) (*Scheduler, error) {
+	if len(validators) == 0 {
+		return nil, errors.New("no validators")
+	}
+	if totalStake.Sign() == 0 {
+		return nil, errors.New("total stake is zero")
+	}
 	var (
 		listed    = false
 		validator *staker.Validator
-		list      []struct {
-			addr thor.Address
-			hash thor.Bytes32
-		}
 	)
 	var num [4]byte
 	binary.BigEndian.PutUint32(num[:], parentBlockNumber)
+
+	placements := make([]placement, 0, len(validators))
 
 	for addr, entry := range validators {
 		if addr == signer {
@@ -51,12 +65,9 @@ func NewScheduler(
 			listed = true
 		}
 
-		list = append(list, struct {
-			addr thor.Address
-			hash thor.Bytes32
-		}{
-			addr,
-			thor.Blake2b(seed, num[:], addr.Bytes()),
+		placements = append(placements, placement{
+			addr: addr,
+			hash: thor.Blake2b(seed, num[:], addr.Bytes()),
 		})
 	}
 
@@ -64,43 +75,51 @@ func NewScheduler(
 		return nil, errors.New("unauthorized block proposer")
 	}
 
-	sort.Slice(list, func(i, j int) bool {
-		return bytes.Compare(list[i].hash.Bytes(), list[j].hash.Bytes()) < 0
+	sort.Slice(placements, func(i, j int) bool {
+		return bytes.Compare(placements[i].hash.Bytes(), placements[j].hash.Bytes()) < 0
 	})
 
-	shuffled := make([]thor.Address, 0, len(list))
-	for _, t := range list {
-		shuffled = append(shuffled, t.addr)
+	prev := big.NewRat(0, 1)
+	totalStakeRat := new(big.Rat).SetInt(totalStake)
+
+	for i := range placements {
+		weightRat := new(big.Rat).SetInt(validators[placements[i].addr].Weight)
+		weight := new(big.Rat).Quo(weightRat, totalStakeRat)
+
+		placements[i].start = new(big.Rat).Set(prev)
+		placements[i].end = new(big.Rat).Add(prev, weight)
+		prev = placements[i].end
 	}
 
 	return &Scheduler{
 		validator,
 		signer,
 		parentBlockTime,
-		shuffled,
 		validators,
+		placements,
+		seed,
 	}, nil
 }
 
-func (s *Scheduler) Schedule(nowTime uint64) (newBlockTime uint64) {
+// Schedule to determine time of the proposer to produce a block, according to `nowTime`.
+// `newBlockTime` is promised to be >= nowTime and > parentBlockTime
+func (s *Scheduler) Schedule(nowTime uint64) (uint64, error) {
 	const T = thor.BlockInterval
 
-	newBlockTime = s.parentBlockTime + T
+	newBlockTime := s.parentBlockTime + T
 	if nowTime > newBlockTime {
 		// ensure T aligned, and >= nowTime
 		newBlockTime += (nowTime - newBlockTime + T - 1) / T * T
 	}
 
-	offset := (newBlockTime-s.parentBlockTime)/T - 1
-	for i, n := uint64(0), uint64(len(s.shuffled)); i < n; i++ {
-		index := (i + offset) % n
-		if s.shuffled[index] == s.addr {
-			return newBlockTime + i*T
+	for i := 0; i < len(s.placements); i++ {
+		slot := newBlockTime + uint64(i)*T
+		if s.expectedValidator(slot) == s.addr {
+			return slot, nil
 		}
 	}
 
-	// should never happen
-	panic("something wrong with proposers list")
+	return 0, errors.Errorf("not scheduled within %d slots", len(s.placements))
 }
 
 // IsScheduled returns if the schedule(proposer, blockTime) is correct.
@@ -116,8 +135,7 @@ func (s *Scheduler) IsScheduled(blockTime uint64, proposer thor.Address) bool {
 		return false
 	}
 
-	index := (blockTime - s.parentBlockTime - T) / T % uint64(len(s.shuffled))
-	return s.shuffled[index] == proposer
+	return s.expectedValidator(blockTime) == proposer
 }
 
 func (s *Scheduler) IsTheTime(newBlockTime uint64) bool {
@@ -129,14 +147,33 @@ func (s *Scheduler) Updates(newBlockTime uint64) ([]thor.Address, uint64) {
 
 	missed := make([]thor.Address, 0)
 
-	for i := uint64(0); i < uint64(len(s.shuffled)); i++ {
+	for i := uint64(0); i < uint64(len(s.placements)); i++ {
 		if s.parentBlockTime+T+i*T >= newBlockTime {
 			break
 		}
-		missed = append(missed, s.shuffled[i])
+
+		addr := s.expectedValidator(s.parentBlockTime + T + i*T)
+		missed = append(missed, addr)
 	}
 
 	// TODO: Slightly different behaviour to PoA, we don't reduce score for missed slots
 	// https://github.com/vechain/protocol-board-repo/issues/433
-	return missed, uint64(len(s.shuffled))
+	return missed, uint64(len(s.placements))
+}
+
+// expectedValidator returns the expected validator for the given block time.
+// It uses the seed to deterministically select a validator.
+func (s *Scheduler) expectedValidator(blockTime uint64) thor.Address {
+	hash := thor.Blake2b(s.seed, big.NewInt(0).SetUint64(blockTime).Bytes())
+	selector := new(big.Rat).SetInt(new(big.Int).SetBytes(hash.Bytes()))
+	divisor := new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), uint(len(hash)*8)))
+
+	selector.Quo(selector, divisor)
+
+	for i := range s.placements {
+		if selector.Cmp(s.placements[i].start) >= 0 && selector.Cmp(s.placements[i].end) < 0 {
+			return s.placements[i].addr
+		}
+	}
+	return thor.Address{}
 }

@@ -403,7 +403,7 @@ func (a *Staker) Initialise(auth *authority.Authority, params *params.Params, cu
 		}
 	}
 
-	total := big.NewInt(0).Mul(stake, big.NewInt(int64(len(poaCandidates))))
+	total := big.NewInt(0).Mul(weight, big.NewInt(int64(len(poaCandidates))))
 	a.activeStake.Set(total)
 	a.totalStake.Set(total)
 	a.leaderGroupSize.Set(big.NewInt(int64(len(poaCandidates))))
