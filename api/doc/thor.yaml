@@ -923,10 +923,13 @@ components:
       example:
         id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
         chainTag: 1
+        txType: '0x51'
         blockRef: '0x00000001511fc0be'
         expiration: 30
         clauses: [ ]
         gasPriceCoef: 128
+        maxFeePerGas: '0x5af3107a4000'
+        maxPriorityFeePerGas: '0x278d'
         gas: 21000
         origin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
         delegator: null
@@ -964,6 +967,7 @@ components:
         gasLimit: 11253579
         beneficiary: '0xb4094c25f86d628fdd571afc4077f0d0196afb48'
         gasUsed: 21000
+        baseFee: '0x9184e72a000'
         totalScore: 1029988
         txsRoot: '0x89dfd9fcd10c9e53d68592cf8b540b280b72d381b868523223992f3e09a806bb'
         txsFeatures: 0
@@ -1458,6 +1462,12 @@ components:
           description: The actual amount of gas used within the block
           example: 21000
           nullable: false
+        baseFee:
+          type: string
+          format: hex
+          description: The minimum amount of fee required to include a transaction in the current block
+          example: '0x9184e72a000'
+          nullable: true
         totalScore:
           type: integer
           format: uint64
@@ -1540,6 +1550,12 @@ components:
           example: '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
           pattern: '^0x[0-9a-f]{64}$'
           nullable: false
+        txType:
+          type: string
+          format: hex
+          description: The transaction type in hex.
+          example: '0x51'
+          nullable: false
         origin:
           type: string
           description: The address of the origin account.
@@ -1589,6 +1605,18 @@ components:
           description: The coefficient used to calculate the final gas price of the transaction.
           example: 0
           nullable: false
+        maxFeePerGas:
+          type: string
+          format: hex
+          description: The maximum amount that can be spent to pay for base fee and priority fee expressed in hex.
+          example: '0x5af3107a4000'
+          nullable: true
+        maxPriorityFeePerGas:
+          type: string
+          format: hex
+          description: The maximum amount that can be tipped to the validator expressed in hex.
+          example: '0x278d'
+          nullable: true
         gas:
           type: integer
           format: uint64
