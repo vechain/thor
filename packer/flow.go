@@ -125,7 +125,7 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 		if f.runtime.Context().BaseFee == nil {
 			return fork.ErrBaseFeeNotSet
 		}
-		if t.MaxPriorityFeePerGas() == nil {
+		if t.Type() == tx.TypeDynamicFee && t.MaxPriorityFeePerGas() == nil {
 			return errTxRequiresPriorityFee
 		}
 	}
