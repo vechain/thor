@@ -320,6 +320,17 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 			return nil, nil, consensusError("tx already exists")
 		}
 
+		// check if tx has enough fee to cover for base fee, if set
+		if header.BaseFee() != nil {
+			baseGasPrice, err := builtin.Params.Native(state).Get(thor.KeyBaseGasPrice)
+			if err != nil {
+				return nil, nil, err
+			}
+			if err := fork.ValidateGalacticaTxFee(tx, header.BaseFee(), baseGasPrice); err != nil {
+				return nil, nil, err
+			}
+		}
+
 		// check depended tx
 		if dep := tx.DependsOn(); dep != nil {
 			found, reverted, err := findDep(*dep)
