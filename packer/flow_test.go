@@ -365,3 +365,53 @@ func TestAdoptAfterGalacticaLowerBaseFeeThreshold(t *testing.T) {
 	best, _ := chain.BestBlock()
 	fmt.Println(best.Header().BaseFee())
 }
+
+func TestAdoptAfterGalacticaRequireMaxPriorityFee(t *testing.T) {
+	forkConfig := thor.ForkConfig{GALACTICA: 1}
+	chain, err := testchain.NewWithFork(forkConfig)
+	assert.NoError(t, err)
+
+	// Mint a block to activate Galactica fork
+	tr := tx.NewTxBuilder(tx.TypeLegacy).ChainTag(chain.Repo().ChainTag()).Gas(21000).Expiration(100).MustBuild()
+	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
+	err = chain.MintBlock(genesis.DevAccounts()[0], tr)
+	assert.NoError(t, err)
+
+	// Create a transaction with dynamic fee type, but without max priority fee
+	best := chain.Repo().BestBlockSummary()
+	baseFee := fork.CalcBaseFee(&thor.ForkConfig{}, best.Header)
+	txNoPriorityFee := tx.NewTxBuilder(tx.TypeDynamicFee).
+		ChainTag(chain.Repo().ChainTag()).
+		Nonce(2).
+		MaxFeePerGas(baseFee).
+		Gas(21000).
+		Expiration(100).
+		MustBuild()
+	txNoPriorityFee = tx.MustSign(txNoPriorityFee, genesis.DevAccounts()[0].PrivateKey)
+
+	// Create a transaction with dynamic fee type and max priority fee
+
+	txPriorityFee := tx.NewTxBuilder(tx.TypeDynamicFee).
+		ChainTag(chain.Repo().ChainTag()).
+		Nonce(2).
+		MaxFeePerGas(baseFee).
+		MaxPriorityFeePerGas(big.NewInt(1)).
+		Gas(21000).
+		Expiration(100).
+		MustBuild()
+	txPriorityFee = tx.MustSign(txPriorityFee, genesis.DevAccounts()[0].PrivateKey)
+
+	// Last parameter is true, which means that all txs require max priority fee
+	proposer := genesis.DevAccounts()[0]
+	pckr := packer.New(chain.Repo(), chain.Stater(), proposer.Address, &proposer.Address, forkConfig, true)
+
+	flow, _ := pckr.Schedule(best, uint64(time.Now().Unix()))
+
+	expectedErrorMessage := "bad tx: max priority fee per gas is required"
+	if err := flow.Adopt(txNoPriorityFee); err.Error() != expectedErrorMessage {
+		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
+	}
+
+	err = flow.Adopt(txPriorityFee)
+	assert.NoError(t, err)
+}
