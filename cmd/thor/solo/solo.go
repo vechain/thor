@@ -46,17 +46,13 @@ type Options struct {
 
 // Solo mode is the standalone client without p2p server
 type Solo struct {
-	repo                 *chain.Repository
-	stater               *state.Stater
-	txPool               *txpool.TxPool
-	packer               *packer.Packer
-	logDB                *logdb.LogDB
-	gasLimit             uint64
-	bandwidth            bandwidth.Bandwidth
-	blockInterval        uint64
-	onDemand             bool
-	skipLogs             bool
-	requireTxPriorityFee bool
+	repo      *chain.Repository
+	stater    *state.Stater
+	txPool    *txpool.TxPool
+	packer    *packer.Packer
+	logDB     *logdb.LogDB
+	bandwidth bandwidth.Bandwidth
+	options   Options
 }
 
 // New returns Solo instance
@@ -79,12 +75,8 @@ func New(
 			&genesis.DevAccounts()[0].Address,
 			forkConfig,
 		),
-		logDB:                logDB,
-		gasLimit:             options.GasLimit,
-		blockInterval:        options.BlockInterval,
-		onDemand:             options.OnDemand,
-		skipLogs:             options.SkipLogs,
-		requireTxPriorityFee: options.RequireTxPriorityFee,
+		logDB:   logDB,
+		options: options,
 	}
 }
 
@@ -117,11 +109,11 @@ func (s *Solo) loop(ctx context.Context) {
 			logger.Info("stopping interval packing service......")
 			return
 		case <-time.After(time.Duration(1) * time.Second):
-			if left := uint64(time.Now().Unix()) % s.blockInterval; left == 0 {
+			if left := uint64(time.Now().Unix()) % s.options.BlockInterval; left == 0 {
 				if err := s.packing(s.txPool.Executables(), false); err != nil {
 					logger.Error("failed to pack block", "err", err)
 				}
-			} else if s.onDemand {
+			} else if s.options.OnDemand {
 				pendingTxs := s.txPool.Executables()
 				if len(pendingTxs) > 0 {
 					if err := s.packing(pendingTxs, true); err != nil {
@@ -144,12 +136,12 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 		}
 	}()
 
-	if s.gasLimit == 0 {
+	if s.options.GasLimit == 0 {
 		suggested := s.bandwidth.SuggestGasLimit()
 		s.packer.SetTargetGasLimit(suggested)
 	}
 
-	flow, err := s.packer.Mock(best, now, s.gasLimit)
+	flow, err := s.packer.Mock(best, now, s.options.GasLimit)
 	if err != nil {
 		return errors.WithMessage(err, "mock packer")
 	}
@@ -182,7 +174,7 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 		return errors.WithMessage(err, "commit state")
 	}
 
-	if !s.skipLogs {
+	if !s.options.SkipLogs {
 		w := s.logDB.NewWriter()
 		if err := w.Write(b, receipts); err != nil {
 			return errors.WithMessage(err, "write logs")
@@ -245,11 +237,11 @@ func (s *Solo) init(ctx context.Context) error {
 		return err
 	}
 
-	if !s.onDemand {
+	if !s.options.OnDemand {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(time.Duration(int64(s.blockInterval)-time.Now().Unix()%int64(s.blockInterval)) * time.Second):
+		case <-time.After(time.Duration(int64(s.options.BlockInterval)-time.Now().Unix()%int64(s.options.BlockInterval)) * time.Second):
 		}
 	}
 
