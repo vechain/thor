@@ -36,6 +36,14 @@ var (
 	baseGasPrice = big.NewInt(1e13)
 )
 
+type Options struct {
+	GasLimit             uint64
+	SkipLogs             bool
+	RequireTxPriorityFee bool
+	OnDemand             bool
+	BlockInterval        uint64
+}
+
 // Solo mode is the standalone client without p2p server
 type Solo struct {
 	repo                 *chain.Repository
@@ -57,12 +65,8 @@ func New(
 	stater *state.Stater,
 	logDB *logdb.LogDB,
 	txPool *txpool.TxPool,
-	gasLimit uint64,
-	onDemand bool,
-	skipLogs bool,
-	requireTxPriorityFee bool,
-	blockInterval uint64,
 	forkConfig thor.ForkConfig,
+	options Options,
 ) *Solo {
 	return &Solo{
 		repo:   repo,
@@ -74,14 +78,14 @@ func New(
 			genesis.DevAccounts()[0].Address,
 			&genesis.DevAccounts()[0].Address,
 			forkConfig,
-			requireTxPriorityFee,
+			options.RequireTxPriorityFee,
 		),
 		logDB:                logDB,
-		gasLimit:             gasLimit,
-		blockInterval:        blockInterval,
-		onDemand:             onDemand,
-		skipLogs:             skipLogs,
-		requireTxPriorityFee: requireTxPriorityFee,
+		gasLimit:             options.GasLimit,
+		blockInterval:        options.BlockInterval,
+		onDemand:             options.OnDemand,
+		skipLogs:             options.SkipLogs,
+		requireTxPriorityFee: options.RequireTxPriorityFee,
 	}
 }
 

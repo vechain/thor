@@ -475,16 +475,20 @@ func soloAction(ctx *cli.Context) error {
 		log.Info("max priority fee per gas is required in transactions")
 	}
 
+	options := solo.Options{
+		GasLimit:             ctx.Uint64(gasLimitFlag.Name),
+		SkipLogs:             skipLogs,
+		RequireTxPriorityFee: requireTxPriorityFee,
+		OnDemand:             onDemandBlockProduction,
+		BlockInterval:        blockProductionInterval,
+	}
+
 	return solo.New(repo,
 		state.NewStater(mainDB),
 		logDB,
 		txPool,
-		ctx.Uint64(gasLimitFlag.Name),
-		onDemandBlockProduction,
-		skipLogs,
-		requireTxPriorityFee,
-		blockProductionInterval,
-		forkConfig).Run(exitSignal)
+		forkConfig,
+		options).Run(exitSignal)
 }
 
 func masterKeyAction(ctx *cli.Context) error {
