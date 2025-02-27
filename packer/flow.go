@@ -90,6 +90,16 @@ func (f *Flow) hasTx(txid thor.Bytes32, txBlockRef uint32) (bool, error) {
 	return f.runtime.Chain().HasTransaction(txid, txBlockRef)
 }
 
+func (f *Flow) requireMaxPriorityFeePerGas(t *tx.Transaction) error {
+	isLegacy := t.Type() == tx.TypeLegacy
+	maxPriorityFeeNotGreaterThan0 := t.MaxPriorityFeePerGas() == nil || t.MaxPriorityFeePerGas().Cmp(big.NewInt(0)) <= 0
+	if f.packer.requireTxPriorityFee && (isLegacy || maxPriorityFeeNotGreaterThan0) {
+		return badTxError{"max priority fee per gas is required"}
+	}
+
+	return nil
+}
+
 // Adopt try to execute the given transaction.
 // If the tx is valid and can be executed on current state (regardless of VM error),
 // it will be adopted by the new block.
@@ -127,18 +137,16 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 		if f.runtime.Context().BaseFee == nil {
 			return fork.ErrBaseFeeNotSet
 		}
-		isLegacy := t.Type() == tx.TypeLegacy
-		maxPriorityFeeNotGreaterThan0 := t.MaxPriorityFeePerGas() == nil || t.MaxPriorityFeePerGas().Cmp(big.NewInt(0)) <= 0
-		if f.packer.requireTxPriorityFee && (isLegacy || maxPriorityFeeNotGreaterThan0) {
-			return badTxError{"max priority fee per gas is required"}
-		}
-
 		baseGasPrice, err := builtin.Params.Native(f.runtime.State()).Get(thor.KeyBaseGasPrice)
 		if err != nil {
 			return err
 		}
 		if err := fork.ValidateGalacticaTxFee(t, f.runtime.Context().BaseFee, baseGasPrice); err != nil {
 			return errTxNotAdoptableNow
+		}
+
+		if err := f.requireMaxPriorityFeePerGas(t); err != nil {
+			return err
 		}
 	}
 
