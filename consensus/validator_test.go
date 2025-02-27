@@ -6,15 +6,19 @@
 package consensus
 
 import (
+	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
 )
 
@@ -88,5 +92,42 @@ func TestValidateBlockBody(t *testing.T) {
 			err := c.validateBlockBody(tt.getBlock())
 			assert.Equal(t, tt.expectedError, err)
 		})
+	}
+}
+
+func TestValidateBlock(t *testing.T) {
+	db := muxdb.NewMem()
+	gen := genesis.NewDevnet()
+	stater := state.NewStater(db)
+
+	genesis, _, _, err := gen.Build(stater)
+	assert.NoError(t, err)
+
+	state := stater.NewState(trie.Root{Hash: genesis.Header().StateRoot()})
+	repo, err := chain.NewRepository(db, genesis)
+	assert.NoError(t, err)
+
+	tests := []struct {
+		name    string
+		testFun func(t *testing.T)
+	}{
+		{
+			name: "valid block",
+			testFun: func(t *testing.T) {
+				baseFee := big.NewInt(100000)
+				tr := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).BlockRef(tx.NewBlockRef(10)).MaxFeePerGas(new(big.Int).Sub(baseFee, common.Big1)).MustBuild()
+				blk := new(block.Builder).BaseFee(baseFee).Transaction(tr).Build()
+
+				c := New(repo, stater, thor.ForkConfig{GALACTICA: 0})
+				s, r, err := c.verifyBlock(blk, state, 0)
+				assert.Nil(t, s)
+				assert.Nil(t, r)
+				assert.Equal(t, fork.ErrMaxFeePerGasTooLow, err)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, tt.testFun)
 	}
 }
