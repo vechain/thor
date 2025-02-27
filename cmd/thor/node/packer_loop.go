@@ -197,6 +197,12 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 			"et", fmt.Sprintf("%v|%v", common.PrettyDuration(execElapsed), common.PrettyDuration(commitElapsed)),
 			"id", shortID(newBlock.Header().ID()),
 		)
+		// TODO: log to be removed when fork is stable
+		if newBlock.Header().Number()+1 == n.forkConfig.GALACTICA {
+			logger.Info("Last block before Galactica fork activates!")
+		} else if newBlock.Header().Number() == n.forkConfig.GALACTICA {
+			logger.Info("Galactica fork activated!")
+		}
 
 		if v, updated := n.bandwidth.Update(newBlock.Header(), time.Duration(realElapsed)); updated {
 			logger.Trace("bandwidth updated", "gps", v)
