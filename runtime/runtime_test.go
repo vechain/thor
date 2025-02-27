@@ -16,7 +16,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/abi"
-	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
@@ -712,44 +711,6 @@ func TestGetValues(t *testing.T) {
 	assert.NotNil(t, runtimeChain)
 	assert.NotNil(t, runtimeState)
 	assert.NotNil(t, runtimeContext)
-}
-
-func TestTransactionsWithNotEnoughGasFee(t *testing.T) {
-	// Arrange
-	db := muxdb.NewMem()
-	g := genesis.NewDevnet()
-	b0, _, _, err := g.Build(state.NewStater(db))
-	assert.Nil(t, err)
-	repo, _ := chain.NewRepository(db, b0)
-	chain := repo.NewChain(b0.Header().ID())
-	state := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
-	baseFee := int64(1000000000)
-
-	b := new(block.Builder).
-		ParentID(repo.BestBlockSummary().Header.ID()).
-		TotalScore(repo.BestBlockSummary().Header.TotalScore() + 1).
-		Timestamp(repo.BestBlockSummary().Header.Timestamp() + 10).
-		BaseFee(big.NewInt(baseFee)).
-		Build()
-	repo.AddBlock(b, tx.Receipts{}, 0, true)
-
-	rt := runtime.New(chain, state, &xenv.BlockContext{BaseFee: big.NewInt(baseFee)}, thor.ForkConfig{})
-	illegalTx, err := tx.NewTxBuilder(tx.TypeDynamicFee).
-		ChainTag(repo.ChainTag()).
-		MaxFeePerGas(big.NewInt(baseFee / 10000)).
-		MaxPriorityFeePerGas(big.NewInt(baseFee / 100)).
-		Gas(21000).
-		Build()
-	assert.NoError(t, err)
-	illegalTx = tx.MustSign(illegalTx, genesis.DevAccounts()[0].PrivateKey)
-
-	// Act
-	receipt, err := rt.ExecuteTransaction(illegalTx)
-
-	// Assert
-	assert.Error(t, err)
-	assert.Equal(t, runtime.ErrMaxFeePerGasTooLow, err)
-	assert.Nil(t, receipt)
 }
 
 func TestExecuteTransactionFailure(t *testing.T) {

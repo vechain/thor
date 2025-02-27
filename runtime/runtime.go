@@ -35,12 +35,6 @@ var (
 	EmptyRuntimeBytecode = []byte{0x60, 0x60, 0x60, 0x40, 0x52, 0x60, 0x02, 0x56}
 )
 
-var (
-	// ErrMaxFeePerGasTooLow is returned if the transaction fee cap is less than
-	// the base fee of the block.
-	ErrMaxFeePerGasTooLow = errors.New("max fee per gas is less than block base fee")
-)
-
 func init() {
 	var found bool
 	if energyTransferEvent, found = builtin.Energy.ABI.EventByName("Transfer"); !found {
@@ -420,13 +414,6 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 	baseGasPrice, gasPrice, payer, _, returnGas, err := resolvedTx.BuyGas(rt.state, rt.ctx.Time, &fork.GalacticaItems{IsActive: galactica, BaseFee: rt.ctx.BaseFee})
 	if err != nil {
 		return nil, err
-	}
-
-	if galactica {
-		feeItems := fork.GalacticaTxGasPriceAdapter(tx, gasPrice)
-		if feeItems.MaxFee.Cmp(rt.ctx.BaseFee) < 0 {
-			return nil, ErrMaxFeePerGasTooLow
-		}
 	}
 
 	txCtx, err := resolvedTx.ToContext(gasPrice, payer, rt.ctx.Number, rt.chain.GetBlockID)

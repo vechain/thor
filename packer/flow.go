@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
@@ -130,6 +131,14 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 		maxPriorityFeeNotGreaterThan0 := t.MaxPriorityFeePerGas() == nil || t.MaxPriorityFeePerGas().Cmp(big.NewInt(0)) <= 0
 		if f.packer.requireTxPriorityFee && (isLegacy || maxPriorityFeeNotGreaterThan0) {
 			return badTxError{"max priority fee per gas is required"}
+		}
+		
+		baseGasPrice, err := builtin.Params.Native(f.runtime.State()).Get(thor.KeyBaseGasPrice)
+		if err != nil {
+			return err
+		}
+		if err := fork.ValidateGalacticaTxFee(t, f.runtime.Context().BaseFee, baseGasPrice); err != nil {
+			return errTxNotAdoptableNow
 		}
 	}
 
