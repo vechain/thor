@@ -20,7 +20,6 @@ import (
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/packer"
-	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
@@ -228,7 +227,7 @@ func TestPackAfterGalacticaFork(t *testing.T) {
 	// Adopt a tx which has not enough max fee to cover for base fee
 	badTx := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).Gas(21000).MaxFeePerGas(big.NewInt(thor.InitialBaseFee - 1)).MaxPriorityFeePerGas(common.Big1).Expiration(100).MustBuild()
 	badTx = tx.MustSign(badTx, genesis.DevAccounts()[0].PrivateKey)
-	expectedErrorMessage := fmt.Sprintf("bad tx: %s", runtime.ErrMaxFeePerGasTooLow.Error())
+	expectedErrorMessage := "tx not adoptable now"
 	if err := flow.Adopt(badTx); err.Error() != expectedErrorMessage {
 		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
 	}
@@ -323,7 +322,7 @@ func TestAdoptErrorAfterGalactica(t *testing.T) {
 	tr = tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(chain.Repo().ChainTag()).Nonce(2).MaxFeePerGas(notEnoughBaseFee).Gas(21000).Expiration(100).MustBuild()
 	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 	err = chain.MintBlock(genesis.DevAccounts()[0], tr)
-	expectedErrMsg = "unable to adopt tx into block: bad tx: max fee per gas is less than block base fee"
+	expectedErrMsg = "unable to adopt tx into block: tx not adoptable now"
 	assert.Equal(t, expectedErrMsg, err.Error())
 
 	// Try to adopt a dyn fee with just the right amount of max fee per gas - SUCCESS

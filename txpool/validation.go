@@ -8,6 +8,7 @@ package txpool
 import (
 	"fmt"
 
+	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus/fork"
@@ -61,15 +62,14 @@ func ValidateTransaction(tr *tx.Transaction, repo *chain.Repository, head *chain
 	return nil
 }
 
-func ValidateTransactionWithState(tr *tx.Transaction, head *chain.BlockSummary, forkConfig *thor.ForkConfig, state *state.State) error {
-	if head.Header.Number() >= forkConfig.GALACTICA {
+func ValidateTransactionWithState(tr *tx.Transaction, header *block.Header, forkConfig *thor.ForkConfig, state *state.State) error {
+	if header.Number() >= forkConfig.GALACTICA {
 		baseGasPrice, err := builtin.Params.Native(state).Get(thor.KeyBaseGasPrice)
 		if err != nil {
-			return txRejectedError{err.Error()}
+			return err
 		}
-		galacticaItems := fork.GalacticaTxGasPriceAdapter(tr, baseGasPrice)
-		if galacticaItems.MaxFee.Cmp(head.Header.BaseFee()) < 0 {
-			return txRejectedError{"max fee per gas too low to cover for base fee"}
+		if err := fork.ValidateGalacticaTxFee(tr, header.BaseFee(), baseGasPrice); err != nil {
+			return txRejectedError{err.Error()}
 		}
 	}
 

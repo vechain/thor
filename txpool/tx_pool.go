@@ -242,7 +242,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		}
 
 		state := p.stater.NewState(headSummary.Root())
-		if err := ValidateTransactionWithState(newTx, headSummary, p.forkConfig, state); err != nil {
+		if err := ValidateTransactionWithState(newTx, headSummary.Header, p.forkConfig, state); err != nil {
 			return err
 		}
 		executable, err := txObj.Executable(p.repo.NewChain(headSummary.Header.ID()), state, headSummary.Header, p.forkConfig)
