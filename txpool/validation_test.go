@@ -235,7 +235,7 @@ func TestValidateTransactionWithState(t *testing.T) {
 	tests := []struct {
 		name        string
 		getTx       func() *tx.Transaction
-		head        *chain.BlockSummary
+		header      *block.Header
 		forkConfig  *thor.ForkConfig
 		expectedErr error
 	}{
@@ -246,9 +246,9 @@ func TestValidateTransactionWithState(t *testing.T) {
 				t, _ := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(maxFee).Build()
 				return t
 			},
-			head:        &chain.BlockSummary{Header: getHeader(1)},
+			header:      getHeader(1),
 			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
-			expectedErr: txRejectedError{"max fee per gas too low to cover for base fee"},
+			expectedErr: txRejectedError{"max fee per gas is less than block base fee"},
 		},
 		{
 			name: "dyn fee tx with max fee equals to base fee + 1",
@@ -257,7 +257,7 @@ func TestValidateTransactionWithState(t *testing.T) {
 				t, _ := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(maxFee).Build()
 				return t
 			},
-			head:        &chain.BlockSummary{Header: getHeader(1)},
+			header:      getHeader(1),
 			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
 			expectedErr: nil,
 		},
@@ -267,7 +267,7 @@ func TestValidateTransactionWithState(t *testing.T) {
 				t, _ := tx.NewTxBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).GasPriceCoef(0).Build()
 				return t
 			},
-			head:        &chain.BlockSummary{Header: getHeader(1)},
+			header:      getHeader(1),
 			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
 			expectedErr: nil,
 		},
@@ -277,47 +277,47 @@ func TestValidateTransactionWithState(t *testing.T) {
 				t, _ := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(common.Big0).Build()
 				return t
 			},
-			head:        &chain.BlockSummary{Header: getHeader(1)},
+			header:      getHeader(1),
 			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
-			expectedErr: txRejectedError{"max fee per gas too low to cover for base fee"},
+			expectedErr: txRejectedError{"max fee per gas is less than block base fee"},
 		},
 		{
-			name: "dyn fee tx with maxPriorityFeePerGas = 0, maxFeePerGas > baseFee",
+			name: "dyn fee tx with maxPriorityFeePerGas = 0, maxFeePerGas == baseFee + 1",
 			getTx: func() *tx.Transaction {
-				baseFee := new(big.Int).Add(getHeader(1).BaseFee(), common.Big1)
-				t, _ := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(baseFee).MaxPriorityFeePerGas(common.Big0).Build()
+				maxFeePerGas := new(big.Int).Add(getHeader(1).BaseFee(), common.Big1)
+				t, _ := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(maxFeePerGas).MaxPriorityFeePerGas(common.Big0).Build()
 				return t
 			},
-			head:        &chain.BlockSummary{Header: getHeader(1)},
+			header:      getHeader(1),
 			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
 			expectedErr: nil,
 		},
 		{
-			name: "dyn fee tx with maxPriorityFeePerGas = 0, maxFeePerGas > baseFee",
+			name: "dyn fee tx with maxPriorityFeePerGas = 0, maxFeePerGas == baseFee",
 			getTx: func() *tx.Transaction {
 				t, _ := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(getHeader(1).BaseFee()).MaxPriorityFeePerGas(common.Big0).Build()
 				return t
 			},
-			head:        &chain.BlockSummary{Header: getHeader(1)},
+			header:      getHeader(1),
 			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
 			expectedErr: nil,
 		},
 		{
-			name: "dyn fee tx with maxPriorityFeePerGas = 0, maxFeePerGas > baseFee",
+			name: "dyn fee tx with maxPriorityFeePerGas = 0, maxFeePerGas == baseFee - 1",
 			getTx: func() *tx.Transaction {
-				baseFee := new(big.Int).Sub(getHeader(1).BaseFee(), common.Big1)
-				t, _ := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(baseFee).MaxPriorityFeePerGas(common.Big0).Build()
+				maxFeePerGas := new(big.Int).Sub(getHeader(1).BaseFee(), common.Big1)
+				t, _ := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(maxFeePerGas).MaxPriorityFeePerGas(common.Big0).Build()
 				return t
 			},
-			head:        &chain.BlockSummary{Header: getHeader(1)},
+			header:      getHeader(1),
 			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
-			expectedErr: txRejectedError{"max fee per gas too low to cover for base fee"},
+			expectedErr: txRejectedError{"max fee per gas is less than block base fee"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateTransactionWithState(tt.getTx(), tt.head, tt.forkConfig, state)
+			err := ValidateTransactionWithState(tt.getTx(), tt.header, tt.forkConfig, state)
 			assert.Equal(t, tt.expectedErr, err)
 		})
 	}
