@@ -22,14 +22,13 @@ import (
 
 // Packer to pack txs and build new blocks.
 type Packer struct {
-	repo                 *chain.Repository
-	stater               *state.Stater
-	nodeMaster           thor.Address
-	beneficiary          *thor.Address
-	targetGasLimit       uint64
-	forkConfig           thor.ForkConfig
-	seeder               *poa.Seeder
-	requireTxPriorityFee bool
+	repo           *chain.Repository
+	stater         *state.Stater
+	nodeMaster     thor.Address
+	beneficiary    *thor.Address
+	targetGasLimit uint64
+	forkConfig     thor.ForkConfig
+	seeder         *poa.Seeder
 }
 
 // New create a new Packer instance.
@@ -40,7 +39,6 @@ func New(
 	nodeMaster thor.Address,
 	beneficiary *thor.Address,
 	forkConfig thor.ForkConfig,
-	requireTxPriorityFee bool,
 ) *Packer {
 	return &Packer{
 		repo,
@@ -50,12 +48,11 @@ func New(
 		0,
 		forkConfig,
 		poa.NewSeeder(repo),
-		requireTxPriorityFee,
 	}
 }
 
 // Schedule schedule a packing flow to pack new block upon given parent and clock time.
-func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (flow *Flow, err error) {
+func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64, requireTxPriorityFee bool) (flow *Flow, err error) {
 	state := p.stater.NewState(parent.Root())
 
 	var features tx.Features
@@ -147,7 +144,7 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (flow
 		},
 		p.forkConfig)
 
-	return newFlow(p, parent.Header, rt, features), nil
+	return newFlow(p, parent.Header, rt, features, requireTxPriorityFee), nil
 }
 
 // Mock create a packing flow upon given parent, but with a designated timestamp.
@@ -185,7 +182,7 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 		},
 		p.forkConfig)
 
-	return newFlow(p, parent.Header, rt, features), nil
+	return newFlow(p, parent.Header, rt, features, false), nil
 }
 
 func (p *Packer) gasLimit(parentGasLimit uint64) uint64 {

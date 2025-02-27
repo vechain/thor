@@ -78,7 +78,6 @@ func New(
 			genesis.DevAccounts()[0].Address,
 			&genesis.DevAccounts()[0].Address,
 			forkConfig,
-			options.RequireTxPriorityFee,
 		),
 		logDB:                logDB,
 		gasLimit:             options.GasLimit,

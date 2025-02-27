@@ -24,14 +24,15 @@ import (
 
 // Flow the flow of packing a new block.
 type Flow struct {
-	packer       *Packer
-	parentHeader *block.Header
-	runtime      *runtime.Runtime
-	processedTxs map[thor.Bytes32]bool // txID -> reverted
-	gasUsed      uint64
-	txs          tx.Transactions
-	receipts     tx.Receipts
-	features     tx.Features
+	packer               *Packer
+	parentHeader         *block.Header
+	runtime              *runtime.Runtime
+	processedTxs         map[thor.Bytes32]bool // txID -> reverted
+	gasUsed              uint64
+	txs                  tx.Transactions
+	receipts             tx.Receipts
+	features             tx.Features
+	requireTxPriorityFee bool
 }
 
 func newFlow(
@@ -39,13 +40,15 @@ func newFlow(
 	parentHeader *block.Header,
 	runtime *runtime.Runtime,
 	features tx.Features,
+	requireTxPriorityFee bool,
 ) *Flow {
 	return &Flow{
-		packer:       packer,
-		parentHeader: parentHeader,
-		runtime:      runtime,
-		processedTxs: make(map[thor.Bytes32]bool),
-		features:     features,
+		packer:               packer,
+		parentHeader:         parentHeader,
+		runtime:              runtime,
+		processedTxs:         make(map[thor.Bytes32]bool),
+		features:             features,
+		requireTxPriorityFee: requireTxPriorityFee,
 	}
 }
 
@@ -93,7 +96,7 @@ func (f *Flow) hasTx(txid thor.Bytes32, txBlockRef uint32) (bool, error) {
 func (f *Flow) requireMaxPriorityFeePerGas(t *tx.Transaction) error {
 	isLegacy := t.Type() == tx.TypeLegacy
 	maxPriorityFeeNotGreaterThan0 := t.MaxPriorityFeePerGas() == nil || t.MaxPriorityFeePerGas().Cmp(big.NewInt(0)) <= 0
-	if f.packer.requireTxPriorityFee && (isLegacy || maxPriorityFeeNotGreaterThan0) {
+	if f.requireTxPriorityFee && (isLegacy || maxPriorityFeeNotGreaterThan0) {
 		return badTxError{"max priority fee per gas is required"}
 	}
 

@@ -53,18 +53,17 @@ type Options struct {
 }
 
 type Node struct {
-	packer         *packer.Packer
-	cons           *consensus.Consensus
-	master         *Master
-	repo           *chain.Repository
-	bft            *bft.Engine
-	logDB          *logdb.LogDB
-	txPool         *txpool.TxPool
-	txStashPath    string
-	comm           *comm.Communicator
-	forkConfig     thor.ForkConfig
-	targetGasLimit uint64
-	skipLogs       bool
+	packer      *packer.Packer
+	cons        *consensus.Consensus
+	master      *Master
+	repo        *chain.Repository
+	bft         *bft.Engine
+	logDB       *logdb.LogDB
+	txPool      *txpool.TxPool
+	txStashPath string
+	comm        *comm.Communicator
+	forkConfig  thor.ForkConfig
+	options     Options
 
 	logDBFailed bool
 	bandwidth   bandwidth.Bandwidth
@@ -86,18 +85,17 @@ func New(
 	options Options,
 ) *Node {
 	return &Node{
-		packer:         packer.New(repo, stater, master.Address(), master.Beneficiary, forkConfig, options.RequireTxPriorityFee),
-		cons:           consensus.New(repo, stater, forkConfig),
-		master:         master,
-		repo:           repo,
-		bft:            bft,
-		logDB:          logDB,
-		txPool:         txPool,
-		txStashPath:    txStashPath,
-		comm:           comm,
-		forkConfig:     forkConfig,
-		targetGasLimit: options.TargetGasLimit,
-		skipLogs:       options.SkipLogs,
+		packer:      packer.New(repo, stater, master.Address(), master.Beneficiary, forkConfig),
+		cons:        consensus.New(repo, stater, forkConfig),
+		master:      master,
+		repo:        repo,
+		bft:         bft,
+		logDB:       logDB,
+		txPool:      txPool,
+		txStashPath: txStashPath,
+		comm:        comm,
+		forkConfig:  forkConfig,
+		options:     options,
 	}
 }
 
@@ -349,7 +347,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		} else {
 			becomeNewBest = newBlock.Header().BetterThan(oldBest.Header)
 		}
-		logEnabled := becomeNewBest && !n.skipLogs && !n.logDBFailed
+		logEnabled := becomeNewBest && !n.options.SkipLogs && !n.logDBFailed
 		isTrunk = &becomeNewBest
 
 		execElapsed := mclock.Now() - startTime

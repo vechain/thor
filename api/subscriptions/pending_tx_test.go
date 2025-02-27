@@ -126,9 +126,9 @@ func TestPendingTx_DispatchLoop(t *testing.T) {
 }
 
 func addNewBlock(repo *chain.Repository, stater *state.Stater, b0 *block.Block, t *testing.T) {
-	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork, false)
+	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
 	sum, _ := repo.GetBlockSummary(b0.Header().ID())
-	flow, err := packer.Schedule(sum, uint64(time.Now().Unix()))
+	flow, err := packer.Schedule(sum, uint64(time.Now().Unix()), false)
 	if err != nil {
 		t.Fatal(err)
 	}
