@@ -132,7 +132,7 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 		if f.packer.requireTxPriorityFee && (isLegacy || maxPriorityFeeNotGreaterThan0) {
 			return badTxError{"max priority fee per gas is required"}
 		}
-		
+
 		baseGasPrice, err := builtin.Params.Native(f.runtime.State()).Get(thor.KeyBaseGasPrice)
 		if err != nil {
 			return err
