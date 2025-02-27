@@ -298,6 +298,12 @@ func defaultAction(ctx *cli.Context) error {
 		log.Info("max priority fee per gas is required in transactions")
 	}
 
+	options := node.Options{
+		SkipLogs:             skipLogs,
+		RequireTxPriorityFee: requireTxPriorityFee,
+		TargetGasLimit:       ctx.Uint64(targetGasLimitFlag.Name),
+	}
+
 	return node.New(
 		master,
 		repo,
@@ -307,10 +313,8 @@ func defaultAction(ctx *cli.Context) error {
 		txPool,
 		filepath.Join(instanceDir, "tx.stash"),
 		p2pCommunicator.Communicator(),
-		ctx.Uint64(targetGasLimitFlag.Name),
-		skipLogs,
-		requireTxPriorityFee,
 		forkConfig,
+		options,
 	).Run(exitSignal)
 }
 

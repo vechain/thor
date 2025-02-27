@@ -207,10 +207,12 @@ func benchmarkBlockProcess(b *testing.B, db *muxdb.MuxDB, accounts []genesis.Dev
 		nil,
 		"",
 		nil,
-		10_000_000,
-		true,
-		false,
 		thor.NoFork,
+		Options{
+			SkipLogs:             true,
+			RequireTxPriorityFee: false,
+			TargetGasLimit:       10_000_000,
+		},
 	)
 
 	stats := &blockStats{}
