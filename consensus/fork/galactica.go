@@ -18,7 +18,11 @@ import (
 )
 
 var (
+	// ErrBaseFeeNotSet is returned if the base fee is not set after the Galactica fork
 	ErrBaseFeeNotSet = errors.New("base fee not set after galactica")
+	// ErrMaxFeePerGasTooLow is returned if the transaction max fee is less than
+	// the base fee of the block.
+	ErrMaxFeePerGasTooLow = errors.New("max fee per gas is less than block base fee")
 )
 
 // VerifyGalacticaHeader verifies some header attributes which were changed in Galactica fork,
@@ -92,7 +96,7 @@ func CalcBaseFee(config *thor.ForkConfig, parent *block.Header) *big.Int {
 	}
 }
 
-func GalacticaTxGasPriceAdapter(tr *tx.Transaction, gasPrice *big.Int) *GalacticaFeeMarketItems {
+func GalacticaTxGasPriceAdapter(tr *tx.Transaction, gasPrice *big.Int) *galacticaFeeMarketItems {
 	var maxPriorityFee, maxFee *big.Int
 	switch tr.Type() {
 	case tx.TypeLegacy:
@@ -102,10 +106,10 @@ func GalacticaTxGasPriceAdapter(tr *tx.Transaction, gasPrice *big.Int) *Galactic
 		maxPriorityFee = tr.MaxPriorityFeePerGas()
 		maxFee = tr.MaxFeePerGas()
 	}
-	return &GalacticaFeeMarketItems{maxFee, maxPriorityFee}
+	return &galacticaFeeMarketItems{maxFee, maxPriorityFee}
 }
 
-type GalacticaFeeMarketItems struct {
+type galacticaFeeMarketItems struct {
 	MaxFee         *big.Int
 	MaxPriorityFee *big.Int
 }
@@ -156,4 +160,12 @@ func CalculateReward(gasUsed uint64, rewardGasPrice, rewardRatio *big.Int, isGal
 	reward.Mul(reward, rewardRatio)
 	reward.Div(reward, big.NewInt(1e18))
 	return reward
+}
+
+func ValidateGalacticaTxFee(tr *tx.Transaction, baseFee, baseGasPrice *big.Int) error {
+	galacticaItems := GalacticaTxGasPriceAdapter(tr, baseGasPrice)
+	if galacticaItems.MaxFee.Cmp(baseFee) < 0 {
+		return ErrMaxFeePerGasTooLow
+	}
+	return nil
 }
