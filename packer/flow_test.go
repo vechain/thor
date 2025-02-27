@@ -389,7 +389,6 @@ func TestAdoptAfterGalacticaRequireMaxPriorityFee(t *testing.T) {
 	txNoPriorityFee = tx.MustSign(txNoPriorityFee, genesis.DevAccounts()[0].PrivateKey)
 
 	// Create a transaction with dynamic fee type and max priority fee
-
 	txPriorityFee := tx.NewTxBuilder(tx.TypeDynamicFee).
 		ChainTag(chain.Repo().ChainTag()).
 		Nonce(2).
@@ -399,6 +398,16 @@ func TestAdoptAfterGalacticaRequireMaxPriorityFee(t *testing.T) {
 		Expiration(100).
 		MustBuild()
 	txPriorityFee = tx.MustSign(txPriorityFee, genesis.DevAccounts()[0].PrivateKey)
+
+	// Create a legacy transaction
+	txLegacy := tx.NewTxBuilder(tx.TypeLegacy).
+		ChainTag(chain.Repo().ChainTag()).
+		Nonce(3).
+		Gas(21000).
+		Expiration(100).
+		GasPriceCoef(0).
+		MustBuild()
+	txLegacy = tx.MustSign(txLegacy, genesis.DevAccounts()[0].PrivateKey)
 
 	// Last parameter is true, which means that all txs require max priority fee
 	proposer := genesis.DevAccounts()[0]
@@ -412,5 +421,8 @@ func TestAdoptAfterGalacticaRequireMaxPriorityFee(t *testing.T) {
 	}
 
 	err = flow.Adopt(txPriorityFee)
+	assert.NoError(t, err)
+
+	err = flow.Adopt(txLegacy)
 	assert.NoError(t, err)
 }
