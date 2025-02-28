@@ -128,11 +128,11 @@ func (b Bucket) NewStore(src Store) Store {
 }
 
 func (b Bucket) newRange(r Range) Range {
-	r.Start = slices.Concat(b, r.Start)
+	r.Start = slices.Concat([]byte(b), r.Start)
 	if len(r.Limit) == 0 {
 		r.Limit = util.BytesPrefix([]byte(b)).Limit
 	} else {
-		r.Limit = slices.Concat(b, r.Limit)
+		r.Limit = slices.Concat([]byte(b), r.Limit)
 	}
 	return r
 }
