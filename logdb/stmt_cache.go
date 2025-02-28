@@ -42,7 +42,7 @@ func (sc *stmtCache) MustPrepare(query string) *sql.Stmt {
 }
 
 func (sc *stmtCache) Clear() {
-	sc.m.Range(func(k, v interface{}) bool {
+	sc.m.Range(func(k, v any) bool {
 		_ = v.(*sql.Stmt).Close()
 		sc.m.Delete(k)
 		return true

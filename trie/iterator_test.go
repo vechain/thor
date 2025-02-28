@@ -242,7 +242,7 @@ func TestIteratorContinueAfterError(t *testing.T) {
 	keys := db.db.Keys()
 	t.Log("node count", wantNodeCount)
 
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		// Create trie that will load all nodes from DB.
 		tr := New(Root{tr.Hash(), ver}, db)
 

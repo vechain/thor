@@ -15,6 +15,7 @@ import (
 
 	"github.com/qianbin/directcache"
 	"github.com/vechain/thor/v2/trie"
+	"slices"
 )
 
 type Cache interface {
@@ -112,7 +113,7 @@ func (c *cache) GetNodeBlob(keyBuf *[]byte, name string, path []byte, ver trie.V
 	// lookup from committing cache
 	if c.committedNodes.AdvGet(k[len(v):], func(val []byte) {
 		if bytes.Equal(k[:len(v)], val[:len(v)]) {
-			blob = append([]byte(nil), val[len(v):]...)
+			blob = slices.Clone(val[len(v):])
 		}
 	}, peek) && len(blob) > 0 {
 		if !peek {
@@ -123,7 +124,7 @@ func (c *cache) GetNodeBlob(keyBuf *[]byte, name string, path []byte, ver trie.V
 
 	// fallback to querying cache
 	if c.queriedNodes.AdvGet(k, func(val []byte) {
-		blob = append([]byte(nil), val...)
+		blob = slices.Clone(val)
 	}, peek) && len(blob) > 0 {
 		if !peek {
 			c.nodeStats.Hit()

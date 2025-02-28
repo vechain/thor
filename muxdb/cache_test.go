@@ -127,12 +127,12 @@ func TestConcurrentAccess(t *testing.T) {
 	operations := 20
 
 	// Add concurrent writers
-	for i := 0; i < workers; i++ {
+	for i := range workers {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
 			var keyBuf []byte
-			for j := 0; j < operations; j++ {
+			for j := range operations {
 				blob := []byte{byte(id), byte(j)}
 				ver := trie.Version{Major: uint32(id), Minor: uint32(j)}
 				cache.AddNodeBlob(&keyBuf, "test", []byte{byte(id)}, ver, blob, true)
@@ -141,12 +141,12 @@ func TestConcurrentAccess(t *testing.T) {
 	}
 
 	// Add concurrent readers
-	for i := 0; i < workers; i++ {
+	for i := range workers {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
 			var keyBuf []byte
-			for j := 0; j < operations; j++ {
+			for j := range operations {
 				ver := trie.Version{Major: uint32(id), Minor: uint32(j)}
 				cache.GetNodeBlob(&keyBuf, "test", []byte{byte(id)}, ver, false)
 			}
@@ -164,7 +164,7 @@ func TestCacheLogging(t *testing.T) {
 	cache.AddRootNode("test", node)
 
 	// Get root node 2000 times to trigger the logging
-	for i := 0; i < 2000; i++ {
+	for range 2000 {
 		result := cache.GetRootNode("test", node.ver)
 		assert.NotNil(t, result)
 	}
@@ -223,7 +223,7 @@ func TestCacheLogTrigger(t *testing.T) {
 	// Add the root node
 	cache.AddRootNode("test", node)
 
-	for i := 0; i < 2000; i++ {
+	for range 2000 {
 		result := cache.GetRootNode("test", node.ver)
 		assert.NotNil(t, result)
 	}

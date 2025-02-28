@@ -322,7 +322,7 @@ func TestSubscriptionsBacktrace(t *testing.T) {
 
 	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], tr, txDeploy))
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0]))
 	}
 

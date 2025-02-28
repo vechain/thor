@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
+	"slices"
 )
 
 const (
@@ -39,7 +40,7 @@ type Body struct {
 func Compose(header *Header, txs tx.Transactions) *Block {
 	return &Block{
 		header: header,
-		txs:    append(tx.Transactions(nil), txs...),
+		txs:    slices.Clone(txs),
 	}
 }
 
@@ -58,17 +59,17 @@ func (b *Block) Header() *Header {
 
 // Transactions returns a copy of transactions.
 func (b *Block) Transactions() tx.Transactions {
-	return append(tx.Transactions(nil), b.txs...)
+	return slices.Clone(b.txs)
 }
 
 // Body returns body of a block.
 func (b *Block) Body() *Body {
-	return &Body{append(tx.Transactions(nil), b.txs...)}
+	return &Body{slices.Clone(b.txs)}
 }
 
 // EncodeRLP implements rlp.Encoder.
 func (b *Block) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, []interface{}{
+	return rlp.Encode(w, []any{
 		b.header,
 		b.txs,
 	})

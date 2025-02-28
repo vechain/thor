@@ -169,7 +169,7 @@ func (c *Communicator) servePeer(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 
 	var txsToSync txsToSync
 
-	return peer.Serve(func(msg *p2p.Msg, w func(interface{})) error {
+	return peer.Serve(func(msg *p2p.Msg, w func(any)) error {
 		return c.handleRPC(peer, msg, w, &txsToSync)
 	}, proto.MaxMsgSize)
 }

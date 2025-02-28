@@ -55,7 +55,7 @@ func Root() Logger {
 //	log.Trace("msg")
 //	log.Trace("msg", "key1", val1)
 //	log.Trace("msg", "key1", val1, "key2", val2)
-func Trace(msg string, ctx ...interface{}) {
+func Trace(msg string, ctx ...any) {
 	Root().Write(LevelTrace, msg, ctx...)
 }
 
@@ -68,7 +68,7 @@ func Trace(msg string, ctx ...interface{}) {
 //	log.Debug("msg")
 //	log.Debug("msg", "key1", val1)
 //	log.Debug("msg", "key1", val1, "key2", val2)
-func Debug(msg string, ctx ...interface{}) {
+func Debug(msg string, ctx ...any) {
 	Root().Write(slog.LevelDebug, msg, ctx...)
 }
 
@@ -81,7 +81,7 @@ func Debug(msg string, ctx ...interface{}) {
 //	log.Info("msg")
 //	log.Info("msg", "key1", val1)
 //	log.Info("msg", "key1", val1, "key2", val2)
-func Info(msg string, ctx ...interface{}) {
+func Info(msg string, ctx ...any) {
 	Root().Write(slog.LevelInfo, msg, ctx...)
 }
 
@@ -94,7 +94,7 @@ func Info(msg string, ctx ...interface{}) {
 //	log.Warn("msg")
 //	log.Warn("msg", "key1", val1)
 //	log.Warn("msg", "key1", val1, "key2", val2)
-func Warn(msg string, ctx ...interface{}) {
+func Warn(msg string, ctx ...any) {
 	Root().Write(slog.LevelWarn, msg, ctx...)
 }
 
@@ -107,7 +107,7 @@ func Warn(msg string, ctx ...interface{}) {
 //	log.Error("msg")
 //	log.Error("msg", "key1", val1)
 //	log.Error("msg", "key1", val1, "key2", val2)
-func Error(msg string, ctx ...interface{}) {
+func Error(msg string, ctx ...any) {
 	Root().Write(slog.LevelError, msg, ctx...)
 }
 
@@ -120,13 +120,13 @@ func Error(msg string, ctx ...interface{}) {
 //	log.Crit("msg")
 //	log.Crit("msg", "key1", val1)
 //	log.Crit("msg", "key1", val1, "key2", val2)
-func Crit(msg string, ctx ...interface{}) {
+func Crit(msg string, ctx ...any) {
 	Root().Write(LevelCrit, msg, ctx...)
 	os.Exit(1)
 }
 
 // WithContext returns a logger that uses Root with the provided context
-func WithContext(ctx ...interface{}) Logger {
+func WithContext(ctx ...any) Logger {
 	return &RootWithContext{
 		ctx: ctx,
 	}
@@ -134,51 +134,51 @@ func WithContext(ctx ...interface{}) Logger {
 
 // RootWithContext is a logger than can be initialized at a global scope
 type RootWithContext struct {
-	ctx []interface{}
+	ctx []any
 }
 
 func (r *RootWithContext) Handler() slog.Handler {
 	return Root().Handler()
 }
 
-func (r *RootWithContext) With(ctx ...interface{}) Logger {
+func (r *RootWithContext) With(ctx ...any) Logger {
 	return Root().With(append(r.ctx, ctx...)...)
 }
 
-func (r *RootWithContext) New(ctx ...interface{}) Logger {
+func (r *RootWithContext) New(ctx ...any) Logger {
 	return Root().With(append(r.ctx, ctx...)...)
 }
 
-func (r *RootWithContext) Log(level slog.Level, msg string, ctx ...interface{}) {
+func (r *RootWithContext) Log(level slog.Level, msg string, ctx ...any) {
 	Root().Write(level, msg, append(r.ctx, ctx...)...)
 }
 
-func (r *RootWithContext) Trace(msg string, ctx ...interface{}) {
+func (r *RootWithContext) Trace(msg string, ctx ...any) {
 	r.Log(LevelTrace, msg, ctx...)
 }
 
-func (r *RootWithContext) Debug(msg string, ctx ...interface{}) {
+func (r *RootWithContext) Debug(msg string, ctx ...any) {
 	r.Log(slog.LevelDebug, msg, ctx...)
 }
 
-func (r *RootWithContext) Info(msg string, ctx ...interface{}) {
+func (r *RootWithContext) Info(msg string, ctx ...any) {
 	r.Log(slog.LevelInfo, msg, ctx...)
 }
 
-func (r *RootWithContext) Warn(msg string, ctx ...interface{}) {
+func (r *RootWithContext) Warn(msg string, ctx ...any) {
 	r.Log(slog.LevelWarn, msg, ctx...)
 }
 
-func (r *RootWithContext) Error(msg string, ctx ...interface{}) {
+func (r *RootWithContext) Error(msg string, ctx ...any) {
 	r.Log(slog.LevelError, msg, ctx...)
 }
 
-func (r *RootWithContext) Crit(msg string, ctx ...interface{}) {
+func (r *RootWithContext) Crit(msg string, ctx ...any) {
 	r.Log(LevelCrit, msg, ctx...)
 	os.Exit(1)
 }
 
-func (r *RootWithContext) Write(level slog.Level, msg string, ctx ...interface{}) {
+func (r *RootWithContext) Write(level slog.Level, msg string, ctx ...any) {
 	Root().Write(level, msg, append(r.ctx, ctx...)...)
 }
 

@@ -259,7 +259,7 @@ func (a *Accounts) batchCall(
 		},
 		a.forkConfig)
 	results = make(BatchCallResults, 0)
-	resultCh := make(chan interface{}, 1)
+	resultCh := make(chan any, 1)
 	for i, clause := range clauses {
 		exec, interrupt := rt.PrepareClause(clause, uint32(i), gas, txCtx)
 		go func() {

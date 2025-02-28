@@ -34,7 +34,7 @@ func (m *Method) Const() bool {
 }
 
 // EncodeInput encode args to data, and the data is prefixed with method id.
-func (m *Method) EncodeInput(args ...interface{}) ([]byte, error) {
+func (m *Method) EncodeInput(args ...any) ([]byte, error) {
 	data, err := m.method.Inputs.Pack(args...)
 	if err != nil {
 		return nil, err
@@ -43,7 +43,7 @@ func (m *Method) EncodeInput(args ...interface{}) ([]byte, error) {
 }
 
 // DecodeInput decode input data into args.
-func (m *Method) DecodeInput(input []byte, v interface{}) error {
+func (m *Method) DecodeInput(input []byte, v any) error {
 	if !bytes.HasPrefix(input, m.id[:]) {
 		return errors.New("input has incorrect prefix")
 	}
@@ -51,12 +51,12 @@ func (m *Method) DecodeInput(input []byte, v interface{}) error {
 }
 
 // EncodeOutput encode output args to data.
-func (m *Method) EncodeOutput(args ...interface{}) ([]byte, error) {
+func (m *Method) EncodeOutput(args ...any) ([]byte, error) {
 	return m.method.Outputs.Pack(args...)
 }
 
 // DecodeOutput decode output data.
-func (m *Method) DecodeOutput(output []byte, v interface{}) error {
+func (m *Method) DecodeOutput(output []byte, v any) error {
 	if len(output)%32 != 0 {
 		return errors.New("output has incorrect length")
 	}

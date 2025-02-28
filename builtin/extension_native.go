@@ -18,20 +18,20 @@ const (
 func init() {
 	defines := []struct {
 		name string
-		run  func(env *xenv.Environment) []interface{}
+		run  func(env *xenv.Environment) []any
 	}{
-		{"native_blake2b256", func(env *xenv.Environment) []interface{} {
+		{"native_blake2b256", func(env *xenv.Environment) []any {
 			var data []byte
 			env.ParseArgs(&data)
 			env.UseGas(uint64(len(data)+31)/32*blake2b256WordGas + blake2b256Gas)
 			output := thor.Blake2b(data)
-			return []interface{}{output}
+			return []any{output}
 		}},
-		{"native_blockID", func(env *xenv.Environment) []interface{} {
+		{"native_blockID", func(env *xenv.Environment) []any {
 			var blockNum uint32
 			env.ParseArgs(&blockNum)
 			if blockNum >= env.BlockContext().Number {
-				return []interface{}{thor.Bytes32{}}
+				return []any{thor.Bytes32{}}
 			}
 
 			env.UseGas(thor.SloadGas)
@@ -39,18 +39,18 @@ func init() {
 			if err != nil {
 				panic(err)
 			}
-			return []interface{}{output}
+			return []any{output}
 		}},
-		{"native_blockTotalScore", func(env *xenv.Environment) []interface{} {
+		{"native_blockTotalScore", func(env *xenv.Environment) []any {
 			var blockNum uint32
 			env.ParseArgs(&blockNum)
 
 			if blockNum > env.BlockContext().Number {
-				return []interface{}{uint64(0)}
+				return []any{uint64(0)}
 			}
 
 			if blockNum == env.BlockContext().Number {
-				return []interface{}{env.BlockContext().TotalScore}
+				return []any{env.BlockContext().TotalScore}
 			}
 
 			env.UseGas(thor.SloadGas)
@@ -59,18 +59,18 @@ func init() {
 			if err != nil {
 				panic(err)
 			}
-			return []interface{}{header.TotalScore()}
+			return []any{header.TotalScore()}
 		}},
-		{"native_blockTime", func(env *xenv.Environment) []interface{} {
+		{"native_blockTime", func(env *xenv.Environment) []any {
 			var blockNum uint32
 			env.ParseArgs(&blockNum)
 
 			if blockNum > env.BlockContext().Number {
-				return []interface{}{uint64(0)}
+				return []any{uint64(0)}
 			}
 
 			if blockNum == env.BlockContext().Number {
-				return []interface{}{env.BlockContext().Time}
+				return []any{env.BlockContext().Time}
 			}
 
 			env.UseGas(thor.SloadGas)
@@ -79,18 +79,18 @@ func init() {
 			if err != nil {
 				panic(err)
 			}
-			return []interface{}{header.Timestamp()}
+			return []any{header.Timestamp()}
 		}},
-		{"native_blockSigner", func(env *xenv.Environment) []interface{} {
+		{"native_blockSigner", func(env *xenv.Environment) []any {
 			var blockNum uint32
 			env.ParseArgs(&blockNum)
 
 			if blockNum > env.BlockContext().Number {
-				return []interface{}{thor.Address{}}
+				return []any{thor.Address{}}
 			}
 
 			if blockNum == env.BlockContext().Number {
-				return []interface{}{env.BlockContext().Signer}
+				return []any{env.BlockContext().Signer}
 			}
 
 			env.UseGas(thor.SloadGas)
@@ -103,36 +103,36 @@ func init() {
 			if err != nil {
 				panic(err)
 			}
-			return []interface{}{signer}
+			return []any{signer}
 		}},
-		{"native_totalSupply", func(env *xenv.Environment) []interface{} {
+		{"native_totalSupply", func(env *xenv.Environment) []any {
 			env.UseGas(thor.SloadGas)
 			output, err := Energy.Native(env.State(), env.BlockContext().Time).TokenTotalSupply()
 			if err != nil {
 				panic(err)
 			}
-			return []interface{}{output}
+			return []any{output}
 		}},
-		{"native_txProvedWork", func(env *xenv.Environment) []interface{} {
+		{"native_txProvedWork", func(env *xenv.Environment) []any {
 			output := env.TransactionContext().ProvedWork
-			return []interface{}{output}
+			return []any{output}
 		}},
-		{"native_txID", func(env *xenv.Environment) []interface{} {
+		{"native_txID", func(env *xenv.Environment) []any {
 			output := env.TransactionContext().ID
-			return []interface{}{output}
+			return []any{output}
 		}},
 
-		{"native_txBlockRef", func(env *xenv.Environment) []interface{} {
+		{"native_txBlockRef", func(env *xenv.Environment) []any {
 			output := env.TransactionContext().BlockRef
-			return []interface{}{output}
+			return []any{output}
 		}},
-		{"native_txExpiration", func(env *xenv.Environment) []interface{} {
+		{"native_txExpiration", func(env *xenv.Environment) []any {
 			output := env.TransactionContext().Expiration
-			return []interface{}{output}
+			return []any{output}
 		}},
-		{"native_txGasPayer", func(env *xenv.Environment) []interface{} {
+		{"native_txGasPayer", func(env *xenv.Environment) []any {
 			output := env.TransactionContext().GasPayer
-			return []interface{}{output}
+			return []any{output}
 		}},
 	}
 

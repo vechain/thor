@@ -814,7 +814,7 @@ func makeLog(size int) executionFunc {
 	return func(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 		topics := make([]common.Hash, size)
 		mStart, mSize := stack.popptr().Uint64(), stack.popptr().Uint64()
-		for i := 0; i < size; i++ {
+		for i := range size {
 			addr := stack.popptr()
 			topics[i] = addr.Bytes32()
 		}
@@ -853,15 +853,9 @@ func makePush(size uint64, pushByteSize int) executionFunc {
 	return func(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 		codeLen := len(contract.Code)
 
-		startMin := codeLen
-		if int(*pc+1) < startMin {
-			startMin = int(*pc + 1)
-		}
+		startMin := min(int(*pc+1), codeLen)
 
-		endMin := codeLen
-		if startMin+pushByteSize < endMin {
-			endMin = startMin + pushByteSize
-		}
+		endMin := min(startMin+pushByteSize, codeLen)
 
 		integer := new(uint256.Int)
 		stack.push(integer.SetBytes(common.RightPadBytes(contract.Code[startMin:endMin], pushByteSize)))

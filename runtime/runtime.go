@@ -439,10 +439,7 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 				leftOverGas = output.LeftOverGas
 
 				// Apply refund counter, capped to half of the used gas.
-				refund := gasUsed / 2
-				if refund > output.RefundGas {
-					refund = output.RefundGas
-				}
+				refund := min(gasUsed/2, output.RefundGas)
 
 				// won't overflow
 				leftOverGas += refund

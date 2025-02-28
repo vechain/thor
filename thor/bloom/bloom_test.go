@@ -18,20 +18,20 @@ func TestBloom(t *testing.T) {
 	const bitsPerKey = 10
 
 	g := &bloom.Generator{}
-	for i := 0; i < nKey; i++ {
-		g.Add([]byte(fmt.Sprintf("%v", i)))
+	for i := range nKey {
+		g.Add(fmt.Appendf(nil, "%v", i))
 	}
 
 	f := g.Generate(bitsPerKey, bloom.K(bitsPerKey))
 
-	for i := 0; i < nKey; i++ {
-		assert.Equal(t, true, f.Contains([]byte(fmt.Sprintf("%v", i))))
+	for i := range nKey {
+		assert.Equal(t, true, f.Contains(fmt.Appendf(nil, "%v", i)))
 	}
 
 	const nFalseKey = 1000
 	nFalse := 0
-	for i := 0; i < nFalseKey; i++ {
-		if !f.Contains([]byte(fmt.Sprintf("x%v", i))) {
+	for i := range nFalseKey {
+		if !f.Contains(fmt.Appendf(nil, "x%v", i)) {
 			nFalse++
 		}
 	}

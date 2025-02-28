@@ -20,6 +20,7 @@ import (
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/log"
+	"slices"
 )
 
 var logger = log.WithContext("pkg", "p2psrv")
@@ -369,7 +370,7 @@ func (s *Server) fetchBootstrap() {
 			return err
 		}
 
-		bootnodes := append([]*discv5.Node(nil), s.bootstrapNodes...)
+		bootnodes := slices.Clone(s.bootstrapNodes)
 		bootnodes = append(bootnodes, remoteNodes...)
 		if err := s.discv5.SetFallbackNodes(bootnodes); err != nil {
 			return err

@@ -26,7 +26,7 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func M(args ...interface{}) []interface{} {
+func M(args ...any) []any {
 	return args
 }
 

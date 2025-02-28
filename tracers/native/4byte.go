@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/vechain/thor/v2/tracers"
 	"github.com/vechain/thor/v2/vm"
+	"slices"
 )
 
 func init() {
@@ -64,12 +65,7 @@ func newFourByteTracer(_ json.RawMessage) (tracers.Tracer, error) {
 
 // isPrecompiled returns whether the addr is a precompile. Logic borrowed from newJsTracer in eth/tracers/js/tracer.go
 func (t *fourByteTracer) isPrecompiled(addr common.Address) bool {
-	for _, p := range t.activePrecompiles {
-		if p == addr {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(t.activePrecompiles, addr)
 }
 
 // store saves the given identifier and datasize.

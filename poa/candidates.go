@@ -10,6 +10,7 @@ import (
 	"github.com/vechain/thor/v2/builtin/authority"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"slices"
 )
 
 // Candidates holds candidates list in memory, and tends to be reused in PoA stage without querying from contract.
@@ -97,7 +98,7 @@ func (c *Candidates) Update(addr thor.Address, active bool) bool {
 		// something like COW
 		if c.referenced {
 			// shallow copy the list
-			c.list = append([]*authority.Candidate(nil), c.list...)
+			c.list = slices.Clone(c.list)
 			c.referenced = false
 		}
 		cpy := *c.list[i]

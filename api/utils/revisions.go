@@ -25,7 +25,7 @@ const (
 )
 
 type Revision struct {
-	val interface{}
+	val any
 }
 
 func (rev *Revision) IsNext() bool {

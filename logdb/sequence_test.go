@@ -53,7 +53,7 @@ func TestSequence(t *testing.T) {
 // In case some one messes up the bit allocation
 func TestSequenceValue(t *testing.T) {
 	//#nosec G404
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		blk := rand.Uint32N(blockNumMask)
 		txIndex := rand.Uint32N(txIndexMask)
 		logIndex := rand.Uint32N(logIndexMask)

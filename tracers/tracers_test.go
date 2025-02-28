@@ -169,10 +169,7 @@ func RunTracerTest(t *testing.T, data *traceTest, tracerName string) json.RawMes
 
 	leftOverGas := output.LeftOverGas
 	gasUsed := uint64(data.Context.Gas) - leftOverGas
-	refund := gasUsed / 2
-	if refund > output.RefundGas {
-		refund = output.RefundGas
-	}
+	refund := min(gasUsed/2, output.RefundGas)
 	leftOverGas += refund
 
 	tr.CaptureClauseEnd(leftOverGas)
@@ -407,10 +404,7 @@ func TestInternals(t *testing.T) {
 
 			leftOverGas := output.LeftOverGas
 			gasUsed := gas - leftOverGas
-			refund := gasUsed / 2
-			if refund > output.RefundGas {
-				refund = output.RefundGas
-			}
+			refund := min(gasUsed/2, output.RefundGas)
 			leftOverGas += refund
 
 			tr.CaptureClauseEnd(leftOverGas)

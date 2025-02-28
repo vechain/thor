@@ -479,11 +479,11 @@ func (c *blake2F) Run(input []byte) ([]byte, error) {
 		m [16]uint64
 		t [2]uint64
 	)
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		offset := 4 + i*8
 		h[i] = binary.LittleEndian.Uint64(input[offset : offset+8])
 	}
-	for i := 0; i < 16; i++ {
+	for i := range 16 {
 		offset := 68 + i*8
 		m[i] = binary.LittleEndian.Uint64(input[offset : offset+8])
 	}
@@ -494,7 +494,7 @@ func (c *blake2F) Run(input []byte) ([]byte, error) {
 	blake2b.F(&h, m, t, final, rounds)
 
 	output := make([]byte, 64)
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		offset := i * 8
 		binary.LittleEndian.PutUint64(output[offset:offset+8], h[i])
 	}

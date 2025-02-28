@@ -8,6 +8,7 @@ package block
 import (
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
+	"slices"
 )
 
 // Builder to make it easy to build a block object.
@@ -78,7 +79,7 @@ func (b *Builder) TransactionFeatures(features tx.Features) *Builder {
 
 // Alpha set the alpha.
 func (b *Builder) Alpha(alpha []byte) *Builder {
-	b.headerBody.Extension.Alpha = append([]byte(nil), alpha...)
+	b.headerBody.Extension.Alpha = slices.Clone(alpha)
 	return b
 }
 

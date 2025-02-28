@@ -164,7 +164,7 @@ func TestWaitUntil(t *testing.T) {
 
 	parentID := b0.Header().ID()
 	var parentScore uint64 = 0
-	for i := 0; i < 6; i++ {
+	for range 6 {
 		blk := newBlock(parentID, parentScore+2, b0.Header().StateRoot(), devAccounts[0].PrivateKey)
 		err := repo.AddBlock(blk, tx.Receipts{}, 0, true)
 		assert.Nil(t, err)
@@ -177,7 +177,7 @@ func TestWaitUntil(t *testing.T) {
 	assert.Nil(t, err)
 
 	parentScore = (100000 - 1) * 2
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		signer := devAccounts[0].PrivateKey
 		score := parentScore + 1
 		blk := newBlock(parentID, score, b0.Header().StateRoot(), signer)
@@ -198,7 +198,7 @@ func TestWaitUntil(t *testing.T) {
 	_, err = pruner.awaitUntilSteady(100000)
 	assert.NotNil(t, err)
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		signer := devAccounts[i%2].PrivateKey
 		score := parentScore + 2
 		blk := newBlock(parentID, score, b0.Header().StateRoot(), signer)
@@ -244,7 +244,7 @@ func TestPrune(t *testing.T) {
 	code := []byte("code")
 
 	parentID := b0.Header().ID()
-	for i := 0; i < 9; i++ {
+	for range 9 {
 		blk := newBlock(parentID, 10, b0.Header().StateRoot(), nil)
 
 		err := repo.AddBlock(blk, tx.Receipts{}, 0, false)

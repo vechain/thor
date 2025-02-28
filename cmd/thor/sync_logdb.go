@@ -349,7 +349,7 @@ func verifyLogDBPerBlock(
 	return nil
 }
 
-func jsonDiff(expected, actual interface{}) string {
+func jsonDiff(expected, actual any) string {
 	e, _ := json.MarshalIndent(expected, "", "  ")
 	a, _ := json.MarshalIndent(actual, "", "  ")
 	diff, _ := difflib.GetUnifiedDiffString(difflib.UnifiedDiff{

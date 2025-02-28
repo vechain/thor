@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/syndtr/goleveldb/leveldb/util"
+	"slices"
 )
 
 // Bucket provides logical bucket for kv store.
@@ -127,11 +128,11 @@ func (b Bucket) NewStore(src Store) Store {
 }
 
 func (b Bucket) newRange(r Range) Range {
-	r.Start = append(append([]byte(nil), b...), r.Start...)
+	r.Start = slices.Concat(b, r.Start)
 	if len(r.Limit) == 0 {
 		r.Limit = util.BytesPrefix([]byte(b)).Limit
 	} else {
-		r.Limit = append(append([]byte(nil), b...), r.Limit...)
+		r.Limit = slices.Concat(b, r.Limit)
 	}
 	return r
 }
@@ -141,7 +142,7 @@ type buf struct {
 }
 
 var bufPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return &buf{}
 	},
 }

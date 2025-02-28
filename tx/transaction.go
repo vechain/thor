@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/v2/thor"
+	"slices"
 )
 
 var (
@@ -132,7 +133,7 @@ func (t *Transaction) UnprovedWork() (w *big.Int) {
 // EvaluateWork try to compute work when tx origin assumed.
 func (t *Transaction) EvaluateWork(origin thor.Address) func(nonce uint64) *big.Int {
 	hashWithoutNonce := thor.Blake2bFn(func(w io.Writer) {
-		rlp.Encode(w, []interface{}{
+		rlp.Encode(w, []any{
 			t.body.ChainTag,
 			t.body.BlockRef,
 			t.body.Expiration,
@@ -162,7 +163,7 @@ func (t *Transaction) SigningHash() (hash thor.Bytes32) {
 	defer func() { t.cache.signingHash.Store(hash) }()
 
 	return thor.Blake2bFn(func(w io.Writer) {
-		rlp.Encode(w, []interface{}{
+		rlp.Encode(w, []any{
 			t.body.ChainTag,
 			t.body.BlockRef,
 			t.body.Expiration,
@@ -189,7 +190,7 @@ func (t *Transaction) Gas() uint64 {
 
 // Clauses returns clauses in tx.
 func (t *Transaction) Clauses() []*Clause {
-	return append([]*Clause(nil), t.body.Clauses...)
+	return slices.Clone(t.body.Clauses)
 }
 
 // DependsOn returns depended tx hash.
@@ -203,7 +204,7 @@ func (t *Transaction) DependsOn() *thor.Bytes32 {
 
 // Signature returns signature.
 func (t *Transaction) Signature() []byte {
-	return append([]byte(nil), t.body.Signature...)
+	return slices.Clone(t.body.Signature)
 }
 
 // Features returns features.
@@ -274,7 +275,7 @@ func (t *Transaction) WithSignature(sig []byte) *Transaction {
 		body: t.body,
 	}
 	// copy sig
-	newTx.body.Signature = append([]byte(nil), sig...)
+	newTx.body.Signature = slices.Clone(sig)
 	return &newTx
 }
 

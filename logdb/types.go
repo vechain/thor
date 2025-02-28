@@ -64,7 +64,7 @@ type EventCriteria struct {
 	Topics  [5]*thor.Bytes32
 }
 
-func (c *EventCriteria) toWhereCondition() (cond string, args []interface{}) {
+func (c *EventCriteria) toWhereCondition() (cond string, args []any) {
 	cond = "1"
 	if c.Address != nil {
 		cond += " AND address = " + refIDQuery
@@ -93,7 +93,7 @@ type TransferCriteria struct {
 	Recipient *thor.Address //who received tokens
 }
 
-func (c *TransferCriteria) toWhereCondition() (cond string, args []interface{}) {
+func (c *TransferCriteria) toWhereCondition() (cond string, args []any) {
 	cond = "1"
 	if c.TxOrigin != nil {
 		cond += " AND txOrigin = " + refIDQuery

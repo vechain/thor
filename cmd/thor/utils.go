@@ -374,10 +374,7 @@ func normalizeCacheSize(sizeMB int) int {
 		half := total / 2
 
 		// limit to not less than total/2 and up to total-2GB
-		limitMB := total - 2048
-		if limitMB < half {
-			limitMB = half
-		}
+		limitMB := max(total-2048, half)
 
 		if sizeMB > limitMB {
 			sizeMB = limitMB

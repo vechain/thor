@@ -17,7 +17,7 @@ import (
 	"github.com/vechain/thor/v2/trie"
 )
 
-func M(a ...interface{}) []interface{} {
+func M(a ...any) []any {
 	return a
 }
 
@@ -33,38 +33,38 @@ func TestPrototype(t *testing.T) {
 	sponsor := thor.BytesToAddress([]byte("sponsor"))
 
 	tests := []struct {
-		fn       func() interface{}
-		expected interface{}
+		fn       func() any
+		expected any
 		msg      string
 	}{
 
-		{func() interface{} { return M(binding.IsUser(user)) }, M(false, nil), "should not be user"},
-		{func() interface{} { return binding.AddUser(user, 1) }, nil, ""},
-		{func() interface{} { return M(binding.IsUser(user)) }, M(true, nil), "should be user"},
-		{func() interface{} { return binding.RemoveUser(user) }, nil, ""},
-		{func() interface{} { return M(binding.IsUser(user)) }, M(false, nil), "removed user should not a user"},
+		{func() any { return M(binding.IsUser(user)) }, M(false, nil), "should not be user"},
+		{func() any { return binding.AddUser(user, 1) }, nil, ""},
+		{func() any { return M(binding.IsUser(user)) }, M(true, nil), "should be user"},
+		{func() any { return binding.RemoveUser(user) }, nil, ""},
+		{func() any { return M(binding.IsUser(user)) }, M(false, nil), "removed user should not a user"},
 
-		{func() interface{} { return M(binding.CreditPlan()) }, M(&big.Int{}, &big.Int{}, nil), "should be zero plan"},
-		{func() interface{} { return binding.SetCreditPlan(planCredit, planRecRate) }, nil, ""},
-		{func() interface{} { return M(binding.CreditPlan()) }, M(planCredit, planRecRate, nil), "should set plan"},
+		{func() any { return M(binding.CreditPlan()) }, M(&big.Int{}, &big.Int{}, nil), "should be zero plan"},
+		{func() any { return binding.SetCreditPlan(planCredit, planRecRate) }, nil, ""},
+		{func() any { return M(binding.CreditPlan()) }, M(planCredit, planRecRate, nil), "should set plan"},
 
-		{func() interface{} { return binding.AddUser(user, 1) }, nil, ""},
-		{func() interface{} { return M(binding.UserCredit(user, 1)) }, M(planCredit, nil), "should have credit"},
-		{func() interface{} { return M(binding.UserCredit(user, 2)) }, M(planCredit, nil), "should have full credit"},
+		{func() any { return binding.AddUser(user, 1) }, nil, ""},
+		{func() any { return M(binding.UserCredit(user, 1)) }, M(planCredit, nil), "should have credit"},
+		{func() any { return M(binding.UserCredit(user, 2)) }, M(planCredit, nil), "should have full credit"},
 
-		{func() interface{} { return binding.SetUserCredit(user, &big.Int{}, 1) }, nil, ""},
-		{func() interface{} { return M(binding.UserCredit(user, 2)) }, M(planRecRate, nil), "should recover credit"},
-		{func() interface{} { return M(binding.UserCredit(user, 100000)) }, M(planCredit, nil), "should recover to full credit"},
+		{func() any { return binding.SetUserCredit(user, &big.Int{}, 1) }, nil, ""},
+		{func() any { return M(binding.UserCredit(user, 2)) }, M(planRecRate, nil), "should recover credit"},
+		{func() any { return M(binding.UserCredit(user, 100000)) }, M(planCredit, nil), "should recover to full credit"},
 
-		{func() interface{} { return M(binding.IsSponsor(sponsor)) }, M(false, nil), "should not be sponsor"},
-		{func() interface{} { return binding.Sponsor(sponsor, true) }, nil, ""},
-		{func() interface{} { return M(binding.IsSponsor(sponsor)) }, M(true, nil), "should be sponsor"},
-		{func() interface{} { return binding.Sponsor(sponsor, false) }, nil, ""},
-		{func() interface{} { return M(binding.IsSponsor(sponsor)) }, M(false, nil), "should not be sponsor"},
-		{func() interface{} { return binding.Sponsor(sponsor, true) }, nil, ""},
-		{func() interface{} { binding.SelectSponsor(sponsor); return nil }, nil, ""},
-		{func() interface{} { return M(binding.CurrentSponsor()) }, M(sponsor, nil), "should be current sponsor"},
-		{func() interface{} { return binding.Sponsor(sponsor, false) }, nil, ""},
+		{func() any { return M(binding.IsSponsor(sponsor)) }, M(false, nil), "should not be sponsor"},
+		{func() any { return binding.Sponsor(sponsor, true) }, nil, ""},
+		{func() any { return M(binding.IsSponsor(sponsor)) }, M(true, nil), "should be sponsor"},
+		{func() any { return binding.Sponsor(sponsor, false) }, nil, ""},
+		{func() any { return M(binding.IsSponsor(sponsor)) }, M(false, nil), "should not be sponsor"},
+		{func() any { return binding.Sponsor(sponsor, true) }, nil, ""},
+		{func() any { binding.SelectSponsor(sponsor); return nil }, nil, ""},
+		{func() any { return M(binding.CurrentSponsor()) }, M(sponsor, nil), "should be current sponsor"},
+		{func() any { return binding.Sponsor(sponsor, false) }, nil, ""},
 	}
 
 	for _, tt := range tests {

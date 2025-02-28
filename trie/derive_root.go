@@ -22,7 +22,7 @@ func DeriveRoot(list DerivableList) thor.Bytes32 {
 		key  []byte
 	)
 
-	for i := 0; i < list.Len(); i++ {
+	for i := range list.Len() {
 		key = drlp.AppendUint(key[:0], uint64(i))
 		trie.Update(key, list.GetRlp(i), nil)
 	}
