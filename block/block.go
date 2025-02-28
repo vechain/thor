@@ -10,10 +10,11 @@ import (
 	"io"
 	"sync/atomic"
 
+	"slices"
+
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
-	"slices"
 )
 
 const (

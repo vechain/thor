@@ -6,9 +6,10 @@
 package block
 
 import (
+	"slices"
+
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
-	"slices"
 )
 
 // Builder to make it easy to build a block object.

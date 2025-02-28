@@ -9,8 +9,9 @@ import (
 	"context"
 	"sync"
 
-	"github.com/syndtr/goleveldb/leveldb/util"
 	"slices"
+
+	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 // Bucket provides logical bucket for kv store.

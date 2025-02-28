@@ -12,6 +12,8 @@ import (
 	"net"
 	"time"
 
+	"slices"
+
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -20,7 +22,6 @@ import (
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/log"
-	"slices"
 )
 
 var logger = log.WithContext("pkg", "p2psrv")

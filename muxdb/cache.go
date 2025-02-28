@@ -13,9 +13,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"slices"
+
 	"github.com/qianbin/directcache"
 	"github.com/vechain/thor/v2/trie"
-	"slices"
 )
 
 type Cache interface {

@@ -14,12 +14,13 @@ import (
 	"io"
 	"sync/atomic"
 
+	"slices"
+
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/vrf"
-	"slices"
 )
 
 // Header contains almost all information about a block, except block body.

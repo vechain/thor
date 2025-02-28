@@ -6,11 +6,11 @@
 package comm_test
 
 import (
-	"sort"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"slices"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestLoopVar(t *testing.T) {
