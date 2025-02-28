@@ -59,6 +59,8 @@ func (g *Generator) Add(key []byte) {
 // The generator will be reset right after Generate.
 func (g *Generator) Generate(bitsPerKey int, k uint8) *Filter {
 	// compute bloom filter size in bytes
+	// for small n, we can see a very high false positive rate.  Fix it
+	// by enforcing a minimum bloom filter length.
 	nBytes := max((len(g.hashes)*bitsPerKey+7)/8, 8)
 
 	bits := make([]byte, nBytes)

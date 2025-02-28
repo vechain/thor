@@ -46,6 +46,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 		if n.targetGasLimit == 0 {
 			// no preset, use suggested
+			// apply soft limit in adaptive mode
 			suggested := min(n.bandwidth.SuggestGasLimit(), gasLimitSoftLimit)
 			n.packer.SetTargetGasLimit(suggested)
 		}
