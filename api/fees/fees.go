@@ -114,7 +114,7 @@ func (f *Fees) handleGetPriority(w http.ResponseWriter, _ *http.Request) error {
 
 	priorityFee := (*hexutil.Big)(priorityMinPriorityFee)
 	if priorityFees.Len() > 0 {
-		priorityFeeEntry := (*priorityFees)[(priorityFees.Len()-1)*int(f.data.config.Percentile)/100]
+		priorityFeeEntry := (*priorityFees)[(priorityFees.Len()-1)*int(f.data.config.PriorityPercentile)/100]
 		if priorityFeeEntry.Cmp(priorityMinPriorityFee) > 0 {
 			priorityFee = (*hexutil.Big)(priorityFeeEntry)
 		}

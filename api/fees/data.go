@@ -17,11 +17,11 @@ import (
 )
 
 type Config struct {
-	APIBacktraceLimit      uint32 // The max number of blocks to backtrace.
-	PriorityBacktraceLimit uint32
-	SampleTxPerBlock       uint32
-	Percentile             uint32
-	FixedCacheSize         uint32
+	APIBacktraceLimit        uint32 // The max number of blocks to backtrace.
+	PriorityBacktraceLimit   uint32
+	PrioritySampleTxPerBlock uint32
+	PriorityPercentile       uint32
+	FixedCacheSize           uint32
 }
 
 // minPriorityHeap is a min-heap of priority fee values.
@@ -90,7 +90,7 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 		}
 		baseFees[i-1] = fees.baseFee
 		gasUsedRatios[i-1] = fees.gasUsedRatio
-		fd.updatePriorityFees(priorityFees, fees.priorityFees, int(fd.config.SampleTxPerBlock)*int(blockCount))
+		fd.updatePriorityFees(priorityFees, fees.priorityFees, int(fd.config.PrioritySampleTxPerBlock)*int(blockCount))
 
 		newestBlockID = fees.parentBlockID
 	}
@@ -117,7 +117,7 @@ func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32) (*FeeCacheEntry, error) 
 
 	for _, tx := range transactions {
 		maxPriorityFeePerGas := fd.effectiveMaxPriorityFeePerGas(tx, header.BaseFee())
-		fd.updatePriorityFees(blockPriorityFees, &minPriorityHeap{maxPriorityFeePerGas}, int(fd.config.SampleTxPerBlock))
+		fd.updatePriorityFees(blockPriorityFees, &minPriorityHeap{maxPriorityFeePerGas}, int(fd.config.PrioritySampleTxPerBlock))
 	}
 
 	fees = &FeeCacheEntry{
