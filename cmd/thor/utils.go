@@ -278,18 +278,17 @@ func parseGenesisFile(filePath string) (*genesis.Genesis, thor.ForkConfig, error
 }
 
 func makeAPIConfig(ctx *cli.Context, logAPIRequests *atomic.Bool, soloMode bool) api.Config {
-	backtraceLimit := uint32(ctx.Uint64(apiBacktraceLimitFlag.Name))
 	return api.Config{
 		AllowedOrigins: ctx.String(apiCorsFlag.Name),
-		BacktraceLimit: backtraceLimit,
+		BacktraceLimit: uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
 		CallGasLimit:   ctx.Uint64(apiCallGasLimitFlag.Name),
 		PprofOn:        ctx.Bool(pprofFlag.Name),
 		SkipLogs:       ctx.Bool(skipLogsFlag.Name),
 		Fees: fees.Config{
-			APIBacktraceLimit:        backtraceLimit,
-			PriorityBacktraceLimit:   uint32(ctx.Uint64(apiPriorityFeesBacktraceLimitFlag.Name)),
-			PrioritySampleTxPerBlock: uint32(ctx.Uint64(apiPriorityFeesSampleTxPerBlockFlag.Name)),
-			PriorityPercentile:       uint32(ctx.Uint64(apiPriorityFeesPercentileFlag.Name)),
+			APIBacktraceLimit:        int(ctx.Uint64(apiBacktraceLimitFlag.Name)),
+			PriorityBacktraceLimit:   int(ctx.Uint64(apiPriorityFeesBacktraceLimitFlag.Name)),
+			PrioritySampleTxPerBlock: int(ctx.Uint64(apiPriorityFeesSampleTxPerBlockFlag.Name)),
+			PriorityPercentile:       int(ctx.Uint64(apiPriorityFeesPercentileFlag.Name)),
 			FixedCacheSize:           1024,
 		},
 		AllowCustomTracer: ctx.Bool(apiAllowCustomTracerFlag.Name),

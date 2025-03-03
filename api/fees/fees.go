@@ -65,10 +65,10 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 
 	bestBlockNumber := f.data.repo.BestBlockSummary().Header.Number()
 	// Calculate minAllowedBlock
-	minAllowedBlock := uint32(math.Max(0, float64(int(bestBlockNumber)-int(f.data.config.APIBacktraceLimit)+1)))
+	minAllowedBlock := uint32(math.Max(0, float64(int(bestBlockNumber)-f.data.config.APIBacktraceLimit+1)))
 
 	// Adjust blockCount if necessary
-	if int(bestBlockNumber) < int(f.data.config.APIBacktraceLimit) {
+	if int(bestBlockNumber) < f.data.config.APIBacktraceLimit {
 		blockCount = uint64(math.Min(float64(blockCount), float64(bestBlockNumber+1)))
 	}
 
@@ -114,7 +114,7 @@ func (f *Fees) handleGetPriority(w http.ResponseWriter, _ *http.Request) error {
 
 	priorityFee := (*hexutil.Big)(priorityMinPriorityFee)
 	if priorityFees.Len() > 0 {
-		priorityFeeEntry := (*priorityFees)[(priorityFees.Len()-1)*int(f.data.config.PriorityPercentile)/100]
+		priorityFeeEntry := (*priorityFees)[(priorityFees.Len()-1)*f.data.config.PriorityPercentile/100]
 		if priorityFeeEntry.Cmp(priorityMinPriorityFee) > 0 {
 			priorityFee = (*hexutil.Big)(priorityFeeEntry)
 		}
