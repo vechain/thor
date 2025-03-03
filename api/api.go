@@ -34,8 +34,6 @@ import (
 
 var logger = log.WithContext("pkg", "api")
 
-const fixedFeesCacheSize = 1024
-
 type Config struct {
 	AllowedOrigins    string
 	BacktraceLimit    uint32
@@ -49,6 +47,7 @@ type Config struct {
 	AllowedTracers    []string
 	SoloMode          bool
 	EnableDeprecated  bool
+	Fees              fees.Config
 }
 
 // New return api router
@@ -100,7 +99,7 @@ func New(
 	subs := subscriptions.New(repo, origins, config.BacktraceLimit, txPool, config.EnableDeprecated)
 	subs.Mount(router, "/subscriptions")
 
-	fees.New(repo, bft, config.BacktraceLimit, fixedFeesCacheSize).Mount(router, "/fees")
+	fees.New(repo, bft, config.Fees).Mount(router, "/fees")
 
 	if config.PprofOn {
 		router.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
