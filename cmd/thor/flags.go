@@ -88,7 +88,7 @@ var (
 		Value: 60,
 		Usage: "percentile for priority fees calculation",
 	}
-	apiPriorityFeeSampleTxPerBlockFlag = cli.Uint64Flag{
+	apiPriorityFeesSampleTxPerBlockFlag = cli.Uint64Flag{
 		Name:  "api-priority-fees-sample-tx-per-block",
 		Value: 3,
 		Usage: "number of transactions to sample per block for priority fees calculation",

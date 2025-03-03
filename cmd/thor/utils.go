@@ -288,7 +288,7 @@ func makeAPIConfig(ctx *cli.Context, logAPIRequests *atomic.Bool, soloMode bool)
 		Fees: fees.Config{
 			APIBacktraceLimit:        backtraceLimit,
 			PriorityBacktraceLimit:   uint32(ctx.Uint64(apiPriorityFeesBacktraceLimitFlag.Name)),
-			PrioritySampleTxPerBlock: uint32(ctx.Uint64(apiPriorityFeeSampleTxPerBlockFlag.Name)),
+			PrioritySampleTxPerBlock: uint32(ctx.Uint64(apiPriorityFeesSampleTxPerBlockFlag.Name)),
 			PriorityPercentile:       uint32(ctx.Uint64(apiPriorityFeesPercentileFlag.Name)),
 			FixedCacheSize:           1024,
 		},
