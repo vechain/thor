@@ -17,7 +17,7 @@ import (
 )
 
 type Config struct {
-	APIBacktraceLimit        uint32 // The max number of blocks to backtrace.
+	APIBacktraceLimit        uint32
 	PriorityBacktraceLimit   uint32
 	PrioritySampleTxPerBlock uint32
 	PriorityPercentile       uint32
