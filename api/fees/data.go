@@ -16,10 +16,13 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-const (
-	priorityNumberOfTxsPerBlock = 3
-	priorityPercentile          = 60
-)
+type Config struct {
+	APIBacktraceLimit        int
+	PriorityBacktraceLimit   int
+	PrioritySampleTxPerBlock int
+	PriorityPercentile       int
+	FixedCacheSize           int
+}
 
 // minPriorityHeap is a min-heap of priority fee values.
 type minPriorityHeap []*big.Int
@@ -48,14 +51,16 @@ type FeeCacheEntry struct {
 }
 
 type FeesData struct {
-	repo  *chain.Repository
-	cache *cache.PrioCache
+	repo   *chain.Repository
+	cache  *cache.PrioCache
+	config Config
 }
 
-func newFeesData(repo *chain.Repository, fixedSize uint32) *FeesData {
+func newFeesData(repo *chain.Repository, config Config) *FeesData {
 	return &FeesData{
-		repo:  repo,
-		cache: cache.NewPrioCache(int(fixedSize)),
+		repo:   repo,
+		cache:  cache.NewPrioCache(config.FixedCacheSize),
+		config: config,
 	}
 }
 
@@ -85,7 +90,7 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 		}
 		baseFees[i-1] = fees.baseFee
 		gasUsedRatios[i-1] = fees.gasUsedRatio
-		fd.updatePriorityFees(priorityFees, fees.priorityFees, priorityNumberOfTxsPerBlock*int(blockCount))
+		fd.updatePriorityFees(priorityFees, fees.priorityFees, fd.config.PrioritySampleTxPerBlock*int(blockCount))
 
 		newestBlockID = fees.parentBlockID
 	}
@@ -112,7 +117,7 @@ func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32) (*FeeCacheEntry, error) 
 
 	for _, tx := range transactions {
 		maxPriorityFeePerGas := fd.effectiveMaxPriorityFeePerGas(tx, header.BaseFee())
-		fd.updatePriorityFees(blockPriorityFees, &minPriorityHeap{maxPriorityFeePerGas}, priorityNumberOfTxsPerBlock)
+		fd.updatePriorityFees(blockPriorityFees, &minPriorityHeap{maxPriorityFeePerGas}, fd.config.PrioritySampleTxPerBlock)
 	}
 
 	fees = &FeeCacheEntry{
