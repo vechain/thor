@@ -88,7 +88,13 @@ func initFeesServer(t *testing.T, backtraceLimit uint32, fixedCacheSize uint32, 
 	require.NoError(t, err)
 
 	router := mux.NewRouter()
-	fees := fees.New(thorChain.Repo(), thorChain.Engine(), backtraceLimit, fixedCacheSize)
+	fees := fees.New(thorChain.Repo(), thorChain.Engine(), fees.Config{
+		APIBacktraceLimit:      backtraceLimit,
+		PriorityBacktraceLimit: 20,
+		SampleTxPerBlock:       3,
+		Percentile:             60,
+		FixedCacheSize:         fixedCacheSize,
+	})
 	fees.Mount(router, "/fees")
 
 	addr := thor.BytesToAddress([]byte("to"))

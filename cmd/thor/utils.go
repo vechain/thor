@@ -40,6 +40,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/doc"
+	"github.com/vechain/thor/v2/api/fees"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/node"
 	"github.com/vechain/thor/v2/cmd/thor/p2p"
@@ -277,12 +278,20 @@ func parseGenesisFile(filePath string) (*genesis.Genesis, thor.ForkConfig, error
 }
 
 func makeAPIConfig(ctx *cli.Context, logAPIRequests *atomic.Bool, soloMode bool) api.Config {
+	backtraceLimit := uint32(ctx.Uint64(apiBacktraceLimitFlag.Name))
 	return api.Config{
-		AllowedOrigins:    ctx.String(apiCorsFlag.Name),
-		BacktraceLimit:    uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
-		CallGasLimit:      ctx.Uint64(apiCallGasLimitFlag.Name),
-		PprofOn:           ctx.Bool(pprofFlag.Name),
-		SkipLogs:          ctx.Bool(skipLogsFlag.Name),
+		AllowedOrigins: ctx.String(apiCorsFlag.Name),
+		BacktraceLimit: backtraceLimit,
+		CallGasLimit:   ctx.Uint64(apiCallGasLimitFlag.Name),
+		PprofOn:        ctx.Bool(pprofFlag.Name),
+		SkipLogs:       ctx.Bool(skipLogsFlag.Name),
+		Fees: fees.Config{
+			APIBacktraceLimit:      backtraceLimit,
+			PriorityBacktraceLimit: uint32(ctx.Uint64(apiPriorityFeesBacktraceLimitFlag.Name)),
+			SampleTxPerBlock:       uint32(ctx.Uint64(apiPriorityFeeSampleTxPerBlockFlag.Name)),
+			Percentile:             uint32(ctx.Uint64(apiPriorityFeesPercentileFlag.Name)),
+			FixedCacheSize:         1024,
+		},
 		AllowCustomTracer: ctx.Bool(apiAllowCustomTracerFlag.Name),
 		EnableReqLogger:   logAPIRequests,
 		EnableMetrics:     ctx.Bool(enableMetricsFlag.Name),

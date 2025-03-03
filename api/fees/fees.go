@@ -19,23 +19,19 @@ import (
 	"github.com/vechain/thor/v2/chain"
 )
 
-const priorityNumberOfBlocks = 20
-
 var (
 	priorityMinPriorityFee = big.NewInt(2)
 )
 
 type Fees struct {
-	data           *FeesData
-	bft            bft.Committer
-	backtraceLimit uint32 // The max number of blocks to backtrace.
+	data *FeesData
+	bft  bft.Committer
 }
 
-func New(repo *chain.Repository, bft bft.Committer, backtraceLimit uint32, fixedCacheSize uint32) *Fees {
+func New(repo *chain.Repository, bft bft.Committer, config Config) *Fees {
 	return &Fees{
-		data:           newFeesData(repo, fixedCacheSize),
-		bft:            bft,
-		backtraceLimit: backtraceLimit,
+		data: newFeesData(repo, config),
+		bft:  bft,
 	}
 }
 
@@ -69,10 +65,10 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 
 	bestBlockNumber := f.data.repo.BestBlockSummary().Header.Number()
 	// Calculate minAllowedBlock
-	minAllowedBlock := uint32(math.Max(0, float64(int(bestBlockNumber)-int(f.backtraceLimit)+1)))
+	minAllowedBlock := uint32(math.Max(0, float64(int(bestBlockNumber)-int(f.data.config.APIBacktraceLimit)+1)))
 
 	// Adjust blockCount if necessary
-	if int(bestBlockNumber) < int(f.backtraceLimit) {
+	if int(bestBlockNumber) < int(f.data.config.APIBacktraceLimit) {
 		blockCount = uint64(math.Min(float64(blockCount), float64(bestBlockNumber+1)))
 	}
 
@@ -108,7 +104,7 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 
 func (f *Fees) handleGetPriority(w http.ResponseWriter, _ *http.Request) error {
 	bestBlockSummary := f.data.repo.BestBlockSummary()
-	blockCount := uint32(math.Min(float64(priorityNumberOfBlocks), float64(f.backtraceLimit)))
+	blockCount := uint32(math.Min(float64(f.data.config.PriorityBacktraceLimit), float64(f.data.config.APIBacktraceLimit)))
 	blockCount = uint32(math.Min(float64(blockCount), float64(bestBlockSummary.Header.Number()+1)))
 
 	_, _, _, priorityFees, err := f.data.resolveRange(bestBlockSummary, blockCount)
@@ -118,7 +114,7 @@ func (f *Fees) handleGetPriority(w http.ResponseWriter, _ *http.Request) error {
 
 	priorityFee := (*hexutil.Big)(priorityMinPriorityFee)
 	if priorityFees.Len() > 0 {
-		priorityFeeEntry := (*priorityFees)[(priorityFees.Len()-1)*priorityPercentile/100]
+		priorityFeeEntry := (*priorityFees)[(priorityFees.Len()-1)*int(f.data.config.Percentile)/100]
 		if priorityFeeEntry.Cmp(priorityMinPriorityFee) > 0 {
 			priorityFee = (*hexutil.Big)(priorityFeeEntry)
 		}
