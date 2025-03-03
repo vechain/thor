@@ -81,14 +81,20 @@ func TestFeesFixedSizeSameAsBacktrace(t *testing.T) {
 	}
 }
 
-func initFeesServer(t *testing.T, backtraceLimit uint32, fixedCacheSize uint32, numberOfBlocks int) (*httptest.Server, *chain.Chain) {
+func initFeesServer(t *testing.T, backtraceLimit int, fixedCacheSize int, numberOfBlocks int) (*httptest.Server, *chain.Chain) {
 	forkConfig := thor.NoFork
 	forkConfig.GALACTICA = 1
 	thorChain, err := testchain.NewWithFork(forkConfig)
 	require.NoError(t, err)
 
 	router := mux.NewRouter()
-	fees := fees.New(thorChain.Repo(), thorChain.Engine(), backtraceLimit, fixedCacheSize)
+	fees := fees.New(thorChain.Repo(), thorChain.Engine(), fees.Config{
+		APIBacktraceLimit:        backtraceLimit,
+		PriorityBacktraceLimit:   20,
+		PrioritySampleTxPerBlock: 3,
+		PriorityPercentile:       60,
+		FixedCacheSize:           fixedCacheSize,
+	})
 	fees.Mount(router, "/fees")
 
 	addr := thor.BytesToAddress([]byte("to"))
