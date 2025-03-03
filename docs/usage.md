@@ -157,37 +157,40 @@ To show usages of all command line options:
 bin/thor -h
 ```
 
-| Flag                        | Description                                                                                 |
-|-----------------------------|---------------------------------------------------------------------------------------------|
-| `--network`                 | The network to join (main\|test) or path to the genesis file                                |
-| `--data-dir`                | Directory for blockchain databases                                                          |
-| `--beneficiary`             | Address for block rewards                                                                   |
-| `--api-addr`                | API service listening address (default: "localhost:8669")                                   |
-| `--api-cors`                | Comma-separated list of domains from which to accept cross-origin requests to API           |
-| `--api-timeout`             | API request timeout value in milliseconds (default: 10000)                                  |
-| `--api-call-gas-limit`      | Limit contract call gas (default: 50000000)                                                 |
-| `--api-backtrace-limit`     | Limit the distance between 'position' and best block for subscriptions and fees APIs (default: 1000) |
-| `--api-allow-custom-tracer` | Allow custom JS tracer to be used for the tracer API                                        |
-| `--api-allowed-tracers`     | Comma-separated list of allowed tracers (default: "none")                                   |
-| `--enable-api-logs`         | Enables API requests logging                                                                |
-| `--api-logs-limit`          | Limit the number of logs returned by /logs API (default: 1000)                              |
-| `--verbosity`               | Log verbosity (0-9) (default: 3)                                                            |
-| `--max-peers`               | Maximum number of P2P network peers (P2P network disabled if set to 0) (default: 25)        |
-| `--p2p-port`                | P2P network listening port (default: 11235)                                                 |
-| `--nat`                     | Port mapping mechanism (any\|none\|upnp\|pmp\|extip:<IP>) (default: "any")                  |
-| `--bootnode`                | Comma separated list of bootnode IDs                                                        |
-| `--target-gas-limit`        | Target block gas limit (adaptive if set to 0) (default: 0)                                  |
-| `--pprof`                   | Turn on go-pprof                                                                            |
-| `--skip-logs`               | Skip writing event\|transfer logs (/logs API will be disabled)                              |
-| `--cache`                   | Megabytes of RAM allocated to trie nodes cache (default: 4096)                              |
-| `--disable-pruner`          | Disable state pruner to keep all history                                                    |
-| `--enable-metrics`          | Enables the metrics server                                                                  |
-| `--metrics-addr`            | Metrics service listening address                                                           |
-| `--enable-admin`            | Enables the admin server                                                                    |
-| `--admin-addr`              | Admin service listening address                                                             |
-| `--txpool-limit-per-account`| Transaction pool size limit per account                                                     |
-| `--help, -h`                | Show help                                                                                   |
-| `--version, -v`             | Print the version                                                                           |
+| Flag                                     | Description                                                                                          |
+|------------------------------------------|------------------------------------------------------------------------------------------------------|
+| `--network`                              | The network to join (main\|test) or path to the genesis file                                         |
+| `--data-dir`                             | Directory for blockchain databases                                                                   |
+| `--beneficiary`                          | Address for block rewards                                                                            |
+| `--api-addr`                             | API service listening address (default: "localhost:8669")                                            |
+| `--api-cors`                             | Comma-separated list of domains from which to accept cross-origin requests to API                    |
+| `--api-timeout`                          | API request timeout value in milliseconds (default: 10000)                                           |
+| `--api-call-gas-limit`                   | Limit contract call gas (default: 50000000)                                                          |
+| `--api-backtrace-limit`                  | Limit the distance between 'position' and best block for subscriptions and fees APIs (default: 1000) |
+| `--api-allow-custom-tracer`              | Allow custom JS tracer to be used for the tracer API                                                 |
+| `--api-allowed-tracers`                  | Comma-separated list of allowed tracers (default: "none")                                            |
+| `--enable-api-logs`                      | Enables API requests logging                                                                         |
+| `--api-logs-limit`                       | Limit the number of logs returned by /logs API (default: 1000)                                       |
+| `--api-priority-fees-backtrace-limit`    | Limit the distance with the best block for priority fees calculation (default: 20)                   |
+| `--api-priority-fees-percentile`         | Percentile for priority fees calculation (default: 60)                                               |
+| `--api-priority-fees-sample-tx-per-block`| Number of transactions to sample per block for priority fees calculation (default: 3)                |
+| `--verbosity`                            | Log verbosity (0-9) (default: 3)                                                                     |
+| `--max-peers`                            | Maximum number of P2P network peers (P2P network disabled if set to 0) (default: 25)                 |
+| `--p2p-port`                             | P2P network listening port (default: 11235)                                                          |
+| `--nat`                                  | Port mapping mechanism (any\|none\|upnp\|pmp\|extip:<IP>) (default: "any")                           |
+| `--bootnode`                             | Comma separated list of bootnode IDs                                                                 |
+| `--target-gas-limit`                     | Target block gas limit (adaptive if set to 0) (default: 0)                                           |
+| `--pprof`                                | Turn on go-pprof                                                                                     |
+| `--skip-logs`                            | Skip writing event\|transfer logs (/logs API will be disabled)                                       |
+| `--cache`                                | Megabytes of RAM allocated to trie nodes cache (default: 4096)                                       |
+| `--disable-pruner`                       | Disable state pruner to keep all history                                                             |
+| `--enable-metrics`                       | Enables the metrics server                                                                           |
+| `--metrics-addr`                         | Metrics service listening address                                                                    |
+| `--enable-admin`                         | Enables the admin server                                                                             |
+| `--admin-addr`                           | Admin service listening address                                                                      |
+| `--txpool-limit-per-account`             | Transaction pool size limit per account                                                              |
+| `--help, -h`                             | Show help                                                                                            |
+| `--version, -v`                          | Print the version                                                                                    |
 
 #### Thor Solo Flags
 
