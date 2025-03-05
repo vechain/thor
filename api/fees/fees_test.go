@@ -88,7 +88,7 @@ func initFeesServer(t *testing.T, backtraceLimit int, fixedCacheSize int, number
 	require.NoError(t, err)
 
 	router := mux.NewRouter()
-	fees := fees.New(thorChain.Repo(), thorChain.Engine(), fees.Config{
+	fees := fees.New(thorChain.Repo(), thorChain.Engine(), thorChain.Stater(), fees.Config{
 		APIBacktraceLimit:        backtraceLimit,
 		PriorityBacktraceLimit:   20,
 		PrioritySampleTxPerBlock: 3,

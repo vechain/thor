@@ -99,7 +99,7 @@ func New(
 	subs := subscriptions.New(repo, origins, config.BacktraceLimit, txPool, config.EnableDeprecated)
 	subs.Mount(router, "/subscriptions")
 
-	fees.New(repo, bft, config.Fees).Mount(router, "/fees")
+	fees.New(repo, bft, stater, config.Fees).Mount(router, "/fees")
 
 	if config.PprofOn {
 		router.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
