@@ -15,6 +15,7 @@ import (
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
 )
 
@@ -209,6 +210,10 @@ func (t *Transactions) parseHead(head string) (thor.Bytes32, error) {
 	h, err := thor.ParseBytes32(head)
 	if err != nil {
 		return thor.Bytes32{}, err
+	}
+	// if the provided head is newer than the best block, return the best block ID.
+	if tx.NewBlockRefFromID(h).Number() > t.repo.BestBlockSummary().Header.Number() {
+		return t.repo.BestBlockSummary().Header.ID(), nil
 	}
 	return h, nil
 }
