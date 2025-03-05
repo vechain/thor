@@ -16,6 +16,7 @@ import (
 var (
 	initialSupplyKey = thor.Blake2b([]byte("initial-supply"))
 	totalAddSubKey   = thor.Blake2b([]byte("total-add-sub"))
+	issuedKey        = thor.Blake2b([]byte("issued"))
 )
 
 // Energy implements energy operations.
@@ -37,6 +38,17 @@ func (e *Energy) getInitialSupply() (init initialSupply, err error) {
 			return nil
 		}
 		return rlp.DecodeBytes(raw, &init)
+	})
+	return
+}
+
+func (e *Energy) getIssued() (issued *big.Int, err error) {
+	err = e.state.DecodeStorage(e.addr, issuedKey, func(raw []byte) error {
+		if len(raw) == 0 {
+			issued = big.NewInt(0)
+			return nil
+		}
+		return rlp.DecodeBytes(raw, &issued)
 	})
 	return
 }
@@ -91,10 +103,17 @@ func (e *Energy) TotalSupply() (*big.Int, error) {
 		BlockTime: initialSupply.BlockTime}
 
 	hayabusaForkTime, err := e.state.GetHayabusaForkTime()
+
 	if err != nil {
 		return nil, err
 	}
-	return acc.CalcEnergy(e.blockTime, *hayabusaForkTime), nil
+	preHayabusa := acc.CalcEnergy(e.blockTime, *hayabusaForkTime)
+	postHayabusa, err := e.getIssued()
+	if err != nil {
+		return nil, err
+	}
+
+	return big.NewInt(0).Add(preHayabusa, postHayabusa), nil
 }
 
 // TotalBurned returns energy totally burned.
@@ -164,4 +183,15 @@ func (e *Energy) Sub(addr thor.Address, amount *big.Int) (bool, error) {
 func (e *Energy) StopEnergyGrowth(blockTime uint64) {
 	bt := big.NewInt(int64(blockTime))
 	e.state.SetStorage(thor.BytesToAddress([]byte("Energy")), thor.HayabusaEnergyGrowthStopTime, thor.BytesToBytes32(bt.Bytes()))
+}
+
+func (e *Energy) AddIssued(issued *big.Int) error {
+	total, err := e.getIssued()
+	if err != nil {
+		return err
+	}
+	total.Add(total, issued)
+	return e.state.EncodeStorage(e.addr, issuedKey, func() ([]byte, error) {
+		return rlp.EncodeToBytes(&total)
+	})
 }

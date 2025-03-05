@@ -222,3 +222,7 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 		return newBlock.WithSignature(sig), stage, f.receipts, nil
 	}
 }
+
+func (f *Flow) DistributeReward() error {
+	return f.runtime.DistributeRewards()
+}

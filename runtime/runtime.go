@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math/big"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -31,6 +32,7 @@ var (
 	energyTransferEvent     *abi.Event
 	prototypeSetMasterEvent *abi.Event
 	nativeCallReturnGas     uint64 = 1562 // see test case for calculation
+	bigE18                         = big.NewInt(1e18)
 
 	EmptyRuntimeBytecode = []byte{0x60, 0x60, 0x60, 0x40, 0x52, 0x60, 0x02, 0x56}
 
@@ -533,4 +535,46 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 			return receipt, nil
 		},
 	}, nil
+}
+
+func (rt *Runtime) DistributeRewards() error {
+	totalStaked, err := builtin.Staker.Native(rt.State()).ActiveStake()
+	if err != nil {
+		return err
+	}
+	// sqrt(totalStaked / 1e18) * 1e18, we are calculating sqrt on VET and then converting to wei
+	sqrtStake := new(big.Int).Sqrt(new(big.Int).Div(totalStaked, bigE18))
+	sqrtStake.Mul(sqrtStake, bigE18)
+
+	currentYear := time.Now().Year()
+	isLeap := isLeapYear(currentYear)
+	blocksPerYear := thor.NumberOfBlocksPerYear
+	if isLeap {
+		blocksPerYear = new(big.Int).Sub(thor.NumberOfBlocksPerYear, big.NewInt(thor.SeederInterval))
+	}
+
+	// reward = 1 * TargetFactor * ScalingFactor * sqrt(totalStaked / 1e18) / blocksPerYear
+	reward := big.NewInt(1)
+	reward.Mul(reward, thor.TargetFactor)
+	reward.Mul(reward, thor.ScalingFactor)
+	reward.Mul(reward, sqrtStake)
+	reward.Div(reward, blocksPerYear)
+
+	if err := builtin.Energy.Native(rt.State(), rt.ctx.Time).Add(rt.ctx.Beneficiary, reward); err != nil {
+		return err
+	}
+	if err := builtin.Energy.Native(rt.State(), rt.ctx.Time).AddIssued(reward); err != nil {
+		return err
+	}
+	return nil
+}
+
+func isLeapYear(year int) bool {
+	if year%4 == 0 {
+		if year%100 == 0 {
+			return year%400 == 0
+		}
+		return true
+	}
+	return false
 }

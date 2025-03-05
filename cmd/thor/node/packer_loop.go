@@ -164,6 +164,9 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 			}
 		}
 
+		if err := flow.DistributeReward(); err != nil {
+			return errors.Wrap(err, "reward distribution")
+		}
 		// commit the state
 		if _, err := stage.Commit(); err != nil {
 			return errors.Wrap(err, "commit state")
@@ -188,6 +191,7 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 				return errors.Wrap(err, "bft commits")
 			}
 		}
+
 		realElapsed := mclock.Now() - startTime
 
 		n.processFork(newBlock, oldBest.Header.ID())

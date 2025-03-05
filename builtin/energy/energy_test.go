@@ -104,6 +104,19 @@ func TestTotalSupply(t *testing.T) {
 
 	assert.Nil(t, err)
 	assert.Equal(t, big.NewInt(624500000456), totalSupply)
+
+	eng.blockTime = 2001
+	eng.AddIssued(big.NewInt(100))
+	totalSupply, err = eng.TotalSupply()
+
+	assert.Nil(t, err)
+	assert.Equal(t, big.NewInt(624500000556), totalSupply)
+
+	eng.blockTime = 3000
+	totalSupply, err = eng.TotalSupply()
+
+	assert.Nil(t, err)
+	assert.Equal(t, big.NewInt(624500000556), totalSupply)
 }
 
 func TestTokenTotalSupply(t *testing.T) {
@@ -152,4 +165,29 @@ func TestEnergyGrowth(t *testing.T) {
 	x.Div(x, big.NewInt(1e18))
 
 	assert.Equal(t, x, bal1)
+}
+
+func TestAddIssued(t *testing.T) {
+	st := state.New(muxdb.NewMem(), trie.Root{})
+
+	eng := New(thor.BytesToAddress([]byte("eng")), st, 1)
+
+	issued, err := eng.getIssued()
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0), issued)
+
+	storage, err := st.GetStorage(eng.addr, issuedKey)
+	assert.NoError(t, err)
+	assert.Equal(t, thor.Bytes32{}, storage)
+
+	err = eng.AddIssued(big.NewInt(100))
+	assert.NoError(t, err)
+
+	issued, err = eng.getIssued()
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(100), issued)
+
+	storage, err = st.GetStorage(eng.addr, issuedKey)
+	assert.NoError(t, err)
+	assert.Equal(t, thor.BytesToBytes32(big.NewInt(100).Bytes()), storage)
 }

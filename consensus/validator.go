@@ -8,12 +8,9 @@ package consensus
 import (
 	"bytes"
 	"fmt"
-	"math/big"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -261,12 +258,6 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 		}
 	}
 
-	if rt.Context().Number > c.forkConfig.HAYABUSA {
-		if err := c.distributeRewards(rt); err != nil {
-			return nil, nil, consensusError(fmt.Sprintf("unable to distribute validator rewards, root cause: %v", err.Error()))
-		}
-	}
-
 	stage, err := state.Stage(trie.Version{Major: header.Number(), Minor: blockConflicts})
 	if err != nil {
 		return nil, nil, err
@@ -277,46 +268,11 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 		return nil, nil, consensusError(fmt.Sprintf("block state root mismatch: want %v, have %v", header.StateRoot(), stateRoot))
 	}
 
-	return stage, receipts, nil
-}
-
-var bigE18 = big.NewInt(1e18)
-
-func (c *Consensus) distributeRewards(rt *runtime.Runtime) error {
-	totalStaked, err := builtin.Staker.Native(rt.State()).ActiveStake()
-	if err != nil {
-		return err
-	}
-	// sqrt(totalStaked / 1e18) * 1e18, we are calculating sqrt on VET and then converting to wei
-	sqrtStake := new(big.Int).Sqrt(new(big.Int).Div(totalStaked, bigE18))
-	sqrtStake.Mul(sqrtStake, bigE18)
-
-	currentYear := time.Now().Year()
-	isLeap := isLeapYear(currentYear)
-	blocksPerYear := thor.NumberOfBlocksPerYear
-	if isLeap {
-		blocksPerYear = new(big.Int).Sub(thor.NumberOfBlocksPerYear, big.NewInt(thor.SeederInterval))
-	}
-
-	// reward = 1 * TargetFactor * ScalingFactor * sqrt(totalStaked / 1e18) / blocksPerYear
-	reward := big.NewInt(1)
-	reward.Mul(reward, thor.TargetFactor)
-	reward.Mul(reward, thor.ScalingFactor)
-	reward.Mul(reward, sqrtStake)
-	reward.Div(reward, blocksPerYear)
-
-	if err := builtin.Energy.Native(rt.State(), rt.Context().Time).Add(rt.Context().Beneficiary, reward); err != nil {
-		return err
-	}
-	return nil
-}
-
-func isLeapYear(year int) bool {
-	if year%4 == 0 {
-		if year%100 == 0 {
-			return year%400 == 0
+	if rt.Context().Number > c.forkConfig.HAYABUSA {
+		if err := rt.DistributeRewards(); err != nil {
+			return nil, nil, consensusError(fmt.Sprintf("unable to distribute validator rewards, root cause: %v", err.Error()))
 		}
-		return true
 	}
-	return false
+
+	return stage, receipts, nil
 }
