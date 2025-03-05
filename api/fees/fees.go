@@ -32,7 +32,7 @@ type Fees struct {
 	data           *FeesData
 	bft            bft.Committer
 	stater         *state.Stater
-	minPriorityFee *big.Int // The minimum suggested priority fee is 5% of the block initial base fee.
+	minPriorityFee *big.Int // The minimum suggested priority fee is (Config.PriorityPercentile)% of the block initial base fee.
 	config         Config
 }
 
