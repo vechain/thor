@@ -23,9 +23,9 @@ import (
 )
 
 type Config struct {
-	APIBacktraceLimit      int
-	PriorityFeesPercentile int64
-	FixedCacheSize         int
+	APIBacktraceLimit  int
+	PriorityPercentile int64
+	FixedCacheSize     int
 }
 
 type Fees struct {
@@ -41,7 +41,7 @@ func New(repo *chain.Repository, bft bft.Committer, stater *state.Stater, config
 		data:           newFeesData(repo, config.FixedCacheSize),
 		bft:            bft,
 		stater:         stater,
-		minPriorityFee: new(big.Int).Div(new(big.Int).Mul(big.NewInt(thor.InitialBaseFee), big.NewInt(config.PriorityFeesPercentile)), big.NewInt(100)),
+		minPriorityFee: new(big.Int).Div(new(big.Int).Mul(big.NewInt(thor.InitialBaseFee), big.NewInt(config.PriorityPercentile)), big.NewInt(100)),
 		config:         config,
 	}
 }
@@ -121,7 +121,7 @@ func (f *Fees) handleGetPriority(w http.ResponseWriter, _ *http.Request) error {
 		forkConfig := thor.GetForkConfig(f.data.repo.NewBestChain().GenesisID())
 		nextBaseFee := fork.CalcBaseFee(&forkConfig, bestBlockSummary.Header)
 		if nextBaseFee.Cmp(big.NewInt(thor.InitialBaseFee)) > 0 {
-			priorityFee = (*hexutil.Big)(new(big.Int).Div(new(big.Int).Mul(nextBaseFee, big.NewInt(f.config.PriorityFeesPercentile)), big.NewInt(100)))
+			priorityFee = (*hexutil.Big)(new(big.Int).Div(new(big.Int).Mul(nextBaseFee, big.NewInt(f.config.PriorityPercentile)), big.NewInt(100)))
 		}
 	}
 

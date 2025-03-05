@@ -87,9 +87,9 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 	node.New(communicator).Mount(router, "/node")
 
 	fees.New(thorChain.Repo(), thorChain.Engine(), thorChain.Stater(), fees.Config{
-		APIBacktraceLimit:      6,
-		FixedCacheSize:         6,
-		PriorityFeesPercentile: priorityFeesPercentile,
+		APIBacktraceLimit:  6,
+		FixedCacheSize:     6,
+		PriorityPercentile: priorityFeesPercentile,
 	}).Mount(router, "/fees")
 
 	return thorChain, httptest.NewServer(router)
