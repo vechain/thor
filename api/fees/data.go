@@ -86,7 +86,8 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 		oldestBlockID = newestBlockID
 		fees, err := fd.getOrLoadFees(newestBlockID)
 		if err != nil {
-			// If "next" we do not cache the data since it does not belong to an actual block
+			// This should happen only when "next" since the boundaries are validated beforehand
+			// We do not cache the data in this case since it does not belong to an actual block
 			if fd.repo.IsNotFound(err) {
 				header := newestBlockSummary.Header
 				baseFees[i-1] = getBaseFee(header.BaseFee())
