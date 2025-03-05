@@ -17,6 +17,7 @@ import (
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/state"
 )
 
 var (
@@ -24,14 +25,16 @@ var (
 )
 
 type Fees struct {
-	data *FeesData
-	bft  bft.Committer
+	data   *FeesData
+	bft    bft.Committer
+	stater *state.Stater
 }
 
-func New(repo *chain.Repository, bft bft.Committer, config Config) *Fees {
+func New(repo *chain.Repository, bft bft.Committer, stater *state.Stater, config Config) *Fees {
 	return &Fees{
-		data: newFeesData(repo, config),
-		bft:  bft,
+		data:   newFeesData(repo, config),
+		bft:    bft,
+		stater: stater,
 	}
 }
 
@@ -48,12 +51,12 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 	}
 
 	// Validate newestBlock
-	newestBlock, err := utils.ParseRevision(req.URL.Query().Get("newestBlock"), false)
+	newestBlock, err := utils.ParseRevision(req.URL.Query().Get("newestBlock"), true)
 	if err != nil {
 		return 0, nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
 	}
 
-	newestBlockSummary, err := utils.GetSummary(newestBlock, f.data.repo, f.bft)
+	newestBlockSummary, _, err := utils.GetSummaryAndState(newestBlock, f.data.repo, f.bft, f.stater)
 	if err != nil {
 		if f.data.repo.IsNotFound(err) {
 			// return 400 for the parameter validation
