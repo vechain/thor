@@ -13,6 +13,7 @@ import (
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -133,6 +134,12 @@ func GetSummaryAndState(rev *Revision, repo *chain.Repository, bft bft.Committer
 		if best.Header.COM() {
 			builder.COM()
 		}
+
+		if best.Header.BaseFee() != nil {
+			forkConfig := thor.GetForkConfig(repo.NewBestChain().GenesisID())
+			builder.BaseFee(fork.CalcBaseFee(&forkConfig, best.Header))
+		}
+
 		mocked := builder.Build()
 
 		// state is also reused from the parent block
