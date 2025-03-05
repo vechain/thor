@@ -86,6 +86,15 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 		oldestBlockID = newestBlockID
 		fees, err := fd.getOrLoadFees(newestBlockID)
 		if err != nil {
+			// This should happen only when "next" since the boundaries are validated beforehand
+			// We do not cache the data in this case since it does not belong to an actual block
+			if fd.repo.IsNotFound(err) {
+				header := newestBlockSummary.Header
+				baseFees[i-1] = getBaseFee(header.BaseFee())
+				gasUsedRatios[i-1] = float64(header.GasUsed()) / float64(header.GasLimit())
+				newestBlockID = header.ParentID()
+				continue
+			}
 			return thor.Bytes32{}, nil, nil, nil, err
 		}
 		baseFees[i-1] = fees.baseFee
