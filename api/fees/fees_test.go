@@ -26,6 +26,7 @@ import (
 
 const expectedGasPriceUsedRatio = 0.0021
 const expectedBaseFee = thor.InitialBaseFee
+const priorityFeesPercentile = 5
 
 func TestFeesBacktraceGreaterThanFixedSize(t *testing.T) {
 	ts, bestchain := initFeesServer(t, 8, 10, 10)
@@ -91,11 +92,9 @@ func initFeesServer(t *testing.T, backtraceLimit int, fixedCacheSize int, number
 
 	router := mux.NewRouter()
 	fees := fees.New(thorChain.Repo(), thorChain.Engine(), thorChain.Stater(), fees.Config{
-		APIBacktraceLimit:        backtraceLimit,
-		PriorityBacktraceLimit:   20,
-		PrioritySampleTxPerBlock: 3,
-		PriorityPercentile:       60,
-		FixedCacheSize:           fixedCacheSize,
+		APIBacktraceLimit:      backtraceLimit,
+		FixedCacheSize:         fixedCacheSize,
+		PriorityFeesPercentile: priorityFeesPercentile,
 	})
 	fees.Mount(router, "/fees")
 
@@ -400,7 +399,7 @@ func getFeePriority(t *testing.T, tclient *thorclient.Client, bestchain *chain.C
 	}
 
 	expectedFeesPriority := fees.FeesPriority{
-		MaxPriorityFeePerGas: (*hexutil.Big)(big.NewInt(100)),
+		MaxPriorityFeePerGas: (*hexutil.Big)(new(big.Int).Div(new(big.Int).Mul(big.NewInt(thor.InitialBaseFee), big.NewInt(priorityFeesPercentile)), big.NewInt(100))),
 	}
 
 	assert.Equal(t, expectedFeesPriority, feesPriority)
