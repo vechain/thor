@@ -350,7 +350,8 @@ func TestStaker_Get_FullFlow(t *testing.T) {
 	assert.Equal(t, stake, validator.Weight)
 
 	// housekeep the validator
-	assert.NoError(t, staker.Housekeep(uint32(360)*24*14))
+	_, err = staker.Housekeep(uint32(360)*24*14, 0)
+	assert.NoError(t, err)
 	validator, err = staker.Get(addr)
 	assert.NoError(t, err)
 	assert.Equal(t, StatusExit, validator.Status)
@@ -589,7 +590,8 @@ func TestStaker_Housekeep_TooEarly(t *testing.T) {
 	assert.NoError(t, staker.AddValidator(0, addr2, addr2, uint32(360)*24*15, stake))
 	assert.NoError(t, staker.ActivateNextValidator())
 
-	assert.NoError(t, staker.Housekeep(0))
+	_, err := staker.Housekeep(0, 0)
+	assert.NoError(t, err)
 	validator, err := staker.Get(addr1)
 	assert.NoError(t, err)
 	assert.Equal(t, StatusActive, validator.Status)
@@ -610,7 +612,8 @@ func TestStaker_Housekeep_ExitOne(t *testing.T) {
 	assert.NoError(t, staker.AddValidator(0, addr2, addr2, uint32(360)*24*15, stake))
 	assert.NoError(t, staker.ActivateNextValidator())
 
-	assert.NoError(t, staker.Housekeep(uint32(360)*24*14))
+	_, err := staker.Housekeep(uint32(360)*24*14, 0)
+	assert.NoError(t, err)
 	validator, err := staker.Get(addr1)
 	assert.NoError(t, err)
 	assert.Equal(t, StatusExit, validator.Status)
@@ -631,7 +634,8 @@ func TestStaker_Housekeep_Cooldown(t *testing.T) {
 	assert.NoError(t, staker.AddValidator(0, addr2, addr2, uint32(360)*24*15, stake))
 	assert.NoError(t, staker.ActivateNextValidator())
 
-	assert.NoError(t, staker.Housekeep(uint32(360)*24*15))
+	_, err := staker.Housekeep(uint32(360)*24*15, 0)
+	assert.NoError(t, err)
 	validator, err := staker.Get(addr1)
 	assert.NoError(t, err)
 	assert.Equal(t, StatusExit, validator.Status)
@@ -652,7 +656,8 @@ func TestStaker_Housekeep_CooldownToExited(t *testing.T) {
 	assert.NoError(t, staker.AddValidator(0, addr2, addr2, uint32(360)*24*15, stake))
 	assert.NoError(t, staker.ActivateNextValidator())
 
-	assert.NoError(t, staker.Housekeep(uint32(360)*24*15))
+	_, err := staker.Housekeep(uint32(360)*24*15, 0)
+	assert.NoError(t, err)
 	validator, err := staker.Get(addr1)
 	assert.NoError(t, err)
 	assert.Equal(t, StatusExit, validator.Status)
@@ -660,7 +665,8 @@ func TestStaker_Housekeep_CooldownToExited(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, StatusCooldown, validator.Status)
 
-	assert.NoError(t, staker.Housekeep(uint32(360)*24*20))
+	_, err = staker.Housekeep(uint32(360)*24*20, 0)
+	assert.NoError(t, err)
 	validator, err = staker.Get(addr2)
 	assert.NoError(t, err)
 	assert.Equal(t, StatusExit, validator.Status)

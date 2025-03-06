@@ -56,8 +56,14 @@ func (p *Packer) schedulePOS(parent *chain.BlockSummary, nowTimestamp uint64, st
 		}
 	}
 
-	// TODO: Call the staker.Housekeeping function and tidy up the pos.Validators
-	// https://github.com/vechain/protocol-board-repo/issues/443
+	// Perform validator housekeeping on epoch boundaries
+	parentNum := parent.Header.Number()
+	nextBlockNum := parentNum + 1
+
+	_, err = staker.Housekeep(nextBlockNum, p.forkConfig.HAYABUSA)
+	if err != nil {
+		return thor.Address{}, 0, 0, err
+	}
 
 	return beneficiary, newBlockTime, score, nil
 }

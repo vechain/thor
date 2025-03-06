@@ -27,6 +27,7 @@ var (
 	//maxStakingPeriod = uint32(360) * 24 * 365 // 1 year
 
 	slotPreviousExitKey = thor.Blake2b(thor.Bytes32{slotPreviousExit}.Bytes())
+	cooldownPeriod      = uint32(8640)
 )
 
 type slot = byte
@@ -42,6 +43,7 @@ const (
 	slotQueuedHead
 	slotQueuedTail
 	slotPreviousExit
+	slotQueuedGroupSize
 )
 
 // Staker implements native methods of `Staker` contract.
@@ -55,6 +57,7 @@ type Staker struct {
 	validators         *solidity.Mapping[thor.Address, *Validator]
 	leaderGroup        *linkedList
 	validatorQueue     *linkedList
+	queuedGroupSize    *solidity.Uint256 // New field for tracking queued validators count
 	minStakingPeriod   uint32
 	maxStakingPeriod   uint32
 	epochLength        uint32
@@ -96,6 +99,7 @@ func New(addr thor.Address, state *state.State) *Staker {
 		maxLeaderGroupSize: solidity.NewUint256(addr, state, thor.Bytes32{slotMaxLeaderGroupSize}),
 		leaderGroup:        newLinkedList(addr, state, validators, thor.Bytes32{slotActiveHead}, thor.Bytes32{slotActiveTail}),
 		validatorQueue:     newLinkedList(addr, state, validators, thor.Bytes32{slotQueuedHead}, thor.Bytes32{slotQueuedTail}),
+		queuedGroupSize:    solidity.NewUint256(addr, state, thor.Bytes32{slotQueuedGroupSize}),
 		minStakingPeriod:   minStakingPeriod,
 		maxStakingPeriod:   maxStakingPeriod,
 		epochLength:        epochLength,
@@ -157,6 +161,11 @@ func (a *Staker) AddValidator(
 		return err
 	}
 
+	// Increment queuedGroupSize when adding validator to queue
+	if err := a.queuedGroupSize.Add(big.NewInt(1)); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -199,6 +208,16 @@ func (a *Staker) ActivateNextValidator() error {
 	if leaderGroupLength.Cmp(maxLeaderGroupSize) >= 0 {
 		return errors.New("leader group is full")
 	}
+
+	// Check if queue is empty
+	queuedSize, err := a.queuedGroupSize.Get()
+	if err != nil {
+		return err
+	}
+	if queuedSize.Cmp(big.NewInt(0)) <= 0 {
+		return errors.New("no validator in the queue")
+	}
+
 	if err := a.leaderGroupSize.Add(big.NewInt(1)); err != nil {
 		return nil
 	}
@@ -210,6 +229,12 @@ func (a *Staker) ActivateNextValidator() error {
 	if validator.IsEmpty() {
 		return errors.New("no validator in the queue")
 	}
+
+	// Decrement queuedGroupSize when removing from queue
+	if err := a.queuedGroupSize.Sub(big.NewInt(1)); err != nil {
+		return err
+	}
+
 	if err := a.activeStake.Add(validator.Stake); err != nil {
 		return err
 	}
@@ -224,47 +249,89 @@ func (a *Staker) ActivateNextValidator() error {
 
 // Iterate over validators, move to cooldown
 // take the oldest validator and move to exited
-func (a *Staker) Housekeep(currentBlock uint32) error {
-	ptr, err := a.FirstActive()
-	if err != nil {
-		return err
-	}
-	next := &ptr
-
-	toExit := thor.Address{}
-	toExitExp := uint32(math.MaxUint32)
-	for next != nil {
-		entry, err := a.validators.Get(*next)
+func (a *Staker) Housekeep(currentBlock uint32, forkBlock uint32) (bool, error) {
+	validatorsChanged := false
+	if (currentBlock-forkBlock)%cooldownPeriod == 0 {
+		ptr, err := a.FirstActive()
 		if err != nil {
-			return err
+			return false, err
 		}
+		next := &ptr
 
-		if currentBlock >= entry.Expiry {
-			if entry.Status == StatusActive {
-				// Put to cooldown
-				entry.Status = StatusCooldown
-				if err := a.validators.Set(*next, entry); err != nil {
-					return err
+		toExit := thor.Address{}
+		toExitExp := uint32(math.MaxUint32)
+		for next != nil && !next.IsZero() {
+			entry, err := a.validators.Get(*next)
+			if err != nil {
+				return false, err
+			}
+
+			if currentBlock >= entry.Expiry {
+				if entry.Status == StatusActive {
+					// Put to cooldown
+					entry.Status = StatusCooldown
+					if err := a.validators.Set(*next, entry); err != nil {
+						return false, err
+					}
+				}
+
+				// Find validator with the lowest expiry
+				if entry.Status == StatusCooldown && toExitExp > entry.Expiry {
+					toExit = *next
+					toExitExp = entry.Expiry
 				}
 			}
 
-			// Find calidator with the lowest expiry
-			if entry.Status == StatusCooldown && toExitExp > entry.Expiry {
-				toExit = *next
-				toExitExp = entry.Expiry
+			next = entry.Next
+		}
+
+		// should the protocol handle this case? `((currentBlock-forkBlock)%cooldownPeriod) == 0`
+		if !toExit.IsZero() {
+			validatorsChanged = true
+			if err := a.RemoveValidator(toExit); err != nil {
+				return false, err
+			}
+			if err := a.setPreviousExit(currentBlock); err != nil {
+				return false, err
 			}
 		}
-
-		next = entry.Next
 	}
 
-	// should the protocol handle this case? `((currentBlock-forkBlock)%cooldownPeriod) == 0`
-	if !toExit.IsZero() {
-		if err := a.RemoveValidator(toExit); err != nil {
-			return err
+	if currentBlock%a.epochLength == 0 {
+		validatorsChanged = true
+		if err := a.activateValidators(); err != nil {
+			return false, err
 		}
-		if err := a.setPreviousExit(currentBlock); err != nil {
-			return err
+	}
+
+	return validatorsChanged, nil
+}
+func (a *Staker) activateValidators() error {
+	queuedSize, err := a.QueuedGroupSize()
+	if err != nil {
+		return err
+	}
+	leaderSize, err := a.LeaderGroupSize()
+	if err != nil {
+		return err
+	}
+
+	if queuedSize.Cmp(big.NewInt(0)) > 0 {
+		queuedCount := queuedSize.Int64()
+		leaderDelta := 101 - leaderSize.Int64()
+		if leaderDelta > 0 {
+			if leaderDelta < queuedCount {
+				queuedCount = leaderDelta
+			}
+		} else {
+			queuedCount = 0
+		}
+
+		for i := int64(0); i < queuedCount; i++ {
+			err := a.ActivateNextValidator()
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -442,6 +509,14 @@ func (a *Staker) Initialise(auth *authority.Authority, params *params.Params, cu
 	a.leaderGroupSize.Set(big.NewInt(int64(len(poaCandidates))))
 
 	return nil
+}
+
+// QueuedGroupSize returns the number of validators in the queue
+func (a *Staker) QueuedGroupSize() (*big.Int, error) {
+	return a.queuedGroupSize.Get()
+}
+func (a *Staker) LeaderGroupSize() (*big.Int, error) {
+	return a.leaderGroupSize.Get()
 }
 
 func IsExitingSlot(blockNumber uint64) bool {

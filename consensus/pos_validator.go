@@ -68,8 +68,20 @@ func (c *Consensus) validateStakingProposer(header *block.Header, parent *block.
 		}
 	}
 
-	// TODO: Call the staker.Housekeeping function and tidy up the pos.Validators
-	// https://github.com/vechain/protocol-board-repo/issues/443
+	// Perform validator housekeeping on epoch boundaries
+	headerNumber := header.Number()
+	updateValidators, err := stakerContract.Housekeep(headerNumber, c.forkConfig.HAYABUSA)
+	if err != nil {
+		return nil, err
+	}
+	if updateValidators {
+		// Refresh validators from contract since they've changed
+		leaders, err := stakerContract.LeaderGroup()
+		if err != nil {
+			return nil, err
+		}
+		validators = pos.NewValidators(leaders)
+	}
 
 	return c.validatorCacheHandler(validators, header), nil
 }
