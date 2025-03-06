@@ -43,7 +43,7 @@ import (
 const (
 	gasLimit               = 30_000_000
 	logDBLimit             = 1_000
-	priorityFeesPercentile = 5
+	priorityFeesPercentage = 5
 )
 
 var (
@@ -87,9 +87,9 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 	node.New(communicator).Mount(router, "/node")
 
 	fees.New(thorChain.Repo(), thorChain.Engine(), thorChain.Stater(), fees.Config{
-		APIBacktraceLimit:  6,
-		FixedCacheSize:     6,
-		PriorityPercentile: priorityFeesPercentile,
+		APIBacktraceLimit:          6,
+		FixedCacheSize:             6,
+		PriorityIncreasePercentage: priorityFeesPercentage,
 	}).Mount(router, "/fees")
 
 	return thorChain, httptest.NewServer(router)
@@ -455,7 +455,7 @@ func testFeesEndpoint(t *testing.T, testchain *testchain.Chain, ts *httptest.Ser
 		require.NotNil(t, feesPriority)
 
 		expectedFeesPriority := &fees.FeesPriority{
-			MaxPriorityFeePerGas: (*hexutil.Big)(new(big.Int).Div(new(big.Int).Mul(big.NewInt(thor.InitialBaseFee), big.NewInt(priorityFeesPercentile)), big.NewInt(100))),
+			MaxPriorityFeePerGas: (*hexutil.Big)(new(big.Int).Div(new(big.Int).Mul(big.NewInt(thor.InitialBaseFee), big.NewInt(priorityFeesPercentage)), big.NewInt(100))),
 		}
 
 		require.Equal(t, expectedFeesPriority, feesPriority)

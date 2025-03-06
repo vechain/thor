@@ -171,7 +171,7 @@ bin/thor -h
 | `--api-allowed-tracers`                  | Comma-separated list of allowed tracers (default: "none")                                            |
 | `--enable-api-logs`                      | Enables API requests logging                                                                         |
 | `--api-logs-limit`                       | Limit the number of logs returned by /logs API (default: 1000)                                       |
-| `--api-priority-fees-percentile`         | Percentile of the block base fee for priority fees calculation (default: 5)                          |
+| `--api-priority-fees-percentage`         | Percentage of the block base fee for priority fees calculation (default: 5)                          |
 | `--verbosity`                            | Log verbosity (0-9) (default: 3)                                                                     |
 | `--max-peers`                            | Maximum number of P2P network peers (P2P network disabled if set to 0) (default: 25)                 |
 | `--p2p-port`                             | P2P network listening port (default: 11235)                                                          |

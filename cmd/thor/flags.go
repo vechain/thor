@@ -78,10 +78,10 @@ var (
 		Usage: "enables API requests logging",
 	}
 	// priority fees API flags
-	apiPriorityFeesPercentileFlag = cli.Uint64Flag{
-		Name:  "api-priority-fees-percentile",
+	apiPriorityFeesPercentageFlag = cli.Uint64Flag{
+		Name:  "api-priority-fees-percentage",
 		Value: 5,
-		Usage: "percentile of the block base fee for priority fees calculation",
+		Usage: "percentage of the block base fee for priority fees calculation",
 	}
 
 	verbosityFlag = cli.Uint64Flag{

@@ -285,9 +285,9 @@ func makeAPIConfig(ctx *cli.Context, logAPIRequests *atomic.Bool, soloMode bool)
 		PprofOn:        ctx.Bool(pprofFlag.Name),
 		SkipLogs:       ctx.Bool(skipLogsFlag.Name),
 		Fees: fees.Config{
-			APIBacktraceLimit:  int(ctx.Uint64(apiBacktraceLimitFlag.Name)),
-			FixedCacheSize:     1024,
-			PriorityPercentile: int64(ctx.Uint64(apiPriorityFeesPercentileFlag.Name)),
+			APIBacktraceLimit:          int(ctx.Uint64(apiBacktraceLimitFlag.Name)),
+			FixedCacheSize:             1024,
+			PriorityIncreasePercentage: int(ctx.Uint64(apiPriorityFeesPercentageFlag.Name)),
 		},
 		AllowCustomTracer: ctx.Bool(apiAllowCustomTracerFlag.Name),
 		EnableReqLogger:   logAPIRequests,
