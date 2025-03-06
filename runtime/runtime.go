@@ -88,6 +88,7 @@ type Runtime struct {
 	state       *state.State
 	ctx         *xenv.BlockContext
 	chainConfig vm.ChainConfig
+	forkConfig  thor.ForkConfig
 }
 
 // New create a Runtime object.
@@ -140,6 +141,7 @@ func New(
 		state:       state,
 		ctx:         ctx,
 		chainConfig: currentChainConfig,
+		forkConfig:  forkConfig,
 	}
 	return &rt
 }
@@ -410,8 +412,7 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 		return nil, err
 	}
 
-	galactica := rt.chainConfig.IsShanghai(big.NewInt(int64(rt.ctx.Number)))
-	baseGasPrice, gasPrice, payer, _, returnGas, err := resolvedTx.BuyGas(rt.state, rt.ctx.Time, &fork.GalacticaItems{IsActive: galactica, BaseFee: rt.ctx.BaseFee})
+	baseGasPrice, gasPrice, payer, _, returnGas, err := resolvedTx.BuyGas(rt.state, rt.ctx.Time, &fork.GalacticaItems{IsActive: rt.ctx.Number >= rt.forkConfig.GALACTICA, BaseFee: rt.ctx.BaseFee})
 	if err != nil {
 		return nil, err
 	}
@@ -512,8 +513,8 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 			if err != nil {
 				return nil, err
 			}
-			rewardGasPrice := fork.GalacticaPriorityPrice(tx, baseGasPrice, provedWork, &fork.GalacticaItems{IsActive: galactica, BaseFee: rt.ctx.BaseFee})
-			reward := fork.CalculateReward(receipt.GasUsed, rewardGasPrice, rewardRatio, galactica)
+			rewardGasPrice := fork.GalacticaPriorityPrice(tx, baseGasPrice, provedWork, &fork.GalacticaItems{IsActive: rt.ctx.Number >= rt.forkConfig.GALACTICA, BaseFee: rt.ctx.BaseFee})
+			reward := fork.CalculateReward(receipt.GasUsed, rewardGasPrice, rewardRatio, rt.ctx.Number >= rt.forkConfig.GALACTICA)
 
 			if err := builtin.Energy.Native(rt.state, rt.ctx.Time).Add(rt.ctx.Beneficiary, reward); err != nil {
 				return nil, err
