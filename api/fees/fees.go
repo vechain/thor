@@ -17,24 +17,36 @@ import (
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
 )
 
-var (
-	priorityMinPriorityFee = big.NewInt(2)
-)
+type Config struct {
+	APIBacktraceLimit          int
+	PriorityIncreasePercentage int
+	FixedCacheSize             int
+}
 
 type Fees struct {
-	data   *FeesData
-	bft    bft.Committer
-	stater *state.Stater
+	data           *FeesData
+	bft            bft.Committer
+	stater         *state.Stater
+	minPriorityFee *big.Int // The minimum suggested priority fee is (Config.PriorityIncreasePercentage)% of the block initial base fee.
+	config         Config
+}
+
+func calcPriorityFee(baseFee *big.Int, priorityPercentile int64) *big.Int {
+	return new(big.Int).Div(new(big.Int).Mul(baseFee, big.NewInt(priorityPercentile)), big.NewInt(100))
 }
 
 func New(repo *chain.Repository, bft bft.Committer, stater *state.Stater, config Config) *Fees {
 	return &Fees{
-		data:   newFeesData(repo, config),
-		bft:    bft,
-		stater: stater,
+		data:           newFeesData(repo, config.FixedCacheSize),
+		bft:            bft,
+		stater:         stater,
+		minPriorityFee: calcPriorityFee(big.NewInt(thor.InitialBaseFee), int64(config.PriorityIncreasePercentage)),
+		config:         config,
 	}
 }
 
@@ -68,10 +80,10 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 
 	bestBlockNumber := f.data.repo.BestBlockSummary().Header.Number()
 	// Calculate minAllowedBlock
-	minAllowedBlock := uint32(math.Max(0, float64(int(bestBlockNumber)-f.data.config.APIBacktraceLimit+1)))
+	minAllowedBlock := uint32(math.Max(0, float64(int(bestBlockNumber)-f.config.APIBacktraceLimit+1)))
 
 	// Adjust blockCount if necessary
-	if int(bestBlockNumber) < f.data.config.APIBacktraceLimit {
+	if int(bestBlockNumber) < f.config.APIBacktraceLimit {
 		blockCount = uint64(math.Min(float64(blockCount), float64(bestBlockNumber+1)))
 	}
 
@@ -93,7 +105,7 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 		return err
 	}
 
-	oldestBlockRevision, baseFees, gasUsedRatios, _, err := f.data.resolveRange(newestBlockSummary, blockCount)
+	oldestBlockRevision, baseFees, gasUsedRatios, err := f.data.resolveRange(newestBlockSummary, blockCount)
 	if err != nil {
 		return err
 	}
@@ -107,19 +119,13 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 
 func (f *Fees) handleGetPriority(w http.ResponseWriter, _ *http.Request) error {
 	bestBlockSummary := f.data.repo.BestBlockSummary()
-	blockCount := uint32(math.Min(float64(f.data.config.PriorityBacktraceLimit), float64(f.data.config.APIBacktraceLimit)))
-	blockCount = uint32(math.Min(float64(blockCount), float64(bestBlockSummary.Header.Number()+1)))
 
-	_, _, _, priorityFees, err := f.data.resolveRange(bestBlockSummary, blockCount)
-	if err != nil {
-		return err
-	}
-
-	priorityFee := (*hexutil.Big)(priorityMinPriorityFee)
-	if priorityFees.Len() > 0 {
-		priorityFeeEntry := (*priorityFees)[(priorityFees.Len()-1)*f.data.config.PriorityPercentile/100]
-		if priorityFeeEntry.Cmp(priorityMinPriorityFee) > 0 {
-			priorityFee = (*hexutil.Big)(priorityFeeEntry)
+	priorityFee := (*hexutil.Big)(f.minPriorityFee)
+	if bestBlockSummary.Header.BaseFee() != nil {
+		forkConfig := thor.GetForkConfig(f.data.repo.NewBestChain().GenesisID())
+		nextBaseFee := fork.CalcBaseFee(&forkConfig, bestBlockSummary.Header)
+		if nextBaseFee.Cmp(big.NewInt(thor.InitialBaseFee)) > 0 {
+			priorityFee = (*hexutil.Big)(calcPriorityFee(nextBaseFee, int64(f.config.PriorityIncreasePercentage)))
 		}
 	}
 
