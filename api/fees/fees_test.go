@@ -26,6 +26,7 @@ import (
 
 const expectedGasPriceUsedRatio = 0.0021
 const expectedBaseFee = thor.InitialBaseFee
+const priorityFeesPercentage = 5
 
 func TestFeesBacktraceGreaterThanFixedSize(t *testing.T) {
 	ts, bestchain := initFeesServer(t, 8, 10, 10)
@@ -55,6 +56,8 @@ func TestFeesFixedSizeGreaterThanBacktrace(t *testing.T) {
 		"getFeeHistoryWithSummaries":          getFeeHistoryWithSummaries,
 		"getFeeHistoryOnlySummaries":          getFeeHistoryOnlySummaries,
 		"getFeeHistoryMoreThanBacktraceLimit": getFeeHistoryMoreThanBacktraceLimit,
+		"getFeeHistoryNextBlock":              getFeeHistoryNextBlock,
+		"getFeeHistoryOnlyNextBlock":          getFeeHistoryOnlyNextBlock,
 	} {
 		t.Run(name, func(t *testing.T) {
 			tt(t, tclient, bestchain)
@@ -88,12 +91,10 @@ func initFeesServer(t *testing.T, backtraceLimit int, fixedCacheSize int, number
 	require.NoError(t, err)
 
 	router := mux.NewRouter()
-	fees := fees.New(thorChain.Repo(), thorChain.Engine(), fees.Config{
-		APIBacktraceLimit:        backtraceLimit,
-		PriorityBacktraceLimit:   20,
-		PrioritySampleTxPerBlock: 3,
-		PriorityPercentile:       60,
-		FixedCacheSize:           fixedCacheSize,
+	fees := fees.New(thorChain.Repo(), thorChain.Engine(), thorChain.Stater(), fees.Config{
+		APIBacktraceLimit:          backtraceLimit,
+		FixedCacheSize:             fixedCacheSize,
+		PriorityIncreasePercentage: priorityFeesPercentage,
 	})
 	fees.Mount(router, "/fees")
 
@@ -347,6 +348,46 @@ func getFeeHistoryBlockCount0(t *testing.T, tclient *thorclient.Client, bestchai
 	assert.Equal(t, "invalid blockCount, it should not be 0\n", string(res))
 }
 
+func getFeeHistoryNextBlock(t *testing.T, tclient *thorclient.Client, bestchain *chain.Chain) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=3&newestBlock=next")
+	require.NoError(t, err)
+	require.Equal(t, 200, statusCode)
+	require.NotNil(t, res)
+	var feesHistory fees.FeesHistory
+	if err := json.Unmarshal(res, &feesHistory); err != nil {
+		t.Fatal(err)
+	}
+	expectedOldestBlock, err := bestchain.GetBlockID(8)
+	require.NoError(t, err)
+	expectedFeesHistory := fees.FeesHistory{
+		OldestBlock:   expectedOldestBlock,
+		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(expectedBaseFee)), (*hexutil.Big)(big.NewInt(expectedBaseFee)), (*hexutil.Big)(big.NewInt(expectedBaseFee))},
+		GasUsedRatios: []float64{expectedGasPriceUsedRatio, expectedGasPriceUsedRatio, expectedGasPriceUsedRatio},
+	}
+
+	assert.Equal(t, expectedFeesHistory, feesHistory)
+}
+
+func getFeeHistoryOnlyNextBlock(t *testing.T, tclient *thorclient.Client, bestchain *chain.Chain) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=1&newestBlock=next")
+	require.NoError(t, err)
+	require.Equal(t, 200, statusCode)
+	require.NotNil(t, res)
+	var feesHistory fees.FeesHistory
+	if err := json.Unmarshal(res, &feesHistory); err != nil {
+		t.Fatal(err)
+	}
+	expectedOldestBlock := thor.Bytes32{0x0, 0x0, 0x0, 0xa}
+	require.NoError(t, err)
+	expectedFeesHistory := fees.FeesHistory{
+		OldestBlock:   expectedOldestBlock,
+		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(expectedBaseFee))},
+		GasUsedRatios: []float64{expectedGasPriceUsedRatio},
+	}
+
+	assert.Equal(t, expectedFeesHistory, feesHistory)
+}
+
 func getFeePriority(t *testing.T, tclient *thorclient.Client, bestchain *chain.Chain) {
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/priority")
 	require.NoError(t, err)
@@ -358,7 +399,7 @@ func getFeePriority(t *testing.T, tclient *thorclient.Client, bestchain *chain.C
 	}
 
 	expectedFeesPriority := fees.FeesPriority{
-		MaxPriorityFeePerGas: (*hexutil.Big)(big.NewInt(100)),
+		MaxPriorityFeePerGas: (*hexutil.Big)(new(big.Int).Div(new(big.Int).Mul(big.NewInt(thor.InitialBaseFee), big.NewInt(priorityFeesPercentage)), big.NewInt(100))),
 	}
 
 	assert.Equal(t, expectedFeesPriority, feesPriority)

@@ -78,20 +78,10 @@ var (
 		Usage: "enables API requests logging",
 	}
 	// priority fees API flags
-	apiPriorityFeesBacktraceLimitFlag = cli.Uint64Flag{
-		Name:  "api-priority-fees-backtrace-limit",
-		Value: 20,
-		Usage: "limit the distance with the best block for priority fees calculation",
-	}
-	apiPriorityFeesPercentileFlag = cli.Uint64Flag{
-		Name:  "api-priority-fees-percentile",
-		Value: 60,
-		Usage: "percentile for priority fees calculation",
-	}
-	apiPriorityFeesSampleTxPerBlockFlag = cli.Uint64Flag{
-		Name:  "api-priority-fees-sample-tx-per-block",
-		Value: 3,
-		Usage: "number of transactions to sample per block for priority fees calculation",
+	apiPriorityFeesPercentageFlag = cli.Uint64Flag{
+		Name:  "api-priority-fees-percentage",
+		Value: 5,
+		Usage: "percentage of the block base fee for priority fees calculation",
 	}
 
 	verbosityFlag = cli.Uint64Flag{
