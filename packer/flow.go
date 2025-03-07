@@ -94,8 +94,10 @@ func (f *Flow) hasTx(txid thor.Bytes32, txBlockRef uint32) (bool, error) {
 }
 
 func (f *Flow) maxPriorityFeePerGasTooLow(t *tx.Transaction) error {
+	// We need this check because t.MaxPriorityFeePerGas() might be nil if the tx is a dynamic one.
+	flagIsSet := f.minTxPriorityFee.Cmp(big.NewInt(0)) > 0
 	maxPriorityFeeTooLow := t.MaxPriorityFeePerGas() == nil || t.MaxPriorityFeePerGas().Cmp(f.minTxPriorityFee) < 0
-	if maxPriorityFeeTooLow {
+	if flagIsSet && maxPriorityFeeTooLow {
 		return badTxError{"max priority fee per gas too low"}
 	}
 
