@@ -52,8 +52,8 @@ type (
 func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
 	var precompiles map[common.Address]PrecompiledContract
 	switch {
-	case evm.chainRules.IsGalactica:
-		precompiles = PrecompiledContractsGalactica
+	case evm.chainRules.IsShanghai:
+		precompiles = PrecompiledContractsShanghai
 	case evm.chainRules.IsIstanbul:
 		precompiles = PrecompiledContractsIstanbul
 	case evm.chainRules.IsByzantium:
@@ -492,7 +492,7 @@ func (evm *EVM) create(caller ContractRef, code []byte, gas uint64, value *big.I
 	}
 
 	// Reject code starting with 0xEF if EIP-3541 is enabled.
-	if err == nil && len(ret) >= 1 && ret[0] == 0xEF && evm.chainRules.IsGalactica {
+	if err == nil && len(ret) >= 1 && ret[0] == 0xEF && evm.chainRules.IsShanghai {
 		err = ErrInvalidCode
 	}
 
