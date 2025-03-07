@@ -47,9 +47,9 @@ var (
 
 // Options options for tx pool.
 type Options struct {
-	TargetGasLimit       uint64
-	SkipLogs             bool
-	RequireTxPriorityFee bool
+	TargetGasLimit   uint64
+	SkipLogs         bool
+	MinTxPriorityFee uint64
 }
 
 type Node struct {

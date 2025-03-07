@@ -52,7 +52,7 @@ func New(
 }
 
 // Schedule schedule a packing flow to pack new block upon given parent and clock time.
-func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64, requireTxPriorityFee bool) (flow *Flow, err error) {
+func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64, minTxPriorityFee uint64) (flow *Flow, err error) {
 	state := p.stater.NewState(parent.Root())
 
 	var features tx.Features
@@ -144,7 +144,7 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64, requi
 		},
 		p.forkConfig)
 
-	return newFlow(p, parent.Header, rt, features, requireTxPriorityFee), nil
+	return newFlow(p, parent.Header, rt, features, minTxPriorityFee), nil
 }
 
 // Mock create a packing flow upon given parent, but with a designated timestamp.
@@ -182,7 +182,7 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 		},
 		p.forkConfig)
 
-	return newFlow(p, parent.Header, rt, features, false), nil
+	return newFlow(p, parent.Header, rt, features, 0), nil
 }
 
 func (p *Packer) gasLimit(parentGasLimit uint64) uint64 {

@@ -101,7 +101,7 @@ func main() {
 			enableAdminFlag,
 			txPoolLimitPerAccountFlag,
 			allowedTracersFlag,
-			requireMaxPriorityFeePerGasFlag,
+			minMaxPriorityFeePerGasFlag,
 		},
 		Action: defaultAction,
 		Commands: []cli.Command{
@@ -139,7 +139,7 @@ func main() {
 					adminAddrFlag,
 					enableAdminFlag,
 					allowedTracersFlag,
-					requireMaxPriorityFeePerGasFlag,
+					minMaxPriorityFeePerGasFlag,
 				},
 				Action: soloAction,
 			},
@@ -295,15 +295,15 @@ func defaultAction(ctx *cli.Context) error {
 		defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
 	}
 
-	requireTxPriorityFee := ctx.Bool(requireMaxPriorityFeePerGasFlag.Name)
-	if requireTxPriorityFee {
+	minTxPriorityFee := ctx.Uint64(minMaxPriorityFeePerGasFlag.Name)
+	if minTxPriorityFee > 0 {
 		log.Info("max priority fee per gas is required in transactions")
 	}
 
 	options := node.Options{
-		SkipLogs:             skipLogs,
-		RequireTxPriorityFee: requireTxPriorityFee,
-		TargetGasLimit:       ctx.Uint64(targetGasLimitFlag.Name),
+		SkipLogs:         skipLogs,
+		MinTxPriorityFee: minTxPriorityFee,
+		TargetGasLimit:   ctx.Uint64(targetGasLimitFlag.Name),
 	}
 
 	return node.New(
@@ -472,17 +472,17 @@ func soloAction(ctx *cli.Context) error {
 		defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
 	}
 
-	requireTxPriorityFee := ctx.Bool(requireMaxPriorityFeePerGasFlag.Name)
-	if requireTxPriorityFee {
+	minTxPriorityFee := ctx.Uint64(minMaxPriorityFeePerGasFlag.Name)
+	if minTxPriorityFee > 0 {
 		log.Info("max priority fee per gas is required in transactions")
 	}
 
 	options := solo.Options{
-		GasLimit:             ctx.Uint64(gasLimitFlag.Name),
-		SkipLogs:             skipLogs,
-		RequireTxPriorityFee: requireTxPriorityFee,
-		OnDemand:             onDemandBlockProduction,
-		BlockInterval:        blockProductionInterval,
+		GasLimit:         ctx.Uint64(gasLimitFlag.Name),
+		SkipLogs:         skipLogs,
+		MinTxPriorityFee: minTxPriorityFee,
+		OnDemand:         onDemandBlockProduction,
+		BlockInterval:    blockProductionInterval,
 	}
 
 	return solo.New(repo,

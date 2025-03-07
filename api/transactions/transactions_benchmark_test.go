@@ -335,7 +335,7 @@ func packTxsIntoBlock(thorChain *testchain.Chain, proposerAccount *genesis.DevAc
 		return nil, err
 	}
 
-	flow, err := p.Schedule(parentSum, parentBlk.Header().Timestamp()+1, false)
+	flow, err := p.Schedule(parentSum, parentBlk.Header().Timestamp()+1, 0)
 	if err != nil {
 		return nil, err
 	}

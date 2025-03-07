@@ -37,11 +37,11 @@ var (
 )
 
 type Options struct {
-	GasLimit             uint64
-	SkipLogs             bool
-	RequireTxPriorityFee bool
-	OnDemand             bool
-	BlockInterval        uint64
+	GasLimit         uint64
+	SkipLogs         bool
+	MinTxPriorityFee uint64
+	OnDemand         bool
+	BlockInterval    uint64
 }
 
 // Solo mode is the standalone client without p2p server

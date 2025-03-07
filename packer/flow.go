@@ -24,15 +24,15 @@ import (
 
 // Flow the flow of packing a new block.
 type Flow struct {
-	packer               *Packer
-	parentHeader         *block.Header
-	runtime              *runtime.Runtime
-	processedTxs         map[thor.Bytes32]bool // txID -> reverted
-	gasUsed              uint64
-	txs                  tx.Transactions
-	receipts             tx.Receipts
-	features             tx.Features
-	requireTxPriorityFee bool
+	packer           *Packer
+	parentHeader     *block.Header
+	runtime          *runtime.Runtime
+	processedTxs     map[thor.Bytes32]bool // txID -> reverted
+	gasUsed          uint64
+	txs              tx.Transactions
+	receipts         tx.Receipts
+	features         tx.Features
+	minTxPriorityFee *big.Int
 }
 
 func newFlow(
@@ -40,15 +40,15 @@ func newFlow(
 	parentHeader *block.Header,
 	runtime *runtime.Runtime,
 	features tx.Features,
-	requireTxPriorityFee bool,
+	minTxPriorityFee uint64,
 ) *Flow {
 	return &Flow{
-		packer:               packer,
-		parentHeader:         parentHeader,
-		runtime:              runtime,
-		processedTxs:         make(map[thor.Bytes32]bool),
-		features:             features,
-		requireTxPriorityFee: requireTxPriorityFee,
+		packer:           packer,
+		parentHeader:     parentHeader,
+		runtime:          runtime,
+		processedTxs:     make(map[thor.Bytes32]bool),
+		features:         features,
+		minTxPriorityFee: new(big.Int).SetUint64(minTxPriorityFee),
 	}
 }
 
@@ -93,14 +93,10 @@ func (f *Flow) hasTx(txid thor.Bytes32, txBlockRef uint32) (bool, error) {
 	return f.runtime.Chain().HasTransaction(txid, txBlockRef)
 }
 
-func (f *Flow) requireMaxPriorityFeePerGas(t *tx.Transaction) error {
-	if t.Type() == tx.TypeLegacy {
-		return nil
-	}
-
-	maxPriorityFeeNotGreaterThan0 := t.MaxPriorityFeePerGas() == nil || t.MaxPriorityFeePerGas().Cmp(big.NewInt(0)) <= 0
-	if f.requireTxPriorityFee && maxPriorityFeeNotGreaterThan0 {
-		return badTxError{"max priority fee per gas is required"}
+func (f *Flow) maxPriorityFeePerGasTooLow(t *tx.Transaction) error {
+	maxPriorityFeeTooLow := t.MaxPriorityFeePerGas() == nil || t.MaxPriorityFeePerGas().Cmp(f.minTxPriorityFee) < 0
+	if maxPriorityFeeTooLow {
+		return badTxError{"max priority fee per gas too low"}
 	}
 
 	return nil
@@ -151,7 +147,7 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 			return errTxNotAdoptableNow
 		}
 
-		if err := f.requireMaxPriorityFeePerGas(t); err != nil {
+		if err := f.maxPriorityFeePerGasTooLow(t); err != nil {
 			return err
 		}
 	}

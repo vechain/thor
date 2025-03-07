@@ -209,9 +209,9 @@ func benchmarkBlockProcess(b *testing.B, db *muxdb.MuxDB, accounts []genesis.Dev
 		nil,
 		thor.NoFork,
 		Options{
-			SkipLogs:             true,
-			RequireTxPriorityFee: false,
-			TargetGasLimit:       10_000_000,
+			SkipLogs:         true,
+			MinTxPriorityFee: 0,
+			TargetGasLimit:   10_000_000,
 		},
 	)
 
@@ -325,7 +325,7 @@ func packTxsIntoBlock(thorChain *testchain.Chain, proposerAccount *genesis.DevAc
 		return nil, err
 	}
 
-	flow, err := p.Schedule(parentSum, parentBlk.Header().Timestamp()+1, false)
+	flow, err := p.Schedule(parentSum, parentBlk.Header().Timestamp()+1, 0)
 	if err != nil {
 		return nil, err
 	}
