@@ -409,6 +409,16 @@ func TestAdoptAfterGalacticaRequireMaxPriorityFee(t *testing.T) {
 		MustBuild()
 	txLegacy = tx.MustSign(txLegacy, genesis.DevAccounts()[0].PrivateKey)
 
+	// Create a legacy transaction with "max priority fee" (gas price coef)
+	txLegacyWithGasPriceCoef := tx.NewTxBuilder(tx.TypeLegacy).
+		ChainTag(chain.Repo().ChainTag()).
+		Nonce(3).
+		Gas(21000).
+		Expiration(100).
+		GasPriceCoef(1).
+		MustBuild()
+	txLegacyWithGasPriceCoef = tx.MustSign(txLegacyWithGasPriceCoef, genesis.DevAccounts()[0].PrivateKey)
+
 	// Last parameter is true, which means that all txs require max priority fee
 	proposer := genesis.DevAccounts()[0]
 	pckr := packer.New(chain.Repo(), chain.Stater(), proposer.Address, &proposer.Address, forkConfig)
@@ -419,11 +429,13 @@ func TestAdoptAfterGalacticaRequireMaxPriorityFee(t *testing.T) {
 	if err := flow.Adopt(txNoPriorityFee); err.Error() != expectedErrorMessage {
 		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
 	}
+	if err := flow.Adopt(txLegacy); err.Error() != expectedErrorMessage {
+		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
+	}
 
 	err = flow.Adopt(txPriorityFee)
 	assert.NoError(t, err)
 
-	if err := flow.Adopt(txLegacy); err.Error() != expectedErrorMessage {
-		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
-	}
+	err = flow.Adopt(txLegacyWithGasPriceCoef)
+	assert.NoError(t, err)
 }
