@@ -104,7 +104,7 @@ func WriteJSON(w http.ResponseWriter, obj interface{}) error {
 	w.Header().Set("Content-Type", JSONContentType)
 	err := json.NewEncoder(w).Encode(obj)
 	if err != nil {
-		logger.Error("failed to write JSON response", "err", err)
+		logger.Debug("failed to write JSON response", "err", err)
 	}
 	return nil
 }
