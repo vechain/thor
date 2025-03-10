@@ -102,7 +102,11 @@ func ParseJSON(r io.Reader, v any) error {
 // WriteJSON response an object in JSON encoding.
 func WriteJSON(w http.ResponseWriter, obj any) error {
 	w.Header().Set("Content-Type", JSONContentType)
-	return json.NewEncoder(w).Encode(obj)
+	err := json.NewEncoder(w).Encode(obj)
+	if err != nil {
+		logger.Debug("failed to write JSON response", "err", err)
+	}
+	return nil
 }
 
 // HandleGone is a handler for deprecated endpoints that returns HTTP 410 Gone.
