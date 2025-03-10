@@ -32,6 +32,7 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/vechain/thor/v2/tracers"
 	"github.com/vechain/thor/v2/vm"
+	"maps"
 )
 
 func init() {
@@ -44,9 +45,7 @@ type Storage map[common.Hash]common.Hash
 // Copy duplicates the current storage.
 func (s Storage) Copy() Storage {
 	cpy := make(Storage, len(s))
-	for key, value := range s {
-		cpy[key] = value
-	}
+	maps.Copy(cpy, s)
 	return cpy
 }
 
