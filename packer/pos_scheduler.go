@@ -30,6 +30,9 @@ func (p *Packer) schedulePOS(parent *chain.BlockSummary, nowTimestamp uint64, st
 	if p.beneficiary != nil {
 		beneficiary = *p.beneficiary
 	}
+	if beneficiary.IsZero() {
+		beneficiary = p.nodeMaster
+	}
 
 	// TODO: We're using the same seed mechanism as PoA. Should we use a different one?
 	// TODO: See also consensus/pos_validator.go

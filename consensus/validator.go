@@ -258,6 +258,12 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 		}
 	}
 
+	if rt.Context().Number > c.forkConfig.HAYABUSA {
+		if err := rt.DistributeRewards(); err != nil {
+			return nil, nil, consensusError(fmt.Sprintf("unable to distribute validator rewards, root cause: %v", err.Error()))
+		}
+	}
+
 	stage, err := state.Stage(trie.Version{Major: header.Number(), Minor: blockConflicts})
 	if err != nil {
 		return nil, nil, err
@@ -266,12 +272,6 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 
 	if blk.Header().StateRoot() != stateRoot {
 		return nil, nil, consensusError(fmt.Sprintf("block state root mismatch: want %v, have %v", header.StateRoot(), stateRoot))
-	}
-
-	if rt.Context().Number > c.forkConfig.HAYABUSA {
-		if err := rt.DistributeRewards(); err != nil {
-			return nil, nil, consensusError(fmt.Sprintf("unable to distribute validator rewards, root cause: %v", err.Error()))
-		}
 	}
 
 	return stage, receipts, nil

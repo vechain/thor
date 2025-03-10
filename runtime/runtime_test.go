@@ -22,6 +22,7 @@ import (
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
@@ -607,12 +608,12 @@ func TestDistributeRewards(t *testing.T) {
 	stater := state.NewStater(db)
 	st := stater.NewState(trie.Root{Hash: b0.Header().StateRoot()})
 	chain := repo.NewChain(b0.Header().ID())
-	addr := thor.Address{}
+	addr := datagen.RandAddress()
 	issuedKey := thor.Blake2b([]byte("issued"))
 
 	fc := thor.SoloFork
 	fc.HAYABUSA = 0
-	rt := runtime.New(chain, st, &xenv.BlockContext{Time: uint64(time.Now().Unix())}, fc)
+	rt := runtime.New(chain, st, &xenv.BlockContext{Time: uint64(time.Now().Unix()), Beneficiary: addr}, fc)
 
 	balance, err := builtin.Energy.Native(st, 0).Get(addr)
 	assert.NoError(t, err)

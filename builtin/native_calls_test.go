@@ -1341,8 +1341,9 @@ func TestExtensionNative(t *testing.T) {
 	assert.Equal(t, uint64(570), gasUsed)
 
 	gasUsed, err = callContractAndGetOutput(abi, "blockID", toAddr, &uint8Array, big.NewInt(1))
-	assert.Equal(t, uint64(770), gasUsed)
 
+	require.NoError(t, err)
+	assert.Equal(t, uint64(770), gasUsed)
 	bl, err := thorChain.GetTxBlock(id)
 	require.NoError(t, err)
 	require.Equal(t, bl.Header().ID().Bytes(), uint8Array[:])
