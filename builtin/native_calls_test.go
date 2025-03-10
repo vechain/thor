@@ -214,7 +214,7 @@ func buildGenesis(db *muxdb.MuxDB, proc func(state *state.State) error) *block.B
 	return blk
 }
 
-func inspectClauseWithBlockRef(clause *tx.Clause, blockRef *tx.BlockRef) ([]byte, error) {
+func inspectClauseWithBlockRef(clause *tx.Clause, blockRef *tx.BlockRef) ([]byte, uint64, error) {
 	builder := new(tx.Builder).
 		ChainTag(thorChain.Repo().ChainTag()).
 		Expiration(50).
@@ -238,16 +238,16 @@ func getClause(abi *abi.ABI, methodName string, address thor.Address, args ...in
 	return tx.NewClause(&address).WithData(input), m, err
 }
 
-func callContractAndGetOutput(abi *abi.ABI, methodName string, address thor.Address, output interface{}, args ...interface{}) error {
+func callContractAndGetOutput(abi *abi.ABI, methodName string, address thor.Address, output interface{}, args ...interface{}) (uint64, error) {
 	clause, m, err := getClause(abi, methodName, address, args...)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	decoded, err := inspectClauseWithBlockRef(clause, nil)
+	decoded, gaseUsed, err := inspectClauseWithBlockRef(clause, nil)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	return m.DecodeOutput(decoded, output)
+	return gaseUsed, m.DecodeOutput(decoded, output)
 }
 
 func executeTxAndGetReceipt(description TestTxDescription) (*tx.Receipt, *thor.Bytes32, error) {
@@ -297,7 +297,7 @@ func TestParamsNative(t *testing.T) {
 	abi := builtin.Params.ABI
 
 	var addr common.Address
-	err := callContractAndGetOutput(abi, "executor", toAddr, &addr)
+	_, err := callContractAndGetOutput(abi, "executor", toAddr, &addr)
 
 	require.NoError(t, err)
 	require.Equal(t, genesis.DevAccounts()[0].Address.Bytes(), addr.Bytes())
@@ -335,7 +335,7 @@ func TestParamsNative(t *testing.T) {
 	require.True(t, fetchedTx.Reverted)
 
 	var decodedVal *big.Int
-	err = callContractAndGetOutput(abi, "get", toAddr, &decodedVal, key)
+	_, err = callContractAndGetOutput(abi, "get", toAddr, &decodedVal, key)
 	require.NoError(t, err)
 	require.Equal(t, value, decodedVal)
 }
@@ -360,7 +360,7 @@ func TestAuthorityNative(t *testing.T) {
 	abi := builtin.Authority.ABI
 
 	var addr common.Address
-	err := callContractAndGetOutput(abi, "first", toAddr, &addr)
+	_, err := callContractAndGetOutput(abi, "first", toAddr, &addr)
 
 	require.NoError(t, err)
 	require.Equal(t, genesis.DevAccounts()[0].Address.Bytes(), addr.Bytes())
@@ -424,23 +424,23 @@ func TestAuthorityNative(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, added, string(bytes.Trim(fetchedTx.Outputs[0].Events[0].Data, "\x00")))
 
-	err = callContractAndGetOutput(abi, "first", toAddr, &addr)
+	_, err = callContractAndGetOutput(abi, "first", toAddr, &addr)
 	require.NoError(t, err)
 	require.Equal(t, genesis.DevAccounts()[0].Address.Bytes(), addr.Bytes())
 
-	err = callContractAndGetOutput(abi, "next", toAddr, &addr, genesis.DevAccounts()[0].Address)
+	_, err = callContractAndGetOutput(abi, "next", toAddr, &addr, genesis.DevAccounts()[0].Address)
 	require.NoError(t, err)
 	require.Equal(t, master1.Address.Bytes(), addr.Bytes())
 
-	err = callContractAndGetOutput(abi, "next", toAddr, &addr, master1.Address)
+	_, err = callContractAndGetOutput(abi, "next", toAddr, &addr, master1.Address)
 	require.NoError(t, err)
 	require.Equal(t, master2.Address.Bytes(), addr.Bytes())
 
-	err = callContractAndGetOutput(abi, "next", toAddr, &addr, master2.Address)
+	_, err = callContractAndGetOutput(abi, "next", toAddr, &addr, master2.Address)
 	require.NoError(t, err)
 	require.Equal(t, master3.Address.Bytes(), addr.Bytes())
 
-	err = callContractAndGetOutput(abi, "next", toAddr, &addr, master3.Address)
+	_, err = callContractAndGetOutput(abi, "next", toAddr, &addr, master3.Address)
 	require.NoError(t, err)
 	require.Equal(t, thor.Address{}.Bytes(), addr.Bytes())
 
@@ -554,34 +554,34 @@ func TestEnergyNative(t *testing.T) {
 	thorChain, _ = testchain.NewWithFork(fc)
 
 	var stringOutput string
-	err := callContractAndGetOutput(abi, "name", toAddr, &stringOutput)
+	_, err := callContractAndGetOutput(abi, "name", toAddr, &stringOutput)
 
 	veThor := "VeThor"
 	require.NoError(t, err)
 	require.Equal(t, veThor, stringOutput)
 
 	var uint8Output uint8
-	err = callContractAndGetOutput(abi, "decimals", toAddr, &uint8Output)
+	_, err = callContractAndGetOutput(abi, "decimals", toAddr, &uint8Output)
 
 	exDecimals := uint8(18)
 	require.NoError(t, err)
 	require.Equal(t, exDecimals, uint8Output)
 
-	err = callContractAndGetOutput(abi, "symbol", toAddr, &stringOutput)
+	_, err = callContractAndGetOutput(abi, "symbol", toAddr, &stringOutput)
 
 	exSymbol := "VTHO"
 	require.NoError(t, err)
 	require.Equal(t, exSymbol, stringOutput)
 
 	var bigIntOutput *big.Int
-	err = callContractAndGetOutput(abi, "totalSupply", toAddr, &bigIntOutput)
+	_, err = callContractAndGetOutput(abi, "totalSupply", toAddr, &bigIntOutput)
 
 	exSupply := new(big.Int)
 	exSupply.SetString("10000000000000000000000000000", 10)
 	require.NoError(t, err)
 	require.Equal(t, exSupply, bigIntOutput)
 
-	err = callContractAndGetOutput(abi, "totalBurned", toAddr, &bigIntOutput)
+	_, err = callContractAndGetOutput(abi, "totalBurned", toAddr, &bigIntOutput)
 
 	exBurned := big.Int{}
 	require.NoError(t, err)
@@ -675,7 +675,7 @@ func TestEnergyNative(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, big.NewInt(1001).Bytes(), bytes.Trim(fetchedTx.Outputs[0].Events[0].Data, "\x00"))
 
-	err = callContractAndGetOutput(abi, "allowance", toAddr, &bigIntOutput, acc1.Address, acc2.Address)
+	_, err = callContractAndGetOutput(abi, "allowance", toAddr, &bigIntOutput, acc1.Address, acc2.Address)
 
 	exAllowance := big.NewInt(1001)
 	require.NoError(t, err)
@@ -715,7 +715,7 @@ func TestEnergyNative(t *testing.T) {
 	require.True(t, fetchedTx.Reverted)
 
 	// hayabusa fork happens on block 2, growth is calculated for 1 block = 10 seconds
-	err = callContractAndGetOutput(abi, "totalSupply", toAddr, &bigIntOutput)
+	_, err = callContractAndGetOutput(abi, "totalSupply", toAddr, &bigIntOutput)
 
 	exSupply = new(big.Int)
 	exSupply.SetString("10000000500000000000000000000", 10)
@@ -755,13 +755,13 @@ func TestPrototypeNative(t *testing.T) {
 	contractAddr := fetchedTx.Outputs[0].Events[0].Address
 
 	var outputAddr common.Address
-	err = callContractAndGetOutput(abi, "master", toAddr, &outputAddr, acc1)
+	_, err = callContractAndGetOutput(abi, "master", toAddr, &outputAddr, acc1)
 
 	exMaster := thor.Address{}
 	require.NoError(t, err)
 	require.Equal(t, exMaster.Bytes(), outputAddr.Bytes())
 
-	err = callContractAndGetOutput(abi, "master", toAddr, &outputAddr, contractAddr)
+	_, err = callContractAndGetOutput(abi, "master", toAddr, &outputAddr, contractAddr)
 	require.NoError(t, err)
 	require.Equal(t, master1.Address.Bytes(), outputAddr.Bytes())
 
@@ -796,16 +796,16 @@ func TestPrototypeNative(t *testing.T) {
 	require.Equal(t, 0, len(fetchedTx.Outputs))
 	require.True(t, fetchedTx.Reverted)
 
-	err = callContractAndGetOutput(abi, "master", toAddr, &outputAddr, master2.Address)
+	_, err = callContractAndGetOutput(abi, "master", toAddr, &outputAddr, master2.Address)
 	require.NoError(t, err)
 	require.Equal(t, master1.Address.Bytes(), outputAddr.Bytes())
 
 	var outputBool bool
-	err = callContractAndGetOutput(abi, "hasCode", toAddr, &outputBool, master1.Address)
+	_, err = callContractAndGetOutput(abi, "hasCode", toAddr, &outputBool, master1.Address)
 	require.NoError(t, err)
 	require.Equal(t, false, outputBool)
 
-	err = callContractAndGetOutput(abi, "hasCode", toAddr, &outputBool, contractAddr)
+	_, err = callContractAndGetOutput(abi, "hasCode", toAddr, &outputBool, contractAddr)
 	require.NoError(t, err)
 	require.Equal(t, true, outputBool)
 
@@ -848,13 +848,13 @@ func TestPrototypeNative(t *testing.T) {
 		RecoveryRate *big.Int
 	}
 	plan := &CreditPlan{}
-	err = callContractAndGetOutput(abi, "creditPlan", toAddr, plan, contractAddr)
+	_, err = callContractAndGetOutput(abi, "creditPlan", toAddr, plan, contractAddr)
 
 	require.NoError(t, err)
 	require.Equal(t, credit.String(), plan.Credit.String())
 	require.Equal(t, recoveryRate, plan.RecoveryRate)
 
-	err = callContractAndGetOutput(abi, "isUser", toAddr, &outputBool, contractAddr, acc1)
+	_, err = callContractAndGetOutput(abi, "isUser", toAddr, &outputBool, contractAddr, acc1)
 	require.NoError(t, err)
 	require.Equal(t, false, outputBool)
 
@@ -905,16 +905,16 @@ func TestPrototypeNative(t *testing.T) {
 	require.Equal(t, 0, len(fetchedTx.Outputs))
 	require.True(t, fetchedTx.Reverted)
 
-	err = callContractAndGetOutput(abi, "isUser", toAddr, &outputBool, contractAddr, acc1)
+	_, err = callContractAndGetOutput(abi, "isUser", toAddr, &outputBool, contractAddr, acc1)
 	require.NoError(t, err)
 	require.Equal(t, true, outputBool)
 
 	var outputBigInt *big.Int
-	err = callContractAndGetOutput(abi, "userCredit", toAddr, &outputBigInt, contractAddr, acc1)
+	_, err = callContractAndGetOutput(abi, "userCredit", toAddr, &outputBigInt, contractAddr, acc1)
 	require.NoError(t, err)
 	require.Equal(t, credit, outputBigInt)
 
-	err = callContractAndGetOutput(abi, "isSponsor", toAddr, &outputBool, contractAddr, sponsor.Address)
+	_, err = callContractAndGetOutput(abi, "isSponsor", toAddr, &outputBool, contractAddr, sponsor.Address)
 	require.NoError(t, err)
 	require.Equal(t, false, outputBool)
 
@@ -951,11 +951,11 @@ func TestPrototypeNative(t *testing.T) {
 	require.Equal(t, 0, len(fetchedTx.Outputs))
 	require.True(t, fetchedTx.Reverted)
 
-	err = callContractAndGetOutput(abi, "isSponsor", toAddr, &outputBool, contractAddr, sponsor.Address)
+	_, err = callContractAndGetOutput(abi, "isSponsor", toAddr, &outputBool, contractAddr, sponsor.Address)
 	require.NoError(t, err)
 	require.Equal(t, true, outputBool)
 
-	err = callContractAndGetOutput(abi, "currentSponsor", toAddr, &outputAddr, contractAddr)
+	_, err = callContractAndGetOutput(abi, "currentSponsor", toAddr, &outputAddr, contractAddr)
 	require.NoError(t, err)
 	require.Equal(t, common.Address{}, outputAddr)
 
@@ -1006,7 +1006,7 @@ func TestPrototypeNative(t *testing.T) {
 	require.Equal(t, 0, len(fetchedTx.Outputs))
 	require.True(t, fetchedTx.Reverted)
 
-	err = callContractAndGetOutput(abi, "currentSponsor", toAddr, &outputAddr, contractAddr)
+	_, err = callContractAndGetOutput(abi, "currentSponsor", toAddr, &outputAddr, contractAddr)
 	require.NoError(t, err)
 	require.Equal(t, sponsor.Address.Bytes(), outputAddr.Bytes())
 
@@ -1024,7 +1024,7 @@ func TestPrototypeNative(t *testing.T) {
 	require.Equal(t, 1, len(fetchedTx.Outputs))
 	require.False(t, fetchedTx.Reverted)
 
-	err = callContractAndGetOutput(abi, "currentSponsor", toAddr, &outputAddr, contractAddr)
+	_, err = callContractAndGetOutput(abi, "currentSponsor", toAddr, &outputAddr, contractAddr)
 	require.NoError(t, err)
 	require.Equal(t, sponsor.Address.Bytes(), outputAddr.Bytes())
 
@@ -1042,7 +1042,7 @@ func TestPrototypeNative(t *testing.T) {
 	require.Equal(t, 0, len(fetchedTx.Outputs))
 	require.True(t, fetchedTx.Reverted)
 
-	err = callContractAndGetOutput(abi, "isSponsor", toAddr, &outputBool, contractAddr, sponsor.Address)
+	_, err = callContractAndGetOutput(abi, "isSponsor", toAddr, &outputBool, contractAddr, sponsor.Address)
 	require.NoError(t, err)
 	require.Equal(t, false, outputBool)
 
@@ -1055,18 +1055,18 @@ func TestPrototypeNative(t *testing.T) {
 	assert.NoError(t, err)
 
 	var uint8Array [32]uint8
-	err = callContractAndGetOutput(abi, "storageFor", toAddr, &uint8Array, builtin.Prototype.Address, thor.Blake2b([]byte("credit-plan")))
+	_, err = callContractAndGetOutput(abi, "storageFor", toAddr, &uint8Array, builtin.Prototype.Address, thor.Blake2b([]byte("credit-plan")))
 
 	require.NoError(t, err)
 	require.Equal(t, thor.Bytes32{}.Bytes(), uint8Array[:])
 
-	err = callContractAndGetOutput(abi, "storageFor", toAddr, &uint8Array, builtin.Prototype.Address, thor.Blake2b(contractAddr.Bytes(), []byte("credit-plan")))
+	_, err = callContractAndGetOutput(abi, "storageFor", toAddr, &uint8Array, builtin.Prototype.Address, thor.Blake2b(contractAddr.Bytes(), []byte("credit-plan")))
 
 	require.NoError(t, err)
 	require.Equal(t, storageValDecoded.Bytes(), uint8Array[:])
 
 	var outputInt *big.Int
-	err = callContractAndGetOutput(abi, "balance", toAddr, &outputInt, acc1, big.NewInt(0))
+	_, err = callContractAndGetOutput(abi, "balance", toAddr, &outputInt, acc1, big.NewInt(0))
 
 	require.NoError(t, err)
 	require.Equal(t, big.NewInt(0).String(), outputInt.String())
@@ -1084,12 +1084,12 @@ func TestPrototypeNative(t *testing.T) {
 	bestBlock, err := thorChain.BestBlock()
 	assert.NoError(t, err)
 
-	err = callContractAndGetOutput(abi, "balance", toAddr, &outputInt, acc1, big.NewInt(int64(bestBlock.Header().Number())))
+	_, err = callContractAndGetOutput(abi, "balance", toAddr, &outputInt, acc1, big.NewInt(int64(bestBlock.Header().Number())))
 
 	require.NoError(t, err)
 	require.Equal(t, big.NewInt(1001), outputInt)
 
-	err = callContractAndGetOutput(abi, "energy", toAddr, &outputInt, acc1, big.NewInt(0))
+	_, err = callContractAndGetOutput(abi, "energy", toAddr, &outputInt, acc1, big.NewInt(0))
 
 	require.NoError(t, err)
 	require.Equal(t, big.NewInt(0).String(), outputInt.String())
@@ -1110,7 +1110,7 @@ func TestPrototypeNative(t *testing.T) {
 
 	bestBlock, err = thorChain.BestBlock()
 	assert.NoError(t, err)
-	err = callContractAndGetOutput(abi, "energy", toAddr, &outputInt, acc1, big.NewInt(int64(bestBlock.Header().Number())))
+	_, err = callContractAndGetOutput(abi, "energy", toAddr, &outputInt, acc1, big.NewInt(int64(bestBlock.Header().Number())))
 
 	require.NoError(t, err)
 	require.Equal(t, big.NewInt(1000), outputInt)
@@ -1126,7 +1126,7 @@ func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 	thorChain, _ = testchain.NewDefault()
 
 	var outputBigInt *big.Int
-	err := callContractAndGetOutput(abi, "balance", toAddr, &outputBigInt, acc2, big.NewInt(0))
+	_, err := callContractAndGetOutput(abi, "balance", toAddr, &outputBigInt, acc2, big.NewInt(0))
 
 	require.NoError(t, err)
 	require.Equal(t, big.NewInt(0).String(), outputBigInt.String())
@@ -1144,12 +1144,12 @@ func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 	bestBlock, err := thorChain.BestBlock()
 	assert.NoError(t, err)
 
-	err = callContractAndGetOutput(abi, "balance", toAddr, &outputBigInt, acc2, big.NewInt(int64(bestBlock.Header().Number())))
+	_, err = callContractAndGetOutput(abi, "balance", toAddr, &outputBigInt, acc2, big.NewInt(int64(bestBlock.Header().Number())))
 
 	require.NoError(t, err)
 	require.Equal(t, big.NewInt(1), outputBigInt)
 
-	err = callContractAndGetOutput(abi, "energy", toAddr, &outputBigInt, acc2, big.NewInt(0))
+	_, err = callContractAndGetOutput(abi, "energy", toAddr, &outputBigInt, acc2, big.NewInt(0))
 
 	require.NoError(t, err)
 	require.Equal(t, big.NewInt(0).String(), outputBigInt.String())
@@ -1170,7 +1170,7 @@ func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 
 	bestBlock, err = thorChain.BestBlock()
 	assert.NoError(t, err)
-	err = callContractAndGetOutput(abi, "energy", toAddr, &outputBigInt, acc2, big.NewInt(int64(bestBlock.Header().Number())))
+	_, err = callContractAndGetOutput(abi, "energy", toAddr, &outputBigInt, acc2, big.NewInt(int64(bestBlock.Header().Number())))
 
 	require.NoError(t, err)
 	require.Equal(t, big.NewInt(1), outputBigInt)
@@ -1189,7 +1189,7 @@ func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 	bestBlock, err = thorChain.BestBlock()
 	assert.NoError(t, err)
 
-	err = callContractAndGetOutput(abi, "balance", toAddr, &outputBigInt, acc2, big.NewInt(int64(bestBlock.Header().Number())))
+	_, err = callContractAndGetOutput(abi, "balance", toAddr, &outputBigInt, acc2, big.NewInt(int64(bestBlock.Header().Number())))
 
 	require.NoError(t, err)
 	require.Equal(t, big.NewInt(2), outputBigInt)
@@ -1210,7 +1210,7 @@ func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 
 	bestBlock, err = thorChain.BestBlock()
 	assert.NoError(t, err)
-	err = callContractAndGetOutput(abi, "energy", toAddr, &outputBigInt, acc2, big.NewInt(int64(bestBlock.Header().Number())))
+	_, err = callContractAndGetOutput(abi, "energy", toAddr, &outputBigInt, acc2, big.NewInt(int64(bestBlock.Header().Number())))
 
 	require.NoError(t, err)
 	require.Equal(t, big.NewInt(2), outputBigInt)
@@ -1226,16 +1226,16 @@ func TestExtensionNative(t *testing.T) {
 	toAddr := builtin.Extension.Address
 
 	var uint8Array [32]uint8
-	err := callContractAndGetOutput(abi, "blake2b256", toAddr, &uint8Array, []byte("hello world"))
+	_, err := callContractAndGetOutput(abi, "blake2b256", toAddr, &uint8Array, []byte("hello world"))
 
 	require.NoError(t, err)
 	require.Equal(t, thor.Blake2b([]byte("hello world")).Bytes(), uint8Array[:])
 
 	var expected *big.Int
 	var bigIntOutput *big.Int
-	err = callContractAndGetOutput(builtin.Energy.ABI, "totalSupply", builtin.Energy.Address, &expected)
+	_, err = callContractAndGetOutput(builtin.Energy.ABI, "totalSupply", builtin.Energy.Address, &expected)
 	assert.NoError(t, err)
-	err = callContractAndGetOutput(abi, "totalSupply", toAddr, &bigIntOutput)
+	_, err = callContractAndGetOutput(abi, "totalSupply", toAddr, &bigIntOutput)
 
 	require.NoError(t, err)
 	require.Equal(t, expected, bigIntOutput)
@@ -1246,12 +1246,12 @@ func TestExtensionNative(t *testing.T) {
 	clause := tx.NewClause(&toAddr).WithData(input)
 	blkRef := tx.NewBlockRef(1)
 
-	outBytes, err := inspectClauseWithBlockRef(clause, &blkRef)
+	outBytes, _, err := inspectClauseWithBlockRef(clause, &blkRef)
 
 	require.NoError(t, err)
 	require.Equal(t, tx.NewBlockRef(1).Number(), binary.BigEndian.Uint32(outBytes))
 
-	err = callContractAndGetOutput(abi, "txExpiration", toAddr, &bigIntOutput)
+	_, err = callContractAndGetOutput(abi, "txExpiration", toAddr, &bigIntOutput)
 
 	require.NoError(t, err)
 	require.Equal(t, big.NewInt(50), bigIntOutput)
@@ -1268,7 +1268,7 @@ func TestExtensionNative(t *testing.T) {
 		Clause(clause)
 
 	trx := builder.Build()
-	outBytes, err = thorChain.ClauseCall(master1, trx, 0)
+	outBytes, _, err = thorChain.ClauseCall(master1, trx, 0)
 	assert.NoError(t, err)
 
 	block, err := thorChain.BestBlock()
@@ -1294,7 +1294,7 @@ func TestExtensionNative(t *testing.T) {
 		Clause(clause)
 
 	trx = builder.Build()
-	trxID, err := thorChain.ClauseCall(master1, trx, 0)
+	trxID, _, err := thorChain.ClauseCall(master1, trx, 0)
 	assert.NoError(t, err)
 
 	require.NoError(t, err)
@@ -1328,37 +1328,39 @@ func TestExtensionNative(t *testing.T) {
 	require.Equal(t, 1, len(fetchedTx2.Outputs))
 	require.False(t, fetchedTx2.Reverted)
 
-	err = callContractAndGetOutput(abi, "blockID", toAddr, &uint8Array, big.NewInt(3))
+	gasUsed, err := callContractAndGetOutput(abi, "blockID", toAddr, &uint8Array, big.NewInt(3))
 
 	require.NoError(t, err)
 	require.Equal(t, thor.Bytes32{}.Bytes(), uint8Array[:])
+	assert.Equal(t, uint64(570), gasUsed)
 
-	err = callContractAndGetOutput(abi, "blockID", toAddr, &uint8Array, big.NewInt(2))
+	gasUsed, err = callContractAndGetOutput(abi, "blockID", toAddr, &uint8Array, big.NewInt(2))
 
 	require.NoError(t, err)
 	require.Equal(t, thor.Bytes32{}.Bytes(), uint8Array[:])
+	assert.Equal(t, uint64(570), gasUsed)
 
-	err = callContractAndGetOutput(abi, "blockID", toAddr, &uint8Array, big.NewInt(1))
-	require.NoError(t, err)
+	gasUsed, err = callContractAndGetOutput(abi, "blockID", toAddr, &uint8Array, big.NewInt(1))
+	assert.Equal(t, uint64(770), gasUsed)
 
 	bl, err := thorChain.GetTxBlock(id)
 	require.NoError(t, err)
 	require.Equal(t, bl.Header().ID().Bytes(), uint8Array[:])
 
-	err = callContractAndGetOutput(abi, "blockID", toAddr, &uint8Array, big.NewInt(0))
-
+	gasUsed, err = callContractAndGetOutput(abi, "blockID", toAddr, &uint8Array, big.NewInt(0))
 	require.NoError(t, err)
+	assert.Equal(t, uint64(770), gasUsed)
 	require.Equal(t, b0.Header().ID().Bytes(), uint8Array[:])
 
 	var uint64Output uint64
-	err = callContractAndGetOutput(abi, "blockTotalScore", toAddr, &uint64Output, big.NewInt(3))
-
+	gasUsed, err = callContractAndGetOutput(abi, "blockTotalScore", toAddr, &uint64Output, big.NewInt(3))
 	require.NoError(t, err)
+	assert.Equal(t, uint64(454), gasUsed)
 	require.Equal(t, uint64(0), uint64Output)
 
-	err = callContractAndGetOutput(abi, "blockTotalScore", toAddr, &uint64Output, big.NewInt(2))
+	gasUsed, err = callContractAndGetOutput(abi, "blockTotalScore", toAddr, &uint64Output, big.NewInt(2))
 	assert.NoError(t, err)
-
+	assert.Equal(t, uint64(454), gasUsed)
 	bl2, err := thorChain.GetTxBlock(id2)
 	require.NoError(t, err)
 	block2, err := thorChain.Repo().GetBlock(bl2.Header().ID())
@@ -1366,61 +1368,72 @@ func TestExtensionNative(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, block2.Header().TotalScore(), uint64Output)
 
-	err = callContractAndGetOutput(abi, "blockTotalScore", toAddr, &uint64Output, big.NewInt(1))
+	gasUsed, err = callContractAndGetOutput(abi, "blockTotalScore", toAddr, &uint64Output, big.NewInt(1))
+	assert.Equal(t, uint64(854), gasUsed)
 	assert.NoError(t, err)
 	block1, err := thorChain.Repo().GetBlock(bl.Header().ID())
 
 	require.NoError(t, err)
 	require.Equal(t, block1.Header().TotalScore(), uint64Output)
 
-	err = callContractAndGetOutput(abi, "blockTotalScore", toAddr, &uint64Output, big.NewInt(0))
+	gasUsed, err = callContractAndGetOutput(abi, "blockTotalScore", toAddr, &uint64Output, big.NewInt(0))
 
 	require.NoError(t, err)
+	assert.Equal(t, uint64(854), gasUsed)
 	require.Equal(t, b0.Header().TotalScore(), uint64Output)
 
-	err = callContractAndGetOutput(abi, "blockTime", toAddr, &bigIntOutput, big.NewInt(3))
+	gasUsed, err = callContractAndGetOutput(abi, "blockTime", toAddr, &bigIntOutput, big.NewInt(3))
 
 	require.NoError(t, err)
+	assert.Equal(t, uint64(404), gasUsed)
 	require.Equal(t, big.NewInt(0).String(), bigIntOutput.String())
 
-	err = callContractAndGetOutput(abi, "blockTime", toAddr, &bigIntOutput, big.NewInt(2))
+	gasUsed, err = callContractAndGetOutput(abi, "blockTime", toAddr, &bigIntOutput, big.NewInt(2))
 
 	require.NoError(t, err)
+	assert.Equal(t, uint64(404), gasUsed)
 	require.Equal(t, new(big.Int).SetUint64(block2.Header().Timestamp()), bigIntOutput)
 
-	err = callContractAndGetOutput(abi, "blockTime", toAddr, &bigIntOutput, big.NewInt(1))
+	gasUsed, err = callContractAndGetOutput(abi, "blockTime", toAddr, &bigIntOutput, big.NewInt(1))
 
 	require.NoError(t, err)
+	assert.Equal(t, uint64(804), gasUsed)
 	require.Equal(t, new(big.Int).SetUint64(block1.Header().Timestamp()), bigIntOutput)
 
-	err = callContractAndGetOutput(abi, "blockTime", toAddr, &bigIntOutput, big.NewInt(0))
+	gasUsed, err = callContractAndGetOutput(abi, "blockTime", toAddr, &bigIntOutput, big.NewInt(0))
 
 	require.NoError(t, err)
+	assert.Equal(t, uint64(804), gasUsed)
 	require.Equal(t, new(big.Int).SetUint64(b0.Header().Timestamp()), bigIntOutput)
 
 	var addressOutput common.Address
-	err = callContractAndGetOutput(abi, "blockSigner", toAddr, &addressOutput, big.NewInt(3))
+	gasUsed, err = callContractAndGetOutput(abi, "blockSigner", toAddr, &addressOutput, big.NewInt(3))
 
 	require.NoError(t, err)
+	assert.Equal(t, uint64(432), gasUsed)
 	require.Equal(t, common.Address{}, addressOutput)
 
-	err = callContractAndGetOutput(abi, "blockSigner", toAddr, &addressOutput, big.NewInt(2))
+	gasUsed, err = callContractAndGetOutput(abi, "blockSigner", toAddr, &addressOutput, big.NewInt(2))
 
 	require.NoError(t, err)
+	assert.Equal(t, uint64(432), gasUsed)
 	require.Equal(t, master1.Address.Bytes(), addressOutput.Bytes())
 
-	err = callContractAndGetOutput(abi, "blockSigner", toAddr, &addressOutput, big.NewInt(1))
+	gasUsed, err = callContractAndGetOutput(abi, "blockSigner", toAddr, &addressOutput, big.NewInt(1))
 
 	require.NoError(t, err)
+	assert.Equal(t, uint64(832), gasUsed)
 	require.Equal(t, master1.Address.Bytes(), addressOutput.Bytes())
 
-	err = callContractAndGetOutput(abi, "blockSigner", toAddr, &addressOutput, big.NewInt(0))
+	gasUsed, err = callContractAndGetOutput(abi, "blockSigner", toAddr, &addressOutput, big.NewInt(0))
 
 	require.NoError(t, err)
+	assert.Equal(t, uint64(832), gasUsed)
 	require.Equal(t, common.Address{}, addressOutput)
 
-	err = callContractAndGetOutput(abi, "txGasPayer", toAddr, &addressOutput)
+	gasUsed, err = callContractAndGetOutput(abi, "txGasPayer", toAddr, &addressOutput)
 
 	require.NoError(t, err)
+	assert.Equal(t, uint64(372), gasUsed)
 	require.Equal(t, master1.Address.Bytes(), addressOutput.Bytes())
 }

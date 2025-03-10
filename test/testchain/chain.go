@@ -232,11 +232,11 @@ func (c *Chain) AddBlock(newBlk *block.Block, stage *state.Stage, receipts tx.Re
 }
 
 // ClauseCall executes contract call with clause referenced by the clauseIdx parameter, the rest of tx is passed as is.
-func (c *Chain) ClauseCall(account genesis.DevAccount, trx *tx.Transaction, clauseIdx int) ([]byte, error) {
+func (c *Chain) ClauseCall(account genesis.DevAccount, trx *tx.Transaction, clauseIdx int) ([]byte, uint64, error) {
 	ch := c.repo.NewBestChain()
 	summary, err := c.repo.GetBlockSummary(ch.HeadID())
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	st := state.New(c.db, trie.Root{Hash: summary.Header.StateRoot(), Ver: trie.Version{Major: summary.Header.Number()}})
 	rt := runtime.New(ch, st, &xenv.BlockContext{Number: summary.Header.Number(), Time: summary.Header.Timestamp(), TotalScore: summary.Header.TotalScore(), Signer: account.Address}, thor.SoloFork)
@@ -251,7 +251,7 @@ func (c *Chain) ClauseCall(account genesis.DevAccount, trx *tx.Transaction, clau
 			Expiration: trx.Expiration()})
 
 	out, _, err := exec()
-	return out.Data, err
+	return out.Data, math.MaxUint64 - out.LeftOverGas, err
 }
 
 func (c *Chain) GetTxReceipt(txID thor.Bytes32) (*tx.Receipt, error) {

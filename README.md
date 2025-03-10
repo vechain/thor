@@ -1,8 +1,8 @@
 <p align="center">
   <a href="https://www.vechain.org/vechainthor/">
     <picture style="padding: 80px;">
-        <source srcset="https://github.com/vechain/thor/blob/master/docs/assets/banner-dark-mode.png"  media="(prefers-color-scheme: dark)" >
-        <img src="https://github.com/vechain/thor/blob/master/docs/assets/banner-light-mode.png" style="padding: 20px;">
+        <source srcset="https://raw.githubusercontent.com/vechain/thor/refs/heads/master/docs/assets/banner-dark-mode.png"  media="(prefers-color-scheme: dark)" >
+        <img src="https://raw.githubusercontent.com/vechain/thor/refs/heads/master/docs/assets/banner-light-mode.png" style="padding: 20px;">
     </picture>
   </a>
 </p>
