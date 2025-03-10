@@ -24,6 +24,10 @@ jobs:
           go generate ./builtin/gen
           git diff --exit-code builtin/gen || (echo "\n\n\nbuiltin/gen directory is not up to date, run 'go generate ./...' to update it" && exit 1)
 
+      - name: Check `modernize` (code style)
+        run: |
+          go run golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@v0.18.1 ./...
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6.4.1
         with:
