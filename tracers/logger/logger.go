@@ -25,6 +25,8 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"maps"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -32,7 +34,6 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/vechain/thor/v2/tracers"
 	"github.com/vechain/thor/v2/vm"
-	"maps"
 )
 
 func init() {
