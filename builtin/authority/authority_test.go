@@ -16,7 +16,7 @@ import (
 	"github.com/vechain/thor/v2/trie"
 )
 
-func M(a ...interface{}) []interface{} {
+func M(a ...any) []any {
 	return a
 }
 
@@ -33,8 +33,8 @@ func TestAuthority(t *testing.T) {
 
 	aut := New(thor.BytesToAddress([]byte("aut")), st)
 	tests := []struct {
-		ret      interface{}
-		expected interface{}
+		ret      any
+		expected any
 	}{
 		{M(aut.Add(p1, p1, thor.Bytes32{})), M(true, nil)},
 		{M(aut.Get(p1)), M(true, p1, thor.Bytes32{}, true, nil)},

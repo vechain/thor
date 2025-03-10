@@ -291,7 +291,7 @@ func (c *Client) GetPeers() ([]*node.PeerStats, error) {
 }
 
 // RawHTTPPost sends a raw HTTP POST request to the specified URL with the provided data.
-func (c *Client) RawHTTPPost(url string, calldata interface{}) ([]byte, int, error) {
+func (c *Client) RawHTTPPost(url string, calldata any) ([]byte, int, error) {
 	var data []byte
 	var err error
 

@@ -14,9 +14,9 @@ import (
 func init() {
 	defines := []struct {
 		name string
-		run  func(env *xenv.Environment) []interface{}
+		run  func(env *xenv.Environment) []any
 	}{
-		{"native_executor", func(env *xenv.Environment) []interface{} {
+		{"native_executor", func(env *xenv.Environment) []any {
 			env.UseGas(thor.SloadGas)
 
 			val, err := Params.Native(env.State()).Get(thor.KeyExecutorAddress)
@@ -25,9 +25,9 @@ func init() {
 			}
 
 			addr := thor.BytesToAddress(val.Bytes())
-			return []interface{}{addr}
+			return []any{addr}
 		}},
-		{"native_add", func(env *xenv.Environment) []interface{} {
+		{"native_add", func(env *xenv.Environment) []any {
 			var args struct {
 				NodeMaster common.Address
 				Endorsor   common.Address
@@ -48,9 +48,9 @@ func init() {
 				env.UseGas(thor.SstoreSetGas)
 				env.UseGas(thor.SstoreResetGas)
 			}
-			return []interface{}{ok}
+			return []any{ok}
 		}},
-		{"native_revoke", func(env *xenv.Environment) []interface{} {
+		{"native_revoke", func(env *xenv.Environment) []any {
 			var nodeMaster common.Address
 			env.ParseArgs(&nodeMaster)
 
@@ -62,9 +62,9 @@ func init() {
 			if ok {
 				env.UseGas(thor.SstoreResetGas * 3)
 			}
-			return []interface{}{ok}
+			return []any{ok}
 		}},
-		{"native_get", func(env *xenv.Environment) []interface{} {
+		{"native_get", func(env *xenv.Environment) []any {
 			var nodeMaster common.Address
 			env.ParseArgs(&nodeMaster)
 
@@ -74,20 +74,20 @@ func init() {
 				panic(err)
 			}
 
-			return []interface{}{listed, endorsor, identity, active}
+			return []any{listed, endorsor, identity, active}
 		}},
-		{"native_first", func(env *xenv.Environment) []interface{} {
+		{"native_first", func(env *xenv.Environment) []any {
 			env.UseGas(thor.SloadGas)
 			nodeMaster, err := Authority.Native(env.State()).First()
 			if err != nil {
 				panic(err)
 			}
 			if nodeMaster != nil {
-				return []interface{}{*nodeMaster}
+				return []any{*nodeMaster}
 			}
-			return []interface{}{thor.Address{}}
+			return []any{thor.Address{}}
 		}},
-		{"native_next", func(env *xenv.Environment) []interface{} {
+		{"native_next", func(env *xenv.Environment) []any {
 			var nodeMaster common.Address
 			env.ParseArgs(&nodeMaster)
 
@@ -97,11 +97,11 @@ func init() {
 				panic(err)
 			}
 			if next != nil {
-				return []interface{}{*next}
+				return []any{*next}
 			}
-			return []interface{}{thor.Address{}}
+			return []any{thor.Address{}}
 		}},
-		{"native_isEndorsed", func(env *xenv.Environment) []interface{} {
+		{"native_isEndorsed", func(env *xenv.Environment) []any {
 			var nodeMaster common.Address
 			env.ParseArgs(&nodeMaster)
 
@@ -111,7 +111,7 @@ func init() {
 				panic(err)
 			}
 			if !listed {
-				return []interface{}{false}
+				return []any{false}
 			}
 
 			env.UseGas(thor.GetBalanceGas)
@@ -125,7 +125,7 @@ func init() {
 			if err != nil {
 				panic(err)
 			}
-			return []interface{}{bal.Cmp(endorsement) >= 0}
+			return []any{bal.Cmp(endorsement) >= 0}
 		}},
 	}
 	abi := Authority.NativeABI()

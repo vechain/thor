@@ -281,7 +281,7 @@ func insertBlocks(t *testing.T, chain *testchain.Chain, n int) {
 
 	transferClause := tx.NewClause(&builtin.Energy.Address).WithData(encoded)
 
-	for i := 0; i < n; i++ {
+	for range n {
 		err := chain.MintClauses(genesis.DevAccounts()[0], []*tx.Clause{transferClause})
 		require.NoError(t, err)
 	}

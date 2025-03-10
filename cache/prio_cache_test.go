@@ -43,7 +43,7 @@ func TestPrioCache(t *testing.T) {
 
 	var kvps []kvp
 
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		e := kvp{
 			rand.Int(),
 			rand.Int(),

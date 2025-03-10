@@ -499,7 +499,7 @@ func masterKeyAction(ctx *cli.Context) error {
 			return err
 		}
 
-		if err := json.Unmarshal(keyjson, &map[string]interface{}{}); err != nil {
+		if err := json.Unmarshal(keyjson, &map[string]any{}); err != nil {
 			return errors.WithMessage(err, "unmarshal")
 		}
 		password, err := readPasswordFromNewTTY("Enter passphrase: ")

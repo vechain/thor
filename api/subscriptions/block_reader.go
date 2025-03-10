@@ -20,12 +20,12 @@ func newBlockReader(repo *chain.Repository, position thor.Bytes32) *blockReader 
 	}
 }
 
-func (br *blockReader) Read() ([]interface{}, bool, error) {
+func (br *blockReader) Read() ([]any, bool, error) {
 	blocks, err := br.blockReader.Read()
 	if err != nil {
 		return nil, false, err
 	}
-	var msgs []interface{}
+	var msgs []any
 	for _, block := range blocks {
 		msg, err := convertBlock(block)
 		if err != nil {

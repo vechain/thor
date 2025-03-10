@@ -16,25 +16,25 @@ import (
 func init() {
 	defines := []struct {
 		name string
-		run  func(env *xenv.Environment) []interface{}
+		run  func(env *xenv.Environment) []any
 	}{
-		{"native_totalSupply", func(env *xenv.Environment) []interface{} {
+		{"native_totalSupply", func(env *xenv.Environment) []any {
 			env.UseGas(thor.SloadGas)
 			supply, err := Energy.Native(env.State(), env.BlockContext().Time).TotalSupply()
 			if err != nil {
 				panic(err)
 			}
-			return []interface{}{supply}
+			return []any{supply}
 		}},
-		{"native_totalBurned", func(env *xenv.Environment) []interface{} {
+		{"native_totalBurned", func(env *xenv.Environment) []any {
 			env.UseGas(thor.SloadGas)
 			burned, err := Energy.Native(env.State(), env.BlockContext().Time).TotalBurned()
 			if err != nil {
 				panic(err)
 			}
-			return []interface{}{burned}
+			return []any{burned}
 		}},
-		{"native_get", func(env *xenv.Environment) []interface{} {
+		{"native_get", func(env *xenv.Environment) []any {
 			var addr common.Address
 			env.ParseArgs(&addr)
 
@@ -43,9 +43,9 @@ func init() {
 			if err != nil {
 				panic(err)
 			}
-			return []interface{}{bal}
+			return []any{bal}
 		}},
-		{"native_add", func(env *xenv.Environment) []interface{} {
+		{"native_add", func(env *xenv.Environment) []any {
 			var args struct {
 				Addr   common.Address
 				Amount *big.Int
@@ -71,14 +71,14 @@ func init() {
 			}
 			return nil
 		}},
-		{"native_sub", func(env *xenv.Environment) []interface{} {
+		{"native_sub", func(env *xenv.Environment) []any {
 			var args struct {
 				Addr   common.Address
 				Amount *big.Int
 			}
 			env.ParseArgs(&args)
 			if args.Amount.Sign() == 0 {
-				return []interface{}{true}
+				return []any{true}
 			}
 
 			env.UseGas(thor.GetBalanceGas)
@@ -89,9 +89,9 @@ func init() {
 			if ok {
 				env.UseGas(thor.SstoreResetGas)
 			}
-			return []interface{}{ok}
+			return []any{ok}
 		}},
-		{"native_master", func(env *xenv.Environment) []interface{} {
+		{"native_master", func(env *xenv.Environment) []any {
 			var addr common.Address
 			env.ParseArgs(&addr)
 
@@ -100,7 +100,7 @@ func init() {
 			if err != nil {
 				panic(err)
 			}
-			return []interface{}{master}
+			return []any{master}
 		}},
 	}
 	abi := Energy.NativeABI()

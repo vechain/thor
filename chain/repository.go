@@ -291,7 +291,7 @@ func (r *Repository) GetMaxBlockNum() (uint32, error) {
 
 // GetBlockSummary get block summary by block id.
 func (r *Repository) GetBlockSummary(id thor.Bytes32) (*BlockSummary, error) {
-	blk, cached, err := r.caches.summaries.GetOrLoad(id, func() (interface{}, error) {
+	blk, cached, err := r.caches.summaries.GetOrLoad(id, func() (any, error) {
 		return loadBlockSummary(r.hdrStore, id)
 	})
 	if err != nil {
@@ -311,7 +311,7 @@ func (r *Repository) GetBlockSummary(id thor.Bytes32) (*BlockSummary, error) {
 }
 
 func (r *Repository) getTransaction(key []byte) (*tx.Transaction, error) {
-	trx, cached, err := r.caches.txs.GetOrLoad(string(key), func() (interface{}, error) {
+	trx, cached, err := r.caches.txs.GetOrLoad(string(key), func() (any, error) {
 		return loadTransaction(r.bodyStore, key)
 	})
 	if err != nil {
@@ -374,7 +374,7 @@ func (r *Repository) GetBlock(id thor.Bytes32) (*block.Block, error) {
 }
 
 func (r *Repository) getReceipt(key []byte) (*tx.Receipt, error) {
-	receipt, cached, err := r.caches.receipts.GetOrLoad(string(key), func() (interface{}, error) {
+	receipt, cached, err := r.caches.receipts.GetOrLoad(string(key), func() (any, error) {
 		return loadReceipt(r.bodyStore, key)
 	})
 	if err != nil {

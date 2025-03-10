@@ -211,7 +211,7 @@ func createPackedChain(b *testing.B, db *muxdb.MuxDB, noBlocks int, accounts []g
 
 	// Start from the Genesis block
 	previousBlock := fakeChain.GenesisBlock()
-	for i := 0; i < noBlocks; i++ {
+	for range noBlocks {
 		newTxs, err := createTxFunc(fakeChain)
 		require.NoError(b, err)
 		previousBlock, err = packTxsIntoBlock(
@@ -423,7 +423,7 @@ func randomPickSignerFunc(
 func createAccounts(b *testing.B, accountNo int) []genesis.DevAccount {
 	var accs []genesis.DevAccount
 
-	for i := 0; i < accountNo; i++ {
+	for range accountNo {
 		pk, err := crypto.GenerateKey()
 		require.NoError(b, err)
 		addr := crypto.PubkeyToAddress(pk.PublicKey)
@@ -481,10 +481,7 @@ func normalizeCacheSize(sizeMB int) int {
 		half := total / 2
 
 		// limit to not less than total/2 and up to total-2GB
-		limitMB := total - 2048
-		if limitMB < half {
-			limitMB = half
-		}
+		limitMB := max(total-2048, half)
 
 		if sizeMB > limitMB {
 			sizeMB = limitMB

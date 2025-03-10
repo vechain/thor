@@ -6,6 +6,8 @@
 package poa
 
 import (
+	"slices"
+
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/builtin/authority"
 	"github.com/vechain/thor/v2/state"
@@ -97,7 +99,7 @@ func (c *Candidates) Update(addr thor.Address, active bool) bool {
 		// something like COW
 		if c.referenced {
 			// shallow copy the list
-			c.list = append([]*authority.Candidate(nil), c.list...)
+			c.list = slices.Clone(c.list)
 			c.referenced = false
 		}
 		cpy := *c.list[i]

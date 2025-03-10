@@ -127,9 +127,9 @@ func TestStorageRangeMaxResult(t *testing.T) {
 	state := state.New(muxdb.NewMem(), trie.Root{})
 
 	addr := thor.BytesToAddress([]byte("account1"))
-	for i := 0; i < 1001; i++ {
-		key := thor.BytesToBytes32([]byte(fmt.Sprintf("key%d", i)))
-		value := thor.BytesToBytes32([]byte(fmt.Sprintf("value%d", i)))
+	for i := range 1001 {
+		key := thor.BytesToBytes32(fmt.Appendf(nil, "key%d", i))
+		value := thor.BytesToBytes32(fmt.Appendf(nil, "value%d", i))
 		state.SetRawStorage(addr, key, value[:])
 	}
 
@@ -575,7 +575,7 @@ func initDebugServer(t *testing.T) {
 	ts = httptest.NewServer(router)
 }
 
-func httpPostAndCheckResponseStatus(t *testing.T, url string, obj interface{}, responseStatusCode int) string {
+func httpPostAndCheckResponseStatus(t *testing.T, url string, obj any, responseStatusCode int) string {
 	body, status, err := tclient.RawHTTPClient().RawHTTPPost(url, obj)
 	require.NoError(t, err)
 	require.Equal(t, responseStatusCode, status)

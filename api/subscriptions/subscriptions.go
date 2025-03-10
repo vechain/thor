@@ -38,7 +38,7 @@ type Subscriptions struct {
 }
 
 type msgReader interface {
-	Read() (msgs []interface{}, hasMore bool, err error)
+	Read() (msgs []any, hasMore bool, err error)
 }
 
 var (

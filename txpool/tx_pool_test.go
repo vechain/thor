@@ -99,7 +99,7 @@ func TestNewCloseWithServer(t *testing.T) {
 
 	// Create a slice of transactions to be added to the pool.
 	txs := make(Tx.Transactions, 0, 15)
-	for i := 0; i < 15; i++ {
+	for i := range 15 {
 		tx := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i%len(devAccounts)])
 		txs = append(txs, tx)
 	}
@@ -113,7 +113,7 @@ func TestNewCloseWithServer(t *testing.T) {
 func FillPoolWithTxs(pool *TxPool, t *testing.T) {
 	// Create a slice of transactions to be added to the pool.
 	txs := make(Tx.Transactions, 0, 15)
-	for i := 0; i < 12; i++ {
+	for range 12 {
 		tx := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
 		txs = append(txs, tx)
 	}
@@ -151,7 +151,7 @@ func TestDump(t *testing.T) {
 
 	// Create and add transactions to the pool
 	txsToAdd := make(tx.Transactions, 0, 5)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		tx := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i%len(devAccounts)])
 		txsToAdd = append(txsToAdd, tx)
 		assert.Nil(t, pool.Add(tx))
@@ -301,7 +301,7 @@ func TestFillPool(t *testing.T) {
 
 	// Create a slice of transactions to be added to the pool.
 	txs := make(Tx.Transactions, 0, 5)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		tx := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i%len(devAccounts)])
 		txs = append(txs, tx)
 	}
@@ -446,7 +446,7 @@ func TestExecutableAndNonExecutableLimits(t *testing.T) {
 
 	// Create a slice of transactions to be added to the pool.
 	txs := make(Tx.Transactions, 0, 11)
-	for i := 0; i < 12; i++ {
+	for i := range 12 {
 		tx := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i%len(devAccounts)])
 		pool.add(tx, false, false)
 		txs = append(txs, tx)
@@ -491,7 +491,7 @@ func TestNonExecutables(t *testing.T) {
 	pool := newPoolWithParams(100, 100, "", "", uint64(time.Now().Unix()))
 
 	// loop 90 times
-	for i := 0; i < 90; i++ {
+	for i := range 90 {
 		assert.NoError(t, pool.AddLocal(newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i%len(devAccounts)])))
 	}
 
@@ -506,7 +506,7 @@ func TestExpiredTxs(t *testing.T) {
 	pool := newPoolWithMaxLifetime(100, 100, "", "", uint64(time.Now().Unix()), 3*time.Second)
 
 	// loop 90 times
-	for i := 0; i < 90; i++ {
+	for i := range 90 {
 		assert.NoError(t, pool.Add(newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i%len(devAccounts)])))
 	}
 

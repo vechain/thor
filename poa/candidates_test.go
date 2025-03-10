@@ -19,7 +19,7 @@ import (
 
 func generateCandidateList(candidateCount int) []*authority.Candidate {
 	candidateList := make([]*authority.Candidate, 0, candidateCount)
-	for i := 0; i < candidateCount; i++ {
+	for range candidateCount {
 		var nodeMaster, endorsor thor.Address
 		var identity thor.Bytes32
 

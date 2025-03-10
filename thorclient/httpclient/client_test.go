@@ -330,7 +330,7 @@ func TestClient_GetRawTransaction(t *testing.T) {
 
 func TestClient_RawHTTPPost(t *testing.T) {
 	url := "/test"
-	calldata := map[string]interface{}{}
+	calldata := map[string]any{}
 	expectedResponse := []byte{0x01}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -401,7 +401,7 @@ func TestClient_Errors(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		path     string
-		function interface{}
+		function any
 	}{
 		{
 			name:     "TransactionReceipt",

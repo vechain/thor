@@ -200,33 +200,33 @@ func TestClient_SubscribeError(t *testing.T) {
 
 	for _, tc := range []struct {
 		name          string
-		subscribeFunc interface{}
-		args          []interface{}
+		subscribeFunc any
+		args          []any
 	}{
 		{
 			name:          "SubscribeEvents",
 			subscribeFunc: client.SubscribeEvents,
-			args:          []interface{}{pos, (*subscriptions.EventFilter)(nil)}, // pos and a nil EventFilter
+			args:          []any{pos, (*subscriptions.EventFilter)(nil)}, // pos and a nil EventFilter
 		},
 		{
 			name:          "SubscribeTransfers",
 			subscribeFunc: client.SubscribeTransfers,
-			args:          []interface{}{pos, (*subscriptions.TransferFilter)(nil)}, // pos and a nil TransferFilter
+			args:          []any{pos, (*subscriptions.TransferFilter)(nil)}, // pos and a nil TransferFilter
 		},
 		{
 			name:          "SubscribeTxPool",
 			subscribeFunc: client.SubscribeTxPool,
-			args:          []interface{}{(*thor.Bytes32)(nil)}, // nil txID
+			args:          []any{(*thor.Bytes32)(nil)}, // nil txID
 		},
 		{
 			name:          "SubscribeBeats2",
 			subscribeFunc: client.SubscribeBeats2,
-			args:          []interface{}{pos}, // only pos
+			args:          []any{pos}, // only pos
 		},
 		{
 			name:          "SubscribeBlocks",
 			subscribeFunc: client.SubscribeBlocks,
-			args:          []interface{}{pos}, // only pos
+			args:          []any{pos}, // only pos
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -353,7 +353,7 @@ func TestClient_SubscribeBlocks_ClientShutdown(t *testing.T) {
 
 	// The first 50 events should be the valid block
 	// the server is producing events at high speed
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		event := <-sub.EventChan
 		assert.NoError(t, event.Error)
 		assert.Equal(t, expectedBlock, event.Data)

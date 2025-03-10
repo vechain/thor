@@ -152,7 +152,7 @@ func initChain(t *testing.T) *testchain.Chain {
 	thorChain, err := testchain.NewIntegrationTestChain()
 	require.NoError(t, err)
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		require.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
 	}
 

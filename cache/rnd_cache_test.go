@@ -29,7 +29,7 @@ func TestRandCacheAddRemove(t *testing.T) {
 
 func TestRandCacheLimit(t *testing.T) {
 	c := cache.NewRandCache(16)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		c.Set(i, i)
 	}
 

@@ -6,8 +6,9 @@
 package comm_test
 
 import (
-	"sort"
 	"testing"
+
+	"slices"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -26,13 +27,11 @@ func TestLoopVar(t *testing.T) {
 	}()
 
 	ret := make([]uint, 0, len(cases))
-	for i := 0; i < len(cases); i++ {
+	for range cases {
 		v := <-ch
 		ret = append(ret, v)
 	}
-	sort.Slice(ret, func(i, j int) bool {
-		return ret[i] < ret[j]
-	})
+	slices.Sort(ret)
 	// before go1.22 the result is [4, 4, 4, 4]
 	// after go1.22 the result is [1, 2, 3, 4]
 

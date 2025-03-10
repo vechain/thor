@@ -61,7 +61,7 @@ func convertEvent(event *logdb.Event, addIndexes bool) *FilteredEvent {
 	}
 
 	fe.Topics = make([]*thor.Bytes32, 0)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if event.Topics[i] != nil {
 			fe.Topics = append(fe.Topics, event.Topics[i])
 		}

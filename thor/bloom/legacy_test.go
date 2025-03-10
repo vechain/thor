@@ -18,11 +18,11 @@ func TestLegacyBloom(t *testing.T) {
 
 	bloom := bloom.NewLegacyBloom(bloom.LegacyEstimateBloomK(itemCount))
 
-	for i := 0; i < itemCount; i++ {
-		bloom.Add([]byte(fmt.Sprintf("%v", i)))
+	for i := range itemCount {
+		bloom.Add(fmt.Appendf(nil, "%v", i))
 	}
 
-	for i := 0; i < itemCount; i++ {
-		assert.Equal(t, true, bloom.Test([]byte(fmt.Sprintf("%v", i))))
+	for i := range itemCount {
+		assert.Equal(t, true, bloom.Test(fmt.Appendf(nil, "%v", i)))
 	}
 }

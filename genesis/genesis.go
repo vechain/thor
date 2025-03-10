@@ -42,7 +42,7 @@ func (g *Genesis) Name() string {
 	return g.name
 }
 
-func mustEncodeInput(abi *abi.ABI, name string, args ...interface{}) []byte {
+func mustEncodeInput(abi *abi.ABI, name string, args ...any) []byte {
 	m, found := abi.MethodByName(name)
 	if !found {
 		panic("method not found")
