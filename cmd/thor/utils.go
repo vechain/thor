@@ -253,7 +253,7 @@ func selectGenesis(ctx *cli.Context) (*genesis.Genesis, thor.ForkConfig, error) 
 func parseGenesisFile(uri string) (*genesis.Genesis, thor.ForkConfig, error) {
 	var (
 		reader io.ReadCloser
-		err error
+		err    error
 	)
 	if strings.HasPrefix(uri, "http://") || strings.HasPrefix(uri, "https://") {
 		res, err := http.Get(uri) // #nosec
