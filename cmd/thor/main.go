@@ -297,7 +297,7 @@ func defaultAction(ctx *cli.Context) error {
 
 	minTxPriorityFee := ctx.Uint64(minMaxPriorityFeePerGasFlag.Name)
 	if minTxPriorityFee > 0 {
-		log.Info("max priority fee per gas is required in transactions")
+		log.Info(fmt.Sprintf("the minimum max priority fee per gas required in transactions is %d", minTxPriorityFee))
 	}
 
 	options := node.Options{
@@ -474,7 +474,7 @@ func soloAction(ctx *cli.Context) error {
 
 	minTxPriorityFee := ctx.Uint64(minMaxPriorityFeePerGasFlag.Name)
 	if minTxPriorityFee > 0 {
-		log.Info("max priority fee per gas is required in transactions")
+		log.Info(fmt.Sprintf("the minimum max priority fee per gas required in transactions is %d", minTxPriorityFee))
 	}
 
 	options := solo.Options{
