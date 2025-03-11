@@ -13,7 +13,7 @@ import (
 var (
 	networkFlag = cli.StringFlag{
 		Name:  "network",
-		Usage: "the network to join (main|test) or path/ URL to a genesis file",
+		Usage: "the network to join (main|test) or path / URL to a genesis file",
 	}
 	configDirFlag = cli.StringFlag{
 		Name:   "config-dir",
@@ -202,6 +202,6 @@ var (
 	}
 	genesisFlag = cli.StringFlag{
 		Name:  "genesis",
-		Usage: "path to genesis file, if not set, the default devnet genesis will be used",
+		Usage: "path or URL to genesis file, if not set, the default devnet genesis will be used",
 	}
 )
