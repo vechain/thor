@@ -19,7 +19,7 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func newTx(txType tx.TxType) *tx.Transaction {
+func newTx(txType tx.Type) *tx.Transaction {
 	trx := tx.NewTxBuilder(txType).MustBuild()
 
 	pk, _ := crypto.GenerateKey()
@@ -133,7 +133,7 @@ func TestErrTxTypeNotSupported(t *testing.T) {
 			t.Errorf("Expected to panic")
 		}
 	}()
-	nonExistingTxType := tx.TxType(100)
+	nonExistingTxType := tx.Type(100)
 	newTx(nonExistingTxType)
 }
 

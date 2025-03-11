@@ -129,15 +129,19 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 		)
 
 		// adopt txs
-		for _, tx := range txs {
-			if err := flow.Adopt(tx); err != nil {
+		for _, trx := range txs {
+			if err := flow.Adopt(trx); err != nil {
 				if packer.IsGasLimitReached(err) {
 					break
 				}
 				if packer.IsTxNotAdoptableNow(err) {
 					continue
 				}
-				txsToRemove = append(txsToRemove, tx)
+				txsToRemove = append(txsToRemove, trx)
+				metricTransactionTypeCounter().AddWithLabel(1, map[string]string{"type": fmt.Sprintf("%d", trx.Type())})
+				if trx.Type() == tx.TypeDynamicFee {
+					metricPriorityFeeBucket().Observe(trx.MaxPriorityFeePerGas().Int64())
+				}
 			}
 		}
 
@@ -211,6 +215,7 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 			logger.Trace("bandwidth updated", "gps", v)
 		}
 
+		go metricsWriteTxData(n.forkConfig, newBlock)
 		metricBlockProcessedTxs().SetWithLabel(int64(len(receipts)), map[string]string{"type": "proposed"})
 		metricBlockProcessedGas().SetWithLabel(int64(newBlock.Header().GasUsed()), map[string]string{"type": "proposed"})
 		metricBlockProcessedDuration().Observe(time.Duration(realElapsed).Milliseconds())

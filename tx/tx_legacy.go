@@ -28,7 +28,7 @@ type LegacyTransaction struct {
 	Signature    []byte
 }
 
-func (t *LegacyTransaction) txType() byte {
+func (t *LegacyTransaction) txType() Type {
 	return TypeLegacy
 }
 

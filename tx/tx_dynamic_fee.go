@@ -29,7 +29,7 @@ type DynamicFeeTransaction struct {
 	Signature            []byte
 }
 
-func (t *DynamicFeeTransaction) txType() byte {
+func (t *DynamicFeeTransaction) txType() Type {
 	return TypeDynamicFee
 }
 

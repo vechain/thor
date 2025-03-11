@@ -211,7 +211,7 @@ func clause() *tx.Clause {
 	return tx.NewClause(&address).WithData(nil)
 }
 
-func txBuilder(tag byte, txType tx.TxType) *tx.Builder {
+func txBuilder(tag byte, txType tx.Type) *tx.Builder {
 	return tx.NewTxBuilder(txType).
 		GasPriceCoef(1).
 		Gas(1000000).
