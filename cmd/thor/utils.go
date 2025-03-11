@@ -257,7 +257,7 @@ func parseGenesisFile(uri string) (*genesis.Genesis, thor.ForkConfig, error) {
 	)
 
 	if strings.HasPrefix(uri, "http://") || strings.HasPrefix(uri, "https://") {
-		res, err := http.Get(uri)
+		res, err := http.Get(uri) // #nosec
 		if err != nil {
 			return nil, thor.ForkConfig{}, errors.Wrap(err, "http get genesis file")
 		}
