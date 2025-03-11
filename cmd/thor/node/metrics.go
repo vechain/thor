@@ -42,14 +42,14 @@ func metricsWriteTxData(fc thor.ForkConfig, blk *block.Block) {
 	metricBaseFeeGauge().Set(baseFeePercent.Int64())
 
 	// tx type & priority fee
-	mapping := make(map[tx.Type]int64)
+	typeCounts := make(map[tx.Type]int64)
 	for _, r := range blk.Transactions() {
-		mapping[r.Type()]++
+		typeCounts[r.Type()]++
 		if r.Type() == tx.TypeDynamicFee {
 			metricPriorityFeeBucket().Observe(r.MaxPriorityFeePerGas().Int64())
 		}
 	}
-	for t, c := range mapping {
+	for t, c := range typeCounts {
 		metricTransactionTypeCounter().AddWithLabel(c, map[string]string{"type": fmt.Sprintf("%d", t)})
 	}
 }
