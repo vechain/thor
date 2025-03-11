@@ -93,23 +93,18 @@ func (f *Flow) hasTx(txid thor.Bytes32, txBlockRef uint32) (bool, error) {
 	return f.runtime.Chain().HasTransaction(txid, txBlockRef)
 }
 
-func (f *Flow) isEffectivePriorityFeeTooLow(t *tx.Transaction, baseGasPrice *big.Int) error {
+func (f *Flow) isEffectivePriorityFeeTooLow(t *tx.Transaction, baseGasPrice *big.Int, isGalactica bool) error {
 	// Skip check if the minimum priority fee is not set
 	if f.minTxPriorityFee.Sign() <= 0 {
 		return nil
 	}
 
-	effectivePriorityFee := t.MaxPriorityFeePerGas()
-	baseFee := f.runtime.Context().BaseFee
-
-	if t.Type() == tx.TypeLegacy {
-		effectivePriorityFee = new(big.Int).Sub(t.GasPrice(baseGasPrice), baseFee)
-	} else {
-		maxPriorityLimit := new(big.Int).Sub(t.MaxFeePerGas(), baseFee)
-		if effectivePriorityFee == nil || effectivePriorityFee.Cmp(maxPriorityLimit) > 0 {
-			effectivePriorityFee = maxPriorityLimit
-		}
+	provedWork, err := t.ProvedWork(f.Number()-1, f.runtime.Chain().GetBlockID)
+	if err != nil {
+		return err
 	}
+	effectivePriorityFee := fork.GalacticaPriorityPrice(
+		t, baseGasPrice, provedWork, &fork.GalacticaItems{IsActive: isGalactica, BaseFee: f.runtime.Context().BaseFee})
 
 	if effectivePriorityFee.Cmp(f.minTxPriorityFee) < 0 {
 		return badTxError{"effective priority fee too low"}
@@ -163,7 +158,7 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 			return errTxNotAdoptableNow
 		}
 
-		if err := f.isEffectivePriorityFeeTooLow(t, baseGasPrice); err != nil {
+		if err := f.isEffectivePriorityFeeTooLow(t, baseGasPrice, true); err != nil {
 			return err
 		}
 	}
