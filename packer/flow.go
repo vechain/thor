@@ -193,9 +193,12 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 		StateRoot(stateRoot).
 		TransactionFeatures(f.features)
 
-	for _, tx := range f.txs {
-		builder.Transaction(tx)
-		metricTransactionTypeCounter().AddWithLabel(1, map[string]string{"type": fmt.Sprintf("%d", tx.Type())})
+	for _, trx := range f.txs {
+		builder.Transaction(trx)
+		metricTransactionTypeCounter().AddWithLabel(1, map[string]string{"type": fmt.Sprintf("%d", trx.Type())})
+		if trx.Type() == tx.TypeDynamicFee {
+			metricPriorityFeeBucket().Observe(trx.MaxPriorityFeePerGas().Int64())
+		}
 	}
 
 	if f.Number() >= f.packer.forkConfig.FINALITY && shouldVote {

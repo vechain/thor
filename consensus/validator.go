@@ -312,9 +312,9 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 		return chain.HasTransaction(txid, txBlockRef)
 	}
 
-	for _, tx := range txs {
+	for _, trx := range txs {
 		// check if tx existed
-		if found, err := hasTx(tx.ID(), tx.BlockRef().Number()); err != nil {
+		if found, err := hasTx(trx.ID(), trx.BlockRef().Number()); err != nil {
 			return nil, nil, err
 		} else if found {
 			return nil, nil, consensusError("tx already exists")
@@ -326,13 +326,13 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 			if err != nil {
 				return nil, nil, err
 			}
-			if err := fork.ValidateGalacticaTxFee(tx, header.BaseFee(), baseGasPrice); err != nil {
+			if err := fork.ValidateGalacticaTxFee(trx, header.BaseFee(), baseGasPrice); err != nil {
 				return nil, nil, err
 			}
 		}
 
 		// check depended tx
-		if dep := tx.DependsOn(); dep != nil {
+		if dep := trx.DependsOn(); dep != nil {
 			found, reverted, err := findDep(*dep)
 			if err != nil {
 				return nil, nil, err
@@ -346,15 +346,18 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 			}
 		}
 
-		receipt, err := rt.ExecuteTransaction(tx)
+		receipt, err := rt.ExecuteTransaction(trx)
 		if err != nil {
 			return nil, nil, err
 		}
 
 		totalGasUsed += receipt.GasUsed
 		receipts = append(receipts, receipt)
-		processedTxs[tx.ID()] = receipt.Reverted
-		metricTransactionTypeCounter().AddWithLabel(1, map[string]string{"type": fmt.Sprintf("%d", tx.Type())})
+		processedTxs[trx.ID()] = receipt.Reverted
+		metricTransactionTypeCounter().AddWithLabel(1, map[string]string{"type": fmt.Sprintf("%d", trx.Type())})
+		if trx.Type() == tx.TypeDynamicFee {
+			metricPriorityFeeBucket().Observe(trx.MaxPriorityFeePerGas().Int64())
+		}
 	}
 
 	if header.GasUsed() != totalGasUsed {

@@ -37,6 +37,7 @@ func NoOp() bool {
 
 // Define standard buckets for histograms
 var (
+	PriorityFeeBucket = []int64{0, 5, 10, 25, 100, 500, 1000, 10000, 100000, 1000000}
 	Bucket10s      = []int64{0, 500, 1000, 2000, 3000, 4000, 5000, 7500, 10_000}
 	BucketHTTPReqs = []int64{
 		0, 1, 2, 5, 10, 20, 30, 50, 75, 100,
