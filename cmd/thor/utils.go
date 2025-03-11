@@ -251,23 +251,23 @@ func selectGenesis(ctx *cli.Context) (*genesis.Genesis, thor.ForkConfig, error) 
 }
 
 func parseGenesisFile(uri string) (*genesis.Genesis, thor.ForkConfig, error) {
-	var reader io.Reader
-
+	var (
+		reader io.ReadCloser
+		err error
+	)
 	if strings.HasPrefix(uri, "http://") || strings.HasPrefix(uri, "https://") {
 		res, err := http.Get(uri) // #nosec
 		if err != nil {
 			return nil, thor.ForkConfig{}, errors.Wrap(err, "http get genesis file")
 		}
-		defer res.Body.Close()
 		reader = res.Body
 	} else {
-		file, err := os.Open(uri)
+		reader, err = os.Open(uri)
 		if err != nil {
 			return nil, thor.ForkConfig{}, errors.Wrap(err, "open genesis file")
 		}
-		defer file.Close()
-		reader = file
 	}
+	defer reader.Close()
 
 	decoder := json.NewDecoder(reader)
 	decoder.DisallowUnknownFields()
