@@ -7,12 +7,13 @@ package node
 
 import (
 	"fmt"
+	"math/big"
+	"time"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/metrics"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
-	"math/big"
-	"time"
 )
 
 var (
@@ -23,7 +24,7 @@ var (
 	metricChainForkCount         = metrics.LazyLoadCounter("chain_fork_count")
 	metricTransactionTypeCounter = metrics.LazyLoadCounterVec("tx_type_counter", []string{"type"})
 	metricPriorityFeeBucket      = metrics.LazyLoadHistogram("tx_priority_fee_bucket", []int64{0, 5, 10, 25, 100, 500, 1000, 10000, 100000, 1000000})
-	metricBaseFeeGauge = metrics.LazyLoadGauge("base_fee_gauge")
+	metricBaseFeeGauge           = metrics.LazyLoadGauge("base_fee_gauge")
 )
 
 func metricsWriteTxData(fc thor.ForkConfig, blk *block.Block) {

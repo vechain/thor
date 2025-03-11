@@ -14,8 +14,8 @@ import (
 
 // Builder to make it easy to build transaction.
 type Builder struct {
-	txType   Type
-	chainTag byte
+	txType               Type
+	chainTag             byte
 	clauses              []*Clause
 	gasPriceCoef         uint8
 	maxFeePerGas         *big.Int
