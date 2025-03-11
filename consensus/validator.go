@@ -354,6 +354,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 		totalGasUsed += receipt.GasUsed
 		receipts = append(receipts, receipt)
 		processedTxs[tx.ID()] = receipt.Reverted
+		metricTransactionTypeCounter().AddWithLabel(1, map[string]string{"type": fmt.Sprintf("%d", tx.Type())})
 	}
 
 	if header.GasUsed() != totalGasUsed {

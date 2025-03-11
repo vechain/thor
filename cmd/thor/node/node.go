@@ -396,6 +396,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		metricBlockProcessedTxs().SetWithLabel(int64(len(receipts)), map[string]string{"type": "received"})
 		metricBlockProcessedGas().SetWithLabel(int64(newBlock.Header().GasUsed()), map[string]string{"type": "received"})
 		metricBlockProcessedDuration().Observe(time.Duration(realElapsed).Milliseconds())
+		metricsRecordBaseFee(n.forkConfig, newBlock)
 		return nil
 	}); err != nil {
 		switch {

@@ -6,6 +6,7 @@
 package transactions
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -122,6 +123,8 @@ func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Re
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "raw"))
 	}
+
+	metricTransactionType().AddWithLabel(1, map[string]string{"type": fmt.Sprintf("%d", tx.Type())})
 
 	if err := t.pool.AddLocal(tx); err != nil {
 		if txpool.IsBadTx(err) {

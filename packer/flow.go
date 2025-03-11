@@ -7,7 +7,7 @@ package packer
 
 import (
 	"crypto/ecdsa"
-
+	"fmt"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/block"
@@ -195,6 +195,7 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 
 	for _, tx := range f.txs {
 		builder.Transaction(tx)
+		metricTransactionTypeCounter().AddWithLabel(1, map[string]string{"type": fmt.Sprintf("%d", tx.Type())})
 	}
 
 	if f.Number() >= f.packer.forkConfig.FINALITY && shouldVote {
