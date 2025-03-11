@@ -389,11 +389,12 @@ func TestAdoptAfterGalacticaRequireMaxPriorityFee(t *testing.T) {
 	txNoPriorityFee = tx.MustSign(txNoPriorityFee, genesis.DevAccounts()[0].PrivateKey)
 
 	// Create a transaction with dynamic fee type and max priority fee
+	maxPriorityFeePerGas := big.NewInt(1)
 	txPriorityFee := tx.NewTxBuilder(tx.TypeDynamicFee).
 		ChainTag(chain.Repo().ChainTag()).
 		Nonce(2).
-		MaxFeePerGas(baseFee).
-		MaxPriorityFeePerGas(big.NewInt(1)).
+		MaxFeePerGas(new(big.Int).Add(baseFee, maxPriorityFeePerGas)).
+		MaxPriorityFeePerGas(maxPriorityFeePerGas).
 		Gas(21000).
 		Expiration(100).
 		MustBuild()
@@ -425,7 +426,7 @@ func TestAdoptAfterGalacticaRequireMaxPriorityFee(t *testing.T) {
 
 	flow, _ := pckr.Schedule(best, uint64(time.Now().Unix()), 1)
 
-	expectedErrorMessage := "bad tx: max priority fee per gas too low"
+	expectedErrorMessage := "bad tx: effective priority fee too low"
 	if err := flow.Adopt(txNoPriorityFee); err.Error() != expectedErrorMessage {
 		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
 	}

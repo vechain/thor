@@ -101,7 +101,7 @@ func main() {
 			enableAdminFlag,
 			txPoolLimitPerAccountFlag,
 			allowedTracersFlag,
-			minMaxPriorityFeePerGasFlag,
+			minEffectivePriorityFeeFlag,
 		},
 		Action: defaultAction,
 		Commands: []cli.Command{
@@ -139,7 +139,7 @@ func main() {
 					adminAddrFlag,
 					enableAdminFlag,
 					allowedTracersFlag,
-					minMaxPriorityFeePerGasFlag,
+					minEffectivePriorityFeeFlag,
 				},
 				Action: soloAction,
 			},
@@ -295,9 +295,9 @@ func defaultAction(ctx *cli.Context) error {
 		defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
 	}
 
-	minTxPriorityFee := ctx.Uint64(minMaxPriorityFeePerGasFlag.Name)
+	minTxPriorityFee := ctx.Uint64(minEffectivePriorityFeeFlag.Name)
 	if minTxPriorityFee > 0 {
-		log.Info(fmt.Sprintf("the minimum max priority fee per gas required in transactions is %d", minTxPriorityFee))
+		log.Info(fmt.Sprintf("the minimum effective priority fee required in transactions is %d", minTxPriorityFee))
 	}
 
 	options := node.Options{
@@ -472,9 +472,9 @@ func soloAction(ctx *cli.Context) error {
 		defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
 	}
 
-	minTxPriorityFee := ctx.Uint64(minMaxPriorityFeePerGasFlag.Name)
+	minTxPriorityFee := ctx.Uint64(minEffectivePriorityFeeFlag.Name)
 	if minTxPriorityFee > 0 {
-		log.Info(fmt.Sprintf("the minimum max priority fee per gas required in transactions is %d", minTxPriorityFee))
+		log.Info(fmt.Sprintf("the minimum effective priority fee required in transactions is %d", minTxPriorityFee))
 	}
 
 	options := solo.Options{

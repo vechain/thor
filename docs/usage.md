@@ -187,7 +187,7 @@ bin/thor -h
 | `--enable-admin`                         | Enables the admin server                                                                             |
 | `--admin-addr`                           | Admin service listening address                                                                      |
 | `--txpool-limit-per-account`             | Transaction pool size limit per account                                                              |
-| `--minimum-max-priority-fee-per-gas`     | Minimum max priority fee per gas for all transactions (default: 0)                                   |
+| `--minimum-effective-priority-fee`       | Minimum effective priority fee for all transactions (default: 0)                                     |
 | `--help, -h`                             | Show help                                                                                            |
 | `--version, -v`                          | Print the version                                                                                    |
 

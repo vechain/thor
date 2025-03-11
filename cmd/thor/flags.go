@@ -183,10 +183,10 @@ var (
 		Usage: "comma separated list of allowed API tracers(none,all,call,prestate etc.)",
 	}
 
-	minMaxPriorityFeePerGasFlag = cli.Uint64Flag{
-		Name:  "minimum-max-priority-fee-per-gas",
+	minEffectivePriorityFeeFlag = cli.Uint64Flag{
+		Name:  "minimum-effective-priority-fee",
 		Value: 0,
-		Usage: "minimum max priority fee per gas for all transactions",
+		Usage: "minimum effective priority fee for all transactions",
 	}
 
 	// solo mode only flags
