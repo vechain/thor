@@ -138,10 +138,6 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 					continue
 				}
 				txsToRemove = append(txsToRemove, trx)
-				metricTransactionTypeCounter().AddWithLabel(1, map[string]string{"type": fmt.Sprintf("%d", trx.Type())})
-				if trx.Type() == tx.TypeDynamicFee {
-					metricPriorityFeeBucket().Observe(trx.MaxPriorityFeePerGas().Int64())
-				}
 			}
 		}
 
