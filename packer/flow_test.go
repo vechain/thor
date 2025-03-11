@@ -365,9 +365,12 @@ func TestAdoptAfterGalacticaLowerBaseFeeThreshold(t *testing.T) {
 	fmt.Println(best.Header().BaseFee())
 }
 
-func TestAdoptAfterGalacticaRequireMaxPriorityFee(t *testing.T) {
-	forkConfig := thor.ForkConfig{GALACTICA: 1}
-	chain, err := testchain.NewWithFork(forkConfig)
+func TestAdoptAfterGalacticaEffectivePriorityFee(t *testing.T) {
+	config := genesis.DevConfig{
+		ForkConfig:      thor.ForkConfig{GALACTICA: 1},
+		KeyBaseGasPrice: new(big.Int).Add(big.NewInt(1), big.NewInt(thor.InitialBaseFee)),
+	}
+	chain, err := testchain.NewIntegrationTestChain(config)
 	assert.NoError(t, err)
 
 	// Mint a block to activate Galactica fork
@@ -389,7 +392,7 @@ func TestAdoptAfterGalacticaRequireMaxPriorityFee(t *testing.T) {
 	txNoPriorityFee = tx.MustSign(txNoPriorityFee, genesis.DevAccounts()[0].PrivateKey)
 
 	// Create a transaction with dynamic fee type and max priority fee
-	maxPriorityFeePerGas := big.NewInt(1)
+	maxPriorityFeePerGas := big.NewInt(3)
 	txPriorityFee := tx.NewTxBuilder(tx.TypeDynamicFee).
 		ChainTag(chain.Repo().ChainTag()).
 		Nonce(2).
@@ -403,14 +406,14 @@ func TestAdoptAfterGalacticaRequireMaxPriorityFee(t *testing.T) {
 	// Create a legacy transaction
 	txLegacy := tx.NewTxBuilder(tx.TypeLegacy).
 		ChainTag(chain.Repo().ChainTag()).
-		Nonce(3).
+		Nonce(1).
 		Gas(21000).
 		Expiration(100).
 		GasPriceCoef(0).
 		MustBuild()
 	txLegacy = tx.MustSign(txLegacy, genesis.DevAccounts()[0].PrivateKey)
 
-	// Create a legacy transaction with "max priority fee" (gas price coef)
+	// Create a legacy transaction with "fees" (gas price coef)
 	txLegacyWithGasPriceCoef := tx.NewTxBuilder(tx.TypeLegacy).
 		ChainTag(chain.Repo().ChainTag()).
 		Nonce(3).
@@ -422,9 +425,9 @@ func TestAdoptAfterGalacticaRequireMaxPriorityFee(t *testing.T) {
 
 	// Last parameter is true, which means that all txs require max priority fee
 	proposer := genesis.DevAccounts()[0]
-	pckr := packer.New(chain.Repo(), chain.Stater(), proposer.Address, &proposer.Address, forkConfig)
+	pckr := packer.New(chain.Repo(), chain.Stater(), proposer.Address, &proposer.Address, config.ForkConfig)
 
-	flow, _ := pckr.Schedule(best, uint64(time.Now().Unix()), 1)
+	flow, _ := pckr.Schedule(best, uint64(time.Now().Unix()), 2)
 
 	expectedErrorMessage := "bad tx: effective priority fee too low"
 	if err := flow.Adopt(txNoPriorityFee); err.Error() != expectedErrorMessage {
