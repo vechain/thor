@@ -266,6 +266,7 @@ func parseGenesisFile(uri string) (*genesis.Genesis, thor.ForkConfig, error) {
 			return nil, thor.ForkConfig{}, errors.Wrap(err, "open genesis file")
 		}
 		defer file.Close()
+		reader = file
 	}
 
 	decoder := json.NewDecoder(reader)
