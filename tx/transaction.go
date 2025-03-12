@@ -12,9 +12,8 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"sync/atomic"
-
 	"slices"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
