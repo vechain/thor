@@ -655,7 +655,7 @@ func TestCall(t *testing.T) {
 	assert.Nil(t, err)
 }
 
-func getMockTx(repo *chain.Repository, txType tx.TxType, t *testing.T) *tx.Transaction {
+func getMockTx(repo *chain.Repository, txType tx.Type, t *testing.T) *tx.Transaction {
 	var blockRef = tx.NewBlockRef(0)
 	var chainTag = repo.ChainTag()
 	var expiration = uint32(10)
@@ -679,7 +679,7 @@ func getMockTx(repo *chain.Repository, txType tx.TxType, t *testing.T) *tx.Trans
 	return tx
 }
 
-func GetMockFailedTx(txType tx.TxType) *tx.Transaction {
+func GetMockFailedTx(txType tx.Type) *tx.Transaction {
 	to, _ := thor.ParseAddress("0x7567d83b7b8d80addcb281a71d54fc7b3364ffed")
 	return tx.NewTxBuilder(txType).ChainTag(1).
 		BlockRef(tx.BlockRef{0, 0, 0, 0, 0xaa, 0xbb, 0xcc, 0xdd}).
@@ -730,7 +730,7 @@ func TestExecuteTransactionFailure(t *testing.T) {
 	originEnergy.SetString("9000000000000000000000000000000000000", 10)
 	state.SetEnergy(origin.Address, originEnergy, 0)
 
-	for _, txType := range []tx.TxType{tx.TypeLegacy, tx.TypeDynamicFee} {
+	for _, txType := range []tx.Type{tx.TypeLegacy, tx.TypeDynamicFee} {
 		tx := GetMockFailedTx(txType)
 
 		rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.NoFork)
