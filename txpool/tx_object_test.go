@@ -29,12 +29,12 @@ func newChainRepo(db *muxdb.MuxDB) *chain.Repository {
 	return repo
 }
 
-func newTx(txType tx.TxType, chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, features tx.Features, from genesis.DevAccount) *tx.Transaction {
+func newTx(txType tx.Type, chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, features tx.Features, from genesis.DevAccount) *tx.Transaction {
 	trx := txBuilder(txType, chainTag, clauses, gas, blockRef, expiration, dependsOn, features).MustBuild()
 	return tx.MustSign(trx, from.PrivateKey)
 }
 
-func newDelegatedTx(txType tx.TxType, chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, from genesis.DevAccount, delegator genesis.DevAccount) *tx.Transaction {
+func newDelegatedTx(txType tx.Type, chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, from genesis.DevAccount, delegator genesis.DevAccount) *tx.Transaction {
 	var features tx.Features
 	features.SetDelegated(true)
 
@@ -45,7 +45,7 @@ func newDelegatedTx(txType tx.TxType, chainTag byte, clauses []*tx.Clause, gas u
 	)
 }
 
-func txBuilder(txType tx.TxType, chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, features tx.Features) *tx.Builder {
+func txBuilder(txType tx.Type, chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, features tx.Features) *tx.Builder {
 	builder := tx.NewTxBuilder(txType).ChainTag(chainTag)
 	for _, c := range clauses {
 		builder.Clause(c)

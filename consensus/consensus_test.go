@@ -28,7 +28,7 @@ import (
 	"github.com/vechain/thor/v2/vrf"
 )
 
-func txBuilder(tag byte, txType tx.TxType) *tx.Builder {
+func txBuilder(tag byte, txType tx.Type) *tx.Builder {
 	address := thor.BytesToAddress([]byte("addr"))
 	return tx.NewTxBuilder(txType).
 		GasPriceCoef(1).
