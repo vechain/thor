@@ -546,16 +546,16 @@ func initDebugServer(t *testing.T) {
 
 	// Adding an empty clause transaction to the block to cover the case of
 	// scanning multiple txs before getting the right one
-	noClausesTx := tx.NewTxBuilder(tx.TypeLegacy).
+	noClausesTx := tx.NewBuilder(tx.TypeLegacy).
 		ChainTag(thorChain.Repo().ChainTag()).
 		Expiration(10).
 		Gas(21000).
-		MustBuild()
+		Build()
 	noClausesTx = tx.MustSign(noClausesTx, genesis.DevAccounts()[0].PrivateKey)
 
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 	cla2 := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	transaction = tx.NewTxBuilder(tx.TypeLegacy).
+	transaction = tx.NewBuilder(tx.TypeLegacy).
 		ChainTag(thorChain.Repo().ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -564,11 +564,11 @@ func initDebugServer(t *testing.T) {
 		Clause(cla).
 		Clause(cla2).
 		BlockRef(tx.NewBlockRef(0)).
-		MustBuild()
+		Build()
 	transaction = tx.MustSign(transaction, genesis.DevAccounts()[0].PrivateKey)
 	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], transaction, noClausesTx))
 
-	dynFeeTx := tx.NewTxBuilder(tx.TypeDynamicFee).
+	dynFeeTx := tx.NewBuilder(tx.TypeDynamicFee).
 		ChainTag(thorChain.Repo().ChainTag()).
 		Expiration(10).
 		Gas(21000).
@@ -577,7 +577,7 @@ func initDebugServer(t *testing.T) {
 		Nonce(1).
 		Clause(cla).
 		BlockRef(tx.NewBlockRef(0)).
-		MustBuild()
+		Build()
 	dynFeeTx = tx.MustSign(
 		dynFeeTx,
 		genesis.DevAccounts()[0].PrivateKey,

@@ -77,7 +77,7 @@ func initChain(t *testing.T) *testchain.Chain {
 
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	tr := tx.NewTxBuilder(tx.TypeLegacy).
+	tr := tx.NewBuilder(tx.TypeLegacy).
 		ChainTag(thorChain.Repo().ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -85,11 +85,11 @@ func initChain(t *testing.T) *testchain.Chain {
 		Nonce(1).
 		Clause(cla).
 		BlockRef(tx.NewBlockRef(0)).
-		MustBuild()
+		Build()
 	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], tr))
 
-	txDeploy := tx.NewTxBuilder(tx.TypeDynamicFee).
+	txDeploy := tx.NewBuilder(tx.TypeDynamicFee).
 		ChainTag(thorChain.Repo().ChainTag()).
 		MaxFeePerGas(big.NewInt(thor.InitialBaseFee)).
 		Expiration(100).
@@ -97,7 +97,7 @@ func initChain(t *testing.T) *testchain.Chain {
 		Nonce(3).
 		Clause(tx.NewClause(nil).WithData(common.Hex2Bytes(eventcontract.HexBytecode))).
 		BlockRef(tx.NewBlockRef(0)).
-		MustBuild()
+		Build()
 	txDeploy = tx.MustSign(txDeploy, genesis.DevAccounts()[0].PrivateKey)
 	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], txDeploy))
 

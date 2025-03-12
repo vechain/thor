@@ -104,7 +104,7 @@ func initFeesServer(t *testing.T, backtraceLimit int, fixedCacheSize int, number
 	var dynFeeTx *tx.Transaction
 
 	for i := range numberOfBlocks - 1 {
-		dynFeeTx = tx.NewTxBuilder(tx.TypeDynamicFee).
+		dynFeeTx = tx.NewBuilder(tx.TypeDynamicFee).
 			ChainTag(thorChain.Repo().ChainTag()).
 			MaxFeePerGas(big.NewInt(250_000_000_000_000)).
 			MaxPriorityFeePerGas(big.NewInt(100)).
@@ -113,7 +113,7 @@ func initFeesServer(t *testing.T, backtraceLimit int, fixedCacheSize int, number
 			Nonce(uint64(i)).
 			Clause(cla).
 			BlockRef(tx.NewBlockRef(uint32(i))).
-			MustBuild()
+			Build()
 		dynFeeTx = tx.MustSign(dynFeeTx, genesis.DevAccounts()[0].PrivateKey)
 		require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], dynFeeTx))
 	}
