@@ -222,7 +222,7 @@ func TestPendingTx_UnsubscribeOnWebSocketClose(t *testing.T) {
 	sub.pendingTx.mu.Unlock()
 }
 
-func createTx(repo *chain.Repository, addressNumber uint, txType tx.TxType) *tx.Transaction {
+func createTx(repo *chain.Repository, addressNumber uint, txType tx.Type) *tx.Transaction {
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 

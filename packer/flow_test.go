@@ -26,7 +26,7 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func createTx(txType tx.TxType, chainTag byte, gasPriceCoef uint8, expiration uint32, gas uint64, nonce uint64, dependsOn *thor.Bytes32, clause *tx.Clause, br tx.BlockRef) *tx.Transaction {
+func createTx(txType tx.Type, chainTag byte, gasPriceCoef uint8, expiration uint32, gas uint64, nonce uint64, dependsOn *thor.Bytes32, clause *tx.Clause, br tx.BlockRef) *tx.Transaction {
 	builder := tx.NewTxBuilder(txType).
 		ChainTag(chainTag).
 		GasPriceCoef(gasPriceCoef).
