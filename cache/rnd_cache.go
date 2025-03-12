@@ -13,7 +13,7 @@ import (
 // RandCache a simple cache which randomly evicts entries when
 // length exceeds limit.
 type RandCache struct {
-	m     map[interface{}]*randEntry
+	m     map[any]*randEntry
 	s     []*randEntry
 	limit int
 	lock  sync.Mutex
@@ -30,7 +30,7 @@ func NewRandCache(limit int) *RandCache {
 		panic("invalid limit for RandCache")
 	}
 	return &RandCache{
-		m:     make(map[interface{}]*randEntry),
+		m:     make(map[any]*randEntry),
 		limit: limit,
 	}
 }
@@ -44,7 +44,7 @@ func (rc *RandCache) Len() int {
 }
 
 // Set sets value for given key.
-func (rc *RandCache) Set(key, value interface{}) {
+func (rc *RandCache) Set(key, value any) {
 	rc.lock.Lock()
 	defer rc.lock.Unlock()
 
@@ -68,7 +68,7 @@ func (rc *RandCache) Set(key, value interface{}) {
 }
 
 // Get get value for the given key.
-func (rc *RandCache) Get(key interface{}) (interface{}, bool) {
+func (rc *RandCache) Get(key any) (any, bool) {
 	rc.lock.Lock()
 	defer rc.lock.Unlock()
 
@@ -79,7 +79,7 @@ func (rc *RandCache) Get(key interface{}) (interface{}, bool) {
 }
 
 // Contains returns whether the given key is contained.
-func (rc *RandCache) Contains(key interface{}) bool {
+func (rc *RandCache) Contains(key any) bool {
 	rc.lock.Lock()
 	defer rc.lock.Unlock()
 	_, ok := rc.m[key]
@@ -87,7 +87,7 @@ func (rc *RandCache) Contains(key interface{}) bool {
 }
 
 // Remove removes key.
-func (rc *RandCache) Remove(key interface{}) bool {
+func (rc *RandCache) Remove(key any) bool {
 	rc.lock.Lock()
 	defer rc.lock.Unlock()
 	return rc.remove(key)
@@ -120,7 +120,7 @@ func (rc *RandCache) ForEach(cb func(*Entry) bool) bool {
 	return true
 }
 
-func (rc *RandCache) remove(key interface{}) bool {
+func (rc *RandCache) remove(key any) bool {
 	if ent, ok := rc.m[key]; ok {
 		delete(rc.m, key)
 		last := rc.s[len(rc.s)-1]

@@ -6,6 +6,8 @@
 package block
 
 import (
+	"slices"
+
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
@@ -78,7 +80,7 @@ func (b *Builder) TransactionFeatures(features tx.Features) *Builder {
 
 // Alpha set the alpha.
 func (b *Builder) Alpha(alpha []byte) *Builder {
-	b.headerBody.Extension.Alpha = append([]byte(nil), alpha...)
+	b.headerBody.Extension.Alpha = slices.Clone(alpha)
 	return b
 }
 

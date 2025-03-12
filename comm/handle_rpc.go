@@ -19,7 +19,7 @@ import (
 )
 
 // peer will be disconnected if error returned
-func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{}), txsToSync *txsToSync) (err error) {
+func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(any), txsToSync *txsToSync) (err error) {
 	log := peer.logger.New("msg", proto.MsgName(msg.Code))
 	log.Trace("received RPC call")
 	defer func() {

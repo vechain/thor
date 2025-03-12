@@ -31,7 +31,7 @@ func NewLevelEngine(db *leveldb.DB) Engine {
 	return &LevelEngine{
 		db,
 		&sync.Pool{
-			New: func() interface{} {
+			New: func() any {
 				return &leveldb.Batch{}
 			},
 		},

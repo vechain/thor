@@ -42,7 +42,7 @@ func TestMessageCache_GetOrAdd(t *testing.T) {
 
 	counter := atomic.Int32{}
 	wg := sync.WaitGroup{}
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		wg.Add(1)
 		start := time.Now().Add(20 * time.Millisecond)
 		go func() {

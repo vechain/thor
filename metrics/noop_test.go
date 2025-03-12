@@ -28,20 +28,20 @@ func TestNoopMetrics(t *testing.T) {
 
 	count1.Add(1)
 	randCount2 := rand.N(100) + 1
-	for i := 0; i < randCount2; i++ {
+	for range randCount2 {
 		Counter("count2").Add(1)
 	}
 
 	hist := Histogram("hist1", nil)
 	histVect := HistogramVec("hist2", []string{"zeroOrOne"}, nil)
-	for i := 0; i < rand.N(100)+1; i++ {
+	for i := range rand.N(100) + 1 {
 		hist.Observe(int64(i))
 		histVect.ObserveWithLabels(int64(i), map[string]string{"thisIsNonsense": "butDoesntBreak"})
 	}
 
 	countVect := CounterVec("countVec1", []string{"zeroOrOne"})
 	gaugeVec := GaugeVec("gaugeVec1", []string{"zeroOrOne"})
-	for i := 0; i < rand.N(100)+1; i++ {
+	for i := range rand.N(100) + 1 {
 		countVect.AddWithLabel(int64(i), map[string]string{"thisIsNonsense": "butDoesntBreak"})
 		gaugeVec.AddWithLabel(int64(i), map[string]string{"thisIsNonsense": "butDoesntBreak"})
 	}

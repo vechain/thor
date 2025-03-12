@@ -93,14 +93,14 @@ const (
 )
 
 // ParseJSON parse a JSON object using strict mode.
-func ParseJSON(r io.Reader, v interface{}) error {
+func ParseJSON(r io.Reader, v any) error {
 	decoder := json.NewDecoder(r)
 	decoder.DisallowUnknownFields()
 	return decoder.Decode(v)
 }
 
 // WriteJSON response an object in JSON encoding.
-func WriteJSON(w http.ResponseWriter, obj interface{}) error {
+func WriteJSON(w http.ResponseWriter, obj any) error {
 	w.Header().Set("Content-Type", JSONContentType)
 	err := json.NewEncoder(w).Encode(obj)
 	if err != nil {
@@ -117,4 +117,4 @@ func HandleGone(w http.ResponseWriter, _ *http.Request) error {
 }
 
 // M shortcut for type map[string]interface{}.
-type M map[string]interface{}
+type M map[string]any

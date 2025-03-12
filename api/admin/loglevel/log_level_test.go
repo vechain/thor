@@ -21,7 +21,7 @@ import (
 type TestCase struct {
 	name             string
 	method           string
-	body             interface{}
+	body             any
 	expectedStatus   int
 	expectedLevel    string
 	expectedErrorMsg string

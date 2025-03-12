@@ -106,7 +106,7 @@ func warmupBlocks(ctx context.Context, fetched <-chan []*block.Block, warmedUp c
 				// send nil block to throttle to reduce mem pressure.
 				if len(warmedUp)*10 > cap(warmedUp) {
 					const targetSize = 2048
-					for i := 0; i < int(blk.Size())/targetSize-1; i++ {
+					for range int(blk.Size())/targetSize - 1 {
 						select {
 						case warmedUp <- nil:
 						default:

@@ -41,24 +41,24 @@ type ctest struct {
 }
 
 type ccase struct {
-	rt         *runtime.Runtime
-	abi        *abi.ABI
-	to, caller thor.Address
-	name       string
-	args       []interface{}
-	events     tx.Events
-	provedWork *big.Int
-	txID       thor.Bytes32
-	blockRef   tx.BlockRef
-	gasPayer   thor.Address
-	expiration uint32
+	rt          *runtime.Runtime
+	abi         *abi.ABI
+	to, caller  thor.Address
+	name        string
+	args        []any
+	events      tx.Events
+	provedWork  *big.Int
+	txID        thor.Bytes32
+	blockRef    tx.BlockRef
+	gasPayer    thor.Address
+	expiration  uint32
 	expectedGas uint64
 
-	output *[]interface{}
+	output *[]any
 	vmerr  error
 }
 
-func (c *ctest) Case(name string, args ...interface{}) *ccase {
+func (c *ctest) Case(name string, args ...any) *ccase {
 	return &ccase{
 		rt:     c.rt,
 		abi:    c.abi,
@@ -113,7 +113,7 @@ func (c *ccase) ShouldLog(events ...*tx.Event) *ccase {
 	return c
 }
 
-func (c *ccase) ShouldOutput(outputs ...interface{}) *ccase {
+func (c *ccase) ShouldOutput(outputs ...any) *ccase {
 	c.output = &outputs
 	return c
 }
@@ -159,7 +159,7 @@ func (c *ccase) Assert(t *testing.T) *ccase {
 	}
 
 	if c.expectedGas != 0 {
-		assert.Equal(t, c.expectedGas,  math.MaxUint64 - vmout.LeftOverGas)
+		assert.Equal(t, c.expectedGas, math.MaxUint64-vmout.LeftOverGas)
 	}
 
 	if c.output != nil {
@@ -915,7 +915,7 @@ func TestExtensionNative(t *testing.T) {
 
 	privKeys := make([]*ecdsa.PrivateKey, 2)
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		privateKey, _ := crypto.GenerateKey()
 		privKeys[i] = privateKey
 	}

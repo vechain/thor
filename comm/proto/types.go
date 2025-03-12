@@ -27,8 +27,8 @@ type (
 
 // RPC defines RPC interface.
 type RPC interface {
-	Notify(ctx context.Context, msgCode uint64, arg interface{}) error
-	Call(ctx context.Context, msgCode uint64, arg interface{}, result interface{}) error
+	Notify(ctx context.Context, msgCode uint64, arg any) error
+	Call(ctx context.Context, msgCode uint64, arg any, result any) error
 }
 
 // GetStatus get status of remote peer.

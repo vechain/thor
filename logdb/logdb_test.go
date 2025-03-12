@@ -132,7 +132,7 @@ func TestEvents(t *testing.T) {
 	var allEvents eventLogs
 	var allTransfers transferLogs
 
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		b = new(block.Builder).
 			ParentID(b.Header().ID()).
 			Transaction(newTx()).
@@ -140,7 +140,7 @@ func TestEvents(t *testing.T) {
 			Build()
 		receipts := tx.Receipts{newReceipt(), newReceipt()}
 
-		for j := 0; j < len(receipts); j++ {
+		for j := range receipts {
 			tx := b.Transactions()[j]
 			receipt := receipts[j]
 			origin, _ := tx.Origin()

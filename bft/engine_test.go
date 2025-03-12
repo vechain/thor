@@ -281,7 +281,7 @@ func TestNeverReachJustified(t *testing.T) {
 	assert.Equal(t, uint32(0), st.Quality)
 	assert.Equal(t, genesisID, testBFT.engine.Finalized())
 
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		if err := testBFT.fastForwardWithMinority(thor.CheckpointInterval); err != nil {
 			t.Fatal(err)
 		}
@@ -778,7 +778,7 @@ func TestJustifier(t *testing.T) {
 				}
 
 				// vote <threshold> times COM
-				for i := 0; i < MaxBlockProposers*2/3; i++ {
+				for range MaxBlockProposers * 2 / 3 {
 					vs.AddBlock(datagen.RandAddress(), true)
 				}
 
@@ -873,7 +873,7 @@ func TestJustified(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				for i := 0; i < 3*thor.CheckpointInterval; i++ {
+				for range 3 * thor.CheckpointInterval {
 					if err = testBFT.fastForwardWithMinority(1); err != nil {
 						t.Fatal(err)
 					}
@@ -891,7 +891,7 @@ func TestJustified(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				for i := 0; i < 2*thor.CheckpointInterval-2; i++ {
+				for range 2*thor.CheckpointInterval - 2 {
 					if err = testBFT.fastForward(1); err != nil {
 						t.Fatal(err)
 					}
@@ -1003,7 +1003,7 @@ func TestJustified(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				for i := 0; i < 2*thor.CheckpointInterval-2; i++ {
+				for range 2*thor.CheckpointInterval - 2 {
 					if err = testBFT.fastForward(1); err != nil {
 						t.Fatal(err)
 					}

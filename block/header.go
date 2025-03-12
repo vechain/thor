@@ -14,6 +14,8 @@ import (
 	"io"
 	"sync/atomic"
 
+	"slices"
+
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/v2/thor"
@@ -137,7 +139,7 @@ func (h *Header) SigningHash() (hash thor.Bytes32) {
 	defer func() { h.cache.signingHash.Store(hash) }()
 
 	return thor.Blake2bFn(func(w io.Writer) {
-		rlp.Encode(w, []interface{}{
+		rlp.Encode(w, []any{
 			&h.body.ParentID,
 			h.body.Timestamp,
 			h.body.GasLimit,
@@ -155,13 +157,13 @@ func (h *Header) SigningHash() (hash thor.Bytes32) {
 
 // Signature returns signature.
 func (h *Header) Signature() []byte {
-	return append([]byte(nil), h.body.Signature...)
+	return slices.Clone(h.body.Signature)
 }
 
 // withSignature create a new Header object with signature set.
 func (h *Header) withSignature(sig []byte) *Header {
 	cpy := Header{body: h.body}
-	cpy.body.Signature = append([]byte(nil), sig...)
+	cpy.body.Signature = slices.Clone(sig)
 	return &cpy
 }
 

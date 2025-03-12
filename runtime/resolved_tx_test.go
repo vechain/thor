@@ -32,7 +32,7 @@ func TestResolvedTx(t *testing.T) {
 
 	obValue := reflect.ValueOf(r)
 	obType := obValue.Type()
-	for i := 0; i < obValue.NumMethod(); i++ {
+	for i := range obValue.NumMethod() {
 		if strings.HasPrefix(obType.Method(i).Name, "Test") {
 			obValue.Method(i).Call(nil)
 		}
@@ -105,7 +105,7 @@ func (tr *testResolvedTransaction) TestCommonTo() {
 		return txBuilder(tr.repo.ChainTag())
 	}
 
-	commonTo := func(tx *tx.Transaction, assert func(interface{}, ...interface{}) bool) {
+	commonTo := func(tx *tx.Transaction, assert func(any, ...any) bool) {
 		resolve, err := runtime.ResolveTransaction(tx)
 		if err != nil {
 			tr.t.Fatal(err)

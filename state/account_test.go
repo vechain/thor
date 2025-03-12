@@ -16,7 +16,7 @@ import (
 	"github.com/vechain/thor/v2/trie"
 )
 
-func M(a ...interface{}) []interface{} {
+func M(a ...any) []any {
 	return a
 }
 

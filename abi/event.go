@@ -42,11 +42,11 @@ func (e *Event) Name() string {
 }
 
 // Encode encodes args to data.
-func (e *Event) Encode(args ...interface{}) ([]byte, error) {
+func (e *Event) Encode(args ...any) ([]byte, error) {
 	return e.argsWithoutIndexed.Pack(args...)
 }
 
 // Decode decodes event data.
-func (e *Event) Decode(data []byte, v interface{}) error {
+func (e *Event) Decode(data []byte, v any) error {
 	return e.argsWithoutIndexed.Unpack(v, data)
 }

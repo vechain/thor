@@ -131,7 +131,7 @@ func (d *Debug) prepareClauseEnv(ctx context.Context, block *block.Block, txID t
 }
 
 // trace an existed clause
-func (d *Debug) traceClause(ctx context.Context, tracer tracers.Tracer, block *block.Block, txID thor.Bytes32, clauseIndex uint32) (interface{}, error) {
+func (d *Debug) traceClause(ctx context.Context, tracer tracers.Tracer, block *block.Block, txID thor.Bytes32, clauseIndex uint32) (any, error) {
 	rt, txExec, txID, err := d.prepareClauseEnv(ctx, block, txID, clauseIndex)
 	if err != nil {
 		return nil, err
@@ -255,7 +255,7 @@ func (d *Debug) createTracer(name string, config json.RawMessage) (tracers.Trace
 	return nil, errors.New("tracer is not defined")
 }
 
-func (d *Debug) traceCall(ctx context.Context, tracer tracers.Tracer, header *block.Header, st *state.State, txCtx *xenv.TransactionContext, gas uint64, clause *tx.Clause) (interface{}, error) {
+func (d *Debug) traceCall(ctx context.Context, tracer tracers.Tracer, header *block.Header, st *state.State, txCtx *xenv.TransactionContext, gas uint64, clause *tx.Clause) (any, error) {
 	signer, _ := header.Signer()
 
 	rt := runtime.New(

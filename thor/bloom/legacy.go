@@ -59,7 +59,7 @@ func (b *LegacyBloom) Test(item []byte) bool {
 
 func (b *LegacyBloom) distribute(item []byte, cb func(index int, bit byte) bool) bool {
 	hash := thor.Blake2b(item)
-	for i := 0; i < b.K; i++ {
+	for i := range b.K {
 		d := (uint(hash[i*2+1]) + (uint(hash[i*2]) << 8)) % legacyBitsLength
 		bit := byte(1) << (d % 8)
 		if !cb(int(d/8), bit) {

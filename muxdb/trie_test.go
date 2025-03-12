@@ -232,7 +232,7 @@ func TestContextChecker(t *testing.T) {
 	checker := newContextChecker(ctx, 1) // Set small debounce for faster testing
 	cancel()
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		err := checker()
 		if err != nil {
 			assert.Equal(t, context.Canceled, err)

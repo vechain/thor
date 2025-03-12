@@ -16,7 +16,7 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func M(args ...interface{}) []interface{} {
+func M(args ...any) []any {
 	return args
 }
 
@@ -106,13 +106,13 @@ func TestConflicts(t *testing.T) {
 	b1 := newBlock(b0, 10)
 	repo.AddBlock(b1, nil, 0, false)
 
-	assert.Equal(t, []interface{}{uint32(1), nil}, M(repo.GetMaxBlockNum()))
-	assert.Equal(t, []interface{}{uint32(1), nil}, M(repo.ScanConflicts(1)))
+	assert.Equal(t, []any{uint32(1), nil}, M(repo.GetMaxBlockNum()))
+	assert.Equal(t, []any{uint32(1), nil}, M(repo.ScanConflicts(1)))
 
 	b1x := newBlock(b0, 20)
 	repo.AddBlock(b1x, nil, 1, false)
-	assert.Equal(t, []interface{}{uint32(1), nil}, M(repo.GetMaxBlockNum()))
-	assert.Equal(t, []interface{}{uint32(2), nil}, M(repo.ScanConflicts(1)))
+	assert.Equal(t, []any{uint32(1), nil}, M(repo.GetMaxBlockNum()))
+	assert.Equal(t, []any{uint32(2), nil}, M(repo.ScanConflicts(1)))
 }
 
 func TestScanHeads(t *testing.T) {

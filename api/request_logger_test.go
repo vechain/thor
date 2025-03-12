@@ -19,16 +19,16 @@ import (
 
 // mockLogger is a simple logger implementation for testing purposes
 type mockLogger struct {
-	loggedData []interface{}
+	loggedData []any
 }
 
-func (m *mockLogger) With(_ ...interface{}) log.Logger {
+func (m *mockLogger) With(_ ...any) log.Logger {
 	return m
 }
 
-func (m *mockLogger) Log(_ slog.Level, _ string, _ ...interface{}) {}
+func (m *mockLogger) Log(_ slog.Level, _ string, _ ...any) {}
 
-func (m *mockLogger) Trace(_ string, _ ...interface{}) {}
+func (m *mockLogger) Trace(_ string, _ ...any) {}
 
 func (m *mockLogger) Write(_ slog.Level, _ string, _ ...any) {}
 
@@ -38,23 +38,23 @@ func (m *mockLogger) Enabled(_ context.Context, _ slog.Level) bool {
 
 func (m *mockLogger) Handler() slog.Handler { return nil }
 
-func (m *mockLogger) New(_ ...interface{}) log.Logger { return m }
+func (m *mockLogger) New(_ ...any) log.Logger { return m }
 
-func (m *mockLogger) Debug(_ string, _ ...interface{}) {}
+func (m *mockLogger) Debug(_ string, _ ...any) {}
 
-func (m *mockLogger) Error(_ string, _ ...interface{}) {}
+func (m *mockLogger) Error(_ string, _ ...any) {}
 
-func (m *mockLogger) Crit(_ string, _ ...interface{}) {}
+func (m *mockLogger) Crit(_ string, _ ...any) {}
 
-func (m *mockLogger) Info(_ string, ctx ...interface{}) {
+func (m *mockLogger) Info(_ string, ctx ...any) {
 	m.loggedData = append(m.loggedData, ctx...)
 }
 
-func (m *mockLogger) Warn(_ string, ctx ...interface{}) {
+func (m *mockLogger) Warn(_ string, ctx ...any) {
 	m.loggedData = append(m.loggedData, ctx...)
 }
 
-func (m *mockLogger) GetLoggedData() []interface{} {
+func (m *mockLogger) GetLoggedData() []any {
 	return m.loggedData
 }
 

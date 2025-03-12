@@ -199,7 +199,7 @@ func TestGet(t *testing.T) {
 	updateString(trie, "dogglesworth", "cat")
 	db := newMemDatabase()
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		res := getString(trie, "dog")
 		if !bytes.Equal(res, []byte("puppy")) {
 			t.Errorf("expected puppy got %x", res)
@@ -371,7 +371,7 @@ func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
 	}
 
 	var steps randTest
-	for i := 0; i < size; i++ {
+	for i := range size {
 		step := randTestStep{op: r.Intn(opMax)}
 		switch step.op {
 		case opUpdate:
@@ -464,7 +464,7 @@ func benchGet(b *testing.B, commit bool) {
 		trie = New(root, db)
 	}
 	k := make([]byte, 32)
-	for i := 0; i < benchElemCount; i++ {
+	for i := range benchElemCount {
 		binary.LittleEndian.PutUint64(k, uint64(i))
 		trie.Update(k, k, nil)
 	}
@@ -501,24 +501,24 @@ func BenchmarkHash(b *testing.B) {
 
 	// Create a realistic account trie to hash
 	addresses := make([][20]byte, b.N)
-	for i := 0; i < len(addresses); i++ {
-		for j := 0; j < len(addresses[i]); j++ {
+	for i := range addresses {
+		for j := range len(addresses[i]) {
 			addresses[i][j] = byte(random.Intn(256))
 		}
 	}
 	accounts := make([][]byte, len(addresses))
-	for i := 0; i < len(accounts); i++ {
+	for i := range accounts {
 		var (
 			nonce   = uint64(random.Int63())
 			balance = new(big.Int).Rand(random, new(big.Int).Exp(common.Big2, common.Big256, nil))
 			root    = emptyRoot
 			code    = crypto.Keccak256(nil)
 		)
-		accounts[i], _ = rlp.EncodeToBytes([]interface{}{nonce, balance, root, code})
+		accounts[i], _ = rlp.EncodeToBytes([]any{nonce, balance, root, code})
 	}
 	// Insert the accounts into the trie and hash it
 	trie := new(Trie)
-	for i := 0; i < len(addresses); i++ {
+	for i := range addresses {
 		trie.Update(thor.Blake2b(addresses[i][:]).Bytes(), accounts[i], nil)
 	}
 	b.ResetTimer()

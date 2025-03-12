@@ -123,7 +123,7 @@ func (p *TxPool) housekeeping() {
 				executables, removed, err := p.wash(headSummary)
 				elapsed := mclock.Now() - startTime
 
-				ctx := []interface{}{
+				ctx := []any{
 					"len", poolLen,
 					"removed", removed,
 					"elapsed", common.PrettyDuration(elapsed),

@@ -58,7 +58,7 @@ func (c *Client) httpGET(url string) ([]byte, error) {
 	return c.httpRequest("GET", url, nil)
 }
 
-func (c *Client) httpPOST(url string, payload interface{}) ([]byte, error) {
+func (c *Client) httpPOST(url string, payload any) ([]byte, error) {
 	var data []byte
 
 	if _, ok := payload.([]byte); ok {

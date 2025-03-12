@@ -12,6 +12,8 @@ import (
 	"net"
 	"time"
 
+	"slices"
+
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -369,7 +371,7 @@ func (s *Server) fetchBootstrap() {
 			return err
 		}
 
-		bootnodes := append([]*discv5.Node(nil), s.bootstrapNodes...)
+		bootnodes := slices.Clone(s.bootstrapNodes)
 		bootnodes = append(bootnodes, remoteNodes...)
 		if err := s.discv5.SetFallbackNodes(bootnodes); err != nil {
 			return err

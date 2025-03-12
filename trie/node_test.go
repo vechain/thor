@@ -30,7 +30,7 @@ func benchmarkEncodeFullNode(b *testing.B, consensus, skipHash bool) {
 		f   = fullNode{}
 		buf []byte
 	)
-	for i := 0; i < 16; i++ {
+	for i := range 16 {
 		f.children[i] = &refNode{hash: datagen.RandomHash().Bytes()}
 	}
 	for i := 0; i < b.N; i++ {
@@ -81,7 +81,7 @@ func BenchmarkEncodeShortNodeConsensus(b *testing.B) {
 
 func benchmarkDecodeFullNode(b *testing.B, skipHash bool) {
 	f := fullNode{}
-	for i := 0; i < 16; i++ {
+	for i := range 16 {
 		f.children[i] = &refNode{hash: datagen.RandomHash().Bytes()}
 	}
 	enc := f.encode(nil, skipHash)
@@ -111,7 +111,7 @@ func BenchmarkDecodeShortNode(b *testing.B) {
 }
 
 type fNode struct {
-	Children [17]interface{}
+	Children [17]any
 }
 
 func (f *fNode) EncodeRLP(w io.Writer) error {
@@ -120,13 +120,13 @@ func (f *fNode) EncodeRLP(w io.Writer) error {
 
 type sNode struct {
 	Key []byte
-	Val interface{}
+	Val any
 }
 type vNode []byte
 type hNode []byte
 
 func TestRefNodeEncodeConsensus(t *testing.T) {
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		randHash := datagen.RandomHash()
 
 		h := hNode(randHash.Bytes())
@@ -141,7 +141,7 @@ func TestRefNodeEncodeConsensus(t *testing.T) {
 }
 
 func TestValueNodeEncodeConsensus(t *testing.T) {
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		randValue := datagen.RandBytes(datagen.RandIntN(30))
 
 		v := vNode(randValue)
@@ -156,7 +156,7 @@ func TestValueNodeEncodeConsensus(t *testing.T) {
 }
 
 func TestShortNodeEncodeConsensus(t *testing.T) {
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		randKey := datagen.RandBytes(datagen.RandIntN(32))
 		randValue := datagen.RandBytes(datagen.RandIntN(30))
 
@@ -171,7 +171,7 @@ func TestShortNodeEncodeConsensus(t *testing.T) {
 		assert.Equal(t, expected, actual)
 	}
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		randKey := datagen.RandBytes(datagen.RandIntN(32))
 		randHash := datagen.RandomHash()
 
@@ -187,7 +187,7 @@ func TestShortNodeEncodeConsensus(t *testing.T) {
 }
 
 func TestFullNodeEncodeConsensus(t *testing.T) {
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		randValue := datagen.RandBytes(datagen.RandIntN(30))
 
 		var (
@@ -195,7 +195,7 @@ func TestFullNodeEncodeConsensus(t *testing.T) {
 			full fullNode
 		)
 
-		for i := 0; i < 16; i++ {
+		for i := range 16 {
 			if datagen.RandIntN(2) == 1 {
 				randHash := datagen.RandomHash()
 
@@ -215,13 +215,13 @@ func TestFullNodeEncodeConsensus(t *testing.T) {
 		assert.Equal(t, expected, actual)
 	}
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		var (
 			f    fNode
 			full fullNode
 		)
 
-		for i := 0; i < 16; i++ {
+		for i := range 16 {
 			if datagen.RandIntN(2) == 1 {
 				randHash := datagen.RandomHash()
 
