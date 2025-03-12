@@ -37,7 +37,7 @@ func TestConvertLegacyTransaction_Success(t *testing.T) {
 
 	result := convertTransaction(transaction, header)
 	// Common fields
-	assert.Equal(t, (math.HexOrDecimal64)(transaction.Type()), result.TxType)
+	assert.Equal(t, transaction.Type(), result.Type)
 	assert.Equal(t, hexutil.Encode(br[:]), result.BlockRef)
 	assert.Equal(t, transaction.ChainTag(), result.ChainTag)
 	assert.Equal(t, transaction.Expiration(), result.Expiration)
@@ -78,7 +78,7 @@ func TestConvertDynTransaction_Success(t *testing.T) {
 
 	result := convertTransaction(transaction, header)
 	// Common fields
-	assert.Equal(t, (math.HexOrDecimal64)(transaction.Type()), result.TxType)
+	assert.Equal(t, transaction.Type(), result.Type)
 	assert.Equal(t, hexutil.Encode(br[:]), result.BlockRef)
 	assert.Equal(t, transaction.ChainTag(), result.ChainTag)
 	assert.Equal(t, transaction.Expiration(), result.Expiration)
