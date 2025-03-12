@@ -21,7 +21,7 @@ import (
 )
 
 func TestErrorWhileRetrievingTxOriginInConvertReceipt(t *testing.T) {
-	txTypes := []tx.TxType{tx.TypeLegacy, tx.TypeDynamicFee}
+	txTypes := []tx.Type{tx.TypeLegacy, tx.TypeDynamicFee}
 
 	for _, txType := range txTypes {
 		tr := tx.NewTxBuilder(txType).MustBuild()
@@ -119,7 +119,7 @@ func newReceipt() *tx.Receipt {
 	}
 }
 
-func newTx(clause *tx.Clause, txType tx.TxType) *tx.Transaction {
+func newTx(clause *tx.Clause, txType tx.Type) *tx.Transaction {
 	tx := tx.NewTxBuilder(txType).
 		Clause(clause).
 		MustBuild()
