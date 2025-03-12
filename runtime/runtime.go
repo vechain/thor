@@ -106,13 +106,14 @@ func New(
 		currentChainConfig.ChainID = new(big.Int).SetBytes(chain.GenesisID().Bytes())
 	}
 
-	// alloc precompiled contracts
+	// alloc precompiled contracts and update builtin contracts
 	if forkConfig.GALACTICA == ctx.Number {
 		for addr := range vm.PrecompiledContractsGalactica {
 			if err := state.SetCode(thor.Address(addr), EmptyRuntimeBytecode); err != nil {
 				panic(err)
 			}
 		}
+		// upgrade extension contract to V3
 		if err := state.SetCode(builtin.Extension.Address, builtin.Extension.V3.RuntimeBytecodes()); err != nil {
 			panic(err)
 		}
@@ -122,19 +123,16 @@ func New(
 				panic(err)
 			}
 		}
+	} else if forkConfig.VIP191 == ctx.Number {
+		// upgrade extension contract to V2
+		if err := state.SetCode(builtin.Extension.Address, builtin.Extension.V2.RuntimeBytecodes()); err != nil {
+			panic(err)
+		}
 	} else if ctx.Number == 0 {
 		for addr := range vm.PrecompiledContractsByzantium {
 			if err := state.SetCode(thor.Address(addr), EmptyRuntimeBytecode); err != nil {
 				panic(err)
 			}
-		}
-	}
-
-	// VIP191
-	if forkConfig.VIP191 == ctx.Number {
-		// upgrade extension contract to V2
-		if err := state.SetCode(builtin.Extension.Address, builtin.Extension.V2.RuntimeBytecodes()); err != nil {
-			panic(err)
 		}
 	}
 
