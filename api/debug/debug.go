@@ -446,7 +446,7 @@ func (d *Debug) handleTraceCallOption(opt *TraceCallOption) (*xenv.TransactionCo
 
 	txCtx := xenv.TransactionContext{
 		ClauseCount: 1,
-		Expiration: opt.Expiration,
+		Expiration:  opt.Expiration,
 	}
 	if opt.GasPrice == nil {
 		txCtx.GasPrice = new(big.Int)
