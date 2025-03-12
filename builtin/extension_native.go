@@ -133,13 +133,13 @@ func init() {
 			output := env.TransactionContext().GasPayer
 			return []any{output}
 		}},
-		{"native_txClauseIndex", func(env *xenv.Environment) []interface{} {
+		{"native_txClauseIndex", func(env *xenv.Environment) []any {
 			output := env.ClauseIndex()
-			return []interface{}{output}
+			return []any{output}
 		}},
-		{"native_txClauseCount", func(env *xenv.Environment) []interface{} {
+		{"native_txClauseCount", func(env *xenv.Environment) []any {
 			output := env.TransactionContext().ClauseCount
-			return []interface{}{output}
+			return []any{output}
 		}},
 	}
 
