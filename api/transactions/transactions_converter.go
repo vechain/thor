@@ -15,7 +15,7 @@ import (
 
 type Transaction struct {
 	ID                   thor.Bytes32          `json:"id"`
-	TxType               math.HexOrDecimal64   `json:"txType"`
+	Type                 uint8                 `json:"type"`
 	ChainTag             byte                  `json:"chainTag"`
 	BlockRef             string                `json:"blockRef"`
 	Expiration           uint32                `json:"expiration"`
@@ -45,7 +45,7 @@ func convertTransaction(trx *tx.Transaction, header *block.Header) *Transaction 
 	br := trx.BlockRef()
 	t := &Transaction{
 		ChainTag:   trx.ChainTag(),
-		TxType:     math.HexOrDecimal64(trx.Type()),
+		Type:       trx.Type(),
 		ID:         trx.ID(),
 		Origin:     origin,
 		BlockRef:   hexutil.Encode(br[:]),
