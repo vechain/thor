@@ -45,6 +45,13 @@ var (
 	errBFTRejected                 = errors.New("block rejected by BFT engine")
 )
 
+// Options options for tx pool.
+type Options struct {
+	TargetGasLimit   uint64
+	SkipLogs         bool
+	MinTxPriorityFee uint64
+}
+
 type Node struct {
 	packer         *packer.Packer
 	cons           *consensus.Consensus
@@ -58,6 +65,7 @@ type Node struct {
 	targetGasLimit uint64
 	skipLogs       bool
 	forkConfig     *thor.ForkConfig
+	options        Options
 
 	logDBFailed bool
 	bandwidth   bandwidth.Bandwidth
@@ -75,23 +83,21 @@ func New(
 	txPool *txpool.TxPool,
 	txStashPath string,
 	comm *comm.Communicator,
-	targetGasLimit uint64,
-	skipLogs bool,
 	forkConfig *thor.ForkConfig,
+	options Options,
 ) *Node {
 	return &Node{
-		packer:         packer.New(repo, stater, master.Address(), master.Beneficiary, forkConfig),
-		cons:           consensus.New(repo, stater, forkConfig),
-		master:         master,
-		repo:           repo,
-		bft:            bft,
-		logDB:          logDB,
-		txPool:         txPool,
-		txStashPath:    txStashPath,
-		comm:           comm,
-		targetGasLimit: targetGasLimit,
-		skipLogs:       skipLogs,
-		forkConfig:     forkConfig,
+		packer:      packer.New(repo, stater, master.Address(), master.Beneficiary, forkConfig, options.MinTxPriorityFee),
+		cons:        consensus.New(repo, stater, forkConfig),
+		master:      master,
+		repo:        repo,
+		bft:         bft,
+		logDB:       logDB,
+		txPool:      txPool,
+		txStashPath: txStashPath,
+		comm:        comm,
+		forkConfig:  forkConfig,
+		options:     options,
 	}
 }
 
@@ -349,7 +355,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		} else {
 			becomeNewBest = newBlock.Header().BetterThan(oldBest.Header)
 		}
-		logEnabled := becomeNewBest && !n.skipLogs && !n.logDBFailed
+		logEnabled := becomeNewBest && !n.options.SkipLogs && !n.logDBFailed
 		isTrunk = &becomeNewBest
 
 		execElapsed := mclock.Now() - startTime
