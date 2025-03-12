@@ -102,6 +102,7 @@ func main() {
 			enableAdminFlag,
 			txPoolLimitPerAccountFlag,
 			allowedTracersFlag,
+			minEffectivePriorityFeeFlag,
 		},
 		Action: defaultAction,
 		Commands: []cli.Command{
@@ -140,6 +141,7 @@ func main() {
 					adminAddrFlag,
 					enableAdminFlag,
 					allowedTracersFlag,
+					minEffectivePriorityFeeFlag,
 				},
 				Action: soloAction,
 			},
@@ -295,6 +297,17 @@ func defaultAction(ctx *cli.Context) error {
 		defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
 	}
 
+	minTxPriorityFee := ctx.Uint64(minEffectivePriorityFeeFlag.Name)
+	if minTxPriorityFee > 0 {
+		log.Info(fmt.Sprintf("the minimum effective priority fee required in transactions is %d wei", minTxPriorityFee))
+	}
+
+	options := node.Options{
+		SkipLogs:         skipLogs,
+		MinTxPriorityFee: minTxPriorityFee,
+		TargetGasLimit:   ctx.Uint64(targetGasLimitFlag.Name),
+	}
+
 	return node.New(
 		master,
 		repo,
@@ -304,9 +317,8 @@ func defaultAction(ctx *cli.Context) error {
 		txPool,
 		filepath.Join(instanceDir, "tx.stash"),
 		p2pCommunicator.Communicator(),
-		ctx.Uint64(targetGasLimitFlag.Name),
-		skipLogs,
 		forkConfig,
+		options,
 	).Run(exitSignal)
 }
 
@@ -462,15 +474,25 @@ func soloAction(ctx *cli.Context) error {
 		defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
 	}
 
+	minTxPriorityFee := ctx.Uint64(minEffectivePriorityFeeFlag.Name)
+	if minTxPriorityFee > 0 {
+		log.Info(fmt.Sprintf("the minimum effective priority fee required in transactions is %d wei", minTxPriorityFee))
+	}
+
+	options := solo.Options{
+		GasLimit:         ctx.Uint64(gasLimitFlag.Name),
+		SkipLogs:         skipLogs,
+		MinTxPriorityFee: minTxPriorityFee,
+		OnDemand:         onDemandBlockProduction,
+		BlockInterval:    blockProductionInterval,
+	}
+
 	return solo.New(repo,
 		state.NewStater(mainDB),
 		logDB,
 		txPool,
-		ctx.Uint64(gasLimitFlag.Name),
-		onDemandBlockProduction,
-		skipLogs,
-		blockProductionInterval,
-		forkConfig).Run(exitSignal)
+		forkConfig,
+		options).Run(exitSignal)
 }
 
 func masterKeyAction(ctx *cli.Context) error {

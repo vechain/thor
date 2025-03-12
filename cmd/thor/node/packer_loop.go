@@ -39,12 +39,12 @@ func (n *Node) packerLoop(ctx context.Context) {
 		ticker     = n.repo.NewTicker()
 	)
 
-	n.packer.SetTargetGasLimit(n.targetGasLimit)
+	n.packer.SetTargetGasLimit(n.options.TargetGasLimit)
 
 	for {
 		now := uint64(time.Now().Unix())
 
-		if n.targetGasLimit == 0 {
+		if n.options.TargetGasLimit == 0 {
 			// no preset, use suggested
 			// apply soft limit in adaptive mode
 			suggested := min(n.bandwidth.SuggestGasLimit(), gasLimitSoftLimit)
@@ -121,7 +121,7 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 	return n.guardBlockProcessing(flow.Number(), func(conflicts uint32) error {
 		var (
 			startTime  = mclock.Now()
-			logEnabled = !n.skipLogs && !n.logDBFailed
+			logEnabled = !n.options.SkipLogs && !n.logDBFailed
 			oldBest    = n.repo.BestBlockSummary()
 		)
 

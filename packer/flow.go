@@ -7,6 +7,7 @@ package packer
 
 import (
 	"crypto/ecdsa"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
@@ -89,6 +90,26 @@ func (f *Flow) hasTx(txid thor.Bytes32, txBlockRef uint32) (bool, error) {
 	return f.runtime.Chain().HasTransaction(txid, txBlockRef)
 }
 
+func (f *Flow) isEffectivePriorityFeeTooLow(t *tx.Transaction, baseGasPrice *big.Int, isGalactica bool) error {
+	// Skip check if the minimum priority fee is not set
+	if f.packer.minTxPriorityFee.Sign() <= 0 {
+		return nil
+	}
+
+	provedWork, err := t.ProvedWork(f.Number()-1, f.runtime.Chain().GetBlockID)
+	if err != nil {
+		return err
+	}
+	effectivePriorityFee := fork.GalacticaPriorityPrice(
+		t, baseGasPrice, provedWork, &fork.GalacticaItems{IsActive: isGalactica, BaseFee: f.runtime.Context().BaseFee})
+
+	if effectivePriorityFee.Cmp(f.packer.minTxPriorityFee) < 0 {
+		return badTxError{"effective priority fee too low"}
+	}
+
+	return nil
+}
+
 // Adopt try to execute the given transaction.
 // If the tx is valid and can be executed on current state (regardless of VM error),
 // it will be adopted by the new block.
@@ -140,6 +161,10 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 		}
 		if err := fork.ValidateGalacticaTxFee(t, f.runtime.Context().BaseFee, baseGasPrice); err != nil {
 			return errTxNotAdoptableNow
+		}
+
+		if err := f.isEffectivePriorityFeeTooLow(t, baseGasPrice, true); err != nil {
+			return err
 		}
 	}
 

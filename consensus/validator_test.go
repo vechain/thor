@@ -118,7 +118,7 @@ func TestValidateBlock(t *testing.T) {
 				tr := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).BlockRef(tx.NewBlockRef(10)).MaxFeePerGas(new(big.Int).Sub(baseFee, common.Big1)).MustBuild()
 				blk := new(block.Builder).BaseFee(baseFee).Transaction(tr).Build()
 
-				c := New(repo, stater, thor.ForkConfig{GALACTICA: 0})
+				c := New(repo, stater, &thor.ForkConfig{GALACTICA: 0})
 				s, r, err := c.verifyBlock(blk, state, 0)
 				assert.Nil(t, s)
 				assert.Nil(t, r)

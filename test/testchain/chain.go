@@ -75,17 +75,17 @@ var DefaultForkConfig = thor.ForkConfig{
 
 // NewDefault is a wrapper function that creates a Chain for testing with the default fork config.
 func NewDefault() (*Chain, error) {
-	return newIntegrationTestChain(DefaultForkConfig)
+	return NewIntegrationTestChain(genesis.DevConfig{ForkConfig: DefaultForkConfig})
 }
 
 // NewWithFork is a wrapper function that creates a Chain for testing with custom forkConfig.
 func NewWithFork(forkConfig thor.ForkConfig) (*Chain, error) {
-	return newIntegrationTestChain(forkConfig)
+	return NewIntegrationTestChain(genesis.DevConfig{ForkConfig: forkConfig})
 }
 
 // newIntegrationTestChain is a convenience function that creates a Chain for testing.
 // It uses an in-memory database, development network genesis, and a solo BFT engine.
-func newIntegrationTestChain(forkConfig thor.ForkConfig) (*Chain, error) {
+func NewIntegrationTestChain(config genesis.DevConfig) (*Chain, error) {
 	// Initialize the database
 	db := muxdb.NewMem()
 
@@ -93,7 +93,7 @@ func newIntegrationTestChain(forkConfig thor.ForkConfig) (*Chain, error) {
 	stater := state.NewStater(db)
 
 	// Initialize the genesis and retrieve the genesis block
-	gene := genesis.NewDevnetWithConfigAndLaunchtime(&forkConfig, uint64(time.Now().Unix()))
+	gene := genesis.NewDevnetWithConfigAndLaunchtime(config, uint64(time.Now().Unix()))
 	geneBlk, _, _, err := gene.Build(stater)
 	if err != nil {
 		return nil, err
@@ -119,7 +119,7 @@ func newIntegrationTestChain(forkConfig thor.ForkConfig) (*Chain, error) {
 		stater,
 		geneBlk,
 		logDb,
-		&forkConfig,
+		&config.ForkConfig,
 	), nil
 }
 
@@ -176,7 +176,7 @@ func (c *Chain) MintClauses(account genesis.DevAccount, clauses []*tx.Clause) er
 // It schedules a new block, adopts transactions, packs them into a block, and commits it to the chain.
 func (c *Chain) MintBlock(account genesis.DevAccount, transactions ...*tx.Transaction) error {
 	// Create a new block packer with the current chain state and account information.
-	blkPacker := packer.New(c.Repo(), c.Stater(), account.Address, &genesis.DevAccounts()[0].Address, c.forkConfig)
+	blkPacker := packer.New(c.Repo(), c.Stater(), account.Address, &genesis.DevAccounts()[0].Address, c.forkConfig, 0)
 
 	// Create a new block
 	blkFlow, err := blkPacker.Mock(
