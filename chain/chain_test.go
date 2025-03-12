@@ -15,7 +15,7 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func newTx(txType tx.TxType) *tx.Transaction {
+func newTx(txType tx.Type) *tx.Transaction {
 	tx := tx.NewTxBuilder(txType).MustBuild()
 	pk, _ := crypto.GenerateKey()
 	sig, _ := crypto.Sign(tx.SigningHash().Bytes(), pk)
@@ -24,7 +24,7 @@ func newTx(txType tx.TxType) *tx.Transaction {
 
 func TestChain(t *testing.T) {
 	_, repo := newTestRepo()
-	txTypes := []tx.TxType{tx.TypeLegacy, tx.TypeDynamicFee}
+	txTypes := []tx.Type{tx.TypeLegacy, tx.TypeDynamicFee}
 
 	for _, txType := range txTypes {
 		tr := newTx(txType)

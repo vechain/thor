@@ -312,7 +312,7 @@ func initAccountServer(t *testing.T, enabledDeprecated bool) {
 	ts = httptest.NewServer(router)
 }
 
-func buildTxWithClauses(txType tx.TxType, chainTag byte, clauses ...*tx.Clause) *tx.Transaction {
+func buildTxWithClauses(txType tx.Type, chainTag byte, clauses ...*tx.Clause) *tx.Transaction {
 	trx := tx.NewTxBuilder(txType).
 		ChainTag(chainTag).
 		Expiration(10).
