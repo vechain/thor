@@ -14,13 +14,14 @@ import (
 	"math/big"
 	"sync/atomic"
 
+	"slices"
+
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/v2/thor"
-	"slices"
 )
 
 var (
