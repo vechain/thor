@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"slices"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common/math"
@@ -20,7 +21,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/v2/thor"
-	"slices"
 )
 
 var (
