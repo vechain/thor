@@ -24,15 +24,14 @@ import (
 
 // Flow the flow of packing a new block.
 type Flow struct {
-	packer           *Packer
-	parentHeader     *block.Header
-	runtime          *runtime.Runtime
-	processedTxs     map[thor.Bytes32]bool // txID -> reverted
-	gasUsed          uint64
-	txs              tx.Transactions
-	receipts         tx.Receipts
-	features         tx.Features
-	minTxPriorityFee *big.Int
+	packer       *Packer
+	parentHeader *block.Header
+	runtime      *runtime.Runtime
+	processedTxs map[thor.Bytes32]bool // txID -> reverted
+	gasUsed      uint64
+	txs          tx.Transactions
+	receipts     tx.Receipts
+	features     tx.Features
 }
 
 func newFlow(
@@ -40,15 +39,13 @@ func newFlow(
 	parentHeader *block.Header,
 	runtime *runtime.Runtime,
 	features tx.Features,
-	minTxPriorityFee uint64,
 ) *Flow {
 	return &Flow{
-		packer:           packer,
-		parentHeader:     parentHeader,
-		runtime:          runtime,
-		processedTxs:     make(map[thor.Bytes32]bool),
-		features:         features,
-		minTxPriorityFee: new(big.Int).SetUint64(minTxPriorityFee),
+		packer:       packer,
+		parentHeader: parentHeader,
+		runtime:      runtime,
+		processedTxs: make(map[thor.Bytes32]bool),
+		features:     features,
 	}
 }
 
@@ -95,7 +92,7 @@ func (f *Flow) hasTx(txid thor.Bytes32, txBlockRef uint32) (bool, error) {
 
 func (f *Flow) isEffectivePriorityFeeTooLow(t *tx.Transaction, baseGasPrice *big.Int, isGalactica bool) error {
 	// Skip check if the minimum priority fee is not set
-	if f.minTxPriorityFee.Sign() <= 0 {
+	if f.packer.minTxPriorityFee.Sign() <= 0 {
 		return nil
 	}
 
@@ -106,7 +103,7 @@ func (f *Flow) isEffectivePriorityFeeTooLow(t *tx.Transaction, baseGasPrice *big
 	effectivePriorityFee := fork.GalacticaPriorityPrice(
 		t, baseGasPrice, provedWork, &fork.GalacticaItems{IsActive: isGalactica, BaseFee: f.runtime.Context().BaseFee})
 
-	if effectivePriorityFee.Cmp(f.minTxPriorityFee) < 0 {
+	if effectivePriorityFee.Cmp(f.packer.minTxPriorityFee) < 0 {
 		return badTxError{"effective priority fee too low"}
 	}
 

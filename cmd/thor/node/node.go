@@ -85,7 +85,7 @@ func New(
 	options Options,
 ) *Node {
 	return &Node{
-		packer:      packer.New(repo, stater, master.Address(), master.Beneficiary, forkConfig),
+		packer:      packer.New(repo, stater, master.Address(), master.Beneficiary, forkConfig, options.MinTxPriorityFee),
 		cons:        consensus.New(repo, stater, forkConfig),
 		master:      master,
 		repo:        repo,

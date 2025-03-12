@@ -297,7 +297,7 @@ func defaultAction(ctx *cli.Context) error {
 
 	minTxPriorityFee := ctx.Uint64(minEffectivePriorityFeeFlag.Name)
 	if minTxPriorityFee > 0 {
-		log.Info(fmt.Sprintf("the minimum effective priority fee required in transactions is %d", minTxPriorityFee))
+		log.Info(fmt.Sprintf("the minimum effective priority fee required in transactions is %d wei", minTxPriorityFee))
 	}
 
 	options := node.Options{
@@ -474,7 +474,7 @@ func soloAction(ctx *cli.Context) error {
 
 	minTxPriorityFee := ctx.Uint64(minEffectivePriorityFeeFlag.Name)
 	if minTxPriorityFee > 0 {
-		log.Info(fmt.Sprintf("the minimum effective priority fee required in transactions is %d", minTxPriorityFee))
+		log.Info(fmt.Sprintf("the minimum effective priority fee required in transactions is %d wei", minTxPriorityFee))
 	}
 
 	options := solo.Options{

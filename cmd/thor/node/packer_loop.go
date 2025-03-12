@@ -54,7 +54,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			n.packer.SetTargetGasLimit(suggested)
 		}
 
-		flow, err := n.packer.Schedule(n.repo.BestBlockSummary(), now, n.options.MinTxPriorityFee)
+		flow, err := n.packer.Schedule(n.repo.BestBlockSummary(), now)
 		if err != nil {
 			if authorized {
 				authorized = false

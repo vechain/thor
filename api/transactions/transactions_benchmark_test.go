@@ -328,14 +328,14 @@ func createManyClausesPerTxDynFee(signerPK *ecdsa.PrivateKey, thorChain *testcha
 }
 
 func packTxsIntoBlock(thorChain *testchain.Chain, proposerAccount *genesis.DevAccount, parentBlk *block.Block, transactions tx.Transactions) (*block.Block, error) {
-	p := packer.New(thorChain.Repo(), thorChain.Stater(), proposerAccount.Address, &proposerAccount.Address, thorChain.GetForkConfig())
+	p := packer.New(thorChain.Repo(), thorChain.Stater(), proposerAccount.Address, &proposerAccount.Address, thorChain.GetForkConfig(), 0)
 
 	parentSum, err := thorChain.Repo().GetBlockSummary(parentBlk.Header().ID())
 	if err != nil {
 		return nil, err
 	}
 
-	flow, err := p.Schedule(parentSum, parentBlk.Header().Timestamp()+1, 0)
+	flow, err := p.Schedule(parentSum, parentBlk.Header().Timestamp()+1)
 	if err != nil {
 		return nil, err
 	}

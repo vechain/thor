@@ -61,13 +61,13 @@ func TestAdopt(t *testing.T) {
 	clause := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 
 	// Create and adopt two transactions
-	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
+	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork, 0)
 	sum, err := repo.GetBlockSummary(b.Header().ID())
 	if err != nil {
 		t.Fatal("Error getting block summary:", err)
 	}
 
-	flow, err := pkr.Schedule(sum, uint64(time.Now().Unix()), 0)
+	flow, err := pkr.Schedule(sum, uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal("Error scheduling:", err)
 	}
@@ -117,13 +117,13 @@ func TestAdoptTypedTxs(t *testing.T) {
 	clause := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 
 	// Create and adopt two transactions
-	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.ForkConfig{GALACTICA: 1})
+	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.ForkConfig{GALACTICA: 1}, 0)
 	sum, err := repo.GetBlockSummary(b.Header().ID())
 	if err != nil {
 		t.Fatal("Error getting block summary:", err)
 	}
 
-	flow, err := pkr.Schedule(sum, uint64(time.Now().Unix()), 0)
+	flow, err := pkr.Schedule(sum, uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal("Error scheduling:", err)
 	}
@@ -167,9 +167,9 @@ func TestPack(t *testing.T) {
 	forkConfig.FINALITY = 0
 
 	proposer := genesis.DevAccounts()[0]
-	p := packer.New(repo, stater, proposer.Address, &proposer.Address, forkConfig)
+	p := packer.New(repo, stater, proposer.Address, &proposer.Address, forkConfig, 0)
 	parentSum, _ := repo.GetBlockSummary(parent.Header().ID())
-	flow, _ := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval, 0)
+	flow, _ := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval)
 
 	flow.Pack(proposer.PrivateKey, 0, false)
 
@@ -199,9 +199,9 @@ func TestPackAfterGalacticaFork(t *testing.T) {
 	forkConfig.GALACTICA = 2
 
 	proposer := genesis.DevAccounts()[0]
-	p := packer.New(repo, stater, proposer.Address, &proposer.Address, forkConfig)
+	p := packer.New(repo, stater, proposer.Address, &proposer.Address, forkConfig, 0)
 	parentSum, _ := repo.GetBlockSummary(parent.Header().ID())
-	flow, _ := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval, 0)
+	flow, _ := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval)
 
 	// Block 1: Galactica is not enabled
 	block, stg, receipts, err := flow.Pack(proposer.PrivateKey, 0, false)
@@ -218,7 +218,7 @@ func TestPackAfterGalacticaFork(t *testing.T) {
 
 	// Block 2: Galactica is enabled
 	parentSum, _ = repo.GetBlockSummary(block.Header().ID())
-	flow, _ = p.Schedule(parentSum, block.Header().Timestamp()+100*thor.BlockInterval, 0)
+	flow, _ = p.Schedule(parentSum, block.Header().Timestamp()+100*thor.BlockInterval)
 	block, _, _, err = flow.Pack(proposer.PrivateKey, 0, false)
 	assert.Nil(t, err)
 	assert.Equal(t, uint32(2), block.Header().Number())
@@ -261,10 +261,10 @@ func TestAdoptErr(t *testing.T) {
 	addr := thor.BytesToAddress([]byte("to"))
 	clause := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 
-	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
+	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork, 0)
 	sum, _ := repo.GetBlockSummary(b.Header().ID())
 
-	flow, _ := pkr.Schedule(sum, uint64(time.Now().Unix()), 0)
+	flow, _ := pkr.Schedule(sum, uint64(time.Now().Unix()))
 
 	// Test chain tag mismatch
 	tx1 := createTx(tx.TypeLegacy, byte(0xFF), 1, 10, 21000, 1, nil, clause, tx.NewBlockRef(0))
@@ -425,9 +425,9 @@ func TestAdoptAfterGalacticaEffectivePriorityFee(t *testing.T) {
 
 	// Last parameter is true, which means that all txs require max priority fee
 	proposer := genesis.DevAccounts()[0]
-	pckr := packer.New(chain.Repo(), chain.Stater(), proposer.Address, &proposer.Address, config.ForkConfig)
+	pckr := packer.New(chain.Repo(), chain.Stater(), proposer.Address, &proposer.Address, config.ForkConfig, 2)
 
-	flow, _ := pckr.Schedule(best, uint64(time.Now().Unix()), 2)
+	flow, _ := pckr.Schedule(best, uint64(time.Now().Unix()))
 
 	expectedErrorMessage := "bad tx: effective priority fee too low"
 	if err := flow.Adopt(txNoPriorityFee); err.Error() != expectedErrorMessage {

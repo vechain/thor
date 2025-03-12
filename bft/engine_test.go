@@ -114,7 +114,7 @@ func (test *TestBFT) reCreateEngine() error {
 }
 
 func (test *TestBFT) newBlock(parentSummary *chain.BlockSummary, master genesis.DevAccount, shouldVote bool, asBest bool) (*chain.BlockSummary, error) {
-	packer := packer.New(test.repo, test.stater, master.Address, &thor.Address{}, test.fc)
+	packer := packer.New(test.repo, test.stater, master.Address, &thor.Address{}, test.fc, 0)
 	flow, err := packer.Mock(parentSummary, parentSummary.Header.Timestamp()+thor.BlockInterval, parentSummary.Header.GasLimit())
 	if err != nil {
 		return nil, err

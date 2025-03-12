@@ -184,9 +184,9 @@ var (
 	}
 
 	minEffectivePriorityFeeFlag = cli.Uint64Flag{
-		Name:  "minimum-effective-priority-fee",
+		Name:  "min-effective-priority-fee",
 		Value: 0,
-		Usage: "minimum effective priority fee for all transactions",
+		Usage: "set a minimum effective priority fee for transactions to be included in the block proposed by the block proposer",
 	}
 
 	// solo mode only flags
