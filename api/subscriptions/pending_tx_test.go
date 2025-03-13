@@ -226,7 +226,7 @@ func createTx(repo *chain.Repository, addressNumber uint, txType tx.Type) *tx.Tr
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 
-	trx := tx.NewTxBuilder(txType).
+	trx := tx.NewBuilder(txType).
 		ChainTag(repo.ChainTag()).
 		GasPriceCoef(1).
 		Expiration(1000).
@@ -234,7 +234,7 @@ func createTx(repo *chain.Repository, addressNumber uint, txType tx.Type) *tx.Tr
 		Nonce(uint64(datagen.RandInt())).
 		Clause(cla).
 		BlockRef(tx.NewBlockRef(0)).
-		MustBuild()
+		Build()
 	return tx.MustSign(
 		trx,
 		genesis.DevAccounts()[addressNumber].PrivateKey,

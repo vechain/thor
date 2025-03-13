@@ -19,7 +19,7 @@ import (
 
 func GetMockTx(txType tx.Type) *tx.Transaction {
 	to, _ := thor.ParseAddress("0x7567d83b7b8d80addcb281a71d54fc7b3364ffed")
-	return tx.NewTxBuilder(txType).ChainTag(1).
+	return tx.NewBuilder(txType).ChainTag(1).
 		BlockRef(tx.BlockRef{0, 0, 0, 0, 0xaa, 0xbb, 0xcc, 0xdd}).
 		Expiration(32).
 		Clause(tx.NewClause(&to).WithValue(big.NewInt(10000)).WithData([]byte{0, 0, 0, 0x60, 0x60, 0x60})).
@@ -29,7 +29,7 @@ func GetMockTx(txType tx.Type) *tx.Transaction {
 		MaxPriorityFeePerGas(big.NewInt(20000)).
 		Gas(21000).
 		DependsOn(nil).
-		Nonce(12345678).MustBuild()
+		Nonce(12345678).Build()
 }
 
 func TestIsExpired(t *testing.T) {
@@ -225,7 +225,7 @@ func TestEvaluateWork(t *testing.T) {
 
 func TestLegacyTx(t *testing.T) {
 	to, _ := thor.ParseAddress("0x7567d83b7b8d80addcb281a71d54fc7b3364ffed")
-	trx := tx.NewTxBuilder(tx.TypeLegacy).ChainTag(1).
+	trx := tx.NewBuilder(tx.TypeLegacy).ChainTag(1).
 		BlockRef(tx.BlockRef{0, 0, 0, 0, 0xaa, 0xbb, 0xcc, 0xdd}).
 		Expiration(32).
 		Clause(tx.NewClause(&to).WithValue(big.NewInt(10000)).WithData([]byte{0, 0, 0, 0x60, 0x60, 0x60})).
@@ -233,12 +233,12 @@ func TestLegacyTx(t *testing.T) {
 		GasPriceCoef(128).
 		Gas(21000).
 		DependsOn(nil).
-		Nonce(12345678).MustBuild()
+		Nonce(12345678).Build()
 
 	assert.Equal(t, "0x2a1c25ce0d66f45276a5f308b99bf410e2fc7d5b6ea37a49f2ab9f1da9446478", trx.SigningHash().String())
 	assert.Equal(t, thor.Bytes32{}, trx.ID())
 
-	assert.Equal(t, uint64(21000), func() uint64 { t := tx.NewTxBuilder(tx.TypeLegacy).MustBuild(); g, _ := t.IntrinsicGas(); return g }())
+	assert.Equal(t, uint64(21000), func() uint64 { t := tx.NewBuilder(tx.TypeLegacy).Build(); g, _ := t.IntrinsicGas(); return g }())
 	assert.Equal(t, uint64(37432), func() uint64 { g, _ := trx.IntrinsicGas(); return g }())
 
 	assert.Equal(t, big.NewInt(150), trx.GasPrice(big.NewInt(100)))
@@ -270,7 +270,7 @@ func TestDelegatedTx(t *testing.T) {
 	var feat tx.Features
 	feat.SetDelegated(true)
 
-	trx := tx.NewTxBuilder(tx.TypeLegacy).ChainTag(0xa4).
+	trx := tx.NewBuilder(tx.TypeLegacy).ChainTag(0xa4).
 		BlockRef(tx.BlockRef{0, 0, 0, 0, 0xaa, 0xbb, 0xcc, 0xdd}).
 		Expiration(32).
 		Clause(tx.NewClause(&to).WithValue(big.NewInt(10000)).WithData([]byte{0, 0, 0, 0x60, 0x60, 0x60})).
@@ -279,7 +279,7 @@ func TestDelegatedTx(t *testing.T) {
 		Gas(210000).
 		DependsOn(nil).
 		Features(feat).
-		Nonce(12345678).MustBuild()
+		Nonce(12345678).Build()
 
 	assert.Equal(t, "0x96c4cd08584994f337946f950eca5511abe15b152bc879bf47c2227901f9f2af", trx.SigningHash().String())
 	assert.Equal(t, true, trx.Features().IsDelegated())
@@ -336,7 +336,7 @@ func TestIntrinsicGas(t *testing.T) {
 
 func BenchmarkTxMining(b *testing.B) {
 	for _, txType := range []tx.Type{tx.TypeLegacy, tx.TypeDynamicFee} {
-		trx := tx.NewTxBuilder(txType).MustBuild()
+		trx := tx.NewBuilder(txType).Build()
 		signer := thor.BytesToAddress([]byte("acc1"))
 		maxWork := &big.Int{}
 		eval := trx.EvaluateWork(signer)

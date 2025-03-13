@@ -42,8 +42,7 @@ func TestValidateBlockBody(t *testing.T) {
 		{
 			name: "supported legacy tx type before galactica fork",
 			getBlock: func() *block.Block {
-				tr, err := tx.NewTxBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Expiration(10).Build()
-				assert.NoError(t, err)
+				tr := tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Expiration(10).Build()
 				tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 				return new(block.Builder).Transaction(tr).Build()
 			},
@@ -53,8 +52,7 @@ func TestValidateBlockBody(t *testing.T) {
 		{
 			name: "unsupported tx type before galactica fork",
 			getBlock: func() *block.Block {
-				tr, err := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).Expiration(10).Build()
-				assert.NoError(t, err)
+				tr := tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).Expiration(10).Build()
 				tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 				return new(block.Builder).Transaction(tr).Build()
 			},
@@ -64,8 +62,7 @@ func TestValidateBlockBody(t *testing.T) {
 		{
 			name: "supported legacy tx type after galactica fork",
 			getBlock: func() *block.Block {
-				tr, err := tx.NewTxBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Expiration(10).Build()
-				assert.NoError(t, err)
+				tr := tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Expiration(10).Build()
 				tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 				return new(block.Builder).Transaction(tr).Build()
 			},
@@ -75,8 +72,7 @@ func TestValidateBlockBody(t *testing.T) {
 		{
 			name: "supported tx type after galactica fork",
 			getBlock: func() *block.Block {
-				tr, err := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).Expiration(10).Build()
-				assert.NoError(t, err)
+				tr := tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).Expiration(10).Build()
 				tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 				return new(block.Builder).Transaction(tr).Build()
 			},
@@ -115,7 +111,7 @@ func TestValidateBlock(t *testing.T) {
 			name: "valid block",
 			testFun: func(t *testing.T) {
 				baseFee := big.NewInt(100000)
-				tr := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).BlockRef(tx.NewBlockRef(10)).MaxFeePerGas(new(big.Int).Sub(baseFee, common.Big1)).MustBuild()
+				tr := tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).BlockRef(tx.NewBlockRef(10)).MaxFeePerGas(new(big.Int).Sub(baseFee, common.Big1)).Build()
 				blk := new(block.Builder).BaseFee(baseFee).Transaction(tr).Build()
 
 				c := New(repo, stater, &thor.ForkConfig{GALACTICA: 0})

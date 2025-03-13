@@ -146,12 +146,12 @@ func sendLegacyTx(t *testing.T) {
 	var expiration = uint32(10)
 	var gas = uint64(21000)
 
-	trx := tx.NewTxBuilder(tx.TypeLegacy).
+	trx := tx.NewBuilder(tx.TypeLegacy).
 		BlockRef(blockRef).
 		ChainTag(chainTag).
 		Expiration(expiration).
 		Gas(gas).
-		MustBuild()
+		Build()
 	trx = tx.MustSign(
 		trx,
 		genesis.DevAccounts()[0].PrivateKey,
@@ -175,14 +175,14 @@ func sendDynamicFeeTx(t *testing.T) {
 	var expiration = uint32(10)
 	var gas = uint64(21000)
 
-	trx := tx.NewTxBuilder(tx.TypeDynamicFee).
+	trx := tx.NewBuilder(tx.TypeDynamicFee).
 		BlockRef(blockRef).
 		ChainTag(chainTag).
 		Expiration(expiration).
 		Gas(gas).
 		MaxFeePerGas(big.NewInt(10_000)).
 		MaxPriorityFeePerGas(big.NewInt(10)).
-		MustBuild()
+		Build()
 	trx = tx.MustSign(
 		trx,
 		genesis.DevAccounts()[0].PrivateKey,
@@ -317,7 +317,7 @@ func sendTxWithBadFormat(t *testing.T) {
 }
 
 func sendTxThatCannotBeAcceptedInLocalMempool(t *testing.T) {
-	tx := tx.NewTxBuilder(tx.TypeLegacy).MustBuild()
+	tx := tx.NewBuilder(tx.TypeLegacy).Build()
 	rlpTx, err := tx.MarshalBinary()
 	if err != nil {
 		t.Fatal(err)
@@ -371,7 +371,7 @@ func initTransactionServer(t *testing.T) {
 	// Creating first block with legacy tx
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	legacyTx = tx.NewTxBuilder(tx.TypeLegacy).
+	legacyTx = tx.NewBuilder(tx.TypeLegacy).
 		ChainTag(chainTag).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -379,11 +379,11 @@ func initTransactionServer(t *testing.T) {
 		Nonce(1).
 		Clause(cla).
 		BlockRef(tx.NewBlockRef(0)).
-		MustBuild()
+		Build()
 	legacyTx = tx.MustSign(legacyTx, genesis.DevAccounts()[0].PrivateKey)
 	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], legacyTx))
 
-	dynFeeTx = tx.NewTxBuilder(tx.TypeDynamicFee).
+	dynFeeTx = tx.NewBuilder(tx.TypeDynamicFee).
 		ChainTag(chainTag).
 		MaxFeePerGas(big.NewInt(thor.InitialBaseFee * 10)).
 		MaxPriorityFeePerGas(big.NewInt(10)).
@@ -392,21 +392,21 @@ func initTransactionServer(t *testing.T) {
 		Nonce(1).
 		Clause(cla).
 		BlockRef(tx.NewBlockRef(0)).
-		MustBuild()
+		Build()
 	dynFeeTx = tx.MustSign(dynFeeTx, genesis.DevAccounts()[0].PrivateKey)
 
 	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], dynFeeTx))
 
 	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute}, &forkConfig)
 
-	mempoolTx = tx.NewTxBuilder(tx.TypeDynamicFee).
+	mempoolTx = tx.NewBuilder(tx.TypeDynamicFee).
 		ChainTag(chainTag).
 		Expiration(10).
 		Gas(21000).
 		MaxFeePerGas(big.NewInt(thor.InitialBaseFee * 10)).
 		MaxPriorityFeePerGas(big.NewInt(10)).
 		Nonce(1).
-		MustBuild()
+		Build()
 	mempoolTx = tx.MustSign(mempoolTx, genesis.DevAccounts()[0].PrivateKey)
 
 	// Add a tx to the mempool to have both pending and non-pending transactions

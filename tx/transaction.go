@@ -83,13 +83,6 @@ type TxData interface {
 	encode(w io.Writer) error
 }
 
-// NewTx creates a new transaction.
-func NewTx(body TxData) *Transaction {
-	tx := new(Transaction)
-	tx.setDecoded(body.copy(), 0)
-	return tx
-}
-
 // Type returns the transaction type.
 func (t *Transaction) Type() uint8 {
 	return t.body.txType()

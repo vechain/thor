@@ -39,7 +39,7 @@ func TestBuilder_Build(t *testing.T) {
 	builder.StateRoot(hash)
 
 	builder.ReceiptsRoot(hash)
-	tr := tx.NewTxBuilder(tx.TypeLegacy).MustBuild()
+	tr := tx.NewBuilder(tx.TypeLegacy).Build()
 
 	builder.Transaction(tr)
 	features := tx.Features(0x01)

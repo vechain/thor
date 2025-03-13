@@ -98,11 +98,11 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 func mintTransactions(t *testing.T, thorChain *testchain.Chain) {
 	toAddr := datagen.RandAddress()
 
-	noClausesTx := tx.NewTxBuilder(tx.TypeLegacy).
+	noClausesTx := tx.NewBuilder(tx.TypeLegacy).
 		ChainTag(thorChain.Repo().ChainTag()).
 		Expiration(10).
 		Gas(21000).
-		MustBuild()
+		Build()
 	sig, err := crypto.Sign(noClausesTx.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
 		t.Fatal(err)
@@ -111,7 +111,7 @@ func mintTransactions(t *testing.T, thorChain *testchain.Chain) {
 
 	cla := tx.NewClause(&toAddr).WithValue(big.NewInt(10000))
 	cla2 := tx.NewClause(&toAddr).WithValue(big.NewInt(10000))
-	transaction := tx.NewTxBuilder(tx.TypeLegacy).
+	transaction := tx.NewBuilder(tx.TypeLegacy).
 		ChainTag(thorChain.Repo().ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -120,7 +120,7 @@ func mintTransactions(t *testing.T, thorChain *testchain.Chain) {
 		Clause(cla).
 		Clause(cla2).
 		BlockRef(tx.NewBlockRef(0)).
-		MustBuild()
+		Build()
 
 	sig, err = crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
@@ -230,12 +230,12 @@ func testTransactionsEndpoint(t *testing.T, thorChain *testchain.Chain, ts *http
 	t.Run("SendTransaction", func(t *testing.T) {
 		toAddr := thor.MustParseAddress("0x0123456789abcdef0123456789abcdef01234567")
 		clause := tx.NewClause(&toAddr).WithValue(big.NewInt(10000))
-		trx := tx.NewTxBuilder(tx.TypeLegacy).
+		trx := tx.NewBuilder(tx.TypeLegacy).
 			ChainTag(thorChain.Repo().ChainTag()).
 			Expiration(10).
 			Gas(21000).
 			Clause(clause).
-			MustBuild()
+			Build()
 
 		trx = tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)
 		sendResult, err := c.SendTransaction(trx)
@@ -243,12 +243,12 @@ func testTransactionsEndpoint(t *testing.T, thorChain *testchain.Chain, ts *http
 		require.NotNil(t, sendResult)
 		require.Equal(t, trx.ID().String(), sendResult.ID.String()) // Ensure transaction was successful
 
-		trx = tx.NewTxBuilder(tx.TypeLegacy).
+		trx = tx.NewBuilder(tx.TypeLegacy).
 			ChainTag(thorChain.Repo().ChainTag()).
 			Expiration(10).
 			Gas(21000).
 			Clause(clause).
-			MustBuild()
+			Build()
 
 		trx = tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)
 		sendResult, err = c.SendTransaction(trx)
