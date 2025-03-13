@@ -150,12 +150,6 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 			}
 		}
 
-		if flow.Number() > n.forkConfig.HAYABUSA {
-			if err := flow.DistributeReward(); err != nil {
-				return errors.Wrap(err, "reward distribution")
-			}
-		}
-
 		// pack the new block
 		newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey, conflicts, shouldVote)
 		if err != nil {

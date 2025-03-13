@@ -157,6 +157,10 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 		return nil, nil, nil, errors.New("private key mismatch")
 	}
 
+	if err := f.runtime.DistributeRewards(); err != nil {
+		return nil, nil, nil, err
+	}
+
 	stage, err := f.runtime.State().Stage(trie.Version{Major: f.Number(), Minor: newBlockConflicts})
 	if err != nil {
 		return nil, nil, nil, err
@@ -221,8 +225,4 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 
 		return newBlock.WithSignature(sig), stage, f.receipts, nil
 	}
-}
-
-func (f *Flow) DistributeReward() error {
-	return f.runtime.DistributeRewards()
 }

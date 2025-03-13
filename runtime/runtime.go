@@ -538,9 +538,30 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 }
 
 func (rt *Runtime) DistributeRewards() error {
-	totalStaked, err := builtin.Staker.Native(rt.State()).ActiveStake()
+	if rt.ctx.Number <= rt.forkConfig.HAYABUSA {
+		return nil
+	}
+	reward, err := rt.CalculateRewards()
 	if err != nil {
 		return err
+	}
+
+	if err := builtin.Energy.Native(rt.State(), rt.ctx.Time).Add(rt.ctx.Beneficiary, reward); err != nil {
+		return err
+	}
+	if err := builtin.Energy.Native(rt.State(), rt.ctx.Time).AddIssued(reward); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (rt *Runtime) CalculateRewards() (*big.Int, error) {
+	if rt.ctx.Number <= rt.forkConfig.HAYABUSA {
+		return big.NewInt(0), nil
+	}
+	totalStaked, err := builtin.Staker.Native(rt.state).ActiveStake()
+	if err != nil {
+		return nil, err
 	}
 	// sqrt(totalStaked / 1e18) * 1e18, we are calculating sqrt on VET and then converting to wei
 	sqrtStake := new(big.Int).Sqrt(new(big.Int).Div(totalStaked, bigE18))
@@ -559,14 +580,7 @@ func (rt *Runtime) DistributeRewards() error {
 	reward.Mul(reward, thor.ScalingFactor)
 	reward.Mul(reward, sqrtStake)
 	reward.Div(reward, blocksPerYear)
-
-	if err := builtin.Energy.Native(rt.State(), rt.ctx.Time).Add(rt.ctx.Beneficiary, reward); err != nil {
-		return err
-	}
-	if err := builtin.Energy.Native(rt.State(), rt.ctx.Time).AddIssued(reward); err != nil {
-		return err
-	}
-	return nil
+	return reward, nil
 }
 
 func isLeapYear(year int) bool {

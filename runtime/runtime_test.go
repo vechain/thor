@@ -613,7 +613,7 @@ func TestDistributeRewards(t *testing.T) {
 
 	fc := thor.SoloFork
 	fc.HAYABUSA = 0
-	rt := runtime.New(chain, st, &xenv.BlockContext{Time: uint64(time.Now().Unix()), Beneficiary: addr}, fc)
+	rt := runtime.New(chain, st, &xenv.BlockContext{Time: uint64(time.Now().Unix()), Beneficiary: addr, Number: 1}, fc)
 
 	balance, err := builtin.Energy.Native(st, 0).Get(addr)
 	assert.NoError(t, err)

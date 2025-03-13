@@ -714,13 +714,37 @@ func TestEnergyNative(t *testing.T) {
 	require.Equal(t, 0, len(fetchedTx.Outputs))
 	require.True(t, fetchedTx.Reverted)
 
-	// hayabusa fork happens on block 2, growth is calculated for 1 block = 10 seconds
 	_, err = callContractAndGetOutput(abi, "totalSupply", toAddr, &bigIntOutput)
-
-	exSupply = new(big.Int)
-	exSupply.SetString("10000000500000000000000000000", 10)
 	require.NoError(t, err)
-	require.Equal(t, exSupply, bigIntOutput)
+
+	best := thorChain.Repo().BestBlockSummary()
+
+	hayabusaBlock, err := thorChain.Repo().NewBestChain().GetBlockSummary(fc.HAYABUSA)
+	require.NoError(t, err)
+	preHayabusaState := thorChain.Stater().NewState(hayabusaBlock.Root())
+	totalSupply, err := builtin.Energy.Native(preHayabusaState, hayabusaBlock.Header.Timestamp()).TotalSupply()
+	require.NoError(t, err)
+
+	stakeRewards := big.NewInt(0)
+	for i := fc.HAYABUSA + 1; i <= best.Header.Number(); i++ {
+		summary, err := thorChain.Repo().NewBestChain().GetBlockSummary(i)
+		require.NoError(t, err)
+		parent, err := thorChain.Repo().GetBlockSummary(summary.Header.ParentID())
+		require.NoError(t, err)
+		st := thorChain.Stater().NewState(parent.Root())
+		rt := runtime.New(
+			thorChain.Repo().NewChain(summary.Header.ParentID()),
+			st,
+			&xenv.BlockContext{Number: i},
+			fc)
+		reward, err := rt.CalculateRewards()
+		require.NoError(t, err)
+		stakeRewards.Add(stakeRewards, reward)
+	}
+	totalSupply = totalSupply.Add(totalSupply, stakeRewards)
+
+	require.NoError(t, err)
+	require.Equal(t, totalSupply, bigIntOutput)
 }
 
 func TestPrototypeNative(t *testing.T) {
