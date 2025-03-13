@@ -71,7 +71,7 @@ func TestTxReplacement(t *testing.T) {
 
 	// wait for next block
 	t.Log("txs built and signed, waiting for next block")
-	//waitForNext(t,client)
+	waitForNext(t,client)
 
 	lowFeeRes, err := client.SendTransaction(lowFeeTx)
 	require.NoError(t, err)
