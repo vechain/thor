@@ -251,19 +251,17 @@ func (s *Solo) init(ctx context.Context) error {
 
 // newTx builds and signs a new transaction from the given clauses
 func (s *Solo) newTx(clauses []*tx.Clause, from genesis.DevAccount) (*tx.Transaction, error) {
-	builder := tx.NewTxBuilder(tx.TypeLegacy).ChainTag(s.repo.ChainTag())
+	builder := new(tx.Builder).ChainTag(s.repo.ChainTag())
 	for _, c := range clauses {
 		builder.Clause(c)
 	}
 
-	trx, err := builder.BlockRef(tx.NewBlockRef(0)).
+	trx := builder.BlockRef(tx.NewBlockRef(0)).
 		Expiration(math.MaxUint32).
 		Nonce(rand.Uint64()). //#nosec G404
 		DependsOn(nil).
 		Gas(1_000_000).
 		Build()
-	if err != nil {
-		return nil, err
-	}
+
 	return tx.Sign(trx, from.PrivateKey)
 }

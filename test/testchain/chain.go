@@ -162,7 +162,7 @@ func (c *Chain) MintClauses(account genesis.DevAccount, clauses []*tx.Clause) er
 		builer.Clause(clause)
 	}
 
-	tx, _ := builer.Build()
+	tx := builer.Build()
 	signature, err := crypto.Sign(tx.SigningHash().Bytes(), account.PrivateKey)
 	if err != nil {
 		return fmt.Errorf("unable to sign tx: %w", err)

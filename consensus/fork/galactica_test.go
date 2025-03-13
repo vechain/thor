@@ -258,7 +258,7 @@ func TestBaseFeeLimits(t *testing.T) {
 func TestGalacticaGasPrice(t *testing.T) {
 	baseGasPrice := big.NewInt(1_000_000_000)
 	baseFee := big.NewInt(20_000_000)
-	legacyTr := tx.NewTxBuilder(tx.TypeLegacy).GasPriceCoef(255).MustBuild()
+	legacyTr := tx.NewBuilder(tx.TypeLegacy).GasPriceCoef(255).Build()
 
 	tests := []struct {
 		name string
@@ -287,7 +287,7 @@ func TestGalacticaGasPrice(t *testing.T) {
 		{
 			name: "galactica is activated, dynamic fee transaction with maxPriorityFee+baseFee as price",
 			f: func(t *testing.T) {
-				tr := tx.NewTxBuilder(tx.TypeDynamicFee).MaxFeePerGas(big.NewInt(250_000_000)).MaxPriorityFeePerGas(big.NewInt(15_000)).MustBuild()
+				tr := tx.NewBuilder(tx.TypeDynamicFee).MaxFeePerGas(big.NewInt(250_000_000)).MaxPriorityFeePerGas(big.NewInt(15_000)).Build()
 				res := GalacticaGasPrice(tr, baseGasPrice, &GalacticaItems{
 					IsActive: true,
 					BaseFee:  baseFee,
@@ -299,7 +299,7 @@ func TestGalacticaGasPrice(t *testing.T) {
 		{
 			name: "galactica is activated, dynamic fee transaction with maxFee as price",
 			f: func(t *testing.T) {
-				tr := tx.NewTxBuilder(tx.TypeDynamicFee).MaxFeePerGas(big.NewInt(20_500_000)).MaxPriorityFeePerGas(big.NewInt(1_000_000)).MustBuild()
+				tr := tx.NewBuilder(tx.TypeDynamicFee).MaxFeePerGas(big.NewInt(20_500_000)).MaxPriorityFeePerGas(big.NewInt(1_000_000)).Build()
 				res := GalacticaGasPrice(tr, baseGasPrice, &GalacticaItems{
 					IsActive: true,
 					BaseFee:  baseFee,
@@ -320,7 +320,7 @@ func TestGalacticaPriorityPrice(t *testing.T) {
 	baseGasPrice := big.NewInt(1_000_000_000)
 	baseFee := big.NewInt(20_000_000)
 	provedWork := big.NewInt(1)
-	legacyTr := tx.NewTxBuilder(tx.TypeLegacy).GasPriceCoef(255).MustBuild()
+	legacyTr := tx.NewBuilder(tx.TypeLegacy).GasPriceCoef(255).Build()
 
 	tests := []struct {
 		name string
@@ -351,7 +351,7 @@ func TestGalacticaPriorityPrice(t *testing.T) {
 		{
 			name: "galactica is activated, dynamic fee transaction with maxPriorityFee as priority fee",
 			f: func(t *testing.T) {
-				tr := tx.NewTxBuilder(tx.TypeDynamicFee).MaxFeePerGas(big.NewInt(250_000_000)).MaxPriorityFeePerGas(big.NewInt(15_000)).MustBuild()
+				tr := tx.NewBuilder(tx.TypeDynamicFee).MaxFeePerGas(big.NewInt(250_000_000)).MaxPriorityFeePerGas(big.NewInt(15_000)).Build()
 				res := GalacticaPriorityPrice(tr, baseGasPrice, provedWork, &GalacticaItems{
 					IsActive: true,
 					BaseFee:  baseFee,
@@ -362,7 +362,7 @@ func TestGalacticaPriorityPrice(t *testing.T) {
 		{
 			name: "galactica is activated, dynamic fee transaction with maxFee-baseFee as priority fee",
 			f: func(t *testing.T) {
-				tr := tx.NewTxBuilder(tx.TypeDynamicFee).MaxFeePerGas(big.NewInt(20_500_000)).MaxPriorityFeePerGas(big.NewInt(1_000_000)).MustBuild()
+				tr := tx.NewBuilder(tx.TypeDynamicFee).MaxFeePerGas(big.NewInt(20_500_000)).MaxPriorityFeePerGas(big.NewInt(1_000_000)).Build()
 				res := GalacticaPriorityPrice(tr, baseGasPrice, provedWork, &GalacticaItems{
 					IsActive: true,
 					BaseFee:  baseFee,
@@ -438,28 +438,28 @@ func TestValidateGalacticaTxFee(t *testing.T) {
 	}{
 		{
 			name:         "legacy transaction with enough fee",
-			tx:           tx.NewTxBuilder(tx.TypeLegacy).GasPriceCoef(255).MustBuild(),
+			tx:           tx.NewBuilder(tx.TypeLegacy).GasPriceCoef(255).Build(),
 			baseFee:      defaultBaseFee,
 			baseGasPrice: defaultBaseFee,
 			wantErr:      nil,
 		},
 		{
 			name:         "dynamic fee transaction with enough fee",
-			tx:           tx.NewTxBuilder(tx.TypeDynamicFee).MaxFeePerGas(defaultBaseFee).MustBuild(),
+			tx:           tx.NewBuilder(tx.TypeDynamicFee).MaxFeePerGas(defaultBaseFee).Build(),
 			baseFee:      defaultBaseFee,
 			baseGasPrice: defaultBaseFee,
 			wantErr:      nil,
 		},
 		{
 			name:         "legacy transaction with not enough fee",
-			tx:           tx.NewTxBuilder(tx.TypeLegacy).GasPriceCoef(255).MustBuild(),
+			tx:           tx.NewBuilder(tx.TypeLegacy).GasPriceCoef(255).Build(),
 			baseFee:      defaultBaseFee,
 			baseGasPrice: new(big.Int).Sub(defaultBaseFee, common.Big1),
 			wantErr:      errors.New("max fee per gas is less than block base fee"),
 		},
 		{
 			name:         "dynamic fee transaction not with enough fee",
-			tx:           tx.NewTxBuilder(tx.TypeDynamicFee).MaxFeePerGas(new(big.Int).Sub(defaultBaseFee, common.Big1)).MustBuild(),
+			tx:           tx.NewBuilder(tx.TypeDynamicFee).MaxFeePerGas(new(big.Int).Sub(defaultBaseFee, common.Big1)).Build(),
 			baseFee:      defaultBaseFee,
 			baseGasPrice: defaultBaseFee,
 			wantErr:      errors.New("max fee per gas is less than block base fee"),

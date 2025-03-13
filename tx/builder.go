@@ -28,7 +28,7 @@ type Builder struct {
 	reserved             reserved
 }
 
-func NewTxBuilder(txType Type) *Builder {
+func NewBuilder(txType Type) *Builder {
 	return &Builder{txType: txType}
 }
 
@@ -111,11 +111,9 @@ func (b *Builder) Features(feat Features) *Builder {
 }
 
 // Build builds a tx object.
-func (b *Builder) Build() (*Transaction, error) {
-	var tx *Transaction
-	switch b.txType {
-	case TypeLegacy:
-		tx = &Transaction{
+func (b *Builder) Build() *Transaction {
+	if b.txType == TypeLegacy {
+		return &Transaction{
 			body: &LegacyTransaction{
 				ChainTag:     b.chainTag,
 				Clauses:      b.clauses,
@@ -128,32 +126,20 @@ func (b *Builder) Build() (*Transaction, error) {
 				Reserved:     b.reserved,
 			},
 		}
-	case TypeDynamicFee:
-		tx = &Transaction{
-			body: &DynamicFeeTransaction{
-				ChainTag:             b.chainTag,
-				Clauses:              b.clauses,
-				MaxFeePerGas:         b.maxFeePerGas,
-				MaxPriorityFeePerGas: b.maxPriorityFeePerGas,
-				Gas:                  b.gas,
-				BlockRef:             b.blockRef,
-				Expiration:           b.expiration,
-				Nonce:                b.nonce,
-				DependsOn:            b.dependsOn,
-				Reserved:             b.reserved,
-			},
-		}
-	default:
-		return nil, ErrTxTypeNotSupported
 	}
-	return tx, nil
-}
 
-// MustBuild builds a tx object, it panics if an error is returned.
-func (b *Builder) MustBuild() *Transaction {
-	tx, err := b.Build()
-	if err != nil {
-		panic(err)
+	return &Transaction{
+		body: &DynamicFeeTransaction{
+			ChainTag:             b.chainTag,
+			Clauses:              b.clauses,
+			MaxFeePerGas:         b.maxFeePerGas,
+			MaxPriorityFeePerGas: b.maxPriorityFeePerGas,
+			Gas:                  b.gas,
+			BlockRef:             b.blockRef,
+			Expiration:           b.expiration,
+			Nonce:                b.nonce,
+			DependsOn:            b.dependsOn,
+			Reserved:             b.reserved,
+		},
 	}
-	return tx
 }

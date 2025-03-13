@@ -50,10 +50,10 @@ func (ti *txIterator) Next() *tx.Transaction {
 
 	data, _ := method.EncodeInput(a1.Address, big.NewInt(1))
 
-	trx := tx.NewTxBuilder(tx.TypeLegacy).
+	trx := tx.NewBuilder(tx.TypeLegacy).
 		ChainTag(ti.chainTag).
 		Clause(tx.NewClause(&builtin.Energy.Address).WithData(data)).
-		Gas(300000).GasPriceCoef(0).Nonce(nonce).Expiration(math.MaxUint32).MustBuild()
+		Gas(300000).GasPriceCoef(0).Nonce(nonce).Expiration(math.MaxUint32).Build()
 	trx = tx.MustSign(trx, a0.PrivateKey)
 	nonce++
 
@@ -208,10 +208,10 @@ func TestBlocklist(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tx0 := tx.NewTxBuilder(tx.TypeLegacy).
+	tx0 := tx.NewBuilder(tx.TypeLegacy).
 		ChainTag(repo.ChainTag()).
 		Clause(tx.NewClause(&a1.Address)).
-		Gas(300000).GasPriceCoef(0).Nonce(0).Expiration(math.MaxUint32).MustBuild()
+		Gas(300000).GasPriceCoef(0).Nonce(0).Expiration(math.MaxUint32).Build()
 	sig0, _ := crypto.Sign(tx0.SigningHash().Bytes(), a0.PrivateKey)
 	tx0 = tx0.WithSignature(sig0)
 

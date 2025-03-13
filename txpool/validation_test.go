@@ -34,14 +34,14 @@ func TestValidateTransaction(t *testing.T) {
 	}{
 		{
 			name:        "invalid legacy tx chain tag",
-			getTx:       func() *tx.Transaction { t, _ := tx.NewTxBuilder(tx.TypeLegacy).ChainTag(0xff).Build(); return t },
+			getTx:       func() *tx.Transaction { return tx.NewBuilder(tx.TypeLegacy).ChainTag(0xff).Build() },
 			head:        &chain.BlockSummary{},
 			forkConfig:  &thor.NoFork,
 			expectedErr: badTxError{"chain tag mismatch"},
 		},
 		{
 			name:        "invalid dyn fee tx chain tag",
-			getTx:       func() *tx.Transaction { t, _ := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(0xff).Build(); return t },
+			getTx:       func() *tx.Transaction { return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(0xff).Build() },
 			head:        &chain.BlockSummary{},
 			forkConfig:  &thor.NoFork,
 			expectedErr: badTxError{"chain tag mismatch"},
@@ -49,13 +49,12 @@ func TestValidateTransaction(t *testing.T) {
 		{
 			name: "legacy tx size too large",
 			getTx: func() *tx.Transaction {
-				b := tx.NewTxBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag())
+				b := tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag())
 				// Including a lot of clauses to increase the size above the max allowed
 				for range 50_000 {
 					b.Clause(&tx.Clause{})
 				}
-				t, _ := b.Build()
-				return t
+				return b.Build()
 			},
 			head:        &chain.BlockSummary{},
 			forkConfig:  &thor.NoFork,
@@ -64,13 +63,12 @@ func TestValidateTransaction(t *testing.T) {
 		{
 			name: "dyn fee tx size too large",
 			getTx: func() *tx.Transaction {
-				b := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag())
+				b := tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag())
 				// Including a lot of clauses to increase the size above the max allowed
 				for range 50_000 {
 					b.Clause(&tx.Clause{})
 				}
-				t, _ := b.Build()
-				return t
+				return b.Build()
 			},
 			head:        &chain.BlockSummary{},
 			forkConfig:  &thor.NoFork,
@@ -79,8 +77,7 @@ func TestValidateTransaction(t *testing.T) {
 		{
 			name: "supported legacy transaction type before Galactica fork",
 			getTx: func() *tx.Transaction {
-				t, _ := tx.NewTxBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Build()
-				return t
+				return tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Build()
 			},
 			head:        &chain.BlockSummary{Header: getHeader(1)},
 			forkConfig:  &thor.ForkConfig{GALACTICA: 10},
@@ -89,8 +86,7 @@ func TestValidateTransaction(t *testing.T) {
 		{
 			name: "supported legacy transaction type after Galactica fork",
 			getTx: func() *tx.Transaction {
-				t, _ := tx.NewTxBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Build()
-				return t
+				return tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Build()
 			},
 			head:        &chain.BlockSummary{Header: getHeader(100)},
 			forkConfig:  &thor.ForkConfig{GALACTICA: 10},
@@ -99,8 +95,7 @@ func TestValidateTransaction(t *testing.T) {
 		{
 			name: "unsupported dyn fee transaction type before Galactica fork",
 			getTx: func() *tx.Transaction {
-				t, _ := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).Build()
-				return t
+				return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).Build()
 			},
 			head:        &chain.BlockSummary{Header: getHeader(1)},
 			forkConfig:  &thor.ForkConfig{GALACTICA: 10},
@@ -109,8 +104,7 @@ func TestValidateTransaction(t *testing.T) {
 		{
 			name: "supported dyn fee transaction type after Galactica fork",
 			getTx: func() *tx.Transaction {
-				t, _ := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(big.NewInt(1000)).MaxPriorityFeePerGas(big.NewInt(10)).Build()
-				return t
+				return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(big.NewInt(1000)).MaxPriorityFeePerGas(big.NewInt(10)).Build()
 			},
 			head:        &chain.BlockSummary{Header: getHeader(100)},
 			forkConfig:  &thor.ForkConfig{GALACTICA: 10},
@@ -119,8 +113,7 @@ func TestValidateTransaction(t *testing.T) {
 		{
 			name: "legacy transaction with unsupported features",
 			getTx: func() *tx.Transaction {
-				t, _ := tx.NewTxBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Features(tx.Features(4)).Build()
-				return t
+				return tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Features(tx.Features(4)).Build()
 			},
 			head:        &chain.BlockSummary{Header: new(block.Builder).TransactionFeatures(tx.Features(1)).Build().Header()},
 			forkConfig:  &thor.NoFork,
@@ -129,8 +122,7 @@ func TestValidateTransaction(t *testing.T) {
 		{
 			name: "dyn fee transaction with unsupported features",
 			getTx: func() *tx.Transaction {
-				t, _ := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(big.NewInt(10_000)).MaxPriorityFeePerGas(big.NewInt(100)).Features(tx.Features(4)).Build()
-				return t
+				return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(big.NewInt(10_000)).MaxPriorityFeePerGas(big.NewInt(100)).Features(tx.Features(4)).Build()
 			},
 			head:        &chain.BlockSummary{Header: new(block.Builder).TransactionFeatures(tx.Features(1)).Build().Header()},
 			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
@@ -139,8 +131,7 @@ func TestValidateTransaction(t *testing.T) {
 		{
 			name: "legacy transaction with supported features",
 			getTx: func() *tx.Transaction {
-				t, _ := tx.NewTxBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Features(tx.DelegationFeature).Build()
-				return t
+				return tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Features(tx.DelegationFeature).Build()
 			},
 			head:        &chain.BlockSummary{Header: getHeader(1)},
 			forkConfig:  &thor.NoFork,
@@ -149,8 +140,7 @@ func TestValidateTransaction(t *testing.T) {
 		{
 			name: "dyn fee transaction with supported features",
 			getTx: func() *tx.Transaction {
-				t, _ := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).Features(tx.DelegationFeature).MaxFeePerGas(big.NewInt(1000)).MaxPriorityFeePerGas(big.NewInt(10)).Build()
-				return t
+				return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).Features(tx.DelegationFeature).MaxFeePerGas(big.NewInt(1000)).MaxPriorityFeePerGas(big.NewInt(10)).Build()
 			},
 			head:        &chain.BlockSummary{Header: getHeader(1)},
 			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
@@ -159,8 +149,7 @@ func TestValidateTransaction(t *testing.T) {
 		{
 			name: "max fee per gas less than max priority fee per gas",
 			getTx: func() *tx.Transaction {
-				t, _ := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(big.NewInt(10)).MaxPriorityFeePerGas(big.NewInt(100)).Build()
-				return t
+				return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(big.NewInt(10)).MaxPriorityFeePerGas(big.NewInt(100)).Build()
 			},
 			head:        &chain.BlockSummary{Header: getHeader(1)},
 			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
@@ -169,8 +158,7 @@ func TestValidateTransaction(t *testing.T) {
 		{
 			name: "max fee per gas is negative",
 			getTx: func() *tx.Transaction {
-				t, _ := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(big.NewInt(-10)).MaxPriorityFeePerGas(big.NewInt(-100)).Build()
-				return t
+				return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(big.NewInt(-10)).MaxPriorityFeePerGas(big.NewInt(-100)).Build()
 			},
 			head:        &chain.BlockSummary{Header: getHeader(1)},
 			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
@@ -179,8 +167,7 @@ func TestValidateTransaction(t *testing.T) {
 		{
 			name: "max priority fee per gas is negative",
 			getTx: func() *tx.Transaction {
-				t, _ := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(big.NewInt(10)).MaxPriorityFeePerGas(big.NewInt(-100)).Build()
-				return t
+				return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(big.NewInt(10)).MaxPriorityFeePerGas(big.NewInt(-100)).Build()
 			},
 			head:        &chain.BlockSummary{Header: getHeader(1)},
 			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
@@ -189,8 +176,7 @@ func TestValidateTransaction(t *testing.T) {
 		{
 			name: "max fee per gas is exceding 256 bits",
 			getTx: func() *tx.Transaction {
-				t, _ := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(new(big.Int).Lsh(big.NewInt(1), 257)).MaxPriorityFeePerGas(big.NewInt(10)).Build()
-				return t
+				return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(new(big.Int).Lsh(big.NewInt(1), 257)).MaxPriorityFeePerGas(big.NewInt(10)).Build()
 			},
 			head:        &chain.BlockSummary{Header: getHeader(1)},
 			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
@@ -199,8 +185,7 @@ func TestValidateTransaction(t *testing.T) {
 		{
 			name: "max fee per gas is nil",
 			getTx: func() *tx.Transaction {
-				t, _ := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxPriorityFeePerGas(big.NewInt(10)).Build()
-				return t
+				return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxPriorityFeePerGas(big.NewInt(10)).Build()
 			},
 			head:        &chain.BlockSummary{Header: getHeader(1)},
 			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
@@ -209,8 +194,7 @@ func TestValidateTransaction(t *testing.T) {
 		{
 			name: "max priority fee per gas is nil",
 			getTx: func() *tx.Transaction {
-				t, _ := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(big.NewInt(10)).Build()
-				return t
+				return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(big.NewInt(10)).Build()
 			},
 			head:        &chain.BlockSummary{Header: getHeader(1)},
 			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
@@ -243,8 +227,7 @@ func TestValidateTransactionWithState(t *testing.T) {
 			name: "dyn fee tx with not enough fee to pay for base fee",
 			getTx: func() *tx.Transaction {
 				maxFee := big.NewInt(thor.InitialBaseFee - 1)
-				t, _ := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(maxFee).Build()
-				return t
+				return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(maxFee).Build()
 			},
 			header:      getHeader(1),
 			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
@@ -254,8 +237,7 @@ func TestValidateTransactionWithState(t *testing.T) {
 			name: "dyn fee tx with max fee equals to base fee + 1",
 			getTx: func() *tx.Transaction {
 				maxFee := big.NewInt(thor.InitialBaseFee + 1)
-				t, _ := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(maxFee).Build()
-				return t
+				return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(maxFee).Build()
 			},
 			header:      getHeader(1),
 			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
@@ -264,8 +246,7 @@ func TestValidateTransactionWithState(t *testing.T) {
 		{
 			name: "legacy tx with gasPriceCoef 0",
 			getTx: func() *tx.Transaction {
-				t, _ := tx.NewTxBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).GasPriceCoef(0).Build()
-				return t
+				return tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).GasPriceCoef(0).Build()
 			},
 			header:      getHeader(1),
 			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
@@ -274,8 +255,7 @@ func TestValidateTransactionWithState(t *testing.T) {
 		{
 			name: "dyn fee tx not accepted with maxFeePerGas equals to zero",
 			getTx: func() *tx.Transaction {
-				t, _ := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(common.Big0).Build()
-				return t
+				return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(common.Big0).Build()
 			},
 			header:      getHeader(1),
 			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
@@ -285,8 +265,7 @@ func TestValidateTransactionWithState(t *testing.T) {
 			name: "dyn fee tx with maxPriorityFeePerGas = 0, maxFeePerGas == baseFee + 1",
 			getTx: func() *tx.Transaction {
 				maxFeePerGas := new(big.Int).Add(getHeader(1).BaseFee(), common.Big1)
-				t, _ := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(maxFeePerGas).MaxPriorityFeePerGas(common.Big0).Build()
-				return t
+				return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(maxFeePerGas).MaxPriorityFeePerGas(common.Big0).Build()
 			},
 			header:      getHeader(1),
 			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
@@ -295,8 +274,7 @@ func TestValidateTransactionWithState(t *testing.T) {
 		{
 			name: "dyn fee tx with maxPriorityFeePerGas = 0, maxFeePerGas == baseFee",
 			getTx: func() *tx.Transaction {
-				t, _ := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(getHeader(1).BaseFee()).MaxPriorityFeePerGas(common.Big0).Build()
-				return t
+				return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(getHeader(1).BaseFee()).MaxPriorityFeePerGas(common.Big0).Build()
 			},
 			header:      getHeader(1),
 			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
@@ -306,8 +284,7 @@ func TestValidateTransactionWithState(t *testing.T) {
 			name: "dyn fee tx with maxPriorityFeePerGas = 0, maxFeePerGas == baseFee - 1",
 			getTx: func() *tx.Transaction {
 				maxFeePerGas := new(big.Int).Sub(getHeader(1).BaseFee(), common.Big1)
-				t, _ := tx.NewTxBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(maxFeePerGas).MaxPriorityFeePerGas(common.Big0).Build()
-				return t
+				return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(maxFeePerGas).MaxPriorityFeePerGas(common.Big0).Build()
 			},
 			header:      getHeader(1),
 			forkConfig:  &thor.ForkConfig{GALACTICA: 0},

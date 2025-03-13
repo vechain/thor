@@ -93,27 +93,27 @@ func (tr *testResolvedTransaction) TestResolveTransaction() {
 	}
 
 	for _, f := range fun {
-		trx := f.getBuilder().MustBuild()
+		trx := f.getBuilder().Build()
 		_, err := runtime.ResolveTransaction(trx)
 		tr.assert.Equal(secp256k1.ErrInvalidSignatureLen.Error(), err.Error())
 
-		trx = f.getBuilder().Gas(21000 - 1).MustBuild()
+		trx = f.getBuilder().Gas(21000 - 1).Build()
 		_, err = runtime.ResolveTransaction(txSign(trx))
 		tr.assert.NotNil(err)
 
 		address := thor.BytesToAddress([]byte("addr"))
-		trx = f.getBuilder().Clause(tx.NewClause(&address).WithValue(big.NewInt(-10)).WithData(nil)).MustBuild()
+		trx = f.getBuilder().Clause(tx.NewClause(&address).WithValue(big.NewInt(-10)).WithData(nil)).Build()
 		_, err = runtime.ResolveTransaction(txSign(trx))
 		tr.assert.NotNil(err)
 
 		trx = f.getBuilder().
 			Clause(tx.NewClause(&address).WithValue(math.MaxBig256).WithData(nil)).
 			Clause(tx.NewClause(&address).WithValue(math.MaxBig256).WithData(nil)).
-			MustBuild()
+			Build()
 		_, err = runtime.ResolveTransaction(txSign(trx))
 		tr.assert.NotNil(err)
 
-		_, err = runtime.ResolveTransaction(txSign(f.getBuilder().MustBuild()))
+		_, err = runtime.ResolveTransaction(txSign(f.getBuilder().Build()))
 		tr.assert.Nil(err)
 	}
 }
@@ -144,23 +144,23 @@ func (tr *testResolvedTransaction) TestCommonTo() {
 			assert(to)
 		}
 
-		legacyTx := f.getBuilder().MustBuild()
+		legacyTx := f.getBuilder().Build()
 		commonTo(txSign(legacyTx), tr.assert.Nil)
 
-		legacyTx = f.getBuilder().Clause(tx.NewClause(nil)).MustBuild()
+		legacyTx = f.getBuilder().Clause(tx.NewClause(nil)).Build()
 		commonTo(txSign(legacyTx), tr.assert.Nil)
 
-		legacyTx = f.getBuilder().Clause(clause()).Clause(tx.NewClause(nil)).MustBuild()
+		legacyTx = f.getBuilder().Clause(clause()).Clause(tx.NewClause(nil)).Build()
 		commonTo(txSign(legacyTx), tr.assert.Nil)
 
 		address := thor.BytesToAddress([]byte("addr1"))
 		legacyTx = f.getBuilder().
 			Clause(clause()).
 			Clause(tx.NewClause(&address)).
-			MustBuild()
+			Build()
 		commonTo(txSign(legacyTx), tr.assert.Nil)
 
-		legacyTx = f.getBuilder().Clause(clause()).MustBuild()
+		legacyTx = f.getBuilder().Clause(clause()).Build()
 		commonTo(txSign(legacyTx), tr.assert.NotNil)
 	}
 }
@@ -187,7 +187,7 @@ func (tr *testResolvedTransaction) TestBuyGas() {
 
 	tr.assert.Equal(
 		genesis.DevAccounts()[0].Address,
-		buyGas(txSign(txBuild().Clause(clause().WithValue(big.NewInt(100))).MustBuild())),
+		buyGas(txSign(txBuild().Clause(clause().WithValue(big.NewInt(100))).Build())),
 	)
 
 	bind := builtin.Prototype.Native(state).Bind(genesis.DevAccounts()[1].Address)
@@ -195,14 +195,14 @@ func (tr *testResolvedTransaction) TestBuyGas() {
 	bind.AddUser(genesis.DevAccounts()[0].Address, targetTime)
 	tr.assert.Equal(
 		genesis.DevAccounts()[1].Address,
-		buyGas(txSign(txBuild().Clause(clause().WithValue(big.NewInt(100))).MustBuild())),
+		buyGas(txSign(txBuild().Clause(clause().WithValue(big.NewInt(100))).Build())),
 	)
 
 	bind.Sponsor(genesis.DevAccounts()[2].Address, true)
 	bind.SelectSponsor(genesis.DevAccounts()[2].Address)
 	tr.assert.Equal(
 		genesis.DevAccounts()[2].Address,
-		buyGas(txSign(txBuild().Clause(clause().WithValue(big.NewInt(100))).MustBuild())),
+		buyGas(txSign(txBuild().Clause(clause().WithValue(big.NewInt(100))).Build())),
 	)
 }
 
@@ -212,7 +212,7 @@ func clause() *tx.Clause {
 }
 
 func txBuilder(tag byte, txType tx.Type) *tx.Builder {
-	return tx.NewTxBuilder(txType).
+	return tx.NewBuilder(txType).
 		GasPriceCoef(1).
 		Gas(1000000).
 		Expiration(100).

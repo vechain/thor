@@ -20,7 +20,7 @@ import (
 )
 
 func newTx(txType tx.Type) *tx.Transaction {
-	trx := tx.NewTxBuilder(txType).MustBuild()
+	trx := tx.NewBuilder(txType).Build()
 
 	pk, _ := crypto.GenerateKey()
 
@@ -125,16 +125,6 @@ func (logs transferLogs) Reverse() (ret transferLogs) {
 		ret = append(ret, logs[i])
 	}
 	return
-}
-
-func TestErrTxTypeNotSupported(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Errorf("Expected to panic")
-		}
-	}()
-	nonExistingTxType := tx.Type(100)
-	newTx(nonExistingTxType)
 }
 
 func TestEvents(t *testing.T) {
