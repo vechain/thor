@@ -7,8 +7,9 @@ package tx
 
 import (
 	"encoding/binary"
-	"github.com/ethereum/go-ethereum/rlp"
 	"math/big"
+
+	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/vechain/thor/v2/thor"
 )

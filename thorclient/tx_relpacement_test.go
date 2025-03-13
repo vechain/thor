@@ -2,19 +2,19 @@ package thorclient_test
 
 import (
 	"fmt"
+	"math/big"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/tx"
-	"math/big"
-	"testing"
-	"time"
 )
 
-
-func waitForNext(t *testing.T,client *thorclient.Client) {
+func waitForNext(t *testing.T, client *thorclient.Client) {
 	best, err := client.Block("best")
 	require.NoError(t, err)
 
@@ -80,7 +80,7 @@ func TestTxReplacement(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Logf("txs sent, waiting for next block (low=%s, high=%s)", lowFeeRes.ID.String(), highFeeRes.ID.String())
-	waitForNext(t,client)
+	waitForNext(t, client)
 
 	lowFeeTxRes, err := client.Transaction(lowFeeRes.ID)
 	require.NoError(t, err)

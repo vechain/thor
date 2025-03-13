@@ -7,9 +7,10 @@ package txpool
 
 import (
 	"errors"
-	"github.com/vechain/thor/v2/log"
 	"math/big"
 	"sync"
+
+	"github.com/vechain/thor/v2/log"
 
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -17,20 +18,20 @@ import (
 
 // txObjectMap to maintain mapping of tx hash to tx object, account quota and pending cost.
 type txObjectMap struct {
-	lock      sync.RWMutex
-	mapByHash map[thor.Bytes32]*txObject
-	mapByID   map[thor.Bytes32]*txObject
-	quota     map[thor.Address]int
-	cost      map[thor.Address]*big.Int
+	lock         sync.RWMutex
+	mapByHash    map[thor.Bytes32]*txObject
+	mapByID      map[thor.Bytes32]*txObject
+	quota        map[thor.Address]int
+	cost         map[thor.Address]*big.Int
 	replacements map[thor.Address]map[uint64]thor.Bytes32
 }
 
 func newTxObjectMap() *txObjectMap {
 	return &txObjectMap{
-		mapByHash: make(map[thor.Bytes32]*txObject),
-		mapByID:   make(map[thor.Bytes32]*txObject),
-		quota:     make(map[thor.Address]int),
-		cost:      make(map[thor.Address]*big.Int),
+		mapByHash:    make(map[thor.Bytes32]*txObject),
+		mapByID:      make(map[thor.Bytes32]*txObject),
+		quota:        make(map[thor.Address]int),
+		cost:         make(map[thor.Address]*big.Int),
 		replacements: make(map[thor.Address]map[uint64]thor.Bytes32),
 	}
 }
