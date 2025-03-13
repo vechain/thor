@@ -25,6 +25,7 @@ import (
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
@@ -911,7 +912,7 @@ func TestExtensionNative(t *testing.T) {
 	gene := genesis.NewDevnet()
 	genesisBlock, _, _, _ := gene.Build(state.NewStater(db))
 	repo, _ := chain.NewRepository(db, genesisBlock)
-	st.SetCode(builtin.Extension.Address, builtin.Extension.V2.RuntimeBytecodes())
+	st.SetCode(builtin.Extension.Address, builtin.Extension.V3.RuntimeBytecodes())
 
 	privKeys := make([]*ecdsa.PrivateKey, 2)
 
@@ -948,7 +949,7 @@ func TestExtensionNative(t *testing.T) {
 
 	test.Case("blake2b256", []byte("hello world")).
 		ShouldOutput(thor.Blake2b([]byte("hello world"))).
-		ExpectedGas(913).
+		ExpectedGas(935).
 		Assert(t)
 
 	expected, _ := builtin.Energy.Native(st, 0).TokenTotalSupply()
@@ -960,30 +961,30 @@ func TestExtensionNative(t *testing.T) {
 	test.Case("txBlockRef").
 		BlockRef(tx.NewBlockRef(1)).
 		ShouldOutput(tx.NewBlockRef(1)).
-		ExpectedGas(488).
+		ExpectedGas(532).
 		Assert(t)
 
 	test.Case("txExpiration").
 		Expiration(100).
 		ShouldOutput(big.NewInt(100)).
-		ExpectedGas(388).
+		ExpectedGas(410).
 		Assert(t)
 
 	test.Case("txProvedWork").
 		ProvedWork(big.NewInt(1e12)).
 		ShouldOutput(big.NewInt(1e12)).
-		ExpectedGas(426).
+		ExpectedGas(470).
 		Assert(t)
 
 	test.Case("txID").
 		TxID(thor.BytesToBytes32([]byte("txID"))).
 		ShouldOutput(thor.BytesToBytes32([]byte("txID"))).
-		ExpectedGas(422).
+		ExpectedGas(444).
 		Assert(t)
 
 	test.Case("blockID", big.NewInt(3)).
 		ShouldOutput(thor.Bytes32{}).
-		ExpectedGas(570).
+		ExpectedGas(614).
 		Assert(t)
 
 	test.Case("blockID", big.NewInt(2)).
@@ -1000,7 +1001,7 @@ func TestExtensionNative(t *testing.T) {
 
 	test.Case("blockTotalScore", big.NewInt(3)).
 		ShouldOutput(uint64(0)).
-		ExpectedGas(454).
+		ExpectedGas(476).
 		Assert(t)
 
 	test.Case("blockTotalScore", big.NewInt(2)).
@@ -1017,7 +1018,7 @@ func TestExtensionNative(t *testing.T) {
 
 	test.Case("blockTime", big.NewInt(3)).
 		ShouldOutput(&big.Int{}).
-		ExpectedGas(404).
+		ExpectedGas(426).
 		Assert(t)
 
 	test.Case("blockTime", big.NewInt(2)).
@@ -1052,5 +1053,52 @@ func TestExtensionNative(t *testing.T) {
 		GasPayer(gasPayer).
 		ShouldOutput(gasPayer).
 		Assert(t)
+}
 
+func TestExtensionV3(t *testing.T) {
+	fc := thor.SoloFork
+	chain, err := testchain.NewWithFork(fc)
+	assert.Nil(t, err)
+
+	// galactica fork happens at block 1
+	assert.NoError(t, chain.MintBlock(genesis.DevAccounts()[0]))
+	assert.NoError(t, chain.MintBlock(genesis.DevAccounts()[0]))
+
+	// setup txClauseIndex call data
+	txClauseIndexABI, ok := builtin.Extension.V3.ABI.MethodByName("txClauseIndex")
+	assert.True(t, ok)
+	txClauseIndex, err := txClauseIndexABI.EncodeInput()
+	assert.Nil(t, err)
+	txClauseIndexClause := tx.NewClause(&builtin.Extension.Address).WithData(txClauseIndex)
+
+	// setup txClauseCount call data
+	txClauseCountABI, ok := builtin.Extension.V3.ABI.MethodByName("txClauseCount")
+	assert.True(t, ok)
+	txClauseCount, err := txClauseCountABI.EncodeInput()
+	assert.Nil(t, err)
+	txClauseCountClause := tx.NewClause(&builtin.Extension.Address).WithData(txClauseCount)
+
+	// init the runtime
+	best := chain.Repo().BestBlockSummary()
+	rtChain := chain.Repo().NewChain(best.Header.ParentID())
+	rtStater := chain.Stater().NewState(best.Root())
+	rt := runtime.New(rtChain, rtStater, &xenv.BlockContext{Number: best.Header.Number(), Time: best.Header.Timestamp(), TotalScore: 1}, thor.ForkConfig{})
+
+	// test txClauseIndex
+	clauseIndex := uint32(934)
+	exec, _ := rt.PrepareClause(txClauseIndexClause, clauseIndex, math.MaxUint64, &xenv.TransactionContext{})
+	out, _, err := exec()
+	assert.Nil(t, err)
+	val := new(big.Int).SetBytes(out.Data)
+	assert.Equal(t, uint64(clauseIndex), val.Uint64())
+
+	// test txClauseCount
+	clauseCount := uint32(712)
+	exec, _ = rt.PrepareClause(txClauseCountClause, 0, math.MaxUint64, &xenv.TransactionContext{
+		ClauseCount: clauseCount,
+	})
+	out, _, err = exec()
+	assert.Nil(t, err)
+	val = new(big.Int).SetBytes(out.Data)
+	assert.Equal(t, uint64(clauseCount), val.Uint64())
 }
