@@ -444,7 +444,10 @@ func (d *Debug) handleTraceCallOption(opt *TraceCallOption) (*xenv.TransactionCo
 		gas = d.callGasLimit
 	}
 
-	var txCtx xenv.TransactionContext
+	txCtx := xenv.TransactionContext{
+		ClauseCount: 1,
+		Expiration:  opt.Expiration,
+	}
 	if opt.GasPrice == nil {
 		txCtx.GasPrice = new(big.Int)
 	} else {
@@ -465,7 +468,6 @@ func (d *Debug) handleTraceCallOption(opt *TraceCallOption) (*xenv.TransactionCo
 	} else {
 		txCtx.ProvedWork = (*big.Int)(opt.ProvedWork)
 	}
-	txCtx.Expiration = opt.Expiration
 
 	if len(opt.BlockRef) > 0 {
 		blockRef, err := hexutil.Decode(opt.BlockRef)

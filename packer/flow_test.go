@@ -298,7 +298,7 @@ func TestAdoptErr(t *testing.T) {
 		Nonce(nonce).
 		Clause(clause).
 		BlockRef(tx.NewBlockRef(1))
-	tx4 := tx.MustSign(builder.MustBuild(), genesis.DevAccounts()[9].PrivateKey)
+	tx4 := tx.MustSign(builder.Build(), genesis.DevAccounts()[9].PrivateKey)
 
 	expectedErrorMessage = "bad tx: tx origin blocked"
 	if err := flow.Adopt(tx4); err.Error() != expectedErrorMessage {
@@ -315,7 +315,7 @@ func TestAdoptErr(t *testing.T) {
 		Clause(clause).
 		Features(tx.Features(0x01)).
 		BlockRef(tx.NewBlockRef(1))
-	tx5 := tx.MustSignDelegated(builder.MustBuild(), genesis.DevAccounts()[8].PrivateKey, genesis.DevAccounts()[9].PrivateKey)
+	tx5 := tx.MustSignDelegated(builder.Build(), genesis.DevAccounts()[8].PrivateKey, genesis.DevAccounts()[9].PrivateKey)
 
 	expectedErrorMessage = "bad tx: tx delegator blocked"
 	if err := flow.Adopt(tx5); err.Error() != expectedErrorMessage {
