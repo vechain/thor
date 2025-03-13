@@ -80,6 +80,16 @@ func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 		return false, errors.New("known tx")
 	}
 
+	if nonce, ok := o.ReplacementNonce(); ok {
+		exists, err := state.HasUsedReplacement(o.Origin(), nonce)
+		if err != nil {
+			return false, err
+		}
+		if exists {
+			return false, errors.New("replacement nonce already used")
+		}
+	}
+
 	if dep := o.DependsOn(); dep != nil {
 		txMeta, err := chain.GetTransactionMeta(*dep)
 		if err != nil {

@@ -60,7 +60,10 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (flow
 
 	var features tx.Features
 	if parent.Header.Number()+1 >= p.forkConfig.VIP191 {
-		features |= tx.DelegationFeature
+		features |= tx.FeatureDelegation
+	}
+	if parent.Header.Number()+1 >= p.forkConfig.GALACTICA {
+		features |= tx.FeatureReplacement
 	}
 
 	authority := builtin.Authority.Native(state)
@@ -158,7 +161,10 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 
 	var features tx.Features
 	if parent.Header.Number()+1 >= p.forkConfig.VIP191 {
-		features |= tx.DelegationFeature
+		features |= tx.FeatureDelegation
+	}
+	if parent.Header.Number()+1 >= p.forkConfig.GALACTICA {
+		features |= tx.FeatureReplacement
 	}
 
 	gl := gasLimit

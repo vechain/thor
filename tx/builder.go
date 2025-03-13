@@ -7,6 +7,7 @@ package tx
 
 import (
 	"encoding/binary"
+	"github.com/ethereum/go-ethereum/rlp"
 	"math/big"
 
 	"github.com/vechain/thor/v2/thor"
@@ -107,6 +108,17 @@ func (b *Builder) DependsOn(txID *thor.Bytes32) *Builder {
 // Features set features.
 func (b *Builder) Features(feat Features) *Builder {
 	b.reserved.Features = feat
+	return b
+}
+
+// Replacement enables the replacement feature
+func (b *Builder) Replacement(id uint64) *Builder {
+	encoded, err := rlp.EncodeToBytes(id)
+	if err != nil {
+		panic(err)
+	}
+	b.reserved.Unused = []rlp.RawValue{encoded}
+	b.reserved.Features.SetReplacement(true)
 	return b
 }
 

@@ -181,6 +181,16 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 		}
 	}
 
+	if nonce, ok := t.ReplacementNonce(); ok {
+		exists, err := f.runtime.State().HasUsedReplacement(origin, nonce)
+		if err != nil {
+			return err
+		}
+		if exists {
+			return errTxNotAdoptableForever
+		}
+	}
+
 	checkpoint := f.runtime.State().NewCheckpoint()
 	receipt, err := f.runtime.ExecuteTransaction(t)
 	if err != nil {

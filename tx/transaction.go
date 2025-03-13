@@ -258,6 +258,26 @@ func (t *Transaction) Delegator() (*thor.Address, error) {
 	return &delegator, nil
 }
 
+// HasReplacement returns whether the tx is a replacement for another tx.
+func (t *Transaction) HasReplacement() bool {
+	reserved := t.body.reserved()
+	return reserved.Features.HasReplacement() && len(reserved.Unused) > 0
+}
+
+// ReplacementNonce returns nonce of the tx it replaces.
+func (t *Transaction) ReplacementNonce() (uint64, bool) {
+	unused := t.body.reserved().Unused
+	if len(unused) < 1 {
+		return 0, false
+	}
+	var nonce uint64
+	err := rlp.DecodeBytes(unused[0], &nonce)
+	if err != nil {
+		return 0, false
+	}
+	return nonce, true
+}
+
 // WithSignature create a new tx with signature set.
 // For delegated tx, sig is joined with signatures of originator and delegator.
 func (t *Transaction) WithSignature(sig []byte) *Transaction {
@@ -277,7 +297,7 @@ func (t *Transaction) TestFeatures(supported Features) error {
 		return errors.New("unsupported features")
 	}
 
-	if len(r.Unused) > 0 {
+	if !supported.HasReplacement() && len(r.Unused) > 0 {
 		return errors.New("unused reserved slot")
 	}
 	return nil

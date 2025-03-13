@@ -346,6 +346,20 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 			}
 		}
 
+		if nonce, ok := tx.ReplacementNonce(); ok {
+			origin, err := tx.Origin()
+			if err != nil {
+				return nil, nil, err
+			}
+			exists, err := rt.State().HasUsedReplacement(origin, nonce)
+			if err != nil {
+				return nil, nil, err
+			}
+			if exists {
+				return nil, nil, consensusError("tx replacement nonce used")
+			}
+		}
+
 		receipt, err := rt.ExecuteTransaction(tx)
 		if err != nil {
 			return nil, nil, err

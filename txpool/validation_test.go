@@ -24,6 +24,7 @@ import (
 func TestValidateTransaction(t *testing.T) {
 	db := muxdb.NewMem()
 	repo := newChainRepo(db)
+	stater := state.NewStater(db)
 
 	tests := []struct {
 		name        string
@@ -131,7 +132,7 @@ func TestValidateTransaction(t *testing.T) {
 		{
 			name: "legacy transaction with supported features",
 			getTx: func() *tx.Transaction {
-				return tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Features(tx.DelegationFeature).Build()
+				return tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Features(tx.FeatureDelegation).Build()
 			},
 			head:        &chain.BlockSummary{Header: getHeader(1)},
 			forkConfig:  &thor.NoFork,
@@ -140,7 +141,7 @@ func TestValidateTransaction(t *testing.T) {
 		{
 			name: "dyn fee transaction with supported features",
 			getTx: func() *tx.Transaction {
-				return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).Features(tx.DelegationFeature).MaxFeePerGas(big.NewInt(1000)).MaxPriorityFeePerGas(big.NewInt(10)).Build()
+				return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).Features(tx.FeatureDelegation).MaxFeePerGas(big.NewInt(1000)).MaxPriorityFeePerGas(big.NewInt(10)).Build()
 			},
 			head:        &chain.BlockSummary{Header: getHeader(1)},
 			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
@@ -204,7 +205,7 @@ func TestValidateTransaction(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateTransaction(tt.getTx(), repo, tt.head, tt.forkConfig)
+			err := ValidateTransaction(tt.getTx(), repo, stater, tt.head, tt.forkConfig)
 			assert.Equal(t, tt.expectedErr, err)
 		})
 	}

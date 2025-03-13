@@ -196,6 +196,27 @@ func (s *State) SetEnergy(addr thor.Address, energy *big.Int, blockTime uint64) 
 	return nil
 }
 
+// HasUsedReplacement checks if the given address has already used the replacement feature for the given data.
+func (s *State) HasUsedReplacement(addr thor.Address, id uint64) (bool, error) {
+	idBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(idBytes, id)
+	key := thor.Blake2b(addr.Bytes(), idBytes)
+
+	storage, err := s.GetStorage(addr, key)
+	if err != nil {
+		return false, err
+	}
+	return !storage.IsZero(), nil
+}
+
+// SetUsedReplacement set the given address has used the replacement feature for the given data.
+func (s *State) SetUsedReplacement(addr thor.Address, id uint64) {
+	var idBytes []byte
+	binary.BigEndian.PutUint64(idBytes, id)
+	key := thor.Blake2b(addr.Bytes(), idBytes)
+	s.SetStorage(addr, key, thor.BytesToBytes32(idBytes))
+}
+
 // GetMaster get master for the given address.
 // Master can move energy, manage users...
 func (s *State) GetMaster(addr thor.Address) (thor.Address, error) {
@@ -553,4 +574,6 @@ type (
 	}
 	codeKey           thor.Address
 	storageBarrierKey thor.Address
+
+	replacementKey thor.Address
 )
