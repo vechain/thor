@@ -17,6 +17,12 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
+// Config for the devnet network, to be extended by our needs
+type DevConfig struct {
+	ForkConfig      thor.ForkConfig
+	KeyBaseGasPrice *big.Int
+}
+
 // DevAccount account for development.
 type DevAccount struct {
 	Address    thor.Address
@@ -58,19 +64,22 @@ func DevAccounts() []DevAccount {
 
 // NewDevnet create genesis for solo mode.
 func NewDevnet() *Genesis {
-	return NewDevnetWithConfig(thor.SoloFork)
+	return NewDevnetWithConfig(DevConfig{ForkConfig: thor.SoloFork})
 }
 
-func NewDevnetWithConfig(config thor.ForkConfig) *Genesis {
+func NewDevnetWithConfig(config DevConfig) *Genesis {
 	launchTime := uint64(1526400000) // 'Wed May 16 2018 00:00:00 GMT+0800 (CST)'
 
 	executor := DevAccounts()[0].Address
 	soloBlockSigner := DevAccounts()[0]
+	if config.KeyBaseGasPrice == nil {
+		config.KeyBaseGasPrice = thor.InitialBaseGasPrice
+	}
 
 	builder := new(Builder).
 		GasLimit(thor.InitialGasLimit).
 		Timestamp(launchTime).
-		ForkConfig(config).
+		ForkConfig(config.ForkConfig).
 		State(func(state *state.State) error {
 			// setup builtin contracts
 			if err := state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes()); err != nil {
@@ -111,7 +120,7 @@ func NewDevnetWithConfig(config thor.ForkConfig) *Genesis {
 			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyRewardRatio, thor.InitialRewardRatio)),
 			executor).
 		Call(
-			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyBaseGasPrice, thor.InitialBaseGasPrice)),
+			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyBaseGasPrice, config.KeyBaseGasPrice)),
 			executor).
 		Call(
 			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)),

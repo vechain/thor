@@ -312,14 +312,14 @@ func initAccountServer(t *testing.T, enabledDeprecated bool) {
 	ts = httptest.NewServer(router)
 }
 
-func buildTxWithClauses(txType tx.TxType, chainTag byte, clauses ...*tx.Clause) *tx.Transaction {
-	trx := tx.NewTxBuilder(txType).
+func buildTxWithClauses(txType tx.Type, chainTag byte, clauses ...*tx.Clause) *tx.Transaction {
+	trx := tx.NewBuilder(txType).
 		ChainTag(chainTag).
 		Expiration(10).
 		Gas(1000000).
 		MaxFeePerGas(big.NewInt(1000)).
 		Clauses(clauses).
-		MustBuild()
+		Build()
 	return tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)
 }
 

@@ -22,13 +22,14 @@ import (
 
 // Packer to pack txs and build new blocks.
 type Packer struct {
-	repo           *chain.Repository
-	stater         *state.Stater
-	nodeMaster     thor.Address
-	beneficiary    *thor.Address
-	targetGasLimit uint64
-	forkConfig     thor.ForkConfig
-	seeder         *poa.Seeder
+	repo             *chain.Repository
+	stater           *state.Stater
+	nodeMaster       thor.Address
+	beneficiary      *thor.Address
+	targetGasLimit   uint64
+	forkConfig       thor.ForkConfig
+	seeder           *poa.Seeder
+	minTxPriorityFee *big.Int
 }
 
 // New create a new Packer instance.
@@ -39,6 +40,7 @@ func New(
 	nodeMaster thor.Address,
 	beneficiary *thor.Address,
 	forkConfig thor.ForkConfig,
+	minTxPriorityFee uint64,
 ) *Packer {
 	return &Packer{
 		repo,
@@ -48,6 +50,7 @@ func New(
 		0,
 		forkConfig,
 		poa.NewSeeder(repo),
+		new(big.Int).SetUint64(minTxPriorityFee),
 	}
 }
 

@@ -6,8 +6,6 @@
 package blocks
 
 import (
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/vechain/thor/v2/chain"
@@ -71,13 +69,14 @@ type JSONOutput struct {
 
 type JSONEmbeddedTx struct {
 	ID                   thor.Bytes32        `json:"id"`
+	Type                 uint8               `json:"type"`
 	ChainTag             byte                `json:"chainTag"`
 	BlockRef             string              `json:"blockRef"`
 	Expiration           uint32              `json:"expiration"`
 	Clauses              []*JSONClause       `json:"clauses"`
 	GasPriceCoef         uint8               `json:"gasPriceCoef"`
-	MaxFeePerGas         *big.Int            `json:"maxFeePerGas,omitempty"`
-	MaxPriorityFeePerGas *big.Int            `json:"maxPriorityFeePerGas,omitempty"`
+	MaxFeePerGas         *hexutil.Big        `json:"maxFeePerGas,omitempty"`
+	MaxPriorityFeePerGas *hexutil.Big        `json:"maxPriorityFeePerGas,omitempty"`
 	Gas                  uint64              `json:"gas"`
 	Origin               thor.Address        `json:"origin"`
 	Delegator            *thor.Address       `json:"delegator"`
@@ -178,6 +177,7 @@ func buildJSONEmbeddedTxs(txs tx.Transactions, receipts tx.Receipts) []*JSONEmbe
 
 		embedTx := &JSONEmbeddedTx{
 			ID:         trx.ID(),
+			Type:       trx.Type(),
 			ChainTag:   trx.ChainTag(),
 			BlockRef:   hexutil.Encode(blockRef[:]),
 			Expiration: trx.Expiration(),
@@ -199,8 +199,8 @@ func buildJSONEmbeddedTxs(txs tx.Transactions, receipts tx.Receipts) []*JSONEmbe
 		if trx.Type() == tx.TypeLegacy {
 			embedTx.GasPriceCoef = trx.GasPriceCoef()
 		} else {
-			embedTx.MaxFeePerGas = trx.MaxFeePerGas()
-			embedTx.MaxPriorityFeePerGas = trx.MaxPriorityFeePerGas()
+			embedTx.MaxFeePerGas = (*hexutil.Big)(trx.MaxFeePerGas())
+			embedTx.MaxPriorityFeePerGas = (*hexutil.Big)(trx.MaxPriorityFeePerGas())
 		}
 		jTxs = append(jTxs, embedTx)
 	}

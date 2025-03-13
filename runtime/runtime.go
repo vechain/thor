@@ -60,8 +60,8 @@ var baseChainConfig = vm.ChainConfig{
 		Ethash:              nil,
 		Clique:              nil,
 	},
-	IstanbulBlock:  nil,
-	GalacticaBlock: nil,
+	IstanbulBlock: nil,
+	ShanghaiBlock: nil,
 }
 
 // Output output of clause execution.
@@ -88,6 +88,7 @@ type Runtime struct {
 	state       *state.State
 	ctx         *xenv.BlockContext
 	chainConfig vm.ChainConfig
+	forkConfig  thor.ForkConfig
 }
 
 // New create a Runtime object.
@@ -100,7 +101,7 @@ func New(
 	currentChainConfig := baseChainConfig
 	currentChainConfig.ConstantinopleBlock = big.NewInt(int64(forkConfig.ETH_CONST))
 	currentChainConfig.IstanbulBlock = big.NewInt(int64(forkConfig.ETH_IST))
-	currentChainConfig.GalacticaBlock = big.NewInt(int64(forkConfig.GALACTICA))
+	currentChainConfig.ShanghaiBlock = big.NewInt(int64(forkConfig.GALACTICA))
 	if chain != nil {
 		// use genesis id as chain id
 		currentChainConfig.ChainID = new(big.Int).SetBytes(chain.GenesisID().Bytes())
@@ -109,7 +110,7 @@ func New(
 	// allocate precompiled contracts
 	var precompiled map[common.Address]vm.PrecompiledContract
 	if forkConfig.GALACTICA == ctx.Number {
-		precompiled = vm.PrecompiledContractsGalactica
+		precompiled = vm.PrecompiledContractsShanghai
 	} else if forkConfig.ETH_IST == ctx.Number {
 		precompiled = vm.PrecompiledContractsIstanbul
 	} else if ctx.Number == 0 {
@@ -137,6 +138,7 @@ func New(
 		state:       state,
 		ctx:         ctx,
 		chainConfig: currentChainConfig,
+		forkConfig:  forkConfig,
 	}
 	return &rt
 }
@@ -407,8 +409,7 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 		return nil, err
 	}
 
-	galactica := rt.chainConfig.IsGalactica(big.NewInt(int64(rt.ctx.Number)))
-	baseGasPrice, gasPrice, payer, _, returnGas, err := resolvedTx.BuyGas(rt.state, rt.ctx.Time, &fork.GalacticaItems{IsActive: galactica, BaseFee: rt.ctx.BaseFee})
+	baseGasPrice, gasPrice, payer, _, returnGas, err := resolvedTx.BuyGas(rt.state, rt.ctx.Time, &fork.GalacticaItems{IsActive: rt.ctx.Number >= rt.forkConfig.GALACTICA, BaseFee: rt.ctx.BaseFee})
 	if err != nil {
 		return nil, err
 	}
@@ -506,8 +507,8 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 			if err != nil {
 				return nil, err
 			}
-			rewardGasPrice := fork.GalacticaPriorityPrice(tx, baseGasPrice, provedWork, &fork.GalacticaItems{IsActive: galactica, BaseFee: rt.ctx.BaseFee})
-			reward := fork.CalculateReward(receipt.GasUsed, rewardGasPrice, rewardRatio, galactica)
+			rewardGasPrice := fork.GalacticaPriorityPrice(tx, baseGasPrice, provedWork, &fork.GalacticaItems{IsActive: rt.ctx.Number >= rt.forkConfig.GALACTICA, BaseFee: rt.ctx.BaseFee})
+			reward := fork.CalculateReward(receipt.GasUsed, rewardGasPrice, rewardRatio, rt.ctx.Number >= rt.forkConfig.GALACTICA)
 
 			if err := builtin.Energy.Native(rt.state, rt.ctx.Time).Add(rt.ctx.Beneficiary, reward); err != nil {
 				return nil, err

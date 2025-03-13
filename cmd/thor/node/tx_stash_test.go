@@ -18,9 +18,9 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func newTx(txType tx.TxType) *tx.Transaction {
+func newTx(txType tx.Type) *tx.Transaction {
 	return tx.MustSign(
-		tx.NewTxBuilder(txType).Nonce(rand.Uint64()).MustBuild(), //#nosec
+		tx.NewBuilder(txType).Nonce(rand.Uint64()).Build(), //#nosec
 		genesis.DevAccounts()[0].PrivateKey,
 	)
 }

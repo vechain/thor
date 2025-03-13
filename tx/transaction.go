@@ -35,12 +35,12 @@ var (
 	ErrMaxFeeVeryHigh = errors.New("max fee per gas higher than 2^256-1")
 )
 
-type TxType = byte
+type Type = byte
 
 // Starting from 0x51 to avoid ambiguity with Ethereum tx type codes.
 const (
-	TypeLegacy     = TxType(0x00)
-	TypeDynamicFee = TxType(0x51)
+	TypeLegacy     = Type(0x00)
+	TypeDynamicFee = Type(0x51)
 )
 
 // Transaction is an immutable tx type.
@@ -81,13 +81,6 @@ type TxData interface {
 	evaluateWork(origin thor.Address) func(nonce uint64) *big.Int
 
 	encode(w io.Writer) error
-}
-
-// NewTx creates a new transaction.
-func NewTx(body TxData) *Transaction {
-	tx := new(Transaction)
-	tx.setDecoded(body.copy(), 0)
-	return tx
 }
 
 // Type returns the transaction type.

@@ -36,18 +36,23 @@ var (
 	baseGasPrice = big.NewInt(1e13)
 )
 
+type Options struct {
+	GasLimit         uint64
+	SkipLogs         bool
+	MinTxPriorityFee uint64
+	OnDemand         bool
+	BlockInterval    uint64
+}
+
 // Solo mode is the standalone client without p2p server
 type Solo struct {
-	repo          *chain.Repository
-	stater        *state.Stater
-	txPool        *txpool.TxPool
-	packer        *packer.Packer
-	logDB         *logdb.LogDB
-	gasLimit      uint64
-	bandwidth     bandwidth.Bandwidth
-	blockInterval uint64
-	onDemand      bool
-	skipLogs      bool
+	repo      *chain.Repository
+	stater    *state.Stater
+	txPool    *txpool.TxPool
+	packer    *packer.Packer
+	logDB     *logdb.LogDB
+	bandwidth bandwidth.Bandwidth
+	options   Options
 }
 
 // New returns Solo instance
@@ -56,11 +61,8 @@ func New(
 	stater *state.Stater,
 	logDB *logdb.LogDB,
 	txPool *txpool.TxPool,
-	gasLimit uint64,
-	onDemand bool,
-	skipLogs bool,
-	blockInterval uint64,
 	forkConfig thor.ForkConfig,
+	options Options,
 ) *Solo {
 	return &Solo{
 		repo:   repo,
@@ -71,12 +73,11 @@ func New(
 			stater,
 			genesis.DevAccounts()[0].Address,
 			&genesis.DevAccounts()[0].Address,
-			forkConfig),
-		logDB:         logDB,
-		gasLimit:      gasLimit,
-		blockInterval: blockInterval,
-		skipLogs:      skipLogs,
-		onDemand:      onDemand,
+			forkConfig,
+			options.MinTxPriorityFee,
+		),
+		logDB:   logDB,
+		options: options,
 	}
 }
 
@@ -109,11 +110,11 @@ func (s *Solo) loop(ctx context.Context) {
 			logger.Info("stopping interval packing service......")
 			return
 		case <-time.After(time.Duration(1) * time.Second):
-			if left := uint64(time.Now().Unix()) % s.blockInterval; left == 0 {
+			if left := uint64(time.Now().Unix()) % s.options.BlockInterval; left == 0 {
 				if err := s.packing(s.txPool.Executables(), false); err != nil {
 					logger.Error("failed to pack block", "err", err)
 				}
-			} else if s.onDemand {
+			} else if s.options.OnDemand {
 				pendingTxs := s.txPool.Executables()
 				if len(pendingTxs) > 0 {
 					if err := s.packing(pendingTxs, true); err != nil {
@@ -136,12 +137,12 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 		}
 	}()
 
-	if s.gasLimit == 0 {
+	if s.options.GasLimit == 0 {
 		suggested := s.bandwidth.SuggestGasLimit()
 		s.packer.SetTargetGasLimit(suggested)
 	}
 
-	flow, err := s.packer.Mock(best, now, s.gasLimit)
+	flow, err := s.packer.Mock(best, now, s.options.GasLimit)
 	if err != nil {
 		return errors.WithMessage(err, "mock packer")
 	}
@@ -174,7 +175,7 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 		return errors.WithMessage(err, "commit state")
 	}
 
-	if !s.skipLogs {
+	if !s.options.SkipLogs {
 		w := s.logDB.NewWriter()
 		if err := w.Write(b, receipts); err != nil {
 			return errors.WithMessage(err, "write logs")
@@ -237,11 +238,11 @@ func (s *Solo) init(ctx context.Context) error {
 		return err
 	}
 
-	if !s.onDemand {
+	if !s.options.OnDemand {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(time.Duration(int64(s.blockInterval)-time.Now().Unix()%int64(s.blockInterval)) * time.Second):
+		case <-time.After(time.Duration(int64(s.options.BlockInterval)-time.Now().Unix()%int64(s.options.BlockInterval)) * time.Second):
 		}
 	}
 
@@ -250,19 +251,17 @@ func (s *Solo) init(ctx context.Context) error {
 
 // newTx builds and signs a new transaction from the given clauses
 func (s *Solo) newTx(clauses []*tx.Clause, from genesis.DevAccount) (*tx.Transaction, error) {
-	builder := tx.NewTxBuilder(tx.TypeLegacy).ChainTag(s.repo.ChainTag())
+	builder := new(tx.Builder).ChainTag(s.repo.ChainTag())
 	for _, c := range clauses {
 		builder.Clause(c)
 	}
 
-	trx, err := builder.BlockRef(tx.NewBlockRef(0)).
+	trx := builder.BlockRef(tx.NewBlockRef(0)).
 		Expiration(math.MaxUint32).
 		Nonce(rand.Uint64()). //#nosec G404
 		DependsOn(nil).
 		Gas(1_000_000).
 		Build()
-	if err != nil {
-		return nil, err
-	}
+
 	return tx.Sign(trx, from.PrivateKey)
 }

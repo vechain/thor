@@ -207,9 +207,12 @@ func benchmarkBlockProcess(b *testing.B, db *muxdb.MuxDB, accounts []genesis.Dev
 		nil,
 		"",
 		nil,
-		10_000_000,
-		true,
 		thor.NoFork,
+		Options{
+			SkipLogs:         true,
+			MinTxPriorityFee: 0,
+			TargetGasLimit:   10_000_000,
+		},
 	)
 
 	stats := &blockStats{}
@@ -262,7 +265,7 @@ func createOneClausePerTx(signerPK *ecdsa.PrivateKey, thorChain *testchain.Chain
 	for gasUsed < 9_500_000 {
 		toAddr := datagen.RandAddress()
 		cla := tx.NewClause(&toAddr).WithValue(big.NewInt(10000))
-		transaction := tx.NewTxBuilder(tx.TypeLegacy).
+		transaction := tx.NewBuilder(tx.TypeLegacy).
 			ChainTag(thorChain.Repo().ChainTag()).
 			GasPriceCoef(1).
 			Expiration(math.MaxUint32 - 1).
@@ -270,7 +273,7 @@ func createOneClausePerTx(signerPK *ecdsa.PrivateKey, thorChain *testchain.Chain
 			Nonce(uint64(datagen.RandInt())).
 			Clause(cla).
 			BlockRef(tx.NewBlockRef(0)).
-			MustBuild()
+			Build()
 
 		sig, err := crypto.Sign(transaction.SigningHash().Bytes(), signerPK)
 		if err != nil {
@@ -289,7 +292,7 @@ func createManyClausesPerTx(signerPK *ecdsa.PrivateKey, thorChain *testchain.Cha
 	gasUsed := uint64(0)
 	txGas := uint64(42_000)
 
-	transactionBuilder := tx.NewTxBuilder(tx.TypeLegacy).
+	transactionBuilder := tx.NewBuilder(tx.TypeLegacy).
 		ChainTag(thorChain.Repo().ChainTag()).
 		GasPriceCoef(1).
 		Expiration(math.MaxUint32 - 1).
@@ -301,7 +304,7 @@ func createManyClausesPerTx(signerPK *ecdsa.PrivateKey, thorChain *testchain.Cha
 		transactionBuilder.Clause(tx.NewClause(&toAddr).WithValue(big.NewInt(10000)))
 	}
 
-	transaction := transactionBuilder.Gas(gasUsed).MustBuild()
+	transaction := transactionBuilder.Gas(gasUsed).Build()
 
 	sig, err := crypto.Sign(transaction.SigningHash().Bytes(), signerPK)
 	if err != nil {
@@ -315,7 +318,7 @@ func createManyClausesPerTx(signerPK *ecdsa.PrivateKey, thorChain *testchain.Cha
 }
 
 func packTxsIntoBlock(thorChain *testchain.Chain, proposerAccount *genesis.DevAccount, parentBlk *block.Block, transactions tx.Transactions) (*block.Block, error) {
-	p := packer.New(thorChain.Repo(), thorChain.Stater(), proposerAccount.Address, &proposerAccount.Address, thorChain.GetForkConfig())
+	p := packer.New(thorChain.Repo(), thorChain.Stater(), proposerAccount.Address, &proposerAccount.Address, thorChain.GetForkConfig(), 0)
 
 	parentSum, err := thorChain.Repo().GetBlockSummary(parentBlk.Header().ID())
 	if err != nil {

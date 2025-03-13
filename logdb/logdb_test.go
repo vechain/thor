@@ -19,8 +19,8 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func newTx(txType tx.TxType) *tx.Transaction {
-	trx := tx.NewTxBuilder(txType).MustBuild()
+func newTx(txType tx.Type) *tx.Transaction {
+	trx := tx.NewBuilder(txType).Build()
 
 	pk, _ := crypto.GenerateKey()
 
@@ -125,16 +125,6 @@ func (logs transferLogs) Reverse() (ret transferLogs) {
 		ret = append(ret, logs[i])
 	}
 	return
-}
-
-func TestErrTxTypeNotSupported(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Errorf("Expected to panic")
-		}
-	}()
-	nonExistingTxType := tx.TxType(100)
-	newTx(nonExistingTxType)
 }
 
 func TestEvents(t *testing.T) {

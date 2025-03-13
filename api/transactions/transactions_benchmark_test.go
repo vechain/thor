@@ -238,9 +238,9 @@ func createOneClausePerTx(signerPK *ecdsa.PrivateKey, thorChain *testchain.Chain
 	for gasUsed < 9_500_000 {
 		toAddr := datagen.RandAddress()
 		cla := tx.NewClause(&toAddr).WithValue(big.NewInt(10000))
-		b := tx.NewTxBuilder(tx.TypeLegacy)
+		b := tx.NewBuilder(tx.TypeLegacy)
 		if gasUsed%2 == 0 {
-			b = tx.NewTxBuilder(tx.TypeDynamicFee)
+			b = tx.NewBuilder(tx.TypeDynamicFee)
 		}
 		transaction := b.
 			ChainTag(thorChain.Repo().ChainTag()).
@@ -252,7 +252,7 @@ func createOneClausePerTx(signerPK *ecdsa.PrivateKey, thorChain *testchain.Chain
 			Nonce(uint64(datagen.RandInt())).
 			Clause(cla).
 			BlockRef(tx.NewBlockRef(0)).
-			MustBuild()
+			Build()
 
 		sig, err := crypto.Sign(transaction.SigningHash().Bytes(), signerPK)
 		if err != nil {
@@ -271,7 +271,7 @@ func createManyClausesPerTxLegacy(signerPK *ecdsa.PrivateKey, thorChain *testcha
 	gasUsed := uint64(0)
 	txGas := uint64(42_000)
 
-	transactionBuilder := tx.NewTxBuilder(tx.TypeLegacy).
+	transactionBuilder := tx.NewBuilder(tx.TypeLegacy).
 		ChainTag(thorChain.Repo().ChainTag()).
 		GasPriceCoef(1).
 		Expiration(math.MaxUint32 - 1).
@@ -283,7 +283,7 @@ func createManyClausesPerTxLegacy(signerPK *ecdsa.PrivateKey, thorChain *testcha
 		transactionBuilder.Clause(tx.NewClause(&toAddr).WithValue(big.NewInt(10000)))
 	}
 
-	transaction := transactionBuilder.Gas(gasUsed).MustBuild()
+	transaction := transactionBuilder.Gas(gasUsed).Build()
 
 	sig, err := crypto.Sign(transaction.SigningHash().Bytes(), signerPK)
 	if err != nil {
@@ -301,7 +301,7 @@ func createManyClausesPerTxDynFee(signerPK *ecdsa.PrivateKey, thorChain *testcha
 	gasUsed := uint64(0)
 	txGas := uint64(42_000)
 
-	transactionBuilder := tx.NewTxBuilder(tx.TypeDynamicFee).
+	transactionBuilder := tx.NewBuilder(tx.TypeDynamicFee).
 		ChainTag(thorChain.Repo().ChainTag()).
 		MaxFeePerGas(big.NewInt(1000000)).
 		MaxPriorityFeePerGas(big.NewInt(100)).
@@ -314,7 +314,7 @@ func createManyClausesPerTxDynFee(signerPK *ecdsa.PrivateKey, thorChain *testcha
 		transactionBuilder.Clause(tx.NewClause(&toAddr).WithValue(big.NewInt(10000)))
 	}
 
-	transaction := transactionBuilder.Gas(gasUsed).MustBuild()
+	transaction := transactionBuilder.Gas(gasUsed).Build()
 
 	sig, err := crypto.Sign(transaction.SigningHash().Bytes(), signerPK)
 	if err != nil {
@@ -328,7 +328,7 @@ func createManyClausesPerTxDynFee(signerPK *ecdsa.PrivateKey, thorChain *testcha
 }
 
 func packTxsIntoBlock(thorChain *testchain.Chain, proposerAccount *genesis.DevAccount, parentBlk *block.Block, transactions tx.Transactions) (*block.Block, error) {
-	p := packer.New(thorChain.Repo(), thorChain.Stater(), proposerAccount.Address, &proposerAccount.Address, thorChain.GetForkConfig())
+	p := packer.New(thorChain.Repo(), thorChain.Stater(), proposerAccount.Address, &proposerAccount.Address, thorChain.GetForkConfig(), 0)
 
 	parentSum, err := thorChain.Repo().GetBlockSummary(parentBlk.Header().ID())
 	if err != nil {

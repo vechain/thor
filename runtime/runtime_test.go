@@ -655,21 +655,21 @@ func TestCall(t *testing.T) {
 	assert.Nil(t, err)
 }
 
-func getMockTx(repo *chain.Repository, txType tx.TxType, t *testing.T) *tx.Transaction {
+func getMockTx(repo *chain.Repository, txType tx.Type, t *testing.T) *tx.Transaction {
 	var blockRef = tx.NewBlockRef(0)
 	var chainTag = repo.ChainTag()
 	var expiration = uint32(10)
 	var gas = uint64(210000)
 	to, _ := thor.ParseAddress("0x7567d83b7b8d80addcb281a71d54fc7b3364ffed")
 
-	tx := tx.NewTxBuilder(txType).
+	tx := tx.NewBuilder(txType).
 		BlockRef(blockRef).
 		ChainTag(chainTag).
 		Clause(tx.NewClause(&to).WithValue(big.NewInt(10000)).WithData([]byte{0, 0, 0, 0x60, 0x60, 0x60})).
 		Clause(tx.NewClause(&to).WithValue(big.NewInt(20000)).WithData([]byte{0, 0, 0, 0x60, 0x60, 0x60})).
 		Expiration(expiration).
 		Gas(gas).
-		MustBuild()
+		Build()
 	sig, err := crypto.Sign(tx.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
 		t.Fatal(err)
@@ -679,9 +679,9 @@ func getMockTx(repo *chain.Repository, txType tx.TxType, t *testing.T) *tx.Trans
 	return tx
 }
 
-func GetMockFailedTx(txType tx.TxType) *tx.Transaction {
+func GetMockFailedTx(txType tx.Type) *tx.Transaction {
 	to, _ := thor.ParseAddress("0x7567d83b7b8d80addcb281a71d54fc7b3364ffed")
-	return tx.NewTxBuilder(txType).ChainTag(1).
+	return tx.NewBuilder(txType).ChainTag(1).
 		BlockRef(tx.BlockRef{0, 0, 0, 0, 0xaa, 0xbb, 0xcc, 0xdd}).
 		Expiration(32).
 		Clause(tx.NewClause(&to).WithValue(big.NewInt(10000)).WithData([]byte{0, 0, 0, 0x60, 0x60, 0x60})).
@@ -689,7 +689,7 @@ func GetMockFailedTx(txType tx.TxType) *tx.Transaction {
 		GasPriceCoef(128).
 		Gas(21000).
 		DependsOn(nil).
-		Nonce(12345678).MustBuild()
+		Nonce(12345678).Build()
 }
 
 func TestGetValues(t *testing.T) {
@@ -730,7 +730,7 @@ func TestExecuteTransactionFailure(t *testing.T) {
 	originEnergy.SetString("9000000000000000000000000000000000000", 10)
 	state.SetEnergy(origin.Address, originEnergy, 0)
 
-	for _, txType := range []tx.TxType{tx.TypeLegacy, tx.TypeDynamicFee} {
+	for _, txType := range []tx.Type{tx.TypeLegacy, tx.TypeDynamicFee} {
 		tx := GetMockFailedTx(txType)
 
 		rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.NoFork)
@@ -752,21 +752,19 @@ func TestExecuteTransaction(t *testing.T) {
 	maxFee := int64(thor.InitialBaseFee * 1000)
 	maxPriorityFee := maxFee / 100
 	gas := uint64(42000)
-	dynTx, err := tx.NewTxBuilder(tx.TypeDynamicFee).
+	dynTx := tx.NewBuilder(tx.TypeDynamicFee).
 		ChainTag(repo.ChainTag()).
 		Gas(gas).
 		MaxFeePerGas(big.NewInt(maxFee)).
 		MaxPriorityFeePerGas(big.NewInt(maxPriorityFee)).
 		Build()
-	assert.Nil(t, err)
 	dynTx = tx.MustSign(dynTx, genesis.DevAccounts()[0].PrivateKey)
 
-	legacyTx, err := tx.NewTxBuilder(tx.TypeLegacy).
+	legacyTx := tx.NewBuilder(tx.TypeLegacy).
 		ChainTag(repo.ChainTag()).
 		Gas(gas).
 		GasPriceCoef(128).
 		Build()
-	assert.Nil(t, err)
 	legacyTx = tx.MustSign(legacyTx, genesis.DevAccounts()[0].PrivateKey)
 
 	t.Run("Receipt check with legacy tx before galactica fork", func(t *testing.T) {
@@ -901,20 +899,19 @@ func TestNoRewards(t *testing.T) {
 		{
 			name: "Dyn tx with maxFeePerGas = 0",
 			getTx: func() *tx.Transaction {
-				dt, err := tx.NewTxBuilder(tx.TypeDynamicFee).
+				dt := tx.NewBuilder(tx.TypeDynamicFee).
 					ChainTag(repo.ChainTag()).
 					Gas(21000).
 					MaxFeePerGas(big.NewInt(thor.InitialBaseFee * 1000)).
 					MaxPriorityFeePerGas(common.Big0).
 					Build()
-				assert.Nil(t, err)
 				return tx.MustSign(dt, genesis.DevAccounts()[0].PrivateKey)
 			},
 		},
 		{
 			name: "Dyn tx with maxFee equals to baseFee",
 			getTx: func() *tx.Transaction {
-				dt, err := tx.NewTxBuilder(tx.TypeDynamicFee).
+				dt := tx.NewBuilder(tx.TypeDynamicFee).
 					ChainTag(repo.ChainTag()).
 					Gas(21000).
 					MaxFeePerGas(big.NewInt(thor.InitialBaseFee)).

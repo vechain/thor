@@ -183,6 +183,12 @@ var (
 		Usage: "comma separated list of allowed API tracers(none,all,call,prestate etc.)",
 	}
 
+	minEffectivePriorityFeeFlag = cli.Uint64Flag{
+		Name:  "min-effective-priority-fee",
+		Value: 0,
+		Usage: "set a minimum effective priority fee for transactions to be included in the block proposed by the block proposer",
+	}
+
 	// solo mode only flags
 	onDemandFlag = cli.BoolFlag{
 		Name:  "on-demand",

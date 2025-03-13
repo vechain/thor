@@ -28,9 +28,9 @@ import (
 	"github.com/vechain/thor/v2/vrf"
 )
 
-func txBuilder(tag byte, txType tx.TxType) *tx.Builder {
+func txBuilder(tag byte, txType tx.Type) *tx.Builder {
 	address := thor.BytesToAddress([]byte("addr"))
-	return tx.NewTxBuilder(txType).
+	return tx.NewBuilder(txType).
 		GasPriceCoef(1).
 		Gas(1000000).
 		Expiration(100).
@@ -40,7 +40,7 @@ func txBuilder(tag byte, txType tx.TxType) *tx.Builder {
 }
 
 func txSign(builder *tx.Builder) *tx.Transaction {
-	transaction := builder.MustBuild()
+	transaction := builder.Build()
 	sig, _ := crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
 	return transaction.WithSignature(sig)
 }
@@ -89,7 +89,7 @@ func newTestConsensus() (*testConsensus, error) {
 	forkConfig.GALACTICA = 5
 
 	proposer := genesis.DevAccounts()[0]
-	p := packer.New(repo, stater, proposer.Address, &proposer.Address, forkConfig)
+	p := packer.New(repo, stater, proposer.Address, &proposer.Address, forkConfig, 0)
 	parentSum, _ := repo.GetBlockSummary(parent.Header().ID())
 	flow, err := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval)
 	if err != nil {
@@ -126,7 +126,7 @@ func newTestConsensus() (*testConsensus, error) {
 	}
 
 	proposer2 := genesis.DevAccounts()[1]
-	p2 := packer.New(repo, stater, proposer2.Address, &proposer2.Address, forkConfig)
+	p2 := packer.New(repo, stater, proposer2.Address, &proposer2.Address, forkConfig, 0)
 	b1sum, _ := repo.GetBlockSummary(b1.Header().ID())
 	flow2, err := p2.Schedule(b1sum, b1.Header().Timestamp()+100*thor.BlockInterval)
 	if err != nil {
@@ -632,7 +632,7 @@ func TestConsent(t *testing.T) {
 		{
 			"TxOriginBlocked", func(t *testing.T) {
 				thor.MockBlocklist([]string{genesis.DevAccounts()[9].Address.String()})
-				trx := tx.MustSign(txBuilder(tc.tag, tx.TypeLegacy).MustBuild(), genesis.DevAccounts()[9].PrivateKey)
+				trx := tx.MustSign(txBuilder(tc.tag, tx.TypeLegacy).Build(), genesis.DevAccounts()[9].PrivateKey)
 
 				blk, err := tc.sign(
 					tc.builder(tc.original.Header()).Transaction(trx),
@@ -649,7 +649,7 @@ func TestConsent(t *testing.T) {
 		},
 		{
 			"TxSignerUnavailable", func(t *testing.T) {
-				tx := txBuilder(tc.tag, tx.TypeLegacy).MustBuild()
+				tx := txBuilder(tc.tag, tx.TypeLegacy).Build()
 				var sig [65]byte
 				tx = tx.WithSignature(sig[:])
 
@@ -668,7 +668,7 @@ func TestConsent(t *testing.T) {
 		},
 		{
 			"UnsupportedFeatures", func(t *testing.T) {
-				tx := txBuilder(tc.tag, tx.TypeLegacy).Features(tx.Features(2)).MustBuild()
+				tx := txBuilder(tc.tag, tx.TypeLegacy).Features(tx.Features(2)).Build()
 				sig, _ := crypto.Sign(tx.SigningHash().Bytes(), genesis.DevAccounts()[2].PrivateKey)
 				tx = tx.WithSignature(sig)
 
@@ -705,7 +705,7 @@ func TestConsent(t *testing.T) {
 		},
 		{
 			"ZeroGasTx", func(t *testing.T) {
-				txBuilder := tx.NewTxBuilder(tx.TypeLegacy).
+				txBuilder := tx.NewBuilder(tx.TypeLegacy).
 					GasPriceCoef(0).
 					Gas(0).
 					Expiration(100).
