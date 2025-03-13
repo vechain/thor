@@ -38,7 +38,7 @@ jobs:
       THOR_IMAGE: vechain/thor:${{ github.sha }}
     name: Run Tests
     steps:
-      # Main: https://github.com/vechain/thor-e2e-tests/tree/2885dbac144e8e28f2bf0b3f3c1f65cca6429422
+      # Main: https://github.com/vechain/thor-e2e-tests/tree/256a22618ae328769ad3a060debdb026e120fd00
       # For release branches, names in the thor and thor-e2e-tests repos should match
       - name: Set e2e repo reference
         id: set-ref
@@ -48,7 +48,7 @@ jobs:
           elif [[ "${{ github.head_ref }}" == release/* ]]; then
             echo "ref=${{ github.head_ref }}" >> "$GITHUB_OUTPUT"
           else
-            echo "ref=2885dbac144e8e28f2bf0b3f3c1f65cca6429422" >> "$GITHUB_OUTPUT"
+            echo "ref=256a22618ae328769ad3a060debdb026e120fd00" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Checkout

@@ -11,6 +11,8 @@ type Features uint32
 const (
 	// DelegationFeature See VIP-191 for more detail. (https://github.com/vechain/VIPs/blob/master/vips/VIP-191.md)
 	DelegationFeature Features = 1
+
+	NegateDependsOnFeature Features = 1 << 1
 )
 
 // IsDelegated returns whether tx is delegated.
