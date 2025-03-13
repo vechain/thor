@@ -196,7 +196,7 @@ func (s *State) SetEnergy(addr thor.Address, energy *big.Int, blockTime uint64) 
 	return nil
 }
 
-// HasUsedReplacement checks if the given address has already used the replacement feature for the given data.
+// HasUsedReplacement checks if the given address has already used the replacement feature for the ID.
 func (s *State) HasUsedReplacement(addr thor.Address, id uint64) (bool, error) {
 	idBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(idBytes, id)
@@ -209,7 +209,7 @@ func (s *State) HasUsedReplacement(addr thor.Address, id uint64) (bool, error) {
 	return !storage.IsZero(), nil
 }
 
-// SetUsedReplacement set the given address has used the replacement feature for the given data.
+// SetUsedReplacement set the given address has used the replacement feature for the ID.
 func (s *State) SetUsedReplacement(addr thor.Address, id uint64) {
 	var idBytes []byte
 	binary.BigEndian.PutUint64(idBytes, id)
@@ -574,6 +574,4 @@ type (
 	}
 	codeKey           thor.Address
 	storageBarrierKey thor.Address
-
-	replacementKey thor.Address
 )

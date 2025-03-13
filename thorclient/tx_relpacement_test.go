@@ -29,6 +29,7 @@ func waitForNext(t *testing.T,client *thorclient.Client) {
 }
 
 func TestTxReplacement(t *testing.T) {
+	t.Skip()
 	client := thorclient.New("http://localhost:8669")
 	chainTag, err := client.ChainTag()
 	require.NoError(t, err)
