@@ -299,7 +299,10 @@ func (a *Accounts) handleBatchCallData(batchCallData *BatchCallData) (txCtx *xen
 		gas = batchCallData.Gas
 	}
 
-	txCtx = &xenv.TransactionContext{}
+	txCtx = &xenv.TransactionContext{
+		ClauseCount: uint32(len(batchCallData.Clauses)),
+		Expiration:  batchCallData.Expiration,
+	}
 
 	if batchCallData.GasPrice == nil {
 		txCtx.GasPrice = new(big.Int)
@@ -321,7 +324,6 @@ func (a *Accounts) handleBatchCallData(batchCallData *BatchCallData) (txCtx *xen
 	} else {
 		txCtx.ProvedWork = (*big.Int)(batchCallData.ProvedWork)
 	}
-	txCtx.Expiration = batchCallData.Expiration
 
 	if len(batchCallData.BlockRef) > 0 {
 		blockRef, err := hexutil.Decode(batchCallData.BlockRef)

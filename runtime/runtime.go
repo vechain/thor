@@ -88,7 +88,7 @@ type Runtime struct {
 	state       *state.State
 	ctx         *xenv.BlockContext
 	chainConfig vm.ChainConfig
-	forkConfig  thor.ForkConfig
+	forkConfig  *thor.ForkConfig
 }
 
 // New create a Runtime object.
@@ -107,30 +107,27 @@ func New(
 		currentChainConfig.ChainID = new(big.Int).SetBytes(chain.GenesisID().Bytes())
 	}
 
-	// alloc precompiled contracts
+	// allocate precompiled contracts
+	var precompiled map[common.Address]vm.PrecompiledContract
 	if forkConfig.GALACTICA == ctx.Number {
-		for addr := range vm.PrecompiledContractsShanghai {
-			if err := state.SetCode(thor.Address(addr), EmptyRuntimeBytecode); err != nil {
-				panic(err)
-			}
-		}
+		precompiled = vm.PrecompiledContractsShanghai
 	} else if forkConfig.ETH_IST == ctx.Number {
-		for addr := range vm.PrecompiledContractsIstanbul {
-			if err := state.SetCode(thor.Address(addr), EmptyRuntimeBytecode); err != nil {
-				panic(err)
-			}
-		}
+		precompiled = vm.PrecompiledContractsIstanbul
 	} else if ctx.Number == 0 {
-		for addr := range vm.PrecompiledContractsByzantium {
-			if err := state.SetCode(thor.Address(addr), EmptyRuntimeBytecode); err != nil {
-				panic(err)
-			}
+		precompiled = vm.PrecompiledContractsByzantium
+	}
+	for addr := range precompiled {
+		if err := state.SetCode(thor.Address(addr), EmptyRuntimeBytecode); err != nil {
+			panic(err)
 		}
 	}
 
-	// VIP191
-	if forkConfig.VIP191 == ctx.Number {
-		// upgrade extension contract to V2
+	// set builtin contracts
+	if forkConfig.GALACTICA == ctx.Number {
+		if err := state.SetCode(builtin.Extension.Address, builtin.Extension.V3.RuntimeBytecodes()); err != nil {
+			panic(err)
+		}
+	} else if forkConfig.VIP191 == ctx.Number {
 		if err := state.SetCode(builtin.Extension.Address, builtin.Extension.V2.RuntimeBytecodes()); err != nil {
 			panic(err)
 		}
@@ -245,7 +242,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 				panic("serious bug: native call returned gas over consumed")
 			}
 
-			ret, err := xenv.New(abi, rt.chain, rt.state, rt.ctx, txCtx, evm, contract).Call(run)
+			ret, err := xenv.New(abi, rt.chain, rt.state, rt.ctx, txCtx, evm, contract, clauseIndex).Call(run)
 			return ret, err, true
 		},
 		OnCreateContract: func(_ *vm.EVM, contractAddr, caller common.Address) {

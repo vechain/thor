@@ -212,7 +212,7 @@ func sendImpossibleBlockRefExpiryTx(t *testing.T) {
 			ChainTag(chainTag).
 			Expiration(expiration).
 			Gas(gas).
-			MustBuild(),
+			Build(),
 		genesis.DevAccounts()[0].PrivateKey,
 	)
 

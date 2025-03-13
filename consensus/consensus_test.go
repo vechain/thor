@@ -653,7 +653,7 @@ func TestConsent(t *testing.T) {
 				thor.MockBlocklist([]string{genesis.DevAccounts()[9].Address.String()})
 				builder := txBuilder(tc.tag, tx.TypeLegacy)
 				builder = builder.Features(tx.Features(0x01))
-				trx := tx.MustSignDelegated(builder.MustBuild(), genesis.DevAccounts()[8].PrivateKey, genesis.DevAccounts()[9].PrivateKey)
+				trx := tx.MustSignDelegated(builder.Build(), genesis.DevAccounts()[8].PrivateKey, genesis.DevAccounts()[9].PrivateKey)
 				blk, err := tc.sign(
 					tc.builder(tc.original.Header()).Transaction(trx),
 				)
@@ -731,7 +731,7 @@ func TestConsent(t *testing.T) {
 					Expiration(100).
 					Clause(tx.NewClause(&thor.Address{}).WithValue(big.NewInt(0)).WithData(nil)).
 					Nonce(0).
-					ChainTag(96)
+					ChainTag(161)
 
 				tx := txSign(txBuilder)
 

@@ -65,7 +65,7 @@ func initCommServer(t *testing.T) {
 			Expiration(10).
 			Gas(21000).
 			Nonce(uint64(i)).
-			MustBuild()
+			Build()
 		transaction = tx.MustSign(transaction, genesis.DevAccounts()[0].PrivateKey)
 		err := pool.Add(transaction)
 		require.NoError(t, err)

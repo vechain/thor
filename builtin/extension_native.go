@@ -121,7 +121,6 @@ func init() {
 			output := env.TransactionContext().ID
 			return []any{output}
 		}},
-
 		{"native_txBlockRef", func(env *xenv.Environment) []any {
 			output := env.TransactionContext().BlockRef
 			return []any{output}
@@ -134,9 +133,17 @@ func init() {
 			output := env.TransactionContext().GasPayer
 			return []any{output}
 		}},
+		{"native_txClauseIndex", func(env *xenv.Environment) []any {
+			output := env.ClauseIndex()
+			return []any{output}
+		}},
+		{"native_txClauseCount", func(env *xenv.Environment) []any {
+			output := env.TransactionContext().ClauseCount
+			return []any{output}
+		}},
 	}
 
-	abi := Extension.V2.NativeABI()
+	abi := Extension.V3.NativeABI()
 	for _, def := range defines {
 		if method, found := abi.MethodByName(def.name); found {
 			nativeMethods[methodKey{Extension.Address, method.ID()}] = &nativeMethod{
