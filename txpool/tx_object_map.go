@@ -11,7 +11,6 @@ import (
 	"sync"
 
 	"github.com/vechain/thor/v2/log"
-
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
