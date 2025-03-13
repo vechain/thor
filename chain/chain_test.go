@@ -16,7 +16,7 @@ import (
 )
 
 func newTx(txType tx.Type) *tx.Transaction {
-	tx := tx.NewTxBuilder(txType).MustBuild()
+	tx := tx.NewBuilder(txType).Build()
 	pk, _ := crypto.GenerateKey()
 	sig, _ := crypto.Sign(tx.SigningHash().Bytes(), pk)
 	return tx.WithSignature(sig)

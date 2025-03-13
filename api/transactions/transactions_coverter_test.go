@@ -22,7 +22,7 @@ func TestConvertLegacyTransaction_Success(t *testing.T) {
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 	cla2 := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 	br := tx.NewBlockRef(0)
-	transaction := tx.NewTxBuilder(tx.TypeLegacy).
+	transaction := tx.NewBuilder(tx.TypeLegacy).
 		ChainTag(123).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -31,7 +31,7 @@ func TestConvertLegacyTransaction_Success(t *testing.T) {
 		Clause(cla).
 		Clause(cla2).
 		BlockRef(br).
-		MustBuild()
+		Build()
 
 	header := new(block.Builder).Build().Header()
 
@@ -62,7 +62,7 @@ func TestConvertDynTransaction_Success(t *testing.T) {
 	br := tx.NewBlockRef(0)
 	maxFeePerGas := big.NewInt(25000)
 	maxPriorityFeePerGas := big.NewInt(100)
-	transaction := tx.NewTxBuilder(tx.TypeDynamicFee).
+	transaction := tx.NewBuilder(tx.TypeDynamicFee).
 		ChainTag(123).
 		MaxFeePerGas(maxFeePerGas).
 		MaxPriorityFeePerGas(maxPriorityFeePerGas).
@@ -72,7 +72,7 @@ func TestConvertDynTransaction_Success(t *testing.T) {
 		Clause(cla).
 		Clause(cla2).
 		BlockRef(br).
-		MustBuild()
+		Build()
 
 	header := new(block.Builder).Build().Header()
 

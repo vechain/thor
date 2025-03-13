@@ -239,7 +239,7 @@ func initSubscriptionsServer(t *testing.T, enabledDeprecated bool) {
 
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	tr := tx.NewTxBuilder(tx.TypeLegacy).
+	tr := tx.NewBuilder(tx.TypeLegacy).
 		ChainTag(thorChain.Repo().ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -247,7 +247,7 @@ func initSubscriptionsServer(t *testing.T, enabledDeprecated bool) {
 		Nonce(1).
 		Clause(cla).
 		BlockRef(tx.NewBlockRef(0)).
-		MustBuild()
+		Build()
 
 	sig, err := crypto.Sign(tr.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
@@ -255,7 +255,7 @@ func initSubscriptionsServer(t *testing.T, enabledDeprecated bool) {
 	}
 	tr = tr.WithSignature(sig)
 
-	txDeploy := tx.NewTxBuilder(tx.TypeLegacy).
+	txDeploy := tx.NewBuilder(tx.TypeLegacy).
 		ChainTag(thorChain.Repo().ChainTag()).
 		GasPriceCoef(1).
 		Expiration(100).
@@ -263,7 +263,7 @@ func initSubscriptionsServer(t *testing.T, enabledDeprecated bool) {
 		Nonce(3).
 		Clause(tx.NewClause(nil).WithData(common.Hex2Bytes(eventcontract.HexBytecode))).
 		BlockRef(tx.NewBlockRef(0)).
-		MustBuild()
+		Build()
 	sigTxDeploy, err := crypto.Sign(txDeploy.SigningHash().Bytes(), genesis.DevAccounts()[1].PrivateKey)
 	require.NoError(t, err)
 	txDeploy = txDeploy.WithSignature(sigTxDeploy)
@@ -291,7 +291,7 @@ func TestSubscriptionsBacktrace(t *testing.T) {
 
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	tr := tx.NewTxBuilder(tx.TypeLegacy).
+	tr := tx.NewBuilder(tx.TypeLegacy).
 		ChainTag(thorChain.Repo().ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -299,7 +299,7 @@ func TestSubscriptionsBacktrace(t *testing.T) {
 		Nonce(1).
 		Clause(cla).
 		BlockRef(tx.NewBlockRef(0)).
-		MustBuild()
+		Build()
 
 	sig, err := crypto.Sign(tr.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
@@ -307,7 +307,7 @@ func TestSubscriptionsBacktrace(t *testing.T) {
 	}
 	tr = tr.WithSignature(sig)
 
-	txDeploy := tx.NewTxBuilder(tx.TypeLegacy).
+	txDeploy := tx.NewBuilder(tx.TypeLegacy).
 		ChainTag(thorChain.Repo().ChainTag()).
 		GasPriceCoef(1).
 		Expiration(100).
@@ -315,7 +315,7 @@ func TestSubscriptionsBacktrace(t *testing.T) {
 		Nonce(3).
 		Clause(tx.NewClause(nil).WithData(common.Hex2Bytes(eventcontract.HexBytecode))).
 		BlockRef(tx.NewBlockRef(0)).
-		MustBuild()
+		Build()
 	sigTxDeploy, err := crypto.Sign(txDeploy.SigningHash().Bytes(), genesis.DevAccounts()[1].PrivateKey)
 	require.NoError(t, err)
 	txDeploy = txDeploy.WithSignature(sigTxDeploy)
