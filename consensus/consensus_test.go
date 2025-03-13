@@ -30,7 +30,7 @@ import (
 
 func txBuilder(tag byte, txType tx.Type) *tx.Builder {
 	address := thor.BytesToAddress([]byte("addr"))
-	return tx.NewTxBuilder(txType).
+	return tx.NewBuilder(txType).
 		GasPriceCoef(1).
 		Gas(1000000).
 		Expiration(100).
@@ -40,7 +40,7 @@ func txBuilder(tag byte, txType tx.Type) *tx.Builder {
 }
 
 func txSign(builder *tx.Builder) *tx.Transaction {
-	transaction := builder.MustBuild()
+	transaction := builder.Build()
 	sig, _ := crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
 	return transaction.WithSignature(sig)
 }
@@ -632,7 +632,7 @@ func TestConsent(t *testing.T) {
 		{
 			"TxOriginBlocked", func(t *testing.T) {
 				thor.MockBlocklist([]string{genesis.DevAccounts()[9].Address.String()})
-				trx := tx.MustSign(txBuilder(tc.tag, tx.TypeLegacy).MustBuild(), genesis.DevAccounts()[9].PrivateKey)
+				trx := tx.MustSign(txBuilder(tc.tag, tx.TypeLegacy).Build(), genesis.DevAccounts()[9].PrivateKey)
 
 				blk, err := tc.sign(
 					tc.builder(tc.original.Header()).Transaction(trx),
@@ -649,7 +649,7 @@ func TestConsent(t *testing.T) {
 		},
 		{
 			"TxSignerUnavailable", func(t *testing.T) {
-				tx := txBuilder(tc.tag, tx.TypeLegacy).MustBuild()
+				tx := txBuilder(tc.tag, tx.TypeLegacy).Build()
 				var sig [65]byte
 				tx = tx.WithSignature(sig[:])
 
@@ -668,7 +668,7 @@ func TestConsent(t *testing.T) {
 		},
 		{
 			"UnsupportedFeatures", func(t *testing.T) {
-				tx := txBuilder(tc.tag, tx.TypeLegacy).Features(tx.Features(2)).MustBuild()
+				tx := txBuilder(tc.tag, tx.TypeLegacy).Features(tx.Features(2)).Build()
 				sig, _ := crypto.Sign(tx.SigningHash().Bytes(), genesis.DevAccounts()[2].PrivateKey)
 				tx = tx.WithSignature(sig)
 
@@ -705,7 +705,7 @@ func TestConsent(t *testing.T) {
 		},
 		{
 			"ZeroGasTx", func(t *testing.T) {
-				txBuilder := tx.NewTxBuilder(tx.TypeLegacy).
+				txBuilder := tx.NewBuilder(tx.TypeLegacy).
 					GasPriceCoef(0).
 					Gas(0).
 					Expiration(100).

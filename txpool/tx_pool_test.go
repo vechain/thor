@@ -368,14 +368,13 @@ func TestSubscribeNewTypedTx(t *testing.T) {
 
 	pool.SubscribeTxEvent(txCh)
 
-	trx, err := tx.NewTxBuilder(tx.TypeDynamicFee).
+	trx := tx.NewBuilder(tx.TypeDynamicFee).
 		ChainTag(pool.repo.ChainTag()).
 		Expiration(100).
 		Gas(21000).
 		MaxFeePerGas(big.NewInt(thor.InitialBaseFee * 10)).
 		MaxPriorityFeePerGas(big.NewInt(100)).
 		Build()
-	assert.Nil(t, err)
 	trx = tx.MustSign(trx, devAccounts[0].PrivateKey)
 	assert.Nil(t, pool.Add(trx))
 
@@ -552,7 +551,7 @@ func generateRandomTx(t *testing.T, seed int, chainTag byte) *tx.Transaction {
 	maxFeePerGas := int64(thor.InitialBaseFee + r.IntN(thor.InitialBaseFee)) // #nosec G404
 	maxPriorityFeePerGas := maxFeePerGas / int64(r.IntN(10)+1)               // #nosec G404
 
-	tx, err := tx.NewTxBuilder(txType).
+	trx := tx.NewBuilder(txType).
 		ChainTag(chainTag).
 		Expiration(100).
 		Gas(21000).
@@ -560,9 +559,8 @@ func generateRandomTx(t *testing.T, seed int, chainTag byte) *tx.Transaction {
 		MaxFeePerGas(big.NewInt(maxFeePerGas)).
 		MaxPriorityFeePerGas(big.NewInt(maxPriorityFeePerGas)).
 		Build()
-	assert.NoError(t, err)
 
-	return tx
+	return trx
 }
 
 func TestFillPool(t *testing.T) {
