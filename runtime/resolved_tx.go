@@ -213,12 +213,13 @@ func (r *ResolvedTransaction) ToContext(
 		return nil, err
 	}
 	return &xenv.TransactionContext{
-		ID:         r.tx.ID(),
-		Origin:     r.Origin,
-		GasPayer:   gasPayer,
-		GasPrice:   gasPrice,
-		ProvedWork: provedWork,
-		BlockRef:   r.tx.BlockRef(),
-		Expiration: r.tx.Expiration(),
+		ID:          r.tx.ID(),
+		Origin:      r.Origin,
+		GasPayer:    gasPayer,
+		GasPrice:    gasPrice,
+		ProvedWork:  provedWork,
+		BlockRef:    r.tx.BlockRef(),
+		Expiration:  r.tx.Expiration(),
+		ClauseCount: uint32(len(r.Clauses)),
 	}, nil
 }
