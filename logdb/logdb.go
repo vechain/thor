@@ -18,9 +18,7 @@ import (
 )
 
 const (
-	refIDQuery    = "(SELECT id FROM ref WHERE data=?)"
-	defaultOffset = 0
-	defaultLimit  = 200
+	refIDQuery = "(SELECT id FROM ref WHERE data=?)"
 )
 
 type LogDB struct {
@@ -115,7 +113,7 @@ FROM event e
 		if err != nil {
 			return nil, err
 		}
-		whereLimit := fmt.Sprintf(" WHERE e.seq >= 0 AND e.seq <= %v LIMIT %v, %v", to, defaultOffset, defaultLimit)
+		whereLimit := fmt.Sprintf(" WHERE e.seq >= 0 AND e.seq <= %v", to)
 		return db.queryEvents(ctx, fmt.Sprintf(query, whereLimit))
 	}
 
@@ -148,11 +146,7 @@ FROM event e
 	}
 
 	if len(filter.CriteriaSet) > 0 {
-		if subQuery == "" {
-			subQuery += " WHERE ("
-		} else {
-			subQuery += " AND ("
-		}
+		subQuery += " AND ("
 
 		for i, c := range filter.CriteriaSet {
 			cond, cargs := c.toWhereCondition()
@@ -184,7 +178,6 @@ FROM event e
 		} else {
 			eventQuery += " ORDER BY e.seq ASC "
 		}
-		eventQuery += fmt.Sprintf(" LIMIT %v, %v", defaultOffset, defaultLimit)
 	}
 
 	return db.queryEvents(ctx, eventQuery, args...)
@@ -192,24 +185,32 @@ FROM event e
 
 func (db *LogDB) FilterTransfers(ctx context.Context, filter *TransferFilter) ([]*Transfer, error) {
 	const query = `SELECT t.seq, r0.data, t.blockTime, r1.data, r2.data, t.clauseIndex, r3.data, r4.data, t.amount
-FROM (%v) t 
+FROM transfer t 
 	LEFT JOIN ref r0 ON t.blockID = r0.id
 	LEFT JOIN ref r1 ON t.txID = r1.id
 	LEFT JOIN ref r2 ON t.txOrigin = r2.id
 	LEFT JOIN ref r3 ON t.sender = r3.id
-	LEFT JOIN ref r4 ON t.recipient = r4.id`
+	LEFT JOIN ref r4 ON t.recipient = r4.id
+	%v`
 
 	if filter == nil {
-		return db.queryTransfers(ctx, fmt.Sprintf(query, "transfer"))
+		to, err := newSequence(MaxBlockNumber, 0, 0)
+		if err != nil {
+			return nil, err
+		}
+		whereLimit := fmt.Sprintf(" WHERE t.seq >= 0 AND t.seq <= %v", to)
+
+		println("transfer query", fmt.Sprintf(query, whereLimit))
+		return db.queryTransfers(ctx, fmt.Sprintf(query, whereLimit))
 	}
 
 	var (
-		subQuery = "SELECT seq FROM transfer WHERE 1"
+		subQuery = ""
 		args     []any
 	)
 
 	if filter.Range != nil {
-		subQuery += " AND seq >= ?"
+		subQuery += " WHERE seq >= ?"
 		from, err := newSequence(filter.Range.From, 0, 0)
 		if err != nil {
 			return nil, err
@@ -223,6 +224,12 @@ FROM (%v) t
 			}
 			args = append(args, to)
 		}
+	} else {
+		to, err := newSequence(MaxBlockNumber, 0, 0)
+		if err != nil {
+			return nil, err
+		}
+		subQuery += fmt.Sprintf(" WHERE t.seq > 0 AND t.seq <= %v", to)
 	}
 
 	if len(filter.CriteriaSet) > 0 {
@@ -249,7 +256,6 @@ FROM (%v) t
 		args = append(args, filter.Options.Offset, filter.Options.Limit)
 	}
 
-	subQuery = "SELECT e.* FROM (" + subQuery + ") s LEFT JOIN transfer e ON s.seq = e.seq"
 	transferQuery := fmt.Sprintf(query, subQuery)
 	// if there is no limit option, set order outside
 	if filter.Options == nil {
@@ -259,6 +265,7 @@ FROM (%v) t
 			transferQuery += " ORDER BY seq ASC "
 		}
 	}
+
 	return db.queryTransfers(ctx, transferQuery, args...)
 }
 

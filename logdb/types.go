@@ -97,17 +97,23 @@ type TransferCriteria struct {
 }
 
 func (c *TransferCriteria) toWhereCondition() (cond string, args []any) {
-	cond = "1"
+	cond = ""
 	if c.TxOrigin != nil {
-		cond += " AND txOrigin = " + refIDQuery
+		cond += " r2.data = ?"
 		args = append(args, c.TxOrigin.Bytes())
 	}
 	if c.Sender != nil {
-		cond += " AND sender = " + refIDQuery
+		if cond != "" {
+			cond += " AND"
+		}
+		cond += " r3.data = ?"
 		args = append(args, c.Sender.Bytes())
 	}
 	if c.Recipient != nil {
-		cond += " AND recipient = " + refIDQuery
+		if cond != "" {
+			cond += " AND"
+		}
+		cond += " r4.data = ?"
 		args = append(args, c.Recipient.Bytes())
 	}
 	return
