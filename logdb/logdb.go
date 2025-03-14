@@ -113,24 +113,24 @@ FROM event e
 		if err != nil {
 			return nil, err
 		}
-		whereLimit := fmt.Sprintf(" WHERE e.seq >= 0 AND e.seq <= %v", to)
-		return db.queryEvents(ctx, fmt.Sprintf(query, whereLimit))
+		where := fmt.Sprintf(" WHERE e.seq >= 0 AND e.seq <= %v", to)
+		return db.queryEvents(ctx, fmt.Sprintf(query, where))
 	}
 
 	var (
-		subQuery = ""
-		args     []any
+		whereOrderLimit = ""
+		args            []any
 	)
 
 	if filter.Range != nil {
-		subQuery += " WHERE seq >= ?"
+		whereOrderLimit += " WHERE seq >= ?"
 		from, err := newSequence(filter.Range.From, 0, 0)
 		if err != nil {
 			return nil, err
 		}
 		args = append(args, from)
 		if filter.Range.To >= filter.Range.From {
-			subQuery += " AND seq <= ?"
+			whereOrderLimit += " AND seq <= ?"
 			to, err := newSequence(filter.Range.To, txIndexMask, logIndexMask)
 			if err != nil {
 				return nil, err
@@ -142,35 +142,35 @@ FROM event e
 		if err != nil {
 			return nil, err
 		}
-		subQuery += fmt.Sprintf(" WHERE e.seq > 0 AND e.seq <= %v", to)
+		whereOrderLimit += fmt.Sprintf(" WHERE e.seq > 0 AND e.seq <= %v", to)
 	}
 
 	if len(filter.CriteriaSet) > 0 {
-		subQuery += " AND ("
+		whereOrderLimit += " AND ("
 
 		for i, c := range filter.CriteriaSet {
 			cond, cargs := c.toWhereCondition()
 			if i > 0 {
-				subQuery += " OR"
+				whereOrderLimit += " OR"
 			}
-			subQuery += " (" + cond + ")"
+			whereOrderLimit += " (" + cond + ")"
 			args = append(args, cargs...)
 		}
-		subQuery += ")"
+		whereOrderLimit += ")"
 	}
 
 	// if there is limit option, set order inside subquery
 	if filter.Options != nil {
 		if filter.Order == DESC {
-			subQuery += " ORDER BY seq DESC "
+			whereOrderLimit += " ORDER BY seq DESC "
 		} else {
-			subQuery += " ORDER BY seq ASC "
+			whereOrderLimit += " ORDER BY seq ASC "
 		}
-		subQuery += " LIMIT ?, ?"
+		whereOrderLimit += " LIMIT ?, ?"
 		args = append(args, filter.Options.Offset, filter.Options.Limit)
 	}
 
-	eventQuery := fmt.Sprintf(query, subQuery)
+	eventQuery := fmt.Sprintf(query, whereOrderLimit)
 	// if there is no limit option, set order outside
 	if filter.Options == nil {
 		if filter.Order == DESC {
@@ -198,25 +198,25 @@ FROM transfer t
 		if err != nil {
 			return nil, err
 		}
-		whereLimit := fmt.Sprintf(" WHERE t.seq >= 0 AND t.seq <= %v", to)
+		where := fmt.Sprintf(" WHERE t.seq >= 0 AND t.seq <= %v", to)
 
-		return db.queryTransfers(ctx, fmt.Sprintf(query, whereLimit))
+		return db.queryTransfers(ctx, fmt.Sprintf(query, where))
 	}
 
 	var (
-		subQuery = ""
-		args     []any
+		whereOrderLimit = ""
+		args            []any
 	)
 
 	if filter.Range != nil {
-		subQuery += " WHERE seq >= ?"
+		whereOrderLimit += " WHERE seq >= ?"
 		from, err := newSequence(filter.Range.From, 0, 0)
 		if err != nil {
 			return nil, err
 		}
 		args = append(args, from)
 		if filter.Range.To >= filter.Range.From {
-			subQuery += " AND seq <= ?"
+			whereOrderLimit += " AND seq <= ?"
 			to, err := newSequence(filter.Range.To, txIndexMask, logIndexMask)
 			if err != nil {
 				return nil, err
@@ -228,34 +228,34 @@ FROM transfer t
 		if err != nil {
 			return nil, err
 		}
-		subQuery += fmt.Sprintf(" WHERE t.seq > 0 AND t.seq <= %v", to)
+		whereOrderLimit += fmt.Sprintf(" WHERE t.seq > 0 AND t.seq <= %v", to)
 	}
 
 	if len(filter.CriteriaSet) > 0 {
-		subQuery += " AND ("
+		whereOrderLimit += " AND ("
 		for i, c := range filter.CriteriaSet {
 			cond, cargs := c.toWhereCondition()
 			if i > 0 {
-				subQuery += " OR"
+				whereOrderLimit += " OR"
 			}
-			subQuery += " (" + cond + ")"
+			whereOrderLimit += " (" + cond + ")"
 			args = append(args, cargs...)
 		}
-		subQuery += ")"
+		whereOrderLimit += ")"
 	}
 
 	// if there is limit option, set order inside subquery
 	if filter.Options != nil {
 		if filter.Order == DESC {
-			subQuery += " ORDER BY seq DESC"
+			whereOrderLimit += " ORDER BY seq DESC"
 		} else {
-			subQuery += " ORDER BY seq ASC"
+			whereOrderLimit += " ORDER BY seq ASC"
 		}
-		subQuery += " LIMIT ?, ?"
+		whereOrderLimit += " LIMIT ?, ?"
 		args = append(args, filter.Options.Offset, filter.Options.Limit)
 	}
 
-	transferQuery := fmt.Sprintf(query, subQuery)
+	transferQuery := fmt.Sprintf(query, whereOrderLimit)
 	// if there is no limit option, set order outside
 	if filter.Options == nil {
 		if filter.Order == DESC {
