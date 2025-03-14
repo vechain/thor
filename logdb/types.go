@@ -65,14 +65,17 @@ type EventCriteria struct {
 }
 
 func (c *EventCriteria) toWhereCondition() (cond string, args []any) {
-	cond = "1"
+	cond = ""
 	if c.Address != nil {
-		cond += " AND address = " + refIDQuery
+		cond += " r3.data = ?"
 		args = append(args, c.Address.Bytes())
 	}
 	for i, topic := range c.Topics {
 		if topic != nil {
-			cond += fmt.Sprintf(" AND topic%v = ", i) + refIDQuery
+			if cond != "" {
+				cond += " AND "
+			}
+			cond += fmt.Sprintf(" r%v.data = ?", i+4)
 			args = append(args, removeLeadingZeros(topic.Bytes()))
 		}
 	}
@@ -94,17 +97,23 @@ type TransferCriteria struct {
 }
 
 func (c *TransferCriteria) toWhereCondition() (cond string, args []any) {
-	cond = "1"
+	cond = ""
 	if c.TxOrigin != nil {
-		cond += " AND txOrigin = " + refIDQuery
+		cond += " r2.data = ?"
 		args = append(args, c.TxOrigin.Bytes())
 	}
 	if c.Sender != nil {
-		cond += " AND sender = " + refIDQuery
+		if cond != "" {
+			cond += " AND"
+		}
+		cond += " r3.data = ?"
 		args = append(args, c.Sender.Bytes())
 	}
 	if c.Recipient != nil {
-		cond += " AND recipient = " + refIDQuery
+		if cond != "" {
+			cond += " AND"
+		}
+		cond += " r4.data = ?"
 		args = append(args, c.Recipient.Bytes())
 	}
 	return
