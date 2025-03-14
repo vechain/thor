@@ -64,7 +64,7 @@ type EventCriteria struct {
 	Topics  [5]*thor.Bytes32
 }
 
-func (c *EventCriteria) toWhereCondition() (cond string, args []interface{}) {
+func (c *EventCriteria) toWhereCondition() (cond string, args []any) {
 	cond = ""
 	if c.Address != nil {
 		cond += " r3.data = ?"

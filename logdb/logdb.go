@@ -121,7 +121,7 @@ FROM event e
 
 	var (
 		subQuery = ""
-		args     []interface{}
+		args     []any
 	)
 
 	if filter.Range != nil {
