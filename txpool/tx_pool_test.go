@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
@@ -455,16 +456,16 @@ func TestOrderTxsAfterGalacticaFork(t *testing.T) {
 	repo, _ := chain.NewRepository(db, b0)
 	repo.AddBlock(b1, tx.Receipts{}, 0, true)
 
-	totalPoolTxs := 10_000
+	poolLimit := 10_000
 	pool := New(repo, state.NewStater(db), Options{
-		Limit:           totalPoolTxs,
-		LimitPerAccount: totalPoolTxs,
+		Limit:           poolLimit,
+		LimitPerAccount: poolLimit,
 		MaxLifetime:     time.Hour,
 	}, &thor.ForkConfig{GALACTICA: 1})
 	defer pool.Close()
 
 	txs := make(map[thor.Bytes32]*tx.Transaction)
-	for i := range totalPoolTxs {
+	for i := range poolLimit - 2 {
 		tx := tx.MustSign(generateRandomTx(t, i, repo.ChainTag()), devAccounts[i%len(devAccounts)].PrivateKey)
 		txs[tx.ID()] = tx
 		assert.Nil(t, pool.Add(tx))
@@ -474,7 +475,7 @@ func TestOrderTxsAfterGalacticaFork(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Zero(t, removed)
 	assert.Equal(t, len(txs), len(execTxs))
-	assert.Equal(t, totalPoolTxs, len(execTxs))
+	assert.Equal(t, poolLimit-2, len(execTxs))
 	baseGasPrice, err := builtin.Params.Native(st).Get(thor.KeyBaseGasPrice)
 	assert.Nil(t, err)
 	for i := 1; i < len(txs); i++ {
@@ -484,6 +485,36 @@ func TestOrderTxsAfterGalacticaFork(t *testing.T) {
 		currEffectiveFee := math.BigMin(new(big.Int).Sub(currGalacticaFee.MaxFee, b1.Header().BaseFee()), currGalacticaFee.MaxPriorityFee)
 		assert.True(t, prevEffectiveFee.Cmp(currEffectiveFee) >= 0)
 	}
+
+	// Add a tx with the highest priority fee
+	firstTx := tx.NewBuilder(tx.TypeDynamicFee).
+		ChainTag(repo.ChainTag()).
+		Expiration(100).
+		Gas(21000).
+		MaxFeePerGas(big.NewInt(thor.InitialBaseFee * 10)).
+		MaxPriorityFeePerGas(big.NewInt(thor.InitialBaseFee * 10)).
+		Build()
+	firstTx = tx.MustSign(firstTx, devAccounts[0].PrivateKey)
+
+	// Add a tx with 0 priority fee
+	lastTx := tx.NewBuilder(tx.TypeDynamicFee).
+		ChainTag(repo.ChainTag()).
+		Expiration(100).
+		Gas(21000).
+		MaxFeePerGas(big.NewInt(thor.InitialBaseFee * 10)).
+		MaxPriorityFeePerGas(common.Big0).
+		Build()
+	lastTx = tx.MustSign(lastTx, devAccounts[0].PrivateKey)
+
+	assert.Nil(t, pool.Add(firstTx))
+	assert.Nil(t, pool.Add(lastTx))
+
+	execTxs, removed, err = pool.wash(pool.repo.BestBlockSummary())
+	assert.Nil(t, err)
+	assert.Zero(t, removed)
+	assert.Equal(t, poolLimit, len(execTxs))
+	assert.Equal(t, execTxs[0].ID(), firstTx.ID())
+	assert.Equal(t, execTxs[len(execTxs)-1].ID(), lastTx.ID())
 }
 
 func TestOrderTxsAfterGalacticaForkSameValues(t *testing.T) {
