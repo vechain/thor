@@ -64,15 +64,21 @@ type EventCriteria struct {
 	Topics  [5]*thor.Bytes32
 }
 
-func (c *EventCriteria) toWhereCondition() (cond string, args []any) {
-	cond = "1"
+func (c *EventCriteria) toWhereCondition() (cond string, args []interface{}) {
+	cond = ""
 	if c.Address != nil {
-		cond += " AND address = " + refIDQuery
+		if cond != "" {
+			cond += " AND "
+		}
+		cond += " r3.data = ?"
 		args = append(args, c.Address.Bytes())
 	}
 	for i, topic := range c.Topics {
 		if topic != nil {
-			cond += fmt.Sprintf(" AND topic%v = ", i) + refIDQuery
+			if cond != "" {
+				cond += " AND "
+			}
+			cond += fmt.Sprintf(" r%v.data = ?", i+4)
 			args = append(args, removeLeadingZeros(topic.Bytes()))
 		}
 	}

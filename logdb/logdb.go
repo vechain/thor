@@ -18,7 +18,9 @@ import (
 )
 
 const (
-	refIDQuery = "(SELECT id FROM ref WHERE data=?)"
+	refIDQuery    = "(SELECT id FROM ref WHERE data=?)"
+	defaultOffset = 0
+	defaultLimit  = 200
 )
 
 type LogDB struct {
@@ -95,7 +97,7 @@ func (db *LogDB) Path() string {
 
 func (db *LogDB) FilterEvents(ctx context.Context, filter *EventFilter) ([]*Event, error) {
 	const query = `SELECT e.seq, r0.data, e.blockTime, r1.data, r2.data, e.clauseIndex, r3.data, r4.data, r5.data, r6.data, r7.data, r8.data, e.data
-FROM (%v) e
+FROM event e
 	LEFT JOIN ref r0 ON e.blockID = r0.id
 	LEFT JOIN ref r1 ON e.txID = r1.id
 	LEFT JOIN ref r2 ON e.txOrigin = r2.id
@@ -104,19 +106,26 @@ FROM (%v) e
 	LEFT JOIN ref r5 ON e.topic1 = r5.id
 	LEFT JOIN ref r6 ON e.topic2 = r6.id
 	LEFT JOIN ref r7 ON e.topic3 = r7.id
-	LEFT JOIN ref r8 ON e.topic4 = r8.id`
+	LEFT JOIN ref r8 ON e.topic4 = r8.id
+	%v
+	`
 
 	if filter == nil {
-		return db.queryEvents(ctx, fmt.Sprintf(query, "event"))
+		to, err := newSequence(MaxBlockNumber, 0, 0)
+		if err != nil {
+			return nil, err
+		}
+		whereLimit := fmt.Sprintf(" WHERE e.seq >= 0 AND e.seq <= %v LIMIT %v, %v", to, defaultOffset, defaultLimit)
+		return db.queryEvents(ctx, fmt.Sprintf(query, whereLimit))
 	}
 
 	var (
-		subQuery = "SELECT seq FROM event WHERE 1"
-		args     []any
+		subQuery = ""
+		args     []interface{}
 	)
 
 	if filter.Range != nil {
-		subQuery += " AND seq >= ?"
+		subQuery += " WHERE seq >= ?"
 		from, err := newSequence(filter.Range.From, 0, 0)
 		if err != nil {
 			return nil, err
@@ -130,10 +139,20 @@ FROM (%v) e
 			}
 			args = append(args, to)
 		}
+	} else {
+		to, err := newSequence(MaxBlockNumber, 0, 0)
+		if err != nil {
+			return nil, err
+		}
+		subQuery += fmt.Sprintf(" WHERE e.seq > 0 AND e.seq <= %v", to)
 	}
 
 	if len(filter.CriteriaSet) > 0 {
-		subQuery += " AND ("
+		if subQuery == "" {
+			subQuery += " WHERE ("
+		} else {
+			subQuery += " AND ("
+		}
 
 		for i, c := range filter.CriteriaSet {
 			cond, cargs := c.toWhereCondition()
@@ -157,17 +176,17 @@ FROM (%v) e
 		args = append(args, filter.Options.Offset, filter.Options.Limit)
 	}
 
-	subQuery = "SELECT e.* FROM (" + subQuery + ") s LEFT JOIN event e ON s.seq = e.seq"
-
 	eventQuery := fmt.Sprintf(query, subQuery)
 	// if there is no limit option, set order outside
 	if filter.Options == nil {
 		if filter.Order == DESC {
-			eventQuery += " ORDER BY seq DESC "
+			eventQuery += " ORDER BY e.seq DESC "
 		} else {
-			eventQuery += " ORDER BY seq ASC "
+			eventQuery += " ORDER BY e.seq ASC "
 		}
+		eventQuery += fmt.Sprintf(" LIMIT %v, %v", defaultOffset, defaultLimit)
 	}
+
 	return db.queryEvents(ctx, eventQuery, args...)
 }
 
