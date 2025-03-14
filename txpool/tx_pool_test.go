@@ -486,23 +486,23 @@ func TestOrderTxsAfterGalacticaFork(t *testing.T) {
 	}
 
 	// Add a tx with the highest priority fee
-	firstTx := tx.NewTxBuilder(tx.TypeDynamicFee).
+	firstTx := tx.NewBuilder(tx.TypeDynamicFee).
 		ChainTag(repo.ChainTag()).
 		Expiration(100).
 		Gas(21000).
 		MaxFeePerGas(big.NewInt(thor.InitialBaseFee * 10)).
 		MaxPriorityFeePerGas(big.NewInt(thor.InitialBaseFee * 10)).
-		MustBuild()
+		Build()
 	firstTx = tx.MustSign(firstTx, devAccounts[0].PrivateKey)
 
 	// Add a tx with 0 priority fee
-	lastTx := tx.NewTxBuilder(tx.TypeDynamicFee).
+	lastTx := tx.NewBuilder(tx.TypeDynamicFee).
 		ChainTag(repo.ChainTag()).
 		Expiration(100).
 		Gas(21000).
 		MaxFeePerGas(big.NewInt(thor.InitialBaseFee * 10)).
 		MaxPriorityFeePerGas(common.Big0).
-		MustBuild()
+		Build()
 	lastTx = tx.MustSign(lastTx, devAccounts[0].PrivateKey)
 
 	assert.Nil(t, pool.Add(firstTx))
