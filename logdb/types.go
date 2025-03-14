@@ -67,9 +67,6 @@ type EventCriteria struct {
 func (c *EventCriteria) toWhereCondition() (cond string, args []interface{}) {
 	cond = ""
 	if c.Address != nil {
-		if cond != "" {
-			cond += " AND "
-		}
 		cond += " r3.data = ?"
 		args = append(args, c.Address.Bytes())
 	}
