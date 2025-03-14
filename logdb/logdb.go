@@ -200,7 +200,6 @@ FROM transfer t
 		}
 		whereLimit := fmt.Sprintf(" WHERE t.seq >= 0 AND t.seq <= %v", to)
 
-		println("transfer query", fmt.Sprintf(query, whereLimit))
 		return db.queryTransfers(ctx, fmt.Sprintf(query, whereLimit))
 	}
 
