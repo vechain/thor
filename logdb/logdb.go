@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"fmt"
 	"math/big"
+	"strings"
 
 	sqlite3 "github.com/mattn/go-sqlite3"
 	"github.com/vechain/thor/v2/block"
@@ -118,19 +119,19 @@ FROM event e
 	}
 
 	var (
-		whereOrderLimit = ""
+		whereOrderLimit = strings.Builder{}
 		args            []any
 	)
 
 	if filter.Range != nil {
-		whereOrderLimit += " WHERE seq >= ?"
+		whereOrderLimit.WriteString(" WHERE seq >= ?")
 		from, err := newSequence(filter.Range.From, 0, 0)
 		if err != nil {
 			return nil, err
 		}
 		args = append(args, from)
 		if filter.Range.To >= filter.Range.From {
-			whereOrderLimit += " AND seq <= ?"
+			whereOrderLimit.WriteString(" AND seq <= ?")
 			to, err := newSequence(filter.Range.To, txIndexMask, logIndexMask)
 			if err != nil {
 				return nil, err
@@ -142,45 +143,48 @@ FROM event e
 		if err != nil {
 			return nil, err
 		}
-		whereOrderLimit += fmt.Sprintf(" WHERE e.seq > 0 AND e.seq <= %v", to)
+		whereOrderLimit.WriteString(fmt.Sprintf(" WHERE e.seq > 0 AND e.seq <= %v", to))
 	}
 
 	if len(filter.CriteriaSet) > 0 {
-		whereOrderLimit += " AND ("
+		whereOrderLimit.WriteString(" AND (")
 
 		for i, c := range filter.CriteriaSet {
 			cond, cargs := c.toWhereCondition()
 			if i > 0 {
-				whereOrderLimit += " OR"
+				whereOrderLimit.WriteString(" OR")
 			}
-			whereOrderLimit += " (" + cond + ")"
+			whereOrderLimit.WriteString(" (")
+			whereOrderLimit.WriteString(cond)
+			whereOrderLimit.WriteString(")")
 			args = append(args, cargs...)
 		}
-		whereOrderLimit += ")"
+		whereOrderLimit.WriteString(")")
 	}
 
 	// if there is limit option, set order inside subquery
 	if filter.Options != nil {
 		if filter.Order == DESC {
-			whereOrderLimit += " ORDER BY seq DESC "
+			whereOrderLimit.WriteString(" ORDER BY seq DESC ")
 		} else {
-			whereOrderLimit += " ORDER BY seq ASC "
+			whereOrderLimit.WriteString(" ORDER BY seq ASC ")
 		}
-		whereOrderLimit += " LIMIT ?, ?"
+		whereOrderLimit.WriteString(" LIMIT ?, ?")
 		args = append(args, filter.Options.Offset, filter.Options.Limit)
 	}
 
-	eventQuery := fmt.Sprintf(query, whereOrderLimit)
+	eventQuery := strings.Builder{}
+	eventQuery.WriteString(fmt.Sprintf(query, whereOrderLimit.String()))
 	// if there is no limit option, set order outside
 	if filter.Options == nil {
 		if filter.Order == DESC {
-			eventQuery += " ORDER BY e.seq DESC "
+			eventQuery.WriteString(" ORDER BY e.seq DESC ")
 		} else {
-			eventQuery += " ORDER BY e.seq ASC "
+			eventQuery.WriteString(" ORDER BY e.seq ASC ")
 		}
 	}
 
-	return db.queryEvents(ctx, eventQuery, args...)
+	return db.queryEvents(ctx, eventQuery.String(), args...)
 }
 
 func (db *LogDB) FilterTransfers(ctx context.Context, filter *TransferFilter) ([]*Transfer, error) {
@@ -204,19 +208,19 @@ FROM transfer t
 	}
 
 	var (
-		whereOrderLimit = ""
+		whereOrderLimit = strings.Builder{}
 		args            []any
 	)
 
 	if filter.Range != nil {
-		whereOrderLimit += " WHERE seq >= ?"
+		whereOrderLimit.WriteString(" WHERE seq >= ?")
 		from, err := newSequence(filter.Range.From, 0, 0)
 		if err != nil {
 			return nil, err
 		}
 		args = append(args, from)
 		if filter.Range.To >= filter.Range.From {
-			whereOrderLimit += " AND seq <= ?"
+			whereOrderLimit.WriteString(" AND seq <= ?")
 			to, err := newSequence(filter.Range.To, txIndexMask, logIndexMask)
 			if err != nil {
 				return nil, err
@@ -228,44 +232,47 @@ FROM transfer t
 		if err != nil {
 			return nil, err
 		}
-		whereOrderLimit += fmt.Sprintf(" WHERE t.seq > 0 AND t.seq <= %v", to)
+		whereOrderLimit.WriteString(fmt.Sprintf(" WHERE t.seq > 0 AND t.seq <= %v", to))
 	}
 
 	if len(filter.CriteriaSet) > 0 {
-		whereOrderLimit += " AND ("
+		whereOrderLimit.WriteString(" AND (")
 		for i, c := range filter.CriteriaSet {
 			cond, cargs := c.toWhereCondition()
 			if i > 0 {
-				whereOrderLimit += " OR"
+				whereOrderLimit.WriteString(" OR")
 			}
-			whereOrderLimit += " (" + cond + ")"
+			whereOrderLimit.WriteString(" (")
+			whereOrderLimit.WriteString(cond)
+			whereOrderLimit.WriteString(")")
 			args = append(args, cargs...)
 		}
-		whereOrderLimit += ")"
+		whereOrderLimit.WriteString(")")
 	}
 
 	// if there is limit option, set order inside subquery
 	if filter.Options != nil {
 		if filter.Order == DESC {
-			whereOrderLimit += " ORDER BY seq DESC"
+			whereOrderLimit.WriteString(" ORDER BY seq DESC")
 		} else {
-			whereOrderLimit += " ORDER BY seq ASC"
+			whereOrderLimit.WriteString(" ORDER BY seq ASC")
 		}
-		whereOrderLimit += " LIMIT ?, ?"
+		whereOrderLimit.WriteString(" LIMIT ?, ?")
 		args = append(args, filter.Options.Offset, filter.Options.Limit)
 	}
 
-	transferQuery := fmt.Sprintf(query, whereOrderLimit)
+	transferQuery := strings.Builder{}
+	transferQuery.WriteString(fmt.Sprintf(query, whereOrderLimit.String()))
 	// if there is no limit option, set order outside
 	if filter.Options == nil {
 		if filter.Order == DESC {
-			transferQuery += " ORDER BY seq DESC "
+			transferQuery.WriteString(" ORDER BY seq DESC ")
 		} else {
-			transferQuery += " ORDER BY seq ASC "
+			transferQuery.WriteString(" ORDER BY seq ASC ")
 		}
 	}
 
-	return db.queryTransfers(ctx, transferQuery, args...)
+	return db.queryTransfers(ctx, transferQuery.String(), args...)
 }
 
 func (db *LogDB) queryEvents(ctx context.Context, query string, args ...any) ([]*Event, error) {
