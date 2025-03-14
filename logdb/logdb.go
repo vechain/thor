@@ -119,7 +119,7 @@ FROM event e
 	}
 
 	var (
-		whereOrderLimit = strings.Builder{}
+		whereOrderLimit strings.Builder
 		args            []any
 	)
 
@@ -208,7 +208,7 @@ FROM transfer t
 	}
 
 	var (
-		whereOrderLimit = strings.Builder{}
+		whereOrderLimit strings.Builder
 		args            []any
 	)
 
