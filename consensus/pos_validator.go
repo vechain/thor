@@ -41,9 +41,6 @@ func (c *Consensus) validateStakingProposer(header *block.Header, parent *block.
 		return nil, err
 	}
 
-	// TODO: We're using the same seed mechanism as PoA. Should we use a different one?
-	// TODO: See also packer/pos_scheduler.go
-	// https://github.com/vechain/protocol-board-repo/issues/442
 	var seed []byte
 	seed, err = c.seeder.Generate(header.ParentID())
 	if err != nil {

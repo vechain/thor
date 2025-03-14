@@ -24,19 +24,11 @@ func (p *Packer) schedulePOS(parent *chain.BlockSummary, nowTimestamp uint64, st
 		return thor.Address{}, 0, 0, err
 	}
 
-	// TODO: There has been a decision in confluence to store the beneficiary on chain. Follow up on this and resolve this issue.
-	// https://github.com/vechain/protocol-board-repo/issues/432
-	var beneficiary thor.Address
+	beneficiary := p.nodeMaster
 	if p.beneficiary != nil {
 		beneficiary = *p.beneficiary
 	}
-	if beneficiary.IsZero() {
-		beneficiary = p.nodeMaster
-	}
 
-	// TODO: We're using the same seed mechanism as PoA. Should we use a different one?
-	// TODO: See also consensus/pos_validator.go
-	// https://github.com/vechain/protocol-board-repo/issues/442
 	var seed []byte
 	seed, err = p.seeder.Generate(parent.Header.ID())
 	if err != nil {

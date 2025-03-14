@@ -618,10 +618,15 @@ func printStartupMessage1(
     Beneficiary  [ %v ]`,
 					master.Address(),
 					func() string {
-						if master.Beneficiary == nil {
-							return "not set, defaults to endorsor"
+						nodeAddr := master.Address().String()
+						beneficiaryAddr := "not set, defaulting to endorsor"
+
+						if master.Beneficiary != nil {
+							beneficiaryAddr = master.Beneficiary.String()
+							nodeAddr = master.Beneficiary.String()
 						}
-						return master.Beneficiary.String()
+
+						return fmt.Sprintf("Pre-Hayabusa: %s, Post-Hayabusa: %s", beneficiaryAddr, nodeAddr)
 					}(),
 				)
 			}
