@@ -10,25 +10,28 @@ import (
 	"math/big"
 	"sync"
 
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
 
 // txObjectMap to maintain mapping of tx hash to tx object, account quota and pending cost.
 type txObjectMap struct {
-	lock      sync.RWMutex
-	mapByHash map[thor.Bytes32]*txObject
-	mapByID   map[thor.Bytes32]*txObject
-	quota     map[thor.Address]int
-	cost      map[thor.Address]*big.Int
+	lock         sync.RWMutex
+	mapByHash    map[thor.Bytes32]*txObject
+	mapByID      map[thor.Bytes32]*txObject
+	quota        map[thor.Address]int
+	cost         map[thor.Address]*big.Int
+	replacements map[thor.Address]map[uint64]thor.Bytes32
 }
 
 func newTxObjectMap() *txObjectMap {
 	return &txObjectMap{
-		mapByHash: make(map[thor.Bytes32]*txObject),
-		mapByID:   make(map[thor.Bytes32]*txObject),
-		quota:     make(map[thor.Address]int),
-		cost:      make(map[thor.Address]*big.Int),
+		mapByHash:    make(map[thor.Bytes32]*txObject),
+		mapByID:      make(map[thor.Bytes32]*txObject),
+		quota:        make(map[thor.Address]int),
+		cost:         make(map[thor.Address]*big.Int),
+		replacements: make(map[thor.Address]map[uint64]thor.Bytes32),
 	}
 }
 
@@ -46,6 +49,34 @@ func (m *txObjectMap) Add(txObj *txObject, limitPerAccount int, validatePayer fu
 	hash := txObj.Hash()
 	if _, found := m.mapByHash[hash]; found {
 		return nil
+	}
+
+	if txObj.HasReplacement() {
+		replacement, _ := txObj.ReplacementNonce()
+		txMap, ok := m.replacements[txObj.Origin()]
+		if ok {
+			txID, ok := txMap[replacement]
+			if ok {
+				previous, ok := m.mapByID[txID]
+				if ok {
+					log.Info("found a replacement tx", "prev", previous.ID(), "new", txObj.ID())
+					if err := validReplacement(txObj, previous); err != nil {
+						return err
+					}
+					delete(m.replacements[txObj.Origin()], replacement)
+					delete(m.mapByID, previous.ID())
+					delete(m.mapByHash, previous.Hash())
+					m.quota[txObj.Origin()]--
+					if previous.Delegator() != nil {
+						m.quota[*previous.Delegator()]--
+					}
+				}
+			}
+		}
+		if !ok {
+			m.replacements[txObj.Origin()] = make(map[uint64]thor.Bytes32)
+		}
+		m.replacements[txObj.Origin()][replacement] = txObj.ID()
 	}
 
 	if m.quota[txObj.Origin()] >= limitPerAccount {
@@ -129,6 +160,17 @@ func (m *txObjectMap) RemoveByHash(txHash thor.Bytes32) bool {
 			}
 		}
 
+		if nonce, ok := txObj.ReplacementNonce(); ok {
+			txMap, ok := m.replacements[txObj.Origin()]
+			if ok {
+				if len(txMap) > 1 {
+					delete(txMap, nonce)
+				} else {
+					delete(m.replacements, txObj.Origin())
+				}
+			}
+		}
+
 		delete(m.mapByHash, txHash)
 		delete(m.mapByID, txObj.ID())
 		return true
@@ -192,4 +234,24 @@ func (m *txObjectMap) Len() int {
 	defer m.lock.RUnlock()
 
 	return len(m.mapByHash)
+}
+
+func validReplacement(newTx, existing *txObject) error {
+	if newTx.Type() != existing.Type() {
+		return errors.New("replacement tx type mismatch")
+	}
+	if newTx.Type() == tx.TypeLegacy {
+		if existing.GasPriceCoef() > newTx.GasPriceCoef() {
+			return errors.New("replacement tx gas price too low")
+		}
+	}
+	if newTx.Type() == tx.TypeDynamicFee {
+		if existing.MaxFeePerGas().Cmp(newTx.MaxFeePerGas()) > 0 {
+			return errors.New("replacement tx max fee per gas too low")
+		}
+		if existing.MaxPriorityFeePerGas().Cmp(newTx.MaxPriorityFeePerGas()) > 0 {
+			return errors.New("replacement tx max priority fee per gas too low")
+		}
+	}
+	return nil
 }
