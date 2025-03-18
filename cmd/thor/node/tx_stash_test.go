@@ -32,7 +32,7 @@ func TestTxStash(t *testing.T) {
 	stash := newTxStash(db, 10)
 
 	var saved tx.Transactions
-	for i := 0; i < 11; i++ {
+	for range 11 {
 		tx := newTx()
 		assert.Nil(t, stash.Save(tx))
 		saved = append(saved, tx)

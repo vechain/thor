@@ -89,7 +89,7 @@ func (s *stakerContract) Events() *abi.ABI {
 
 type nativeMethod struct {
 	abi *abi.Method
-	run func(env *xenv.Environment) []interface{}
+	run func(env *xenv.Environment) []any
 }
 
 type methodKey struct {
@@ -100,7 +100,7 @@ type methodKey struct {
 var nativeMethods = make(map[methodKey]*nativeMethod)
 
 // FindNativeCall find native calls.
-func FindNativeCall(to thor.Address, input []byte) (*abi.Method, func(*xenv.Environment) []interface{}, bool) {
+func FindNativeCall(to thor.Address, input []byte) (*abi.Method, func(*xenv.Environment) []any, bool) {
 	methodID, err := abi.ExtractMethodID(input)
 	if err != nil {
 		return nil, nil, false

@@ -28,7 +28,7 @@ var (
 )
 
 // HandleFunc to handle received messages from peer.
-type HandleFunc func(msg *p2p.Msg, write func(interface{})) error
+type HandleFunc func(msg *p2p.Msg, write func(any)) error
 
 // RPC defines the common pattern that peer interacts with each other.
 type RPC struct {
@@ -46,7 +46,7 @@ func New(peer *p2p.Peer, rw p2p.MsgReadWriter) *RPC {
 	if peer.Inbound() {
 		dir = "inbound"
 	}
-	ctx := []interface{}{
+	ctx := []any{
 		"peer", peer,
 		"dir", dir,
 	}
@@ -106,7 +106,7 @@ func (r *RPC) Serve(handleFunc HandleFunc, maxMsgSize uint32) error {
 				return err
 			}
 		} else {
-			if err := handleFunc(&msg, func(result interface{}) {
+			if err := handleFunc(&msg, func(result any) {
 				if callID != 0 {
 					p2p.Send(r.rw, msg.Code, &msgData{callID, true, result})
 				}
@@ -174,12 +174,12 @@ func (r *RPC) finalizeCall(id uint32) {
 }
 
 // Notify notifies a message to the peer.
-func (r *RPC) Notify(_ context.Context, msgCode uint64, arg interface{}) error {
+func (r *RPC) Notify(_ context.Context, msgCode uint64, arg any) error {
 	return p2p.Send(r.rw, msgCode, &msgData{0, false, arg})
 }
 
 // Call send a call to the peer and wait for result.
-func (r *RPC) Call(ctx context.Context, msgCode uint64, arg interface{}, result interface{}) error {
+func (r *RPC) Call(ctx context.Context, msgCode uint64, arg any, result any) error {
 	ctx, cancel := context.WithTimeout(ctx, rpcDefaultTimeout)
 	defer cancel()
 

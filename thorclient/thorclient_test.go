@@ -42,7 +42,7 @@ func TestRevision(t *testing.T) {
 
 	for _, tc := range []struct {
 		name             string
-		function         interface{}
+		function         any
 		expectedPath     string
 		expectedRevision string
 	}{
@@ -97,7 +97,7 @@ func TestGetTransaction(t *testing.T) {
 
 	for _, tc := range []struct {
 		name      string
-		function  interface{}
+		function  any
 		isPending bool
 	}{
 		{

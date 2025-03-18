@@ -45,7 +45,7 @@ func newPeer(peer *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 	if peer.Inbound() {
 		dir = "inbound"
 	}
-	ctx := []interface{}{
+	ctx := []any{
 		"peer", peer,
 		"dir", dir,
 	}

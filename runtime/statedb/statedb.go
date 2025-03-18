@@ -37,7 +37,7 @@ type (
 
 // New create a statedb object.
 func New(state *state.State) *StateDB {
-	getter := func(k interface{}) (interface{}, bool, error) {
+	getter := func(k any) (any, bool, error) {
 		switch k.(type) {
 		case suicideFlagKey:
 			return false, true, nil
@@ -66,7 +66,7 @@ func (s *StateDB) GetLogs() (tx.Events, tx.Transfers) {
 		events    tx.Events
 		transfers tx.Transfers
 	)
-	s.repo.Journal(func(k, v interface{}) bool {
+	s.repo.Journal(func(k, v any) bool {
 		switch k.(type) {
 		case eventKey:
 			events = append(events, ethlogToEvent(v.(*types.Log)))

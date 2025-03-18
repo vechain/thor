@@ -51,7 +51,7 @@ type ccase struct {
 	abi        *abi.ABI
 	to, caller thor.Address
 	name       string
-	args       []interface{}
+	args       []any
 	events     tx.Events
 	provedWork *big.Int
 	txID       thor.Bytes32
@@ -60,7 +60,7 @@ type ccase struct {
 	expiration uint32
 	value      *big.Int
 
-	output *[]interface{}
+	output *[]any
 	vmerr  error
 }
 
@@ -70,11 +70,11 @@ type TestTxDescription struct {
 	methodName string
 	address    thor.Address
 	acc        genesis.DevAccount
-	args       []interface{}
+	args       []any
 	duplicate  bool
 }
 
-func (c *ctest) Case(name string, args ...interface{}) *ccase {
+func (c *ctest) Case(name string, args ...any) *ccase {
 	return &ccase{
 		rt:     c.rt,
 		abi:    c.abi,
@@ -134,7 +134,7 @@ func (c *ccase) ShouldLog(events ...*tx.Event) *ccase {
 	return c
 }
 
-func (c *ccase) ShouldOutput(outputs ...interface{}) *ccase {
+func (c *ccase) ShouldOutput(outputs ...any) *ccase {
 	c.output = &outputs
 	return c
 }
@@ -229,7 +229,7 @@ func inspectClauseWithBlockRef(clause *tx.Clause, blockRef *tx.BlockRef) ([]byte
 	return thorChain.ClauseCall(genesis.DevAccounts()[0], trx, 0)
 }
 
-func getClause(abi *abi.ABI, methodName string, address thor.Address, args ...interface{}) (*tx.Clause, *abi.Method, error) {
+func getClause(abi *abi.ABI, methodName string, address thor.Address, args ...any) (*tx.Clause, *abi.Method, error) {
 	m, ok := abi.MethodByName(methodName)
 	if !ok {
 		return nil, nil, fmt.Errorf("method %s not found", methodName)
@@ -238,7 +238,7 @@ func getClause(abi *abi.ABI, methodName string, address thor.Address, args ...in
 	return tx.NewClause(&address).WithData(input), m, err
 }
 
-func callContractAndGetOutput(abi *abi.ABI, methodName string, address thor.Address, output interface{}, args ...interface{}) (uint64, error) {
+func callContractAndGetOutput(abi *abi.ABI, methodName string, address thor.Address, output any, args ...any) (uint64, error) {
 	clause, m, err := getClause(abi, methodName, address, args...)
 	if err != nil {
 		return 0, err
@@ -310,7 +310,7 @@ func TestParamsNative(t *testing.T) {
 		methodName: "set",
 		address:    toAddr,
 		acc:        genesis.DevAccounts()[0],
-		args:       []interface{}{key, value},
+		args:       []any{key, value},
 		duplicate:  false,
 	})
 
@@ -328,7 +328,7 @@ func TestParamsNative(t *testing.T) {
 		methodName: "set",
 		address:    toAddr,
 		acc:        genesis.DevAccounts()[1],
-		args:       []interface{}{key, value},
+		args:       []any{key, value},
 		duplicate:  false,
 	})
 	require.NoError(t, err)
@@ -373,7 +373,7 @@ func TestAuthorityNative(t *testing.T) {
 		methodName: "add",
 		address:    toAddr,
 		acc:        genesis.DevAccounts()[0],
-		args:       []interface{}{master1.Address, endorsor1.Address, b32},
+		args:       []any{master1.Address, endorsor1.Address, b32},
 		duplicate:  false,
 	})
 
@@ -393,7 +393,7 @@ func TestAuthorityNative(t *testing.T) {
 		methodName: "add",
 		address:    toAddr,
 		acc:        genesis.DevAccounts()[0],
-		args:       []interface{}{master2.Address, endorsor2.Address, b32},
+		args:       []any{master2.Address, endorsor2.Address, b32},
 		duplicate:  false,
 	})
 
@@ -412,7 +412,7 @@ func TestAuthorityNative(t *testing.T) {
 		methodName: "add",
 		address:    toAddr,
 		acc:        genesis.DevAccounts()[0],
-		args:       []interface{}{master3.Address, endorsor3.Address, b32},
+		args:       []any{master3.Address, endorsor3.Address, b32},
 		duplicate:  false,
 	})
 
@@ -451,7 +451,7 @@ func TestAuthorityNative(t *testing.T) {
 		methodName: "add",
 		address:    toAddr,
 		acc:        master2,
-		args:       []interface{}{master1.Address, endorsor1.Address, b32},
+		args:       []any{master1.Address, endorsor1.Address, b32},
 		duplicate:  false,
 	})
 
@@ -465,7 +465,7 @@ func TestAuthorityNative(t *testing.T) {
 		methodName: "add",
 		address:    toAddr,
 		acc:        master1,
-		args:       []interface{}{master1.Address, endorsor1.Address, b32},
+		args:       []any{master1.Address, endorsor1.Address, b32},
 		duplicate:  false,
 	})
 	require.NoError(t, err)
@@ -478,7 +478,7 @@ func TestAuthorityNative(t *testing.T) {
 		methodName: "revoke",
 		address:    toAddr,
 		acc:        genesis.DevAccounts()[0],
-		args:       []interface{}{master1.Address},
+		args:       []any{master1.Address},
 		duplicate:  false,
 	})
 	require.NoError(t, err)
@@ -496,7 +496,7 @@ func TestAuthorityNative(t *testing.T) {
 		methodName: "revoke",
 		address:    toAddr,
 		acc:        genesis.DevAccounts()[0],
-		args:       []interface{}{master1.Address},
+		args:       []any{master1.Address},
 		duplicate:  true,
 	})
 	require.NoError(t, err)
@@ -525,7 +525,7 @@ func TestAuthorityNative(t *testing.T) {
 		methodName: "revoke",
 		address:    toAddr,
 		acc:        master3,
-		args:       []interface{}{master2.Address},
+		args:       []any{master2.Address},
 		duplicate:  false,
 	})
 
@@ -593,7 +593,7 @@ func TestEnergyNative(t *testing.T) {
 		methodName: "transfer",
 		address:    toAddr,
 		acc:        acc1,
-		args:       []interface{}{acc3, big.NewInt(1000)},
+		args:       []any{acc3, big.NewInt(1000)},
 		duplicate:  false,
 	})
 
@@ -615,7 +615,7 @@ func TestEnergyNative(t *testing.T) {
 		methodName: "transfer",
 		address:    toAddr,
 		acc:        acc2,
-		args:       []interface{}{acc3, i},
+		args:       []any{acc3, i},
 		duplicate:  false,
 	})
 
@@ -629,7 +629,7 @@ func TestEnergyNative(t *testing.T) {
 		methodName: "move",
 		address:    toAddr,
 		acc:        acc1,
-		args:       []interface{}{acc1.Address, acc3, big.NewInt(1001)},
+		args:       []any{acc1.Address, acc3, big.NewInt(1001)},
 		duplicate:  false,
 	})
 
@@ -648,7 +648,7 @@ func TestEnergyNative(t *testing.T) {
 		methodName: "move",
 		address:    toAddr,
 		acc:        acc2,
-		args:       []interface{}{acc1.Address, acc3, big.NewInt(1001)},
+		args:       []any{acc1.Address, acc3, big.NewInt(1001)},
 		duplicate:  false,
 	})
 
@@ -662,7 +662,7 @@ func TestEnergyNative(t *testing.T) {
 		methodName: "approve",
 		address:    toAddr,
 		acc:        acc1,
-		args:       []interface{}{acc2.Address, big.NewInt(1001)},
+		args:       []any{acc2.Address, big.NewInt(1001)},
 		duplicate:  false,
 	})
 
@@ -687,7 +687,7 @@ func TestEnergyNative(t *testing.T) {
 		methodName: "transferFrom",
 		address:    toAddr,
 		acc:        acc2,
-		args:       []interface{}{acc1.Address, acc3, big.NewInt(1000)},
+		args:       []any{acc1.Address, acc3, big.NewInt(1000)},
 		duplicate:  false,
 	})
 
@@ -706,7 +706,7 @@ func TestEnergyNative(t *testing.T) {
 		methodName: "transferFrom",
 		address:    toAddr,
 		acc:        acc2,
-		args:       []interface{}{acc1.Address, acc3, big.NewInt(1000)},
+		args:       []any{acc1.Address, acc3, big.NewInt(1000)},
 		duplicate:  true,
 	})
 
@@ -795,7 +795,7 @@ func TestPrototypeNative(t *testing.T) {
 		methodName: "setMaster",
 		address:    toAddr,
 		acc:        master2,
-		args:       []interface{}{master2.Address, master1.Address},
+		args:       []any{master2.Address, master1.Address},
 		duplicate:  false,
 	})
 
@@ -812,7 +812,7 @@ func TestPrototypeNative(t *testing.T) {
 		methodName: "setMaster",
 		address:    toAddr,
 		acc:        master2,
-		args:       []interface{}{master1.Address, acc1},
+		args:       []any{master1.Address, acc1},
 		duplicate:  false,
 	})
 
@@ -839,7 +839,7 @@ func TestPrototypeNative(t *testing.T) {
 		methodName: "setCreditPlan",
 		address:    toAddr,
 		acc:        master1,
-		args:       []interface{}{contractAddr, credit, recoveryRate},
+		args:       []any{contractAddr, credit, recoveryRate},
 		duplicate:  false,
 	})
 
@@ -859,7 +859,7 @@ func TestPrototypeNative(t *testing.T) {
 		methodName: "setCreditPlan",
 		address:    toAddr,
 		acc:        master2,
-		args:       []interface{}{contractAddr, credit, recoveryRate},
+		args:       []any{contractAddr, credit, recoveryRate},
 		duplicate:  false,
 	})
 
@@ -888,7 +888,7 @@ func TestPrototypeNative(t *testing.T) {
 		methodName: "addUser",
 		address:    toAddr,
 		acc:        master1,
-		args:       []interface{}{contractAddr, acc1},
+		args:       []any{contractAddr, acc1},
 		duplicate:  false,
 	})
 
@@ -907,7 +907,7 @@ func TestPrototypeNative(t *testing.T) {
 		methodName: "addUser",
 		address:    toAddr,
 		acc:        master2,
-		args:       []interface{}{contractAddr, acc1},
+		args:       []any{contractAddr, acc1},
 		duplicate:  false,
 	})
 
@@ -921,7 +921,7 @@ func TestPrototypeNative(t *testing.T) {
 		methodName: "addUser",
 		address:    toAddr,
 		acc:        master1,
-		args:       []interface{}{contractAddr, acc1},
+		args:       []any{contractAddr, acc1},
 		duplicate:  true,
 	})
 
@@ -948,7 +948,7 @@ func TestPrototypeNative(t *testing.T) {
 		methodName: "sponsor",
 		address:    toAddr,
 		acc:        sponsor,
-		args:       []interface{}{contractAddr},
+		args:       []any{contractAddr},
 		duplicate:  false,
 	})
 
@@ -967,7 +967,7 @@ func TestPrototypeNative(t *testing.T) {
 		methodName: "sponsor",
 		address:    toAddr,
 		acc:        sponsor,
-		args:       []interface{}{contractAddr},
+		args:       []any{contractAddr},
 		duplicate:  true,
 	})
 
@@ -989,7 +989,7 @@ func TestPrototypeNative(t *testing.T) {
 		methodName: "selectSponsor",
 		address:    toAddr,
 		acc:        master1,
-		args:       []interface{}{contractAddr, sponsor.Address},
+		args:       []any{contractAddr, sponsor.Address},
 		duplicate:  false,
 	})
 
@@ -1008,7 +1008,7 @@ func TestPrototypeNative(t *testing.T) {
 		methodName: "selectSponsor",
 		address:    toAddr,
 		acc:        master1,
-		args:       []interface{}{contractAddr, acc1},
+		args:       []any{contractAddr, acc1},
 		duplicate:  false,
 	})
 
@@ -1022,7 +1022,7 @@ func TestPrototypeNative(t *testing.T) {
 		methodName: "selectSponsor",
 		address:    toAddr,
 		acc:        master2,
-		args:       []interface{}{contractAddr, sponsor.Address},
+		args:       []any{contractAddr, sponsor.Address},
 		duplicate:  false,
 	})
 
@@ -1040,7 +1040,7 @@ func TestPrototypeNative(t *testing.T) {
 		methodName: "unsponsor",
 		address:    toAddr,
 		acc:        sponsor,
-		args:       []interface{}{contractAddr},
+		args:       []any{contractAddr},
 		duplicate:  false,
 	})
 
@@ -1058,7 +1058,7 @@ func TestPrototypeNative(t *testing.T) {
 		methodName: "unsponsor",
 		address:    toAddr,
 		acc:        sponsor,
-		args:       []interface{}{contractAddr},
+		args:       []any{contractAddr},
 		duplicate:  true,
 	})
 
@@ -1124,7 +1124,7 @@ func TestPrototypeNative(t *testing.T) {
 		methodName: "transfer",
 		address:    builtin.Energy.Address,
 		acc:        master1,
-		args:       []interface{}{acc1, big.NewInt(1000)},
+		args:       []any{acc1, big.NewInt(1000)},
 		duplicate:  false,
 	})
 
@@ -1184,7 +1184,7 @@ func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 		methodName: "transfer",
 		address:    builtin.Energy.Address,
 		acc:        acc1,
-		args:       []interface{}{acc2, big.NewInt(1)},
+		args:       []any{acc2, big.NewInt(1)},
 		duplicate:  false,
 	})
 
@@ -1224,7 +1224,7 @@ func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 		methodName: "transfer",
 		address:    builtin.Energy.Address,
 		acc:        acc1,
-		args:       []interface{}{acc2, big.NewInt(1)},
+		args:       []any{acc2, big.NewInt(1)},
 		duplicate:  true,
 	})
 
@@ -1330,7 +1330,7 @@ func TestExtensionNative(t *testing.T) {
 		methodName: "transfer",
 		address:    builtin.Energy.Address,
 		acc:        master1,
-		args:       []interface{}{master2.Address, big.NewInt(1000)},
+		args:       []any{master2.Address, big.NewInt(1000)},
 		duplicate:  false,
 	})
 
@@ -1344,7 +1344,7 @@ func TestExtensionNative(t *testing.T) {
 		methodName: "transfer",
 		address:    builtin.Energy.Address,
 		acc:        master1,
-		args:       []interface{}{master2.Address, big.NewInt(1001)},
+		args:       []any{master2.Address, big.NewInt(1001)},
 		duplicate:  false,
 	})
 

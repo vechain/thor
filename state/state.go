@@ -62,7 +62,7 @@ func New(db *muxdb.MuxDB, root trie.Root) *State {
 		cache: make(map[thor.Address]*cachedObject),
 	}
 
-	state.sm = stackedmap.New(func(key interface{}) (interface{}, bool, error) {
+	state.sm = stackedmap.New(func(key any) (any, bool, error) {
 		return state.cacheGetter(key)
 	})
 	return &state
@@ -74,7 +74,7 @@ func (s *State) Checkout(root trie.Root) *State {
 }
 
 // cacheGetter implements stackedmap.MapGetter.
-func (s *State) cacheGetter(key interface{}) (value interface{}, exist bool, err error) {
+func (s *State) cacheGetter(key any) (value any, exist bool, err error) {
 	switch k := key.(type) {
 	case thor.Address: // get account
 		obj, err := s.getCachedObject(k)
@@ -393,7 +393,7 @@ func (s *State) BuildStorageTrie(addr thor.Address) (t *muxdb.Trie, err error) {
 	barrier := s.getStorageBarrier(addr)
 
 	// traverse journal to filter out storage changes for addr
-	s.sm.Journal(func(k, v interface{}) bool {
+	s.sm.Journal(func(k, v any) bool {
 		switch key := k.(type) {
 		case storageKey:
 			if key.barrier == barrier && key.addr == addr {
@@ -443,7 +443,7 @@ func (s *State) Stage(newVer trie.Version) (*Stage, error) {
 
 	var jerr error
 	// traverse journal to build changes
-	s.sm.Journal(func(k, v interface{}) bool {
+	s.sm.Journal(func(k, v any) bool {
 		var c *changed
 		switch key := k.(type) {
 		case thor.Address:

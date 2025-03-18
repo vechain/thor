@@ -204,7 +204,7 @@ func testTransferWithBlocks(t *testing.T, expectedBlocks int) {
 // Init functions
 func insertBlocks(t *testing.T, db *logdb.LogDB, n int) {
 	b := new(block.Builder).Build()
-	for i := 0; i < n; i++ {
+	for range n {
 		b = new(block.Builder).
 			ParentID(b.Header().ID()).
 			Build()

@@ -18,7 +18,7 @@ func newCache(maxSize int) *cache {
 	return &cache{c}
 }
 
-func (c *cache) GetOrLoad(key interface{}, load func() (interface{}, error)) (interface{}, bool, error) {
+func (c *cache) GetOrLoad(key any, load func() (any, error)) (any, bool, error) {
 	if value, ok := c.Get(key); ok {
 		return value, true, nil
 	}

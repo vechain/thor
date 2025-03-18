@@ -9,6 +9,8 @@ import (
 	"context"
 	"sync"
 
+	"slices"
+
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
@@ -127,11 +129,11 @@ func (b Bucket) NewStore(src Store) Store {
 }
 
 func (b Bucket) newRange(r Range) Range {
-	r.Start = append(append([]byte(nil), b...), r.Start...)
+	r.Start = slices.Concat([]byte(b), r.Start)
 	if len(r.Limit) == 0 {
 		r.Limit = util.BytesPrefix([]byte(b)).Limit
 	} else {
-		r.Limit = append(append([]byte(nil), b...), r.Limit...)
+		r.Limit = slices.Concat([]byte(b), r.Limit)
 	}
 	return r
 }
@@ -141,7 +143,7 @@ type buf struct {
 }
 
 var bufPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return &buf{}
 	},
 }

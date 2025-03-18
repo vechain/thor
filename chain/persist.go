@@ -54,7 +54,7 @@ func (s *BlockSummary) IndexRoot() trie.Root {
 	}
 }
 
-func saveRLP(w kv.Putter, key []byte, val interface{}) error {
+func saveRLP(w kv.Putter, key []byte, val any) error {
 	data, err := rlp.EncodeToBytes(val)
 	if err != nil {
 		return err
@@ -62,7 +62,7 @@ func saveRLP(w kv.Putter, key []byte, val interface{}) error {
 	return w.Put(key, data)
 }
 
-func loadRLP(r kv.Getter, key []byte, val interface{}) error {
+func loadRLP(r kv.Getter, key []byte, val any) error {
 	data, err := r.Get(key)
 	if err != nil {
 		return err

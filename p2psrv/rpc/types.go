@@ -10,7 +10,7 @@ import "github.com/ethereum/go-ethereum/p2p"
 type msgData struct {
 	ID       uint32
 	IsResult bool
-	Payload  interface{}
+	Payload  any
 }
 
 type resultListener struct {

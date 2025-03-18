@@ -83,7 +83,7 @@ func TestNewCustomNetPanicInvalidApprovers(t *testing.T) {
 	}()
 
 	var approvers []genesis.Approver
-	for i := 0; i < 1; i++ {
+	for range 1 {
 		addr, _ := thor.ParseAddress("0x1f9090aaE28b8a3dCeaDf281B0F12828e676c326")
 
 		approver := genesis.Approver{

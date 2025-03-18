@@ -10,6 +10,8 @@ import (
 	"io"
 	"math/big"
 
+	"slices"
+
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -51,7 +53,7 @@ func (c *Clause) WithValue(value *big.Int) *Clause {
 // WithData create a new clause copy with data changed.
 func (c *Clause) WithData(data []byte) *Clause {
 	newClause := *c
-	newClause.body.Data = append([]byte(nil), data...)
+	newClause.body.Data = slices.Clone(data)
 	return &newClause
 }
 
@@ -71,7 +73,7 @@ func (c *Clause) Value() *big.Int {
 
 // Data returns 'Data'.
 func (c *Clause) Data() []byte {
-	return append([]byte(nil), c.body.Data...)
+	return slices.Clone(c.body.Data)
 }
 
 // IsCreatingContract return if this clause is going to create a contract.

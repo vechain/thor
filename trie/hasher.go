@@ -49,7 +49,7 @@ func (h *hasher) hash(n node, force bool) []byte {
 			return hash
 		}
 		// hash all children
-		for i := 0; i < 16; i++ {
+		for i := range 16 {
 			if cn := n.children[i]; cn != nil {
 				h.hash(cn, false)
 			}
@@ -93,7 +93,7 @@ func (h *hasher) store(n node, db DatabaseWriter, path []byte) (node, error) {
 	switch n := n.(type) {
 	case *fullNode:
 		n = n.copy()
-		for i := 0; i < 16; i++ {
+		for i := range 16 {
 			cn := n.children[i]
 			switch cn := cn.(type) {
 			case *fullNode, *shortNode:

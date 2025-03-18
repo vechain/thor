@@ -166,7 +166,7 @@ func (t *callTracer) CaptureState(pc uint64, op vm.OpCode, _, _ uint64, memory *
 		mStart := stackData[len(stackData)-1]
 		mSize := stackData[len(stackData)-2]
 		topics := make([]common.Hash, size)
-		for i := 0; i < size; i++ {
+		for i := range size {
 			topic := stackData[len(stackData)-2-(i+1)]
 			topics[i] = common.Hash(topic.Bytes32())
 		}

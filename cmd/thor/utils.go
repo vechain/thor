@@ -250,14 +250,26 @@ func selectGenesis(ctx *cli.Context) (*genesis.Genesis, thor.ForkConfig, error) 
 	}
 }
 
-func parseGenesisFile(filePath string) (*genesis.Genesis, thor.ForkConfig, error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return nil, thor.ForkConfig{}, errors.Wrap(err, "open genesis file")
+func parseGenesisFile(uri string) (*genesis.Genesis, thor.ForkConfig, error) {
+	var (
+		reader io.ReadCloser
+		err    error
+	)
+	if strings.HasPrefix(uri, "http://") || strings.HasPrefix(uri, "https://") {
+		res, err := http.Get(uri) // #nosec
+		if err != nil {
+			return nil, thor.ForkConfig{}, errors.Wrap(err, "http get genesis file")
+		}
+		reader = res.Body
+	} else {
+		reader, err = os.Open(uri)
+		if err != nil {
+			return nil, thor.ForkConfig{}, errors.Wrap(err, "open genesis file")
+		}
 	}
-	defer file.Close()
+	defer reader.Close()
 
-	decoder := json.NewDecoder(file)
+	decoder := json.NewDecoder(reader)
 	decoder.DisallowUnknownFields()
 
 	var forkConfig = thor.NoFork
@@ -374,10 +386,7 @@ func normalizeCacheSize(sizeMB int) int {
 		half := total / 2
 
 		// limit to not less than total/2 and up to total-2GB
-		limitMB := total - 2048
-		if limitMB < half {
-			limitMB = half
-		}
+		limitMB := max(total-2048, half)
 
 		if sizeMB > limitMB {
 			sizeMB = limitMB

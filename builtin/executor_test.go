@@ -24,7 +24,7 @@ import (
 	"github.com/vechain/thor/v2/xenv"
 )
 
-func M(a ...interface{}) []interface{} {
+func M(a ...any) []any {
 	return a
 }
 
@@ -89,8 +89,8 @@ func initExectorTest() *ctest {
 func TestExecutorApprover(t *testing.T) {
 	test := initExectorTest()
 	var approvers []thor.Address
-	for i := 0; i < 7; i++ {
-		approvers = append(approvers, thor.BytesToAddress([]byte(fmt.Sprintf("approver%d", i))))
+	for i := range 7 {
+		approvers = append(approvers, thor.BytesToAddress(fmt.Appendf(nil, "approver%d", i)))
 	}
 
 	for _, a := range approvers {

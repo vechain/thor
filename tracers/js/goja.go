@@ -27,6 +27,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
+	"slices"
+
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tracers"
 	jsassets "github.com/vechain/thor/v2/tracers/js/internal/tracers"
@@ -445,12 +447,7 @@ func (t *jsTracer) setBuiltinFunctions() {
 			return false
 		}
 		addr := common.BytesToAddress(a)
-		for _, p := range t.activePrecompiles {
-			if p == addr {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(t.activePrecompiles, addr)
 	})
 	jsvm.Set("slice", func(slice goja.Value, start, end int) goja.Value {
 		b, err := t.fromBuf(jsvm, slice, false)

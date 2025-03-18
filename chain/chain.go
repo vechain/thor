@@ -11,6 +11,8 @@ import (
 	"math"
 	"sort"
 
+	"slices"
+
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb/util"
@@ -159,10 +161,8 @@ func (c *Chain) HasTransaction(txid thor.Bytes32, txBlockRef uint32) (bool, erro
 			if err != nil {
 				return false, err
 			}
-			for _, _txid := range s.Txs {
-				if _txid == txid {
-					return true, nil
-				}
+			if slices.Contains(s.Txs, txid) {
+				return true, nil
 			}
 			nextID = s.Header.ParentID()
 		}

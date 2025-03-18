@@ -11,26 +11,26 @@ package stackedmap
 type StackedMap struct {
 	src            MapGetter
 	mapStack       stack
-	keyRevisionMap map[interface{}]*stack
+	keyRevisionMap map[any]*stack
 }
 
 type level struct {
-	kvs     map[interface{}]interface{}
+	kvs     map[any]any
 	journal []*journalEntry
 }
 
 func newLevel() *level {
-	return &level{kvs: make(map[interface{}]interface{})}
+	return &level{kvs: make(map[any]any)}
 }
 
 // journalEntry entry of journal.
 type journalEntry struct {
-	key   interface{}
-	value interface{}
+	key   any
+	value any
 }
 
 // MapGetter defines getter method of map.
-type MapGetter func(key interface{}) (value interface{}, exist bool, err error)
+type MapGetter func(key any) (value any, exist bool, err error)
 
 // New create an instance of StackedMap.
 // src acts as source of data.
@@ -38,7 +38,7 @@ func New(src MapGetter) *StackedMap {
 	return &StackedMap{
 		src,
 		stack{newLevel()},
-		make(map[interface{}]*stack),
+		make(map[any]*stack),
 	}
 }
 
@@ -78,7 +78,7 @@ func (sm *StackedMap) PopTo(depth int) {
 
 // Get gets value for given key.
 // The second return value indicates whether the given key is found.
-func (sm *StackedMap) Get(key interface{}) (interface{}, bool, error) {
+func (sm *StackedMap) Get(key any) (any, bool, error) {
 	if revs, ok := sm.keyRevisionMap[key]; ok {
 		lvl := sm.mapStack[revs.top().(int)].(*level)
 		if v, ok := lvl.kvs[key]; ok {
@@ -90,7 +90,7 @@ func (sm *StackedMap) Get(key interface{}) (interface{}, bool, error) {
 
 // Put puts key value into map at stack top.
 // It will panic if stack is empty.
-func (sm *StackedMap) Put(key, value interface{}) {
+func (sm *StackedMap) Put(key, value any) {
 	top := sm.mapStack.top().(*level)
 	top.kvs[key] = value
 	top.journal = append(top.journal, &journalEntry{key: key, value: value})
@@ -108,7 +108,7 @@ func (sm *StackedMap) Put(key, value interface{}) {
 
 // Journal traverse journal entries of all Put operations.
 // The traverse will abort if the callback func returns false.
-func (sm *StackedMap) Journal(cb func(key, value interface{}) bool) {
+func (sm *StackedMap) Journal(cb func(key, value any) bool) {
 	for _, lvl := range sm.mapStack {
 		for _, entry := range lvl.(*level).journal {
 			if !cb(entry.key, entry.value) {
@@ -119,15 +119,15 @@ func (sm *StackedMap) Journal(cb func(key, value interface{}) bool) {
 }
 
 // stack ops
-type stack []interface{}
+type stack []any
 
 func (s *stack) pop() {
 	*s = (*s)[:len(*s)-1]
 }
 
-func (s *stack) push(v interface{}) {
+func (s *stack) push(v any) {
 	*s = append(*s, v)
 }
-func (s stack) top() interface{} {
+func (s stack) top() any {
 	return s[len(s)-1]
 }

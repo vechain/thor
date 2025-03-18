@@ -17,7 +17,7 @@ func TestSignalBroadcastBefore(t *testing.T) {
 	sig.Broadcast()
 
 	var ws []co.Waiter
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		ws = append(ws, sig.NewWaiter())
 	}
 
@@ -36,7 +36,7 @@ func TestSignalBroadcastAfterWait(t *testing.T) {
 	var sig co.Signal
 
 	var ws []co.Waiter
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		ws = append(ws, sig.NewWaiter())
 	}
 

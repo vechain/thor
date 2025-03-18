@@ -17,27 +17,27 @@ import (
 func init() {
 	defines := []struct {
 		name string
-		run  func(env *xenv.Environment) []interface{}
+		run  func(env *xenv.Environment) []any
 	}{
-		{"native_totalStake", func(env *xenv.Environment) []interface{} {
+		{"native_totalStake", func(env *xenv.Environment) []any {
 			env.UseGas(thor.SloadGas)
 			env.UseGas(thor.GetBalanceGas)
 			staked, err := Staker.Native(env.State()).TotalStake()
 			if err != nil {
 				panic(err)
 			}
-			return []interface{}{staked}
+			return []any{staked}
 		}},
-		{"native_activeStake", func(env *xenv.Environment) []interface{} {
+		{"native_activeStake", func(env *xenv.Environment) []any {
 			env.UseGas(thor.SloadGas)
 			env.UseGas(thor.GetBalanceGas)
 			staked, err := Staker.Native(env.State()).ActiveStake()
 			if err != nil {
 				panic(err)
 			}
-			return []interface{}{staked}
+			return []any{staked}
 		}},
-		{"native_get", func(env *xenv.Environment) []interface{} {
+		{"native_get", func(env *xenv.Environment) []any {
 			var args struct {
 				Validator common.Address
 			}
@@ -51,27 +51,27 @@ func init() {
 				panic(err)
 			}
 			if validator.IsEmpty() {
-				return []interface{}{big.NewInt(0), big.NewInt(0), staker.StatusUnknown}
+				return []any{big.NewInt(0), big.NewInt(0), staker.StatusUnknown}
 			}
-			return []interface{}{validator.Stake, validator.Weight, validator.Status}
+			return []any{validator.Stake, validator.Weight, validator.Status}
 		}},
-		{"native_firstActive", func(env *xenv.Environment) []interface{} {
+		{"native_firstActive", func(env *xenv.Environment) []any {
 			env.UseGas(thor.SloadGas)
 			first, err := Staker.Native(env.State()).FirstActive()
 			if err != nil {
 				panic(err)
 			}
-			return []interface{}{first}
+			return []any{first}
 		}},
-		{"native_firstQueued", func(env *xenv.Environment) []interface{} {
+		{"native_firstQueued", func(env *xenv.Environment) []any {
 			env.UseGas(thor.SloadGas)
 			first, err := Staker.Native(env.State()).FirstQueued()
 			if err != nil {
 				panic(err)
 			}
-			return []interface{}{first}
+			return []any{first}
 		}},
-		{"native_next", func(env *xenv.Environment) []interface{} {
+		{"native_next", func(env *xenv.Environment) []any {
 			var args struct {
 				Prev common.Address
 			}
@@ -82,9 +82,9 @@ func init() {
 			if err != nil {
 				panic(err)
 			}
-			return []interface{}{next}
+			return []any{next}
 		}},
-		{"native_withdraw", func(env *xenv.Environment) []interface{} {
+		{"native_withdraw", func(env *xenv.Environment) []any {
 			var args struct {
 				Validator common.Address
 			}
@@ -96,9 +96,9 @@ func init() {
 			}
 			env.UseGas(thor.SstoreSetGas)
 
-			return []interface{}{stake}
+			return []any{stake}
 		}},
-		{"native_addValidator", func(env *xenv.Environment) []interface{} {
+		{"native_addValidator", func(env *xenv.Environment) []any {
 			var args struct {
 				Validator common.Address
 				Expiry    uint32

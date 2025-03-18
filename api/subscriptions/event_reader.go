@@ -24,12 +24,12 @@ func newEventReader(repo *chain.Repository, position thor.Bytes32, filter *Event
 	}
 }
 
-func (er *eventReader) Read() ([]interface{}, bool, error) {
+func (er *eventReader) Read() ([]any, bool, error) {
 	blocks, err := er.blockReader.Read()
 	if err != nil {
 		return nil, false, err
 	}
-	var msgs []interface{}
+	var msgs []any
 	for _, block := range blocks {
 		receipts, err := er.repo.GetBlockReceipts(block.Header().ID())
 		if err != nil {

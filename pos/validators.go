@@ -10,6 +10,7 @@ import (
 	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"maps"
 )
 
 type Validators struct {
@@ -44,9 +45,7 @@ func (v *Validators) Copy() *Validators {
 func (v *Validators) beforeUpdate() {
 	if v.referenced {
 		copied := make(map[thor.Address]*staker.Validator, len(v.mapping))
-		for k, v := range v.mapping {
-			copied[k] = v
-		}
+		maps.Copy(copied, v.mapping)
 		v.mapping = copied
 		v.referenced = false
 	}

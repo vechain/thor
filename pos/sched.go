@@ -113,7 +113,7 @@ func (s *Scheduler) Schedule(nowTime uint64) (uint64, error) {
 		newBlockTime += (nowTime - newBlockTime + T - 1) / T * T
 	}
 
-	for i := 0; i < len(s.placements); i++ {
+	for i := range s.placements {
 		slot := newBlockTime + uint64(i)*T
 		if s.expectedValidator(slot) == s.addr {
 			return slot, nil

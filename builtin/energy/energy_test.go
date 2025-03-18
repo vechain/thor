@@ -16,7 +16,7 @@ import (
 	"github.com/vechain/thor/v2/trie"
 )
 
-func M(a ...interface{}) []interface{} {
+func M(a ...any) []any {
 	return a
 }
 
@@ -27,8 +27,8 @@ func TestEnergy(t *testing.T) {
 
 	eng := New(thor.BytesToAddress([]byte("eng")), st, 0)
 	tests := []struct {
-		ret      interface{}
-		expected interface{}
+		ret      any
+		expected any
 	}{
 		{M(eng.Get(acc)), M(&big.Int{}, nil)},
 		{eng.Add(acc, big.NewInt(10)), nil},

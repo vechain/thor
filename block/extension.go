@@ -26,7 +26,7 @@ func (ex *extension) EncodeRLP(w io.Writer) error {
 	}
 
 	if len(ex.Alpha) != 0 {
-		return rlp.Encode(w, []interface{}{
+		return rlp.Encode(w, []any{
 			ex.Alpha,
 		})
 	}

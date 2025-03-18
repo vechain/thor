@@ -85,7 +85,7 @@ func getTx(t *testing.T) {
 	checkMatchingTx(t, transaction, rtx)
 
 	res = httpGetAndCheckResponseStatus(t, "/transactions/"+transaction.ID().String()+"?raw=true", 200)
-	var rawTx map[string]interface{}
+	var rawTx map[string]any
 	if err := json.Unmarshal(res, &rawTx); err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +175,7 @@ func getNonExistingRawTransactionWhenTxStillInMempool(t *testing.T) {
 
 func getNonPendingRawTransactionWhenTxStillInMempool(t *testing.T) {
 	res := httpGetAndCheckResponseStatus(t, "/transactions/"+mempoolTx.ID().String()+"?raw=true", 200)
-	var rawTx map[string]interface{}
+	var rawTx map[string]any
 	if err := json.Unmarshal(res, &rawTx); err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +185,7 @@ func getNonPendingRawTransactionWhenTxStillInMempool(t *testing.T) {
 
 func getRawTransactionWhenTxStillInMempool(t *testing.T) {
 	res := httpGetAndCheckResponseStatus(t, "/transactions/"+mempoolTx.ID().String()+"?raw=true&pending=true", 200)
-	var rawTx map[string]interface{}
+	var rawTx map[string]any
 	if err := json.Unmarshal(res, &rawTx); err != nil {
 		t.Fatal(err)
 	}
@@ -257,7 +257,7 @@ func handleGetTransactionReceiptByIDWithNonExistingHead(t *testing.T) {
 	assert.Equal(t, "head: leveldb: not found", strings.TrimSpace(string(res)))
 }
 
-func httpPostAndCheckResponseStatus(t *testing.T, url string, obj interface{}, responseStatusCode int) []byte {
+func httpPostAndCheckResponseStatus(t *testing.T, url string, obj any, responseStatusCode int) []byte {
 	body, statusCode, err := tclient.RawHTTPClient().RawHTTPPost(url, obj)
 	require.NoError(t, err)
 	assert.Equal(t, responseStatusCode, statusCode, fmt.Sprintf("status code should be %d", responseStatusCode))

@@ -19,14 +19,14 @@ func TestParallel(t *testing.T) {
 	}
 
 	startTime := time.Now().UnixNano()
-	for i := 0; i < n; i++ {
+	for range n {
 		fn()
 	}
 	t.Log("non-parallel", time.Duration(time.Now().UnixNano()-startTime))
 
 	startTime = time.Now().UnixNano()
 	<-co.Parallel(func(queue chan<- func()) {
-		for i := 0; i < n; i++ {
+		for range n {
 			queue <- fn
 		}
 	})

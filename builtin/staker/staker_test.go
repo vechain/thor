@@ -22,7 +22,7 @@ import (
 	"github.com/vechain/thor/v2/trie"
 )
 
-func M(a ...interface{}) []interface{} {
+func M(a ...any) []any {
 	return a
 }
 
@@ -41,7 +41,7 @@ func RandomStake() *big.Int {
 }
 
 func addAuthorities(t *testing.T, auth *authority.Authority, authorities int) {
-	for i := 0; i < authorities; i++ {
+	for range authorities {
 		nodeMaster := datagen.RandAddress()
 		endorsor := datagen.RandAddress()
 		identity := datagen.RandomHash()
@@ -72,8 +72,8 @@ func TestStaker(t *testing.T) {
 	stkr := newStaker(t, 0, 101)
 
 	tests := []struct {
-		ret      interface{}
-		expected interface{}
+		ret      any
+		expected any
 	}{
 		{M(stkr.TotalStake()), M(zeroStake, nil)},
 		{stkr.AddValidator(0, validatorAcc, uint32(360)*24*14, stakeAmount), nil},
@@ -254,7 +254,7 @@ func TestStaker_AddValidator_QueueOrder(t *testing.T) {
 
 	// add 100 validators to the queue
 	stakers := make([]thor.Address, 0)
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		addr := datagen.RandAddress()
 		stake := RandomStake()
 		assert.NoError(t, staker.AddValidator(0, addr, uint32(360)*24*14, stake))
@@ -275,7 +275,7 @@ func TestStaker_AddValidator_QueueOrder(t *testing.T) {
 	}
 
 	// activating validators should continue to set the correct head of the queue
-	for i := 0; i < 99; i++ {
+	for i := range 99 {
 		assert.NoError(t, staker.ActivateNextValidator())
 		first, err = staker.FirstQueued()
 		assert.NoError(t, err)
@@ -379,7 +379,7 @@ func TestStaker_ActivateNextValidator_LeaderGroupFull(t *testing.T) {
 	staker := newStaker(t, 0, 101)
 
 	// fill 101 validators to leader group
-	for i := 0; i < 101; i++ {
+	for range 101 {
 		assert.NoError(t, staker.AddValidator(0, datagen.RandAddress(), uint32(360)*24*14, RandomStake()))
 		assert.NoError(t, staker.ActivateNextValidator())
 	}
@@ -433,7 +433,7 @@ func TestStaker_LeaderGroup(t *testing.T) {
 	staker := newStaker(t, 0, 101)
 
 	stakes := make(map[thor.Address]*big.Int)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		addr := datagen.RandAddress()
 		stake := RandomStake()
 		assert.NoError(t, staker.AddValidator(0, addr, uint32(360)*24*14, stake))
@@ -463,7 +463,7 @@ func TestStaker_Next(t *testing.T) {
 	staker := newStaker(t, 0, 101)
 
 	leaderGroup := make([]thor.Address, 0)
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		addr := datagen.RandAddress()
 		stake := RandomStake()
 		assert.NoError(t, staker.AddValidator(0, addr, uint32(360)*24*14, stake))
@@ -472,7 +472,7 @@ func TestStaker_Next(t *testing.T) {
 	}
 
 	queued := make([]thor.Address, 0)
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		addr := datagen.RandAddress()
 		stake := RandomStake()
 		assert.NoError(t, staker.AddValidator(0, addr, uint32(360)*24*14, stake))
@@ -483,7 +483,7 @@ func TestStaker_Next(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, leaderGroup[0], firstLeader)
 
-	for i := 0; i < 99; i++ {
+	for i := range 99 {
 		next, err := staker.Next(leaderGroup[i])
 		assert.NoError(t, err)
 		assert.Equal(t, leaderGroup[i+1], next)
@@ -493,7 +493,7 @@ func TestStaker_Next(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, queued[0], firstQueued)
 
-	for i := 0; i < 99; i++ {
+	for i := range 99 {
 		next, err := staker.Next(queued[i])
 		assert.NoError(t, err)
 		assert.Equal(t, queued[i+1], next)
