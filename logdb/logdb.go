@@ -159,9 +159,9 @@ FROM event e
 	// if there is limit option, set order inside subquery
 	if filter.Options != nil {
 		if filter.Order == DESC {
-			whereOrderLimit.WriteString(" ORDER BY seq DESC ")
+			whereOrderLimit.WriteString(" ORDER BY e.seq DESC ")
 		} else {
-			whereOrderLimit.WriteString(" ORDER BY seq ASC ")
+			whereOrderLimit.WriteString(" ORDER BY e.seq ASC ")
 		}
 		whereOrderLimit.WriteString(" LIMIT ?, ?")
 		args = append(args, filter.Options.Offset, filter.Options.Limit)
@@ -239,9 +239,9 @@ FROM transfer t
 	// if there is limit option, set order inside subquery
 	if filter.Options != nil {
 		if filter.Order == DESC {
-			whereOrderLimit.WriteString(" ORDER BY seq DESC")
+			whereOrderLimit.WriteString(" ORDER BY t.seq DESC")
 		} else {
-			whereOrderLimit.WriteString(" ORDER BY seq ASC")
+			whereOrderLimit.WriteString(" ORDER BY t.seq ASC")
 		}
 		whereOrderLimit.WriteString(" LIMIT ?, ?")
 		args = append(args, filter.Options.Offset, filter.Options.Limit)
@@ -252,9 +252,9 @@ FROM transfer t
 	// if there is no limit option, set order outside
 	if filter.Options == nil {
 		if filter.Order == DESC {
-			transferQuery.WriteString(" ORDER BY seq DESC ")
+			transferQuery.WriteString(" ORDER BY t.seq DESC ")
 		} else {
-			transferQuery.WriteString(" ORDER BY seq ASC ")
+			transferQuery.WriteString(" ORDER BY t.seq ASC ")
 		}
 	}
 
