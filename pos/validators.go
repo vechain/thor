@@ -6,11 +6,12 @@
 package pos
 
 import (
+	"maps"
+
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
-	"maps"
 )
 
 type Validators struct {
