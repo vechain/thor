@@ -174,6 +174,7 @@ func (t *Transaction) DecodeRLP(s *rlp.Stream) error {
 		var body legacyTransaction
 		err = s.Decode(&body)
 		if err == nil {
+			t.body = &body
 			t.setDecoded(&body, int64(rlp.ListSize(size)))
 		}
 
