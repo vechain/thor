@@ -22,6 +22,8 @@ const (
 	refIDQuery = "(SELECT id FROM ref WHERE data=?)"
 )
 
+var toMax, _ = newSequence(MaxBlockNumber, 0, 0)
+
 type LogDB struct {
 	path          string
 	driverVersion string
@@ -110,11 +112,7 @@ FROM event e
 	`
 
 	if filter == nil {
-		to, err := newSequence(MaxBlockNumber, 0, 0)
-		if err != nil {
-			return nil, err
-		}
-		where := fmt.Sprintf(" WHERE e.seq >= 0 AND e.seq <= %v", to)
+		where := fmt.Sprintf(" WHERE e.seq >= 0 AND e.seq <= %v", toMax)
 		return db.queryEvents(ctx, fmt.Sprintf(query, where))
 	}
 
@@ -124,14 +122,14 @@ FROM event e
 	)
 
 	if filter.Range != nil {
-		whereOrderLimit.WriteString(" WHERE seq >= ?")
+		whereOrderLimit.WriteString(" WHERE e.seq >= ?")
 		from, err := newSequence(filter.Range.From, 0, 0)
 		if err != nil {
 			return nil, err
 		}
 		args = append(args, from)
 		if filter.Range.To >= filter.Range.From {
-			whereOrderLimit.WriteString(" AND seq <= ?")
+			whereOrderLimit.WriteString(" AND e.seq <= ?")
 			to, err := newSequence(filter.Range.To, txIndexMask, logIndexMask)
 			if err != nil {
 				return nil, err
@@ -139,11 +137,7 @@ FROM event e
 			args = append(args, to)
 		}
 	} else {
-		to, err := newSequence(MaxBlockNumber, 0, 0)
-		if err != nil {
-			return nil, err
-		}
-		whereOrderLimit.WriteString(fmt.Sprintf(" WHERE e.seq > 0 AND e.seq <= %v", to))
+		whereOrderLimit.WriteString(fmt.Sprintf(" WHERE e.seq >= 0 AND e.seq <= %v", toMax))
 	}
 
 	if len(filter.CriteriaSet) > 0 {
@@ -198,11 +192,7 @@ FROM transfer t
 	%v`
 
 	if filter == nil {
-		to, err := newSequence(MaxBlockNumber, 0, 0)
-		if err != nil {
-			return nil, err
-		}
-		where := fmt.Sprintf(" WHERE t.seq >= 0 AND t.seq <= %v", to)
+		where := fmt.Sprintf(" WHERE t.seq >= 0 AND t.seq <= %v", toMax)
 
 		return db.queryTransfers(ctx, fmt.Sprintf(query, where))
 	}
@@ -213,14 +203,14 @@ FROM transfer t
 	)
 
 	if filter.Range != nil {
-		whereOrderLimit.WriteString(" WHERE seq >= ?")
+		whereOrderLimit.WriteString(" WHERE t.seq >= ?")
 		from, err := newSequence(filter.Range.From, 0, 0)
 		if err != nil {
 			return nil, err
 		}
 		args = append(args, from)
 		if filter.Range.To >= filter.Range.From {
-			whereOrderLimit.WriteString(" AND seq <= ?")
+			whereOrderLimit.WriteString(" AND t.seq <= ?")
 			to, err := newSequence(filter.Range.To, txIndexMask, logIndexMask)
 			if err != nil {
 				return nil, err
@@ -228,11 +218,7 @@ FROM transfer t
 			args = append(args, to)
 		}
 	} else {
-		to, err := newSequence(MaxBlockNumber, 0, 0)
-		if err != nil {
-			return nil, err
-		}
-		whereOrderLimit.WriteString(fmt.Sprintf(" WHERE t.seq > 0 AND t.seq <= %v", to))
+		whereOrderLimit.WriteString(fmt.Sprintf(" WHERE t.seq >= 0 AND t.seq <= %v", toMax))
 	}
 
 	if len(filter.CriteriaSet) > 0 {

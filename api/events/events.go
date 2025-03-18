@@ -8,6 +8,7 @@ package events
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -56,6 +57,9 @@ func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
 	}
 	if filter.Options != nil && filter.Options.Limit > e.limit {
 		return utils.Forbidden(fmt.Errorf("options.limit exceeds the maximum allowed value of %d", e.limit))
+	}
+	if filter.Options != nil && filter.Options.Offset > math.MaxInt64 {
+		return utils.BadRequest(fmt.Errorf("options.offset exceeds the maximum allowed value of %d", math.MaxInt64))
 	}
 	if filter.Options == nil {
 		// if filter.Options is nil, set to the default limit +1
