@@ -32,11 +32,11 @@ func createParams() (map[thor.Address]*staker.Validator, *big.Int) {
 }
 
 func TestNewScheduler_Seed(t *testing.T) {
-	validators, totalStake := createParams()
-	s1, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, totalStake, 1, 10, []byte("seed1"))
+	validators, _ := createParams()
+	s1, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed1"))
 	assert.NoError(t, err)
 
-	s2, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, totalStake, 1, 10, []byte("seed10"))
+	s2, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed10"))
 	assert.NoError(t, err)
 
 	for i := range s1.placements {
@@ -48,8 +48,8 @@ func TestNewScheduler_Seed(t *testing.T) {
 }
 
 func TestScheduler_IsScheduled(t *testing.T) {
-	validators, totalStake := createParams()
-	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, totalStake, 1, 10, []byte("seed1"))
+	validators, _ := createParams()
+	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed1"))
 	assert.NoError(t, err)
 
 	assert.True(t, sched.IsScheduled(20, thor.MustParseAddress("0xf370940abdbd2583bc80bfc19d19bc216c88ccf0")))
@@ -57,7 +57,7 @@ func TestScheduler_IsScheduled(t *testing.T) {
 
 func TestScheduler_Distribution(t *testing.T) {
 	validators, totalStake := createParams()
-	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, totalStake, 1, 10, []byte("seed1"))
+	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed1"))
 	assert.NoError(t, err)
 
 	distribution := make(map[thor.Address]int)
@@ -82,13 +82,13 @@ func TestScheduler_Distribution(t *testing.T) {
 func TestScheduler_Schedule(t *testing.T) {
 	parentTime := uint64(10)
 
-	validators, totalStake := createParams()
+	validators, _ := createParams()
 	addr := thor.Address{}
 
 	for i := uint64(1); i <= 1000; i++ {
 		expectedNext := parentTime + thor.BlockInterval*i
 		for _, acc := range genesis.DevAccounts() {
-			sched, err := NewScheduler(acc.Address, validators, totalStake, 1, parentTime, []byte("seed1"))
+			sched, err := NewScheduler(acc.Address, validators, 1, parentTime, []byte("seed1"))
 			assert.NoError(t, err)
 			newBlockTime, _ := sched.Schedule(20)
 			if newBlockTime == expectedNext {
@@ -104,8 +104,8 @@ func TestScheduler_Updates(t *testing.T) {
 	parentTime := uint64(10)
 	nowTime := uint64(30)
 
-	validators, totalStake := createParams()
-	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, totalStake, 1, parentTime, []byte("seed1"))
+	validators, _ := createParams()
+	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, parentTime, []byte("seed1"))
 	assert.NoError(t, err)
 
 	updates, score := sched.Updates(nowTime)
@@ -119,4 +119,26 @@ func TestScheduler_Updates(t *testing.T) {
 
 	assert.Equal(t, 1, offline)
 	assert.Equal(t, 9, int(score))
+}
+
+func TestScheduler_TotalPlacements(t *testing.T) {
+	validators, totalStake := createParams()
+
+	otherAcc := genesis.DevAccounts()[1].Address
+	validators[otherAcc].Online = false
+
+	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed1"))
+	assert.NoError(t, err)
+
+	assert.Equal(t, 9, len(sched.placements))
+
+	// check total stake in scheduler, should only use online validators
+	total := big.NewInt(0)
+	for _, p := range sched.placements {
+		total.Add(total, validators[p.addr].Weight)
+	}
+
+	expectedStake := totalStake.Sub(totalStake, validators[otherAcc].Weight)
+
+	assert.True(t, total.Cmp(expectedStake) == 0)
 }

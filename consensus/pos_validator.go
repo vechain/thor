@@ -21,10 +21,6 @@ func (c *Consensus) validateStakingProposer(header *block.Header, parent *block.
 		return nil, consensusError(fmt.Sprintf("block signer unavailable: %v", err))
 	}
 	stakerContract := builtin.Staker.Native(st)
-	activeStake, err := stakerContract.ActiveStake()
-	if err != nil {
-		return nil, err
-	}
 
 	var validators *pos.Validators
 	if entry, ok := c.validatorCache.Get(parent.ID()); ok {
@@ -47,7 +43,7 @@ func (c *Consensus) validateStakingProposer(header *block.Header, parent *block.
 		return nil, err
 	}
 
-	sched, err := pos.NewScheduler(signer, proposers, activeStake, parent.Number(), parent.Timestamp(), seed)
+	sched, err := pos.NewScheduler(signer, proposers, parent.Number(), parent.Timestamp(), seed)
 	if err != nil {
 		return nil, consensusError(fmt.Sprintf("block signer invalid: %v %v", signer, err))
 	}

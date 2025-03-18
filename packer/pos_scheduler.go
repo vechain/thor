@@ -19,10 +19,6 @@ func (p *Packer) schedulePOS(parent *chain.BlockSummary, nowTimestamp uint64, st
 	if err != nil {
 		return thor.Address{}, 0, 0, err
 	}
-	activeStake, err := staker.ActiveStake()
-	if err != nil {
-		return thor.Address{}, 0, 0, err
-	}
 
 	beneficiary := p.nodeMaster
 	if p.beneficiary != nil {
@@ -34,11 +30,10 @@ func (p *Packer) schedulePOS(parent *chain.BlockSummary, nowTimestamp uint64, st
 	if err != nil {
 		return thor.Address{}, 0, 0, err
 	}
-	sched, err := pos.NewScheduler(p.nodeMaster, leaderGroup, activeStake, parent.Header.Number(), parent.Header.Timestamp(), seed)
+	sched, err := pos.NewScheduler(p.nodeMaster, leaderGroup, parent.Header.Number(), parent.Header.Timestamp(), seed)
 	if err != nil {
 		return thor.Address{}, 0, 0, err
 	}
-
 	newBlockTime, err := sched.Schedule(nowTimestamp)
 	if err != nil {
 		return thor.Address{}, 0, 0, errNotScheduled

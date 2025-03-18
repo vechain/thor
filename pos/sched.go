@@ -39,16 +39,12 @@ type placement struct {
 func NewScheduler(
 	signer thor.Address,
 	validators map[thor.Address]*staker.Validator,
-	totalStake *big.Int,
 	parentBlockNumber uint32,
 	parentBlockTime uint64,
 	seed []byte,
 ) (*Scheduler, error) {
 	if len(validators) == 0 {
 		return nil, errors.New("no validators")
-	}
-	if totalStake.Sign() == 0 {
-		return nil, errors.New("total stake is zero")
 	}
 	var (
 		listed    = false
@@ -58,6 +54,7 @@ func NewScheduler(
 	binary.BigEndian.PutUint32(num[:], parentBlockNumber)
 
 	placements := make([]placement, 0, len(validators))
+	onlineStake := big.NewInt(0)
 
 	for addr, entry := range validators {
 		if addr == signer {
@@ -65,6 +62,7 @@ func NewScheduler(
 			listed = true
 		}
 		if entry.Online || addr == signer {
+			onlineStake.Add(onlineStake, entry.Weight)
 			placements = append(placements, placement{
 				addr: addr,
 				hash: thor.Blake2b(seed, num[:], addr.Bytes()),
@@ -81,7 +79,7 @@ func NewScheduler(
 	})
 
 	prev := big.NewRat(0, 1)
-	totalStakeRat := new(big.Rat).SetInt(totalStake)
+	totalStakeRat := new(big.Rat).SetInt(onlineStake)
 
 	for i := range placements {
 		weightRat := new(big.Rat).SetInt(validators[placements[i].addr].Weight)
