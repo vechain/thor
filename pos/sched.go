@@ -64,11 +64,12 @@ func NewScheduler(
 			validator = entry
 			listed = true
 		}
-
-		placements = append(placements, placement{
-			addr: addr,
-			hash: thor.Blake2b(seed, num[:], addr.Bytes()),
-		})
+		if entry.Online || addr == signer {
+			placements = append(placements, placement{
+				addr: addr,
+				hash: thor.Blake2b(seed, num[:], addr.Bytes()),
+			})
+		}
 	}
 
 	if !listed {
@@ -142,10 +143,10 @@ func (s *Scheduler) IsTheTime(newBlockTime uint64) bool {
 	return s.IsScheduled(newBlockTime, s.addr)
 }
 
-func (s *Scheduler) Updates(newBlockTime uint64) ([]thor.Address, uint64) {
+func (s *Scheduler) Updates(newBlockTime uint64) (map[thor.Address]bool, uint64) {
 	T := thor.BlockInterval
 
-	missed := make([]thor.Address, 0)
+	updates := make(map[thor.Address]bool)
 
 	for i := uint64(0); i < uint64(len(s.placements)); i++ {
 		if s.parentBlockTime+T+i*T >= newBlockTime {
@@ -153,12 +154,17 @@ func (s *Scheduler) Updates(newBlockTime uint64) ([]thor.Address, uint64) {
 		}
 
 		addr := s.expectedValidator(s.parentBlockTime + T + i*T)
-		missed = append(missed, addr)
+		updates[addr] = false
 	}
 
-	// TODO: Slightly different behaviour to PoA, we don't reduce score for missed slots
-	// https://github.com/vechain/protocol-board-repo/issues/433
-	return missed, uint64(len(s.placements))
+	delete(updates, s.addr) // we know the proposer is online
+	score := uint64(len(s.placements) - len(updates))
+
+	if !s.validator.Online {
+		updates[s.addr] = true
+	}
+
+	return updates, score
 }
 
 // expectedValidator returns the expected validator for the given block time.

@@ -106,19 +106,12 @@ func New(addr thor.Address, state *state.State) *Staker {
 	}
 }
 
-// IncrementMissedSlot increments the missed slot counter of a validator.
-// TODO: This is not currently doing anything with the missed slot counter. Should the validator be punished?
-// https://github.com/vechain/protocol-board-repo/issues/433
-func (a *Staker) IncrementMissedSlot(addr thor.Address) error {
+func (a *Staker) SetOnline(addr thor.Address, online bool) error {
 	entry, err := a.validators.Get(addr)
 	if err != nil {
 		return err
 	}
-	if entry.IsEmpty() {
-		return nil
-	}
-	entry.MissedSlots++
-
+	entry.Online = online
 	return a.validators.Set(addr, entry)
 }
 
@@ -126,7 +119,6 @@ func (a *Staker) IncrementMissedSlot(addr thor.Address) error {
 func (a *Staker) AddValidator(
 	currentBlock uint32,
 	addr thor.Address,
-	beneficiary thor.Address,
 	expiry uint32,
 	stake *big.Int,
 ) error {
@@ -151,7 +143,6 @@ func (a *Staker) AddValidator(
 	entry.Stake = stake
 	entry.Weight = stake
 	entry.Status = StatusQueued
-	entry.Beneficiary = beneficiary
 	entry.Expiry = expiry
 
 	if err := a.validatorQueue.Add(entry, addr); err != nil {
@@ -239,6 +230,7 @@ func (a *Staker) ActivateNextValidator() error {
 		return err
 	}
 	validator.Status = StatusActive
+	validator.Online = true
 	// add to the active list
 	if err := a.leaderGroup.Add(validator, addr); err != nil {
 		return err
@@ -247,7 +239,7 @@ func (a *Staker) ActivateNextValidator() error {
 	return nil
 }
 
-// Iterate over validators, move to cooldown
+// Housekeep iterates over validators, move to cooldown
 // take the oldest validator and move to exited
 func (a *Staker) Housekeep(currentBlock uint32, forkBlock uint32) (bool, error) {
 	validatorsChanged := false
@@ -482,12 +474,12 @@ func (a *Staker) Initialise(auth *authority.Authority, params *params.Params, cu
 	var previous *thor.Address
 	for i, candidate := range poaCandidates {
 		validator := &Validator{
-			Expiry:      currentBlock + a.minStakingPeriod,
-			Stake:       stake,
-			Weight:      weight,
-			Status:      StatusActive,
-			Prev:        previous,
-			Beneficiary: candidate.Endorsor, // TODO: Pending question on confluence
+			Expiry: currentBlock + a.minStakingPeriod,
+			Stake:  stake,
+			Weight: weight,
+			Status: StatusActive,
+			Prev:   previous,
+			Online: candidate.Active,
 		}
 		if i < len(poaCandidates)-1 {
 			validator.Next = &poaCandidates[i+1].NodeMaster

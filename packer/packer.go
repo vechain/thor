@@ -6,6 +6,8 @@
 package packer
 
 import (
+	"math/big"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
@@ -106,13 +108,21 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 		if err != nil {
 			return nil, err
 		}
-		score = uint64(len(leaders))
+		for _, leader := range leaders {
+			if leader.Online {
+				score++
+			}
+		}
 	} else {
-		authorities, err := builtin.Authority.Native(state).AllCandidates()
+		authorities, err := builtin.Authority.Native(state).Candidates(big.NewInt(0), thor.InitialMaxBlockProposers)
 		if err != nil {
 			return nil, err
 		}
-		score = uint64(len(authorities))
+		for _, authority := range authorities {
+			if authority.Active {
+				score++
+			}
+		}
 	}
 
 	gl := gasLimit

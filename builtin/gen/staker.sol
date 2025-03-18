@@ -8,7 +8,6 @@ contract Staker {
     // we can store up to 3-4 topics in the log
     event ValidatorQueued(
         address indexed validator,
-        address indexed beneficiary,
         uint32 indexed expiry,
         uint256 stake
     );
@@ -30,14 +29,13 @@ contract Staker {
     /**
      * @dev addValidator adds a validator to the queue.
      */
-    function addValidator(address beneficiary, uint32 expiry) public payable {
+    function addValidator(uint32 expiry) public payable {
         StakerNative(address(this)).native_addValidator(
             msg.sender,
-            beneficiary,
             expiry,
             msg.value
         );
-        emit ValidatorQueued(msg.sender, beneficiary, expiry, msg.value);
+        emit ValidatorQueued(msg.sender, expiry, msg.value);
     }
 
     /**
@@ -84,7 +82,6 @@ interface StakerNative {
     // Write methods
     function native_addValidator(
         address validator,
-        address beneficiary,
         uint32 expiry,
         uint256 stake
     ) external;

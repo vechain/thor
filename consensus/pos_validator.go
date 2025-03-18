@@ -59,8 +59,8 @@ func (c *Consensus) validateStakingProposer(header *block.Header, parent *block.
 		return nil, consensusError(fmt.Sprintf("block total score invalid: want %v, have %v", parent.TotalScore()+score, header.TotalScore()))
 	}
 
-	for _, addr := range updates {
-		if err := stakerContract.IncrementMissedSlot(addr); err != nil {
+	for addr, online := range updates {
+		if err := stakerContract.SetOnline(addr, online); err != nil {
 			return nil, err
 		}
 	}
@@ -71,13 +71,9 @@ func (c *Consensus) validateStakingProposer(header *block.Header, parent *block.
 	if err != nil {
 		return nil, err
 	}
-	if updateValidators {
+	if updateValidators || len(updates) > 0 {
 		// Refresh validators from contract since they've changed
-		leaders, err := stakerContract.LeaderGroup()
-		if err != nil {
-			return nil, err
-		}
-		validators = pos.NewValidators(leaders)
+		validators.InvalidateCache()
 	}
 
 	return c.validatorCacheHandler(validators, header), nil

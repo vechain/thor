@@ -74,7 +74,7 @@ func TestConsensus_POS_MissedSlots(t *testing.T) {
 	staker := builtin.Staker.Native(st)
 	validator, err := staker.Get(signer.Address)
 	assert.NoError(t, err)
-	assert.Equal(t, uint64(1), validator.MissedSlots)
+	assert.True(t, validator.Online)
 }
 
 func TestConsensus_POS_Unscheduled(t *testing.T) {
@@ -128,7 +128,6 @@ func TestConsensus_POS_BadScore(t *testing.T) {
 	signer2 := genesis.DevAccounts()[2]
 	assert.NoError(t, staker.AddValidator(
 		parent.Header.Number(),
-		signer2.Address,
 		signer2.Address,
 		parent.Header.Number()+uint32(360)*24*14,
 		big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))))

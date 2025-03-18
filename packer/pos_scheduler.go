@@ -43,10 +43,10 @@ func (p *Packer) schedulePOS(parent *chain.BlockSummary, nowTimestamp uint64, st
 	if err != nil {
 		return thor.Address{}, 0, 0, errNotScheduled
 	}
-	missedSlots, score := sched.Updates(newBlockTime)
+	updates, score := sched.Updates(newBlockTime)
 
-	for _, addr := range missedSlots {
-		if err := staker.IncrementMissedSlot(addr); err != nil {
+	for addr, online := range updates {
+		if err := staker.SetOnline(addr, online); err != nil {
 			return thor.Address{}, 0, 0, err
 		}
 	}

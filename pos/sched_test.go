@@ -22,6 +22,7 @@ func createParams() (map[thor.Address]*staker.Validator, *big.Int) {
 		stake := big.NewInt(0).SetBytes(acc.Address[10:]) // use the last 10 bytes to create semi random, but deterministic stake
 		validator := &staker.Validator{
 			Weight: stake,
+			Online: true,
 		}
 		validators[acc.Address] = validator
 		totalStake.Add(totalStake, validator.Weight)
@@ -35,7 +36,7 @@ func TestNewScheduler_Seed(t *testing.T) {
 	s1, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, totalStake, 1, 10, []byte("seed1"))
 	assert.NoError(t, err)
 
-	s2, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, totalStake, 1, 10, []byte("seed2"))
+	s2, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, totalStake, 1, 10, []byte("seed10"))
 	assert.NoError(t, err)
 
 	for i := range s1.placements {
@@ -101,14 +102,21 @@ func TestScheduler_Schedule(t *testing.T) {
 
 func TestScheduler_Updates(t *testing.T) {
 	parentTime := uint64(10)
-	nowTime := uint64(100)
+	nowTime := uint64(30)
 
 	validators, totalStake := createParams()
 	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, totalStake, 1, parentTime, []byte("seed1"))
 	assert.NoError(t, err)
 
-	missedSlots, score := sched.Updates(nowTime)
+	updates, score := sched.Updates(nowTime)
 
-	assert.Equal(t, 8, len(missedSlots))
-	assert.Equal(t, uint64(10), score)
+	offline := 0
+	for _, online := range updates {
+		if !online {
+			offline++
+		}
+	}
+
+	assert.Equal(t, 1, offline)
+	assert.Equal(t, 9, int(score))
 }
