@@ -109,7 +109,7 @@ func TestBuilder_Build_Legacy(t *testing.T) {
 
 	tx := builder.Build()
 	assert.NotNil(t, tx)
-	assert.IsType(t, &LegacyTransaction{}, tx.body)
+	assert.IsType(t, &legacyTransaction{}, tx.body)
 }
 
 func TestBuilder_Build_DynamicFee(t *testing.T) {
@@ -127,5 +127,5 @@ func TestBuilder_Build_DynamicFee(t *testing.T) {
 
 	tx := builder.Build()
 	assert.NotNil(t, tx)
-	assert.IsType(t, &DynamicFeeTransaction{}, tx.body)
+	assert.IsType(t, &dynamicFeeTransaction{}, tx.body)
 }

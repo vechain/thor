@@ -12,6 +12,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -72,7 +73,7 @@ func TestToString(t *testing.T) {
 		{
 			name:           "Dynamic fee transaction",
 			txType:         tx.TypeDynamicFee,
-			expectedString: "\n\tTx(0x0000000000000000000000000000000000000000000000000000000000000000, 95 B)\n\tOrigin:         N/A\n\tClauses:        [\n\t\t(To:\t0x7567d83b7b8d80addcb281a71d54fc7b3364ffed\n\t\t Value:\t10000\n\t\t Data:\t0x000000606060) \n\t\t(To:\t0x7567d83b7b8d80addcb281a71d54fc7b3364ffed\n\t\t Value:\t20000\n\t\t Data:\t0x000000606060)]\n\tGas:            21000\n\tChainTag:       1\n\tBlockRef:       0-aabbccdd\n\tExpiration:     32\n\tDependsOn:      nil\n\tNonce:          12345678\n\tUnprovedWork:   0\n\tDelegator:      N/A\n\tSignature:      0x\n\n\t\tMaxFeePerGas:   10000000\n\t\tMaxPriorityFeePerGas: 20000\n\t\t",
+			expectedString: "\n\tTx(0x0000000000000000000000000000000000000000000000000000000000000000, 96 B)\n\tOrigin:         N/A\n\tClauses:        [\n\t\t(To:\t0x7567d83b7b8d80addcb281a71d54fc7b3364ffed\n\t\t Value:\t10000\n\t\t Data:\t0x000000606060) \n\t\t(To:\t0x7567d83b7b8d80addcb281a71d54fc7b3364ffed\n\t\t Value:\t20000\n\t\t Data:\t0x000000606060)]\n\tGas:            21000\n\tChainTag:       1\n\tBlockRef:       0-aabbccdd\n\tExpiration:     32\n\tDependsOn:      nil\n\tNonce:          12345678\n\tUnprovedWork:   0\n\tDelegator:      N/A\n\tSignature:      0x\n\n\t\tMaxFeePerGas:   10000000\n\t\tMaxPriorityFeePerGas: 20000\n\t\t",
 		},
 	}
 
@@ -99,7 +100,7 @@ func TestTxSize(t *testing.T) {
 		{
 			name:         "Dynamic fee transaction",
 			txType:       tx.TypeDynamicFee,
-			expectedSize: thor.StorageSize(95),
+			expectedSize: thor.StorageSize(96),
 		},
 	}
 
@@ -260,6 +261,10 @@ func TestLegacyTx(t *testing.T) {
 	assert.Equal(t, "f8970184aabbccdd20f840df947567d83b7b8d80addcb281a71d54fc7b3364ffed82271086000000606060df947567d83b7b8d80addcb281a71d54fc7b3364ffed824e208600000060606081808252088083bc614ec0b841f76f3c91a834165872aa9464fc55b03a13f46ea8d3b858e528fcceaf371ad6884193c3f313ff8effbb57fe4d1adc13dceb933bedbf9dbb528d2936203d5511df00",
 		func() string { d, _ := trx.MarshalBinary(); return hex.EncodeToString(d) }(),
 	)
+
+	assert.Equal(t, "f8970184aabbccdd20f840df947567d83b7b8d80addcb281a71d54fc7b3364ffed82271086000000606060df947567d83b7b8d80addcb281a71d54fc7b3364ffed824e208600000060606081808252088083bc614ec0b841f76f3c91a834165872aa9464fc55b03a13f46ea8d3b858e528fcceaf371ad6884193c3f313ff8effbb57fe4d1adc13dceb933bedbf9dbb528d2936203d5511df00",
+		func() string { d, _ := rlp.EncodeToBytes(trx); return hex.EncodeToString(d) }(),
+	)
 }
 
 func TestDelegatedTx(t *testing.T) {
@@ -314,6 +319,10 @@ func TestDelegatedTx(t *testing.T) {
 	assert.Equal(t, "0xd989829d88b0ed1b06edf5c50174ecfa64f14a64", func() string { s, _ := newTx.Origin(); return s.String() }())
 	assert.Equal(t, "0x956577b09b2a770d10ea129b26d916955df3606dc973da0043d6321b922fdef9", newTx.ID().String())
 	assert.Equal(t, "0xd3ae78222beadb038203be21ed5ce7c9b1bff602", func() string { s, _ := newTx.Delegator(); return s.String() }())
+
+	b, err := rlp.EncodeToBytes(newTx)
+	assert.Nil(t, err)
+	assert.Equal(t, raw, b)
 }
 
 func TestIntrinsicGas(t *testing.T) {
