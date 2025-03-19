@@ -9,11 +9,11 @@ import (
 var (
 	metricCriteriaLengthBucket   = metrics.LazyLoadHistogramVec("logdb_criteria_length_bucket", []string{"type"}, []int64{0, 2, 5, 10, 25, 100, 1000})
 	metricEventQueryTypes        = metrics.LazyLoadCounterVec("logdb_query_types", []string{"type"})
-	metricEventQueryOrderCounter = metrics.LazyLoadCounterVec("logdb_query_order", []string{"order"})
-	metricEventOffsetBucket      = metrics.LazyLoadHistogramVec("logdb_query_offset_bucket", []string{"type"}, []int64{
+	metricQueryOrderCounter = metrics.LazyLoadCounterVec("logdb_query_order", []string{"order"})
+	metricOffsetBucket      = metrics.LazyLoadHistogramVec("logdb_query_offset_bucket", []string{"type"}, []int64{
 		0, 1_000, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000,
 	})
-	metricEventLimitBucket = metrics.LazyLoadHistogramVec("logdb_query_limit_bucket", []string{"type"}, []int64{
+	metricLimitBucket = metrics.LazyLoadHistogramVec("logdb_query_limit_bucket", []string{"type"}, []int64{
 		0, 5, 10, 25, 50, 100, 250, 500, 1000,
 	})
 )
@@ -57,20 +57,20 @@ func metricsHandleCommon(options *Options, order Order, criteriaLen int, queryTy
 	metricCriteriaLengthBucket().ObserveWithLabels(int64(criteriaLen), map[string]string{"type": "transfer"})
 
 	if order == DESC {
-		metricEventQueryOrderCounter().AddWithLabel(1, map[string]string{"order": "desc", "type": queryType})
+		metricQueryOrderCounter().AddWithLabel(1, map[string]string{"order": "desc", "type": queryType})
 	} else {
-		metricEventQueryOrderCounter().AddWithLabel(1, map[string]string{"order": "asc", "type": queryType})
+		metricQueryOrderCounter().AddWithLabel(1, map[string]string{"order": "asc", "type": queryType})
 	}
 
 	offset := options.Offset
 	if offset > 1_000_000 {
 		offset = 1_000_001
 	}
-	metricEventOffsetBucket().ObserveWithLabels(int64(offset), map[string]string{"type": queryType})
+	metricOffsetBucket().ObserveWithLabels(int64(offset), map[string]string{"type": queryType})
 
 	limit := options.Limit
 	if limit > 1000 {
 		limit = 1001
 	}
-	metricEventLimitBucket().ObserveWithLabels(int64(limit), map[string]string{"type": queryType})
+	metricLimitBucket().ObserveWithLabels(int64(limit), map[string]string{"type": queryType})
 }
