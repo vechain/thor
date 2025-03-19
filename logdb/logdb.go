@@ -9,12 +9,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"math/big"
-
 	sqlite3 "github.com/mattn/go-sqlite3"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
+	"math/big"
 )
 
 const (
@@ -110,6 +109,8 @@ FROM (%v) e
 		return db.queryEvents(ctx, fmt.Sprintf(query, "event"))
 	}
 
+	metricsHandleEventsFilter(filter)
+
 	var (
 		subQuery = "SELECT seq FROM event WHERE 1"
 		args     []any
@@ -183,6 +184,8 @@ FROM (%v) t
 	if filter == nil {
 		return db.queryTransfers(ctx, fmt.Sprintf(query, "transfer"))
 	}
+
+	metricsHandleCommon(filter.Options, filter.Order, len(filter.CriteriaSet), "transfer")
 
 	var (
 		subQuery = "SELECT seq FROM transfer WHERE 1"
