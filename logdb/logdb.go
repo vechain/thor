@@ -116,6 +116,8 @@ FROM event e
 		return db.queryEvents(ctx, fmt.Sprintf(query, where))
 	}
 
+	metricsHandleEventsFilter(filter)
+
 	var (
 		whereOrderLimit strings.Builder
 		args            []any
@@ -196,6 +198,8 @@ FROM transfer t
 
 		return db.queryTransfers(ctx, fmt.Sprintf(query, where))
 	}
+
+	metricsHandleCommonFilter(filter.Options, filter.Order, len(filter.CriteriaSet), "transfer")
 
 	var (
 		whereOrderLimit strings.Builder
