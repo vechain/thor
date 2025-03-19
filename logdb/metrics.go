@@ -13,7 +13,7 @@ import (
 
 var (
 	metricCriteriaLengthBucket = metrics.LazyLoadHistogramVec("logdb_criteria_length_bucket", []string{"type"}, []int64{0, 2, 5, 10, 25, 100, 1000})
-	metricEventQueryTypes      = metrics.LazyLoadCounterVec("logdb_query_types", []string{"type"})
+	metricEventQueryParameters = metrics.LazyLoadCounterVec("logdb_query_parameters", []string{"parameters"})
 	metricQueryOrderCounter    = metrics.LazyLoadCounterVec("logdb_query_order", []string{"order"})
 	metricOffsetBucket         = metrics.LazyLoadHistogramVec("logdb_query_offset_bucket", []string{"type"}, []int64{
 		0, 1_000, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000,
@@ -50,7 +50,7 @@ func metricsHandleEventsFilter(filter *EventFilter) {
 		if c.Topics[4] != nil {
 			queryTypes = append(queryTypes, "topic4")
 		}
-		metricEventQueryTypes().AddWithLabel(1, map[string]string{"type": strings.Join(queryTypes, ",")})
+		metricEventQueryParameters().AddWithLabel(1, map[string]string{"parameters": strings.Join(queryTypes, ",")})
 	}
 }
 
