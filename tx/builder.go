@@ -114,7 +114,7 @@ func (b *Builder) Features(feat Features) *Builder {
 func (b *Builder) Build() *Transaction {
 	if b.txType == TypeLegacy {
 		return &Transaction{
-			body: &LegacyTransaction{
+			body: &legacyTransaction{
 				ChainTag:     b.chainTag,
 				Clauses:      b.clauses,
 				GasPriceCoef: b.gasPriceCoef,
@@ -129,7 +129,7 @@ func (b *Builder) Build() *Transaction {
 	}
 
 	return &Transaction{
-		body: &DynamicFeeTransaction{
+		body: &dynamicFeeTransaction{
 			ChainTag:             b.chainTag,
 			Clauses:              b.clauses,
 			MaxFeePerGas:         b.maxFeePerGas,
