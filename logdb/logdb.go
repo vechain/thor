@@ -186,7 +186,7 @@ FROM (%v) t
 		return db.queryTransfers(ctx, fmt.Sprintf(query, "transfer"))
 	}
 
-	metricsHandleCommon(filter.Options, filter.Order, len(filter.CriteriaSet), "transfer")
+	metricsHandleCommonFilter(filter.Options, filter.Order, len(filter.CriteriaSet), "transfer")
 
 	var (
 		subQuery = "SELECT seq FROM transfer WHERE 1"

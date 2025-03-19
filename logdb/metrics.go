@@ -25,7 +25,7 @@ var (
 )
 
 func metricsHandleEventsFilter(filter *EventFilter) {
-	metricsHandleCommon(filter.Options, filter.Order, len(filter.CriteriaSet), "event")
+	metricsHandleCommonFilter(filter.Options, filter.Order, len(filter.CriteriaSet), "event")
 
 	for _, c := range filter.CriteriaSet {
 		paramsUsed := make([]string, 0)
@@ -41,7 +41,7 @@ func metricsHandleEventsFilter(filter *EventFilter) {
 	}
 }
 
-func metricsHandleCommon(options *Options, order Order, criteriaLen int, queryType string) {
+func metricsHandleCommonFilter(options *Options, order Order, criteriaLen int, queryType string) {
 	orderStr := "asc"
 	if order == DESC {
 		orderStr = "desc"
