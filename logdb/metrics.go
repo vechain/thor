@@ -31,26 +31,26 @@ func metricsHandleEventsFilter(filter *EventFilter) {
 	metricsHandleCommon(filter.Options, filter.Order, len(filter.CriteriaSet), "event")
 
 	for _, c := range filter.CriteriaSet {
-		queryTypes := make([]string, 0)
+		paramsUsed := make([]string, 0)
 		if c.Address != nil {
-			queryTypes = append(queryTypes, "address")
+			paramsUsed = append(paramsUsed, "address")
 		}
 		if c.Topics[0] != nil {
-			queryTypes = append(queryTypes, "topic0")
+			paramsUsed = append(paramsUsed, "topic0")
 		}
 		if c.Topics[1] != nil {
-			queryTypes = append(queryTypes, "topic1")
+			paramsUsed = append(paramsUsed, "topic1")
 		}
 		if c.Topics[2] != nil {
-			queryTypes = append(queryTypes, "topic2")
+			paramsUsed = append(paramsUsed, "topic2")
 		}
 		if c.Topics[3] != nil {
-			queryTypes = append(queryTypes, "topic3")
+			paramsUsed = append(paramsUsed, "topic3")
 		}
 		if c.Topics[4] != nil {
-			queryTypes = append(queryTypes, "topic4")
+			paramsUsed = append(paramsUsed, "topic4")
 		}
-		metricEventQueryParameters().AddWithLabel(1, map[string]string{"parameters": strings.Join(queryTypes, ",")})
+		metricEventQueryParameters().AddWithLabel(1, map[string]string{"parameters": strings.Join(paramsUsed, ",")})
 	}
 }
 
