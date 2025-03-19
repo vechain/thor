@@ -47,6 +47,10 @@ func metricsHandleCommon(options *Options, order Order, criteriaLen int, queryTy
 		orderStr = "desc"
 	}
 
+	if options == nil {
+		options = &Options{}
+	}
+
 	offset := options.Offset
 	if offset > 1_000_000 {
 		offset = 1_000_001
