@@ -13,10 +13,10 @@ import (
 )
 
 var (
-	metricCriteriaLengthBucket = metrics.LazyLoadHistogramVec("logdb_criteria_length_bucket", []string{"type"}, []int64{0, 2, 5, 10, 25, 100, 1000})
-	metricEventQueryParameters = metrics.LazyLoadCounterVec("logdb_query_parameters", []string{"parameters"})
-	metricQueryOrderCounter    = metrics.LazyLoadCounterVec("logdb_query_order", []string{"order", "type"})
-	metricOffsetBucket         = metrics.LazyLoadHistogramVec("logdb_query_offset_bucket", []string{"type"}, []int64{
+	metricCriteriaLengthBucket        = metrics.LazyLoadHistogramVec("logdb_criteria_length_bucket", []string{"type"}, []int64{0, 2, 5, 10, 25, 100, 1000})
+	metricEventQueryParametersCounter = metrics.LazyLoadCounterVec("logdb_query_parameters_counter", []string{"parameters"})
+	metricQueryOrderCounter           = metrics.LazyLoadCounterVec("logdb_query_order", []string{"order", "type"})
+	metricOffsetBucket                = metrics.LazyLoadHistogramVec("logdb_query_offset_bucket", []string{"type"}, []int64{
 		0, 1_000, 5_000, 10_000, 25_000, 50_000, 100_000,
 	})
 	metricLimitBucket = metrics.LazyLoadHistogramVec("logdb_query_limit_bucket", []string{"type"}, []int64{
@@ -37,7 +37,7 @@ func metricsHandleEventsFilter(filter *EventFilter) {
 				paramsUsed = append(paramsUsed, fmt.Sprintf("topic%d", i))
 			}
 		}
-		metricEventQueryParameters().AddWithLabel(1, map[string]string{"parameters": strings.Join(paramsUsed, ",")})
+		metricEventQueryParametersCounter().AddWithLabel(1, map[string]string{"parameters": strings.Join(paramsUsed, ",")})
 	}
 }
 
