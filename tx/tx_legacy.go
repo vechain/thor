@@ -15,7 +15,7 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-type LegacyTransaction struct {
+type legacyTransaction struct {
 	ChainTag     byte
 	BlockRef     uint64
 	Expiration   uint32
@@ -28,12 +28,12 @@ type LegacyTransaction struct {
 	Signature    []byte
 }
 
-func (t *LegacyTransaction) txType() byte {
+func (t *legacyTransaction) txType() byte {
 	return TypeLegacy
 }
 
-func (t *LegacyTransaction) copy() TxData {
-	cpy := &LegacyTransaction{
+func (t *legacyTransaction) copy() txData {
+	cpy := &legacyTransaction{
 		ChainTag:     t.ChainTag,
 		BlockRef:     t.BlockRef,
 		Expiration:   t.Expiration,
@@ -49,61 +49,61 @@ func (t *LegacyTransaction) copy() TxData {
 	return cpy
 }
 
-func (t *LegacyTransaction) chainTag() byte {
+func (t *legacyTransaction) chainTag() byte {
 	return t.ChainTag
 }
 
-func (t *LegacyTransaction) blockRef() uint64 {
+func (t *legacyTransaction) blockRef() uint64 {
 	return t.BlockRef
 }
 
-func (t *LegacyTransaction) expiration() uint32 {
+func (t *legacyTransaction) expiration() uint32 {
 	return t.Expiration
 }
 
-func (t *LegacyTransaction) clauses() []*Clause {
+func (t *legacyTransaction) clauses() []*Clause {
 	return t.Clauses
 }
 
-func (t *LegacyTransaction) gas() uint64 {
+func (t *legacyTransaction) gas() uint64 {
 	return t.Gas
 }
 
-func (t *LegacyTransaction) gasPriceCoef() uint8 {
+func (t *legacyTransaction) gasPriceCoef() uint8 {
 	return t.GasPriceCoef
 }
 
-func (t *LegacyTransaction) maxFeePerGas() *big.Int {
+func (t *legacyTransaction) maxFeePerGas() *big.Int {
 	// For legacy transactions, maxFeePerGas is determined by GasPriceCoef
 	return new(big.Int).SetUint64(uint64(t.GasPriceCoef))
 }
 
-func (t *LegacyTransaction) maxPriorityFeePerGas() *big.Int {
+func (t *legacyTransaction) maxPriorityFeePerGas() *big.Int {
 	// For legacy transactions, maxPriorityFeePerGas is determined by GasPriceCoef
 	return new(big.Int).SetUint64(uint64(t.GasPriceCoef))
 }
 
-func (t *LegacyTransaction) dependsOn() *thor.Bytes32 {
+func (t *legacyTransaction) dependsOn() *thor.Bytes32 {
 	return t.DependsOn
 }
 
-func (t *LegacyTransaction) nonce() uint64 {
+func (t *legacyTransaction) nonce() uint64 {
 	return t.Nonce
 }
 
-func (t *LegacyTransaction) reserved() reserved {
+func (t *legacyTransaction) reserved() reserved {
 	return t.Reserved
 }
 
-func (t *LegacyTransaction) signature() []byte {
+func (t *legacyTransaction) signature() []byte {
 	return t.Signature
 }
 
-func (t *LegacyTransaction) setSignature(sig []byte) {
+func (t *legacyTransaction) setSignature(sig []byte) {
 	t.Signature = sig
 }
 
-func (t *LegacyTransaction) hashWithoutNonce(origin thor.Address) *thor.Bytes32 {
+func (t *legacyTransaction) hashWithoutNonce(origin thor.Address) *thor.Bytes32 {
 	b := thor.Blake2bFn(func(w io.Writer) {
 		rlp.Encode(w, []any{
 			t.chainTag(),
@@ -120,7 +120,7 @@ func (t *LegacyTransaction) hashWithoutNonce(origin thor.Address) *thor.Bytes32 
 	return &b
 }
 
-func (t *LegacyTransaction) encode(w io.Writer) error {
+func (t *legacyTransaction) encode(w io.Writer) error {
 	return rlp.Encode(w, []any{
 		t.ChainTag,
 		t.BlockRef,
@@ -134,7 +134,7 @@ func (t *LegacyTransaction) encode(w io.Writer) error {
 	})
 }
 
-func (t *LegacyTransaction) evaluateWork(origin thor.Address) func(nonce uint64) *big.Int {
+func (t *legacyTransaction) evaluateWork(origin thor.Address) func(nonce uint64) *big.Int {
 	hashWithoutNonce := t.hashWithoutNonce(origin)
 
 	return func(nonce uint64) *big.Int {
