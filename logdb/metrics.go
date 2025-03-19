@@ -1,3 +1,8 @@
+// Copyright (c) 2025 The VeChainThor developers
+//
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
 package logdb
 
 import (
@@ -7,10 +12,10 @@ import (
 )
 
 var (
-	metricCriteriaLengthBucket   = metrics.LazyLoadHistogramVec("logdb_criteria_length_bucket", []string{"type"}, []int64{0, 2, 5, 10, 25, 100, 1000})
-	metricEventQueryTypes        = metrics.LazyLoadCounterVec("logdb_query_types", []string{"type"})
-	metricQueryOrderCounter = metrics.LazyLoadCounterVec("logdb_query_order", []string{"order"})
-	metricOffsetBucket      = metrics.LazyLoadHistogramVec("logdb_query_offset_bucket", []string{"type"}, []int64{
+	metricCriteriaLengthBucket = metrics.LazyLoadHistogramVec("logdb_criteria_length_bucket", []string{"type"}, []int64{0, 2, 5, 10, 25, 100, 1000})
+	metricEventQueryTypes      = metrics.LazyLoadCounterVec("logdb_query_types", []string{"type"})
+	metricQueryOrderCounter    = metrics.LazyLoadCounterVec("logdb_query_order", []string{"order"})
+	metricOffsetBucket         = metrics.LazyLoadHistogramVec("logdb_query_offset_bucket", []string{"type"}, []int64{
 		0, 1_000, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000,
 	})
 	metricLimitBucket = metrics.LazyLoadHistogramVec("logdb_query_limit_bucket", []string{"type"}, []int64{
