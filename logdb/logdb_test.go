@@ -183,6 +183,11 @@ func TestEvents(t *testing.T) {
 		}
 	}
 
+	multiTopicsCriteria := [5]*thor.Bytes32{
+		allEvents[2].Topics[0],
+		allEvents[4].Topics[0],
+	}
+
 	{
 		tests := []struct {
 			name string
@@ -202,6 +207,9 @@ func TestEvents(t *testing.T) {
 			})},
 			{"query all events with multi-criteria", &EventFilter{CriteriaSet: []*EventCriteria{{Address: &allEvents[1].Address}, {Topics: [5]*thor.Bytes32{allEvents[2].Topics[0]}}, {Topics: [5]*thor.Bytes32{allEvents[3].Topics[0]}}}}, allEvents.Filter(func(ev *Event) bool {
 				return ev.Address == allEvents[1].Address || *ev.Topics[0] == *allEvents[2].Topics[0] || *ev.Topics[0] == *allEvents[3].Topics[0]
+			})},
+			{"query all events with multi-value multi-criteria", &EventFilter{CriteriaSet: []*EventCriteria{{Address: &allEvents[1].Address}, {Address: &allEvents[2].Address, Topics: multiTopicsCriteria}, {Topics: [5]*thor.Bytes32{allEvents[3].Topics[0]}}}}, allEvents.Filter(func(ev *Event) bool {
+				return ev.Address == allEvents[1].Address || *ev.Topics[0] == *allEvents[3].Topics[0]
 			})},
 		}
 
