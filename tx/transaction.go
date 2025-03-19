@@ -24,15 +24,16 @@ import (
 )
 
 var (
-	errIntrinsicGasOverflow = errors.New("intrinsic gas overflow")
-	ErrTxTypeNotSupported   = errors.New("transaction type not supported")
-	errEmptyTypedTx         = errors.New("empty typed transaction bytes")
+	ErrTxTypeNotSupported = errors.New("transaction type not supported")
 	// ErrMaxPriorityFeeVeryHigh is a sanity error to avoid extremely big numbers specified
 	// in the priority fee field.
 	ErrMaxPriorityFeeVeryHigh = errors.New("max priority fee per gas higher than 2^256-1")
 	// ErrMaxFeeVeryHigh is a sanity error to avoid extremely big numbers specified
 	// in the max fee field.
 	ErrMaxFeeVeryHigh = errors.New("max fee per gas higher than 2^256-1")
+
+	errIntrinsicGasOverflow = errors.New("intrinsic gas overflow")
+	errShortTypedTx         = errors.New("typed transaction too short")
 )
 
 type Type = byte
@@ -45,24 +46,24 @@ const (
 
 // Transaction is an immutable tx type.
 type Transaction struct {
-	body TxData
+	body txData
 
 	cache struct {
 		signingHash  atomic.Value
 		origin       atomic.Value
 		id           atomic.Value
 		unprovedWork atomic.Value
-		size         atomic.Value
-		intrinsicGas atomic.Value
+		size         atomic.Int64 // TODO: change to atomic.Uint64
+		intrinsicGas atomic.Value // TODO: change to atomic.Uint64
 		hash         atomic.Value
 		delegator    atomic.Value
 	}
 }
 
-// TxData describes details of a tx.
-type TxData interface {
+// txData describes details of a tx.
+type txData interface {
 	txType() byte
-	copy() TxData
+	copy() txData
 
 	chainTag() byte
 	blockRef() uint64
@@ -81,6 +82,135 @@ type TxData interface {
 	evaluateWork(origin thor.Address) func(nonce uint64) *big.Int
 
 	encode(w io.Writer) error
+}
+
+// MarshalBinary returns the canonical encoding of the transaction.
+// For legacy transactions, it returns the RLP encoding. For typed
+// transactions, it returns the type RLP encoding of the tx.
+func (t *Transaction) MarshalBinary() ([]byte, error) {
+	if t.Type() == TypeLegacy {
+		return rlp.EncodeToBytes(t.body)
+	}
+	var buf bytes.Buffer
+	err := t.encodeTyped(&buf)
+	return buf.Bytes(), err
+}
+
+// encodeTyped writes the canonical encoding of a typed transaction to w.
+func (t *Transaction) encodeTyped(w *bytes.Buffer) error {
+	w.WriteByte(t.Type())
+	return rlp.Encode(w, t.body)
+}
+
+// EncodeRLP implements rlp.Encoder
+func (t *Transaction) EncodeRLP(w io.Writer) error {
+	if t.Type() == TypeLegacy {
+		return rlp.Encode(w, &t.body)
+	}
+	buf := encodeBufferPool.Get().(*bytes.Buffer)
+	defer encodeBufferPool.Put(buf)
+	buf.Reset()
+
+	if err := t.encodeTyped(buf); err != nil {
+		return err
+	}
+
+	return rlp.Encode(w, buf.Bytes())
+}
+
+// UnmarshalBinary decodes the canonical encoding of transactions.
+// It supports legacy RLP transactions and typed transactions.
+func (t *Transaction) UnmarshalBinary(b []byte) error {
+	if len(b) > 0 && b[0] > 0x7f {
+		// It's a legacy transaction.
+		var data legacyTransaction
+		if err := rlp.DecodeBytes(b, &data); err != nil {
+			return err
+		}
+		t.setDecoded(&data, int64(len(b)))
+		return nil
+	}
+	// It's a typed transaction envelope.
+	body, err := t.decodeTyped(b)
+	if err != nil {
+		return err
+	}
+	t.setDecoded(body, int64(len(b)))
+	return nil
+}
+
+// decodeTyped decodes a typed transaction from the canonical format.
+func (t *Transaction) decodeTyped(b []byte) (txData, error) {
+	if len(b) <= 1 {
+		return nil, errShortTypedTx
+	}
+	switch b[0] {
+	case TypeDynamicFee:
+		var body dynamicFeeTransaction
+		err := rlp.DecodeBytes(b[1:], &body)
+		return &body, err
+	default:
+		return nil, ErrTxTypeNotSupported
+	}
+}
+
+// setDecoded sets the inner transaction body and size after decoding.
+func (t *Transaction) setDecoded(body txData, size int64) {
+	t.body = body
+	if size > 0 {
+		t.cache.size.Store(size)
+	}
+}
+
+// DecodeRLP implements rlp.Decoder
+func (t *Transaction) DecodeRLP(s *rlp.Stream) error {
+	kind, size, err := s.Kind()
+
+	switch {
+	case err != nil:
+		return err
+	case kind == rlp.List:
+		// It's a legacy transaction.
+		var body legacyTransaction
+		err = s.Decode(&body)
+		if err == nil {
+			t.setDecoded(&body, int64(rlp.ListSize(size)))
+		}
+
+		return err
+	case kind == rlp.Byte:
+		return errShortTypedTx
+	default:
+		// It's a TX envelope.
+		// First read the tx payload bytes into a temporary buffer.
+		b, err := s.Bytes()
+		if err != nil {
+			return err
+		}
+		body, err := t.decodeTyped(b)
+		if err == nil {
+			t.setDecoded(body, int64(len(b)))
+		}
+		return err
+	}
+}
+
+// Size returns size in bytes when RLP encoded.
+func (t *Transaction) Size() thor.StorageSize {
+	if cached := t.cache.size.Load(); cached != 0 {
+		return thor.StorageSize(cached)
+	}
+
+	var size thor.StorageSize
+	rlp.Encode(&size, t)
+
+	// For typed transactions, the encoding also includes the leading type byte.
+	if t.body.txType() != TypeLegacy {
+		size += 1
+	}
+
+	t.cache.size.Store(int64(size))
+	return size
 }
 
 // Type returns the transaction type.
@@ -281,128 +411,6 @@ func (t *Transaction) TestFeatures(supported Features) error {
 		return errors.New("unused reserved slot")
 	}
 	return nil
-}
-
-// encodeTyped writes the canonical encoding of a typed transaction to w.
-func (t *Transaction) encodeTyped(w *bytes.Buffer) error {
-	w.WriteByte(t.Type())
-	return rlp.Encode(w, t.body)
-}
-
-// MarshalBinary returns the canonical encoding of the transaction.
-// For legacy transactions, it returns the RLP encoding. For typed
-// transactions, it returns the type RLP encoding of the tx.
-func (t *Transaction) MarshalBinary() ([]byte, error) {
-	if t.Type() == TypeLegacy {
-		return rlp.EncodeToBytes(t.body)
-	}
-	var buf bytes.Buffer
-	err := t.encodeTyped(&buf)
-	return buf.Bytes(), err
-}
-
-// UnmarshalBinary decodes the canonical encoding of transactions.
-// It supports legacy RLP transactions and typed transactions.
-func (t *Transaction) UnmarshalBinary(b []byte) error {
-	if len(b) > 0 && b[0] > 0x7f {
-		// It's a legacy transaction.
-		var data LegacyTransaction
-		err := rlp.DecodeBytes(b, &data)
-		if err != nil {
-			return err
-		}
-		t.setDecoded(&data, len(b))
-		return nil
-	}
-	// It's a typed transaction envelope.
-	inner, err := t.decodeTyped(b)
-	if err != nil {
-		return err
-	}
-	t.setDecoded(inner, len(b))
-	return nil
-}
-
-// EncodeRLP implements rlp.Encoder
-func (t *Transaction) EncodeRLP(w io.Writer) error {
-	if t.Type() == TypeLegacy {
-		return rlp.Encode(w, &t.body)
-	}
-	buf := encodeBufferPool.Get().(*bytes.Buffer)
-	defer encodeBufferPool.Put(buf)
-	buf.Reset()
-
-	if err := t.encodeTyped(buf); err != nil {
-		return err
-	}
-	return rlp.Encode(w, buf.Bytes())
-}
-
-// DecodeRLP implements rlp.Decoder
-func (t *Transaction) DecodeRLP(s *rlp.Stream) error {
-	kind, size, err := s.Kind()
-
-	switch {
-	case err != nil:
-		return err
-	case kind == rlp.List:
-		// It's a legacy transaction.
-		var body LegacyTransaction
-		if err := s.Decode(&body); err != nil {
-			return err
-		}
-		*t = Transaction{body: &body}
-
-		t.cache.size.Store(thor.StorageSize(rlp.ListSize(size)))
-		return nil
-	case kind == rlp.String:
-		// It's a typed TX.
-		var b []byte
-		if b, err = s.Bytes(); err != nil {
-			return err
-		}
-		inner, err := t.decodeTyped(b)
-		if err == nil {
-			t.setDecoded(inner, len(b))
-		}
-		return err
-	default:
-		return rlp.ErrExpectedList
-	}
-}
-
-// decodeTyped decodes a typed transaction from the canonical format.
-func (t *Transaction) decodeTyped(b []byte) (TxData, error) {
-	if len(b) == 0 {
-		return nil, errEmptyTypedTx
-	}
-	switch b[0] {
-	case TypeDynamicFee:
-		var body DynamicFeeTransaction
-		err := rlp.DecodeBytes(b[1:], &body)
-		return &body, err
-	default:
-		return nil, ErrTxTypeNotSupported
-	}
-}
-
-// setDecoded sets the inner transaction and size after decoding.
-func (t *Transaction) setDecoded(body TxData, size int) {
-	t.body = body
-	if size > 0 {
-		t.cache.size.Store(thor.StorageSize(rlp.ListSize(uint64(size))))
-	}
-}
-
-// Size returns size in bytes when RLP encoded.
-func (t *Transaction) Size() thor.StorageSize {
-	if cached := t.cache.size.Load(); cached != nil {
-		return cached.(thor.StorageSize)
-	}
-	var size thor.StorageSize
-	rlp.Encode(&size, t)
-	t.cache.size.Store(size)
-	return size
 }
 
 // IntrinsicGas returns intrinsic gas of tx.

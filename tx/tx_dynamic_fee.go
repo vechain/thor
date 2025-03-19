@@ -15,7 +15,7 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-type DynamicFeeTransaction struct {
+type dynamicFeeTransaction struct {
 	ChainTag             byte
 	BlockRef             uint64
 	Expiration           uint32
@@ -29,12 +29,12 @@ type DynamicFeeTransaction struct {
 	Signature            []byte
 }
 
-func (t *DynamicFeeTransaction) txType() byte {
+func (t *dynamicFeeTransaction) txType() byte {
 	return TypeDynamicFee
 }
 
-func (t *DynamicFeeTransaction) copy() TxData {
-	cpy := &DynamicFeeTransaction{
+func (t *dynamicFeeTransaction) copy() txData {
+	cpy := &dynamicFeeTransaction{
 		ChainTag:             t.ChainTag,
 		BlockRef:             t.BlockRef,
 		Expiration:           t.Expiration,
@@ -57,68 +57,68 @@ func (t *DynamicFeeTransaction) copy() TxData {
 	return cpy
 }
 
-func (t *DynamicFeeTransaction) chainTag() byte {
+func (t *dynamicFeeTransaction) chainTag() byte {
 	return t.ChainTag
 }
 
-func (t *DynamicFeeTransaction) blockRef() uint64 {
+func (t *dynamicFeeTransaction) blockRef() uint64 {
 	return t.BlockRef
 }
 
-func (t *DynamicFeeTransaction) expiration() uint32 {
+func (t *dynamicFeeTransaction) expiration() uint32 {
 	return t.Expiration
 }
 
-func (t *DynamicFeeTransaction) clauses() []*Clause {
+func (t *dynamicFeeTransaction) clauses() []*Clause {
 	return t.Clauses
 }
 
-func (t *DynamicFeeTransaction) gas() uint64 {
+func (t *dynamicFeeTransaction) gas() uint64 {
 	return t.Gas
 }
 
-func (t *DynamicFeeTransaction) gasPriceCoef() uint8 {
+func (t *dynamicFeeTransaction) gasPriceCoef() uint8 {
 	if t.MaxFeePerGas.Cmp(big.NewInt(math.MaxUint8)) > 0 {
 		return math.MaxUint8
 	}
 	return uint8(t.MaxFeePerGas.Uint64())
 }
 
-func (t *DynamicFeeTransaction) maxFeePerGas() *big.Int {
+func (t *dynamicFeeTransaction) maxFeePerGas() *big.Int {
 	if t.MaxFeePerGas == nil {
 		return nil
 	}
 	return new(big.Int).Set(t.MaxFeePerGas)
 }
 
-func (t *DynamicFeeTransaction) maxPriorityFeePerGas() *big.Int {
+func (t *dynamicFeeTransaction) maxPriorityFeePerGas() *big.Int {
 	if t.MaxPriorityFeePerGas == nil {
 		return nil
 	}
 	return new(big.Int).Set(t.MaxPriorityFeePerGas)
 }
 
-func (t *DynamicFeeTransaction) dependsOn() *thor.Bytes32 {
+func (t *dynamicFeeTransaction) dependsOn() *thor.Bytes32 {
 	return t.DependsOn
 }
 
-func (t *DynamicFeeTransaction) nonce() uint64 {
+func (t *dynamicFeeTransaction) nonce() uint64 {
 	return t.Nonce
 }
 
-func (t *DynamicFeeTransaction) reserved() reserved {
+func (t *dynamicFeeTransaction) reserved() reserved {
 	return t.Reserved
 }
 
-func (t *DynamicFeeTransaction) signature() []byte {
+func (t *dynamicFeeTransaction) signature() []byte {
 	return t.Signature
 }
 
-func (t *DynamicFeeTransaction) setSignature(sig []byte) {
+func (t *dynamicFeeTransaction) setSignature(sig []byte) {
 	t.Signature = sig
 }
 
-func (t *DynamicFeeTransaction) hashWithoutNonce(origin thor.Address) *thor.Bytes32 {
+func (t *dynamicFeeTransaction) hashWithoutNonce(origin thor.Address) *thor.Bytes32 {
 	b := thor.Blake2bFn(func(w io.Writer) {
 		rlp.Encode(w, []any{
 			t.chainTag(),
@@ -136,7 +136,7 @@ func (t *DynamicFeeTransaction) hashWithoutNonce(origin thor.Address) *thor.Byte
 	return &b
 }
 
-func (t *DynamicFeeTransaction) encode(w io.Writer) error {
+func (t *dynamicFeeTransaction) encode(w io.Writer) error {
 	return rlp.Encode(w, []any{
 		t.ChainTag,
 		t.BlockRef,
@@ -151,6 +151,6 @@ func (t *DynamicFeeTransaction) encode(w io.Writer) error {
 	})
 }
 
-func (t *DynamicFeeTransaction) evaluateWork(origin thor.Address) func(nonce uint64) *big.Int {
+func (t *dynamicFeeTransaction) evaluateWork(origin thor.Address) func(nonce uint64) *big.Int {
 	return func(nonce uint64) *big.Int { return common.Big0 }
 }
