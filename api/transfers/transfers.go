@@ -70,6 +70,9 @@ func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Re
 	if filter.Options != nil && filter.Options.Offset > math.MaxInt64 {
 		return utils.BadRequest(fmt.Errorf("options.offset exceeds the maximum allowed value of %d", math.MaxInt64))
 	}
+	if filter.Range != nil && filter.Range.From != nil && filter.Range.To != nil && *filter.Range.From > *filter.Range.To {
+		return utils.BadRequest(fmt.Errorf("filter.Range.To must be greater than or equal to filter.Range.From"))
+	}
 	if filter.Options == nil {
 		// if filter.Options is nil, set to the default limit +1
 		// to detect whether there are more logs than the default limit
