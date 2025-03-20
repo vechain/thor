@@ -53,8 +53,8 @@ type Transaction struct {
 		origin       atomic.Value
 		id           atomic.Value
 		unprovedWork atomic.Value
-		size         atomic.Int64 // TODO: change to atomic.Uint64
-		intrinsicGas atomic.Value // TODO: change to atomic.Uint64
+		size         atomic.Uint64
+		intrinsicGas atomic.Uint64
 		hash         atomic.Value
 		delegator    atomic.Value
 	}
@@ -127,7 +127,7 @@ func (t *Transaction) UnmarshalBinary(b []byte) error {
 		if err := rlp.DecodeBytes(b, &data); err != nil {
 			return err
 		}
-		t.setDecoded(&data, int64(len(b)))
+		t.setDecoded(&data, uint64(len(b)))
 		return nil
 	}
 	// It's a typed transaction envelope.
@@ -135,7 +135,7 @@ func (t *Transaction) UnmarshalBinary(b []byte) error {
 	if err != nil {
 		return err
 	}
-	t.setDecoded(body, int64(len(b)))
+	t.setDecoded(body, uint64(len(b)))
 	return nil
 }
 
@@ -155,7 +155,7 @@ func (t *Transaction) decodeTyped(b []byte) (txData, error) {
 }
 
 // setDecoded sets the inner transaction body and size after decoding.
-func (t *Transaction) setDecoded(body txData, size int64) {
+func (t *Transaction) setDecoded(body txData, size uint64) {
 	t.body = body
 	if size > 0 {
 		t.cache.size.Store(size)
@@ -174,7 +174,7 @@ func (t *Transaction) DecodeRLP(s *rlp.Stream) error {
 		var body legacyTransaction
 		err = s.Decode(&body)
 		if err == nil {
-			t.setDecoded(&body, int64(rlp.ListSize(size)))
+			t.setDecoded(&body, rlp.ListSize(size))
 		}
 
 		return err
@@ -189,7 +189,7 @@ func (t *Transaction) DecodeRLP(s *rlp.Stream) error {
 		}
 		body, err := t.decodeTyped(b)
 		if err == nil {
-			t.setDecoded(body, int64(len(b)))
+			t.setDecoded(body, uint64(len(b)))
 		}
 		return err
 	}
@@ -209,7 +209,7 @@ func (t *Transaction) Size() thor.StorageSize {
 		size += 1
 	}
 
-	t.cache.size.Store(int64(size))
+	t.cache.size.Store(uint64(size))
 	return size
 }
 
@@ -415,8 +415,8 @@ func (t *Transaction) TestFeatures(supported Features) error {
 
 // IntrinsicGas returns intrinsic gas of tx.
 func (t *Transaction) IntrinsicGas() (uint64, error) {
-	if cached := t.cache.intrinsicGas.Load(); cached != nil {
-		return cached.(uint64), nil
+	if cached := t.cache.intrinsicGas.Load(); cached != 0 {
+		return cached, nil
 	}
 
 	gas, err := IntrinsicGas(t.body.clauses()...)
