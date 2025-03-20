@@ -63,6 +63,9 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 			if err := state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes()); err != nil {
 				return err
 			}
+			if err := state.SetCode(builtin.Staker.Address, builtin.Staker.RuntimeBytecodes()); err != nil {
+				return err
+			}
 			if err := state.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes()); err != nil {
 				return err
 			}
