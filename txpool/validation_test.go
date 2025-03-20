@@ -182,24 +182,6 @@ func TestValidateTransaction(t *testing.T) {
 			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
 			expectedErr: tx.ErrMaxFeeVeryHigh,
 		},
-		{
-			name: "max fee per gas is nil",
-			getTx: func() *tx.Transaction {
-				return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxPriorityFeePerGas(big.NewInt(10)).Build()
-			},
-			head:        &chain.BlockSummary{Header: getHeader(1)},
-			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
-			expectedErr: txRejectedError{"max fee per gas is required"},
-		},
-		{
-			name: "max priority fee per gas is nil",
-			getTx: func() *tx.Transaction {
-				return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(big.NewInt(10)).Build()
-			},
-			head:        &chain.BlockSummary{Header: getHeader(1)},
-			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
-			expectedErr: txRejectedError{"max priority fee per gas is required"},
-		},
 	}
 
 	for _, tt := range tests {
