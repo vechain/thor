@@ -45,13 +45,6 @@ func ResolveTransaction(tx *tx.Transaction) (*ResolvedTransaction, error) {
 		return nil, err
 	}
 
-	if tx.MaxFeePerGas() == nil {
-		return nil, errors.New("max fee per gas is required")
-	}
-	if tx.MaxPriorityFeePerGas() == nil {
-		return nil, errors.New("max priority fee per gas is required")
-	}
-
 	clauses := tx.Clauses()
 	sumValue := new(big.Int)
 	for _, clause := range clauses {

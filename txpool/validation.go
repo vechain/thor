@@ -31,12 +31,6 @@ func ValidateTransaction(tr *tx.Transaction, repo *chain.Repository, head *chain
 		}
 	} else {
 		// Post-Galactica
-		if tr.MaxFeePerGas() == nil {
-			return txRejectedError{"max fee per gas is required"}
-		}
-		if tr.MaxPriorityFeePerGas() == nil {
-			return txRejectedError{"max priority fee per gas is required"}
-		}
 		if tr.MaxFeePerGas().Cmp(tr.MaxPriorityFeePerGas()) < 0 {
 			return txRejectedError{fmt.Sprintf("max fee per gas (%v) must be greater than max priority fee per gas (%v)\n", tr.MaxFeePerGas(), tr.MaxPriorityFeePerGas())}
 		}

@@ -7,6 +7,7 @@ package tx_test
 
 import (
 	"encoding/hex"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -14,6 +15,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
@@ -356,4 +359,62 @@ func BenchmarkTxMining(b *testing.B) {
 			}
 		}
 	}
+}
+
+func FuzzTransactionMarshalling(f *testing.F) {
+	f.Fuzz(func(t *testing.T, b []byte, ui8 uint8, ui32 uint32, ui64 uint64) {
+		txType := tx.TypeLegacy
+		if ui8%2 == 0 {
+			txType = tx.TypeDynamicFee
+		}
+		newTx := randomTx(b, ui8, ui32, ui64, txType)
+		enc, err := newTx.MarshalBinary()
+		if err != nil {
+			t.Errorf("MarshalBinary: %v", err)
+		}
+		decTx := new(tx.Transaction)
+		err = decTx.UnmarshalBinary(enc)
+		if err != nil {
+			t.Errorf("UnmarshalBinary: %v", err)
+		}
+		if err := checkTxsEquality(newTx, decTx); err != nil {
+			t.Errorf("Tx expected to be the same but: %v", err)
+		}
+	})
+}
+
+func randomTx(b []byte, ui8 uint8, ui32 uint32, ui64 uint64, txType tx.Type) *tx.Transaction {
+	to := datagen.RandAddress()
+	var b8 [8]byte
+	copy(b8[:], b)
+	i64 := int64(ui64)
+	tag := datagen.RandBytes(1)[0]
+	tr := tx.NewBuilder(txType).ChainTag(tag).
+		BlockRef(b8).
+		Expiration(ui32).
+		Clause(tx.NewClause(&to).WithValue(big.NewInt(i64)).WithData(b)).
+		Clause(tx.NewClause(&to).WithValue(big.NewInt(i64)).WithData(b)).
+		GasPriceCoef(ui8).
+		MaxFeePerGas(big.NewInt(i64)).
+		MaxPriorityFeePerGas(big.NewInt(i64)).
+		Gas(ui64).
+		DependsOn(nil).
+		Nonce(ui64).Build()
+	sig, _ := crypto.Sign(tr.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
+
+	tr = tr.WithSignature(sig)
+	return tr
+}
+
+func checkTxsEquality(expectedTx, actualTx *tx.Transaction) error {
+	if expectedTx.ID() != actualTx.ID() {
+		return fmt.Errorf("ID: expected %v, got %v", expectedTx.ID(), actualTx.ID())
+	}
+	if expectedTx.Hash() != actualTx.Hash() {
+		return fmt.Errorf("Hash: expected %v, got %v", expectedTx.Hash(), actualTx.Hash())
+	}
+	if expectedTx.SigningHash() != actualTx.SigningHash() {
+		return fmt.Errorf("SigningHash: expected %v, got %v", expectedTx.SigningHash(), actualTx.SigningHash())
+	}
+	return nil
 }
