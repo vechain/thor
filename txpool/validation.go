@@ -17,7 +17,13 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func ValidateTransaction(tr *tx.Transaction, repo *chain.Repository, head *chain.BlockSummary, forkConfig *thor.ForkConfig) error {
+func ValidateTransaction(
+	tr *tx.Transaction,
+	repo *chain.Repository,
+	stater *state.Stater,
+	head *chain.BlockSummary,
+	forkConfig *thor.ForkConfig,
+) error {
 	if tr.ChainTag() != repo.ChainTag() {
 		return badTxError{"chain tag mismatch"}
 	}
@@ -57,6 +63,20 @@ func ValidateTransaction(tr *tx.Transaction, repo *chain.Repository, head *chain
 	}
 	if tr.MaxPriorityFeePerGas().BitLen() > 256 {
 		return tx.ErrMaxPriorityFeeVeryHigh
+	}
+	if nonce, ok := tr.ReplacementNonce(); ok {
+		st := stater.NewState(head.Root())
+		origin, err := tr.Origin()
+		if err != nil {
+			return err
+		}
+		exists, err := st.HasUsedReplacement(origin, nonce)
+		if err != nil {
+			return err
+		}
+		if exists {
+			return txRejectedError{"replacement nonce already used"}
+		}
 	}
 
 	return nil

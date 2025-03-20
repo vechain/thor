@@ -224,7 +224,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 
 	headSummary := p.repo.BestBlockSummary()
 
-	if err := ValidateTransaction(newTx, p.repo, headSummary, p.forkConfig); err != nil {
+	if err := ValidateTransaction(newTx, p.repo, p.stater, headSummary, p.forkConfig); err != nil {
 		return err
 	}
 

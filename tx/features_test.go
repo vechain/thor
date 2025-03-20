@@ -27,3 +27,27 @@ func TestFeatures(t *testing.T) {
 	f.SetDelegated(false)
 	assert.False(t, f.IsDelegated())
 }
+
+func TestReplacement(t *testing.T) {
+	var f tx.Features
+
+	assert.False(t, f.HasReplacement())
+
+	f.SetReplacement(true)
+	assert.True(t, f.HasReplacement())
+
+	f.SetDelegated(true)
+	assert.True(t, f.HasReplacement())
+}
+
+func TestDelegated(t *testing.T) {
+	var f tx.Features
+
+	assert.False(t, f.IsDelegated())
+
+	f.SetDelegated(true)
+	assert.True(t, f.IsDelegated())
+
+	f.SetReplacement(true)
+	assert.True(t, f.IsDelegated())
+}
