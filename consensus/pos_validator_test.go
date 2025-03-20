@@ -129,6 +129,7 @@ func TestConsensus_POS_BadScore(t *testing.T) {
 	assert.NoError(t, staker.AddValidator(
 		parent.Header.Number(),
 		signer2.Address,
+		signer2.Address,
 		parent.Header.Number()+uint32(360)*24*14,
 		big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))))
 	assert.NoError(t, staker.ActivateNextValidator())

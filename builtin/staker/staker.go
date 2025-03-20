@@ -106,26 +106,27 @@ func New(addr thor.Address, state *state.State) *Staker {
 	}
 }
 
-func (a *Staker) SetOnline(addr thor.Address, online bool) error {
-	entry, err := a.validators.Get(addr)
+func (a *Staker) SetOnline(master thor.Address, online bool) error {
+	entry, err := a.validators.Get(master)
 	if err != nil {
 		return err
 	}
 	entry.Online = online
-	return a.validators.Set(addr, entry)
+	return a.validators.Set(master, entry)
 }
 
 // AddValidator queues a new validator.
 func (a *Staker) AddValidator(
 	currentBlock uint32,
-	addr thor.Address,
+	endorsor thor.Address,
+	master thor.Address,
 	expiry uint32,
 	stake *big.Int,
 ) error {
 	if stake.Cmp(minStake) < 0 || stake.Cmp(maxStake) > 0 {
 		return errors.New("stake is out of range")
 	}
-	entry, err := a.validators.Get(addr)
+	entry, err := a.validators.Get(master)
 	if err != nil {
 		return err
 	}
@@ -144,8 +145,9 @@ func (a *Staker) AddValidator(
 	entry.Weight = stake
 	entry.Status = StatusQueued
 	entry.Expiry = expiry
+	entry.Endorsor = endorsor
 
-	if err := a.validatorQueue.Add(entry, addr); err != nil {
+	if err := a.validatorQueue.Add(master, entry); err != nil {
 		return err
 	}
 	if err := a.totalStake.Add(stake); err != nil {
@@ -160,8 +162,8 @@ func (a *Staker) AddValidator(
 	return nil
 }
 
-func (a *Staker) Get(validator thor.Address) (*Validator, error) {
-	return a.validators.Get(validator)
+func (a *Staker) Get(master thor.Address) (*Validator, error) {
+	return a.validators.Get(master)
 }
 
 func (a *Staker) PreviousExit() (uint32, error) {
@@ -213,7 +215,7 @@ func (a *Staker) ActivateNextValidator() error {
 		return nil
 	}
 	// pop the head of the queue
-	validator, addr, err := a.validatorQueue.Pop()
+	addr, validator, err := a.validatorQueue.Pop()
 	if err != nil {
 		return err
 	}
@@ -232,7 +234,7 @@ func (a *Staker) ActivateNextValidator() error {
 	validator.Status = StatusActive
 	validator.Online = true
 	// add to the active list
-	if err := a.leaderGroup.Add(validator, addr); err != nil {
+	if err := a.leaderGroup.Add(addr, validator); err != nil {
 		return err
 	}
 
@@ -332,8 +334,8 @@ func (a *Staker) activateValidators() error {
 
 // RemoveValidator sets a validators status to exited and removes it from the active list.
 // It will also decrease the total stake. Exited validators can then withdraw their stake.
-func (a *Staker) RemoveValidator(validator thor.Address) error {
-	entry, err := a.validators.Get(validator)
+func (a *Staker) RemoveValidator(master thor.Address) error {
+	entry, err := a.validators.Get(master)
 	if err != nil {
 		return err
 	}
@@ -352,7 +354,7 @@ func (a *Staker) RemoveValidator(validator thor.Address) error {
 	entry.Status = StatusExit
 	entry.Weight = big.NewInt(0)
 
-	return a.leaderGroup.Remove(validator, entry)
+	return a.leaderGroup.Remove(master, entry)
 }
 
 // LeaderGroup lists all registered candidates.
@@ -415,8 +417,8 @@ func (a *Staker) Next(prev thor.Address) (thor.Address, error) {
 }
 
 // GetStake returns the stake of a validator.
-func (a *Staker) GetStake(validator thor.Address) (*big.Int, error) {
-	entry, err := a.validators.Get(validator)
+func (a *Staker) GetStake(master thor.Address) (*big.Int, error) {
+	entry, err := a.validators.Get(master)
 	if err != nil {
 		return nil, err
 	}
@@ -424,18 +426,21 @@ func (a *Staker) GetStake(validator thor.Address) (*big.Int, error) {
 }
 
 // WithdrawStake allows expired validators to withdraw their stake.
-func (a *Staker) WithdrawStake(validator thor.Address) (*big.Int, error) {
-	entry, err := a.validators.Get(validator)
+func (a *Staker) WithdrawStake(endorsor thor.Address, master thor.Address) (*big.Int, error) {
+	entry, err := a.validators.Get(master)
 	if err != nil {
 		return nil, err
 	}
 	if entry.IsEmpty() {
 		return big.NewInt(0), nil
 	}
+	if entry.Endorsor != endorsor {
+		return big.NewInt(0), errors.New("invalid endorser")
+	}
 	if entry.Status != StatusExit {
 		return nil, errors.New("validator is not inactive")
 	}
-	if err := a.validators.Set(validator, &Validator{}); err != nil {
+	if err := a.validators.Set(master, &Validator{}); err != nil {
 		return nil, err
 	}
 	return entry.Stake, nil
@@ -469,17 +474,17 @@ func (a *Staker) Initialise(auth *authority.Authority, params *params.Params, cu
 	if err != nil {
 		panic(err)
 	}
-	validators := make([]*Validator, 0, len(poaCandidates))
 
 	var previous *thor.Address
 	for i, candidate := range poaCandidates {
 		validator := &Validator{
-			Expiry: currentBlock + a.minStakingPeriod,
-			Stake:  stake,
-			Weight: weight,
-			Status: StatusActive,
-			Prev:   previous,
-			Online: candidate.Active,
+			Expiry:   currentBlock + a.minStakingPeriod,
+			Stake:    stake,
+			Weight:   weight,
+			Status:   StatusActive,
+			Prev:     previous,
+			Online:   candidate.Active,
+			Endorsor: candidate.Endorsor,
 		}
 		if i < len(poaCandidates)-1 {
 			validator.Next = &poaCandidates[i+1].NodeMaster
@@ -487,12 +492,11 @@ func (a *Staker) Initialise(auth *authority.Authority, params *params.Params, cu
 		if ok, err := auth.Revoke(candidate.NodeMaster); err != nil || !ok {
 			return errors.New("failed to revoke authority candidate")
 		}
-
-		validators = append(validators, validator)
-		previous = &candidate.NodeMaster
-		if err := a.leaderGroup.Add(validators[i], candidate.NodeMaster); err != nil {
+		if err := a.leaderGroup.Add(candidate.NodeMaster, validator); err != nil {
 			return err
 		}
+
+		previous = &candidate.NodeMaster
 	}
 
 	total := big.NewInt(0).Mul(weight, big.NewInt(int64(len(poaCandidates))))

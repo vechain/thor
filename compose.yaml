@@ -9,7 +9,7 @@ services:
     volumes:
       - ./builtin/gen/compiled:/usr/app/builtin/gen/compiled
     environment:
-      - VUE_APP_SOLO_URL=http://localhost:8669
+      - VUE_APP_SOLO_URL=http://host.docker.internal:8669
       - VUE_APP_IS_DOCKER=true
     ports:
       - "8080:80"
@@ -21,6 +21,6 @@ services:
     hostname: insight
     container_name: insight
     environment:
-      - VUE_APP_SOLO_URL=http://localhost:8669
+      - VUE_APP_SOLO_URL=http://host.docker.internal:8669
     ports:
       - "8081:80"

@@ -6,6 +6,8 @@
 package packer
 
 import (
+	"errors"
+
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/pos"
@@ -20,9 +22,18 @@ func (p *Packer) schedulePOS(parent *chain.BlockSummary, nowTimestamp uint64, st
 		return thor.Address{}, 0, 0, err
 	}
 
-	beneficiary := p.nodeMaster
+	var beneficiary thor.Address
 	if p.beneficiary != nil {
 		beneficiary = *p.beneficiary
+	} else {
+		validator, err := staker.Get(p.nodeMaster)
+		if err != nil {
+			return thor.Address{}, 0, 0, err
+		}
+		if validator.IsEmpty() {
+			return thor.Address{}, 0, 0, errors.New("node master is not a validator")
+		}
+		beneficiary = validator.Endorsor
 	}
 
 	var seed []byte

@@ -39,21 +39,21 @@ func init() {
 		}},
 		{"native_get", func(env *xenv.Environment) []any {
 			var args struct {
-				Validator common.Address
+				Master common.Address
 			}
 			env.ParseArgs(&args)
 
 			env.UseGas(thor.SloadGas)
 			env.UseGas(thor.SloadGas)
 
-			validator, err := Staker.Native(env.State()).Get(thor.Address(args.Validator))
+			validator, err := Staker.Native(env.State()).Get(thor.Address(args.Master))
 			if err != nil {
 				panic(err)
 			}
 			if validator.IsEmpty() {
-				return []any{big.NewInt(0), big.NewInt(0), staker.StatusUnknown}
+				return []any{thor.Address{}, big.NewInt(0), big.NewInt(0), staker.StatusUnknown}
 			}
-			return []any{validator.Stake, validator.Weight, validator.Status}
+			return []any{validator.Endorsor, validator.Stake, validator.Weight, validator.Status}
 		}},
 		{"native_firstActive", func(env *xenv.Environment) []any {
 			env.UseGas(thor.SloadGas)
@@ -86,11 +86,12 @@ func init() {
 		}},
 		{"native_withdraw", func(env *xenv.Environment) []any {
 			var args struct {
-				Validator common.Address
+				Endorsor common.Address
+				Master   common.Address
 			}
 			env.ParseArgs(&args)
 
-			stake, err := Staker.Native(env.State()).WithdrawStake(thor.Address(args.Validator))
+			stake, err := Staker.Native(env.State()).WithdrawStake(thor.Address(args.Endorsor), thor.Address(args.Master))
 			if err != nil {
 				panic(err)
 			}
@@ -100,13 +101,14 @@ func init() {
 		}},
 		{"native_addValidator", func(env *xenv.Environment) []any {
 			var args struct {
-				Validator common.Address
-				Expiry    uint32
-				Stake     *big.Int
+				Endorsor common.Address
+				Master   common.Address
+				Expiry   uint32
+				Stake    *big.Int
 			}
 			env.ParseArgs(&args)
 
-			err := Staker.Native(env.State()).AddValidator(env.BlockContext().Number, thor.Address(args.Validator), args.Expiry, args.Stake)
+			err := Staker.Native(env.State()).AddValidator(env.BlockContext().Number, thor.Address(args.Endorsor), thor.Address(args.Master), args.Expiry, args.Stake)
 			if err != nil {
 				panic(err)
 			}

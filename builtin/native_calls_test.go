@@ -10,6 +10,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+
 	"math"
 	"math/big"
 	"reflect"
@@ -22,6 +23,7 @@ import (
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/runtime"
@@ -72,6 +74,7 @@ type TestTxDescription struct {
 	acc        genesis.DevAccount
 	args       []any
 	duplicate  bool
+	vet        *big.Int
 }
 
 func (c *ctest) Case(name string, args ...any) *ccase {
@@ -261,6 +264,10 @@ func executeTxAndGetReceipt(description TestTxDescription) (*tx.Receipt, *thor.B
 	}
 
 	clause := tx.NewClause(&description.address).WithData(input)
+	if description.vet != nil {
+		clause = clause.WithValue(description.vet)
+	}
+
 	trx := new(tx.Builder).
 		ChainTag(thorChain.Repo().ChainTag()).
 		Expiration(50).
@@ -1461,4 +1468,82 @@ func TestExtensionNative(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, uint64(372), gasUsed)
 	require.Equal(t, master1.Address.Bytes(), addressOutput.Bytes())
+}
+
+func TestStakerContract_Native(t *testing.T) {
+	fc := thor.SoloFork
+	fc.HAYABUSA = 1
+	var err error
+	thorChain, err = testchain.NewWithFork(fc)
+	assert.NoError(t, err)
+	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
+	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
+
+	abi := builtin.Staker.ABI
+	toAddr := builtin.Staker.Address
+	endorsor := genesis.DevAccounts()[9]
+	master := genesis.DevAccounts()[8]
+
+	// parameters
+	minStake := big.NewInt(25_000_000)
+	minStake = minStake.Mul(minStake, big.NewInt(1e18))
+	minStakingPeriod := uint32(360) * 24 * 14
+
+	// addValidator
+	addValidatorArgs := []any{master.Address, minStakingPeriod + 360}
+	desc := TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "addValidator",
+		address:    toAddr,
+		acc:        endorsor,
+		args:       addValidatorArgs,
+		vet:        minStake,
+	}
+	_, _, err = executeTxAndGetReceipt(desc)
+	assert.NoError(t, err)
+
+	// get
+	getRes := make([]any, 4)
+	getRes[0] = new(common.Address)
+	getRes[1] = new(*big.Int)
+	getRes[2] = new(*big.Int)
+	getRes[3] = new(uint8)
+	_, err = callContractAndGetOutput(abi, "get", toAddr, &getRes, master.Address)
+	assert.NoError(t, err)
+	expectedEndorsor := common.BytesToAddress(endorsor.Address.Bytes())
+	assert.Equal(t, &expectedEndorsor, getRes[0])
+	assert.Equal(t, minStake, *getRes[1].(**big.Int)) // stake
+	assert.Equal(t, minStake, *getRes[2].(**big.Int)) // weight
+	assert.Equal(t, staker.StatusQueued, *getRes[3].(*uint8))
+
+	//firstQueued
+	firstQueuedRes := new(common.Address)
+	_, err = callContractAndGetOutput(abi, "firstQueued", toAddr, firstQueuedRes)
+	assert.NoError(t, err)
+	expectedMaster := common.BytesToAddress(master.Address.Bytes())
+	assert.Equal(t, &expectedMaster, firstQueuedRes)
+
+	// firstActive
+	firstActiveRes := new(common.Address)
+	_, err = callContractAndGetOutput(abi, "firstActive", toAddr, firstActiveRes)
+	assert.NoError(t, err)
+	expectedFirst := common.BytesToAddress(genesis.DevAccounts()[0].Address.Bytes())
+	assert.Equal(t, &expectedFirst, firstActiveRes)
+
+	// totalStake
+	totalStake := new(*big.Int)
+	_, err = callContractAndGetOutput(abi, "totalStake", toAddr, totalStake)
+	assert.NoError(t, err)
+	expectedTotalStake := big.NewInt(50_000_000)
+	expectedTotalStake = expectedTotalStake.Mul(expectedTotalStake, big.NewInt(1e18))
+	assert.Equal(t, expectedTotalStake, *totalStake)
+
+	// activeStake
+	activeStake := new(*big.Int)
+	_, err = callContractAndGetOutput(abi, "activeStake", toAddr, activeStake)
+	assert.NoError(t, err)
+	expectedActiveStake := big.NewInt(25_000_000)
+	expectedActiveStake = expectedActiveStake.Mul(expectedActiveStake, big.NewInt(1e18))
+	assert.Equal(t, expectedActiveStake, *activeStake)
 }

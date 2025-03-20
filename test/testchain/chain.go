@@ -240,8 +240,9 @@ func (c *Chain) ClauseCall(account genesis.DevAccount, trx *tx.Transaction, clau
 	}
 	st := state.New(c.db, trie.Root{Hash: summary.Header.StateRoot(), Ver: trie.Version{Major: summary.Header.Number()}})
 	rt := runtime.New(ch, st, &xenv.BlockContext{Number: summary.Header.Number(), Time: summary.Header.Timestamp(), TotalScore: summary.Header.TotalScore(), Signer: account.Address}, thor.SoloFork)
+	maxGas := uint64(math.MaxUint32)
 	exec, _ := rt.PrepareClause(trx.Clauses()[clauseIdx],
-		0, math.MaxUint64, &xenv.TransactionContext{
+		0, maxGas, &xenv.TransactionContext{
 			ID:         trx.ID(),
 			Origin:     account.Address,
 			GasPrice:   &big.Int{},
@@ -251,7 +252,13 @@ func (c *Chain) ClauseCall(account genesis.DevAccount, trx *tx.Transaction, clau
 			Expiration: trx.Expiration()})
 
 	out, _, err := exec()
-	return out.Data, math.MaxUint64 - out.LeftOverGas, err
+	if err != nil {
+		return nil, 0, err
+	}
+	if out.VMErr != nil {
+		return nil, 0, out.VMErr
+	}
+	return out.Data, maxGas - out.LeftOverGas, err
 }
 
 func (c *Chain) GetTxReceipt(txID thor.Bytes32) (*tx.Receipt, error) {

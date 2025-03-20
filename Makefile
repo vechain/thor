@@ -68,12 +68,24 @@ lint_command_check:
 	@command -v golangci-lint || (echo "golangci-lint not found, please install it from https://golangci-lint.run/usage/install/" && exit 1)
 
 lint: | go_version_check lint_command_check #@ Run 'golangci-lint'
+	@echo "running golanci-lint..."
 	@golangci-lint run --config .golangci.yml
+	@echo "running modernize..."
+	@go run golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@v0.18.1 ./...
+	@echo "done."
+
+lint-fix: | go_version_check lint_command_check #@ Attempt to fix linting issues
+	@echo "running golanci-lint..."
+	@golangci-lint run --config .golangci.yml --fix
+	@echo "running modernize..."
+	@go run golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@v0.18.1 --fix ./...
+	@echo "done."
 
 license-check: #@ Check license headers
 	@FILE_COUNT=$$(find . -type f -name '*.go' | wc -l); \
 	echo "Checking license headers for all .go... $$FILE_COUNT files found"; \
 	docker run -it --rm -v $$(pwd):/github/workspace apache/skywalking-eyes header check
+
 
 .DEFAULT:
 	@$(MAKE) help

@@ -39,18 +39,18 @@ func newLinkedList(
 }
 
 // Pop removes the head of the linked list, sets the new head, and returns the removed head
-func (l *linkedList) Pop() (*Validator, thor.Address, error) {
+func (l *linkedList) Pop() (thor.Address, *Validator, error) {
 	oldHeadAddr, err := l.head.Get()
 	if err != nil {
-		return nil, thor.Address{}, err
+		return thor.Address{}, nil, err
 	}
 	if oldHeadAddr.IsZero() {
-		return nil, thor.Address{}, errors.New("no head present")
+		return thor.Address{}, nil, errors.New("no head present")
 	}
 
 	oldHead, err := l.validators.Get(oldHeadAddr)
 	if err != nil {
-		return nil, thor.Address{}, err
+		return thor.Address{}, nil, err
 	}
 
 	if oldHead.Next == nil || oldHead.Next.IsZero() {
@@ -62,12 +62,12 @@ func (l *linkedList) Pop() (*Validator, thor.Address, error) {
 		newHeadAddr := oldHead.Next
 		newHead, err := l.validators.Get(*newHeadAddr)
 		if err != nil {
-			return nil, thor.Address{}, err
+			return thor.Address{}, nil, err
 		}
 		newHead.Prev = nil
 
 		if err := l.validators.Set(*newHeadAddr, newHead); err != nil {
-			return nil, thor.Address{}, err
+			return thor.Address{}, nil, err
 		}
 
 		l.head.Set(newHeadAddr)
@@ -77,7 +77,7 @@ func (l *linkedList) Pop() (*Validator, thor.Address, error) {
 	oldHead.Next = nil
 	oldHead.Prev = nil
 
-	return oldHead, oldHeadAddr, nil
+	return oldHeadAddr, oldHead, nil
 }
 
 // Remove removes a validator from the linked list
@@ -119,7 +119,7 @@ func (l *linkedList) Remove(addr thor.Address, validator *Validator) error {
 }
 
 // Add adds a new validator to the tail of the linked list
-func (l *linkedList) Add(newTail *Validator, newTailAddr thor.Address) error {
+func (l *linkedList) Add(newTailAddr thor.Address, newTail *Validator) error {
 	// Clear any previous references in the new validator
 	newTail.Next = nil
 	newTail.Prev = nil
