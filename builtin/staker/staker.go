@@ -56,7 +56,7 @@ type Staker struct {
 	maxLeaderGroupSize *solidity.Uint256
 	validators         *solidity.Mapping[thor.Address, *Validator]
 	leaderGroup        *linkedList
-	validatorQueue     *linkedList
+	validatorQueue     *orderedLinkedList
 	queuedGroupSize    *solidity.Uint256 // New field for tracking queued validators count
 	minStakingPeriod   uint32
 	maxStakingPeriod   uint32
@@ -98,7 +98,7 @@ func New(addr thor.Address, state *state.State) *Staker {
 		validators:         validators,
 		maxLeaderGroupSize: solidity.NewUint256(addr, state, thor.Bytes32{slotMaxLeaderGroupSize}),
 		leaderGroup:        newLinkedList(addr, state, validators, thor.Bytes32{slotActiveHead}, thor.Bytes32{slotActiveTail}),
-		validatorQueue:     newLinkedList(addr, state, validators, thor.Bytes32{slotQueuedHead}, thor.Bytes32{slotQueuedTail}),
+		validatorQueue:     newOrderedLinkedList(addr, state, validators, thor.Bytes32{slotQueuedHead}, thor.Bytes32{slotQueuedTail}),
 		queuedGroupSize:    solidity.NewUint256(addr, state, thor.Bytes32{slotQueuedGroupSize}),
 		minStakingPeriod:   minStakingPeriod,
 		maxStakingPeriod:   maxStakingPeriod,
@@ -400,7 +400,7 @@ func (a *Staker) FirstActive() (thor.Address, error) {
 
 // FirstQueued returns validator address of first entry.
 func (a *Staker) FirstQueued() (thor.Address, error) {
-	return a.validatorQueue.head.Get()
+	return a.validatorQueue.linkedList.head.Get()
 }
 
 // Next returns the next validator in a a linked list.

@@ -28,13 +28,13 @@ func M(a ...any) []any {
 
 // RandomStake returns a random number between minStake and maxStake
 func RandomStake() *big.Int {
-	rand.New(rand.NewSource(time.Now().UnixNano()))
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	// Calculate the range (maxStake - minStake)
 	rangeStake := new(big.Int).Sub(maxStake, minStake)
 
 	// Generate a random number within the range
-	randomOffset := new(big.Int).Rand(rand.New(rand.NewSource(time.Now().UnixNano())), rangeStake)
+	randomOffset := new(big.Int).Rand(rng, rangeStake)
 
 	// Add minStake to ensure the value is within the desired range
 	return new(big.Int).Add(minStake, randomOffset)
@@ -253,33 +253,40 @@ func TestStaker_AddValidator_QueueOrder(t *testing.T) {
 	staker := newStaker(t, 0, 101)
 
 	// add 100 validators to the queue
-	stakers := make([]thor.Address, 0)
 	for range 100 {
 		addr := datagen.RandAddress()
 		stake := RandomStake()
 		assert.NoError(t, staker.AddValidator(0, addr, addr, uint32(360)*24*14, stake))
-		stakers = append(stakers, addr)
 	}
 
 	first, err := staker.FirstQueued()
 	assert.NoError(t, err)
-	assert.Equal(t, stakers[0], first)
 
 	// iterating using the `Next` method should return the same order
 	loopAddr := first
-	for i := 1; i < 100; i++ {
+	for range 99 {
 		next, err := staker.Next(loopAddr)
 		assert.NoError(t, err)
-		assert.Equal(t, stakers[i], next)
+		loopVal, err := staker.validatorQueue.linkedList.validators.Get(loopAddr)
+		assert.NoError(t, err)
+		nextVal, err := staker.validatorQueue.linkedList.validators.Get(next)
+		assert.NoError(t, err)
+		assert.True(t, loopVal.Stake.Cmp(nextVal.Stake) >= 0)
 		loopAddr = next
 	}
 
 	// activating validators should continue to set the correct head of the queue
-	for i := range 99 {
+	loopAddr = first
+	for range 99 {
 		assert.NoError(t, staker.ActivateNextValidator())
 		first, err = staker.FirstQueued()
 		assert.NoError(t, err)
-		assert.Equal(t, stakers[i+1], first)
+		previous, err := staker.validatorQueue.linkedList.validators.Get(loopAddr)
+		assert.NoError(t, err)
+		current, err := staker.validatorQueue.linkedList.validators.Get(first)
+		assert.NoError(t, err)
+		assert.True(t, previous.Stake.Cmp(current.Stake) >= 0)
+		loopAddr = first
 	}
 }
 
@@ -471,12 +478,10 @@ func TestStaker_Next(t *testing.T) {
 		leaderGroup = append(leaderGroup, addr)
 	}
 
-	queued := make([]thor.Address, 0)
 	for range 100 {
 		addr := datagen.RandAddress()
 		stake := RandomStake()
 		assert.NoError(t, staker.AddValidator(0, addr, addr, uint32(360)*24*14, stake))
-		queued = append(queued, addr)
 	}
 
 	firstLeader, err := staker.FirstActive()
@@ -491,12 +496,17 @@ func TestStaker_Next(t *testing.T) {
 
 	firstQueued, err := staker.FirstQueued()
 	assert.NoError(t, err)
-	assert.Equal(t, queued[0], firstQueued)
 
-	for i := range 99 {
-		next, err := staker.Next(queued[i])
+	current := firstQueued
+	for range 99 {
+		next, err := staker.Next(current)
 		assert.NoError(t, err)
-		assert.Equal(t, queued[i+1], next)
+		currentVal, err := staker.validatorQueue.linkedList.validators.Get(current)
+		assert.NoError(t, err)
+		nextVal, err := staker.validatorQueue.linkedList.validators.Get(next)
+		assert.NoError(t, err)
+		assert.True(t, currentVal.Stake.Cmp(nextVal.Stake) >= 0)
+		current = next
 	}
 }
 
