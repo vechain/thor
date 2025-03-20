@@ -12,7 +12,7 @@ var fs embed.FS
 // It simplifies safe initialization of global variables.
 func MustAsset(name string) []byte {
 	if !strings.HasSuffix(name, ".abi") && !strings.HasSuffix(name, ".bin-runtime") {
-		panic("asset: Asset(" + name + "): not a valid asset")
+		panic("asset: Asset(" + name + "): not a valid asset name")
 	}
 
 	data, err := fs.ReadFile(name)
