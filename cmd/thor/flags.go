@@ -173,7 +173,7 @@ var (
 	}
 	txPoolLimitPerAccountFlag = cli.Uint64Flag{
 		Name:  "txpool-limit-per-account",
-		Value: 16,
+		Value: 128,
 		Usage: "set tx limit per account in pool",
 	}
 
