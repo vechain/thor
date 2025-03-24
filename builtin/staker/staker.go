@@ -162,6 +162,43 @@ func (a *Staker) AddValidator(
 	return nil
 }
 
+func (a *Staker) IncreaseStake(master thor.Address, endorsor thor.Address, amount *big.Int) (*big.Int, error) {
+	entry, err := a.validators.Get(master)
+	if err != nil {
+		return nil, err
+	}
+	if entry.IsEmpty() {
+		return nil, errors.New("validator doesn't exist")
+	}
+	if entry.Endorsor != endorsor {
+		return nil, errors.New("invalid endorser")
+	}
+	if entry.Status != StatusQueued {
+		return nil, errors.New("validator is not queued")
+	}
+
+	newStake := big.NewInt(0).Add(entry.Stake, amount)
+	if newStake.Cmp(maxStake) > 0 {
+		return nil, errors.New("stake is out of range")
+	}
+
+	if _, err := a.WithdrawStake(endorsor, master); err != nil {
+		return nil, errors.New("unable to withdraw validator")
+	}
+
+	entry.Stake = newStake
+	entry.Weight = newStake
+
+	if err := a.validatorQueue.Add(master, entry); err != nil {
+		return nil, err
+	}
+	if err := a.queuedGroupSize.Add(big.NewInt(1)); err != nil {
+		return nil, err
+	}
+
+	return newStake, nil
+}
+
 func (a *Staker) Get(master thor.Address) (*Validator, error) {
 	return a.validators.Get(master)
 }
@@ -437,7 +474,14 @@ func (a *Staker) WithdrawStake(endorsor thor.Address, master thor.Address) (*big
 	if entry.Endorsor != endorsor {
 		return big.NewInt(0), errors.New("invalid endorser")
 	}
-	if entry.Status != StatusExit {
+	switch entry.Status {
+	case StatusExit:
+		// skip
+	case StatusQueued:
+		if err := a.validatorQueue.Remove(master, entry); err != nil {
+			return nil, err
+		}
+	default:
 		return nil, errors.New("validator is not inactive")
 	}
 	if err := a.validators.Set(master, &Validator{}); err != nil {

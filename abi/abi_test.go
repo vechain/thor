@@ -103,6 +103,7 @@ func TestStakerABI(t *testing.T) {
 		{"firstActive", true},
 		{"firstQueued", true},
 		{"next", true},
+		{"increaseStake", false},
 	}
 
 	assert.Equal(t, len(testCases), len(abi.Methods()))

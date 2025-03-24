@@ -1547,3 +1547,71 @@ func TestStakerContract_Native(t *testing.T) {
 	expectedActiveStake = expectedActiveStake.Mul(expectedActiveStake, big.NewInt(1e18))
 	assert.Equal(t, expectedActiveStake, *activeStake)
 }
+
+func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
+	fc := thor.SoloFork
+	fc.HAYABUSA = 1
+	var err error
+	thorChain, err = testchain.NewWithFork(fc)
+	assert.NoError(t, err)
+	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
+	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
+
+	abi := builtin.Staker.ABI
+	toAddr := builtin.Staker.Address
+	endorsor := genesis.DevAccounts()[9]
+	master := genesis.DevAccounts()[8]
+
+	// parameters
+	minStake := big.NewInt(25_000_000)
+	minStake = minStake.Mul(minStake, big.NewInt(1e18))
+	minStakingPeriod := uint32(360) * 24 * 14
+
+	// addValidator
+	addValidatorArgs := []any{master.Address, minStakingPeriod + 360}
+	desc := TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "addValidator",
+		address:    toAddr,
+		acc:        endorsor,
+		args:       addValidatorArgs,
+		vet:        minStake,
+	}
+	_, _, err = executeTxAndGetReceipt(desc)
+	assert.NoError(t, err)
+
+	// withdraw queued
+	withdrawArgs := []any{master.Address}
+	desc = TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "withdraw",
+		address:    toAddr,
+		acc:        endorsor,
+		args:       withdrawArgs,
+		vet:        big.NewInt(0),
+	}
+	_, _, err = executeTxAndGetReceipt(desc)
+	assert.NoError(t, err)
+	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
+
+	// get
+	getRes := make([]any, 4)
+	getRes[0] = new(common.Address)
+	getRes[1] = new(*big.Int)
+	getRes[2] = new(*big.Int)
+	getRes[3] = new(uint8)
+	_, err = callContractAndGetOutput(abi, "get", toAddr, &getRes, master.Address)
+	assert.NoError(t, err)
+	expectedEndorsor := common.Address{}
+	assert.Equal(t, &expectedEndorsor, getRes[0])
+	assert.Equal(t, staker.StatusUnknown, *getRes[3].(*uint8))
+
+	//firstQueued
+	firstQueuedRes := new(common.Address)
+	_, err = callContractAndGetOutput(abi, "firstQueued", toAddr, firstQueuedRes)
+	assert.NoError(t, err)
+	expectedMaster := common.Address{}
+	assert.Equal(t, &expectedMaster, firstQueuedRes)
+}

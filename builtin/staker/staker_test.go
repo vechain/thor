@@ -334,6 +334,133 @@ func TestStaker_Get(t *testing.T) {
 	assert.Equal(t, stake, validator.Stake)
 }
 
+func TestStaker_WithdrawQueued(t *testing.T) {
+	staker := newStaker(t, 0, 101)
+	addr := datagen.RandAddress()
+	stake := RandomStake()
+
+	// verify queued empty
+	queued, err := staker.FirstQueued()
+	assert.NoError(t, err)
+	assert.Equal(t, thor.Address{}, queued)
+
+	// add the validator
+	assert.NoError(t, staker.AddValidator(0, addr, addr, uint32(360)*24*14, stake))
+
+	validator, err := staker.Get(addr)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusQueued, validator.Status)
+	assert.Equal(t, stake, validator.Stake)
+	assert.Equal(t, stake, validator.Weight)
+
+	// verify queued
+	queued, err = staker.FirstQueued()
+	assert.NoError(t, err)
+	assert.Equal(t, addr, queued)
+
+	// withraw queued
+	withdrawAmount, err := staker.WithdrawStake(addr, addr)
+	assert.NoError(t, err)
+	assert.Equal(t, stake, withdrawAmount)
+	validator, err = staker.Get(addr)
+	assert.NoError(t, err)
+	assert.True(t, validator.IsEmpty())
+
+	// verify removed queued
+	queued, err = staker.FirstQueued()
+	assert.NoError(t, err)
+	assert.Equal(t, thor.Address{}, queued)
+}
+
+func TestStaker_IncreaseQueued(t *testing.T) {
+	staker := newStaker(t, 0, 101)
+	addr := datagen.RandAddress()
+	stake := RandomStake()
+
+	_, err := staker.IncreaseStake(addr, addr, stake)
+	assert.Error(t, err, "validator not found")
+
+	// add the validator
+	assert.NoError(t, staker.AddValidator(0, addr, addr, uint32(360)*24*14, stake))
+
+	validator, err := staker.Get(addr)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusQueued, validator.Status)
+	assert.Equal(t, stake, validator.Stake)
+	assert.Equal(t, stake, validator.Weight)
+
+	// increase stake queued
+	expectedStake := big.NewInt(0).Add(big.NewInt(1000), stake)
+	newAmount, err := staker.IncreaseStake(addr, addr, big.NewInt(1000))
+	assert.NoError(t, err)
+	assert.Equal(t, newAmount, expectedStake)
+	validator, err = staker.Get(addr)
+	assert.NoError(t, err)
+	assert.False(t, validator.IsEmpty())
+	assert.Equal(t, validator.Status, StatusQueued)
+	assert.Equal(t, validator.Stake, expectedStake)
+}
+
+func TestStaker_IncreaseQueued_Order(t *testing.T) {
+	staker := newStaker(t, 0, 101)
+	addr := datagen.RandAddress()
+	addr1 := datagen.RandAddress()
+	stake := RandomStake()
+
+	_, err := staker.IncreaseStake(addr, addr, stake)
+	assert.Error(t, err, "validator not found")
+
+	// add the validator
+	assert.NoError(t, staker.AddValidator(0, addr, addr, uint32(360)*24*14, stake))
+
+	validator, err := staker.Get(addr)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusQueued, validator.Status)
+	assert.Equal(t, stake, validator.Stake)
+	assert.Equal(t, stake, validator.Weight)
+
+	assert.NoError(t, staker.AddValidator(0, addr1, addr1, uint32(360)*24*14, stake))
+
+	validator, err = staker.Get(addr1)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusQueued, validator.Status)
+	assert.Equal(t, stake, validator.Stake)
+	assert.Equal(t, stake, validator.Weight)
+
+	// verify order
+	queued, err := staker.FirstQueued()
+	assert.NoError(t, err)
+	assert.Equal(t, queued, addr)
+
+	// increase stake queued
+	_, err = staker.IncreaseStake(addr1, addr1, big.NewInt(1000))
+	assert.NoError(t, err)
+
+	// verify order after increasing stake
+	queued, err = staker.FirstQueued()
+	assert.NoError(t, err)
+	assert.Equal(t, queued, addr1)
+}
+
+func TestStaker_IncreaseQueued_ActiveValidator(t *testing.T) {
+	staker := newStaker(t, 0, 101)
+	addr := datagen.RandAddress()
+	stake := RandomStake()
+
+	// add the validator
+	assert.NoError(t, staker.AddValidator(0, addr, addr, uint32(360)*24*14, stake))
+	assert.NoError(t, staker.ActivateNextValidator())
+	validator, err := staker.Get(addr)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusActive, validator.Status)
+	assert.Equal(t, stake, validator.Stake)
+	assert.Equal(t, stake, validator.Weight)
+
+	// increase stake of an active validator
+	_, err = staker.IncreaseStake(addr, addr, big.NewInt(1000))
+	assert.Error(t, err, "validator is not queued")
+}
+
 func TestStaker_Get_FullFlow(t *testing.T) {
 	staker := newStaker(t, 0, 101)
 	addr := datagen.RandAddress()
@@ -547,9 +674,6 @@ func TestStaker_WithdrawStake(t *testing.T) {
 	stake := RandomStake()
 
 	assert.NoError(t, staker.AddValidator(0, addr, addr, uint32(360)*24*14, stake))
-	withdrawAmount, err = staker.WithdrawStake(addr, addr)
-	assert.ErrorContains(t, err, "validator is not inactive")
-	assert.Nil(t, withdrawAmount)
 
 	assert.NoError(t, staker.ActivateNextValidator())
 	withdrawAmount, err = staker.WithdrawStake(addr, addr)

@@ -115,6 +115,21 @@ func init() {
 			env.UseGas(thor.SstoreSetGas)
 			return nil
 		}},
+		{"native_increaseStake", func(env *xenv.Environment) []any {
+			var args struct {
+				Endorsor common.Address
+				Master   common.Address
+				Stake    *big.Int
+			}
+			env.ParseArgs(&args)
+
+			newStake, err := Staker.Native(env.State()).IncreaseStake(thor.Address(args.Endorsor), thor.Address(args.Master), args.Stake)
+			if err != nil {
+				panic(err)
+			}
+			env.UseGas(thor.SstoreSetGas)
+			return []any{newStake}
+		}},
 	}
 	stakerAbi := Staker.NativeABI()
 	for _, def := range defines {

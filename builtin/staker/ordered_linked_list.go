@@ -54,8 +54,6 @@ func (l *orderedLinkedList) Add(address thor.Address, newValidator *Validator) e
 
 	// If list is empty add to head and tail
 	if headAddr.IsZero() {
-		l.linkedList.head.Set(&address)
-		l.linkedList.tail.Set(&address)
 		return l.linkedList.Add(address, newValidator)
 	}
 

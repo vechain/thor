@@ -8,7 +8,17 @@ contract Staker {
         uint32 expiry,
         uint256 stake
     );
-    event ValidatorWithdrawn(address indexed endorsor, address indexed master, uint256 stake);
+    event StakeUpdated(
+        address indexed endorsor,
+        address indexed master,
+        uint256 stake,
+        uint256 added
+    );
+    event ValidatorWithdrawn(
+        address indexed endorsor,
+        address indexed master,
+        uint256 stake
+    );
 
     /**
      * @dev totalStake returns all stakes by queued and active validators.
@@ -38,13 +48,29 @@ contract Staker {
     }
 
     /**
+     * @dev increaseStake adds VET to the current stake of the queued validator.
+     */
+    function increaseStake(address master) public payable {
+        require(msg.value > 0, "value is empty");
+        uint256 stake = StakerNative(address(this)).native_increaseStake(
+            msg.sender,
+            master,
+            msg.value
+        );
+        emit StakeUpdated(msg.sender, master, stake, msg.value);
+    }
+
+    /**
      * @dev allows the caller to withdraw a stake when their status is set to exited
      */
     function withdraw(address master) public {
-        uint256 stake = StakerNative(address(this)).native_withdraw(msg.sender, master);
+        uint256 stake = StakerNative(address(this)).native_withdraw(
+            msg.sender,
+            master
+        );
         emit ValidatorWithdrawn(msg.sender, master, stake);
 
-        (bool success,) = msg.sender.call{value: stake}("");
+        (bool success, ) = msg.sender.call{value: stake}("");
         require(success, "Transfer failed");
     }
 
@@ -96,7 +122,16 @@ interface StakerNative {
         uint256 stake
     ) external;
 
-    function native_withdraw(address endorsor, address master) external returns (uint256);
+    function native_increaseStake(
+        address endorsor,
+        address master,
+        uint256 stake
+    ) external returns (uint256);
+
+    function native_withdraw(
+        address endorsor,
+        address master
+    ) external returns (uint256);
 
     // Read methods
     function native_totalStake() external pure returns (uint256);
