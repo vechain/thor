@@ -61,6 +61,11 @@ clean: #@ Clean the test and build cache and remove binaries
 test:| go_version_check #@ Run the tests
 	@go test -cover $(PACKAGES)
 
+fuzz:| go_version_check #@ Run the fuzz tests
+	@go test -fuzz=FuzzTransactionMarshalling -fuzztime=1m $(CURDIR)/tx
+	@go test -fuzz=FuzzBlockEncoding -fuzztime=1m $(CURDIR)/block
+	@go test -fuzz=FuzzHeaderEncoding -fuzztime=1m $(CURDIR)/block
+
 test-coverage:| go_version_check #@ Run the tests with coverage
 	@go test -race -coverprofile=coverage.out -covermode=atomic $(PACKAGES)
 	@go tool cover -html=coverage.out
