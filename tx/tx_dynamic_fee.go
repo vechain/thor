@@ -86,14 +86,14 @@ func (t *dynamicFeeTransaction) gasPriceCoef() uint8 {
 
 func (t *dynamicFeeTransaction) maxFeePerGas() *big.Int {
 	if t.MaxFeePerGas == nil {
-		return nil
+		return common.Big0
 	}
 	return new(big.Int).Set(t.MaxFeePerGas)
 }
 
 func (t *dynamicFeeTransaction) maxPriorityFeePerGas() *big.Int {
 	if t.MaxPriorityFeePerGas == nil {
-		return nil
+		return common.Big0
 	}
 	return new(big.Int).Set(t.MaxPriorityFeePerGas)
 }
