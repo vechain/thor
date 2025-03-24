@@ -11,7 +11,7 @@ import (
 )
 
 // StorageSize describes storage size in bytes.
-type StorageSize int64
+type StorageSize uint64
 
 func (ss StorageSize) String() string {
 	if ss > 1000000000 {
@@ -22,11 +22,6 @@ func (ss StorageSize) String() string {
 		return fmt.Sprintf("%.2f kB", float64(ss)/1000)
 	}
 	return fmt.Sprintf("%d B", ss)
-}
-
-// Int64 returns int64 value.
-func (ss StorageSize) Int64() int64 {
-	return int64(ss)
 }
 
 // Write implements io.Writer, so it can be passed into function
