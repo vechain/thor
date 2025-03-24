@@ -103,6 +103,7 @@ func TestStakerABI(t *testing.T) {
 		{"firstActive", true},
 		{"firstQueued", true},
 		{"next", true},
+		{"updateAutoRenew", false},
 		{"increaseStake", false},
 	}
 

@@ -127,12 +127,13 @@ func TestConsensus_POS_BadScore(t *testing.T) {
 	staker := builtin.Staker.Native(st)
 	signer2 := genesis.DevAccounts()[2]
 	assert.NoError(t, staker.AddValidator(
-		parent.Header.Number(),
 		signer2.Address,
 		signer2.Address,
-		parent.Header.Number()+uint32(360)*24*14,
-		big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))))
-	assert.NoError(t, staker.ActivateNextValidator())
+		uint32(360)*24*14,
+		big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18)),
+		false,
+	))
+	assert.NoError(t, staker.ActivateNextValidator(blk.Header().Number()))
 
 	_, err = consensus.validateStakingProposer(blk.Header(), parent.Header, st)
 	assert.ErrorContains(t, err, "block total score invalid")

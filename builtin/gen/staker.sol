@@ -5,19 +5,17 @@ contract Staker {
     event ValidatorQueued(
         address indexed endorsor,
         address indexed master,
-        uint32 expiry,
-        uint256 stake
+        uint32 period,
+        uint256 stake,
+        bool autoRenew
     );
+    event ValidatorWithdrawn(address indexed endorsor, address indexed master, uint256 stake);
+    event ValidatorUpdatedAutoRenew(address indexed endorsor, address indexed master, bool autoRenew);
     event StakeUpdated(
         address indexed endorsor,
         address indexed master,
         uint256 stake,
         uint256 added
-    );
-    event ValidatorWithdrawn(
-        address indexed endorsor,
-        address indexed master,
-        uint256 stake
     );
 
     /**
@@ -37,14 +35,15 @@ contract Staker {
     /**
      * @dev addValidator adds a validator to the queue.
      */
-    function addValidator(address master, uint32 expiry) public payable {
+    function addValidator(address master, uint32 period, bool autoRenew) public payable {
         StakerNative(address(this)).native_addValidator(
             msg.sender,
             master,
-            expiry,
-            msg.value
+            period,
+            msg.value,
+            autoRenew
         );
-        emit ValidatorQueued(msg.sender, master, expiry, msg.value);
+        emit ValidatorQueued(msg.sender, master, period, msg.value, autoRenew);
     }
 
     /**
@@ -104,6 +103,14 @@ contract Staker {
         return StakerNative(address(this)).native_next(prev);
     }
 
+    /**
+     * @dev updateAutoRenew updates the autoRenew flag of a validator.
+     */
+    function updateAutoRenew(address master, bool autoRenew) public {
+        StakerNative(address(this)).native_updateAutoRenew(msg.sender, master, autoRenew);
+        emit ValidatorUpdatedAutoRenew(msg.sender, master, autoRenew);
+    }
+
     receive() external payable {
         revert("receive function not allowed");
     }
@@ -118,8 +125,9 @@ interface StakerNative {
     function native_addValidator(
         address endorsor,
         address master,
-        uint32 expiry,
-        uint256 stake
+        uint32 period,
+        uint256 stake,
+        bool autoRenew
     ) external;
 
     function native_increaseStake(
@@ -147,4 +155,6 @@ interface StakerNative {
     function native_firstQueued() external view returns (address);
 
     function native_next(address prev) external view returns (address);
+
+    function native_updateAutoRenew(address endorsor, address master, bool autoRenew) external;
 }

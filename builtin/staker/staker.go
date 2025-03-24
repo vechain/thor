@@ -23,8 +23,10 @@ var (
 	minStake = big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
 	maxStake = big.NewInt(0).Mul(big.NewInt(400e6), big.NewInt(1e18))
 
-	//minStakingPeriod = uint32(360) * 24 * 14  // 2 weeks
-	//maxStakingPeriod = uint32(360) * 24 * 365 // 1 year
+	// TODO: Enable these once customnet testing is done
+	//oneWeekStakingPeriod  = uint32(360) * 24 * 7     // 1 weeks
+	//twoWeeksStakingPeriod = oneWeekStakingPeriod * 2 // 2 weeks
+	//oneMonthStakingPeriod = uint32(360) * 24 * 30    // 30 days
 
 	slotPreviousExitKey = thor.Blake2b(thor.Bytes32{slotPreviousExit}.Bytes())
 	cooldownPeriod      = uint32(8640)
@@ -58,29 +60,39 @@ type Staker struct {
 	leaderGroup        *linkedList
 	validatorQueue     *orderedLinkedList
 	queuedGroupSize    *solidity.Uint256 // New field for tracking queued validators count
-	minStakingPeriod   uint32
-	maxStakingPeriod   uint32
-	epochLength        uint32
+	// TODO: remove once customnet testing is done https://github.com/vechain/protocol-board-repo/issues/486
+	lowStakingPeriod    uint32
+	mediumStakingPeriod uint32
+	highStakingPeriod   uint32
+	epochLength         uint32
 }
 
 // New create a new instance.
 func New(addr thor.Address, state *state.State) *Staker {
 	validators := solidity.NewMapping[thor.Address, *Validator](addr, state, thor.Bytes32{slotValidators})
 
-	minStakingPeriod := uint32(360) * 24 * 14
-	if num, err := solidity.NewUint256(addr, state, thor.BytesToBytes32([]byte("staker-min-staking-period"))).Get(); err == nil {
+	lowStakingPeriod := uint32(360) * 24 * 7
+	if num, err := solidity.NewUint256(addr, state, thor.BytesToBytes32([]byte("staker-low-staking-period"))).Get(); err == nil {
 		numUint64 := num.Uint64()
 		if numUint64 != 0 {
-			minStakingPeriod = uint32(numUint64)
+			lowStakingPeriod = uint32(numUint64)
 		}
 	}
-	maxStakingPeriod := uint32(360) * 24 * 365
-	if num, err := solidity.NewUint256(addr, state, thor.BytesToBytes32([]byte("staker-max-staking-period"))).Get(); err == nil {
+	mediumStakingPeriod := uint32(360) * 24 * 14
+	if num, err := solidity.NewUint256(addr, state, thor.BytesToBytes32([]byte("staker-medium-staking-period"))).Get(); err == nil {
 		numUint64 := num.Uint64()
 		if numUint64 != 0 {
-			maxStakingPeriod = uint32(numUint64)
+			mediumStakingPeriod = uint32(numUint64)
 		}
 	}
+	highStakingPeriod := uint32(360) * 24 * 30
+	if num, err := solidity.NewUint256(addr, state, thor.BytesToBytes32([]byte("staker-high-staking-period"))).Get(); err == nil {
+		numUint64 := num.Uint64()
+		if numUint64 != 0 {
+			highStakingPeriod = uint32(numUint64)
+		}
+	}
+
 	epochLength := uint32(180)
 	if num, err := solidity.NewUint256(addr, state, thor.BytesToBytes32([]byte("epoch-length"))).Get(); err == nil {
 		numUint64 := num.Uint64()
@@ -90,19 +102,20 @@ func New(addr thor.Address, state *state.State) *Staker {
 	}
 
 	return &Staker{
-		addr:               addr,
-		state:              state,
-		totalStake:         solidity.NewUint256(addr, state, thor.Bytes32{slotTotalStake}),
-		activeStake:        solidity.NewUint256(addr, state, thor.Bytes32{slotActiveStake}),
-		leaderGroupSize:    solidity.NewUint256(addr, state, thor.Bytes32{slotLeaderGroupSize}),
-		validators:         validators,
-		maxLeaderGroupSize: solidity.NewUint256(addr, state, thor.Bytes32{slotMaxLeaderGroupSize}),
-		leaderGroup:        newLinkedList(addr, state, validators, thor.Bytes32{slotActiveHead}, thor.Bytes32{slotActiveTail}),
-		validatorQueue:     newOrderedLinkedList(addr, state, validators, thor.Bytes32{slotQueuedHead}, thor.Bytes32{slotQueuedTail}),
-		queuedGroupSize:    solidity.NewUint256(addr, state, thor.Bytes32{slotQueuedGroupSize}),
-		minStakingPeriod:   minStakingPeriod,
-		maxStakingPeriod:   maxStakingPeriod,
-		epochLength:        epochLength,
+		addr:                addr,
+		state:               state,
+		totalStake:          solidity.NewUint256(addr, state, thor.Bytes32{slotTotalStake}),
+		activeStake:         solidity.NewUint256(addr, state, thor.Bytes32{slotActiveStake}),
+		leaderGroupSize:     solidity.NewUint256(addr, state, thor.Bytes32{slotLeaderGroupSize}),
+		validators:          validators,
+		maxLeaderGroupSize:  solidity.NewUint256(addr, state, thor.Bytes32{slotMaxLeaderGroupSize}),
+		leaderGroup:         newLinkedList(addr, state, validators, thor.Bytes32{slotActiveHead}, thor.Bytes32{slotActiveTail}),
+		validatorQueue:      newOrderedLinkedList(addr, state, validators, thor.Bytes32{slotQueuedHead}, thor.Bytes32{slotQueuedTail}),
+		queuedGroupSize:     solidity.NewUint256(addr, state, thor.Bytes32{slotQueuedGroupSize}),
+		epochLength:         epochLength,
+		lowStakingPeriod:    lowStakingPeriod,
+		mediumStakingPeriod: mediumStakingPeriod,
+		highStakingPeriod:   highStakingPeriod,
 	}
 }
 
@@ -117,11 +130,11 @@ func (a *Staker) SetOnline(master thor.Address, online bool) error {
 
 // AddValidator queues a new validator.
 func (a *Staker) AddValidator(
-	currentBlock uint32,
 	endorsor thor.Address,
 	master thor.Address,
-	expiry uint32,
+	period uint32,
 	stake *big.Int,
+	autoRenew bool,
 ) error {
 	if stake.Cmp(minStake) < 0 || stake.Cmp(maxStake) > 0 {
 		return errors.New("stake is out of range")
@@ -134,18 +147,17 @@ func (a *Staker) AddValidator(
 		return errors.New("validator already exists")
 	}
 
-	period := expiry - currentBlock
-	if expiry <= currentBlock ||
-		period < a.minStakingPeriod ||
-		period > a.maxStakingPeriod {
-		return errors.New("expiry is out of boundaries")
+	if period != a.lowStakingPeriod && period != a.mediumStakingPeriod && period != a.highStakingPeriod {
+		return errors.New("period is out of boundaries")
 	}
 
 	entry.Stake = stake
 	entry.Weight = stake
 	entry.Status = StatusQueued
-	entry.Expiry = expiry
+	entry.Expiry = nil
+	entry.Period = period
 	entry.Endorsor = endorsor
+	entry.AutoRenew = autoRenew
 
 	if err := a.validatorQueue.Add(master, entry); err != nil {
 		return err
@@ -160,6 +172,21 @@ func (a *Staker) AddValidator(
 	}
 
 	return nil
+}
+
+func (a *Staker) UpdateAutoRenew(endorsor thor.Address, master thor.Address, autoRenew bool) error {
+	validator, err := a.validators.Get(master)
+	if err != nil {
+		return err
+	}
+	if validator.IsEmpty() {
+		return errors.New("validator not found")
+	}
+	if validator.Endorsor != endorsor {
+		return errors.New("invalid endorsor for master")
+	}
+	validator.AutoRenew = autoRenew
+	return a.validators.Set(master, validator)
 }
 
 func (a *Staker) IncreaseStake(master thor.Address, endorsor thor.Address, amount *big.Int) (*big.Int, error) {
@@ -226,7 +253,7 @@ func (a *Staker) setPreviousExit(blockNumber uint32) error {
 // ActivateNextValidator pops the head of the queue and adds it to the leader group.
 // It will also increase the active stake
 // If there is no validator in the queue, it will return an error.
-func (a *Staker) ActivateNextValidator() error {
+func (a *Staker) ActivateNextValidator(blockNumber uint32) error {
 	leaderGroupLength, err := a.leaderGroupSize.Get()
 	if err != nil {
 		return err
@@ -268,8 +295,11 @@ func (a *Staker) ActivateNextValidator() error {
 	if err := a.activeStake.Add(validator.Stake); err != nil {
 		return err
 	}
+
+	expiry := blockNumber + validator.Period
 	validator.Status = StatusActive
 	validator.Online = true
+	validator.Expiry = &expiry
 	// add to the active list
 	if err := a.leaderGroup.Add(addr, validator); err != nil {
 		return err
@@ -297,19 +327,26 @@ func (a *Staker) Housekeep(currentBlock uint32, forkBlock uint32) (bool, error) 
 				return false, err
 			}
 
-			if currentBlock >= entry.Expiry {
-				if entry.Status == StatusActive {
+			if entry.Expiry != nil && currentBlock >= *entry.Expiry {
+				if entry.Status == StatusActive && !entry.AutoRenew {
 					// Put to cooldown
 					entry.Status = StatusCooldown
+					if err := a.validators.Set(*next, entry); err != nil {
+						return false, err
+					}
+				} else if entry.Status == StatusActive && entry.AutoRenew {
+					// Renew the validator
+					expiry := *entry.Expiry + entry.Period
+					entry.Expiry = &expiry
 					if err := a.validators.Set(*next, entry); err != nil {
 						return false, err
 					}
 				}
 
 				// Find validator with the lowest expiry
-				if entry.Status == StatusCooldown && toExitExp > entry.Expiry {
+				if entry.Status == StatusCooldown && toExitExp > *entry.Expiry {
 					toExit = *next
-					toExitExp = entry.Expiry
+					toExitExp = *entry.Expiry
 				}
 			}
 
@@ -319,7 +356,7 @@ func (a *Staker) Housekeep(currentBlock uint32, forkBlock uint32) (bool, error) 
 		// should the protocol handle this case? `((currentBlock-forkBlock)%cooldownPeriod) == 0`
 		if !toExit.IsZero() {
 			validatorsChanged = true
-			if err := a.RemoveValidator(toExit); err != nil {
+			if err := a.RemoveValidator(toExit, currentBlock); err != nil {
 				return false, err
 			}
 			if err := a.setPreviousExit(currentBlock); err != nil {
@@ -330,14 +367,14 @@ func (a *Staker) Housekeep(currentBlock uint32, forkBlock uint32) (bool, error) 
 
 	if currentBlock%a.epochLength == 0 {
 		validatorsChanged = true
-		if err := a.activateValidators(); err != nil {
+		if err := a.activateValidators(currentBlock); err != nil {
 			return false, err
 		}
 	}
 
 	return validatorsChanged, nil
 }
-func (a *Staker) activateValidators() error {
+func (a *Staker) activateValidators(currentBlock uint32) error {
 	queuedSize, err := a.QueuedGroupSize()
 	if err != nil {
 		return err
@@ -359,7 +396,7 @@ func (a *Staker) activateValidators() error {
 		}
 
 		for i := int64(0); i < queuedCount; i++ {
-			err := a.ActivateNextValidator()
+			err := a.ActivateNextValidator(currentBlock)
 			if err != nil {
 				return err
 			}
@@ -371,7 +408,7 @@ func (a *Staker) activateValidators() error {
 
 // RemoveValidator sets a validators status to exited and removes it from the active list.
 // It will also decrease the total stake. Exited validators can then withdraw their stake.
-func (a *Staker) RemoveValidator(master thor.Address) error {
+func (a *Staker) RemoveValidator(master thor.Address, currentBlock uint32) error {
 	entry, err := a.validators.Get(master)
 	if err != nil {
 		return err
@@ -379,6 +416,10 @@ func (a *Staker) RemoveValidator(master thor.Address) error {
 
 	if entry.IsEmpty() {
 		return nil
+	}
+
+	if entry.Status != StatusExit && *entry.Expiry > currentBlock {
+		return errors.New("validator cannot be removed")
 	}
 
 	if err := a.totalStake.Sub(entry.Stake); err != nil {
@@ -520,9 +561,11 @@ func (a *Staker) Initialise(auth *authority.Authority, params *params.Params, cu
 	}
 
 	var previous *thor.Address
+	expiry := currentBlock + a.mediumStakingPeriod
 	for i, candidate := range poaCandidates {
 		validator := &Validator{
-			Expiry:   currentBlock + a.minStakingPeriod,
+			Expiry:   &expiry,
+			Period:   a.mediumStakingPeriod,
 			Stake:    stake,
 			Weight:   weight,
 			Status:   StatusActive,

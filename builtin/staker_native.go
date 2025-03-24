@@ -101,14 +101,31 @@ func init() {
 		}},
 		{"native_addValidator", func(env *xenv.Environment) []any {
 			var args struct {
-				Endorsor common.Address
-				Master   common.Address
-				Expiry   uint32
-				Stake    *big.Int
+				Endorsor  common.Address
+				Master    common.Address
+				Period    uint32
+				Stake     *big.Int
+				AutoRenew bool
 			}
 			env.ParseArgs(&args)
 
-			err := Staker.Native(env.State()).AddValidator(env.BlockContext().Number, thor.Address(args.Endorsor), thor.Address(args.Master), args.Expiry, args.Stake)
+			err := Staker.Native(env.State()).AddValidator(thor.Address(args.Endorsor), thor.Address(args.Master), args.Period, args.Stake, args.AutoRenew)
+			if err != nil {
+				panic(err)
+			}
+			env.UseGas(thor.SstoreSetGas)
+			return nil
+		}},
+
+		{"native_updateAutoRenew", func(env *xenv.Environment) []any {
+			var args struct {
+				Endorsor  common.Address
+				Master    common.Address
+				AutoRenew bool
+			}
+			env.ParseArgs(&args)
+
+			err := Staker.Native(env.State()).UpdateAutoRenew(thor.Address(args.Endorsor), thor.Address(args.Master), args.AutoRenew)
 			if err != nil {
 				panic(err)
 			}

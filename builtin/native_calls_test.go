@@ -1490,7 +1490,7 @@ func TestStakerContract_Native(t *testing.T) {
 	minStakingPeriod := uint32(360) * 24 * 14
 
 	// addValidator
-	addValidatorArgs := []any{master.Address, minStakingPeriod + 360}
+	addValidatorArgs := []any{master.Address, minStakingPeriod, true}
 	desc := TestTxDescription{
 		t:          t,
 		abi:        abi,
@@ -1568,7 +1568,7 @@ func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
 	minStakingPeriod := uint32(360) * 24 * 14
 
 	// addValidator
-	addValidatorArgs := []any{master.Address, minStakingPeriod + 360}
+	addValidatorArgs := []any{master.Address, minStakingPeriod, false}
 	desc := TestTxDescription{
 		t:          t,
 		abi:        abi,
