@@ -982,7 +982,7 @@ components:
         gasLimit: 11253579
         beneficiary: '0xb4094c25f86d628fdd571afc4077f0d0196afb48'
         gasUsed: 21000
-        baseFee: '0x9184e72a000'
+        baseFeePerGas: '0x9184e72a000'
         totalScore: 1029988
         txsRoot: '0x89dfd9fcd10c9e53d68592cf8b540b280b72d381b868523223992f3e09a806bb'
         txsFeatures: 0
@@ -1489,7 +1489,7 @@ components:
           description: The actual amount of gas used within the block
           example: 21000
           nullable: false
-        baseFee:
+        baseFeePerGas:
           type: string
           format: hex
           description: The minimum amount of fee required to include a transaction in the current block
