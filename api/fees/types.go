@@ -12,7 +12,7 @@ import (
 
 type FeesHistory struct {
 	OldestBlock   thor.Bytes32   `json:"oldestBlock"`
-	BaseFees      []*hexutil.Big `json:"baseFees"`
+	BaseFeePerGas []*hexutil.Big `json:"baseFees"`
 	GasUsedRatios []float64      `json:"gasUsedRatios"`
 }
 

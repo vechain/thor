@@ -437,7 +437,7 @@ func testFeesEndpoint(t *testing.T, testchain *testchain.Chain, ts *httptest.Ser
 		require.NoError(t, err)
 		expectedFeesHistory := &fees.FeesHistory{
 			OldestBlock: expectedOldestBlock,
-			BaseFees: []*hexutil.Big{
+			BaseFeePerGas: []*hexutil.Big{
 				(*hexutil.Big)(big.NewInt(thor.InitialBaseFee)),
 			},
 			GasUsedRatios: []float64{
