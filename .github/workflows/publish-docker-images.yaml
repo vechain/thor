@@ -29,8 +29,6 @@ on:
         default: false
 
 jobs:
-
-
   build-and-push-image:
     name: Build and Push Docker Image
     runs-on: ${{ matrix.os }}
