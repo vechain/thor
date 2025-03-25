@@ -47,7 +47,7 @@ var (
 	copyrightYear        string
 	defaultTxPoolOptions = txpool.Options{
 		Limit:           10000,
-		LimitPerAccount: 16,
+		LimitPerAccount: 128,
 		MaxLifetime:     20 * time.Minute,
 	}
 )
