@@ -30,7 +30,9 @@ func newSolo() *Solo {
 	repo, _ := chain.NewRepository(db, b)
 	mempool := txpool.New(repo, stater, txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute})
 
-	return New(repo, stater, logDb, mempool, 0, true, false, thor.BlockInterval, thor.ForkConfig{})
+	return New(repo, stater, logDb, mempool, 0, true, false, thor.BlockInterval, thor.ForkConfig{
+		HAYABUSA_TP: 1,
+	})
 }
 
 func TestInitSolo(t *testing.T) {

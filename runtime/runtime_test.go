@@ -10,7 +10,6 @@ import (
 	"math"
 	"math/big"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -22,7 +21,6 @@ import (
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
-	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
@@ -588,56 +586,4 @@ func TestExecuteTransactionAfterHayabusa(t *testing.T) {
 	assert.Equal(t, receipt.Reward, beneficiaryEnergyBalance)
 
 	assert.Equal(t, new(big.Int), beneficiaryEnergyBalance)
-}
-
-func TestDistributeRewards(t *testing.T) {
-	db := muxdb.NewMem()
-	b0, _, _, _ := new(genesis.Builder).
-		Timestamp(uint64(time.Now().Unix())).
-		State(func(state *state.State) error {
-			state.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes())
-			state.SetCode(builtin.Executor.Address, builtin.Executor.RuntimeBytecodes())
-			state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
-			state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
-			state.SetCode(builtin.Staker.Address, builtin.Staker.RuntimeBytecodes())
-			builtin.Params.Native(state).Set(thor.KeyExecutorAddress, new(big.Int).SetBytes(builtin.Executor.Address[:]))
-			return nil
-		}).Build(state.NewStater(db))
-
-	repo, _ := chain.NewRepository(db, b0)
-	stater := state.NewStater(db)
-	st := stater.NewState(trie.Root{Hash: b0.Header().StateRoot()})
-	chain := repo.NewChain(b0.Header().ID())
-	addr := datagen.RandAddress()
-	issuedKey := thor.Blake2b([]byte("issued"))
-
-	fc := thor.SoloFork
-	fc.HAYABUSA = 0
-	rt := runtime.New(chain, st, &xenv.BlockContext{Time: uint64(time.Now().Unix()), Beneficiary: addr, Number: 1}, fc)
-
-	balance, err := builtin.Energy.Native(st, 0).Get(addr)
-	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(0), balance)
-
-	issuedAmt, err := st.GetStorage(builtin.Energy.Address, issuedKey)
-	assert.NoError(t, err)
-	assert.Equal(t, thor.BytesToBytes32(big.NewInt(0).Bytes()), issuedAmt)
-
-	activeStakeSlot := thor.Bytes32{1}
-	stake := big.NewInt(1e18)
-	stake = stake.Mul(stake, big.NewInt(25000000))
-	stake = stake.Mul(stake, big.NewInt(101))
-
-	st.SetStorage(builtin.Staker.Address, activeStakeSlot, thor.BytesToBytes32(stake.Bytes()))
-	err = rt.DistributeRewards()
-	assert.NoError(t, err)
-
-	balance, err = builtin.Energy.Native(st, 0).Get(addr)
-	expectedBalance, _ := big.NewInt(1).SetString("1223719939117199391171", 10)
-	assert.NoError(t, err)
-	assert.Equal(t, expectedBalance, balance)
-
-	issuedAmt, err = st.GetStorage(builtin.Energy.Address, issuedKey)
-	assert.NoError(t, err)
-	assert.Equal(t, thor.BytesToBytes32(expectedBalance.Bytes()), issuedAmt)
 }

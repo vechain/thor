@@ -141,7 +141,7 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 		s.packer.SetTargetGasLimit(suggested)
 	}
 
-	flow, err := s.packer.Mock(best, now, s.gasLimit)
+	flow, _, err := s.packer.Mock(best, now, s.gasLimit)
 	if err != nil {
 		return errors.WithMessage(err, "mock packer")
 	}

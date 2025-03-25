@@ -83,7 +83,7 @@ func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipPoA bool) (*ru
 	}
 	state := c.stater.NewState(parentSummary.Root())
 	if !skipPoA {
-		if _, err := c.validateProposer(header, parentSummary.Header, state); err != nil {
+		if _, _, err := c.validateProposer(header, parentSummary.Header, state); err != nil {
 			return nil, err
 		}
 	}

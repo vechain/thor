@@ -96,7 +96,6 @@ func TestStakerABI(t *testing.T) {
 
 	testCases := []testCase{
 		{"totalStake", true},
-		{"activeStake", true},
 		{"addValidator", false},
 		{"withdraw", false},
 		{"get", true},

@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"math/big"
 	"sync/atomic"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -32,7 +31,6 @@ var (
 	energyTransferEvent     *abi.Event
 	prototypeSetMasterEvent *abi.Event
 	nativeCallReturnGas     uint64 = 1562 // see test case for calculation
-	bigE18                         = big.NewInt(1e18)
 
 	EmptyRuntimeBytecode = []byte{0x60, 0x60, 0x60, 0x40, 0x52, 0x60, 0x02, 0x56}
 
@@ -132,19 +130,22 @@ func New(
 		}
 	}
 
+	// Prepare the transition period
 	if forkConfig.HAYABUSA == ctx.Number {
-		logger.Info("HAYABUSA fork")
+		logger.Info("HAYABUSA fork, setting up staker contract")
 		if err := state.SetCode(builtin.Staker.Address, builtin.Staker.RuntimeBytecodes()); err != nil {
 			panic(err)
 		}
+	} else if forkConfig.IsTransitionBlock(ctx.Number) {
 		staker := builtin.Staker.Native(state)
-		authority := builtin.Authority.Native(state)
-		params := builtin.Params.Native(state)
-		if err := staker.Initialise(authority, params, ctx.Number); err != nil {
+		transitioned, err := staker.Transition(builtin.Params.Native(state))
+		if err != nil {
 			panic(err)
 		}
-
-		builtin.Energy.Native(state, ctx.Time).StopEnergyGrowth(ctx.Time)
+		if transitioned {
+			logger.Info("HAYABUSA - POS has become fully active", "block", ctx.Number)
+			builtin.Energy.Native(state, ctx.Time).StopEnergyGrowth()
+		}
 	}
 
 	rt := Runtime{
@@ -532,60 +533,4 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 			return receipt, nil
 		},
 	}, nil
-}
-
-func (rt *Runtime) DistributeRewards() error {
-	if rt.ctx.Number <= rt.forkConfig.HAYABUSA {
-		return nil
-	}
-	reward, err := rt.CalculateRewards()
-	if err != nil {
-		return err
-	}
-
-	if err := builtin.Energy.Native(rt.State(), rt.ctx.Time).Add(rt.ctx.Beneficiary, reward); err != nil {
-		return err
-	}
-	if err := builtin.Energy.Native(rt.State(), rt.ctx.Time).AddIssued(reward); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (rt *Runtime) CalculateRewards() (*big.Int, error) {
-	if rt.ctx.Number <= rt.forkConfig.HAYABUSA {
-		return big.NewInt(0), nil
-	}
-	totalStaked, err := builtin.Staker.Native(rt.state).ActiveStake()
-	if err != nil {
-		return nil, err
-	}
-	// sqrt(totalStaked / 1e18) * 1e18, we are calculating sqrt on VET and then converting to wei
-	sqrtStake := new(big.Int).Sqrt(new(big.Int).Div(totalStaked, bigE18))
-	sqrtStake.Mul(sqrtStake, bigE18)
-
-	currentYear := time.Now().Year()
-	isLeap := isLeapYear(currentYear)
-	blocksPerYear := thor.NumberOfBlocksPerYear
-	if isLeap {
-		blocksPerYear = new(big.Int).Sub(thor.NumberOfBlocksPerYear, big.NewInt(thor.SeederInterval))
-	}
-
-	// reward = 1 * TargetFactor * ScalingFactor * sqrt(totalStaked / 1e18) / blocksPerYear
-	reward := big.NewInt(1)
-	reward.Mul(reward, thor.TargetFactor)
-	reward.Mul(reward, thor.ScalingFactor)
-	reward.Mul(reward, sqrtStake)
-	reward.Div(reward, blocksPerYear)
-	return reward, nil
-}
-
-func isLeapYear(year int) bool {
-	if year%4 == 0 {
-		if year%100 == 0 {
-			return year%400 == 0
-		}
-		return true
-	}
-	return false
 }

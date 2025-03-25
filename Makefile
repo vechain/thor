@@ -68,14 +68,14 @@ lint_command_check:
 	@command -v golangci-lint || (echo "golangci-lint not found, please install it from https://golangci-lint.run/usage/install/" && exit 1)
 
 lint: | go_version_check lint_command_check #@ Run 'golangci-lint'
-	@echo "running golanci-lint..."
+	@echo "running golangci-lint..."
 	@golangci-lint run --config .golangci.yml
 	@echo "running modernize..."
 	@go run golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@v0.18.1 ./...
 	@echo "done."
 
 lint-fix: | go_version_check lint_command_check #@ Attempt to fix linting issues
-	@echo "running golanci-lint..."
+	@echo "running golangci-lint..."
 	@golangci-lint run --config .golangci.yml --fix
 	@echo "running modernize..."
 	@go run golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@v0.18.1 --fix ./...

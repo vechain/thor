@@ -10,7 +10,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-
 	"math"
 	"math/big"
 	"reflect"
@@ -246,11 +245,11 @@ func callContractAndGetOutput(abi *abi.ABI, methodName string, address thor.Addr
 	if err != nil {
 		return 0, err
 	}
-	decoded, gaseUsed, err := inspectClauseWithBlockRef(clause, nil)
+	decoded, gasUsed, err := inspectClauseWithBlockRef(clause, nil)
 	if err != nil {
 		return 0, err
 	}
-	return gaseUsed, m.DecodeOutput(decoded, output)
+	return gasUsed, m.DecodeOutput(decoded, output)
 }
 
 func executeTxAndGetReceipt(description TestTxDescription) (*tx.Receipt, *thor.Bytes32, error) {
@@ -556,8 +555,8 @@ func TestEnergyNative(t *testing.T) {
 
 	abi := builtin.Energy.ABI
 
-	fc := testchain.DefaultForkConfig
-	fc.HAYABUSA = 1
+	fc := thor.SoloFork
+	fc.HAYABUSA = 4
 	thorChain, _ = testchain.NewWithFork(fc)
 
 	var stringOutput string
@@ -723,35 +722,59 @@ func TestEnergyNative(t *testing.T) {
 
 	_, err = callContractAndGetOutput(abi, "totalSupply", toAddr, &bigIntOutput)
 	require.NoError(t, err)
+	best := thorChain.Repo().BestBlockSummary().Header.Number()
 
-	best := thorChain.Repo().BestBlockSummary()
+	growth := new(big.Int)
+	growth.SetUint64(thor.BlockInterval)
+	growth.Mul(growth, exSupply)
+	growth.Mul(growth, thor.EnergyGrowthRate)
+	growth.Div(growth, big.NewInt(1e18))
+	for i := uint32(0); i < best; i++ {
+		exSupply = exSupply.Add(exSupply, growth)
+	}
+	require.Equal(t, exSupply, bigIntOutput)
 
-	hayabusaBlock, err := thorChain.Repo().NewBestChain().GetBlockSummary(fc.HAYABUSA)
+	//_________________________________________________________
+	// -- START SETUP HAYABUSA FORK AND TRANSITION TO POS --
+	//---------------------------------------------------------
+
+	//1: Set MaxBlockProposers to 1
+	params := thorChain.Contract(builtin.Params.Address, builtin.Params.ABI, genesis.DevAccounts()[0])
+	staker := thorChain.Contract(builtin.Staker.Address, builtin.Staker.ABI, genesis.DevAccounts()[0])
+	assert.NoError(t, params.MintTransaction("set", big.NewInt(0), thor.KeyMaxBlockProposers, big.NewInt(1)))
+	exSupply = exSupply.Add(exSupply, growth)
+
+	// 2: Add a validator to the queue
+	minStake := big.NewInt(25_000_000)
+	minStake = minStake.Mul(minStake, big.NewInt(1e18))
+	assert.NoError(t, staker.MintTransaction("addValidator", minStake, acc1.Address, uint32(360)*24*7, true))
+	exSupply = exSupply.Add(exSupply, growth)
+	exSupply = exSupply.Add(exSupply, growth)
+
+	// 3: Mint some blocks
+	firstPOS := thorChain.Repo().BestBlockSummary().Header.Number() + 2
 	require.NoError(t, err)
-	preHayabusaState := thorChain.Stater().NewState(hayabusaBlock.Root())
-	totalSupply, err := builtin.Energy.Native(preHayabusaState, hayabusaBlock.Header.Timestamp()).TotalSupply()
-	require.NoError(t, err)
+	for range 5 {
+		require.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
+	}
+	best = thorChain.Repo().BestBlockSummary().Header.Number()
 
 	stakeRewards := big.NewInt(0)
-	for i := fc.HAYABUSA + 1; i <= best.Header.Number(); i++ {
+	for i := firstPOS; i <= best; i++ {
 		summary, err := thorChain.Repo().NewBestChain().GetBlockSummary(i)
 		require.NoError(t, err)
-		parent, err := thorChain.Repo().GetBlockSummary(summary.Header.ParentID())
-		require.NoError(t, err)
-		st := thorChain.Stater().NewState(parent.Root())
-		rt := runtime.New(
-			thorChain.Repo().NewChain(summary.Header.ParentID()),
-			st,
-			&xenv.BlockContext{Number: i},
-			fc)
-		reward, err := rt.CalculateRewards()
+		st := thorChain.Stater().NewState(summary.Root())
+		staker := builtin.Staker.Native(st)
+		energy := builtin.Energy.Native(st, summary.Header.Timestamp())
+		reward, err := energy.CalculateRewards(staker)
 		require.NoError(t, err)
 		stakeRewards.Add(stakeRewards, reward)
 	}
-	totalSupply = totalSupply.Add(totalSupply, stakeRewards)
+	exSupply = exSupply.Add(exSupply, stakeRewards)
 
+	_, err = callContractAndGetOutput(abi, "totalSupply", toAddr, &bigIntOutput)
 	require.NoError(t, err)
-	require.Equal(t, totalSupply, bigIntOutput)
+	require.Equal(t, exSupply, bigIntOutput)
 }
 
 func TestPrototypeNative(t *testing.T) {
@@ -1472,12 +1495,26 @@ func TestExtensionNative(t *testing.T) {
 
 func TestStakerContract_Native(t *testing.T) {
 	fc := thor.SoloFork
-	fc.HAYABUSA = 1
+	fc.HAYABUSA = 2
+	fc.HAYABUSA_TP = 2
 	var err error
 	thorChain, err = testchain.NewWithFork(fc)
 	assert.NoError(t, err)
-	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
-	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
+
+	mbp := TestTxDescription{
+		t:          t,
+		abi:        builtin.Params.ABI,
+		methodName: "set",
+		address:    builtin.Params.Address,
+		acc:        genesis.DevAccounts()[0],
+		args:       []any{thor.KeyMaxBlockProposers, big.NewInt(1)},
+	}
+	receipt, a, err := executeTxAndGetReceipt(mbp) // mint block 1
+	assert.NoError(t, err)
+	assert.NotNil(t, receipt)
+	assert.NotNil(t, a)
+
+	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0])) // mint block 2: hayabusa should fork here and set the contract bytecode
 
 	abi := builtin.Staker.ABI
 	toAddr := builtin.Staker.Address
@@ -1500,7 +1537,7 @@ func TestStakerContract_Native(t *testing.T) {
 		args:       addValidatorArgs,
 		vet:        minStake,
 	}
-	_, _, err = executeTxAndGetReceipt(desc)
+	_, _, err = executeTxAndGetReceipt(desc) // mint block 3
 	assert.NoError(t, err)
 
 	// get
@@ -1524,28 +1561,22 @@ func TestStakerContract_Native(t *testing.T) {
 	expectedMaster := common.BytesToAddress(master.Address.Bytes())
 	assert.Equal(t, &expectedMaster, firstQueuedRes)
 
+	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0])) // mint block 4: PoS should become active and active the queued validators
+
 	// firstActive
 	firstActiveRes := new(common.Address)
 	_, err = callContractAndGetOutput(abi, "firstActive", toAddr, firstActiveRes)
 	assert.NoError(t, err)
-	expectedFirst := common.BytesToAddress(genesis.DevAccounts()[0].Address.Bytes())
+	expectedFirst := common.BytesToAddress(master.Address.Bytes())
 	assert.Equal(t, &expectedFirst, firstActiveRes)
 
 	// totalStake
 	totalStake := new(*big.Int)
 	_, err = callContractAndGetOutput(abi, "totalStake", toAddr, totalStake)
 	assert.NoError(t, err)
-	expectedTotalStake := big.NewInt(50_000_000)
+	expectedTotalStake := big.NewInt(25_000_000)
 	expectedTotalStake = expectedTotalStake.Mul(expectedTotalStake, big.NewInt(1e18))
 	assert.Equal(t, expectedTotalStake, *totalStake)
-
-	// activeStake
-	activeStake := new(*big.Int)
-	_, err = callContractAndGetOutput(abi, "activeStake", toAddr, activeStake)
-	assert.NoError(t, err)
-	expectedActiveStake := big.NewInt(25_000_000)
-	expectedActiveStake = expectedActiveStake.Mul(expectedActiveStake, big.NewInt(1e18))
-	assert.Equal(t, expectedActiveStake, *activeStake)
 }
 
 func TestStakerContract_Native_WithdrawQueued(t *testing.T) {

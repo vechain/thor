@@ -95,7 +95,7 @@ func newTestConsensus() (*testConsensus, error) {
 	proposer := genesis.DevAccounts()[0]
 	p := packer.New(repo, stater, proposer.Address, &proposer.Address, forkConfig)
 	parentSum, _ := repo.GetBlockSummary(parent.Header().ID())
-	flow, err := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval)
+	flow, _, err := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +132,7 @@ func newTestConsensus() (*testConsensus, error) {
 	proposer2 := genesis.DevAccounts()[1]
 	p2 := packer.New(repo, stater, proposer2.Address, &proposer2.Address, forkConfig)
 	b1sum, _ := repo.GetBlockSummary(b1.Header().ID())
-	flow2, err := p2.Schedule(b1sum, b1.Header().Timestamp()+100*thor.BlockInterval)
+	flow2, _, err := p2.Schedule(b1sum, b1.Header().Timestamp()+100*thor.BlockInterval)
 	if err != nil {
 		return nil, err
 	}

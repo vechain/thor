@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -29,6 +30,7 @@ type Flow struct {
 	txs          tx.Transactions
 	receipts     tx.Receipts
 	features     tx.Features
+	posActive    bool
 }
 
 func newFlow(
@@ -36,6 +38,7 @@ func newFlow(
 	parentHeader *block.Header,
 	runtime *runtime.Runtime,
 	features tx.Features,
+	posActive bool,
 ) *Flow {
 	return &Flow{
 		packer:       packer,
@@ -43,6 +46,7 @@ func newFlow(
 		runtime:      runtime,
 		processedTxs: make(map[thor.Bytes32]bool),
 		features:     features,
+		posActive:    posActive,
 	}
 }
 
@@ -157,8 +161,13 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 		return nil, nil, nil, errors.New("private key mismatch")
 	}
 
-	if err := f.runtime.DistributeRewards(); err != nil {
-		return nil, nil, nil, err
+	if f.posActive {
+		// TODO: We can reward priority fees here too
+		stakerContract := builtin.Staker.Native(f.runtime.State())
+		energy := builtin.Energy.Native(f.runtime.State(), f.runtime.Context().Time)
+		if err := energy.DistributeRewards(f.runtime.Context().Beneficiary, stakerContract); err != nil {
+			return nil, nil, nil, err
+		}
 	}
 
 	stage, err := f.runtime.State().Stage(trie.Version{Major: f.Number(), Minor: newBlockConflicts})

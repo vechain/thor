@@ -61,7 +61,7 @@ func TestAdopt(t *testing.T) {
 		t.Fatal("Error getting block summary:", err)
 	}
 
-	flow, err := pkr.Schedule(sum, uint64(time.Now().Unix()))
+	flow, _, err := pkr.Schedule(sum, uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal("Error scheduling:", err)
 	}
@@ -112,7 +112,7 @@ func TestPack(t *testing.T) {
 	proposer := genesis.DevAccounts()[0]
 	p := packer.New(repo, stater, proposer.Address, &proposer.Address, forkConfig)
 	parentSum, _ := repo.GetBlockSummary(parent.Header().ID())
-	flow, _ := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval)
+	flow, _, _ := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval)
 
 	flow.Pack(proposer.PrivateKey, 0, false)
 
@@ -161,7 +161,7 @@ func TestAdoptErr(t *testing.T) {
 	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, config)
 	sum, _ := repo.GetBlockSummary(b.Header().ID())
 
-	flow, _ := pkr.Schedule(sum, uint64(time.Now().Unix()))
+	flow, _, _ := pkr.Schedule(sum, uint64(time.Now().Unix()))
 
 	// Test chain tag mismatch
 	tx1 := createTx(byte(0xFF), 1, 10, 21000, 1, nil, clause, tx.NewBlockRef(0))

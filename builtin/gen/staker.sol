@@ -26,13 +26,6 @@ contract Staker {
     }
 
     /**
-     * @dev activeStake returns all stakes by active validators.
-     */
-    function activeStake() public view returns (uint256) {
-        return StakerNative(address(this)).native_activeStake();
-    }
-
-    /**
      * @dev addValidator adds a validator to the queue.
      */
     function addValidator(address master, uint32 period, bool autoRenew) public payable {
@@ -143,8 +136,6 @@ interface StakerNative {
 
     // Read methods
     function native_totalStake() external pure returns (uint256);
-
-    function native_activeStake() external view returns (uint256);
 
     function native_get(
         address master

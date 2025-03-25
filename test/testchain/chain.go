@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
@@ -68,13 +69,14 @@ func New(
 }
 
 var DefaultForkConfig = thor.ForkConfig{
-	BLOCKLIST: 0,
-	VIP191:    1,
-	VIP214:    2,
-	ETH_CONST: math.MaxUint32,
-	ETH_IST:   math.MaxUint32,
-	FINALITY:  math.MaxUint32,
-	HAYABUSA:  math.MaxUint32,
+	BLOCKLIST:   0,
+	VIP191:      1,
+	VIP214:      2,
+	ETH_CONST:   math.MaxUint32,
+	ETH_IST:     math.MaxUint32,
+	FINALITY:    math.MaxUint32,
+	HAYABUSA:    math.MaxUint32,
+	HAYABUSA_TP: 360 * 24 * 14, // 2 weeks
 }
 
 // NewDefault is a wrapper function that creates a Chain for testing with the default fork config.
@@ -153,6 +155,11 @@ func (c *Chain) MintTransactions(account genesis.DevAccount, transactions ...*tx
 	return c.MintBlock(account, transactions...)
 }
 
+// Contract creates a new contract instance with the provided address and ABI.
+func (c *Chain) Contract(addr thor.Address, abi *abi.ABI, acc genesis.DevAccount) *Contract {
+	return NewContract(c, acc, addr, abi)
+}
+
 // MintClauses creates a transaction with the provided clauses and adds it to the blockchain.
 func (c *Chain) MintClauses(account genesis.DevAccount, clauses []*tx.Clause) error {
 	builer := new(tx.Builder).GasPriceCoef(255).
@@ -183,7 +190,7 @@ func (c *Chain) MintBlock(account genesis.DevAccount, transactions ...*tx.Transa
 	blkPacker := packer.New(c.Repo(), c.Stater(), account.Address, &genesis.DevAccounts()[0].Address, c.forkConfig)
 
 	// Create a new block
-	blkFlow, err := blkPacker.Mock(
+	blkFlow, _, err := blkPacker.Mock(
 		c.Repo().BestBlockSummary(),
 		c.Repo().BestBlockSummary().Header.Timestamp()+thor.BlockInterval,
 		c.Repo().BestBlockSummary().Header.GasLimit(),
@@ -239,7 +246,7 @@ func (c *Chain) ClauseCall(account genesis.DevAccount, trx *tx.Transaction, clau
 		return nil, 0, err
 	}
 	st := state.New(c.db, trie.Root{Hash: summary.Header.StateRoot(), Ver: trie.Version{Major: summary.Header.Number()}})
-	rt := runtime.New(ch, st, &xenv.BlockContext{Number: summary.Header.Number(), Time: summary.Header.Timestamp(), TotalScore: summary.Header.TotalScore(), Signer: account.Address}, thor.SoloFork)
+	rt := runtime.New(ch, st, &xenv.BlockContext{Number: summary.Header.Number(), Time: summary.Header.Timestamp(), TotalScore: summary.Header.TotalScore(), Signer: account.Address}, c.forkConfig)
 	maxGas := uint64(math.MaxUint32)
 	exec, _ := rt.PrepareClause(trx.Clauses()[clauseIdx],
 		0, maxGas, &xenv.TransactionContext{

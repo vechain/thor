@@ -11,12 +11,18 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/xenv"
+)
+
+var (
+	logger = log.WithContext("pkg", "consensus")
 )
 
 type cacheHandler func(receipts tx.Receipts) error
@@ -34,7 +40,7 @@ func (c *Consensus) validate(
 		return nil, nil, err
 	}
 
-	cacheHandler, err := c.validateProposer(header, parent, state)
+	cacheHandler, posActive, err := c.validateProposer(header, parent, state)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -43,7 +49,7 @@ func (c *Consensus) validate(
 		return nil, nil, err
 	}
 
-	stage, receipts, err := c.verifyBlock(block, state, blockConflicts)
+	stage, receipts, err := c.verifyBlock(block, state, blockConflicts, posActive)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -55,16 +61,19 @@ func (c *Consensus) validate(
 	return stage, receipts, nil
 }
 
-func (c *Consensus) validateProposer(header *block.Header, parent *block.Header, state *state.State) (cacheHandler, error) {
-	if header.Number() <= c.forkConfig.HAYABUSA {
-		return c.validateAuthorityProposer(header, parent, state)
+func (c *Consensus) validateProposer(header *block.Header, parent *block.Header, state *state.State) (cacheHandler, bool, error) {
+	posActive, err := builtin.Staker.Native(state).IsActive()
+	if err != nil {
+		return nil, false, err
 	}
-
-	if header.Number() == c.forkConfig.HAYABUSA+1 {
-		c.authorityCache.Purge()
+	logger.Debug("validating block proposer", "pos", posActive)
+	var handler cacheHandler
+	if posActive {
+		handler, err = c.validateStakingProposer(header, parent, state)
+	} else {
+		handler, err = c.validateAuthorityProposer(header, parent, state)
 	}
-
-	return c.validateStakingProposer(header, parent, state)
+	return handler, posActive, err
 }
 
 func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Header, nowTimestamp uint64) error {
@@ -170,7 +179,7 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 	return nil
 }
 
-func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConflicts uint32) (*state.Stage, tx.Receipts, error) {
+func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConflicts uint32, posActive bool) (*state.Stage, tx.Receipts, error) {
 	var totalGasUsed uint64
 	txs := blk.Transactions()
 	receipts := make(tx.Receipts, 0, len(txs))
@@ -258,9 +267,12 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 		}
 	}
 
-	if rt.Context().Number > c.forkConfig.HAYABUSA {
-		if err := rt.DistributeRewards(); err != nil {
-			return nil, nil, consensusError(fmt.Sprintf("unable to distribute validator rewards, root cause: %v", err.Error()))
+	if posActive {
+		// TODO: We can reward priority fees here too
+		stakerContract := builtin.Staker.Native(state)
+		energy := builtin.Energy.Native(state, header.Timestamp())
+		if err := energy.DistributeRewards(blk.Header().Beneficiary(), stakerContract); err != nil {
+			return nil, nil, err
 		}
 	}
 

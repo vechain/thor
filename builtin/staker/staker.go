@@ -11,7 +11,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/thor/v2/builtin/authority"
 	"github.com/vechain/thor/v2/builtin/params"
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/state"
@@ -36,7 +35,6 @@ type slot = byte
 
 const (
 	slotTotalStake slot = iota
-	slotActiveStake
 	slotLeaderGroupSize
 	slotMaxLeaderGroupSize
 	slotValidators
@@ -53,7 +51,6 @@ type Staker struct {
 	addr               thor.Address
 	state              *state.State
 	totalStake         *solidity.Uint256
-	activeStake        *solidity.Uint256
 	leaderGroupSize    *solidity.Uint256
 	maxLeaderGroupSize *solidity.Uint256
 	validators         *solidity.Mapping[thor.Address, *Validator]
@@ -105,7 +102,6 @@ func New(addr thor.Address, state *state.State) *Staker {
 		addr:                addr,
 		state:               state,
 		totalStake:          solidity.NewUint256(addr, state, thor.Bytes32{slotTotalStake}),
-		activeStake:         solidity.NewUint256(addr, state, thor.Bytes32{slotActiveStake}),
 		leaderGroupSize:     solidity.NewUint256(addr, state, thor.Bytes32{slotLeaderGroupSize}),
 		validators:          validators,
 		maxLeaderGroupSize:  solidity.NewUint256(addr, state, thor.Bytes32{slotMaxLeaderGroupSize}),
@@ -117,6 +113,14 @@ func New(addr thor.Address, state *state.State) *Staker {
 		mediumStakingPeriod: mediumStakingPeriod,
 		highStakingPeriod:   highStakingPeriod,
 	}
+}
+
+func (a *Staker) IsActive() (bool, error) {
+	activeCount, err := a.leaderGroupSize.Get()
+	if err != nil {
+		return false, err
+	}
+	return activeCount.Cmp(big.NewInt(0)) > 0, nil
 }
 
 func (a *Staker) SetOnline(master thor.Address, online bool) error {
@@ -160,9 +164,6 @@ func (a *Staker) AddValidator(
 	entry.AutoRenew = autoRenew
 
 	if err := a.validatorQueue.Add(master, entry); err != nil {
-		return err
-	}
-	if err := a.totalStake.Add(stake); err != nil {
 		return err
 	}
 
@@ -295,7 +296,7 @@ func (a *Staker) ActivateNextValidator(blockNumber uint32) error {
 		return err
 	}
 
-	if err := a.activeStake.Add(validator.Stake); err != nil {
+	if err := a.totalStake.Add(validator.Stake); err != nil {
 		return err
 	}
 
@@ -429,9 +430,6 @@ func (a *Staker) RemoveValidator(master thor.Address, currentBlock uint32) error
 	if err := a.totalStake.Sub(entry.Stake); err != nil {
 		return err
 	}
-	if err := a.activeStake.Sub(entry.Stake); err != nil {
-		return err
-	}
 
 	entry.Status = StatusExit
 	entry.Weight = big.NewInt(0)
@@ -469,10 +467,6 @@ func (a *Staker) EpochLength() uint32 {
 
 func (a *Staker) TotalStake() (*big.Int, error) {
 	return a.totalStake.Get()
-}
-
-func (a *Staker) ActiveStake() (*big.Int, error) {
-	return a.activeStake.Get()
 }
 
 // FirstActive returns validator address of first entry.
@@ -535,73 +529,71 @@ func (a *Staker) WithdrawStake(endorsor thor.Address, master thor.Address) (*big
 	return entry.Stake, nil
 }
 
-// Initialise the staker contract with the PoA candidates.
-func (a *Staker) Initialise(auth *authority.Authority, params *params.Params, currentBlock uint32) error {
-	currentSize, err := a.leaderGroupSize.Get()
+// Transition from PoA to PoS. It checks that the queue is at least 2/3 of the maxProposers, and activates the first
+// `min(queueSize, maxProposers)` validators.
+func (a *Staker) Transition(params *params.Params) (bool, error) {
+	active, err := a.IsActive()
 	if err != nil {
-		return err
+		return false, err
 	}
-	if currentSize.Cmp(big.NewInt(0)) != 0 {
-		// TODO: Runtime has small edge case/bug for accounts/debug endpoints. Runtime is accepting state of completed
-		// block N and block context of N. Block context should have been N+1 to avoid this issue.
-		// Once we decide how we will bootstrap the Staker contract we should resolve this issue
-		return nil
+	if active {
+		return false, nil
 	}
 
-	// init max validators
 	maxProposers, err := params.Get(thor.KeyMaxBlockProposers)
 	if err != nil || maxProposers.Cmp(big.NewInt(0)) == 0 {
 		maxProposers = big.NewInt(0).SetUint64(thor.InitialMaxBlockProposers)
 	}
 	a.maxLeaderGroupSize.Set(maxProposers)
 
-	// init validators
-	stake := big.NewInt(0) // validators have soft staked minimum 25M VET
-	weight := big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
-
-	poaCandidates, err := auth.AllCandidates()
+	queueSize, err := a.queuedGroupSize.Get()
 	if err != nil {
-		panic(err)
+		return false, err
 	}
 
-	var previous *thor.Address
-	expiry := currentBlock + a.mediumStakingPeriod
-	for i, candidate := range poaCandidates {
-		validator := &Validator{
-			Expiry:   &expiry,
-			Period:   a.mediumStakingPeriod,
-			Stake:    stake,
-			Weight:   weight,
-			Status:   StatusActive,
-			Prev:     previous,
-			Online:   candidate.Active,
-			Endorsor: candidate.Endorsor,
-		}
-		if i < len(poaCandidates)-1 {
-			validator.Next = &poaCandidates[i+1].NodeMaster
-		}
-		if ok, err := auth.Revoke(candidate.NodeMaster); err != nil || !ok {
-			return errors.New("failed to revoke authority candidate")
-		}
-		if err := a.leaderGroup.Add(candidate.NodeMaster, validator); err != nil {
-			return err
-		}
-
-		previous = &candidate.NodeMaster
+	// if the queue size is not AT LEAST 2/3 of the maxProposers, then return nil
+	twoThirds := big.NewInt(0).Mul(maxProposers, big.NewInt(2))
+	twoThirds.Div(twoThirds, big.NewInt(3))
+	if queueSize.Cmp(twoThirds) < 0 {
+		return false, nil
 	}
 
-	total := big.NewInt(0).Mul(weight, big.NewInt(int64(len(poaCandidates))))
-	a.activeStake.Set(total)
-	a.totalStake.Set(total)
-	a.leaderGroupSize.Set(big.NewInt(int64(len(poaCandidates))))
+	// activeLeaderSize = min(queueSize, maxProposers)
+	activeLeaderSize := big.NewInt(0).Set(queueSize)
+	if activeLeaderSize.Cmp(maxProposers) > 0 {
+		activeLeaderSize.Set(maxProposers)
+	}
 
-	return nil
+	totalStake := big.NewInt(0)
+
+	for i := int64(0); i < activeLeaderSize.Int64(); i++ {
+		addr, validator, err := a.validatorQueue.Pop()
+		if err != nil {
+			return false, err
+		}
+
+		validator.Status = StatusActive
+		validator.Online = true
+		if err := a.leaderGroup.Add(addr, validator); err != nil {
+			return false, err
+		}
+		totalStake.Add(totalStake, validator.Stake)
+	}
+
+	a.totalStake.Set(totalStake)
+	a.leaderGroupSize.Set(activeLeaderSize)
+	if err := a.queuedGroupSize.Sub(activeLeaderSize); err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
 // QueuedGroupSize returns the number of validators in the queue
 func (a *Staker) QueuedGroupSize() (*big.Int, error) {
 	return a.queuedGroupSize.Get()
 }
+
 func (a *Staker) LeaderGroupSize() (*big.Int, error) {
 	return a.leaderGroupSize.Get()
 }

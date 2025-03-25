@@ -13,13 +13,14 @@ import (
 // TestForkConfigString verifies that the String method returns expected values.
 func TestForkConfigString(t *testing.T) {
 	fc := ForkConfig{
-		VIP191:    1,
-		ETH_CONST: math.MaxUint32,
-		BLOCKLIST: 2,
-		ETH_IST:   math.MaxUint32,
-		VIP214:    math.MaxUint32,
-		FINALITY:  math.MaxUint32,
-		HAYABUSA:  math.MaxUint32,
+		VIP191:      1,
+		ETH_CONST:   math.MaxUint32,
+		BLOCKLIST:   2,
+		ETH_IST:     math.MaxUint32,
+		VIP214:      math.MaxUint32,
+		FINALITY:    math.MaxUint32,
+		HAYABUSA:    math.MaxUint32,
+		HAYABUSA_TP: math.MaxUint32,
 	}
 
 	expectedStr := "VIP191: #1, BLOCKLIST: #2"

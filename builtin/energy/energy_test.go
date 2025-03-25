@@ -77,7 +77,8 @@ func TestInitialSupplyError(t *testing.T) {
 func TestTotalSupply(t *testing.T) {
 	st := state.New(muxdb.NewMem(), trie.Root{})
 
-	eng := New(thor.BytesToAddress([]byte("eng")), st, 1)
+	addr := thor.BytesToAddress([]byte("eng"))
+	eng := New(addr, st, 1)
 
 	eng.SetInitialSupply(big.NewInt(100000000000000000), big.NewInt(456))
 
@@ -93,30 +94,30 @@ func TestTotalSupply(t *testing.T) {
 	assert.Equal(t, big.NewInt(499500000456), totalSupply)
 
 	eng.blockTime = 1500
-	eng.StopEnergyGrowth(1250)
+	eng.StopEnergyGrowth()
 	totalSupply, err = eng.TotalSupply()
 
 	assert.Nil(t, err)
-	assert.Equal(t, big.NewInt(624500000456), totalSupply)
+	assert.Equal(t, big.NewInt(749500000456), totalSupply)
 
 	eng.blockTime = 2000
 	totalSupply, err = eng.TotalSupply()
 
 	assert.Nil(t, err)
-	assert.Equal(t, big.NewInt(624500000456), totalSupply)
+	assert.Equal(t, big.NewInt(749500000456), totalSupply)
 
 	eng.blockTime = 2001
 	eng.AddIssued(big.NewInt(100))
 	totalSupply, err = eng.TotalSupply()
 
 	assert.Nil(t, err)
-	assert.Equal(t, big.NewInt(624500000556), totalSupply)
+	assert.Equal(t, big.NewInt(749500000556), totalSupply)
 
 	eng.blockTime = 3000
 	totalSupply, err = eng.TotalSupply()
 
 	assert.Nil(t, err)
-	assert.Equal(t, big.NewInt(624500000556), totalSupply)
+	assert.Equal(t, big.NewInt(749500000556), totalSupply)
 }
 
 func TestTokenTotalSupply(t *testing.T) {

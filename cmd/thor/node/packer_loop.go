@@ -51,7 +51,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			n.packer.SetTargetGasLimit(suggested)
 		}
 
-		flow, err := n.packer.Schedule(n.repo.BestBlockSummary(), now)
+		flow, pos, err := n.packer.Schedule(n.repo.BestBlockSummary(), now)
 		if err != nil {
 			if !packer.IsSchedulingError(err) && authorized {
 				authorized = false
@@ -69,7 +69,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			authorized = true
 			logger.Info("prepared to pack block")
 		}
-		logger.Debug("scheduled to pack block", "after", time.Duration(flow.When()-now)*time.Second, "score", flow.TotalScore())
+		logger.Debug("scheduled to pack block", "after", time.Duration(flow.When()-now)*time.Second, "score", flow.TotalScore(), "pos", pos)
 
 		for {
 			if uint64(time.Now().Unix())+thor.BlockInterval/2 > flow.When() {

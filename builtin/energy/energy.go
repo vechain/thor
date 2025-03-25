@@ -7,6 +7,7 @@ package energy
 
 import (
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/v2/state"
@@ -180,8 +181,8 @@ func (e *Energy) Sub(addr thor.Address, amount *big.Int) (bool, error) {
 	return true, nil
 }
 
-func (e *Energy) StopEnergyGrowth(blockTime uint64) {
-	bt := big.NewInt(int64(blockTime))
+func (e *Energy) StopEnergyGrowth() {
+	bt := big.NewInt(int64(e.blockTime))
 	e.state.SetStorage(thor.BytesToAddress([]byte("Energy")), thor.HayabusaEnergyGrowthStopTime, thor.BytesToBytes32(bt.Bytes()))
 }
 
@@ -194,4 +195,60 @@ func (e *Energy) AddIssued(issued *big.Int) error {
 	return e.state.EncodeStorage(e.addr, issuedKey, func() ([]byte, error) {
 		return rlp.EncodeToBytes(&total)
 	})
+}
+
+type staker interface {
+	TotalStake() (*big.Int, error)
+}
+
+func (e *Energy) DistributeRewards(beneficiary thor.Address, staker staker) error {
+	reward, err := e.CalculateRewards(staker)
+	if err != nil {
+		return err
+	}
+
+	if err := e.Add(beneficiary, reward); err != nil {
+		return err
+	}
+	if err := e.AddIssued(reward); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (e *Energy) CalculateRewards(staker staker) (*big.Int, error) {
+	totalStaked, err := staker.TotalStake()
+	if err != nil {
+		return nil, err
+	}
+	bigE18 := big.NewInt(1e18)
+	// sqrt(totalStaked / 1e18) * 1e18, we are calculating sqrt on VET and then converting to wei
+	sqrtStake := new(big.Int).Sqrt(new(big.Int).Div(totalStaked, bigE18))
+	sqrtStake.Mul(sqrtStake, bigE18)
+
+	currentYear := time.Now().Year()
+	isLeap := isLeapYear(currentYear)
+	blocksPerYear := thor.NumberOfBlocksPerYear
+	if isLeap {
+		blocksPerYear = new(big.Int).Sub(thor.NumberOfBlocksPerYear, big.NewInt(thor.SeederInterval))
+	}
+
+	// reward = 1 * TargetFactor * ScalingFactor * sqrt(totalStaked / 1e18) / blocksPerYear
+	reward := big.NewInt(1)
+	reward.Mul(reward, thor.TargetFactor)
+	reward.Mul(reward, thor.ScalingFactor)
+	reward.Mul(reward, sqrtStake)
+	reward.Div(reward, blocksPerYear)
+
+	return reward, nil
+}
+
+func isLeapYear(year int) bool {
+	if year%4 == 0 {
+		if year%100 == 0 {
+			return year%400 == 0
+		}
+		return true
+	}
+	return false
 }

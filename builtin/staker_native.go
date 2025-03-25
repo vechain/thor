@@ -28,15 +28,6 @@ func init() {
 			}
 			return []any{staked}
 		}},
-		{"native_activeStake", func(env *xenv.Environment) []any {
-			env.UseGas(thor.SloadGas)
-			env.UseGas(thor.GetBalanceGas)
-			staked, err := Staker.Native(env.State()).ActiveStake()
-			if err != nil {
-				panic(err)
-			}
-			return []any{staked}
-		}},
 		{"native_get", func(env *xenv.Environment) []any {
 			var args struct {
 				Master common.Address

@@ -50,8 +50,10 @@ func New(
 	}
 }
 
+type scheduler func(parent *chain.BlockSummary, nowTimestamp uint64, state *state.State) (thor.Address, uint64, uint64, error)
+
 // Schedule a packing flow to pack new block upon given parent and clock time.
-func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (*Flow, error) {
+func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (*Flow, bool, error) {
 	st := p.stater.NewState(parent.Root())
 
 	var features tx.Features
@@ -59,20 +61,20 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (*Flo
 		features |= tx.DelegationFeature
 	}
 
-	var (
-		beneficiary  thor.Address
-		newBlockTime uint64
-		score        uint64
-		err          error
-	)
-
-	if parent.Header.Number()+1 <= p.forkConfig.HAYABUSA {
-		beneficiary, newBlockTime, score, err = p.schedulePOA(parent, nowTimestamp, st)
-	} else {
-		beneficiary, newBlockTime, score, err = p.schedulePOS(parent, nowTimestamp, st)
-	}
+	var sched scheduler
+	posActive, err := builtin.Staker.Native(st).IsActive()
 	if err != nil {
-		return nil, err
+		return nil, false, err
+	}
+	if posActive {
+		sched = p.schedulePOS
+	} else {
+		sched = p.schedulePOA
+	}
+
+	beneficiary, newBlockTime, score, err := sched(parent, nowTimestamp, st)
+	if err != nil {
+		return nil, false, err
 	}
 
 	rt := runtime.New(
@@ -88,13 +90,13 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (*Flo
 		},
 		p.forkConfig)
 
-	return newFlow(p, parent.Header, rt, features), nil
+	return newFlow(p, parent.Header, rt, features, posActive), posActive, nil
 }
 
 // Mock create a packing flow upon given parent, but with a designated timestamp.
 // It will skip the PoA verification and scheduling, and the block produced by
 // the returned flow is not in consensus.
-func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit uint64) (*Flow, error) {
+func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit uint64) (*Flow, bool, error) {
 	state := p.stater.NewState(parent.Root())
 
 	var features tx.Features
@@ -102,11 +104,16 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 		features |= tx.DelegationFeature
 	}
 
+	posActive, err := builtin.Staker.Native(state).IsActive()
+	if err != nil {
+		return nil, false, err
+	}
+
 	var score uint64
-	if p.forkConfig.HAYABUSA < parent.Header.Number()+1 {
+	if posActive {
 		leaders, err := builtin.Staker.Native(state).LeaderGroup()
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		for _, leader := range leaders {
 			if leader.Online {
@@ -116,7 +123,7 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 	} else {
 		authorities, err := builtin.Authority.Native(state).Candidates(big.NewInt(0), thor.InitialMaxBlockProposers)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		for _, authority := range authorities {
 			if authority.Active {
@@ -143,7 +150,7 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 		},
 		p.forkConfig)
 
-	return newFlow(p, parent.Header, rt, features), nil
+	return newFlow(p, parent.Header, rt, features, posActive), posActive, nil
 }
 
 func (p *Packer) gasLimit(parentGasLimit uint64) uint64 {
