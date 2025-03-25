@@ -75,7 +75,7 @@ func initCommServer(t *testing.T) {
 		thorChain.Repo(),
 		txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
 			Limit:           10000,
-			LimitPerAccount: 16,
+			LimitPerAccount: 128,
 			MaxLifetime:     10 * time.Minute,
 		}, &thor.NoFork),
 	)
