@@ -174,7 +174,7 @@ func (a *Staker) AddValidator(
 	return nil
 }
 
-func (a *Staker) UpdateAutoRenew(endorsor thor.Address, master thor.Address, autoRenew bool) error {
+func (a *Staker) UpdateAutoRenew(endorsor thor.Address, master thor.Address, autoRenew bool, blockNumber uint32) error {
 	validator, err := a.validators.Get(master)
 	if err != nil {
 		return err
@@ -186,6 +186,9 @@ func (a *Staker) UpdateAutoRenew(endorsor thor.Address, master thor.Address, aut
 		return errors.New("invalid endorsor for master")
 	}
 	validator.AutoRenew = autoRenew
+	if !autoRenew {
+		validator.ExitTxBlock = blockNumber
+	}
 	return a.validators.Set(master, validator)
 }
 
@@ -300,6 +303,7 @@ func (a *Staker) ActivateNextValidator(blockNumber uint32) error {
 	validator.Status = StatusActive
 	validator.Online = true
 	validator.Expiry = &expiry
+	validator.ExitTxBlock = blockNumber
 	// add to the active list
 	if err := a.leaderGroup.Add(addr, validator); err != nil {
 		return err
@@ -312,7 +316,7 @@ func (a *Staker) ActivateNextValidator(blockNumber uint32) error {
 // take the oldest validator and move to exited
 func (a *Staker) Housekeep(currentBlock uint32, forkBlock uint32) (bool, error) {
 	validatorsChanged := false
-	if (currentBlock-forkBlock)%cooldownPeriod == 0 {
+	if (currentBlock-forkBlock)%a.epochLength == 0 {
 		ptr, err := a.FirstActive()
 		if err != nil {
 			return false, err
@@ -343,10 +347,10 @@ func (a *Staker) Housekeep(currentBlock uint32, forkBlock uint32) (bool, error) 
 					}
 				}
 
-				// Find validator with the lowest expiry
-				if entry.Status == StatusCooldown && toExitExp > *entry.Expiry {
+				// Find validator with the lowest exit tx block
+				if entry.Status == StatusCooldown && toExitExp > entry.ExitTxBlock && currentBlock >= *entry.Expiry+cooldownPeriod {
 					toExit = *next
-					toExitExp = *entry.Expiry
+					toExitExp = entry.ExitTxBlock
 				}
 			}
 
@@ -354,7 +358,7 @@ func (a *Staker) Housekeep(currentBlock uint32, forkBlock uint32) (bool, error) 
 		}
 
 		// should the protocol handle this case? `((currentBlock-forkBlock)%cooldownPeriod) == 0`
-		if !toExit.IsZero() {
+		if !toExit.IsZero() && currentBlock%a.epochLength == 0 {
 			validatorsChanged = true
 			if err := a.RemoveValidator(toExit, currentBlock); err != nil {
 				return false, err

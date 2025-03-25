@@ -23,16 +23,17 @@ const (
 
 type (
 	Validator struct {
-		Endorsor  thor.Address  // the address providing the stake
-		Expiry    *uint32       // the block number when the validators current staking period ends
-		Period    uint32        // the staking period of the validator
-		Stake     *big.Int      // the stake of the validator
-		Weight    *big.Int      // stake + total stake from delegators
-		Next      *thor.Address `rlp:"nil"` // doubly linked list
-		Prev      *thor.Address `rlp:"nil"` // doubly linked list
-		Status    Status        // status of the validator
-		Online    bool          // whether the validator is online or not
-		AutoRenew bool          // whether the validators staking period is auto-renewed
+		Endorsor    thor.Address  // the address providing the stake
+		Expiry      *uint32       // the block number when the validators current staking period ends
+		Period      uint32        // the staking period of the validator
+		Stake       *big.Int      // the stake of the validator
+		Weight      *big.Int      // stake + total stake from delegators
+		Next        *thor.Address `rlp:"nil"` // doubly linked list
+		Prev        *thor.Address `rlp:"nil"` // doubly linked list
+		Status      Status        // status of the validator
+		Online      bool          // whether the validator is online or not
+		AutoRenew   bool          // whether the validators staking period is auto-renewed
+		ExitTxBlock uint32        // the block number when the validator signaled the exit
 	}
 
 	previousExit struct {

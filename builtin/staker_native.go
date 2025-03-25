@@ -125,7 +125,7 @@ func init() {
 			}
 			env.ParseArgs(&args)
 
-			err := Staker.Native(env.State()).UpdateAutoRenew(thor.Address(args.Endorsor), thor.Address(args.Master), args.AutoRenew)
+			err := Staker.Native(env.State()).UpdateAutoRenew(thor.Address(args.Endorsor), thor.Address(args.Master), args.AutoRenew, env.BlockContext().Number)
 			if err != nil {
 				panic(err)
 			}

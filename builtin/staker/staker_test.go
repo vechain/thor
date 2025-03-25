@@ -385,7 +385,7 @@ func TestStaker_Get_FullFlow_Renewal_Off(t *testing.T) {
 	assert.Equal(t, stake, validator.Weight)
 
 	// housekeep the validator
-	_, err = staker.Housekeep(uint32(360)*24*14, 0)
+	_, err = staker.Housekeep(period+cooldownPeriod, 0)
 	assert.NoError(t, err)
 	validator, err = staker.Get(addr)
 	assert.NoError(t, err)
@@ -561,7 +561,7 @@ func TestStaker_Get_FullFlow(t *testing.T) {
 	assert.Equal(t, stake, validator.Weight)
 
 	// housekeep the validator
-	_, err = staker.Housekeep(uint32(360)*24*14, 0)
+	_, err = staker.Housekeep(period+cooldownPeriod, 0)
 	assert.NoError(t, err)
 	validator, err = staker.Get(addr)
 	assert.NoError(t, err)
@@ -637,6 +637,7 @@ func TestStaker_Get_FullFlow_Renewal_On_Then_Off(t *testing.T) {
 	staker := newStaker(t, 0, 101)
 	addr := datagen.RandAddress()
 	stake := RandomStake()
+	period := uint32(360) * 24 * 14
 
 	// add the validator
 	assert.NoError(t, staker.AddValidator(addr, addr, uint32(360)*24*14, stake, true))
@@ -656,7 +657,7 @@ func TestStaker_Get_FullFlow_Renewal_On_Then_Off(t *testing.T) {
 	assert.Equal(t, stake, validator.Weight)
 
 	// housekeep the validator
-	_, err = staker.Housekeep(uint32(360)*24*14, 0)
+	_, err = staker.Housekeep(period+cooldownPeriod, 0)
 	assert.NoError(t, err)
 	validator, err = staker.Get(addr)
 	assert.NoError(t, err)
@@ -679,10 +680,10 @@ func TestStaker_Get_FullFlow_Renewal_On_Then_Off(t *testing.T) {
 	assert.NoError(t, err)
 	assert.False(t, validator.IsEmpty())
 
-	assert.NoError(t, staker.UpdateAutoRenew(addr, addr, false))
+	assert.NoError(t, staker.UpdateAutoRenew(addr, addr, false, 0))
 
 	// housekeep the validator
-	_, err = staker.Housekeep(uint32(360)*24*14*2, 0)
+	_, err = staker.Housekeep(period*2+cooldownPeriod, 0)
 	assert.NoError(t, err)
 	validator, err = staker.Get(addr)
 	assert.NoError(t, err)
@@ -711,9 +712,10 @@ func TestStaker_Get_FullFlow_Renewal_Off_Then_On(t *testing.T) {
 	staker := newStaker(t, 0, 101)
 	addr := datagen.RandAddress()
 	stake := RandomStake()
+	period := uint32(360) * 24 * 14
 
 	// add the validator
-	assert.NoError(t, staker.AddValidator(addr, addr, uint32(360)*24*14, stake, false))
+	assert.NoError(t, staker.AddValidator(addr, addr, period, stake, false))
 
 	validator, err := staker.Get(addr)
 	assert.NoError(t, err)
@@ -729,10 +731,10 @@ func TestStaker_Get_FullFlow_Renewal_Off_Then_On(t *testing.T) {
 	assert.Equal(t, stake, validator.Stake)
 	assert.Equal(t, stake, validator.Weight)
 
-	assert.NoError(t, staker.UpdateAutoRenew(addr, addr, true))
+	assert.NoError(t, staker.UpdateAutoRenew(addr, addr, true, 0))
 
 	// housekeep the validator
-	_, err = staker.Housekeep(uint32(360)*24*14, 0)
+	_, err = staker.Housekeep(period+cooldownPeriod, 0)
 	assert.NoError(t, err)
 	validator, err = staker.Get(addr)
 	assert.NoError(t, err)
@@ -755,10 +757,10 @@ func TestStaker_Get_FullFlow_Renewal_Off_Then_On(t *testing.T) {
 	assert.NoError(t, err)
 	assert.False(t, validator.IsEmpty())
 
-	assert.NoError(t, staker.UpdateAutoRenew(addr, addr, false))
+	assert.NoError(t, staker.UpdateAutoRenew(addr, addr, false, 0))
 
 	// housekeep the validator
-	_, err = staker.Housekeep(uint32(360)*24*14*2, 0)
+	_, err = staker.Housekeep(period*2+cooldownPeriod, 0)
 	assert.NoError(t, err)
 	validator, err = staker.Get(addr)
 	assert.NoError(t, err)
@@ -1025,7 +1027,7 @@ func TestStaker_Housekeep_ExitOne(t *testing.T) {
 	assert.NoError(t, staker.AddValidator(addr2, addr2, period, stake, true))
 	assert.NoError(t, staker.ActivateNextValidator(0))
 
-	_, err := staker.Housekeep(period, 0)
+	_, err := staker.Housekeep(period+cooldownPeriod, 0)
 	assert.NoError(t, err)
 	validator, err := staker.Get(addr1)
 	assert.NoError(t, err)
@@ -1083,6 +1085,98 @@ func TestStaker_Housekeep_CooldownToExited(t *testing.T) {
 	_, err = staker.Housekeep(uint32(360)*24*20, 0)
 	assert.NoError(t, err)
 	validator, err = staker.Get(addr2)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusExit, validator.Status)
+}
+
+func TestStaker_Housekeep_ExitOrder(t *testing.T) {
+	staker := newStaker(t, 0, 101)
+	addr1 := datagen.RandAddress()
+	addr2 := datagen.RandAddress()
+	addr3 := datagen.RandAddress()
+
+	stake := RandomStake()
+	period := uint32(360) * 24 * 14
+
+	assert.NoError(t, staker.AddValidator(addr1, addr1, period, stake, true))
+	assert.NoError(t, staker.ActivateNextValidator(0))
+	assert.NoError(t, staker.AddValidator(addr2, addr2, period, stake, false))
+	assert.NoError(t, staker.ActivateNextValidator(0))
+	assert.NoError(t, staker.AddValidator(addr3, addr3, period, stake, false))
+	assert.NoError(t, staker.ActivateNextValidator(10))
+
+	assert.NoError(t, staker.UpdateAutoRenew(addr1, addr1, false, uint32(360)*24*12))
+
+	exitBlock := uint32(360) * 24 * 15
+	_, err := staker.Housekeep(exitBlock, 0)
+	assert.NoError(t, err)
+	validator, err := staker.Get(addr1)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusCooldown, validator.Status)
+	validator, err = staker.Get(addr2)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusExit, validator.Status)
+	validator, err = staker.Get(addr3)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusCooldown, validator.Status)
+
+	_, err = staker.Housekeep(exitBlock+2, 0)
+	assert.NoError(t, err)
+	validator, err = staker.Get(addr1)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusCooldown, validator.Status)
+	validator, err = staker.Get(addr3)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusCooldown, validator.Status)
+
+	_, err = staker.Housekeep(exitBlock+360, 0)
+	assert.NoError(t, err)
+	validator, err = staker.Get(addr1)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusCooldown, validator.Status)
+	validator, err = staker.Get(addr3)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusExit, validator.Status)
+
+	_, err = staker.Housekeep(exitBlock+362, 0)
+	assert.NoError(t, err)
+	validator, err = staker.Get(addr1)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusCooldown, validator.Status)
+
+	_, err = staker.Housekeep(exitBlock+720, 0)
+	assert.NoError(t, err)
+	validator, err = staker.Get(addr1)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusExit, validator.Status)
+}
+
+func TestStaker_Housekeep_Cannot_Exit_Without_Cooldown(t *testing.T) {
+	staker := newStaker(t, 0, 101)
+	addr1 := datagen.RandAddress()
+
+	stake := RandomStake()
+	period := uint32(360) * 24 * 14
+
+	assert.NoError(t, staker.AddValidator(addr1, addr1, period, stake, false))
+	assert.NoError(t, staker.ActivateNextValidator(0))
+
+	exitBlock := uint32(360) * 24 * 14
+	_, err := staker.Housekeep(exitBlock, 0)
+	assert.NoError(t, err)
+	validator, err := staker.Get(addr1)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusCooldown, validator.Status)
+
+	_, err = staker.Housekeep(exitBlock+8639, 0)
+	assert.NoError(t, err)
+	validator, err = staker.Get(addr1)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusCooldown, validator.Status)
+
+	_, err = staker.Housekeep(exitBlock+8640, 0)
+	assert.NoError(t, err)
+	validator, err = staker.Get(addr1)
 	assert.NoError(t, err)
 	assert.Equal(t, StatusExit, validator.Status)
 }
