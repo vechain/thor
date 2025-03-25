@@ -48,9 +48,9 @@ jobs:
         id: result
         run: |
           if [ "${{ inputs.publish_arm64 }}" == "true" ]; then
-            echo "publish-os="[\"ubuntu-latest\",\"ubuntu-24.04-arm\"]" >> $GITHUB_OUTPUT
+            echo "publish-os=[\"ubuntu-latest\",\"ubuntu-24.04-arm\"]" >> $GITHUB_OUTPUT
           else
-            echo "publish-os="[\"ubuntu-latest\"]" >> $GITHUB_OUTPUT
+            echo "publish-os=[\"ubuntu-latest\"]" >> $GITHUB_OUTPUT
           fi
 
   build-and-push-image:
@@ -59,7 +59,7 @@ jobs:
     needs: matrix-options
     strategy:
       matrix:
-        os: ${{fromJSON(needs.matrix-options.outputs.publish-os)}}
+        os: ${{ fromJSON(needs.matrix-options.outputs.publish-os) }}
 
     permissions:
       contents: read
