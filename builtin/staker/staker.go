@@ -388,6 +388,13 @@ func (a *Staker) activateValidators(currentBlock uint32) error {
 	if err != nil {
 		return err
 	}
+	maxSize, err := a.maxLeaderGroupSize.Get()
+	if err != nil {
+		return err
+	}
+	if leaderSize.Cmp(maxSize) >= 0 {
+		return nil
+	}
 
 	if queuedSize.Cmp(big.NewInt(0)) > 0 {
 		queuedCount := queuedSize.Int64()

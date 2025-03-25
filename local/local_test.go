@@ -28,7 +28,7 @@ func sendAddValidatorTx(t *testing.T, acc genesis.DevAccount) {
 	if !ok {
 		t.Fatal("method not found")
 	}
-	data, err := method.EncodeInput(acc.Address, uint32(180))
+	data, err := method.EncodeInput(acc.Address, uint32(6), true)
 	if err != nil {
 		t.Fatal(err)
 	}
