@@ -409,11 +409,11 @@ func checkMatchingTx(t *testing.T, expectedTx *tx.Transaction, actualTx *transac
 	}
 	switch expectedTx.Type() {
 	case tx.TypeLegacy:
-		assert.Equal(t, expectedTx.GasPriceCoef(), actualTx.GasPriceCoef)
+		assert.Equal(t, expectedTx.GasPriceCoef(), *actualTx.GasPriceCoef)
 		assert.Empty(t, actualTx.MaxFeePerGas)
 		assert.Empty(t, actualTx.MaxPriorityFeePerGas)
 	case tx.TypeDynamicFee:
-		assert.Empty(t, actualTx.GasPriceCoef)
+		assert.Nil(t, actualTx.GasPriceCoef)
 		assert.Equal(t, (*math.HexOrDecimal256)(expectedTx.MaxFeePerGas()), actualTx.MaxFeePerGas)
 		assert.Equal(t, (*math.HexOrDecimal256)(expectedTx.MaxPriorityFeePerGas()), actualTx.MaxPriorityFeePerGas)
 	}

@@ -1577,10 +1577,10 @@ components:
           example: '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
           pattern: '^0x[0-9a-f]{64}$'
           nullable: false
-        txType:
+        type:
           type: string
           format: hex
-          description: The transaction type in hex.
+          description: The transaction type in hex, currently 0(Legacy Transaction) and 81(DynamicFee Transaction) are supported.
           example: '0x51'
           nullable: false
         origin:
@@ -1631,7 +1631,7 @@ components:
           format: uint8
           description: The coefficient used to calculate the final gas price of the transaction.
           example: 0
-          nullable: false
+          nullable: true
         maxFeePerGas:
           type: string
           format: hex
