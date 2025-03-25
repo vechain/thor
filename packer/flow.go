@@ -152,7 +152,7 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 			return err
 		}
 		if err := fork.ValidateGalacticaTxFee(t, f.runtime.Context().BaseFee, baseGasPrice); err != nil {
-			return errTxNotAdoptableNow
+			return err
 		}
 
 		if err := f.isEffectivePriorityFeeTooLow(t, baseGasPrice, true); err != nil {
