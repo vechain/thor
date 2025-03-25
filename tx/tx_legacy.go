@@ -6,10 +6,12 @@
 package tx
 
 import (
+	"bytes"
 	"encoding/binary"
 	"io"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/v2/thor"
@@ -26,10 +28,6 @@ type legacyTransaction struct {
 	Nonce        uint64
 	Reserved     reserved
 	Signature    []byte
-}
-
-func (t *legacyTransaction) txType() byte {
-	return TypeLegacy
 }
 
 func (t *legacyTransaction) copy() txData {
@@ -49,62 +47,24 @@ func (t *legacyTransaction) copy() txData {
 	return cpy
 }
 
-func (t *legacyTransaction) chainTag() byte {
-	return t.ChainTag
-}
-
-func (t *legacyTransaction) blockRef() uint64 {
-	return t.BlockRef
-}
-
-func (t *legacyTransaction) expiration() uint32 {
-	return t.Expiration
-}
-
-func (t *legacyTransaction) clauses() []*Clause {
-	return t.Clauses
-}
-
-func (t *legacyTransaction) gas() uint64 {
-	return t.Gas
-}
-
-func (t *legacyTransaction) gasPriceCoef() uint8 {
-	return t.GasPriceCoef
-}
-
-func (t *legacyTransaction) maxFeePerGas() *big.Int {
-	// For legacy transactions, maxFeePerGas is determined by GasPriceCoef
-	return new(big.Int).SetUint64(uint64(t.GasPriceCoef))
-}
-
-func (t *legacyTransaction) maxPriorityFeePerGas() *big.Int {
-	// For legacy transactions, maxPriorityFeePerGas is determined by GasPriceCoef
-	return new(big.Int).SetUint64(uint64(t.GasPriceCoef))
-}
-
-func (t *legacyTransaction) dependsOn() *thor.Bytes32 {
-	return t.DependsOn
-}
-
-func (t *legacyTransaction) nonce() uint64 {
-	return t.Nonce
-}
-
-func (t *legacyTransaction) reserved() reserved {
-	return t.Reserved
-}
-
-func (t *legacyTransaction) signature() []byte {
-	return t.Signature
-}
+func (t *legacyTransaction) txType() byte             { return TypeLegacy }
+func (t *legacyTransaction) chainTag() byte           { return t.ChainTag }
+func (t *legacyTransaction) blockRef() uint64         { return t.BlockRef }
+func (t *legacyTransaction) expiration() uint32       { return t.Expiration }
+func (t *legacyTransaction) clauses() []*Clause       { return t.Clauses }
+func (t *legacyTransaction) gas() uint64              { return t.Gas }
+func (t *legacyTransaction) gasPriceCoef() uint8      { return t.GasPriceCoef }
+func (t *legacyTransaction) dependsOn() *thor.Bytes32 { return t.DependsOn }
+func (t *legacyTransaction) nonce() uint64            { return t.Nonce }
+func (t *legacyTransaction) reserved() *reserved      { return &t.Reserved }
+func (t *legacyTransaction) signature() []byte        { return t.Signature }
 
 func (t *legacyTransaction) setSignature(sig []byte) {
 	t.Signature = sig
 }
 
-func (t *legacyTransaction) hashWithoutNonce(origin thor.Address) *thor.Bytes32 {
-	b := thor.Blake2bFn(func(w io.Writer) {
+func (t *legacyTransaction) evaluateWork(origin thor.Address) func(nonce uint64) *big.Int {
+	hashWithoutNonce := thor.Blake2bFn(func(w io.Writer) {
 		rlp.Encode(w, []any{
 			t.chainTag(),
 			t.blockRef(),
@@ -117,25 +77,6 @@ func (t *legacyTransaction) hashWithoutNonce(origin thor.Address) *thor.Bytes32 
 			origin,
 		})
 	})
-	return &b
-}
-
-func (t *legacyTransaction) encode(w io.Writer) error {
-	return rlp.Encode(w, []any{
-		t.ChainTag,
-		t.BlockRef,
-		t.Expiration,
-		t.Clauses,
-		t.GasPriceCoef,
-		t.Gas,
-		t.DependsOn,
-		t.Nonce,
-		&t.Reserved,
-	})
-}
-
-func (t *legacyTransaction) evaluateWork(origin thor.Address) func(nonce uint64) *big.Int {
-	hashWithoutNonce := t.hashWithoutNonce(origin)
 
 	return func(nonce uint64) *big.Int {
 		var nonceBytes [8]byte
@@ -144,4 +85,16 @@ func (t *legacyTransaction) evaluateWork(origin thor.Address) func(nonce uint64)
 		r := new(big.Int).SetBytes(hash[:])
 		return r.Div(math.MaxBig256, r)
 	}
+}
+
+// Below are the methods that are not compatible with legacy transaction
+func (t *legacyTransaction) maxFeePerGas() *big.Int         { return common.Big0 }
+func (t *legacyTransaction) maxPriorityFeePerGas() *big.Int { return common.Big0 }
+
+func (t *legacyTransaction) encode(*bytes.Buffer) error {
+	panic("encode called on LegacyTx")
+}
+
+func (t *legacyTransaction) decode([]byte) error {
+	panic("decode called on LegacyTx")
 }

@@ -76,7 +76,7 @@ func TestToString(t *testing.T) {
 		{
 			name:           "Dynamic fee transaction",
 			txType:         tx.TypeDynamicFee,
-			expectedString: "\n\tTx(0x0000000000000000000000000000000000000000000000000000000000000000, 96 B)\n\tOrigin:         N/A\n\tClauses:        [\n\t\t(To:\t0x7567d83b7b8d80addcb281a71d54fc7b3364ffed\n\t\t Value:\t10000\n\t\t Data:\t0x000000606060) \n\t\t(To:\t0x7567d83b7b8d80addcb281a71d54fc7b3364ffed\n\t\t Value:\t20000\n\t\t Data:\t0x000000606060)]\n\tGas:            21000\n\tChainTag:       1\n\tBlockRef:       0-aabbccdd\n\tExpiration:     32\n\tDependsOn:      nil\n\tNonce:          12345678\n\tUnprovedWork:   0\n\tDelegator:      N/A\n\tSignature:      0x\n\n\t\tMaxFeePerGas:   10000000\n\t\tMaxPriorityFeePerGas: 20000\n\t\t",
+			expectedString: "\n\tTx(0x0000000000000000000000000000000000000000000000000000000000000000, 93 B)\n\tOrigin:         N/A\n\tClauses:        [\n\t\t(To:\t0x7567d83b7b8d80addcb281a71d54fc7b3364ffed\n\t\t Value:\t10000\n\t\t Data:\t0x000000606060) \n\t\t(To:\t0x7567d83b7b8d80addcb281a71d54fc7b3364ffed\n\t\t Value:\t20000\n\t\t Data:\t0x000000606060)]\n\tGas:            21000\n\tChainTag:       1\n\tBlockRef:       0-aabbccdd\n\tExpiration:     32\n\tDependsOn:      nil\n\tNonce:          12345678\n\tUnprovedWork:   0\n\tDelegator:      N/A\n\tSignature:      0x\n\n\t\tMaxFeePerGas:   10000000\n\t\tMaxPriorityFeePerGas: 20000\n\t\t",
 		},
 	}
 
@@ -103,7 +103,7 @@ func TestTxSize(t *testing.T) {
 		{
 			name:         "Dynamic fee transaction",
 			txType:       tx.TypeDynamicFee,
-			expectedSize: thor.StorageSize(96),
+			expectedSize: thor.StorageSize(93),
 		},
 	}
 

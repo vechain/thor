@@ -6,8 +6,7 @@
 package tx
 
 import (
-	"io"
-	"math"
+	"bytes"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -27,10 +26,6 @@ type dynamicFeeTransaction struct {
 	Nonce                uint64
 	Reserved             reserved
 	Signature            []byte
-}
-
-func (t *dynamicFeeTransaction) txType() byte {
-	return TypeDynamicFee
 }
 
 func (t *dynamicFeeTransaction) copy() txData {
@@ -57,32 +52,16 @@ func (t *dynamicFeeTransaction) copy() txData {
 	return cpy
 }
 
-func (t *dynamicFeeTransaction) chainTag() byte {
-	return t.ChainTag
-}
-
-func (t *dynamicFeeTransaction) blockRef() uint64 {
-	return t.BlockRef
-}
-
-func (t *dynamicFeeTransaction) expiration() uint32 {
-	return t.Expiration
-}
-
-func (t *dynamicFeeTransaction) clauses() []*Clause {
-	return t.Clauses
-}
-
-func (t *dynamicFeeTransaction) gas() uint64 {
-	return t.Gas
-}
-
-func (t *dynamicFeeTransaction) gasPriceCoef() uint8 {
-	if t.MaxFeePerGas.Cmp(big.NewInt(math.MaxUint8)) > 0 {
-		return math.MaxUint8
-	}
-	return uint8(t.MaxFeePerGas.Uint64())
-}
+func (t *dynamicFeeTransaction) txType() byte             { return TypeDynamicFee }
+func (t *dynamicFeeTransaction) chainTag() byte           { return t.ChainTag }
+func (t *dynamicFeeTransaction) blockRef() uint64         { return t.BlockRef }
+func (t *dynamicFeeTransaction) expiration() uint32       { return t.Expiration }
+func (t *dynamicFeeTransaction) clauses() []*Clause       { return t.Clauses }
+func (t *dynamicFeeTransaction) gas() uint64              { return t.Gas }
+func (t *dynamicFeeTransaction) dependsOn() *thor.Bytes32 { return t.DependsOn }
+func (t *dynamicFeeTransaction) nonce() uint64            { return t.Nonce }
+func (t *dynamicFeeTransaction) reserved() *reserved      { return &t.Reserved }
+func (t *dynamicFeeTransaction) signature() []byte        { return t.Signature }
 
 func (t *dynamicFeeTransaction) maxFeePerGas() *big.Int {
 	if t.MaxFeePerGas == nil {
@@ -98,46 +77,12 @@ func (t *dynamicFeeTransaction) maxPriorityFeePerGas() *big.Int {
 	return new(big.Int).Set(t.MaxPriorityFeePerGas)
 }
 
-func (t *dynamicFeeTransaction) dependsOn() *thor.Bytes32 {
-	return t.DependsOn
-}
-
-func (t *dynamicFeeTransaction) nonce() uint64 {
-	return t.Nonce
-}
-
-func (t *dynamicFeeTransaction) reserved() reserved {
-	return t.Reserved
-}
-
-func (t *dynamicFeeTransaction) signature() []byte {
-	return t.Signature
-}
-
 func (t *dynamicFeeTransaction) setSignature(sig []byte) {
 	t.Signature = sig
 }
 
-func (t *dynamicFeeTransaction) hashWithoutNonce(origin thor.Address) *thor.Bytes32 {
-	b := thor.Blake2bFn(func(w io.Writer) {
-		rlp.Encode(w, []any{
-			t.chainTag(),
-			t.blockRef(),
-			t.expiration(),
-			t.clauses(),
-			t.maxFeePerGas(),
-			t.maxPriorityFeePerGas(),
-			t.dependsOn(),
-			t.nonce(),
-			t.reserved(),
-			origin,
-		})
-	})
-	return &b
-}
-
-func (t *dynamicFeeTransaction) encode(w io.Writer) error {
-	return rlp.Encode(w, []any{
+func (t *dynamicFeeTransaction) encode(b *bytes.Buffer) error {
+	return rlp.Encode(b, []any{
 		t.ChainTag,
 		t.BlockRef,
 		t.Expiration,
@@ -150,6 +95,13 @@ func (t *dynamicFeeTransaction) encode(w io.Writer) error {
 		&t.Reserved,
 	})
 }
+
+// Below are the methods that are not compatible with dynamic fee transaction
+func (t *dynamicFeeTransaction) decode(input []byte) error {
+	return rlp.DecodeBytes(input, t)
+}
+
+func (t *dynamicFeeTransaction) gasPriceCoef() uint8 { return 0 }
 
 func (t *dynamicFeeTransaction) evaluateWork(origin thor.Address) func(nonce uint64) *big.Int {
 	return func(nonce uint64) *big.Int { return common.Big0 }
