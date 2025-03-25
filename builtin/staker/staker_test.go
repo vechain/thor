@@ -73,7 +73,7 @@ func newStaker(t *testing.T, authorities int, maxValidators int64, initialise bo
 	param := params.New(thor.BytesToAddress([]byte("params")), st)
 	param.Set(thor.KeyMaxBlockProposers, big.NewInt(maxValidators))
 	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(maxValidators)))
-	staker := New(thor.BytesToAddress([]byte("stkr")), st)
+	staker := New(thor.BytesToAddress([]byte("stkr")), st, param)
 	totalStake := big.NewInt(0)
 	if initialise {
 		for _, key := range keys {
@@ -81,11 +81,9 @@ func newStaker(t *testing.T, authorities int, maxValidators int64, initialise bo
 			totalStake = totalStake.Add(totalStake, stake)
 			assert.Nil(t, staker.AddValidator(key.endorsor, key.master, uint32(360)*24*14, stake, true))
 		}
-		transitioned, err := staker.Transition(param)
+		transitioned, err := staker.Transition()
 		assert.NoError(t, err)
 		assert.True(t, transitioned)
-	} else {
-		staker.maxLeaderGroupSize.Set(big.NewInt(maxValidators))
 	}
 	return staker, totalStake
 }
@@ -98,7 +96,6 @@ func TestStaker(t *testing.T) {
 	zeroStake := big.NewInt(0).SetBytes(thor.Bytes32{}.Bytes())
 
 	stkr, _ := newStaker(t, 0, 3, false)
-	params := params.New(thor.BytesToAddress([]byte("params")), stkr.state)
 
 	totalStake := big.NewInt(0).Mul(stakeAmount, big.NewInt(2))
 
@@ -109,7 +106,7 @@ func TestStaker(t *testing.T) {
 		{M(stkr.TotalStake()), M(zeroStake, nil)},
 		{stkr.AddValidator(validator1, validator1, uint32(360)*24*14, stakeAmount, true), nil},
 		{stkr.AddValidator(validator2, validator2, uint32(360)*24*14, stakeAmount, true), nil},
-		{M(stkr.Transition(params)), M(true, nil)},
+		{M(stkr.Transition()), M(true, nil)},
 		{M(stkr.TotalStake()), M(totalStake, nil)},
 		{stkr.AddValidator(validator3, validator3, uint32(360)*24*14, stakeAmount, true), nil},
 		{M(stkr.FirstQueued()), M(validator3, nil)},
@@ -910,16 +907,15 @@ func TestStaker_Initialise(t *testing.T) {
 	st := state.New(db, trie.Root{})
 	addr := datagen.RandAddress()
 
-	staker := New(thor.BytesToAddress([]byte("stkr")), st)
-
 	param := params.New(thor.BytesToAddress([]byte("params")), st)
+	staker := New(thor.BytesToAddress([]byte("stkr")), st, param)
 	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(3)))
 
 	for range 3 {
 		assert.NoError(t, staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*14, minStake, true))
 	}
 
-	transitioned, err := staker.Transition(param)
+	transitioned, err := staker.Transition()
 	assert.NoError(t, err) // should succeed
 	assert.True(t, transitioned)
 	// should be able to add validators after initialisation

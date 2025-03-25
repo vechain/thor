@@ -48,24 +48,24 @@ const (
 
 // Staker implements native methods of `Staker` contract.
 type Staker struct {
-	addr               thor.Address
-	state              *state.State
-	totalStake         *solidity.Uint256
-	leaderGroupSize    *solidity.Uint256
-	maxLeaderGroupSize *solidity.Uint256
-	validators         *solidity.Mapping[thor.Address, *Validator]
-	leaderGroup        *linkedList
-	validatorQueue     *orderedLinkedList
-	queuedGroupSize    *solidity.Uint256 // New field for tracking queued validators count
+	addr            thor.Address
+	state           *state.State
+	totalStake      *solidity.Uint256
+	leaderGroupSize *solidity.Uint256
+	validators      *solidity.Mapping[thor.Address, *Validator]
+	leaderGroup     *linkedList
+	validatorQueue  *orderedLinkedList
+	queuedGroupSize *solidity.Uint256 // New field for tracking queued validators count
 	// TODO: remove once customnet testing is done https://github.com/vechain/protocol-board-repo/issues/486
 	lowStakingPeriod    uint32
 	mediumStakingPeriod uint32
 	highStakingPeriod   uint32
 	epochLength         uint32
+	params              *params.Params
 }
 
 // New create a new instance.
-func New(addr thor.Address, state *state.State) *Staker {
+func New(addr thor.Address, state *state.State, params *params.Params) *Staker {
 	validators := solidity.NewMapping[thor.Address, *Validator](addr, state, thor.Bytes32{slotValidators})
 
 	lowStakingPeriod := uint32(360) * 24 * 7
@@ -104,7 +104,6 @@ func New(addr thor.Address, state *state.State) *Staker {
 		totalStake:          solidity.NewUint256(addr, state, thor.Bytes32{slotTotalStake}),
 		leaderGroupSize:     solidity.NewUint256(addr, state, thor.Bytes32{slotLeaderGroupSize}),
 		validators:          validators,
-		maxLeaderGroupSize:  solidity.NewUint256(addr, state, thor.Bytes32{slotMaxLeaderGroupSize}),
 		leaderGroup:         newLinkedList(addr, state, validators, thor.Bytes32{slotActiveHead}, thor.Bytes32{slotActiveTail}),
 		validatorQueue:      newOrderedLinkedList(addr, state, validators, thor.Bytes32{slotQueuedHead}, thor.Bytes32{slotQueuedTail}),
 		queuedGroupSize:     solidity.NewUint256(addr, state, thor.Bytes32{slotQueuedGroupSize}),
@@ -112,6 +111,7 @@ func New(addr thor.Address, state *state.State) *Staker {
 		lowStakingPeriod:    lowStakingPeriod,
 		mediumStakingPeriod: mediumStakingPeriod,
 		highStakingPeriod:   highStakingPeriod,
+		params:              params,
 	}
 }
 
@@ -262,7 +262,7 @@ func (a *Staker) ActivateNextValidator(blockNumber uint32) error {
 	if err != nil {
 		return err
 	}
-	maxLeaderGroupSize, err := a.maxLeaderGroupSize.Get()
+	maxLeaderGroupSize, err := a.params.Get(thor.KeyMaxBlockProposers)
 	if err != nil {
 		return err
 	}
@@ -388,7 +388,7 @@ func (a *Staker) activateValidators(currentBlock uint32) error {
 	if err != nil {
 		return err
 	}
-	maxSize, err := a.maxLeaderGroupSize.Get()
+	maxSize, err := a.params.Get(thor.KeyMaxBlockProposers)
 	if err != nil {
 		return err
 	}
@@ -538,7 +538,7 @@ func (a *Staker) WithdrawStake(endorsor thor.Address, master thor.Address) (*big
 
 // Transition from PoA to PoS. It checks that the queue is at least 2/3 of the maxProposers, and activates the first
 // `min(queueSize, maxProposers)` validators.
-func (a *Staker) Transition(params *params.Params) (bool, error) {
+func (a *Staker) Transition() (bool, error) {
 	active, err := a.IsActive()
 	if err != nil {
 		return false, err
@@ -547,11 +547,10 @@ func (a *Staker) Transition(params *params.Params) (bool, error) {
 		return false, nil
 	}
 
-	maxProposers, err := params.Get(thor.KeyMaxBlockProposers)
+	maxProposers, err := a.params.Get(thor.KeyMaxBlockProposers)
 	if err != nil || maxProposers.Cmp(big.NewInt(0)) == 0 {
 		maxProposers = big.NewInt(0).SetUint64(thor.InitialMaxBlockProposers)
 	}
-	a.maxLeaderGroupSize.Set(maxProposers)
 
 	queueSize, err := a.queuedGroupSize.Get()
 	if err != nil {

@@ -74,7 +74,7 @@ func (p *prototypeContract) Events() *abi.ABI {
 }
 
 func (s *stakerContract) Native(state *state.State) *staker.Staker {
-	return staker.New(s.Address, state)
+	return staker.New(s.Address, state, Params.Native(state))
 }
 
 func (s *stakerContract) Events() *abi.ABI {
