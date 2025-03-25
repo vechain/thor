@@ -48,16 +48,16 @@ jobs:
           if [ "${{ inputs.publish_arm64 }}" == "true" ]; then
             echo "::set-output name=runs-on::[\"ubuntu-latest\",\"ubuntu-24.04-arm\"]"
           else
-            echo "::set-output name=runs-on::[\"ubuntu-latest\"]"4
+            echo "::set-output name=runs-on::[\"ubuntu-latest\"]"
           fi
 
   build-and-push-image:
     name: Build and Push Docker Image
-    runs-on: ${{ matrix.runs-on }}
+    runs-on: ${{ matrix.os }}
     needs: matrix-options
     strategy:
       matrix:
-        runs-on: ${{ fromJSON(needs.matrix-options.outputs.runs-on) }}
+        os: ${{ fromJSON(needs.matrix-options.outputs.runs-on) }}
 
     permissions:
       contents: read
