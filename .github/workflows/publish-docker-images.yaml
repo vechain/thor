@@ -29,9 +29,25 @@ on:
         default: false
 
 jobs:
+  matrix-options:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Output matrix options
+        id: result
+        run: |
+          if [ "${{ inputs.publish_arm64 }}" == "true" ]; then
+            echo "::set-output name=runs-on::[\"ubuntu-latest\",\"ubuntu-24.04-arm\"]"
+          else
+            echo "::set-output name=runs-on::[\"ubuntu-latest\"]"4
+          fi
+
   build-and-push-image:
     name: Build and Push Docker Image
-    runs-on: ubuntu-22.04
+    runs-on: ${{ matrix.runs-on }}
+    needs: matrix-options
+    strategy:
+      matrix:
+        runs-on: ${{ fromJSON(needs.matrix-options.outputs.runs-on) }}
 
     permissions:
       contents: read
@@ -76,11 +92,20 @@ jobs:
           # use the branch + sha if workflow_dispatch
           tags: ${{ inputs.tags || format('type=raw,value={0}-{1}', github.ref_name, github.sha) }}
 
+      - name: Set Platform
+        id: platform
+        run: |
+          if [ "${{ matrix.runs-on }}" == "ubuntu-latest" ]; then
+            echo "::set-output name=platform::linux/amd64"
+          else
+            echo "::set-output name=platform::linux/arm64"
+          fi
+
       - name: Push to Registry(s)
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: ${{ github.event_name != 'pull_request' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
+          platforms: ${{ steps.platform.outputs.platform }}
           push: ${{ github.event_name != 'pull_request' }}
           load: ${{ github.event_name == 'pull_request' }}
           provenance: ${{ github.event_name != 'pull_request' }}
