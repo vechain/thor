@@ -41,14 +41,16 @@ on:
 jobs:
   matrix-options:
     runs-on: ubuntu-latest
+    outputs:
+      publish-os: ${{ steps.result.outputs.publish-os }}
     steps:
       - name: Output matrix options
         id: result
         run: |
           if [ "${{ inputs.publish_arm64 }}" == "true" ]; then
-            echo "::set-output name=runs-on::[\"ubuntu-latest\",\"ubuntu-24.04-arm\"]"
+            echo "publish-os="[\"ubuntu-latest\",\"ubuntu-24.04-arm\"]" >> $GITHUB_OUTPUT
           else
-            echo "::set-output name=runs-on::[\"ubuntu-latest\"]"
+            echo "publish-os="[\"ubuntu-latest\"]" >> $GITHUB_OUTPUT
           fi
 
   build-and-push-image:
@@ -57,7 +59,7 @@ jobs:
     needs: matrix-options
     strategy:
       matrix:
-        os: ${{ fromJSON(needs.matrix-options.outputs.runs-on) }}
+        os: ${{fromJSON(needs.matrix-options.outputs.publish-os)}}
 
     permissions:
       contents: read
