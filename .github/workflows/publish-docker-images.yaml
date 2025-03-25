@@ -20,11 +20,6 @@ on:
         required: false
         type: boolean
         default: false
-      publish_arm64:
-        description: 'Publish the arm64 image'
-        required: true
-        type: boolean
-        default: true
   workflow_dispatch:
     inputs:
       trigger_internal_ci:
@@ -32,34 +27,18 @@ on:
         required: true
         type: boolean
         default: false
-      publish_arm64:
-        description: 'Whether to publish the arm64 image'
-        required: true
-        type: boolean
-        default: true
 
 jobs:
-  matrix-options:
-    runs-on: ubuntu-latest
-    outputs:
-      publish-os: ${{ steps.result.outputs.publish-os }}
-    steps:
-      - name: Output matrix options
-        id: result
-        run: |
-          if [ "${{ inputs.publish_arm64 }}" == "true" ]; then
-            echo "publish-os=[\"ubuntu-latest\",\"ubuntu-24.04-arm\"]" >> $GITHUB_OUTPUT
-          else
-            echo "publish-os=[\"ubuntu-latest\"]" >> $GITHUB_OUTPUT
-          fi
+
 
   build-and-push-image:
     name: Build and Push Docker Image
     runs-on: ${{ matrix.os }}
-    needs: matrix-options
     strategy:
       matrix:
-        os: ${{ fromJSON(needs.matrix-options.outputs.publish-os) }}
+        os:
+          - ubuntu-latest
+          - ubuntu-24.04-arm
 
     permissions:
       contents: read
@@ -107,7 +86,7 @@ jobs:
       - name: Set Platform
         id: platform
         run: |
-          if [ "${{ matrix.runs-on }}" == "ubuntu-latest" ]; then
+          if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
             echo "::set-output name=platform::linux/amd64"
           else
             echo "::set-output name=platform::linux/arm64"
