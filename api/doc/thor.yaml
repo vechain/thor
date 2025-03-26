@@ -1578,10 +1578,10 @@ components:
           pattern: '^0x[0-9a-f]{64}$'
           nullable: false
         type:
-          type: string
-          format: hex
+          type: integer
+          format: uint8
           description: The transaction type in hex, currently 0(Legacy Transaction) and 81(DynamicFee Transaction) are supported.
-          example: '0x51'
+          example: '81'
           nullable: false
         origin:
           type: string
