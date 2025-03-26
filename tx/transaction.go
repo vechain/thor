@@ -79,9 +79,11 @@ type txData interface {
 	signature() []byte
 	setSignature(sig []byte)
 	evaluateWork(origin thor.Address) func(nonce uint64) *big.Int
+	signingFields() []any // signingFields returns the fields that are used to compute the singing hash.
 
-	// Encode/decode format is defined by the tx data itself. This allows different tx types to have different encoding formats.
-	// The coding function are designed only for typed txs and the type identifier is not included in the encoding.
+	// Encode/decode encodes/decodes the tx body into binary format, the format is defined by the tx data itself.
+	// This allows different tx types to have different encoding formats. The coding function are designed only
+	// for typed txs and the type identifier is not included in the encoding.
 	encode(*bytes.Buffer) error
 	decode([]byte) error
 }
@@ -101,7 +103,7 @@ func (t *Transaction) MarshalBinary() ([]byte, error) {
 // encodeTyped writes the canonical encoding of a typed transaction to w.
 func (t *Transaction) encodeTyped(w *bytes.Buffer) error {
 	w.WriteByte(t.Type())
-	return rlp.Encode(w, t.body)
+	return t.body.encode(w)
 }
 
 // EncodeRLP implements rlp.Encoder
@@ -287,32 +289,10 @@ func (t *Transaction) SigningHash() (hash thor.Bytes32) {
 	defer func() { t.cache.signingHash.Store(hash) }()
 
 	if t.Type() == TypeLegacy {
-		return rlpHash([]any{
-			t.body.chainTag(),
-			t.body.blockRef(),
-			t.body.expiration(),
-			t.body.clauses(),
-			t.body.gasPriceCoef(),
-			t.body.gas(),
-			t.body.dependsOn(),
-			t.body.nonce(),
-			t.body.reserved(),
-		})
+		return rlpHash(t.body.signingFields())
 	}
-
 	// Include type prefix for typed tx.
-	return prefixedRlpHash(t.Type(), []any{
-		t.body.chainTag(),
-		t.body.blockRef(),
-		t.body.expiration(),
-		t.body.clauses(),
-		t.body.gas(),
-		t.body.maxFeePerGas(),
-		t.body.maxPriorityFeePerGas(),
-		t.body.dependsOn(),
-		t.body.nonce(),
-		t.body.reserved(),
-	})
+	return prefixedRlpHash(t.Type(), t.body.signingFields())
 }
 
 // Gas returns gas provision for this tx.

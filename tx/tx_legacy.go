@@ -63,17 +63,32 @@ func (t *legacyTransaction) setSignature(sig []byte) {
 	t.Signature = sig
 }
 
+func (t *legacyTransaction) signingFields() []any {
+	return []any{
+		t.ChainTag,
+		t.BlockRef,
+		t.Expiration,
+		t.Clauses,
+		t.GasPriceCoef,
+		t.Gas,
+		t.DependsOn,
+		t.Nonce,
+		&t.Reserved,
+	}
+}
+
 func (t *legacyTransaction) evaluateWork(origin thor.Address) func(nonce uint64) *big.Int {
 	hashWithoutNonce := thor.Blake2bFn(func(w io.Writer) {
 		rlp.Encode(w, []any{
-			t.chainTag(),
-			t.blockRef(),
-			t.expiration(),
-			t.clauses(),
-			t.gasPriceCoef(),
-			t.dependsOn(),
-			t.nonce(),
-			t.reserved(),
+			t.ChainTag,
+			t.BlockRef,
+			t.Expiration,
+			t.Clauses,
+			t.GasPriceCoef,
+			t.Gas,
+			t.DependsOn,
+			t.Nonce,
+			&t.Reserved,
 			origin,
 		})
 	})
@@ -88,8 +103,8 @@ func (t *legacyTransaction) evaluateWork(origin thor.Address) func(nonce uint64)
 }
 
 // Below are the methods that are not compatible with legacy transaction
-func (t *legacyTransaction) maxFeePerGas() *big.Int         { return common.Big0 }
-func (t *legacyTransaction) maxPriorityFeePerGas() *big.Int { return common.Big0 }
+func (t *legacyTransaction) maxFeePerGas() *big.Int         { return common.Big0 } // Return default value as they are not meant to be used anywhere else
+func (t *legacyTransaction) maxPriorityFeePerGas() *big.Int { return common.Big0 } // Return default value as they are not meant to be used anywhere else
 
 func (t *legacyTransaction) encode(*bytes.Buffer) error {
 	panic("encode called on LegacyTx")

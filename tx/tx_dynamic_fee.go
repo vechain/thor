@@ -81,8 +81,8 @@ func (t *dynamicFeeTransaction) setSignature(sig []byte) {
 	t.Signature = sig
 }
 
-func (t *dynamicFeeTransaction) encode(b *bytes.Buffer) error {
-	return rlp.Encode(b, []any{
+func (t *dynamicFeeTransaction) signingFields() []any {
+	return []any{
 		t.ChainTag,
 		t.BlockRef,
 		t.Expiration,
@@ -93,16 +93,19 @@ func (t *dynamicFeeTransaction) encode(b *bytes.Buffer) error {
 		t.DependsOn,
 		t.Nonce,
 		&t.Reserved,
-	})
+	}
 }
 
-// Below are the methods that are not compatible with dynamic fee transaction
+func (t *dynamicFeeTransaction) encode(b *bytes.Buffer) error {
+	return rlp.Encode(b, t)
+}
+
 func (t *dynamicFeeTransaction) decode(input []byte) error {
 	return rlp.DecodeBytes(input, t)
 }
 
-func (t *dynamicFeeTransaction) gasPriceCoef() uint8 { return 0 }
-
-func (t *dynamicFeeTransaction) evaluateWork(origin thor.Address) func(nonce uint64) *big.Int {
+// Below are the methods that are not compatible with dynamic fee transaction
+func (t *dynamicFeeTransaction) gasPriceCoef() uint8 { return 0 } // Return default value as they are not meant to be used anywhere else
+func (t *dynamicFeeTransaction) evaluateWork(origin thor.Address) func(nonce uint64) *big.Int { // Return default value as they are not meant to be used anywhere else
 	return func(nonce uint64) *big.Int { return common.Big0 }
 }
