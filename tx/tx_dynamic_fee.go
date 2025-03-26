@@ -19,9 +19,9 @@ type dynamicFeeTransaction struct {
 	BlockRef             uint64
 	Expiration           uint32
 	Clauses              []*Clause
-	Gas                  uint64
-	MaxFeePerGas         *big.Int
 	MaxPriorityFeePerGas *big.Int
+	MaxFeePerGas         *big.Int
+	Gas                  uint64
 	DependsOn            *thor.Bytes32 `rlp:"nil"`
 	Nonce                uint64
 	Reserved             reserved
@@ -87,9 +87,9 @@ func (t *dynamicFeeTransaction) signingFields() []any {
 		t.BlockRef,
 		t.Expiration,
 		t.Clauses,
-		t.Gas,
-		t.MaxFeePerGas,
 		t.MaxPriorityFeePerGas,
+		t.MaxFeePerGas,
+		t.Gas,
 		t.DependsOn,
 		t.Nonce,
 		&t.Reserved,
