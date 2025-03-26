@@ -7,6 +7,7 @@ package packer
 
 import (
 	"crypto/ecdsa"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -152,7 +153,7 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 			return err
 		}
 		if err := fork.ValidateGalacticaTxFee(t, f.runtime.Context().BaseFee, baseGasPrice); err != nil {
-			return err
+			return fmt.Errorf("%w: %w", errTxNotAdoptableNow, err)
 		}
 
 		if err := f.isEffectivePriorityFeeTooLow(t, baseGasPrice, true); err != nil {
