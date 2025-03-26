@@ -68,21 +68,21 @@ type JSONOutput struct {
 }
 
 type JSONEmbeddedTx struct {
-	ID                   thor.Bytes32        `json:"id"`
-	Type                 uint8               `json:"type"`
-	ChainTag             byte                `json:"chainTag"`
-	BlockRef             string              `json:"blockRef"`
-	Expiration           uint32              `json:"expiration"`
-	Clauses              []*JSONClause       `json:"clauses"`
-	GasPriceCoef         uint8               `json:"gasPriceCoef"`
-	MaxFeePerGas         *hexutil.Big        `json:"maxFeePerGas,omitempty"`
-	MaxPriorityFeePerGas *hexutil.Big        `json:"maxPriorityFeePerGas,omitempty"`
-	Gas                  uint64              `json:"gas"`
-	Origin               thor.Address        `json:"origin"`
-	Delegator            *thor.Address       `json:"delegator"`
-	Nonce                math.HexOrDecimal64 `json:"nonce"`
-	DependsOn            *thor.Bytes32       `json:"dependsOn"`
-	Size                 uint32              `json:"size"`
+	ID                   thor.Bytes32          `json:"id"`
+	Type                 math.HexOrDecimal64   `json:"type"`
+	ChainTag             byte                  `json:"chainTag"`
+	BlockRef             string                `json:"blockRef"`
+	Expiration           uint32                `json:"expiration"`
+	Clauses              []*JSONClause         `json:"clauses"`
+	GasPriceCoef         uint8                 `json:"gasPriceCoef"`
+	MaxFeePerGas         *math.HexOrDecimal256 `json:"maxFeePerGas,omitempty"`
+	MaxPriorityFeePerGas *math.HexOrDecimal256 `json:"maxPriorityFeePerGas,omitempty"`
+	Gas                  uint64                `json:"gas"`
+	Origin               thor.Address          `json:"origin"`
+	Delegator            *thor.Address         `json:"delegator"`
+	Nonce                math.HexOrDecimal64   `json:"nonce"`
+	DependsOn            *thor.Bytes32         `json:"dependsOn"`
+	Size                 uint32                `json:"size"`
 
 	// receipt part
 	GasUsed  uint64                `json:"gasUsed"`
@@ -177,7 +177,7 @@ func buildJSONEmbeddedTxs(txs tx.Transactions, receipts tx.Receipts) []*JSONEmbe
 
 		embedTx := &JSONEmbeddedTx{
 			ID:         trx.ID(),
-			Type:       trx.Type(),
+			Type:       math.HexOrDecimal64(trx.Type()),
 			ChainTag:   trx.ChainTag(),
 			BlockRef:   hexutil.Encode(blockRef[:]),
 			Expiration: trx.Expiration(),
@@ -199,8 +199,8 @@ func buildJSONEmbeddedTxs(txs tx.Transactions, receipts tx.Receipts) []*JSONEmbe
 		if trx.Type() == tx.TypeLegacy {
 			embedTx.GasPriceCoef = trx.GasPriceCoef()
 		} else {
-			embedTx.MaxFeePerGas = (*hexutil.Big)(trx.MaxFeePerGas())
-			embedTx.MaxPriorityFeePerGas = (*hexutil.Big)(trx.MaxPriorityFeePerGas())
+			embedTx.MaxFeePerGas = (*math.HexOrDecimal256)(trx.MaxFeePerGas())
+			embedTx.MaxPriorityFeePerGas = (*math.HexOrDecimal256)(trx.MaxPriorityFeePerGas())
 		}
 		jTxs = append(jTxs, embedTx)
 	}
