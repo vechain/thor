@@ -6,6 +6,7 @@
 package poa
 
 import (
+	"math/big"
 	"slices"
 
 	"github.com/vechain/thor/v2/builtin"
@@ -50,8 +51,10 @@ func (c *Candidates) Copy() *Candidates {
 	return &cpy
 }
 
+type BalancerChecker func(thor.Address, *big.Int) (bool, error)
+
 // Pick picks a list of proposers, which satisfy preset conditions.
-func (c *Candidates) Pick(state *state.State) ([]Proposer, error) {
+func (c *Candidates) Pick(state *state.State, checkBalance BalancerChecker) ([]Proposer, error) {
 	satisfied := c.satisfied
 	if len(satisfied) == 0 {
 		// re-pick
@@ -71,11 +74,11 @@ func (c *Candidates) Pick(state *state.State) ([]Proposer, error) {
 
 		satisfied = make([]int, 0, len(c.list))
 		for i := 0; i < len(c.list) && uint64(len(satisfied)) < maxBlockProposers; i++ {
-			bal, err := state.GetBalance(c.list[i].Endorsor)
+			hasBalance, err := checkBalance(c.list[i].Endorsor, endorsement)
 			if err != nil {
 				return nil, err
 			}
-			if bal.Cmp(endorsement) >= 0 {
+			if hasBalance {
 				satisfied = append(satisfied, i)
 			}
 		}

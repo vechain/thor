@@ -20,6 +20,10 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
+var (
+	minStake = big.NewInt(0).Mul(big.NewInt(25_000_000), big.NewInt(1e18))
+)
+
 func TestConsensus_PosFork(t *testing.T) {
 	config := thor.SoloFork
 	config.HAYABUSA = 2
@@ -157,16 +161,14 @@ func mintBlock(t *testing.T, chain *testchain.Chain, txs ...*tx.Transaction) (*c
 	return best, parent, chain.Stater().NewState(parent.Root())
 }
 
-func mintMbpBlock(t *testing.T, chain *testchain.Chain, amount int64) {
+func mintMbpBlock(t *testing.T, chain *testchain.Chain, amount int64) (*chain.BlockSummary, *chain.BlockSummary, *state.State) {
 	contract := chain.Contract(builtin.Params.Address, builtin.Params.ABI, genesis.DevAccounts()[0])
 	tx, err := contract.BuildTransaction("set", big.NewInt(0), thor.KeyMaxBlockProposers, big.NewInt(amount))
 	assert.NoError(t, err)
-	mintBlock(t, chain, tx)
+	return mintBlock(t, chain, tx)
 }
 
-func mintAddValidatorBlock(t *testing.T, chain *testchain.Chain, accs ...genesis.DevAccount) {
-	vet := big.NewInt(25_000_000)
-	vet = vet.Mul(vet, big.NewInt(1e18))
+func mintAddValidatorBlock(t *testing.T, chain *testchain.Chain, accs ...genesis.DevAccount) (*chain.BlockSummary, *chain.BlockSummary, *state.State) {
 	if len(accs) == 0 {
 		accs = make([]genesis.DevAccount, 1)
 		accs[0] = genesis.DevAccounts()[0]
@@ -175,9 +177,9 @@ func mintAddValidatorBlock(t *testing.T, chain *testchain.Chain, accs ...genesis
 	contract := chain.Contract(builtin.Staker.Address, builtin.Staker.ABI, genesis.DevAccounts()[0])
 	for _, acc := range accs {
 		contract = contract.Attach(acc)
-		tx, err := contract.BuildTransaction("addValidator", vet, acc.Address, uint32(360)*24*7, true)
+		tx, err := contract.BuildTransaction("addValidator", minStake, acc.Address, uint32(360)*24*7, true)
 		assert.NoError(t, err)
 		txs = append(txs, tx)
 	}
-	mintBlock(t, chain, txs...)
+	return mintBlock(t, chain, txs...)
 }

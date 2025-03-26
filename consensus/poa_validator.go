@@ -7,11 +7,13 @@ package consensus
 
 import (
 	"fmt"
+	"math/big"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/poa"
 	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
 
@@ -33,7 +35,7 @@ func (c *Consensus) validateAuthorityProposer(header *block.Header, parent *bloc
 		candidates = poa.NewCandidates(list)
 	}
 
-	proposers, err := candidates.Pick(st)
+	proposers, err := candidates.Pick(st, c.authorityBalanceCheck(header, st, signer))
 	if err != nil {
 		return nil, err
 	}
@@ -99,6 +101,9 @@ func (c *Consensus) authorityCacheHandler(candidates *poa.Candidates, header *bl
 				for _, r := range receipts {
 					for _, o := range r.Outputs {
 						for _, ev := range o.Events {
+							if header.Number() >= c.forkConfig.HAYABUSA && ev.Address == builtin.Staker.Address {
+								return true
+							}
 							if ev.Address == builtin.Params.Address {
 								return true
 							}
@@ -120,5 +125,35 @@ func (c *Consensus) authorityCacheHandler(candidates *poa.Candidates, header *bl
 		}
 
 		return nil
+	}
+}
+
+func (c *Consensus) authorityBalanceCheck(header *block.Header, st *state.State, signer thor.Address) poa.BalancerChecker {
+	transitionPeriod := header.Number() >= c.forkConfig.HAYABUSA
+	staker := builtin.Staker.Native(st)
+
+	return func(endorsor thor.Address, minBalance *big.Int) (bool, error) {
+		bal, err := st.GetBalance(endorsor)
+		if err != nil {
+			return false, err
+		}
+		hasAccountBalance := bal.Cmp(minBalance) >= 0
+		if hasAccountBalance {
+			return true, nil
+		}
+		if !transitionPeriod { // before HAYABUSA fork, we only check the account balance
+			return false, nil
+		}
+		// `signer` is the node master, not the endorsor
+		// We are checking if the signer of the block has a `Validator` entry with a stake
+		// NOT if the given endorsor has a staked
+		validator, err := staker.Get(signer)
+		if err != nil {
+			return false, err
+		}
+		if validator.IsEmpty() || validator.Stake == nil {
+			return false, nil
+		}
+		return validator.Stake.Cmp(minBalance) >= 0, nil
 	}
 }

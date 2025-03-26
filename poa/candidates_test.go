@@ -7,6 +7,7 @@ package poa
 
 import (
 	"crypto/rand"
+	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -111,7 +112,15 @@ func TestPick(t *testing.T) {
 	// Call NewCandidates with the mock data
 	candidates := NewCandidates(candidateList)
 
-	proposers, err := candidates.Pick(state)
+	checkBalance := func(address thor.Address, endorsement *big.Int) (bool, error) {
+		bal, err := state.GetBalance(address)
+		if err != nil {
+			return false, err
+		}
+		return bal.Cmp(endorsement) >= 0, nil
+	}
+
+	proposers, err := candidates.Pick(state, checkBalance)
 
 	assert.NoError(t, err)
 
