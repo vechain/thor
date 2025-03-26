@@ -336,7 +336,7 @@ func TestClient_GetFeesHistory(t *testing.T) {
 	newestBlock := "best"
 	expectedFeesHistory := &fees.FeesHistory{
 		OldestBlock:   thor.Bytes32{0x01},
-		BaseFees:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(0x01))},
+		BaseFeePerGas: []*hexutil.Big{(*hexutil.Big)(big.NewInt(0x01))},
 		GasUsedRatios: []float64{0.0021},
 	}
 
