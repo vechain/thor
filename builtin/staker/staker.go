@@ -681,7 +681,7 @@ func (a *Staker) WithdrawStake(endorsor thor.Address, master thor.Address) (*big
 
 // Transition from PoA to PoS. It checks that the queue is at least 2/3 of the maxProposers, and activates the first
 // `min(queueSize, maxProposers)` validators.
-func (a *Staker) Transition() (bool, error) {
+func (a *Staker) Transition(currentBlock uint32) (bool, error) {
 	active, err := a.IsActive()
 	if err != nil {
 		return false, err
@@ -701,9 +701,10 @@ func (a *Staker) Transition() (bool, error) {
 	}
 
 	// if the queue size is not AT LEAST 2/3 of the maxProposers, then return nil
-	twoThirds := big.NewInt(0).Mul(maxProposers, big.NewInt(2))
-	twoThirds.Div(twoThirds, big.NewInt(3))
-	if queueSize.Cmp(twoThirds) < 0 {
+	minimum := big.NewFloat(0).SetInt(maxProposers)
+	minimum.Mul(minimum, big.NewFloat(2))
+	minimum.Quo(minimum, big.NewFloat(3))
+	if big.NewFloat(0).SetInt(queueSize).Cmp(minimum) < 0 {
 		return false, nil
 	}
 
@@ -715,6 +716,7 @@ func (a *Staker) Transition() (bool, error) {
 
 	totalStake := big.NewInt(0)
 
+	expiry := currentBlock + a.mediumStakingPeriod
 	for i := int64(0); i < activeLeaderSize.Int64(); i++ {
 		addr, validator, err := a.validatorQueue.Pop()
 		if err != nil {
@@ -723,6 +725,7 @@ func (a *Staker) Transition() (bool, error) {
 
 		validator.Status = StatusActive
 		validator.Online = true
+		validator.Expiry = &expiry
 		if err := a.leaderGroup.Add(addr, validator); err != nil {
 			return false, err
 		}

@@ -138,7 +138,7 @@ func New(
 		}
 	} else if forkConfig.IsTransitionBlock(ctx.Number) {
 		staker := builtin.Staker.Native(state)
-		transitioned, err := staker.Transition()
+		transitioned, err := staker.Transition(ctx.Number)
 		if err != nil {
 			panic(err)
 		}

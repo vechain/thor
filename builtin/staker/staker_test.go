@@ -81,7 +81,7 @@ func newStaker(t *testing.T, authorities int, maxValidators int64, initialise bo
 			totalStake = totalStake.Add(totalStake, stake)
 			assert.Nil(t, staker.AddValidator(key.endorsor, key.master, uint32(360)*24*14, stake, true))
 		}
-		transitioned, err := staker.Transition()
+		transitioned, err := staker.Transition(0)
 		assert.NoError(t, err)
 		assert.True(t, transitioned)
 	}
@@ -106,7 +106,7 @@ func TestStaker(t *testing.T) {
 		{M(stkr.TotalStake()), M(zeroStake, nil)},
 		{stkr.AddValidator(validator1, validator1, uint32(360)*24*14, stakeAmount, true), nil},
 		{stkr.AddValidator(validator2, validator2, uint32(360)*24*14, stakeAmount, true), nil},
-		{M(stkr.Transition()), M(true, nil)},
+		{M(stkr.Transition(0)), M(true, nil)},
 		{M(stkr.TotalStake()), M(totalStake, nil)},
 		{stkr.AddValidator(validator3, validator3, uint32(360)*24*14, stakeAmount, true), nil},
 		{M(stkr.FirstQueued()), M(validator3, nil)},
@@ -987,7 +987,7 @@ func TestStaker_Initialise(t *testing.T) {
 		assert.NoError(t, staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*14, minStake, true))
 	}
 
-	transitioned, err := staker.Transition()
+	transitioned, err := staker.Transition(0)
 	assert.NoError(t, err) // should succeed
 	assert.True(t, transitioned)
 	// should be able to add validators after initialisation
