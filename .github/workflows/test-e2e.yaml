@@ -43,13 +43,22 @@ jobs:
       - name: Set e2e repo reference
         id: set-ref
         run: |
-          if [[ "${{ github.event.pull_request.base.ref }}" == release/* ]]; then
-            echo "ref=${{ github.event.pull_request.base.ref }}" >> "$GITHUB_OUTPUT"
-          elif [[ "${{ github.head_ref }}" == release/* ]]; then
-            echo "ref=${{ github.head_ref }}" >> "$GITHUB_OUTPUT"
+          # Default fallback commit
+          REF="256a22618ae328769ad3a060debdb026e120fd00"
+      
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # For pull_request events, we only look at the PR's base branch
+            if [[ "${{ github.event.pull_request.base.ref }}" == release/* ]]; then
+              REF="${{ github.event.pull_request.base.ref }}"
+            fi
           else
-            echo "ref=256a22618ae328769ad3a060debdb026e120fd00" >> "$GITHUB_OUTPUT"
+            # For push events, we check the branch or tag that was pushed
+            if [[ "${{ github.ref_name }}" == release/* ]]; then
+              REF="${{ github.ref_name }}"
+            fi
           fi
+      
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
 
       - name: Checkout
         uses: actions/checkout@v4
