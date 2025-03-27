@@ -84,6 +84,22 @@ func TestFeesFixedSizeSameAsBacktrace(t *testing.T) {
 	}
 }
 
+func TestRewardPercentiles(t *testing.T) {
+	ts, bestchain := initFeesServer(t, 8, 10, 10)
+	t.Cleanup(ts.Close)
+
+	tclient := thorclient.New(ts.URL)
+	for name, tt := range map[string]func(*testing.T, *thorclient.Client, *chain.Chain){
+		"getRewardsValidPercentiles":      getRewardsValidPercentiles,
+		"getRewardsInvalidPercentiles":    getRewardsInvalidPercentiles,
+		"getRewardsOutOfRangePercentiles": getRewardsOutOfRangePercentiles,
+	} {
+		t.Run(name, func(t *testing.T) {
+			tt(t, tclient, bestchain)
+		})
+	}
+}
+
 func initFeesServer(t *testing.T, backtraceLimit int, fixedCacheSize int, numberOfBlocks int) (*httptest.Server, *chain.Chain) {
 	forkConfig := thor.NoFork
 	forkConfig.GALACTICA = 1
@@ -101,26 +117,22 @@ func initFeesServer(t *testing.T, backtraceLimit int, fixedCacheSize int, number
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 
-	var dynFeeTx *tx.Transaction
-
+	// Create blocks with transactions
 	for i := range numberOfBlocks - 1 {
-		dynFeeTx = tx.NewBuilder(tx.TypeDynamicFee).
+		// Create one transaction per block with different priority fees
+		priorityFee := int64(100 + i*50) // Each block has a different priority fee
+		trx := tx.NewBuilder(tx.TypeDynamicFee).
 			ChainTag(thorChain.Repo().ChainTag()).
 			MaxFeePerGas(big.NewInt(250_000_000_000_000)).
-			MaxPriorityFeePerGas(big.NewInt(100)).
-			Expiration(10).
+			MaxPriorityFeePerGas(big.NewInt(priorityFee)).
+			Expiration(720).
 			Gas(21000).
 			Nonce(uint64(i)).
 			Clause(cla).
 			BlockRef(tx.NewBlockRef(uint32(i))).
 			Build()
-		dynFeeTx = tx.MustSign(dynFeeTx, genesis.DevAccounts()[0].PrivateKey)
-		require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], dynFeeTx))
+		require.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0], tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)))
 	}
-
-	allBlocks, err := thorChain.GetAllBlocks()
-	require.NoError(t, err)
-	require.Len(t, allBlocks, numberOfBlocks)
 
 	return httptest.NewServer(router), thorChain.Repo().NewBestChain()
 }
@@ -403,4 +415,87 @@ func getFeePriority(t *testing.T, tclient *thorclient.Client, bestchain *chain.C
 	}
 
 	assert.Equal(t, expectedFeesPriority, feesPriority)
+}
+
+func getRewardsValidPercentiles(t *testing.T, tclient *thorclient.Client, bestchain *chain.Chain) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=3&newestBlock=4&rewardPercentiles=25,50,75")
+	require.NoError(t, err)
+	require.Equal(t, 200, statusCode)
+
+	var feesHistory fees.FeesHistory
+	require.NoError(t, json.Unmarshal(res, &feesHistory))
+
+	require.NotNil(t, feesHistory.Reward, "reward array should not be nil")
+	require.Len(t, feesHistory.Reward, 3, "should have rewards for 3 blocks")
+
+	// Expected reward values based on MaxPriorityFeePerGas values
+	// For block 4: MaxPriorityFeePerGas = 150 (100 + 4*50)
+	// For block 3: MaxPriorityFeePerGas = 200 (100 + 3*50)
+	// For block 2: MaxPriorityFeePerGas = 250 (100 + 2*50)
+	expectedRewards := [][]*hexutil.Big{
+		{
+			(*hexutil.Big)(big.NewInt(150)), // 25th percentile
+			(*hexutil.Big)(big.NewInt(150)), // 50th percentile
+			(*hexutil.Big)(big.NewInt(150)), // 75th percentile
+		},
+		{
+			(*hexutil.Big)(big.NewInt(200)), // 25th percentile
+			(*hexutil.Big)(big.NewInt(200)), // 50th percentile
+			(*hexutil.Big)(big.NewInt(200)), // 75th percentile
+		},
+		{
+			(*hexutil.Big)(big.NewInt(250)), // 25th percentile
+			(*hexutil.Big)(big.NewInt(250)), // 50th percentile
+			(*hexutil.Big)(big.NewInt(250)), // 75th percentile
+		},
+	}
+
+	for i, blockRewards := range feesHistory.Reward {
+		require.NotNil(t, blockRewards, "block %d rewards should not be nil", i)
+		require.Len(t, blockRewards, 3,
+			"block %d should have 3 rewards, has %d",
+			i, len(blockRewards))
+
+		// Verify specific reward values
+		for j, reward := range blockRewards {
+			require.NotNil(t, reward, "block %d, reward %d should not be nil", i, j)
+			require.NotNil(t, expectedRewards[i][j], "expected reward %d for block %d should not be nil", j, i)
+
+			rewardValue := reward.ToInt()
+			expectedValue := expectedRewards[i][j].ToInt()
+
+			assert.Equal(t, expectedValue.String(), rewardValue.String(),
+				"block %d, percentile %d should have reward %s, got %s",
+				i, j, expectedValue.String(), rewardValue.String())
+		}
+	}
+}
+
+func getRewardsInvalidPercentiles(t *testing.T, tclient *thorclient.Client, bestchain *chain.Chain) {
+	testCases := []string{
+		"abc",
+		"25,abc,75",
+		"25,,75",
+		",50,",
+	}
+
+	for _, percentiles := range testCases {
+		_, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=3&newestBlock=4&rewardPercentiles=" + percentiles)
+		require.NoError(t, err)
+		require.Equal(t, 400, statusCode, "should fail with invalid percentiles: %s", percentiles)
+	}
+}
+
+func getRewardsOutOfRangePercentiles(t *testing.T, tclient *thorclient.Client, bestchain *chain.Chain) {
+	testCases := []string{
+		"-10,50,75",
+		"25,101,75",
+		"0,50,100.1",
+	}
+
+	for _, percentiles := range testCases {
+		_, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=3&newestBlock=4&rewardPercentiles=" + percentiles)
+		require.NoError(t, err)
+		require.Equal(t, 400, statusCode, "should fail with percentiles out of range: %s", percentiles)
+	}
 }

@@ -59,6 +59,12 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 	var rewards [][]*hexutil.Big
 	if rewardPercentiles != nil {
 		rewards = make([][]*hexutil.Big, blockCount)
+		for i := range rewards {
+			rewards[i] = make([]*hexutil.Big, len(*rewardPercentiles))
+			for j := range rewards[i] {
+				rewards[i][j] = (*hexutil.Big)(big.NewInt(0))
+			}
+		}
 	}
 
 	var oldestBlockID thor.Bytes32
@@ -72,16 +78,24 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 				header := newestBlockSummary.Header
 				baseFees[i-1] = getBaseFee(header.BaseFee())
 				gasUsedRatios[i-1] = float64(header.GasUsed()) / float64(header.GasLimit())
-				//TODO: handle rewards
+				if rewardPercentiles != nil {
+					//TODO: Use something different here
+					blockRewards, err := fd.calculateRewards(nil, rewardPercentiles, baseGasPrice)
+					if err != nil {
+						return thor.Bytes32{}, nil, nil, nil, err
+					}
+					copy(rewards[i-1], blockRewards)
+				}
 				newestBlockID = header.ParentID()
 				continue
 			}
 			return thor.Bytes32{}, nil, nil, nil, err
 		}
+
 		baseFees[i-1] = fees.baseFee
 		gasUsedRatios[i-1] = fees.gasUsedRatio
-		if rewards != nil {
-			rewards[i-1] = fees.rewards
+		if rewardPercentiles != nil {
+			copy(rewards[i-1], fees.rewards)
 		}
 
 		newestBlockID = fees.parentBlockID
@@ -91,9 +105,12 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 }
 
 func (fd *FeesData) calculateRewards(block *block.Block, rewardPercentiles *[]float64, baseGasPrice *big.Int) ([]*hexutil.Big, error) {
-	rewards := make([]*hexutil.Big, len(*rewardPercentiles))
-	txs := block.Transactions()
-	if len(txs) == 0 {
+	// If there is no block or no transactions, return zero rewards
+	if block == nil || len(block.Transactions()) == 0 {
+		rewards := make([]*hexutil.Big, len(*rewardPercentiles))
+		for i := range rewards {
+			rewards[i] = (*hexutil.Big)(big.NewInt(0))
+		}
 		return rewards, nil
 	}
 
@@ -103,9 +120,12 @@ func (fd *FeesData) calculateRewards(block *block.Block, rewardPercentiles *[]fl
 		return nil, err
 	}
 
+	// Calculate rewards
+	transactions := block.Transactions()
+	items := make([]rewardItem, len(transactions))
 	isGalactica := header.Number() >= thor.GetForkConfig(fd.repo.NewBestChain().GenesisID()).GALACTICA
-	items := make([]rewardItem, len(txs))
-	for i, tx := range txs {
+
+	for i, tx := range transactions {
 		provedWork, err := tx.ProvedWork(header.Number(), fd.repo.NewBestChain().GetBlockID)
 		if err != nil {
 			return nil, err
@@ -116,17 +136,32 @@ func (fd *FeesData) calculateRewards(block *block.Block, rewardPercentiles *[]fl
 		}
 	}
 
-	slices.SortStableFunc(items, func(a, b rewardItem) int { return a.reward.Cmp(b.reward) })
+	// Sort by reward
+	slices.SortStableFunc(items, func(a, b rewardItem) int {
+		return a.reward.Cmp(b.reward)
+	})
 
-	gas := items[0].gasUsed
-	idx := 0
+	// Calculate rewards for each percentile
+	rewards := make([]*hexutil.Big, len(*rewardPercentiles))
+	totalGasUsed := header.GasUsed()
+
 	for i, p := range *rewardPercentiles {
-		threshold := uint64(float64(header.GasUsed()) * p / 100)
-		for gas < threshold && idx < len(items)-1 {
-			idx++
-			gas += items[idx].gasUsed
+		threshold := uint64(float64(totalGasUsed) * p / 100)
+		var currentGas uint64
+
+		// Find the first transaction that exceeds the threshold
+		for _, item := range items {
+			currentGas += item.gasUsed
+			if currentGas >= threshold {
+				rewards[i] = (*hexutil.Big)(item.reward)
+				break
+			}
 		}
-		rewards[i] = (*hexutil.Big)(items[idx].reward)
+
+		// If not found, use the last reward
+		if rewards[i] == nil && len(items) > 0 {
+			rewards[i] = (*hexutil.Big)(items[len(items)-1].reward)
+		}
 	}
 
 	return rewards, nil
@@ -148,6 +183,12 @@ func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32, rewardPercentiles *[]flo
 		rewards, err = fd.calculateRewards(block, rewardPercentiles, baseGasPrice)
 		if err != nil {
 			return nil, err
+		}
+		// Ensure rewards are not nil
+		for i := range rewards {
+			if rewards[i] == nil {
+				rewards[i] = (*hexutil.Big)(big.NewInt(0))
+			}
 		}
 	}
 
