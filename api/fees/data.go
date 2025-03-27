@@ -108,11 +108,7 @@ func (fd *FeesData) calculateRewards(block *block.Block, rewardPercentiles *[]fl
 	// If there is no transactions, return zero rewards
 	transactions := block.Transactions()
 	if len(transactions) == 0 {
-		rewards := make([]*hexutil.Big, len(*rewardPercentiles))
-		for i := range rewards {
-			rewards[i] = (*hexutil.Big)(big.NewInt(0))
-		}
-		return rewards, nil
+		return make([]*hexutil.Big, len(*rewardPercentiles)), nil
 	}
 
 	header := block.Header()
@@ -176,12 +172,6 @@ func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32, rewardPercentiles *[]flo
 		rewards, err = fd.calculateRewards(block, rewardPercentiles, baseGasPrice)
 		if err != nil {
 			return nil, err
-		}
-		// Ensure rewards are not nil
-		for i := range rewards {
-			if rewards[i] == nil {
-				rewards[i] = (*hexutil.Big)(big.NewInt(0))
-			}
 		}
 	}
 
