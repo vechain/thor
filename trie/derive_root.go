@@ -13,7 +13,7 @@ import (
 
 type DerivableList interface {
 	Len() int
-	GetRlp(i int) []byte
+	EncodeIndex(i int) []byte
 }
 
 func DeriveRoot(list DerivableList) thor.Bytes32 {
@@ -24,7 +24,7 @@ func DeriveRoot(list DerivableList) thor.Bytes32 {
 
 	for i := range list.Len() {
 		key = drlp.AppendUint(key[:0], uint64(i))
-		trie.Update(key, list.GetRlp(i), nil)
+		trie.Update(key, list.EncodeIndex(i), nil)
 	}
 
 	return trie.Hash()
