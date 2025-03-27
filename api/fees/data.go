@@ -95,7 +95,7 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 		baseFees[i-1] = fees.baseFee
 		gasUsedRatios[i-1] = fees.gasUsedRatio
 		if rewardPercentiles != nil {
-			copy(rewards[i-1], fees.rewards)
+			rewards[i-1] = fees.rewards
 		}
 
 		newestBlockID = fees.parentBlockID
