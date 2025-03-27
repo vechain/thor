@@ -387,6 +387,16 @@ func (a *Staker) ActivateNextValidator(blockNumber uint32) error {
 // take the oldest validator and move to exited
 func (a *Staker) Housekeep(currentBlock uint32, forkBlock uint32) (bool, error) {
 	validatorsChanged := false
+	maxLeaderGroupSize, err := a.params.Get(thor.KeyMaxBlockProposers)
+	if err != nil {
+		return false, err
+	}
+
+	// min leader group size is 2/3 (+1) of max leader group size
+	minLeaderGroupSize := big.NewInt(0).Mul(maxLeaderGroupSize, big.NewInt(2))
+	minLeaderGroupSize = minLeaderGroupSize.Div(minLeaderGroupSize, big.NewInt(3))
+	minLeaderGroupSize = minLeaderGroupSize.Add(minLeaderGroupSize, big.NewInt(1))
+
 	if (currentBlock-forkBlock)%a.epochLength == 0 {
 		ptr, err := a.FirstActive()
 		if err != nil {
@@ -442,8 +452,11 @@ func (a *Staker) Housekeep(currentBlock uint32, forkBlock uint32) (bool, error) 
 			next = entry.Next
 		}
 
-		// should the protocol handle this case? `((currentBlock-forkBlock)%cooldownPeriod) == 0`
-		if !toExit.IsZero() && currentBlock%a.epochLength == 0 {
+		leaderGroupLength, err := a.leaderGroupSize.Get()
+		if err != nil {
+			return false, err
+		}
+		if !toExit.IsZero() && currentBlock%a.epochLength == 0 && leaderGroupLength.Cmp(minLeaderGroupSize) >= 0 {
 			validatorsChanged = true
 			if err := a.RemoveValidator(toExit, currentBlock); err != nil {
 				return false, err
