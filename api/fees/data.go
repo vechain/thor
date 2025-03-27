@@ -105,8 +105,9 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 }
 
 func (fd *FeesData) calculateRewards(block *block.Block, rewardPercentiles *[]float64, baseGasPrice *big.Int) ([]*hexutil.Big, error) {
-	// If there is no block or no transactions, return zero rewards
-	if block == nil || len(block.Transactions()) == 0 {
+	// If there is no transactions, return zero rewards
+	transactions := block.Transactions()
+	if len(transactions) == 0 {
 		rewards := make([]*hexutil.Big, len(*rewardPercentiles))
 		for i := range rewards {
 			rewards[i] = (*hexutil.Big)(big.NewInt(0))
@@ -121,7 +122,6 @@ func (fd *FeesData) calculateRewards(block *block.Block, rewardPercentiles *[]fl
 	}
 
 	// Calculate rewards
-	transactions := block.Transactions()
 	items := make([]rewardItem, len(transactions))
 	isGalactica := header.Number() >= thor.GetForkConfig(fd.repo.NewBestChain().GenesisID()).GALACTICA
 
