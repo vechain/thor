@@ -77,7 +77,7 @@ func TestConvertReceipt(t *testing.T) {
 		convRec, err := convertReceipt(receipt, header, tr)
 
 		assert.NoError(t, err)
-		assert.Equal(t, receipt.Type, convRec.Type)
+		assert.Equal(t, math.HexOrDecimal64(receipt.Type), convRec.Type)
 		assert.Equal(t, 1, len(convRec.Outputs))
 		assert.Equal(t, 1, len(convRec.Outputs[0].Events))
 		assert.Equal(t, 1, len(convRec.Outputs[0].Transfers))
