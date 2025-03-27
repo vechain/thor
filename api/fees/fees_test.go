@@ -139,7 +139,7 @@ func getFeeHistoryWithSummaries(t *testing.T, tclient *thorclient.Client, bestch
 	expectedFeesHistory := fees.FeesHistory{
 		OldestBlock:   expectedOldestBlock,
 		BaseFeePerGas: []*hexutil.Big{(*hexutil.Big)(big.NewInt(expectedBaseFee)), (*hexutil.Big)(big.NewInt(expectedBaseFee)), (*hexutil.Big)(big.NewInt(expectedBaseFee))},
-		GasUsedRatios: []float64{expectedGasPriceUsedRatio, expectedGasPriceUsedRatio, expectedGasPriceUsedRatio},
+		GasUsedRatio:  []float64{expectedGasPriceUsedRatio, expectedGasPriceUsedRatio, expectedGasPriceUsedRatio},
 	}
 	assert.Equal(t, expectedFeesHistory, feesHistory)
 }
@@ -161,7 +161,7 @@ func getFeeHistoryOnlySummaries(t *testing.T, tclient *thorclient.Client, bestch
 			(*hexutil.Big)(big.NewInt(expectedBaseFee)),
 			(*hexutil.Big)(big.NewInt(expectedBaseFee)),
 		},
-		GasUsedRatios: []float64{
+		GasUsedRatio: []float64{
 			expectedGasPriceUsedRatio,
 			expectedGasPriceUsedRatio,
 		},
@@ -184,7 +184,7 @@ func getFeeHistoryBestBlock(t *testing.T, tclient *thorclient.Client, bestchain 
 	expectedFeesHistory := fees.FeesHistory{
 		OldestBlock:   expectedOldestBlock,
 		BaseFeePerGas: []*hexutil.Big{(*hexutil.Big)(big.NewInt(expectedBaseFee)), (*hexutil.Big)(big.NewInt(expectedBaseFee)), (*hexutil.Big)(big.NewInt(expectedBaseFee)), (*hexutil.Big)(big.NewInt(expectedBaseFee))},
-		GasUsedRatios: []float64{expectedGasPriceUsedRatio, expectedGasPriceUsedRatio, expectedGasPriceUsedRatio, expectedGasPriceUsedRatio},
+		GasUsedRatio:  []float64{expectedGasPriceUsedRatio, expectedGasPriceUsedRatio, expectedGasPriceUsedRatio, expectedGasPriceUsedRatio},
 	}
 
 	assert.Equal(t, expectedFeesHistory, feesHistory)
@@ -234,7 +234,7 @@ func getFeeHistoryCacheLimit(t *testing.T, tclient *thorclient.Client, bestchain
 	expectedFeesHistory := fees.FeesHistory{
 		OldestBlock:   expectedOldestBlock,
 		BaseFeePerGas: []*hexutil.Big{(*hexutil.Big)(big.NewInt(expectedBaseFee))},
-		GasUsedRatios: []float64{expectedGasPriceUsedRatio},
+		GasUsedRatio:  []float64{expectedGasPriceUsedRatio},
 	}
 
 	require.Equal(t, expectedFeesHistory, feesHistory)
@@ -272,7 +272,7 @@ func getFeeHistoryMoreBlocksRequestedThanAvailable(t *testing.T, tclient *thorcl
 			(*hexutil.Big)(big.NewInt(expectedBaseFee)),
 			(*hexutil.Big)(big.NewInt(expectedBaseFee)),
 			(*hexutil.Big)(big.NewInt(expectedBaseFee))},
-		GasUsedRatios: []float64{
+		GasUsedRatio: []float64{
 			0,
 			expectedGasPriceUsedRatio,
 			expectedGasPriceUsedRatio,
@@ -289,7 +289,7 @@ func getFeeHistoryMoreBlocksRequestedThanAvailable(t *testing.T, tclient *thorcl
 	assert.Equal(t, expectedFeesHistory.OldestBlock, feesHistory.OldestBlock)
 	assert.Equal(t, expectedFeesHistory.BaseFeePerGas[0].String(), feesHistory.BaseFeePerGas[0].String())
 	assert.Equal(t, expectedFeesHistory.BaseFeePerGas[1:], feesHistory.BaseFeePerGas[1:])
-	assert.Equal(t, expectedFeesHistory.GasUsedRatios, feesHistory.GasUsedRatios)
+	assert.Equal(t, expectedFeesHistory.GasUsedRatio, feesHistory.GasUsedRatio)
 }
 
 func getFeeHistoryBlock0(t *testing.T, tclient *thorclient.Client, bestchain *chain.Chain) {
@@ -306,12 +306,12 @@ func getFeeHistoryBlock0(t *testing.T, tclient *thorclient.Client, bestchain *ch
 	expectedFeesHistory := fees.FeesHistory{
 		OldestBlock:   expectedOldestBlock,
 		BaseFeePerGas: []*hexutil.Big{(*hexutil.Big)(big.NewInt(0))},
-		GasUsedRatios: []float64{0},
+		GasUsedRatio:  []float64{0},
 	}
 
 	assert.Equal(t, expectedFeesHistory.OldestBlock, feesHistory.OldestBlock)
 	assert.Equal(t, expectedFeesHistory.BaseFeePerGas[0].String(), feesHistory.BaseFeePerGas[0].String())
-	assert.Equal(t, expectedFeesHistory.GasUsedRatios, feesHistory.GasUsedRatios)
+	assert.Equal(t, expectedFeesHistory.GasUsedRatio, feesHistory.GasUsedRatio)
 }
 
 func getFeeHistoryMoreThanBacktraceLimit(t *testing.T, tclient *thorclient.Client, bestchain *chain.Chain) {
@@ -331,7 +331,7 @@ func getFeeHistoryMoreThanBacktraceLimit(t *testing.T, tclient *thorclient.Clien
 			(*hexutil.Big)(big.NewInt(expectedBaseFee)),
 			(*hexutil.Big)(big.NewInt(expectedBaseFee)),
 			(*hexutil.Big)(big.NewInt(expectedBaseFee))},
-		GasUsedRatios: []float64{
+		GasUsedRatio: []float64{
 			expectedGasPriceUsedRatio,
 			expectedGasPriceUsedRatio,
 			expectedGasPriceUsedRatio},
@@ -362,7 +362,7 @@ func getFeeHistoryNextBlock(t *testing.T, tclient *thorclient.Client, bestchain 
 	expectedFeesHistory := fees.FeesHistory{
 		OldestBlock:   expectedOldestBlock,
 		BaseFeePerGas: []*hexutil.Big{(*hexutil.Big)(big.NewInt(expectedBaseFee)), (*hexutil.Big)(big.NewInt(expectedBaseFee)), (*hexutil.Big)(big.NewInt(expectedBaseFee))},
-		GasUsedRatios: []float64{expectedGasPriceUsedRatio, expectedGasPriceUsedRatio, expectedGasPriceUsedRatio},
+		GasUsedRatio:  []float64{expectedGasPriceUsedRatio, expectedGasPriceUsedRatio, expectedGasPriceUsedRatio},
 	}
 
 	assert.Equal(t, expectedFeesHistory, feesHistory)
@@ -382,7 +382,7 @@ func getFeeHistoryOnlyNextBlock(t *testing.T, tclient *thorclient.Client, bestch
 	expectedFeesHistory := fees.FeesHistory{
 		OldestBlock:   expectedOldestBlock,
 		BaseFeePerGas: []*hexutil.Big{(*hexutil.Big)(big.NewInt(expectedBaseFee))},
-		GasUsedRatios: []float64{expectedGasPriceUsedRatio},
+		GasUsedRatio:  []float64{expectedGasPriceUsedRatio},
 	}
 
 	assert.Equal(t, expectedFeesHistory, feesHistory)
