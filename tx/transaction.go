@@ -20,8 +20,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -627,35 +625,4 @@ func dataGas(data []byte) (uint64, error) {
 		return 0, errIntrinsicGasOverflow
 	}
 	return gas, nil
-}
-
-// EffectivePriorityFee calculates the effective priority fee for the transaction.
-// It requires:
-// - blockNumber: the current block number
-// - getBlockID: function to get block ID by number
-// - baseGasPrice: base gas price for legacy transactions
-// - isGalactica: whether Galactica fork is active
-func (t *Transaction) EffectivePriorityFee(
-    blockNumber uint32,
-    getBlockID func(uint32) (thor.Bytes32, error),
-    baseGasPrice *big.Int,
-	baseFee *big.Int,
-    isGalactica bool,
-) (*big.Int, error) {
-    provedWork, err := t.ProvedWork(blockNumber, getBlockID)
-    if err != nil {
-        return nil, err
-    }
-
-    effectivePriorityFee := fork.GalacticaPriorityPrice(
-        t,
-        baseGasPrice,
-        provedWork,
-        &fork.GalacticaItems{
-            IsActive: isGalactica,
-            BaseFee:  baseFee,
-        },
-    )
-    
-    return effectivePriorityFee, nil
 }

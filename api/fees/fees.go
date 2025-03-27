@@ -17,6 +17,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/bft"
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/state"
@@ -32,6 +33,7 @@ type Config struct {
 type Fees struct {
 	data           *FeesData
 	bft            bft.Committer
+	stater         *state.Stater
 	minPriorityFee *big.Int // The minimum suggested priority fee is (Config.PriorityIncreasePercentage)% of the block initial base fee.
 	config         Config
 }
@@ -42,8 +44,9 @@ func calcPriorityFee(baseFee *big.Int, priorityPercentile int64) *big.Int {
 
 func New(repo *chain.Repository, bft bft.Committer, stater *state.Stater, config Config) *Fees {
 	return &Fees{
-		data:           newFeesData(repo, stater, config.FixedCacheSize),
+		data:           newFeesData(repo, config.FixedCacheSize),
 		bft:            bft,
+		stater:         stater,
 		minPriorityFee: calcPriorityFee(big.NewInt(thor.InitialBaseFee), int64(config.PriorityIncreasePercentage)),
 		config:         config,
 	}
@@ -65,30 +68,30 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 		return 0, nil, nil, err
 	}
 
-	return uint32(blockCount), newestBlockSummary, rewardPercentiles, nil
+	return uint32(*blockCount), newestBlockSummary, rewardPercentiles, nil
 }
 
-func (f *Fees) validateBlockCount(req *http.Request) (uint64, error) {
+func (f *Fees) validateBlockCount(req *http.Request) (*uint64, error) {
 	blockCountParam := req.URL.Query().Get("blockCount")
 	blockCount, err := strconv.ParseUint(blockCountParam, 10, 32)
 	if err != nil {
-		return 0, utils.BadRequest(errors.WithMessage(err, "invalid blockCount, it should represent an integer"))
+		return nil, utils.BadRequest(errors.WithMessage(err, "invalid blockCount, it should represent an integer"))
 	}
 
 	if blockCount == 0 {
-		return 0, utils.BadRequest(errors.New("invalid blockCount, it should not be 0"))
+		return nil, utils.BadRequest(errors.New("invalid blockCount, it should not be 0"))
 	}
 
-	return blockCount, nil
+	return &blockCount, nil
 }
 
-func (f *Fees) validateNewestBlock(req *http.Request, blockCount uint64) (*chain.BlockSummary, error) {
+func (f *Fees) validateNewestBlock(req *http.Request, blockCount *uint64) (*chain.BlockSummary, error) {
 	newestBlock, err := utils.ParseRevision(req.URL.Query().Get("newestBlock"), true)
 	if err != nil {
 		return nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
 	}
 
-	newestBlockSummary, _, err := utils.GetSummaryAndState(newestBlock, f.data.repo, f.bft, f.data.stater)
+	newestBlockSummary, _, err := utils.GetSummaryAndState(newestBlock, f.data.repo, f.bft, f.stater)
 	if err != nil {
 		if f.data.repo.IsNotFound(err) {
 			return nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
@@ -103,8 +106,8 @@ func (f *Fees) validateNewestBlock(req *http.Request, blockCount uint64) (*chain
 		return nil, utils.BadRequest(errors.New("invalid newestBlock, it is below the minimum allowed block"))
 	}
 
-	if int(newestBlockSummary.Header.Number())-int(blockCount) < int(minAllowedBlock) {
-		blockCount = uint64(newestBlockSummary.Header.Number() - minAllowedBlock + 1)
+	if int(newestBlockSummary.Header.Number())-int(*blockCount) < int(minAllowedBlock) {
+		*blockCount = uint64(newestBlockSummary.Header.Number() - minAllowedBlock + 1)
 	}
 
 	return newestBlockSummary, nil
@@ -139,7 +142,17 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 		return err
 	}
 
-	oldestBlockRevision, baseFees, gasUsedRatios, rewards, err := f.data.resolveRange(newestBlockSummary, blockCount, rewardPercentiles)
+	var baseGasPrice *big.Int
+	if rewardPercentiles != nil {
+		state := f.stater.NewState(newestBlockSummary.Root())
+
+		baseGasPrice, err = builtin.Params.Native(state).Get(thor.KeyBaseGasPrice)
+		if err != nil {
+			return err
+		}
+	}
+
+	oldestBlockRevision, baseFees, gasUsedRatios, rewards, err := f.data.resolveRange(newestBlockSummary, blockCount, rewardPercentiles, baseGasPrice)
 	if err != nil {
 		return err
 	}

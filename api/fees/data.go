@@ -10,10 +10,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -25,16 +24,14 @@ type FeeCacheEntry struct {
 }
 
 type FeesData struct {
-	repo   *chain.Repository
-	cache  *cache.PrioCache
-	stater *state.Stater
+	repo  *chain.Repository
+	cache *cache.PrioCache
 }
 
-func newFeesData(repo *chain.Repository, stater *state.Stater, fixedCacheSize int) *FeesData {
+func newFeesData(repo *chain.Repository, fixedCacheSize int) *FeesData {
 	return &FeesData{
-		repo:   repo,
-		stater: stater,
-		cache:  cache.NewPrioCache(fixedCacheSize),
+		repo:  repo,
+		cache: cache.NewPrioCache(fixedCacheSize),
 	}
 }
 
@@ -47,17 +44,20 @@ func getBaseFee(baseFee *big.Int) *hexutil.Big {
 
 // resolveRange resolves the base fees, gas used ratios and priority fees for the given block range.
 // Assumes that the boundaries (newest block - block count) are correct and validated beforehand.
-func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCount uint32, rewardPercentiles *[]float64) (thor.Bytes32, []*hexutil.Big, []float64, [][]*hexutil.Big, error) {
+func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCount uint32, rewardPercentiles *[]float64, baseGasPrice *big.Int) (thor.Bytes32, []*hexutil.Big, []float64, [][]*hexutil.Big, error) {
 	newestBlockID := newestBlockSummary.Header.ID()
 
 	baseFees := make([]*hexutil.Big, blockCount)
 	gasUsedRatios := make([]float64, blockCount)
-	rewards := make([][]*hexutil.Big, blockCount)
+	var rewards [][]*hexutil.Big
+    if rewardPercentiles != nil {
+        rewards = make([][]*hexutil.Big, blockCount)
+    }
 
 	var oldestBlockID thor.Bytes32
 	for i := blockCount; i > 0; i-- {
 		oldestBlockID = newestBlockID
-		fees, err := fd.getOrLoadFees(newestBlockID, rewardPercentiles)
+		fees, err := fd.getOrLoadFees(newestBlockID, rewardPercentiles, baseGasPrice)
 		if err != nil {
 			// This should happen only when "next" since the boundaries are validated beforehand
 			// We do not cache the data in this case since it does not belong to an actual block
@@ -65,6 +65,7 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 				header := newestBlockSummary.Header
 				baseFees[i-1] = getBaseFee(header.BaseFee())
 				gasUsedRatios[i-1] = float64(header.GasUsed()) / float64(header.GasLimit())
+				//TODO: handle rewards
 				newestBlockID = header.ParentID()
 				continue
 			}
@@ -72,6 +73,9 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 		}
 		baseFees[i-1] = fees.baseFee
 		gasUsedRatios[i-1] = fees.gasUsedRatio
+		if rewards != nil {
+			rewards[i-1] = fees.rewards
+		}
 
 		newestBlockID = fees.parentBlockID
 	}
@@ -79,36 +83,35 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 	return oldestBlockID, baseFees, gasUsedRatios, rewards, nil
 }
 
-func (fd *FeesData) calculateRewards(block *block.Block, rewardPercentiles *[]float64) ([]*hexutil.Big, error) {
-	parentSummary, err := fd.repo.GetBlockSummary(block.Header().ParentID())
-	if err != nil {
-		return nil, err
-	}
-
-	state := fd.stater.NewState(parentSummary.Root())
-
-	baseGasPrice, err := builtin.Params.Native(state).Get(thor.KeyBaseGasPrice)
-	if err != nil {
-		return nil, err
-	}
-
+func (fd *FeesData) calculateRewards(block *block.Block, rewardPercentiles *[]float64, baseGasPrice *big.Int) ([]*hexutil.Big, error) {
 	forkConfig := thor.GetForkConfig(fd.repo.NewBestChain().GenesisID())
 	isGalactica := block.Header().Number() >= forkConfig.GALACTICA
 
 	transactions := block.Transactions()
 	rewards := make([]*hexutil.Big, 0)
 	for _, trx := range transactions {
-		effectivePriorityFee, err := trx.EffectivePriorityFee(block.Header().Number(), fd.repo.NewBestChain().GetBlockID, baseGasPrice, block.Header().BaseFee(), isGalactica)
+		provedWork, err := trx.ProvedWork(block.Header().Number(), fd.repo.NewBestChain().GetBlockID)
 		if err != nil {
 			return nil, err
 		}
+
+		effectivePriorityFee := fork.GalacticaPriorityPrice(
+			trx,
+			baseGasPrice,
+			provedWork,
+			&fork.GalacticaItems{
+				IsActive: isGalactica,
+				BaseFee:  block.Header().BaseFee(),
+			},
+		)
+
 		rewards = append(rewards, (*hexutil.Big)(effectivePriorityFee))
 	}
 
 	return rewards, nil
 }
 
-func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32, rewardPercentiles *[]float64) (*FeeCacheEntry, error) {
+func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32, rewardPercentiles *[]float64, baseGasPrice *big.Int) (*FeeCacheEntry, error) {
 	fees, _, found := fd.cache.Get(blockID)
 	if found {
 		return fees.(*FeeCacheEntry), nil
@@ -121,7 +124,7 @@ func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32, rewardPercentiles *[]flo
 
 	var rewards []*hexutil.Big
 	if rewardPercentiles != nil {
-		rewards, err = fd.calculateRewards(block, rewardPercentiles)
+		rewards, err = fd.calculateRewards(block, rewardPercentiles, baseGasPrice)
 		if err != nil {
 			return nil, err
 		}
