@@ -120,11 +120,11 @@ func initFeesServer(t *testing.T, backtraceLimit int, fixedCacheSize int, number
 	// Create blocks with transactions
 	for i := range numberOfBlocks - 1 {
 		// Create one transaction per block with different priority fees
-		priorityFee := int64(100 + i*50) // Each block has a different priority fee
+		priorityFee := new(big.Int).Add(big.NewInt(100), new(big.Int).Mul(big.NewInt(int64(i)), big.NewInt(50)))
 		trx := tx.NewBuilder(tx.TypeDynamicFee).
 			ChainTag(thorChain.Repo().ChainTag()).
 			MaxFeePerGas(big.NewInt(250_000_000_000_000)).
-			MaxPriorityFeePerGas(big.NewInt(priorityFee)).
+			MaxPriorityFeePerGas(priorityFee).
 			Expiration(720).
 			Gas(21000).
 			Nonce(uint64(i)).
