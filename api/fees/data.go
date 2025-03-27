@@ -8,6 +8,8 @@ package fees
 import (
 	"math/big"
 
+	"slices"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/cache"
@@ -26,6 +28,11 @@ type FeeCacheEntry struct {
 type FeesData struct {
 	repo  *chain.Repository
 	cache *cache.PrioCache
+}
+
+type rewardItem struct {
+	reward  *big.Int
+	gasUsed uint64
 }
 
 func newFeesData(repo *chain.Repository, fixedCacheSize int) *FeesData {
@@ -50,9 +57,9 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 	baseFees := make([]*hexutil.Big, blockCount)
 	gasUsedRatios := make([]float64, blockCount)
 	var rewards [][]*hexutil.Big
-    if rewardPercentiles != nil {
-        rewards = make([][]*hexutil.Big, blockCount)
-    }
+	if rewardPercentiles != nil {
+		rewards = make([][]*hexutil.Big, blockCount)
+	}
 
 	var oldestBlockID thor.Bytes32
 	for i := blockCount; i > 0; i-- {
@@ -84,28 +91,42 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 }
 
 func (fd *FeesData) calculateRewards(block *block.Block, rewardPercentiles *[]float64, baseGasPrice *big.Int) ([]*hexutil.Big, error) {
-	forkConfig := thor.GetForkConfig(fd.repo.NewBestChain().GenesisID())
-	isGalactica := block.Header().Number() >= forkConfig.GALACTICA
+	rewards := make([]*hexutil.Big, len(*rewardPercentiles))
+	txs := block.Transactions()
+	if len(txs) == 0 {
+		return rewards, nil
+	}
 
-	transactions := block.Transactions()
-	rewards := make([]*hexutil.Big, 0)
-	for _, trx := range transactions {
-		provedWork, err := trx.ProvedWork(block.Header().Number(), fd.repo.NewBestChain().GetBlockID)
+	header := block.Header()
+	receipts, err := fd.repo.GetBlockReceipts(header.ID())
+	if err != nil {
+		return nil, err
+	}
+
+	isGalactica := header.Number() >= thor.GetForkConfig(fd.repo.NewBestChain().GenesisID()).GALACTICA
+	items := make([]rewardItem, len(txs))
+	for i, tx := range txs {
+		provedWork, err := tx.ProvedWork(header.Number(), fd.repo.NewBestChain().GetBlockID)
 		if err != nil {
 			return nil, err
 		}
+		items[i] = rewardItem{
+			reward:  fork.GalacticaPriorityPrice(tx, baseGasPrice, provedWork, &fork.GalacticaItems{IsActive: isGalactica, BaseFee: header.BaseFee()}),
+			gasUsed: receipts[i].GasUsed,
+		}
+	}
 
-		effectivePriorityFee := fork.GalacticaPriorityPrice(
-			trx,
-			baseGasPrice,
-			provedWork,
-			&fork.GalacticaItems{
-				IsActive: isGalactica,
-				BaseFee:  block.Header().BaseFee(),
-			},
-		)
+	slices.SortStableFunc(items, func(a, b rewardItem) int { return a.reward.Cmp(b.reward) })
 
-		rewards = append(rewards, (*hexutil.Big)(effectivePriorityFee))
+	gas := items[0].gasUsed
+	idx := 0
+	for i, p := range *rewardPercentiles {
+		threshold := uint64(float64(header.GasUsed()) * p / 100)
+		for gas < threshold && idx < len(items)-1 {
+			idx++
+			gas += items[idx].gasUsed
+		}
+		rewards[i] = (*hexutil.Big)(items[idx].reward)
 	}
 
 	return rewards, nil
