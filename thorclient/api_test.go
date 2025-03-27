@@ -111,7 +111,7 @@ func mintTransactions(t *testing.T, thorChain *testchain.Chain) {
 
 	cla := tx.NewClause(&toAddr).WithValue(big.NewInt(10000))
 	cla2 := tx.NewClause(&toAddr).WithValue(big.NewInt(10000))
-	transaction := tx.NewBuilder(tx.TypeLegacy).
+	legacyTx := tx.NewBuilder(tx.TypeLegacy).
 		ChainTag(thorChain.Repo().ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -122,14 +122,24 @@ func mintTransactions(t *testing.T, thorChain *testchain.Chain) {
 		BlockRef(tx.NewBlockRef(0)).
 		Build()
 
-	sig, err = crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	transaction = transaction.WithSignature(sig)
+	legacyTx = tx.MustSign(legacyTx, genesis.DevAccounts()[0].PrivateKey)
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], legacyTx, noClausesTx))
+	preMintedTx01 = legacyTx
 
-	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], transaction, noClausesTx))
-	preMintedTx01 = transaction
+	dynFeeTx := tx.NewBuilder(tx.TypeDynamicFee).
+		ChainTag(thorChain.Repo().ChainTag()).
+		MaxFeePerGas(thor.InitialBaseGasPrice).
+		MaxPriorityFeePerGas((&big.Int{}).Add(thor.InitialBaseGasPrice, thor.InitialBaseGasPrice)).
+		Expiration(10).
+		Gas(37000).
+		Nonce(1).
+		Clause(cla).
+		Clause(cla2).
+		BlockRef(tx.NewBlockRef(0)).
+		Build()
+
+	dynFeeTx = tx.MustSign(dynFeeTx, genesis.DevAccounts()[0].PrivateKey)
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], dynFeeTx))
 }
 
 func TestAPIs(t *testing.T) {
@@ -433,7 +443,7 @@ func testFeesEndpoint(t *testing.T, testchain *testchain.Chain, ts *httptest.Ser
 		require.NoError(t, err)
 		require.NotNil(t, feesHistory)
 
-		expectedOldestBlock, err := testchain.Repo().NewBestChain().GetBlockID(1)
+		expectedOldestBlock, err := testchain.Repo().NewBestChain().GetBlockID(2)
 		require.NoError(t, err)
 		expectedFeesHistory := &fees.FeesHistory{
 			OldestBlock: expectedOldestBlock,
@@ -441,7 +451,7 @@ func testFeesEndpoint(t *testing.T, testchain *testchain.Chain, ts *httptest.Ser
 				(*hexutil.Big)(big.NewInt(thor.InitialBaseFee)),
 			},
 			GasUsedRatio: []float64{
-				0.0058,
+				0.0037,
 			},
 		}
 
