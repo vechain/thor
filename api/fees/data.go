@@ -145,23 +145,16 @@ func (fd *FeesData) calculateRewards(block *block.Block, rewardPercentiles *[]fl
 	rewards := make([]*hexutil.Big, len(*rewardPercentiles))
 	totalGasUsed := header.GasUsed()
 
+	currentTransactionIndex := 0
+	cumulativeGasUsed := items[0].gasUsed
+
 	for i, p := range *rewardPercentiles {
-		threshold := uint64(float64(totalGasUsed) * p / 100)
-		var currentGas uint64
-
-		// Find the first transaction that exceeds the threshold
-		for _, item := range items {
-			currentGas += item.gasUsed
-			if currentGas >= threshold {
-				rewards[i] = (*hexutil.Big)(item.reward)
-				break
-			}
+		thresholdGasUsed := uint64(float64(totalGasUsed) * p / 100)
+		for cumulativeGasUsed < thresholdGasUsed && currentTransactionIndex < len(transactions)-1 {
+			currentTransactionIndex++
+			cumulativeGasUsed += items[currentTransactionIndex].gasUsed
 		}
-
-		// If not found, use the last reward
-		if rewards[i] == nil && len(items) > 0 {
-			rewards[i] = (*hexutil.Big)(items[len(items)-1].reward)
-		}
+		rewards[i] = (*hexutil.Big)(items[currentTransactionIndex].reward)
 	}
 
 	return rewards, nil
