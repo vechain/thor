@@ -337,7 +337,7 @@ func TestClient_GetFeesHistory(t *testing.T) {
 	expectedFeesHistory := &fees.FeesHistory{
 		OldestBlock:   thor.Bytes32{0x01},
 		BaseFeePerGas: []*hexutil.Big{(*hexutil.Big)(big.NewInt(0x01))},
-		GasUsedRatios: []float64{0.0021},
+		GasUsedRatio:  []float64{0.0021},
 	}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
