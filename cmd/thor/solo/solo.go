@@ -7,6 +7,7 @@ package solo
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"math/rand/v2"
@@ -15,7 +16,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
@@ -144,7 +144,7 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 
 	flow, err := s.packer.Mock(best, now, s.options.GasLimit)
 	if err != nil {
-		return errors.WithMessage(err, "mock packer")
+		return fmt.Errorf("mock packer: %w", err)
 	}
 
 	startTime := mclock.Now()
@@ -162,7 +162,7 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 
 	b, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, false)
 	if err != nil {
-		return errors.WithMessage(err, "pack")
+		return fmt.Errorf("pack: %w", err)
 	}
 	execElapsed := mclock.Now() - startTime
 
@@ -172,23 +172,23 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 	}
 
 	if _, err := stage.Commit(); err != nil {
-		return errors.WithMessage(err, "commit state")
+		return fmt.Errorf("commit state: %w", err)
 	}
 
 	if !s.options.SkipLogs {
 		w := s.logDB.NewWriter()
 		if err := w.Write(b, receipts); err != nil {
-			return errors.WithMessage(err, "write logs")
+			return fmt.Errorf("write logs: %w", err)
 		}
 
 		if err := w.Commit(); err != nil {
-			return errors.WithMessage(err, "commit logs")
+			return fmt.Errorf("commit logs: %w", err)
 		}
 	}
 
 	// ignore fork when solo
 	if err := s.repo.AddBlock(b, receipts, 0, true); err != nil {
-		return errors.WithMessage(err, "commit block")
+		return fmt.Errorf("commit block: %w", err)
 	}
 	realElapsed := mclock.Now() - startTime
 
@@ -216,7 +216,7 @@ func (s *Solo) init(ctx context.Context) error {
 	newState := s.stater.NewState(best.Root())
 	currentBGP, err := builtin.Params.Native(newState).Get(thor.KeyBaseGasPrice)
 	if err != nil {
-		return errors.WithMessage(err, "failed to get the current base gas price")
+		return fmt.Errorf("failed to get the current base gas price: %w", err)
 	}
 	if currentBGP == baseGasPrice {
 		return nil

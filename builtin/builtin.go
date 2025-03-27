@@ -6,7 +6,8 @@
 package builtin
 
 import (
-	"github.com/pkg/errors"
+	"fmt"
+
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/builtin/authority"
 	"github.com/vechain/thor/v2/builtin/energy"
@@ -67,7 +68,7 @@ func (p *prototypeContract) Events() *abi.ABI {
 	data := gen.MustAsset(asset)
 	abi, err := abi.New(data)
 	if err != nil {
-		panic(errors.Wrap(err, "load ABI for "+asset))
+		panic(fmt.Errorf("load ABI for %s: %w", asset, err))
 	}
 	return abi
 }

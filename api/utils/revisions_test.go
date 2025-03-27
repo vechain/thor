@@ -6,11 +6,11 @@
 package utils
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"testing"
 
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/test/testchain"

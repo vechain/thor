@@ -7,10 +7,10 @@ package comm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/co"
@@ -20,7 +20,7 @@ import (
 func download(_ctx context.Context, repo *chain.Repository, peer *Peer, headNum uint32, handler HandleBlockStream) error {
 	ancestor, err := findCommonAncestor(_ctx, repo, peer, headNum)
 	if err != nil {
-		return errors.WithMessage(err, "find common ancestor")
+		return fmt.Errorf("find common ancestor: %w", err)
 	}
 
 	var (
@@ -60,7 +60,7 @@ func fetchBlocks(ctx context.Context, peer *Peer, fromBlockNum uint32, fetched c
 		for _, raw := range result {
 			var blk block.Block
 			if err := rlp.DecodeBytes(raw, &blk); err != nil {
-				return errors.Wrap(err, "invalid block")
+				return fmt.Errorf("invalid block: %w", err)
 			}
 			if blk.Header().Number() != fromBlockNum {
 				return errors.New("broken sequence")

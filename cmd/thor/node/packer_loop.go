@@ -12,7 +12,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/thor"
@@ -143,27 +142,27 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 			var err error
 			shouldVote, err = n.bft.ShouldVote(flow.ParentHeader().ID())
 			if err != nil {
-				return errors.Wrap(err, "get vote")
+				return fmt.Errorf("get vote: %w", err)
 			}
 		}
 
 		// pack the new block
 		newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey, conflicts, shouldVote)
 		if err != nil {
-			return errors.Wrap(err, "failed to pack block")
+			return fmt.Errorf("failed to pack block: %w", err)
 		}
 		execElapsed := mclock.Now() - startTime
 
 		// write logs
 		if logEnabled {
 			if err := n.writeLogs(newBlock, receipts, oldBest.Header.ID()); err != nil {
-				return errors.Wrap(err, "write logs")
+				return fmt.Errorf("write logs: %w", err)
 			}
 		}
 
 		// commit the state
 		if _, err := stage.Commit(); err != nil {
-			return errors.Wrap(err, "commit state")
+			return fmt.Errorf("commit state: %w", err)
 		}
 
 		// sync the log-writing task
@@ -176,13 +175,13 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 
 		// add the new block into repository
 		if err := n.repo.AddBlock(newBlock, receipts, conflicts, true); err != nil {
-			return errors.Wrap(err, "add block")
+			return fmt.Errorf("add block: %w", err)
 		}
 
 		// commit block in bft engine
 		if newBlock.Header().Number() >= n.forkConfig.FINALITY {
 			if err := n.bft.CommitBlock(newBlock.Header(), true); err != nil {
-				return errors.Wrap(err, "bft commits")
+				return fmt.Errorf("bft commits: %w", err)
 			}
 		}
 		realElapsed := mclock.Now() - startTime

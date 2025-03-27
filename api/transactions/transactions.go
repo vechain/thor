@@ -6,11 +6,12 @@
 package transactions
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/mux"
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/thor"
@@ -116,11 +117,11 @@ func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32, head thor.By
 func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Request) error {
 	var rawTx *RawTx
 	if err := utils.ParseJSON(req.Body, &rawTx); err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "body"))
+		return utils.BadRequest(fmt.Errorf("body: %w", err))
 	}
 	tx, err := rawTx.decode()
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "raw"))
+		return utils.BadRequest(fmt.Errorf("raw: %w", err))
 	}
 
 	if err := t.pool.AddLocal(tx); err != nil {
@@ -140,26 +141,26 @@ func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http
 	id := mux.Vars(req)["id"]
 	txID, err := thor.ParseBytes32(id)
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "id"))
+		return utils.BadRequest(fmt.Errorf("id: %w", err))
 	}
 
 	head, err := t.parseHead(req.URL.Query().Get("head"))
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "head"))
+		return utils.BadRequest(fmt.Errorf("head: %w", err))
 	}
 	if _, err := t.repo.GetBlockSummary(head); err != nil {
 		if t.repo.IsNotFound(err) {
-			return utils.BadRequest(errors.WithMessage(err, "head"))
+			return utils.BadRequest(fmt.Errorf("head: %w", err))
 		}
 	}
 
 	raw := req.URL.Query().Get("raw")
 	if raw != "" && raw != "false" && raw != "true" {
-		return utils.BadRequest(errors.WithMessage(errors.New("should be boolean"), "raw"))
+		return utils.BadRequest(errors.New("raw: should be boolean"))
 	}
 	pending := req.URL.Query().Get("pending")
 	if pending != "" && pending != "false" && pending != "true" {
-		return utils.BadRequest(errors.WithMessage(errors.New("should be boolean"), "pending"))
+		return utils.BadRequest(errors.New("pending: should be boolean"))
 	}
 
 	if raw == "true" {
@@ -180,17 +181,17 @@ func (t *Transactions) handleGetTransactionReceiptByID(w http.ResponseWriter, re
 	id := mux.Vars(req)["id"]
 	txID, err := thor.ParseBytes32(id)
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "id"))
+		return utils.BadRequest(fmt.Errorf("id: %w", err))
 	}
 
 	head, err := t.parseHead(req.URL.Query().Get("head"))
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "head"))
+		return utils.BadRequest(fmt.Errorf("head: %w", err))
 	}
 
 	if _, err := t.repo.GetBlockSummary(head); err != nil {
 		if t.repo.IsNotFound(err) {
-			return utils.BadRequest(errors.WithMessage(err, "head"))
+			return utils.BadRequest(fmt.Errorf("head: %w", err))
 		}
 	}
 

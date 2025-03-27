@@ -6,9 +6,9 @@
 package genesis
 
 import (
+	"fmt"
 	"math"
 
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/runtime"
@@ -87,7 +87,7 @@ func (b *Builder) Build(stater *state.Stater) (blk *block.Block, events tx.Event
 
 	for _, proc := range b.stateProcs {
 		if err := proc(state); err != nil {
-			return nil, nil, nil, errors.Wrap(err, "state process")
+			return nil, nil, nil, fmt.Errorf("state process: %w", err)
 		}
 	}
 
@@ -102,10 +102,10 @@ func (b *Builder) Build(stater *state.Stater) (blk *block.Block, events tx.Event
 		})
 		out, _, err := exec()
 		if err != nil {
-			return nil, nil, nil, errors.Wrap(err, "call")
+			return nil, nil, nil, fmt.Errorf("call: %w", err)
 		}
 		if out.VMErr != nil {
-			return nil, nil, nil, errors.Wrap(out.VMErr, "vm")
+			return nil, nil, nil, fmt.Errorf("vm: %w", out.VMErr)
 		}
 		events = append(events, out.Events...)
 		transfers = append(transfers, out.Transfers...)
@@ -113,11 +113,11 @@ func (b *Builder) Build(stater *state.Stater) (blk *block.Block, events tx.Event
 
 	stage, err := state.Stage(trie.Version{})
 	if err != nil {
-		return nil, nil, nil, errors.Wrap(err, "stage")
+		return nil, nil, nil, fmt.Errorf("stage: %w", err)
 	}
 	stateRoot, err := stage.Commit()
 	if err != nil {
-		return nil, nil, nil, errors.Wrap(err, "commit state")
+		return nil, nil, nil, fmt.Errorf("commit state: %w", err)
 	}
 
 	parentID := thor.Bytes32{0xff, 0xff, 0xff, 0xff} //so, genesis number is 0

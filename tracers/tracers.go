@@ -19,9 +19,9 @@ package tracers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/vm"
@@ -106,7 +106,7 @@ func (d *directory) New(name string, cfg json.RawMessage, allowCustom bool) (Tra
 		// Assume JS code
 		tracer, err := d.jsEval(name, cfg)
 		if err != nil {
-			return nil, errors.Wrap(err, "unable to create custom tracer")
+			return nil, fmt.Errorf("unable to create custom tracer: %w", err)
 		}
 		return tracer, nil
 	} else {

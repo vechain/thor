@@ -16,7 +16,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
-	"github.com/pkg/errors"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -39,24 +38,24 @@ var (
 func run(ctx *cli.Context) error {
 	lvl, err := readIntFromUInt64Flag(ctx.Uint64(verbosityFlag.Name))
 	if err != nil {
-		return errors.Wrap(err, "parse verbosity flag")
+		return fmt.Errorf("parse verbosity flag: %w", err)
 	}
 	initLogger(lvl)
 
 	natm, err := nat.Parse(ctx.String("nat"))
 	if err != nil {
-		return errors.Wrap(err, "-nat")
+		return fmt.Errorf("-nat: %w", err)
 	}
 
 	var key *ecdsa.PrivateKey
 
 	if keyHex := ctx.String("keyhex"); keyHex != "" {
 		if key, err = crypto.HexToECDSA(keyHex); err != nil {
-			return errors.Wrap(err, "-keyhex")
+			return fmt.Errorf("-keyhex: %w", err)
 		}
 	} else {
 		if key, err = loadOrGenerateKeyFile(ctx.String("keyfile")); err != nil {
-			return errors.Wrap(err, "-keyfile")
+			return fmt.Errorf("-keyfile: %w", err)
 		}
 	}
 
@@ -65,13 +64,13 @@ func run(ctx *cli.Context) error {
 	if netrestrict != "" {
 		restrictList, err = netutil.ParseNetlist(netrestrict)
 		if err != nil {
-			return errors.Wrap(err, "-netrestrict")
+			return fmt.Errorf("-netrestrict: %w", err)
 		}
 	}
 
 	addr, err := net.ResolveUDPAddr("udp", ctx.String("addr"))
 	if err != nil {
-		return errors.Wrap(err, "-addr")
+		return fmt.Errorf("-addr: %w", err)
 	}
 	conn, err := net.ListenUDP("udp", addr)
 	if err != nil {

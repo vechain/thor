@@ -7,6 +7,7 @@ package accounts
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -14,7 +15,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/gorilla/mux"
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
@@ -65,17 +65,17 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 	hexAddr := mux.Vars(req)["address"]
 	addr, err := thor.ParseAddress(hexAddr)
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "address"))
+		return utils.BadRequest(fmt.Errorf("address: %w", err))
 	}
 	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"), false)
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "revision"))
+		return utils.BadRequest(fmt.Errorf("revision: %w", err))
 	}
 
 	_, st, err := utils.GetSummaryAndState(revision, a.repo, a.bft, a.stater)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
-			return utils.BadRequest(errors.WithMessage(err, "revision"))
+			return utils.BadRequest(fmt.Errorf("revision: %w", err))
 		}
 		return err
 	}
@@ -119,17 +119,17 @@ func (a *Accounts) getStorage(addr thor.Address, key thor.Bytes32, state *state.
 func (a *Accounts) handleGetAccount(w http.ResponseWriter, req *http.Request) error {
 	addr, err := thor.ParseAddress(mux.Vars(req)["address"])
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "address"))
+		return utils.BadRequest(fmt.Errorf("address: %w", err))
 	}
 	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"), false)
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "revision"))
+		return utils.BadRequest(fmt.Errorf("revision: %w", err))
 	}
 
 	summary, st, err := utils.GetSummaryAndState(revision, a.repo, a.bft, a.stater)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
-			return utils.BadRequest(errors.WithMessage(err, "revision"))
+			return utils.BadRequest(fmt.Errorf("revision: %w", err))
 		}
 		return err
 	}
@@ -144,21 +144,21 @@ func (a *Accounts) handleGetAccount(w http.ResponseWriter, req *http.Request) er
 func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) error {
 	addr, err := thor.ParseAddress(mux.Vars(req)["address"])
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "address"))
+		return utils.BadRequest(fmt.Errorf("address: %w", err))
 	}
 	key, err := thor.ParseBytes32(mux.Vars(req)["key"])
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "key"))
+		return utils.BadRequest(fmt.Errorf("key: %w", err))
 	}
 	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"), false)
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "revision"))
+		return utils.BadRequest(fmt.Errorf("revision: %w", err))
 	}
 
 	_, st, err := utils.GetSummaryAndState(revision, a.repo, a.bft, a.stater)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
-			return utils.BadRequest(errors.WithMessage(err, "revision"))
+			return utils.BadRequest(fmt.Errorf("revision: %w", err))
 		}
 		return err
 	}
@@ -173,16 +173,16 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) error {
 	callData := &CallData{}
 	if err := utils.ParseJSON(req.Body, &callData); err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "body"))
+		return utils.BadRequest(fmt.Errorf("body: %w", err))
 	}
 	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"), true)
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "revision"))
+		return utils.BadRequest(fmt.Errorf("revision: %w", err))
 	}
 	summary, st, err := utils.GetSummaryAndState(revision, a.repo, a.bft, a.stater)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
-			return utils.BadRequest(errors.WithMessage(err, "revision"))
+			return utils.BadRequest(fmt.Errorf("revision: %w", err))
 		}
 		return err
 	}
@@ -190,7 +190,7 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 	if mux.Vars(req)["address"] != "" {
 		address, err := thor.ParseAddress(mux.Vars(req)["address"])
 		if err != nil {
-			return utils.BadRequest(errors.WithMessage(err, "address"))
+			return utils.BadRequest(fmt.Errorf("address: %w", err))
 		}
 		addr = &address
 	}
@@ -216,16 +216,16 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 func (a *Accounts) handleCallBatchCode(w http.ResponseWriter, req *http.Request) error {
 	batchCallData := &BatchCallData{}
 	if err := utils.ParseJSON(req.Body, &batchCallData); err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "body"))
+		return utils.BadRequest(fmt.Errorf("body: %w", err))
 	}
 	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"), true)
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "revision"))
+		return utils.BadRequest(fmt.Errorf("revision: %w", err))
 	}
 	summary, st, err := utils.GetSummaryAndState(revision, a.repo, a.bft, a.stater)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
-			return utils.BadRequest(errors.WithMessage(err, "revision"))
+			return utils.BadRequest(fmt.Errorf("revision: %w", err))
 		}
 		return err
 	}
@@ -328,7 +328,7 @@ func (a *Accounts) handleBatchCallData(batchCallData *BatchCallData) (txCtx *xen
 	if len(batchCallData.BlockRef) > 0 {
 		blockRef, err := hexutil.Decode(batchCallData.BlockRef)
 		if err != nil {
-			return nil, 0, nil, errors.WithMessage(err, "blockRef")
+			return nil, 0, nil, fmt.Errorf("blockRef: %w", err)
 		}
 		if len(blockRef) != 8 {
 			return nil, 0, nil, errors.New("blockRef: invalid length")
@@ -350,7 +350,7 @@ func (a *Accounts) handleBatchCallData(batchCallData *BatchCallData) (txCtx *xen
 		if c.Data != "" {
 			data, err = hexutil.Decode(c.Data)
 			if err != nil {
-				err = utils.BadRequest(errors.WithMessage(err, fmt.Sprintf("data[%d]", i)))
+				err = utils.BadRequest(fmt.Errorf("data[%d]: %w", i, err))
 				return
 			}
 		}

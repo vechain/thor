@@ -11,7 +11,6 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/events"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/chain"
@@ -61,7 +60,7 @@ func (t *Transfers) filter(ctx context.Context, filter *TransferFilter) ([]*Filt
 func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Request) error {
 	var filter TransferFilter
 	if err := utils.ParseJSON(req.Body, &filter); err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "body"))
+		return utils.BadRequest(fmt.Errorf("body: %w", err))
 	}
 	if filter.Options != nil && filter.Options.Limit > t.limit {
 		return utils.Forbidden(fmt.Errorf("options.limit exceeds the maximum allowed value of %d", t.limit))

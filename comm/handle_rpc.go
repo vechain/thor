@@ -11,7 +11,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/comm/proto"
 	"github.com/vechain/thor/v2/thor"
@@ -31,7 +30,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(any), txsT
 	switch msg.Code {
 	case proto.MsgGetStatus:
 		if err := msg.Decode(&struct{}{}); err != nil {
-			return errors.WithMessage(err, "decode msg")
+			return fmt.Errorf("decode msg: %w", err)
 		}
 
 		best := c.repo.BestBlockSummary().Header
@@ -44,7 +43,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(any), txsT
 	case proto.MsgNewBlock:
 		var newBlock *block.Block
 		if err := msg.Decode(&newBlock); err != nil {
-			return errors.WithMessage(err, "decode msg")
+			return fmt.Errorf("decode msg")
 		}
 
 		peer.MarkBlock(newBlock.Header().ID())
@@ -54,7 +53,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(any), txsT
 	case proto.MsgNewBlockID:
 		var newBlockID thor.Bytes32
 		if err := msg.Decode(&newBlockID); err != nil {
-			return errors.WithMessage(err, "decode msg")
+			return fmt.Errorf("decode msg: %w", err)
 		}
 		peer.MarkBlock(newBlockID)
 		select {
@@ -65,7 +64,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(any), txsT
 	case proto.MsgNewTx:
 		var newTx *tx.Transaction
 		if err := msg.Decode(&newTx); err != nil {
-			return errors.WithMessage(err, "decode msg")
+			return fmt.Errorf("decode msg: %w", err)
 		}
 		peer.MarkTransaction(newTx.Hash())
 		_ = c.txPool.Add(newTx)
@@ -73,7 +72,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(any), txsT
 	case proto.MsgGetBlockByID:
 		var blockID thor.Bytes32
 		if err := msg.Decode(&blockID); err != nil {
-			return errors.WithMessage(err, "decode msg")
+			return fmt.Errorf("decode msg: %w", err)
 		}
 		var result []rlp.RawValue
 		b, err := c.repo.GetBlock(blockID)
@@ -89,7 +88,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(any), txsT
 	case proto.MsgGetBlockIDByNumber:
 		var num uint32
 		if err := msg.Decode(&num); err != nil {
-			return errors.WithMessage(err, "decode msg")
+			return fmt.Errorf("decode msg: %w", err)
 		}
 
 		id, err := c.repo.NewBestChain().GetBlockID(num)
@@ -104,7 +103,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(any), txsT
 	case proto.MsgGetBlocksFromNumber:
 		var num uint32
 		if err := msg.Decode(&num); err != nil {
-			return errors.WithMessage(err, "decode msg")
+			return fmt.Errorf("decode msg: %w", err)
 		}
 
 		const maxBlocks = 1024
@@ -129,7 +128,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(any), txsT
 	case proto.MsgGetTxs:
 		const maxTxSyncSize = 100 * 1024
 		if err := msg.Decode(&struct{}{}); err != nil {
-			return errors.WithMessage(err, "decode msg")
+			return fmt.Errorf("decode msg: %w", err)
 		}
 
 		if txsToSync.synced {

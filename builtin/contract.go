@@ -7,8 +7,8 @@ package builtin
 
 import (
 	"encoding/hex"
+	"fmt"
 
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/builtin/gen"
 	"github.com/vechain/thor/v2/thor"
@@ -25,7 +25,7 @@ func mustLoadContract(name string) *contract {
 	data := gen.MustAsset(asset)
 	abi, err := abi.New(data)
 	if err != nil {
-		panic(errors.Wrap(err, "load ABI for '"+name+"'"))
+		panic(fmt.Errorf("load ABI for '%s': %w", name, err))
 	}
 
 	return &contract{
@@ -40,7 +40,7 @@ func (c *contract) RuntimeBytecodes() []byte {
 	asset := "compiled/" + c.name + ".bin-runtime"
 	data, err := hex.DecodeString(string(gen.MustAsset(asset)))
 	if err != nil {
-		panic(errors.Wrap(err, "load runtime byte code for '"+c.name+"'"))
+		panic(fmt.Errorf("load runtime byte code for %s: %w'" + c.name + "'"))
 	}
 	return data
 }
@@ -50,7 +50,7 @@ func (c *contract) NativeABI() *abi.ABI {
 	data := gen.MustAsset(asset)
 	abi, err := abi.New(data)
 	if err != nil {
-		panic(errors.Wrap(err, "load native ABI for '"+c.name+"'"))
+		panic(fmt.Errorf("load native ABI for '" + c.name + "'"))
 	}
 	return abi
 }
