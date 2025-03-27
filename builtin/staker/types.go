@@ -36,6 +36,12 @@ type (
 		ExitTxBlock uint32        // the block number when the validator signaled the exit
 	}
 
+	Withdraw struct {
+		Endorsor  thor.Address
+		Available bool
+		Amount    *big.Int
+	}
+
 	previousExit struct {
 		PreviousExit uint32
 	}

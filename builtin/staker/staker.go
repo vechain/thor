@@ -44,6 +44,7 @@ const (
 	slotQueuedTail
 	slotPreviousExit
 	slotQueuedGroupSize
+	slotWithdraws
 )
 
 // Staker implements native methods of `Staker` contract.
@@ -62,11 +63,13 @@ type Staker struct {
 	highStakingPeriod   uint32
 	epochLength         uint32
 	params              *params.Params
+	withdraws           *solidity.Mapping[thor.Address, *Withdraw]
 }
 
 // New create a new instance.
 func New(addr thor.Address, state *state.State, params *params.Params) *Staker {
 	validators := solidity.NewMapping[thor.Address, *Validator](addr, state, thor.Bytes32{slotValidators})
+	withdraws := solidity.NewMapping[thor.Address, *Withdraw](addr, state, thor.Bytes32{slotWithdraws})
 
 	lowStakingPeriod := uint32(360) * 24 * 7
 	if num, err := solidity.NewUint256(addr, state, thor.BytesToBytes32([]byte("staker-low-staking-period"))).Get(); err == nil {
@@ -112,6 +115,7 @@ func New(addr thor.Address, state *state.State, params *params.Params) *Staker {
 		mediumStakingPeriod: mediumStakingPeriod,
 		highStakingPeriod:   highStakingPeriod,
 		params:              params,
+		withdraws:           withdraws,
 	}
 }
 
@@ -193,6 +197,9 @@ func (a *Staker) UpdateAutoRenew(endorsor thor.Address, master thor.Address, aut
 	return a.validators.Set(master, validator)
 }
 
+// IncreaseStake increases the stake of a queued or active validator
+// if a validator is active, the stake is increase, but the weight stays the same
+// the weight will be recalculated at the end of the staking period, by the housekeep function
 func (a *Staker) IncreaseStake(master thor.Address, endorsor thor.Address, amount *big.Int) (*big.Int, error) {
 	entry, err := a.validators.Get(master)
 	if err != nil {
@@ -204,26 +211,85 @@ func (a *Staker) IncreaseStake(master thor.Address, endorsor thor.Address, amoun
 	if entry.Endorsor != endorsor {
 		return nil, errors.New("invalid endorser")
 	}
-	if entry.Status != StatusQueued {
-		return nil, errors.New("validator is not queued")
-	}
 
 	newStake := big.NewInt(0).Add(entry.Stake, amount)
 	if newStake.Cmp(maxStake) > 0 {
 		return nil, errors.New("stake is out of range")
 	}
 
-	if _, err := a.WithdrawStake(endorsor, master); err != nil {
-		return nil, errors.New("unable to withdraw validator")
+	entry.Stake = newStake
+
+	switch entry.Status {
+	case StatusQueued:
+		if _, err := a.WithdrawStake(endorsor, master); err != nil {
+			return nil, errors.New("unable to withdraw validator")
+		}
+
+		entry.Weight = newStake
+
+		if err := a.validatorQueue.Add(master, entry); err != nil {
+			return nil, err
+		}
+		if err := a.queuedGroupSize.Add(big.NewInt(1)); err != nil {
+			return nil, err
+		}
+	case StatusActive:
+		err := a.validators.Set(master, entry)
+		if err != nil {
+			return nil, err
+		}
+
+	default:
+		return nil, errors.New("validator is not queued nor active")
+	}
+
+	return newStake, nil
+}
+
+func (a *Staker) DecreaseStake(master thor.Address, endorsor thor.Address, amount *big.Int) (*big.Int, error) {
+	entry, err := a.validators.Get(master)
+	if err != nil {
+		return nil, err
+	}
+	if entry.IsEmpty() {
+		return nil, errors.New("validator doesn't exist")
+	}
+	if entry.Endorsor != endorsor {
+		return nil, errors.New("invalid endorser")
+	}
+
+	newStake := big.NewInt(0).Sub(entry.Stake, amount)
+	if newStake.Cmp(minStake) < 0 {
+		return nil, errors.New("stake is out of range")
+	}
+	if entry.Status != StatusActive {
+		return nil, errors.New("validator is not active")
 	}
 
 	entry.Stake = newStake
-	entry.Weight = newStake
-
-	if err := a.validatorQueue.Add(master, entry); err != nil {
+	withdraw, err := a.withdraws.Get(master)
+	if err != nil {
 		return nil, err
 	}
-	if err := a.queuedGroupSize.Add(big.NewInt(1)); err != nil {
+	// set withdraw to unavailable, even if it wasn't empty
+	if withdraw != nil && !withdraw.Endorsor.IsZero() {
+		withdraw.Available = false
+		withdraw.Amount = big.NewInt(0).Add(withdraw.Amount, amount)
+	} else {
+		withdraw = &Withdraw{
+			Endorsor:  endorsor,
+			Available: false,
+			Amount:    amount,
+		}
+	}
+
+	err = a.withdraws.Set(master, withdraw)
+	if err != nil {
+		return nil, err
+	}
+
+	err = a.validators.Set(master, entry)
+	if err != nil {
 		return nil, err
 	}
 
@@ -232,6 +298,10 @@ func (a *Staker) IncreaseStake(master thor.Address, endorsor thor.Address, amoun
 
 func (a *Staker) Get(master thor.Address) (*Validator, error) {
 	return a.validators.Get(master)
+}
+
+func (a *Staker) GetWithdraw(master thor.Address) (*Withdraw, error) {
+	return a.withdraws.Get(master)
 }
 
 func (a *Staker) PreviousExit() (uint32, error) {
@@ -333,6 +403,20 @@ func (a *Staker) Housekeep(currentBlock uint32, forkBlock uint32) (bool, error) 
 			}
 
 			if entry.Expiry != nil && currentBlock >= *entry.Expiry {
+				// recalculate entry weight
+				entry.Weight = entry.Stake
+				withdraw, err := a.withdraws.Get(*next)
+				if err != nil {
+					return false, err
+				}
+				if withdraw != nil && !withdraw.Endorsor.IsZero() {
+					withdraw.Available = true
+					err := a.withdraws.Set(*next, withdraw)
+					if err != nil {
+						return false, err
+					}
+				}
+
 				if entry.Status == StatusActive && !entry.AutoRenew {
 					// Put to cooldown
 					entry.Status = StatusCooldown
@@ -438,8 +522,29 @@ func (a *Staker) RemoveValidator(master thor.Address, currentBlock uint32) error
 		return err
 	}
 
+	// check for previous withdraws
+	withdraw, err := a.withdraws.Get(master)
+	if err != nil {
+		return err
+	}
+	totalWithdraw := entry.Stake
+	// if previous withdraw exists - add it's amount to the total
+	if withdraw != nil && withdraw.Endorsor == entry.Endorsor && withdraw.Available {
+		totalWithdraw = big.NewInt(0).Add(totalWithdraw, withdraw.Amount)
+	}
+	newWithdraw := Withdraw{
+		Endorsor:  entry.Endorsor,
+		Available: true,
+		Amount:    totalWithdraw,
+	}
+	err = a.withdraws.Set(master, &newWithdraw)
+	if err != nil {
+		return err
+	}
+
 	entry.Status = StatusExit
 	entry.Weight = big.NewInt(0)
+	entry.Stake = big.NewInt(0)
 
 	return a.leaderGroup.Remove(master, entry)
 }
@@ -520,20 +625,45 @@ func (a *Staker) WithdrawStake(endorsor thor.Address, master thor.Address) (*big
 	if entry.Endorsor != endorsor {
 		return big.NewInt(0), errors.New("invalid endorser")
 	}
-	switch entry.Status {
-	case StatusExit:
-		// skip
-	case StatusQueued:
-		if err := a.validatorQueue.Remove(master, entry); err != nil {
-			return nil, err
-		}
-	default:
-		return nil, errors.New("validator is not inactive")
-	}
-	if err := a.validators.Set(master, &Validator{}); err != nil {
+
+	withdraw, err := a.withdraws.Get(master)
+	if err != nil {
 		return nil, err
 	}
-	return entry.Stake, nil
+	withdrawnAmount := big.NewInt(0)
+	removeValidator := false
+	if !withdraw.Endorsor.IsZero() && withdraw.Endorsor == endorsor && withdraw.Amount.Cmp(big.NewInt(0)) == 1 && withdraw.Available {
+		if err := a.withdraws.Set(master, &Withdraw{}); err != nil {
+			return nil, err
+		}
+		withdrawnAmount = withdraw.Amount
+		if entry.Stake.Cmp(big.NewInt(0)) == 0 {
+			removeValidator = true
+		}
+	} else {
+		switch entry.Status {
+		case StatusExit:
+			// skip
+		case StatusQueued:
+			if err := a.validatorQueue.Remove(master, entry); err != nil {
+				return nil, err
+			}
+			// Decrement queuedGroupSize when removing from queue
+			if err := a.queuedGroupSize.Sub(big.NewInt(1)); err != nil {
+				return nil, err
+			}
+			withdrawnAmount = entry.Stake
+		default:
+			return nil, errors.New("validator is not inactive")
+		}
+		removeValidator = true
+	}
+	if removeValidator {
+		if err := a.validators.Set(master, &Validator{}); err != nil {
+			return nil, err
+		}
+	}
+	return withdrawnAmount, nil
 }
 
 // Transition from PoA to PoS. It checks that the queue is at least 2/3 of the maxProposers, and activates the first

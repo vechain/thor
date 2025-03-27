@@ -9,13 +9,27 @@ contract Staker {
         uint256 stake,
         bool autoRenew
     );
-    event ValidatorWithdrawn(address indexed endorsor, address indexed master, uint256 stake);
-    event ValidatorUpdatedAutoRenew(address indexed endorsor, address indexed master, bool autoRenew);
-    event StakeUpdated(
+    event ValidatorWithdrawn(
+        address indexed endorsor,
+        address indexed master,
+        uint256 stake
+    );
+    event ValidatorUpdatedAutoRenew(
+        address indexed endorsor,
+        address indexed master,
+        bool autoRenew
+    );
+    event StakeIncreased(
         address indexed endorsor,
         address indexed master,
         uint256 stake,
         uint256 added
+    );
+    event StakeDecreased(
+        address indexed endorsor,
+        address indexed master,
+        uint256 stake,
+        uint256 removed
     );
 
     /**
@@ -28,7 +42,11 @@ contract Staker {
     /**
      * @dev addValidator adds a validator to the queue.
      */
-    function addValidator(address master, uint32 period, bool autoRenew) public payable {
+    function addValidator(
+        address master,
+        uint32 period,
+        bool autoRenew
+    ) public payable {
         StakerNative(address(this)).native_addValidator(
             msg.sender,
             master,
@@ -40,7 +58,7 @@ contract Staker {
     }
 
     /**
-     * @dev increaseStake adds VET to the current stake of the queued validator.
+     * @dev increaseStake adds VET to the current stake of the queued/active validator.
      */
     function increaseStake(address master) public payable {
         require(msg.value > 0, "value is empty");
@@ -49,7 +67,20 @@ contract Staker {
             master,
             msg.value
         );
-        emit StakeUpdated(msg.sender, master, stake, msg.value);
+        emit StakeIncreased(msg.sender, master, stake, msg.value);
+    }
+
+    /**
+     * @dev decreaseStake removes VET from the current stake of an active validator
+     */
+    function decreaseStake(address master) public payable {
+        require(msg.value > 0, "value is empty");
+        uint256 stake = StakerNative(address(this)).native_decreaseStake(
+            msg.sender,
+            master,
+            msg.value
+        );
+        emit StakeDecreased(msg.sender, master, stake, msg.value);
     }
 
     /**
@@ -73,6 +104,15 @@ contract Staker {
         address master
     ) public view returns (address, uint256, uint256, uint8) {
         return StakerNative(address(this)).native_get(master);
+    }
+
+    /**
+     * @dev getWithdraw returns the Endorsor, Availability, amount of a validator's withdrawal.
+     */
+    function getWithdraw(
+        address master
+    ) public view returns (address, bool, uint256) {
+        return StakerNative(address(this)).native_getWithdraw(master);
     }
 
     /**
@@ -100,7 +140,11 @@ contract Staker {
      * @dev updateAutoRenew updates the autoRenew flag of a validator.
      */
     function updateAutoRenew(address master, bool autoRenew) public {
-        StakerNative(address(this)).native_updateAutoRenew(msg.sender, master, autoRenew);
+        StakerNative(address(this)).native_updateAutoRenew(
+            msg.sender,
+            master,
+            autoRenew
+        );
         emit ValidatorUpdatedAutoRenew(msg.sender, master, autoRenew);
     }
 
@@ -129,6 +173,12 @@ interface StakerNative {
         uint256 stake
     ) external returns (uint256);
 
+    function native_decreaseStake(
+        address endorsor,
+        address master,
+        uint256 stake
+    ) external returns (uint256);
+
     function native_withdraw(
         address endorsor,
         address master
@@ -141,11 +191,19 @@ interface StakerNative {
         address master
     ) external view returns (address, uint256, uint256, uint8);
 
+    function native_getWithdraw(
+        address master
+    ) external view returns (address, bool, uint256);
+
     function native_firstActive() external view returns (address);
 
     function native_firstQueued() external view returns (address);
 
     function native_next(address prev) external view returns (address);
 
-    function native_updateAutoRenew(address endorsor, address master, bool autoRenew) external;
+    function native_updateAutoRenew(
+        address endorsor,
+        address master,
+        bool autoRenew
+    ) external;
 }

@@ -46,6 +46,24 @@ func init() {
 			}
 			return []any{validator.Endorsor, validator.Stake, validator.Weight, validator.Status}
 		}},
+		{"native_getWithdraw", func(env *xenv.Environment) []any {
+			var args struct {
+				Master common.Address
+			}
+			env.ParseArgs(&args)
+
+			env.UseGas(thor.SloadGas)
+			env.UseGas(thor.SloadGas)
+
+			withdraw, err := Staker.Native(env.State()).GetWithdraw(thor.Address(args.Master))
+			if err != nil {
+				panic(err)
+			}
+			if withdraw.Endorsor.IsZero() {
+				return []any{thor.Address{}, false, big.NewInt(0)}
+			}
+			return []any{withdraw.Endorsor, withdraw.Available, withdraw.Amount}
+		}},
 		{"native_firstActive", func(env *xenv.Environment) []any {
 			env.UseGas(thor.SloadGas)
 			first, err := Staker.Native(env.State()).FirstActive()
@@ -132,6 +150,21 @@ func init() {
 			env.ParseArgs(&args)
 
 			newStake, err := Staker.Native(env.State()).IncreaseStake(thor.Address(args.Endorsor), thor.Address(args.Master), args.Stake)
+			if err != nil {
+				panic(err)
+			}
+			env.UseGas(thor.SstoreSetGas)
+			return []any{newStake}
+		}},
+		{"native_decreaseStake", func(env *xenv.Environment) []any {
+			var args struct {
+				Endorsor common.Address
+				Master   common.Address
+				Stake    *big.Int
+			}
+			env.ParseArgs(&args)
+
+			newStake, err := Staker.Native(env.State()).DecreaseStake(thor.Address(args.Endorsor), thor.Address(args.Master), args.Stake)
 			if err != nil {
 				panic(err)
 			}

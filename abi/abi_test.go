@@ -99,11 +99,13 @@ func TestStakerABI(t *testing.T) {
 		{"addValidator", false},
 		{"withdraw", false},
 		{"get", true},
+		{"getWithdraw", true},
 		{"firstActive", true},
 		{"firstQueued", true},
 		{"next", true},
 		{"updateAutoRenew", false},
 		{"increaseStake", false},
+		{"decreaseStake", false},
 	}
 
 	assert.Equal(t, len(testCases), len(abi.Methods()))
