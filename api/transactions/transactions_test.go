@@ -128,14 +128,14 @@ func getTxReceipt(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, receipt.GasUsed, legacyTx.Gas(), "receipt gas used not equal to transaction gas")
-	assert.Equal(t, receipt.Type, legacyTx.Type())
+	assert.Equal(t, receipt.Type, math.HexOrDecimal64(legacyTx.Type()))
 
 	r = httpGetAndCheckResponseStatus(t, "/transactions/"+dynFeeTx.ID().String()+"/receipt", 200)
 	if err := json.Unmarshal(r, &receipt); err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, receipt.GasUsed, legacyTx.Gas(), "receipt gas used not equal to transaction gas")
-	assert.Equal(t, receipt.Type, dynFeeTx.Type())
+	assert.Equal(t, receipt.Type, math.HexOrDecimal64(dynFeeTx.Type()))
 }
 
 func sendLegacyTx(t *testing.T) {

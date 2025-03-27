@@ -227,7 +227,7 @@ func TestPackAfterGalacticaFork(t *testing.T) {
 	// Adopt a tx which has not enough max fee to cover for base fee
 	badTx := tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).Gas(21000).MaxFeePerGas(big.NewInt(thor.InitialBaseFee - 1)).MaxPriorityFeePerGas(common.Big1).Expiration(100).Build()
 	badTx = tx.MustSign(badTx, genesis.DevAccounts()[0].PrivateKey)
-	expectedErrorMessage := "tx not adoptable now"
+	expectedErrorMessage := "tx not adoptable now: max fee per gas is less than block base fee"
 	if err := flow.Adopt(badTx); err.Error() != expectedErrorMessage {
 		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
 	}
@@ -322,7 +322,7 @@ func TestAdoptErrorAfterGalactica(t *testing.T) {
 	tr = tx.NewBuilder(tx.TypeDynamicFee).ChainTag(chain.Repo().ChainTag()).Nonce(2).MaxFeePerGas(notEnoughBaseFee).Gas(21000).Expiration(100).Build()
 	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 	err = chain.MintBlock(genesis.DevAccounts()[0], tr)
-	expectedErrMsg = "unable to adopt tx into block: tx not adoptable now"
+	expectedErrMsg = "unable to adopt tx into block: tx not adoptable now: max fee per gas is less than block base fee"
 	assert.Equal(t, expectedErrMsg, err.Error())
 
 	// Try to adopt a dyn fee with just the right amount of max fee per gas - SUCCESS
