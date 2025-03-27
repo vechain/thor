@@ -11,9 +11,10 @@ import (
 )
 
 type FeesHistory struct {
-	OldestBlock   thor.Bytes32   `json:"oldestBlock"`
-	BaseFees      []*hexutil.Big `json:"baseFees"`
-	GasUsedRatios []float64      `json:"gasUsedRatios"`
+	OldestBlock   thor.Bytes32     `json:"oldestBlock"`
+	BaseFees      []*hexutil.Big   `json:"baseFees"`
+	GasUsedRatios []float64        `json:"gasUsedRatios"`
+	Reward        [][]*hexutil.Big `json:"reward"`
 }
 
 type FeesPriority struct {

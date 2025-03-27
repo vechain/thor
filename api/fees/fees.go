@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/mux"
@@ -31,7 +32,6 @@ type Config struct {
 type Fees struct {
 	data           *FeesData
 	bft            bft.Committer
-	stater         *state.Stater
 	minPriorityFee *big.Int // The minimum suggested priority fee is (Config.PriorityIncreasePercentage)% of the block initial base fee.
 	config         Config
 }
@@ -42,70 +42,104 @@ func calcPriorityFee(baseFee *big.Int, priorityPercentile int64) *big.Int {
 
 func New(repo *chain.Repository, bft bft.Committer, stater *state.Stater, config Config) *Fees {
 	return &Fees{
-		data:           newFeesData(repo, config.FixedCacheSize),
+		data:           newFeesData(repo, stater, config.FixedCacheSize),
 		bft:            bft,
-		stater:         stater,
 		minPriorityFee: calcPriorityFee(big.NewInt(thor.InitialBaseFee), int64(config.PriorityIncreasePercentage)),
 		config:         config,
 	}
 }
 
-func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.BlockSummary, error) {
-	// Validate blockCount
+func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.BlockSummary, *[]float64, error) {
+	blockCount, err := f.validateBlockCount(req)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+
+	newestBlockSummary, err := f.validateNewestBlock(req, blockCount)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+
+	rewardPercentiles, err := f.validateRewardPercentiles(req)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+
+	return uint32(blockCount), newestBlockSummary, rewardPercentiles, nil
+}
+
+func (f *Fees) validateBlockCount(req *http.Request) (uint64, error) {
 	blockCountParam := req.URL.Query().Get("blockCount")
 	blockCount, err := strconv.ParseUint(blockCountParam, 10, 32)
 	if err != nil {
-		return 0, nil, utils.BadRequest(errors.WithMessage(err, "invalid blockCount, it should represent an integer"))
+		return 0, utils.BadRequest(errors.WithMessage(err, "invalid blockCount, it should represent an integer"))
 	}
 
 	if blockCount == 0 {
-		return 0, nil, utils.BadRequest(errors.New("invalid blockCount, it should not be 0"))
+		return 0, utils.BadRequest(errors.New("invalid blockCount, it should not be 0"))
 	}
 
-	// Validate newestBlock
+	return blockCount, nil
+}
+
+func (f *Fees) validateNewestBlock(req *http.Request, blockCount uint64) (*chain.BlockSummary, error) {
 	newestBlock, err := utils.ParseRevision(req.URL.Query().Get("newestBlock"), true)
 	if err != nil {
-		return 0, nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
+		return nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
 	}
 
-	newestBlockSummary, _, err := utils.GetSummaryAndState(newestBlock, f.data.repo, f.bft, f.stater)
+	newestBlockSummary, _, err := utils.GetSummaryAndState(newestBlock, f.data.repo, f.bft, f.data.stater)
 	if err != nil {
 		if f.data.repo.IsNotFound(err) {
-			// return 400 for the parameter validation
-			return 0, nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
+			return nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
 		}
-		// all other unexpected errors will fall to 500 error
-		return 0, nil, err
+		return nil, err
 	}
 
 	bestBlockNumber := f.data.repo.BestBlockSummary().Header.Number()
-	// Calculate minAllowedBlock
 	minAllowedBlock := uint32(math.Max(0, float64(int(bestBlockNumber)-f.config.APIBacktraceLimit+1)))
 
-	// Adjust blockCount if necessary
-	if int(bestBlockNumber) < f.config.APIBacktraceLimit {
-		blockCount = uint64(math.Min(float64(blockCount), float64(bestBlockNumber+1)))
-	}
-
 	if newestBlockSummary.Header.Number() < minAllowedBlock {
-		return 0, nil, utils.BadRequest(errors.New("invalid newestBlock, it is below the minimum allowed block"))
+		return nil, utils.BadRequest(errors.New("invalid newestBlock, it is below the minimum allowed block"))
 	}
 
-	// Adjust blockCount if the oldest block is below the allowed range
 	if int(newestBlockSummary.Header.Number())-int(blockCount) < int(minAllowedBlock) {
 		blockCount = uint64(newestBlockSummary.Header.Number() - minAllowedBlock + 1)
 	}
 
-	return uint32(blockCount), newestBlockSummary, nil
+	return newestBlockSummary, nil
+}
+
+func (f *Fees) validateRewardPercentiles(req *http.Request) (*[]float64, error) {
+	rewardPercentilesParam := req.URL.Query().Get("rewardPercentiles")
+	if rewardPercentilesParam == "" {
+		return nil, nil
+	}
+
+	percentileStrs := strings.Split(rewardPercentilesParam, ",")
+	rewardPercentiles := make([]float64, 0, len(percentileStrs))
+
+	for _, str := range percentileStrs {
+		val, err := strconv.ParseFloat(str, 64)
+		if err != nil {
+			return nil, utils.BadRequest(errors.WithMessage(err, "invalid rewardPercentiles value"))
+		}
+		if val < 0 || val > 100 {
+			return nil, utils.BadRequest(errors.New("rewardPercentiles values must be between 0 and 100"))
+		}
+		rewardPercentiles = append(rewardPercentiles, val)
+	}
+
+	return &rewardPercentiles, nil
 }
 
 func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) error {
-	blockCount, newestBlockSummary, err := f.validateGetFeesHistoryParams(req)
+	blockCount, newestBlockSummary, rewardPercentiles, err := f.validateGetFeesHistoryParams(req)
 	if err != nil {
 		return err
 	}
 
-	oldestBlockRevision, baseFees, gasUsedRatios, err := f.data.resolveRange(newestBlockSummary, blockCount)
+	oldestBlockRevision, baseFees, gasUsedRatios, rewards, err := f.data.resolveRange(newestBlockSummary, blockCount, rewardPercentiles)
 	if err != nil {
 		return err
 	}
@@ -114,6 +148,7 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 		OldestBlock:   oldestBlockRevision,
 		BaseFees:      baseFees,
 		GasUsedRatios: gasUsedRatios,
+		Reward:        rewards,
 	})
 }
 
