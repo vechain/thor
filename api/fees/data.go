@@ -84,7 +84,7 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 					if err != nil {
 						return thor.Bytes32{}, nil, nil, nil, err
 					}
-					copy(rewards[i-1], blockRewards)
+					rewards[i-1] = blockRewards
 				}
 				newestBlockID = header.ParentID()
 				continue
