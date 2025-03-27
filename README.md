@@ -37,7 +37,7 @@ VeChainThor is the layer 1 blockchain, highly compatible with EVM<sup>*</sup>, w
 VeChainThor is a public blockchain that is designed for the mass adoption of blockchain technology by enterprise users
 of all sizes and is intended to serve as a foundation for a sustainable and scalable enterprise blockchain ecosystem.
 
-> VeChainThor is currently up-to-date with the EVM's `paris` hard fork,
+> VeChainThor is currently up-to-date with the EVM's `shanghai` hard fork,
 > set [evmVersion](https://docs.soliditylang.org/en/latest/using-the-compiler.html#setting-the-evm-version-to-target)
 > to `shanghai` if you are using solidity compiler version `0.8.20` or above.
 ___
