@@ -146,7 +146,6 @@ func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32, rewardPercentiles *[]flo
 }
 
 func (fd *FeesData) getRewardsForCache(block *block.Block, baseGasPrice *big.Int) (*rewards, error) {
-	// If there are no transactions, return rewards with zero values
 	transactions := block.Transactions()
 
 	header := block.Header()
@@ -183,6 +182,7 @@ func (fd *FeesData) getRewardsForCache(block *block.Block, baseGasPrice *big.Int
 
 func (fd *FeesData) calculateRewards(cachedRewards *rewards, rewardPercentiles *[]float64) []*hexutil.Big {
 	rewards := make([]*hexutil.Big, len(*rewardPercentiles))
+	// If there are no reward items, return rewards with value 0
 	if cachedRewards == nil || len(cachedRewards.items) == 0 {
 		for i := range rewards {
 			rewards[i] = (*hexutil.Big)(big.NewInt(0))
