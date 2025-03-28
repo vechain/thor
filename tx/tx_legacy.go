@@ -87,7 +87,6 @@ func (t *legacyTransaction) evaluateWork(origin thor.Address) func(nonce uint64)
 			t.GasPriceCoef,
 			t.Gas,
 			t.DependsOn,
-			t.Nonce,
 			&t.Reserved,
 			origin,
 		})

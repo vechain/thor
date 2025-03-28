@@ -106,6 +106,6 @@ func (t *dynamicFeeTransaction) decode(input []byte) error {
 
 // Below are the methods that are not compatible with dynamic fee transaction
 func (t *dynamicFeeTransaction) gasPriceCoef() uint8 { return 0 } // Return default value as they are not meant to be used anywhere else
-func (t *dynamicFeeTransaction) evaluateWork(origin thor.Address) func(nonce uint64) *big.Int { // Return default value as they are not meant to be used anywhere else
+func (t *dynamicFeeTransaction) evaluateWork(_ thor.Address) func(nonce uint64) *big.Int { // Return default value as they are not meant to be used anywhere else
 	return func(nonce uint64) *big.Int { return common.Big0 }
 }

@@ -79,7 +79,7 @@ type txData interface {
 	signature() []byte
 	setSignature(sig []byte)
 	evaluateWork(origin thor.Address) func(nonce uint64) *big.Int
-	signingFields() []any // signingFields returns the fields that are used to compute the singing hash.
+	signingFields() []any // signingFields returns the fields that are used to compute the signing hash.
 
 	// Encode/decode encodes/decodes the tx body into binary format, the format is defined by the tx data itself.
 	// This allows different tx types to have different encoding formats. The coding function are designed only
