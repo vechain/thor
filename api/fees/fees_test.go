@@ -122,9 +122,8 @@ func initFeesServer(t *testing.T, backtraceLimit int, fixedCacheSize int, number
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 
-	// Create blocks with transactions
+	// Create blocks with two dynamic fee transactions
 	for i := range numberOfBlocks - 1 {
-		// Create one transaction per block with different priority fees
 		trx1 := tx.NewBuilder(tx.TypeDynamicFee).
 			ChainTag(thorChain.Repo().ChainTag()).
 			MaxFeePerGas(big.NewInt(250_000_000_000_000)).
