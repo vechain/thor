@@ -242,15 +242,13 @@ func createDb(t *testing.T) *logdb.LogDB {
 // Utilities functions
 func newReceipt() *tx.Receipt {
 	return &tx.Receipt{
-		ReceiptBody: tx.ReceiptBody{
-			Outputs: []*tx.Output{
-				{
-					Transfers: tx.Transfers{{
-						Sender:    datagen.RandAddress(),
-						Recipient: datagen.RandAddress(),
-						Amount:    new(big.Int).SetBytes(datagen.RandAddress().Bytes()),
-					}},
-				},
+		Outputs: []*tx.Output{
+			{
+				Transfers: tx.Transfers{{
+					Sender:    datagen.RandAddress(),
+					Recipient: datagen.RandAddress(),
+					Amount:    new(big.Int).SetBytes(datagen.RandAddress().Bytes()),
+				}},
 			},
 		},
 	}

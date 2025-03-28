@@ -441,10 +441,8 @@ func initChainRepository(gene *genesis.Genesis, mainDB *muxdb.MuxDB, logDB *logd
 	}
 	w := logDB.NewWriter()
 	if err := w.Write(genesisBlock, tx.Receipts{{
-		ReceiptBody: tx.ReceiptBody{
-			Outputs: []*tx.Output{
-				{Events: genesisEvents, Transfers: genesisTransfers},
-			},
+		Outputs: []*tx.Output{
+			{Events: genesisEvents, Transfers: genesisTransfers},
 		},
 	}}); err != nil {
 		return nil, errors.Wrap(err, "write genesis logs")

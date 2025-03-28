@@ -7,7 +7,6 @@ package tx
 
 import (
 	"bytes"
-	"fmt"
 	"math/big"
 	"testing"
 
@@ -18,24 +17,23 @@ import (
 
 func getMockReceipt(txType byte) Receipt {
 	receipt := Receipt{
-		Type: txType,
-		ReceiptBody: ReceiptBody{GasUsed: 1000,
-			GasPayer: thor.Address{},
-			Paid:     big.NewInt(100),
-			Reward:   big.NewInt(50),
-			Reverted: false,
-			Outputs:  []*Output{},
-		},
+		Type:     txType,
+		GasUsed:  1000,
+		GasPayer: thor.Address{},
+		Paid:     big.NewInt(100),
+		Reward:   big.NewInt(50),
+		Reverted: false,
+		Outputs:  []*Output{},
 	}
 	return receipt
 }
 
 func TestReceipt(t *testing.T) {
 	var rs Receipts
-	fmt.Println(rs.RootHash())
+	assert.Equal(t, emptyRoot, rs.RootHash())
 
 	var txs Transactions
-	fmt.Println(txs.RootHash())
+	assert.Equal(t, emptyRoot, txs.RootHash())
 }
 
 func TestReceiptStructure(t *testing.T) {
@@ -125,7 +123,7 @@ func TestDecodeEmptyTypedReceipt(t *testing.T) {
 	input := []byte{0x80}
 	var r Receipt
 	err := rlp.DecodeBytes(input, &r)
-	if err != errEmptyTypedReceipt {
+	if err != errShortTypedReceipt {
 		t.Fatal("wrong error:", err)
 	}
 }
