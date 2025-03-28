@@ -24,7 +24,7 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-const expectedGasPriceUsedRatio = 0.0021
+const expectedGasPriceUsedRatio = 0.0042
 const expectedBaseFee = thor.InitialBaseFee
 const priorityFeesPercentage = 5
 
@@ -120,18 +120,29 @@ func initFeesServer(t *testing.T, backtraceLimit int, fixedCacheSize int, number
 	// Create blocks with transactions
 	for i := range numberOfBlocks - 1 {
 		// Create one transaction per block with different priority fees
-		priorityFee := new(big.Int).Add(big.NewInt(100), new(big.Int).Mul(big.NewInt(int64(i)), big.NewInt(50)))
-		trx := tx.NewBuilder(tx.TypeDynamicFee).
+		priorityFee1 := big.NewInt(10)
+		trx1 := tx.NewBuilder(tx.TypeDynamicFee).
 			ChainTag(thorChain.Repo().ChainTag()).
 			MaxFeePerGas(big.NewInt(250_000_000_000_000)).
-			MaxPriorityFeePerGas(priorityFee).
+			MaxPriorityFeePerGas(priorityFee1).
 			Expiration(720).
 			Gas(21000).
 			Nonce(uint64(i)).
 			Clause(cla).
 			BlockRef(tx.NewBlockRef(uint32(i))).
 			Build()
-		require.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0], tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)))
+		priorityFee2 := big.NewInt(12)
+		trx2 := tx.NewBuilder(tx.TypeDynamicFee).
+			ChainTag(thorChain.Repo().ChainTag()).
+			MaxFeePerGas(big.NewInt(250_000_000_000_000)).
+			MaxPriorityFeePerGas(priorityFee2).
+			Expiration(720).
+			Gas(21000).
+			Nonce(uint64(i)).
+			Clause(cla).
+			BlockRef(tx.NewBlockRef(uint32(i))).
+			Build()
+		require.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0], tx.MustSign(trx1, genesis.DevAccounts()[0].PrivateKey), tx.MustSign(trx2, genesis.DevAccounts()[0].PrivateKey)))
 	}
 
 	return httptest.NewServer(router), thorChain.Repo().NewBestChain()
@@ -429,24 +440,21 @@ func getRewardsValidPercentiles(t *testing.T, tclient *thorclient.Client, bestch
 	require.Len(t, feesHistory.Reward, 3, "should have rewards for 3 blocks")
 
 	// Expected reward values based on MaxPriorityFeePerGas values
-	// For block 4: MaxPriorityFeePerGas = 150 (100 + 4*50)
-	// For block 3: MaxPriorityFeePerGas = 200 (100 + 3*50)
-	// For block 2: MaxPriorityFeePerGas = 250 (100 + 2*50)
 	expectedRewards := [][]*hexutil.Big{
 		{
-			(*hexutil.Big)(big.NewInt(150)), // 25th percentile
-			(*hexutil.Big)(big.NewInt(150)), // 50th percentile
-			(*hexutil.Big)(big.NewInt(150)), // 75th percentile
+			(*hexutil.Big)(big.NewInt(10)), // 25th percentile
+			(*hexutil.Big)(big.NewInt(10)), // 50th percentile
+			(*hexutil.Big)(big.NewInt(12)), // 75th percentile
 		},
 		{
-			(*hexutil.Big)(big.NewInt(200)), // 25th percentile
-			(*hexutil.Big)(big.NewInt(200)), // 50th percentile
-			(*hexutil.Big)(big.NewInt(200)), // 75th percentile
+			(*hexutil.Big)(big.NewInt(10)), // 25th percentile
+			(*hexutil.Big)(big.NewInt(10)), // 50th percentile
+			(*hexutil.Big)(big.NewInt(12)), // 75th percentile
 		},
 		{
-			(*hexutil.Big)(big.NewInt(250)), // 25th percentile
-			(*hexutil.Big)(big.NewInt(250)), // 50th percentile
-			(*hexutil.Big)(big.NewInt(250)), // 75th percentile
+			(*hexutil.Big)(big.NewInt(10)), // 25th percentile
+			(*hexutil.Big)(big.NewInt(10)), // 50th percentile
+			(*hexutil.Big)(big.NewInt(12)), // 75th percentile
 		},
 	}
 
