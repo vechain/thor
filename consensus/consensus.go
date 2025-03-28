@@ -8,6 +8,7 @@ package consensus
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/hashicorp/golang-lru/simplelru"
 	"github.com/vechain/thor/v2/block"
@@ -52,8 +53,13 @@ func (c *Consensus) Process(parentSummary *chain.BlockSummary, blk *block.Block,
 
 	var features tx.Features
 	if header.Number() >= c.forkConfig.VIP191 {
-		features |= tx.DelegationFeature
+		features |= tx.FeatureDelegation
 	}
+	if header.Number() >= c.forkConfig.GALACTICA {
+		features |= tx.FeatureReplacement
+	}
+
+	slog.Info("process block", "number", header.Number(), "features", features)
 
 	if header.TxsFeatures() != features {
 		return nil, nil, consensusError(fmt.Sprintf("block txs features invalid: want %v, have %v", features, header.TxsFeatures()))
