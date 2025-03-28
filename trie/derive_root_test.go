@@ -16,7 +16,7 @@ type mockedDerivableList struct {
 
 func (l *mockedDerivableList) Len() int { return l.n }
 
-func (l *mockedDerivableList) GetRlp(i int) []byte { return l.content }
+func (l *mockedDerivableList) EncodeIndex(i int) []byte { return l.content }
 
 func BenchmarkDeriveRoot(b *testing.B) {
 	list := mockedDerivableList{
