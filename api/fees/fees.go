@@ -6,6 +6,7 @@
 package fees
 
 import (
+	"fmt"
 	"math"
 	"math/big"
 	"net/http"
@@ -23,6 +24,8 @@ import (
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 )
+
+const maxRewardPercentiles = 100
 
 type Config struct {
 	APIBacktraceLimit          int
@@ -121,6 +124,10 @@ func (f *Fees) validateRewardPercentiles(req *http.Request) (*[]float64, error) 
 
 	percentileStrs := strings.Split(rewardPercentilesParam, ",")
 	rewardPercentiles := make([]float64, 0, len(percentileStrs))
+
+	if len(percentileStrs) > maxRewardPercentiles {
+		return nil, utils.BadRequest(errors.New(fmt.Sprintf("there can be at most %d rewardPercentiles", maxRewardPercentiles)))
+	}
 
 	for _, str := range percentileStrs {
 		val, err := strconv.ParseFloat(str, 64)
