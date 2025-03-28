@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -349,11 +350,51 @@ func TestClient_GetFeesHistory(t *testing.T) {
 	defer ts.Close()
 
 	client := New(ts.URL)
-	//TODO: Add test for rewardPercentiles
 	feesHistory, err := client.GetFeesHistory(blockCount, newestBlock, nil)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedFeesHistory, feesHistory)
+}
+
+func TestClient_GetFeesHistoryWithRewardPercentiles(t *testing.T) {
+	blockCount := uint32(5)
+	newestBlock := "best"
+	rewardPercentiles := []float64{10, 90}
+	expectedFeesHistory := &fees.FeesHistory{
+		OldestBlock:   thor.Bytes32{0x01},
+		BaseFeePerGas: []*hexutil.Big{(*hexutil.Big)(big.NewInt(0x01))},
+		GasUsedRatio:  []float64{0.0021},
+		Reward: [][]*hexutil.Big{
+			{
+				(*hexutil.Big)(big.NewInt(0)),
+				(*hexutil.Big)(big.NewInt(0)),
+			},
+		},
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rewardPercentilesStr := make([]string, len(rewardPercentiles))
+		for i, p := range rewardPercentiles {
+			rewardPercentilesStr[i] = fmt.Sprint(p)
+		}
+		assert.Equal(t, "/fees/history?blockCount="+fmt.Sprint(blockCount)+"&newestBlock="+newestBlock+"&rewardPercentiles="+strings.Join(rewardPercentilesStr, ","), r.URL.Path+"?"+r.URL.RawQuery)
+
+		feesHistoryBytes, _ := json.Marshal(expectedFeesHistory)
+		w.Write(feesHistoryBytes)
+	}))
+	defer ts.Close()
+
+	client := New(ts.URL)
+	feesHistory, err := client.GetFeesHistory(blockCount, newestBlock, &rewardPercentiles)
+
+	assert.NoError(t, err)
+	assert.Equal(t, expectedFeesHistory.OldestBlock, feesHistory.OldestBlock)
+	assert.Equal(t, expectedFeesHistory.BaseFeePerGas, feesHistory.BaseFeePerGas)
+	assert.Equal(t, expectedFeesHistory.GasUsedRatio, feesHistory.GasUsedRatio)
+	for i, blockRewards := range feesHistory.Reward {
+		for j, reward := range blockRewards {
+			assert.Equal(t, expectedFeesHistory.Reward[i][j].String(), reward.String())
+		}
+	}
 }
 
 func TestClient_GetFeesPriority(t *testing.T) {
