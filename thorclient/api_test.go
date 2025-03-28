@@ -458,7 +458,7 @@ func testFeesEndpoint(t *testing.T, testchain *testchain.Chain, ts *httptest.Ser
 		require.Equal(t, expectedFeesHistory, feesHistory)
 
 		rewardPercentiles := []float64{10, 90}
-		feesHistory, err = c.FeesHistory(blockCount, newestBlock, &rewardPercentiles)
+		feesHistory, err = c.FeesHistory(blockCount, newestBlock, rewardPercentiles)
 		require.NoError(t, err)
 		require.NotNil(t, feesHistory)
 
