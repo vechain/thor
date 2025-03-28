@@ -52,7 +52,7 @@ func New(repo *chain.Repository, bft bft.Committer, stater *state.Stater, config
 	}
 }
 
-func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.BlockSummary, *[]float64, error) {
+func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.BlockSummary, []float64, error) {
 	blockCount, err := f.validateBlockCount(req)
 	if err != nil {
 		return 0, nil, nil, err
@@ -113,7 +113,7 @@ func (f *Fees) validateNewestBlock(req *http.Request, blockCount *uint64) (*chai
 	return newestBlockSummary, nil
 }
 
-func (f *Fees) validateRewardPercentiles(req *http.Request) (*[]float64, error) {
+func (f *Fees) validateRewardPercentiles(req *http.Request) ([]float64, error) {
 	rewardPercentilesParam := req.URL.Query().Get("rewardPercentiles")
 	if rewardPercentilesParam == "" {
 		return nil, nil
@@ -140,7 +140,7 @@ func (f *Fees) validateRewardPercentiles(req *http.Request) (*[]float64, error) 
 		rewardPercentiles = append(rewardPercentiles, val)
 	}
 
-	return &rewardPercentiles, nil
+	return rewardPercentiles, nil
 }
 
 func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) error {
