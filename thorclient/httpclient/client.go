@@ -297,7 +297,11 @@ func (c *Client) GetFeesHistory(blockCount uint32, newestBlock string, rewardPer
 	var url strings.Builder
 	url.WriteString(c.url + "/fees/history?blockCount=" + fmt.Sprint(blockCount) + "&newestBlock=" + newestBlock)
 	if rewardPercentiles != nil && len(*rewardPercentiles) > 0 {
-		url.WriteString("&rewardPercentiles=" + strings.Trim(fmt.Sprint(*rewardPercentiles), "[]"))
+		strValues := make([]string, len(*rewardPercentiles))
+		for i, v := range *rewardPercentiles {
+			strValues[i] = fmt.Sprint(v)
+		}
+		url.WriteString("&rewardPercentiles=" + strings.Join(strValues, ","))
 	}
 	body, err := c.httpGET(url.String())
 	if err != nil {
