@@ -99,10 +99,14 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 }
 
 func (fd *FeesData) calculateRewards(block *block.Block, rewardPercentiles *[]float64, baseGasPrice *big.Int) ([]*hexutil.Big, error) {
-	// If there is no transactions, return zero rewards
+	// If there are no transactions, return rewards with zero values
 	transactions := block.Transactions()
+	rewards := make([]*hexutil.Big, len(*rewardPercentiles))
 	if len(transactions) == 0 {
-		return make([]*hexutil.Big, len(*rewardPercentiles)), nil
+		for i := range rewards {
+			rewards[i] = (*hexutil.Big)(big.NewInt(0))
+		}
+		return rewards, nil
 	}
 
 	header := block.Header()
@@ -132,7 +136,6 @@ func (fd *FeesData) calculateRewards(block *block.Block, rewardPercentiles *[]fl
 	})
 
 	// Calculate rewards for each percentile
-	rewards := make([]*hexutil.Big, len(*rewardPercentiles))
 	totalGasUsed := header.GasUsed()
 
 	currentTransactionIndex := 0
