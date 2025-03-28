@@ -75,13 +75,17 @@ type txData interface {
 	maxPriorityFeePerGas() *big.Int
 	dependsOn() *thor.Bytes32
 	nonce() uint64
-	reserved() reserved
+	reserved() *reserved
 	signature() []byte
 	setSignature(sig []byte)
-	hashWithoutNonce(origin thor.Address) *thor.Bytes32
 	evaluateWork(origin thor.Address) func(nonce uint64) *big.Int
+	signingFields() []any // signingFields returns the fields that are used to compute the signing hash.
 
-	encode(w io.Writer) error
+	// Encode/decode encodes/decodes the tx body into binary format, the format is defined by the tx data itself.
+	// This allows different tx types to have different encoding formats. The coding function are designed only
+	// for typed txs and the type identifier is not included in the encoding.
+	encode(*bytes.Buffer) error
+	decode([]byte) error
 }
 
 // MarshalBinary returns the canonical encoding of the transaction.
@@ -99,7 +103,7 @@ func (t *Transaction) MarshalBinary() ([]byte, error) {
 // encodeTyped writes the canonical encoding of a typed transaction to w.
 func (t *Transaction) encodeTyped(w *bytes.Buffer) error {
 	w.WriteByte(t.Type())
-	return rlp.Encode(w, t.body)
+	return t.body.encode(w)
 }
 
 // EncodeRLP implements rlp.Encoder
@@ -147,7 +151,7 @@ func (t *Transaction) decodeTyped(b []byte) (txData, error) {
 	switch b[0] {
 	case TypeDynamicFee:
 		var body dynamicFeeTransaction
-		err := rlp.DecodeBytes(b[1:], &body)
+		err := body.decode(b[1:])
 		return &body, err
 	default:
 		return nil, ErrTxTypeNotSupported
@@ -202,7 +206,7 @@ func (t *Transaction) Size() thor.StorageSize {
 	}
 
 	var size thor.StorageSize
-	rlp.Encode(&size, t)
+	rlp.Encode(&size, t.body)
 
 	// For typed transactions, the encoding also includes the leading type byte.
 	if t.body.txType() != TypeLegacy {
@@ -272,7 +276,7 @@ func (t *Transaction) Hash() (hash thor.Bytes32) {
 
 	// Legacy tx don't have type prefix.
 	if t.Type() == TypeLegacy {
-		return rlpHash(t)
+		return rlpHash(t.body)
 	}
 	return prefixedRlpHash(t.Type(), t.body)
 }
@@ -284,9 +288,11 @@ func (t *Transaction) SigningHash() (hash thor.Bytes32) {
 	}
 	defer func() { t.cache.signingHash.Store(hash) }()
 
-	return thor.Blake2bFn(func(w io.Writer) {
-		t.body.encode(w)
-	})
+	if t.Type() == TypeLegacy {
+		return rlpHash(t.body.signingFields())
+	}
+	// Include type prefix for typed tx.
+	return prefixedRlpHash(t.Type(), t.body.signingFields())
 }
 
 // Gas returns gas provision for this tx.
