@@ -309,7 +309,7 @@ func checkExpandedBlock(t *testing.T, expBl *block.Block, actBl *blocks.JSONExpa
 	assert.Equal(t, header.ReceiptsRoot(), actBl.ReceiptsRoot, "ReceiptsRoot should be equal")
 	for i, tx := range expBl.Transactions() {
 		assert.Equal(t, tx.ID(), actBl.Transactions[i].ID, "txid should be equal")
-		assert.Equal(t, hexMath.HexOrDecimal64(tx.Type()), actBl.Transactions[i].Type, "tx type should be equal")
+		assert.Equal(t, tx.Type(), actBl.Transactions[i].Type, "tx type should be equal")
 		assert.Equal(t, tx.ChainTag(), actBl.Transactions[i].ChainTag, "ChainTag should be equal")
 	}
 	assert.Equal(t, (*hexMath.HexOrDecimal256)(header.BaseFee()), actBl.BaseFeePerGas, "BaseFee should be equal")

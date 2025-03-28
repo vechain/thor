@@ -938,7 +938,7 @@ components:
       example:
         id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
         chainTag: 1
-        txType: '0x51'
+        type: 81
         blockRef: '0x00000001511fc0be'
         expiration: 30
         clauses: [ ]
@@ -1577,11 +1577,11 @@ components:
           example: '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
           pattern: '^0x[0-9a-f]{64}$'
           nullable: false
-        txType:
-          type: string
-          format: hex
+        type:
+          type: integer
+          format: uint8
           description: The transaction type in hex.
-          example: '0x51'
+          example: 81
           nullable: false
         origin:
           type: string
@@ -1739,10 +1739,10 @@ components:
       type: object
       properties:
         type:
-          type: string
-          format: hex
+          type: integer
+          format: uint8
           description: The transaction type of this receipt
-          example: '0x51'
+          example: 81
           nullable: true
         gasUsed:
           type: integer
