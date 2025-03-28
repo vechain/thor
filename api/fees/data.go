@@ -81,9 +81,9 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 				header := newestBlockSummary.Header
 				baseFees[i-1] = getBaseFee(header.BaseFee())
 				gasUsedRatios[i-1] = float64(header.GasUsed()) / float64(header.GasLimit())
-				if rewardPercentiles != nil {
+				if rewards != nil {
 					// There are no transactions in this block, so the rewards are empty
-					rewards[i-1] = make([]*hexutil.Big, 0)
+					rewards[i-1] = fd.calculateRewards(nil, rewardPercentiles)
 				}
 				newestBlockID = header.ParentID()
 				continue
@@ -93,11 +93,8 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 
 		baseFees[i-1] = fees.baseFee
 		gasUsedRatios[i-1] = fees.gasUsedRatio
-		if rewardPercentiles != nil {
-			rewards[i-1], err = fd.calculateRewards(fees.cachedRewards, rewardPercentiles)
-			if err != nil {
-				return thor.Bytes32{}, nil, nil, nil, err
-			}
+		if rewards != nil {
+			rewards[i-1] = fd.calculateRewards(fees.cachedRewards, rewardPercentiles)
 		}
 
 		newestBlockID = fees.parentBlockID
@@ -184,13 +181,13 @@ func (fd *FeesData) getRewardsForCache(block *block.Block, baseGasPrice *big.Int
 	}, nil
 }
 
-func (fd *FeesData) calculateRewards(cachedRewards *rewards, rewardPercentiles *[]float64) ([]*hexutil.Big, error) {
+func (fd *FeesData) calculateRewards(cachedRewards *rewards, rewardPercentiles *[]float64) []*hexutil.Big {
 	rewards := make([]*hexutil.Big, len(*rewardPercentiles))
 	if cachedRewards == nil || len(cachedRewards.items) == 0 {
 		for i := range rewards {
 			rewards[i] = (*hexutil.Big)(big.NewInt(0))
 		}
-		return rewards, nil
+		return rewards
 	}
 
 	currentTransactionIndex := 0
@@ -205,5 +202,5 @@ func (fd *FeesData) calculateRewards(cachedRewards *rewards, rewardPercentiles *
 		rewards[i] = (*hexutil.Big)(cachedRewards.items[currentTransactionIndex].reward)
 	}
 
-	return rewards, nil
+	return rewards
 }

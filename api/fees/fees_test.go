@@ -97,6 +97,7 @@ func TestRewardPercentiles(t *testing.T) {
 		"getRewardsOutOfRangePercentiles":    getRewardsOutOfRangePercentiles,
 		"getRewardsNonAscendingPercentiles":  getRewardsNonAscendingPercentiles,
 		"getRewardsMorePercentilesThanLimit": getRewardsMorePercentilesThanLimit,
+		"getRewardsWithNextBlock":            getRewardsWithNextBlock,
 	} {
 		t.Run(name, func(t *testing.T) {
 			tt(t, tclient, bestchain)
@@ -525,4 +526,24 @@ func getRewardsMorePercentilesThanLimit(t *testing.T, tclient *thorclient.Client
 	require.Equal(t, 400, statusCode)
 	require.NotNil(t, res)
 	assert.Equal(t, "there can be at most 100 rewardPercentiles\n", string(res))
+}
+
+func getRewardsWithNextBlock(t *testing.T, tclient *thorclient.Client, bestchain *chain.Chain) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=1&newestBlock=next&rewardPercentiles=25,50,75")
+	require.NoError(t, err)
+	require.Equal(t, 200, statusCode)
+
+	var feesHistory fees.FeesHistory
+	require.NoError(t, json.Unmarshal(res, &feesHistory))
+
+	// Verify that rewards are received with value 0
+	require.NotNil(t, feesHistory.Reward, "rewards should not be nil")
+	require.Len(t, feesHistory.Reward, 1, "should have rewards for 1 block")
+	require.Len(t, feesHistory.Reward[0], 3, "should have 3 rewards per block")
+
+	// Verify that all rewards are 0
+	for i, reward := range feesHistory.Reward[0] {
+		require.NotNil(t, reward, "reward %d should not be nil", i)
+		assert.Equal(t, "0x0", reward.String(), "reward %d should be 0", i)
+	}
 }
