@@ -141,7 +141,7 @@ func GetSummaryAndState(rev *Revision, repo *chain.Repository, bft bft.Committer
 		// rebuild the block summary with the next header (mocked) AND the best block status
 		return &chain.BlockSummary{
 			Header:    mocked.Header(),
-			Txs:       best.Txs,
+			Txs:       make([]thor.Bytes32, 0),
 			Size:      uint64(mocked.Size()),
 			Conflicts: best.Conflicts,
 		}, st, nil
