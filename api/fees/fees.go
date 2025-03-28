@@ -126,13 +126,16 @@ func (f *Fees) validateRewardPercentiles(req *http.Request) (*[]float64, error) 
 		return nil, utils.BadRequest(errors.New(fmt.Sprintf("there can be at most %d rewardPercentiles", maxRewardPercentiles)))
 	}
 
-	for _, str := range percentileStrs {
+	for i, str := range percentileStrs {
 		val, err := strconv.ParseFloat(str, 64)
 		if err != nil {
 			return nil, utils.BadRequest(errors.WithMessage(err, "invalid rewardPercentiles value"))
 		}
 		if val < 0 || val > 100 {
 			return nil, utils.BadRequest(errors.New("rewardPercentiles values must be between 0 and 100"))
+		}
+		if i > 0 && val < rewardPercentiles[i-1] {
+			return nil, utils.BadRequest(errors.New(fmt.Sprintf("reward percentiles must be in ascending order, but %f is less than %f", val, rewardPercentiles[i-1])))
 		}
 		rewardPercentiles = append(rewardPercentiles, val)
 	}

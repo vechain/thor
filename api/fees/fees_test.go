@@ -90,9 +90,10 @@ func TestRewardPercentiles(t *testing.T) {
 
 	tclient := thorclient.New(ts.URL)
 	for name, tt := range map[string]func(*testing.T, *thorclient.Client, *chain.Chain){
-		"getRewardsValidPercentiles":      getRewardsValidPercentiles,
-		"getRewardsInvalidPercentiles":    getRewardsInvalidPercentiles,
-		"getRewardsOutOfRangePercentiles": getRewardsOutOfRangePercentiles,
+		"getRewardsValidPercentiles":        getRewardsValidPercentiles,
+		"getRewardsInvalidPercentiles":      getRewardsInvalidPercentiles,
+		"getRewardsOutOfRangePercentiles":   getRewardsOutOfRangePercentiles,
+		"getRewardsNonAscendingPercentiles": getRewardsNonAscendingPercentiles,
 	} {
 		t.Run(name, func(t *testing.T) {
 			tt(t, tclient, bestchain)
@@ -497,4 +498,12 @@ func getRewardsOutOfRangePercentiles(t *testing.T, tclient *thorclient.Client, b
 		require.NoError(t, err)
 		require.Equal(t, 400, statusCode, "should fail with percentiles out of range: %s", percentiles)
 	}
+}
+
+func getRewardsNonAscendingPercentiles(t *testing.T, tclient *thorclient.Client, bestchain *chain.Chain) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=3&newestBlock=4&rewardPercentiles=20,10,30")
+	require.NoError(t, err)
+	require.Equal(t, 400, statusCode)
+	require.NotNil(t, res)
+	assert.Equal(t, "reward percentiles must be in ascending order, but 10.000000 is less than 20.000000\n", string(res))
 }
