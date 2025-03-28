@@ -2459,16 +2459,14 @@ components:
       in: query
       required: false
       description: |
-        The percentiles of the rewards to be returned.
+        The percentiles of the rewards to be returned. Each percentile value must be between 0 and 100.
+        Values should be comma-separated.
+        For example: ?rewardPercentiles=25,50,75
       schema:
-        type: array
-        items:
-          type: number
-          format: float
-          minimum: 0
-          maximum: 100
-        description: Array of percentiles between 0 and 100
-      example: [25, 50, 75]
+        type: string
+        pattern: '^(\d+(\.\d+)?,)*\d+(\.\d+)?$'
+        description: Comma-separated list of percentiles between 0 and 100
+      example: "25,50,75"
 
     CallCodeRevisionInQuery:
       name: revision
