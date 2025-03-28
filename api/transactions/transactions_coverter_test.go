@@ -49,7 +49,7 @@ func TestConvertLegacyTransaction_Success(t *testing.T) {
 	assert.Equal(t, addr, *result.Clauses[1].To)
 	assert.Equal(t, convertClause(cla2), result.Clauses[1])
 	// Legacy fields
-	assert.Equal(t, uint8(1), result.GasPriceCoef)
+	assert.Equal(t, uint8(1), *result.GasPriceCoef)
 	// Non legacy fields
 	assert.Empty(t, result.MaxFeePerGas)
 	assert.Empty(t, result.MaxPriorityFeePerGas)

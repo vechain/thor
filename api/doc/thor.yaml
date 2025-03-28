@@ -1282,7 +1282,7 @@ components:
               example:
                 - '0x0'
                 - '0x98'
-            gasUsedRatios:
+            gasUsedRatio:
               type: array
               description: |
                 An array of gas used ratios per block as float numbers.
@@ -1631,7 +1631,7 @@ components:
           format: uint8
           description: The coefficient used to calculate the final gas price of the transaction.
           example: 0
-          nullable: false
+          nullable: true
         maxFeePerGas:
           type: string
           format: hex
