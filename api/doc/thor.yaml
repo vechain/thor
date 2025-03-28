@@ -768,7 +768,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/BlockCountInQuery'
         - $ref: '#/components/parameters/NewestBlockInQuery'
-        - $ref: '#/components/parameters/RewardsPercentilesInQuery'
+        - $ref: '#/components/parameters/RewardPercentilesInQuery'
       responses:
         '200':
           description: OK
@@ -1298,7 +1298,7 @@ components:
             reward:
               type: array
               description: |
-                An array of arrays of rewards by the percentiles provided in the request via rewardsPercentiles.
+                An array of arrays of rewards by the percentiles provided in the request via rewardPercentiles.
                 Each inner array contains the reward values for each percentile requested.
               nullable: true
               items:
@@ -2454,8 +2454,8 @@ components:
       schema:
         type: string
     
-    RewardsPercentilesInQuery:
-      name: rewardsPercentiles
+    RewardPercentilesInQuery:
+      name: rewardPercentiles
       in: query
       required: false
       description: |

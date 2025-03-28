@@ -439,7 +439,7 @@ func testFeesEndpoint(t *testing.T, testchain *testchain.Chain, ts *httptest.Ser
 	t.Run("GetFeesHistory", func(t *testing.T) {
 		blockCount := uint32(1)
 		newestBlock := "best"
-		//TODO: Add test for rewardsPercentiles
+		//TODO: Add test for rewardPercentiles
 		feesHistory, err := c.FeesHistory(blockCount, newestBlock, nil)
 		require.NoError(t, err)
 		require.NotNil(t, feesHistory)

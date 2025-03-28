@@ -349,7 +349,7 @@ func TestClient_GetFeesHistory(t *testing.T) {
 	defer ts.Close()
 
 	client := New(ts.URL)
-	//TODO: Add test for rewardsPercentiles
+	//TODO: Add test for rewardPercentiles
 	feesHistory, err := client.GetFeesHistory(blockCount, newestBlock, nil)
 
 	assert.NoError(t, err)

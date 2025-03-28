@@ -293,11 +293,11 @@ func (c *Client) GetPeers() ([]*node.PeerStats, error) {
 }
 
 // GetFeesHistory retrieves the fees history based on the block count and newest block.
-func (c *Client) GetFeesHistory(blockCount uint32, newestBlock string, rewardsPercentiles *[]float64) (*fees.FeesHistory, error) {
+func (c *Client) GetFeesHistory(blockCount uint32, newestBlock string, rewardPercentiles *[]float64) (*fees.FeesHistory, error) {
 	var url strings.Builder
 	url.WriteString(c.url + "/fees/history?blockCount=" + fmt.Sprint(blockCount) + "&newestBlock=" + newestBlock)
-	if rewardsPercentiles != nil && len(*rewardsPercentiles) > 0 {
-		url.WriteString("&rewardsPercentiles=" + strings.Trim(fmt.Sprint(*rewardsPercentiles), "[]"))
+	if rewardPercentiles != nil && len(*rewardPercentiles) > 0 {
+		url.WriteString("&rewardPercentiles=" + strings.Trim(fmt.Sprint(*rewardPercentiles), "[]"))
 	}
 	body, err := c.httpGET(url.String())
 	if err != nil {
