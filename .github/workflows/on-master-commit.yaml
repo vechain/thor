@@ -7,6 +7,10 @@ on:
       - 'release/*'
       - 'releases/*'
 
+concurrency:
+    group: 'master-commit-ci'
+    cancel-in-progress: false
+
 jobs:
   run-unit-tests:
     name: Run Unit Tests
@@ -70,6 +74,20 @@ jobs:
         type=raw,value=${{ needs.generate-tags.outputs.clean_ref_name }}-${{ needs.generate-tags.outputs.tag_date }}-${{ needs.generate-tags.outputs.short_sha }}
         type=raw,value=${{ needs.generate-tags.outputs.clean_ref_name }}-latest
       trigger_internal_ci: true
+
+  delpoy-devnet:
+    needs: publish-docker-image
+    if: needs.publish-docker-image.result == 'success'
+    uses: ./.github/workflows/deploy-devnet.yaml
+    secrets: inherit
+    with:
+      node_image: 'ghcr.io/vechain/hayabusa:${{ needs.generate-tags.outputs.clean_ref_name }}-${{ needs.generate-tags.outputs.tag_date }}-${{ needs.generate-tags.outputs.short_sha }}'
+      genesis_url: 'https://vechain.github.io/hayabusa-devnet/genesis.json'
+      network: 'hayabusa'
+      nodes: 'both'
+      swap: true
+      destroy_live: true
+
   notify-slack:
     name: Notify Slack
     needs:

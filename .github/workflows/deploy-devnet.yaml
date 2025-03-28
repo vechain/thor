@@ -1,0 +1,200 @@
+name: Destroy, Deploy & Swap
+
+on:
+  workflow_call:
+    inputs:
+      network:
+        description: The network to deploy
+        required: true
+        type: string
+      genesis_url:
+        description: The URL to the genesis file
+        type: string
+        default: https://vechain.github.io/hayabusa-devnet/genesis.json
+      node_image:
+        description: The node image to deploy
+        type: string
+        default: docker pull ghcr.io/vechain/hayabusa:release-hayabusa-latest
+      nodes:
+        description: The nodes to deploy
+        type: string
+        default: "public"
+      destroy_live:
+        description: Whether to destroy both staging and live nodes
+        type: boolean
+        default: true
+      swap:
+        description: Whether to swap staging / live nodes
+        type: boolean
+        default: true
+
+  workflow_dispatch:
+    inputs:
+      network:
+        description: The network to deploy
+        required: true
+        type: choice
+        options:
+          - hayabusa
+          - galactica
+      genesis_url:
+        description: The URL to the genesis file
+        type: string
+        default: https://vechain.github.io/hayabusa-devnet/genesis.json
+      node_image:
+        description: The node image to deploy
+        default: ghcr.io/vechain/hayabusa:release-hayabusa-latest
+        type: string
+      nodes:
+        description: The network to deploy
+        required: true
+        type: choice
+        options:
+          - public
+          - authority
+          - both
+      destroy_live:
+        description: Whether to destroy both staging and live nodes
+        type: boolean
+        default: true
+      swap:
+        description: Whether to swap staging / live nodes
+        type: boolean
+        default: true
+
+# Required for authentication through GitHub OIDC
+permissions:
+  id-token: write # This is required for requesting the JWT
+  contents: read # This is required for actions/checkout
+  pull-requests: write # This is required for pull request comments
+
+concurrency:
+  group: 'destroy-deploy-swap'
+  cancel-in-progress: false
+
+jobs:
+  public-nodes:
+    runs-on: ubuntu-latest
+    name: Public Nodes
+    if: inputs.nodes == 'public' || inputs.nodes == 'both'
+    steps:
+      - uses: convictional/trigger-workflow-and-wait@v1.6.1
+        name: Destroy Staging
+        with:
+          owner: vechain
+          repo: node-hosting
+          github_token: ${{ secrets.GHA_REPO_ACCESS }}
+          workflow_file_name: destroy.yml
+          client_payload: '{"target_environment": "dev", "network": "${{ inputs.network }}"}'
+      - uses: convictional/trigger-workflow-and-wait@v1.6.1
+        name: Swap (Old -> Staging)
+        if: inputs.destroy_live
+        with:
+          owner: vechain
+          repo: node-hosting
+          github_token: ${{ secrets.GHA_REPO_ACCESS }}
+          workflow_file_name: swap.yml
+          client_payload: '{"environment": "dev", "network": "${{ inputs.network }}"}'
+      - uses: convictional/trigger-workflow-and-wait@v1.6.1
+        name: Destroy Old Live
+        if: inputs.destroy_live
+        with:
+          owner: vechain
+          repo: node-hosting
+          github_token: ${{ secrets.GHA_REPO_ACCESS }}
+          workflow_file_name: destroy.yml
+          client_payload: '{"target_environment": "dev", "network": "${{ inputs.network }}"}'
+      - uses: convictional/trigger-workflow-and-wait@v1.6.1
+        name: Deploy Staging
+        with:
+          owner: vechain
+          repo: node-hosting
+          github_token: ${{ secrets.GHA_REPO_ACCESS }}
+          workflow_file_name: deploy.yml
+          client_payload: '{"target_environment": "dev", "network": "${{ inputs.network }}", "full_sync": true, "node_image": "${{ inputs.node_image }}", "genesis_url": "${{ inputs.genesis_url }}"}'
+      - uses: convictional/trigger-workflow-and-wait@v1.6.1
+        name: Swap (New -> Live)
+        if: inputs.swap
+        with:
+          owner: vechain
+          repo: node-hosting
+          github_token: ${{ secrets.GHA_REPO_ACCESS }}
+          workflow_file_name: swap.yml
+          client_payload: '{"environment": "dev", "network": "${{ inputs.network }}"}'
+
+  authority-nodes:
+    runs-on: ubuntu-latest
+    name: Authority Nodes
+    if: inputs.nodes == 'authority' || inputs.nodes == 'both'
+    steps:
+      - uses: convictional/trigger-workflow-and-wait@v1.6.1
+        name: Destroy Staging
+        with:
+          owner: vechain
+          repo: node-authority
+          github_token: ${{ secrets.GHA_REPO_ACCESS }}
+          workflow_file_name: destroy-environment.yml
+          client_payload: '{"target_environment": "dev", "node_network": "${{ inputs.network }}"}'
+      - uses: convictional/trigger-workflow-and-wait@v1.6.1
+        name: Swap (Old -> Staging)
+        if: inputs.destroy_live
+        with:
+          owner: vechain
+          repo: node-authority
+          github_token: ${{ secrets.GHA_REPO_ACCESS }}
+          workflow_file_name: swap-all-regions.yml
+          client_payload: '{"target_environment": "dev", "node_network": "${{ inputs.network }}"}'
+      - uses: convictional/trigger-workflow-and-wait@v1.6.1
+        name: Destroy Old Live
+        if: inputs.destroy_live
+        with:
+          owner: vechain
+          repo: node-authority
+          github_token: ${{ secrets.GHA_REPO_ACCESS }}
+          workflow_file_name: destroy-environment.yml
+          client_payload: '{"target_environment": "dev", "node_network": "${{ inputs.network }}"}'
+      - uses: convictional/trigger-workflow-and-wait@v1.6.1
+        name: Deploy Staging
+        with:
+          owner: vechain
+          repo: node-authority
+          github_token: ${{ secrets.GHA_REPO_ACCESS }}
+          workflow_file_name: deploy-environment.yml
+          client_payload: '{"target_environment": "dev", "node_network": "${{ inputs.network }}", "node_genesis_url": "${{ inputs.genesis_url }}", "node_image": "${{ inputs.node_image }}"}'
+      - uses: convictional/trigger-workflow-and-wait@v1.6.1
+        name: Swap (New -> Live)
+        if: inputs.swap
+        with:
+          owner: vechain
+          repo: node-authority
+          github_token: ${{ secrets.GHA_REPO_ACCESS }}
+          workflow_file_name: swap-all-regions.yml
+          client_payload: '{"target_environment": "dev", "node_network": "${{ inputs.network }}"}'
+
+  update-faucet-inspector:
+    needs: [public-nodes, authority-nodes]
+    runs-on: ubuntu-latest
+    name: Update Faucet & Inspector
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get Staker ABI
+        run: |
+          ABI=$(cat builtin/gen/compiled/Staker.abi)
+          ABI="${ABI//'%'/'%25'}"
+          ABI="${ABI//$'\n'/'%0A'}"
+          ABI="${ABI//$'\r'/'%0D'}"
+          ABI="${ABI//'"'/'\"'}"
+          echo "staker_abi=$ABI" >> $GITHUB_OUTPUT
+          echo $ABI
+        id: get-staker-abi
+
+      - uses: convictional/trigger-workflow-and-wait@v1.6.1
+        name: Update Faucet
+        with:
+          owner: vechain
+          repo: devnet-faucet
+          github_token: ${{ secrets.GHA_REPO_ACCESS }}
+          workflow_file_name: deploy.yaml
+          client_payload: '{"environment": "${{ inputs.network }}", "staker_abi": "${{ steps.get-staker-abi.outputs.staker_abi }}"}'
