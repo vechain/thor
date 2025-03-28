@@ -120,22 +120,20 @@ func initFeesServer(t *testing.T, backtraceLimit int, fixedCacheSize int, number
 	// Create blocks with transactions
 	for i := range numberOfBlocks - 1 {
 		// Create one transaction per block with different priority fees
-		priorityFee1 := big.NewInt(10)
 		trx1 := tx.NewBuilder(tx.TypeDynamicFee).
 			ChainTag(thorChain.Repo().ChainTag()).
 			MaxFeePerGas(big.NewInt(250_000_000_000_000)).
-			MaxPriorityFeePerGas(priorityFee1).
+			MaxPriorityFeePerGas(big.NewInt(10)).
 			Expiration(720).
 			Gas(21000).
 			Nonce(uint64(i)).
 			Clause(cla).
 			BlockRef(tx.NewBlockRef(uint32(i))).
 			Build()
-		priorityFee2 := big.NewInt(12)
 		trx2 := tx.NewBuilder(tx.TypeDynamicFee).
 			ChainTag(thorChain.Repo().ChainTag()).
 			MaxFeePerGas(big.NewInt(250_000_000_000_000)).
-			MaxPriorityFeePerGas(priorityFee2).
+			MaxPriorityFeePerGas(big.NewInt(12)).
 			Expiration(720).
 			Gas(21000).
 			Nonce(uint64(i)).
@@ -144,6 +142,10 @@ func initFeesServer(t *testing.T, backtraceLimit int, fixedCacheSize int, number
 			Build()
 		require.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0], tx.MustSign(trx1, genesis.DevAccounts()[0].PrivateKey), tx.MustSign(trx2, genesis.DevAccounts()[0].PrivateKey)))
 	}
+
+	allBlocks, err := thorChain.GetAllBlocks()
+	require.NoError(t, err)
+	require.Len(t, allBlocks, numberOfBlocks)
 
 	return httptest.NewServer(router), thorChain.Repo().NewBestChain()
 }
