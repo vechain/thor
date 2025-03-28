@@ -59,12 +59,6 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 	var rewards [][]*hexutil.Big
 	if rewardPercentiles != nil {
 		rewards = make([][]*hexutil.Big, blockCount)
-		for i := range rewards {
-			rewards[i] = make([]*hexutil.Big, len(*rewardPercentiles))
-			for j := range rewards[i] {
-				rewards[i][j] = (*hexutil.Big)(big.NewInt(0))
-			}
-		}
 	}
 
 	var oldestBlockID thor.Bytes32
