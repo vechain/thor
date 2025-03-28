@@ -33,7 +33,7 @@ func (txs derivableTxs) Len() int {
 	return len(txs)
 }
 
-func (txs derivableTxs) GetRlp(i int) []byte {
+func (txs derivableTxs) EncodeIndex(i int) []byte {
 	data, err := txs[i].MarshalBinary()
 	if err != nil {
 		panic(err)
