@@ -20,11 +20,10 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-type FeeCacheEntry struct {
-	parentBlockID thor.Bytes32
-	baseFee       *hexutil.Big
-	gasUsedRatio  float64
-	cachedRewards *rewards
+type FeesData struct {
+	repo   *chain.Repository
+	cache  *cache.PrioCache
+	stater *state.Stater
 }
 
 type rewardItem struct {
@@ -37,10 +36,11 @@ type rewards struct {
 	totalGasUsed uint64
 }
 
-type FeesData struct {
-	repo   *chain.Repository
-	cache  *cache.PrioCache
-	stater *state.Stater
+type FeeCacheEntry struct {
+	parentBlockID thor.Bytes32
+	baseFee       *hexutil.Big
+	gasUsedRatio  float64
+	cachedRewards *rewards
 }
 
 func newFeesData(repo *chain.Repository, stater *state.Stater, fixedCacheSize int) *FeesData {
