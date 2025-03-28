@@ -117,17 +117,7 @@ func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32, rewardPercentiles []floa
 	var rewards *rewards
 	// If rewardPercentiles is not empty, we need to calculate the rewards for the block
 	if len(rewardPercentiles) > 0 {
-		parentSummary, err := fd.repo.GetBlockSummary(block.Header().ParentID())
-		if err != nil {
-			return nil, err
-		}
-		state := fd.stater.NewState(parentSummary.Root())
-
-		baseGasPrice, err := builtin.Params.Native(state).Get(thor.KeyBaseGasPrice)
-		if err != nil {
-			return nil, err
-		}
-		rewards, err = fd.getRewardsForCache(block, baseGasPrice)
+		rewards, err = fd.getRewardsForCache(block)
 		if err != nil {
 			return nil, err
 		}
@@ -145,18 +135,29 @@ func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32, rewardPercentiles []floa
 	return fees.(*FeeCacheEntry), nil
 }
 
-func (fd *FeesData) getRewardsForCache(block *block.Block, baseGasPrice *big.Int) (*rewards, error) {
+func (fd *FeesData) getRewardsForCache(block *block.Block) (*rewards, error) {
 	header := block.Header()
 	receipts, err := fd.repo.GetBlockReceipts(header.ID())
 	if err != nil {
 		return nil, err
 	}
 
-	// Calculate rewards
+	// Get the baseGasPrice for legacy transactions
+	parentSummary, err := fd.repo.GetBlockSummary(block.Header().ParentID())
+	if err != nil {
+		return nil, err
+	}
+	state := fd.stater.NewState(parentSummary.Root())
+
+	baseGasPrice, err := builtin.Params.Native(state).Get(thor.KeyBaseGasPrice)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the effective priority fee (reward) for each transaction
 	transactions := block.Transactions()
 	items := make([]rewardItem, len(transactions))
 	isGalactica := header.Number() >= thor.GetForkConfig(fd.repo.NewBestChain().GenesisID()).GALACTICA
-
 	for i, tx := range transactions {
 		provedWork, err := tx.ProvedWork(header.Number(), fd.repo.NewBestChain().GetBlockID)
 		if err != nil {
