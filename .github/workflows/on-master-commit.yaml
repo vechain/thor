@@ -76,8 +76,9 @@ jobs:
       trigger_internal_ci: true
 
   delpoy-devnet:
-    needs: publish-docker-image
-    if: needs.publish-docker-image.result == 'success'
+    needs:
+     - publish-docker-image
+     - generate-tags
     uses: ./.github/workflows/deploy-devnet.yaml
     secrets: inherit
     with:
