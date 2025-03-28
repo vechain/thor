@@ -7,8 +7,10 @@ package fees_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -90,10 +92,11 @@ func TestRewardPercentiles(t *testing.T) {
 
 	tclient := thorclient.New(ts.URL)
 	for name, tt := range map[string]func(*testing.T, *thorclient.Client, *chain.Chain){
-		"getRewardsValidPercentiles":        getRewardsValidPercentiles,
-		"getRewardsInvalidPercentiles":      getRewardsInvalidPercentiles,
-		"getRewardsOutOfRangePercentiles":   getRewardsOutOfRangePercentiles,
-		"getRewardsNonAscendingPercentiles": getRewardsNonAscendingPercentiles,
+		"getRewardsValidPercentiles":         getRewardsValidPercentiles,
+		"getRewardsInvalidPercentiles":       getRewardsInvalidPercentiles,
+		"getRewardsOutOfRangePercentiles":    getRewardsOutOfRangePercentiles,
+		"getRewardsNonAscendingPercentiles":  getRewardsNonAscendingPercentiles,
+		"getRewardsMorePercentilesThanLimit": getRewardsMorePercentilesThanLimit,
 	} {
 		t.Run(name, func(t *testing.T) {
 			tt(t, tclient, bestchain)
@@ -506,4 +509,20 @@ func getRewardsNonAscendingPercentiles(t *testing.T, tclient *thorclient.Client,
 	require.Equal(t, 400, statusCode)
 	require.NotNil(t, res)
 	assert.Equal(t, "reward percentiles must be in ascending order, but 10.000000 is less than 20.000000\n", string(res))
+}
+
+func getRewardsMorePercentilesThanLimit(t *testing.T, tclient *thorclient.Client, bestchain *chain.Chain) {
+	// Generate 101 values from 1.0
+	var percentiles []string
+	for i := 0; i <= 100; i++ {
+		value := 1.0 + float64(i)/100.0
+		percentiles = append(percentiles, fmt.Sprintf("%.2f", value))
+	}
+	percentilesStr := strings.Join(percentiles, ",")
+
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=3&newestBlock=4&rewardPercentiles=" + percentilesStr)
+	require.NoError(t, err)
+	require.Equal(t, 400, statusCode)
+	require.NotNil(t, res)
+	assert.Equal(t, "there can be at most 100 rewardPercentiles\n", string(res))
 }
