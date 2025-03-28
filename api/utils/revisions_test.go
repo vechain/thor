@@ -167,6 +167,7 @@ func TestGetSummaryAndState(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, summary.Header.Number(), b.Header().Number()+1)
 	assert.Equal(t, summary.Header.Timestamp(), b.Header().Timestamp()+thor.BlockInterval)
+	assert.Equal(t, len(summary.Txs), 0)
 
 	signer, err := summary.Header.Signer()
 	assert.NotNil(t, err)
