@@ -222,8 +222,8 @@ func (c *Client) ChainTag() (byte, error) {
 }
 
 // FeesHistory retrieves the fee history for the range newest block - block count.
-func (c *Client) FeesHistory(blockCount uint32, newestBlock string) (feesHistory *fees.FeesHistory, err error) {
-	return c.httpConn.GetFeesHistory(blockCount, newestBlock)
+func (c *Client) FeesHistory(blockCount uint32, newestBlock string, rewardPercentiles []float64) (feesHistory *fees.FeesHistory, err error) {
+	return c.httpConn.GetFeesHistory(blockCount, newestBlock, rewardPercentiles)
 }
 
 // FeesPriority retrieves the suggested maxPriorityFeePerGas for a transaction to be included in the next blocks.

@@ -439,7 +439,7 @@ func testFeesEndpoint(t *testing.T, testchain *testchain.Chain, ts *httptest.Ser
 	t.Run("GetFeesHistory", func(t *testing.T) {
 		blockCount := uint32(1)
 		newestBlock := "best"
-		feesHistory, err := c.FeesHistory(blockCount, newestBlock)
+		feesHistory, err := c.FeesHistory(blockCount, newestBlock, nil)
 		require.NoError(t, err)
 		require.NotNil(t, feesHistory)
 
@@ -456,6 +456,44 @@ func testFeesEndpoint(t *testing.T, testchain *testchain.Chain, ts *httptest.Ser
 		}
 
 		require.Equal(t, expectedFeesHistory, feesHistory)
+
+		rewardPercentiles := []float64{10, 90}
+		feesHistory, err = c.FeesHistory(blockCount, newestBlock, rewardPercentiles)
+		require.NoError(t, err)
+		require.NotNil(t, feesHistory)
+
+		expectedOldestBlock, err = testchain.Repo().NewBestChain().GetBlockID(2)
+		require.NoError(t, err)
+		expectedFeesHistory = &fees.FeesHistory{
+			OldestBlock: expectedOldestBlock,
+			BaseFeePerGas: []*hexutil.Big{
+				(*hexutil.Big)(big.NewInt(thor.InitialBaseFee)),
+			},
+			GasUsedRatio: []float64{
+				0.0037,
+			},
+			Reward: [][]*hexutil.Big{
+				{
+					(*hexutil.Big)(big.NewInt(0)),
+					(*hexutil.Big)(big.NewInt(0)),
+				},
+			},
+		}
+
+		require.Equal(t, expectedFeesHistory.OldestBlock, feesHistory.OldestBlock)
+		require.Equal(t, expectedFeesHistory.BaseFeePerGas, feesHistory.BaseFeePerGas)
+		require.Equal(t, expectedFeesHistory.GasUsedRatio, feesHistory.GasUsedRatio)
+
+		// Compare rewards as strings
+		require.Len(t, feesHistory.Reward, len(expectedFeesHistory.Reward), "should have same number of reward blocks")
+		for i, blockRewards := range feesHistory.Reward {
+			require.Len(t, blockRewards, len(expectedFeesHistory.Reward[i]), "block %d should have same number of rewards", i)
+			for j, reward := range blockRewards {
+				require.NotNil(t, reward, "reward %d in block %d should not be nil", j, i)
+				require.NotNil(t, expectedFeesHistory.Reward[i][j], "expected reward %d in block %d should not be nil", j, i)
+				require.Equal(t, expectedFeesHistory.Reward[i][j].String(), reward.String(), "reward %d in block %d should match", j, i)
+			}
+		}
 	})
 
 	// 2. Test GET /fees/priority
