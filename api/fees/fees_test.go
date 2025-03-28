@@ -440,23 +440,12 @@ func getRewardsValidPercentiles(t *testing.T, tclient *thorclient.Client, bestch
 	require.Len(t, feesHistory.Reward, 3, "should have rewards for 3 blocks")
 
 	// Expected reward values based on MaxPriorityFeePerGas values
-	expectedRewards := [][]*hexutil.Big{
-		{
-			(*hexutil.Big)(big.NewInt(10)), // 25th percentile
-			(*hexutil.Big)(big.NewInt(10)), // 50th percentile
-			(*hexutil.Big)(big.NewInt(12)), // 75th percentile
-		},
-		{
-			(*hexutil.Big)(big.NewInt(10)), // 25th percentile
-			(*hexutil.Big)(big.NewInt(10)), // 50th percentile
-			(*hexutil.Big)(big.NewInt(12)), // 75th percentile
-		},
-		{
-			(*hexutil.Big)(big.NewInt(10)), // 25th percentile
-			(*hexutil.Big)(big.NewInt(10)), // 50th percentile
-			(*hexutil.Big)(big.NewInt(12)), // 75th percentile
-		},
+	expectedTxRewardsByPercentile := []*hexutil.Big{
+		(*hexutil.Big)(big.NewInt(10)), // 25th percentile
+		(*hexutil.Big)(big.NewInt(10)), // 50th percentile
+		(*hexutil.Big)(big.NewInt(12)), // 75th percentile
 	}
+	expectedRewards := [][]*hexutil.Big{expectedTxRewardsByPercentile, expectedTxRewardsByPercentile, expectedTxRewardsByPercentile}
 
 	for i, blockRewards := range feesHistory.Reward {
 		require.NotNil(t, blockRewards, "block %d rewards should not be nil", i)
