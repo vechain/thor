@@ -21,18 +21,23 @@ import (
 type FeeCacheEntry struct {
 	parentBlockID thor.Bytes32
 	baseFee       *hexutil.Big
-	rewards       []*hexutil.Big
 	gasUsedRatio  float64
-}
-
-type FeesData struct {
-	repo  *chain.Repository
-	cache *cache.PrioCache
+	cachedRewards *rewards
 }
 
 type rewardItem struct {
 	reward  *big.Int
 	gasUsed uint64
+}
+
+type rewards struct {
+	items        []rewardItem
+	totalGasUsed uint64
+}
+
+type FeesData struct {
+	repo  *chain.Repository
+	cache *cache.PrioCache
 }
 
 func newFeesData(repo *chain.Repository, fixedCacheSize int) *FeesData {
@@ -64,7 +69,7 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 	var oldestBlockID thor.Bytes32
 	for i := blockCount; i > 0; i-- {
 		oldestBlockID = newestBlockID
-		fees, err := fd.getOrLoadFees(newestBlockID, rewardPercentiles, baseGasPrice)
+		fees, err := fd.getOrLoadFees(newestBlockID, baseGasPrice)
 		if err != nil {
 			// This should happen only when "next" since the boundaries are validated beforehand
 			// We do not cache the data in this case since it does not belong to an actual block
@@ -85,7 +90,10 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 		baseFees[i-1] = fees.baseFee
 		gasUsedRatios[i-1] = fees.gasUsedRatio
 		if rewardPercentiles != nil {
-			rewards[i-1] = fees.rewards
+			rewards[i-1], err = fd.calculateRewards(fees.cachedRewards, rewardPercentiles)
+			if err != nil {
+				return thor.Bytes32{}, nil, nil, nil, err
+			}
 		}
 
 		newestBlockID = fees.parentBlockID
@@ -94,7 +102,7 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 	return oldestBlockID, baseFees, gasUsedRatios, rewards, nil
 }
 
-func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32, rewardPercentiles *[]float64, baseGasPrice *big.Int) (*FeeCacheEntry, error) {
+func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32, baseGasPrice *big.Int) (*FeeCacheEntry, error) {
 	fees, _, found := fd.cache.Get(blockID)
 	if found {
 		return fees.(*FeeCacheEntry), nil
@@ -105,9 +113,10 @@ func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32, rewardPercentiles *[]flo
 		return nil, err
 	}
 
-	var rewards []*hexutil.Big
-	if rewardPercentiles != nil {
-		rewards, err = fd.calculateRewards(block, rewardPercentiles, baseGasPrice)
+	var rewards *rewards
+	// If baseGasPrice is not nil, we need to calculate the rewards for the block
+	if baseGasPrice != nil {
+		rewards, err = fd.getRewardsForCache(block, baseGasPrice)
 		if err != nil {
 			return nil, err
 		}
@@ -117,7 +126,7 @@ func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32, rewardPercentiles *[]flo
 	fees = &FeeCacheEntry{
 		baseFee:       getBaseFee(header.BaseFee()),
 		gasUsedRatio:  float64(header.GasUsed()) / float64(header.GasLimit()),
-		rewards:       rewards,
+		cachedRewards: rewards,
 		parentBlockID: header.ParentID(),
 	}
 	fd.cache.Set(header.ID(), fees, float64(header.Number()))
@@ -125,16 +134,9 @@ func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32, rewardPercentiles *[]flo
 	return fees.(*FeeCacheEntry), nil
 }
 
-func (fd *FeesData) calculateRewards(block *block.Block, rewardPercentiles *[]float64, baseGasPrice *big.Int) ([]*hexutil.Big, error) {
+func (fd *FeesData) getRewardsForCache(block *block.Block, baseGasPrice *big.Int) (*rewards, error) {
 	// If there are no transactions, return rewards with zero values
 	transactions := block.Transactions()
-	rewards := make([]*hexutil.Big, len(*rewardPercentiles))
-	if len(transactions) == 0 {
-		for i := range rewards {
-			rewards[i] = (*hexutil.Big)(big.NewInt(0))
-		}
-		return rewards, nil
-	}
 
 	header := block.Header()
 	receipts, err := fd.repo.GetBlockReceipts(header.ID())
@@ -162,19 +164,31 @@ func (fd *FeesData) calculateRewards(block *block.Block, rewardPercentiles *[]fl
 		return a.reward.Cmp(b.reward)
 	})
 
-	// Calculate rewards for each percentile
-	totalGasUsed := header.GasUsed()
+	return &rewards{
+		items:        items,
+		totalGasUsed: header.GasUsed(),
+	}, nil
+}
+
+func (fd *FeesData) calculateRewards(cachedRewards *rewards, rewardPercentiles *[]float64) ([]*hexutil.Big, error) {
+	rewards := make([]*hexutil.Big, len(*rewardPercentiles))
+	if cachedRewards == nil || len(cachedRewards.items) == 0 {
+		for i := range rewards {
+			rewards[i] = (*hexutil.Big)(big.NewInt(0))
+		}
+		return rewards, nil
+	}
 
 	currentTransactionIndex := 0
-	cumulativeGasUsed := items[0].gasUsed
+	cumulativeGasUsed := cachedRewards.items[0].gasUsed
 
 	for i, p := range *rewardPercentiles {
-		thresholdGasUsed := uint64(float64(totalGasUsed) * p / 100)
-		for cumulativeGasUsed < thresholdGasUsed && currentTransactionIndex < len(transactions)-1 {
+		thresholdGasUsed := uint64(float64(cachedRewards.totalGasUsed) * p / 100)
+		for cumulativeGasUsed < thresholdGasUsed && currentTransactionIndex < len(cachedRewards.items)-1 {
 			currentTransactionIndex++
-			cumulativeGasUsed += items[currentTransactionIndex].gasUsed
+			cumulativeGasUsed += cachedRewards.items[currentTransactionIndex].gasUsed
 		}
-		rewards[i] = (*hexutil.Big)(items[currentTransactionIndex].reward)
+		rewards[i] = (*hexutil.Big)(cachedRewards.items[currentTransactionIndex].reward)
 	}
 
 	return rewards, nil
