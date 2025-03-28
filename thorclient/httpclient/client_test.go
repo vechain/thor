@@ -349,7 +349,8 @@ func TestClient_GetFeesHistory(t *testing.T) {
 	defer ts.Close()
 
 	client := New(ts.URL)
-	feesHistory, err := client.GetFeesHistory(blockCount, newestBlock)
+	//TODO: Add test for rewardsPercentiles
+	feesHistory, err := client.GetFeesHistory(blockCount, newestBlock, nil)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedFeesHistory, feesHistory)
