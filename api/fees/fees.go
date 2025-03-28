@@ -18,7 +18,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/bft"
-	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/state"
@@ -36,7 +35,6 @@ type Config struct {
 type Fees struct {
 	data           *FeesData
 	bft            bft.Committer
-	stater         *state.Stater
 	minPriorityFee *big.Int // The minimum suggested priority fee is (Config.PriorityIncreasePercentage)% of the block initial base fee.
 	config         Config
 }
@@ -47,9 +45,8 @@ func calcPriorityFee(baseFee *big.Int, priorityPercentile int64) *big.Int {
 
 func New(repo *chain.Repository, bft bft.Committer, stater *state.Stater, config Config) *Fees {
 	return &Fees{
-		data:           newFeesData(repo, config.FixedCacheSize),
+		data:           newFeesData(repo, stater, config.FixedCacheSize),
 		bft:            bft,
-		stater:         stater,
 		minPriorityFee: calcPriorityFee(big.NewInt(thor.InitialBaseFee), int64(config.PriorityIncreasePercentage)),
 		config:         config,
 	}
@@ -94,7 +91,7 @@ func (f *Fees) validateNewestBlock(req *http.Request, blockCount *uint64) (*chai
 		return nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
 	}
 
-	newestBlockSummary, _, err := utils.GetSummaryAndState(newestBlock, f.data.repo, f.bft, f.stater)
+	newestBlockSummary, _, err := utils.GetSummaryAndState(newestBlock, f.data.repo, f.bft, f.data.stater)
 	if err != nil {
 		if f.data.repo.IsNotFound(err) {
 			return nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
@@ -149,17 +146,7 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 		return err
 	}
 
-	var baseGasPrice *big.Int
-	if rewardPercentiles != nil {
-		state := f.stater.NewState(newestBlockSummary.Root())
-
-		baseGasPrice, err = builtin.Params.Native(state).Get(thor.KeyBaseGasPrice)
-		if err != nil {
-			return err
-		}
-	}
-
-	oldestBlockRevision, baseFees, gasUsedRatios, rewards, err := f.data.resolveRange(newestBlockSummary, blockCount, rewardPercentiles, baseGasPrice)
+	oldestBlockRevision, baseFees, gasUsedRatios, rewards, err := f.data.resolveRange(newestBlockSummary, blockCount, rewardPercentiles)
 	if err != nil {
 		return err
 	}

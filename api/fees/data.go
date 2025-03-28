@@ -12,9 +12,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus/fork"
+	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -36,14 +38,16 @@ type rewards struct {
 }
 
 type FeesData struct {
-	repo  *chain.Repository
-	cache *cache.PrioCache
+	repo   *chain.Repository
+	cache  *cache.PrioCache
+	stater *state.Stater
 }
 
-func newFeesData(repo *chain.Repository, fixedCacheSize int) *FeesData {
+func newFeesData(repo *chain.Repository, stater *state.Stater, fixedCacheSize int) *FeesData {
 	return &FeesData{
-		repo:  repo,
-		cache: cache.NewPrioCache(fixedCacheSize),
+		repo:   repo,
+		stater: stater,
+		cache:  cache.NewPrioCache(fixedCacheSize),
 	}
 }
 
@@ -56,7 +60,7 @@ func getBaseFee(baseFee *big.Int) *hexutil.Big {
 
 // resolveRange resolves the base fees, gas used ratios and priority fees for the given block range.
 // Assumes that the boundaries (newest block - block count) are correct and validated beforehand.
-func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCount uint32, rewardPercentiles *[]float64, baseGasPrice *big.Int) (thor.Bytes32, []*hexutil.Big, []float64, [][]*hexutil.Big, error) {
+func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCount uint32, rewardPercentiles *[]float64) (thor.Bytes32, []*hexutil.Big, []float64, [][]*hexutil.Big, error) {
 	newestBlockID := newestBlockSummary.Header.ID()
 
 	baseFees := make([]*hexutil.Big, blockCount)
@@ -69,7 +73,7 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 	var oldestBlockID thor.Bytes32
 	for i := blockCount; i > 0; i-- {
 		oldestBlockID = newestBlockID
-		fees, err := fd.getOrLoadFees(newestBlockID, baseGasPrice)
+		fees, err := fd.getOrLoadFees(newestBlockID, rewardPercentiles)
 		if err != nil {
 			// This should happen only when "next" since the boundaries are validated beforehand
 			// We do not cache the data in this case since it does not belong to an actual block
@@ -78,7 +82,7 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 				baseFees[i-1] = getBaseFee(header.BaseFee())
 				gasUsedRatios[i-1] = float64(header.GasUsed()) / float64(header.GasLimit())
 				if rewardPercentiles != nil {
-					//TODO: Use something different here
+					// There are no transactions in this block, so the rewards are empty
 					rewards[i-1] = make([]*hexutil.Big, 0)
 				}
 				newestBlockID = header.ParentID()
@@ -102,7 +106,7 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 	return oldestBlockID, baseFees, gasUsedRatios, rewards, nil
 }
 
-func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32, baseGasPrice *big.Int) (*FeeCacheEntry, error) {
+func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32, rewardPercentiles *[]float64) (*FeeCacheEntry, error) {
 	fees, _, found := fd.cache.Get(blockID)
 	if found {
 		return fees.(*FeeCacheEntry), nil
@@ -114,8 +118,18 @@ func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32, baseGasPrice *big.Int) (
 	}
 
 	var rewards *rewards
-	// If baseGasPrice is not nil, we need to calculate the rewards for the block
-	if baseGasPrice != nil {
+	// If rewardPercentiles is not nil, we need to calculate the rewards for the block
+	if rewardPercentiles != nil {
+		parentSummary, err := fd.repo.GetBlockSummary(block.Header().ParentID())
+		if err != nil {
+			return nil, err
+		}
+		state := fd.stater.NewState(parentSummary.Root())
+
+		baseGasPrice, err := builtin.Params.Native(state).Get(thor.KeyBaseGasPrice)
+		if err != nil {
+			return nil, err
+		}
 		rewards, err = fd.getRewardsForCache(block, baseGasPrice)
 		if err != nil {
 			return nil, err
