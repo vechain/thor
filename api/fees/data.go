@@ -98,6 +98,37 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 	return oldestBlockID, baseFees, gasUsedRatios, rewards, nil
 }
 
+func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32, rewardPercentiles *[]float64, baseGasPrice *big.Int) (*FeeCacheEntry, error) {
+	fees, _, found := fd.cache.Get(blockID)
+	if found {
+		return fees.(*FeeCacheEntry), nil
+	}
+
+	block, err := fd.repo.GetBlock(blockID)
+	if err != nil {
+		return nil, err
+	}
+
+	var rewards []*hexutil.Big
+	if rewardPercentiles != nil {
+		rewards, err = fd.calculateRewards(block, rewardPercentiles, baseGasPrice)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	header := block.Header()
+	fees = &FeeCacheEntry{
+		baseFee:       getBaseFee(header.BaseFee()),
+		gasUsedRatio:  float64(header.GasUsed()) / float64(header.GasLimit()),
+		rewards:       rewards,
+		parentBlockID: header.ParentID(),
+	}
+	fd.cache.Set(header.ID(), fees, float64(header.Number()))
+
+	return fees.(*FeeCacheEntry), nil
+}
+
 func (fd *FeesData) calculateRewards(block *block.Block, rewardPercentiles *[]float64, baseGasPrice *big.Int) ([]*hexutil.Big, error) {
 	// If there are no transactions, return rewards with zero values
 	transactions := block.Transactions()
@@ -151,35 +182,4 @@ func (fd *FeesData) calculateRewards(block *block.Block, rewardPercentiles *[]fl
 	}
 
 	return rewards, nil
-}
-
-func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32, rewardPercentiles *[]float64, baseGasPrice *big.Int) (*FeeCacheEntry, error) {
-	fees, _, found := fd.cache.Get(blockID)
-	if found {
-		return fees.(*FeeCacheEntry), nil
-	}
-
-	block, err := fd.repo.GetBlock(blockID)
-	if err != nil {
-		return nil, err
-	}
-
-	var rewards []*hexutil.Big
-	if rewardPercentiles != nil {
-		rewards, err = fd.calculateRewards(block, rewardPercentiles, baseGasPrice)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	header := block.Header()
-	fees = &FeeCacheEntry{
-		baseFee:       getBaseFee(header.BaseFee()),
-		gasUsedRatio:  float64(header.GasUsed()) / float64(header.GasLimit()),
-		rewards:       rewards,
-		parentBlockID: header.ParentID(),
-	}
-	fd.cache.Set(header.ID(), fees, float64(header.Number()))
-
-	return fees.(*FeeCacheEntry), nil
 }
