@@ -7,12 +7,12 @@ package pruner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"time"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/log"
@@ -49,7 +49,7 @@ func New(db *muxdb.MuxDB, repo *chain.Repository) *Pruner {
 	}
 	o.goes.Go(func() {
 		if err := o.loop(); err != nil {
-			if err != context.Canceled && errors.Cause(err) != context.Canceled {
+			if !errors.Is(err, context.Canceled) {
 				logger.Warn("pruner interrupted", "error", err)
 			}
 		}
@@ -72,7 +72,7 @@ func (p *Pruner) loop() error {
 		propsStore = p.db.NewStore(propsStoreName)
 	)
 	if err := status.Load(propsStore); err != nil {
-		return errors.Wrap(err, "load status")
+		return fmt.Errorf("load status: %w", err)
 	}
 
 	for {
@@ -87,13 +87,13 @@ func (p *Pruner) loop() error {
 
 		targetChain, err := p.awaitUntilSteady(target + thor.MaxStateHistory)
 		if err != nil {
-			return errors.Wrap(err, "awaitUntilSteady")
+			return fmt.Errorf("awaitUntilSteady: %w", err)
 		}
 		startTime := time.Now().UnixNano()
 
 		// prune index/account/storage tries
 		if err := p.pruneTries(targetChain, status.Base, target); err != nil {
-			return errors.Wrap(err, "prune tries")
+			return fmt.Errorf("prune tries: %w", err)
 		}
 
 		logger.Info("prune tries",
@@ -103,7 +103,7 @@ func (p *Pruner) loop() error {
 
 		status.Base = target
 		if err := status.Save(propsStore); err != nil {
-			return errors.Wrap(err, "save status")
+			return fmt.Errorf("save status: %w", err)
 		}
 	}
 }
@@ -119,11 +119,11 @@ func (p *Pruner) newStorageTrieIfUpdated(accLeaf *trie.Leaf, base uint32) *muxdb
 		meta state.AccountMetadata
 	)
 	if err := rlp.DecodeBytes(accLeaf.Value, &acc); err != nil {
-		panic(errors.Wrap(err, "decode account"))
+		panic(fmt.Errorf("decode account: %w", err))
 	}
 
 	if err := rlp.DecodeBytes(accLeaf.Meta, &meta); err != nil {
-		panic(errors.Wrap(err, "decode account metadata"))
+		panic(fmt.Errorf("decode account metadata: %w", err))
 	}
 
 	if meta.StorageMajorVer >= base {
@@ -181,11 +181,11 @@ func (p *Pruner) checkpointTries(targetChain *chain.Chain, base, target uint32) 
 // pruneTries prunes index/account/storage tries in the range [base, target).
 func (p *Pruner) pruneTries(targetChain *chain.Chain, base, target uint32) error {
 	if err := p.checkpointTries(targetChain, base, target); err != nil {
-		return errors.Wrap(err, "checkpoint tries")
+		return fmt.Errorf("checkpoint tries: %w", err)
 	}
 
 	if err := p.db.DeleteTrieHistoryNodes(p.ctx, base, target); err != nil {
-		return errors.Wrap(err, "delete trie history")
+		return fmt.Errorf("delete trie history: %w", err)
 	}
 	return nil
 }

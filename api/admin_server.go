@@ -6,13 +6,13 @@
 package api
 
 import (
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
 	"sync/atomic"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/admin"
 	"github.com/vechain/thor/v2/api/admin/health"
 	"github.com/vechain/thor/v2/chain"
@@ -29,7 +29,7 @@ func StartAdminServer(
 ) (string, func(), error) {
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
-		return "", nil, errors.Wrapf(err, "listen admin API addr [%v]", addr)
+		return "", nil, fmt.Errorf("listen admin API addr [%s]: %w", addr, err)
 	}
 
 	adminHandler := admin.New(logLevel, health.New(repo, p2p), apiLogs)

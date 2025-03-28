@@ -6,6 +6,7 @@
 package subscriptions
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"sync"
@@ -13,7 +14,6 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
@@ -102,27 +102,27 @@ func (s *Subscriptions) handleEventReader(w http.ResponseWriter, req *http.Reque
 	}
 	address, err := parseAddress(req.URL.Query().Get("addr"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "addr"))
+		return nil, utils.BadRequest(fmt.Errorf("addr: %w", err))
 	}
 	t0, err := parseTopic(req.URL.Query().Get("t0"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "t0"))
+		return nil, utils.BadRequest(fmt.Errorf("t0: %w", err))
 	}
 	t1, err := parseTopic(req.URL.Query().Get("t1"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "t1"))
+		return nil, utils.BadRequest(fmt.Errorf("t1: %w", err))
 	}
 	t2, err := parseTopic(req.URL.Query().Get("t2"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "t2"))
+		return nil, utils.BadRequest(fmt.Errorf("t2: %w", err))
 	}
 	t3, err := parseTopic(req.URL.Query().Get("t3"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "t3"))
+		return nil, utils.BadRequest(fmt.Errorf("t3: %w", err))
 	}
 	t4, err := parseTopic(req.URL.Query().Get("t4"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "t4"))
+		return nil, utils.BadRequest(fmt.Errorf("t4: %w", err))
 	}
 	eventFilter := &EventFilter{
 		Address: address,
@@ -142,15 +142,15 @@ func (s *Subscriptions) handleTransferReader(_ http.ResponseWriter, req *http.Re
 	}
 	txOrigin, err := parseAddress(req.URL.Query().Get("txOrigin"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "txOrigin"))
+		return nil, utils.BadRequest(fmt.Errorf("txOrigin: %w", err))
 	}
 	sender, err := parseAddress(req.URL.Query().Get("sender"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "sender"))
+		return nil, utils.BadRequest(fmt.Errorf("sender: %w", err))
 	}
 	recipient, err := parseAddress(req.URL.Query().Get("recipient"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "recipient"))
+		return nil, utils.BadRequest(fmt.Errorf("recipient: %w", err))
 	}
 	transferFilter := &TransferFilter{
 		TxOrigin:  txOrigin,
@@ -321,7 +321,7 @@ func (s *Subscriptions) parsePosition(posStr string) (thor.Bytes32, error) {
 	}
 	pos, err := thor.ParseBytes32(posStr)
 	if err != nil {
-		return thor.Bytes32{}, utils.BadRequest(errors.WithMessage(err, "pos"))
+		return thor.Bytes32{}, utils.BadRequest(fmt.Errorf("pos: %w", err))
 	}
 	if block.Number(bestID)-block.Number(pos) > s.backtraceLimit {
 		return thor.Bytes32{}, utils.Forbidden(errors.New("pos: backtrace limit exceeded"))

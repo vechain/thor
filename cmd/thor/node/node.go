@@ -7,6 +7,7 @@ package node
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -16,7 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
@@ -326,7 +326,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		)
 
 		if ok, err := n.bft.Accepts(newBlock.Header().ParentID()); err != nil {
-			return errors.Wrap(err, "bft accepts")
+			return fmt.Errorf("bft accepts: %w", err)
 		} else if !ok {
 			return errBFTRejected
 		}
@@ -342,7 +342,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		if newBlock.Header().Number() >= n.forkConfig.FINALITY && oldBest.Header.Number() >= n.forkConfig.FINALITY {
 			becomeNewBest, err = n.bft.Select(newBlock.Header())
 			if err != nil {
-				return errors.Wrap(err, "bft select")
+				return fmt.Errorf("bft select: %w", err)
 			}
 		} else {
 			becomeNewBest = newBlock.Header().BetterThan(oldBest.Header)
@@ -355,13 +355,13 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		// write logs
 		if logEnabled {
 			if err := n.writeLogs(newBlock, receipts, oldBest.Header.ID()); err != nil {
-				return errors.Wrap(err, "write logs")
+				return fmt.Errorf("write logs: %w", err)
 			}
 		}
 
 		// commit produced states
 		if _, err := stage.Commit(); err != nil {
-			return errors.Wrap(err, "commit state")
+			return fmt.Errorf("commit state: %w", err)
 		}
 
 		// sync the log-writing task
@@ -374,13 +374,13 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 
 		// add the new block into repository
 		if err := n.repo.AddBlock(newBlock, receipts, conflicts, becomeNewBest); err != nil {
-			return errors.Wrap(err, "add block")
+			return fmt.Errorf("add block: %w", err)
 		}
 
 		// commit block in bft engine
 		if newBlock.Header().Number() >= n.forkConfig.FINALITY {
 			if err := n.bft.CommitBlock(newBlock.Header(), false); err != nil {
-				return errors.Wrap(err, "bft commits")
+				return fmt.Errorf("bft commits: %w", err)
 			}
 		}
 

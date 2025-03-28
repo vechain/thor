@@ -6,6 +6,8 @@
 package fees
 
 import (
+	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"net/http"
@@ -13,7 +15,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/mux"
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/chain"
@@ -55,7 +56,7 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 	blockCountParam := req.URL.Query().Get("blockCount")
 	blockCount, err := strconv.ParseUint(blockCountParam, 10, 32)
 	if err != nil {
-		return 0, nil, utils.BadRequest(errors.WithMessage(err, "invalid blockCount, it should represent an integer"))
+		return 0, nil, utils.BadRequest(fmt.Errorf("invalid blockCount, it should represent an integer: %w", err))
 	}
 
 	if blockCount == 0 {
@@ -65,14 +66,14 @@ func (f *Fees) validateGetFeesHistoryParams(req *http.Request) (uint32, *chain.B
 	// Validate newestBlock
 	newestBlock, err := utils.ParseRevision(req.URL.Query().Get("newestBlock"), true)
 	if err != nil {
-		return 0, nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
+		return 0, nil, utils.BadRequest(fmt.Errorf("newestBlock: %w", err))
 	}
 
 	newestBlockSummary, _, err := utils.GetSummaryAndState(newestBlock, f.data.repo, f.bft, f.stater)
 	if err != nil {
 		if f.data.repo.IsNotFound(err) {
 			// return 400 for the parameter validation
-			return 0, nil, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
+			return 0, nil, utils.BadRequest(fmt.Errorf("newestBlock: %w", err))
 		}
 		// all other unexpected errors will fall to 500 error
 		return 0, nil, err

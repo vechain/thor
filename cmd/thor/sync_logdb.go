@@ -8,10 +8,10 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 
-	"github.com/pkg/errors"
 	"github.com/pmezard/go-difflib/difflib"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
@@ -25,11 +25,11 @@ import (
 func syncLogDB(ctx context.Context, repo *chain.Repository, logDB *logdb.LogDB, verify bool) error {
 	startPos, err := seekLogDBSyncPosition(repo, logDB)
 	if err != nil {
-		return errors.Wrap(err, "seek log db sync position")
+		return fmt.Errorf("seek log db sync position: %w", err)
 	}
 	if verify && startPos > 0 {
 		if err := verifyLogDB(ctx, startPos-1, repo, logDB); err != nil {
-			return errors.Wrap(err, "verify log db")
+			return fmt.Errorf("verify log db: %w", err)
 		}
 	}
 

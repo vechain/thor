@@ -6,12 +6,12 @@
 package xenv
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	ethparams "github.com/ethereum/go-ethereum/params"
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/state"
@@ -95,14 +95,14 @@ func (env *Environment) UseGas(gas uint64) {
 func (env *Environment) ParseArgs(val any) {
 	if err := env.abi.DecodeInput(env.contract.Input, val); err != nil {
 		// as vm error
-		panic(errors.WithMessage(err, "decode native input"))
+		panic(fmt.Errorf("decode native input: %w", err))
 	}
 }
 
 func (env *Environment) Log(abi *abi.Event, address thor.Address, topics []thor.Bytes32, args ...any) {
 	data, err := abi.Encode(args...)
 	if err != nil {
-		panic(errors.WithMessage(err, "encode native event"))
+		panic(fmt.Errorf("encode native event: %w", err))
 	}
 	env.UseGas(ethparams.LogGas + ethparams.LogTopicGas*uint64(len(topics)) + ethparams.LogDataGas*uint64(len(data)))
 
@@ -130,7 +130,7 @@ func (env *Environment) Call(proc func(env *Environment) []any) (output []byte, 
 	}()
 	data, err := env.abi.EncodeOutput(proc(env)...)
 	if err != nil {
-		panic(errors.WithMessage(err, "encode native output"))
+		panic(fmt.Errorf("encode native output: %w", err))
 	}
 	return data, nil
 }
