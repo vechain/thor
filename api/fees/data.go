@@ -74,11 +74,7 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 				gasUsedRatios[i-1] = float64(header.GasUsed()) / float64(header.GasLimit())
 				if rewardPercentiles != nil {
 					//TODO: Use something different here
-					blockRewards, err := fd.calculateRewards(nil, rewardPercentiles, baseGasPrice)
-					if err != nil {
-						return thor.Bytes32{}, nil, nil, nil, err
-					}
-					rewards[i-1] = blockRewards
+					rewards[i-1] = make([]*hexutil.Big, 0)
 				}
 				newestBlockID = header.ParentID()
 				continue
