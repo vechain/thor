@@ -39,7 +39,7 @@ of all sizes and is intended to serve as a foundation for a sustainable and scal
 
 > VeChainThor is currently up-to-date with the EVM's `shanghai` hard fork,
 > set [evmVersion](https://docs.soliditylang.org/en/latest/using-the-compiler.html#setting-the-evm-version-to-target)
-> to `shanghai` if you are using solidity compiler version `0.8.20` or above.
+> to `shanghai` if you are using solidity compiler version `0.8.25` or above.
 ___
 
 ## Documentation
