@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/vechain/thor/v2/api/accounts"
@@ -297,11 +298,11 @@ func (c *Client) GetFeesHistory(blockCount uint32, newestBlock string, rewardPer
 	var url strings.Builder
 	url.WriteString(c.url + "/fees/history?blockCount=" + fmt.Sprint(blockCount) + "&newestBlock=" + newestBlock)
 	if len(rewardPercentiles) > 0 {
-		strValues := make([]string, len(rewardPercentiles))
-		for i, v := range rewardPercentiles {
-			strValues[i] = fmt.Sprint(v)
+		var values []string
+		for _, v := range rewardPercentiles {
+			values = append(values, strconv.FormatFloat(v, 'f', -1, 64))
 		}
-		url.WriteString("&rewardPercentiles=" + strings.Join(strValues, ","))
+		url.WriteString("&rewardPercentiles=" + strings.Join(values, ","))
 	}
 	body, err := c.httpGET(url.String())
 	if err != nil {
