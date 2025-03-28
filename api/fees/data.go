@@ -146,8 +146,6 @@ func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32, rewardPercentiles *[]flo
 }
 
 func (fd *FeesData) getRewardsForCache(block *block.Block, baseGasPrice *big.Int) (*rewards, error) {
-	transactions := block.Transactions()
-
 	header := block.Header()
 	receipts, err := fd.repo.GetBlockReceipts(header.ID())
 	if err != nil {
@@ -155,6 +153,7 @@ func (fd *FeesData) getRewardsForCache(block *block.Block, baseGasPrice *big.Int
 	}
 
 	// Calculate rewards
+	transactions := block.Transactions()
 	items := make([]rewardItem, len(transactions))
 	isGalactica := header.Number() >= thor.GetForkConfig(fd.repo.NewBestChain().GenesisID()).GALACTICA
 
@@ -193,6 +192,11 @@ func (fd *FeesData) calculateRewards(cachedRewards *rewards, rewardPercentiles *
 	currentTransactionIndex := 0
 	cumulativeGasUsed := cachedRewards.items[0].gasUsed
 
+	// For each percentile, we calculate the cumulative gas used until reaching the threshold
+	// The threshold is calculated as: (total gas used * percentile) / 100
+	// For example, if total gas was 1000 and percentile is 50, the threshold is 500
+	// We iterate over transactions sorted by reward until we exceed the threshold
+	// or reach the last transaction
 	for i, p := range *rewardPercentiles {
 		thresholdGasUsed := uint64(float64(cachedRewards.totalGasUsed) * p / 100)
 		for cumulativeGasUsed < thresholdGasUsed && currentTransactionIndex < len(cachedRewards.items)-1 {
