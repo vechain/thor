@@ -391,7 +391,7 @@ func getFeeHistoryNextBlock(t *testing.T, tclient *thorclient.Client, bestchain 
 	expectedFeesHistory := fees.FeesHistory{
 		OldestBlock:   expectedOldestBlock,
 		BaseFeePerGas: []*hexutil.Big{(*hexutil.Big)(big.NewInt(expectedBaseFee)), (*hexutil.Big)(big.NewInt(expectedBaseFee)), (*hexutil.Big)(big.NewInt(expectedBaseFee))},
-		GasUsedRatio:  []float64{expectedGasPriceUsedRatio, expectedGasPriceUsedRatio, expectedGasPriceUsedRatio},
+		GasUsedRatio:  []float64{expectedGasPriceUsedRatio, expectedGasPriceUsedRatio, 0},
 	}
 
 	assert.Equal(t, expectedFeesHistory, feesHistory)
@@ -411,7 +411,7 @@ func getFeeHistoryOnlyNextBlock(t *testing.T, tclient *thorclient.Client, bestch
 	expectedFeesHistory := fees.FeesHistory{
 		OldestBlock:   expectedOldestBlock,
 		BaseFeePerGas: []*hexutil.Big{(*hexutil.Big)(big.NewInt(expectedBaseFee))},
-		GasUsedRatio:  []float64{expectedGasPriceUsedRatio},
+		GasUsedRatio:  []float64{0},
 	}
 
 	assert.Equal(t, expectedFeesHistory, feesHistory)

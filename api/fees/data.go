@@ -80,7 +80,6 @@ func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCo
 			if fd.repo.IsNotFound(err) {
 				header := newestBlockSummary.Header
 				baseFees[i-1] = getBaseFee(header.BaseFee())
-				gasUsedRatios[i-1] = float64(header.GasUsed()) / float64(header.GasLimit())
 				if rewards != nil {
 					// There are no transactions in this block, so the rewards are empty
 					rewards[i-1] = fd.calculateRewards(nil, rewardPercentiles)
