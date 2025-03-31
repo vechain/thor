@@ -483,13 +483,11 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 			finalized = true
 
 			receipt := &Tx.Receipt{
-				Type: tx.Type(),
-				ReceiptBody: Tx.ReceiptBody{
-					Reverted: reverted,
-					Outputs:  txOutputs,
-					GasUsed:  tx.Gas() - leftOverGas,
-					GasPayer: payer,
-				},
+				Type:     tx.Type(),
+				Reverted: reverted,
+				Outputs:  txOutputs,
+				GasUsed:  tx.Gas() - leftOverGas,
+				GasPayer: payer,
 			}
 
 			receipt.Paid = new(big.Int).Mul(new(big.Int).SetUint64(receipt.GasUsed), gasPrice)

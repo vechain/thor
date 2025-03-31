@@ -15,12 +15,12 @@ import (
 
 type Transaction struct {
 	ID                   thor.Bytes32          `json:"id"`
-	Type                 math.HexOrDecimal64   `json:"type"`
+	Type                 uint8                 `json:"type"`
 	ChainTag             byte                  `json:"chainTag"`
 	BlockRef             string                `json:"blockRef"`
 	Expiration           uint32                `json:"expiration"`
 	Clauses              Clauses               `json:"clauses"`
-	GasPriceCoef         uint8                 `json:"gasPriceCoef"`
+	GasPriceCoef         *uint8                `json:"gasPriceCoef,omitempty"`
 	Gas                  uint64                `json:"gas"`
 	MaxFeePerGas         *math.HexOrDecimal256 `json:"maxFeePerGas,omitempty"`
 	MaxPriorityFeePerGas *math.HexOrDecimal256 `json:"maxPriorityFeePerGas,omitempty"`
@@ -45,7 +45,7 @@ func convertTransaction(trx *tx.Transaction, header *block.Header) *Transaction 
 	br := trx.BlockRef()
 	t := &Transaction{
 		ChainTag:   trx.ChainTag(),
-		Type:       math.HexOrDecimal64(trx.Type()),
+		Type:       trx.Type(),
 		ID:         trx.ID(),
 		Origin:     origin,
 		BlockRef:   hexutil.Encode(br[:]),
@@ -60,7 +60,8 @@ func convertTransaction(trx *tx.Transaction, header *block.Header) *Transaction 
 
 	switch trx.Type() {
 	case tx.TypeLegacy:
-		t.GasPriceCoef = trx.GasPriceCoef()
+		coef := trx.GasPriceCoef()
+		t.GasPriceCoef = &coef
 	default:
 		t.MaxFeePerGas = (*math.HexOrDecimal256)(trx.MaxFeePerGas())
 		t.MaxPriorityFeePerGas = (*math.HexOrDecimal256)(trx.MaxPriorityFeePerGas())

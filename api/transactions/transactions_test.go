@@ -128,14 +128,14 @@ func getTxReceipt(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, receipt.GasUsed, legacyTx.Gas(), "receipt gas used not equal to transaction gas")
-	assert.Equal(t, receipt.Type, math.HexOrDecimal64(legacyTx.Type()))
+	assert.Equal(t, receipt.Type, legacyTx.Type())
 
 	r = httpGetAndCheckResponseStatus(t, "/transactions/"+dynFeeTx.ID().String()+"/receipt", 200)
 	if err := json.Unmarshal(r, &receipt); err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, receipt.GasUsed, legacyTx.Gas(), "receipt gas used not equal to transaction gas")
-	assert.Equal(t, receipt.Type, math.HexOrDecimal64(dynFeeTx.Type()))
+	assert.Equal(t, receipt.Type, dynFeeTx.Type())
 }
 
 func sendLegacyTx(t *testing.T) {
@@ -409,11 +409,11 @@ func checkMatchingTx(t *testing.T, expectedTx *tx.Transaction, actualTx *transac
 	}
 	switch expectedTx.Type() {
 	case tx.TypeLegacy:
-		assert.Equal(t, expectedTx.GasPriceCoef(), actualTx.GasPriceCoef)
+		assert.Equal(t, expectedTx.GasPriceCoef(), *actualTx.GasPriceCoef)
 		assert.Empty(t, actualTx.MaxFeePerGas)
 		assert.Empty(t, actualTx.MaxPriorityFeePerGas)
 	case tx.TypeDynamicFee:
-		assert.Empty(t, actualTx.GasPriceCoef)
+		assert.Nil(t, actualTx.GasPriceCoef)
 		assert.Equal(t, (*math.HexOrDecimal256)(expectedTx.MaxFeePerGas()), actualTx.MaxFeePerGas)
 		assert.Equal(t, (*math.HexOrDecimal256)(expectedTx.MaxPriorityFeePerGas()), actualTx.MaxPriorityFeePerGas)
 	}

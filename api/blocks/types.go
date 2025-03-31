@@ -69,7 +69,7 @@ type JSONOutput struct {
 
 type JSONEmbeddedTx struct {
 	ID                   thor.Bytes32          `json:"id"`
-	Type                 math.HexOrDecimal64   `json:"type"`
+	Type                 uint8                 `json:"type"`
 	ChainTag             byte                  `json:"chainTag"`
 	BlockRef             string                `json:"blockRef"`
 	Expiration           uint32                `json:"expiration"`
@@ -177,7 +177,7 @@ func buildJSONEmbeddedTxs(txs tx.Transactions, receipts tx.Receipts) []*JSONEmbe
 
 		embedTx := &JSONEmbeddedTx{
 			ID:         trx.ID(),
-			Type:       math.HexOrDecimal64(trx.Type()),
+			Type:       trx.Type(),
 			ChainTag:   trx.ChainTag(),
 			BlockRef:   hexutil.Encode(blockRef[:]),
 			Expiration: trx.Expiration(),

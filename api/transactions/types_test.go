@@ -27,10 +27,8 @@ func TestErrorWhileRetrievingTxOriginInConvertReceipt(t *testing.T) {
 		tr := tx.NewBuilder(txType).Build()
 		header := &block.Header{}
 		receipt := &tx.Receipt{
-			ReceiptBody: tx.ReceiptBody{
-				Reward: big.NewInt(100),
-				Paid:   big.NewInt(10),
-			},
+			Reward: big.NewInt(100),
+			Paid:   big.NewInt(10),
 		}
 
 		convRec, err := convertReceipt(receipt, header, tr)
@@ -77,7 +75,7 @@ func TestConvertReceipt(t *testing.T) {
 		convRec, err := convertReceipt(receipt, header, tr)
 
 		assert.NoError(t, err)
-		assert.Equal(t, math.HexOrDecimal64(receipt.Type), convRec.Type)
+		assert.Equal(t, receipt.Type, convRec.Type)
 		assert.Equal(t, 1, len(convRec.Outputs))
 		assert.Equal(t, 1, len(convRec.Outputs[0].Events))
 		assert.Equal(t, 1, len(convRec.Outputs[0].Transfers))
@@ -98,24 +96,22 @@ func randAddress() (addr thor.Address) {
 
 func newReceipt() *tx.Receipt {
 	return &tx.Receipt{
-		ReceiptBody: tx.ReceiptBody{
-			Outputs: []*tx.Output{
-				{
-					Events: tx.Events{{
-						Address: randAddress(),
-						Topics:  []thor.Bytes32{randomBytes32()},
-						Data:    randomBytes32().Bytes(),
-					}},
-					Transfers: tx.Transfers{{
-						Sender:    randAddress(),
-						Recipient: randAddress(),
-						Amount:    new(big.Int).SetBytes(randAddress().Bytes()),
-					}},
-				},
+		Outputs: []*tx.Output{
+			{
+				Events: tx.Events{{
+					Address: randAddress(),
+					Topics:  []thor.Bytes32{randomBytes32()},
+					Data:    randomBytes32().Bytes(),
+				}},
+				Transfers: tx.Transfers{{
+					Sender:    randAddress(),
+					Recipient: randAddress(),
+					Amount:    new(big.Int).SetBytes(randAddress().Bytes()),
+				}},
 			},
-			Reward: big.NewInt(100),
-			Paid:   big.NewInt(10),
 		},
+		Reward: big.NewInt(100),
+		Paid:   big.NewInt(10),
 	}
 }
 

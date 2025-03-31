@@ -82,7 +82,7 @@ type ReceiptMeta struct {
 
 // Receipt for json marshal
 type Receipt struct {
-	Type     math.HexOrDecimal64   `json:"type,omitempty"`
+	Type     uint8                 `json:"type,omitempty"`
 	GasUsed  uint64                `json:"gasUsed"`
 	GasPayer thor.Address          `json:"gasPayer"`
 	Paid     *math.HexOrDecimal256 `json:"paid"`
@@ -122,7 +122,7 @@ func convertReceipt(txReceipt *tx.Receipt, header *block.Header, tx *tx.Transact
 		return nil, err
 	}
 	receipt := &Receipt{
-		Type:     math.HexOrDecimal64(txReceipt.Type),
+		Type:     txReceipt.Type,
 		GasUsed:  txReceipt.GasUsed,
 		GasPayer: txReceipt.GasPayer,
 		Paid:     &paid,

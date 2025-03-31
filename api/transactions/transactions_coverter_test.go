@@ -37,7 +37,7 @@ func TestConvertLegacyTransaction_Success(t *testing.T) {
 
 	result := convertTransaction(transaction, header)
 	// Common fields
-	assert.Equal(t, math.HexOrDecimal64(transaction.Type()), result.Type)
+	assert.Equal(t, transaction.Type(), result.Type)
 	assert.Equal(t, hexutil.Encode(br[:]), result.BlockRef)
 	assert.Equal(t, transaction.ChainTag(), result.ChainTag)
 	assert.Equal(t, transaction.Expiration(), result.Expiration)
@@ -49,7 +49,7 @@ func TestConvertLegacyTransaction_Success(t *testing.T) {
 	assert.Equal(t, addr, *result.Clauses[1].To)
 	assert.Equal(t, convertClause(cla2), result.Clauses[1])
 	// Legacy fields
-	assert.Equal(t, uint8(1), result.GasPriceCoef)
+	assert.Equal(t, uint8(1), *result.GasPriceCoef)
 	// Non legacy fields
 	assert.Empty(t, result.MaxFeePerGas)
 	assert.Empty(t, result.MaxPriorityFeePerGas)
@@ -78,7 +78,7 @@ func TestConvertDynTransaction_Success(t *testing.T) {
 
 	result := convertTransaction(transaction, header)
 	// Common fields
-	assert.Equal(t, math.HexOrDecimal64(transaction.Type()), result.Type)
+	assert.Equal(t, transaction.Type(), result.Type)
 	assert.Equal(t, hexutil.Encode(br[:]), result.BlockRef)
 	assert.Equal(t, transaction.ChainTag(), result.ChainTag)
 	assert.Equal(t, transaction.Expiration(), result.Expiration)
