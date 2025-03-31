@@ -20,7 +20,7 @@ type Transaction struct {
 	BlockRef             string                `json:"blockRef"`
 	Expiration           uint32                `json:"expiration"`
 	Clauses              Clauses               `json:"clauses"`
-	GasPriceCoef         uint8                 `json:"gasPriceCoef"`
+	GasPriceCoef         *uint8                `json:"gasPriceCoef,omitempty"`
 	Gas                  uint64                `json:"gas"`
 	MaxFeePerGas         *math.HexOrDecimal256 `json:"maxFeePerGas,omitempty"`
 	MaxPriorityFeePerGas *math.HexOrDecimal256 `json:"maxPriorityFeePerGas,omitempty"`
@@ -60,7 +60,8 @@ func convertTransaction(trx *tx.Transaction, header *block.Header) *Transaction 
 
 	switch trx.Type() {
 	case tx.TypeLegacy:
-		t.GasPriceCoef = trx.GasPriceCoef()
+		coef := trx.GasPriceCoef()
+		t.GasPriceCoef = &coef
 	default:
 		t.MaxFeePerGas = (*math.HexOrDecimal256)(trx.MaxFeePerGas())
 		t.MaxPriorityFeePerGas = (*math.HexOrDecimal256)(trx.MaxPriorityFeePerGas())
