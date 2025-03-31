@@ -1604,7 +1604,7 @@ components:
         type:
           type: integer
           format: uint8
-          description: The transaction type in hex.
+          description: The transaction type in number, currently 0(Legacy Transaction) and 81(DynamicFee Transaction) are supported.
           example: 81
           nullable: false
         origin:
@@ -1655,7 +1655,7 @@ components:
           format: uint8
           description: The coefficient used to calculate the final gas price of the transaction.
           example: 0
-          nullable: false
+          nullable: true
         maxFeePerGas:
           type: string
           format: hex
