@@ -15,6 +15,7 @@ import (
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
 
 const (
@@ -121,10 +122,9 @@ func GetSummaryAndState(rev *Revision, repo *chain.Repository, bft bft.Committer
 			Timestamp(best.Header.Timestamp() + thor.BlockInterval).
 			TotalScore(best.Header.TotalScore()).
 			GasLimit(best.Header.GasLimit()).
-			GasUsed(0).
 			Beneficiary(best.Header.Beneficiary()).
 			StateRoot(best.Header.StateRoot()).
-			ReceiptsRoot(thor.Bytes32{}).
+			ReceiptsRoot(tx.Receipts{}.RootHash()).
 			TransactionFeatures(best.Header.TxsFeatures()).
 			Alpha(best.Header.Alpha())
 
