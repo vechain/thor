@@ -121,10 +121,10 @@ func GetSummaryAndState(rev *Revision, repo *chain.Repository, bft bft.Committer
 			Timestamp(best.Header.Timestamp() + thor.BlockInterval).
 			TotalScore(best.Header.TotalScore()).
 			GasLimit(best.Header.GasLimit()).
-			GasUsed(best.Header.GasUsed()).
+			GasUsed(0).
 			Beneficiary(best.Header.Beneficiary()).
 			StateRoot(best.Header.StateRoot()).
-			ReceiptsRoot(best.Header.ReceiptsRoot()).
+			ReceiptsRoot(thor.Bytes32{}).
 			TransactionFeatures(best.Header.TxsFeatures()).
 			Alpha(best.Header.Alpha())
 
