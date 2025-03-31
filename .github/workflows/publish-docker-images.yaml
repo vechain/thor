@@ -31,12 +31,14 @@ on:
 jobs:
   build-and-push-image:
     name: Build and Push Docker Image
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.host-os }}
     strategy:
       matrix:
-        os:
-          - ubuntu-latest
-          - ubuntu-24.04-arm
+        include:
+          - host-os: ubuntu-24.04-x86
+            docker-arch: linux/amd64
+          - host-os: ubuntu-24.04-arm
+            docker-arch: linux/arm64
 
     permissions:
       contents: read
@@ -47,14 +49,6 @@ jobs:
 
       - name: Checkout Repo
         uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        if: ${{ github.event_name != 'pull_request' }}
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        if: ${{ github.event_name != 'pull_request' }}
-        uses: docker/setup-buildx-action@v3
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
@@ -81,20 +75,11 @@ jobs:
           # use the branch + sha if workflow_dispatch
           tags: ${{ inputs.tags || format('type=raw,value={0}-{1}', github.ref_name, github.sha) }}
 
-      - name: Set Platform
-        id: platform
-        run: |
-          if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
-            echo "::set-output name=platform::linux/amd64"
-          else
-            echo "::set-output name=platform::linux/arm64"
-          fi
-
       - name: Push to Registry(s)
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: ${{ steps.platform.outputs.platform }}
+          platforms: ${{ matrix.docker-arch }}
           push: ${{ github.event_name != 'pull_request' }}
           load: ${{ github.event_name == 'pull_request' }}
           provenance: ${{ github.event_name != 'pull_request' }}
@@ -123,12 +108,3 @@ jobs:
           # See https://github.com/aquasecurity/trivy/discussions/7538
           TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2
 
-      - name: Internal CI
-        uses: peter-evans/repository-dispatch@v3
-        if: ${{ inputs.trigger_internal_ci }}
-        continue-on-error: true
-        with:
-          token: ${{ secrets.INTERNAL_CI_TOKEN }}
-          repository: vechain/thor-internal-ci
-          event-type: internal-thor-ci
-          client-payload: '{"thor_image": "${{ fromJSON(steps.build-and-push-image.outputs.meta.json).tags[0] }}"}'
