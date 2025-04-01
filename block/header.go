@@ -148,24 +148,28 @@ func (h *Header) SigningHash() (hash thor.Bytes32) {
 	defer func() { h.cache.signingHash.Store(hash) }()
 
 	return thor.Blake2bFn(func(w io.Writer) {
-		hashBody := []any{
-			&h.body.ParentID,
-			h.body.Timestamp,
-			h.body.GasLimit,
-			&h.body.Beneficiary,
-
-			h.body.GasUsed,
-			h.body.TotalScore,
-
-			&h.body.TxsRootFeatures,
-			&h.body.StateRoot,
-			&h.body.ReceiptsRoot,
-		}
-		if h.body.Extension.BaseFee != nil {
-			hashBody = append(hashBody, &h.body.Extension.BaseFee)
-		}
-		rlp.Encode(w, hashBody)
+		rlp.Encode(w, h.signingFields())
 	})
+}
+
+func (h *Header) signingFields() []any {
+	fields := []any{
+		&h.body.ParentID,
+		h.body.Timestamp,
+		h.body.GasLimit,
+		&h.body.Beneficiary,
+
+		h.body.GasUsed,
+		h.body.TotalScore,
+
+		&h.body.TxsRootFeatures,
+		&h.body.StateRoot,
+		&h.body.ReceiptsRoot,
+	}
+	if h.body.Extension.BaseFee != nil {
+		fields = append(fields, &h.body.Extension)
+	}
+	return fields
 }
 
 // Signature returns signature.

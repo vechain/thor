@@ -83,12 +83,14 @@ func (ex *extension) DecodeRLP(s *rlp.Stream) error {
 			}
 			return nil
 		}
+
+		// more than one filed, must have com
 		var com bool
 		if err := rlp.DecodeBytes(raws[1], &com); err != nil {
 			return err
 		}
 
-		// alpha and com, make sure baseFee is trimmed
+		// alpha and com, make sure it's trimmed
 		if len(raws) == 2 {
 			// COM must be trimmed if not set
 			if !com {
@@ -102,19 +104,15 @@ func (ex *extension) DecodeRLP(s *rlp.Stream) error {
 			return nil
 		}
 
-		var baseFee *big.Int
+		var baseFee big.Int
 		if err := rlp.DecodeBytes(raws[2], &baseFee); err != nil {
 			return err
 		}
 
-		// baseFee must be trimmed if not set
-		if baseFee == nil {
-			return errors.New("rlp: extension must be trimmed")
-		}
 		*ex = extension{
 			Alpha:   alpha,
 			COM:     com,
-			BaseFee: baseFee,
+			BaseFee: &baseFee,
 		}
 
 		return nil

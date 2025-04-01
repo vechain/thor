@@ -7,14 +7,19 @@ package block
 
 import (
 	"crypto/rand"
+	"encoding/binary"
+	"io"
 	"math/big"
+	"reflect"
 	"sync/atomic"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
 
 func TestHeader_BetterThan(t *testing.T) {
@@ -135,7 +140,7 @@ func TestEncodingBadExtension(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// backward compatiability，required to be trimmed
+	// backward compatibility, required to be trimmed
 	assert.EqualValues(t, 10, count)
 
 	var raws []rlp.RawValue
@@ -217,7 +222,7 @@ type v2 struct {
 	Extension extension
 }
 
-// type extension struct{Alpha []byte; Vote *Vote}
+// type extension struct{Alpha []byte; COM bool, BaseFee *big.Int}
 func TestExtensionV2(t *testing.T) {
 	tests := []struct {
 		name string
@@ -260,6 +265,7 @@ func TestExtensionV2(t *testing.T) {
 				cnt, err := rlp.CountValues(content)
 				assert.Nil(t, err)
 
+				// Extension should represent
 				assert.Equal(t, 1, cnt)
 
 				var dst v2
@@ -286,6 +292,22 @@ func TestExtensionV2(t *testing.T) {
 				})
 				assert.Nil(t, err)
 
+				// Extension should represent in the Encoding
+				content, _, err := rlp.SplitList(bytes)
+				assert.Nil(t, err)
+				cnt, err := rlp.CountValues(content)
+				assert.Nil(t, err)
+				assert.Equal(t, 1, cnt)
+
+				// Continue split extension struct
+				content, _, err = rlp.SplitList(content)
+				assert.Nil(t, err)
+				cnt, err = rlp.CountValues(content)
+				assert.Nil(t, err)
+
+				// Only alpha represent
+				assert.Equal(t, 1, cnt)
+
 				var dst v2
 				err = rlp.DecodeBytes(bytes, &dst)
 				assert.EqualError(t, err, "rlp: extension must be trimmed")
@@ -308,11 +330,12 @@ func TestExtensionV2(t *testing.T) {
 
 				content, _, err := rlp.SplitList(bytes)
 				assert.Nil(t, err)
-
+				content, _, err = rlp.SplitList(content)
+				assert.Nil(t, err)
 				cnt, err := rlp.CountValues(content)
 				assert.Nil(t, err)
-
-				assert.Equal(t, 1, cnt)
+				// All fields should be represented
+				assert.Equal(t, 3, cnt)
 
 				var dst v2
 				err = rlp.DecodeBytes(bytes, &dst)
@@ -338,11 +361,12 @@ func TestExtensionV2(t *testing.T) {
 
 				content, _, err := rlp.SplitList(bytes)
 				assert.Nil(t, err)
-
+				content, _, err = rlp.SplitList(content)
+				assert.Nil(t, err)
 				cnt, err := rlp.CountValues(content)
 				assert.Nil(t, err)
-
-				assert.Equal(t, 1, cnt)
+				// All fields should be represented
+				assert.Equal(t, 3, cnt)
 
 				var dst v2
 				err = rlp.DecodeBytes(bytes, &dst)
@@ -376,5 +400,84 @@ func FuzzHeaderEncoding(f *testing.F) {
 		if h0.String() != decodedHeader.String() {
 			t.Errorf("Header expected to be the same but: %v", err)
 		}
+	})
+}
+
+func TestHeaderHash(t *testing.T) {
+	for range 100 {
+		var builder = new(Builder)
+
+		num := datagen.RandUint32()
+		parentID := datagen.RandomHash()
+		binary.BigEndian.PutUint32(parentID[:], num)
+		u64 := datagen.RandUint64()
+
+		builder.
+			ParentID(parentID).
+			Timestamp(u64 - u64%10).
+			TotalScore(u64 + 100).
+			GasLimit(u64 + 1000).
+			GasUsed(u64 / 2).
+			Beneficiary(datagen.RandAddress()).
+			StateRoot(datagen.RandomHash()).
+			ReceiptsRoot(datagen.RandomHash())
+
+		var feat tx.Features
+		if num%2 == 0 {
+			feat.SetDelegated(true)
+		}
+		builder.TransactionFeatures(feat)
+
+		if num%2 == 1 {
+			builder.Alpha(datagen.RandomHash().Bytes())
+
+			if num%3 == 0 {
+				builder.COM()
+			}
+
+			if num%5 == 0 {
+				builder.BaseFee(datagen.RandBigInt())
+			}
+		}
+		h := builder.Build().Header()
+
+		expectedFieldsLen := reflect.TypeOf(h.body).NumField() - 1
+		if h.body.Extension.BaseFee == nil {
+			expectedFieldsLen--
+		}
+		assert.Equal(t, expectedFieldsLen, len(h.signingFields()), "unexpected number of signing fields")
+
+		expected := signingHash(h)
+		assert.Equal(t, expected, h.SigningHash())
+	}
+}
+
+// signingHash returns the signing hash the block header.
+// this is a reflect based implementation used for cross checking.
+func signingHash(h *Header) thor.Bytes32 {
+	types := reflect.TypeOf(h.body)
+	values := reflect.ValueOf(h.body)
+
+	fields := make([]any, 0)
+	for i := range types.NumField() {
+		// skip signature field
+		if types.Field(i).Name != "Signature" {
+			// pass extension field as a pointer
+			if types.Field(i).Name == "Extension" {
+				extension := values.Field(i).Interface().(extension)
+				if extension.BaseFee != nil {
+					fields = append(fields, &extension)
+				}
+			} else if types.Field(i).Name == "TxsRootFeatures" {
+				rootFeat := values.Field(i).Interface().(txsRootFeatures)
+				fields = append(fields, &rootFeat)
+			} else {
+				fields = append(fields, values.Field(i).Interface())
+			}
+		}
+	}
+
+	return thor.Blake2bFn(func(w io.Writer) {
+		rlp.Encode(w, fields)
 	})
 }
