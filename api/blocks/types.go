@@ -74,7 +74,7 @@ type JSONEmbeddedTx struct {
 	BlockRef             string                `json:"blockRef"`
 	Expiration           uint32                `json:"expiration"`
 	Clauses              []*JSONClause         `json:"clauses"`
-	GasPriceCoef         uint8                 `json:"gasPriceCoef"`
+	GasPriceCoef         *uint8                `json:"gasPriceCoef,omitempty"`
 	MaxFeePerGas         *math.HexOrDecimal256 `json:"maxFeePerGas,omitempty"`
 	MaxPriorityFeePerGas *math.HexOrDecimal256 `json:"maxPriorityFeePerGas,omitempty"`
 	Gas                  uint64                `json:"gas"`
@@ -197,7 +197,8 @@ func buildJSONEmbeddedTxs(txs tx.Transactions, receipts tx.Receipts) []*JSONEmbe
 			Outputs:  jos,
 		}
 		if trx.Type() == tx.TypeLegacy {
-			embedTx.GasPriceCoef = trx.GasPriceCoef()
+			coef := trx.GasPriceCoef()
+			embedTx.GasPriceCoef = &coef
 		} else {
 			embedTx.MaxFeePerGas = (*math.HexOrDecimal256)(trx.MaxFeePerGas())
 			embedTx.MaxPriorityFeePerGas = (*math.HexOrDecimal256)(trx.MaxPriorityFeePerGas())
