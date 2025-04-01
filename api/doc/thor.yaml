@@ -841,6 +841,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/BlockCountInQuery'
         - $ref: '#/components/parameters/NewestBlockInQuery'
+        - $ref: '#/components/parameters/RewardPercentilesInQuery'
       responses:
         '200':
           description: OK
@@ -1366,6 +1367,29 @@ components:
               example:
                 - 0.75
                 - 0.22
+            reward:
+              type: array
+              description: |
+                An array of arrays of rewards by the percentiles provided in the request via rewardPercentiles.
+                Each inner array contains the reward values for each percentile requested.
+              nullable: true
+              items:
+                type: array
+                description: Array of reward values for each percentile requested
+                items:
+                  type: string
+                  format: hex
+                  description: Reward value in hex format
+              example:
+                - - '0x0'    # 25th percentile
+                  - '0xa'    # 50th percentile
+                  - '0xc'    # 75th percentile
+                - - '0x0'    # 25th percentile
+                  - '0xa'    # 50th percentile
+                  - '0xc'    # 75th percentile
+                - - '0x0'    # 25th percentile
+                  - '0xa'    # 50th percentile
+                  - '0xc'    # 75th percentile
 
     GetFeesPriorityResponse:
       type: object
@@ -2528,9 +2552,24 @@ components:
     NewestBlockInQuery:
       name: newestBlock
       in: query
+      required: true
       description: Specify either `best`, `justified`, `finalized`, a block number or block ID. If omitted, the `best` block is assumed.
       schema:
         type: string
+    
+    RewardPercentilesInQuery:
+      name: rewardPercentiles
+      in: query
+      required: false
+      description: |
+        The percentiles of the rewards to be returned. Each percentile value must be between 0 and 100 and in ascending order.
+        Values should be comma-separated.
+        For example: ?rewardPercentiles=25,50,75
+      schema:
+        type: string
+        pattern: '^(\d+(\.\d+)?,)*\d+(\.\d+)?$'
+        description: Comma-separated list of percentiles between 0 and 100
+      example: "25,50,75"
 
     CallCodeRevisionInQuery:
       name: revision
@@ -2755,11 +2794,11 @@ components:
     BlockCountInQuery:
       name: blockCount
       in: query
+      required: true
       schema:
         type: integer
         format: uint32
         minimum: 1
-        maximum: 1024
       description: |
         The number of blocks to be returned.
       example: 10
