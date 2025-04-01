@@ -7,8 +7,10 @@ package fees_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -24,7 +26,7 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-const expectedGasPriceUsedRatio = 0.0021
+const expectedGasPriceUsedRatio = 0.0042
 const expectedBaseFee = thor.InitialBaseFee
 const priorityFeesPercentage = 5
 
@@ -84,6 +86,25 @@ func TestFeesFixedSizeSameAsBacktrace(t *testing.T) {
 	}
 }
 
+func TestRewardPercentiles(t *testing.T) {
+	ts, bestchain := initFeesServer(t, 8, 10, 10)
+	t.Cleanup(ts.Close)
+
+	tclient := thorclient.New(ts.URL)
+	for name, tt := range map[string]func(*testing.T, *thorclient.Client, *chain.Chain){
+		"getRewardsValidPercentiles":         getRewardsValidPercentiles,
+		"getRewardsInvalidPercentiles":       getRewardsInvalidPercentiles,
+		"getRewardsOutOfRangePercentiles":    getRewardsOutOfRangePercentiles,
+		"getRewardsNonAscendingPercentiles":  getRewardsNonAscendingPercentiles,
+		"getRewardsMorePercentilesThanLimit": getRewardsMorePercentilesThanLimit,
+		"getRewardsWithNextBlock":            getRewardsWithNextBlock,
+	} {
+		t.Run(name, func(t *testing.T) {
+			tt(t, tclient, bestchain)
+		})
+	}
+}
+
 func initFeesServer(t *testing.T, backtraceLimit int, fixedCacheSize int, numberOfBlocks int) (*httptest.Server, *chain.Chain) {
 	forkConfig := thor.NoFork
 	forkConfig.GALACTICA = 1
@@ -101,21 +122,29 @@ func initFeesServer(t *testing.T, backtraceLimit int, fixedCacheSize int, number
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 
-	var dynFeeTx *tx.Transaction
-
+	// Create blocks with two dynamic fee transactions
 	for i := range numberOfBlocks - 1 {
-		dynFeeTx = tx.NewBuilder(tx.TypeDynamicFee).
+		trx1 := tx.NewBuilder(tx.TypeDynamicFee).
 			ChainTag(thorChain.Repo().ChainTag()).
 			MaxFeePerGas(big.NewInt(250_000_000_000_000)).
-			MaxPriorityFeePerGas(big.NewInt(100)).
-			Expiration(10).
+			MaxPriorityFeePerGas(big.NewInt(10)).
+			Expiration(720).
 			Gas(21000).
 			Nonce(uint64(i)).
 			Clause(cla).
 			BlockRef(tx.NewBlockRef(uint32(i))).
 			Build()
-		dynFeeTx = tx.MustSign(dynFeeTx, genesis.DevAccounts()[0].PrivateKey)
-		require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], dynFeeTx))
+		trx2 := tx.NewBuilder(tx.TypeDynamicFee).
+			ChainTag(thorChain.Repo().ChainTag()).
+			MaxFeePerGas(big.NewInt(250_000_000_000_000)).
+			MaxPriorityFeePerGas(big.NewInt(12)).
+			Expiration(720).
+			Gas(21000).
+			Nonce(uint64(i)).
+			Clause(cla).
+			BlockRef(tx.NewBlockRef(uint32(i))).
+			Build()
+		require.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0], tx.MustSign(trx1, genesis.DevAccounts()[0].PrivateKey), tx.MustSign(trx2, genesis.DevAccounts()[0].PrivateKey)))
 	}
 
 	allBlocks, err := thorChain.GetAllBlocks()
@@ -362,7 +391,7 @@ func getFeeHistoryNextBlock(t *testing.T, tclient *thorclient.Client, bestchain 
 	expectedFeesHistory := fees.FeesHistory{
 		OldestBlock:   expectedOldestBlock,
 		BaseFeePerGas: []*hexutil.Big{(*hexutil.Big)(big.NewInt(expectedBaseFee)), (*hexutil.Big)(big.NewInt(expectedBaseFee)), (*hexutil.Big)(big.NewInt(expectedBaseFee))},
-		GasUsedRatio:  []float64{expectedGasPriceUsedRatio, expectedGasPriceUsedRatio, expectedGasPriceUsedRatio},
+		GasUsedRatio:  []float64{expectedGasPriceUsedRatio, expectedGasPriceUsedRatio, 0},
 	}
 
 	assert.Equal(t, expectedFeesHistory, feesHistory)
@@ -382,7 +411,7 @@ func getFeeHistoryOnlyNextBlock(t *testing.T, tclient *thorclient.Client, bestch
 	expectedFeesHistory := fees.FeesHistory{
 		OldestBlock:   expectedOldestBlock,
 		BaseFeePerGas: []*hexutil.Big{(*hexutil.Big)(big.NewInt(expectedBaseFee))},
-		GasUsedRatio:  []float64{expectedGasPriceUsedRatio},
+		GasUsedRatio:  []float64{0},
 	}
 
 	assert.Equal(t, expectedFeesHistory, feesHistory)
@@ -403,4 +432,117 @@ func getFeePriority(t *testing.T, tclient *thorclient.Client, bestchain *chain.C
 	}
 
 	assert.Equal(t, expectedFeesPriority, feesPriority)
+}
+
+func getRewardsValidPercentiles(t *testing.T, tclient *thorclient.Client, bestchain *chain.Chain) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=3&newestBlock=4&rewardPercentiles=25,50,75")
+	require.NoError(t, err)
+	require.Equal(t, 200, statusCode)
+
+	var feesHistory fees.FeesHistory
+	require.NoError(t, json.Unmarshal(res, &feesHistory))
+
+	require.NotNil(t, feesHistory.Reward, "reward array should not be nil")
+	require.Len(t, feesHistory.Reward, 3, "should have rewards for 3 blocks")
+
+	// Expected reward values based on MaxPriorityFeePerGas values
+	expectedTxRewardsByPercentile := []*hexutil.Big{
+		(*hexutil.Big)(big.NewInt(10)), // 25th percentile
+		(*hexutil.Big)(big.NewInt(10)), // 50th percentile
+		(*hexutil.Big)(big.NewInt(12)), // 75th percentile
+	}
+	expectedRewards := [][]*hexutil.Big{expectedTxRewardsByPercentile, expectedTxRewardsByPercentile, expectedTxRewardsByPercentile}
+
+	for i, blockRewards := range feesHistory.Reward {
+		require.NotNil(t, blockRewards, "block %d rewards should not be nil", i)
+		require.Len(t, blockRewards, 3,
+			"block %d should have 3 rewards, has %d",
+			i, len(blockRewards))
+
+		// Verify specific reward values
+		for j, reward := range blockRewards {
+			require.NotNil(t, reward, "block %d, reward %d should not be nil", i, j)
+			require.NotNil(t, expectedRewards[i][j], "expected reward %d for block %d should not be nil", j, i)
+
+			rewardValue := reward.ToInt()
+			expectedValue := expectedRewards[i][j].ToInt()
+
+			assert.Equal(t, expectedValue.String(), rewardValue.String(),
+				"block %d, percentile %d should have reward %s, got %s",
+				i, j, expectedValue.String(), rewardValue.String())
+		}
+	}
+}
+
+func getRewardsInvalidPercentiles(t *testing.T, tclient *thorclient.Client, bestchain *chain.Chain) {
+	testCases := []string{
+		"abc",
+		"25,abc,75",
+		"25,,75",
+		",50,",
+	}
+
+	for _, percentiles := range testCases {
+		_, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=3&newestBlock=4&rewardPercentiles=" + percentiles)
+		require.NoError(t, err)
+		require.Equal(t, 400, statusCode, "should fail with invalid percentiles: %s", percentiles)
+	}
+}
+
+func getRewardsOutOfRangePercentiles(t *testing.T, tclient *thorclient.Client, bestchain *chain.Chain) {
+	testCases := []string{
+		"-10,50,75",
+		"25,101,75",
+		"0,50,100.1",
+	}
+
+	for _, percentiles := range testCases {
+		_, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=3&newestBlock=4&rewardPercentiles=" + percentiles)
+		require.NoError(t, err)
+		require.Equal(t, 400, statusCode, "should fail with percentiles out of range: %s", percentiles)
+	}
+}
+
+func getRewardsNonAscendingPercentiles(t *testing.T, tclient *thorclient.Client, bestchain *chain.Chain) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=3&newestBlock=4&rewardPercentiles=20,10,30")
+	require.NoError(t, err)
+	require.Equal(t, 400, statusCode)
+	require.NotNil(t, res)
+	assert.Equal(t, "reward percentiles must be in ascending order, but 10.000000 is less than 20.000000\n", string(res))
+}
+
+func getRewardsMorePercentilesThanLimit(t *testing.T, tclient *thorclient.Client, bestchain *chain.Chain) {
+	// Generate 101 values from 1.0
+	var percentiles []string
+	for i := 0; i <= 100; i++ {
+		value := 1.0 + float64(i)/100.0
+		percentiles = append(percentiles, fmt.Sprintf("%.2f", value))
+	}
+	percentilesStr := strings.Join(percentiles, ",")
+
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=3&newestBlock=4&rewardPercentiles=" + percentilesStr)
+	require.NoError(t, err)
+	require.Equal(t, 400, statusCode)
+	require.NotNil(t, res)
+	assert.Equal(t, "there can be at most 100 rewardPercentiles\n", string(res))
+}
+
+func getRewardsWithNextBlock(t *testing.T, tclient *thorclient.Client, bestchain *chain.Chain) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=1&newestBlock=next&rewardPercentiles=25,50,75")
+	require.NoError(t, err)
+	require.Equal(t, 200, statusCode)
+
+	var feesHistory fees.FeesHistory
+	require.NoError(t, json.Unmarshal(res, &feesHistory))
+
+	// Verify that rewards are received with value 0
+	require.NotNil(t, feesHistory.Reward, "rewards should not be nil")
+	require.Len(t, feesHistory.Reward, 1, "should have rewards for 1 block")
+	require.Len(t, feesHistory.Reward[0], 3, "should have 3 rewards per block")
+
+	// Verify that all rewards are 0
+	for i, reward := range feesHistory.Reward[0] {
+		require.NotNil(t, reward, "reward %d should not be nil", i)
+		assert.Equal(t, "0x0", reward.String(), "reward %d should be 0", i)
+	}
 }

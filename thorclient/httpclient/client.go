@@ -13,6 +13,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/api/blocks"
@@ -292,8 +294,17 @@ func (c *Client) GetPeers() ([]*node.PeerStats, error) {
 }
 
 // GetFeesHistory retrieves the fees history based on the block count and newest block.
-func (c *Client) GetFeesHistory(blockCount uint32, newestBlock string) (*fees.FeesHistory, error) {
-	body, err := c.httpGET(c.url + "/fees/history?blockCount=" + fmt.Sprint(blockCount) + "&newestBlock=" + newestBlock)
+func (c *Client) GetFeesHistory(blockCount uint32, newestBlock string, rewardPercentiles []float64) (*fees.FeesHistory, error) {
+	var url strings.Builder
+	url.WriteString(c.url + "/fees/history?blockCount=" + fmt.Sprint(blockCount) + "&newestBlock=" + newestBlock)
+	if len(rewardPercentiles) > 0 {
+		var values []string
+		for _, v := range rewardPercentiles {
+			values = append(values, strconv.FormatFloat(v, 'f', -1, 64))
+		}
+		url.WriteString("&rewardPercentiles=" + strings.Join(values, ","))
+	}
+	body, err := c.httpGET(url.String())
 	if err != nil {
 		return nil, fmt.Errorf("unable to get the fees history - %w", err)
 	}
