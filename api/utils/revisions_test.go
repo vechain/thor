@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
 
 func TestParseRevision(t *testing.T) {
@@ -167,6 +168,9 @@ func TestGetSummaryAndState(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, summary.Header.Number(), b.Header().Number()+1)
 	assert.Equal(t, summary.Header.Timestamp(), b.Header().Timestamp()+thor.BlockInterval)
+	assert.Equal(t, summary.Header.GasUsed(), uint64(0))
+	assert.Equal(t, summary.Header.ReceiptsRoot(), tx.Receipts{}.RootHash())
+	assert.Equal(t, len(summary.Txs), 0)
 
 	signer, err := summary.Header.Signer()
 	assert.NotNil(t, err)
