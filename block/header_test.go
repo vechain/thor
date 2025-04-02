@@ -265,7 +265,7 @@ func TestExtensionV2(t *testing.T) {
 				cnt, err := rlp.CountValues(content)
 				assert.Nil(t, err)
 
-				// Extension should represent
+				// Extension should be present
 				assert.Equal(t, 1, cnt)
 
 				var dst v2
@@ -292,7 +292,7 @@ func TestExtensionV2(t *testing.T) {
 				})
 				assert.Nil(t, err)
 
-				// Extension should represent in the Encoding
+				// Extension should be present in the Encoding
 				content, _, err := rlp.SplitList(bytes)
 				assert.Nil(t, err)
 				cnt, err := rlp.CountValues(content)
@@ -305,7 +305,7 @@ func TestExtensionV2(t *testing.T) {
 				cnt, err = rlp.CountValues(content)
 				assert.Nil(t, err)
 
-				// Only alpha represent
+				// Only alpha present
 				assert.Equal(t, 1, cnt)
 
 				var dst v2
@@ -334,7 +334,7 @@ func TestExtensionV2(t *testing.T) {
 				assert.Nil(t, err)
 				cnt, err := rlp.CountValues(content)
 				assert.Nil(t, err)
-				// All fields should be represented
+				// All fields should be present
 				assert.Equal(t, 3, cnt)
 
 				var dst v2
@@ -365,7 +365,7 @@ func TestExtensionV2(t *testing.T) {
 				assert.Nil(t, err)
 				cnt, err := rlp.CountValues(content)
 				assert.Nil(t, err)
-				// All fields should be represented
+				// All fields should be present
 				assert.Equal(t, 3, cnt)
 
 				var dst v2
