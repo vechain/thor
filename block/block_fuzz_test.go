@@ -108,6 +108,10 @@ func FuzzHeaderEncoding(f *testing.F) {
 }
 
 func FuzzBlockDecoding(f *testing.F) {
+	blk := new(Builder).Build()
+	enc, _ := rlp.EncodeToBytes(&blk)
+	f.Add(enc)
+
 	f.Fuzz(func(t *testing.T, input []byte) {
 		var b Block
 		_ = rlp.DecodeBytes(input, &b)

@@ -76,6 +76,18 @@ func checkTxsEquality(expectedTx, actualTx *Transaction) error {
 }
 
 func FuzzTransactionDecoding(f *testing.F) {
+	trx := NewBuilder(TypeLegacy).Build()
+	enc, _ := rlp.EncodeToBytes(trx)
+	f.Add(enc)
+	enc, _ = trx.MarshalBinary()
+	f.Add(enc)
+
+	trx = NewBuilder(TypeDynamicFee).Build()
+	enc, _ = rlp.EncodeToBytes(trx)
+	f.Add(enc)
+	enc, _ = trx.MarshalBinary()
+	f.Add(enc)
+
 	f.Fuzz(func(t *testing.T, input []byte) {
 		var (
 			trx1 Transaction
@@ -87,6 +99,18 @@ func FuzzTransactionDecoding(f *testing.F) {
 }
 
 func FuzzReceiptDecoding(f *testing.F) {
+	var r Receipt
+	enc, _ := rlp.EncodeToBytes(&r)
+	f.Add(enc)
+	enc, _ = r.MarshalBinary()
+	f.Add(enc)
+
+	r.Type = TypeDynamicFee
+	enc, _ = rlp.EncodeToBytes(&r)
+	f.Add(enc)
+	enc, _ = r.MarshalBinary()
+	f.Add(enc)
+
 	f.Fuzz(func(t *testing.T, input []byte) {
 		var (
 			r1 Receipt
