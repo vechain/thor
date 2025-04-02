@@ -7,6 +7,7 @@ THOR_VERSION = $(shell cat cmd/thor/VERSION)
 DISCO_VERSION = $(shell cat cmd/disco/VERSION)
 
 PACKAGES = `go list ./... | grep -v '/vendor/'`
+FUZZTIME=1m
 
 MAJOR = $(shell go version | cut -d' ' -f3 | cut -b 3- | cut -d. -f1)
 MINOR = $(shell go version | cut -d' ' -f3 | cut -b 3- | cut -d. -f2)
@@ -61,9 +62,12 @@ test:| go_version_check #@ Run the tests
 	@go test -cover $(PACKAGES)
 
 fuzz:| go_version_check #@ Run the fuzz tests
-	@go test -fuzz=FuzzTransactionMarshalling -fuzztime=1m $(CURDIR)/tx
-	@go test -fuzz=FuzzBlockEncoding -fuzztime=1m $(CURDIR)/block
-	@go test -fuzz=FuzzHeaderEncoding -fuzztime=1m $(CURDIR)/block
+	@go test -fuzz=FuzzTransactionMarshalling -fuzztime=$(FUZZTIME) $(CURDIR)/tx
+	@go test -fuzz=FuzzTransactionDecoding -fuzztime=$(FUZZTIME) $(CURDIR)/tx
+	@go test -fuzz=FuzzReceiptDecoding -fuzztime=$(FUZZTIME) $(CURDIR)/tx
+	@go test -fuzz=FuzzBlockEncoding -fuzztime=$(FUZZTIME) $(CURDIR)/block
+	@go test -fuzz=FuzzHeaderEncoding -fuzztime=$(FUZZTIME) $(CURDIR)/block
+	@go test -fuzz=FuzzBlockDecoding -fuzztime=$(FUZZTIME) $(CURDIR)/block
 
 test-coverage:| go_version_check #@ Run the tests with coverage
 	@go test -race -coverprofile=coverage.out -covermode=atomic $(PACKAGES)
