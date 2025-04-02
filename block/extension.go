@@ -65,56 +65,58 @@ func (ex *extension) DecodeRLP(s *rlp.Stream) error {
 
 	if len(raws) == 0 || len(raws) > 3 {
 		return errors.New("rlp: unexpected extension")
-	} else {
-		var alpha []byte
-		if err := rlp.DecodeBytes(raws[0], &alpha); err != nil {
-			return err
-		}
+	}
 
-		// only alpha, make sure it's trimmed
-		if len(raws) == 1 {
-			if len(alpha) == 0 {
-				return errors.New("rlp: extension must be trimmed")
-			}
+	// alpha is always decoded
+	var alpha []byte
+	if err := rlp.DecodeBytes(raws[0], &alpha); err != nil {
+		return err
+	}
 
-			*ex = extension{
-				Alpha: alpha,
-				COM:   false,
-			}
-			return nil
-		}
-
-		// more than one filed, must have com
-		var com bool
-		if err := rlp.DecodeBytes(raws[1], &com); err != nil {
-			return err
-		}
-
-		// alpha and com, make sure it's trimmed
-		if len(raws) == 2 {
-			// COM must be trimmed if not set
-			if !com {
-				return errors.New("rlp: extension must be trimmed")
-			}
-
-			*ex = extension{
-				Alpha: alpha,
-				COM:   com,
-			}
-			return nil
-		}
-
-		var baseFee big.Int
-		if err := rlp.DecodeBytes(raws[2], &baseFee); err != nil {
-			return err
+	// only alpha, make sure it's trimmed
+	if len(raws) == 1 {
+		if len(alpha) == 0 {
+			return errors.New("rlp: extension must be trimmed")
 		}
 
 		*ex = extension{
-			Alpha:   alpha,
-			COM:     com,
-			BaseFee: &baseFee,
+			Alpha: alpha,
+			COM:   false,
 		}
-
 		return nil
 	}
+
+	// more than one filed, must have com
+	var com bool
+	if err := rlp.DecodeBytes(raws[1], &com); err != nil {
+		return err
+	}
+
+	// alpha and com, make sure it's trimmed
+	if len(raws) == 2 {
+		// COM must be trimmed if not set
+		if !com {
+			return errors.New("rlp: extension must be trimmed")
+		}
+
+		*ex = extension{
+			Alpha: alpha,
+			COM:   com,
+		}
+		return nil
+	}
+
+	// For three fields, decode BaseFee
+	var baseFee big.Int
+	if err := rlp.DecodeBytes(raws[2], &baseFee); err != nil {
+		return err
+	}
+
+	*ex = extension{
+		Alpha:   alpha,
+		COM:     com,
+		BaseFee: &baseFee,
+	}
+
+	return nil
 }
