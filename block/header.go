@@ -154,17 +154,17 @@ func (h *Header) SigningHash() (hash thor.Bytes32) {
 
 func (h *Header) signingFields() []any {
 	fields := []any{
-		&h.body.ParentID,
+		h.body.ParentID,
 		h.body.Timestamp,
 		h.body.GasLimit,
-		&h.body.Beneficiary,
+		h.body.Beneficiary,
 
 		h.body.GasUsed,
 		h.body.TotalScore,
 
 		&h.body.TxsRootFeatures,
-		&h.body.StateRoot,
-		&h.body.ReceiptsRoot,
+		h.body.StateRoot,
+		h.body.ReceiptsRoot,
 	}
 	if h.body.Extension.BaseFee != nil {
 		fields = append(fields, &h.body.Extension)
