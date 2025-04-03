@@ -101,6 +101,13 @@ func New(addr thor.Address, state *state.State, params *params.Params) *Staker {
 		}
 	}
 
+	if num, err := solidity.NewUint256(addr, state, thor.BytesToBytes32([]byte("cooldown-period"))).Get(); err == nil {
+		numUint64 := num.Uint64()
+		if numUint64 != 0 {
+			cooldownPeriod = uint32(numUint64)
+		}
+	}
+
 	return &Staker{
 		addr:                addr,
 		state:               state,
