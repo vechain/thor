@@ -10,6 +10,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"math/big"
 	"reflect"
 	"testing"
@@ -487,7 +488,7 @@ func TestTransactionHash(t *testing.T) {
 			ChainTag(randBytes[0]).
 			BlockRef(ref).
 			Expiration(uint32(num)).
-			Clause(NewClause(&to).WithValue(big.NewInt(int64(num))).WithData(datagen.RandBytes(32))).
+			Clause(NewClause(&to).WithValue(datagen.RandBigInt()).WithData(datagen.RandBytes(32))).
 			GasPriceCoef(uint8(num)).
 			Gas(datagen.RandUint64()).
 			Nonce(num)
@@ -506,17 +507,25 @@ func TestTransactionHash(t *testing.T) {
 
 		var expected thor.Bytes32
 		if trx.Type() == TypeLegacy {
-			expected = rlpHash(signingFields(trx.body))
+			expected = thor.Blake2bFn(func(w io.Writer) {
+				err := rlp.Encode(w, signingFields(trx.body))
+				assert.Nil(t, err)
+			})
 
 			// test evaluate work
 			origin := thor.BytesToAddress(datagen.RandBytes(20))
 			nonce := datagen.RandUint64()
 
 			body, _ := trx.body.(*legacyTransaction)
-			expectedWork := evaluateWork(body, origin, nonce)
+			expectedWork := evaluateWork(body, origin, nonce, t)
 			assert.Equal(t, expectedWork, trx.EvaluateWork(origin)(nonce))
 		} else {
-			expected = prefixedRlpHash(trx.Type(), signingFields(trx.body))
+			expected = thor.Blake2bFn(func(w io.Writer) {
+				_, err := w.Write([]byte{trx.Type()})
+				assert.Nil(t, err)
+				err = rlp.Encode(w, signingFields(trx.body))
+				assert.Nil(t, err)
+			})
 		}
 		assert.Equal(t, len(trx.body.signingFields()), reflect.TypeOf(trx.body).Elem().NumField()-1, "unexpected number of signing fields")
 		assert.Equal(t, expected, trx.SigningHash())
@@ -524,7 +533,7 @@ func TestTransactionHash(t *testing.T) {
 }
 
 // a reflect based implementation of hashWithoutNonce for cross implementation.
-func evaluateWork(body *legacyTransaction, origin thor.Address, nonce uint64) *big.Int {
+func evaluateWork(body *legacyTransaction, origin thor.Address, nonce uint64, t *testing.T) *big.Int {
 	types := reflect.TypeOf(body)
 	values := reflect.ValueOf(body)
 
@@ -543,7 +552,10 @@ func evaluateWork(body *legacyTransaction, origin thor.Address, nonce uint64) *b
 		}
 	}
 	fields = append(fields, origin)
-	hashWithoutNonce := rlpHash(fields)
+	hashWithoutNonce := thor.Blake2bFn(func(w io.Writer) {
+		err := rlp.Encode(w, fields)
+		assert.Nil(t, err)
+	})
 
 	var nonceBytes [8]byte
 	binary.BigEndian.PutUint64(nonceBytes[:], nonce)

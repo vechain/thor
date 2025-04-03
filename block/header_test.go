@@ -447,14 +447,14 @@ func TestHeaderHash(t *testing.T) {
 		}
 		assert.Equal(t, expectedFieldsLen, len(h.signingFields()), "unexpected number of signing fields")
 
-		expected := signingHash(h)
+		expected := signingHash(h, t)
 		assert.Equal(t, expected, h.SigningHash())
 	}
 }
 
 // signingHash returns the signing hash the block header.
 // this is a reflect based implementation used for cross checking.
-func signingHash(h *Header) thor.Bytes32 {
+func signingHash(h *Header, t *testing.T) thor.Bytes32 {
 	types := reflect.TypeOf(h.body)
 	values := reflect.ValueOf(h.body)
 
@@ -478,6 +478,6 @@ func signingHash(h *Header) thor.Bytes32 {
 	}
 
 	return thor.Blake2bFn(func(w io.Writer) {
-		rlp.Encode(w, fields)
+		assert.Nil(t, rlp.Encode(w, fields))
 	})
 }
