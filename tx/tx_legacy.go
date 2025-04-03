@@ -78,7 +78,19 @@ func (t *legacyTransaction) signingFields() []any {
 }
 
 func (t *legacyTransaction) evaluateWork(origin thor.Address) func(nonce uint64) *big.Int {
-	hashWithoutNonce := thor.Blake2bFn(func(w io.Writer) {
+	hashWithoutNonce := t.hashWithoutNonce(origin)
+
+	return func(nonce uint64) *big.Int {
+		var nonceBytes [8]byte
+		binary.BigEndian.PutUint64(nonceBytes[:], nonce)
+		hash := thor.Blake2b(hashWithoutNonce[:], nonceBytes[:])
+		r := new(big.Int).SetBytes(hash[:])
+		return r.Div(math.MaxBig256, r)
+	}
+}
+
+func (t *legacyTransaction) hashWithoutNonce(origin thor.Address) thor.Bytes32 {
+	return thor.Blake2bFn(func(w io.Writer) {
 		rlp.Encode(w, []any{
 			t.ChainTag,
 			t.BlockRef,
@@ -91,14 +103,6 @@ func (t *legacyTransaction) evaluateWork(origin thor.Address) func(nonce uint64)
 			origin,
 		})
 	})
-
-	return func(nonce uint64) *big.Int {
-		var nonceBytes [8]byte
-		binary.BigEndian.PutUint64(nonceBytes[:], nonce)
-		hash := thor.Blake2b(hashWithoutNonce[:], nonceBytes[:])
-		r := new(big.Int).SetBytes(hash[:])
-		return r.Div(math.MaxBig256, r)
-	}
 }
 
 // Below are the methods that are not compatible with legacy transaction
