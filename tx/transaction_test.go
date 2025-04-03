@@ -7,12 +7,16 @@ package tx
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"math/big"
+	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
@@ -460,4 +464,124 @@ func checkTxsEquality(expectedTx, actualTx *Transaction) error {
 		return fmt.Errorf("SigningHash: expected %v, got %v", expectedTx.SigningHash(), actualTx.SigningHash())
 	}
 	return nil
+}
+
+func TestTransactionHash(t *testing.T) {
+	for range 100 {
+		num := datagen.RandUint64()
+		var builder *Builder
+		if num%2 == 0 {
+			builder = NewBuilder(TypeLegacy)
+		} else {
+			builder = NewBuilder(TypeDynamicFee)
+		}
+
+		var (
+			ref  BlockRef
+			feat Features
+		)
+		randBytes := datagen.RandBytes(9)
+		copy(ref[:], randBytes[1:9])
+		to := datagen.RandAddress()
+
+		builder.
+			ChainTag(randBytes[0]).
+			BlockRef(ref).
+			Expiration(uint32(num)).
+			Clause(NewClause(&to).WithValue(datagen.RandBigInt()).WithData(datagen.RandBytes(32))).
+			GasPriceCoef(uint8(num)).
+			Gas(datagen.RandUint64()).
+			Nonce(num)
+
+		if num%3 == 0 {
+			feat.SetDelegated(true)
+		}
+		builder.Features(feat)
+
+		if num%5 == 0 {
+			dep := datagen.RandomHash()
+			builder.DependsOn(&dep)
+		}
+
+		trx := builder.Build()
+
+		var expected thor.Bytes32
+		if trx.Type() == TypeLegacy {
+			expected = thor.Blake2bFn(func(w io.Writer) {
+				err := rlp.Encode(w, signingFields(trx.body))
+				assert.Nil(t, err)
+			})
+
+			// test evaluate work
+			origin := thor.BytesToAddress(datagen.RandBytes(20))
+			nonce := datagen.RandUint64()
+
+			body, _ := trx.body.(*legacyTransaction)
+			expectedWork := evaluateWork(body, origin, nonce, t)
+			assert.Equal(t, expectedWork, trx.EvaluateWork(origin)(nonce))
+		} else {
+			expected = thor.Blake2bFn(func(w io.Writer) {
+				_, err := w.Write([]byte{trx.Type()})
+				assert.Nil(t, err)
+				err = rlp.Encode(w, signingFields(trx.body))
+				assert.Nil(t, err)
+			})
+		}
+		assert.Equal(t, len(trx.body.signingFields()), reflect.TypeOf(trx.body).Elem().NumField()-1, "unexpected number of signing fields")
+		assert.Equal(t, expected, trx.SigningHash())
+	}
+}
+
+// a reflect based implementation of hashWithoutNonce for cross implementation.
+func evaluateWork(body *legacyTransaction, origin thor.Address, nonce uint64, t *testing.T) *big.Int {
+	types := reflect.TypeOf(body)
+	values := reflect.ValueOf(body)
+
+	fields := make([]any, 0)
+	// hash without nonce
+	for i := range types.Elem().NumField() {
+		// skip signature and nonce field
+		if types.Elem().Field(i).Name != "Signature" && types.Elem().Field(i).Name != "Nonce" {
+			// pass reserved field as a pointer
+			if types.Elem().Field(i).Name == "Reserved" {
+				reserved := values.Elem().Field(i).Interface().(reserved)
+				fields = append(fields, &reserved)
+			} else {
+				fields = append(fields, values.Elem().Field(i).Interface())
+			}
+		}
+	}
+	fields = append(fields, origin)
+	hashWithoutNonce := thor.Blake2bFn(func(w io.Writer) {
+		err := rlp.Encode(w, fields)
+		assert.Nil(t, err)
+	})
+
+	var nonceBytes [8]byte
+	binary.BigEndian.PutUint64(nonceBytes[:], nonce)
+	hash := thor.Blake2b(hashWithoutNonce[:], nonceBytes[:])
+	r := new(big.Int).SetBytes(hash[:])
+	return r.Div(math.MaxBig256, r)
+}
+
+// signingFields returns the fields that need to be signed.
+// this is a reflect based implementation used for cross checking.
+func signingFields(body txData) []any {
+	types := reflect.TypeOf(body)
+	values := reflect.ValueOf(body)
+
+	fields := make([]any, 0)
+	for i := range types.Elem().NumField() {
+		// skip signature field
+		if types.Elem().Field(i).Name != "Signature" {
+			// pass reserved field as a pointer
+			if types.Elem().Field(i).Name == "Reserved" {
+				reserved := values.Elem().Field(i).Interface().(reserved)
+				fields = append(fields, &reserved)
+			} else {
+				fields = append(fields, values.Elem().Field(i).Interface())
+			}
+		}
+	}
+	return fields
 }
