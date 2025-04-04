@@ -60,7 +60,7 @@ func initCommServer(t *testing.T) {
 		MaxLifetime:     10 * time.Minute,
 	})
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		transaction := new(tx.Builder).
 			Clause(tx.NewClause(&genesis.DevAccounts()[1].Address)).
 			ChainTag(chainTag).
