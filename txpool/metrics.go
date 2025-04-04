@@ -10,3 +10,4 @@ import (
 )
 
 var metricTxPoolGauge = metrics.LazyLoadGaugeVec("txpool_current_tx_count", []string{"source", "total"})
+var metricTxPoolExecutablesGauge = metrics.LazyLoadGaugeVec("txpool_executable_tx_count", []string{"total"})
