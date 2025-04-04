@@ -51,7 +51,7 @@ func (m *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) e
 	}
 
 	fromString := req.URL.Query().Get("from")
-	from := &thor.Address{}
+	var from *thor.Address
 	if fromString != "" {
 		fromParsed, err := thor.ParseAddress(fromString)
 		if err != nil {
@@ -63,7 +63,7 @@ func (m *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) e
 	}
 
 	toString := req.URL.Query().Get("to")
-	to := &thor.Address{}
+	var to *thor.Address
 	if toString != "" {
 		toParsed, err := thor.ParseAddress(toString)
 		if err != nil {
@@ -123,7 +123,6 @@ func (m *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) e
 					Value: math.HexOrDecimal256(*c.Value()),
 					Data:  hexutil.Encode(c.Data()),
 				}
-
 			}
 			br := tx.BlockRef()
 			gasPriceCoef := tx.GasPriceCoef()
@@ -153,7 +152,6 @@ func (m *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) e
 	}
 
 	return utils.WriteJSON(w, transactions)
-
 }
 
 func (m *Node) handleGetMempoolStatus(w http.ResponseWriter, req *http.Request) error {
