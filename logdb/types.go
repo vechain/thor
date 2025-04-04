@@ -8,6 +8,7 @@ package logdb
 import (
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/vechain/thor/v2/thor"
 )
@@ -65,18 +66,21 @@ type EventCriteria struct {
 }
 
 func (c *EventCriteria) toWhereCondition() (cond string, args []any) {
-	cond = "1"
+	builder := strings.Builder{}
 	if c.Address != nil {
-		cond += " AND address = " + refIDQuery
+		builder.WriteString(" r3.data = ?")
 		args = append(args, c.Address.Bytes())
 	}
 	for i, topic := range c.Topics {
 		if topic != nil {
-			cond += fmt.Sprintf(" AND topic%v = ", i) + refIDQuery
+			if builder.String() != "" {
+				builder.WriteString(" AND ")
+			}
+			builder.WriteString(fmt.Sprintf(" r%v.data = ?", i+4))
 			args = append(args, removeLeadingZeros(topic.Bytes()))
 		}
 	}
-	return
+	return builder.String(), args
 }
 
 // EventFilter filter
@@ -94,20 +98,26 @@ type TransferCriteria struct {
 }
 
 func (c *TransferCriteria) toWhereCondition() (cond string, args []any) {
-	cond = "1"
+	builder := strings.Builder{}
 	if c.TxOrigin != nil {
-		cond += " AND txOrigin = " + refIDQuery
+		builder.WriteString(" r2.data = ?")
 		args = append(args, c.TxOrigin.Bytes())
 	}
 	if c.Sender != nil {
-		cond += " AND sender = " + refIDQuery
+		if builder.String() != "" {
+			builder.WriteString(" AND ")
+		}
+		builder.WriteString(" r3.data = ?")
 		args = append(args, c.Sender.Bytes())
 	}
 	if c.Recipient != nil {
-		cond += " AND recipient = " + refIDQuery
+		if builder.String() != "" {
+			builder.WriteString(" AND ")
+		}
+		builder.WriteString(" r4.data = ?")
 		args = append(args, c.Recipient.Bytes())
 	}
-	return
+	return builder.String(), args
 }
 
 type TransferFilter struct {
