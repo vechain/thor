@@ -14,6 +14,11 @@ type Network interface {
 	PeersStats() []*comm.PeerStats
 }
 
+type Status struct {
+	Total       uint `json:"amount"`
+	Executables uint `json:"executables"`
+}
+
 type PeerStats struct {
 	Name        string       `json:"name"`
 	BestBlockID thor.Bytes32 `json:"bestBlockID"`
