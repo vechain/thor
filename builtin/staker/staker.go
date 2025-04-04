@@ -566,7 +566,11 @@ func (a *Staker) RemoveValidator(master thor.Address, currentBlock uint32) error
 	entry.Weight = big.NewInt(0)
 	entry.Stake = big.NewInt(0)
 
-	return a.leaderGroup.Remove(master, entry)
+	err = a.leaderGroup.Remove(master, entry)
+	if err != nil {
+		return err
+	}
+	return a.leaderGroupSize.Sub(big.NewInt(1))
 }
 
 // LeaderGroup lists all registered candidates.

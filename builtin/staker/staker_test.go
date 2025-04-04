@@ -709,15 +709,17 @@ func TestStaker_Get_FullFlow_Renewal_On_Then_Off(t *testing.T) {
 }
 
 func TestStaker_Get_FullFlow_Renewal_Off_Then_On(t *testing.T) {
-	staker, _ := newStaker(t, 0, 2, false)
+	staker, _ := newStaker(t, 0, 3, false)
 	addr := datagen.RandAddress()
 	addr1 := datagen.RandAddress()
+	addr2 := datagen.RandAddress()
 	stake := RandomStake()
 	period := uint32(360) * 24 * 14
 
 	// add the validator
 	assert.NoError(t, staker.AddValidator(addr, addr, period, stake, false))
 	assert.NoError(t, staker.AddValidator(addr1, addr1, period, stake, false))
+	assert.NoError(t, staker.AddValidator(addr2, addr2, period, stake, false))
 
 	validator, err := staker.Get(addr)
 	assert.NoError(t, err)
@@ -1079,9 +1081,10 @@ func TestStaker_Housekeep_Cooldown(t *testing.T) {
 }
 
 func TestStaker_Housekeep_CooldownToExited(t *testing.T) {
-	staker, _ := newStaker(t, 0, 2, false)
+	staker, _ := newStaker(t, 0, 3, false)
 	addr1 := datagen.RandAddress()
 	addr2 := datagen.RandAddress()
+	addr3 := datagen.RandAddress()
 
 	stake := RandomStake()
 	period := uint32(360) * 24 * 14
@@ -1089,6 +1092,8 @@ func TestStaker_Housekeep_CooldownToExited(t *testing.T) {
 	assert.NoError(t, staker.AddValidator(addr1, addr1, period, stake, false))
 	assert.NoError(t, staker.ActivateNextValidator(0))
 	assert.NoError(t, staker.AddValidator(addr2, addr2, period, stake, false))
+	assert.NoError(t, staker.ActivateNextValidator(0))
+	assert.NoError(t, staker.AddValidator(addr3, addr3, period, stake, false))
 	assert.NoError(t, staker.ActivateNextValidator(0))
 
 	_, err := staker.Housekeep(uint32(360)*24*15, 0)
@@ -1104,7 +1109,7 @@ func TestStaker_Housekeep_CooldownToExited(t *testing.T) {
 	assert.NoError(t, err)
 	validator, err = staker.Get(addr2)
 	assert.NoError(t, err)
-	assert.Equal(t, StatusExit, validator.Status)
+	assert.Equal(t, StatusCooldown, validator.Status)
 }
 
 func TestStaker_Housekeep_ExitOrder(t *testing.T) {
@@ -1112,6 +1117,8 @@ func TestStaker_Housekeep_ExitOrder(t *testing.T) {
 	addr1 := datagen.RandAddress()
 	addr2 := datagen.RandAddress()
 	addr3 := datagen.RandAddress()
+	addr4 := datagen.RandAddress()
+	addr5 := datagen.RandAddress()
 
 	stake := RandomStake()
 	period := uint32(360) * 24 * 14
@@ -1147,7 +1154,29 @@ func TestStaker_Housekeep_ExitOrder(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, StatusCooldown, validator.Status)
 
+	// exit prevented because of min stakers 2/3 of max stakers rule
 	_, err = staker.Housekeep(exitBlock+360, 0)
+	assert.NoError(t, err)
+	validator, err = staker.Get(addr1)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusCooldown, validator.Status)
+	validator, err = staker.Get(addr3)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusCooldown, validator.Status)
+
+	assert.NoError(t, staker.AddValidator(addr4, addr4, period, stake, true))
+	assert.NoError(t, staker.ActivateNextValidator(exitBlock+360))
+
+	_, err = staker.Housekeep(exitBlock+362, 0)
+	assert.NoError(t, err)
+	validator, err = staker.Get(addr1)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusCooldown, validator.Status)
+	validator, err = staker.Get(addr3)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusCooldown, validator.Status)
+
+	_, err = staker.Housekeep(exitBlock+720, 0)
 	assert.NoError(t, err)
 	validator, err = staker.Get(addr1)
 	assert.NoError(t, err)
@@ -1156,13 +1185,10 @@ func TestStaker_Housekeep_ExitOrder(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, StatusExit, validator.Status)
 
-	_, err = staker.Housekeep(exitBlock+362, 0)
-	assert.NoError(t, err)
-	validator, err = staker.Get(addr1)
-	assert.NoError(t, err)
-	assert.Equal(t, StatusCooldown, validator.Status)
+	assert.NoError(t, staker.AddValidator(addr5, addr5, period, stake, true))
+	assert.NoError(t, staker.ActivateNextValidator(exitBlock+721))
 
-	_, err = staker.Housekeep(exitBlock+720, 0)
+	_, err = staker.Housekeep(exitBlock+1080, 0)
 	assert.NoError(t, err)
 	validator, err = staker.Get(addr1)
 	assert.NoError(t, err)
