@@ -512,6 +512,11 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 	return executables, 0, nil
 }
 
+// Get length of the `all` field
+func (p *TxPool) Len() int {
+	return p.all.Len()
+}
+
 func isChainSynced(nowTimestamp, blockTimestamp uint64) bool {
 	timeDiff := nowTimestamp - blockTimestamp
 	if blockTimestamp > nowTimestamp {

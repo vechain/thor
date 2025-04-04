@@ -15,6 +15,10 @@ var (
 		Name:  "network",
 		Usage: "the network to join (main|test) or the path/URL to a genesis file",
 	}
+	mempoolApiFlag = cli.BoolFlag{
+		Name:  "enable-mempool",
+		Usage: "enable mempool rest API enpoints",
+	}
 	configDirFlag = cli.StringFlag{
 		Name:   "config-dir",
 		Value:  defaultConfigDir(),
