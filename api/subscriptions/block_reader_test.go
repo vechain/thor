@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/genesis"
@@ -40,6 +41,7 @@ func TestBlockReader_Read(t *testing.T) {
 	} else {
 		assert.Equal(t, firstBlk.Header().Number(), resBlock.Number)
 		assert.Equal(t, firstBlk.Header().ParentID(), resBlock.ParentID)
+		assert.Equal(t, (*math.HexOrDecimal256)(firstBlk.Header().BaseFee()), resBlock.BaseFeePerGas)
 	}
 
 	res, ok, err = br.Read()
@@ -50,6 +52,7 @@ func TestBlockReader_Read(t *testing.T) {
 	} else {
 		assert.Equal(t, bestBlk.Header().Number(), resBlock.Number)
 		assert.Equal(t, bestBlk.Header().ParentID(), resBlock.ParentID)
+		assert.Equal(t, (*math.HexOrDecimal256)(firstBlk.Header().BaseFee()), resBlock.BaseFeePerGas)
 	}
 
 	// Test case 2: There is no new block
