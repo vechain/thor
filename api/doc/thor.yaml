@@ -394,21 +394,21 @@ paths:
               schema:
                 $ref: '#/components/schemas/GetPeersResponse'
 
-  /node/mempool:
+  /node/txpool:
     get:
       tags:
         - Node
-      summary: Retrieve transactions from mempool
+      summary: Retrieve transactions from transactions pool
       description: |
-        Retrieve transactions that are currently in the mempool (pending transactions). 
-        The response can be filtered by sender (from) and recipient (to) addresses.
+        Retrieve transactions that are currently in the txpool (pending transactions). 
+        The response can be filtered by sender (origin) and recipient (to) addresses.
         
-        The transactions can be returned either as a list of transaction hashes or as expanded transaction objects.
+        The transactions can be returned either as a list of transaction IDs or as expanded transaction objects.
       parameters:
         - name: expanded
           in: query
           description: |
-            Whether to return expanded transaction details (true) or just transaction hashes (false).
+            Whether to return expanded transaction details (true) or just transaction IDs (false).
             If omitted, defaults to false.
           required: false
           schema:
@@ -446,13 +446,13 @@ paths:
                 type: string
                 example: 'Invalid address'
 
-  /node/mempool/status:
+  /node/txpool/status:
     get:
       tags:
         - Node 
-      summary: Get mempool status
+      summary: Get txpool status
       description: |
-        Retrieve the current status of the mempool, including the number of pending transactions.
+        Retrieve the current status of the txpool, including the number of pending transactions.
       responses:
         '200':
           description: OK
@@ -2330,13 +2330,13 @@ components:
         total:
           type: integer
           format: uint
-          description: The total number of transactions currently in the mempool
+          description: The total number of transactions currently in the txpool
           example: 42
           nullable: false
         executables:
           type: integer
           format: uint
-          description: The number of executable transactions currently in the mempool
+          description: The number of executable transactions currently in the txpool
           example: 42
           nullable: false
 
@@ -2344,7 +2344,7 @@ components:
       type: array
       title: TransactionsHashes  
       name: TransactionsHashes
-      description: Array of transaction hashes currently in the mempool
+      description: Array of transaction hashes currently in the txpool
       items:
         type: string
         format: hex
@@ -2356,7 +2356,7 @@ components:
     Transactions:
       type: array 
       title: Transactions
-      description: Array of expanded transaction objects currently in the mempool
+      description: Array of expanded transaction objects currently in the txpool
       items:
         $ref: '#/components/schemas/Tx'
 

@@ -6,7 +6,6 @@
 package node
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -154,7 +153,7 @@ func (m *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) e
 	return utils.WriteJSON(w, transactions)
 }
 
-func (m *Node) handleGetMempoolStatus(w http.ResponseWriter, req *http.Request) error {
+func (m *Node) handleGetTxpoolStatus(w http.ResponseWriter, req *http.Request) error {
 	total := m.pool.Len()
 	executables := m.pool.Executables()
 	status := Status{
@@ -164,7 +163,7 @@ func (m *Node) handleGetMempoolStatus(w http.ResponseWriter, req *http.Request) 
 	return utils.WriteJSON(w, status)
 }
 
-func (n *Node) Mount(root *mux.Router, pathPrefix string, enableMempool bool) {
+func (n *Node) Mount(root *mux.Router, pathPrefix string, enableTxpool bool) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
 	sub.Path("/network/peers").
@@ -172,15 +171,14 @@ func (n *Node) Mount(root *mux.Router, pathPrefix string, enableMempool bool) {
 		Name("GET /node/network/peers").
 		HandlerFunc(utils.WrapHandlerFunc(n.handleNetwork))
 
-	fmt.Println("EnableMempool", enableMempool)
-	if enableMempool {
-		sub.Path("/mempool").
+	if enableTxpool {
+		sub.Path("/txpool").
 			Methods(http.MethodGet).
-			Name("GET /node/mempool").
+			Name("GET /node/txpool").
 			HandlerFunc(utils.WrapHandlerFunc(n.handleGetTransactions))
-		sub.Path("/mempool/status").
+		sub.Path("/txpool/status").
 			Methods(http.MethodGet).
-			Name("GET /node/mempool/status").
-			HandlerFunc(utils.WrapHandlerFunc(n.handleGetMempoolStatus))
+			Name("GET /node/txpool/status").
+			HandlerFunc(utils.WrapHandlerFunc(n.handleGetTxpoolStatus))
 	}
 }

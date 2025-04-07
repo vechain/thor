@@ -46,7 +46,7 @@ type Config struct {
 	AllowedTracers    []string
 	SoloMode          bool
 	EnableDeprecated  bool
-	EnableMempool     bool
+	EnableTxpool      bool
 }
 
 // New return api router
@@ -94,7 +94,7 @@ func New(
 	debug.New(repo, stater, forkConfig, config.CallGasLimit, config.AllowCustomTracer, bft, config.AllowedTracers, config.SoloMode).
 		Mount(router, "/debug")
 	node.New(nw, txPool).
-		Mount(router, "/node", config.EnableMempool)
+		Mount(router, "/node", config.EnableTxpool)
 	subs := subscriptions.New(repo, origins, config.BacktraceLimit, txPool, config.EnableDeprecated)
 	subs.Mount(router, "/subscriptions")
 

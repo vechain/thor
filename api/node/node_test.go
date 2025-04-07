@@ -96,7 +96,7 @@ func httpGetAndCheckResponseStatus(t *testing.T, url string, responseStatusCode 
 }
 
 func testGetTransactions(t *testing.T) {
-	res := httpGetAndCheckResponseStatus(t, "/node/mempool", 200)
+	res := httpGetAndCheckResponseStatus(t, "/node/txpool", 200)
 	var txResponse []string
 	err := json.Unmarshal(res, &txResponse)
 	require.NoError(t, err)
@@ -105,7 +105,7 @@ func testGetTransactions(t *testing.T) {
 }
 
 func testGetTransactionsExpanded(t *testing.T) {
-	res := httpGetAndCheckResponseStatus(t, "/node/mempool?expanded=true", 200)
+	res := httpGetAndCheckResponseStatus(t, "/node/txpool?expanded=true", 200)
 	var txResponse []transactions.Transaction
 	err := json.Unmarshal(res, &txResponse)
 	require.NoError(t, err)
@@ -115,7 +115,7 @@ func testGetTransactionsExpanded(t *testing.T) {
 
 func testGetTransactionsWithFrom(t *testing.T) {
 	acc := genesis.DevAccounts()[0]
-	res := httpGetAndCheckResponseStatus(t, "/node/mempool?from="+acc.Address.String(), 200)
+	res := httpGetAndCheckResponseStatus(t, "/node/txpool?from="+acc.Address.String(), 200)
 	var txResponse []string
 	err := json.Unmarshal(res, &txResponse)
 	require.NoError(t, err)
@@ -125,7 +125,7 @@ func testGetTransactionsWithFrom(t *testing.T) {
 
 func testGetTransactionsWithTo(t *testing.T) {
 	acc := genesis.DevAccounts()[1]
-	res := httpGetAndCheckResponseStatus(t, "/node/mempool?to="+acc.Address.String(), 200)
+	res := httpGetAndCheckResponseStatus(t, "/node/txpool?to="+acc.Address.String(), 200)
 	var txResponse []string
 	err := json.Unmarshal(res, &txResponse)
 	require.NoError(t, err)
@@ -134,13 +134,13 @@ func testGetTransactionsWithTo(t *testing.T) {
 }
 
 func testGetTransactionsWithBadExpanded(t *testing.T) {
-	httpGetAndCheckResponseStatus(t, "/node/mempool?expanded=notboolean", 400)
+	httpGetAndCheckResponseStatus(t, "/node/txpool?expanded=notboolean", 400)
 }
 
 func testGetTransactionsWithBadFrom(t *testing.T) {
-	httpGetAndCheckResponseStatus(t, "/node/mempool?from=0xinvalid", 400)
+	httpGetAndCheckResponseStatus(t, "/node/txpool?from=0xinvalid", 400)
 }
 
 func testGetTransactionsWithBadTo(t *testing.T) {
-	httpGetAndCheckResponseStatus(t, "/node/mempool?to=0xinvalid", 400)
+	httpGetAndCheckResponseStatus(t, "/node/txpool?to=0xinvalid", 400)
 }
