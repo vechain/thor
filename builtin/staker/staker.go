@@ -502,7 +502,11 @@ func (a *Staker) activateValidators(currentBlock uint32) error {
 
 	if queuedSize.Cmp(big.NewInt(0)) > 0 {
 		queuedCount := queuedSize.Int64()
-		leaderDelta := 101 - leaderSize.Int64()
+		maxLeaderGroupSize, err := a.params.Get(thor.KeyMaxBlockProposers)
+		if err != nil {
+			return err
+		}
+		leaderDelta := maxLeaderGroupSize.Int64() - leaderSize.Int64()
 		if leaderDelta > 0 {
 			if leaderDelta < queuedCount {
 				queuedCount = leaderDelta

@@ -1440,3 +1440,80 @@ func TestStaker_Housekeep_Cannot_Exit_If_It_Breaks_Finality(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, StatusExit, validator.Status)
 }
+
+func TestStaker_Housekeep_Exit_Decrements_Leader_Group_Size(t *testing.T) {
+	staker, _ := newStaker(t, 0, 2, false)
+	addr1 := datagen.RandAddress()
+	addr2 := datagen.RandAddress()
+
+	stake := RandomStake()
+	period := uint32(360) * 24 * 14
+
+	assert.NoError(t, staker.AddValidator(addr1, addr1, period, stake, false))
+	assert.NoError(t, staker.ActivateNextValidator(0))
+	assert.NoError(t, staker.AddValidator(addr2, addr2, period, stake, false))
+	assert.NoError(t, staker.ActivateNextValidator(0))
+
+	exitBlock := uint32(360) * 24 * 14
+	_, err := staker.Housekeep(exitBlock, 0)
+	assert.NoError(t, err)
+	validator, err := staker.Get(addr1)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusCooldown, validator.Status)
+	leaderGroupSize, err := staker.leaderGroupSize.Get()
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(2), leaderGroupSize)
+
+	_, err = staker.Housekeep(exitBlock+8640, 0)
+	assert.NoError(t, err)
+	validator, err = staker.Get(addr1)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusExit, validator.Status)
+	validator2, err := staker.Get(addr2)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusCooldown, validator2.Status)
+	leaderGroupSize, err = staker.leaderGroupSize.Get()
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(1), leaderGroupSize)
+}
+
+func TestStaker_Housekeep_Adds_Queued_Validators_Up_To_Limit(t *testing.T) {
+	staker, _ := newStaker(t, 0, 2, false)
+	addr1 := datagen.RandAddress()
+	addr2 := datagen.RandAddress()
+	addr3 := datagen.RandAddress()
+
+	stake := RandomStake()
+	period := uint32(360) * 24 * 14
+
+	assert.NoError(t, staker.AddValidator(addr1, addr1, period, stake, false))
+	assert.NoError(t, staker.AddValidator(addr2, addr2, period, stake, false))
+	assert.NoError(t, staker.AddValidator(addr3, addr3, period, stake, false))
+
+	queuedValidators, err := staker.queuedGroupSize.Get()
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(3), queuedValidators)
+
+	leaderGroupSize, err := staker.leaderGroupSize.Get()
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0).String(), leaderGroupSize.String())
+
+	block := uint32(360) * 24 * 13
+	_, err = staker.Housekeep(block, 0)
+	assert.NoError(t, err)
+	validator, err := staker.Get(addr1)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusActive, validator.Status)
+	validator1, err := staker.Get(addr2)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusActive, validator1.Status)
+	validator2, err := staker.Get(addr3)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusQueued, validator2.Status)
+	leaderGroupSize, err = staker.leaderGroupSize.Get()
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(2), leaderGroupSize)
+	queuedValidators, err = staker.queuedGroupSize.Get()
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(1), queuedValidators)
+}
