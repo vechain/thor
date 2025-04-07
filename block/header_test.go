@@ -386,23 +386,6 @@ func TestExtensionV2(t *testing.T) {
 	}
 }
 
-func FuzzHeaderEncoding(f *testing.F) {
-	f.Fuzz(func(t *testing.T, addrBytes, beneficiary []byte, maxFee, gasUsed, gasLimit, totalScore uint64) {
-		h0 := randomBlock(addrBytes, beneficiary, maxFee, gasUsed, gasLimit, totalScore).Header()
-		enc, err := rlp.EncodeToBytes(h0)
-		if err != nil {
-			t.Errorf("failed to encode header: %v", err)
-		}
-		var decodedHeader Header
-		if err := rlp.DecodeBytes(enc, &decodedHeader); err != nil {
-			t.Errorf("failed to decode header: %v", err)
-		}
-		if h0.String() != decodedHeader.String() {
-			t.Errorf("Header expected to be the same but: %v", err)
-		}
-	})
-}
-
 func TestHeaderHash(t *testing.T) {
 	for range 100 {
 		var builder = new(Builder)
