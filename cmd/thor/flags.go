@@ -16,8 +16,8 @@ var (
 		Usage: "the network to join (main|test) or the path/URL to a genesis file",
 	}
 	txpoolFlag = cli.BoolFlag{
-		Name:  "enable-txpool",
-		Usage: "enable txpool rest API enpoints",
+		Name:  "enable-txpool-api",
+		Usage: "enable txpool REST API endpoints",
 	}
 	configDirFlag = cli.StringFlag{
 		Name:   "config-dir",

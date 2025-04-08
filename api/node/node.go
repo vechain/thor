@@ -132,8 +132,7 @@ func (m *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) e
 
 	transactions := make([]thor.Bytes32, len(allTransactions))
 	for index, tx := range allTransactions {
-		hash := tx.Hash()
-		transactions[index] = hash
+		transactions[index] = tx.Hash()
 	}
 
 	return utils.WriteJSON(w, transactions)
