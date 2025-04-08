@@ -455,7 +455,7 @@ func TestValidateGalacticaTxFee(t *testing.T) {
 			tx:           tx.NewBuilder(tx.TypeLegacy).GasPriceCoef(255).Build(),
 			baseFee:      defaultBaseFee,
 			baseGasPrice: new(big.Int).Sub(defaultBaseFee, common.Big1),
-			wantErr:      errors.New("max fee per gas is less than block base fee"),
+			wantErr:      errors.New("base fee too high for legacy tx, use dynamic fee tx or retry later"),
 		},
 		{
 			name:         "dynamic fee transaction not with enough fee",
