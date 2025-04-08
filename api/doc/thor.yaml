@@ -1048,10 +1048,9 @@ components:
               type: array
               nullable: false
               minItems: 0
-              items:
-                allOf:
-                  - $ref: '#/components/schemas/Tx'
-                  - $ref: '#/components/schemas/Receipt'
+              allOf:
+                - $ref: '#/components/schemas/Tx'
+                - $ref: '#/components/schemas/Receipt'
 
     EventLogFilterRequest:
       type: object
@@ -1729,7 +1728,7 @@ components:
                   The address of the deployed contract, if the corresponding clause is a
                   contract deployment clause.
                 example: '0x0000000000000000000000000000456e65726779'
-                nullable: false
+                nullable: true
                 pattern: '^0x[0-9a-f]{40}$'
               events:
                 type: array
@@ -2000,7 +1999,7 @@ components:
         }
         ```
         This refers to the range from block 10 to block 1000.
-        
+
     EventOptionalData:
       nullable: true
       type: object
