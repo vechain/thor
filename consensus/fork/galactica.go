@@ -13,6 +13,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
@@ -164,7 +166,11 @@ func CalculateReward(gasUsed uint64, rewardGasPrice, rewardRatio *big.Int, isGal
 	return reward
 }
 
-func ValidateGalacticaTxFee(tr *tx.Transaction, baseFee, baseGasPrice *big.Int) error {
+func ValidateGalacticaTxFee(tr *tx.Transaction, state *state.State, baseFee *big.Int) error {
+	baseGasPrice, err := builtin.Params.Native(state).Get(thor.KeyBaseGasPrice)
+	if err != nil {
+		return err
+	}
 	galacticaItems := GalacticaTxGasPriceAdapter(tr, baseGasPrice)
 	if galacticaItems.MaxFee.Cmp(baseFee) < 0 {
 		if tr.Type() == tx.TypeLegacy {
