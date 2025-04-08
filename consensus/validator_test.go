@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
@@ -96,11 +97,11 @@ func TestValidateBlock(t *testing.T) {
 	gen := genesis.NewDevnet()
 	stater := state.NewStater(db)
 
-	genesis, _, _, err := gen.Build(stater)
+	genesisBlock, _, _, err := gen.Build(stater)
 	assert.NoError(t, err)
 
-	state := stater.NewState(trie.Root{Hash: genesis.Header().StateRoot()})
-	repo, err := chain.NewRepository(db, genesis)
+	state := stater.NewState(trie.Root{Hash: genesisBlock.Header().StateRoot()})
+	repo, err := chain.NewRepository(db, genesisBlock)
 	assert.NoError(t, err)
 
 	tests := []struct {
@@ -119,6 +120,27 @@ func TestValidateBlock(t *testing.T) {
 				assert.Nil(t, s)
 				assert.Nil(t, r)
 				assert.Equal(t, fork.ErrMaxFeePerGasTooLow, err)
+			},
+		},
+		{
+			name: "legacy tx with high base fee",
+			testFun: func(t *testing.T) {
+				baseFee := big.NewInt(thor.InitialBaseFee * 1000) // Base fee higher than legacy tx base gas price
+				tr := tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Gas(21000).BlockRef(tx.NewBlockRef(10)).Build()
+				tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
+				blk := new(block.Builder).
+					BaseFee(baseFee).
+					Transaction(tr).
+					GasUsed(21000).
+					ReceiptsRoot(thor.BytesToBytes32(hexutil.MustDecode("0x18e50e1cc2cededa9037a4d89ef5c0147fa104cf15f6a1e97a5ac0cbd4f58422"))).
+					StateRoot(thor.BytesToBytes32(hexutil.MustDecode("0xfd52b74feb856784be141440cc8d68d8a518aaa5e845ceed2ed8322f99c11352"))).
+					Build()
+
+				c := New(repo, stater, thor.ForkConfig{GALACTICA: 0})
+				s, r, err := c.verifyBlock(blk, state, 0)
+				assert.Nil(t, s)
+				assert.Nil(t, r)
+				assert.Equal(t, fork.ErrBaseFeeTooHighForLegacyTx, err)
 			},
 		},
 	}

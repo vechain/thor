@@ -20,9 +20,12 @@ import (
 var (
 	// ErrBaseFeeNotSet is returned if the base fee is not set after the Galactica fork
 	ErrBaseFeeNotSet = errors.New("base fee not set after galactica")
+	// ErrBaseFeeTooHighForLegacyTx is returned if the base fee is too high for a legacy tx
+	ErrBaseFeeTooHighForLegacyTx = errors.New("base fee too high for legacy tx, use dynamic fee tx or retry later")
 	// ErrMaxFeePerGasTooLow is returned if the transaction max fee is less than
 	// the base fee of the block.
 	ErrMaxFeePerGasTooLow = errors.New("max fee per gas is less than block base fee")
+
 )
 
 // VerifyGalacticaHeader verifies some header attributes which were changed in Galactica fork,
@@ -165,6 +168,9 @@ func CalculateReward(gasUsed uint64, rewardGasPrice, rewardRatio *big.Int, isGal
 func ValidateGalacticaTxFee(tr *tx.Transaction, baseFee, baseGasPrice *big.Int) error {
 	galacticaItems := GalacticaTxGasPriceAdapter(tr, baseGasPrice)
 	if galacticaItems.MaxFee.Cmp(baseFee) < 0 {
+		if tr.Type() == tx.TypeLegacy {
+			return ErrBaseFeeTooHighForLegacyTx
+		}
 		return ErrMaxFeePerGasTooLow
 	}
 	return nil
