@@ -20,9 +20,9 @@ import (
 var (
 	// errBaseFeeTooHighForLegacyTx is returned if the base fee is too high for a legacy tx
 	errBaseFeeTooHighForLegacyTx = errors.New("base fee too high for legacy tx, use dynamic fee tx or retry later")
-	// errMaxFeePerGasTooLow is returned if the transaction max fee is less than
+	// errBaseFeeTooHighForDynamicFeeTx is returned if the transaction max fee is less than
 	// the base fee of the block.
-	errMaxFeePerGasTooLow = errors.New("max fee per gas is less than block base fee")
+	errBaseFeeTooHighForDynamicFeeTx = errors.New("max fee per gas is less than block base fee")
 	// ErrBaseFeeNotSet is returned if the base fee is not set after the Galactica fork
 	ErrBaseFeeNotSet = errors.New("base fee not set after galactica")
 )
@@ -170,7 +170,7 @@ func ValidateGalacticaTxFee(tr *tx.Transaction, baseFee, baseGasPrice *big.Int) 
 		if tr.Type() == tx.TypeLegacy {
 			return errBaseFeeTooHighForLegacyTx
 		}
-		return errMaxFeePerGasTooLow
+		return errBaseFeeTooHighForDynamicFeeTx
 	}
 	return nil
 }
