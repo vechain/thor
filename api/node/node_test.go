@@ -40,10 +40,10 @@ func TestNode(t *testing.T) {
 
 	t.Run("getTransactions", testGetTransactions)
 	t.Run("getTransactionsExpanded", testGetTransactionsExpanded)
-	t.Run("getTransactionsWithFrom", testGetTransactionsWithFrom)
+	t.Run("getTransactionsWithOrigin", testGetTransactionsWithOrigin)
 	t.Run("getTransactionsWithTo", testGetTransactionsWithTo)
 	t.Run("getTransactionsWithBadExpanded", testGetTransactionsWithBadExpanded)
-	t.Run("getTransactionsWithBadFrom", testGetTransactionsWithBadFrom)
+	t.Run("getTransactionsWithBadOrigin", testGetTransactionsWithBadOrigin)
 	t.Run("getTransactionsWithBadTo", testGetTransactionsWithBadTo)
 }
 
@@ -112,9 +112,9 @@ func testGetTransactionsExpanded(t *testing.T) {
 	assert.True(t, len(txResponse) > 0)
 }
 
-func testGetTransactionsWithFrom(t *testing.T) {
+func testGetTransactionsWithOrigin(t *testing.T) {
 	acc := genesis.DevAccounts()[0]
-	res := httpGetAndCheckResponseStatus(t, "/node/txpool?from="+acc.Address.String(), 200)
+	res := httpGetAndCheckResponseStatus(t, "/node/txpool?origin="+acc.Address.String(), 200)
 	var txResponse []string
 	err := json.Unmarshal(res, &txResponse)
 	require.NoError(t, err)
@@ -136,8 +136,8 @@ func testGetTransactionsWithBadExpanded(t *testing.T) {
 	httpGetAndCheckResponseStatus(t, "/node/txpool?expanded=notboolean", 400)
 }
 
-func testGetTransactionsWithBadFrom(t *testing.T) {
-	httpGetAndCheckResponseStatus(t, "/node/txpool?from=0xinvalid", 400)
+func testGetTransactionsWithBadOrigin(t *testing.T) {
+	httpGetAndCheckResponseStatus(t, "/node/txpool?origin=0xinvalid", 400)
 }
 
 func testGetTransactionsWithBadTo(t *testing.T) {
