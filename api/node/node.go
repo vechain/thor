@@ -39,38 +39,34 @@ func (n *Node) handleNetwork(w http.ResponseWriter, _ *http.Request) error {
 	return utils.WriteJSON(w, n.PeersStats())
 }
 
-func (m *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) error {
-	expandedString := req.URL.Query().Get("expanded")
-	if expandedString != "" && expandedString != "false" && expandedString != "true" {
-		return utils.BadRequest(errors.WithMessage(errors.New("should be boolean"), "expanded"))
+func StringToAddress(addressString string) (*thor.Address, error) {
+	var address *thor.Address
+	if addressString != "" {
+		fromParsed, err := thor.ParseAddress(addressString)
+		if err != nil {
+			return nil, utils.BadRequest(errors.WithMessage(err, "from"))
+		}
+		address = &fromParsed
 	}
-	expanded := false
-	if expandedString == "true" {
-		expanded = true
+	return address, nil
+}
+
+func (m *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) error {
+	expanded, err := utils.StringToBoolean(req.URL.Query().Get("expanded"), false)
+	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "expanded"))
 	}
 
 	fromString := req.URL.Query().Get("from")
-	var from *thor.Address
-	if fromString != "" {
-		fromParsed, err := thor.ParseAddress(fromString)
-		if err != nil {
-			return utils.BadRequest(errors.WithMessage(err, "from"))
-		}
-		from = &fromParsed
-	} else {
-		from = nil
+	from, err := StringToAddress(fromString)
+	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "from"))
 	}
 
 	toString := req.URL.Query().Get("to")
-	var to *thor.Address
-	if toString != "" {
-		toParsed, err := thor.ParseAddress(toString)
-		if err != nil {
-			return utils.BadRequest(errors.WithMessage(err, "to"))
-		}
-		to = &toParsed
-	} else {
-		to = nil
+	to, err := StringToAddress(toString)
+	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "to"))
 	}
 
 	allTransactions := m.pool.Dump()
@@ -81,27 +77,18 @@ func (m *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) e
 			if err != nil {
 				return utils.BadRequest(errors.WithMessage(err, "filtering origin"))
 			}
-			if sender == *from {
-				filtered = append(filtered, tx)
-			}
-		}
-		allTransactions = filtered
-	}
-
-	if to != nil {
-		var filtered []*tx.Transaction
-		for _, tx := range allTransactions {
 			clauses := tx.Clauses()
-			toAdd := false
-			for _, cl := range clauses {
-				toClause := cl.To()
-				if *toClause == *to {
-					toAdd = true
-					break
+			toFound := false
+			if to != nil {
+				for _, cl := range clauses {
+					toClause := cl.To()
+					if *toClause == *to {
+						toFound = true
+						break
+					}
 				}
 			}
-
-			if toAdd {
+			if sender == *from || toFound {
 				filtered = append(filtered, tx)
 			}
 		}
@@ -124,7 +111,6 @@ func (m *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) e
 				}
 			}
 			br := tx.BlockRef()
-			gasPriceCoef := tx.GasPriceCoef()
 			trxs[index] = transactions.Transaction{
 				ChainTag:     tx.ChainTag(),
 				ID:           tx.ID(),
@@ -133,7 +119,7 @@ func (m *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) e
 				Expiration:   tx.Expiration(),
 				Nonce:        math.HexOrDecimal64(tx.Nonce()),
 				Size:         uint32(tx.Size()),
-				GasPriceCoef: gasPriceCoef,
+				GasPriceCoef: tx.GasPriceCoef(),
 				Gas:          tx.Gas(),
 				DependsOn:    tx.DependsOn(),
 				Clauses:      cls,
