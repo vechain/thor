@@ -76,7 +76,6 @@ func filterTransactions(origin *thor.Address, to *thor.Address, allTransactions 
 	}
 
 	return filtered, nil
-
 }
 
 func (m *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) error {
