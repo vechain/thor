@@ -7,7 +7,6 @@ package fork
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"math/big"
 	"testing"
@@ -455,14 +454,14 @@ func TestValidateGalacticaTxFee(t *testing.T) {
 			tx:           tx.NewBuilder(tx.TypeLegacy).GasPriceCoef(255).Build(),
 			baseFee:      defaultBaseFee,
 			baseGasPrice: new(big.Int).Sub(defaultBaseFee, common.Big1),
-			wantErr:      errors.New("max fee per gas is less than block base fee"),
+			wantErr:      errBaseFeeTooHighForLegacyTx,
 		},
 		{
 			name:         "dynamic fee transaction not with enough fee",
 			tx:           tx.NewBuilder(tx.TypeDynamicFee).MaxFeePerGas(new(big.Int).Sub(defaultBaseFee, common.Big1)).Build(),
 			baseFee:      defaultBaseFee,
 			baseGasPrice: defaultBaseFee,
-			wantErr:      errors.New("max fee per gas is less than block base fee"),
+			wantErr:      errBaseFeeTooHighForDynamicFeeTx,
 		},
 	}
 
