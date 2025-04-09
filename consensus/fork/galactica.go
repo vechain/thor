@@ -123,8 +123,8 @@ func GalacticaBuyGasPrice(tr *tx.Transaction, legacyTxDefaultGasPrice *big.Int, 
 	* tracked by Energy.TotalAddSub
 	*
 	* if galactica is not active CurrentBaseFee will be 0
-	* legacyTxs MaxPriorityFee == MaxFee
-	 */
+	* LegacyTx GasPrice Calculation = MaxFee
+	**/
 	currBaseFee := big.NewInt(0)
 	if blkBaseFee != nil {
 		currBaseFee = blkBaseFee
@@ -143,8 +143,8 @@ func GalacticaPriorityGasPrice(tr *tx.Transaction, legacyTxDefaultGasPrice, prov
 	* baseFee=1100; maxFee = 1000; maxPriorityFee = 100 -> tx rejected, maxFee < baseFee
 	*
 	* if galactica is not active CurrentBaseFee will be 0
-	* legacyTxs MaxPriorityFee == MaxFee
-	 */
+	* LegacyTx OverallGasPrice Calculation = MaxFee
+	**/
 	currBaseFee := big.NewInt(0)
 	if blkBaseFee != nil {
 		currBaseFee = blkBaseFee
