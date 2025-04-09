@@ -152,7 +152,7 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyRewardRatio, r)
 	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
 
-	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyBaseGasPrice, bgp)
+	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyLegacyTxDefaultGasPrice, bgp)
 	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
 
 	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyProposerEndorsement, e)

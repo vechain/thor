@@ -7,7 +7,7 @@ package fork
 
 import (
 	"encoding/binary"
-	"fmt"
+	"errors"
 	"math/big"
 	"testing"
 
@@ -266,20 +266,14 @@ func TestGalacticaGasPrice(t *testing.T) {
 		{
 			name: "galactica is not yet activated",
 			f: func(t *testing.T) {
-				res := GalacticaGasPrice(legacyTr, baseGasPrice, &GalacticaItems{
-					IsActive: false,
-					BaseFee:  nil,
-				})
+				res := GalacticaBuyGasPrice(legacyTr, baseGasPrice, nil)
 				assert.True(t, res.Cmp(legacyTr.GasPrice(baseGasPrice)) == 0)
 			},
 		},
 		{
 			name: "galactica is activated",
 			f: func(t *testing.T) {
-				res := GalacticaGasPrice(legacyTr, baseGasPrice, &GalacticaItems{
-					IsActive: true,
-					BaseFee:  baseFee,
-				})
+				res := GalacticaBuyGasPrice(legacyTr, baseGasPrice, baseFee)
 				assert.True(t, res.Cmp(legacyTr.GasPrice(baseGasPrice)) == 0)
 			},
 		},
@@ -287,10 +281,7 @@ func TestGalacticaGasPrice(t *testing.T) {
 			name: "galactica is activated, dynamic fee transaction with maxPriorityFee+baseFee as price",
 			f: func(t *testing.T) {
 				tr := tx.NewBuilder(tx.TypeDynamicFee).MaxFeePerGas(big.NewInt(250_000_000)).MaxPriorityFeePerGas(big.NewInt(15_000)).Build()
-				res := GalacticaGasPrice(tr, baseGasPrice, &GalacticaItems{
-					IsActive: true,
-					BaseFee:  baseFee,
-				})
+				res := GalacticaBuyGasPrice(tr, baseGasPrice, baseFee)
 				expectedRes := new(big.Int).Add(tr.MaxPriorityFeePerGas(), baseFee)
 				assert.True(t, res.Cmp(expectedRes) == 0)
 			},
@@ -299,10 +290,7 @@ func TestGalacticaGasPrice(t *testing.T) {
 			name: "galactica is activated, dynamic fee transaction with maxFee as price",
 			f: func(t *testing.T) {
 				tr := tx.NewBuilder(tx.TypeDynamicFee).MaxFeePerGas(big.NewInt(20_500_000)).MaxPriorityFeePerGas(big.NewInt(1_000_000)).Build()
-				res := GalacticaGasPrice(tr, baseGasPrice, &GalacticaItems{
-					IsActive: true,
-					BaseFee:  baseFee,
-				})
+				res := GalacticaBuyGasPrice(tr, baseGasPrice, baseFee)
 				assert.True(t, res.Cmp(tr.MaxFeePerGas()) == 0)
 			},
 		},
@@ -318,31 +306,31 @@ func TestGalacticaGasPrice(t *testing.T) {
 func TestGalacticaPriorityPrice(t *testing.T) {
 	baseGasPrice := big.NewInt(1_000_000_000)
 	baseFee := big.NewInt(20_000_000)
-	provedWork := big.NewInt(1)
-	legacyTr := tx.NewBuilder(tx.TypeLegacy).GasPriceCoef(255).Build()
+	provedWork := big.NewInt(100_000)
+	legacyTr := tx.NewBuilder(tx.TypeLegacy).Gas(100).GasPriceCoef(255).BlockRef(tx.NewBlockRef(100)).Build()
 
 	tests := []struct {
 		name string
 		f    func(*testing.T)
 	}{
 		{
-			name: "galactica is not yet activated",
+			name: "galactica is not yet activated, use PoW GasPrice",
 			f: func(t *testing.T) {
-				res := GalacticaPriorityPrice(legacyTr, baseGasPrice, provedWork, &GalacticaItems{
-					IsActive: false,
-					BaseFee:  nil,
-				})
+				res := GalacticaPriorityGasPrice(legacyTr, baseGasPrice, provedWork, nil)
 				assert.True(t, res.Cmp(legacyTr.OverallGasPrice(baseGasPrice, provedWork)) == 0)
+			},
+		},
+		{
+			name: "galactica is not yet activated, do not use base GasPrice for priority",
+			f: func(t *testing.T) {
+				res := GalacticaPriorityGasPrice(legacyTr, baseGasPrice, provedWork, nil)
+				assert.False(t, res.Cmp(legacyTr.GasPrice(baseGasPrice)) == 0)
 			},
 		},
 		{
 			name: "galactica is activated",
 			f: func(t *testing.T) {
-				res := GalacticaPriorityPrice(legacyTr, baseGasPrice, provedWork, &GalacticaItems{
-					IsActive: true,
-					BaseFee:  baseFee,
-				})
-				fmt.Println(res)
+				res := GalacticaPriorityGasPrice(legacyTr, baseGasPrice, provedWork, baseFee)
 				expected := new(big.Int).Sub(legacyTr.OverallGasPrice(baseGasPrice, provedWork), baseFee)
 				assert.True(t, res.Cmp(expected) == 0)
 			},
@@ -350,22 +338,16 @@ func TestGalacticaPriorityPrice(t *testing.T) {
 		{
 			name: "galactica is activated, dynamic fee transaction with maxPriorityFee as priority fee",
 			f: func(t *testing.T) {
-				tr := tx.NewBuilder(tx.TypeDynamicFee).MaxFeePerGas(big.NewInt(250_000_000)).MaxPriorityFeePerGas(big.NewInt(15_000)).Build()
-				res := GalacticaPriorityPrice(tr, baseGasPrice, provedWork, &GalacticaItems{
-					IsActive: true,
-					BaseFee:  baseFee,
-				})
+				tr := tx.NewBuilder(tx.TypeDynamicFee).Gas(21000).MaxFeePerGas(big.NewInt(250_000_000)).MaxPriorityFeePerGas(big.NewInt(15_000)).Build()
+				res := GalacticaPriorityGasPrice(tr, baseGasPrice, provedWork, baseFee)
 				assert.True(t, res.Cmp(tr.MaxPriorityFeePerGas()) == 0)
 			},
 		},
 		{
 			name: "galactica is activated, dynamic fee transaction with maxFee-baseFee as priority fee",
 			f: func(t *testing.T) {
-				tr := tx.NewBuilder(tx.TypeDynamicFee).MaxFeePerGas(big.NewInt(20_500_000)).MaxPriorityFeePerGas(big.NewInt(1_000_000)).Build()
-				res := GalacticaPriorityPrice(tr, baseGasPrice, provedWork, &GalacticaItems{
-					IsActive: true,
-					BaseFee:  baseFee,
-				})
+				tr := tx.NewBuilder(tx.TypeDynamicFee).Gas(2100).MaxFeePerGas(big.NewInt(20_500_000)).MaxPriorityFeePerGas(big.NewInt(1_000_000)).Build()
+				res := GalacticaPriorityGasPrice(tr, baseGasPrice, provedWork, baseFee)
 				expectedRes := new(big.Int).Sub(tr.MaxFeePerGas(), baseFee)
 				assert.True(t, res.Cmp(expectedRes) == 0)
 			},
@@ -429,46 +411,53 @@ func TestCalculateReward(t *testing.T) {
 func TestValidateGalacticaTxFee(t *testing.T) {
 	defaultBaseFee := big.NewInt(20_000_000)
 	tests := []struct {
-		name         string
-		tx           *tx.Transaction
-		baseFee      *big.Int
-		baseGasPrice *big.Int
-		wantErr      error
+		name                    string
+		tx                      *tx.Transaction
+		legacyTxDefaultGasPrice *big.Int
+		baseGasPrice            *big.Int
+		wantErr                 error
 	}{
 		{
-			name:         "legacy transaction with enough fee",
-			tx:           tx.NewBuilder(tx.TypeLegacy).GasPriceCoef(255).Build(),
-			baseFee:      defaultBaseFee,
-			baseGasPrice: defaultBaseFee,
-			wantErr:      nil,
+			name:                    "legacy transaction with enough fee",
+			tx:                      tx.NewBuilder(tx.TypeLegacy).GasPriceCoef(255).Build(),
+			legacyTxDefaultGasPrice: defaultBaseFee,
+			baseGasPrice:            defaultBaseFee,
+			wantErr:                 nil,
 		},
 		{
-			name:         "dynamic fee transaction with enough fee",
-			tx:           tx.NewBuilder(tx.TypeDynamicFee).MaxFeePerGas(defaultBaseFee).Build(),
-			baseFee:      defaultBaseFee,
-			baseGasPrice: defaultBaseFee,
-			wantErr:      nil,
+			name:                    "legacy transaction with not enough fee",
+			tx:                      tx.NewBuilder(tx.TypeLegacy).GasPriceCoef(0).Build(),
+			legacyTxDefaultGasPrice: defaultBaseFee,
+			baseGasPrice:            new(big.Int).Add(defaultBaseFee, common.Big1),
+			wantErr:                 ErrMaxFeePerGasTooLow,
 		},
 		{
-			name:         "legacy transaction with not enough fee",
-			tx:           tx.NewBuilder(tx.TypeLegacy).GasPriceCoef(255).Build(),
-			baseFee:      defaultBaseFee,
-			baseGasPrice: new(big.Int).Sub(defaultBaseFee, common.Big1),
-			wantErr:      errBaseFeeTooHighForLegacyTx,
+			name:                    "legacy transaction with just enough fee",
+			tx:                      tx.NewBuilder(tx.TypeLegacy).GasPriceCoef(1).Build(),
+			legacyTxDefaultGasPrice: defaultBaseFee,
+			baseGasPrice:            new(big.Int).Add(defaultBaseFee, common.Big1),
+			wantErr:                 nil,
 		},
 		{
-			name:         "dynamic fee transaction not with enough fee",
-			tx:           tx.NewBuilder(tx.TypeDynamicFee).MaxFeePerGas(new(big.Int).Sub(defaultBaseFee, common.Big1)).Build(),
-			baseFee:      defaultBaseFee,
-			baseGasPrice: defaultBaseFee,
-			wantErr:      errBaseFeeTooHighForDynamicFeeTx,
+			name:                    "dynamic fee transaction with enough fee",
+			tx:                      tx.NewBuilder(tx.TypeDynamicFee).MaxFeePerGas(defaultBaseFee).Build(),
+			legacyTxDefaultGasPrice: defaultBaseFee,
+			baseGasPrice:            defaultBaseFee,
+			wantErr:                 nil,
+		},
+		{
+			name:                    "dynamic fee transaction not with enough fee",
+			tx:                      tx.NewBuilder(tx.TypeDynamicFee).MaxFeePerGas(new(big.Int).Sub(defaultBaseFee, common.Big1)).Build(),
+			legacyTxDefaultGasPrice: defaultBaseFee,
+			baseGasPrice:            defaultBaseFee,
+			wantErr:                 ErrMaxFeePerGasTooLow,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateGalacticaTxFee(tt.tx, tt.baseFee, tt.baseGasPrice)
-			assert.Equal(t, tt.wantErr, err)
+			err := ValidateGalacticaTxFee(tt.tx, tt.baseGasPrice, tt.legacyTxDefaultGasPrice)
+			assert.True(t, errors.Is(err, tt.wantErr))
 		})
 	}
 }

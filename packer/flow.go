@@ -91,7 +91,7 @@ func (f *Flow) hasTx(txid thor.Bytes32, txBlockRef uint32) (bool, error) {
 	return f.runtime.Chain().HasTransaction(txid, txBlockRef)
 }
 
-func (f *Flow) isEffectivePriorityFeeTooLow(t *tx.Transaction, baseGasPrice *big.Int, isGalactica bool) error {
+func (f *Flow) isEffectivePriorityFeeTooLow(t *tx.Transaction, legacyTxDefaultGasPrice *big.Int) error {
 	// Skip check if the minimum priority fee is not set
 	if f.packer.minTxPriorityFee.Sign() <= 0 {
 		return nil
@@ -101,8 +101,12 @@ func (f *Flow) isEffectivePriorityFeeTooLow(t *tx.Transaction, baseGasPrice *big
 	if err != nil {
 		return err
 	}
-	effectivePriorityFee := fork.GalacticaPriorityPrice(
-		t, baseGasPrice, provedWork, &fork.GalacticaItems{IsActive: isGalactica, BaseFee: f.runtime.Context().BaseFee})
+	effectivePriorityFee := fork.GalacticaPriorityGasPrice(
+		t,
+		legacyTxDefaultGasPrice,
+		provedWork,
+		f.runtime.Context().BaseFee,
+	)
 
 	if effectivePriorityFee.Cmp(f.packer.minTxPriorityFee) < 0 {
 		return badTxError{"effective priority fee too low"}
@@ -140,6 +144,7 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 		return errGasLimitReached
 	}
 
+	// when f.Number() == f.packer.forkConfig.GALACTICA will the baseFee be set ??
 	if f.Number() < f.packer.forkConfig.GALACTICA {
 		if t.Type() != tx.TypeLegacy {
 			return badTxError{"invalid tx type"}
@@ -148,15 +153,15 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 		if f.runtime.Context().BaseFee == nil {
 			return fork.ErrBaseFeeNotSet
 		}
-		baseGasPrice, err := builtin.Params.Native(f.runtime.State()).Get(thor.KeyBaseGasPrice)
+		legacyTxDefaultGasPrice, err := builtin.Params.Native(f.runtime.State()).Get(thor.KeyLegacyTxDefaultGasPrice)
 		if err != nil {
 			return err
 		}
-		if err := fork.ValidateGalacticaTxFee(t, f.runtime.Context().BaseFee, baseGasPrice); err != nil {
+		if err := fork.ValidateGalacticaTxFee(t, f.runtime.Context().BaseFee, legacyTxDefaultGasPrice); err != nil {
 			return fmt.Errorf("%w: %w", errTxNotAdoptableNow, err)
 		}
-
-		if err := f.isEffectivePriorityFeeTooLow(t, baseGasPrice, true); err != nil {
+		// TODO REVIEW THIS BETWEEN
+		if err := f.isEffectivePriorityFeeTooLow(t, legacyTxDefaultGasPrice); err != nil {
 			return err
 		}
 	}

@@ -108,8 +108,8 @@ func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 	if isGalactica {
 		baseFee = fork.CalcBaseFee(forkConfig, headBlock)
 	}
-	galacticaItems := &fork.GalacticaItems{IsActive: isGalactica, BaseFee: baseFee}
-	_, _, payer, prepaid, _, err := o.resolved.BuyGas(state, headBlock.Timestamp()+thor.BlockInterval, galacticaItems)
+
+	_, _, payer, prepaid, _, err := o.resolved.BuyGas(state, headBlock.Timestamp()+thor.BlockInterval, baseFee)
 	if err != nil {
 		return false, err
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
@@ -119,8 +120,7 @@ func TestValidateBlock(t *testing.T) {
 				s, r, err := c.verifyBlock(blk, state, 0)
 				assert.Nil(t, s)
 				assert.Nil(t, r)
-				expectedErr := errors.New("max fee per gas is less than block base fee")
-				assert.Equal(t, expectedErr, err)
+				assert.True(t, errors.Is(err, fork.ErrMaxFeePerGasTooLow))
 			},
 		},
 		{
@@ -141,8 +141,7 @@ func TestValidateBlock(t *testing.T) {
 				s, r, err := c.verifyBlock(blk, state, 0)
 				assert.Nil(t, s)
 				assert.Nil(t, r)
-				expectedErr := errors.New("base fee too high for legacy tx, use dynamic fee tx or retry later")
-				assert.Equal(t, expectedErr, err)
+				assert.True(t, errors.Is(err, fork.ErrMaxFeePerGasTooLow))
 			},
 		},
 	}

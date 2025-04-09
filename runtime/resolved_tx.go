@@ -93,18 +93,18 @@ func (r *ResolvedTransaction) CommonTo() *thor.Address {
 }
 
 // BuyGas consumes energy to buy gas, to prepare for execution.
-func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64, galacticaItems *fork.GalacticaItems) (
-	baseGasPrice *big.Int,
+func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64, blkBaseFee *big.Int) (
+	legacyTxDefaultGasPrice *big.Int,
 	gasPrice *big.Int,
 	payer thor.Address,
 	prepaid *big.Int,
 	returnGas func(uint64) error,
 	err error,
 ) {
-	if baseGasPrice, err = builtin.Params.Native(state).Get(thor.KeyBaseGasPrice); err != nil {
+	if legacyTxDefaultGasPrice, err = builtin.Params.Native(state).Get(thor.KeyLegacyTxDefaultGasPrice); err != nil {
 		return
 	}
-	gasPrice = fork.GalacticaGasPrice(r.tx, baseGasPrice, galacticaItems)
+	gasPrice = fork.GalacticaBuyGasPrice(r.tx, legacyTxDefaultGasPrice, blkBaseFee)
 
 	energy := builtin.Energy.Native(state, blockTime)
 	doReturnGas := func(rgas uint64) (*big.Int, error) {
@@ -123,7 +123,7 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64, galac
 			return
 		}
 		if sufficient {
-			return baseGasPrice, gasPrice, *r.Delegator, prepaid, func(rgas uint64) error {
+			return legacyTxDefaultGasPrice, gasPrice, *r.Delegator, prepaid, func(rgas uint64) error {
 				_, err := doReturnGas(rgas)
 				return err
 			}, nil
@@ -167,7 +167,7 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64, galac
 					return
 				}
 				if ok {
-					return baseGasPrice, gasPrice, sponsor, prepaid, doReturnGasAndSetCredit, nil
+					return legacyTxDefaultGasPrice, gasPrice, sponsor, prepaid, doReturnGasAndSetCredit, nil
 				}
 			}
 			// deduct from To
@@ -177,7 +177,7 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64, galac
 				return
 			}
 			if sufficient {
-				return baseGasPrice, gasPrice, *commonTo, prepaid, doReturnGasAndSetCredit, nil
+				return legacyTxDefaultGasPrice, gasPrice, *commonTo, prepaid, doReturnGasAndSetCredit, nil
 			}
 		}
 	}
@@ -189,7 +189,7 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64, galac
 	}
 
 	if sufficient {
-		return baseGasPrice, gasPrice, r.Origin, prepaid, func(rgas uint64) error { _, err := doReturnGas(rgas); return err }, nil
+		return legacyTxDefaultGasPrice, gasPrice, r.Origin, prepaid, func(rgas uint64) error { _, err := doReturnGas(rgas); return err }, nil
 	}
 	return nil, nil, thor.Address{}, nil, nil, errors.New("insufficient energy")
 }

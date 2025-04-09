@@ -58,11 +58,11 @@ func ValidateTransaction(tr *tx.Transaction, repo *chain.Repository, head *chain
 
 func ValidateTransactionWithState(tr *tx.Transaction, header *block.Header, forkConfig *thor.ForkConfig, state *state.State) error {
 	if header.Number() >= forkConfig.GALACTICA {
-		baseGasPrice, err := builtin.Params.Native(state).Get(thor.KeyBaseGasPrice)
+		legacyTxDefaultGasPrice, err := builtin.Params.Native(state).Get(thor.KeyLegacyTxDefaultGasPrice)
 		if err != nil {
 			return err
 		}
-		if err := fork.ValidateGalacticaTxFee(tr, header.BaseFee(), baseGasPrice); err != nil {
+		if err := fork.ValidateGalacticaTxFee(tr, header.BaseFee(), legacyTxDefaultGasPrice); err != nil {
 			return txRejectedError{err.Error()}
 		}
 	}
