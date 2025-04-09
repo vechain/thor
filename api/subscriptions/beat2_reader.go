@@ -9,6 +9,7 @@ import (
 	"bytes"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thor/bloom"
@@ -88,15 +89,16 @@ func (br *beat2Reader) generateBeat2Message(block *chain.ExtendedBlock) func() (
 		filter := bloomGenerator.Generate(bitsPerKey, bloom.K(bitsPerKey))
 
 		beat2 := Beat2Message{
-			Number:      header.Number(),
-			ID:          header.ID(),
-			ParentID:    header.ParentID(),
-			Timestamp:   header.Timestamp(),
-			TxsFeatures: uint32(header.TxsFeatures()),
-			GasLimit:    header.GasLimit(),
-			Bloom:       hexutil.Encode(filter.Bits),
-			K:           filter.K,
-			Obsolete:    block.Obsolete,
+			Number:        header.Number(),
+			ID:            header.ID(),
+			ParentID:      header.ParentID(),
+			Timestamp:     header.Timestamp(),
+			TxsFeatures:   uint32(header.TxsFeatures()),
+			BaseFeePerGas: (*math.HexOrDecimal256)(header.BaseFee()),
+			GasLimit:      header.GasLimit(),
+			Bloom:         hexutil.Encode(filter.Bits),
+			K:             filter.K,
+			Obsolete:      block.Obsolete,
 		}
 
 		return beat2, nil
