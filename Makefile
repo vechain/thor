@@ -33,11 +33,11 @@ dep:| go_version_check
 
 go_version_check:
 	@if test $(MAJOR) -lt 1; then \
-		echo "Go 1.23 or higher required"; \
+		echo "Go 1.24 or higher required"; \
 		exit 1; \
 	else \
-		if test $(MAJOR) -eq 1 -a $(MINOR) -lt 22; then \
-			echo "Go 1.23 or higher required"; \
+		if test $(MAJOR) -eq 1 -a $(MINOR) -lt 24; then \
+			echo "Go 1.24 or higher required"; \
 			exit 1; \
 		fi \
 	fi

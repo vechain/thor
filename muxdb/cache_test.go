@@ -66,7 +66,7 @@ func Benchmark_cacheNodeBlob(b *testing.B) {
 	)
 	rand.Read(blob)
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		cache.AddNodeBlob(&keyBuf, name, path, trie.Version{}, blob, true)
 		got := cache.GetNodeBlob(&keyBuf, name, path, trie.Version{}, false)
 		if !bytes.Equal(got, blob) {
@@ -86,7 +86,7 @@ func Benchmark_cacheRootNode(b *testing.B) {
 
 	rn := tr.RootNode()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		cache.AddRootNode(name, rn)
 		got := cache.GetRootNode(name, trie.Version{})
 		if got != rn {

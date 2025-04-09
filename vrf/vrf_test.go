@@ -198,7 +198,7 @@ func BenchmarkVRF(b *testing.B) {
 		alpha := []byte("Hello VeChain")
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, _, err := vrf.Prove(sk, alpha)
 			if err != nil {
 				b.Fatal(err)
@@ -211,7 +211,7 @@ func BenchmarkVRF(b *testing.B) {
 
 		_, pi, _ := vrf.Prove(sk, alpha)
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err := vrf.Verify(&sk.PublicKey, alpha, pi)
 			if err != nil {
 				b.Fatal(err)

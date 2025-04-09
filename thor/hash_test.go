@@ -29,7 +29,7 @@ func BenchmarkHash(b *testing.B) {
 
 		k := sha3.NewLegacyKeccak256().(keccakState)
 		var b32 thor.Bytes32
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			k.Write(data)
 			k.Read(b32[:])
 			k.Reset()
@@ -37,7 +37,7 @@ func BenchmarkHash(b *testing.B) {
 	})
 
 	b.Run("blake2b", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			thor.Blake2b(data)
 		}
 	})
@@ -47,13 +47,13 @@ func BenchmarkBlake2b(b *testing.B) {
 	data := make([]byte, 100)
 	rand.New(rand.NewSource(1)).Read(data) //#nosec G404
 	b.Run("Blake2b", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			thor.Blake2b(data).Bytes()
 		}
 	})
 
 	b.Run("BlakeFn", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			thor.Blake2bFn(func(w io.Writer) {
 				w.Write(data)
 			})
