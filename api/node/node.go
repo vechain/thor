@@ -39,18 +39,6 @@ func (n *Node) handleNetwork(w http.ResponseWriter, _ *http.Request) error {
 	return utils.WriteJSON(w, n.PeersStats())
 }
 
-func stringToAddress(addressString string) (*thor.Address, error) {
-	var address *thor.Address
-	if addressString != "" {
-		fromParsed, err := thor.ParseAddress(addressString)
-		if err != nil {
-			return nil, utils.BadRequest(errors.WithMessage(err, "from"))
-		}
-		address = &fromParsed
-	}
-	return address, nil
-}
-
 func filterTransactions(origin *thor.Address, to *thor.Address, allTransactions tx.Transactions) (tx.Transactions, error) {
 	var filtered []*tx.Transaction
 
@@ -85,13 +73,13 @@ func (m *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) e
 	}
 
 	originString := req.URL.Query().Get("origin")
-	origin, err := stringToAddress(originString)
+	origin, err := utils.StringToAddress(originString)
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "origin"))
 	}
 
 	toString := req.URL.Query().Get("to")
-	to, err := stringToAddress(toString)
+	to, err := utils.StringToAddress(toString)
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "to"))
 	}
