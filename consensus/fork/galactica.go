@@ -114,7 +114,7 @@ type GalacticaFeeMarketItems struct {
 	MaxPriorityFee *big.Int
 }
 
-func GalacticaBuyGasPrice(tr *tx.Transaction, legacyTxDefaultGasPrice *big.Int, blkBaseFee *big.Int) *big.Int {
+func GalacticaOverallGasPrice(tr *tx.Transaction, legacyTxDefaultGasPrice *big.Int, blkBaseFee *big.Int) *big.Int {
 	// pow is not accounted for buying gas
 	feeItems := GalacticaTxGasPriceAdapter(tr, tr.GasPrice(legacyTxDefaultGasPrice))
 
@@ -164,13 +164,13 @@ func CalculateReward(gasUsed uint64, rewardGasPrice, rewardRatio *big.Int, isGal
 	return reward
 }
 
-func ValidateGalacticaTxFee(tr *tx.Transaction, baseGasPrice, legacyTxDefaultGasPrice *big.Int) error {
+func ValidateGalacticaTxFee(tr *tx.Transaction, blockBaseFeeGasPrice, legacyTxDefaultGasPrice *big.Int) error {
 	// pow is not accounted for verifying if gas is enough to cover block base fee
 	feeItems := GalacticaTxGasPriceAdapter(tr, tr.GasPrice(legacyTxDefaultGasPrice))
 
 	// do not accept txs with less than the block base fee
-	if feeItems.MaxFee.Cmp(baseGasPrice) < 0 {
-		return fmt.Errorf("%w: expected %s got %s", ErrMaxFeePerGasTooLow, baseGasPrice.String(), feeItems.MaxFee.String())
+	if feeItems.MaxFee.Cmp(blockBaseFeeGasPrice) < 0 {
+		return fmt.Errorf("%w: expected %s got %s", ErrMaxFeePerGasTooLow, blockBaseFeeGasPrice.String(), feeItems.MaxFee.String())
 	}
 	return nil
 }

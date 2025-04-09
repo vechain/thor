@@ -104,7 +104,7 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64, blkBa
 	if legacyTxDefaultGasPrice, err = builtin.Params.Native(state).Get(thor.KeyLegacyTxDefaultGasPrice); err != nil {
 		return
 	}
-	gasPrice = fork.GalacticaBuyGasPrice(r.tx, legacyTxDefaultGasPrice, blkBaseFee)
+	gasPrice = fork.GalacticaOverallGasPrice(r.tx, legacyTxDefaultGasPrice, blkBaseFee)
 
 	energy := builtin.Energy.Native(state, blockTime)
 	doReturnGas := func(rgas uint64) (*big.Int, error) {
