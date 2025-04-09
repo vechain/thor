@@ -436,7 +436,7 @@ paths:
             application/json:
               schema:
                 oneOf:
-                  - $ref: '#/components/schemas/TransactionsHashes'
+                  - $ref: '#/components/schemas/TransactionsIDs'
                   - $ref: '#/components/schemas/Transactions'
         '400':
           description: Bad Request
@@ -2339,11 +2339,11 @@ components:
           example: 42
           nullable: false
 
-    TransactionsHashes:
+    TransactionsIDs:
       type: array
-      title: TransactionsHashes  
-      name: TransactionsHashes
-      description: Array of transaction hashes currently in the txpool
+      title: TransactionsIDs  
+      name: TransactionsIDs
+      description: Array of transaction IDs currently in the txpool
       items:
         type: string
         format: hex
