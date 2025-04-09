@@ -2450,7 +2450,7 @@ components:
       name: newestBlock
       in: query
       required: true
-      description: Specify either `best`, `justified`, `finalized`, a block number or block ID. If omitted, the `best` block is assumed.
+      description: Specify either `best`, `justified`, `finalized`, `next` or a block number or block ID. If omitted, the `best` block is assumed.
       schema:
         type: string
     
