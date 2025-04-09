@@ -2449,7 +2449,6 @@ components:
     NewestBlockInQuery:
       name: newestBlock
       in: query
-      required: true
       description: Specify either `best`, `justified`, `finalized`, `next`, a block number or block ID. If omitted, the `best` block is assumed.
       schema:
         type: string
