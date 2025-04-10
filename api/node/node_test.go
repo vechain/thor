@@ -41,10 +41,8 @@ func TestNode(t *testing.T) {
 	t.Run("getTransactions", testGetTransactions)
 	t.Run("getTransactionsExpanded", testGetTransactionsExpanded)
 	t.Run("getTransactionsWithOrigin", testGetTransactionsWithOrigin)
-	t.Run("getTransactionsWithTo", testGetTransactionsWithTo)
 	t.Run("getTransactionsWithBadExpanded", testGetTransactionsWithBadExpanded)
 	t.Run("getTransactionsWithBadOrigin", testGetTransactionsWithBadOrigin)
-	t.Run("getTransactionsWithBadTo", testGetTransactionsWithBadTo)
 }
 
 func initCommServer(t *testing.T) {
@@ -122,24 +120,10 @@ func testGetTransactionsWithOrigin(t *testing.T) {
 	assert.True(t, len(txResponse) > 0)
 }
 
-func testGetTransactionsWithTo(t *testing.T) {
-	acc := genesis.DevAccounts()[1]
-	res := httpGetAndCheckResponseStatus(t, "/node/txpool?to="+acc.Address.String(), 200)
-	var txResponse []string
-	err := json.Unmarshal(res, &txResponse)
-	require.NoError(t, err)
-	assert.NotNil(t, txResponse)
-	assert.True(t, len(txResponse) > 0)
-}
-
 func testGetTransactionsWithBadExpanded(t *testing.T) {
 	httpGetAndCheckResponseStatus(t, "/node/txpool?expanded=notboolean", 400)
 }
 
 func testGetTransactionsWithBadOrigin(t *testing.T) {
 	httpGetAndCheckResponseStatus(t, "/node/txpool?origin=0xinvalid", 400)
-}
-
-func testGetTransactionsWithBadTo(t *testing.T) {
-	httpGetAndCheckResponseStatus(t, "/node/txpool?to=0xinvalid", 400)
 }

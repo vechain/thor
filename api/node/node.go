@@ -39,7 +39,7 @@ func (n *Node) handleNetwork(w http.ResponseWriter, _ *http.Request) error {
 	return utils.WriteJSON(w, n.PeersStats())
 }
 
-func filterTransactions(origin *thor.Address, to *thor.Address, allTransactions tx.Transactions) (tx.Transactions, error) {
+func filterTransactions(origin *thor.Address, allTransactions tx.Transactions) (tx.Transactions, error) {
 	var filtered []*tx.Transaction
 
 	for _, tx := range allTransactions {
@@ -47,18 +47,7 @@ func filterTransactions(origin *thor.Address, to *thor.Address, allTransactions 
 		if err != nil {
 			return nil, utils.BadRequest(errors.WithMessage(err, "filtering origin"))
 		}
-		clauses := tx.Clauses()
-		toFound := false
-		if to != nil {
-			for _, cl := range clauses {
-				toClause := cl.To()
-				if *toClause == *to {
-					toFound = true
-					break
-				}
-			}
-		}
-		if (origin != nil && sender == *origin) || toFound {
+		if origin != nil && sender == *origin {
 			filtered = append(filtered, tx)
 		}
 	}
@@ -78,17 +67,11 @@ func (m *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) e
 		return utils.BadRequest(errors.WithMessage(err, "origin"))
 	}
 
-	toString := req.URL.Query().Get("to")
-	to, err := utils.StringToAddress(toString)
-	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "to"))
-	}
-
 	var filteredTransactions tx.Transactions
-	if origin == nil && to == nil {
+	if origin == nil {
 		filteredTransactions = m.pool.Dump()
 	} else {
-		filtered, err := filterTransactions(origin, to, m.pool.Dump())
+		filtered, err := filterTransactions(origin, m.pool.Dump())
 		if err != nil {
 			return utils.BadRequest(err)
 		}
