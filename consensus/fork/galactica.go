@@ -165,7 +165,7 @@ func CalculateReward(gasUsed uint64, rewardGasPrice, rewardRatio *big.Int, isGal
 }
 
 func ValidateGalacticaTxFee(tr *tx.Transaction, blockBaseFeeGasPrice, legacyTxDefaultGasPrice *big.Int) error {
-	// pow is not accounted for verifying if gas is enough to cover block base fee
+	// proved work is not accounted for verifying if gas is enough to cover block base fee
 	feeItems := GalacticaTxGasPriceAdapter(tr, tr.GasPrice(legacyTxDefaultGasPrice))
 
 	// do not accept txs with less than the block base fee
