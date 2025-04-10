@@ -1167,6 +1167,13 @@ components:
                 The gas limit of the block
               example: 12000000
               nullable: false
+            baseFeePerGas:
+              type: string
+              format: hex
+              description: |
+                The base fee of the block
+              example: '0x9184e72a000'
+              nullable: true
 
     SubscriptionBeatResponse:
       type: object
@@ -1283,7 +1290,7 @@ components:
               example:
                 - '0x0'
                 - '0x98'
-            gasUsedRatios:
+            gasUsedRatio:
               type: array
               description: |
                 An array of gas used ratios per block as float numbers.
@@ -2449,8 +2456,7 @@ components:
     NewestBlockInQuery:
       name: newestBlock
       in: query
-      required: true
-      description: Specify either `best`, `justified`, `finalized`, a block number or block ID. If omitted, the `best` block is assumed.
+      description: Specify either `best`, `justified`, `finalized`, `next`, a block number or block ID. If omitted, the `best` block is assumed.
       schema:
         type: string
     

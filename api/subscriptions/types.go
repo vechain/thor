@@ -211,15 +211,16 @@ type BeatMessage struct {
 }
 
 type Beat2Message struct {
-	Number      uint32       `json:"number"`
-	ID          thor.Bytes32 `json:"id"`
-	ParentID    thor.Bytes32 `json:"parentID"`
-	Timestamp   uint64       `json:"timestamp"`
-	TxsFeatures uint32       `json:"txsFeatures"`
-	GasLimit    uint64       `json:"gasLimit"`
-	Bloom       string       `json:"bloom"`
-	K           uint8        `json:"k"`
-	Obsolete    bool         `json:"obsolete"`
+	Number        uint32                `json:"number"`
+	ID            thor.Bytes32          `json:"id"`
+	ParentID      thor.Bytes32          `json:"parentID"`
+	Timestamp     uint64                `json:"timestamp"`
+	TxsFeatures   uint32                `json:"txsFeatures"`
+	BaseFeePerGas *math.HexOrDecimal256 `json:"baseFeePerGas,omitempty"`
+	GasLimit      uint64                `json:"gasLimit"`
+	Bloom         string                `json:"bloom"`
+	K             uint8                 `json:"k"`
+	Obsolete      bool                  `json:"obsolete"`
 }
 
 type PendingTxIDMessage struct {
