@@ -144,7 +144,7 @@ func benchmarkPrecompiled(addr string, test precompiledTest, bench *testing.B) {
 		bench.ReportAllocs()
 		start := time.Now()
 		bench.ResetTimer()
-		for i := 0; i < bench.N; i++ {
+		for bench.Loop() {
 			copy(data, in)
 			contract := NewContract(AccountRef(common.HexToAddress("1337")),
 				nil, new(big.Int), reqGas)
