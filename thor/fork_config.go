@@ -22,6 +22,7 @@ type ForkConfig struct {
 	FINALITY    uint32
 	HAYABUSA    uint32 // Start of the Hayabusa Transition Period - PoA is still active until the transition period is over and 2/3 of the MBP have entered the PoS queue
 	HAYABUSA_TP uint32 // Hayabusa Transition Period - The minimum amount of blocks to allow migration of PoA to PoS
+	GALACTICA   uint32
 }
 
 // IsTransitionBlock returns true if the block number matches a block to transition to PoS.
