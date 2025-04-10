@@ -1362,7 +1362,7 @@ components:
               example:
                 - '0x0'
                 - '0x98'
-            gasUsedRatios:
+            gasUsedRatio:
               type: array
               description: |
                 An array of gas used ratios per block as float numbers.
