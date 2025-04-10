@@ -115,7 +115,7 @@ type GalacticaFeeMarketItems struct {
 }
 
 func GalacticaOverallGasPrice(tr *tx.Transaction, legacyTxDefaultGasPrice *big.Int, blkBaseFee *big.Int) *big.Int {
-	// pow is not accounted for buying gas
+	// proved work is not accounted for buying gas
 	feeItems := GalacticaTxGasPriceAdapter(tr, tr.GasPrice(legacyTxDefaultGasPrice))
 
 	/** This gasPrice is the same that will be used when refunding the user
