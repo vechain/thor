@@ -193,8 +193,8 @@ func opBenchmark(bench *testing.B, op func(pc *uint64, evm *EVM, contract *Contr
 		byteArgs[i] = common.Hex2Bytes(arg)
 	}
 	pc := uint64(0)
-	bench.ResetTimer()
-	for i := 0; i < bench.N; i++ {
+
+	for bench.Loop() {
 		for _, arg := range byteArgs {
 			a := new(uint256.Int).SetBytes(arg)
 			stack.push(a)
