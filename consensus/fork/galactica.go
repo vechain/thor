@@ -22,7 +22,7 @@ var (
 	ErrBaseFeeNotSet = errors.New("base fee not set after galactica")
 	// ErrMaxFeePerGasTooLow is returned if the transaction max fee is less than
 	// the base fee of the block.
-	ErrMaxFeePerGasTooLow = errors.New("max fee per gas is less than block base fee")
+	ErrMaxFeePerGasTooLow = errors.New("gas price is less than block base fee")
 )
 
 // VerifyGalacticaHeader verifies some header attributes which were changed in Galactica fork,
