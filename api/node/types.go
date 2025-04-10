@@ -15,8 +15,7 @@ type Network interface {
 }
 
 type Status struct {
-	Total       uint `json:"amount"`
-	Executables uint `json:"executables"`
+	Total uint `json:"amount"`
 }
 
 type PeerStats struct {

@@ -123,10 +123,8 @@ func (m *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) e
 
 func (m *Node) handleGetTxpoolStatus(w http.ResponseWriter, req *http.Request) error {
 	total := m.pool.Len()
-	executables := m.pool.Executables()
 	status := Status{
-		Total:       uint(total),
-		Executables: uint(len(executables)),
+		Total: uint(total),
 	}
 	return utils.WriteJSON(w, status)
 }

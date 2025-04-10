@@ -2324,12 +2324,6 @@ components:
           description: The total number of transactions currently in the txpool
           example: 42
           nullable: false
-        executables:
-          type: integer
-          format: uint
-          description: The number of executable transactions currently in the txpool
-          example: 42
-          nullable: false
 
     TransactionsIDs:
       type: array
