@@ -133,7 +133,7 @@ func GalacticaOverallGasPrice(tr *tx.Transaction, legacyTxDefaultGasPrice *big.I
 }
 
 func GalacticaPriorityGasPrice(tr *tx.Transaction, legacyTxDefaultGasPrice, provedWork *big.Int, blkBaseFee *big.Int) *big.Int {
-	// pow is accounted for priority gas
+	// proved work is accounted for priority gas
 	feeItems := GalacticaTxGasPriceAdapter(tr, tr.OverallGasPrice(legacyTxDefaultGasPrice, provedWork))
 
 	/** This gasPrice will be used to compensate the validator
