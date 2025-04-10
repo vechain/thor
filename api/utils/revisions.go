@@ -15,6 +15,7 @@ import (
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
 
 const (
@@ -121,10 +122,9 @@ func GetSummaryAndState(rev *Revision, repo *chain.Repository, bft bft.Committer
 			Timestamp(best.Header.Timestamp() + thor.BlockInterval).
 			TotalScore(best.Header.TotalScore()).
 			GasLimit(best.Header.GasLimit()).
-			GasUsed(best.Header.GasUsed()).
 			Beneficiary(best.Header.Beneficiary()).
 			StateRoot(best.Header.StateRoot()).
-			ReceiptsRoot(best.Header.ReceiptsRoot()).
+			ReceiptsRoot(tx.Receipts{}.RootHash()).
 			TransactionFeatures(best.Header.TxsFeatures()).
 			Alpha(best.Header.Alpha())
 
@@ -141,7 +141,7 @@ func GetSummaryAndState(rev *Revision, repo *chain.Repository, bft bft.Committer
 		// rebuild the block summary with the next header (mocked) AND the best block status
 		return &chain.BlockSummary{
 			Header:    mocked.Header(),
-			Txs:       best.Txs,
+			Txs:       make([]thor.Bytes32, 0),
 			Size:      uint64(mocked.Size()),
 			Conflicts: best.Conflicts,
 		}, st, nil
