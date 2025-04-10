@@ -190,6 +190,10 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 		n.processFork(newBlock, oldBest.Header.ID())
 		commitElapsed := mclock.Now() - startTime - execElapsed
 
+		if newBlock.Header().Number() == n.forkConfig.GALACTICA {
+			fmt.Println(GalacticaASCIIArt)
+		}
+
 		n.comm.BroadcastBlock(newBlock)
 		logger.Info("📦 new block packed",
 			"txs", len(receipts),
