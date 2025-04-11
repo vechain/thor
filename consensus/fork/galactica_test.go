@@ -411,52 +411,52 @@ func TestCalculateReward(t *testing.T) {
 func TestValidateGalacticaTxFee(t *testing.T) {
 	defaultBaseFee := big.NewInt(20_000_000)
 	tests := []struct {
-		name                    string
-		tx                      *tx.Transaction
-		legacyTxDefaultGasPrice *big.Int
-		blkBaseFeeGasPrice      *big.Int
-		wantErr                 error
+		name                 string
+		tx                   *tx.Transaction
+		legacyTxBaseGasPrice *big.Int
+		blkBaseFeeGasPrice   *big.Int
+		wantErr              error
 	}{
 		{
-			name:                    "legacy transaction with enough fee",
-			tx:                      tx.NewBuilder(tx.TypeLegacy).GasPriceCoef(255).Build(),
-			legacyTxDefaultGasPrice: defaultBaseFee,
-			blkBaseFeeGasPrice:      defaultBaseFee,
-			wantErr:                 nil,
+			name:                 "legacy transaction with enough fee",
+			tx:                   tx.NewBuilder(tx.TypeLegacy).GasPriceCoef(255).Build(),
+			legacyTxBaseGasPrice: defaultBaseFee,
+			blkBaseFeeGasPrice:   defaultBaseFee,
+			wantErr:              nil,
 		},
 		{
-			name:                    "legacy transaction with not enough fee",
-			tx:                      tx.NewBuilder(tx.TypeLegacy).GasPriceCoef(0).Build(),
-			legacyTxDefaultGasPrice: defaultBaseFee,
-			blkBaseFeeGasPrice:      new(big.Int).Add(defaultBaseFee, common.Big1),
-			wantErr:                 ErrMaxFeePerGasTooLow,
+			name:                 "legacy transaction with not enough fee",
+			tx:                   tx.NewBuilder(tx.TypeLegacy).GasPriceCoef(0).Build(),
+			legacyTxBaseGasPrice: defaultBaseFee,
+			blkBaseFeeGasPrice:   new(big.Int).Add(defaultBaseFee, common.Big1),
+			wantErr:              ErrGasPriceTooLowForBlockBase,
 		},
 		{
-			name:                    "legacy transaction with just enough fee",
-			tx:                      tx.NewBuilder(tx.TypeLegacy).GasPriceCoef(1).Build(),
-			legacyTxDefaultGasPrice: defaultBaseFee,
-			blkBaseFeeGasPrice:      new(big.Int).Add(defaultBaseFee, common.Big1),
-			wantErr:                 nil,
+			name:                 "legacy transaction with just enough fee",
+			tx:                   tx.NewBuilder(tx.TypeLegacy).GasPriceCoef(1).Build(),
+			legacyTxBaseGasPrice: defaultBaseFee,
+			blkBaseFeeGasPrice:   new(big.Int).Add(defaultBaseFee, common.Big1),
+			wantErr:              nil,
 		},
 		{
-			name:                    "dynamic fee transaction with enough fee",
-			tx:                      tx.NewBuilder(tx.TypeDynamicFee).MaxFeePerGas(defaultBaseFee).Build(),
-			legacyTxDefaultGasPrice: defaultBaseFee,
-			blkBaseFeeGasPrice:      defaultBaseFee,
-			wantErr:                 nil,
+			name:                 "dynamic fee transaction with enough fee",
+			tx:                   tx.NewBuilder(tx.TypeDynamicFee).MaxFeePerGas(defaultBaseFee).Build(),
+			legacyTxBaseGasPrice: defaultBaseFee,
+			blkBaseFeeGasPrice:   defaultBaseFee,
+			wantErr:              nil,
 		},
 		{
-			name:                    "dynamic fee transaction not with enough fee",
-			tx:                      tx.NewBuilder(tx.TypeDynamicFee).MaxFeePerGas(new(big.Int).Sub(defaultBaseFee, common.Big1)).Build(),
-			legacyTxDefaultGasPrice: defaultBaseFee,
-			blkBaseFeeGasPrice:      defaultBaseFee,
-			wantErr:                 ErrMaxFeePerGasTooLow,
+			name:                 "dynamic fee transaction not with enough fee",
+			tx:                   tx.NewBuilder(tx.TypeDynamicFee).MaxFeePerGas(new(big.Int).Sub(defaultBaseFee, common.Big1)).Build(),
+			legacyTxBaseGasPrice: defaultBaseFee,
+			blkBaseFeeGasPrice:   defaultBaseFee,
+			wantErr:              ErrGasPriceTooLowForBlockBase,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateGalacticaTxFee(tt.tx, tt.blkBaseFeeGasPrice, tt.legacyTxDefaultGasPrice)
+			err := ValidateGalacticaTxFee(tt.tx, tt.blkBaseFeeGasPrice, tt.legacyTxBaseGasPrice)
 			assert.True(t, errors.Is(err, tt.wantErr))
 		})
 	}

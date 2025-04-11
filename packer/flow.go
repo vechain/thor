@@ -91,7 +91,7 @@ func (f *Flow) hasTx(txid thor.Bytes32, txBlockRef uint32) (bool, error) {
 	return f.runtime.Chain().HasTransaction(txid, txBlockRef)
 }
 
-func (f *Flow) isEffectivePriorityFeeTooLow(t *tx.Transaction, legacyTxDefaultGasPrice *big.Int) error {
+func (f *Flow) isEffectivePriorityFeeTooLow(t *tx.Transaction, legacyTxBaseGasPrice *big.Int) error {
 	// Skip check if the minimum priority fee is not set
 	if f.packer.minTxPriorityFee.Sign() <= 0 {
 		return nil
@@ -103,7 +103,7 @@ func (f *Flow) isEffectivePriorityFeeTooLow(t *tx.Transaction, legacyTxDefaultGa
 	}
 	effectivePriorityFee := fork.GalacticaPriorityGasPrice(
 		t,
-		legacyTxDefaultGasPrice,
+		legacyTxBaseGasPrice,
 		provedWork,
 		f.runtime.Context().BaseFee,
 	)
@@ -143,8 +143,7 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 		}
 		return errGasLimitReached
 	}
-
-	// when f.Number() == f.packer.forkConfig.GALACTICA will the baseFee be set ??
+	
 	if f.Number() < f.packer.forkConfig.GALACTICA {
 		if t.Type() != tx.TypeLegacy {
 			return badTxError{"invalid tx type"}
@@ -153,15 +152,15 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 		if f.runtime.Context().BaseFee == nil {
 			return fork.ErrBaseFeeNotSet
 		}
-		legacyTxDefaultGasPrice, err := builtin.Params.Native(f.runtime.State()).Get(thor.KeyLegacyTxDefaultGasPrice)
+		legacyTxBaseGasPrice, err := builtin.Params.Native(f.runtime.State()).Get(thor.KeyLegacyTxBaseGasPrice)
 		if err != nil {
 			return err
 		}
-		if err := fork.ValidateGalacticaTxFee(t, f.runtime.Context().BaseFee, legacyTxDefaultGasPrice); err != nil {
+		if err := fork.ValidateGalacticaTxFee(t, f.runtime.Context().BaseFee, legacyTxBaseGasPrice); err != nil {
 			return fmt.Errorf("%w: %w", errTxNotAdoptableNow, err)
 		}
-		// TODO REVIEW THIS BETWEEN
-		if err := f.isEffectivePriorityFeeTooLow(t, legacyTxDefaultGasPrice); err != nil {
+
+		if err := f.isEffectivePriorityFeeTooLow(t, legacyTxBaseGasPrice); err != nil {
 			return err
 		}
 	}

@@ -20,9 +20,9 @@ import (
 var (
 	// ErrBaseFeeNotSet is returned if the base fee is not set after the Galactica fork
 	ErrBaseFeeNotSet = errors.New("base fee not set after galactica")
-	// ErrMaxFeePerGasTooLow is returned if the transaction max fee is less than
+	// ErrGasPriceTooLowForBlockBase is returned if the transaction gas price is less than
 	// the base fee of the block.
-	ErrMaxFeePerGasTooLow = errors.New("gas price is less than block base fee")
+	ErrGasPriceTooLowForBlockBase = errors.New("gas price is less than block base fee")
 )
 
 // VerifyGalacticaHeader verifies some header attributes which were changed in Galactica fork,
@@ -114,9 +114,9 @@ type GalacticaFeeMarketItems struct {
 	MaxPriorityFee *big.Int
 }
 
-func GalacticaOverallGasPrice(tr *tx.Transaction, legacyTxDefaultGasPrice *big.Int, blkBaseFee *big.Int) *big.Int {
+func GalacticaOverallGasPrice(tr *tx.Transaction, legacyTxBaseGasPrice *big.Int, blkBaseFee *big.Int) *big.Int {
 	// proved work is not accounted for buying gas
-	feeItems := GalacticaTxGasPriceAdapter(tr, tr.GasPrice(legacyTxDefaultGasPrice))
+	feeItems := GalacticaTxGasPriceAdapter(tr, tr.GasPrice(legacyTxBaseGasPrice))
 
 	/** This gasPrice is the same that will be used when refunding the user
 	* it takes into account the priority fee that will be paid to the validator and the base fee that will be implicitly burned
@@ -132,9 +132,9 @@ func GalacticaOverallGasPrice(tr *tx.Transaction, legacyTxDefaultGasPrice *big.I
 	return math.BigMin(new(big.Int).Add(feeItems.MaxPriorityFee, currBaseFee), feeItems.MaxFee)
 }
 
-func GalacticaPriorityGasPrice(tr *tx.Transaction, legacyTxDefaultGasPrice, provedWork *big.Int, blkBaseFee *big.Int) *big.Int {
+func GalacticaPriorityGasPrice(tr *tx.Transaction, legacyTxBaseGasPrice, provedWork *big.Int, blkBaseFee *big.Int) *big.Int {
 	// proved work is accounted for priority gas
-	feeItems := GalacticaTxGasPriceAdapter(tr, tr.OverallGasPrice(legacyTxDefaultGasPrice, provedWork))
+	feeItems := GalacticaTxGasPriceAdapter(tr, tr.OverallGasPrice(legacyTxBaseGasPrice, provedWork))
 
 	/** This gasPrice will be used to compensate the validator
 	* baseFee=1000; maxFee = 1000; maxPriorityFee = 100 -> validator gets  0
@@ -164,13 +164,13 @@ func CalculateReward(gasUsed uint64, rewardGasPrice, rewardRatio *big.Int, isGal
 	return reward
 }
 
-func ValidateGalacticaTxFee(tr *tx.Transaction, blockBaseFeeGasPrice, legacyTxDefaultGasPrice *big.Int) error {
+func ValidateGalacticaTxFee(tr *tx.Transaction, blockBaseFeeGasPrice, legacyTxBaseGasPrice *big.Int) error {
 	// proved work is not accounted for verifying if gas is enough to cover block base fee
-	feeItems := GalacticaTxGasPriceAdapter(tr, tr.GasPrice(legacyTxDefaultGasPrice))
+	feeItems := GalacticaTxGasPriceAdapter(tr, tr.GasPrice(legacyTxBaseGasPrice))
 
 	// do not accept txs with less than the block base fee
 	if feeItems.MaxFee.Cmp(blockBaseFeeGasPrice) < 0 {
-		return fmt.Errorf("%w: expected %s got %s", ErrMaxFeePerGasTooLow, blockBaseFeeGasPrice.String(), feeItems.MaxFee.String())
+		return fmt.Errorf("%w: expected %s got %s", ErrGasPriceTooLowForBlockBase, blockBaseFeeGasPrice.String(), feeItems.MaxFee.String())
 	}
 	return nil
 }

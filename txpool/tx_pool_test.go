@@ -475,7 +475,7 @@ func TestOrderTxsAfterGalacticaFork(t *testing.T) {
 	assert.Zero(t, removed)
 	assert.Equal(t, len(txs), len(execTxs))
 	assert.Equal(t, poolLimit-2, len(execTxs))
-	baseGasPrice, err := builtin.Params.Native(st).Get(thor.KeyLegacyTxDefaultGasPrice)
+	baseGasPrice, err := builtin.Params.Native(st).Get(thor.KeyLegacyTxBaseGasPrice)
 	assert.Nil(t, err)
 	for i := 1; i < len(txs); i++ {
 		prevGalacticaFee := fork.GalacticaTxGasPriceAdapter(execTxs[i-1], baseGasPrice)
@@ -562,7 +562,7 @@ func TestOrderTxsAfterGalacticaForkSameValues(t *testing.T) {
 	assert.Zero(t, removed)
 	assert.Equal(t, len(txs), len(execTxs))
 	assert.Equal(t, totalPoolTxs, len(execTxs))
-	baseGasPrice, err := builtin.Params.Native(st).Get(thor.KeyLegacyTxDefaultGasPrice)
+	baseGasPrice, err := builtin.Params.Native(st).Get(thor.KeyLegacyTxBaseGasPrice)
 	assert.Nil(t, err)
 	for i := 1; i < len(txs); i++ {
 		prevGalacticaFee := fork.GalacticaTxGasPriceAdapter(execTxs[i-1], baseGasPrice)
@@ -1229,7 +1229,7 @@ func TestAddOverPendingCost(t *testing.T) {
 	assert.Nil(t, err)
 	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), thor.Address{})
 
-	data, err = method.EncodeInput(thor.KeyLegacyTxDefaultGasPrice, thor.InitialBaseGasPrice)
+	data, err = method.EncodeInput(thor.KeyLegacyTxBaseGasPrice, thor.InitialBaseGasPrice)
 	assert.Nil(t, err)
 	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
 
@@ -1317,7 +1317,7 @@ func TestAddOverPendingCostDynamicFee(t *testing.T) {
 	assert.Nil(t, err)
 	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), thor.Address{})
 
-	data, err = method.EncodeInput(thor.KeyLegacyTxDefaultGasPrice, thor.InitialBaseGasPrice)
+	data, err = method.EncodeInput(thor.KeyLegacyTxBaseGasPrice, thor.InitialBaseGasPrice)
 	assert.Nil(t, err)
 	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
 

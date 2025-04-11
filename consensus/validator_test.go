@@ -120,7 +120,7 @@ func TestValidateBlock(t *testing.T) {
 				s, r, err := c.verifyBlock(blk, state, 0)
 				assert.Nil(t, s)
 				assert.Nil(t, r)
-				assert.True(t, errors.Is(err, fork.ErrMaxFeePerGasTooLow))
+				assert.True(t, errors.Is(err, fork.ErrGasPriceTooLowForBlockBase))
 			},
 		},
 		{
@@ -141,7 +141,7 @@ func TestValidateBlock(t *testing.T) {
 				s, r, err := c.verifyBlock(blk, state, 0)
 				assert.Nil(t, s)
 				assert.Nil(t, r)
-				assert.True(t, errors.Is(err, fork.ErrMaxFeePerGasTooLow))
+				assert.True(t, errors.Is(err, fork.ErrGasPriceTooLowForBlockBase))
 			},
 		},
 	}

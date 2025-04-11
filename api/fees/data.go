@@ -148,7 +148,7 @@ func (fd *FeesData) getRewardsForCache(block *block.Block) (*rewards, error) {
 	}
 	state := fd.stater.NewState(parentSummary.Root())
 
-	legacyTxDefaultGasPrice, err := builtin.Params.Native(state).Get(thor.KeyLegacyTxDefaultGasPrice)
+	legacyTxBaseGasPrice, err := builtin.Params.Native(state).Get(thor.KeyLegacyTxBaseGasPrice)
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +165,7 @@ func (fd *FeesData) getRewardsForCache(block *block.Block) (*rewards, error) {
 		items[i] = rewardItem{
 			reward: fork.GalacticaPriorityGasPrice(
 				tx,
-				legacyTxDefaultGasPrice,
+				legacyTxBaseGasPrice,
 				provedWork,
 				header.BaseFee(),
 			),

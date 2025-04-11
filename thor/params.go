@@ -52,11 +52,11 @@ const (
 
 // Keys of governance params.
 var (
-	KeyExecutorAddress         = BytesToBytes32([]byte("executor"))
-	KeyRewardRatio             = BytesToBytes32([]byte("reward-ratio"))
-	KeyLegacyTxDefaultGasPrice = BytesToBytes32([]byte("base-gas-price")) // the legacy tx default gas price
-	KeyProposerEndorsement     = BytesToBytes32([]byte("proposer-endorsement"))
-	KeyMaxBlockProposers       = BytesToBytes32([]byte("max-block-proposers"))
+	KeyExecutorAddress      = BytesToBytes32([]byte("executor"))
+	KeyRewardRatio          = BytesToBytes32([]byte("reward-ratio"))
+	KeyLegacyTxBaseGasPrice = BytesToBytes32([]byte("base-gas-price")) // the legacy tx default gas price
+	KeyProposerEndorsement  = BytesToBytes32([]byte("proposer-endorsement"))
+	KeyMaxBlockProposers    = BytesToBytes32([]byte("max-block-proposers"))
 
 	InitialRewardRatio         = big.NewInt(3e17) // 30%
 	InitialBaseGasPrice        = big.NewInt(1e15)
