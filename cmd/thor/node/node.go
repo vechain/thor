@@ -405,6 +405,10 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		}
 		stats.UpdateProcessed(1, len(receipts), execElapsed, commitElapsed, realElapsed, newBlock.Header().GasUsed())
 
+		if newBlock.Header().Number() == n.forkConfig.GALACTICA {
+			fmt.Println(GalacticaASCIIArt)
+		}
+
 		metricBlockProcessedTxs().SetWithLabel(int64(len(receipts)), map[string]string{"type": "received"})
 		metricBlockProcessedGas().SetWithLabel(int64(newBlock.Header().GasUsed()), map[string]string{"type": "received"})
 		metricBlockProcessedDuration().Observe(time.Duration(realElapsed).Milliseconds())
