@@ -23,7 +23,7 @@ func BenchmarkDeriveRoot(b *testing.B) {
 		n:       100,
 		content: make([]byte, 32),
 	}
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		DeriveRoot(&list)
 	}
 }
