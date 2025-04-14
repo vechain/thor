@@ -9,7 +9,6 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/thor/v2/block"
@@ -91,10 +90,15 @@ func (f *Flow) hasTx(txid thor.Bytes32, txBlockRef uint32) (bool, error) {
 	return f.runtime.Chain().HasTransaction(txid, txBlockRef)
 }
 
-func (f *Flow) isEffectivePriorityFeeTooLow(t *tx.Transaction, baseGasPrice *big.Int, isGalactica bool) error {
+func (f *Flow) isEffectivePriorityFeeTooLow(t *tx.Transaction, isGalactica bool) error {
 	// Skip check if the minimum priority fee is not set
 	if f.packer.minTxPriorityFee.Sign() <= 0 {
 		return nil
+	}
+
+	baseGasPrice, err := builtin.Params.Native(f.runtime.State()).Get(thor.KeyBaseGasPrice)
+	if err != nil {
+		return err
 	}
 
 	provedWork, err := t.ProvedWork(f.Number()-1, f.runtime.Chain().GetBlockID)
@@ -148,15 +152,12 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 		if f.runtime.Context().BaseFee == nil {
 			return fork.ErrBaseFeeNotSet
 		}
-		baseGasPrice, err := builtin.Params.Native(f.runtime.State()).Get(thor.KeyBaseGasPrice)
-		if err != nil {
-			return err
-		}
-		if err := fork.ValidateGalacticaTxFee(t, f.runtime.Context().BaseFee, baseGasPrice); err != nil {
+
+		if err := fork.ValidateGalacticaTxFee(t, f.runtime.State(), f.runtime.Context().BaseFee); err != nil {
 			return fmt.Errorf("%w: %w", errTxNotAdoptableNow, err)
 		}
 
-		if err := f.isEffectivePriorityFeeTooLow(t, baseGasPrice, true); err != nil {
+		if err := f.isEffectivePriorityFeeTooLow(t, true); err != nil {
 			return err
 		}
 	}

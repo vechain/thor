@@ -9,7 +9,6 @@ import (
 	"fmt"
 
 	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/state"
@@ -58,11 +57,7 @@ func ValidateTransaction(tr *tx.Transaction, repo *chain.Repository, head *chain
 
 func ValidateTransactionWithState(tr *tx.Transaction, header *block.Header, forkConfig *thor.ForkConfig, state *state.State) error {
 	if header.Number() >= forkConfig.GALACTICA {
-		baseGasPrice, err := builtin.Params.Native(state).Get(thor.KeyBaseGasPrice)
-		if err != nil {
-			return err
-		}
-		if err := fork.ValidateGalacticaTxFee(tr, header.BaseFee(), baseGasPrice); err != nil {
+		if err := fork.ValidateGalacticaTxFee(tr, state, header.BaseFee()); err != nil {
 			return txRejectedError{err.Error()}
 		}
 	}

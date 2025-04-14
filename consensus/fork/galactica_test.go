@@ -14,7 +14,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
 )
 
@@ -427,6 +431,9 @@ func TestCalculateReward(t *testing.T) {
 }
 
 func TestValidateGalacticaTxFee(t *testing.T) {
+	// Create a real state with a custom base gas price
+	db := muxdb.NewMem()
+	state := state.New(db, trie.Root{})
 	defaultBaseFee := big.NewInt(20_000_000)
 	tests := []struct {
 		name         string
@@ -467,7 +474,9 @@ func TestValidateGalacticaTxFee(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateGalacticaTxFee(tt.tx, tt.baseFee, tt.baseGasPrice)
+			// Set the base gas price in the state
+			state.SetStorage(builtin.Params.Address, thor.KeyBaseGasPrice, thor.BytesToBytes32(tt.baseGasPrice.Bytes()))
+			err := ValidateGalacticaTxFee(tt.tx, state, tt.baseFee)
 			assert.Equal(t, tt.wantErr, err)
 		})
 	}
