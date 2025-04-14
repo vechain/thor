@@ -437,6 +437,13 @@ paths:
               schema:
                 type: string
                 example: 'Invalid address'
+        '404':
+          description: Endpoint is disabled
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: '404 Not Found'
 
   /node/txpool/status:
     get:
@@ -452,6 +459,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Status'
+        '404':
+          description: Endpoint is disabled
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: '404 Not Found'
 
   /subscriptions/block:
     get:
