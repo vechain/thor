@@ -229,18 +229,19 @@ paths:
         
         ⚠️ <b>Note:</b> The example values provided for this endpoint are optimized for mainnet.  
         
-        The below is a TypeScript example of how to sign and RLP encode a transaction using the `thor-devkit` library:
+        The code below focuses on how the two different transaction types are built, with the signing and encoding functions omitted:
         
         ```typescript
-        import { Transaction, secp256k1 } from 'thor-devkit'
-
         const clauses = [{
             to: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed',
             value: 10000,
             data: '0x'
         }]
-
-        let body: Transaction.Body = {
+        
+        let body: Transaction.Body
+        
+        if (legacyTx) {
+          body = newLegacyTxBody({
             chainTag: '0x4a',
             blockRef: '0x0000000000000000',
             expiration: 32,
@@ -249,6 +250,19 @@ paths:
             gas: Transaction.intrinsicGas(clauses),
             dependsOn: null,
             nonce: 12345678
+          })
+        } else {
+          body = newDynamicFeeTxBody({
+            chainTag: '0x4a',
+            blockRef: '0x0000000000000000',
+            expiration: 32,
+            clauses: clauses,
+            maxFeePerGas: bigInt('12345678900000'),
+            maxPriorityFeePerGas: bigInt('1000'),
+            gas: Transaction.intrinsicGas(clauses),
+            dependsOn: null,
+            nonce: 12345678
+          })
         }
 
         const tx = new Transaction(body)
