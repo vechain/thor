@@ -26,7 +26,7 @@ var sink []byte
 func BenchmarkPrettyInt64Logfmt(b *testing.B) {
 	buf := make([]byte, 100)
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		sink = appendInt64(buf, rand.Int64()) //#nosec G404
 	}
 }
@@ -34,7 +34,7 @@ func BenchmarkPrettyInt64Logfmt(b *testing.B) {
 func BenchmarkPrettyUint64Logfmt(b *testing.B) {
 	buf := make([]byte, 100)
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		sink = appendUint64(buf, rand.Uint64(), false) //#nosec G404
 	}
 }

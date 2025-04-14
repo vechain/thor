@@ -9,7 +9,7 @@ header:
     # This is content written to files when running:
     #   docker run -it --rm -v $(pwd):/github/workspace apache/skywalking-eyes header fix
     content: |
-      Copyright (c) 2024 The VeChainThor developers
+      Copyright (c) 2025 The VeChainThor developers
       
       Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
       file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>

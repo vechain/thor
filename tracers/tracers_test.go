@@ -99,7 +99,7 @@ type traceTest struct {
 
 type callTest struct {
 	traceTest
-	Calls callFrame `json:"calls,omitempty"`
+	Calls callFrame `json:"calls"`
 }
 
 type diffState struct {

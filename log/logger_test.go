@@ -73,8 +73,8 @@ func TestJSONHandler(t *testing.T) {
 
 func BenchmarkTraceLogging(b *testing.B) {
 	SetDefault(NewLogger(NewTerminalHandler(os.Stderr, true)))
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for i := 0; b.Loop(); i++ {
 		Trace("a message", "v", i)
 	}
 }
@@ -102,8 +102,8 @@ func benchmarkLogger(b *testing.B, l Logger) {
 		err    = errors.New("oh nooes it's crap")
 	)
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for i := 0; b.Loop(); i++ {
 		l.Info("This is a message",
 			"foo", int16(i),
 			"bytes", bb,
@@ -165,18 +165,18 @@ const termTimeFormat = "01-02|15:04:05.000"
 func BenchmarkAppendFormat(b *testing.B) {
 	var now = time.Now()
 	b.Run("fmt time.Format", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			fmt.Fprintf(io.Discard, "%s", now.Format(termTimeFormat))
 		}
 	})
 	b.Run("time.AppendFormat", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			now.AppendFormat(nil, termTimeFormat)
 		}
 	})
 	var buf = new(bytes.Buffer)
 	b.Run("time.Custom", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			writeTimeTermFormat(buf, now)
 			buf.Reset()
 		}

@@ -474,8 +474,7 @@ func benchGet(b *testing.B, commit bool) {
 		trie.Commit(db, root.Ver, false)
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		trie.Get(k)
 	}
 	b.StopTimer()
@@ -484,7 +483,7 @@ func benchGet(b *testing.B, commit bool) {
 func benchUpdate(b *testing.B, e binary.ByteOrder) *Trie {
 	trie := new(Trie)
 	k := make([]byte, 32)
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		e.PutUint64(k, uint64(i))
 		trie.Update(k, k, nil)
 	}

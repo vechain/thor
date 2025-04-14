@@ -33,7 +33,7 @@ func benchmarkEncodeFullNode(b *testing.B, consensus, skipHash bool) {
 	for i := range 16 {
 		f.children[i] = &refNode{hash: datagen.RandomHash().Bytes()}
 	}
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if consensus {
 			buf = f.encodeConsensus(buf[:0])
 		} else {
@@ -50,7 +50,7 @@ func benchmarkEncodeShortNode(b *testing.B, consensus bool) {
 		buf []byte
 	)
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if consensus {
 			buf = s.encodeConsensus(buf[:0])
 		} else {
@@ -85,7 +85,7 @@ func benchmarkDecodeFullNode(b *testing.B, skipHash bool) {
 		f.children[i] = &refNode{hash: datagen.RandomHash().Bytes()}
 	}
 	enc := f.encode(nil, skipHash)
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		mustDecodeNode(nil, enc, 0)
 	}
 }
@@ -105,7 +105,7 @@ func BenchmarkDecodeShortNode(b *testing.B) {
 	}
 
 	enc := s.encode(nil, false)
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		mustDecodeNode(nil, enc, 0)
 	}
 }
