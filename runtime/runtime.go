@@ -409,7 +409,11 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 		return nil, err
 	}
 
-	baseGasPrice, gasPrice, payer, _, returnGas, err := resolvedTx.BuyGas(rt.state, rt.ctx.Time, &fork.GalacticaItems{IsActive: rt.ctx.Number >= rt.forkConfig.GALACTICA, BaseFee: rt.ctx.BaseFee})
+	legacyTxBaseGasPrice, gasPrice, payer, _, returnGas, err := resolvedTx.BuyGas(
+		rt.state,
+		rt.ctx.Time,
+		rt.ctx.BaseFee,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -505,7 +509,7 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 			if err != nil {
 				return nil, err
 			}
-			rewardGasPrice := fork.GalacticaPriorityPrice(tx, baseGasPrice, provedWork, &fork.GalacticaItems{IsActive: rt.ctx.Number >= rt.forkConfig.GALACTICA, BaseFee: rt.ctx.BaseFee})
+			rewardGasPrice := fork.GalacticaPriorityGasPrice(tx, legacyTxBaseGasPrice, provedWork, rt.ctx.BaseFee)
 			reward := fork.CalculateReward(receipt.GasUsed, rewardGasPrice, rewardRatio, rt.ctx.Number >= rt.forkConfig.GALACTICA)
 
 			if err := builtin.Energy.Native(rt.state, rt.ctx.Time).Add(rt.ctx.Beneficiary, reward); err != nil {
