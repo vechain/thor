@@ -408,7 +408,7 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 	newState := func() *state.State {
 		return p.stater.NewState(headSummary.Root())
 	}
-	baseGasPrice, err := builtin.Params.Native(newState()).Get(thor.KeyBaseGasPrice)
+	legacyTxBaseGasPrice, err := builtin.Params.Native(newState()).Get(thor.KeyLegacyTxBaseGasPrice)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -459,7 +459,7 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 			if isGalactica {
 				baseFee = fork.CalcBaseFee(p.forkConfig, headSummary.Header)
 			}
-			txObj.priorityGasPrice = fork.GalacticaPriorityPrice(txObj.Transaction, baseGasPrice, provedWork, &fork.GalacticaItems{IsActive: isGalactica, BaseFee: baseFee})
+			txObj.priorityGasPrice = fork.GalacticaPriorityGasPrice(txObj.Transaction, legacyTxBaseGasPrice, provedWork, baseFee)
 
 			if txObj.localSubmitted {
 				localExecutableObjs = append(localExecutableObjs, txObj)

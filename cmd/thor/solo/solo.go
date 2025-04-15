@@ -214,7 +214,7 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 func (s *Solo) init(ctx context.Context) error {
 	best := s.repo.BestBlockSummary()
 	newState := s.stater.NewState(best.Root())
-	currentBGP, err := builtin.Params.Native(newState).Get(thor.KeyBaseGasPrice)
+	currentBGP, err := builtin.Params.Native(newState).Get(thor.KeyLegacyTxBaseGasPrice)
 	if err != nil {
 		return errors.WithMessage(err, "failed to get the current base gas price")
 	}
@@ -227,7 +227,7 @@ func (s *Solo) init(ctx context.Context) error {
 		return errors.New("Params ABI: set method not found")
 	}
 
-	data, err := method.EncodeInput(thor.KeyBaseGasPrice, baseGasPrice)
+	data, err := method.EncodeInput(thor.KeyLegacyTxBaseGasPrice, baseGasPrice)
 	if err != nil {
 		return err
 	}
