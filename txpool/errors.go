@@ -5,7 +5,6 @@
 
 package txpool
 
-// todo these should be wrapped errors instead of custom messages
 type (
 	badTxError      struct{ msg string }
 	txRejectedError struct{ msg string }
