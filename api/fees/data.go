@@ -148,7 +148,7 @@ func (fd *FeesData) getRewardsForCache(block *block.Block) (*rewards, error) {
 	}
 	state := fd.stater.NewState(parentSummary.Root())
 
-	baseGasPrice, err := builtin.Params.Native(state).Get(thor.KeyBaseGasPrice)
+	legacyTxBaseGasPrice, err := builtin.Params.Native(state).Get(thor.KeyLegacyTxBaseGasPrice)
 	if err != nil {
 		return nil, err
 	}
@@ -156,14 +156,19 @@ func (fd *FeesData) getRewardsForCache(block *block.Block) (*rewards, error) {
 	// Get the effective priority fee (reward) for each transaction
 	transactions := block.Transactions()
 	items := make([]rewardItem, len(transactions))
-	isGalactica := header.Number() >= thor.GetForkConfig(fd.repo.NewBestChain().GenesisID()).GALACTICA
+
 	for i, tx := range transactions {
 		provedWork, err := tx.ProvedWork(header.Number(), fd.repo.NewBestChain().GetBlockID)
 		if err != nil {
 			return nil, err
 		}
 		items[i] = rewardItem{
-			reward:  fork.GalacticaPriorityPrice(tx, baseGasPrice, provedWork, &fork.GalacticaItems{IsActive: isGalactica, BaseFee: header.BaseFee()}),
+			reward: fork.GalacticaPriorityGasPrice(
+				tx,
+				legacyTxBaseGasPrice,
+				provedWork,
+				header.BaseFee(),
+			),
 			gasUsed: receipts[i].GasUsed,
 		}
 	}
