@@ -18,40 +18,19 @@ import (
 )
 
 func sendAddValidatorTx(t *testing.T, acc genesis.DevAccount) {
-	client := thorclient.New("http://localhost:8669")
-	chainTag, err := client.ChainTag()
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	method, ok := builtin.Staker.ABI.MethodByName("addValidator")
 	if !ok {
 		t.Fatal("method not found")
 	}
-	data, err := method.EncodeInput(acc.Address, uint32(6), true)
+	data, err := method.EncodeInput(acc.Address, uint32(2), true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	stake := big.NewInt(25_000_000)
 	stake = stake.Mul(stake, big.NewInt(1e18))
 	clause := tx.NewClause(&builtin.Staker.Address).WithValue(stake).WithData(data)
-	transaction := new(tx.Builder).
-		Clause(clause).
-		ChainTag(chainTag).
-		Gas(1_000_000).
-		BlockRef(tx.NewBlockRef(0)).
-		Expiration(1_000_000).
-		Nonce(datagen.RandUint64()).
-		GasPriceCoef(255).
-		Build()
 
-	transaction = tx.MustSign(transaction, acc.PrivateKey)
-
-	res, err := client.SendTransaction(transaction)
-	if err != nil {
-		t.Fatal(err)
-	}
-	slog.Info("sent addValidator tx", "from", acc.Address, "txid", res.ID)
+	sendClause(t, clause, acc)
 }
 
 func Test_AddValidator_1(t *testing.T) {
@@ -62,4 +41,27 @@ func Test_AddValidator_1(t *testing.T) {
 func Test_AddValidator_2(t *testing.T) {
 	t.Skip()
 	sendAddValidatorTx(t, genesis.DevAccounts()[1])
+}
+
+func sendClause(t *testing.T, clause *tx.Clause, acc genesis.DevAccount) {
+	client := thorclient.New("http://localhost:8669")
+	chainTag, err := client.ChainTag()
+	if err != nil {
+		t.Fatal(err)
+	}
+	transaction := new(tx.Builder).
+		Clause(clause).
+		ChainTag(chainTag).
+		Gas(1_000_000).
+		BlockRef(tx.NewBlockRef(0)).
+		Expiration(1_000_000).
+		Nonce(datagen.RandUint64()).
+		GasPriceCoef(255).
+		Build()
+	transaction = tx.MustSign(transaction, acc.PrivateKey)
+	res, err := client.SendTransaction(transaction)
+	if err != nil {
+		t.Fatal(err)
+	}
+	slog.Info("sent tx", "from", acc.Address, "txid", res.ID)
 }

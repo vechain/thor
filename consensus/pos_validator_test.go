@@ -81,7 +81,7 @@ func TestConsensus_POS_MissedSlots(t *testing.T) {
 	_, err = consensus.validateStakingProposer(blk.Header(), parent.Header, st)
 	assert.NoError(t, err)
 	staker := builtin.Staker.Native(st)
-	validator, err := staker.Get(signer.Address)
+	validator, _, err := staker.LookupMaster(signer.Address)
 	assert.NoError(t, err)
 	assert.True(t, validator.Online)
 }
@@ -131,14 +131,17 @@ func TestConsensus_POS_BadScore(t *testing.T) {
 
 	// Add a new staker to the state, so that the block score is invalid
 	staker := builtin.Staker.Native(st)
-	assert.NoError(t, staker.AddValidator(
+	_, err = staker.AddValidator(
 		newSigner.Address,
 		newSigner.Address,
 		uint32(360)*24*14,
 		big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18)),
 		false,
-	))
-	assert.NoError(t, staker.ActivateNextValidator(best.Header.Number()))
+		best.Header.Number(),
+	)
+	assert.NoError(t, err)
+	_, err = staker.Housekeep(180)
+	assert.NoError(t, err)
 
 	blkPacker := packer.New(chain.Repo(), chain.Stater(), newSigner.Address, &newSigner.Address, config)
 	flow, _, err := blkPacker.Mock(parent, parent.Header.Timestamp()+thor.BlockInterval, 10_000_000)

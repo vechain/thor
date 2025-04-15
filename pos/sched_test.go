@@ -15,16 +15,18 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-func createParams() (map[thor.Address]*staker.Validator, *big.Int) {
-	validators := make(map[thor.Address]*staker.Validator)
+func createParams() (map[thor.Bytes32]*staker.Validation, *big.Int) {
+	validators := make(map[thor.Bytes32]*staker.Validation)
 	totalStake := big.NewInt(0)
 	for _, acc := range genesis.DevAccounts() {
 		stake := big.NewInt(0).SetBytes(acc.Address[10:]) // use the last 10 bytes to create semi random, but deterministic stake
-		validator := &staker.Validator{
+		validator := &staker.Validation{
+			Master: acc.Address,
 			Weight: stake,
 			Online: true,
 		}
-		validators[acc.Address] = validator
+		id := thor.BytesToBytes32(acc.Address.Bytes())
+		validators[id] = validator
 		totalStake.Add(totalStake, validator.Weight)
 	}
 
@@ -60,11 +62,11 @@ func TestScheduler_Distribution(t *testing.T) {
 	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed1"))
 	assert.NoError(t, err)
 
-	distribution := make(map[thor.Address]int)
+	distribution := make(map[thor.Bytes32]int)
 
 	for i := uint64(1); i <= 100_000; i++ {
-		addr := sched.expectedValidator(thor.BlockInterval * i)
-		distribution[addr]++
+		id, _ := sched.expectedValidator(thor.BlockInterval * i)
+		distribution[id]++
 	}
 
 	for addr, count := range distribution {
@@ -125,7 +127,8 @@ func TestScheduler_TotalPlacements(t *testing.T) {
 	validators, totalStake := createParams()
 
 	otherAcc := genesis.DevAccounts()[1].Address
-	validators[otherAcc].Online = false
+	otherAccID := thor.BytesToBytes32(otherAcc.Bytes())
+	validators[otherAccID].Online = false
 
 	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed1"))
 	assert.NoError(t, err)
@@ -135,10 +138,10 @@ func TestScheduler_TotalPlacements(t *testing.T) {
 	// check total stake in scheduler, should only use online validators
 	total := big.NewInt(0)
 	for _, p := range sched.placements {
-		total.Add(total, validators[p.addr].Weight)
+		total.Add(total, validators[p.id].Weight)
 	}
 
-	expectedStake := totalStake.Sub(totalStake, validators[otherAcc].Weight)
+	expectedStake := totalStake.Sub(totalStake, validators[otherAccID].Weight)
 
 	assert.True(t, total.Cmp(expectedStake) == 0)
 }

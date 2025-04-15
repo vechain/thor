@@ -198,7 +198,7 @@ func (e *Energy) AddIssued(issued *big.Int) error {
 }
 
 type staker interface {
-	TotalStake() (*big.Int, error)
+	LockedVET() (*big.Int, error)
 }
 
 func (e *Energy) DistributeRewards(beneficiary thor.Address, staker staker) error {
@@ -217,7 +217,7 @@ func (e *Energy) DistributeRewards(beneficiary thor.Address, staker staker) erro
 }
 
 func (e *Energy) CalculateRewards(staker staker) (*big.Int, error) {
-	totalStaked, err := staker.TotalStake()
+	totalStaked, err := staker.LockedVET()
 	if err != nil {
 		return nil, err
 	}

@@ -53,6 +53,8 @@ var (
 	KeyProposerEndorsement = BytesToBytes32([]byte("proposer-endorsement"))
 	KeyMaxBlockProposers   = BytesToBytes32([]byte("max-block-proposers"))
 
+	DelegatorContractAddress = BytesToBytes32([]byte("delegator-contract"))
+
 	InitialRewardRatio         = big.NewInt(3e17) // 30%
 	InitialBaseGasPrice        = big.NewInt(1e15)
 	InitialProposerEndorsement = new(big.Int).Mul(big.NewInt(1e18), big.NewInt(25000000))

@@ -63,7 +63,7 @@ func (c *Consensus) validateStakingProposer(header *block.Header, parent *block.
 
 	// Perform validator housekeeping on epoch boundaries
 	headerNumber := header.Number()
-	updateValidators, err := stakerContract.Housekeep(headerNumber, c.forkConfig.HAYABUSA)
+	updateValidators, err := stakerContract.Housekeep(headerNumber)
 	if err != nil {
 		return nil, err
 	}

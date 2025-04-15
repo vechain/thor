@@ -9,7 +9,6 @@ import (
 	"errors"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
-	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -17,40 +16,36 @@ import (
 // removing, and popping validators.
 // It allows us to maintain to linked list for both the queued validators and the active validators
 type linkedList struct {
-	addr       thor.Address
-	head       *solidity.Address
-	tail       *solidity.Address
-	validators *solidity.Mapping[thor.Address, *Validator]
+	head    *solidity.Bytes32
+	tail    *solidity.Bytes32
+	storage *storage
 }
 
 func newLinkedList(
-	addr thor.Address,
-	state *state.State,
-	validators *solidity.Mapping[thor.Address, *Validator],
+	storage *storage,
 	headPos thor.Bytes32,
 	tailPos thor.Bytes32,
 ) *linkedList {
 	return &linkedList{
-		addr:       addr,
-		head:       solidity.NewAddress(addr, state, headPos),
-		tail:       solidity.NewAddress(addr, state, tailPos),
-		validators: validators,
+		head:    solidity.NewBytes32(storage.Address(), storage.State(), headPos),
+		tail:    solidity.NewBytes32(storage.Address(), storage.State(), tailPos),
+		storage: storage,
 	}
 }
 
 // Pop removes the head of the linked list, sets the new head, and returns the removed head
-func (l *linkedList) Pop() (thor.Address, *Validator, error) {
-	oldHeadAddr, err := l.head.Get()
+func (l *linkedList) Pop() (thor.Bytes32, *Validation, error) {
+	oldHeadID, err := l.head.Get()
 	if err != nil {
-		return thor.Address{}, nil, err
+		return thor.Bytes32{}, nil, err
 	}
-	if oldHeadAddr.IsZero() {
-		return thor.Address{}, nil, errors.New("no head present")
+	if oldHeadID.IsZero() {
+		return thor.Bytes32{}, nil, errors.New("no head present")
 	}
 
-	oldHead, err := l.validators.Get(oldHeadAddr)
+	oldHead, err := l.storage.GetValidator(oldHeadID)
 	if err != nil {
-		return thor.Address{}, nil, err
+		return thor.Bytes32{}, nil, err
 	}
 
 	if oldHead.Next == nil || oldHead.Next.IsZero() {
@@ -59,41 +54,41 @@ func (l *linkedList) Pop() (thor.Address, *Validator, error) {
 		l.tail.Set(nil)
 	} else {
 		// Set the new head
-		newHeadAddr := oldHead.Next
-		newHead, err := l.validators.Get(*newHeadAddr)
+		newHeadID := oldHead.Next
+		newHead, err := l.storage.GetValidator(*newHeadID)
 		if err != nil {
-			return thor.Address{}, nil, err
+			return thor.Bytes32{}, nil, err
 		}
 		newHead.Prev = nil
 
-		if err := l.validators.Set(*newHeadAddr, newHead); err != nil {
-			return thor.Address{}, nil, err
+		if err := l.storage.SetValidator(*newHeadID, newHead); err != nil {
+			return thor.Bytes32{}, nil, err
 		}
 
-		l.head.Set(newHeadAddr)
+		l.head.Set(newHeadID)
 	}
 
 	// Clear references in the removed validator
 	oldHead.Next = nil
 	oldHead.Prev = nil
 
-	return oldHeadAddr, oldHead, nil
+	return oldHeadID, oldHead, nil
 }
 
 // Remove removes a validator from the linked list
-func (l *linkedList) Remove(addr thor.Address, validator *Validator) error {
+func (l *linkedList) Remove(id thor.Bytes32, validator *Validation) error {
 	prev := validator.Prev
 	next := validator.Next
 
 	if prev == nil || prev.IsZero() {
 		l.head.Set(next)
 	} else {
-		prevEntry, err := l.validators.Get(*prev)
+		prevEntry, err := l.storage.GetValidator(*prev)
 		if err != nil {
 			return err
 		}
 		prevEntry.Next = next
-		if err := l.validators.Set(*prev, prevEntry); err != nil {
+		if err := l.storage.SetValidator(*prev, prevEntry); err != nil {
 			return err
 		}
 	}
@@ -101,12 +96,12 @@ func (l *linkedList) Remove(addr thor.Address, validator *Validator) error {
 	if next == nil || next.IsZero() {
 		l.tail.Set(prev)
 	} else {
-		nextEntry, err := l.validators.Get(*next)
+		nextEntry, err := l.storage.GetValidator(*next)
 		if err != nil {
 			return err
 		}
 		nextEntry.Prev = prev
-		if err := l.validators.Set(*next, nextEntry); err != nil {
+		if err := l.storage.SetValidator(*next, nextEntry); err != nil {
 			return err
 		}
 	}
@@ -115,50 +110,50 @@ func (l *linkedList) Remove(addr thor.Address, validator *Validator) error {
 	validator.Next = nil
 	validator.Prev = nil
 
-	return l.validators.Set(addr, validator)
+	return l.storage.SetValidator(id, validator)
 }
 
 // Add adds a new validator to the tail of the linked list
-func (l *linkedList) Add(newTailAddr thor.Address, newTail *Validator) error {
+func (l *linkedList) Add(newTail thor.Bytes32, validation *Validation) error {
 	// Clear any previous references in the new validator
-	newTail.Next = nil
-	newTail.Prev = nil
+	validation.Next = nil
+	validation.Prev = nil
 
-	oldTailAddr, err := l.tail.Get()
+	oldTailID, err := l.tail.Get()
 	if err != nil {
 		return err
 	}
-	if oldTailAddr.IsZero() {
+	if oldTailID.IsZero() {
 		// list is currently empty, set this entry to head & tail
-		l.head.Set(&newTailAddr)
-		l.tail.Set(&newTailAddr)
-		return l.validators.Set(newTailAddr, newTail)
+		l.head.Set(&newTail)
+		l.tail.Set(&newTail)
+		return l.storage.SetValidator(newTail, validation)
 	}
 
-	oldTail, err := l.validators.Get(oldTailAddr)
+	oldTail, err := l.storage.GetValidator(oldTailID)
 	if err != nil {
 		return err
 	}
-	oldTail.Next = &newTailAddr
-	newTail.Prev = &oldTailAddr
+	oldTail.Next = &newTail
+	validation.Prev = &oldTailID
 
-	if err := l.validators.Set(oldTailAddr, oldTail); err != nil {
+	if err := l.storage.SetValidator(oldTailID, oldTail); err != nil {
 		return err
 	}
-	if err := l.validators.Set(newTailAddr, newTail); err != nil {
+	if err := l.storage.SetValidator(newTail, validation); err != nil {
 		return err
 	}
 
-	l.tail.Set(&newTailAddr)
+	l.tail.Set(&newTail)
 
 	return nil
 }
 
 // Peek returns the head of the linked list
-func (l *linkedList) Peek() (*Validator, error) {
+func (l *linkedList) Peek() (*Validation, error) {
 	head, err := l.head.Get()
 	if err != nil {
 		return nil, err
 	}
-	return l.validators.Get(head)
+	return l.storage.GetValidator(head)
 }

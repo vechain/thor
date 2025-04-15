@@ -106,6 +106,10 @@ func TestStakerABI(t *testing.T) {
 		{"updateAutoRenew", false},
 		{"increaseStake", false},
 		{"decreaseStake", false},
+		{"addDelegation", false},
+		{"getDelegation", true},
+		{"updateDelegatorAutoRenew", false},
+		{"withdrawDelegation", false},
 	}
 
 	assert.Equal(t, len(testCases), len(abi.Methods()))

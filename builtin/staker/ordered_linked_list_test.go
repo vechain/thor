@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -24,105 +23,102 @@ func TestOrderedLinkedList_Add(t *testing.T) {
 	headPos := thor.Bytes32{}
 	tailPos := thor.Bytes32{1}
 
-	// Create validators mapping
-	validators := solidity.NewMapping[thor.Address, *Validator](addr, st, thor.Bytes32{})
-
 	// Create ordered linked list
-	list := newOrderedLinkedList(addr, st, validators, headPos, tailPos)
+	list := newOrderedLinkedList(newStorage(addr, st), headPos, tailPos)
 
 	// Test cases
 	tests := []struct {
 		name       string
 		validators []struct {
-			addr   thor.Address
-			weight uint64
+			id    thor.Bytes32
+			stake uint64
 		}
-		expectedOrder []thor.Address
+		expectedOrder []thor.Bytes32
 	}{
 		{
 			name: "empty list",
 			validators: []struct {
-				addr   thor.Address
-				weight uint64
+				id    thor.Bytes32
+				stake uint64
 			}{
-				{thor.BytesToAddress([]byte("v1")), 100},
+				{thor.BytesToBytes32([]byte("v1")), 100},
 			},
-			expectedOrder: []thor.Address{
-				thor.BytesToAddress([]byte("v1")),
+			expectedOrder: []thor.Bytes32{
+				thor.BytesToBytes32([]byte("v1")),
 			},
 		},
 		{
 			name: "insert at head",
 			validators: []struct {
-				addr   thor.Address
-				weight uint64
+				id    thor.Bytes32
+				stake uint64
 			}{
-				{thor.BytesToAddress([]byte("v1")), 100},
-				{thor.BytesToAddress([]byte("v2")), 200},
-				{thor.BytesToAddress([]byte("v3")), 300},
+				{thor.BytesToBytes32([]byte("v1")), 100},
+				{thor.BytesToBytes32([]byte("v2")), 200},
+				{thor.BytesToBytes32([]byte("v3")), 300},
 			},
-			expectedOrder: []thor.Address{
-				thor.BytesToAddress([]byte("v3")),
-				thor.BytesToAddress([]byte("v2")),
-				thor.BytesToAddress([]byte("v1")),
+			expectedOrder: []thor.Bytes32{
+				thor.BytesToBytes32([]byte("v3")),
+				thor.BytesToBytes32([]byte("v2")),
+				thor.BytesToBytes32([]byte("v1")),
 			},
 		},
 		{
 			name: "insert at tail",
 			validators: []struct {
-				addr   thor.Address
-				weight uint64
+				id    thor.Bytes32
+				stake uint64
 			}{
-				{thor.BytesToAddress([]byte("v3")), 300},
-				{thor.BytesToAddress([]byte("v2")), 200},
-				{thor.BytesToAddress([]byte("v1")), 100},
+				{thor.BytesToBytes32([]byte("v3")), 300},
+				{thor.BytesToBytes32([]byte("v2")), 200},
+				{thor.BytesToBytes32([]byte("v1")), 100},
 			},
-			expectedOrder: []thor.Address{
-				thor.BytesToAddress([]byte("v3")),
-				thor.BytesToAddress([]byte("v2")),
-				thor.BytesToAddress([]byte("v1")),
+			expectedOrder: []thor.Bytes32{
+				thor.BytesToBytes32([]byte("v3")),
+				thor.BytesToBytes32([]byte("v2")),
+				thor.BytesToBytes32([]byte("v1")),
 			},
 		},
 		{
 			name: "insert in middle",
 			validators: []struct {
-				addr   thor.Address
-				weight uint64
+				id    thor.Bytes32
+				stake uint64
 			}{
-				{thor.BytesToAddress([]byte("v3")), 300},
-				{thor.BytesToAddress([]byte("v1")), 100},
-				{thor.BytesToAddress([]byte("v2")), 200},
-				{thor.BytesToAddress([]byte("v4")), 400},
-				{thor.BytesToAddress([]byte("v22")), 200},
-				{thor.BytesToAddress([]byte("v15")), 150},
-				{thor.BytesToAddress([]byte("v5")), 500},
-				{thor.BytesToAddress([]byte("v6")), 600},
+				{thor.BytesToBytes32([]byte("v3")), 300},
+				{thor.BytesToBytes32([]byte("v1")), 100},
+				{thor.BytesToBytes32([]byte("v2")), 200},
+				{thor.BytesToBytes32([]byte("v4")), 400},
+				{thor.BytesToBytes32([]byte("v22")), 200},
+				{thor.BytesToBytes32([]byte("v15")), 150},
+				{thor.BytesToBytes32([]byte("v5")), 500},
+				{thor.BytesToBytes32([]byte("v6")), 600},
 			},
-			expectedOrder: []thor.Address{
-				thor.BytesToAddress([]byte("v6")),
-				thor.BytesToAddress([]byte("v5")),
-				thor.BytesToAddress([]byte("v4")),
-				thor.BytesToAddress([]byte("v3")),
-				thor.BytesToAddress([]byte("v2")),
-				thor.BytesToAddress([]byte("v22")),
-				thor.BytesToAddress([]byte("v15")),
-				thor.BytesToAddress([]byte("v1")),
+			expectedOrder: []thor.Bytes32{
+				thor.BytesToBytes32([]byte("v6")),
+				thor.BytesToBytes32([]byte("v5")),
+				thor.BytesToBytes32([]byte("v4")),
+				thor.BytesToBytes32([]byte("v3")),
+				thor.BytesToBytes32([]byte("v2")),
+				thor.BytesToBytes32([]byte("v22")),
+				thor.BytesToBytes32([]byte("v15")),
+				thor.BytesToBytes32([]byte("v1")),
 			},
 		},
 		{
 			name: "equal weights",
 			validators: []struct {
-				addr   thor.Address
-				weight uint64
+				id    thor.Bytes32
+				stake uint64
 			}{
-				{thor.BytesToAddress([]byte("v1")), 100},
-				{thor.BytesToAddress([]byte("v2")), 100},
-				{thor.BytesToAddress([]byte("v3")), 100},
+				{thor.BytesToBytes32([]byte("v1")), 100},
+				{thor.BytesToBytes32([]byte("v2")), 100},
+				{thor.BytesToBytes32([]byte("v3")), 100},
 			},
-			expectedOrder: []thor.Address{
-				thor.BytesToAddress([]byte("v1")),
-				thor.BytesToAddress([]byte("v2")),
-				thor.BytesToAddress([]byte("v3")),
+			expectedOrder: []thor.Bytes32{
+				thor.BytesToBytes32([]byte("v1")),
+				thor.BytesToBytes32([]byte("v2")),
+				thor.BytesToBytes32([]byte("v3")),
 			},
 		},
 	}
@@ -131,19 +127,18 @@ func TestOrderedLinkedList_Add(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Reset state for each test
 			st = state.New(db, trie.Root{})
-			validators = solidity.NewMapping[thor.Address, *Validator](addr, st, thor.Bytes32{})
-			list = newOrderedLinkedList(addr, st, validators, headPos, tailPos)
+			list = newOrderedLinkedList(newStorage(addr, st), headPos, tailPos)
 
-			// Add validators
+			// Add validations
 			for _, v := range tt.validators {
-				validator := &Validator{
-					Weight: big.NewInt(int64(v.weight)),
+				validator := &Validation{
+					PendingLocked: big.NewInt(int64(v.stake)),
 				}
-				err := list.Add(v.addr, validator)
+				err := list.Add(v.id, validator)
 				assert.NoError(t, err)
 			}
 
-			// Verify order by popping all validators
+			// Verify order by popping all validations
 			for _, expectedAddr := range tt.expectedOrder {
 				address, validator, err := list.Pop()
 				assert.NoError(t, err)

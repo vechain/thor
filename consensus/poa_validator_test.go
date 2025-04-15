@@ -43,7 +43,7 @@ func TestAuthority_Hayabusa_TransitionPeriod(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, proposers, 1)
 
-	// mint block 3: validator moves their staker to the contract
+	// mint block 3: validator moves their stake to the contract
 	best, parent, st = mintAddValidatorBlock(t, chain)
 	handler, err = consensus.validateAuthorityProposer(best.Header, parent.Header, st)
 	assert.NoError(t, err)
@@ -59,7 +59,7 @@ func TestAuthority_Hayabusa_TransitionPeriod(t *testing.T) {
 	// check the staker contract has the correct stake
 	masterStake, err := getMasterStake(chain, blk.Header)
 	assert.NoError(t, err)
-	assert.Equal(t, masterStake.Stake.Cmp(minStake), 0)
+	assert.Equal(t, masterStake.PendingLocked.Cmp(minStake), 0)
 }
 
 func getBestCandidates(chain *testchain.Chain, con *Consensus, handler cacheHandler) ([]poa.Proposer, error) {
@@ -112,11 +112,13 @@ func getEndorsorBalance(blk *block.Header, chain *testchain.Chain) (*big.Int, er
 	return balance, nil
 }
 
-func getMasterStake(chain *testchain.Chain, blk *block.Header) (*staker.Validator, error) {
+func getMasterStake(chain *testchain.Chain, blk *block.Header) (*staker.Validation, error) {
 	st := chain.Stater().NewState(chain.Repo().BestBlockSummary().Root())
 	signer, err := blk.Signer()
 	if err != nil {
 		return nil, err
 	}
-	return builtin.Staker.Native(st).Get(signer)
+	staker := builtin.Staker.Native(st)
+	validator, _, err := staker.LookupMaster(signer)
+	return validator, err
 }

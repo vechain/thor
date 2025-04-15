@@ -15,15 +15,15 @@ import (
 )
 
 type Validators struct {
-	mapping    map[thor.Address]*staker.Validator
+	mapping    map[thor.Bytes32]*staker.Validation
 	referenced bool
 }
 
-func NewValidators(mapping map[thor.Address]*staker.Validator) *Validators {
+func NewValidators(mapping map[thor.Bytes32]*staker.Validation) *Validators {
 	return &Validators{mapping: mapping}
 }
 
-func (v *Validators) Pick(state *state.State) (map[thor.Address]*staker.Validator, error) {
+func (v *Validators) Pick(state *state.State) (map[thor.Bytes32]*staker.Validation, error) {
 	leaders := v.mapping
 	if len(leaders) == 0 {
 		var err error
@@ -45,21 +45,21 @@ func (v *Validators) Copy() *Validators {
 
 func (v *Validators) beforeUpdate() {
 	if v.referenced {
-		copied := make(map[thor.Address]*staker.Validator, len(v.mapping))
+		copied := make(map[thor.Bytes32]*staker.Validation, len(v.mapping))
 		maps.Copy(copied, v.mapping)
 		v.mapping = copied
 		v.referenced = false
 	}
 }
 
-func (v *Validators) Remove(addr thor.Address) {
+func (v *Validators) Remove(id thor.Bytes32) {
 	v.beforeUpdate()
-	delete(v.mapping, addr)
+	delete(v.mapping, id)
 }
 
-func (v *Validators) Add(addr thor.Address, validator *staker.Validator) {
+func (v *Validators) Add(id thor.Bytes32, validator *staker.Validation) {
 	v.beforeUpdate()
-	v.mapping[addr] = validator
+	v.mapping[id] = validator
 }
 
 // InvalidateCache invalidates the cache.
