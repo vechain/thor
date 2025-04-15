@@ -143,7 +143,6 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 		}
 		return errGasLimitReached
 	}
-	
 	if f.Number() < f.packer.forkConfig.GALACTICA {
 		if t.Type() != tx.TypeLegacy {
 			return badTxError{"invalid tx type"}
