@@ -17,7 +17,6 @@ import (
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/runtime/statedb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -403,28 +402,24 @@ func (rt *Runtime) ExecuteTransaction(tx *tx.Transaction) (receipt *tx.Receipt, 
 }
 
 // PrepareTransaction prepare to execute tx.
-func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor, error) {
-	resolvedTx, err := ResolveTransaction(tx)
+func (rt *Runtime) PrepareTransaction(trx *tx.Transaction) (*TransactionExecutor, error) {
+	resolvedTx, err := ResolveTransaction(trx)
 	if err != nil {
 		return nil, err
 	}
 
-	legacyTxBaseGasPrice, gasPrice, payer, _, returnGas, err := resolvedTx.BuyGas(
-		rt.state,
-		rt.ctx.Time,
-		rt.ctx.BaseFee,
-	)
+	legacyTxBaseGasPrice, effectiveGasPrice, payer, _, returnGas, err := resolvedTx.BuyGas(rt.state, rt.ctx.Time, rt.ctx.BaseFee)
 	if err != nil {
 		return nil, err
 	}
 
-	txCtx, err := resolvedTx.ToContext(gasPrice, payer, rt.ctx.Number, rt.chain.GetBlockID)
+	txCtx, err := resolvedTx.ToContext(effectiveGasPrice, payer, rt.ctx.Number, rt.chain.GetBlockID)
 	if err != nil {
 		return nil, err
 	}
 
 	// ResolveTransaction has checked that tx.Gas() >= IntrinsicGas
-	leftOverGas := tx.Gas() - resolvedTx.IntrinsicGas
+	leftOverGas := trx.Gas() - resolvedTx.IntrinsicGas
 	// checkpoint to be reverted when clause failure.
 	checkpoint := rt.state.NewCheckpoint()
 
@@ -487,36 +482,60 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 			finalized = true
 
 			receipt := &Tx.Receipt{
-				Type:     tx.Type(),
+				Type:     trx.Type(),
 				Reverted: reverted,
 				Outputs:  txOutputs,
-				GasUsed:  tx.Gas() - leftOverGas,
+				GasUsed:  trx.Gas() - leftOverGas,
 				GasPayer: payer,
 			}
-
-			receipt.Paid = new(big.Int).Mul(new(big.Int).SetUint64(receipt.GasUsed), gasPrice)
+			receipt.Paid = new(big.Int).Mul(new(big.Int).SetUint64(receipt.GasUsed), effectiveGasPrice)
 
 			if err := returnGas(leftOverGas); err != nil {
 				return nil, err
 			}
 
-			// reward
-			rewardRatio, err := builtin.Params.Native(rt.state).Get(thor.KeyRewardRatio)
-			if err != nil {
-				return nil, err
-			}
-			provedWork, err := tx.ProvedWork(rt.ctx.Number-1, rt.chain.GetBlockID)
-			if err != nil {
-				return nil, err
-			}
-			rewardGasPrice := fork.GalacticaPriorityGasPrice(tx, legacyTxBaseGasPrice, provedWork, rt.ctx.BaseFee)
-			reward := fork.CalculateReward(receipt.GasUsed, rewardGasPrice, rewardRatio, rt.ctx.Number >= rt.forkConfig.GALACTICA)
+			if rt.ctx.Number < rt.forkConfig.GALACTICA {
+				// before galactica, reward is based on the reward ratio
+				rewardRatio, err := builtin.Params.Native(rt.state).Get(thor.KeyRewardRatio)
+				if err != nil {
+					return nil, err
+				}
 
-			if err := builtin.Energy.Native(rt.state, rt.ctx.Time).Add(rt.ctx.Beneficiary, reward); err != nil {
-				return nil, err
+				provedWork, err := trx.ProvedWork(rt.ctx.Number-1, rt.chain.GetBlockID)
+				if err != nil {
+					return nil, err
+				}
+				overallGasPrice := trx.OverallGasPrice(legacyTxBaseGasPrice, provedWork)
+
+				reward := new(big.Int).SetUint64(receipt.GasUsed)
+				reward.Mul(reward, overallGasPrice)
+				reward.Mul(reward, rewardRatio)
+				reward.Div(reward, big.NewInt(1e18))
+				if err := builtin.Energy.Native(rt.state, rt.ctx.Time).Add(rt.ctx.Beneficiary, reward); err != nil {
+					return nil, err
+				}
+
+				receipt.Reward = reward
+				return receipt, nil
 			}
 
-			receipt.Reward = reward
+			// after galactica, reward is the priority fee
+			var priorityFeePerGas *big.Int
+			if trx.Type() == tx.TypeLegacy {
+				overallGasPrice := trx.OverallGasPrice(legacyTxBaseGasPrice, txCtx.ProvedWork)
+				// for legacy tx, maxFeePerGas is overallGasPrice and maxPriorityFeePerGas is also overallGasPrice
+				priorityFeePerGas, err = tx.EffectivePriorityFeePerGas(rt.ctx.BaseFee, overallGasPrice, overallGasPrice)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				priorityFeePerGas, err = tx.EffectivePriorityFeePerGas(rt.ctx.BaseFee, trx.MaxPriorityFeePerGas(), trx.MaxFeePerGas())
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			receipt.Reward = priorityFeePerGas.Mul(priorityFeePerGas, new(big.Int).SetUint64(receipt.GasUsed))
 			return receipt, nil
 		},
 	}, nil

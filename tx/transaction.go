@@ -15,6 +15,7 @@ import (
 	"slices"
 	"sync/atomic"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
@@ -24,13 +25,11 @@ import (
 )
 
 var (
-	ErrTxTypeNotSupported = errors.New("transaction type not supported")
-	// ErrMaxPriorityFeeVeryHigh is a sanity error to avoid extremely big numbers specified
-	// in the priority fee field.
+	// ErrMaxPriorityFeeVeryHigh is a sanity error to avoid extremely big numbers specified in the priority fee field.
 	ErrMaxPriorityFeeVeryHigh = errors.New("max priority fee per gas higher than 2^256-1")
-	// ErrMaxFeeVeryHigh is a sanity error to avoid extremely big numbers specified
-	// in the max fee field.
-	ErrMaxFeeVeryHigh = errors.New("max fee per gas higher than 2^256-1")
+	// ErrMaxFeeVeryHigh is a sanity error to avoid extremely big numbers specified in the max fee field.
+	ErrMaxFeeVeryHigh     = errors.New("max fee per gas higher than 2^256-1")
+	ErrTxTypeNotSupported = errors.New("transaction type not supported")
 
 	errIntrinsicGasOverflow = errors.New("intrinsic gas overflow")
 	errShortTypedTx         = errors.New("typed transaction too short")
@@ -69,7 +68,6 @@ type txData interface {
 	blockRef() uint64
 	expiration() uint32
 	clauses() []*Clause
-	gasPriceCoef() uint8
 	gas() uint64
 	maxFeePerGas() *big.Int
 	maxPriorityFeePerGas() *big.Int
@@ -78,7 +76,6 @@ type txData interface {
 	reserved() *reserved
 	signature() []byte
 	setSignature(sig []byte)
-	evaluateWork(origin thor.Address) func(nonce uint64) *big.Int
 	signingFields() []any // signingFields returns the fields that are used to compute the signing hash.
 
 	// Encode/decode encodes/decodes the tx body into binary format, the format is defined by the tx data itself.
@@ -300,16 +297,12 @@ func (t *Transaction) Gas() uint64 {
 	return t.body.gas()
 }
 
-// GasPriceCoef returns gas price coef.
-// gas price = bgp + bgp * gpc / 255.
-func (t *Transaction) GasPriceCoef() uint8 {
-	return t.body.gasPriceCoef()
-}
-
+// MaxFeePerGas returns max fee per gas.
 func (t *Transaction) MaxFeePerGas() *big.Int {
 	return t.body.maxFeePerGas()
 }
 
+// MaxPriorityFeePerGas returns max priority fee per gas.
 func (t *Transaction) MaxPriorityFeePerGas() *big.Int {
 	return t.body.maxPriorityFeePerGas()
 }
@@ -433,27 +426,54 @@ func (t *Transaction) IntrinsicGas() (uint64, error) {
 	return gas, nil
 }
 
-// GasPrice returns gas price.
-// gasPrice = baseGasPrice + baseGasPrice * gasPriceCoef / 255
-func (t *Transaction) GasPrice(baseGasPrice *big.Int) *big.Int {
-	x := big.NewInt(int64(t.body.gasPriceCoef()))
-	x.Mul(x, baseGasPrice)
-	x.Div(x, big.NewInt(math.MaxUint8))
-	return x.Add(x, baseGasPrice)
+// GasPriceCoef returns gas price coef.
+// gas price = bgp + bgp * gpc / 255.
+//
+// NOTE: This method only works for legacy transactions.
+func (t *Transaction) GasPriceCoef() uint8 {
+	if t.Type() != TypeLegacy {
+		return 0
+	}
+	return t.body.(*legacyTransaction).gasPriceCoef()
 }
 
-// ProvedWork returns proved work.
-// Unproved work will be considered as proved work if block ref is do the prefix of a block's ID,
-// and tx delay is less equal to MaxTxWorkDelay.
+// EffectiveGasPrice calculates the effective gas price of a transaction,which is the gas
+// price sender have to pay per gas unit. The proved work is NOT included.For legacy
+// transactions, baseGasPrice is required. For dynamic fee transactions,baseFee is required.
+// It is caller's responsibility to ensure the fields are passed correctly.
+func (t *Transaction) EffectiveGasPrice(baseGasPrice *big.Int, baseFee *big.Int) *big.Int {
+	// For legacy transactions, the gas price is fixed and determined at transaction creation time.
+	if t.Type() == TypeLegacy {
+		return t.body.(*legacyTransaction).gasPrice(baseGasPrice)
+	}
+
+	// For dynamic fee transactions, effective gas price take block base fee into account.
+	priorityFeePerGas := new(big.Int).Sub(t.body.maxFeePerGas(), baseFee)
+	if priorityFeePerGas.Cmp(t.body.maxPriorityFeePerGas()) > 0 {
+		priorityFeePerGas = t.body.maxPriorityFeePerGas()
+	}
+
+	return priorityFeePerGas.Add(priorityFeePerGas, baseFee)
+}
+
+// ProvedWork returns proved work for legacy transactions.
+// Unproved work will be considered as proved work if block ref is the prefix
+// of a block's ID, and tx delay is less equal to MaxTxWorkDelay.
+//
+// NOTE: This method only works for legacy transactions.
 func (t *Transaction) ProvedWork(headBlockNum uint32, getBlockID func(uint32) (thor.Bytes32, error)) (*big.Int, error) {
+	if t.Type() != TypeLegacy {
+		return common.Big0, nil
+	}
+
 	ref := t.BlockRef()
 	refNum := ref.Number()
 	if refNum >= headBlockNum {
-		return &big.Int{}, nil
+		return common.Big0, nil
 	}
 
 	if delay := headBlockNum - refNum; delay > thor.MaxTxWorkDelay {
-		return &big.Int{}, nil
+		return common.Big0, nil
 	}
 
 	id, err := getBlockID(refNum)
@@ -463,12 +483,18 @@ func (t *Transaction) ProvedWork(headBlockNum uint32, getBlockID func(uint32) (t
 	if bytes.HasPrefix(id[:], ref[:]) {
 		return t.UnprovedWork(), nil
 	}
-	return &big.Int{}, nil
+	return common.Big0, nil
 }
 
-// UnprovedWork returns unproved work of this tx.
-// It returns 0, if tx is not signed or is not a legacy tx type.
+// UnprovedWork returns unproved work for legacy transactions.
+// It returns 0, if tx is not signed or not a legacy transaction.
+//
+// NOTE: This method only works for legacy transactions.
 func (t *Transaction) UnprovedWork() (w *big.Int) {
+	if t.Type() != TypeLegacy {
+		return common.Big0
+	}
+
 	if cached := t.cache.unprovedWork.Load(); cached != nil {
 		return cached.(*big.Int)
 	}
@@ -478,21 +504,22 @@ func (t *Transaction) UnprovedWork() (w *big.Int) {
 
 	origin, err := t.Origin()
 	if err != nil {
-		return &big.Int{}
+		return common.Big0
 	}
-	return t.EvaluateWork(origin)(t.body.nonce())
+	evaluateWork := t.body.(*legacyTransaction).evaluateWork
+	return evaluateWork(origin)(t.body.nonce())
 }
 
-// EvaluateWork try to compute work when tx origin assumed.
-func (t *Transaction) EvaluateWork(origin thor.Address) func(nonce uint64) *big.Int {
-	return t.body.evaluateWork(origin)
-}
-
-// OverallGasPrice calculate overall gas price.
+// OverallGasPrice calculate overall gas price which includes proved work for legacy transactions.
 // overallGasPrice = gasPrice + baseGasPrice * wgas/gas.
+//
+// NOTE: This method only works for legacy transactions.
 func (t *Transaction) OverallGasPrice(baseGasPrice *big.Int, provedWork *big.Int) *big.Int {
-	gasPrice := t.GasPrice(baseGasPrice)
+	if t.Type() != TypeLegacy {
+		return t.body.maxFeePerGas()
+	}
 
+	gasPrice := t.body.(*legacyTransaction).gasPrice(baseGasPrice)
 	if provedWork.Sign() == 0 {
 		return gasPrice
 	}
@@ -549,7 +576,7 @@ func (t *Transaction) String() string {
 	if t.Type() == TypeLegacy {
 		return fmt.Sprintf(`%v
 		GasPriceCoef:   %v
-		`, s, t.body.gasPriceCoef())
+		`, s, t.body.(*legacyTransaction).gasPriceCoef())
 	}
 
 	return fmt.Sprintf(`%v
@@ -568,6 +595,18 @@ func (t *Transaction) validateSignatureLength() error {
 		return secp256k1.ErrInvalidSignatureLen
 	}
 	return nil
+}
+
+// EffectivePriorityFeePerGas returns the effective priority fee per gas for the transaction.
+// If maxFeePerGas is less than baseFee, an error is returned.
+func EffectivePriorityFeePerGas(baseFee, maxPriorityFeePerGas, maxFeePerGas *big.Int) (*big.Int, error) {
+	// sanity check to ensure maxFeePerGas can cover the block baseFee
+	if maxFeePerGas.Cmp(baseFee) < 0 {
+		return nil, errors.New("max fee per gas is less than base fee")
+	}
+
+	priorityFeePerGas := new(big.Int).Sub(maxFeePerGas, baseFee)
+	return math.BigMin(priorityFeePerGas, maxPriorityFeePerGas), nil
 }
 
 // IntrinsicGas calculate intrinsic gas cost for tx with such clauses.
