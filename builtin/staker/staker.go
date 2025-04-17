@@ -34,6 +34,7 @@ var (
 // Staker implements native methods of `Staker` contract.
 type Staker struct {
 	lockedVET   *solidity.Uint256
+	queuedVET   *solidity.Uint256
 	delegations *delegations
 	validations *validations
 	storage     *storage
@@ -60,6 +61,7 @@ func New(addr thor.Address, state *state.State, params *params.Params) *Staker {
 
 	return &Staker{
 		lockedVET:   solidity.NewUint256(addr, state, slotLockedVET),
+		queuedVET:   solidity.NewUint256(addr, state, slotQueuedVET),
 		storage:     storage,
 		validations: newValidations(storage),
 		delegations: newDelegations(storage),
@@ -80,6 +82,11 @@ func (s *Staker) LeaderGroup() (map[thor.Bytes32]*Validation, error) {
 // LockedVET returns the amount of VET locked by validators and delegators.
 func (s *Staker) LockedVET() (*big.Int, error) {
 	return s.lockedVET.Get()
+}
+
+// QueuedStake returns the amount of VET queued by validators and delegators.
+func (s *Staker) QueuedStake() (*big.Int, error) {
+	return s.queuedVET.Get()
 }
 
 // FirstActive returns validator address of first entry.

@@ -175,12 +175,19 @@ func Test_Delegator_DisableAutoRenew_InAStakingPeriod(t *testing.T) {
 	delegator := datagen.RandAddress()
 	assert.NoError(t, staker.AddDelegator(validator.ID, delegator, stake, true, 255))
 
+	queuedVet, err := staker.QueuedStake()
+	assert.NoError(t, err)
+	assert.Equal(t, stake, queuedVet)
+
 	// And the first staking period has occurred
-	_, err := staker.Housekeep(validator.Period)
+	_, err = staker.Housekeep(validator.Period)
 	assert.NoError(t, err)
 	delegation, err := staker.storage.GetDelegation(validator.ID)
 	assert.NoError(t, err)
 	assert.Equal(t, stake, delegation.LockedVET)
+	queuedVet, err = staker.QueuedStake()
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0).String(), queuedVet.String())
 
 	// When the delegator disables auto renew
 	assert.NoError(t, staker.UpdateDelegatorAutoRenew(validator.ID, delegator, false))
@@ -188,6 +195,9 @@ func Test_Delegator_DisableAutoRenew_InAStakingPeriod(t *testing.T) {
 	delegation, err = staker.storage.GetDelegation(validator.ID)
 	assert.NoError(t, err)
 	assert.Equal(t, stake, delegation.CooldownVET)
+	queuedVet, err = staker.QueuedStake()
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0).String(), queuedVet.String())
 
 	// And the funds should be withdrawable after the next iteration
 	_, err = staker.Housekeep(2 * validator.Period)

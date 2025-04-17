@@ -22,6 +22,7 @@ type validations struct {
 	leaderGroupSize     *solidity.Uint256
 	queuedGroupSize     *solidity.Uint256
 	lockedVET           *solidity.Uint256
+	queuedVET           *solidity.Uint256
 	lowStakingPeriod    uint32
 	mediumStakingPeriod uint32
 	highStakingPeriod   uint32
@@ -57,6 +58,7 @@ func newValidations(storage *storage) *validations {
 		queuedGroupSize:     solidity.NewUint256(storage.Address(), storage.State(), slotQueuedGroupSize),
 		leaderGroupSize:     solidity.NewUint256(storage.Address(), storage.State(), slotActiveGroupSize),
 		lockedVET:           solidity.NewUint256(storage.Address(), storage.State(), slotLockedVET),
+		queuedVET:           solidity.NewUint256(storage.Address(), storage.State(), slotQueuedVET),
 		lowStakingPeriod:    lowStakingPeriod,
 		mediumStakingPeriod: mediumStakingPeriod,
 		highStakingPeriod:   highStakingPeriod,
@@ -164,6 +166,10 @@ func (v *validations) Add(
 		return thor.Bytes32{}, err
 	}
 
+	if err := v.queuedVET.Add(stake); err != nil {
+		return thor.Bytes32{}, err
+	}
+
 	// Increment queuedGroupSize when adding validator to queue
 	if err := v.queuedGroupSize.Add(big.NewInt(1)); err != nil {
 		return thor.Bytes32{}, err
@@ -227,15 +233,19 @@ func (v *validations) ActivateNext(
 	validator.PendingLocked = big.NewInt(0)
 	validator.LockedVET = validatorLocked
 
-	changeTVL, changeWeight := delegation.RenewDelegations()
+	changeTVL, changeWeight, changePending := delegation.RenewDelegations()
 	validator.Weight = big.NewInt(0).Add(validatorLocked, changeWeight)
 	if err := v.storage.SetDelegation(id, delegation); err != nil {
 		return err
 	}
 
 	totalLocked := big.NewInt(0).Add(validatorLocked, changeTVL)
+	changePending = changePending.Add(changePending, validatorLocked)
 
 	if err := v.lockedVET.Add(totalLocked); err != nil {
+		return err
+	}
+	if err := v.queuedVET.Sub(changePending); err != nil {
 		return err
 	}
 
@@ -299,6 +309,9 @@ func (v *validations) IncreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 	}
 
 	entry.PendingLocked = amount.Add(amount, entry.PendingLocked)
+	if err := v.queuedVET.Add(amount); err != nil {
+		return err
+	}
 
 	if entry.Status == StatusActive {
 		err = v.storage.SetValidator(id, entry)
@@ -356,6 +369,9 @@ func (v *validations) DecreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 	if entry.Status == StatusQueued {
 		entry.PendingLocked = big.NewInt(0).Sub(entry.PendingLocked, amount)
 		entry.WithdrawableVET = big.NewInt(0).Add(entry.WithdrawableVET, amount)
+		if err := v.queuedVET.Sub(amount); err != nil {
+			return err
+		}
 
 		// queue is stake based, so we need to remove and re-add the validator
 		if err := v.validatorQueue.Remove(id, entry); err != nil {

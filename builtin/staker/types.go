@@ -159,9 +159,10 @@ func (v *ValidatorDelegations) NextPeriodLocked() *big.Int {
 // 2. Move PendingLocked => Locked
 // 3. Move PendingCooldown => Cooldown
 // 4. Return the change in TVL and weight
-func (v *ValidatorDelegations) RenewDelegations() (*big.Int, *big.Int) {
+func (v *ValidatorDelegations) RenewDelegations() (*big.Int, *big.Int, *big.Int) {
 	changeTVL := big.NewInt(0)
 	changeWeight := big.NewInt(0)
+	lockedPending := big.NewInt(0)
 
 	// Move Cooldown => Withdrawable
 	v.WithdrawVET = big.NewInt(0).Add(v.WithdrawVET, v.CooldownVET)
@@ -175,6 +176,7 @@ func (v *ValidatorDelegations) RenewDelegations() (*big.Int, *big.Int) {
 	v.LockedWeight = big.NewInt(0).Add(v.LockedWeight, v.PendingLockedWeight)
 	changeTVL.Add(changeTVL, v.PendingLockedVET)
 	changeWeight.Add(changeWeight, v.PendingLockedWeight)
+	lockedPending.Add(lockedPending, v.PendingLockedVET)
 	v.PendingLockedVET = big.NewInt(0)
 	v.PendingLockedWeight = big.NewInt(0)
 
@@ -183,10 +185,11 @@ func (v *ValidatorDelegations) RenewDelegations() (*big.Int, *big.Int) {
 	v.CooldownWeight = big.NewInt(0).Set(v.PendingCooldownWeight)
 	changeTVL.Add(changeTVL, v.PendingCooldownVET)
 	changeWeight.Add(changeWeight, v.PendingCooldownWeight)
+	lockedPending.Add(lockedPending, v.PendingCooldownVET)
 	v.PendingCooldownVET = big.NewInt(0)
 	v.PendingCooldownWeight = big.NewInt(0)
 
-	return changeTVL, changeWeight
+	return changeTVL, changeWeight, lockedPending
 }
 
 // Exit moves all of the funds to withdrawable

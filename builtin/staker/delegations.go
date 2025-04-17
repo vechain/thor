@@ -9,16 +9,21 @@ import (
 	"math/big"
 
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/thor"
 )
 
 // delegations represent a 1-to-1 mapping of a validator to the sum of its delegator totals.
 type delegations struct {
-	storage *storage
+	storage   *storage
+	queuedVET *solidity.Uint256
 }
 
 func newDelegations(storage *storage) *delegations {
-	return &delegations{storage: storage}
+	return &delegations{
+		storage:   storage,
+		queuedVET: solidity.NewUint256(storage.Address(), storage.State(), slotQueuedVET),
+	}
 }
 
 func (d *delegations) Add(
@@ -76,6 +81,10 @@ func (d *delegations) Add(
 			exitIteration += 1 // validator is currently active, so this delegation needs to wait for this iteration and the next
 		}
 		delegator.ExitIteration = &exitIteration
+	}
+
+	if err := d.queuedVET.Add(stake); err != nil {
+		return err
 	}
 
 	if delegator.AutoRenew {

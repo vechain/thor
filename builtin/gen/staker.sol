@@ -34,6 +34,13 @@ contract Staker {
     }
 
     /**
+     * @dev queuedStake returns all stakes which are queued
+     */
+    function queuedStake() public view returns (uint256) {
+        return StakerNative(address(this)).native_queuedStake();
+    }
+
+    /**
      * @dev addValidator adds a validator to the queue.
      */
     function addValidator(
@@ -260,6 +267,8 @@ interface StakerNative {
 
     // Read methods
     function native_totalStake() external pure returns (uint256);
+
+    function native_queuedStake() external pure returns (uint256);
 
     function native_getDelegation(
         bytes32 validationID,

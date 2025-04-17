@@ -9,6 +9,7 @@ import "github.com/vechain/thor/v2/thor"
 
 var (
 	slotLockedVET         = nameToSlot("total-stake")
+	slotQueuedVET         = nameToSlot("queued-stake")
 	slotValidations       = nameToSlot("validations")
 	slotValidationLookups = nameToSlot("validator-lookups")
 	slotDelegations       = nameToSlot("delegations")

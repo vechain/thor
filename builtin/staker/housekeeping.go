@@ -92,6 +92,8 @@ func (s *Staker) performRenewalUpdates(id thor.Bytes32, entry *Validation) error
 	changeTVL := big.NewInt(0)
 	// change in TVL with multipliers applied
 	changeWeight := big.NewInt(0)
+	// change in VET value queued
+	changePending := big.NewInt(0)
 
 	// move cooldown to withdrawable
 	if entry.CooldownVET.Sign() == 1 {
@@ -106,21 +108,26 @@ func (s *Staker) performRenewalUpdates(id thor.Bytes32, entry *Validation) error
 		changeWeight = changeWeight.Add(changeWeight, entry.PendingLocked)
 		entry.LockedVET = big.NewInt(0).Add(entry.LockedVET, entry.PendingLocked)
 		entry.PendingLocked = big.NewInt(0)
+		changePending = changePending.Add(changePending, entry.PendingLocked)
 	}
 
 	delegation, err := s.storage.GetDelegation(id)
 	if err != nil {
 		return err
 	}
-	delegatorChangeTVL, delegatorChangeWeight := delegation.RenewDelegations()
+	delegatorChangeTVL, delegatorChangeWeight, lockedPending := delegation.RenewDelegations()
 	if err := s.storage.SetDelegation(id, delegation); err != nil {
 		return err
 	}
 	changeTVL = changeTVL.Add(changeTVL, delegatorChangeTVL)
 	changeWeight = changeWeight.Add(changeWeight, delegatorChangeWeight)
+	changePending = changePending.Add(changePending, lockedPending)
 
 	entry.Weight = big.NewInt(0).Add(entry.Weight, changeWeight)
 	if err := s.lockedVET.Add(changeTVL); err != nil {
+		return err
+	}
+	if err := s.queuedVET.Sub(changePending); err != nil {
 		return err
 	}
 
