@@ -1579,3 +1579,58 @@ func TestStaker_Housekeep_Adds_Queued_Validators_Up_To_Limit(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(1), queuedValidators)
 }
+
+func TestStaker_QueuedValidator_Withdraw(t *testing.T) {
+	staker, _ := newStaker(t, 0, 3, false)
+	addr1 := datagen.RandAddress()
+
+	stake := RandomStake()
+	period := uint32(360) * 24 * 14
+
+	id1, err := staker.AddValidator(addr1, addr1, period, stake, false, 0)
+	assert.NoError(t, err)
+
+	withdraw, err := staker.WithdrawStake(addr1, id1)
+	assert.NoError(t, err)
+	assert.Equal(t, stake, withdraw)
+
+	validation, err := staker.Get(id1)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusExit, validation.Status)
+	assert.Equal(t, big.NewInt(0), validation.LockedVET)
+	assert.Equal(t, big.NewInt(0), validation.Weight)
+	assert.Equal(t, big.NewInt(0), validation.WithdrawableVET)
+	assert.Equal(t, big.NewInt(0), validation.PendingLocked)
+}
+
+func TestStaker_IncreaseStake_Withdraw(t *testing.T) {
+	staker, _ := newStaker(t, 0, 3, false)
+	addr1 := datagen.RandAddress()
+
+	stake := RandomStake()
+	period := uint32(360) * 24 * 14
+
+	id1, err := staker.AddValidator(addr1, addr1, period, stake, true, 0)
+	assert.NoError(t, err)
+
+	_, err = staker.Housekeep(period)
+	assert.NoError(t, err)
+
+	validation, err := staker.Get(id1)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusActive, validation.Status)
+	assert.Equal(t, stake, validation.LockedVET)
+
+	assert.NoError(t, staker.IncreaseStake(addr1, id1, big.NewInt(100)))
+	withdrawAmount, err := staker.WithdrawStake(addr1, id1)
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(100), withdrawAmount)
+
+	validation, err = staker.Get(id1)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusActive, validation.Status)
+	assert.Equal(t, stake, validation.LockedVET)
+	assert.Equal(t, stake, validation.Weight)
+	assert.Equal(t, big.NewInt(0), validation.WithdrawableVET)
+	assert.Equal(t, big.NewInt(0), validation.PendingLocked)
+}

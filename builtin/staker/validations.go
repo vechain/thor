@@ -399,7 +399,7 @@ func (v *validations) WithdrawStake(endorsor thor.Address, id thor.Bytes32) (*bi
 	}
 	withdrawAmount := big.NewInt(0).Set(entry.WithdrawableVET)
 
-	if entry.Status == StatusExit {
+	if entry.Status == StatusExit || entry.Status == StatusQueued {
 		if err := v.storage.SetLookup(entry.Master, thor.Bytes32{}); err != nil {
 			return nil, err
 		}
@@ -411,6 +411,13 @@ func (v *validations) WithdrawStake(endorsor thor.Address, id thor.Bytes32) (*bi
 		if err := v.validatorQueue.Remove(id, entry); err != nil {
 			return nil, err
 		}
+		if err := v.queuedGroupSize.Sub(big.NewInt(1)); err != nil {
+			return nil, err
+		}
+	}
+	if entry.PendingLocked.Sign() > 0 {
+		withdrawAmount = withdrawAmount.Add(withdrawAmount, entry.PendingLocked)
+		entry.PendingLocked = big.NewInt(0)
 	}
 
 	entry.WithdrawableVET = big.NewInt(0)
