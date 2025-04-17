@@ -12,6 +12,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/log"
+	"github.com/vechain/thor/v2/thor"
 )
 
 var logger = log.WithContext("pkg", "http-utils")
@@ -50,6 +51,18 @@ func StringToBoolean(boolStr string, defaultVal bool) (bool, error) {
 		return true, nil
 	}
 	return false, errors.New("should be boolean")
+}
+
+func StringToAddress(addressString string) (*thor.Address, error) {
+	var address *thor.Address
+	if addressString != "" {
+		fromParsed, err := thor.ParseAddress(addressString)
+		if err != nil {
+			return nil, err
+		}
+		address = &fromParsed
+	}
+	return address, nil
 }
 
 // Forbidden convenience method to create http forbidden error.

@@ -394,6 +394,79 @@ paths:
               schema:
                 $ref: '#/components/schemas/GetPeersResponse'
 
+  /node/txpool:
+    get:
+      tags:
+        - Node
+      summary: Retrieve transactions from transactions pool
+      description: |
+        Retrieve transactions that are currently in the txpool (pending transactions). 
+        The response can be filtered by sender (origin) addresses.
+        
+        The transactions can be returned either as a list of transaction IDs or as expanded transaction objects.
+      parameters:
+        - name: expanded
+          in: query
+          description: |
+            Whether to return expanded transaction details (true) or just transaction IDs (false).
+            If omitted, defaults to false.
+          required: false
+          schema:
+            type: boolean
+        - name: origin
+          in: query
+          description: |
+            Filter transactions by sender address.
+          required: false
+          schema:
+            type: string
+            pattern: '^0x[0-9a-fA-F]{40}$'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/TransactionsIDs'
+                  - $ref: '#/components/schemas/Transactions'
+        '400':
+          description: Bad Request
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: 'Invalid address'
+        '404':
+          description: Endpoint is disabled
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: '404 Not Found'
+
+  /node/txpool/status:
+    get:
+      tags:
+        - Node 
+      summary: Get txpool status
+      description: |
+        Retrieve the current status of the txpool, including the number of pending transactions.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Endpoint is disabled
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: '404 Not Found'
+
   /subscriptions/block:
     get:
       tags:
@@ -2254,6 +2327,37 @@ components:
           description: Whether the block has been finalized (true) or not (false)
           example: false
           nullable: false
+
+    Status:
+      type: object
+      title: Status
+      properties:
+        total:
+          type: integer
+          format: uint
+          description: The total number of transactions currently in the txpool
+          example: 42
+          nullable: false
+
+    TransactionsIDs:
+      type: array
+      title: TransactionsIDs  
+      name: TransactionsIDs
+      description: Array of transaction IDs currently in the txpool
+      items:
+        type: string
+        format: hex
+        pattern: '^0x[0-9a-f]{64}$'
+      example:
+        - '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
+        - '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
+
+    Transactions:
+      type: array 
+      title: Transactions
+      description: Array of expanded transaction objects currently in the txpool
+      items:
+        $ref: '#/components/schemas/Tx'
 
   parameters:
     GetAddressInPath:

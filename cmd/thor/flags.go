@@ -77,6 +77,10 @@ var (
 		Name:  "enable-api-logs",
 		Usage: "enables API requests logging",
 	}
+	apiTxpoolFlag = cli.BoolFlag{
+		Name:  "api-enable-txpool",
+		Usage: "enable txpool REST API endpoints",
+	}
 	verbosityFlag = cli.Uint64Flag{
 		Name:  "verbosity",
 		Value: log.LegacyLevelInfo,

@@ -68,6 +68,7 @@ func main() {
 		Copyright: fmt.Sprintf("2018-%s VeChain Foundation <https://vechain.org/>", copyrightYear),
 		Flags: []cli.Flag{
 			networkFlag,
+			apiTxpoolFlag,
 			configDirFlag,
 			masterKeyStdinFlag,
 			dataDirFlag,
@@ -110,6 +111,7 @@ func main() {
 					genesisFlag,
 					dataDirFlag,
 					cacheFlag,
+					apiTxpoolFlag,
 					apiAddrFlag,
 					apiCorsFlag,
 					apiTimeoutFlag,
