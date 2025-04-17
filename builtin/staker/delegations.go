@@ -224,11 +224,21 @@ func (d *delegations) Withdraw(validationID thor.Bytes32, delegatorAddr thor.Add
 	if delegator.IsLocked(validator) {
 		return nil, errors.New("delegator is not eligible for withdraw")
 	}
-	if delegation.WithdrawVET.Cmp(delegator.Stake) < 0 {
-		return nil, errors.New("not enough withdraw VET")
-	}
 
-	delegation.WithdrawVET = delegation.WithdrawVET.Sub(delegation.WithdrawVET, delegator.Stake)
+	delegationStarted := delegator.FirstIteration <= validator.CompleteIterations
+	if delegationStarted {
+		// the stake has moved to withdrawable since we checked if the validator is locked above
+		if delegation.WithdrawVET.Cmp(delegator.Stake) < 0 {
+			return nil, errors.New("not enough withdraw VET")
+		}
+		delegation.WithdrawVET = delegation.WithdrawVET.Sub(delegation.WithdrawVET, delegator.Stake)
+	} else {
+		// the delegators was never locked
+		if delegation.PendingLockedVET.Cmp(delegator.Stake) < 0 {
+			return nil, errors.New("not enough pending locked VET")
+		}
+		delegation.PendingLockedVET = delegation.PendingLockedVET.Sub(delegation.PendingLockedVET, delegator.Stake)
+	}
 
 	// remove the delegator from the mapping after the withdraw
 	if err := d.storage.SetDelegator(validationID, delegatorAddr, &Delegator{}); err != nil {

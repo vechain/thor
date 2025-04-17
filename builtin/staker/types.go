@@ -100,9 +100,9 @@ func (d *Delegator) IsLocked(validator *Validation) bool {
 	if validator.Status != StatusActive {
 		return false
 	}
-	// the delegator is locked into the current staking period
+	// the delegator is not yet locked into the validator
 	if d.FirstIteration == validator.CompleteIterations+1 {
-		return true
+		return false
 	}
 	if d.ExitIteration == nil {
 		return true

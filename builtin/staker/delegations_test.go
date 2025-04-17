@@ -296,3 +296,29 @@ func Test_Delegator_AutoRenew_ValidatorExits(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, stake, amount)
 }
+
+func Test_Delegator_WithdrawWhilePending(t *testing.T) {
+	// Given the staker contract is setup
+	staker, validators := newDelegationStaker(t)
+
+	// And a delegator is added with auto renew enabled
+	validator := validators[0]
+	stake := RandomStake()
+	delegatorAddr := datagen.RandAddress()
+	assert.NoError(t, staker.AddDelegator(validator.ID, delegatorAddr, stake, true, 255))
+
+	// When the delegator withdraws
+	amount, err := staker.DelegatorWithdrawStake(validator.ID, delegatorAddr)
+	assert.NoError(t, err)
+	assert.Equal(t, stake, amount)
+
+	// Then the delegation should be removed
+	delegation, err := staker.storage.GetDelegation(validator.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0), delegation.PendingLockedVET)
+
+	// And the delegator should be removed
+	delegator, err := staker.GetDelegator(validator.ID, delegatorAddr)
+	assert.NoError(t, err)
+	assert.True(t, delegator.IsEmpty())
+}
