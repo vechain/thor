@@ -282,8 +282,14 @@ func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts uint
 			// the block is surely unprocessable now
 			return errBlockTemporaryUnprocessable
 		}
+
+		// don't increase maxBlockNum if the block is unprocessable
+		if err := process(0); err != nil {
+			return err
+		}
+
 		n.maxBlockNum = blockNum
-		return process(0)
+		return nil
 	}
 
 	conflicts, err := n.repo.ScanConflicts(blockNum)
