@@ -102,6 +102,7 @@ func TestGetSummary(t *testing.T) {
 	thorChain, err := testchain.NewIntegrationTestChain()
 	require.NoError(t, err)
 
+	customRevision := thorChain.Repo().BestBlockSummary().Header.ID()
 	// Test cases
 	testCases := []struct {
 		name     string
@@ -129,8 +130,8 @@ func TestGetSummary(t *testing.T) {
 			err:      nil,
 		},
 		{
-			name:     "0x00000000c05a20fbca2bf6ae3affba6af4a74b800b585bf7a4988aba7aea69f6",
-			revision: &Revision{thor.MustParseBytes32("0x00000000c05a20fbca2bf6ae3affba6af4a74b800b585bf7a4988aba7aea69f6")},
+			name:     "customRevision",
+			revision: &Revision{customRevision},
 			err:      nil,
 		},
 		{
