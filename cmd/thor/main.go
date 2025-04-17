@@ -111,6 +111,7 @@ func main() {
 					genesisFlag,
 					dataDirFlag,
 					cacheFlag,
+					apiTxpoolFlag,
 					apiAddrFlag,
 					apiCorsFlag,
 					apiTimeoutFlag,
