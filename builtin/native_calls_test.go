@@ -1542,20 +1542,23 @@ func TestStakerContract_Native(t *testing.T) {
 	id := receipt.Outputs[0].Events[0].Topics[3]
 
 	// get
-	getRes := make([]any, 5)
+	getRes := make([]any, 6)
 	getRes[0] = new(common.Address)
-	getRes[1] = new(*big.Int)
+	getRes[1] = new(common.Address)
 	getRes[2] = new(*big.Int)
-	getRes[3] = new(uint8)
-	getRes[4] = new(bool)
+	getRes[3] = new(*big.Int)
+	getRes[4] = new(uint8)
+	getRes[5] = new(bool)
 	_, err = callContractAndGetOutput(abi, "get", toAddr, &getRes, id)
 	assert.NoError(t, err)
 	expectedEndorsor := common.BytesToAddress(endorsor.Address.Bytes())
-	assert.Equal(t, &expectedEndorsor, getRes[0])
-	assert.Equal(t, big.NewInt(0).Cmp(*getRes[1].(**big.Int)), 0) // stake - should be 0 while queued
-	assert.Equal(t, big.NewInt(0).Cmp(*getRes[2].(**big.Int)), 0) // weight - should be 0 while queued
-	assert.Equal(t, staker.StatusQueued, *getRes[3].(*uint8))
-	assert.Equal(t, true, *getRes[4].(*bool)) // isMaster
+	expectedMasterAddress := common.BytesToAddress(master.Address.Bytes())
+	assert.Equal(t, &expectedMasterAddress, getRes[0])
+	assert.Equal(t, &expectedEndorsor, getRes[1])
+	assert.Equal(t, big.NewInt(0).Cmp(*getRes[2].(**big.Int)), 0) // stake - should be 0 while queued
+	assert.Equal(t, big.NewInt(0).Cmp(*getRes[3].(**big.Int)), 0) // weight - should be 0 while queued
+	assert.Equal(t, staker.StatusQueued, *getRes[4].(*uint8))
+	assert.Equal(t, true, *getRes[5].(*bool)) // isMaster
 
 	//firstQueued
 	firstQueuedRes := new(common.Hash)
@@ -1563,6 +1566,14 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.NoError(t, err)
 	expectedMaster := common.BytesToHash(id.Bytes())
 	assert.Equal(t, &expectedMaster, firstQueuedRes)
+
+	// queuedStake
+	queuedStake := new(*big.Int)
+	_, err = callContractAndGetOutput(abi, "queuedStake", toAddr, queuedStake)
+	assert.NoError(t, err)
+	expectedTotalStake := big.NewInt(25_000_000)
+	expectedTotalStake = expectedTotalStake.Mul(expectedTotalStake, big.NewInt(1e18))
+	assert.Equal(t, expectedTotalStake, *queuedStake)
 
 	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0])) // mint block 4: PoS should become active and active the queued validators
 
@@ -1577,9 +1588,15 @@ func TestStakerContract_Native(t *testing.T) {
 	totalStake := new(*big.Int)
 	_, err = callContractAndGetOutput(abi, "totalStake", toAddr, totalStake)
 	assert.NoError(t, err)
-	expectedTotalStake := big.NewInt(25_000_000)
+	expectedTotalStake = big.NewInt(25_000_000)
 	expectedTotalStake = expectedTotalStake.Mul(expectedTotalStake, big.NewInt(1e18))
 	assert.Equal(t, expectedTotalStake, *totalStake)
+
+	// queuedStake
+	queuedStake = new(*big.Int)
+	_, err = callContractAndGetOutput(abi, "queuedStake", toAddr, queuedStake)
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0).String(), (*queuedStake).String())
 }
 
 func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
@@ -1633,15 +1650,16 @@ func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
 	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
 
 	// get
-	getRes := make([]any, 5)
+	getRes := make([]any, 6)
 	getRes[0] = new(common.Address)
-	getRes[1] = new(*big.Int)
+	getRes[1] = new(common.Address)
 	getRes[2] = new(*big.Int)
-	getRes[3] = new(uint8)
-	getRes[4] = new(bool)
+	getRes[3] = new(*big.Int)
+	getRes[4] = new(uint8)
+	getRes[5] = new(bool)
 	_, err = callContractAndGetOutput(abi, "get", toAddr, &getRes, id)
 	assert.NoError(t, err)
-	assert.Equal(t, staker.StatusExit, *getRes[3].(*uint8))
+	assert.Equal(t, staker.StatusExit, *getRes[4].(*uint8))
 
 	//firstQueued
 	firstQueuedRes := new(common.Hash)

@@ -51,9 +51,9 @@ func init() {
 				panic(err)
 			}
 			if validator.IsEmpty() {
-				return []any{thor.Address{}, big.NewInt(0), big.NewInt(0), staker.StatusUnknown, false}
+				return []any{thor.Address{}, thor.Address{}, big.NewInt(0), big.NewInt(0), staker.StatusUnknown, false}
 			}
-			return []any{validator.Endorsor, validator.LockedVET, validator.Weight, validator.Status, validator.AutoRenew}
+			return []any{validator.Master, validator.Endorsor, validator.LockedVET, validator.Weight, validator.Status, validator.AutoRenew}
 		}},
 		{"native_getWithdraw", func(env *xenv.Environment) []any {
 			var args struct {

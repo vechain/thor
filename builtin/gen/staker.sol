@@ -161,11 +161,11 @@ contract Staker {
 
     /**
      * @dev get returns the stake, weight and status of a validator.
-     * @return (endorser, stake, weight, status, autoRenew)
+     * @return (master, endorser, stake, weight, status, autoRenew)
      */
     function get(
         bytes32 id
-    ) public view returns (address, uint256, uint256, uint8, bool) {
+    ) public view returns (address, address, uint256, uint256, uint8, bool) {
         return StakerNative(address(this)).native_get(id);
     }
 
@@ -277,7 +277,7 @@ interface StakerNative {
 
     function native_get(
         bytes32 id
-    ) external view returns (address, uint256, uint256, uint8, bool);
+    ) external view returns (address, address, uint256, uint256, uint8, bool);
 
     function native_getWithdraw(
         bytes32 id
