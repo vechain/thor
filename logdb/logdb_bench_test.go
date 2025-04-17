@@ -78,7 +78,7 @@ func BenchmarkFakeDB_NewestBlockID(t *testing.B) {
 	t.ResetTimer()
 	for _, tt := range tests {
 		t.Run(tt.name, func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				want, err := tt.prepare()
 				require.NoError(t, err)
 
@@ -139,7 +139,7 @@ func BenchmarkFakeDB_WriteBlocks(t *testing.B) {
 	t.ResetTimer()
 	for _, tt := range tests {
 		t.Run(tt.name, func(b *testing.B) {
-			for i := 0; i < t.N; i++ {
+			for t.Loop() {
 				tt.writeFunc(b)
 			}
 		})
@@ -158,8 +158,7 @@ func BenchmarkTestDB_HasBlockID(b *testing.B) {
 	require.NoError(b, err)
 	require.GreaterOrEqual(b, len(events), 500_000, "there should be more than 500k events in the db")
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, event := range events {
 			has, err := db.HasBlockID(event.BlockID)
 			require.NoError(b, err)
@@ -203,7 +202,7 @@ func BenchmarkTestDB_FilterEvents(b *testing.B) {
 	for _, tt := range tests {
 		b.Run(tt.name, func(b *testing.B) {
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_, err = db.FilterEvents(context.Background(), tt.arg)
 				if err != nil {
 					b.Fatal(err)
@@ -242,7 +241,7 @@ func BenchmarkTestDB_FilterTransfers(b *testing.B) {
 	for _, tt := range tests {
 		b.Run(tt.name, func(b *testing.B) {
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_, err = db.FilterTransfers(context.Background(), tt.arg)
 				if err != nil {
 					b.Fatal(err)
