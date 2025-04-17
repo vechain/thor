@@ -302,7 +302,7 @@ func makeAPIConfig(ctx *cli.Context, logAPIRequests *atomic.Bool, soloMode bool)
 		AllowedTracers:    parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
 		EnableDeprecated:  ctx.Bool(apiEnableDeprecatedFlag.Name),
 		SoloMode:          soloMode,
-		EnableTxpool:      ctx.Bool(txpoolFlag.Name),
+		EnableTxpool:      ctx.Bool(apiTxpoolFlag.Name),
 	}
 }
 
