@@ -287,7 +287,7 @@ func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts uint
 		if err := process(0); err != nil {
 			return err
 		}
-		
+
 		n.maxBlockNum = blockNum
 		return nil
 	}
