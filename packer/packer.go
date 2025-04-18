@@ -128,7 +128,6 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (flow
 	}
 
 	var baseFee *big.Int
-
 	if parent.Header.Number()+1 >= p.forkConfig.GALACTICA {
 		baseFee = fork.CalcBaseFee(&p.forkConfig, parent.Header)
 	}

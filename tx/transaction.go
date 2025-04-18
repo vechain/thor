@@ -25,10 +25,6 @@ import (
 )
 
 var (
-	// ErrMaxPriorityFeeVeryHigh is a sanity error to avoid extremely big numbers specified in the priority fee field.
-	ErrMaxPriorityFeeVeryHigh = errors.New("max priority fee per gas higher than 2^256-1")
-	// ErrMaxFeeVeryHigh is a sanity error to avoid extremely big numbers specified in the max fee field.
-	ErrMaxFeeVeryHigh     = errors.New("max fee per gas higher than 2^256-1")
 	ErrTxTypeNotSupported = errors.New("transaction type not supported")
 
 	errIntrinsicGasOverflow = errors.New("intrinsic gas overflow")
@@ -449,11 +445,7 @@ func (t *Transaction) EffectiveGasPrice(baseGasPrice *big.Int, baseFee *big.Int)
 
 	// For dynamic fee transactions, effective gas price take block base fee into account.
 	priorityFeePerGas := new(big.Int).Sub(t.body.maxFeePerGas(), baseFee)
-	if priorityFeePerGas.Cmp(t.body.maxPriorityFeePerGas()) > 0 {
-		priorityFeePerGas = t.body.maxPriorityFeePerGas()
-	}
-
-	return priorityFeePerGas.Add(priorityFeePerGas, baseFee)
+	return priorityFeePerGas.Add(math.BigMin(priorityFeePerGas, t.body.maxPriorityFeePerGas()), baseFee)
 }
 
 // ProvedWork returns proved work for legacy transactions.

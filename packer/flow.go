@@ -148,9 +148,6 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 			return badTxError{"invalid tx type"}
 		}
 	} else {
-		if f.runtime.Context().BaseFee == nil {
-			return fork.ErrBaseFeeNotSet
-		}
 		legacyTxBaseGasPrice, err := builtin.Params.Native(f.runtime.State()).Get(thor.KeyLegacyTxBaseGasPrice)
 		if err != nil {
 			return err
@@ -231,7 +228,7 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 	}
 
 	if f.Number() >= f.packer.forkConfig.GALACTICA {
-		builder.BaseFee(fork.CalcBaseFee(&f.packer.forkConfig, f.parentHeader))
+		builder.BaseFee(f.runtime.Context().BaseFee)
 	}
 
 	if f.Number() < f.packer.forkConfig.VIP214 {

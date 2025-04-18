@@ -159,13 +159,21 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 			return consensusError("invalid block: baseFee should not set before fork GALACTICA")
 		}
 
-		if !block.GasLimit(header.GasLimit()).IsValid(parent.GasLimit()) {
-			return consensusError(fmt.Sprintf("block gas limit invalid: parent %v, current %v", parent.GasLimit(), header.GasLimit()))
-		}
 	} else {
-		if err := fork.VerifyGalacticaHeader(&c.forkConfig, parent, header); err != nil {
-			return consensusError(fmt.Sprintf("block header invalid: %v", err))
+		if header.BaseFee() == nil {
+			return consensusError("invalid block: baseFee is missing")
 		}
+
+		// Verify the baseFee is correct based on the parent header.
+		expectedBaseFee := fork.CalcBaseFee(&c.forkConfig, parent)
+		if header.BaseFee().Cmp(expectedBaseFee) != 0 {
+			return fmt.Errorf("block baseFee invalid: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
+				expectedBaseFee, header.BaseFee(), parent.BaseFee(), parent.GasUsed())
+		}
+	}
+
+	if !block.GasLimit(header.GasLimit()).IsValid(parent.GasLimit()) {
+		return consensusError(fmt.Sprintf("block gas limit invalid: parent %v, current %v", parent.GasLimit(), header.GasLimit()))
 	}
 
 	return nil
@@ -256,7 +264,7 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 		case tr.IsExpired(header.Number()):
 			return consensusError(fmt.Sprintf("tx expired: ref %v, current %v, expiration %v", tr.BlockRef().Number(), header.Number(), tr.Expiration()))
 		case header.Number() < c.forkConfig.GALACTICA && tr.Type() != tx.TypeLegacy:
-			return consensusError(tx.ErrTxTypeNotSupported.Error())
+			return consensusError("invalid tx: " + tx.ErrTxTypeNotSupported.Error())
 		}
 
 		if err := tr.TestFeatures(header.TxsFeatures()); err != nil {
@@ -312,6 +320,11 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 		return chain.HasTransaction(txid, txBlockRef)
 	}
 
+	baseGasPrice, err := builtin.Params.Native(state).Get(thor.KeyBaseGasPrice)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	for _, tx := range txs {
 		// check if tx existed
 		if found, err := hasTx(tx.ID(), tx.BlockRef().Number()); err != nil {
@@ -322,12 +335,9 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 
 		// check if tx has enough fee to cover for base fee, if set
 		if header.BaseFee() != nil {
-			legacyTxBaseGasPrice, err := builtin.Params.Native(state).Get(thor.KeyLegacyTxBaseGasPrice)
-			if err != nil {
-				return nil, nil, err
-			}
-			if err := fork.ValidateGalacticaTxFee(tx, header.BaseFee(), legacyTxBaseGasPrice); err != nil {
-				return nil, nil, err
+			effectiveGasPrice := tx.EffectiveGasPrice(baseGasPrice, header.BaseFee())
+			if effectiveGasPrice.Cmp(header.BaseFee()) < 0 {
+				return nil, nil, consensusError("tx gas price is lower than block base fee")
 			}
 		}
 

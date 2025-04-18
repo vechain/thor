@@ -224,8 +224,16 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 
 	headSummary := p.repo.BestBlockSummary()
 
-	if err := ValidateTransaction(newTx, p.repo, headSummary, p.forkConfig); err != nil {
-		return err
+	// validation
+	switch {
+	case newTx.ChainTag() != p.repo.ChainTag():
+		return badTxError{"chain tag mismatch"}
+	case newTx.Size() > maxTxSize:
+		return txRejectedError{"size too large"}
+	}
+
+	if err := newTx.TestFeatures(headSummary.Header.TxsFeatures()); err != nil {
+		return txRejectedError{err.Error()}
 	}
 
 	txObj, err := resolveTx(newTx, localSubmitted)
