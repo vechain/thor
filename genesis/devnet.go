@@ -63,7 +63,10 @@ func NewDevnet() *Genesis {
 
 func NewDevnetWithConfig(config thor.ForkConfig) *Genesis {
 	launchTime := uint64(1526400000) // 'Wed May 16 2018 00:00:00 GMT+0800 (CST)'
+	return NewDevnetWithConfigAndLaunchtime(config, launchTime)
+}
 
+func NewDevnetWithConfigAndLaunchtime(config thor.ForkConfig, launchTime uint64) *Genesis {
 	executor := DevAccounts()[0].Address
 	soloBlockSigner := DevAccounts()[0]
 
