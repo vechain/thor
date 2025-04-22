@@ -549,6 +549,7 @@ func TestEnergyNative(t *testing.T) {
 		acc1 = genesis.DevAccounts()[0]
 		acc2 = genesis.DevAccounts()[1]
 		acc3 = thor.BytesToAddress([]byte("some acc"))
+		acc4 = thor.BytesToAddress([]byte("stargate address"))
 	)
 
 	toAddr := builtin.Energy.Address
@@ -743,6 +744,8 @@ func TestEnergyNative(t *testing.T) {
 	staker := thorChain.Contract(builtin.Staker.Address, builtin.Staker.ABI, genesis.DevAccounts()[0])
 	assert.NoError(t, params.MintTransaction("set", big.NewInt(0), thor.KeyMaxBlockProposers, big.NewInt(1)))
 	exSupply = exSupply.Add(exSupply, growth)
+	assert.NoError(t, params.MintTransaction("set", big.NewInt(0), thor.KeyStargateContractAddress, big.NewInt(0).SetBytes(acc4.Bytes())))
+	exSupply = exSupply.Add(exSupply, growth)
 
 	// 2: Add a validator to the queue
 	minStake := big.NewInt(25_000_000)
@@ -751,11 +754,30 @@ func TestEnergyNative(t *testing.T) {
 	exSupply = exSupply.Add(exSupply, growth)
 	exSupply = exSupply.Add(exSupply, growth)
 
+	validatorMap := make(map[uint64]*big.Int)
+	stargateMap := make(map[uint64]*big.Int)
+
 	// 3: Mint some blocks
-	firstPOS := thorChain.Repo().BestBlockSummary().Header.Number() + 2
+	summary := thorChain.Repo().BestBlockSummary()
+	firstPOS := summary.Header.Number() + 2
+	st := thorChain.Stater().NewState(summary.Root())
+	energyAtBlock, err := st.GetEnergy(summary.Header.Beneficiary(), summary.Header.Timestamp())
 	require.NoError(t, err)
+	validatorMap[summary.Header.Timestamp()] = energyAtBlock
+	stargateBalAtBlock, err := st.GetEnergy(acc4, summary.Header.Timestamp())
+	require.NoError(t, err)
+	stargateMap[summary.Header.Timestamp()] = stargateBalAtBlock
+
 	for range 5 {
 		require.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
+		summary = thorChain.Repo().BestBlockSummary()
+		st := thorChain.Stater().NewState(summary.Root())
+		energyAtBlock, err = st.GetEnergy(summary.Header.Beneficiary(), summary.Header.Timestamp())
+		require.NoError(t, err)
+		validatorMap[thorChain.Repo().BestBlockSummary().Header.Timestamp()] = energyAtBlock
+		stargateBalAtBlock, err = st.GetEnergy(acc4, summary.Header.Timestamp())
+		require.NoError(t, err)
+		stargateMap[summary.Header.Timestamp()] = stargateBalAtBlock
 	}
 	best = thorChain.Repo().BestBlockSummary().Header.Number()
 
@@ -763,12 +785,23 @@ func TestEnergyNative(t *testing.T) {
 	for i := firstPOS; i <= best; i++ {
 		summary, err := thorChain.Repo().NewBestChain().GetBlockSummary(i)
 		require.NoError(t, err)
-		st := thorChain.Stater().NewState(summary.Root())
+		st = thorChain.Stater().NewState(summary.Root())
 		staker := builtin.Staker.Native(st)
 		energy := builtin.Energy.Native(st, summary.Header.Timestamp())
 		reward, err := energy.CalculateRewards(staker)
 		require.NoError(t, err)
 		stakeRewards.Add(stakeRewards, reward)
+
+		energyAtBlock := validatorMap[summary.Header.Timestamp()]
+		energyBeforeBlock := validatorMap[summary.Header.Timestamp()-10]
+
+		expectedReward := big.NewInt(0).Mul(reward, big.NewInt(3))
+		expectedReward = expectedReward.Div(expectedReward, big.NewInt(10))
+		require.Equal(t, expectedReward, big.NewInt(0).Sub(energyAtBlock, energyBeforeBlock))
+
+		stargateEnergyAtBlock := stargateMap[summary.Header.Timestamp()]
+		stargateEnergyBeforeBlock := stargateMap[summary.Header.Timestamp()-10]
+		require.Equal(t, big.NewInt(0).Sub(reward, expectedReward), big.NewInt(0).Sub(stargateEnergyAtBlock, stargateEnergyBeforeBlock))
 	}
 	exSupply = exSupply.Add(exSupply, stakeRewards)
 

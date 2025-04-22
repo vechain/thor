@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/v2/builtin/params"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -25,7 +26,8 @@ func TestEnergy(t *testing.T) {
 
 	acc := thor.BytesToAddress([]byte("a1"))
 
-	eng := New(thor.BytesToAddress([]byte("eng")), st, 0)
+	p := params.New(thor.BytesToAddress([]byte("par")), st)
+	eng := New(thor.BytesToAddress([]byte("eng")), st, 0, p)
 	tests := []struct {
 		ret      any
 		expected any
@@ -47,7 +49,8 @@ func TestEnergy(t *testing.T) {
 func TestInitialSupply(t *testing.T) {
 	st := state.New(muxdb.NewMem(), trie.Root{})
 
-	eng := New(thor.BytesToAddress([]byte("eng")), st, 0)
+	p := params.New(thor.BytesToAddress([]byte("par")), st)
+	eng := New(thor.BytesToAddress([]byte("eng")), st, 0, p)
 
 	// get initial supply before set should return 0
 	supply, err := eng.getInitialSupply()
@@ -64,7 +67,8 @@ func TestInitialSupply(t *testing.T) {
 func TestInitialSupplyError(t *testing.T) {
 	st := state.New(muxdb.NewMem(), trie.Root{})
 
-	eng := New(thor.BytesToAddress([]byte("a1")), st, 0)
+	p := params.New(thor.BytesToAddress([]byte("par")), st)
+	eng := New(thor.BytesToAddress([]byte("a1")), st, 0, p)
 
 	eng.SetInitialSupply(big.NewInt(0), big.NewInt(0))
 
@@ -78,7 +82,8 @@ func TestTotalSupply(t *testing.T) {
 	st := state.New(muxdb.NewMem(), trie.Root{})
 
 	addr := thor.BytesToAddress([]byte("eng"))
-	eng := New(addr, st, 1)
+	p := params.New(thor.BytesToAddress([]byte("par")), st)
+	eng := New(addr, st, 1, p)
 
 	eng.SetInitialSupply(big.NewInt(100000000000000000), big.NewInt(456))
 
@@ -123,7 +128,8 @@ func TestTotalSupply(t *testing.T) {
 func TestTokenTotalSupply(t *testing.T) {
 	st := state.New(muxdb.NewMem(), trie.Root{})
 
-	eng := New(thor.BytesToAddress([]byte("eng")), st, 0)
+	p := params.New(thor.BytesToAddress([]byte("par")), st)
+	eng := New(thor.BytesToAddress([]byte("eng")), st, 0, p)
 
 	eng.SetInitialSupply(big.NewInt(123), big.NewInt(456))
 
@@ -136,7 +142,8 @@ func TestTokenTotalSupply(t *testing.T) {
 func TestTotalBurned(t *testing.T) {
 	st := state.New(muxdb.NewMem(), trie.Root{})
 
-	eng := New(thor.BytesToAddress([]byte("eng")), st, 0)
+	p := params.New(thor.BytesToAddress([]byte("par")), st)
+	eng := New(thor.BytesToAddress([]byte("eng")), st, 0, p)
 
 	eng.SetInitialSupply(big.NewInt(123), big.NewInt(456))
 
@@ -156,7 +163,8 @@ func TestEnergyGrowth(t *testing.T) {
 	vetBal := big.NewInt(1e18)
 	st.SetBalance(acc, vetBal)
 
-	bal1, err := New(thor.Address{}, st, 1000).
+	p := params.New(thor.BytesToAddress([]byte("par")), st)
+	bal1, err := New(thor.Address{}, st, 1000, p).
 		Get(acc)
 
 	assert.Nil(t, err)
@@ -171,7 +179,8 @@ func TestEnergyGrowth(t *testing.T) {
 func TestAddIssued(t *testing.T) {
 	st := state.New(muxdb.NewMem(), trie.Root{})
 
-	eng := New(thor.BytesToAddress([]byte("eng")), st, 1)
+	p := params.New(thor.BytesToAddress([]byte("par")), st)
+	eng := New(thor.BytesToAddress([]byte("eng")), st, 1, p)
 
 	issued, err := eng.getIssued()
 	assert.NoError(t, err)

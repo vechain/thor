@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -47,17 +48,17 @@ const (
 
 // Keys of governance params.
 var (
-	KeyExecutorAddress     = BytesToBytes32([]byte("executor"))
-	KeyRewardRatio         = BytesToBytes32([]byte("reward-ratio"))
-	KeyBaseGasPrice        = BytesToBytes32([]byte("base-gas-price"))
-	KeyProposerEndorsement = BytesToBytes32([]byte("proposer-endorsement"))
-	KeyMaxBlockProposers   = BytesToBytes32([]byte("max-block-proposers"))
-
-	DelegatorContractAddress = BytesToBytes32([]byte("delegator-contract"))
+	KeyExecutorAddress         = BytesToBytes32([]byte("executor"))
+	KeyRewardRatio             = BytesToBytes32([]byte("reward-ratio"))
+	KeyBaseGasPrice            = BytesToBytes32([]byte("base-gas-price"))
+	KeyProposerEndorsement     = BytesToBytes32([]byte("proposer-endorsement"))
+	KeyMaxBlockProposers       = BytesToBytes32([]byte("max-block-proposers"))
+	KeyStargateContractAddress = BytesToBytes32([]byte("stargate-contract-address"))
 
 	InitialRewardRatio         = big.NewInt(3e17) // 30%
 	InitialBaseGasPrice        = big.NewInt(1e15)
 	InitialProposerEndorsement = new(big.Int).Mul(big.NewInt(1e18), big.NewInt(25000000))
+	InitialStargateAddress     = common.Address{}.Big()
 
 	HayabusaEnergyGrowthStopTime = BytesToBytes32([]byte("hayabusa-energy-growth-stop-time"))
 
@@ -66,4 +67,5 @@ var (
 	ScalingFactor         = big.NewInt(64)      // scaling factor for rewards curve
 	TargetFactor          = big.NewInt(1200)    // target factor for rewards curve
 	NumberOfBlocksPerYear = big.NewInt(3153600) // number of blocks per year, non leap
+
 )

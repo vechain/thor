@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/vechain/thor/v2/builtin/params"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -25,11 +26,12 @@ type Energy struct {
 	addr      thor.Address
 	state     *state.State
 	blockTime uint64
+	params    *params.Params
 }
 
 // New creates a new energy instance.
-func New(addr thor.Address, state *state.State, blockTime uint64) *Energy {
-	return &Energy{addr, state, blockTime}
+func New(addr thor.Address, state *state.State, blockTime uint64, params *params.Params) *Energy {
+	return &Energy{addr, state, blockTime, params}
 }
 
 func (e *Energy) getInitialSupply() (init initialSupply, err error) {
@@ -206,8 +208,18 @@ func (e *Energy) DistributeRewards(beneficiary thor.Address, staker staker) erro
 	if err != nil {
 		return err
 	}
+	proposerReward := big.NewInt(0).Mul(reward, big.NewInt(3))
+	proposerReward = proposerReward.Div(proposerReward, big.NewInt(10))
+	val, err := e.params.Get(thor.KeyStargateContractAddress)
+	if err != nil {
+		return err
+	}
 
-	if err := e.Add(beneficiary, reward); err != nil {
+	addr := thor.BytesToAddress(val.Bytes())
+	if err := e.Add(addr, big.NewInt(0).Sub(reward, proposerReward)); err != nil {
+		return err
+	}
+	if err := e.Add(beneficiary, proposerReward); err != nil {
 		return err
 	}
 	if err := e.AddIssued(reward); err != nil {
