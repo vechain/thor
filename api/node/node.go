@@ -41,7 +41,7 @@ func (n *Node) handleNetwork(w http.ResponseWriter, _ *http.Request) error {
 	return utils.WriteJSON(w, n.PeersStats())
 }
 
-func (m *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) error {
+func (n *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) error {
 	expanded, err := utils.StringToBoolean(req.URL.Query().Get("expanded"), false)
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "expanded"))
@@ -53,7 +53,7 @@ func (m *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) e
 		return utils.BadRequest(errors.WithMessage(err, "origin"))
 	}
 
-	filteredTransactions := m.pool.Dump()
+	filteredTransactions := n.pool.Dump()
 	if origin != nil {
 		filteredTransactions, err = filterTransactions(*origin, filteredTransactions)
 		if err != nil {
@@ -104,8 +104,8 @@ func (m *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) e
 	return utils.WriteJSON(w, transactions)
 }
 
-func (m *Node) handleGetTxpoolStatus(w http.ResponseWriter, req *http.Request) error {
-	total := m.pool.Len()
+func (n *Node) handleGetTxpoolStatus(w http.ResponseWriter, req *http.Request) error {
+	total := n.pool.Len()
 	status := Status{
 		Amount: uint(total),
 	}
