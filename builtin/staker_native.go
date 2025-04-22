@@ -39,14 +39,14 @@ func init() {
 		}},
 		{"native_get", func(env *xenv.Environment) []any {
 			var args struct {
-				Id common.Hash // nolint: revive
+				ValidationID common.Hash
 			}
 			env.ParseArgs(&args)
 
 			env.UseGas(thor.SloadGas)
 			env.UseGas(thor.SloadGas)
 
-			validator, err := Staker.Native(env.State()).Get(thor.Bytes32(args.Id))
+			validator, err := Staker.Native(env.State()).Get(thor.Bytes32(args.ValidationID))
 			if err != nil {
 				panic(err)
 			}
@@ -57,14 +57,14 @@ func init() {
 		}},
 		{"native_getWithdraw", func(env *xenv.Environment) []any {
 			var args struct {
-				Id common.Hash // nolint: revive
+				ValidationID common.Hash
 			}
 			env.ParseArgs(&args)
 
 			env.UseGas(thor.SloadGas)
 			env.UseGas(thor.SloadGas)
 
-			validator, err := Staker.Native(env.State()).Get(thor.Bytes32(args.Id))
+			validator, err := Staker.Native(env.State()).Get(thor.Bytes32(args.ValidationID))
 			if err != nil {
 				panic(err)
 			}
@@ -104,12 +104,12 @@ func init() {
 		}},
 		{"native_withdraw", func(env *xenv.Environment) []any {
 			var args struct {
-				Endorsor common.Address
-				Id       common.Hash // nolint: revive
+				Endorsor     common.Address
+				ValidationID common.Hash
 			}
 			env.ParseArgs(&args)
 
-			stake, err := Staker.Native(env.State()).WithdrawStake(thor.Address(args.Endorsor), thor.Bytes32(args.Id))
+			stake, err := Staker.Native(env.State()).WithdrawStake(thor.Address(args.Endorsor), thor.Bytes32(args.ValidationID))
 			if err != nil {
 				panic(err)
 			}
@@ -137,13 +137,13 @@ func init() {
 
 		{"native_updateAutoRenew", func(env *xenv.Environment) []any {
 			var args struct {
-				Endorsor  common.Address
-				Id        common.Hash // nolint: revive
-				AutoRenew bool
+				Endorsor     common.Address
+				ValidationID common.Hash
+				AutoRenew    bool
 			}
 			env.ParseArgs(&args)
 
-			err := Staker.Native(env.State()).UpdateAutoRenew(thor.Address(args.Endorsor), thor.Bytes32(args.Id), args.AutoRenew, env.BlockContext().Number)
+			err := Staker.Native(env.State()).UpdateAutoRenew(thor.Address(args.Endorsor), thor.Bytes32(args.ValidationID), args.AutoRenew, env.BlockContext().Number)
 			if err != nil {
 				panic(err)
 			}
@@ -152,13 +152,13 @@ func init() {
 		}},
 		{"native_increaseStake", func(env *xenv.Environment) []any {
 			var args struct {
-				Endorsor common.Address
-				Id       common.Hash // nolint: revive
-				Stake    *big.Int
+				Endorsor     common.Address
+				ValidationID common.Hash
+				Amount       *big.Int
 			}
 			env.ParseArgs(&args)
 
-			err := Staker.Native(env.State()).IncreaseStake(thor.Address(args.Endorsor), thor.Bytes32(args.Id), args.Stake)
+			err := Staker.Native(env.State()).IncreaseStake(thor.Address(args.Endorsor), thor.Bytes32(args.ValidationID), args.Amount)
 			if err != nil {
 				panic(err)
 			}
@@ -167,13 +167,13 @@ func init() {
 		}},
 		{"native_decreaseStake", func(env *xenv.Environment) []any {
 			var args struct {
-				Endorsor common.Address
-				Id       common.Hash // nolint: revive
-				Stake    *big.Int
+				Endorsor     common.Address
+				ValidationID common.Hash
+				Amount       *big.Int
 			}
 			env.ParseArgs(&args)
 
-			err := Staker.Native(env.State()).DecreaseStake(thor.Address(args.Endorsor), thor.Bytes32(args.Id), args.Stake)
+			err := Staker.Native(env.State()).DecreaseStake(thor.Address(args.Endorsor), thor.Bytes32(args.ValidationID), args.Amount)
 			if err != nil {
 				panic(err)
 			}

@@ -225,24 +225,24 @@ interface StakerNative {
 
     function native_increaseStake(
         address endorsor,
-        bytes32 id,
+        bytes32 validationID,
         uint256 amount
     ) external;
 
     function native_decreaseStake(
         address endorsor,
-        bytes32 id,
+        bytes32 validationID,
         uint256 amount
     ) external;
 
     function native_withdraw(
         address endorsor,
-        bytes32 id
+        bytes32 validationID
     ) external returns (uint256);
 
     function native_updateAutoRenew(
         address endorsor,
-        bytes32 id,
+        bytes32 validationID,
         bool autoRenew
     ) external;
 
@@ -276,11 +276,11 @@ interface StakerNative {
     ) external view returns (uint256, uint8, bool);
 
     function native_get(
-        bytes32 id
+        bytes32 validationID
     ) external view returns (address, address, uint256, uint256, uint8, bool);
 
     function native_getWithdraw(
-        bytes32 id
+        bytes32 validationID
     ) external view returns (uint256);
 
     function native_firstActive() external view returns (bytes32);

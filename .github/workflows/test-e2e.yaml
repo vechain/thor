@@ -2,6 +2,16 @@ name: E2E Tests
 
 on:
   workflow_call:
+    inputs:
+      hayabusa-e2e-branch:
+        type: string
+        default: 'release/hayabusa'
+  workflow_dispatch:
+    inputs:
+      hayabusa-e2e-branch:
+        description: 'Branch to test against'
+        required: true
+        default: 'release/hayabusa'
 
 jobs:
   build-docker-image:
@@ -54,8 +64,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          repository: vechain/hayabusa-e2e
-          ref: ${{ steps.set-ref.outputs.ref }}
+          repository: vechain/thor-e2e-tests
+          ref: 956b34bcf5b0b072cd7c8fd2e546a9beb66a866a
           token: ${{ secrets.GHA_REPO_ACCESS }}
 
       - name: Download artifact
@@ -87,3 +97,40 @@ jobs:
           name: e2e-test-results-${{ github.sha }}
           path: ./junit.xml
           retention-days: 14
+
+  run-hayabusa-tests:
+    runs-on: 8-core-10-jobs
+    name: Hayabusa Tests
+
+    env:
+      GOPRIVATE: github.com/vechain/draupnir/*
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          repository: vechain/hayabusa-e2e
+          path: hayabusa-e2e
+          token: ${{ secrets.GHA_REPO_ACCESS }}
+          ref: ${{ inputs.hayabusa-e2e-branch }}
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          path: hayabusa
+
+      - name: Install Goq
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.24.x
+
+      - name: Configure git for private modules
+        run: |
+          git config --global url."https://${{ secrets.GHA_REPO_ACCESS }}@github.com/".insteadOf "https://github.com/"
+
+      - name: Test
+        run: |
+          for PACKAGE in $(go list ./...); do go test -v -failfast -timeout 3600s ${PACKAGE}; done;
+        working-directory: ${{ github.workspace }}/hayabusa-e2e
+        env:
+          THOR_WORKING_DIR: ${{ github.workspace }}/hayabusa
