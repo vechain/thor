@@ -41,22 +41,6 @@ func (n *Node) handleNetwork(w http.ResponseWriter, _ *http.Request) error {
 	return utils.WriteJSON(w, n.PeersStats())
 }
 
-func filterTransactions(origin thor.Address, allTransactions tx.Transactions) (tx.Transactions, error) {
-	var filtered []*tx.Transaction
-
-	for _, tx := range allTransactions {
-		sender, err := tx.Origin()
-		if err != nil {
-			return nil, utils.BadRequest(errors.WithMessage(err, "filtering origin"))
-		}
-		if sender == origin {
-			filtered = append(filtered, tx)
-		}
-	}
-
-	return filtered, nil
-}
-
 func (m *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) error {
 	expanded, err := utils.StringToBoolean(req.URL.Query().Get("expanded"), false)
 	if err != nil {
@@ -149,4 +133,20 @@ func (n *Node) Mount(root *mux.Router, pathPrefix string) {
 			Name("GET /node/txpool/status").
 			HandlerFunc(utils.WrapHandlerFunc(n.handleGetTxpoolStatus))
 	}
+}
+
+func filterTransactions(origin thor.Address, allTransactions tx.Transactions) (tx.Transactions, error) {
+	var filtered []*tx.Transaction
+
+	for _, tx := range allTransactions {
+		sender, err := tx.Origin()
+		if err != nil {
+			return nil, utils.BadRequest(errors.WithMessage(err, "filtering origin"))
+		}
+		if sender == origin {
+			filtered = append(filtered, tx)
+		}
+	}
+
+	return filtered, nil
 }
