@@ -93,8 +93,8 @@ func New(
 		Mount(router, "/transactions")
 	debug.New(repo, stater, forkConfig, config.CallGasLimit, config.AllowCustomTracer, bft, config.AllowedTracers, config.SoloMode).
 		Mount(router, "/debug")
-	node.New(nw, txPool).
-		Mount(router, "/node", config.EnableTxpool)
+	node.New(nw, txPool, config.EnableTxpool).
+		Mount(router, "/node")
 	subs := subscriptions.New(repo, origins, config.BacktraceLimit, txPool, config.EnableDeprecated)
 	subs.Mount(router, "/subscriptions")
 

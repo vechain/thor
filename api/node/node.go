@@ -20,14 +20,16 @@ import (
 )
 
 type Node struct {
-	pool *txpool.TxPool
-	nw   Network
+	pool         *txpool.TxPool
+	nw           Network
+	enableTxpool bool
 }
 
-func New(nw Network, pool *txpool.TxPool) *Node {
+func New(nw Network, pool *txpool.TxPool, enableTxpool bool) *Node {
 	return &Node{
 		pool,
 		nw,
+		enableTxpool,
 	}
 }
 
@@ -129,7 +131,7 @@ func (m *Node) handleGetTxpoolStatus(w http.ResponseWriter, req *http.Request) e
 	return utils.WriteJSON(w, status)
 }
 
-func (n *Node) Mount(root *mux.Router, pathPrefix string, enableTxpool bool) {
+func (n *Node) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
 	sub.Path("/network/peers").
@@ -137,7 +139,7 @@ func (n *Node) Mount(root *mux.Router, pathPrefix string, enableTxpool bool) {
 		Name("GET /node/network/peers").
 		HandlerFunc(utils.WrapHandlerFunc(n.handleNetwork))
 
-	if enableTxpool {
+	if n.enableTxpool {
 		sub.Path("/txpool").
 			Methods(http.MethodGet).
 			Name("GET /node/txpool").

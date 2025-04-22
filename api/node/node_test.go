@@ -80,7 +80,7 @@ func initCommServer(t *testing.T) {
 	)
 
 	router := mux.NewRouter()
-	node.New(communicator, pool).Mount(router, "/node", true)
+	node.New(communicator, pool, true).Mount(router, "/node")
 
 	ts = httptest.NewServer(router)
 }
