@@ -132,7 +132,7 @@ func (p *TxPool) housekeeping() {
 					ctx = append(ctx, "err", err)
 				} else {
 					p.executables.Store(executables)
-					metricTxPoolExecutablesGauge().Add(int64(len(executables)))
+					metricTxPoolExecutablesGauge().Set(int64(len(executables)))
 				}
 
 				metricTxPoolGauge().AddWithLabel(0-int64(removed), map[string]string{"source": "washed", "total": "true"})
