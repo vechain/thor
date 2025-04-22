@@ -53,15 +53,12 @@ func (m *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) e
 		return utils.BadRequest(errors.WithMessage(err, "origin"))
 	}
 
-	var filteredTransactions tx.Transactions
-	if origin == nil {
-		filteredTransactions = m.pool.Dump()
-	} else {
-		filtered, err := filterTransactions(*origin, m.pool.Dump())
+	filteredTransactions := m.pool.Dump()
+	if origin != nil {
+		filteredTransactions, err = filterTransactions(*origin, filteredTransactions)
 		if err != nil {
 			return utils.BadRequest(err)
 		}
-		filteredTransactions = filtered
 	}
 
 	if expanded {
