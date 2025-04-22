@@ -12,7 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/consensus/fork"
+	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/poa"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
@@ -165,7 +165,7 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 		}
 
 		// Verify the baseFee is correct based on the parent header.
-		expectedBaseFee := fork.CalcBaseFee(parent, c.forkConfig)
+		expectedBaseFee := galactica.CalcBaseFee(parent, c.forkConfig)
 		if header.BaseFee().Cmp(expectedBaseFee) != 0 {
 			return fmt.Errorf("block baseFee invalid: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
 				expectedBaseFee, header.BaseFee(), parent.BaseFee(), parent.GasUsed())

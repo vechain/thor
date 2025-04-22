@@ -11,7 +11,7 @@ import (
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/consensus/fork"
+	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -76,7 +76,7 @@ func (p *params) GetBaseFee(head *chain.BlockSummary) *big.Int {
 		ent = &entry{}
 	}
 
-	ent.baseFee = fork.CalcBaseFee(head.Header, p.forkConfig)
+	ent.baseFee = galactica.CalcBaseFee(head.Header, p.forkConfig)
 
 	p.cache.Set(head.Header.ID(), ent, float64(head.Header.Number()))
 	return ent.baseFee

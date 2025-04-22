@@ -11,7 +11,7 @@ import (
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/consensus/fork"
+	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/poa"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
@@ -129,7 +129,7 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (flow
 
 	var baseFee *big.Int
 	if parent.Header.Number()+1 >= p.forkConfig.GALACTICA {
-		baseFee = fork.CalcBaseFee(parent.Header, p.forkConfig)
+		baseFee = galactica.CalcBaseFee(parent.Header, p.forkConfig)
 	}
 
 	rt := runtime.New(
@@ -167,7 +167,7 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 
 	var baseFee *big.Int
 	if parent.Header.Number()+1 >= p.forkConfig.GALACTICA {
-		baseFee = fork.CalcBaseFee(parent.Header, p.forkConfig)
+		baseFee = galactica.CalcBaseFee(parent.Header, p.forkConfig)
 	}
 
 	rt := runtime.New(

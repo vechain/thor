@@ -13,7 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -90,25 +89,47 @@ func (f *Flow) hasTx(txid thor.Bytes32, txBlockRef uint32) (bool, error) {
 	return f.runtime.Chain().HasTransaction(txid, txBlockRef)
 }
 
-func (f *Flow) isEffectivePriorityFeeTooLow(t *tx.Transaction, legacyTxBaseGasPrice *big.Int) error {
+func (f *Flow) isEffectivePriorityFeeTooLow(t *tx.Transaction) error {
 	// Skip check if the minimum priority fee is not set
 	if f.packer.minTxPriorityFee.Sign() <= 0 {
 		return nil
 	}
 
-	provedWork, err := t.ProvedWork(f.Number()-1, f.runtime.Chain().GetBlockID)
+	if t.MaxPriorityFeePerGas().Cmp(f.packer.minTxPriorityFee) < 0 {
+		return badTxError{"effective priority fee too low"} // never going to meet the requirement
+	}
+
+	legacyTxBaseGasPrice, err := builtin.Params.Native(f.runtime.State()).Get(thor.KeyLegacyTxBaseGasPrice)
 	if err != nil {
 		return err
 	}
-	effectivePriorityFee := fork.GalacticaPriorityGasPrice(
-		t,
-		legacyTxBaseGasPrice,
-		provedWork,
-		f.runtime.Context().BaseFee,
+
+	var (
+		maxPriorityFeePerGas *big.Int
+		maxFeePerGas         *big.Int
 	)
 
+	if t.Type() == tx.TypeLegacy {
+		provedWork, err := t.ProvedWork(f.Number(), f.runtime.Chain().GetBlockID)
+		if err != nil {
+			return err
+		}
+
+		overallGasPrice := t.OverallGasPrice(legacyTxBaseGasPrice, provedWork)
+		maxPriorityFeePerGas = overallGasPrice
+		maxFeePerGas = overallGasPrice
+	} else {
+		maxPriorityFeePerGas = t.MaxPriorityFeePerGas()
+		maxFeePerGas = t.MaxFeePerGas()
+	}
+
+	effectivePriorityFee, err := tx.EffectivePriorityFeePerGas(f.runtime.Context().BaseFee, maxPriorityFeePerGas, maxFeePerGas)
+	if err != nil {
+		return err
+	}
+
 	if effectivePriorityFee.Cmp(f.packer.minTxPriorityFee) < 0 {
-		return badTxError{"effective priority fee too low"}
+		return errTxNotAdoptableNow
 	}
 
 	return nil
@@ -147,12 +168,7 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 			return badTxError{"invalid tx type"}
 		}
 	} else {
-		// baseGasPrice required to
-		legacyTxBaseGasPrice, err := builtin.Params.Native(f.runtime.State()).Get(thor.KeyLegacyTxBaseGasPrice)
-		if err != nil {
-			return err
-		}
-		if err := f.isEffectivePriorityFeeTooLow(t, legacyTxBaseGasPrice); err != nil {
+		if err := f.isEffectivePriorityFeeTooLow(t); err != nil {
 			return err
 		}
 	}
