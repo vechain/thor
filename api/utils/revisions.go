@@ -137,7 +137,7 @@ func GetSummaryAndState(rev *Revision, repo *chain.Repository, bft bft.Committer
 
 		if best.Header.BaseFee() != nil {
 			forkConfig := thor.GetForkConfig(repo.NewBestChain().GenesisID())
-			builder.BaseFee(fork.CalcBaseFee(&forkConfig, best.Header))
+			builder.BaseFee(fork.CalcBaseFee(best.Header, forkConfig))
 		}
 
 		mocked := builder.Build()

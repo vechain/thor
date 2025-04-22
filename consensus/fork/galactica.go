@@ -6,8 +6,6 @@
 package fork
 
 import (
-	"errors"
-	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -17,18 +15,10 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-var (
-	// ErrBaseFeeNotSet is returned if the base fee is not set after the Galactica fork
-	ErrBaseFeeNotSet = errors.New("base fee not set after galactica")
-	// ErrGasPriceTooLowForBlockBase is returned if the transaction gas price is less than
-	// the base fee of the block.
-	ErrGasPriceTooLowForBlockBase = errors.New("gas price is less than block base fee")
-)
-
 // CalcBaseFee calculates the basefee of the header.
-func CalcBaseFee(config *thor.ForkConfig, parent *block.Header) *big.Int {
+func CalcBaseFee(parent *block.Header, forkConfig thor.ForkConfig) *big.Int {
 	// If the current block is the first Galactica block, return the InitialBaseFee.
-	if parent.Number()+1 == config.GALACTICA {
+	if parent.Number()+1 == forkConfig.GALACTICA {
 		return new(big.Int).SetUint64(thor.InitialBaseFee)
 	}
 
@@ -138,15 +128,4 @@ func CalculateReward(gasUsed uint64, rewardGasPrice, rewardRatio *big.Int, isGal
 	reward.Mul(reward, rewardRatio)
 	reward.Div(reward, big.NewInt(1e18))
 	return reward
-}
-
-func ValidateGalacticaTxFee(tr *tx.Transaction, blockBaseFeeGasPrice, legacyTxBaseGasPrice *big.Int) error {
-	// proved work is not accounted for verifying if gas is enough to cover block base fee
-	feeItems := GalacticaTxGasPriceAdapter(tr, tr.OverallGasPrice(legacyTxBaseGasPrice, blockBaseFeeGasPrice))
-
-	// do not accept txs with less than the block base fee
-	if feeItems.MaxFee.Cmp(blockBaseFeeGasPrice) < 0 {
-		return fmt.Errorf("%w: expected %s got %s", ErrGasPriceTooLowForBlockBase, blockBaseFeeGasPrice.String(), feeItems.MaxFee.String())
-	}
-	return nil
 }

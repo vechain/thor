@@ -8,7 +8,6 @@ package packer
 import (
 	"crypto/ecdsa"
 	"errors"
-	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -148,14 +147,11 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 			return badTxError{"invalid tx type"}
 		}
 	} else {
+		// baseGasPrice required to
 		legacyTxBaseGasPrice, err := builtin.Params.Native(f.runtime.State()).Get(thor.KeyLegacyTxBaseGasPrice)
 		if err != nil {
 			return err
 		}
-		if err := fork.ValidateGalacticaTxFee(t, f.runtime.Context().BaseFee, legacyTxBaseGasPrice); err != nil {
-			return fmt.Errorf("%w: %w", errTxNotAdoptableNow, err)
-		}
-
 		if err := f.isEffectivePriorityFeeTooLow(t, legacyTxBaseGasPrice); err != nil {
 			return err
 		}

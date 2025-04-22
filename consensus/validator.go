@@ -165,7 +165,7 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 		}
 
 		// Verify the baseFee is correct based on the parent header.
-		expectedBaseFee := fork.CalcBaseFee(&c.forkConfig, parent)
+		expectedBaseFee := fork.CalcBaseFee(parent, c.forkConfig)
 		if header.BaseFee().Cmp(expectedBaseFee) != 0 {
 			return fmt.Errorf("block baseFee invalid: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
 				expectedBaseFee, header.BaseFee(), parent.BaseFee(), parent.GasUsed())
@@ -320,25 +320,12 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 		return chain.HasTransaction(txid, txBlockRef)
 	}
 
-	baseGasPrice, err := builtin.Params.Native(state).Get(thor.KeyBaseGasPrice)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	for _, tx := range txs {
 		// check if tx existed
 		if found, err := hasTx(tx.ID(), tx.BlockRef().Number()); err != nil {
 			return nil, nil, err
 		} else if found {
 			return nil, nil, consensusError("tx already exists")
-		}
-
-		// check if tx has enough fee to cover for base fee, if set
-		if header.BaseFee() != nil {
-			effectiveGasPrice := tx.EffectiveGasPrice(baseGasPrice, header.BaseFee())
-			if effectiveGasPrice.Cmp(header.BaseFee()) < 0 {
-				return nil, nil, consensusError("tx gas price is lower than block base fee")
-			}
 		}
 
 		// check depended tx

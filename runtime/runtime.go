@@ -519,20 +519,24 @@ func (rt *Runtime) PrepareTransaction(trx *tx.Transaction) (*TransactionExecutor
 				return receipt, nil
 			}
 
-			// after galactica, reward is the priority fee
-			var priorityFeePerGas *big.Int
+			// after galactica, reward is the priority fee, this is the final guard for checking the priority fee is able to cover the base fee
+			var (
+				maxPriorityFeePerGas *big.Int
+				maxFeePerGas         *big.Int
+			)
 			if trx.Type() == tx.TypeLegacy {
 				overallGasPrice := trx.OverallGasPrice(legacyTxBaseGasPrice, txCtx.ProvedWork)
 				// for legacy tx, maxFeePerGas is overallGasPrice and maxPriorityFeePerGas is also overallGasPrice
-				priorityFeePerGas, err = tx.EffectivePriorityFeePerGas(rt.ctx.BaseFee, overallGasPrice, overallGasPrice)
-				if err != nil {
-					return nil, err
-				}
+				maxPriorityFeePerGas = overallGasPrice
+				maxFeePerGas = overallGasPrice
 			} else {
-				priorityFeePerGas, err = tx.EffectivePriorityFeePerGas(rt.ctx.BaseFee, trx.MaxPriorityFeePerGas(), trx.MaxFeePerGas())
-				if err != nil {
-					return nil, err
-				}
+				maxPriorityFeePerGas = trx.MaxPriorityFeePerGas()
+				maxFeePerGas = trx.MaxFeePerGas()
+			}
+
+			priorityFeePerGas, err := tx.EffectivePriorityFeePerGas(rt.ctx.BaseFee, maxPriorityFeePerGas, maxFeePerGas)
+			if err != nil {
+				return nil, err
 			}
 
 			receipt.Reward = priorityFeePerGas.Mul(priorityFeePerGas, new(big.Int).SetUint64(receipt.GasUsed))

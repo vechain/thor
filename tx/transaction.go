@@ -25,7 +25,9 @@ import (
 )
 
 var (
-	ErrTxTypeNotSupported = errors.New("transaction type not supported")
+	ErrTxTypeNotSupported        = errors.New("transaction type not supported")
+	ErrGasPriceLessThanBaseFee   = errors.New("gas price is less than block baseFee")
+	ErrMaxFeeLessThanPriorityFee = errors.New("maxFeePerGas is less than maxPriorityFeePerGas")
 
 	errIntrinsicGasOverflow = errors.New("intrinsic gas overflow")
 	errShortTypedTx         = errors.New("typed transaction too short")
@@ -437,10 +439,10 @@ func (t *Transaction) GasPriceCoef() uint8 {
 // price sender have to pay per gas unit. The proved work is NOT included.For legacy
 // transactions, baseGasPrice is required. For dynamic fee transactions,baseFee is required.
 // It is caller's responsibility to ensure the fields are passed correctly.
-func (t *Transaction) EffectiveGasPrice(baseGasPrice *big.Int, baseFee *big.Int) *big.Int {
+func (t *Transaction) EffectiveGasPrice(legacyTxBaseGasPrice *big.Int, baseFee *big.Int) *big.Int {
 	// For legacy transactions, the gas price is fixed and determined at transaction creation time.
 	if t.Type() == TypeLegacy {
-		return t.body.(*legacyTransaction).gasPrice(baseGasPrice)
+		return t.body.(*legacyTransaction).gasPrice(legacyTxBaseGasPrice)
 	}
 
 	// For dynamic fee transactions, effective gas price take block base fee into account.
@@ -506,12 +508,12 @@ func (t *Transaction) UnprovedWork() (w *big.Int) {
 // overallGasPrice = gasPrice + baseGasPrice * wgas/gas.
 //
 // NOTE: This method only works for legacy transactions.
-func (t *Transaction) OverallGasPrice(baseGasPrice *big.Int, provedWork *big.Int) *big.Int {
+func (t *Transaction) OverallGasPrice(legacyTxBaseGasPrice *big.Int, provedWork *big.Int) *big.Int {
 	if t.Type() != TypeLegacy {
 		return t.body.maxFeePerGas()
 	}
 
-	gasPrice := t.body.(*legacyTransaction).gasPrice(baseGasPrice)
+	gasPrice := t.body.(*legacyTransaction).gasPrice(legacyTxBaseGasPrice)
 	if provedWork.Sign() == 0 {
 		return gasPrice
 	}
@@ -525,7 +527,7 @@ func (t *Transaction) OverallGasPrice(baseGasPrice *big.Int, provedWork *big.Int
 	}
 
 	x := new(big.Int).SetUint64(wgas)
-	x.Mul(x, baseGasPrice)
+	x.Mul(x, legacyTxBaseGasPrice)
 	x.Div(x, new(big.Int).SetUint64(t.body.gas()))
 	return x.Add(x, gasPrice)
 }
@@ -594,7 +596,12 @@ func (t *Transaction) validateSignatureLength() error {
 func EffectivePriorityFeePerGas(baseFee, maxPriorityFeePerGas, maxFeePerGas *big.Int) (*big.Int, error) {
 	// sanity check to ensure maxFeePerGas can cover the block baseFee
 	if maxFeePerGas.Cmp(baseFee) < 0 {
-		return nil, errors.New("max fee per gas is less than base fee")
+		return nil, ErrGasPriceLessThanBaseFee
+	}
+
+	// sanity check to ensure maxFeePerGas is greater than maxPriorityFeePerGas
+	if maxFeePerGas.Cmp(maxPriorityFeePerGas) < 0 {
+		return nil, ErrMaxFeeLessThanPriorityFee
 	}
 
 	priorityFeePerGas := new(big.Int).Sub(maxFeePerGas, baseFee)
