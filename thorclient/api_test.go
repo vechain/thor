@@ -79,7 +79,7 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 			MaxLifetime:     10 * time.Minute,
 		}),
 	)
-	node.New(communicator).Mount(router, "/node")
+	node.New(communicator, mempool, false).Mount(router, "/node")
 
 	return thorChain, httptest.NewServer(router)
 }
