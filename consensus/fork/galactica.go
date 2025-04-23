@@ -166,11 +166,7 @@ func CalculateReward(gasUsed uint64, rewardGasPrice, rewardRatio *big.Int, isGal
 	return reward
 }
 
-func ValidateGalacticaTxFee(tr *tx.Transaction, state *state.State, blockBaseFeeGasPrice *big.Int) error {
-	legacyTxBaseGasPrice, err := builtin.Params.Native(state).Get(thor.KeyLegacyTxBaseGasPrice)
-	if err != nil {
-		return err
-	}
+func validateGalacticaTxFee(tr *tx.Transaction, legacyTxBaseGasPrice, blockBaseFeeGasPrice *big.Int) error {
 	// proved work is not accounted for verifying if gas is enough to cover block base fee
 	feeItems := GalacticaTxGasPriceAdapter(tr, tr.GasPrice(legacyTxBaseGasPrice))
 
@@ -179,4 +175,13 @@ func ValidateGalacticaTxFee(tr *tx.Transaction, state *state.State, blockBaseFee
 		return fmt.Errorf("%w: expected %s got %s", ErrGasPriceTooLowForBlockBase, blockBaseFeeGasPrice.String(), feeItems.MaxFee.String())
 	}
 	return nil
+}
+
+func ValidateGalacticaTxFee(tr *tx.Transaction, state *state.State, blockBaseFeeGasPrice *big.Int) error {
+	legacyTxBaseGasPrice, err := builtin.Params.Native(state).Get(thor.KeyLegacyTxBaseGasPrice)
+	if err != nil {
+		return err
+	}
+
+	return validateGalacticaTxFee(tr, legacyTxBaseGasPrice, blockBaseFeeGasPrice)
 }
