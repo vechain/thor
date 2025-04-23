@@ -511,35 +511,35 @@ func (rt *Runtime) PrepareTransaction(trx *tx.Transaction) (*TransactionExecutor
 				reward.Mul(reward, overallGasPrice)
 				reward.Mul(reward, rewardRatio)
 				reward.Div(reward, big.NewInt(1e18))
-				if err := builtin.Energy.Native(rt.state, rt.ctx.Time).Add(rt.ctx.Beneficiary, reward); err != nil {
+
+				receipt.Reward = reward
+			} else {
+				// after galactica, reward is the priority fee, this is the final guard for checking the priority fee is able to cover the base fee
+				var (
+					maxPriorityFeePerGas *big.Int
+					maxFeePerGas         *big.Int
+				)
+				if trx.Type() == tx.TypeLegacy {
+					overallGasPrice := trx.OverallGasPrice(legacyTxBaseGasPrice, txCtx.ProvedWork)
+					// for legacy tx, maxFeePerGas is overallGasPrice and maxPriorityFeePerGas is also overallGasPrice
+					maxPriorityFeePerGas = overallGasPrice
+					maxFeePerGas = overallGasPrice
+				} else {
+					maxPriorityFeePerGas = trx.MaxPriorityFeePerGas()
+					maxFeePerGas = trx.MaxFeePerGas()
+				}
+
+				priorityFeePerGas, err := tx.EffectivePriorityFeePerGas(rt.ctx.BaseFee, maxPriorityFeePerGas, maxFeePerGas)
+				if err != nil {
 					return nil, err
 				}
 
-				receipt.Reward = reward
-				return receipt, nil
+				receipt.Reward = priorityFeePerGas.Mul(priorityFeePerGas, new(big.Int).SetUint64(receipt.GasUsed))
 			}
 
-			// after galactica, reward is the priority fee, this is the final guard for checking the priority fee is able to cover the base fee
-			var (
-				maxPriorityFeePerGas *big.Int
-				maxFeePerGas         *big.Int
-			)
-			if trx.Type() == tx.TypeLegacy {
-				overallGasPrice := trx.OverallGasPrice(legacyTxBaseGasPrice, txCtx.ProvedWork)
-				// for legacy tx, maxFeePerGas is overallGasPrice and maxPriorityFeePerGas is also overallGasPrice
-				maxPriorityFeePerGas = overallGasPrice
-				maxFeePerGas = overallGasPrice
-			} else {
-				maxPriorityFeePerGas = trx.MaxPriorityFeePerGas()
-				maxFeePerGas = trx.MaxFeePerGas()
-			}
-
-			priorityFeePerGas, err := tx.EffectivePriorityFeePerGas(rt.ctx.BaseFee, maxPriorityFeePerGas, maxFeePerGas)
-			if err != nil {
+			if err := builtin.Energy.Native(rt.state, rt.ctx.Time).Add(rt.ctx.Beneficiary, receipt.Reward); err != nil {
 				return nil, err
 			}
-
-			receipt.Reward = priorityFeePerGas.Mul(priorityFeePerGas, new(big.Int).SetUint64(receipt.GasUsed))
 			return receipt, nil
 		},
 	}, nil

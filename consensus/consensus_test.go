@@ -475,18 +475,21 @@ func TestValidateBlockHeaderWithBadBaseFee(t *testing.T) {
 
 	var sig [65]byte
 	rand.Read(sig[:])
-	newBlock := new(block.Builder).
+	builder := new(block.Builder).
 		ParentID(best.Header().ID()).
 		Timestamp(best.Header().Timestamp() + thor.BlockInterval).
 		TotalScore(best.Header().TotalScore() + 1).
 		BaseFee(big.NewInt(thor.InitialBaseFee * 123)).
 		TransactionFeatures(1).
-		GasLimit(thor.InitialGasLimit).
-		Build().
-		WithSignature(sig[:])
+		GasLimit(thor.InitialGasLimit)
 
+	newBlock := builder.Build().WithSignature(sig[:])
 	_, _, err = con.Process(con.repo.BestBlockSummary(), newBlock, newBlock.Header().Timestamp(), 0)
-	assert.Contains(t, err.Error(), "block header invalid: invalid baseFee: have 10000000000000, want 1230000000000000")
+	assert.Contains(t, err.Error(), "block baseFee invalid: have 1230000000000000, want 10000000000000")
+
+	newBlock = builder.BaseFee(nil).Build().WithSignature(sig[:])
+	_, _, err = con.Process(con.repo.BestBlockSummary(), newBlock, newBlock.Header().Timestamp(), 0)
+	assert.EqualError(t, err, "invalid block: baseFee is missing")
 }
 
 func TestVerifyBlock(t *testing.T) {

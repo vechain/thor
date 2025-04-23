@@ -7,6 +7,7 @@ package txpool
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"math/rand/v2"
 	"os"
@@ -362,6 +363,8 @@ func (p *TxPool) Fill(txs tx.Transactions) {
 		// here we ignore errors
 		if txObj, err := resolveTx(tx, false); err == nil {
 			txObjs = append(txObjs, txObj)
+		} else {
+			fmt.Println(err)
 		}
 	}
 	p.all.Fill(txObjs)
@@ -429,7 +432,7 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 		executable, err := txObj.Executable(chain, newState(), headSummary, p.forkConfig, p.params)
 		if err != nil {
 			toRemove = append(toRemove, txObj)
-			logger.Trace("tx washed out", "id", txObj.ID(), "err", err)
+			logger.Trace("tx washed out", "id", txObj.ID(), "type", txObj.Transaction.Type(), "err", err)
 			continue
 		}
 

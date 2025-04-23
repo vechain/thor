@@ -8,6 +8,7 @@ package packer
 import (
 	"crypto/ecdsa"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -89,14 +90,12 @@ func (f *Flow) hasTx(txid thor.Bytes32, txBlockRef uint32) (bool, error) {
 	return f.runtime.Chain().HasTransaction(txid, txBlockRef)
 }
 
-func (f *Flow) isEffectivePriorityFeeTooLow(t *tx.Transaction) error {
-	// Skip check if the minimum priority fee is not set
-	if f.packer.minTxPriorityFee.Sign() <= 0 {
-		return nil
-	}
-
-	if t.MaxPriorityFeePerGas().Cmp(f.packer.minTxPriorityFee) < 0 {
-		return badTxError{"effective priority fee too low"} // never going to meet the requirement
+func (f *Flow) validateTxFee(t *tx.Transaction) error {
+	// if the minimum priority fee is set, check the tx max priority fee
+	if f.packer.minTxPriorityFee.Sign() > 0 {
+		if t.Type() == tx.TypeDynamicFee && t.MaxPriorityFeePerGas().Cmp(f.packer.minTxPriorityFee) < 0 {
+			return badTxError{"effective priority fee too low"} // never going to meet the requirement
+		}
 	}
 
 	legacyTxBaseGasPrice, err := builtin.Params.Native(f.runtime.State()).Get(thor.KeyLegacyTxBaseGasPrice)
@@ -118,18 +117,29 @@ func (f *Flow) isEffectivePriorityFeeTooLow(t *tx.Transaction) error {
 		overallGasPrice := t.OverallGasPrice(legacyTxBaseGasPrice, provedWork)
 		maxPriorityFeePerGas = overallGasPrice
 		maxFeePerGas = overallGasPrice
+
+		if f.packer.minTxPriorityFee.Sign() > 0 {
+			if maxPriorityFeePerGas.Cmp(f.packer.minTxPriorityFee) < 0 {
+				return badTxError{"effective priority fee too low"} // never going to meet the requirement
+			}
+		}
 	} else {
 		maxPriorityFeePerGas = t.MaxPriorityFeePerGas()
 		maxFeePerGas = t.MaxFeePerGas()
 	}
 
-	effectivePriorityFee, err := tx.EffectivePriorityFeePerGas(f.runtime.Context().BaseFee, maxPriorityFeePerGas, maxFeePerGas)
-	if err != nil {
-		return err
+	if maxFeePerGas.Cmp(f.runtime.Context().BaseFee) < 0 {
+		return fmt.Errorf("%w: %w", errTxNotAdoptableNow, tx.ErrGasPriceLessThanBaseFee)
 	}
 
-	if effectivePriorityFee.Cmp(f.packer.minTxPriorityFee) < 0 {
-		return errTxNotAdoptableNow
+	if f.packer.minTxPriorityFee.Sign() > 0 {
+		effectivePriorityFee, err := tx.EffectivePriorityFeePerGas(f.runtime.Context().BaseFee, maxPriorityFeePerGas, maxFeePerGas)
+		if err != nil {
+			return err
+		}
+		if effectivePriorityFee.Cmp(f.packer.minTxPriorityFee) < 0 {
+			return fmt.Errorf("%w: effective priority fee lower than minTxPriorityFee", errTxNotAdoptableNow)
+		}
 	}
 
 	return nil
@@ -168,7 +178,7 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 			return badTxError{"invalid tx type"}
 		}
 	} else {
-		if err := f.isEffectivePriorityFeeTooLow(t); err != nil {
+		if err := f.validateTxFee(t); err != nil {
 			return err
 		}
 	}

@@ -158,7 +158,6 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 		if header.BaseFee() != nil {
 			return consensusError("invalid block: baseFee should not set before fork GALACTICA")
 		}
-
 	} else {
 		if header.BaseFee() == nil {
 			return consensusError("invalid block: baseFee is missing")
@@ -168,8 +167,9 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 		expectedBaseFee := galactica.CalcBaseFee(parent, c.forkConfig)
 		if header.BaseFee().Cmp(expectedBaseFee) != 0 {
 			return fmt.Errorf("block baseFee invalid: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
-				expectedBaseFee, header.BaseFee(), parent.BaseFee(), parent.GasUsed())
+				header.BaseFee(), expectedBaseFee, parent.BaseFee(), parent.GasUsed())
 		}
+		// block header invalid: invalid baseFee: have 10000000000000, want 1230000000000000
 	}
 
 	if !block.GasLimit(header.GasLimit()).IsValid(parent.GasLimit()) {
