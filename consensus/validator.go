@@ -113,8 +113,11 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 		return consensusError(fmt.Sprintf("block total score invalid: parent %v, current %v", parent.TotalScore(), header.TotalScore()))
 	}
 
-	signature := header.Signature()
+	if !block.GasLimit(header.GasLimit()).IsValid(parent.GasLimit()) {
+		return consensusError(fmt.Sprintf("block gas limit invalid: parent %v, current %v", parent.GasLimit(), header.GasLimit()))
+	}
 
+	signature := header.Signature()
 	if header.Number() < c.forkConfig.VIP214 {
 		if len(header.Alpha()) > 0 {
 			return consensusError("invalid block, alpha should be empty before VIP214")
@@ -169,11 +172,6 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 			return fmt.Errorf("block baseFee invalid: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
 				header.BaseFee(), expectedBaseFee, parent.BaseFee(), parent.GasUsed())
 		}
-		// block header invalid: invalid baseFee: have 10000000000000, want 1230000000000000
-	}
-
-	if !block.GasLimit(header.GasLimit()).IsValid(parent.GasLimit()) {
-		return consensusError(fmt.Sprintf("block gas limit invalid: parent %v, current %v", parent.GasLimit(), header.GasLimit()))
 	}
 
 	return nil

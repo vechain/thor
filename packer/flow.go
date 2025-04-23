@@ -98,11 +98,6 @@ func (f *Flow) validateTxFee(t *tx.Transaction) error {
 		}
 	}
 
-	legacyTxBaseGasPrice, err := builtin.Params.Native(f.runtime.State()).Get(thor.KeyLegacyTxBaseGasPrice)
-	if err != nil {
-		return err
-	}
-
 	var (
 		maxPriorityFeePerGas *big.Int
 		maxFeePerGas         *big.Int
@@ -110,6 +105,11 @@ func (f *Flow) validateTxFee(t *tx.Transaction) error {
 
 	if t.Type() == tx.TypeLegacy {
 		provedWork, err := t.ProvedWork(f.Number(), f.runtime.Chain().GetBlockID)
+		if err != nil {
+			return err
+		}
+
+		legacyTxBaseGasPrice, err := builtin.Params.Native(f.runtime.State()).Get(thor.KeyLegacyTxBaseGasPrice)
 		if err != nil {
 			return err
 		}
