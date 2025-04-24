@@ -227,41 +227,9 @@ paths:
       description: |
         This endpoint allows you to send a transaction to the blockchain. The transaction must be signed and RLP encoded.
         
+        You can find more detailed information in the [transaction model documentation](https://docs.vechain.org/core-concepts/transactions/transaction-model).
+        
         ⚠️ <b>Note:</b> The example values provided for this endpoint are optimized for mainnet.  
-        
-        The below is a TypeScript example of how to sign and RLP encode a transaction using the `thor-devkit` library:
-        
-        ```typescript
-        import { Transaction, secp256k1 } from 'thor-devkit'
-
-        const clauses = [{
-            to: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed',
-            value: 10000,
-            data: '0x'
-        }]
-
-        let body: Transaction.Body = {
-            chainTag: '0x4a',
-            blockRef: '0x0000000000000000',
-            expiration: 32,
-            clauses: clauses,
-            gasPriceCoef: 128,
-            gas: Transaction.intrinsicGas(clauses),
-            dependsOn: null,
-            nonce: 12345678
-        }
-
-        const tx = new Transaction(body)
-        const signingHash = tx.signingHash()
-        tx.signature = secp256k1.sign(signingHash, Buffer.from("99f0500549792796c14fed62011a51081dc5b5e68fe8bd8a13b86be829c4fd36", "hex"))
-
-        const raw = tx.encode()
-        const decoded = Transaction.decode(raw)
-        
-        axios.post('http://localhost:8669/transactions', {
-          raw: '0x' + raw.toString('hex')
-        })
-        ```
       requestBody:
         required: true
         content:
