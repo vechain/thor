@@ -154,6 +154,8 @@ func TestPendingCost(t *testing.T) {
 	repo := newChainRepo(db)
 	stater := state.NewStater(db)
 
+	forkConfig := thor.SoloFork
+
 	// Creating transactions
 	tx1 := newTx(tx.TypeLegacy, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
 	tx2 := newDelegatedTx(tx.TypeLegacy, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[1], genesis.DevAccounts()[2])
@@ -169,15 +171,15 @@ func TestPendingCost(t *testing.T) {
 	state := stater.NewState(best.Root())
 
 	var err error
-	txObj1.executable, err = txObj1.Executable(chain, state, best.Header, &thor.NoFork)
+	txObj1.executable, err = txObj1.Executable(chain, state, best, forkConfig, newParams(stater, forkConfig))
 	assert.Nil(t, err)
 	assert.True(t, txObj1.executable)
 
-	txObj2.executable, err = txObj2.Executable(chain, state, best.Header, &thor.NoFork)
+	txObj2.executable, err = txObj2.Executable(chain, state, best, forkConfig, newParams(stater, forkConfig))
 	assert.Nil(t, err)
 	assert.True(t, txObj2.executable)
 
-	txObj3.executable, err = txObj3.Executable(chain, state, best.Header, &thor.NoFork)
+	txObj3.executable, err = txObj3.Executable(chain, state, best, forkConfig, newParams(stater, forkConfig))
 	assert.Nil(t, err)
 	assert.True(t, txObj3.executable)
 

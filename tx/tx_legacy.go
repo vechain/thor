@@ -77,6 +77,13 @@ func (t *legacyTransaction) signingFields() []any {
 	}
 }
 
+func (t *legacyTransaction) gasPrice(baseGasPrice *big.Int) *big.Int {
+	x := big.NewInt(int64(t.GasPriceCoef))
+	x.Mul(x, baseGasPrice)
+	x.Div(x, big.NewInt(math.MaxUint8))
+	return x.Add(x, baseGasPrice)
+}
+
 func (t *legacyTransaction) evaluateWork(origin thor.Address) func(nonce uint64) *big.Int {
 	hashWithoutNonce := t.hashWithoutNonce(origin)
 

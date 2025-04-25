@@ -24,6 +24,69 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
+func TestTxBasics(t *testing.T) {
+	fun := []struct {
+		getBuilder func() *tx.Builder
+	}{
+		{
+			getBuilder: func() *tx.Builder {
+				return txBuilder(0x0, tx.TypeLegacy)
+			},
+		},
+		{
+			getBuilder: func() *tx.Builder {
+				return txBuilder(0x0, tx.TypeDynamicFee)
+			},
+		},
+	}
+
+	for _, f := range fun {
+		trx := f.getBuilder().Build()
+		_, err := runtime.ResolveTransaction(trx)
+		assert.Equal(t, secp256k1.ErrInvalidSignatureLen.Error(), err.Error())
+
+		trx = f.getBuilder().Gas(21000 - 1).Build()
+		_, err = runtime.ResolveTransaction(txSign(trx))
+		assert.EqualError(t, err, "intrinsic gas exceeds provided gas")
+
+		address := thor.BytesToAddress([]byte("addr"))
+		trx = f.getBuilder().Clause(tx.NewClause(&address).WithValue(big.NewInt(-10)).WithData(nil)).Build()
+		_, err = runtime.ResolveTransaction(txSign(trx))
+		assert.EqualError(t, err, "clause with negative value")
+
+		trx = f.getBuilder().
+			Clause(tx.NewClause(&address).WithValue(math.MaxBig256).WithData(nil)).
+			Clause(tx.NewClause(&address).WithValue(math.MaxBig256).WithData(nil)).
+			Build()
+		_, err = runtime.ResolveTransaction(txSign(trx))
+		assert.EqualError(t, err, "tx value too large")
+
+		_, err = runtime.ResolveTransaction(txSign(f.getBuilder().Build()))
+		assert.Nil(t, err)
+	}
+
+	// DynamicFee tx related fields
+	trx := txBuilder(0x0, tx.TypeDynamicFee).MaxFeePerGas(big.NewInt(-1)).Build()
+	_, err := runtime.ResolveTransaction(txSign(trx))
+	assert.EqualError(t, err, "max fee per gas must be positive")
+
+	trx = txBuilder(0x0, tx.TypeDynamicFee).MaxPriorityFeePerGas(big.NewInt(-1)).Build()
+	_, err = runtime.ResolveTransaction(txSign(trx))
+	assert.EqualError(t, err, "max priority fee per gas must be positive")
+
+	trx = txBuilder(0x0, tx.TypeDynamicFee).MaxFeePerGas(math.BigPow(2, 256)).Build()
+	_, err = runtime.ResolveTransaction(txSign(trx))
+	assert.EqualError(t, err, "max fee per gas higher than 2^256-1")
+
+	trx = txBuilder(0x0, tx.TypeDynamicFee).MaxPriorityFeePerGas(math.BigPow(2, 256)).Build()
+	_, err = runtime.ResolveTransaction(txSign(trx))
+	assert.EqualError(t, err, "max priority fee per gas higher than 2^256-1")
+
+	trx = txBuilder(0x0, tx.TypeDynamicFee).MaxPriorityFeePerGas(math.MaxBig256).Build()
+	_, err = runtime.ResolveTransaction(txSign(trx))
+	assert.EqualError(t, err, "maxFeePerGas is less than maxPriorityFeePerGas")
+}
+
 func TestResolvedTx(t *testing.T) {
 	r, err := newTestResolvedTransaction(t)
 	if err != nil {
@@ -73,48 +136,6 @@ func newTestResolvedTransaction(t *testing.T) (*testResolvedTransaction, error) 
 func (tr *testResolvedTransaction) currentState() *state.State {
 	h := tr.repo.BestBlockSummary()
 	return tr.stater.NewState(h.Root())
-}
-
-func (tr *testResolvedTransaction) TestResolveTransaction() {
-	fun := []struct {
-		getBuilder func() *tx.Builder
-	}{
-		{
-			getBuilder: func() *tx.Builder {
-				return txBuilder(tr.repo.ChainTag(), tx.TypeLegacy)
-			},
-		},
-		{
-			getBuilder: func() *tx.Builder {
-				return txBuilder(tr.repo.ChainTag(), tx.TypeDynamicFee)
-			},
-		},
-	}
-
-	for _, f := range fun {
-		trx := f.getBuilder().Build()
-		_, err := runtime.ResolveTransaction(trx)
-		tr.assert.Equal(secp256k1.ErrInvalidSignatureLen.Error(), err.Error())
-
-		trx = f.getBuilder().Gas(21000 - 1).Build()
-		_, err = runtime.ResolveTransaction(txSign(trx))
-		tr.assert.NotNil(err)
-
-		address := thor.BytesToAddress([]byte("addr"))
-		trx = f.getBuilder().Clause(tx.NewClause(&address).WithValue(big.NewInt(-10)).WithData(nil)).Build()
-		_, err = runtime.ResolveTransaction(txSign(trx))
-		tr.assert.NotNil(err)
-
-		trx = f.getBuilder().
-			Clause(tx.NewClause(&address).WithValue(math.MaxBig256).WithData(nil)).
-			Clause(tx.NewClause(&address).WithValue(math.MaxBig256).WithData(nil)).
-			Build()
-		_, err = runtime.ResolveTransaction(txSign(trx))
-		tr.assert.NotNil(err)
-
-		_, err = runtime.ResolveTransaction(txSign(f.getBuilder().Build()))
-		tr.assert.Nil(err)
-	}
 }
 
 func (tr *testResolvedTransaction) TestCommonTo() {
@@ -187,6 +208,18 @@ func (tr *testResolvedTransaction) TestBuyGas() {
 	tr.assert.Equal(
 		genesis.DevAccounts()[0].Address,
 		buyGas(txSign(txBuild().Clause(clause().WithValue(big.NewInt(100))).Build())),
+	)
+
+	var feat tx.Features
+	feat.SetDelegated(true)
+	trx := txBuilder(tr.repo.ChainTag(), tx.TypeLegacy).
+		Clause(clause().WithValue(big.NewInt(100))).
+		Features(feat).
+		Build()
+	trx = tx.MustSignDelegated(trx, genesis.DevAccounts()[0].PrivateKey, genesis.DevAccounts()[2].PrivateKey)
+	tr.assert.Equal(
+		genesis.DevAccounts()[2].Address,
+		buyGas(trx),
 	)
 
 	bind := builtin.Prototype.Native(state).Bind(genesis.DevAccounts()[1].Address)

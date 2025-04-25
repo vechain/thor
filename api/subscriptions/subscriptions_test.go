@@ -235,7 +235,7 @@ func initSubscriptionsServer(t *testing.T, enabledDeprecated bool) {
 		Limit:           100,
 		LimitPerAccount: 16,
 		MaxLifetime:     time.Hour,
-	}, &thor.NoFork)
+	}, thor.NoFork)
 
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
@@ -287,7 +287,7 @@ func TestSubscriptionsBacktrace(t *testing.T) {
 		Limit:           100,
 		LimitPerAccount: 16,
 		MaxLifetime:     time.Hour,
-	}, &thor.NoFork)
+	}, thor.NoFork)
 
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))

@@ -15,9 +15,9 @@ import (
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
 
 type FeesData struct {
@@ -157,18 +157,33 @@ func (fd *FeesData) getRewardsForCache(block *block.Block) (*rewards, error) {
 	transactions := block.Transactions()
 	items := make([]rewardItem, len(transactions))
 
-	for i, tx := range transactions {
-		provedWork, err := tx.ProvedWork(header.Number(), fd.repo.NewBestChain().GetBlockID)
+	for i, trx := range transactions {
+		var (
+			maxPriorityFeePerGas *big.Int
+			maxFeePerGas         *big.Int
+		)
+
+		if trx.Type() == tx.TypeLegacy {
+			provedWork, err := trx.ProvedWork(header.Number(), fd.repo.NewBestChain().GetBlockID)
+			if err != nil {
+				return nil, err
+			}
+
+			overallGasPrice := trx.OverallGasPrice(legacyTxBaseGasPrice, provedWork)
+			maxPriorityFeePerGas = overallGasPrice
+			maxFeePerGas = overallGasPrice
+		} else {
+			maxPriorityFeePerGas = trx.MaxPriorityFeePerGas()
+			maxFeePerGas = trx.MaxFeePerGas()
+		}
+
+		priorityFeePerGas, err := tx.EffectivePriorityFeePerGas(header.BaseFee(), maxPriorityFeePerGas, maxFeePerGas)
 		if err != nil {
 			return nil, err
 		}
+
 		items[i] = rewardItem{
-			reward: fork.GalacticaPriorityGasPrice(
-				tx,
-				legacyTxBaseGasPrice,
-				provedWork,
-				header.BaseFee(),
-			),
+			reward:  priorityFeePerGas,
 			gasUsed: receipts[i].GasUsed,
 		}
 	}

@@ -14,7 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -91,25 +90,56 @@ func (f *Flow) hasTx(txid thor.Bytes32, txBlockRef uint32) (bool, error) {
 	return f.runtime.Chain().HasTransaction(txid, txBlockRef)
 }
 
-func (f *Flow) isEffectivePriorityFeeTooLow(t *tx.Transaction, legacyTxBaseGasPrice *big.Int) error {
-	// Skip check if the minimum priority fee is not set
-	if f.packer.minTxPriorityFee.Sign() <= 0 {
-		return nil
+func (f *Flow) validateTxFee(t *tx.Transaction) error {
+	// if the minimum priority fee is set, check the tx max priority fee
+	if f.packer.minTxPriorityFee.Sign() > 0 {
+		if t.Type() == tx.TypeDynamicFee && t.MaxPriorityFeePerGas().Cmp(f.packer.minTxPriorityFee) < 0 {
+			return badTxError{"effective priority fee too low"} // never going to meet the requirement
+		}
 	}
 
-	provedWork, err := t.ProvedWork(f.Number()-1, f.runtime.Chain().GetBlockID)
-	if err != nil {
-		return err
-	}
-	effectivePriorityFee := fork.GalacticaPriorityGasPrice(
-		t,
-		legacyTxBaseGasPrice,
-		provedWork,
-		f.runtime.Context().BaseFee,
+	var (
+		maxPriorityFeePerGas *big.Int
+		maxFeePerGas         *big.Int
 	)
 
-	if effectivePriorityFee.Cmp(f.packer.minTxPriorityFee) < 0 {
-		return badTxError{"effective priority fee too low"}
+	if t.Type() == tx.TypeLegacy {
+		provedWork, err := t.ProvedWork(f.Number(), f.runtime.Chain().GetBlockID)
+		if err != nil {
+			return err
+		}
+
+		legacyTxBaseGasPrice, err := builtin.Params.Native(f.runtime.State()).Get(thor.KeyLegacyTxBaseGasPrice)
+		if err != nil {
+			return err
+		}
+
+		overallGasPrice := t.OverallGasPrice(legacyTxBaseGasPrice, provedWork)
+		maxPriorityFeePerGas = overallGasPrice
+		maxFeePerGas = overallGasPrice
+
+		if f.packer.minTxPriorityFee.Sign() > 0 {
+			if maxPriorityFeePerGas.Cmp(f.packer.minTxPriorityFee) < 0 {
+				return badTxError{"effective priority fee too low"} // never going to meet the requirement
+			}
+		}
+	} else {
+		maxPriorityFeePerGas = t.MaxPriorityFeePerGas()
+		maxFeePerGas = t.MaxFeePerGas()
+	}
+
+	if maxFeePerGas.Cmp(f.runtime.Context().BaseFee) < 0 {
+		return fmt.Errorf("%w: %w", errTxNotAdoptableNow, tx.ErrGasPriceLessThanBaseFee)
+	}
+
+	if f.packer.minTxPriorityFee.Sign() > 0 {
+		effectivePriorityFee, err := tx.EffectivePriorityFeePerGas(f.runtime.Context().BaseFee, maxPriorityFeePerGas, maxFeePerGas)
+		if err != nil {
+			return err
+		}
+		if effectivePriorityFee.Cmp(f.packer.minTxPriorityFee) < 0 {
+			return fmt.Errorf("%w: effective priority fee lower than minTxPriorityFee", errTxNotAdoptableNow)
+		}
 	}
 
 	return nil
@@ -148,18 +178,7 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 			return badTxError{"invalid tx type"}
 		}
 	} else {
-		if f.runtime.Context().BaseFee == nil {
-			return fork.ErrBaseFeeNotSet
-		}
-		legacyTxBaseGasPrice, err := builtin.Params.Native(f.runtime.State()).Get(thor.KeyLegacyTxBaseGasPrice)
-		if err != nil {
-			return err
-		}
-		if err := fork.ValidateGalacticaTxFee(t, f.runtime.Context().BaseFee, legacyTxBaseGasPrice); err != nil {
-			return fmt.Errorf("%w: %w", errTxNotAdoptableNow, err)
-		}
-
-		if err := f.isEffectivePriorityFeeTooLow(t, legacyTxBaseGasPrice); err != nil {
+		if err := f.validateTxFee(t); err != nil {
 			return err
 		}
 	}
@@ -231,7 +250,7 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 	}
 
 	if f.Number() >= f.packer.forkConfig.GALACTICA {
-		builder.BaseFee(fork.CalcBaseFee(&f.packer.forkConfig, f.parentHeader))
+		builder.BaseFee(f.runtime.Context().BaseFee)
 	}
 
 	if f.Number() < f.packer.forkConfig.VIP214 {

@@ -64,7 +64,7 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 	accounts.New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), thor.NoFork, thorChain.Engine(), true).
 		Mount(router, "/accounts")
 
-	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute}, &forks)
+	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute}, forks)
 	transactions.New(thorChain.Repo(), mempool).Mount(router, "/transactions")
 
 	blocks.New(thorChain.Repo(), thorChain.Engine()).Mount(router, "/blocks")
@@ -82,7 +82,7 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 			Limit:           10000,
 			LimitPerAccount: 16,
 			MaxLifetime:     10 * time.Minute,
-		}, &thor.NoFork),
+		}, thor.NoFork),
 	)
 	node.New(communicator).Mount(router, "/node")
 
@@ -128,8 +128,8 @@ func mintTransactions(t *testing.T, thorChain *testchain.Chain) {
 
 	dynFeeTx := tx.NewBuilder(tx.TypeDynamicFee).
 		ChainTag(thorChain.Repo().ChainTag()).
-		MaxFeePerGas(thor.InitialBaseGasPrice).
-		MaxPriorityFeePerGas((&big.Int{}).Add(thor.InitialBaseGasPrice, thor.InitialBaseGasPrice)).
+		MaxFeePerGas((&big.Int{}).Add(thor.InitialBaseGasPrice, thor.InitialBaseGasPrice)).
+		MaxPriorityFeePerGas(thor.InitialBaseGasPrice).
 		Expiration(10).
 		Gas(37000).
 		Nonce(1).

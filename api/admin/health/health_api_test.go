@@ -39,7 +39,7 @@ func initAPIServer(t *testing.T) {
 
 	router := mux.NewRouter()
 	NewAPI(
-		New(thorChain.Repo(), comm.New(thorChain.Repo(), txpool.New(thorChain.Repo(), nil, txpool.Options{}, &thor.NoFork))),
+		New(thorChain.Repo(), comm.New(thorChain.Repo(), txpool.New(thorChain.Repo(), nil, txpool.Options{}, thor.NoFork))),
 	).Mount(router, "/health")
 
 	ts = httptest.NewServer(router)

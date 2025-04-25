@@ -30,8 +30,13 @@ func newChainRepo(db *muxdb.MuxDB) *chain.Repository {
 }
 
 func newTx(txType tx.Type, chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, features tx.Features, from genesis.DevAccount) *tx.Transaction {
-	trx := txBuilder(txType, chainTag, clauses, gas, blockRef, expiration, dependsOn, features).Build()
-	return tx.MustSign(trx, from.PrivateKey)
+	builder := txBuilder(txType, chainTag, clauses, gas, blockRef, expiration, dependsOn, features)
+	if txType == tx.TypeDynamicFee {
+		builder.MaxFeePerGas(big.NewInt(thor.InitialBaseFee)).MaxPriorityFeePerGas(big.NewInt(thor.InitialBaseFee))
+	} else {
+		builder.GasPriceCoef(0)
+	}
+	return tx.MustSign(builder.Build(), from.PrivateKey)
 }
 
 func newDelegatedTx(txType tx.Type, chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, from genesis.DevAccount, delegator genesis.DevAccount) *tx.Transaction {
@@ -61,21 +66,21 @@ func txBuilder(txType tx.Type, chainTag byte, clauses []*tx.Clause, gas uint64, 
 		Gas(gas)
 }
 
-func SetupTest() (genesis.DevAccount, *chain.Repository, *block.Block, *state.State) {
+func SetupTest() (genesis.DevAccount, *chain.Repository, *block.Block, *state.State, *muxdb.MuxDB) {
 	acc := genesis.DevAccounts()[0]
 
 	db := muxdb.NewMem()
 	repo := newChainRepo(db)
 	b0 := repo.GenesisBlock()
 	b1 := new(block.Builder).ParentID(b0.Header().ID()).GasLimit(10000000).TotalScore(100).Build()
-	repo.AddBlock(b1, nil, 0, false)
+	repo.AddBlock(b1, nil, 0, true)
 	st := state.New(db, trie.Root{Hash: repo.GenesisBlock().Header().StateRoot()})
 
-	return acc, repo, b1, st
+	return acc, repo, b1, st, db
 }
 
 func TestExecutableWithError(t *testing.T) {
-	acc, repo, b1, st := SetupTest()
+	acc, repo, _, st, db := SetupTest()
 
 	tests := []struct {
 		tx          *tx.Transaction
@@ -93,7 +98,7 @@ func TestExecutableWithError(t *testing.T) {
 		// pass custom headID
 		chain := repo.NewChain(thor.Bytes32{0})
 
-		exe, err := txObj.Executable(chain, st, b1.Header(), &thor.NoFork)
+		exe, err := txObj.Executable(chain, st, repo.BestBlockSummary(), thor.NoFork, newParams(state.NewStater(db), thor.NoFork))
 		if tt.expectedErr != "" {
 			assert.Equal(t, tt.expectedErr, err.Error())
 		} else {
@@ -110,7 +115,7 @@ func TestSort(t *testing.T) {
 		{priorityGasPrice: big.NewInt(20)},
 		{priorityGasPrice: big.NewInt(30)},
 	}
-	sortTxObjsByOverallGasPriceDesc(objs)
+	sortTxObjsByPriorityGasPriceDesc(objs)
 
 	assert.Equal(t, big.NewInt(30), objs[0].priorityGasPrice)
 	assert.Equal(t, big.NewInt(20), objs[1].priorityGasPrice)
@@ -164,11 +169,13 @@ func TestExecutable(t *testing.T) {
 		{newTx(tx.TypeDynamicFee, 0, nil, 21000, tx.BlockRef{0}, 100, &thor.Bytes32{}, tx.Features(0), acc), false, ""},
 	}
 
+	forkConfig := thor.SoloFork
+
 	for _, tt := range tests {
 		txObj, err := resolveTx(tt.tx, false)
 		assert.Nil(t, err)
 
-		exe, err := txObj.Executable(repo.NewChain(b1.Header().ID()), st, b1.Header(), &thor.NoFork)
+		exe, err := txObj.Executable(repo.NewChain(b1.Header().ID()), st, repo.BestBlockSummary(), forkConfig, newParams(state.NewStater(db), forkConfig))
 		if tt.expectedErr != "" {
 			assert.Equal(t, tt.expectedErr, err.Error())
 		} else {

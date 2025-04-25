@@ -370,7 +370,7 @@ func initTransactionServer(t *testing.T) {
 
 	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], dynFeeTx))
 
-	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute}, &forkConfig)
+	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute}, forkConfig)
 
 	mempoolTx = tx.NewBuilder(tx.TypeDynamicFee).
 		ChainTag(chainTag).

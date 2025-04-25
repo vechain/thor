@@ -41,7 +41,7 @@ func initCommServer(t *testing.T) {
 			Limit:           10000,
 			LimitPerAccount: 128,
 			MaxLifetime:     10 * time.Minute,
-		}, &thor.NoFork),
+		}, thor.NoFork),
 	)
 
 	router := mux.NewRouter()
