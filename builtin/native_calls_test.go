@@ -768,7 +768,12 @@ func TestEnergyNative(t *testing.T) {
 	require.NoError(t, err)
 	stargateMap[summary.Header.Timestamp()] = stargateBalAtBlock
 
+	var totalSupplyBefore *big.Int
+	var totalSupplyAfter *big.Int
+
 	for range 5 {
+		_, err = callContractAndGetOutput(abi, "totalSupply", toAddr, &totalSupplyBefore)
+		require.NoError(t, err)
 		require.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
 		summary = thorChain.Repo().BestBlockSummary()
 		st := thorChain.Stater().NewState(summary.Root())
@@ -778,6 +783,17 @@ func TestEnergyNative(t *testing.T) {
 		stargateBalAtBlock, err = st.GetEnergy(acc4, summary.Header.Timestamp())
 		require.NoError(t, err)
 		stargateMap[summary.Header.Timestamp()] = stargateBalAtBlock
+
+		_, err = callContractAndGetOutput(abi, "totalSupply", toAddr, &totalSupplyAfter)
+		require.NoError(t, err)
+
+		validatorEnergyBefore := validatorMap[thorChain.Repo().BestBlockSummary().Header.Timestamp()-10]
+		stargateEnergyBefore := stargateMap[thorChain.Repo().BestBlockSummary().Header.Timestamp()-10]
+
+		if firstPOS <= summary.Header.Number() {
+			// check after POS that sum of all rewards for block is equal to total supply growth
+			require.Equal(t, big.NewInt(0).Add(big.NewInt(0).Sub(energyAtBlock, validatorEnergyBefore), big.NewInt(0).Sub(stargateBalAtBlock, stargateEnergyBefore)), big.NewInt(0).Sub(totalSupplyAfter, totalSupplyBefore))
+		}
 	}
 	best = thorChain.Repo().BestBlockSummary().Header.Number()
 
@@ -1534,6 +1550,9 @@ func TestStakerContract_Native(t *testing.T) {
 	thorChain, err = testchain.NewWithFork(fc)
 	assert.NoError(t, err)
 
+	energyAbi := builtin.Energy.ABI
+	energyAddress := builtin.Energy.Address
+
 	mbp := TestTxDescription{
 		t:          t,
 		abi:        builtin.Params.ABI,
@@ -1548,6 +1567,10 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.NotNil(t, a)
 
 	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0])) // mint block 2: hayabusa should fork here and set the contract bytecode
+
+	totalBurnedBefore := new(big.Int)
+	_, err = callContractAndGetOutput(energyAbi, "totalBurned", energyAddress, &totalBurnedBefore)
+	assert.NoError(t, err)
 
 	abi := builtin.Staker.ABI
 	toAddr := builtin.Staker.Address
@@ -1573,6 +1596,11 @@ func TestStakerContract_Native(t *testing.T) {
 	receipt, _, err = executeTxAndGetReceipt(desc) // mint block 3
 	assert.NoError(t, err)
 	id := receipt.Outputs[0].Events[0].Topics[3]
+
+	totalBurned := new(big.Int)
+	_, err = callContractAndGetOutput(energyAbi, "totalBurned", energyAddress, &totalBurned)
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0).Mul(big.NewInt(0).SetUint64(receipt.GasUsed), big.NewInt(1e15)), big.NewInt(0).Sub(totalBurned, totalBurnedBefore))
 
 	// get
 	getRes := make([]any, 6)

@@ -172,6 +172,7 @@ func (e *Energy) Sub(addr thor.Address, amount *big.Int) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+
 	total.TotalSub = new(big.Int).Add(total.TotalSub, amount)
 	if err := e.setTotalAddSub(total); err != nil {
 		return false, err
@@ -188,7 +189,7 @@ func (e *Energy) StopEnergyGrowth() {
 	e.state.SetStorage(thor.BytesToAddress([]byte("Energy")), thor.HayabusaEnergyGrowthStopTime, thor.BytesToBytes32(bt.Bytes()))
 }
 
-func (e *Energy) AddIssued(issued *big.Int) error {
+func (e *Energy) addIssued(issued *big.Int) error {
 	total, err := e.getIssued()
 	if err != nil {
 		return err
@@ -216,13 +217,25 @@ func (e *Energy) DistributeRewards(beneficiary thor.Address, staker staker) erro
 	}
 
 	addr := thor.BytesToAddress(val.Bytes())
-	if err := e.Add(addr, big.NewInt(0).Sub(reward, proposerReward)); err != nil {
+	addrEng, err := e.state.GetEnergy(addr, e.blockTime)
+	if err != nil {
 		return err
 	}
-	if err := e.Add(beneficiary, proposerReward); err != nil {
+	beneficiaryEng, err := e.state.GetEnergy(beneficiary, e.blockTime)
+	if err != nil {
 		return err
 	}
-	if err := e.AddIssued(reward); err != nil {
+
+	// we don't use e.add which is adding to total add sub since that function is only meant to be used for transactions
+	// which are also burning the amount, distribute rewards is used only for distribution so in this case we just set the
+	// energy and increase the issued to be able to keep track of totalSupply
+	if err := e.state.SetEnergy(addr, new(big.Int).Add(addrEng, big.NewInt(0).Sub(reward, proposerReward)), e.blockTime); err != nil {
+		return err
+	}
+	if err := e.state.SetEnergy(beneficiary, new(big.Int).Add(beneficiaryEng, proposerReward), e.blockTime); err != nil {
+		return err
+	}
+	if err := e.addIssued(reward); err != nil {
 		return err
 	}
 	return nil

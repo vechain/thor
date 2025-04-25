@@ -112,7 +112,7 @@ func TestTotalSupply(t *testing.T) {
 	assert.Equal(t, big.NewInt(749500000456), totalSupply)
 
 	eng.blockTime = 2001
-	eng.AddIssued(big.NewInt(100))
+	eng.addIssued(big.NewInt(100))
 	totalSupply, err = eng.TotalSupply()
 
 	assert.Nil(t, err)
@@ -190,7 +190,7 @@ func TestAddIssued(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, thor.Bytes32{}, storage)
 
-	err = eng.AddIssued(big.NewInt(100))
+	err = eng.addIssued(big.NewInt(100))
 	assert.NoError(t, err)
 
 	issued, err = eng.getIssued()
