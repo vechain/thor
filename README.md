@@ -19,7 +19,7 @@
 <p align="center">
     <a href="https://goreportcard.com/report/github.com/vechain/thor" ><img src="https://goreportcard.com/badge/github.com/vechain/thor"/></a>
     <img src="https://github.com/vechain/thor/actions/workflows/on-master-commit.yaml/badge.svg"/>
-    <img src="https://github.com/vechain/thor/actions/workflows/on-release.yaml/badge.svg"/>
+    <a href="https://github.com/vechain/thor/actions/workflows/on-release.yaml" ><img src="https://github.com/vechain/thor/actions/workflows/on-release.yaml/badge.svg"/></a>
     <a href="https://codecov.io/gh/vechain/thor"><img src="https://codecov.io/gh/vechain/thor/graph/badge.svg?token=NniVYY7IAD"/></a>
 <p/>
 
