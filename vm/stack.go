@@ -51,8 +51,8 @@ func (st *Stack) Data() []uint256.Int {
 }
 
 func (st *Stack) push(d *uint256.Int) {
-	// push limit check is evaluated in the https://github.com/vechain/thor/blob/master/vm/evm.go#L193,
-	// value is compared to param `CallCreateDepth`.
+	// push limit check is evaluated in the https://github.com/vechain/thor/blob/master/vm/evm.go,
+	// evm.depth is compared to param `CallCreateDepth` (1024).
 	st.data = append(st.data, *d)
 }
 
