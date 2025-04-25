@@ -73,6 +73,8 @@ func CalcBaseFee(config *thor.ForkConfig, parent *block.Header) *big.Int {
 		// newBaseFee := parentBaseFee + max(1, parentBaseFee * (parentGasUsed - parentGasTarget) / parentGasTarget / baseFeeChangeDenominator)
 		gasUsedDelta := new(big.Int).SetUint64(parentGasUsed - parentGasTarget)
 		x := new(big.Int).Mul(parentBaseFee, gasUsedDelta)
+		// division by zero cannot happen here because of the intrinsic gas pre-check which ensures that tx gas is always
+		// greater than 0
 		y := x.Div(x, parentGasTargetBig)
 		baseFeeDelta := math.BigMax(
 			x.Div(y, baseFeeChangeDenominator),

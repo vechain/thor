@@ -507,6 +507,8 @@ func (t *Transaction) OverallGasPrice(baseGasPrice *big.Int, provedWork *big.Int
 
 	x := new(big.Int).SetUint64(wgas)
 	x.Mul(x, baseGasPrice)
+	// division by zero cannot happen here because of the intrinsic gas pre-check which ensures that tx gas is always
+	// greater than 0
 	x.Div(x, new(big.Int).SetUint64(t.body.gas()))
 	return x.Add(x, gasPrice)
 }
