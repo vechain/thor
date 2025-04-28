@@ -1660,6 +1660,141 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).String(), (*queuedStake).String())
 }
 
+func TestStakerContract_Native_Revert(t *testing.T) {
+	fc := thor.SoloFork
+	fc.HAYABUSA = 2
+	fc.HAYABUSA_TP = 2
+	var err error
+	thorChain, err = testchain.NewWithFork(fc)
+	assert.NoError(t, err)
+
+	mbp := TestTxDescription{
+		t:          t,
+		abi:        builtin.Params.ABI,
+		methodName: "set",
+		address:    builtin.Params.Address,
+		acc:        genesis.DevAccounts()[0],
+		args:       []any{thor.KeyMaxBlockProposers, big.NewInt(1)},
+	}
+	receipt, a, err := executeTxAndGetReceipt(mbp) // mint block 1
+	assert.NoError(t, err)
+	assert.NotNil(t, receipt)
+	assert.NotNil(t, a)
+
+	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0])) // mint block 2: hayabusa should fork here and set the contract bytecode
+
+	abi := builtin.Staker.ABI
+	toAddr := builtin.Staker.Address
+	endorsor := genesis.DevAccounts()[9]
+	master := genesis.DevAccounts()[8]
+
+	// parameters
+	minStake := big.NewInt(25_000_000)
+	minStake = minStake.Mul(minStake, big.NewInt(1e18))
+	minStakingPeriod := uint32(360) * 24 * 14
+
+	// addValidator
+	addValidatorArgs := []any{master.Address, minStakingPeriod + 1, true}
+	desc := TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "addValidator",
+		address:    toAddr,
+		acc:        endorsor,
+		args:       addValidatorArgs,
+		vet:        minStake,
+	}
+	receipt, _, err = executeTxAndGetReceipt(desc)
+	assert.NoError(t, err)
+	assert.True(t, receipt.Reverted)
+
+	//update auto renew
+	updateAutoRenewArgs := []any{thor.Bytes32{}, false}
+	desc = TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "updateAutoRenew",
+		address:    toAddr,
+		acc:        genesis.DevAccounts()[2],
+		args:       updateAutoRenewArgs,
+	}
+	receipt, _, err = executeTxAndGetReceipt(desc)
+	assert.NoError(t, err)
+	assert.True(t, receipt.Reverted)
+
+	//increase stake
+	increaseStakeArgs := []any{thor.Bytes32{}}
+	desc = TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "increaseStake",
+		address:    toAddr,
+		acc:        genesis.DevAccounts()[2],
+		args:       increaseStakeArgs,
+		vet:        big.NewInt(1),
+	}
+	receipt, _, err = executeTxAndGetReceipt(desc)
+	assert.NoError(t, err)
+	assert.True(t, receipt.Reverted)
+
+	//decrease stake
+	decreaseStakeArgs := []any{thor.Bytes32{}, big.NewInt(1)}
+	desc = TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "decreaseStake",
+		address:    toAddr,
+		acc:        genesis.DevAccounts()[2],
+		args:       decreaseStakeArgs,
+	}
+	receipt, _, err = executeTxAndGetReceipt(desc)
+	assert.NoError(t, err)
+	assert.True(t, receipt.Reverted)
+
+	// update delegator auto renew
+	updateDelegatorAutoRenewArgs := []any{thor.Bytes32{}, thor.Address{}, false}
+	desc = TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "updateDelegatorAutoRenew",
+		address:    toAddr,
+		acc:        genesis.DevAccounts()[2],
+		args:       updateDelegatorAutoRenewArgs,
+	}
+	receipt, _, err = executeTxAndGetReceipt(desc)
+	assert.NoError(t, err)
+	assert.True(t, receipt.Reverted)
+
+	// addDelegation
+	addDelegationArgs := []any{thor.Bytes32{}, thor.Address{}, false, uint8(1)}
+	desc = TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "addDelegation",
+		address:    toAddr,
+		acc:        genesis.DevAccounts()[2],
+		args:       addDelegationArgs,
+		vet:        big.NewInt(10),
+	}
+	receipt, _, err = executeTxAndGetReceipt(desc)
+	assert.NoError(t, err)
+	assert.True(t, receipt.Reverted)
+
+	// withdrawDelegation
+	withdrawDelegationArgs := []any{thor.Bytes32{}, thor.Address{}}
+	desc = TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "withdrawDelegation",
+		address:    toAddr,
+		acc:        genesis.DevAccounts()[2],
+		args:       withdrawDelegationArgs,
+	}
+	receipt, _, err = executeTxAndGetReceipt(desc)
+	assert.NoError(t, err)
+	assert.True(t, receipt.Reverted)
+}
+
 func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
 	fc := thor.SoloFork
 	fc.HAYABUSA = 1
