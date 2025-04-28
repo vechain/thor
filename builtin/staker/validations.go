@@ -147,7 +147,6 @@ func (v *validations) Add(
 	entry := &Validation{
 		Master:             master,
 		Endorsor:           endorsor,
-		Expiry:             nil,
 		Period:             period,
 		CompleteIterations: 0,
 		Status:             StatusQueued,
@@ -158,8 +157,6 @@ func (v *validations) Add(
 		CooldownVET:        big.NewInt(0),
 		WithdrawableVET:    big.NewInt(0),
 		Weight:             big.NewInt(0),
-		Next:               nil,
-		Prev:               nil,
 	}
 
 	if err := v.validatorQueue.Add(id, entry); err != nil {
@@ -233,19 +230,19 @@ func (v *validations) ActivateNext(
 	validator.PendingLocked = big.NewInt(0)
 	validator.LockedVET = validatorLocked
 
-	changeTVL, changeWeight, changePending := delegation.RenewDelegations()
+	changeTVL, changeWeight, queuedDecrease := delegation.RenewDelegations()
 	validator.Weight = big.NewInt(0).Add(validatorLocked, changeWeight)
 	if err := v.storage.SetDelegation(id, delegation); err != nil {
 		return err
 	}
 
 	totalLocked := big.NewInt(0).Add(validatorLocked, changeTVL)
-	changePending = changePending.Add(changePending, validatorLocked)
+	queuedDecrease = queuedDecrease.Add(queuedDecrease, validatorLocked)
 
 	if err := v.lockedVET.Add(totalLocked); err != nil {
 		return err
 	}
-	if err := v.queuedVET.Sub(changePending); err != nil {
+	if err := v.queuedVET.Sub(queuedDecrease); err != nil {
 		return err
 	}
 

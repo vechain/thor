@@ -35,7 +35,7 @@ type Validation struct {
 
 	LockedVET       *big.Int // the amount of VET locked for the current staking period
 	PendingLocked   *big.Int // the amount of VET that will be locked in the next staking period
-	CooldownVET     *big.Int // the amount of VET that will be withdrawable in the next staking period
+	CooldownVET     *big.Int // the amount of VET that will be withdrawable in the next staking period, but is currently locked
 	WithdrawableVET *big.Int // the amount of VET that is currently withdrawable
 
 	Weight *big.Int // LockedVET + CooldownVET + total weight from delegators
@@ -58,7 +58,7 @@ func (v *Validation) IsPeriodEnd(current uint32) bool {
 	return diff%v.Period == 0
 }
 
-// NextPeriodStakes returns the validator stake + all the delegators stakes for the next staking period.
+// NextPeriodStakes returns the validator stake and all the delegator stakes for the next staking period.
 func (v *Validation) NextPeriodStakes(delegation *ValidatorDelegations) *big.Int {
 	validatorTotal := big.NewInt(0).Add(v.LockedVET, v.PendingLocked)
 	return validatorTotal.Add(validatorTotal, delegation.NextPeriodLocked())
@@ -121,7 +121,7 @@ type ValidatorDelegations struct {
 	PendingCooldownVET    *big.Int // PendingCooldownVET (autoRenew == false) represents the amount of VET that will be locked for 1 staking period only
 	PendingCooldownWeight *big.Int // PendingCooldownWeight the weight of PendingCooldownVET including multipliers
 
-	WithdrawVET *big.Int // WithdrawVET represents the amount of VET that is available for withdraw
+	WithdrawVET *big.Int // WithdrawVET represents the amount of VET that is available for withdrawal
 }
 
 func newDelegation() *ValidatorDelegations {
@@ -142,7 +142,7 @@ func (v *ValidatorDelegations) IsEmpty() bool {
 	return v.LockedVET == nil && v.CooldownVET == nil && v.PendingLockedVET == nil && v.PendingCooldownVET == nil && v.WithdrawVET == nil
 }
 
-// PeriodLocked returns the VET that is locked for a given validator's delegations for the current staking period.
+// PeriodLocked returns the VET locked for a given validator's delegations for the current staking period.
 func (v *ValidatorDelegations) PeriodLocked() *big.Int {
 	return big.NewInt(0).Add(v.LockedVET, v.CooldownVET)
 }
@@ -162,7 +162,7 @@ func (v *ValidatorDelegations) NextPeriodLocked() *big.Int {
 func (v *ValidatorDelegations) RenewDelegations() (*big.Int, *big.Int, *big.Int) {
 	changeTVL := big.NewInt(0)
 	changeWeight := big.NewInt(0)
-	lockedPending := big.NewInt(0)
+	queuedDecrease := big.NewInt(0)
 
 	// Move Cooldown => Withdrawable
 	v.WithdrawVET = big.NewInt(0).Add(v.WithdrawVET, v.CooldownVET)
@@ -176,7 +176,7 @@ func (v *ValidatorDelegations) RenewDelegations() (*big.Int, *big.Int, *big.Int)
 	v.LockedWeight = big.NewInt(0).Add(v.LockedWeight, v.PendingLockedWeight)
 	changeTVL.Add(changeTVL, v.PendingLockedVET)
 	changeWeight.Add(changeWeight, v.PendingLockedWeight)
-	lockedPending.Add(lockedPending, v.PendingLockedVET)
+	queuedDecrease.Add(queuedDecrease, v.PendingLockedVET)
 	v.PendingLockedVET = big.NewInt(0)
 	v.PendingLockedWeight = big.NewInt(0)
 
@@ -185,14 +185,14 @@ func (v *ValidatorDelegations) RenewDelegations() (*big.Int, *big.Int, *big.Int)
 	v.CooldownWeight = big.NewInt(0).Set(v.PendingCooldownWeight)
 	changeTVL.Add(changeTVL, v.PendingCooldownVET)
 	changeWeight.Add(changeWeight, v.PendingCooldownWeight)
-	lockedPending.Add(lockedPending, v.PendingCooldownVET)
+	queuedDecrease.Add(queuedDecrease, v.PendingCooldownVET)
 	v.PendingCooldownVET = big.NewInt(0)
 	v.PendingCooldownWeight = big.NewInt(0)
 
-	return changeTVL, changeWeight, lockedPending
+	return changeTVL, changeWeight, queuedDecrease
 }
 
-// Exit moves all of the funds to withdrawable
+// Exit moves all the funds to withdrawable
 func (v *ValidatorDelegations) Exit() *big.Int {
 	withdrawable := big.NewInt(0).Set(v.WithdrawVET)
 	withdrawable = withdrawable.Add(withdrawable, v.LockedVET)

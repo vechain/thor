@@ -165,6 +165,32 @@ func Test_Delegator_DisableAutoRenew_PendingLocked(t *testing.T) {
 	assert.Equal(t, stake, amount)
 }
 
+func Test_QueuedDelegator_Withdraw_NonAutoRenew(t *testing.T) {
+	// Given the staker contract is setup
+	staker, validators := newDelegationStaker(t)
+
+	// And a delegator is added with auto renew disabled
+	validator := validators[0]
+	stake := RandomStake()
+	delegatorAddr := datagen.RandAddress()
+	assert.NoError(t, staker.AddDelegator(validator.ID, delegatorAddr, stake, false, 255))
+
+	// When the delegator withdraws
+	amount, err := staker.DelegatorWithdrawStake(validator.ID, delegatorAddr)
+	assert.NoError(t, err)
+	assert.Equal(t, stake, amount)
+
+	// Then the delegation should be removed
+	delegation, err := staker.storage.GetDelegation(validator.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0), delegation.PendingCooldownVET)
+
+	// And the delegator should be removed
+	delegator, err := staker.GetDelegator(validator.ID, delegatorAddr)
+	assert.NoError(t, err)
+	assert.True(t, delegator.IsEmpty())
+}
+
 func Test_Delegator_DisableAutoRenew_InAStakingPeriod(t *testing.T) {
 	// Given the staker contract is setup
 	staker, validators := newDelegationStaker(t)

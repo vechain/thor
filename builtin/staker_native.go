@@ -72,6 +72,9 @@ func init() {
 			if validator.IsEmpty() {
 				return []any{big.NewInt(0), ""}
 			}
+			if validator.Status == staker.StatusQueued {
+				return []any{validator.PendingLocked, ""}
+			}
 			return []any{validator.WithdrawableVET, ""}
 		}},
 		{"native_firstActive", func(env *xenv.Environment) []any {

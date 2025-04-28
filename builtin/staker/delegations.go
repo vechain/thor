@@ -242,11 +242,17 @@ func (d *delegations) Withdraw(validationID thor.Bytes32, delegatorAddr thor.Add
 		}
 		delegation.WithdrawVET = delegation.WithdrawVET.Sub(delegation.WithdrawVET, delegator.Stake)
 	} else {
-		// the delegators was never locked
-		if delegation.PendingLockedVET.Cmp(delegator.Stake) < 0 {
-			return nil, errors.New("not enough pending locked VET")
+		if delegator.AutoRenew { // delegator's stake is pending locked
+			if delegation.PendingLockedVET.Cmp(delegator.Stake) < 0 {
+				return nil, errors.New("not enough pending locked VET")
+			}
+			delegation.PendingLockedVET = delegation.PendingLockedVET.Sub(delegation.PendingLockedVET, delegator.Stake)
+		} else { // delegator's stake is pending 1 staking period only, i.e., pending cooldown
+			if delegation.PendingCooldownVET.Cmp(delegator.Stake) < 0 {
+				return nil, errors.New("not enough pending cooldown VET")
+			}
+			delegation.PendingCooldownVET = delegation.PendingCooldownVET.Sub(delegation.PendingCooldownVET, delegator.Stake)
 		}
-		delegation.PendingLockedVET = delegation.PendingLockedVET.Sub(delegation.PendingLockedVET, delegator.Stake)
 	}
 
 	// remove the delegator from the mapping after the withdraw
