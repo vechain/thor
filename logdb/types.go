@@ -65,13 +65,11 @@ type EventCriteria struct {
 	Topics  [5]*thor.Bytes32
 }
 
-func (c *EventCriteria) toWhereCondition(query string) (cond string, args []any, adjustedQuery string) {
+func (c *EventCriteria) toWhereCondition() (cond string, args []any) {
 	builder := strings.Builder{}
-	adjustedQuery = query
 	if c.Address != nil {
 		builder.WriteString(" r3.data = ?")
 		args = append(args, c.Address.Bytes())
-		adjustedQuery = strings.Replace(adjustedQuery, "LEFT JOIN ref r3 ON e.address", "INNER JOIN ref r3 ON e.address", 1)
 	}
 	for i, topic := range c.Topics {
 		if topic != nil {
@@ -80,10 +78,9 @@ func (c *EventCriteria) toWhereCondition(query string) (cond string, args []any,
 			}
 			builder.WriteString(fmt.Sprintf(" r%v.data = ?", i+4))
 			args = append(args, removeLeadingZeros(topic.Bytes()))
-			adjustedQuery = strings.Replace(adjustedQuery, fmt.Sprintf("LEFT JOIN ref r%v", i+4), fmt.Sprintf("INNER JOIN ref r%v", i+4), 1)
 		}
 	}
-	return builder.String(), args, adjustedQuery
+	return builder.String(), args
 }
 
 // EventFilter filter

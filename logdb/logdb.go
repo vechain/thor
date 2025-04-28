@@ -97,12 +97,12 @@ func (db *LogDB) Path() string {
 }
 
 func (db *LogDB) FilterEvents(ctx context.Context, filter *EventFilter) ([]*Event, error) {
-	query := `SELECT e.seq, r0.data, e.blockTime, r1.data, r2.data, e.clauseIndex, r3.data, r4.data, r5.data, r6.data, r7.data, r8.data, e.data
+	const query = `SELECT e.seq, r0.data, e.blockTime, r1.data, r2.data, e.clauseIndex, r3.data, r4.data, r5.data, r6.data, r7.data, r8.data, e.data
 FROM event e
 	LEFT JOIN ref r0 ON e.blockID = r0.id
 	LEFT JOIN ref r1 ON e.txID = r1.id
 	LEFT JOIN ref r2 ON e.txOrigin = r2.id
-	LEFT JOIN ref r3 ON e.address = r3.id
+	INNER JOIN ref r3 ON e.address = r3.id
 	LEFT JOIN ref r4 ON e.topic0 = r4.id
 	LEFT JOIN ref r5 ON e.topic1 = r5.id
 	LEFT JOIN ref r6 ON e.topic2 = r6.id
@@ -146,8 +146,7 @@ FROM event e
 		whereOrderLimit.WriteString(" AND (")
 
 		for i, c := range filter.CriteriaSet {
-			cond, cargs, adjustedQuery := c.toWhereCondition(query)
-			query = adjustedQuery
+			cond, cargs := c.toWhereCondition()
 			if i > 0 {
 				whereOrderLimit.WriteString(" OR")
 			}
