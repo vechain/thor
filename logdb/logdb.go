@@ -114,7 +114,7 @@ FROM (%v) e
 
 	var (
 		subQuery = "SELECT seq FROM event WHERE 1"
-		args     []interface{}
+		args     []any
 	)
 
 	if filter.Range != nil {
@@ -190,7 +190,7 @@ FROM (%v) t
 
 	var (
 		subQuery = "SELECT seq FROM transfer WHERE 1"
-		args     []interface{}
+		args     []any
 	)
 
 	if filter.Range != nil {
@@ -247,7 +247,7 @@ FROM (%v) t
 	return db.queryTransfers(ctx, transferQuery, args...)
 }
 
-func (db *LogDB) queryEvents(ctx context.Context, query string, args ...interface{}) ([]*Event, error) {
+func (db *LogDB) queryEvents(ctx context.Context, query string, args ...any) ([]*Event, error) {
 	rows, err := db.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -315,7 +315,7 @@ func (db *LogDB) queryEvents(ctx context.Context, query string, args ...interfac
 	return events, nil
 }
 
-func (db *LogDB) queryTransfers(ctx context.Context, query string, args ...interface{}) ([]*Transfer, error) {
+func (db *LogDB) queryTransfers(ctx context.Context, query string, args ...any) ([]*Transfer, error) {
 	rows, err := db.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
