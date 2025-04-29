@@ -80,6 +80,15 @@ func (l *linkedList) Remove(id thor.Bytes32, validator *Validation) error {
 	prev := validator.Prev
 	next := validator.Next
 
+	// verify the entry exists in the linked list
+	validatorEntry, err := l.storage.GetValidator(id)
+	if err != nil {
+		return err
+	}
+	if validatorEntry.IsEmpty() {
+		return nil
+	}
+
 	if prev == nil || prev.IsZero() {
 		l.head.Set(next)
 	} else {

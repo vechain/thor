@@ -48,8 +48,9 @@ type Validation struct {
 func (v *Validation) IsEmpty() bool {
 	emptyStake := v.LockedVET == nil || v.LockedVET.Sign() == 0
 	emptyWeight := v.Weight == nil || v.Weight.Sign() == 0
+	emptyAddresses := v.Master.IsZero() || v.Endorsor.IsZero()
 
-	return emptyStake && emptyWeight && v.Status == StatusUnknown
+	return emptyStake && emptyWeight && v.Status == StatusUnknown && emptyAddresses
 }
 
 // IsPeriodEnd returns whether the provided block is the last block of the current staking period.
