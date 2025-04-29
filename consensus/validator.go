@@ -330,11 +330,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 
 		// check if tx has enough fee to cover for base fee, if set
 		if header.BaseFee() != nil {
-			legacyTxBaseGasPrice, err := builtin.Params.Native(state).Get(thor.KeyLegacyTxBaseGasPrice)
-			if err != nil {
-				return nil, nil, err
-			}
-			if err := fork.ValidateGalacticaTxFee(tx, header.BaseFee(), legacyTxBaseGasPrice); err != nil {
+			if err := fork.ValidateGalacticaTxFee(tx, state, header.BaseFee()); err != nil {
 				return nil, nil, err
 			}
 		}
