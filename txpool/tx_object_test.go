@@ -104,9 +104,12 @@ func TestExecutableWithError(t *testing.T) {
 }
 
 func TestSort(t *testing.T) {
+	addr1 := thor.BytesToAddress([]byte("addr1"))
+	addr2 := thor.BytesToAddress([]byte("addr2"))
 	objs := []*txObject{
 		{priorityGasPrice: big.NewInt(0)},
-		{priorityGasPrice: big.NewInt(10)},
+		{priorityGasPrice: big.NewInt(10), timeAdded: 20, payer: &addr1},
+		{priorityGasPrice: big.NewInt(10), timeAdded: 3, payer: &addr2},
 		{priorityGasPrice: big.NewInt(20)},
 		{priorityGasPrice: big.NewInt(30)},
 	}
@@ -115,7 +118,12 @@ func TestSort(t *testing.T) {
 	assert.Equal(t, big.NewInt(30), objs[0].priorityGasPrice)
 	assert.Equal(t, big.NewInt(20), objs[1].priorityGasPrice)
 	assert.Equal(t, big.NewInt(10), objs[2].priorityGasPrice)
-	assert.Equal(t, big.NewInt(0), objs[3].priorityGasPrice)
+	assert.Equal(t, int64(20), objs[2].timeAdded)
+	assert.Equal(t, &addr1, objs[2].payer)
+	assert.Equal(t, big.NewInt(10), objs[3].priorityGasPrice)
+	assert.Equal(t, int64(3), objs[3].timeAdded)
+	assert.Equal(t, &addr2, objs[3].payer)
+	assert.Equal(t, big.NewInt(0), objs[4].priorityGasPrice)
 }
 
 func TestResolve(t *testing.T) {

@@ -7,7 +7,7 @@ package txpool
 
 import (
 	"math/big"
-	"sort"
+	"slices"
 	"time"
 
 	"github.com/pkg/errors"
@@ -122,8 +122,13 @@ func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 }
 
 func sortTxObjsByOverallGasPriceDesc(txObjs []*txObject) {
-	sort.Slice(txObjs, func(i, j int) bool {
-		gp1, gp2 := txObjs[i].priorityGasPrice, txObjs[j].priorityGasPrice
-		return gp1.Cmp(gp2) >= 0
+	slices.SortFunc(txObjs, func(a, b *txObject) int {
+		if cmp := b.priorityGasPrice.Cmp(a.priorityGasPrice); cmp != 0 {
+			return cmp
+		}
+		if a.timeAdded < b.timeAdded {
+			return 1
+		}
+		return -1
 	})
 }
