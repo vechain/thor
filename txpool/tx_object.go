@@ -123,16 +123,12 @@ func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 
 func sortTxObjsByOverallGasPriceDesc(txObjs []*txObject) {
 	slices.SortFunc(txObjs, func(a, b *txObject) int {
-		switch {
-		case a.priorityGasPrice.Cmp(b.priorityGasPrice) < 0:
-			return 1
-		case a.priorityGasPrice.Cmp(b.priorityGasPrice) > 0:
-			return -1
-		default:
-			if a.timeAdded < b.timeAdded {
-				return 1
-			}
-			return -1
+		if cmp := b.priorityGasPrice.Cmp(a.priorityGasPrice); cmp != 0 {
+			return cmp
 		}
+		if a.timeAdded < b.timeAdded {
+			return 1
+		}
+		return -1
 	})
 }
