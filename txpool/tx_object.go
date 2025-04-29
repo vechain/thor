@@ -131,9 +131,8 @@ func sortTxObjsByOverallGasPriceDesc(txObjs []*txObject) {
 		default:
 			if a.timeAdded < b.timeAdded {
 				return 1
-			} else {
-				return -1
 			}
+			return -1
 		}
 	})
 }
