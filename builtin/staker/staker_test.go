@@ -7,6 +7,7 @@
 package staker
 
 import (
+	"fmt"
 	"math/big"
 	"math/rand"
 	"testing"
@@ -196,12 +197,14 @@ func TestStaker_AddValidator_Duplicate(t *testing.T) {
 func TestStaker_AddValidator_QueueOrder(t *testing.T) {
 	staker, _ := newStaker(t, 0, 101, false)
 
+	expectedOrder := [100]thor.Address{}
 	// add 100 validations to the queue
-	for range 100 {
+	for i := range 100 {
 		addr := datagen.RandAddress()
 		stake := RandomStake()
 		_, err := staker.AddValidator(addr, addr, uint32(360)*24*14, stake, true, 0)
 		assert.NoError(t, err)
+		expectedOrder[i] = addr
 	}
 
 	first, err := staker.FirstQueued()
@@ -209,14 +212,13 @@ func TestStaker_AddValidator_QueueOrder(t *testing.T) {
 
 	// iterating using the `Next` method should return the same order
 	loopID := first
-	for range 99 {
-		next, err := staker.Next(loopID)
-		assert.NoError(t, err)
+	for i := range 100 {
 		loopVal, err := staker.storage.GetValidator(loopID)
 		assert.NoError(t, err)
-		nextVal, err := staker.storage.GetValidator(next)
+		assert.Equal(t, expectedOrder[i], loopVal.Master)
+
+		next, err := staker.Next(loopID)
 		assert.NoError(t, err)
-		assert.True(t, loopVal.PendingLocked.Cmp(nextVal.PendingLocked) >= 0)
 		loopID = next
 	}
 
@@ -439,6 +441,7 @@ func TestStaker_IncreaseQueued_Order(t *testing.T) {
 	staker, _ := newStaker(t, 68, 101, true)
 	addr := datagen.RandAddress()
 	addr1 := datagen.RandAddress()
+	addr2 := datagen.RandAddress()
 	stake := RandomStake()
 
 	err := staker.IncreaseStake(addr, thor.Bytes32{}, stake)
@@ -463,19 +466,121 @@ func TestStaker_IncreaseQueued_Order(t *testing.T) {
 	assert.Equal(t, stake, validator.PendingLocked)
 	assert.Equal(t, big.NewInt(0), validator.Weight)
 
+	id2, err := staker.AddValidator(addr2, addr2, uint32(360)*24*14, stake, false, 0)
+	assert.NoError(t, err)
+
+	validator, err = staker.Get(id1)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusQueued, validator.Status)
+	assert.Equal(t, stake, validator.PendingLocked)
+	assert.Equal(t, big.NewInt(0), validator.Weight)
+
 	// verify order
 	queued, err := staker.FirstQueued()
 	assert.NoError(t, err)
 	assert.Equal(t, queued, id)
 
 	// increase stake queued
-	err = staker.IncreaseStake(addr1, id1, big.NewInt(1000))
+	increaseBy := big.NewInt(1000)
+	err = staker.IncreaseStake(addr1, id1, increaseBy)
 	assert.NoError(t, err)
+	fmt.Println("Stake", stake, increaseBy)
+	expectedIncreaseStake := big.NewInt(0).Add(stake, increaseBy)
 
 	// verify order after increasing stake
 	queued, err = staker.FirstQueued()
 	assert.NoError(t, err)
+	assert.Equal(t, queued, id)
+	entry, err := staker.Get(queued)
+	assert.NoError(t, err)
+	assert.Equal(t, stake, entry.PendingLocked)
+
+	queued, err = staker.Next(queued)
+	assert.NoError(t, err)
 	assert.Equal(t, queued, id1)
+	entry, err = staker.Get(queued)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedIncreaseStake, entry.PendingLocked)
+
+	queued, err = staker.Next(queued)
+	assert.NoError(t, err)
+	assert.Equal(t, queued, id2)
+	entry, err = staker.Get(queued)
+	assert.NoError(t, err)
+	assert.Equal(t, stake, entry.PendingLocked)
+}
+
+func TestStaker_DecreaseQueued_Order(t *testing.T) {
+	staker, _ := newStaker(t, 68, 101, true)
+	addr := datagen.RandAddress()
+	addr1 := datagen.RandAddress()
+	addr2 := datagen.RandAddress()
+	stake := RandomStake()
+
+	err := staker.DecreaseStake(addr, thor.Bytes32{}, stake)
+	assert.Error(t, err, "validator not found")
+
+	// add the validator
+	id, err := staker.AddValidator(addr, addr, uint32(360)*24*14, stake, false, 0)
+	assert.NoError(t, err)
+
+	validator, err := staker.Get(id)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusQueued, validator.Status)
+	assert.Equal(t, stake, validator.PendingLocked)
+	assert.Equal(t, big.NewInt(0), validator.Weight)
+
+	id1, err := staker.AddValidator(addr1, addr1, uint32(360)*24*14, stake, false, 0)
+	assert.NoError(t, err)
+
+	validator, err = staker.Get(id1)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusQueued, validator.Status)
+	assert.Equal(t, stake, validator.PendingLocked)
+	assert.Equal(t, big.NewInt(0), validator.Weight)
+
+	id2, err := staker.AddValidator(addr2, addr2, uint32(360)*24*14, stake, false, 0)
+	assert.NoError(t, err)
+
+	validator, err = staker.Get(id1)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusQueued, validator.Status)
+	assert.Equal(t, stake, validator.PendingLocked)
+	assert.Equal(t, big.NewInt(0), validator.Weight)
+
+	// verify order
+	queued, err := staker.FirstQueued()
+	assert.NoError(t, err)
+	assert.Equal(t, queued, id)
+
+	// increase stake queued
+	decreaseBy := big.NewInt(1000)
+	err = staker.DecreaseStake(addr1, id1, decreaseBy)
+	assert.NoError(t, err)
+
+	expectedDecreaseStake := big.NewInt(0).Sub(stake, decreaseBy)
+
+	// verify order after increasing stake
+	queued, err = staker.FirstQueued()
+	assert.NoError(t, err)
+	assert.Equal(t, queued, id)
+	entry, err := staker.Get(queued)
+	assert.NoError(t, err)
+	assert.Equal(t, stake, entry.PendingLocked)
+
+	queued, err = staker.Next(queued)
+	assert.NoError(t, err)
+	assert.Equal(t, queued, id1)
+	entry, err = staker.Get(queued)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedDecreaseStake, entry.PendingLocked)
+
+	queued, err = staker.Next(queued)
+	assert.NoError(t, err)
+	assert.Equal(t, queued, id2)
+	entry, err = staker.Get(queued)
+	assert.NoError(t, err)
+	assert.Equal(t, stake, entry.PendingLocked)
 }
 
 func TestStaker_IncreaseActive(t *testing.T) {
@@ -944,11 +1049,13 @@ func TestStaker_Next(t *testing.T) {
 		leaderGroup = append(leaderGroup, id)
 	}
 
-	for range 100 {
+	queuedGroup := [100]thor.Address{}
+	for i := range 100 {
 		addr := datagen.RandAddress()
 		stake := RandomStake()
 		_, err := staker.AddValidator(addr, addr, uint32(360)*24*14, stake, true, 0)
 		assert.NoError(t, err)
+		queuedGroup[i] = addr
 	}
 
 	firstLeader, err := staker.FirstActive()
@@ -965,14 +1072,13 @@ func TestStaker_Next(t *testing.T) {
 	assert.NoError(t, err)
 
 	current := firstQueued
-	for range 99 {
-		next, err := staker.Next(current)
-		assert.NoError(t, err)
+	for i := range 100 {
 		currentVal, err := staker.Get(current)
 		assert.NoError(t, err)
-		nextVal, err := staker.Get(next)
+		assert.Equal(t, queuedGroup[i], currentVal.Master)
+
+		next, err := staker.Next(current)
 		assert.NoError(t, err)
-		assert.True(t, currentVal.PendingLocked.Cmp(nextVal.PendingLocked) >= 0)
 		current = next
 	}
 }

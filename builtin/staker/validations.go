@@ -18,7 +18,7 @@ import (
 type validations struct {
 	storage             *storage
 	leaderGroup         *linkedList
-	validatorQueue      *orderedLinkedList
+	validatorQueue      *linkedList
 	leaderGroupSize     *solidity.Uint256
 	queuedGroupSize     *solidity.Uint256
 	lockedVET           *solidity.Uint256
@@ -54,7 +54,7 @@ func newValidations(storage *storage) *validations {
 	return &validations{
 		storage:             storage,
 		leaderGroup:         newLinkedList(storage, slotActiveHead, slotActiveTail),
-		validatorQueue:      newOrderedLinkedList(storage, slotQueuedHead, slotQueuedTail),
+		validatorQueue:      newLinkedList(storage, slotQueuedHead, slotQueuedTail),
 		queuedGroupSize:     solidity.NewUint256(storage.Address(), storage.State(), slotQueuedGroupSize),
 		leaderGroupSize:     solidity.NewUint256(storage.Address(), storage.State(), slotActiveGroupSize),
 		lockedVET:           solidity.NewUint256(storage.Address(), storage.State(), slotLockedVET),
@@ -81,7 +81,7 @@ func (v *validations) FirstActive() (thor.Bytes32, error) {
 
 // FirstQueued returns validator address of first entry.
 func (v *validations) FirstQueued() (thor.Bytes32, error) {
-	return v.validatorQueue.linkedList.head.Get()
+	return v.validatorQueue.head.Get()
 }
 
 func (v *validations) LeaderGroupIterator(callback func(thor.Bytes32, *Validation) error) error {
@@ -305,26 +305,14 @@ func (v *validations) IncreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 		return errors.New("stake is out of range")
 	}
 
-	entry.PendingLocked = amount.Add(amount, entry.PendingLocked)
+	entry.PendingLocked = big.NewInt(0).Add(amount, entry.PendingLocked)
 	if err := v.queuedVET.Add(amount); err != nil {
 		return err
 	}
 
-	if entry.Status == StatusActive {
-		err = v.storage.SetValidator(id, entry)
-		if err != nil {
-			return err
-		}
-	}
-
-	if entry.Status == StatusQueued {
-		// queue is stake based, so we need to remove and re-add the validator
-		if err := v.validatorQueue.Remove(id, entry); err != nil {
-			return err
-		}
-		if err := v.validatorQueue.Add(id, entry); err != nil {
-			return err
-		}
+	err = v.storage.SetValidator(id, entry)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -356,11 +344,6 @@ func (v *validations) DecreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 	if entry.Status == StatusActive {
 		entry.CooldownVET = entry.CooldownVET.Add(entry.CooldownVET, amount)
 		entry.LockedVET = entry.LockedVET.Sub(entry.LockedVET, amount)
-
-		err = v.storage.SetValidator(id, entry)
-		if err != nil {
-			return err
-		}
 	}
 
 	if entry.Status == StatusQueued {
@@ -369,14 +352,10 @@ func (v *validations) DecreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 		if err := v.queuedVET.Sub(amount); err != nil {
 			return err
 		}
-
-		// queue is stake based, so we need to remove and re-add the validator
-		if err := v.validatorQueue.Remove(id, entry); err != nil {
-			return err
-		}
-		if err := v.validatorQueue.Add(id, entry); err != nil {
-			return err
-		}
+	}
+	err = v.storage.SetValidator(id, entry)
+	if err != nil {
+		return err
 	}
 
 	return nil
