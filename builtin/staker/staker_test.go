@@ -1110,7 +1110,7 @@ func TestStaker_Initialise(t *testing.T) {
 	assert.False(t, first.IsZero())
 
 	expectedLength := big.NewInt(101)
-	length, err := staker.validations.leaderGroupSize.Get()
+	length, err := staker.validations.leaderGroup.Len()
 	assert.NoError(t, err)
 	assert.True(t, expectedLength.Cmp(length) == 0)
 }
@@ -1615,7 +1615,7 @@ func TestStaker_Housekeep_Exit_Decrements_Leader_Group_Size(t *testing.T) {
 	validator, err := staker.Get(id1)
 	assert.NoError(t, err)
 	assert.Equal(t, StatusCooldown, validator.Status)
-	leaderGroupSize, err := staker.validations.leaderGroupSize.Get()
+	leaderGroupSize, err := staker.validations.leaderGroup.Len()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(2), leaderGroupSize)
 
@@ -1625,7 +1625,7 @@ func TestStaker_Housekeep_Exit_Decrements_Leader_Group_Size(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NoError(t, staker.validations.ActivateNext(0, staker.params))
 
-	leaderGroupSize, err = staker.validations.leaderGroupSize.Get()
+	leaderGroupSize, err = staker.validations.leaderGroup.Len()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(3), leaderGroupSize)
 
@@ -1637,7 +1637,7 @@ func TestStaker_Housekeep_Exit_Decrements_Leader_Group_Size(t *testing.T) {
 	validator2, err := staker.Get(id2)
 	assert.NoError(t, err)
 	assert.Equal(t, StatusCooldown, validator2.Status)
-	leaderGroupSize, err = staker.validations.leaderGroupSize.Get()
+	leaderGroupSize, err = staker.validations.leaderGroup.Len()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(2), leaderGroupSize)
 }
@@ -1658,11 +1658,11 @@ func TestStaker_Housekeep_Adds_Queued_Validators_Up_To_Limit(t *testing.T) {
 	id3, err := staker.AddValidator(addr3, addr3, period, stake, false, 0)
 	assert.NoError(t, err)
 
-	queuedValidators, err := staker.validations.queuedGroupSize.Get()
+	queuedValidators, err := staker.validations.validatorQueue.Len()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(3), queuedValidators)
 
-	leaderGroupSize, err := staker.validations.leaderGroupSize.Get()
+	leaderGroupSize, err := staker.validations.leaderGroup.Len()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).String(), leaderGroupSize.String())
 
@@ -1678,10 +1678,10 @@ func TestStaker_Housekeep_Adds_Queued_Validators_Up_To_Limit(t *testing.T) {
 	validator2, err := staker.Get(id3)
 	assert.NoError(t, err)
 	assert.Equal(t, StatusQueued, validator2.Status)
-	leaderGroupSize, err = staker.validations.leaderGroupSize.Get()
+	leaderGroupSize, err = staker.validations.leaderGroup.Len()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(2), leaderGroupSize)
-	queuedValidators, err = staker.validations.queuedGroupSize.Get()
+	queuedValidators, err = staker.validations.validatorQueue.Len()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(1), queuedValidators)
 }

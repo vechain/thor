@@ -56,7 +56,7 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 		return false, err
 	}
 
-	leaderGroupLength, err := s.validations.leaderGroupSize.Get()
+	leaderGroupLength, err := s.validations.leaderGroup.Len()
 	if err != nil {
 		return false, err
 	}
@@ -217,7 +217,7 @@ func (s *Staker) Transition(currentBlock uint32) (bool, error) {
 		maxProposers = big.NewInt(0).SetUint64(thor.InitialMaxBlockProposers)
 	}
 
-	queueSize, err := s.validations.queuedGroupSize.Get()
+	queueSize, err := s.validations.validatorQueue.Len()
 	if err != nil {
 		return false, err
 	}

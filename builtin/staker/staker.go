@@ -101,11 +101,11 @@ func (s *Staker) FirstQueued() (thor.Bytes32, error) {
 
 // QueuedGroupSize returns the number of validations in the queue
 func (s *Staker) QueuedGroupSize() (*big.Int, error) {
-	return s.validations.queuedGroupSize.Get()
+	return s.validations.validatorQueue.Len()
 }
 
 func (s *Staker) LeaderGroupSize() (*big.Int, error) {
-	return s.validations.leaderGroupSize.Get()
+	return s.validations.leaderGroup.Len()
 }
 
 // Next returns the next validator in a a linked list.

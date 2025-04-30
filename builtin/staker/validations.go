@@ -19,8 +19,6 @@ type validations struct {
 	storage             *storage
 	leaderGroup         *linkedList
 	validatorQueue      *linkedList
-	leaderGroupSize     *solidity.Uint256
-	queuedGroupSize     *solidity.Uint256
 	lockedVET           *solidity.Uint256
 	queuedVET           *solidity.Uint256
 	lowStakingPeriod    uint32
@@ -53,10 +51,8 @@ func newValidations(storage *storage) *validations {
 
 	return &validations{
 		storage:             storage,
-		leaderGroup:         newLinkedList(storage, slotActiveHead, slotActiveTail),
-		validatorQueue:      newLinkedList(storage, slotQueuedHead, slotQueuedTail),
-		queuedGroupSize:     solidity.NewUint256(storage.Address(), storage.State(), slotQueuedGroupSize),
-		leaderGroupSize:     solidity.NewUint256(storage.Address(), storage.State(), slotActiveGroupSize),
+		leaderGroup:         newLinkedList(storage, slotActiveHead, slotActiveTail, slotActiveGroupSize),
+		validatorQueue:      newLinkedList(storage, slotQueuedHead, slotQueuedTail, slotQueuedGroupSize),
 		lockedVET:           solidity.NewUint256(storage.Address(), storage.State(), slotLockedVET),
 		queuedVET:           solidity.NewUint256(storage.Address(), storage.State(), slotQueuedVET),
 		lowStakingPeriod:    lowStakingPeriod,
@@ -67,7 +63,7 @@ func newValidations(storage *storage) *validations {
 
 // IsActive returns true if there are active validators.
 func (v *validations) IsActive() (bool, error) {
-	activeCount, err := v.leaderGroupSize.Get()
+	activeCount, err := v.leaderGroup.count.Get()
 	if err != nil {
 		return false, err
 	}
@@ -159,21 +155,19 @@ func (v *validations) Add(
 		Weight:             big.NewInt(0),
 	}
 
-	if err := v.validatorQueue.Add(id, entry); err != nil {
-		return thor.Bytes32{}, err
-	}
-
 	if err := v.queuedVET.Add(stake); err != nil {
 		return thor.Bytes32{}, err
 	}
-
-	// Increment queuedGroupSize when adding validator to queue
-	if err := v.queuedGroupSize.Add(big.NewInt(1)); err != nil {
+	if err := v.storage.SetLookup(master, id); err != nil {
 		return thor.Bytes32{}, err
 	}
 
-	if err := v.storage.SetLookup(master, id); err != nil {
+	added, err := v.validatorQueue.Add(id, entry)
+	if err != nil {
 		return thor.Bytes32{}, err
+	}
+	if !added {
+		return thor.Bytes32{}, errors.New("failed to add validator to queue")
 	}
 
 	return id, nil
@@ -183,7 +177,7 @@ func (v *validations) ActivateNext(
 	currentBlock uint32,
 	params *params.Params,
 ) error {
-	leaderGroupLength, err := v.leaderGroupSize.Get()
+	leaderGroupLength, err := v.leaderGroup.Len()
 	if err != nil {
 		return err
 	}
@@ -195,15 +189,12 @@ func (v *validations) ActivateNext(
 		return errors.New("leader group is full")
 	}
 	// Check if queue is empty
-	queuedSize, err := v.queuedGroupSize.Get()
+	queuedSize, err := v.validatorQueue.Len()
 	if err != nil {
 		return err
 	}
 	if queuedSize.Cmp(big.NewInt(0)) <= 0 {
 		return errors.New("no validator in the queue")
-	}
-	if err := v.leaderGroupSize.Add(big.NewInt(1)); err != nil {
-		return nil
 	}
 	// pop the head of the queue
 	id, validator, err := v.validatorQueue.Pop()
@@ -215,11 +206,6 @@ func (v *validations) ActivateNext(
 	}
 	delegation, err := v.storage.GetDelegation(id)
 	if err != nil {
-		return err
-	}
-
-	// Decrement queuedGroupSize when removing from queue
-	if err := v.queuedGroupSize.Sub(big.NewInt(1)); err != nil {
 		return err
 	}
 
@@ -253,8 +239,12 @@ func (v *validations) ActivateNext(
 	validator.ExitTxBlock = currentBlock
 	validator.StartBlock = currentBlock
 	// add to the active list
-	if err := v.leaderGroup.Add(id, validator); err != nil {
+	added, err := v.leaderGroup.Add(id, validator)
+	if err != nil {
 		return err
+	}
+	if !added {
+		return errors.New("failed to add validator to active list")
 	}
 
 	return nil
@@ -384,10 +374,7 @@ func (v *validations) WithdrawStake(endorsor thor.Address, id thor.Bytes32) (*bi
 		withdrawAmount = withdrawAmount.Add(withdrawAmount, entry.PendingLocked)
 		entry.PendingLocked = big.NewInt(0)
 		entry.Status = StatusExit
-		if err := v.validatorQueue.Remove(id, entry); err != nil {
-			return nil, err
-		}
-		if err := v.queuedGroupSize.Sub(big.NewInt(1)); err != nil {
+		if _, err := v.validatorQueue.Remove(id, entry); err != nil {
 			return nil, err
 		}
 	}
@@ -431,14 +418,11 @@ func (v *validations) ExitValidator(id thor.Bytes32, currentBlock uint32) error 
 	entry.LockedVET = big.NewInt(0)
 	entry.PendingLocked = big.NewInt(0)
 
-	if err = v.leaderGroup.Remove(id, entry); err != nil {
+	if _, err = v.leaderGroup.Remove(id, entry); err != nil {
 		return err
 	}
 	if err = v.storage.SetLookup(entry.Master, thor.Bytes32{}); err != nil {
 		return err
 	}
-	if err = v.lockedVET.Sub(validatorTVL); err != nil {
-		return err
-	}
-	return v.leaderGroupSize.Sub(big.NewInt(1))
+	return v.lockedVET.Sub(validatorTVL)
 }

@@ -20,7 +20,7 @@ func Test_LinkedList_Remove_NonExistent(t *testing.T) {
 	db := muxdb.NewMem()
 	st := state.New(db, trie.Root{})
 	addr := thor.BytesToAddress([]byte("test"))
-	linkedList := newLinkedList(newStorage(addr, st), thor.Bytes32{0x1}, thor.Bytes32{0x2})
+	linkedList := newLinkedList(newStorage(addr, st), thor.Bytes32{0x1}, thor.Bytes32{0x2}, thor.Bytes32{0x3})
 
 	validator1ID := datagen.RandomHash()
 	validator1 := &Validation{
@@ -37,15 +37,15 @@ func Test_LinkedList_Remove_NonExistent(t *testing.T) {
 		Master: datagen.RandAddress(),
 	}
 
-	if err := linkedList.Add(validator1ID, validator1); err != nil {
+	if _, err := linkedList.Add(validator1ID, validator1); err != nil {
 		t.Fatalf("failed to add validator 1: %v", err)
 	}
 
-	if err := linkedList.Add(validator2ID, validator2); err != nil {
+	if _, err := linkedList.Add(validator2ID, validator2); err != nil {
 		t.Fatalf("failed to add validator 2: %v", err)
 	}
 
-	if err := linkedList.Remove(validator3ID, validator3); err != nil {
+	if _, err := linkedList.Remove(validator3ID, validator3); err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
 
