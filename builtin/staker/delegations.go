@@ -53,6 +53,9 @@ func (d *delegations) Add(
 	if validator.IsEmpty() {
 		return errors.New("validator not found")
 	}
+	if validator.Status != StatusQueued && validator.Status != StatusActive {
+		return errors.New("validator is not queued or active")
+	}
 
 	delegation, err := d.storage.GetDelegation(validationID)
 	if err != nil {
@@ -78,7 +81,7 @@ func (d *delegations) Add(
 	if !autoRenew {
 		exitIteration := validator.CompleteIterations + 1
 		if validator.Status == StatusActive {
-			exitIteration += 1 // validator is currently active, so this delegation needs to wait for this iteration and the next
+			exitIteration += 1 // validator is currently active, so this delegation needs to wait for this iteration and its own before it can exit
 		}
 		delegator.ExitIteration = &exitIteration
 	}
@@ -127,7 +130,7 @@ func (d *delegations) DisableAutoRenew(validationID thor.Bytes32, delegatorAddr 
 
 	weight := delegator.Weight()
 
-	// update the delegator
+	// set the delegator's exit iteration
 	exitIteration := validator.CompleteIterations + 1
 	if validator.Status == StatusActive && validator.CompleteIterations < delegator.FirstIteration {
 		exitIteration += 1 // delegator's first staking period has not begun, it must wait for the current and then its own period

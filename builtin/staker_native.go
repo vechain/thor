@@ -244,8 +244,12 @@ func init() {
 			return []any{delegation.Stake, delegation.Multiplier, delegation.AutoRenew, ""}
 		}},
 		{"native_getDelegatorContract", func(env *xenv.Environment) []any {
-			// TODO: This is a quick hack for testing. Any address that calls the staker can be the delegator contract
-			return []any{env.TransactionContext().Origin, ""}
+			raw, err := Params.Native(env.State()).Get(thor.KeyStargateContractAddress)
+			if err != nil {
+				return []any{thor.Address{}, fmt.Sprintf("failed to get Stargate contract address: %v", err)}
+			}
+			addr := thor.BytesToAddress(raw.Bytes())
+			return []any{addr, ""}
 		}},
 	}
 	stakerAbi := Staker.NativeABI()

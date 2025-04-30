@@ -99,8 +99,18 @@ jobs:
           retention-days: 14
 
   run-hayabusa-tests:
-    runs-on: 8-core-10-jobs
+    runs-on:
+      - codebuild-Hayabusa-${{ github.run_id }}-${{ github.run_attempt }}
+      - image:arm-3.0
+      - instance-size:large # xlarge=32 vCPUs, 64 GiB memory, large=8 vCPUs, 16 GiB memory
+
     name: Hayabusa Tests
+
+    strategy:
+      matrix:
+        packages:
+          - builtins
+          - tests
 
     env:
       GOPRIVATE: github.com/vechain/draupnir/*
@@ -129,8 +139,7 @@ jobs:
           git config --global url."https://${{ secrets.GHA_REPO_ACCESS }}@github.com/".insteadOf "https://github.com/"
 
       - name: Test
-        run: |
-          for PACKAGE in $(go list ./...); do go test -v -failfast -timeout 3600s ${PACKAGE}; done;
+        run: go test -v -failfast -timeout 3600s ./${{ matrix.packages }}
         working-directory: ${{ github.workspace }}/hayabusa-e2e
         env:
           THOR_WORKING_DIR: ${{ github.workspace }}/hayabusa

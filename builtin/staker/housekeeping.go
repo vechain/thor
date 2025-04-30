@@ -18,13 +18,11 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 	if currentBlock%epochLength != 0 { // we only perform housekeeping on epoch blocks
 		return false, nil
 	}
-	maxLeaderGroupSize, err := s.params.Get(thor.KeyMaxBlockProposers)
-	if err != nil {
-		return false, err
-	}
 
 	validatorExitID := thor.Bytes32{}
 	validatorLowestExitBlock := uint32(math.MaxUint32)
+
+	hasUpdates := false
 
 	iterator := func(id thor.Bytes32, entry *Validation) error {
 		isPeriodEnd := entry.IsPeriodEnd(currentBlock)
@@ -37,9 +35,11 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 		// check if the validator should be moved to cooldown / exit
 		if entry.Expiry != nil && currentBlock >= *entry.Expiry {
 			if entry.Status == StatusActive && !entry.AutoRenew {
+				hasUpdates = true
 				return s.performCooldownUpdates(id, entry)
 			}
 			if entry.Status == StatusActive && entry.AutoRenew {
+				hasUpdates = true
 				return s.performRenewalUpdates(id, entry)
 			}
 			// Find validator with the lowest exit tx block
@@ -51,35 +51,37 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 
 		return nil
 	}
-
-	if err = s.validations.LeaderGroupIterator(iterator); err != nil {
+	// perform the iteration
+	if err := s.validations.LeaderGroupIterator(iterator); err != nil {
 		return false, err
 	}
 
-	leaderGroupLength, err := s.validations.leaderGroup.Len()
+	// exit 1 validator if the conditions are met
+	if !validatorExitID.IsZero() {
+		canExit, err := s.canExit()
+		if err != nil {
+			return false, err
+		}
+		if canExit {
+			if err := s.validations.ExitValidator(validatorExitID, currentBlock); err != nil {
+				return false, err
+			}
+			hasUpdates = true
+		}
+	}
+
+	// fill any remaining leader group slots with validators from the queue
+	activated, err := s.activateValidators(currentBlock)
 	if err != nil {
 		return false, err
 	}
-	// min leader group size is 2/3 of max leader group size
-	minimum := big.NewFloat(0).SetInt(maxLeaderGroupSize)
-	minimum = minimum.Mul(minimum, big.NewFloat(2))
-	minimum = minimum.Quo(minimum, big.NewFloat(3))
-	currentLessOne := big.NewFloat(0).SetInt(leaderGroupLength)
-	currentLessOne = currentLessOne.Sub(currentLessOne, big.NewFloat(1))
-
-	// TODO: We need to check if the queue size + leader group size is less than 2/3 of max leader group size
-	// Not just the active leader group size
-
-	if !validatorExitID.IsZero() && currentLessOne.Cmp(minimum) >= 0 {
-		if err := s.validations.ExitValidator(validatorExitID, currentBlock); err != nil {
-			return false, err
-		}
-	}
-	if err := s.activateValidators(currentBlock); err != nil {
-		return false, err
+	if activated > 0 {
+		hasUpdates = true
 	}
 
-	return true, nil
+	logger.Info("performed housekeeping", "block", currentBlock, "updates", hasUpdates, "activated", activated, "exited", validatorExitID.IsZero())
+
+	return hasUpdates, nil
 }
 
 func (s *Staker) performRenewalUpdates(id thor.Bytes32, entry *Validation) error {
@@ -160,30 +162,54 @@ func (s *Staker) performCooldownUpdates(id thor.Bytes32, entry *Validation) erro
 	return s.storage.SetValidator(id, entry)
 }
 
-func (s *Staker) activateValidators(currentBlock uint32) error {
+// canExit checks if 1 validator can exit
+func (s *Staker) canExit() (bool, error) {
+	leaderGroupSize, err := s.validations.leaderGroup.Len()
+	if err != nil {
+		return false, err
+	}
+	maxLeaderGroupSize, err := s.params.Get(thor.KeyMaxBlockProposers)
+	if err != nil {
+		return false, err
+	}
+	queueSize, err := s.validations.validatorQueue.Len()
+	if err != nil {
+		return false, err
+	}
+	minimum := big.NewFloat(0).SetInt(maxLeaderGroupSize)
+	minimum = minimum.Mul(minimum, big.NewFloat(2))
+	minimum = minimum.Quo(minimum, big.NewFloat(3))
+
+	current := big.NewFloat(0).SetInt(leaderGroupSize)
+	current = current.Sub(current, big.NewFloat(1)) // less the one about to exit
+
+	if queueSize.Sign() == 1 { // if there are validators in the queue
+		current = current.Add(current, big.NewFloat(1))
+	}
+
+	return current.Cmp(minimum) >= 0, nil
+}
+
+func (s *Staker) activateValidators(currentBlock uint32) (int64, error) {
 	queuedSize, err := s.QueuedGroupSize()
 	if err != nil {
-		return err
+		return 0, err
 	}
 	leaderSize, err := s.LeaderGroupSize()
 	if err != nil {
-		return err
+		return 0, err
 	}
 	maxSize, err := s.params.Get(thor.KeyMaxBlockProposers)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if leaderSize.Cmp(maxSize) >= 0 {
-		return nil
+		return 0, nil
 	}
 
 	if queuedSize.Cmp(big.NewInt(0)) > 0 {
 		queuedCount := queuedSize.Int64()
-		maxLeaderGroupSize, err := s.params.Get(thor.KeyMaxBlockProposers)
-		if err != nil {
-			return err
-		}
-		leaderDelta := maxLeaderGroupSize.Int64() - leaderSize.Int64()
+		leaderDelta := maxSize.Int64() - leaderSize.Int64()
 		if leaderDelta > 0 {
 			if leaderDelta < queuedCount {
 				queuedCount = leaderDelta
@@ -195,12 +221,14 @@ func (s *Staker) activateValidators(currentBlock uint32) error {
 		for i := int64(0); i < queuedCount; i++ {
 			err := s.validations.ActivateNext(currentBlock, s.params)
 			if err != nil {
-				return err
+				return 0, err
 			}
 		}
+
+		return queuedCount, nil
 	}
 
-	return nil
+	return 0, nil
 }
 
 func (s *Staker) Transition(currentBlock uint32) (bool, error) {
@@ -229,10 +257,11 @@ func (s *Staker) Transition(currentBlock uint32) (bool, error) {
 	if big.NewFloat(0).SetInt(queueSize).Cmp(minimum) < 0 {
 		return false, nil
 	}
-
-	if err := s.activateValidators(currentBlock); err != nil {
+	activated, err := s.activateValidators(currentBlock)
+	if err != nil {
 		return false, err
 	}
+	logger.Info("activated validators", "count", activated)
 
 	return true, nil
 }
