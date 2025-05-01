@@ -82,12 +82,7 @@ jobs:
     uses: ./.github/workflows/deploy-devnet.yaml
     secrets: inherit
     with:
-      node_image: 'ghcr.io/vechain/hayabusa:${{ needs.generate-tags.outputs.clean_ref_name }}-${{ needs.generate-tags.outputs.tag_date }}-${{ needs.generate-tags.outputs.short_sha }}'
-      genesis_url: 'https://vechain.github.io/hayabusa-devnet/genesis.json'
       network: 'hayabusa'
-      nodes: 'both'
-      swap: true
-      destroy_live: true
 
   notify-slack:
     name: Notify Slack
