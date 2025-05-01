@@ -34,6 +34,7 @@ var (
 	mempoolTx   *tx.Transaction
 	tclient     *thorclient.Client
 	chainTag    byte
+	thorChain   *testchain.Chain
 )
 
 func TestTransaction(t *testing.T) {
@@ -43,8 +44,9 @@ func TestTransaction(t *testing.T) {
 	// Send tx
 	tclient = thorclient.New(ts.URL)
 	for name, tt := range map[string]func(*testing.T){
-		"sendTx":              sendTx,
-		"sendTxWithBadFormat": sendTxWithBadFormat,
+		"sendTx":                                   sendTx,
+		"sendImpossibleBlockRefExpiryTx":           sendImpossibleBlockRefExpiryTx,
+		"sendTxWithBadFormat":                      sendTxWithBadFormat,
 		"sendTxThatCannotBeAcceptedInLocalMempool": sendTxThatCannotBeAcceptedInLocalMempool,
 	} {
 		t.Run(name, tt)
@@ -131,6 +133,30 @@ func sendTx(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, trx.ID().String(), txObj["id"], "should be the same transaction id")
+}
+
+func sendImpossibleBlockRefExpiryTx(t *testing.T) {
+	var blockRef = tx.NewBlockRef(thorChain.Repo().BestBlockSummary().Header.Number())
+	var expiration = uint32(0)
+	var gas = uint64(21000)
+
+	trx := tx.MustSign(
+		new(tx.Builder).
+			BlockRef(blockRef).
+			ChainTag(chainTag).
+			Expiration(expiration).
+			Gas(gas).
+			Build(),
+		genesis.DevAccounts()[0].PrivateKey,
+	)
+
+	rlpTx, err := rlp.EncodeToBytes(trx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res := httpPostAndCheckResponseStatus(t, "/transactions", transactions.RawTx{Raw: hexutil.Encode(rlpTx)}, 403)
+	assert.Equal(t, "tx rejected: expired\n", string(res), "should be expired")
 }
 
 func getTxWithBadID(t *testing.T) {
@@ -266,7 +292,8 @@ func httpPostAndCheckResponseStatus(t *testing.T, url string, obj any, responseS
 }
 
 func initTransactionServer(t *testing.T) {
-	thorChain, err := testchain.NewDefault()
+	var err error
+	thorChain, err = testchain.NewDefault()
 	require.NoError(t, err)
 
 	chainTag = thorChain.Repo().ChainTag()

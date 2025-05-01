@@ -132,6 +132,7 @@ func (p *TxPool) housekeeping() {
 					ctx = append(ctx, "err", err)
 				} else {
 					p.executables.Store(executables)
+					metricTxPoolExecutablesGauge().Set(int64(len(executables)))
 				}
 
 				metricTxPoolGauge().AddWithLabel(0-int64(removed), map[string]string{"source": "washed", "total": "true"})
@@ -510,6 +511,11 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 		}
 	})
 	return executables, 0, nil
+}
+
+// Get length of the `all` field
+func (p *TxPool) Len() int {
+	return p.all.Len()
 }
 
 func isChainSynced(nowTimestamp, blockTimestamp uint64) bool {

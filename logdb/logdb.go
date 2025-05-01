@@ -110,6 +110,8 @@ FROM (%v) e
 		return db.queryEvents(ctx, fmt.Sprintf(query, "event"))
 	}
 
+	metricsHandleEventsFilter(filter)
+
 	var (
 		subQuery = "SELECT seq FROM event WHERE 1"
 		args     []any
@@ -183,6 +185,8 @@ FROM (%v) t
 	if filter == nil {
 		return db.queryTransfers(ctx, fmt.Sprintf(query, "transfer"))
 	}
+
+	metricsHandleCommonFilter(filter.Options, filter.Order, len(filter.CriteriaSet), "transfer")
 
 	var (
 		subQuery = "SELECT seq FROM transfer WHERE 1"
