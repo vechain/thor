@@ -17,49 +17,43 @@ import (
 type delegations struct {
 	storage   *storage
 	queuedVET *solidity.Uint256
+	idCounter *solidity.Uint256
 }
 
 func newDelegations(storage *storage) *delegations {
 	return &delegations{
 		storage:   storage,
 		queuedVET: solidity.NewUint256(storage.Address(), storage.State(), slotQueuedVET),
+		idCounter: solidity.NewUint256(storage.Address(), storage.State(), slotDelegatorsCounter),
 	}
 }
 
 func (d *delegations) Add(
 	validationID thor.Bytes32,
-	delegatorAddr thor.Address,
 	stake *big.Int,
 	autoRenew bool,
 	multiplier uint8,
-) error {
+) (thor.Bytes32, error) {
 	if multiplier == 0 {
-		return errors.New("multiplier cannot be 0")
+		return thor.Bytes32{}, errors.New("multiplier cannot be 0")
 	}
 	if stake.Cmp(big.NewInt(0)) <= 0 {
-		return errors.New("stake must be greater than 0")
-	}
-	delegator, err := d.storage.GetDelegator(validationID, delegatorAddr)
-	if err != nil {
-		return err
-	}
-	if !delegator.IsEmpty() {
-		return errors.New("delegator already exists")
+		return thor.Bytes32{}, errors.New("stake must be greater than 0")
 	}
 	validator, err := d.storage.GetValidator(validationID)
 	if err != nil {
-		return err
+		return thor.Bytes32{}, err
 	}
 	if validator.IsEmpty() {
-		return errors.New("validator not found")
+		return thor.Bytes32{}, errors.New("validator not found")
 	}
 	if validator.Status != StatusQueued && validator.Status != StatusActive {
-		return errors.New("validator is not queued or active")
+		return thor.Bytes32{}, errors.New("validator is not queued or active")
 	}
 
 	delegation, err := d.storage.GetDelegation(validationID)
 	if err != nil {
-		return err
+		return thor.Bytes32{}, err
 	}
 	if delegation.IsEmpty() {
 		delegation = newDelegation()
@@ -67,14 +61,25 @@ func (d *delegations) Add(
 	nextPeriodStake := validator.NextPeriodStakes(delegation)
 	nextPeriodStake = nextPeriodStake.Add(nextPeriodStake, stake)
 	if nextPeriodStake.Cmp(maxStake) > 0 {
-		return errors.New("validator's next period stake exceeds max stake")
+		return thor.Bytes32{}, errors.New("validator's next period stake exceeds max stake")
 	}
 
-	delegator.Multiplier = multiplier
-	delegator.Stake = stake
-	delegator.AutoRenew = autoRenew
-	delegator.ValidatorID = validationID
-	delegator.FirstIteration = validator.CompleteIterations + 1
+	id, err := d.idCounter.Get()
+	if err != nil {
+		return thor.Bytes32{}, err
+	}
+	id = id.Add(id, big.NewInt(1))
+	d.idCounter.Set(id)
+
+	delegationID := thor.BytesToBytes32(id.Bytes())
+
+	delegator := &Delegator{
+		Multiplier:     multiplier,
+		Stake:          stake,
+		AutoRenew:      autoRenew,
+		ValidatorID:    validationID,
+		FirstIteration: validator.CompleteIterations + 1,
+	}
 
 	weight := delegator.Weight()
 
@@ -87,7 +92,7 @@ func (d *delegations) Add(
 	}
 
 	if err := d.queuedVET.Add(stake); err != nil {
-		return err
+		return thor.Bytes32{}, err
 	}
 
 	if delegator.AutoRenew {
@@ -99,14 +104,14 @@ func (d *delegations) Add(
 	}
 
 	if err := d.storage.SetDelegation(validationID, delegation); err != nil {
-		return err
+		return thor.Bytes32{}, err
 	}
 
-	return d.storage.SetDelegator(validationID, delegatorAddr, delegator)
+	return delegationID, d.storage.SetDelegator(delegationID, delegator)
 }
 
-func (d *delegations) DisableAutoRenew(validationID thor.Bytes32, delegatorAddr thor.Address) error {
-	delegator, err := d.storage.GetDelegator(validationID, delegatorAddr)
+func (d *delegations) DisableAutoRenew(delegationID thor.Bytes32) error {
+	delegator, err := d.storage.GetDelegator(delegationID)
 	if err != nil {
 		return err
 	}
@@ -123,7 +128,7 @@ func (d *delegations) DisableAutoRenew(validationID thor.Bytes32, delegatorAddr 
 	if delegation.IsEmpty() {
 		return errors.New("delegation not found")
 	}
-	validator, err := d.storage.GetValidator(validationID)
+	validator, err := d.storage.GetValidator(delegator.ValidatorID)
 	if err != nil {
 		return err
 	}
@@ -138,7 +143,7 @@ func (d *delegations) DisableAutoRenew(validationID thor.Bytes32, delegatorAddr 
 	delegator.ExitIteration = &exitIteration
 	delegator.AutoRenew = false
 
-	if err := d.storage.SetDelegator(validationID, delegatorAddr, delegator); err != nil {
+	if err := d.storage.SetDelegator(delegationID, delegator); err != nil {
 		return err
 	}
 
@@ -165,12 +170,12 @@ func (d *delegations) DisableAutoRenew(validationID thor.Bytes32, delegatorAddr 
 	return d.storage.SetDelegation(delegator.ValidatorID, delegation)
 }
 
-func (d *delegations) EnableAutoRenew(validationID thor.Bytes32, delegatorAddr thor.Address) error {
-	validator, err := d.storage.GetValidator(validationID)
+func (d *delegations) EnableAutoRenew(delegationID thor.Bytes32) error {
+	delegator, err := d.storage.GetDelegator(delegationID)
 	if err != nil {
 		return err
 	}
-	delegator, err := d.storage.GetDelegator(validationID, delegatorAddr)
+	validator, err := d.storage.GetValidator(delegator.ValidatorID)
 	if err != nil {
 		return err
 	}
@@ -192,7 +197,7 @@ func (d *delegations) EnableAutoRenew(validationID thor.Bytes32, delegatorAddr t
 
 	delegator.ExitIteration = nil
 	delegator.AutoRenew = true
-	if err := d.storage.SetDelegator(validationID, delegatorAddr, delegator); err != nil {
+	if err := d.storage.SetDelegator(delegationID, delegator); err != nil {
 		return err
 	}
 
@@ -217,8 +222,8 @@ func (d *delegations) EnableAutoRenew(validationID thor.Bytes32, delegatorAddr t
 	return d.storage.SetDelegation(delegator.ValidatorID, delegation)
 }
 
-func (d *delegations) Withdraw(validationID thor.Bytes32, delegatorAddr thor.Address) (*big.Int, error) {
-	delegator, err := d.storage.GetDelegator(validationID, delegatorAddr)
+func (d *delegations) Withdraw(delegationID thor.Bytes32) (*big.Int, error) {
+	delegator, err := d.storage.GetDelegator(delegationID)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +234,7 @@ func (d *delegations) Withdraw(validationID thor.Bytes32, delegatorAddr thor.Add
 	if err != nil {
 		return nil, err
 	}
-	validator, err := d.storage.GetValidator(validationID)
+	validator, err := d.storage.GetValidator(delegator.ValidatorID)
 	if err != nil {
 		return nil, err
 	}
@@ -259,7 +264,7 @@ func (d *delegations) Withdraw(validationID thor.Bytes32, delegatorAddr thor.Add
 	}
 
 	// remove the delegator from the mapping after the withdraw
-	if err := d.storage.SetDelegator(validationID, delegatorAddr, &Delegator{}); err != nil {
+	if err := d.storage.SetDelegator(delegationID, &Delegator{}); err != nil {
 		return nil, err
 	}
 

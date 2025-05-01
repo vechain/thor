@@ -56,18 +56,13 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 		return false, err
 	}
 
-	// exit 1 validator if the conditions are met
-	if !validatorExitID.IsZero() {
-		canExit, err := s.canExit()
-		if err != nil {
+	if canExit, err := s.canExit(); err == nil && !validatorExitID.IsZero() && canExit {
+		if err := s.validations.ExitValidator(validatorExitID, currentBlock); err != nil {
 			return false, err
 		}
-		if canExit {
-			if err := s.validations.ExitValidator(validatorExitID, currentBlock); err != nil {
-				return false, err
-			}
-			hasUpdates = true
-		}
+		hasUpdates = true
+	} else if err != nil {
+		return false, err
 	}
 
 	// fill any remaining leader group slots with validators from the queue

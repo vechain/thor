@@ -187,41 +187,38 @@ func init() {
 		{"native_addDelegation", func(env *xenv.Environment) []any {
 			var args struct {
 				ValidationID common.Hash
-				Delegator    common.Address
 				Stake        *big.Int
 				AutoRenew    bool
 				Multiplier   uint8
 			}
 			env.ParseArgs(&args)
-			err := Staker.Native(env.State()).AddDelegator(thor.Bytes32(args.ValidationID), thor.Address(args.Delegator), args.Stake, args.AutoRenew, args.Multiplier)
+			delegationID, err := Staker.Native(env.State()).AddDelegator(thor.Bytes32(args.ValidationID), args.Stake, args.AutoRenew, args.Multiplier)
 			if err != nil {
-				return []any{fmt.Sprintf("revert: %v", err)}
+				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", err)}
 			}
-			return []any{""}
+			return []any{delegationID, ""}
 		}},
 		{"native_withdrawDelegation", func(env *xenv.Environment) []any {
 			var args struct {
-				ValidationID common.Hash
-				Delegator    common.Address
+				DelegationID common.Hash
 			}
 			env.ParseArgs(&args)
 
-			stake, err := Staker.Native(env.State()).DelegatorWithdrawStake(thor.Bytes32(args.ValidationID), thor.Address(args.Delegator))
+			stake, err := Staker.Native(env.State()).DelegatorWithdrawStake(thor.Bytes32(args.DelegationID))
 			if err != nil {
 				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
 			}
 
 			return []any{stake, ""}
 		}},
-		{"native_updateDelegatorAutoRenew", func(env *xenv.Environment) []any {
+		{"native_updateDelegationAutoRenew", func(env *xenv.Environment) []any {
 			var args struct {
-				ValidationID common.Hash
-				Delegator    common.Address
+				DelegationID common.Hash
 				AutoRenew    bool
 			}
 			env.ParseArgs(&args)
 
-			err := Staker.Native(env.State()).UpdateDelegatorAutoRenew(thor.Bytes32(args.ValidationID), thor.Address(args.Delegator), args.AutoRenew)
+			err := Staker.Native(env.State()).UpdateDelegatorAutoRenew(thor.Bytes32(args.DelegationID), args.AutoRenew)
 			if err != nil {
 				return []any{fmt.Sprintf("revert: %v", err)}
 			}
@@ -230,17 +227,13 @@ func init() {
 		}},
 		{"native_getDelegation", func(env *xenv.Environment) []any {
 			var args struct {
-				ValidationID common.Hash
-				Delegator    common.Address
+				DelegationID common.Hash
 			}
-
 			env.ParseArgs(&args)
-
-			delegation, err := Staker.Native(env.State()).GetDelegator(thor.Bytes32(args.ValidationID), thor.Address(args.Delegator))
+			delegation, err := Staker.Native(env.State()).GetDelegator(thor.Bytes32(args.DelegationID))
 			if err != nil {
 				return []any{new(big.Int), uint8(0), false, fmt.Sprintf("revert: %v", err)}
 			}
-
 			return []any{delegation.Stake, delegation.Multiplier, delegation.AutoRenew, ""}
 		}},
 		{"native_getDelegatorContract", func(env *xenv.Environment) []any {

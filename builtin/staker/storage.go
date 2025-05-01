@@ -19,6 +19,7 @@ var (
 	slotValidationLookups = nameToSlot("validator-lookups")
 	slotDelegations       = nameToSlot("delegations")
 	slotDelegators        = nameToSlot("delegators")
+	slotDelegatorsCounter = nameToSlot("delegators-counter")
 	// active validators linked list
 	slotActiveTail      = nameToSlot("validators-active-tail")
 	slotActiveHead      = nameToSlot("validators-active-head")
@@ -97,18 +98,16 @@ func (s *storage) SetDelegation(id thor.Bytes32, entry *ValidatorDelegations) er
 	return nil
 }
 
-func (s *storage) GetDelegator(validationID thor.Bytes32, delegatorAddr thor.Address) (*Delegator, error) {
-	key := thor.Blake2b(validationID.Bytes(), delegatorAddr.Bytes())
-	d, err := s.delegators.Get(key)
+func (s *storage) GetDelegator(delegationID thor.Bytes32) (*Delegator, error) {
+	d, err := s.delegators.Get(delegationID)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get delegator")
 	}
 	return d, nil
 }
 
-func (s *storage) SetDelegator(validationID thor.Bytes32, delegatorAddr thor.Address, entry *Delegator) error {
-	key := thor.Blake2b(validationID.Bytes(), delegatorAddr.Bytes())
-	if err := s.delegators.Set(key, entry); err != nil {
+func (s *storage) SetDelegator(delegationID thor.Bytes32, entry *Delegator) error {
+	if err := s.delegators.Set(delegationID, entry); err != nil {
 		return errors.Wrap(err, "failed to set delegator")
 	}
 	return nil

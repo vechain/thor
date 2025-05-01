@@ -180,38 +180,34 @@ func (s *Staker) SetOnline(id thor.Bytes32, online bool) error {
 // AddDelegator adds a new delegator.
 func (s *Staker) AddDelegator(
 	validationID thor.Bytes32,
-	delegator thor.Address,
 	stake *big.Int,
 	autoRenew bool,
 	multiplier uint8,
-) error {
-	return s.delegations.Add(validationID, delegator, stake, autoRenew, multiplier)
+) (thor.Bytes32, error) {
+	return s.delegations.Add(validationID, stake, autoRenew, multiplier)
 }
 
 // GetDelegator returns the delegator.
 func (s *Staker) GetDelegator(
-	validationID thor.Bytes32,
-	delegator thor.Address,
+	delegationID thor.Bytes32,
 ) (*Delegator, error) {
-	return s.storage.GetDelegator(validationID, delegator)
+	return s.storage.GetDelegator(delegationID)
 }
 
 // UpdateDelegatorAutoRenew updates the auto-renewal status of a delegator.
 func (s *Staker) UpdateDelegatorAutoRenew(
-	validationID thor.Bytes32,
-	delegator thor.Address,
+	delegationID thor.Bytes32,
 	autoRenew bool,
 ) error {
 	if autoRenew {
-		return s.delegations.EnableAutoRenew(validationID, delegator)
+		return s.delegations.EnableAutoRenew(delegationID)
 	}
-	return s.delegations.DisableAutoRenew(validationID, delegator)
+	return s.delegations.DisableAutoRenew(delegationID)
 }
 
 // DelegatorWithdrawStake allows expired delegators to withdraw their stake.
 func (s *Staker) DelegatorWithdrawStake(
-	id thor.Bytes32,
-	delegator thor.Address,
+	delegationID thor.Bytes32,
 ) (*big.Int, error) {
-	return s.delegations.Withdraw(id, delegator)
+	return s.delegations.Withdraw(delegationID)
 }

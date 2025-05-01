@@ -109,7 +109,7 @@ func TestStakerABI(t *testing.T) {
 		{"decreaseStake", false},
 		{"addDelegation", false},
 		{"getDelegation", true},
-		{"updateDelegatorAutoRenew", false},
+		{"updateDelegationAutoRenew", false},
 		{"withdrawDelegation", false},
 	}
 
