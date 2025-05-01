@@ -194,6 +194,17 @@ func (s *Staker) GetDelegator(
 	return s.storage.GetDelegator(delegationID)
 }
 
+// GetDelegation returns the delegation.
+func (s *Staker) GetDelegationLockedVET(
+	validationID thor.Bytes32,
+) (*big.Int, error) {
+	delegation, err := s.storage.GetDelegation(validationID)
+	if err != nil {
+		return nil, err
+	}
+	return delegation.LockedVET, nil
+}
+
 // UpdateDelegatorAutoRenew updates the auto-renewal status of a delegator.
 func (s *Staker) UpdateDelegatorAutoRenew(
 	delegationID thor.Bytes32,

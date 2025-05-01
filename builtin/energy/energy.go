@@ -202,24 +202,39 @@ func (e *Energy) addIssued(issued *big.Int) error {
 
 type staker interface {
 	LockedVET() (*big.Int, error)
+	GetDelegationLockedVET(validationID thor.Bytes32) (*big.Int, error)
 }
 
-func (e *Energy) DistributeRewards(beneficiary thor.Address, staker staker) error {
+func (e *Energy) DistributeRewards(validationID thor.Bytes32, beneficiary thor.Address, staker staker) error {
 	reward, err := e.CalculateRewards(staker)
 	if err != nil {
 		return err
 	}
-	proposerReward := big.NewInt(0).Mul(reward, big.NewInt(3))
-	proposerReward = proposerReward.Div(proposerReward, big.NewInt(10))
-	val, err := e.params.Get(thor.KeyStargateContractAddress)
+
+	delegatedVET, err := staker.GetDelegationLockedVET(validationID)
 	if err != nil {
 		return err
 	}
 
-	addr := thor.BytesToAddress(val.Bytes())
-	addrEng, err := e.state.GetEnergy(addr, e.blockTime)
-	if err != nil {
-		return err
+	// If delegated amount of VET is 0 then transfer the whole reward to the validator
+	proposerReward := new(big.Int).Set(reward)
+	if delegatedVET.Cmp(big.NewInt(0)) != 0 {
+		proposerReward.Mul(proposerReward, big.NewInt(3))
+		proposerReward.Div(proposerReward, big.NewInt(10))
+
+		val, err := e.params.Get(thor.KeyStargateContractAddress)
+		if err != nil {
+			return err
+		}
+
+		addr := thor.BytesToAddress(val.Bytes())
+		addrEng, err := e.state.GetEnergy(addr, e.blockTime)
+		if err != nil {
+			return err
+		}
+		if err := e.state.SetEnergy(addr, new(big.Int).Add(addrEng, big.NewInt(0).Sub(reward, proposerReward)), e.blockTime); err != nil {
+			return err
+		}
 	}
 	beneficiaryEng, err := e.state.GetEnergy(beneficiary, e.blockTime)
 	if err != nil {
@@ -229,9 +244,6 @@ func (e *Energy) DistributeRewards(beneficiary thor.Address, staker staker) erro
 	// we don't use e.add which is adding to total add sub since that function is only meant to be used for transactions
 	// which are also burning the amount, distribute rewards is used only for distribution so in this case we just set the
 	// energy and increase the issued to be able to keep track of totalSupply
-	if err := e.state.SetEnergy(addr, new(big.Int).Add(addrEng, big.NewInt(0).Sub(reward, proposerReward)), e.blockTime); err != nil {
-		return err
-	}
 	if err := e.state.SetEnergy(beneficiary, new(big.Int).Add(beneficiaryEng, proposerReward), e.blockTime); err != nil {
 		return err
 	}

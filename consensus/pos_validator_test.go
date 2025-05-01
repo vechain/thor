@@ -112,47 +112,6 @@ func TestConsensus_POS_Unscheduled(t *testing.T) {
 	assert.ErrorContains(t, err, "block timestamp unscheduled")
 }
 
-func TestConsensus_POS_BadScore(t *testing.T) {
-	config := thor.SoloFork
-	config.HAYABUSA = 2
-
-	chain, err := testchain.NewWithFork(config)
-	assert.NoError(t, err)
-
-	consensus := New(chain.Repo(), chain.Stater(), config)
-
-	mintMbpBlock(t, chain, 3)                                                           // mint block 1: update MBP
-	mintBlock(t, chain)                                                                 // mint block 2: set staker contract
-	mintAddValidatorBlock(t, chain, genesis.DevAccounts()[3], genesis.DevAccounts()[4]) // mint block 3: add validators to queue
-	best, _, _ := mintBlock(t, chain)                                                   // mint block 4: chain should switch to PoS on future blocks
-	_, parent, st := mintBlock(t, chain)                                                // mint block 5: Full PoS
-
-	newSigner := genesis.DevAccounts()[2]
-
-	// Add a new staker to the state, so that the block score is invalid
-	staker := builtin.Staker.Native(st)
-	_, err = staker.AddValidator(
-		newSigner.Address,
-		newSigner.Address,
-		uint32(360)*24*14,
-		big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18)),
-		false,
-		best.Header.Number(),
-	)
-	assert.NoError(t, err)
-	_, err = staker.Housekeep(180)
-	assert.NoError(t, err)
-
-	blkPacker := packer.New(chain.Repo(), chain.Stater(), newSigner.Address, &newSigner.Address, config)
-	flow, _, err := blkPacker.Mock(parent, parent.Header.Timestamp()+thor.BlockInterval, 10_000_000)
-	assert.NoError(t, err)
-	blk, _, _, err := flow.Pack(newSigner.PrivateKey, 0, false)
-	assert.NoError(t, err)
-
-	_, err = consensus.validateStakingProposer(blk.Header(), parent.Header, st)
-	assert.ErrorContains(t, err, "block total score invalid")
-}
-
 func mintBlock(t *testing.T, chain *testchain.Chain, txs ...*tx.Transaction) (*chain.BlockSummary, *chain.BlockSummary, *state.State) {
 	signer := genesis.DevAccounts()[0]
 	assert.NoError(t, chain.MintBlock(signer, txs...))

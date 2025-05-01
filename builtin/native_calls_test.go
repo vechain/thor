@@ -811,13 +811,13 @@ func TestEnergyNative(t *testing.T) {
 		energyAtBlock := validatorMap[summary.Header.Timestamp()]
 		energyBeforeBlock := validatorMap[summary.Header.Timestamp()-10]
 
-		expectedReward := big.NewInt(0).Mul(reward, big.NewInt(3))
-		expectedReward = expectedReward.Div(expectedReward, big.NewInt(10))
+		// there are no delegators, so the validator gets the whole reward
+		expectedReward := new(big.Int).Set(reward)
 		require.Equal(t, expectedReward, big.NewInt(0).Sub(energyAtBlock, energyBeforeBlock))
 
 		stargateEnergyAtBlock := stargateMap[summary.Header.Timestamp()]
 		stargateEnergyBeforeBlock := stargateMap[summary.Header.Timestamp()-10]
-		require.Equal(t, big.NewInt(0).Sub(reward, expectedReward), big.NewInt(0).Sub(stargateEnergyAtBlock, stargateEnergyBeforeBlock))
+		require.Equal(t, big.NewInt(0), big.NewInt(0).Sub(stargateEnergyAtBlock, stargateEnergyBeforeBlock))
 	}
 	exSupply = exSupply.Add(exSupply, stakeRewards)
 

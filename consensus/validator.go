@@ -271,7 +271,11 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 		// TODO: We can reward priority fees here too
 		stakerContract := builtin.Staker.Native(state)
 		energy := builtin.Energy.Native(state, header.Timestamp())
-		if err := energy.DistributeRewards(blk.Header().Beneficiary(), stakerContract); err != nil {
+		_, validationID, err := stakerContract.LookupMaster(signer)
+		if err != nil {
+			return nil, nil, err
+		}
+		if err := energy.DistributeRewards(validationID, blk.Header().Beneficiary(), stakerContract); err != nil {
 			return nil, nil, err
 		}
 	}

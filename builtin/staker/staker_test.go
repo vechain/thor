@@ -7,7 +7,6 @@
 package staker
 
 import (
-	"fmt"
 	"math/big"
 	"math/rand"
 	"testing"
@@ -280,6 +279,78 @@ func TestStaker_AddValidator(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, validator.IsEmpty())
 }
+func TestStaker_QueueUpValidators(t *testing.T) {
+	staker, _ := newStaker(t, 101, 101, false)
+
+	addr1 := datagen.RandAddress()
+	addr2 := datagen.RandAddress()
+	addr3 := datagen.RandAddress()
+	addr4 := datagen.RandAddress()
+
+	stake := RandomStake()
+	id1, err := staker.AddValidator(addr1, addr1, uint32(360)*24*14, stake, true, 0)
+	assert.NoError(t, err)
+
+	validator, err := staker.Get(id1)
+	assert.NoError(t, err)
+	assert.False(t, validator.IsEmpty())
+	assert.Equal(t, stake, validator.PendingLocked)
+	assert.Equal(t, StatusQueued, validator.Status)
+
+	_, err = staker.Housekeep(180)
+	assert.NoError(t, err)
+	validator, err = staker.Get(id1)
+	assert.NoError(t, err)
+	assert.False(t, validator.IsEmpty())
+	assert.Equal(t, stake, validator.LockedVET)
+	assert.Equal(t, StatusActive, validator.Status)
+
+	id2, err := staker.AddValidator(addr2, addr2, uint32(360)*24*14, stake, true, 0)
+	assert.NoError(t, err)
+
+	validator, err = staker.Get(id2)
+	assert.NoError(t, err)
+	assert.False(t, validator.IsEmpty())
+	assert.Equal(t, stake, validator.PendingLocked)
+	assert.Equal(t, StatusQueued, validator.Status)
+
+	id3, err := staker.AddValidator(addr3, addr3, uint32(360)*24*30, stake, true, 0)
+	assert.NoError(t, err)
+
+	validator, err = staker.Get(id3)
+	assert.NoError(t, err)
+	assert.False(t, validator.IsEmpty())
+	assert.Equal(t, stake, validator.PendingLocked)
+	assert.Equal(t, StatusQueued, validator.Status)
+
+	id4, err := staker.AddValidator(addr4, addr4, uint32(360)*24*15, stake, true, 0)
+	assert.Error(t, err, "period is out of boundaries")
+
+	validator, err = staker.Get(id4)
+	assert.NoError(t, err)
+	assert.True(t, validator.IsEmpty())
+
+	validator, err = staker.Get(id1)
+	assert.NoError(t, err)
+	assert.False(t, validator.IsEmpty())
+	assert.Equal(t, stake, validator.LockedVET)
+	assert.Equal(t, StatusActive, validator.Status)
+
+	_, err = staker.Housekeep(180 * 2)
+	assert.NoError(t, err)
+
+	validator, err = staker.Get(id2)
+	assert.NoError(t, err)
+	assert.False(t, validator.IsEmpty())
+	assert.Equal(t, stake, validator.LockedVET)
+	assert.Equal(t, StatusActive, validator.Status)
+
+	validator, err = staker.Get(id1)
+	assert.NoError(t, err)
+	assert.False(t, validator.IsEmpty())
+	assert.Equal(t, stake, validator.LockedVET)
+	assert.Equal(t, StatusActive, validator.Status)
+}
 
 func TestStaker_Get_NonExistent(t *testing.T) {
 	staker, _ := newStaker(t, 101, 101, true)
@@ -484,7 +555,6 @@ func TestStaker_IncreaseQueued_Order(t *testing.T) {
 	increaseBy := big.NewInt(1000)
 	err = staker.IncreaseStake(addr1, id1, increaseBy)
 	assert.NoError(t, err)
-	fmt.Println("Stake", stake, increaseBy)
 	expectedIncreaseStake := big.NewInt(0).Add(stake, increaseBy)
 
 	// verify order after increasing stake
