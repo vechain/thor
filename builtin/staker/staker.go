@@ -194,15 +194,26 @@ func (s *Staker) GetDelegator(
 	return s.storage.GetDelegator(delegationID)
 }
 
-// GetDelegation returns the delegation.
-func (s *Staker) GetDelegationLockedVET(
-	validationID thor.Bytes32,
-) (*big.Int, error) {
+// HasDelegations returns true if the validator has any delegations.
+func (s *Staker) HasDelegations(
+	master thor.Address,
+) (bool, error) {
+	_, validationID, err := s.storage.LookupMaster(master)
+	if err != nil {
+		return false, err
+	}
+	if validationID.IsZero() {
+		return false, nil
+	}
 	delegation, err := s.storage.GetDelegation(validationID)
 	if err != nil {
-		return nil, err
+		return false, err
 	}
-	return delegation.LockedVET, nil
+	if delegation == nil || delegation.IsEmpty() {
+		return false, nil
+	}
+	total := new(big.Int).Add(delegation.LockedVET, delegation.CooldownVET)
+	return total.Sign() > 0, nil
 }
 
 // UpdateDelegatorAutoRenew updates the auto-renewal status of a delegator.

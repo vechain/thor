@@ -163,13 +163,10 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 
 	if f.posActive {
 		// TODO: We can reward priority fees here too
-		stakerContract := builtin.Staker.Native(f.runtime.State())
+		signer := crypto.PubkeyToAddress(privateKey.PublicKey)
+		staker := builtin.Staker.Native(f.runtime.State())
 		energy := builtin.Energy.Native(f.runtime.State(), f.runtime.Context().Time)
-		_, validationID, err := stakerContract.LookupMaster(f.packer.nodeMaster)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		if err := energy.DistributeRewards(validationID, f.runtime.Context().Beneficiary, stakerContract); err != nil {
+		if err := energy.DistributeRewards(f.runtime.Context().Beneficiary, thor.Address(signer), staker); err != nil {
 			return nil, nil, nil, err
 		}
 	}

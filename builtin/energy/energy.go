@@ -202,23 +202,22 @@ func (e *Energy) addIssued(issued *big.Int) error {
 
 type staker interface {
 	LockedVET() (*big.Int, error)
-	GetDelegationLockedVET(validationID thor.Bytes32) (*big.Int, error)
+	HasDelegations(address thor.Address) (bool, error)
 }
 
-func (e *Energy) DistributeRewards(validationID thor.Bytes32, beneficiary thor.Address, staker staker) error {
+func (e *Energy) DistributeRewards(beneficiary, signer thor.Address, staker staker) error {
 	reward, err := e.CalculateRewards(staker)
 	if err != nil {
 		return err
 	}
-
-	delegatedVET, err := staker.GetDelegationLockedVET(validationID)
+	hasDelegations, err := staker.HasDelegations(signer)
 	if err != nil {
 		return err
 	}
 
 	// If delegated amount of VET is 0 then transfer the whole reward to the validator
 	proposerReward := new(big.Int).Set(reward)
-	if delegatedVET.Cmp(big.NewInt(0)) != 0 {
+	if hasDelegations {
 		proposerReward.Mul(proposerReward, big.NewInt(3))
 		proposerReward.Div(proposerReward, big.NewInt(10))
 
