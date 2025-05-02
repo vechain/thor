@@ -96,6 +96,14 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 		return badTxError{"tx origin blocked"}
 	}
 
+	delegator, err := tx.Delegator()
+	if err != nil {
+		return badTxError{"delegator cannot be extracted"}
+	}
+	if f.Number() >= f.packer.forkConfig.BLOCKLIST && delegator != nil && thor.IsOriginBlocked(*delegator) {
+		return badTxError{"tx delegator blocked"}
+	}
+
 	if err := tx.TestFeatures(f.features); err != nil {
 		return badTxError{err.Error()}
 	}

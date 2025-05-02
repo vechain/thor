@@ -154,7 +154,7 @@ func TestAdoptErr(t *testing.T) {
 	addr := thor.BytesToAddress([]byte("to"))
 	clause := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 
-	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
+	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.SoloFork)
 	sum, _ := repo.GetBlockSummary(b.Header().ID())
 
 	flow, _ := pkr.Schedule(sum, uint64(time.Now().Unix()))
@@ -177,6 +177,40 @@ func TestAdoptErr(t *testing.T) {
 	tx3 := createTx(repo.ChainTag(), 1, 0, 1, 1, nil, clause, tx.NewBlockRef(1))
 	expectedErrorMessage = "gas limit reached"
 	if err := flow.Adopt(tx3); err.Error() != expectedErrorMessage {
+		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
+	}
+
+	thor.MockBlocklist([]string{genesis.DevAccounts()[9].Address.String()})
+	// Test origin blacklisted
+	builder := new(tx.Builder).
+		ChainTag(repo.ChainTag()).
+		GasPriceCoef(1).
+		Expiration(0).
+		Gas(10e18).
+		Nonce(nonce).
+		Clause(clause).
+		BlockRef(tx.NewBlockRef(1))
+	tx4 := tx.MustSign(builder.Build(), genesis.DevAccounts()[9].PrivateKey)
+
+	expectedErrorMessage = "bad tx: tx origin blocked"
+	if err := flow.Adopt(tx4); err.Error() != expectedErrorMessage {
+		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
+	}
+
+	// Test delegator blacklisted
+	builder = new(tx.Builder).
+		ChainTag(repo.ChainTag()).
+		GasPriceCoef(1).
+		Expiration(0).
+		Gas(10e18).
+		Nonce(nonce).
+		Clause(clause).
+		Features(tx.Features(0x01)).
+		BlockRef(tx.NewBlockRef(1))
+	tx5 := tx.MustSignDelegated(builder.Build(), genesis.DevAccounts()[8].PrivateKey, genesis.DevAccounts()[9].PrivateKey)
+
+	expectedErrorMessage = "bad tx: tx delegator blocked"
+	if err := flow.Adopt(tx5); err.Error() != expectedErrorMessage {
 		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
 	}
 }

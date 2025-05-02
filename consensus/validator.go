@@ -237,6 +237,14 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 			return consensusError(fmt.Sprintf("tx origin blocked got packed: %v", origin))
 		}
 
+		delegator, err := tx.Delegator()
+		if err != nil {
+			return consensusError(fmt.Sprintf("tx delegator unavailable: %v", err))
+		}
+		if header.Number() >= c.forkConfig.BLOCKLIST && delegator != nil && thor.IsOriginBlocked(*delegator) {
+			return consensusError(fmt.Sprintf("tx delegator blocked got packed: %v", delegator))
+		}
+
 		switch {
 		case tx.ChainTag() != c.repo.ChainTag():
 			return consensusError(fmt.Sprintf("tx chain tag mismatch: want %v, have %v", c.repo.ChainTag(), tx.ChainTag()))
