@@ -639,6 +639,25 @@ func TestValidateBlockBody(t *testing.T) {
 			},
 		},
 		{
+			"TxDelegatorBlocked", func(t *testing.T) {
+				thor.MockBlocklist([]string{genesis.DevAccounts()[9].Address.String()})
+				builder := txBuilder(tc.tag)
+				builder = builder.Features(tx.Features(0x01))
+				trx := tx.MustSignDelegated(builder.Build(), genesis.DevAccounts()[8].PrivateKey, genesis.DevAccounts()[9].PrivateKey)
+				blk, err := tc.sign(
+					tc.builder(tc.original.Header()).Transaction(trx),
+				)
+				if err != nil {
+					t.Fatal(err)
+				}
+				err = tc.consent(blk)
+				expected := consensusError(
+					fmt.Sprintf("tx delegator blocked got packed: %v", genesis.DevAccounts()[9].Address),
+				)
+				assert.Equal(t, expected, err)
+			},
+		},
+		{
 			"TxSignerUnavailable", func(t *testing.T) {
 				tx := txBuilder(tc.tag).Build()
 				var sig [65]byte
