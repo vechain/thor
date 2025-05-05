@@ -167,17 +167,18 @@ func TestPendingCost(t *testing.T) {
 	chain := repo.NewBestChain()
 	best := repo.BestBlockSummary()
 	state := stater.NewState(best.Root())
+	cache := newGasPriceCache(&thor.NoFork, 10)
 
 	var err error
-	txObj1.executable, err = txObj1.Executable(chain, state, best.Header, &thor.NoFork)
+	txObj1.executable, err = txObj1.Executable(chain, state, best.Header, cache)
 	assert.Nil(t, err)
 	assert.True(t, txObj1.executable)
 
-	txObj2.executable, err = txObj2.Executable(chain, state, best.Header, &thor.NoFork)
+	txObj2.executable, err = txObj2.Executable(chain, state, best.Header, cache)
 	assert.Nil(t, err)
 	assert.True(t, txObj2.executable)
 
-	txObj3.executable, err = txObj3.Executable(chain, state, best.Header, &thor.NoFork)
+	txObj3.executable, err = txObj3.Executable(chain, state, best.Header, cache)
 	assert.Nil(t, err)
 	assert.True(t, txObj3.executable)
 

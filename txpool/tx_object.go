@@ -6,12 +6,14 @@
 package txpool
 
 import (
+	"fmt"
 	"math/big"
 	"slices"
 	"time"
 
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/runtime"
@@ -29,8 +31,12 @@ type txObject struct {
 	payer          *thor.Address // payer of the tx, either origin, delegator, or on-chain delegation payer
 	cost           *big.Int      // total tx cost the payer needs to pay before execution(gas price * gas)
 
-	executable       bool     // don't touch this value, will be updated by the pool
-	priorityGasPrice *big.Int // don't touch this value, it's only be used in pool's housekeeping
+	// basic unit of tip price for the validator, before GALACTICA it's the overallGasPrice(provedWork included) and validator
+	// gets <reward-ratio>% of the tip, after GALACTICA it's the effective priority fee per gas and validator gets 100% of the tip
+	// don't touch this value, it's only be used in pool's housekeeping
+	priorityGasPrice *big.Int
+
+	executable bool // don't touch this value, will be updated by the pool
 }
 
 func resolveTx(tx *tx.Transaction, localSubmitted bool) (*txObject, error) {
@@ -63,11 +69,18 @@ func (o *txObject) Payer() *thor.Address {
 	return o.payer
 }
 
-func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock *block.Header, forkConfig *thor.ForkConfig) (bool, error) {
+func (o *txObject) Executable(
+	chain *chain.Chain,
+	state *state.State,
+	headBlock *block.Header,
+	cache *gasPriceCache,
+) (bool, error) {
+	nextBlockNum := headBlock.Number() + 1 // checks on top of the next block
+
 	switch {
 	case o.Gas() > headBlock.GasLimit():
 		return false, errors.New("gas too large")
-	case o.IsExpired(headBlock.Number() + 1): // Check tx expiration on top of next block
+	case o.IsExpired(nextBlockNum): // Check tx expiration on top of next block
 		return false, errors.New("expired")
 	case o.BlockRef().Number() > headBlock.Number()+uint32(5*60/thor.BlockInterval):
 		// reject deferred tx which will be applied after 5mins
@@ -94,22 +107,19 @@ func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 	}
 
 	// Tx is considered executable when the BlockRef has passed in reference to the next block.
-	if o.BlockRef().Number() > headBlock.Number()+1 {
+	if o.BlockRef().Number() > nextBlockNum {
 		return false, nil
 	}
 
 	checkpoint := state.NewCheckpoint()
 	defer state.RevertTo(checkpoint)
 
-	isGalactica := headBlock.Number()+1 >= forkConfig.GALACTICA
+	// Check the cache in case the value has been seen before
+	// If the value is not in the cache, the new block's base fee will be calculated and cached.
+	// Will only be calculated and stored if the best block is the last block before galactica
+	blkBaseFee := cache.getBlockBaseFee(headBlock)
 
-	var baseFee *big.Int
-	// If the best block is the last block before galactica, we need to estimate the new block's base fee.
-	if isGalactica {
-		baseFee = fork.CalcBaseFee(forkConfig, headBlock)
-	}
-
-	_, _, payer, prepaid, _, err := o.resolved.BuyGas(state, headBlock.Timestamp()+thor.BlockInterval, baseFee)
+	_, _, payer, prepaid, _, err := o.resolved.BuyGas(state, headBlock.Timestamp()+thor.BlockInterval, blkBaseFee)
 	if err != nil {
 		return false, err
 	}
@@ -118,6 +128,19 @@ func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 		o.payer = &payer
 		o.cost = prepaid
 	}
+
+	// the tx is executable, calculate and set the priority gas price
+	provedWork, err := o.ProvedWork(headBlock.Number(), chain.GetBlockID)
+	if err != nil {
+		return false, fmt.Errorf("failed to get proved work: %w", err)
+	}
+	legacyTxBaseGasPrice, err := builtin.Params.Native(state).Get(thor.KeyLegacyTxBaseGasPrice)
+	if err != nil {
+		return false, err
+	}
+
+	o.priorityGasPrice = fork.GalacticaPriorityGasPrice(o.Transaction, legacyTxBaseGasPrice, provedWork, blkBaseFee)
+
 	return true, nil
 }
 

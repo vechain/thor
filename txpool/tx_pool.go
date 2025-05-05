@@ -17,10 +17,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/co"
-	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -69,6 +67,7 @@ type TxPool struct {
 	goes   co.Goes
 
 	forkConfig *thor.ForkConfig
+	cache      *gasPriceCache
 }
 
 // New create a new TxPool instance.
@@ -83,6 +82,7 @@ func New(repo *chain.Repository, stater *state.Stater, options Options, forkConf
 		ctx:        ctx,
 		cancel:     cancel,
 		forkConfig: forkConfig,
+		cache:      newGasPriceCache(forkConfig, 32),
 	}
 
 	pool.goes.Go(pool.housekeeping)
@@ -245,7 +245,12 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		if err := ValidateTransactionWithState(newTx, headSummary.Header, p.forkConfig, state); err != nil {
 			return err
 		}
-		executable, err := txObj.Executable(p.repo.NewChain(headSummary.Header.ID()), state, headSummary.Header, p.forkConfig)
+		executable, err := txObj.Executable(
+			p.repo.NewChain(headSummary.Header.ID()),
+			state,
+			headSummary.Header,
+			p.cache,
+		)
 		if err != nil {
 			return txRejectedError{err.Error()}
 		}
@@ -398,10 +403,6 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 	newState := func() *state.State {
 		return p.stater.NewState(headSummary.Root())
 	}
-	legacyTxBaseGasPrice, err := builtin.Params.Native(newState()).Get(thor.KeyLegacyTxBaseGasPrice)
-	if err != nil {
-		return nil, 0, err
-	}
 
 	var (
 		chain               = p.repo.NewChain(headSummary.Header.ID())
@@ -424,7 +425,7 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 			continue
 		}
 		// settled, out of energy or dep broken
-		executable, err := txObj.Executable(chain, newState(), headSummary.Header, p.forkConfig)
+		executable, err := txObj.Executable(chain, newState(), headSummary.Header, p.cache)
 		if err != nil {
 			toRemove = append(toRemove, txObj)
 			logger.Trace("tx washed out", "id", txObj.ID(), "err", err)
@@ -432,18 +433,18 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 		}
 
 		if executable {
-			provedWork, err := txObj.ProvedWork(headSummary.Header.Number(), chain.GetBlockID)
-			if err != nil {
-				toRemove = append(toRemove, txObj)
-				logger.Trace("tx washed out", "id", txObj.ID(), "err", err)
-				continue
-			}
-			isGalactica := headSummary.Header.Number() >= p.forkConfig.GALACTICA
-			var baseFee *big.Int
-			if isGalactica {
-				baseFee = fork.CalcBaseFee(p.forkConfig, headSummary.Header)
-			}
-			txObj.priorityGasPrice = fork.GalacticaPriorityGasPrice(txObj.Transaction, legacyTxBaseGasPrice, provedWork, baseFee)
+			//provedWork, err := txObj.ProvedWork(headSummary.Header.Number(), chain.GetBlockID)
+			//if err != nil {
+			//	toRemove = append(toRemove, txObj)
+			//	logger.Trace("tx washed out", "id", txObj.ID(), "err", err)
+			//	continue
+			//}
+			//isGalactica := headSummary.Header.Number() >= p.forkConfig.GALACTICA
+			//var baseFee *big.Int
+			//if isGalactica {
+			//	baseFee = fork.CalcBaseFee(p.forkConfig, headSummary.Header)
+			//}
+			//txObj.priorityGasPrice = fork.GalacticaPriorityGasPrice(txObj.Transaction, legacyTxBaseGasPrice, provedWork, baseFee)
 
 			if txObj.localSubmitted {
 				localExecutableObjs = append(localExecutableObjs, txObj)
