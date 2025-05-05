@@ -9,10 +9,10 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
@@ -24,14 +24,15 @@ import (
 
 // Flow the flow of packing a new block.
 type Flow struct {
-	packer       *Packer
-	parentHeader *block.Header
-	runtime      *runtime.Runtime
-	processedTxs map[thor.Bytes32]bool // txID -> reverted
-	gasUsed      uint64
-	txs          tx.Transactions
-	receipts     tx.Receipts
-	features     tx.Features
+	packer               *Packer
+	parentHeader         *block.Header
+	runtime              *runtime.Runtime
+	processedTxs         map[thor.Bytes32]bool // txID -> reverted
+	gasUsed              uint64
+	txs                  tx.Transactions
+	receipts             tx.Receipts
+	features             tx.Features
+	legacyTxBaseGasPrice *big.Int
 }
 
 func newFlow(
@@ -39,13 +40,15 @@ func newFlow(
 	parentHeader *block.Header,
 	runtime *runtime.Runtime,
 	features tx.Features,
+	legacyTxBaseGasPrice *big.Int,
 ) *Flow {
 	return &Flow{
-		packer:       packer,
-		parentHeader: parentHeader,
-		runtime:      runtime,
-		processedTxs: make(map[thor.Bytes32]bool),
-		features:     features,
+		packer:               packer,
+		parentHeader:         parentHeader,
+		runtime:              runtime,
+		processedTxs:         make(map[thor.Bytes32]bool),
+		features:             features,
+		legacyTxBaseGasPrice: legacyTxBaseGasPrice,
 	}
 }
 
@@ -96,18 +99,13 @@ func (f *Flow) isEffectivePriorityFeeTooLow(t *tx.Transaction) error {
 		return nil
 	}
 
-	legacyTxBaseGasPrice, err := builtin.Params.Native(f.runtime.State()).Get(thor.KeyLegacyTxBaseGasPrice)
-	if err != nil {
-		return err
-	}
-
 	provedWork, err := t.ProvedWork(f.Number()-1, f.runtime.Chain().GetBlockID)
 	if err != nil {
 		return err
 	}
 	effectivePriorityFee := fork.GalacticaPriorityGasPrice(
 		t,
-		legacyTxBaseGasPrice,
+		f.legacyTxBaseGasPrice,
 		provedWork,
 		f.runtime.Context().BaseFee,
 	)

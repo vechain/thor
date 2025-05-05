@@ -127,7 +127,10 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (flow
 		}
 	}
 
-	var baseFee *big.Int
+	var legacyTxBaseGasPrice, baseFee *big.Int
+	if legacyTxBaseGasPrice, err = builtin.Params.Native(state).Get(thor.KeyLegacyTxBaseGasPrice); err != nil {
+		return nil, err
+	}
 
 	if parent.Header.Number()+1 >= p.forkConfig.GALACTICA {
 		baseFee = fork.CalcBaseFee(&p.forkConfig, parent.Header)
@@ -147,7 +150,7 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (flow
 		},
 		p.forkConfig)
 
-	return newFlow(p, parent.Header, rt, features), nil
+	return newFlow(p, parent.Header, rt, features, legacyTxBaseGasPrice), nil
 }
 
 // Mock create a packing flow upon given parent, but with a designated timestamp.
@@ -166,7 +169,11 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 		gl = p.gasLimit(parent.Header.GasLimit())
 	}
 
-	var baseFee *big.Int
+	var err error
+	var legacyTxBaseGasPrice, baseFee *big.Int
+	if legacyTxBaseGasPrice, err = builtin.Params.Native(state).Get(thor.KeyLegacyTxBaseGasPrice); err != nil {
+		return nil, err
+	}
 	if parent.Header.Number()+1 >= p.forkConfig.GALACTICA {
 		baseFee = fork.CalcBaseFee(&p.forkConfig, parent.Header)
 	}
@@ -185,7 +192,7 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 		},
 		p.forkConfig)
 
-	return newFlow(p, parent.Header, rt, features), nil
+	return newFlow(p, parent.Header, rt, features, legacyTxBaseGasPrice), nil
 }
 
 func (p *Packer) gasLimit(parentGasLimit uint64) uint64 {
