@@ -433,19 +433,6 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 		}
 
 		if executable {
-			//provedWork, err := txObj.ProvedWork(headSummary.Header.Number(), chain.GetBlockID)
-			//if err != nil {
-			//	toRemove = append(toRemove, txObj)
-			//	logger.Trace("tx washed out", "id", txObj.ID(), "err", err)
-			//	continue
-			//}
-			//isGalactica := headSummary.Header.Number() >= p.forkConfig.GALACTICA
-			//var baseFee *big.Int
-			//if isGalactica {
-			//	baseFee = fork.CalcBaseFee(p.forkConfig, headSummary.Header)
-			//}
-			//txObj.priorityGasPrice = fork.GalacticaPriorityGasPrice(txObj.Transaction, legacyTxBaseGasPrice, provedWork, baseFee)
-
 			if txObj.localSubmitted {
 				localExecutableObjs = append(localExecutableObjs, txObj)
 			} else {
