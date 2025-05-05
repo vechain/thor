@@ -1,3 +1,7 @@
+// Copyright (c) 2025 The VeChainThor developers
+
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 package txpool
 
 import (
@@ -145,7 +149,7 @@ func TestGasPriceCacheConcurrentAccess(t *testing.T) {
 	done := make(chan bool)
 
 	// Launch multiple goroutines to test concurrent access
-	for i := 0; i < 10; i++ {
+	for i := range [10]struct{}{} {
 		go func(blockNum uint32) {
 			header := new(block.Builder).
 				ParentID(createParentID(blockNum - 1)). // Parent of current block
@@ -165,7 +169,7 @@ func TestGasPriceCacheConcurrentAccess(t *testing.T) {
 	}
 
 	// Wait for all goroutines to complete
-	for i := 0; i < 10; i++ {
+	for range [10]struct{}{} {
 		<-done
 	}
 }
