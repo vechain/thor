@@ -39,6 +39,9 @@ func (u *Uint256) Set(value *big.Int) {
 }
 
 func (u *Uint256) Add(value *big.Int) error {
+	if value.Sign() == 0 {
+		return nil
+	}
 	storage, err := u.Get()
 	if err != nil {
 		return err
@@ -49,6 +52,9 @@ func (u *Uint256) Add(value *big.Int) error {
 }
 
 func (u *Uint256) Sub(value *big.Int) error {
+	if value.Sign() == 0 {
+		return nil
+	}
 	storage, err := u.Get()
 	if err != nil {
 		return err

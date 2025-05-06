@@ -65,7 +65,7 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 		return false, err
 	}
 
-	// fill any remaining leader group slots with validators from the queue
+	// fill any remaining leader group slots with validations from the queue
 	activated, err := s.activateValidators(currentBlock)
 	if err != nil {
 		return false, err
@@ -108,12 +108,12 @@ func (s *Staker) performRenewalUpdates(id thor.Bytes32, entry *Validation) error
 		queuedDecrease = queuedDecrease.Add(queuedDecrease, entry.PendingLocked)
 	}
 
-	delegation, err := s.storage.GetDelegation(id)
+	aggregation, err := s.storage.GetAggregation(id)
 	if err != nil {
 		return err
 	}
-	delegatorChangeTVL, delegatorChangeWeight, delegatorQueuedDecrease := delegation.RenewDelegations()
-	if err := s.storage.SetDelegation(id, delegation); err != nil {
+	delegatorChangeTVL, delegatorChangeWeight, delegatorQueuedDecrease := aggregation.RenewDelegations()
+	if err := s.storage.SetAggregation(id, aggregation); err != nil {
 		return err
 	}
 	changeTVL = changeTVL.Add(changeTVL, delegatorChangeTVL)
@@ -141,15 +141,18 @@ func (s *Staker) performCooldownUpdates(id thor.Bytes32, entry *Validation) erro
 	entry.CompleteIterations++
 	entry.Weight = big.NewInt(0).Set(entry.CooldownVET)
 
-	delegation, err := s.storage.GetDelegation(id)
+	aggregation, err := s.storage.GetAggregation(id)
 	if err != nil {
 		return err
 	}
-	exitedTVL := delegation.Exit()
-	if err := s.storage.SetDelegation(id, delegation); err != nil {
+	exitedTVL, queuedDecrease := aggregation.Exit()
+	if err := s.storage.SetAggregation(id, aggregation); err != nil {
 		return err
 	}
 
+	if err := s.queuedVET.Add(queuedDecrease); err != nil {
+		return err
+	}
 	if err := s.lockedVET.Sub(exitedTVL); err != nil {
 		return err
 	}
@@ -178,7 +181,7 @@ func (s *Staker) canExit() (bool, error) {
 	current := big.NewFloat(0).SetInt(leaderGroupSize)
 	current = current.Sub(current, big.NewFloat(1)) // less the one about to exit
 
-	if queueSize.Sign() == 1 { // if there are validators in the queue
+	if queueSize.Sign() == 1 { // if there are validations in the queue
 		current = current.Add(current, big.NewFloat(1))
 	}
 
@@ -256,7 +259,7 @@ func (s *Staker) Transition(currentBlock uint32) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	logger.Info("activated validators", "count", activated)
+	logger.Info("activated validations", "count", activated)
 
 	return true, nil
 }

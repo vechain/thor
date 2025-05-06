@@ -79,12 +79,12 @@ func (s *Staker) LeaderGroup() (map[thor.Bytes32]*Validation, error) {
 	return s.validations.LeaderGroup()
 }
 
-// LockedVET returns the amount of VET locked by validators and delegators.
+// LockedVET returns the amount of VET locked by validations and delegations.
 func (s *Staker) LockedVET() (*big.Int, error) {
 	return s.lockedVET.Get()
 }
 
-// QueuedStake returns the amount of VET queued by validators and delegators.
+// QueuedStake returns the amount of VET queued by validations and delegations.
 func (s *Staker) QueuedStake() (*big.Int, error) {
 	return s.queuedVET.Get()
 }
@@ -134,7 +134,7 @@ func (s *Staker) AddValidator(
 	if err != nil {
 		return thor.Bytes32{}, err
 	}
-	if err := s.storage.SetDelegation(id, newDelegation()); err != nil {
+	if err := s.storage.SetAggregation(id, newAggregation()); err != nil {
 		return thor.Bytes32{}, err
 	}
 	return id, nil
@@ -177,8 +177,8 @@ func (s *Staker) SetOnline(id thor.Bytes32, online bool) error {
 	return s.storage.SetValidator(id, entry)
 }
 
-// AddDelegator adds a new delegator.
-func (s *Staker) AddDelegator(
+// AddDelegation adds a new delegation.
+func (s *Staker) AddDelegation(
 	validationID thor.Bytes32,
 	stake *big.Int,
 	autoRenew bool,
@@ -187,11 +187,22 @@ func (s *Staker) AddDelegator(
 	return s.delegations.Add(validationID, stake, autoRenew, multiplier)
 }
 
-// GetDelegator returns the delegator.
-func (s *Staker) GetDelegator(
+// GetDelegation returns the delegation.
+func (s *Staker) GetDelegation(
 	delegationID thor.Bytes32,
-) (*Delegator, error) {
-	return s.storage.GetDelegator(delegationID)
+) (*Delegation, *Validation, error) {
+	delegation, err := s.storage.GetDelegation(delegationID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if delegation.IsEmpty() {
+		return &Delegation{}, nil, nil
+	}
+	validation, err := s.storage.GetValidator(delegation.ValidatorID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return delegation, validation, nil
 }
 
 // HasDelegations returns true if the validator has any delegations.
@@ -205,19 +216,19 @@ func (s *Staker) HasDelegations(
 	if validationID.IsZero() {
 		return false, nil
 	}
-	delegation, err := s.storage.GetDelegation(validationID)
+	aggregation, err := s.storage.GetAggregation(validationID)
 	if err != nil {
 		return false, err
 	}
-	if delegation == nil || delegation.IsEmpty() {
+	if aggregation == nil || aggregation.IsEmpty() {
 		return false, nil
 	}
-	total := new(big.Int).Add(delegation.LockedVET, delegation.CooldownVET)
+	total := new(big.Int).Add(aggregation.LockedVET, aggregation.CooldownVET)
 	return total.Sign() > 0, nil
 }
 
-// UpdateDelegatorAutoRenew updates the auto-renewal status of a delegator.
-func (s *Staker) UpdateDelegatorAutoRenew(
+// UpdateDelegationAutoRenew updates the auto-renewal status of a delegation.
+func (s *Staker) UpdateDelegationAutoRenew(
 	delegationID thor.Bytes32,
 	autoRenew bool,
 ) error {
@@ -227,8 +238,8 @@ func (s *Staker) UpdateDelegatorAutoRenew(
 	return s.delegations.DisableAutoRenew(delegationID)
 }
 
-// DelegatorWithdrawStake allows expired delegators to withdraw their stake.
-func (s *Staker) DelegatorWithdrawStake(
+// WithdrawDelegation allows expired and queued delegations to withdraw their stake.
+func (s *Staker) WithdrawDelegation(
 	delegationID thor.Bytes32,
 ) (*big.Int, error) {
 	return s.delegations.Withdraw(delegationID)

@@ -61,7 +61,7 @@ func newValidations(storage *storage) *validations {
 	}
 }
 
-// IsActive returns true if there are active validators.
+// IsActive returns true if there are active validations.
 func (v *validations) IsActive() (bool, error) {
 	activeCount, err := v.leaderGroup.count.Get()
 	if err != nil {
@@ -204,7 +204,7 @@ func (v *validations) ActivateNext(
 	if validator.IsEmpty() {
 		return errors.New("no validator in the queue")
 	}
-	delegation, err := v.storage.GetDelegation(id)
+	aggregation, err := v.storage.GetAggregation(id)
 	if err != nil {
 		return err
 	}
@@ -216,9 +216,9 @@ func (v *validations) ActivateNext(
 	validator.PendingLocked = big.NewInt(0)
 	validator.LockedVET = validatorLocked
 
-	changeTVL, changeWeight, queuedDecrease := delegation.RenewDelegations()
+	changeTVL, changeWeight, queuedDecrease := aggregation.RenewDelegations()
 	validator.Weight = big.NewInt(0).Add(validatorLocked, changeWeight)
-	if err := v.storage.SetDelegation(id, delegation); err != nil {
+	if err := v.storage.SetAggregation(id, aggregation); err != nil {
 		return err
 	}
 
@@ -284,11 +284,11 @@ func (v *validations) IncreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 	if entry.Status == StatusActive && !entry.AutoRenew {
 		return errors.New("validator is not set to renew in the next period")
 	}
-	delegation, err := v.storage.GetDelegation(id)
+	aggregation, err := v.storage.GetAggregation(id)
 	if err != nil {
 		return err
 	}
-	nextPeriodTVL := entry.NextPeriodStakes(delegation)
+	nextPeriodTVL := entry.NextPeriodStakes(aggregation)
 	newTVL := big.NewInt(0).Add(nextPeriodTVL, amount)
 
 	if newTVL.Cmp(maxStake) > 0 {
@@ -390,8 +390,8 @@ func (v *validations) WithdrawStake(endorsor thor.Address, id thor.Bytes32) (*bi
 	return withdrawAmount, nil
 }
 
-// ExitValidator sets a validators status to exited and removes it from the active list.
-// It will also decrease the total stake. Exited validators can then withdraw their stake.
+// ExitValidator sets a validations status to exited and removes it from the active list.
+// It will also decrease the total stake. Exited validations can then withdraw their stake.
 func (v *validations) ExitValidator(id thor.Bytes32, currentBlock uint32) error {
 	entry, err := v.storage.GetValidator(id)
 	if err != nil {

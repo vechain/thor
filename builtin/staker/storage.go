@@ -13,21 +13,21 @@ import (
 )
 
 var (
-	slotLockedVET         = nameToSlot("total-stake")
-	slotQueuedVET         = nameToSlot("queued-stake")
-	slotValidations       = nameToSlot("validations")
-	slotValidationLookups = nameToSlot("validator-lookups")
-	slotDelegations       = nameToSlot("delegations")
-	slotDelegators        = nameToSlot("delegators")
-	slotDelegatorsCounter = nameToSlot("delegators-counter")
-	// active validators linked list
-	slotActiveTail      = nameToSlot("validators-active-tail")
-	slotActiveHead      = nameToSlot("validators-active-head")
-	slotActiveGroupSize = nameToSlot("validators-active-group-size")
-	// queued validators linked list
-	slotQueuedHead      = nameToSlot("validators-queued-head")
-	slotQueuedTail      = nameToSlot("validators-queued-tail")
-	slotQueuedGroupSize = nameToSlot("validators-queued-group-size")
+	slotLockedVET          = nameToSlot("total-stake")
+	slotQueuedVET          = nameToSlot("queued-stake")
+	slotValidations        = nameToSlot("validations")
+	slotValidationLookups  = nameToSlot("validator-lookups")
+	slotAggregations       = nameToSlot("aggregated-delegations")
+	slotDelegations        = nameToSlot("delegations")
+	slotDelegationsCounter = nameToSlot("delegations-counter")
+	// active validations linked list
+	slotActiveTail      = nameToSlot("validations-active-tail")
+	slotActiveHead      = nameToSlot("validations-active-head")
+	slotActiveGroupSize = nameToSlot("validations-active-group-size")
+	// queued validations linked list
+	slotQueuedHead      = nameToSlot("validations-queued-head")
+	slotQueuedTail      = nameToSlot("validations-queued-tail")
+	slotQueuedGroupSize = nameToSlot("validations-queued-group-size")
 	// init params
 	slotLowStakingPeriod    = nameToSlot("staker-low-staking-period")
 	slotMediumStakingPeriod = nameToSlot("staker-medium-staking-period")
@@ -40,23 +40,23 @@ func nameToSlot(name string) thor.Bytes32 {
 
 // storage represents the root storage for the Staker contract.
 type storage struct {
-	state       *state.State
-	address     thor.Address
-	validators  *solidity.Mapping[thor.Bytes32, *Validation]
-	delegations *solidity.Mapping[thor.Bytes32, *ValidatorDelegations]
-	delegators  *solidity.Mapping[thor.Bytes32, *Delegator]
-	lookups     *solidity.Mapping[thor.Address, thor.Bytes32] // allows lookup of Validation by node master address
+	state        *state.State
+	address      thor.Address
+	validations  *solidity.Mapping[thor.Bytes32, *Validation]
+	aggregations *solidity.Mapping[thor.Bytes32, *Aggregation]
+	delegations  *solidity.Mapping[thor.Bytes32, *Delegation]
+	lookups      *solidity.Mapping[thor.Address, thor.Bytes32] // allows lookup of Validation by node master address
 }
 
 // newStorage creates a new instance of storage.
 func newStorage(addr thor.Address, state *state.State) *storage {
 	return &storage{
-		state:       state,
-		address:     addr,
-		validators:  solidity.NewMapping[thor.Bytes32, *Validation](addr, state, slotValidations),
-		delegations: solidity.NewMapping[thor.Bytes32, *ValidatorDelegations](addr, state, slotDelegations),
-		delegators:  solidity.NewMapping[thor.Bytes32, *Delegator](addr, state, slotDelegators),
-		lookups:     solidity.NewMapping[thor.Address, thor.Bytes32](addr, state, slotValidationLookups),
+		state:        state,
+		address:      addr,
+		validations:  solidity.NewMapping[thor.Bytes32, *Validation](addr, state, slotValidations),
+		aggregations: solidity.NewMapping[thor.Bytes32, *Aggregation](addr, state, slotAggregations),
+		delegations:  solidity.NewMapping[thor.Bytes32, *Delegation](addr, state, slotDelegations),
+		lookups:      solidity.NewMapping[thor.Address, thor.Bytes32](addr, state, slotValidationLookups),
 	}
 }
 
@@ -69,7 +69,7 @@ func (s *storage) State() *state.State {
 }
 
 func (s *storage) GetValidator(id thor.Bytes32) (*Validation, error) {
-	v, err := s.validators.Get(id)
+	v, err := s.validations.Get(id)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get validator")
 	}
@@ -77,38 +77,38 @@ func (s *storage) GetValidator(id thor.Bytes32) (*Validation, error) {
 }
 
 func (s *storage) SetValidator(id thor.Bytes32, entry *Validation) error {
-	if err := s.validators.Set(id, entry); err != nil {
+	if err := s.validations.Set(id, entry); err != nil {
 		return errors.Wrap(err, "failed to set validator")
 	}
 	return nil
 }
 
-func (s *storage) GetDelegation(id thor.Bytes32) (*ValidatorDelegations, error) {
-	d, err := s.delegations.Get(id)
+func (s *storage) GetAggregation(validationID thor.Bytes32) (*Aggregation, error) {
+	d, err := s.aggregations.Get(validationID)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get validator aggregation")
+	}
+	return d, nil
+}
+
+func (s *storage) SetAggregation(validationID thor.Bytes32, entry *Aggregation) error {
+	if err := s.aggregations.Set(validationID, entry); err != nil {
+		return errors.Wrap(err, "failed to set validator aggregation")
+	}
+	return nil
+}
+
+func (s *storage) GetDelegation(delegationID thor.Bytes32) (*Delegation, error) {
+	d, err := s.delegations.Get(delegationID)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get delegation")
 	}
 	return d, nil
 }
 
-func (s *storage) SetDelegation(id thor.Bytes32, entry *ValidatorDelegations) error {
-	if err := s.delegations.Set(id, entry); err != nil {
+func (s *storage) SetDelegation(delegationID thor.Bytes32, entry *Delegation) error {
+	if err := s.delegations.Set(delegationID, entry); err != nil {
 		return errors.Wrap(err, "failed to set delegation")
-	}
-	return nil
-}
-
-func (s *storage) GetDelegator(delegationID thor.Bytes32) (*Delegator, error) {
-	d, err := s.delegators.Get(delegationID)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get delegator")
-	}
-	return d, nil
-}
-
-func (s *storage) SetDelegator(delegationID thor.Bytes32, entry *Delegator) error {
-	if err := s.delegators.Set(delegationID, entry); err != nil {
-		return errors.Wrap(err, "failed to set delegator")
 	}
 	return nil
 }

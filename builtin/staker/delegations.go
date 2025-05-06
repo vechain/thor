@@ -13,7 +13,7 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-// delegations represent a 1-to-1 mapping of a validator to the sum of its delegator totals.
+// delegations is a struct that manages the delegations for the staker contract.
 type delegations struct {
 	storage   *storage
 	queuedVET *solidity.Uint256
@@ -24,7 +24,7 @@ func newDelegations(storage *storage) *delegations {
 	return &delegations{
 		storage:   storage,
 		queuedVET: solidity.NewUint256(storage.Address(), storage.State(), slotQueuedVET),
-		idCounter: solidity.NewUint256(storage.Address(), storage.State(), slotDelegatorsCounter),
+		idCounter: solidity.NewUint256(storage.Address(), storage.State(), slotDelegationsCounter),
 	}
 }
 
@@ -51,14 +51,14 @@ func (d *delegations) Add(
 		return thor.Bytes32{}, errors.New("validator is not queued or active")
 	}
 
-	delegation, err := d.storage.GetDelegation(validationID)
+	aggregated, err := d.storage.GetAggregation(validationID)
 	if err != nil {
 		return thor.Bytes32{}, err
 	}
-	if delegation.IsEmpty() {
-		delegation = newDelegation()
+	if aggregated.IsEmpty() {
+		aggregated = newAggregation()
 	}
-	nextPeriodStake := validator.NextPeriodStakes(delegation)
+	nextPeriodStake := validator.NextPeriodStakes(aggregated)
 	nextPeriodStake = nextPeriodStake.Add(nextPeriodStake, stake)
 	if nextPeriodStake.Cmp(maxStake) > 0 {
 		return thor.Bytes32{}, errors.New("validator's next period stake exceeds max stake")
@@ -73,7 +73,7 @@ func (d *delegations) Add(
 
 	delegationID := thor.BytesToBytes32(id.Bytes())
 
-	delegator := &Delegator{
+	delegation := &Delegation{
 		Multiplier:     multiplier,
 		Stake:          stake,
 		AutoRenew:      autoRenew,
@@ -81,196 +81,202 @@ func (d *delegations) Add(
 		FirstIteration: validator.CompleteIterations + 1,
 	}
 
-	weight := delegator.Weight()
+	weight := delegation.Weight()
 
 	if !autoRenew {
 		exitIteration := validator.CompleteIterations + 1
 		if validator.Status == StatusActive {
 			exitIteration += 1 // validator is currently active, so this delegation needs to wait for this iteration and its own before it can exit
 		}
-		delegator.ExitIteration = &exitIteration
+		delegation.ExitIteration = &exitIteration
 	}
 
 	if err := d.queuedVET.Add(stake); err != nil {
 		return thor.Bytes32{}, err
 	}
 
-	if delegator.AutoRenew {
-		delegation.PendingLockedVET = big.NewInt(0).Add(delegation.PendingLockedVET, delegator.Stake)
-		delegation.PendingLockedWeight = big.NewInt(0).Add(delegation.PendingLockedWeight, weight)
+	if delegation.AutoRenew {
+		aggregated.PendingLockedVET = big.NewInt(0).Add(aggregated.PendingLockedVET, delegation.Stake)
+		aggregated.PendingLockedWeight = big.NewInt(0).Add(aggregated.PendingLockedWeight, weight)
 	} else {
-		delegation.PendingCooldownVET = big.NewInt(0).Add(delegation.PendingCooldownVET, delegator.Stake)
-		delegation.PendingCooldownWeight = big.NewInt(0).Add(delegation.PendingCooldownWeight, weight)
+		aggregated.PendingCooldownVET = big.NewInt(0).Add(aggregated.PendingCooldownVET, delegation.Stake)
+		aggregated.PendingCooldownWeight = big.NewInt(0).Add(aggregated.PendingCooldownWeight, weight)
 	}
 
-	if err := d.storage.SetDelegation(validationID, delegation); err != nil {
+	if err := d.storage.SetAggregation(validationID, aggregated); err != nil {
 		return thor.Bytes32{}, err
 	}
 
-	return delegationID, d.storage.SetDelegator(delegationID, delegator)
+	return delegationID, d.storage.SetDelegation(delegationID, delegation)
 }
 
 func (d *delegations) DisableAutoRenew(delegationID thor.Bytes32) error {
-	delegator, err := d.storage.GetDelegator(delegationID)
-	if err != nil {
-		return err
-	}
-	if delegator.IsEmpty() {
-		return errors.New("delegator is empty")
-	}
-	if !delegator.AutoRenew {
-		return errors.New("delegator is not autoRenew")
-	}
-	delegation, err := d.storage.GetDelegation(delegator.ValidatorID)
+	delegation, err := d.storage.GetDelegation(delegationID)
 	if err != nil {
 		return err
 	}
 	if delegation.IsEmpty() {
-		return errors.New("delegation not found")
+		return errors.New("delegation is empty")
 	}
-	validator, err := d.storage.GetValidator(delegator.ValidatorID)
+	if !delegation.AutoRenew {
+		return errors.New("delegation is not autoRenew")
+	}
+	aggregation, err := d.storage.GetAggregation(delegation.ValidatorID)
+	if err != nil {
+		return err
+	}
+	if aggregation.IsEmpty() {
+		return errors.New("aggregation not found")
+	}
+	validator, err := d.storage.GetValidator(delegation.ValidatorID)
 	if err != nil {
 		return err
 	}
 
-	weight := delegator.Weight()
+	weight := delegation.Weight()
 
-	// set the delegator's exit iteration
+	// set the delegation's exit iteration
 	exitIteration := validator.CompleteIterations + 1
-	if validator.Status == StatusActive && validator.CompleteIterations < delegator.FirstIteration {
-		exitIteration += 1 // delegator's first staking period has not begun, it must wait for the current and then its own period
+	if validator.Status == StatusActive && validator.CompleteIterations < delegation.FirstIteration {
+		exitIteration += 1 // delegation's first staking period has not begun, it must wait for the current and then its own period
 	}
-	delegator.ExitIteration = &exitIteration
-	delegator.AutoRenew = false
+	delegation.ExitIteration = &exitIteration
+	delegation.AutoRenew = false
 
-	if err := d.storage.SetDelegator(delegationID, delegator); err != nil {
+	if err := d.storage.SetDelegation(delegationID, delegation); err != nil {
 		return err
 	}
 
-	// the delegator's funds have already been locked, so we need to move them to cooldown
-	if validator.CompleteIterations >= delegator.FirstIteration {
-		// move the delegator's portion of locked to cooldown.
+	// the delegation's funds have already been locked, so we need to move them to cooldown
+	if validator.CompleteIterations >= delegation.FirstIteration {
+		// move the delegation's portion of locked to cooldown.
 		// this will make the funds available at the end of the current iteration
-		delegation.LockedVET = big.NewInt(0).Sub(delegation.LockedVET, delegator.Stake)
-		delegation.LockedWeight = big.NewInt(0).Sub(delegation.LockedWeight, weight)
+		aggregation.LockedVET = big.NewInt(0).Sub(aggregation.LockedVET, delegation.Stake)
+		aggregation.LockedWeight = big.NewInt(0).Sub(aggregation.LockedWeight, weight)
 
-		delegation.CooldownVET = big.NewInt(0).Add(delegation.CooldownVET, delegator.Stake)
-		delegation.CooldownWeight = big.NewInt(0).Add(delegation.CooldownWeight, weight)
+		aggregation.CooldownVET = big.NewInt(0).Add(aggregation.CooldownVET, delegation.Stake)
+		aggregation.CooldownWeight = big.NewInt(0).Add(aggregation.CooldownWeight, weight)
 	} else {
-		// the delegator's stake is pending a lock
-		// this moves the delegator's portion of pending locked to pending cooldown
+		// the delegation's stake is pending a lock
+		// this moves the delegation's portion of pending locked to pending cooldown
 		// pending cooldown means the funds will be available at the end of the next iteration
-		delegation.PendingCooldownVET = big.NewInt(0).Add(delegation.PendingCooldownVET, delegator.Stake)
-		delegation.PendingCooldownWeight = big.NewInt(0).Add(delegation.PendingCooldownWeight, weight)
+		aggregation.PendingCooldownVET = big.NewInt(0).Add(aggregation.PendingCooldownVET, delegation.Stake)
+		aggregation.PendingCooldownWeight = big.NewInt(0).Add(aggregation.PendingCooldownWeight, weight)
 
-		delegation.PendingLockedVET = big.NewInt(0).Sub(delegation.PendingLockedVET, delegator.Stake)
-		delegation.PendingLockedWeight = big.NewInt(0).Sub(delegation.PendingLockedWeight, weight)
+		aggregation.PendingLockedVET = big.NewInt(0).Sub(aggregation.PendingLockedVET, delegation.Stake)
+		aggregation.PendingLockedWeight = big.NewInt(0).Sub(aggregation.PendingLockedWeight, weight)
 	}
 
-	return d.storage.SetDelegation(delegator.ValidatorID, delegation)
+	return d.storage.SetAggregation(delegation.ValidatorID, aggregation)
 }
 
 func (d *delegations) EnableAutoRenew(delegationID thor.Bytes32) error {
-	delegator, err := d.storage.GetDelegator(delegationID)
+	delegation, err := d.storage.GetDelegation(delegationID)
 	if err != nil {
 		return err
 	}
-	validator, err := d.storage.GetValidator(delegator.ValidatorID)
-	if err != nil {
-		return err
-	}
-	if delegator.IsEmpty() {
-		return errors.New("delegator is empty")
-	}
-	if delegator.AutoRenew {
-		return errors.New("delegator is already autoRenew")
-	}
-	delegation, err := d.storage.GetDelegation(delegator.ValidatorID)
+	validator, err := d.storage.GetValidator(delegation.ValidatorID)
 	if err != nil {
 		return err
 	}
 	if delegation.IsEmpty() {
-		return errors.New("delegation not found")
+		return errors.New("delegation is empty")
+	}
+	if delegation.AutoRenew {
+		return errors.New("delegation is already autoRenew")
+	}
+	aggregation, err := d.storage.GetAggregation(delegation.ValidatorID)
+	if err != nil {
+		return err
+	}
+	if aggregation.IsEmpty() {
+		return errors.New("aggregation not found")
 	}
 
-	weight := delegator.Weight()
+	weight := delegation.Weight()
 
-	delegator.ExitIteration = nil
-	delegator.AutoRenew = true
-	if err := d.storage.SetDelegator(delegationID, delegator); err != nil {
+	delegation.ExitIteration = nil
+	delegation.AutoRenew = true
+	if err := d.storage.SetDelegation(delegationID, delegation); err != nil {
 		return err
 	}
 
-	if validator.CompleteIterations >= delegator.FirstIteration {
-		// move the delegator's portion of cooldown to locked.
-		// this means the funds will not be available until the validator is inactive, or the delegator signals an exit
+	if validator.CompleteIterations >= delegation.FirstIteration {
+		// move the delegation's portion of cooldown to locked.
+		// this means the funds will not be available until the validator is inactive, or the delegation signals an exit
 		// and completes the current staking period
-		delegation.CooldownVET = big.NewInt(0).Sub(delegation.CooldownVET, delegator.Stake)
-		delegation.CooldownWeight = big.NewInt(0).Sub(delegation.CooldownWeight, weight)
+		aggregation.CooldownVET = big.NewInt(0).Sub(aggregation.CooldownVET, delegation.Stake)
+		aggregation.CooldownWeight = big.NewInt(0).Sub(aggregation.CooldownWeight, weight)
 
-		delegation.LockedVET = big.NewInt(0).Add(delegation.LockedVET, delegator.Stake)
-		delegation.LockedWeight = big.NewInt(0).Add(delegation.LockedWeight, weight)
+		aggregation.LockedVET = big.NewInt(0).Add(aggregation.LockedVET, delegation.Stake)
+		aggregation.LockedWeight = big.NewInt(0).Add(aggregation.LockedWeight, weight)
 	} else {
-		// the delegator's stake is from pending locked, to pending cooldown, ie 1 staking period
-		delegation.PendingLockedVET = big.NewInt(0).Add(delegation.PendingLockedVET, delegator.Stake)
-		delegation.PendingLockedWeight = big.NewInt(0).Add(delegation.PendingLockedWeight, weight)
+		// the delegation's stake is from pending locked, to pending cooldown, ie 1 staking period
+		aggregation.PendingLockedVET = big.NewInt(0).Add(aggregation.PendingLockedVET, delegation.Stake)
+		aggregation.PendingLockedWeight = big.NewInt(0).Add(aggregation.PendingLockedWeight, weight)
 
-		delegation.PendingCooldownVET = big.NewInt(0).Sub(delegation.PendingCooldownVET, delegator.Stake)
-		delegation.PendingCooldownWeight = big.NewInt(0).Sub(delegation.PendingCooldownWeight, weight)
+		aggregation.PendingCooldownVET = big.NewInt(0).Sub(aggregation.PendingCooldownVET, delegation.Stake)
+		aggregation.PendingCooldownWeight = big.NewInt(0).Sub(aggregation.PendingCooldownWeight, weight)
 	}
 
-	return d.storage.SetDelegation(delegator.ValidatorID, delegation)
+	return d.storage.SetAggregation(delegation.ValidatorID, aggregation)
 }
 
 func (d *delegations) Withdraw(delegationID thor.Bytes32) (*big.Int, error) {
-	delegator, err := d.storage.GetDelegator(delegationID)
+	delegation, err := d.storage.GetDelegation(delegationID)
 	if err != nil {
 		return nil, err
 	}
-	if delegator.IsEmpty() {
-		return nil, errors.New("delegator is empty")
+	if delegation.IsEmpty() {
+		return nil, errors.New("delegation is empty")
 	}
-	delegation, err := d.storage.GetDelegation(delegator.ValidatorID)
+	aggregation, err := d.storage.GetAggregation(delegation.ValidatorID)
 	if err != nil {
 		return nil, err
 	}
-	validator, err := d.storage.GetValidator(delegator.ValidatorID)
+	validator, err := d.storage.GetValidator(delegation.ValidatorID)
 	if err != nil {
 		return nil, err
 	}
-	if delegator.IsLocked(validator) {
-		return nil, errors.New("delegator is not eligible for withdraw")
+	if delegation.Stake.Sign() == 0 {
+		return nil, errors.New("delegation already withdrawn")
+	}
+	if delegation.IsLocked(validator) {
+		return nil, errors.New("delegation is not eligible for withdraw")
 	}
 
-	delegationStarted := delegator.FirstIteration <= validator.CompleteIterations
+	delegationStarted := delegation.FirstIteration <= validator.CompleteIterations
 	if delegationStarted {
 		// the stake has moved to withdrawable since we checked if the validator is locked above
-		if delegation.WithdrawVET.Cmp(delegator.Stake) < 0 {
+		if aggregation.WithdrawVET.Cmp(delegation.Stake) < 0 {
 			return nil, errors.New("not enough withdraw VET")
 		}
-		delegation.WithdrawVET = delegation.WithdrawVET.Sub(delegation.WithdrawVET, delegator.Stake)
+		aggregation.WithdrawVET = aggregation.WithdrawVET.Sub(aggregation.WithdrawVET, delegation.Stake)
 	} else {
-		if delegator.AutoRenew { // delegator's stake is pending locked
-			if delegation.PendingLockedVET.Cmp(delegator.Stake) < 0 {
+		if delegation.AutoRenew { // delegation's stake is pending locked
+			if aggregation.PendingLockedVET.Cmp(delegation.Stake) < 0 {
 				return nil, errors.New("not enough pending locked VET")
 			}
-			delegation.PendingLockedVET = delegation.PendingLockedVET.Sub(delegation.PendingLockedVET, delegator.Stake)
-		} else { // delegator's stake is pending 1 staking period only, i.e., pending cooldown
-			if delegation.PendingCooldownVET.Cmp(delegator.Stake) < 0 {
+			aggregation.PendingLockedVET = aggregation.PendingLockedVET.Sub(aggregation.PendingLockedVET, delegation.Stake)
+		} else { // delegation's stake is pending 1 staking period only, i.e., pending cooldown
+			if aggregation.PendingCooldownVET.Cmp(delegation.Stake) < 0 {
 				return nil, errors.New("not enough pending cooldown VET")
 			}
-			delegation.PendingCooldownVET = delegation.PendingCooldownVET.Sub(delegation.PendingCooldownVET, delegator.Stake)
+			aggregation.PendingCooldownVET = aggregation.PendingCooldownVET.Sub(aggregation.PendingCooldownVET, delegation.Stake)
 		}
 	}
 
-	// remove the delegator from the mapping after the withdraw
-	if err := d.storage.SetDelegator(delegationID, &Delegator{}); err != nil {
+	amount := delegation.Stake
+	delegation.Stake = big.NewInt(0)
+
+	// remove the delegation from the mapping after the withdraw
+	if err := d.storage.SetDelegation(delegationID, delegation); err != nil {
 		return nil, err
 	}
 
-	if err = d.storage.SetDelegation(delegator.ValidatorID, delegation); err != nil {
+	if err = d.storage.SetAggregation(delegation.ValidatorID, aggregation); err != nil {
 		return nil, err
 	}
 
-	return delegator.Stake, nil
+	return amount, nil
 }

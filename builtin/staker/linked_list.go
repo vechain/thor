@@ -13,9 +13,9 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-// linkedList is a doubly linked list implementation for validators, providing convenient operations for adding,
-// removing, and popping validators.
-// It allows us to maintain to linked list for both the queued validators and the active validators
+// linkedList is a doubly linked list implementation for validations, providing convenient operations for adding,
+// removing, and popping validations.
+// It allows us to maintain to linked list for both the queued validations and the active validations
 type linkedList struct {
 	head    *solidity.Bytes32
 	tail    *solidity.Bytes32
