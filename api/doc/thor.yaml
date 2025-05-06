@@ -1301,6 +1301,8 @@ components:
     GetFeesPriorityResponse:
       type: object
       title: GetFeesPriorityResponse
+      required:
+        - maxPriorityFeePerGas
       allOf:
         - properties:
             maxPriorityFeePerGas:
