@@ -52,7 +52,7 @@ func TestGetForkConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		config := GetForkConfig(tt.id)
-		if (config != ForkConfig{}) != tt.expectFound {
+		if (config != nil) != tt.expectFound {
 			t.Errorf("GetForkConfig(%v) found = %v, want %v", tt.id, !tt.expectFound, tt.expectFound)
 		}
 	}

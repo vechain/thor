@@ -149,7 +149,7 @@ func TestChainID(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	exec, _ := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.ForkConfig{ETH_IST: 0}).
+	exec, _ := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, &thor.ForkConfig{ETH_IST: 0}).
 		PrepareClause(tx.NewClause(&addr).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
 	out, _, err := exec()
 	assert.Nil(t, err)
@@ -203,7 +203,7 @@ func TestSelfBalance(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	exec, _ := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.ForkConfig{ETH_IST: 0}).
+	exec, _ := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, &thor.ForkConfig{ETH_IST: 0}).
 		PrepareClause(tx.NewClause(&addr).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
 	out, _, err := exec()
 	assert.Nil(t, err)
@@ -328,7 +328,7 @@ func TestBlake2(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	exec, _ := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.ForkConfig{ETH_IST: 0}).
+	exec, _ := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, &thor.ForkConfig{ETH_IST: 0}).
 		PrepareClause(tx.NewClause(&addr).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
 	out, _, err := exec()
 	assert.Nil(t, err)

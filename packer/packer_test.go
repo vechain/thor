@@ -192,7 +192,7 @@ func TestBlocklist(t *testing.T) {
 
 	stater := state.NewStater(db)
 
-	forkConfig := thor.ForkConfig{
+	forkConfig := &thor.ForkConfig{
 		VIP191:    math.MaxUint32,
 		ETH_CONST: math.MaxUint32,
 		BLOCKLIST: 0,

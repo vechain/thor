@@ -41,7 +41,7 @@ func (fc ForkConfig) String() string {
 }
 
 // NoFork a special config without any forks.
-var NoFork = ForkConfig{
+var NoFork = &ForkConfig{
 	VIP191:    math.MaxUint32,
 	ETH_CONST: math.MaxUint32,
 	BLOCKLIST: math.MaxUint32,
@@ -52,7 +52,7 @@ var NoFork = ForkConfig{
 
 // SoloFork is used to retain the solo genesis ID.
 // Any forks that modify the chain state should be placed in block 1.
-var SoloFork = ForkConfig{
+var SoloFork = &ForkConfig{
 	VIP191:    0,
 	ETH_CONST: 0,
 	BLOCKLIST: 0,
@@ -62,7 +62,7 @@ var SoloFork = ForkConfig{
 }
 
 // for well-known networks
-var forkConfigs = map[Bytes32]ForkConfig{
+var forkConfigs = map[Bytes32]*ForkConfig{
 	// mainnet
 	MustParseBytes32("0x00000000851caf3cfdb6e899cf5958bfb1ac3413d346d43539627e6be7ec1b4a"): {
 		VIP191:    3337300,
@@ -84,6 +84,6 @@ var forkConfigs = map[Bytes32]ForkConfig{
 }
 
 // GetForkConfig get fork config for given genesis ID.
-func GetForkConfig(genesisID Bytes32) ForkConfig {
+func GetForkConfig(genesisID Bytes32) *ForkConfig {
 	return forkConfigs[genesisID]
 }

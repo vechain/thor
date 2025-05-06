@@ -37,7 +37,7 @@ type Chain struct {
 	stater       *state.Stater
 	genesisBlock *block.Block
 	logDB        *logdb.LogDB
-	forkConfig   thor.ForkConfig
+	forkConfig   *thor.ForkConfig
 }
 
 func New(
@@ -48,7 +48,7 @@ func New(
 	stater *state.Stater,
 	genesisBlock *block.Block,
 	logDB *logdb.LogDB,
-	forkConfig thor.ForkConfig,
+	forkConfig *thor.ForkConfig,
 ) *Chain {
 	return &Chain{
 		db:           db,
@@ -238,7 +238,7 @@ func (c *Chain) BestBlock() (*block.Block, error) {
 }
 
 // GetForkConfig returns the current fork configuration based on the ID of the genesis block.
-func (c *Chain) GetForkConfig() thor.ForkConfig {
+func (c *Chain) GetForkConfig() *thor.ForkConfig {
 	return c.forkConfig
 }
 

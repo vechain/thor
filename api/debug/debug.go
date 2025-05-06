@@ -40,7 +40,7 @@ const defaultMaxStorageResult = 1000
 type Debug struct {
 	repo              *chain.Repository
 	stater            *state.Stater
-	forkConfig        thor.ForkConfig
+	forkConfig        *thor.ForkConfig
 	callGasLimit      uint64
 	allowCustomTracer bool
 	bft               bft.Committer
@@ -51,7 +51,7 @@ type Debug struct {
 func New(
 	repo *chain.Repository,
 	stater *state.Stater,
-	forkConfig thor.ForkConfig,
+	forkConfig *thor.ForkConfig,
 	callGaslimit uint64,
 	allowCustomTracer bool,
 	bft bft.Committer,

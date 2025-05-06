@@ -24,7 +24,7 @@ type Packer struct {
 	nodeMaster     thor.Address
 	beneficiary    *thor.Address
 	targetGasLimit uint64
-	forkConfig     thor.ForkConfig
+	forkConfig     *thor.ForkConfig
 	seeder         *poa.Seeder
 }
 
@@ -35,7 +35,7 @@ func New(
 	stater *state.Stater,
 	nodeMaster thor.Address,
 	beneficiary *thor.Address,
-	forkConfig thor.ForkConfig,
+	forkConfig *thor.ForkConfig,
 ) *Packer {
 	return &Packer{
 		repo,

@@ -133,6 +133,7 @@ func TestAdoptErr(t *testing.T) {
 	g := new(genesis.Builder).
 		GasLimit(0).
 		Timestamp(launchTime).
+		ForkConfig(thor.NoFork).
 		State(func(state *state.State) error {
 			bal, _ := new(big.Int).SetString("1000000000000000000000000000", 10)
 			state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())

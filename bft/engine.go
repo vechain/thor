@@ -41,7 +41,7 @@ type Engine struct {
 	repo       *chain.Repository
 	data       kv.Store
 	stater     *state.Stater
-	forkConfig thor.ForkConfig
+	forkConfig *thor.ForkConfig
 	master     thor.Address
 	casts      casts
 	finalized  atomic.Value
@@ -54,7 +54,7 @@ type Engine struct {
 }
 
 // NewEngine creates a new bft engine.
-func NewEngine(repo *chain.Repository, mainDB *muxdb.MuxDB, forkConfig thor.ForkConfig, master thor.Address) (*Engine, error) {
+func NewEngine(repo *chain.Repository, mainDB *muxdb.MuxDB, forkConfig *thor.ForkConfig, master thor.Address) (*Engine, error) {
 	engine := Engine{
 		repo:       repo,
 		data:       mainDB.NewStore(dataStoreName),

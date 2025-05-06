@@ -340,7 +340,7 @@ func soloAction(ctx *cli.Context) error {
 
 	var (
 		gene       *genesis.Genesis
-		forkConfig thor.ForkConfig
+		forkConfig *thor.ForkConfig
 	)
 
 	flagGenesis := ctx.String(genesisFlag.Name)

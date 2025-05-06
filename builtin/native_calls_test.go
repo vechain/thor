@@ -193,6 +193,7 @@ func buildGenesis(db *muxdb.MuxDB, proc func(state *state.State) error) *block.B
 	blk, _, _, _ := new(genesis.Builder).
 		Timestamp(uint64(time.Now().Unix())).
 		State(proc).
+		ForkConfig(thor.NoFork).
 		Build(state.NewStater(db))
 	return blk
 }

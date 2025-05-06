@@ -322,7 +322,7 @@ func packTxsIntoBlock(thorChain *testchain.Chain, proposerAccount *genesis.DevAc
 }
 
 func createChain(db *muxdb.MuxDB, accounts []genesis.DevAccount) (*testchain.Chain, error) {
-	forkConfig := thor.NoFork
+	forkConfig := *thor.NoFork // value copy
 	forkConfig.VIP191 = 1
 	forkConfig.BLOCKLIST = 0
 	forkConfig.VIP214 = 2
@@ -393,7 +393,7 @@ func createChain(db *muxdb.MuxDB, accounts []genesis.DevAccount) (*testchain.Cha
 		stater,
 		geneBlk,
 		logDb,
-		thor.NoFork,
+		&forkConfig,
 	), nil
 }
 
