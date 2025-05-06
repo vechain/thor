@@ -1311,6 +1311,10 @@ components:
     GetFeesHistoryResponse:
       type: object
       title: GetFeesHistoryResponse
+      required:
+        - oldestBlock
+        - baseFeePerGas
+        - gasUsedRatio
       allOf:
         - properties:
             oldestBlock:
@@ -1347,7 +1351,7 @@ components:
               description: |
                 An array of arrays of rewards by the percentiles provided in the request via rewardPercentiles.
                 Each inner array contains the reward values for each percentile requested.
-              nullable: true
+                This field is optional and will only be present if rewardPercentiles was specified in the request.
               items:
                 type: array
                 description: Array of reward values for each percentile requested
@@ -1369,6 +1373,8 @@ components:
     GetFeesPriorityResponse:
       type: object
       title: GetFeesPriorityResponse
+      required:
+        - maxPriorityFeePerGas
       allOf:
         - properties:
             maxPriorityFeePerGas:
