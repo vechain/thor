@@ -19,6 +19,8 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 		return false, nil
 	}
 
+	logger.Info("performing housekeeping", "block", currentBlock)
+
 	validatorExitID := thor.Bytes32{}
 	validatorLowestExitBlock := uint32(math.MaxUint32)
 
@@ -36,10 +38,12 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 		if entry.Expiry != nil && currentBlock >= *entry.Expiry {
 			if entry.Status == StatusActive && !entry.AutoRenew {
 				hasUpdates = true
+				logger.Debug("performing cooldown updates", "id", id)
 				return s.performCooldownUpdates(id, entry)
 			}
 			if entry.Status == StatusActive && entry.AutoRenew {
 				hasUpdates = true
+				logger.Debug("performing renewal updates", "id", id)
 				return s.performRenewalUpdates(id, entry)
 			}
 			// Find validator with the lowest exit tx block
@@ -57,6 +61,7 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 	}
 
 	if canExit, err := s.canExit(); err == nil && !validatorExitID.IsZero() && canExit {
+		logger.Debug("exiting validator", "id", validatorExitID)
 		if err := s.validations.ExitValidator(validatorExitID, currentBlock); err != nil {
 			return false, err
 		}
@@ -74,7 +79,7 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 		hasUpdates = true
 	}
 
-	logger.Info("performed housekeeping", "block", currentBlock, "updates", hasUpdates, "activated", activated, "exited", validatorExitID.IsZero())
+	logger.Info("performed housekeeping", "block", currentBlock, "updates", hasUpdates, "activated", activated)
 
 	return hasUpdates, nil
 }

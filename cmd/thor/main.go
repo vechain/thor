@@ -85,6 +85,7 @@ func main() {
 			enableAPILogsFlag,
 			apiLogsLimitFlag,
 			verbosityFlag,
+			verbosityStakerFlag,
 			jsonLogsFlag,
 			maxPeersFlag,
 			p2pPortFlag,
@@ -126,6 +127,7 @@ func main() {
 					persistFlag,
 					gasLimitFlag,
 					verbosityFlag,
+					verbosityStakerFlag,
 					jsonLogsFlag,
 					pprofFlag,
 					verifyLogsFlag,
@@ -165,11 +167,10 @@ func defaultAction(ctx *cli.Context) error {
 
 	defer func() { log.Info("exited") }()
 
-	lvl, err := readIntFromUInt64Flag(ctx.Uint64(verbosityFlag.Name))
+	logLevel, err := initLogger(ctx)
 	if err != nil {
-		return errors.Wrap(err, "parse verbosity flag")
+		return err
 	}
-	logLevel := initLogger(lvl, ctx.Bool(jsonLogsFlag.Name))
 
 	// enable metrics as soon as possible
 	enableMetrics := ctx.Bool(enableMetricsFlag.Name)
@@ -311,13 +312,10 @@ func defaultAction(ctx *cli.Context) error {
 func soloAction(ctx *cli.Context) error {
 	exitSignal := handleExitSignal()
 	defer func() { log.Info("exited") }()
-
-	lvl, err := readIntFromUInt64Flag(ctx.Uint64(verbosityFlag.Name))
+	logLevel, err := initLogger(ctx)
 	if err != nil {
-		return errors.Wrap(err, "parse verbosity flag")
+		return err
 	}
-
-	logLevel := initLogger(lvl, ctx.Bool(jsonLogsFlag.Name))
 
 	onDemandBlockProduction := ctx.Bool(onDemandFlag.Name)
 	blockProductionInterval := ctx.Uint64(blockInterval.Name)

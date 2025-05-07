@@ -170,6 +170,10 @@ func (v *validations) Add(
 		return thor.Bytes32{}, errors.New("failed to add validator to queue")
 	}
 
+	if err := v.storage.SetAggregation(id, newAggregation()); err != nil {
+		return thor.Bytes32{}, err
+	}
+
 	return id, nil
 }
 
@@ -209,7 +213,7 @@ func (v *validations) ActivateNext(
 		return err
 	}
 
-	logger.Debug("activating validator", "master", validator.Master, "block", currentBlock)
+	logger.Debug("activating validator", "id", id, "master", validator.Master, "block", currentBlock)
 
 	// update the validator
 	validatorLocked := big.NewInt(0).Add(validator.LockedVET, validator.PendingLocked)

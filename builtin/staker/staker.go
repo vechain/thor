@@ -8,10 +8,9 @@ package staker
 import (
 	"math/big"
 
-	"github.com/vechain/thor/v2/log"
-
 	"github.com/vechain/thor/v2/builtin/params"
 	"github.com/vechain/thor/v2/builtin/solidity"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -30,6 +29,10 @@ var (
 	cooldownPeriod = uint32(8640)
 	epochLength    = uint32(180)
 )
+
+func SetLogger(l log.Logger) {
+	logger = l
+}
 
 // Staker implements native methods of `Staker` contract.
 type Staker struct {
@@ -130,14 +133,15 @@ func (s *Staker) AddValidator(
 	autoRenew bool,
 	currentBlock uint32,
 ) (thor.Bytes32, error) {
-	id, err := s.validations.Add(endorsor, master, period, stake, autoRenew, currentBlock)
-	if err != nil {
+	stakeETH := new(big.Int).Div(stake, big.NewInt(1e18))
+	logger.Debug("adding validator", "endorsor", endorsor, "master", master, "period", period, "stake", stakeETH, "autoRenew", autoRenew)
+	if id, err := s.validations.Add(endorsor, master, period, stake, autoRenew, currentBlock); err != nil {
+		logger.Info("add validator failed", "master", master, "error", err)
 		return thor.Bytes32{}, err
+	} else {
+		logger.Info("added validator", "master", master, "id", id)
+		return id, nil
 	}
-	if err := s.storage.SetAggregation(id, newAggregation()); err != nil {
-		return thor.Bytes32{}, err
-	}
-	return id, nil
 }
 
 func (s *Staker) LookupMaster(master thor.Address) (*Validation, thor.Bytes32, error) {
@@ -149,26 +153,60 @@ func (s *Staker) Get(id thor.Bytes32) (*Validation, error) {
 }
 
 func (s *Staker) UpdateAutoRenew(endorsor thor.Address, id thor.Bytes32, autoRenew bool, blockNumber uint32) error {
-	return s.validations.UpdateAutoRenew(endorsor, id, autoRenew, blockNumber)
+	logger.Debug("updating autorenew", "endorsor", endorsor, "id", id, "autoRenew", autoRenew)
+
+	if err := s.validations.UpdateAutoRenew(endorsor, id, autoRenew, blockNumber); err != nil {
+		logger.Info("update autorenew failed", "id", id, "error", err)
+		return err
+	} else {
+		logger.Info("updated autorenew", "id", id)
+		return nil
+	}
 }
 
 // IncreaseStake increases the stake of a queued or active validator
 // if a validator is active, the stake is increase, but the weight stays the same
 // the weight will be recalculated at the end of the staking period, by the housekeep function
 func (s *Staker) IncreaseStake(endorsor thor.Address, id thor.Bytes32, amount *big.Int) error {
-	return s.validations.IncreaseStake(id, endorsor, amount)
+	amountETH := new(big.Int).Div(amount, big.NewInt(1e18))
+	logger.Debug("increasing stake", "endorsor", endorsor, "id", id, "amount", amountETH)
+	if err := s.validations.IncreaseStake(id, endorsor, amount); err != nil {
+		logger.Info("increase stake failed", "id", id, "error", err)
+		return err
+	} else {
+		logger.Info("increased stake", "id", id)
+		return nil
+	}
 }
 
 func (s *Staker) DecreaseStake(endorsor thor.Address, id thor.Bytes32, amount *big.Int) error {
-	return s.validations.DecreaseStake(id, endorsor, amount)
+	amountETH := new(big.Int).Div(amount, big.NewInt(1e18))
+	logger.Debug("decreasing stake", "endorsor", endorsor, "id", id, "amount", amountETH)
+
+	if err := s.validations.DecreaseStake(id, endorsor, amount); err != nil {
+		logger.Info("decrease stake failed", "id", id, "error", err)
+		return err
+	} else {
+		logger.Info("decreased stake", "id", id)
+		return nil
+	}
 }
 
 // WithdrawStake allows expired validations to withdraw their stake.
 func (s *Staker) WithdrawStake(endorsor thor.Address, id thor.Bytes32) (*big.Int, error) {
-	return s.validations.WithdrawStake(endorsor, id)
+	logger.Debug("withdrawing stake", "endorsor", endorsor, "id", id)
+
+	if stake, err := s.validations.WithdrawStake(endorsor, id); err != nil {
+		logger.Info("withdraw failed", "id", id, "error", err)
+		return nil, err
+	} else {
+		logger.Info("withdrew validator staker", "id", id)
+		return stake, nil
+	}
 }
 
 func (s *Staker) SetOnline(id thor.Bytes32, online bool) error {
+	logger.Debug("set master online", "id", id, "online", online)
 	entry, err := s.storage.GetValidator(id)
 	if err != nil {
 		return err
@@ -184,7 +222,15 @@ func (s *Staker) AddDelegation(
 	autoRenew bool,
 	multiplier uint8,
 ) (thor.Bytes32, error) {
-	return s.delegations.Add(validationID, stake, autoRenew, multiplier)
+	stakeETH := new(big.Int).Div(stake, big.NewInt(1e18))
+	logger.Debug("adding delegation", "validationID", validationID, "stake", stakeETH, "autoRenew", autoRenew, "multiplier", multiplier)
+	if id, err := s.delegations.Add(validationID, stake, autoRenew, multiplier); err != nil {
+		logger.Info("failed to add delegation", "validationID", validationID, "error", err)
+		return thor.Bytes32{}, err
+	} else {
+		logger.Info("added delegation", "validationID", validationID, "id", id)
+		return id, nil
+	}
 }
 
 // GetDelegation returns the delegation.
@@ -232,15 +278,32 @@ func (s *Staker) UpdateDelegationAutoRenew(
 	delegationID thor.Bytes32,
 	autoRenew bool,
 ) error {
+	logger.Debug("updating autorenew", "delegationID", delegationID, "autoRenew", autoRenew)
+	var err error
 	if autoRenew {
-		return s.delegations.EnableAutoRenew(delegationID)
+		err = s.delegations.EnableAutoRenew(delegationID)
+	} else {
+		err = s.delegations.DisableAutoRenew(delegationID)
 	}
-	return s.delegations.DisableAutoRenew(delegationID)
+	if err != nil {
+		logger.Info("update autorenew failed", "delegationID", delegationID, "error", err)
+	} else {
+		logger.Info("updated autorenew", "delegationID", delegationID)
+	}
+	return err
 }
 
 // WithdrawDelegation allows expired and queued delegations to withdraw their stake.
 func (s *Staker) WithdrawDelegation(
 	delegationID thor.Bytes32,
 ) (*big.Int, error) {
-	return s.delegations.Withdraw(delegationID)
+	logger.Debug("withdrawing delegation", "delegationID", delegationID)
+	if stake, err := s.delegations.Withdraw(delegationID); err != nil {
+		logger.Info("failed to withdraw", "delegationID", delegationID, "error", err)
+		return nil, err
+	} else {
+		stakeETH := new(big.Int).Div(stake, big.NewInt(1e18))
+		logger.Info("withdrew delegation", "delegationID", delegationID, "stake", stakeETH)
+		return stake, nil
+	}
 }
