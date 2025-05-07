@@ -18,7 +18,7 @@ fi
 if git diff --cached --diff-filter=AM -U0 | \
      grep -E --color=never '^(\+[^\+]|-[^-]).*[0-9A-Fa-f]{64}'; then
   echo
-  echo "✖ ERROR: Detected Ethereum private key in staged changes. Commit aborted."
+  echo "✖ ERROR: Detected ECDSA private key in staged changes. Commit aborted."
   echo
   exit 1
 fi
