@@ -322,7 +322,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 
 		// check if tx has enough fee to cover for base fee, if set
 		if header.BaseFee() != nil {
-			if err := fork.ValidateGalacticaTxFee(tx, state, header.BaseFee()); err != nil {
+			if err := fork.ValidateGalacticaTxFeeWithState(tx, state, header.BaseFee()); err != nil {
 				return nil, nil, err
 			}
 		}

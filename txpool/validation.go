@@ -57,7 +57,7 @@ func ValidateTransaction(tr *tx.Transaction, repo *chain.Repository, head *chain
 
 func ValidateTransactionWithState(tr *tx.Transaction, header *block.Header, forkConfig *thor.ForkConfig, state *state.State) error {
 	if header.Number() >= forkConfig.GALACTICA {
-		if err := fork.ValidateGalacticaTxFee(tr, state, header.BaseFee()); err != nil {
+		if err := fork.ValidateGalacticaTxFeeWithState(tr, state, header.BaseFee()); err != nil {
 			return txRejectedError{err.Error()}
 		}
 	}

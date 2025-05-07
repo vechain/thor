@@ -154,7 +154,10 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 			return fork.ErrBaseFeeNotSet
 		}
 
-		if err := fork.ValidateGalacticaTxFee(t, f.runtime.State(), f.runtime.Context().BaseFee); err != nil {
+		// A transaction that changes the `legacyTxBaseGasPrice` will still obey the current block base fee
+		// Because the state of the block is not changed at this point
+		// re-fetching the `KeyLegacyTxBaseGasPrice` not produce different results
+		if err := fork.ValidateGalacticaTxFee(t, f.legacyTxBaseGasPrice, f.runtime.Context().BaseFee); err != nil {
 			return fmt.Errorf("%w: %w", errTxNotAdoptableNow, err)
 		}
 

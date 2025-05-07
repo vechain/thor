@@ -456,7 +456,7 @@ func TestValidateGalacticaTxFee(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateGalacticaTxFee(tt.tx, tt.legacyTxBaseGasPrice, tt.blkBaseFeeGasPrice)
+			err := ValidateGalacticaTxFee(tt.tx, tt.legacyTxBaseGasPrice, tt.blkBaseFeeGasPrice)
 			assert.True(t, errors.Is(err, tt.wantErr))
 		})
 	}
