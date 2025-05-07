@@ -203,6 +203,7 @@ func (e *Energy) addIssued(issued *big.Int) error {
 type staker interface {
 	LockedVET() (*big.Int, error)
 	HasDelegations(address thor.Address) (bool, error)
+	IncreaseReward(master thor.Address, reward big.Int) error
 }
 
 func (e *Energy) DistributeRewards(beneficiary, signer thor.Address, staker staker) error {
@@ -249,6 +250,9 @@ func (e *Energy) DistributeRewards(beneficiary, signer thor.Address, staker stak
 	if err := e.addIssued(reward); err != nil {
 		return err
 	}
+	if err := staker.IncreaseReward(signer, *reward); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -262,11 +266,11 @@ func (e *Energy) CalculateRewards(staker staker) (*big.Int, error) {
 	sqrtStake := new(big.Int).Sqrt(new(big.Int).Div(totalStaked, bigE18))
 	sqrtStake.Mul(sqrtStake, bigE18)
 
-	currentYear := time.Now().Year()
-	isLeap := isLeapYear(currentYear)
+	blockTime := time.Unix(int64(e.blockTime), 0)
+	isLeap := isLeapYear(blockTime.Year())
 	blocksPerYear := thor.NumberOfBlocksPerYear
 	if isLeap {
-		blocksPerYear = new(big.Int).Sub(thor.NumberOfBlocksPerYear, big.NewInt(thor.SeederInterval))
+		blocksPerYear = new(big.Int).Add(thor.NumberOfBlocksPerYear, big.NewInt(thor.SeederInterval))
 	}
 
 	// reward = 1 * TargetFactor * ScalingFactor * sqrt(totalStaked / 1e18) / blocksPerYear

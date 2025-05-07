@@ -111,7 +111,7 @@ func (s *Staker) LeaderGroupSize() (*big.Int, error) {
 	return s.validations.leaderGroup.Len()
 }
 
-// Next returns the next validator in a a linked list.
+// Next returns the next validator in a linked list.
 // If the provided ID is not in a list, it will return empty bytes.
 func (s *Staker) Next(prev thor.Bytes32) (thor.Bytes32, error) {
 	entry, err := s.Get(prev)
@@ -306,4 +306,19 @@ func (s *Staker) WithdrawDelegation(
 		logger.Info("withdrew delegation", "delegationID", delegationID, "stake", stakeETH)
 		return stake, nil
 	}
+}
+
+// GetRewards returns reward amount for validation id and staking period.
+func (s *Staker) GetRewards(validationID thor.Bytes32, stakingPeriod uint32) (*big.Int, error) {
+	return s.storage.GetRewards(validationID, stakingPeriod)
+}
+
+// GetCompletedPeriods returns number of completed staking periods for validation.
+func (s *Staker) GetCompletedPeriods(validationID thor.Bytes32) (uint32, error) {
+	return s.storage.GetCompletedPeriods(validationID)
+}
+
+// IncreaseReward Increases reward for master address, for current staking period.
+func (s *Staker) IncreaseReward(master thor.Address, reward big.Int) error {
+	return s.storage.IncreaseReward(master, reward)
 }

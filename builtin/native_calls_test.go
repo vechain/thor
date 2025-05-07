@@ -824,6 +824,15 @@ func TestEnergyNative(t *testing.T) {
 	_, err = callContractAndGetOutput(abi, "totalSupply", toAddr, &bigIntOutput)
 	require.NoError(t, err)
 	require.Equal(t, exSupply, bigIntOutput)
+
+	firstActiveRes := new(common.Hash)
+	_, err = callContractAndGetOutput(builtin.Staker.ABI, "firstActive", builtin.Staker.Address, firstActiveRes)
+	assert.NoError(t, err)
+
+	rewards := new(*big.Int)
+	_, err = callContractAndGetOutput(builtin.Staker.ABI, "getRewards", builtin.Staker.Address, rewards, firstActiveRes, uint32(1))
+	assert.NoError(t, err)
+	assert.Equal(t, stakeRewards.String(), (*rewards).String())
 }
 
 func TestPrototypeNative(t *testing.T) {
@@ -1658,6 +1667,16 @@ func TestStakerContract_Native(t *testing.T) {
 	_, err = callContractAndGetOutput(abi, "queuedStake", toAddr, queuedStake)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).String(), (*queuedStake).String())
+
+	reward := new(*big.Int)
+	_, err = callContractAndGetOutput(abi, "getRewards", toAddr, reward, id, uint32(1))
+	assert.NoError(t, err)
+	assert.Equal(t, new(big.Int).String(), (*reward).String())
+
+	periods := uint32(1)
+	_, err = callContractAndGetOutput(abi, "getCompletedPeriods", toAddr, &periods, id)
+	assert.NoError(t, err)
+	assert.Equal(t, uint32(0), periods)
 }
 
 func TestStakerContract_Native_Revert(t *testing.T) {

@@ -63,9 +63,11 @@ func createKeys(amount int) map[thor.Address]keySet {
 func newStaker(t *testing.T, amount int, maxValidators int64, initialise bool) (*Staker, *big.Int) {
 	db := muxdb.NewMem()
 	st := state.New(db, trie.Root{})
+
 	keys := createKeys(amount)
 	param := params.New(thor.BytesToAddress([]byte("params")), st)
 	param.Set(thor.KeyMaxBlockProposers, big.NewInt(maxValidators))
+
 	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(maxValidators)))
 	staker := New(thor.BytesToAddress([]byte("stkr")), st, param)
 	totalStake := big.NewInt(0)
@@ -1809,4 +1811,54 @@ func TestStaker_IncreaseStake_Withdraw(t *testing.T) {
 	assert.Equal(t, stake, validation.Weight)
 	assert.Equal(t, big.NewInt(0), validation.WithdrawableVET)
 	assert.Equal(t, big.NewInt(0), validation.PendingLocked)
+}
+
+func TestStaker_GetRewards(t *testing.T) {
+	staker, _ := newStaker(t, 0, 3, false)
+
+	proposerAddr := datagen.RandAddress()
+
+	stake := RandomStake()
+	period := uint32(360) * 24 * 14
+
+	id, err := staker.AddValidator(proposerAddr, proposerAddr, period, stake, true, 0)
+	assert.NoError(t, err)
+
+	assert.NoError(t, staker.validations.ActivateNext(0, staker.params))
+
+	amount, err := staker.GetRewards(id, 1)
+	assert.NoError(t, err)
+	assert.Equal(t, new(big.Int), amount)
+
+	reward := big.NewInt(1000)
+	staker.IncreaseReward(proposerAddr, *reward)
+
+	amount, err = staker.GetRewards(id, 1)
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(1000), amount)
+}
+
+func TestStaker_GetCompletedPeriods(t *testing.T) {
+	staker, _ := newStaker(t, 0, 3, false)
+
+	proposerAddr := datagen.RandAddress()
+
+	stake := RandomStake()
+	period := uint32(360) * 24 * 14
+
+	id, err := staker.AddValidator(proposerAddr, proposerAddr, period, stake, true, 0)
+	assert.NoError(t, err)
+
+	assert.NoError(t, staker.validations.ActivateNext(0, staker.params))
+
+	periods, err := staker.GetCompletedPeriods(id)
+	assert.NoError(t, err)
+	assert.Equal(t, uint32(0), periods)
+
+	_, err = staker.Housekeep(period)
+	assert.NoError(t, err)
+
+	periods, err = staker.GetCompletedPeriods(id)
+	assert.NoError(t, err)
+	assert.Equal(t, uint32(1), periods)
 }

@@ -236,6 +236,29 @@ func init() {
 			}
 			return []any{delegation.Stake, delegation.Multiplier, delegation.AutoRenew, delegation.IsLocked(validator), ""}
 		}},
+		{"native_getRewards", func(env *xenv.Environment) []any {
+			var args struct {
+				ValidationID  common.Hash
+				StakingPeriod uint32
+			}
+			env.ParseArgs(&args)
+			reward, err := Staker.Native(env.State()).GetRewards(thor.Bytes32(args.ValidationID), args.StakingPeriod)
+			if err != nil {
+				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
+			}
+			return []any{reward, ""}
+		}},
+		{"native_getCompletedPeriods", func(env *xenv.Environment) []any {
+			var args struct {
+				ValidationID common.Hash
+			}
+			env.ParseArgs(&args)
+			periods, err := Staker.Native(env.State()).GetCompletedPeriods(thor.Bytes32(args.ValidationID))
+			if err != nil {
+				return []any{uint32(0), fmt.Sprintf("revert: %v", err)}
+			}
+			return []any{periods, ""}
+		}},
 		{"native_getDelegatorContract", func(env *xenv.Environment) []any {
 			raw, err := Params.Native(env.State()).Get(thor.KeyStargateContractAddress)
 			if err != nil {

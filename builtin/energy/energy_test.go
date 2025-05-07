@@ -201,3 +201,43 @@ func TestAddIssued(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, thor.BytesToBytes32(big.NewInt(100).Bytes()), storage)
 }
+
+type mockStaker struct {
+	lockedVET         *big.Int
+	hasDelegations    bool
+	increaseRewardErr error
+}
+
+func (m *mockStaker) LockedVET() (*big.Int, error) {
+	return m.lockedVET, nil
+}
+
+func (m *mockStaker) HasDelegations(address thor.Address) (bool, error) {
+	return m.hasDelegations, nil
+}
+
+func (m *mockStaker) IncreaseReward(master thor.Address, reward big.Int) error {
+	return m.increaseRewardErr
+}
+
+func TestCalculateRewards(t *testing.T) {
+	st := state.New(muxdb.NewMem(), trie.Root{})
+
+	p := params.New(thor.BytesToAddress([]byte("par")), st)
+	eng := New(thor.BytesToAddress([]byte("eng")), st, 1, p)
+
+	mockStaker := &mockStaker{
+		lockedVET:         big.NewInt(0).Mul(big.NewInt(25), big.NewInt(1e18)),
+		hasDelegations:    false,
+		increaseRewardErr: nil,
+	}
+
+	reward, err := eng.CalculateRewards(mockStaker)
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(121765601217656012), reward)
+
+	leapEng := New(thor.BytesToAddress([]byte("eng")), st, 69638400, p)
+	reward, err = leapEng.CalculateRewards(mockStaker)
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(121432908318154219), reward)
+}

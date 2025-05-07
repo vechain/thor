@@ -273,6 +273,26 @@ contract Staker {
         return id;
     }
 
+    /**
+     * @dev getRewards returns the rewards received for validation id and staking period (this function returns full reward for all delegations and validator)
+     */
+    function getRewards(bytes32 validationID, uint32 stakingPeriod) public view returns (uint256) {
+        (uint256 reward, string memory error) = StakerNative(address(this))
+            .native_getRewards(validationID, stakingPeriod);
+        require(bytes(error).length == 0, error);
+        return reward;
+    }
+
+    /**
+     * @dev getCompletedPeriods returns the number of completed periods for validation
+     */
+    function getCompletedPeriods(bytes32 validationID) public view returns (uint32) {
+        (uint32 periods, string memory error) = StakerNative(address(this))
+            .native_getCompletedPeriods(validationID);
+        require(bytes(error).length == 0, error);
+        return periods;
+    }
+
     modifier onlyDelegatorContract() {
         (address sender, string memory error) = StakerNative(address(this))
             .native_getDelegatorContract();
@@ -391,4 +411,10 @@ interface StakerNative {
         external
         view
         returns (address, string calldata);
+
+    function native_getBlockProposerAndReward(uint32 blockNumber) external view returns (uint256, address, address, bytes32, string calldata);
+
+    function native_getRewards(bytes32 validationID, uint32 stakingPeriod) external view returns (uint256, string calldata);
+
+    function native_getCompletedPeriods(bytes32 validationID) external view returns (uint32, string calldata);
 }

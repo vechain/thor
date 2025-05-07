@@ -6,6 +6,9 @@
 package staker
 
 import (
+	"encoding/binary"
+	"math/big"
+
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/state"
@@ -20,6 +23,7 @@ var (
 	slotAggregations       = nameToSlot("aggregated-delegations")
 	slotDelegations        = nameToSlot("delegations")
 	slotDelegationsCounter = nameToSlot("delegations-counter")
+	slotRewards            = nameToSlot("period-rewards")
 	// active validations linked list
 	slotActiveTail      = nameToSlot("validations-active-tail")
 	slotActiveHead      = nameToSlot("validations-active-head")
@@ -46,6 +50,7 @@ type storage struct {
 	aggregations *solidity.Mapping[thor.Bytes32, *Aggregation]
 	delegations  *solidity.Mapping[thor.Bytes32, *Delegation]
 	lookups      *solidity.Mapping[thor.Address, thor.Bytes32] // allows lookup of Validation by node master address
+	rewards      *solidity.Mapping[thor.Bytes32, *big.Int]     // stores rewards per validator staking period
 }
 
 // newStorage creates a new instance of storage.
@@ -57,6 +62,7 @@ func newStorage(addr thor.Address, state *state.State) *storage {
 		aggregations: solidity.NewMapping[thor.Bytes32, *Aggregation](addr, state, slotAggregations),
 		delegations:  solidity.NewMapping[thor.Bytes32, *Delegation](addr, state, slotDelegations),
 		lookups:      solidity.NewMapping[thor.Address, thor.Bytes32](addr, state, slotValidationLookups),
+		rewards:      solidity.NewMapping[thor.Bytes32, *big.Int](addr, state, slotRewards),
 	}
 }
 
@@ -141,4 +147,43 @@ func (s *storage) LookupMaster(master thor.Address) (*Validation, thor.Bytes32, 
 		return nil, thor.Bytes32{}, err
 	}
 	return val, id, nil
+}
+
+func (s *storage) GetRewards(validationID thor.Bytes32, stakingPeriod uint32) (*big.Int, error) {
+	periodBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(periodBytes, stakingPeriod)
+	key := thor.Blake2b([]byte("rewards"), validationID.Bytes(), periodBytes)
+	return s.rewards.Get(key)
+}
+
+func (s *storage) GetCompletedPeriods(validationID thor.Bytes32) (uint32, error) {
+	v, err := s.GetValidator(validationID)
+	if err != nil {
+		return uint32(0), err
+	}
+	return v.CompleteIterations, nil
+}
+
+func (s *storage) IncreaseReward(master thor.Address, reward big.Int) error {
+	id, err := s.GetLookup(master)
+	if err != nil {
+		return err
+	}
+	if id.IsZero() {
+		return nil
+	}
+	val, err := s.GetValidator(id)
+	if err != nil {
+		return err
+	}
+
+	periodBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(periodBytes, val.CompleteIterations+1)
+	key := thor.Blake2b([]byte("rewards"), id.Bytes(), periodBytes)
+
+	rewards, err := s.rewards.Get(key)
+	if err != nil {
+		return err
+	}
+	return s.rewards.Set(key, big.NewInt(0).Add(rewards, &reward))
 }
