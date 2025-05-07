@@ -33,10 +33,6 @@ type placement struct {
 	id    thor.Bytes32
 }
 
-// NewScheduler is a placeholder implementation for Staked based consensus.
-// TODO: It will be replaced by a more sophisticated implementation in the future.
-// It is currently based on the old PoA algorithm.
-// https://github.com/vechain/protocol-board-repo/issues/429
 func NewScheduler(
 	signer thor.Address,
 	validators map[thor.Bytes32]*staker.Validation,
