@@ -170,8 +170,8 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 		// Verify the baseFee is correct based on the parent header.
 		expectedBaseFee := galactica.CalcBaseFee(parent, &c.forkConfig)
 		if header.BaseFee().Cmp(expectedBaseFee) != 0 {
-			return fmt.Errorf("block baseFee invalid: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
-				header.BaseFee(), expectedBaseFee, parent.BaseFee(), parent.GasUsed())
+			return consensusError(fmt.Sprintf("block baseFee invalid: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
+				header.BaseFee(), expectedBaseFee, parent.BaseFee(), parent.GasUsed()))
 		}
 	}
 
