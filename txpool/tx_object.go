@@ -13,7 +13,6 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/runtime"
@@ -134,7 +133,7 @@ func (o *txObject) Executable(
 	if err != nil {
 		return false, fmt.Errorf("failed to get proved work: %w", err)
 	}
-	legacyTxBaseGasPrice, err := builtin.Params.Native(state).Get(thor.KeyLegacyTxBaseGasPrice)
+	legacyTxBaseGasPrice, err := cache.getLegacyTxBaseGasPrice(state, headBlock)
 	if err != nil {
 		return false, err
 	}

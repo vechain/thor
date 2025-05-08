@@ -2,6 +2,7 @@
 
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
 package txpool
 
 import (
@@ -11,7 +12,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 )
 
 func createParentID(blockNum uint32) thor.Bytes32 {
@@ -94,7 +99,7 @@ func TestGasPriceCache(t *testing.T) {
 	cache.getBlockBaseFee(header4)
 
 	// First block should be evicted and values recalculated
-	assert.False(t, cache.cache.Contains(postGalacticaHeader.ID()))
+	assert.False(t, cache.blockBaseFeeCache.Contains(postGalacticaHeader.ID()))
 }
 
 func TestGasPriceCacheWithMockFork(t *testing.T) {
@@ -172,4 +177,109 @@ func TestGasPriceCacheConcurrentAccess(t *testing.T) {
 	for range [10]struct{}{} {
 		<-done
 	}
+}
+
+// Test that we read the legacy base gas price out of state correctly.
+func TestGetLegacyTxBaseGasPrice_StorageRetrieval(t *testing.T) {
+	// 1) build a fresh in-memory state and set the legacy price
+	db := muxdb.NewMem()
+	st1 := state.New(db, trie.Root{})
+	wantPrice := big.NewInt(888)
+	st1.SetStorage(builtin.Params.Address, thor.KeyLegacyTxBaseGasPrice, thor.BytesToBytes32(wantPrice.Bytes()))
+
+	// 3) build a dummy header
+	hdr := new(block.Builder).
+		ParentID(createParentID(0)).
+		Timestamp(1).
+		TotalScore(1).
+		GasLimit(1).
+		GasUsed(0).
+		Beneficiary(thor.Address{}).
+		StateRoot(thor.Bytes32{}).
+		ReceiptsRoot(thor.Bytes32{}).
+		Build().Header()
+
+	// 4) call getLegacyTxBaseGasPrice
+	cache := newGasPriceCache(&thor.ForkConfig{}, 2)
+	got, err := cache.getLegacyTxBaseGasPrice(st1, hdr)
+	assert.NoError(t, err)
+	assert.Equal(t, wantPrice, got, "should read the exact stored price")
+}
+
+// Test that a second call for the same header hits the cache (no extra state reads).
+func TestGetLegacyTxBaseGasPrice_CacheHit(t *testing.T) {
+	db := muxdb.NewMem()
+	st1 := state.New(db, trie.Root{})
+	price := big.NewInt(777)
+	st1.SetStorage(builtin.Params.Address, thor.KeyLegacyTxBaseGasPrice, thor.BytesToBytes32(price.Bytes()))
+
+	hdr := new(block.Builder).
+		ParentID(createParentID(1)).
+		Timestamp(1).
+		TotalScore(1).
+		GasLimit(1).
+		GasUsed(0).
+		Beneficiary(thor.Address{}).
+		StateRoot(thor.Bytes32{}).
+		ReceiptsRoot(thor.Bytes32{}).
+		Build().Header()
+
+	cache := newGasPriceCache(&thor.ForkConfig{}, 2)
+
+	p1, err1 := cache.getLegacyTxBaseGasPrice(st1, hdr)
+	assert.NoError(t, err1)
+
+	// mutate underlying state (would change what Get would return if called)
+	st1.SetStorage(builtin.Params.Address, thor.KeyLegacyTxBaseGasPrice, thor.BytesToBytes32(big.NewInt(1).Bytes()))
+
+	p2, err2 := cache.getLegacyTxBaseGasPrice(st1, hdr)
+	assert.NoError(t, err2)
+
+	// both calls must return the original price—and identical *big.Int pointer
+	assert.Equal(t, price, p2, "cache must hold the original value")
+	assert.True(t, p1 == p2, "should return the same *big.Int instance on cache-hit")
+}
+
+// Test that once we exceed the cache limit entries get evicted.
+func TestGetLegacyTxBaseGasPrice_CacheEviction(t *testing.T) {
+	// limit = 1 so second insert evicts the first
+	cache := newGasPriceCache(&thor.ForkConfig{}, 1)
+
+	// set up a shared in-memory state with one price
+	db := muxdb.NewMem()
+	st1 := state.New(db, trie.Root{})
+	base := big.NewInt(42)
+	st1.SetStorage(builtin.Params.Address, thor.KeyLegacyTxBaseGasPrice, thor.BytesToBytes32(base.Bytes()))
+
+	// helper to build header for a given block number
+	buildHdr := func(n uint32) *block.Header {
+		return new(block.Builder).
+			ParentID(createParentID(n - 1)).
+			Timestamp(1).
+			TotalScore(1).
+			GasLimit(1).
+			GasUsed(0).
+			Beneficiary(thor.Address{}).
+			StateRoot(thor.Bytes32{}).
+			ReceiptsRoot(thor.Bytes32{}).
+			Build().Header()
+	}
+
+	hdr1 := buildHdr(10)
+	hdr2 := buildHdr(20)
+
+	// first insertion
+	p1, err := cache.getLegacyTxBaseGasPrice(st1, hdr1)
+	assert.NoError(t, err)
+	assert.Equal(t, base, p1)
+
+	// second insertion → should evict hdr1
+	p2, err := cache.getLegacyTxBaseGasPrice(st1, hdr2)
+	assert.NoError(t, err)
+	assert.Equal(t, base, p2)
+
+	assert.False(t, cache.legacyBaseFeeCache.Contains(hdr1.ID()),
+		"first entry should be evicted when limit=1")
+	assert.True(t, cache.legacyBaseFeeCache.Contains(hdr2.ID()),
+		"second entry should remain in cache")
 }
