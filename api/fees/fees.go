@@ -19,7 +19,7 @@ import (
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/consensus/fork"
+	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -169,7 +169,7 @@ func (f *Fees) handleGetPriority(w http.ResponseWriter, _ *http.Request) error {
 	priorityFee := (*hexutil.Big)(f.minPriorityFee)
 	if bestBlockSummary.Header.BaseFee() != nil {
 		forkConfig := thor.GetForkConfig(f.data.repo.NewBestChain().GenesisID())
-		nextBaseFee := fork.CalcBaseFee(&forkConfig, bestBlockSummary.Header)
+		nextBaseFee := galactica.CalcBaseFee(bestBlockSummary.Header, &forkConfig)
 		if nextBaseFee.Cmp(big.NewInt(thor.InitialBaseFee)) > 0 {
 			priorityFee = (*hexutil.Big)(calcPriorityFee(nextBaseFee, int64(f.config.PriorityIncreasePercentage)))
 		}

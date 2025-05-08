@@ -13,7 +13,7 @@ import (
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/consensus/fork"
+	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -137,7 +137,7 @@ func GetSummaryAndState(rev *Revision, repo *chain.Repository, bft bft.Committer
 
 		if best.Header.BaseFee() != nil {
 			forkConfig := thor.GetForkConfig(repo.NewBestChain().GenesisID())
-			builder.BaseFee(fork.CalcBaseFee(&forkConfig, best.Header))
+			builder.BaseFee(galactica.CalcBaseFee(best.Header, &forkConfig))
 		}
 
 		mocked := builder.Build()

@@ -13,7 +13,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/consensus/fork"
+	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -106,7 +106,7 @@ func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 	var baseFee *big.Int
 	// If the best block is the last block before galactica, we need to estimate the new block's base fee.
 	if isGalactica {
-		baseFee = fork.CalcBaseFee(forkConfig, headBlock)
+		baseFee = galactica.CalcBaseFee(headBlock, forkConfig)
 	}
 
 	_, _, payer, prepaid, _, err := o.resolved.BuyGas(state, headBlock.Timestamp()+thor.BlockInterval, baseFee)

@@ -12,7 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/consensus/fork"
+	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/poa"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
@@ -113,6 +113,10 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 		return consensusError(fmt.Sprintf("block total score invalid: parent %v, current %v", parent.TotalScore(), header.TotalScore()))
 	}
 
+	if !block.GasLimit(header.GasLimit()).IsValid(parent.GasLimit()) {
+		return consensusError(fmt.Sprintf("block gas limit invalid: parent %v, current %v", parent.GasLimit(), header.GasLimit()))
+	}
+
 	signature := header.Signature()
 
 	if header.Number() < c.forkConfig.VIP214 {
@@ -158,13 +162,16 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 		if header.BaseFee() != nil {
 			return consensusError("invalid block: baseFee should not set before fork GALACTICA")
 		}
-
-		if !block.GasLimit(header.GasLimit()).IsValid(parent.GasLimit()) {
-			return consensusError(fmt.Sprintf("block gas limit invalid: parent %v, current %v", parent.GasLimit(), header.GasLimit()))
-		}
 	} else {
-		if err := fork.VerifyGalacticaHeader(&c.forkConfig, parent, header); err != nil {
-			return consensusError(fmt.Sprintf("block header invalid: %v", err))
+		if header.BaseFee() == nil {
+			return consensusError("invalid block: baseFee is missing")
+		}
+
+		// Verify the baseFee is correct based on the parent header.
+		expectedBaseFee := galactica.CalcBaseFee(parent, &c.forkConfig)
+		if header.BaseFee().Cmp(expectedBaseFee) != 0 {
+			return fmt.Errorf("block baseFee invalid: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
+				header.BaseFee(), expectedBaseFee, parent.BaseFee(), parent.GasUsed())
 		}
 	}
 
@@ -322,7 +329,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 
 		// check if tx has enough fee to cover for base fee, if set
 		if header.BaseFee() != nil {
-			if err := fork.ValidateGalacticaTxFee(tx, state, header.BaseFee()); err != nil {
+			if err := galactica.ValidateGalacticaTxFee(tx, state, header.BaseFee()); err != nil {
 				return nil, nil, err
 			}
 		}
