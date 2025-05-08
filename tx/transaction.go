@@ -24,13 +24,8 @@ import (
 )
 
 var (
-	ErrTxTypeNotSupported = errors.New("transaction type not supported")
-	// ErrMaxPriorityFeeVeryHigh is a sanity error to avoid extremely big numbers specified
-	// in the priority fee field.
-	ErrMaxPriorityFeeVeryHigh = errors.New("max priority fee per gas higher than 2^256-1")
-	// ErrMaxFeeVeryHigh is a sanity error to avoid extremely big numbers specified
-	// in the max fee field.
-	ErrMaxFeeVeryHigh = errors.New("max fee per gas higher than 2^256-1")
+	ErrTxTypeNotSupported        = errors.New("transaction type not supported")
+	ErrMaxFeeLessThanPriorityFee = errors.New("maxFeePerGas is less than maxPriorityFeePerGas")
 
 	errIntrinsicGasOverflow = errors.New("intrinsic gas overflow")
 	errShortTypedTx         = errors.New("typed transaction too short")

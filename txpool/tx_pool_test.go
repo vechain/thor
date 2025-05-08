@@ -643,7 +643,7 @@ func TestFillPoolWithMixedTxs(t *testing.T) {
 		StateRoot(root).
 		TotalScore(100).
 		Timestamp(now + 10).
-		BaseFee(thor.InitialBaseGasPrice).
+		BaseFee(big.NewInt(thor.InitialBaseFee)).
 		GasLimit(thor.InitialGasLimit).
 		Build()
 
@@ -1125,7 +1125,7 @@ func TestWashWithDynFeeTxAndPoolLimit(t *testing.T) {
 		TotalScore(100).
 		GasLimit(10000000).
 		StateRoot(root1).
-		BaseFee(thor.InitialBaseGasPrice).
+		BaseFee(big.NewInt(thor.InitialBaseFee)).
 		Build().WithSignature(sig[:])
 	if err := pool.repo.AddBlock(b1, nil, 0, true); err != nil {
 		t.Fatal(err)

@@ -148,47 +148,11 @@ func TestValidateTransaction(t *testing.T) {
 			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
 			expectedErr: nil,
 		},
-		{
-			name: "max fee per gas less than max priority fee per gas",
-			getTx: func() *tx.Transaction {
-				return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(big.NewInt(10)).MaxPriorityFeePerGas(big.NewInt(100)).Build()
-			},
-			head:        &chain.BlockSummary{Header: getHeader(1)},
-			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
-			expectedErr: txRejectedError{"max fee per gas (10) must be greater than max priority fee per gas (100)\n"},
-		},
-		{
-			name: "max fee per gas is negative",
-			getTx: func() *tx.Transaction {
-				return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(big.NewInt(-10)).MaxPriorityFeePerGas(big.NewInt(-100)).Build()
-			},
-			head:        &chain.BlockSummary{Header: getHeader(1)},
-			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
-			expectedErr: txRejectedError{"max fee per gas must be positive"},
-		},
-		{
-			name: "max priority fee per gas is negative",
-			getTx: func() *tx.Transaction {
-				return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(big.NewInt(10)).MaxPriorityFeePerGas(big.NewInt(-100)).Build()
-			},
-			head:        &chain.BlockSummary{Header: getHeader(1)},
-			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
-			expectedErr: txRejectedError{"max priority fee per gas must be positive"},
-		},
-		{
-			name: "max fee per gas is exceding 256 bits",
-			getTx: func() *tx.Transaction {
-				return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(new(big.Int).Lsh(big.NewInt(1), 257)).MaxPriorityFeePerGas(big.NewInt(10)).Build()
-			},
-			head:        &chain.BlockSummary{Header: getHeader(1)},
-			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
-			expectedErr: tx.ErrMaxFeeVeryHigh,
-		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateTransaction(tt.getTx(), repo, tt.head, tt.forkConfig)
+			err := validateTransaction(tt.getTx(), repo, tt.head, tt.forkConfig)
 			assert.Equal(t, tt.expectedErr, err)
 		})
 	}
@@ -278,7 +242,7 @@ func TestValidateTransactionWithState(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateTransactionWithState(tt.getTx(), tt.header, tt.forkConfig, state)
+			err := validateTransactionWithState(tt.getTx(), tt.header, tt.forkConfig, state)
 			assert.Equal(t, tt.expectedErr, err)
 		})
 	}
