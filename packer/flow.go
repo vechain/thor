@@ -13,7 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/consensus/fork"
+	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -105,7 +105,7 @@ func (f *Flow) isEffectivePriorityFeeTooLow(t *tx.Transaction) error {
 	if err != nil {
 		return err
 	}
-	effectivePriorityFee := fork.GalacticaPriorityGasPrice(
+	effectivePriorityFee := galactica.GalacticaPriorityGasPrice(
 		t,
 		legacyTxBaseGasPrice,
 		provedWork,
@@ -153,10 +153,10 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 		}
 	} else {
 		if f.runtime.Context().BaseFee == nil {
-			return fork.ErrBaseFeeNotSet
+			return galactica.ErrBaseFeeNotSet
 		}
 
-		if err := fork.ValidateGalacticaTxFee(t, f.runtime.State(), f.runtime.Context().BaseFee); err != nil {
+		if err := galactica.ValidateGalacticaTxFee(t, f.runtime.State(), f.runtime.Context().BaseFee); err != nil {
 			return fmt.Errorf("%w: %w", errTxNotAdoptableNow, err)
 		}
 
@@ -232,7 +232,7 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 	}
 
 	if f.Number() >= f.packer.forkConfig.GALACTICA {
-		builder.BaseFee(fork.CalcBaseFee(&f.packer.forkConfig, f.parentHeader))
+		builder.BaseFee(galactica.CalcBaseFee(f.parentHeader, &f.packer.forkConfig))
 	}
 
 	if f.Number() < f.packer.forkConfig.VIP214 {

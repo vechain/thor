@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/consensus/fork"
+	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -215,7 +215,7 @@ func TestValidateTransactionWithState(t *testing.T) {
 			},
 			header:      getHeader(1),
 			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
-			expectedErr: txRejectedError{fmt.Sprintf("%s: expected 10000000000000 got 9999999999999", fork.ErrGasPriceTooLowForBlockBase.Error())},
+			expectedErr: txRejectedError{fmt.Sprintf("%s: expected 10000000000000 got 9999999999999", galactica.ErrGasPriceTooLowForBlockBase.Error())},
 		},
 		{
 			name: "dyn fee tx with max fee equals to base fee + 1",
@@ -243,7 +243,7 @@ func TestValidateTransactionWithState(t *testing.T) {
 			},
 			header:      getHeader(1),
 			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
-			expectedErr: txRejectedError{fmt.Sprintf("%s: expected 10000000000000 got 0", fork.ErrGasPriceTooLowForBlockBase.Error())},
+			expectedErr: txRejectedError{fmt.Sprintf("%s: expected 10000000000000 got 0", galactica.ErrGasPriceTooLowForBlockBase.Error())},
 		},
 		{
 			name: "dyn fee tx with maxPriorityFeePerGas = 0, maxFeePerGas == baseFee + 1",
@@ -272,7 +272,7 @@ func TestValidateTransactionWithState(t *testing.T) {
 			},
 			header:      getHeader(1),
 			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
-			expectedErr: txRejectedError{fmt.Sprintf("%s: expected 10000000000000 got 9999999999999", fork.ErrGasPriceTooLowForBlockBase.Error())},
+			expectedErr: txRejectedError{fmt.Sprintf("%s: expected 10000000000000 got 9999999999999", galactica.ErrGasPriceTooLowForBlockBase.Error())},
 		},
 	}
 

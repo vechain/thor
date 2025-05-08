@@ -11,7 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/consensus/fork"
+	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -104,7 +104,7 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64, blkBa
 	if legacyTxBaseGasPrice, err = builtin.Params.Native(state).Get(thor.KeyLegacyTxBaseGasPrice); err != nil {
 		return
 	}
-	gasPrice = fork.GalacticaOverallGasPrice(r.tx, legacyTxBaseGasPrice, blkBaseFee)
+	gasPrice = galactica.GalacticaOverallGasPrice(r.tx, legacyTxBaseGasPrice, blkBaseFee)
 
 	energy := builtin.Energy.Native(state, blockTime)
 	doReturnGas := func(rgas uint64) (*big.Int, error) {

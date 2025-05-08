@@ -486,7 +486,7 @@ func TestValidateBlockHeaderWithBadBaseFee(t *testing.T) {
 		WithSignature(sig[:])
 
 	_, _, err = con.Process(con.repo.BestBlockSummary(), newBlock, newBlock.Header().Timestamp(), 0)
-	assert.Contains(t, err.Error(), "block header invalid: invalid baseFee: have 10000000000000, want 1230000000000000")
+	assert.Contains(t, err.Error(), "block baseFee invalid: have 1230000000000000, want 10000000000000")
 }
 
 func TestVerifyBlock(t *testing.T) {
