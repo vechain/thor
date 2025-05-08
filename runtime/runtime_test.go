@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/abi"
+	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
@@ -747,7 +748,14 @@ func TestExecuteTransaction(t *testing.T) {
 	b0, _, _, err := g.Build(state.NewStater(db))
 	assert.Nil(t, err)
 	repo, _ := chain.NewRepository(db, b0)
-	state := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
+	st := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
+	ver := trie.Version{Major: b0.Header().Number() + 1, Minor: 0}
+	stg, err := st.Stage(ver)
+	assert.Nil(t, err)
+	root, err := stg.Commit()
+	assert.Nil(t, err)
+	b1 := new(block.Builder).ParentID(b0.Header().ID()).Timestamp(b0.Header().Timestamp() + thor.BlockInterval).BaseFee(big.NewInt(thor.InitialBaseFee)).StateRoot(root).Build()
+	repo.AddBlock(b1, nil, 0, true)
 
 	maxFee := int64(thor.InitialBaseFee * 1000)
 	maxPriorityFee := maxFee / 100
@@ -768,12 +776,13 @@ func TestExecuteTransaction(t *testing.T) {
 	legacyTx = tx.MustSign(legacyTx, genesis.DevAccounts()[0].PrivateKey)
 
 	t.Run("Receipt check with legacy tx before galactica fork", func(t *testing.T) {
-		prevPayerEnergy, err := state.GetEnergy(genesis.DevAccounts()[0].Address, b0.Header().Timestamp())
+		st := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
+		prevPayerEnergy, err := st.GetEnergy(genesis.DevAccounts()[0].Address, b0.Header().Timestamp())
 		assert.Nil(t, err)
-		prevEndorserEnergy, err := state.GetEnergy(thor.Address{}, b0.Header().Timestamp())
+		prevEndorserEnergy, err := st.GetEnergy(thor.Address{}, b0.Header().Timestamp())
 		assert.Nil(t, err)
 
-		rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.NoFork)
+		rt := runtime.New(repo.NewChain(b0.Header().ID()), st, &xenv.BlockContext{}, thor.NoFork)
 		receipt, err := rt.ExecuteTransaction(legacyTx)
 		assert.Nil(t, err)
 
@@ -781,9 +790,9 @@ func TestExecuteTransaction(t *testing.T) {
 		assert.False(t, receipt.Reverted)
 		assert.NotNil(t, receipt)
 
-		currentPayerEnergy, err := state.GetEnergy(genesis.DevAccounts()[0].Address, b0.Header().Timestamp()+10)
+		currentPayerEnergy, err := st.GetEnergy(genesis.DevAccounts()[0].Address, b0.Header().Timestamp()+10)
 		assert.Nil(t, err)
-		currentEndorserEnergy, err := state.GetEnergy(thor.Address{}, b0.Header().Timestamp()+10)
+		currentEndorserEnergy, err := st.GetEnergy(thor.Address{}, b0.Header().Timestamp()+10)
 		assert.Nil(t, err)
 
 		// Expecting to consume just the intrinsic gas portion
@@ -801,12 +810,13 @@ func TestExecuteTransaction(t *testing.T) {
 	})
 
 	t.Run("Receipt check with legacy tx after galactica fork", func(t *testing.T) {
-		prevPayerEnergy, err := state.GetEnergy(genesis.DevAccounts()[0].Address, b0.Header().Timestamp())
+		st := state.New(db, trie.Root{Hash: b1.Header().StateRoot(), Ver: trie.Version{Major: b1.Header().Number(), Minor: 0}})
+		prevPayerEnergy, err := st.GetEnergy(genesis.DevAccounts()[0].Address, b0.Header().Timestamp())
 		assert.Nil(t, err)
-		prevEndorserEnergy, err := state.GetEnergy(thor.Address{}, b0.Header().Timestamp())
+		prevEndorserEnergy, err := st.GetEnergy(thor.Address{}, b0.Header().Timestamp())
 		assert.Nil(t, err)
 
-		rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{BaseFee: big.NewInt(thor.InitialBaseFee)}, thor.ForkConfig{GALACTICA: 0})
+		rt := runtime.New(repo.NewChain(b0.Header().ID()), st, &xenv.BlockContext{BaseFee: big.NewInt(thor.InitialBaseFee)}, thor.ForkConfig{GALACTICA: 0})
 		receipt, err := rt.ExecuteTransaction(legacyTx)
 		assert.Nil(t, err)
 
@@ -814,9 +824,9 @@ func TestExecuteTransaction(t *testing.T) {
 		assert.False(t, receipt.Reverted)
 		assert.NotNil(t, receipt)
 
-		currentPayerEnergy, err := state.GetEnergy(genesis.DevAccounts()[0].Address, b0.Header().Timestamp()+10)
+		currentPayerEnergy, err := st.GetEnergy(genesis.DevAccounts()[0].Address, b0.Header().Timestamp()+10)
 		assert.Nil(t, err)
-		currentEndorserEnergy, err := state.GetEnergy(thor.Address{}, b0.Header().Timestamp()+10)
+		currentEndorserEnergy, err := st.GetEnergy(thor.Address{}, b0.Header().Timestamp()+10)
 		assert.Nil(t, err)
 
 		// Expecting to consume just the intrinsic gas portion
@@ -834,12 +844,13 @@ func TestExecuteTransaction(t *testing.T) {
 	})
 
 	t.Run("Receipt check with dyn fee tx after galactica fork", func(t *testing.T) {
-		prevPayerEnergy, err := state.GetEnergy(genesis.DevAccounts()[0].Address, b0.Header().Timestamp())
+		st := state.New(db, trie.Root{Hash: b1.Header().StateRoot(), Ver: trie.Version{Major: b1.Header().Number(), Minor: 0}})
+		prevPayerEnergy, err := st.GetEnergy(genesis.DevAccounts()[0].Address, b0.Header().Timestamp())
 		assert.Nil(t, err)
-		prevEndorserEnergy, err := state.GetEnergy(thor.Address{}, b0.Header().Timestamp())
+		prevEndorserEnergy, err := st.GetEnergy(thor.Address{}, b0.Header().Timestamp())
 		assert.Nil(t, err)
 
-		rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{BaseFee: big.NewInt(thor.InitialBaseFee)}, thor.ForkConfig{})
+		rt := runtime.New(repo.NewChain(b0.Header().ID()), st, &xenv.BlockContext{BaseFee: big.NewInt(thor.InitialBaseFee)}, thor.ForkConfig{})
 		receipt, err := rt.ExecuteTransaction(dynTx)
 		assert.Nil(t, err)
 
@@ -847,9 +858,9 @@ func TestExecuteTransaction(t *testing.T) {
 		assert.False(t, receipt.Reverted)
 		assert.NotNil(t, receipt)
 
-		currentPayerEnergy, err := state.GetEnergy(genesis.DevAccounts()[0].Address, b0.Header().Timestamp()+10)
+		currentPayerEnergy, err := st.GetEnergy(genesis.DevAccounts()[0].Address, b0.Header().Timestamp()+10)
 		assert.Nil(t, err)
-		currentEndorserEnergy, err := state.GetEnergy(thor.Address{}, b0.Header().Timestamp()+10)
+		currentEndorserEnergy, err := st.GetEnergy(thor.Address{}, b0.Header().Timestamp()+10)
 		assert.Nil(t, err)
 
 		// Expecting to consume just the intrinsic gas portion
@@ -867,13 +878,14 @@ func TestExecuteTransaction(t *testing.T) {
 	})
 
 	t.Run("Test mixed txs", func(t *testing.T) {
+		st := state.New(db, trie.Root{Hash: b1.Header().StateRoot(), Ver: trie.Version{Major: b1.Header().Number(), Minor: 0}})
 		txs := []*tx.Transaction{
 			getMockTx(repo, tx.TypeLegacy, t),
 			getMockTx(repo, tx.TypeDynamicFee, t),
 		}
 
 		for _, trx := range txs {
-			rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.NoFork)
+			rt := runtime.New(repo.NewChain(b1.Header().ID()), st, &xenv.BlockContext{Time: b1.Header().Timestamp(), BaseFee: b1.Header().BaseFee(), Number: b1.Header().Number()}, thor.SoloFork)
 
 			receipt, err := rt.ExecuteTransaction(trx)
 			if err != nil {

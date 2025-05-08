@@ -93,7 +93,7 @@ func TestExecutableWithError(t *testing.T) {
 		// pass custom headID
 		chain := repo.NewChain(thor.Bytes32{0})
 
-		exe, err := txObj.Executable(chain, st, b1.Header(), &thor.NoFork)
+		exe, err := txObj.Executable(chain, st, b1.Header(), &thor.SoloFork)
 		if tt.expectedErr != "" {
 			assert.Equal(t, tt.expectedErr, err.Error())
 		} else {
@@ -149,8 +149,6 @@ func TestExecutable(t *testing.T) {
 	db := muxdb.NewMem()
 	repo := newChainRepo(db)
 	b0 := repo.GenesisBlock()
-	b1 := new(block.Builder).ParentID(b0.Header().ID()).GasLimit(10000000).TotalScore(100).Build()
-	repo.AddBlock(b1, nil, 0, false)
 	st := state.New(db, trie.Root{Hash: repo.GenesisBlock().Header().StateRoot()})
 
 	tests := []struct {
@@ -159,8 +157,8 @@ func TestExecutable(t *testing.T) {
 		expectedErr string
 	}{
 		{newTx(tx.TypeLegacy, 0, nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), acc), true, ""},
-		{newTx(tx.TypeLegacy, 0, nil, b1.Header().GasLimit(), tx.BlockRef{}, 100, nil, tx.Features(0), acc), true, ""},
-		{newTx(tx.TypeLegacy, 0, nil, b1.Header().GasLimit()+1, tx.BlockRef{}, 100, nil, tx.Features(0), acc), false, "gas too large"},
+		{newTx(tx.TypeLegacy, 0, nil, b0.Header().GasLimit(), tx.BlockRef{}, 100, nil, tx.Features(0), acc), true, ""},
+		{newTx(tx.TypeLegacy, 0, nil, b0.Header().GasLimit()+1, tx.BlockRef{}, 100, nil, tx.Features(0), acc), false, "gas too large"},
 		{newTx(tx.TypeLegacy, 0, nil, math.MaxUint64, tx.BlockRef{}, 100, nil, tx.Features(0), acc), false, "gas too large"},
 		{newTx(tx.TypeLegacy, 0, nil, 21000, tx.BlockRef{1}, 100, nil, tx.Features(0), acc), true, "block ref out of schedule"},
 		{newTx(tx.TypeLegacy, 0, nil, 21000, tx.BlockRef{0}, 0, nil, tx.Features(0), acc), true, "expired"},
@@ -176,7 +174,7 @@ func TestExecutable(t *testing.T) {
 		txObj, err := resolveTx(tt.tx, false)
 		assert.Nil(t, err)
 
-		exe, err := txObj.Executable(repo.NewChain(b1.Header().ID()), st, b1.Header(), &thor.NoFork)
+		exe, err := txObj.Executable(repo.NewChain(b0.Header().ID()), st, b0.Header(), &thor.SoloFork)
 		if tt.expectedErr != "" {
 			assert.Equal(t, tt.expectedErr, err.Error())
 		} else {

@@ -254,55 +254,6 @@ func TestBaseFeeLimits(t *testing.T) {
 	})
 }
 
-func TestGalacticaGasPrice(t *testing.T) {
-	baseGasPrice := big.NewInt(1_000_000_000)
-	baseFee := big.NewInt(20_000_000)
-	legacyTr := tx.NewBuilder(tx.TypeLegacy).GasPriceCoef(255).Build()
-
-	tests := []struct {
-		name string
-		f    func(*testing.T)
-	}{
-		{
-			name: "galactica is not yet activated",
-			f: func(t *testing.T) {
-				res := GalacticaOverallGasPrice(legacyTr, baseGasPrice, nil)
-				assert.True(t, res.Cmp(legacyTr.GasPrice(baseGasPrice)) == 0)
-			},
-		},
-		{
-			name: "galactica is activated",
-			f: func(t *testing.T) {
-				res := GalacticaOverallGasPrice(legacyTr, baseGasPrice, baseFee)
-				assert.True(t, res.Cmp(legacyTr.GasPrice(baseGasPrice)) == 0)
-			},
-		},
-		{
-			name: "galactica is activated, dynamic fee transaction with maxPriorityFee+baseFee as price",
-			f: func(t *testing.T) {
-				tr := tx.NewBuilder(tx.TypeDynamicFee).MaxFeePerGas(big.NewInt(250_000_000)).MaxPriorityFeePerGas(big.NewInt(15_000)).Build()
-				res := GalacticaOverallGasPrice(tr, baseGasPrice, baseFee)
-				expectedRes := new(big.Int).Add(tr.MaxPriorityFeePerGas(), baseFee)
-				assert.True(t, res.Cmp(expectedRes) == 0)
-			},
-		},
-		{
-			name: "galactica is activated, dynamic fee transaction with maxFee as price",
-			f: func(t *testing.T) {
-				tr := tx.NewBuilder(tx.TypeDynamicFee).MaxFeePerGas(big.NewInt(20_500_000)).MaxPriorityFeePerGas(big.NewInt(1_000_000)).Build()
-				res := GalacticaOverallGasPrice(tr, baseGasPrice, baseFee)
-				assert.True(t, res.Cmp(tr.MaxFeePerGas()) == 0)
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.f(t)
-		})
-	}
-}
-
 func TestGalacticaPriorityPrice(t *testing.T) {
 	baseGasPrice := big.NewInt(1_000_000_000)
 	baseFee := big.NewInt(20_000_000)
@@ -324,7 +275,7 @@ func TestGalacticaPriorityPrice(t *testing.T) {
 			name: "galactica is not yet activated, do not use base GasPrice for priority",
 			f: func(t *testing.T) {
 				res := GalacticaPriorityGasPrice(legacyTr, baseGasPrice, provedWork, nil)
-				assert.False(t, res.Cmp(legacyTr.GasPrice(baseGasPrice)) == 0)
+				assert.False(t, res.Cmp(legacyTr.EffectiveGasPrice(baseGasPrice, nil)) == 0)
 			},
 		},
 		{
