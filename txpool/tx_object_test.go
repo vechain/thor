@@ -76,6 +76,7 @@ func SetupTest() (genesis.DevAccount, *chain.Repository, *block.Block, *state.St
 
 func TestExecutableWithError(t *testing.T) {
 	acc, repo, b1, st := SetupTest()
+	cache := newGasPriceCache(&thor.NoFork, 10)
 
 	tests := []struct {
 		tx          *tx.Transaction
@@ -93,7 +94,7 @@ func TestExecutableWithError(t *testing.T) {
 		// pass custom headID
 		chain := repo.NewChain(thor.Bytes32{0})
 
-		exe, err := txObj.Executable(chain, st, b1.Header(), &thor.NoFork)
+		exe, err := txObj.Executable(chain, st, b1.Header(), cache)
 		if tt.expectedErr != "" {
 			assert.Equal(t, tt.expectedErr, err.Error())
 		} else {
@@ -152,6 +153,7 @@ func TestExecutable(t *testing.T) {
 	b1 := new(block.Builder).ParentID(b0.Header().ID()).GasLimit(10000000).TotalScore(100).Build()
 	repo.AddBlock(b1, nil, 0, false)
 	st := state.New(db, trie.Root{Hash: repo.GenesisBlock().Header().StateRoot()})
+	cache := newGasPriceCache(&thor.NoFork, 10)
 
 	tests := []struct {
 		tx          *tx.Transaction
@@ -176,7 +178,7 @@ func TestExecutable(t *testing.T) {
 		txObj, err := resolveTx(tt.tx, false)
 		assert.Nil(t, err)
 
-		exe, err := txObj.Executable(repo.NewChain(b1.Header().ID()), st, b1.Header(), &thor.NoFork)
+		exe, err := txObj.Executable(repo.NewChain(b1.Header().ID()), st, b1.Header(), cache)
 		if tt.expectedErr != "" {
 			assert.Equal(t, tt.expectedErr, err.Error())
 		} else {
