@@ -209,7 +209,7 @@ func benchmarkBlockProcess(b *testing.B, db *muxdb.MuxDB, accounts []genesis.Dev
 		nil,
 		10_000_000,
 		true,
-		thor.NoFork,
+		&thor.NoFork,
 	)
 
 	stats := &blockStats{}
@@ -351,7 +351,7 @@ func packTxsIntoBlock(thorChain *testchain.Chain, proposerAccount *genesis.DevAc
 }
 
 func createChain(db *muxdb.MuxDB, accounts []genesis.DevAccount) (*testchain.Chain, error) {
-	forkConfig := *thor.NoFork // value copy
+	forkConfig := &thor.NoFork // copy
 	forkConfig.VIP191 = 1
 	forkConfig.BLOCKLIST = 0
 	forkConfig.VIP214 = 2
@@ -382,7 +382,7 @@ func createChain(db *muxdb.MuxDB, accounts []genesis.DevAccount) (*testchain.Cha
 		LaunchTime: 1526400000,
 		GasLimit:   thor.InitialGasLimit,
 		ExtraData:  "",
-		ForkConfig: &forkConfig,
+		ForkConfig: forkConfig,
 		Authority:  authAccs,
 		Accounts:   stateAccs,
 		Params: genesis.Params{
@@ -422,7 +422,7 @@ func createChain(db *muxdb.MuxDB, accounts []genesis.DevAccount) (*testchain.Cha
 		stater,
 		geneBlk,
 		logDb,
-		thor.NoFork,
+		&thor.NoFork,
 	), nil
 }
 

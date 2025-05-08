@@ -55,7 +55,7 @@ func newPoolWithMaxLifetime(limit int, limitPerAccount int, BlocklistCacheFilePa
 	gene := new(genesis.Builder).
 		GasLimit(thor.InitialGasLimit).
 		Timestamp(timestamp).
-		ForkConfig(thor.NoFork).
+		ForkConfig(&thor.NoFork).
 		State(func(state *state.State) error {
 			bal, _ := new(big.Int).SetString("1000000000000000000000000000", 10)
 			for _, acc := range devAccounts {
@@ -679,7 +679,7 @@ func TestAddOverPendingCost(t *testing.T) {
 	db := muxdb.NewMem()
 	builder := new(genesis.Builder).
 		GasLimit(thor.InitialGasLimit).
-		ForkConfig(thor.NoFork).
+		ForkConfig(&thor.NoFork).
 		Timestamp(now).
 		State(func(state *state.State) error {
 			if err := state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes()); err != nil {

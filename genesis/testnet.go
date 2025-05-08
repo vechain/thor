@@ -28,7 +28,7 @@ func NewTestnet() *Genesis {
 	builder := new(Builder).
 		Timestamp(launchTime).
 		GasLimit(thor.InitialGasLimit).
-		ForkConfig(thor.NoFork).
+		ForkConfig(&thor.NoFork).
 		State(func(state *state.State) error {
 			tokenSupply := new(big.Int)
 

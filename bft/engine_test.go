@@ -31,7 +31,7 @@ const MaxBlockProposers = 11
 
 var (
 	devAccounts = genesis.DevAccounts()
-	defaultFC   = thor.NoFork
+	defaultFC   = &thor.NoFork
 )
 
 func init() {

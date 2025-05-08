@@ -272,7 +272,7 @@ func parseGenesisFile(uri string) (*genesis.Genesis, *thor.ForkConfig, error) {
 	decoder := json.NewDecoder(reader)
 	decoder.DisallowUnknownFields()
 
-	var forkConfig = thor.NoFork
+	var forkConfig = &thor.NoFork
 	var gen genesis.CustomGenesis
 	gen.ForkConfig = forkConfig
 

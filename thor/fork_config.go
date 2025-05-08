@@ -41,7 +41,7 @@ func (fc ForkConfig) String() string {
 }
 
 // NoFork a special config without any forks.
-var NoFork = &ForkConfig{
+var NoFork = ForkConfig{
 	VIP191:    math.MaxUint32,
 	ETH_CONST: math.MaxUint32,
 	BLOCKLIST: math.MaxUint32,

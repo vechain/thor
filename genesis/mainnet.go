@@ -23,7 +23,7 @@ func NewMainnet() *Genesis {
 	builder := new(Builder).
 		Timestamp(launchTime).
 		GasLimit(thor.InitialGasLimit).
-		ForkConfig(thor.NoFork).
+		ForkConfig(&thor.NoFork).
 		State(func(state *state.State) error {
 			// alloc builtin contracts
 			if err := state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes()); err != nil {

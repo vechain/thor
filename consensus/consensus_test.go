@@ -61,7 +61,7 @@ func newTestConsensus() (*testConsensus, error) {
 	gen := new(genesis.Builder).
 		GasLimit(thor.InitialGasLimit).
 		Timestamp(launchTime).
-		ForkConfig(thor.NoFork).
+		ForkConfig(&thor.NoFork).
 		State(func(state *state.State) error {
 			bal, _ := new(big.Int).SetString("1000000000000000000000000000", 10)
 			state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
@@ -91,7 +91,7 @@ func newTestConsensus() (*testConsensus, error) {
 	forkConfig.VIP214 = 2
 
 	proposer := genesis.DevAccounts()[0]
-	p := packer.New(repo, stater, proposer.Address, &proposer.Address, forkConfig)
+	p := packer.New(repo, stater, proposer.Address, &proposer.Address, &forkConfig)
 	parentSum, _ := repo.GetBlockSummary(parent.Header().ID())
 	flow, err := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval)
 	if err != nil {
@@ -113,7 +113,7 @@ func newTestConsensus() (*testConsensus, error) {
 		return nil, err
 	}
 
-	con := New(repo, stater, forkConfig)
+	con := New(repo, stater, &forkConfig)
 
 	if _, _, err := con.Process(parentSum, b1, flow.When(), 0); err != nil {
 		return nil, err
@@ -128,7 +128,7 @@ func newTestConsensus() (*testConsensus, error) {
 	}
 
 	proposer2 := genesis.DevAccounts()[1]
-	p2 := packer.New(repo, stater, proposer2.Address, &proposer2.Address, forkConfig)
+	p2 := packer.New(repo, stater, proposer2.Address, &proposer2.Address, &forkConfig)
 	b1sum, _ := repo.GetBlockSummary(b1.Header().ID())
 	flow2, err := p2.Schedule(b1sum, b1.Header().Timestamp()+100*thor.BlockInterval)
 	if err != nil {
@@ -150,7 +150,7 @@ func newTestConsensus() (*testConsensus, error) {
 		pk:         proposer.PrivateKey,
 		parent:     b1,
 		original:   b2,
-		forkConfig: forkConfig,
+		forkConfig: &forkConfig,
 		tag:        repo.ChainTag(),
 	}, nil
 }

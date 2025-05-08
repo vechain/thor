@@ -193,7 +193,7 @@ func buildGenesis(db *muxdb.MuxDB, proc func(state *state.State) error) *block.B
 	blk, _, _, _ := new(genesis.Builder).
 		Timestamp(uint64(time.Now().Unix())).
 		State(proc).
-		ForkConfig(thor.NoFork).
+		ForkConfig(&thor.NoFork).
 		Build(state.NewStater(db))
 	return blk
 }
@@ -210,7 +210,7 @@ func TestParamsNative(t *testing.T) {
 	st := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
 	chain := repo.NewChain(b0.Header().ID())
 
-	rt := runtime.New(chain, st, &xenv.BlockContext{}, thor.NoFork)
+	rt := runtime.New(chain, st, &xenv.BlockContext{}, &thor.NoFork)
 
 	test := &ctest{
 		rt:  rt,
@@ -278,7 +278,7 @@ func TestAuthorityNative(t *testing.T) {
 	st := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
 	chain := repo.NewChain(b0.Header().ID())
 
-	rt := runtime.New(chain, st, &xenv.BlockContext{}, thor.NoFork)
+	rt := runtime.New(chain, st, &xenv.BlockContext{}, &thor.NoFork)
 
 	candidateEvent := func(nodeMaster thor.Address, action string) *tx.Event {
 		ev, _ := builtin.Authority.ABI.EventByName("Candidate")
@@ -406,7 +406,7 @@ func TestEnergyNative(t *testing.T) {
 		}
 	}
 
-	rt := runtime.New(chain, st, &xenv.BlockContext{Time: b0.Header().Timestamp()}, thor.NoFork)
+	rt := runtime.New(chain, st, &xenv.BlockContext{Time: b0.Header().Timestamp()}, &thor.NoFork)
 	test := &ctest{
 		rt:     rt,
 		abi:    builtin.Energy.ABI,
@@ -560,7 +560,7 @@ func TestPrototypeNative(t *testing.T) {
 	rt := runtime.New(chain, st, &xenv.BlockContext{
 		Time:   genesisBlock.Header().Timestamp(),
 		Number: genesisBlock.Header().Number(),
-	}, thor.NoFork)
+	}, &thor.NoFork)
 
 	code, _ := hex.DecodeString("60606040523415600e57600080fd5b603580601b6000396000f3006060604052600080fd00a165627a7a72305820edd8a93b651b5aac38098767f0537d9b25433278c9d155da2135efc06927fc960029")
 	exec, _ := rt.PrepareClause(tx.NewClause(nil).WithData(code), 0, math.MaxUint64, &xenv.TransactionContext{
@@ -805,7 +805,7 @@ func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 	rt := runtime.New(chain, st, &xenv.BlockContext{
 		Number: thor.MaxStateHistory + 1,
 		Time:   repo.BestBlockSummary().Header.Timestamp(),
-	}, thor.NoFork)
+	}, &thor.NoFork)
 
 	test := &ctest{
 		rt:     rt,
@@ -874,7 +874,7 @@ func TestPrototypeNativeWithBlockNumber(t *testing.T) {
 	rt := runtime.New(chain, st, &xenv.BlockContext{
 		Number: repo.BestBlockSummary().Header.Number(),
 		Time:   repo.BestBlockSummary().Header.Timestamp(),
-	}, thor.NoFork)
+	}, &thor.NoFork)
 
 	test := &ctest{
 		rt:     rt,
@@ -939,7 +939,7 @@ func TestExtensionNative(t *testing.T) {
 
 	chain := repo.NewChain(b2.Header().ID())
 
-	rt := runtime.New(chain, st, &xenv.BlockContext{Number: 2, Time: b2.Header().Timestamp(), TotalScore: b2.Header().TotalScore(), Signer: b2_singer}, thor.NoFork)
+	rt := runtime.New(chain, st, &xenv.BlockContext{Number: 2, Time: b2.Header().Timestamp(), TotalScore: b2.Header().TotalScore(), Signer: b2_singer}, &thor.NoFork)
 
 	test := &ctest{
 		rt:  rt,
