@@ -12,14 +12,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/muxdb"
-	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
 
 func TestGetByID(t *testing.T) {
-	repo := newChainRepo(muxdb.NewMem())
+	repo := newChainRepo()
 
 	// Creating transactions
 	tx1 := newTx(tx.TypeLegacy, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
@@ -54,7 +53,7 @@ func TestGetByID(t *testing.T) {
 }
 
 func TestFill(t *testing.T) {
-	repo := newChainRepo(muxdb.NewMem())
+	repo := newChainRepo()
 
 	// Creating transactions
 	tx1 := newTx(tx.TypeLegacy, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
@@ -93,7 +92,7 @@ func TestFill(t *testing.T) {
 }
 
 func TestTxObjMap(t *testing.T) {
-	repo := newChainRepo(muxdb.NewMem())
+	repo := newChainRepo()
 
 	tx1 := newTx(tx.TypeLegacy, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
 	tx2 := newTx(tx.TypeDynamicFee, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
@@ -129,7 +128,7 @@ func TestTxObjMap(t *testing.T) {
 }
 
 func TestLimitByDelegator(t *testing.T) {
-	repo := newChainRepo(muxdb.NewMem())
+	repo := newChainRepo()
 
 	tx1 := newTx(tx.TypeLegacy, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
 	tx2 := newDelegatedTx(tx.TypeDynamicFee, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[0], genesis.DevAccounts()[1])
@@ -150,9 +149,12 @@ func TestLimitByDelegator(t *testing.T) {
 }
 
 func TestPendingCost(t *testing.T) {
-	db := muxdb.NewMem()
-	repo := newChainRepo(db)
-	stater := state.NewStater(db)
+	tchain, err := testchain.NewWithFork(thor.SoloFork)
+	assert.Nil(t, err)
+
+	repo := tchain.Repo()
+	stater := tchain.Stater()
+	forkConfig := tchain.GetForkConfig()
 
 	// Creating transactions
 	tx1 := newTx(tx.TypeLegacy, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
@@ -168,16 +170,15 @@ func TestPendingCost(t *testing.T) {
 	best := repo.BestBlockSummary()
 	state := stater.NewState(best.Root())
 
-	var err error
-	txObj1.executable, err = txObj1.Executable(chain, state, best.Header, &thor.SoloFork)
+	txObj1.executable, err = txObj1.Executable(chain, state, best.Header, &forkConfig)
 	assert.Nil(t, err)
 	assert.True(t, txObj1.executable)
 
-	txObj2.executable, err = txObj2.Executable(chain, state, best.Header, &thor.SoloFork)
+	txObj2.executable, err = txObj2.Executable(chain, state, best.Header, &forkConfig)
 	assert.Nil(t, err)
 	assert.True(t, txObj2.executable)
 
-	txObj3.executable, err = txObj3.Executable(chain, state, best.Header, &thor.SoloFork)
+	txObj3.executable, err = txObj3.Executable(chain, state, best.Header, &forkConfig)
 	assert.Nil(t, err)
 	assert.True(t, txObj3.executable)
 

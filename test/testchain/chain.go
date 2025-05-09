@@ -17,7 +17,6 @@ import (
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/muxdb"
@@ -114,7 +113,7 @@ func NewIntegrationTestChain(config genesis.DevConfig) (*Chain, error) {
 	return New(
 		db,
 		gene,
-		solo.NewBFTEngine(repo),
+		NewBFTEngine(repo),
 		repo,
 		stater,
 		geneBlk,
@@ -270,4 +269,25 @@ func (c *Chain) Database() *muxdb.MuxDB {
 // LogDB returns the current logdb.
 func (c *Chain) LogDB() *logdb.LogDB {
 	return c.logDB
+}
+
+// BFTEngine is a mock BFT engine.
+type BFTEngine struct {
+	finalized thor.Bytes32
+	justified thor.Bytes32
+}
+
+func (engine *BFTEngine) Finalized() thor.Bytes32 {
+	return engine.finalized
+}
+
+func (engine *BFTEngine) Justified() (thor.Bytes32, error) {
+	return engine.justified, nil
+}
+
+func NewBFTEngine(repo *chain.Repository) bft.Committer {
+	return &BFTEngine{
+		finalized: repo.GenesisBlock().Header().ID(),
+		justified: repo.GenesisBlock().Header().ID(),
+	}
 }

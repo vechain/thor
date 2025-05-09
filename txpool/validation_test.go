@@ -16,16 +16,14 @@ import (
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus/fork"
-	"github.com/vechain/thor/v2/muxdb"
-	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
 )
 
 func TestValidateTransaction(t *testing.T) {
-	db := muxdb.NewMem()
-	repo := newChainRepo(db)
+	repo := newChainRepo()
 
 	tests := []struct {
 		name        string
@@ -195,9 +193,10 @@ func TestValidateTransaction(t *testing.T) {
 }
 
 func TestValidateTransactionWithState(t *testing.T) {
-	db := muxdb.NewMem()
-	repo := newChainRepo(db)
-	stater := state.NewStater(db)
+	tchain, err := testchain.NewWithFork(thor.SoloFork)
+	assert.Nil(t, err)
+	repo := tchain.Repo()
+	stater := tchain.Stater()
 	state := stater.NewState(trie.Root{Hash: repo.GenesisBlock().Header().StateRoot()})
 
 	tests := []struct {
