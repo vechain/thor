@@ -57,7 +57,7 @@ type Node struct {
 	comm           *comm.Communicator
 	targetGasLimit uint64
 	skipLogs       bool
-	forkConfig     thor.ForkConfig
+	forkConfig     *thor.ForkConfig
 
 	logDBFailed bool
 	bandwidth   bandwidth.Bandwidth
@@ -77,7 +77,7 @@ func New(
 	comm *comm.Communicator,
 	targetGasLimit uint64,
 	skipLogs bool,
-	forkConfig thor.ForkConfig,
+	forkConfig *thor.ForkConfig,
 ) *Node {
 	return &Node{
 		packer:         packer.New(repo, stater, master.Address(), master.Beneficiary, forkConfig),

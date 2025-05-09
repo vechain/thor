@@ -57,7 +57,7 @@ func New(
 	logDB *logdb.LogDB,
 	bft bft.Committer,
 	nw node.Network,
-	forkConfig thor.ForkConfig,
+	forkConfig *thor.ForkConfig,
 	config Config,
 ) (http.HandlerFunc, func()) {
 	origins := strings.Split(strings.TrimSpace(config.AllowedOrigins), ",")

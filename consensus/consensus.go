@@ -27,13 +27,13 @@ type Consensus struct {
 	repo                 *chain.Repository
 	stater               *state.Stater
 	seeder               *poa.Seeder
-	forkConfig           thor.ForkConfig
+	forkConfig           *thor.ForkConfig
 	correctReceiptsRoots map[string]string
 	candidatesCache      *simplelru.LRU
 }
 
 // New create a Consensus instance.
-func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfig) *Consensus {
+func New(repo *chain.Repository, stater *state.Stater, forkConfig *thor.ForkConfig) *Consensus {
 	candidatesCache, _ := simplelru.NewLRU(16, nil)
 	return &Consensus{
 		repo:                 repo,

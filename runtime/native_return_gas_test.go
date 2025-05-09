@@ -28,7 +28,7 @@ func TestNativeCallReturnGas(t *testing.T) {
 	outer, _ := builtin.Measure.ABI.MethodByName("outer")
 	outerData, _ := outer.EncodeInput()
 
-	exec, _ := New(nil, state, &xenv.BlockContext{}, thor.NoFork).PrepareClause(
+	exec, _ := New(nil, state, &xenv.BlockContext{}, &thor.NoFork).PrepareClause(
 		tx.NewClause(&builtin.Measure.Address).WithData(innerData),
 		0,
 		math.MaxUint64,
@@ -38,7 +38,7 @@ func TestNativeCallReturnGas(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Nil(t, innerOutput.VMErr)
 
-	exec, _ = New(nil, state, &xenv.BlockContext{}, thor.NoFork).PrepareClause(
+	exec, _ = New(nil, state, &xenv.BlockContext{}, &thor.NoFork).PrepareClause(
 		tx.NewClause(&builtin.Measure.Address).WithData(outerData),
 		0,
 		math.MaxUint64,

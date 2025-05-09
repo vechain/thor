@@ -93,7 +93,7 @@ func New(
 	chain *chain.Chain,
 	state *state.State,
 	ctx *xenv.BlockContext,
-	forkConfig thor.ForkConfig,
+	forkConfig *thor.ForkConfig,
 ) *Runtime {
 	currentChainConfig := baseChainConfig
 	currentChainConfig.ConstantinopleBlock = big.NewInt(int64(forkConfig.ETH_CONST))

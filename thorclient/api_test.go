@@ -56,7 +56,7 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 
 	router := mux.NewRouter()
 
-	accounts.New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), thor.NoFork, thorChain.Engine(), true).
+	accounts.New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), &thor.NoFork, thorChain.Engine(), true).
 		Mount(router, "/accounts")
 
 	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute})

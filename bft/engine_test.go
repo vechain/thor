@@ -24,21 +24,21 @@ type TestBFT struct {
 	db     *muxdb.MuxDB
 	repo   *chain.Repository
 	stater *state.Stater
-	fc     thor.ForkConfig
+	fc     *thor.ForkConfig
 }
 
 const MaxBlockProposers = 11
 
 var (
 	devAccounts = genesis.DevAccounts()
-	defaultFC   = thor.NoFork
+	defaultFC   = &thor.NoFork
 )
 
 func init() {
 	defaultFC.FINALITY = 0
 }
 
-func newTestBft(forkCfg thor.ForkConfig) (*TestBFT, error) {
+func newTestBft(forkCfg *thor.ForkConfig) (*TestBFT, error) {
 	db := muxdb.NewMem()
 
 	auth := make([]genesis.Authority, 0, len(devAccounts))
@@ -54,7 +54,7 @@ func newTestBft(forkCfg thor.ForkConfig) (*TestBFT, error) {
 		LaunchTime: 1526400000,
 		GasLimit:   thor.InitialGasLimit,
 		ExtraData:  "",
-		ForkConfig: &forkCfg,
+		ForkConfig: forkCfg,
 		Authority:  auth,
 		Params: genesis.Params{
 			MaxBlockProposers: &mbp,

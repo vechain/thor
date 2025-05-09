@@ -75,7 +75,7 @@ func TestContractSuicide(t *testing.T) {
 	}
 
 	origin := genesis.DevAccounts()[0].Address
-	exec, _ := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{Time: time}, thor.NoFork).
+	exec, _ := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{Time: time}, &thor.NoFork).
 		PrepareClause(tx.NewClause(&addr).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{Origin: origin})
 	out, _, err := exec()
 	assert.Nil(t, err)
@@ -149,7 +149,7 @@ func TestChainID(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	exec, _ := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.ForkConfig{ETH_IST: 0}).
+	exec, _ := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, &thor.ForkConfig{ETH_IST: 0}).
 		PrepareClause(tx.NewClause(&addr).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
 	out, _, err := exec()
 	assert.Nil(t, err)
@@ -203,7 +203,7 @@ func TestSelfBalance(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	exec, _ := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.ForkConfig{ETH_IST: 0}).
+	exec, _ := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, &thor.ForkConfig{ETH_IST: 0}).
 		PrepareClause(tx.NewClause(&addr).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
 	out, _, err := exec()
 	assert.Nil(t, err)
@@ -328,7 +328,7 @@ func TestBlake2(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	exec, _ := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.ForkConfig{ETH_IST: 0}).
+	exec, _ := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, &thor.ForkConfig{ETH_IST: 0}).
 		PrepareClause(tx.NewClause(&addr).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
 	out, _, err := exec()
 	assert.Nil(t, err)
@@ -352,7 +352,7 @@ func TestCall(t *testing.T) {
 
 	state := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
 
-	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.NoFork)
+	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, &thor.NoFork)
 
 	method, _ := builtin.Params.ABI.MethodByName("executor")
 	data, err := method.EncodeInput()
@@ -440,7 +440,7 @@ func TestGetValues(t *testing.T) {
 	repo, _ := chain.NewRepository(db, b0)
 
 	state := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
-	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.NoFork)
+	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, &thor.NoFork)
 
 	runtimeChain := rt.Chain()
 	runtimeState := rt.State()
@@ -470,7 +470,7 @@ func TestExecuteTransaction(t *testing.T) {
 
 	tx := GetMockTx(repo, t)
 
-	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.NoFork)
+	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, &thor.NoFork)
 
 	receipt, err := rt.ExecuteTransaction(&tx)
 	if err != nil {
@@ -498,7 +498,7 @@ func TestExecuteTransactionFailure(t *testing.T) {
 
 	tx := GetMockFailedTx()
 
-	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.NoFork)
+	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, &thor.NoFork)
 
 	_, err = rt.ExecuteTransaction(&tx)
 

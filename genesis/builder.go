@@ -28,7 +28,7 @@ type Builder struct {
 	calls      []call
 	extraData  [28]byte
 
-	forkConfig thor.ForkConfig
+	forkConfig *thor.ForkConfig
 }
 
 type call struct {
@@ -67,7 +67,7 @@ func (b *Builder) ExtraData(data [28]byte) *Builder {
 }
 
 // ForkConfig set fork config.
-func (b *Builder) ForkConfig(fc thor.ForkConfig) *Builder {
+func (b *Builder) ForkConfig(fc *thor.ForkConfig) *Builder {
 	b.forkConfig = fc
 	return b
 }

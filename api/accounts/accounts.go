@@ -30,7 +30,7 @@ type Accounts struct {
 	repo              *chain.Repository
 	stater            *state.Stater
 	callGasLimit      uint64
-	forkConfig        thor.ForkConfig
+	forkConfig        *thor.ForkConfig
 	bft               bft.Committer
 	enabledDeprecated bool
 }
@@ -39,7 +39,7 @@ func New(
 	repo *chain.Repository,
 	stater *state.Stater,
 	callGasLimit uint64,
-	forkConfig thor.ForkConfig,
+	forkConfig *thor.ForkConfig,
 	bft bft.Committer,
 	enabledDeprecated bool,
 ) *Accounts {

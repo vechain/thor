@@ -60,7 +60,7 @@ func New(
 	onDemand bool,
 	skipLogs bool,
 	blockInterval uint64,
-	forkConfig thor.ForkConfig,
+	forkConfig *thor.ForkConfig,
 ) *Solo {
 	return &Solo{
 		repo:   repo,

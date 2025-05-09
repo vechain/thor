@@ -58,15 +58,15 @@ func DevAccounts() []DevAccount {
 
 // NewDevnet create genesis for solo mode.
 func NewDevnet() *Genesis {
-	return NewDevnetWithConfig(thor.SoloFork)
+	return NewDevnetWithConfig(&thor.SoloFork)
 }
 
-func NewDevnetWithConfig(config thor.ForkConfig) *Genesis {
+func NewDevnetWithConfig(config *thor.ForkConfig) *Genesis {
 	launchTime := uint64(1526400000) // 'Wed May 16 2018 00:00:00 GMT+0800 (CST)'
 	return NewDevnetWithConfigAndLaunchtime(config, launchTime)
 }
 
-func NewDevnetWithConfigAndLaunchtime(config thor.ForkConfig, launchTime uint64) *Genesis {
+func NewDevnetWithConfigAndLaunchtime(config *thor.ForkConfig, launchTime uint64) *Genesis {
 	executor := DevAccounts()[0].Address
 	soloBlockSigner := DevAccounts()[0]
 

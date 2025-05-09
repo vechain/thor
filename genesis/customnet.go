@@ -48,7 +48,7 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 	builder := new(Builder).
 		Timestamp(launchTime).
 		GasLimit(gen.GasLimit).
-		ForkConfig(*gen.ForkConfig).
+		ForkConfig(gen.ForkConfig).
 		State(func(state *state.State) error {
 			// alloc builtin contracts
 			if err := state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes()); err != nil {

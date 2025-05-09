@@ -231,11 +231,11 @@ func readPasswordFromNewTTY(prompt string) (string, error) {
 	return pass, err
 }
 
-func selectGenesis(ctx *cli.Context) (*genesis.Genesis, thor.ForkConfig, error) {
+func selectGenesis(ctx *cli.Context) (*genesis.Genesis, *thor.ForkConfig, error) {
 	network := ctx.String(networkFlag.Name)
 	if network == "" {
 		_ = cli.ShowAppHelp(ctx)
-		return nil, thor.ForkConfig{}, errors.New("network flag not specified")
+		return nil, nil, errors.New("network flag not specified")
 	}
 
 	switch network {
@@ -250,7 +250,7 @@ func selectGenesis(ctx *cli.Context) (*genesis.Genesis, thor.ForkConfig, error) 
 	}
 }
 
-func parseGenesisFile(uri string) (*genesis.Genesis, thor.ForkConfig, error) {
+func parseGenesisFile(uri string) (*genesis.Genesis, *thor.ForkConfig, error) {
 	var (
 		reader io.ReadCloser
 		err    error
@@ -258,13 +258,13 @@ func parseGenesisFile(uri string) (*genesis.Genesis, thor.ForkConfig, error) {
 	if strings.HasPrefix(uri, "http://") || strings.HasPrefix(uri, "https://") {
 		res, err := http.Get(uri) // #nosec
 		if err != nil {
-			return nil, thor.ForkConfig{}, errors.Wrap(err, "http get genesis file")
+			return nil, nil, errors.Wrap(err, "http get genesis file")
 		}
 		reader = res.Body
 	} else {
 		reader, err = os.Open(uri)
 		if err != nil {
-			return nil, thor.ForkConfig{}, errors.Wrap(err, "open genesis file")
+			return nil, nil, errors.Wrap(err, "open genesis file")
 		}
 	}
 	defer reader.Close()
@@ -277,15 +277,15 @@ func parseGenesisFile(uri string) (*genesis.Genesis, thor.ForkConfig, error) {
 	gen.ForkConfig = &forkConfig
 
 	if err := decoder.Decode(&gen); err != nil {
-		return nil, thor.ForkConfig{}, errors.Wrap(err, "decode genesis file")
+		return nil, nil, errors.Wrap(err, "decode genesis file")
 	}
 
 	customGen, err := genesis.NewCustomNet(&gen)
 	if err != nil {
-		return nil, thor.ForkConfig{}, errors.Wrap(err, "build genesis")
+		return nil, nil, errors.Wrap(err, "build genesis")
 	}
 
-	return customGen, forkConfig, nil
+	return customGen, &forkConfig, nil
 }
 
 func makeAPIConfig(ctx *cli.Context, logAPIRequests *atomic.Bool, soloMode bool) api.Config {
@@ -599,7 +599,7 @@ func printStartupMessage1(
 	repo *chain.Repository,
 	master *node.Master,
 	dataDir string,
-	forkConfig thor.ForkConfig,
+	forkConfig *thor.ForkConfig,
 ) {
 	bestBlock := repo.BestBlockSummary()
 
