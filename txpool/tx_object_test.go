@@ -175,7 +175,8 @@ func TestExecutable(t *testing.T) {
 		txObj, err := resolveTx(tt.tx, false)
 		assert.Nil(t, err)
 
-		exe, err := txObj.Executable(repo.NewChain(b0.Header().ID()), st, b0.Header(), &thor.SoloFork)
+		fc := tchain.GetForkConfig()
+		exe, err := txObj.Executable(repo.NewChain(b0.Header().ID()), st, b0.Header(), &fc)
 		if tt.expectedErr != "" {
 			assert.Equal(t, tt.expectedErr, err.Error())
 		} else {
