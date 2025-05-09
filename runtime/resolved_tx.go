@@ -8,7 +8,6 @@ package runtime
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/consensus/fork"
@@ -28,24 +27,24 @@ type ResolvedTransaction struct {
 }
 
 // ResolveTransaction resolves the transaction and performs basic validation.
-func ResolveTransaction(tx *tx.Transaction) (*ResolvedTransaction, error) {
-	origin, err := tx.Origin()
+func ResolveTransaction(trx *tx.Transaction) (*ResolvedTransaction, error) {
+	origin, err := trx.Origin()
 	if err != nil {
 		return nil, err
 	}
-	intrinsicGas, err := tx.IntrinsicGas()
+	intrinsicGas, err := trx.IntrinsicGas()
 	if err != nil {
 		return nil, err
 	}
-	if tx.Gas() < intrinsicGas {
+	if trx.Gas() < intrinsicGas {
 		return nil, errors.New("intrinsic gas exceeds provided gas")
 	}
-	delegator, err := tx.Delegator()
+	delegator, err := trx.Delegator()
 	if err != nil {
 		return nil, err
 	}
 
-	clauses := tx.Clauses()
+	clauses := trx.Clauses()
 	sumValue := new(big.Int)
 	for _, clause := range clauses {
 		value := clause.Value()
@@ -54,13 +53,33 @@ func ResolveTransaction(tx *tx.Transaction) (*ResolvedTransaction, error) {
 		}
 
 		sumValue.Add(sumValue, value)
-		if sumValue.Cmp(math.MaxBig256) > 0 {
+		if sumValue.BitLen() > 256 {
 			return nil, errors.New("tx value too large")
 		}
 	}
 
+	if trx.Type() != tx.TypeLegacy {
+		if trx.MaxFeePerGas().Sign() < 0 {
+			return nil, errors.New("max fee per gas must be positive")
+		}
+		if trx.MaxPriorityFeePerGas().Sign() < 0 {
+			return nil, errors.New("max priority fee per gas must be positive")
+		}
+
+		if trx.MaxFeePerGas().BitLen() > 256 {
+			return nil, errors.New("max fee per gas higher than 2^256-1")
+		}
+		if trx.MaxPriorityFeePerGas().BitLen() > 256 {
+			return nil, errors.New("max priority fee per gas higher than 2^256-1")
+		}
+
+		if trx.MaxFeePerGas().Cmp(trx.MaxPriorityFeePerGas()) < 0 {
+			return nil, errors.New("maxFeePerGas is less than maxPriorityFeePerGas")
+		}
+	}
+
 	return &ResolvedTransaction{
-		tx,
+		trx,
 		origin,
 		delegator,
 		intrinsicGas,
