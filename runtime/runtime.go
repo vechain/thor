@@ -409,7 +409,7 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 		return nil, err
 	}
 
-	legacyTxBaseGasPrice, gasPrice, payer, _, returnGas, err := resolvedTx.BuyGas(
+	legacyTxBaseGasPrice, effectiveGasPrice, payer, _, returnGas, err := resolvedTx.BuyGas(
 		rt.state,
 		rt.ctx.Time,
 		rt.ctx.BaseFee,
@@ -418,7 +418,7 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 		return nil, err
 	}
 
-	txCtx, err := resolvedTx.ToContext(gasPrice, payer, rt.ctx.Number, rt.chain.GetBlockID)
+	txCtx, err := resolvedTx.ToContext(effectiveGasPrice, payer, rt.ctx.Number, rt.chain.GetBlockID)
 	if err != nil {
 		return nil, err
 	}
@@ -494,7 +494,7 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 				GasPayer: payer,
 			}
 
-			receipt.Paid = new(big.Int).Mul(new(big.Int).SetUint64(receipt.GasUsed), gasPrice)
+			receipt.Paid = new(big.Int).Mul(new(big.Int).SetUint64(receipt.GasUsed), effectiveGasPrice)
 
 			if err := returnGas(leftOverGas); err != nil {
 				return nil, err

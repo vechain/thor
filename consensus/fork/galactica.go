@@ -118,24 +118,6 @@ type GalacticaFeeMarketItems struct {
 	MaxPriorityFee *big.Int
 }
 
-func GalacticaOverallGasPrice(tr *tx.Transaction, legacyTxBaseGasPrice *big.Int, blkBaseFee *big.Int) *big.Int {
-	// proved work is not accounted for buying gas
-	feeItems := GalacticaTxGasPriceAdapter(tr, tr.GasPrice(legacyTxBaseGasPrice))
-
-	/** This gasPrice is the same that will be used when refunding the user
-	* it takes into account the priority fee that will be paid to the validator and the base fee that will be implicitly burned
-	* tracked by Energy.TotalAddSub
-	*
-	* if galactica is not active CurrentBaseFee will be 0
-	* LegacyTx GasPrice Calculation = MaxFee
-	**/
-	currBaseFee := big.NewInt(0)
-	if blkBaseFee != nil {
-		currBaseFee = blkBaseFee
-	}
-	return math.BigMin(new(big.Int).Add(feeItems.MaxPriorityFee, currBaseFee), feeItems.MaxFee)
-}
-
 func GalacticaPriorityGasPrice(tr *tx.Transaction, legacyTxBaseGasPrice, provedWork *big.Int, blkBaseFee *big.Int) *big.Int {
 	// proved work is accounted for priority gas
 	feeItems := GalacticaTxGasPriceAdapter(tr, tr.OverallGasPrice(legacyTxBaseGasPrice, provedWork))
@@ -170,11 +152,11 @@ func CalculateReward(gasUsed uint64, rewardGasPrice, rewardRatio *big.Int, isGal
 
 func validateGalacticaTxFee(tr *tx.Transaction, legacyTxBaseGasPrice, blockBaseFeeGasPrice *big.Int) error {
 	// proved work is not accounted for verifying if gas is enough to cover block base fee
-	feeItems := GalacticaTxGasPriceAdapter(tr, tr.GasPrice(legacyTxBaseGasPrice))
+	effectiveGasPrice := tr.EffectiveGasPrice(legacyTxBaseGasPrice, blockBaseFeeGasPrice)
 
 	// do not accept txs with less than the block base fee
-	if feeItems.MaxFee.Cmp(blockBaseFeeGasPrice) < 0 {
-		return fmt.Errorf("%w: expected %s got %s", ErrGasPriceTooLowForBlockBase, blockBaseFeeGasPrice.String(), feeItems.MaxFee.String())
+	if effectiveGasPrice.Cmp(blockBaseFeeGasPrice) < 0 {
+		return fmt.Errorf("%w: expected %s got %s", ErrGasPriceTooLowForBlockBase, blockBaseFeeGasPrice.String(), effectiveGasPrice)
 	}
 	return nil
 }
