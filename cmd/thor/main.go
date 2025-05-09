@@ -437,14 +437,12 @@ func soloAction(ctx *cli.Context) error {
 	txPool := txpool.New(repo, state.NewStater(mainDB), txPoolOption, &forkConfig)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
-	bftEngine := solo.NewBFTEngine(repo)
-
 	apiHandler, apiCloser := api.New(
 		repo,
 		state.NewStater(mainDB),
 		txPool,
 		logDB,
-		bftEngine,
+		bft.NewMockedEngine(repo.GenesisBlock().Header().ID()),
 		&solo.Communicator{},
 		forkConfig,
 		makeAPIConfig(ctx, logAPIRequests, true),

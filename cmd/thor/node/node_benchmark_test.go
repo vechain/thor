@@ -24,7 +24,6 @@ import (
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/muxdb"
@@ -415,7 +414,7 @@ func createChain(db *muxdb.MuxDB, accounts []genesis.DevAccount) (*testchain.Cha
 	return testchain.New(
 		db,
 		builder,
-		solo.NewBFTEngine(repo),
+		bft.NewMockedEngine(geneBlk.Header().ID()),
 		repo,
 		stater,
 		geneBlk,

@@ -128,8 +128,8 @@ func mintTransactions(t *testing.T, thorChain *testchain.Chain) {
 
 	dynFeeTx := tx.NewBuilder(tx.TypeDynamicFee).
 		ChainTag(thorChain.Repo().ChainTag()).
-		MaxFeePerGas(thor.InitialBaseGasPrice).
-		MaxPriorityFeePerGas((&big.Int{}).Add(thor.InitialBaseGasPrice, thor.InitialBaseGasPrice)).
+		MaxPriorityFeePerGas(big.NewInt(thor.InitialBaseFee)).
+		MaxFeePerGas(new(big.Int).Add(big.NewInt(thor.InitialBaseFee), big.NewInt(thor.InitialBaseFee))).
 		Expiration(10).
 		Gas(37000).
 		Nonce(1).
