@@ -28,6 +28,7 @@ import (
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
@@ -40,9 +41,8 @@ const LIMIT_PER_ACCOUNT = 2
 var devAccounts = genesis.DevAccounts()
 
 func newPool(limit int, limitPerAccount int, forkConfig *thor.ForkConfig) *TxPool {
-	db := muxdb.NewMem()
-	repo := newChainRepo(db)
-	return New(repo, state.NewStater(db), Options{
+	tchain, _ := testchain.NewWithFork(thor.SoloFork)
+	return New(tchain.Repo(), tchain.Stater(), Options{
 		Limit:           limit,
 		LimitPerAccount: limitPerAccount,
 		MaxLifetime:     time.Hour,
@@ -643,7 +643,7 @@ func TestFillPoolWithMixedTxs(t *testing.T) {
 		StateRoot(root).
 		TotalScore(100).
 		Timestamp(now + 10).
-		BaseFee(big.NewInt(thor.InitialBaseFee)).
+		BaseFee(thor.InitialBaseGasPrice).
 		GasLimit(thor.InitialGasLimit).
 		Build()
 
@@ -765,21 +765,18 @@ func TestAdd(t *testing.T) {
 }
 
 func TestBeforeVIP191Add(t *testing.T) {
-	db := muxdb.NewMem()
-	defer db.Close()
-
-	chain := newChainRepo(db)
-
+	tchain, err := testchain.NewWithFork(thor.SoloFork)
+	assert.Nil(t, err)
 	acc := devAccounts[0]
 
-	pool := New(chain, state.NewStater(db), Options{
+	pool := New(tchain.Repo(), tchain.Stater(), Options{
 		Limit:           10,
 		LimitPerAccount: 2,
 		MaxLifetime:     time.Hour,
 	}, &thor.NoFork)
 	defer pool.Close()
 
-	err := pool.StrictlyAdd(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(200), 100, nil, Tx.Features(1), acc))
+	err = pool.StrictlyAdd(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(200), 100, nil, Tx.Features(1), acc))
 
 	assert.Equal(t, "tx rejected: unsupported features", err.Error())
 }
@@ -1125,7 +1122,7 @@ func TestWashWithDynFeeTxAndPoolLimit(t *testing.T) {
 		TotalScore(100).
 		GasLimit(10000000).
 		StateRoot(root1).
-		BaseFee(big.NewInt(thor.InitialBaseFee)).
+		BaseFee(thor.InitialBaseGasPrice).
 		Build().WithSignature(sig[:])
 	if err := pool.repo.AddBlock(b1, nil, 0, true); err != nil {
 		t.Fatal(err)

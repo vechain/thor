@@ -15,18 +15,16 @@ import (
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
 )
 
-func newChainRepo(db *muxdb.MuxDB) *chain.Repository {
-	gene := genesis.NewDevnet()
-	b0, _, _, _ := gene.Build(state.NewStater(db))
-	repo, _ := chain.NewRepository(db, b0)
-	return repo
+func newChainRepo() *chain.Repository {
+	tchain, _ := testchain.NewWithFork(thor.SoloFork)
+	return tchain.Repo()
 }
 
 func newTx(txType tx.Type, chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, features tx.Features, from genesis.DevAccount) *tx.Transaction {
@@ -61,21 +59,21 @@ func txBuilder(txType tx.Type, chainTag byte, clauses []*tx.Clause, gas uint64, 
 		Gas(gas)
 }
 
-func SetupTest() (genesis.DevAccount, *chain.Repository, *block.Block, *state.State) {
-	acc := genesis.DevAccounts()[0]
+func SetupTest() (genesis.DevAccount, *chain.Repository, *block.Block, *state.State, thor.ForkConfig) {
+	tchain, _ := testchain.NewWithFork(thor.SoloFork)
+	repo := tchain.Repo()
+	db := tchain.Database()
 
-	db := muxdb.NewMem()
-	repo := newChainRepo(db)
 	b0 := repo.GenesisBlock()
 	b1 := new(block.Builder).ParentID(b0.Header().ID()).GasLimit(10000000).TotalScore(100).Build()
 	repo.AddBlock(b1, nil, 0, false)
 	st := state.New(db, trie.Root{Hash: repo.GenesisBlock().Header().StateRoot()})
 
-	return acc, repo, b1, st
+	return genesis.DevAccounts()[0], tchain.Repo(), b1, st, tchain.GetForkConfig()
 }
 
 func TestExecutableWithError(t *testing.T) {
-	acc, repo, b1, st := SetupTest()
+	acc, repo, b1, st, fc := SetupTest()
 
 	tests := []struct {
 		tx          *tx.Transaction
@@ -93,7 +91,7 @@ func TestExecutableWithError(t *testing.T) {
 		// pass custom headID
 		chain := repo.NewChain(thor.Bytes32{0})
 
-		exe, err := txObj.Executable(chain, st, b1.Header(), &thor.NoFork)
+		exe, err := txObj.Executable(chain, st, b1.Header(), &fc)
 		if tt.expectedErr != "" {
 			assert.Equal(t, tt.expectedErr, err.Error())
 		} else {
@@ -146,11 +144,12 @@ func TestResolve(t *testing.T) {
 func TestExecutable(t *testing.T) {
 	acc := genesis.DevAccounts()[0]
 
-	db := muxdb.NewMem()
-	repo := newChainRepo(db)
+	tchain, err := testchain.NewWithFork(thor.SoloFork)
+	assert.Nil(t, err)
+	repo := tchain.Repo()
+	db := tchain.Database()
+
 	b0 := repo.GenesisBlock()
-	b1 := new(block.Builder).ParentID(b0.Header().ID()).GasLimit(10000000).TotalScore(100).Build()
-	repo.AddBlock(b1, nil, 0, false)
 	st := state.New(db, trie.Root{Hash: repo.GenesisBlock().Header().StateRoot()})
 
 	tests := []struct {
@@ -159,8 +158,8 @@ func TestExecutable(t *testing.T) {
 		expectedErr string
 	}{
 		{newTx(tx.TypeLegacy, 0, nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), acc), true, ""},
-		{newTx(tx.TypeLegacy, 0, nil, b1.Header().GasLimit(), tx.BlockRef{}, 100, nil, tx.Features(0), acc), true, ""},
-		{newTx(tx.TypeLegacy, 0, nil, b1.Header().GasLimit()+1, tx.BlockRef{}, 100, nil, tx.Features(0), acc), false, "gas too large"},
+		{newTx(tx.TypeLegacy, 0, nil, b0.Header().GasLimit(), tx.BlockRef{}, 100, nil, tx.Features(0), acc), true, ""},
+		{newTx(tx.TypeLegacy, 0, nil, b0.Header().GasLimit()+1, tx.BlockRef{}, 100, nil, tx.Features(0), acc), false, "gas too large"},
 		{newTx(tx.TypeLegacy, 0, nil, math.MaxUint64, tx.BlockRef{}, 100, nil, tx.Features(0), acc), false, "gas too large"},
 		{newTx(tx.TypeLegacy, 0, nil, 21000, tx.BlockRef{1}, 100, nil, tx.Features(0), acc), true, "block ref out of schedule"},
 		{newTx(tx.TypeLegacy, 0, nil, 21000, tx.BlockRef{0}, 0, nil, tx.Features(0), acc), true, "expired"},
@@ -176,7 +175,7 @@ func TestExecutable(t *testing.T) {
 		txObj, err := resolveTx(tt.tx, false)
 		assert.Nil(t, err)
 
-		exe, err := txObj.Executable(repo.NewChain(b1.Header().ID()), st, b1.Header(), &thor.NoFork)
+		exe, err := txObj.Executable(repo.NewChain(b0.Header().ID()), st, b0.Header(), &thor.SoloFork)
 		if tt.expectedErr != "" {
 			assert.Equal(t, tt.expectedErr, err.Error())
 		} else {
