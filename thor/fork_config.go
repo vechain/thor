@@ -52,7 +52,7 @@ var NoFork = ForkConfig{
 
 // SoloFork is used to retain the solo genesis ID.
 // Any forks that modify the chain state should be placed in block 1.
-var SoloFork = &ForkConfig{
+var SoloFork = ForkConfig{
 	VIP191:    0,
 	ETH_CONST: 0,
 	BLOCKLIST: 0,

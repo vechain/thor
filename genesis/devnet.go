@@ -58,7 +58,7 @@ func DevAccounts() []DevAccount {
 
 // NewDevnet create genesis for solo mode.
 func NewDevnet() *Genesis {
-	return NewDevnetWithConfig(thor.SoloFork)
+	return NewDevnetWithConfig(&thor.SoloFork)
 }
 
 func NewDevnetWithConfig(config *thor.ForkConfig) *Genesis {

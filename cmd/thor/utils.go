@@ -272,9 +272,9 @@ func parseGenesisFile(uri string) (*genesis.Genesis, *thor.ForkConfig, error) {
 	decoder := json.NewDecoder(reader)
 	decoder.DisallowUnknownFields()
 
-	var forkConfig = &thor.NoFork
+	var forkConfig = thor.NoFork
 	var gen genesis.CustomGenesis
-	gen.ForkConfig = forkConfig
+	gen.ForkConfig = &forkConfig
 
 	if err := decoder.Decode(&gen); err != nil {
 		return nil, nil, errors.Wrap(err, "decode genesis file")
@@ -285,7 +285,7 @@ func parseGenesisFile(uri string) (*genesis.Genesis, *thor.ForkConfig, error) {
 		return nil, nil, errors.Wrap(err, "build genesis")
 	}
 
-	return customGen, forkConfig, nil
+	return customGen, &forkConfig, nil
 }
 
 func makeAPIConfig(ctx *cli.Context, logAPIRequests *atomic.Bool, soloMode bool) api.Config {
