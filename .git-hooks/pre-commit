@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+#
+# Scan only staged changes for any 64-character hex strings (Ethereum private keys).
+# Override with: git commit --safe-to-ignore-key
+
+# 1) detect override flag on parent `git commit`
+if [ -r "/proc/$PPID/cmdline" ]; then
+  parent_cmd=$(tr '\0' ' ' </proc/$PPID/cmdline)
+else
+  parent_cmd=$(ps -o args= -p "$PPID" 2>/dev/null)
+fi
+if [[ "$parent_cmd" == *"--safe-to-ignore-key"* ]]; then
+  exit 0
+fi
+
+# 2) scan only added (+) or modified (-) lines (not the diff headers)
+#    and look for any 64-hex-char run
+if git diff --cached --diff-filter=AM -U0 | \
+     grep -E --color=never '^(\+[^\+]|-[^-]).*[0-9A-Fa-f]{64}'; then
+  echo
+  echo "✖ ERROR: Detected ECDSA private key in staged changes. Commit aborted."
+  echo
+  exit 1
+fi
+
+exit 0
