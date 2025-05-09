@@ -436,3 +436,20 @@ func isCheckPoint(blockNum uint32) bool {
 func getStorePoint(blockNum uint32) uint32 {
 	return getCheckPoint(blockNum) + thor.CheckpointInterval - 1
 }
+
+type mockedEngine thor.Bytes32
+
+func (e *mockedEngine) Finalized() thor.Bytes32 {
+	return thor.Bytes32(*e)
+}
+
+func (e *mockedEngine) Justified() (thor.Bytes32, error) {
+	return thor.Bytes32(*e), nil
+}
+
+// NewMockedEngine returns a new mocked engine. Which just
+// returns the genesisID for both finalized and justified.
+func NewMockedEngine(genesisID thor.Bytes32) Committer {
+	me := mockedEngine(genesisID)
+	return &me
+}

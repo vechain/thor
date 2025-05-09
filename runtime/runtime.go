@@ -505,7 +505,14 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 			if err != nil {
 				return nil, err
 			}
-			provedWork, err := tx.ProvedWork(rt.ctx.Number-1, rt.chain.GetBlockID)
+
+			var num uint32
+			if rt.ctx.Number < rt.forkConfig.GALACTICA {
+				num = rt.ctx.Number - 1
+			} else {
+				num = rt.ctx.Number
+			}
+			provedWork, err := tx.ProvedWork(num, rt.chain.GetBlockID)
 			if err != nil {
 				return nil, err
 			}
