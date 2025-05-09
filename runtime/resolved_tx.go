@@ -74,7 +74,7 @@ func ResolveTransaction(trx *tx.Transaction) (*ResolvedTransaction, error) {
 		}
 
 		if trx.MaxFeePerGas().Cmp(trx.MaxPriorityFeePerGas()) < 0 {
-			return nil, tx.ErrMaxFeeLessThanPriorityFee
+			return nil, errors.New("maxFeePerGas is less than maxPriorityFeePerGas")
 		}
 	}
 

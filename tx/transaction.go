@@ -24,8 +24,7 @@ import (
 )
 
 var (
-	ErrTxTypeNotSupported        = errors.New("transaction type not supported")
-	ErrMaxFeeLessThanPriorityFee = errors.New("maxFeePerGas is less than maxPriorityFeePerGas")
+	ErrTxTypeNotSupported = errors.New("transaction type not supported")
 
 	errIntrinsicGasOverflow = errors.New("intrinsic gas overflow")
 	errShortTypedTx         = errors.New("typed transaction too short")
