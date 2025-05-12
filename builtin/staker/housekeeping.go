@@ -26,26 +26,9 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 
 	hasUpdates := false
 
-	iterator := func(id thor.Bytes32, entry *Validation) error {
-		isPeriodEnd := entry.IsPeriodEnd(currentBlock)
-
-		// validator is in the middle of a staking period, no need to process
-		if !isPeriodEnd && entry.Status != StatusCooldown {
-			return nil
-		}
-
+	iteratorCooldownGroup := func(id thor.Bytes32, entry *Validation) error {
 		// check if the validator should be moved to cooldown / exit
 		if entry.Expiry != nil && currentBlock >= *entry.Expiry {
-			if entry.Status == StatusActive && !entry.AutoRenew {
-				hasUpdates = true
-				logger.Debug("performing cooldown updates", "id", id)
-				return s.performCooldownUpdates(id, entry)
-			}
-			if entry.Status == StatusActive && entry.AutoRenew {
-				hasUpdates = true
-				logger.Debug("performing renewal updates", "id", id)
-				return s.performRenewalUpdates(id, entry)
-			}
 			// Find validator with the lowest exit tx block
 			if entry.Status == StatusCooldown && validatorLowestExitBlock > entry.ExitTxBlock && currentBlock >= *entry.Expiry+cooldownPeriod {
 				validatorExitID = id
@@ -55,19 +38,58 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 
 		return nil
 	}
-	// perform the iteration
-	if err := s.validations.LeaderGroupIterator(iterator); err != nil {
+	// perform the iteration over cooldown group
+	if err := s.validations.CooldownGroupIterator(iteratorCooldownGroup); err != nil {
 		return false, err
 	}
 
-	if canExit, err := s.canExit(); err == nil && !validatorExitID.IsZero() && canExit {
+	var toCooldown []thor.Bytes32
+	iteratorLeaderGroup := func(id thor.Bytes32, entry *Validation) error {
+		isPeriodEnd := entry.IsPeriodEnd(currentBlock)
+
+		// validator is in the middle of a staking period, no need to process
+		if !isPeriodEnd {
+			return nil
+		}
+
+		// check if the validator should be moved to cooldown / exit
+		if entry.Expiry != nil && currentBlock >= *entry.Expiry {
+			if entry.Status == StatusActive && !entry.AutoRenew {
+				hasUpdates = true
+				toCooldown = append(toCooldown, id)
+				return nil
+			}
+			if entry.Status == StatusActive && entry.AutoRenew {
+				hasUpdates = true
+				logger.Debug("performing renewal updates", "id", id)
+				return s.performRenewalUpdates(id, entry)
+			}
+		}
+
+		return nil
+	}
+	// perform the iteration
+	if err := s.validations.LeaderGroupIterator(iteratorLeaderGroup); err != nil {
+		return false, err
+	}
+	for _, cooldown := range toCooldown {
+		entry, err := s.Get(cooldown)
+		if err != nil {
+			return false, err
+		}
+		err = s.performCooldownUpdates(cooldown, entry)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	if !validatorExitID.IsZero() {
 		logger.Debug("exiting validator", "id", validatorExitID)
+
 		if err := s.validations.ExitValidator(validatorExitID, currentBlock); err != nil {
 			return false, err
 		}
 		hasUpdates = true
-	} else if err != nil {
-		return false, err
 	}
 
 	// fill any remaining leader group slots with validations from the queue
@@ -162,35 +184,13 @@ func (s *Staker) performCooldownUpdates(id thor.Bytes32, entry *Validation) erro
 		return err
 	}
 
+	if _, err = s.validations.leaderGroup.Remove(id, entry); err != nil {
+		return err
+	}
+	if _, err = s.validations.cooldownQueue.Add(id, entry); err != nil {
+		return err
+	}
 	return s.storage.SetValidator(id, entry)
-}
-
-// canExit checks if 1 validator can exit
-func (s *Staker) canExit() (bool, error) {
-	leaderGroupSize, err := s.validations.leaderGroup.Len()
-	if err != nil {
-		return false, err
-	}
-	maxLeaderGroupSize, err := s.params.Get(thor.KeyMaxBlockProposers)
-	if err != nil {
-		return false, err
-	}
-	queueSize, err := s.validations.validatorQueue.Len()
-	if err != nil {
-		return false, err
-	}
-	minimum := big.NewFloat(0).SetInt(maxLeaderGroupSize)
-	minimum = minimum.Mul(minimum, big.NewFloat(2))
-	minimum = minimum.Quo(minimum, big.NewFloat(3))
-
-	current := big.NewFloat(0).SetInt(leaderGroupSize)
-	current = current.Sub(current, big.NewFloat(1)) // less the one about to exit
-
-	if queueSize.Sign() == 1 { // if there are validations in the queue
-		current = current.Add(current, big.NewFloat(1))
-	}
-
-	return current.Cmp(minimum) >= 0, nil
 }
 
 func (s *Staker) activateValidators(currentBlock uint32) (int64, error) {

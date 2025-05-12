@@ -19,6 +19,7 @@ type validations struct {
 	storage             *storage
 	leaderGroup         *linkedList
 	validatorQueue      *linkedList
+	cooldownQueue       *linkedList
 	lockedVET           *solidity.Uint256
 	queuedVET           *solidity.Uint256
 	lowStakingPeriod    uint32
@@ -53,6 +54,7 @@ func newValidations(storage *storage) *validations {
 		storage:             storage,
 		leaderGroup:         newLinkedList(storage, slotActiveHead, slotActiveTail, slotActiveGroupSize),
 		validatorQueue:      newLinkedList(storage, slotQueuedHead, slotQueuedTail, slotQueuedGroupSize),
+		cooldownQueue:       newLinkedList(storage, slotCooldownHead, slotCooldownTail, slotCooldownGroupSize),
 		lockedVET:           solidity.NewUint256(storage.Address(), storage.State(), slotLockedVET),
 		queuedVET:           solidity.NewUint256(storage.Address(), storage.State(), slotQueuedVET),
 		lowStakingPeriod:    lowStakingPeriod,
@@ -81,27 +83,11 @@ func (v *validations) FirstQueued() (thor.Bytes32, error) {
 }
 
 func (v *validations) LeaderGroupIterator(callback func(thor.Bytes32, *Validation) error) error {
-	ptr, err := v.FirstActive()
-	if err != nil {
-		return err
-	}
-	for {
-		entry, err := v.storage.GetValidator(ptr)
-		if err != nil {
-			return err
-		}
-		if entry.IsEmpty() {
-			break
-		}
-		if err := callback(ptr, entry); err != nil {
-			return err
-		}
-		if entry.Next == nil || entry.Next.IsZero() {
-			break
-		}
-		ptr = *entry.Next
-	}
-	return nil
+	return v.leaderGroup.Iter(callback)
+}
+
+func (v *validations) CooldownGroupIterator(callback func(thor.Bytes32, *Validation) error) error {
+	return v.cooldownQueue.Iter(callback)
 }
 
 // LeaderGroup lists all registered candidates.
@@ -422,7 +408,7 @@ func (v *validations) ExitValidator(id thor.Bytes32, currentBlock uint32) error 
 	entry.LockedVET = big.NewInt(0)
 	entry.PendingLocked = big.NewInt(0)
 
-	if _, err = v.leaderGroup.Remove(id, entry); err != nil {
+	if err = v.storage.SetValidator(id, entry); err != nil {
 		return err
 	}
 	if err = v.storage.SetLookup(entry.Master, thor.Bytes32{}); err != nil {

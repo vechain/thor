@@ -171,3 +171,34 @@ func (l *linkedList) Peek() (*Validation, error) {
 func (l *linkedList) Len() (*big.Int, error) {
 	return l.count.Get()
 }
+
+// Iter iterates through the linked list and calls the callback function for each entry
+func (l *linkedList) Iter(callback func(thor.Bytes32, *Validation) error) error {
+	ptr, err := l.head.Get()
+	if err != nil {
+		return err
+	}
+	for {
+		if ptr.IsZero() {
+			break
+		}
+
+		entry, err := l.storage.GetValidator(ptr)
+		if err != nil {
+			return err
+		}
+		if entry.IsEmpty() {
+			break
+		}
+
+		if err := callback(ptr, entry); err != nil {
+			return err
+		}
+
+		if entry.Next == nil || entry.Next.IsZero() {
+			break
+		}
+		ptr = *entry.Next
+	}
+	return nil
+}

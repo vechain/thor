@@ -32,6 +32,10 @@ var (
 	slotQueuedHead      = nameToSlot("validations-queued-head")
 	slotQueuedTail      = nameToSlot("validations-queued-tail")
 	slotQueuedGroupSize = nameToSlot("validations-queued-group-size")
+	// queued validators on cooldown
+	slotCooldownHead      = nameToSlot("validations-cooldown-head")
+	slotCooldownTail      = nameToSlot("validations-cooldown-tail")
+	slotCooldownGroupSize = nameToSlot("validations-cooldown-group-size")
 	// init params
 	slotLowStakingPeriod    = nameToSlot("staker-low-staking-period")
 	slotMediumStakingPeriod = nameToSlot("staker-medium-staking-period")
