@@ -21,6 +21,7 @@ import (
 type DevConfig struct {
 	ForkConfig      *thor.ForkConfig
 	KeyBaseGasPrice *big.Int
+	LaunchTime      uint64
 }
 
 // DevAccount account for development.
@@ -68,11 +69,11 @@ func NewDevnet() *Genesis {
 }
 
 func NewDevnetWithConfig(config DevConfig) *Genesis {
-	launchTime := uint64(1526400000) // 'Wed May 16 2018 00:00:00 GMT+0800 (CST)'
-	return NewDevnetWithConfigAndLaunchtime(config, launchTime)
-}
+	launchTime := config.LaunchTime
+	if launchTime == 0 {
+		launchTime = uint64(1526400000) // Default launch time 'Wed May 16 2018 00:00:00 GMT+0800 (CST)'
+	}
 
-func NewDevnetWithConfigAndLaunchtime(config DevConfig, launchTime uint64) *Genesis {
 	executor := DevAccounts()[0].Address
 	soloBlockSigner := DevAccounts()[0]
 	if config.KeyBaseGasPrice == nil {

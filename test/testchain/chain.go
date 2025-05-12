@@ -91,9 +91,14 @@ func NewIntegrationTestChain(config genesis.DevConfig) (*Chain, error) {
 	// Create the state manager (Stater) with the initialized database.
 	stater := state.NewStater(db)
 
-	now := uint64(time.Now().Unix())
+	// If the launch time is not set, set it to the current time minus the current time aligned with the block interval
+	if config.LaunchTime == 0 {
+		now := uint64(time.Now().Unix())
+		config.LaunchTime = now - now%thor.BlockInterval
+	}
+
 	// Initialize the genesis and retrieve the genesis block
-	gene := genesis.NewDevnetWithConfigAndLaunchtime(config, now-now%thor.BlockInterval)
+	gene := genesis.NewDevnetWithConfig(config)
 	geneBlk, _, _, err := gene.Build(stater)
 	if err != nil {
 		return nil, err
