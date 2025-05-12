@@ -687,7 +687,19 @@ func TestFillPoolWithMixedTxs(t *testing.T) {
 }
 
 func TestAdd(t *testing.T) {
-	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.SoloFork)
+	// this will create a chain with a deterministic chainTag which required for the badReserved test
+	config := genesis.DevConfig{
+		ForkConfig: &thor.SoloFork,
+		LaunchTime: 1526400000,
+	}
+	tchain, err := testchain.NewIntegrationTestChain(config)
+	assert.Nil(t, err)
+	pool := New(tchain.Repo(), tchain.Stater(), Options{
+		Limit:           LIMIT,
+		LimitPerAccount: LIMIT_PER_ACCOUNT,
+		MaxLifetime:     time.Hour,
+	}, config.ForkConfig)
+
 	defer pool.Close()
 	st := pool.stater.NewState(trie.Root{Hash: pool.repo.GenesisBlock().Header().StateRoot()})
 	stage, _ := st.Stage(trie.Version{Major: 1})
