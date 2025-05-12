@@ -78,7 +78,7 @@ func TestFeesFixedSizeSameAsBacktrace(t *testing.T) {
 		"getFeeHistoryMoreBlocksRequestedThanAvailable": getFeeHistoryMoreBlocksRequestedThanAvailable,
 		"getFeeHistoryBlock0":                           getFeeHistoryBlock0,
 		"getFeeHistoryBlockCount0":                      getFeeHistoryBlockCount0,
-		// "getFeePriority":                                getFeePriority,
+		"getFeePriority":                                getFeePriority,
 	} {
 		t.Run(name, func(t *testing.T) {
 			tt(t, tclient, bestchain)
