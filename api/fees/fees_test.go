@@ -8,6 +8,7 @@ package fees_test
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/big"
 	"net/http/httptest"
 	"strings"
@@ -103,6 +104,24 @@ func TestRewardPercentiles(t *testing.T) {
 			tt(t, tclient, bestchain)
 		})
 	}
+}
+
+func TestFeeHistoryHugeBlockCountClamped(t *testing.T) {
+	// pick a small backtrace limit so we can observe the clamp easily
+	const backtraceLimit = 5
+	ts, _ := initFeesServer(t, backtraceLimit /* fixedCacheSize */, 10 /* numberOfBlocks */, 10)
+	t.Cleanup(ts.Close)
+
+	client := thorclient.New(ts.URL)
+
+	// use an astronomically large blockCount
+	huge := uint64(math.MaxUint64)
+	url := fmt.Sprintf("/fees/history?blockCount=%d&newestBlock=best", huge)
+
+	res, statusCode, err := client.RawHTTPClient().RawHTTPGet(url)
+	require.True(t, strings.Contains(string(res), "invalid blockCount, it should represent an integer"))
+	require.Equal(t, 400, statusCode, "huge blockCount should not panic")
+	require.NoError(t, err)
 }
 
 func initFeesServer(t *testing.T, backtraceLimit int, fixedCacheSize int, numberOfBlocks int) (*httptest.Server, *chain.Chain) {
