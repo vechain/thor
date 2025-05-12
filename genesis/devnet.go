@@ -19,7 +19,7 @@ import (
 
 // Config for the devnet network, to be extended by our needs
 type DevConfig struct {
-	ForkConfig      thor.ForkConfig
+	ForkConfig      *thor.ForkConfig
 	KeyBaseGasPrice *big.Int
 }
 
@@ -64,7 +64,7 @@ func DevAccounts() []DevAccount {
 
 // NewDevnet create genesis for solo mode.
 func NewDevnet() *Genesis {
-	return NewDevnetWithConfig(DevConfig{ForkConfig: thor.SoloFork})
+	return NewDevnetWithConfig(DevConfig{ForkConfig: &thor.SoloFork})
 }
 
 func NewDevnetWithConfig(config DevConfig) *Genesis {
@@ -82,7 +82,7 @@ func NewDevnetWithConfigAndLaunchtime(config DevConfig, launchTime uint64) *Gene
 	builder := new(Builder).
 		GasLimit(thor.InitialGasLimit).
 		Timestamp(launchTime).
-		ForkConfig(&config.ForkConfig).
+		ForkConfig(config.ForkConfig).
 		State(func(state *state.State) error {
 			// setup builtin contracts
 			if err := state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes()); err != nil {

@@ -232,7 +232,7 @@ func initBlockServer(t *testing.T) {
 		GALACTICA: 1,
 		VIP214:    2,
 	}
-	thorChain, err := testchain.NewWithFork(forks)
+	thorChain, err := testchain.NewWithFork(&forks)
 	require.NoError(t, err)
 
 	addr := thor.BytesToAddress([]byte("to"))

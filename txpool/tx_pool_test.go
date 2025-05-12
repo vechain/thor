@@ -41,7 +41,7 @@ const LIMIT_PER_ACCOUNT = 2
 var devAccounts = genesis.DevAccounts()
 
 func newPool(limit int, limitPerAccount int, forkConfig *thor.ForkConfig) *TxPool {
-	tchain, _ := testchain.NewWithFork(thor.SoloFork)
+	tchain, _ := testchain.NewWithFork(forkConfig)
 	return New(tchain.Repo(), tchain.Stater(), Options{
 		Limit:           limit,
 		LimitPerAccount: limitPerAccount,
@@ -687,7 +687,7 @@ func TestFillPoolWithMixedTxs(t *testing.T) {
 }
 
 func TestAdd(t *testing.T) {
-	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.ForkConfig{})
+	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.SoloFork)
 	defer pool.Close()
 	st := pool.stater.NewState(trie.Root{Hash: pool.repo.GenesisBlock().Header().StateRoot()})
 	stage, _ := st.Stage(trie.Version{Major: 1})
@@ -732,6 +732,7 @@ func TestAdd(t *testing.T) {
 	))
 	badReserved := new(tx.Transaction)
 	if err := badReserved.UnmarshalBinary(raw); err != nil {
+		t.Log(pool.repo.ChainTag())
 		t.Error(err)
 	}
 
@@ -766,7 +767,7 @@ func TestAdd(t *testing.T) {
 }
 
 func TestBeforeVIP191Add(t *testing.T) {
-	tchain, err := testchain.NewWithFork(thor.SoloFork)
+	tchain, err := testchain.NewWithFork(&thor.SoloFork)
 	assert.Nil(t, err)
 	acc := devAccounts[0]
 

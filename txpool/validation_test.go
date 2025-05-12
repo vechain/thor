@@ -157,7 +157,7 @@ func TestValidateTransaction(t *testing.T) {
 }
 
 func TestValidateTransactionWithState(t *testing.T) {
-	tchain, err := testchain.NewWithFork(thor.SoloFork)
+	tchain, err := testchain.NewWithFork(&thor.SoloFork)
 	assert.Nil(t, err)
 	repo := tchain.Repo()
 	stater := tchain.Stater()

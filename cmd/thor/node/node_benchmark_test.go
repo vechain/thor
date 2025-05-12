@@ -384,7 +384,7 @@ func createChain(db *muxdb.MuxDB, accounts []genesis.DevAccount) (*testchain.Cha
 		LaunchTime: 1526400000,
 		GasLimit:   thor.InitialGasLimit,
 		ExtraData:  "",
-		ForkConfig: &testchain.DefaultForkConfig,
+		ForkConfig: &forkConfig,
 		Authority:  authAccs,
 		Accounts:   stateAccs,
 		Params: genesis.Params{

@@ -466,10 +466,10 @@ func TestValidateBlockHeaderWithBadBaseFee(t *testing.T) {
 	forkConfig.GALACTICA = 1
 	forkConfig.VIP214 = 2
 
-	chain, err := testchain.NewWithFork(forkConfig)
+	chain, err := testchain.NewWithFork(&forkConfig)
 	assert.NoError(t, err)
 
-	con := New(chain.Repo(), chain.Stater(), forkConfig)
+	con := New(chain.Repo(), chain.Stater(), &forkConfig)
 
 	best, err := chain.BestBlock()
 	assert.NoError(t, err)

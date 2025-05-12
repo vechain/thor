@@ -1058,7 +1058,7 @@ func TestExtensionNative(t *testing.T) {
 
 func TestExtensionV3(t *testing.T) {
 	fc := thor.SoloFork
-	chain, err := testchain.NewWithFork(fc)
+	chain, err := testchain.NewWithFork(&fc)
 	assert.Nil(t, err)
 
 	// galactica fork happens at block 1

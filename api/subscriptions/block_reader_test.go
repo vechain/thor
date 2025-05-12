@@ -75,7 +75,7 @@ func TestBlockReader_Read(t *testing.T) {
 func initChain(t *testing.T) *testchain.Chain {
 	forks := testchain.DefaultForkConfig
 	forks.GALACTICA = 1
-	thorChain, err := testchain.NewWithFork(forks)
+	thorChain, err := testchain.NewWithFork(&forks)
 	require.NoError(t, err)
 
 	addr := thor.BytesToAddress([]byte("to"))

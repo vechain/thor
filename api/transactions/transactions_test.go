@@ -46,12 +46,11 @@ func TestTransaction(t *testing.T) {
 	// Send tx
 	tclient = thorclient.New(ts.URL)
 	for name, tt := range map[string]func(*testing.T){
-		"sendImpossibleBlockRefExpiryTx":           sendImpossibleBlockRefExpiryTx,
 		"sendLegacyTx":                             sendLegacyTx,
+		"sendImpossibleBlockRefExpiryTx":           sendImpossibleBlockRefExpiryTx,
 		"sendTxWithBadFormat":                      sendTxWithBadFormat,
 		"sendTxThatCannotBeAcceptedInLocalMempool": sendTxThatCannotBeAcceptedInLocalMempool,
-
-		"sendDynamicFeeTx": sendDynamicFeeTx,
+		"sendDynamicFeeTx":                         sendDynamicFeeTx,
 	} {
 		t.Run(name, tt)
 	}
@@ -180,7 +179,7 @@ func sendDynamicFeeTx(t *testing.T) {
 		ChainTag(chainTag).
 		Expiration(expiration).
 		Gas(gas).
-		MaxFeePerGas(big.NewInt(10_000)).
+		MaxFeePerGas(big.NewInt(thor.InitialBaseFee)).
 		MaxPriorityFeePerGas(big.NewInt(10)).
 		Build()
 	trx = tx.MustSign(
@@ -363,7 +362,8 @@ func initTransactionServer(t *testing.T) {
 	forkConfig := testchain.DefaultForkConfig
 	forkConfig.GALACTICA = 2
 
-	thorChain, err := testchain.NewWithFork(forkConfig)
+	var err error
+	thorChain, err = testchain.NewWithFork(&forkConfig)
 	require.NoError(t, err)
 
 	chainTag = thorChain.Repo().ChainTag()

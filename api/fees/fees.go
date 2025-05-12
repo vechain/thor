@@ -35,6 +35,7 @@ type Config struct {
 type Fees struct {
 	data           *FeesData
 	bft            bft.Committer
+	forkConfig     *thor.ForkConfig
 	minPriorityFee *big.Int // The minimum suggested priority fee is (Config.PriorityIncreasePercentage)% of the block initial base fee.
 	config         Config
 }
@@ -43,10 +44,11 @@ func calcPriorityFee(baseFee *big.Int, priorityPercentile int64) *big.Int {
 	return new(big.Int).Div(new(big.Int).Mul(baseFee, big.NewInt(priorityPercentile)), big.NewInt(100))
 }
 
-func New(repo *chain.Repository, bft bft.Committer, stater *state.Stater, config Config) *Fees {
+func New(repo *chain.Repository, bft bft.Committer, forkConfig *thor.ForkConfig, stater *state.Stater, config Config) *Fees {
 	return &Fees{
 		data:           newFeesData(repo, stater, config.FixedCacheSize),
 		bft:            bft,
+		forkConfig:     forkConfig,
 		minPriorityFee: calcPriorityFee(big.NewInt(thor.InitialBaseFee), int64(config.PriorityIncreasePercentage)),
 		config:         config,
 	}
@@ -91,7 +93,7 @@ func (f *Fees) validateNewestBlock(req *http.Request, blockCount uint64) (*chain
 		return nil, 0, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
 	}
 
-	newestBlockSummary, _, err := utils.GetSummaryAndState(newestBlock, f.data.repo, f.bft, f.data.stater)
+	newestBlockSummary, _, err := utils.GetSummaryAndState(newestBlock, f.data.repo, f.bft, f.data.stater, f.forkConfig)
 	if err != nil {
 		if f.data.repo.IsNotFound(err) {
 			return nil, 0, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
@@ -168,8 +170,7 @@ func (f *Fees) handleGetPriority(w http.ResponseWriter, _ *http.Request) error {
 
 	priorityFee := (*hexutil.Big)(f.minPriorityFee)
 	if bestBlockSummary.Header.BaseFee() != nil {
-		forkConfig := thor.GetForkConfig(f.data.repo.NewBestChain().GenesisID())
-		nextBaseFee := fork.CalcBaseFee(forkConfig, bestBlockSummary.Header)
+		nextBaseFee := fork.CalcBaseFee(f.forkConfig, bestBlockSummary.Header)
 		if nextBaseFee.Cmp(big.NewInt(thor.InitialBaseFee)) > 0 {
 			priorityFee = (*hexutil.Big)(calcPriorityFee(nextBaseFee, int64(f.config.PriorityIncreasePercentage)))
 		}
