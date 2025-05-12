@@ -7,10 +7,10 @@ THOR_VERSION = $(shell cat cmd/thor/VERSION)
 DISCO_VERSION = $(shell cat cmd/disco/VERSION)
 
 PACKAGES = `go list ./... | grep -v '/vendor/'`
-REQUIRED_GO_MAJOR = 1
-REQUIRED_GO_MINOR = 24
 FUZZTIME=1m
 
+REQUIRED_GO_MAJOR = 1
+REQUIRED_GO_MINOR = 24
 MAJOR = $(shell go version | cut -d' ' -f3 | cut -b 3- | cut -d. -f1)
 MINOR = $(shell go version | cut -d' ' -f3 | cut -b 3- | cut -d. -f2)
 export GO111MODULE=on

@@ -137,7 +137,7 @@ func TestValidateBlock(t *testing.T) {
 					StateRoot(thor.BytesToBytes32(hexutil.MustDecode("0xfd52b74feb856784be141440cc8d68d8a518aaa5e845ceed2ed8322f99c11352"))).
 					Build()
 
-				c := New(repo, stater, thor.ForkConfig{GALACTICA: 0})
+				c := New(repo, stater, &thor.ForkConfig{GALACTICA: 0})
 				s, r, err := c.verifyBlock(blk, state, 0)
 				assert.Nil(t, s)
 				assert.Nil(t, r)

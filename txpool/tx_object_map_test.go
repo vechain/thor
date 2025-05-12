@@ -149,12 +149,12 @@ func TestLimitByDelegator(t *testing.T) {
 }
 
 func TestPendingCost(t *testing.T) {
-	tchain, err := testchain.NewWithFork(thor.SoloFork)
+	forkConfig := &thor.SoloFork
+	tchain, err := testchain.NewWithFork(forkConfig)
 	assert.Nil(t, err)
 
 	repo := tchain.Repo()
 	stater := tchain.Stater()
-	forkConfig := tchain.GetForkConfig()
 
 	// Creating transactions
 	tx1 := newTx(tx.TypeLegacy, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
@@ -170,15 +170,15 @@ func TestPendingCost(t *testing.T) {
 	best := repo.BestBlockSummary()
 	state := stater.NewState(best.Root())
 
-	txObj1.executable, err = txObj1.Executable(chain, state, best.Header, &forkConfig)
+	txObj1.executable, err = txObj1.Executable(chain, state, best.Header, forkConfig)
 	assert.Nil(t, err)
 	assert.True(t, txObj1.executable)
 
-	txObj2.executable, err = txObj2.Executable(chain, state, best.Header, &forkConfig)
+	txObj2.executable, err = txObj2.Executable(chain, state, best.Header, forkConfig)
 	assert.Nil(t, err)
 	assert.True(t, txObj2.executable)
 
-	txObj3.executable, err = txObj3.Executable(chain, state, best.Header, &forkConfig)
+	txObj3.executable, err = txObj3.Executable(chain, state, best.Header, forkConfig)
 	assert.Nil(t, err)
 	assert.True(t, txObj3.executable)
 

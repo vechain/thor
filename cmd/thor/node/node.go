@@ -53,19 +53,17 @@ type Options struct {
 }
 
 type Node struct {
-	packer         *packer.Packer
-	cons           *consensus.Consensus
-	master         *Master
-	repo           *chain.Repository
-	bft            *bft.Engine
-	logDB          *logdb.LogDB
-	txPool         *txpool.TxPool
-	txStashPath    string
-	comm           *comm.Communicator
-	targetGasLimit uint64
-	skipLogs       bool
-	forkConfig     *thor.ForkConfig
-	options        Options
+	packer      *packer.Packer
+	cons        *consensus.Consensus
+	master      *Master
+	repo        *chain.Repository
+	bft         *bft.Engine
+	logDB       *logdb.LogDB
+	txPool      *txpool.TxPool
+	txStashPath string
+	comm        *comm.Communicator
+	forkConfig  *thor.ForkConfig
+	options     Options
 
 	logDBFailed bool
 	bandwidth   bandwidth.Bandwidth

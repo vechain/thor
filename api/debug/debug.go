@@ -205,7 +205,7 @@ func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error 
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	summary, st, err := utils.GetSummaryAndState(revision, d.repo, d.bft, d.stater)
+	summary, st, err := utils.GetSummaryAndState(revision, d.repo, d.bft, d.stater, d.forkConfig)
 	if err != nil {
 		if d.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "revision"))

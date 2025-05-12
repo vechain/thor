@@ -325,7 +325,7 @@ func TestAdoptErr(t *testing.T) {
 
 func TestAdoptErrorAfterGalactica(t *testing.T) {
 	forks := thor.ForkConfig{GALACTICA: 2}
-	chain, err := testchain.NewWithFork(forks)
+	chain, err := testchain.NewWithFork(&forks)
 	assert.NoError(t, err)
 
 	// Try to adopt a dyn fee tx before galactica fork activates - FAILS
@@ -379,7 +379,7 @@ func TestAdoptErrorAfterGalactica(t *testing.T) {
 }
 
 func TestAdoptAfterGalacticaLowerBaseFeeThreshold(t *testing.T) {
-	chain, err := testchain.NewWithFork(thor.ForkConfig{GALACTICA: 1})
+	chain, err := testchain.NewWithFork(&thor.ForkConfig{GALACTICA: 1})
 	assert.NoError(t, err)
 
 	tr := tx.NewBuilder(tx.TypeLegacy).ChainTag(chain.Repo().ChainTag()).Gas(21000).Expiration(100).Build()
@@ -402,7 +402,7 @@ func TestAdoptAfterGalacticaLowerBaseFeeThreshold(t *testing.T) {
 
 func TestAdoptAfterGalacticaEffectivePriorityFee(t *testing.T) {
 	config := genesis.DevConfig{
-		ForkConfig:      thor.ForkConfig{GALACTICA: 1},
+		ForkConfig:      &thor.ForkConfig{GALACTICA: 1},
 		KeyBaseGasPrice: new(big.Int).Add(big.NewInt(1), big.NewInt(thor.InitialBaseFee)),
 	}
 	chain, err := testchain.NewIntegrationTestChain(config)
@@ -460,7 +460,7 @@ func TestAdoptAfterGalacticaEffectivePriorityFee(t *testing.T) {
 
 	// Last parameter is true, which means that all txs require max priority fee
 	proposer := genesis.DevAccounts()[0]
-	pckr := packer.New(chain.Repo(), chain.Stater(), proposer.Address, &proposer.Address, &config.ForkConfig, 2)
+	pckr := packer.New(chain.Repo(), chain.Stater(), proposer.Address, &proposer.Address, config.ForkConfig, 2)
 
 	flow, _ := pckr.Schedule(best, uint64(time.Now().Unix()))
 

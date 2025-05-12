@@ -53,7 +53,7 @@ var (
 func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 	forks := testchain.DefaultForkConfig
 	forks.GALACTICA = 1
-	thorChain, err := testchain.NewWithFork(forks)
+	thorChain, err := testchain.NewWithFork(&forks)
 	require.NoError(t, err)
 
 	// mint some transactions to be used in the endpoints
@@ -86,7 +86,7 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 	)
 	node.New(communicator, mempool, false).Mount(router, "/node")
 
-	fees.New(thorChain.Repo(), thorChain.Engine(), thorChain.Stater(), fees.Config{
+	fees.New(thorChain.Repo(), thorChain.Engine(), thorChain.GetForkConfig(), thorChain.Stater(), fees.Config{
 		APIBacktraceLimit:          6,
 		FixedCacheSize:             6,
 		PriorityIncreasePercentage: priorityFeesPercentage,

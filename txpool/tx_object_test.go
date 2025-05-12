@@ -23,7 +23,7 @@ import (
 )
 
 func newChainRepo() *chain.Repository {
-	tchain, _ := testchain.NewWithFork(thor.SoloFork)
+	tchain, _ := testchain.NewWithFork(&thor.SoloFork)
 	return tchain.Repo()
 }
 
@@ -59,8 +59,8 @@ func txBuilder(txType tx.Type, chainTag byte, clauses []*tx.Clause, gas uint64, 
 		Gas(gas)
 }
 
-func SetupTest() (genesis.DevAccount, *chain.Repository, *block.Block, *state.State, thor.ForkConfig) {
-	tchain, _ := testchain.NewWithFork(thor.SoloFork)
+func SetupTest() (genesis.DevAccount, *chain.Repository, *block.Block, *state.State, *thor.ForkConfig) {
+	tchain, _ := testchain.NewWithFork(&thor.SoloFork)
 	repo := tchain.Repo()
 	db := tchain.Database()
 
@@ -91,7 +91,7 @@ func TestExecutableWithError(t *testing.T) {
 		// pass custom headID
 		chain := repo.NewChain(thor.Bytes32{0})
 
-		exe, err := txObj.Executable(chain, st, b1.Header(), &fc)
+		exe, err := txObj.Executable(chain, st, b1.Header(), fc)
 		if tt.expectedErr != "" {
 			assert.Equal(t, tt.expectedErr, err.Error())
 		} else {
@@ -144,7 +144,7 @@ func TestResolve(t *testing.T) {
 func TestExecutable(t *testing.T) {
 	acc := genesis.DevAccounts()[0]
 
-	tchain, err := testchain.NewWithFork(thor.SoloFork)
+	tchain, err := testchain.NewWithFork(&thor.SoloFork)
 	assert.Nil(t, err)
 	repo := tchain.Repo()
 	db := tchain.Database()
@@ -175,8 +175,7 @@ func TestExecutable(t *testing.T) {
 		txObj, err := resolveTx(tt.tx, false)
 		assert.Nil(t, err)
 
-		fc := tchain.GetForkConfig()
-		exe, err := txObj.Executable(repo.NewChain(b0.Header().ID()), st, b0.Header(), &fc)
+		exe, err := txObj.Executable(repo.NewChain(b0.Header().ID()), st, b0.Header(), tchain.GetForkConfig())
 		if tt.expectedErr != "" {
 			assert.Equal(t, tt.expectedErr, err.Error())
 		} else {

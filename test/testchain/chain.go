@@ -74,11 +74,11 @@ var DefaultForkConfig = thor.ForkConfig{
 
 // NewDefault is a wrapper function that creates a Chain for testing with the default fork config.
 func NewDefault() (*Chain, error) {
-	return NewIntegrationTestChain(genesis.DevConfig{ForkConfig: DefaultForkConfig})
+	return NewIntegrationTestChain(genesis.DevConfig{ForkConfig: &DefaultForkConfig})
 }
 
 // NewWithFork is a wrapper function that creates a Chain for testing with custom forkConfig.
-func NewWithFork(forkConfig thor.ForkConfig) (*Chain, error) {
+func NewWithFork(forkConfig *thor.ForkConfig) (*Chain, error) {
 	return NewIntegrationTestChain(genesis.DevConfig{ForkConfig: forkConfig})
 }
 
@@ -91,8 +91,9 @@ func NewIntegrationTestChain(config genesis.DevConfig) (*Chain, error) {
 	// Create the state manager (Stater) with the initialized database.
 	stater := state.NewStater(db)
 
+	now := uint64(time.Now().Unix())
 	// Initialize the genesis and retrieve the genesis block
-	gene := genesis.NewDevnetWithConfigAndLaunchtime(config, uint64(time.Now().Unix()))
+	gene := genesis.NewDevnetWithConfigAndLaunchtime(config, now-now%thor.BlockInterval)
 	geneBlk, _, _, err := gene.Build(stater)
 	if err != nil {
 		return nil, err
@@ -118,7 +119,7 @@ func NewIntegrationTestChain(config genesis.DevConfig) (*Chain, error) {
 		stater,
 		geneBlk,
 		logDb,
-		&config.ForkConfig,
+		config.ForkConfig,
 	), nil
 }
 

@@ -109,7 +109,7 @@ func GetSummary(rev *Revision, repo *chain.Repository, bft bft.Committer) (sum *
 
 // GetSummaryAndState returns the block summary and state for the given revision,
 // this function supports the "next" revision.
-func GetSummaryAndState(rev *Revision, repo *chain.Repository, bft bft.Committer, stater *state.Stater) (*chain.BlockSummary, *state.State, error) {
+func GetSummaryAndState(rev *Revision, repo *chain.Repository, bft bft.Committer, stater *state.Stater, forkConfig *thor.ForkConfig) (*chain.BlockSummary, *state.State, error) {
 	if rev.IsNext() {
 		best := repo.BestBlockSummary()
 
@@ -136,7 +136,6 @@ func GetSummaryAndState(rev *Revision, repo *chain.Repository, bft bft.Committer
 		}
 
 		if best.Header.BaseFee() != nil {
-			forkConfig := thor.GetForkConfig(repo.NewBestChain().GenesisID())
 			builder.BaseFee(fork.CalcBaseFee(forkConfig, best.Header))
 		}
 
