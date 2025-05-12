@@ -89,7 +89,8 @@ var forkConfigs = map[Bytes32]*ForkConfig{
 	},
 }
 
-// GetForkConfig get fork config for given genesis ID.
+// GetForkConfig get fork config for the given genesis ID.
+// Only works for the well-known networks.Custom network will get nil.
 func GetForkConfig(genesisID Bytes32) *ForkConfig {
 	return forkConfigs[genesisID]
 }
