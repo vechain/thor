@@ -80,6 +80,8 @@ lint-fix: | go_version_check lint_command_check #@ Attempt to fix linting issues
 	@golangci-lint run --config .golangci.yml --fix
 	@echo "running modernize..."
 	@go run golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@v0.18.1 --fix ./...
+	@echo "running builtin generator..."
+	@go generate ./builtin/gen
 	@echo "done."
 
 license-check: #@ Check license headers

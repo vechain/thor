@@ -7,6 +7,7 @@ package builtin
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -232,9 +233,13 @@ func init() {
 			env.ParseArgs(&args)
 			delegation, validator, err := Staker.Native(env.State()).GetDelegation(thor.Bytes32(args.DelegationID))
 			if err != nil {
-				return []any{new(big.Int), uint8(0), false, false, fmt.Sprintf("revert: %v", err)}
+				return []any{thor.Bytes32{}, new(big.Int), uint32(0), uint32(0), uint8(0), false, false, fmt.Sprintf("revert: %v", err)}
 			}
-			return []any{delegation.Stake, delegation.Multiplier, delegation.AutoRenew, delegation.IsLocked(validator), ""}
+			var endPeriod uint32 = math.MaxUint32
+			if delegation.ExitIteration != nil {
+				endPeriod = *delegation.ExitIteration
+			}
+			return []any{delegation.ValidatorID, delegation.Stake, delegation.FirstIteration, endPeriod, delegation.Multiplier, delegation.AutoRenew, delegation.IsLocked(validator), ""}
 		}},
 		{"native_getRewards", func(env *xenv.Environment) []any {
 			var args struct {

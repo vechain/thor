@@ -196,20 +196,23 @@ contract Staker {
 
     /**
      * @dev getDelegation returns the amount, multiplier and auto renew for delegator.
-     * @return (stake, multiplier, autoRenew, isLocked)
+     * @return (validationID, stake, startPeriod, endPeriod, multiplier, autoRenew, isLocked)
      */
     function getDelegation(
         bytes32 delegationID
-    ) public view returns (uint256, uint8, bool, bool) {
+    ) public view returns (bytes32, uint256, uint32, uint32, uint8, bool, bool) {
         (
+            bytes32 validationID,
             uint256 stake,
+            uint32 startPeriod,
+            uint32 endPeriod,
             uint8 multiplier,
             bool autoRenew,
             bool isLocked,
             string memory error
         ) = StakerNative(address(this)).native_getDelegation(delegationID);
         require(bytes(error).length == 0, error);
-        return (stake, multiplier, autoRenew, isLocked);
+        return (validationID, stake, startPeriod, endPeriod, multiplier, autoRenew, isLocked);
     }
 
     /**
@@ -372,7 +375,16 @@ interface StakerNative {
 
     function native_getDelegation(
         bytes32 delegationID
-    ) external view returns (uint256, uint8, bool, bool, string calldata);
+    ) external view returns (
+        bytes32,
+        uint256,
+        uint32,
+        uint32,
+        uint8,
+        bool,
+        bool,
+        string calldata
+    );
 
     function native_get(
         bytes32 validationID
