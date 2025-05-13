@@ -54,7 +54,7 @@ func TestScheduler_IsScheduled(t *testing.T) {
 	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed1"))
 	assert.NoError(t, err)
 
-	assert.True(t, sched.IsScheduled(20, thor.MustParseAddress("0xf370940abdbd2583bc80bfc19d19bc216c88ccf0")))
+	assert.True(t, sched.IsScheduled(20, thor.MustParseBytes32("0x000000000000000000000000f370940abdbd2583bc80bfc19d19bc216c88ccf0")))
 }
 
 func TestScheduler_Distribution(t *testing.T) {
@@ -65,7 +65,7 @@ func TestScheduler_Distribution(t *testing.T) {
 	distribution := make(map[thor.Bytes32]int)
 
 	for i := uint64(1); i <= 100_000; i++ {
-		id, _ := sched.expectedValidator(thor.BlockInterval * i)
+		id := sched.expectedValidator(thor.BlockInterval * i)
 		distribution[id]++
 	}
 

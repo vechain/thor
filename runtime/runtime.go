@@ -136,16 +136,6 @@ func New(
 		if err := state.SetCode(builtin.Staker.Address, builtin.Staker.RuntimeBytecodes()); err != nil {
 			panic(err)
 		}
-	} else if forkConfig.IsTransitionBlock(ctx.Number) {
-		staker := builtin.Staker.Native(state)
-		transitioned, err := staker.Transition(ctx.Number)
-		if err != nil {
-			panic(err)
-		}
-		if transitioned {
-			logger.Info("HAYABUSA - POS has become fully active", "block", ctx.Number)
-			builtin.Energy.Native(state, ctx.Time).StopEnergyGrowth()
-		}
 	}
 
 	rt := Runtime{

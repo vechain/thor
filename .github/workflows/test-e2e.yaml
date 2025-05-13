@@ -110,7 +110,8 @@ jobs:
       matrix:
         packages:
           - builtins
-          - tests
+          - tests/validations
+          - tests/delegations
 
     env:
       GOPRIVATE: github.com/vechain/draupnir/*

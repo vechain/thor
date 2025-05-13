@@ -10,7 +10,9 @@ import (
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/poa"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
@@ -62,7 +64,7 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (*Flo
 	}
 
 	var sched scheduler
-	posActive, err := builtin.Staker.Native(st).IsActive()
+	posActive, activated, err := p.syncPOS(builtin.Staker.Native(st), parent.Header.Number()+1)
 	if err != nil {
 		return nil, false, err
 	}
@@ -75,6 +77,10 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (*Flo
 	beneficiary, newBlockTime, score, err := sched(parent, nowTimestamp, st)
 	if err != nil {
 		return nil, false, err
+	}
+
+	if activated {
+		builtin.Energy.Native(st, parent.Header.Timestamp()).StopEnergyGrowth()
 	}
 
 	rt := runtime.New(
@@ -104,9 +110,13 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 		features |= tx.DelegationFeature
 	}
 
-	posActive, err := builtin.Staker.Native(state).IsActive()
+	posActive, activated, err := p.syncPOS(builtin.Staker.Native(state), parent.Header.Number()+1)
 	if err != nil {
 		return nil, false, err
+	}
+
+	if activated {
+		builtin.Energy.Native(state, parent.Header.Timestamp()).StopEnergyGrowth()
 	}
 
 	var score uint64
@@ -164,4 +174,41 @@ func (p *Packer) gasLimit(parentGasLimit uint64) uint64 {
 // it as it can.
 func (p *Packer) SetTargetGasLimit(gl uint64) {
 	p.targetGasLimit = gl
+}
+
+// syncPOS checks if POS consensus is active, or tries to activate it if conditions are met.
+// If the staker contract is active, it will perform housekeeping.
+func (p *Packer) syncPOS(staker *staker.Staker, current uint32) (active bool, activated bool, err error) {
+	// still on PoA
+	if p.forkConfig.HAYABUSA+p.forkConfig.HAYABUSA_TP > current {
+		return false, false, nil
+	}
+	// check if the staker contract currently is active
+	active, err = staker.IsActive()
+	if err != nil {
+		return false, false, err
+	}
+
+	// attempt to transition if we're on a transition block and the staker contract is not active
+	if !active && current%p.forkConfig.HAYABUSA_TP == 0 {
+		activated, err = staker.Transition(current)
+		if err != nil {
+			return false, false, err
+		}
+		if activated {
+			log.Info("dPoS activated", "pkg", "packer", "block", current)
+			return true, true, nil
+		}
+	}
+
+	// perform housekeeping if the staker contract is active
+	if active {
+		_, err := staker.Housekeep(current)
+		if err != nil {
+			return false, false, err
+		}
+		return true, false, nil
+	}
+
+	return active, false, nil
 }

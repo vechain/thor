@@ -17,7 +17,7 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func (c *Consensus) validateAuthorityProposer(header *block.Header, parent *block.Header, st *state.State) (cacheHandler, error) {
+func (c *Consensus) validateAuthorityProposer(header *block.Header, parent *block.Header, st *state.State) (*poa.Candidates, error) {
 	signer, err := header.Signer()
 	if err != nil {
 		return nil, consensusError(fmt.Sprintf("block signer unavailable: %v", err))
@@ -74,17 +74,41 @@ func (c *Consensus) validateAuthorityProposer(header *block.Header, parent *bloc
 		}
 	}
 
-	return c.authorityCacheHandler(candidates, header), nil
+	return candidates, nil
 }
 
 // handleAuthorityEvents checks each block for authority related events, and updates the candidates list accordingly.
-func (c *Consensus) authorityCacheHandler(candidates *poa.Candidates, header *block.Header) cacheHandler {
-	return func(receipts tx.Receipts) error {
-		hasAuthorityEvent := func() bool {
+func (c *Consensus) authorityCacheHandler(candidates *poa.Candidates, header *block.Header, receipts tx.Receipts) error {
+	hasAuthorityEvent := func() bool {
+		for _, r := range receipts {
+			for _, o := range r.Outputs {
+				for _, ev := range o.Events {
+					if ev.Address == builtin.Authority.Address {
+						return true
+					}
+				}
+			}
+		}
+		return false
+	}()
+
+	// if no event emitted from Authority contract, it's believed that the candidates list not changed
+	if !hasAuthorityEvent {
+		// if no endorsor related transfer, or no event emitted from Params contract, the proposers list
+		// can be reused
+		hasEndorsorEvent := func() bool {
 			for _, r := range receipts {
 				for _, o := range r.Outputs {
 					for _, ev := range o.Events {
-						if ev.Address == builtin.Authority.Address {
+						if header.Number() >= c.forkConfig.HAYABUSA && ev.Address == builtin.Staker.Address {
+							return true
+						}
+						if ev.Address == builtin.Params.Address {
+							return true
+						}
+					}
+					for _, t := range o.Transfers {
+						if candidates.IsEndorsor(t.Sender) || candidates.IsEndorsor(t.Recipient) {
 							return true
 						}
 					}
@@ -93,39 +117,13 @@ func (c *Consensus) authorityCacheHandler(candidates *poa.Candidates, header *bl
 			return false
 		}()
 
-		// if no event emitted from Authority contract, it's believed that the candidates list not changed
-		if !hasAuthorityEvent {
-			// if no endorsor related transfer, or no event emitted from Params contract, the proposers list
-			// can be reused
-			hasEndorsorEvent := func() bool {
-				for _, r := range receipts {
-					for _, o := range r.Outputs {
-						for _, ev := range o.Events {
-							if header.Number() >= c.forkConfig.HAYABUSA && ev.Address == builtin.Staker.Address {
-								return true
-							}
-							if ev.Address == builtin.Params.Address {
-								return true
-							}
-						}
-						for _, t := range o.Transfers {
-							if candidates.IsEndorsor(t.Sender) || candidates.IsEndorsor(t.Recipient) {
-								return true
-							}
-						}
-					}
-				}
-				return false
-			}()
-
-			if hasEndorsorEvent {
-				candidates.InvalidateCache()
-			}
-			c.authorityCache.Add(header.ID(), candidates)
+		if hasEndorsorEvent {
+			candidates.InvalidateCache()
 		}
-
-		return nil
+		c.authorityCache.Add(header.ID(), candidates)
 	}
+
+	return nil
 }
 
 func (c *Consensus) authorityBalanceCheck(header *block.Header, st *state.State, signer thor.Address) poa.BalancerChecker {

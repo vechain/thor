@@ -17,10 +17,6 @@ import (
 
 func (p *Packer) schedulePOS(parent *chain.BlockSummary, nowTimestamp uint64, state *state.State) (thor.Address, uint64, uint64, error) {
 	staker := builtin.Staker.Native(state)
-	leaderGroup, err := staker.LeaderGroup()
-	if err != nil {
-		return thor.Address{}, 0, 0, err
-	}
 
 	var beneficiary thor.Address
 	if p.beneficiary != nil {
@@ -37,7 +33,11 @@ func (p *Packer) schedulePOS(parent *chain.BlockSummary, nowTimestamp uint64, st
 	}
 
 	var seed []byte
-	seed, err = p.seeder.Generate(parent.Header.ID())
+	seed, err := p.seeder.Generate(parent.Header.ID())
+	if err != nil {
+		return thor.Address{}, 0, 0, err
+	}
+	leaderGroup, err := staker.LeaderGroup()
 	if err != nil {
 		return thor.Address{}, 0, 0, err
 	}
@@ -55,15 +55,6 @@ func (p *Packer) schedulePOS(parent *chain.BlockSummary, nowTimestamp uint64, st
 		if err := staker.SetOnline(addr, online); err != nil {
 			return thor.Address{}, 0, 0, err
 		}
-	}
-
-	// Perform validator housekeeping on epoch boundaries
-	parentNum := parent.Header.Number()
-	nextBlockNum := parentNum + 1
-
-	_, err = staker.Housekeep(nextBlockNum)
-	if err != nil {
-		return thor.Address{}, 0, 0, err
 	}
 
 	return beneficiary, newBlockTime, score, nil

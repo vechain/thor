@@ -12,7 +12,9 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/log"
+	"github.com/vechain/thor/v2/poa"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -20,12 +22,6 @@ import (
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/xenv"
 )
-
-var (
-	logger = log.WithContext("pkg", "consensus")
-)
-
-type cacheHandler func(receipts tx.Receipts) error
 
 func (c *Consensus) validate(
 	state *state.State,
@@ -36,13 +32,28 @@ func (c *Consensus) validate(
 ) (*state.Stage, tx.Receipts, error) {
 	header := block.Header()
 
+	staker := builtin.Staker.Native(state)
+	posActive, activated, err := c.syncPOS(staker, header.Number())
+	if err != nil {
+		return nil, nil, err
+	}
+
 	if err := c.validateBlockHeader(header, parent, nowTimestamp); err != nil {
 		return nil, nil, err
 	}
 
-	cacheHandler, posActive, err := c.validateProposer(header, parent, state)
+	var candidates *poa.Candidates
+	if posActive {
+		err = c.validateStakingProposer(header, parent, staker)
+	} else {
+		candidates, err = c.validateAuthorityProposer(header, parent, state)
+	}
 	if err != nil {
 		return nil, nil, err
+	}
+
+	if activated {
+		builtin.Energy.Native(state, parent.Timestamp()).StopEnergyGrowth()
 	}
 
 	if err := c.validateBlockBody(block); err != nil {
@@ -54,26 +65,13 @@ func (c *Consensus) validate(
 		return nil, nil, err
 	}
 
-	if err = cacheHandler(receipts); err != nil {
-		return nil, nil, err
+	if !posActive {
+		if err := c.authorityCacheHandler(candidates, header, receipts); err != nil {
+			return nil, nil, err
+		}
 	}
 
 	return stage, receipts, nil
-}
-
-func (c *Consensus) validateProposer(header *block.Header, parent *block.Header, state *state.State) (cacheHandler, bool, error) {
-	posActive, err := builtin.Staker.Native(state).IsActive()
-	if err != nil {
-		return nil, false, err
-	}
-	logger.Debug("validating block proposer", "pos", posActive)
-	var handler cacheHandler
-	if posActive {
-		handler, err = c.validateStakingProposer(header, parent, state)
-	} else {
-		handler, err = c.validateAuthorityProposer(header, parent, state)
-	}
-	return handler, posActive, err
 }
 
 func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Header, nowTimestamp uint64) error {
@@ -287,4 +285,39 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 	}
 
 	return stage, receipts, nil
+}
+
+func (c *Consensus) syncPOS(staker *staker.Staker, current uint32) (active bool, activated bool, err error) {
+	// still on PoA
+	if c.forkConfig.HAYABUSA+c.forkConfig.HAYABUSA_TP > current {
+		return false, false, nil
+	}
+	// check if the staker contract is active
+	active, err = staker.IsActive()
+	if err != nil {
+		return false, false, err
+	}
+
+	// attempt to transition if we're on a transition block and the staker contract is not active
+	if !active && current%c.forkConfig.HAYABUSA_TP == 0 {
+		activated, err = staker.Transition(current)
+		if err != nil {
+			return false, false, err
+		}
+		if activated {
+			log.Info("dPoS activated", "pkg", "consensus", "block", current)
+			return true, true, nil
+		}
+	}
+
+	// perform housekeeping if the staker contract is active
+	if active {
+		_, err := staker.Housekeep(current)
+		if err != nil {
+			return false, false, err
+		}
+		return true, false, nil
+	}
+
+	return active, false, nil
 }

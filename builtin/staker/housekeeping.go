@@ -15,7 +15,8 @@ import (
 // Housekeep iterates over validations, move to cooldown
 // take the oldest validator and move to exited
 func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
-	if currentBlock%epochLength != 0 { // we only perform housekeeping on epoch blocks
+	// we only perform housekeeping at the start of epochs
+	if currentBlock%epochLength != 0 {
 		return false, nil
 	}
 
@@ -85,7 +86,6 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 
 	if !validatorExitID.IsZero() {
 		logger.Debug("exiting validator", "id", validatorExitID)
-
 		if err := s.validations.ExitValidator(validatorExitID, currentBlock); err != nil {
 			return false, err
 		}

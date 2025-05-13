@@ -71,7 +71,7 @@ func NewScheduler(
 	}
 
 	if !listed {
-		return nil, errors.New("unauthorized block proposer")
+		return nil, errors.New("pos: unauthorized block proposer")
 	}
 
 	sort.Slice(placements, func(i, j int) bool {
@@ -113,8 +113,8 @@ func (s *Scheduler) Schedule(nowTime uint64) (uint64, error) {
 
 	for i := range s.placements {
 		slot := newBlockTime + uint64(i)*T
-		_, addr := s.expectedValidator(slot)
-		if addr == s.validator.Master {
+		id := s.expectedValidator(slot)
+		if id == s.id {
 			return slot, nil
 		}
 	}
@@ -123,7 +123,7 @@ func (s *Scheduler) Schedule(nowTime uint64) (uint64, error) {
 }
 
 // IsScheduled returns if the schedule(proposer, blockTime) is correct.
-func (s *Scheduler) IsScheduled(blockTime uint64, proposer thor.Address) bool {
+func (s *Scheduler) IsScheduled(blockTime uint64, id thor.Bytes32) bool {
 	if s.parentBlockTime >= blockTime {
 		// invalid block time
 		return false
@@ -135,13 +135,13 @@ func (s *Scheduler) IsScheduled(blockTime uint64, proposer thor.Address) bool {
 		return false
 	}
 
-	_, addr := s.expectedValidator(blockTime)
+	expectedID := s.expectedValidator(blockTime)
 
-	return addr == proposer
+	return expectedID == id
 }
 
 func (s *Scheduler) IsTheTime(newBlockTime uint64) bool {
-	return s.IsScheduled(newBlockTime, s.validator.Master)
+	return s.IsScheduled(newBlockTime, s.id)
 }
 
 func (s *Scheduler) Updates(newBlockTime uint64) (map[thor.Bytes32]bool, uint64) {
@@ -154,11 +154,12 @@ func (s *Scheduler) Updates(newBlockTime uint64) (map[thor.Bytes32]bool, uint64)
 			break
 		}
 
-		id, _ := s.expectedValidator(s.parentBlockTime + T + i*T)
-		updates[id] = false
+		id := s.expectedValidator(s.parentBlockTime + T + i*T)
+		if id != s.id {
+			updates[s.id] = false
+		}
 	}
 
-	delete(updates, s.id) // we know the proposer is online
 	score := uint64(len(s.placements) - len(updates))
 
 	if !s.validator.Online {
@@ -170,7 +171,7 @@ func (s *Scheduler) Updates(newBlockTime uint64) (map[thor.Bytes32]bool, uint64)
 
 // expectedValidator returns the expected validator for the given block time.
 // It uses the seed to deterministically select a validator.
-func (s *Scheduler) expectedValidator(blockTime uint64) (thor.Bytes32, thor.Address) {
+func (s *Scheduler) expectedValidator(blockTime uint64) thor.Bytes32 {
 	hash := thor.Blake2b(s.seed, big.NewInt(0).SetUint64(blockTime).Bytes())
 	selector := new(big.Rat).SetInt(new(big.Int).SetBytes(hash.Bytes()))
 	divisor := new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), uint(len(hash)*8)))
@@ -179,8 +180,8 @@ func (s *Scheduler) expectedValidator(blockTime uint64) (thor.Bytes32, thor.Addr
 
 	for i := range s.placements {
 		if selector.Cmp(s.placements[i].start) >= 0 && selector.Cmp(s.placements[i].end) < 0 {
-			return s.placements[i].id, s.placements[i].addr
+			return s.placements[i].id
 		}
 	}
-	return thor.Bytes32{}, thor.Address{} // should never happen
+	return thor.Bytes32{} // should never happen
 }

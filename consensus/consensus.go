@@ -11,6 +11,7 @@ import (
 
 	"github.com/hashicorp/golang-lru/simplelru"
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/poa"
 	"github.com/vechain/thor/v2/runtime"
@@ -29,13 +30,11 @@ type Consensus struct {
 	forkConfig           thor.ForkConfig
 	correctReceiptsRoots map[string]string
 	authorityCache       *simplelru.LRU
-	validatorCache       *simplelru.LRU
 }
 
 // New create a Consensus instance.
 func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfig) *Consensus {
 	authorityCache, _ := simplelru.NewLRU(16, nil)
-	validatorCache, _ := simplelru.NewLRU(16, nil)
 	return &Consensus{
 		repo:                 repo,
 		stater:               stater,
@@ -43,7 +42,6 @@ func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfi
 		forkConfig:           forkConfig,
 		correctReceiptsRoots: thor.LoadCorrectReceiptsRoots(),
 		authorityCache:       authorityCache,
-		validatorCache:       validatorCache,
 	}
 }
 
@@ -69,7 +67,7 @@ func (c *Consensus) Process(parentSummary *chain.BlockSummary, blk *block.Block,
 	return stage, receipts, nil
 }
 
-func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipPoA bool) (*runtime.Runtime, error) {
+func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipValidation bool) (*runtime.Runtime, error) {
 	signer, err := header.Signer()
 	if err != nil {
 		return nil, err
@@ -82,8 +80,22 @@ func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipPoA bool) (*ru
 		return nil, errors.New("parent block is missing")
 	}
 	state := c.stater.NewState(parentSummary.Root())
-	if !skipPoA {
-		if _, _, err := c.validateProposer(header, parentSummary.Header, state); err != nil {
+
+	if !skipValidation {
+		staker := builtin.Staker.Native(state)
+		posActive, activated, err := c.syncPOS(staker, header.Number())
+		if err != nil {
+			return nil, err
+		}
+		if activated {
+			builtin.Energy.Native(state, parentSummary.Header.Timestamp()).StopEnergyGrowth()
+		}
+		if posActive {
+			err = c.validateStakingProposer(header, parentSummary.Header, staker)
+		} else {
+			_, err = c.validateAuthorityProposer(header, parentSummary.Header, state)
+		}
+		if err != nil {
 			return nil, err
 		}
 	}
