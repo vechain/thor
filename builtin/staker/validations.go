@@ -205,9 +205,11 @@ func (v *validations) ActivateNext(
 	validatorLocked := big.NewInt(0).Add(validator.LockedVET, validator.PendingLocked)
 	validator.PendingLocked = big.NewInt(0)
 	validator.LockedVET = validatorLocked
+	// x2 multiplier for validator's stake
+	probabilityWeight := big.NewInt(0).Mul(validatorLocked, big.NewInt(2))
 
 	changeTVL, changeWeight, queuedDecrease := aggregation.RenewDelegations()
-	validator.Weight = big.NewInt(0).Add(validatorLocked, changeWeight)
+	validator.Weight = big.NewInt(0).Add(probabilityWeight, changeWeight)
 	if err := v.storage.SetAggregation(id, aggregation); err != nil {
 		return err
 	}

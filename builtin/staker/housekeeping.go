@@ -144,6 +144,8 @@ func (s *Staker) performRenewalUpdates(id thor.Bytes32, entry *Validation) error
 		return err
 	}
 	changeTVL = changeTVL.Add(changeTVL, delegatorChangeTVL)
+	// Apply x2 multiplier for validator's stake
+	changeWeight = big.NewInt(0).Mul(changeWeight, big.NewInt(2))
 	changeWeight = changeWeight.Add(changeWeight, delegatorChangeWeight)
 	queuedDecrease = queuedDecrease.Add(queuedDecrease, delegatorQueuedDecrease)
 
