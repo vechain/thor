@@ -11,6 +11,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/test/datagen"
+	"github.com/vechain/thor/v2/test/testchain"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
 
 func TestCalculateRewards(t *testing.T) {
@@ -111,5 +117,91 @@ func TestCalculateRewards(t *testing.T) {
 			result := fd.calculateRewards(tt.cachedRewards, tt.rewardPercentiles)
 			assert.Equal(t, tt.expected, result)
 		})
+	}
+}
+
+func TestRewardsBeforeAndAfterGalactica(t *testing.T) {
+	forkConfig := thor.NoFork
+	forkConfig.GALACTICA = 2
+
+	thorChain, err := testchain.NewWithFork(&forkConfig)
+	assert.NoError(t, err)
+
+	addr := thor.BytesToAddress([]byte("to"))
+	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
+
+	trx1 := tx.NewBuilder(tx.TypeLegacy).
+		ChainTag(thorChain.Repo().ChainTag()).
+		GasPriceCoef(100).
+		Expiration(720).
+		Gas(21000).
+		Nonce(datagen.RandUint64()).
+		Clause(cla).
+		BlockRef(tx.NewBlockRef(0)).
+		Build()
+	trx2 := tx.NewBuilder(tx.TypeLegacy).
+		ChainTag(thorChain.Repo().ChainTag()).
+		GasPriceCoef(0).
+		Expiration(720).
+		Gas(21000).
+		Nonce(datagen.RandUint64()).
+		Clause(cla).
+		BlockRef(tx.NewBlockRef(0)).
+		Build()
+	assert.NoError(t,
+		thorChain.MintBlock(
+			genesis.DevAccounts()[0],
+			tx.MustSign(trx1, genesis.DevAccounts()[0].PrivateKey),
+			tx.MustSign(trx2, genesis.DevAccounts()[0].PrivateKey),
+		),
+	)
+
+	trx3 := tx.NewBuilder(tx.TypeLegacy).
+		ChainTag(thorChain.Repo().ChainTag()).
+		GasPriceCoef(10).
+		Expiration(720).
+		Gas(21000).
+		Nonce(datagen.RandUint64()).
+		Clause(cla).
+		BlockRef(tx.NewBlockRef(0)).
+		Build()
+	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0], tx.MustSign(trx3, genesis.DevAccounts()[0].PrivateKey)))
+
+	feesData := newFeesData(thorChain.Repo(), thorChain.Stater(), 10)
+
+	bestBlockSummary := thorChain.Repo().BestBlockSummary()
+
+	blockCount := 2
+	oldestBlockID, baseFees, gasUsedRatios, rewards, err := feesData.resolveRange(bestBlockSummary, uint32(blockCount), []float64{25, 50, 75})
+	assert.NoError(t, err)
+	assert.NotNil(t, oldestBlockID)
+	assert.Len(t, baseFees, blockCount)
+	assert.Len(t, gasUsedRatios, blockCount)
+	assert.Len(t, rewards, blockCount)
+
+	// Before GALACTICA
+	assert.NotNil(t, baseFees[0])
+	assert.Equal(t, baseFees[0], (*hexutil.Big)(big.NewInt(0)))
+
+	assert.NotNil(t, rewards[0])
+	assert.Len(t, rewards[0], 3)
+	for _, reward := range rewards[0] {
+		assert.NotNil(t, reward)
+		assert.True(t, big.NewInt(0).Cmp((*big.Int)(reward)) == 0)
+	}
+
+	// After GALACTICA
+	assert.NotNil(t, baseFees[1])
+	assert.Equal(t, baseFees[1], (*hexutil.Big)(big.NewInt(thor.InitialBaseFee)))
+
+	assert.NotNil(t, rewards[1])
+	assert.Len(t, rewards[1], 3)
+
+	expectedReward, ok := new(big.Int).SetString("1029215686274509", 10)
+	require.True(t, ok, "failed to parse expected reward")
+
+	for _, reward := range rewards[1] {
+		assert.NotNil(t, reward)
+		assert.True(t, expectedReward.Cmp((*big.Int)(reward)) == 0)
 	}
 }
