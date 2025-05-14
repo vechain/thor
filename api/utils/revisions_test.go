@@ -99,7 +99,16 @@ func TestAllowNext(t *testing.T) {
 }
 
 func TestGetSummary(t *testing.T) {
-	thorChain, err := testchain.NewDefault()
+	forks := thor.ForkConfig{
+		VIP191:    0,
+		ETH_CONST: 0,
+		BLOCKLIST: 0,
+		ETH_IST:   0,
+		VIP214:    0,
+		FINALITY:  0,
+		GALACTICA: 100,
+	}
+	thorChain, err := testchain.NewWithFork(&forks)
 	require.NoError(t, err)
 
 	customRevision := thorChain.Repo().BestBlockSummary().Header.ID()
@@ -160,12 +169,12 @@ func TestGetSummaryAndState(t *testing.T) {
 
 	b := thorChain.GenesisBlock()
 
-	summary, _, err := GetSummaryAndState(&Revision{revBest}, thorChain.Repo(), thorChain.Engine(), thorChain.Stater())
+	summary, _, err := GetSummaryAndState(&Revision{revBest}, thorChain.Repo(), thorChain.Engine(), thorChain.Stater(), thorChain.GetForkConfig())
 	assert.Nil(t, err)
 	assert.Equal(t, summary.Header.Number(), b.Header().Number())
 	assert.Equal(t, summary.Header.Timestamp(), b.Header().Timestamp())
 
-	summary, _, err = GetSummaryAndState(&Revision{revNext}, thorChain.Repo(), thorChain.Engine(), thorChain.Stater())
+	summary, _, err = GetSummaryAndState(&Revision{revNext}, thorChain.Repo(), thorChain.Engine(), thorChain.Stater(), thorChain.GetForkConfig())
 	assert.Nil(t, err)
 	assert.Equal(t, summary.Header.Number(), b.Header().Number()+1)
 	assert.Equal(t, summary.Header.Timestamp(), b.Header().Timestamp()+thor.BlockInterval)

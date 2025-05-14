@@ -22,7 +22,7 @@ import (
 
 func TestConvertToBatchCallData(t *testing.T) {
 	// Test case 1: Empty transaction
-	tx1 := &tx.Transaction{}
+	tx1 := tx.NewBuilder(tx.TypeLegacy).Build()
 	addr1 := &thor.Address{}
 	expected1 := &accounts.BatchCallData{
 		Clauses:    make(accounts.Clauses, 0),

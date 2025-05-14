@@ -20,7 +20,8 @@ func TestEventReader_Read(t *testing.T) {
 	allBlocks, err := thorChain.GetAllBlocks()
 	require.NoError(t, err)
 	genesisBlk := allBlocks[0]
-	newBlock := allBlocks[1]
+	// taking best block to include also galactica block
+	bestBlk := allBlocks[len(allBlocks)-1]
 
 	er := &eventReader{
 		repo:        thorChain.Repo(),
@@ -34,13 +35,19 @@ func TestEventReader_Read(t *testing.T) {
 	assert.Empty(t, events)
 	assert.False(t, ok)
 
-	// Test case 2: Events are available to read
+	// Test case 2: There are no events available to read
 	er = newEventReader(thorChain.Repo(), genesisBlk.Header().ID(), &EventFilter{})
 
 	events, ok, err = er.Read()
-
 	assert.NoError(t, err)
 	assert.True(t, ok)
+	assert.Zero(t, len(events))
+
+	// Test case 3: There are no events available to read
+	events, ok, err = er.Read()
+	assert.NoError(t, err)
+	assert.True(t, ok)
+
 	var eventMessages []*EventMessage
 	for _, event := range events {
 		if msg, ok := event.(*EventMessage); ok {
@@ -51,8 +58,8 @@ func TestEventReader_Read(t *testing.T) {
 	}
 	assert.Equal(t, 2, len(eventMessages))
 	eventMsg := eventMessages[0]
-	assert.Equal(t, newBlock.Header().ID(), eventMsg.Meta.BlockID)
-	assert.Equal(t, newBlock.Header().Number(), eventMsg.Meta.BlockNumber)
+	assert.Equal(t, bestBlk.Header().ID(), eventMsg.Meta.BlockID)
+	assert.Equal(t, bestBlk.Header().Number(), eventMsg.Meta.BlockNumber)
 }
 
 type mockBlockReaderWithError struct{}

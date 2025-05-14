@@ -26,7 +26,7 @@ type Block struct {
 	header *Header
 	txs    tx.Transactions
 	cache  struct {
-		size atomic.Value
+		size atomic.Uint64
 	}
 }
 
@@ -92,18 +92,18 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 		header: &payload.Header,
 		txs:    payload.Txs,
 	}
-	b.cache.size.Store(thor.StorageSize(rlp.ListSize(size)))
+	b.cache.size.Store(rlp.ListSize(size))
 	return nil
 }
 
 // Size returns block size in bytes.
 func (b *Block) Size() thor.StorageSize {
-	if cached := b.cache.size.Load(); cached != nil {
-		return cached.(thor.StorageSize)
+	if cached := b.cache.size.Load(); cached != 0 {
+		return thor.StorageSize(cached)
 	}
 	var size thor.StorageSize
 	rlp.Encode(&size, b)
-	b.cache.size.Store(size)
+	b.cache.size.Store(uint64(size))
 	return size
 }
 

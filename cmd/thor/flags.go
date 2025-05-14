@@ -58,7 +58,7 @@ var (
 	apiBacktraceLimitFlag = cli.Uint64Flag{
 		Name:  "api-backtrace-limit",
 		Value: 1000,
-		Usage: "limit the distance between 'position' and best block for subscriptions APIs",
+		Usage: "limit the distance between 'position' and best block for subscriptions and fees APIs",
 	}
 	apiAllowCustomTracerFlag = cli.BoolFlag{
 		Name:  "api-allow-custom-tracer",
@@ -81,6 +81,13 @@ var (
 		Name:  "api-enable-txpool",
 		Usage: "enable txpool REST API endpoints",
 	}
+	// priority fees API flags
+	apiPriorityFeesPercentageFlag = cli.Uint64Flag{
+		Name:  "api-priority-fees-percentage",
+		Value: 5,
+		Usage: "percentage of the block base fee for priority fees calculation",
+	}
+
 	verbosityFlag = cli.Uint64Flag{
 		Name:  "verbosity",
 		Value: log.LegacyLevelInfo,
@@ -174,7 +181,7 @@ var (
 	}
 	txPoolLimitPerAccountFlag = cli.Uint64Flag{
 		Name:  "txpool-limit-per-account",
-		Value: 16,
+		Value: 128,
 		Usage: "set tx limit per account in pool",
 	}
 
@@ -182,6 +189,12 @@ var (
 		Name:  "api-allowed-tracers",
 		Value: "none",
 		Usage: "comma separated list of allowed API tracers(none,all,call,prestate etc.)",
+	}
+
+	minEffectivePriorityFeeFlag = cli.Uint64Flag{
+		Name:  "min-effective-priority-fee",
+		Value: 0,
+		Usage: "set a minimum effective priority fee for transactions to be included in the block proposed by the block proposer",
 	}
 
 	// solo mode only flags

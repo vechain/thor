@@ -286,7 +286,7 @@ func initAccountServer(t *testing.T, enabledDeprecated bool) {
 	genesisBlock = thorChain.GenesisBlock()
 	claTransfer := tx.NewClause(&addr).WithValue(value)
 	claDeploy := tx.NewClause(nil).WithData(bytecode)
-	transaction := buildTxWithClauses(thorChain.Repo().ChainTag(), claTransfer, claDeploy)
+	transaction := buildTxWithClauses(tx.TypeLegacy, thorChain.Repo().ChainTag(), claTransfer, claDeploy)
 	contractAddr = thor.CreateContractAddress(transaction.ID(), 1, 0)
 	method := "set"
 	abi, _ := ABI.New([]byte(abiJSON))
@@ -296,7 +296,7 @@ func initAccountServer(t *testing.T, enabledDeprecated bool) {
 		t.Fatal(err)
 	}
 	claCall := tx.NewClause(&contractAddr).WithData(input)
-	transactionCall := buildTxWithClauses(thorChain.Repo().ChainTag(), claCall)
+	transactionCall := buildTxWithClauses(tx.TypeLegacy, thorChain.Repo().ChainTag(), claCall)
 	require.NoError(t,
 		thorChain.MintTransactions(
 			genesis.DevAccounts()[0],
@@ -306,23 +306,20 @@ func initAccountServer(t *testing.T, enabledDeprecated bool) {
 	)
 
 	router := mux.NewRouter()
-	accounts.New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), thor.NoFork, thorChain.Engine(), enabledDeprecated).
+	accounts.New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), &thor.NoFork, thorChain.Engine(), enabledDeprecated).
 		Mount(router, "/accounts")
 
 	ts = httptest.NewServer(router)
 }
 
-func buildTxWithClauses(chaiTag byte, clauses ...*tx.Clause) *tx.Transaction {
-	builder := new(tx.Builder).
-		ChainTag(chaiTag).
+func buildTxWithClauses(txType tx.Type, chainTag byte, clauses ...*tx.Clause) *tx.Transaction {
+	trx := tx.NewBuilder(txType).
+		ChainTag(chainTag).
 		Expiration(10).
-		Gas(1000000)
-	for _, c := range clauses {
-		builder.Clause(c)
-	}
-
-	trx := builder.Build()
-
+		Gas(1000000).
+		MaxFeePerGas(big.NewInt(1000)).
+		Clauses(clauses).
+		Build()
 	return tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)
 }
 

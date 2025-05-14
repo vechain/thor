@@ -62,12 +62,13 @@ func (n *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) e
 	}
 
 	if expanded {
+		// TODO: consider  transaction/convertTransactions
 		trxs := make([]transactions.Transaction, len(filteredTransactions))
-		for index, tx := range filteredTransactions {
-			origin, _ := tx.Origin()
-			delegator, _ := tx.Delegator()
+		for index, trx := range filteredTransactions {
+			origin, _ := trx.Origin()
+			delegator, _ := trx.Delegator()
 
-			txClauses := tx.Clauses()
+			txClauses := trx.Clauses()
 			cls := make(transactions.Clauses, len(txClauses))
 			for i, c := range txClauses {
 				cls[i] = transactions.Clause{
@@ -76,20 +77,28 @@ func (n *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) e
 					Data:  hexutil.Encode(c.Data()),
 				}
 			}
-			br := tx.BlockRef()
+			br := trx.BlockRef()
 			trxs[index] = transactions.Transaction{
-				ChainTag:     tx.ChainTag(),
-				ID:           tx.ID(),
-				Origin:       origin,
-				BlockRef:     hexutil.Encode(br[:]),
-				Expiration:   tx.Expiration(),
-				Nonce:        math.HexOrDecimal64(tx.Nonce()),
-				Size:         uint32(tx.Size()),
-				GasPriceCoef: tx.GasPriceCoef(),
-				Gas:          tx.Gas(),
-				DependsOn:    tx.DependsOn(),
-				Clauses:      cls,
-				Delegator:    delegator,
+				ChainTag:   trx.ChainTag(),
+				ID:         trx.ID(),
+				Origin:     origin,
+				BlockRef:   hexutil.Encode(br[:]),
+				Expiration: trx.Expiration(),
+				Nonce:      math.HexOrDecimal64(trx.Nonce()),
+				Size:       uint32(trx.Size()),
+				Gas:        trx.Gas(),
+				DependsOn:  trx.DependsOn(),
+				Clauses:    cls,
+				Delegator:  delegator,
+			}
+
+			switch trx.Type() {
+			case tx.TypeLegacy:
+				coef := trx.GasPriceCoef()
+				trxs[index].GasPriceCoef = &coef
+			default:
+				trxs[index].MaxFeePerGas = (*math.HexOrDecimal256)(trx.MaxFeePerGas())
+				trxs[index].MaxPriorityFeePerGas = (*math.HexOrDecimal256)(trx.MaxPriorityFeePerGas())
 			}
 		}
 

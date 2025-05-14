@@ -20,6 +20,7 @@ import (
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/co"
+	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -66,19 +67,22 @@ type TxPool struct {
 	txFeed event.Feed
 	scope  event.SubscriptionScope
 	goes   co.Goes
+
+	forkConfig *thor.ForkConfig
 }
 
 // New create a new TxPool instance.
 // Shutdown is required to be called at end.
-func New(repo *chain.Repository, stater *state.Stater, options Options) *TxPool {
+func New(repo *chain.Repository, stater *state.Stater, options Options, forkConfig *thor.ForkConfig) *TxPool {
 	ctx, cancel := context.WithCancel(context.Background())
 	pool := &TxPool{
-		options: options,
-		repo:    repo,
-		stater:  stater,
-		all:     newTxObjectMap(),
-		ctx:     ctx,
-		cancel:  cancel,
+		options:    options,
+		repo:       repo,
+		stater:     stater,
+		all:        newTxObjectMap(),
+		ctx:        ctx,
+		cancel:     cancel,
+		forkConfig: forkConfig,
 	}
 
 	pool.goes.Go(pool.housekeeping)
@@ -219,18 +223,14 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		return nil
 	}
 
-	headSummary := p.repo.BestBlockSummary()
-
-	// validation
-	switch {
-	case newTx.ChainTag() != p.repo.ChainTag():
-		return badTxError{"chain tag mismatch"}
-	case newTx.Size() > maxTxSize:
-		return txRejectedError{"size too large"}
+	delegator, _ := newTx.Delegator()
+	if delegator != nil && (thor.IsOriginBlocked(*delegator) || p.blocklist.Contains(*delegator)) {
+		return nil
 	}
 
-	if err := newTx.TestFeatures(headSummary.Header.TxsFeatures()); err != nil {
-		return txRejectedError{err.Error()}
+	headSummary := p.repo.BestBlockSummary()
+	if err := validateTransaction(newTx, p.repo, headSummary, p.forkConfig); err != nil {
+		return err
 	}
 
 	txObj, err := resolveTx(newTx, localSubmitted)
@@ -247,7 +247,10 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		}
 
 		state := p.stater.NewState(headSummary.Root())
-		executable, err := txObj.Executable(p.repo.NewChain(headSummary.Header.ID()), state, headSummary.Header)
+		if err := validateTransactionWithState(newTx, headSummary.Header, p.forkConfig, state); err != nil {
+			return err
+		}
+		executable, err := txObj.Executable(p.repo.NewChain(headSummary.Header.ID()), state, headSummary.Header, p.forkConfig)
 		if err != nil {
 			return txRejectedError{err.Error()}
 		}
@@ -355,6 +358,10 @@ func (p *TxPool) Fill(txs tx.Transactions) {
 		if thor.IsOriginBlocked(origin) || p.blocklist.Contains(origin) {
 			continue
 		}
+		delegator, _ := tx.Delegator()
+		if delegator != nil && (thor.IsOriginBlocked(*delegator) || p.blocklist.Contains(*delegator)) {
+			continue
+		}
 		// here we ignore errors
 		if txObj, err := resolveTx(tx, false); err == nil {
 			txObjs = append(txObjs, txObj)
@@ -400,7 +407,7 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 	newState := func() *state.State {
 		return p.stater.NewState(headSummary.Root())
 	}
-	baseGasPrice, err := builtin.Params.Native(newState()).Get(thor.KeyBaseGasPrice)
+	legacyTxBaseGasPrice, err := builtin.Params.Native(newState()).Get(thor.KeyLegacyTxBaseGasPrice)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -418,6 +425,12 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 			logger.Trace("tx washed out", "id", txObj.ID(), "err", "blocked")
 			continue
 		}
+		delegator := txObj.Delegator()
+		if delegator != nil && (thor.IsOriginBlocked(*delegator) || p.blocklist.Contains(*delegator)) {
+			toRemove = append(toRemove, txObj)
+			logger.Trace("tx washed out", "id", txObj.ID(), "err", "blocked delegator")
+			continue
+		}
 
 		// out of lifetime
 		if !txObj.localSubmitted && now > txObj.timeAdded+int64(p.options.MaxLifetime) {
@@ -426,7 +439,7 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 			continue
 		}
 		// settled, out of energy or dep broken
-		executable, err := txObj.Executable(chain, newState(), headSummary.Header)
+		executable, err := txObj.Executable(chain, newState(), headSummary.Header, p.forkConfig)
 		if err != nil {
 			toRemove = append(toRemove, txObj)
 			logger.Trace("tx washed out", "id", txObj.ID(), "err", err)
@@ -440,7 +453,13 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 				logger.Trace("tx washed out", "id", txObj.ID(), "err", err)
 				continue
 			}
-			txObj.overallGasPrice = txObj.OverallGasPrice(baseGasPrice, provedWork)
+			isGalactica := headSummary.Header.Number() >= p.forkConfig.GALACTICA
+			var baseFee *big.Int
+			if isGalactica {
+				baseFee = fork.CalcBaseFee(p.forkConfig, headSummary.Header)
+			}
+			txObj.priorityGasPrice = fork.GalacticaPriorityGasPrice(txObj.Transaction, legacyTxBaseGasPrice, provedWork, baseFee)
+
 			if txObj.localSubmitted {
 				localExecutableObjs = append(localExecutableObjs, txObj)
 			} else {

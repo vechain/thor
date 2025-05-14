@@ -6,7 +6,7 @@
 package gen
 
 //go:generate rm -rf ./compiled/
-//go:generate docker run -v ./:/solidity ethereum/solc:0.4.24 --optimize-runs 200 --overwrite --bin-runtime --abi -o /solidity/compiled authority.sol energy.sol executor.sol extension.sol extension-v2.sol measure.sol params.sol prototype.sol
+//go:generate docker run -v ./:/solidity ethereum/solc:0.4.24 --optimize-runs 200 --overwrite --bin-runtime --abi -o /solidity/compiled authority.sol energy.sol executor.sol extension.sol extension-v2.sol extension-v3.sol measure.sol params.sol prototype.sol
 //go:generate docker run -v ./:/sources ethereum/solc:0.8.20 --evm-version paris --via-ir --optimize --optimize-runs 200 -o /sources/compiled --abi --bin-runtime /sources/staker.sol
 // cleanup - remove all files starting with _
 //go:generate docker run --rm -v ./compiled:/compiled alpine sh -c "find /compiled -type f \\( -name '_*' \\) -delete"

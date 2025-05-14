@@ -12,7 +12,7 @@ info:
   license:
     name: LGPL 3.0
     url: https://www.gnu.org/licenses/lgpl-3.0.en.html
-  version: 2.2.2
+  version: 2.3.0
 servers:
   - url: /
     description: Current Node
@@ -38,6 +38,9 @@ tags:
   - name: Debug
     description: |
       Offers a set of debugging utilities.
+  - name: Fees
+    description: |
+      Provides access to fee data, like historical values and the estimated priority fee for a transaction to be included in a block.
 
 paths:
   /accounts/{address}:
@@ -224,41 +227,9 @@ paths:
       description: |
         This endpoint allows you to send a transaction to the blockchain. The transaction must be signed and RLP encoded.
         
+        You can find more detailed information in the [transaction model documentation](https://docs.vechain.org/core-concepts/transactions/transaction-model).
+        
         ⚠️ <b>Note:</b> The example values provided for this endpoint are optimized for mainnet.  
-        
-        The below is a TypeScript example of how to sign and RLP encode a transaction using the `thor-devkit` library:
-        
-        ```typescript
-        import { Transaction, secp256k1 } from 'thor-devkit'
-
-        const clauses = [{
-            to: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed',
-            value: 10000,
-            data: '0x'
-        }]
-
-        let body: Transaction.Body = {
-            chainTag: '0x4a',
-            blockRef: '0x0000000000000000',
-            expiration: 32,
-            clauses: clauses,
-            gasPriceCoef: 128,
-            gas: Transaction.intrinsicGas(clauses),
-            dependsOn: null,
-            nonce: 12345678
-        }
-
-        const tx = new Transaction(body)
-        const signingHash = tx.signingHash()
-        tx.signature = secp256k1.sign(signingHash, Buffer.from("99f0500549792796c14fed62011a51081dc5b5e68fe8bd8a13b86be829c4fd36", "hex"))
-
-        const raw = tx.encode()
-        const decoded = Transaction.decode(raw)
-        
-        axios.post('http://localhost:8669/transactions', {
-          raw: '0x' + raw.toString('hex')
-        })
-        ```
       requestBody:
         required: true
         content:
@@ -825,6 +796,50 @@ paths:
                 type: string
                 example: 'Invalid address'
 
+  /fees/history:
+    get:
+      tags:
+        - Fees
+      summary: Retrieve historical fee data
+      description: |
+        Retrieve historical fee data, including the gas used ratio per block.
+        Will return only fees for accessible blocks.
+        Max accessible blocks = BestBlock - api-backtrace-limit-flag.
+        api-backtrace-limit defaults to 1000 blocks.
+      parameters:
+        - $ref: '#/components/parameters/BlockCountInQuery'
+        - $ref: '#/components/parameters/NewestBlockInQuery'
+        - $ref: '#/components/parameters/RewardPercentilesInQuery'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetFeesHistoryResponse'
+        '400':
+          description: Bad Request
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: 'Invalid revision'
+  
+  /fees/priority:
+    get:
+      tags:
+        - Fees
+      summary: Suggest a priority fee for a transaction to be included in a block
+      description: |
+        This endpoint allows you to estimate the priority fee for a transaction to be included in a block.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetFeesPriorityResponse'
+
 components:
   schemas:
     GetAccountResponse:
@@ -965,10 +980,13 @@ components:
       example:
         id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
         chainTag: 1
+        type: 81
         blockRef: '0x00000001511fc0be'
         expiration: 30
         clauses: [ ]
         gasPriceCoef: 128
+        maxFeePerGas: '0x5af3107a4000'
+        maxPriorityFeePerGas: '0x278d'
         gas: 21000
         origin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
         delegator: null
@@ -1006,6 +1024,7 @@ components:
         gasLimit: 11253579
         beneficiary: '0xb4094c25f86d628fdd571afc4077f0d0196afb48'
         gasUsed: 21000
+        baseFeePerGas: '0x9184e72a000'
         totalScore: 1029988
         txsRoot: '0x89dfd9fcd10c9e53d68592cf8b540b280b72d381b868523223992f3e09a806bb'
         txsFeatures: 0
@@ -1188,6 +1207,13 @@ components:
                 The gas limit of the block
               example: 12000000
               nullable: false
+            baseFeePerGas:
+              type: string
+              format: hex
+              description: |
+                The base fee of the block
+              example: '0x9184e72a000'
+              nullable: true
 
     SubscriptionBeatResponse:
       type: object
@@ -1281,6 +1307,82 @@ components:
         expiration: 1000
         blockRef: "0x00000000851caf3c"
         name: "call"
+
+    GetFeesHistoryResponse:
+      type: object
+      title: GetFeesHistoryResponse
+      required:
+        - oldestBlock
+        - baseFeePerGas
+        - gasUsedRatio
+      allOf:
+        - properties:
+            oldestBlock:
+              type: string
+              format: hex
+              description: |
+                The VeChain block identifier of the oldest block in the response.
+            baseFeePerGas:
+              type: array
+              description: |
+                An array of base fees per block as hexadecimal strings. They will be 0x0 for blocks previous to the Galactic fork.
+              nullable: false
+              items:
+                type: string
+                format: hex
+                description: |
+              example:
+                - '0x0'
+                - '0x98'
+            gasUsedRatio:
+              type: array
+              description: |
+                An array of gas used ratios per block as float numbers.
+              nullable: false
+              items:
+                type: number
+                format: float
+                description: |
+              example:
+                - 0.75
+                - 0.22
+            reward:
+              type: array
+              description: |
+                An array of arrays of rewards by the percentiles provided in the request via rewardPercentiles.
+                Each inner array contains the reward values for each percentile requested.
+                This field is optional and will only be present if rewardPercentiles was specified in the request.
+              items:
+                type: array
+                description: Array of reward values for each percentile requested
+                items:
+                  type: string
+                  format: hex
+                  description: Reward value in hex format
+              example:
+                - - '0x0'    # 25th percentile
+                  - '0xa'    # 50th percentile
+                  - '0xc'    # 75th percentile
+                - - '0x0'    # 25th percentile
+                  - '0xa'    # 50th percentile
+                  - '0xc'    # 75th percentile
+                - - '0x0'    # 25th percentile
+                  - '0xa'    # 50th percentile
+                  - '0xc'    # 75th percentile
+
+    GetFeesPriorityResponse:
+      type: object
+      title: GetFeesPriorityResponse
+      required:
+        - maxPriorityFeePerGas
+      allOf:
+        - properties:
+            maxPriorityFeePerGas:
+              type: string
+              format: hex
+              description: |
+                The suggested maximum priority fee per gas as an hexadecimal string.
+              example: '0x98'
 
     TxMeta:
       title: TxMeta
@@ -1464,6 +1566,12 @@ components:
           description: The actual amount of gas used within the block
           example: 21000
           nullable: false
+        baseFeePerGas:
+          type: string
+          format: hex
+          description: The minimum amount of fee required to include a transaction in the current block
+          example: '0x9184e72a000'
+          nullable: true
         totalScore:
           type: integer
           format: uint64
@@ -1546,6 +1654,12 @@ components:
           example: '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
           pattern: '^0x[0-9a-f]{64}$'
           nullable: false
+        type:
+          type: integer
+          format: uint8
+          description: The transaction type in number, currently 0(Legacy Transaction) and 81(DynamicFee Transaction) are supported.
+          example: 81
+          nullable: false
         origin:
           type: string
           description: The address of the origin account.
@@ -1594,7 +1708,19 @@ components:
           format: uint8
           description: The coefficient used to calculate the final gas price of the transaction.
           example: 0
-          nullable: false
+          nullable: true
+        maxFeePerGas:
+          type: string
+          format: hex
+          description: The maximum amount that can be spent to pay for base fee and priority fee expressed in hex.
+          example: '0x5af3107a4000'
+          nullable: true
+        maxPriorityFeePerGas:
+          type: string
+          format: hex
+          description: The maximum amount that can be tipped to the validator expressed in hex.
+          example: '0x278d'
+          nullable: true
         gas:
           type: integer
           format: uint64
@@ -1689,6 +1815,12 @@ components:
       title: Receipt
       type: object
       properties:
+        type:
+          type: integer
+          format: uint8
+          description: The transaction type of this receipt
+          example: 81
+          nullable: true
         gasUsed:
           type: integer
           format: uint64
@@ -2398,6 +2530,27 @@ components:
       schema:
         type: string
 
+    NewestBlockInQuery:
+      name: newestBlock
+      in: query
+      description: Specify either `best`, `justified`, `finalized`, `next`, a block number or block ID. If omitted, the `best` block is assumed.
+      schema:
+        type: string
+    
+    RewardPercentilesInQuery:
+      name: rewardPercentiles
+      in: query
+      required: false
+      description: |
+        The percentiles of the rewards to be returned. Each percentile value must be between 0 and 100 and in ascending order.
+        Values should be comma-separated.
+        For example: ?rewardPercentiles=25,50,75
+      schema:
+        type: string
+        pattern: '^(\d+(\.\d+)?,)*\d+(\.\d+)?$'
+        description: Comma-separated list of percentiles between 0 and 100
+      example: "25,50,75"
+
     CallCodeRevisionInQuery:
       name: revision
       in: query
@@ -2617,3 +2770,15 @@ components:
       description: |
         The address that received the VET.
       example: '0x45429a2255e7248e57fce99e7239aed3f84b7a53'
+
+    BlockCountInQuery:
+      name: blockCount
+      in: query
+      required: true
+      schema:
+        type: integer
+        format: uint32
+        minimum: 1
+      description: |
+        The number of blocks to be returned.
+      example: 10

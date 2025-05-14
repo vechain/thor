@@ -7,12 +7,13 @@ package txpool
 
 import (
 	"math/big"
-	"sort"
+	"slices"
 	"time"
 
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -28,8 +29,8 @@ type txObject struct {
 	payer          *thor.Address // payer of the tx, either origin, delegator, or on-chain delegation payer
 	cost           *big.Int      // total tx cost the payer needs to pay before execution(gas price * gas)
 
-	executable      bool     // don't touch this value, will be updated by the pool
-	overallGasPrice *big.Int // don't touch this value, it's only be used in pool's housekeeping
+	executable       bool     // don't touch this value, will be updated by the pool
+	priorityGasPrice *big.Int // don't touch this value, it's only be used in pool's housekeeping
 }
 
 func resolveTx(tx *tx.Transaction, localSubmitted bool) (*txObject, error) {
@@ -62,7 +63,7 @@ func (o *txObject) Payer() *thor.Address {
 	return o.payer
 }
 
-func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock *block.Header) (bool, error) {
+func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock *block.Header, forkConfig *thor.ForkConfig) (bool, error) {
 	switch {
 	case o.Gas() > headBlock.GasLimit():
 		return false, errors.New("gas too large")
@@ -100,7 +101,15 @@ func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 	checkpoint := state.NewCheckpoint()
 	defer state.RevertTo(checkpoint)
 
-	_, _, payer, prepaid, _, err := o.resolved.BuyGas(state, headBlock.Timestamp()+thor.BlockInterval)
+	isGalactica := headBlock.Number()+1 >= forkConfig.GALACTICA
+
+	var baseFee *big.Int
+	// If the best block is the last block before galactica, we need to estimate the new block's base fee.
+	if isGalactica {
+		baseFee = fork.CalcBaseFee(forkConfig, headBlock)
+	}
+
+	_, _, payer, prepaid, _, err := o.resolved.BuyGas(state, headBlock.Timestamp()+thor.BlockInterval, baseFee)
 	if err != nil {
 		return false, err
 	}
@@ -113,8 +122,13 @@ func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 }
 
 func sortTxObjsByOverallGasPriceDesc(txObjs []*txObject) {
-	sort.Slice(txObjs, func(i, j int) bool {
-		gp1, gp2 := txObjs[i].overallGasPrice, txObjs[j].overallGasPrice
-		return gp1.Cmp(gp2) >= 0
+	slices.SortFunc(txObjs, func(a, b *txObject) int {
+		if cmp := b.priorityGasPrice.Cmp(a.priorityGasPrice); cmp != 0 {
+			return cmp
+		}
+		if a.timeAdded < b.timeAdded {
+			return 1
+		}
+		return -1
 	})
 }

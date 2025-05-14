@@ -23,7 +23,7 @@ func NewMainnet() *Genesis {
 	builder := new(Builder).
 		Timestamp(launchTime).
 		GasLimit(thor.InitialGasLimit).
-		ForkConfig(thor.NoFork).
+		ForkConfig(&thor.NoFork).
 		State(func(state *state.State) error {
 			// alloc builtin contracts
 			if err := state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes()); err != nil {
@@ -106,7 +106,7 @@ func NewMainnet() *Genesis {
 	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyRewardRatio, thor.InitialRewardRatio)
 	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), builtin.Executor.Address)
 
-	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyBaseGasPrice, thor.InitialBaseGasPrice)
+	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyLegacyTxBaseGasPrice, thor.InitialBaseGasPrice)
 	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), builtin.Executor.Address)
 
 	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)

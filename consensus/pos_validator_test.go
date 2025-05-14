@@ -56,7 +56,7 @@ func TestConsensus_POS_MissedSlots(t *testing.T) {
 	setup.mintBlock()                  // mint block 4: chain should switch to PoS on future blocks
 	_, parent, st := setup.mintBlock() // mint block 5: Full PoS
 
-	blkPacker := packer.New(setup.chain.Repo(), setup.chain.Stater(), signer.Address, &signer.Address, setup.config)
+	blkPacker := packer.New(setup.chain.Repo(), setup.chain.Stater(), signer.Address, &signer.Address, setup.config, 0)
 	flow, _, err := blkPacker.Mock(parent, parent.Header.Timestamp()+thor.BlockInterval*2, 10_000_000)
 	assert.NoError(t, err)
 	blk, stage, receipts, err := flow.Pack(signer.PrivateKey, 0, false)
@@ -81,7 +81,7 @@ func TestConsensus_POS_Unscheduled(t *testing.T) {
 	setup.mintBlock()                  // mint block 4: chain should switch to PoS on future blocks
 	_, parent, st := setup.mintBlock() // mint block 5: Full PoS
 
-	blkPacker := packer.New(setup.chain.Repo(), setup.chain.Stater(), signer.Address, &signer.Address, setup.config)
+	blkPacker := packer.New(setup.chain.Repo(), setup.chain.Stater(), signer.Address, &signer.Address, setup.config, 0)
 	flow, _, err := blkPacker.Mock(parent, parent.Header.Timestamp()+1, 10_000_000)
 	assert.NoError(t, err)
 	blk, _, _, err := flow.Pack(signer.PrivateKey, 0, false)
@@ -95,11 +95,11 @@ type hayabusaSetup struct {
 	chain     *testchain.Chain
 	consensus *Consensus
 	t         *testing.T
-	config    thor.ForkConfig
+	config    *thor.ForkConfig
 }
 
 func newHayabusaSetup(t *testing.T) *hayabusaSetup {
-	config := thor.SoloFork
+	config := &thor.SoloFork
 	config.HAYABUSA = 2
 
 	chain, err := testchain.NewWithFork(config)

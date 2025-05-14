@@ -39,12 +39,12 @@ func (n *Node) packerLoop(ctx context.Context) {
 		ticker     = n.repo.NewTicker()
 	)
 
-	n.packer.SetTargetGasLimit(n.targetGasLimit)
+	n.packer.SetTargetGasLimit(n.options.TargetGasLimit)
 
 	for {
 		now := uint64(time.Now().Unix())
 
-		if n.targetGasLimit == 0 {
+		if n.options.TargetGasLimit == 0 {
 			// no preset, use suggested
 			// apply soft limit in adaptive mode
 			suggested := min(n.bandwidth.SuggestGasLimit(), gasLimitSoftLimit)
@@ -121,7 +121,7 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 	return n.guardBlockProcessing(flow.Number(), func(conflicts uint32) error {
 		var (
 			startTime  = mclock.Now()
-			logEnabled = !n.skipLogs && !n.logDBFailed
+			logEnabled = !n.options.SkipLogs && !n.logDBFailed
 			oldBest    = n.repo.BestBlockSummary()
 		)
 
@@ -191,6 +191,10 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 		n.processFork(newBlock, oldBest.Header.ID())
 		commitElapsed := mclock.Now() - startTime - execElapsed
 
+		if newBlock.Header().Number() == n.forkConfig.GALACTICA {
+			fmt.Println(GalacticaASCIIArt)
+		}
+
 		n.comm.BroadcastBlock(newBlock)
 		logger.Info("📦 new block packed",
 			"txs", len(receipts),
@@ -198,6 +202,12 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 			"et", fmt.Sprintf("%v|%v", common.PrettyDuration(execElapsed), common.PrettyDuration(commitElapsed)),
 			"id", shortID(newBlock.Header().ID()),
 		)
+		// TODO: log to be removed when fork is stable
+		if newBlock.Header().Number()+1 == n.forkConfig.GALACTICA {
+			logger.Info("Last block before Galactica fork activates!")
+		} else if newBlock.Header().Number() == n.forkConfig.GALACTICA {
+			logger.Info("Galactica fork activated!")
+		}
 
 		if v, updated := n.bandwidth.Update(newBlock.Header(), time.Duration(realElapsed)); updated {
 			logger.Trace("bandwidth updated", "gps", v)

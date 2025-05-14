@@ -235,11 +235,11 @@ func initSubscriptionsServer(t *testing.T, enabledDeprecated bool) {
 		Limit:           100,
 		LimitPerAccount: 16,
 		MaxLifetime:     time.Hour,
-	})
+	}, &thor.NoFork)
 
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	tr := new(tx.Builder).
+	tr := tx.NewBuilder(tx.TypeLegacy).
 		ChainTag(thorChain.Repo().ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -255,7 +255,7 @@ func initSubscriptionsServer(t *testing.T, enabledDeprecated bool) {
 	}
 	tr = tr.WithSignature(sig)
 
-	txDeploy := new(tx.Builder).
+	txDeploy := tx.NewBuilder(tx.TypeLegacy).
 		ChainTag(thorChain.Repo().ChainTag()).
 		GasPriceCoef(1).
 		Expiration(100).
@@ -287,11 +287,11 @@ func TestSubscriptionsBacktrace(t *testing.T) {
 		Limit:           100,
 		LimitPerAccount: 16,
 		MaxLifetime:     time.Hour,
-	})
+	}, &thor.NoFork)
 
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	tr := new(tx.Builder).
+	tr := tx.NewBuilder(tx.TypeLegacy).
 		ChainTag(thorChain.Repo().ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -307,7 +307,7 @@ func TestSubscriptionsBacktrace(t *testing.T) {
 	}
 	tr = tr.WithSignature(sig)
 
-	txDeploy := new(tx.Builder).
+	txDeploy := tx.NewBuilder(tx.TypeLegacy).
 		ChainTag(thorChain.Repo().ChainTag()).
 		GasPriceCoef(1).
 		Expiration(100).

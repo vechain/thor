@@ -40,7 +40,7 @@ const defaultMaxStorageResult = 1000
 type Debug struct {
 	repo              *chain.Repository
 	stater            *state.Stater
-	forkConfig        thor.ForkConfig
+	forkConfig        *thor.ForkConfig
 	callGasLimit      uint64
 	allowCustomTracer bool
 	bft               bft.Committer
@@ -51,7 +51,7 @@ type Debug struct {
 func New(
 	repo *chain.Repository,
 	stater *state.Stater,
-	forkConfig thor.ForkConfig,
+	forkConfig *thor.ForkConfig,
 	callGaslimit uint64,
 	allowCustomTracer bool,
 	bft bft.Committer,
@@ -205,7 +205,7 @@ func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error 
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	summary, st, err := utils.GetSummaryAndState(revision, d.repo, d.bft, d.stater)
+	summary, st, err := utils.GetSummaryAndState(revision, d.repo, d.bft, d.stater, d.forkConfig)
 	if err != nil {
 		if d.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "revision"))
@@ -268,6 +268,7 @@ func (d *Debug) traceCall(ctx context.Context, tracer tracers.Tracer, header *bl
 			Time:        header.Timestamp(),
 			GasLimit:    header.GasLimit(),
 			TotalScore:  header.TotalScore(),
+			BaseFee:     header.BaseFee(),
 		},
 		d.forkConfig)
 
@@ -443,7 +444,10 @@ func (d *Debug) handleTraceCallOption(opt *TraceCallOption) (*xenv.TransactionCo
 		gas = d.callGasLimit
 	}
 
-	var txCtx xenv.TransactionContext
+	txCtx := xenv.TransactionContext{
+		ClauseCount: 1,
+		Expiration:  opt.Expiration,
+	}
 	if opt.GasPrice == nil {
 		txCtx.GasPrice = new(big.Int)
 	} else {
@@ -464,7 +468,6 @@ func (d *Debug) handleTraceCallOption(opt *TraceCallOption) (*xenv.TransactionCo
 	} else {
 		txCtx.ProvedWork = (*big.Int)(opt.ProvedWork)
 	}
-	txCtx.Expiration = opt.Expiration
 
 	if len(opt.BlockRef) > 0 {
 		blockRef, err := hexutil.Decode(opt.BlockRef)

@@ -22,9 +22,9 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
+	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/muxdb"
@@ -38,9 +38,13 @@ import (
 )
 
 var (
-	cachedAccounts []genesis.DevAccount
-	once           sync.Once
-	blockCount     = 1_000
+	cachedAccounts    []genesis.DevAccount
+	once              sync.Once
+	blockCount        = 1_000
+	createManyTxFuncs = []func(signerPK *ecdsa.PrivateKey, thorChain *testchain.Chain) (tx.Transactions, error){
+		createManyClausesPerTxLegacy,
+		createManyClausesPerTxDynFee,
+	}
 )
 
 func getCachedAccounts(b *testing.B) []genesis.DevAccount {
@@ -56,28 +60,29 @@ func BenchmarkFetchTx_RealDB_RandomSigners_ManyClausesPerTx(b *testing.B) {
 	// create state accounts
 	accounts := getCachedAccounts(b)
 
-	// randomly pick a signer for signing the transactions
-	randomSignerFunc := randomPickSignerFunc(accounts, createManyClausesPerTx)
+	for _, createManyClausesPerTx := range createManyTxFuncs { // randomly pick a signer for signing the transactions
+		randomSignerFunc := randomPickSignerFunc(accounts, createManyClausesPerTx)
 
-	// create test db - will be automagically removed when the benchmark ends
-	db, err := openTempMainDB(b.TempDir())
-	require.NoError(b, err)
+		// create test db - will be automagically removed when the benchmark ends
+		db, err := openTempMainDB(b.TempDir())
+		require.NoError(b, err)
 
-	// create blocks
-	newChain, transactions := createPackedChain(b, db, blockCount, accounts, randomSignerFunc)
+		// create blocks
+		newChain, transactions := createPackedChain(b, db, blockCount, accounts, randomSignerFunc)
 
-	// shuffle the transaction into a randomized order
-	randomizedTransactions := shuffleSlice(transactions)
-	b.Logf("About to process %d txs", len(randomizedTransactions))
+		// shuffle the transaction into a randomized order
+		randomizedTransactions := shuffleSlice(transactions)
+		b.Logf("About to process %d txs", len(randomizedTransactions))
 
-	// run the benchmarks
-	b.Run("getTransaction", func(b *testing.B) {
-		benchmarkGetTransaction(b, newChain, randomizedTransactions)
-	})
+		// run the benchmarks
+		b.Run("getTransaction", func(b *testing.B) {
+			benchmarkGetTransaction(b, newChain, randomizedTransactions)
+		})
 
-	b.Run("getReceipt", func(b *testing.B) {
-		benchmarkGetReceipt(b, newChain, randomizedTransactions)
-	})
+		b.Run("getReceipt", func(b *testing.B) {
+			benchmarkGetReceipt(b, newChain, randomizedTransactions)
+		})
+	}
 }
 
 func BenchmarkFetchTx_RealDB_RandomSigners_OneClausePerTx(b *testing.B) {
@@ -109,27 +114,27 @@ func BenchmarkFetchTx_RealDB_RandomSigners_OneClausePerTx(b *testing.B) {
 }
 
 func BenchmarkFetchTx_RandomSigners_ManyClausesPerTx(b *testing.B) {
-	// create state accounts
-	accounts := getCachedAccounts(b)
+	for _, createManyClausesPerTx := range createManyTxFuncs { // create state accounts
+		accounts := getCachedAccounts(b)
+		// randomly pick a signer for signing the transactions
+		randomSignerFunc := randomPickSignerFunc(accounts, createManyClausesPerTx)
 
-	// randomly pick a signer for signing the transactions
-	randomSignerFunc := randomPickSignerFunc(accounts, createManyClausesPerTx)
+		// create blocks
+		newChain, transactions := createPackedChain(b, muxdb.NewMem(), blockCount, accounts, randomSignerFunc)
 
-	// create blocks
-	newChain, transactions := createPackedChain(b, muxdb.NewMem(), blockCount, accounts, randomSignerFunc)
+		// shuffle the transaction into a randomized order
+		randomizedTransactions := shuffleSlice(transactions)
+		b.Logf("About to process %d txs", len(randomizedTransactions))
 
-	// shuffle the transaction into a randomized order
-	randomizedTransactions := shuffleSlice(transactions)
-	b.Logf("About to process %d txs", len(randomizedTransactions))
+		// run the benchmarks
+		b.Run("getTransaction", func(b *testing.B) {
+			benchmarkGetTransaction(b, newChain, randomizedTransactions)
+		})
 
-	// run the benchmarks
-	b.Run("getTransaction", func(b *testing.B) {
-		benchmarkGetTransaction(b, newChain, randomizedTransactions)
-	})
-
-	b.Run("getReceipt", func(b *testing.B) {
-		benchmarkGetReceipt(b, newChain, randomizedTransactions)
-	})
+		b.Run("getReceipt", func(b *testing.B) {
+			benchmarkGetReceipt(b, newChain, randomizedTransactions)
+		})
+	}
 }
 
 func BenchmarkFetchTx_RandomSigners_OneClausePerTx(b *testing.B) {
@@ -160,7 +165,7 @@ func BenchmarkFetchTx_RandomSigners_OneClausePerTx(b *testing.B) {
 }
 
 func benchmarkGetTransaction(b *testing.B, thorChain *testchain.Chain, randTxs tx.Transactions) {
-	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute})
+	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute}, &thor.NoFork)
 	transactionAPI := New(thorChain.Repo(), mempool)
 	head := thorChain.Repo().BestBlockSummary().Header.ID()
 	var err error
@@ -180,7 +185,7 @@ func benchmarkGetTransaction(b *testing.B, thorChain *testchain.Chain, randTxs t
 }
 
 func benchmarkGetReceipt(b *testing.B, thorChain *testchain.Chain, randTxs tx.Transactions) {
-	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute})
+	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute}, &thor.NoFork)
 	transactionAPI := New(thorChain.Repo(), mempool)
 	head := thorChain.Repo().BestBlockSummary().Header.ID()
 	var err error
@@ -233,9 +238,15 @@ func createOneClausePerTx(signerPK *ecdsa.PrivateKey, thorChain *testchain.Chain
 	for gasUsed < 9_500_000 {
 		toAddr := datagen.RandAddress()
 		cla := tx.NewClause(&toAddr).WithValue(big.NewInt(10000))
-		transaction := new(tx.Builder).
+		b := tx.NewBuilder(tx.TypeLegacy)
+		if gasUsed%2 == 0 {
+			b = tx.NewBuilder(tx.TypeDynamicFee)
+		}
+		transaction := b.
 			ChainTag(thorChain.Repo().ChainTag()).
 			GasPriceCoef(1).
+			MaxFeePerGas(big.NewInt(1000000)).
+			MaxPriorityFeePerGas(big.NewInt(100)).
 			Expiration(math.MaxUint32 - 1).
 			Gas(21_000).
 			Nonce(uint64(datagen.RandInt())).
@@ -255,12 +266,12 @@ func createOneClausePerTx(signerPK *ecdsa.PrivateKey, thorChain *testchain.Chain
 	return transactions, nil
 }
 
-func createManyClausesPerTx(signerPK *ecdsa.PrivateKey, thorChain *testchain.Chain) (tx.Transactions, error) {
+func createManyClausesPerTxLegacy(signerPK *ecdsa.PrivateKey, thorChain *testchain.Chain) (tx.Transactions, error) {
 	var transactions tx.Transactions
 	gasUsed := uint64(0)
 	txGas := uint64(42_000)
 
-	transactionBuilder := new(tx.Builder).
+	transactionBuilder := tx.NewBuilder(tx.TypeLegacy).
 		ChainTag(thorChain.Repo().ChainTag()).
 		GasPriceCoef(1).
 		Expiration(math.MaxUint32 - 1).
@@ -285,8 +296,39 @@ func createManyClausesPerTx(signerPK *ecdsa.PrivateKey, thorChain *testchain.Cha
 	return transactions, nil
 }
 
+func createManyClausesPerTxDynFee(signerPK *ecdsa.PrivateKey, thorChain *testchain.Chain) (tx.Transactions, error) {
+	var transactions tx.Transactions
+	gasUsed := uint64(0)
+	txGas := uint64(42_000)
+
+	transactionBuilder := tx.NewBuilder(tx.TypeDynamicFee).
+		ChainTag(thorChain.Repo().ChainTag()).
+		MaxFeePerGas(big.NewInt(1000000)).
+		MaxPriorityFeePerGas(big.NewInt(100)).
+		Expiration(math.MaxUint32 - 1).
+		Nonce(uint64(datagen.RandInt())).
+		BlockRef(tx.NewBlockRef(0))
+
+	for ; gasUsed < 9_500_000; gasUsed += txGas {
+		toAddr := datagen.RandAddress()
+		transactionBuilder.Clause(tx.NewClause(&toAddr).WithValue(big.NewInt(10000)))
+	}
+
+	transaction := transactionBuilder.Gas(gasUsed).Build()
+
+	sig, err := crypto.Sign(transaction.SigningHash().Bytes(), signerPK)
+	if err != nil {
+		return nil, err
+	}
+	transaction = transaction.WithSignature(sig)
+
+	transactions = append(transactions, transaction)
+
+	return transactions, nil
+}
+
 func packTxsIntoBlock(thorChain *testchain.Chain, proposerAccount *genesis.DevAccount, parentBlk *block.Block, transactions tx.Transactions) (*block.Block, error) {
-	p := packer.New(thorChain.Repo(), thorChain.Stater(), proposerAccount.Address, &proposerAccount.Address, thorChain.GetForkConfig())
+	p := packer.New(thorChain.Repo(), thorChain.Stater(), proposerAccount.Address, &proposerAccount.Address, thorChain.GetForkConfig(), 0)
 
 	parentSum, err := thorChain.Repo().GetBlockSummary(parentBlk.Header().ID())
 	if err != nil {
@@ -388,12 +430,12 @@ func createChain(db *muxdb.MuxDB, accounts []genesis.DevAccount) (*testchain.Cha
 	return testchain.New(
 		db,
 		builder,
-		solo.NewBFTEngine(repo),
+		bft.NewMockedEngine(geneBlk.Header().ID()),
 		repo,
 		stater,
 		geneBlk,
 		logDb,
-		thor.NoFork,
+		&forkConfig,
 	), nil
 }
 

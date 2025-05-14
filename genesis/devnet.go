@@ -17,6 +17,13 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
+// Config for the devnet network, to be extended by our needs
+type DevConfig struct {
+	ForkConfig      *thor.ForkConfig
+	KeyBaseGasPrice *big.Int
+	LaunchTime      uint64
+}
+
 // DevAccount account for development.
 type DevAccount struct {
 	Address    thor.Address
@@ -58,22 +65,25 @@ func DevAccounts() []DevAccount {
 
 // NewDevnet create genesis for solo mode.
 func NewDevnet() *Genesis {
-	return NewDevnetWithConfig(thor.SoloFork)
+	return NewDevnetWithConfig(DevConfig{ForkConfig: &thor.SoloFork})
 }
 
-func NewDevnetWithConfig(config thor.ForkConfig) *Genesis {
-	launchTime := uint64(1526400000) // 'Wed May 16 2018 00:00:00 GMT+0800 (CST)'
-	return NewDevnetWithConfigAndLaunchtime(config, launchTime)
-}
+func NewDevnetWithConfig(config DevConfig) *Genesis {
+	launchTime := config.LaunchTime
+	if launchTime == 0 {
+		launchTime = uint64(1526400000) // Default launch time 'Wed May 16 2018 00:00:00 GMT+0800 (CST)'
+	}
 
-func NewDevnetWithConfigAndLaunchtime(config thor.ForkConfig, launchTime uint64) *Genesis {
 	executor := DevAccounts()[0].Address
 	soloBlockSigner := DevAccounts()[0]
+	if config.KeyBaseGasPrice == nil {
+		config.KeyBaseGasPrice = thor.InitialBaseGasPrice
+	}
 
 	builder := new(Builder).
 		GasLimit(thor.InitialGasLimit).
 		Timestamp(launchTime).
-		ForkConfig(config).
+		ForkConfig(config.ForkConfig).
 		State(func(state *state.State) error {
 			// setup builtin contracts
 			if err := state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes()); err != nil {
@@ -114,7 +124,7 @@ func NewDevnetWithConfigAndLaunchtime(config thor.ForkConfig, launchTime uint64)
 			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyRewardRatio, thor.InitialRewardRatio)),
 			executor).
 		Call(
-			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyBaseGasPrice, thor.InitialBaseGasPrice)),
+			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyLegacyTxBaseGasPrice, config.KeyBaseGasPrice)),
 			executor).
 		Call(
 			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)),

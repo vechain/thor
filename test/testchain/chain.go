@@ -19,7 +19,6 @@ import (
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/muxdb"
@@ -43,7 +42,7 @@ type Chain struct {
 	stater       *state.Stater
 	genesisBlock *block.Block
 	logDB        *logdb.LogDB
-	forkConfig   thor.ForkConfig
+	forkConfig   *thor.ForkConfig
 }
 
 func New(
@@ -54,7 +53,7 @@ func New(
 	stater *state.Stater,
 	genesisBlock *block.Block,
 	logDB *logdb.LogDB,
-	forkConfig thor.ForkConfig,
+	forkConfig *thor.ForkConfig,
 ) *Chain {
 	return &Chain{
 		db:           db,
@@ -75,31 +74,38 @@ var DefaultForkConfig = thor.ForkConfig{
 	ETH_CONST:   math.MaxUint32,
 	ETH_IST:     math.MaxUint32,
 	FINALITY:    math.MaxUint32,
+	GALACTICA:   math.MaxUint32,
 	HAYABUSA:    math.MaxUint32,
 	HAYABUSA_TP: 360 * 24 * 14, // 2 weeks
 }
 
 // NewDefault is a wrapper function that creates a Chain for testing with the default fork config.
 func NewDefault() (*Chain, error) {
-	return newIntegrationTestChain(DefaultForkConfig)
+	return NewIntegrationTestChain(genesis.DevConfig{ForkConfig: &DefaultForkConfig})
 }
 
 // NewWithFork is a wrapper function that creates a Chain for testing with custom forkConfig.
-func NewWithFork(forkConfig thor.ForkConfig) (*Chain, error) {
-	return newIntegrationTestChain(forkConfig)
+func NewWithFork(forkConfig *thor.ForkConfig) (*Chain, error) {
+	return NewIntegrationTestChain(genesis.DevConfig{ForkConfig: forkConfig})
 }
 
-// newIntegrationTestChain is a convenience function that creates a Chain for testing.
+// NewIntegrationTestChain is a convenience function that creates a Chain for testing.
 // It uses an in-memory database, development network genesis, and a solo BFT engine.
-func newIntegrationTestChain(forkConfig thor.ForkConfig) (*Chain, error) {
+func NewIntegrationTestChain(config genesis.DevConfig) (*Chain, error) {
 	// Initialize the database
 	db := muxdb.NewMem()
 
 	// Create the state manager (Stater) with the initialized database.
 	stater := state.NewStater(db)
 
+	// If the launch time is not set, set it to the current time minus the current time aligned with the block interval
+	if config.LaunchTime == 0 {
+		now := uint64(time.Now().Unix())
+		config.LaunchTime = now - now%thor.BlockInterval
+	}
+
 	// Initialize the genesis and retrieve the genesis block
-	gene := genesis.NewDevnetWithConfigAndLaunchtime(forkConfig, uint64(time.Now().Unix()))
+	gene := genesis.NewDevnetWithConfig(config)
 	geneBlk, _, _, err := gene.Build(stater)
 	if err != nil {
 		return nil, err
@@ -120,12 +126,12 @@ func newIntegrationTestChain(forkConfig thor.ForkConfig) (*Chain, error) {
 	return New(
 		db,
 		gene,
-		solo.NewBFTEngine(repo),
+		bft.NewMockedEngine(geneBlk.Header().ID()),
 		repo,
 		stater,
 		geneBlk,
 		logDb,
-		forkConfig,
+		config.ForkConfig,
 	), nil
 }
 
@@ -187,7 +193,7 @@ func (c *Chain) MintClauses(account genesis.DevAccount, clauses []*tx.Clause) er
 // It schedules a new block, adopts transactions, packs them into a block, and commits it to the chain.
 func (c *Chain) MintBlock(account genesis.DevAccount, transactions ...*tx.Transaction) error {
 	// Create a new block packer with the current chain state and account information.
-	blkPacker := packer.New(c.Repo(), c.Stater(), account.Address, &genesis.DevAccounts()[0].Address, c.forkConfig)
+	blkPacker := packer.New(c.Repo(), c.Stater(), account.Address, &genesis.DevAccounts()[0].Address, c.forkConfig, 0)
 
 	// Create a new block
 	blkFlow, _, err := blkPacker.Mock(
@@ -317,7 +323,7 @@ func (c *Chain) BestBlock() (*block.Block, error) {
 }
 
 // GetForkConfig returns the current fork configuration based on the ID of the genesis block.
-func (c *Chain) GetForkConfig() thor.ForkConfig {
+func (c *Chain) GetForkConfig() *thor.ForkConfig {
 	return c.forkConfig
 }
 

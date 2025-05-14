@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gorilla/mux"
@@ -22,6 +23,7 @@ import (
 	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/api/debug"
 	"github.com/vechain/thor/v2/api/events"
+	"github.com/vechain/thor/v2/api/fees"
 	"github.com/vechain/thor/v2/api/node"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/comm"
@@ -39,8 +41,9 @@ import (
 )
 
 const (
-	gasLimit   = 30_000_000
-	logDBLimit = 1_000
+	gasLimit               = 30_000_000
+	logDBLimit             = 1_000
+	priorityFeesPercentage = 5
 )
 
 var (
@@ -48,7 +51,9 @@ var (
 )
 
 func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
-	thorChain, err := testchain.NewDefault()
+	forks := testchain.DefaultForkConfig
+	forks.GALACTICA = 1
+	thorChain, err := testchain.NewWithFork(&forks)
 	require.NoError(t, err)
 
 	// mint some transactions to be used in the endpoints
@@ -56,10 +61,10 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 
 	router := mux.NewRouter()
 
-	accounts.New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), thor.NoFork, thorChain.Engine(), true).
+	accounts.New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), &thor.NoFork, thorChain.Engine(), true).
 		Mount(router, "/accounts")
 
-	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute})
+	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute}, &forks)
 	transactions.New(thorChain.Repo(), mempool).Mount(router, "/transactions")
 
 	blocks.New(thorChain.Repo(), thorChain.Engine()).Mount(router, "/blocks")
@@ -77,9 +82,15 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 			Limit:           10000,
 			LimitPerAccount: 16,
 			MaxLifetime:     10 * time.Minute,
-		}),
+		}, &thor.NoFork),
 	)
 	node.New(communicator, mempool, false).Mount(router, "/node")
+
+	fees.New(thorChain.Repo(), thorChain.Engine(), thorChain.GetForkConfig(), thorChain.Stater(), fees.Config{
+		APIBacktraceLimit:          6,
+		FixedCacheSize:             6,
+		PriorityIncreasePercentage: priorityFeesPercentage,
+	}).Mount(router, "/fees")
 
 	return thorChain, httptest.NewServer(router)
 }
@@ -87,7 +98,7 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 func mintTransactions(t *testing.T, thorChain *testchain.Chain) {
 	toAddr := datagen.RandAddress()
 
-	noClausesTx := new(tx.Builder).
+	noClausesTx := tx.NewBuilder(tx.TypeLegacy).
 		ChainTag(thorChain.Repo().ChainTag()).
 		Expiration(10).
 		Gas(21000).
@@ -100,7 +111,7 @@ func mintTransactions(t *testing.T, thorChain *testchain.Chain) {
 
 	cla := tx.NewClause(&toAddr).WithValue(big.NewInt(10000))
 	cla2 := tx.NewClause(&toAddr).WithValue(big.NewInt(10000))
-	transaction := new(tx.Builder).
+	legacyTx := tx.NewBuilder(tx.TypeLegacy).
 		ChainTag(thorChain.Repo().ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -111,14 +122,24 @@ func mintTransactions(t *testing.T, thorChain *testchain.Chain) {
 		BlockRef(tx.NewBlockRef(0)).
 		Build()
 
-	sig, err = crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	transaction = transaction.WithSignature(sig)
+	legacyTx = tx.MustSign(legacyTx, genesis.DevAccounts()[0].PrivateKey)
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], legacyTx, noClausesTx))
+	preMintedTx01 = legacyTx
 
-	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], transaction, noClausesTx))
-	preMintedTx01 = transaction
+	dynFeeTx := tx.NewBuilder(tx.TypeDynamicFee).
+		ChainTag(thorChain.Repo().ChainTag()).
+		MaxPriorityFeePerGas(big.NewInt(thor.InitialBaseFee)).
+		MaxFeePerGas(new(big.Int).Add(big.NewInt(thor.InitialBaseFee), big.NewInt(thor.InitialBaseFee))).
+		Expiration(10).
+		Gas(37000).
+		Nonce(1).
+		Clause(cla).
+		Clause(cla2).
+		BlockRef(tx.NewBlockRef(0)).
+		Build()
+
+	dynFeeTx = tx.MustSign(dynFeeTx, genesis.DevAccounts()[0].PrivateKey)
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], dynFeeTx))
 }
 
 func TestAPIs(t *testing.T) {
@@ -132,6 +153,7 @@ func TestAPIs(t *testing.T) {
 		"testDebugEndpoint":        testDebugEndpoint,
 		"testEventsEndpoint":       testEventsEndpoint,
 		"testNodeEndpoint":         testNodeEndpoint,
+		"testFeesEndpoint":         testFeesEndpoint,
 	} {
 		t.Run(name, func(t *testing.T) {
 			tt(t, thorChain, ts)
@@ -218,7 +240,7 @@ func testTransactionsEndpoint(t *testing.T, thorChain *testchain.Chain, ts *http
 	t.Run("SendTransaction", func(t *testing.T) {
 		toAddr := thor.MustParseAddress("0x0123456789abcdef0123456789abcdef01234567")
 		clause := tx.NewClause(&toAddr).WithValue(big.NewInt(10000))
-		trx := new(tx.Builder).
+		trx := tx.NewBuilder(tx.TypeLegacy).
 			ChainTag(thorChain.Repo().ChainTag()).
 			Expiration(10).
 			Gas(21000).
@@ -227,6 +249,19 @@ func testTransactionsEndpoint(t *testing.T, thorChain *testchain.Chain, ts *http
 
 		trx = tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)
 		sendResult, err := c.SendTransaction(trx)
+		require.NoError(t, err)
+		require.NotNil(t, sendResult)
+		require.Equal(t, trx.ID().String(), sendResult.ID.String()) // Ensure transaction was successful
+
+		trx = tx.NewBuilder(tx.TypeLegacy).
+			ChainTag(thorChain.Repo().ChainTag()).
+			Expiration(10).
+			Gas(21000).
+			Clause(clause).
+			Build()
+
+		trx = tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)
+		sendResult, err = c.SendTransaction(trx)
 		require.NoError(t, err)
 		require.NotNil(t, sendResult)
 		require.Equal(t, trx.ID().String(), sendResult.ID.String()) // Ensure transaction was successful
@@ -367,7 +402,7 @@ func testEventsEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) {
 		// Define the payload for filtering events
 		payload := &events.EventFilter{
 			CriteriaSet: []*events.EventCriteria{
-				&events.EventCriteria{
+				{
 					Address: &address,
 					TopicSet: events.TopicSet{
 						Topic0: &topic,
@@ -395,5 +430,82 @@ func testNodeEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) {
 	t.Run("GetPeersStats", func(t *testing.T) {
 		_, err := c.Peers()
 		require.NoError(t, err)
+	})
+}
+
+func testFeesEndpoint(t *testing.T, testchain *testchain.Chain, ts *httptest.Server) {
+	c := New(ts.URL)
+	// 1. Test GET /fees/history
+	t.Run("GetFeesHistory", func(t *testing.T) {
+		blockCount := uint32(1)
+		newestBlock := "best"
+		feesHistory, err := c.FeesHistory(blockCount, newestBlock, nil)
+		require.NoError(t, err)
+		require.NotNil(t, feesHistory)
+
+		expectedOldestBlock, err := testchain.Repo().NewBestChain().GetBlockID(2)
+		require.NoError(t, err)
+		expectedFeesHistory := &fees.FeesHistory{
+			OldestBlock: expectedOldestBlock,
+			BaseFeePerGas: []*hexutil.Big{
+				(*hexutil.Big)(big.NewInt(thor.InitialBaseFee)),
+			},
+			GasUsedRatio: []float64{
+				0.0037,
+			},
+		}
+
+		require.Equal(t, expectedFeesHistory, feesHistory)
+
+		rewardPercentiles := []float64{10, 90}
+		feesHistory, err = c.FeesHistory(blockCount, newestBlock, rewardPercentiles)
+		require.NoError(t, err)
+		require.NotNil(t, feesHistory)
+
+		expectedOldestBlock, err = testchain.Repo().NewBestChain().GetBlockID(2)
+		require.NoError(t, err)
+		expectedFeesHistory = &fees.FeesHistory{
+			OldestBlock: expectedOldestBlock,
+			BaseFeePerGas: []*hexutil.Big{
+				(*hexutil.Big)(big.NewInt(thor.InitialBaseFee)),
+			},
+			GasUsedRatio: []float64{
+				0.0037,
+			},
+			Reward: [][]*hexutil.Big{
+				{
+					(*hexutil.Big)(big.NewInt(0)),
+					(*hexutil.Big)(big.NewInt(0)),
+				},
+			},
+		}
+
+		require.Equal(t, expectedFeesHistory.OldestBlock, feesHistory.OldestBlock)
+		require.Equal(t, expectedFeesHistory.BaseFeePerGas, feesHistory.BaseFeePerGas)
+		require.Equal(t, expectedFeesHistory.GasUsedRatio, feesHistory.GasUsedRatio)
+
+		// Compare rewards as strings
+		require.Len(t, feesHistory.Reward, len(expectedFeesHistory.Reward), "should have same number of reward blocks")
+		for i, blockRewards := range feesHistory.Reward {
+			require.Len(t, blockRewards, len(expectedFeesHistory.Reward[i]), "block %d should have same number of rewards", i)
+			for j, reward := range blockRewards {
+				require.NotNil(t, reward, "reward %d in block %d should not be nil", j, i)
+				require.NotNil(t, expectedFeesHistory.Reward[i][j], "expected reward %d in block %d should not be nil", j, i)
+				require.Equal(t, expectedFeesHistory.Reward[i][j].String(), reward.String(), "reward %d in block %d should match", j, i)
+			}
+		}
+	})
+
+	// 2. Test GET /fees/priority
+	t.Run("GetFeesPriority", func(t *testing.T) {
+		feesPriority, err := c.FeesPriority()
+		require.NoError(t, err)
+		require.NotNil(t, feesPriority)
+
+		expectedFeesPriority := &fees.FeesPriority{
+			MaxPriorityFeePerGas: (*hexutil.Big)(new(big.Int).Div(new(big.Int).Mul(big.NewInt(thor.InitialBaseFee), big.NewInt(priorityFeesPercentage)), big.NewInt(100))),
+		}
+
+		require.Equal(t, expectedFeesPriority, feesPriority)
 	})
 }

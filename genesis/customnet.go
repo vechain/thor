@@ -48,7 +48,7 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 	builder := new(Builder).
 		Timestamp(launchTime).
 		GasLimit(gen.GasLimit).
-		ForkConfig(*gen.ForkConfig).
+		ForkConfig(gen.ForkConfig).
 		State(func(state *state.State) error {
 			// alloc builtin contracts
 			if err := state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes()); err != nil {
@@ -152,7 +152,7 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyRewardRatio, r)
 	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
 
-	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyBaseGasPrice, bgp)
+	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyLegacyTxBaseGasPrice, bgp)
 	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
 
 	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyProposerEndorsement, e)

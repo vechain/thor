@@ -95,7 +95,7 @@ func TestConvertTransfer(t *testing.T) {
 	repo, _ := chain.NewRepository(db, b)
 
 	// New tx
-	transaction := new(tx.Builder).
+	legacyTx := tx.NewBuilder(tx.TypeLegacy).
 		ChainTag(repo.ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -103,11 +103,22 @@ func TestConvertTransfer(t *testing.T) {
 		Nonce(1).
 		BlockRef(tx.NewBlockRef(0)).
 		Build()
-	transaction = tx.MustSign(transaction, genesis.DevAccounts()[0].PrivateKey)
+	legacyTx = tx.MustSign(legacyTx, genesis.DevAccounts()[0].PrivateKey)
+
+	dynFeeTx := tx.NewBuilder(tx.TypeDynamicFee).
+		ChainTag(repo.ChainTag()).
+		MaxFeePerGas(big.NewInt(1)).
+		Expiration(10).
+		Gas(21000).
+		Nonce(1).
+		BlockRef(tx.NewBlockRef(0)).
+		Build()
+	dynFeeTx = tx.MustSign(dynFeeTx, genesis.DevAccounts()[0].PrivateKey)
 
 	// New block
 	blk := new(block.Builder).
-		Transaction(transaction).
+		Transaction(legacyTx).
+		Transaction(dynFeeTx).
 		Build()
 
 	transfer := &tx.Transfer{
@@ -117,25 +128,46 @@ func TestConvertTransfer(t *testing.T) {
 	}
 
 	// Act
-	transferMessage, err := convertTransfer(blk.Header(), transaction, 0, transfer, false)
+	transferLegacyMessage, errL := convertTransfer(blk.Header(), legacyTx, 0, transfer, false)
+	transferDynFeeMessage, errD := convertTransfer(blk.Header(), dynFeeTx, 1, transfer, false)
 
 	// Assert
-	assert.NoError(t, err)
-	assert.Equal(t, transfer.Sender, transferMessage.Sender)
-	assert.Equal(t, transfer.Recipient, transferMessage.Recipient)
+	assert.NoError(t, errL)
+	assert.NoError(t, errD)
+
+	assert.Equal(t, transfer.Sender, transferLegacyMessage.Sender)
+	assert.Equal(t, transfer.Sender, transferDynFeeMessage.Sender)
+
+	assert.Equal(t, transfer.Recipient, transferLegacyMessage.Recipient)
+	assert.Equal(t, transfer.Recipient, transferDynFeeMessage.Recipient)
+
 	amount := (*math.HexOrDecimal256)(transfer.Amount)
-	assert.Equal(t, amount, transferMessage.Amount)
-	assert.Equal(t, blk.Header().ID(), transferMessage.Meta.BlockID)
-	assert.Equal(t, blk.Header().Number(), transferMessage.Meta.BlockNumber)
-	assert.Equal(t, blk.Header().Timestamp(), transferMessage.Meta.BlockTimestamp)
-	assert.Equal(t, transaction.ID(), transferMessage.Meta.TxID)
-	origin, err := transaction.Origin()
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, origin, transferMessage.Meta.TxOrigin)
-	assert.Equal(t, uint32(0), transferMessage.Meta.ClauseIndex)
-	assert.Equal(t, false, transferMessage.Obsolete)
+	assert.Equal(t, amount, transferLegacyMessage.Amount)
+	assert.Equal(t, amount, transferDynFeeMessage.Amount)
+
+	assert.Equal(t, blk.Header().ID(), transferLegacyMessage.Meta.BlockID)
+	assert.Equal(t, blk.Header().ID(), transferDynFeeMessage.Meta.BlockID)
+
+	assert.Equal(t, blk.Header().Number(), transferLegacyMessage.Meta.BlockNumber)
+	assert.Equal(t, blk.Header().Number(), transferDynFeeMessage.Meta.BlockNumber)
+
+	assert.Equal(t, blk.Header().Timestamp(), transferLegacyMessage.Meta.BlockTimestamp)
+	assert.Equal(t, blk.Header().Timestamp(), transferDynFeeMessage.Meta.BlockTimestamp)
+
+	assert.Equal(t, legacyTx.ID(), transferLegacyMessage.Meta.TxID)
+	assert.Equal(t, dynFeeTx.ID(), transferDynFeeMessage.Meta.TxID)
+
+	origin, err := legacyTx.Origin()
+	assert.NoError(t, err)
+	assert.Equal(t, origin, transferLegacyMessage.Meta.TxOrigin)
+	assert.Equal(t, uint32(0), transferLegacyMessage.Meta.ClauseIndex)
+	assert.Equal(t, false, transferLegacyMessage.Obsolete)
+
+	origin, err = dynFeeTx.Origin()
+	assert.NoError(t, err)
+	assert.Equal(t, origin, transferDynFeeMessage.Meta.TxOrigin)
+	assert.Equal(t, uint32(1), transferDynFeeMessage.Meta.ClauseIndex)
+	assert.Equal(t, false, transferDynFeeMessage.Obsolete)
 }
 
 func TestConvertEventWithBadSignature(t *testing.T) {
@@ -143,14 +175,15 @@ func TestConvertEventWithBadSignature(t *testing.T) {
 	badSig := bytes.Repeat([]byte{0xf}, 65)
 
 	// New tx
-	transaction := new(tx.Builder).
+	transaction := tx.NewBuilder(tx.TypeLegacy).
 		ChainTag(1).
 		GasPriceCoef(1).
 		Expiration(10).
 		Gas(21000).
 		Nonce(1).
 		BlockRef(tx.NewBlockRef(0)).
-		Build().
+		Build()
+	transaction = transaction.
 		WithSignature(badSig[:])
 
 	// New block
@@ -182,15 +215,16 @@ func TestConvertEvent(t *testing.T) {
 	repo, _ := chain.NewRepository(db, b)
 
 	// New tx
-	transaction := tx.MustSign(
-		new(tx.Builder).
-			ChainTag(repo.ChainTag()).
-			GasPriceCoef(1).
-			Expiration(10).
-			Gas(21000).
-			Nonce(1).
-			BlockRef(tx.NewBlockRef(0)).
-			Build(),
+	transaction := tx.NewBuilder(tx.TypeLegacy).
+		ChainTag(repo.ChainTag()).
+		GasPriceCoef(1).
+		Expiration(10).
+		Gas(21000).
+		Nonce(1).
+		BlockRef(tx.NewBlockRef(0)).
+		Build()
+	transaction = tx.MustSign(
+		transaction,
 		genesis.DevAccounts()[0].PrivateKey,
 	)
 

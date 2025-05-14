@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/test/testchain"
+	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/txpool"
 )
 
@@ -38,7 +39,7 @@ func initAPIServer(t *testing.T) {
 
 	router := mux.NewRouter()
 	NewAPI(
-		New(thorChain.Repo(), comm.New(thorChain.Repo(), txpool.New(thorChain.Repo(), nil, txpool.Options{}))),
+		New(thorChain.Repo(), comm.New(thorChain.Repo(), txpool.New(thorChain.Repo(), nil, txpool.Options{}, &thor.NoFork))),
 	).Mount(router, "/health")
 
 	ts = httptest.NewServer(router)

@@ -8,9 +8,9 @@ package runtime
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -27,24 +27,24 @@ type ResolvedTransaction struct {
 }
 
 // ResolveTransaction resolves the transaction and performs basic validation.
-func ResolveTransaction(tx *tx.Transaction) (*ResolvedTransaction, error) {
-	origin, err := tx.Origin()
+func ResolveTransaction(trx *tx.Transaction) (*ResolvedTransaction, error) {
+	origin, err := trx.Origin()
 	if err != nil {
 		return nil, err
 	}
-	intrinsicGas, err := tx.IntrinsicGas()
+	intrinsicGas, err := trx.IntrinsicGas()
 	if err != nil {
 		return nil, err
 	}
-	if tx.Gas() < intrinsicGas {
+	if trx.Gas() < intrinsicGas {
 		return nil, errors.New("intrinsic gas exceeds provided gas")
 	}
-	delegator, err := tx.Delegator()
+	delegator, err := trx.Delegator()
 	if err != nil {
 		return nil, err
 	}
 
-	clauses := tx.Clauses()
+	clauses := trx.Clauses()
 	sumValue := new(big.Int)
 	for _, clause := range clauses {
 		value := clause.Value()
@@ -53,13 +53,33 @@ func ResolveTransaction(tx *tx.Transaction) (*ResolvedTransaction, error) {
 		}
 
 		sumValue.Add(sumValue, value)
-		if sumValue.Cmp(math.MaxBig256) > 0 {
+		if sumValue.BitLen() > 256 {
 			return nil, errors.New("tx value too large")
 		}
 	}
 
+	if trx.Type() != tx.TypeLegacy {
+		if trx.MaxFeePerGas().Sign() < 0 {
+			return nil, errors.New("max fee per gas must be positive")
+		}
+		if trx.MaxPriorityFeePerGas().Sign() < 0 {
+			return nil, errors.New("max priority fee per gas must be positive")
+		}
+
+		if trx.MaxFeePerGas().BitLen() > 256 {
+			return nil, errors.New("max fee per gas higher than 2^256-1")
+		}
+		if trx.MaxPriorityFeePerGas().BitLen() > 256 {
+			return nil, errors.New("max priority fee per gas higher than 2^256-1")
+		}
+
+		if trx.MaxFeePerGas().Cmp(trx.MaxPriorityFeePerGas()) < 0 {
+			return nil, errors.New("maxFeePerGas is less than maxPriorityFeePerGas")
+		}
+	}
+
 	return &ResolvedTransaction{
-		tx,
+		trx,
 		origin,
 		delegator,
 		intrinsicGas,
@@ -92,18 +112,18 @@ func (r *ResolvedTransaction) CommonTo() *thor.Address {
 }
 
 // BuyGas consumes energy to buy gas, to prepare for execution.
-func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64) (
-	baseGasPrice *big.Int,
+func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64, blkBaseFee *big.Int) (
+	legacyTxBaseGasPrice *big.Int,
 	gasPrice *big.Int,
 	payer thor.Address,
 	prepaid *big.Int,
 	returnGas func(uint64) error,
 	err error,
 ) {
-	if baseGasPrice, err = builtin.Params.Native(state).Get(thor.KeyBaseGasPrice); err != nil {
+	if legacyTxBaseGasPrice, err = builtin.Params.Native(state).Get(thor.KeyLegacyTxBaseGasPrice); err != nil {
 		return
 	}
-	gasPrice = r.tx.GasPrice(baseGasPrice)
+	gasPrice = fork.GalacticaOverallGasPrice(r.tx, legacyTxBaseGasPrice, blkBaseFee)
 
 	energy := builtin.Energy.Native(state, blockTime)
 	doReturnGas := func(rgas uint64) (*big.Int, error) {
@@ -122,7 +142,7 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64) (
 			return
 		}
 		if sufficient {
-			return baseGasPrice, gasPrice, *r.Delegator, prepaid, func(rgas uint64) error {
+			return legacyTxBaseGasPrice, gasPrice, *r.Delegator, prepaid, func(rgas uint64) error {
 				_, err := doReturnGas(rgas)
 				return err
 			}, nil
@@ -166,7 +186,7 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64) (
 					return
 				}
 				if ok {
-					return baseGasPrice, gasPrice, sponsor, prepaid, doReturnGasAndSetCredit, nil
+					return legacyTxBaseGasPrice, gasPrice, sponsor, prepaid, doReturnGasAndSetCredit, nil
 				}
 			}
 			// deduct from To
@@ -176,7 +196,7 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64) (
 				return
 			}
 			if sufficient {
-				return baseGasPrice, gasPrice, *commonTo, prepaid, doReturnGasAndSetCredit, nil
+				return legacyTxBaseGasPrice, gasPrice, *commonTo, prepaid, doReturnGasAndSetCredit, nil
 			}
 		}
 	}
@@ -188,7 +208,7 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64) (
 	}
 
 	if sufficient {
-		return baseGasPrice, gasPrice, r.Origin, prepaid, func(rgas uint64) error { _, err := doReturnGas(rgas); return err }, nil
+		return legacyTxBaseGasPrice, gasPrice, r.Origin, prepaid, func(rgas uint64) error { _, err := doReturnGas(rgas); return err }, nil
 	}
 	return nil, nil, thor.Address{}, nil, nil, errors.New("insufficient energy")
 }
@@ -205,12 +225,13 @@ func (r *ResolvedTransaction) ToContext(
 		return nil, err
 	}
 	return &xenv.TransactionContext{
-		ID:         r.tx.ID(),
-		Origin:     r.Origin,
-		GasPayer:   gasPayer,
-		GasPrice:   gasPrice,
-		ProvedWork: provedWork,
-		BlockRef:   r.tx.BlockRef(),
-		Expiration: r.tx.Expiration(),
+		ID:          r.tx.ID(),
+		Origin:      r.Origin,
+		GasPayer:    gasPayer,
+		GasPrice:    gasPrice,
+		ProvedWork:  provedWork,
+		BlockRef:    r.tx.BlockRef(),
+		Expiration:  r.tx.Expiration(),
+		ClauseCount: uint32(len(r.Clauses)),
 	}, nil
 }

@@ -41,7 +41,7 @@ type Engine struct {
 	repo       *chain.Repository
 	data       kv.Store
 	stater     *state.Stater
-	forkConfig thor.ForkConfig
+	forkConfig *thor.ForkConfig
 	master     thor.Address
 	casts      casts
 	finalized  atomic.Value
@@ -54,7 +54,7 @@ type Engine struct {
 }
 
 // NewEngine creates a new bft engine.
-func NewEngine(repo *chain.Repository, mainDB *muxdb.MuxDB, forkConfig thor.ForkConfig, master thor.Address) (*Engine, error) {
+func NewEngine(repo *chain.Repository, mainDB *muxdb.MuxDB, forkConfig *thor.ForkConfig, master thor.Address) (*Engine, error) {
 	engine := Engine{
 		repo:       repo,
 		data:       mainDB.NewStore(dataStoreName),
@@ -435,4 +435,21 @@ func isCheckPoint(blockNum uint32) bool {
 // save quality at the end of round
 func getStorePoint(blockNum uint32) uint32 {
 	return getCheckPoint(blockNum) + thor.CheckpointInterval - 1
+}
+
+type mockedEngine thor.Bytes32
+
+func (e *mockedEngine) Finalized() thor.Bytes32 {
+	return thor.Bytes32(*e)
+}
+
+func (e *mockedEngine) Justified() (thor.Bytes32, error) {
+	return thor.Bytes32(*e), nil
+}
+
+// NewMockedEngine returns a new mocked engine. Which just
+// returns the genesisID for both finalized and justified.
+func NewMockedEngine(genesisID thor.Bytes32) Committer {
+	me := mockedEngine(genesisID)
+	return &me
 }

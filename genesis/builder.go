@@ -7,6 +7,7 @@ package genesis
 
 import (
 	"math"
+	"math/big"
 
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/block"
@@ -28,7 +29,7 @@ type Builder struct {
 	calls      []call
 	extraData  [28]byte
 
-	forkConfig thor.ForkConfig
+	forkConfig *thor.ForkConfig
 }
 
 type call struct {
@@ -67,7 +68,7 @@ func (b *Builder) ExtraData(data [28]byte) *Builder {
 }
 
 // ForkConfig set fork config.
-func (b *Builder) ForkConfig(fc thor.ForkConfig) *Builder {
+func (b *Builder) ForkConfig(fc *thor.ForkConfig) *Builder {
 	b.forkConfig = fc
 	return b
 }
@@ -123,11 +124,16 @@ func (b *Builder) Build(stater *state.Stater) (blk *block.Block, events tx.Event
 	parentID := thor.Bytes32{0xff, 0xff, 0xff, 0xff} //so, genesis number is 0
 	copy(parentID[4:], b.extraData[:])
 
-	return new(block.Builder).
+	blkBuilder := new(block.Builder).
 		ParentID(parentID).
 		Timestamp(b.timestamp).
 		GasLimit(b.gasLimit).
 		StateRoot(stateRoot).
-		ReceiptsRoot(tx.Transactions(nil).RootHash()).
-		Build(), events, transfers, nil
+		ReceiptsRoot(tx.Transactions(nil).RootHash())
+
+	if b.forkConfig.GALACTICA == 0 {
+		blkBuilder.BaseFee(new(big.Int).SetUint64(thor.InitialBaseFee))
+	}
+
+	return blkBuilder.Build(), events, transfers, nil
 }

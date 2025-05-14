@@ -13,6 +13,7 @@ import (
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/builtin/staker"
+	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/poa"
 	"github.com/vechain/thor/v2/runtime"
@@ -87,10 +88,6 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 		return errFutureBlock
 	}
 
-	if !block.GasLimit(header.GasLimit()).IsValid(parent.GasLimit()) {
-		return consensusError(fmt.Sprintf("block gas limit invalid: parent %v, current %v", parent.GasLimit(), header.GasLimit()))
-	}
-
 	if header.GasUsed() > header.GasLimit() {
 		return consensusError(fmt.Sprintf("block gas used exceeds limit: limit %v, used %v", header.GasLimit(), header.GasUsed()))
 	}
@@ -140,6 +137,20 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 		}
 	}
 
+	if header.Number() < c.forkConfig.GALACTICA {
+		if header.BaseFee() != nil {
+			return consensusError("invalid block: baseFee should not set before fork GALACTICA")
+		}
+
+		if !block.GasLimit(header.GasLimit()).IsValid(parent.GasLimit()) {
+			return consensusError(fmt.Sprintf("block gas limit invalid: parent %v, current %v", parent.GasLimit(), header.GasLimit()))
+		}
+	} else {
+		if err := fork.VerifyGalacticaHeader(c.forkConfig, parent, header); err != nil {
+			return consensusError(fmt.Sprintf("block header invalid: %v", err))
+		}
+	}
+
 	return nil
 }
 
@@ -150,8 +161,8 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 		return consensusError(fmt.Sprintf("block txs root mismatch: want %v, have %v", header.TxsRoot(), txs.RootHash()))
 	}
 
-	for _, tx := range txs {
-		origin, err := tx.Origin()
+	for _, tr := range txs {
+		origin, err := tr.Origin()
 		if err != nil {
 			return consensusError(fmt.Sprintf("tx signer unavailable: %v", err))
 		}
@@ -160,16 +171,26 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 			return consensusError(fmt.Sprintf("tx origin blocked got packed: %v", origin))
 		}
 
-		switch {
-		case tx.ChainTag() != c.repo.ChainTag():
-			return consensusError(fmt.Sprintf("tx chain tag mismatch: want %v, have %v", c.repo.ChainTag(), tx.ChainTag()))
-		case header.Number() < tx.BlockRef().Number():
-			return consensusError(fmt.Sprintf("tx ref future block: ref %v, current %v", tx.BlockRef().Number(), header.Number()))
-		case tx.IsExpired(header.Number()):
-			return consensusError(fmt.Sprintf("tx expired: ref %v, current %v, expiration %v", tx.BlockRef().Number(), header.Number(), tx.Expiration()))
+		delegator, err := tr.Delegator()
+		if err != nil {
+			return consensusError(fmt.Sprintf("tx delegator unavailable: %v", err))
+		}
+		if header.Number() >= c.forkConfig.BLOCKLIST && delegator != nil && thor.IsOriginBlocked(*delegator) {
+			return consensusError(fmt.Sprintf("tx delegator blocked got packed: %v", delegator))
 		}
 
-		if err := tx.TestFeatures(header.TxsFeatures()); err != nil {
+		switch {
+		case tr.ChainTag() != c.repo.ChainTag():
+			return consensusError(fmt.Sprintf("tx chain tag mismatch: want %v, have %v", c.repo.ChainTag(), tr.ChainTag()))
+		case header.Number() < tr.BlockRef().Number():
+			return consensusError(fmt.Sprintf("tx ref future block: ref %v, current %v", tr.BlockRef().Number(), header.Number()))
+		case tr.IsExpired(header.Number()):
+			return consensusError(fmt.Sprintf("tx expired: ref %v, current %v, expiration %v", tr.BlockRef().Number(), header.Number(), tr.Expiration()))
+		case header.Number() < c.forkConfig.GALACTICA && tr.Type() != tx.TypeLegacy:
+			return consensusError(tx.ErrTxTypeNotSupported.Error())
+		}
+
+		if err := tr.TestFeatures(header.TxsFeatures()); err != nil {
 			return consensusError("invalid tx: " + err.Error())
 		}
 	}
@@ -196,6 +217,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 			Time:        header.Timestamp(),
 			GasLimit:    header.GasLimit(),
 			TotalScore:  header.TotalScore(),
+			BaseFee:     header.BaseFee(),
 		},
 		c.forkConfig)
 
@@ -227,6 +249,13 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 			return nil, nil, err
 		} else if found {
 			return nil, nil, consensusError("tx already exists")
+		}
+
+		// check if tx has enough fee to cover for base fee, if set
+		if header.BaseFee() != nil {
+			if err := fork.ValidateGalacticaTxFee(tx, state, header.BaseFee()); err != nil {
+				return nil, nil, err
+			}
 		}
 
 		// check depended tx

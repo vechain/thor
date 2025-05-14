@@ -35,7 +35,7 @@ func TestPendingTx_Subscribe(t *testing.T) {
 		Limit:           100,
 		LimitPerAccount: 16,
 		MaxLifetime:     time.Hour,
-	})
+	}, &thor.NoFork)
 
 	p := newPendingTx(txPool)
 
@@ -55,7 +55,7 @@ func TestPendingTx_Unsubscribe(t *testing.T) {
 		Limit:           100,
 		LimitPerAccount: 16,
 		MaxLifetime:     time.Hour,
-	})
+	}, &thor.NoFork)
 	p := newPendingTx(txPool)
 
 	ch := make(chan *tx.Transaction)
@@ -80,7 +80,7 @@ func TestPendingTx_DispatchLoop(t *testing.T) {
 		Limit:           100,
 		LimitPerAccount: 16,
 		MaxLifetime:     time.Hour,
-	})
+	}, &thor.NoFork)
 	p := newPendingTx(txPool)
 
 	// Add new block to be in a sync state
@@ -95,7 +95,7 @@ func TestPendingTx_DispatchLoop(t *testing.T) {
 	p.Subscribe(txCh)
 
 	// Add a new tx to the mempool
-	transaction := createTx(repo, 0)
+	transaction := createTx(repo, 0, tx.TypeLegacy)
 	txPool.AddLocal(transaction)
 
 	// Start the dispatch loop
@@ -113,7 +113,7 @@ func TestPendingTx_DispatchLoop(t *testing.T) {
 	p.Unsubscribe(txCh)
 
 	// Add another tx to the mempool
-	tx2 := createTx(repo, 1)
+	tx2 := createTx(repo, 1, tx.TypeDynamicFee)
 	txPool.AddLocal(tx2)
 
 	// Assert that the channel did not receive the second transaction
@@ -126,7 +126,7 @@ func TestPendingTx_DispatchLoop(t *testing.T) {
 }
 
 func addNewBlock(repo *chain.Repository, stater *state.Stater, b0 *block.Block, t *testing.T) {
-	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
+	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, &thor.NoFork, 0)
 	sum, _ := repo.GetBlockSummary(b0.Header().ID())
 	flow, _, err := packer.Schedule(sum, uint64(time.Now().Unix()))
 	if err != nil {
@@ -144,24 +144,6 @@ func addNewBlock(repo *chain.Repository, stater *state.Stater, b0 *block.Block, 
 	}
 }
 
-func createTx(repo *chain.Repository, addressNumber uint) *tx.Transaction {
-	addr := thor.BytesToAddress([]byte("to"))
-	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-
-	return tx.MustSign(
-		new(tx.Builder).
-			ChainTag(repo.ChainTag()).
-			GasPriceCoef(1).
-			Expiration(1000).
-			Gas(21000).
-			Nonce(uint64(datagen.RandInt())).
-			Clause(cla).
-			BlockRef(tx.NewBlockRef(0)).
-			Build(),
-		genesis.DevAccounts()[addressNumber].PrivateKey,
-	)
-}
-
 func TestPendingTx_NoWriteAfterUnsubscribe(t *testing.T) {
 	// Arrange
 	thorChain := initChain(t)
@@ -169,7 +151,7 @@ func TestPendingTx_NoWriteAfterUnsubscribe(t *testing.T) {
 		Limit:           100,
 		LimitPerAccount: 16,
 		MaxLifetime:     time.Hour,
-	})
+	}, &thor.NoFork)
 
 	p := newPendingTx(txPool)
 	txCh := make(chan *tx.Transaction, txQueueSize)
@@ -180,7 +162,7 @@ func TestPendingTx_NoWriteAfterUnsubscribe(t *testing.T) {
 
 	done := make(chan struct{})
 	// Attempt to write a new transaction
-	trx := createTx(thorChain.Repo(), 0)
+	trx := createTx(thorChain.Repo(), 0, tx.TypeLegacy)
 	assert.NotPanics(t, func() {
 		p.dispatch(trx, done) // dispatch should not panic after unsubscribe
 	}, "Dispatching after unsubscribe should not panic")
@@ -200,7 +182,7 @@ func TestPendingTx_UnsubscribeOnWebSocketClose(t *testing.T) {
 		Limit:           100,
 		LimitPerAccount: 16,
 		MaxLifetime:     time.Hour,
-	})
+	}, &thor.NoFork)
 
 	// Subscriptions setup
 	sub := New(thorChain.Repo(), []string{"*"}, 100, txPool, false)
@@ -218,7 +200,7 @@ func TestPendingTx_UnsubscribeOnWebSocketClose(t *testing.T) {
 	defer ws.Close()
 
 	// Add a transaction
-	trx := createTx(thorChain.Repo(), 0)
+	trx := createTx(thorChain.Repo(), 0, tx.TypeLegacy)
 	txPool.AddLocal(trx)
 
 	// Wait to receive transaction
@@ -238,4 +220,23 @@ func TestPendingTx_UnsubscribeOnWebSocketClose(t *testing.T) {
 	sub.pendingTx.mu.Lock()
 	require.Equal(t, len(sub.pendingTx.listeners), 0)
 	sub.pendingTx.mu.Unlock()
+}
+
+func createTx(repo *chain.Repository, addressNumber uint, txType tx.Type) *tx.Transaction {
+	addr := thor.BytesToAddress([]byte("to"))
+	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
+
+	trx := tx.NewBuilder(txType).
+		ChainTag(repo.ChainTag()).
+		GasPriceCoef(1).
+		Expiration(1000).
+		Gas(21000).
+		Nonce(uint64(datagen.RandInt())).
+		Clause(cla).
+		BlockRef(tx.NewBlockRef(0)).
+		Build()
+	return tx.MustSign(
+		trx,
+		genesis.DevAccounts()[addressNumber].PrivateKey,
+	)
 }

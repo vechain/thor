@@ -8,21 +8,34 @@ package block
 import (
 	"errors"
 	"io"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+/**
+ * extension represents a data structure that follows a tail trim strategy,
+ * where the last element is not considered if it is its default null value.
+ */
 type extension struct {
-	Alpha []byte
-	COM   bool
+	Alpha   []byte
+	COM     bool
+	BaseFee *big.Int
 }
 
 type _extension extension
 
 // EncodeRLP implements rlp.Encoder.
 func (ex *extension) EncodeRLP(w io.Writer) error {
-	if ex.COM {
+	if ex.BaseFee != nil {
 		return rlp.Encode(w, (*_extension)(ex))
+	}
+
+	if ex.COM {
+		return rlp.Encode(w, []any{
+			ex.Alpha,
+			ex.COM,
+		})
 	}
 
 	if len(ex.Alpha) != 0 {
@@ -44,37 +57,43 @@ func (ex *extension) DecodeRLP(s *rlp.Stream) error {
 			*ex = extension{
 				nil,
 				false,
+				nil,
 			}
 			return nil
 		}
 	}
 
-	if len(raws) == 0 || len(raws) > 2 {
+	if len(raws) == 0 || len(raws) > 3 {
 		return errors.New("rlp: unexpected extension")
-	} else {
-		var alpha []byte
-		if err := rlp.DecodeBytes(raws[0], &alpha); err != nil {
-			return err
+	}
+
+	// alpha is always decoded
+	var alpha []byte
+	if err := rlp.DecodeBytes(raws[0], &alpha); err != nil {
+		return err
+	}
+
+	// only alpha, make sure it's trimmed
+	if len(raws) == 1 {
+		if len(alpha) == 0 {
+			return errors.New("rlp: extension must be trimmed")
 		}
 
-		// only alpha, make sure it's trimmed
-		if len(raws) == 1 {
-			if len(alpha) == 0 {
-				return errors.New("rlp: extension must be trimmed")
-			}
-
-			*ex = extension{
-				Alpha: alpha,
-				COM:   false,
-			}
-			return nil
+		*ex = extension{
+			Alpha: alpha,
+			COM:   false,
 		}
+		return nil
+	}
 
-		var com bool
-		if err := rlp.DecodeBytes(raws[1], &com); err != nil {
-			return err
-		}
+	// more than one filed, must have com
+	var com bool
+	if err := rlp.DecodeBytes(raws[1], &com); err != nil {
+		return err
+	}
 
+	// alpha and com, make sure it's trimmed
+	if len(raws) == 2 {
 		// COM must be trimmed if not set
 		if !com {
 			return errors.New("rlp: extension must be trimmed")
@@ -86,4 +105,18 @@ func (ex *extension) DecodeRLP(s *rlp.Stream) error {
 		}
 		return nil
 	}
+
+	// For three fields, decode BaseFee
+	var baseFee big.Int
+	if err := rlp.DecodeBytes(raws[2], &baseFee); err != nil {
+		return err
+	}
+
+	*ex = extension{
+		Alpha:   alpha,
+		COM:     com,
+		BaseFee: &baseFee,
+	}
+
+	return nil
 }

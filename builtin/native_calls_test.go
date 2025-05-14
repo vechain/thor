@@ -212,6 +212,7 @@ func buildGenesis(db *muxdb.MuxDB, proc func(state *state.State) error) *block.B
 	blk, _, _, _ := new(genesis.Builder).
 		Timestamp(uint64(time.Now().Unix())).
 		State(proc).
+		ForkConfig(&thor.NoFork).
 		Build(state.NewStater(db))
 	return blk
 }
@@ -556,7 +557,7 @@ func TestEnergyNative(t *testing.T) {
 
 	abi := builtin.Energy.ABI
 
-	fc := thor.SoloFork
+	fc := &thor.SoloFork
 	fc.HAYABUSA = 4
 	thorChain, _ = testchain.NewWithFork(fc)
 
@@ -1540,7 +1541,7 @@ func TestExtensionNative(t *testing.T) {
 }
 
 func TestStakerContract_Native(t *testing.T) {
-	fc := thor.SoloFork
+	fc := &thor.SoloFork
 	fc.HAYABUSA = 2
 	fc.HAYABUSA_TP = 2
 	var err error
@@ -1668,7 +1669,7 @@ func TestStakerContract_Native(t *testing.T) {
 }
 
 func TestStakerContract_Native_Revert(t *testing.T) {
-	fc := thor.SoloFork
+	fc := &thor.SoloFork
 	fc.HAYABUSA = 2
 	fc.HAYABUSA_TP = 2
 	var err error
@@ -1803,7 +1804,7 @@ func TestStakerContract_Native_Revert(t *testing.T) {
 }
 
 func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
-	fc := thor.SoloFork
+	fc := &thor.SoloFork
 	fc.HAYABUSA = 1
 	fc.HAYABUSA_TP = 2
 	var err error
@@ -1870,4 +1871,52 @@ func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
 	assert.NoError(t, err)
 	expectedMaster := common.Hash{}
 	assert.Equal(t, &expectedMaster, firstQueuedRes)
+}
+
+func TestExtensionV3(t *testing.T) {
+	fc := thor.SoloFork
+	chain, err := testchain.NewWithFork(&fc)
+	assert.Nil(t, err)
+
+	// galactica fork happens at block 1
+	assert.NoError(t, chain.MintBlock(genesis.DevAccounts()[0]))
+	assert.NoError(t, chain.MintBlock(genesis.DevAccounts()[0]))
+
+	// setup txClauseIndex call data
+	txClauseIndexABI, ok := builtin.Extension.V3.ABI.MethodByName("txClauseIndex")
+	assert.True(t, ok)
+	txClauseIndex, err := txClauseIndexABI.EncodeInput()
+	assert.Nil(t, err)
+	txClauseIndexClause := tx.NewClause(&builtin.Extension.Address).WithData(txClauseIndex)
+
+	// setup txClauseCount call data
+	txClauseCountABI, ok := builtin.Extension.V3.ABI.MethodByName("txClauseCount")
+	assert.True(t, ok)
+	txClauseCount, err := txClauseCountABI.EncodeInput()
+	assert.Nil(t, err)
+	txClauseCountClause := tx.NewClause(&builtin.Extension.Address).WithData(txClauseCount)
+
+	// init the runtime
+	best := chain.Repo().BestBlockSummary()
+	rtChain := chain.Repo().NewChain(best.Header.ParentID())
+	rtStater := chain.Stater().NewState(best.Root())
+	rt := runtime.New(rtChain, rtStater, &xenv.BlockContext{Number: best.Header.Number(), Time: best.Header.Timestamp(), TotalScore: 1}, &thor.ForkConfig{})
+
+	// test txClauseIndex
+	clauseIndex := uint32(934)
+	exec, _ := rt.PrepareClause(txClauseIndexClause, clauseIndex, math.MaxUint64, &xenv.TransactionContext{})
+	out, _, err := exec()
+	assert.Nil(t, err)
+	val := new(big.Int).SetBytes(out.Data)
+	assert.Equal(t, uint64(clauseIndex), val.Uint64())
+
+	// test txClauseCount
+	clauseCount := uint32(712)
+	exec, _ = rt.PrepareClause(txClauseCountClause, 0, math.MaxUint64, &xenv.TransactionContext{
+		ClauseCount: clauseCount,
+	})
+	out, _, err = exec()
+	assert.Nil(t, err)
+	val = new(big.Int).SetBytes(out.Data)
+	assert.Equal(t, uint64(clauseCount), val.Uint64())
 }

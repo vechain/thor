@@ -29,7 +29,7 @@ const (
 	MinGasLimit          uint64 = 1000 * 1000
 	InitialGasLimit      uint64 = 10 * 1000 * 1000 // InitialGasLimit gas limit value int genesis block.
 	GasLimitBoundDivisor uint64 = 1024             // from ethereum
-	GetBalanceGas        uint64 = 400              //EIP158 gas table
+	GetBalanceGas        uint64 = 400              // EIP158 gas table
 	SloadGas             uint64 = 200              // EIP158 gas table
 	SstoreSetGas         uint64 = params.SstoreSetGas
 	SstoreResetGas       uint64 = params.SstoreResetGas
@@ -44,13 +44,18 @@ const (
 
 	SeederInterval     = 8640 // blocks between two seeder epochs.
 	CheckpointInterval = 180  // blocks between two bft checkpoints.
+
+	ElasticityMultiplierNum  = 3                  // numerator value to determines the target gas limit as a fraction of the maximum block gas limit
+	ElasticityMultiplierDen  = 4                  // denominator value to determines the target gas limit as a fraction of the maximum block gas limit
+	InitialBaseFee           = 10_000_000_000_000 // 10^13 wei, 0.00001 VTHO
+	BaseFeeChangeDenominator = 8                  // determines the percentage change in the base fee per block based on network utilization
 )
 
 // Keys of governance params.
 var (
 	KeyExecutorAddress         = BytesToBytes32([]byte("executor"))
 	KeyRewardRatio             = BytesToBytes32([]byte("reward-ratio"))
-	KeyBaseGasPrice            = BytesToBytes32([]byte("base-gas-price"))
+	KeyLegacyTxBaseGasPrice    = BytesToBytes32([]byte("base-gas-price")) // the legacy tx default gas price
 	KeyProposerEndorsement     = BytesToBytes32([]byte("proposer-endorsement"))
 	KeyMaxBlockProposers       = BytesToBytes32([]byte("max-block-proposers"))
 	KeyStargateContractAddress = BytesToBytes32([]byte("stargate-contract-address"))

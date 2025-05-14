@@ -18,6 +18,7 @@ import (
 	"github.com/vechain/thor/v2/api/debug"
 	"github.com/vechain/thor/v2/api/doc"
 	"github.com/vechain/thor/v2/api/events"
+	"github.com/vechain/thor/v2/api/fees"
 	"github.com/vechain/thor/v2/api/node"
 	"github.com/vechain/thor/v2/api/subscriptions"
 	"github.com/vechain/thor/v2/api/transactions"
@@ -47,6 +48,7 @@ type Config struct {
 	SoloMode          bool
 	EnableDeprecated  bool
 	EnableTxpool      bool
+	Fees              fees.Config
 }
 
 // New return api router
@@ -57,7 +59,7 @@ func New(
 	logDB *logdb.LogDB,
 	bft bft.Committer,
 	nw node.Network,
-	forkConfig thor.ForkConfig,
+	forkConfig *thor.ForkConfig,
 	config Config,
 ) (http.HandlerFunc, func()) {
 	origins := strings.Split(strings.TrimSpace(config.AllowedOrigins), ",")
@@ -97,6 +99,8 @@ func New(
 		Mount(router, "/node")
 	subs := subscriptions.New(repo, origins, config.BacktraceLimit, txPool, config.EnableDeprecated)
 	subs.Mount(router, "/subscriptions")
+
+	fees.New(repo, bft, forkConfig, stater, config.Fees).Mount(router, "/fees")
 
 	if config.PprofOn {
 		router.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)

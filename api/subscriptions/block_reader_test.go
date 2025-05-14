@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/genesis"
@@ -26,7 +26,9 @@ func TestBlockReader_Read(t *testing.T) {
 	allBlocks, err := thorChain.GetAllBlocks()
 	require.NoError(t, err)
 	genesisBlk := allBlocks[0]
-	newBlock := allBlocks[1]
+	firstBlk := allBlocks[1]
+	// taking best block to include also galactica block
+	bestBlk := allBlocks[len(allBlocks)-1]
 
 	// Test case 1: Successful read next blocks
 	br := newBlockReader(thorChain.Repo(), genesisBlk.Header().ID())
@@ -37,12 +39,24 @@ func TestBlockReader_Read(t *testing.T) {
 	if resBlock, ok := res[0].(*BlockMessage); !ok {
 		t.Fatal("unexpected type")
 	} else {
-		assert.Equal(t, newBlock.Header().Number(), resBlock.Number)
-		assert.Equal(t, newBlock.Header().ParentID(), resBlock.ParentID)
+		assert.Equal(t, firstBlk.Header().Number(), resBlock.Number)
+		assert.Equal(t, firstBlk.Header().ParentID(), resBlock.ParentID)
+		assert.Equal(t, (*math.HexOrDecimal256)(firstBlk.Header().BaseFee()), resBlock.BaseFeePerGas)
+	}
+
+	res, ok, err = br.Read()
+	assert.NoError(t, err)
+	assert.True(t, ok)
+	if resBlock, ok := res[0].(*BlockMessage); !ok {
+		t.Fatal("unexpected type")
+	} else {
+		assert.Equal(t, bestBlk.Header().Number(), resBlock.Number)
+		assert.Equal(t, bestBlk.Header().ParentID(), resBlock.ParentID)
+		assert.Equal(t, (*math.HexOrDecimal256)(firstBlk.Header().BaseFee()), resBlock.BaseFeePerGas)
 	}
 
 	// Test case 2: There is no new block
-	br = newBlockReader(thorChain.Repo(), newBlock.Header().ID())
+	br = newBlockReader(thorChain.Repo(), bestBlk.Header().ID())
 	res, ok, err = br.Read()
 
 	assert.NoError(t, err)
@@ -59,12 +73,14 @@ func TestBlockReader_Read(t *testing.T) {
 }
 
 func initChain(t *testing.T) *testchain.Chain {
-	thorChain, err := testchain.NewDefault()
+	forks := testchain.DefaultForkConfig
+	forks.GALACTICA = 1
+	thorChain, err := testchain.NewWithFork(&forks)
 	require.NoError(t, err)
 
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	tr := new(tx.Builder).
+	tr := tx.NewBuilder(tx.TypeLegacy).
 		ChainTag(thorChain.Repo().ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -74,21 +90,19 @@ func initChain(t *testing.T) *testchain.Chain {
 		BlockRef(tx.NewBlockRef(0)).
 		Build()
 	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], tr))
 
-	txDeploy := new(tx.Builder).
+	txDeploy := tx.NewBuilder(tx.TypeDynamicFee).
 		ChainTag(thorChain.Repo().ChainTag()).
-		GasPriceCoef(1).
+		MaxFeePerGas(big.NewInt(thor.InitialBaseFee)).
 		Expiration(100).
 		Gas(1_000_000).
 		Nonce(3).
 		Clause(tx.NewClause(nil).WithData(common.Hex2Bytes(eventcontract.HexBytecode))).
 		BlockRef(tx.NewBlockRef(0)).
 		Build()
-	sigTxDeploy, err := crypto.Sign(txDeploy.SigningHash().Bytes(), genesis.DevAccounts()[1].PrivateKey)
-	require.NoError(t, err)
-	txDeploy = txDeploy.WithSignature(sigTxDeploy)
-
-	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], tr, txDeploy))
+	txDeploy = tx.MustSign(txDeploy, genesis.DevAccounts()[0].PrivateKey)
+	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], txDeploy))
 
 	return thorChain
 }

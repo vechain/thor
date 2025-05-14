@@ -28,7 +28,7 @@ func NewTestnet() *Genesis {
 	builder := new(Builder).
 		Timestamp(launchTime).
 		GasLimit(thor.InitialGasLimit).
-		ForkConfig(thor.NoFork).
+		ForkConfig(&thor.NoFork).
 		State(func(state *state.State) error {
 			tokenSupply := new(big.Int)
 
@@ -80,7 +80,7 @@ func NewTestnet() *Genesis {
 			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyRewardRatio, thor.InitialRewardRatio)),
 			executor).
 		Call(
-			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyBaseGasPrice, thor.InitialBaseGasPrice)),
+			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyLegacyTxBaseGasPrice, thor.InitialBaseGasPrice)),
 			executor).
 		Call(
 			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)),

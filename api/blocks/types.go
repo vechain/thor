@@ -14,23 +14,24 @@ import (
 )
 
 type JSONBlockSummary struct {
-	Number       uint32       `json:"number"`
-	ID           thor.Bytes32 `json:"id"`
-	Size         uint32       `json:"size"`
-	ParentID     thor.Bytes32 `json:"parentID"`
-	Timestamp    uint64       `json:"timestamp"`
-	GasLimit     uint64       `json:"gasLimit"`
-	Beneficiary  thor.Address `json:"beneficiary"`
-	GasUsed      uint64       `json:"gasUsed"`
-	TotalScore   uint64       `json:"totalScore"`
-	TxsRoot      thor.Bytes32 `json:"txsRoot"`
-	TxsFeatures  uint32       `json:"txsFeatures"`
-	StateRoot    thor.Bytes32 `json:"stateRoot"`
-	ReceiptsRoot thor.Bytes32 `json:"receiptsRoot"`
-	COM          bool         `json:"com"`
-	Signer       thor.Address `json:"signer"`
-	IsTrunk      bool         `json:"isTrunk"`
-	IsFinalized  bool         `json:"isFinalized"`
+	Number        uint32                `json:"number"`
+	ID            thor.Bytes32          `json:"id"`
+	Size          uint32                `json:"size"`
+	ParentID      thor.Bytes32          `json:"parentID"`
+	Timestamp     uint64                `json:"timestamp"`
+	GasLimit      uint64                `json:"gasLimit"`
+	Beneficiary   thor.Address          `json:"beneficiary"`
+	GasUsed       uint64                `json:"gasUsed"`
+	TotalScore    uint64                `json:"totalScore"`
+	TxsRoot       thor.Bytes32          `json:"txsRoot"`
+	TxsFeatures   uint32                `json:"txsFeatures"`
+	StateRoot     thor.Bytes32          `json:"stateRoot"`
+	ReceiptsRoot  thor.Bytes32          `json:"receiptsRoot"`
+	COM           bool                  `json:"com"`
+	Signer        thor.Address          `json:"signer"`
+	IsTrunk       bool                  `json:"isTrunk"`
+	IsFinalized   bool                  `json:"isFinalized"`
+	BaseFeePerGas *math.HexOrDecimal256 `json:"baseFeePerGas,omitempty"`
 }
 
 type JSONRawBlockSummary struct {
@@ -67,18 +68,21 @@ type JSONOutput struct {
 }
 
 type JSONEmbeddedTx struct {
-	ID           thor.Bytes32        `json:"id"`
-	ChainTag     byte                `json:"chainTag"`
-	BlockRef     string              `json:"blockRef"`
-	Expiration   uint32              `json:"expiration"`
-	Clauses      []*JSONClause       `json:"clauses"`
-	GasPriceCoef uint8               `json:"gasPriceCoef"`
-	Gas          uint64              `json:"gas"`
-	Origin       thor.Address        `json:"origin"`
-	Delegator    *thor.Address       `json:"delegator"`
-	Nonce        math.HexOrDecimal64 `json:"nonce"`
-	DependsOn    *thor.Bytes32       `json:"dependsOn"`
-	Size         uint32              `json:"size"`
+	ID                   thor.Bytes32          `json:"id"`
+	Type                 uint8                 `json:"type"`
+	ChainTag             byte                  `json:"chainTag"`
+	BlockRef             string                `json:"blockRef"`
+	Expiration           uint32                `json:"expiration"`
+	Clauses              []*JSONClause         `json:"clauses"`
+	GasPriceCoef         *uint8                `json:"gasPriceCoef,omitempty"`
+	MaxFeePerGas         *math.HexOrDecimal256 `json:"maxFeePerGas,omitempty"`
+	MaxPriorityFeePerGas *math.HexOrDecimal256 `json:"maxPriorityFeePerGas,omitempty"`
+	Gas                  uint64                `json:"gas"`
+	Origin               thor.Address          `json:"origin"`
+	Delegator            *thor.Address         `json:"delegator"`
+	Nonce                math.HexOrDecimal64   `json:"nonce"`
+	DependsOn            *thor.Bytes32         `json:"dependsOn"`
+	Size                 uint32                `json:"size"`
 
 	// receipt part
 	GasUsed  uint64                `json:"gasUsed"`
@@ -99,23 +103,24 @@ func buildJSONBlockSummary(summary *chain.BlockSummary, isTrunk bool, isFinalize
 	signer, _ := header.Signer()
 
 	return &JSONBlockSummary{
-		Number:       header.Number(),
-		ID:           header.ID(),
-		ParentID:     header.ParentID(),
-		Timestamp:    header.Timestamp(),
-		TotalScore:   header.TotalScore(),
-		GasLimit:     header.GasLimit(),
-		GasUsed:      header.GasUsed(),
-		Beneficiary:  header.Beneficiary(),
-		Signer:       signer,
-		Size:         uint32(summary.Size),
-		StateRoot:    header.StateRoot(),
-		ReceiptsRoot: header.ReceiptsRoot(),
-		TxsRoot:      header.TxsRoot(),
-		TxsFeatures:  uint32(header.TxsFeatures()),
-		COM:          header.COM(),
-		IsTrunk:      isTrunk,
-		IsFinalized:  isFinalized,
+		Number:        header.Number(),
+		ID:            header.ID(),
+		ParentID:      header.ParentID(),
+		Timestamp:     header.Timestamp(),
+		TotalScore:    header.TotalScore(),
+		GasLimit:      header.GasLimit(),
+		GasUsed:       header.GasUsed(),
+		Beneficiary:   header.Beneficiary(),
+		Signer:        signer,
+		Size:          uint32(summary.Size),
+		StateRoot:     header.StateRoot(),
+		ReceiptsRoot:  header.ReceiptsRoot(),
+		TxsRoot:       header.TxsRoot(),
+		TxsFeatures:   uint32(header.TxsFeatures()),
+		COM:           header.COM(),
+		IsTrunk:       isTrunk,
+		IsFinalized:   isFinalized,
+		BaseFeePerGas: (*math.HexOrDecimal256)(summary.Header.BaseFee()),
 	}
 }
 
@@ -148,13 +153,13 @@ func buildJSONOutput(txID thor.Bytes32, index uint32, c *tx.Clause, o *tx.Output
 
 func buildJSONEmbeddedTxs(txs tx.Transactions, receipts tx.Receipts) []*JSONEmbeddedTx {
 	jTxs := make([]*JSONEmbeddedTx, 0, len(txs))
-	for itx, tx := range txs {
+	for itx, trx := range txs {
 		receipt := receipts[itx]
 
-		clauses := tx.Clauses()
-		blockRef := tx.BlockRef()
-		origin, _ := tx.Origin()
-		delegator, _ := tx.Delegator()
+		clauses := trx.Clauses()
+		blockRef := trx.BlockRef()
+		origin, _ := trx.Origin()
+		delegator, _ := trx.Delegator()
 
 		jcs := make([]*JSONClause, 0, len(clauses))
 		jos := make([]*JSONOutput, 0, len(receipt.Outputs))
@@ -166,23 +171,23 @@ func buildJSONEmbeddedTxs(txs tx.Transactions, receipts tx.Receipts) []*JSONEmbe
 				hexutil.Encode(c.Data()),
 			})
 			if !receipt.Reverted {
-				jos = append(jos, buildJSONOutput(tx.ID(), uint32(i), c, receipt.Outputs[i]))
+				jos = append(jos, buildJSONOutput(trx.ID(), uint32(i), c, receipt.Outputs[i]))
 			}
 		}
 
-		jTxs = append(jTxs, &JSONEmbeddedTx{
-			ID:           tx.ID(),
-			ChainTag:     tx.ChainTag(),
-			BlockRef:     hexutil.Encode(blockRef[:]),
-			Expiration:   tx.Expiration(),
-			Clauses:      jcs,
-			GasPriceCoef: tx.GasPriceCoef(),
-			Gas:          tx.Gas(),
-			Origin:       origin,
-			Delegator:    delegator,
-			Nonce:        math.HexOrDecimal64(tx.Nonce()),
-			DependsOn:    tx.DependsOn(),
-			Size:         uint32(tx.Size()),
+		embedTx := &JSONEmbeddedTx{
+			ID:         trx.ID(),
+			Type:       trx.Type(),
+			ChainTag:   trx.ChainTag(),
+			BlockRef:   hexutil.Encode(blockRef[:]),
+			Expiration: trx.Expiration(),
+			Clauses:    jcs,
+			Gas:        trx.Gas(),
+			Origin:     origin,
+			Delegator:  delegator,
+			Nonce:      math.HexOrDecimal64(trx.Nonce()),
+			DependsOn:  trx.DependsOn(),
+			Size:       uint32(trx.Size()),
 
 			GasUsed:  receipt.GasUsed,
 			GasPayer: receipt.GasPayer,
@@ -190,7 +195,15 @@ func buildJSONEmbeddedTxs(txs tx.Transactions, receipts tx.Receipts) []*JSONEmbe
 			Reward:   (*math.HexOrDecimal256)(receipt.Reward),
 			Reverted: receipt.Reverted,
 			Outputs:  jos,
-		})
+		}
+		if trx.Type() == tx.TypeLegacy {
+			coef := trx.GasPriceCoef()
+			embedTx.GasPriceCoef = &coef
+		} else {
+			embedTx.MaxFeePerGas = (*math.HexOrDecimal256)(trx.MaxFeePerGas())
+			embedTx.MaxPriorityFeePerGas = (*math.HexOrDecimal256)(trx.MaxPriorityFeePerGas())
+		}
+		jTxs = append(jTxs, embedTx)
 	}
 	return jTxs
 }

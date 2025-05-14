@@ -3,23 +3,23 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package block_test
+package block
 
 import (
+	"math/big"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
 
 func TestBlock(t *testing.T) {
-	tx1 := new(tx.Builder).Clause(tx.NewClause(&thor.Address{})).Clause(tx.NewClause(&thor.Address{})).Build()
-	tx2 := new(tx.Builder).Clause(tx.NewClause(nil)).Build()
+	tx1 := tx.NewBuilder(tx.TypeLegacy).Clause(tx.NewClause(&thor.Address{})).Clause(tx.NewClause(&thor.Address{})).Build()
+	tx2 := tx.NewBuilder(tx.TypeDynamicFee).Clause(tx.NewClause(nil)).Build()
 
 	privKey := string("dce1443bd2ef0c2631adc1c67e5c93f13dc23a41c18b536effbbdcbcdb96fb65")
 
@@ -33,7 +33,7 @@ func TestBlock(t *testing.T) {
 		beneficiary thor.Address = thor.BytesToAddress([]byte("abc"))
 	)
 
-	blk := new(block.Builder).
+	blk := new(Builder).
 		GasUsed(gasUsed).
 		Transaction(tx1).
 		Transaction(tx2).
@@ -42,6 +42,7 @@ func TestBlock(t *testing.T) {
 		StateRoot(emptyRoot).
 		ReceiptsRoot(emptyRoot).
 		Timestamp(now).
+		BaseFee(big.NewInt(thor.InitialBaseFee)).
 		ParentID(emptyRoot).
 		Beneficiary(beneficiary).
 		Build()
@@ -51,13 +52,14 @@ func TestBlock(t *testing.T) {
 	txs := blk.Transactions()
 	txsRootHash := txs.RootHash()
 
-	assert.Equal(t, block.Compose(h, txs), blk)
+	assert.Equal(t, Compose(h, txs), blk)
 	assert.Equal(t, gasLimit, h.GasLimit())
 	assert.Equal(t, gasUsed, h.GasUsed())
 	assert.Equal(t, totalScore, h.TotalScore())
 	assert.Equal(t, emptyRoot, h.StateRoot())
 	assert.Equal(t, emptyRoot, h.ReceiptsRoot())
 	assert.Equal(t, now, h.Timestamp())
+	assert.Equal(t, big.NewInt(thor.InitialBaseFee), h.BaseFee())
 	assert.Equal(t, emptyRoot, h.ParentID())
 	assert.Equal(t, beneficiary, h.Beneficiary())
 	assert.Equal(t, txsRootHash, h.TxsRoot())
@@ -69,10 +71,10 @@ func TestBlock(t *testing.T) {
 
 	data, _ := rlp.EncodeToBytes(blk)
 
-	b := block.Block{}
+	b := Block{}
 	rlp.DecodeBytes(data, &b)
 
-	blk = new(block.Builder).
+	blk = new(Builder).
 		GasUsed(gasUsed).
 		GasLimit(gasLimit).
 		TotalScore(totalScore).
@@ -80,6 +82,7 @@ func TestBlock(t *testing.T) {
 		ReceiptsRoot(emptyRoot).
 		Timestamp(now).
 		ParentID(emptyRoot).
+		BaseFee(big.NewInt(thor.InitialBaseFee)).
 		Beneficiary(beneficiary).
 		TransactionFeatures(1).
 		Build()
@@ -89,7 +92,7 @@ func TestBlock(t *testing.T) {
 
 	assert.Equal(t, tx.Features(1), blk.Header().TxsFeatures())
 	data, _ = rlp.EncodeToBytes(blk)
-	var bx block.Block
+	var bx Block
 	assert.Nil(t, rlp.DecodeBytes(data, &bx))
 	assert.Equal(t, blk.Header().ID(), bx.Header().ID())
 	assert.Equal(t, blk.Header().TxsFeatures(), bx.Header().TxsFeatures())

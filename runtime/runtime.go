@@ -17,6 +17,7 @@ import (
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/runtime/statedb"
 	"github.com/vechain/thor/v2/state"
@@ -63,6 +64,7 @@ var baseChainConfig = vm.ChainConfig{
 		Clique:              nil,
 	},
 	IstanbulBlock: nil,
+	ShanghaiBlock: nil,
 }
 
 // Output output of clause execution.
@@ -97,34 +99,38 @@ func New(
 	chain *chain.Chain,
 	state *state.State,
 	ctx *xenv.BlockContext,
-	forkConfig thor.ForkConfig,
+	forkConfig *thor.ForkConfig,
 ) *Runtime {
 	currentChainConfig := baseChainConfig
 	currentChainConfig.ConstantinopleBlock = big.NewInt(int64(forkConfig.ETH_CONST))
 	currentChainConfig.IstanbulBlock = big.NewInt(int64(forkConfig.ETH_IST))
+	currentChainConfig.ShanghaiBlock = big.NewInt(int64(forkConfig.GALACTICA))
 	if chain != nil {
 		// use genesis id as chain id
 		currentChainConfig.ChainID = new(big.Int).SetBytes(chain.GenesisID().Bytes())
 	}
 
-	// alloc precompiled contracts
-	if forkConfig.ETH_IST == ctx.Number {
-		for addr := range vm.PrecompiledContractsIstanbul {
-			if err := state.SetCode(thor.Address(addr), EmptyRuntimeBytecode); err != nil {
-				panic(err)
-			}
-		}
+	// allocate precompiled contracts
+	var precompiled map[common.Address]vm.PrecompiledContract
+	if forkConfig.GALACTICA == ctx.Number {
+		precompiled = vm.PrecompiledContractsShanghai
+	} else if forkConfig.ETH_IST == ctx.Number {
+		precompiled = vm.PrecompiledContractsIstanbul
 	} else if ctx.Number == 0 {
-		for addr := range vm.PrecompiledContractsByzantium {
-			if err := state.SetCode(thor.Address(addr), EmptyRuntimeBytecode); err != nil {
-				panic(err)
-			}
+		precompiled = vm.PrecompiledContractsByzantium
+	}
+	for addr := range precompiled {
+		if err := state.SetCode(thor.Address(addr), EmptyRuntimeBytecode); err != nil {
+			panic(err)
 		}
 	}
 
-	// VIP191
-	if forkConfig.VIP191 == ctx.Number {
-		// upgrade extension contract to V2
+	// set builtin contracts
+	if forkConfig.GALACTICA == ctx.Number {
+		if err := state.SetCode(builtin.Extension.Address, builtin.Extension.V3.RuntimeBytecodes()); err != nil {
+			panic(err)
+		}
+	} else if forkConfig.VIP191 == ctx.Number {
 		if err := state.SetCode(builtin.Extension.Address, builtin.Extension.V2.RuntimeBytecodes()); err != nil {
 			panic(err)
 		}
@@ -143,7 +149,7 @@ func New(
 		state:       state,
 		ctx:         ctx,
 		chainConfig: currentChainConfig,
-		forkConfig:  &forkConfig,
+		forkConfig:  forkConfig,
 	}
 	return &rt
 }
@@ -160,7 +166,13 @@ func (rt *Runtime) SetVMConfig(config vm.Config) *Runtime {
 }
 
 func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *xenv.TransactionContext) *vm.EVM {
-	var lastNonNativeCallGas uint64
+	var (
+		lastNonNativeCallGas uint64
+		baseFee              *big.Int
+	)
+	if rt.ctx.BaseFee != nil {
+		baseFee = new(big.Int).Set(rt.ctx.BaseFee)
+	}
 	return vm.NewEVM(vm.Context{
 		CanTransfer: func(_ vm.StateDB, addr common.Address, amount *big.Int) bool {
 			return stateDB.GetBalance(addr).Cmp(amount) >= 0
@@ -241,7 +253,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 				panic("serious bug: native call returned gas over consumed")
 			}
 
-			ret, err := xenv.New(abi, rt.chain, rt.state, rt.ctx, txCtx, evm, contract).Call(run)
+			ret, err := xenv.New(abi, rt.chain, rt.state, rt.ctx, txCtx, evm, contract, clauseIndex).Call(run)
 			return ret, err, true
 		},
 		OnCreateContract: func(_ *vm.EVM, contractAddr, caller common.Address) {
@@ -321,6 +333,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 		BlockNumber: new(big.Int).SetUint64(uint64(rt.ctx.Number)),
 		Time:        new(big.Int).SetUint64(rt.ctx.Time),
 		Difficulty:  &big.Int{},
+		BaseFee:     baseFee,
 	}, stateDB, &rt.chainConfig, rt.vmConfig)
 }
 
@@ -407,7 +420,11 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 		return nil, err
 	}
 
-	baseGasPrice, gasPrice, payer, _, returnGas, err := resolvedTx.BuyGas(rt.state, rt.ctx.Time)
+	legacyTxBaseGasPrice, gasPrice, payer, _, returnGas, err := resolvedTx.BuyGas(
+		rt.state,
+		rt.ctx.Time,
+		rt.ctx.BaseFee,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -481,6 +498,7 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 			finalized = true
 
 			receipt := &Tx.Receipt{
+				Type:     tx.Type(),
 				Reverted: reverted,
 				Outputs:  txOutputs,
 				GasUsed:  tx.Gas() - leftOverGas,
@@ -498,18 +516,21 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 			if err != nil {
 				return nil, err
 			}
-			provedWork, err := tx.ProvedWork(rt.ctx.Number-1, rt.chain.GetBlockID)
+
+			var num uint32
+			if rt.ctx.Number < rt.forkConfig.GALACTICA {
+				num = rt.ctx.Number - 1
+			} else {
+				num = rt.ctx.Number
+			}
+			provedWork, err := tx.ProvedWork(num, rt.chain.GetBlockID)
 			if err != nil {
 				return nil, err
 			}
-			overallGasPrice := tx.OverallGasPrice(baseGasPrice, provedWork)
+			rewardGasPrice := fork.GalacticaPriorityGasPrice(tx, legacyTxBaseGasPrice, provedWork, rt.ctx.BaseFee)
+			reward := fork.CalculateReward(receipt.GasUsed, rewardGasPrice, rewardRatio, rt.ctx.Number >= rt.forkConfig.GALACTICA)
 
-			var reward *big.Int
-			if rt.ctx.Number <= rt.forkConfig.HAYABUSA {
-				reward = new(big.Int).SetUint64(receipt.GasUsed)
-				reward.Mul(reward, overallGasPrice)
-				reward.Mul(reward, rewardRatio)
-				reward.Div(reward, big.NewInt(1e18))
+			if rt.ctx.Number < rt.forkConfig.HAYABUSA {
 				if err := builtin.Energy.Native(rt.state, rt.ctx.Time).Add(rt.ctx.Beneficiary, reward); err != nil {
 					return nil, err
 				}

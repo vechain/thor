@@ -15,10 +15,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/api/events"
+	"github.com/vechain/thor/v2/api/fees"
 	"github.com/vechain/thor/v2/api/node"
 	"github.com/vechain/thor/v2/api/subscriptions"
 	"github.com/vechain/thor/v2/api/transactions"
@@ -174,7 +174,7 @@ func (c *Client) TransactionReceipt(id *thor.Bytes32, opts ...Option) (*transact
 
 // SendTransaction sends a signed transaction to the blockchain.
 func (c *Client) SendTransaction(tx *tx.Transaction) (*transactions.SendTxResult, error) {
-	rlpTx, err := rlp.EncodeToBytes(tx)
+	rlpTx, err := tx.MarshalBinary()
 	if err != nil {
 		return nil, fmt.Errorf("unable to encode transaction - %w", err)
 	}
@@ -219,6 +219,16 @@ func (c *Client) ChainTag() (byte, error) {
 		return 0, err
 	}
 	return genesisBlock.ID[31], nil
+}
+
+// FeesHistory retrieves the fee history for the range newest block - block count.
+func (c *Client) FeesHistory(blockCount uint32, newestBlock string, rewardPercentiles []float64) (feesHistory *fees.FeesHistory, err error) {
+	return c.httpConn.GetFeesHistory(blockCount, newestBlock, rewardPercentiles)
+}
+
+// FeesPriority retrieves the suggested maxPriorityFeePerGas for a transaction to be included in the next blocks.
+func (c *Client) FeesPriority() (feesPriority *fees.FeesPriority, err error) {
+	return c.httpConn.GetFeesPriority()
 }
 
 // SubscribeBlocks subscribes to block updates over WebSocket.

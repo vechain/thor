@@ -30,7 +30,7 @@ type Accounts struct {
 	repo              *chain.Repository
 	stater            *state.Stater
 	callGasLimit      uint64
-	forkConfig        thor.ForkConfig
+	forkConfig        *thor.ForkConfig
 	bft               bft.Committer
 	enabledDeprecated bool
 }
@@ -39,7 +39,7 @@ func New(
 	repo *chain.Repository,
 	stater *state.Stater,
 	callGasLimit uint64,
-	forkConfig thor.ForkConfig,
+	forkConfig *thor.ForkConfig,
 	bft bft.Committer,
 	enabledDeprecated bool,
 ) *Accounts {
@@ -72,7 +72,7 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
 
-	_, st, err := utils.GetSummaryAndState(revision, a.repo, a.bft, a.stater)
+	_, st, err := utils.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "revision"))
@@ -126,7 +126,7 @@ func (a *Accounts) handleGetAccount(w http.ResponseWriter, req *http.Request) er
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
 
-	summary, st, err := utils.GetSummaryAndState(revision, a.repo, a.bft, a.stater)
+	summary, st, err := utils.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "revision"))
@@ -155,7 +155,7 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
 
-	_, st, err := utils.GetSummaryAndState(revision, a.repo, a.bft, a.stater)
+	_, st, err := utils.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "revision"))
@@ -179,7 +179,7 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	summary, st, err := utils.GetSummaryAndState(revision, a.repo, a.bft, a.stater)
+	summary, st, err := utils.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "revision"))
@@ -222,7 +222,7 @@ func (a *Accounts) handleCallBatchCode(w http.ResponseWriter, req *http.Request)
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	summary, st, err := utils.GetSummaryAndState(revision, a.repo, a.bft, a.stater)
+	summary, st, err := utils.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "revision"))
@@ -256,6 +256,7 @@ func (a *Accounts) batchCall(
 			Time:        header.Timestamp(),
 			GasLimit:    header.GasLimit(),
 			TotalScore:  header.TotalScore(),
+			BaseFee:     header.BaseFee(),
 		},
 		a.forkConfig)
 	results = make(BatchCallResults, 0)
@@ -298,7 +299,10 @@ func (a *Accounts) handleBatchCallData(batchCallData *BatchCallData) (txCtx *xen
 		gas = batchCallData.Gas
 	}
 
-	txCtx = &xenv.TransactionContext{}
+	txCtx = &xenv.TransactionContext{
+		ClauseCount: uint32(len(batchCallData.Clauses)),
+		Expiration:  batchCallData.Expiration,
+	}
 
 	if batchCallData.GasPrice == nil {
 		txCtx.GasPrice = new(big.Int)
@@ -320,7 +324,6 @@ func (a *Accounts) handleBatchCallData(batchCallData *BatchCallData) (txCtx *xen
 	} else {
 		txCtx.ProvedWork = (*big.Int)(batchCallData.ProvedWork)
 	}
-	txCtx.Expiration = batchCallData.Expiration
 
 	if len(batchCallData.BlockRef) > 0 {
 		blockRef, err := hexutil.Decode(batchCallData.BlockRef)

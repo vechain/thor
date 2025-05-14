@@ -21,7 +21,7 @@ import (
 )
 
 func TestFlow_Schedule_POS(t *testing.T) {
-	config := thor.SoloFork
+	config := &thor.SoloFork
 	config.HAYABUSA = 2
 	config.HAYABUSA_TP = 1
 	config.BLOCKLIST = math.MaxUint32
@@ -57,7 +57,7 @@ func TestFlow_Schedule_POS(t *testing.T) {
 
 func packNext(t *testing.T, chain *testchain.Chain, interval uint64, txs ...*tx.Transaction) {
 	account := genesis.DevAccounts()[0]
-	p := packer.New(chain.Repo(), chain.Stater(), account.Address, &account.Address, chain.GetForkConfig())
+	p := packer.New(chain.Repo(), chain.Stater(), account.Address, &account.Address, chain.GetForkConfig(), 0)
 	parent := chain.Repo().BestBlockSummary()
 	flow, _, err := p.Schedule(parent, parent.Header.Timestamp()+interval)
 	assert.NoError(t, err)

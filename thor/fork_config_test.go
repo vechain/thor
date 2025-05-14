@@ -19,6 +19,7 @@ func TestForkConfigString(t *testing.T) {
 		ETH_IST:     math.MaxUint32,
 		VIP214:      math.MaxUint32,
 		FINALITY:    math.MaxUint32,
+		GALACTICA:   math.MaxUint32,
 		HAYABUSA:    math.MaxUint32,
 		HAYABUSA_TP: math.MaxUint32,
 	}
@@ -54,7 +55,7 @@ func TestGetForkConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		config := GetForkConfig(tt.id)
-		if (config != ForkConfig{}) != tt.expectFound {
+		if (config != nil) != tt.expectFound {
 			t.Errorf("GetForkConfig(%v) found = %v, want %v", tt.id, !tt.expectFound, tt.expectFound)
 		}
 	}

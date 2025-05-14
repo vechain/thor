@@ -7,11 +7,13 @@ package packer
 
 import (
 	"crypto/ecdsa"
+	"errors"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -91,27 +93,64 @@ func (f *Flow) hasTx(txid thor.Bytes32, txBlockRef uint32) (bool, error) {
 	return f.runtime.Chain().HasTransaction(txid, txBlockRef)
 }
 
+func (f *Flow) isEffectivePriorityFeeTooLow(t *tx.Transaction) error {
+	// Skip check if the minimum priority fee is not set
+	if f.packer.minTxPriorityFee.Sign() <= 0 {
+		return nil
+	}
+
+	legacyTxBaseGasPrice, err := builtin.Params.Native(f.runtime.State()).Get(thor.KeyLegacyTxBaseGasPrice)
+	if err != nil {
+		return err
+	}
+
+	provedWork, err := t.ProvedWork(f.Number()-1, f.runtime.Chain().GetBlockID)
+	if err != nil {
+		return err
+	}
+	effectivePriorityFee := fork.GalacticaPriorityGasPrice(
+		t,
+		legacyTxBaseGasPrice,
+		provedWork,
+		f.runtime.Context().BaseFee,
+	)
+
+	if effectivePriorityFee.Cmp(f.packer.minTxPriorityFee) < 0 {
+		return badTxError{"effective priority fee too low"}
+	}
+
+	return nil
+}
+
 // Adopt try to execute the given transaction.
 // If the tx is valid and can be executed on current state (regardless of VM error),
 // it will be adopted by the new block.
-func (f *Flow) Adopt(tx *tx.Transaction) error {
-	origin, _ := tx.Origin()
+func (f *Flow) Adopt(t *tx.Transaction) error {
+	origin, _ := t.Origin()
 	if f.Number() >= f.packer.forkConfig.BLOCKLIST && thor.IsOriginBlocked(origin) {
 		return badTxError{"tx origin blocked"}
 	}
 
-	if err := tx.TestFeatures(f.features); err != nil {
+	delegator, err := t.Delegator()
+	if err != nil {
+		return badTxError{"delegator cannot be extracted"}
+	}
+	if f.Number() >= f.packer.forkConfig.BLOCKLIST && delegator != nil && thor.IsOriginBlocked(*delegator) {
+		return badTxError{"tx delegator blocked"}
+	}
+
+	if err := t.TestFeatures(f.features); err != nil {
 		return badTxError{err.Error()}
 	}
 
 	switch {
-	case tx.ChainTag() != f.packer.repo.ChainTag():
+	case t.ChainTag() != f.packer.repo.ChainTag():
 		return badTxError{"chain tag mismatch"}
-	case f.Number() < tx.BlockRef().Number():
+	case f.Number() < t.BlockRef().Number():
 		return errTxNotAdoptableNow
-	case tx.IsExpired(f.Number()):
+	case t.IsExpired(f.Number()):
 		return badTxError{"expired"}
-	case f.gasUsed+tx.Gas() > f.runtime.Context().GasLimit:
+	case f.gasUsed+t.Gas() > f.runtime.Context().GasLimit:
 		// has enough space to adopt minimum tx
 		if f.gasUsed+thor.TxGas+thor.ClauseGas <= f.runtime.Context().GasLimit {
 			// try to find a lower gas tx
@@ -119,15 +158,32 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 		}
 		return errGasLimitReached
 	}
+	if f.Number() < f.packer.forkConfig.GALACTICA {
+		if t.Type() != tx.TypeLegacy {
+			return badTxError{"invalid tx type"}
+		}
+	} else {
+		if f.runtime.Context().BaseFee == nil {
+			return fork.ErrBaseFeeNotSet
+		}
+
+		if err := fork.ValidateGalacticaTxFee(t, f.runtime.State(), f.runtime.Context().BaseFee); err != nil {
+			return fmt.Errorf("%w: %w", errTxNotAdoptableNow, err)
+		}
+
+		if err := f.isEffectivePriorityFeeTooLow(t); err != nil {
+			return err
+		}
+	}
 
 	// check if tx already there
-	if found, err := f.hasTx(tx.ID(), tx.BlockRef().Number()); err != nil {
+	if found, err := f.hasTx(t.ID(), t.BlockRef().Number()); err != nil {
 		return err
 	} else if found {
 		return errKnownTx
 	}
 
-	if dependsOn := tx.DependsOn(); dependsOn != nil {
+	if dependsOn := t.DependsOn(); dependsOn != nil {
 		// check if deps exists
 		found, reverted, err := f.findDep(*dependsOn)
 		if err != nil {
@@ -142,16 +198,16 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 	}
 
 	checkpoint := f.runtime.State().NewCheckpoint()
-	receipt, err := f.runtime.ExecuteTransaction(tx)
+	receipt, err := f.runtime.ExecuteTransaction(t)
 	if err != nil {
 		// skip and revert state
 		f.runtime.State().RevertTo(checkpoint)
 		return badTxError{err.Error()}
 	}
-	f.processedTxs[tx.ID()] = receipt.Reverted
+	f.processedTxs[t.ID()] = receipt.Reverted
 	f.gasUsed += receipt.GasUsed
 	f.receipts = append(f.receipts, receipt)
-	f.txs = append(f.txs, tx)
+	f.txs = append(f.txs, t)
 	return nil
 }
 
@@ -194,6 +250,10 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 
 	if f.Number() >= f.packer.forkConfig.FINALITY && shouldVote {
 		builder.COM()
+	}
+
+	if f.Number() >= f.packer.forkConfig.GALACTICA {
+		builder.BaseFee(fork.CalcBaseFee(f.packer.forkConfig, f.parentHeader))
 	}
 
 	if f.Number() < f.packer.forkConfig.VIP214 {
