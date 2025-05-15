@@ -10,7 +10,6 @@ import (
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus/fork"
 	"github.com/vechain/thor/v2/log"
@@ -68,7 +67,7 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (*Flo
 	}
 
 	var sched scheduler
-	posActive, activated, err := p.syncPOS(builtin.Staker.Native(st), parent.Header.Number()+1)
+	posActive, activated, err := p.syncPOS(st, parent.Header.Number()+1)
 	if err != nil {
 		return nil, false, err
 	}
@@ -121,7 +120,7 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 		features |= tx.DelegationFeature
 	}
 
-	posActive, activated, err := p.syncPOS(builtin.Staker.Native(state), parent.Header.Number()+1)
+	posActive, activated, err := p.syncPOS(state, parent.Header.Number()+1)
 	if err != nil {
 		return nil, false, err
 	}
@@ -195,12 +194,13 @@ func (p *Packer) SetTargetGasLimit(gl uint64) {
 
 // syncPOS checks if POS consensus is active, or tries to activate it if conditions are met.
 // If the staker contract is active, it will perform housekeeping.
-func (p *Packer) syncPOS(staker *staker.Staker, current uint32) (active bool, activated bool, err error) {
+func (p *Packer) syncPOS(st *state.State, current uint32) (active bool, activated bool, err error) {
 	// still on PoA
 	if p.forkConfig.HAYABUSA+p.forkConfig.HAYABUSA_TP > current {
 		return false, false, nil
 	}
 	// check if the staker contract currently is active
+	staker := builtin.Staker.Native(st)
 	active, err = staker.IsActive()
 	if err != nil {
 		return false, false, err

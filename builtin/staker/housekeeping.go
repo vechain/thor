@@ -78,14 +78,14 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 		if err != nil {
 			return false, err
 		}
-		err = s.performCooldownUpdates(cooldown, entry)
-		if err != nil {
+		logger.Info("performing cooldown updates", "id", cooldown, "master", entry.Master)
+		if err = s.performCooldownUpdates(cooldown, entry); err != nil {
 			return false, err
 		}
 	}
 
 	if !validatorExitID.IsZero() {
-		logger.Debug("exiting validator", "id", validatorExitID)
+		logger.Info("exiting validator", "id", validatorExitID)
 		if err := s.validations.ExitValidator(validatorExitID, currentBlock); err != nil {
 			return false, err
 		}
@@ -179,7 +179,7 @@ func (s *Staker) performCooldownUpdates(id thor.Bytes32, entry *Validation) erro
 		return err
 	}
 
-	if err := s.queuedVET.Add(queuedDecrease); err != nil {
+	if err := s.queuedVET.Sub(queuedDecrease); err != nil {
 		return err
 	}
 	if err := s.lockedVET.Sub(exitedTVL); err != nil {
