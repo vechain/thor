@@ -108,48 +108,8 @@ jobs:
           retention-days: 14
 
   run-hayabusa-tests:
-    runs-on:
-      - codebuild-Hayabusa-${{ github.run_id }}-${{ github.run_attempt }}
-      - image:arm-3.0
-      - instance-size:large # xlarge=32 vCPUs, 64 GiB memory, large=8 vCPUs, 16 GiB memory
-
-    name: Hayabusa Tests
-
-    strategy:
-      matrix:
-        packages:
-          - builtins
-          - tests/validations
-          - tests/delegations
-
-    env:
-      GOPRIVATE: github.com/vechain/draupnir/*
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          repository: vechain/hayabusa-e2e
-          path: hayabusa-e2e
-          token: ${{ secrets.GHA_REPO_ACCESS }}
-          ref: ${{ inputs.hayabusa-e2e-branch }}
-
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          path: hayabusa
-
-      - name: Install Goq
-        uses: actions/setup-go@v5
-        with:
-          go-version: 1.24.x
-
-      - name: Configure git for private modules
-        run: |
-          git config --global url."https://${{ secrets.GHA_REPO_ACCESS }}@github.com/".insteadOf "https://github.com/"
-
-      - name: Test
-        run: go test -v -failfast -timeout 3600s ./${{ matrix.packages }}
-        working-directory: ${{ github.workspace }}/hayabusa-e2e
-        env:
-          THOR_WORKING_DIR: ${{ github.workspace }}/hayabusa
+    uses: vechain/hayabusa-e2e/.github/workflows/run-tests.yaml@release/hayabusa
+    with:
+      codebuild-name: codebuild-Hayabusa
+      hayabusa-branch: ${{ github.ref }}
+    secrets: inherit
