@@ -50,12 +50,12 @@ func init() {
 
 			validator, err := Staker.Native(env.State()).Get(thor.Bytes32(args.ValidationID))
 			if err != nil {
-				return []any{thor.Address{}, thor.Address{}, big.NewInt(0), big.NewInt(0), staker.StatusUnknown, false, fmt.Sprintf("revert: %v", err)}
+				return []any{thor.Address{}, thor.Address{}, big.NewInt(0), big.NewInt(0), staker.StatusUnknown, false, false, fmt.Sprintf("revert: %v", err)}
 			}
 			if validator.IsEmpty() {
-				return []any{thor.Address{}, thor.Address{}, big.NewInt(0), big.NewInt(0), staker.StatusUnknown, false, ""}
+				return []any{thor.Address{}, thor.Address{}, big.NewInt(0), big.NewInt(0), staker.StatusUnknown, false, false, ""}
 			}
-			return []any{validator.Master, validator.Endorsor, validator.LockedVET, validator.Weight, validator.Status, validator.AutoRenew, ""}
+			return []any{validator.Master, validator.Endorsor, validator.LockedVET, validator.Weight, validator.Status, validator.AutoRenew, validator.Online, ""}
 		}},
 		{"native_getWithdraw", func(env *xenv.Environment) []any {
 			var args struct {

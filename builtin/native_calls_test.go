@@ -1601,13 +1601,14 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).Mul(big.NewInt(0).SetUint64(receipt.GasUsed), big.NewInt(1e15)), big.NewInt(0).Sub(totalBurned, totalBurnedBefore))
 
 	// get
-	getRes := make([]any, 6)
+	getRes := make([]any, 7)
 	getRes[0] = new(common.Address)
 	getRes[1] = new(common.Address)
 	getRes[2] = new(*big.Int)
 	getRes[3] = new(*big.Int)
 	getRes[4] = new(uint8)
 	getRes[5] = new(bool)
+	getRes[6] = new(bool)
 	_, err = callContractAndGetOutput(abi, "get", toAddr, &getRes, id)
 	assert.NoError(t, err)
 	expectedEndorsor := common.BytesToAddress(endorsor.Address.Bytes())
@@ -1854,13 +1855,14 @@ func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
 	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
 
 	// get
-	getRes := make([]any, 6)
+	getRes := make([]any, 7)
 	getRes[0] = new(common.Address)
 	getRes[1] = new(common.Address)
 	getRes[2] = new(*big.Int)
 	getRes[3] = new(*big.Int)
 	getRes[4] = new(uint8)
 	getRes[5] = new(bool)
+	getRes[6] = new(bool)
 	_, err = callContractAndGetOutput(abi, "get", toAddr, &getRes, id)
 	assert.NoError(t, err)
 	assert.Equal(t, staker.StatusExit, *getRes[4].(*uint8))

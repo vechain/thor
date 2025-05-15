@@ -217,12 +217,12 @@ contract Staker {
 
     /**
      * @dev get returns the master. endorser, stake, weight, status and auto renew of a validator.
-     * @return (master, endorser, stake, weight, status, autoRenew)
+     * @return (master, endorser, stake, weight, status, autoRenew, online)
      * - status (0: unknown, 1: queued, 2: active, 3: cooldown, 4: exited)
      */
     function get(
         bytes32 id
-    ) public view returns (address, address, uint256, uint256, uint8, bool) {
+    ) public view returns (address, address, uint256, uint256, uint8, bool, bool) {
         (
             address master,
             address endorser,
@@ -230,10 +230,11 @@ contract Staker {
             uint256 weight,
             uint8 status,
             bool autoRenew,
+            bool online,
             string memory error
         ) = StakerNative(address(this)).native_get(id);
         require(bytes(error).length == 0, error);
-        return (master, endorser, stake, weight, status, autoRenew);
+        return (master, endorser, stake, weight, status, autoRenew, online);
     }
 
     /**
@@ -397,6 +398,7 @@ interface StakerNative {
             uint256,
             uint256,
             uint8,
+            bool,
             bool,
             string calldata
         );

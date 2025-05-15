@@ -185,7 +185,7 @@ func (e *Energy) Sub(addr thor.Address, amount *big.Int) (bool, error) {
 }
 
 func (e *Energy) StopEnergyGrowth() {
-	bt := big.NewInt(int64(e.blockTime))
+	bt := new(big.Int).SetUint64(e.blockTime)
 	e.state.SetStorage(thor.BytesToAddress([]byte("Energy")), thor.HayabusaEnergyGrowthStopTime, thor.BytesToBytes32(bt.Bytes()))
 }
 
