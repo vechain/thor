@@ -20,6 +20,7 @@ import (
 	"github.com/vechain/thor/v2/api/events"
 	"github.com/vechain/thor/v2/api/fees"
 	"github.com/vechain/thor/v2/api/node"
+	"github.com/vechain/thor/v2/api/rewards"
 	"github.com/vechain/thor/v2/api/subscriptions"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/api/transfers"
@@ -91,6 +92,8 @@ func New(
 	}
 	blocks.New(repo, bft).
 		Mount(router, "/blocks")
+	rewards.New(repo, bft, stater, forkConfig).
+		Mount(router, "/blocks/reward")
 	transactions.New(repo, txPool).
 		Mount(router, "/transactions")
 	debug.New(repo, stater, forkConfig, config.CallGasLimit, config.AllowCustomTracer, bft, config.AllowedTracers, config.SoloMode).

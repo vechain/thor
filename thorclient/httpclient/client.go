@@ -248,6 +248,25 @@ func (c *Client) GetExpandedBlock(revision string) (*blocks.JSONExpandedBlock, e
 	return &block, nil
 }
 
+// GetBlockReward retrieves a block reward and validator for block
+func (c *Client) GetBlockReward(revision string) (*blocks.JSONBlockReward, error) {
+	body, err := c.httpGET(c.url + "/blocks/reward/" + revision)
+	if err != nil {
+		return nil, fmt.Errorf("unable to retrieve block reward - %w", err)
+	}
+
+	if len(body) == 0 || bytes.Equal(bytes.TrimSpace(body), []byte("null")) {
+		return nil, common.ErrNotFound
+	}
+
+	var blockReward blocks.JSONBlockReward
+	if err = json.Unmarshal(body, &blockReward); err != nil {
+		return nil, fmt.Errorf("unable to unmarshal block reward - %w", err)
+	}
+
+	return &blockReward, nil
+}
+
 // FilterEvents filters events based on the provided event filter.
 func (c *Client) FilterEvents(req *events.EventFilter) ([]events.FilteredEvent, error) {
 	body, err := c.httpPOST(c.url+"/logs/event", req)

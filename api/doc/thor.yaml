@@ -287,6 +287,33 @@ paths:
                 type: string
                 example: 'Invalid revision'
 
+  /blocks/reward/{revision}:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/RevisionInPath'
+      tags:
+        - Blocks
+      summary: Retrieve a block reward
+      description: |
+
+        Retrieve information about a block reward and proposer, identified by its `revision`.
+
+        If the provided `revision` is not found, the response will be `null`
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetBlockRewardResponse'
+        '400':
+          description: Bad Request
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: 'Invalid revision'
+
   /logs/event:
     post:
       tags:
@@ -1076,6 +1103,54 @@ components:
               allOf:
                 - $ref: '#/components/schemas/Tx'
                 - $ref: '#/components/schemas/Receipt'
+
+    GetBlockRewardResponse:
+      type: object
+      description: |
+        The response will contain information about the block reward identified by the provided `revision`.
+      title: GetBlockRewardResponse
+      allOf:
+        - properties:
+            number:
+              type: integer
+              format: uint32
+              description: The block number (height).
+              example: 325324
+              nullable: false
+            id:
+              type: string
+              format: hex
+              description: The block identifier.
+              example: '0x0004f6cc88bb4626a92907718e82f255b8fa511453a78e8797eb8cea3393b215'
+              nullable: false
+              pattern: '^0x[0-9a-f]{64}$'
+            reward:
+              type: string
+              description: |
+                The hexadecimal representation of the amount (wei) of VTHO reward.
+              example: '0x47ff1f90327aa0f8e'
+              nullable: false
+              pattern: '^0x[0-9a-f]*$'
+            master:
+              type: string
+              format: hex
+              description: The address of the block proposer which have received the reward (in VTHO)
+              example: '0xb4094c25f86d628fdd571afc4077f0d0196afb48'
+              nullable: false
+              pattern: '^0x[0-9a-f]{40}$'
+            validationId:
+              type: string
+              format: hex
+              description: The Validation ID of the block proposer which have received the reward (in VTHO)
+              example: '0x1323778d1aff762f10fce30146b8c33ca2d35885cbdcaa9069533f7f4b03b9cc'
+              nullable: false
+              pattern: '^0x[0-9a-f]{64}$'
+      example:
+        number: 325324
+        id: '0x0004f6cc88bb4626a92907718e82f255b8fa511453a78e8797eb8cea3393b215'
+        reward: 100000000000000000
+        master: '0xb4094c25f86d628fdd571afc4077f0d0196afb48'
+        validatorId: '0x89dfd9fcd10c9e53d68592cf8b540b280b72d381b868523223992f3e09a806bb'
 
     EventLogFilterRequest:
       type: object
