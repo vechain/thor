@@ -69,7 +69,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			authorized = true
 			logger.Info("prepared to pack block")
 		}
-		logger.Debug("scheduled to pack block", "after", time.Duration(flow.When()-now)*time.Second, "score", flow.TotalScore(), "pos", pos)
+		logger.Info("scheduled to pack block", "after", time.Duration(flow.When()-now)*time.Second, "score", flow.TotalScore(), "pos", pos)
 
 		for {
 			if uint64(time.Now().Unix())+thor.BlockInterval/2 > flow.When() {

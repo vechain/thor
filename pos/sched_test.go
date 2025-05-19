@@ -7,6 +7,7 @@ package pos
 
 import (
 	"math/big"
+	mathrand "math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -38,14 +39,25 @@ func TestNewScheduler_Seed(t *testing.T) {
 	s1, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed1"))
 	assert.NoError(t, err)
 
-	s2, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed10"))
+	s2, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed2"))
 	assert.NoError(t, err)
 
-	for i := range s1.placements {
-		assert.NotEqual(t, s1.placements[i].hash, s2.placements[i].hash)
-		v1 := s1.placements[i].addr
-		v2 := s2.placements[i].addr
-		assert.NotEqual(t, v1, v2)
+	time1 := s1.Schedule(20)
+	time2 := s2.Schedule(20)
+	assert.NotEqual(t, time1, time2)
+
+	assert.NotEqual(t, s1.sequence[0], s2.sequence[0])
+}
+
+func TestNewScheduler_Schedule_ShouldNotPanic(t *testing.T) {
+	validators, _ := createParams()
+	parentTime := uint64(10)
+	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, parentTime, []byte("seed1"))
+	assert.NoError(t, err)
+
+	for i := range uint64(1000) {
+		next := parentTime + thor.BlockInterval*(i+1)
+		sched.Schedule(next)
 	}
 }
 
@@ -54,30 +66,113 @@ func TestScheduler_IsScheduled(t *testing.T) {
 	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed1"))
 	assert.NoError(t, err)
 
-	assert.True(t, sched.IsScheduled(20, thor.MustParseBytes32("0x000000000000000000000000f370940abdbd2583bc80bfc19d19bc216c88ccf0")))
+	assert.True(t, sched.IsScheduled(20, thor.MustParseBytes32("0x0000000000000000000000000f872421dc479f3c11edd89512731814d0598db5")))
 }
 
 func TestScheduler_Distribution(t *testing.T) {
-	validators, totalStake := createParams()
-	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed1"))
-	assert.NoError(t, err)
+	iterations := 100_000
+	tolerance := 0.04 // 4% tolerance, reduce by increasing iterations, 2% works for 1million
 
-	distribution := make(map[thor.Bytes32]int)
+	type stakeFunc func(index int, acc thor.Address) *big.Int
 
-	for i := uint64(1); i <= 100_000; i++ {
-		id := sched.expectedValidator(thor.BlockInterval * i)
-		distribution[id]++
+	//  pseudo-random number generator
+	randReader := mathrand.New(mathrand.NewSource(412342)) //nolint:gosec
+
+	var testCases = []struct {
+		name   string
+		stakes stakeFunc
+	}{
+		{
+			name: "some_big_some_small",
+			stakes: func(index int, acc thor.Address) *big.Int {
+				if index%2 == 0 {
+					return big.NewInt(2000)
+				}
+				return big.NewInt(1000)
+			},
+		},
+		{
+			name: "all_same",
+			stakes: func(index int, acc thor.Address) *big.Int {
+				return big.NewInt(1000)
+			},
+		},
+		{
+			name: "pseudo_random_weight",
+			stakes: func(index int, acc thor.Address) *big.Int {
+				eth := big.NewInt(1)
+				millionEth := new(big.Int).Mul(big.NewInt(1e6), eth)
+				maxWeight := new(big.Int).Mul(big.NewInt(1200), millionEth) // max with multipliers
+				minWeight := new(big.Int).Mul(big.NewInt(50), millionEth)   // min with multipliers
+				diff := new(big.Int).Sub(maxWeight, minWeight)
+
+				// Generate random number in [0, diff)
+				n := new(big.Int).Rand(randReader, diff)
+				// Add min to shift range to [min, max)
+				randomValue := new(big.Int).Add(minWeight, n)
+
+				return randomValue
+			},
+		},
+		{
+			name: "increasing",
+			stakes: func(index int, acc thor.Address) *big.Int {
+				return new(big.Int).SetInt64((int64(index) + 1) * 1000)
+			},
+		},
 	}
 
-	for addr, count := range distribution {
-		expectedWeight := new(big.Float).SetInt(validators[addr].Weight)
-		expectedWeight.Quo(expectedWeight, new(big.Float).SetInt(totalStake))
-		expectedCountFloat := new(big.Float).Mul(expectedWeight, big.NewFloat(100_000))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			validators := make(map[thor.Bytes32]*staker.Validation)
+			totalStake := big.NewInt(0)
 
-		expectedCount, _ := expectedCountFloat.Int64()
+			for i, acc := range genesis.DevAccounts() {
+				id := thor.BytesToBytes32(acc.Address.Bytes())
+				stake := tc.stakes(i, acc.Address)
+				stake = stake.Mul(stake, big.NewInt(1e18)) // convert to wei
+				validators[id] = &staker.Validation{
+					Master: acc.Address,
+					Weight: stake,
+					Online: true,
+				}
+				totalStake.Add(totalStake, stake)
+			}
 
-		tolerance := float64(expectedCount) * 0.05
-		assert.InDeltaf(t, float64(count), float64(expectedCount), tolerance, "Distribution is not within tolerance for validator %v", addr)
+			distribution := make(map[thor.Bytes32]int)
+
+			for i := uint64(1); i <= uint64(iterations); i++ {
+				parent := i * thor.BlockInterval
+				next := parent + thor.BlockInterval
+				seed := big.NewInt(int64(i)).Bytes()
+
+				sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, parent, seed[:])
+				assert.NoError(t, err)
+
+				for _, acc := range genesis.DevAccounts() {
+					id := thor.BytesToBytes32(acc.Address.Bytes())
+					if sched.IsScheduled(next, id) {
+						distribution[id]++
+					}
+				}
+			}
+
+			for id, count := range distribution {
+				weight := new(big.Float).SetInt(validators[id].Weight)
+				weight.Quo(weight, new(big.Float).SetInt(totalStake))
+				expectedCountFloat := new(big.Float).Mul(weight, big.NewFloat(float64(iterations)))
+				expectedCount, _ := expectedCountFloat.Int64()
+
+				diff := float64(expectedCount) * tolerance
+				diffPercent := (float64(expectedCount) - float64(count)) / float64(expectedCount)
+				addr := thor.BytesToAddress(id[:])
+
+				assert.InDeltaf(t, float64(count), float64(expectedCount), diff,
+					"Validator %s has a distribution of %d, expected %d, diff %v",
+					addr.String(), count, expectedCount, diffPercent,
+				)
+			}
+		})
 	}
 }
 
@@ -92,7 +187,7 @@ func TestScheduler_Schedule(t *testing.T) {
 		for _, acc := range genesis.DevAccounts() {
 			sched, err := NewScheduler(acc.Address, validators, 1, parentTime, []byte("seed1"))
 			assert.NoError(t, err)
-			newBlockTime, _ := sched.Schedule(20)
+			newBlockTime := sched.Schedule(20)
 			if newBlockTime == expectedNext {
 				addr = acc.Address
 			}
@@ -133,15 +228,54 @@ func TestScheduler_TotalPlacements(t *testing.T) {
 	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed1"))
 	assert.NoError(t, err)
 
-	assert.Equal(t, 9, len(sched.placements))
+	assert.Equal(t, 9, len(sched.sequence))
 
 	// check total stake in scheduler, should only use online validators
 	total := big.NewInt(0)
-	for _, p := range sched.placements {
-		total.Add(total, validators[p.id].Weight)
+	for _, p := range sched.sequence {
+		total.Add(total, validators[p].Weight)
 	}
 
 	expectedStake := totalStake.Sub(totalStake, validators[otherAccID].Weight)
 
 	assert.True(t, total.Cmp(expectedStake) == 0)
+}
+
+func TestScheduler_AllValidatorsScheduled(t *testing.T) {
+	validators := make(map[thor.Bytes32]*staker.Validation)
+	lowStakeAcc := genesis.DevAccounts()[0].Address
+	for _, acc := range genesis.DevAccounts() {
+		var stake *big.Int
+		// this ensures the first account will be last in the list
+		if acc.Address == lowStakeAcc {
+			stake = big.NewInt(1)
+		} else {
+			eth := big.NewInt(1e18)
+			stake = new(big.Int).Mul(eth, eth)
+		}
+		validator := &staker.Validation{
+			Master: acc.Address,
+			Weight: stake,
+			Online: true,
+		}
+		id := thor.BytesToBytes32(acc.Address.Bytes())
+		validators[id] = validator
+	}
+
+	parent := uint64(10)
+	sched, err := NewScheduler(lowStakeAcc, validators, 1, parent, []byte("seed1"))
+	assert.NoError(t, err)
+
+	lowStakeBlockTime := sched.Schedule(20)
+	diff := int(thor.BlockInterval) * len(validators)
+	assert.Equal(t, int(parent)+diff, int(lowStakeBlockTime))
+
+	seen := make(map[thor.Bytes32]bool)
+	for _, id := range sched.sequence {
+		if seen[id] {
+			t.Fatalf("Validator %s is scheduled multiple times", id)
+		}
+		seen[id] = true
+	}
+	assert.Equal(t, len(seen), len(validators))
 }

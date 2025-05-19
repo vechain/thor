@@ -1,5 +1,5 @@
 // Copyright (c) 2025 The VeChainThor developers
-//
+
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
@@ -8,122 +8,110 @@ package pos
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
+	"math"
 	"math/big"
+	"math/rand"
+	"slices"
 	"sort"
 
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/thor"
 )
 
+// Scheduler to schedule the time when a proposer to produce a block for PoS.
 type Scheduler struct {
-	validator       *staker.Validation
-	id              thor.Bytes32
+	proposer        *staker.Validation
+	proposerID      thor.Bytes32
 	parentBlockTime uint64
-	validators      map[thor.Bytes32]*staker.Validation
-	placements      []placement
-	seed            []byte
+	sequence        []thor.Bytes32
 }
 
-type placement struct {
-	start *big.Rat
-	end   *big.Rat
-	addr  thor.Address
-	hash  thor.Bytes32
-	id    thor.Bytes32
+type onlineProposer struct {
+	id         thor.Bytes32
+	validation *staker.Validation
+	hash       thor.Bytes32
+	score      float64
 }
 
+// NewScheduler create a Scheduler object.
+// `addr` is the proposer to be scheduled.
+// If `addr` is not listed in `proposers` or not active, an error returned.
 func NewScheduler(
-	signer thor.Address,
-	validators map[thor.Bytes32]*staker.Validation,
+	addr thor.Address,
+	proposers map[thor.Bytes32]*staker.Validation,
 	parentBlockNumber uint32,
 	parentBlockTime uint64,
-	seed []byte,
-) (*Scheduler, error) {
-	if len(validators) == 0 {
-		return nil, errors.New("no validators")
-	}
+	seed []byte) (*Scheduler, error) {
 	var (
-		listed      = false
-		validator   *staker.Validation
-		validatorID thor.Bytes32
+		proposer   *staker.Validation
+		proposerID thor.Bytes32
 	)
 	var num [4]byte
 	binary.BigEndian.PutUint32(num[:], parentBlockNumber)
 
-	placements := make([]placement, 0, len(validators))
-	onlineStake := big.NewInt(0)
-
-	for id, entry := range validators {
-		if entry.Master == signer {
-			validatorID = id
-			validator = entry
-			listed = true
+	online := make([]*onlineProposer, 0)
+	for id, p := range proposers {
+		if p.Master == addr {
+			proposer = p
+			proposerID = id
 		}
-		if entry.Online || entry.Master == signer {
-			onlineStake.Add(onlineStake, entry.Weight)
-			placements = append(placements, placement{
-				addr: entry.Master,
-				hash: thor.Blake2b(seed, num[:], entry.Master.Bytes()),
-				id:   id,
+		if p.Online || p.Master == addr {
+			online = append(online, &onlineProposer{
+				id:         id,
+				validation: p,
+				hash:       thor.Blake2b(seed, num[:], p.Master.Bytes()),
 			})
 		}
 	}
 
-	if !listed {
-		return nil, errors.New("pos: unauthorized block proposer")
+	if proposerID.IsZero() {
+		return nil, errors.New("unauthorized block proposer")
 	}
 
-	sort.Slice(placements, func(i, j int) bool {
-		return bytes.Compare(placements[i].hash.Bytes(), placements[j].hash.Bytes()) < 0
+	// initial sort -> this is required to ensure the same order for the random source generator
+	slices.SortFunc(online, func(i, j *onlineProposer) int {
+		return bytes.Compare(i.hash.Bytes(), j.hash.Bytes())
 	})
 
-	prev := big.NewRat(0, 1)
-	totalStakeRat := new(big.Rat).SetInt(onlineStake)
-
-	for i := range placements {
-		weightRat := new(big.Rat).SetInt(validators[placements[i].id].Weight)
-		weight := new(big.Rat).Quo(weightRat, totalStakeRat)
-
-		placements[i].start = new(big.Rat).Set(prev)
-		placements[i].end = new(big.Rat).Add(prev, weight)
-		prev = placements[i].end
-	}
-
 	return &Scheduler{
-		validator,
-		validatorID,
+		proposer,
+		proposerID,
 		parentBlockTime,
-		validators,
-		placements,
-		seed,
+		createSequence(online, seed, parentBlockNumber),
 	}, nil
 }
 
 // Schedule to determine time of the proposer to produce a block, according to `nowTime`.
 // `newBlockTime` is promised to be >= nowTime and > parentBlockTime
-func (s *Scheduler) Schedule(nowTime uint64) (uint64, error) {
+func (s *Scheduler) Schedule(nowTime uint64) (newBlockTime uint64) {
 	const T = thor.BlockInterval
 
-	newBlockTime := s.parentBlockTime + T
+	newBlockTime = s.parentBlockTime + T
 	if nowTime > newBlockTime {
 		// ensure T aligned, and >= nowTime
 		newBlockTime += (nowTime - newBlockTime + T - 1) / T * T
 	}
 
-	for i := range s.placements {
-		slot := newBlockTime + uint64(i)*T
-		id := s.expectedValidator(slot)
-		if id == s.id {
-			return slot, nil
+	offset := (newBlockTime-s.parentBlockTime)/T - 1
+	for i, n := uint64(0), uint64(len(s.sequence)); i < n; i++ {
+		index := (i + offset) % n
+		if s.sequence[index] == s.proposerID {
+			return newBlockTime + i*T
 		}
 	}
 
-	return 0, errors.Errorf("not scheduled within %d slots", len(s.placements))
+	// should never happen
+	panic("something wrong with proposers list")
+}
+
+// IsTheTime returns if the newBlockTime is correct for the proposer.
+func (s *Scheduler) IsTheTime(newBlockTime uint64) bool {
+	return s.IsScheduled(newBlockTime, s.proposerID)
 }
 
 // IsScheduled returns if the schedule(proposer, blockTime) is correct.
-func (s *Scheduler) IsScheduled(blockTime uint64, id thor.Bytes32) bool {
+func (s *Scheduler) IsScheduled(blockTime uint64, proposer thor.Bytes32) bool {
 	if s.parentBlockTime >= blockTime {
 		// invalid block time
 		return false
@@ -135,53 +123,83 @@ func (s *Scheduler) IsScheduled(blockTime uint64, id thor.Bytes32) bool {
 		return false
 	}
 
-	expectedID := s.expectedValidator(blockTime)
-
-	return expectedID == id
+	index := (blockTime - s.parentBlockTime - T) / T % uint64(len(s.sequence))
+	return s.sequence[index] == proposer
 }
 
-func (s *Scheduler) IsTheTime(newBlockTime uint64) bool {
-	return s.IsScheduled(newBlockTime, s.id)
-}
-
+// Updates returns proposers whose status are changed, and the score when new block time is assumed to be newBlockTime.
 func (s *Scheduler) Updates(newBlockTime uint64) (map[thor.Bytes32]bool, uint64) {
 	T := thor.BlockInterval
 
 	updates := make(map[thor.Bytes32]bool)
 
-	for i := uint64(0); i < uint64(len(s.placements)); i++ {
+	for i := uint64(0); i < uint64(len(s.sequence)); i++ {
 		if s.parentBlockTime+T+i*T >= newBlockTime {
 			break
 		}
-
-		id := s.expectedValidator(s.parentBlockTime + T + i*T)
-		if id != s.id {
-			updates[s.id] = false
+		id := s.sequence[i]
+		if s.sequence[i] != s.proposerID {
+			updates[id] = false
 		}
 	}
 
-	score := uint64(len(s.placements) - len(updates))
+	score := uint64(len(s.sequence) - len(updates))
 
-	if !s.validator.Online {
-		updates[s.id] = true
+	if !s.proposer.Online {
+		updates[s.proposerID] = true
 	}
-
 	return updates, score
 }
 
-// expectedValidator returns the expected validator for the given block time.
-// It uses the seed to deterministically select a validator.
-func (s *Scheduler) expectedValidator(blockTime uint64) thor.Bytes32 {
-	hash := thor.Blake2b(s.seed, big.NewInt(0).SetUint64(blockTime).Bytes())
-	selector := new(big.Rat).SetInt(new(big.Int).SetBytes(hash.Bytes()))
-	divisor := new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), uint(len(hash)*8)))
+// createSequence implements a Weighted Random Sampling algorithm using the Exponential Distribution Method.
+func createSequence(proposers []*onlineProposer, seed []byte, parentNum uint32) []thor.Bytes32 {
+	if len(proposers) == 0 {
+		return []thor.Bytes32{}
+	}
 
-	selector.Quo(selector, divisor)
+	// Step 1: Generate a deterministic seed for the random number generator
+	var num [4]byte
+	binary.BigEndian.PutUint32(num[:], parentNum)
 
-	for i := range s.placements {
-		if selector.Cmp(s.placements[i].start) >= 0 && selector.Cmp(s.placements[i].end) < 0 {
-			return s.placements[i].id
+	hashedSeed := thor.Blake2b(seed, num[:])
+	randomSource := rand.New(rand.NewSource(int64(binary.LittleEndian.Uint64(hashedSeed[:])))) //nolint:gosec
+
+	// Step 2: Calculate priority scores for each validator based on their weight
+	// using the exponential distribution method for weighted random sampling
+	weightedProposers := make([]*onlineProposer, len(proposers))
+	bigE18 := big.NewFloat(1e18) // Divisor constant to convert from wei to ether (10^18)
+
+	for i, proposer := range proposers {
+		// Convert weight from wei to a manageable float value
+		weight := new(big.Float).SetInt(proposer.validation.Weight)
+		weight = weight.Quo(weight, bigE18)
+		weightFloat, _ := weight.Float64()
+		if weightFloat < 1 {
+			weightFloat = 1 // Ensure a minimum weight threshold
+		}
+
+		// Generate random value and calculate priority using exponential distribution
+		randomValue := randomSource.Float64()
+		priorityScore := math.Pow(randomValue, 1.0/weightFloat)
+
+		weightedProposers[i] = &onlineProposer{
+			id:         proposer.id,
+			score:      priorityScore,
+			hash:       proposer.hash,
+			validation: proposer.validation,
 		}
 	}
-	return thor.Bytes32{} // should never happen
+
+	// Step 3: Sort validators by priority score in descending order
+	sort.Slice(weightedProposers, func(i, j int) bool {
+		return weightedProposers[i].score > weightedProposers[j].score
+	})
+
+	// Step 4: Extract the validator IDs in priority order
+	resultSequence := make([]thor.Bytes32, len(weightedProposers))
+	for i, validator := range weightedProposers {
+		resultSequence[i] = validator.id
+	}
+
+	return resultSequence
 }
