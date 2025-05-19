@@ -530,14 +530,8 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 			rewardGasPrice := fork.GalacticaPriorityGasPrice(tx, legacyTxBaseGasPrice, provedWork, rt.ctx.BaseFee)
 			reward := fork.CalculateReward(receipt.GasUsed, rewardGasPrice, rewardRatio, rt.ctx.Number >= rt.forkConfig.GALACTICA)
 
-			if rt.ctx.Number < rt.forkConfig.HAYABUSA {
-				if err := builtin.Energy.Native(rt.state, rt.ctx.Time).Add(rt.ctx.Beneficiary, reward); err != nil {
-					return nil, err
-				}
-			} else {
-				// TODO: implement once merged with galactica, should set priority fee as reward
-				// https://github.com/vechain/protocol-board-repo/issues/441
-				reward = new(big.Int).SetUint64(0)
+			if err := builtin.Energy.Native(rt.state, rt.ctx.Time).Add(rt.ctx.Beneficiary, reward); err != nil {
+				return nil, err
 			}
 
 			receipt.Reward = reward

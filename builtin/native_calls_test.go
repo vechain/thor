@@ -1591,14 +1591,16 @@ func TestStakerContract_Native(t *testing.T) {
 		args:       addValidatorArgs,
 		vet:        minStake,
 	}
-	receipt, _, err = executeTxAndGetReceipt(desc) // mint block 3
+	receipt, trxid, err := executeTxAndGetReceipt(desc) // mint block 3
 	assert.NoError(t, err)
 	id := receipt.Outputs[0].Events[0].Topics[3]
+	block, err := thorChain.GetTxBlock(trxid)
+	assert.NoError(t, err)
 
 	totalBurned := new(big.Int)
 	_, err = callContractAndGetOutput(energyAbi, "totalBurned", energyAddress, &totalBurned)
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(0).Mul(big.NewInt(0).SetUint64(receipt.GasUsed), big.NewInt(1e15)), big.NewInt(0).Sub(totalBurned, totalBurnedBefore))
+	assert.Equal(t, big.NewInt(0).Mul(big.NewInt(0).SetUint64(receipt.GasUsed), block.Header().BaseFee()), big.NewInt(0).Sub(totalBurned, totalBurnedBefore))
 
 	// get
 	getRes := make([]any, 7)

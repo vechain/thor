@@ -1030,8 +1030,6 @@ func TestExecuteTransactionAfterHayabusa(t *testing.T) {
 	beneficiaryEnergyBalance, err = state.GetEnergy(beneficiary, b0.Header().Timestamp())
 	assert.NoError(t, err)
 	assert.Equal(t, receipt.Reward, beneficiaryEnergyBalance)
-
-	assert.Equal(t, new(big.Int), beneficiaryEnergyBalance)
 }
 
 func GetMockTx(repo *chain.Repository, t *testing.T) *tx.Transaction {
