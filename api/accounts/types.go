@@ -15,9 +15,9 @@ import (
 
 // Account for marshal account
 type Account struct {
-	Balance math.HexOrDecimal256 `json:"balance"`
-	Energy  math.HexOrDecimal256 `json:"energy"`
-	HasCode bool                 `json:"hasCode"`
+	Balance *math.HexOrDecimal256 `json:"balance"`
+	Energy  *math.HexOrDecimal256 `json:"energy"`
+	HasCode bool                  `json:"hasCode"`
 }
 
 // CallData represents contract-call body

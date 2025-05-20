@@ -201,8 +201,8 @@ func getAccountWithFinalizedRevision(t *testing.T) {
 	finalizedAccount, err := tclient.Account(&soloAddress, thorclient.Revision(tccommon.FinalizedRevision))
 	require.NoError(t, err)
 
-	genesisEnergy := (*big.Int)(&genesisAccount.Energy)
-	finalizedEnergy := (*big.Int)(&finalizedAccount.Energy)
+	genesisEnergy := (*big.Int)(genesisAccount.Energy)
+	finalizedEnergy := (*big.Int)(finalizedAccount.Energy)
 
 	assert.Equal(t, genesisEnergy, finalizedEnergy, "finalized energy should equal genesis energy")
 }
