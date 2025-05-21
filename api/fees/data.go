@@ -113,10 +113,11 @@ func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32, rewardPercentiles []floa
 		return nil, err
 	}
 
-	var rewards *rewards
-	// If rewardPercentiles is not empty, we need to calculate the rewards for the block
-	if len(rewardPercentiles) > 0 {
-		rewards, err = fd.getRewardsForCache(block)
+	var priorityRewards *rewards
+	// Fetch the rewards if rewardPercentiles is set and only for post-Galactica blocks
+	// The rewards refer to priority fees per gas, which are different from pre-Galactica validator rewards
+	if len(rewardPercentiles) > 0 && block.Header().BaseFee() != nil {
+		priorityRewards, err = fd.getRewardsForCache(block)
 		if err != nil {
 			return nil, err
 		}
@@ -126,7 +127,7 @@ func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32, rewardPercentiles []floa
 	fees = &FeeCacheEntry{
 		baseFee:       getBaseFee(header.BaseFee()),
 		gasUsedRatio:  float64(header.GasUsed()) / float64(header.GasLimit()),
-		cachedRewards: rewards,
+		cachedRewards: priorityRewards,
 		parentBlockID: header.ParentID(),
 	}
 	fd.cache.Set(header.ID(), fees, float64(header.Number()))
