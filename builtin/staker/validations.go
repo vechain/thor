@@ -395,14 +395,15 @@ func (v *validations) ExitValidator(id thor.Bytes32, currentBlock uint32) error 
 	if entry.Status != StatusExit && *entry.Expiry > currentBlock {
 		return errors.New("validator cannot be removed")
 	}
-	validatorTVL := big.NewInt(0).Add(entry.LockedVET, entry.CooldownVET)
+	validatorTVL := big.NewInt(0).Set(entry.LockedVET)
 
 	logger.Debug("removing validator", "master", entry.Master, "block", currentBlock)
 
 	entry.Status = StatusExit
 	entry.Weight = big.NewInt(0)
 
-	withdrawable := big.NewInt(0).Add(validatorTVL, entry.PendingLocked)
+	withdrawable := big.NewInt(0).Add(entry.CooldownVET, validatorTVL)
+	withdrawable = big.NewInt(0).Add(withdrawable, entry.PendingLocked)
 	withdrawable = withdrawable.Add(withdrawable, entry.WithdrawableVET)
 
 	entry.WithdrawableVET = withdrawable

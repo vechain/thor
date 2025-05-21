@@ -165,6 +165,7 @@ func (s *Staker) performCooldownUpdates(id thor.Bytes32, entry *Validation) erro
 	entry.Status = StatusCooldown
 	// move locked to cooldown
 	entry.CooldownVET = big.NewInt(0).Add(entry.CooldownVET, entry.LockedVET)
+	locked := entry.LockedVET
 	entry.LockedVET = big.NewInt(0)
 	// unlock delegator's stakes and remove their weight
 	entry.CompleteIterations++
@@ -178,6 +179,7 @@ func (s *Staker) performCooldownUpdates(id thor.Bytes32, entry *Validation) erro
 	if err := s.storage.SetAggregation(id, aggregation); err != nil {
 		return err
 	}
+	exitedTVL.Add(exitedTVL, locked)
 
 	if err := s.queuedVET.Sub(queuedDecrease); err != nil {
 		return err
