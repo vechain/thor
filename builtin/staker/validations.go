@@ -166,37 +166,37 @@ func (v *validations) Add(
 func (v *validations) ActivateNext(
 	currentBlock uint32,
 	params *params.Params,
-) error {
+) (*thor.Bytes32, error) {
 	leaderGroupLength, err := v.leaderGroup.Len()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	maxLeaderGroupSize, err := params.Get(thor.KeyMaxBlockProposers)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if leaderGroupLength.Cmp(maxLeaderGroupSize) >= 0 {
-		return errors.New("leader group is full")
+		return nil, errors.New("leader group is full")
 	}
 	// Check if queue is empty
 	queuedSize, err := v.validatorQueue.Len()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if queuedSize.Cmp(big.NewInt(0)) <= 0 {
-		return errors.New("no validator in the queue")
+		return nil, errors.New("no validator in the queue")
 	}
 	// pop the head of the queue
 	id, validator, err := v.validatorQueue.Pop()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if validator.IsEmpty() {
-		return errors.New("no validator in the queue")
+		return nil, errors.New("no validator in the queue")
 	}
 	aggregation, err := v.storage.GetAggregation(id)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	logger.Debug("activating validator", "id", id, "master", validator.Master, "block", currentBlock)
@@ -211,17 +211,17 @@ func (v *validations) ActivateNext(
 	changeTVL, changeWeight, queuedDecrease := aggregation.RenewDelegations()
 	validator.Weight = big.NewInt(0).Add(probabilityWeight, changeWeight)
 	if err := v.storage.SetAggregation(id, aggregation); err != nil {
-		return err
+		return nil, err
 	}
 
 	totalLocked := big.NewInt(0).Add(validatorLocked, changeTVL)
 	queuedDecrease = queuedDecrease.Add(queuedDecrease, validatorLocked)
 
 	if err := v.lockedVET.Add(totalLocked); err != nil {
-		return err
+		return nil, err
 	}
 	if err := v.queuedVET.Sub(queuedDecrease); err != nil {
-		return err
+		return nil, err
 	}
 
 	expiry := currentBlock + validator.Period
@@ -233,13 +233,13 @@ func (v *validations) ActivateNext(
 	// add to the active list
 	added, err := v.leaderGroup.Add(id, validator)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !added {
-		return errors.New("failed to add validator to active list")
+		return nil, errors.New("failed to add validator to active list")
 	}
 
-	return nil
+	return &id, nil
 }
 
 func (v *validations) UpdateAutoRenew(endorsor thor.Address, id thor.Bytes32, autoRenew bool, blockNumber uint32) error {

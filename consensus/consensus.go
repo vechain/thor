@@ -29,19 +29,19 @@ type Consensus struct {
 	seeder               *poa.Seeder
 	forkConfig           *thor.ForkConfig
 	correctReceiptsRoots map[string]string
-	authorityCache       *simplelru.LRU
+	validatorsCache      *simplelru.LRU
 }
 
 // New create a Consensus instance.
 func New(repo *chain.Repository, stater *state.Stater, forkConfig *thor.ForkConfig) *Consensus {
-	authorityCache, _ := simplelru.NewLRU(16, nil)
+	validatorsCache, _ := simplelru.NewLRU(16, nil)
 	return &Consensus{
 		repo:                 repo,
 		stater:               stater,
 		seeder:               poa.NewSeeder(repo),
 		forkConfig:           forkConfig,
 		correctReceiptsRoots: thor.LoadCorrectReceiptsRoots(),
-		authorityCache:       authorityCache,
+		validatorsCache:      validatorsCache,
 	}
 }
 
@@ -83,15 +83,19 @@ func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipValidation boo
 
 	if !skipValidation {
 		staker := builtin.Staker.Native(state)
-		posActive, activated, err := c.syncPOS(staker, header.Number())
+		posActive, activated, activeGroup, err := c.syncPOS(staker, header.Number())
 		if err != nil {
 			return nil, err
+		}
+		if len(activeGroup) > 0 {
+			// invalidate cache
+			c.validatorsCache.Add(header.ParentID(), activeGroup)
 		}
 		if activated {
 			builtin.Energy.Native(state, parentSummary.Header.Timestamp()).StopEnergyGrowth()
 		}
 		if posActive {
-			err = c.validateStakingProposer(header, parentSummary.Header, staker)
+			err = c.validateStakingProposer(header, parentSummary.Header, staker, activeGroup)
 		} else {
 			_, err = c.validateAuthorityProposer(header, parentSummary.Header, state)
 		}

@@ -25,7 +25,7 @@ func (c *Consensus) validateAuthorityProposer(header *block.Header, parent *bloc
 
 	authority := builtin.Authority.Native(st)
 	var candidates *poa.Candidates
-	if entry, ok := c.authorityCache.Get(parent.ID()); ok {
+	if entry, ok := c.validatorsCache.Get(parent.ID()); ok {
 		candidates = entry.(*poa.Candidates).Copy()
 	} else {
 		list, err := authority.AllCandidates()
@@ -120,7 +120,7 @@ func (c *Consensus) authorityCacheHandler(candidates *poa.Candidates, header *bl
 		if hasEndorsorEvent {
 			candidates.InvalidateCache()
 		}
-		c.authorityCache.Add(header.ID(), candidates)
+		c.validatorsCache.Add(header.ID(), candidates)
 	}
 
 	return nil

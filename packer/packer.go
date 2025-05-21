@@ -220,7 +220,7 @@ func (p *Packer) syncPOS(st *state.State, current uint32) (active bool, activate
 
 	// perform housekeeping if the staker contract is active
 	if active {
-		_, err := staker.Housekeep(current)
+		_, _, err := staker.Housekeep(current)
 		if err != nil {
 			return false, false, err
 		}

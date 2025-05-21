@@ -147,12 +147,12 @@ func Test_Delegator_DisableAutoRenew_PendingLocked(t *testing.T) {
 
 	// And the funds should be withdrawable after 1 iteration
 	// step 1: start the first iteration
-	_, err = staker.Housekeep(validator.Period)
+	_, _, err = staker.Housekeep(validator.Period)
 	assert.NoError(t, err)
 	_, err = staker.WithdrawDelegation(id)
 	assert.ErrorContains(t, err, "delegation is not eligible for withdraw")
 	// step 2: end the first iteration
-	_, err = staker.Housekeep(2 * validator.Period)
+	_, _, err = staker.Housekeep(2 * validator.Period)
 
 	assert.NoError(t, err)
 	amount, err := staker.WithdrawDelegation(id)
@@ -202,7 +202,7 @@ func Test_Delegator_DisableAutoRenew_InAStakingPeriod(t *testing.T) {
 	assert.Equal(t, stake, queuedVet)
 
 	// And the first staking period has occurred
-	_, err = staker.Housekeep(validator.Period)
+	_, _, err = staker.Housekeep(validator.Period)
 	assert.NoError(t, err)
 	aggregation, err := staker.storage.GetAggregation(validator.ID)
 	assert.NoError(t, err)
@@ -222,7 +222,7 @@ func Test_Delegator_DisableAutoRenew_InAStakingPeriod(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).String(), queuedVet.String())
 
 	// And the funds should be withdrawable after the next iteration
-	_, err = staker.Housekeep(2 * validator.Period)
+	_, _, err = staker.Housekeep(2 * validator.Period)
 	assert.NoError(t, err)
 	aggregation, err = staker.storage.GetAggregation(validator.ID)
 	assert.NoError(t, err)
@@ -252,13 +252,13 @@ func Test_Delegator_EnableAutoRenew_PendingLocked(t *testing.T) {
 
 	// And the funds should NOT be withdrawable after 1 iteration
 	// step 1: start the first iteration
-	_, err = staker.Housekeep(validator.Period)
+	_, _, err = staker.Housekeep(validator.Period)
 	assert.NoError(t, err)
 	_, err = staker.WithdrawDelegation(id)
 	assert.ErrorContains(t, err, "delegation is not eligible for withdraw")
 
 	// step 2: end the first iteration
-	_, err = staker.Housekeep(2 * validator.Period)
+	_, _, err = staker.Housekeep(2 * validator.Period)
 	assert.NoError(t, err)
 	_, err = staker.WithdrawDelegation(id)
 	assert.ErrorContains(t, err, "delegation is not eligible for withdraw")
@@ -275,7 +275,7 @@ func Test_Delegator_EnableAutoRenew_InAStakingPeriod(t *testing.T) {
 	assert.NoError(t, err)
 
 	// And the first staking period has occurred
-	_, err = staker.Housekeep(validator.Period)
+	_, _, err = staker.Housekeep(validator.Period)
 	assert.NoError(t, err)
 	aggregation, err := staker.storage.GetAggregation(validator.ID)
 	assert.NoError(t, err)
@@ -290,7 +290,7 @@ func Test_Delegator_EnableAutoRenew_InAStakingPeriod(t *testing.T) {
 	assert.Equal(t, stake, aggregation.LockedVET)
 
 	// And the funds should NOT be withdrawable after 1 iteration
-	_, err = staker.Housekeep(2 * validator.Period)
+	_, _, err = staker.Housekeep(2 * validator.Period)
 	assert.NoError(t, err)
 	_, err = staker.WithdrawDelegation(id)
 	assert.ErrorContains(t, err, "delegation is not eligible for withdraw")
@@ -307,7 +307,7 @@ func Test_Delegator_AutoRenew_ValidatorExits(t *testing.T) {
 	assert.NoError(t, err)
 
 	// And the first staking period has occurred
-	_, err = staker.Housekeep(validator.Period)
+	_, _, err = staker.Housekeep(validator.Period)
 	assert.NoError(t, err)
 	aggregation, err := staker.storage.GetAggregation(validator.ID)
 	assert.NoError(t, err)
@@ -317,7 +317,7 @@ func Test_Delegator_AutoRenew_ValidatorExits(t *testing.T) {
 	assert.NoError(t, staker.UpdateAutoRenew(validator.Endorsor, validator.ID, false, validator.Period+1))
 
 	// And the next staking period is over
-	_, err = staker.Housekeep(validator.Period * 2)
+	_, _, err = staker.Housekeep(validator.Period * 2)
 	assert.NoError(t, err)
 	aggregation, err = staker.storage.GetAggregation(validator.ID)
 	assert.NoError(t, err)

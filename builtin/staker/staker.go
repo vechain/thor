@@ -205,14 +205,20 @@ func (s *Staker) WithdrawStake(endorsor thor.Address, id thor.Bytes32) (*big.Int
 	}
 }
 
-func (s *Staker) SetOnline(id thor.Bytes32, online bool) error {
+func (s *Staker) SetOnline(id thor.Bytes32, online bool) (bool, error) {
 	logger.Debug("set master online", "id", id, "online", online)
 	entry, err := s.storage.GetValidator(id)
 	if err != nil {
-		return err
+		return false, err
 	}
+	hasChanged := entry.Online != online
 	entry.Online = online
-	return s.storage.SetValidator(id, entry)
+	if hasChanged {
+		err = s.storage.SetValidator(id, entry)
+	} else {
+		err = nil
+	}
+	return hasChanged, err
 }
 
 // AddDelegation adds a new delegation.

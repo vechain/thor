@@ -9,15 +9,16 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/thor"
 )
 
 // Housekeep iterates over validations, move to cooldown
 // take the oldest validator and move to exited
-func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
+func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Bytes32]*Validation, error) {
 	// we only perform housekeeping at the start of epochs
 	if currentBlock%epochLength != 0 {
-		return false, nil
+		return false, nil, nil
 	}
 
 	logger.Info("performing housekeeping", "block", currentBlock)
@@ -41,8 +42,10 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 	}
 	// perform the iteration over cooldown group
 	if err := s.validations.CooldownGroupIterator(iteratorCooldownGroup); err != nil {
-		return false, err
+		return false, nil, err
 	}
+
+	activeValidators := make(map[thor.Bytes32]*Validation)
 
 	var toCooldown []thor.Bytes32
 	iteratorLeaderGroup := func(id thor.Bytes32, entry *Validation) error {
@@ -50,6 +53,7 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 
 		// validator is in the middle of a staking period, no need to process
 		if !isPeriodEnd {
+			activeValidators[id] = entry
 			return nil
 		}
 
@@ -63,7 +67,9 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 			if entry.Status == StatusActive && entry.AutoRenew {
 				hasUpdates = true
 				logger.Debug("performing renewal updates", "id", id)
-				return s.performRenewalUpdates(id, entry)
+				err := s.performRenewalUpdates(id, entry)
+				activeValidators[id] = entry
+				return err
 			}
 		}
 
@@ -71,39 +77,52 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 	}
 	// perform the iteration
 	if err := s.validations.LeaderGroupIterator(iteratorLeaderGroup); err != nil {
-		return false, err
+		return false, nil, err
 	}
 	for _, cooldown := range toCooldown {
 		entry, err := s.Get(cooldown)
 		if err != nil {
-			return false, err
+			return false, nil, err
 		}
 		logger.Info("performing cooldown updates", "id", cooldown, "master", entry.Master)
 		if err = s.performCooldownUpdates(cooldown, entry); err != nil {
-			return false, err
+			return false, nil, err
 		}
 	}
 
 	if !validatorExitID.IsZero() {
 		logger.Info("exiting validator", "id", validatorExitID)
 		if err := s.validations.ExitValidator(validatorExitID, currentBlock); err != nil {
-			return false, err
+			return false, nil, err
 		}
 		hasUpdates = true
 	}
 
 	// fill any remaining leader group slots with validations from the queue
-	activated, err := s.activateValidators(currentBlock)
+	_, activated, err := s.activateValidators(currentBlock)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
-	if activated > 0 {
+	if len(activated) > 0 {
 		hasUpdates = true
+		if activated == nil {
+			return false, nil, errors.New("activate validators returned `nil`")
+		}
+		for _, active := range activated {
+			validation, err := s.Get(*active)
+			if err != nil {
+				return false, nil, err
+			}
+			activeValidators[*active] = validation
+		}
 	}
 
 	logger.Info("performed housekeeping", "block", currentBlock, "updates", hasUpdates, "activated", activated)
 
-	return hasUpdates, nil
+	if hasUpdates {
+		return hasUpdates, activeValidators, nil
+	}
+	return hasUpdates, nil, nil
 }
 
 func (s *Staker) performRenewalUpdates(id thor.Bytes32, entry *Validation) error {
@@ -197,21 +216,21 @@ func (s *Staker) performCooldownUpdates(id thor.Bytes32, entry *Validation) erro
 	return s.storage.SetValidator(id, entry)
 }
 
-func (s *Staker) activateValidators(currentBlock uint32) (int64, error) {
+func (s *Staker) activateValidators(currentBlock uint32) (int64, []*thor.Bytes32, error) {
 	queuedSize, err := s.QueuedGroupSize()
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	leaderSize, err := s.LeaderGroupSize()
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	maxSize, err := s.params.Get(thor.KeyMaxBlockProposers)
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	if leaderSize.Cmp(maxSize) >= 0 {
-		return 0, nil
+		return 0, nil, nil
 	}
 
 	if queuedSize.Cmp(big.NewInt(0)) > 0 {
@@ -222,20 +241,23 @@ func (s *Staker) activateValidators(currentBlock uint32) (int64, error) {
 				queuedCount = leaderDelta
 			}
 		} else {
-			queuedCount = 0
+			return 0, nil, nil
 		}
+
+		activated := make([]*thor.Bytes32, queuedCount)
 
 		for i := int64(0); i < queuedCount; i++ {
-			err := s.validations.ActivateNext(currentBlock, s.params)
+			id, err := s.validations.ActivateNext(currentBlock, s.params)
 			if err != nil {
-				return 0, err
+				return 0, nil, err
 			}
+			activated[i] = id
 		}
 
-		return queuedCount, nil
+		return queuedCount, activated, nil
 	}
 
-	return 0, nil
+	return 0, nil, nil
 }
 
 func (s *Staker) Transition(currentBlock uint32) (bool, error) {
@@ -264,7 +286,7 @@ func (s *Staker) Transition(currentBlock uint32) (bool, error) {
 	if big.NewFloat(0).SetInt(queueSize).Cmp(minimum) < 0 {
 		return false, nil
 	}
-	activated, err := s.activateValidators(currentBlock)
+	activated, _, err := s.activateValidators(currentBlock)
 	if err != nil {
 		return false, err
 	}

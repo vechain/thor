@@ -9,11 +9,12 @@ import (
 	"fmt"
 
 	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/builtin/staker"
+	stakerContract "github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/pos"
+	"github.com/vechain/thor/v2/thor"
 )
 
-func (c *Consensus) validateStakingProposer(header *block.Header, parent *block.Header, staker *staker.Staker) error {
+func (c *Consensus) validateStakingProposer(header *block.Header, parent *block.Header, staker *stakerContract.Staker, providedLeaders map[thor.Bytes32]*stakerContract.Validation) error {
 	signer, err := header.Signer()
 	if err != nil {
 		return consensusError(fmt.Sprintf("pos - block signer unavailable: %v", err))
@@ -25,9 +26,26 @@ func (c *Consensus) validateStakingProposer(header *block.Header, parent *block.
 		return err
 	}
 
-	leaders, err := staker.LeaderGroup()
-	if err != nil {
-		return err
+	var leaders map[thor.Bytes32]*stakerContract.Validation
+	if entry, ok := c.validatorsCache.Get(parent.ID()); ok {
+		possiblyLeaders, ok := entry.(*map[thor.Bytes32]*stakerContract.Validation)
+		if ok {
+			leaders = *possiblyLeaders
+		} else {
+			leaders, err = staker.LeaderGroup()
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		if len(providedLeaders) > 0 {
+			leaders = providedLeaders
+		} else {
+			leaders, err = staker.LeaderGroup()
+			if err != nil {
+				return err
+			}
+		}
 	}
 	sched, err := pos.NewScheduler(signer, leaders, parent.Number(), parent.Timestamp(), seed)
 	if err != nil {
@@ -41,10 +59,18 @@ func (c *Consensus) validateStakingProposer(header *block.Header, parent *block.
 		return consensusError(fmt.Sprintf("pos - block total score invalid: want %v, have %v", parent.TotalScore()+score, header.TotalScore()))
 	}
 
+	hasUpdates := false
 	for addr, online := range updates {
-		if err := staker.SetOnline(addr, online); err != nil {
+		updated, err := staker.SetOnline(addr, online)
+		if err != nil {
 			return err
 		}
+		if updated {
+			hasUpdates = true
+		}
+	}
+	if !hasUpdates {
+		c.validatorsCache.Add(header.ID(), leaders)
 	}
 
 	return nil

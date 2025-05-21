@@ -34,9 +34,13 @@ func (c *Consensus) validate(
 	header := block.Header()
 
 	staker := builtin.Staker.Native(state)
-	posActive, activated, err := c.syncPOS(staker, header.Number())
+	posActive, activated, activeGroup, err := c.syncPOS(staker, header.Number())
 	if err != nil {
 		return nil, nil, err
+	}
+	if len(activeGroup) > 0 {
+		// invalidate cache
+		c.validatorsCache.Add(parent.ID(), activeGroup)
 	}
 
 	if err := c.validateBlockHeader(header, parent, nowTimestamp); err != nil {
@@ -45,7 +49,7 @@ func (c *Consensus) validate(
 
 	var candidates *poa.Candidates
 	if posActive {
-		err = c.validateStakingProposer(header, parent, staker)
+		err = c.validateStakingProposer(header, parent, staker, activeGroup)
 	} else {
 		candidates, err = c.validateAuthorityProposer(header, parent, state)
 	}
@@ -316,37 +320,37 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 	return stage, receipts, nil
 }
 
-func (c *Consensus) syncPOS(staker *staker.Staker, current uint32) (active bool, activated bool, err error) {
+func (c *Consensus) syncPOS(staker *staker.Staker, current uint32) (active bool, activated bool, activeGroup map[thor.Bytes32]*staker.Validation, err error) {
 	// still on PoA
 	if c.forkConfig.HAYABUSA+c.forkConfig.HAYABUSA_TP > current {
-		return false, false, nil
+		return false, false, nil, nil
 	}
 	// check if the staker contract is active
 	active, err = staker.IsActive()
 	if err != nil {
-		return false, false, err
+		return false, false, nil, err
 	}
 
 	// attempt to transition if we're on a transition block and the staker contract is not active
 	if !active && current%c.forkConfig.HAYABUSA_TP == 0 {
 		activated, err = staker.Transition(current)
 		if err != nil {
-			return false, false, err
+			return false, false, nil, err
 		}
 		if activated {
 			log.Info("dPoS activated", "pkg", "consensus", "block", current)
-			return true, true, nil
+			return true, true, nil, nil
 		}
 	}
 
 	// perform housekeeping if the staker contract is active
 	if active {
-		_, err := staker.Housekeep(current)
+		_, activeGroup, err := staker.Housekeep(current)
 		if err != nil {
-			return false, false, err
+			return false, false, nil, err
 		}
-		return true, false, nil
+		return true, false, activeGroup, nil
 	}
 
-	return active, false, nil
+	return active, false, nil, nil
 }
