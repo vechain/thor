@@ -154,8 +154,8 @@ func TestClient_FilterEvents(t *testing.T) {
 func TestClient_GetAccount(t *testing.T) {
 	addr := thor.Address{0x01}
 	expectedAccount := &accounts.Account{
-		Balance: math.HexOrDecimal256{},
-		Energy:  math.HexOrDecimal256{},
+		Balance: &math.HexOrDecimal256{},
+		Energy:  &math.HexOrDecimal256{},
 		HasCode: false,
 	}
 
