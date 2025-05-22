@@ -36,12 +36,14 @@ func SetLogger(l log.Logger) {
 
 // Staker implements native methods of `Staker` contract.
 type Staker struct {
-	lockedVET   *solidity.Uint256
-	queuedVET   *solidity.Uint256
-	delegations *delegations
-	validations *validations
-	storage     *storage
-	params      *params.Params
+	lockedVET    *solidity.Uint256
+	lockedWeight *solidity.Uint256
+	queuedVET    *solidity.Uint256
+	queuedWeight *solidity.Uint256
+	delegations  *delegations
+	validations  *validations
+	storage      *storage
+	params       *params.Params
 }
 
 // New create a new instance.
@@ -63,12 +65,14 @@ func New(addr thor.Address, state *state.State, params *params.Params) *Staker {
 	}
 
 	return &Staker{
-		lockedVET:   solidity.NewUint256(addr, state, slotLockedVET),
-		queuedVET:   solidity.NewUint256(addr, state, slotQueuedVET),
-		storage:     storage,
-		validations: newValidations(storage),
-		delegations: newDelegations(storage),
-		params:      params,
+		lockedVET:    solidity.NewUint256(addr, state, slotLockedVET),
+		lockedWeight: solidity.NewUint256(addr, state, slotLockedWeight),
+		queuedVET:    solidity.NewUint256(addr, state, slotQueuedVET),
+		queuedWeight: solidity.NewUint256(addr, state, slotQueuedWeight),
+		storage:      storage,
+		validations:  newValidations(storage),
+		delegations:  newDelegations(storage),
+		params:       params,
 	}
 }
 
@@ -82,14 +86,24 @@ func (s *Staker) LeaderGroup() (map[thor.Bytes32]*Validation, error) {
 	return s.validations.LeaderGroup()
 }
 
-// LockedVET returns the amount of VET locked by validations and delegations.
-func (s *Staker) LockedVET() (*big.Int, error) {
-	return s.lockedVET.Get()
+// LockedVET returns the amount of VET and weight locked by validations and delegations.
+func (s *Staker) LockedVET() (*big.Int, *big.Int, error) {
+	lockedVet, err := s.lockedVET.Get()
+	if err != nil {
+		return nil, nil, err
+	}
+	lockedWeight, err := s.lockedWeight.Get()
+	return lockedVet, lockedWeight, err
 }
 
-// QueuedStake returns the amount of VET queued by validations and delegations.
-func (s *Staker) QueuedStake() (*big.Int, error) {
-	return s.queuedVET.Get()
+// QueuedStake returns the amount of VET and weight queued by validations and delegations.
+func (s *Staker) QueuedStake() (*big.Int, *big.Int, error) {
+	queuedVet, err := s.queuedVET.Get()
+	if err != nil {
+		return nil, nil, err
+	}
+	queuedWeight, err := s.queuedWeight.Get()
+	return queuedVet, queuedWeight, err
 }
 
 // FirstActive returns validator address of first entry.
@@ -234,6 +248,12 @@ func (s *Staker) AddDelegation(
 		logger.Info("failed to add delegation", "validationID", validationID, "error", err)
 		return thor.Bytes32{}, err
 	} else {
+		weight := big.NewInt(0).Mul(stake, big.NewInt(int64(multiplier)))
+		weight = big.NewInt(0).Quo(weight, big.NewInt(100))
+		err := s.queuedWeight.Add(weight)
+		if err != nil {
+			return [32]byte{}, err
+		}
 		logger.Info("added delegation", "validationID", validationID, "id", id)
 		return id, nil
 	}

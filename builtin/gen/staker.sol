@@ -46,23 +46,23 @@ contract Staker {
     );
 
     /**
-     * @dev totalStake returns all stakes by queued and active validators.
+     * @dev totalStake returns all stakes and weight by active validators.
      */
-    function totalStake() public view returns (uint256) {
-        (uint256 stake, string memory error) = StakerNative(address(this))
+    function totalStake() public view returns (uint256, uint256) {
+        (uint256 stake, uint256 weight, string memory error) = StakerNative(address(this))
             .native_totalStake();
         require(bytes(error).length == 0, error);
-        return stake;
+        return (stake, weight);
     }
 
     /**
-     * @dev queuedStake returns all stakes which are queued
+     * @dev queuedStake returns all stakes and weight by queued validators.
      */
-    function queuedStake() public view returns (uint256) {
-        (uint256 stake, string memory error) = StakerNative(address(this))
+    function queuedStake() public view returns (uint256, uint256) {
+        (uint256 stake, uint256 weight, string memory error) = StakerNative(address(this))
             .native_queuedStake();
         require(bytes(error).length == 0, error);
-        return stake;
+        return (stake, weight);
     }
 
     /**
@@ -216,13 +216,13 @@ contract Staker {
     }
 
     /**
-     * @dev get returns the master. endorser, stake, weight, status and auto renew of a validator.
+     * @dev get returns the master. endorser, stake, weight, status, auto renew, online and staking period of a validator.
      * @return (master, endorser, stake, weight, status, autoRenew, online)
      * - status (0: unknown, 1: queued, 2: active, 3: cooldown, 4: exited)
      */
     function get(
         bytes32 id
-    ) public view returns (address, address, uint256, uint256, uint8, bool, bool) {
+    ) public view returns (address, address, uint256, uint256, uint8, bool, bool, uint32) {
         (
             address master,
             address endorser,
@@ -231,10 +231,11 @@ contract Staker {
             uint8 status,
             bool autoRenew,
             bool online,
+            uint32 period,
             string memory error
         ) = StakerNative(address(this)).native_get(id);
         require(bytes(error).length == 0, error);
-        return (master, endorser, stake, weight, status, autoRenew, online);
+        return (master, endorser, stake, weight, status, autoRenew, online, period);
     }
 
     /**
@@ -367,12 +368,12 @@ interface StakerNative {
     function native_totalStake()
         external
         pure
-        returns (uint256, string calldata);
+        returns (uint256, uint256, string calldata);
 
     function native_queuedStake()
         external
         pure
-        returns (uint256, string calldata);
+        returns (uint256, uint256, string calldata);
 
     function native_getDelegation(
         bytes32 delegationID
@@ -400,6 +401,7 @@ interface StakerNative {
             uint8,
             bool,
             bool,
+            uint32,
             string calldata
         );
 

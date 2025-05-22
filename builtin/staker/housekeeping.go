@@ -172,10 +172,15 @@ func (s *Staker) performRenewalUpdates(id thor.Bytes32, entry *Validation) error
 	if err := s.lockedVET.Add(changeTVL); err != nil {
 		return err
 	}
+	if err := s.lockedWeight.Add(changeWeight); err != nil {
+		return err
+	}
 	if err := s.queuedVET.Sub(queuedDecrease); err != nil {
 		return err
 	}
-
+	if err := s.queuedWeight.Add(big.NewInt(0).Neg(changeWeight)); err != nil {
+		return err
+	}
 	return s.storage.SetValidator(id, entry)
 }
 
@@ -188,13 +193,14 @@ func (s *Staker) performCooldownUpdates(id thor.Bytes32, entry *Validation) erro
 	entry.LockedVET = big.NewInt(0)
 	// unlock delegator's stakes and remove their weight
 	entry.CompleteIterations++
-	entry.Weight = big.NewInt(0).Set(entry.CooldownVET)
 
 	aggregation, err := s.storage.GetAggregation(id)
 	if err != nil {
 		return err
 	}
-	exitedTVL, queuedDecrease := aggregation.Exit()
+	exitedTVL, queuedDecrease, exitedWeight, queuedWeightDecrease := aggregation.Exit()
+
+	entry.Weight = big.NewInt(0).Sub(entry.Weight, exitedWeight)
 	if err := s.storage.SetAggregation(id, aggregation); err != nil {
 		return err
 	}
@@ -204,6 +210,12 @@ func (s *Staker) performCooldownUpdates(id thor.Bytes32, entry *Validation) erro
 		return err
 	}
 	if err := s.lockedVET.Sub(exitedTVL); err != nil {
+		return err
+	}
+	if err := s.queuedWeight.Sub(queuedWeightDecrease); err != nil {
+		return err
+	}
+	if err := s.lockedWeight.Sub(exitedWeight); err != nil {
 		return err
 	}
 

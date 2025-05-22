@@ -15,13 +15,17 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
+var validatorWeightMultiplier = big.NewInt(2)
+
 type validations struct {
 	storage             *storage
 	leaderGroup         *linkedList
 	validatorQueue      *linkedList
 	cooldownQueue       *linkedList
 	lockedVET           *solidity.Uint256
+	lockedWeight        *solidity.Uint256
 	queuedVET           *solidity.Uint256
+	queuedWeight        *solidity.Uint256
 	lowStakingPeriod    uint32
 	mediumStakingPeriod uint32
 	highStakingPeriod   uint32
@@ -56,7 +60,9 @@ func newValidations(storage *storage) *validations {
 		validatorQueue:      newLinkedList(storage, slotQueuedHead, slotQueuedTail, slotQueuedGroupSize),
 		cooldownQueue:       newLinkedList(storage, slotCooldownHead, slotCooldownTail, slotCooldownGroupSize),
 		lockedVET:           solidity.NewUint256(storage.Address(), storage.State(), slotLockedVET),
+		lockedWeight:        solidity.NewUint256(storage.Address(), storage.State(), slotLockedWeight),
 		queuedVET:           solidity.NewUint256(storage.Address(), storage.State(), slotQueuedVET),
+		queuedWeight:        solidity.NewUint256(storage.Address(), storage.State(), slotQueuedWeight),
 		lowStakingPeriod:    lowStakingPeriod,
 		mediumStakingPeriod: mediumStakingPeriod,
 		highStakingPeriod:   highStakingPeriod,
@@ -144,6 +150,9 @@ func (v *validations) Add(
 	if err := v.queuedVET.Add(stake); err != nil {
 		return thor.Bytes32{}, err
 	}
+	if err := v.queuedWeight.Add(big.NewInt(0).Mul(stake, validatorWeightMultiplier)); err != nil {
+		return thor.Bytes32{}, err
+	}
 	if err := v.storage.SetLookup(master, id); err != nil {
 		return thor.Bytes32{}, err
 	}
@@ -206,21 +215,30 @@ func (v *validations) ActivateNext(
 	validator.PendingLocked = big.NewInt(0)
 	validator.LockedVET = validatorLocked
 	// x2 multiplier for validator's stake
-	probabilityWeight := big.NewInt(0).Mul(validatorLocked, big.NewInt(2))
+	probabilityWeight := big.NewInt(0).Mul(validatorLocked, validatorWeightMultiplier)
 
 	changeTVL, changeWeight, queuedDecrease := aggregation.RenewDelegations()
+
 	validator.Weight = big.NewInt(0).Add(probabilityWeight, changeWeight)
+	totalLocked := big.NewInt(0).Add(validatorLocked, changeTVL)
+	totalWeightLocked := validator.Weight
+	queuedDecrease = queuedDecrease.Add(queuedDecrease, validatorLocked)
+
+	aggregation.LockedWeight = totalWeightLocked
 	if err := v.storage.SetAggregation(id, aggregation); err != nil {
 		return nil, err
 	}
-
-	totalLocked := big.NewInt(0).Add(validatorLocked, changeTVL)
-	queuedDecrease = queuedDecrease.Add(queuedDecrease, validatorLocked)
-
 	if err := v.lockedVET.Add(totalLocked); err != nil {
 		return nil, err
 	}
+	if err := v.lockedWeight.Add(totalWeightLocked); err != nil {
+		return nil, err
+	}
+
 	if err := v.queuedVET.Sub(queuedDecrease); err != nil {
+		return nil, err
+	}
+	if err := v.queuedWeight.Sub(totalWeightLocked); err != nil {
 		return nil, err
 	}
 
@@ -322,10 +340,15 @@ func (v *validations) DecreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 	if newStake.Cmp(minStake) < 0 {
 		return errors.New("stake is too low for validator")
 	}
+	aggregation, err := v.storage.GetAggregation(id)
+	if err != nil {
+		return err
+	}
 
 	if entry.Status == StatusActive {
 		entry.CooldownVET = entry.CooldownVET.Add(entry.CooldownVET, amount)
 		entry.LockedVET = entry.LockedVET.Sub(entry.LockedVET, amount)
+		aggregation.LockedWeight = big.NewInt(0).Sub(aggregation.LockedWeight, big.NewInt(0).Mul(amount, validatorWeightMultiplier))
 	}
 
 	if entry.Status == StatusQueued {
@@ -336,6 +359,10 @@ func (v *validations) DecreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 		}
 	}
 	err = v.storage.SetValidator(id, entry)
+	if err != nil {
+		return err
+	}
+	err = v.storage.SetAggregation(id, aggregation)
 	if err != nil {
 		return err
 	}
@@ -396,6 +423,7 @@ func (v *validations) ExitValidator(id thor.Bytes32, currentBlock uint32) error 
 		return errors.New("validator cannot be removed")
 	}
 	validatorTVL := big.NewInt(0).Set(entry.LockedVET)
+	validatorWeight := entry.Weight
 
 	logger.Debug("removing validator", "master", entry.Master, "block", currentBlock)
 
@@ -417,5 +445,8 @@ func (v *validations) ExitValidator(id thor.Bytes32, currentBlock uint32) error 
 	if err = v.storage.SetLookup(entry.Master, thor.Bytes32{}); err != nil {
 		return err
 	}
-	return v.lockedVET.Sub(validatorTVL)
+	if err = v.lockedVET.Sub(validatorTVL); err != nil {
+		return err
+	}
+	return v.lockedWeight.Sub(validatorWeight)
 }

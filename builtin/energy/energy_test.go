@@ -204,12 +204,13 @@ func TestAddIssued(t *testing.T) {
 
 type mockStaker struct {
 	lockedVET         *big.Int
+	lockedWeight      *big.Int
 	hasDelegations    bool
 	increaseRewardErr error
 }
 
-func (m *mockStaker) LockedVET() (*big.Int, error) {
-	return m.lockedVET, nil
+func (m *mockStaker) LockedVET() (*big.Int, *big.Int, error) {
+	return m.lockedVET, m.lockedWeight, nil
 }
 
 func (m *mockStaker) HasDelegations(address thor.Address) (bool, error) {
@@ -226,8 +227,10 @@ func TestCalculateRewards(t *testing.T) {
 	p := params.New(thor.BytesToAddress([]byte("par")), st)
 	eng := New(thor.BytesToAddress([]byte("eng")), st, 1, p)
 
+	stake := big.NewInt(0).Mul(big.NewInt(25), big.NewInt(1e18))
+
 	mockStaker := &mockStaker{
-		lockedVET:         big.NewInt(0).Mul(big.NewInt(25), big.NewInt(1e18)),
+		lockedVET:         stake,
 		hasDelegations:    false,
 		increaseRewardErr: nil,
 	}

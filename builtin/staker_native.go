@@ -24,20 +24,20 @@ func init() {
 		{"native_totalStake", func(env *xenv.Environment) []any {
 			env.UseGas(thor.SloadGas)
 			env.UseGas(thor.GetBalanceGas)
-			staked, err := Staker.Native(env.State()).LockedVET()
+			staked, weight, err := Staker.Native(env.State()).LockedVET()
 			if err != nil {
-				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
+				return []any{new(big.Int), new(big.Int), fmt.Sprintf("revert: %v", err)}
 			}
-			return []any{staked, ""}
+			return []any{staked, weight, ""}
 		}},
 		{"native_queuedStake", func(env *xenv.Environment) []any {
 			env.UseGas(thor.SloadGas)
 			env.UseGas(thor.GetBalanceGas)
-			staked, err := Staker.Native(env.State()).QueuedStake()
+			staked, weight, err := Staker.Native(env.State()).QueuedStake()
 			if err != nil {
-				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
+				return []any{new(big.Int), new(big.Int), fmt.Sprintf("revert: %v", err)}
 			}
-			return []any{staked, ""}
+			return []any{staked, weight, ""}
 		}},
 		{"native_get", func(env *xenv.Environment) []any {
 			var args struct {
@@ -50,12 +50,12 @@ func init() {
 
 			validator, err := Staker.Native(env.State()).Get(thor.Bytes32(args.ValidationID))
 			if err != nil {
-				return []any{thor.Address{}, thor.Address{}, big.NewInt(0), big.NewInt(0), staker.StatusUnknown, false, false, fmt.Sprintf("revert: %v", err)}
+				return []any{thor.Address{}, thor.Address{}, big.NewInt(0), big.NewInt(0), staker.StatusUnknown, false, false, uint32(0), fmt.Sprintf("revert: %v", err)}
 			}
 			if validator.IsEmpty() {
-				return []any{thor.Address{}, thor.Address{}, big.NewInt(0), big.NewInt(0), staker.StatusUnknown, false, false, ""}
+				return []any{thor.Address{}, thor.Address{}, big.NewInt(0), big.NewInt(0), staker.StatusUnknown, false, false, uint32(0), ""}
 			}
-			return []any{validator.Master, validator.Endorsor, validator.LockedVET, validator.Weight, validator.Status, validator.AutoRenew, validator.Online, ""}
+			return []any{validator.Master, validator.Endorsor, validator.LockedVET, validator.Weight, validator.Status, validator.AutoRenew, validator.Online, validator.Period, ""}
 		}},
 		{"native_getWithdraw", func(env *xenv.Environment) []any {
 			var args struct {

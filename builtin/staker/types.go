@@ -195,7 +195,7 @@ func (a *Aggregation) RenewDelegations() (*big.Int, *big.Int, *big.Int) {
 }
 
 // Exit moves all the funds to withdrawable
-func (a *Aggregation) Exit() (*big.Int, *big.Int) {
+func (a *Aggregation) Exit() (*big.Int, *big.Int, *big.Int, *big.Int) {
 	withdrawable := big.NewInt(0).Set(a.WithdrawVET)
 	withdrawable = withdrawable.Add(withdrawable, a.LockedVET)
 	withdrawable = withdrawable.Add(withdrawable, a.CooldownVET)
@@ -203,7 +203,9 @@ func (a *Aggregation) Exit() (*big.Int, *big.Int) {
 	// The change in TVL is the amount of VET that went from locked to withdrawable
 	// Subtract the previously withdrawable amount from the new total
 	exitedTVL := big.NewInt(0).Sub(withdrawable, a.WithdrawVET)
+	exitedWeight := big.NewInt(0).Add(a.LockedWeight, a.CooldownWeight)
 	queuedDecrease := big.NewInt(0).Add(a.PendingLockedVET, a.PendingCooldownVET)
+	queuedWeightDecrease := big.NewInt(0).Add(a.PendingLockedWeight, a.PendingCooldownWeight)
 
 	// PendingLockedVET did not previously contribute to the TVL, so we need to add it after
 	withdrawable = withdrawable.Add(withdrawable, a.PendingLockedVET)
@@ -219,5 +221,5 @@ func (a *Aggregation) Exit() (*big.Int, *big.Int) {
 	a.PendingCooldownWeight = big.NewInt(0)
 	a.WithdrawVET = withdrawable
 
-	return exitedTVL, queuedDecrease
+	return exitedTVL, queuedDecrease, exitedWeight, queuedWeightDecrease
 }

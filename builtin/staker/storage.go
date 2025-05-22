@@ -17,7 +17,9 @@ import (
 
 var (
 	slotLockedVET          = nameToSlot("total-stake")
+	slotLockedWeight       = nameToSlot("total-weight")
 	slotQueuedVET          = nameToSlot("queued-stake")
+	slotQueuedWeight       = nameToSlot("queued-weight")
 	slotValidations        = nameToSlot("validations")
 	slotValidationLookups  = nameToSlot("validator-lookups")
 	slotAggregations       = nameToSlot("aggregated-delegations")
