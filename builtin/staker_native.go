@@ -132,6 +132,24 @@ func init() {
 			}
 			env.ParseArgs(&args)
 
+			isActive, err := Staker.Native(env.State()).IsActive()
+			if err != nil {
+				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", err)}
+			}
+
+			if !isActive {
+				exists, endorsor, _, _, err := Authority.Native(env.State()).Get(thor.Address(args.Master))
+				if err != nil {
+					return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", err)}
+				}
+				if !exists {
+					return []any{thor.Bytes32{}, "revert: master is not present in the Authority"}
+				}
+				if thor.Address(args.Endorsor) != endorsor {
+					return []any{thor.Bytes32{}, "revert: endorsor is not present in the Authority"}
+				}
+			}
+
 			id, err := Staker.Native(env.State()).AddValidator(thor.Address(args.Endorsor), thor.Address(args.Master), args.Period, args.Stake, args.AutoRenew, env.BlockContext().Number)
 			if err != nil {
 				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", err)}

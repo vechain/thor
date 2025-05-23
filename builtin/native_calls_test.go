@@ -1548,6 +1548,23 @@ func TestStakerContract_Native(t *testing.T) {
 	thorChain, err = testchain.NewWithFork(fc)
 	assert.NoError(t, err)
 
+	// add validator as authority
+	endorsor := genesis.DevAccounts()[0] // dev acc, since it has to be in PoA
+	master := genesis.DevAccounts()[8]
+	var b32 [32]uint8
+	copy(b32[12:], genesis.DevAccounts()[3].Address.Bytes())
+	receipt, _, err := executeTxAndGetReceipt(TestTxDescription{
+		t:          t,
+		abi:        builtin.Authority.ABI,
+		methodName: "add",
+		address:    builtin.Authority.Address,
+		acc:        genesis.DevAccounts()[0],
+		args:       []any{master.Address, endorsor.Address, b32},
+		duplicate:  false,
+	})
+	require.NoError(t, err)
+	require.False(t, receipt.Reverted)
+
 	energyAbi := builtin.Energy.ABI
 	energyAddress := builtin.Energy.Address
 
@@ -1572,8 +1589,6 @@ func TestStakerContract_Native(t *testing.T) {
 
 	abi := builtin.Staker.ABI
 	toAddr := builtin.Staker.Address
-	endorsor := genesis.DevAccounts()[9]
-	master := genesis.DevAccounts()[8]
 
 	// parameters
 	minStake := big.NewInt(25_000_000)
@@ -1587,12 +1602,13 @@ func TestStakerContract_Native(t *testing.T) {
 		abi:        abi,
 		methodName: "addValidator",
 		address:    toAddr,
-		acc:        endorsor,
+		acc:        genesis.DevAccounts()[0],
 		args:       addValidatorArgs,
 		vet:        minStake,
 	}
 	receipt, trxid, err := executeTxAndGetReceipt(desc) // mint block 3
 	assert.NoError(t, err)
+	assert.False(t, receipt.Reverted)
 	id := receipt.Outputs[0].Events[0].Topics[3]
 	block, err := thorChain.GetTxBlock(trxid)
 	assert.NoError(t, err)
@@ -1642,7 +1658,8 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.Equal(t, expectedTotalStake, *queuedStakeRes[0].(**big.Int))
 	assert.Equal(t, big.NewInt(0).Mul(expectedTotalStake, big.NewInt(2)), *queuedStakeRes[1].(**big.Int))
 
-	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0])) // mint block 4: PoS should become active and active the queued validators
+	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0])) // mint block 4: Transition period block
+	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0])) // mint block 5: PoS should become active and active the queued validators
 
 	// firstActive
 	firstActiveRes := new(common.Hash)
@@ -1706,7 +1723,7 @@ func TestStakerContract_Native_Revert(t *testing.T) {
 
 	abi := builtin.Staker.ABI
 	toAddr := builtin.Staker.Address
-	endorsor := genesis.DevAccounts()[9]
+	endorsor := genesis.DevAccounts()[0]
 	master := genesis.DevAccounts()[8]
 
 	// parameters
@@ -1828,8 +1845,8 @@ func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
 
 	abi := builtin.Staker.ABI
 	toAddr := builtin.Staker.Address
-	endorsor := genesis.DevAccounts()[9]
-	master := genesis.DevAccounts()[8]
+	endorsor := genesis.DevAccounts()[0]
+	master := genesis.DevAccounts()[0]
 
 	// parameters
 	minStake := big.NewInt(25_000_000)
