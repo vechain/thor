@@ -2,6 +2,9 @@ name: Pull Request CI
 
 on:
   pull_request:
+  push:
+    branches:
+      - darren/chore/multi-platform-build
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}

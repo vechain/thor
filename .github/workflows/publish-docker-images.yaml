@@ -1,9 +1,6 @@
 name: Publish Docker Image
 
 on:
-  push:
-    branches:
-      - '*'
   workflow_call:
     inputs:
       environment:
