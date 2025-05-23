@@ -38,6 +38,9 @@ jobs:
             docker-arch: linux/amd64
           - host-os: ubuntu-24.04-arm
             docker-arch: linux/arm64
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Prepare
         run: |
