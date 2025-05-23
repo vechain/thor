@@ -66,17 +66,11 @@ func init() {
 			env.UseGas(thor.SloadGas)
 			env.UseGas(thor.SloadGas)
 
-			validator, err := Staker.Native(env.State()).Get(thor.Bytes32(args.ValidationID))
+			amount, err := Staker.Native(env.State()).GetWithdrawable(thor.Bytes32(args.ValidationID), env.BlockContext().Number)
 			if err != nil {
-				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
+				return []any{big.NewInt(0), fmt.Sprintf("revert: %v", err)}
 			}
-			if validator.IsEmpty() {
-				return []any{big.NewInt(0), ""}
-			}
-			if validator.Status == staker.StatusQueued {
-				return []any{validator.PendingLocked, ""}
-			}
-			return []any{validator.WithdrawableVET, ""}
+			return []any{amount, ""}
 		}},
 		{"native_firstActive", func(env *xenv.Environment) []any {
 			env.UseGas(thor.SloadGas)

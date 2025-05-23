@@ -92,48 +92,27 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Bytes32]*Validat
 	return hasUpdates, nil, nil
 }
 
-func (s *Staker) performRenewalUpdates(id thor.Bytes32, entry *Validation) error {
-	// Renew the validator
-	entry.CompleteIterations++
+func (s *Staker) performRenewalUpdates(id thor.Bytes32, validator *Validation) error {
+	// renew the validator
+	validatorRenewal := validator.Renew()
 
-	// change in total value locked, ie the amount of VET that is locked
-	changeTVL := big.NewInt(0)
-	// change in TVL with multipliers applied
-	changeWeight := big.NewInt(0)
-	// change in VET value queued
-	queuedDecrease := big.NewInt(0)
-
-	// for any decrease in validator stake
-	if entry.LockedOnePeriod.Sign() == 1 {
-		changeTVL = changeTVL.Sub(changeTVL, entry.LockedOnePeriod)
-		changeWeight = changeWeight.Sub(changeWeight, entry.LockedOnePeriod)
-		entry.WithdrawableVET = big.NewInt(0).Add(entry.WithdrawableVET, entry.LockedOnePeriod)
-		entry.LockedOnePeriod = big.NewInt(0)
-	}
-	// move pending locked to locked
-	if entry.PendingLocked.Sign() == 1 {
-		changeTVL = changeTVL.Add(changeTVL, entry.PendingLocked)
-		changeWeight = changeWeight.Add(changeWeight, entry.PendingLocked)
-		entry.LockedVET = big.NewInt(0).Add(entry.LockedVET, entry.PendingLocked)
-		entry.PendingLocked = big.NewInt(0)
-		queuedDecrease = queuedDecrease.Add(queuedDecrease, entry.PendingLocked)
-	}
-
+	// renew the delegations
 	aggregation, err := s.storage.GetAggregation(id)
 	if err != nil {
 		return err
 	}
-	delegatorChangeTVL, delegatorChangeWeight, delegatorQueuedDecrease := aggregation.RenewDelegations()
+	delegationsRenewal := aggregation.Renew()
 	if err := s.storage.SetAggregation(id, aggregation); err != nil {
 		return err
 	}
-	changeTVL = changeTVL.Add(changeTVL, delegatorChangeTVL)
-	// Apply x2 multiplier for validator's stake
-	changeWeight = big.NewInt(0).Mul(changeWeight, big.NewInt(2))
-	changeWeight = changeWeight.Add(changeWeight, delegatorChangeWeight)
-	queuedDecrease = queuedDecrease.Add(queuedDecrease, delegatorQueuedDecrease)
 
-	entry.Weight = big.NewInt(0).Add(entry.Weight, changeWeight)
+	// calculate the new totals for validator + delegations
+	changeTVL := big.NewInt(0).Add(validatorRenewal.ChangeTVL, delegationsRenewal.ChangeTVL)
+	changeWeight := big.NewInt(0).Add(validatorRenewal.ChangeWeight, delegationsRenewal.ChangeWeight)
+	queuedDecrease := big.NewInt(0).Add(validatorRenewal.QueuedDecrease, delegationsRenewal.QueuedDecrease)
+
+	// set the new totals
+	validator.Weight = big.NewInt(0).Add(validator.Weight, changeWeight)
 	if err := s.lockedVET.Add(changeTVL); err != nil {
 		return err
 	}
@@ -146,7 +125,7 @@ func (s *Staker) performRenewalUpdates(id thor.Bytes32, entry *Validation) error
 	if err := s.queuedWeight.Add(big.NewInt(0).Neg(changeWeight)); err != nil {
 		return err
 	}
-	return s.storage.SetValidator(id, entry)
+	return s.storage.SetValidator(id, validator)
 }
 
 func (s *Staker) activateValidators(currentBlock uint32) ([]*thor.Bytes32, error) {

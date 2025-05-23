@@ -219,6 +219,12 @@ func (s *Staker) WithdrawStake(endorsor thor.Address, id thor.Bytes32, currentBl
 	}
 }
 
+// GetWithdrawable returns the withdrawable stake of a validator.
+func (s *Staker) GetWithdrawable(id thor.Bytes32, block uint32) (*big.Int, error) {
+	_, stake, err := s.validations.GetWithdrawable(id, block)
+	return stake, err
+}
+
 func (s *Staker) SetOnline(id thor.Bytes32, online bool) (bool, error) {
 	logger.Debug("set master online", "id", id, "online", online)
 	entry, err := s.storage.GetValidator(id)

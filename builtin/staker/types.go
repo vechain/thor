@@ -31,11 +31,11 @@ type Validation struct {
 	StartBlock         uint32       // the block number when the validator started the first staking period
 	ExitBlock          *uint32      `rlp:"nil"` // the block number when the validator moved to cooldown
 
-	LockedVET       *big.Int // the amount of VET locked for the current staking period
-	LockedOnePeriod *big.Int // the amount of VET that will be unlocked in the next staking period. Continues to contribute to the validators TVL for the current staking period
-	PendingLocked   *big.Int // the amount of VET that will be locked in the next staking period
-	CooldownVET     *big.Int // the amount of VET that is locked into the validator's cooldown
-	WithdrawableVET *big.Int // the amount of VET that is currently withdrawable
+	LockedVET          *big.Int // the amount of VET locked for the current staking period
+	NextPeriodDecrease *big.Int // the amount of VET that will be unlocked in the next staking period. DOES NOT contribute to the TVL
+	PendingLocked      *big.Int // the amount of VET that will be locked in the next staking period
+	CooldownVET        *big.Int // the amount of VET that is locked into the validator's cooldown
+	WithdrawableVET    *big.Int // the amount of VET that is currently withdrawable
 
 	Weight *big.Int // LockedVET + CooldownVET + total weight from delegators
 
@@ -58,6 +58,35 @@ func (v *Validation) IsPeriodEnd(current uint32) bool {
 func (v *Validation) NextPeriodStakes(delegation *Aggregation) *big.Int {
 	validatorTotal := big.NewInt(0).Add(v.LockedVET, v.PendingLocked)
 	return validatorTotal.Add(validatorTotal, delegation.NextPeriodLocked())
+}
+
+// Renew moves the stakes and weights around as follows:
+// 1. Move PendingLocked => Locked
+// 2. Decrease LockedVET by NextPeriodDecrease
+// 3. Increase WithdrawableVET by NextPeriodDecrease
+// 4. Set PendingLocked to 0
+// 5. Set NextPeriodDecrease to 0
+func (v *Validation) Renew() *Renewal {
+	changeTVL := big.NewInt(0)
+
+	changeTVL.Add(changeTVL, v.PendingLocked)
+	changeTVL.Sub(changeTVL, v.NextPeriodDecrease)
+
+	queuedDecrease := big.NewInt(0).Set(v.PendingLocked)
+	v.LockedVET = big.NewInt(0).Add(v.LockedVET, changeTVL)
+	v.WithdrawableVET = big.NewInt(0).Add(v.WithdrawableVET, v.NextPeriodDecrease)
+	v.PendingLocked = big.NewInt(0)
+	v.NextPeriodDecrease = big.NewInt(0)
+
+	changeWeight := big.NewInt(0).Mul(changeTVL, validatorWeightMultiplier) // Apply x2 multiplier for validator's stake
+
+	v.CompleteIterations++
+
+	return &Renewal{
+		ChangeTVL:      changeTVL,
+		ChangeWeight:   changeWeight,
+		QueuedDecrease: queuedDecrease,
+	}
 }
 
 type Delegation struct {
@@ -151,12 +180,12 @@ func (a *Aggregation) NextPeriodLocked() *big.Int {
 	return total
 }
 
-// RenewDelegations moves the stakes and weights around as follows:
+// Renew moves the stakes and weights around as follows:
 // 1. Move Cooldown => Withdrawable
 // 2. Move PendingLocked => Locked
 // 3. Move PendingCooldown => Cooldown
 // 4. Return the change in TVL and weight
-func (a *Aggregation) RenewDelegations() (*big.Int, *big.Int, *big.Int) {
+func (a *Aggregation) Renew() *Renewal {
 	changeTVL := big.NewInt(0)
 	changeWeight := big.NewInt(0)
 	queuedDecrease := big.NewInt(0)
@@ -186,7 +215,11 @@ func (a *Aggregation) RenewDelegations() (*big.Int, *big.Int, *big.Int) {
 	a.PendingCooldownVET = big.NewInt(0)
 	a.PendingCooldownWeight = big.NewInt(0)
 
-	return changeTVL, changeWeight, queuedDecrease
+	return &Renewal{
+		ChangeTVL:      changeTVL,
+		ChangeWeight:   changeWeight,
+		QueuedDecrease: queuedDecrease,
+	}
 }
 
 // Exit moves all the funds to withdrawable
@@ -217,4 +250,10 @@ func (a *Aggregation) Exit() (*big.Int, *big.Int, *big.Int, *big.Int) {
 	a.WithdrawVET = withdrawable
 
 	return exitedTVL, queuedDecrease, exitedWeight, queuedWeightDecrease
+}
+
+type Renewal struct {
+	ChangeTVL      *big.Int
+	ChangeWeight   *big.Int
+	QueuedDecrease *big.Int
 }
