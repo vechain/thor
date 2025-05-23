@@ -1578,7 +1578,7 @@ func TestStakerContract_Native(t *testing.T) {
 	// parameters
 	minStake := big.NewInt(25_000_000)
 	minStake = minStake.Mul(minStake, big.NewInt(1e18))
-	minStakingPeriod := uint32(360) * 24 * 14
+	minStakingPeriod := uint32(360) * 24 * 15
 
 	// addValidator
 	addValidatorArgs := []any{master.Address, minStakingPeriod, true}
@@ -1621,8 +1621,8 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).Cmp(*getRes[2].(**big.Int)), 0) // stake - should be 0 while queued
 	assert.Equal(t, big.NewInt(0).Cmp(*getRes[3].(**big.Int)), 0) // weight - should be 0 while queued
 	assert.Equal(t, staker.StatusQueued, *getRes[4].(*uint8))
-	assert.Equal(t, true, *getRes[5].(*bool))                // isMaster
-	assert.Equal(t, uint32(360*24*14), *getRes[7].(*uint32)) // isMaster
+	assert.Equal(t, true, *getRes[5].(*bool)) // isMaster
+	assert.Equal(t, uint32(360*24*15), *getRes[7].(*uint32))
 
 	//firstQueued
 	firstQueuedRes := new(common.Hash)
@@ -1712,7 +1712,7 @@ func TestStakerContract_Native_Revert(t *testing.T) {
 	// parameters
 	minStake := big.NewInt(25_000_000)
 	minStake = minStake.Mul(minStake, big.NewInt(1e18))
-	minStakingPeriod := uint32(360) * 24 * 14
+	minStakingPeriod := uint32(360) * 24 * 15
 
 	// addValidator
 	addValidatorArgs := []any{master.Address, minStakingPeriod + 1, true}
@@ -1834,7 +1834,7 @@ func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
 	// parameters
 	minStake := big.NewInt(25_000_000)
 	minStake = minStake.Mul(minStake, big.NewInt(1e18))
-	minStakingPeriod := uint32(360) * 24 * 14
+	minStakingPeriod := uint32(360) * 24 * 15
 
 	// addValidator
 	addValidatorArgs := []any{master.Address, minStakingPeriod, false}

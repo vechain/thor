@@ -38,7 +38,7 @@ func newValidations(storage *storage) *validations {
 			lowStakingPeriod = uint32(numUint64)
 		}
 	}
-	mediumStakingPeriod := uint32(360) * 24 * 14
+	mediumStakingPeriod := uint32(360) * 24 * 15
 	if num, err := solidity.NewUint256(storage.Address(), storage.State(), slotMediumStakingPeriod).Get(); err == nil {
 		numUint64 := num.Uint64()
 		if numUint64 != 0 {
