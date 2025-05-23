@@ -1,6 +1,9 @@
 name: Publish Docker Image
 
 on:
+  push:
+    branches:
+      - '*'
   workflow_call:
     inputs:
       environment:
@@ -29,27 +32,80 @@ on:
         default: false
 
 jobs:
-  build-and-push-image:
-    name: Build and Push Docker Image
-    runs-on: ubuntu-22.04
-
-    permissions:
-      contents: read
-      packages: write
-
-    environment: ${{ inputs.environment }}
+  build:
+    runs-on: ${{ matrix.host-os }}
+    strategy:
+      matrix:
+        include:
+          - host-os: ubuntu-22.04
+            docker-arch: linux/amd64
+          - host-os: ubuntu-24.04-arm
+            docker-arch: linux/arm64
     steps:
-
+      - name: Prepare
+        run: |
+          platform=${{ matrix.docker-arch }}
+          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
       - name: Checkout Repo
         uses: actions/checkout@v4
 
+      - name: Metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          # default to ghcr.io for workflow_dispatch
+          images: ${{ inputs.images || format('ghcr.io/{0}', github.repository) }}
+          # use the branch + sha if workflow_dispatch
+          tags: ${{ inputs.tags || format('type=raw,value={0}-{1}', github.ref_name, github.sha) }}
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Set up QEMU
-        if: ${{ github.event_name != 'pull_request' }}
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
-        if: ${{ github.event_name != 'pull_request' }}
         uses: docker/setup-buildx-action@v3
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          platforms: ${{ matrix.docker-arch }}
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          provenance: ${{ github.event_name != 'pull_request' }}
+          sbom: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Export digest
+        run: |
+          mkdir -p ${{ runner.temp }}/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    runs-on: ubuntu-latest
+    needs:
+      - build
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
@@ -67,7 +123,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels) for Docker
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -76,45 +135,12 @@ jobs:
           # use the branch + sha if workflow_dispatch
           tags: ${{ inputs.tags || format('type=raw,value={0}-{1}', github.ref_name, github.sha) }}
 
-      - name: Push to Registry(s)
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          platforms: ${{ github.event_name != 'pull_request' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
-          push: ${{ github.event_name != 'pull_request' }}
-          load: ${{ github.event_name == 'pull_request' }}
-          provenance: ${{ github.event_name != 'pull_request' }}
-          sbom: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+      - name: Create manifest list and push
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ github.repository }}@sha256:%s ' *)
 
-      - name: Update Docker Hub
-        # official documentation docker: https://docs.docker.com/build/ci/github-actions/update-dockerhub-desc/
-        if: ${{ inputs.environment == 'docker-publish' && github.event_name != 'pull_request' }}
-        uses: peter-evans/dockerhub-description@v4
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: ${{ github.repository }}
-
-      - name: Scan for vulnerabilities
-        uses: crazy-max/ghaction-container-scan@v3
-        if: ${{ github.event_name == 'pull_request' || github.ref_name == 'master' }}
-        with:
-          image: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
-          annotations: true
-          severity: LOW
-          dockerfile: ./Dockerfile
-        env:
-          # See https://github.com/aquasecurity/trivy/discussions/7538
-          TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2
-
-      - name: Internal CI
-        uses: peter-evans/repository-dispatch@v3
-        if: ${{ inputs.trigger_internal_ci }}
-        continue-on-error: true
-        with:
-          token: ${{ secrets.INTERNAL_CI_TOKEN }}
-          repository: vechain/thor-internal-ci
-          event-type: internal-thor-ci
-          client-payload: '{"thor_image": "${{ fromJSON(steps.build-and-push-image.outputs.meta.json).tags[0] }}"}'
+      - name: Inspect image
+        run: |
+          docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}
