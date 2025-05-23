@@ -3,72 +3,11 @@ name: Destroy, Deploy & Swap
 on:
   workflow_call:
     inputs:
-      network:
-        description: The network to deploy
-        required: true
-        type: string
-      genesis_url:
-        description: The URL to the genesis file
-        type: string
-        default: https://vechain.github.io/hayabusa-devnet/genesis.json
       node_image:
-        description: The node image to deploy
         type: string
-        default: docker pull ghcr.io/vechain/hayabusa:release-hayabusa-latest
-      nodes:
-        description: The nodes to deploy
-        type: string
-        default: "public"
-      destroy_live:
-        description: Whether to destroy both staging and live nodes
-        type: boolean
-        default: true
-      swap:
-        description: Whether to swap staging / live nodes
-        type: boolean
-        default: true
-      run_register_validators:
-        description: Whether to run register-validators script
-        type: boolean
-        default: false
-
+        required: true
+        description: 'The Docker image to use for the node.'
   workflow_dispatch:
-    inputs:
-      network:
-        description: The network to deploy
-        required: true
-        type: choice
-        options:
-          - hayabusa
-          - galactica
-      genesis_url:
-        description: The URL to the genesis file
-        type: string
-        default: https://vechain.github.io/hayabusa-devnet/genesis.json
-      node_image:
-        description: The node image to deploy
-        default: ghcr.io/vechain/hayabusa:release-hayabusa-latest
-        type: string
-      nodes:
-        description: The network to deploy
-        required: true
-        type: choice
-        options:
-          - public
-          - authority
-          - both
-      destroy_live:
-        description: Whether to destroy both staging and live nodes
-        type: boolean
-        default: true
-      swap:
-        description: Whether to swap staging / live nodes
-        type: boolean
-        default: true
-      run_register_validators:
-        description: Whether to run register-validators script
-        type: boolean
-        default: false
 
 # Required for authentication through GitHub OIDC
 permissions:
@@ -81,10 +20,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  public-nodes:
+  destroy-public-nodes:
     runs-on: ubuntu-latest
-    name: Public Nodes
-    if: inputs.nodes == 'public' || inputs.nodes == 'both'
+    name: DestroyPublic Nodes (hayabusa)
     steps:
       - uses: convictional/trigger-workflow-and-wait@v1.6.1
         name: Destroy Staging
@@ -93,25 +31,60 @@ jobs:
           repo: node-hosting
           github_token: ${{ secrets.GHA_REPO_ACCESS }}
           workflow_file_name: destroy.yml
-          client_payload: '{"target_environment": "dev", "network": "${{ inputs.network }}"}'
+          client_payload: '{"target_environment": "dev", "network": "hayabusa"}'
       - uses: convictional/trigger-workflow-and-wait@v1.6.1
         name: Swap (Old -> Staging)
-        if: inputs.destroy_live
         with:
           owner: vechain
           repo: node-hosting
           github_token: ${{ secrets.GHA_REPO_ACCESS }}
           workflow_file_name: swap.yml
-          client_payload: '{"environment": "dev", "network": "${{ inputs.network }}"}'
+          client_payload: '{"environment": "dev", "network": "hayabusa"}'
       - uses: convictional/trigger-workflow-and-wait@v1.6.1
         name: Destroy Old Live
-        if: inputs.destroy_live
         with:
           owner: vechain
           repo: node-hosting
           github_token: ${{ secrets.GHA_REPO_ACCESS }}
           workflow_file_name: destroy.yml
-          client_payload: '{"target_environment": "dev", "network": "${{ inputs.network }}"}'
+          client_payload: '{"target_environment": "dev", "network": "hayabusa"}'
+
+  destroy-authority-nodes:
+    runs-on: ubuntu-latest
+    name: Destroy Authority Nodes (hayabusa)
+    steps:
+      - uses: convictional/trigger-workflow-and-wait@v1.6.1
+        name: Destroy Staging
+        with:
+          owner: vechain
+          repo: node-authority
+          github_token: ${{ secrets.GHA_REPO_ACCESS }}
+          workflow_file_name: destroy-environment.yml
+          client_payload: '{"target_environment": "dev", "node_network": "hayabusa"}'
+      - uses: convictional/trigger-workflow-and-wait@v1.6.1
+        name: Swap (Old -> Staging)
+        with:
+          owner: vechain
+          repo: node-authority
+          github_token: ${{ secrets.GHA_REPO_ACCESS }}
+          workflow_file_name: swap-all-regions.yml
+          client_payload: '{"target_environment": "dev", "node_network": "hayabusa"}'
+      - uses: convictional/trigger-workflow-and-wait@v1.6.1
+        name: Destroy Old Live
+        with:
+          owner: vechain
+          repo: node-authority
+          github_token: ${{ secrets.GHA_REPO_ACCESS }}
+          workflow_file_name: destroy-environment.yml
+          client_payload: '{"target_environment": "dev", "node_network": "hayabusa"}'
+
+  deploy-public-nodes:
+    runs-on: ubuntu-latest
+    needs:
+      - destroy-public-nodes
+      - destroy-authority-nodes
+    name: Deploy Public Nodes (hayabusa)
+    steps:
       - uses: convictional/trigger-workflow-and-wait@v1.6.1
         name: Deploy Staging
         with:
@@ -119,48 +92,23 @@ jobs:
           repo: node-hosting
           github_token: ${{ secrets.GHA_REPO_ACCESS }}
           workflow_file_name: deploy.yml
-          client_payload: '{"target_environment": "dev", "network": "${{ inputs.network }}", "full_sync": true, "node_image": "${{ inputs.node_image }}", "genesis_url": "${{ inputs.genesis_url }}"}'
+          client_payload: '{"target_environment": "dev", "network": "hayabusa", "full_sync": true, "node_image": "${{ inputs.node_image || vars.NODE_IMAGE }}", "genesis_url": "${{ vars.GENESIS_URL }}"}'
       - uses: convictional/trigger-workflow-and-wait@v1.6.1
         name: Swap (New -> Live)
-        if: inputs.swap
         with:
           owner: vechain
           repo: node-hosting
           github_token: ${{ secrets.GHA_REPO_ACCESS }}
           workflow_file_name: swap.yml
-          client_payload: '{"environment": "dev", "network": "${{ inputs.network }}"}'
+          client_payload: '{"environment": "dev", "network": "hayabusa"}'
 
-  authority-nodes:
+  deploy-authority-nodes:
     runs-on: ubuntu-latest
-    name: Authority Nodes
-    if: inputs.nodes == 'authority' || inputs.nodes == 'both'
+    needs:
+      - destroy-public-nodes
+      - destroy-authority-nodes
+    name: Deploy Authority Nodes (hayabusa)
     steps:
-      - uses: convictional/trigger-workflow-and-wait@v1.6.1
-        name: Destroy Staging
-        with:
-          owner: vechain
-          repo: node-authority
-          github_token: ${{ secrets.GHA_REPO_ACCESS }}
-          workflow_file_name: destroy-environment.yml
-          client_payload: '{"target_environment": "dev", "node_network": "${{ inputs.network }}"}'
-      - uses: convictional/trigger-workflow-and-wait@v1.6.1
-        name: Swap (Old -> Staging)
-        if: inputs.destroy_live
-        with:
-          owner: vechain
-          repo: node-authority
-          github_token: ${{ secrets.GHA_REPO_ACCESS }}
-          workflow_file_name: swap-all-regions.yml
-          client_payload: '{"target_environment": "dev", "node_network": "${{ inputs.network }}"}'
-      - uses: convictional/trigger-workflow-and-wait@v1.6.1
-        name: Destroy Old Live
-        if: inputs.destroy_live
-        with:
-          owner: vechain
-          repo: node-authority
-          github_token: ${{ secrets.GHA_REPO_ACCESS }}
-          workflow_file_name: destroy-environment.yml
-          client_payload: '{"target_environment": "dev", "node_network": "${{ inputs.network }}"}'
       - uses: convictional/trigger-workflow-and-wait@v1.6.1
         name: Deploy Staging
         with:
@@ -168,19 +116,20 @@ jobs:
           repo: node-authority
           github_token: ${{ secrets.GHA_REPO_ACCESS }}
           workflow_file_name: deploy-environment.yml
-          client_payload: '{"target_environment": "dev", "node_network": "${{ inputs.network }}", "node_genesis_url": "${{ inputs.genesis_url }}", "node_image": "${{ inputs.node_image }}"}'
+          client_payload: '{"target_environment": "dev", "node_network": "hayabusa", "node_genesis_url": "${{ vars.GENESIS_URL }}", "node_image": "${{ inputs.node_image || vars.NODE_IMAGE }}"}'
       - uses: convictional/trigger-workflow-and-wait@v1.6.1
         name: Swap (New -> Live)
-        if: inputs.swap
         with:
           owner: vechain
           repo: node-authority
           github_token: ${{ secrets.GHA_REPO_ACCESS }}
           workflow_file_name: swap-all-regions.yml
-          client_payload: '{"target_environment": "dev", "node_network": "${{ inputs.network }}"}'
+          client_payload: '{"target_environment": "dev", "node_network": "hayabusa"}'
 
   update-faucet-inspector:
-    needs: [public-nodes, authority-nodes]
+    needs:
+      - deploy-authority-nodes
+      - deploy-public-nodes
     runs-on: ubuntu-latest
     name: Update Faucet & Inspector
     steps:
@@ -205,11 +154,12 @@ jobs:
           repo: devnet-faucet
           github_token: ${{ secrets.GHA_REPO_ACCESS }}
           workflow_file_name: deploy.yaml
-          client_payload: '{"environment": "${{ inputs.network }}", "staker_abi": "${{ steps.get-staker-abi.outputs.staker_abi }}"}'
+          client_payload: '{"environment": "hayabusa", "staker_abi": "${{ steps.get-staker-abi.outputs.staker_abi }}"}'
 
   register-validators:
-    if: inputs.run_register_validators
-    needs: [public-nodes, authority-nodes]
+    needs:
+      - deploy-authority-nodes
+      - deploy-public-nodes
     runs-on: ubuntu-latest
     name: Register Validators
     steps:

@@ -82,7 +82,7 @@ jobs:
     uses: ./.github/workflows/deploy-devnet.yaml
     secrets: inherit
     with:
-      network: 'hayabusa'
+      node_image: ghcr.io/${{ github.repository }}:${{ needs.generate-tags.outputs.clean_ref_name }}-${{ needs.generate-tags.outputs.tag_date }}-${{ needs.generate-tags.outputs.short_sha }}
 
   notify-slack:
     name: Notify Slack
