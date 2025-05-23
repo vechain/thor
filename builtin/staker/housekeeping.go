@@ -6,7 +6,6 @@
 package staker
 
 import (
-	"math"
 	"math/big"
 
 	"github.com/pkg/errors"
@@ -23,83 +22,51 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Bytes32]*Validat
 
 	logger.Info("performing housekeeping", "block", currentBlock)
 
-	validatorExitID := thor.Bytes32{}
-	validatorLowestExitBlock := uint32(math.MaxUint32)
-
 	hasUpdates := false
-
-	iteratorCooldownGroup := func(id thor.Bytes32, entry *Validation) error {
-		// check if the validator should be moved to cooldown / exit
-		if entry.Expiry != nil && currentBlock >= *entry.Expiry {
-			// Find validator with the lowest exit tx block
-			if entry.Status == StatusCooldown && validatorLowestExitBlock > entry.ExitTxBlock && currentBlock >= *entry.Expiry+cooldownPeriod {
-				validatorExitID = id
-				validatorLowestExitBlock = entry.ExitTxBlock
-			}
-		}
-
-		return nil
-	}
-	// perform the iteration over cooldown group
-	if err := s.validations.CooldownGroupIterator(iteratorCooldownGroup); err != nil {
-		return false, nil, err
-	}
-
+	validatorExitID := thor.Bytes32{}
 	activeValidators := make(map[thor.Bytes32]*Validation)
 
-	var toCooldown []thor.Bytes32
 	iteratorLeaderGroup := func(id thor.Bytes32, entry *Validation) error {
-		isPeriodEnd := entry.IsPeriodEnd(currentBlock)
+		if entry.ExitBlock != nil && currentBlock == *entry.ExitBlock {
+			validatorExitID = id
+			return nil
+		}
 
-		// validator is in the middle of a staking period, no need to process
-		if !isPeriodEnd {
+		isPeriodEnd := entry.IsPeriodEnd(currentBlock)
+		if !isPeriodEnd { // early exit - validator is not due for renewal
 			activeValidators[id] = entry
 			return nil
 		}
 
-		// check if the validator should be moved to cooldown / exit
-		if entry.Expiry != nil && currentBlock >= *entry.Expiry {
-			if entry.Status == StatusActive && !entry.AutoRenew {
-				hasUpdates = true
-				toCooldown = append(toCooldown, id)
-				return nil
-			}
-			if entry.Status == StatusActive && entry.AutoRenew {
-				hasUpdates = true
-				logger.Debug("performing renewal updates", "id", id)
-				err := s.performRenewalUpdates(id, entry)
-				activeValidators[id] = entry
-				return err
-			}
+		if !entry.AutoRenew { // early exit, validator is due to exit but has not reached exit block
+			activeValidators[id] = entry
+			logger.Debug("validator exit delayed", "master", entry.Master, "exit-block", entry.ExitBlock)
+			return nil
 		}
 
+		// validator has auto renew enabled and is due for renewal
+		if err := s.performRenewalUpdates(id, entry); err != nil {
+			return err
+		}
+		hasUpdates = true
+		activeValidators[id] = entry
 		return nil
 	}
 	// perform the iteration
 	if err := s.validations.LeaderGroupIterator(iteratorLeaderGroup); err != nil {
 		return false, nil, err
 	}
-	for _, cooldown := range toCooldown {
-		entry, err := s.Get(cooldown)
-		if err != nil {
-			return false, nil, err
-		}
-		logger.Info("performing cooldown updates", "id", cooldown, "master", entry.Master)
-		if err = s.performCooldownUpdates(cooldown, entry); err != nil {
-			return false, nil, err
-		}
-	}
 
 	if !validatorExitID.IsZero() {
+		hasUpdates = true
 		logger.Info("exiting validator", "id", validatorExitID)
-		if err := s.validations.ExitValidator(validatorExitID, currentBlock); err != nil {
+		if err := s.validations.ExitValidator(validatorExitID); err != nil {
 			return false, nil, err
 		}
-		hasUpdates = true
 	}
 
 	// fill any remaining leader group slots with validations from the queue
-	_, activated, err := s.activateValidators(currentBlock)
+	activated, err := s.activateValidators(currentBlock)
 	if err != nil {
 		return false, nil, err
 	}
@@ -127,8 +94,6 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Bytes32]*Validat
 
 func (s *Staker) performRenewalUpdates(id thor.Bytes32, entry *Validation) error {
 	// Renew the validator
-	expiry := *entry.Expiry + entry.Period
-	entry.Expiry = &expiry
 	entry.CompleteIterations++
 
 	// change in total value locked, ie the amount of VET that is locked
@@ -138,12 +103,12 @@ func (s *Staker) performRenewalUpdates(id thor.Bytes32, entry *Validation) error
 	// change in VET value queued
 	queuedDecrease := big.NewInt(0)
 
-	// move cooldown to withdrawable
-	if entry.CooldownVET.Sign() == 1 {
-		changeTVL = changeTVL.Sub(changeTVL, entry.CooldownVET)
-		changeWeight = changeWeight.Sub(changeWeight, entry.CooldownVET)
-		entry.WithdrawableVET = big.NewInt(0).Add(entry.WithdrawableVET, entry.CooldownVET)
-		entry.CooldownVET = big.NewInt(0)
+	// for any decrease in validator stake
+	if entry.LockedOnePeriod.Sign() == 1 {
+		changeTVL = changeTVL.Sub(changeTVL, entry.LockedOnePeriod)
+		changeWeight = changeWeight.Sub(changeWeight, entry.LockedOnePeriod)
+		entry.WithdrawableVET = big.NewInt(0).Add(entry.WithdrawableVET, entry.LockedOnePeriod)
+		entry.LockedOnePeriod = big.NewInt(0)
 	}
 	// move pending locked to locked
 	if entry.PendingLocked.Sign() == 1 {
@@ -184,65 +149,21 @@ func (s *Staker) performRenewalUpdates(id thor.Bytes32, entry *Validation) error
 	return s.storage.SetValidator(id, entry)
 }
 
-func (s *Staker) performCooldownUpdates(id thor.Bytes32, entry *Validation) error {
-	// Put to cooldown
-	entry.Status = StatusCooldown
-	// move locked to cooldown
-	entry.CooldownVET = big.NewInt(0).Add(entry.CooldownVET, entry.LockedVET)
-	locked := entry.LockedVET
-	entry.LockedVET = big.NewInt(0)
-	// unlock delegator's stakes and remove their weight
-	entry.CompleteIterations++
-
-	aggregation, err := s.storage.GetAggregation(id)
-	if err != nil {
-		return err
-	}
-	exitedTVL, queuedDecrease, exitedWeight, queuedWeightDecrease := aggregation.Exit()
-
-	entry.Weight = big.NewInt(0).Sub(entry.Weight, exitedWeight)
-	if err := s.storage.SetAggregation(id, aggregation); err != nil {
-		return err
-	}
-	exitedTVL.Add(exitedTVL, locked)
-
-	if err := s.queuedVET.Sub(queuedDecrease); err != nil {
-		return err
-	}
-	if err := s.lockedVET.Sub(exitedTVL); err != nil {
-		return err
-	}
-	if err := s.queuedWeight.Sub(queuedWeightDecrease); err != nil {
-		return err
-	}
-	if err := s.lockedWeight.Sub(exitedWeight); err != nil {
-		return err
-	}
-
-	if _, err = s.validations.leaderGroup.Remove(id, entry); err != nil {
-		return err
-	}
-	if _, err = s.validations.cooldownQueue.Add(id, entry); err != nil {
-		return err
-	}
-	return s.storage.SetValidator(id, entry)
-}
-
-func (s *Staker) activateValidators(currentBlock uint32) (int64, []*thor.Bytes32, error) {
+func (s *Staker) activateValidators(currentBlock uint32) ([]*thor.Bytes32, error) {
 	queuedSize, err := s.QueuedGroupSize()
 	if err != nil {
-		return 0, nil, err
+		return nil, err
 	}
 	leaderSize, err := s.LeaderGroupSize()
 	if err != nil {
-		return 0, nil, err
+		return nil, err
 	}
 	maxSize, err := s.params.Get(thor.KeyMaxBlockProposers)
 	if err != nil {
-		return 0, nil, err
+		return nil, err
 	}
 	if leaderSize.Cmp(maxSize) >= 0 {
-		return 0, nil, nil
+		return nil, nil
 	}
 
 	if queuedSize.Cmp(big.NewInt(0)) > 0 {
@@ -253,7 +174,7 @@ func (s *Staker) activateValidators(currentBlock uint32) (int64, []*thor.Bytes32
 				queuedCount = leaderDelta
 			}
 		} else {
-			return 0, nil, nil
+			return nil, nil
 		}
 
 		activated := make([]*thor.Bytes32, queuedCount)
@@ -261,15 +182,15 @@ func (s *Staker) activateValidators(currentBlock uint32) (int64, []*thor.Bytes32
 		for i := int64(0); i < queuedCount; i++ {
 			id, err := s.validations.ActivateNext(currentBlock, s.params)
 			if err != nil {
-				return 0, nil, err
+				return nil, err
 			}
 			activated[i] = id
 		}
 
-		return queuedCount, activated, nil
+		return activated, nil
 	}
 
-	return 0, nil, nil
+	return nil, nil
 }
 
 func (s *Staker) Transition(currentBlock uint32) (bool, error) {
@@ -298,11 +219,11 @@ func (s *Staker) Transition(currentBlock uint32) (bool, error) {
 	if big.NewFloat(0).SetInt(queueSize).Cmp(minimum) < 0 {
 		return false, nil
 	}
-	activated, _, err := s.activateValidators(currentBlock)
+	ids, err := s.activateValidators(currentBlock)
 	if err != nil {
 		return false, err
 	}
-	logger.Info("activated validations", "count", activated)
+	logger.Info("activated validations", "count", len(ids))
 
 	return true, nil
 }

@@ -321,7 +321,7 @@ func Test_Delegator_AutoRenew_ValidatorExits(t *testing.T) {
 	assert.Equal(t, stake, aggregation.LockedVET)
 
 	// When the validator signals an exit
-	assert.NoError(t, staker.UpdateAutoRenew(validator.Endorsor, validator.ID, false, validator.Period+1))
+	assert.NoError(t, staker.UpdateAutoRenew(validator.Endorsor, validator.ID, false))
 
 	// And the next staking period is over
 	_, _, err = staker.Housekeep(validator.Period * 2)

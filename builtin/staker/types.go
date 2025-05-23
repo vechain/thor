@@ -14,28 +14,27 @@ import (
 type Status = uint8
 
 const (
-	StatusUnknown  = Status(iota) // 0 -> default value
-	StatusQueued                  // Once on the queue
-	StatusActive                  // When activated by protocol
-	StatusCooldown                // When in cooldown
-	StatusExit                    // Validation should not be used again
+	StatusUnknown = Status(iota) // 0 -> default value
+	StatusQueued                 // Once on the queue
+	StatusActive                 // When activated by protocol
+	StatusExit                   // Validation should not be used again
 )
 
 type Validation struct {
 	Master             thor.Address // the node address of the validator
 	Endorsor           thor.Address // the address providing the stake
-	Expiry             *uint32      `rlp:"nil"` // the block number when the validator's current staking period ends
 	Period             uint32       // the staking period of the validator
 	CompleteIterations uint32       // the completed staking periods by the validator
 	Status             Status       // status of the validator
 	Online             bool         // whether the validator is online or not
 	AutoRenew          bool         // whether the validations staking period is auto-renewed
-	ExitTxBlock        uint32       // the block number when the validator signaled the exit
 	StartBlock         uint32       // the block number when the validator started the first staking period
+	ExitBlock          *uint32      `rlp:"nil"` // the block number when the validator moved to cooldown
 
 	LockedVET       *big.Int // the amount of VET locked for the current staking period
+	LockedOnePeriod *big.Int // the amount of VET that will be unlocked in the next staking period. Continues to contribute to the validators TVL for the current staking period
 	PendingLocked   *big.Int // the amount of VET that will be locked in the next staking period
-	CooldownVET     *big.Int // the amount of VET that will be withdrawable in the next staking period, but is currently locked
+	CooldownVET     *big.Int // the amount of VET that is locked into the validator's cooldown
 	WithdrawableVET *big.Int // the amount of VET that is currently withdrawable
 
 	Weight *big.Int // LockedVET + CooldownVET + total weight from delegators
@@ -46,11 +45,7 @@ type Validation struct {
 
 // IsEmpty returns whether the entry can be treated as empty.
 func (v *Validation) IsEmpty() bool {
-	emptyStake := v.LockedVET == nil || v.LockedVET.Sign() == 0
-	emptyWeight := v.Weight == nil || v.Weight.Sign() == 0
-	emptyAddresses := v.Master.IsZero() || v.Endorsor.IsZero()
-
-	return emptyStake && emptyWeight && v.Status == StatusUnknown && emptyAddresses
+	return v.Status == StatusUnknown
 }
 
 // IsPeriodEnd returns whether the provided block is the last block of the current staking period.

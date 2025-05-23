@@ -34,14 +34,12 @@ var (
 	slotQueuedHead      = nameToSlot("validations-queued-head")
 	slotQueuedTail      = nameToSlot("validations-queued-tail")
 	slotQueuedGroupSize = nameToSlot("validations-queued-group-size")
-	// queued validators on cooldown
-	slotCooldownHead      = nameToSlot("validations-cooldown-head")
-	slotCooldownTail      = nameToSlot("validations-cooldown-tail")
-	slotCooldownGroupSize = nameToSlot("validations-cooldown-group-size")
 	// init params
 	slotLowStakingPeriod    = nameToSlot("staker-low-staking-period")
 	slotMediumStakingPeriod = nameToSlot("staker-medium-staking-period")
 	slotHighStakingPeriod   = nameToSlot("staker-high-staking-period")
+	// exit epoch mapping
+	slotExitEpochs = nameToSlot("exit-epochs")
 )
 
 func nameToSlot(name string) thor.Bytes32 {
@@ -57,6 +55,7 @@ type storage struct {
 	delegations  *solidity.Mapping[thor.Bytes32, *Delegation]
 	lookups      *solidity.Mapping[thor.Address, thor.Bytes32] // allows lookup of Validation by node master address
 	rewards      *solidity.Mapping[thor.Bytes32, *big.Int]     // stores rewards per validator staking period
+	exits        *solidity.Mapping[*big.Int, thor.Bytes32]     // exit block -> validator ID
 }
 
 // newStorage creates a new instance of storage.
@@ -69,6 +68,7 @@ func newStorage(addr thor.Address, state *state.State) *storage {
 		delegations:  solidity.NewMapping[thor.Bytes32, *Delegation](addr, state, slotDelegations),
 		lookups:      solidity.NewMapping[thor.Address, thor.Bytes32](addr, state, slotValidationLookups),
 		rewards:      solidity.NewMapping[thor.Bytes32, *big.Int](addr, state, slotRewards),
+		exits:        solidity.NewMapping[*big.Int, thor.Bytes32](addr, state, slotExitEpochs),
 	}
 }
 
@@ -153,6 +153,23 @@ func (s *storage) LookupMaster(master thor.Address) (*Validation, thor.Bytes32, 
 		return nil, thor.Bytes32{}, err
 	}
 	return val, id, nil
+}
+
+func (s *storage) GetExitEpoch(block uint32) (thor.Bytes32, error) {
+	bigBlock := big.NewInt(0).SetUint64(uint64(block))
+	id, err := s.exits.Get(bigBlock)
+	if err != nil {
+		return thor.Bytes32{}, errors.Wrap(err, "failed to get exit epoch")
+	}
+	return id, nil
+}
+
+func (s *storage) SetExitEpoch(block uint32, id thor.Bytes32) error {
+	bigBlock := big.NewInt(0).SetUint64(uint64(block))
+	if err := s.exits.Set(bigBlock, id); err != nil {
+		return errors.Wrap(err, "failed to set exit epoch")
+	}
+	return nil
 }
 
 func (s *storage) GetRewards(validationID thor.Bytes32, stakingPeriod uint32) (*big.Int, error) {

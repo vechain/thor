@@ -166,10 +166,10 @@ func (s *Staker) Get(id thor.Bytes32) (*Validation, error) {
 	return s.storage.GetValidator(id)
 }
 
-func (s *Staker) UpdateAutoRenew(endorsor thor.Address, id thor.Bytes32, autoRenew bool, blockNumber uint32) error {
+func (s *Staker) UpdateAutoRenew(endorsor thor.Address, id thor.Bytes32, autoRenew bool) error {
 	logger.Debug("updating autorenew", "endorsor", endorsor, "id", id, "autoRenew", autoRenew)
 
-	if err := s.validations.UpdateAutoRenew(endorsor, id, autoRenew, blockNumber); err != nil {
+	if err := s.validations.UpdateAutoRenew(endorsor, id, autoRenew); err != nil {
 		logger.Info("update autorenew failed", "id", id, "error", err)
 		return err
 	} else {
@@ -207,10 +207,10 @@ func (s *Staker) DecreaseStake(endorsor thor.Address, id thor.Bytes32, amount *b
 }
 
 // WithdrawStake allows expired validations to withdraw their stake.
-func (s *Staker) WithdrawStake(endorsor thor.Address, id thor.Bytes32) (*big.Int, error) {
+func (s *Staker) WithdrawStake(endorsor thor.Address, id thor.Bytes32, currentBlock uint32) (*big.Int, error) {
 	logger.Debug("withdrawing stake", "endorsor", endorsor, "id", id)
 
-	if stake, err := s.validations.WithdrawStake(endorsor, id); err != nil {
+	if stake, err := s.validations.WithdrawStake(endorsor, id, currentBlock); err != nil {
 		logger.Info("withdraw failed", "id", id, "error", err)
 		return nil, err
 	} else {

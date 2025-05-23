@@ -21,7 +21,6 @@ type validations struct {
 	storage             *storage
 	leaderGroup         *linkedList
 	validatorQueue      *linkedList
-	cooldownQueue       *linkedList
 	lockedVET           *solidity.Uint256
 	lockedWeight        *solidity.Uint256
 	queuedVET           *solidity.Uint256
@@ -58,7 +57,6 @@ func newValidations(storage *storage) *validations {
 		storage:             storage,
 		leaderGroup:         newLinkedList(storage, slotActiveHead, slotActiveTail, slotActiveGroupSize),
 		validatorQueue:      newLinkedList(storage, slotQueuedHead, slotQueuedTail, slotQueuedGroupSize),
-		cooldownQueue:       newLinkedList(storage, slotCooldownHead, slotCooldownTail, slotCooldownGroupSize),
 		lockedVET:           solidity.NewUint256(storage.Address(), storage.State(), slotLockedVET),
 		lockedWeight:        solidity.NewUint256(storage.Address(), storage.State(), slotLockedWeight),
 		queuedVET:           solidity.NewUint256(storage.Address(), storage.State(), slotQueuedVET),
@@ -90,10 +88,6 @@ func (v *validations) FirstQueued() (thor.Bytes32, error) {
 
 func (v *validations) LeaderGroupIterator(callback func(thor.Bytes32, *Validation) error) error {
 	return v.leaderGroup.Iter(callback)
-}
-
-func (v *validations) CooldownGroupIterator(callback func(thor.Bytes32, *Validation) error) error {
-	return v.cooldownQueue.Iter(callback)
 }
 
 // LeaderGroup lists all registered candidates.
@@ -143,6 +137,7 @@ func (v *validations) Add(
 		LockedVET:          big.NewInt(0),
 		PendingLocked:      stake,
 		CooldownVET:        big.NewInt(0),
+		LockedOnePeriod:    big.NewInt(0),
 		WithdrawableVET:    big.NewInt(0),
 		Weight:             big.NewInt(0),
 	}
@@ -213,7 +208,11 @@ func (v *validations) ActivateNext(
 	// update the validator
 	validatorLocked := big.NewInt(0).Add(validator.LockedVET, validator.PendingLocked)
 	validator.PendingLocked = big.NewInt(0)
-	validator.LockedVET = validatorLocked
+	if validator.AutoRenew {
+		validator.LockedVET = validatorLocked
+	} else {
+		validator.LockedOnePeriod = validatorLocked
+	}
 	// x2 multiplier for validator's stake
 	probabilityWeight := big.NewInt(0).Mul(validatorLocked, validatorWeightMultiplier)
 
@@ -224,7 +223,6 @@ func (v *validations) ActivateNext(
 	totalWeightLocked := validator.Weight
 	queuedDecrease = queuedDecrease.Add(queuedDecrease, validatorLocked)
 
-	aggregation.LockedWeight = totalWeightLocked
 	if err := v.storage.SetAggregation(id, aggregation); err != nil {
 		return nil, err
 	}
@@ -242,11 +240,16 @@ func (v *validations) ActivateNext(
 		return nil, err
 	}
 
-	expiry := currentBlock + validator.Period
+	if !validator.AutoRenew {
+		exitBlock, err := v.SetExitBlock(id, currentBlock+validator.Period)
+		if err != nil {
+			return nil, err
+		}
+		validator.ExitBlock = &exitBlock
+	}
+
 	validator.Status = StatusActive
 	validator.Online = true
-	validator.Expiry = &expiry
-	validator.ExitTxBlock = currentBlock
 	validator.StartBlock = currentBlock
 	// add to the active list
 	added, err := v.leaderGroup.Add(id, validator)
@@ -260,7 +263,7 @@ func (v *validations) ActivateNext(
 	return &id, nil
 }
 
-func (v *validations) UpdateAutoRenew(endorsor thor.Address, id thor.Bytes32, autoRenew bool, blockNumber uint32) error {
+func (v *validations) UpdateAutoRenew(endorsor thor.Address, id thor.Bytes32, autoRenew bool) error {
 	validator, err := v.storage.GetValidator(id)
 	if err != nil {
 		return err
@@ -270,11 +273,46 @@ func (v *validations) UpdateAutoRenew(endorsor thor.Address, id thor.Bytes32, au
 	}
 	validator.AutoRenew = autoRenew
 	if !autoRenew {
-		validator.ExitTxBlock = blockNumber
-		validator.CooldownVET = big.NewInt(0).Add(validator.CooldownVET, validator.LockedVET)
+		validator.LockedOnePeriod = big.NewInt(0).Add(validator.LockedOnePeriod, validator.LockedVET)
 		validator.LockedVET = big.NewInt(0)
+
+		if validator.Status == StatusActive {
+			minBlock := validator.StartBlock + validator.Period*(validator.CompleteIterations+1)
+			exitBlock, err := v.SetExitBlock(id, minBlock)
+			if err != nil {
+				return err
+			}
+			validator.ExitBlock = &exitBlock
+		}
+	} else {
+		validator.LockedVET = big.NewInt(0).Add(validator.LockedVET, validator.LockedOnePeriod)
+		validator.LockedOnePeriod = big.NewInt(0)
+		validator.ExitBlock = nil
 	}
 	return v.storage.SetValidator(id, validator)
+}
+
+// SetExitBlock sets the exit block for a validator.
+// It ensures that the exit block is not already set for another validator.
+// A validator cannot consume several epochs at once.
+func (v *validations) SetExitBlock(id thor.Bytes32, minBlock uint32) (uint32, error) {
+	start := minBlock
+	for {
+		existing, err := v.storage.GetExitEpoch(start)
+		if err != nil {
+			return 0, err
+		}
+		if existing == id {
+			return start, nil
+		}
+		if existing.IsZero() {
+			if err := v.storage.SetExitEpoch(start, id); err != nil {
+				return 0, err
+			}
+			return start, nil
+		}
+		start += epochLength
+	}
 }
 
 func (v *validations) IncreaseStake(id thor.Bytes32, endorsor thor.Address, amount *big.Int) error {
@@ -288,7 +326,7 @@ func (v *validations) IncreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 	if entry.Endorsor != endorsor {
 		return errors.New("invalid endorser")
 	}
-	if entry.Status == StatusExit || entry.Status == StatusCooldown {
+	if entry.Status == StatusExit {
 		return errors.New("validator status is not queued or active")
 	}
 	if entry.Status == StatusActive && !entry.AutoRenew {
@@ -310,12 +348,7 @@ func (v *validations) IncreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 		return err
 	}
 
-	err = v.storage.SetValidator(id, entry)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return v.storage.SetValidator(id, entry)
 }
 
 func (v *validations) DecreaseStake(id thor.Bytes32, endorsor thor.Address, amount *big.Int) error {
@@ -329,7 +362,7 @@ func (v *validations) DecreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 	if entry.Endorsor != endorsor {
 		return errors.New("invalid endorser")
 	}
-	if entry.Status == StatusExit || entry.Status == StatusCooldown {
+	if entry.Status == StatusExit {
 		return errors.New("validator status is not queued or active")
 	}
 	if entry.Status == StatusActive && !entry.AutoRenew {
@@ -346,9 +379,8 @@ func (v *validations) DecreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 	}
 
 	if entry.Status == StatusActive {
-		entry.CooldownVET = entry.CooldownVET.Add(entry.CooldownVET, amount)
+		entry.LockedOnePeriod = entry.LockedOnePeriod.Add(entry.LockedOnePeriod, amount)
 		entry.LockedVET = entry.LockedVET.Sub(entry.LockedVET, amount)
-		aggregation.LockedWeight = big.NewInt(0).Sub(aggregation.LockedWeight, big.NewInt(0).Mul(amount, validatorWeightMultiplier))
 	}
 
 	if entry.Status == StatusQueued {
@@ -358,20 +390,16 @@ func (v *validations) DecreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 			return err
 		}
 	}
-	err = v.storage.SetValidator(id, entry)
-	if err != nil {
-		return err
-	}
 	err = v.storage.SetAggregation(id, aggregation)
 	if err != nil {
 		return err
 	}
 
-	return nil
+	return v.storage.SetValidator(id, entry)
 }
 
 // WithdrawStake allows expired validations to withdraw their stake.
-func (v *validations) WithdrawStake(endorsor thor.Address, id thor.Bytes32) (*big.Int, error) {
+func (v *validations) WithdrawStake(endorsor thor.Address, id thor.Bytes32, currentBlock uint32) (*big.Int, error) {
 	entry, err := v.storage.GetValidator(id)
 	if err != nil {
 		return nil, err
@@ -384,12 +412,16 @@ func (v *validations) WithdrawStake(endorsor thor.Address, id thor.Bytes32) (*bi
 	}
 	withdrawAmount := big.NewInt(0).Set(entry.WithdrawableVET)
 
-	if entry.Status == StatusExit || entry.Status == StatusQueued {
+	// validator has exited and waited for the cooldown period
+	if entry.ExitBlock != nil && *entry.ExitBlock+cooldownPeriod <= currentBlock {
+		withdrawAmount = withdrawAmount.Add(withdrawAmount, entry.CooldownVET)
+		entry.CooldownVET = big.NewInt(0)
+	}
+
+	if entry.Status == StatusQueued {
 		if err := v.storage.SetLookup(entry.Master, thor.Bytes32{}); err != nil {
 			return nil, err
 		}
-	}
-	if entry.Status == StatusQueued {
 		withdrawAmount = withdrawAmount.Add(withdrawAmount, entry.PendingLocked)
 		entry.PendingLocked = big.NewInt(0)
 		entry.Status = StatusExit
@@ -409,9 +441,8 @@ func (v *validations) WithdrawStake(endorsor thor.Address, id thor.Bytes32) (*bi
 	return withdrawAmount, nil
 }
 
-// ExitValidator sets a validations status to exited and removes it from the active list.
-// It will also decrease the total stake. Exited validations can then withdraw their stake.
-func (v *validations) ExitValidator(id thor.Bytes32, currentBlock uint32) error {
+// ExitValidator removes the validator from the active list and puts it in cooldown.
+func (v *validations) ExitValidator(id thor.Bytes32) error {
 	entry, err := v.storage.GetValidator(id)
 	if err != nil {
 		return err
@@ -419,34 +450,49 @@ func (v *validations) ExitValidator(id thor.Bytes32, currentBlock uint32) error 
 	if entry.IsEmpty() {
 		return nil
 	}
-	if entry.Status != StatusExit && *entry.Expiry > currentBlock {
-		return errors.New("validator cannot be removed")
-	}
-	validatorTVL := big.NewInt(0).Set(entry.LockedVET)
-	validatorWeight := entry.Weight
-
-	logger.Debug("removing validator", "master", entry.Master, "block", currentBlock)
-
+	// move locked to cooldown
 	entry.Status = StatusExit
+	entry.CooldownVET = big.NewInt(0).Add(entry.LockedOnePeriod, entry.LockedVET)
+	entry.LockedVET = big.NewInt(0)
+	entry.LockedOnePeriod = big.NewInt(0)
+	// unlock delegator's stakes and remove their weight
+	entry.CompleteIterations++
+
+	if entry.PendingLocked.Sign() == 1 {
+		entry.WithdrawableVET = big.NewInt(0).Add(entry.WithdrawableVET, entry.PendingLocked)
+		entry.PendingLocked = big.NewInt(0)
+	}
+
+	aggregation, err := v.storage.GetAggregation(id)
+	if err != nil {
+		return err
+	}
+	exitedTVL, queuedDecrease, exitedWeight, queuedWeightDecrease := aggregation.Exit()
+	if err := v.storage.SetAggregation(id, aggregation); err != nil {
+		return err
+	}
+	exitedTVL.Add(exitedTVL, entry.CooldownVET)
+	weight := big.NewInt(0).Sub(entry.Weight, exitedWeight)
 	entry.Weight = big.NewInt(0)
 
-	withdrawable := big.NewInt(0).Add(entry.CooldownVET, validatorTVL)
-	withdrawable = big.NewInt(0).Add(withdrawable, entry.PendingLocked)
-	withdrawable = withdrawable.Add(withdrawable, entry.WithdrawableVET)
+	if err := v.queuedWeight.Sub(queuedWeightDecrease); err != nil {
+		return err
+	}
+	if err := v.queuedVET.Sub(queuedDecrease); err != nil {
+		return err
+	}
+	if err := v.lockedVET.Sub(exitedTVL); err != nil {
+		return err
+	}
+	if err := v.storage.SetLookup(entry.Master, thor.Bytes32{}); err != nil {
+		return err
+	}
+	if _, err = v.leaderGroup.Remove(id, entry); err != nil {
+		return err
+	}
+	if err := v.lockedWeight.Sub(weight); err != nil {
+		return err
+	}
 
-	entry.WithdrawableVET = withdrawable
-	entry.CooldownVET = big.NewInt(0)
-	entry.LockedVET = big.NewInt(0)
-	entry.PendingLocked = big.NewInt(0)
-
-	if err = v.storage.SetValidator(id, entry); err != nil {
-		return err
-	}
-	if err = v.storage.SetLookup(entry.Master, thor.Bytes32{}); err != nil {
-		return err
-	}
-	if err = v.lockedVET.Sub(validatorTVL); err != nil {
-		return err
-	}
-	return v.lockedWeight.Sub(validatorWeight)
+	return nil
 }

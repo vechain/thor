@@ -114,7 +114,7 @@ func init() {
 			}
 			env.ParseArgs(&args)
 
-			stake, err := Staker.Native(env.State()).WithdrawStake(thor.Address(args.Endorsor), thor.Bytes32(args.ValidationID))
+			stake, err := Staker.Native(env.State()).WithdrawStake(thor.Address(args.Endorsor), thor.Bytes32(args.ValidationID), env.BlockContext().Number)
 			if err != nil {
 				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
 			}
@@ -148,7 +148,7 @@ func init() {
 			}
 			env.ParseArgs(&args)
 
-			err := Staker.Native(env.State()).UpdateAutoRenew(thor.Address(args.Endorsor), thor.Bytes32(args.ValidationID), args.AutoRenew, env.BlockContext().Number)
+			err := Staker.Native(env.State()).UpdateAutoRenew(thor.Address(args.Endorsor), thor.Bytes32(args.ValidationID), args.AutoRenew)
 			if err != nil {
 				return []any{fmt.Sprintf("revert: %v", err)}
 			}
