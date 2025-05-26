@@ -162,6 +162,10 @@ jobs:
       - deploy-public-nodes
     runs-on: ubuntu-latest
     name: Register Validators
+
+    env:
+      GOPRIVATE: github.com/vechain/draupnir/*
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -170,27 +174,18 @@ jobs:
           ref: release/hayabusa
           token: ${{ secrets.GHA_REPO_ACCESS }}
 
-      - name: Checkout private dependency
-        uses: actions/checkout@v4
-        with:
-          repository: vechain/draupnir
-          path: .draupnir
-          token: ${{ secrets.GHA_REPO_ACCESS }}
-
-      - name: Set up Go with local module
-        run: |
-          go mod edit -replace github.com/vechain/draupnir=./.draupnir
-          go mod tidy
-      
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
           go-version: '1.24'
-      
-      - name: Build register-validators tool
+
+      - name: Configure Git
         run: |
-          go build -o register-validators ./cmd/pos
-      
+          git config --global url."https://${{ secrets.GHA_REPO_ACCESS }}@github.com/".insteadOf "https://github.com/"
+
       - name: Register 2/3 of validators
-        run: |
-          NETWORK_URL=${{ vars.NETWORK_URL }} FORK_BLOCK=${{ vars.FORK_BLOCK }} VALIDATOR_PRIVATE_KEYS=${{ secrets.VALIDATOR_PRIVATE_KEYS }} ./register-validators
+        run: go run ./cmd/pos
+        env:
+            NETWORK_URL: ${{ vars.NETWORK_URL }}
+            FORK_BLOCK: ${{ vars.FORK_BLOCK }}
+            VALIDATOR_PRIVATE_KEYS: ${{ secrets.VALIDATOR_PRIVATE_KEYS }}

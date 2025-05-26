@@ -37,7 +37,7 @@ type Validation struct {
 	CooldownVET        *big.Int // the amount of VET that is locked into the validator's cooldown
 	WithdrawableVET    *big.Int // the amount of VET that is currently withdrawable
 
-	Weight *big.Int // LockedVET + CooldownVET + total weight from delegators
+	Weight *big.Int // LockedVET x2 + total weight from delegators
 
 	Next *thor.Bytes32 `rlp:"nil"` // double linked list
 	Prev *thor.Bytes32 `rlp:"nil"` // double linked list
