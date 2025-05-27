@@ -9,7 +9,7 @@ on:
 
 jobs:
   run-tests:
-    name: Run Tests
+    name: Run Solo e2e Tests
     runs-on: ubuntu-latest
     env:
       THOR_VERSION: ${{ inputs.thor_version }}
@@ -39,7 +39,7 @@ jobs:
       - name: Build Docker images
         run: docker compose build
             
-      - name: Run e2e tests (Solo)
+      - name: Run e2e tests
         run: npm run test:e2e:solo
 
   
