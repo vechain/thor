@@ -17,10 +17,30 @@ jobs:
       TEST_NETWORK: solo
       MODE: online
     steps:
+      - name: Set Rosetta repo reference
+        id: set-ref
+        run: |
+          # Default fallback branch
+          REF="master"
+      
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # For pull_request events, we only look at the PR's base branch
+            if [[ "${{ github.event.pull_request.base.ref }}" == release/* ]]; then
+              REF="${{ github.event.pull_request.base.ref }}"
+            fi
+          else
+            # For push events, we check the branch or tag that was pushed
+            if [[ "${{ github.ref_name }}" == release/* ]]; then
+              REF="${{ github.ref_name }}"
+            fi
+          fi
+      
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
       - name: Checkout
         uses: actions/checkout@v4
         with:
           repository: vechain/rosetta
+          ref: ${{ steps.set-ref.outputs.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
