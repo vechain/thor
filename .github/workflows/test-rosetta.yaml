@@ -1,0 +1,41 @@
+name: Rosetta Tests
+
+on:
+  workflow_call:
+
+jobs:
+  run-tests:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    env:
+      THOR_VERSION: ${{ github.sha }}
+      NETWORK: solo
+      TEST_NETWORK: solo
+      MODE: online
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          repository: vechain/rosetta
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+            
+      - name: Install dependencies
+        run: npm ci
+  
+      - name: Prepare volume dir
+        run: |
+          mkdir -p rosetta_data
+          chmod -R 777 rosetta_data
+
+      - name: Build Docker images
+        run: docker compose build
+            
+      - name: Run e2e tests
+        run: npm run test:e2e:solo
+
+  
