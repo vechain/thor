@@ -150,7 +150,7 @@ func (p *TxPool) housekeeping() {
 					}
 				}
 				metricTxPoolLegacyGauge().Set(totalLegacy)
-				metricTxPoolDynamicFeeGauge().Add(1)
+				metricTxPoolDynamicFeeGauge().Set(totalDynamic)
 				logger.Trace("wash done", ctx...)
 			}
 		}
