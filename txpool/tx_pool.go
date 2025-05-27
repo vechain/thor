@@ -149,7 +149,7 @@ func (p *TxPool) housekeeping() {
 					}
 				}
 
-				metricTxPoolGauge().AddWithLabel(0-int64(removedLegacy), map[string]string{"source": "washed", "total": "true", "type": "total"})
+				metricTxPoolGauge().AddWithLabel(0-int64(removedLegacy+removedDynamicFee), map[string]string{"source": "washed", "total": "true", "type": "total"})
 				if removedLegacy > 0 {
 					metricTxPoolGauge().AddWithLabel(0-int64(removedLegacy), map[string]string{"source": "washed", "total": "false", "type": "Legacy"})
 				}
