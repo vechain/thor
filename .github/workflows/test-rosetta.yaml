@@ -8,7 +8,7 @@ on:
         type: string
 
 jobs:
-  run-tests:
+  run-solo-tests:
     name: Run Solo e2e Tests
     runs-on: ubuntu-latest
     env:
@@ -36,6 +36,7 @@ jobs:
           fi
       
           echo "ref=$REF" >> "$GITHUB_OUTPUT"
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
