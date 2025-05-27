@@ -2,13 +2,17 @@ name: Rosetta Tests
 
 on:
   workflow_call:
+    inputs:
+      thor_version:
+        required: true
+        type: string
 
 jobs:
   run-tests:
     name: Run Tests
     runs-on: ubuntu-latest
     env:
-      THOR_VERSION: ${{ github.sha }}
+      THOR_VERSION: ${{ inputs.thor_version }}
       NETWORK: solo
       TEST_NETWORK: solo
       MODE: online
