@@ -46,12 +46,12 @@ func (w *Caller) ABI() *abi.ABI {
 }
 
 // Revision creates a new instance and sets the revision for the contract wrapper. Allows querying historical states.
-func (w *Caller) Revision(id string) *Caller {
+func (w *Caller) Revision(rev string) *Caller {
 	return &Caller{
 		client: w.client,
 		abi:    w.abi,
 		addr:   w.addr,
-		rev:    &id,
+		rev:    &rev,
 	}
 }
 
@@ -63,19 +63,18 @@ func (w *Caller) Attach(signer Signer) *Transactor {
 	}
 }
 
-// Call calls a method and returns the result as a CallResult.
+// Call a method and return the result as a CallResult.
 func (w *Caller) Call(methodName string, args ...any) (*accounts.CallResult, error) {
 	return w.Simulate(big.NewInt(0), thor.Address{}, methodName, args...)
 }
 
-// Simulate simulates a contract call with the specified VET value and caller address.
+// Simulate a contract call with the specified VET value and caller address.
 // It can be used to estimate gas or check the result of a call without sending a transaction.
 func (w *Caller) Simulate(vet *big.Int, caller thor.Address, methodName string, args ...any) (*accounts.CallResult, error) {
 	clause, err := w.ClauseWithVET(vet, methodName, args...)
 	if err != nil {
 		return nil, err
 	}
-	//var caller *thor.Address
 	body := &accounts.BatchCallData{
 		Caller: &caller,
 		Clauses: []accounts.Clause{
