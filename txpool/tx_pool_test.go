@@ -388,7 +388,7 @@ func TestWashTxs(t *testing.T) {
 	pool := newPool(1, LIMIT_PER_ACCOUNT, &thor.NoFork)
 	defer pool.Close()
 
-	txs, _, err := pool.wash(pool.repo.BestBlockSummary())
+	txs, _, _, err := pool.wash(pool.repo.BestBlockSummary())
 	assert.Nil(t, err)
 	assert.Zero(t, len(txs))
 	assert.Zero(t, len(pool.Executables()))
@@ -396,7 +396,7 @@ func TestWashTxs(t *testing.T) {
 	tx1 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
 	assert.Nil(t, pool.AddLocal(tx1)) // this tx won't participate in the wash out.
 
-	txs, _, err = pool.wash(pool.repo.BestBlockSummary())
+	txs, _, _, err = pool.wash(pool.repo.BestBlockSummary())
 	assert.Nil(t, err)
 	assert.Equal(t, Tx.Transactions{tx1}, txs)
 
@@ -412,7 +412,7 @@ func TestWashTxs(t *testing.T) {
 		Build()
 	pool.repo.AddBlock(b1, nil, 0, false)
 
-	txs, _, err = pool.wash(pool.repo.BestBlockSummary())
+	txs, _, _, err = pool.wash(pool.repo.BestBlockSummary())
 	assert.Nil(t, err)
 	assert.Equal(t, Tx.Transactions{tx1}, txs)
 
@@ -424,10 +424,10 @@ func TestWashTxs(t *testing.T) {
 	txObj3, _ := resolveTx(tx3, false)
 	assert.Nil(t, pool.all.Add(txObj3, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })) // this tx will participate in the wash out.
 
-	txs, removedCount, err := pool.wash(pool.repo.BestBlockSummary())
+	txs, removedLegacy, removedDynamicFee, err := pool.wash(pool.repo.BestBlockSummary())
 	assert.Nil(t, err)
 	assert.Equal(t, 2, len(txs))
-	assert.Equal(t, 1, removedCount)
+	assert.Equal(t, 1, removedLegacy+removedDynamicFee)
 }
 
 func TestOrderTxsAfterGalacticaFork(t *testing.T) {
@@ -471,9 +471,9 @@ func TestOrderTxsAfterGalacticaFork(t *testing.T) {
 		assert.Nil(t, pool.Add(tx))
 	}
 
-	execTxs, removed, err := pool.wash(pool.repo.BestBlockSummary())
+	execTxs, removedLegacy, removedDynamicFee, err := pool.wash(pool.repo.BestBlockSummary())
 	assert.Nil(t, err)
-	assert.Zero(t, removed)
+	assert.Zero(t, removedLegacy+removedDynamicFee)
 	assert.Equal(t, len(txs), len(execTxs))
 	assert.Equal(t, poolLimit-2, len(execTxs))
 	baseGasPrice, err := builtin.Params.Native(st).Get(thor.KeyLegacyTxBaseGasPrice)
@@ -509,9 +509,9 @@ func TestOrderTxsAfterGalacticaFork(t *testing.T) {
 	assert.Nil(t, pool.Add(firstTx))
 	assert.Nil(t, pool.Add(lastTx))
 
-	execTxs, removed, err = pool.wash(pool.repo.BestBlockSummary())
+	execTxs, removedLegacy, removedDynamicFee, err = pool.wash(pool.repo.BestBlockSummary())
 	assert.Nil(t, err)
-	assert.Zero(t, removed)
+	assert.Zero(t, removedLegacy+removedDynamicFee)
 	assert.Equal(t, poolLimit, len(execTxs))
 	assert.Equal(t, execTxs[0].ID(), firstTx.ID())
 	assert.Equal(t, execTxs[len(execTxs)-1].ID(), lastTx.ID())
@@ -558,9 +558,9 @@ func TestOrderTxsAfterGalacticaForkSameValues(t *testing.T) {
 		assert.Nil(t, pool.Add(tx))
 	}
 
-	execTxs, removed, err := pool.wash(pool.repo.BestBlockSummary())
+	execTxs, removedLegacy, removedDynamicFee, err := pool.wash(pool.repo.BestBlockSummary())
 	assert.Nil(t, err)
-	assert.Zero(t, removed)
+	assert.Zero(t, removedLegacy+removedDynamicFee)
 	assert.Equal(t, len(txs), len(execTxs))
 	assert.Equal(t, totalPoolTxs, len(execTxs))
 	baseGasPrice, err := builtin.Params.Native(st).Get(thor.KeyLegacyTxBaseGasPrice)
@@ -620,7 +620,7 @@ func TestFillPool(t *testing.T) {
 	assert.Equal(t, len(txs), pool.all.Len(), "Number of transactions in the pool should match the number added")
 
 	// Test executables after wash
-	executables, _, _ := pool.wash(pool.repo.BestBlockSummary())
+	executables, _, _, _ := pool.wash(pool.repo.BestBlockSummary())
 	pool.executables.Store(executables)
 	assert.Equal(t, len(txs), len(pool.Executables()), "Number of transactions in the pool should match the number added")
 }
@@ -681,7 +681,7 @@ func TestFillPoolWithMixedTxs(t *testing.T) {
 	assert.Equal(t, len(txs), pool.all.Len(), "Number of transactions in the pool should match the number added")
 
 	// Test executables after wash
-	executables, _, _ := pool.wash(pool.repo.BestBlockSummary())
+	executables, _, _, _ := pool.wash(pool.repo.BestBlockSummary())
 	pool.executables.Store(executables)
 	assert.Equal(t, len(txs), len(pool.Executables()), "Number of transactions in the pool should match the number added")
 }
@@ -873,7 +873,7 @@ func TestNonExecutables(t *testing.T) {
 		assert.NoError(t, pool.AddLocal(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i%len(devAccounts)])))
 	}
 
-	executables, _, _ := pool.wash(pool.repo.BestBlockSummary())
+	executables, _, _, _ := pool.wash(pool.repo.BestBlockSummary())
 	pool.executables.Store(executables)
 
 	// add 1 non-executable
@@ -888,23 +888,23 @@ func TestExpiredTxs(t *testing.T) {
 		assert.NoError(t, pool.Add(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i%len(devAccounts)])))
 	}
 
-	executables, _, _ := pool.wash(pool.repo.BestBlockSummary())
+	executables, _, _, _ := pool.wash(pool.repo.BestBlockSummary())
 	pool.executables.Store(executables)
 
 	// add 1 non-executable
 	assert.NoError(t, pool.Add(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(0), devAccounts[2])))
 
-	executables, washed, err := pool.wash(pool.repo.BestBlockSummary())
+	executables, washedLegacy, washedDynamicFee, err := pool.wash(pool.repo.BestBlockSummary())
 	assert.Nil(t, err)
 	assert.Equal(t, 90, len(executables))
-	assert.Equal(t, 0, washed)
+	assert.Equal(t, 0, washedLegacy+washedDynamicFee)
 	assert.Equal(t, 91, pool.all.Len())
 
 	time.Sleep(3 * time.Second)
-	executables, washed, err = pool.wash(pool.repo.BestBlockSummary())
+	executables, washedLegacy, washedDynamicFee, err = pool.wash(pool.repo.BestBlockSummary())
 	assert.Nil(t, err)
 	assert.Equal(t, 0, len(executables))
-	assert.Equal(t, 91, washed)
+	assert.Equal(t, 91, washedLegacy+washedDynamicFee)
 	assert.Equal(t, 0, pool.all.Len())
 }
 
