@@ -11,3 +11,5 @@ import (
 
 var metricTxPoolGauge = metrics.LazyLoadGaugeVec("txpool_current_tx_count", []string{"source", "total"})
 var metricTxPoolExecutablesGauge = metrics.LazyLoadGauge("txpool_executable_tx_count")
+var metricTxPoolLegacyGauge = metrics.LazyLoadGauge("txpool_legacy_tx_count")
+var metricTxPoolDynamicFeeGauge = metrics.LazyLoadGauge("txpool_dynamic_tx_count")
