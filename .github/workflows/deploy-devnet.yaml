@@ -1,12 +1,6 @@
 name: Destroy, Deploy & Swap
 
 on:
-  workflow_call:
-    inputs:
-      node_image:
-        type: string
-        required: true
-        description: 'The Docker image to use for the node.'
   workflow_dispatch:
 
 # Required for authentication through GitHub OIDC
