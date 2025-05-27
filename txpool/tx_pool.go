@@ -149,12 +149,11 @@ func (p *TxPool) housekeeping() {
 					}
 				}
 
-				metricTxPoolGauge().AddWithLabel(0-int64(removedLegacy+removedDynamicFee), map[string]string{"source": "washed", "total": "true", "type": "total"})
 				if removedLegacy > 0 {
-					metricTxPoolGauge().AddWithLabel(0-int64(removedLegacy), map[string]string{"source": "washed", "total": "false", "type": "Legacy"})
+					metricTxPoolGauge().AddWithLabel(0-int64(removedLegacy), map[string]string{"source": "washed", "type": "Legacy"})
 				}
 				if removedDynamicFee > 0 {
-					metricTxPoolGauge().AddWithLabel(0-int64(removedDynamicFee), map[string]string{"source": "washed", "total": "false", "type": "DynamicFee"})
+					metricTxPoolGauge().AddWithLabel(0-int64(removedDynamicFee), map[string]string{"source": "washed", "type": "DynamicFee"})
 				}
 				logger.Trace("wash done", ctx...)
 			}
@@ -331,8 +330,7 @@ func (p *TxPool) Add(newTx *tx.Transaction) error {
 	} else if newTx.Type() == tx.TypeDynamicFee {
 		txTypeString = "DynamicFee"
 	}
-	metricTxPoolGauge().AddWithLabel(1, map[string]string{"source": "remote", "total": "true", "type": "total"}) // total tag allows display the cumulative for this metric
-	metricTxPoolGauge().AddWithLabel(1, map[string]string{"source": "remote", "total": "false", "type": txTypeString})
+	metricTxPoolGauge().AddWithLabel(1, map[string]string{"source": "remote", "type": txTypeString})
 	return p.add(newTx, false, false)
 }
 
@@ -344,8 +342,7 @@ func (p *TxPool) AddLocal(newTx *tx.Transaction) error {
 	} else if newTx.Type() == tx.TypeDynamicFee {
 		txTypeString = "DynamicFee"
 	}
-	metricTxPoolGauge().AddWithLabel(1, map[string]string{"source": "local", "total": "true", "type": "total"})
-	metricTxPoolGauge().AddWithLabel(1, map[string]string{"source": "local", "total": "false", "type": txTypeString})
+	metricTxPoolGauge().AddWithLabel(1, map[string]string{"source": "local", "type": txTypeString})
 	return p.add(newTx, false, true)
 }
 
@@ -372,8 +369,7 @@ func (p *TxPool) Remove(txHash thor.Bytes32, txID thor.Bytes32) bool {
 		} else if removedTransaction.Type() == tx.TypeDynamicFee {
 			txTypeString = "DynamicFee"
 		}
-		metricTxPoolGauge().AddWithLabel(-1, map[string]string{"source": "n/a", "total": "true", "type": "total"})
-		metricTxPoolGauge().AddWithLabel(-1, map[string]string{"source": "n/a", "total": "false", "type": txTypeString})
+		metricTxPoolGauge().AddWithLabel(-1, map[string]string{"source": "n/a", "type": txTypeString})
 		logger.Debug("tx removed", "id", txID)
 		return true
 	}
