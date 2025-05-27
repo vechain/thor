@@ -39,7 +39,7 @@ jobs:
       - name: Build Docker images
         run: docker compose build
             
-      - name: Run e2e tests
+      - name: Run e2e tests (Solo)
         run: npm run test:e2e:solo
 
   
