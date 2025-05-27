@@ -10,6 +10,7 @@ import (
 )
 
 // Transactor is a generic contract wrapper to build and send transactions.
+// It also allows calling methods and filtering events since it embeds a Caller.
 type Transactor struct {
 	*Caller
 	signer Signer
