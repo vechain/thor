@@ -36,6 +36,12 @@ func (p *Params) Raw() *bind.Caller {
 	return p.contract
 }
 
+func (p *Params) Revision(blockID string) *Params {
+	return &Params{
+		contract: p.contract.Revision(blockID),
+	}
+}
+
 func (p *Params) Set(signer bind.Signer, key thor.Bytes32, value *big.Int) *bind.Sender {
 	return p.contract.Attach(signer).Sender("set", key, value)
 }

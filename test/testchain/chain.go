@@ -81,17 +81,24 @@ var DefaultForkConfig = thor.ForkConfig{
 
 // NewDefault is a wrapper function that creates a Chain for testing with the default fork config.
 func NewDefault() (*Chain, error) {
-	return NewIntegrationTestChain(genesis.DevConfig{ForkConfig: &DefaultForkConfig})
+	return NewIntegrationTestChain(genesis.DevConfig{ForkConfig: &DefaultForkConfig}, genesis.NewDevnet())
 }
 
 // NewWithFork is a wrapper function that creates a Chain for testing with custom forkConfig.
 func NewWithFork(forkConfig *thor.ForkConfig) (*Chain, error) {
-	return NewIntegrationTestChain(genesis.DevConfig{ForkConfig: forkConfig})
+	return NewIntegrationTestChain(genesis.DevConfig{ForkConfig: forkConfig}, genesis.NewDevnet())
+}
+
+// NewWithGenesis is a convenience function that creates a Chain for testing with a custom genesis.
+func NewWithGenesis(gene *genesis.Genesis, fc *thor.ForkConfig) (*Chain, error) {
+	return NewIntegrationTestChain(genesis.DevConfig{
+		ForkConfig: fc,
+	}, gene)
 }
 
 // NewIntegrationTestChain is a convenience function that creates a Chain for testing.
 // It uses an in-memory database, development network genesis, and a solo BFT engine.
-func NewIntegrationTestChain(config genesis.DevConfig) (*Chain, error) {
+func NewIntegrationTestChain(config genesis.DevConfig, gene *genesis.Genesis) (*Chain, error) {
 	// Initialize the database
 	db := muxdb.NewMem()
 
@@ -105,7 +112,6 @@ func NewIntegrationTestChain(config genesis.DevConfig) (*Chain, error) {
 	}
 
 	// Initialize the genesis and retrieve the genesis block
-	gene := genesis.NewDevnetWithConfig(config)
 	geneBlk, _, _, err := gene.Build(stater)
 	if err != nil {
 		return nil, err

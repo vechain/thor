@@ -20,14 +20,14 @@ type Prototype struct {
 	contract *bind.Caller
 }
 
-func NewPrototype(client *thorclient.Client) *Prototype {
+func NewPrototype(client *thorclient.Client) (*Prototype, error) {
 	contract, err := bind.NewCaller(client, builtin.Prototype.RawABI(), builtin.Prototype.Address)
 	if err != nil {
-		panic(fmt.Sprintf("failed to create prototype contract: %v", err))
+		return nil, fmt.Errorf("failed to create prototype contract: %w", err)
 	}
 	return &Prototype{
 		contract: contract,
-	}
+	}, nil
 }
 
 func (p *Prototype) Raw() *bind.Caller {
@@ -41,9 +41,9 @@ func (p *Prototype) Revision(id string) *Prototype {
 }
 
 // Master returns the master address for the given contract
-func (p *Prototype) Master(self thor.Address) (thor.Address, error) {
+func (p *Prototype) Master(contract thor.Address) (thor.Address, error) {
 	out := new(common.Address)
-	if err := p.contract.CallInto("master", &out, self); err != nil {
+	if err := p.contract.CallInto("master", &out, contract); err != nil {
 		return thor.Address{}, err
 	}
 	return thor.Address(*out), nil

@@ -414,7 +414,7 @@ func TestAdoptAfterGalacticaEffectivePriorityFee(t *testing.T) {
 		ForkConfig:      &thor.ForkConfig{GALACTICA: 1, HAYABUSA: math.MaxUint32},
 		KeyBaseGasPrice: new(big.Int).Add(big.NewInt(1), big.NewInt(thor.InitialBaseFee)),
 	}
-	chain, err := testchain.NewIntegrationTestChain(config)
+	chain, err := testchain.NewIntegrationTestChain(config, genesis.NewDevnet())
 	assert.NoError(t, err)
 
 	// Mint a block to activate Galactica fork

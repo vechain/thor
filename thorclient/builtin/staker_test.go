@@ -6,14 +6,10 @@
 package builtin
 
 import (
-	"context"
 	"math/big"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
-	"github.com/vechain/thor/v2/api/events"
-	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/test/datagen"
@@ -24,8 +20,7 @@ import (
 func TestStaker(t *testing.T) {
 	minStakingPeriod := uint32(360) * 24 * 7 // 360 days in seconds
 
-	chain, client, cancel := newChain(t)
-	t.Cleanup(cancel)
+	chain, client := newChain(t, false)
 
 	// builtins
 	staker, err := NewStaker(client)
@@ -254,25 +249,4 @@ func TestStaker(t *testing.T) {
 	delegation, err = staker.GetDelegation(delegationID)
 	require.NoError(t, err)
 	require.Equal(t, big.NewInt(0).Cmp(delegation.Stake), 0)
-}
-
-func txContext(t *testing.T) context.Context {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	t.Cleanup(cancel)
-	return ctx
-}
-
-func txOpts() *bind.Options {
-	gas := uint64(10_000_000)
-	return &bind.Options{
-		Gas: &gas,
-	}
-}
-
-func newRange(receipt *transactions.Receipt) *events.Range {
-	block64 := uint64(receipt.Meta.BlockNumber)
-	return &events.Range{
-		From: &block64,
-		To:   &block64,
-	}
 }

@@ -7,31 +7,17 @@ package builtin
 
 import (
 	"math/big"
-	"net/http/httptest"
-	"path/filepath"
-	"sync"
-	"sync/atomic"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/event"
 	"github.com/stretchr/testify/require"
-	"github.com/vechain/thor/v2/api"
-	"github.com/vechain/thor/v2/api/fees"
-	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
-	"github.com/vechain/thor/v2/test/testchain"
-	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
-	"github.com/vechain/thor/v2/tx"
-	"github.com/vechain/thor/v2/txpool"
 )
 
 func TestEnergy(t *testing.T) {
-	_, client, cancel := newChain(t)
-	t.Cleanup(cancel)
+	_, client := newChain(t, false)
 
 	energy, err := NewEnergy(client)
 	require.NoError(t, err)
@@ -125,132 +111,4 @@ func TestEnergy(t *testing.T) {
 		}
 		require.True(t, found, "Transfer event should be found in the logs")
 	})
-}
-
-// mockPool instantly mines a block when adding a transaction to the pool.
-type mockPool struct {
-	txs       tx.Transactions
-	validator genesis.DevAccount
-	chain     *testchain.Chain
-
-	mutex  sync.Mutex
-	scope  event.SubscriptionScope
-	txFeed event.Feed
-}
-
-var _ transactions.Pool = (*mockPool)(nil)
-
-func (m *mockPool) Get(txID thor.Bytes32) *tx.Transaction {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
-	for _, tx := range m.txs {
-		if tx.ID() == txID {
-			return tx
-		}
-	}
-	return nil
-}
-
-func (m *mockPool) AddLocal(trx *tx.Transaction) error {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
-	if m.txs == nil {
-		m.txs = make(tx.Transactions, 0)
-	}
-	m.txs = append(m.txs, trx)
-	executable := true
-	m.txFeed.Send(&txpool.TxEvent{
-		Tx:         trx,
-		Executable: &executable,
-	})
-	return m.chain.MintBlock(m.validator, trx)
-}
-
-func (m *mockPool) Dump() tx.Transactions {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
-	return m.txs
-}
-
-func (m *mockPool) Len() int {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
-	return len(m.txs)
-}
-
-func (m *mockPool) SubscribeTxEvent(ch chan *txpool.TxEvent) event.Subscription {
-	return m.scope.Track(m.txFeed.Subscribe(ch))
-}
-
-// newChain creates a node with the API enabled to test the smart contract wrappers
-func newChain(t *testing.T) (*testchain.Chain, *thorclient.Client, func()) {
-	chain, err := testchain.NewWithFork(&thor.SoloFork)
-	if err != nil {
-		t.Fatalf("failed to create test chain: %v", err)
-	}
-	if err := chain.MintBlock(genesis.DevAccounts()[0]); err != nil {
-		t.Fatalf("failed to mint genesis block: %v", err)
-	}
-
-	// this is a bug with logsdb, can't have multiple instances on in-mem databases
-	path := filepath.Join(t.TempDir(), "logs.db")
-	logs, err := logdb.New(path)
-	if err != nil {
-		t.Fatalf("failed to create logdb: %v", err)
-	}
-	chain = testchain.New(
-		chain.Database(),
-		chain.Genesis(),
-		chain.Engine(),
-		chain.Repo(),
-		chain.Stater(),
-		chain.GenesisBlock(),
-		logs,
-		chain.GetForkConfig(),
-	)
-
-	pool := &mockPool{
-		txs:       make(tx.Transactions, 0),
-		validator: genesis.DevAccounts()[0],
-		chain:     chain,
-	}
-
-	apiConfig := api.Config{
-		AllowedOrigins:    "*",
-		BacktraceLimit:    1000,
-		CallGasLimit:      40_000_000,
-		AllowCustomTracer: true,
-		EnableReqLogger:   &atomic.Bool{},
-		LogsLimit:         1000,
-		AllowedTracers:    []string{"all"},
-		SoloMode:          true,
-		EnableDeprecated:  true,
-		EnableTxpool:      true,
-		SkipLogs:          false,
-		Fees: fees.Config{
-			FixedCacheSize:             1000,
-			PriorityIncreasePercentage: 10,
-			APIBacktraceLimit:          1000,
-		},
-	}
-
-	handler, cancelSubs := api.New(
-		chain.Repo(),
-		chain.Stater(),
-		pool,
-		chain.LogDB(),
-		chain.Engine(),
-		nil,
-		chain.GetForkConfig(),
-		apiConfig,
-	)
-
-	ts := httptest.NewServer(handler)
-	client := thorclient.New(ts.URL)
-
-	return chain, client, cancelSubs
 }
