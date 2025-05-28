@@ -139,16 +139,6 @@ func (p *TxPool) housekeeping() {
 					metricTxPoolExecutablesGauge().Set(int64(len(executables)))
 				}
 
-				totalLegacy := int64(0)
-				totalDynamic := int64(0)
-				for _, tr := range p.all.ToTxs() {
-					if tr.Type() == tx.TypeLegacy {
-						totalLegacy += 1
-					} else if tr.Type() == tx.TypeDynamicFee {
-						totalDynamic += 1
-					}
-				}
-
 				if removedLegacy > 0 {
 					metricTxPoolGauge().AddWithLabel(0-int64(removedLegacy), map[string]string{"source": "washed", "type": "Legacy"})
 				}
@@ -324,7 +314,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 // Add adds a new tx into pool.
 // It's not assumed as an error if the tx to be added is already in the pool,
 func (p *TxPool) Add(newTx *tx.Transaction) error {
-	txTypeString := "Uknown"
+	txTypeString := "Unknown"
 	if newTx.Type() == tx.TypeLegacy {
 		txTypeString = "Legacy"
 	} else if newTx.Type() == tx.TypeDynamicFee {
@@ -336,7 +326,7 @@ func (p *TxPool) Add(newTx *tx.Transaction) error {
 
 // AddLocal adds new locally submitted tx into pool.
 func (p *TxPool) AddLocal(newTx *tx.Transaction) error {
-	txTypeString := "Uknown"
+	txTypeString := "Unknown"
 	if newTx.Type() == tx.TypeLegacy {
 		txTypeString = "Legacy"
 	} else if newTx.Type() == tx.TypeDynamicFee {
@@ -362,8 +352,11 @@ func (p *TxPool) StrictlyAdd(newTx *tx.Transaction) error {
 // Remove removes tx from pool by its Hash.
 func (p *TxPool) Remove(txHash thor.Bytes32, txID thor.Bytes32) bool {
 	removedTransaction := p.all.GetByID(txID)
+	if removedTransaction == nil {
+		return false
+	}
 	if p.all.RemoveByHash(txHash) {
-		txTypeString := "Uknown"
+		txTypeString := "Unknown"
 		if removedTransaction.Type() == tx.TypeLegacy {
 			txTypeString = "Legacy"
 		} else if removedTransaction.Type() == tx.TypeDynamicFee {
