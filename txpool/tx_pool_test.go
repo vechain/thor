@@ -692,7 +692,7 @@ func TestAdd(t *testing.T) {
 		ForkConfig: &thor.SoloFork,
 		LaunchTime: 1526400000,
 	}
-	tchain, err := testchain.NewIntegrationTestChain(config, genesis.NewDevnet())
+	tchain, err := testchain.NewIntegrationTestChain(config)
 	assert.Nil(t, err)
 	pool := New(tchain.Repo(), tchain.Stater(), Options{
 		Limit:           LIMIT,

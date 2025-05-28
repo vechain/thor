@@ -8,9 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vechain/thor/v2/api/transactions"
-
 	"github.com/hashicorp/golang-lru/simplelru"
+	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"

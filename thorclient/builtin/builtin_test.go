@@ -1,3 +1,8 @@
+// Copyright (c) 2025 The VeChainThor developers
+//
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
 package builtin
 
 import (
@@ -173,7 +178,7 @@ func newChain(t *testing.T, useExecutor bool) (*testchain.Chain, *thorclient.Cli
 	gene, err := genesis.NewCustomNet(&genConfig)
 	require.NoError(t, err, "failed to create genesis builder")
 
-	chain, err := testchain.NewWithGenesis(gene, &thor.SoloFork)
+	chain, err := testchain.NewIntegrationTestChainWithGenesis(gene, &thor.SoloFork)
 	if err != nil {
 		t.Fatalf("failed to create test chain: %v", err)
 	}
