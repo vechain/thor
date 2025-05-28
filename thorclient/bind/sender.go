@@ -37,6 +37,11 @@ type Options struct {
 	Nonce                *uint64
 }
 
+func (o *Options) Clone() *Options {
+	opts := *o
+	return &opts
+}
+
 func newSender(contract *Transactor, vet *big.Int, methodName string, args ...any) *Sender {
 	return &Sender{
 		contract:   contract,
@@ -62,6 +67,14 @@ func (s *Sender) Simulate() (*accounts.CallResult, error) {
 
 // Build and sign the transaction without sending it to the network.
 func (s *Sender) Build(opts *Options) (*tx.Transaction, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	previous := s.tx.Load()
+	if previous != nil {
+		return previous, nil
+	}
+
 	if opts == nil {
 		opts = &Options{}
 	}
@@ -140,14 +153,6 @@ func (s *Sender) Build(opts *Options) (*tx.Transaction, error) {
 
 // Send sends the transaction to the network. Does not wait for the receipt.
 func (s *Sender) Send(opts *Options) (*tx.Transaction, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	previous := s.tx.Load()
-	if previous != nil {
-		return previous, nil
-	}
-
 	transaction, err := s.Build(opts)
 	if err != nil {
 		return nil, err
@@ -170,23 +175,16 @@ func (s *Sender) Receipt(ctx context.Context, opts *Options) (*transactions.Rece
 	}
 
 	id := transaction.ID()
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return nil, nil, fmt.Errorf("context cancelled while waiting for receipt (method: %s, transaction ID: %s)", s.methodName, id.String())
-		case <-ticker.C:
+		default:
 			receipt, err := s.contract.client.TransactionReceipt(&id)
-			if err != nil {
+			if err != nil || receipt == nil {
+				time.Sleep(1 * time.Second) // wait before retrying
 				continue
-			}
-			if receipt == nil {
-				continue
-			}
-			if receipt.Reverted {
-				return receipt, transaction, errors.Join(errors.New("transaction reverted"), s.errorContext())
 			}
 			return receipt, transaction, nil
 		}
@@ -246,7 +244,7 @@ func (s *Senders) Send(ctx context.Context, opts *Options) ([]*transactions.Rece
 		wg.Add(1)
 		go func(i int, sender *Sender) {
 			defer wg.Done()
-			receipt, trx, err := sender.Receipt(ctx, opts)
+			receipt, trx, err := sender.Receipt(ctx, opts.Clone())
 			if err != nil {
 				errs[i] = err
 				return
