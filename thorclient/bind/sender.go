@@ -90,7 +90,7 @@ func (s *Sender) Build(opts *Options) (*tx.Transaction, error) {
 		}
 		simulation, err := s.Simulate()
 		if err != nil {
-			return nil, errors.Join(err, s.errorContext())
+			return nil, errors.Join(errors.New("simulation failed"), err, s.errorContext())
 		}
 		gas += simulation.GasUsed
 		opts.Gas = &gas
@@ -176,7 +176,7 @@ func (s *Sender) Receipt(ctx context.Context, opts *Options) (*transactions.Rece
 	for {
 		select {
 		case <-ctx.Done():
-			return nil, nil, errors.New("context cancelled while waiting for receipt")
+			return nil, nil, errors.New(fmt.Sprintf("context cancelled while waiting for receipt (method: %s, transaction ID: %s)", s.methodName, id.String()))
 		case <-ticker.C:
 			receipt, err := s.contract.client.TransactionReceipt(&id)
 			if err != nil {

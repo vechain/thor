@@ -81,7 +81,7 @@ func (w *Caller) Simulate(vet *big.Int, caller thor.Address, methodName string, 
 			{
 				To:    &w.addr,
 				Data:  hexutil.Encode(clause.Data()),
-				Value: (*math.HexOrDecimal256)(big.NewInt(0)),
+				Value: (*math.HexOrDecimal256)(clause.Value()),
 			},
 		},
 	}

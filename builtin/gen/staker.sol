@@ -73,6 +73,7 @@ contract Staker {
         uint32 period,
         bool autoRenew
     ) public payable {
+        require(msg.value > 0, "value is empty");
         (bytes32 id, string memory error) = StakerNative(address(this))
             .native_addValidator(
                 msg.sender,

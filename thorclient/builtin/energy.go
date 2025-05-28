@@ -1,4 +1,4 @@
-package bind
+package builtin
 
 import (
 	_ "embed"
@@ -11,23 +11,28 @@ import (
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
+	"github.com/vechain/thor/v2/thorclient/bind"
 )
 
 // Energy is a type-safe smart contract wrapper of VTHO.
 type Energy struct {
-	caller *Caller
+	caller *bind.Caller
 	client *thorclient.Client
 }
 
-func NewEnergy(client *thorclient.Client) *Energy {
-	caller, err := NewCaller(client, builtin.Energy.RawABI(), builtin.Energy.Address)
+func NewEnergy(client *thorclient.Client) (*Energy, error) {
+	caller, err := bind.NewCaller(client, builtin.Energy.RawABI(), builtin.Energy.Address)
 	if err != nil {
 		panic(err)
 	}
 	return &Energy{
 		caller: caller,
 		client: client,
-	}
+	}, nil
+}
+
+func (e *Energy) Raw() *bind.Caller {
+	return e.caller
 }
 
 func (e *Energy) Revision(blockID string) *Energy {
@@ -101,22 +106,22 @@ func (e *Energy) Allowance(owner, spender thor.Address) (*big.Int, error) {
 }
 
 // Transfer transfers tokens to the specified address
-func (e *Energy) Transfer(signer Signer, to thor.Address, amount *big.Int) *Sender {
+func (e *Energy) Transfer(signer bind.Signer, to thor.Address, amount *big.Int) *bind.Sender {
 	return e.caller.Attach(signer).Sender("transfer", to, amount)
 }
 
 // TransferFrom transfers tokens from one address to another
-func (e *Energy) TransferFrom(signer Signer, from, to thor.Address, amount *big.Int) *Sender {
+func (e *Energy) TransferFrom(signer bind.Signer, from, to thor.Address, amount *big.Int) *bind.Sender {
 	return e.caller.Attach(signer).Sender("transferFrom", from, to, amount)
 }
 
 // Approve approves the spender to spend the specified amount of tokens
-func (e *Energy) Approve(signer Signer, spender thor.Address, amount *big.Int) *Sender {
+func (e *Energy) Approve(signer bind.Signer, spender thor.Address, amount *big.Int) *bind.Sender {
 	return e.caller.Attach(signer).Sender("approve", spender, amount)
 }
 
 // Move transfers tokens from one address to another (alias for transferFrom)
-func (e *Energy) Move(signer Signer, from, to thor.Address, amount *big.Int) *Sender {
+func (e *Energy) Move(signer bind.Signer, from, to thor.Address, amount *big.Int) *bind.Sender {
 	return e.caller.Attach(signer).Sender("move", from, to, amount)
 }
 
@@ -125,6 +130,7 @@ type TransferEvent struct {
 	From  thor.Address
 	To    thor.Address
 	Value *big.Int
+	Log   events.FilteredEvent
 }
 
 // FilterTransfer filters Transfer events for the specified range and options.
@@ -161,6 +167,7 @@ func (e *Energy) FilterTransfer(eventsRange *events.Range, opts *events.Options,
 			From:  fromAddr,
 			To:    toAddr,
 			Value: *(data[0].(**big.Int)),
+			Log:   log,
 		}
 	}
 
@@ -172,6 +179,7 @@ type ApprovalEvent struct {
 	Owner   thor.Address
 	Spender thor.Address
 	Value   *big.Int
+	Log     events.FilteredEvent
 }
 
 // FilterApproval filters Approval events for the specified range and options.
@@ -208,6 +216,7 @@ func (e *Energy) FilterApproval(eventsRange *events.Range, opts *events.Options,
 			Owner:   ownerAddr,
 			Spender: spenderAddr,
 			Value:   *(data[0].(**big.Int)),
+			Log:     log,
 		}
 	}
 

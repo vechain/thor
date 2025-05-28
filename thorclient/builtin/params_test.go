@@ -1,0 +1,45 @@
+package builtin
+
+import (
+	"context"
+	"math/big"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient/bind"
+)
+
+func TestParams(t *testing.T) {
+	executor := (*bind.PrivateKeySigner)(genesis.DevAccounts()[0].PrivateKey)
+
+	params, err := NewParams(client)
+	require.NoError(t, err)
+
+	t.Run("Get", func(t *testing.T) {
+		mbp, err := params.Get(thor.KeyExecutorAddress)
+		require.NoError(t, err)
+		addr := thor.BytesToAddress(mbp.Bytes())
+		require.Equal(t, genesis.DevAccounts()[0].Address, addr)
+	})
+
+	t.Run("Set", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		receipt, _, err := params.Set(executor, thor.KeyMaxBlockProposers, big.NewInt(2)).Receipt(ctx, &bind.Options{})
+		require.NoError(t, err)
+		require.False(t, receipt.Reverted)
+
+		mbp, err := params.Get(thor.KeyMaxBlockProposers)
+		require.NoError(t, err)
+		require.Equal(t, big.NewInt(2), mbp)
+
+		events, err := params.FilterSet(nil, nil, logdb.ASC)
+		require.NoError(t, err)
+		require.Len(t, events, 1)
+	})
+}

@@ -28,4 +28,3 @@ func (p *PrivateKeySigner) SignTransaction(trx *tx.Transaction) (*tx.Transaction
 	}
 	return signedTx, nil
 }
-
