@@ -188,11 +188,11 @@ func newChain(t *testing.T, useExecutor bool) (*testchain.Chain, *thorclient.Cli
 	if err != nil {
 		t.Fatalf("failed to create logdb: %v", err)
 	}
-	defer func() {
+	t.Cleanup(func() {
 		if err := logs.Close(); err != nil {
 			t.Fatalf("failed to close logdb: %v", err)
 		}
-	}()
+	})
 
 	chain = testchain.New(
 		chain.Database(),
