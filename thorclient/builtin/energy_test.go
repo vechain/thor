@@ -1,7 +1,6 @@
 package builtin
 
 import (
-	"log/slog"
 	"math/big"
 	"net/http/httptest"
 	"path/filepath"
@@ -72,9 +71,7 @@ func TestEnergy(t *testing.T) {
 		acc1 := (*bind.PrivateKeySigner)(genesis.DevAccounts()[1].PrivateKey)
 		acc2 := (*bind.PrivateKeySigner)(genesis.DevAccounts()[2].PrivateKey)
 		acc3 := (*bind.PrivateKeySigner)(genesis.DevAccounts()[3].PrivateKey)
-
-		slog.Info("Testing Approve, Approval, and TransferFrom", "acc1", acc1.Address(), "acc2", acc2.Address(), "acc3", acc3.Address())
-
+		
 		allowanceAmount := big.NewInt(1000)
 
 		receipt, _, err := energy.Approve(acc1, acc2.Address(), allowanceAmount).Receipt(txContext(t), txOpts())

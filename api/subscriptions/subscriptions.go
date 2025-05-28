@@ -11,11 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vechain/thor/v2/api/transactions"
-
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
