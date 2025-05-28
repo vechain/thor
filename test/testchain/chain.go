@@ -155,6 +155,11 @@ func (c *Chain) GenesisBlock() *block.Block {
 	return c.genesisBlock
 }
 
+// Genesis returns the genesis information of the chain, which includes the initial state and configuration of the blockchain.
+func (c *Chain) Genesis() *genesis.Genesis {
+	return c.genesis
+}
+
 // MintTransactions creates a block with the provided transactions and adds it to the blockchain.
 // It wraps the transactions with receipts and passes them to MintTransactionsWithReceiptFunc.
 func (c *Chain) MintTransactions(account genesis.DevAccount, transactions ...*tx.Transaction) error {

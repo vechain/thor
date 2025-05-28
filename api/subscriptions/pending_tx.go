@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vechain/thor/v2/api/transactions"
+
 	"github.com/hashicorp/golang-lru/simplelru"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -15,12 +17,12 @@ import (
 )
 
 type pendingTx struct {
-	txPool    *txpool.TxPool
+	txPool    transactions.Pool
 	listeners map[chan *tx.Transaction]struct{}
 	mu        sync.Mutex
 }
 
-func newPendingTx(txPool *txpool.TxPool) *pendingTx {
+func newPendingTx(txPool transactions.Pool) *pendingTx {
 	p := &pendingTx{
 		txPool:    txPool,
 		listeners: make(map[chan *tx.Transaction]struct{}),

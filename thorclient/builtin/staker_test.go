@@ -2,13 +2,13 @@ package builtin
 
 import (
 	"context"
-	"github.com/vechain/thor/v2/api/transactions"
 	"math/big"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/events"
+	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/test/datagen"
@@ -19,6 +19,9 @@ import (
 func TestStaker(t *testing.T) {
 	minStakingPeriod := uint32(360) * 24 * 7 // 360 days in seconds
 
+	chain, client, cancel := newChain(t)
+	t.Cleanup(cancel)
+
 	// builtins
 	staker, err := NewStaker(client)
 	require.NoError(t, err)
@@ -26,25 +29,6 @@ func TestStaker(t *testing.T) {
 	require.NoError(t, err)
 	params, err := NewParams(client)
 	require.NoError(t, err)
-
-	gas := uint64(1_000_000)
-	txOpts := &bind.Options{
-		Gas: &gas,
-	}
-
-	// helper functions
-	txContext := func() context.Context {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		t.Cleanup(cancel)
-		return ctx
-	}
-	newRange := func(receipt *transactions.Receipt) *events.Range {
-		block64 := uint64(receipt.Meta.BlockNumber)
-		return &events.Range{
-			From: &block64,
-			To:   &block64,
-		}
-	}
 
 	// set authorities - required for initial staker setup
 	authorityTxs := &bind.Senders{}
@@ -54,15 +38,15 @@ func TestStaker(t *testing.T) {
 		sender := authority.Add(executor, acc.Address, acc.Address, datagen.RandomHash())
 		authorityTxs.Add(sender)
 	}
-	if _, _, err := authorityTxs.Send(txContext(), txOpts); err != nil {
+	if _, _, err := authorityTxs.Send(txContext(t), txOpts()); err != nil {
 		t.Fatal(err)
 	}
 	// set max block proposers
-	if _, _, err := params.Set(executor, thor.KeyMaxBlockProposers, big.NewInt(3)).Receipt(txContext(), txOpts); err != nil {
+	if _, _, err := params.Set(executor, thor.KeyMaxBlockProposers, big.NewInt(3)).Receipt(txContext(t), txOpts()); err != nil {
 		t.Fatal(err)
 	}
 	// set stargate address
-	if _, _, err := params.Set(executor, thor.KeyStargateContractAddress, new(big.Int).SetBytes(stargate.Address().Bytes())).Receipt(txContext(), txOpts); err != nil {
+	if _, _, err := params.Set(executor, thor.KeyStargateContractAddress, new(big.Int).SetBytes(stargate.Address().Bytes())).Receipt(txContext(t), txOpts()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -74,7 +58,7 @@ func TestStaker(t *testing.T) {
 		sender := staker.AddValidator(signer, acc.Address, minStake, minStakingPeriod, true)
 		validatorTxs.Add(sender)
 	}
-	if _, _, err := validatorTxs.Send(txContext(), txOpts); err != nil {
+	if _, _, err := validatorTxs.Send(txContext(t), txOpts()); err != nil {
 		t.Fatal(err)
 	}
 	if err := chain.MintBlock(genesis.DevAccounts()[0]); err != nil {
@@ -127,7 +111,7 @@ func TestStaker(t *testing.T) {
 	)
 
 	// AddValidator
-	receipt, _, err := staker.AddValidator(validatorKey, validator.Address, minStake, minStakingPeriod, false).Receipt(txContext(), txOpts)
+	receipt, _, err := staker.AddValidator(validatorKey, validator.Address, minStake, minStakingPeriod, false).Receipt(txContext(t), txOpts())
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
@@ -157,7 +141,7 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, big.NewInt(0).Mul(stake, big.NewInt(2)), queuedWeight)
 
 	// IncreaseStake
-	receipt, _, err = staker.IncreaseStake(validatorKey, queuedID, minStake).Receipt(txContext(), txOpts)
+	receipt, _, err = staker.IncreaseStake(validatorKey, queuedID, minStake).Receipt(txContext(t), txOpts())
 	require.NoError(t, err)
 
 	increaseEvents, err := staker.FilterStakeIncreased(newRange(receipt), nil, logdb.ASC)
@@ -168,7 +152,7 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, minStake, increaseEvents[0].Added)
 
 	// DecreaseStake
-	receipt, _, err = staker.DecreaseStake(validatorKey, queuedID, minStake).Receipt(txContext(), txOpts)
+	receipt, _, err = staker.DecreaseStake(validatorKey, queuedID, minStake).Receipt(txContext(t), txOpts())
 	require.NoError(t, err)
 
 	decreaseEvents, err := staker.FilterStakeDecreased(newRange(receipt), nil, logdb.ASC)
@@ -179,7 +163,7 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, minStake, decreaseEvents[0].Removed)
 
 	// UpdateAutoRenew - Disable AutoRenew
-	receipt, _, err = staker.UpdateAutoRenew(validatorKey, queuedID, true).Receipt(txContext(), txOpts)
+	receipt, _, err = staker.UpdateAutoRenew(validatorKey, queuedID, true).Receipt(txContext(t), txOpts())
 	require.NoError(t, err)
 
 	autoRenewEvents, err := staker.FilterValidatorUpdatedAutoRenew(newRange(receipt), nil, logdb.ASC)
@@ -194,7 +178,7 @@ func TestStaker(t *testing.T) {
 	require.True(t, getRes.AutoRenew)
 
 	// UpdateAutoRenew - Enable AutoRenew
-	receipt, _, err = staker.UpdateAutoRenew(validatorKey, queuedID, false).Receipt(txContext(), txOpts)
+	receipt, _, err = staker.UpdateAutoRenew(validatorKey, queuedID, false).Receipt(txContext(t), txOpts())
 	require.NoError(t, err)
 
 	autoRenewEvents, err = staker.FilterValidatorUpdatedAutoRenew(newRange(receipt), nil, logdb.ASC)
@@ -204,17 +188,17 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, false, autoRenewEvents[0].AutoRenew)
 
 	// AddDelegation
-	receipt, _, err = staker.AddDelegation(stargate, queuedID, minStake, false, 100).Receipt(txContext(), txOpts)
+	receipt, _, err = staker.AddDelegation(stargate, queuedID, minStake, false, 100).Receipt(txContext(t), txOpts())
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
 	delegationEvents, err := staker.FilterDelegationAdded(newRange(receipt), nil, logdb.ASC)
 	require.NoError(t, err)
 	require.Len(t, delegationEvents, 1)
-	delegationId := delegationEvents[0].DelegationID
+	delegationID := delegationEvents[0].DelegationID
 
 	// GetDelegation
-	delegation, err := staker.GetDelegation(delegationId)
+	delegation, err := staker.GetDelegation(delegationID)
 	require.NoError(t, err)
 	require.Equal(t, minStake, delegation.Stake)
 	require.Equal(t, uint8(100), delegation.Multiplier)
@@ -222,7 +206,7 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, queuedID, delegation.ValidationID)
 
 	// UpdateDelegationAutoRenew - Enable AutoRenew
-	receipt, _, err = staker.UpdateDelegationAutoRenew(stargate, delegationId, true).Receipt(txContext(), txOpts)
+	receipt, _, err = staker.UpdateDelegationAutoRenew(stargate, delegationID, true).Receipt(txContext(t), txOpts())
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
@@ -231,7 +215,7 @@ func TestStaker(t *testing.T) {
 	require.Len(t, delegatorAutoRenewEvents, 1)
 
 	// UpdateDelegationAutoRenew - Disable AutoRenew
-	receipt, _, err = staker.UpdateDelegationAutoRenew(stargate, delegationId, false).Receipt(txContext(), txOpts)
+	receipt, _, err = staker.UpdateDelegationAutoRenew(stargate, delegationID, false).Receipt(txContext(t), txOpts())
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
@@ -240,7 +224,7 @@ func TestStaker(t *testing.T) {
 	require.Len(t, delegatorAutoRenewEvents, 1)
 
 	// Withdraw
-	receipt, _, err = staker.Withdraw(validatorKey, queuedID).Receipt(txContext(), txOpts)
+	receipt, _, err = staker.Withdraw(validatorKey, queuedID).Receipt(txContext(t), txOpts())
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
@@ -253,7 +237,7 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, StakerStatusExited, getRes.Status)
 
 	// WithdrawDelegation
-	receipt, _, err = staker.WithdrawDelegation(stargate, delegationId).Receipt(txContext(), txOpts)
+	receipt, _, err = staker.WithdrawDelegation(stargate, delegationID).Receipt(txContext(t), txOpts())
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
@@ -262,7 +246,28 @@ func TestStaker(t *testing.T) {
 	require.Len(t, withdrawDelegationEvents, 1)
 
 	// GetDelegation after withdrawal
-	delegation, err = staker.GetDelegation(delegationId)
+	delegation, err = staker.GetDelegation(delegationID)
 	require.NoError(t, err)
 	require.Equal(t, big.NewInt(0).Cmp(delegation.Stake), 0)
+}
+
+func txContext(t *testing.T) context.Context {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(cancel)
+	return ctx
+}
+
+func txOpts() *bind.Options {
+	gas := uint64(10_000_000)
+	return &bind.Options{
+		Gas: &gas,
+	}
+}
+
+func newRange(receipt *transactions.Receipt) *events.Range {
+	block64 := uint64(receipt.Meta.BlockNumber)
+	return &events.Range{
+		From: &block64,
+		To:   &block64,
+	}
 }

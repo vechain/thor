@@ -16,6 +16,9 @@ import (
 func TestParams(t *testing.T) {
 	executor := (*bind.PrivateKeySigner)(genesis.DevAccounts()[0].PrivateKey)
 
+	_, client, cancel := newChain(t)
+	t.Cleanup(cancel)
+
 	params, err := NewParams(client)
 	require.NoError(t, err)
 
@@ -38,7 +41,7 @@ func TestParams(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, big.NewInt(2), mbp)
 
-		events, err := params.FilterSet(nil, nil, logdb.ASC)
+		events, err := params.FilterSet(newRange(receipt), nil, logdb.ASC)
 		require.NoError(t, err)
 		require.Len(t, events, 1)
 	})

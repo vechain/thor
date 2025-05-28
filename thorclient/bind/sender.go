@@ -170,13 +170,13 @@ func (s *Sender) Receipt(ctx context.Context, opts *Options) (*transactions.Rece
 	}
 
 	id := transaction.ID()
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
-			return nil, nil, errors.New(fmt.Sprintf("context cancelled while waiting for receipt (method: %s, transaction ID: %s)", s.methodName, id.String()))
+			return nil, nil, fmt.Errorf("context cancelled while waiting for receipt (method: %s, transaction ID: %s)", s.methodName, id.String())
 		case <-ticker.C:
 			receipt, err := s.contract.client.TransactionReceipt(&id)
 			if err != nil {

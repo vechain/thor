@@ -1,9 +1,7 @@
 package builtin
 
 import (
-	"context"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,17 +14,17 @@ import (
 func TestAuthority(t *testing.T) {
 	executor := (*bind.PrivateKeySigner)(genesis.DevAccounts()[0].PrivateKey)
 
+	_, client, cancel := newChain(t)
+	t.Cleanup(cancel)
+
 	authority, err := NewAuthority(client)
 	require.NoError(t, err)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 
 	// Add a new authority for the test
 	acc2 := genesis.DevAccounts()[1]
 	identity := datagen.RandomHash()
 
-	receipt, _, err := authority.Add(executor, acc2.Address, acc2.Address, identity).Receipt(ctx, &bind.Options{})
+	receipt, _, err := authority.Add(executor, acc2.Address, acc2.Address, identity).Receipt(txContext(t), txOpts())
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
@@ -60,7 +58,7 @@ func TestAuthority(t *testing.T) {
 	})
 
 	t.Run("Revoke", func(t *testing.T) {
-		receipt, _, err = authority.Revoke(executor, acc2.Address).Receipt(ctx, &bind.Options{})
+		receipt, _, err = authority.Revoke(executor, acc2.Address).Receipt(txContext(t), txOpts())
 		require.NoError(t, err)
 		require.False(t, receipt.Reverted)
 

@@ -27,7 +27,7 @@ const (
 )
 
 func MinStake() *big.Int {
-	eth := big.NewInt(1e18) // 1 ETH
+	eth := big.NewInt(1e18)                        // 1 ETH
 	return new(big.Int).Mul(eth, big.NewInt(25e6)) // 25 million VET
 }
 

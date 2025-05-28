@@ -7,6 +7,8 @@ THOR_VERSION = $(shell cat cmd/thor/VERSION)
 DISCO_VERSION = $(shell cat cmd/disco/VERSION)
 
 PACKAGES = `go list ./... | grep -v '/vendor/'`
+# SAME AS PACKAGES, but excluding the ./thorclient/builtin
+COVERAGE_PACKAGES = `go list ./... | grep -v '/vendor/' | grep -v '/thorclient/builtin/'`
 FUZZTIME=1m
 
 REQUIRED_GO_MAJOR = 1
@@ -72,7 +74,7 @@ fuzz:| go_version_check #@ Run the fuzz tests
 	@go test -fuzz=FuzzBlockDecoding -fuzztime=$(FUZZTIME) $(CURDIR)/block
 
 test-coverage:| go_version_check #@ Run the tests with coverage
-	@go test -race -coverprofile=coverage.out -covermode=atomic $(PACKAGES)
+	@go test -race -coverprofile=coverage.out -covermode=atomic $(COVERAGE_PACKAGES)
 	@go tool cover -html=coverage.out
 
 lint_command_check:
