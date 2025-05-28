@@ -71,7 +71,7 @@ func TestEnergy(t *testing.T) {
 		acc1 := (*bind.PrivateKeySigner)(genesis.DevAccounts()[1].PrivateKey)
 		acc2 := (*bind.PrivateKeySigner)(genesis.DevAccounts()[2].PrivateKey)
 		acc3 := (*bind.PrivateKeySigner)(genesis.DevAccounts()[3].PrivateKey)
-		
+
 		allowanceAmount := big.NewInt(1000)
 
 		receipt, _, err := energy.Approve(acc1, acc2.Address(), allowanceAmount).Receipt(txContext(t), txOpts())
