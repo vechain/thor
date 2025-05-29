@@ -1641,7 +1641,7 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.Equal(t, staker.StatusQueued, *getRes[4].(*uint8))
 	assert.Equal(t, true, *getRes[5].(*bool)) // isMaster
 	assert.Equal(t, uint32(360*24*15), *getRes[7].(*uint32))
-	assert.Equal(t, uint32(0), *getRes[8].(*uint32)) // completed periods
+	assert.Equal(t, uint32(0), *getRes[8].(*uint32))              // start period
 	assert.Equal(t, uint32(math.MaxUint32), *getRes[9].(*uint32)) // total periods
 
 	//firstQueued

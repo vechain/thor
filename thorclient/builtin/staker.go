@@ -138,14 +138,14 @@ func (s *Staker) LookupMaster(master thor.Address) (*Validator, thor.Bytes32, er
 }
 
 type Validator struct {
-	Master    *thor.Address
-	Endorsor  *thor.Address
-	Stake     *big.Int
-	Weight    *big.Int
-	Status    StakerStatus
-	AutoRenew bool
-	Online    bool
-	Period    uint32
+	Master     *thor.Address
+	Endorsor   *thor.Address
+	Stake      *big.Int
+	Weight     *big.Int
+	Status     StakerStatus
+	AutoRenew  bool
+	Online     bool
+	Period     uint32
 	StartBlock uint32
 	ExitBlock  uint32
 }
@@ -170,14 +170,14 @@ func (s *Staker) Get(id thor.Bytes32) (*Validator, error) {
 		return nil, err
 	}
 	validator := &Validator{
-		Master:    (*thor.Address)(out[0].(*common.Address)),
-		Endorsor:  (*thor.Address)(out[1].(*common.Address)),
-		Stake:     *(out[2].(**big.Int)),
-		Weight:    *(out[3].(**big.Int)),
-		Status:    StakerStatus(*(out[4].(*uint8))),
-		AutoRenew: *(out[5].(*bool)),
-		Online:    *(out[6].(*bool)),
-		Period:    *(out[7].(*uint32)),
+		Master:     (*thor.Address)(out[0].(*common.Address)),
+		Endorsor:   (*thor.Address)(out[1].(*common.Address)),
+		Stake:      *(out[2].(**big.Int)),
+		Weight:     *(out[3].(**big.Int)),
+		Status:     StakerStatus(*(out[4].(*uint8))),
+		AutoRenew:  *(out[5].(*bool)),
+		Online:     *(out[6].(*bool)),
+		Period:     *(out[7].(*uint32)),
 		StartBlock: *(out[8].(*uint32)),
 		ExitBlock:  *(out[9].(*uint32)),
 	}
