@@ -85,7 +85,7 @@ func (s *Sender) Build(opts *TxOptions) (*tx.Transaction, error) {
 		opts = &TxOptions{}
 	}
 
-	clause, err := s.contract.ClauseWithVET(s.vet, s.methodName, s.args...)
+	clause, err := s.Clause()
 	if err != nil {
 		return nil, err
 	}

@@ -42,7 +42,7 @@ jobs:
           retention-days: 7
 
   run-tests:
-    runs-on: 8-core-10-jobs
+    runs-on: ubuntu-latest
     needs: build-docker-image
     env:
       THOR_IMAGE: vechain/thor:${{ github.sha }}
