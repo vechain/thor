@@ -26,8 +26,8 @@ import (
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
+	"github.com/vechain/thor/v2/thorclient/httpclient"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
 )
@@ -49,9 +49,9 @@ func txContext(t *testing.T) context.Context {
 	return ctx
 }
 
-func txOpts() *bind.Options {
+func txOpts() *bind.TxOptions {
 	gas := uint64(10_000_000)
-	return &bind.Options{
+	return &bind.TxOptions{
 		Gas: &gas,
 	}
 }
@@ -124,7 +124,7 @@ func (m *mockPool) SubscribeTxEvent(ch chan *txpool.TxEvent) event.Subscription 
 }
 
 // newChain creates a node with the API enabled to test the smart contract wrappers
-func newChain(t *testing.T, useExecutor bool) (*testchain.Chain, *thorclient.Client) {
+func newChain(t *testing.T, useExecutor bool) (*testchain.Chain, *httpclient.Client) {
 	accounts := genesis.DevAccounts()
 	authAccs := make([]genesis.Authority, 0, len(accounts))
 	stateAccs := make([]genesis.Account, 0, len(accounts))
@@ -149,7 +149,7 @@ func newChain(t *testing.T, useExecutor bool) (*testchain.Chain, *thorclient.Cli
 
 	mbp := uint64(1_000)
 	genConfig := genesis.CustomGenesis{
-		LaunchTime: 1526400000,
+		LaunchTime: uint64(time.Now().Unix()),
 		GasLimit:   thor.InitialGasLimit,
 		ExtraData:  "",
 		ForkConfig: &thor.SoloFork,
@@ -182,7 +182,7 @@ func newChain(t *testing.T, useExecutor bool) (*testchain.Chain, *thorclient.Cli
 	if err != nil {
 		t.Fatalf("failed to create test chain: %v", err)
 	}
-	// this is a bug with logsdb, can't have multiple instances on in-mem databases
+	// this is a bug with logsdb, can't have multiple instances of in-mem databases
 	path := filepath.Join(t.TempDir(), "logs.db")
 	logs, err := logdb.New(path)
 	if err != nil {
@@ -225,7 +225,6 @@ func newChain(t *testing.T, useExecutor bool) (*testchain.Chain, *thorclient.Cli
 		SoloMode:          true,
 		EnableDeprecated:  true,
 		EnableTxpool:      true,
-		SkipLogs:          false,
 		Fees: fees.Config{
 			FixedCacheSize:             1000,
 			PriorityIncreasePercentage: 10,
@@ -247,7 +246,7 @@ func newChain(t *testing.T, useExecutor bool) (*testchain.Chain, *thorclient.Cli
 	t.Cleanup(cancelSubs)
 
 	ts := httptest.NewServer(handler)
-	client := thorclient.New(ts.URL)
+	client := httpclient.New(ts.URL)
 
 	return chain, client
 }

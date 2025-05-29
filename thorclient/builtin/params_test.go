@@ -6,10 +6,8 @@
 package builtin
 
 import (
-	"context"
 	"math/big"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/genesis"
@@ -34,10 +32,7 @@ func TestParams(t *testing.T) {
 	})
 
 	t.Run("Set", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		receipt, _, err := params.Set(executor, thor.KeyMaxBlockProposers, big.NewInt(2)).Receipt(ctx, &bind.Options{})
+		receipt, _, err := params.Set(executor, thor.KeyMaxBlockProposers, big.NewInt(2)).Receipt(txContext(t), txOpts())
 		require.NoError(t, err)
 		require.False(t, receipt.Reverted)
 
@@ -48,5 +43,7 @@ func TestParams(t *testing.T) {
 		events, err := params.FilterSet(newRange(receipt), nil, logdb.ASC)
 		require.NoError(t, err)
 		require.Len(t, events, 1)
+		require.Equal(t, thor.KeyMaxBlockProposers, events[0].Key)
+		require.Equal(t, big.NewInt(2), events[0].Value)
 	})
 }

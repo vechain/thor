@@ -18,19 +18,19 @@ import (
 	"github.com/vechain/thor/v2/api/events"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/thorclient"
+	"github.com/vechain/thor/v2/thorclient/httpclient"
 	"github.com/vechain/thor/v2/tx"
 )
 
 // Caller is a generic contract wrapper that allows calling methods and filtering events.
 type Caller struct {
-	client *thorclient.Client
+	client *httpclient.Client
 	abi    *abi.ABI
 	addr   thor.Address
 	rev    *string
 }
 
-func NewCaller(client *thorclient.Client, abiData []byte, address thor.Address) (*Caller, error) {
+func NewCaller(client *httpclient.Client, abiData []byte, address thor.Address) (*Caller, error) {
 	contractABI, err := abi.JSON(bytes.NewReader(abiData))
 	if err != nil {
 		return nil, err
@@ -62,10 +62,7 @@ func (w *Caller) Revision(rev string) *Caller {
 
 // Attach creates a new Transactor instance with the provided signer.
 func (w *Caller) Attach(signer Signer) *Transactor {
-	return &Transactor{
-		Caller: w,
-		signer: signer,
-	}
+	return NewTransactor(signer, w)
 }
 
 // Call a method and return the result as a CallResult.
@@ -92,9 +89,9 @@ func (w *Caller) Simulate(vet *big.Int, caller thor.Address, methodName string, 
 	}
 	var res []*accounts.CallResult
 	if w.rev != nil {
-		res, err = w.client.InspectClauses(body, thorclient.Revision(*w.rev))
+		res, err = w.client.InspectClauses(body, *w.rev)
 	} else {
-		res, err = w.client.InspectClauses(body)
+		res, err = w.client.InspectClauses(body, "best")
 	}
 	if err != nil {
 		return nil, err

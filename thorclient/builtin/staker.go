@@ -11,15 +11,14 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/vechain/thor/v2/thorclient/bind"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/v2/api/events"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/thorclient"
+	"github.com/vechain/thor/v2/thorclient/bind"
+	"github.com/vechain/thor/v2/thorclient/httpclient"
 )
 
 type StakerStatus uint8
@@ -40,7 +39,7 @@ type Staker struct {
 	contract *bind.Caller
 }
 
-func NewStaker(client *thorclient.Client) (*Staker, error) {
+func NewStaker(client *httpclient.Client) (*Staker, error) {
 	contract, err := bind.NewCaller(client, builtin.Staker.RawABI(), builtin.Staker.Address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create staker contract: %w", err)

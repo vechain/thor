@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/test/datagen"
@@ -31,9 +32,9 @@ type Sender struct {
 	tx         atomic.Pointer[tx.Transaction]
 }
 
-// Options to override default transaction parameters when building or sending a transaction.
+// TxOptions to override default transaction parameters when building or sending a transaction.
 // See Sender.Build for more details.
-type Options struct {
+type TxOptions struct {
 	Gas                  *uint64
 	MaxFeePerGas         *big.Int
 	MaxPriorityFeePerGas *big.Int
@@ -42,7 +43,7 @@ type Options struct {
 	Nonce                *uint64
 }
 
-func (o *Options) Clone() *Options {
+func (o *TxOptions) Clone() *TxOptions {
 	opts := *o
 	return &opts
 }
@@ -71,7 +72,7 @@ func (s *Sender) Simulate() (*accounts.CallResult, error) {
 }
 
 // Build and sign the transaction without sending it to the network.
-func (s *Sender) Build(opts *Options) (*tx.Transaction, error) {
+func (s *Sender) Build(opts *TxOptions) (*tx.Transaction, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -81,21 +82,22 @@ func (s *Sender) Build(opts *Options) (*tx.Transaction, error) {
 	}
 
 	if opts == nil {
-		opts = &Options{}
+		opts = &TxOptions{}
 	}
 
 	clause, err := s.contract.ClauseWithVET(s.vet, s.methodName, s.args...)
 	if err != nil {
 		return nil, err
 	}
-	best, err := s.contract.client.Block("best")
+	best, err := s.contract.client.GetBlock("best")
 	if err != nil {
 		return nil, errors.New("failed to get best block: " + err.Error())
 	}
-	chainTag, err := s.contract.client.ChainTag()
+	genesis, err := s.contract.client.GetBlock("0")
 	if err != nil {
 		return nil, errors.New("failed to get chain tag: " + err.Error())
 	}
+	chainTag := genesis.ID[31]
 	txType := tx.TypeLegacy
 	if best.BaseFeePerGas != nil {
 		txType = tx.TypeDynamicFee
@@ -157,13 +159,18 @@ func (s *Sender) Build(opts *Options) (*tx.Transaction, error) {
 }
 
 // Send sends the transaction to the network. Does not wait for the receipt.
-func (s *Sender) Send(opts *Options) (*tx.Transaction, error) {
+func (s *Sender) Send(opts *TxOptions) (*tx.Transaction, error) {
 	transaction, err := s.Build(opts)
 	if err != nil {
 		return nil, err
 	}
 
-	if _, err = s.contract.client.SendTransaction(transaction); err != nil {
+	rlpTx, err := transaction.MarshalBinary()
+	if err != nil {
+		return nil, fmt.Errorf("unable to encode transaction - %w", err)
+	}
+
+	if _, err = s.contract.client.SendTransaction(&transactions.RawTx{Raw: hexutil.Encode(rlpTx)}); err != nil {
 		return nil, err
 	}
 
@@ -173,7 +180,7 @@ func (s *Sender) Send(opts *Options) (*tx.Transaction, error) {
 }
 
 // Receipt sends the transaction if it hasn't been sent already and polls for the receipt.
-func (s *Sender) Receipt(ctx context.Context, opts *Options) (*transactions.Receipt, *tx.Transaction, error) {
+func (s *Sender) Receipt(ctx context.Context, opts *TxOptions) (*transactions.Receipt, *tx.Transaction, error) {
 	transaction, err := s.Send(opts)
 	if err != nil {
 		return nil, nil, err
@@ -186,7 +193,7 @@ func (s *Sender) Receipt(ctx context.Context, opts *Options) (*transactions.Rece
 		case <-ctx.Done():
 			return nil, nil, fmt.Errorf("context cancelled while waiting for receipt (method: %s, transaction ID: %s)", s.methodName, id.String())
 		default:
-			receipt, err := s.contract.client.TransactionReceipt(&id)
+			receipt, err := s.contract.client.GetTransactionReceipt(&id, "")
 			if err != nil || receipt == nil {
 				time.Sleep(1 * time.Second) // wait before retrying
 				continue
@@ -236,7 +243,7 @@ func (s *Senders) Add(sender *Sender) {
 }
 
 // Send all transactions in parallel and returns the transactions and receipts.
-func (s *Senders) Send(ctx context.Context, opts *Options) ([]*transactions.Receipt, []*tx.Transaction, error) {
+func (s *Senders) Send(ctx context.Context, opts *TxOptions) ([]*transactions.Receipt, []*tx.Transaction, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
