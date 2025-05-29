@@ -200,12 +200,12 @@ func testAccountEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) 
 		value := math.HexOrDecimal256(*big.NewInt(1))
 		payload := &accounts.BatchCallData{
 			Clauses: accounts.Clauses{
-				accounts.Clause{
+				&accounts.Clause{
 					To:    &address1,
 					Value: nil,
 					Data:  "0x",
 				},
-				accounts.Clause{
+				&accounts.Clause{
 					To:    &address2,
 					Value: &value,
 					Data:  "0x",

@@ -73,6 +73,11 @@ func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Re
 	if filter.Range != nil && filter.Range.From != nil && filter.Range.To != nil && *filter.Range.From > *filter.Range.To {
 		return utils.BadRequest(fmt.Errorf("filter.Range.To must be greater than or equal to filter.Range.From"))
 	}
+	for i, criterion := range filter.CriteriaSet {
+		if criterion == nil {
+			return utils.BadRequest(fmt.Errorf("criteriaSet[%d]: null not allowed", i))
+		}
+	}
 	if filter.Options == nil {
 		// if filter.Options is nil, set to the default limit +1
 		// to detect whether there are more logs than the default limit

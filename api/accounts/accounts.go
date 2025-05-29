@@ -196,7 +196,7 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 	}
 	var batchCallData = &BatchCallData{
 		Clauses: Clauses{
-			Clause{
+			&Clause{
 				To:    addr,
 				Value: callData.Value,
 				Data:  callData.Data,
@@ -214,9 +214,14 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 }
 
 func (a *Accounts) handleCallBatchCode(w http.ResponseWriter, req *http.Request) error {
-	batchCallData := &BatchCallData{}
+	var batchCallData BatchCallData
 	if err := utils.ParseJSON(req.Body, &batchCallData); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
+	}
+	for i, clause := range batchCallData.Clauses {
+		if clause == nil {
+			return utils.BadRequest(fmt.Errorf("clauses[%d]: null not allowed", i))
+		}
 	}
 	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"), true)
 	if err != nil {
@@ -229,7 +234,7 @@ func (a *Accounts) handleCallBatchCode(w http.ResponseWriter, req *http.Request)
 		}
 		return err
 	}
-	results, err := a.batchCall(req.Context(), batchCallData, summary.Header, st)
+	results, err := a.batchCall(req.Context(), &batchCallData, summary.Header, st)
 	if err != nil {
 		return err
 	}

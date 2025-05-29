@@ -185,6 +185,26 @@ func TestZeroFrom(t *testing.T) {
 	assert.NotEmpty(t, tLogs)
 }
 
+func TestNullCriteriaSet(t *testing.T) {
+	initEventServer(t, defaultLogLimit)
+	defer ts.Close()
+
+	tclient = thorclient.New(ts.URL)
+	_, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/event", []byte(`{"criteriaSet": null}`))
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, statusCode)
+
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/event", []byte(`{"criteriaSet": [null]}`))
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, statusCode)
+	assert.Equal(t, "criteriaSet[0]: null not allowed\n", string(res), "null criteriaSet")
+
+	res, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/logs/event", []byte(`{"criteriaSet": [{}, null]}`))
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, statusCode)
+	assert.Equal(t, "criteriaSet[1]: null not allowed\n", string(res), "null criteriaSet")
+}
+
 // Test functions
 func testEventsBadRequest(t *testing.T) {
 	badBody := []byte{0x00, 0x01, 0x02}

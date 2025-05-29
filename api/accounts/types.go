@@ -96,7 +96,7 @@ type Clause struct {
 }
 
 // Clauses array of clauses.
-type Clauses []Clause
+type Clauses []*Clause
 
 // BatchCallData executes a batch of codes
 type BatchCallData struct {

@@ -121,6 +121,7 @@ func TestAccount(t *testing.T) {
 		"callContractWithNonExistingRevision": callContractWithNonExistingRevision,
 		"batchCall":                           batchCall,
 		"batchCallWithNonExistingRevision":    batchCallWithNonExistingRevision,
+		"batchCallWithNullClause":             batchCallWithNullClause,
 	} {
 		t.Run(name, tt)
 	}
@@ -433,12 +434,12 @@ func batchCall(t *testing.T) {
 	// Request body is not a valid BatchCallData
 	badBody := &accounts.BatchCallData{
 		Clauses: accounts.Clauses{
-			accounts.Clause{
+			&accounts.Clause{
 				To:    &contractAddr,
 				Data:  "data1",
 				Value: nil,
 			},
-			accounts.Clause{
+			&accounts.Clause{
 				To:    &contractAddr,
 				Data:  "data2",
 				Value: nil,
@@ -478,12 +479,12 @@ func batchCall(t *testing.T) {
 	}
 	reqBody := &accounts.BatchCallData{
 		Clauses: accounts.Clauses{
-			accounts.Clause{
+			&accounts.Clause{
 				To:    &contractAddr,
 				Data:  hexutil.Encode(input),
 				Value: nil,
 			},
-			accounts.Clause{
+			&accounts.Clause{
 				To:    &contractAddr,
 				Data:  hexutil.Encode(input),
 				Value: nil,
@@ -555,4 +556,24 @@ func batchCallWithNonExistingRevision(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
 	assert.Equal(t, "revision: leveldb: not found\n", string(res), "revision not found")
+}
+
+func batchCallWithNullClause(t *testing.T) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/accounts/*", []byte("{\"clauses\": [null]}"))
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, statusCode, "null clause")
+	assert.Equal(t, "clauses[0]: null not allowed\n", string(res), "null clause")
+
+	res, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/accounts/*", []byte("{\"clauses\": [{}, null]}"))
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, statusCode, "null clause")
+	assert.Equal(t, "clauses[1]: null not allowed\n", string(res), "null clause")
+
+	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/accounts/*", []byte("{\"clauses\":null }"))
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, statusCode, "null clause")
+
+	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/accounts/*", []byte("{\"clauses\":[] }"))
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, statusCode, "null clause")
 }
