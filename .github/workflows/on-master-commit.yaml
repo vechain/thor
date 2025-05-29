@@ -30,6 +30,12 @@ jobs:
     name: E2E Tests
     uses: ./.github/workflows/test-e2e.yaml
 
+  run-rosetta-tests:
+    name: Rosetta Tests
+    uses: ./.github/workflows/test-rosetta.yaml
+    with:
+      thor_version: ${{ github.sha }}
+
   generate-tags:
     name: Generate Docker Tags
     runs-on: ubuntu-latest
