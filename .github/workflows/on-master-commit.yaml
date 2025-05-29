@@ -84,7 +84,13 @@ jobs:
       - module-check
       - run-unit-tests
       - run-e2e-tests
-    if: always() && (needs.publish-docker-image.result != 'success' || needs.run-unit-tests.result != 'success' || needs.lint.result != 'success' || needs.run-e2e-tests.result != 'success' || needs.license-check.result != 'success' || needs.module-check.result != 'success')
+    if: github.ref_name == 'master' && always() && (
+      needs.publish-docker-image.result != 'success' || 
+      needs.run-unit-tests.result != 'success' || 
+      needs.lint.result != 'success' || 
+      needs.run-e2e-tests.result != 'success' || 
+      needs.license-check.result != 'success' || 
+      needs.module-check.result != 'success')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
