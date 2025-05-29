@@ -31,8 +31,8 @@ import (
 // Client represents the HTTP client for interacting with the VeChainThor blockchain.
 // It manages communication via HTTP requests.
 type Client struct {
-	url string
-	c   *http.Client
+	url     string
+	c       *http.Client
 	genesis atomic.Pointer[blocks.JSONCollapsedBlock]
 }
 
@@ -43,8 +43,8 @@ func New(url string) *Client {
 
 func NewWithHTTP(url string, c *http.Client) *Client {
 	return &Client{
-		url: url,
-		c:   c,
+		url:     url,
+		c:       c,
 		genesis: atomic.Pointer[blocks.JSONCollapsedBlock]{},
 	}
 }
