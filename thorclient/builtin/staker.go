@@ -122,6 +122,21 @@ func (s *Staker) QueuedStake() (*big.Int, *big.Int, error) {
 	return *(out[0].(**big.Int)), *(out[1].(**big.Int)), nil
 }
 
+// LookupMaster returns the validation ID for the given master address if it is queued or active.
+func (s *Staker) LookupMaster(master thor.Address) (*Validator, thor.Bytes32, error) {
+	out := new(common.Hash)
+	if err := s.contract.CallInto("lookupMaster", &out, common.Address(master)); err != nil {
+		return nil, thor.Bytes32{}, err
+	}
+	res := *out
+	id := thor.Bytes32(res[:])
+	if id.IsZero() {
+		return nil, thor.Bytes32{}, errors.New("no validator found for master address")
+	}
+	v, err := s.Get(id)
+	return v, id, err
+}
+
 type Validator struct {
 	Master    *thor.Address
 	Endorsor  *thor.Address
@@ -131,6 +146,8 @@ type Validator struct {
 	AutoRenew bool
 	Online    bool
 	Period    uint32
+	StartBlock uint32
+	ExitBlock  uint32
 }
 
 func (v *Validator) Exists() bool {
@@ -138,7 +155,7 @@ func (v *Validator) Exists() bool {
 }
 
 func (s *Staker) Get(id thor.Bytes32) (*Validator, error) {
-	var out = [8]any{}
+	var out = [10]any{}
 	out[0] = new(common.Address)
 	out[1] = new(common.Address)
 	out[2] = new(*big.Int)
@@ -147,6 +164,8 @@ func (s *Staker) Get(id thor.Bytes32) (*Validator, error) {
 	out[5] = new(bool)
 	out[6] = new(bool)
 	out[7] = new(uint32)
+	out[8] = new(uint32)
+	out[9] = new(uint32)
 	if err := s.contract.CallInto("get", &out, id); err != nil {
 		return nil, err
 	}
@@ -159,6 +178,8 @@ func (s *Staker) Get(id thor.Bytes32) (*Validator, error) {
 		AutoRenew: *(out[5].(*bool)),
 		Online:    *(out[6].(*bool)),
 		Period:    *(out[7].(*uint32)),
+		StartBlock: *(out[8].(*uint32)),
+		ExitBlock:  *(out[9].(*uint32)),
 	}
 
 	return validator, nil
