@@ -110,4 +110,7 @@ jobs:
     uses: vechain/hayabusa-e2e/.github/workflows/run-tests.yaml@release/hayabusa
     with:
       codebuild-name: codebuild-ThorGHA
-      hayabusa-branch: ${{ github.ref }}
+      thor-branch: ${{ github.ref }}
+    permissions:
+      contents: read
+    secrets: inherit
