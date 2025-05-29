@@ -65,6 +65,11 @@ func (w *Caller) Attach(signer Signer) *Transactor {
 	return NewTransactor(signer, w)
 }
 
+// Client returns the underlying HTTP client used by the Caller.
+func (w *Caller) Client() *httpclient.Client {
+	return w.client
+}
+
 // Call a method and return the result as a CallResult.
 func (w *Caller) Call(methodName string, args ...any) (*accounts.CallResult, error) {
 	return w.Simulate(big.NewInt(0), thor.Address{}, methodName, args...)
