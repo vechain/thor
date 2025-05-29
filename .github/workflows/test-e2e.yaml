@@ -107,7 +107,7 @@ jobs:
           retention-days: 14
 
   run-hayabusa-tests:
-    uses: vechain/hayabusa-e2e/.github/workflows/run-tests.yaml@darren/chore/remove-unused-token
+    uses: vechain/hayabusa-e2e/.github/workflows/run-tests.yaml@release/hayabusa
     with:
       codebuild-name: codebuild-ThorGHA
       thor-branch: ${{ github.ref }}
