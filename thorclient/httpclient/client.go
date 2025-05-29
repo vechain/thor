@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/api/blocks"
@@ -30,8 +31,9 @@ import (
 // Client represents the HTTP client for interacting with the VeChainThor blockchain.
 // It manages communication via HTTP requests.
 type Client struct {
-	url string
-	c   *http.Client
+	url     string
+	c       *http.Client
+	genesis atomic.Pointer[blocks.JSONCollapsedBlock]
 }
 
 // New creates a new Client with the provided URL.
@@ -41,8 +43,9 @@ func New(url string) *Client {
 
 func NewWithHTTP(url string, c *http.Client) *Client {
 	return &Client{
-		url: url,
-		c:   c,
+		url:     url,
+		c:       c,
+		genesis: atomic.Pointer[blocks.JSONCollapsedBlock]{},
 	}
 }
 
@@ -212,6 +215,10 @@ func (c *Client) SendTransaction(obj *transactions.RawTx) (*transactions.SendTxR
 
 // GetBlock retrieves a block by its block ID.
 func (c *Client) GetBlock(blockID string) (*blocks.JSONCollapsedBlock, error) {
+	if blockID == "0" && c.genesis.Load() != nil {
+		return c.genesis.Load(), nil
+	}
+
 	body, err := c.httpGET(c.url + "/blocks/" + blockID)
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve block - %w", err)
@@ -224,6 +231,11 @@ func (c *Client) GetBlock(blockID string) (*blocks.JSONCollapsedBlock, error) {
 	var block blocks.JSONCollapsedBlock
 	if err = json.Unmarshal(body, &block); err != nil {
 		return nil, fmt.Errorf("unable to unmarshal block - %w", err)
+	}
+
+	if block.Number == 0 {
+		// Cache the genesis block for future requests
+		c.genesis.Store(&block)
 	}
 
 	return &block, nil

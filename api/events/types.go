@@ -75,16 +75,16 @@ type EventCriteria struct {
 }
 
 type Options struct {
-	Offset         uint64
-	Limit          uint64
-	IncludeIndexes bool
+	Offset         uint64 `json:"offset,omitempty"`         // default 0
+	Limit          uint64 `json:"limit,omitempty"`          // default 1000, max 1000
+	IncludeIndexes bool   `json:"includeIndexes,omitempty"` // default false, if true, will include txIndex and logIndex in the response
 }
 
 type EventFilter struct {
-	CriteriaSet []*EventCriteria
-	Range       *Range
-	Options     *Options
-	Order       logdb.Order // default asc
+	CriteriaSet []*EventCriteria `json:"criteriaSet,omitempty"`
+	Range       *Range           `json:"range,omitempty"`   // nil means no range
+	Options     *Options         `json:"options,omitempty"` // nil means no options
+	Order       logdb.Order      `json:"order,omitempty"`   // default asc
 }
 
 func convertEventFilter(chain *chain.Chain, filter *EventFilter) (*logdb.EventFilter, error) {
@@ -126,9 +126,9 @@ const (
 )
 
 type Range struct {
-	Unit RangeType
-	From *uint64 `json:"from,omitempty"`
-	To   *uint64 `json:"to,omitempty"`
+	Unit RangeType `json:"unit,omitempty"` // "block" or "time"
+	From *uint64   `json:"from,omitempty"`
+	To   *uint64   `json:"to,omitempty"`
 }
 
 var emptyRange = logdb.Range{

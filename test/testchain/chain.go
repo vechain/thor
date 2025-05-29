@@ -92,12 +92,6 @@ func NewWithFork(forkConfig *thor.ForkConfig) (*Chain, error) {
 // NewIntegrationTestChain is a convenience function that creates a Chain for testing.
 // It uses an in-memory database, development network genesis, and a solo BFT engine.
 func NewIntegrationTestChain(config genesis.DevConfig) (*Chain, error) {
-	// Initialize the database
-	db := muxdb.NewMem()
-
-	// Create the state manager (Stater) with the initialized database.
-	stater := state.NewStater(db)
-
 	// If the launch time is not set, set it to the current time minus the current time aligned with the block interval
 	if config.LaunchTime == 0 {
 		now := uint64(time.Now().Unix())
@@ -106,6 +100,15 @@ func NewIntegrationTestChain(config genesis.DevConfig) (*Chain, error) {
 
 	// Initialize the genesis and retrieve the genesis block
 	gene := genesis.NewDevnetWithConfig(config)
+	return NewIntegrationTestChainWithGenesis(gene, config.ForkConfig)
+}
+
+func NewIntegrationTestChainWithGenesis(gene *genesis.Genesis, forkConfig *thor.ForkConfig) (*Chain, error) {
+	// Initialize the database
+	db := muxdb.NewMem()
+
+	// Create the state manager (Stater) with the initialized database.
+	stater := state.NewStater(db)
 	geneBlk, _, _, err := gene.Build(stater)
 	if err != nil {
 		return nil, err
@@ -131,8 +134,13 @@ func NewIntegrationTestChain(config genesis.DevConfig) (*Chain, error) {
 		stater,
 		geneBlk,
 		logDb,
-		config.ForkConfig,
+		forkConfig,
 	), nil
+}
+
+// Genesis returns the genesis information of the chain, which includes the initial state and configuration.
+func (c *Chain) Genesis() *genesis.Genesis {
+	return c.genesis
 }
 
 // Repo returns the blockchain's repository, which stores blocks and other data.
