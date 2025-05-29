@@ -20,7 +20,7 @@ import (
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/co"
-	"github.com/vechain/thor/v2/consensus/fork"
+	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -456,9 +456,9 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 			isGalactica := headSummary.Header.Number() >= p.forkConfig.GALACTICA
 			var baseFee *big.Int
 			if isGalactica {
-				baseFee = fork.CalcBaseFee(p.forkConfig, headSummary.Header)
+				baseFee = galactica.CalcBaseFee(headSummary.Header, p.forkConfig)
 			}
-			txObj.priorityGasPrice = fork.GalacticaPriorityGasPrice(txObj.Transaction, legacyTxBaseGasPrice, provedWork, baseFee)
+			txObj.priorityGasPrice = galactica.GalacticaPriorityGasPrice(txObj.Transaction, legacyTxBaseGasPrice, provedWork, baseFee)
 
 			if txObj.localSubmitted {
 				localExecutableObjs = append(localExecutableObjs, txObj)

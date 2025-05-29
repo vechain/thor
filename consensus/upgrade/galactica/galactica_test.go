@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package fork
+package galactica
 
 import (
 	"encoding/binary"
@@ -21,49 +21,6 @@ import (
 func config() *thor.ForkConfig {
 	return &thor.ForkConfig{
 		GALACTICA: 5,
-	}
-}
-
-// TestBlockGasLimits tests the gasLimit checks for blocks both across
-// the Galactica boundary and post-Galactica blocks
-func TestBlockGasLimits(t *testing.T) {
-	initial := new(big.Int).SetUint64(thor.InitialBaseFee)
-
-	for i, tc := range []struct {
-		pGasLimit uint64
-		pNum      uint32
-		gasLimit  uint64
-		ok        bool
-	}{
-		// Transitions from non-Galactica to Galactica
-		{20000000, 5, 20000000, true},  // No change
-		{20000000, 5, 20019531, true},  // Upper limit
-		{20000000, 5, 20019532, false}, // Upper +1
-		{20000000, 5, 19980469, true},  // Lower limit
-		{20000000, 5, 19980468, false}, // Lower limit -1
-		// Galactica to Galactica
-		{20000000, 6, 20000000, true},
-		{20000000, 6, 20019531, true},  // Upper limit
-		{20000000, 6, 20019532, false}, // Upper limit +1
-		{20000000, 6, 19980469, true},  // Lower limit
-		{20000000, 6, 19980468, false}, // Lower limit -1
-		{40000000, 6, 40039062, true},  // Upper limit
-		{40000000, 6, 40039063, false}, // Upper limit +1
-		{40000000, 6, 39960938, true},  // lower limit
-		{40000000, 6, 39960937, false}, // Lower limit -1
-	} {
-		var parentID thor.Bytes32
-		binary.BigEndian.PutUint32(parentID[:], tc.pNum-2)
-
-		parent := new(block.Builder).ParentID(parentID).GasUsed(tc.pGasLimit / 2).GasLimit(tc.pGasLimit).BaseFee(initial).Build().Header()
-		header := new(block.Builder).ParentID(parent.ID()).GasUsed(tc.gasLimit / 2).GasLimit(tc.gasLimit).BaseFee(initial).Build().Header()
-		err := VerifyGalacticaHeader(config(), parent, header)
-		if tc.ok && err != nil {
-			t.Errorf("test %d: Expected valid header: %s", i, err)
-		}
-		if !tc.ok && err == nil {
-			t.Errorf("test %d: Expected invalid header", i)
-		}
 	}
 }
 
@@ -86,7 +43,7 @@ func TestCalcBaseFee(t *testing.T) {
 		binary.BigEndian.PutUint32(parentID[:], 5)
 
 		parent := new(block.Builder).ParentID(parentID).GasLimit(test.parentGasLimit).GasUsed(test.parentGasUsed).BaseFee(big.NewInt(test.parentBaseFee)).Build().Header()
-		if have, want := CalcBaseFee(config(), parent), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
+		if have, want := CalcBaseFee(parent, config()), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
 			t.Errorf("test %d: have %d  want %d, ", i, have, want)
 		}
 	}
@@ -104,7 +61,7 @@ func TestCalcBaseFeeEdgeCases(t *testing.T) {
 				binary.BigEndian.PutUint32(parentID[:], 3)
 
 				parent := new(block.Builder).ParentID(parentID).Build().Header()
-				baseFee := CalcBaseFee(config(), parent)
+				baseFee := CalcBaseFee(parent, config())
 				assert.True(t, baseFee.Cmp(big.NewInt(thor.InitialBaseFee)) == 0)
 			},
 		},
@@ -126,12 +83,12 @@ func TestBaseFeeLowerBound(t *testing.T) {
 
 	// Generate new block with no gas utilization
 	parent := new(block.Builder).ParentID(parentID).GasLimit(parentGasLimit).GasUsed(parentGasUsed).BaseFee(parentBaseFee).Build().Header()
-	baseFee := CalcBaseFee(config(), parent)
+	baseFee := CalcBaseFee(parent, config())
 	assert.True(t, baseFee.Cmp(big.NewInt(thor.InitialBaseFee)) == 0)
 
 	// Generate new block again with no gas utitlization
 	parent = new(block.Builder).ParentID(parent.ID()).GasLimit(parentGasLimit).GasUsed(parentGasUsed).BaseFee(baseFee).Build().Header()
-	baseFee = CalcBaseFee(config(), parent)
+	baseFee = CalcBaseFee(parent, config())
 	assert.True(t, baseFee.Cmp(big.NewInt(thor.InitialBaseFee)) == 0)
 }
 
@@ -172,7 +129,7 @@ func TestBaseFeeLimits(t *testing.T) {
 				for range tt.blockRange {
 					parent := new(block.Builder).ParentID(parentID).GasLimit(parentGasLimit).GasUsed(parentGasUsed).BaseFee(parentBaseFee).Build().Header()
 					parentID = parent.ID()
-					baseFee := CalcBaseFee(config(), parent)
+					baseFee := CalcBaseFee(parent, config())
 
 					currentFloat, previousFloat := new(big.Float).SetInt(baseFee), new(big.Float).SetInt(parentBaseFee)
 					delta := new(big.Float).Quo(currentFloat, previousFloat)
@@ -219,7 +176,7 @@ func TestBaseFeeLimits(t *testing.T) {
 				for range tt.blockRange {
 					parent := new(block.Builder).ParentID(parentID).GasLimit(parentGasLimit).GasUsed(parentGasUsed).BaseFee(parentBaseFee).Build().Header()
 					parentID = parent.ID()
-					baseFee := CalcBaseFee(config(), parent)
+					baseFee := CalcBaseFee(parent, config())
 
 					currentFloat, previousFloat := new(big.Float).SetInt(baseFee), new(big.Float).SetInt(parentBaseFee)
 					delta := new(big.Float).Quo(currentFloat, previousFloat)
@@ -245,7 +202,7 @@ func TestBaseFeeLimits(t *testing.T) {
 		for range 100 {
 			parent := new(block.Builder).ParentID(parentID).GasLimit(parentGasLimit).GasUsed(parentGasUsed).BaseFee(parentBaseFee).Build().Header()
 			parentID = parent.ID()
-			baseFee := CalcBaseFee(config(), parent)
+			baseFee := CalcBaseFee(parent, config())
 
 			assert.True(t, baseFee.Cmp(parentBaseFee) == 0)
 
