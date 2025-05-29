@@ -111,3 +111,6 @@ jobs:
     with:
       codebuild-name: codebuild-ThorGHA
       hayabusa-branch: ${{ github.ref }}
+    permissions:
+      contents: read
+    secrets: inherit
