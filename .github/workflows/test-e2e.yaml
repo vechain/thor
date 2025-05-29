@@ -42,7 +42,7 @@ jobs:
           retention-days: 7
 
   run-tests:
-    runs-on: 8-core-10-jobs
+    runs-on: ubuntu-latest
     needs: build-docker-image
     env:
       THOR_IMAGE: vechain/thor:${{ github.sha }}
@@ -50,32 +50,31 @@ jobs:
     steps:
       # Main: https://github.com/vechain/thor-e2e-tests/tree/bc75a1814361ff987402b6dd0225b44292d2780b
       # For release branches, names in the thor and thor-e2e-tests repos should match
-#      - name: Set e2e repo reference
-#        id: set-ref
-#        run: |
-#          # Default fallback commit
-#          REF="bc75a1814361ff987402b6dd0225b44292d2780b"
-#
-#          if [ "${{ github.event_name }}" = "pull_request" ]; then
-#            # For pull_request events, we only look at the PR's base branch
-#            if [[ "${{ github.event.pull_request.base.ref }}" == release/* ]]; then
-#              REF="${{ github.event.pull_request.base.ref }}"
-#            fi
-#          else
-#            # For push events, we check the branch or tag that was pushed
-#            if [[ "${{ github.ref_name }}" == release/* ]]; then
-#              REF="${{ github.ref_name }}"
-#            fi
-#          fi
-#
-#          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+      - name: Set e2e repo reference
+        id: set-ref
+        run: |
+          # Default fallback commit
+          REF="bc75a1814361ff987402b6dd0225b44292d2780b"
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # For pull_request events, we only look at the PR's base branch
+            if [[ "${{ github.event.pull_request.base.ref }}" == release/* ]]; then
+              REF="${{ github.event.pull_request.base.ref }}"
+            fi
+          else
+            # For push events, we check the branch or tag that was pushed
+            if [[ "${{ github.ref_name }}" == release/* ]]; then
+              REF="${{ github.ref_name }}"
+            fi
+          fi
+
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
 
       - name: Checkout
         uses: actions/checkout@v4
         with:
           repository: vechain/thor-e2e-tests
-          ref: bc75a1814361ff987402b6dd0225b44292d2780b
-          token: ${{ secrets.GHA_REPO_ACCESS }}
+          ref: ${{ steps.set-ref.outputs.ref }}
 
       - name: Download artifact
         uses: actions/download-artifact@v4
@@ -110,6 +109,5 @@ jobs:
   run-hayabusa-tests:
     uses: vechain/hayabusa-e2e/.github/workflows/run-tests.yaml@release/hayabusa
     with:
-      codebuild-name: codebuild-Hayabusa
+      codebuild-name: codebuild-ThorGHA
       hayabusa-branch: ${{ github.ref }}
-    secrets: inherit

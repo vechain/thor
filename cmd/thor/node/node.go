@@ -403,7 +403,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		}
 		stats.UpdateProcessed(1, len(receipts), execElapsed, commitElapsed, realElapsed, newBlock.Header().GasUsed())
 
-		if newBlock.Header().Number() == n.forkConfig.GALACTICA {
+		if newBlock.Header().Number() == n.forkConfig.GALACTICA && newBlock.Header().Number() != 0 {
 			fmt.Println(GalacticaASCIIArt)
 		}
 

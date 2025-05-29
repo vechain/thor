@@ -33,7 +33,6 @@ jobs:
   run-e2e-tests:
     name: E2E Tests
     uses: ./.github/workflows/test-e2e.yaml
-    secrets: inherit
 
   generate-tags:
     name: Generate Docker Tags

@@ -40,6 +40,13 @@ func (c *contract) RuntimeBytecodes() []byte {
 	return data
 }
 
+// RawABI load raw ABI data.
+func (c *contract) RawABI() []byte {
+	asset := "compiled/" + c.name + ".abi"
+	data := gen.MustABI(asset)
+	return data
+}
+
 func (c *contract) NativeABI() *abi.ABI {
 	asset := "compiled/" + c.name + "Native.abi"
 	data := gen.MustABI(asset)
