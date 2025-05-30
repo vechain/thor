@@ -21,7 +21,8 @@ jobs:
         id: set-ref
         run: |
           # Default fallback branch
-          REF="master"
+          DEFAULT_BRANCH="master"
+          REF="$DEFAULT_BRANCH"
       
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             # For pull_request events, we only look at the PR's base branch
@@ -34,8 +35,14 @@ jobs:
               REF="${{ github.ref_name }}"
             fi
           fi
-      
-          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+
+          # Verify if branch exists
+          if ! git ls-remote --heads https://github.com/vechain/rosetta.git $REF; then
+            echo "Branch does not exist, using default branch"
+            echo "ref=$DEFAULT_BRANCH" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Checkout
         uses: actions/checkout@v4
