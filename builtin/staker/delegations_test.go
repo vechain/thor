@@ -43,31 +43,34 @@ func Test_AddDelegator_AutoRenew(t *testing.T) {
 	id1, err := staker.AddDelegation(validator.ID, stake, true, 255)
 	assert.NoError(t, err)
 	assert.False(t, id1.IsZero())
+	_, _, err = staker.Housekeep(validator.Period)
+	assert.NoError(t, err)
 	aggregation, err := staker.storage.GetAggregation(validator.ID)
 	assert.NoError(t, err)
-	assert.Equal(t, aggregation.PendingLockedVET, stake)
+	assert.Equal(t, aggregation.LockedVET, stake)
 	delegation, _, err := staker.GetDelegation(id1)
 	assert.NoError(t, err)
 	assert.Equal(t, stake, delegation.Stake)
 	assert.Equal(t, uint8(255), delegation.Multiplier)
-	assert.Equal(t, uint32(1), delegation.FirstIteration)
+	assert.Equal(t, uint32(2), delegation.FirstIteration)
 	assert.Nil(t, delegation.ExitIteration) // auto renew, so exit iteration is nil
 
 	// Auto Renew == false
 	validator = validators[1]
 	id2, err := staker.AddDelegation(validator.ID, stake, false, 255)
 	assert.NoError(t, err)
+	_, _, err = staker.Housekeep(validator.Period)
+	assert.NoError(t, err)
 	aggregation2, err := staker.storage.GetAggregation(validator.ID)
 	assert.NoError(t, err)
-	assert.Equal(t, aggregation2.PendingCooldownVET, stake)
+	assert.Equal(t, aggregation2.CooldownVET, stake)
 
 	delegation, _, err = staker.GetDelegation(id2)
 	assert.NoError(t, err)
 	assert.Equal(t, stake, delegation.Stake)
 	assert.Equal(t, uint8(255), delegation.Multiplier)
-	assert.Equal(t, uint32(1), delegation.FirstIteration)
-	expectedExit := uint32(2)
-	assert.Equal(t, &expectedExit, delegation.ExitIteration) // auto renew, so we know when it will exit
+	assert.Equal(t, uint32(3), delegation.FirstIteration)
+	assert.Equal(t, uint32(3), *delegation.ExitIteration) // auto renew, so we know when it will exit
 }
 
 func Test_AddDelegator_StakeRange(t *testing.T) {
@@ -145,14 +148,29 @@ func Test_Delegator_DisableAutoRenew_PendingLocked(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, stake, aggregation.PendingCooldownVET)
 
-	// And the funds should be withdrawable after 1 iteration
+	// And the delegation becomes active
 	// step 1: start the first iteration
 	_, _, err = staker.Housekeep(validator.Period)
 	assert.NoError(t, err)
+	delegation, err := staker.storage.GetDelegation(id)
+	assert.NoError(t, err)
+	validation, err := staker.storage.GetValidator(validator.ID)
+	assert.NoError(t, err)
+	assert.True(t, delegation.IsLocked(validation))
 	_, err = staker.WithdrawDelegation(id)
 	assert.ErrorContains(t, err, "delegation is not eligible for withdraw")
 	// step 2: end the first iteration
 	_, _, err = staker.Housekeep(2 * validator.Period)
+	assert.NoError(t, err)
+
+	// And the delegation ends due to auto renew being disabled
+	_, _, err = staker.Housekeep(validator.Period * 2)
+	assert.NoError(t, err)
+	delegation, err = staker.storage.GetDelegation(id)
+	assert.NoError(t, err)
+	validation, err = staker.storage.GetValidator(validator.ID)
+	assert.NoError(t, err)
+	assert.False(t, delegation.IsLocked(validation))
 
 	assert.NoError(t, err)
 	amount, err := staker.WithdrawDelegation(id)
