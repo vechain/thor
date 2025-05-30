@@ -189,12 +189,6 @@ func (d *delegations) EnableAutoRenew(delegationID thor.Bytes32) error {
 
 	weight := delegation.Weight()
 
-	delegation.LastIteration = nil
-	delegation.AutoRenew = true
-	if err := d.storage.SetDelegation(delegationID, delegation); err != nil {
-		return err
-	}
-
 	if delegation.IsLocked(validator) {
 		// move the delegation's portion of cooldown to locked.
 		// this means the funds will not be available until the validator is inactive, or the delegation signals an exit
@@ -205,12 +199,18 @@ func (d *delegations) EnableAutoRenew(delegationID thor.Bytes32) error {
 		aggregation.LockedVET = big.NewInt(0).Add(aggregation.LockedVET, delegation.Stake)
 		aggregation.LockedWeight = big.NewInt(0).Add(aggregation.LockedWeight, weight)
 	} else {
-		// the delegation's stake is from pending locked, to pending cooldown, ie 1 staking period
+		// the delegation's stake is moved from pending locked to pending cooldown, ie 1 staking period
 		aggregation.PendingLockedVET = big.NewInt(0).Add(aggregation.PendingLockedVET, delegation.Stake)
 		aggregation.PendingLockedWeight = big.NewInt(0).Add(aggregation.PendingLockedWeight, weight)
 
 		aggregation.PendingCooldownVET = big.NewInt(0).Sub(aggregation.PendingCooldownVET, delegation.Stake)
 		aggregation.PendingCooldownWeight = big.NewInt(0).Sub(aggregation.PendingCooldownWeight, weight)
+	}
+
+	delegation.LastIteration = nil
+	delegation.AutoRenew = true
+	if err := d.storage.SetDelegation(delegationID, delegation); err != nil {
+		return err
 	}
 
 	return d.storage.SetAggregation(delegation.ValidatorID, aggregation)
