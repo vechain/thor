@@ -53,7 +53,7 @@ func Test_AddDelegator_AutoRenew(t *testing.T) {
 	assert.Equal(t, stake, delegation.Stake)
 	assert.Equal(t, uint8(255), delegation.Multiplier)
 	assert.Equal(t, uint32(2), delegation.FirstIteration)
-	assert.Nil(t, delegation.ExitIteration) // auto renew, so exit iteration is nil
+	assert.Nil(t, delegation.LastIteration) // auto renew, so exit iteration is nil
 
 	// Auto Renew == false
 	validator = validators[1]
@@ -70,7 +70,7 @@ func Test_AddDelegator_AutoRenew(t *testing.T) {
 	assert.Equal(t, stake, delegation.Stake)
 	assert.Equal(t, uint8(255), delegation.Multiplier)
 	assert.Equal(t, uint32(3), delegation.FirstIteration)
-	assert.Equal(t, uint32(3), *delegation.ExitIteration) // auto renew, so we know when it will exit
+	assert.Equal(t, uint32(3), *delegation.LastIteration) // auto renew, so we know when it will exit
 }
 
 func Test_AddDelegator_StakeRange(t *testing.T) {

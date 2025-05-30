@@ -60,6 +60,13 @@ func (v *Validation) NextPeriodStakes(delegation *Aggregation) *big.Int {
 	return validatorTotal.Add(validatorTotal, delegation.NextPeriodLocked())
 }
 
+func (v *Validation) CurrentIteration() uint32 {
+	if v.Status == StatusActive {
+		return v.CompleteIterations + 1 // +1 because the current iteration is not completed yet
+	}
+	return v.CompleteIterations
+}
+
 // Renew moves the stakes and weights around as follows:
 // 1. Move PendingLocked => Locked
 // 2. Decrease LockedVET by NextPeriodDecrease
@@ -94,7 +101,7 @@ type Delegation struct {
 	Stake          *big.Int
 	AutoRenew      bool
 	Multiplier     uint8
-	ExitIteration  *uint32 `rlp:"nil"` // the Validation iteration at which the delegator may withdraw their funds
+	LastIteration  *uint32 `rlp:"nil"` // the last staking period in which the delegator was active
 	FirstIteration uint32  // the iteration at which the delegator was created
 }
 
@@ -125,14 +132,13 @@ func (d *Delegation) IsLocked(validator *Validation) bool {
 	if validator.Status != StatusActive {
 		return false
 	}
-	currentIteration := validator.CompleteIterations + 1
-	if d.ExitIteration == nil {
-		return currentIteration >= d.FirstIteration
+	if d.LastIteration == nil {
+		return validator.CurrentIteration() >= d.FirstIteration
 	}
-	if currentIteration < d.FirstIteration {
+	if validator.CurrentIteration() < d.FirstIteration {
 		return false
 	}
-	return *d.ExitIteration >= validator.CompleteIterations
+	return *d.LastIteration >= validator.CompleteIterations
 }
 
 // Aggregation represents the total amount of VET locked for a given validation's delegations.

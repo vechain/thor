@@ -73,27 +73,19 @@ func (d *delegations) Add(
 
 	delegationID := thor.BytesToBytes32(id.Bytes())
 
-	firstIteration := validator.CompleteIterations + 1
-	if validator.Status == StatusActive {
-		// Example:
-		// - Validator has completed 3
-		// - Their current is 4
-		// - Delegator starts in 5
-		firstIteration += 1
-	}
-
 	delegation := &Delegation{
 		Multiplier:     multiplier,
 		Stake:          stake,
 		AutoRenew:      autoRenew,
 		ValidatorID:    validationID,
-		FirstIteration: firstIteration,
+		FirstIteration: validator.CurrentIteration() + 1,
 	}
 
 	weight := delegation.Weight()
 
 	if !autoRenew {
-		delegation.ExitIteration = &firstIteration
+		last := validator.CurrentIteration() + 1
+		delegation.LastIteration = &last
 	}
 
 	if err := d.queuedVET.Add(stake); err != nil {
@@ -161,11 +153,8 @@ func (d *delegations) DisableAutoRenew(delegationID thor.Bytes32) error {
 	}
 
 	// set the delegation's exit iteration
-	exitIteration := validator.CompleteIterations + 1
-	if validator.Status == StatusActive {
-		exitIteration += 1 // delegation's first staking period has not begun, it must wait for the current and then its own period
-	}
-	delegation.ExitIteration = &exitIteration
+	lastIteration := validator.CurrentIteration() + 1
+	delegation.LastIteration = &lastIteration
 	delegation.AutoRenew = false
 
 	if err := d.storage.SetDelegation(delegationID, delegation); err != nil {
@@ -200,7 +189,7 @@ func (d *delegations) EnableAutoRenew(delegationID thor.Bytes32) error {
 
 	weight := delegation.Weight()
 
-	delegation.ExitIteration = nil
+	delegation.LastIteration = nil
 	delegation.AutoRenew = true
 	if err := d.storage.SetDelegation(delegationID, delegation); err != nil {
 		return err
@@ -251,7 +240,7 @@ func (d *delegations) Withdraw(delegationID thor.Bytes32) (*big.Int, error) {
 	}
 
 	delegationStarted := delegation.FirstIteration <= validator.CompleteIterations
-	if delegationStarted {
+	if delegationStarted && validator.Status != StatusQueued {
 		// the stake has moved to withdrawable since we checked if the validator is locked above
 		if aggregation.WithdrawVET.Cmp(delegation.Stake) < 0 {
 			return nil, errors.New("not enough withdraw VET")
