@@ -16,13 +16,12 @@ jobs:
       NETWORK: solo
       TEST_NETWORK: solo
       MODE: online
-      DEFAULT_BRANCH: master
     steps:
       - name: Set Rosetta repo reference
         id: set-ref
         run: |
           # Default fallback branch
-          REF="${{ env.DEFAULT_BRANCH }}"
+          REF="master"
       
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             # For pull_request events, we only look at the PR's base branch
@@ -35,24 +34,20 @@ jobs:
               REF="${{ github.ref_name }}"
             fi
           fi
-      
-          echo "ref=$REF" >> "$GITHUB_OUTPUT"
 
-      - name: Verify branch exists
-        id: verify-branch
-        run: |
-          if ! git ls-remote --heads https://github.com/vechain/rosetta.git ${{ steps.set-ref.outputs.ref }}; then
+          # Verify if branch exists
+          if ! git ls-remote --heads https://github.com/vechain/rosetta.git $REF; then
             echo "Branch does not exist, using default branch"
-            echo "ref=${{ env.DEFAULT_BRANCH }}" >> "$GITHUB_OUTPUT"
+            echo "ref=master" >> "$GITHUB_OUTPUT"
           else
-            echo "ref=${{ steps.set-ref.outputs.ref }}" >> "$GITHUB_OUTPUT"
+            echo "ref=$REF" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Checkout
         uses: actions/checkout@v4
         with:
           repository: vechain/rosetta
-          ref: ${{ steps.verify-branch.outputs.ref }}
+          ref: ${{ steps.set-ref.outputs.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
