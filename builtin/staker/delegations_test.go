@@ -48,7 +48,7 @@ func Test_IsLocked(t *testing.T) {
 			CompleteIterations: 2,
 		}
 
-		assert.False(t, d.IsLocked(v), "should not be locked when last iteration is set and complete iterations is equal to first iteration")
+		assert.False(t, d.IsLocked(v), "should not be locked when complete iterations is equal to last iteration")
 	})
 
 	t.Run("Incomplete Staking Periods", func(t *testing.T) {
@@ -65,7 +65,7 @@ func Test_IsLocked(t *testing.T) {
 			CompleteIterations: 3,
 		}
 
-		assert.True(t, d.IsLocked(v), "should be locked when last iteration is set and complete iterations is less than first iteration")
+		assert.True(t, d.IsLocked(v), "should be locked when first is less than current and last is greater")
 	})
 
 	t.Run("Delegation Not Started", func(t *testing.T) {
@@ -82,7 +82,7 @@ func Test_IsLocked(t *testing.T) {
 			CompleteIterations: 3,
 		}
 
-		assert.False(t, d.IsLocked(v), "should not be locked when first iteration is 0 and last iteration is nil")
+		assert.False(t, d.IsLocked(v), "should not be locked if delegation has not started yet")
 	})
 	t.Run("Staker is Queued", func(t *testing.T) {
 		d := &Delegation{
@@ -113,7 +113,7 @@ func Test_IsLocked(t *testing.T) {
 			CompleteIterations: 0,
 		}
 
-		assert.True(t, d.IsLocked(v), "should not be locked when last iteration is nil")
+		assert.True(t, d.IsLocked(v), "should be locked when last iteration is nil and first equals current")
 	})
 }
 
