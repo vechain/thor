@@ -36,6 +36,7 @@ jobs:
     needs: build-docker-image
     env:
       THOR_IMAGE: vechain/thor:${{ github.sha }}
+      DEFAULT_COMMIT: bc75a1814361ff987402b6dd0225b44292d2780b
     name: Run Tests
     steps:
       # Main: https://github.com/vechain/thor-e2e-tests/tree/bc75a1814361ff987402b6dd0225b44292d2780b
@@ -44,7 +45,7 @@ jobs:
         id: set-ref
         run: |
           # Default fallback commit
-          REF="bc75a1814361ff987402b6dd0225b44292d2780b"
+          REF="${{ env.DEFAULT_COMMIT }}"
       
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             # For pull_request events, we only look at the PR's base branch
@@ -60,11 +61,21 @@ jobs:
       
           echo "ref=$REF" >> "$GITHUB_OUTPUT"
 
+      - name: Verify branch exists
+        id: verify-branch
+        run: |
+          if ! git ls-remote --heads https://github.com/vechain/thor-e2e-tests.git ${{ steps.set-ref.outputs.ref }}; then
+            echo "Branch does not exist, using default commit"
+            echo "ref=${{ env.DEFAULT_COMMIT }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=${{ steps.set-ref.outputs.ref }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
           repository: vechain/thor-e2e-tests
-          ref: ${{ steps.set-ref.outputs.ref }}
+          ref: ${{ steps.verify-branch.outputs.ref }}
 
       - name: Download artifact
         uses: actions/download-artifact@v4
