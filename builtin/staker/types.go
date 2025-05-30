@@ -132,13 +132,14 @@ func (d *Delegation) IsLocked(validator *Validation) bool {
 	if validator.Status != StatusActive {
 		return false
 	}
+	current := validator.CurrentIteration()
 	if d.LastIteration == nil {
-		return validator.CurrentIteration() >= d.FirstIteration
+		return current >= d.FirstIteration
 	}
-	if validator.CurrentIteration() < d.FirstIteration {
+	if current < d.FirstIteration {
 		return false
 	}
-	return *d.LastIteration >= validator.CompleteIterations
+	return current == d.FirstIteration || current < *d.LastIteration
 }
 
 // Aggregation represents the total amount of VET locked for a given validation's delegations.

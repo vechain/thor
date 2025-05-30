@@ -6,6 +6,7 @@
 package staker
 
 import (
+	"log/slog"
 	"math/big"
 
 	"github.com/pkg/errors"
@@ -132,6 +133,12 @@ func (d *delegations) DisableAutoRenew(delegationID thor.Bytes32) error {
 
 	weight := delegation.Weight()
 
+	slog.Info("Disabling auto-renew for delegation",
+		"pending-cooldown-vet", aggregation.PendingCooldownVET,
+		"pending-cooldown-weight", aggregation.PendingCooldownWeight,
+		"pending-locked-vet", aggregation.PendingLockedVET,
+		"pending-locked-weight", aggregation.PendingLockedWeight)
+
 	// the delegation's funds have already been locked, so we need to move them to cooldown
 	if delegation.IsLocked(validator) {
 		// move the delegation's portion of locked to cooldown.
@@ -156,6 +163,12 @@ func (d *delegations) DisableAutoRenew(delegationID thor.Bytes32) error {
 	lastIteration := validator.CurrentIteration() + 1
 	delegation.LastIteration = &lastIteration
 	delegation.AutoRenew = false
+
+	slog.Info("Disabling auto-renew for delegation",
+		"pending-cooldown-vet", aggregation.PendingCooldownVET,
+		"pending-cooldown-weight", aggregation.PendingCooldownWeight,
+		"pending-locked-vet", aggregation.PendingLockedVET,
+		"pending-locked-weight", aggregation.PendingLockedWeight)
 
 	if err := d.storage.SetDelegation(delegationID, delegation); err != nil {
 		return err
