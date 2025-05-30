@@ -127,11 +127,9 @@ func Test_AddDelegator_AutoRenew(t *testing.T) {
 	id1, err := staker.AddDelegation(validator.ID, stake, true, 255)
 	assert.NoError(t, err)
 	assert.False(t, id1.IsZero())
-	_, _, err = staker.Housekeep(validator.Period)
-	assert.NoError(t, err)
 	aggregation, err := staker.storage.GetAggregation(validator.ID)
 	assert.NoError(t, err)
-	assert.Equal(t, aggregation.LockedVET, stake)
+	assert.Equal(t, aggregation.PendingLockedVET, stake)
 	delegation, _, err := staker.GetDelegation(id1)
 	assert.NoError(t, err)
 	assert.Equal(t, stake, delegation.Stake)
@@ -143,18 +141,17 @@ func Test_AddDelegator_AutoRenew(t *testing.T) {
 	validator = validators[1]
 	id2, err := staker.AddDelegation(validator.ID, stake, false, 255)
 	assert.NoError(t, err)
-	_, _, err = staker.Housekeep(validator.Period)
-	assert.NoError(t, err)
 	aggregation2, err := staker.storage.GetAggregation(validator.ID)
 	assert.NoError(t, err)
-	assert.Equal(t, aggregation2.CooldownVET, stake)
+	assert.Equal(t, aggregation2.PendingCooldownVET, stake)
 
 	delegation, _, err = staker.GetDelegation(id2)
 	assert.NoError(t, err)
 	assert.Equal(t, stake, delegation.Stake)
 	assert.Equal(t, uint8(255), delegation.Multiplier)
-	assert.Equal(t, uint32(3), delegation.FirstIteration)
-	assert.Equal(t, uint32(3), *delegation.LastIteration) // auto renew, so we know when it will exit
+	assert.Equal(t, uint32(2), delegation.FirstIteration)
+	expectedExit := uint32(2)
+	assert.Equal(t, &expectedExit, delegation.LastIteration) // auto renew, so we know when it will exit
 }
 
 func Test_AddDelegator_StakeRange(t *testing.T) {
