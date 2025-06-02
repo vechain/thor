@@ -65,7 +65,7 @@ func TestEnergy(t *testing.T) {
 
 		allowanceAmount := big.NewInt(1000)
 
-		receipt, _, err := energy.Approve(acc1, acc2.Address(), allowanceAmount).Receipt(txContext(t), txOpts())
+		receipt, _, err := energy.Approve(acc2.Address(), allowanceAmount).Send().WithSigner(acc1).WithOptions(txOpts()).Receipt(txContext(t))
 		require.NoError(t, err)
 		require.False(t, receipt.Reverted, "Transaction should not be reverted")
 
@@ -78,7 +78,7 @@ func TestEnergy(t *testing.T) {
 		require.Equal(t, allowanceAmount, allowance, "Allowance should match the approved amount")
 
 		transferAmount := big.NewInt(500)
-		receipt, _, err = energy.TransferFrom(acc2, acc1.Address(), acc3.Address(), transferAmount).Receipt(txContext(t), txOpts())
+		receipt, _, err = energy.TransferFrom(acc1.Address(), acc3.Address(), transferAmount).Send().WithSigner(acc2).WithOptions(txOpts()).Receipt(txContext(t))
 		require.NoError(t, err)
 		require.False(t, receipt.Reverted, "TransferFrom should not be reverted")
 	})
@@ -91,7 +91,7 @@ func TestEnergy(t *testing.T) {
 
 		transferAmount := big.NewInt(999)
 
-		receipt, _, err := energy.Transfer(acc1, acc2.Address(), transferAmount).Receipt(txContext(t), txOpts())
+		receipt, _, err := energy.Transfer(acc2.Address(), transferAmount).Send().WithSigner(acc1).WithOptions(txOpts()).Receipt(txContext(t))
 		require.NoError(t, err)
 		require.False(t, receipt.Reverted, "Transfer should not be reverted")
 

@@ -33,8 +33,8 @@ import (
 )
 
 type Builtin[T any] interface {
-	Raw() *bind.Caller
-	Revision(blockID string) T
+	//Raw() *bind.Caller
+	//Revision(blockID string) T
 }
 
 var _ Builtin[*Energy] = (*Energy)(nil)

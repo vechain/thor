@@ -28,7 +28,10 @@ func TestAuthority(t *testing.T) {
 	acc2 := genesis.DevAccounts()[1]
 	identity := datagen.RandomHash()
 
-	receipt, _, err := authority.Add(executor, acc2.Address, acc2.Address, identity).Receipt(txContext(t), txOpts())
+	receipt, _, err := authority.Add(acc2.Address, acc2.Address, identity).
+		Send().
+		WithSigner(executor).
+		WithOptions(txOpts()).Receipt(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
@@ -62,7 +65,7 @@ func TestAuthority(t *testing.T) {
 	})
 
 	t.Run("Revoke", func(t *testing.T) {
-		receipt, _, err = authority.Revoke(executor, acc2.Address).Receipt(txContext(t), txOpts())
+		receipt, _, err = authority.Revoke(acc2.Address).Send().WithSigner(executor).WithOptions(txOpts()).Receipt(txContext(t))
 		require.NoError(t, err)
 		require.False(t, receipt.Reverted)
 

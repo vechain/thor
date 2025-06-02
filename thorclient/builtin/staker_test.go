@@ -31,36 +31,51 @@ func TestStaker(t *testing.T) {
 	require.NoError(t, err)
 
 	// set authorities - required for initial staker setup
-	authorityTxs := &bind.Senders{}
+	var authorityTxs []bind.OperationBuilder
 	executor := bind.NewSigner(genesis.DevAccounts()[0].PrivateKey)
 	stargate := bind.NewSigner(genesis.DevAccounts()[0].PrivateKey)
 	for _, acc := range genesis.DevAccounts()[1:] {
-		sender := authority.Add(executor, acc.Address, acc.Address, datagen.RandomHash())
-		authorityTxs.Add(sender)
+		sender := authority.Add(acc.Address, acc.Address, datagen.RandomHash())
+		authorityTxs = append(authorityTxs, sender)
 	}
-	if _, _, err := authorityTxs.Send(txContext(t), txOpts()); err != nil {
-		t.Fatal(err)
+	for _, tx := range authorityTxs {
+		if _, err := tx.Send().WithSigner(executor).WithOptions(txOpts()).Send(); err != nil {
+			t.Fatal(err)
+		}
 	}
+
 	// set max block proposers
-	if _, _, err := params.Set(executor, thor.KeyMaxBlockProposers, big.NewInt(3)).Receipt(txContext(t), txOpts()); err != nil {
+	if _, _, err := params.Set(thor.KeyMaxBlockProposers, big.NewInt(3)).
+		Send().
+		WithSigner(executor).
+		WithOptions(txOpts()).
+		Receipt(txContext(t)); err != nil {
 		t.Fatal(err)
 	}
 	// set stargate address
-	if _, _, err := params.Set(executor, thor.KeyStargateContractAddress, new(big.Int).SetBytes(stargate.Address().Bytes())).Receipt(txContext(t), txOpts()); err != nil {
+	if _, _, err := params.Set(thor.KeyStargateContractAddress, new(big.Int).SetBytes(stargate.Address().Bytes())).
+		Send().
+		WithSigner(executor).
+		WithOptions(txOpts()).Receipt(txContext(t)); err != nil {
 		t.Fatal(err)
 	}
 
 	// add validators - trigger PoS activation
 	minStake := MinStake()
-	validatorTxs := &bind.Senders{}
+	var validatorTxs []bind.SendBuilder
 	for _, acc := range genesis.DevAccounts()[0:2] {
-		signer := bind.NewSigner(acc.PrivateKey)
-		sender := staker.AddValidator(signer, acc.Address, minStake, minStakingPeriod, true)
-		validatorTxs.Add(sender)
+		addValidatorTx := staker.AddValidator(acc.Address, minStake, minStakingPeriod, true).
+			Send().
+			WithSigner(bind.NewSigner(acc.PrivateKey)).
+			WithOptions(txOpts())
+		validatorTxs = append(validatorTxs, addValidatorTx)
 	}
-	if _, _, err := validatorTxs.Send(txContext(t), txOpts()); err != nil {
-		t.Fatal(err)
+	for _, tx := range validatorTxs {
+		if _, err = tx.Send(); err != nil {
+			t.Fatal(err)
+		}
 	}
+
 	if err := chain.MintBlock(genesis.DevAccounts()[0]); err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +126,10 @@ func TestStaker(t *testing.T) {
 	)
 
 	// AddValidator
-	receipt, _, err := staker.AddValidator(validatorKey, validator.Address, minStake, minStakingPeriod, false).Receipt(txContext(t), txOpts())
+	receipt, _, err := staker.AddValidator(validator.Address, minStake, minStakingPeriod, false).
+		Send().
+		WithSigner(validatorKey).
+		WithOptions(txOpts()).Receipt(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
@@ -141,7 +159,10 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, big.NewInt(0).Mul(stake, big.NewInt(2)), queuedWeight)
 
 	// IncreaseStake
-	receipt, _, err = staker.IncreaseStake(validatorKey, queuedID, minStake).Receipt(txContext(t), txOpts())
+	receipt, _, err = staker.IncreaseStake(queuedID, minStake).
+		Send().
+		WithSigner(validatorKey).
+		WithOptions(txOpts()).Receipt(txContext(t))
 	require.NoError(t, err)
 
 	increaseEvents, err := staker.FilterStakeIncreased(newRange(receipt), nil, logdb.ASC)
@@ -152,7 +173,10 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, minStake, increaseEvents[0].Added)
 
 	// DecreaseStake
-	receipt, _, err = staker.DecreaseStake(validatorKey, queuedID, minStake).Receipt(txContext(t), txOpts())
+	receipt, _, err = staker.DecreaseStake(queuedID, minStake).
+		Send().
+		WithSigner(validatorKey).
+		WithOptions(txOpts()).Receipt(txContext(t))
 	require.NoError(t, err)
 
 	decreaseEvents, err := staker.FilterStakeDecreased(newRange(receipt), nil, logdb.ASC)
@@ -163,7 +187,10 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, minStake, decreaseEvents[0].Removed)
 
 	// UpdateAutoRenew - Disable AutoRenew
-	receipt, _, err = staker.UpdateAutoRenew(validatorKey, queuedID, true).Receipt(txContext(t), txOpts())
+	receipt, _, err = staker.UpdateAutoRenew(queuedID, true).
+		Send().
+		WithSigner(validatorKey).
+		WithOptions(txOpts()).Receipt(txContext(t))
 	require.NoError(t, err)
 
 	autoRenewEvents, err := staker.FilterValidatorUpdatedAutoRenew(newRange(receipt), nil, logdb.ASC)
@@ -178,7 +205,10 @@ func TestStaker(t *testing.T) {
 	require.True(t, getRes.AutoRenew)
 
 	// UpdateAutoRenew - Enable AutoRenew
-	receipt, _, err = staker.UpdateAutoRenew(validatorKey, queuedID, false).Receipt(txContext(t), txOpts())
+	receipt, _, err = staker.UpdateAutoRenew(queuedID, false).
+		Send().
+		WithSigner(validatorKey).
+		WithOptions(txOpts()).Receipt(txContext(t))
 	require.NoError(t, err)
 
 	autoRenewEvents, err = staker.FilterValidatorUpdatedAutoRenew(newRange(receipt), nil, logdb.ASC)
@@ -188,7 +218,10 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, false, autoRenewEvents[0].AutoRenew)
 
 	// AddDelegation
-	receipt, _, err = staker.AddDelegation(stargate, queuedID, minStake, false, 100).Receipt(txContext(t), txOpts())
+	receipt, _, err = staker.AddDelegation(queuedID, minStake, false, 100).
+		Send().
+		WithSigner(stargate).
+		WithOptions(txOpts()).Receipt(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
@@ -206,7 +239,10 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, queuedID, delegation.ValidationID)
 
 	// UpdateDelegationAutoRenew - Enable AutoRenew
-	receipt, _, err = staker.UpdateDelegationAutoRenew(stargate, delegationID, true).Receipt(txContext(t), txOpts())
+	receipt, _, err = staker.UpdateDelegationAutoRenew(delegationID, true).
+		Send().
+		WithSigner(stargate).
+		WithOptions(txOpts()).Receipt(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
@@ -215,7 +251,10 @@ func TestStaker(t *testing.T) {
 	require.Len(t, delegatorAutoRenewEvents, 1)
 
 	// UpdateDelegationAutoRenew - Disable AutoRenew
-	receipt, _, err = staker.UpdateDelegationAutoRenew(stargate, delegationID, false).Receipt(txContext(t), txOpts())
+	receipt, _, err = staker.UpdateDelegationAutoRenew(delegationID, false).
+		Send().
+		WithSigner(stargate).
+		WithOptions(txOpts()).Receipt(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
@@ -224,7 +263,7 @@ func TestStaker(t *testing.T) {
 	require.Len(t, delegatorAutoRenewEvents, 1)
 
 	// Withdraw
-	receipt, _, err = staker.Withdraw(validatorKey, queuedID).Receipt(txContext(t), txOpts())
+	receipt, _, err = staker.Withdraw(queuedID).Send().WithSigner(validatorKey).WithOptions(txOpts()).Receipt(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
@@ -237,7 +276,7 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, StakerStatusExited, getRes.Status)
 
 	// WithdrawDelegation
-	receipt, _, err = staker.WithdrawDelegation(stargate, delegationID).Receipt(txContext(t), txOpts())
+	receipt, _, err = staker.WithdrawDelegation(delegationID).Send().WithSigner(stargate).WithOptions(txOpts()).Receipt(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
