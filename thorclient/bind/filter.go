@@ -30,7 +30,7 @@ type FilterBuilder interface {
 
 // filterBuilder is the concrete implementation of FilterBuilder.
 type filterBuilder struct {
-	op      *operationBuilder
+	op      *methodBuilder
 	evRange *events.Range
 	opts    *events.Options
 	order   logdb.Order

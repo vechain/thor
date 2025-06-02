@@ -36,13 +36,13 @@ func (p *Params) Raw() bind.Contract {
 	return p.contract
 }
 
-func (p *Params) Set(key thor.Bytes32, value *big.Int) bind.OperationBuilder {
-	return p.contract.Operation("set", key, value)
+func (p *Params) Set(key thor.Bytes32, value *big.Int) bind.MethodBuilder {
+	return p.contract.Method("set", key, value)
 }
 
 func (p *Params) Get(key thor.Bytes32) (*big.Int, error) {
 	out := new(big.Int)
-	if err := p.contract.Operation("get", key).Call().Into(&out); err != nil {
+	if err := p.contract.Method("get", key).Call().Into(&out); err != nil {
 		return nil, err
 	}
 	return out, nil

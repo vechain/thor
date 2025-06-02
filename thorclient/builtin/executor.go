@@ -45,7 +45,7 @@ func (e *Executor) Approvers(address thor.Address) (*Approver, error) {
 	out[0] = new(common.Hash)
 	out[1] = new(bool)
 
-	if err := e.contract.Operation("approvers", address).Call().Into(&out); err != nil {
+	if err := e.contract.Method("approvers", address).Call().Into(&out); err != nil {
 		return nil, fmt.Errorf("failed to call approvers: %w", err)
 	}
 
@@ -75,7 +75,7 @@ func (e *Executor) Proposals(proposalID thor.Bytes32) (*Proposal, error) {
 	out[5] = new(common.Address)
 	out[6] = new([]byte)
 
-	if err := e.contract.Operation("proposals", proposalID).Call().Into(&out); err != nil {
+	if err := e.contract.Method("proposals", proposalID).Call().Into(&out); err != nil {
 		return nil, fmt.Errorf("failed to call proposals: %w", err)
 	}
 
@@ -92,38 +92,38 @@ func (e *Executor) Proposals(proposalID thor.Bytes32) (*Proposal, error) {
 
 func (e *Executor) ApproverCount() (uint8, error) {
 	var count uint8
-	if err := e.contract.Operation("approverCount").Call().Into(&count); err != nil {
+	if err := e.contract.Method("approverCount").Call().Into(&count); err != nil {
 		return 0, fmt.Errorf("failed to call approverCount: %w", err)
 	}
 	return count, nil
 }
 
-func (e *Executor) Propose(target thor.Address, data []byte) bind.OperationBuilder {
-	return e.contract.Operation("propose", target, data)
+func (e *Executor) Propose(target thor.Address, data []byte) bind.MethodBuilder {
+	return e.contract.Method("propose", target, data)
 }
 
-func (e *Executor) Approve(proposalID thor.Bytes32) bind.OperationBuilder {
-	return e.contract.Operation("approve", proposalID)
+func (e *Executor) Approve(proposalID thor.Bytes32) bind.MethodBuilder {
+	return e.contract.Method("approve", proposalID)
 }
 
-func (e *Executor) Execute(proposalID thor.Bytes32) bind.OperationBuilder {
-	return e.contract.Operation("execute", proposalID)
+func (e *Executor) Execute(proposalID thor.Bytes32) bind.MethodBuilder {
+	return e.contract.Method("execute", proposalID)
 }
 
-func (e *Executor) AddApprover(address thor.Address, identity thor.Bytes32) bind.OperationBuilder {
-	return e.contract.Operation("addApprover", address, identity)
+func (e *Executor) AddApprover(address thor.Address, identity thor.Bytes32) bind.MethodBuilder {
+	return e.contract.Method("addApprover", address, identity)
 }
 
-func (e *Executor) RevokeApprover(address thor.Address) bind.OperationBuilder {
-	return e.contract.Operation("revokeApprover", address)
+func (e *Executor) RevokeApprover(address thor.Address) bind.MethodBuilder {
+	return e.contract.Method("revokeApprover", address)
 }
 
-func (e *Executor) AttachVotingContract(votingContract thor.Address) bind.OperationBuilder {
-	return e.contract.Operation("attachVotingContract", votingContract)
+func (e *Executor) AttachVotingContract(votingContract thor.Address) bind.MethodBuilder {
+	return e.contract.Method("attachVotingContract", votingContract)
 }
 
-func (e *Executor) DetachVotingContract(votingContract thor.Address) bind.OperationBuilder {
-	return e.contract.Operation("detachVotingContract", votingContract)
+func (e *Executor) DetachVotingContract(votingContract thor.Address) bind.MethodBuilder {
+	return e.contract.Method("detachVotingContract", votingContract)
 }
 
 type ProposalEvent struct {

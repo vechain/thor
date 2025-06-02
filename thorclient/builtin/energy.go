@@ -41,7 +41,7 @@ func (e *Energy) Raw() bind.Contract {
 // Name returns the name of the token
 func (e *Energy) Name() (string, error) {
 	var name string
-	if err := e.contract.Operation("name").Call().Into(&name); err != nil {
+	if err := e.contract.Method("name").Call().Into(&name); err != nil {
 		return "", err
 	}
 	return name, nil
@@ -50,7 +50,7 @@ func (e *Energy) Name() (string, error) {
 // Symbol returns the symbol of the token
 func (e *Energy) Symbol() (string, error) {
 	var symbol string
-	if err := e.contract.Operation("symbol").Call().Into(&symbol); err != nil {
+	if err := e.contract.Method("symbol").Call().Into(&symbol); err != nil {
 		return "", err
 	}
 	return symbol, nil
@@ -59,7 +59,7 @@ func (e *Energy) Symbol() (string, error) {
 // Decimals returns the number of decimals the token uses
 func (e *Energy) Decimals() (uint8, error) {
 	var decimals uint8
-	if err := e.contract.Operation("decimals").Call().Into(&decimals); err != nil {
+	if err := e.contract.Method("decimals").Call().Into(&decimals); err != nil {
 		return 0, err
 	}
 	return decimals, nil
@@ -68,7 +68,7 @@ func (e *Energy) Decimals() (uint8, error) {
 // TotalSupply returns the total token supply
 func (e *Energy) TotalSupply() (*big.Int, error) {
 	totalSupply := new(big.Int)
-	if err := e.contract.Operation("totalSupply").Call().Into(&totalSupply); err != nil {
+	if err := e.contract.Method("totalSupply").Call().Into(&totalSupply); err != nil {
 		return nil, err
 	}
 	return totalSupply, nil
@@ -77,7 +77,7 @@ func (e *Energy) TotalSupply() (*big.Int, error) {
 // TotalBurned returns the total amount of burned tokens
 func (e *Energy) TotalBurned() (*big.Int, error) {
 	totalBurned := new(big.Int)
-	if err := e.contract.Operation("totalBurned").Call().Into(&totalBurned); err != nil {
+	if err := e.contract.Method("totalBurned").Call().Into(&totalBurned); err != nil {
 		return nil, err
 	}
 	return totalBurned, nil
@@ -86,7 +86,7 @@ func (e *Energy) TotalBurned() (*big.Int, error) {
 // BalanceOf returns the token balance of the specified address
 func (e *Energy) BalanceOf(owner thor.Address) (*big.Int, error) {
 	balanceOf := new(big.Int)
-	if err := e.contract.Operation("balanceOf", owner).Call().Into(&balanceOf); err != nil {
+	if err := e.contract.Method("balanceOf", owner).Call().Into(&balanceOf); err != nil {
 		return nil, err
 	}
 	return balanceOf, nil
@@ -95,30 +95,30 @@ func (e *Energy) BalanceOf(owner thor.Address) (*big.Int, error) {
 // Allowance returns the amount of tokens approved by the owner to be spent by the spender
 func (e *Energy) Allowance(owner, spender thor.Address) (*big.Int, error) {
 	allowance := new(big.Int)
-	if err := e.contract.Operation("allowance", owner, spender).Call().Into(&allowance); err != nil {
+	if err := e.contract.Method("allowance", owner, spender).Call().Into(&allowance); err != nil {
 		return nil, err
 	}
 	return allowance, nil
 }
 
 // Transfer transfers tokens to the specified address
-func (e *Energy) Transfer(to thor.Address, amount *big.Int) bind.OperationBuilder {
-	return e.contract.Operation("transfer", to, amount)
+func (e *Energy) Transfer(to thor.Address, amount *big.Int) bind.MethodBuilder {
+	return e.contract.Method("transfer", to, amount)
 }
 
 // TransferFrom transfers tokens from one address to another
-func (e *Energy) TransferFrom(from, to thor.Address, amount *big.Int) bind.OperationBuilder {
-	return e.contract.Operation("transferFrom", from, to, amount)
+func (e *Energy) TransferFrom(from, to thor.Address, amount *big.Int) bind.MethodBuilder {
+	return e.contract.Method("transferFrom", from, to, amount)
 }
 
 // Approve approves the spender to spend the specified amount of tokens
-func (e *Energy) Approve(spender thor.Address, amount *big.Int) bind.OperationBuilder {
-	return e.contract.Operation("approve", spender, amount)
+func (e *Energy) Approve(spender thor.Address, amount *big.Int) bind.MethodBuilder {
+	return e.contract.Method("approve", spender, amount)
 }
 
 // Move transfers tokens from one address to another (alias for transferFrom)
-func (e *Energy) Move(from, to thor.Address, amount *big.Int) bind.OperationBuilder {
-	return e.contract.Operation("move", from, to, amount)
+func (e *Energy) Move(from, to thor.Address, amount *big.Int) bind.MethodBuilder {
+	return e.contract.Method("move", from, to, amount)
 }
 
 // TransferEvent represents the Transfer event

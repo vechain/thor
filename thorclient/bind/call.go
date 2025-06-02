@@ -32,7 +32,7 @@ type CallBuilder interface {
 
 // callBuilder is the concrete implementation of CallBuilder.
 type callBuilder struct {
-	op  *operationBuilder
+	op  *methodBuilder
 	rev string
 }
 

@@ -53,7 +53,7 @@ type TxOptions struct {
 
 // sendBuilder is the concrete implementation of SendBuilder.
 type sendBuilder struct {
-	op     *operationBuilder
+	op     *methodBuilder
 	signer Signer
 	opts   *TxOptions
 }

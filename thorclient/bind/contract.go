@@ -18,8 +18,8 @@ import (
 // Contract is the main interface for contract interactions.
 // It provides a unified entry point for all contract operations.
 type Contract interface {
-	// Operation creates a new operation builder for the specified method and arguments.
-	Operation(method string, args ...any) OperationBuilder
+	// Method creates a new method builder for the specified method and arguments.
+	Method(method string, args ...any) MethodBuilder
 
 	// FilterEvent creates a new filter builder for the specified event.
 	FilterEvent(eventName string) FilterBuilder
@@ -57,9 +57,9 @@ func NewContract(client *httpclient.Client, abiData []byte, address *thor.Addres
 	}, nil
 }
 
-// Operation implements Contract.Operation.
-func (c *contract) Operation(method string, args ...any) OperationBuilder {
-	return &operationBuilder{
+// Method implements Contract.Method.
+func (c *contract) Method(method string, args ...any) MethodBuilder {
+	return &methodBuilder{
 		contract: c,
 		method:   method,
 		args:     args,
@@ -70,7 +70,7 @@ func (c *contract) Operation(method string, args ...any) OperationBuilder {
 // FilterEvent implements Contract.Event.
 func (c *contract) FilterEvent(eventName string) FilterBuilder {
 	return &filterBuilder{
-		op: &operationBuilder{
+		op: &methodBuilder{
 			contract: c,
 			method:   eventName,
 		},

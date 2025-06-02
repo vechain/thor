@@ -13,10 +13,10 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-// OperationBuilder is the interface that routes to specific operation types.
-type OperationBuilder interface {
+// MethodBuilder is the interface that routes to specific operation types.
+type MethodBuilder interface {
 	// WithValue sets the VET value for the operation.
-	WithValue(vet *big.Int) OperationBuilder
+	WithValue(vet *big.Int) MethodBuilder
 
 	// Call returns a CallBuilder for read operations.
 	Call() CallBuilder
@@ -28,39 +28,39 @@ type OperationBuilder interface {
 	Clause() (*tx.Clause, error)
 }
 
-// operationBuilder is the concrete implementation of OperationBuilder.
-type operationBuilder struct {
+// methodBuilder is the concrete implementation of MethodBuilder.
+type methodBuilder struct {
 	contract *contract
 	method   string
 	args     []any
 	vet      *big.Int
 }
 
-// WithValue implements OperationBuilder.WithValue.
-func (b *operationBuilder) WithValue(vet *big.Int) OperationBuilder {
+// WithValue implements MethodBuilder.WithValue.
+func (b *methodBuilder) WithValue(vet *big.Int) MethodBuilder {
 	b.vet = vet
 	return b
 }
 
-// Call implements OperationBuilder.Call.
-func (b *operationBuilder) Call() CallBuilder {
+// Call implements MethodBuilder.Call.
+func (b *methodBuilder) Call() CallBuilder {
 	return &callBuilder{
 		op: b,
 	}
 }
 
-// Send implements OperationBuilder.Send.
-func (b *operationBuilder) Send() SendBuilder {
+// Send implements MethodBuilder.Send.
+func (b *methodBuilder) Send() SendBuilder {
 	return &sendBuilder{
 		op: b,
 	}
 }
 
 // Clause implements Clause build.
-func (b *operationBuilder) Clause() (*tx.Clause, error) {
+func (b *methodBuilder) Clause() (*tx.Clause, error) {
 	method, ok := b.contract.abi.Methods[b.method]
 	if !ok {
-		return nil, fmt.Errorf("method not found: " + b.method)
+		return nil, fmt.Errorf("method not found: %s", b.method)
 	}
 
 	data, err := method.Inputs.Pack(b.args...)
