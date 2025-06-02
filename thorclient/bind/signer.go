@@ -20,7 +20,9 @@ type Signer interface {
 }
 type PrivateKeySigner ecdsa.PrivateKey
 
-var _ Signer = (*PrivateKeySigner)(nil)
+func NewSigner(privateKey *ecdsa.PrivateKey) *PrivateKeySigner {
+	return (*PrivateKeySigner)(privateKey)
+}
 
 func (p *PrivateKeySigner) Address() thor.Address {
 	return thor.Address(crypto.PubkeyToAddress(p.PublicKey))

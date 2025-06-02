@@ -26,11 +26,11 @@ import (
 type Caller struct {
 	client *httpclient.Client
 	abi    *abi.ABI
-	addr   thor.Address
+	addr   *thor.Address
 	rev    *string
 }
 
-func NewCaller(client *httpclient.Client, abiData []byte, address thor.Address) (*Caller, error) {
+func NewCaller(client *httpclient.Client, abiData []byte, address *thor.Address) (*Caller, error) {
 	contractABI, err := abi.JSON(bytes.NewReader(abiData))
 	if err != nil {
 		return nil, err
@@ -42,7 +42,7 @@ func NewCaller(client *httpclient.Client, abiData []byte, address thor.Address) 
 	}, nil
 }
 
-func (w *Caller) Address() thor.Address {
+func (w *Caller) Address() *thor.Address {
 	return w.addr
 }
 
@@ -86,7 +86,7 @@ func (w *Caller) Simulate(vet *big.Int, caller thor.Address, methodName string, 
 		Caller: &caller,
 		Clauses: []accounts.Clause{
 			{
-				To:    &w.addr,
+				To:    w.addr,
 				Data:  hexutil.Encode(clause.Data()),
 				Value: (*math.HexOrDecimal256)(clause.Value()),
 			},
@@ -158,7 +158,7 @@ func (w *Caller) ClauseWithVET(vet *big.Int, methodName string, args ...any) (*t
 		return nil, fmt.Errorf("failed to pack method (%s): %w", methodName, err)
 	}
 	data = append(method.Id()[:], data...)
-	clause := tx.NewClause(&w.addr).WithData(data)
+	clause := tx.NewClause(w.addr).WithData(data)
 	clause = clause.WithValue(vet)
 
 	return clause, nil
@@ -177,7 +177,7 @@ func (w *Caller) FilterEvents(eventName string, eventsRange *events.Range, opts 
 		Order:   order,
 		CriteriaSet: []*events.EventCriteria{
 			{
-				Address: &w.addr,
+				Address: w.addr,
 				TopicSet: events.TopicSet{
 					Topic0: &id,
 				},

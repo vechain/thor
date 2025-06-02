@@ -32,8 +32,8 @@ func TestStaker(t *testing.T) {
 
 	// set authorities - required for initial staker setup
 	authorityTxs := &bind.Senders{}
-	executor := (*bind.PrivateKeySigner)(genesis.DevAccounts()[0].PrivateKey)
-	stargate := (*bind.PrivateKeySigner)(genesis.DevAccounts()[0].PrivateKey)
+	executor := bind.NewSigner(genesis.DevAccounts()[0].PrivateKey)
+	stargate := bind.NewSigner(genesis.DevAccounts()[0].PrivateKey)
 	for _, acc := range genesis.DevAccounts()[1:] {
 		sender := authority.Add(executor, acc.Address, acc.Address, datagen.RandomHash())
 		authorityTxs.Add(sender)
@@ -54,7 +54,7 @@ func TestStaker(t *testing.T) {
 	minStake := MinStake()
 	validatorTxs := &bind.Senders{}
 	for _, acc := range genesis.DevAccounts()[0:2] {
-		signer := (*bind.PrivateKeySigner)(acc.PrivateKey)
+		signer := bind.NewSigner(acc.PrivateKey)
 		sender := staker.AddValidator(signer, acc.Address, minStake, minStakingPeriod, true)
 		validatorTxs.Add(sender)
 	}
@@ -107,7 +107,7 @@ func TestStaker(t *testing.T) {
 
 	var (
 		validator    = genesis.DevAccounts()[9]
-		validatorKey = (*bind.PrivateKeySigner)(validator.PrivateKey)
+		validatorKey = bind.NewSigner(validator.PrivateKey)
 	)
 
 	// AddValidator
