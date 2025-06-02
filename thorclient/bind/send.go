@@ -28,8 +28,8 @@ type SendBuilder interface {
 	// WithOptions sets the transaction options.
 	WithOptions(opts *TxOptions) SendBuilder
 
-	// Send sends the transaction without waiting for receipt.
-	Send() (*tx.Transaction, error)
+	// IssueTx sends the transaction without waiting for receipt.
+	IssueTx() (*tx.Transaction, error)
 
 	// Receipt sends the transaction and waits for the receipt.
 	Receipt(ctx context.Context) (*transactions.Receipt, *tx.Transaction, error)
@@ -71,8 +71,8 @@ func (b *sendBuilder) WithOptions(opts *TxOptions) SendBuilder {
 	return b
 }
 
-// Send implements SendBuilder.Send.
-func (b *sendBuilder) Send() (*tx.Transaction, error) {
+// IssueTx implements SendBuilder.IssueTx.
+func (b *sendBuilder) IssueTx() (*tx.Transaction, error) {
 	if b.signer == nil {
 		return nil, errors.New("signer not set")
 	}
@@ -173,7 +173,7 @@ func (b *sendBuilder) Send() (*tx.Transaction, error) {
 		return nil, fmt.Errorf("failed to sign transaction: %w", err)
 	}
 
-	// Send the transaction
+	// IssueTx the transaction
 	rlpTx, err := transaction.MarshalBinary()
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode transaction: %w", err)
@@ -188,7 +188,7 @@ func (b *sendBuilder) Send() (*tx.Transaction, error) {
 
 // Receipt implements SendBuilder.Receipt.
 func (b *sendBuilder) Receipt(ctx context.Context) (*transactions.Receipt, *tx.Transaction, error) {
-	transaction, err := b.Send()
+	transaction, err := b.IssueTx()
 	if err != nil {
 		return nil, nil, err
 	}

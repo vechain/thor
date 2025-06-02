@@ -39,7 +39,7 @@ func TestStaker(t *testing.T) {
 		authorityTxs = append(authorityTxs, sender)
 	}
 	for _, tx := range authorityTxs {
-		if _, err := tx.Send().WithSigner(executor).WithOptions(txOpts()).Send(); err != nil {
+		if _, err := tx.Send().WithSigner(executor).WithOptions(txOpts()).IssueTx(); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -71,7 +71,7 @@ func TestStaker(t *testing.T) {
 		validatorTxs = append(validatorTxs, addValidatorTx)
 	}
 	for _, tx := range validatorTxs {
-		if _, err = tx.Send(); err != nil {
+		if _, err = tx.IssueTx(); err != nil {
 			t.Fatal(err)
 		}
 	}
