@@ -6,6 +6,9 @@
 package bind
 
 import (
+	"fmt"
+
+	"github.com/vechain/thor/v2/tx"
 	"math/big"
 )
 
@@ -20,8 +23,8 @@ type OperationBuilder interface {
 	// Send returns a SendBuilder for write operations.
 	Send() SendBuilder
 
-	// Clause returns a ClauseBuilder for building transaction clauses.
-	Clause() ClauseBuilder
+	// Clause builds a clause for the operation.
+	Clause() (*tx.Clause, error)
 }
 
 // operationBuilder is the concrete implementation of OperationBuilder.
@@ -52,9 +55,20 @@ func (b *operationBuilder) Send() SendBuilder {
 	}
 }
 
-// Clause implements OperationBuilder.Clause.
-func (b *operationBuilder) Clause() ClauseBuilder {
-	return &clauseBuilder{
-		op: b,
+// Clause implements Clause build.
+func (b *operationBuilder) Clause() (*tx.Clause, error) {
+	method, ok := b.contract.abi.Methods[b.method]
+	if !ok {
+		return nil, fmt.Errorf("method not found: " + b.method)
 	}
+
+	data, err := method.Inputs.Pack(b.args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to pack method (%s): %w", b.method, err)
+	}
+
+	data = append(method.Id()[:], data...)
+	clause := tx.NewClause(b.contract.addr).WithData(data).WithValue(b.vet)
+
+	return clause, nil
 }

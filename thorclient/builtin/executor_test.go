@@ -39,7 +39,7 @@ func TestExecutor(t *testing.T) {
 	require.Equal(t, uint8(3), approverCount)
 
 	// Propose - Add another approver
-	addApproverClause, err := executor.AddApprover(newApprover.Address(), datagen.RandomHash()).Clause().Build()
+	addApproverClause, err := executor.AddApprover(newApprover.Address(), datagen.RandomHash()).Clause()
 	require.NoError(t, err)
 	receipt, _, err := executor.Propose(*addApproverClause.To(), addApproverClause.Data()).Send().WithSigner(approver1).WithOptions(txOpts()).Receipt(txContext(t))
 	require.NoError(t, err)
@@ -91,14 +91,14 @@ func TestExecutor(t *testing.T) {
 	require.True(t, newApproverInfo.InPower)
 
 	// RevokeApprover - Clause only
-	_, err = executor.RevokeApprover(newApprover.Address()).Clause().Build()
+	_, err = executor.RevokeApprover(newApprover.Address()).Clause()
 	require.NoError(t, err)
 
 	// AttachVotingContract - Clause only
-	_, err = executor.AttachVotingContract(thor.Address{}).Clause().Build()
+	_, err = executor.AttachVotingContract(thor.Address{}).Clause()
 	require.NoError(t, err)
 
 	// DetachVotingContract - Clause only
-	_, err = executor.DetachVotingContract(thor.Address{}).Clause().Build()
+	_, err = executor.DetachVotingContract(thor.Address{}).Clause()
 	require.NoError(t, err)
 }

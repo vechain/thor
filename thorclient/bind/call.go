@@ -70,7 +70,7 @@ func (b *callBuilder) Execute() (*accounts.CallResult, error) {
 // Simulate implements CallBuilder.Simulate.
 func (b *callBuilder) Simulate(caller *thor.Address) (*accounts.CallResult, error) {
 	// Build the clause
-	clause, err := b.op.Clause().Build()
+	clause, err := b.op.Clause()
 	if err != nil {
 		return nil, err
 	}

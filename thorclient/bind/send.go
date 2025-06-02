@@ -71,7 +71,7 @@ func (b *sendBuilder) IssueTx() (*tx.Transaction, error) {
 	}
 
 	// Build the clause
-	clause, err := b.op.Clause().Build()
+	clause, err := b.op.Clause()
 	if err != nil {
 		return nil, err
 	}
