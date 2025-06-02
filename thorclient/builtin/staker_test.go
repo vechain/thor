@@ -31,15 +31,15 @@ func TestStaker(t *testing.T) {
 	require.NoError(t, err)
 
 	// set authorities - required for initial staker setup
-	var authorityTxs []bind.OperationBuilder
+	var authorityTxs []bind.SendBuilder
 	executor := bind.NewSigner(genesis.DevAccounts()[0].PrivateKey)
 	stargate := bind.NewSigner(genesis.DevAccounts()[0].PrivateKey)
 	for _, acc := range genesis.DevAccounts()[1:] {
-		sender := authority.Add(acc.Address, acc.Address, datagen.RandomHash())
+		sender := authority.Add(acc.Address, acc.Address, datagen.RandomHash()).Send().WithSigner(executor).WithOptions(txOpts())
 		authorityTxs = append(authorityTxs, sender)
 	}
 	for _, tx := range authorityTxs {
-		if _, err := tx.Send().WithSigner(executor).WithOptions(txOpts()).IssueTx(); err != nil {
+		if _, err := tx.IssueTx(); err != nil {
 			t.Fatal(err)
 		}
 	}
