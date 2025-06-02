@@ -40,7 +40,7 @@ type Staker struct {
 }
 
 func NewStaker(client *httpclient.Client) (*Staker, error) {
-	contract, err := bind.NewCaller(client, builtin.Staker.RawABI(), builtin.Staker.Address)
+	contract, err := bind.NewCaller(client, builtin.Staker.RawABI(), &builtin.Staker.Address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create staker contract: %w", err)
 	}

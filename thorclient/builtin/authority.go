@@ -22,7 +22,7 @@ type Authority struct {
 }
 
 func NewAuthority(client *httpclient.Client) (*Authority, error) {
-	base, err := bind.NewCaller(client, builtin.Authority.RawABI(), builtin.Authority.Address)
+	base, err := bind.NewCaller(client, builtin.Authority.RawABI(), &builtin.Authority.Address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create authority contract: %w", err)
 	}

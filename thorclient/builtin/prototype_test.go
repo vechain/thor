@@ -28,8 +28,8 @@ func TestPrototype(t *testing.T) {
 	prototype, err := NewPrototype(client)
 	require.NoError(t, err)
 	accKey := genesis.DevAccounts()[0].PrivateKey
-	acc := (*bind.PrivateKeySigner)(accKey)
-	acc2 := (*bind.PrivateKeySigner)(genesis.DevAccounts()[1].PrivateKey)
+	acc := bind.NewSigner(accKey)
+	acc2 := bind.NewSigner(genesis.DevAccounts()[1].PrivateKey)
 
 	contractBytecode := "0x6080604052348015600f57600080fd5b5060c88061001e6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c8063b8d1c87214602d575b600080fd5b605660048036036020811015604157600080fd5b81019080803590602001909291905050506058565b005b7fa66e3d99cea58d39cb278611964329fa8d4b08252d747eced50565286fb225c0816040518082815260200191505060405180910390a15056fea2646970667358221220be91f5a1548580d479fc71c4ee668fdb51566550b04fa3632f1d4c453053d3e264736f6c63430006020033"
 	bytecode, err := hexutil.Decode(contractBytecode)

@@ -17,7 +17,7 @@ import (
 )
 
 func TestParams(t *testing.T) {
-	executor := (*bind.PrivateKeySigner)(genesis.DevAccounts()[0].PrivateKey)
+	executor := bind.NewSigner(genesis.DevAccounts()[0].PrivateKey)
 
 	_, client := newChain(t, false)
 
