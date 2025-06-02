@@ -32,17 +32,6 @@ import (
 	"github.com/vechain/thor/v2/txpool"
 )
 
-type Builtin[T any] interface {
-	//Raw() *bind.Caller
-	//Revision(blockID string) T
-}
-
-var _ Builtin[*Energy] = (*Energy)(nil)
-var _ Builtin[*Authority] = (*Authority)(nil)
-var _ Builtin[*Executor] = (*Executor)(nil)
-var _ Builtin[*Params] = (*Params)(nil)
-var _ Builtin[*Staker] = (*Staker)(nil)
-
 func txContext(t *testing.T) context.Context {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(cancel)
