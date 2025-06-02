@@ -40,7 +40,7 @@ type FilteredEvent struct {
 	Meta    LogMeta         `json:"meta"`
 }
 
-// convert a logdb.Event into a json format FilterEvent
+// convert a logdb.Event into a json format Event
 func convertEvent(event *logdb.Event, addIndexes bool) *FilteredEvent {
 	fe := &FilteredEvent{
 		Address: event.Address,
