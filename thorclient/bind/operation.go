@@ -59,24 +59,15 @@ func (b *operationBuilder) Call() CallBuilder {
 
 // Send implements OperationBuilder.Send.
 func (b *operationBuilder) Send() SendBuilder {
-	if _, ok := b.contract.abi.Methods[b.method]; !ok {
-		panic("method not found: " + b.method)
-	}
 	return newSendBuilder(b)
 }
 
 // Clause implements OperationBuilder.Clause.
 func (b *operationBuilder) Clause() ClauseBuilder {
-	if _, ok := b.contract.abi.Methods[b.method]; !ok {
-		panic("method not found: " + b.method)
-	}
 	return newClauseBuilder(b)
 }
 
 // Filter implements OperationBuilder.Filter.
 func (b *operationBuilder) Filter() FilterBuilder {
-	if _, ok := b.contract.abi.Events[b.method]; !ok {
-		panic("event not found: " + b.method)
-	}
 	return newFilterBuilder(b)
 }

@@ -13,7 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/tx"
 )
 
 // CallBuilder is the interface for read operations.
@@ -34,7 +33,7 @@ type CallBuilder interface {
 // callBuilder is the concrete implementation of CallBuilder.
 type callBuilder struct {
 	op  *operationBuilder
-	rev *string
+	rev string
 }
 
 // newCallBuilder creates a new call builder.
@@ -46,7 +45,7 @@ func newCallBuilder(op *operationBuilder) *callBuilder {
 
 // AtRevision implements CallBuilder.AtRevision.
 func (b *callBuilder) AtRevision(rev string) CallBuilder {
-	b.rev = &rev
+	b.rev = rev
 	return b
 }
 
@@ -78,16 +77,10 @@ func (b *callBuilder) Execute() (*accounts.CallResult, error) {
 // Simulate implements CallBuilder.Simulate.
 func (b *callBuilder) Simulate(caller *thor.Address) (*accounts.CallResult, error) {
 	// Build the clause
-	method, ok := b.op.contract.abi.Methods[b.op.method]
-	if !ok {
-		return nil, errors.New("method not found: " + b.op.method)
-	}
-	data, err := method.Inputs.Pack(b.op.args...)
+	clause, err := b.op.Clause().Build()
 	if err != nil {
-		return nil, fmt.Errorf("failed to pack method (%s): %w", b.op.method, err)
+		return nil, err
 	}
-	data = append(method.Id()[:], data...)
-	clause := tx.NewClause(b.op.contract.addr).WithData(data).WithValue(b.op.vet)
 
 	body := &accounts.BatchCallData{
 		Caller: caller,
@@ -101,11 +94,7 @@ func (b *callBuilder) Simulate(caller *thor.Address) (*accounts.CallResult, erro
 	}
 
 	var res []*accounts.CallResult
-	if b.rev != nil {
-		res, err = b.op.contract.client.InspectClauses(body, *b.rev)
-	} else {
-		res, err = b.op.contract.client.InspectClauses(body, "best")
-	}
+	res, err = b.op.contract.client.InspectClauses(body, b.rev)
 	if err != nil {
 		return nil, err
 	}

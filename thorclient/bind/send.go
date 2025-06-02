@@ -78,16 +78,10 @@ func (b *sendBuilder) IssueTx() (*tx.Transaction, error) {
 	}
 
 	// Build the clause
-	method, ok := b.op.contract.abi.Methods[b.op.method]
-	if !ok {
-		return nil, errors.New("method not found: " + b.op.method)
-	}
-	data, err := method.Inputs.Pack(b.op.args...)
+	clause, err := b.op.Clause().Build()
 	if err != nil {
-		return nil, fmt.Errorf("failed to pack method (%s): %w", b.op.method, err)
+		return nil, err
 	}
-	data = append(method.Id()[:], data...)
-	clause := tx.NewClause(b.op.contract.addr).WithData(data).WithValue(b.op.vet)
 
 	// Build the transaction
 	best, err := b.op.contract.client.GetBlock("best")
