@@ -115,7 +115,7 @@ func (a *Authority) FilterCandidate(eventsRange *events.Range, opts *events.Opti
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := a.contract.Operation("Candidate").Filter().WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	raw, err := a.contract.FilterEvent("Candidate").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}

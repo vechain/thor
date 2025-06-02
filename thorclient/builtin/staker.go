@@ -267,7 +267,7 @@ func (s *Staker) FilterValidatorQueued(eventsRange *events.Range, opts *events.O
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.Operation("ValidatorQueued").Filter().WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	raw, err := s.contract.FilterEvent("ValidatorQueued").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}
@@ -320,7 +320,7 @@ func (s *Staker) FilterValidatorUpdatedAutoRenew(eventsRange *events.Range, opts
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.Operation("ValidatorUpdatedAutoRenew").Filter().WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	raw, err := s.contract.FilterEvent("ValidatorUpdatedAutoRenew").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}
@@ -369,7 +369,7 @@ func (s *Staker) FilterDelegationAdded(eventsRange *events.Range, opts *events.O
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.Operation("DelegationAdded").Filter().WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	raw, err := s.contract.FilterEvent("DelegationAdded").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}
@@ -419,7 +419,7 @@ func (s *Staker) FilterDelegationUpdatedAutoRenew(eventsRange *events.Range, opt
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.Operation("DelegationUpdatedAutoRenew").Filter().WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	raw, err := s.contract.FilterEvent("DelegationUpdatedAutoRenew").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}
@@ -463,7 +463,7 @@ func (s *Staker) FilterDelegationWithdrawn(eventsRange *events.Range, opts *even
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.Operation("DelegationWithdrawn").Filter().WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	raw, err := s.contract.FilterEvent("DelegationWithdrawn").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}
@@ -508,7 +508,7 @@ func (s *Staker) FilterStakeIncreased(eventsRange *events.Range, opts *events.Op
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.Operation("StakeIncreased").Filter().WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	raw, err := s.contract.FilterEvent("StakeIncreased").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}
@@ -555,7 +555,7 @@ func (s *Staker) FilterStakeDecreased(eventsRange *events.Range, opts *events.Op
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.Operation("StakeDecreased").Filter().WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	raw, err := s.contract.FilterEvent("StakeDecreased").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}
@@ -602,7 +602,7 @@ func (s *Staker) FilterValidatorWithdrawn(eventsRange *events.Range, opts *event
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.Operation("ValidatorWithdrawn").Filter().WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	raw, err := s.contract.FilterEvent("ValidatorWithdrawn").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}

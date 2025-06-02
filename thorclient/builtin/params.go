@@ -60,7 +60,7 @@ func (p *Params) FilterSet(eventsRange *events.Range, opts *events.Options, orde
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := p.contract.Operation("Set").Filter().WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	raw, err := p.contract.FilterEvent("Set").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}

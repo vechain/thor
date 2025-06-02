@@ -22,9 +22,6 @@ type OperationBuilder interface {
 
 	// Clause returns a ClauseBuilder for building transaction clauses.
 	Clause() ClauseBuilder
-
-	// Filter returns a FilterBuilder for event filtering.
-	Filter() FilterBuilder
 }
 
 // operationBuilder is the concrete implementation of OperationBuilder.

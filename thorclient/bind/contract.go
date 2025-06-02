@@ -19,6 +19,9 @@ type Contract interface {
 	// Operation creates a new operation builder for the specified method and arguments.
 	Operation(method string, args ...any) OperationBuilder
 
+	// FilterEvent creates a new filter builder for the specified event.
+	FilterEvent(eventName string) FilterBuilder
+
 	// Address returns the contract address.
 	Address() *thor.Address
 
@@ -52,6 +55,14 @@ func NewContract(client *httpclient.Client, abiData []byte, address *thor.Addres
 // Operation implements Contract.Operation.
 func (c *contract) Operation(method string, args ...any) OperationBuilder {
 	return newOperationBuilder(c, method, args...)
+}
+
+// FilterEvent implements Contract.Event.
+func (c *contract) FilterEvent(eventName string) FilterBuilder {
+	return newFilterBuilder(&operationBuilder{
+		contract: c,
+		method:   eventName,
+	})
 }
 
 // Address returns the contract address.

@@ -136,7 +136,7 @@ func (e *Energy) FilterTransfer(eventsRange *events.Range, opts *events.Options,
 		return nil, fmt.Errorf("event not found")
 	}
 
-	logs, err := e.contract.Operation("Transfer").Filter().WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	logs, err := e.contract.FilterEvent("Transfer").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +185,7 @@ func (e *Energy) FilterApproval(eventsRange *events.Range, opts *events.Options,
 		return nil, fmt.Errorf("event not found")
 	}
 
-	logs, err := e.contract.Operation("Approval").Filter().WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	logs, err := e.contract.FilterEvent("Approval").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}

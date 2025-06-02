@@ -10,10 +10,10 @@ pragma solidity ^0.8.0;
 
 contract EventContract {
     
-    // Event that is triggered on deployment
+    // FilterEvent that is triggered on deployment
     event Deployed(string message);
     
-    // Event that is triggered when triggerEvent method is called
+    // FilterEvent that is triggered when triggerEvent method is called
     event Triggered(string message);
     
     // Constructor is executed upon contract deployment

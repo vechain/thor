@@ -138,7 +138,7 @@ func (e *Executor) FilterProposals(eventsRange *events.Range, opts *events.Optio
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := e.contract.Operation("Proposal").Filter().WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	raw, err := e.contract.FilterEvent("Proposal").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}
