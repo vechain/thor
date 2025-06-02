@@ -13,15 +13,15 @@ import (
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
-	"github.com/vechain/thor/v2/thorclient/httpclient"
 )
 
 type Executor struct {
 	contract bind.Contract
 }
 
-func NewExecutor(client *httpclient.Client) (*Executor, error) {
+func NewExecutor(client *thorclient.Client) (*Executor, error) {
 	contract, err := bind.NewContract(client, builtin.Executor.RawABI(), &builtin.Executor.Address)
 	if err != nil {
 		return nil, err

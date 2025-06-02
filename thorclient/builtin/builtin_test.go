@@ -26,8 +26,8 @@ import (
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
-	"github.com/vechain/thor/v2/thorclient/httpclient"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
 )
@@ -113,7 +113,7 @@ func (m *mockPool) SubscribeTxEvent(ch chan *txpool.TxEvent) event.Subscription 
 }
 
 // newChain creates a node with the API enabled to test the smart contract wrappers
-func newChain(t *testing.T, useExecutor bool) (*testchain.Chain, *httpclient.Client) {
+func newChain(t *testing.T, useExecutor bool) (*testchain.Chain, *thorclient.Client) {
 	accounts := genesis.DevAccounts()
 	authAccs := make([]genesis.Authority, 0, len(accounts))
 	stateAccs := make([]genesis.Account, 0, len(accounts))
@@ -235,7 +235,6 @@ func newChain(t *testing.T, useExecutor bool) (*testchain.Chain, *httpclient.Cli
 	t.Cleanup(cancelSubs)
 
 	ts := httptest.NewServer(handler)
-	client := httpclient.New(ts.URL)
 
-	return chain, client
+	return chain, thorclient.New(ts.URL)
 }

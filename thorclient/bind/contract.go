@@ -12,7 +12,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/thorclient/httpclient"
+	"github.com/vechain/thor/v2/thorclient"
 )
 
 // Contract is the main interface for contract interactions.
@@ -30,19 +30,19 @@ type Contract interface {
 	// ABI returns the contract ABI.
 	ABI() *abi.ABI
 
-	// Client returns the underlying HTTP client.
-	Client() *httpclient.Client
+	// Client returns the underlying client.
+	Client() *thorclient.Client
 }
 
 // contract is the concrete implementation of Contract.
 type contract struct {
-	client *httpclient.Client
+	client *thorclient.Client
 	abi    *abi.ABI
 	addr   *thor.Address
 }
 
 // NewContract creates a new contract instance with the given client, ABI data and address.
-func NewContract(client *httpclient.Client, abiData []byte, address *thor.Address) (Contract, error) {
+func NewContract(client *thorclient.Client, abiData []byte, address *thor.Address) (Contract, error) {
 	if address == nil {
 		return nil, fmt.Errorf("empty contract address")
 	}
@@ -88,6 +88,6 @@ func (c *contract) ABI() *abi.ABI {
 }
 
 // Client returns the underlying HTTP client.
-func (c *contract) Client() *httpclient.Client {
+func (c *contract) Client() *thorclient.Client {
 	return c.client
 }

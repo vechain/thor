@@ -13,15 +13,15 @@ import (
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
-	"github.com/vechain/thor/v2/thorclient/httpclient"
 )
 
 type Authority struct {
 	contract bind.Contract
 }
 
-func NewAuthority(client *httpclient.Client) (*Authority, error) {
+func NewAuthority(client *thorclient.Client) (*Authority, error) {
 	base, err := bind.NewContract(client, builtin.Authority.RawABI(), &builtin.Authority.Address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create authority contract: %w", err)

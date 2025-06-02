@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient"
 )
 
 // CallBuilder is the interface for read operations.
@@ -87,7 +88,7 @@ func (b *callBuilder) Simulate(caller *thor.Address) (*accounts.CallResult, erro
 	}
 
 	var res []*accounts.CallResult
-	res, err = b.op.contract.client.InspectClauses(body, b.rev)
+	res, err = b.op.contract.client.InspectClauses(body, thorclient.Revision(b.rev))
 	if err != nil {
 		return nil, err
 	}

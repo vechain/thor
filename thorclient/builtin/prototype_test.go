@@ -11,7 +11,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/require"
-	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/thor"
@@ -21,9 +20,8 @@ import (
 
 func TestPrototype(t *testing.T) {
 	_, client := newChain(t, false)
-	gene, err := client.GetBlock("0")
+	chainTag, err := client.ChainTag()
 	require.NoError(t, err)
-	chainTag := gene.ID[31]
 
 	prototype, err := NewPrototype(client)
 	require.NoError(t, err)
@@ -43,11 +41,10 @@ func TestPrototype(t *testing.T) {
 		Gas(10_000_000).
 		Build()
 	trx = tx.MustSign(trx, accKey)
-	rlpTx, err := trx.MarshalBinary()
+
+	res, err := client.SendTransaction(trx) // tx mines on API call due to mock tx pool
 	require.NoError(t, err)
-	res, err := client.SendTransaction(&transactions.RawTx{Raw: hexutil.Encode(rlpTx)}) // tx mines on API call due to mock tx pool
-	require.NoError(t, err)
-	receipt, err := client.GetTransactionReceipt(res.ID, "")
+	receipt, err := client.TransactionReceipt(res.ID)
 	require.NoError(t, err)
 	contractAddr := receipt.Outputs[0].Events[0].Address
 

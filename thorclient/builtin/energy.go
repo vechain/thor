@@ -15,8 +15,8 @@ import (
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
-	"github.com/vechain/thor/v2/thorclient/httpclient"
 )
 
 // Energy is a type-safe smart contract wrapper of VTHO.
@@ -24,7 +24,7 @@ type Energy struct {
 	contract bind.Contract
 }
 
-func NewEnergy(client *httpclient.Client) (*Energy, error) {
+func NewEnergy(client *thorclient.Client) (*Energy, error) {
 	contract, err := bind.NewContract(client, builtin.Energy.RawABI(), &builtin.Energy.Address)
 	if err != nil {
 		return nil, err

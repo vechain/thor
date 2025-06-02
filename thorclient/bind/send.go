@@ -17,6 +17,7 @@ import (
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/test/datagen"
+	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/tx"
 )
 
@@ -83,16 +84,15 @@ func (b *sendBuilder) IssueTx() (*tx.Transaction, error) {
 	}
 
 	// Build the transaction
-	best, err := b.op.contract.client.GetBlock("best")
+	best, err := b.op.contract.client.Block("best")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get best block: %w", err)
 	}
-	genesis, err := b.op.contract.client.GetBlock("0")
+	chainTag, err := b.op.contract.client.ChainTag()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get chain tag: %w", err)
 	}
 
-	chainTag := genesis.ID[31]
 	txType := tx.TypeLegacy
 	if best.BaseFeePerGas != nil {
 		txType = tx.TypeDynamicFee
@@ -110,10 +110,11 @@ func (b *sendBuilder) IssueTx() (*tx.Transaction, error) {
 			return nil, fmt.Errorf("failed to calculate intrinsic gas: %w", err)
 		}
 		caller := b.signer.Address()
-		simulation, err := b.op.contract.client.InspectClauses(&accounts.BatchCallData{
-			Caller:  &caller,
-			Clauses: []accounts.Clause{{To: b.op.contract.addr, Data: hexutil.Encode(clause.Data()), Value: (*math.HexOrDecimal256)(clause.Value())}},
-		}, "best")
+		simulation, err := b.op.contract.client.InspectClauses(
+			&accounts.BatchCallData{
+				Caller:  &caller,
+				Clauses: []accounts.Clause{{To: b.op.contract.addr, Data: hexutil.Encode(clause.Data()), Value: (*math.HexOrDecimal256)(clause.Value())}},
+			}, thorclient.Revision("best"))
 		if err != nil {
 			return nil, fmt.Errorf("simulation failed: %w", err)
 		}
@@ -166,13 +167,7 @@ func (b *sendBuilder) IssueTx() (*tx.Transaction, error) {
 		return nil, fmt.Errorf("failed to sign transaction: %w", err)
 	}
 
-	// IssueTx the transaction
-	rlpTx, err := transaction.MarshalBinary()
-	if err != nil {
-		return nil, fmt.Errorf("failed to encode transaction: %w", err)
-	}
-
-	if _, err = b.op.contract.client.SendTransaction(&transactions.RawTx{Raw: hexutil.Encode(rlpTx)}); err != nil {
+	if _, err = b.op.contract.client.SendTransaction(transaction); err != nil {
 		return nil, err
 	}
 
@@ -192,7 +187,7 @@ func (b *sendBuilder) Receipt(ctx context.Context) (*transactions.Receipt, *tx.T
 		case <-ctx.Done():
 			return nil, nil, fmt.Errorf("context cancelled while waiting for receipt (method: %s, transaction ID: %s)", b.op.method, id.String())
 		default:
-			receipt, err := b.op.contract.client.GetTransactionReceipt(&id, "")
+			receipt, err := b.op.contract.client.TransactionReceipt(&id)
 			if err != nil || receipt == nil {
 				time.Sleep(1 * time.Second) // wait before retrying
 				continue

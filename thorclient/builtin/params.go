@@ -14,15 +14,15 @@ import (
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
-	"github.com/vechain/thor/v2/thorclient/httpclient"
 )
 
 type Params struct {
 	contract bind.Contract
 }
 
-func NewParams(client *httpclient.Client) (*Params, error) {
+func NewParams(client *thorclient.Client) (*Params, error) {
 	contract, err := bind.NewContract(client, builtin.Params.RawABI(), &builtin.Params.Address)
 	if err != nil {
 		return nil, err

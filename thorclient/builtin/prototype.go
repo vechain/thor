@@ -12,15 +12,15 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
-	"github.com/vechain/thor/v2/thorclient/httpclient"
 )
 
 type Prototype struct {
 	contract bind.Contract
 }
 
-func NewPrototype(client *httpclient.Client) (*Prototype, error) {
+func NewPrototype(client *thorclient.Client) (*Prototype, error) {
 	contract, err := bind.NewContract(client, builtin.Prototype.RawABI(), &builtin.Prototype.Address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create prototype contract: %w", err)
