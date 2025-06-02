@@ -37,12 +37,18 @@ type SendBuilder interface {
 
 // TxOptions to override default transaction parameters when building or sending a transaction.
 type TxOptions struct {
-	Gas                  *uint64
-	MaxFeePerGas         *big.Int
+	// Gas sets the gas limit for the transaction.
+	Gas *uint64
+	// MaxFeePerGas sets the maximum fee per gas unit.
+	MaxFeePerGas *big.Int
+	// MaxPriorityFeePerGas sets the maximum priority fee per gas unit.
 	MaxPriorityFeePerGas *big.Int
-	Expiration           *uint32
-	BlockRef             *tx.BlockRef
-	Nonce                *uint64
+	// Expiration sets the number of blocks until the transaction expires.
+	Expiration *uint32
+	// BlockRef sets the block reference for the transaction.
+	BlockRef *tx.BlockRef
+	// Nonce sets the transaction nonce.
+	Nonce *uint64
 }
 
 // sendBuilder is the concrete implementation of SendBuilder.

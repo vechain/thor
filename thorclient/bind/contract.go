@@ -41,7 +41,7 @@ type contract struct {
 	addr   *thor.Address
 }
 
-// NewContract creates a new contract instance.
+// NewContract creates a new contract instance with the given client, ABI data and address.
 func NewContract(client *httpclient.Client, abiData []byte, address *thor.Address) (Contract, error) {
 	if address == nil {
 		return nil, fmt.Errorf("empty contract address")

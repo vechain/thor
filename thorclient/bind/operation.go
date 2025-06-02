@@ -8,8 +8,9 @@ package bind
 import (
 	"fmt"
 
-	"github.com/vechain/thor/v2/tx"
 	"math/big"
+
+	"github.com/vechain/thor/v2/tx"
 )
 
 // OperationBuilder is the interface that routes to specific operation types.
@@ -23,7 +24,7 @@ type OperationBuilder interface {
 	// Send returns a SendBuilder for write operations.
 	Send() SendBuilder
 
-	// Clause builds a clause for the operation.
+	// Clause returns a ClauseBuilder for building transaction clauses.
 	Clause() (*tx.Clause, error)
 }
 
