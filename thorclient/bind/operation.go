@@ -32,16 +32,6 @@ type operationBuilder struct {
 	vet      *big.Int
 }
 
-// newOperationBuilder creates a new operation builder.
-func newOperationBuilder(contract *contract, method string, args ...any) *operationBuilder {
-	return &operationBuilder{
-		contract: contract,
-		method:   method,
-		args:     args,
-		vet:      big.NewInt(0),
-	}
-}
-
 // WithValue implements OperationBuilder.WithValue.
 func (b *operationBuilder) WithValue(vet *big.Int) OperationBuilder {
 	b.vet = vet
@@ -50,24 +40,21 @@ func (b *operationBuilder) WithValue(vet *big.Int) OperationBuilder {
 
 // Call implements OperationBuilder.Call.
 func (b *operationBuilder) Call() CallBuilder {
-	if _, ok := b.contract.abi.Methods[b.method]; !ok {
-		// Could panic or return error - design decision
-		panic("method not found: " + b.method)
+	return &callBuilder{
+		op: b,
 	}
-	return newCallBuilder(b)
 }
 
 // Send implements OperationBuilder.Send.
 func (b *operationBuilder) Send() SendBuilder {
-	return newSendBuilder(b)
+	return &sendBuilder{
+		op: b,
+	}
 }
 
 // Clause implements OperationBuilder.Clause.
 func (b *operationBuilder) Clause() ClauseBuilder {
-	return newClauseBuilder(b)
-}
-
-// Filter implements OperationBuilder.Filter.
-func (b *operationBuilder) Filter() FilterBuilder {
-	return newFilterBuilder(b)
+	return &clauseBuilder{
+		op: b,
+	}
 }

@@ -27,13 +27,6 @@ type clauseBuilder struct {
 	op *operationBuilder
 }
 
-// newClauseBuilder creates a new clause builder.
-func newClauseBuilder(op *operationBuilder) *clauseBuilder {
-	return &clauseBuilder{
-		op: op,
-	}
-}
-
 // WithVET implements ClauseBuilder.WithVET.
 func (b *clauseBuilder) WithVET(vet *big.Int) ClauseBuilder {
 	b.op.vet = vet

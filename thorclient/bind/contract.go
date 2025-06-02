@@ -7,6 +7,8 @@ package bind
 
 import (
 	"bytes"
+	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/vechain/thor/v2/thor"
@@ -41,6 +43,9 @@ type contract struct {
 
 // NewContract creates a new contract instance.
 func NewContract(client *httpclient.Client, abiData []byte, address *thor.Address) (Contract, error) {
+	if address == nil {
+		return nil, fmt.Errorf("empty contract address")
+	}
 	contractABI, err := abi.JSON(bytes.NewReader(abiData))
 	if err != nil {
 		return nil, err
@@ -54,15 +59,22 @@ func NewContract(client *httpclient.Client, abiData []byte, address *thor.Addres
 
 // Operation implements Contract.Operation.
 func (c *contract) Operation(method string, args ...any) OperationBuilder {
-	return newOperationBuilder(c, method, args...)
+	return &operationBuilder{
+		contract: c,
+		method:   method,
+		args:     args,
+		vet:      big.NewInt(0),
+	}
 }
 
 // FilterEvent implements Contract.Event.
 func (c *contract) FilterEvent(eventName string) FilterBuilder {
-	return newFilterBuilder(&operationBuilder{
-		contract: c,
-		method:   eventName,
-	})
+	return &filterBuilder{
+		op: &operationBuilder{
+			contract: c,
+			method:   eventName,
+		},
+	}
 }
 
 // Address returns the contract address.

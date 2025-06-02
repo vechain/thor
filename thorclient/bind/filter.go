@@ -36,13 +36,6 @@ type filterBuilder struct {
 	order   logdb.Order
 }
 
-// newFilterBuilder creates a new filter builder.
-func newFilterBuilder(op *operationBuilder) *filterBuilder {
-	return &filterBuilder{
-		op: op,
-	}
-}
-
 // InRange implements FilterBuilder.InRange.
 func (b *filterBuilder) InRange(r *events.Range) FilterBuilder {
 	b.evRange = r

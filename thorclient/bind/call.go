@@ -36,13 +36,6 @@ type callBuilder struct {
 	rev string
 }
 
-// newCallBuilder creates a new call builder.
-func newCallBuilder(op *operationBuilder) *callBuilder {
-	return &callBuilder{
-		op: op,
-	}
-}
-
 // AtRevision implements CallBuilder.AtRevision.
 func (b *callBuilder) AtRevision(rev string) CallBuilder {
 	b.rev = rev

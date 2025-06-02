@@ -52,13 +52,6 @@ type sendBuilder struct {
 	opts   *TxOptions
 }
 
-// newSendBuilder creates a new send builder.
-func newSendBuilder(op *operationBuilder) *sendBuilder {
-	return &sendBuilder{
-		op: op,
-	}
-}
-
 // WithSigner implements SendBuilder.WithSigner.
 func (b *sendBuilder) WithSigner(signer Signer) SendBuilder {
 	b.signer = signer
