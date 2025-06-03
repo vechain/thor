@@ -299,6 +299,13 @@ contract Staker {
         return periods;
     }
 
+    function getValidatorTotals(bytes32 validationID) public view returns (uint256, uint256, uint256, uint256) {
+        (uint256 lockedStake, uint256 lockedWeight, uint256 delegatorsStake, uint256 delegatorsWeight, string memory error) = StakerNative(address(this))
+            .native_getValidatorTotals(validationID);
+        require(bytes(error).length == 0, error);
+        return (lockedStake, lockedWeight, delegatorsStake, delegatorsWeight);
+    }
+
     modifier onlyDelegatorContract() {
         (address sender, string memory error) = StakerNative(address(this))
             .native_getDelegatorContract();
@@ -434,4 +441,6 @@ interface StakerNative {
     function native_getRewards(bytes32 validationID, uint32 stakingPeriod) external view returns (uint256, string calldata);
 
     function native_getCompletedPeriods(bytes32 validationID) external view returns (uint32, string calldata);
+
+    function native_getValidatorTotals(bytes32 validationID) external view returns (uint256, uint256, uint256, uint256, string calldata);
 }

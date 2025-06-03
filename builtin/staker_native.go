@@ -284,6 +284,17 @@ func init() {
 			addr := thor.BytesToAddress(raw.Bytes())
 			return []any{addr, ""}
 		}},
+		{"native_getValidatorTotals", func(env *xenv.Environment) []any {
+			var args struct {
+				ValidationID common.Hash
+			}
+			env.ParseArgs(&args)
+			totals, err := Staker.Native(env.State()).GetValidatorsTotals(thor.Bytes32(args.ValidationID))
+			if err != nil {
+				return []any{new(big.Int), new(big.Int), new(big.Int), new(big.Int), fmt.Sprintf("failed to validators totals: %v", err)}
+			}
+			return []any{totals.TotalLockedStake, totals.TotalLockedWeight, totals.DelegationsLockedStake, totals.DelegationsLockedWeight, ""}
+		}},
 	}
 	stakerAbi := Staker.NativeABI()
 	for _, def := range defines {

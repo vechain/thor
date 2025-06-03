@@ -43,6 +43,13 @@ type Validation struct {
 	Prev *thor.Bytes32 `rlp:"nil"` // double linked list
 }
 
+type ValidationTotals struct {
+	TotalLockedStake        *big.Int // total locked stake in validator (current period), validator's stake + all delegators stake
+	TotalLockedWeight       *big.Int // total locked weight in validator (current period), validator's weight + all delegators weight
+	DelegationsLockedStake  *big.Int // total locked stake in validator (current period) by all delegators
+	DelegationsLockedWeight *big.Int // total locked weight in validator (current period) by all delegators
+}
+
 // IsEmpty returns whether the entry can be treated as empty.
 func (v *Validation) IsEmpty() bool {
 	return v.Status == StatusUnknown
