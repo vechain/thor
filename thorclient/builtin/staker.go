@@ -17,8 +17,8 @@ import (
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
-	"github.com/vechain/thor/v2/thorclient/httpclient"
 )
 
 type StakerStatus uint8
@@ -36,11 +36,11 @@ func MinStake() *big.Int {
 }
 
 type Staker struct {
-	contract *bind.Caller
+	contract bind.Contract
 }
 
-func NewStaker(client *httpclient.Client) (*Staker, error) {
-	contract, err := bind.NewCaller(client, builtin.Staker.RawABI(), &builtin.Staker.Address)
+func NewStaker(client *thorclient.Client) (*Staker, error) {
+	contract, err := bind.NewContract(client, builtin.Staker.RawABI(), &builtin.Staker.Address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create staker contract: %w", err)
 	}
@@ -49,14 +49,10 @@ func NewStaker(client *httpclient.Client) (*Staker, error) {
 	}, nil
 }
 
-func (s *Staker) Revision(id string) *Staker {
-	return &Staker{contract: s.contract.Revision(id)}
-}
-
 // FirstActive returns the first active validator
 func (s *Staker) FirstActive() (*Validator, thor.Bytes32, error) {
 	out := new(common.Hash)
-	if err := s.contract.CallInto("firstActive", &out); err != nil {
+	if err := s.contract.Method("firstActive").Call().ExecuteInto(&out); err != nil {
 		return nil, thor.Bytes32{}, err
 	}
 	res := *out
@@ -68,14 +64,14 @@ func (s *Staker) FirstActive() (*Validator, thor.Bytes32, error) {
 	return v, id, err
 }
 
-func (s *Staker) Raw() *bind.Caller {
+func (s *Staker) Raw() bind.Contract {
 	return s.contract
 }
 
 // FirstQueued returns the first queued validator
 func (s *Staker) FirstQueued() (*Validator, thor.Bytes32, error) {
 	out := new(common.Hash)
-	if err := s.contract.CallInto("firstQueued", &out); err != nil {
+	if err := s.contract.Method("firstQueued").Call().ExecuteInto(&out); err != nil {
 		return nil, thor.Bytes32{}, err
 	}
 	res := *out
@@ -90,7 +86,7 @@ func (s *Staker) FirstQueued() (*Validator, thor.Bytes32, error) {
 // Next returns the next validator
 func (s *Staker) Next(id thor.Bytes32) (*Validator, thor.Bytes32, error) {
 	out := new(common.Hash)
-	if err := s.contract.CallInto("next", &out, id); err != nil {
+	if err := s.contract.Method("next", id).Call().ExecuteInto(&out); err != nil {
 		return nil, thor.Bytes32{}, err
 	}
 	res := *out
@@ -106,7 +102,7 @@ func (s *Staker) TotalStake() (*big.Int, *big.Int, error) {
 	var out = [2]any{}
 	out[0] = new(*big.Int)
 	out[1] = new(*big.Int)
-	if err := s.contract.CallInto("totalStake", &out); err != nil {
+	if err := s.contract.Method("totalStake").Call().ExecuteInto(&out); err != nil {
 		return nil, nil, err
 	}
 	return *(out[0].(**big.Int)), *(out[1].(**big.Int)), nil
@@ -116,7 +112,7 @@ func (s *Staker) QueuedStake() (*big.Int, *big.Int, error) {
 	var out = [2]any{}
 	out[0] = new(*big.Int)
 	out[1] = new(*big.Int)
-	if err := s.contract.CallInto("queuedStake", &out); err != nil {
+	if err := s.contract.Method("queuedStake").Call().ExecuteInto(&out); err != nil {
 		return nil, nil, err
 	}
 	return *(out[0].(**big.Int)), *(out[1].(**big.Int)), nil
@@ -147,7 +143,7 @@ func (s *Staker) Get(id thor.Bytes32) (*Validator, error) {
 	out[5] = new(bool)
 	out[6] = new(bool)
 	out[7] = new(uint32)
-	if err := s.contract.CallInto("get", &out, id); err != nil {
+	if err := s.contract.Method("get", id).Call().ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 	validator := &Validator{
@@ -164,60 +160,60 @@ func (s *Staker) Get(id thor.Bytes32) (*Validator, error) {
 	return validator, nil
 }
 
-func (s *Staker) AddValidator(signer bind.Signer, master thor.Address, stake *big.Int, period uint32, autoRenew bool) *bind.Sender {
-	return s.contract.Attach(signer).SenderWithVET(stake, "addValidator", master, period, autoRenew)
+func (s *Staker) AddValidator(master thor.Address, stake *big.Int, period uint32, autoRenew bool) bind.MethodBuilder {
+	return s.contract.Method("addValidator", master, period, autoRenew).WithValue(stake)
 }
 
-func (s *Staker) AddDelegation(signer bind.Signer, validationID thor.Bytes32, stake *big.Int, autoRenew bool, multiplier uint8) *bind.Sender {
-	return s.contract.Attach(signer).SenderWithVET(stake, "addDelegation", validationID, autoRenew, multiplier)
+func (s *Staker) AddDelegation(validationID thor.Bytes32, stake *big.Int, autoRenew bool, multiplier uint8) bind.MethodBuilder {
+	return s.contract.Method("addDelegation", validationID, autoRenew, multiplier).WithValue(stake)
 }
 
-func (s *Staker) UpdateDelegationAutoRenew(signer bind.Signer, delegationID thor.Bytes32, autoRenew bool) *bind.Sender {
-	return s.contract.Attach(signer).Sender("updateDelegationAutoRenew", delegationID, autoRenew)
+func (s *Staker) UpdateDelegationAutoRenew(delegationID thor.Bytes32, autoRenew bool) bind.MethodBuilder {
+	return s.contract.Method("updateDelegationAutoRenew", delegationID, autoRenew)
 }
 
-func (s *Staker) UpdateAutoRenew(signer bind.Signer, validationID thor.Bytes32, autoRenew bool) *bind.Sender {
-	return s.contract.Attach(signer).Sender("updateAutoRenew", validationID, autoRenew)
+func (s *Staker) UpdateAutoRenew(validationID thor.Bytes32, autoRenew bool) bind.MethodBuilder {
+	return s.contract.Method("updateAutoRenew", validationID, autoRenew)
 }
 
-func (s *Staker) WithdrawDelegation(signer bind.Signer, delegationID thor.Bytes32) *bind.Sender {
-	return s.contract.Attach(signer).Sender("withdrawDelegation", delegationID)
+func (s *Staker) WithdrawDelegation(delegationID thor.Bytes32) bind.MethodBuilder {
+	return s.contract.Method("withdrawDelegation", delegationID)
 }
 
-func (s *Staker) Withdraw(signer bind.Signer, validationID thor.Bytes32) *bind.Sender {
-	return s.contract.Attach(signer).Sender("withdraw", validationID)
+func (s *Staker) Withdraw(validationID thor.Bytes32) bind.MethodBuilder {
+	return s.contract.Method("withdraw", validationID)
 }
 
-func (s *Staker) DecreaseStake(signer bind.Signer, validationID thor.Bytes32, amount *big.Int) *bind.Sender {
-	return s.contract.Attach(signer).Sender("decreaseStake", validationID, amount)
+func (s *Staker) DecreaseStake(validationID thor.Bytes32, amount *big.Int) bind.MethodBuilder {
+	return s.contract.Method("decreaseStake", validationID, amount)
 }
 
-func (s *Staker) IncreaseStake(signer bind.Signer, validationID thor.Bytes32, amount *big.Int) *bind.Sender {
-	return s.contract.Attach(signer).SenderWithVET(amount, "increaseStake", validationID)
+func (s *Staker) IncreaseStake(validationID thor.Bytes32, amount *big.Int) bind.MethodBuilder {
+	return s.contract.Method("increaseStake", validationID).WithValue(amount)
 }
 
 func (s *Staker) GetWithdraw(validationID thor.Bytes32) (*big.Int, error) {
 	out := new(big.Int)
-	if err := s.contract.CallInto("getWithdraw", &out, validationID); err != nil {
+	if err := s.contract.Method("getWithdraw", validationID).Call().ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
 func (s *Staker) GetRewards(validatorID thor.Bytes32, period uint32) (*big.Int, error) {
-	reward := new(big.Int)
-	if err := s.contract.CallInto("getRewards", &reward, validatorID, period); err != nil {
+	out := new(big.Int)
+	if err := s.contract.Method("getRewards", validatorID, period).Call().ExecuteInto(&out); err != nil {
 		return nil, err
 	}
-	return reward, nil
+	return out, nil
 }
 
 func (s *Staker) GetCompletedPeriods(validatorID thor.Bytes32) (*uint32, error) {
-	completedPeriods := uint32(0)
-	if err := s.contract.CallInto("getCompletedPeriods", &completedPeriods, validatorID); err != nil {
+	out := uint32(0)
+	if err := s.contract.Method("getCompletedPeriods", validatorID).Call().ExecuteInto(&out); err != nil {
 		return nil, err
 	}
-	return &completedPeriods, nil
+	return &out, nil
 }
 
 type Delegation struct {
@@ -239,7 +235,7 @@ func (s *Staker) GetDelegation(delegationID thor.Bytes32) (*Delegation, error) {
 	out[4] = new(uint8)
 	out[5] = new(bool)
 	out[6] = new(bool)
-	if err := s.contract.CallInto("getDelegation", &out, delegationID); err != nil {
+	if err := s.contract.Method("getDelegation", delegationID).Call().ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 	delegatorInfo := &Delegation{
@@ -271,7 +267,7 @@ func (s *Staker) FilterValidatorQueued(eventsRange *events.Range, opts *events.O
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.FilterEvents("ValidatorQueued", eventsRange, opts, order)
+	raw, err := s.contract.FilterEvent("ValidatorQueued").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}
@@ -324,7 +320,7 @@ func (s *Staker) FilterValidatorUpdatedAutoRenew(eventsRange *events.Range, opts
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.FilterEvents("ValidatorUpdatedAutoRenew", eventsRange, opts, order)
+	raw, err := s.contract.FilterEvent("ValidatorUpdatedAutoRenew").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}
@@ -373,7 +369,7 @@ func (s *Staker) FilterDelegationAdded(eventsRange *events.Range, opts *events.O
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.FilterEvents("DelegationAdded", eventsRange, opts, order)
+	raw, err := s.contract.FilterEvent("DelegationAdded").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}
@@ -423,7 +419,7 @@ func (s *Staker) FilterDelegationUpdatedAutoRenew(eventsRange *events.Range, opt
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.FilterEvents("DelegationUpdatedAutoRenew", eventsRange, opts, order)
+	raw, err := s.contract.FilterEvent("DelegationUpdatedAutoRenew").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}
@@ -467,7 +463,7 @@ func (s *Staker) FilterDelegationWithdrawn(eventsRange *events.Range, opts *even
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.FilterEvents("DelegationWithdrawn", eventsRange, opts, order)
+	raw, err := s.contract.FilterEvent("DelegationWithdrawn").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}
@@ -512,7 +508,7 @@ func (s *Staker) FilterStakeIncreased(eventsRange *events.Range, opts *events.Op
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.FilterEvents("StakeIncreased", eventsRange, opts, order)
+	raw, err := s.contract.FilterEvent("StakeIncreased").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}
@@ -559,7 +555,7 @@ func (s *Staker) FilterStakeDecreased(eventsRange *events.Range, opts *events.Op
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.FilterEvents("StakeDecreased", eventsRange, opts, order)
+	raw, err := s.contract.FilterEvent("StakeDecreased").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}
@@ -606,7 +602,7 @@ func (s *Staker) FilterValidatorWithdrawn(eventsRange *events.Range, opts *event
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.FilterEvents("ValidatorWithdrawn", eventsRange, opts, order)
+	raw, err := s.contract.FilterEvent("ValidatorWithdrawn").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}
