@@ -22,6 +22,7 @@ import (
 // Energy is a type-safe smart contract wrapper of VTHO.
 type Energy struct {
 	contract bind.Contract
+	revision string
 }
 
 func NewEnergy(client *thorclient.Client) (*Energy, error) {
@@ -34,6 +35,14 @@ func NewEnergy(client *thorclient.Client) (*Energy, error) {
 	}, nil
 }
 
+// Revision creates a new Energy instance with the specified revision.
+func (e *Energy) Revision(rev string) *Energy {
+	return &Energy{
+		contract: e.contract,
+		revision: rev,
+	}
+}
+
 func (e *Energy) Raw() bind.Contract {
 	return e.contract
 }
@@ -41,7 +50,7 @@ func (e *Energy) Raw() bind.Contract {
 // Name returns the name of the token
 func (e *Energy) Name() (string, error) {
 	var name string
-	if err := e.contract.Method("name").Call().ExecuteInto(&name); err != nil {
+	if err := e.contract.Method("name").Call().AtRevision(e.revision).ExecuteInto(&name); err != nil {
 		return "", err
 	}
 	return name, nil
@@ -50,7 +59,7 @@ func (e *Energy) Name() (string, error) {
 // Symbol returns the symbol of the token
 func (e *Energy) Symbol() (string, error) {
 	var symbol string
-	if err := e.contract.Method("symbol").Call().ExecuteInto(&symbol); err != nil {
+	if err := e.contract.Method("symbol").Call().AtRevision(e.revision).ExecuteInto(&symbol); err != nil {
 		return "", err
 	}
 	return symbol, nil
@@ -59,7 +68,7 @@ func (e *Energy) Symbol() (string, error) {
 // Decimals returns the number of decimals the token uses
 func (e *Energy) Decimals() (uint8, error) {
 	var decimals uint8
-	if err := e.contract.Method("decimals").Call().ExecuteInto(&decimals); err != nil {
+	if err := e.contract.Method("decimals").Call().AtRevision(e.revision).ExecuteInto(&decimals); err != nil {
 		return 0, err
 	}
 	return decimals, nil
@@ -68,7 +77,7 @@ func (e *Energy) Decimals() (uint8, error) {
 // TotalSupply returns the total token supply
 func (e *Energy) TotalSupply() (*big.Int, error) {
 	totalSupply := new(big.Int)
-	if err := e.contract.Method("totalSupply").Call().ExecuteInto(&totalSupply); err != nil {
+	if err := e.contract.Method("totalSupply").Call().AtRevision(e.revision).ExecuteInto(&totalSupply); err != nil {
 		return nil, err
 	}
 	return totalSupply, nil
@@ -77,7 +86,7 @@ func (e *Energy) TotalSupply() (*big.Int, error) {
 // TotalBurned returns the total amount of burned tokens
 func (e *Energy) TotalBurned() (*big.Int, error) {
 	totalBurned := new(big.Int)
-	if err := e.contract.Method("totalBurned").Call().ExecuteInto(&totalBurned); err != nil {
+	if err := e.contract.Method("totalBurned").Call().AtRevision(e.revision).ExecuteInto(&totalBurned); err != nil {
 		return nil, err
 	}
 	return totalBurned, nil
@@ -86,7 +95,7 @@ func (e *Energy) TotalBurned() (*big.Int, error) {
 // BalanceOf returns the token balance of the specified address
 func (e *Energy) BalanceOf(owner thor.Address) (*big.Int, error) {
 	balanceOf := new(big.Int)
-	if err := e.contract.Method("balanceOf", owner).Call().ExecuteInto(&balanceOf); err != nil {
+	if err := e.contract.Method("balanceOf", owner).Call().AtRevision(e.revision).ExecuteInto(&balanceOf); err != nil {
 		return nil, err
 	}
 	return balanceOf, nil
@@ -95,7 +104,7 @@ func (e *Energy) BalanceOf(owner thor.Address) (*big.Int, error) {
 // Allowance returns the amount of tokens approved by the owner to be spent by the spender
 func (e *Energy) Allowance(owner, spender thor.Address) (*big.Int, error) {
 	allowance := new(big.Int)
-	if err := e.contract.Method("allowance", owner, spender).Call().ExecuteInto(&allowance); err != nil {
+	if err := e.contract.Method("allowance", owner, spender).Call().AtRevision(e.revision).ExecuteInto(&allowance); err != nil {
 		return nil, err
 	}
 	return allowance, nil

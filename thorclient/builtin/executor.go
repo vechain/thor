@@ -19,6 +19,7 @@ import (
 
 type Executor struct {
 	contract bind.Contract
+	revision string
 }
 
 func NewExecutor(client *thorclient.Client) (*Executor, error) {
@@ -29,6 +30,14 @@ func NewExecutor(client *thorclient.Client) (*Executor, error) {
 	return &Executor{
 		contract: contract,
 	}, nil
+}
+
+// Revision creates a new Executor instance with the specified revision.
+func (e *Executor) Revision(rev string) *Executor {
+	return &Executor{
+		contract: e.contract,
+		revision: rev,
+	}
 }
 
 func (e *Executor) Raw() bind.Contract {
@@ -45,7 +54,7 @@ func (e *Executor) Approvers(address thor.Address) (*Approver, error) {
 	out[0] = new(common.Hash)
 	out[1] = new(bool)
 
-	if err := e.contract.Method("approvers", address).Call().ExecuteInto(&out); err != nil {
+	if err := e.contract.Method("approvers", address).Call().AtRevision(e.revision).ExecuteInto(&out); err != nil {
 		return nil, fmt.Errorf("failed to call approvers: %w", err)
 	}
 
@@ -75,7 +84,7 @@ func (e *Executor) Proposals(proposalID thor.Bytes32) (*Proposal, error) {
 	out[5] = new(common.Address)
 	out[6] = new([]byte)
 
-	if err := e.contract.Method("proposals", proposalID).Call().ExecuteInto(&out); err != nil {
+	if err := e.contract.Method("proposals", proposalID).Call().AtRevision(e.revision).ExecuteInto(&out); err != nil {
 		return nil, fmt.Errorf("failed to call proposals: %w", err)
 	}
 
@@ -92,7 +101,7 @@ func (e *Executor) Proposals(proposalID thor.Bytes32) (*Proposal, error) {
 
 func (e *Executor) ApproverCount() (uint8, error) {
 	var count uint8
-	if err := e.contract.Method("approverCount").Call().ExecuteInto(&count); err != nil {
+	if err := e.contract.Method("approverCount").Call().AtRevision(e.revision).ExecuteInto(&count); err != nil {
 		return 0, fmt.Errorf("failed to call approverCount: %w", err)
 	}
 	return count, nil

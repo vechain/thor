@@ -112,3 +112,20 @@ func TestEnergy(t *testing.T) {
 		require.True(t, found, "Transfer event should be found in the logs")
 	})
 }
+
+func TestEnergy_Revision(t *testing.T) {
+	chain, client := newChain(t, false)
+
+	energy, err := NewEnergy(client)
+	require.NoError(t, err)
+
+	require.NoError(t, chain.MintBlock(genesis.DevAccounts()[0]))
+	require.NoError(t, chain.MintBlock(genesis.DevAccounts()[1]))
+
+	supplyBlock1, err := energy.Revision("1").TotalSupply()
+	require.NoError(t, err)
+	supplyBlock2, err := energy.Revision("2").TotalSupply()
+	require.NoError(t, err)
+
+	require.Greater(t, supplyBlock2.Cmp(supplyBlock1), 0, "Total supply should increase with each block")
+}
