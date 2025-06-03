@@ -21,7 +21,7 @@ type Prototype struct {
 }
 
 func NewPrototype(client *httpclient.Client) (*Prototype, error) {
-	contract, err := bind.NewCaller(client, builtin.Prototype.RawABI(), builtin.Prototype.Address)
+	contract, err := bind.NewCaller(client, builtin.Prototype.RawABI(), &builtin.Prototype.Address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create prototype contract: %w", err)
 	}

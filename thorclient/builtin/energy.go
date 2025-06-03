@@ -25,7 +25,7 @@ type Energy struct {
 }
 
 func NewEnergy(client *httpclient.Client) (*Energy, error) {
-	caller, err := bind.NewCaller(client, builtin.Energy.RawABI(), builtin.Energy.Address)
+	caller, err := bind.NewCaller(client, builtin.Energy.RawABI(), &builtin.Energy.Address)
 	if err != nil {
 		panic(err)
 	}

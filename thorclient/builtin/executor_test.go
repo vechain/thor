@@ -22,11 +22,11 @@ func TestExecutor(t *testing.T) {
 	executor, err := NewExecutor(client)
 	require.NoError(t, err)
 
-	approver1 := (*bind.PrivateKeySigner)(genesis.DevAccounts()[0].PrivateKey)
-	approver2 := (*bind.PrivateKeySigner)(genesis.DevAccounts()[1].PrivateKey)
-	approver3 := (*bind.PrivateKeySigner)(genesis.DevAccounts()[2].PrivateKey)
+	approver1 := bind.NewSigner(genesis.DevAccounts()[0].PrivateKey)
+	approver2 := bind.NewSigner(genesis.DevAccounts()[1].PrivateKey)
+	approver3 := bind.NewSigner(genesis.DevAccounts()[2].PrivateKey)
 
-	newApprover := (*bind.PrivateKeySigner)(genesis.DevAccounts()[3].PrivateKey)
+	newApprover := bind.NewSigner(genesis.DevAccounts()[3].PrivateKey)
 
 	// Approvers
 	approver, err := executor.Approvers(approver1.Address())

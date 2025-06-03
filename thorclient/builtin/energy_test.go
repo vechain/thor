@@ -59,9 +59,9 @@ func TestEnergy(t *testing.T) {
 	})
 
 	t.Run("Approve-Approval-TransferFrom", func(t *testing.T) {
-		acc1 := (*bind.PrivateKeySigner)(genesis.DevAccounts()[1].PrivateKey)
-		acc2 := (*bind.PrivateKeySigner)(genesis.DevAccounts()[2].PrivateKey)
-		acc3 := (*bind.PrivateKeySigner)(genesis.DevAccounts()[3].PrivateKey)
+		acc1 := bind.NewSigner(genesis.DevAccounts()[1].PrivateKey)
+		acc2 := bind.NewSigner(genesis.DevAccounts()[2].PrivateKey)
+		acc3 := bind.NewSigner(genesis.DevAccounts()[3].PrivateKey)
 
 		allowanceAmount := big.NewInt(1000)
 
@@ -84,10 +84,10 @@ func TestEnergy(t *testing.T) {
 	})
 
 	t.Run("Transfer", func(t *testing.T) {
-		acc1 := (*bind.PrivateKeySigner)(genesis.DevAccounts()[1].PrivateKey)
+		acc1 := bind.NewSigner(genesis.DevAccounts()[1].PrivateKey)
 		random, err := crypto.GenerateKey()
 		require.NoError(t, err)
-		acc2 := (*bind.PrivateKeySigner)(random)
+		acc2 := bind.NewSigner(random)
 
 		transferAmount := big.NewInt(999)
 
