@@ -18,6 +18,7 @@ import (
 
 type Prototype struct {
 	contract bind.Contract
+	revision string
 }
 
 func NewPrototype(client *thorclient.Client) (*Prototype, error) {
@@ -30,6 +31,14 @@ func NewPrototype(client *thorclient.Client) (*Prototype, error) {
 	}, nil
 }
 
+// Revision creates a new Prototype instance with the specified revision.
+func (p *Prototype) Revision(rev string) *Prototype {
+	return &Prototype{
+		contract: p.contract,
+		revision: rev,
+	}
+}
+
 func (p *Prototype) Raw() bind.Contract {
 	return p.contract
 }
@@ -37,7 +46,7 @@ func (p *Prototype) Raw() bind.Contract {
 // Master returns the master address for the given contract
 func (p *Prototype) Master(contract thor.Address) (thor.Address, error) {
 	out := new(common.Address)
-	if err := p.contract.Method("master", contract).Call().ExecuteInto(&out); err != nil {
+	if err := p.contract.Method("master", contract).Call().AtRevision(p.revision).ExecuteInto(&out); err != nil {
 		return thor.Address{}, err
 	}
 	return thor.Address(*out), nil
@@ -51,7 +60,7 @@ func (p *Prototype) SetMaster(self thor.Address, newMaster thor.Address) bind.Me
 // IsUser checks if the given address is a user of the contract
 func (p *Prototype) IsUser(self thor.Address, user thor.Address) (bool, error) {
 	out := new(bool)
-	if err := p.contract.Method("isUser", self, user).Call().ExecuteInto(&out); err != nil {
+	if err := p.contract.Method("isUser", self, user).Call().AtRevision(p.revision).ExecuteInto(&out); err != nil {
 		return false, err
 	}
 	return *out, nil
@@ -70,7 +79,7 @@ func (p *Prototype) RemoveUser(self thor.Address, user thor.Address) bind.Method
 // UserCredit returns the credit amount for a specific user
 func (p *Prototype) UserCredit(self thor.Address, user thor.Address) (*big.Int, error) {
 	out := new(big.Int)
-	if err := p.contract.Method("userCredit", self, user).Call().ExecuteInto(&out); err != nil {
+	if err := p.contract.Method("userCredit", self, user).Call().AtRevision(p.revision).ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -81,7 +90,7 @@ func (p *Prototype) CreditPlan(self thor.Address) (*big.Int, *big.Int, error) {
 	var out = [2]any{}
 	out[0] = new(*big.Int)
 	out[1] = new(*big.Int)
-	if err := p.contract.Method("creditPlan", self).Call().ExecuteInto(&out); err != nil {
+	if err := p.contract.Method("creditPlan", self).Call().AtRevision(p.revision).ExecuteInto(&out); err != nil {
 		return nil, nil, err
 	}
 	return *(out[0].(**big.Int)), *(out[1].(**big.Int)), nil
@@ -95,7 +104,7 @@ func (p *Prototype) SetCreditPlan(self thor.Address, credit *big.Int, recoveryRa
 // CurrentSponsor returns the current sponsor address
 func (p *Prototype) CurrentSponsor(self thor.Address) (thor.Address, error) {
 	out := new(common.Address)
-	if err := p.contract.Method("currentSponsor", self).Call().ExecuteInto(&out); err != nil {
+	if err := p.contract.Method("currentSponsor", self).Call().AtRevision(p.revision).ExecuteInto(&out); err != nil {
 		return thor.Address{}, err
 	}
 	return thor.Address(*out), nil
@@ -104,7 +113,7 @@ func (p *Prototype) CurrentSponsor(self thor.Address) (thor.Address, error) {
 // IsSponsor checks if the given address is a sponsor
 func (p *Prototype) IsSponsor(self thor.Address, sponsor thor.Address) (bool, error) {
 	out := new(bool)
-	if err := p.contract.Method("isSponsor", self, sponsor).Call().ExecuteInto(&out); err != nil {
+	if err := p.contract.Method("isSponsor", self, sponsor).Call().AtRevision(p.revision).ExecuteInto(&out); err != nil {
 		return false, err
 	}
 	return *out, nil
@@ -128,7 +137,7 @@ func (p *Prototype) Unsponsor(self thor.Address) bind.MethodBuilder {
 // Balance returns the balance at a specific block number
 func (p *Prototype) Balance(self thor.Address, blockNumber *big.Int) (*big.Int, error) {
 	out := new(big.Int)
-	if err := p.contract.Method("balance", self, blockNumber).Call().ExecuteInto(&out); err != nil {
+	if err := p.contract.Method("balance", self, blockNumber).Call().AtRevision(p.revision).ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -137,7 +146,7 @@ func (p *Prototype) Balance(self thor.Address, blockNumber *big.Int) (*big.Int, 
 // Energy returns the energy at a specific block number
 func (p *Prototype) Energy(self thor.Address, blockNumber *big.Int) (*big.Int, error) {
 	out := new(big.Int)
-	if err := p.contract.Method("energy", self, blockNumber).Call().ExecuteInto(&out); err != nil {
+	if err := p.contract.Method("energy", self, blockNumber).Call().AtRevision(p.revision).ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -146,7 +155,7 @@ func (p *Prototype) Energy(self thor.Address, blockNumber *big.Int) (*big.Int, e
 // HasCode checks if the contract has code
 func (p *Prototype) HasCode(self thor.Address) (bool, error) {
 	out := new(bool)
-	if err := p.contract.Method("hasCode", self).Call().ExecuteInto(&out); err != nil {
+	if err := p.contract.Method("hasCode", self).Call().AtRevision(p.revision).ExecuteInto(&out); err != nil {
 		return false, err
 	}
 	return *out, nil
@@ -155,7 +164,7 @@ func (p *Prototype) HasCode(self thor.Address) (bool, error) {
 // StorageFor returns the storage value for a given key
 func (p *Prototype) StorageFor(self thor.Address, key thor.Bytes32) (thor.Bytes32, error) {
 	out := new(common.Hash)
-	if err := p.contract.Method("storageFor", self, key).Call().ExecuteInto(out); err != nil {
+	if err := p.contract.Method("storageFor", self, key).Call().AtRevision(p.revision).ExecuteInto(out); err != nil {
 		return thor.Bytes32{}, err
 	}
 	return thor.Bytes32(*out), nil

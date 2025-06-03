@@ -19,6 +19,7 @@ import (
 
 type Authority struct {
 	contract bind.Contract
+	revision string
 }
 
 func NewAuthority(client *thorclient.Client) (*Authority, error) {
@@ -31,6 +32,14 @@ func NewAuthority(client *thorclient.Client) (*Authority, error) {
 	}, nil
 }
 
+// Revision creates a new Authority instance with the specified revision.
+func (a *Authority) Revision(rev string) *Authority {
+	return &Authority{
+		contract: a.contract,
+		revision: rev,
+	}
+}
+
 func (a *Authority) Raw() bind.Contract {
 	return a.contract
 }
@@ -39,7 +48,7 @@ func (a *Authority) Raw() bind.Contract {
 func (a *Authority) First() (thor.Address, error) {
 	// todo add sanity check on the methods and arguments
 	out := new(common.Address)
-	if err := a.contract.Method("first").Call().ExecuteInto(&out); err != nil {
+	if err := a.contract.Method("first").Call().AtRevision(a.revision).ExecuteInto(&out); err != nil {
 		return thor.Address{}, err
 	}
 	return thor.Address(*out), nil
@@ -48,7 +57,7 @@ func (a *Authority) First() (thor.Address, error) {
 // Next returns the next authority node after the given node master
 func (a *Authority) Next(nodeMaster thor.Address) (thor.Address, error) {
 	out := new(common.Address)
-	if err := a.contract.Method("next", common.Address(nodeMaster)).Call().ExecuteInto(&out); err != nil {
+	if err := a.contract.Method("next", common.Address(nodeMaster)).Call().AtRevision(a.revision).ExecuteInto(&out); err != nil {
 		return thor.Address{}, err
 	}
 	return thor.Address(*out), nil
@@ -57,7 +66,7 @@ func (a *Authority) Next(nodeMaster thor.Address) (thor.Address, error) {
 // Executor returns the executor address
 func (a *Authority) Executor() (thor.Address, error) {
 	out := new(common.Address)
-	if err := a.contract.Method("executor").Call().ExecuteInto(&out); err != nil {
+	if err := a.contract.Method("executor").Call().AtRevision(a.revision).ExecuteInto(&out); err != nil {
 		return thor.Address{}, err
 	}
 	return thor.Address(*out), nil
@@ -78,7 +87,7 @@ func (a *Authority) Get(nodeMaster thor.Address) (*AuthorityNode, error) {
 	out[2] = new(common.Hash)
 	out[3] = new(bool)
 
-	if err := a.contract.Method("get", common.Address(nodeMaster)).Call().ExecuteInto(&out); err != nil {
+	if err := a.contract.Method("get", common.Address(nodeMaster)).Call().AtRevision(a.revision).ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 
