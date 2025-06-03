@@ -1,0 +1,93 @@
+// Copyright (c) 2025 The VeChainThor developers
+//
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
+package bind
+
+import (
+	"bytes"
+	"fmt"
+	"math/big"
+
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient"
+)
+
+// Contract is the main interface for contract interactions.
+// It provides a unified entry point for all contract operations.
+type Contract interface {
+	// Method creates a new method builder for the specified method and arguments.
+	Method(method string, args ...any) MethodBuilder
+
+	// FilterEvent creates a new filter builder for the specified event.
+	FilterEvent(eventName string) FilterBuilder
+
+	// Address returns the contract address.
+	Address() *thor.Address
+
+	// ABI returns the contract ABI.
+	ABI() *abi.ABI
+
+	// Client returns the underlying client.
+	Client() *thorclient.Client
+}
+
+// contract is the concrete implementation of Contract.
+type contract struct {
+	client *thorclient.Client
+	abi    *abi.ABI
+	addr   *thor.Address
+}
+
+// NewContract creates a new contract instance with the given client, ABI data and address.
+func NewContract(client *thorclient.Client, abiData []byte, address *thor.Address) (Contract, error) {
+	if address == nil {
+		return nil, fmt.Errorf("empty contract address")
+	}
+	contractABI, err := abi.JSON(bytes.NewReader(abiData))
+	if err != nil {
+		return nil, err
+	}
+	return &contract{
+		client: client,
+		abi:    &contractABI,
+		addr:   address,
+	}, nil
+}
+
+// Method implements Contract.Method.
+func (c *contract) Method(method string, args ...any) MethodBuilder {
+	return &methodBuilder{
+		contract: c,
+		method:   method,
+		args:     args,
+		vet:      big.NewInt(0),
+	}
+}
+
+// FilterEvent implements Contract.Event.
+func (c *contract) FilterEvent(eventName string) FilterBuilder {
+	return &filterBuilder{
+		op: &methodBuilder{
+			contract: c,
+			method:   eventName,
+		},
+	}
+}
+
+// Address returns the contract address.
+func (c *contract) Address() *thor.Address {
+	return c.addr
+}
+
+// ABI returns the contract ABI.
+func (c *contract) ABI() *abi.ABI {
+	return c.abi
+}
+
+// Client returns the underlying HTTP client.
+func (c *contract) Client() *thorclient.Client {
+	return c.client
+}

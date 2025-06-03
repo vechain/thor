@@ -14,16 +14,16 @@ import (
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
-	"github.com/vechain/thor/v2/thorclient/httpclient"
 )
 
 type Params struct {
-	contract *bind.Caller
+	contract bind.Contract
 }
 
-func NewParams(client *httpclient.Client) (*Params, error) {
-	contract, err := bind.NewCaller(client, builtin.Params.RawABI(), builtin.Params.Address)
+func NewParams(client *thorclient.Client) (*Params, error) {
+	contract, err := bind.NewContract(client, builtin.Params.RawABI(), &builtin.Params.Address)
 	if err != nil {
 		return nil, err
 	}
@@ -32,23 +32,17 @@ func NewParams(client *httpclient.Client) (*Params, error) {
 	}, nil
 }
 
-func (p *Params) Raw() *bind.Caller {
+func (p *Params) Raw() bind.Contract {
 	return p.contract
 }
 
-func (p *Params) Revision(blockID string) *Params {
-	return &Params{
-		contract: p.contract.Revision(blockID),
-	}
-}
-
-func (p *Params) Set(signer bind.Signer, key thor.Bytes32, value *big.Int) *bind.Sender {
-	return p.contract.Attach(signer).Sender("set", key, value)
+func (p *Params) Set(key thor.Bytes32, value *big.Int) bind.MethodBuilder {
+	return p.contract.Method("set", key, value)
 }
 
 func (p *Params) Get(key thor.Bytes32) (*big.Int, error) {
 	out := new(big.Int)
-	if err := p.contract.CallInto("get", &out, key); err != nil {
+	if err := p.contract.Method("get", key).Call().ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -66,7 +60,7 @@ func (p *Params) FilterSet(eventsRange *events.Range, opts *events.Options, orde
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := p.contract.FilterEvents("Set", eventsRange, opts, order)
+	raw, err := p.contract.FilterEvent("Set").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}

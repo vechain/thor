@@ -14,13 +14,21 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
+// Signer is the interface for transaction signing.
 type Signer interface {
+	// Address returns the signer's address.
 	Address() thor.Address
+	// SignTransaction signs the given transaction.
 	SignTransaction(tx *tx.Transaction) (*tx.Transaction, error)
 }
+
+// PrivateKeySigner implements Signer using an ECDSA private key.
 type PrivateKeySigner ecdsa.PrivateKey
 
-var _ Signer = (*PrivateKeySigner)(nil)
+// NewSigner creates a new signer from a private key.
+func NewSigner(privateKey *ecdsa.PrivateKey) *PrivateKeySigner {
+	return (*PrivateKeySigner)(privateKey)
+}
 
 func (p *PrivateKeySigner) Address() thor.Address {
 	return thor.Address(crypto.PubkeyToAddress(p.PublicKey))

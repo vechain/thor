@@ -13,16 +13,16 @@ import (
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
-	"github.com/vechain/thor/v2/thorclient/httpclient"
 )
 
 type Authority struct {
-	contract *bind.Caller
+	contract bind.Contract
 }
 
-func NewAuthority(client *httpclient.Client) (*Authority, error) {
-	base, err := bind.NewCaller(client, builtin.Authority.RawABI(), builtin.Authority.Address)
+func NewAuthority(client *thorclient.Client) (*Authority, error) {
+	base, err := bind.NewContract(client, builtin.Authority.RawABI(), &builtin.Authority.Address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create authority contract: %w", err)
 	}
@@ -31,20 +31,15 @@ func NewAuthority(client *httpclient.Client) (*Authority, error) {
 	}, nil
 }
 
-func (a *Authority) Raw() *bind.Caller {
+func (a *Authority) Raw() bind.Contract {
 	return a.contract
-}
-
-func (a *Authority) Revision(blockID string) *Authority {
-	return &Authority{
-		contract: a.contract.Revision(blockID),
-	}
 }
 
 // First returns the first authority node
 func (a *Authority) First() (thor.Address, error) {
+	// todo add sanity check on the methods and arguments
 	out := new(common.Address)
-	if err := a.contract.CallInto("first", &out); err != nil {
+	if err := a.contract.Method("first").Call().ExecuteInto(&out); err != nil {
 		return thor.Address{}, err
 	}
 	return thor.Address(*out), nil
@@ -53,7 +48,7 @@ func (a *Authority) First() (thor.Address, error) {
 // Next returns the next authority node after the given node master
 func (a *Authority) Next(nodeMaster thor.Address) (thor.Address, error) {
 	out := new(common.Address)
-	if err := a.contract.CallInto("next", &out, common.Address(nodeMaster)); err != nil {
+	if err := a.contract.Method("next", common.Address(nodeMaster)).Call().ExecuteInto(&out); err != nil {
 		return thor.Address{}, err
 	}
 	return thor.Address(*out), nil
@@ -62,7 +57,7 @@ func (a *Authority) Next(nodeMaster thor.Address) (thor.Address, error) {
 // Executor returns the executor address
 func (a *Authority) Executor() (thor.Address, error) {
 	out := new(common.Address)
-	if err := a.contract.CallInto("executor", &out); err != nil {
+	if err := a.contract.Method("executor").Call().ExecuteInto(&out); err != nil {
 		return thor.Address{}, err
 	}
 	return thor.Address(*out), nil
@@ -83,7 +78,7 @@ func (a *Authority) Get(nodeMaster thor.Address) (*AuthorityNode, error) {
 	out[2] = new(common.Hash)
 	out[3] = new(bool)
 
-	if err := a.contract.CallInto("get", &out, common.Address(nodeMaster)); err != nil {
+	if err := a.contract.Method("get", common.Address(nodeMaster)).Call().ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 
@@ -98,13 +93,13 @@ func (a *Authority) Get(nodeMaster thor.Address) (*AuthorityNode, error) {
 }
 
 // Add adds a new authority node
-func (a *Authority) Add(signer bind.Signer, nodeMaster, endorsor thor.Address, identity thor.Bytes32) *bind.Sender {
-	return a.contract.Attach(signer).Sender("add", common.Address(nodeMaster), common.Address(endorsor), common.Hash(identity))
+func (a *Authority) Add(nodeMaster, endorsor thor.Address, identity thor.Bytes32) bind.MethodBuilder {
+	return a.contract.Method("add", common.Address(nodeMaster), common.Address(endorsor), common.Hash(identity))
 }
 
 // Revoke revokes an authority node
-func (a *Authority) Revoke(signer bind.Signer, nodeMaster thor.Address) *bind.Sender {
-	return a.contract.Attach(signer).Sender("revoke", common.Address(nodeMaster))
+func (a *Authority) Revoke(nodeMaster thor.Address) bind.MethodBuilder {
+	return a.contract.Method("revoke", common.Address(nodeMaster))
 }
 
 type CandidateEvent struct {
@@ -120,7 +115,7 @@ func (a *Authority) FilterCandidate(eventsRange *events.Range, opts *events.Opti
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := a.contract.FilterEvents("Candidate", eventsRange, opts, order)
+	raw, err := a.contract.FilterEvent("Candidate").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}

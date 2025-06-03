@@ -22,11 +22,11 @@ func TestExecutor(t *testing.T) {
 	executor, err := NewExecutor(client)
 	require.NoError(t, err)
 
-	approver1 := (*bind.PrivateKeySigner)(genesis.DevAccounts()[0].PrivateKey)
-	approver2 := (*bind.PrivateKeySigner)(genesis.DevAccounts()[1].PrivateKey)
-	approver3 := (*bind.PrivateKeySigner)(genesis.DevAccounts()[2].PrivateKey)
+	approver1 := bind.NewSigner(genesis.DevAccounts()[0].PrivateKey)
+	approver2 := bind.NewSigner(genesis.DevAccounts()[1].PrivateKey)
+	approver3 := bind.NewSigner(genesis.DevAccounts()[2].PrivateKey)
 
-	newApprover := (*bind.PrivateKeySigner)(genesis.DevAccounts()[3].PrivateKey)
+	newApprover := bind.NewSigner(genesis.DevAccounts()[3].PrivateKey)
 
 	// Approvers
 	approver, err := executor.Approvers(approver1.Address())
@@ -39,9 +39,9 @@ func TestExecutor(t *testing.T) {
 	require.Equal(t, uint8(3), approverCount)
 
 	// Propose - Add another approver
-	addApproverClause, err := executor.AddApprover(approver1, newApprover.Address(), datagen.RandomHash()).Clause()
+	addApproverClause, err := executor.AddApprover(newApprover.Address(), datagen.RandomHash()).Clause()
 	require.NoError(t, err)
-	receipt, _, err := executor.Propose(approver1, *addApproverClause.To(), addApproverClause.Data()).Receipt(txContext(t), txOpts())
+	receipt, _, err := executor.Propose(*addApproverClause.To(), addApproverClause.Data()).Send().WithSigner(approver1).WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
@@ -58,18 +58,19 @@ func TestExecutor(t *testing.T) {
 	require.False(t, proposal.Executed)
 
 	// Approve
-	receipt, _, err = executor.Approve(approver1, proposals[0].ProposalID).Receipt(txContext(t), txOpts())
+	approveTx := executor.Approve(proposals[0].ProposalID).Send().WithOptions(txOpts())
+	receipt, _, err = approveTx.WithSigner(approver1).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
-	receipt, _, err = executor.Approve(approver2, proposals[0].ProposalID).Receipt(txContext(t), txOpts())
+	receipt, _, err = approveTx.WithSigner(approver2).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
-	receipt, _, err = executor.Approve(approver3, proposals[0].ProposalID).Receipt(txContext(t), txOpts())
+	receipt, _, err = approveTx.WithSigner(approver3).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
 	// Execute
-	receipt, _, err = executor.Execute(approver1, proposals[0].ProposalID).Receipt(txContext(t), txOpts())
+	receipt, _, err = executor.Execute(proposals[0].ProposalID).Send().WithSigner(approver1).WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
@@ -90,14 +91,14 @@ func TestExecutor(t *testing.T) {
 	require.True(t, newApproverInfo.InPower)
 
 	// RevokeApprover - Clause only
-	_, err = executor.RevokeApprover(approver1, newApprover.Address()).Clause()
+	_, err = executor.RevokeApprover(newApprover.Address()).Clause()
 	require.NoError(t, err)
 
 	// AttachVotingContract - Clause only
-	_, err = executor.AttachVotingContract(approver1, thor.Address{}).Clause()
+	_, err = executor.AttachVotingContract(thor.Address{}).Clause()
 	require.NoError(t, err)
 
 	// DetachVotingContract - Clause only
-	_, err = executor.DetachVotingContract(approver1, thor.Address{}).Clause()
+	_, err = executor.DetachVotingContract(thor.Address{}).Clause()
 	require.NoError(t, err)
 }

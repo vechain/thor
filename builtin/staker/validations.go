@@ -269,7 +269,7 @@ func (v *validations) UpdateAutoRenew(endorsor thor.Address, id thor.Bytes32, au
 	validator.AutoRenew = autoRenew
 	if !autoRenew {
 		if validator.Status == StatusActive {
-			minBlock := validator.StartBlock + validator.Period*(validator.CompleteIterations+1)
+			minBlock := validator.StartBlock + validator.Period*(validator.CurrentIteration())
 			exitBlock, err := v.SetExitBlock(id, minBlock)
 			if err != nil {
 				return err

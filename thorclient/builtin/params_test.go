@@ -17,7 +17,7 @@ import (
 )
 
 func TestParams(t *testing.T) {
-	executor := (*bind.PrivateKeySigner)(genesis.DevAccounts()[0].PrivateKey)
+	executor := bind.NewSigner(genesis.DevAccounts()[0].PrivateKey)
 
 	_, client := newChain(t, false)
 
@@ -32,7 +32,7 @@ func TestParams(t *testing.T) {
 	})
 
 	t.Run("Set", func(t *testing.T) {
-		receipt, _, err := params.Set(executor, thor.KeyMaxBlockProposers, big.NewInt(2)).Receipt(txContext(t), txOpts())
+		receipt, _, err := params.Set(thor.KeyMaxBlockProposers, big.NewInt(2)).Send().WithSigner(executor).WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 		require.NoError(t, err)
 		require.False(t, receipt.Reverted)
 
