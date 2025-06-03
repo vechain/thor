@@ -50,12 +50,27 @@ func init() {
 
 			validator, err := Staker.Native(env.State()).Get(thor.Bytes32(args.ValidationID))
 			if err != nil {
-				return []any{thor.Address{}, thor.Address{}, big.NewInt(0), big.NewInt(0), staker.StatusUnknown, false, false, uint32(0), fmt.Sprintf("revert: %v", err)}
+				return []any{thor.Address{}, thor.Address{}, big.NewInt(0), big.NewInt(0), staker.StatusUnknown, false, false, uint32(0), uint32(0), uint32(0), fmt.Sprintf("revert: %v", err)}
 			}
 			if validator.IsEmpty() {
-				return []any{thor.Address{}, thor.Address{}, big.NewInt(0), big.NewInt(0), staker.StatusUnknown, false, false, uint32(0), ""}
+				return []any{thor.Address{}, thor.Address{}, big.NewInt(0), big.NewInt(0), staker.StatusUnknown, false, false, uint32(0), uint32(0), uint32(0), ""}
 			}
-			return []any{validator.Master, validator.Endorsor, validator.LockedVET, validator.Weight, validator.Status, validator.AutoRenew, validator.Online, validator.Period, ""}
+			exitBlock := uint32(math.MaxUint32)
+			if validator.ExitBlock != nil {
+				exitBlock = *validator.ExitBlock
+			}
+			return []any{validator.Master, validator.Endorsor, validator.LockedVET, validator.Weight, validator.Status, validator.AutoRenew, validator.Online, validator.Period, validator.StartBlock, exitBlock, ""}
+		}},
+		{"native_lookupMaster", func(env *xenv.Environment) []any {
+			var args struct {
+				Master common.Address
+			}
+			env.ParseArgs(&args)
+			env.UseGas(thor.SloadGas)
+
+			_, validationID, _ := Staker.Native(env.State()).LookupMaster(thor.Address(args.Master))
+
+			return []any{validationID}
 		}},
 		{"native_getWithdraw", func(env *xenv.Environment) []any {
 			var args struct {

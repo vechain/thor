@@ -143,14 +143,16 @@ func (s *Staker) LookupMaster(master thor.Address) (*Validator, thor.Bytes32, er
 }
 
 type Validator struct {
-	Master    *thor.Address
-	Endorsor  *thor.Address
-	Stake     *big.Int
-	Weight    *big.Int
-	Status    StakerStatus
-	AutoRenew bool
-	Online    bool
-	Period    uint32
+	Master     *thor.Address
+	Endorsor   *thor.Address
+	Stake      *big.Int
+	Weight     *big.Int
+	Status     StakerStatus
+	AutoRenew  bool
+	Online     bool
+	Period     uint32
+	StartBlock uint32
+	ExitBlock  uint32
 }
 
 func (v *Validator) Exists() bool {
@@ -158,7 +160,7 @@ func (v *Validator) Exists() bool {
 }
 
 func (s *Staker) Get(id thor.Bytes32) (*Validator, error) {
-	var out = [8]any{}
+	var out = [10]any{}
 	out[0] = new(common.Address)
 	out[1] = new(common.Address)
 	out[2] = new(*big.Int)
@@ -167,18 +169,22 @@ func (s *Staker) Get(id thor.Bytes32) (*Validator, error) {
 	out[5] = new(bool)
 	out[6] = new(bool)
 	out[7] = new(uint32)
+	out[8] = new(uint32)
+	out[9] = new(uint32)
 	if err := s.contract.Method("get", id).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 	validator := &Validator{
-		Master:    (*thor.Address)(out[0].(*common.Address)),
-		Endorsor:  (*thor.Address)(out[1].(*common.Address)),
-		Stake:     *(out[2].(**big.Int)),
-		Weight:    *(out[3].(**big.Int)),
-		Status:    StakerStatus(*(out[4].(*uint8))),
-		AutoRenew: *(out[5].(*bool)),
-		Online:    *(out[6].(*bool)),
-		Period:    *(out[7].(*uint32)),
+		Master:     (*thor.Address)(out[0].(*common.Address)),
+		Endorsor:   (*thor.Address)(out[1].(*common.Address)),
+		Stake:      *(out[2].(**big.Int)),
+		Weight:     *(out[3].(**big.Int)),
+		Status:     StakerStatus(*(out[4].(*uint8))),
+		AutoRenew:  *(out[5].(*bool)),
+		Online:     *(out[6].(*bool)),
+		Period:     *(out[7].(*uint32)),
+		StartBlock: *(out[8].(*uint32)),
+		ExitBlock:  *(out[9].(*uint32)),
 	}
 
 	return validator, nil
@@ -288,7 +294,7 @@ func (s *Staker) GetValidatorsTotals(validationID thor.Bytes32) (*ValidationTota
 	out[1] = new(*big.Int)
 	out[2] = new(*big.Int)
 	out[3] = new(*big.Int)
-	if err := s.contract.Method("getValidatorTotals", validationID).Call().ExecuteInto(&out); err != nil {
+	if err := s.contract.Method("getValidatorTotals", validationID).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 	validationTotals := &ValidationTotals{

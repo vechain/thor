@@ -114,6 +114,7 @@ func TestStakerABI(t *testing.T) {
 		{"getRewards", true},
 		{"getCompletedPeriods", true},
 		{"getValidatorTotals", true},
+		{"lookupMaster", true},
 	}
 
 	assert.Equal(t, len(testCases), len(abi.Methods()))

@@ -49,8 +49,9 @@ contract Staker {
      * @dev totalStake returns all stakes and weight by active validators.
      */
     function totalStake() public view returns (uint256, uint256) {
-        (uint256 stake, uint256 weight, string memory error) = StakerNative(address(this))
-            .native_totalStake();
+        (uint256 stake, uint256 weight, string memory error) = StakerNative(
+            address(this)
+        ).native_totalStake();
         require(bytes(error).length == 0, error);
         return (stake, weight);
     }
@@ -59,8 +60,9 @@ contract Staker {
      * @dev queuedStake returns all stakes and weight by queued validators.
      */
     function queuedStake() public view returns (uint256, uint256) {
-        (uint256 stake, uint256 weight, string memory error) = StakerNative(address(this))
-            .native_queuedStake();
+        (uint256 stake, uint256 weight, string memory error) = StakerNative(
+            address(this)
+        ).native_queuedStake();
         require(bytes(error).length == 0, error);
         return (stake, weight);
     }
@@ -201,7 +203,11 @@ contract Staker {
      */
     function getDelegation(
         bytes32 delegationID
-    ) public view returns (bytes32, uint256, uint32, uint32, uint8, bool, bool) {
+    )
+        public
+        view
+        returns (bytes32, uint256, uint32, uint32, uint8, bool, bool)
+    {
         (
             bytes32 validationID,
             uint256 stake,
@@ -213,17 +219,40 @@ contract Staker {
             string memory error
         ) = StakerNative(address(this)).native_getDelegation(delegationID);
         require(bytes(error).length == 0, error);
-        return (validationID, stake, startPeriod, endPeriod, multiplier, autoRenew, isLocked);
+        return (
+            validationID,
+            stake,
+            startPeriod,
+            endPeriod,
+            multiplier,
+            autoRenew,
+            isLocked
+        );
     }
 
     /**
      * @dev get returns the master. endorser, stake, weight, status, auto renew, online and staking period of a validator.
-     * @return (master, endorser, stake, weight, status, autoRenew, online)
+     * @return (master, endorser, stake, weight, status, autoRenew, online, stakingPeriod, startBlock, exitBlock)
      * - status (0: unknown, 1: queued, 2: active, 3: cooldown, 4: exited)
      */
     function get(
         bytes32 id
-    ) public view returns (address, address, uint256, uint256, uint8, bool, bool, uint32) {
+    )
+        public
+        view
+        returns (
+            address,
+            address,
+            uint256,
+            uint256,
+            uint8,
+            bool,
+            bool,
+            uint32,
+            uint32,
+            uint32
+        )
+    {
         (
             address master,
             address endorser,
@@ -233,10 +262,30 @@ contract Staker {
             bool autoRenew,
             bool online,
             uint32 period,
+            uint32 startBlock,
+            uint32 exitBlock,
             string memory error
         ) = StakerNative(address(this)).native_get(id);
         require(bytes(error).length == 0, error);
-        return (master, endorser, stake, weight, status, autoRenew, online, period);
+        return (
+            master,
+            endorser,
+            stake,
+            weight,
+            status,
+            autoRenew,
+            online,
+            period,
+            startBlock,
+            exitBlock
+        );
+    }
+
+    /**
+     * @dev lookupMaster returns a validation ID if the master address is currently queued or active.
+     */
+    function lookupMaster(address master) public view returns (bytes32) {
+        return StakerNative(address(this)).native_lookupMaster(master);
     }
 
     /**
@@ -282,7 +331,10 @@ contract Staker {
     /**
      * @dev getRewards returns the rewards received for validation id and staking period (this function returns full reward for all delegations and validator)
      */
-    function getRewards(bytes32 validationID, uint32 stakingPeriod) public view returns (uint256) {
+    function getRewards(
+        bytes32 validationID,
+        uint32 stakingPeriod
+    ) public view returns (uint256) {
         (uint256 reward, string memory error) = StakerNative(address(this))
             .native_getRewards(validationID, stakingPeriod);
         require(bytes(error).length == 0, error);
@@ -292,7 +344,9 @@ contract Staker {
     /**
      * @dev getCompletedPeriods returns the number of completed periods for validation
      */
-    function getCompletedPeriods(bytes32 validationID) public view returns (uint32) {
+    function getCompletedPeriods(
+        bytes32 validationID
+    ) public view returns (uint32) {
         (uint32 periods, string memory error) = StakerNative(address(this))
             .native_getCompletedPeriods(validationID);
         require(bytes(error).length == 0, error);
@@ -385,16 +439,19 @@ interface StakerNative {
 
     function native_getDelegation(
         bytes32 delegationID
-    ) external view returns (
-        bytes32,
-        uint256,
-        uint32,
-        uint32,
-        uint8,
-        bool,
-        bool,
-        string calldata
-    );
+    )
+        external
+        view
+        returns (
+            bytes32,
+            uint256,
+            uint32,
+            uint32,
+            uint8,
+            bool,
+            bool,
+            string calldata
+        );
 
     function native_get(
         bytes32 validationID
@@ -410,8 +467,14 @@ interface StakerNative {
             bool,
             bool,
             uint32,
+            uint32,
+            uint32,
             string calldata
         );
+
+    function native_lookupMaster(
+        address master
+    ) external view returns (bytes32);
 
     function native_getWithdraw(
         bytes32 validationID
@@ -436,11 +499,21 @@ interface StakerNative {
         view
         returns (address, string calldata);
 
-    function native_getBlockProposerAndReward(uint32 blockNumber) external view returns (uint256, address, address, bytes32, string calldata);
+    function native_getBlockProposerAndReward(
+        uint32 blockNumber
+    )
+        external
+        view
+        returns (uint256, address, address, bytes32, string calldata);
 
-    function native_getRewards(bytes32 validationID, uint32 stakingPeriod) external view returns (uint256, string calldata);
+    function native_getRewards(
+        bytes32 validationID,
+        uint32 stakingPeriod
+    ) external view returns (uint256, string calldata);
 
-    function native_getCompletedPeriods(bytes32 validationID) external view returns (uint32, string calldata);
+    function native_getCompletedPeriods(
+        bytes32 validationID
+    ) external view returns (uint32, string calldata);
 
     function native_getValidatorTotals(bytes32 validationID) external view returns (uint256, uint256, uint256, uint256, string calldata);
 }

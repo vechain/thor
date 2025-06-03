@@ -6,6 +6,7 @@
 package builtin
 
 import (
+	"math"
 	"math/big"
 	"testing"
 
@@ -108,6 +109,14 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, big.NewInt(0).Mul(minStake, big.NewInt(2)), firstActive.Weight)
 	require.Equal(t, StakerStatusActive, firstActive.Status)
 	require.False(t, firstActive.Endorsor.IsZero())
+	require.Greater(t, firstActive.StartBlock, uint32(0))
+	require.Equal(t, firstActive.ExitBlock, uint32(math.MaxUint32))
+
+	// LookupMaster
+	getRes, id, err := staker.LookupMaster(*firstActive.Master)
+	require.NoError(t, err)
+	require.False(t, id.IsZero())
+	require.True(t, getRes.Exists())
 
 	// Next
 	next, id, err := staker.Next(firstID)
