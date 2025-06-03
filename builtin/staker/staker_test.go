@@ -2170,8 +2170,8 @@ func Test_GetValidatorTotals(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, stake, delegation.Stake)
 	assert.Equal(t, uint8(255), delegation.Multiplier)
-	assert.Equal(t, uint32(1), delegation.FirstIteration)
-	assert.Nil(t, delegation.ExitIteration)
+	assert.Equal(t, uint32(2), delegation.FirstIteration)
+	assert.Nil(t, delegation.LastIteration)
 
 	_, _, err = staker.Housekeep(validator.Period)
 	assert.NoError(t, err)
