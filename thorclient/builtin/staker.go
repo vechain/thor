@@ -294,7 +294,7 @@ func (s *Staker) GetValidatorsTotals(validationID thor.Bytes32) (*ValidationTota
 	out[1] = new(*big.Int)
 	out[2] = new(*big.Int)
 	out[3] = new(*big.Int)
-	if err := s.contract.Method("getValidatorTotals", validationID).Call().ExecuteInto(&out); err != nil {
+	if err := s.contract.Method("getValidatorTotals", validationID).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 	validationTotals := &ValidationTotals{
