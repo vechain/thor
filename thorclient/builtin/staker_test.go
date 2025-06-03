@@ -238,6 +238,15 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, false, delegation.AutoRenew)
 	require.Equal(t, queuedID, delegation.ValidationID)
 
+	// GetValidatorsTotals
+	validationTotals, err := staker.GetValidatorsTotals(firstID)
+	require.NoError(t, err)
+
+	require.Equal(t, minStake, validationTotals.TotalLockedStake)
+	require.Equal(t, big.NewInt(0).Mul(minStake, big.NewInt(2)), validationTotals.TotalLockedWeight)
+	require.Equal(t, big.NewInt(0).String(), validationTotals.DelegationsLockedWeight.String())
+	require.Equal(t, big.NewInt(0).String(), validationTotals.DelegationsLockedStake.String())
+
 	// UpdateDelegationAutoRenew - Enable AutoRenew
 	receipt, _, err = staker.UpdateDelegationAutoRenew(delegationID, true).
 		Send().

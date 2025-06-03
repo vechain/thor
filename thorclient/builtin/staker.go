@@ -251,6 +251,32 @@ func (s *Staker) GetDelegation(delegationID thor.Bytes32) (*Delegation, error) {
 	return delegatorInfo, nil
 }
 
+type ValidationTotals struct {
+	TotalLockedStake        *big.Int
+	TotalLockedWeight       *big.Int
+	DelegationsLockedStake  *big.Int
+	DelegationsLockedWeight *big.Int
+}
+
+func (s *Staker) GetValidatorsTotals(validationID thor.Bytes32) (*ValidationTotals, error) {
+	var out = make([]any, 4)
+	out[0] = new(*big.Int)
+	out[1] = new(*big.Int)
+	out[2] = new(*big.Int)
+	out[3] = new(*big.Int)
+	if err := s.contract.Method("getValidatorTotals", validationID).Call().ExecuteInto(&out); err != nil {
+		return nil, err
+	}
+	validationTotals := &ValidationTotals{
+		TotalLockedStake:        *(out[0].(**big.Int)),
+		TotalLockedWeight:       *(out[1].(**big.Int)),
+		DelegationsLockedStake:  *(out[2].(**big.Int)),
+		DelegationsLockedWeight: *(out[3].(**big.Int)),
+	}
+
+	return validationTotals, nil
+}
+
 type ValidatorQueuedEvent struct {
 	Endorsor     thor.Address
 	Master       thor.Address
