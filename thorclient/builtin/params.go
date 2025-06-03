@@ -20,6 +20,7 @@ import (
 
 type Params struct {
 	contract bind.Contract
+	revision string
 }
 
 func NewParams(client *thorclient.Client) (*Params, error) {
@@ -32,6 +33,14 @@ func NewParams(client *thorclient.Client) (*Params, error) {
 	}, nil
 }
 
+// Revision creates a new Params instance with the specified revision.
+func (p *Params) Revision(rev string) *Params {
+	return &Params{
+		contract: p.contract,
+		revision: rev,
+	}
+}
+
 func (p *Params) Raw() bind.Contract {
 	return p.contract
 }
@@ -42,7 +51,7 @@ func (p *Params) Set(key thor.Bytes32, value *big.Int) bind.MethodBuilder {
 
 func (p *Params) Get(key thor.Bytes32) (*big.Int, error) {
 	out := new(big.Int)
-	if err := p.contract.Method("get", key).Call().ExecuteInto(&out); err != nil {
+	if err := p.contract.Method("get", key).Call().AtRevision(p.revision).ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 	return out, nil
