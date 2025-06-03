@@ -37,6 +37,7 @@ func MinStake() *big.Int {
 
 type Staker struct {
 	contract bind.Contract
+	revision string
 }
 
 func NewStaker(client *thorclient.Client) (*Staker, error) {
@@ -49,10 +50,18 @@ func NewStaker(client *thorclient.Client) (*Staker, error) {
 	}, nil
 }
 
+// Revision creates a new Staker instance with the specified revision.
+func (s *Staker) Revision(rev string) *Staker {
+	return &Staker{
+		contract: s.contract,
+		revision: rev,
+	}
+}
+
 // FirstActive returns the first active validator
 func (s *Staker) FirstActive() (*Validator, thor.Bytes32, error) {
 	out := new(common.Hash)
-	if err := s.contract.Method("firstActive").Call().ExecuteInto(&out); err != nil {
+	if err := s.contract.Method("firstActive").Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, thor.Bytes32{}, err
 	}
 	res := *out
@@ -71,7 +80,7 @@ func (s *Staker) Raw() bind.Contract {
 // FirstQueued returns the first queued validator
 func (s *Staker) FirstQueued() (*Validator, thor.Bytes32, error) {
 	out := new(common.Hash)
-	if err := s.contract.Method("firstQueued").Call().ExecuteInto(&out); err != nil {
+	if err := s.contract.Method("firstQueued").Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, thor.Bytes32{}, err
 	}
 	res := *out
@@ -86,7 +95,7 @@ func (s *Staker) FirstQueued() (*Validator, thor.Bytes32, error) {
 // Next returns the next validator
 func (s *Staker) Next(id thor.Bytes32) (*Validator, thor.Bytes32, error) {
 	out := new(common.Hash)
-	if err := s.contract.Method("next", id).Call().ExecuteInto(&out); err != nil {
+	if err := s.contract.Method("next", id).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, thor.Bytes32{}, err
 	}
 	res := *out
@@ -102,7 +111,7 @@ func (s *Staker) TotalStake() (*big.Int, *big.Int, error) {
 	var out = [2]any{}
 	out[0] = new(*big.Int)
 	out[1] = new(*big.Int)
-	if err := s.contract.Method("totalStake").Call().ExecuteInto(&out); err != nil {
+	if err := s.contract.Method("totalStake").Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, nil, err
 	}
 	return *(out[0].(**big.Int)), *(out[1].(**big.Int)), nil
@@ -112,7 +121,7 @@ func (s *Staker) QueuedStake() (*big.Int, *big.Int, error) {
 	var out = [2]any{}
 	out[0] = new(*big.Int)
 	out[1] = new(*big.Int)
-	if err := s.contract.Method("queuedStake").Call().ExecuteInto(&out); err != nil {
+	if err := s.contract.Method("queuedStake").Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, nil, err
 	}
 	return *(out[0].(**big.Int)), *(out[1].(**big.Int)), nil
@@ -121,7 +130,7 @@ func (s *Staker) QueuedStake() (*big.Int, *big.Int, error) {
 // LookupMaster returns the validation ID for the given master address if it is queued or active.
 func (s *Staker) LookupMaster(master thor.Address) (*Validator, thor.Bytes32, error) {
 	out := new(common.Hash)
-	if err := s.contract.Method("lookupMaster", common.Address(master)).Call().ExecuteInto(&out); err != nil {
+	if err := s.contract.Method("lookupMaster", common.Address(master)).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, thor.Bytes32{}, err
 	}
 	res := *out
@@ -162,7 +171,7 @@ func (s *Staker) Get(id thor.Bytes32) (*Validator, error) {
 	out[7] = new(uint32)
 	out[8] = new(uint32)
 	out[9] = new(uint32)
-	if err := s.contract.Method("get", id).Call().ExecuteInto(&out); err != nil {
+	if err := s.contract.Method("get", id).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 	validator := &Validator{
@@ -215,7 +224,7 @@ func (s *Staker) IncreaseStake(validationID thor.Bytes32, amount *big.Int) bind.
 
 func (s *Staker) GetWithdraw(validationID thor.Bytes32) (*big.Int, error) {
 	out := new(big.Int)
-	if err := s.contract.Method("getWithdraw", validationID).Call().ExecuteInto(&out); err != nil {
+	if err := s.contract.Method("getWithdraw", validationID).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -223,7 +232,7 @@ func (s *Staker) GetWithdraw(validationID thor.Bytes32) (*big.Int, error) {
 
 func (s *Staker) GetRewards(validatorID thor.Bytes32, period uint32) (*big.Int, error) {
 	out := new(big.Int)
-	if err := s.contract.Method("getRewards", validatorID, period).Call().ExecuteInto(&out); err != nil {
+	if err := s.contract.Method("getRewards", validatorID, period).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -231,7 +240,7 @@ func (s *Staker) GetRewards(validatorID thor.Bytes32, period uint32) (*big.Int, 
 
 func (s *Staker) GetCompletedPeriods(validatorID thor.Bytes32) (*uint32, error) {
 	out := uint32(0)
-	if err := s.contract.Method("getCompletedPeriods", validatorID).Call().ExecuteInto(&out); err != nil {
+	if err := s.contract.Method("getCompletedPeriods", validatorID).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -256,7 +265,7 @@ func (s *Staker) GetDelegation(delegationID thor.Bytes32) (*Delegation, error) {
 	out[4] = new(uint8)
 	out[5] = new(bool)
 	out[6] = new(bool)
-	if err := s.contract.Method("getDelegation", delegationID).Call().ExecuteInto(&out); err != nil {
+	if err := s.contract.Method("getDelegation", delegationID).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 	delegatorInfo := &Delegation{
@@ -270,6 +279,32 @@ func (s *Staker) GetDelegation(delegationID thor.Bytes32) (*Delegation, error) {
 	}
 
 	return delegatorInfo, nil
+}
+
+type ValidationTotals struct {
+	TotalLockedStake        *big.Int
+	TotalLockedWeight       *big.Int
+	DelegationsLockedStake  *big.Int
+	DelegationsLockedWeight *big.Int
+}
+
+func (s *Staker) GetValidatorsTotals(validationID thor.Bytes32) (*ValidationTotals, error) {
+	var out = make([]any, 4)
+	out[0] = new(*big.Int)
+	out[1] = new(*big.Int)
+	out[2] = new(*big.Int)
+	out[3] = new(*big.Int)
+	if err := s.contract.Method("getValidatorTotals", validationID).Call().ExecuteInto(&out); err != nil {
+		return nil, err
+	}
+	validationTotals := &ValidationTotals{
+		TotalLockedStake:        *(out[0].(**big.Int)),
+		TotalLockedWeight:       *(out[1].(**big.Int)),
+		DelegationsLockedStake:  *(out[2].(**big.Int)),
+		DelegationsLockedWeight: *(out[3].(**big.Int)),
+	}
+
+	return validationTotals, nil
 }
 
 type ValidatorQueuedEvent struct {

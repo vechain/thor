@@ -2153,3 +2153,37 @@ func TestStaker_MultipleUpdates_CorrectWithdraw(t *testing.T) {
 	depositTotal := new(big.Int).Add(initialStake, increases)
 	assert.Equal(t, depositTotal, withdrawnTotal)
 }
+
+func Test_GetValidatorTotals(t *testing.T) {
+	staker, validators := newDelegationStaker(t)
+
+	stake := big.NewInt(0).Set(minStake)
+
+	validator := validators[0]
+	id1, err := staker.AddDelegation(validator.ID, stake, true, 255)
+	assert.NoError(t, err)
+	assert.False(t, id1.IsZero())
+	aggregation, err := staker.storage.GetAggregation(validator.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, aggregation.PendingLockedVET, stake)
+	delegation, _, err := staker.GetDelegation(id1)
+	assert.NoError(t, err)
+	assert.Equal(t, stake, delegation.Stake)
+	assert.Equal(t, uint8(255), delegation.Multiplier)
+	assert.Equal(t, uint32(2), delegation.FirstIteration)
+	assert.Nil(t, delegation.LastIteration)
+
+	_, _, err = staker.Housekeep(validator.Period)
+	assert.NoError(t, err)
+
+	totals, err := staker.GetValidatorsTotals(validator.ID)
+	assert.NoError(t, err)
+
+	fetchedValidator, err := staker.Get(validator.ID)
+	assert.NoError(t, err)
+
+	assert.Equal(t, fetchedValidator.LockedVET, totals.TotalLockedStake)
+	assert.Equal(t, fetchedValidator.Weight, totals.TotalLockedWeight)
+	assert.Equal(t, delegation.Stake, totals.DelegationsLockedStake)
+	assert.Equal(t, delegation.Weight(), totals.DelegationsLockedWeight)
+}

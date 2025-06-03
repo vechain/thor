@@ -125,7 +125,8 @@ func (e *Energy) TotalBurned() (*big.Int, error) {
 	if err != nil {
 		return nil, err
 	}
-	return new(big.Int).Sub(total.TotalSub, total.TotalAdd), nil
+	burned := new(big.Int).Sub(total.TotalSub, total.TotalAdd)
+	return burned, nil
 }
 
 // Get returns energy of an account at given block time.

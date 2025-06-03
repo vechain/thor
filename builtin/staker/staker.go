@@ -354,3 +354,21 @@ func (s *Staker) GetCompletedPeriods(validationID thor.Bytes32) (uint32, error) 
 func (s *Staker) IncreaseReward(master thor.Address, reward big.Int) error {
 	return s.storage.IncreaseReward(master, reward)
 }
+
+// GetValidatorsTotals returns the total stake, total weight, total delegators stake and total delegators weight.
+func (s *Staker) GetValidatorsTotals(validationID thor.Bytes32) (*ValidationTotals, error) {
+	validator, err := s.storage.GetValidator(validationID)
+	if err != nil {
+		return nil, err
+	}
+	aggregation, err := s.storage.GetAggregation(validationID)
+	if err != nil {
+		return nil, err
+	}
+	return &ValidationTotals{
+		TotalLockedStake:        validator.LockedVET,
+		TotalLockedWeight:       validator.Weight,
+		DelegationsLockedStake:  big.NewInt(0).Add(aggregation.LockedVET, aggregation.CooldownVET),
+		DelegationsLockedWeight: big.NewInt(0).Add(aggregation.LockedWeight, aggregation.CooldownWeight),
+	}, nil
+}
