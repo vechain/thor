@@ -122,6 +122,7 @@ func (e *Energy) TotalSupply() (*big.Int, error) {
 // TotalBurned returns energy totally burned.
 func (e *Energy) TotalBurned() (*big.Int, error) {
 	total, err := e.getTotalAddSub()
+	println("=========total add and sub", total.TotalAdd.String(), total.TotalSub.String())
 	if err != nil {
 		return nil, err
 	}
