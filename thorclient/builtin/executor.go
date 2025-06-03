@@ -13,16 +13,16 @@ import (
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
-	"github.com/vechain/thor/v2/thorclient/httpclient"
 )
 
 type Executor struct {
-	contract *bind.Caller
+	contract bind.Contract
 }
 
-func NewExecutor(client *httpclient.Client) (*Executor, error) {
-	contract, err := bind.NewCaller(client, builtin.Executor.RawABI(), &builtin.Executor.Address)
+func NewExecutor(client *thorclient.Client) (*Executor, error) {
+	contract, err := bind.NewContract(client, builtin.Executor.RawABI(), &builtin.Executor.Address)
 	if err != nil {
 		return nil, err
 	}
@@ -31,14 +31,8 @@ func NewExecutor(client *httpclient.Client) (*Executor, error) {
 	}, nil
 }
 
-func (e *Executor) Raw() *bind.Caller {
+func (e *Executor) Raw() bind.Contract {
 	return e.contract
-}
-
-func (e *Executor) Revision(blockID string) *Executor {
-	return &Executor{
-		contract: e.contract.Revision(blockID),
-	}
 }
 
 type Approver struct {
@@ -51,7 +45,7 @@ func (e *Executor) Approvers(address thor.Address) (*Approver, error) {
 	out[0] = new(common.Hash)
 	out[1] = new(bool)
 
-	if err := e.contract.CallInto("approvers", &out, address); err != nil {
+	if err := e.contract.Method("approvers", address).Call().ExecuteInto(&out); err != nil {
 		return nil, fmt.Errorf("failed to call approvers: %w", err)
 	}
 
@@ -81,7 +75,7 @@ func (e *Executor) Proposals(proposalID thor.Bytes32) (*Proposal, error) {
 	out[5] = new(common.Address)
 	out[6] = new([]byte)
 
-	if err := e.contract.CallInto("proposals", &out, proposalID); err != nil {
+	if err := e.contract.Method("proposals", proposalID).Call().ExecuteInto(&out); err != nil {
 		return nil, fmt.Errorf("failed to call proposals: %w", err)
 	}
 
@@ -98,38 +92,38 @@ func (e *Executor) Proposals(proposalID thor.Bytes32) (*Proposal, error) {
 
 func (e *Executor) ApproverCount() (uint8, error) {
 	var count uint8
-	if err := e.contract.CallInto("approverCount", &count); err != nil {
+	if err := e.contract.Method("approverCount").Call().ExecuteInto(&count); err != nil {
 		return 0, fmt.Errorf("failed to call approverCount: %w", err)
 	}
 	return count, nil
 }
 
-func (e *Executor) Propose(signer bind.Signer, target thor.Address, data []byte) *bind.Sender {
-	return e.contract.Attach(signer).Sender("propose", target, data)
+func (e *Executor) Propose(target thor.Address, data []byte) bind.MethodBuilder {
+	return e.contract.Method("propose", target, data)
 }
 
-func (e *Executor) Approve(signer bind.Signer, proposalID thor.Bytes32) *bind.Sender {
-	return e.contract.Attach(signer).Sender("approve", proposalID)
+func (e *Executor) Approve(proposalID thor.Bytes32) bind.MethodBuilder {
+	return e.contract.Method("approve", proposalID)
 }
 
-func (e *Executor) Execute(signer bind.Signer, proposalID thor.Bytes32) *bind.Sender {
-	return e.contract.Attach(signer).Sender("execute", proposalID)
+func (e *Executor) Execute(proposalID thor.Bytes32) bind.MethodBuilder {
+	return e.contract.Method("execute", proposalID)
 }
 
-func (e *Executor) AddApprover(signer bind.Signer, address thor.Address, identity thor.Bytes32) *bind.Sender {
-	return e.contract.Attach(signer).Sender("addApprover", address, identity)
+func (e *Executor) AddApprover(address thor.Address, identity thor.Bytes32) bind.MethodBuilder {
+	return e.contract.Method("addApprover", address, identity)
 }
 
-func (e *Executor) RevokeApprover(signer bind.Signer, address thor.Address) *bind.Sender {
-	return e.contract.Attach(signer).Sender("revokeApprover", address)
+func (e *Executor) RevokeApprover(address thor.Address) bind.MethodBuilder {
+	return e.contract.Method("revokeApprover", address)
 }
 
-func (e *Executor) AttachVotingContract(signer bind.Signer, votingContract thor.Address) *bind.Sender {
-	return e.contract.Attach(signer).Sender("attachVotingContract", votingContract)
+func (e *Executor) AttachVotingContract(votingContract thor.Address) bind.MethodBuilder {
+	return e.contract.Method("attachVotingContract", votingContract)
 }
 
-func (e *Executor) DetachVotingContract(signer bind.Signer, votingContract thor.Address) *bind.Sender {
-	return e.contract.Attach(signer).Sender("detachVotingContract", votingContract)
+func (e *Executor) DetachVotingContract(votingContract thor.Address) bind.MethodBuilder {
+	return e.contract.Method("detachVotingContract", votingContract)
 }
 
 type ProposalEvent struct {
@@ -139,7 +133,12 @@ type ProposalEvent struct {
 }
 
 func (e *Executor) FilterProposals(eventsRange *events.Range, opts *events.Options, order logdb.Order) ([]ProposalEvent, error) {
-	raw, err := e.contract.FilterEvents("Proposal", eventsRange, opts, order)
+	_, ok := e.contract.ABI().Events["Proposal"]
+	if !ok {
+		return nil, fmt.Errorf("event not found")
+	}
+
+	raw, err := e.contract.FilterEvent("Proposal").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}
