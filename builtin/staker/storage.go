@@ -201,7 +201,7 @@ func (s *storage) IncreaseReward(master thor.Address, reward big.Int) error {
 	}
 
 	periodBytes := make([]byte, 4)
-	binary.BigEndian.PutUint32(periodBytes, val.CompleteIterations+1)
+	binary.BigEndian.PutUint32(periodBytes, val.CurrentIteration())
 	key := thor.Blake2b([]byte("rewards"), id.Bytes(), periodBytes)
 
 	rewards, err := s.rewards.Get(key)
