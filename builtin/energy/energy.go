@@ -126,7 +126,6 @@ func (e *Energy) TotalBurned() (*big.Int, error) {
 		return nil, err
 	}
 	burned := new(big.Int).Sub(total.TotalSub, total.TotalAdd)
-	println("=========total burned is", total.TotalAdd.String(), total.TotalSub.String(), burned.String())
 	return burned, nil
 }
 
