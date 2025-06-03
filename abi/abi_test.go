@@ -113,6 +113,7 @@ func TestStakerABI(t *testing.T) {
 		{"withdrawDelegation", false},
 		{"getRewards", true},
 		{"getCompletedPeriods", true},
+		{"getValidatorTotals", true},
 	}
 
 	assert.Equal(t, len(testCases), len(abi.Methods()))
