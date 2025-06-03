@@ -39,7 +39,7 @@ func TestStaker(t *testing.T) {
 		authorityTxs = append(authorityTxs, sender)
 	}
 	for _, tx := range authorityTxs {
-		if _, err := tx.IssueTx(); err != nil {
+		if _, err := tx.Submit(); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -49,14 +49,14 @@ func TestStaker(t *testing.T) {
 		Send().
 		WithSigner(executor).
 		WithOptions(txOpts()).
-		Receipt(txContext(t)); err != nil {
+		SubmitAndConfirm(txContext(t)); err != nil {
 		t.Fatal(err)
 	}
 	// set stargate address
 	if _, _, err := params.Set(thor.KeyStargateContractAddress, new(big.Int).SetBytes(stargate.Address().Bytes())).
 		Send().
 		WithSigner(executor).
-		WithOptions(txOpts()).Receipt(txContext(t)); err != nil {
+		WithOptions(txOpts()).SubmitAndConfirm(txContext(t)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -71,7 +71,7 @@ func TestStaker(t *testing.T) {
 		validatorTxs = append(validatorTxs, addValidatorTx)
 	}
 	for _, tx := range validatorTxs {
-		if _, err = tx.IssueTx(); err != nil {
+		if _, err = tx.Submit(); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -129,7 +129,7 @@ func TestStaker(t *testing.T) {
 	receipt, _, err := staker.AddValidator(validator.Address, minStake, minStakingPeriod, false).
 		Send().
 		WithSigner(validatorKey).
-		WithOptions(txOpts()).Receipt(txContext(t))
+		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
@@ -162,7 +162,7 @@ func TestStaker(t *testing.T) {
 	receipt, _, err = staker.IncreaseStake(queuedID, minStake).
 		Send().
 		WithSigner(validatorKey).
-		WithOptions(txOpts()).Receipt(txContext(t))
+		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 
 	increaseEvents, err := staker.FilterStakeIncreased(newRange(receipt), nil, logdb.ASC)
@@ -176,7 +176,7 @@ func TestStaker(t *testing.T) {
 	receipt, _, err = staker.DecreaseStake(queuedID, minStake).
 		Send().
 		WithSigner(validatorKey).
-		WithOptions(txOpts()).Receipt(txContext(t))
+		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 
 	decreaseEvents, err := staker.FilterStakeDecreased(newRange(receipt), nil, logdb.ASC)
@@ -190,7 +190,7 @@ func TestStaker(t *testing.T) {
 	receipt, _, err = staker.UpdateAutoRenew(queuedID, true).
 		Send().
 		WithSigner(validatorKey).
-		WithOptions(txOpts()).Receipt(txContext(t))
+		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 
 	autoRenewEvents, err := staker.FilterValidatorUpdatedAutoRenew(newRange(receipt), nil, logdb.ASC)
@@ -208,7 +208,7 @@ func TestStaker(t *testing.T) {
 	receipt, _, err = staker.UpdateAutoRenew(queuedID, false).
 		Send().
 		WithSigner(validatorKey).
-		WithOptions(txOpts()).Receipt(txContext(t))
+		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 
 	autoRenewEvents, err = staker.FilterValidatorUpdatedAutoRenew(newRange(receipt), nil, logdb.ASC)
@@ -221,7 +221,7 @@ func TestStaker(t *testing.T) {
 	receipt, _, err = staker.AddDelegation(queuedID, minStake, false, 100).
 		Send().
 		WithSigner(stargate).
-		WithOptions(txOpts()).Receipt(txContext(t))
+		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
@@ -242,7 +242,7 @@ func TestStaker(t *testing.T) {
 	receipt, _, err = staker.UpdateDelegationAutoRenew(delegationID, true).
 		Send().
 		WithSigner(stargate).
-		WithOptions(txOpts()).Receipt(txContext(t))
+		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
@@ -254,7 +254,7 @@ func TestStaker(t *testing.T) {
 	receipt, _, err = staker.UpdateDelegationAutoRenew(delegationID, false).
 		Send().
 		WithSigner(stargate).
-		WithOptions(txOpts()).Receipt(txContext(t))
+		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
@@ -263,7 +263,7 @@ func TestStaker(t *testing.T) {
 	require.Len(t, delegatorAutoRenewEvents, 1)
 
 	// Withdraw
-	receipt, _, err = staker.Withdraw(queuedID).Send().WithSigner(validatorKey).WithOptions(txOpts()).Receipt(txContext(t))
+	receipt, _, err = staker.Withdraw(queuedID).Send().WithSigner(validatorKey).WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
@@ -276,7 +276,7 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, StakerStatusExited, getRes.Status)
 
 	// WithdrawDelegation
-	receipt, _, err = staker.WithdrawDelegation(delegationID).Send().WithSigner(stargate).WithOptions(txOpts()).Receipt(txContext(t))
+	receipt, _, err = staker.WithdrawDelegation(delegationID).Send().WithSigner(stargate).WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 

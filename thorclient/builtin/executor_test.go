@@ -41,7 +41,7 @@ func TestExecutor(t *testing.T) {
 	// Propose - Add another approver
 	addApproverClause, err := executor.AddApprover(newApprover.Address(), datagen.RandomHash()).Clause()
 	require.NoError(t, err)
-	receipt, _, err := executor.Propose(*addApproverClause.To(), addApproverClause.Data()).Send().WithSigner(approver1).WithOptions(txOpts()).Receipt(txContext(t))
+	receipt, _, err := executor.Propose(*addApproverClause.To(), addApproverClause.Data()).Send().WithSigner(approver1).WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
@@ -59,18 +59,18 @@ func TestExecutor(t *testing.T) {
 
 	// Approve
 	approveTx := executor.Approve(proposals[0].ProposalID).Send().WithOptions(txOpts())
-	receipt, _, err = approveTx.WithSigner(approver1).Receipt(txContext(t))
+	receipt, _, err = approveTx.WithSigner(approver1).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
-	receipt, _, err = approveTx.WithSigner(approver2).Receipt(txContext(t))
+	receipt, _, err = approveTx.WithSigner(approver2).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
-	receipt, _, err = approveTx.WithSigner(approver3).Receipt(txContext(t))
+	receipt, _, err = approveTx.WithSigner(approver3).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
 	// Execute
-	receipt, _, err = executor.Execute(proposals[0].ProposalID).Send().WithSigner(approver1).WithOptions(txOpts()).Receipt(txContext(t))
+	receipt, _, err = executor.Execute(proposals[0].ProposalID).Send().WithSigner(approver1).WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 

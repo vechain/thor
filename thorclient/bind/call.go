@@ -21,20 +21,21 @@ type CallBuilder interface {
 	// AtRevision sets the revision for the call.
 	AtRevision(rev string) CallBuilder
 
-	// Into unpacks the result into the provided interface.
-	Into(result any) error
+	// Caller sets the caller for the simulation.
+	Caller(caller *thor.Address) CallBuilder
+
+	// ExecuteInto unpacks the result into the provided interface.
+	ExecuteInto(result any) error
 
 	// Execute performs the call and returns the raw result.
 	Execute() (*accounts.CallResult, error)
-
-	// Simulate performs a call simulation with the specified caller.
-	Simulate(caller *thor.Address) (*accounts.CallResult, error)
 }
 
 // callBuilder is the concrete implementation of CallBuilder.
 type callBuilder struct {
-	op  *methodBuilder
-	rev string
+	op     *methodBuilder
+	rev    string
+	caller *thor.Address
 }
 
 // AtRevision implements CallBuilder.AtRevision.
@@ -43,8 +44,14 @@ func (b *callBuilder) AtRevision(rev string) CallBuilder {
 	return b
 }
 
-// Into implements CallBuilder.Into.
-func (b *callBuilder) Into(result any) error {
+// Caller implements CallBuilder.AtRevision.
+func (b *callBuilder) Caller(caller *thor.Address) CallBuilder {
+	b.caller = caller
+	return b
+}
+
+// ExecuteInto implements CallBuilder.Into.
+func (b *callBuilder) ExecuteInto(result any) error {
 	method, ok := b.op.contract.abi.Methods[b.op.method]
 	if !ok {
 		return errors.New("method not found: " + b.op.method)
@@ -65,11 +72,6 @@ func (b *callBuilder) Into(result any) error {
 
 // Execute implements CallBuilder.Execute.
 func (b *callBuilder) Execute() (*accounts.CallResult, error) {
-	return b.Simulate(nil)
-}
-
-// Simulate implements CallBuilder.Simulate.
-func (b *callBuilder) Simulate(caller *thor.Address) (*accounts.CallResult, error) {
 	// Build the clause
 	clause, err := b.op.Clause()
 	if err != nil {
@@ -77,7 +79,7 @@ func (b *callBuilder) Simulate(caller *thor.Address) (*accounts.CallResult, erro
 	}
 
 	body := &accounts.BatchCallData{
-		Caller: caller,
+		Caller: b.caller,
 		Clauses: []accounts.Clause{
 			{
 				To:    b.op.contract.addr,

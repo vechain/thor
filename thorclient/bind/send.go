@@ -29,11 +29,11 @@ type SendBuilder interface {
 	// WithOptions sets the transaction options.
 	WithOptions(opts *TxOptions) SendBuilder
 
-	// IssueTx sends the transaction without waiting for receipt.
-	IssueTx() (*tx.Transaction, error)
+	// Submit sends the transaction without waiting for receipt.
+	Submit() (*tx.Transaction, error)
 
-	// Receipt sends the transaction and waits for the receipt.
-	Receipt(ctx context.Context) (*transactions.Receipt, *tx.Transaction, error)
+	// SubmitAndConfirm sends the transaction and waits for the receipt.
+	SubmitAndConfirm(ctx context.Context) (*transactions.Receipt, *tx.Transaction, error)
 }
 
 // TxOptions to override default transaction parameters when building or sending a transaction.
@@ -72,7 +72,7 @@ func (b *sendBuilder) WithOptions(opts *TxOptions) SendBuilder {
 }
 
 // IssueTx implements SendBuilder.IssueTx.
-func (b *sendBuilder) IssueTx() (*tx.Transaction, error) {
+func (b *sendBuilder) Submit() (*tx.Transaction, error) {
 	if b.signer == nil {
 		return nil, errors.New("signer not set")
 	}
@@ -175,8 +175,8 @@ func (b *sendBuilder) IssueTx() (*tx.Transaction, error) {
 }
 
 // Receipt implements SendBuilder.Receipt.
-func (b *sendBuilder) Receipt(ctx context.Context) (*transactions.Receipt, *tx.Transaction, error) {
-	transaction, err := b.IssueTx()
+func (b *sendBuilder) SubmitAndConfirm(ctx context.Context) (*transactions.Receipt, *tx.Transaction, error) {
+	transaction, err := b.Submit()
 	if err != nil {
 		return nil, nil, err
 	}

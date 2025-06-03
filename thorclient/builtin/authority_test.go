@@ -31,7 +31,7 @@ func TestAuthority(t *testing.T) {
 	receipt, _, err := authority.Add(acc2.Address, acc2.Address, identity).
 		Send().
 		WithSigner(executor).
-		WithOptions(txOpts()).Receipt(txContext(t))
+		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
@@ -65,7 +65,7 @@ func TestAuthority(t *testing.T) {
 	})
 
 	t.Run("Revoke", func(t *testing.T) {
-		receipt, _, err = authority.Revoke(acc2.Address).Send().WithSigner(executor).WithOptions(txOpts()).Receipt(txContext(t))
+		receipt, _, err = authority.Revoke(acc2.Address).Send().WithSigner(executor).WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 		require.NoError(t, err)
 		require.False(t, receipt.Reverted)
 

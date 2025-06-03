@@ -57,7 +57,7 @@ func TestPrototype(t *testing.T) {
 	receipt, _, err = prototype.SetMaster(builtin.Authority.Address, builtin.Authority.Address).
 		Send().
 		WithSigner(acc).
-		WithOptions(txOpts()).Receipt(txContext(t))
+		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 	require.True(t, receipt.Reverted) // should revert because acc is not the master
 
@@ -85,7 +85,7 @@ func TestPrototype(t *testing.T) {
 	receipt, _, err = prototype.SetCreditPlan(contractAddr, big.NewInt(100), big.NewInt(200)).
 		Send().
 		WithSigner(acc).
-		WithOptions(txOpts()).Receipt(txContext(t))
+		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
@@ -97,7 +97,7 @@ func TestPrototype(t *testing.T) {
 	receipt, _, err = prototype.AddUser(contractAddr, acc2.Address()).
 		Send().
 		WithSigner(acc).
-		WithOptions(txOpts()).Receipt(txContext(t))
+		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
@@ -110,7 +110,7 @@ func TestPrototype(t *testing.T) {
 	receipt, _, err = prototype.RemoveUser(contractAddr, acc2.Address()).
 		Send().
 		WithSigner(acc).
-		WithOptions(txOpts()).Receipt(txContext(t))
+		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
@@ -123,7 +123,7 @@ func TestPrototype(t *testing.T) {
 	receipt, _, err = prototype.SetMaster(contractAddr, acc2.Address()).
 		Send().
 		WithSigner(acc).
-		WithOptions(txOpts()).Receipt(txContext(t))
+		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
@@ -138,7 +138,7 @@ func TestPrototype(t *testing.T) {
 	require.False(t, isSponsor)
 
 	// Sponsor
-	receipt, _, err = prototype.Sponsor(contractAddr).Send().WithSigner(acc).WithOptions(txOpts()).Receipt(txContext(t))
+	receipt, _, err = prototype.Sponsor(contractAddr).Send().WithSigner(acc).WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
@@ -146,7 +146,7 @@ func TestPrototype(t *testing.T) {
 	receipt, _, err = prototype.SelectSponsor(contractAddr, acc.Address()).
 		Send().
 		WithSigner(acc2).
-		WithOptions(txOpts()).Receipt(txContext(t))
+		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
@@ -159,7 +159,7 @@ func TestPrototype(t *testing.T) {
 	receipt, _, err = prototype.Unsponsor(contractAddr).
 		Send().
 		WithSigner(acc).
-		WithOptions(txOpts()).Receipt(txContext(t))
+		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 }
