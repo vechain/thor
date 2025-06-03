@@ -22,7 +22,7 @@ type Executor struct {
 }
 
 func NewExecutor(client *httpclient.Client) (*Executor, error) {
-	contract, err := bind.NewCaller(client, builtin.Executor.RawABI(), builtin.Executor.Address)
+	contract, err := bind.NewCaller(client, builtin.Executor.RawABI(), &builtin.Executor.Address)
 	if err != nil {
 		return nil, err
 	}

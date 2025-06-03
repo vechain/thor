@@ -247,11 +247,11 @@ func init() {
 			if err != nil {
 				return []any{thor.Bytes32{}, new(big.Int), uint32(0), uint32(0), uint8(0), false, false, fmt.Sprintf("revert: %v", err)}
 			}
-			var endPeriod uint32 = math.MaxUint32
-			if delegation.ExitIteration != nil {
-				endPeriod = *delegation.ExitIteration
+			var lastPeriod uint32 = math.MaxUint32
+			if delegation.LastIteration != nil {
+				lastPeriod = *delegation.LastIteration
 			}
-			return []any{delegation.ValidatorID, delegation.Stake, delegation.FirstIteration, endPeriod, delegation.Multiplier, delegation.AutoRenew, delegation.IsLocked(validator), ""}
+			return []any{delegation.ValidatorID, delegation.Stake, delegation.FirstIteration, lastPeriod, delegation.Multiplier, delegation.AutoRenew, delegation.IsLocked(validator), ""}
 		}},
 		{"native_getRewards", func(env *xenv.Environment) []any {
 			var args struct {

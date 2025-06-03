@@ -23,7 +23,7 @@ type Params struct {
 }
 
 func NewParams(client *httpclient.Client) (*Params, error) {
-	contract, err := bind.NewCaller(client, builtin.Params.RawABI(), builtin.Params.Address)
+	contract, err := bind.NewCaller(client, builtin.Params.RawABI(), &builtin.Params.Address)
 	if err != nil {
 		return nil, err
 	}
