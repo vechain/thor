@@ -121,7 +121,7 @@ func (s *Staker) QueuedStake() (*big.Int, *big.Int, error) {
 // LookupMaster returns the validation ID for the given master address if it is queued or active.
 func (s *Staker) LookupMaster(master thor.Address) (*Validator, thor.Bytes32, error) {
 	out := new(common.Hash)
-	if err := s.contract.CallInto("lookupMaster", &out, common.Address(master)); err != nil {
+	if err := s.contract.Method("lookupMaster", common.Address(master)).Call().ExecuteInto(&out); err != nil {
 		return nil, thor.Bytes32{}, err
 	}
 	res := *out
