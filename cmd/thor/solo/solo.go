@@ -111,13 +111,13 @@ func (s *Solo) loop(ctx context.Context) {
 			return
 		case <-time.After(time.Duration(1) * time.Second):
 			if left := uint64(time.Now().Unix()) % s.options.BlockInterval; left == 0 {
-				if err := s.packing(s.txPool.Executables(), false); err != nil {
+				if err := s.PackNewBlock(s.txPool.Executables(), false); err != nil {
 					logger.Error("failed to pack block", "err", err)
 				}
 			} else if s.options.OnDemand {
 				pendingTxs := s.txPool.Executables()
 				if len(pendingTxs) > 0 {
-					if err := s.packing(pendingTxs, true); err != nil {
+					if err := s.PackNewBlock(pendingTxs, true); err != nil {
 						logger.Error("failed to pack block", "err", err)
 					}
 				}
@@ -126,7 +126,7 @@ func (s *Solo) loop(ctx context.Context) {
 	}
 }
 
-func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
+func (s *Solo) PackNewBlock(pendingTxs tx.Transactions, onDemand bool) error {
 	best := s.repo.BestBlockSummary()
 	now := uint64(time.Now().Unix())
 
@@ -246,7 +246,7 @@ func (s *Solo) init(ctx context.Context) error {
 		}
 	}
 
-	return s.packing(tx.Transactions{baseGasePriceTx}, false)
+	return s.PackNewBlock(tx.Transactions{baseGasePriceTx}, false)
 }
 
 // newTx builds and signs a new transaction from the given clauses

@@ -17,40 +17,28 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/accounts"
-	"github.com/vechain/thor/v2/api/blocks"
-	"github.com/vechain/thor/v2/api/debug"
 	"github.com/vechain/thor/v2/api/events"
 	"github.com/vechain/thor/v2/api/fees"
-	"github.com/vechain/thor/v2/api/node"
-	"github.com/vechain/thor/v2/api/transactions"
-	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/test"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/test/testchain"
+	"github.com/vechain/thor/v2/test/testsolo"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
-	"github.com/vechain/thor/v2/txpool"
 
 	// Force-load the tracer native engines to trigger registration
 	_ "github.com/vechain/thor/v2/tracers/js"
 	_ "github.com/vechain/thor/v2/tracers/logger"
 )
 
-const (
-	gasLimit               = 30_000_000
-	logDBLimit             = 1_000
-	priorityFeesPercentage = 5
-)
-
 var (
 	preMintedTx01 *tx.Transaction
 )
 
-func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
+func initAPIServer(t *testing.T) *testsolo.Solo {
 	forks := testchain.DefaultForkConfig
 	forks.GALACTICA = 1
 	thorChain, err := testchain.NewWithFork(&forks)
@@ -59,40 +47,10 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 	// mint some transactions to be used in the endpoints
 	mintTransactions(t, thorChain)
 
-	router := mux.NewRouter()
-
-	accounts.New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), &thor.NoFork, thorChain.Engine(), true).
-		Mount(router, "/accounts")
-
-	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute}, &forks)
-	transactions.New(thorChain.Repo(), mempool).Mount(router, "/transactions")
-
-	blocks.New(thorChain.Repo(), thorChain.Engine()).Mount(router, "/blocks")
-
-	debug.New(thorChain.Repo(), thorChain.Stater(), thorChain.GetForkConfig(), gasLimit, true, thorChain.Engine(), []string{"all"}, false).
-		Mount(router, "/debug")
-
-	logDb, err := logdb.NewMem()
+	testSolo, err := testsolo.NewSolo(thorChain)
 	require.NoError(t, err)
-	events.New(thorChain.Repo(), logDb, logDBLimit).Mount(router, "/logs/event")
 
-	communicator := comm.New(
-		thorChain.Repo(),
-		txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
-			Limit:           10000,
-			LimitPerAccount: 16,
-			MaxLifetime:     10 * time.Minute,
-		}, &thor.NoFork),
-	)
-	node.New(communicator, mempool, false).Mount(router, "/node")
-
-	fees.New(thorChain.Repo(), thorChain.Engine(), thorChain.GetForkConfig(), thorChain.Stater(), fees.Config{
-		APIBacktraceLimit:          6,
-		FixedCacheSize:             6,
-		PriorityIncreasePercentage: priorityFeesPercentage,
-	}).Mount(router, "/fees")
-
-	return thorChain, httptest.NewServer(router)
+	return testSolo
 }
 
 func mintTransactions(t *testing.T, thorChain *testchain.Chain) {
@@ -143,8 +101,10 @@ func mintTransactions(t *testing.T, thorChain *testchain.Chain) {
 }
 
 func TestAPIs(t *testing.T) {
-	thorChain, ts := initAPIServer(t)
-	defer ts.Close()
+	testSolo := initAPIServer(t)
+	defer func() {
+		require.NoError(t, testSolo.Shutdown())
+	}()
 
 	for name, tt := range map[string]func(*testing.T, *testchain.Chain, *httptest.Server){
 		"testAccountEndpoint":      testAccountEndpoint,
@@ -156,7 +116,7 @@ func TestAPIs(t *testing.T) {
 		"testFeesEndpoint":         testFeesEndpoint,
 	} {
 		t.Run(name, func(t *testing.T) {
-			tt(t, thorChain, ts)
+			tt(t, testSolo.Chain, testSolo.APIServer)
 		})
 	}
 }
@@ -265,6 +225,19 @@ func testTransactionsEndpoint(t *testing.T, thorChain *testchain.Chain, ts *http
 		require.NoError(t, err)
 		require.NotNil(t, sendResult)
 		require.Equal(t, trx.ID().String(), sendResult.ID.String()) // Ensure transaction was successful
+
+		txID := trx.ID()
+
+		require.NoError(t, test.Retry(func() error {
+			receipt, err := c.TransactionReceipt(&txID)
+			if err != nil {
+				return err
+			}
+			require.NoError(t, err)
+			require.NotNil(t, receipt)
+			require.Equal(t, txID.String(), receipt.Meta.TxID.String())
+			return nil
+		}, time.Second, 10*time.Second))
 	})
 
 	// 3. Test retrieving the transaction receipt
@@ -438,8 +411,8 @@ func testFeesEndpoint(t *testing.T, testchain *testchain.Chain, ts *httptest.Ser
 	// 1. Test GET /fees/history
 	t.Run("GetFeesHistory", func(t *testing.T) {
 		blockCount := uint32(1)
-		newestBlock := "best"
-		feesHistory, err := c.FeesHistory(blockCount, newestBlock, nil)
+
+		feesHistory, err := c.FeesHistory(blockCount, "2", nil)
 		require.NoError(t, err)
 		require.NotNil(t, feesHistory)
 
@@ -458,7 +431,7 @@ func testFeesEndpoint(t *testing.T, testchain *testchain.Chain, ts *httptest.Ser
 		require.Equal(t, expectedFeesHistory, feesHistory)
 
 		rewardPercentiles := []float64{10, 90}
-		feesHistory, err = c.FeesHistory(blockCount, newestBlock, rewardPercentiles)
+		feesHistory, err = c.FeesHistory(blockCount, "2", rewardPercentiles)
 		require.NoError(t, err)
 		require.NotNil(t, feesHistory)
 
@@ -503,7 +476,7 @@ func testFeesEndpoint(t *testing.T, testchain *testchain.Chain, ts *httptest.Ser
 		require.NotNil(t, feesPriority)
 
 		expectedFeesPriority := &fees.FeesPriority{
-			MaxPriorityFeePerGas: (*hexutil.Big)(new(big.Int).Div(new(big.Int).Mul(big.NewInt(thor.InitialBaseFee), big.NewInt(priorityFeesPercentage)), big.NewInt(100))),
+			MaxPriorityFeePerGas: (*hexutil.Big)(new(big.Int).Div(new(big.Int).Mul(big.NewInt(thor.InitialBaseFee), big.NewInt(5)), big.NewInt(100))),
 		}
 
 		require.Equal(t, expectedFeesPriority, feesPriority)

@@ -8,11 +8,14 @@ package builtin
 import (
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/require"
+	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/test"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/bind"
 	"github.com/vechain/thor/v2/tx"
@@ -42,10 +45,17 @@ func TestPrototype(t *testing.T) {
 		Build()
 	trx = tx.MustSign(trx, accKey)
 
-	res, err := client.SendTransaction(trx) // tx mines on API call due to mock tx pool
+	res, err := client.SendTransaction(trx)
 	require.NoError(t, err)
-	receipt, err := client.TransactionReceipt(res.ID)
-	require.NoError(t, err)
+
+	var receipt *transactions.Receipt
+	require.NoError(t,
+		test.Retry(func() error {
+			if receipt, err = client.TransactionReceipt(res.ID); err != nil {
+				return err
+			}
+			return nil
+		}, time.Second, 10*time.Second))
 	contractAddr := receipt.Outputs[0].Events[0].Address
 
 	// Master

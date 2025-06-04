@@ -174,7 +174,7 @@ func (b *sendBuilder) Submit() (*tx.Transaction, error) {
 	return transaction, nil
 }
 
-// Receipt implements SendBuilder.Receipt.
+// SubmitAndConfirm implements SendBuilder.Receipt.
 func (b *sendBuilder) SubmitAndConfirm(ctx context.Context) (*transactions.Receipt, *tx.Transaction, error) {
 	transaction, err := b.Submit()
 	if err != nil {

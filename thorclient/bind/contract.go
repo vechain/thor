@@ -9,10 +9,15 @@ import (
 	"bytes"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/vechain/thor/v2/api/transactions"
+	"github.com/vechain/thor/v2/test"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
+	"github.com/vechain/thor/v2/tx"
 )
 
 // Contract is the main interface for contract interactions.
@@ -55,6 +60,55 @@ func NewContract(client *thorclient.Client, abiData []byte, address *thor.Addres
 		abi:    &contractABI,
 		addr:   address,
 	}, nil
+}
+
+// DeployContract deploys a contract and creates a new contract instance with the given client, ABI data and address.
+func DeployContract(client *thorclient.Client, signer Signer, abiData []byte, bytecode string) (Contract, error) {
+	bc, err := hexutil.Decode(bytecode)
+	if err != nil {
+		return nil, err
+	}
+
+	tag, err := client.ChainTag()
+	if err != nil {
+		return nil, err
+	}
+
+	trx := tx.NewBuilder(tx.TypeLegacy).
+		ChainTag(tag).
+		Clause(tx.NewClause(nil).WithData(bc)).
+		Expiration(10000).
+		Gas(10_000_000).
+		Build()
+	trx, err = signer.SignTransaction(trx)
+	if err != nil {
+		return nil, err
+	}
+
+	signerAddr := signer.Address()
+	clauses, err := client.InspectTxClauses(trx, &signerAddr)
+	if err != nil {
+		return nil, err
+	}
+	if len(clauses) != 1 || clauses[0].Reverted || clauses[0].VMError != "" {
+		return nil, fmt.Errorf("unable to deploy contract: %+v", clauses)
+	}
+
+	res, err := client.SendTransaction(trx)
+	if err != nil {
+		return nil, err
+	}
+
+	var receipt *transactions.Receipt
+	err = test.Retry(func() error {
+		if receipt, err = client.TransactionReceipt(res.ID); err != nil {
+			return err
+		}
+		return nil
+	}, time.Second, 10*time.Second)
+
+	contractAddr := receipt.Outputs[0].Events[0].Address
+	return NewContract(client, abiData, &contractAddr)
 }
 
 // Method implements Contract.Method.
