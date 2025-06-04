@@ -9,6 +9,7 @@ import (
 	"math"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/genesis"
@@ -21,7 +22,7 @@ import (
 func TestStaker(t *testing.T) {
 	minStakingPeriod := uint32(360) * 24 * 7 // 360 days in seconds
 
-	chain, client := newChain(t, false)
+	_, client := newChain(t, false)
 
 	// builtins
 	staker, err := NewStaker(client)
@@ -77,9 +78,10 @@ func TestStaker(t *testing.T) {
 		}
 	}
 
-	if err := chain.MintBlock(genesis.DevAccounts()[0]); err != nil {
-		t.Fatal(err)
-	}
+	// pack a new block
+	time.Sleep(10 * time.Second)
+	//require.NoError(t, testSolo.Solo.PackNewBlock(nil, false))
+	//require.NoError(t, testSolo.Solo.PackNewBlock(nil, false))
 
 	// TotalStake
 	totalStake, totalWeight, err := staker.TotalStake()
