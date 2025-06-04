@@ -70,8 +70,6 @@ func New(path string) (logDB *LogDB, err error) {
 		wconn:         wconn1,
 		wconnSyncOff:  wconn2,
 		stmtCache:     newStmtCache(db),
-		// todo investigate having a dedicated writer similar to the InMem
-		//writer:        &Writer{conn: wconn1, stmtCache: newStmtCache(db)},
 	}, nil
 }
 
