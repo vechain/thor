@@ -218,6 +218,7 @@ func (a *Accounts) handleCallBatchCode(w http.ResponseWriter, req *http.Request)
 	if err := utils.ParseJSON(req.Body, &batchCallData); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
+	// reject null element in clauses, {} will be unmarshaled to default value and will be accepted/handled by the runtime
 	for i, clause := range batchCallData.Clauses {
 		if clause == nil {
 			return utils.BadRequest(fmt.Errorf("clauses[%d]: null not allowed", i))

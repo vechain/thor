@@ -64,6 +64,7 @@ func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
 	if filter.Range != nil && filter.Range.From != nil && filter.Range.To != nil && *filter.Range.From > *filter.Range.To {
 		return utils.BadRequest(fmt.Errorf("filter.Range.To must be greater than or equal to filter.Range.From"))
 	}
+	// reject null element in CriteriaSet, {} will be unmarshaled to default value and will be accepted/handled by the filter engine
 	for i, criterion := range filter.CriteriaSet {
 		if criterion == nil {
 			return utils.BadRequest(fmt.Errorf("criteriaSet[%d]: null not allowed", i))
