@@ -190,7 +190,13 @@ func (s *State) GetEnergy(addr thor.Address, blockTime uint64) (*big.Int, error)
 		// TODO: revisit the error handling
 		return nil, &Error{err}
 	}
-	return acc.CalcEnergy(blockTime, *hayabusaForkTime), nil
+	energy, err := acc.CalcEnergy(blockTime, *hayabusaForkTime), nil
+	if err != nil {
+		// TODO: revisit the error handling
+		return nil, &Error{err}
+	}
+	println("energy for", addr.String(), addr.String())
+	return energy, nil
 }
 
 // SetEnergy set energy at block number for the given address.
