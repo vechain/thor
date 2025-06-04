@@ -30,6 +30,13 @@ type FilteredTransfer struct {
 	Meta      LogMeta               `json:"meta"`
 }
 
+type TransferFilter struct {
+	CriteriaSet []*logdb.TransferCriteria
+	Range       *events.Range
+	Options     *events.Options
+	Order       logdb.Order //default asc
+}
+
 func convertTransfer(transfer *logdb.Transfer, addIndexes bool) *FilteredTransfer {
 	v := math.HexOrDecimal256(*transfer.Amount)
 	ft := &FilteredTransfer{
@@ -52,11 +59,4 @@ func convertTransfer(transfer *logdb.Transfer, addIndexes bool) *FilteredTransfe
 	}
 
 	return ft
-}
-
-type TransferFilter struct {
-	CriteriaSet []*logdb.TransferCriteria
-	Range       *events.Range
-	Options     *events.Options
-	Order       logdb.Order //default asc
 }

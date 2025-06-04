@@ -69,20 +69,20 @@ func TestOption(t *testing.T) {
 		Order:       logdb.DESC,
 	}
 
-	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfers", filter)
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", filter)
 	require.NoError(t, err)
 	assert.Equal(t, "options.limit exceeds the maximum allowed value of 5", strings.Trim(string(res), "\n"))
 	assert.Equal(t, http.StatusForbidden, statusCode)
 
 	filter.Options.Limit = 5
-	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/logs/transfers", filter)
+	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", filter)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, statusCode)
 
 	// with nil options, should use default limit, when the filtered lower
 	// or equal to the limit, should return the filtered transfers
 	filter.Options = nil
-	res, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/logs/transfers", filter)
+	res, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", filter)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, statusCode)
 	var tLogs []*events.FilteredEvent
@@ -94,7 +94,7 @@ func TestOption(t *testing.T) {
 
 	// when the filtered transfers exceed the limit, should return the forbidden
 	insertBlocks(t, db, 6)
-	res, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/logs/transfers", filter)
+	res, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", filter)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusForbidden, statusCode)
 	assert.Equal(t, "the number of filtered logs exceeds the maximum allowed value of 5, please use pagination", strings.Trim(string(res), "\n"))
@@ -133,7 +133,7 @@ func TestOptionalData(t *testing.T) {
 				Order:       logdb.DESC,
 			}
 
-			res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfers", filter)
+			res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", filter)
 			assert.NoError(t, err)
 			assert.Equal(t, http.StatusOK, statusCode)
 			var tLogs []*transfers.FilteredTransfer
@@ -151,11 +151,33 @@ func TestOptionalData(t *testing.T) {
 	}
 }
 
+func TestNullCriteriaSet(t *testing.T) {
+	db := createDb(t)
+	initTransferServer(t, db, defaultLogLimit)
+	defer ts.Close()
+	tclient = thorclient.New(ts.URL)
+
+	_, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", []byte(`{"criteriaSet": null}`))
+	require.NoError(t, err)
+
+	assert.Equal(t, http.StatusOK, statusCode)
+
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", []byte(`{"criteriaSet": [null]}`))
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, statusCode)
+	assert.Equal(t, "criteriaSet[0]: null not allowed\n", string(res), "null criteriaSet")
+
+	res, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", []byte(`{"criteriaSet": [{}, null]}`))
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, statusCode)
+	assert.Equal(t, "criteriaSet[1]: null not allowed\n", string(res), "null criteriaSet")
+}
+
 // Test functions
 func testTransferBadRequest(t *testing.T) {
 	badBody := []byte{0x00, 0x01, 0x02}
 
-	_, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfers", badBody)
+	_, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", badBody)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode)
 }
@@ -168,7 +190,7 @@ func testTransferWithEmptyDb(t *testing.T) {
 		Order:       logdb.DESC,
 	}
 
-	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfers", emptyFilter)
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", emptyFilter)
 	require.NoError(t, err)
 	var tLogs []*transfers.FilteredTransfer
 	if err := json.Unmarshal(res, &tLogs); err != nil {
@@ -187,7 +209,7 @@ func testTransferWithBlocks(t *testing.T, expectedBlocks int) {
 		Order:       logdb.DESC,
 	}
 
-	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfers", emptyFilter)
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", emptyFilter)
 	require.NoError(t, err)
 	var tLogs []*transfers.FilteredTransfer
 	if err := json.Unmarshal(res, &tLogs); err != nil {
@@ -226,7 +248,7 @@ func initTransferServer(t *testing.T, logDb *logdb.LogDB, limit uint64) {
 	require.NoError(t, err)
 
 	router := mux.NewRouter()
-	transfers.New(thorChain.Repo(), logDb, limit).Mount(router, "/logs/transfers")
+	transfers.New(thorChain.Repo(), logDb, limit).Mount(router, "/logs/transfer")
 
 	ts = httptest.NewServer(router)
 }

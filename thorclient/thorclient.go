@@ -294,9 +294,9 @@ func convertToBatchCallData(tx *tx.Transaction, addr *thor.Address) *accounts.Ba
 }
 
 // convertClauseAccounts converts a transaction clause to accounts.Clause format.
-func convertClauseAccounts(c *tx.Clause) accounts.Clause {
+func convertClauseAccounts(c *tx.Clause) *accounts.Clause {
 	value := math.HexOrDecimal256(*c.Value())
-	return accounts.Clause{
+	return &accounts.Clause{
 		To:    c.To(),
 		Value: &value,
 		Data:  hexutil.Encode(c.Data()),
