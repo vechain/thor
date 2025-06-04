@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/consensus/fork"
+	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
@@ -120,7 +120,7 @@ func TestValidateBlock(t *testing.T) {
 				s, r, err := c.verifyBlock(blk, state, 0)
 				assert.Nil(t, s)
 				assert.Nil(t, r)
-				assert.True(t, errors.Is(err, fork.ErrGasPriceTooLowForBlockBase))
+				assert.True(t, errors.Is(err, galactica.ErrGasPriceTooLowForBlockBase))
 			},
 		},
 		{
@@ -141,7 +141,7 @@ func TestValidateBlock(t *testing.T) {
 				s, r, err := c.verifyBlock(blk, state, 0)
 				assert.Nil(t, s)
 				assert.Nil(t, r)
-				assert.True(t, errors.Is(err, fork.ErrGasPriceTooLowForBlockBase))
+				assert.True(t, errors.Is(err, galactica.ErrGasPriceTooLowForBlockBase))
 			},
 		},
 	}

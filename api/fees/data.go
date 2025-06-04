@@ -15,7 +15,7 @@ import (
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/consensus/fork"
+	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -164,7 +164,7 @@ func (fd *FeesData) getRewardsForCache(block *block.Block) (*rewards, error) {
 			return nil, err
 		}
 		items[i] = rewardItem{
-			reward: fork.GalacticaPriorityGasPrice(
+			reward: galactica.GalacticaPriorityGasPrice(
 				tx,
 				legacyTxBaseGasPrice,
 				provedWork,

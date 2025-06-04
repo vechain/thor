@@ -8,7 +8,7 @@ package txpool
 import (
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/consensus/fork"
+	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -36,7 +36,7 @@ func validateTransaction(tr *tx.Transaction, repo *chain.Repository, head *chain
 
 func validateTransactionWithState(tr *tx.Transaction, header *block.Header, forkConfig *thor.ForkConfig, state *state.State) error {
 	if header.Number() >= forkConfig.GALACTICA {
-		if err := fork.ValidateGalacticaTxFee(tr, state, header.BaseFee()); err != nil {
+		if err := galactica.ValidateGalacticaTxFee(tr, state, header.BaseFee()); err != nil {
 			return txRejectedError{err.Error()}
 		}
 	}
