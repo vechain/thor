@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package fork
+package galactica
 
 import (
 	"errors"
@@ -27,34 +27,10 @@ var (
 	ErrGasPriceTooLowForBlockBase = errors.New("gas price is less than block base fee")
 )
 
-// VerifyGalacticaHeader verifies some header attributes which were changed in Galactica fork,
-// - gas limit check
-// - basefee check
-func VerifyGalacticaHeader(config *thor.ForkConfig, parent, header *block.Header) error {
-	// Verify the header is not malformed
-	if header.BaseFee() == nil {
-		return fmt.Errorf("header is missing baseFee")
-	}
-
-	// Verify that the gas limit remains within allowed bounds
-	parentGasLimit := parent.GasLimit()
-	if err := block.GasLimit(header.GasLimit()).IsValid(parentGasLimit); !err {
-		return fmt.Errorf("invalid gas limit: have %d, want %d", header.GasLimit(), parentGasLimit)
-	}
-
-	// Verify the baseFee is correct based on the parent header.
-	expectedBaseFee := CalcBaseFee(config, parent)
-	if header.BaseFee().Cmp(expectedBaseFee) != 0 {
-		return fmt.Errorf("invalid baseFee: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
-			expectedBaseFee, header.BaseFee(), parent.BaseFee(), parent.GasUsed())
-	}
-	return nil
-}
-
 // CalcBaseFee calculates the basefee of the header.
-func CalcBaseFee(config *thor.ForkConfig, parent *block.Header) *big.Int {
+func CalcBaseFee(parent *block.Header, forkConfig *thor.ForkConfig) *big.Int {
 	// If the current block is the first Galactica block, return the InitialBaseFee.
-	if parent.Number()+1 == config.GALACTICA {
+	if parent.Number()+1 == forkConfig.GALACTICA {
 		return new(big.Int).SetUint64(thor.InitialBaseFee)
 	}
 
