@@ -195,7 +195,7 @@ func (s *State) GetEnergy(addr thor.Address, blockTime uint64) (*big.Int, error)
 		// TODO: revisit the error handling
 		return nil, &Error{err}
 	}
-	println("energy for", addr.String(), addr.String())
+	println("energy for", addr.String(), energy.String())
 	return energy, nil
 }
 
