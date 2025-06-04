@@ -47,7 +47,7 @@ func (l *linkedList) Pop() (thor.Bytes32, *Validation, error) {
 		return thor.Bytes32{}, nil, errors.New("no head present")
 	}
 
-	oldHead, err := l.storage.GetValidator(oldHeadID)
+	oldHead, err := l.storage.GetValidation(oldHeadID)
 	if err != nil {
 		return thor.Bytes32{}, nil, err
 	}
@@ -73,7 +73,7 @@ func (l *linkedList) Remove(id thor.Bytes32, validator *Validation) (removed boo
 	next := validator.Next
 
 	// verify the entry exists in the linked list
-	validatorEntry, err := l.storage.GetValidator(id)
+	validatorEntry, err := l.storage.GetValidation(id)
 	if err != nil {
 		return false, err
 	}
@@ -84,12 +84,12 @@ func (l *linkedList) Remove(id thor.Bytes32, validator *Validation) (removed boo
 	if prev == nil || prev.IsZero() {
 		l.head.Set(next)
 	} else {
-		prevEntry, err := l.storage.GetValidator(*prev)
+		prevEntry, err := l.storage.GetValidation(*prev)
 		if err != nil {
 			return false, err
 		}
 		prevEntry.Next = next
-		if err := l.storage.SetValidator(*prev, prevEntry); err != nil {
+		if err := l.storage.SetValidation(*prev, prevEntry); err != nil {
 			return false, err
 		}
 	}
@@ -97,12 +97,12 @@ func (l *linkedList) Remove(id thor.Bytes32, validator *Validation) (removed boo
 	if next == nil || next.IsZero() {
 		l.tail.Set(prev)
 	} else {
-		nextEntry, err := l.storage.GetValidator(*next)
+		nextEntry, err := l.storage.GetValidation(*next)
 		if err != nil {
 			return false, err
 		}
 		nextEntry.Prev = prev
-		if err := l.storage.SetValidator(*next, nextEntry); err != nil {
+		if err := l.storage.SetValidation(*next, nextEntry); err != nil {
 			return false, err
 		}
 	}
@@ -111,7 +111,7 @@ func (l *linkedList) Remove(id thor.Bytes32, validator *Validation) (removed boo
 	validator.Next = nil
 	validator.Prev = nil
 
-	return true, l.storage.SetValidator(id, validator)
+	return true, l.storage.SetValidation(id, validator)
 }
 
 // Add adds a new validator to the tail of the linked list
@@ -136,20 +136,20 @@ func (l *linkedList) Add(newTail thor.Bytes32, validation *Validation) (added bo
 		// list is currently empty, set this entry to head & tail
 		l.head.Set(&newTail)
 		l.tail.Set(&newTail)
-		return true, l.storage.SetValidator(newTail, validation)
+		return true, l.storage.SetValidation(newTail, validation)
 	}
 
-	oldTail, err := l.storage.GetValidator(oldTailID)
+	oldTail, err := l.storage.GetValidation(oldTailID)
 	if err != nil {
 		return false, err
 	}
 	oldTail.Next = &newTail
 	validation.Prev = &oldTailID
 
-	if err := l.storage.SetValidator(oldTailID, oldTail); err != nil {
+	if err := l.storage.SetValidation(oldTailID, oldTail); err != nil {
 		return false, err
 	}
-	if err := l.storage.SetValidator(newTail, validation); err != nil {
+	if err := l.storage.SetValidation(newTail, validation); err != nil {
 		return false, err
 	}
 
@@ -164,7 +164,7 @@ func (l *linkedList) Peek() (*Validation, error) {
 	if err != nil {
 		return nil, err
 	}
-	return l.storage.GetValidator(head)
+	return l.storage.GetValidation(head)
 }
 
 // Len returns the length of the linked list
@@ -183,7 +183,7 @@ func (l *linkedList) Iter(callback func(thor.Bytes32, *Validation) error) error 
 			break
 		}
 
-		entry, err := l.storage.GetValidator(ptr)
+		entry, err := l.storage.GetValidation(ptr)
 		if err != nil {
 			return err
 		}

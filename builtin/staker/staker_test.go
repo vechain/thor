@@ -279,7 +279,7 @@ func TestStaker_AddValidator_QueueOrder(t *testing.T) {
 	// iterating using the `Next` method should return the same order
 	loopID := first
 	for i := range 100 {
-		loopVal, err := staker.storage.GetValidator(loopID)
+		loopVal, err := staker.storage.GetValidation(loopID)
 		assert.NoError(t, err)
 		assert.Equal(t, expectedOrder[i], loopVal.Master)
 
@@ -2165,7 +2165,7 @@ func Test_GetValidatorTotals(t *testing.T) {
 	assert.False(t, id1.IsZero())
 	aggregation, err := staker.storage.GetAggregation(validator.ID)
 	assert.NoError(t, err)
-	assert.Equal(t, aggregation.PendingLockedVET, stake)
+	assert.Equal(t, aggregation.PendingRecurringVET, stake)
 	delegation, _, err := staker.GetDelegation(id1)
 	assert.NoError(t, err)
 	assert.Equal(t, stake, delegation.Stake)

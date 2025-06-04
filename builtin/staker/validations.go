@@ -259,7 +259,7 @@ func (v *validations) ActivateNext(
 }
 
 func (v *validations) UpdateAutoRenew(endorsor thor.Address, id thor.Bytes32, autoRenew bool) error {
-	validator, err := v.storage.GetValidator(id)
+	validator, err := v.storage.GetValidation(id)
 	if err != nil {
 		return err
 	}
@@ -282,7 +282,7 @@ func (v *validations) UpdateAutoRenew(endorsor thor.Address, id thor.Bytes32, au
 		}
 		validator.ExitBlock = nil
 	}
-	return v.storage.SetValidator(id, validator)
+	return v.storage.SetValidation(id, validator)
 }
 
 // SetExitBlock sets the exit block for a validator.
@@ -309,7 +309,7 @@ func (v *validations) SetExitBlock(id thor.Bytes32, minBlock uint32) (uint32, er
 }
 
 func (v *validations) IncreaseStake(id thor.Bytes32, endorsor thor.Address, amount *big.Int) error {
-	entry, err := v.storage.GetValidator(id)
+	entry, err := v.storage.GetValidation(id)
 	if err != nil {
 		return err
 	}
@@ -341,11 +341,11 @@ func (v *validations) IncreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 		return err
 	}
 
-	return v.storage.SetValidator(id, entry)
+	return v.storage.SetValidation(id, entry)
 }
 
 func (v *validations) DecreaseStake(id thor.Bytes32, endorsor thor.Address, amount *big.Int) error {
-	entry, err := v.storage.GetValidator(id)
+	entry, err := v.storage.GetValidation(id)
 	if err != nil {
 		return err
 	}
@@ -387,7 +387,7 @@ func (v *validations) DecreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 		return err
 	}
 
-	return v.storage.SetValidator(id, entry)
+	return v.storage.SetValidation(id, entry)
 }
 
 // WithdrawStake allows validations to withdraw any withdrawable stake.
@@ -421,7 +421,7 @@ func (v *validations) WithdrawStake(endorsor thor.Address, id thor.Bytes32, curr
 	}
 
 	entry.WithdrawableVET = big.NewInt(0)
-	if err := v.storage.SetValidator(id, entry); err != nil {
+	if err := v.storage.SetValidation(id, entry); err != nil {
 		return nil, err
 	}
 
@@ -431,7 +431,7 @@ func (v *validations) WithdrawStake(endorsor thor.Address, id thor.Bytes32, curr
 // GetWithdrawable returns the validator entry and the withdrawable amount.
 // It does not perform any updates or verify the endorsor.
 func (v *validations) GetWithdrawable(id thor.Bytes32, currentBlock uint32) (*Validation, *big.Int, error) {
-	entry, err := v.storage.GetValidator(id)
+	entry, err := v.storage.GetValidation(id)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -454,7 +454,7 @@ func (v *validations) GetWithdrawable(id thor.Bytes32, currentBlock uint32) (*Va
 
 // ExitValidator removes the validator from the active list and puts it in cooldown.
 func (v *validations) ExitValidator(id thor.Bytes32) error {
-	entry, err := v.storage.GetValidator(id)
+	entry, err := v.storage.GetValidation(id)
 	if err != nil {
 		return err
 	}

@@ -125,7 +125,7 @@ func (s *Staker) performRenewalUpdates(id thor.Bytes32, validator *Validation) e
 	if err := s.queuedWeight.Add(big.NewInt(0).Neg(changeWeight)); err != nil {
 		return err
 	}
-	return s.storage.SetValidator(id, validator)
+	return s.storage.SetValidation(id, validator)
 }
 
 func (s *Staker) activateValidators(currentBlock uint32) ([]*thor.Bytes32, error) {
