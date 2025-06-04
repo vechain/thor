@@ -24,14 +24,6 @@ type LogMeta struct {
 	LogIndex       *uint32      `json:"logIndex,omitempty"`
 }
 
-type TopicSet struct {
-	Topic0 *thor.Bytes32 `json:"topic0"`
-	Topic1 *thor.Bytes32 `json:"topic1"`
-	Topic2 *thor.Bytes32 `json:"topic2"`
-	Topic3 *thor.Bytes32 `json:"topic3"`
-	Topic4 *thor.Bytes32 `json:"topic4"`
-}
-
 // FilteredEvent only comes from one contract
 type FilteredEvent struct {
 	Address thor.Address    `json:"address"`
@@ -67,6 +59,14 @@ func convertEvent(event *logdb.Event, addIndexes bool) *FilteredEvent {
 		}
 	}
 	return fe
+}
+
+type TopicSet struct {
+	Topic0 *thor.Bytes32 `json:"topic0"`
+	Topic1 *thor.Bytes32 `json:"topic1"`
+	Topic2 *thor.Bytes32 `json:"topic2"`
+	Topic3 *thor.Bytes32 `json:"topic3"`
+	Topic4 *thor.Bytes32 `json:"topic4"`
 }
 
 type EventCriteria struct {
