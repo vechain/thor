@@ -92,7 +92,7 @@ func Test_LinkedList_Remove(t *testing.T) {
 	head, err := linkedList.head.Get()
 	assert.NoError(t, err)
 	assert.Equal(t, validator1ID, head)
-	validator1, err = storage.GetValidator(validator1ID)
+	validator1, err = storage.GetValidation(validator1ID)
 	assert.NoError(t, err)
 
 	if _, err := linkedList.Remove(validator1ID, validator1); err != nil {
@@ -102,7 +102,7 @@ func Test_LinkedList_Remove(t *testing.T) {
 	head, err = linkedList.head.Get()
 	assert.NoError(t, err)
 	assert.Equal(t, validator2ID, head)
-	validator, err := storage.GetValidator(validator1ID)
+	validator, err := storage.GetValidation(validator1ID)
 	assert.NoError(t, err)
 	assert.Nil(t, validator.Next)
 	assert.Nil(t, validator.Prev)
@@ -113,7 +113,7 @@ func Test_LinkedList_Remove(t *testing.T) {
 	head, err = linkedList.head.Get()
 	assert.NoError(t, err)
 	assert.True(t, head.IsZero())
-	validator, err = storage.GetValidator(validator2ID)
+	validator, err = storage.GetValidation(validator2ID)
 	assert.NoError(t, err)
 	assert.Nil(t, validator.Next)
 	assert.Nil(t, validator.Prev)

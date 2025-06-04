@@ -80,7 +80,7 @@ func (s *storage) State() *state.State {
 	return s.state
 }
 
-func (s *storage) GetValidator(id thor.Bytes32) (*Validation, error) {
+func (s *storage) GetValidation(id thor.Bytes32) (*Validation, error) {
 	v, err := s.validations.Get(id)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get validator")
@@ -88,7 +88,7 @@ func (s *storage) GetValidator(id thor.Bytes32) (*Validation, error) {
 	return v, nil
 }
 
-func (s *storage) SetValidator(id thor.Bytes32, entry *Validation) error {
+func (s *storage) SetValidation(id thor.Bytes32, entry *Validation) error {
 	if err := s.validations.Set(id, entry); err != nil {
 		return errors.Wrap(err, "failed to set validator")
 	}
@@ -125,6 +125,33 @@ func (s *storage) SetDelegation(delegationID thor.Bytes32, entry *Delegation) er
 	return nil
 }
 
+func (s *storage) GetDelegationBundle(delegationID thor.Bytes32) (*Delegation, *Validation, *Aggregation, error) {
+	delegation, err := s.GetDelegation(delegationID)
+	if err != nil {
+		return nil, nil, nil, errors.Wrap(err, "failed to get delegation")
+	}
+	if delegation.IsEmpty() {
+		return nil, nil, nil, errors.New("delegation is empty")
+	}
+
+	validation, err := s.GetValidation(delegation.ValidationID)
+	if err != nil {
+		return nil, nil, nil, errors.Wrap(err, "failed to get validation")
+	}
+	if validation.IsEmpty() {
+		return nil, nil, nil, errors.New("validation is empty")
+	}
+
+	aggregation, err := s.GetAggregation(delegation.ValidationID)
+	if err != nil {
+		return nil, nil, nil, errors.Wrap(err, "failed to get aggregation")
+	}
+	if aggregation.IsEmpty() {
+		return nil, nil, nil, errors.New("aggregation is empty")
+	}
+	return delegation, validation, aggregation, nil
+}
+
 func (s *storage) GetLookup(address thor.Address) (thor.Bytes32, error) {
 	l, err := s.lookups.Get(address)
 	if err != nil {
@@ -148,7 +175,7 @@ func (s *storage) LookupMaster(master thor.Address) (*Validation, thor.Bytes32, 
 	if id.IsZero() {
 		return &Validation{}, thor.Bytes32{}, nil
 	}
-	val, err := s.GetValidator(id)
+	val, err := s.GetValidation(id)
 	if err != nil {
 		return nil, thor.Bytes32{}, err
 	}
@@ -180,7 +207,7 @@ func (s *storage) GetRewards(validationID thor.Bytes32, stakingPeriod uint32) (*
 }
 
 func (s *storage) GetCompletedPeriods(validationID thor.Bytes32) (uint32, error) {
-	v, err := s.GetValidator(validationID)
+	v, err := s.GetValidation(validationID)
 	if err != nil {
 		return uint32(0), err
 	}
@@ -195,7 +222,7 @@ func (s *storage) IncreaseReward(master thor.Address, reward big.Int) error {
 	if id.IsZero() {
 		return nil
 	}
-	val, err := s.GetValidator(id)
+	val, err := s.GetValidation(id)
 	if err != nil {
 		return err
 	}

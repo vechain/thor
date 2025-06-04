@@ -129,7 +129,7 @@ func Test_AddDelegator_AutoRenew(t *testing.T) {
 	assert.False(t, id1.IsZero())
 	aggregation, err := staker.storage.GetAggregation(validator.ID)
 	assert.NoError(t, err)
-	assert.Equal(t, aggregation.PendingLockedVET, stake)
+	assert.Equal(t, aggregation.PendingRecurringVET, stake)
 	delegation, _, err := staker.GetDelegation(id1)
 	assert.NoError(t, err)
 	assert.Equal(t, stake, delegation.Stake)
@@ -143,7 +143,7 @@ func Test_AddDelegator_AutoRenew(t *testing.T) {
 	assert.NoError(t, err)
 	aggregation2, err := staker.storage.GetAggregation(validator.ID)
 	assert.NoError(t, err)
-	assert.Equal(t, aggregation2.PendingCooldownVET, stake)
+	assert.Equal(t, aggregation2.PendingOneTimeVET, stake)
 
 	delegation, _, err = staker.GetDelegation(id2)
 	assert.NoError(t, err)
@@ -165,7 +165,7 @@ func Test_AddDelegator_StakeRange(t *testing.T) {
 
 	// should NOT be able to stake greater than max stake
 	_, err = staker.AddDelegation(validator.ID, maxStake, true, 255)
-	assert.ErrorContains(t, err, "validator's next period stake exceeds max stake")
+	assert.ErrorContains(t, err, "validation's next period stake exceeds max stake")
 
 	// should be able stake 1 VET
 	_, err = staker.AddDelegation(validator.ID, big.NewInt(1), true, 255)
@@ -184,7 +184,7 @@ func Test_AddDelegator_ValidatorNotFound(t *testing.T) {
 	staker, _ := newStaker(t, 75, 101, true)
 
 	_, err := staker.AddDelegation(datagen.RandomHash(), RandomStake(), true, 255)
-	assert.ErrorContains(t, err, "validator not found")
+	assert.ErrorContains(t, err, "validation not found")
 }
 
 func Test_AddDelegator_ManyValidators(t *testing.T) {
@@ -197,7 +197,7 @@ func Test_AddDelegator_ManyValidators(t *testing.T) {
 		assert.NoError(t, err)
 		aggregation, err := staker.storage.GetAggregation(validator.ID)
 		assert.NoError(t, err)
-		assert.Equal(t, aggregation.PendingLockedVET, stake)
+		assert.Equal(t, aggregation.PendingRecurringVET, stake)
 	}
 }
 
@@ -219,7 +219,7 @@ func Test_Delegator_DisableAutoRenew_PendingLocked(t *testing.T) {
 	assert.NoError(t, err)
 	aggregation, err := staker.storage.GetAggregation(validator.ID)
 	assert.NoError(t, err)
-	assert.Equal(t, stake, aggregation.PendingLockedVET)
+	assert.Equal(t, stake, aggregation.PendingRecurringVET)
 
 	// When the delegation disables auto renew
 	assert.NoError(t, staker.UpdateDelegationAutoRenew(id, false))
@@ -227,7 +227,7 @@ func Test_Delegator_DisableAutoRenew_PendingLocked(t *testing.T) {
 	// Then the stake is moved to pending cooldown
 	aggregation, err = staker.storage.GetAggregation(validator.ID)
 	assert.NoError(t, err)
-	assert.Equal(t, stake, aggregation.PendingCooldownVET)
+	assert.Equal(t, stake, aggregation.PendingOneTimeVET)
 
 	// When the delegation becomes active
 	_, _, err = staker.Housekeep(validator.Period)
@@ -266,7 +266,7 @@ func Test_QueuedDelegator_Withdraw_NonAutoRenew(t *testing.T) {
 	// Then the aggregation should be removed
 	aggregation, err := staker.storage.GetAggregation(validator.ID)
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(0), aggregation.PendingCooldownVET)
+	assert.Equal(t, big.NewInt(0), aggregation.PendingOneTimeVET)
 
 	// And the delegation should be removed
 	delegation, _, err := staker.GetDelegation(id)
@@ -298,7 +298,7 @@ func Test_Delegator_DisableAutoRenew_InAStakingPeriod(t *testing.T) {
 	assert.NoError(t, err)
 	aggregation, err := staker.storage.GetAggregation(validator.ID)
 	assert.NoError(t, err)
-	assert.Equal(t, stake, aggregation.LockedVET)
+	assert.Equal(t, stake, aggregation.CurrentRecurringVET)
 	queuedVet, queuedWeight, err = staker.QueuedStake()
 
 	assert.NoError(t, err)
@@ -310,7 +310,7 @@ func Test_Delegator_DisableAutoRenew_InAStakingPeriod(t *testing.T) {
 	// Then the stake is moved to cooldown
 	aggregation, err = staker.storage.GetAggregation(validator.ID)
 	assert.NoError(t, err)
-	assert.Equal(t, stake, aggregation.CooldownVET)
+	assert.Equal(t, stake, aggregation.CurrentOneTimeVET)
 	queuedVet, queuedWeight, err = staker.QueuedStake()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).String(), queuedVet.String())
@@ -321,7 +321,7 @@ func Test_Delegator_DisableAutoRenew_InAStakingPeriod(t *testing.T) {
 	assert.NoError(t, err)
 	aggregation, err = staker.storage.GetAggregation(validator.ID)
 	assert.NoError(t, err)
-	assert.Equal(t, stake, aggregation.WithdrawVET)
+	assert.Equal(t, stake, aggregation.WithdrawableVET)
 }
 
 func Test_Delegator_EnableAutoRenew_PendingLocked(t *testing.T) {
@@ -335,7 +335,7 @@ func Test_Delegator_EnableAutoRenew_PendingLocked(t *testing.T) {
 	assert.NoError(t, err)
 	aggregation, err := staker.storage.GetAggregation(validator.ID)
 	assert.NoError(t, err)
-	assert.Equal(t, stake, aggregation.PendingCooldownVET)
+	assert.Equal(t, stake, aggregation.PendingOneTimeVET)
 
 	// When the delegation enables auto renew
 	assert.NoError(t, staker.UpdateDelegationAutoRenew(id, true))
@@ -343,7 +343,7 @@ func Test_Delegator_EnableAutoRenew_PendingLocked(t *testing.T) {
 	// Then the stake is moved to pending locked
 	aggregation, err = staker.storage.GetAggregation(validator.ID)
 	assert.NoError(t, err)
-	assert.Equal(t, stake, aggregation.PendingLockedVET)
+	assert.Equal(t, stake, aggregation.PendingRecurringVET)
 
 	// And the funds should NOT be withdrawable after 1 iteration
 	// step 1: start the first iteration
@@ -374,7 +374,7 @@ func Test_Delegator_EnableAutoRenew_InAStakingPeriod(t *testing.T) {
 	assert.NoError(t, err)
 	aggregation, err := staker.storage.GetAggregation(validator.ID)
 	assert.NoError(t, err)
-	assert.Equal(t, stake, aggregation.CooldownVET)
+	assert.Equal(t, stake, aggregation.CurrentOneTimeVET)
 
 	// When the delegation enables auto renew
 	assert.NoError(t, staker.UpdateDelegationAutoRenew(id, true))
@@ -382,7 +382,7 @@ func Test_Delegator_EnableAutoRenew_InAStakingPeriod(t *testing.T) {
 	// Then the stake is moved to locked
 	aggregation, err = staker.storage.GetAggregation(validator.ID)
 	assert.NoError(t, err)
-	assert.Equal(t, stake, aggregation.LockedVET)
+	assert.Equal(t, stake, aggregation.CurrentRecurringVET)
 
 	// And the funds should NOT be withdrawable after 1 iteration
 	_, _, err = staker.Housekeep(2 * validator.Period)
@@ -406,7 +406,7 @@ func Test_Delegator_AutoRenew_ValidatorExits(t *testing.T) {
 	assert.NoError(t, err)
 	aggregation, err := staker.storage.GetAggregation(validator.ID)
 	assert.NoError(t, err)
-	assert.Equal(t, stake, aggregation.LockedVET)
+	assert.Equal(t, stake, aggregation.CurrentRecurringVET)
 
 	// When the validator signals an exit
 	assert.NoError(t, staker.UpdateAutoRenew(validator.Endorsor, validator.ID, false))
@@ -416,7 +416,7 @@ func Test_Delegator_AutoRenew_ValidatorExits(t *testing.T) {
 	assert.NoError(t, err)
 	aggregation, err = staker.storage.GetAggregation(validator.ID)
 	assert.NoError(t, err)
-	assert.Equal(t, stake, aggregation.WithdrawVET)
+	assert.Equal(t, stake, aggregation.WithdrawableVET)
 
 	// Then the funds should be withdrawable
 	amount, err := staker.WithdrawDelegation(id)
@@ -442,7 +442,7 @@ func Test_Delegator_WithdrawWhilePending(t *testing.T) {
 	// Then the aggregation should be removed
 	aggregation, err := staker.storage.GetAggregation(validator.ID)
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(0), aggregation.PendingLockedVET)
+	assert.Equal(t, big.NewInt(0), aggregation.PendingRecurringVET)
 
 	// And the delegation should be removed
 	delegation, _, err := staker.GetDelegation(id)

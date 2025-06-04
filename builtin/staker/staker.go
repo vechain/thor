@@ -163,7 +163,7 @@ func (s *Staker) LookupMaster(master thor.Address) (*Validation, thor.Bytes32, e
 }
 
 func (s *Staker) Get(id thor.Bytes32) (*Validation, error) {
-	return s.storage.GetValidator(id)
+	return s.storage.GetValidation(id)
 }
 
 func (s *Staker) UpdateAutoRenew(endorsor thor.Address, id thor.Bytes32, autoRenew bool) error {
@@ -227,14 +227,14 @@ func (s *Staker) GetWithdrawable(id thor.Bytes32, block uint32) (*big.Int, error
 
 func (s *Staker) SetOnline(id thor.Bytes32, online bool) (bool, error) {
 	logger.Debug("set master online", "id", id, "online", online)
-	entry, err := s.storage.GetValidator(id)
+	entry, err := s.storage.GetValidation(id)
 	if err != nil {
 		return false, err
 	}
 	hasChanged := entry.Online != online
 	entry.Online = online
 	if hasChanged {
-		err = s.storage.SetValidator(id, entry)
+		err = s.storage.SetValidation(id, entry)
 	} else {
 		err = nil
 	}
@@ -249,9 +249,9 @@ func (s *Staker) AddDelegation(
 	multiplier uint8,
 ) (thor.Bytes32, error) {
 	stakeETH := new(big.Int).Div(stake, big.NewInt(1e18))
-	logger.Debug("adding delegation", "validationID", validationID, "stake", stakeETH, "autoRenew", autoRenew, "multiplier", multiplier)
+	logger.Debug("adding delegation", "ValidationID", validationID, "stake", stakeETH, "autoRenew", autoRenew, "multiplier", multiplier)
 	if id, err := s.delegations.Add(validationID, stake, autoRenew, multiplier); err != nil {
-		logger.Info("failed to add delegation", "validationID", validationID, "error", err)
+		logger.Info("failed to add delegation", "ValidationID", validationID, "error", err)
 		return thor.Bytes32{}, err
 	} else {
 		weight := big.NewInt(0).Mul(stake, big.NewInt(int64(multiplier)))
@@ -260,7 +260,7 @@ func (s *Staker) AddDelegation(
 		if err != nil {
 			return [32]byte{}, err
 		}
-		logger.Info("added delegation", "validationID", validationID, "id", id)
+		logger.Info("added delegation", "ValidationID", validationID, "id", id)
 		return id, nil
 	}
 }
@@ -276,7 +276,7 @@ func (s *Staker) GetDelegation(
 	if delegation.IsEmpty() {
 		return &Delegation{}, nil, nil
 	}
-	validation, err := s.storage.GetValidator(delegation.ValidatorID)
+	validation, err := s.storage.GetValidation(delegation.ValidationID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -301,7 +301,7 @@ func (s *Staker) HasDelegations(
 	if aggregation == nil || aggregation.IsEmpty() {
 		return false, nil
 	}
-	total := new(big.Int).Add(aggregation.LockedVET, aggregation.CooldownVET)
+	total := new(big.Int).Add(aggregation.CurrentRecurringVET, aggregation.CurrentOneTimeVET)
 	return total.Sign() > 0, nil
 }
 
@@ -357,7 +357,7 @@ func (s *Staker) IncreaseReward(master thor.Address, reward big.Int) error {
 
 // GetValidatorsTotals returns the total stake, total weight, total delegators stake and total delegators weight.
 func (s *Staker) GetValidatorsTotals(validationID thor.Bytes32) (*ValidationTotals, error) {
-	validator, err := s.storage.GetValidator(validationID)
+	validator, err := s.storage.GetValidation(validationID)
 	if err != nil {
 		return nil, err
 	}
@@ -368,7 +368,7 @@ func (s *Staker) GetValidatorsTotals(validationID thor.Bytes32) (*ValidationTota
 	return &ValidationTotals{
 		TotalLockedStake:        validator.LockedVET,
 		TotalLockedWeight:       validator.Weight,
-		DelegationsLockedStake:  big.NewInt(0).Add(aggregation.LockedVET, aggregation.CooldownVET),
-		DelegationsLockedWeight: big.NewInt(0).Add(aggregation.LockedWeight, aggregation.CooldownWeight),
+		DelegationsLockedStake:  big.NewInt(0).Add(aggregation.CurrentRecurringVET, aggregation.CurrentOneTimeVET),
+		DelegationsLockedWeight: big.NewInt(0).Add(aggregation.CurrentRecurringWeight, aggregation.CurrentOneTimeWeight),
 	}, nil
 }
