@@ -157,7 +157,7 @@ func getAccount(t *testing.T) {
 	if err := json.Unmarshal(res, &acc); err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, math.HexOrDecimal256(*value), acc.Balance, "balance should be equal")
+	assert.Equal(t, (*math.HexOrDecimal256)(value), acc.Balance, "balance should be equal")
 	assert.Equal(t, http.StatusOK, statusCode, "OK")
 }
 
@@ -201,8 +201,8 @@ func getAccountWithFinalizedRevision(t *testing.T) {
 	finalizedAccount, err := tclient.Account(&soloAddress, thorclient.Revision(tccommon.FinalizedRevision))
 	require.NoError(t, err)
 
-	genesisEnergy := (*big.Int)(&genesisAccount.Energy)
-	finalizedEnergy := (*big.Int)(&finalizedAccount.Energy)
+	genesisEnergy := (*big.Int)(genesisAccount.Energy)
+	finalizedEnergy := (*big.Int)(finalizedAccount.Energy)
 
 	assert.Equal(t, genesisEnergy, finalizedEnergy, "finalized energy should equal genesis energy")
 }

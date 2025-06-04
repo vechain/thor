@@ -102,8 +102,8 @@ func (a *Accounts) getAccount(addr thor.Address, header *block.Header, state *st
 	}
 
 	return &Account{
-		Balance: math.HexOrDecimal256(*b),
-		Energy:  math.HexOrDecimal256(*energy),
+		Balance: (*math.HexOrDecimal256)(b),
+		Energy:  (*math.HexOrDecimal256)(energy),
 		HasCode: len(code) != 0,
 	}, nil
 }
