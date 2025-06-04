@@ -153,6 +153,7 @@ func (e *Energy) Add(addr thor.Address, amount *big.Int) error {
 		return err
 	}
 
+	println("=============+++++++ adding amount to accouny", addr.String(), amount.String())
 	return e.state.SetEnergy(addr, new(big.Int).Add(eng, amount), e.blockTime)
 }
 
