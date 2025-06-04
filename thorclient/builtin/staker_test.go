@@ -6,6 +6,8 @@
 package builtin
 
 import (
+	"github.com/vechain/thor/v2/test"
+	"github.com/vechain/thor/v2/tx"
 	"math"
 	"math/big"
 	"testing"
@@ -22,7 +24,7 @@ import (
 func TestStaker(t *testing.T) {
 	minStakingPeriod := uint32(360) * 24 * 7 // 360 days in seconds
 
-	_, client := newChain(t, false)
+	testSolo, client := newChain(t, false)
 
 	// builtins
 	staker, err := NewStaker(client)
@@ -64,24 +66,27 @@ func TestStaker(t *testing.T) {
 
 	// add validators - trigger PoS activation
 	minStake := MinStake()
-	var validatorTxs []bind.SendBuilder
+	var validatorTxs []*tx.Transaction
 	for _, acc := range genesis.DevAccounts()[0:2] {
-		addValidatorTx := staker.AddValidator(acc.Address, minStake, minStakingPeriod, true).
+		addValidatorTx, err := staker.AddValidator(acc.Address, minStake, minStakingPeriod, true).
 			Send().
 			WithSigner(bind.NewSigner(acc.PrivateKey)).
-			WithOptions(txOpts())
+			WithOptions(txOpts()).Submit()
+		require.NoError(t, err)
 		validatorTxs = append(validatorTxs, addValidatorTx)
 	}
-	for _, tx := range validatorTxs {
-		if _, err = tx.Submit(); err != nil {
-			t.Fatal(err)
-		}
+	for _, trx := range validatorTxs {
+		require.NoError(t, test.Retry(func() error {
+			id := trx.ID()
+			if _, err = client.TransactionReceipt(&id); err != nil {
+				return err
+			}
+			return nil
+		}, 100*time.Millisecond, 10*time.Second))
 	}
 
 	// pack a new block
-	time.Sleep(10 * time.Second)
-	//require.NoError(t, testSolo.Solo.PackNewBlock(nil, false))
-	//require.NoError(t, testSolo.Solo.PackNewBlock(nil, false))
+	require.NoError(t, testSolo.Solo.PackNewBlock(nil, false))
 
 	// TotalStake
 	totalStake, totalWeight, err := staker.TotalStake()
