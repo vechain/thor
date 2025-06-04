@@ -125,6 +125,8 @@ func (s *storage) SetDelegation(delegationID thor.Bytes32, entry *Delegation) er
 	return nil
 }
 
+// GetDelegationBundle retrieves the delegation, validation, and aggregation for a given delegation ID.
+// It returns an error if any of the components are not found or are empty.
 func (s *storage) GetDelegationBundle(delegationID thor.Bytes32) (*Delegation, *Validation, *Aggregation, error) {
 	delegation, err := s.GetDelegation(delegationID)
 	if err != nil {
