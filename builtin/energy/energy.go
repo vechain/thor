@@ -183,6 +183,7 @@ func (e *Energy) Sub(addr thor.Address, amount *big.Int) (bool, error) {
 	if err := e.state.SetEnergy(addr, new(big.Int).Sub(eng, amount), e.blockTime); err != nil {
 		return false, err
 	}
+	println("=============+++++++ removing amount to accouny", addr.String(), amount.String())
 	return true, nil
 }
 
