@@ -32,6 +32,10 @@ type SendBuilder interface {
 	// Submit sends the transaction without waiting for receipt.
 	Submit() (*tx.Transaction, error)
 
+	// Build builds the transaction without sending it.
+	// If the signer is not set, it returns an unsigned transaction.
+	Build() (*tx.Transaction, error)
+
 	// SubmitAndConfirm sends the transaction and waits for the receipt.
 	SubmitAndConfirm(ctx context.Context) (*transactions.Receipt, *tx.Transaction, error)
 }
@@ -71,12 +75,8 @@ func (b *sendBuilder) WithOptions(opts *TxOptions) SendBuilder {
 	return b
 }
 
-// IssueTx implements SendBuilder.IssueTx.
-func (b *sendBuilder) Submit() (*tx.Transaction, error) {
-	if b.signer == nil {
-		return nil, errors.New("signer not set")
-	}
-
+// Build implements SendBuilder.Build.
+func (b *sendBuilder) Build() (*tx.Transaction, error) {
 	// Build the clause
 	clause, err := b.op.Clause()
 	if err != nil {
@@ -162,9 +162,22 @@ func (b *sendBuilder) Submit() (*tx.Transaction, error) {
 	}
 
 	transaction := builder.Build()
-	transaction, err = b.signer.SignTransaction(transaction)
+	if b.signer == nil {
+		// If no signer is set, return the unsigned transaction
+		return transaction, nil
+	}
+	return b.signer.SignTransaction(transaction)
+}
+
+// Submit implements SendBuilder.IssueTx.
+func (b *sendBuilder) Submit() (*tx.Transaction, error) {
+	if b.signer == nil {
+		return nil, errors.New("signer not set")
+	}
+
+	transaction, err := b.Build()
 	if err != nil {
-		return nil, fmt.Errorf("failed to sign transaction: %w", err)
+		return nil, fmt.Errorf("failed to build transaction: %w", err)
 	}
 
 	if _, err = b.op.contract.client.SendTransaction(transaction); err != nil {
