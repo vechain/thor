@@ -6,8 +6,6 @@
 package builtin
 
 import (
-	"github.com/vechain/thor/v2/test"
-	"github.com/vechain/thor/v2/tx"
 	"math"
 	"math/big"
 	"testing"
@@ -16,9 +14,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/test"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/bind"
+	"github.com/vechain/thor/v2/tx"
 )
 
 func TestStaker(t *testing.T) {

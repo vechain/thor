@@ -122,9 +122,9 @@ func TestEnergy_Revision(t *testing.T) {
 	require.NoError(t, solo.Solo.PackNewBlock(nil, false))
 	require.NoError(t, solo.Solo.PackNewBlock(nil, false))
 
-	supplyBlock1, err := energy.Revision("1").TotalSupply()
+	supplyBlock1, err := energy.Revision("2").TotalSupply()
 	require.NoError(t, err)
-	supplyBlock2, err := energy.Revision("2").TotalSupply()
+	supplyBlock2, err := energy.Revision("3").TotalSupply()
 	require.NoError(t, err)
 
 	require.Greater(t, supplyBlock2.Cmp(supplyBlock1), 0, "Total supply should increase with each block")

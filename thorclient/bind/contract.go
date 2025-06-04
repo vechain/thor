@@ -107,6 +107,10 @@ func DeployContract(client *thorclient.Client, signer Signer, abiData []byte, by
 		return nil
 	}, time.Second, 10*time.Second)
 
+	if receipt.Reverted {
+		return nil, fmt.Errorf("transaction reverted")
+	}
+
 	contractAddr := receipt.Outputs[0].Events[0].Address
 	return NewContract(client, abiData, &contractAddr)
 }
