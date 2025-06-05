@@ -32,8 +32,8 @@ type Transaction struct {
 	Meta                 *TxMeta               `json:"meta"`
 }
 
-// convertTransaction convert a raw transaction into a json format transaction
-func convertTransaction(trx *tx.Transaction, header *block.Header) *Transaction {
+// ConvertTransaction convert a raw transaction into a json format transaction
+func ConvertTransaction(trx *tx.Transaction, header *block.Header) *Transaction {
 	//tx origin
 	origin, _ := trx.Origin()
 	delegator, _ := trx.Delegator()

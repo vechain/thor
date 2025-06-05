@@ -35,7 +35,7 @@ func TestConvertLegacyTransaction_Success(t *testing.T) {
 
 	header := new(block.Builder).Build().Header()
 
-	result := convertTransaction(transaction, header)
+	result := ConvertTransaction(transaction, header)
 	// Common fields
 	assert.Equal(t, transaction.Type(), result.Type)
 	assert.Equal(t, hexutil.Encode(br[:]), result.BlockRef)
@@ -76,7 +76,7 @@ func TestConvertDynTransaction_Success(t *testing.T) {
 
 	header := new(block.Builder).Build().Header()
 
-	result := convertTransaction(transaction, header)
+	result := ConvertTransaction(transaction, header)
 	// Common fields
 	assert.Equal(t, transaction.Type(), result.Type)
 	assert.Equal(t, hexutil.Encode(br[:]), result.BlockRef)
