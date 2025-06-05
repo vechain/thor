@@ -24,7 +24,8 @@ import (
 func TestStaker(t *testing.T) {
 	minStakingPeriod := uint32(360) * 24 * 7 // 360 days in seconds
 
-	testSolo, client := newChain(t, false)
+	node, client := newTestNode(t, false)
+	defer node.Stop()
 
 	// builtins
 	staker, err := NewStaker(client)
@@ -86,7 +87,7 @@ func TestStaker(t *testing.T) {
 	}
 
 	// pack a new block
-	require.NoError(t, testSolo.Solo.PackNewBlock(nil, false))
+	require.NoError(t, node.Chain().MintBlock(genesis.DevAccounts()[0]))
 
 	// TotalStake
 	totalStake, totalWeight, err := staker.TotalStake()

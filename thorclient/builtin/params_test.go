@@ -19,7 +19,8 @@ import (
 func TestParams(t *testing.T) {
 	executor := bind.NewSigner(genesis.DevAccounts()[0].PrivateKey)
 
-	_, client := newChain(t, false)
+	testNode, client := newTestNode(t, false)
+	defer testNode.Stop()
 
 	params, err := NewParams(client)
 	require.NoError(t, err)

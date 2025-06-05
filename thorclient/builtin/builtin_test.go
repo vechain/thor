@@ -17,7 +17,7 @@ import (
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/test/testchain"
-	"github.com/vechain/thor/v2/test/testsolo"
+	"github.com/vechain/thor/v2/test/testnode"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
@@ -44,8 +44,8 @@ func newRange(receipt *transactions.Receipt) *events.Range {
 	}
 }
 
-// newChain creates a node with the API enabled to test the smart contract wrappers
-func newChain(t *testing.T, useExecutor bool) (*testsolo.Solo, *thorclient.Client) {
+// newTestNode creates a node with the API enabled to test the smart contract wrappers
+func newTestNode(t *testing.T, useExecutor bool) (testnode.Node, *thorclient.Client) {
 	accounts := genesis.DevAccounts()
 	authAccs := make([]genesis.Authority, 0, len(accounts))
 	stateAccs := make([]genesis.Account, 0, len(accounts))
@@ -118,8 +118,9 @@ func newChain(t *testing.T, useExecutor bool) (*testsolo.Solo, *thorclient.Clien
 		require.NoErrorf(t, err, "failed to mint genesis block")
 	}
 
-	solo, err := testsolo.NewSolo(chain)
+	node, err := testnode.NewNodeBuilder().WithChain(chain).Build()
 	require.NoError(t, err)
+	require.NoError(t, node.Start())
 
-	return solo, thorclient.New(solo.APIServer.URL)
+	return node, thorclient.New(node.APIServer().URL)
 }

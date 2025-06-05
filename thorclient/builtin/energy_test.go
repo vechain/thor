@@ -17,7 +17,8 @@ import (
 )
 
 func TestEnergy(t *testing.T) {
-	_, client := newChain(t, false)
+	testNode, client := newTestNode(t, false)
+	defer testNode.Stop()
 
 	energy, err := NewEnergy(client)
 	require.NoError(t, err)
@@ -114,13 +115,14 @@ func TestEnergy(t *testing.T) {
 }
 
 func TestEnergy_Revision(t *testing.T) {
-	solo, client := newChain(t, false)
+	node, client := newTestNode(t, false)
+	defer node.Stop()
 
 	energy, err := NewEnergy(client)
 	require.NoError(t, err)
 
-	require.NoError(t, solo.Solo.PackNewBlock(nil, false))
-	require.NoError(t, solo.Solo.PackNewBlock(nil, false))
+	require.NoError(t, node.Chain().MintBlock(genesis.DevAccounts()[0]))
+	require.NoError(t, node.Chain().MintBlock(genesis.DevAccounts()[0]))
 
 	supplyBlock1, err := energy.Revision("2").TotalSupply()
 	require.NoError(t, err)
