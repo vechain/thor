@@ -469,3 +469,49 @@ func Test_Delegator_ID_ShouldBeIncremental(t *testing.T) {
 		id = nextID
 	}
 }
+
+func Test_Delegator_Queued_Weight(t *testing.T) {
+	staker, validations := newDelegationStaker(t)
+	totalStaked := big.NewInt(0)
+	for _, validation := range validations {
+		totalStaked = totalStaked.Add(totalStaked, validation.LockedVET)
+	}
+
+	validatorStake := big.NewInt(0).Mul(big.NewInt(25000000), big.NewInt(1e18))
+	validatorWeight := big.NewInt(0).Mul(validatorStake, big.NewInt(2))
+	stake := big.NewInt(100)
+
+	lockedVetBefore, lockedWeightBefore, err := staker.LockedVET()
+	assert.NoError(t, err)
+	queuedVetBefore, queuedWeightBefore, err := staker.QueuedStake()
+	assert.NoError(t, err)
+
+	assert.Equal(t, totalStaked, lockedVetBefore)
+	assert.Equal(t, big.NewInt(0).Mul(lockedVetBefore, big.NewInt(2)), lockedWeightBefore)
+	assert.Equal(t, big.NewInt(0).String(), queuedVetBefore.String())
+	assert.Equal(t, big.NewInt(0).String(), queuedWeightBefore.String())
+
+	nodeMaster := datagen.RandAddress()
+	endorsor := datagen.RandAddress()
+	id, err := staker.AddValidator(endorsor, nodeMaster, uint32(360)*24*15, validatorStake, true, 0)
+	assert.NoError(t, err)
+
+	validator, err := staker.Get(id)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusQueued, validator.Status)
+
+	_, err = staker.AddDelegation(id, stake, true, 255)
+	assert.NoError(t, err)
+
+	lockedVetAfter, lockedWeightAfter, err := staker.LockedVET()
+	assert.NoError(t, err)
+	queuedVetAfter, queuedWeightAfter, err := staker.QueuedStake()
+	assert.NoError(t, err)
+
+	delegatorWeight := big.NewInt(0).Mul(stake, big.NewInt(255))
+	delegatorWeight = delegatorWeight.Div(delegatorWeight, big.NewInt(100))
+	assert.Equal(t, lockedVetBefore, lockedVetAfter)
+	assert.Equal(t, lockedWeightBefore, lockedWeightAfter)
+	assert.Equal(t, big.NewInt(0).Add(validatorStake, stake), queuedVetAfter)
+	assert.Equal(t, big.NewInt(0).Add(validatorWeight, delegatorWeight), queuedWeightAfter)
+}
