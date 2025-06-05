@@ -63,7 +63,6 @@ type txData interface {
 	blockRef() uint64
 	expiration() uint32
 	clauses() []*Clause
-	gasPriceCoef() uint8
 	gas() uint64
 	maxFeePerGas() *big.Int
 	maxPriorityFeePerGas() *big.Int
@@ -72,7 +71,6 @@ type txData interface {
 	reserved() *reserved
 	signature() []byte
 	setSignature(sig []byte)
-	evaluateWork(origin thor.Address) func(nonce uint64) *big.Int
 	signingFields() []any // signingFields returns the fields that are used to compute the signing hash.
 
 	// Encode/decode encodes/decodes the tx body into binary format, the format is defined by the tx data itself.
@@ -294,16 +292,12 @@ func (t *Transaction) Gas() uint64 {
 	return t.body.gas()
 }
 
-// GasPriceCoef returns gas price coef.
-// gas price = bgp + bgp * gpc / 255.
-func (t *Transaction) GasPriceCoef() uint8 {
-	return t.body.gasPriceCoef()
-}
-
+// MaxFeePerGas returns max fee per gas.
 func (t *Transaction) MaxFeePerGas() *big.Int {
 	return t.body.maxFeePerGas()
 }
 
+// MaxPriorityFeePerGas returns max priority fee per gas.
 func (t *Transaction) MaxPriorityFeePerGas() *big.Int {
 	return t.body.maxPriorityFeePerGas()
 }
@@ -427,19 +421,42 @@ func (t *Transaction) IntrinsicGas() (uint64, error) {
 	return gas, nil
 }
 
-// GasPrice returns gas price.
-// gasPrice = baseGasPrice + baseGasPrice * gasPriceCoef / 255
-func (t *Transaction) GasPrice(baseGasPrice *big.Int) *big.Int {
-	x := big.NewInt(int64(t.body.gasPriceCoef()))
-	x.Mul(x, baseGasPrice)
-	x.Div(x, big.NewInt(math.MaxUint8))
-	return x.Add(x, baseGasPrice)
+// EffectiveGasPrice calculates the effective gas price of a transaction,which is the gas
+// price sender have to pay per gas unit. The proved work is NOT included.For legacy
+// transactions, baseGasPrice is required. For dynamic fee transactions,baseFee is required.
+// It is caller's responsibility to ensure the fields are passed correctly.
+func (t *Transaction) EffectiveGasPrice(legacyTxBaseGasPrice *big.Int, baseFee *big.Int) *big.Int {
+	// For legacy transactions, the gas price is fixed and determined at transaction creation time.
+	if t.Type() == TypeLegacy {
+		return t.body.(*legacyTransaction).gasPrice(legacyTxBaseGasPrice)
+	}
+
+	// For dynamic fee transactions, effective gas price take block base fee into account.
+	// Which is MIN(maxFeePerGas, maxPriorityFeePerGas + baseFee)
+	return math.BigMin(t.body.maxFeePerGas(), t.body.maxPriorityFeePerGas().Add(t.body.maxPriorityFeePerGas(), baseFee))
 }
 
-// ProvedWork returns proved work.
-// Unproved work will be considered as proved work if block ref is do the prefix of a block's ID,
-// and tx delay is less equal to MaxTxWorkDelay.
+// GasPriceCoef returns gas price coef.
+// gas price = bgp + bgp * gpc / 255.
+//
+// NOTE: This method only works for legacy transactions.
+func (t *Transaction) GasPriceCoef() uint8 {
+	if t.Type() != TypeLegacy {
+		return 0
+	}
+	return t.body.(*legacyTransaction).gasPriceCoef()
+}
+
+// ProvedWork returns proved work for legacy transactions.
+// Unproved work will be considered as proved work if block ref is the prefix
+// of a block's ID, and tx delay is less equal to MaxTxWorkDelay.
+//
+// NOTE: This method only works for legacy transactions.
 func (t *Transaction) ProvedWork(headBlockNum uint32, getBlockID func(uint32) (thor.Bytes32, error)) (*big.Int, error) {
+	if t.Type() != TypeLegacy {
+		return &big.Int{}, nil
+	}
+
 	ref := t.BlockRef()
 	refNum := ref.Number()
 	if refNum >= headBlockNum {
@@ -460,33 +477,39 @@ func (t *Transaction) ProvedWork(headBlockNum uint32, getBlockID func(uint32) (t
 	return &big.Int{}, nil
 }
 
-// UnprovedWork returns unproved work of this tx.
-// It returns 0, if tx is not signed or is not a legacy tx type.
-func (t *Transaction) UnprovedWork() (w *big.Int) {
+// UnprovedWork returns unproved work for legacy transactions.
+// It returns 0, if tx is not signed or not a legacy transaction.
+//
+// NOTE: This method only works for legacy transactions.
+func (t *Transaction) UnprovedWork() *big.Int {
+	if t.Type() != TypeLegacy {
+		return &big.Int{}
+	}
+
 	if cached := t.cache.unprovedWork.Load(); cached != nil {
 		return cached.(*big.Int)
 	}
-	defer func() {
-		t.cache.unprovedWork.Store(w)
-	}()
 
 	origin, err := t.Origin()
 	if err != nil {
 		return &big.Int{}
 	}
-	return t.EvaluateWork(origin)(t.body.nonce())
+
+	w := t.EvaluateWork(origin)(t.body.nonce())
+	t.cache.unprovedWork.Store(w)
+	return w
 }
 
-// EvaluateWork try to compute work when tx origin assumed.
-func (t *Transaction) EvaluateWork(origin thor.Address) func(nonce uint64) *big.Int {
-	return t.body.evaluateWork(origin)
-}
-
-// OverallGasPrice calculate overall gas price.
+// OverallGasPrice calculate overall gas price which includes proved work for legacy transactions.
 // overallGasPrice = gasPrice + baseGasPrice * wgas/gas.
-func (t *Transaction) OverallGasPrice(baseGasPrice *big.Int, provedWork *big.Int) *big.Int {
-	gasPrice := t.GasPrice(baseGasPrice)
+//
+// NOTE: This method only works for legacy transactions.
+func (t *Transaction) OverallGasPrice(legacyTxBaseGasPrice *big.Int, provedWork *big.Int) *big.Int {
+	if t.Type() != TypeLegacy {
+		return t.body.maxFeePerGas()
+	}
 
+	gasPrice := t.body.(*legacyTransaction).gasPrice(legacyTxBaseGasPrice)
 	if provedWork.Sign() == 0 {
 		return gasPrice
 	}
@@ -500,11 +523,25 @@ func (t *Transaction) OverallGasPrice(baseGasPrice *big.Int, provedWork *big.Int
 	}
 
 	x := new(big.Int).SetUint64(wgas)
-	x.Mul(x, baseGasPrice)
+	x.Mul(x, legacyTxBaseGasPrice)
 	// division by zero cannot happen here because of the intrinsic gas pre-check which ensures that tx gas is always
 	// greater than 0
 	x.Div(x, new(big.Int).SetUint64(t.body.gas()))
 	return x.Add(x, gasPrice)
+}
+
+// EvaluateWork try to compute work when tx origin assumed. This is mostly used for a
+// client trying to gain higher priority in the mempool for the legacy transactions.
+//
+// NOTE: This method only works for legacy transactions.
+func (t *Transaction) EvaluateWork(origin thor.Address) func(nonce uint64) *big.Int {
+	if t.Type() != TypeLegacy {
+		return func(nonce uint64) *big.Int {
+			return &big.Int{}
+		}
+	}
+
+	return t.body.(*legacyTransaction).evaluateWork(origin)
 }
 
 func (t *Transaction) String() string {
@@ -545,7 +582,7 @@ func (t *Transaction) String() string {
 	if t.Type() == TypeLegacy {
 		return fmt.Sprintf(`%v
 		GasPriceCoef:   %v
-		`, s, t.body.gasPriceCoef())
+		`, s, t.body.(*legacyTransaction).gasPriceCoef())
 	}
 
 	return fmt.Sprintf(`%v

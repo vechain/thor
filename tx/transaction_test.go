@@ -176,48 +176,29 @@ func TestOverallGasPrice(t *testing.T) {
 			}
 		})
 	}
+
+	// for dynamic fee, overallGasPrice should be maxFeePerGas
+	trx = GetMockTx(TypeDynamicFee)
+	assert.Equal(t, trx.MaxFeePerGas(), trx.OverallGasPrice(big.NewInt(1), big.NewInt(0)))
 }
 
 func TestEvaluateWork(t *testing.T) {
-	tests := []struct {
-		name         string
-		txType       Type
-		expectedFunc func(b *big.Int) bool
-	}{
-		{
-			name:   "LegacyTxType",
-			txType: TypeLegacy,
-			expectedFunc: func(res *big.Int) bool {
-				return res.Cmp(big.NewInt(0)) > 0
-			},
-		},
-		{
-			name:   "DynamicFeeTxType",
-			txType: TypeDynamicFee,
-			expectedFunc: func(res *big.Int) bool {
-				return res.Cmp(common.Big0) == 0
-			},
-		},
+	trx := GetMockTx(TypeLegacy)
+	origin := thor.BytesToAddress([]byte("origin"))
+	// Returns a function
+	evaluate := trx.body.(*legacyTransaction).evaluateWork(origin)
+
+	// Test with a range of nonce values
+	for nonce := uint64(0); nonce < 100; nonce++ {
+		work := evaluate(nonce)
+
+		// Basic Assertions
+		assert.NotNil(t, work)
+		assert.True(t, work.Cmp(big.NewInt(0)) > 0, "legacy tx should have work")
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			origin := thor.BytesToAddress([]byte("origin"))
-			trx := GetMockTx(tt.txType)
-
-			// Returns a function
-			evaluate := trx.EvaluateWork(origin)
-
-			// Test with a range of nonce values
-			for nonce := uint64(0); nonce < 100; nonce++ {
-				work := evaluate(nonce)
-
-				// Basic Assertions
-				assert.NotNil(t, work)
-				assert.True(t, tt.expectedFunc(work), "Work does not match")
-			}
-		})
-	}
+	trx = GetMockTx(TypeDynamicFee)
+	assert.True(t, trx.UnprovedWork().Cmp(big.NewInt(0)) == 0, "dynamic fee tx should not have work")
 }
 
 func TestLegacyTx(t *testing.T) {
@@ -238,7 +219,6 @@ func TestLegacyTx(t *testing.T) {
 	assert.Equal(t, uint64(21000), func() uint64 { t := NewBuilder(TypeLegacy).Build(); g, _ := t.IntrinsicGas(); return g }())
 	assert.Equal(t, uint64(37432), func() uint64 { g, _ := trx.IntrinsicGas(); return g }())
 
-	assert.Equal(t, big.NewInt(150), trx.GasPrice(big.NewInt(100)))
 	assert.Equal(t, []byte(nil), trx.Signature())
 
 	assert.Equal(t, false, trx.Features().IsDelegated())
@@ -382,16 +362,14 @@ func TestIntrinsicGas(t *testing.T) {
 }
 
 func BenchmarkTxMining(b *testing.B) {
-	for _, txType := range []Type{TypeLegacy, TypeDynamicFee} {
-		trx := NewBuilder(txType).Build()
-		signer := thor.BytesToAddress([]byte("acc1"))
-		maxWork := &big.Int{}
-		eval := trx.EvaluateWork(signer)
-		for i := 0; b.Loop(); i++ {
-			work := eval(uint64(i))
-			if work.Cmp(maxWork) > 0 {
-				maxWork = work
-			}
+	trx := NewBuilder(TypeLegacy).Build()
+	signer := thor.BytesToAddress([]byte("acc1"))
+	maxWork := &big.Int{}
+	eval := trx.body.(*legacyTransaction).evaluateWork(signer)
+	for i := 0; b.Loop(); i++ {
+		work := eval(uint64(i))
+		if work.Cmp(maxWork) > 0 {
+			maxWork = work
 		}
 	}
 }
@@ -475,7 +453,7 @@ func TestTransactionHash(t *testing.T) {
 
 			body, _ := trx.body.(*legacyTransaction)
 			expectedWork := evaluateWork(body, origin, nonce, t)
-			assert.Equal(t, expectedWork, trx.EvaluateWork(origin)(nonce))
+			assert.Equal(t, expectedWork, trx.body.(*legacyTransaction).evaluateWork(origin)(nonce))
 		} else {
 			expected = thor.Blake2bFn(func(w io.Writer) {
 				_, err := w.Write([]byte{trx.Type()})
@@ -541,4 +519,45 @@ func signingFields(body txData) []any {
 		}
 	}
 	return fields
+}
+
+func TestTxFields(t *testing.T) {
+	trx := GetMockTx(TypeDynamicFee)
+
+	assert.Equal(t, trx.Expiration(), uint32(32))
+	assert.Equal(t, trx.Gas(), uint64(21000))
+	assert.Equal(t, trx.MaxFeePerGas(), big.NewInt(10000000))
+	assert.Equal(t, trx.MaxPriorityFeePerGas(), big.NewInt(20000))
+	assert.Equal(t, trx.Features(), Features(1))
+	assert.Equal(t, trx.Nonce(), uint64(12345678))
+
+	trx = NewBuilder(TypeLegacy).GasPriceCoef(128).Build()
+	assert.Equal(t, trx.GasPriceCoef(), uint8(128))
+}
+
+func TestEffectiveGasPrice(t *testing.T) {
+	bgp := big.NewInt(255)
+
+	// for legacy tx, effective gas price is (1+gasPriceCoef/255)*baseGasPrice
+	trx := NewBuilder(TypeLegacy).Build()
+	assert.Equal(t, trx.EffectiveGasPrice(bgp, nil), big.NewInt(255))
+	trx = NewBuilder(TypeLegacy).GasPriceCoef(255).Build()
+	assert.Equal(t, trx.EffectiveGasPrice(bgp, nil), big.NewInt(255+255))
+	trx = NewBuilder(TypeLegacy).GasPriceCoef(128).Build()
+	assert.Equal(t, trx.EffectiveGasPrice(bgp, nil), big.NewInt(255+128))
+
+	// for dynamic fee tx, effective takes baseFee into account
+	b10 := big.NewInt(10)
+	b5 := big.NewInt(5)
+	b1 := big.NewInt(1)
+
+	trx = NewBuilder(TypeDynamicFee).MaxFeePerGas(b10).MaxPriorityFeePerGas(b5).Build()
+	// baseFee < maxFee - maxPriorityFee
+	assert.Equal(t, trx.EffectiveGasPrice(nil, b1), big.NewInt(6))
+	// baseFee = maxFee - maxPriorityFee
+	trx = NewBuilder(TypeDynamicFee).MaxFeePerGas(b10).MaxPriorityFeePerGas(b5).Build()
+	assert.Equal(t, trx.EffectiveGasPrice(nil, b5), big.NewInt(10))
+	// baseFee > maxFee - maxPriorityFee
+	trx = NewBuilder(TypeDynamicFee).MaxFeePerGas(b10).MaxPriorityFeePerGas(b5).Build()
+	assert.Equal(t, trx.EffectiveGasPrice(nil, big.NewInt(6)), big.NewInt(10))
 }
