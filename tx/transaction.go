@@ -481,7 +481,7 @@ func (t *Transaction) ProvedWork(headBlockNum uint32, getBlockID func(uint32) (t
 // It returns 0, if tx is not signed or not a legacy transaction.
 //
 // NOTE: This method only works for legacy transactions.
-func (t *Transaction) UnprovedWork() (w *big.Int) {
+func (t *Transaction) UnprovedWork() *big.Int {
 	if t.Type() != TypeLegacy {
 		return &big.Int{}
 	}
@@ -489,16 +489,15 @@ func (t *Transaction) UnprovedWork() (w *big.Int) {
 	if cached := t.cache.unprovedWork.Load(); cached != nil {
 		return cached.(*big.Int)
 	}
-	defer func() {
-		t.cache.unprovedWork.Store(w)
-	}()
 
 	origin, err := t.Origin()
 	if err != nil {
 		return &big.Int{}
 	}
-	evaluateWork := t.body.(*legacyTransaction).evaluateWork
-	return evaluateWork(origin)(t.body.nonce())
+
+	w := t.EvaluateWork(origin)(t.body.nonce())
+	t.cache.unprovedWork.Store(w)
+	return w
 }
 
 // OverallGasPrice calculate overall gas price which includes proved work for legacy transactions.
@@ -529,6 +528,20 @@ func (t *Transaction) OverallGasPrice(legacyTxBaseGasPrice *big.Int, provedWork 
 	// greater than 0
 	x.Div(x, new(big.Int).SetUint64(t.body.gas()))
 	return x.Add(x, gasPrice)
+}
+
+// EvaluateWork try to compute work when tx origin assumed. This is mostly used for a
+// client trying to gain higher priority in the mempool for the legacy transactions.
+//
+// NOTE: This method only works for legacy transactions.
+func (t *Transaction) EvaluateWork(origin thor.Address) func(nonce uint64) *big.Int {
+	if t.Type() != TypeLegacy {
+		return func(nonce uint64) *big.Int {
+			return &big.Int{}
+		}
+	}
+
+	return t.body.(*legacyTransaction).evaluateWork(origin)
 }
 
 func (t *Transaction) String() string {
