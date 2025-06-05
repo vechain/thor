@@ -7,15 +7,17 @@ package logdb
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"math/big"
-	"time"
 
-	sqlite3 "github.com/mattn/go-sqlite3"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
+
+	"github.com/mattn/go-sqlite3"
 )
 
 const (
@@ -29,7 +31,6 @@ type LogDB struct {
 	wconn         *sql.Conn
 	wconnSyncOff  *sql.Conn
 	stmtCache     *stmtCache
-	writer        *Writer
 }
 
 // New create or open log db at given path.
@@ -70,8 +71,6 @@ func New(path string) (logDB *LogDB, err error) {
 		wconn:         wconn1,
 		wconnSyncOff:  wconn2,
 		stmtCache:     newStmtCache(db),
-		// todo investigate having a dedicated writer similar to the InMem
-		//writer:        &Writer{conn: wconn1, stmtCache: newStmtCache(db)},
 	}, nil
 }
 
@@ -81,9 +80,12 @@ func New(path string) (logDB *LogDB, err error) {
 // 2. Uses a single connection with minimal transaction overhead
 // 3. Optimizes for in-memory performance
 func NewMem() (*LogDB, error) {
-	// Generate a unique database name to prevent concurrent access issues
-	dbName := fmt.Sprintf("file:memdb_%d?mode=memory&cache=shared&_txlock=immediate&synchronous=off&journal_mode=memory", time.Now().UnixNano())
-
+	// Generate 6 random bytes for unique database name
+	randBytes := make([]byte, 6)
+	if _, err := rand.Read(randBytes); err != nil {
+		return nil, fmt.Errorf("failed to generate random bytes: %w", err)
+	}
+	dbName := fmt.Sprintf("file:memdb_%s?mode=memory&cache=shared&_txlock=immediate&synchronous=off&journal_mode=memory", hex.EncodeToString(randBytes))
 	// Open SQLite in-memory database with optimized settings:
 	// - mode=memory: Create a new in-memory database
 	// - cache=shared: Enable shared cache mode
@@ -92,20 +94,6 @@ func NewMem() (*LogDB, error) {
 	// - journal_mode=memory: Use in-memory journal for better performance
 	db, err := sql.Open("sqlite3", dbName)
 	if err != nil {
-		return nil, err
-	}
-
-	// Set optimized PRAGMA settings for in-memory performance
-	if _, err := db.Exec(`
-		PRAGMA synchronous = OFF;
-		PRAGMA journal_mode = MEMORY;
-		PRAGMA busy_timeout = 1000;
-		PRAGMA cache_size = -2000;  -- Use 2MB of memory for cache
-		PRAGMA temp_store = MEMORY;  -- Store temp tables and indices in memory
-		PRAGMA mmap_size = 30000000000;  -- Use memory mapping for better performance
-		PRAGMA page_size = 4096;  -- Optimal page size for most systems
-	`); err != nil {
-		db.Close()
 		return nil, err
 	}
 
@@ -121,20 +109,6 @@ func NewMem() (*LogDB, error) {
 		return nil, err
 	}
 
-	// Set optimized transaction settings for the writer connection
-	if _, err := wconn.ExecContext(context.Background(), `
-		PRAGMA synchronous = OFF;
-		PRAGMA journal_mode = MEMORY;
-		PRAGMA busy_timeout = 1000;
-		PRAGMA temp_store = MEMORY;
-		PRAGMA mmap_size = 30000000000;
-		PRAGMA page_size = 4096;
-	`); err != nil {
-		wconn.Close()
-		db.Close()
-		return nil, err
-	}
-
 	driverVer, _, _ := sqlite3.Version()
 	return &LogDB{
 		path:          dbName,
@@ -143,7 +117,6 @@ func NewMem() (*LogDB, error) {
 		wconn:         wconn,
 		wconnSyncOff:  wconn, // Use same connection for both writers
 		stmtCache:     newStmtCache(db),
-		writer:        &Writer{conn: wconn, stmtCache: newStmtCache(db)},
 	}, nil
 }
 
