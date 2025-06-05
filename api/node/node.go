@@ -60,7 +60,6 @@ func (n *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) e
 	}
 
 	if expanded {
-		// TODO: consider  transaction/convertTransactions
 		trxs := make([]transactions.Transaction, len(filteredTransactions))
 		for index, trx := range filteredTransactions {
 			convertedTx := transactions.ConvertTransaction(trx, nil)
