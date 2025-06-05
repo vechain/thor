@@ -7,6 +7,7 @@ package consensus
 
 import (
 	"fmt"
+	"github.com/vechain/thor/v2/log"
 
 	"github.com/vechain/thor/v2/block"
 	stakerContract "github.com/vechain/thor/v2/builtin/staker"
@@ -62,6 +63,7 @@ func (c *Consensus) validateStakingProposer(header *block.Header, parent *block.
 	hasUpdates := false
 	for addr, online := range updates {
 		updated, err := staker.SetOnline(addr, online)
+		log.Info("Updated address in validator", addr.String(), updated)
 		if err != nil {
 			return err
 		}
