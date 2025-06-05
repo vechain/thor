@@ -149,12 +149,12 @@ func TestLimitByDelegator(t *testing.T) {
 }
 
 func TestPendingCost(t *testing.T) {
-	forkConfig := &thor.SoloFork
-	tchain, err := testchain.NewWithFork(forkConfig)
+	tchain, err := testchain.NewWithFork(&thor.SoloFork)
 	assert.Nil(t, err)
 
 	repo := tchain.Repo()
 	stater := tchain.Stater()
+	forkConfig := tchain.GetForkConfig()
 
 	// Creating transactions
 	tx1 := newTx(tx.TypeLegacy, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
