@@ -8,8 +8,6 @@ package node
 import (
 	"net/http"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/transactions"
@@ -62,44 +60,10 @@ func (n *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) e
 	}
 
 	if expanded {
-		// TODO: consider  transaction/convertTransactions
 		trxs := make([]transactions.Transaction, len(filteredTransactions))
 		for index, trx := range filteredTransactions {
-			origin, _ := trx.Origin()
-			delegator, _ := trx.Delegator()
-
-			txClauses := trx.Clauses()
-			cls := make(transactions.Clauses, len(txClauses))
-			for i, c := range txClauses {
-				cls[i] = transactions.Clause{
-					To:    c.To(),
-					Value: math.HexOrDecimal256(*c.Value()),
-					Data:  hexutil.Encode(c.Data()),
-				}
-			}
-			br := trx.BlockRef()
-			trxs[index] = transactions.Transaction{
-				ChainTag:   trx.ChainTag(),
-				ID:         trx.ID(),
-				Origin:     origin,
-				BlockRef:   hexutil.Encode(br[:]),
-				Expiration: trx.Expiration(),
-				Nonce:      math.HexOrDecimal64(trx.Nonce()),
-				Size:       uint32(trx.Size()),
-				Gas:        trx.Gas(),
-				DependsOn:  trx.DependsOn(),
-				Clauses:    cls,
-				Delegator:  delegator,
-			}
-
-			switch trx.Type() {
-			case tx.TypeLegacy:
-				coef := trx.GasPriceCoef()
-				trxs[index].GasPriceCoef = &coef
-			default:
-				trxs[index].MaxFeePerGas = (*math.HexOrDecimal256)(trx.MaxFeePerGas())
-				trxs[index].MaxPriorityFeePerGas = (*math.HexOrDecimal256)(trx.MaxPriorityFeePerGas())
-			}
+			convertedTx := transactions.ConvertTransaction(trx, nil)
+			trxs[index] = *convertedTx
 		}
 
 		return utils.WriteJSON(w, trxs)

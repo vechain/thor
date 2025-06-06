@@ -75,7 +75,7 @@ func (t *Transactions) getTransactionByID(txID thor.Bytes32, head thor.Bytes32, 
 		if t.repo.IsNotFound(err) {
 			if allowPending {
 				if pending := t.pool.Get(txID); pending != nil {
-					return convertTransaction(pending, nil), nil
+					return ConvertTransaction(pending, nil), nil
 				}
 			}
 			return nil, nil
@@ -87,7 +87,7 @@ func (t *Transactions) getTransactionByID(txID thor.Bytes32, head thor.Bytes32, 
 	if err != nil {
 		return nil, err
 	}
-	return convertTransaction(tx, header), nil
+	return ConvertTransaction(tx, header), nil
 }
 
 // GetTransactionReceiptByID get tx's receipt
