@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/api/types"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
@@ -84,10 +85,10 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 		return err
 	}
 
-	return utils.WriteJSON(w, &GetCodeResult{Code: hexutil.Encode(code)})
+	return utils.WriteJSON(w, &types.GetCodeResult{Code: hexutil.Encode(code)})
 }
 
-func (a *Accounts) getAccount(addr thor.Address, header *block.Header, state *state.State) (*Account, error) {
+func (a *Accounts) getAccount(addr thor.Address, header *block.Header, state *state.State) (*types.Account, error) {
 	b, err := state.GetBalance(addr)
 	if err != nil {
 		return nil, err
@@ -101,7 +102,7 @@ func (a *Accounts) getAccount(addr thor.Address, header *block.Header, state *st
 		return nil, err
 	}
 
-	return &Account{
+	return &types.Account{
 		Balance: (*math.HexOrDecimal256)(b),
 		Energy:  (*math.HexOrDecimal256)(energy),
 		HasCode: len(code) != 0,
@@ -167,11 +168,11 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 	if err != nil {
 		return err
 	}
-	return utils.WriteJSON(w, &GetStorageResult{Value: storage.String()})
+	return utils.WriteJSON(w, &types.GetStorageResult{Value: storage.String()})
 }
 
 func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) error {
-	callData := &CallData{}
+	callData := &types.CallData{}
 	if err := utils.ParseJSON(req.Body, &callData); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
@@ -194,9 +195,9 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 		}
 		addr = &address
 	}
-	var batchCallData = &BatchCallData{
-		Clauses: Clauses{
-			&Clause{
+	var batchCallData = &types.BatchCallData{
+		Clauses: types.Clauses{
+			&types.Clause{
 				To:    addr,
 				Value: callData.Value,
 				Data:  callData.Data,
@@ -214,7 +215,7 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 }
 
 func (a *Accounts) handleCallBatchCode(w http.ResponseWriter, req *http.Request) error {
-	var batchCallData BatchCallData
+	var batchCallData types.BatchCallData
 	if err := utils.ParseJSON(req.Body, &batchCallData); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
@@ -244,10 +245,10 @@ func (a *Accounts) handleCallBatchCode(w http.ResponseWriter, req *http.Request)
 
 func (a *Accounts) batchCall(
 	ctx context.Context,
-	batchCallData *BatchCallData,
+	batchCallData *types.BatchCallData,
 	header *block.Header,
 	st *state.State,
-) (results BatchCallResults, err error) {
+) (results types.BatchCallResults, err error) {
 	txCtx, gas, clauses, err := a.handleBatchCallData(batchCallData)
 	if err != nil {
 		return nil, err
@@ -265,7 +266,7 @@ func (a *Accounts) batchCall(
 			BaseFee:     header.BaseFee(),
 		},
 		a.forkConfig)
-	results = make(BatchCallResults, 0)
+	results = make(types.BatchCallResults, 0)
 	resultCh := make(chan any, 1)
 	for i, clause := range clauses {
 		exec, interrupt := rt.PrepareClause(clause, uint32(i), gas, txCtx)
@@ -285,7 +286,7 @@ func (a *Accounts) batchCall(
 			case error:
 				return nil, v
 			case *runtime.Output:
-				results = append(results, convertCallResultWithInputGas(v, gas))
+				results = append(results, types.ConvertCallResultWithInputGas(v, gas))
 				if v.VMErr != nil {
 					return results, nil
 				}
@@ -296,7 +297,7 @@ func (a *Accounts) batchCall(
 	return results, nil
 }
 
-func (a *Accounts) handleBatchCallData(batchCallData *BatchCallData) (txCtx *xenv.TransactionContext, gas uint64, clauses []*tx.Clause, err error) {
+func (a *Accounts) handleBatchCallData(batchCallData *types.BatchCallData) (txCtx *xenv.TransactionContext, gas uint64, clauses []*tx.Clause, err error) {
 	if batchCallData.Gas > a.callGasLimit {
 		return nil, 0, nil, utils.Forbidden(errors.New("gas: exceeds limit"))
 	} else if batchCallData.Gas == 0 {

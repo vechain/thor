@@ -6,10 +6,8 @@
 package accounts
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -21,10 +19,12 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vechain/thor/v2/api/types"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/tx"
 
 	ABI "github.com/vechain/thor/v2/abi"
@@ -99,13 +99,14 @@ var (
 	bytecode        = common.Hex2Bytes("608060405234801561001057600080fd5b50610125806100206000396000f3006080604052600436106049576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff16806324b8ba5f14604e578063bb4e3f4d14607b575b600080fd5b348015605957600080fd5b506079600480360381019080803560ff16906020019092919050505060cf565b005b348015608657600080fd5b5060b3600480360381019080803560ff169060200190929190803560ff16906020019092919050505060ec565b604051808260ff1660ff16815260200191505060405180910390f35b806000806101000a81548160ff021916908360ff16021790555050565b60008183019050929150505600a165627a7a723058201584add23e31d36c569b468097fe01033525686b59bbb263fb3ab82e9553dae50029")
 	runtimeBytecode = common.Hex2Bytes("6080604052600436106049576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff16806324b8ba5f14604e578063bb4e3f4d14607b575b600080fd5b348015605957600080fd5b506079600480360381019080803560ff16906020019092919050505060cf565b005b348015608657600080fd5b5060b3600480360381019080803560ff169060200190929190803560ff16906020019092919050505060ec565b604051808260ff1660ff16815260200191505060405180910390f35b806000806101000a81548160ff021916908360ff16021790555050565b60008183019050929150505600a165627a7a723058201584add23e31d36c569b468097fe01033525686b59bbb263fb3ab82e9553dae50029")
 	ts              *httptest.Server
-	mimeTypeJSON    = "application/json"
+	tclient         *thorclient.Client
 )
 
 func TestAccount(t *testing.T) {
 	initAccountServer(t, true)
 	defer ts.Close()
 
+	tclient = thorclient.New(ts.URL)
 	for name, tt := range map[string]func(*testing.T){
 		"getAccount":                          getAccount,
 		"getAccountWithNonExistingRevision":   getAccountWithNonExistingRevision,
@@ -130,61 +131,54 @@ func TestDeprecated(t *testing.T) {
 	initAccountServer(t, false)
 	defer ts.Close()
 
-	body := &CallData{}
-	jsonData, err := json.Marshal(body)
-	assert.NoError(t, err)
+	tclient = thorclient.New(ts.URL)
 
-	res, _ := ts.Client().Post(ts.URL+"/accounts", mimeTypeJSON, bytes.NewReader(jsonData))
-	assert.Equal(t, http.StatusGone, res.StatusCode, "invalid address")
+	body := &types.CallData{}
 
-	res, _ = ts.Client().Post(ts.URL+"/accounts/"+contractAddr.String(), mimeTypeJSON, bytes.NewReader(jsonData))
-	assert.Equal(t, http.StatusGone, res.StatusCode, "invalid address")
+	_, statusCode, _ := tclient.RawHTTPClient().RawHTTPPost("/accounts", body)
+	assert.Equal(t, http.StatusGone, statusCode, "invalid address")
+
+	_, statusCode, _ = tclient.RawHTTPClient().RawHTTPPost("/accounts/"+contractAddr.String(), body)
+	assert.Equal(t, http.StatusGone, statusCode, "invalid address")
 }
 
 func getAccount(t *testing.T) {
-	resp, err := ts.Client().Get(ts.URL + "/accounts/" + invalidAddr)
+	_, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/accounts/" + invalidAddr)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "bad address")
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad address")
 
-	resp, err = ts.Client().Get(ts.URL + "/accounts/" + addr.String() + "?revision=" + invalidNumberRevision)
+	_, statusCode, err = tclient.RawHTTPClient().RawHTTPGet("/accounts/" + addr.String() + "?revision=" + invalidNumberRevision)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "bad revision")
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
 
 	//revision is optional default `best`
-	res, err := ts.Client().Get(ts.URL + "/accounts/" + addr.String())
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/accounts/" + addr.String())
 	require.NoError(t, err)
-	var acc Account
-	body, err := io.ReadAll(res.Body)
-	require.NoError(t, err)
-	if err := json.Unmarshal(body, &acc); err != nil {
+	var acc types.Account
+	if err := json.Unmarshal(res, &acc); err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, (*math.HexOrDecimal256)(value), acc.Balance, "balance should be equal")
-	assert.Equal(t, http.StatusOK, res.StatusCode, "OK")
+	assert.Equal(t, http.StatusOK, statusCode, "OK")
 }
 
 func getAccountWithNonExistingRevision(t *testing.T) {
 	revision64Len := "0x00000000851caf3cfdb6e899cf5958bfb1ac3413d346d43539627e6be7ec1b4a"
 
-	res, err := ts.Client().Get(ts.URL + "/accounts/" + addr.String() + "?revision=" + revision64Len)
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/accounts/" + addr.String() + "?revision=" + revision64Len)
 	require.NoError(t, err)
 
-	body, err := io.ReadAll(res.Body)
-	require.NoError(t, err)
-
-	assert.Equal(t, http.StatusBadRequest, res.StatusCode, "bad revision")
-	assert.Equal(t, "revision: leveldb: not found\n", string(body), "revision not found")
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
+	assert.Equal(t, "revision: leveldb: not found\n", string(res), "revision not found")
 }
 
 func getAccountWithGenesisRevision(t *testing.T) {
-	res, err := ts.Client().Get(ts.URL + "/accounts/" + addr.String() + "?revision=" + genesisBlock.Header().ID().String())
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/accounts/" + addr.String() + "?revision=" + genesisBlock.Header().ID().String())
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, res.StatusCode, "bad revision")
+	assert.Equal(t, http.StatusOK, statusCode, "bad revision")
 
-	var acc Account
-	body, err := io.ReadAll(res.Body)
-	require.NoError(t, err)
-	if err := json.Unmarshal(body, &acc); err != nil {
+	var acc types.Account
+	if err := json.Unmarshal(res, &acc); err != nil {
 		t.Fatal(err)
 	}
 
@@ -202,47 +196,32 @@ func getAccountWithGenesisRevision(t *testing.T) {
 func getAccountWithFinalizedRevision(t *testing.T) {
 	soloAddress := thor.MustParseAddress("0xf077b491b355E64048cE21E3A6Fc4751eEeA77fa")
 
-	genesisAccount, err := ts.Client().Get(ts.URL + "/accounts/" + soloAddress.String() + "?revision=" + genesisBlock.Header().ID().String())
-	require.NoError(t, err)
-	finalizedAccount, err := ts.Client().Get(ts.URL + "/accounts/" + soloAddress.String() + "?revision=" + tccommon.FinalizedRevision)
+	genesisAccount, err := tclient.Account(&soloAddress, thorclient.Revision(genesisBlock.Header().ID().String()))
 	require.NoError(t, err)
 
-	var genesisAcc Account
-	body, err := io.ReadAll(genesisAccount.Body)
+	finalizedAccount, err := tclient.Account(&soloAddress, thorclient.Revision(tccommon.FinalizedRevision))
 	require.NoError(t, err)
-	if err := json.Unmarshal(body, &genesisAcc); err != nil {
-		t.Fatal(err)
-	}
 
-	var finalizedAcc Account
-	body, err = io.ReadAll(finalizedAccount.Body)
-	require.NoError(t, err)
-	if err := json.Unmarshal(body, &finalizedAcc); err != nil {
-		t.Fatal(err)
-	}
-	genesisEnergy := (*big.Int)(genesisAcc.Energy)
-	finalizedEnergy := (*big.Int)(finalizedAcc.Energy)
+	genesisEnergy := (*big.Int)(genesisAccount.Energy)
+	finalizedEnergy := (*big.Int)(finalizedAccount.Energy)
 
 	assert.Equal(t, genesisEnergy, finalizedEnergy, "finalized energy should equal genesis energy")
 }
 
 func getCode(t *testing.T) {
-	res, err := ts.Client().Get(ts.URL + "/accounts/" + invalidAddr + "/code")
+	_, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/accounts/" + invalidAddr + "/code")
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusBadRequest, res.StatusCode, "bad address")
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad address")
 
-	res, err = ts.Client().Get(ts.URL + "/accounts/" + contractAddr.String() + "/code?revision=" + invalidNumberRevision)
+	_, statusCode, err = tclient.RawHTTPClient().RawHTTPGet("/accounts/" + contractAddr.String() + "/code?revision=" + invalidNumberRevision)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusBadRequest, res.StatusCode, "bad revision")
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
 
 	//revision is optional defaut `best`
-	res, err = ts.Client().Get(ts.URL + "/accounts/" + contractAddr.String() + "/code")
-	require.NoError(t, err)
-
-	body, err := io.ReadAll(res.Body)
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/accounts/" + contractAddr.String() + "/code")
 	require.NoError(t, err)
 	var code map[string]string
-	if err := json.Unmarshal(body, &code); err != nil {
+	if err := json.Unmarshal(res, &code); err != nil {
 		t.Fatal(err)
 	}
 	c, err := hexutil.Decode(code["code"])
@@ -250,44 +229,37 @@ func getCode(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, runtimeBytecode, c, "code should be equal")
-	assert.Equal(t, http.StatusOK, res.StatusCode, "OK")
+	assert.Equal(t, http.StatusOK, statusCode, "OK")
 }
 
 func getCodeWithNonExistingRevision(t *testing.T) {
 	revision64Len := "0x00000000851caf3cfdb6e899cf5958bfb1ac3413d346d43539627e6be7ec1b4a"
 
-	res, err := ts.Client().Get(ts.URL + "/accounts/" + contractAddr.String() + "/code?revision=" + revision64Len)
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/accounts/" + contractAddr.String() + "/code?revision=" + revision64Len)
 	require.NoError(t, err)
 
-	body, err := io.ReadAll(res.Body)
-	require.NoError(t, err)
-
-	assert.Equal(t, http.StatusBadRequest, res.StatusCode, "bad revision")
-	assert.Equal(t, "revision: leveldb: not found\n", string(body), "revision not found")
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
+	assert.Equal(t, "revision: leveldb: not found\n", string(res), "revision not found")
 }
 
 func getStorage(t *testing.T) {
-	res, err := ts.Client().Get(ts.URL + "/accounts/" + invalidAddr + "/storage/" + storageKey.String())
+	_, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/accounts/" + invalidAddr + "/storage/" + storageKey.String())
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusBadRequest, res.StatusCode, "bad address")
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad address")
 
-	res, err = ts.Client().Get(ts.URL + "/accounts/" + contractAddr.String() + "/storage/" + invalidBytes32)
+	_, statusCode, err = tclient.RawHTTPClient().RawHTTPGet("/accounts/" + contractAddr.String() + "/storage/" + invalidBytes32)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusBadRequest, res.StatusCode, "bad storage key")
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad storage key")
 
-	res, err = ts.Client().Get(ts.URL + "/accounts/" + contractAddr.String() + "/storage/" + storageKey.String() + "?revision=" + invalidNumberRevision)
+	_, statusCode, err = tclient.RawHTTPClient().RawHTTPGet("/accounts/" + contractAddr.String() + "/storage/" + storageKey.String() + "?revision=" + invalidNumberRevision)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusBadRequest, res.StatusCode, "bad revision")
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
 
 	//revision is optional defaut `best`
-	res, err = ts.Client().Get(ts.URL + "/accounts/" + contractAddr.String() + "/storage/" + storageKey.String())
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/accounts/" + contractAddr.String() + "/storage/" + storageKey.String())
 	require.NoError(t, err)
-
-	body, err := io.ReadAll(res.Body)
-	require.NoError(t, err)
-
 	var value map[string]string
-	if err := json.Unmarshal(body, &value); err != nil {
+	if err := json.Unmarshal(res, &value); err != nil {
 		t.Fatal(err)
 	}
 	h, err := thor.ParseBytes32(value["value"])
@@ -295,20 +267,17 @@ func getStorage(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, thor.BytesToBytes32([]byte{storageValue}), h, "storage should be equal")
-	assert.Equal(t, http.StatusOK, res.StatusCode, "OK")
+	assert.Equal(t, http.StatusOK, statusCode, "OK")
 }
 
 func getStorageWithNonExistingRevision(t *testing.T) {
 	revision64Len := "0x00000000851caf3cfdb6e899cf5958bfb1ac3413d346d43539627e6be7ec1b4a"
 
-	res, err := ts.Client().Get(ts.URL + "/accounts/" + contractAddr.String() + "/storage/" + storageKey.String() + "?revision=" + revision64Len)
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/accounts/" + contractAddr.String() + "/storage/" + storageKey.String() + "?revision=" + revision64Len)
 	require.NoError(t, err)
 
-	body, err := io.ReadAll(res.Body)
-	require.NoError(t, err)
-
-	assert.Equal(t, http.StatusBadRequest, res.StatusCode, "bad revision")
-	assert.Equal(t, "revision: leveldb: not found\n", string(body), "revision not found")
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
+	assert.Equal(t, "revision: leveldb: not found\n", string(res), "revision not found")
 }
 
 func initAccountServer(t *testing.T, enabledDeprecated bool) {
@@ -356,65 +325,53 @@ func buildTxWithClauses(txType tx.Type, chainTag byte, clauses ...*tx.Clause) *t
 }
 
 func deployContractWithCall(t *testing.T) {
-	badBody := &CallData{
+	badBody := &types.CallData{
 		Gas:  10000000,
 		Data: "abc",
 	}
-	jsonData, err := json.Marshal(badBody)
-	assert.NoError(t, err)
-
-	res, err := ts.Client().Post(ts.URL+"/accounts", mimeTypeJSON, bytes.NewReader(jsonData))
+	_, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/accounts", badBody)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusBadRequest, res.StatusCode, "bad data")
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad data")
 
-	reqBody := &CallData{
+	reqBody := &types.CallData{
 		Gas:  10000000,
 		Data: hexutil.Encode(bytecode),
 	}
-	jsonData, err = json.Marshal(reqBody)
-	assert.NoError(t, err)
 
-	res, err = ts.Client().Post(ts.URL+"/accounts?revision="+invalidNumberRevision, mimeTypeJSON, bytes.NewReader(jsonData))
+	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/accounts?revision="+invalidNumberRevision, reqBody)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusBadRequest, res.StatusCode, "bad revision")
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
 
 	//revision is optional defaut `best`
-	res, err = ts.Client().Post(ts.URL+"/accounts", mimeTypeJSON, bytes.NewReader(jsonData))
+	res, _, err := tclient.RawHTTPClient().RawHTTPPost("/accounts", reqBody)
 	require.NoError(t, err)
-
-	body, err := io.ReadAll(res.Body)
-	require.NoError(t, err)
-	var output *CallResult
-	if err := json.Unmarshal(body, &output); err != nil {
+	var output *types.CallResult
+	if err := json.Unmarshal(res, &output); err != nil {
 		t.Fatal(err)
 	}
 	assert.False(t, output.Reverted)
 }
 
 func callContract(t *testing.T) {
-	res, err := ts.Client().Post(ts.URL+"/accounts/"+invalidAddr, mimeTypeJSON, nil)
+	_, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/accounts/"+invalidAddr, nil)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusBadRequest, res.StatusCode, "invalid address")
+	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid address")
 
 	malFormedBody := 123
-	jsonData, err := json.Marshal(malFormedBody)
-	assert.NoError(t, err)
-	res, err = ts.Client().Post(ts.URL+"/accounts", mimeTypeJSON, bytes.NewReader(jsonData))
+	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/accounts", malFormedBody)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusBadRequest, res.StatusCode, "invalid address")
+	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid address")
 
-	res, err = ts.Client().Post(ts.URL+"/accounts/"+contractAddr.String(), mimeTypeJSON, bytes.NewReader(jsonData))
+	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/accounts/"+contractAddr.String(), malFormedBody)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusBadRequest, res.StatusCode, "invalid address")
+	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid address")
 
-	badBody := &CallData{
+	badBody := &types.CallData{
 		Data: "input",
 	}
-	jsonData, err = json.Marshal(badBody)
+	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/accounts/"+contractAddr.String(), badBody)
 	require.NoError(t, err)
-	res, err = ts.Client().Post(ts.URL+"/accounts/"+contractAddr.String(), mimeTypeJSON, bytes.NewReader(jsonData))
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusBadRequest, res.StatusCode, "invalid input data")
+	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid input data")
 
 	a := uint8(1)
 	b := uint8(2)
@@ -425,27 +382,23 @@ func callContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reqBody := &CallData{
+	reqBody := &types.CallData{
 		Data: hexutil.Encode(input),
 	}
-	jsonData, err = json.Marshal(reqBody)
-	require.NoError(t, err)
 
-	// next revision should be valid
-	res, err = ts.Client().Post(ts.URL+"/accounts/"+contractAddr.String()+"?revision=next", mimeTypeJSON, bytes.NewReader(jsonData))
+	// next revisoun should be valid
+	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/accounts/"+contractAddr.String()+"?revision=next", reqBody)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, res.StatusCode, "next revision should be okay")
+	assert.Equal(t, http.StatusOK, statusCode, "next revision should be okay")
 
-	res, err = ts.Client().Post(ts.URL+"/accounts?revision=next", mimeTypeJSON, bytes.NewReader(jsonData))
+	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/accounts?revision=next", reqBody)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, res.StatusCode, "next revision should be okay")
+	assert.Equal(t, http.StatusOK, statusCode, "next revision should be okay")
 
-	res, err = ts.Client().Post(ts.URL+"/accounts/"+contractAddr.String(), mimeTypeJSON, bytes.NewReader(jsonData))
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/accounts/"+contractAddr.String(), reqBody)
 	require.NoError(t, err)
-	var output *CallResult
-	body, err := io.ReadAll(res.Body)
-	require.NoError(t, err)
-	if err = json.Unmarshal(body, &output); err != nil {
+	var output *types.CallResult
+	if err = json.Unmarshal(res, &output); err != nil {
 		t.Fatal(err)
 	}
 	data, err := hexutil.Decode(output.Data)
@@ -457,75 +410,62 @@ func callContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, http.StatusOK, res.StatusCode)
+	assert.Equal(t, http.StatusOK, statusCode)
 	assert.Equal(t, a+b, ret)
 }
 
 func callContractWithNonExistingRevision(t *testing.T) {
 	revision64Len := "0x00000000851caf3cfdb6e899cf5958bfb1ac3413d346d43539627e6be7ec1b4a"
 
-	println("calling", ts.URL+"/accounts/"+contractAddr.String()+"?revision="+revision64Len)
-	res, err := ts.Client().Post(ts.URL+"/accounts/"+contractAddr.String()+"?revision="+revision64Len, mimeTypeJSON, bytes.NewReader([]byte("{}")))
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/accounts/"+contractAddr.String()+"?revision="+revision64Len, nil)
 	require.NoError(t, err)
 
-	body, err := io.ReadAll(res.Body)
-	require.NoError(t, err)
-
-	println(" res is this ", string(body))
-	assert.Equal(t, http.StatusBadRequest, res.StatusCode, "bad revision")
-	assert.Equal(t, "revision: leveldb: not found\n", string(body), "revision not found")
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
+	assert.Equal(t, "revision: leveldb: not found\n", string(res), "revision not found")
 }
 
 func batchCall(t *testing.T) {
 	// Request body is not a valid JSON
 	malformedBody := 123
-	jsonData, err := json.Marshal(malformedBody)
+	_, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/accounts/*", malformedBody)
 	require.NoError(t, err)
-	res, err := ts.Client().Post(ts.URL+"/accounts/*", mimeTypeJSON, bytes.NewReader(jsonData))
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusBadRequest, res.StatusCode, "malformed data")
+	assert.Equal(t, http.StatusBadRequest, statusCode, "malformed data")
 
 	// Request body is not a valid BatchCallData
-	badBody := &BatchCallData{
-		Clauses: Clauses{
-			&Clause{
+	badBody := &types.BatchCallData{
+		Clauses: types.Clauses{
+			&types.Clause{
 				To:    &contractAddr,
 				Data:  "data1",
 				Value: nil,
 			},
-			&Clause{
+			&types.Clause{
 				To:    &contractAddr,
 				Data:  "data2",
 				Value: nil,
 			}},
 	}
-	jsonData, err = json.Marshal(badBody)
+	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/accounts/*", badBody)
 	require.NoError(t, err)
-	res, err = ts.Client().Post(ts.URL+"/accounts/*", mimeTypeJSON, bytes.NewReader(jsonData))
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusBadRequest, res.StatusCode, "invalid data")
+	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid data")
 
 	// Request body has an invalid blockRef
-	badBlockRef := &BatchCallData{
+	badBlockRef := &types.BatchCallData{
 		BlockRef: "0x00",
 	}
-	jsonData, err = json.Marshal(badBlockRef)
+	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/accounts/*", badBlockRef)
 	require.NoError(t, err)
-	res, err = ts.Client().Post(ts.URL+"/accounts/*", mimeTypeJSON, bytes.NewReader(jsonData))
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusInternalServerError, res.StatusCode, "invalid blockRef")
+	assert.Equal(t, http.StatusInternalServerError, statusCode, "invalid blockRef")
 
 	// Request body has an invalid malformed revision
-	jsonData, err = json.Marshal(badBody)
+	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost(fmt.Sprintf("/accounts/*?revision=%s", "0xZZZ"), badBody)
 	require.NoError(t, err)
-	res, err = ts.Client().Post(ts.URL+fmt.Sprintf("/accounts/*?revision=%s", "0xZZZ"), mimeTypeJSON, bytes.NewReader(jsonData))
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusBadRequest, res.StatusCode, "revision")
+	assert.Equal(t, http.StatusBadRequest, statusCode, "revision")
 
 	// Request body has an invalid revision number
-	res, err = ts.Client().Post(ts.URL+"/accounts/*?revision="+invalidNumberRevision, mimeTypeJSON, bytes.NewReader(jsonData))
+	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/accounts/*?revision="+invalidNumberRevision, badBody)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusBadRequest, res.StatusCode, "invalid revision")
+	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid revision")
 
 	// Valid request
 	a := uint8(1)
@@ -537,33 +477,29 @@ func batchCall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reqBody := &BatchCallData{
-		Clauses: Clauses{
-			&Clause{
+	reqBody := &types.BatchCallData{
+		Clauses: types.Clauses{
+			&types.Clause{
 				To:    &contractAddr,
 				Data:  hexutil.Encode(input),
 				Value: nil,
 			},
-			&Clause{
+			&types.Clause{
 				To:    &contractAddr,
 				Data:  hexutil.Encode(input),
 				Value: nil,
 			}},
 	}
-	jsonData, err = json.Marshal(reqBody)
-	require.NoError(t, err)
 
 	// 'next' revisoun should be valid
-	res, err = ts.Client().Post(ts.URL+"/accounts/*?revision=next", mimeTypeJSON, bytes.NewReader(jsonData))
+	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/accounts/*?revision=next", reqBody)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, res.StatusCode, "next revision should be okay")
+	assert.Equal(t, http.StatusOK, statusCode, "next revision should be okay")
 
-	res, err = ts.Client().Post(ts.URL+"/accounts/*", mimeTypeJSON, bytes.NewReader(jsonData))
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/accounts/*", reqBody)
 	require.NoError(t, err)
-	body, err := io.ReadAll(res.Body)
-	require.NoError(t, err)
-	var results BatchCallResults
-	if err = json.Unmarshal(body, &results); err != nil {
+	var results types.BatchCallResults
+	if err = json.Unmarshal(res, &results); err != nil {
 		t.Fatal(err)
 	}
 	for _, result := range results {
@@ -578,12 +514,12 @@ func batchCall(t *testing.T) {
 		}
 		assert.Equal(t, a+b, ret, "should be equal")
 	}
-	assert.Equal(t, http.StatusOK, res.StatusCode)
+	assert.Equal(t, http.StatusOK, statusCode)
 
 	// Valid request
 	big := math.HexOrDecimal256(*big.NewInt(1000))
-	fullBody := &BatchCallData{
-		Clauses:    Clauses{},
+	fullBody := &types.BatchCallData{
+		Clauses:    types.Clauses{},
 		Gas:        21000,
 		GasPrice:   &big,
 		ProvedWork: &big,
@@ -592,15 +528,13 @@ func batchCall(t *testing.T) {
 		Expiration: 100,
 		BlockRef:   "0x00000000aabbccdd",
 	}
-	jsonData, err = json.Marshal(fullBody)
+	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/accounts/*", fullBody)
 	require.NoError(t, err)
-	res, err = ts.Client().Post(ts.URL+"/accounts/*", mimeTypeJSON, bytes.NewReader(jsonData))
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, res.StatusCode)
+	assert.Equal(t, http.StatusOK, statusCode)
 
 	// Request with not enough gas
-	tooMuchGasBody := &BatchCallData{
-		Clauses:    Clauses{},
+	tooMuchGasBody := &types.BatchCallData{
+		Clauses:    types.Clauses{},
 		Gas:        math.MaxUint64,
 		GasPrice:   &big,
 		ProvedWork: &big,
@@ -609,45 +543,37 @@ func batchCall(t *testing.T) {
 		Expiration: 100,
 		BlockRef:   "0x00000000aabbccdd",
 	}
-	jsonData, err = json.Marshal(tooMuchGasBody)
+	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/accounts/*", tooMuchGasBody)
 	require.NoError(t, err)
-	res, err = ts.Client().Post(ts.URL+"/accounts/*", mimeTypeJSON, bytes.NewReader(jsonData))
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusForbidden, res.StatusCode)
+	assert.Equal(t, http.StatusForbidden, statusCode)
 }
 
 func batchCallWithNonExistingRevision(t *testing.T) {
 	revision64Len := "0x00000000851caf3cfdb6e899cf5958bfb1ac3413d346d43539627e6be7ec1b4a"
 
-	res, err := ts.Client().Post(ts.URL+"/accounts/*?revision="+revision64Len, mimeTypeJSON, bytes.NewReader([]byte("{}")))
-	require.NoError(t, err)
-	body, err := io.ReadAll(res.Body)
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/accounts/*?revision="+revision64Len, nil)
 	require.NoError(t, err)
 
-	assert.Equal(t, http.StatusBadRequest, res.StatusCode, "bad revision")
-	assert.Equal(t, "revision: leveldb: not found\n", string(body), "revision not found")
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
+	assert.Equal(t, "revision: leveldb: not found\n", string(res), "revision not found")
 }
 
 func batchCallWithNullClause(t *testing.T) {
-	res, err := ts.Client().Post(ts.URL+"/accounts/*", mimeTypeJSON, bytes.NewReader([]byte("{\"clauses\": [null]}")))
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/accounts/*", []byte("{\"clauses\": [null]}"))
 	assert.NoError(t, err)
-	body, err := io.ReadAll(res.Body)
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusBadRequest, res.StatusCode, "null clause")
-	assert.Equal(t, "clauses[0]: null not allowed\n", string(body), "null clause")
+	assert.Equal(t, http.StatusBadRequest, statusCode, "null clause")
+	assert.Equal(t, "clauses[0]: null not allowed\n", string(res), "null clause")
 
-	res, err = ts.Client().Post(ts.URL+"/accounts/*", mimeTypeJSON, bytes.NewReader([]byte("{\"clauses\": [{}, null]}")))
+	res, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/accounts/*", []byte("{\"clauses\": [{}, null]}"))
 	assert.NoError(t, err)
-	body, err = io.ReadAll(res.Body)
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusBadRequest, res.StatusCode, "null clause")
-	assert.Equal(t, "clauses[1]: null not allowed\n", string(body), "null clause")
+	assert.Equal(t, http.StatusBadRequest, statusCode, "null clause")
+	assert.Equal(t, "clauses[1]: null not allowed\n", string(res), "null clause")
 
-	res, err = ts.Client().Post(ts.URL+"/accounts/*", mimeTypeJSON, bytes.NewReader([]byte("{\"clauses\":null }")))
+	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/accounts/*", []byte("{\"clauses\":null }"))
 	assert.NoError(t, err)
-	assert.Equal(t, http.StatusOK, res.StatusCode, "null clause")
+	assert.Equal(t, http.StatusOK, statusCode, "null clause")
 
-	res, err = ts.Client().Post(ts.URL+"/accounts/*", mimeTypeJSON, bytes.NewReader([]byte("{\"clauses\":[] }")))
+	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/accounts/*", []byte("{\"clauses\":[] }"))
 	assert.NoError(t, err)
-	assert.Equal(t, http.StatusOK, res.StatusCode, "null clause")
+	assert.Equal(t, http.StatusOK, statusCode, "null clause")
 }
