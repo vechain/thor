@@ -128,7 +128,7 @@ func CalculateReward(gasUsed uint64, rewardGasPrice, rewardRatio *big.Int, isGal
 
 func validateGalacticaTxFee(tr *tx.Transaction, legacyTxBaseGasPrice, baseFee *big.Int) error {
 	// proved work is not accounted for verifying if gas is enough to cover block base fee
-	effectiveGasPrice := tr.EffectiveGasPrice(legacyTxBaseGasPrice, baseFee)
+	effectiveGasPrice := tr.EffectiveGasPrice(baseFee, legacyTxBaseGasPrice)
 
 	// do not accept txs with less than the block base fee
 	if effectiveGasPrice.Cmp(baseFee) < 0 {
