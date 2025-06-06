@@ -219,6 +219,7 @@ func testTransactionsEndpoint(t *testing.T, thorChain *testchain.Chain, ts *http
 			Expiration(10).
 			Gas(21000).
 			Clause(clause).
+			Nonce(datagen.RandUint64()).
 			Build()
 
 		trx = tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)
