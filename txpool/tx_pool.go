@@ -71,8 +71,9 @@ type TxPool struct {
 	forkConfig *thor.ForkConfig
 }
 
-// NewFrozenPool create a new TxPool instance with no housekeeping
-func NewFrozenPool(repo *chain.Repository, stater *state.Stater, options Options, forkConfig *thor.ForkConfig) *TxPool {
+// New create a new TxPool instance.
+// Shutdown is required to be called at end.
+func New(repo *chain.Repository, stater *state.Stater, options Options, forkConfig *thor.ForkConfig) *TxPool {
 	ctx, cancel := context.WithCancel(context.Background())
 	pool := &TxPool{
 		options:    options,
@@ -83,13 +84,6 @@ func NewFrozenPool(repo *chain.Repository, stater *state.Stater, options Options
 		cancel:     cancel,
 		forkConfig: forkConfig,
 	}
-
-	return pool
-}
-
-// New create a new TxPool instance.
-func New(repo *chain.Repository, stater *state.Stater, options Options, forkConfig *thor.ForkConfig) *TxPool {
-	pool := NewFrozenPool(repo, stater, options, forkConfig)
 
 	pool.goes.Go(pool.housekeeping)
 	pool.goes.Go(pool.fetchBlocklistLoop)
