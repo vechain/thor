@@ -114,17 +114,17 @@ func TestEnergy(t *testing.T) {
 }
 
 func TestEnergy_Revision(t *testing.T) {
-	chain, client := newChain(t, false)
+	solo, client := newChain(t, false)
 
 	energy, err := NewEnergy(client)
 	require.NoError(t, err)
 
-	require.NoError(t, chain.MintBlock(genesis.DevAccounts()[0]))
-	require.NoError(t, chain.MintBlock(genesis.DevAccounts()[1]))
+	require.NoError(t, solo.Solo.PackNewBlock(nil, false))
+	require.NoError(t, solo.Solo.PackNewBlock(nil, false))
 
-	supplyBlock1, err := energy.Revision("1").TotalSupply()
+	supplyBlock1, err := energy.Revision("2").TotalSupply()
 	require.NoError(t, err)
-	supplyBlock2, err := energy.Revision("2").TotalSupply()
+	supplyBlock2, err := energy.Revision("3").TotalSupply()
 	require.NoError(t, err)
 
 	require.Greater(t, supplyBlock2.Cmp(supplyBlock1), 0, "Total supply should increase with each block")
