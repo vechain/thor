@@ -232,7 +232,7 @@ func TestGalacticaPriorityPrice(t *testing.T) {
 			name: "galactica is not yet activated, do not use base GasPrice for priority",
 			f: func(t *testing.T) {
 				res := GalacticaPriorityGasPrice(legacyTr, baseGasPrice, provedWork, nil)
-				assert.False(t, res.Cmp(legacyTr.EffectiveGasPrice(baseGasPrice, nil)) == 0)
+				assert.False(t, res.Cmp(legacyTr.EffectiveGasPrice(nil, baseGasPrice)) == 0)
 			},
 		},
 		{

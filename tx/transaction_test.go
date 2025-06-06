@@ -540,11 +540,11 @@ func TestEffectiveGasPrice(t *testing.T) {
 
 	// for legacy tx, effective gas price is (1+gasPriceCoef/255)*baseGasPrice
 	trx := NewBuilder(TypeLegacy).Build()
-	assert.Equal(t, trx.EffectiveGasPrice(bgp, nil), big.NewInt(255))
+	assert.Equal(t, trx.EffectiveGasPrice(nil, bgp), big.NewInt(255))
 	trx = NewBuilder(TypeLegacy).GasPriceCoef(255).Build()
-	assert.Equal(t, trx.EffectiveGasPrice(bgp, nil), big.NewInt(255+255))
+	assert.Equal(t, trx.EffectiveGasPrice(nil, bgp), big.NewInt(255+255))
 	trx = NewBuilder(TypeLegacy).GasPriceCoef(128).Build()
-	assert.Equal(t, trx.EffectiveGasPrice(bgp, nil), big.NewInt(255+128))
+	assert.Equal(t, trx.EffectiveGasPrice(nil, bgp), big.NewInt(255+128))
 
 	// for dynamic fee tx, effective takes baseFee into account
 	b10 := big.NewInt(10)
@@ -553,11 +553,69 @@ func TestEffectiveGasPrice(t *testing.T) {
 
 	trx = NewBuilder(TypeDynamicFee).MaxFeePerGas(b10).MaxPriorityFeePerGas(b5).Build()
 	// baseFee < maxFee - maxPriorityFee
-	assert.Equal(t, trx.EffectiveGasPrice(nil, b1), big.NewInt(6))
+	assert.Equal(t, trx.EffectiveGasPrice(b1, nil), big.NewInt(6))
 	// baseFee = maxFee - maxPriorityFee
 	trx = NewBuilder(TypeDynamicFee).MaxFeePerGas(b10).MaxPriorityFeePerGas(b5).Build()
-	assert.Equal(t, trx.EffectiveGasPrice(nil, b5), big.NewInt(10))
+	assert.Equal(t, trx.EffectiveGasPrice(b5, nil), big.NewInt(10))
 	// baseFee > maxFee - maxPriorityFee
 	trx = NewBuilder(TypeDynamicFee).MaxFeePerGas(b10).MaxPriorityFeePerGas(b5).Build()
-	assert.Equal(t, trx.EffectiveGasPrice(nil, big.NewInt(6)), big.NewInt(10))
+	assert.Equal(t, trx.EffectiveGasPrice(big.NewInt(6), nil), big.NewInt(10))
+}
+
+func TestEffectivePriorityFeePerGas(t *testing.T) {
+	bgp := big.NewInt(255)
+	baseFee0 := big.NewInt(0)
+	provedWork0 := big.NewInt(0)
+
+	// This function can be compatible with legacy tx in pre GALACTICA stage.
+	// Which is pass baseFee as 0
+	trx := NewBuilder(TypeLegacy).GasPriceCoef(0).Build()
+	effectivePriorityFeePerGas, err := trx.EffectivePriorityFeePerGas(baseFee0, bgp, provedWork0)
+	assert.Nil(t, err)
+	// Should be equal
+	assert.Equal(t, effectivePriorityFeePerGas, trx.OverallGasPrice(bgp, provedWork0))
+
+	// for legacy tx maxFee = maxPriorityFee=overallGasPrice
+	// as long as base fee is less than overallGasPrice, priorityFee will always be overallGasPrice - baseFee
+	effectivePriorityFeePerGas, err = trx.EffectivePriorityFeePerGas(big.NewInt(100), bgp, provedWork0)
+	assert.Nil(t, err)
+	// Should be equal
+	assert.Equal(t, effectivePriorityFeePerGas, trx.OverallGasPrice(bgp, provedWork0).Sub(trx.OverallGasPrice(bgp, provedWork0), big.NewInt(100)))
+
+	// error
+	_, err = trx.EffectivePriorityFeePerGas(big.NewInt(256), bgp, provedWork0)
+	assert.Error(t, err, "gas price is less than block base fee")
+
+	effectivePriorityFeePerGas, err = trx.EffectivePriorityFeePerGas(big.NewInt(200), bgp, provedWork0)
+	assert.Nil(t, err)
+	// Should be equal
+	assert.Equal(t, effectivePriorityFeePerGas, trx.OverallGasPrice(bgp, provedWork0).Sub(trx.OverallGasPrice(bgp, provedWork0), big.NewInt(200)))
+
+	b10 := big.NewInt(10)
+	b5 := big.NewInt(5)
+	b1 := big.NewInt(1)
+	trx = NewBuilder(TypeDynamicFee).MaxFeePerGas(b10).MaxPriorityFeePerGas(b5).Build()
+
+	// baseFee < maxFee - maxPriorityFee
+	effectivePriorityFeePerGas, err = trx.EffectivePriorityFeePerGas(b1, nil, nil)
+	assert.Nil(t, err)
+	// should be the maxPriorityFeePerGas
+	assert.Equal(t, effectivePriorityFeePerGas, trx.MaxPriorityFeePerGas())
+
+	// baseFee = maxFee - maxPriorityFee
+	effectivePriorityFeePerGas, err = trx.EffectivePriorityFeePerGas(b5, nil, nil)
+	assert.Nil(t, err)
+	// should be the maxPriorityFeePerGas
+	assert.Equal(t, effectivePriorityFeePerGas, trx.MaxPriorityFeePerGas())
+
+	//baseFee > maxFee-maxPriorityFee
+	baseFee := big.NewInt(8)
+	effectivePriorityFeePerGas, err = trx.EffectivePriorityFeePerGas(baseFee, nil, nil)
+	assert.Nil(t, err)
+	// should be the maxPriorityFeePerGas
+	assert.Equal(t, effectivePriorityFeePerGas, new(big.Int).Sub(trx.MaxFeePerGas(), baseFee))
+
+	// error
+	_, err = trx.EffectivePriorityFeePerGas(big.NewInt(11), nil, nil)
+	assert.Error(t, err, "gas price is less than block base fee")
 }
