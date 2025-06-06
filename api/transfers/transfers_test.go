@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package transfers_test
+package transfers
 
 import (
 	"encoding/json"
@@ -16,8 +16,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vechain/thor/v2/api/events"
-	"github.com/vechain/thor/v2/api/transfers"
+	"github.com/vechain/thor/v2/api/types"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/test/datagen"
@@ -62,10 +61,10 @@ func TestOption(t *testing.T) {
 	insertBlocks(t, db, 5)
 
 	tclient = thorclient.New(ts.URL)
-	filter := transfers.TransferFilter{
+	filter := types.TransferFilter{
 		CriteriaSet: make([]*logdb.TransferCriteria, 0),
 		Range:       nil,
-		Options:     &events.Options{Limit: 6},
+		Options:     &types.Options{Limit: 6},
 		Order:       logdb.DESC,
 	}
 
@@ -85,7 +84,7 @@ func TestOption(t *testing.T) {
 	res, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", filter)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, statusCode)
-	var tLogs []*events.FilteredEvent
+	var tLogs []*types.FilteredEvent
 	if err := json.Unmarshal(res, &tLogs); err != nil {
 		t.Fatal(err)
 	}
@@ -126,17 +125,17 @@ func TestOptionalData(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			filter := transfers.TransferFilter{
+			filter := types.TransferFilter{
 				CriteriaSet: make([]*logdb.TransferCriteria, 0),
 				Range:       nil,
-				Options:     &events.Options{Limit: 5, IncludeIndexes: tc.includeIndexes},
+				Options:     &types.Options{Limit: 5, IncludeIndexes: tc.includeIndexes},
 				Order:       logdb.DESC,
 			}
 
 			res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", filter)
 			assert.NoError(t, err)
 			assert.Equal(t, http.StatusOK, statusCode)
-			var tLogs []*transfers.FilteredTransfer
+			var tLogs []*types.FilteredTransfer
 			if err := json.Unmarshal(res, &tLogs); err != nil {
 				t.Fatal(err)
 			}
@@ -183,7 +182,7 @@ func testTransferBadRequest(t *testing.T) {
 }
 
 func testTransferWithEmptyDb(t *testing.T) {
-	emptyFilter := transfers.TransferFilter{
+	emptyFilter := types.TransferFilter{
 		CriteriaSet: make([]*logdb.TransferCriteria, 0),
 		Range:       nil,
 		Options:     nil,
@@ -192,7 +191,7 @@ func testTransferWithEmptyDb(t *testing.T) {
 
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", emptyFilter)
 	require.NoError(t, err)
-	var tLogs []*transfers.FilteredTransfer
+	var tLogs []*types.FilteredTransfer
 	if err := json.Unmarshal(res, &tLogs); err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +201,7 @@ func testTransferWithEmptyDb(t *testing.T) {
 }
 
 func testTransferWithBlocks(t *testing.T, expectedBlocks int) {
-	emptyFilter := transfers.TransferFilter{
+	emptyFilter := types.TransferFilter{
 		CriteriaSet: make([]*logdb.TransferCriteria, 0),
 		Range:       nil,
 		Options:     nil,
@@ -211,7 +210,7 @@ func testTransferWithBlocks(t *testing.T, expectedBlocks int) {
 
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", emptyFilter)
 	require.NoError(t, err)
-	var tLogs []*transfers.FilteredTransfer
+	var tLogs []*types.FilteredTransfer
 	if err := json.Unmarshal(res, &tLogs); err != nil {
 		t.Fatal(err)
 	}
@@ -248,7 +247,7 @@ func initTransferServer(t *testing.T, logDb *logdb.LogDB, limit uint64) {
 	require.NoError(t, err)
 
 	router := mux.NewRouter()
-	transfers.New(thorChain.Repo(), logDb, limit).Mount(router, "/logs/transfer")
+	New(thorChain.Repo(), logDb, limit).Mount(router, "/logs/transfer")
 
 	ts = httptest.NewServer(router)
 }

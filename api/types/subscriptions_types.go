@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package subscriptions
+package types
 
 import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -36,7 +36,7 @@ type BlockMessage struct {
 	Obsolete      bool                  `json:"obsolete"`
 }
 
-func convertBlock(b *chain.ExtendedBlock) (*BlockMessage, error) {
+func ConvertBlock(b *chain.ExtendedBlock) (*BlockMessage, error) {
 	header := b.Header()
 	signer, err := header.Signer()
 	if err != nil {
@@ -70,15 +70,6 @@ func convertBlock(b *chain.ExtendedBlock) (*BlockMessage, error) {
 	}, nil
 }
 
-type LogMeta struct {
-	BlockID        thor.Bytes32 `json:"blockID"`
-	BlockNumber    uint32       `json:"blockNumber"`
-	BlockTimestamp uint64       `json:"blockTimestamp"`
-	TxID           thor.Bytes32 `json:"txID"`
-	TxOrigin       thor.Address `json:"txOrigin"`
-	ClauseIndex    uint32       `json:"clauseIndex"`
-}
-
 // TransferMessage transfer piped by websocket
 type TransferMessage struct {
 	Sender    thor.Address          `json:"sender"`
@@ -88,7 +79,7 @@ type TransferMessage struct {
 	Obsolete  bool                  `json:"obsolete"`
 }
 
-func convertTransfer(header *block.Header, tx *tx.Transaction, clauseIndex uint32, transfer *tx.Transfer, obsolete bool) (*TransferMessage, error) {
+func ConvertSubscriptionTransfer(header *block.Header, tx *tx.Transaction, clauseIndex uint32, transfer *tx.Transfer, obsolete bool) (*TransferMessage, error) {
 	origin, err := tx.Origin()
 	if err != nil {
 		return nil, err
@@ -119,7 +110,7 @@ type EventMessage struct {
 	Obsolete bool           `json:"obsolete"`
 }
 
-func convertEvent(header *block.Header, tx *tx.Transaction, clauseIndex uint32, event *tx.Event, obsolete bool) (*EventMessage, error) {
+func ConvertSubscriptionEvent(header *block.Header, tx *tx.Transaction, clauseIndex uint32, event *tx.Event, obsolete bool) (*EventMessage, error) {
 	signer, err := tx.Origin()
 	if err != nil {
 		return nil, err
@@ -140,8 +131,8 @@ func convertEvent(header *block.Header, tx *tx.Transaction, clauseIndex uint32, 
 	}, nil
 }
 
-// EventFilter contains options for contract event filtering.
-type EventFilter struct {
+// SubscriptionEventFilter contains options for contract event filtering.
+type SubscriptionEventFilter struct {
 	Address *thor.Address // restricts matches to events created by specific contracts
 	Topic0  *thor.Bytes32
 	Topic1  *thor.Bytes32
@@ -151,7 +142,7 @@ type EventFilter struct {
 }
 
 // Match returs whether event matches filter
-func (ef *EventFilter) Match(event *tx.Event) bool {
+func (ef *SubscriptionEventFilter) Match(event *tx.Event) bool {
 	if (ef.Address != nil) && (*ef.Address != event.Address) {
 		return false
 	}
@@ -176,15 +167,15 @@ func (ef *EventFilter) Match(event *tx.Event) bool {
 		matchTopic(ef.Topic4, 4)
 }
 
-// TransferFilter contains options for contract transfer filtering.
-type TransferFilter struct {
+// SubscriptionTransferFilter contains options for contract transfer filtering.
+type SubscriptionTransferFilter struct {
 	TxOrigin  *thor.Address // who send transaction
 	Sender    *thor.Address // who transferred tokens
 	Recipient *thor.Address // who received tokens
 }
 
 // Match returs whether transfer matches filter
-func (tf *TransferFilter) Match(transfer *tx.Transfer, origin thor.Address) bool {
+func (tf *SubscriptionTransferFilter) Match(transfer *tx.Transfer, origin thor.Address) bool {
 	if (tf.TxOrigin != nil) && (*tf.TxOrigin != origin) {
 		return false
 	}

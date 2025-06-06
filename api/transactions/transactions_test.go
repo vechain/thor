@@ -21,6 +21,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/transactions"
+	"github.com/vechain/thor/v2/api/types"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
@@ -125,7 +126,7 @@ func getDynamicFeeTx(t *testing.T) {
 
 func getTxReceipt(t *testing.T) {
 	r := httpGetAndCheckResponseStatus(t, "/transactions/"+legacyTx.ID().String()+"/receipt", 200)
-	var receipt *transactions.Receipt
+	var receipt *types.Receipt
 	if err := json.Unmarshal(r, &receipt); err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +162,7 @@ func sendLegacyTx(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res := httpPostAndCheckResponseStatus(t, "/transactions", transactions.RawTx{Raw: hexutil.Encode(rlpTx)}, 200)
+	res := httpPostAndCheckResponseStatus(t, "/transactions", types.RawTx{Raw: hexutil.Encode(rlpTx)}, 200)
 	var txObj map[string]string
 	if err = json.Unmarshal(res, &txObj); err != nil {
 		t.Fatal(err)
@@ -192,7 +193,7 @@ func sendDynamicFeeTx(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res := httpPostAndCheckResponseStatus(t, "/transactions", transactions.RawTx{Raw: hexutil.Encode(rlpTx)}, 200)
+	res := httpPostAndCheckResponseStatus(t, "/transactions", types.RawTx{Raw: hexutil.Encode(rlpTx)}, 200)
 	var txObj map[string]string
 	if err = json.Unmarshal(res, &txObj); err != nil {
 		t.Fatal(err)
@@ -220,7 +221,7 @@ func sendImpossibleBlockRefExpiryTx(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res := httpPostAndCheckResponseStatus(t, "/transactions", transactions.RawTx{Raw: hexutil.Encode(rlpTx)}, 403)
+	res := httpPostAndCheckResponseStatus(t, "/transactions", types.RawTx{Raw: hexutil.Encode(rlpTx)}, 403)
 	assert.Equal(t, "tx rejected: expired\n", string(res), "should be expired")
 }
 
@@ -308,7 +309,7 @@ func getTransactionByIDPendingTxNotFound(t *testing.T) {
 }
 
 func sendTxWithBadFormat(t *testing.T) {
-	badRawTx := transactions.RawTx{Raw: "badRawTx"}
+	badRawTx := types.RawTx{Raw: "badRawTx"}
 
 	res := httpPostAndCheckResponseStatus(t, "/transactions", badRawTx, 400)
 
@@ -321,7 +322,7 @@ func sendTxThatCannotBeAcceptedInLocalMempool(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	duplicatedRawTx := transactions.RawTx{Raw: hexutil.Encode(rlpTx)}
+	duplicatedRawTx := types.RawTx{Raw: hexutil.Encode(rlpTx)}
 
 	res := httpPostAndCheckResponseStatus(t, "/transactions", duplicatedRawTx, 400)
 
@@ -431,7 +432,7 @@ func checkMatchingTx(t *testing.T, expectedTx *tx.Transaction, actualTx *transac
 	assert.Equal(t, expectedTx.Gas(), actualTx.Gas)
 	for i, c := range expectedTx.Clauses() {
 		assert.Equal(t, hexutil.Encode(c.Data()), actualTx.Clauses[i].Data)
-		assert.Equal(t, *c.Value(), big.Int(actualTx.Clauses[i].Value))
+		assert.Equal(t, c.Value().String(), (*big.Int)(actualTx.Clauses[i].Value).String())
 		assert.Equal(t, c.To(), actualTx.Clauses[i].To)
 	}
 	switch expectedTx.Type() {

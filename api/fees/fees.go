@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/api/types"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/chain"
@@ -157,7 +158,7 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 		return err
 	}
 
-	return utils.WriteJSON(w, &FeesHistory{
+	return utils.WriteJSON(w, &types.FeesHistory{
 		OldestBlock:   oldestBlockRevision,
 		BaseFeePerGas: baseFees,
 		GasUsedRatio:  gasUsedRatios,
@@ -176,7 +177,7 @@ func (f *Fees) handleGetPriority(w http.ResponseWriter, _ *http.Request) error {
 		}
 	}
 
-	return utils.WriteJSON(w, &FeesPriority{
+	return utils.WriteJSON(w, &types.FeesPriority{
 		MaxPriorityFeePerGas: priorityFee,
 	})
 }

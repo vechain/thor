@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vechain/thor/v2/api/types"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -22,13 +23,13 @@ func TestBeatReader_Read(t *testing.T) {
 	newBlock := allBlocks[1]
 
 	// Act
-	beatReader := newBeatReader(thorChain.Repo(), genesisBlk.Header().ID(), newMessageCache[BeatMessage](10))
+	beatReader := newBeatReader(thorChain.Repo(), genesisBlk.Header().ID(), newMessageCache[types.BeatMessage](10))
 	res, ok, err := beatReader.Read()
 
 	// Assert
 	assert.NoError(t, err)
 	assert.True(t, ok)
-	if beatMsg, ok := res[0].(BeatMessage); !ok {
+	if beatMsg, ok := res[0].(types.BeatMessage); !ok {
 		t.Fatal("unexpected type")
 	} else {
 		assert.Equal(t, newBlock.Header().Number(), beatMsg.Number)
@@ -48,7 +49,7 @@ func TestBeatReader_Read_NoNewBlocksToRead(t *testing.T) {
 	bestBlock := allBlocks[len(allBlocks)-1]
 
 	// Act
-	beatReader := newBeatReader(thorChain.Repo(), bestBlock.Header().ID(), newMessageCache[BeatMessage](10))
+	beatReader := newBeatReader(thorChain.Repo(), bestBlock.Header().ID(), newMessageCache[types.BeatMessage](10))
 	res, ok, err := beatReader.Read()
 
 	// Assert
@@ -62,7 +63,7 @@ func TestBeatReader_Read_ErrorWhenReadingBlocks(t *testing.T) {
 	thorChain := initChain(t)
 
 	// Act
-	beatReader := newBeatReader(thorChain.Repo(), thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), newMessageCache[BeatMessage](10))
+	beatReader := newBeatReader(thorChain.Repo(), thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), newMessageCache[types.BeatMessage](10))
 	res, ok, err := beatReader.Read()
 
 	// Assert
