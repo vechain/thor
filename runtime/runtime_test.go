@@ -663,14 +663,20 @@ func getMockTx(repo *chain.Repository, txType tx.Type, t *testing.T) *tx.Transac
 	var gas = uint64(210000)
 	to, _ := thor.ParseAddress("0x7567d83b7b8d80addcb281a71d54fc7b3364ffed")
 
-	tx := tx.NewBuilder(txType).
+	builder := tx.NewBuilder(txType).
 		BlockRef(blockRef).
 		ChainTag(chainTag).
 		Clause(tx.NewClause(&to).WithValue(big.NewInt(10000)).WithData([]byte{0, 0, 0, 0x60, 0x60, 0x60})).
 		Clause(tx.NewClause(&to).WithValue(big.NewInt(20000)).WithData([]byte{0, 0, 0, 0x60, 0x60, 0x60})).
 		Expiration(expiration).
-		Gas(gas).
-		Build()
+		Gas(gas)
+
+	if txType == tx.TypeDynamicFee {
+		builder.MaxFeePerGas(big.NewInt(thor.InitialBaseFee))
+	}
+
+	tx := builder.Build()
+
 	sig, err := crypto.Sign(tx.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
 		t.Fatal(err)

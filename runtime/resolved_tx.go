@@ -122,7 +122,7 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64, baseF
 	if legacyTxBaseGasPrice, err = builtin.Params.Native(state).Get(thor.KeyLegacyTxBaseGasPrice); err != nil {
 		return
 	}
-	effectiveGasPrice = r.tx.EffectiveGasPrice(legacyTxBaseGasPrice, baseFee)
+	effectiveGasPrice = r.tx.EffectiveGasPrice(baseFee, legacyTxBaseGasPrice)
 
 	energy := builtin.Energy.Native(state, blockTime)
 	doReturnGas := func(rgas uint64) (*big.Int, error) {

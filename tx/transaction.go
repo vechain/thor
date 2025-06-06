@@ -425,7 +425,7 @@ func (t *Transaction) IntrinsicGas() (uint64, error) {
 // price sender have to pay per gas unit. The proved work is NOT included.For legacy
 // transactions, baseGasPrice is required. For dynamic fee transactions,baseFee is required.
 // It is caller's responsibility to ensure the fields are passed correctly.
-func (t *Transaction) EffectiveGasPrice(legacyTxBaseGasPrice *big.Int, baseFee *big.Int) *big.Int {
+func (t *Transaction) EffectiveGasPrice(baseFee *big.Int, legacyTxBaseGasPrice *big.Int) *big.Int {
 	// For legacy transactions, the gas price is fixed and determined at transaction creation time.
 	if t.Type() == TypeLegacy {
 		return t.body.(*legacyTransaction).gasPrice(legacyTxBaseGasPrice)
@@ -434,6 +434,34 @@ func (t *Transaction) EffectiveGasPrice(legacyTxBaseGasPrice *big.Int, baseFee *
 	// For dynamic fee transactions, effective gas price take block base fee into account.
 	// Which is MIN(maxFeePerGas, maxPriorityFeePerGas + baseFee)
 	return math.BigMin(t.body.maxFeePerGas(), t.body.maxPriorityFeePerGas().Add(t.body.maxPriorityFeePerGas(), baseFee))
+}
+
+// EffectivePriorityFeePerGas returns the effective priority fee per gas for the transaction. If maxFeePerGas is less than
+// baseFee, an error is returned. For legacy transactions, the overall gas price which includes the proved work is used as both
+// maxPriorityFeePerGas and maxFeePerGas.
+// It is caller's responsibility to ensure the fields are passed correctly.
+func (t *Transaction) EffectivePriorityFeePerGas(baseFee *big.Int, legacyTxBaseGasPrice *big.Int, provedWork *big.Int) (*big.Int, error) {
+	var (
+		maxPriorityFeePerGas *big.Int
+		maxFeePerGas         *big.Int
+	)
+
+	if t.Type() == TypeLegacy {
+		overallGasPrice := t.OverallGasPrice(legacyTxBaseGasPrice, provedWork)
+		maxPriorityFeePerGas = overallGasPrice
+		maxFeePerGas = overallGasPrice
+	} else {
+		maxPriorityFeePerGas = t.body.maxPriorityFeePerGas()
+		maxFeePerGas = t.body.maxFeePerGas()
+	}
+
+	// ensure maxFeePerGas can cover the block baseFee
+	if maxFeePerGas.Cmp(baseFee) < 0 {
+		return nil, errors.New("gas price is less than block base fee")
+	}
+
+	priorityFeePerGas := new(big.Int).Sub(maxFeePerGas, baseFee)
+	return math.BigMin(priorityFeePerGas, maxPriorityFeePerGas), nil
 }
 
 // GasPriceCoef returns gas price coef.
