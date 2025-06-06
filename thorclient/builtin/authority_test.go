@@ -19,7 +19,8 @@ import (
 func TestAuthority(t *testing.T) {
 	executor := bind.NewSigner(genesis.DevAccounts()[0].PrivateKey)
 
-	_, client := newChain(t, false)
+	testNode, client := newTestNode(t, false)
+	defer testNode.Stop()
 
 	authority, err := NewAuthority(client)
 	require.NoError(t, err)

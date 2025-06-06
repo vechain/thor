@@ -25,7 +25,7 @@ import (
 	"github.com/vechain/thor/v2/test"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/test/testchain"
-	"github.com/vechain/thor/v2/test/testsolo"
+	"github.com/vechain/thor/v2/test/testnode"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 
@@ -38,7 +38,7 @@ var (
 	preMintedTx01 *tx.Transaction
 )
 
-func initAPIServer(t *testing.T) *testsolo.Solo {
+func initTestNode(t *testing.T) testnode.Node {
 	forks := testchain.DefaultForkConfig
 	forks.GALACTICA = 1
 	thorChain, err := testchain.NewWithFork(&forks)
@@ -47,10 +47,11 @@ func initAPIServer(t *testing.T) *testsolo.Solo {
 	// mint some transactions to be used in the endpoints
 	mintTransactions(t, thorChain)
 
-	testSolo, err := testsolo.NewSolo(thorChain)
+	testNode, err := testnode.NewNodeBuilder().WithChain(thorChain).Build()
 	require.NoError(t, err)
+	require.NoError(t, testNode.Start())
 
-	return testSolo
+	return testNode
 }
 
 func mintTransactions(t *testing.T, thorChain *testchain.Chain) {
@@ -101,9 +102,9 @@ func mintTransactions(t *testing.T, thorChain *testchain.Chain) {
 }
 
 func TestAPIs(t *testing.T) {
-	testSolo := initAPIServer(t)
+	testNode := initTestNode(t)
 	defer func() {
-		require.NoError(t, testSolo.Shutdown())
+		require.NoError(t, testNode.Stop())
 	}()
 
 	for name, tt := range map[string]func(*testing.T, *testchain.Chain, *httptest.Server){
@@ -116,7 +117,7 @@ func TestAPIs(t *testing.T) {
 		"testFeesEndpoint":         testFeesEndpoint,
 	} {
 		t.Run(name, func(t *testing.T) {
-			tt(t, testSolo.Chain, testSolo.APIServer)
+			tt(t, testNode.Chain(), testNode.APIServer())
 		})
 	}
 }
@@ -218,6 +219,7 @@ func testTransactionsEndpoint(t *testing.T, thorChain *testchain.Chain, ts *http
 			Expiration(10).
 			Gas(21000).
 			Clause(clause).
+			Nonce(datagen.RandUint64()).
 			Build()
 
 		trx = tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)

@@ -22,7 +22,9 @@ import (
 )
 
 func TestPrototype(t *testing.T) {
-	_, client := newChain(t, false)
+	testNode, client := newTestNode(t, false)
+	defer testNode.Stop()
+
 	chainTag, err := client.ChainTag()
 	require.NoError(t, err)
 

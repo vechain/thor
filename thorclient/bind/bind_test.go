@@ -18,20 +18,19 @@ import (
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/bindcontract"
 	"github.com/vechain/thor/v2/test/testchain"
-	"github.com/vechain/thor/v2/test/testsolo"
+	"github.com/vechain/thor/v2/test/testnode"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 )
 
 // testEnv holds the test environment including chain and contract
 type testEnv struct {
-	t *testing.T
-	//chain        *testchain.Chain
+	t            *testing.T
 	client       *thorclient.Client
 	bindContract Contract
 	owner        *PrivateKeySigner
 	user         *PrivateKeySigner
-	testSolo     *testsolo.Solo
+	testNode     testnode.Node
 }
 
 // setupTestEnv creates a new test environment with a deployed test contract
@@ -39,30 +38,31 @@ func setupTestEnv(t *testing.T) *testEnv {
 	// Create test chain
 	forks := testchain.DefaultForkConfig
 	forks.GALACTICA = 1
-	thorChain, err := testchain.NewWithFork(&forks)
+	testChain, err := testchain.NewWithFork(&forks)
+	require.NoError(t, err)
+	testNode, err := testnode.NewNodeBuilder().WithChain(testChain).Build()
 	require.NoError(t, err)
 
 	// mint a block to arrive to Galactica
-	if err := thorChain.MintBlock(genesis.DevAccounts()[0]); err != nil {
+	if err := testNode.Chain().MintBlock(genesis.DevAccounts()[0]); err != nil {
 		require.NoErrorf(t, err, "failed to mint genesis block")
 	}
 
-	testSolo, err := testsolo.NewSolo(thorChain)
-	require.NoError(t, err)
+	require.NoError(t, testNode.Start())
 
 	// Get test accounts
 	accounts := genesis.DevAccounts()
 	owner := NewSigner(accounts[0].PrivateKey)
 	user := NewSigner(accounts[1].PrivateKey)
 
-	client := thorclient.New(testSolo.APIServer.URL)
+	client := thorclient.New(testNode.APIServer().URL)
 	// Deploy test contract
 	bindContract, err := DeployContract(client, owner, []byte(bindcontract.ABI), bindcontract.HexBytecode)
 	require.NoError(t, err)
 
 	return &testEnv{
 		t:            t,
-		testSolo:     testSolo,
+		testNode:     testNode,
 		client:       client,
 		bindContract: bindContract,
 		owner:        owner,
@@ -72,6 +72,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 
 func TestContract_Call(t *testing.T) {
 	env := setupTestEnv(t)
+	defer env.testNode.Stop()
 
 	t.Run("GetValue", func(t *testing.T) {
 		var value *big.Int
@@ -94,6 +95,7 @@ func TestContract_Call(t *testing.T) {
 
 func TestContract_Send(t *testing.T) {
 	env := setupTestEnv(t)
+	defer env.testNode.Stop()
 
 	t.Run("SetValue", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -150,6 +152,7 @@ func TestContract_Send(t *testing.T) {
 
 func TestContract_Filter(t *testing.T) {
 	env := setupTestEnv(t)
+	defer env.testNode.Stop()
 
 	t.Run("ValueChanged", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

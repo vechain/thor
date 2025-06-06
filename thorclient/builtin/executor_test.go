@@ -17,7 +17,8 @@ import (
 )
 
 func TestExecutor(t *testing.T) {
-	_, client := newChain(t, true)
+	node, client := newTestNode(t, true)
+	defer node.Stop()
 
 	executor, err := NewExecutor(client)
 	require.NoError(t, err)
