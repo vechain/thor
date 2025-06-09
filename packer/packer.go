@@ -127,12 +127,6 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (flow
 		}
 	}
 
-	var baseFee *big.Int
-
-	if parent.Header.Number()+1 >= p.forkConfig.GALACTICA {
-		baseFee = galactica.CalcBaseFee(parent.Header, p.forkConfig)
-	}
-
 	rt := runtime.New(
 		p.repo.NewChain(parent.Header.ID()),
 		state,
@@ -143,7 +137,7 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (flow
 			Time:        newBlockTime,
 			GasLimit:    p.gasLimit(parent.Header.GasLimit()),
 			TotalScore:  parent.Header.TotalScore() + score,
-			BaseFee:     baseFee,
+			BaseFee:     galactica.CalcBaseFee(parent.Header, p.forkConfig),
 		},
 		p.forkConfig)
 
