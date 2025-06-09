@@ -8,7 +8,6 @@ package bind
 import (
 	"bytes"
 	"fmt"
-	"github.com/vechain/thor/v2/test/testnode"
 	"math/big"
 	"time"
 
@@ -98,12 +97,6 @@ func DeployContract(client thorclient.ClientInterface, signer Signer, abiData []
 	res, err := client.SendTransaction(trx)
 	if err != nil {
 		return nil, err
-	}
-
-	if c, ok := (client).(*testnode.Client); ok {
-		if err = c.MintTransactions(); err != nil {
-			return nil, err
-		}
 	}
 
 	var receipt *transactions.Receipt
