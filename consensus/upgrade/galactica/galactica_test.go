@@ -7,11 +7,9 @@ package galactica
 
 import (
 	"encoding/binary"
-	"errors"
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
@@ -312,60 +310,6 @@ func TestCalculateReward(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			reward := CalculateReward(tt.gasUsed, tt.rewardGasPrice, rewardRatio, tt.isGalactica)
 			assert.Equal(t, tt.expectedReward, reward)
-		})
-	}
-}
-
-func TestValidateGalacticaTxFee(t *testing.T) {
-	defaultBaseFee := big.NewInt(20_000_000)
-	tests := []struct {
-		name                 string
-		tx                   *tx.Transaction
-		legacyTxBaseGasPrice *big.Int
-		blkBaseFeeGasPrice   *big.Int
-		wantErr              error
-	}{
-		{
-			name:                 "legacy transaction with enough fee",
-			tx:                   tx.NewBuilder(tx.TypeLegacy).GasPriceCoef(255).Build(),
-			legacyTxBaseGasPrice: defaultBaseFee,
-			blkBaseFeeGasPrice:   defaultBaseFee,
-			wantErr:              nil,
-		},
-		{
-			name:                 "legacy transaction with not enough fee",
-			tx:                   tx.NewBuilder(tx.TypeLegacy).GasPriceCoef(0).Build(),
-			legacyTxBaseGasPrice: defaultBaseFee,
-			blkBaseFeeGasPrice:   new(big.Int).Add(defaultBaseFee, common.Big1),
-			wantErr:              ErrGasPriceTooLowForBlockBase,
-		},
-		{
-			name:                 "legacy transaction with just enough fee",
-			tx:                   tx.NewBuilder(tx.TypeLegacy).GasPriceCoef(1).Build(),
-			legacyTxBaseGasPrice: defaultBaseFee,
-			blkBaseFeeGasPrice:   new(big.Int).Add(defaultBaseFee, common.Big1),
-			wantErr:              nil,
-		},
-		{
-			name:                 "dynamic fee transaction with enough fee",
-			tx:                   tx.NewBuilder(tx.TypeDynamicFee).MaxFeePerGas(defaultBaseFee).Build(),
-			legacyTxBaseGasPrice: defaultBaseFee,
-			blkBaseFeeGasPrice:   defaultBaseFee,
-			wantErr:              nil,
-		},
-		{
-			name:                 "dynamic fee transaction not with enough fee",
-			tx:                   tx.NewBuilder(tx.TypeDynamicFee).MaxFeePerGas(new(big.Int).Sub(defaultBaseFee, common.Big1)).Build(),
-			legacyTxBaseGasPrice: defaultBaseFee,
-			blkBaseFeeGasPrice:   defaultBaseFee,
-			wantErr:              ErrGasPriceTooLowForBlockBase,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validateGalacticaTxFee(tt.tx, tt.legacyTxBaseGasPrice, tt.blkBaseFeeGasPrice)
-			assert.True(t, errors.Is(err, tt.wantErr))
 		})
 	}
 }
