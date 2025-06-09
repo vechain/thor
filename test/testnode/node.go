@@ -10,6 +10,8 @@ import (
 	"net/http/httptest"
 	"sync/atomic"
 
+	"github.com/vechain/thor/v2/thorclient"
+
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/fees"
 	"github.com/vechain/thor/v2/api/transactions"
@@ -33,6 +35,9 @@ type Node interface {
 
 	// APIServer returns the node api server
 	APIServer() *httptest.Server
+
+	// Client returns the node client with minting abilities for contract usage
+	Client(c thorclient.ClientInterface) thorclient.ClientInterface
 }
 
 // node implements the Node interface
@@ -55,7 +60,7 @@ func (n *node) Start() error {
 	}
 
 	// Create a mock transaction pool
-	n.txPool = &instantMintPool{
+	n.txPool = &Pool{
 		txs:       tx.Transactions{},
 		validator: genesis.DevAccounts()[0],
 		chain:     n.chain,
@@ -116,4 +121,12 @@ func (n *node) Chain() *testchain.Chain {
 // APIServer returns the node api server
 func (n *node) APIServer() *httptest.Server {
 	return n.apiServer
+}
+
+func (n *node) Client(c thorclient.ClientInterface) thorclient.ClientInterface {
+	pool := n.txPool.(*Pool)
+	return &Client{
+		ClientInterface: c,
+		mintFunc:        pool.MintTransactions,
+	}
 }

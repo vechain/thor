@@ -8,6 +8,7 @@ package bind
 import (
 	"bytes"
 	"fmt"
+	"github.com/vechain/thor/v2/test/testnode"
 	"math/big"
 	"time"
 
@@ -36,18 +37,18 @@ type Contract interface {
 	ABI() *abi.ABI
 
 	// Client returns the underlying client.
-	Client() *thorclient.Client
+	Client() thorclient.ClientInterface
 }
 
 // contract is the concrete implementation of Contract.
 type contract struct {
-	client *thorclient.Client
+	client thorclient.ClientInterface
 	abi    *abi.ABI
 	addr   *thor.Address
 }
 
 // NewContract creates a new contract instance with the given client, ABI data and address.
-func NewContract(client *thorclient.Client, abiData []byte, address *thor.Address) (Contract, error) {
+func NewContract(client thorclient.ClientInterface, abiData []byte, address *thor.Address) (Contract, error) {
 	if address == nil {
 		return nil, fmt.Errorf("empty contract address")
 	}
@@ -63,7 +64,7 @@ func NewContract(client *thorclient.Client, abiData []byte, address *thor.Addres
 }
 
 // DeployContract deploys a contract and creates a new contract instance with the given client, ABI data and address.
-func DeployContract(client *thorclient.Client, signer Signer, abiData []byte, bytecode string) (Contract, error) {
+func DeployContract(client thorclient.ClientInterface, signer Signer, abiData []byte, bytecode string) (Contract, error) {
 	bc, err := hexutil.Decode(bytecode)
 	if err != nil {
 		return nil, err
@@ -97,6 +98,12 @@ func DeployContract(client *thorclient.Client, signer Signer, abiData []byte, by
 	res, err := client.SendTransaction(trx)
 	if err != nil {
 		return nil, err
+	}
+
+	if c, ok := (client).(*testnode.Client); ok {
+		if err = c.MintTransactions(); err != nil {
+			return nil, err
+		}
 	}
 
 	var receipt *transactions.Receipt
@@ -149,6 +156,6 @@ func (c *contract) ABI() *abi.ABI {
 }
 
 // Client returns the underlying HTTP client.
-func (c *contract) Client() *thorclient.Client {
+func (c *contract) Client() thorclient.ClientInterface {
 	return c.client
 }

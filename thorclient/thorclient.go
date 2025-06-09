@@ -32,11 +32,58 @@ import (
 	tccommon "github.com/vechain/thor/v2/thorclient/common"
 )
 
+// ClientInterface defines the interface for interacting with the VeChainThor blockchain.
+type ClientInterface interface {
+	// HTTP and WebSocket client access
+	RawHTTPClient() *httpclient.Client
+	RawWSClient() *wsclient.Client
+
+	// Account related methods
+	Account(addr *thor.Address, opts ...Option) (*accounts.Account, error)
+	InspectClauses(calldata *accounts.BatchCallData, opts ...Option) ([]*accounts.CallResult, error)
+	InspectTxClauses(tx *tx.Transaction, senderAddr *thor.Address, opts ...Option) ([]*accounts.CallResult, error)
+	AccountCode(addr *thor.Address, opts ...Option) (*accounts.GetCodeResult, error)
+	AccountStorage(addr *thor.Address, key *thor.Bytes32, opts ...Option) (*accounts.GetStorageResult, error)
+
+	// Transaction related methods
+	Transaction(id *thor.Bytes32, opts ...Option) (*transactions.Transaction, error)
+	RawTransaction(id *thor.Bytes32, opts ...Option) (*transactions.RawTransaction, error)
+	TransactionReceipt(id *thor.Bytes32, opts ...Option) (*transactions.Receipt, error)
+	SendTransaction(tx *tx.Transaction) (*transactions.SendTxResult, error)
+	SendRawTransaction(rlpTx []byte) (*transactions.SendTxResult, error)
+
+	// Block related methods
+	Block(revision string) (*blocks.JSONCollapsedBlock, error)
+	BlockReward(revision string) (*blocks.JSONBlockReward, error)
+	ExpandedBlock(revision string) (*blocks.JSONExpandedBlock, error)
+
+	// Filter methods
+	FilterEvents(req *events.EventFilter) ([]events.FilteredEvent, error)
+	FilterTransfers(req *transfers.TransferFilter) ([]*transfers.FilteredTransfer, error)
+
+	// Node and chain methods
+	Peers() ([]*node.PeerStats, error)
+	ChainTag() (byte, error)
+	FeesHistory(blockCount uint32, newestBlock string, rewardPercentiles []float64) (*fees.FeesHistory, error)
+	FeesPriority() (*fees.FeesPriority, error)
+
+	// Subscription methods
+	SubscribeBlocks(pos string) (*common.Subscription[*subscriptions.BlockMessage], error)
+	SubscribeEvents(pos string, filter *subscriptions.EventFilter) (*common.Subscription[*subscriptions.EventMessage], error)
+	SubscribeTransfers(pos string, filter *subscriptions.TransferFilter) (*common.Subscription[*subscriptions.TransferMessage], error)
+	SubscribeBeats2(pos string) (*common.Subscription[*subscriptions.Beat2Message], error)
+	SubscribeTxPool(txID *thor.Bytes32) (*common.Subscription[*subscriptions.PendingTxIDMessage], error)
+}
+
 // Client represents the VeChainThor client, allowing communication over HTTP and WebSocket.
+// It implements the ClientInterface.
 type Client struct {
 	httpConn *httpclient.Client
 	wsConn   *wsclient.Client
 }
+
+// Ensure Client implements ClientInterface
+var _ ClientInterface = (*Client)(nil)
 
 // New creates a new Client using the provided HTTP URL.
 func New(url string) *Client {

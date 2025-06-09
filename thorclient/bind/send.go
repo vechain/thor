@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/vechain/thor/v2/test/testnode"
 	"math/big"
 	"time"
 
@@ -182,6 +183,12 @@ func (b *sendBuilder) SubmitAndConfirm(ctx context.Context) (*transactions.Recei
 	}
 
 	id := transaction.ID()
+
+	if c, ok := (b.op.contract.client).(*testnode.Client); ok {
+		if err = c.MintTransactions(); err != nil {
+			return nil, nil, err
+		}
+	}
 	for {
 		select {
 		case <-ctx.Done():

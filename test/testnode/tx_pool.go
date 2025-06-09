@@ -16,8 +16,8 @@ import (
 	"github.com/vechain/thor/v2/txpool"
 )
 
-// instantMintPool instantly mines a block when adding a transaction to the pool.
-type instantMintPool struct {
+// Pool mines a block when requested.
+type Pool struct {
 	txs       tx.Transactions
 	validator genesis.DevAccount
 	chain     *testchain.Chain
@@ -27,7 +27,7 @@ type instantMintPool struct {
 	txFeed event.Feed
 }
 
-func (m *instantMintPool) Get(txID thor.Bytes32) *tx.Transaction {
+func (m *Pool) Get(txID thor.Bytes32) *tx.Transaction {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -39,7 +39,8 @@ func (m *instantMintPool) Get(txID thor.Bytes32) *tx.Transaction {
 	return nil
 }
 
-func (m *instantMintPool) AddLocal(trx *tx.Transaction) error {
+// AddLocal adds a transaction to the pool without minting
+func (m *Pool) AddLocal(trx *tx.Transaction) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -52,23 +53,43 @@ func (m *instantMintPool) AddLocal(trx *tx.Transaction) error {
 		Tx:         trx,
 		Executable: &executable,
 	})
-	return m.chain.MintBlock(m.validator, trx)
+	return nil
 }
 
-func (m *instantMintPool) Dump() tx.Transactions {
+// MintTransactions mints all pending transactions in the pool
+func (m *Pool) MintTransactions() error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	if len(m.txs) == 0 {
+		return nil
+	}
+
+	// Mint all transactions in the pool
+	err := m.chain.MintBlock(m.validator, m.txs...)
+	if err != nil {
+		return err
+	}
+
+	// Clear the pool after successful minting
+	m.txs = make(tx.Transactions, 0)
+	return nil
+}
+
+func (m *Pool) Dump() tx.Transactions {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
 	return m.txs
 }
 
-func (m *instantMintPool) Len() int {
+func (m *Pool) Len() int {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
 	return len(m.txs)
 }
 
-func (m *instantMintPool) SubscribeTxEvent(ch chan *txpool.TxEvent) event.Subscription {
+func (m *Pool) SubscribeTxEvent(ch chan *txpool.TxEvent) event.Subscription {
 	return m.scope.Track(m.txFeed.Subscribe(ch))
 }

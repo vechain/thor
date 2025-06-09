@@ -26,7 +26,7 @@ import (
 // testEnv holds the test environment including chain and contract
 type testEnv struct {
 	t            *testing.T
-	client       *thorclient.Client
+	client       thorclient.ClientInterface
 	bindContract Contract
 	owner        *PrivateKeySigner
 	user         *PrivateKeySigner
@@ -55,7 +55,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 	owner := NewSigner(accounts[0].PrivateKey)
 	user := NewSigner(accounts[1].PrivateKey)
 
-	client := thorclient.New(testNode.APIServer().URL)
+	client := testNode.Client(thorclient.New(testNode.APIServer().URL))
 	// Deploy test contract
 	bindContract, err := DeployContract(client, owner, []byte(bindcontract.ABI), bindcontract.HexBytecode)
 	require.NoError(t, err)
