@@ -124,6 +124,11 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64, baseF
 	}
 	effectiveGasPrice = r.tx.EffectiveGasPrice(baseFee, legacyTxBaseGasPrice)
 
+	if baseFee != nil && effectiveGasPrice.Cmp(baseFee) < 0 {
+		// ensure effectiveGasPrice can cover the block baseFee in GALACTICA
+		return nil, nil, thor.Address{}, nil, nil, errors.New("gas price is less than block base fee")
+	}
+
 	energy := builtin.Energy.Native(state, blockTime)
 	doReturnGas := func(rgas uint64) (*big.Int, error) {
 		returnedEnergy := new(big.Int).Mul(new(big.Int).SetUint64(rgas), effectiveGasPrice)

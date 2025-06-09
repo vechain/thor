@@ -13,7 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -90,28 +89,32 @@ func (f *Flow) hasTx(txid thor.Bytes32, txBlockRef uint32) (bool, error) {
 	return f.runtime.Chain().HasTransaction(txid, txBlockRef)
 }
 
-func (f *Flow) isEffectivePriorityFeeTooLow(t *tx.Transaction) error {
-	// Skip check if the minimum priority fee is not set
-	if f.packer.minTxPriorityFee.Sign() <= 0 {
-		return nil
-	}
-
+// only works after galactica fork
+func (f *Flow) validateTxFee(t *tx.Transaction) error {
 	legacyTxBaseGasPrice, err := builtin.Params.Native(f.runtime.State()).Get(thor.KeyLegacyTxBaseGasPrice)
 	if err != nil {
 		return err
 	}
 
-	provedWork, err := t.ProvedWork(f.Number()-1, f.runtime.Chain().GetBlockID)
+	provedWork, err := t.ProvedWork(f.Number(), f.runtime.Chain().GetBlockID)
 	if err != nil {
 		return err
 	}
-	effectivePriorityFee := galactica.GalacticaPriorityGasPrice(
-		t,
-		legacyTxBaseGasPrice,
-		provedWork,
-		f.runtime.Context().BaseFee,
-	)
 
+	// this is only for a finer granularity check as
+	// 1. txpool will check the effective gas price and only returns executable txs
+	// 2. runtime will have the final check
+	effectiveGasPrice := t.EffectiveGasPrice(f.runtime.Context().BaseFee, legacyTxBaseGasPrice)
+	if effectiveGasPrice.Cmp(f.runtime.Context().BaseFee) < 0 {
+		return fmt.Errorf("%w: gas price is less than block base fee", errTxNotAdoptableNow)
+	}
+
+	// Skip priority fee check if the minimum priority fee is not set
+	if f.packer.minTxPriorityFee.Sign() <= 0 {
+		return nil
+	}
+
+	effectivePriorityFee := t.EffectivePriorityFeePerGas(f.runtime.Context().BaseFee, legacyTxBaseGasPrice, provedWork)
 	if effectivePriorityFee.Cmp(f.packer.minTxPriorityFee) < 0 {
 		return badTxError{"effective priority fee too low"}
 	}
@@ -160,15 +163,7 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 			return badTxError{"invalid tx type"}
 		}
 	} else {
-		if f.runtime.Context().BaseFee == nil {
-			return galactica.ErrBaseFeeNotSet
-		}
-
-		if err := galactica.ValidateGalacticaTxFee(t, f.runtime.State(), f.runtime.Context().BaseFee); err != nil {
-			return fmt.Errorf("%w: %w", errTxNotAdoptableNow, err)
-		}
-
-		if err := f.isEffectivePriorityFeeTooLow(t); err != nil {
+		if err := f.validateTxFee(t); err != nil {
 			return err
 		}
 	}
@@ -229,7 +224,8 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 		GasUsed(f.gasUsed).
 		ReceiptsRoot(f.receipts.RootHash()).
 		StateRoot(stateRoot).
-		TransactionFeatures(f.features)
+		TransactionFeatures(f.features).
+		BaseFee(f.runtime.Context().BaseFee)
 
 	for _, tx := range f.txs {
 		builder.Transaction(tx)
@@ -237,10 +233,6 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 
 	if f.Number() >= f.packer.forkConfig.FINALITY && shouldVote {
 		builder.COM()
-	}
-
-	if f.Number() >= f.packer.forkConfig.GALACTICA {
-		builder.BaseFee(galactica.CalcBaseFee(f.parentHeader, f.packer.forkConfig))
 	}
 
 	if f.Number() < f.packer.forkConfig.VIP214 {

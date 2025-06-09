@@ -7,18 +7,13 @@ package txpool
 
 import (
 	"encoding/binary"
-	"fmt"
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
-	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
 )
 
@@ -151,97 +146,6 @@ func TestValidateTransaction(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateTransaction(tt.getTx(), repo, tt.head, tt.forkConfig)
-			assert.Equal(t, tt.expectedErr, err)
-		})
-	}
-}
-
-func TestValidateTransactionWithState(t *testing.T) {
-	tchain, err := testchain.NewWithFork(&thor.SoloFork)
-	assert.Nil(t, err)
-	repo := tchain.Repo()
-	stater := tchain.Stater()
-	state := stater.NewState(trie.Root{Hash: repo.GenesisBlock().Header().StateRoot()})
-
-	tests := []struct {
-		name        string
-		getTx       func() *tx.Transaction
-		header      *block.Header
-		forkConfig  *thor.ForkConfig
-		expectedErr error
-	}{
-		{
-			name: "dyn fee tx with not enough fee to pay for base fee",
-			getTx: func() *tx.Transaction {
-				maxFee := big.NewInt(thor.InitialBaseFee - 1)
-				return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(maxFee).Build()
-			},
-			header:      getHeader(1),
-			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
-			expectedErr: txRejectedError{fmt.Sprintf("%s: expected 10000000000000 got 9999999999999", galactica.ErrGasPriceTooLowForBlockBase.Error())},
-		},
-		{
-			name: "dyn fee tx with max fee equals to base fee + 1",
-			getTx: func() *tx.Transaction {
-				maxFee := big.NewInt(thor.InitialBaseFee + 1)
-				return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(maxFee).Build()
-			},
-			header:      getHeader(1),
-			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
-			expectedErr: nil,
-		},
-		{
-			name: "legacy tx with gasPriceCoef 0",
-			getTx: func() *tx.Transaction {
-				return tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).GasPriceCoef(0).Build()
-			},
-			header:      getHeader(1),
-			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
-			expectedErr: nil,
-		},
-		{
-			name: "dyn fee tx not accepted with maxFeePerGas equals to zero",
-			getTx: func() *tx.Transaction {
-				return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(common.Big0).Build()
-			},
-			header:      getHeader(1),
-			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
-			expectedErr: txRejectedError{fmt.Sprintf("%s: expected 10000000000000 got 0", galactica.ErrGasPriceTooLowForBlockBase.Error())},
-		},
-		{
-			name: "dyn fee tx with maxPriorityFeePerGas = 0, maxFeePerGas == baseFee + 1",
-			getTx: func() *tx.Transaction {
-				maxFeePerGas := new(big.Int).Add(getHeader(1).BaseFee(), common.Big1)
-				return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(maxFeePerGas).MaxPriorityFeePerGas(common.Big0).Build()
-			},
-			header:      getHeader(1),
-			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
-			expectedErr: nil,
-		},
-		{
-			name: "dyn fee tx with maxPriorityFeePerGas = 0, maxFeePerGas == baseFee",
-			getTx: func() *tx.Transaction {
-				return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(getHeader(1).BaseFee()).MaxPriorityFeePerGas(common.Big0).Build()
-			},
-			header:      getHeader(1),
-			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
-			expectedErr: nil,
-		},
-		{
-			name: "dyn fee tx with maxPriorityFeePerGas = 0, maxFeePerGas == baseFee - 1",
-			getTx: func() *tx.Transaction {
-				maxFeePerGas := new(big.Int).Sub(getHeader(1).BaseFee(), common.Big1)
-				return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).MaxFeePerGas(maxFeePerGas).MaxPriorityFeePerGas(common.Big0).Build()
-			},
-			header:      getHeader(1),
-			forkConfig:  &thor.ForkConfig{GALACTICA: 0},
-			expectedErr: txRejectedError{fmt.Sprintf("%s: expected 10000000000000 got 9999999999999", galactica.ErrGasPriceTooLowForBlockBase.Error())},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validateTransactionWithState(tt.getTx(), tt.header, tt.forkConfig, state)
 			assert.Equal(t, tt.expectedErr, err)
 		})
 	}

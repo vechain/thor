@@ -440,7 +440,7 @@ func (t *Transaction) EffectiveGasPrice(baseFee *big.Int, legacyTxBaseGasPrice *
 // baseFee, an error is returned. For legacy transactions, the overall gas price which includes the proved work is used as both
 // maxPriorityFeePerGas and maxFeePerGas.
 // It is caller's responsibility to ensure the fields are passed correctly.
-func (t *Transaction) EffectivePriorityFeePerGas(baseFee *big.Int, legacyTxBaseGasPrice *big.Int, provedWork *big.Int) (*big.Int, error) {
+func (t *Transaction) EffectivePriorityFeePerGas(baseFee *big.Int, legacyTxBaseGasPrice *big.Int, provedWork *big.Int) *big.Int {
 	var (
 		maxPriorityFeePerGas *big.Int
 		maxFeePerGas         *big.Int
@@ -455,13 +455,8 @@ func (t *Transaction) EffectivePriorityFeePerGas(baseFee *big.Int, legacyTxBaseG
 		maxFeePerGas = t.body.maxFeePerGas()
 	}
 
-	// ensure maxFeePerGas can cover the block baseFee
-	if maxFeePerGas.Cmp(baseFee) < 0 {
-		return nil, errors.New("gas price is less than block base fee")
-	}
-
 	priorityFeePerGas := new(big.Int).Sub(maxFeePerGas, baseFee)
-	return math.BigMin(priorityFeePerGas, maxPriorityFeePerGas), nil
+	return math.BigMin(priorityFeePerGas, maxPriorityFeePerGas)
 }
 
 // GasPriceCoef returns gas price coef.
