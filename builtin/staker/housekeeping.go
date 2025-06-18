@@ -188,18 +188,20 @@ func (s *Staker) Transition(currentBlock uint32) (bool, error) {
 		maxProposers = big.NewInt(0).SetUint64(thor.InitialMaxBlockProposers)
 	}
 
-	println("it is not active, transitioning2", maxProposers)
+	println("it is not active, transitioning2", maxProposers.String())
 	queueSize, err := s.validations.validatorQueue.Len()
 	if err != nil {
 		return false, err
 	}
 
-	println("it is not active, transitioning3", queueSize)
+	println("it is not active, transitioning3", queueSize.String())
 
 	// if the queue size is not AT LEAST 2/3 of the maxProposers, then return nil
 	minimum := big.NewFloat(0).SetInt(maxProposers)
 	minimum.Mul(minimum, big.NewFloat(2))
 	minimum.Quo(minimum, big.NewFloat(3))
+
+	println("it is not active, transitioning4", queueSize.String(), minimum.String())
 	if big.NewFloat(0).SetInt(queueSize).Cmp(minimum) < 0 {
 		return false, nil
 	}
