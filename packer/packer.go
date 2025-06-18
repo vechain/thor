@@ -196,6 +196,7 @@ func (p *Packer) SetTargetGasLimit(gl uint64) {
 // If the staker contract is active, it will perform housekeeping.
 func (p *Packer) syncPOS(st *state.State, current uint32) (active bool, activated bool, err error) {
 	// still on PoA
+	println("is it pos", current, p.forkConfig.HAYABUSA+p.forkConfig.HAYABUSA_TP)
 	if p.forkConfig.HAYABUSA+p.forkConfig.HAYABUSA_TP > current {
 		return false, false, nil
 	}
