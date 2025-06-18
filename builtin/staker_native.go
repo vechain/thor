@@ -160,8 +160,8 @@ func init() {
 			}
 
 			id, err := Staker.Native(env.State()).AddValidator(thor.Address(args.Endorsor), thor.Address(args.Master), args.Period, args.Stake, args.AutoRenew, env.BlockContext().Number)
-			println("dadsadsa ===============", err.Error())
 			if err != nil {
+				println("dadsadsa ===============", err.Error())
 				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", err)}
 			}
 			env.UseGas(thor.SstoreSetGas)
