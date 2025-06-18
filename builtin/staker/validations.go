@@ -116,6 +116,7 @@ func (v *validations) Add(
 		return thor.Bytes32{}, err
 	}
 	if !lookup.IsZero() {
+		println("validator already exists ===============")
 		return thor.Bytes32{}, errors.New("validator already exists")
 	}
 	if period != v.lowStakingPeriod && period != v.mediumStakingPeriod && period != v.highStakingPeriod {
