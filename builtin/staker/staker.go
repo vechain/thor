@@ -151,8 +151,16 @@ func (s *Staker) AddValidator(
 	logger.Debug("adding validator", "endorsor", endorsor, "master", master, "period", period, "stake", stakeETH, "autoRenew", autoRenew)
 	if id, err := s.validations.Add(endorsor, master, period, stake, autoRenew, currentBlock); err != nil {
 		logger.Info("add validator failed", "master", master, "error", err)
+		println("--------- add validator failed")
 		return thor.Bytes32{}, err
 	} else {
+		println("--------- validator added")
+		queueSize, err := s.validations.validatorQueue.Len()
+		if err != nil {
+			return thor.Bytes32{}, err
+		}
+
+		println("--------- queue size is now", queueSize.String())
 		logger.Info("added validator", "master", master, "id", id)
 		return id, nil
 	}
