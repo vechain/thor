@@ -181,15 +181,20 @@ func (s *Staker) Transition(currentBlock uint32) (bool, error) {
 		return false, nil
 	}
 
+	println("it is not active, transitioning")
+
 	maxProposers, err := s.params.Get(thor.KeyMaxBlockProposers)
 	if err != nil || maxProposers.Cmp(big.NewInt(0)) == 0 {
 		maxProposers = big.NewInt(0).SetUint64(thor.InitialMaxBlockProposers)
 	}
 
+	println("it is not active, transitioning2", maxProposers)
 	queueSize, err := s.validations.validatorQueue.Len()
 	if err != nil {
 		return false, err
 	}
+
+	println("it is not active, transitioning3", queueSize)
 
 	// if the queue size is not AT LEAST 2/3 of the maxProposers, then return nil
 	minimum := big.NewFloat(0).SetInt(maxProposers)
@@ -198,6 +203,7 @@ func (s *Staker) Transition(currentBlock uint32) (bool, error) {
 	if big.NewFloat(0).SetInt(queueSize).Cmp(minimum) < 0 {
 		return false, nil
 	}
+	println("activation each", minimum)
 	ids, err := s.activateValidators(currentBlock)
 	if err != nil {
 		return false, err
