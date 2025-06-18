@@ -203,13 +203,16 @@ func (p *Packer) syncPOS(st *state.State, current uint32) (active bool, activate
 	// check if the staker contract currently is active
 	staker := builtin.Staker.Native(st)
 	active, err = staker.IsActive()
+	println("is it pos2", active)
 	if err != nil {
 		return false, false, err
 	}
 
 	// attempt to transition if we're on a transition block and the staker contract is not active
 	if !active && current%p.forkConfig.HAYABUSA_TP == 0 {
+		println("attemting transition", active)
 		activated, err = staker.Transition(current)
+		println("attemting transition2", activated)
 		if err != nil {
 			return false, false, err
 		}
