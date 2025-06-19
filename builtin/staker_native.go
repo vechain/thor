@@ -223,6 +223,8 @@ func init() {
 			env.ParseArgs(&args)
 			delegationID, err := Staker.Native(env.State()).AddDelegation(thor.Bytes32(args.ValidationID), args.Stake, args.AutoRenew, args.Multiplier)
 			if err != nil {
+
+				println("----------------- add delegation reverted", err.Error())
 				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", err)}
 			}
 			return []any{delegationID, ""}
