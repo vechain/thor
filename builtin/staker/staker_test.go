@@ -763,6 +763,70 @@ func TestStaker_IncreaseActive(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).Mul(expectedStake, big.NewInt(2)), validator.Weight)
 }
 
+func TestStaker_ChangeStakeActiveValidatorWithQueued(t *testing.T) {
+	staker, _ := newStaker(t, 0, 1, false)
+	addr := datagen.RandAddress()
+	addr2 := datagen.RandAddress()
+	stake := RandomStake()
+	period := uint32(360) * 24 * 15
+
+	// add the validator
+	id, err := staker.AddValidator(addr, addr, period, stake, true, 0)
+	assert.NoError(t, err)
+	// add a second validator
+	id2, err := staker.AddValidator(addr2, addr2, period, stake, true, 0)
+	assert.NoError(t, err)
+	_, err = staker.validations.ActivateNext(0, staker.params)
+	assert.NoError(t, err)
+	validator, err := staker.Get(id)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusActive, validator.Status)
+	assert.Equal(t, stake, validator.LockedVET)
+	assert.Equal(t, big.NewInt(0).Mul(stake, big.NewInt(2)), validator.Weight)
+	validator2, err := staker.Get(id2)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusQueued, validator2.Status)
+	assert.Equal(t, stake, validator2.PendingLocked)
+	assert.Equal(t, big.NewInt(0), validator2.Weight)
+	queuedVET, queuedWeight, err := staker.QueuedStake()
+	assert.NoError(t, err)
+	assert.Equal(t, stake, queuedVET)
+	assert.Equal(t, big.NewInt(0).Mul(stake, big.NewInt(2)), queuedWeight)
+
+	// increase stake of an active validator
+	expectedStake := big.NewInt(0).Add(big.NewInt(1000), stake)
+	err = staker.IncreaseStake(addr, id, big.NewInt(1000))
+	assert.NoError(t, err)
+	validator, err = staker.Get(id)
+	assert.NoError(t, err)
+	newStake := big.NewInt(0).Add(validator.PendingLocked, validator.LockedVET)
+	assert.Equal(t, expectedStake, newStake)
+
+	// the queued stake also increases
+	queuedVET, queuedWeight, err = staker.QueuedStake()
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0).Add(stake, big.NewInt(1000)), queuedVET)
+	assert.Equal(t, big.NewInt(0).Mul(big.NewInt(0).Add(stake, big.NewInt(1000)), big.NewInt(2)), queuedWeight)
+
+	validator, err = staker.Get(id)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedStake, big.NewInt(0).Add(validator.LockedVET, validator.PendingLocked))
+	assert.Equal(t, big.NewInt(0).Mul(stake, big.NewInt(2)), validator.Weight)
+
+	// verify withdraw amount decrease
+	_, _, err = staker.Housekeep(period)
+	assert.NoError(t, err)
+	validator, err = staker.Get(id)
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0).Mul(expectedStake, big.NewInt(2)), validator.Weight)
+
+	// verify queued stake is still the same as before the increase
+	queuedVET, queuedWeight, err = staker.QueuedStake()
+	assert.NoError(t, err)
+	assert.Equal(t, stake, queuedVET)
+	assert.Equal(t, big.NewInt(0).Mul(stake, big.NewInt(2)), queuedWeight)
+}
+
 func TestStaker_DecreaseActive(t *testing.T) {
 	staker, _ := newStaker(t, 0, 101, false)
 	addr := datagen.RandAddress()
