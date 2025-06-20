@@ -94,7 +94,6 @@ func (d *delegations) Add(
 		return thor.Bytes32{}, err
 	}
 
-	// Add queuedWeight when adding delegation
 	if err := d.queuedWeight.Add(weight); err != nil {
 		return thor.Bytes32{}, err
 	}
@@ -224,12 +223,10 @@ func (d *delegations) Withdraw(delegationID thor.Bytes32) (*big.Int, error) {
 
 	amount := delegation.Stake
 
-	// Decrement queuedVET when withdrawing delegation
 	if err := d.queuedVET.Sub(amount); err != nil {
 		return nil, err
 	}
 
-	// Decrement queuedWeight when withdrawing delegation
 	weight := delegation.Weight()
 	if err := d.queuedWeight.Sub(weight); err != nil {
 		return nil, err
