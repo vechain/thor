@@ -218,6 +218,11 @@ func (d *delegations) Withdraw(delegationID thor.Bytes32) (*big.Int, error) {
 	amount := delegation.Stake
 	delegation.Stake = big.NewInt(0)
 
+	// Decrement queuedVET when withdrawing delegation
+	if err := d.queuedVET.Sub(amount); err != nil {
+		return nil, err
+	}
+
 	// remove the delegation from the mapping after the withdraw
 	if err := d.storage.SetDelegation(delegationID, delegation); err != nil {
 		return nil, err
