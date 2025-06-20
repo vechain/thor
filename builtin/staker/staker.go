@@ -254,12 +254,6 @@ func (s *Staker) AddDelegation(
 		logger.Info("failed to add delegation", "ValidationID", validationID, "error", err)
 		return thor.Bytes32{}, err
 	} else {
-		weight := big.NewInt(0).Mul(stake, big.NewInt(int64(multiplier)))
-		weight = big.NewInt(0).Quo(weight, big.NewInt(100))
-		err := s.queuedWeight.Add(weight)
-		if err != nil {
-			return [32]byte{}, err
-		}
 		logger.Info("added delegation", "ValidationID", validationID, "id", id)
 		return id, nil
 	}

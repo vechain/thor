@@ -15,16 +15,18 @@ import (
 
 // delegations is a struct that manages the delegations for the staker contract.
 type delegations struct {
-	storage   *storage
-	queuedVET *solidity.Uint256
-	idCounter *solidity.Uint256
+	storage      *storage
+	queuedVET    *solidity.Uint256
+	queuedWeight *solidity.Uint256
+	idCounter    *solidity.Uint256
 }
 
 func newDelegations(storage *storage) *delegations {
 	return &delegations{
-		storage:   storage,
-		queuedVET: solidity.NewUint256(storage.Address(), storage.State(), slotQueuedVET),
-		idCounter: solidity.NewUint256(storage.Address(), storage.State(), slotDelegationsCounter),
+		storage:      storage,
+		queuedVET:    solidity.NewUint256(storage.Address(), storage.State(), slotQueuedVET),
+		queuedWeight: solidity.NewUint256(storage.Address(), storage.State(), slotQueuedWeight),
+		idCounter:    solidity.NewUint256(storage.Address(), storage.State(), slotDelegationsCounter),
 	}
 }
 
@@ -89,6 +91,11 @@ func (d *delegations) Add(
 	}
 
 	if err := d.queuedVET.Add(stake); err != nil {
+		return thor.Bytes32{}, err
+	}
+
+	// Add queuedWeight when adding delegation
+	if err := d.queuedWeight.Add(weight); err != nil {
 		return thor.Bytes32{}, err
 	}
 
@@ -221,7 +228,13 @@ func (d *delegations) Withdraw(delegationID thor.Bytes32) (*big.Int, error) {
 	if err := d.queuedVET.Sub(amount); err != nil {
 		return nil, err
 	}
-	
+
+	// Decrement queuedWeight when withdrawing delegation
+	weight := delegation.Weight()
+	if err := d.queuedWeight.Sub(weight); err != nil {
+		return nil, err
+	}
+
 	delegation.Stake = big.NewInt(0)
 
 	// remove the delegation from the mapping after the withdraw
