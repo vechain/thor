@@ -515,3 +515,86 @@ func Test_Delegator_Queued_Weight(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).Add(validatorStake, stake), queuedVetAfter)
 	assert.Equal(t, big.NewInt(0).Add(validatorWeight, delegatorWeight), queuedWeightAfter)
 }
+
+func Test_Delegator_Queued_Weight_QueuedValidator_Withdraw(t *testing.T) {
+	staker, _ := newStaker(t, 0, 101, false)
+
+	validatorAddr := datagen.RandAddress()
+	validatorID, err := staker.AddValidator(validatorAddr, validatorAddr, uint32(360)*24*15, minStake, true, 0)
+	assert.NoError(t, err)
+
+	initialQueuedVET, initialQueuedWeight, err := staker.QueuedStake()
+	assert.NoError(t, err)
+
+	delegationStake := new(big.Int).Div(minStake, big.NewInt(4))
+	delegationID, err := staker.AddDelegation(validatorID, delegationStake, true, 255)
+	assert.NoError(t, err)
+
+	afterAddQueuedVET, afterAddQueuedWeight, err := staker.QueuedStake()
+	assert.NoError(t, err)
+
+	expectedWeight := new(big.Int).Mul(delegationStake, big.NewInt(255))
+	expectedWeight = new(big.Int).Quo(expectedWeight, big.NewInt(100))
+
+	assert.Equal(t, new(big.Int).Add(initialQueuedVET, delegationStake), afterAddQueuedVET)
+	assert.Equal(t, new(big.Int).Add(initialQueuedWeight, expectedWeight), afterAddQueuedWeight)
+
+	withdrawnAmount, err := staker.WithdrawDelegation(delegationID)
+	assert.NoError(t, err)
+	assert.Equal(t, delegationStake, withdrawnAmount)
+
+	afterWithdrawQueuedVET, afterWithdrawQueuedWeight, err := staker.QueuedStake()
+	assert.NoError(t, err)
+
+	assert.Equal(t, initialQueuedVET, afterWithdrawQueuedVET)
+	assert.Equal(t, initialQueuedWeight, afterWithdrawQueuedWeight)
+}
+
+func Test_Delegator_Queued_Weight_MultipleDelegations_Withdraw(t *testing.T) {
+	staker, validators := newDelegationStaker(t)
+
+	validator := validators[0]
+	stake1 := new(big.Int).Set(minStake)
+	stake2 := new(big.Int).Div(minStake, big.NewInt(2))
+
+	initialQueuedVET, initialQueuedWeight, err := staker.QueuedStake()
+	assert.NoError(t, err)
+
+	id1, err := staker.AddDelegation(validator.ID, stake1, true, 200)
+	assert.NoError(t, err)
+
+	id2, err := staker.AddDelegation(validator.ID, stake2, false, 150)
+	assert.NoError(t, err)
+
+	afterAddQueuedVET, afterAddQueuedWeight, err := staker.QueuedStake()
+	assert.NoError(t, err)
+
+	expectedWeight1 := new(big.Int).Mul(stake1, big.NewInt(200))
+	expectedWeight1 = new(big.Int).Quo(expectedWeight1, big.NewInt(100))
+	expectedWeight2 := new(big.Int).Mul(stake2, big.NewInt(150))
+	expectedWeight2 = new(big.Int).Quo(expectedWeight2, big.NewInt(100))
+	totalExpectedWeight := new(big.Int).Add(expectedWeight1, expectedWeight2)
+
+	assert.Equal(t, new(big.Int).Add(initialQueuedVET, new(big.Int).Add(stake1, stake2)), afterAddQueuedVET)
+	assert.Equal(t, new(big.Int).Add(initialQueuedWeight, totalExpectedWeight), afterAddQueuedWeight)
+
+	withdrawnAmount1, err := staker.WithdrawDelegation(id1)
+	assert.NoError(t, err)
+	assert.Equal(t, stake1, withdrawnAmount1)
+
+	afterWithdraw1QueuedVET, afterWithdraw1QueuedWeight, err := staker.QueuedStake()
+	assert.NoError(t, err)
+
+	assert.Equal(t, new(big.Int).Add(initialQueuedVET, stake2), afterWithdraw1QueuedVET)
+	assert.Equal(t, new(big.Int).Add(initialQueuedWeight, expectedWeight2), afterWithdraw1QueuedWeight)
+
+	withdrawnAmount2, err := staker.WithdrawDelegation(id2)
+	assert.NoError(t, err)
+	assert.Equal(t, stake2, withdrawnAmount2)
+
+	afterWithdraw2QueuedVET, afterWithdraw2QueuedWeight, err := staker.QueuedStake()
+	assert.NoError(t, err)
+
+	assert.Equal(t, initialQueuedVET, afterWithdraw2QueuedVET)
+	assert.Equal(t, initialQueuedWeight, afterWithdraw2QueuedWeight)
+}
