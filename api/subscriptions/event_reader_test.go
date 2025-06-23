@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/v2/api/types"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/chain"
 )
 
@@ -26,7 +26,7 @@ func TestEventReader_Read(t *testing.T) {
 
 	er := &eventReader{
 		repo:        thorChain.Repo(),
-		filter:      &types.SubscriptionEventFilter{},
+		filter:      &api.SubscriptionEventFilter{},
 		blockReader: &mockBlockReaderWithError{},
 	}
 
@@ -37,7 +37,7 @@ func TestEventReader_Read(t *testing.T) {
 	assert.False(t, ok)
 
 	// Test case 2: There are no events available to read
-	er = newEventReader(thorChain.Repo(), genesisBlk.Header().ID(), &types.SubscriptionEventFilter{})
+	er = newEventReader(thorChain.Repo(), genesisBlk.Header().ID(), &api.SubscriptionEventFilter{})
 
 	events, ok, err = er.Read()
 	assert.NoError(t, err)
@@ -49,9 +49,9 @@ func TestEventReader_Read(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, ok)
 
-	var eventMessages []*types.EventMessage
+	var eventMessages []*api.EventMessage
 	for _, event := range events {
-		if msg, ok := event.(*types.EventMessage); ok {
+		if msg, ok := event.(*api.EventMessage); ok {
 			eventMessages = append(eventMessages, msg)
 		} else {
 			t.Fatal("unexpected type")

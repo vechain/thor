@@ -19,7 +19,6 @@ import (
 	"github.com/mattn/go-isatty"
 	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/cmd/thor/node"
 	"github.com/vechain/thor/v2/cmd/thor/pruner"
@@ -29,6 +28,7 @@ import (
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/metrics"
 	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/p2psrv"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/txpool"
@@ -180,7 +180,7 @@ func defaultAction(ctx *cli.Context) error {
 	metricsURL := ""
 	if enableMetrics {
 		metrics.InitializePrometheusMetrics()
-		url, closeFunc, err := api.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
+		url, closeFunc, err := p2psrv.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
 		if err != nil {
 			return fmt.Errorf("unable to start metrics server - %w", err)
 		}
@@ -248,7 +248,7 @@ func defaultAction(ctx *cli.Context) error {
 	logAPIRequests := &atomic.Bool{}
 	logAPIRequests.Store(ctx.Bool(enableAPILogsFlag.Name))
 	if ctx.Bool(enableAdminFlag.Name) {
-		url, closeFunc, err := api.StartAdminServer(
+		url, closeFunc, err := p2psrv.StartAdminServer(
 			ctx.String(adminAddrFlag.Name),
 			logLevel,
 			repo,
@@ -267,7 +267,7 @@ func defaultAction(ctx *cli.Context) error {
 		return errors.Wrap(err, "init bft engine")
 	}
 
-	apiHandler, apiCloser := api.New(
+	apiHandler, apiCloser := p2psrv.NewRouter(
 		repo,
 		state.NewStater(mainDB),
 		txPool,
@@ -344,7 +344,7 @@ func soloAction(ctx *cli.Context) error {
 	metricsURL := ""
 	if enableMetrics {
 		metrics.InitializePrometheusMetrics()
-		url, closeFunc, err := api.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
+		url, closeFunc, err := p2psrv.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
 		if err != nil {
 			return fmt.Errorf("unable to start metrics server - %w", err)
 		}
@@ -403,7 +403,7 @@ func soloAction(ctx *cli.Context) error {
 	logAPIRequests := &atomic.Bool{}
 	logAPIRequests.Store(ctx.Bool(enableAPILogsFlag.Name))
 	if ctx.Bool(enableAdminFlag.Name) {
-		url, closeFunc, err := api.StartAdminServer(
+		url, closeFunc, err := p2psrv.StartAdminServer(
 			ctx.String(adminAddrFlag.Name),
 			logLevel,
 			repo,
@@ -439,7 +439,7 @@ func soloAction(ctx *cli.Context) error {
 	txPool := txpool.New(repo, state.NewStater(mainDB), txPoolOption, forkConfig)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
-	apiHandler, apiCloser := api.New(
+	apiHandler, apiCloser := p2psrv.NewRouter(
 		repo,
 		state.NewStater(mainDB),
 		txPool,
