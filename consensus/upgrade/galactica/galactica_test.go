@@ -63,6 +63,18 @@ func TestCalcBaseFeeEdgeCases(t *testing.T) {
 				assert.True(t, baseFee.Cmp(big.NewInt(thor.InitialBaseFee)) == 0)
 			},
 		},
+		{
+			name: "Before galactica fork",
+			f: func(t *testing.T) {
+				var parentID thor.Bytes32
+				binary.BigEndian.PutUint32(parentID[:], 2)
+
+				// parent.Number() = 3
+				parent := new(block.Builder).ParentID(parentID).Build().Header()
+				baseFee := CalcBaseFee(parent, config())
+				assert.Nil(t, baseFee)
+			},
+		},
 	}
 
 	for _, tt := range tests {
