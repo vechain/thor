@@ -271,7 +271,7 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 		case tr.IsExpired(header.Number()):
 			return consensusError(fmt.Sprintf("tx expired: ref %v, current %v, expiration %v", tr.BlockRef().Number(), header.Number(), tr.Expiration()))
 		case header.Number() < c.forkConfig.GALACTICA && tr.Type() != tx.TypeLegacy:
-			return consensusError(tx.ErrTxTypeNotSupported.Error())
+			return consensusError("invalid tx: " + tx.ErrTxTypeNotSupported.Error())
 		}
 
 		if err := tr.TestFeatures(header.TxsFeatures()); err != nil {
@@ -333,13 +333,6 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 			return nil, nil, err
 		} else if found {
 			return nil, nil, consensusError("tx already exists")
-		}
-
-		// check if tx has enough fee to cover for base fee, if set
-		if header.BaseFee() != nil {
-			if err := galactica.ValidateGalacticaTxFee(tx, state, header.BaseFee()); err != nil {
-				return nil, nil, err
-			}
 		}
 
 		// check depended tx
