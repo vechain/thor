@@ -217,6 +217,15 @@ func (p *TxPool) SubscribeTxEvent(ch chan *TxEvent) event.Subscription {
 }
 
 func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmitted bool) error {
+	txTypeString := "Legacy"
+	if newTx.Type() == tx.TypeDynamicFee {
+		txTypeString = "DynamicFee"
+	}
+	source := "local"
+	if !localSubmitted {
+		source = "remote"
+	}
+
 	if p.all.ContainsHash(newTx.Hash()) {
 		// tx already in the pool
 		return nil
@@ -283,6 +292,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		}); err != nil {
 			return txRejectedError{err.Error()}
 		}
+		metricTxPoolGauge().AddWithLabel(1, map[string]string{"source": source, "type": txTypeString})
 
 		p.goes.Go(func() {
 			p.txFeed.Send(&TxEvent{newTx, &executable})
@@ -299,6 +309,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		if err := p.all.Add(txObj, p.options.LimitPerAccount, func(_ thor.Address, _ *big.Int) error { return nil }); err != nil {
 			return txRejectedError{err.Error()}
 		}
+		metricTxPoolGauge().AddWithLabel(1, map[string]string{"source": source, "type": txTypeString})
 		logger.Trace("tx added", "id", newTx.ID())
 		p.goes.Go(func() {
 			p.txFeed.Send(&TxEvent{newTx, nil})
@@ -311,25 +322,11 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 // Add adds a new tx into pool.
 // It's not assumed as an error if the tx to be added is already in the pool,
 func (p *TxPool) Add(newTx *tx.Transaction) error {
-	txTypeString := "Unknown"
-	if newTx.Type() == tx.TypeLegacy {
-		txTypeString = "Legacy"
-	} else if newTx.Type() == tx.TypeDynamicFee {
-		txTypeString = "DynamicFee"
-	}
-	metricTxPoolGauge().AddWithLabel(1, map[string]string{"source": "remote", "type": txTypeString})
 	return p.add(newTx, false, false)
 }
 
 // AddLocal adds new locally submitted tx into pool.
 func (p *TxPool) AddLocal(newTx *tx.Transaction) error {
-	txTypeString := "Unknown"
-	if newTx.Type() == tx.TypeLegacy {
-		txTypeString = "Legacy"
-	} else if newTx.Type() == tx.TypeDynamicFee {
-		txTypeString = "DynamicFee"
-	}
-	metricTxPoolGauge().AddWithLabel(1, map[string]string{"source": "local", "type": txTypeString})
 	return p.add(newTx, false, true)
 }
 
