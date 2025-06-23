@@ -6,25 +6,13 @@
 package galactica
 
 import (
-	"errors"
-	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
-)
-
-var (
-	// ErrBaseFeeNotSet is returned if the base fee is not set after the Galactica fork
-	ErrBaseFeeNotSet = errors.New("base fee not set after galactica")
-	// ErrGasPriceTooLowForBlockBase is returned if the transaction gas price is less than
-	// the base fee of the block.
-	ErrGasPriceTooLowForBlockBase = errors.New("gas price is less than block base fee")
 )
 
 // CalcBaseFee calculates the basefee of the header.
@@ -126,24 +114,4 @@ func CalculateReward(gasUsed uint64, rewardGasPrice, rewardRatio *big.Int, isGal
 	reward.Mul(reward, rewardRatio)
 	reward.Div(reward, big.NewInt(1e18))
 	return reward
-}
-
-func validateGalacticaTxFee(tr *tx.Transaction, legacyTxBaseGasPrice, baseFee *big.Int) error {
-	// proved work is not accounted for verifying if gas is enough to cover block base fee
-	effectiveGasPrice := tr.EffectiveGasPrice(baseFee, legacyTxBaseGasPrice)
-
-	// do not accept txs with less than the block base fee
-	if effectiveGasPrice.Cmp(baseFee) < 0 {
-		return fmt.Errorf("%w: expected %s got %s", ErrGasPriceTooLowForBlockBase, baseFee.String(), effectiveGasPrice)
-	}
-	return nil
-}
-
-func ValidateGalacticaTxFee(tr *tx.Transaction, state *state.State, blockBaseFeeGasPrice *big.Int) error {
-	legacyTxBaseGasPrice, err := builtin.Params.Native(state).Get(thor.KeyLegacyTxBaseGasPrice)
-	if err != nil {
-		return err
-	}
-
-	return validateGalacticaTxFee(tr, legacyTxBaseGasPrice, blockBaseFeeGasPrice)
 }
