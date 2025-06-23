@@ -6,7 +6,6 @@
 package consensus
 
 import (
-	"errors"
 	"math/big"
 	"testing"
 
@@ -15,7 +14,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
@@ -59,7 +57,7 @@ func TestValidateBlockBody(t *testing.T) {
 				return new(block.Builder).Transaction(tr).Build()
 			},
 			forkConfig:    &thor.ForkConfig{GALACTICA: 10},
-			expectedError: consensusError(tx.ErrTxTypeNotSupported.Error()),
+			expectedError: consensusError("invalid tx: " + tx.ErrTxTypeNotSupported.Error()),
 		},
 		{
 			name: "supported legacy tx type after galactica fork",
@@ -113,21 +111,21 @@ func TestValidateBlock(t *testing.T) {
 			name: "valid block",
 			testFun: func(t *testing.T) {
 				baseFee := big.NewInt(100000)
-				tr := tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).BlockRef(tx.NewBlockRef(10)).MaxFeePerGas(new(big.Int).Sub(baseFee, common.Big1)).Build()
+				tr := tx.MustSign(tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).BlockRef(tx.NewBlockRef(10)).MaxFeePerGas(new(big.Int).Sub(baseFee, common.Big1)).Gas(21000).Build(), genesis.DevAccounts()[0].PrivateKey)
 				blk := new(block.Builder).BaseFee(baseFee).Transaction(tr).Build()
 
 				c := New(repo, stater, &thor.ForkConfig{GALACTICA: 0})
 				s, r, err := c.verifyBlock(blk, state, 0)
 				assert.Nil(t, s)
 				assert.Nil(t, r)
-				assert.True(t, errors.Is(err, galactica.ErrGasPriceTooLowForBlockBase))
+				assert.ErrorContains(t, err, "gas price is less than block base fee")
 			},
 		},
 		{
 			name: "legacy tx with high base fee",
 			testFun: func(t *testing.T) {
 				baseFee := big.NewInt(thor.InitialBaseFee * 1000) // Base fee higher than legacy tx base gas price
-				tr := tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Gas(21000).BlockRef(tx.NewBlockRef(10)).Build()
+				tr := tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Gas(21000).BlockRef(tx.NewBlockRef(10)).Gas(21000).Build()
 				tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 				blk := new(block.Builder).
 					BaseFee(baseFee).
@@ -141,7 +139,7 @@ func TestValidateBlock(t *testing.T) {
 				s, r, err := c.verifyBlock(blk, state, 0)
 				assert.Nil(t, s)
 				assert.Nil(t, r)
-				assert.True(t, errors.Is(err, galactica.ErrGasPriceTooLowForBlockBase))
+				assert.ErrorContains(t, err, "gas price is less than block base fee")
 			},
 		},
 	}
