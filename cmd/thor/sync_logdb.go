@@ -11,7 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
-	
+
 	"github.com/pkg/errors"
 	"github.com/pmezard/go-difflib/difflib"
 	"github.com/vechain/thor/v2/block"
