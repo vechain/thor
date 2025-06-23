@@ -38,6 +38,7 @@ import (
 	"github.com/mattn/go-isatty"
 	"github.com/mattn/go-tty"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/doc"
 	"github.com/vechain/thor/v2/api/fees"
 	"github.com/vechain/thor/v2/chain"
@@ -288,8 +289,8 @@ func parseGenesisFile(uri string) (*genesis.Genesis, *thor.ForkConfig, error) {
 	return customGen, &forkConfig, nil
 }
 
-func makeAPIConfig(ctx *cli.Context, logAPIRequests *atomic.Bool, soloMode bool) p2psrv.Config {
-	return p2psrv.Config{
+func makeAPIConfig(ctx *cli.Context, logAPIRequests *atomic.Bool, soloMode bool) api.Config {
+	return api.Config{
 		AllowedOrigins: ctx.String(apiCorsFlag.Name),
 		BacktraceLimit: uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
 		CallGasLimit:   ctx.Uint64(apiCallGasLimitFlag.Name),

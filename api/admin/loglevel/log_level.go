@@ -11,7 +11,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/types"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/log"
 )
@@ -40,13 +40,13 @@ func (l *LogLevel) Mount(root *mux.Router, pathPrefix string) {
 }
 
 func (l *LogLevel) getLogLevelHandler(w http.ResponseWriter, _ *http.Request) error {
-	return utils.WriteJSON(w, api.Response{
+	return utils.WriteJSON(w, types.Response{
 		CurrentLevel: l.logLevel.Level().String(),
 	})
 }
 
 func (l *LogLevel) postLogLevelHandler(w http.ResponseWriter, r *http.Request) error {
-	var req api.Request
+	var req types.Request
 
 	if err := utils.ParseJSON(r.Body, &req); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "Invalid request body"))
@@ -71,7 +71,7 @@ func (l *LogLevel) postLogLevelHandler(w http.ResponseWriter, r *http.Request) e
 
 	log.Info("log level changed", "pkg", "loglevel", "level", l.logLevel.Level().String())
 
-	return utils.WriteJSON(w, api.Response{
+	return utils.WriteJSON(w, types.Response{
 		CurrentLevel: l.logLevel.Level().String(),
 	})
 }

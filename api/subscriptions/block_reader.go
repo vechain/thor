@@ -6,7 +6,7 @@
 package subscriptions
 
 import (
-	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/types"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -28,7 +28,7 @@ func (br *blockReader) Read() ([]any, bool, error) {
 	}
 	var msgs []any
 	for _, block := range blocks {
-		msg, err := api.ConvertBlock(block)
+		msg, err := types.ConvertBlock(block)
 		if err != nil {
 			return nil, false, err
 		}

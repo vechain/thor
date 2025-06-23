@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package p2psrv
+package api
 
 import (
 	"bytes"
@@ -21,7 +21,6 @@ import (
 	"github.com/prometheus/common/expfmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/api/subscriptions"
 	"github.com/vechain/thor/v2/metrics"
@@ -52,7 +51,7 @@ func TestMetricsMiddleware(t *testing.T) {
 	acc := accounts.New(thorChain.Repo(), thorChain.Stater(), math.MaxUint64, &thor.NoFork, thorChain.Engine(), true)
 	acc.Mount(router, "/accounts")
 	router.PathPrefix("/metrics").Handler(metrics.HTTPHandler())
-	router.Use(api.MetricsMiddleware)
+	router.Use(MetricsMiddleware)
 	ts := httptest.NewServer(router)
 
 	httpGet(t, ts.URL+"/accounts/0x")
@@ -107,7 +106,7 @@ func TestWebsocketMetrics(t *testing.T) {
 	sub := subscriptions.New(thorChain.Repo(), []string{"*"}, 10, txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{}, &thor.NoFork), true)
 	sub.Mount(router, "/subscriptions")
 	router.PathPrefix("/metrics").Handler(metrics.HTTPHandler())
-	router.Use(api.MetricsMiddleware)
+	router.Use(MetricsMiddleware)
 	ts := httptest.NewServer(router)
 
 	// initiate 1 beat subscription, active websocket should be 1
