@@ -340,6 +340,9 @@ func (v *validations) IncreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 	if err := v.queuedVET.Add(amount); err != nil {
 		return err
 	}
+	if err := v.queuedWeight.Add(big.NewInt(0).Mul(amount, validatorWeightMultiplier)); err != nil {
+		return err
+	}
 
 	return v.storage.SetValidation(id, entry)
 }
@@ -379,6 +382,9 @@ func (v *validations) DecreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 		entry.PendingLocked = big.NewInt(0).Sub(entry.PendingLocked, amount)
 		entry.WithdrawableVET = big.NewInt(0).Add(entry.WithdrawableVET, amount)
 		if err := v.queuedVET.Sub(amount); err != nil {
+			return err
+		}
+		if err := v.queuedWeight.Sub(big.NewInt(0).Mul(amount, validatorWeightMultiplier)); err != nil {
 			return err
 		}
 	}
