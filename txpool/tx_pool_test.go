@@ -20,19 +20,22 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/metrics"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
-	Tx "github.com/vechain/thor/v2/tx"
 )
 
 const LIMIT = 10
@@ -94,6 +97,60 @@ func newHTTPServer() *httptest.Server {
 	return server
 }
 
+func TestTxPoolMetrics(t *testing.T) {
+	metrics.InitializePrometheusMetrics()
+
+	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.NoFork)
+	defer pool.Close()
+
+	tx1 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
+	err := pool.Add(tx1)
+	assert.NoError(t, err)
+
+	tx2 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 0, nil, tx.Features(0), devAccounts[0])
+	err = pool.Add(tx2)
+	assert.Equal(t, "tx rejected: expired", err.Error())
+
+	gatherers := prometheus.Gatherers{prometheus.DefaultGatherer}
+	metricFamilies, err := gatherers.Gather()
+	require.NoError(t, err)
+
+	var txPoolMetric *dto.MetricFamily
+	for _, mf := range metricFamilies {
+		if mf.GetName() == "thor_metrics_txpool_current_tx_count" {
+			txPoolMetric = mf
+			break
+		}
+	}
+
+	require.NotNil(t, txPoolMetric, "txpool_current_tx_count metric should exist")
+
+	metrics := txPoolMetric.GetMetric()
+	require.Greater(t, len(metrics), 0, "should have at least one metric entry")
+
+	foundLegacy := false
+	for _, m := range metrics {
+		labels := m.GetLabel()
+		source := ""
+		txType := ""
+		for _, label := range labels {
+			if label.GetName() == "source" {
+				source = label.GetValue()
+			}
+			if label.GetName() == "type" {
+				txType = label.GetValue()
+			}
+		}
+
+		if source == "remote" && txType == "Legacy" {
+			foundLegacy = true
+			assert.Equal(t, float64(1), m.GetGauge().GetValue())
+		}
+	}
+
+	assert.True(t, foundLegacy, "should have metric entry for Legacy transaction")
+}
+
 func TestNewCloseWithServer(t *testing.T) {
 	server := newHTTPServer()
 	defer server.Close()
@@ -102,7 +159,7 @@ func TestNewCloseWithServer(t *testing.T) {
 	defer pool.Close()
 
 	// Create a slice of transactions to be added to the pool.
-	txs := make(Tx.Transactions, 0, 30)
+	txs := make(tx.Transactions, 0, 30)
 	for i := range 15 {
 		tx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i%len(devAccounts)])
 		txs = append(txs, tx)
@@ -116,7 +173,7 @@ func TestNewCloseWithServer(t *testing.T) {
 
 func FillPoolWithLegacyTxs(pool *TxPool, t *testing.T) {
 	// Create a slice of transactions to be added to the pool.
-	txs := make(Tx.Transactions, 0, 15)
+	txs := make(tx.Transactions, 0, 15)
 	for range 12 {
 		tx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
 		txs = append(txs, tx)
@@ -125,7 +182,7 @@ func FillPoolWithLegacyTxs(pool *TxPool, t *testing.T) {
 	// Call the Fill method
 	pool.Fill(txs)
 
-	err := pool.Add(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(10), 100, nil, Tx.Features(0), devAccounts[0]))
+	err := pool.Add(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(10), 100, nil, tx.Features(0), devAccounts[0]))
 	assert.Equal(t, err.Error(), "tx rejected: pool is full")
 }
 
@@ -134,7 +191,7 @@ func FillPoolWithDynFeeTxs(pool *TxPool, t *testing.T) {
 	addOneBlock(t, pool)
 
 	// Create a slice of transactions to be added to the pool.
-	txs := make(Tx.Transactions, 0, 15)
+	txs := make(tx.Transactions, 0, 15)
 	for range 12 {
 		tx := newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
 		txs = append(txs, tx)
@@ -143,7 +200,7 @@ func FillPoolWithDynFeeTxs(pool *TxPool, t *testing.T) {
 	// Call the Fill method
 	pool.Fill(txs)
 
-	err := pool.Add(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(10), 100, nil, Tx.Features(0), devAccounts[0]))
+	err := pool.Add(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(10), 100, nil, tx.Features(0), devAccounts[0]))
 	assert.Equal(t, err.Error(), "tx rejected: pool is full")
 	assert.Equal(t, "tx rejected: pool is full", err.Error())
 }
@@ -153,7 +210,7 @@ func FillPoolWithMixedTxs(pool *TxPool, t *testing.T) {
 	addOneBlock(t, pool)
 
 	// Create a slice of transactions to be added to the pool.
-	txs := make(Tx.Transactions, 0, 15)
+	txs := make(tx.Transactions, 0, 15)
 	for range 6 {
 		trx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
 		txs = append(txs, trx)
@@ -164,7 +221,7 @@ func FillPoolWithMixedTxs(pool *TxPool, t *testing.T) {
 	// Call the Fill method
 	pool.Fill(txs)
 
-	err := pool.Add(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(10), 100, nil, Tx.Features(0), devAccounts[0]))
+	err := pool.Add(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(10), 100, nil, tx.Features(0), devAccounts[0]))
 	assert.Equal(t, err.Error(), "tx rejected: pool is full")
 	assert.Equal(t, "tx rejected: pool is full", err.Error())
 }
@@ -247,7 +304,7 @@ func TestDump(t *testing.T) {
 	for _, dumpedTx := range dumpedTxs {
 		found := false
 		for _, addedTx := range txsToAdd {
-			if dumpedTx.ID() == addedTx.ID() {
+			if addedTx.ID() == dumpedTx.ID() {
 				found = true
 				break
 			}
@@ -398,7 +455,7 @@ func TestWashTxs(t *testing.T) {
 
 	txs, _, _, err = pool.wash(pool.repo.BestBlockSummary())
 	assert.Nil(t, err)
-	assert.Equal(t, Tx.Transactions{tx1}, txs)
+	assert.Equal(t, tx.Transactions{tx1}, txs)
 
 	st := pool.stater.NewState(trie.Root{Hash: pool.repo.GenesisBlock().Header().StateRoot()})
 	stage, _ := st.Stage(trie.Version{Major: 1})
@@ -414,7 +471,7 @@ func TestWashTxs(t *testing.T) {
 
 	txs, _, _, err = pool.wash(pool.repo.BestBlockSummary())
 	assert.Nil(t, err)
-	assert.Equal(t, Tx.Transactions{tx1}, txs)
+	assert.Equal(t, tx.Transactions{tx1}, txs)
 
 	tx2 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[1])
 	txObj2, _ := resolveTx(tx2, false)
@@ -600,7 +657,7 @@ func TestFillPool(t *testing.T) {
 	defer pool.Close()
 
 	// Create a slice of transactions to be added to the pool.
-	txs := make(Tx.Transactions, 0, 5)
+	txs := make(tx.Transactions, 0, 5)
 	for i := range 5 {
 		tx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i%len(devAccounts)])
 		txs = append(txs, tx)
@@ -658,7 +715,7 @@ func TestFillPoolWithMixedTxs(t *testing.T) {
 	defer pool.Close()
 
 	// Create a slice of transactions to be added to the pool.
-	txs := make(Tx.Transactions, 0, 10)
+	txs := make(tx.Transactions, 0, 10)
 	for i := range 5 {
 		tr := newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i%len(devAccounts)])
 		txs = append(txs, tr)
@@ -756,20 +813,20 @@ func TestAdd(t *testing.T) {
 	rand.Read(data[:])
 
 	tests = []struct {
-		tx     *Tx.Transaction
+		tx     *tx.Transaction
 		errStr string
 	}{
-		{newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(10), 100, nil, Tx.Features(0), acc), "tx rejected: tx is not executable"},
-		{newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(100), 100, nil, Tx.Features(0), acc), "tx rejected: block ref out of schedule"},
-		{newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, Tx.Features(0), acc), "tx rejected: tx is not executable"},
-		{newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, Tx.Features(2), acc), "tx rejected: unsupported features"},
-		{newTx(tx.TypeLegacy, pool.repo.ChainTag(), []*tx.Clause{tx.NewClause(nil).WithData(data[:])}, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, Tx.Features(0), acc), "tx rejected: size too large"},
+		{newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(10), 100, nil, tx.Features(0), acc), "tx rejected: tx is not executable"},
+		{newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(100), 100, nil, tx.Features(0), acc), "tx rejected: block ref out of schedule"},
+		{newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(0), acc), "tx rejected: tx is not executable"},
+		{newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(2), acc), "tx rejected: unsupported features"},
+		{newTx(tx.TypeLegacy, pool.repo.ChainTag(), []*tx.Clause{tx.NewClause(nil).WithData(data[:])}, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(0), acc), "tx rejected: size too large"},
 		{badReserved, "tx rejected: unsupported features"},
-		{newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(10), 100, nil, Tx.Features(0), acc), "tx rejected: tx is not executable"},
-		{newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(100), 100, nil, Tx.Features(0), acc), "tx rejected: block ref out of schedule"},
-		{newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, Tx.Features(0), acc), "tx rejected: tx is not executable"},
-		{newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, Tx.Features(2), acc), "tx rejected: unsupported features"},
-		{newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), []*tx.Clause{tx.NewClause(nil).WithData(data[:])}, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, Tx.Features(0), acc), "tx rejected: size too large"},
+		{newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(10), 100, nil, tx.Features(0), acc), "tx rejected: tx is not executable"},
+		{newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(100), 100, nil, tx.Features(0), acc), "tx rejected: block ref out of schedule"},
+		{newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(0), acc), "tx rejected: tx is not executable"},
+		{newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(2), acc), "tx rejected: unsupported features"},
+		{newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), []*tx.Clause{tx.NewClause(nil).WithData(data[:])}, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(0), acc), "tx rejected: size too large"},
 	}
 
 	for _, tt := range tests {
@@ -795,7 +852,6 @@ func TestBeforeVIP191Add(t *testing.T) {
 	defer pool.Close()
 
 	err = pool.StrictlyAdd(newDelegatedTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(0), 100, nil, acc, acc))
-
 	assert.Equal(t, "tx rejected: unsupported features", err.Error())
 }
 
@@ -827,7 +883,7 @@ func TestExecutableAndNonExecutableLimits(t *testing.T) {
 	defer pool.Close()
 
 	// Create a slice of transactions to be added to the pool.
-	txs := make(Tx.Transactions, 0, 11)
+	txs := make(tx.Transactions, 0, 11)
 	for i := range 12 {
 		tx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i%len(devAccounts)])
 		pool.add(tx, false, false)
