@@ -292,7 +292,6 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		}); err != nil {
 			return txRejectedError{err.Error()}
 		}
-		metricTxPoolGauge().AddWithLabel(1, map[string]string{"source": source, "type": txTypeString})
 
 		p.goes.Go(func() {
 			p.txFeed.Send(&TxEvent{newTx, &executable})
@@ -309,13 +308,13 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		if err := p.all.Add(txObj, p.options.LimitPerAccount, func(_ thor.Address, _ *big.Int) error { return nil }); err != nil {
 			return txRejectedError{err.Error()}
 		}
-		metricTxPoolGauge().AddWithLabel(1, map[string]string{"source": source, "type": txTypeString})
 		logger.Trace("tx added", "id", newTx.ID())
 		p.goes.Go(func() {
 			p.txFeed.Send(&TxEvent{newTx, nil})
 		})
 	}
 	atomic.AddUint32(&p.addedAfterWash, 1)
+	metricTxPoolGauge().AddWithLabel(1, map[string]string{"source": source, "type": txTypeString})
 	return nil
 }
 
