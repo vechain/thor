@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 
 	"github.com/gorilla/mux"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/log"
 )
@@ -18,10 +19,6 @@ import (
 type APILogs struct {
 	enabled *atomic.Bool
 	mu      sync.Mutex
-}
-
-type Status struct {
-	Enabled bool `json:"enabled"`
 }
 
 func New(enabled *atomic.Bool) *APILogs {
@@ -47,7 +44,7 @@ func (a *APILogs) areAPILogsEnabled(w http.ResponseWriter, _ *http.Request) erro
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	return utils.WriteJSON(w, Status{
+	return utils.WriteJSON(w, api.AdminLogStatus{
 		Enabled: a.enabled.Load(),
 	})
 }
@@ -56,7 +53,7 @@ func (a *APILogs) setAPILogsEnabled(w http.ResponseWriter, r *http.Request) erro
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	var req Status
+	var req api.AdminLogStatus
 	if err := utils.ParseJSON(r.Body, &req); err != nil {
 		return utils.BadRequest(err)
 	}
@@ -64,7 +61,7 @@ func (a *APILogs) setAPILogsEnabled(w http.ResponseWriter, r *http.Request) erro
 
 	log.Info("api logs updated", "pkg", "apilogs", "enabled", req.Enabled)
 
-	return utils.WriteJSON(w, Status{
+	return utils.WriteJSON(w, api.AdminLogStatus{
 		Enabled: a.enabled.Load(),
 	})
 }

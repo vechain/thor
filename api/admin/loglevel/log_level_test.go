@@ -16,7 +16,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/v2/api/types"
+	"github.com/vechain/thor/v2/api"
 )
 
 type TestCase struct {
@@ -87,7 +87,7 @@ func TestLogLevelHandler(t *testing.T) {
 			}
 
 			if tt.expectedLevel != "" {
-				var response types.Response
+				var response api.Response
 				if err := json.NewDecoder(rr.Body).Decode(&response); err != nil {
 					t.Fatalf("could not decode response: %v", err)
 				}

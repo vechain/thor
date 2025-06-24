@@ -19,8 +19,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/transactions"
-	"github.com/vechain/thor/v2/api/types"
 	"github.com/vechain/thor/v2/thor"
 
 	tccommon "github.com/vechain/thor/v2/thorclient/common"
@@ -28,14 +28,14 @@ import (
 
 func TestClient_GetTransactionReceipt(t *testing.T) {
 	txID := thor.Bytes32{0x01}
-	expectedReceipt := &types.Receipt{
+	expectedReceipt := &api.Receipt{
 		GasUsed:  1000,
 		GasPayer: thor.Address{0x01},
 		Paid:     &math.HexOrDecimal256{},
 		Reward:   &math.HexOrDecimal256{},
 		Reverted: false,
-		Meta:     types.ReceiptMeta{},
-		Outputs:  []*types.Output{},
+		Meta:     api.ReceiptMeta{},
+		Outputs:  []*api.Output{},
 	}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -54,11 +54,11 @@ func TestClient_GetTransactionReceipt(t *testing.T) {
 }
 
 func TestClient_InspectClauses(t *testing.T) {
-	calldata := &types.BatchCallData{}
-	expectedResults := []*types.CallResult{{
+	calldata := &api.BatchCallData{}
+	expectedResults := []*api.CallResult{{
 		Data:      "data",
-		Events:    []*types.Event{},
-		Transfers: []*types.Transfer{},
+		Events:    []*api.Event{},
+		Transfers: []*api.Transfer{},
 		GasUsed:   1000,
 		Reverted:  false,
 		VMError:   "no error"}}
@@ -79,8 +79,8 @@ func TestClient_InspectClauses(t *testing.T) {
 }
 
 func TestClient_SendTransaction(t *testing.T) {
-	rawTx := &types.RawTx{}
-	expectedResult := &types.SendTxResult{ID: &thor.Bytes32{0x01}}
+	rawTx := &api.RawTx{}
+	expectedResult := &api.SendTxResult{ID: &thor.Bytes32{0x01}}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/transactions", r.URL.Path)
@@ -98,12 +98,12 @@ func TestClient_SendTransaction(t *testing.T) {
 }
 
 func TestClient_FilterTransfers(t *testing.T) {
-	req := &types.TransferFilter{}
-	expectedTransfers := []*types.FilteredTransfer{{
+	req := &api.TransferFilter{}
+	expectedTransfers := []*api.FilteredTransfer{{
 		Sender:    thor.Address{0x01},
 		Recipient: thor.Address{0x02},
 		Amount:    &math.HexOrDecimal256{},
-		Meta:      types.LogMeta{},
+		Meta:      api.LogMeta{},
 	}}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -122,12 +122,12 @@ func TestClient_FilterTransfers(t *testing.T) {
 }
 
 func TestClient_FilterEvents(t *testing.T) {
-	req := &types.EventFilter{}
-	expectedEvents := []types.FilteredEvent{{
+	req := &api.EventFilter{}
+	expectedEvents := []api.FilteredEvent{{
 		Address: thor.Address{0x01},
 		Topics:  []*thor.Bytes32{{0x01}},
 		Data:    "data",
-		Meta:    types.LogMeta{},
+		Meta:    api.LogMeta{},
 	}}
 	expectedPath := "/logs/event"
 
@@ -148,7 +148,7 @@ func TestClient_FilterEvents(t *testing.T) {
 
 func TestClient_GetAccount(t *testing.T) {
 	addr := thor.Address{0x01}
-	expectedAccount := &types.Account{
+	expectedAccount := &api.Account{
 		Balance: &math.HexOrDecimal256{},
 		Energy:  &math.HexOrDecimal256{},
 		HasCode: false,
@@ -171,7 +171,7 @@ func TestClient_GetAccount(t *testing.T) {
 
 func TestClient_GetAccountCode(t *testing.T) {
 	addr := thor.Address{0x01}
-	expectedCodeRsp := &types.GetCodeResult{Code: hexutil.Encode([]byte{0x01, 0x03})}
+	expectedCodeRsp := &api.GetCodeResult{Code: hexutil.Encode([]byte{0x01, 0x03})}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/accounts/"+addr.String()+"/code", r.URL.Path)
@@ -193,7 +193,7 @@ func TestClient_GetAccountCode(t *testing.T) {
 func TestClient_GetStorage(t *testing.T) {
 	addr := thor.Address{0x01}
 	key := thor.Bytes32{0x01}
-	expectedStorageRsp := &types.GetStorageResult{Value: hexutil.Encode([]byte{0x01, 0x03})}
+	expectedStorageRsp := &api.GetStorageResult{Value: hexutil.Encode([]byte{0x01, 0x03})}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/accounts/"+addr.String()+"/storage/"+key.String(), r.URL.Path)
@@ -214,7 +214,7 @@ func TestClient_GetStorage(t *testing.T) {
 
 func TestClient_GetExpandedBlock(t *testing.T) {
 	blockID := "123"
-	expectedBlock := &types.JSONExpandedBlock{}
+	expectedBlock := &api.JSONExpandedBlock{}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/blocks/"+blockID+"?expanded=true", r.URL.Path+"?"+r.URL.RawQuery)
@@ -233,8 +233,8 @@ func TestClient_GetExpandedBlock(t *testing.T) {
 
 func TestClient_GetBlock(t *testing.T) {
 	blockID := "123"
-	expectedBlock := &types.JSONCollapsedBlock{
-		JSONBlockSummary: &types.JSONBlockSummary{
+	expectedBlock := &api.JSONCollapsedBlock{
+		JSONBlockSummary: &api.JSONBlockSummary{
 			Number:      123456,
 			ID:          thor.Bytes32{0x01},
 			GasLimit:    1000,
@@ -264,7 +264,7 @@ func TestClient_GetBlock(t *testing.T) {
 
 func TestClient_GetNilBlock(t *testing.T) {
 	blockID := "123"
-	var expectedBlock *types.JSONCollapsedBlock
+	var expectedBlock *api.JSONCollapsedBlock
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/blocks/"+blockID, r.URL.Path)
@@ -301,13 +301,13 @@ func TestClient_GetTransaction(t *testing.T) {
 
 func TestClient_GetRawTransaction(t *testing.T) {
 	txID := thor.Bytes32{0x01}
-	expectedTx := &types.RawTransaction{
-		Meta: &types.TxMeta{
+	expectedTx := &api.RawTransaction{
+		Meta: &api.TxMeta{
 			BlockID:        thor.Bytes32{0x01},
 			BlockNumber:    1,
 			BlockTimestamp: 123,
 		},
-		RawTx: types.RawTx{Raw: hexutil.Encode([]byte{0x03})},
+		RawTx: api.RawTx{Raw: hexutil.Encode([]byte{0x03})},
 	}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -330,7 +330,7 @@ func TestClient_GetRawTransaction(t *testing.T) {
 func TestClient_GetFeesHistory(t *testing.T) {
 	blockCount := uint32(5)
 	newestBlock := "best"
-	expectedFeesHistory := &types.FeesHistory{
+	expectedFeesHistory := &api.FeesHistory{
 		OldestBlock:   thor.Bytes32{0x01},
 		BaseFeePerGas: []*hexutil.Big{(*hexutil.Big)(big.NewInt(0x01))},
 		GasUsedRatio:  []float64{0.0021},
@@ -355,7 +355,7 @@ func TestClient_GetFeesHistoryWithRewardPercentiles(t *testing.T) {
 	blockCount := uint32(5)
 	newestBlock := "best"
 	rewardPercentiles := []float64{10, 90}
-	expectedFeesHistory := &types.FeesHistory{
+	expectedFeesHistory := &api.FeesHistory{
 		OldestBlock:   thor.Bytes32{0x01},
 		BaseFeePerGas: []*hexutil.Big{(*hexutil.Big)(big.NewInt(0x01))},
 		GasUsedRatio:  []float64{0.0021},
@@ -393,7 +393,7 @@ func TestClient_GetFeesHistoryWithRewardPercentiles(t *testing.T) {
 }
 
 func TestClient_GetFeesPriority(t *testing.T) {
-	expectedFeesPriority := &types.FeesPriority{
+	expectedFeesPriority := &api.FeesPriority{
 		MaxPriorityFeePerGas: (*hexutil.Big)(big.NewInt(0x20)),
 	}
 
@@ -452,7 +452,7 @@ func TestClient_RawHTTPGet(t *testing.T) {
 }
 
 func TestClient_GetPeers(t *testing.T) {
-	expectedPeers := []*types.PeerStats{{
+	expectedPeers := []*api.PeerStats{{
 		Name:        "nodeA",
 		BestBlockID: thor.Bytes32{0x01},
 		TotalScore:  1000,
@@ -490,62 +490,62 @@ func TestClient_Errors(t *testing.T) {
 		{
 			name:     "TransactionReceipt",
 			path:     "/transactions/" + txID.String() + "/receipt",
-			function: func(client *Client) (*types.Receipt, error) { return client.GetTransactionReceipt(&txID, "") },
+			function: func(client *Client) (*api.Receipt, error) { return client.GetTransactionReceipt(&txID, "") },
 		},
 		{
 			name: "InspectClauses",
 			path: "/accounts/*",
-			function: func(client *Client) ([]*types.CallResult, error) {
-				return client.InspectClauses(&types.BatchCallData{}, "")
+			function: func(client *Client) ([]*api.CallResult, error) {
+				return client.InspectClauses(&api.BatchCallData{}, "")
 			},
 		},
 		{
 			name: "SendTransaction",
 			path: "/transactions",
-			function: func(client *Client) (*types.SendTxResult, error) {
-				return client.SendTransaction(&types.RawTx{})
+			function: func(client *Client) (*api.SendTxResult, error) {
+				return client.SendTransaction(&api.RawTx{})
 			},
 		},
 		{
 			name: "FilterTransfers",
 			path: "/logs/transfer",
-			function: func(client *Client) ([]*types.FilteredTransfer, error) {
-				return client.FilterTransfers(&types.TransferFilter{})
+			function: func(client *Client) ([]*api.FilteredTransfer, error) {
+				return client.FilterTransfers(&api.TransferFilter{})
 			},
 		},
 		{
 			name: "FilterEvents",
 			path: "/logs/event",
-			function: func(client *Client) ([]types.FilteredEvent, error) {
-				return client.FilterEvents(&types.EventFilter{})
+			function: func(client *Client) ([]api.FilteredEvent, error) {
+				return client.FilterEvents(&api.EventFilter{})
 			},
 		},
 		{
 			name:     "Account",
 			path:     "/accounts/" + addr.String(),
-			function: func(client *Client) (*types.Account, error) { return client.GetAccount(&addr, "") },
+			function: func(client *Client) (*api.Account, error) { return client.GetAccount(&addr, "") },
 		},
 		{
 			name:     "GetContractByteCode",
 			path:     "/accounts/" + addr.String() + "/code",
-			function: func(client *Client) (*types.GetCodeResult, error) { return client.GetAccountCode(&addr, "") },
+			function: func(client *Client) (*api.GetCodeResult, error) { return client.GetAccountCode(&addr, "") },
 		},
 		{
 			name: "GetAccountStorage",
 			path: "/accounts/" + addr.String() + "/storage/" + thor.Bytes32{}.String(),
-			function: func(client *Client) (*types.GetStorageResult, error) {
+			function: func(client *Client) (*api.GetStorageResult, error) {
 				return client.GetAccountStorage(&addr, &thor.Bytes32{}, tccommon.BestRevision)
 			},
 		},
 		{
 			name:     "ExpandedBlock",
 			path:     "/blocks/" + blockID + "?expanded=true",
-			function: func(client *Client) (*types.JSONExpandedBlock, error) { return client.GetExpandedBlock(blockID) },
+			function: func(client *Client) (*api.JSONExpandedBlock, error) { return client.GetExpandedBlock(blockID) },
 		},
 		{
 			name:     "Block",
 			path:     "/blocks/" + blockID,
-			function: func(client *Client) (*types.JSONCollapsedBlock, error) { return client.GetBlock(blockID) },
+			function: func(client *Client) (*api.JSONCollapsedBlock, error) { return client.GetBlock(blockID) },
 		},
 		{
 			name: "Transaction",
@@ -557,7 +557,7 @@ func TestClient_Errors(t *testing.T) {
 		{
 			name:     "Peers",
 			path:     "/node/network/peers",
-			function: func(client *Client) ([]*types.PeerStats, error) { return client.GetPeers() },
+			function: func(client *Client) ([]*api.PeerStats, error) { return client.GetPeers() },
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

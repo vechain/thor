@@ -19,7 +19,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vechain/thor/v2/api/types"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/testchain"
@@ -133,7 +133,7 @@ func TestDeprecated(t *testing.T) {
 
 	tclient = thorclient.New(ts.URL)
 
-	body := &types.CallData{}
+	body := &api.CallData{}
 
 	_, statusCode, _ := tclient.RawHTTPClient().RawHTTPPost("/accounts", body)
 	assert.Equal(t, http.StatusGone, statusCode, "invalid address")
@@ -154,7 +154,7 @@ func getAccount(t *testing.T) {
 	//revision is optional default `best`
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/accounts/" + addr.String())
 	require.NoError(t, err)
-	var acc types.Account
+	var acc api.Account
 	if err := json.Unmarshal(res, &acc); err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +177,7 @@ func getAccountWithGenesisRevision(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, statusCode, "bad revision")
 
-	var acc types.Account
+	var acc api.Account
 	if err := json.Unmarshal(res, &acc); err != nil {
 		t.Fatal(err)
 	}
@@ -325,7 +325,7 @@ func buildTxWithClauses(txType tx.Type, chainTag byte, clauses ...*tx.Clause) *t
 }
 
 func deployContractWithCall(t *testing.T) {
-	badBody := &types.CallData{
+	badBody := &api.CallData{
 		Gas:  10000000,
 		Data: "abc",
 	}
@@ -333,7 +333,7 @@ func deployContractWithCall(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad data")
 
-	reqBody := &types.CallData{
+	reqBody := &api.CallData{
 		Gas:  10000000,
 		Data: hexutil.Encode(bytecode),
 	}
@@ -345,7 +345,7 @@ func deployContractWithCall(t *testing.T) {
 	//revision is optional defaut `best`
 	res, _, err := tclient.RawHTTPClient().RawHTTPPost("/accounts", reqBody)
 	require.NoError(t, err)
-	var output *types.CallResult
+	var output *api.CallResult
 	if err := json.Unmarshal(res, &output); err != nil {
 		t.Fatal(err)
 	}
@@ -366,7 +366,7 @@ func callContract(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid address")
 
-	badBody := &types.CallData{
+	badBody := &api.CallData{
 		Data: "input",
 	}
 	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/accounts/"+contractAddr.String(), badBody)
@@ -382,7 +382,7 @@ func callContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reqBody := &types.CallData{
+	reqBody := &api.CallData{
 		Data: hexutil.Encode(input),
 	}
 
@@ -397,7 +397,7 @@ func callContract(t *testing.T) {
 
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/accounts/"+contractAddr.String(), reqBody)
 	require.NoError(t, err)
-	var output *types.CallResult
+	var output *api.CallResult
 	if err = json.Unmarshal(res, &output); err != nil {
 		t.Fatal(err)
 	}
@@ -432,14 +432,14 @@ func batchCall(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, statusCode, "malformed data")
 
 	// Request body is not a valid BatchCallData
-	badBody := &types.BatchCallData{
-		Clauses: types.Clauses{
-			&types.Clause{
+	badBody := &api.BatchCallData{
+		Clauses: api.Clauses{
+			&api.Clause{
 				To:    &contractAddr,
 				Data:  "data1",
 				Value: nil,
 			},
-			&types.Clause{
+			&api.Clause{
 				To:    &contractAddr,
 				Data:  "data2",
 				Value: nil,
@@ -450,7 +450,7 @@ func batchCall(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid data")
 
 	// Request body has an invalid blockRef
-	badBlockRef := &types.BatchCallData{
+	badBlockRef := &api.BatchCallData{
 		BlockRef: "0x00",
 	}
 	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/accounts/*", badBlockRef)
@@ -477,14 +477,14 @@ func batchCall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reqBody := &types.BatchCallData{
-		Clauses: types.Clauses{
-			&types.Clause{
+	reqBody := &api.BatchCallData{
+		Clauses: api.Clauses{
+			&api.Clause{
 				To:    &contractAddr,
 				Data:  hexutil.Encode(input),
 				Value: nil,
 			},
-			&types.Clause{
+			&api.Clause{
 				To:    &contractAddr,
 				Data:  hexutil.Encode(input),
 				Value: nil,
@@ -498,7 +498,7 @@ func batchCall(t *testing.T) {
 
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/accounts/*", reqBody)
 	require.NoError(t, err)
-	var results types.BatchCallResults
+	var results api.BatchCallResults
 	if err = json.Unmarshal(res, &results); err != nil {
 		t.Fatal(err)
 	}
@@ -518,8 +518,8 @@ func batchCall(t *testing.T) {
 
 	// Valid request
 	big := math.HexOrDecimal256(*big.NewInt(1000))
-	fullBody := &types.BatchCallData{
-		Clauses:    types.Clauses{},
+	fullBody := &api.BatchCallData{
+		Clauses:    api.Clauses{},
 		Gas:        21000,
 		GasPrice:   &big,
 		ProvedWork: &big,
@@ -533,8 +533,8 @@ func batchCall(t *testing.T) {
 	assert.Equal(t, http.StatusOK, statusCode)
 
 	// Request with not enough gas
-	tooMuchGasBody := &types.BatchCallData{
-		Clauses:    types.Clauses{},
+	tooMuchGasBody := &api.BatchCallData{
+		Clauses:    api.Clauses{},
 		Gas:        math.MaxUint64,
 		GasPrice:   &big,
 		ProvedWork: &big,

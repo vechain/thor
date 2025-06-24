@@ -16,8 +16,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/transactions"
-	"github.com/vechain/thor/v2/api/types"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/common"
 )
@@ -42,7 +42,7 @@ func NewWithHTTP(url string, c *http.Client) *Client {
 }
 
 // GetAccount retrieves the account details for the given address at the specified revision.
-func (c *Client) GetAccount(addr *thor.Address, revision string) (*types.Account, error) {
+func (c *Client) GetAccount(addr *thor.Address, revision string) (*api.Account, error) {
 	url := c.url + "/accounts/" + addr.String()
 	if revision != "" {
 		url += "?revision=" + revision
@@ -53,7 +53,7 @@ func (c *Client) GetAccount(addr *thor.Address, revision string) (*types.Account
 		return nil, fmt.Errorf("unable to retrieve account - %w", err)
 	}
 
-	var account types.Account
+	var account api.Account
 	if err = json.Unmarshal(body, &account); err != nil {
 		return nil, fmt.Errorf("unable to unmarshal account - %w", err)
 	}
@@ -62,7 +62,7 @@ func (c *Client) GetAccount(addr *thor.Address, revision string) (*types.Account
 }
 
 // InspectClauses performs a clause inspection on batch call data at the specified revision.
-func (c *Client) InspectClauses(calldata *types.BatchCallData, revision string) ([]*types.CallResult, error) {
+func (c *Client) InspectClauses(calldata *api.BatchCallData, revision string) ([]*api.CallResult, error) {
 	url := c.url + "/accounts/*"
 	if revision != "" {
 		url += "?revision=" + revision
@@ -72,7 +72,7 @@ func (c *Client) InspectClauses(calldata *types.BatchCallData, revision string) 
 		return nil, fmt.Errorf("unable to request inspect clauses - %w", err)
 	}
 
-	var inspectionRes []*types.CallResult
+	var inspectionRes []*api.CallResult
 	if err = json.Unmarshal(body, &inspectionRes); err != nil {
 		return nil, fmt.Errorf("unable to unmarshal inspection result - %w", err)
 	}
@@ -81,7 +81,7 @@ func (c *Client) InspectClauses(calldata *types.BatchCallData, revision string) 
 }
 
 // GetAccountCode retrieves the contract code for the given address at the specified revision.
-func (c *Client) GetAccountCode(addr *thor.Address, revision string) (*types.GetCodeResult, error) {
+func (c *Client) GetAccountCode(addr *thor.Address, revision string) (*api.GetCodeResult, error) {
 	url := c.url + "/accounts/" + addr.String() + "/code"
 	if revision != "" {
 		url += "?revision=" + revision
@@ -92,7 +92,7 @@ func (c *Client) GetAccountCode(addr *thor.Address, revision string) (*types.Get
 		return nil, fmt.Errorf("unable to retrieve account code - %w", err)
 	}
 
-	var res types.GetCodeResult
+	var res api.GetCodeResult
 	if err = json.Unmarshal(body, &res); err != nil {
 		return nil, fmt.Errorf("unable to unmarshal code - %w", err)
 	}
@@ -101,7 +101,7 @@ func (c *Client) GetAccountCode(addr *thor.Address, revision string) (*types.Get
 }
 
 // GetAccountStorage retrieves the storage value for the given address and key at the specified revision.
-func (c *Client) GetAccountStorage(addr *thor.Address, key *thor.Bytes32, revision string) (*types.GetStorageResult, error) {
+func (c *Client) GetAccountStorage(addr *thor.Address, key *thor.Bytes32, revision string) (*api.GetStorageResult, error) {
 	url := c.url + "/accounts/" + addr.String() + "/storage/" + key.String()
 	if revision != "" {
 		url += "?revision=" + revision
@@ -112,7 +112,7 @@ func (c *Client) GetAccountStorage(addr *thor.Address, key *thor.Bytes32, revisi
 		return nil, fmt.Errorf("unable to retrieve account storage - %w", err)
 	}
 
-	var res types.GetStorageResult
+	var res api.GetStorageResult
 	if err = json.Unmarshal(body, &res); err != nil {
 		return nil, fmt.Errorf("unable to unmarshal storage result - %w", err)
 	}
@@ -144,7 +144,7 @@ func (c *Client) GetTransaction(txID *thor.Bytes32, head string, isPending bool)
 }
 
 // GetRawTransaction retrieves the raw transaction data by the transaction ID, along with options for head and pending status.
-func (c *Client) GetRawTransaction(txID *thor.Bytes32, head string, isPending bool) (*types.RawTransaction, error) {
+func (c *Client) GetRawTransaction(txID *thor.Bytes32, head string, isPending bool) (*api.RawTransaction, error) {
 	url := c.url + "/transactions/" + txID.String() + "?raw=true&"
 	if isPending {
 		url += "pending=true&"
@@ -158,7 +158,7 @@ func (c *Client) GetRawTransaction(txID *thor.Bytes32, head string, isPending bo
 		return nil, fmt.Errorf("unable to retrieve raw transaction - %w", err)
 	}
 
-	var tx types.RawTransaction
+	var tx api.RawTransaction
 	if err = json.Unmarshal(body, &tx); err != nil {
 		return nil, fmt.Errorf("unable to unmarshal raw transaction - %w", err)
 	}
@@ -167,7 +167,7 @@ func (c *Client) GetRawTransaction(txID *thor.Bytes32, head string, isPending bo
 }
 
 // GetTransactionReceipt retrieves the receipt for the given transaction ID at the specified head.
-func (c *Client) GetTransactionReceipt(txID *thor.Bytes32, head string) (*types.Receipt, error) {
+func (c *Client) GetTransactionReceipt(txID *thor.Bytes32, head string) (*api.Receipt, error) {
 	url := c.url + "/transactions/" + txID.String() + "/receipt"
 	if head != "" {
 		url += "?head=" + head
@@ -182,7 +182,7 @@ func (c *Client) GetTransactionReceipt(txID *thor.Bytes32, head string) (*types.
 		return nil, common.ErrNotFound
 	}
 
-	var receipt types.Receipt
+	var receipt api.Receipt
 	if err = json.Unmarshal(body, &receipt); err != nil {
 		return nil, fmt.Errorf("unable to unmarshal receipt - %w", err)
 	}
@@ -191,13 +191,13 @@ func (c *Client) GetTransactionReceipt(txID *thor.Bytes32, head string) (*types.
 }
 
 // SendTransaction sends a raw transaction to the blockchain.
-func (c *Client) SendTransaction(obj *types.RawTx) (*types.SendTxResult, error) {
+func (c *Client) SendTransaction(obj *api.RawTx) (*api.SendTxResult, error) {
 	body, err := c.httpPOST(c.url+"/transactions", obj)
 	if err != nil {
 		return nil, fmt.Errorf("unable to send raw transaction - %w", err)
 	}
 
-	var txID types.SendTxResult
+	var txID api.SendTxResult
 	if err = json.Unmarshal(body, &txID); err != nil {
 		return nil, fmt.Errorf("unable to unmarshal send transaction result - %w", err)
 	}
@@ -206,7 +206,7 @@ func (c *Client) SendTransaction(obj *types.RawTx) (*types.SendTxResult, error) 
 }
 
 // GetBlock retrieves a block by its block ID.
-func (c *Client) GetBlock(blockID string) (*types.JSONCollapsedBlock, error) {
+func (c *Client) GetBlock(blockID string) (*api.JSONCollapsedBlock, error) {
 	body, err := c.httpGET(c.url + "/blocks/" + blockID)
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve block - %w", err)
@@ -216,7 +216,7 @@ func (c *Client) GetBlock(blockID string) (*types.JSONCollapsedBlock, error) {
 		return nil, common.ErrNotFound
 	}
 
-	var block types.JSONCollapsedBlock
+	var block api.JSONCollapsedBlock
 	if err = json.Unmarshal(body, &block); err != nil {
 		return nil, fmt.Errorf("unable to unmarshal block - %w", err)
 	}
@@ -225,7 +225,7 @@ func (c *Client) GetBlock(blockID string) (*types.JSONCollapsedBlock, error) {
 }
 
 // GetExpandedBlock retrieves an expanded block by its revision.
-func (c *Client) GetExpandedBlock(revision string) (*types.JSONExpandedBlock, error) {
+func (c *Client) GetExpandedBlock(revision string) (*api.JSONExpandedBlock, error) {
 	body, err := c.httpGET(c.url + "/blocks/" + revision + "?expanded=true")
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve expanded block - %w", err)
@@ -235,7 +235,7 @@ func (c *Client) GetExpandedBlock(revision string) (*types.JSONExpandedBlock, er
 		return nil, common.ErrNotFound
 	}
 
-	var block types.JSONExpandedBlock
+	var block api.JSONExpandedBlock
 	if err = json.Unmarshal(body, &block); err != nil {
 		return nil, fmt.Errorf("unable to unmarshal expanded block - %w", err)
 	}
@@ -244,13 +244,13 @@ func (c *Client) GetExpandedBlock(revision string) (*types.JSONExpandedBlock, er
 }
 
 // FilterEvents filters events based on the provided event filter.
-func (c *Client) FilterEvents(req *types.EventFilter) ([]types.FilteredEvent, error) {
+func (c *Client) FilterEvents(req *api.EventFilter) ([]api.FilteredEvent, error) {
 	body, err := c.httpPOST(c.url+"/logs/event", req)
 	if err != nil {
 		return nil, fmt.Errorf("unable to filter events - %w", err)
 	}
 
-	var filteredEvents []types.FilteredEvent
+	var filteredEvents []api.FilteredEvent
 	if err = json.Unmarshal(body, &filteredEvents); err != nil {
 		return nil, fmt.Errorf("unable to unmarshal events - %w", err)
 	}
@@ -259,13 +259,13 @@ func (c *Client) FilterEvents(req *types.EventFilter) ([]types.FilteredEvent, er
 }
 
 // FilterTransfers filters transfer based on the provided transfer filter.
-func (c *Client) FilterTransfers(req *types.TransferFilter) ([]*types.FilteredTransfer, error) {
+func (c *Client) FilterTransfers(req *api.TransferFilter) ([]*api.FilteredTransfer, error) {
 	body, err := c.httpPOST(c.url+"/logs/transfer", req)
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve transfer logs - %w", err)
 	}
 
-	var filteredTransfers []*types.FilteredTransfer
+	var filteredTransfers []*api.FilteredTransfer
 	if err = json.Unmarshal(body, &filteredTransfers); err != nil {
 		return nil, fmt.Errorf("unable to unmarshal transfers - %w", err)
 	}
@@ -274,13 +274,13 @@ func (c *Client) FilterTransfers(req *types.TransferFilter) ([]*types.FilteredTr
 }
 
 // GetPeers retrieves the network peers connected to the node.
-func (c *Client) GetPeers() ([]*types.PeerStats, error) {
+func (c *Client) GetPeers() ([]*api.PeerStats, error) {
 	body, err := c.httpGET(c.url + "/node/network/peers")
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve peers - %w", err)
 	}
 
-	var peers []*types.PeerStats
+	var peers []*api.PeerStats
 	if err = json.Unmarshal(body, &peers); err != nil {
 		return nil, fmt.Errorf("unable to unmarshal peers - %w", err)
 	}
@@ -289,7 +289,7 @@ func (c *Client) GetPeers() ([]*types.PeerStats, error) {
 }
 
 // GetFeesHistory retrieves the fees history based on the block count and newest block.
-func (c *Client) GetFeesHistory(blockCount uint32, newestBlock string, rewardPercentiles []float64) (*types.FeesHistory, error) {
+func (c *Client) GetFeesHistory(blockCount uint32, newestBlock string, rewardPercentiles []float64) (*api.FeesHistory, error) {
 	var url strings.Builder
 	url.WriteString(c.url + "/fees/history?blockCount=" + fmt.Sprint(blockCount) + "&newestBlock=" + newestBlock)
 	if len(rewardPercentiles) > 0 {
@@ -304,7 +304,7 @@ func (c *Client) GetFeesHistory(blockCount uint32, newestBlock string, rewardPer
 		return nil, fmt.Errorf("unable to get the fees history - %w", err)
 	}
 
-	var history types.FeesHistory
+	var history api.FeesHistory
 	if err = json.Unmarshal(body, &history); err != nil {
 		return nil, fmt.Errorf("unable to unmarshal the fees history - %w", err)
 	}
@@ -313,13 +313,13 @@ func (c *Client) GetFeesHistory(blockCount uint32, newestBlock string, rewardPer
 }
 
 // GetFeesPriority retrieves the suggested maxPriorityFeePerGas for a transaction to be included in the next blocks.
-func (c *Client) GetFeesPriority() (*types.FeesPriority, error) {
+func (c *Client) GetFeesPriority() (*api.FeesPriority, error) {
 	body, err := c.httpGET(c.url + "/fees/priority")
 	if err != nil {
 		return nil, fmt.Errorf("unable to get the fees priority - %w", err)
 	}
 
-	var priority types.FeesPriority
+	var priority api.FeesPriority
 	if err = json.Unmarshal(body, &priority); err != nil {
 		return nil, fmt.Errorf("unable to unmarshal the fees priority - %w", err)
 	}

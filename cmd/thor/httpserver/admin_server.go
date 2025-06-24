@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package api
+package httpserver
 
 import (
 	"log/slog"
@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/v2/api/admin"
 	"github.com/vechain/thor/v2/api/admin/health"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/co"
@@ -32,7 +31,7 @@ func StartAdminServer(
 		return "", nil, errors.Wrapf(err, "listen admin API addr [%v]", addr)
 	}
 
-	adminHandler := admin.New(logLevel, health.New(repo, p2p), apiLogs)
+	adminHandler := NewAdminHandler(logLevel, health.New(repo, p2p), apiLogs)
 
 	srv := &http.Server{Handler: adminHandler, ReadHeaderTimeout: time.Second, ReadTimeout: 5 * time.Second}
 	var goes co.Goes
