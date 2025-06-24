@@ -64,14 +64,29 @@ func (o *txObject) Payer() *thor.Address {
 }
 
 func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock *block.Header, forkConfig *thor.ForkConfig) (bool, error) {
+	// evaluate the tx on the next block as head block is already history
+	blockNum := headBlock.Number() + 1
+	blockTime := headBlock.Timestamp() + thor.BlockInterval
+
 	switch {
 	case o.Gas() > headBlock.GasLimit():
 		return false, errors.New("gas too large")
-	case o.IsExpired(headBlock.Number() + 1): // Check tx expiration on top of next block
+	case o.IsExpired(blockNum): // Check tx expiration on top of next block
 		return false, errors.New("expired")
-	case o.BlockRef().Number() > headBlock.Number()+uint32(5*60/thor.BlockInterval):
+	case o.BlockRef().Number() > blockNum+uint32(5*60/thor.BlockInterval):
 		// reject deferred tx which will be applied after 5mins
 		return false, errors.New("block ref out of schedule")
+	case blockNum < forkConfig.GALACTICA && o.Type() != tx.TypeLegacy:
+		// reject none legacy tx before GALACTICA
+		return false, tx.ErrTxTypeNotSupported
+	}
+
+	var features tx.Features
+	if blockNum >= forkConfig.VIP191 {
+		features.SetDelegated(true)
+	}
+	if err := o.TestFeatures(features); err != nil {
+		return false, err
 	}
 
 	if has, err := chain.HasTransaction(o.ID(), o.BlockRef().Number()); err != nil {
@@ -94,22 +109,16 @@ func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 	}
 
 	// Tx is considered executable when the BlockRef has passed in reference to the next block.
-	if o.BlockRef().Number() > headBlock.Number()+1 {
+	if o.BlockRef().Number() > blockNum {
 		return false, nil
 	}
 
 	checkpoint := state.NewCheckpoint()
 	defer state.RevertTo(checkpoint)
 
-	isGalactica := headBlock.Number()+1 >= forkConfig.GALACTICA
-
-	var baseFee *big.Int
-	// If the best block is the last block before galactica, we need to estimate the new block's base fee.
-	if isGalactica {
-		baseFee = galactica.CalcBaseFee(headBlock, forkConfig)
-	}
-
-	_, _, payer, prepaid, _, err := o.resolved.BuyGas(state, headBlock.Timestamp()+thor.BlockInterval, baseFee)
+	// calculate the base fee for the next block
+	baseFee := galactica.CalcBaseFee(headBlock, forkConfig)
+	_, _, payer, prepaid, _, err := o.resolved.BuyGas(state, blockTime, baseFee)
 	if err != nil {
 		return false, err
 	}
