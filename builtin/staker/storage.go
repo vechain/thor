@@ -89,6 +89,7 @@ func (s *storage) GetValidation(id thor.Bytes32) (*Validation, error) {
 }
 
 func (s *storage) SetValidation(id thor.Bytes32, entry *Validation) error {
+	println("setting validation with", id.String(), entry.Next.String(), entry.Master.String(), entry.Endorsor.String())
 	if err := s.validations.Set(id, entry); err != nil {
 		return errors.Wrap(err, "failed to set validator")
 	}
