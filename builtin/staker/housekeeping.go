@@ -107,7 +107,6 @@ func (s *Staker) performRenewalUpdates(id thor.Bytes32, validator *Validation) e
 	}
 
 	// calculate the new totals for validator + delegations
-	println()
 	changeTVL := big.NewInt(0).Add(validatorRenewal.ChangeTVL, delegationsRenewal.ChangeTVL)
 	changeWeight := big.NewInt(0).Add(validatorRenewal.ChangeWeight, delegationsRenewal.ChangeWeight)
 	queuedDecrease := big.NewInt(0).Add(validatorRenewal.QueuedDecrease, delegationsRenewal.QueuedDecrease)

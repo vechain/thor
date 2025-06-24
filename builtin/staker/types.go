@@ -87,7 +87,6 @@ func (v *Validation) Renew() *Renewal {
 	changeTVL.Sub(changeTVL, v.NextPeriodDecrease)
 
 	queuedDecrease := big.NewInt(0).Set(v.PendingLocked)
-	v.LockedVET = big.NewInt(0).Add(v.LockedVET, changeTVL)
 	v.WithdrawableVET = big.NewInt(0).Add(v.WithdrawableVET, v.NextPeriodDecrease)
 	v.PendingLocked = big.NewInt(0)
 	v.NextPeriodDecrease = big.NewInt(0)

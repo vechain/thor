@@ -753,7 +753,7 @@ func TestStaker_IncreaseActive(t *testing.T) {
 	validator, err = staker.Get(id)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedStake, big.NewInt(0).Add(validator.LockedVET, validator.PendingLocked))
-	assert.Equal(t, big.NewInt(0).Mul(stake, big.NewInt(2)), validator.Weight)
+	assert.Equal(t, big.NewInt(0).Mul(validator.LockedVET, big.NewInt(2)), validator.Weight)
 
 	// verify withdraw amount decrease
 	_, _, err = staker.Housekeep(period)
@@ -928,7 +928,7 @@ func TestStaker_DecreaseActiveThenExit(t *testing.T) {
 	assert.Equal(t, StatusExit, validator.Status)
 	assert.Equal(t, big.NewInt(1000), validator.WithdrawableVET)
 	assert.Equal(t, big.NewInt(0), validator.LockedVET)
-	assert.Equal(t, big.NewInt(0).Sub(stake, big.NewInt(1000)), validator.CooldownVET)
+	assert.Equal(t, expectedStake, validator.CooldownVET)
 	assert.Equal(t, big.NewInt(0), validator.PendingLocked)
 }
 
@@ -1717,7 +1717,7 @@ func TestStaker_Housekeep_RecalculateIncrease(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, StatusActive, validator.Status)
 	stake = big.NewInt(0).Add(stake, big.NewInt(1))
-	assert.Equal(t, validator.LockedVET, stake)
+	assert.Equal(t, stake, validator.LockedVET)
 	assert.Equal(t, big.NewInt(0).Mul(stake, big.NewInt(2)), validator.Weight)
 	assert.Equal(t, validator.WithdrawableVET, big.NewInt(0))
 	assert.Equal(t, validator.PendingLocked, big.NewInt(0))
