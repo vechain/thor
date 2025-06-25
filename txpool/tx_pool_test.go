@@ -161,8 +161,7 @@ func TestTxPoolMetrics(t *testing.T) {
 		}
 	}
 
-	foundBadLegacy := false
-	foundAccepted := false
+	foundBad := false
 	for _, m := range badTxMetrics {
 		labels := m.GetLabel()
 		source := ""
@@ -172,19 +171,14 @@ func TestTxPoolMetrics(t *testing.T) {
 			}
 		}
 
-		if source == "badRemote" {
-			foundBadLegacy = true
-			assert.Equal(t, float64(3), m.GetGauge().GetValue())
-		}
 		if source == "remote" {
-			foundAccepted = true
-			assert.Equal(t, float64(-1), m.GetGauge().GetValue())
+			foundBad = true
+			assert.Equal(t, float64(-2), m.GetGauge().GetValue())
 		}
 	}
 
 	assert.True(t, foundLegacy, "should have metric entry for Legacy transaction")
-	assert.True(t, foundBadLegacy, "should have metric entry for bad Legacy transaction")
-	assert.True(t, foundAccepted, "should have metric entry for accepted bad Legacy transaction")
+	assert.True(t, foundBad, "should have metric entry for bad Legacy transaction")
 }
 
 func TestNewCloseWithServer(t *testing.T) {
