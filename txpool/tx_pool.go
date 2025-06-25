@@ -315,17 +315,20 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 	}
 	atomic.AddUint32(&p.addedAfterWash, 1)
 	metricTxPoolGauge().AddWithLabel(1, map[string]string{"source": source, "type": txTypeString})
+	metricBadTxGauge().AddWithLabel(-1, map[string]string{"source": "accepted"})
 	return nil
 }
 
 // Add adds a new tx into pool.
 // It's not assumed as an error if the tx to be added is already in the pool,
 func (p *TxPool) Add(newTx *tx.Transaction) error {
+	metricBadTxGauge().AddWithLabel(1, map[string]string{"source": "badRemote"})
 	return p.add(newTx, false, false)
 }
 
 // AddLocal adds new locally submitted tx into pool.
 func (p *TxPool) AddLocal(newTx *tx.Transaction) error {
+	metricBadTxGauge().AddWithLabel(1, map[string]string{"source": "badLocal"})
 	return p.add(newTx, false, true)
 }
 
