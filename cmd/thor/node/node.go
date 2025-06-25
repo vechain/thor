@@ -513,7 +513,6 @@ func (n *Node) processFork(newBlock *block.Block, oldBestBlockID thor.Bytes32) {
 side-chain count: %v`,
 			sideCount))
 
-		// Mostrar cada side chain con su ID y número de bloque
 		for i, id := range sideIDs {
 			b, err := n.repo.GetBlock(id)
 			if err != nil {
