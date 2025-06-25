@@ -173,7 +173,7 @@ func TestTxPoolMetrics(t *testing.T) {
 
 		if source == "remote" {
 			foundBad = true
-			assert.Equal(t, float64(-2), m.GetGauge().GetValue())
+			assert.Equal(t, float64(2), m.GetGauge().GetValue())
 		}
 	}
 

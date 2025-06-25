@@ -223,7 +223,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 	}
 	defer func() {
 		if err != nil {
-			metricBadTxGauge().AddWithLabel(-1, map[string]string{"source": source})
+			metricBadTxGauge().AddWithLabel(1, map[string]string{"source": source})
 		}
 	}()
 	txTypeString := "Legacy"
