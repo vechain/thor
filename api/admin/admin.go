@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package httpserver
+package admin
 
 import (
 	"log/slog"
@@ -18,7 +18,7 @@ import (
 	healthAPI "github.com/vechain/thor/v2/api/admin/health"
 )
 
-func NewAdminHandler(logLevel *slog.LevelVar, health *healthAPI.Health, apiLogsToggle *atomic.Bool) http.HandlerFunc {
+func New(logLevel *slog.LevelVar, health *healthAPI.Health, apiLogsToggle *atomic.Bool) http.HandlerFunc {
 	router := mux.NewRouter()
 	subRouter := router.PathPrefix("/admin").Subrouter()
 
