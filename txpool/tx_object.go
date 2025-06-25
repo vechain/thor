@@ -65,24 +65,25 @@ func (o *txObject) Payer() *thor.Address {
 
 func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock *block.Header, forkConfig *thor.ForkConfig) (bool, error) {
 	// evaluate the tx on the next block as head block is already history
-	blockNum := headBlock.Number() + 1
-	blockTime := headBlock.Timestamp() + thor.BlockInterval
+	nextBlockNum := headBlock.Number() + 1
+	nextBlockTime := headBlock.Timestamp() + thor.BlockInterval
 
 	switch {
 	case o.Gas() > headBlock.GasLimit():
 		return false, errors.New("gas too large")
-	case o.IsExpired(blockNum): // Check tx expiration on top of next block
+	case o.IsExpired(nextBlockNum): // Check tx expiration on top of next block
 		return false, errors.New("expired")
-	case o.BlockRef().Number() > blockNum+uint32(5*60/thor.BlockInterval):
+	case o.BlockRef().Number() > nextBlockNum+uint32(5*60/thor.BlockInterval):
 		// reject deferred tx which will be applied after 5mins
 		return false, errors.New("block ref out of schedule")
-	case blockNum < forkConfig.GALACTICA && o.Type() != tx.TypeLegacy:
-		// reject none legacy tx before GALACTICA
+	case nextBlockNum < forkConfig.GALACTICA && o.Type() != tx.TypeLegacy:
+		// reject non legacy tx before GALACTICA
 		return false, tx.ErrTxTypeNotSupported
 	}
 
+	// test features on next block
 	var features tx.Features
-	if blockNum >= forkConfig.VIP191 {
+	if nextBlockNum >= forkConfig.VIP191 {
 		features.SetDelegated(true)
 	}
 	if err := o.TestFeatures(features); err != nil {
@@ -109,7 +110,7 @@ func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 	}
 
 	// Tx is considered executable when the BlockRef has passed in reference to the next block.
-	if o.BlockRef().Number() > blockNum {
+	if o.BlockRef().Number() > nextBlockNum {
 		return false, nil
 	}
 
@@ -118,7 +119,7 @@ func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 
 	// calculate the base fee for the next block
 	baseFee := galactica.CalcBaseFee(headBlock, forkConfig)
-	_, _, payer, prepaid, _, err := o.resolved.BuyGas(state, blockTime, baseFee)
+	_, _, payer, prepaid, _, err := o.resolved.BuyGas(state, nextBlockTime, baseFee)
 	if err != nil {
 		return false, err
 	}
