@@ -8,7 +8,7 @@ package transactions
 import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/vechain/thor/v2/api/types"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -20,7 +20,7 @@ type Transaction struct {
 	ChainTag             byte                  `json:"chainTag"`
 	BlockRef             string                `json:"blockRef"`
 	Expiration           uint32                `json:"expiration"`
-	Clauses              types.Clauses         `json:"clauses"`
+	Clauses              api.Clauses           `json:"clauses"`
 	GasPriceCoef         *uint8                `json:"gasPriceCoef,omitempty"`
 	Gas                  uint64                `json:"gas"`
 	MaxFeePerGas         *math.HexOrDecimal256 `json:"maxFeePerGas,omitempty"`
@@ -30,7 +30,7 @@ type Transaction struct {
 	Nonce                math.HexOrDecimal64   `json:"nonce"`
 	DependsOn            *thor.Bytes32         `json:"dependsOn"`
 	Size                 uint32                `json:"size"`
-	Meta                 *types.TxMeta         `json:"meta"`
+	Meta                 *api.TxMeta           `json:"meta"`
 }
 
 // ConvertTransaction convert a raw transaction into a json format transaction
@@ -39,9 +39,9 @@ func ConvertTransaction(trx *tx.Transaction, header *block.Header) *Transaction 
 	origin, _ := trx.Origin()
 	delegator, _ := trx.Delegator()
 
-	cls := make(types.Clauses, len(trx.Clauses()))
+	cls := make(api.Clauses, len(trx.Clauses()))
 	for i, c := range trx.Clauses() {
-		clause := types.ConvertClause(c)
+		clause := api.ConvertClause(c)
 		cls[i] = &clause
 	}
 	br := trx.BlockRef()
@@ -70,7 +70,7 @@ func ConvertTransaction(trx *tx.Transaction, header *block.Header) *Transaction 
 	}
 
 	if header != nil {
-		t.Meta = &types.TxMeta{
+		t.Meta = &api.TxMeta{
 			BlockID:        header.ID(),
 			BlockNumber:    header.Number(),
 			BlockTimestamp: header.Timestamp(),

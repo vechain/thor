@@ -9,7 +9,7 @@ import (
 	"bytes"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/vechain/thor/v2/api/types"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thor/bloom"
@@ -18,10 +18,10 @@ import (
 type beatReader struct {
 	repo        *chain.Repository
 	blockReader chain.BlockReader
-	cache       *messageCache[types.BeatMessage]
+	cache       *messageCache[api.BeatMessage]
 }
 
-func newBeatReader(repo *chain.Repository, position thor.Bytes32, cache *messageCache[types.BeatMessage]) *beatReader {
+func newBeatReader(repo *chain.Repository, position thor.Bytes32, cache *messageCache[api.BeatMessage]) *beatReader {
 	return &beatReader{
 		repo:        repo,
 		blockReader: repo.NewBlockReader(position),
@@ -45,12 +45,12 @@ func (br *beatReader) Read() ([]any, bool, error) {
 	return msgs, len(blocks) > 0, nil
 }
 
-func (br *beatReader) generateBeatMessage(block *chain.ExtendedBlock) func() (types.BeatMessage, error) {
-	return func() (types.BeatMessage, error) {
+func (br *beatReader) generateBeatMessage(block *chain.ExtendedBlock) func() (api.BeatMessage, error) {
+	return func() (api.BeatMessage, error) {
 		header := block.Header()
 		receipts, err := br.repo.GetBlockReceipts(header.ID())
 		if err != nil {
-			return types.BeatMessage{}, err
+			return api.BeatMessage{}, err
 		}
 		txs := block.Transactions()
 		content := &bloomContent{}
@@ -80,7 +80,7 @@ func (br *beatReader) generateBeatMessage(block *chain.ExtendedBlock) func() (ty
 		for _, item := range content.items {
 			bloom.Add(item)
 		}
-		beat := types.BeatMessage{
+		beat := api.BeatMessage{
 			Number:      header.Number(),
 			ID:          header.ID(),
 			ParentID:    header.ParentID(),
