@@ -176,7 +176,7 @@ func TestTxPoolMetrics(t *testing.T) {
 			foundBadLegacy = true
 			assert.Equal(t, float64(3), m.GetGauge().GetValue())
 		}
-		if source == "accepted" {
+		if source == "remote" {
 			foundAccepted = true
 			assert.Equal(t, float64(-1), m.GetGauge().GetValue())
 		}

@@ -316,7 +316,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 	}
 	atomic.AddUint32(&p.addedAfterWash, 1)
 	metricTxPoolGauge().AddWithLabel(1, map[string]string{"source": source, "type": txTypeString})
-	metricBadTxGauge().AddWithLabel(-1, map[string]string{"source": "accepted"})
+	metricBadTxGauge().AddWithLabel(-1, map[string]string{"source": source})
 	return nil
 }
 
