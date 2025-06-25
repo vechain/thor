@@ -507,11 +507,22 @@ func (n *Node) processFork(newBlock *block.Block, oldBestBlockID thor.Bytes32) {
 		return
 	}
 
-	if n := len(sideIDs); n >= 2 {
+	if sideCount := len(sideIDs); sideCount >= 2 {
 		logger.Warn(fmt.Sprintf(
 			`⑂⑂⑂⑂⑂⑂⑂⑂ FORK HAPPENED ⑂⑂⑂⑂⑂⑂⑂⑂
-side-chain:   %v  %v`,
-			n, sideIDs[n-1]))
+side-chain count: %v`,
+			sideCount))
+
+		// Mostrar cada side chain con su ID y número de bloque
+		for i, id := range sideIDs {
+			b, err := n.repo.GetBlock(id)
+			if err != nil {
+				logger.Warn("failed to get block for fork log", "err", err, "id", id)
+				logger.Warn(fmt.Sprintf("side-chain[%d]: ID=%v, Block=unknown", i, id))
+			} else {
+				logger.Warn(fmt.Sprintf("side-chain[%d]: ID=%v, Block=%d", i, id, b.Header().Number()))
+			}
+		}
 	}
 
 	for _, id := range sideIDs {
