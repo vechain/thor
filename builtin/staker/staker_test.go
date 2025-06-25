@@ -825,6 +825,35 @@ func TestStaker_ChangeStakeActiveValidatorWithQueued(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, stake, queuedVET)
 	assert.Equal(t, big.NewInt(0).Mul(stake, big.NewInt(2)), queuedWeight)
+
+	// decrease stake
+	decreaseAmount := big.NewInt(2500)
+	decreasedAmount := big.NewInt(0).Sub(expectedStake, decreaseAmount)
+	err = staker.DecreaseStake(addr, id, decreaseAmount)
+	assert.NoError(t, err)
+	validator, err = staker.Get(id)
+	assert.NoError(t, err)
+	assert.Equal(t, decreaseAmount, validator.NextPeriodDecrease)
+	assert.Equal(t, big.NewInt(0).Mul(expectedStake, big.NewInt(2)), validator.Weight)
+
+	queuedVET, queuedWeight, err = staker.QueuedStake()
+	assert.NoError(t, err)
+	assert.Equal(t, stake, queuedVET)
+	assert.Equal(t, big.NewInt(0).Mul(stake, big.NewInt(2)), queuedWeight)
+
+	// verify queued weight is decreased
+	_, _, err = staker.Housekeep(period)
+	assert.NoError(t, err)
+	validator, err = staker.Get(id)
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(2500), validator.WithdrawableVET)
+	assert.Equal(t, big.NewInt(0).Mul(decreasedAmount, big.NewInt(2)), validator.Weight)
+
+	// verify queued stake is still the same as before the decrease
+	queuedVET, queuedWeight, err = staker.QueuedStake()
+	assert.NoError(t, err)
+	assert.Equal(t, stake, queuedVET)
+	assert.Equal(t, big.NewInt(0).Mul(stake, big.NewInt(2)), queuedWeight)
 }
 
 func TestStaker_DecreaseActive(t *testing.T) {

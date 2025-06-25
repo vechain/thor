@@ -123,8 +123,12 @@ func (s *Staker) performRenewalUpdates(id thor.Bytes32, validator *Validation) e
 	if err := s.queuedVET.Sub(queuedDecrease); err != nil {
 		return err
 	}
-	if err := s.queuedWeight.Add(big.NewInt(0).Neg(changeWeight)); err != nil {
-		return err
+	// the queued weight should decrease only if the validator is queued or the weight is increasingAdd commentMore actions
+	// because of an increased stake transaction or new delegators
+	if validator.Status == StatusQueued || changeWeight.Cmp(big.NewInt(0)) > 0 {
+		if err := s.queuedWeight.Add(big.NewInt(0).Neg(changeWeight)); err != nil {
+			return err
+		}
 	}
 	return s.storage.SetValidation(id, validator)
 }
