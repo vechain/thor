@@ -15,8 +15,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/transactions"
-	"github.com/vechain/thor/v2/api/types"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/common"
 	"github.com/vechain/thor/v2/thorclient/httpclient"
@@ -118,32 +118,32 @@ func (c *Client) RawWSClient() *wsclient.Client {
 }
 
 // Account retrieves an account from the blockchain based on the provided address and options.
-func (c *Client) Account(addr *thor.Address, opts ...Option) (*types.Account, error) {
+func (c *Client) Account(addr *thor.Address, opts ...Option) (*api.Account, error) {
 	options := applyOptions(opts)
 	return c.httpConn.GetAccount(addr, options.revision)
 }
 
 // InspectClauses inspects the clauses of a batch call data and returns the call results.
-func (c *Client) InspectClauses(calldata *types.BatchCallData, opts ...Option) ([]*types.CallResult, error) {
+func (c *Client) InspectClauses(calldata *api.BatchCallData, opts ...Option) ([]*api.CallResult, error) {
 	options := applyOptions(opts)
 	return c.httpConn.InspectClauses(calldata, options.revision)
 }
 
 // InspectTxClauses inspects the clauses of a transaction and returns the call results.
 // It accepts both signed and unsigned transactions.
-func (c *Client) InspectTxClauses(tx *tx.Transaction, senderAddr *thor.Address, opts ...Option) ([]*types.CallResult, error) {
+func (c *Client) InspectTxClauses(tx *tx.Transaction, senderAddr *thor.Address, opts ...Option) ([]*api.CallResult, error) {
 	clauses := convertToBatchCallData(tx, senderAddr)
 	return c.InspectClauses(clauses, opts...)
 }
 
 // AccountCode retrieves the account code for a given address.
-func (c *Client) AccountCode(addr *thor.Address, opts ...Option) (*types.GetCodeResult, error) {
+func (c *Client) AccountCode(addr *thor.Address, opts ...Option) (*api.GetCodeResult, error) {
 	options := applyOptions(opts)
 	return c.httpConn.GetAccountCode(addr, options.revision)
 }
 
 // AccountStorage retrieves the storage value for a given address and key.
-func (c *Client) AccountStorage(addr *thor.Address, key *thor.Bytes32, opts ...Option) (*types.GetStorageResult, error) {
+func (c *Client) AccountStorage(addr *thor.Address, key *thor.Bytes32, opts ...Option) (*api.GetStorageResult, error) {
 	options := applyOptions(opts)
 	return c.httpConn.GetAccountStorage(addr, key, options.revision)
 }
@@ -155,19 +155,19 @@ func (c *Client) Transaction(id *thor.Bytes32, opts ...Option) (*transactions.Tr
 }
 
 // RawTransaction retrieves the raw transaction data by its ID.
-func (c *Client) RawTransaction(id *thor.Bytes32, opts ...Option) (*types.RawTransaction, error) {
+func (c *Client) RawTransaction(id *thor.Bytes32, opts ...Option) (*api.RawTransaction, error) {
 	options := applyHeadOptions(opts)
 	return c.httpConn.GetRawTransaction(id, options.revision, options.pending)
 }
 
 // TransactionReceipt retrieves the receipt for a transaction by its ID.
-func (c *Client) TransactionReceipt(id *thor.Bytes32, opts ...Option) (*types.Receipt, error) {
+func (c *Client) TransactionReceipt(id *thor.Bytes32, opts ...Option) (*api.Receipt, error) {
 	options := applyHeadOptions(opts)
 	return c.httpConn.GetTransactionReceipt(id, options.revision)
 }
 
 // SendTransaction sends a signed transaction to the blockchain.
-func (c *Client) SendTransaction(tx *tx.Transaction) (*types.SendTxResult, error) {
+func (c *Client) SendTransaction(tx *tx.Transaction) (*api.SendTxResult, error) {
 	rlpTx, err := tx.MarshalBinary()
 	if err != nil {
 		return nil, fmt.Errorf("unable to encode transaction - %w", err)
@@ -177,32 +177,32 @@ func (c *Client) SendTransaction(tx *tx.Transaction) (*types.SendTxResult, error
 }
 
 // SendRawTransaction sends a raw RLP-encoded transaction to the blockchain.
-func (c *Client) SendRawTransaction(rlpTx []byte) (*types.SendTxResult, error) {
-	return c.httpConn.SendTransaction(&types.RawTx{Raw: hexutil.Encode(rlpTx)})
+func (c *Client) SendRawTransaction(rlpTx []byte) (*api.SendTxResult, error) {
+	return c.httpConn.SendTransaction(&api.RawTx{Raw: hexutil.Encode(rlpTx)})
 }
 
 // Block retrieves a block by its revision.
-func (c *Client) Block(revision string) (blocks *types.JSONCollapsedBlock, err error) {
+func (c *Client) Block(revision string) (blocks *api.JSONCollapsedBlock, err error) {
 	return c.httpConn.GetBlock(revision)
 }
 
 // ExpandedBlock retrieves an expanded block by its revision.
-func (c *Client) ExpandedBlock(revision string) (blocks *types.JSONExpandedBlock, err error) {
+func (c *Client) ExpandedBlock(revision string) (blocks *api.JSONExpandedBlock, err error) {
 	return c.httpConn.GetExpandedBlock(revision)
 }
 
 // FilterEvents filters events based on the provided filter request.
-func (c *Client) FilterEvents(req *types.EventFilter) ([]types.FilteredEvent, error) {
+func (c *Client) FilterEvents(req *api.EventFilter) ([]api.FilteredEvent, error) {
 	return c.httpConn.FilterEvents(req)
 }
 
 // FilterTransfers filters transfers based on the provided filter request.
-func (c *Client) FilterTransfers(req *types.TransferFilter) ([]*types.FilteredTransfer, error) {
+func (c *Client) FilterTransfers(req *api.TransferFilter) ([]*api.FilteredTransfer, error) {
 	return c.httpConn.FilterTransfers(req)
 }
 
 // Peers retrieves the list of connected peers.
-func (c *Client) Peers() ([]*types.PeerStats, error) {
+func (c *Client) Peers() ([]*api.PeerStats, error) {
 	return c.httpConn.GetPeers()
 }
 
@@ -216,17 +216,17 @@ func (c *Client) ChainTag() (byte, error) {
 }
 
 // FeesHistory retrieves the fee history for the range newest block - block count.
-func (c *Client) FeesHistory(blockCount uint32, newestBlock string, rewardPercentiles []float64) (feesHistory *types.FeesHistory, err error) {
+func (c *Client) FeesHistory(blockCount uint32, newestBlock string, rewardPercentiles []float64) (feesHistory *api.FeesHistory, err error) {
 	return c.httpConn.GetFeesHistory(blockCount, newestBlock, rewardPercentiles)
 }
 
 // FeesPriority retrieves the suggested maxPriorityFeePerGas for a transaction to be included in the next blocks.
-func (c *Client) FeesPriority() (feesPriority *types.FeesPriority, err error) {
+func (c *Client) FeesPriority() (feesPriority *api.FeesPriority, err error) {
 	return c.httpConn.GetFeesPriority()
 }
 
 // SubscribeBlocks subscribes to block updates over WebSocket.
-func (c *Client) SubscribeBlocks(pos string) (*common.Subscription[*types.BlockMessage], error) {
+func (c *Client) SubscribeBlocks(pos string) (*common.Subscription[*api.BlockMessage], error) {
 	if c.wsConn == nil {
 		return nil, fmt.Errorf("not a websocket typed client")
 	}
@@ -234,7 +234,7 @@ func (c *Client) SubscribeBlocks(pos string) (*common.Subscription[*types.BlockM
 }
 
 // SubscribeEvents subscribes to event updates over WebSocket.
-func (c *Client) SubscribeEvents(pos string, filter *types.SubscriptionEventFilter) (*common.Subscription[*types.EventMessage], error) {
+func (c *Client) SubscribeEvents(pos string, filter *api.SubscriptionEventFilter) (*common.Subscription[*api.EventMessage], error) {
 	if c.wsConn == nil {
 		return nil, fmt.Errorf("not a websocket typed client")
 	}
@@ -242,7 +242,7 @@ func (c *Client) SubscribeEvents(pos string, filter *types.SubscriptionEventFilt
 }
 
 // SubscribeTransfers subscribes to transfer updates over WebSocket.
-func (c *Client) SubscribeTransfers(pos string, filter *types.SubscriptionTransferFilter) (*common.Subscription[*types.TransferMessage], error) {
+func (c *Client) SubscribeTransfers(pos string, filter *api.SubscriptionTransferFilter) (*common.Subscription[*api.TransferMessage], error) {
 	if c.wsConn == nil {
 		return nil, fmt.Errorf("not a websocket typed client")
 	}
@@ -250,7 +250,7 @@ func (c *Client) SubscribeTransfers(pos string, filter *types.SubscriptionTransf
 }
 
 // SubscribeBeats2 subscribes to Beat2 message updates over WebSocket.
-func (c *Client) SubscribeBeats2(pos string) (*common.Subscription[*types.Beat2Message], error) {
+func (c *Client) SubscribeBeats2(pos string) (*common.Subscription[*api.Beat2Message], error) {
 	if c.wsConn == nil {
 		return nil, fmt.Errorf("not a websocket typed client")
 	}
@@ -258,7 +258,7 @@ func (c *Client) SubscribeBeats2(pos string) (*common.Subscription[*types.Beat2M
 }
 
 // SubscribeTxPool subscribes to pending transaction updates over WebSocket.
-func (c *Client) SubscribeTxPool(txID *thor.Bytes32) (*common.Subscription[*types.PendingTxIDMessage], error) {
+func (c *Client) SubscribeTxPool(txID *thor.Bytes32) (*common.Subscription[*api.PendingTxIDMessage], error) {
 	if c.wsConn == nil {
 		return nil, fmt.Errorf("not a websocket typed client")
 	}
@@ -266,8 +266,8 @@ func (c *Client) SubscribeTxPool(txID *thor.Bytes32) (*common.Subscription[*type
 }
 
 // convertToBatchCallData converts a transaction and sender address to batch call data format.
-func convertToBatchCallData(tx *tx.Transaction, addr *thor.Address) *types.BatchCallData {
-	cls := make(types.Clauses, len(tx.Clauses()))
+func convertToBatchCallData(tx *tx.Transaction, addr *thor.Address) *api.BatchCallData {
+	cls := make(api.Clauses, len(tx.Clauses()))
 	for i, c := range tx.Clauses() {
 		cls[i] = convertClauseAccounts(c)
 	}
@@ -275,7 +275,7 @@ func convertToBatchCallData(tx *tx.Transaction, addr *thor.Address) *types.Batch
 	blockRef := tx.BlockRef()
 	encodedBlockRef := hexutil.Encode(blockRef[:])
 
-	return &types.BatchCallData{
+	return &api.BatchCallData{
 		Clauses:    cls,
 		Gas:        tx.Gas(),
 		ProvedWork: nil, // todo hook this field
@@ -288,9 +288,9 @@ func convertToBatchCallData(tx *tx.Transaction, addr *thor.Address) *types.Batch
 }
 
 // convertClauseAccounts converts a transaction clause to accounts.Clause format.
-func convertClauseAccounts(c *tx.Clause) *types.Clause {
+func convertClauseAccounts(c *tx.Clause) *api.Clause {
 	value := math.HexOrDecimal256(*c.Value())
-	return &types.Clause{
+	return &api.Clause{
 		To:    c.To(),
 		Value: &value,
 		Data:  hexutil.Encode(c.Data()),

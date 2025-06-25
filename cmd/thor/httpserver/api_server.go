@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package api
+package httpserver
 
 import (
 	"net/http"
@@ -13,6 +13,7 @@ import (
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/api/debug"
@@ -23,7 +24,6 @@ import (
 	"github.com/vechain/thor/v2/api/subscriptions"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/api/transfers"
-	"github.com/vechain/thor/v2/api/types"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/log"
@@ -59,7 +59,7 @@ func New(
 	txPool *txpool.TxPool,
 	logDB *logdb.LogDB,
 	bft bft.Committer,
-	nw types.Network,
+	nw api.Network,
 	forkConfig *thor.ForkConfig,
 	config Config,
 ) (http.HandlerFunc, func()) {

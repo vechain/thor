@@ -19,7 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/v2/api/types"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
@@ -176,7 +176,7 @@ func (d *Debug) traceClause(ctx context.Context, tracer tracers.Tracer, block *b
 }
 
 func (d *Debug) handleTraceClause(w http.ResponseWriter, req *http.Request) error {
-	var opt types.TraceClauseOption
+	var opt api.TraceClauseOption
 	if err := utils.ParseJSON(req.Body, &opt); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
@@ -198,7 +198,7 @@ func (d *Debug) handleTraceClause(w http.ResponseWriter, req *http.Request) erro
 }
 
 func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error {
-	var opt types.TraceCallOption
+	var opt api.TraceCallOption
 	if err := utils.ParseJSON(req.Body, &opt); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
@@ -300,7 +300,7 @@ func (d *Debug) traceCall(ctx context.Context, tracer tracers.Tracer, header *bl
 	return tracer.GetResult()
 }
 
-func (d *Debug) debugStorage(ctx context.Context, contractAddress thor.Address, block *block.Block, txID thor.Bytes32, clauseIndex uint32, keyStart []byte, maxResult int) (*types.StorageRangeResult, error) {
+func (d *Debug) debugStorage(ctx context.Context, contractAddress thor.Address, block *block.Block, txID thor.Bytes32, clauseIndex uint32, keyStart []byte, maxResult int) (*api.StorageRangeResult, error) {
 	rt, _, _, err := d.prepareClauseEnv(ctx, block, txID, clauseIndex)
 	if err != nil {
 		return nil, err
@@ -312,16 +312,16 @@ func (d *Debug) debugStorage(ctx context.Context, contractAddress thor.Address, 
 	return storageRangeAt(storageTrie, keyStart, maxResult)
 }
 
-func storageRangeAt(t *muxdb.Trie, start []byte, maxResult int) (*types.StorageRangeResult, error) {
+func storageRangeAt(t *muxdb.Trie, start []byte, maxResult int) (*api.StorageRangeResult, error) {
 	it := trie.NewIterator(t.NodeIterator(start, 0))
-	result := types.StorageRangeResult{Storage: types.StorageMap{}}
+	result := api.StorageRangeResult{Storage: api.StorageMap{}}
 	for i := 0; i < maxResult && it.Next(); i++ {
 		_, content, _, err := rlp.Split(it.Value)
 		if err != nil {
 			return nil, err
 		}
 		v := thor.BytesToBytes32(content)
-		e := types.StorageEntry{Value: &v}
+		e := api.StorageEntry{Value: &v}
 		preimage := thor.BytesToBytes32(it.Meta)
 		e.Key = &preimage
 		result.Storage[thor.BytesToBytes32(it.Key).String()] = e
@@ -334,7 +334,7 @@ func storageRangeAt(t *muxdb.Trie, start []byte, maxResult int) (*types.StorageR
 }
 
 func (d *Debug) handleDebugStorage(w http.ResponseWriter, req *http.Request) error {
-	var opt types.StorageRangeOption
+	var opt api.StorageRangeOption
 	if err := utils.ParseJSON(req.Body, &opt); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
@@ -437,7 +437,7 @@ func (d *Debug) parseTarget(target string) (block *block.Block, txID thor.Bytes3
 	return
 }
 
-func (d *Debug) handleTraceCallOption(opt *types.TraceCallOption) (*xenv.TransactionContext, uint64, *tx.Clause, error) {
+func (d *Debug) handleTraceCallOption(opt *api.TraceCallOption) (*xenv.TransactionContext, uint64, *tx.Clause, error) {
 	gas := opt.Gas
 	if opt.Gas > d.callGasLimit {
 		return nil, 0, nil, utils.Forbidden(errors.New("gas: exceeds limit"))
