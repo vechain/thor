@@ -3,12 +3,11 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package accounts
+package types
 
 import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -38,15 +37,15 @@ type GetStorageResult struct {
 }
 
 type CallResult struct {
-	Data      string                   `json:"data"`
-	Events    []*transactions.Event    `json:"events"`
-	Transfers []*transactions.Transfer `json:"transfers"`
-	GasUsed   uint64                   `json:"gasUsed"`
-	Reverted  bool                     `json:"reverted"`
-	VMError   string                   `json:"vmError"`
+	Data      string      `json:"data"`
+	Events    []*Event    `json:"events"`
+	Transfers []*Transfer `json:"transfers"`
+	GasUsed   uint64      `json:"gasUsed"`
+	Reverted  bool        `json:"reverted"`
+	VMError   string      `json:"vmError"`
 }
 
-func convertCallResultWithInputGas(vo *runtime.Output, inputGas uint64) *CallResult {
+func ConvertCallResultWithInputGas(vo *runtime.Output, inputGas uint64) *CallResult {
 	gasUsed := inputGas - vo.LeftOverGas
 	var (
 		vmError  string
@@ -58,11 +57,11 @@ func convertCallResultWithInputGas(vo *runtime.Output, inputGas uint64) *CallRes
 		vmError = vo.VMErr.Error()
 	}
 
-	events := make([]*transactions.Event, len(vo.Events))
-	transfers := make([]*transactions.Transfer, len(vo.Transfers))
+	events := make([]*Event, len(vo.Events))
+	transfers := make([]*Transfer, len(vo.Transfers))
 
 	for j, txEvent := range vo.Events {
-		event := &transactions.Event{
+		event := &Event{
 			Address: txEvent.Address,
 			Data:    hexutil.Encode(txEvent.Data),
 		}
@@ -71,7 +70,7 @@ func convertCallResultWithInputGas(vo *runtime.Output, inputGas uint64) *CallRes
 		events[j] = event
 	}
 	for j, txTransfer := range vo.Transfers {
-		transfer := &transactions.Transfer{
+		transfer := &Transfer{
 			Sender:    txTransfer.Sender,
 			Recipient: txTransfer.Recipient,
 			Amount:    (*math.HexOrDecimal256)(txTransfer.Amount),

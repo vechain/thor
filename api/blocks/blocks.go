@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/api/types"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
@@ -63,8 +64,8 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 		if err != nil {
 			return err
 		}
-		return utils.WriteJSON(w, &JSONRawBlockSummary{
-			fmt.Sprintf("0x%s", hex.EncodeToString(rlpEncoded)),
+		return utils.WriteJSON(w, &types.JSONRawBlockSummary{
+			Raw: fmt.Sprintf("0x%s", hex.EncodeToString(rlpEncoded)),
 		})
 	}
 
@@ -81,7 +82,7 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 		}
 	}
 
-	jSummary := buildJSONBlockSummary(summary, isTrunk, isFinalized)
+	jSummary := types.BuildJSONBlockSummary(summary, isTrunk, isFinalized)
 	if expanded {
 		txs, err := b.repo.GetBlockTransactions(summary.Header.ID())
 		if err != nil {
@@ -92,15 +93,15 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 			return err
 		}
 
-		return utils.WriteJSON(w, &JSONExpandedBlock{
-			jSummary,
-			buildJSONEmbeddedTxs(txs, receipts),
+		return utils.WriteJSON(w, &types.JSONExpandedBlock{
+			JSONBlockSummary: jSummary,
+			Transactions:     types.BuildJSONEmbeddedTxs(txs, receipts),
 		})
 	}
 
-	return utils.WriteJSON(w, &JSONCollapsedBlock{
-		jSummary,
-		summary.Txs,
+	return utils.WriteJSON(w, &types.JSONCollapsedBlock{
+		JSONBlockSummary: jSummary,
+		Transactions:     summary.Txs,
 	})
 }
 

@@ -2,7 +2,7 @@
 
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
-package node_test
+package node
 
 import (
 	"encoding/json"
@@ -13,7 +13,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vechain/thor/v2/api/node"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/genesis"
@@ -81,7 +80,7 @@ func initCommServer(t *testing.T) {
 	)
 
 	router := mux.NewRouter()
-	node.New(communicator, pool, true).Mount(router, "/node")
+	New(communicator, pool, true).Mount(router, "/node")
 
 	ts = httptest.NewServer(router)
 }
