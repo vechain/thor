@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vechain/thor/v2/api/types"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/eventcontract"
 	"github.com/vechain/thor/v2/test/testchain"
@@ -36,7 +37,7 @@ func TestBlockReader_Read(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.True(t, ok)
-	if resBlock, ok := res[0].(*BlockMessage); !ok {
+	if resBlock, ok := res[0].(*types.BlockMessage); !ok {
 		t.Fatal("unexpected type")
 	} else {
 		assert.Equal(t, firstBlk.Header().Number(), resBlock.Number)
@@ -47,7 +48,7 @@ func TestBlockReader_Read(t *testing.T) {
 	res, ok, err = br.Read()
 	assert.NoError(t, err)
 	assert.True(t, ok)
-	if resBlock, ok := res[0].(*BlockMessage); !ok {
+	if resBlock, ok := res[0].(*types.BlockMessage); !ok {
 		t.Fatal("unexpected type")
 	} else {
 		assert.Equal(t, bestBlk.Header().Number(), resBlock.Number)

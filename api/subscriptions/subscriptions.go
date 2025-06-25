@@ -14,6 +14,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/api/types"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
@@ -33,8 +34,8 @@ type Subscriptions struct {
 	pendingTx         *pendingTx
 	done              chan struct{}
 	wg                sync.WaitGroup
-	beat2Cache        *messageCache[Beat2Message]
-	beatCache         *messageCache[BeatMessage]
+	beat2Cache        *messageCache[types.Beat2Message]
+	beatCache         *messageCache[types.BeatMessage]
 }
 
 type msgReader interface {
@@ -74,8 +75,8 @@ func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32,
 		},
 		pendingTx:  newPendingTx(txpool),
 		done:       make(chan struct{}),
-		beat2Cache: newMessageCache[Beat2Message](backtraceLimit),
-		beatCache:  newMessageCache[BeatMessage](backtraceLimit),
+		beat2Cache: newMessageCache[types.Beat2Message](backtraceLimit),
+		beatCache:  newMessageCache[types.BeatMessage](backtraceLimit),
 	}
 
 	sub.wg.Add(1)
@@ -124,7 +125,7 @@ func (s *Subscriptions) handleEventReader(w http.ResponseWriter, req *http.Reque
 	if err != nil {
 		return nil, utils.BadRequest(errors.WithMessage(err, "t4"))
 	}
-	eventFilter := &EventFilter{
+	eventFilter := &types.SubscriptionEventFilter{
 		Address: address,
 		Topic0:  t0,
 		Topic1:  t1,
@@ -152,7 +153,7 @@ func (s *Subscriptions) handleTransferReader(_ http.ResponseWriter, req *http.Re
 	if err != nil {
 		return nil, utils.BadRequest(errors.WithMessage(err, "recipient"))
 	}
-	transferFilter := &TransferFilter{
+	transferFilter := &types.SubscriptionTransferFilter{
 		TxOrigin:  txOrigin,
 		Sender:    sender,
 		Recipient: recipient,
@@ -202,7 +203,7 @@ func (s *Subscriptions) handlePendingTransactions(w http.ResponseWriter, req *ht
 	for {
 		select {
 		case tx := <-txCh:
-			if err = conn.WriteJSON(&PendingTxIDMessage{ID: tx.ID()}); err != nil {
+			if err = conn.WriteJSON(&types.PendingTxIDMessage{ID: tx.ID()}); err != nil {
 				// likely conn has failed
 				return nil
 			}

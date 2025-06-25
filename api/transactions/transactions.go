@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/api/types"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/thor"
@@ -29,7 +30,7 @@ func New(repo *chain.Repository, pool *txpool.TxPool) *Transactions {
 	}
 }
 
-func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, allowPending bool) (*RawTransaction, error) {
+func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, allowPending bool) (*types.RawTransaction, error) {
 	chain := t.repo.NewChain(head)
 	tx, meta, err := chain.GetTransaction(txID)
 	if err != nil {
@@ -40,8 +41,8 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, a
 					if err != nil {
 						return nil, err
 					}
-					return &RawTransaction{
-						RawTx: RawTx{hexutil.Encode(raw)},
+					return &types.RawTransaction{
+						RawTx: types.RawTx{Raw: hexutil.Encode(raw)},
 					}, nil
 				}
 			}
@@ -58,9 +59,9 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, a
 	if err != nil {
 		return nil, err
 	}
-	return &RawTransaction{
-		RawTx: RawTx{hexutil.Encode(raw)},
-		Meta: &TxMeta{
+	return &types.RawTransaction{
+		RawTx: types.RawTx{Raw: hexutil.Encode(raw)},
+		Meta: &types.TxMeta{
 			BlockID:        header.ID(),
 			BlockNumber:    header.Number(),
 			BlockTimestamp: header.Timestamp(),
@@ -91,7 +92,7 @@ func (t *Transactions) getTransactionByID(txID thor.Bytes32, head thor.Bytes32, 
 }
 
 // GetTransactionReceiptByID get tx's receipt
-func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32, head thor.Bytes32) (*Receipt, error) {
+func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32, head thor.Bytes32) (*types.Receipt, error) {
 	chain := t.repo.NewChain(head)
 	tx, meta, err := chain.GetTransaction(txID)
 	if err != nil {
@@ -111,14 +112,14 @@ func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32, head thor.By
 		return nil, err
 	}
 
-	return convertReceipt(receipt, header, tx)
+	return types.ConvertReceipt(receipt, header, tx)
 }
 func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Request) error {
-	var rawTx *RawTx
+	var rawTx *types.RawTx
 	if err := utils.ParseJSON(req.Body, &rawTx); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
-	tx, err := rawTx.decode()
+	tx, err := rawTx.Decode()
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "raw"))
 	}
@@ -133,7 +134,7 @@ func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Re
 		return err
 	}
 	txID := tx.ID()
-	return utils.WriteJSON(w, &SendTxResult{ID: &txID})
+	return utils.WriteJSON(w, &types.SendTxResult{ID: &txID})
 }
 
 func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http.Request) error {

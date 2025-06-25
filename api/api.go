@@ -23,6 +23,7 @@ import (
 	"github.com/vechain/thor/v2/api/subscriptions"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/api/transfers"
+	"github.com/vechain/thor/v2/api/types"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/log"
@@ -58,7 +59,7 @@ func New(
 	txPool *txpool.TxPool,
 	logDB *logdb.LogDB,
 	bft bft.Committer,
-	nw node.Network,
+	nw types.Network,
 	forkConfig *thor.ForkConfig,
 	config Config,
 ) (http.HandlerFunc, func()) {
@@ -111,7 +112,7 @@ func New(
 	}
 
 	if config.EnableMetrics {
-		router.Use(metricsMiddleware)
+		router.Use(MetricsMiddleware)
 	}
 
 	handler := handlers.CompressHandler(router)
