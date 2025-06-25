@@ -184,3 +184,62 @@ func TestExecutable(t *testing.T) {
 		}
 	}
 }
+
+func TestExecutableRejectNonLegacyBeforeGalactica(t *testing.T) {
+	forkConfig := &thor.ForkConfig{
+		GALACTICA: 2,
+	}
+
+	dynamicFeeTx := newTx(tx.TypeDynamicFee, 0, nil, 21000, tx.BlockRef{0}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
+
+	tchain, _ := testchain.NewWithFork(forkConfig)
+	repo := tchain.Repo()
+
+	txObj1, err := resolveTx(dynamicFeeTx, false)
+	assert.Nil(t, err)
+
+	st := tchain.Stater().NewState(repo.BestBlockSummary().Root())
+	exe, err := txObj1.Executable(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig)
+	assert.False(t, exe)
+	assert.Equal(t, tx.ErrTxTypeNotSupported, err)
+
+	legacyTx := newTx(tx.TypeLegacy, 0, nil, 21000, tx.BlockRef{0}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
+	txObj2, err := resolveTx(legacyTx, false)
+	assert.Nil(t, err)
+
+	exe, err = txObj2.Executable(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig)
+	assert.True(t, exe)
+	assert.Nil(t, err)
+
+	// add a block 1
+	tchain.MintBlock(genesis.DevAccounts()[0])
+
+	st = tchain.Stater().NewState(repo.BestBlockSummary().Root())
+	_, err = txObj1.Executable(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig)
+	assert.Nil(t, err)
+}
+
+func TestExecutableRejectUnsupportedFeatures(t *testing.T) {
+	forkConfig := &thor.ForkConfig{
+		VIP191: 2,
+	}
+
+	tchain, _ := testchain.NewWithFork(forkConfig)
+	repo := tchain.Repo()
+
+	tx1 := newDelegatedTx(tx.TypeLegacy, 0, nil, 21000, tx.BlockRef{0}, 100, nil, genesis.DevAccounts()[0], genesis.DevAccounts()[1])
+	txObj1, err := resolveTx(tx1, false)
+	assert.Nil(t, err)
+
+	st := tchain.Stater().NewState(repo.BestBlockSummary().Root())
+	exe, err := txObj1.Executable(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig)
+	assert.False(t, exe)
+	assert.ErrorContains(t, err, "unsupported features")
+
+	// add a block 1
+	tchain.MintBlock(genesis.DevAccounts()[0])
+
+	st = tchain.Stater().NewState(repo.BestBlockSummary().Root())
+	_, err = txObj1.Executable(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig)
+	assert.Nil(t, err)
+}
