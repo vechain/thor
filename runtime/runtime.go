@@ -518,7 +518,7 @@ func (rt *Runtime) PrepareTransaction(trx *tx.Transaction) (*TransactionExecutor
 
 				receipt.Reward = reward
 			} else {
-				// after galactica, reward is the priority fee, this is the final guard for checking the max fee is able to cover the base fee
+				// after galactica, reward is the priority fee
 				priorityFeePerGas := trx.EffectivePriorityFeePerGas(rt.ctx.BaseFee, legacyTxBaseGasPrice, txCtx.ProvedWork)
 				receipt.Reward = priorityFeePerGas.Mul(priorityFeePerGas, new(big.Int).SetUint64(receipt.GasUsed))
 			}

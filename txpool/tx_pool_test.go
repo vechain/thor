@@ -745,9 +745,13 @@ func TestFillPoolWithMixedTxs(t *testing.T) {
 
 func TestAdd(t *testing.T) {
 	// this will create a chain with a deterministic chainTag which required for the badReserved test
+	forkConfig := thor.NoFork
+	forkConfig.VIP191 = 10
+	forkConfig.GALACTICA = 1
+
 	config := genesis.DevConfig{
-		ForkConfig: &thor.SoloFork,
-		LaunchTime: 1526400000,
+		ForkConfig: &forkConfig,
+		LaunchTime: 1526300000,
 	}
 	tchain, err := testchain.NewIntegrationTestChain(config)
 	assert.Nil(t, err)
@@ -847,8 +851,7 @@ func TestBeforeVIP191Add(t *testing.T) {
 	}, &thor.NoFork)
 	defer pool.Close()
 
-	err = pool.StrictlyAdd(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(200), 100, nil, tx.Features(1), acc))
-
+	err = pool.StrictlyAdd(newDelegatedTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(0), 100, nil, acc, acc))
 	assert.Equal(t, "tx rejected: unsupported features", err.Error())
 }
 
@@ -1321,13 +1324,16 @@ func TestAddOverPendingCost(t *testing.T) {
 		GasLimit(thor.InitialGasLimit).
 		TransactionFeatures(feat).Build()
 
+	forkConfig := thor.NoFork
+	forkConfig.VIP191 = 0
+
 	repo, _ := chain.NewRepository(db, b0)
 	repo.AddBlock(b1, tx.Receipts{}, 0, true)
 	pool := New(repo, state.NewStater(db), Options{
 		Limit:           LIMIT,
 		LimitPerAccount: LIMIT,
 		MaxLifetime:     time.Hour,
-	}, &thor.NoFork)
+	}, &forkConfig)
 	defer pool.Close()
 
 	// first and second tx should be fine
@@ -1446,4 +1452,69 @@ func TestAddOverPendingCostDynamicFee(t *testing.T) {
 	assert.EqualError(t, err, "tx rejected: insufficient energy for overall pending cost")
 	err = pool.Add(newDelegatedTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[8], devAccounts[2]))
 	assert.EqualError(t, err, "tx rejected: insufficient energy for overall pending cost")
+}
+
+func TestValidateTxBasics(t *testing.T) {
+	pool := newPool(1, LIMIT_PER_ACCOUNT, &thor.ForkConfig{GALACTICA: 0})
+	defer pool.Close()
+
+	repo := pool.repo
+
+	tests := []struct {
+		name        string
+		getTx       func() *tx.Transaction
+		head        *chain.BlockSummary
+		forkConfig  *thor.ForkConfig
+		expectedErr error
+	}{
+		{
+			name:        "invalid legacy tx chain tag",
+			getTx:       func() *tx.Transaction { return tx.NewBuilder(tx.TypeLegacy).ChainTag(0xff).Build() },
+			head:        &chain.BlockSummary{},
+			forkConfig:  &thor.NoFork,
+			expectedErr: badTxError{"chain tag mismatch"},
+		},
+		{
+			name:        "invalid dyn fee tx chain tag",
+			getTx:       func() *tx.Transaction { return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(0xff).Build() },
+			head:        &chain.BlockSummary{},
+			forkConfig:  &thor.NoFork,
+			expectedErr: badTxError{"chain tag mismatch"},
+		},
+		{
+			name: "legacy tx size too large",
+			getTx: func() *tx.Transaction {
+				b := tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag())
+				// Including a lot of clauses to increase the size above the max allowed
+				for range 50_000 {
+					b.Clause(&tx.Clause{})
+				}
+				return b.Build()
+			},
+			head:        &chain.BlockSummary{},
+			forkConfig:  &thor.NoFork,
+			expectedErr: txRejectedError{"size too large"},
+		},
+		{
+			name: "dyn fee tx size too large",
+			getTx: func() *tx.Transaction {
+				b := tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag())
+				// Including a lot of clauses to increase the size above the max allowed
+				for range 50_000 {
+					b.Clause(&tx.Clause{})
+				}
+				return b.Build()
+			},
+			head:        &chain.BlockSummary{},
+			forkConfig:  &thor.NoFork,
+			expectedErr: txRejectedError{"size too large"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := pool.validateTxBasics(tt.getTx())
+			assert.Equal(t, tt.expectedErr, err)
+		})
+	}
 }
