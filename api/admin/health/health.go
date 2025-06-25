@@ -8,22 +8,11 @@ package health
 import (
 	"time"
 
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/thor"
 )
-
-type BlockIngestion struct {
-	ID        *thor.Bytes32 `json:"id"`
-	Timestamp *time.Time    `json:"timestamp"`
-}
-
-type Status struct {
-	Healthy              bool       `json:"healthy"`
-	BestBlockTime        *time.Time `json:"bestBlockTime"`
-	PeerCount            int        `json:"peerCount"`
-	IsNetworkProgressing bool       `json:"isNetworkProgressing"`
-}
 
 type Health struct {
 	repo *chain.Repository
@@ -52,7 +41,7 @@ func (h *Health) isNodeConnectedP2P(peerCount int, minPeerCount int) bool {
 	return peerCount >= minPeerCount
 }
 
-func (h *Health) Status(blockTolerance time.Duration, minPeerCount int) (*Status, error) {
+func (h *Health) Status(blockTolerance time.Duration, minPeerCount int) (*api.AdminHealthStatus, error) {
 	// Fetch the best block details
 	bestBlock := h.repo.BestBlockSummary()
 	bestBlockTimestamp := time.Unix(int64(bestBlock.Header.Timestamp()), 0)
@@ -75,7 +64,7 @@ func (h *Health) Status(blockTolerance time.Duration, minPeerCount int) (*Status
 	healthy := networkProgressing && nodeConnected
 
 	// Return the current status
-	return &Status{
+	return &api.AdminHealthStatus{
 		Healthy:              healthy,
 		BestBlockTime:        &bestBlockTimestamp,
 		IsNetworkProgressing: networkProgressing,

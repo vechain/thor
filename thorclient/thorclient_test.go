@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/v2/api/accounts"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -24,8 +24,8 @@ func TestConvertToBatchCallData(t *testing.T) {
 	// Test case 1: Empty transaction
 	tx1 := tx.NewBuilder(tx.TypeLegacy).Build()
 	addr1 := &thor.Address{}
-	expected1 := &accounts.BatchCallData{
-		Clauses:    make(accounts.Clauses, 0),
+	expected1 := &api.BatchCallData{
+		Clauses:    make(api.Clauses, 0),
 		Gas:        0,
 		ProvedWork: nil,
 		Caller:     addr1,

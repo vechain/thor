@@ -156,6 +156,8 @@ func TestPendingCost(t *testing.T) {
 	stater := tchain.Stater()
 	forkConfig := tchain.GetForkConfig()
 
+	tchain.MintBlock(genesis.DevAccounts()[0])
+
 	// Creating transactions
 	tx1 := newTx(tx.TypeLegacy, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
 	tx2 := newDelegatedTx(tx.TypeLegacy, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[1], genesis.DevAccounts()[2])

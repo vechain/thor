@@ -239,11 +239,11 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 
 	delegator, _ := newTx.Delegator()
 	if delegator != nil && (thor.IsOriginBlocked(*delegator) || p.blocklist.Contains(*delegator)) {
+		// tx delegator blocked
 		return nil
 	}
 
-	headSummary := p.repo.BestBlockSummary()
-	if err := validateTransaction(newTx, p.repo, headSummary, p.forkConfig); err != nil {
+	if err := p.validateTxBasics(newTx); err != nil {
 		return err
 	}
 
@@ -252,6 +252,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		return badTxError{err.Error()}
 	}
 
+	headSummary := p.repo.BestBlockSummary()
 	if isChainSynced(uint64(time.Now().Unix()), headSummary.Header.Timestamp()) {
 		if !localSubmitted {
 			// reject when pool size exceeds 120% of limit
@@ -566,6 +567,19 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 // Get length of the `all` field
 func (p *TxPool) Len() int {
 	return p.all.Len()
+}
+
+// validateTxBasics runs static validation on a transaction.
+func (p *TxPool) validateTxBasics(trx *tx.Transaction) error {
+	if trx.ChainTag() != p.repo.ChainTag() {
+		return badTxError{"chain tag mismatch"}
+	}
+
+	if trx.Size() > maxTxSize {
+		return txRejectedError{"size too large"}
+	}
+
+	return nil
 }
 
 func isChainSynced(nowTimestamp, blockTimestamp uint64) bool {
