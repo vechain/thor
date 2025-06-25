@@ -111,22 +111,35 @@ func TestTxPoolMetrics(t *testing.T) {
 	err = pool.Add(tx2)
 	assert.Equal(t, "tx rejected: expired", err.Error())
 
+	tx3 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 0, nil, tx.Features(0), devAccounts[0])
+	err = pool.Add(tx3)
+	assert.Equal(t, "tx rejected: expired", err.Error())
+
 	gatherers := prometheus.Gatherers{prometheus.DefaultGatherer}
 	metricFamilies, err := gatherers.Gather()
 	require.NoError(t, err)
 
 	var txPoolMetric *dto.MetricFamily
+	var badTxMetric *dto.MetricFamily
 	for _, mf := range metricFamilies {
+		println("metric", mf.GetName())
 		if mf.GetName() == "thor_metrics_txpool_current_tx_count" {
 			txPoolMetric = mf
-			break
+			continue
+		}
+		if mf.GetName() == "thor_metrics_bad_tx_count" {
+			badTxMetric = mf
+			continue
 		}
 	}
 
 	require.NotNil(t, txPoolMetric, "txpool_current_tx_count metric should exist")
+	require.NotNil(t, badTxMetric, "bad_tx_count metric should exist")
 
 	metrics := txPoolMetric.GetMetric()
 	require.Greater(t, len(metrics), 0, "should have at least one metric entry")
+	badTxMetrics := badTxMetric.GetMetric()
+	require.Greater(t, len(badTxMetrics), 0, "should have at least one metric entry")
 
 	foundLegacy := false
 	for _, m := range metrics {
@@ -148,7 +161,24 @@ func TestTxPoolMetrics(t *testing.T) {
 		}
 	}
 
+	foundBad := false
+	for _, m := range badTxMetrics {
+		labels := m.GetLabel()
+		source := ""
+		for _, label := range labels {
+			if label.GetName() == "source" {
+				source = label.GetValue()
+			}
+		}
+
+		if source == "remote" {
+			foundBad = true
+			assert.Equal(t, float64(2), m.GetGauge().GetValue())
+		}
+	}
+
 	assert.True(t, foundLegacy, "should have metric entry for Legacy transaction")
+	assert.True(t, foundBad, "should have metric entry for bad Legacy transaction")
 }
 
 func TestNewCloseWithServer(t *testing.T) {

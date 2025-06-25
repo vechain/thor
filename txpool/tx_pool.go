@@ -216,14 +216,19 @@ func (p *TxPool) SubscribeTxEvent(ch chan *TxEvent) event.Subscription {
 	return p.scope.Track(p.txFeed.Subscribe(ch))
 }
 
-func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmitted bool) error {
-	txTypeString := "Legacy"
-	if newTx.Type() == tx.TypeDynamicFee {
-		txTypeString = "DynamicFee"
-	}
+func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmitted bool) (err error) {
 	source := "local"
 	if !localSubmitted {
 		source = "remote"
+	}
+	defer func() {
+		if err != nil {
+			metricBadTxGauge().AddWithLabel(1, map[string]string{"source": source})
+		}
+	}()
+	txTypeString := "Legacy"
+	if newTx.Type() == tx.TypeDynamicFee {
+		txTypeString = "DynamicFee"
 	}
 
 	if p.all.ContainsHash(newTx.Hash()) {
