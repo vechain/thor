@@ -61,7 +61,7 @@ func (m *metricsResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 }
 
 // metricsMiddleware is a middleware that records metrics for each request.
-func metricsMiddleware(next http.Handler) http.Handler {
+func MetricsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rt := mux.CurrentRoute(r)
 

@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package events_test
+package events
 
 import (
 	"encoding/json"
@@ -16,7 +16,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vechain/thor/v2/api/events"
+	"github.com/vechain/thor/v2/api/types"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
@@ -82,17 +82,17 @@ func TestOptionalIndexes(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			filter := events.EventFilter{
-				CriteriaSet: make([]*events.EventCriteria, 0),
+			filter := types.EventFilter{
+				CriteriaSet: make([]*types.EventCriteria, 0),
 				Range:       nil,
-				Options:     &events.Options{Limit: 6, IncludeIndexes: tc.includeIndexes},
+				Options:     &types.Options{Limit: 6, IncludeIndexes: tc.includeIndexes},
 				Order:       logdb.DESC,
 			}
 
 			res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/event", filter)
 			assert.NoError(t, err)
 			assert.Equal(t, http.StatusOK, statusCode)
-			var tLogs []*events.FilteredEvent
+			var tLogs []*types.FilteredEvent
 			if err := json.Unmarshal(res, &tLogs); err != nil {
 				t.Fatal(err)
 			}
@@ -113,10 +113,10 @@ func TestOption(t *testing.T) {
 	insertBlocks(t, thorChain, 5)
 
 	tclient = thorclient.New(ts.URL)
-	filter := events.EventFilter{
-		CriteriaSet: make([]*events.EventCriteria, 0),
+	filter := types.EventFilter{
+		CriteriaSet: make([]*types.EventCriteria, 0),
 		Range:       nil,
-		Options:     &events.Options{Limit: 6},
+		Options:     &types.Options{Limit: 6},
 		Order:       logdb.DESC,
 	}
 
@@ -136,7 +136,7 @@ func TestOption(t *testing.T) {
 	res, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/logs/event", filter)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, statusCode)
-	var tLogs []*events.FilteredEvent
+	var tLogs []*types.FilteredEvent
 	if err := json.Unmarshal(res, &tLogs); err != nil {
 		t.Fatal(err)
 	}
@@ -158,25 +158,25 @@ func TestZeroFrom(t *testing.T) {
 
 	tclient = thorclient.New(ts.URL)
 	transferTopic := thor.MustParseBytes32("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
-	criteria := []*events.EventCriteria{
+	criteria := []*types.EventCriteria{
 		{
-			TopicSet: events.TopicSet{
+			TopicSet: types.TopicSet{
 				Topic0: &transferTopic,
 			},
 		},
 	}
 
 	from := uint64(0)
-	filter := events.EventFilter{
+	filter := types.EventFilter{
 		CriteriaSet: criteria,
-		Range:       &events.Range{From: &from},
+		Range:       &types.Range{From: &from},
 		Options:     nil,
 		Order:       logdb.DESC,
 	}
 
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/event", filter)
 	require.NoError(t, err)
-	var tLogs []*events.FilteredEvent
+	var tLogs []*types.FilteredEvent
 	if err := json.Unmarshal(res, &tLogs); err != nil {
 		t.Fatal(err)
 	}
@@ -215,8 +215,8 @@ func testEventsBadRequest(t *testing.T) {
 }
 
 func testEventWithEmptyDb(t *testing.T) {
-	emptyFilter := events.EventFilter{
-		CriteriaSet: make([]*events.EventCriteria, 0),
+	emptyFilter := types.EventFilter{
+		CriteriaSet: make([]*types.EventCriteria, 0),
 		Range:       nil,
 		Options:     nil,
 		Order:       logdb.DESC,
@@ -224,7 +224,7 @@ func testEventWithEmptyDb(t *testing.T) {
 
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/event", emptyFilter)
 	require.NoError(t, err)
-	var tLogs []*events.FilteredEvent
+	var tLogs []*types.FilteredEvent
 	if err := json.Unmarshal(res, &tLogs); err != nil {
 		t.Fatal(err)
 	}
@@ -234,8 +234,8 @@ func testEventWithEmptyDb(t *testing.T) {
 }
 
 func testEventWithBlocks(t *testing.T, expectedBlocks int) {
-	emptyFilter := events.EventFilter{
-		CriteriaSet: make([]*events.EventCriteria, 0),
+	emptyFilter := types.EventFilter{
+		CriteriaSet: make([]*types.EventCriteria, 0),
 		Range:       nil,
 		Options:     nil,
 		Order:       logdb.DESC,
@@ -243,7 +243,7 @@ func testEventWithBlocks(t *testing.T, expectedBlocks int) {
 
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/event", emptyFilter)
 	require.NoError(t, err)
-	var tLogs []*events.FilteredEvent
+	var tLogs []*types.FilteredEvent
 	if err := json.Unmarshal(res, &tLogs); err != nil {
 		t.Fatal(err)
 	}
@@ -257,10 +257,10 @@ func testEventWithBlocks(t *testing.T, expectedBlocks int) {
 	transferEvent := thor.MustParseBytes32("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
 
 	// Test with matching filter
-	matchingFilter := events.EventFilter{
-		CriteriaSet: []*events.EventCriteria{{
+	matchingFilter := types.EventFilter{
+		CriteriaSet: []*types.EventCriteria{{
 			Address: &builtin.Energy.Address,
-			TopicSet: events.TopicSet{
+			TopicSet: types.TopicSet{
 				Topic0: &transferEvent,
 			},
 		}},
@@ -285,7 +285,7 @@ func initEventServer(t *testing.T, limit uint64) *testchain.Chain {
 	require.NoError(t, err)
 
 	router := mux.NewRouter()
-	events.New(thorChain.Repo(), thorChain.LogDB(), limit).Mount(router, "/logs/event")
+	New(thorChain.Repo(), thorChain.LogDB(), limit).Mount(router, "/logs/event")
 	ts = httptest.NewServer(router)
 
 	return thorChain

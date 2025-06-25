@@ -11,6 +11,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/transactions"
+	"github.com/vechain/thor/v2/api/types"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -19,11 +20,11 @@ import (
 
 type Node struct {
 	pool         *txpool.TxPool
-	nw           Network
+	nw           types.Network
 	enableTxpool bool
 }
 
-func New(nw Network, pool *txpool.TxPool, enableTxpool bool) *Node {
+func New(nw types.Network, pool *txpool.TxPool, enableTxpool bool) *Node {
 	return &Node{
 		pool,
 		nw,
@@ -31,8 +32,8 @@ func New(nw Network, pool *txpool.TxPool, enableTxpool bool) *Node {
 	}
 }
 
-func (n *Node) PeersStats() []*PeerStats {
-	return ConvertPeersStats(n.nw.PeersStats())
+func (n *Node) PeersStats() []*types.PeerStats {
+	return types.ConvertPeersStats(n.nw.PeersStats())
 }
 
 func (n *Node) handleNetwork(w http.ResponseWriter, _ *http.Request) error {
@@ -79,7 +80,7 @@ func (n *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) e
 
 func (n *Node) handleGetTxpoolStatus(w http.ResponseWriter, req *http.Request) error {
 	total := n.pool.Len()
-	status := Status{
+	status := types.Status{
 		Amount: uint(total),
 	}
 	return utils.WriteJSON(w, status)
