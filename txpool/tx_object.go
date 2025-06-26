@@ -13,7 +13,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -29,8 +28,11 @@ type txObject struct {
 	payer          *thor.Address // payer of the tx, either origin, delegator, or on-chain delegation payer
 	cost           *big.Int      // total tx cost the payer needs to pay before execution(gas price * gas)
 
-	executable       bool     // don't touch this value, will be updated by the pool
-	priorityGasPrice *big.Int // don't touch this value, it's only be used in pool's housekeeping
+	// basic unit of tip price for the validator, before GALACTICA it's the overallGasPrice(provedWork included) and validator
+	// gets <reward-ratio>% of the tip, after GALACTICA it's the effective priority fee per gas and validator gets 100% of the tip
+	priorityGasPrice *big.Int
+
+	executable bool // don't touch this value, will be updated by the pool
 }
 
 func resolveTx(tx *tx.Transaction, localSubmitted bool) (*txObject, error) {
@@ -63,7 +65,7 @@ func (o *txObject) Payer() *thor.Address {
 	return o.payer
 }
 
-func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock *block.Header, forkConfig *thor.ForkConfig) (bool, error) {
+func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock *block.Header, forkConfig *thor.ForkConfig, baseFee *big.Int) (bool, error) {
 	// evaluate the tx on the next block as head block is already history
 	nextBlockNum := headBlock.Number() + 1
 	nextBlockTime := headBlock.Timestamp() + thor.BlockInterval
@@ -117,21 +119,32 @@ func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 	checkpoint := state.NewCheckpoint()
 	defer state.RevertTo(checkpoint)
 
-	// calculate the base fee for the next block
-	baseFee := galactica.CalcBaseFee(headBlock, forkConfig)
-	_, _, payer, prepaid, _, err := o.resolved.BuyGas(state, nextBlockTime, baseFee)
+	legacyTxBaseGasPrice, _, payer, prepaid, _, err := o.resolved.BuyGas(state, nextBlockTime, baseFee)
 	if err != nil {
 		return false, err
 	}
 
+	// non executable -> executable, update payer, cost and priority gas price
 	if !o.executable {
 		o.payer = &payer
 		o.cost = prepaid
+
+		// calculate the priority gas price
+		provedWork, err := o.ProvedWork(nextBlockNum, chain.GetBlockID)
+		if err != nil {
+			return false, err
+		}
+		// normalize the base fee here, set to 0 to make the func EffectivePriorityFeePerGas return overallGasPrice for before GALACTICA txs
+		// before GALACTICA, the baseFeeCache.Get will return nil just like the Header.BaseFee
+		if baseFee == nil {
+			baseFee = big.NewInt(0)
+		}
+		o.priorityGasPrice = o.EffectivePriorityFeePerGas(baseFee, legacyTxBaseGasPrice, provedWork)
 	}
 	return true, nil
 }
 
-func sortTxObjsByOverallGasPriceDesc(txObjs []*txObject) {
+func sortTxObjsByPriorityGasPriceDesc(txObjs []*txObject) {
 	slices.SortFunc(txObjs, func(a, b *txObject) int {
 		if cmp := b.priorityGasPrice.Cmp(a.priorityGasPrice); cmp != 0 {
 			return cmp
