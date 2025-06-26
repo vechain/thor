@@ -87,7 +87,7 @@ func TestLogLevelHandler(t *testing.T) {
 			}
 
 			if tt.expectedLevel != "" {
-				var response api.Response
+				var response api.LogLevelResponse
 				if err := json.NewDecoder(rr.Body).Decode(&response); err != nil {
 					t.Fatalf("could not decode response: %v", err)
 				}

@@ -9,13 +9,21 @@ import (
 	"time"
 )
 
-type AdminLogStatus struct {
+type LogStatus struct {
 	Enabled bool `json:"enabled"`
 }
 
-type AdminHealthStatus struct {
+type HealthStatus struct {
 	Healthy              bool       `json:"healthy"`
 	BestBlockTime        *time.Time `json:"bestBlockTime"`
 	PeerCount            int        `json:"peerCount"`
 	IsNetworkProgressing bool       `json:"isNetworkProgressing"`
+}
+
+type LogLevelRequest struct {
+	Level string `json:"level"`
+}
+
+type LogLevelResponse struct {
+	CurrentLevel string `json:"currentLevel"`
 }

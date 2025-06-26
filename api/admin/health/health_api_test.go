@@ -27,7 +27,7 @@ var ts *httptest.Server
 func TestHealth(t *testing.T) {
 	initAPIServer(t)
 
-	var healthStatus api.AdminHealthStatus
+	var healthStatus api.HealthStatus
 	respBody, statusCode := httpGet(t, ts.URL+"/health")
 	require.NoError(t, json.Unmarshal(respBody, &healthStatus))
 	assert.False(t, healthStatus.Healthy)
