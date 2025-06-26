@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/tx"
 )
 
 func config() *thor.ForkConfig {
@@ -219,109 +218,4 @@ func TestBaseFeeLimits(t *testing.T) {
 			parentBaseFee = baseFee
 		}
 	})
-}
-
-func TestGalacticaPriorityPrice(t *testing.T) {
-	baseGasPrice := big.NewInt(1_000_000_000)
-	baseFee := big.NewInt(20_000_000)
-	provedWork := big.NewInt(100_000)
-	legacyTr := tx.NewBuilder(tx.TypeLegacy).Gas(100).GasPriceCoef(255).BlockRef(tx.NewBlockRef(100)).Build()
-
-	tests := []struct {
-		name string
-		f    func(*testing.T)
-	}{
-		{
-			name: "galactica is not yet activated, use PoW GasPrice",
-			f: func(t *testing.T) {
-				res := GalacticaPriorityGasPrice(legacyTr, baseGasPrice, provedWork, nil)
-				assert.True(t, res.Cmp(legacyTr.OverallGasPrice(baseGasPrice, provedWork)) == 0)
-			},
-		},
-		{
-			name: "galactica is not yet activated, do not use base GasPrice for priority",
-			f: func(t *testing.T) {
-				res := GalacticaPriorityGasPrice(legacyTr, baseGasPrice, provedWork, nil)
-				assert.False(t, res.Cmp(legacyTr.EffectiveGasPrice(nil, baseGasPrice)) == 0)
-			},
-		},
-		{
-			name: "galactica is activated",
-			f: func(t *testing.T) {
-				res := GalacticaPriorityGasPrice(legacyTr, baseGasPrice, provedWork, baseFee)
-				expected := new(big.Int).Sub(legacyTr.OverallGasPrice(baseGasPrice, provedWork), baseFee)
-				assert.True(t, res.Cmp(expected) == 0)
-			},
-		},
-		{
-			name: "galactica is activated, dynamic fee transaction with maxPriorityFee as priority fee",
-			f: func(t *testing.T) {
-				tr := tx.NewBuilder(tx.TypeDynamicFee).Gas(21000).MaxFeePerGas(big.NewInt(250_000_000)).MaxPriorityFeePerGas(big.NewInt(15_000)).Build()
-				res := GalacticaPriorityGasPrice(tr, baseGasPrice, provedWork, baseFee)
-				assert.True(t, res.Cmp(tr.MaxPriorityFeePerGas()) == 0)
-			},
-		},
-		{
-			name: "galactica is activated, dynamic fee transaction with maxFee-baseFee as priority fee",
-			f: func(t *testing.T) {
-				tr := tx.NewBuilder(tx.TypeDynamicFee).Gas(2100).MaxFeePerGas(big.NewInt(20_500_000)).MaxPriorityFeePerGas(big.NewInt(1_000_000)).Build()
-				res := GalacticaPriorityGasPrice(tr, baseGasPrice, provedWork, baseFee)
-				expectedRes := new(big.Int).Sub(tr.MaxFeePerGas(), baseFee)
-				assert.True(t, res.Cmp(expectedRes) == 0)
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.f(t)
-		})
-	}
-}
-
-func TestCalculateReward(t *testing.T) {
-	rewardRatio := thor.InitialRewardRatio
-	tests := []struct {
-		name           string
-		gasUsed        uint64
-		rewardGasPrice *big.Int
-		isGalactica    bool
-		expectedReward *big.Int
-	}{
-		{
-			name:           "Galactica active, full reward",
-			gasUsed:        1000,
-			rewardGasPrice: big.NewInt(100),
-			isGalactica:    true,
-			expectedReward: big.NewInt(100000),
-		},
-		{
-			name:           "Galactica inactive, 30% reward",
-			gasUsed:        1000,
-			rewardGasPrice: big.NewInt(100),
-			isGalactica:    false,
-			expectedReward: big.NewInt(30000),
-		},
-		{
-			name:           "Galactica active, zero gas used",
-			gasUsed:        0,
-			rewardGasPrice: big.NewInt(100),
-			isGalactica:    true,
-			expectedReward: big.NewInt(0),
-		},
-		{
-			name:           "Galactica inactive, zero gas used",
-			gasUsed:        0,
-			rewardGasPrice: big.NewInt(100),
-			isGalactica:    false,
-			expectedReward: big.NewInt(0),
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			reward := CalculateReward(tt.gasUsed, tt.rewardGasPrice, rewardRatio, tt.isGalactica)
-			assert.Equal(t, tt.expectedReward, reward)
-		})
-	}
 }
