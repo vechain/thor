@@ -188,6 +188,8 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 
 		realElapsed := mclock.Now() - startTime
 
+		fmt.Printf("LLEGA newBlock.Header: %+v\n", newBlock.Header())
+		fmt.Printf("LLEGA oldBest.Header: %+v\n", oldBest.Header)
 		n.processFork(newBlock, oldBest.Header.ID())
 		commitElapsed := mclock.Now() - startTime - execElapsed
 

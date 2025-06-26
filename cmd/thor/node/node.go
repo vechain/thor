@@ -347,11 +347,13 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		// let bft engine decide the best block after fork FINALITY
 		if newBlock.Header().Number() >= n.forkConfig.FINALITY && oldBest.Header.Number() >= n.forkConfig.FINALITY {
 			becomeNewBest, err = n.bft.Select(newBlock.Header())
+			fmt.Printf("LLEGA becomeNewBest1: %v\n", becomeNewBest)
 			if err != nil {
 				return errors.Wrap(err, "bft select")
 			}
 		} else {
 			becomeNewBest = newBlock.Header().BetterThan(oldBest.Header)
+			fmt.Printf("LLEGA becomeNewBest2: %v\n", becomeNewBest)
 		}
 		logEnabled := becomeNewBest && !n.options.SkipLogs && !n.logDBFailed
 		isTrunk = &becomeNewBest
