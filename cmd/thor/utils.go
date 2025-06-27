@@ -14,7 +14,6 @@ import (
 	"io"
 	"log/slog"
 	"math"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -38,13 +37,10 @@ import (
 	"github.com/mattn/go-isatty"
 	"github.com/mattn/go-tty"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/v2/api/doc"
-	"github.com/vechain/thor/v2/api/fees"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/httpserver"
 	"github.com/vechain/thor/v2/cmd/thor/node"
 	"github.com/vechain/thor/v2/cmd/thor/p2p"
-	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/log"
@@ -171,53 +167,6 @@ func handleExitSignal() context.Context {
 	return ctx
 }
 
-// middleware to limit request body size.
-func requestBodyLimit(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.Body = http.MaxBytesReader(w, r.Body, 200*1024)
-		h.ServeHTTP(w, r)
-	})
-}
-
-// middleware to verify 'x-genesis-id' header in request, and set to response headers.
-func handleXGenesisID(h http.Handler, genesisID thor.Bytes32) http.Handler {
-	const headerKey = "x-genesis-id"
-	expectedID := genesisID.String()
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		actualID := r.Header.Get(headerKey)
-		if actualID == "" {
-			actualID = r.URL.Query().Get(headerKey)
-		}
-		w.Header().Set(headerKey, expectedID)
-		if actualID != "" && actualID != expectedID {
-			io.Copy(io.Discard, r.Body)
-			http.Error(w, "genesis id mismatch", http.StatusForbidden)
-			return
-		}
-		h.ServeHTTP(w, r)
-	})
-}
-
-// middleware to set 'x-thorest-ver' to response headers.
-func handleXThorestVersion(h http.Handler) http.Handler {
-	const headerKey = "x-thorest-ver"
-	ver := doc.Version()
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set(headerKey, ver)
-		h.ServeHTTP(w, r)
-	})
-}
-
-// middleware for http request timeout.
-func handleAPITimeout(h http.Handler, timeout time.Duration) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx, cancel := context.WithTimeout(r.Context(), timeout)
-		defer cancel()
-		r = r.WithContext(ctx)
-		h.ServeHTTP(w, r)
-	})
-}
-
 func readPasswordFromNewTTY(prompt string) (string, error) {
 	t, err := tty.Open()
 	if err != nil {
@@ -289,26 +238,24 @@ func parseGenesisFile(uri string) (*genesis.Genesis, *thor.ForkConfig, error) {
 	return customGen, &forkConfig, nil
 }
 
-func makeAPIConfig(ctx *cli.Context, logAPIRequests *atomic.Bool, soloMode bool) httpserver.Config {
-	return httpserver.Config{
-		AllowedOrigins: ctx.String(apiCorsFlag.Name),
-		BacktraceLimit: uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
-		CallGasLimit:   ctx.Uint64(apiCallGasLimitFlag.Name),
-		PprofOn:        ctx.Bool(pprofFlag.Name),
-		SkipLogs:       ctx.Bool(skipLogsFlag.Name),
-		Fees: fees.Config{
-			APIBacktraceLimit:          int(ctx.Uint64(apiBacktraceLimitFlag.Name)),
-			FixedCacheSize:             1024,
-			PriorityIncreasePercentage: int(ctx.Uint64(apiPriorityFeesPercentageFlag.Name)),
-		},
-		AllowCustomTracer: ctx.Bool(apiAllowCustomTracerFlag.Name),
-		EnableReqLogger:   logAPIRequests,
-		EnableMetrics:     ctx.Bool(enableMetricsFlag.Name),
-		LogsLimit:         ctx.Uint64(apiLogsLimitFlag.Name),
-		AllowedTracers:    parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
-		EnableDeprecated:  ctx.Bool(apiEnableDeprecatedFlag.Name),
-		SoloMode:          soloMode,
-		EnableTxpool:      ctx.Bool(apiTxpoolFlag.Name),
+func makeAPIConfig(ctx *cli.Context, logAPIRequests *atomic.Bool, soloMode bool) httpserver.APIConfig {
+	return httpserver.APIConfig{
+		AllowedOrigins:             ctx.String(apiCorsFlag.Name),
+		BacktraceLimit:             uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
+		CallGasLimit:               ctx.Uint64(apiCallGasLimitFlag.Name),
+		PprofOn:                    ctx.Bool(pprofFlag.Name),
+		SkipLogs:                   ctx.Bool(skipLogsFlag.Name),
+		APIBacktraceLimit:          int(ctx.Uint64(apiBacktraceLimitFlag.Name)),
+		PriorityIncreasePercentage: int(ctx.Uint64(apiPriorityFeesPercentageFlag.Name)),
+		AllowCustomTracer:          ctx.Bool(apiAllowCustomTracerFlag.Name),
+		EnableReqLogger:            logAPIRequests,
+		EnableMetrics:              ctx.Bool(enableMetricsFlag.Name),
+		LogsLimit:                  ctx.Uint64(apiLogsLimitFlag.Name),
+		AllowedTracers:             parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
+		EnableDeprecated:           ctx.Bool(apiEnableDeprecatedFlag.Name),
+		SoloMode:                   soloMode,
+		EnableTxPool:               ctx.Bool(apiTxpoolFlag.Name),
+		Timeout:                    ctx.Int(apiTimeoutFlag.Name),
 	}
 }
 
@@ -574,30 +521,6 @@ func newP2PCommunicator(ctx *cli.Context, repo *chain.Repository, txPool *txpool
 		cachedPeers,
 		bootnodePeers,
 	), nil
-}
-
-func startAPIServer(ctx *cli.Context, handler http.Handler, genesisID thor.Bytes32) (string, func(), error) {
-	addr := ctx.String(apiAddrFlag.Name)
-	listener, err := net.Listen("tcp", addr)
-	if err != nil {
-		return "", nil, errors.Wrapf(err, "listen API addr [%v]", addr)
-	}
-	timeout := ctx.Int(apiTimeoutFlag.Name)
-	if timeout > 0 {
-		handler = handleAPITimeout(handler, time.Duration(timeout)*time.Millisecond)
-	}
-	handler = handleXGenesisID(handler, genesisID)
-	handler = handleXThorestVersion(handler)
-	handler = requestBodyLimit(handler)
-	srv := &http.Server{Handler: handler, ReadHeaderTimeout: time.Second, ReadTimeout: 5 * time.Second}
-	var goes co.Goes
-	goes.Go(func() {
-		srv.Serve(listener)
-	})
-	return "http://" + listener.Addr().String() + "/", func() {
-		srv.Close()
-		goes.Wait()
-	}, nil
 }
 
 func printStartupMessage1(
