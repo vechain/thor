@@ -22,8 +22,9 @@ func init() {
 		run  func(env *xenv.Environment) []any
 	}{
 		{"native_totalStake", func(env *xenv.Environment) []any {
-			env.UseGas(thor.SloadGas)
-			env.UseGas(thor.GetBalanceGas)
+			env.UseGas(thor.SloadGas) // s.lockedVET.Get()
+			env.UseGas(thor.SloadGas) // s.lockedWeight.Get()
+
 			staked, weight, err := Staker.Native(env.State()).LockedVET()
 			if err != nil {
 				return []any{new(big.Int), new(big.Int), fmt.Sprintf("revert: %v", err)}
@@ -31,8 +32,9 @@ func init() {
 			return []any{staked, weight, ""}
 		}},
 		{"native_queuedStake", func(env *xenv.Environment) []any {
-			env.UseGas(thor.SloadGas)
-			env.UseGas(thor.GetBalanceGas)
+			env.UseGas(thor.SloadGas)      // s.queuedVET.Get()
+			env.UseGas(thor.GetBalanceGas) // s.queuedWeight.Get()
+
 			staked, weight, err := Staker.Native(env.State()).QueuedStake()
 			if err != nil {
 				return []any{new(big.Int), new(big.Int), fmt.Sprintf("revert: %v", err)}
@@ -44,9 +46,7 @@ func init() {
 				ValidationID common.Hash
 			}
 			env.ParseArgs(&args)
-
-			env.UseGas(thor.SloadGas)
-			env.UseGas(thor.SloadGas)
+			env.UseGas(thor.SloadGas) // s.storage.GetValidation(id)
 
 			validator, err := Staker.Native(env.State()).Get(thor.Bytes32(args.ValidationID))
 			if err != nil {
@@ -66,7 +66,8 @@ func init() {
 				Master common.Address
 			}
 			env.ParseArgs(&args)
-			env.UseGas(thor.SloadGas)
+			env.UseGas(thor.SloadGas) // s.GetLookup(master)
+			env.UseGas(thor.SloadGas) // s.GetValidation(id)
 
 			_, validationID, _ := Staker.Native(env.State()).LookupMaster(thor.Address(args.Master))
 
@@ -77,9 +78,7 @@ func init() {
 				ValidationID common.Hash
 			}
 			env.ParseArgs(&args)
-
-			env.UseGas(thor.SloadGas)
-			env.UseGas(thor.SloadGas)
+			env.UseGas(thor.SloadGas) // v.storage.GetValidation(id)
 
 			amount, err := Staker.Native(env.State()).GetWithdrawable(thor.Bytes32(args.ValidationID), env.BlockContext().Number)
 			if err != nil {
@@ -88,7 +87,8 @@ func init() {
 			return []any{amount, ""}
 		}},
 		{"native_firstActive", func(env *xenv.Environment) []any {
-			env.UseGas(thor.SloadGas)
+			env.UseGas(thor.SloadGas) // v.leaderGroup.head.Get()
+
 			first, err := Staker.Native(env.State()).FirstActive()
 			if err != nil {
 				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", err)}
@@ -96,7 +96,8 @@ func init() {
 			return []any{first, ""}
 		}},
 		{"native_firstQueued", func(env *xenv.Environment) []any {
-			env.UseGas(thor.SloadGas)
+			env.UseGas(thor.SloadGas) // v.validatorQueue.head.Get()
+
 			first, err := Staker.Native(env.State()).FirstQueued()
 			if err != nil {
 				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", err)}
@@ -108,8 +109,8 @@ func init() {
 				Prev common.Hash
 			}
 			env.ParseArgs(&args)
+			env.UseGas(thor.SloadGas) // s.storage.GetValidation(id)
 
-			env.UseGas(thor.SloadGas)
 			next, err := Staker.Native(env.State()).Next(thor.Bytes32(args.Prev))
 			if err != nil {
 				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", err)}
@@ -123,11 +124,19 @@ func init() {
 			}
 			env.ParseArgs(&args)
 
-			stake, err := Staker.Native(env.State()).WithdrawStake(thor.Address(args.Endorsor), thor.Bytes32(args.ValidationID), env.BlockContext().Number)
+			env.UseGas(thor.SloadGas) // v.storage.GetValidation(id)
+
+			stake, removedFromQueue, err := Staker.Native(env.State()).WithdrawStake(thor.Address(args.Endorsor), thor.Bytes32(args.ValidationID), env.BlockContext().Number)
 			if err != nil {
 				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
 			}
-			env.UseGas(thor.SstoreSetGas)
+
+			if removedFromQueue {
+				env.UseGas(3 * thor.SloadGas)       // validatorQueue.Remove(...) pays for worst case
+				env.UseGas(3 * thor.SstoreResetGas) // v.storage.SetLookup(master, zero) pays for worst case
+			}
+
+			env.UseGas(thor.SstoreSetGas) // v.storage.SetValidation
 
 			return []any{stake, ""}
 		}},
@@ -140,15 +149,16 @@ func init() {
 				AutoRenew bool
 			}
 			env.ParseArgs(&args)
+			env.UseGas(thor.SloadGas) // s.validations.IsActive()
 
-			env.UseGas(thor.SloadGas)
 			isActive, err := Staker.Native(env.State()).IsActive()
 			if err != nil {
 				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", err)}
 			}
 
 			if !isActive {
-				env.UseGas(thor.SloadGas)
+				env.UseGas(thor.SloadGas) // a.getEntry(nodeMaster)
+
 				exists, endorsor, _, _, err := Authority.Native(env.State()).Get(thor.Address(args.Master))
 				if err != nil {
 					return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", err)}
@@ -159,9 +169,17 @@ func init() {
 				if thor.Address(args.Endorsor) != endorsor {
 					return []any{thor.Bytes32{}, "revert: endorsor is not present in the Authority"}
 				}
+
+				env.UseGas(thor.SloadGas) // a.getAddressPtr(headKey)
 			}
 
-			env.UseGas(thor.SloadGas)
+			env.UseGas(thor.SloadGas)     // v.storage.GetLookup
+			env.UseGas(thor.SstoreSetGas) // v.queuedVET.Add
+			env.UseGas(thor.SstoreSetGas) // v.queuedWeight.Add
+			env.UseGas(thor.SstoreSetGas) // v.storage.SetLookup
+			env.UseGas(thor.SstoreSetGas) // v.validatorQueue.Add
+			env.UseGas(thor.SstoreSetGas) // v.storage.SetAggregation
+
 			id, err := Staker.Native(env.State()).AddValidator(thor.Address(args.Endorsor), thor.Address(args.Master), args.Period, args.Stake, args.AutoRenew, env.BlockContext().Number)
 			if err != nil {
 				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", err)}
@@ -172,7 +190,6 @@ func init() {
 			}
 			return []any{id, ""}
 		}},
-
 		{"native_updateAutoRenew", func(env *xenv.Environment) []any {
 			var args struct {
 				Endorsor     common.Address
@@ -181,11 +198,14 @@ func init() {
 			}
 			env.ParseArgs(&args)
 
+			env.UseGas(thor.SloadGas)       // v.storage.GetValidation
+			env.UseGas(thor.SstoreResetGas) // v.storage.SetExitEpoch TODO might be overpaying if status is not active
+
 			err := Staker.Native(env.State()).UpdateAutoRenew(thor.Address(args.Endorsor), thor.Bytes32(args.ValidationID), args.AutoRenew)
 			if err != nil {
 				return []any{fmt.Sprintf("revert: %v", err)}
 			}
-			env.UseGas(thor.SstoreSetGas)
+			env.UseGas(thor.SstoreSetGas) // // v.storage.SetValidation
 			return []any{""}
 		}},
 		{"native_increaseStake", func(env *xenv.Environment) []any {
@@ -195,6 +215,11 @@ func init() {
 				Amount       *big.Int
 			}
 			env.ParseArgs(&args)
+			env.UseGas(thor.SloadGas) // v.storage.GetValidation(id)
+			env.UseGas(thor.SloadGas) // v.storage.GetAggregation(id)
+
+			env.UseGas(thor.SstoreSetGas) // v.queuedVET.Add TODO might be overpaing
+			env.UseGas(thor.SstoreSetGas) // v.queuedWeight.Add
 
 			err := Staker.Native(env.State()).IncreaseStake(thor.Address(args.Endorsor), thor.Bytes32(args.ValidationID), args.Amount)
 			if err != nil {

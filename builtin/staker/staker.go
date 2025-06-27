@@ -149,6 +149,7 @@ func (s *Staker) AddValidator(
 ) (thor.Bytes32, error) {
 	stakeETH := new(big.Int).Div(stake, big.NewInt(1e18))
 	logger.Debug("adding validator", "endorsor", endorsor, "master", master, "period", period, "stake", stakeETH, "autoRenew", autoRenew)
+
 	if id, err := s.validations.Add(endorsor, master, period, stake, autoRenew, currentBlock); err != nil {
 		logger.Info("add validator failed", "master", master, "error", err)
 		return thor.Bytes32{}, err
@@ -207,16 +208,16 @@ func (s *Staker) DecreaseStake(endorsor thor.Address, id thor.Bytes32, amount *b
 }
 
 // WithdrawStake allows expired validations to withdraw their stake.
-func (s *Staker) WithdrawStake(endorsor thor.Address, id thor.Bytes32, currentBlock uint32) (*big.Int, error) {
+func (s *Staker) WithdrawStake(endorsor thor.Address, id thor.Bytes32, currentBlock uint32) (*big.Int, bool, error) {
 	logger.Debug("withdrawing stake", "endorsor", endorsor, "id", id)
 
-	if stake, err := s.validations.WithdrawStake(endorsor, id, currentBlock); err != nil {
+	stake, removedFromQueue, err := s.validations.WithdrawStake(endorsor, id, currentBlock)
+	if err != nil {
 		logger.Info("withdraw failed", "id", id, "error", err)
-		return nil, err
 	} else {
 		logger.Info("withdrew validator staker", "id", id)
-		return stake, nil
 	}
+	return stake, removedFromQueue, err
 }
 
 // GetWithdrawable returns the withdrawable stake of a validator.

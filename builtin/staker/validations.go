@@ -8,6 +8,7 @@ package staker
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/vechain/thor/v2/builtin/params"
@@ -266,9 +267,19 @@ func (v *validations) UpdateAutoRenew(endorsor thor.Address, id thor.Bytes32, au
 	if validator.Endorsor != endorsor {
 		return errors.New("invalid endorsor for master")
 	}
+	if validator.AutoRenew == autoRenew {
+		return errors.New(fmt.Sprintf("auto-renewal is already set to %t", autoRenew))
+	}
+
 	validator.AutoRenew = autoRenew
-	if !autoRenew {
-		if validator.Status == StatusActive {
+
+	if validator.Status == StatusActive {
+		if autoRenew {
+			if err := v.storage.SetExitEpoch(*validator.ExitBlock, id); err != nil {
+				return err
+			}
+			validator.ExitBlock = nil
+		} else {
 			minBlock := validator.StartBlock + validator.Period*(validator.CurrentIteration())
 			exitBlock, err := v.SetExitBlock(id, minBlock)
 			if err != nil {
@@ -276,12 +287,8 @@ func (v *validations) UpdateAutoRenew(endorsor thor.Address, id thor.Bytes32, au
 			}
 			validator.ExitBlock = &exitBlock
 		}
-	} else if validator.Status == StatusActive {
-		if err := v.storage.SetExitEpoch(*validator.ExitBlock, id); err != nil {
-			return err
-		}
-		validator.ExitBlock = nil
 	}
+
 	return v.storage.SetValidation(id, validator)
 }
 
@@ -397,14 +404,16 @@ func (v *validations) DecreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 }
 
 // WithdrawStake allows validations to withdraw any withdrawable stake.
-// It also verifies the endoresor and updates the validator totals.
-func (v *validations) WithdrawStake(endorsor thor.Address, id thor.Bytes32, currentBlock uint32) (*big.Int, error) {
+// It also verifies the endorsor and updates the validator totals.
+func (v *validations) WithdrawStake(endorsor thor.Address, id thor.Bytes32, currentBlock uint32) (*big.Int, bool, error) {
+	var removedFromQueue bool
+
 	entry, withdrawable, err := v.GetWithdrawable(id, currentBlock)
 	if err != nil {
-		return nil, err
+		return nil, removedFromQueue, err
 	}
 	if entry.Endorsor != endorsor {
-		return big.NewInt(0), errors.New("invalid endorser")
+		return big.NewInt(0), removedFromQueue, errors.New("invalid endorser")
 	}
 
 	// entry has exited and waited for the cooldown period
@@ -414,13 +423,14 @@ func (v *validations) WithdrawStake(endorsor thor.Address, id thor.Bytes32, curr
 
 	if entry.Status == StatusQueued {
 		if err := v.storage.SetLookup(entry.Master, thor.Bytes32{}); err != nil {
-			return nil, err
+			return nil, removedFromQueue, err
 		}
 		entry.PendingLocked = big.NewInt(0)
 		entry.Status = StatusExit
 		if _, err := v.validatorQueue.Remove(id, entry); err != nil {
-			return nil, err
+			return nil, removedFromQueue, err
 		}
+		removedFromQueue = true
 	}
 	if entry.PendingLocked.Sign() > 0 {
 		entry.PendingLocked = big.NewInt(0)
@@ -428,10 +438,10 @@ func (v *validations) WithdrawStake(endorsor thor.Address, id thor.Bytes32, curr
 
 	entry.WithdrawableVET = big.NewInt(0)
 	if err := v.storage.SetValidation(id, entry); err != nil {
-		return nil, err
+		return nil, removedFromQueue, err
 	}
 
-	return withdrawable, nil
+	return withdrawable, removedFromQueue, nil
 }
 
 // GetWithdrawable returns the validator entry and the withdrawable amount.
