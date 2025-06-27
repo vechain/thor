@@ -44,7 +44,7 @@ func (a *APILogs) areAPILogsEnabled(w http.ResponseWriter, _ *http.Request) erro
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	return utils.WriteJSON(w, api.AdminLogStatus{
+	return utils.WriteJSON(w, api.LogStatus{
 		Enabled: a.enabled.Load(),
 	})
 }
@@ -53,7 +53,7 @@ func (a *APILogs) setAPILogsEnabled(w http.ResponseWriter, r *http.Request) erro
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	var req api.AdminLogStatus
+	var req api.LogStatus
 	if err := utils.ParseJSON(r.Body, &req); err != nil {
 		return utils.BadRequest(err)
 	}
@@ -61,7 +61,7 @@ func (a *APILogs) setAPILogsEnabled(w http.ResponseWriter, r *http.Request) erro
 
 	log.Info("api logs updated", "pkg", "apilogs", "enabled", req.Enabled)
 
-	return utils.WriteJSON(w, api.AdminLogStatus{
+	return utils.WriteJSON(w, api.LogStatus{
 		Enabled: a.enabled.Load(),
 	})
 }

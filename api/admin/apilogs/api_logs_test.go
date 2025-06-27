@@ -31,7 +31,7 @@ func marshalBody(tt TestCase, t *testing.T) []byte {
 	var reqBody []byte
 	var err error
 	if tt.method == "POST" {
-		reqBody, err = json.Marshal(api.AdminLogStatus{Enabled: tt.requestBody})
+		reqBody, err = json.Marshal(api.LogStatus{Enabled: tt.requestBody})
 		if err != nil {
 			t.Fatalf("could not marshal request body: %v", err)
 		}
@@ -84,7 +84,7 @@ func TestLogLevelHandler(t *testing.T) {
 			router.ServeHTTP(rr, req)
 
 			assert.Equal(t, tt.expectedHTTP, rr.Code)
-			responseBody := api.AdminLogStatus{}
+			responseBody := api.LogStatus{}
 			assert.NoError(t, json.Unmarshal(rr.Body.Bytes(), &responseBody))
 			assert.Equal(t, tt.expectedEndValue, responseBody.Enabled)
 		})
