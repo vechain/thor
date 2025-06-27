@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/test/testchain"
@@ -65,7 +66,7 @@ func SetupTest() (genesis.DevAccount, *chain.Repository, *block.Block, *state.St
 	db := tchain.Database()
 
 	b0 := repo.GenesisBlock()
-	b1 := new(block.Builder).ParentID(b0.Header().ID()).GasLimit(10000000).TotalScore(100).Build()
+	b1 := new(block.Builder).ParentID(b0.Header().ID()).GasLimit(10000000).TotalScore(100).BaseFee(big.NewInt(thor.InitialBaseFee)).Build()
 	repo.AddBlock(b1, nil, 0, false)
 	st := state.New(db, trie.Root{Hash: repo.GenesisBlock().Header().StateRoot()})
 
@@ -84,6 +85,7 @@ func TestExecutableWithError(t *testing.T) {
 		{newTx(tx.TypeDynamicFee, 0, nil, 21000, tx.BlockRef{0}, 100, nil, tx.Features(0), acc), false, ""},
 	}
 
+	baseFee := galactica.CalcBaseFee(b1.Header(), fc)
 	for _, tt := range tests {
 		txObj, err := resolveTx(tt.tx, false)
 		assert.Nil(t, err)
@@ -91,7 +93,7 @@ func TestExecutableWithError(t *testing.T) {
 		// pass custom headID
 		chain := repo.NewChain(thor.Bytes32{0})
 
-		exe, err := txObj.Executable(chain, st, b1.Header(), fc)
+		exe, err := txObj.Executable(chain, st, b1.Header(), fc, baseFee)
 		if tt.expectedErr != "" {
 			assert.Equal(t, tt.expectedErr, err.Error())
 		} else {
@@ -111,7 +113,7 @@ func TestSort(t *testing.T) {
 		{priorityGasPrice: big.NewInt(20)},
 		{priorityGasPrice: big.NewInt(30)},
 	}
-	sortTxObjsByOverallGasPriceDesc(objs)
+	sortTxObjsByPriorityGasPriceDesc(objs)
 
 	assert.Equal(t, big.NewInt(30), objs[0].priorityGasPrice)
 	assert.Equal(t, big.NewInt(20), objs[1].priorityGasPrice)
@@ -171,11 +173,12 @@ func TestExecutable(t *testing.T) {
 		{newTx(tx.TypeDynamicFee, 0, nil, 21000, tx.BlockRef{0}, 100, &thor.Bytes32{}, tx.Features(0), acc), false, ""},
 	}
 
+	baseFee := galactica.CalcBaseFee(b0.Header(), tchain.GetForkConfig())
 	for _, tt := range tests {
 		txObj, err := resolveTx(tt.tx, false)
 		assert.Nil(t, err)
 
-		exe, err := txObj.Executable(repo.NewChain(b0.Header().ID()), st, b0.Header(), tchain.GetForkConfig())
+		exe, err := txObj.Executable(repo.NewChain(b0.Header().ID()), st, b0.Header(), tchain.GetForkConfig(), baseFee)
 		if tt.expectedErr != "" {
 			assert.Equal(t, tt.expectedErr, err.Error())
 		} else {
@@ -194,12 +197,13 @@ func TestExecutableRejectNonLegacyBeforeGalactica(t *testing.T) {
 
 	tchain, _ := testchain.NewWithFork(forkConfig)
 	repo := tchain.Repo()
+	baseFee := galactica.CalcBaseFee(repo.BestBlockSummary().Header, forkConfig)
 
 	txObj1, err := resolveTx(dynamicFeeTx, false)
 	assert.Nil(t, err)
 
 	st := tchain.Stater().NewState(repo.BestBlockSummary().Root())
-	exe, err := txObj1.Executable(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig)
+	exe, err := txObj1.Executable(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig, baseFee)
 	assert.False(t, exe)
 	assert.Equal(t, tx.ErrTxTypeNotSupported, err)
 
@@ -207,15 +211,17 @@ func TestExecutableRejectNonLegacyBeforeGalactica(t *testing.T) {
 	txObj2, err := resolveTx(legacyTx, false)
 	assert.Nil(t, err)
 
-	exe, err = txObj2.Executable(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig)
+	exe, err = txObj2.Executable(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig, baseFee)
 	assert.True(t, exe)
 	assert.Nil(t, err)
 
 	// add a block 1
 	tchain.MintBlock(genesis.DevAccounts()[0])
 
+	// recalculate the base fee since new block is added
+	baseFee = galactica.CalcBaseFee(repo.BestBlockSummary().Header, forkConfig)
 	st = tchain.Stater().NewState(repo.BestBlockSummary().Root())
-	_, err = txObj1.Executable(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig)
+	_, err = txObj1.Executable(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig, baseFee)
 	assert.Nil(t, err)
 }
 
@@ -232,7 +238,7 @@ func TestExecutableRejectUnsupportedFeatures(t *testing.T) {
 	assert.Nil(t, err)
 
 	st := tchain.Stater().NewState(repo.BestBlockSummary().Root())
-	exe, err := txObj1.Executable(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig)
+	exe, err := txObj1.Executable(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig, galactica.CalcBaseFee(repo.BestBlockSummary().Header, forkConfig))
 	assert.False(t, exe)
 	assert.ErrorContains(t, err, "unsupported features")
 
@@ -240,6 +246,6 @@ func TestExecutableRejectUnsupportedFeatures(t *testing.T) {
 	tchain.MintBlock(genesis.DevAccounts()[0])
 
 	st = tchain.Stater().NewState(repo.BestBlockSummary().Root())
-	_, err = txObj1.Executable(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig)
+	_, err = txObj1.Executable(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig, galactica.CalcBaseFee(repo.BestBlockSummary().Header, forkConfig))
 	assert.Nil(t, err)
 }

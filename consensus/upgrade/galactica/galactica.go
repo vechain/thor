@@ -15,7 +15,7 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-// CalcBaseFee calculates the basefee of the header.
+// CalcBaseFee calculates the base fee of the next block with the given parent block header.
 func CalcBaseFee(parent *block.Header, forkConfig *thor.ForkConfig) *big.Int {
 	if parent.Number()+1 < forkConfig.GALACTICA {
 		return nil
