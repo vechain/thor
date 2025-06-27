@@ -41,7 +41,7 @@ func (h *Health) isNodeConnectedP2P(peerCount int, minPeerCount int) bool {
 	return peerCount >= minPeerCount
 }
 
-func (h *Health) Status(blockTolerance time.Duration, minPeerCount int) (*api.AdminHealthStatus, error) {
+func (h *Health) Status(blockTolerance time.Duration, minPeerCount int) (*api.HealthStatus, error) {
 	// Fetch the best block details
 	bestBlock := h.repo.BestBlockSummary()
 	bestBlockTimestamp := time.Unix(int64(bestBlock.Header.Timestamp()), 0)
@@ -64,7 +64,7 @@ func (h *Health) Status(blockTolerance time.Duration, minPeerCount int) (*api.Ad
 	healthy := networkProgressing && nodeConnected
 
 	// Return the current status
-	return &api.AdminHealthStatus{
+	return &api.HealthStatus{
 		Healthy:              healthy,
 		BestBlockTime:        &bestBlockTimestamp,
 		IsNetworkProgressing: networkProgressing,
