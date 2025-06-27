@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
@@ -27,7 +26,6 @@ import (
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/metrics"
 	"github.com/vechain/thor/v2/muxdb"
@@ -563,13 +561,10 @@ func TestOrderTxsAfterGalacticaFork(t *testing.T) {
 	assert.Zero(t, removedLegacy+removedDynamicFee)
 	assert.Equal(t, len(txs), len(execTxs))
 	assert.Equal(t, poolLimit-2, len(execTxs))
-	baseGasPrice, err := builtin.Params.Native(st).Get(thor.KeyLegacyTxBaseGasPrice)
-	assert.Nil(t, err)
 	for i := 1; i < len(txs); i++ {
-		prevGalacticaFee := galactica.GalacticaTxGasPriceAdapter(execTxs[i-1], baseGasPrice)
-		currGalacticaFee := galactica.GalacticaTxGasPriceAdapter(execTxs[i], baseGasPrice)
-		prevEffectiveFee := math.BigMin(new(big.Int).Sub(prevGalacticaFee.MaxFee, b1.Header().BaseFee()), prevGalacticaFee.MaxPriorityFee)
-		currEffectiveFee := math.BigMin(new(big.Int).Sub(currGalacticaFee.MaxFee, b1.Header().BaseFee()), currGalacticaFee.MaxPriorityFee)
+		// all dynamic fee txs, no proved work, no baseGasPrice
+		prevEffectiveFee := execTxs[i-1].EffectivePriorityFeePerGas(b1.Header().BaseFee(), nil, nil)
+		currEffectiveFee := execTxs[i].EffectivePriorityFeePerGas(b1.Header().BaseFee(), nil, nil)
 		assert.True(t, prevEffectiveFee.Cmp(currEffectiveFee) >= 0)
 	}
 
@@ -650,13 +645,10 @@ func TestOrderTxsAfterGalacticaForkSameValues(t *testing.T) {
 	assert.Zero(t, removedLegacy+removedDynamicFee)
 	assert.Equal(t, len(txs), len(execTxs))
 	assert.Equal(t, totalPoolTxs, len(execTxs))
-	baseGasPrice, err := builtin.Params.Native(st).Get(thor.KeyLegacyTxBaseGasPrice)
-	assert.Nil(t, err)
 	for i := 1; i < len(txs); i++ {
-		prevGalacticaFee := galactica.GalacticaTxGasPriceAdapter(execTxs[i-1], baseGasPrice)
-		currGalacticaFee := galactica.GalacticaTxGasPriceAdapter(execTxs[i], baseGasPrice)
-		prevEffectiveFee := math.BigMin(new(big.Int).Sub(prevGalacticaFee.MaxFee, b1.Header().BaseFee()), prevGalacticaFee.MaxPriorityFee)
-		currEffectiveFee := math.BigMin(new(big.Int).Sub(currGalacticaFee.MaxFee, b1.Header().BaseFee()), currGalacticaFee.MaxPriorityFee)
+		// all dynamic fee txs, no proved work, no baseGasPrice
+		prevEffectiveFee := execTxs[i-1].EffectivePriorityFeePerGas(b1.Header().BaseFee(), nil, nil)
+		currEffectiveFee := execTxs[i].EffectivePriorityFeePerGas(b1.Header().BaseFee(), nil, nil)
 		assert.True(t, prevEffectiveFee.Cmp(currEffectiveFee) >= 0)
 	}
 }

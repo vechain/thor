@@ -12,10 +12,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -108,22 +106,22 @@ func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32, rewardPercentiles []floa
 		return fees.(*FeeCacheEntry), nil
 	}
 
-	block, err := fd.repo.GetBlock(blockID)
+	summary, err := fd.repo.GetBlockSummary(blockID)
 	if err != nil {
 		return nil, err
 	}
+	header := summary.Header
 
 	var priorityRewards *rewards
 	// Fetch the rewards if rewardPercentiles is set and only for post-Galactica blocks
 	// The rewards refer to priority fees per gas, which are different from pre-Galactica validator rewards
-	if len(rewardPercentiles) > 0 && block.Header().BaseFee() != nil {
-		priorityRewards, err = fd.getRewardsForCache(block)
+	if len(rewardPercentiles) > 0 && header.BaseFee() != nil {
+		priorityRewards, err = fd.getRewardsForCache(header)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	header := block.Header()
 	fees = &FeeCacheEntry{
 		baseFee:       getBaseFee(header.BaseFee()),
 		gasUsedRatio:  float64(header.GasUsed()) / float64(header.GasLimit()),
@@ -135,42 +133,19 @@ func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32, rewardPercentiles []floa
 	return fees.(*FeeCacheEntry), nil
 }
 
-func (fd *FeesData) getRewardsForCache(block *block.Block) (*rewards, error) {
-	header := block.Header()
+// called only for post-galactica blocks
+func (fd *FeesData) getRewardsForCache(header *block.Header) (*rewards, error) {
 	receipts, err := fd.repo.GetBlockReceipts(header.ID())
 	if err != nil {
 		return nil, err
 	}
 
-	// Get the baseGasPrice for legacy transactions
-	parentSummary, err := fd.repo.GetBlockSummary(block.Header().ParentID())
-	if err != nil {
-		return nil, err
-	}
-	state := fd.stater.NewState(parentSummary.Root())
-
-	legacyTxBaseGasPrice, err := builtin.Params.Native(state).Get(thor.KeyLegacyTxBaseGasPrice)
-	if err != nil {
-		return nil, err
-	}
-
-	// Get the effective priority fee (reward) for each transaction
-	transactions := block.Transactions()
-	items := make([]rewardItem, len(transactions))
-
-	for i, tx := range transactions {
-		provedWork, err := tx.ProvedWork(header.Number(), fd.repo.NewBestChain().GetBlockID)
-		if err != nil {
-			return nil, err
-		}
+	// Get the effective priority gasprice (reward) for each transaction
+	items := make([]rewardItem, len(receipts))
+	for i, receipt := range receipts {
 		items[i] = rewardItem{
-			reward: galactica.GalacticaPriorityGasPrice(
-				tx,
-				legacyTxBaseGasPrice,
-				provedWork,
-				header.BaseFee(),
-			),
-			gasUsed: receipts[i].GasUsed,
+			reward:  new(big.Int).Div(receipt.Reward, new(big.Int).SetUint64(receipt.GasUsed)),
+			gasUsed: receipt.GasUsed,
 		}
 	}
 

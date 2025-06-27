@@ -12,7 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/tx"
 )
 
 // CalcBaseFee calculates the base fee of the next block with the given parent block header.
@@ -64,54 +63,4 @@ func CalcBaseFee(parent *block.Header, forkConfig *thor.ForkConfig) *big.Int {
 			big.NewInt(thor.InitialBaseFee),
 		)
 	}
-}
-
-func GalacticaTxGasPriceAdapter(tr *tx.Transaction, legacyTxFinalGasPrice *big.Int) *GalacticaFeeMarketItems {
-	var maxPriorityFee, maxFee *big.Int
-	switch tr.Type() {
-	case tx.TypeLegacy:
-		maxFee = legacyTxFinalGasPrice
-		maxPriorityFee = legacyTxFinalGasPrice
-	case tx.TypeDynamicFee:
-		maxPriorityFee = tr.MaxPriorityFeePerGas()
-		maxFee = tr.MaxFeePerGas()
-	}
-	return &GalacticaFeeMarketItems{maxFee, maxPriorityFee}
-}
-
-type GalacticaFeeMarketItems struct {
-	MaxFee         *big.Int
-	MaxPriorityFee *big.Int
-}
-
-func GalacticaPriorityGasPrice(tr *tx.Transaction, legacyTxBaseGasPrice, provedWork *big.Int, blkBaseFee *big.Int) *big.Int {
-	// proved work is accounted for priority gas
-	feeItems := GalacticaTxGasPriceAdapter(tr, tr.OverallGasPrice(legacyTxBaseGasPrice, provedWork))
-
-	/** This gasPrice will be used to compensate the validator
-	* baseFee=1000; maxFee = 1000; maxPriorityFee = 100 -> validator gets  0
-	* baseFee=900;  maxFee = 1000; maxPriorityFee = 0   -> validator get   0; user gets back 100
-	* baseFee=900;  maxFee = 1000; maxPriorityFee = 50  -> validator gets 50
-	* baseFee=1100; maxFee = 1000; maxPriorityFee = 100 -> tx rejected, maxFee < baseFee
-	*
-	* if galactica is not active CurrentBaseFee will be 0
-	* LegacyTx OverallGasPrice Calculation = MaxFee
-	**/
-	currBaseFee := big.NewInt(0)
-	if blkBaseFee != nil {
-		currBaseFee = blkBaseFee
-	}
-	return math.BigMin(feeItems.MaxPriorityFee, new(big.Int).Sub(feeItems.MaxFee, currBaseFee))
-}
-
-func CalculateReward(gasUsed uint64, rewardGasPrice, rewardRatio *big.Int, isGalactica bool) *big.Int {
-	reward := new(big.Int).SetUint64(gasUsed)
-	reward.Mul(reward, rewardGasPrice)
-	if isGalactica {
-		return reward
-	}
-	// Returning the 30% of the reward
-	reward.Mul(reward, rewardRatio)
-	reward.Div(reward, big.NewInt(1e18))
-	return reward
 }
