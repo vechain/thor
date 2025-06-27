@@ -27,13 +27,13 @@ func TestCacheBaseFee(t *testing.T) {
 	cache := newBaseFeeCache(&forkConfig)
 
 	// before GALACTICA
-	baseFee := cache.Get(repo.BestBlockSummary())
+	baseFee := cache.Get(repo.BestBlockSummary().Header)
 	assert.Nil(t, baseFee)
 
 	tchain.MintBlock(genesis.DevAccounts()[0])
 
 	// GALACTICA as next block
-	baseFee = cache.Get(repo.BestBlockSummary())
+	baseFee = cache.Get(repo.BestBlockSummary().Header)
 	assert.NotNil(t, baseFee)
 	assert.Equal(t, big.NewInt(thor.InitialBaseFee), baseFee)
 

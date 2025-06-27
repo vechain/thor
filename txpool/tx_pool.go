@@ -266,7 +266,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		}
 
 		state := p.stater.NewState(headSummary.Root())
-		executable, err := txObj.Executable(p.repo.NewChain(headSummary.Header.ID()), state, headSummary.Header, p.forkConfig, p.baseFeeCache.Get(headSummary))
+		executable, err := txObj.Executable(p.repo.NewChain(headSummary.Header.ID()), state, headSummary.Header, p.forkConfig, p.baseFeeCache.Get(headSummary.Header))
 		if err != nil {
 			return txRejectedError{err.Error()}
 		}
@@ -447,7 +447,7 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 		nonExecutableObjs   = make([]*txObject, 0, len(all))
 		localExecutableObjs = make([]*txObject, 0, len(all))
 		now                 = time.Now().UnixNano()
-		baseFee             = p.baseFeeCache.Get(headSummary)
+		baseFee             = p.baseFeeCache.Get(headSummary.Header)
 	)
 	for _, txObj := range all {
 		if thor.IsOriginBlocked(txObj.Origin()) || p.blocklist.Contains(txObj.Origin()) {

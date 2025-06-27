@@ -8,8 +8,8 @@ package txpool
 import (
 	"math/big"
 
+	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/cache"
-	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -27,18 +27,18 @@ func newBaseFeeCache(forkConfig *thor.ForkConfig) *baseFeeCache {
 	}
 }
 
-// Get returns the base fee for the given block.
+// Get returns the base fee with the given parent block.
 // Before GALACTICA, the base fee is not set, so it returns nil.
-func (p *baseFeeCache) Get(head *chain.BlockSummary) *big.Int {
-	if head.Header.Number()+1 < p.forkConfig.GALACTICA {
+func (p *baseFeeCache) Get(parent *block.Header) *big.Int {
+	if parent.Number()+1 < p.forkConfig.GALACTICA {
 		return nil
 	}
 
-	if val, _, ok := p.cache.Get(head.Header.ID()); ok {
+	if val, _, ok := p.cache.Get(parent.ID()); ok {
 		return val.(*big.Int)
 	}
 
-	baseFee := galactica.CalcBaseFee(head.Header, p.forkConfig)
-	p.cache.Set(head.Header.ID(), baseFee, float64(head.Header.Number()))
+	baseFee := galactica.CalcBaseFee(parent, p.forkConfig)
+	p.cache.Set(parent.ID(), baseFee, float64(parent.Number()))
 	return baseFee
 }
