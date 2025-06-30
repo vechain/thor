@@ -10,6 +10,7 @@ import (
 	"math/big"
 
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/builtin/gascharger"
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -56,11 +57,13 @@ type storage struct {
 	lookups      *solidity.Mapping[thor.Address, thor.Bytes32] // allows lookup of Validation by node master address
 	rewards      *solidity.Mapping[thor.Bytes32, *big.Int]     // stores rewards per validator staking period
 	exits        *solidity.Mapping[*big.Int, thor.Bytes32]     // exit block -> validator ID
+	charger      *gascharger.Charger                           // track storage access costs
 }
 
 // newStorage creates a new instance of storage.
-func newStorage(addr thor.Address, state *state.State) *storage {
+func newStorage(addr thor.Address, state *state.State, charger *gascharger.Charger) *storage {
 	return &storage{
+		charger:      charger,
 		state:        state,
 		address:      addr,
 		validations:  solidity.NewMapping[thor.Bytes32, *Validation](addr, state, slotValidations),
@@ -69,6 +72,12 @@ func newStorage(addr thor.Address, state *state.State) *storage {
 		lookups:      solidity.NewMapping[thor.Address, thor.Bytes32](addr, state, slotValidationLookups),
 		rewards:      solidity.NewMapping[thor.Bytes32, *big.Int](addr, state, slotRewards),
 		exits:        solidity.NewMapping[*big.Int, thor.Bytes32](addr, state, slotExitEpochs),
+	}
+}
+
+func (s *storage) chargeGas(cost uint64) {
+	if s.charger != nil {
+		s.charger.Charge(cost)
 	}
 }
 
@@ -81,6 +90,8 @@ func (s *storage) State() *state.State {
 }
 
 func (s *storage) GetValidation(id thor.Bytes32) (*Validation, error) {
+	s.chargeGas(thor.SloadGas)
+
 	v, err := s.validations.Get(id)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get validator")
@@ -89,6 +100,8 @@ func (s *storage) GetValidation(id thor.Bytes32) (*Validation, error) {
 }
 
 func (s *storage) SetValidation(id thor.Bytes32, entry *Validation) error {
+	s.chargeGas(thor.SstoreResetGas)
+
 	if err := s.validations.Set(id, entry); err != nil {
 		return errors.Wrap(err, "failed to set validator")
 	}
@@ -96,6 +109,8 @@ func (s *storage) SetValidation(id thor.Bytes32, entry *Validation) error {
 }
 
 func (s *storage) GetAggregation(validationID thor.Bytes32) (*Aggregation, error) {
+	s.chargeGas(thor.SloadGas)
+
 	d, err := s.aggregations.Get(validationID)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get validator aggregation")
@@ -104,6 +119,8 @@ func (s *storage) GetAggregation(validationID thor.Bytes32) (*Aggregation, error
 }
 
 func (s *storage) SetAggregation(validationID thor.Bytes32, entry *Aggregation) error {
+	s.chargeGas(thor.SstoreResetGas)
+
 	if err := s.aggregations.Set(validationID, entry); err != nil {
 		return errors.Wrap(err, "failed to set validator aggregation")
 	}
@@ -111,6 +128,8 @@ func (s *storage) SetAggregation(validationID thor.Bytes32, entry *Aggregation) 
 }
 
 func (s *storage) GetDelegation(delegationID thor.Bytes32) (*Delegation, error) {
+	s.chargeGas(thor.SloadGas)
+
 	d, err := s.delegations.Get(delegationID)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get delegation")
@@ -119,6 +138,8 @@ func (s *storage) GetDelegation(delegationID thor.Bytes32) (*Delegation, error) 
 }
 
 func (s *storage) SetDelegation(delegationID thor.Bytes32, entry *Delegation) error {
+	s.chargeGas(thor.SloadGas)
+
 	if err := s.delegations.Set(delegationID, entry); err != nil {
 		return errors.Wrap(err, "failed to set delegation")
 	}
@@ -155,6 +176,8 @@ func (s *storage) GetDelegationBundle(delegationID thor.Bytes32) (*Delegation, *
 }
 
 func (s *storage) GetLookup(address thor.Address) (thor.Bytes32, error) {
+	s.chargeGas(thor.SloadGas)
+
 	l, err := s.lookups.Get(address)
 	if err != nil {
 		return thor.Bytes32{}, errors.Wrap(err, "failed to get lookup")
@@ -163,6 +186,8 @@ func (s *storage) GetLookup(address thor.Address) (thor.Bytes32, error) {
 }
 
 func (s *storage) SetLookup(address thor.Address, id thor.Bytes32) error {
+	s.chargeGas(thor.SstoreResetGas)
+
 	if err := s.lookups.Set(address, id); err != nil {
 		return errors.Wrap(err, "failed to set lookup")
 	}
@@ -186,6 +211,8 @@ func (s *storage) LookupMaster(master thor.Address) (*Validation, thor.Bytes32, 
 
 func (s *storage) GetExitEpoch(block uint32) (thor.Bytes32, error) {
 	bigBlock := big.NewInt(0).SetUint64(uint64(block))
+
+	s.chargeGas(thor.SloadGas)
 	id, err := s.exits.Get(bigBlock)
 	if err != nil {
 		return thor.Bytes32{}, errors.Wrap(err, "failed to get exit epoch")
@@ -195,6 +222,8 @@ func (s *storage) GetExitEpoch(block uint32) (thor.Bytes32, error) {
 
 func (s *storage) SetExitEpoch(block uint32, id thor.Bytes32) error {
 	bigBlock := big.NewInt(0).SetUint64(uint64(block))
+
+	s.chargeGas(thor.SstoreResetGas)
 	if err := s.exits.Set(bigBlock, id); err != nil {
 		return errors.Wrap(err, "failed to set exit epoch")
 	}
@@ -205,6 +234,8 @@ func (s *storage) GetRewards(validationID thor.Bytes32, stakingPeriod uint32) (*
 	periodBytes := make([]byte, 4)
 	binary.BigEndian.PutUint32(periodBytes, stakingPeriod)
 	key := thor.Blake2b([]byte("rewards"), validationID.Bytes(), periodBytes)
+
+	s.chargeGas(thor.SloadGas)
 	return s.rewards.Get(key)
 }
 
@@ -233,9 +264,13 @@ func (s *storage) IncreaseReward(master thor.Address, reward big.Int) error {
 	binary.BigEndian.PutUint32(periodBytes, val.CurrentIteration())
 	key := thor.Blake2b([]byte("rewards"), id.Bytes(), periodBytes)
 
+	s.chargeGas(thor.SloadGas)
+
 	rewards, err := s.rewards.Get(key)
 	if err != nil {
 		return err
 	}
+	s.chargeGas(thor.SstoreResetGas)
+
 	return s.rewards.Set(key, big.NewInt(0).Add(rewards, &reward))
 }

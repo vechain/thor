@@ -69,7 +69,7 @@ func newStaker(t *testing.T, amount int, maxValidators int64, initialise bool) (
 	param.Set(thor.KeyMaxBlockProposers, big.NewInt(maxValidators))
 
 	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(maxValidators)))
-	staker := New(thor.BytesToAddress([]byte("stkr")), st, param)
+	staker := New(thor.BytesToAddress([]byte("stkr")), st, param, nil)
 	totalStake := big.NewInt(0)
 	if initialise {
 		for _, key := range keys {
@@ -189,7 +189,7 @@ func TestStaker_TotalStake_Withdrawal(t *testing.T) {
 	assert.Equal(t, StatusExit, validator.Status)
 	assert.Equal(t, stakeAmount, validator.CooldownVET)
 
-	withdrawnAmount, _, err := staker.WithdrawStake(addr, id, period+cooldownPeriod)
+	withdrawnAmount, err := staker.WithdrawStake(addr, id, period+cooldownPeriod)
 	assert.NoError(t, err)
 	assert.Equal(t, stakeAmount, withdrawnAmount)
 
@@ -498,7 +498,7 @@ func TestStaker_Get_FullFlow_Renewal_Off(t *testing.T) {
 	assert.Equal(t, big.NewInt(0), validator.WithdrawableVET)
 
 	// withdraw the stake
-	withdrawAmount, _, err := staker.WithdrawStake(addr, id, period+cooldownPeriod)
+	withdrawAmount, err := staker.WithdrawStake(addr, id, period+cooldownPeriod)
 	assert.NoError(t, err)
 	assert.Equal(t, stake, withdrawAmount)
 }
@@ -530,7 +530,7 @@ func TestStaker_WithdrawQueued(t *testing.T) {
 	assert.Equal(t, id, queued)
 
 	// withraw queued
-	withdrawAmount, _, err := staker.WithdrawStake(addr, id, period+cooldownPeriod)
+	withdrawAmount, err := staker.WithdrawStake(addr, id, period+cooldownPeriod)
 	assert.NoError(t, err)
 	assert.Equal(t, stake, withdrawAmount)
 
@@ -1014,7 +1014,7 @@ func TestStaker_Get_FullFlow(t *testing.T) {
 	assert.Equal(t, big.NewInt(0), validator.Weight)
 
 	// withdraw the stake
-	withdrawAmount, _, err := staker.WithdrawStake(addr, id, period+cooldownPeriod)
+	withdrawAmount, err := staker.WithdrawStake(addr, id, period+cooldownPeriod)
 	assert.NoError(t, err)
 	assert.Equal(t, stake, withdrawAmount)
 }
@@ -1054,7 +1054,7 @@ func TestStaker_Get_FullFlow_Renewal_On(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).Mul(stake, big.NewInt(2)), validator.Weight)
 
 	// withdraw the stake
-	amount, _, err := staker.WithdrawStake(addr, id, period+cooldownPeriod)
+	amount, err := staker.WithdrawStake(addr, id, period+cooldownPeriod)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0), amount)
 	validator, err = staker.Get(id)
@@ -1106,7 +1106,7 @@ func TestStaker_Get_FullFlow_Renewal_On_Then_Off(t *testing.T) {
 	assert.Equal(t, stake, validator.LockedVET)
 	assert.Equal(t, big.NewInt(0).Mul(stake, big.NewInt(2)), validator.Weight)
 	// withdraw the stake
-	amount, _, err := staker.WithdrawStake(addr, id, period+cooldownPeriod)
+	amount, err := staker.WithdrawStake(addr, id, period+cooldownPeriod)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0), amount)
 	validator, err = staker.Get(id)
@@ -1127,7 +1127,7 @@ func TestStaker_Get_FullFlow_Renewal_On_Then_Off(t *testing.T) {
 	assert.Equal(t, big.NewInt(0), validator.PendingLocked)
 
 	// withdraw the stake
-	withdrawAmount, _, err := staker.WithdrawStake(addr, id, period*2+cooldownPeriod)
+	withdrawAmount, err := staker.WithdrawStake(addr, id, period*2+cooldownPeriod)
 	assert.NoError(t, err)
 	assert.Equal(t, stake, withdrawAmount)
 	validator, err = staker.Get(id)
@@ -1180,7 +1180,7 @@ func TestStaker_Get_FullFlow_Renewal_Off_Then_On(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).Mul(stake, big.NewInt(2)), validator.Weight)
 
 	// withdraw the stake
-	amount, _, err := staker.WithdrawStake(addr, id, period+cooldownPeriod)
+	amount, err := staker.WithdrawStake(addr, id, period+cooldownPeriod)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0), amount)
 	validator, err = staker.Get(id)
@@ -1200,7 +1200,7 @@ func TestStaker_Get_FullFlow_Renewal_Off_Then_On(t *testing.T) {
 	assert.Equal(t, big.NewInt(0), validator.WithdrawableVET)
 
 	// withdraw the stake
-	withdrawAmount, _, err := staker.WithdrawStake(addr, id, period*2+cooldownPeriod)
+	withdrawAmount, err := staker.WithdrawStake(addr, id, period*2+cooldownPeriod)
 	assert.NoError(t, err)
 	assert.Equal(t, stake, withdrawAmount)
 	validator, err = staker.Get(id)
@@ -1274,11 +1274,11 @@ func TestStaker_RemoveValidator(t *testing.T) {
 	assert.Equal(t, big.NewInt(0), validator.Weight)
 	assert.Equal(t, stake, validator.CooldownVET)
 
-	withdrawale, _, err := staker.WithdrawStake(addr, id, period)
+	withdrawale, err := staker.WithdrawStake(addr, id, period)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0), withdrawale)
 
-	withdrawale, _, err = staker.WithdrawStake(addr, id, period+cooldownPeriod)
+	withdrawale, err = staker.WithdrawStake(addr, id, period+cooldownPeriod)
 	assert.NoError(t, err)
 	assert.Equal(t, stake, withdrawale)
 }
@@ -1369,7 +1369,7 @@ func TestStaker_Initialise(t *testing.T) {
 	addr := datagen.RandAddress()
 
 	param := params.New(thor.BytesToAddress([]byte("params")), st)
-	staker := New(thor.BytesToAddress([]byte("stkr")), st, param)
+	staker := New(thor.BytesToAddress([]byte("stkr")), st, param, nil)
 	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(3)))
 
 	for range 3 {
@@ -1609,7 +1609,7 @@ func TestStaker_Housekeep_Cooldown(t *testing.T) {
 	assert.Equal(t, 0, totalLocked.Sign())
 	assert.Equal(t, big.NewInt(0).String(), totalWeight.String())
 
-	withdrawable, _, err := staker.WithdrawStake(addr1, id1, period+cooldownPeriod)
+	withdrawable, err := staker.WithdrawStake(addr1, id1, period+cooldownPeriod)
 	assert.NoError(t, err)
 	assert.Equal(t, stake, withdrawable)
 }
@@ -1828,7 +1828,7 @@ func TestStaker_Housekeep_DecreaseThenWithdraw(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).Mul(stake, big.NewInt(2)), validator.Weight)
 	assert.Equal(t, validator.WithdrawableVET, big.NewInt(1))
 
-	withdrawAmount, _, err := staker.WithdrawStake(addr1, id1, block+cooldownPeriod)
+	withdrawAmount, err := staker.WithdrawStake(addr1, id1, block+cooldownPeriod)
 	assert.NoError(t, err)
 	assert.Equal(t, validator.WithdrawableVET, withdrawAmount)
 
@@ -2054,7 +2054,7 @@ func TestStaker_QueuedValidator_Withdraw(t *testing.T) {
 	id1, err := staker.AddValidator(addr1, addr1, period, stake, false, 0)
 	assert.NoError(t, err)
 
-	withdraw, _, err := staker.WithdrawStake(addr1, id1, period)
+	withdraw, err := staker.WithdrawStake(addr1, id1, period)
 	assert.NoError(t, err)
 	assert.Equal(t, stake, withdraw)
 
@@ -2086,7 +2086,7 @@ func TestStaker_IncreaseStake_Withdraw(t *testing.T) {
 	assert.Equal(t, stake, validation.LockedVET)
 
 	assert.NoError(t, staker.IncreaseStake(addr1, id1, big.NewInt(100)))
-	withdrawAmount, _, err := staker.WithdrawStake(addr1, id1, period+cooldownPeriod)
+	withdrawAmount, err := staker.WithdrawStake(addr1, id1, period+cooldownPeriod)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(100), withdrawAmount)
 
@@ -2192,7 +2192,7 @@ func TestStaker_MultipleUpdates_CorrectWithdraw(t *testing.T) {
 	assert.Equal(t, expected, validator.LockedVET)
 
 	// See `1st decrease` -> validator should be able withdraw the decrease amount
-	withdraw, _, err := staker.WithdrawStake(acc, id, period+1)
+	withdraw, err := staker.WithdrawStake(acc, id, period+1)
 	assert.NoError(t, err)
 	assert.Equal(t, withdraw, fiveHundred)
 	withdrawnTotal = withdrawnTotal.Add(withdrawnTotal, withdraw)
@@ -2220,7 +2220,7 @@ func TestStaker_MultipleUpdates_CorrectWithdraw(t *testing.T) {
 	assert.Equal(t, StatusActive, validator.Status)
 
 	// See `2nd decrease` -> validator should be able withdraw the decrease amount
-	withdraw, _, err = staker.WithdrawStake(acc, id, period*2+cooldownPeriod)
+	withdraw, err = staker.WithdrawStake(acc, id, period*2+cooldownPeriod)
 	assert.NoError(t, err)
 	assert.Equal(t, thousand, withdraw)
 	withdrawnTotal = withdrawnTotal.Add(withdrawnTotal, withdraw)
@@ -2240,7 +2240,7 @@ func TestStaker_MultipleUpdates_CorrectWithdraw(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, expectedLocked, validator.CooldownVET)
 
-	withdraw, _, err = staker.WithdrawStake(acc, id, period*3+cooldownPeriod)
+	withdraw, err = staker.WithdrawStake(acc, id, period*3+cooldownPeriod)
 	assert.NoError(t, err)
 	withdrawnTotal.Add(withdrawnTotal, withdraw)
 	depositTotal := new(big.Int).Add(initialStake, increases)

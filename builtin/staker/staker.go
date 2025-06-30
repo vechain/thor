@@ -8,6 +8,7 @@ package staker
 import (
 	"math/big"
 
+	"github.com/vechain/thor/v2/builtin/gascharger"
 	"github.com/vechain/thor/v2/builtin/params"
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/log"
@@ -47,8 +48,8 @@ type Staker struct {
 }
 
 // New create a new instance.
-func New(addr thor.Address, state *state.State, params *params.Params) *Staker {
-	storage := newStorage(addr, state)
+func New(addr thor.Address, state *state.State, params *params.Params, charger *gascharger.Charger) *Staker {
+	storage := newStorage(addr, state, charger)
 
 	if num, err := solidity.NewUint256(addr, state, thor.BytesToBytes32([]byte("epoch-length"))).Get(); err == nil {
 		numUint64 := num.Uint64()
@@ -88,20 +89,26 @@ func (s *Staker) LeaderGroup() (map[thor.Bytes32]*Validation, error) {
 
 // LockedVET returns the amount of VET and weight locked by validations and delegations.
 func (s *Staker) LockedVET() (*big.Int, *big.Int, error) {
+	s.storage.chargeGas(thor.SloadGas)
 	lockedVet, err := s.lockedVET.Get()
 	if err != nil {
 		return nil, nil, err
 	}
+
+	s.storage.chargeGas(thor.SloadGas)
 	lockedWeight, err := s.lockedWeight.Get()
 	return lockedVet, lockedWeight, err
 }
 
 // QueuedStake returns the amount of VET and weight queued by validations and delegations.
 func (s *Staker) QueuedStake() (*big.Int, *big.Int, error) {
+	s.storage.chargeGas(thor.SloadGas)
 	queuedVet, err := s.queuedVET.Get()
 	if err != nil {
 		return nil, nil, err
 	}
+
+	s.storage.chargeGas(thor.SloadGas)
 	queuedWeight, err := s.queuedWeight.Get()
 	return queuedVet, queuedWeight, err
 }
@@ -208,16 +215,16 @@ func (s *Staker) DecreaseStake(endorsor thor.Address, id thor.Bytes32, amount *b
 }
 
 // WithdrawStake allows expired validations to withdraw their stake.
-func (s *Staker) WithdrawStake(endorsor thor.Address, id thor.Bytes32, currentBlock uint32) (*big.Int, bool, error) {
+func (s *Staker) WithdrawStake(endorsor thor.Address, id thor.Bytes32, currentBlock uint32) (*big.Int, error) {
 	logger.Debug("withdrawing stake", "endorsor", endorsor, "id", id)
 
-	stake, removedFromQueue, err := s.validations.WithdrawStake(endorsor, id, currentBlock)
+	stake, err := s.validations.WithdrawStake(endorsor, id, currentBlock)
 	if err != nil {
 		logger.Info("withdraw failed", "id", id, "error", err)
 	} else {
 		logger.Info("withdrew validator staker", "id", id)
 	}
-	return stake, removedFromQueue, err
+	return stake, err
 }
 
 // GetWithdrawable returns the withdrawable stake of a validator.
