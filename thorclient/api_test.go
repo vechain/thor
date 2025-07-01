@@ -70,7 +70,7 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 
 	blocks.New(thorChain.Repo(), thorChain.Engine()).Mount(router, "/blocks")
 
-	debug.New(thorChain.Repo(), thorChain.Stater(), thorChain.GetForkConfig(), gasLimit, true, thorChain.Engine(), []string{"all"}, false).
+	debug.New(thorChain.Repo(), thorChain.Stater(), thorChain.GetForkConfig(), thorChain.Engine(), gasLimit, true, []string{"all"}, false).
 		Mount(router, "/debug")
 
 	logDb, err := logdb.NewMem()

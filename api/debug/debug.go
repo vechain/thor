@@ -53,9 +53,9 @@ func New(
 	repo *chain.Repository,
 	stater *state.Stater,
 	forkConfig *thor.ForkConfig,
+	bft bft.Committer,
 	callGaslimit uint64,
 	allowCustomTracer bool,
-	bft bft.Committer,
 	allowedTracers []string,
 	soloMode bool,
 ) *Debug {

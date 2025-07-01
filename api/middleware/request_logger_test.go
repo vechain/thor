@@ -2,7 +2,7 @@
 
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
-package httpserver
+package middleware
 
 import (
 	"context"
@@ -70,7 +70,7 @@ func TestRequestLoggerHandler(t *testing.T) {
 	})
 
 	// Create the RequestLoggerHandler
-	loggerHandler := RequestLoggerHandler(testHandler, mockLog, &enabled)
+	loggerHandler := RequestLoggerMiddleware(mockLog, &enabled)(testHandler)
 
 	// Create a test HTTP request
 	reqBody := "test body"
