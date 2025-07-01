@@ -267,7 +267,8 @@ func defaultAction(ctx *cli.Context) error {
 		return errors.Wrap(err, "init bft engine")
 	}
 
-	apiHandler, apiCloser := httpserver.New(
+	apiURL, srvCloser, err := httpserver.StartAPIServer(
+		ctx.String(apiAddrFlag.Name),
 		repo,
 		state.NewStater(mainDB),
 		txPool,
@@ -277,9 +278,6 @@ func defaultAction(ctx *cli.Context) error {
 		forkConfig,
 		makeAPIConfig(ctx, logAPIRequests, false),
 	)
-	defer func() { log.Info("closing API..."); apiCloser() }()
-
-	apiURL, srvCloser, err := startAPIServer(ctx, apiHandler, repo.GenesisBlock().Header().ID())
 	if err != nil {
 		return err
 	}
@@ -439,7 +437,8 @@ func soloAction(ctx *cli.Context) error {
 	txPool := txpool.New(repo, state.NewStater(mainDB), txPoolOption, forkConfig)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
-	apiHandler, apiCloser := httpserver.New(
+	apiURL, srvCloser, err := httpserver.StartAPIServer(
+		ctx.String(apiAddrFlag.Name),
 		repo,
 		state.NewStater(mainDB),
 		txPool,
@@ -449,16 +448,10 @@ func soloAction(ctx *cli.Context) error {
 		forkConfig,
 		makeAPIConfig(ctx, logAPIRequests, true),
 	)
-	defer func() { log.Info("closing API..."); apiCloser() }()
-
-	apiURL, srvCloser, err := startAPIServer(ctx, apiHandler, repo.GenesisBlock().Header().ID())
 	if err != nil {
 		return err
 	}
-	defer func() {
-		log.Info("stopping API server...")
-		srvCloser()
-	}()
+	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
 	blockInterval := ctx.Uint64(blockInterval.Name)
 	if blockInterval == 0 {
