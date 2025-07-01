@@ -281,14 +281,13 @@ func (n *Node) txStashLoop(ctx context.Context) {
 func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts uint32) error) (err error) {
 	n.processLock.Lock()
 	defer func() {
-		n.processLock.Unlock()
-
 		// post process block hook, executed only if the block is processed successfully
 		if err == nil {
 			if n.initialSynced && blockNum == n.forkConfig.GALACTICA {
 				printGalacticaWelcomeInfo()
 			}
 		}
+		n.processLock.Unlock()
 	}()
 
 	if blockNum > n.maxBlockNum {
