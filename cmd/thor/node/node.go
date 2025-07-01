@@ -65,11 +65,12 @@ type Node struct {
 	forkConfig  *thor.ForkConfig
 	options     Options
 
-	logDBFailed bool
-	bandwidth   bandwidth.Bandwidth
-	maxBlockNum uint32
-	processLock sync.Mutex
-	logWorker   *worker
+	logDBFailed   bool
+	initialSynced bool // true if the initial synchronization process is done
+	bandwidth     bandwidth.Bandwidth
+	maxBlockNum   uint32
+	processLock   sync.Mutex
+	logWorker     *worker
 }
 
 func New(
@@ -277,9 +278,18 @@ func (n *Node) txStashLoop(ctx context.Context) {
 }
 
 // guardBlockProcessing adds lock on block processing and maintains block conflicts.
-func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts uint32) error) error {
+func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts uint32) error) (err error) {
 	n.processLock.Lock()
-	defer n.processLock.Unlock()
+	defer func() {
+		n.processLock.Unlock()
+
+		// post process block hook, executed only if the block is processed successfully
+		if err == nil {
+			if n.initialSynced && blockNum == n.forkConfig.GALACTICA {
+				printGalacticaWelcomeInfo()
+			}
+		}
+	}()
 
 	if blockNum > n.maxBlockNum {
 		if blockNum > n.maxBlockNum+1 {
@@ -288,8 +298,8 @@ func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts uint
 		}
 
 		// don't increase maxBlockNum if the block is unprocessable
-		if err := process(0); err != nil {
-			return err
+		if e := process(0); e != nil {
+			return e
 		}
 
 		n.maxBlockNum = blockNum
@@ -402,10 +412,6 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 			logger.Trace("bandwidth updated", "gps", v)
 		}
 		stats.UpdateProcessed(1, len(receipts), execElapsed, commitElapsed, realElapsed, newBlock.Header().GasUsed())
-
-		if newBlock.Header().Number() == n.forkConfig.GALACTICA {
-			fmt.Println(GalacticaASCIIArt)
-		}
 
 		metricBlockProcessedTxs().SetWithLabel(int64(len(receipts)), map[string]string{"type": "received"})
 		metricBlockProcessedGas().SetWithLabel(int64(newBlock.Header().GasUsed()), map[string]string{"type": "received"})
