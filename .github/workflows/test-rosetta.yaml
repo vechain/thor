@@ -3,6 +3,10 @@ name: Rosetta Tests
 on:
   workflow_call:
     inputs:
+      thor_repo:
+        required: false
+        type: string
+        default: "https://github.com/vechain/thor.git"
       thor_version:
         required: true
         type: string
@@ -12,6 +16,7 @@ jobs:
     name: Run Solo e2e Tests
     runs-on: ubuntu-latest
     env:
+      THOR_REPO: ${{ inputs.thor_repo }}
       THOR_VERSION: ${{ inputs.thor_version }}
       NETWORK: solo
       TEST_NETWORK: solo
