@@ -72,7 +72,7 @@ Do note that our [Code of Conduct](https://github.com/vechain/thor/blob/master/d
 
 ---
 
-## Contributing
+## TEST
 
 Contributions to VeChainThor are welcome and highly appreciated. However, before you jump right into it, we would like
 you to review our [Contribution Guidelines](https://github.com/vechain/thor/blob/master/docs/CONTRIBUTING.md) to make sure you have a smooth experience
