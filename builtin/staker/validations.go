@@ -8,6 +8,7 @@ package staker
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/vechain/thor/v2/builtin/params"
@@ -266,9 +267,19 @@ func (v *validations) UpdateAutoRenew(endorsor thor.Address, id thor.Bytes32, au
 	if validator.Endorsor != endorsor {
 		return errors.New("invalid endorsor for master")
 	}
+	if validator.AutoRenew == autoRenew {
+		return fmt.Errorf("auto-renewal is already set to %t", autoRenew)
+	}
+
 	validator.AutoRenew = autoRenew
-	if !autoRenew {
-		if validator.Status == StatusActive {
+
+	if validator.Status == StatusActive {
+		if autoRenew {
+			if err := v.storage.SetExitEpoch(*validator.ExitBlock, id); err != nil {
+				return err
+			}
+			validator.ExitBlock = nil
+		} else {
 			minBlock := validator.StartBlock + validator.Period*(validator.CurrentIteration())
 			exitBlock, err := v.SetExitBlock(id, minBlock)
 			if err != nil {
@@ -276,12 +287,8 @@ func (v *validations) UpdateAutoRenew(endorsor thor.Address, id thor.Bytes32, au
 			}
 			validator.ExitBlock = &exitBlock
 		}
-	} else if validator.Status == StatusActive {
-		if err := v.storage.SetExitEpoch(*validator.ExitBlock, id); err != nil {
-			return err
-		}
-		validator.ExitBlock = nil
 	}
+
 	return v.storage.SetValidation(id, validator)
 }
 
