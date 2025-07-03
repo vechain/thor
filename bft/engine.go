@@ -321,21 +321,18 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 
 		signer, _ := h.Signer()
 		var validatorStake *big.Int
-		if h.Number() >= engine.forkConfig.FINALITY {
-			sum, err := engine.repo.GetBlockSummary(h.ParentID())
-			if err != nil {
-				return nil, err
-			}
-			state := engine.stater.NewState(sum.Root())
-			staker := builtin.Staker.Native(state)
-			validator, _, err := staker.LookupMaster(signer)
-			if err != nil {
-				validatorStake = big.NewInt(1)
-			} else if validator != nil && !validator.IsEmpty() {
-				validatorStake = validator.Weight
-			} else {
-				validatorStake = big.NewInt(1)
-			}
+		sum, err := engine.repo.GetBlockSummary(h.ParentID())
+		if err != nil {
+			return nil, err
+		}
+		state := engine.stater.NewState(sum.Root())
+		staker := builtin.Staker.Native(state)
+		validator, _, err := staker.LookupMaster(signer)
+		if err != nil {
+			// TODO: get the min stake instead of 1
+			validatorStake = big.NewInt(1)
+		} else if validator != nil && !validator.IsEmpty() {
+			validatorStake = validator.Weight
 		} else {
 			validatorStake = big.NewInt(1)
 		}
@@ -345,7 +342,7 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 			break
 		}
 
-		sum, err := engine.repo.GetBlockSummary(h.ParentID())
+		sum, err = engine.repo.GetBlockSummary(h.ParentID())
 		if err != nil {
 			return nil, err
 		}
