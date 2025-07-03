@@ -205,7 +205,7 @@ func TestBaseFeeLimits(t *testing.T) {
 		var parentID thor.Bytes32
 		binary.BigEndian.PutUint32(parentID[:], 5)
 		parentGasLimit := uint64(20000000)
-		parentGasUsed := parentGasLimit * thor.ElasticityMultiplierNum / thor.ElasticityMultiplierDen
+		parentGasUsed := parentGasLimit * thor.GasTargetPercentage / 100
 
 		parentBaseFee := big.NewInt(thor.InitialBaseFee * 10)
 		for range 100 {
