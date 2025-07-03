@@ -69,7 +69,7 @@ func newStaker(t *testing.T, amount int, maxValidators int64, initialise bool) (
 	param.Set(thor.KeyMaxBlockProposers, big.NewInt(maxValidators))
 
 	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(maxValidators)))
-	staker := New(thor.BytesToAddress([]byte("stkr")), st, param)
+	staker := New(thor.BytesToAddress([]byte("stkr")), st, param, nil)
 	totalStake := big.NewInt(0)
 	if initialise {
 		for _, key := range keys {
@@ -1369,7 +1369,7 @@ func TestStaker_Initialise(t *testing.T) {
 	addr := datagen.RandAddress()
 
 	param := params.New(thor.BytesToAddress([]byte("params")), st)
-	staker := New(thor.BytesToAddress([]byte("stkr")), st, param)
+	staker := New(thor.BytesToAddress([]byte("stkr")), st, param, nil)
 	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(3)))
 
 	for range 3 {
