@@ -5,6 +5,8 @@
 package bft
 
 import (
+	"math/big"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -20,10 +22,12 @@ type bftState struct {
 type justifier struct {
 	parentQuality uint32
 	checkpoint    uint32
-	threshold     uint64
+	threshold     *big.Int
 
-	votes    map[thor.Address]bool
-	comVotes uint64
+	votes       map[thor.Address]bool
+	voterStakes map[thor.Address]*big.Int
+	comVotes    uint64
+	comStake    *big.Int
 }
 
 func (engine *Engine) newJustifier(parentID thor.Bytes32) (*justifier, error) {
@@ -41,11 +45,13 @@ func (engine *Engine) newJustifier(parentID thor.Bytes32) (*justifier, error) {
 	if err != nil {
 		return nil, err
 	}
-	mbp, err := engine.getMaxBlockProposers(sum)
+	totalStake, err := engine.getTotalStake(sum)
 	if err != nil {
 		return nil, err
 	}
-	threshold := mbp * 2 / 3
+
+	threshold := new(big.Int).Mul(totalStake, big.NewInt(2))
+	threshold.Div(threshold, big.NewInt(3))
 
 	var parentQuality uint32 // quality of last round
 	if absRound := blockNum/thor.CheckpointInterval - engine.forkConfig.FINALITY/thor.CheckpointInterval; absRound == 0 {
@@ -60,31 +66,42 @@ func (engine *Engine) newJustifier(parentID thor.Bytes32) (*justifier, error) {
 
 	return &justifier{
 		votes:         make(map[thor.Address]bool),
+		voterStakes:   make(map[thor.Address]*big.Int),
 		parentQuality: parentQuality,
 		checkpoint:    checkpoint,
 		threshold:     threshold,
+		comStake:      big.NewInt(0),
 	}, nil
 }
 
 // AddBlock adds a new block to the set.
-func (js *justifier) AddBlock(signer thor.Address, isCOM bool) {
+func (js *justifier) AddBlock(signer thor.Address, isCOM bool, stake *big.Int) {
 	if prev, ok := js.votes[signer]; !ok {
 		js.votes[signer] = isCOM
+		js.voterStakes[signer] = new(big.Int).Set(stake)
 		if isCOM {
 			js.comVotes++
+			js.comStake.Add(js.comStake, stake)
 		}
 	} else if prev != isCOM {
 		// if one votes both COM and non-COM in one round, count as non-COM
 		js.votes[signer] = false
 		if prev {
 			js.comVotes--
+			js.comStake.Sub(js.comStake, js.voterStakes[signer])
 		}
 	}
 }
 
 // Summarize summarizes the state of vote set.
 func (js *justifier) Summarize() *bftState {
-	justified := len(js.votes) > int(js.threshold)
+	totalVoterStake := big.NewInt(0)
+	for _, stake := range js.voterStakes {
+		totalVoterStake.Add(totalVoterStake, stake)
+	}
+
+	justified := totalVoterStake.Cmp(js.threshold) > 0
+	committed := js.comStake.Cmp(js.threshold) > 0
 
 	var quality uint32
 	if justified {
@@ -96,6 +113,6 @@ func (js *justifier) Summarize() *bftState {
 	return &bftState{
 		Quality:   quality,
 		Justified: justified,
-		Committed: js.comVotes > js.threshold,
+		Committed: committed,
 	}
 }

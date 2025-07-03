@@ -5,6 +5,7 @@
 package bft
 
 import (
+	"math/big"
 	"sort"
 	"sync/atomic"
 
@@ -304,7 +305,6 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 		js = (entry.Entry.Value).(*justifier)
 		end = header.Number()
 	} else {
-		// create a new vote set if cache missed or new block is checkpoint
 		var err error
 		js, err = engine.newJustifier(header.ParentID())
 		if err != nil {
@@ -320,7 +320,26 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 		}
 
 		signer, _ := h.Signer()
-		js.AddBlock(signer, h.COM())
+		var validatorStake *big.Int
+		if h.Number() >= engine.forkConfig.FINALITY {
+			sum, err := engine.repo.GetBlockSummary(h.ParentID())
+			if err != nil {
+				return nil, err
+			}
+			state := engine.stater.NewState(sum.Root())
+			staker := builtin.Staker.Native(state)
+			validator, _, err := staker.LookupMaster(signer)
+			if err != nil {
+				validatorStake = big.NewInt(1)
+			} else if validator != nil && !validator.IsEmpty() {
+				validatorStake = validator.LockedVET
+			} else {
+				validatorStake = big.NewInt(1)
+			}
+		} else {
+			validatorStake = big.NewInt(1)
+		}
+		js.AddBlock(signer, h.COM(), validatorStake)
 
 		if h.Number() <= end {
 			break
@@ -391,18 +410,20 @@ func (engine *Engine) findCheckpointByQuality(target uint32, finalized, headID t
 	return c.GetBlockID(searchStart + uint32(num)*thor.CheckpointInterval)
 }
 
-func (engine *Engine) getMaxBlockProposers(sum *chain.BlockSummary) (uint64, error) {
+func (engine *Engine) getTotalStake(sum *chain.BlockSummary) (*big.Int, error) {
 	state := engine.stater.NewState(sum.Root())
-	params, err := builtin.Params.Native(state).Get(thor.KeyMaxBlockProposers)
+	staker := builtin.Staker.Native(state)
+
+	totalStake, _, err := staker.LockedVET()
 	if err != nil {
-		return 0, err
-	}
-	mbp := params.Uint64()
-	if mbp == 0 || mbp > thor.InitialMaxBlockProposers {
-		mbp = thor.InitialMaxBlockProposers
+		return nil, err
 	}
 
-	return mbp, nil
+	if totalStake == nil || totalStake.Sign() == 0 {
+		return big.NewInt(1), nil
+	}
+
+	return totalStake, nil
 }
 
 func (engine *Engine) getQuality(id thor.Bytes32) (quality uint32, err error) {
