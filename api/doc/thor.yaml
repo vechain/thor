@@ -1506,7 +1506,7 @@ components:
           nullable: true
           example: 1
         logIndex:
-          description: The index of the log in the receipt's outputs. This is an overall index among all clauses.
+          description: The index of the log in the block. This is an overall index among all clauses.
           type: integer
           nullable: true
           example: 1
