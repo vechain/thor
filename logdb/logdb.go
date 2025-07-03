@@ -482,9 +482,8 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 		blockIDInserted bool
 	)
 
+	eventCount, transferCount := uint32(0), uint32(0)
 	for i, r := range receipts {
-		eventCount, transferCount := uint32(0), uint32(0)
-
 		if isReceiptEmpty(r) {
 			continue
 		}
