@@ -38,13 +38,13 @@ jobs:
       THOR_IMAGE: vechain/thor:${{ github.sha }}
     name: Run Tests
     steps:
-      # Main: https://github.com/vechain/thor-e2e-tests/tree/bc75a1814361ff987402b6dd0225b44292d2780b
+      # Main: https://github.com/vechain/thor-e2e-tests/tree/062103aa04f9e30895ec97c8b37974ae2d99479c
       # For release branches, names in the thor and thor-e2e-tests repos should match
       - name: Set e2e repo reference
         id: set-ref
         run: |
           # Default fallback commit
-          DEFAULT_COMMIT="bc75a1814361ff987402b6dd0225b44292d2780b"
+          DEFAULT_COMMIT="062103aa04f9e30895ec97c8b37974ae2d99479c"
           REF="$DEFAULT_COMMIT"
       
           if [ "${{ github.event_name }}" = "pull_request" ]; then
