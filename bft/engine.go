@@ -332,7 +332,7 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 			if err != nil {
 				validatorStake = big.NewInt(1)
 			} else if validator != nil && !validator.IsEmpty() {
-				validatorStake = validator.LockedVET
+				validatorStake = validator.Weight
 			} else {
 				validatorStake = big.NewInt(1)
 			}
