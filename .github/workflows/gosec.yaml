@@ -4,6 +4,9 @@ on:
   #   # This is meant to run every day at 8am
     - cron:  '0 8 * * 1-5'
 
+permissions:
+  contents: read
+
 jobs:
   gosec:
     runs-on: ubuntu-latest
