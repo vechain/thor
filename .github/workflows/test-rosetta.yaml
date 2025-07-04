@@ -11,12 +11,13 @@ on:
         required: true
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   run-solo-tests:
     name: Run Solo e2e Tests
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     env:
       THOR_REPO: ${{ inputs.thor_repo }}
       THOR_VERSION: ${{ inputs.thor_version }}
