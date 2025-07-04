@@ -158,6 +158,20 @@ func TestStaker(t *testing.T) {
 	require.False(t, queuedEvents[0].AutoRenew)
 	queuedID := queuedEvents[0].ValidationID
 
+	// SetBeneficiary
+	receipt, _, err = staker.SetBeneficiary(queuedID, genesis.DevAccounts()[7].Address).
+		Send().
+		WithSigner(validatorKey).
+		WithOptions(txOpts()).
+		SubmitAndConfirm(txContext(t))
+	require.NoError(t, err)
+	require.False(t, receipt.Reverted)
+	beneficiaryEvents, err := staker.FilterValidatorUpdatedBeneficiary(newRange(receipt), nil, logdb.ASC)
+	require.NoError(t, err)
+	require.Len(t, beneficiaryEvents, 1)
+	require.Equal(t, queuedID, beneficiaryEvents[0].ValidationID)
+	require.Equal(t, genesis.DevAccounts()[7].Address, beneficiaryEvents[0].Beneficiary)
+
 	// FirstQueued
 	firstQueued, id, err := staker.FirstQueued()
 	require.NoError(t, err)

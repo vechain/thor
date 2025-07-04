@@ -10,6 +10,11 @@ contract Staker {
         uint256 stake,
         bool autoRenew
     );
+    event ValidatorUpdatedBeneficiary(
+        address indexed endorsor,
+        bytes32 indexed validationID,
+        address beneficiary
+    );
     event ValidatorWithdrawn(
         address indexed endorsor,
         bytes32 indexed validationID,
@@ -93,6 +98,19 @@ contract Staker {
             msg.value,
             autoRenew
         );
+    }
+
+    /**
+     * @dev setBeneficiary sets the beneficiary address for a validator.
+     */
+    function setBeneficiary(bytes32 validationID, address beneficiary) public {
+        string memory error = StakerNative(address(this)).native_setBeneficiary(
+            msg.sender,
+            validationID,
+            beneficiary
+        );
+        require(bytes(error).length == 0, error);
+        emit ValidatorUpdatedBeneficiary(msg.sender, validationID, beneficiary);
     }
 
     /**
@@ -353,9 +371,16 @@ contract Staker {
         return periods;
     }
 
-    function getValidatorTotals(bytes32 validationID) public view returns (uint256, uint256, uint256, uint256) {
-        (uint256 lockedStake, uint256 lockedWeight, uint256 delegatorsStake, uint256 delegatorsWeight, string memory error) = StakerNative(address(this))
-            .native_getValidatorTotals(validationID);
+    function getValidatorTotals(
+        bytes32 validationID
+    ) public view returns (uint256, uint256, uint256, uint256) {
+        (
+            uint256 lockedStake,
+            uint256 lockedWeight,
+            uint256 delegatorsStake,
+            uint256 delegatorsWeight,
+            string memory error
+        ) = StakerNative(address(this)).native_getValidatorTotals(validationID);
         require(bytes(error).length == 0, error);
         return (lockedStake, lockedWeight, delegatorsStake, delegatorsWeight);
     }
@@ -386,6 +411,12 @@ interface StakerNative {
         uint256 stake,
         bool autoRenew
     ) external returns (bytes32, string calldata);
+
+    function native_setBeneficiary(
+        address endorsor,
+        bytes32 validationID,
+        address beneficiary
+    ) external returns (string calldata);
 
     function native_increaseStake(
         address endorsor,
@@ -515,5 +546,10 @@ interface StakerNative {
         bytes32 validationID
     ) external view returns (uint32, string calldata);
 
-    function native_getValidatorTotals(bytes32 validationID) external view returns (uint256, uint256, uint256, uint256, string calldata);
+    function native_getValidatorTotals(
+        bytes32 validationID
+    )
+        external
+        view
+        returns (uint256, uint256, uint256, uint256, string calldata);
 }

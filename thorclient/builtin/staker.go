@@ -194,6 +194,10 @@ func (s *Staker) AddValidator(master thor.Address, stake *big.Int, period uint32
 	return s.contract.Method("addValidator", master, period, autoRenew).WithValue(stake)
 }
 
+func (s *Staker) SetBeneficiary(validationID thor.Bytes32, beneficiary thor.Address) bind.MethodBuilder {
+	return s.contract.Method("setBeneficiary", validationID, common.Address(beneficiary))
+}
+
 func (s *Staker) AddDelegation(validationID thor.Bytes32, stake *big.Int, autoRenew bool, multiplier uint8) bind.MethodBuilder {
 	return s.contract.Method("addDelegation", validationID, autoRenew, multiplier).WithValue(stake)
 }
@@ -686,6 +690,51 @@ func (s *Staker) FilterValidatorWithdrawn(eventsRange *events.Range, opts *event
 			ValidationID: validationID,
 			Stake:        *(data[0].(**big.Int)),
 			Log:          log,
+		}
+	}
+
+	return out, nil
+}
+
+type ValidatorUpdatedBeneficiaryEvent struct {
+	Endorsor     thor.Address
+	ValidationID thor.Bytes32
+	Beneficiary  thor.Address
+}
+
+func (s *Staker) FilterValidatorUpdatedBeneficiary(eventsRange *events.Range, opts *events.Options, order logdb.Order) ([]ValidatorUpdatedBeneficiaryEvent, error) {
+	event, ok := s.contract.ABI().Events["ValidatorUpdatedBeneficiary"]
+	if !ok {
+		return nil, fmt.Errorf("event not found")
+	}
+
+	raw, err := s.contract.FilterEvent("ValidatorUpdatedBeneficiary").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]ValidatorUpdatedBeneficiaryEvent, len(raw))
+	for i, log := range raw {
+		endorsor := thor.BytesToAddress(log.Topics[1][:]) // indexed
+		validationID := thor.Bytes32(log.Topics[2][:])    // indexed
+
+		// non-indexed
+		data := make([]any, 1)
+		data[0] = new(common.Address)
+
+		bytes, err := hexutil.Decode(log.Data)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := event.Inputs.Unpack(&data, bytes); err != nil {
+			return nil, err
+		}
+
+		out[i] = ValidatorUpdatedBeneficiaryEvent{
+			Endorsor:     endorsor,
+			ValidationID: validationID,
+			Beneficiary:  (thor.Address)(*(data[0].(*common.Address))),
 		}
 	}
 

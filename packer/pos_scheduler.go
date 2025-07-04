@@ -17,20 +17,18 @@ func (p *Packer) schedulePOS(parent *chain.BlockSummary, nowTimestamp uint64, st
 	staker := builtin.Staker.Native(state)
 
 	var beneficiary thor.Address
-	if p.beneficiary != nil {
+	validator, _, err := staker.LookupMaster(p.nodeMaster)
+	if err != nil {
+		return thor.Address{}, 0, 0, err
+	}
+	if validator.Beneficiary != nil && !validator.Beneficiary.IsZero() {
+		beneficiary = *validator.Beneficiary
+	} else if p.beneficiary != nil {
 		beneficiary = *p.beneficiary
 	} else {
-		validator, _, err := staker.LookupMaster(p.nodeMaster)
-		if err != nil {
-			return thor.Address{}, 0, 0, err
-		}
-		if validator.IsEmpty() {
-			return thor.Address{}, 0, 0, errNotScheduled
-		}
 		beneficiary = validator.Endorsor
 	}
 
-	var seed []byte
 	seed, err := p.seeder.Generate(parent.Header.ID())
 	if err != nil {
 		return thor.Address{}, 0, 0, err

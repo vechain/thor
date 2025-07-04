@@ -82,6 +82,11 @@ func NewScheduler(
 	}, nil
 }
 
+// Validation returns the proposer validation.
+func (s *Scheduler) Validation() *staker.Validation {
+	return s.proposer
+}
+
 // Schedule to determine time of the proposer to produce a block, according to `nowTime`.
 // `newBlockTime` is promised to be >= nowTime and > parentBlockTime
 func (s *Scheduler) Schedule(nowTime uint64) (newBlockTime uint64) {
