@@ -368,7 +368,7 @@ func suggestFDCache() int {
 }
 
 func openLogDB(dir string) (*logdb.LogDB, error) {
-	path := filepath.Join(dir, "logs.db")
+	path := filepath.Join(dir, "logs-v2.db")
 	db, err := logdb.New(path)
 	if err != nil {
 		return nil, errors.Wrapf(err, "open log database [%v]", path)

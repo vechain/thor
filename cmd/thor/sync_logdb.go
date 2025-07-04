@@ -292,11 +292,12 @@ func verifyLogDBPerBlock(
 	var expectedEvLogs []*logdb.Event
 	var expectedTrLogs []*logdb.Transfer
 	txs := block.Transactions()
+
+	evCount = 0
+	trCount = 0
 	for txIndex, r := range receipts {
 		tx := txs[txIndex]
 		origin, _ := tx.Origin()
-		evCount = 0
-		trCount = 0
 
 		for clauseIndex, output := range r.Outputs {
 			for _, ev := range output.Events {
