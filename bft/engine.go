@@ -15,12 +15,15 @@ import (
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/kv"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 
 	lru "github.com/hashicorp/golang-lru"
 )
+
+var logger = log.WithContext("pkg", "bft")
 
 const dataStoreName = "bft.engine"
 
@@ -328,15 +331,26 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 		staker := builtin.Staker.Native(state)
 		validator, _, err := staker.LookupMaster(signer)
 		if err != nil {
-			// If there's an error querying the stake, exclude the validator for security
-			continue
-		} else if validator != nil && !validator.IsEmpty() {
-			// Only add the block if we have a valid validator with stake
-			js.AddBlock(signer, h.COM(), validator.Weight)
-		} else {
-			// If the validator doesn't exist or is empty, also exclude it
+			// Error querying validator data - exclude for security
+			logger.Warn("failed to lookup validator", "signer", signer, "error", err)
 			continue
 		}
+
+		if validator == nil {
+			// Validator doesn't exist - exclude from voting
+			logger.Warn("validator not found", "signer", signer)
+			continue
+		}
+
+		if validator.IsEmpty() {
+			// Validator exists but has no stake - exclude from voting
+			logger.Warn("validator has no stake", "signer", signer)
+			continue
+		}
+
+		// Validator exists and has stake - add to voting set
+		logger.Debug("adding validator to voting set", "signer", signer, "weight", validator.Weight)
+		js.AddBlock(signer, h.COM(), validator.Weight)
 
 		if h.Number() <= end {
 			break
