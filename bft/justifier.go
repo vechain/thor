@@ -22,7 +22,7 @@ type bftState struct {
 type justifier struct {
 	parentQuality uint32
 	checkpoint    uint32
-	threshold     *big.Int
+	threshold     *big.Int // we need to represent uint256
 
 	votes       map[thor.Address]bool
 	voterStakes map[thor.Address]*big.Int
