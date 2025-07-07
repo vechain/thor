@@ -407,22 +407,21 @@ func (engine *Engine) findCheckpointByQuality(target uint32, finalized, headID t
 	return c.GetBlockID(searchStart + uint32(num)*thor.CheckpointInterval)
 }
 
-func (engine *Engine) getTotalStake(sum *chain.BlockSummary) (*big.Int, error) {
+func (engine *Engine) getTotalWeight(sum *chain.BlockSummary) (*big.Int, error) {
 	state := engine.stater.NewState(sum.Root())
 	staker := builtin.Staker.Native(state)
 
-	// Get total stake without adjusting for errors
-	// The threshold will be adjusted dynamically in Summarize() based on actual participating validators
-	totalStake, _, err := staker.LockedVET()
+	// Get total weight including delegations
+	_, totalWeight, err := staker.LockedVET()
 	if err != nil {
 		return nil, err
 	}
 
-	if totalStake == nil || totalStake.Sign() == 0 {
-		return nil, errors.New("total stake is zero or nil")
+	if totalWeight == nil || totalWeight.Sign() == 0 {
+		return nil, errors.New("total weight is zero or nil")
 	}
 
-	return totalStake, nil
+	return totalWeight, nil
 }
 
 func (engine *Engine) getQuality(id thor.Bytes32) (quality uint32, err error) {

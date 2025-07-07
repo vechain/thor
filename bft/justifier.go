@@ -24,10 +24,10 @@ type justifier struct {
 	checkpoint    uint32
 	threshold     *big.Int // we need to represent uint256
 
-	votes       map[thor.Address]bool
-	voterStakes map[thor.Address]*big.Int
-	comVotes    uint64
-	comStake    *big.Int
+	votes        map[thor.Address]bool
+	voterWeights map[thor.Address]*big.Int
+	comVotes     uint64
+	comWeight    *big.Int
 }
 
 func (engine *Engine) newJustifier(parentID thor.Bytes32) (*justifier, error) {
@@ -45,12 +45,12 @@ func (engine *Engine) newJustifier(parentID thor.Bytes32) (*justifier, error) {
 	if err != nil {
 		return nil, err
 	}
-	totalStake, err := engine.getTotalStake(sum)
+	totalWeight, err := engine.getTotalWeight(sum)
 	if err != nil {
 		return nil, err
 	}
 
-	threshold := new(big.Int).Mul(totalStake, big.NewInt(2))
+	threshold := new(big.Int).Mul(totalWeight, big.NewInt(2))
 	threshold.Div(threshold, big.NewInt(3))
 
 	var parentQuality uint32 // quality of last round
@@ -66,46 +66,46 @@ func (engine *Engine) newJustifier(parentID thor.Bytes32) (*justifier, error) {
 
 	return &justifier{
 		votes:         make(map[thor.Address]bool),
-		voterStakes:   make(map[thor.Address]*big.Int),
+		voterWeights:  make(map[thor.Address]*big.Int),
 		parentQuality: parentQuality,
 		checkpoint:    checkpoint,
 		threshold:     threshold,
-		comStake:      big.NewInt(0),
+		comWeight:     big.NewInt(0),
 	}, nil
 }
 
 // AddBlock adds a new block to the set.
-func (js *justifier) AddBlock(signer thor.Address, isCOM bool, stake *big.Int) {
+func (js *justifier) AddBlock(signer thor.Address, isCOM bool, weight *big.Int) {
 	if prev, ok := js.votes[signer]; !ok {
 		js.votes[signer] = isCOM
-		js.voterStakes[signer] = new(big.Int).Set(stake)
+		js.voterWeights[signer] = new(big.Int).Set(weight)
 		if isCOM {
 			js.comVotes++
-			js.comStake.Add(js.comStake, stake)
+			js.comWeight.Add(js.comWeight, weight)
 		}
 	} else if prev != isCOM {
 		// if one votes both COM and non-COM in one round, count as non-COM
 		js.votes[signer] = false
 		if prev {
 			js.comVotes--
-			js.comStake.Sub(js.comStake, js.voterStakes[signer])
+			js.comWeight.Sub(js.comWeight, js.voterWeights[signer])
 		}
 	}
 }
 
 // Summarize summarizes the state of vote set.
 func (js *justifier) Summarize() *bftState {
-	totalVoterStake := big.NewInt(0)
-	for _, stake := range js.voterStakes {
-		totalVoterStake.Add(totalVoterStake, stake)
+	totalVoterWeight := big.NewInt(0)
+	for _, weight := range js.voterWeights {
+		totalVoterWeight.Add(totalVoterWeight, weight)
 	}
 
 	// Adjust threshold based on actual participating validators
-	// This ensures consistency between total stake calculation and vote processing
+	// This ensures consistency between total weight calculation and vote processing
 	adjustedThreshold := js.adjustThresholdForParticipatingValidators()
 
-	justified := totalVoterStake.Cmp(adjustedThreshold) > 0
-	committed := js.comStake.Cmp(adjustedThreshold) > 0
+	justified := totalVoterWeight.Cmp(adjustedThreshold) > 0
+	committed := js.comWeight.Cmp(adjustedThreshold) > 0
 
 	var quality uint32
 	if justified {
@@ -124,21 +124,21 @@ func (js *justifier) Summarize() *bftState {
 // adjustThresholdForParticipatingValidators adjusts the threshold based on
 // the proportion of validators that actually participated in voting
 func (js *justifier) adjustThresholdForParticipatingValidators() *big.Int {
-	// Calculate total stake of participating validators
-	totalParticipatingStake := big.NewInt(0)
-	for _, stake := range js.voterStakes {
-		totalParticipatingStake.Add(totalParticipatingStake, stake)
+	// Calculate total weight of participating validators
+	totalParticipatingWeight := big.NewInt(0)
+	for _, weight := range js.voterWeights {
+		totalParticipatingWeight.Add(totalParticipatingWeight, weight)
 	}
 
-	// If we have participating validators with stake, adjust threshold proportionally
-	// This ensures that the threshold is based on the actual stake that can vote
-	if totalParticipatingStake.Sign() > 0 {
-		// Calculate 2/3 of the participating stake
-		adjustedThreshold := new(big.Int).Mul(totalParticipatingStake, big.NewInt(2))
+	// If we have participating validators with weight, adjust threshold proportionally
+	// This ensures that the threshold is based on the actual weight that can vote
+	if totalParticipatingWeight.Sign() > 0 {
+		// Calculate 2/3 of the participating weight
+		adjustedThreshold := new(big.Int).Mul(totalParticipatingWeight, big.NewInt(2))
 		adjustedThreshold.Div(adjustedThreshold, big.NewInt(3))
 		return adjustedThreshold
 	}
 
-	// Fallback to original threshold if no participating stake
+	// Fallback to original threshold if no participating weight
 	return js.threshold
 }
