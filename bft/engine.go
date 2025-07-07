@@ -419,7 +419,7 @@ func (engine *Engine) getTotalStake(sum *chain.BlockSummary) (*big.Int, error) {
 	}
 
 	if totalStake == nil || totalStake.Sign() == 0 {
-		return big.NewInt(1), nil
+		return nil, errors.New("total stake is zero or nil")
 	}
 
 	return totalStake, nil
