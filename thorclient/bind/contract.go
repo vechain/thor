@@ -11,9 +11,10 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/vechain/thor/v2/api"
+
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/test"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
@@ -99,7 +100,7 @@ func DeployContract(client *thorclient.Client, signer Signer, abiData []byte, by
 		return nil, err
 	}
 
-	var receipt *transactions.Receipt
+	var receipt *api.Receipt
 	err = test.Retry(func() error {
 		if receipt, err = client.TransactionReceipt(res.ID); err != nil {
 			return err

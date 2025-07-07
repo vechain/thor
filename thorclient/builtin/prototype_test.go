@@ -12,7 +12,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/require"
-	"github.com/vechain/thor/v2/api/transactions"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test"
@@ -50,7 +50,7 @@ func TestPrototype(t *testing.T) {
 	res, err := client.SendTransaction(trx)
 	require.NoError(t, err)
 
-	var receipt *transactions.Receipt
+	var receipt *api.Receipt
 	require.NoError(t,
 		test.Retry(func() error {
 			if receipt, err = client.TransactionReceipt(res.ID); err != nil {

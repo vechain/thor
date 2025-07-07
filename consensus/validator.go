@@ -13,7 +13,7 @@ import (
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/builtin/staker"
-	"github.com/vechain/thor/v2/consensus/fork"
+	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/poa"
 	"github.com/vechain/thor/v2/runtime"
@@ -100,6 +100,10 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 		return consensusError(fmt.Sprintf("block total score invalid: parent %v, current %v", parent.TotalScore(), header.TotalScore()))
 	}
 
+	if !block.GasLimit(header.GasLimit()).IsValid(parent.GasLimit()) {
+		return consensusError(fmt.Sprintf("block gas limit invalid: parent %v, current %v", parent.GasLimit(), header.GasLimit()))
+	}
+
 	signature := header.Signature()
 
 	if header.Number() < c.forkConfig.VIP214 {
@@ -145,13 +149,16 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 		if header.BaseFee() != nil {
 			return consensusError("invalid block: baseFee should not set before fork GALACTICA")
 		}
-
-		if !block.GasLimit(header.GasLimit()).IsValid(parent.GasLimit()) {
-			return consensusError(fmt.Sprintf("block gas limit invalid: parent %v, current %v", parent.GasLimit(), header.GasLimit()))
-		}
 	} else {
-		if err := fork.VerifyGalacticaHeader(c.forkConfig, parent, header); err != nil {
-			return consensusError(fmt.Sprintf("block header invalid: %v", err))
+		if header.BaseFee() == nil {
+			return consensusError("invalid block: baseFee is missing")
+		}
+
+		// Verify the baseFee is correct based on the parent header.
+		expectedBaseFee := galactica.CalcBaseFee(parent, c.forkConfig)
+		if header.BaseFee().Cmp(expectedBaseFee) != 0 {
+			return consensusError(fmt.Sprintf("block baseFee invalid: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
+				header.BaseFee(), expectedBaseFee, parent.BaseFee(), parent.GasUsed()))
 		}
 	}
 
@@ -191,7 +198,7 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 		case tr.IsExpired(header.Number()):
 			return consensusError(fmt.Sprintf("tx expired: ref %v, current %v, expiration %v", tr.BlockRef().Number(), header.Number(), tr.Expiration()))
 		case header.Number() < c.forkConfig.GALACTICA && tr.Type() != tx.TypeLegacy:
-			return consensusError(tx.ErrTxTypeNotSupported.Error())
+			return consensusError("invalid tx: " + tx.ErrTxTypeNotSupported.Error())
 		}
 
 		if err := tr.TestFeatures(header.TxsFeatures()); err != nil {
@@ -253,13 +260,6 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 			return nil, nil, err
 		} else if found {
 			return nil, nil, consensusError("tx already exists")
-		}
-
-		// check if tx has enough fee to cover for base fee, if set
-		if header.BaseFee() != nil {
-			if err := fork.ValidateGalacticaTxFee(tx, state, header.BaseFee()); err != nil {
-				return nil, nil, err
-			}
 		}
 
 		// check depended tx

@@ -487,7 +487,7 @@ func TestValidateBlockHeaderWithBadBaseFee(t *testing.T) {
 		WithSignature(sig[:])
 
 	_, _, err = con.Process(con.repo.BestBlockSummary(), newBlock, newBlock.Header().Timestamp(), 0)
-	assert.Contains(t, err.Error(), "block header invalid: invalid baseFee: have 10000000000000, want 1230000000000000")
+	assert.Contains(t, err.Error(), "block baseFee invalid: have 1230000000000000, want 10000000000000")
 }
 
 func TestVerifyBlock(t *testing.T) {
@@ -684,7 +684,7 @@ func TestConsent(t *testing.T) {
 				builder = builder.Features(tx.Features(0x01))
 				trx := tx.MustSignDelegated(builder.Build(), genesis.DevAccounts()[8].PrivateKey, genesis.DevAccounts()[9].PrivateKey)
 				blk, err := tc.sign(
-					tc.builder(tc.original.Header()).Transaction(trx),
+					tc.builder(tc.original.Header()).Transaction(trx).GasUsed(21000),
 				)
 				if err != nil {
 					t.Fatal(err)

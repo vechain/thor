@@ -3,11 +3,10 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package transfers
+package api
 
 import (
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/vechain/thor/v2/api/events"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -30,7 +29,14 @@ type FilteredTransfer struct {
 	Meta      LogMeta               `json:"meta"`
 }
 
-func convertTransfer(transfer *logdb.Transfer, addIndexes bool) *FilteredTransfer {
+type TransferFilter struct {
+	CriteriaSet []*logdb.TransferCriteria
+	Range       *Range
+	Options     *Options
+	Order       logdb.Order //default asc
+}
+
+func ConvertTransfer(transfer *logdb.Transfer, addIndexes bool) *FilteredTransfer {
 	v := math.HexOrDecimal256(*transfer.Amount)
 	ft := &FilteredTransfer{
 		Sender:    transfer.Sender,
@@ -52,11 +58,4 @@ func convertTransfer(transfer *logdb.Transfer, addIndexes bool) *FilteredTransfe
 	}
 
 	return ft
-}
-
-type TransferFilter struct {
-	CriteriaSet []*logdb.TransferCriteria
-	Range       *events.Range
-	Options     *events.Options
-	Order       logdb.Order //default asc
 }

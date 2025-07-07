@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package api
+package middleware
 
 import (
 	"bufio"
@@ -60,8 +60,8 @@ func (m *metricsResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return h.Hijack()
 }
 
-// metricsMiddleware is a middleware that records metrics for each request.
-func metricsMiddleware(next http.Handler) http.Handler {
+// MetricsMiddleware is a middleware that records metrics for each request.
+func MetricsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rt := mux.CurrentRoute(r)
 

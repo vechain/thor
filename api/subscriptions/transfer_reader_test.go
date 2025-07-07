@@ -8,9 +8,9 @@ package subscriptions
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -21,7 +21,7 @@ func TestTransferReader_Read(t *testing.T) {
 	require.NoError(t, err)
 	genesisBlk := allBlocks[0]
 	newBlock := allBlocks[1]
-	filter := &TransferFilter{}
+	filter := &api.SubscriptionTransferFilter{}
 
 	// Act
 	br := newTransferReader(thorChain.Repo(), genesisBlk.Header().ID(), filter)
@@ -30,7 +30,7 @@ func TestTransferReader_Read(t *testing.T) {
 	// Assert
 	assert.NoError(t, err)
 	assert.True(t, ok)
-	if transferMsg, ok := res[0].(*TransferMessage); !ok {
+	if transferMsg, ok := res[0].(*api.TransferMessage); !ok {
 		t.Fatal("unexpected type")
 	} else {
 		assert.Equal(t, newBlock.Header().Number(), transferMsg.Meta.BlockNumber)
@@ -47,7 +47,7 @@ func TestTransferReader_Read_NoNewBlocksToRead(t *testing.T) {
 	require.NoError(t, err)
 	// taking best block to include also galactica block
 	bestBlk := allBlocks[len(allBlocks)-1]
-	filter := &TransferFilter{}
+	filter := &api.SubscriptionTransferFilter{}
 
 	// Act
 	br := newTransferReader(thorChain.Repo(), bestBlk.Header().ID(), filter)
@@ -62,7 +62,7 @@ func TestTransferReader_Read_NoNewBlocksToRead(t *testing.T) {
 func TestTransferReader_Read_ErrorWhenReadingBlocks(t *testing.T) {
 	// Arrange
 	thorChain := initChain(t)
-	filter := &TransferFilter{}
+	filter := &api.SubscriptionTransferFilter{}
 
 	// Act
 	br := newTransferReader(thorChain.Repo(), thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), filter)
@@ -82,7 +82,7 @@ func TestTransferReader_Read_NoTransferMatchingTheFilter(t *testing.T) {
 	genesisBlk := allBlocks[0]
 
 	nonExistingAddress := thor.MustParseAddress("0xffffffffffffffffffffffffffffffffffffffff")
-	badFilter := &TransferFilter{
+	badFilter := &api.SubscriptionTransferFilter{
 		TxOrigin: &nonExistingAddress,
 	}
 

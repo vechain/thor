@@ -6,10 +6,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
+	"math/big"
 
 	"github.com/pkg/errors"
 	"github.com/pmezard/go-difflib/difflib"
@@ -291,11 +292,12 @@ func verifyLogDBPerBlock(
 	var expectedEvLogs []*logdb.Event
 	var expectedTrLogs []*logdb.Transfer
 	txs := block.Transactions()
+
+	evCount = 0
+	trCount = 0
 	for txIndex, r := range receipts {
 		tx := txs[txIndex]
 		origin, _ := tx.Origin()
-		evCount = 0
-		trCount = 0
 
 		for clauseIndex, output := range r.Outputs {
 			for _, ev := range output.Events {
@@ -336,17 +338,143 @@ func verifyLogDBPerBlock(
 			}
 		}
 	}
-	if !reflect.DeepEqual(eventLogs, expectedEvLogs) {
+	if !equalEvents(eventLogs, expectedEvLogs) {
 		fmt.Println("\nDiff event logs")
 		fmt.Println(jsonDiff(expectedEvLogs, eventLogs))
 		return errors.New("incorrect logs")
 	}
-	if !reflect.DeepEqual(transferLogs, expectedTrLogs) {
+	if !equalTransfers(transferLogs, expectedTrLogs) {
 		fmt.Println("\nDiff transfer logs")
 		fmt.Println(jsonDiff(expectedTrLogs, transferLogs))
 		return errors.New("incorrect logs")
 	}
 	return nil
+}
+
+// equalEvents performs a statically typed comparison of two Event slices
+func equalEvents(a, b []*logdb.Event) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if !equalEvent(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// equalEvent performs a statically typed comparison of two Event pointers
+func equalEvent(a, b *logdb.Event) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+
+	// fast-fail on all primitive fields
+	if a.BlockNumber != b.BlockNumber ||
+		a.LogIndex != b.LogIndex ||
+		a.BlockTime != b.BlockTime ||
+		a.TxIndex != b.TxIndex ||
+		a.ClauseIndex != b.ClauseIndex {
+		return false
+	}
+
+	// compare IDs and addresses via byte-level equality
+	if !bytes.Equal(a.BlockID.Bytes(), b.BlockID.Bytes()) ||
+		!bytes.Equal(a.TxID.Bytes(), b.TxID.Bytes()) ||
+		!bytes.Equal(a.TxOrigin.Bytes(), b.TxOrigin.Bytes()) ||
+		!bytes.Equal(a.Address.Bytes(), b.Address.Bytes()) {
+		return false
+	}
+
+	// topics: nil vs non-nil are unequal, otherwise byte-compare the contents
+	if !equalTopics(a.Topics, b.Topics) {
+		return false
+	}
+
+	// distinguish nil vs empty slice (reflect.DeepEqual would treat them unequal)
+	if (a.Data == nil) != (b.Data == nil) {
+		return false
+	}
+	if !bytes.Equal(a.Data, b.Data) {
+		return false
+	}
+
+	return true
+}
+
+// equalTopics compares two [5]*Bytes32 arrays, distinguishing nil pointers
+// and falling back to a byte-level compare of the 32-byte contents.
+func equalTopics(a, b [5]*thor.Bytes32) bool {
+	for i := range a {
+		if a[i] == nil || b[i] == nil {
+			if a[i] != b[i] {
+				return false
+			}
+			continue
+		}
+		if !bytes.Equal(a[i].Bytes(), b[i].Bytes()) {
+			return false
+		}
+	}
+	return true
+}
+
+// equalTransfers performs a statically typed comparison of two Transfer slices
+func equalTransfers(a, b []*logdb.Transfer) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if !equalTransfer(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// equalTransfer performs a statically typed comparison of two Transfer pointers
+// and treats nil Amount as zero for semantic equality.
+func equalTransfer(a, b *logdb.Transfer) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+
+	// fast-fail on primitive fields
+	if a.BlockNumber != b.BlockNumber ||
+		a.LogIndex != b.LogIndex ||
+		a.BlockTime != b.BlockTime ||
+		a.TxIndex != b.TxIndex ||
+		a.ClauseIndex != b.ClauseIndex {
+		return false
+	}
+
+	// compare IDs and addresses via byte-level equality
+	if !bytes.Equal(a.BlockID.Bytes(), b.BlockID.Bytes()) ||
+		!bytes.Equal(a.TxID.Bytes(), b.TxID.Bytes()) ||
+		!bytes.Equal(a.TxOrigin.Bytes(), b.TxOrigin.Bytes()) ||
+		!bytes.Equal(a.Sender.Bytes(), b.Sender.Bytes()) ||
+		!bytes.Equal(a.Recipient.Bytes(), b.Recipient.Bytes()) {
+		return false
+	}
+
+	// normalize nil<->zero for Amount
+	var aAmt, bAmt *big.Int
+	if a.Amount == nil || a.Amount.Sign() == 0 {
+		aAmt = big.NewInt(0)
+	} else {
+		aAmt = a.Amount
+	}
+	if b.Amount == nil || b.Amount.Sign() == 0 {
+		bAmt = big.NewInt(0)
+	} else {
+		bAmt = b.Amount
+	}
+	if aAmt.Cmp(bAmt) != 0 {
+		return false
+	}
+
+	return true
 }
 
 func jsonDiff(expected, actual any) string {

@@ -21,6 +21,7 @@ import (
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
 )
 
@@ -85,6 +86,42 @@ func TestTxBasics(t *testing.T) {
 	trx = txBuilder(0x0, tx.TypeDynamicFee).MaxPriorityFeePerGas(math.MaxBig256).Build()
 	_, err = runtime.ResolveTransaction(txSign(trx))
 	assert.EqualError(t, err, "maxFeePerGas is less than maxPriorityFeePerGas")
+}
+
+func TestGaspriceLessThanBaseFee(t *testing.T) {
+	db := muxdb.NewMem()
+	st := state.NewStater(db).NewState(trie.Root{})
+	legacyTxBaseGasPrice := big.NewInt(100)
+	err := builtin.Params.Native(st).Set(thor.KeyLegacyTxBaseGasPrice, legacyTxBaseGasPrice)
+	assert.Nil(t, err)
+
+	trx := txBuilder(0x0, tx.TypeLegacy).GasPriceCoef(0).Build()
+	trx = tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)
+
+	obj, err := runtime.ResolveTransaction(trx)
+	assert.Nil(t, err)
+
+	_, _, _, _, _, err = obj.BuyGas(st, 0, big.NewInt(101))
+	assert.ErrorContains(t, err, "gas price is less than block base fee")
+
+	// can cover the base fee, not return less than base fee error
+	_, _, _, _, _, err = obj.BuyGas(st, 0, big.NewInt(100))
+	assert.NotNil(t, err)
+	assert.NotContains(t, err.Error(), "gas price is less than block base fee")
+
+	trx = txBuilder(0x0, tx.TypeDynamicFee).MaxFeePerGas(big.NewInt(100)).Build()
+	trx = tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)
+
+	obj, err = runtime.ResolveTransaction(trx)
+	assert.Nil(t, err)
+
+	_, _, _, _, _, err = obj.BuyGas(st, 0, big.NewInt(101))
+	assert.ErrorContains(t, err, "gas price is less than block base fee")
+
+	// can cover the base fee, not return less than base fee error
+	_, _, _, _, _, err = obj.BuyGas(st, 0, big.NewInt(100))
+	assert.NotNil(t, err)
+	assert.NotContains(t, err.Error(), "gas price is less than block base fee")
 }
 
 func TestResolvedTx(t *testing.T) {

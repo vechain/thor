@@ -12,7 +12,7 @@ info:
   license:
     name: LGPL 3.0
     url: https://www.gnu.org/licenses/lgpl-3.0.en.html
-  version: 2.3.0
+  version: 2.3.1
 servers:
   - url: /
     description: Current Node
@@ -1581,7 +1581,7 @@ components:
           nullable: true
           example: 1
         logIndex:
-          description: The index of the log in the receipt's outputs. This is an overall index among all clauses.
+          description: The index of the log in the block. This is an overall index among all transactions.
           type: integer
           nullable: true
           example: 1
