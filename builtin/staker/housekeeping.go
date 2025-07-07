@@ -93,14 +93,13 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Bytes32]*Validat
 }
 
 func (s *Staker) performRenewalUpdates(id thor.Bytes32, validator *Validation) error {
-	// renew the validator
-	validatorRenewal := validator.Renew()
-
-	// renew the delegations
 	aggregation, err := s.storage.GetAggregation(id)
 	if err != nil {
 		return err
 	}
+
+	// renew the validator & delegations
+	validatorRenewal := validator.Renew()
 	delegationsRenewal := aggregation.Renew()
 	if err := s.storage.SetAggregation(id, aggregation); err != nil {
 		return err
@@ -110,6 +109,7 @@ func (s *Staker) performRenewalUpdates(id thor.Bytes32, validator *Validation) e
 	changeTVL := big.NewInt(0).Add(validatorRenewal.ChangeTVL, delegationsRenewal.ChangeTVL)
 	changeWeight := big.NewInt(0).Add(validatorRenewal.ChangeWeight, delegationsRenewal.ChangeWeight)
 	queuedDecrease := big.NewInt(0).Add(validatorRenewal.QueuedDecrease, delegationsRenewal.QueuedDecrease)
+	queuedWeight := big.NewInt(0).Add(validatorRenewal.QueuedDecreaseWeight, delegationsRenewal.QueuedDecreaseWeight)
 
 	// set the new totals
 	validator.LockedVET = big.NewInt(0).Add(validator.LockedVET, changeTVL)
@@ -123,12 +123,8 @@ func (s *Staker) performRenewalUpdates(id thor.Bytes32, validator *Validation) e
 	if err := s.queuedVET.Sub(queuedDecrease); err != nil {
 		return err
 	}
-	// the queued weight should decrease only if the validator is queued or the weight is increasingAdd commentMore actions
-	// because of an increased stake transaction or new delegators
-	if validator.Status == StatusQueued || changeWeight.Cmp(big.NewInt(0)) > 0 {
-		if err := s.queuedWeight.Add(big.NewInt(0).Neg(changeWeight)); err != nil {
-			return err
-		}
+	if err := s.queuedWeight.Sub(queuedWeight); err != nil {
+		return err
 	}
 	return s.storage.SetValidation(id, validator)
 }
