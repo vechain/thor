@@ -6,6 +6,7 @@
 package chain
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -108,11 +109,18 @@ func TestConflicts(t *testing.T) {
 
 	assert.Equal(t, []any{uint32(1), nil}, M(repo.GetMaxBlockNum()))
 	assert.Equal(t, []any{uint32(1), nil}, M(repo.ScanConflicts(1)))
+	assert.Equal(t, []any{[][]byte{b1.Header().ID().Bytes()}, nil}, M(repo.GetConflicts(1)))
 
 	b1x := newBlock(b0, 20)
 	repo.AddBlock(b1x, nil, 1, false)
 	assert.Equal(t, []any{uint32(1), nil}, M(repo.GetMaxBlockNum()))
 	assert.Equal(t, []any{uint32(2), nil}, M(repo.ScanConflicts(1)))
+	switch bytes.Compare(b1.Header().ID().Bytes(), b1x.Header().ID().Bytes()) {
+	case -1:
+		assert.Equal(t, []any{[][]byte{b1.Header().ID().Bytes(), b1x.Header().ID().Bytes()}, nil}, M(repo.GetConflicts(1)))
+	case 1:
+		assert.Equal(t, []any{[][]byte{b1x.Header().ID().Bytes(), b1.Header().ID().Bytes()}, nil}, M(repo.GetConflicts(1)))
+	}
 }
 
 func TestScanHeads(t *testing.T) {
