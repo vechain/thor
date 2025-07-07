@@ -42,15 +42,16 @@ type justified struct {
 // Engine tracks all votes of blocks, computes the finalized checkpoint.
 // Not thread-safe!
 type Engine struct {
-	repo       *chain.Repository
-	data       kv.Store
-	stater     *state.Stater
-	forkConfig *thor.ForkConfig
-	master     thor.Address
-	casts      casts
-	finalized  atomic.Value
-	justified  atomic.Value
-	caches     struct {
+	repo        *chain.Repository
+	data        kv.Store
+	stater      *state.Stater
+	forkConfig  *thor.ForkConfig
+	master      thor.Address
+	casts       casts
+	finalized   atomic.Value
+	justified   atomic.Value
+	votingLayer *VotingLayer
+	caches      struct {
 		state     *lru.Cache
 		quality   *lru.Cache
 		justifier *cache.PrioCache
@@ -70,6 +71,10 @@ func NewEngine(repo *chain.Repository, mainDB *muxdb.MuxDB, forkConfig *thor.For
 	engine.caches.state, _ = lru.New(256)
 	engine.caches.quality, _ = lru.New(16)
 	engine.caches.justifier = cache.NewPrioCache(16)
+
+	// Initialize voting layer with initial total stake
+	// We'll get the actual total stake when we first need it
+	engine.votingLayer = NewVotingLayer(big.NewInt(1))
 
 	// Restore finalized block, if any
 	if val, err := engine.data.Get(finalizedKey); err != nil {
@@ -286,6 +291,27 @@ func (engine *Engine) ShouldVote(parentID thor.Bytes32) (bool, error) {
 		}
 	}
 
+	// Check if voting layer allows this node to vote
+	// Get current node's stake
+	state := engine.stater.NewState(sum.Root())
+	staker := builtin.Staker.Native(state)
+	validator, _, err := staker.LookupMaster(engine.master)
+	if err != nil {
+		logger.Warn("failed to lookup current node's validator data", "master", engine.master, "error", err)
+		return false, nil
+	}
+
+	if validator == nil || validator.IsEmpty() {
+		logger.Debug("current node has no stake, cannot vote", "master", engine.master)
+		return false, nil
+	}
+
+	// Check if voting layer allows this vote
+	if !engine.votingLayer.ShouldAllowVote(engine.master, validator.Weight) {
+		logger.Debug("voting layer rejected current node's vote", "master", engine.master, "weight", validator.Weight)
+		return false, nil
+	}
+
 	return true, nil
 }
 
@@ -315,6 +341,15 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 		}
 		end = js.checkpoint
 	}
+
+	// Update voting layer with current total stake
+	totalStake, err := engine.getTotalWeight(engine.repo.BestBlockSummary())
+	if err != nil {
+		logger.Warn("failed to get total stake for voting layer", "error", err)
+		// Use a reasonable default if we can't get total stake
+		totalStake = big.NewInt(1000000)
+	}
+	engine.votingLayer.Reset(totalStake)
 
 	h := header
 	for {
@@ -348,9 +383,18 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 			continue
 		}
 
-		// Validator exists and has stake - add to voting set
+		// Check if voting layer allows this vote
+		if !engine.votingLayer.ShouldAllowVote(signer, validator.Weight) {
+			logger.Debug("voting layer rejected vote", "signer", signer, "weight", validator.Weight)
+			continue
+		}
+
+		// Validator exists, has stake, and voting layer allows the vote
 		logger.Debug("adding validator to voting set", "signer", signer, "weight", validator.Weight)
 		js.AddBlock(signer, h.COM(), validator.Weight)
+
+		// Record the vote in the voting layer
+		engine.votingLayer.RecordVote(signer, validator.Weight)
 
 		if h.Number() <= end {
 			break
@@ -485,4 +529,9 @@ func (e *mockedEngine) Justified() (thor.Bytes32, error) {
 func NewMockedEngine(genesisID thor.Bytes32) Committer {
 	me := mockedEngine(genesisID)
 	return &me
+}
+
+// GetVotingStats returns current statistics of the voting layer
+func (engine *Engine) GetVotingStats() (rounds uint32, votedStake *big.Int, threshold *big.Int, reached bool) {
+	return engine.votingLayer.GetStats()
 }

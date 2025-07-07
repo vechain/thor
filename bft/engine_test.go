@@ -1110,3 +1110,17 @@ func TestJustifiedStakes(t *testing.T) {
 	expectedThreshold := big.NewInt(threshold)
 	assert.Equal(t, 0, vs.threshold.Cmp(expectedThreshold))
 }
+
+func TestEngine_VotingLayerIntegration(t *testing.T) {
+	// Test that voting layer is properly initialized
+	test, err := newTestBft(defaultFC)
+	assert.NoError(t, err)
+	assert.NotNil(t, test.engine.votingLayer)
+
+	// Test that GetVotingStats returns valid data
+	rounds, votedStake, threshold, reached := test.engine.GetVotingStats()
+	assert.Equal(t, uint32(0), rounds) // Should start at 0
+	assert.NotNil(t, votedStake)
+	assert.NotNil(t, threshold)
+	assert.False(t, reached) // Should not have reached threshold initially
+}
