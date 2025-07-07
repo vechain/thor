@@ -288,7 +288,7 @@ func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts [][]
 		}
 
 		// don't increase maxBlockNum if the block is unprocessable
-		if err := process(make([][]byte, 0, 0)); err != nil {
+		if err := process(make([][]byte, 0)); err != nil {
 			return err
 		}
 
