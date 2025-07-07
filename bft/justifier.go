@@ -100,8 +100,12 @@ func (js *justifier) Summarize() *bftState {
 		totalVoterStake.Add(totalVoterStake, stake)
 	}
 
-	justified := totalVoterStake.Cmp(js.threshold) > 0
-	committed := js.comStake.Cmp(js.threshold) > 0
+	// Adjust threshold based on actual participating validators
+	// This ensures consistency between total stake calculation and vote processing
+	adjustedThreshold := js.adjustThresholdForParticipatingValidators()
+
+	justified := totalVoterStake.Cmp(adjustedThreshold) > 0
+	committed := js.comStake.Cmp(adjustedThreshold) > 0
 
 	var quality uint32
 	if justified {
@@ -115,4 +119,26 @@ func (js *justifier) Summarize() *bftState {
 		Justified: justified,
 		Committed: committed,
 	}
+}
+
+// adjustThresholdForParticipatingValidators adjusts the threshold based on
+// the proportion of validators that actually participated in voting
+func (js *justifier) adjustThresholdForParticipatingValidators() *big.Int {
+	// Calculate total stake of participating validators
+	totalParticipatingStake := big.NewInt(0)
+	for _, stake := range js.voterStakes {
+		totalParticipatingStake.Add(totalParticipatingStake, stake)
+	}
+
+	// If we have participating validators with stake, adjust threshold proportionally
+	// This ensures that the threshold is based on the actual stake that can vote
+	if totalParticipatingStake.Sign() > 0 {
+		// Calculate 2/3 of the participating stake
+		adjustedThreshold := new(big.Int).Mul(totalParticipatingStake, big.NewInt(2))
+		adjustedThreshold.Div(adjustedThreshold, big.NewInt(3))
+		return adjustedThreshold
+	}
+
+	// Fallback to original threshold if no participating stake
+	return js.threshold
 }

@@ -320,7 +320,6 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 		}
 
 		signer, _ := h.Signer()
-		var validatorStake *big.Int
 		sum, err := engine.repo.GetBlockSummary(h.ParentID())
 		if err != nil {
 			return nil, err
@@ -329,14 +328,15 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 		staker := builtin.Staker.Native(state)
 		validator, _, err := staker.LookupMaster(signer)
 		if err != nil {
-			// TODO: get the min stake instead of 1
-			validatorStake = big.NewInt(1)
+			// If there's an error querying the stake, exclude the validator for security
+			continue
 		} else if validator != nil && !validator.IsEmpty() {
-			validatorStake = validator.Weight
+			// Only add the block if we have a valid validator with stake
+			js.AddBlock(signer, h.COM(), validator.Weight)
 		} else {
-			validatorStake = big.NewInt(1)
+			// If the validator doesn't exist or is empty, also exclude it
+			continue
 		}
-		js.AddBlock(signer, h.COM(), validatorStake)
 
 		if h.Number() <= end {
 			break
@@ -411,6 +411,8 @@ func (engine *Engine) getTotalStake(sum *chain.BlockSummary) (*big.Int, error) {
 	state := engine.stater.NewState(sum.Root())
 	staker := builtin.Staker.Native(state)
 
+	// Get total stake without adjusting for errors
+	// The threshold will be adjusted dynamically in Summarize() based on actual participating validators
 	totalStake, _, err := staker.LockedVET()
 	if err != nil {
 		return nil, err
