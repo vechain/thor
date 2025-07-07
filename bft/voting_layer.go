@@ -19,10 +19,11 @@ const (
 )
 
 // VotingLayer implements the voting model requirements:
-// - Weighted picks: Each round, one participant is chosen with probability proportional to their stake
-// - No back-to-back: Whoever just voted is excluded from the very next round
-// - Cumulative "new" stake: Track total fraction that has ever voted, stop at 68%
-// - Maximum 180 rounds
+// - Weighted round robin: Each cycle, each validator can vote a number of times proportional to their stake
+// - No back-to-back: No one can vote twice in a row
+// - When everyone exhausts their quota, the cycle resets
+// - The cycle is dynamic: calculated based on validators and their stake at the start of each cycle
+
 type VotingLayer struct {
 	mu sync.RWMutex
 
@@ -36,107 +37,185 @@ type VotingLayer struct {
 	maxRounds uint32
 	threshold *big.Int // 68% of total stake
 
-	// Deterministic selection state
-	accumulatedStake *big.Int // accumulated stake for deterministic selection
+	// Strict rotation
+	validatorStakes map[thor.Address]*big.Int // stake of each validator
+	voteQuota       map[thor.Address]int      // available quotas per cycle
+	votesUsed       map[thor.Address]int      // votes used in current cycle
+	cycleSize       int                       // total quotas in the cycle
+	cycleVotes      int                       // votes cast in current cycle
 }
 
-// NewVotingLayer creates a new voting layer
-func NewVotingLayer(totalStake *big.Int) *VotingLayer {
+// NewVotingLayer creates a new voting layer with strict rotation
+func NewVotingLayerWithValidators(totalStake *big.Int, validatorStakes map[thor.Address]*big.Int) *VotingLayer {
 	threshold := new(big.Int).Mul(totalStake, big.NewInt(VotingThreshold))
 	threshold.Div(threshold, big.NewInt(100))
 
+	voteQuota := make(map[thor.Address]int)
+	cycleSize := 0
+
+	// Calculate quotas more fairly
+	// Each validator has at least 1 quota, and additional quotas are distributed proportionally
+	totalValidators := len(validatorStakes)
+	if totalValidators == 0 {
+		return &VotingLayer{
+			excludedVoter:   thor.Address{},
+			totalVotedStake: big.NewInt(0),
+			totalStake:      totalStake,
+			rounds:          0,
+			maxRounds:       MaxRounds,
+			threshold:       threshold,
+			validatorStakes: validatorStakes,
+			voteQuota:       voteQuota,
+			votesUsed:       make(map[thor.Address]int),
+			cycleSize:       0,
+			cycleVotes:      0,
+		}
+	}
+
+	// Assign 1 base quota to each validator
+	for addr := range validatorStakes {
+		voteQuota[addr] = 1
+		cycleSize++
+	}
+
+	// Distribute additional quotas proportionally to stake
+	// Use a multiplication factor to ensure integer quotas
+	multiplier := big.NewInt(100) // Factor to avoid decimals
+
+	for addr, stake := range validatorStakes {
+		// Calculate additional quotas proportional to stake
+		additional := new(big.Int).Mul(stake, multiplier)
+		additional.Div(additional, totalStake)
+		additionalInt := int(additional.Int64())
+		if additionalInt > 0 {
+			voteQuota[addr] += additionalInt
+			cycleSize += additionalInt
+		}
+	}
+
+	// If there are no additional quotas, ensure at least 2 quotas per validator to allow rotation
+	if cycleSize == totalValidators {
+		for addr := range validatorStakes {
+			voteQuota[addr] = 2
+		}
+		cycleSize = totalValidators * 2
+	}
+
 	return &VotingLayer{
-		excludedVoter:    thor.Address{},
-		totalVotedStake:  big.NewInt(0),
-		totalStake:       totalStake,
-		rounds:           0,
-		maxRounds:        MaxRounds,
-		threshold:        threshold,
-		accumulatedStake: big.NewInt(0),
+		excludedVoter:   thor.Address{},
+		totalVotedStake: big.NewInt(0),
+		totalStake:      totalStake,
+		rounds:          0,
+		maxRounds:       MaxRounds,
+		threshold:       threshold,
+		validatorStakes: validatorStakes,
+		voteQuota:       voteQuota,
+		votesUsed:       make(map[thor.Address]int),
+		cycleSize:       cycleSize,
+		cycleVotes:      0,
 	}
 }
 
-// ShouldAllowVote determines if a voter should be allowed to vote in this round
+// ShouldAllowVote determines if a validator can vote in this round
 func (layer *VotingLayer) ShouldAllowVote(signer thor.Address, weight *big.Int) bool {
 	layer.mu.Lock()
 	defer layer.mu.Unlock()
 
-	// Check if we've reached the maximum rounds
 	if layer.rounds >= layer.maxRounds {
-		logger.Debug("max rounds reached", "rounds", layer.rounds, "max", layer.maxRounds)
 		return false
 	}
-
-	// Check if we've reached the 68% threshold
 	if layer.hasReachedThreshold() {
-		logger.Debug("voting threshold reached", "votedStake", layer.totalVotedStake, "threshold", layer.threshold)
 		return false
 	}
-
-	// Check if voter is excluded (back-to-back prevention)
 	if layer.excludedVoter == signer {
-		logger.Debug("voter excluded (back-to-back)", "signer", signer)
 		return false
 	}
-
-	// Perform deterministic weighted selection
-	if !layer.deterministicSelection(weight) {
-		logger.Debug("voter not selected by deterministic selection", "signer", signer, "weight", weight)
+	// Does it have available quotas in the cycle?
+	quota, ok := layer.voteQuota[signer]
+	if !ok || layer.votesUsed[signer] >= quota {
 		return false
 	}
-
 	return true
 }
 
-// RecordVote records that a voter has voted and updates the layer state
+// RecordVote records the vote and updates the state
 func (layer *VotingLayer) RecordVote(signer thor.Address, weight *big.Int) {
 	layer.mu.Lock()
 	defer layer.mu.Unlock()
 
-	// Update cumulative voted stake
 	layer.totalVotedStake.Add(layer.totalVotedStake, weight)
-
-	// Increment round counter
 	layer.rounds++
-
-	// Exclude this voter from next round (back-to-back prevention)
 	layer.excludedVoter = signer
+	layer.votesUsed[signer]++
+	layer.cycleVotes++
 
-	// Update accumulated stake for deterministic selection
-	layer.accumulatedStake.Add(layer.accumulatedStake, weight)
+	// If the cycle ends, reset quotas
+	if layer.cycleVotes >= layer.cycleSize {
+		for k := range layer.votesUsed {
+			layer.votesUsed[k] = 0
+		}
+		layer.cycleVotes = 0
+	}
+}
 
-	logger.Debug("vote recorded",
-		"signer", signer,
-		"weight", weight,
-		"rounds", layer.rounds,
-		"totalVotedStake", layer.totalVotedStake,
-		"threshold", layer.threshold)
+// Reset resets the state for a new voting cycle
+func (layer *VotingLayer) ResetWithValidators(totalStake *big.Int, validatorStakes map[thor.Address]*big.Int) {
+	layer.mu.Lock()
+	defer layer.mu.Unlock()
+
+	layer.excludedVoter = thor.Address{}
+	layer.totalVotedStake = big.NewInt(0)
+	layer.totalStake = totalStake
+	layer.rounds = 0
+	layer.validatorStakes = validatorStakes
+	layer.voteQuota = make(map[thor.Address]int)
+	layer.votesUsed = make(map[thor.Address]int)
+	layer.cycleSize = 0
+	layer.cycleVotes = 0
+
+	// Calculate quotas more fairly (same logic as NewVotingLayerWithValidators)
+	totalValidators := len(validatorStakes)
+	if totalValidators == 0 {
+		layer.threshold = new(big.Int).Mul(totalStake, big.NewInt(VotingThreshold))
+		layer.threshold.Div(layer.threshold, big.NewInt(100))
+		return
+	}
+
+	// Assign 1 base quota to each validator
+	for addr := range validatorStakes {
+		layer.voteQuota[addr] = 1
+		layer.cycleSize++
+	}
+
+	// Distribute additional quotas proportionally to stake
+	multiplier := big.NewInt(100) // Factor to avoid decimals
+
+	for addr, stake := range validatorStakes {
+		// Calculate additional quotas proportional to stake
+		additional := new(big.Int).Mul(stake, multiplier)
+		additional.Div(additional, totalStake)
+		additionalInt := int(additional.Int64())
+		if additionalInt > 0 {
+			layer.voteQuota[addr] += additionalInt
+			layer.cycleSize += additionalInt
+		}
+	}
+
+	// If there are no additional quotas, ensure at least 2 quotas per validator to allow rotation
+	if layer.cycleSize == totalValidators {
+		for addr := range validatorStakes {
+			layer.voteQuota[addr] = 2
+		}
+		layer.cycleSize = totalValidators * 2
+	}
+
+	layer.threshold = new(big.Int).Mul(totalStake, big.NewInt(VotingThreshold))
+	layer.threshold.Div(layer.threshold, big.NewInt(100))
 }
 
 // hasReachedThreshold checks if we've reached the 68% threshold
 func (layer *VotingLayer) hasReachedThreshold() bool {
 	return layer.totalVotedStake.Cmp(layer.threshold) >= 0
-}
-
-// deterministicSelection performs deterministic weighted selection
-// Uses accumulated stake to ensure fair distribution proportional to stake
-func (layer *VotingLayer) deterministicSelection(weight *big.Int) bool {
-	if weight.Sign() <= 0 {
-		return false
-	}
-
-	// Calculate the target stake for this round
-	// This ensures that validators with more stake get proportionally more opportunities
-	targetStake := new(big.Int).Mul(layer.totalStake, big.NewInt(int64(layer.rounds)))
-	targetStake.Div(targetStake, big.NewInt(100)) // Normalize to percentage
-
-	// Check if this validator should be selected based on accumulated stake
-	// Validators with more stake will be selected more frequently
-	selectionThreshold := new(big.Int).Add(layer.accumulatedStake, weight)
-
-	// If the accumulated stake plus this validator's stake reaches or exceeds the target,
-	// this validator should be selected
-	return selectionThreshold.Cmp(targetStake) >= 0
 }
 
 // GetStats returns current statistics of the layer
@@ -148,22 +227,4 @@ func (layer *VotingLayer) GetStats() (rounds uint32, votedStake *big.Int, thresh
 		new(big.Int).Set(layer.totalVotedStake),
 		new(big.Int).Set(layer.threshold),
 		layer.hasReachedThreshold()
-}
-
-// Reset resets the layer state for a new voting cycle
-func (layer *VotingLayer) Reset(totalStake *big.Int) {
-	layer.mu.Lock()
-	defer layer.mu.Unlock()
-
-	layer.excludedVoter = thor.Address{}
-	layer.totalVotedStake = big.NewInt(0)
-	layer.totalStake = totalStake
-	layer.rounds = 0
-	layer.accumulatedStake = big.NewInt(0)
-
-	// Recalculate threshold
-	layer.threshold = new(big.Int).Mul(totalStake, big.NewInt(VotingThreshold))
-	layer.threshold.Div(layer.threshold, big.NewInt(100))
-
-	logger.Debug("voting layer reset", "totalStake", totalStake, "threshold", layer.threshold)
 }

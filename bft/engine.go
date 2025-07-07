@@ -74,7 +74,7 @@ func NewEngine(repo *chain.Repository, mainDB *muxdb.MuxDB, forkConfig *thor.For
 
 	// Initialize voting layer with initial total stake
 	// We'll get the actual total stake when we first need it
-	engine.votingLayer = NewVotingLayer(big.NewInt(1))
+	engine.votingLayer = NewVotingLayerWithValidators(big.NewInt(1), map[thor.Address]*big.Int{})
 
 	// Restore finalized block, if any
 	if val, err := engine.data.Get(finalizedKey); err != nil {
@@ -315,6 +315,33 @@ func (engine *Engine) ShouldVote(parentID thor.Bytes32) (bool, error) {
 	return true, nil
 }
 
+// Helper to get the map of active validators and their stakes
+func (engine *Engine) getActiveValidatorStakes(header *block.Header) (map[thor.Address]*big.Int, *big.Int, error) {
+	summary, err := engine.repo.GetBlockSummary(header.ParentID())
+	if err != nil {
+		return nil, nil, err
+	}
+	state := engine.stater.NewState(summary.Root())
+	staker := builtin.Staker.Native(state)
+
+	leaderGroup, err := staker.LeaderGroup()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	validatorStakes := make(map[thor.Address]*big.Int)
+	totalStake := big.NewInt(0)
+
+	for _, validation := range leaderGroup {
+		if validation == nil || validation.IsEmpty() {
+			continue
+		}
+		validatorStakes[validation.Master] = new(big.Int).Set(validation.Weight)
+		totalStake.Add(totalStake, validation.Weight)
+	}
+	return validatorStakes, totalStake, nil
+}
+
 // computeState computes the bft state regarding the given block header to the closest checkpoint.
 func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 	if cached, ok := engine.caches.state.Get(header.ID()); ok {
@@ -342,14 +369,20 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 		end = js.checkpoint
 	}
 
-	// Update voting layer with current total stake
-	totalStake, err := engine.getTotalWeight(engine.repo.BestBlockSummary())
+	// Get map of active validators and their stakes
+	validatorStakes, totalStake, err := engine.getActiveValidatorStakes(header)
 	if err != nil {
-		logger.Warn("failed to get total stake for voting layer", "error", err)
-		// Use a reasonable default if we can't get total stake
-		totalStake = big.NewInt(1000000)
+		logger.Warn("failed to get validator stakes for voting layer", "error", err)
+		validatorStakes = map[thor.Address]*big.Int{}
+		totalStake = big.NewInt(1)
 	}
-	engine.votingLayer.Reset(totalStake)
+
+	// Initialize or reset the voting layer
+	if engine.votingLayer == nil {
+		engine.votingLayer = NewVotingLayerWithValidators(totalStake, validatorStakes)
+	} else {
+		engine.votingLayer.ResetWithValidators(totalStake, validatorStakes)
+	}
 
 	h := header
 	for {
@@ -366,40 +399,28 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 		staker := builtin.Staker.Native(state)
 		validator, _, err := staker.LookupMaster(signer)
 		if err != nil {
-			// Error querying validator data - exclude for security
 			logger.Warn("failed to lookup validator", "signer", signer, "error", err)
 			continue
 		}
-
 		if validator == nil {
-			// Validator doesn't exist - exclude from voting
 			logger.Warn("validator not found", "signer", signer)
 			continue
 		}
-
 		if validator.IsEmpty() {
-			// Validator exists but has no stake - exclude from voting
 			logger.Warn("validator has no stake", "signer", signer)
 			continue
 		}
-
-		// Check if voting layer allows this vote
 		if !engine.votingLayer.ShouldAllowVote(signer, validator.Weight) {
 			logger.Debug("voting layer rejected vote", "signer", signer, "weight", validator.Weight)
 			continue
 		}
-
-		// Validator exists, has stake, and voting layer allows the vote
 		logger.Debug("adding validator to voting set", "signer", signer, "weight", validator.Weight)
 		js.AddBlock(signer, h.COM(), validator.Weight)
-
-		// Record the vote in the voting layer
 		engine.votingLayer.RecordVote(signer, validator.Weight)
 
 		if h.Number() <= end {
 			break
 		}
-
 		sum, err = engine.repo.GetBlockSummary(h.ParentID())
 		if err != nil {
 			return nil, err
