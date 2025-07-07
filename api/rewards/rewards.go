@@ -10,11 +10,12 @@ import (
 	"math/big"
 	"net/http"
 
+	"github.com/vechain/thor/v2/api"
+
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/builtin"
@@ -134,7 +135,7 @@ func (r *Rewards) handleGetBlockRewards(w http.ResponseWriter, req *http.Request
 
 	reward := big.NewInt(0).Sub(issuedAtBlock, issuedBeforeBlock)
 	hexOrDecimalReward := math.HexOrDecimal256(*reward)
-	return utils.WriteJSON(w, &blocks.JSONBlockReward{
+	return utils.WriteJSON(w, &api.JSONBlockReward{
 		Reward:      &hexOrDecimalReward,
 		Master:      &signer,
 		ValidatorID: &validationID,

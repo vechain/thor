@@ -11,10 +11,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/vechain/thor/v2/api"
+
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/testchain"
@@ -59,7 +60,7 @@ func TestGetBlockRewards(t *testing.T) {
 		require.Equal(t, 200, statusCode)
 		require.NotNil(t, res)
 
-		var blockReward blocks.JSONBlockReward
+		var blockReward api.JSONBlockReward
 		err = json.Unmarshal(res, &blockReward)
 		require.NoError(t, err)
 
@@ -104,7 +105,7 @@ func TestBlockRewardCalculation(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 200, statusCode)
 
-		var blockReward blocks.JSONBlockReward
+		var blockReward api.JSONBlockReward
 		err = json.Unmarshal(res, &blockReward)
 		require.NoError(t, err)
 
@@ -126,7 +127,7 @@ func TestRewardResponseFormat(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 200, statusCode)
 
-		var blockReward blocks.JSONBlockReward
+		var blockReward api.JSONBlockReward
 		err = json.Unmarshal(res, &blockReward)
 		require.NoError(t, err)
 

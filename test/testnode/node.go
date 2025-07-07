@@ -7,14 +7,24 @@ package testnode
 
 import (
 	"errors"
+	"net/http"
 	"net/http/httptest"
-	"sync/atomic"
+	"time"
 
-	"github.com/vechain/thor/v2/api"
-	"github.com/vechain/thor/v2/api/fees"
-	"github.com/vechain/thor/v2/api/transactions"
-	"github.com/vechain/thor/v2/bft"
+	node2 "github.com/vechain/thor/v2/api/node"
 	"github.com/vechain/thor/v2/cmd/thor/solo"
+
+	"github.com/gorilla/mux"
+	"github.com/vechain/thor/v2/api/accounts"
+	"github.com/vechain/thor/v2/api/blocks"
+	"github.com/vechain/thor/v2/api/debug"
+	"github.com/vechain/thor/v2/api/events"
+	"github.com/vechain/thor/v2/api/fees"
+	"github.com/vechain/thor/v2/api/rewards"
+	"github.com/vechain/thor/v2/api/subscriptions"
+	"github.com/vechain/thor/v2/api/transactions"
+	"github.com/vechain/thor/v2/api/transfers"
+	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/tx"
@@ -61,35 +71,41 @@ func (n *node) Start() error {
 		chain:     n.chain,
 	}
 
-	apiHandler, apiCloser := api.New(
-		n.Chain().Repo(),
-		n.Chain().Stater(),
-		n.txPool,
-		n.Chain().LogDB(),
-		bft.NewMockedEngine(n.Chain().Repo().GenesisBlock().Header().ID()),
-		&solo.Communicator{},
-		n.Chain().GetForkConfig(),
-		api.Config{
-			AllowedOrigins: "*",
-			BacktraceLimit: 100,
-			CallGasLimit:   40_000_000,
-			SkipLogs:       false,
-			Fees: fees.Config{
-				APIBacktraceLimit:          100,
-				FixedCacheSize:             1024,
-				PriorityIncreasePercentage: 5,
-			},
-			EnableReqLogger:  &atomic.Bool{},
-			LogsLimit:        100,
-			AllowedTracers:   []string{"all"},
-			EnableDeprecated: true,
-			SoloMode:         true,
-			EnableTxpool:     true,
-		},
-	)
+	repo := n.chain.Repo()
+	stater := n.chain.Stater()
+	forkConfig := n.chain.GetForkConfig()
+	logDB := n.chain.LogDB()
+	bft := bft.NewMockedEngine(repo.GenesisBlock().Header().ID())
 
-	n.apiServer = httptest.NewServer(apiHandler)
-	n.apiServerCloser = apiCloser
+	router := mux.NewRouter()
+
+	accounts.New(repo, stater, 40_000_000, forkConfig, bft, true).Mount(router, "/accounts")
+	events.New(repo, logDB, 1000).Mount(router, "/logs/event")
+	transfers.New(repo, logDB, 1000).Mount(router, "/logs/transfer")
+	blocks.New(repo, bft).Mount(router, "/blocks")
+	rewards.New(repo, bft, stater, forkConfig).Mount(router, "/rewards")
+	transactions.New(repo, n.txPool).Mount(router, "/transactions")
+	debug.New(repo, stater, forkConfig, bft,
+		40_000_000,
+		true,
+		[]string{"all"},
+		true,
+	).Mount(router, "/debug")
+	fees.New(repo, bft, forkConfig, stater, fees.Config{
+		APIBacktraceLimit:          1000,
+		PriorityIncreasePercentage: 5,
+		FixedCacheSize:             1000,
+	}).Mount(router, "/fees")
+	node2.New(&solo.Communicator{}, n.txPool, true).Mount(router, "/node")
+	subs := subscriptions.New(repo, []string{"*"}, 1000, n.txPool, true)
+	subs.Mount(router, "/subscriptions")
+
+	srv := &http.Server{Handler: router, ReadHeaderTimeout: time.Second, ReadTimeout: 5 * time.Second}
+	n.apiServer = httptest.NewServer(srv.Handler)
+	n.apiServerCloser = func() {
+		subs.Close()
+		srv.Close()
+	}
 	return nil
 }
 

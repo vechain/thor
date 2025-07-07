@@ -9,8 +9,9 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/vechain/thor/v2/api"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/vechain/thor/v2/api/events"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
@@ -60,10 +61,10 @@ func (p *Params) Get(key thor.Bytes32) (*big.Int, error) {
 type SetEvent struct {
 	Key   thor.Bytes32
 	Value *big.Int
-	Log   events.FilteredEvent
+	Log   api.FilteredEvent
 }
 
-func (p *Params) FilterSet(eventsRange *events.Range, opts *events.Options, order logdb.Order) ([]SetEvent, error) {
+func (p *Params) FilterSet(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]SetEvent, error) {
 	event, ok := p.contract.ABI().Events["Set"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")

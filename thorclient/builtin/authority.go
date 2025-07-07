@@ -8,8 +8,9 @@ package builtin
 import (
 	"fmt"
 
+	"github.com/vechain/thor/v2/api"
+
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/vechain/thor/v2/api/events"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
@@ -114,11 +115,11 @@ func (a *Authority) Revoke(nodeMaster thor.Address) bind.MethodBuilder {
 type CandidateEvent struct {
 	NodeMaster thor.Address
 	Action     thor.Bytes32
-	Log        events.FilteredEvent
+	Log        api.FilteredEvent
 }
 
 // FilterCandidate filters Candidate events within the given block range
-func (a *Authority) FilterCandidate(eventsRange *events.Range, opts *events.Options, order logdb.Order) ([]CandidateEvent, error) {
+func (a *Authority) FilterCandidate(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]CandidateEvent, error) {
 	event, ok := a.contract.ABI().Events["Candidate"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")

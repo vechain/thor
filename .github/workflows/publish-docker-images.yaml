@@ -28,14 +28,14 @@ on:
         type: boolean
         default: false
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   build-and-push-image:
     name: Build and Push Docker Image
     runs-on: ubuntu-22.04
-
-    permissions:
-      contents: read
-      packages: write
 
     environment: ${{ inputs.environment }}
     steps:

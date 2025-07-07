@@ -12,10 +12,10 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/vechain/thor/v2/api"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/vechain/thor/v2/api/accounts"
-	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/tx"
@@ -33,7 +33,7 @@ type SendBuilder interface {
 	Submit() (*tx.Transaction, error)
 
 	// SubmitAndConfirm sends the transaction and waits for the receipt.
-	SubmitAndConfirm(ctx context.Context) (*transactions.Receipt, *tx.Transaction, error)
+	SubmitAndConfirm(ctx context.Context) (*api.Receipt, *tx.Transaction, error)
 }
 
 // TxOptions to override default transaction parameters when building or sending a transaction.
@@ -111,9 +111,9 @@ func (b *sendBuilder) Submit() (*tx.Transaction, error) {
 		}
 		caller := b.signer.Address()
 		simulation, err := b.op.contract.client.InspectClauses(
-			&accounts.BatchCallData{
+			&api.BatchCallData{
 				Caller:  &caller,
-				Clauses: []accounts.Clause{{To: b.op.contract.addr, Data: hexutil.Encode(clause.Data()), Value: (*math.HexOrDecimal256)(clause.Value())}},
+				Clauses: api.Clauses{{To: b.op.contract.addr, Data: hexutil.Encode(clause.Data()), Value: (*math.HexOrDecimal256)(clause.Value())}},
 			}, thorclient.Revision("best"))
 		if err != nil {
 			return nil, fmt.Errorf("simulation failed: %w", err)
@@ -175,7 +175,7 @@ func (b *sendBuilder) Submit() (*tx.Transaction, error) {
 }
 
 // SubmitAndConfirm implements SendBuilder.Receipt.
-func (b *sendBuilder) SubmitAndConfirm(ctx context.Context) (*transactions.Receipt, *tx.Transaction, error) {
+func (b *sendBuilder) SubmitAndConfirm(ctx context.Context) (*api.Receipt, *tx.Transaction, error) {
 	transaction, err := b.Submit()
 	if err != nil {
 		return nil, nil, err

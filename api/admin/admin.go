@@ -18,7 +18,7 @@ import (
 	healthAPI "github.com/vechain/thor/v2/api/admin/health"
 )
 
-func New(logLevel *slog.LevelVar, health *healthAPI.Health, apiLogsToggle *atomic.Bool) http.HandlerFunc {
+func NewHTTPHandler(logLevel *slog.LevelVar, health *healthAPI.Health, apiLogsToggle *atomic.Bool) http.HandlerFunc {
 	router := mux.NewRouter()
 	subRouter := router.PathPrefix("/admin").Subrouter()
 
@@ -27,6 +27,5 @@ func New(logLevel *slog.LevelVar, health *healthAPI.Health, apiLogsToggle *atomi
 	apilogs.New(apiLogsToggle).Mount(subRouter, "/apilogs")
 
 	handler := handlers.CompressHandler(router)
-
 	return handler.ServeHTTP
 }

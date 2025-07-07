@@ -10,11 +10,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vechain/thor/v2/api"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vechain/thor/v2/api/events"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/bindcontract"
 	"github.com/vechain/thor/v2/test/testchain"
@@ -169,7 +170,7 @@ func TestContract_Filter(t *testing.T) {
 
 		// Filter events
 		events, err := env.bindContract.FilterEvent("ValueChanged").
-			InRange(&events.Range{
+			InRange(&api.Range{
 				From: ptr(uint64(receipt.Meta.BlockNumber)),
 				To:   ptr(uint64(receipt.Meta.BlockNumber)),
 			}).

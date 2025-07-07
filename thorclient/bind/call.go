@@ -9,9 +9,10 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/vechain/thor/v2/api"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 )
@@ -28,7 +29,7 @@ type CallBuilder interface {
 	ExecuteInto(result any) error
 
 	// Execute performs the call and returns the raw result.
-	Execute() (*accounts.CallResult, error)
+	Execute() (*api.CallResult, error)
 }
 
 // callBuilder is the concrete implementation of CallBuilder.
@@ -71,16 +72,16 @@ func (b *callBuilder) ExecuteInto(result any) error {
 }
 
 // Execute implements CallBuilder.Execute.
-func (b *callBuilder) Execute() (*accounts.CallResult, error) {
+func (b *callBuilder) Execute() (*api.CallResult, error) {
 	// Build the clause
 	clause, err := b.op.Clause()
 	if err != nil {
 		return nil, err
 	}
 
-	body := &accounts.BatchCallData{
+	body := &api.BatchCallData{
 		Caller: b.caller,
-		Clauses: []accounts.Clause{
+		Clauses: api.Clauses{
 			{
 				To:    b.op.contract.addr,
 				Data:  hexutil.Encode(clause.Data()),
@@ -89,7 +90,7 @@ func (b *callBuilder) Execute() (*accounts.CallResult, error) {
 		},
 	}
 
-	var res []*accounts.CallResult
+	var res []*api.CallResult
 	res, err = b.op.contract.client.InspectClauses(body, thorclient.Revision(b.rev))
 	if err != nil {
 		return nil, err

@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package events
+package api
 
 import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -13,25 +13,6 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-type LogMeta struct {
-	BlockID        thor.Bytes32 `json:"blockID"`
-	BlockNumber    uint32       `json:"blockNumber"`
-	BlockTimestamp uint64       `json:"blockTimestamp"`
-	TxID           thor.Bytes32 `json:"txID"`
-	TxOrigin       thor.Address `json:"txOrigin"`
-	ClauseIndex    uint32       `json:"clauseIndex"`
-	TxIndex        *uint32      `json:"txIndex,omitempty"`
-	LogIndex       *uint32      `json:"logIndex,omitempty"`
-}
-
-type TopicSet struct {
-	Topic0 *thor.Bytes32 `json:"topic0"`
-	Topic1 *thor.Bytes32 `json:"topic1"`
-	Topic2 *thor.Bytes32 `json:"topic2"`
-	Topic3 *thor.Bytes32 `json:"topic3"`
-	Topic4 *thor.Bytes32 `json:"topic4"`
-}
-
 // FilteredEvent only comes from one contract
 type FilteredEvent struct {
 	Address thor.Address    `json:"address"`
@@ -40,8 +21,8 @@ type FilteredEvent struct {
 	Meta    LogMeta         `json:"meta"`
 }
 
-// convert a logdb.Event into a json format Event
-func convertEvent(event *logdb.Event, addIndexes bool) *FilteredEvent {
+// Convert a logdb.Event into a json format Event
+func ConvertEvent(event *logdb.Event, addIndexes bool) *FilteredEvent {
 	fe := &FilteredEvent{
 		Address: event.Address,
 		Data:    hexutil.Encode(event.Data),
@@ -69,6 +50,14 @@ func convertEvent(event *logdb.Event, addIndexes bool) *FilteredEvent {
 	return fe
 }
 
+type TopicSet struct {
+	Topic0 *thor.Bytes32 `json:"topic0"`
+	Topic1 *thor.Bytes32 `json:"topic1"`
+	Topic2 *thor.Bytes32 `json:"topic2"`
+	Topic3 *thor.Bytes32 `json:"topic3"`
+	Topic4 *thor.Bytes32 `json:"topic4"`
+}
+
 type EventCriteria struct {
 	Address *thor.Address `json:"address"`
 	TopicSet
@@ -87,7 +76,7 @@ type EventFilter struct {
 	Order       logdb.Order      `json:"order,omitempty"`   // default asc
 }
 
-func convertEventFilter(chain *chain.Chain, filter *EventFilter) (*logdb.EventFilter, error) {
+func ConvertEventFilter(chain *chain.Chain, filter *EventFilter) (*logdb.EventFilter, error) {
 	rng, err := ConvertRange(chain, filter.Range)
 	if err != nil {
 		return nil, err
