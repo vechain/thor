@@ -24,7 +24,7 @@ func CalcBaseFee(parent *block.Header, forkConfig *thor.ForkConfig) *big.Int {
 	}
 
 	var (
-		parentGasTarget          = parent.GasLimit() * thor.ElasticityMultiplierNum / thor.ElasticityMultiplierDen
+		parentGasTarget          = parent.GasLimit() * thor.GasTargetPercentage / 100
 		parentGasTargetBig       = new(big.Int).SetUint64(parentGasTarget)
 		baseFeeChangeDenominator = new(big.Int).SetUint64(thor.BaseFeeChangeDenominator)
 	)

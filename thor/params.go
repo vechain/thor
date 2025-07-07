@@ -44,8 +44,7 @@ const (
 	SeederInterval     = 8640 // blocks between two seeder epochs.
 	CheckpointInterval = 180  // blocks between two bft checkpoints.
 
-	ElasticityMultiplierNum  = 3                  // numerator value to determines the target gas limit as a fraction of the maximum block gas limit
-	ElasticityMultiplierDen  = 4                  // denominator value to determines the target gas limit as a fraction of the maximum block gas limit
+	GasTargetPercentage      = 75                 // percentage of the block gas limit to determine the gas target
 	InitialBaseFee           = 10_000_000_000_000 // 10^13 wei, 0.00001 VTHO
 	BaseFeeChangeDenominator = 8                  // determines the percentage change in the base fee per block based on network utilization
 )
