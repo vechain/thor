@@ -10,6 +10,7 @@ import (
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/builtin/authority"
 	"github.com/vechain/thor/v2/builtin/energy"
+	"github.com/vechain/thor/v2/builtin/gascharger"
 	"github.com/vechain/thor/v2/builtin/gen"
 	"github.com/vechain/thor/v2/builtin/params"
 	"github.com/vechain/thor/v2/builtin/prototype"
@@ -75,8 +76,12 @@ func (p *prototypeContract) Events() *abi.ABI {
 	return abi
 }
 
+func (s *stakerContract) NativeMetered(state *state.State, charger *gascharger.Charger) *staker.Staker {
+	return staker.New(s.Address, state, Params.Native(state), charger)
+}
+
 func (s *stakerContract) Native(state *state.State) *staker.Staker {
-	return staker.New(s.Address, state, Params.Native(state))
+	return s.NativeMetered(state, nil)
 }
 
 func (s *stakerContract) Events() *abi.ABI {

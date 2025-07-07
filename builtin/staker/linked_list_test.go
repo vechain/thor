@@ -22,7 +22,7 @@ func Test_LinkedList_Remove_NonExistent(t *testing.T) {
 	db := muxdb.NewMem()
 	st := state.New(db, trie.Root{})
 	addr := thor.BytesToAddress([]byte("test"))
-	linkedList := newLinkedList(newStorage(addr, st), thor.Bytes32{0x1}, thor.Bytes32{0x2}, thor.Bytes32{0x3})
+	linkedList := newLinkedList(newStorage(addr, st, nil), thor.Bytes32{0x1}, thor.Bytes32{0x2}, thor.Bytes32{0x3})
 
 	validator1ID := datagen.RandomHash()
 	validator1 := &Validation{
@@ -60,7 +60,7 @@ func Test_LinkedList_Remove(t *testing.T) {
 	db := muxdb.NewMem()
 	st := state.New(db, trie.Root{})
 	addr := thor.BytesToAddress([]byte("test"))
-	storage := newStorage(addr, st)
+	storage := newStorage(addr, st, nil)
 	linkedList := newLinkedList(storage, thor.Bytes32{0x1}, thor.Bytes32{0x2}, thor.Bytes32{0x3})
 
 	validator1ID := datagen.RandomHash()
@@ -123,7 +123,7 @@ func Test_LinkedList_Iter(t *testing.T) {
 	db := muxdb.NewMem()
 	st := state.New(db, trie.Root{})
 	addr := thor.BytesToAddress([]byte("test"))
-	storage := newStorage(addr, st)
+	storage := newStorage(addr, st, nil)
 	linkedList := newLinkedList(storage, thor.Bytes32{0x1}, thor.Bytes32{0x2}, thor.Bytes32{0x3})
 
 	// Create 3 validators
