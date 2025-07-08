@@ -75,12 +75,12 @@ func (n *Node) packerLoop(ctx context.Context) {
 			if uint64(time.Now().Unix())+thor.BlockInterval/2 > flow.When() {
 				// time to pack block
 				// blockInterval/2 early to allow more time for processing txs
-				if err := n.pack(flow); err != nil {
+				if err := n.pack(flow, false); err != nil {
 					logger.Error("failed to pack block", "err", err)
 				}
 
 				if flow.Number() == 10 {
-					if err := n.pack(flow); err != nil {
+					if err := n.pack(flow, true); err != nil {
 						logger.Error("failed to pack block", "err", err)
 					}
 				}
@@ -110,10 +110,10 @@ func (n *Node) packerLoop(ctx context.Context) {
 	}
 }
 
-func (n *Node) pack(flow *packer.Flow) (err error) {
+func (n *Node) pack(flow *packer.Flow, duplicate bool) (err error) {
 	txs := n.txPool.Executables()
 	println("Number of txs ====1", len(txs))
-	if flow.Number() == uint32(10) {
+	if flow.Number() == uint32(10) && duplicate {
 		txs = make(tx.Transactions, 0)
 	}
 	println("Number of txs ====2", len(txs))
