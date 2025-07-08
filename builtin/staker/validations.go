@@ -281,7 +281,7 @@ func (v *validations) UpdateAutoRenew(endorsor thor.Address, id thor.Bytes32, au
 
 	if validator.Status == StatusActive {
 		if autoRenew {
-			if err := v.storage.SetExitEpoch(*validator.ExitBlock, id); err != nil {
+			if err := v.storage.SetExitEpoch(*validator.ExitBlock, thor.Bytes32{}); err != nil {
 				return err
 			}
 			validator.ExitBlock = nil

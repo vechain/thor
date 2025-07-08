@@ -97,9 +97,10 @@ func (v *Validation) Renew() *Renewal {
 	v.CompleteIterations++
 
 	return &Renewal{
-		ChangeTVL:      changeTVL,
-		ChangeWeight:   changeWeight,
-		QueuedDecrease: queuedDecrease,
+		ChangeTVL:            changeTVL,
+		ChangeWeight:         changeWeight,
+		QueuedDecrease:       queuedDecrease,
+		QueuedDecreaseWeight: big.NewInt(0).Mul(queuedDecrease, validatorWeightMultiplier),
 	}
 }
 
@@ -208,6 +209,7 @@ func (a *Aggregation) Renew() *Renewal {
 	changeTVL := big.NewInt(0)
 	changeWeight := big.NewInt(0)
 	queuedDecrease := big.NewInt(0)
+	queuedDecreaseWeight := big.NewInt(0).Add(a.PendingRecurringWeight, a.PendingOneTimeWeight)
 
 	// Move CurrentOneTimeVET => WithdrawableVET
 	a.WithdrawableVET = big.NewInt(0).Add(a.WithdrawableVET, a.CurrentOneTimeVET)
@@ -235,9 +237,10 @@ func (a *Aggregation) Renew() *Renewal {
 	a.PendingOneTimeWeight = big.NewInt(0)
 
 	return &Renewal{
-		ChangeTVL:      changeTVL,
-		ChangeWeight:   changeWeight,
-		QueuedDecrease: queuedDecrease,
+		ChangeTVL:            changeTVL,
+		ChangeWeight:         changeWeight,
+		QueuedDecrease:       queuedDecrease,
+		QueuedDecreaseWeight: queuedDecreaseWeight,
 	}
 }
 
@@ -272,7 +275,8 @@ func (a *Aggregation) Exit() (*big.Int, *big.Int, *big.Int, *big.Int) {
 }
 
 type Renewal struct {
-	ChangeTVL      *big.Int
-	ChangeWeight   *big.Int
-	QueuedDecrease *big.Int
+	ChangeTVL            *big.Int
+	ChangeWeight         *big.Int
+	QueuedDecrease       *big.Int
+	QueuedDecreaseWeight *big.Int
 }
