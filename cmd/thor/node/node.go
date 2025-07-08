@@ -469,6 +469,13 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		return false, err
 	}
 	metricBlockProcessedCount().AddWithLabel(1, map[string]string{"type": "received", "success": "true"})
+	ev := n.repo.GetDoubleSigEvidence()
+	if ev != nil {
+		println("no evidences in the cache =======")
+	} else {
+		println("evidence found in the cache =======")
+	}
+
 	return *isTrunk, nil
 }
 

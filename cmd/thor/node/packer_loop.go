@@ -233,6 +233,15 @@ func (n *Node) pack(flow *packer.Flow, duplicate bool) (err error) {
 			logger.Trace("bandwidth updated", "gps", v)
 		}
 
+		if evidence != nil {
+			blockID := thor.BytesToBytes32((*evidence)[0])
+			duplBlk, err := n.repo.GetBlockSummary(blockID)
+			if err != nil {
+				return err
+			}
+			n.repo.RecordDoubleSigProcessed(duplBlk.Header.Number())
+		}
+
 		metricBlockProcessedTxs().SetWithLabel(int64(len(receipts)), map[string]string{"type": "proposed"})
 		metricBlockProcessedGas().SetWithLabel(int64(newBlock.Header().GasUsed()), map[string]string{"type": "proposed"})
 		metricBlockProcessedDuration().Observe(time.Duration(realElapsed).Milliseconds())

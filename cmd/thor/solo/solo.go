@@ -206,6 +206,15 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 		"et", fmt.Sprintf("%v|%v", common.PrettyDuration(execElapsed), common.PrettyDuration(commitElapsed)),
 		"id", fmt.Sprintf("[#%v…%x]", block.Number(blockID), blockID[28:]),
 	)
+
+	if evidence != nil {
+		blockID := thor.BytesToBytes32((*evidence)[0])
+		duplBlk, err := s.repo.GetBlockSummary(blockID)
+		if err != nil {
+			return err
+		}
+		s.repo.RecordDoubleSigProcessed(duplBlk.Header.Number())
+	}
 	logger.Debug(b.String())
 
 	return nil
