@@ -11,7 +11,7 @@ import (
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/consensus/fork"
+	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/poa"
 	"github.com/vechain/thor/v2/runtime"
@@ -86,12 +86,6 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (*Flo
 		builtin.Energy.Native(st, parent.Header.Timestamp()).StopEnergyGrowth()
 	}
 
-	var baseFee *big.Int
-
-	if parent.Header.Number()+1 >= p.forkConfig.GALACTICA {
-		baseFee = fork.CalcBaseFee(p.forkConfig, parent.Header)
-	}
-
 	rt := runtime.New(
 		p.repo.NewChain(parent.Header.ID()),
 		st,
@@ -102,7 +96,7 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (*Flo
 			Time:        newBlockTime,
 			GasLimit:    p.gasLimit(parent.Header.GasLimit()),
 			TotalScore:  parent.Header.TotalScore() + score,
-			BaseFee:     baseFee,
+			BaseFee:     galactica.CalcBaseFee(parent.Header, p.forkConfig),
 		},
 		p.forkConfig)
 
@@ -159,7 +153,7 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 
 	var baseFee *big.Int
 	if parent.Header.Number()+1 >= p.forkConfig.GALACTICA {
-		baseFee = fork.CalcBaseFee(p.forkConfig, parent.Header)
+		baseFee = galactica.CalcBaseFee(parent.Header, p.forkConfig)
 	}
 
 	rt := runtime.New(

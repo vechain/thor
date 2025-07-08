@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package transactions
+package api
 
 import (
 	"fmt"
@@ -15,22 +15,12 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-// Clause for json marshal
-type Clause struct {
-	To    *thor.Address        `json:"to"`
-	Value math.HexOrDecimal256 `json:"value"`
-	Data  string               `json:"data"`
-}
-
-// Clauses array of clauses.
-type Clauses []Clause
-
 // ConvertClause convert a raw clause into a json format clause
-func convertClause(c *tx.Clause) Clause {
+func ConvertClause(c *tx.Clause) Clause {
 	return Clause{
-		c.To(),
-		math.HexOrDecimal256(*c.Value()),
-		hexutil.Encode(c.Data()),
+		To:    c.To(),
+		Value: (*math.HexOrDecimal256)(c.Value()),
+		Data:  hexutil.Encode(c.Data()),
 	}
 }
 
@@ -48,7 +38,7 @@ type RawTx struct {
 	Raw string `json:"raw"`
 }
 
-func (rtx *RawTx) decode() (*tx.Transaction, error) {
+func (rtx *RawTx) Decode() (*tx.Transaction, error) {
 	data, err := hexutil.Decode(rtx.Raw)
 	if err != nil {
 		return nil, err
@@ -114,7 +104,7 @@ type Transfer struct {
 }
 
 // ConvertReceipt convert a raw clause into a jason format clause
-func convertReceipt(txReceipt *tx.Receipt, header *block.Header, tx *tx.Transaction) (*Receipt, error) {
+func ConvertReceipt(txReceipt *tx.Receipt, header *block.Header, tx *tx.Transaction) (*Receipt, error) {
 	reward := math.HexOrDecimal256(*txReceipt.Reward)
 	paid := math.HexOrDecimal256(*txReceipt.Paid)
 	origin, err := tx.Origin()

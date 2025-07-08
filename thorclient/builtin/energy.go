@@ -10,8 +10,9 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/vechain/thor/v2/api"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/vechain/thor/v2/api/events"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
@@ -135,11 +136,11 @@ type TransferEvent struct {
 	From  thor.Address
 	To    thor.Address
 	Value *big.Int
-	Log   events.FilteredEvent
+	Log   api.FilteredEvent
 }
 
 // FilterTransfer filters Transfer events for the specified range and options.
-func (e *Energy) FilterTransfer(eventsRange *events.Range, opts *events.Options, order logdb.Order) ([]TransferEvent, error) {
+func (e *Energy) FilterTransfer(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]TransferEvent, error) {
 	event, ok := e.contract.ABI().Events["Transfer"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")
@@ -184,11 +185,11 @@ type ApprovalEvent struct {
 	Owner   thor.Address
 	Spender thor.Address
 	Value   *big.Int
-	Log     events.FilteredEvent
+	Log     api.FilteredEvent
 }
 
 // FilterApproval filters Approval events for the specified range and options.
-func (e *Energy) FilterApproval(eventsRange *events.Range, opts *events.Options, order logdb.Order) ([]ApprovalEvent, error) {
+func (e *Energy) FilterApproval(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]ApprovalEvent, error) {
 	event, ok := e.contract.ABI().Events["Approval"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")

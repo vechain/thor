@@ -13,10 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vechain/thor/v2/thor"
-
 	"github.com/gorilla/websocket"
-	"github.com/vechain/thor/v2/api/subscriptions"
+	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/common"
 )
 
@@ -55,7 +54,7 @@ func NewClient(url string) (*Client, error) {
 
 // SubscribeEvents subscribes to blockchain events based on the provided query.
 // It returns a Subscription that streams event messages or an error if the connection fails.
-func (c *Client) SubscribeEvents(pos string, filter *subscriptions.EventFilter) (*common.Subscription[*subscriptions.EventMessage], error) {
+func (c *Client) SubscribeEvents(pos string, filter *api.SubscriptionEventFilter) (*common.Subscription[*api.EventMessage], error) {
 	queryValues := &url.Values{}
 	queryValues.Add("pos", pos)
 	if filter != nil {
@@ -83,12 +82,12 @@ func (c *Client) SubscribeEvents(pos string, filter *subscriptions.EventFilter) 
 		return nil, fmt.Errorf("unable to connect - %w", err)
 	}
 
-	return subscribe[subscriptions.EventMessage](conn), nil
+	return subscribe[api.EventMessage](conn), nil
 }
 
 // SubscribeBlocks subscribes to block updates based on the provided query.
 // It returns a Subscription that streams block messages or an error if the connection fails.
-func (c *Client) SubscribeBlocks(pos string) (*common.Subscription[*subscriptions.BlockMessage], error) {
+func (c *Client) SubscribeBlocks(pos string) (*common.Subscription[*api.BlockMessage], error) {
 	queryValues := &url.Values{}
 	queryValues.Add("pos", pos)
 	conn, _, err := c.Connect("/subscriptions/block", queryValues)
@@ -96,12 +95,12 @@ func (c *Client) SubscribeBlocks(pos string) (*common.Subscription[*subscription
 		return nil, fmt.Errorf("unable to connect - %w", err)
 	}
 
-	return subscribe[subscriptions.BlockMessage](conn), nil
+	return subscribe[api.BlockMessage](conn), nil
 }
 
 // SubscribeTransfers subscribes to transfer events based on the provided query.
 // It returns a Subscription that streams transfer messages or an error if the connection fails.
-func (c *Client) SubscribeTransfers(pos string, filter *subscriptions.TransferFilter) (*common.Subscription[*subscriptions.TransferMessage], error) {
+func (c *Client) SubscribeTransfers(pos string, filter *api.SubscriptionTransferFilter) (*common.Subscription[*api.TransferMessage], error) {
 	queryValues := &url.Values{}
 	queryValues.Add("pos", pos)
 	if filter != nil {
@@ -120,12 +119,12 @@ func (c *Client) SubscribeTransfers(pos string, filter *subscriptions.TransferFi
 		return nil, fmt.Errorf("unable to connect - %w", err)
 	}
 
-	return subscribe[subscriptions.TransferMessage](conn), nil
+	return subscribe[api.TransferMessage](conn), nil
 }
 
 // SubscribeTxPool subscribes to pending transaction pool updates based on the provided query.
 // It returns a Subscription that streams pending transaction messages or an error if the connection fails.
-func (c *Client) SubscribeTxPool(txID *thor.Bytes32) (*common.Subscription[*subscriptions.PendingTxIDMessage], error) {
+func (c *Client) SubscribeTxPool(txID *thor.Bytes32) (*common.Subscription[*api.PendingTxIDMessage], error) {
 	queryValues := &url.Values{}
 	if txID != nil {
 		queryValues.Add("id", txID.String())
@@ -136,12 +135,12 @@ func (c *Client) SubscribeTxPool(txID *thor.Bytes32) (*common.Subscription[*subs
 		return nil, fmt.Errorf("unable to connect - %w", err)
 	}
 
-	return subscribe[subscriptions.PendingTxIDMessage](conn), nil
+	return subscribe[api.PendingTxIDMessage](conn), nil
 }
 
 // SubscribeBeats2 subscribes to Beat2 messages based on the provided query.
 // It returns a Subscription that streams Beat2 messages or an error if the connection fails.
-func (c *Client) SubscribeBeats2(pos string) (*common.Subscription[*subscriptions.Beat2Message], error) {
+func (c *Client) SubscribeBeats2(pos string) (*common.Subscription[*api.Beat2Message], error) {
 	queryValues := &url.Values{}
 	queryValues.Add("pos", pos)
 	conn, _, err := c.Connect("/subscriptions/beat2", queryValues)
@@ -149,7 +148,7 @@ func (c *Client) SubscribeBeats2(pos string) (*common.Subscription[*subscription
 		return nil, fmt.Errorf("unable to connect - %w", err)
 	}
 
-	return subscribe[subscriptions.Beat2Message](conn), nil
+	return subscribe[api.Beat2Message](conn), nil
 }
 
 // subscribe starts a new subscription over the given WebSocket connection.

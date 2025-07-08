@@ -33,6 +33,13 @@ jobs:
       contents: read
     secrets: inherit
 
+  run-rosetta-tests:
+    name: Rosetta Tests
+    uses: ./.github/workflows/test-rosetta.yaml
+    with:
+      thor_repo: https://github.com/${{ github.event.pull_request.head.repo.full_name }}.git
+      thor_version: ${{ github.event.pull_request.head.sha }}
+
   # This doesn't publish the image, it just tests the publishing workflow (build the image / tags / labels)
   test-docker-publish:
     name: Test Docker Publish
