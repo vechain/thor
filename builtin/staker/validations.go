@@ -32,27 +32,10 @@ type validations struct {
 }
 
 func newValidations(storage *storage) *validations {
-	lowStakingPeriod := uint32(360) * 24 * 7
-	if num, err := solidity.NewUint256(storage.Address(), storage.State(), slotLowStakingPeriod).Get(); err == nil {
-		numUint64 := num.Uint64()
-		if numUint64 != 0 {
-			lowStakingPeriod = uint32(numUint64)
-		}
-	}
-	mediumStakingPeriod := uint32(360) * 24 * 15
-	if num, err := solidity.NewUint256(storage.Address(), storage.State(), slotMediumStakingPeriod).Get(); err == nil {
-		numUint64 := num.Uint64()
-		if numUint64 != 0 {
-			mediumStakingPeriod = uint32(numUint64)
-		}
-	}
-	highStakingPeriod := uint32(360) * 24 * 30
-	if num, err := solidity.NewUint256(storage.Address(), storage.State(), slotHighStakingPeriod).Get(); err == nil {
-		numUint64 := num.Uint64()
-		if numUint64 != 0 {
-			highStakingPeriod = uint32(numUint64)
-		}
-	}
+	// debug overrides for testing
+	storage.debugOverride(&lowStakingPeriod, slotLowStakingPeriod)
+	storage.debugOverride(&mediumStakingPeriod, slotMediumStakingPeriod)
+	storage.debugOverride(&highStakingPeriod, slotHighStakingPeriod)
 
 	return &validations{
 		storage:             storage,
