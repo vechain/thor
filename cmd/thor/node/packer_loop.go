@@ -167,7 +167,7 @@ func (n *Node) pack(flow *packer.Flow, duplicate bool) (err error) {
 		// pack the new block
 		println("Requesting double signing evidence")
 		evidence := n.repo.GetDoubleSigEvidence()
-		newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey, uint32(len(conflicts)), false, evidence)
+		newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey, uint32(len(conflicts)), shouldVote, evidence)
 		if err != nil {
 			return errors.Wrap(err, "failed to pack block")
 		}
