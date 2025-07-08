@@ -75,7 +75,7 @@ func newStaker(t *testing.T, amount int, maxValidators int64, initialise bool) (
 		for _, key := range keys {
 			stake := RandomStake()
 			totalStake = totalStake.Add(totalStake, stake)
-			if _, err := staker.AddValidator(key.endorsor, key.master, uint32(360)*24*14, stake, true, 0); err != nil {
+			if _, err := staker.AddValidator(key.endorsor, key.master, uint32(360)*24*15, stake, true, 0); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -102,11 +102,11 @@ func TestStaker(t *testing.T) {
 		expected any
 	}{
 		{M(stkr.LockedVET()), M(zeroStake, zeroStake, nil)},
-		{M(stkr.AddValidator(validator1, validator1, uint32(360)*24*14, stakeAmount, true, 0)), M(thor.MustParseBytes32("0xf97f97edb19ac8a202886795b0a2df88a126cce926e50874448ce885c7ff472e"), nil)},
-		{M(stkr.AddValidator(validator2, validator2, uint32(360)*24*14, stakeAmount, true, 0)), M(thor.MustParseBytes32("0xcc72fbf4d301b909215e6ae6b5e6b305843daae701fda7325d04267de4cf731d"), nil)},
+		{M(stkr.AddValidator(validator1, validator1, uint32(360)*24*15, stakeAmount, true, 0)), M(thor.MustParseBytes32("0xf97f97edb19ac8a202886795b0a2df88a126cce926e50874448ce885c7ff472e"), nil)},
+		{M(stkr.AddValidator(validator2, validator2, uint32(360)*24*15, stakeAmount, true, 0)), M(thor.MustParseBytes32("0xcc72fbf4d301b909215e6ae6b5e6b305843daae701fda7325d04267de4cf731d"), nil)},
 		{M(stkr.Transition(0)), M(true, nil)},
 		{M(stkr.LockedVET()), M(totalStake, big.NewInt(0).Mul(totalStake, big.NewInt(2)), nil)},
-		{M(stkr.AddValidator(validator3, validator3, uint32(360)*24*14, stakeAmount, true, 0)), M(thor.MustParseBytes32("0x5ab9f98c3694a90d5c55443e1ca48ff71e3e0d7523ddcfac2fc4033b780e0390"), nil)},
+		{M(stkr.AddValidator(validator3, validator3, uint32(360)*24*15, stakeAmount, true, 0)), M(thor.MustParseBytes32("0x5ab9f98c3694a90d5c55443e1ca48ff71e3e0d7523ddcfac2fc4033b780e0390"), nil)},
 		{M(stkr.FirstQueued()), M(thor.MustParseBytes32("0x5ab9f98c3694a90d5c55443e1ca48ff71e3e0d7523ddcfac2fc4033b780e0390"), nil)},
 		{M(func() (thor.Bytes32, error) {
 			activated, err := stkr.validations.ActivateNext(0, stkr.params)
@@ -128,7 +128,7 @@ func TestStaker_TotalStake(t *testing.T) {
 
 	for _, addr := range stakers {
 		stakeAmount := RandomStake()
-		id, err := staker.AddValidator(addr, addr, uint32(360)*24*14, stakeAmount, false, 0)
+		id, err := staker.AddValidator(addr, addr, uint32(360)*24*15, stakeAmount, false, 0)
 		assert.NoError(t, err)
 		stakes[id] = stakeAmount
 		totalStaked = totalStaked.Add(totalStaked, stakeAmount)
@@ -155,7 +155,7 @@ func TestStaker_TotalStake_Withdrawal(t *testing.T) {
 
 	addr := datagen.RandAddress()
 	stakeAmount := RandomStake()
-	period := uint32(360) * 24 * 14
+	period := uint32(360) * 24 * 15
 	id, err := staker.AddValidator(addr, addr, period, stakeAmount, false, 0)
 	assert.NoError(t, err)
 
@@ -213,9 +213,9 @@ func TestStaker_AddValidator_MinimumStake(t *testing.T) {
 	staker, _ := newStaker(t, 68, 101, true)
 
 	tooLow := big.NewInt(0).Sub(minStake, big.NewInt(1))
-	_, err := staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*14, tooLow, true, 0)
+	_, err := staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, tooLow, true, 0)
 	assert.ErrorContains(t, err, "stake is out of range")
-	_, err = staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*14, minStake, true, 0)
+	_, err = staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, minStake, true, 0)
 	assert.NoError(t, err)
 }
 
@@ -223,9 +223,9 @@ func TestStaker_AddValidator_MaximumStake(t *testing.T) {
 	staker, _ := newStaker(t, 68, 101, true)
 
 	tooHigh := big.NewInt(0).Add(maxStake, big.NewInt(1))
-	_, err := staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*14, tooHigh, true, 0)
+	_, err := staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, tooHigh, true, 0)
 	assert.ErrorContains(t, err, "stake is out of range")
-	_, err = staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*14, maxStake, true, 0)
+	_, err = staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, maxStake, true, 0)
 	assert.NoError(t, err)
 }
 
@@ -234,7 +234,7 @@ func TestStaker_AddValidator_MaximumStakingPeriod(t *testing.T) {
 
 	_, err := staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*400, minStake, true, 0)
 	assert.ErrorContains(t, err, "period is out of boundaries")
-	_, err = staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*14, minStake, true, 0)
+	_, err = staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, minStake, true, 0)
 	assert.NoError(t, err)
 }
 
@@ -245,7 +245,7 @@ func TestStaker_AddValidator_MinimumStakingPeriod(t *testing.T) {
 	assert.ErrorContains(t, err, "period is out of boundaries")
 	_, err = staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), 100, minStake, true, 0)
 	assert.ErrorContains(t, err, "period is out of boundaries")
-	_, err = staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*14, minStake, true, 0)
+	_, err = staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, minStake, true, 0)
 	assert.NoError(t, err)
 }
 
@@ -254,9 +254,9 @@ func TestStaker_AddValidator_Duplicate(t *testing.T) {
 
 	addr := datagen.RandAddress()
 	stake := big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
-	_, err := staker.AddValidator(addr, addr, uint32(360)*24*14, stake, true, 0)
+	_, err := staker.AddValidator(addr, addr, uint32(360)*24*15, stake, true, 0)
 	assert.NoError(t, err)
-	_, err = staker.AddValidator(addr, addr, uint32(360)*24*14, stake, true, 0)
+	_, err = staker.AddValidator(addr, addr, uint32(360)*24*15, stake, true, 0)
 	assert.ErrorContains(t, err, "validator already exists")
 }
 
@@ -268,7 +268,7 @@ func TestStaker_AddValidator_QueueOrder(t *testing.T) {
 	for i := range 100 {
 		addr := datagen.RandAddress()
 		stake := RandomStake()
-		_, err := staker.AddValidator(addr, addr, uint32(360)*24*14, stake, true, 0)
+		_, err := staker.AddValidator(addr, addr, uint32(360)*24*15, stake, true, 0)
 		assert.NoError(t, err)
 		expectedOrder[i] = addr
 	}
@@ -313,7 +313,7 @@ func TestStaker_AddValidator(t *testing.T) {
 	addr4 := datagen.RandAddress()
 
 	stake := RandomStake()
-	id1, err := staker.AddValidator(addr1, addr1, uint32(360)*24*14, stake, true, 0)
+	id1, err := staker.AddValidator(addr1, addr1, uint32(360)*24*15, stake, true, 0)
 	assert.NoError(t, err)
 
 	validator, err := staker.Get(id1)
@@ -322,7 +322,7 @@ func TestStaker_AddValidator(t *testing.T) {
 	assert.Equal(t, stake, validator.PendingLocked)
 	assert.Equal(t, StatusQueued, validator.Status)
 
-	id2, err := staker.AddValidator(addr2, addr2, uint32(360)*24*14, stake, true, 0)
+	id2, err := staker.AddValidator(addr2, addr2, uint32(360)*24*15, stake, true, 0)
 	assert.NoError(t, err)
 
 	validator, err = staker.Get(id2)
@@ -340,7 +340,7 @@ func TestStaker_AddValidator(t *testing.T) {
 	assert.Equal(t, stake, validator.PendingLocked)
 	assert.Equal(t, StatusQueued, validator.Status)
 
-	id4, err := staker.AddValidator(addr4, addr4, uint32(360)*24*15, stake, true, 0)
+	id4, err := staker.AddValidator(addr4, addr4, uint32(360)*24*14, stake, true, 0)
 	assert.Error(t, err, "period is out of boundaries")
 
 	validator, err = staker.Get(id4)
@@ -356,7 +356,7 @@ func TestStaker_QueueUpValidators(t *testing.T) {
 	addr4 := datagen.RandAddress()
 
 	stake := RandomStake()
-	id1, err := staker.AddValidator(addr1, addr1, uint32(360)*24*14, stake, true, 0)
+	id1, err := staker.AddValidator(addr1, addr1, uint32(360)*24*15, stake, true, 0)
 	assert.NoError(t, err)
 
 	validator, err := staker.Get(id1)
@@ -373,7 +373,7 @@ func TestStaker_QueueUpValidators(t *testing.T) {
 	assert.Equal(t, stake, validator.LockedVET)
 	assert.Equal(t, StatusActive, validator.Status)
 
-	id2, err := staker.AddValidator(addr2, addr2, uint32(360)*24*14, stake, true, 0)
+	id2, err := staker.AddValidator(addr2, addr2, uint32(360)*24*15, stake, true, 0)
 	assert.NoError(t, err)
 
 	validator, err = staker.Get(id2)
@@ -391,7 +391,7 @@ func TestStaker_QueueUpValidators(t *testing.T) {
 	assert.Equal(t, stake, validator.PendingLocked)
 	assert.Equal(t, StatusQueued, validator.Status)
 
-	id4, err := staker.AddValidator(addr4, addr4, uint32(360)*24*16, stake, true, 0)
+	id4, err := staker.AddValidator(addr4, addr4, uint32(360)*24*14, stake, true, 0)
 	assert.Error(t, err, "period is out of boundaries")
 
 	validator, err = staker.Get(id4)
@@ -434,7 +434,7 @@ func TestStaker_Get(t *testing.T) {
 
 	addr := datagen.RandAddress()
 	stake := RandomStake()
-	id, err := staker.AddValidator(addr, addr, uint32(360)*24*14, stake, true, 0)
+	id, err := staker.AddValidator(addr, addr, uint32(360)*24*15, stake, true, 0)
 	assert.NoError(t, err)
 
 	validator, err := staker.Get(id)
@@ -458,7 +458,7 @@ func TestStaker_Get_FullFlow_Renewal_Off(t *testing.T) {
 	addr1 := datagen.RandAddress()
 	addr2 := datagen.RandAddress()
 	stake := RandomStake()
-	period := uint32(360) * 24 * 14
+	period := uint32(360) * 24 * 15
 
 	// add the validator
 	id, err := staker.AddValidator(addr, addr, period, stake, false, 0)
@@ -514,7 +514,7 @@ func TestStaker_WithdrawQueued(t *testing.T) {
 	assert.Equal(t, thor.Bytes32{}, queued)
 
 	// add the validator
-	period := uint32(360) * 24 * 14
+	period := uint32(360) * 24 * 15
 	id, err := staker.AddValidator(addr, addr, period, stake, false, 0)
 	assert.NoError(t, err)
 
@@ -549,7 +549,7 @@ func TestStaker_IncreaseQueued(t *testing.T) {
 	assert.Error(t, err, "validator not found")
 
 	// add the validator
-	id, err := staker.AddValidator(addr, addr, uint32(360)*24*14, stake, false, 0)
+	id, err := staker.AddValidator(addr, addr, uint32(360)*24*15, stake, false, 0)
 	assert.NoError(t, err)
 
 	validator, err := staker.Get(id)
@@ -585,7 +585,7 @@ func TestStaker_IncreaseQueued_Order(t *testing.T) {
 	assert.Error(t, err, "validator not found")
 
 	// add the validator
-	id, err := staker.AddValidator(addr, addr, uint32(360)*24*14, stake, false, 0)
+	id, err := staker.AddValidator(addr, addr, uint32(360)*24*15, stake, false, 0)
 	assert.NoError(t, err)
 
 	validator, err := staker.Get(id)
@@ -594,7 +594,7 @@ func TestStaker_IncreaseQueued_Order(t *testing.T) {
 	assert.Equal(t, stake, validator.PendingLocked)
 	assert.Equal(t, big.NewInt(0), validator.Weight)
 
-	id1, err := staker.AddValidator(addr1, addr1, uint32(360)*24*14, stake, false, 0)
+	id1, err := staker.AddValidator(addr1, addr1, uint32(360)*24*15, stake, false, 0)
 	assert.NoError(t, err)
 
 	validator, err = staker.Get(id1)
@@ -603,7 +603,7 @@ func TestStaker_IncreaseQueued_Order(t *testing.T) {
 	assert.Equal(t, stake, validator.PendingLocked)
 	assert.Equal(t, big.NewInt(0), validator.Weight)
 
-	id2, err := staker.AddValidator(addr2, addr2, uint32(360)*24*14, stake, false, 0)
+	id2, err := staker.AddValidator(addr2, addr2, uint32(360)*24*15, stake, false, 0)
 	assert.NoError(t, err)
 
 	validator, err = staker.Get(id1)
@@ -660,7 +660,7 @@ func TestStaker_DecreaseQueued_Order(t *testing.T) {
 	assert.Error(t, err, "validator not found")
 
 	// add the validator
-	id, err := staker.AddValidator(addr, addr, uint32(360)*24*14, stake, false, 0)
+	id, err := staker.AddValidator(addr, addr, uint32(360)*24*15, stake, false, 0)
 	assert.NoError(t, err)
 
 	validator, err := staker.Get(id)
@@ -669,7 +669,7 @@ func TestStaker_DecreaseQueued_Order(t *testing.T) {
 	assert.Equal(t, stake, validator.PendingLocked)
 	assert.Equal(t, big.NewInt(0), validator.Weight)
 
-	id1, err := staker.AddValidator(addr1, addr1, uint32(360)*24*14, stake, false, 0)
+	id1, err := staker.AddValidator(addr1, addr1, uint32(360)*24*15, stake, false, 0)
 	assert.NoError(t, err)
 
 	validator, err = staker.Get(id1)
@@ -678,7 +678,7 @@ func TestStaker_DecreaseQueued_Order(t *testing.T) {
 	assert.Equal(t, stake, validator.PendingLocked)
 	assert.Equal(t, big.NewInt(0), validator.Weight)
 
-	id2, err := staker.AddValidator(addr2, addr2, uint32(360)*24*14, stake, false, 0)
+	id2, err := staker.AddValidator(addr2, addr2, uint32(360)*24*15, stake, false, 0)
 	assert.NoError(t, err)
 
 	validator, err = staker.Get(id1)
@@ -728,7 +728,7 @@ func TestStaker_IncreaseActive(t *testing.T) {
 	staker, _ := newStaker(t, 0, 101, false)
 	addr := datagen.RandAddress()
 	stake := RandomStake()
-	period := uint32(360) * 24 * 14
+	period := uint32(360) * 24 * 15
 
 	// add the validator
 	id, err := staker.AddValidator(addr, addr, period, stake, true, 0)
@@ -768,7 +768,7 @@ func TestStaker_ChangeStakeActiveValidatorWithQueued(t *testing.T) {
 	addr := datagen.RandAddress()
 	addr2 := datagen.RandAddress()
 	stake := RandomStake()
-	period := uint32(360) * 24 * 14
+	period := uint32(360) * 24 * 15
 
 	// add the validator
 	id, err := staker.AddValidator(addr, addr, period, stake, true, 0)
@@ -860,7 +860,7 @@ func TestStaker_DecreaseActive(t *testing.T) {
 	staker, _ := newStaker(t, 0, 101, false)
 	addr := datagen.RandAddress()
 	stake := maxStake
-	period := uint32(360) * 24 * 14
+	period := uint32(360) * 24 * 15
 
 	// add the validator
 	id, err := staker.AddValidator(addr, addr, period, stake, true, 0)
@@ -906,7 +906,7 @@ func TestStaker_DecreaseActiveThenExit(t *testing.T) {
 	staker, _ := newStaker(t, 0, 101, false)
 	addr := datagen.RandAddress()
 	stake := maxStake
-	period := uint32(360) * 24 * 14
+	period := uint32(360) * 24 * 15
 
 	// add the validator
 	id, err := staker.AddValidator(addr, addr, period, stake, true, 0)
@@ -967,7 +967,7 @@ func TestStaker_Get_FullFlow(t *testing.T) {
 	addr1 := datagen.RandAddress()
 	addr2 := datagen.RandAddress()
 	stake := RandomStake()
-	period := uint32(360) * 24 * 14
+	period := uint32(360) * 24 * 15
 
 	// add the validator
 	id, err := staker.AddValidator(addr, addr, period, stake, false, 0)
@@ -1025,7 +1025,7 @@ func TestStaker_Get_FullFlow_Renewal_On(t *testing.T) {
 	stake := RandomStake()
 
 	// add the validator
-	period := uint32(360) * 24 * 14
+	period := uint32(360) * 24 * 15
 	id, err := staker.AddValidator(addr, addr, period, stake, true, 0)
 	assert.NoError(t, err)
 
@@ -1068,7 +1068,7 @@ func TestStaker_Get_FullFlow_Renewal_On_Then_Off(t *testing.T) {
 	addr1 := datagen.RandAddress()
 	addr2 := datagen.RandAddress()
 	stake := RandomStake()
-	period := uint32(360) * 24 * 14
+	period := uint32(360) * 24 * 15
 
 	// add the validator
 	id, err := staker.AddValidator(addr, addr, period, stake, true, 0)
@@ -1141,7 +1141,7 @@ func TestStaker_Get_FullFlow_Renewal_Off_Then_On(t *testing.T) {
 	addr1 := datagen.RandAddress()
 	addr2 := datagen.RandAddress()
 	stake := RandomStake()
-	period := uint32(360) * 24 * 14
+	period := uint32(360) * 24 * 15
 
 	// add the validator
 	id, err := staker.AddValidator(addr, addr, period, stake, false, 0)
@@ -1213,14 +1213,14 @@ func TestStaker_ActivateNextValidator_LeaderGroupFull(t *testing.T) {
 
 	// fill 101 validations to leader group
 	for range 101 {
-		_, err := staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*14, RandomStake(), true, 0)
+		_, err := staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, RandomStake(), true, 0)
 		assert.NoError(t, err)
 		_, err = staker.validations.ActivateNext(0, staker.params)
 		assert.NoError(t, err)
 	}
 
 	// try to add one more to the leadergroup
-	_, err := staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*14, RandomStake(), true, 0)
+	_, err := staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, RandomStake(), true, 0)
 	assert.NoError(t, err)
 
 	_, err = staker.validations.ActivateNext(0, staker.params)
@@ -1238,7 +1238,7 @@ func TestStaker_ActivateNextValidator(t *testing.T) {
 
 	addr := datagen.RandAddress()
 	stake := RandomStake()
-	id, err := staker.AddValidator(addr, addr, uint32(360)*24*14, stake, true, 0)
+	id, err := staker.AddValidator(addr, addr, uint32(360)*24*15, stake, true, 0)
 	assert.NoError(t, err)
 	_, err = staker.validations.ActivateNext(0, staker.params)
 	assert.NoError(t, err)
@@ -1259,7 +1259,7 @@ func TestStaker_RemoveValidator(t *testing.T) {
 
 	addr := datagen.RandAddress()
 	stake := RandomStake()
-	period := uint32(360) * 24 * 14
+	period := uint32(360) * 24 * 15
 
 	id, err := staker.AddValidator(addr, addr, period, stake, false, 0)
 	assert.NoError(t, err)
@@ -1290,7 +1290,7 @@ func TestStaker_LeaderGroup(t *testing.T) {
 	for range 10 {
 		addr := datagen.RandAddress()
 		stake := RandomStake()
-		id, err := staker.AddValidator(addr, addr, uint32(360)*24*14, stake, true, 0)
+		id, err := staker.AddValidator(addr, addr, uint32(360)*24*15, stake, true, 0)
 		assert.NoError(t, err)
 		_, err = staker.validations.ActivateNext(0, staker.params)
 		assert.NoError(t, err)
@@ -1322,7 +1322,7 @@ func TestStaker_Next(t *testing.T) {
 	for range 100 {
 		addr := datagen.RandAddress()
 		stake := RandomStake()
-		id, err := staker.AddValidator(addr, addr, uint32(360)*24*14, stake, true, 0)
+		id, err := staker.AddValidator(addr, addr, uint32(360)*24*15, stake, true, 0)
 		assert.NoError(t, err)
 		_, err = staker.validations.ActivateNext(0, staker.params)
 		assert.NoError(t, err)
@@ -1333,7 +1333,7 @@ func TestStaker_Next(t *testing.T) {
 	for i := range 100 {
 		addr := datagen.RandAddress()
 		stake := RandomStake()
-		_, err := staker.AddValidator(addr, addr, uint32(360)*24*14, stake, true, 0)
+		_, err := staker.AddValidator(addr, addr, uint32(360)*24*15, stake, true, 0)
 		assert.NoError(t, err)
 		queuedGroup[i] = addr
 	}
@@ -1373,7 +1373,7 @@ func TestStaker_Initialise(t *testing.T) {
 	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(3)))
 
 	for range 3 {
-		_, err := staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*14, minStake, true, 0)
+		_, err := staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, minStake, true, 0)
 		assert.NoError(t, err)
 	}
 
@@ -1381,7 +1381,7 @@ func TestStaker_Initialise(t *testing.T) {
 	assert.NoError(t, err) // should succeed
 	assert.True(t, transitioned)
 	// should be able to add validations after initialisation
-	_, err = staker.AddValidator(addr, addr, uint32(360)*24*14, minStake, true, 0)
+	_, err = staker.AddValidator(addr, addr, uint32(360)*24*15, minStake, true, 0)
 	assert.NoError(t, err)
 
 	staker, _ = newStaker(t, 101, 101, true)
@@ -1402,11 +1402,11 @@ func TestStaker_Housekeep_TooEarly(t *testing.T) {
 
 	stake := RandomStake()
 
-	id, err := staker.AddValidator(addr1, addr1, uint32(360)*24*14, stake, true, 0)
+	id, err := staker.AddValidator(addr1, addr1, uint32(360)*24*15, stake, true, 0)
 	assert.NoError(t, err)
 	_, err = staker.validations.ActivateNext(0, staker.params)
 	assert.NoError(t, err)
-	id2, err := staker.AddValidator(addr2, addr2, uint32(360)*24*14, stake, true, 0)
+	id2, err := staker.AddValidator(addr2, addr2, uint32(360)*24*15, stake, true, 0)
 	assert.NoError(t, err)
 	_, err = staker.validations.ActivateNext(0, staker.params)
 	assert.NoError(t, err)
@@ -1428,7 +1428,7 @@ func TestStaker_Housekeep_ExitOne(t *testing.T) {
 	addr3 := datagen.RandAddress()
 
 	stake := RandomStake()
-	period := uint32(360) * 24 * 14
+	period := uint32(360) * 24 * 15
 
 	// Add first validator
 	id, err := staker.AddValidator(addr1, addr1, period, stake, false, 0)
@@ -1544,7 +1544,7 @@ func TestStaker_Housekeep_Cooldown(t *testing.T) {
 	addr1 := datagen.RandAddress()
 	addr2 := datagen.RandAddress()
 	addr3 := datagen.RandAddress()
-	period := uint32(360) * 24 * 14
+	period := uint32(360) * 24 * 15
 
 	stake := RandomStake()
 
@@ -1621,7 +1621,7 @@ func TestStaker_Housekeep_CooldownToExited(t *testing.T) {
 	addr3 := datagen.RandAddress()
 
 	stake := RandomStake()
-	period := uint32(360) * 24 * 14
+	period := uint32(360) * 24 * 15
 
 	id1, err := staker.AddValidator(addr1, addr1, period, stake, false, 0)
 	assert.NoError(t, err)
@@ -1662,7 +1662,7 @@ func TestStaker_Housekeep_ExitOrder(t *testing.T) {
 	addr3 := datagen.RandAddress()
 
 	stake := RandomStake()
-	period := uint32(360) * 24 * 14
+	period := uint32(360) * 24 * 15
 
 	id1, err := staker.AddValidator(addr1, addr1, period, stake, true, 0)
 	assert.NoError(t, err)
@@ -1719,7 +1719,7 @@ func TestStaker_Housekeep_RecalculateIncrease(t *testing.T) {
 	addr1 := datagen.RandAddress()
 
 	stake := minStake
-	period := uint32(360) * 24 * 14
+	period := uint32(360) * 24 * 15
 
 	// auto renew is turned on
 	id1, err := staker.AddValidator(addr1, addr1, period, stake, true, 0)
@@ -1757,7 +1757,7 @@ func TestStaker_Housekeep_RecalculateDecrease(t *testing.T) {
 	addr1 := datagen.RandAddress()
 
 	stake := maxStake
-	period := uint32(360) * 24 * 14
+	period := uint32(360) * 24 * 15
 
 	// auto renew is turned on
 	id1, err := staker.AddValidator(addr1, addr1, period, stake, true, 0)
@@ -1779,7 +1779,7 @@ func TestStaker_Housekeep_RecalculateDecrease(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).Mul(stake, big.NewInt(2)), validator.Weight)
 	assert.Equal(t, decrease, validator.NextPeriodDecrease)
 
-	block = uint32(360) * 24 * 14
+	block = uint32(360) * 24 * 15
 	_, _, err = staker.Housekeep(block)
 	assert.NoError(t, err)
 	validator, err = staker.Get(id1)
@@ -1796,7 +1796,7 @@ func TestStaker_Housekeep_DecreaseThenWithdraw(t *testing.T) {
 	addr1 := datagen.RandAddress()
 
 	stake := maxStake
-	period := uint32(360) * 24 * 14
+	period := uint32(360) * 24 * 15
 
 	// auto renew is turned on
 	id1, err := staker.AddValidator(addr1, addr1, period, stake, true, 0)
@@ -1817,7 +1817,7 @@ func TestStaker_Housekeep_DecreaseThenWithdraw(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).Mul(stake, big.NewInt(2)), validator.Weight)
 	assert.Equal(t, validator.NextPeriodDecrease, big.NewInt(1))
 
-	block = uint32(360) * 24 * 14
+	block = uint32(360) * 24 * 15
 	_, _, err = staker.Housekeep(block)
 	assert.NoError(t, err)
 	validator, err = staker.Get(id1)
@@ -1851,7 +1851,7 @@ func TestStaker_DecreaseActive_DecreaseMultipleTimes(t *testing.T) {
 	addr1 := datagen.RandAddress()
 
 	stake := RandomStake()
-	period := uint32(360) * 24 * 14
+	period := uint32(360) * 24 * 15
 
 	// auto renew is turned on
 	id1, err := staker.AddValidator(addr1, addr1, period, stake, true, 0)
@@ -1891,14 +1891,14 @@ func TestStaker_Housekeep_Cannot_Exit_If_It_Breaks_Finality(t *testing.T) {
 	addr3 := datagen.RandAddress()
 
 	stake := RandomStake()
-	period := uint32(360) * 24 * 14
+	period := uint32(360) * 24 * 15
 
 	id1, err := staker.AddValidator(addr1, addr1, period, stake, false, 0)
 	assert.NoError(t, err)
 	_, err = staker.validations.ActivateNext(0, staker.params)
 	assert.NoError(t, err)
 
-	exitBlock := uint32(360) * 24 * 14
+	exitBlock := uint32(360) * 24 * 15
 	_, _, err = staker.Housekeep(exitBlock)
 	assert.NoError(t, err)
 	validator, err := staker.Get(id1)
@@ -1933,7 +1933,7 @@ func TestStaker_Housekeep_Exit_Decrements_Leader_Group_Size(t *testing.T) {
 	addr2 := datagen.RandAddress()
 
 	stake := RandomStake()
-	period := uint32(360) * 24 * 14
+	period := uint32(360) * 24 * 15
 
 	id1, err := staker.AddValidator(addr1, addr1, period, stake, false, 0)
 	assert.NoError(t, err)
@@ -1944,7 +1944,7 @@ func TestStaker_Housekeep_Exit_Decrements_Leader_Group_Size(t *testing.T) {
 	_, err = staker.validations.ActivateNext(0, staker.params)
 	assert.NoError(t, err)
 
-	exitBlock := uint32(360) * 24 * 14
+	exitBlock := uint32(360) * 24 * 15
 	_, _, err = staker.Housekeep(exitBlock)
 	assert.NoError(t, err)
 	validator, err := staker.Get(id1)
@@ -2007,7 +2007,7 @@ func TestStaker_Housekeep_Adds_Queued_Validators_Up_To_Limit(t *testing.T) {
 	addr3 := datagen.RandAddress()
 
 	stake := RandomStake()
-	period := uint32(360) * 24 * 14
+	period := uint32(360) * 24 * 15
 
 	id1, err := staker.AddValidator(addr1, addr1, period, stake, false, 0)
 	assert.NoError(t, err)
@@ -2049,7 +2049,7 @@ func TestStaker_QueuedValidator_Withdraw(t *testing.T) {
 	addr1 := datagen.RandAddress()
 
 	stake := RandomStake()
-	period := uint32(360) * 24 * 14
+	period := uint32(360) * 24 * 15
 
 	id1, err := staker.AddValidator(addr1, addr1, period, stake, false, 0)
 	assert.NoError(t, err)
@@ -2072,7 +2072,7 @@ func TestStaker_IncreaseStake_Withdraw(t *testing.T) {
 	addr1 := datagen.RandAddress()
 
 	stake := RandomStake()
-	period := uint32(360) * 24 * 14
+	period := uint32(360) * 24 * 15
 
 	id1, err := staker.AddValidator(addr1, addr1, period, stake, true, 0)
 	assert.NoError(t, err)
@@ -2105,7 +2105,7 @@ func TestStaker_GetRewards(t *testing.T) {
 	proposerAddr := datagen.RandAddress()
 
 	stake := RandomStake()
-	period := uint32(360) * 24 * 14
+	period := uint32(360) * 24 * 15
 
 	id, err := staker.AddValidator(proposerAddr, proposerAddr, period, stake, true, 0)
 	assert.NoError(t, err)
@@ -2131,7 +2131,7 @@ func TestStaker_GetCompletedPeriods(t *testing.T) {
 	proposerAddr := datagen.RandAddress()
 
 	stake := RandomStake()
-	period := uint32(360) * 24 * 14
+	period := uint32(360) * 24 * 15
 
 	id, err := staker.AddValidator(proposerAddr, proposerAddr, period, stake, true, 0)
 	assert.NoError(t, err)
@@ -2162,7 +2162,7 @@ func TestStaker_MultipleUpdates_CorrectWithdraw(t *testing.T) {
 	thousand := big.NewInt(1000)
 	fiveHundred := big.NewInt(500)
 
-	period := uint32(360) * 24 * 14
+	period := uint32(360) * 24 * 15
 
 	// QUEUED
 	id, err := staker.AddValidator(acc, acc, period, initialStake, true, 0)

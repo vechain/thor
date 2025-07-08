@@ -493,7 +493,7 @@ func Test_Delegator_Queued_Weight(t *testing.T) {
 
 	nodeMaster := datagen.RandAddress()
 	endorsor := datagen.RandAddress()
-	id, err := staker.AddValidator(endorsor, nodeMaster, uint32(360)*24*14, validatorStake, true, 0)
+	id, err := staker.AddValidator(endorsor, nodeMaster, uint32(360)*24*15, validatorStake, true, 0)
 	assert.NoError(t, err)
 
 	validator, err := staker.Get(id)
@@ -520,7 +520,7 @@ func Test_Delegator_Queued_Weight_QueuedValidator_Withdraw(t *testing.T) {
 	staker, _ := newStaker(t, 0, 101, false)
 
 	validatorAddr := datagen.RandAddress()
-	validatorID, err := staker.AddValidator(validatorAddr, validatorAddr, uint32(360)*24*14, minStake, true, 0)
+	validatorID, err := staker.AddValidator(validatorAddr, validatorAddr, uint32(360)*24*15, minStake, true, 0)
 	assert.NoError(t, err)
 
 	initialQueuedVET, initialQueuedWeight, err := staker.QueuedStake()

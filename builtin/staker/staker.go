@@ -22,9 +22,9 @@ var (
 	minStake = big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
 	maxStake = big.NewInt(0).Mul(big.NewInt(400e6), big.NewInt(1e18))
 
-	lowStakingPeriod    = uint32(360) * 24 * 7  // 1 week
-	mediumStakingPeriod = uint32(360) * 24 * 14 // 2 weeks
-	highStakingPeriod   = uint32(360) * 24 * 30 // 30 days
+	lowStakingPeriod    = uint32(360) * 24 * 7  // 336 epochs
+	mediumStakingPeriod = uint32(360) * 24 * 15 // 720 epochs
+	highStakingPeriod   = uint32(360) * 24 * 30 // 1,440 epochs
 
 	cooldownPeriod = uint32(8640)
 	epochLength    = uint32(180)
