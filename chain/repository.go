@@ -466,7 +466,8 @@ func (r *Repository) GetDoubleSigEvidence() *[][]byte {
 		if !found {
 			return nil
 		} else {
-			return result.(*[][]byte)
+			evidence := result.([][]byte)
+			return &evidence
 		}
 	}
 }
