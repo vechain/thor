@@ -78,6 +78,12 @@ func (n *Node) packerLoop(ctx context.Context) {
 				if err := n.pack(flow); err != nil {
 					logger.Error("failed to pack block", "err", err)
 				}
+
+				if flow.Number() == 10 {
+					if err := n.pack(flow); err != nil {
+						logger.Error("failed to pack block", "err", err)
+					}
+				}
 				break
 			}
 			select {
