@@ -284,6 +284,7 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 		}
 
 		newBlock := builder.Alpha(alpha).Build()
+		println("signing hash is ", newBlock.Header().SigningHash().String())
 		ec, err := crypto.Sign(newBlock.Header().SigningHash().Bytes(), privateKey)
 		if err != nil {
 			return nil, nil, nil, err
