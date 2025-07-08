@@ -20,7 +20,7 @@ import (
 var (
 	logger   = log.WithContext("pkg", "staker")
 	minStake = big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
-	maxStake = big.NewInt(0).Mul(big.NewInt(400e6), big.NewInt(1e18))
+	maxStake = big.NewInt(0).Mul(big.NewInt(600e6), big.NewInt(1e18))
 
 	// TODO: Enable these once customnet testing is done
 	//oneWeekStakingPeriod  = uint32(360) * 24 * 7     // 1 weeks

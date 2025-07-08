@@ -222,6 +222,7 @@ func TestStaker_AddValidator_MinimumStake(t *testing.T) {
 func TestStaker_AddValidator_MaximumStake(t *testing.T) {
 	staker, _ := newStaker(t, 68, 101, true)
 
+	maxStake := big.NewInt(0).Mul(big.NewInt(1e18), big.NewInt(600e6))
 	tooHigh := big.NewInt(0).Add(maxStake, big.NewInt(1))
 	_, err := staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, tooHigh, true, 0)
 	assert.ErrorContains(t, err, "stake is out of range")
