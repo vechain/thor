@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -35,8 +36,10 @@ func TestConvertLegacyTransaction_Success(t *testing.T) {
 
 	header := new(block.Builder).Build().Header()
 
-	result := convertTransaction(transaction, header)
+	result := ConvertTransaction(transaction, header)
 	// Common fields
+	clause := api.ConvertClause(cla)
+	clause2 := api.ConvertClause(cla2)
 	assert.Equal(t, transaction.Type(), result.Type)
 	assert.Equal(t, hexutil.Encode(br[:]), result.BlockRef)
 	assert.Equal(t, transaction.ChainTag(), result.ChainTag)
@@ -45,9 +48,9 @@ func TestConvertLegacyTransaction_Success(t *testing.T) {
 	assert.Equal(t, math.HexOrDecimal64(transaction.Nonce()), result.Nonce)
 	assert.Equal(t, 2, len(result.Clauses))
 	assert.Equal(t, addr, *result.Clauses[0].To)
-	assert.Equal(t, convertClause(cla), result.Clauses[0])
+	assert.Equal(t, &clause, result.Clauses[0])
 	assert.Equal(t, addr, *result.Clauses[1].To)
-	assert.Equal(t, convertClause(cla2), result.Clauses[1])
+	assert.Equal(t, &clause2, result.Clauses[1])
 	// Legacy fields
 	assert.Equal(t, uint8(1), *result.GasPriceCoef)
 	// Non legacy fields
@@ -76,8 +79,10 @@ func TestConvertDynTransaction_Success(t *testing.T) {
 
 	header := new(block.Builder).Build().Header()
 
-	result := convertTransaction(transaction, header)
+	result := ConvertTransaction(transaction, header)
 	// Common fields
+	clause := api.ConvertClause(cla)
+	clause2 := api.ConvertClause(cla2)
 	assert.Equal(t, transaction.Type(), result.Type)
 	assert.Equal(t, hexutil.Encode(br[:]), result.BlockRef)
 	assert.Equal(t, transaction.ChainTag(), result.ChainTag)
@@ -86,9 +91,9 @@ func TestConvertDynTransaction_Success(t *testing.T) {
 	assert.Equal(t, math.HexOrDecimal64(transaction.Nonce()), result.Nonce)
 	assert.Equal(t, 2, len(result.Clauses))
 	assert.Equal(t, addr, *result.Clauses[0].To)
-	assert.Equal(t, convertClause(cla), result.Clauses[0])
+	assert.Equal(t, &clause, result.Clauses[0])
 	assert.Equal(t, addr, *result.Clauses[1].To)
-	assert.Equal(t, convertClause(cla2), result.Clauses[1])
+	assert.Equal(t, &clause2, result.Clauses[1])
 	// DynFee fields
 	assert.Equal(t, (*math.HexOrDecimal256)(maxFeePerGas), result.MaxFeePerGas)
 	assert.Equal(t, (*math.HexOrDecimal256)(maxPriorityFeePerGas), result.MaxPriorityFeePerGas)

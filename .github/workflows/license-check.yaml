@@ -3,6 +3,9 @@ name: License Check
 on:
   workflow_call:
 
+permissions:
+  contents: read
+
 jobs:
   license-check:
     runs-on: ubuntu-latest

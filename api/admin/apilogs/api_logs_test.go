@@ -15,6 +15,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/v2/api"
 )
 
 type TestCase struct {
@@ -30,7 +31,7 @@ func marshalBody(tt TestCase, t *testing.T) []byte {
 	var reqBody []byte
 	var err error
 	if tt.method == "POST" {
-		reqBody, err = json.Marshal(Status{Enabled: tt.requestBody})
+		reqBody, err = json.Marshal(api.LogStatus{Enabled: tt.requestBody})
 		if err != nil {
 			t.Fatalf("could not marshal request body: %v", err)
 		}
@@ -83,7 +84,7 @@ func TestLogLevelHandler(t *testing.T) {
 			router.ServeHTTP(rr, req)
 
 			assert.Equal(t, tt.expectedHTTP, rr.Code)
-			responseBody := Status{}
+			responseBody := api.LogStatus{}
 			assert.NoError(t, json.Unmarshal(rr.Body.Bytes(), &responseBody))
 			assert.Equal(t, tt.expectedEndValue, responseBody.Enabled)
 		})

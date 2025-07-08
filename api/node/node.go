@@ -8,10 +8,9 @@ package node
 import (
 	"net/http"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/thor"
@@ -20,11 +19,11 @@ import (
 
 type Node struct {
 	pool         transactions.Pool
-	nw           Network
+	nw           api.Network
 	enableTxpool bool
 }
 
-func New(nw Network, pool transactions.Pool, enableTxpool bool) *Node {
+func New(nw api.Network, pool transactions.Pool, enableTxpool bool) *Node {
 	return &Node{
 		pool,
 		nw,
@@ -32,8 +31,8 @@ func New(nw Network, pool transactions.Pool, enableTxpool bool) *Node {
 	}
 }
 
-func (n *Node) PeersStats() []*PeerStats {
-	return ConvertPeersStats(n.nw.PeersStats())
+func (n *Node) PeersStats() []*api.PeerStats {
+	return api.ConvertPeersStats(n.nw.PeersStats())
 }
 
 func (n *Node) handleNetwork(w http.ResponseWriter, _ *http.Request) error {
@@ -61,44 +60,10 @@ func (n *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) e
 	}
 
 	if expanded {
-		// TODO: consider  transaction/convertTransactions
 		trxs := make([]transactions.Transaction, len(filteredTransactions))
 		for index, trx := range filteredTransactions {
-			origin, _ := trx.Origin()
-			delegator, _ := trx.Delegator()
-
-			txClauses := trx.Clauses()
-			cls := make(transactions.Clauses, len(txClauses))
-			for i, c := range txClauses {
-				cls[i] = transactions.Clause{
-					To:    c.To(),
-					Value: math.HexOrDecimal256(*c.Value()),
-					Data:  hexutil.Encode(c.Data()),
-				}
-			}
-			br := trx.BlockRef()
-			trxs[index] = transactions.Transaction{
-				ChainTag:   trx.ChainTag(),
-				ID:         trx.ID(),
-				Origin:     origin,
-				BlockRef:   hexutil.Encode(br[:]),
-				Expiration: trx.Expiration(),
-				Nonce:      math.HexOrDecimal64(trx.Nonce()),
-				Size:       uint32(trx.Size()),
-				Gas:        trx.Gas(),
-				DependsOn:  trx.DependsOn(),
-				Clauses:    cls,
-				Delegator:  delegator,
-			}
-
-			switch trx.Type() {
-			case tx.TypeLegacy:
-				coef := trx.GasPriceCoef()
-				trxs[index].GasPriceCoef = &coef
-			default:
-				trxs[index].MaxFeePerGas = (*math.HexOrDecimal256)(trx.MaxFeePerGas())
-				trxs[index].MaxPriorityFeePerGas = (*math.HexOrDecimal256)(trx.MaxPriorityFeePerGas())
-			}
+			convertedTx := transactions.ConvertTransaction(trx, nil)
+			trxs[index] = *convertedTx
 		}
 
 		return utils.WriteJSON(w, trxs)
@@ -114,7 +79,7 @@ func (n *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) e
 
 func (n *Node) handleGetTxpoolStatus(w http.ResponseWriter, req *http.Request) error {
 	total := n.pool.Len()
-	status := Status{
+	status := api.Status{
 		Amount: uint(total),
 	}
 	return utils.WriteJSON(w, status)

@@ -8,14 +8,19 @@ state, including the disk space required for various node types.
 
 ### Table of Contents
 
-- [System Requirements](#system-requirements)
+- [Hosting a Node](#hosting-a-node)
+  - [Table of Contents](#table-of-contents)
+  - [Command Line Options](#command-line-options)
+  - [System Requirements](#system-requirements)
     - [Authority Nodes](#authority-nodes)
-    - [Full Archive Nodes](#full-archive-nodes)
-- [Node Types](#node-types)
+  - [Full Archive Nodes](#full-archive-nodes)
+  - [Node Types](#node-types)
     - [Full Archive Node](#full-archive-node)
     - [Full Node](#full-node)
     - [Full Node without Logs](#full-node-without-logs)
-- [Metrics](#metrics)
+  - [Metrics](#metrics)
+  - [Admin](#admin)
+    - [Health](#health)
 
 ---
 
@@ -115,8 +120,7 @@ types [here](https://prometheus.io/docs/concepts/metric_types/).
 
 ### Admin
 
-Admin is used to allow privileged actions to the node by the administrator. Currently it supports changing the logger's
-verbosity at runtime.
+Admin is used to allow privileged actions to the node by the administrator.
 
 Admin is not enabled in nodes by default. It's possible to enable it by setting  `--enable-admin`. Once enabled, an
 Admin server is available at `localhost:2113/admin` with the following capabilities:
@@ -132,3 +136,31 @@ Change the log level via a POST request to /admin/loglevel.
 ```shell
 curl -X POST -H "Content-Type: application/json" -d '{"level": "trace"}' http://localhost:2113/admin/loglevel
 ```
+
+#### Health
+
+Retrieve the node health infomation via a GET request to /admin/health.
+
+```shell
+curl http://localhost:2113/admin/health
+```
+
+Response Example
+
+```json
+{
+    "healthy": true,
+    "bestBlockTime": "2025-07-01T06:50:00Z",
+    "peerCount": 5,
+    "isNetworkProgressing": true
+}
+```
+
+|           Key         |           Type        |         Description       |
+|-----------------------|-----------------------|---------------------------|
+| healthy               | boolean               | If the peerCount <= `min_peers_count` and `isNetworkProgressing` is True, it will return True.(default `min_peers_count` is 2)|
+| bestBlockTime         | string                | The best block time of the node.                     |
+| peerCount             | number                | The number of peers connected to the node.                  |
+| isNetworkProgressing  | boolean               | If the node has not completed the block sync, it will return False  |
+
+- **Note**: if the `healthy` is False, the response status code is 503

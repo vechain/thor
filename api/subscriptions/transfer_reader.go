@@ -6,17 +6,18 @@
 package subscriptions
 
 import (
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/thor"
 )
 
 type transferReader struct {
 	repo        *chain.Repository
-	filter      *TransferFilter
+	filter      *api.SubscriptionTransferFilter
 	blockReader chain.BlockReader
 }
 
-func newTransferReader(repo *chain.Repository, position thor.Bytes32, filter *TransferFilter) *transferReader {
+func newTransferReader(repo *chain.Repository, position thor.Bytes32, filter *api.SubscriptionTransferFilter) *transferReader {
 	return &transferReader{
 		repo:        repo,
 		filter:      filter,
@@ -44,7 +45,7 @@ func (tr *transferReader) Read() ([]any, bool, error) {
 						return nil, false, err
 					}
 					if tr.filter.Match(transfer, origin) {
-						msg, err := convertTransfer(block.Header(), txs[i], uint32(j), transfer, block.Obsolete)
+						msg, err := api.ConvertSubscriptionTransfer(block.Header(), txs[i], uint32(j), transfer, block.Obsolete)
 						if err != nil {
 							return nil, false, err
 						}

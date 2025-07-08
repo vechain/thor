@@ -11,9 +11,10 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/vechain/thor/v2/api"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/vechain/thor/v2/api/events"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
@@ -314,10 +315,10 @@ type ValidatorQueuedEvent struct {
 	Stake        *big.Int
 	Period       uint32
 	AutoRenew    bool
-	Log          events.FilteredEvent
+	Log          api.FilteredEvent
 }
 
-func (s *Staker) FilterValidatorQueued(eventsRange *events.Range, opts *events.Options, order logdb.Order) ([]ValidatorQueuedEvent, error) {
+func (s *Staker) FilterValidatorQueued(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]ValidatorQueuedEvent, error) {
 	event, ok := s.contract.ABI().Events["ValidatorQueued"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")
@@ -367,10 +368,10 @@ type ValidatorUpdatedAutoRenewEvent struct {
 	Endorsor     thor.Address
 	ValidationID thor.Bytes32
 	AutoRenew    bool
-	Log          events.FilteredEvent
+	Log          api.FilteredEvent
 }
 
-func (s *Staker) FilterValidatorUpdatedAutoRenew(eventsRange *events.Range, opts *events.Options, order logdb.Order) ([]ValidatorUpdatedAutoRenewEvent, error) {
+func (s *Staker) FilterValidatorUpdatedAutoRenew(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]ValidatorUpdatedAutoRenewEvent, error) {
 	event, ok := s.contract.ABI().Events["ValidatorUpdatedAutoRenew"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")
@@ -416,10 +417,10 @@ type DelegationAddedEvent struct {
 	Stake        *big.Int
 	AutoRenew    bool
 	Multiplier   uint8
-	Log          events.FilteredEvent
+	Log          api.FilteredEvent
 }
 
-func (s *Staker) FilterDelegationAdded(eventsRange *events.Range, opts *events.Options, order logdb.Order) ([]DelegationAddedEvent, error) {
+func (s *Staker) FilterDelegationAdded(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]DelegationAddedEvent, error) {
 	event, ok := s.contract.ABI().Events["DelegationAdded"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")
@@ -466,10 +467,10 @@ func (s *Staker) FilterDelegationAdded(eventsRange *events.Range, opts *events.O
 type DelegationUpdatedAutoRenewEvent struct {
 	DelegationID thor.Bytes32
 	AutoRenew    bool
-	Log          events.FilteredEvent
+	Log          api.FilteredEvent
 }
 
-func (s *Staker) FilterDelegationUpdatedAutoRenew(eventsRange *events.Range, opts *events.Options, order logdb.Order) ([]DelegationUpdatedAutoRenewEvent, error) {
+func (s *Staker) FilterDelegationUpdatedAutoRenew(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]DelegationUpdatedAutoRenewEvent, error) {
 	event, ok := s.contract.ABI().Events["DelegationUpdatedAutoRenew"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")
@@ -510,10 +511,10 @@ func (s *Staker) FilterDelegationUpdatedAutoRenew(eventsRange *events.Range, opt
 type DelegationWithdrawnEvent struct {
 	DelegationID thor.Bytes32
 	Stake        *big.Int
-	Log          events.FilteredEvent
+	Log          api.FilteredEvent
 }
 
-func (s *Staker) FilterDelegationWithdrawn(eventsRange *events.Range, opts *events.Options, order logdb.Order) ([]DelegationWithdrawnEvent, error) {
+func (s *Staker) FilterDelegationWithdrawn(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]DelegationWithdrawnEvent, error) {
 	event, ok := s.contract.ABI().Events["DelegationWithdrawn"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")
@@ -555,10 +556,10 @@ type StakeIncreasedEvent struct {
 	Endorsor     thor.Address
 	ValidationID thor.Bytes32
 	Added        *big.Int
-	Log          events.FilteredEvent
+	Log          api.FilteredEvent
 }
 
-func (s *Staker) FilterStakeIncreased(eventsRange *events.Range, opts *events.Options, order logdb.Order) ([]StakeIncreasedEvent, error) {
+func (s *Staker) FilterStakeIncreased(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]StakeIncreasedEvent, error) {
 	event, ok := s.contract.ABI().Events["StakeIncreased"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")
@@ -602,10 +603,10 @@ type StakeDecreasedEvent struct {
 	Endorsor     thor.Address
 	ValidationID thor.Bytes32
 	Removed      *big.Int
-	Log          events.FilteredEvent
+	Log          api.FilteredEvent
 }
 
-func (s *Staker) FilterStakeDecreased(eventsRange *events.Range, opts *events.Options, order logdb.Order) ([]StakeDecreasedEvent, error) {
+func (s *Staker) FilterStakeDecreased(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]StakeDecreasedEvent, error) {
 	event, ok := s.contract.ABI().Events["StakeDecreased"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")
@@ -649,10 +650,10 @@ type ValidatorWithdrawnEvent struct {
 	Endorsor     thor.Address
 	ValidationID thor.Bytes32
 	Stake        *big.Int
-	Log          events.FilteredEvent
+	Log          api.FilteredEvent
 }
 
-func (s *Staker) FilterValidatorWithdrawn(eventsRange *events.Range, opts *events.Options, order logdb.Order) ([]ValidatorWithdrawnEvent, error) {
+func (s *Staker) FilterValidatorWithdrawn(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]ValidatorWithdrawnEvent, error) {
 	event, ok := s.contract.ABI().Events["ValidatorWithdrawn"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")

@@ -8,11 +8,17 @@ package testnode
 import (
 	"errors"
 	"net/http/httptest"
-	"sync/atomic"
 
-	"github.com/vechain/thor/v2/api"
+	"github.com/gorilla/mux"
+	"github.com/vechain/thor/v2/api/accounts"
+	"github.com/vechain/thor/v2/api/blocks"
+	"github.com/vechain/thor/v2/api/debug"
+	"github.com/vechain/thor/v2/api/events"
 	"github.com/vechain/thor/v2/api/fees"
+	node2 "github.com/vechain/thor/v2/api/node"
+	"github.com/vechain/thor/v2/api/subscriptions"
 	"github.com/vechain/thor/v2/api/transactions"
+	"github.com/vechain/thor/v2/api/transfers"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
@@ -61,35 +67,38 @@ func (n *node) Start() error {
 		chain:     n.chain,
 	}
 
-	apiHandler, apiCloser := api.New(
-		n.Chain().Repo(),
-		n.Chain().Stater(),
-		n.txPool,
-		n.Chain().LogDB(),
-		bft.NewMockedEngine(n.Chain().Repo().GenesisBlock().Header().ID()),
-		&solo.Communicator{},
-		n.Chain().GetForkConfig(),
-		api.Config{
-			AllowedOrigins: "*",
-			BacktraceLimit: 100,
-			CallGasLimit:   40_000_000,
-			SkipLogs:       false,
-			Fees: fees.Config{
-				APIBacktraceLimit:          100,
-				FixedCacheSize:             1024,
-				PriorityIncreasePercentage: 5,
-			},
-			EnableReqLogger:  &atomic.Bool{},
-			LogsLimit:        100,
-			AllowedTracers:   []string{"all"},
-			EnableDeprecated: true,
-			SoloMode:         true,
-			EnableTxpool:     true,
-		},
-	)
+	router := mux.NewRouter()
+	repo := n.chain.Repo()
+	stater := n.chain.Stater()
+	logDB := n.chain.LogDB()
+	forkConfig := n.chain.GetForkConfig()
+	engine := bft.NewMockedEngine(repo.GenesisBlock().Header().ID())
 
-	n.apiServer = httptest.NewServer(apiHandler)
-	n.apiServerCloser = apiCloser
+	accounts.New(repo, stater, 40_000_000, forkConfig, engine, true).Mount(router, "/accounts")
+	events.New(repo, logDB, 1000).Mount(router, "/logs/event")
+	transfers.New(repo, logDB, 1000).Mount(router, "/logs/transfer")
+	blocks.New(repo, engine).Mount(router, "/blocks")
+	transactions.New(repo, n.txPool).Mount(router, "/transactions")
+	debug.New(repo, stater, forkConfig, engine,
+		40_000_000,
+		true,
+		[]string{"all"},
+		true,
+	).Mount(router, "/debug")
+	node2.New(&solo.Communicator{}, n.txPool, true).Mount(router, "/node")
+	fees.New(repo, engine, forkConfig, stater, fees.Config{
+		APIBacktraceLimit:          1000,
+		PriorityIncreasePercentage: 5,
+		FixedCacheSize:             1000,
+	}).Mount(router, "/fees")
+	subs := subscriptions.New(repo, []string{"*"}, 1000, n.txPool, true)
+	subs.Mount(router, "/subscriptions")
+
+	n.apiServer = httptest.NewServer(router)
+	n.apiServerCloser = func() {
+		subs.Close()
+		n.apiServer.Close()
+	}
 	return nil
 }
 

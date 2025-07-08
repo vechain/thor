@@ -8,8 +8,9 @@ package builtin
 import (
 	"fmt"
 
+	"github.com/vechain/thor/v2/api"
+
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/vechain/thor/v2/api/events"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
@@ -138,10 +139,10 @@ func (e *Executor) DetachVotingContract(votingContract thor.Address) bind.Method
 type ProposalEvent struct {
 	ProposalID thor.Bytes32
 	Action     string
-	Log        events.FilteredEvent
+	Log        api.FilteredEvent
 }
 
-func (e *Executor) FilterProposals(eventsRange *events.Range, opts *events.Options, order logdb.Order) ([]ProposalEvent, error) {
+func (e *Executor) FilterProposals(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]ProposalEvent, error) {
 	_, ok := e.contract.ABI().Events["Proposal"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")
