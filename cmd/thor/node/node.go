@@ -329,6 +329,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 			}
 			if len(conflictingBlocks) > 0 {
 				conflictingBlocks = append(conflictingBlocks, newBlock.Header().ID().Bytes())
+				println("============...... Recording double signing in cache while producing  block")
 				n.repo.RecordDoubleSig(newBlock.Header().Number(), conflictingBlocks)
 			}
 
@@ -442,6 +443,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 			if err != nil {
 				logger.Warn("Unable to extract double signed block", err)
 			}
+			println("============...... Removing double signing in cache while processing block")
 			n.repo.RecordDoubleSigProcessed(blkSum.Header.Number())
 		}
 
@@ -469,8 +471,10 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		return false, err
 	}
 	metricBlockProcessedCount().AddWithLabel(1, map[string]string{"type": "received", "success": "true"})
+
+	println("Requesting double signing evidence")
 	ev := n.repo.GetDoubleSigEvidence()
-	if ev != nil {
+	if ev != nil && len(*ev) > 0 {
 		println("no evidences in the cache =======")
 	} else {
 		println("evidence found in the cache =======")

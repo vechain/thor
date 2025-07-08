@@ -165,7 +165,7 @@ func (n *Node) pack(flow *packer.Flow, duplicate bool) (err error) {
 		}
 
 		// pack the new block
-		println("should vote", shouldVote)
+		println("Requesting double signing evidence")
 		evidence := n.repo.GetDoubleSigEvidence()
 		newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey, uint32(len(conflicts)), false, evidence)
 		if err != nil {
@@ -239,6 +239,7 @@ func (n *Node) pack(flow *packer.Flow, duplicate bool) (err error) {
 			if err != nil {
 				return err
 			}
+			println("============...... Removing double signing in cache while producing  block")
 			n.repo.RecordDoubleSigProcessed(duplBlk.Header.Number())
 		}
 
