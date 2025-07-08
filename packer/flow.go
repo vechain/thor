@@ -235,13 +235,18 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 	stateRoot := stage.Hash()
 	println("for block number state root", f.Number(), stateRoot.String())
 
+	gasUsed := f.gasUsed
+	if newBlockConflicts > 0 {
+		gasUsed = gasUsed + 1
+	}
+
 	builder := new(block.Builder).
 		Beneficiary(f.runtime.Context().Beneficiary).
 		GasLimit(f.runtime.Context().GasLimit).
 		ParentID(f.parentHeader.ID()).
 		Timestamp(f.runtime.Context().Time).
 		TotalScore(f.runtime.Context().TotalScore).
-		GasUsed(f.gasUsed).
+		GasUsed(gasUsed).
 		ReceiptsRoot(f.receipts.RootHash()).
 		StateRoot(stateRoot).
 		TransactionFeatures(f.features)
