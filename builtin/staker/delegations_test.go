@@ -491,9 +491,9 @@ func Test_Delegator_Queued_Weight(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).String(), queuedVetBefore.String())
 	assert.Equal(t, big.NewInt(0).String(), queuedWeightBefore.String())
 
-	nodeMaster := datagen.RandAddress()
+	node := datagen.RandAddress()
 	endorsor := datagen.RandAddress()
-	id, err := staker.AddValidator(endorsor, nodeMaster, uint32(360)*24*15, validatorStake, true, 0)
+	id, err := staker.AddValidator(endorsor, node, uint32(360)*24*15, validatorStake, true, 0)
 	assert.NoError(t, err)
 
 	validator, err := staker.Get(id)

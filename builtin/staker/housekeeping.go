@@ -40,7 +40,7 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Bytes32]*Validat
 
 		if !entry.AutoRenew { // early exit, validator is due to exit but has not reached exit block
 			activeValidators[id] = entry
-			logger.Debug("validator exit delayed", "master", entry.Master, "exit-block", entry.ExitBlock)
+			logger.Debug("validator exit delayed", "node", entry.Node, "exit-block", entry.ExitBlock)
 			return nil
 		}
 

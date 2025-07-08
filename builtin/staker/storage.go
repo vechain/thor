@@ -54,7 +54,7 @@ type storage struct {
 	validations  *solidity.Mapping[thor.Bytes32, *Validation]
 	aggregations *solidity.Mapping[thor.Bytes32, *Aggregation]
 	delegations  *solidity.Mapping[thor.Bytes32, *Delegation]
-	lookups      *solidity.Mapping[thor.Address, thor.Bytes32] // allows lookup of Validation by node master address
+	lookups      *solidity.Mapping[thor.Address, thor.Bytes32] // allows lookup of Validation by node address
 	rewards      *solidity.Mapping[thor.Bytes32, *big.Int]     // stores rewards per validator staking period
 	exits        *solidity.Mapping[*big.Int, thor.Bytes32]     // exit block -> validator ID
 	charger      *gascharger.Charger                           // track storage access costs
@@ -194,8 +194,8 @@ func (s *storage) SetLookup(address thor.Address, id thor.Bytes32) error {
 	return nil
 }
 
-func (s *storage) LookupMaster(master thor.Address) (*Validation, thor.Bytes32, error) {
-	id, err := s.GetLookup(master)
+func (s *storage) LookupNode(node thor.Address) (*Validation, thor.Bytes32, error) {
+	id, err := s.GetLookup(node)
 	if err != nil {
 		return nil, thor.Bytes32{}, err
 	}
@@ -247,8 +247,8 @@ func (s *storage) GetCompletedPeriods(validationID thor.Bytes32) (uint32, error)
 	return v.CompleteIterations, nil
 }
 
-func (s *storage) IncreaseReward(master thor.Address, reward big.Int) error {
-	id, err := s.GetLookup(master)
+func (s *storage) IncreaseReward(node thor.Address, reward big.Int) error {
+	id, err := s.GetLookup(node)
 	if err != nil {
 		return err
 	}
