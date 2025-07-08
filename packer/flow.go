@@ -227,11 +227,13 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 		}
 	}
 
+	println("for block number conflicts", f.Number(), newBlockConflicts)
 	stage, err := f.runtime.State().Stage(trie.Version{Major: f.Number(), Minor: newBlockConflicts})
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	stateRoot := stage.Hash()
+	println("for block number state root", f.Number(), stateRoot.String())
 
 	builder := new(block.Builder).
 		Beneficiary(f.runtime.Context().Beneficiary).
