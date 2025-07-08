@@ -138,6 +138,7 @@ func (n *Node) pack(flow *packer.Flow, duplicate bool) (err error) {
 
 		// adopt txs
 		for _, tx := range txs {
+			println("adopting tx for block", flow.Number())
 			if err := flow.Adopt(tx); err != nil {
 				if packer.IsGasLimitReached(err) {
 					break
