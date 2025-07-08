@@ -450,6 +450,23 @@ func (r *Repository) NewTicker() co.Waiter {
 	return r.tick.NewWaiter()
 }
 
-func (r *Repository) RecordDoubleSig(blockNum uint32, numOfConflicts uint32) {
-	r.caches.doubleSig.Add(blockNum, numOfConflicts)
+func (r *Repository) RecordDoubleSig(blockNum uint32, evidence [][]byte) {
+	r.caches.doubleSig.Add(blockNum, evidence)
+}
+
+func (r *Repository) RecordDoubleSigProcessed(blockNum uint32) {
+	r.caches.doubleSig.Remove(blockNum)
+}
+
+func (r *Repository) GetDoubleSigEvidence() *[][]byte {
+	if r.caches.doubleSig.Len() == 0 {
+		return nil
+	} else {
+		result, found := r.caches.doubleSig.Get(r.caches.doubleSig.Keys()[0])
+		if !found {
+			return nil
+		} else {
+			return result.(*[][]byte)
+		}
+	}
 }
