@@ -160,6 +160,7 @@ func (n *Node) pack(flow *packer.Flow, duplicate bool) (err error) {
 		}
 
 		// pack the new block
+		println("should vote", shouldVote)
 		newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey, uint32(len(conflicts)), false)
 		if err != nil {
 			return errors.Wrap(err, "failed to pack block")
