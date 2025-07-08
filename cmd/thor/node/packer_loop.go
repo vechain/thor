@@ -112,6 +112,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 func (n *Node) pack(flow *packer.Flow) (err error) {
 	txs := n.txPool.Executables()
+	println("Number of txs", len(txs))
 	var txsToRemove []*tx.Transaction
 	defer func() {
 		if err == nil {
