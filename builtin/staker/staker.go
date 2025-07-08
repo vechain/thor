@@ -166,6 +166,19 @@ func (s *Staker) AddValidator(
 	}
 }
 
+// SetBeneficiary sets the beneficiary address for a validator.
+func (s *Staker) SetBeneficiary(endorsor thor.Address, id thor.Bytes32, beneficiary thor.Address) error {
+	logger.Debug("setting beneficiary", "endorsor", endorsor, "id", id, "beneficiary", beneficiary)
+
+	if err := s.validations.SetBeneficiary(id, endorsor, beneficiary); err != nil {
+		logger.Info("set beneficiary failed", "id", id, "error", err)
+		return err
+	} else {
+		logger.Info("set beneficiary", "id", id)
+		return nil
+	}
+}
+
 func (s *Staker) LookupMaster(master thor.Address) (*Validation, thor.Bytes32, error) {
 	return s.storage.LookupMaster(master)
 }

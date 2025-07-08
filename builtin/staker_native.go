@@ -71,6 +71,21 @@ func init() {
 
 			return []any{validationID}
 		}},
+		{"native_setBeneficiary", func(env *xenv.Environment) []any {
+			var args struct {
+				Endorsor     common.Address
+				ValidationID common.Hash
+				Beneficiary  common.Address
+			}
+			env.ParseArgs(&args)
+			charger := gascharger.New(env)
+
+			err := Staker.NativeMetered(env.State(), charger).SetBeneficiary(thor.Address(args.Endorsor), thor.Bytes32(args.ValidationID), thor.Address(args.Beneficiary))
+			if err != nil {
+				return []any{fmt.Sprintf("revert: %v", err)}
+			}
+			return []any{""}
+		}},
 		{"native_getWithdraw", func(env *xenv.Environment) []any {
 			var args struct {
 				ValidationID common.Hash

@@ -522,3 +522,24 @@ func (v *validations) ExitValidator(id thor.Bytes32) error {
 	}
 	return v.lockedWeight.Sub(weight)
 }
+
+// SetBeneficiary sets the beneficiary for a validator.
+func (v *validations) SetBeneficiary(id thor.Bytes32, endorsor thor.Address, beneficiary thor.Address) error {
+	entry, err := v.storage.GetValidation(id)
+	if err != nil {
+		return err
+	}
+	if entry.IsEmpty() {
+		return errors.New("validator doesn't exist")
+	}
+	if entry.Endorsor != endorsor {
+		return errors.New("invalid endorser")
+	}
+	if entry.Status == StatusExit {
+		return errors.New("validator status is not queued or active")
+	}
+
+	entry.Beneficiary = &beneficiary
+
+	return v.storage.SetValidation(id, entry)
+}

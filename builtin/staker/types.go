@@ -21,15 +21,16 @@ const (
 )
 
 type Validation struct {
-	Master             thor.Address // the node address of the validation
-	Endorsor           thor.Address // the address providing the stake
-	Period             uint32       // the staking period of the validation
-	CompleteIterations uint32       // the completed staking periods by the validation
-	Status             Status       // status of the validation
-	Online             bool         // whether the validation is online or not
-	AutoRenew          bool         // whether the validations staking period is auto-renewed
-	StartBlock         uint32       // the block number when the validation started the first staking period
-	ExitBlock          *uint32      `rlp:"nil"` // the block number when the validation moved to cooldown
+	Master             thor.Address  // the node address of the validation
+	Endorsor           thor.Address  // the address providing the stake
+	Period             uint32        // the staking period of the validation
+	CompleteIterations uint32        // the completed staking periods by the validation
+	Status             Status        // status of the validation
+	Online             bool          // whether the validation is online or not
+	AutoRenew          bool          // whether the validations staking period is auto-renewed
+	StartBlock         uint32        // the block number when the validation started the first staking period
+	ExitBlock          *uint32       `rlp:"nil"` // the block number when the validation moved to cooldown
+	Beneficiary        *thor.Address `rlp:"nil"` // the address that receives the rewards for the validation
 
 	LockedVET          *big.Int // the amount of VET locked for the current staking period
 	NextPeriodDecrease *big.Int // the amount of VET that will be unlocked in the next staking period. DOES NOT contribute to the TVL

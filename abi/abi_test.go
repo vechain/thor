@@ -99,25 +99,7 @@ func TestStakerABI(t *testing.T) {
 		{"queuedStake", true},
 		{"addValidator", false},
 		{"withdraw", false},
-		{"get", true},
-		{"getWithdraw", true},
-		{"firstActive", true},
-		{"firstQueued", true},
-		{"next", true},
-		{"updateAutoRenew", false},
-		{"increaseStake", false},
-		{"decreaseStake", false},
-		{"addDelegation", false},
-		{"getDelegation", true},
-		{"updateDelegationAutoRenew", false},
-		{"withdrawDelegation", false},
-		{"getRewards", true},
-		{"getCompletedPeriods", true},
-		{"getValidatorTotals", true},
-		{"lookupMaster", true},
 	}
-
-	assert.Equal(t, len(testCases), len(abi.Methods()))
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

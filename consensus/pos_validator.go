@@ -58,6 +58,12 @@ func (c *Consensus) validateStakingProposer(header *block.Header, parent *block.
 	if parent.TotalScore()+score != header.TotalScore() {
 		return consensusError(fmt.Sprintf("pos - block total score invalid: want %v, have %v", parent.TotalScore()+score, header.TotalScore()))
 	}
+	validation := sched.Validation()
+	if validation.Beneficiary != nil && !validation.Beneficiary.IsZero() {
+		if signer != *validation.Beneficiary {
+			return consensusError(fmt.Sprintf("pos - block signer %v is not the beneficiary %v", signer, *validation.Beneficiary))
+		}
+	}
 
 	hasUpdates := false
 	for addr, online := range updates {
