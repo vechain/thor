@@ -533,7 +533,7 @@ side-chain:   %v  %v`,
 
 	uniqueSigners := make([]thor.Address, len(sideIDs)+1)
 	signer, err := newBlock.Header().Signer()
-	logger.Warn("failed to extract signer", "err", err)
+	logger.Warn("failed to extract new block signer", "err", err)
 	uniqueSigners[0] = signer
 	for idx, id := range sideIDs {
 		b, err := n.repo.GetBlock(id)
@@ -542,7 +542,7 @@ side-chain:   %v  %v`,
 			return
 		}
 		signer, err = b.Header().Signer()
-		logger.Warn("failed to extract signer", "err", err)
+		logger.Warn("failed to extract signer of side chain", "err", err)
 		uniqueSigners[idx+1] = signer
 		for _, tx := range b.Transactions() {
 			if err := n.txPool.Add(tx); err != nil {
