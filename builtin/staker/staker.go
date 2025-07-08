@@ -137,26 +137,26 @@ func (s *Staker) Next(prev thor.Bytes32) (thor.Bytes32, error) {
 // AddValidator queues a new validator.
 func (s *Staker) AddValidator(
 	endorsor thor.Address,
-	master thor.Address,
+	node thor.Address,
 	period uint32,
 	stake *big.Int,
 	autoRenew bool,
 	currentBlock uint32,
 ) (thor.Bytes32, error) {
 	stakeETH := new(big.Int).Div(stake, big.NewInt(1e18))
-	logger.Debug("adding validator", "endorsor", endorsor, "master", master, "period", period, "stake", stakeETH, "autoRenew", autoRenew)
+	logger.Debug("adding validator", "endorsor", endorsor, "node", node, "period", period, "stake", stakeETH, "autoRenew", autoRenew)
 
-	if id, err := s.validations.Add(endorsor, master, period, stake, autoRenew, currentBlock); err != nil {
-		logger.Info("add validator failed", "master", master, "error", err)
+	if id, err := s.validations.Add(endorsor, node, period, stake, autoRenew, currentBlock); err != nil {
+		logger.Info("add validator failed", "node", node, "error", err)
 		return thor.Bytes32{}, err
 	} else {
-		logger.Info("added validator", "master", master, "id", id)
+		logger.Info("added validator", "node", node, "id", id)
 		return id, nil
 	}
 }
 
-func (s *Staker) LookupMaster(master thor.Address) (*Validation, thor.Bytes32, error) {
-	return s.storage.LookupMaster(master)
+func (s *Staker) LookupNode(node thor.Address) (*Validation, thor.Bytes32, error) {
+	return s.storage.LookupNode(node)
 }
 
 func (s *Staker) Get(id thor.Bytes32) (*Validation, error) {
@@ -223,7 +223,7 @@ func (s *Staker) GetWithdrawable(id thor.Bytes32, block uint32) (*big.Int, error
 }
 
 func (s *Staker) SetOnline(id thor.Bytes32, online bool) (bool, error) {
-	logger.Debug("set master online", "id", id, "online", online)
+	logger.Debug("set node online", "id", id, "online", online)
 	entry, err := s.storage.GetValidation(id)
 	if err != nil {
 		return false, err
@@ -276,9 +276,9 @@ func (s *Staker) GetDelegation(
 
 // HasDelegations returns true if the validator has any delegations.
 func (s *Staker) HasDelegations(
-	master thor.Address,
+	node thor.Address,
 ) (bool, error) {
-	_, validationID, err := s.storage.LookupMaster(master)
+	_, validationID, err := s.storage.LookupNode(node)
 	if err != nil {
 		return false, err
 	}
@@ -341,9 +341,9 @@ func (s *Staker) GetCompletedPeriods(validationID thor.Bytes32) (uint32, error) 
 	return s.storage.GetCompletedPeriods(validationID)
 }
 
-// IncreaseReward Increases reward for master address, for current staking period.
-func (s *Staker) IncreaseReward(master thor.Address, reward big.Int) error {
-	return s.storage.IncreaseReward(master, reward)
+// IncreaseReward Increases reward for node address, for current staking period.
+func (s *Staker) IncreaseReward(node thor.Address, reward big.Int) error {
+	return s.storage.IncreaseReward(node, reward)
 }
 
 // GetValidatorsTotals returns the total stake, total weight, total delegators stake and total delegators weight.

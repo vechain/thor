@@ -43,18 +43,18 @@ func RandomStake() *big.Int {
 
 type keySet struct {
 	endorsor thor.Address
-	master   thor.Address
+	node     thor.Address
 }
 
 func createKeys(amount int) map[thor.Address]keySet {
 	keys := make(map[thor.Address]keySet)
 	for range amount {
-		nodeMaster := datagen.RandAddress()
+		node := datagen.RandAddress()
 		endorsor := datagen.RandAddress()
 
-		keys[nodeMaster] = keySet{
+		keys[node] = keySet{
 			endorsor: endorsor,
-			master:   nodeMaster,
+			node:     node,
 		}
 	}
 	return keys
@@ -75,7 +75,7 @@ func newStaker(t *testing.T, amount int, maxValidators int64, initialise bool) (
 		for _, key := range keys {
 			stake := RandomStake()
 			totalStake = totalStake.Add(totalStake, stake)
-			if _, err := staker.AddValidator(key.endorsor, key.master, uint32(360)*24*15, stake, true, 0); err != nil {
+			if _, err := staker.AddValidator(key.endorsor, key.node, uint32(360)*24*15, stake, true, 0); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -281,7 +281,7 @@ func TestStaker_AddValidator_QueueOrder(t *testing.T) {
 	for i := range 100 {
 		loopVal, err := staker.storage.GetValidation(loopID)
 		assert.NoError(t, err)
-		assert.Equal(t, expectedOrder[i], loopVal.Master)
+		assert.Equal(t, expectedOrder[i], loopVal.Node)
 
 		next, err := staker.Next(loopID)
 		assert.NoError(t, err)
@@ -1355,7 +1355,7 @@ func TestStaker_Next(t *testing.T) {
 	for i := range 100 {
 		currentVal, err := staker.Get(current)
 		assert.NoError(t, err)
-		assert.Equal(t, queuedGroup[i], currentVal.Master)
+		assert.Equal(t, queuedGroup[i], currentVal.Node)
 
 		next, err := staker.Next(current)
 		assert.NoError(t, err)
@@ -1982,7 +1982,7 @@ func TestStaker_Housekeep_Exit_Decrements_Leader_Group_Size(t *testing.T) {
 	assert.Equal(t, big.NewInt(1), leaderGroupSize)
 	leaderGroupHead, err = staker.validations.leaderGroup.Peek()
 	assert.NoError(t, err)
-	assert.Equal(t, addr3, leaderGroupHead.Master)
+	assert.Equal(t, addr3, leaderGroupHead.Node)
 
 	_, _, err = staker.Housekeep(exitBlock * 2)
 	assert.NoError(t, err)
