@@ -10,11 +10,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
+	"math/big"
 	"os"
 	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/vrf"
 )
 
@@ -218,4 +221,135 @@ func BenchmarkVRF(b *testing.B) {
 			}
 		}
 	})
+}
+
+func TestWeightedValidatorSelection(t *testing.T) {
+	// Create test validators with different weights
+	validators := []vrf.Validator{
+		{
+			Address: thor.BytesToAddress([]byte("validator1")),
+			Weight:  big.NewInt(100),
+		},
+		{
+			Address: thor.BytesToAddress([]byte("validator2")),
+			Weight:  big.NewInt(200),
+		},
+		{
+			Address: thor.BytesToAddress([]byte("validator3")),
+			Weight:  big.NewInt(300),
+		},
+	}
+
+	alpha := []byte("test alpha seed")
+	maxValidators := 2
+
+	selected, beta, pi, err := vrf.WeightedValidatorSelection(validators, alpha, maxValidators)
+	assert.NoError(t, err)
+	assert.NotNil(t, selected)
+	assert.NotNil(t, beta)
+	assert.NotNil(t, pi)
+
+	// Should select exactly maxValidators
+	assert.Len(t, selected, maxValidators)
+
+	// Should not have duplicates
+	selectedSet := make(map[thor.Address]bool)
+	for _, addr := range selected {
+		assert.False(t, selectedSet[addr], "duplicate validator selected")
+		selectedSet[addr] = true
+	}
+
+	// All selected validators should be from the original list
+	for _, addr := range selected {
+		found := false
+		for _, v := range validators {
+			if v.Address == addr {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "selected validator not in original list")
+	}
+}
+
+func TestWeightedValidatorSelectionEmpty(t *testing.T) {
+	validators := []vrf.Validator{}
+	alpha := []byte("test alpha seed")
+	maxValidators := 5
+
+	selected, beta, pi, err := vrf.WeightedValidatorSelection(validators, alpha, maxValidators)
+	assert.NoError(t, err)
+	assert.Nil(t, selected)
+	assert.Nil(t, beta)
+	assert.Nil(t, pi)
+}
+
+func TestWeightedValidatorSelectionZeroWeight(t *testing.T) {
+	validators := []vrf.Validator{
+		{
+			Address: thor.BytesToAddress([]byte("validator1")),
+			Weight:  big.NewInt(0),
+		},
+		{
+			Address: thor.BytesToAddress([]byte("validator2")),
+			Weight:  big.NewInt(0),
+		},
+	}
+
+	alpha := []byte("test alpha seed")
+	maxValidators := 5
+
+	selected, beta, pi, err := vrf.WeightedValidatorSelection(validators, alpha, maxValidators)
+	assert.NoError(t, err)
+	assert.Nil(t, selected)
+	assert.Nil(t, beta)
+	assert.Nil(t, pi)
+}
+
+func TestWeightedValidatorSelectionDeterministic(t *testing.T) {
+	validators := []vrf.Validator{
+		{
+			Address: thor.BytesToAddress([]byte("validator1")),
+			Weight:  big.NewInt(100),
+		},
+		{
+			Address: thor.BytesToAddress([]byte("validator2")),
+			Weight:  big.NewInt(200),
+		},
+		{
+			Address: thor.BytesToAddress([]byte("validator3")),
+			Weight:  big.NewInt(300),
+		},
+	}
+
+	alpha := []byte("deterministic seed")
+	maxValidators := 2
+
+	// Run selection multiple times with same input
+	selected1, _, _, err1 := vrf.WeightedValidatorSelection(validators, alpha, maxValidators)
+	selected2, _, _, err2 := vrf.WeightedValidatorSelection(validators, alpha, maxValidators)
+
+	assert.NoError(t, err1)
+	assert.NoError(t, err2)
+	assert.Equal(t, selected1, selected2, "selection should be deterministic")
+}
+
+func TestWeightedValidatorSelectionMaxValidators(t *testing.T) {
+	validators := []vrf.Validator{
+		{
+			Address: thor.BytesToAddress([]byte("validator1")),
+			Weight:  big.NewInt(100),
+		},
+		{
+			Address: thor.BytesToAddress([]byte("validator2")),
+			Weight:  big.NewInt(200),
+		},
+	}
+
+	alpha := []byte("test alpha seed")
+	maxValidators := 5 // More than available validators
+
+	selected, _, _, err := vrf.WeightedValidatorSelection(validators, alpha, maxValidators)
+	assert.NoError(t, err)
+	assert.Len(t, selected, 2, "should select all available validators")
 }

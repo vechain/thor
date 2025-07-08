@@ -19,6 +19,7 @@ import (
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/vrf"
 
 	lru "github.com/hashicorp/golang-lru"
 )
@@ -299,6 +300,11 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 		return &bftState{}, nil
 	}
 
+	// Use VRF-based selection if the fork is active
+	if header.Number() >= engine.forkConfig.HAYABUSA {
+		return engine.computeStateWithVRF(header)
+	}
+
 	var (
 		js  *justifier
 		end uint32
@@ -367,6 +373,147 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 	engine.caches.state.Add(header.ID(), st)
 	engine.caches.justifier.Set(header.ID(), js, float64(header.Number()))
 	return st, nil
+}
+
+// computeStateWithVRF computes the bft state using weight-based VRF selection
+// This method is used when the WeightBasedVRF fork is active
+func (engine *Engine) computeStateWithVRF(header *block.Header) (*bftState, error) {
+	if cached, ok := engine.caches.state.Get(header.ID()); ok {
+		return cached.(*bftState), nil
+	}
+
+	if header.Number() == 0 || header.Number() < engine.forkConfig.FINALITY {
+		return &bftState{}, nil
+	}
+
+	// Check if weight-based VRF is active
+	if header.Number() < engine.forkConfig.HAYABUSA {
+		return engine.computeState(header)
+	}
+
+	var (
+		js  *justifier
+		end uint32
+	)
+
+	if entry := engine.caches.justifier.Remove(header.ParentID()); !isCheckPoint(header.Number()) && entry != nil {
+		js = (entry.Entry.Value).(*justifier)
+		end = header.Number()
+	} else {
+		var err error
+		js, err = engine.newJustifier(header.ParentID())
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to create vote set")
+		}
+		end = js.checkpoint
+	}
+
+	// Get validators with weights for VRF selection
+	validators, err := engine.getValidatorsWithWeights(header.ParentID())
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get validators with weights")
+	}
+
+	// Use VRF to select validators based on weight
+	alpha := header.Alpha()
+	if len(alpha) == 0 {
+		// Fallback to parent's state root if alpha is empty
+		parentSummary, err := engine.repo.GetBlockSummary(header.ParentID())
+		if err != nil {
+			return nil, err
+		}
+		alpha = parentSummary.Header.StateRoot().Bytes()
+	}
+
+	selectedValidators, _, _, err := vrf.WeightedValidatorSelection(validators, alpha, 101) // Max 101 validators
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to select validators with VRF")
+	}
+
+	// Create a set of selected validators for quick lookup
+	selectedSet := make(map[thor.Address]bool)
+	for _, addr := range selectedValidators {
+		selectedSet[addr] = true
+	}
+
+	h := header
+	for {
+		if h.Number() < engine.forkConfig.FINALITY {
+			break
+		}
+
+		signer, _ := h.Signer()
+
+		// Only include votes from selected validators
+		if !selectedSet[signer] {
+			logger.Debug("validator not selected by VRF", "signer", signer)
+			continue
+		}
+
+		sum, err := engine.repo.GetBlockSummary(h.ParentID())
+		if err != nil {
+			return nil, err
+		}
+		state := engine.stater.NewState(sum.Root())
+		staker := builtin.Staker.Native(state)
+		validator, _, err := staker.LookupMaster(signer)
+		if err != nil {
+			logger.Warn("failed to lookup validator", "signer", signer, "error", err)
+			continue
+		}
+
+		if validator == nil || validator.IsEmpty() {
+			logger.Warn("validator not found or has no stake", "signer", signer)
+			continue
+		}
+
+		logger.Debug("adding VRF-selected validator to voting set", "signer", signer, "weight", validator.Weight)
+		js.AddBlock(signer, h.COM(), validator.Weight)
+
+		if h.Number() <= end {
+			break
+		}
+
+		sum, err = engine.repo.GetBlockSummary(h.ParentID())
+		if err != nil {
+			return nil, err
+		}
+		h = sum.Header
+	}
+
+	st := js.Summarize()
+	engine.caches.state.Add(header.ID(), st)
+	engine.caches.justifier.Set(header.ID(), js, float64(header.Number()))
+	return st, nil
+}
+
+// getValidatorsWithWeights retrieves all validators with their weights
+func (engine *Engine) getValidatorsWithWeights(parentID thor.Bytes32) ([]vrf.Validator, error) {
+	parentSummary, err := engine.repo.GetBlockSummary(parentID)
+	if err != nil {
+		return nil, err
+	}
+
+	state := engine.stater.NewState(parentSummary.Root())
+	staker := builtin.Staker.Native(state)
+
+	// Get leader group (active validators)
+	leaderGroup, err := staker.LeaderGroup()
+	if err != nil {
+		return nil, err
+	}
+
+	var vrfValidators []vrf.Validator
+	for _, validation := range leaderGroup {
+		if validation.Weight.Sign() > 0 {
+			vrfValidators = append(vrfValidators, vrf.Validator{
+				Address: validation.Master,
+				Weight:  validation.Weight,
+			})
+		}
+	}
+
+	return vrfValidators, nil
 }
 
 // findCheckpointByQuality finds the first checkpoint reaches the given quality.

@@ -21,6 +21,7 @@ import (
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/vrf"
 	"github.com/vechain/thor/v2/xenv"
 )
 
@@ -136,6 +137,13 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 
 		if _, err := header.Beta(); err != nil {
 			return consensusError(fmt.Sprintf("block VRF signature invalid: %v", err))
+		}
+
+		// Validate weight-based VRF if the fork is active
+		if header.Number() >= c.forkConfig.HAYABUSA {
+			if err := c.validateWeightBasedVRF(header, parent); err != nil {
+				return consensusError(fmt.Sprintf("weight-based VRF validation failed: %v", err))
+			}
 		}
 	}
 
@@ -354,4 +362,59 @@ func (c *Consensus) syncPOS(staker *staker.Staker, current uint32) (active bool,
 	}
 
 	return active, false, nil, nil
+}
+
+// validateWeightBasedVRF validates that the block signer was selected by weight-based VRF
+func (c *Consensus) validateWeightBasedVRF(header *block.Header, parent *block.Header) error {
+	signer, err := header.Signer()
+	if err != nil {
+		return fmt.Errorf("failed to get block signer: %v", err)
+	}
+
+	// Get validators with weights from parent state
+	parentSummary, err := c.repo.GetBlockSummary(parent.ID())
+	if err != nil {
+		return fmt.Errorf("failed to get parent summary: %v", err)
+	}
+
+	state := c.stater.NewState(parentSummary.Root())
+	staker := builtin.Staker.Native(state)
+
+	// Get leader group (active validators)
+	leaderGroup, err := staker.LeaderGroup()
+	if err != nil {
+		return fmt.Errorf("failed to get leader group: %v", err)
+	}
+
+	// Convert to VRF validators format
+	var validators []vrf.Validator
+	for _, validation := range leaderGroup {
+		if validation.Weight.Sign() > 0 {
+			validators = append(validators, vrf.Validator{
+				Address: validation.Master,
+				Weight:  validation.Weight,
+			})
+		}
+	}
+
+	// Use alpha as seed for VRF selection
+	alpha := header.Alpha()
+	if len(alpha) == 0 {
+		alpha = parent.StateRoot().Bytes()
+	}
+
+	// Select validators using VRF
+	selectedValidators, _, _, err := vrf.WeightedValidatorSelection(validators, alpha, 101)
+	if err != nil {
+		return fmt.Errorf("failed to select validators with VRF: %v", err)
+	}
+
+	// Check if the signer was selected
+	for _, selected := range selectedValidators {
+		if selected == signer {
+			return nil // Signer was selected by VRF
+		}
+	}
+
+	return fmt.Errorf("block signer %v was not selected by weight-based VRF", signer)
 }
