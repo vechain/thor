@@ -80,6 +80,10 @@ func (n *Node) packerLoop(ctx context.Context) {
 				}
 
 				if flow.Number() == 10 {
+					flow, pos, err = n.packer.Schedule(n.repo.BestBlockSummary(), now)
+					if err != nil {
+						logger.Error("failed to initalize second flow", "err", err)
+					}
 					if err := n.pack(flow, true); err != nil {
 						logger.Error("failed to pack block", "err", err)
 					}
