@@ -97,6 +97,11 @@ func (b *Builder) BaseFee(baseFee *big.Int) *Builder {
 	return b
 }
 
+func (b *Builder) Evidence(evidence *[][]byte) *Builder {
+	b.headerBody.Extension.Evidence = evidence
+	return b
+}
+
 // Build build a block object.
 func (b *Builder) Build() *Block {
 	header := Header{body: b.headerBody}

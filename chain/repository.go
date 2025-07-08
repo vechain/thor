@@ -59,6 +59,7 @@ type Repository struct {
 		summaries *cache
 		txs       *cache
 		receipts  *cache
+		doubleSig *cache
 
 		stats struct {
 			summaries cache2.Stats
@@ -92,6 +93,7 @@ func NewRepository(db *muxdb.MuxDB, genesis *block.Block) (*Repository, error) {
 	repo.caches.summaries = newCache(512)
 	repo.caches.txs = newCache(2048)
 	repo.caches.receipts = newCache(2048)
+	repo.caches.doubleSig = newCache(512)
 
 	if val, err := repo.propStore.Get(bestBlockIDKey); err != nil {
 		if !repo.propStore.IsNotFound(err) {
@@ -446,4 +448,8 @@ func (r *Repository) IsNotFound(err error) bool {
 // NewTicker create a signal Waiter to receive event that the best block changed.
 func (r *Repository) NewTicker() co.Waiter {
 	return r.tick.NewWaiter()
+}
+
+func (r *Repository) RecordDoubleSig(blockNum uint32, numOfConflicts uint32) {
+	r.caches.doubleSig.Add(blockNum, numOfConflicts)
 }

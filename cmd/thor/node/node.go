@@ -531,17 +531,27 @@ side-chain:   %v  %v`,
 			n, sideIDs[n-1]))
 	}
 
-	for _, id := range sideIDs {
+	uniqueSigners := make([]thor.Address, len(sideIDs)+1)
+	signer, err := newBlock.Header().Signer()
+	logger.Warn("failed to extract signer", "err", err)
+	uniqueSigners[0] = signer
+	for idx, id := range sideIDs {
 		b, err := n.repo.GetBlock(id)
 		if err != nil {
 			logger.Warn("failed to process fork", "err", err)
 			return
 		}
+		signer, err = b.Header().Signer()
+		logger.Warn("failed to extract signer", "err", err)
+		uniqueSigners[idx+1] = signer
 		for _, tx := range b.Transactions() {
 			if err := n.txPool.Add(tx); err != nil {
 				logger.Debug("failed to add tx to tx pool", "err", err, "id", tx.ID())
 			}
 		}
+	}
+	for _, sig := range uniqueSigners {
+		println("unique signer is ===========", sig.String())
 	}
 }
 

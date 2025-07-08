@@ -32,6 +32,7 @@ type JSONBlockSummary struct {
 	IsTrunk       bool                  `json:"isTrunk"`
 	IsFinalized   bool                  `json:"isFinalized"`
 	BaseFeePerGas *math.HexOrDecimal256 `json:"baseFeePerGas,omitempty"`
+	Evidence      *[][]thor.Bytes32     `json:"evidence,omitempty"`
 }
 
 type JSONRawBlockSummary struct {

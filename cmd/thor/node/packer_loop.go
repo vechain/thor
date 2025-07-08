@@ -174,6 +174,7 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 			}
 		}
 
+		println("this is number of conflicts", uint32(len(conflicts)))
 		// add the new block into repository
 		if err := n.repo.AddBlock(newBlock, receipts, uint32(len(conflicts)), true); err != nil {
 			return errors.Wrap(err, "add block")

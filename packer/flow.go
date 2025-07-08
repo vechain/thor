@@ -256,6 +256,11 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 		builder.BaseFee(fork.CalcBaseFee(f.packer.forkConfig, f.parentHeader))
 	}
 
+	if newBlockConflicts > 0 && f.posActive {
+		evidence := make([][]byte, 0)
+		builder.Evidence(&evidence)
+	}
+
 	if f.Number() < f.packer.forkConfig.VIP214 {
 		newBlock := builder.Build()
 

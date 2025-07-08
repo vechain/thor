@@ -319,11 +319,13 @@ func TestExtensionV2(t *testing.T) {
 			name: "alpha, com and baseFee",
 			test: func(t *testing.T) {
 				baseFee := big.NewInt(123456)
+				evidence := make([][]byte, 0)
 				bytes, err := rlp.EncodeToBytes(&v2{
 					Extension: extension{
-						Alpha:   thor.Bytes32{}.Bytes(),
-						COM:     true,
-						BaseFee: baseFee,
+						Alpha:    thor.Bytes32{}.Bytes(),
+						COM:      true,
+						BaseFee:  baseFee,
+						Evidence: &evidence,
 					},
 				})
 				assert.Nil(t, err)
@@ -335,7 +337,7 @@ func TestExtensionV2(t *testing.T) {
 				cnt, err := rlp.CountValues(content)
 				assert.Nil(t, err)
 				// All fields should be present
-				assert.Equal(t, 3, cnt)
+				assert.Equal(t, 4, cnt)
 
 				var dst v2
 				err = rlp.DecodeBytes(bytes, &dst)
@@ -350,11 +352,13 @@ func TestExtensionV2(t *testing.T) {
 			name: "alpha, com is false and baseFee",
 			test: func(t *testing.T) {
 				baseFee := big.NewInt(123456)
+				evidence := make([][]byte, 0)
 				bytes, err := rlp.EncodeToBytes(&v2{
 					Extension: extension{
-						Alpha:   thor.Bytes32{}.Bytes(),
-						COM:     false,
-						BaseFee: baseFee,
+						Alpha:    thor.Bytes32{}.Bytes(),
+						COM:      false,
+						BaseFee:  baseFee,
+						Evidence: &evidence,
 					},
 				})
 				assert.Nil(t, err)
@@ -366,7 +370,7 @@ func TestExtensionV2(t *testing.T) {
 				cnt, err := rlp.CountValues(content)
 				assert.Nil(t, err)
 				// All fields should be present
-				assert.Equal(t, 3, cnt)
+				assert.Equal(t, 4, cnt)
 
 				var dst v2
 				err = rlp.DecodeBytes(bytes, &dst)
