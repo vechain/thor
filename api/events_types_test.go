@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package events
+package api
 
 import (
 	"testing"
@@ -186,7 +186,7 @@ func TestConvertEvent(t *testing.T) {
 	}
 	expectedData := hexutil.Encode(event.Data)
 
-	result := convertEvent(event, true)
+	result := ConvertEvent(event, true)
 
 	assert.Equal(t, event.Address, result.Address)
 	assert.Equal(t, expectedData, result.Data)

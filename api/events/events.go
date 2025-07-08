@@ -13,6 +13,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/logdb"
@@ -33,9 +34,9 @@ func New(repo *chain.Repository, db *logdb.LogDB, logsLimit uint64) *Events {
 }
 
 // Filter query events with option
-func (e *Events) filter(ctx context.Context, ef *EventFilter) ([]*FilteredEvent, error) {
+func (e *Events) filter(ctx context.Context, ef *api.EventFilter) ([]*api.FilteredEvent, error) {
 	chain := e.repo.NewBestChain()
-	filter, err := convertEventFilter(chain, ef)
+	filter, err := api.ConvertEventFilter(chain, ef)
 	if err != nil {
 		return nil, err
 	}
@@ -43,15 +44,15 @@ func (e *Events) filter(ctx context.Context, ef *EventFilter) ([]*FilteredEvent,
 	if err != nil {
 		return nil, err
 	}
-	fes := make([]*FilteredEvent, len(events))
+	fes := make([]*api.FilteredEvent, len(events))
 	for i, e := range events {
-		fes[i] = convertEvent(e, ef.Options.IncludeIndexes)
+		fes[i] = api.ConvertEvent(e, ef.Options.IncludeIndexes)
 	}
 	return fes, nil
 }
 
 func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
-	var filter EventFilter
+	var filter api.EventFilter
 	if err := utils.ParseJSON(req.Body, &filter); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
@@ -64,10 +65,16 @@ func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
 	if filter.Range != nil && filter.Range.From != nil && filter.Range.To != nil && *filter.Range.From > *filter.Range.To {
 		return utils.BadRequest(fmt.Errorf("filter.Range.To must be greater than or equal to filter.Range.From"))
 	}
+	// reject null element in CriteriaSet, {} will be unmarshaled to default value and will be accepted/handled by the filter engine
+	for i, criterion := range filter.CriteriaSet {
+		if criterion == nil {
+			return utils.BadRequest(fmt.Errorf("criteriaSet[%d]: null not allowed", i))
+		}
+	}
 	if filter.Options == nil {
 		// if filter.Options is nil, set to the default limit +1
 		// to detect whether there are more logs than the default limit
-		filter.Options = &Options{
+		filter.Options = &api.Options{
 			Offset:         0,
 			Limit:          e.limit + 1,
 			IncludeIndexes: false,

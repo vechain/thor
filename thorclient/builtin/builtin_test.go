@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vechain/thor/v2/api"
+
 	"github.com/stretchr/testify/require"
-	"github.com/vechain/thor/v2/api/events"
-	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/test/testchain"
@@ -36,9 +36,9 @@ func txOpts() *bind.TxOptions {
 	}
 }
 
-func newRange(receipt *transactions.Receipt) *events.Range {
+func newRange(receipt *api.Receipt) *api.Range {
 	block64 := uint64(receipt.Meta.BlockNumber)
-	return &events.Range{
+	return &api.Range{
 		From: &block64,
 		To:   &block64,
 	}

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
@@ -149,12 +150,14 @@ func TestLimitByDelegator(t *testing.T) {
 }
 
 func TestPendingCost(t *testing.T) {
-	forkConfig := &thor.SoloFork
-	tchain, err := testchain.NewWithFork(forkConfig)
+	tchain, err := testchain.NewWithFork(&thor.SoloFork)
 	assert.Nil(t, err)
 
 	repo := tchain.Repo()
 	stater := tchain.Stater()
+	forkConfig := tchain.GetForkConfig()
+
+	tchain.MintBlock(genesis.DevAccounts()[0])
 
 	// Creating transactions
 	tx1 := newTx(tx.TypeLegacy, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
@@ -170,15 +173,16 @@ func TestPendingCost(t *testing.T) {
 	best := repo.BestBlockSummary()
 	state := stater.NewState(best.Root())
 
-	txObj1.executable, err = txObj1.Executable(chain, state, best.Header, forkConfig)
+	baseFee := galactica.CalcBaseFee(best.Header, forkConfig)
+	txObj1.executable, err = txObj1.Executable(chain, state, best.Header, forkConfig, baseFee)
 	assert.Nil(t, err)
 	assert.True(t, txObj1.executable)
 
-	txObj2.executable, err = txObj2.Executable(chain, state, best.Header, forkConfig)
+	txObj2.executable, err = txObj2.Executable(chain, state, best.Header, forkConfig, baseFee)
 	assert.Nil(t, err)
 	assert.True(t, txObj2.executable)
 
-	txObj3.executable, err = txObj3.Executable(chain, state, best.Header, forkConfig)
+	txObj3.executable, err = txObj3.Executable(chain, state, best.Header, forkConfig, baseFee)
 	assert.Nil(t, err)
 	assert.True(t, txObj3.executable)
 
