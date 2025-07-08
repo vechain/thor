@@ -499,13 +499,6 @@ interface StakerNative {
         view
         returns (address, string calldata);
 
-    function native_getBlockProposerAndReward(
-        uint32 blockNumber
-    )
-        external
-        view
-        returns (uint256, address, address, bytes32, string calldata);
-
     function native_getRewards(
         bytes32 validationID,
         uint32 stakingPeriod
