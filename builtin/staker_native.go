@@ -58,16 +58,16 @@ func init() {
 			if validator.ExitBlock != nil {
 				exitBlock = *validator.ExitBlock
 			}
-			return []any{validator.Master, validator.Endorsor, validator.LockedVET, validator.Weight, validator.Status, validator.AutoRenew, validator.Online, validator.Period, validator.StartBlock, exitBlock, ""}
+			return []any{validator.Node, validator.Endorsor, validator.LockedVET, validator.Weight, validator.Status, validator.AutoRenew, validator.Online, validator.Period, validator.StartBlock, exitBlock, ""}
 		}},
-		{"native_lookupMaster", func(env *xenv.Environment) []any {
+		{"native_lookupNode", func(env *xenv.Environment) []any {
 			var args struct {
-				Master common.Address
+				Node common.Address
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			_, validationID, _ := Staker.NativeMetered(env.State(), charger).LookupMaster(thor.Address(args.Master))
+			_, validationID, _ := Staker.NativeMetered(env.State(), charger).LookupNode(thor.Address(args.Node))
 
 			return []any{validationID}
 		}},
@@ -137,7 +137,7 @@ func init() {
 		{"native_addValidator", func(env *xenv.Environment) []any {
 			var args struct {
 				Endorsor  common.Address
-				Master    common.Address
+				Node      common.Address
 				Period    uint32
 				Stake     *big.Int
 				AutoRenew bool
@@ -153,12 +153,12 @@ func init() {
 			if !isActive {
 				charger.Charge(thor.SloadGas) // a.getEntry(nodeMaster)
 
-				exists, endorsor, _, _, err := Authority.Native(env.State()).Get(thor.Address(args.Master))
+				exists, endorsor, _, _, err := Authority.Native(env.State()).Get(thor.Address(args.Node))
 				if err != nil {
 					return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", err)}
 				}
 				if !exists {
-					return []any{thor.Bytes32{}, "revert: master is not present in the Authority"}
+					return []any{thor.Bytes32{}, "revert: node is not present in the Authority"}
 				}
 				if thor.Address(args.Endorsor) != endorsor {
 					return []any{thor.Bytes32{}, "revert: endorsor is not present in the Authority"}
@@ -168,7 +168,7 @@ func init() {
 			id, err := Staker.NativeMetered(env.State(), charger).
 				AddValidator(
 					thor.Address(args.Endorsor),
-					thor.Address(args.Master),
+					thor.Address(args.Node),
 					args.Period, args.Stake,
 					args.AutoRenew,
 					env.BlockContext().Number,

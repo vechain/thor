@@ -52,15 +52,15 @@ func NewScheduler(
 
 	online := make([]*onlineProposer, 0)
 	for id, p := range proposers {
-		if p.Master == addr {
+		if p.Node == addr {
 			proposer = p
 			proposerID = id
 		}
-		if p.Online || p.Master == addr {
+		if p.Online || p.Node == addr {
 			online = append(online, &onlineProposer{
 				id:         id,
 				validation: p,
-				hash:       thor.Blake2b(seed, num[:], p.Master.Bytes()),
+				hash:       thor.Blake2b(seed, num[:], p.Node.Bytes()),
 			})
 		}
 	}

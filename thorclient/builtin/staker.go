@@ -128,10 +128,10 @@ func (s *Staker) QueuedStake() (*big.Int, *big.Int, error) {
 	return *(out[0].(**big.Int)), *(out[1].(**big.Int)), nil
 }
 
-// LookupMaster returns the validation ID for the given master address if it is queued or active.
-func (s *Staker) LookupMaster(master thor.Address) (*Validator, thor.Bytes32, error) {
+// LookupNode returns the validation ID for the given node address if it is queued or active.
+func (s *Staker) LookupNode(master thor.Address) (*Validator, thor.Bytes32, error) {
 	out := new(common.Hash)
-	if err := s.contract.Method("lookupMaster", common.Address(master)).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
+	if err := s.contract.Method("lookupNode", common.Address(master)).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, thor.Bytes32{}, err
 	}
 	res := *out

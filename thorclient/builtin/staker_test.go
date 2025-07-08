@@ -120,8 +120,8 @@ func TestStaker(t *testing.T) {
 	require.Greater(t, firstActive.StartBlock, uint32(0))
 	require.Equal(t, firstActive.ExitBlock, uint32(math.MaxUint32))
 
-	// LookupMaster
-	getRes, id, err := staker.LookupMaster(*firstActive.Master)
+	// LookupNode
+	getRes, id, err := staker.LookupNode(*firstActive.Master)
 	require.NoError(t, err)
 	require.False(t, id.IsZero())
 	require.True(t, getRes.Exists())
