@@ -22,10 +22,9 @@ var (
 	minStake = big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
 	maxStake = big.NewInt(0).Mul(big.NewInt(400e6), big.NewInt(1e18))
 
-	// TODO: Enable these once customnet testing is done
-	//oneWeekStakingPeriod  = uint32(360) * 24 * 7     // 1 weeks
-	//twoWeeksStakingPeriod = oneWeekStakingPeriod * 2 // 2 weeks
-	//oneMonthStakingPeriod = uint32(360) * 24 * 30    // 30 days
+	lowStakingPeriod    = uint32(360) * 24 * 7  // 1 week
+	mediumStakingPeriod = uint32(360) * 24 * 14 // 2 weeks
+	highStakingPeriod   = uint32(360) * 24 * 30 // 30 days
 
 	cooldownPeriod = uint32(8640)
 	epochLength    = uint32(180)
@@ -51,19 +50,9 @@ type Staker struct {
 func New(addr thor.Address, state *state.State, params *params.Params, charger *gascharger.Charger) *Staker {
 	storage := newStorage(addr, state, charger)
 
-	if num, err := solidity.NewUint256(addr, state, thor.BytesToBytes32([]byte("epoch-length"))).Get(); err == nil {
-		numUint64 := num.Uint64()
-		if numUint64 != 0 {
-			epochLength = uint32(numUint64)
-		}
-	}
-
-	if num, err := solidity.NewUint256(addr, state, thor.BytesToBytes32([]byte("cooldown-period"))).Get(); err == nil {
-		numUint64 := num.Uint64()
-		if numUint64 != 0 {
-			cooldownPeriod = uint32(numUint64)
-		}
-	}
+	// debug overrides for testing
+	storage.debugOverride(&epochLength, thor.BytesToBytes32([]byte("epoch-length")))
+	storage.debugOverride(&cooldownPeriod, thor.BytesToBytes32([]byte("cooldown-period")))
 
 	return &Staker{
 		lockedVET:    solidity.NewUint256(addr, state, slotLockedVET),

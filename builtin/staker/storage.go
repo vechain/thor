@@ -274,3 +274,14 @@ func (s *storage) IncreaseReward(master thor.Address, reward big.Int) error {
 
 	return s.rewards.Set(key, big.NewInt(0).Add(rewards, &reward))
 }
+
+func (s *storage) debugOverride(ptr *uint32, bytes32 thor.Bytes32) {
+	if num, err := solidity.NewUint256(s.Address(), s.State(), bytes32).Get(); err == nil {
+		numUint64 := num.Uint64()
+		if numUint64 != 0 {
+			o := uint32(numUint64)
+			logger.Warn("overrode state value", "variable", bytes32.String(), "value", o)
+			*ptr = o
+		}
+	}
+}
