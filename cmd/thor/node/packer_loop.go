@@ -51,6 +51,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			n.packer.SetTargetGasLimit(suggested)
 		}
 
+		bb := n.repo.BestBlockSummary()
 		flow, pos, err := n.packer.Schedule(n.repo.BestBlockSummary(), now)
 		if err != nil {
 			if !packer.IsSchedulingError(err) && authorized {
@@ -80,7 +81,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 				}
 
 				if flow.Number() == 10 {
-					flow, pos, err = n.packer.Schedule(n.repo.BestBlockSummary(), now)
+					flow, pos, err = n.packer.Schedule(bb, now)
 					if err != nil {
 						logger.Error("failed to initalize second flow", "err", err)
 					}
