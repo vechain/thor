@@ -12,6 +12,7 @@ import (
 	"crypto/elliptic"
 	"crypto/sha256"
 	"encoding/binary"
+	"errors"
 	"math/big"
 	"sort"
 
@@ -49,11 +50,12 @@ type Validator struct {
 }
 
 // WeightedValidatorSelection selects validators based on their weights using real VRF
-// This implementation uses a collective VRF approach similar to Algorand
+// This implementation requires validator private keys to generate real VRF proofs
 func WeightedValidatorSelection(
 	validators []Validator,
 	alpha []byte,
 	maxValidators int,
+	validatorPrivateKeys map[thor.Address]*ecdsa.PrivateKey,
 ) (selected []thor.Address, beta, pi []byte, err error) {
 	if len(validators) == 0 {
 		return nil, nil, nil, nil
@@ -74,72 +76,53 @@ func WeightedValidatorSelection(
 		return nil, nil, nil, nil
 	}
 
-	// Generate collective VRF using multiple validator proofs
-	beta, pi, err = generateCollectiveVRF(validators, alpha)
+	// Generate collective VRF using real validator private keys
+	collectiveBeta, collectivePi, err := generateCollectiveVRFWithPrivateKeys(validators, alpha, validatorPrivateKeys)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
 	// Use collective beta as seed for weighted selection
-	selected = selectValidatorsByWeight(validators, beta, maxValidators)
+	selected = selectValidatorsByWeight(validators, collectiveBeta, maxValidators)
 
-	return selected, beta, pi, nil
+	return selected, collectiveBeta, collectivePi, nil
 }
 
-// generateCollectiveVRF generates a collective VRF by combining individual validator VRF proofs
-// This approach ensures no single validator can manipulate the selection
-func generateCollectiveVRF(validators []Validator, alpha []byte) (beta, pi []byte, err error) {
-	// Step 1: Generate individual VRF proofs for each validator
-	// In a real implementation, these would come from the validators themselves
-	// For now, we'll simulate this process
-
+// generateCollectiveVRFWithPrivateKeys generates collective VRF using validator private keys
+func generateCollectiveVRFWithPrivateKeys(
+	validators []Validator,
+	alpha []byte,
+	validatorPrivateKeys map[thor.Address]*ecdsa.PrivateKey,
+) (beta, pi []byte, err error) {
 	var individualBetas [][]byte
 	var individualPis [][]byte
 
 	for _, validator := range validators {
-		// In reality, each validator would generate their own VRF proof
-		// Here we simulate it using a deterministic approach based on their address
-		validatorAlpha := append(alpha, validator.Address.Bytes()...)
-
-		// Use the actual VRF implementation for each validator
-		// This would require the validator's private key, which we don't have here
-		// In a real implementation, validators would submit their proofs
-		individualBeta, individualPi, err := generateValidatorVRF(validator, validatorAlpha)
-		if err != nil {
-			return nil, nil, err
+		privateKey, hasKey := validatorPrivateKeys[validator.Address]
+		if !hasKey {
+			// Skip validators that don't have private keys available
+			continue
 		}
 
-		individualBetas = append(individualBetas, individualBeta)
-		individualPis = append(individualPis, individualPi)
+		// Generate VRF proof using the validator's private key
+		validatorAlpha := append(alpha, validator.Address.Bytes()...)
+		validatorBeta, validatorPi, err := Prove(privateKey, validatorAlpha)
+		if err != nil {
+			// Skip validators with invalid VRF generation
+			continue
+		}
+
+		individualBetas = append(individualBetas, validatorBeta)
+		individualPis = append(individualPis, validatorPi)
 	}
 
-	// Step 2: Combine individual VRF outputs deterministically
+	if len(individualBetas) == 0 {
+		return nil, nil, errors.New("no validator private keys available for VRF generation")
+	}
+
+	// Combine individual VRF outputs deterministically
 	beta = combineVRFOutputs(individualBetas, alpha)
 	pi = combineVRFProofs(individualPis, alpha)
-
-	return beta, pi, nil
-}
-
-// generateValidatorVRF generates VRF for a specific validator
-// In a real implementation, this would use the validator's actual private key
-func generateValidatorVRF(validator Validator, alpha []byte) (beta, pi []byte, err error) {
-	// PROBLEM: We don't have access to the validator's private key
-	// In a real implementation, each validator would generate their own VRF proof
-	// and include it in the block or send it through a consensus mechanism
-
-	// Temporary solution: Use a deterministic hash based on the validator's address
-	// This simulates the behavior but is not real VRF
-	hasher := sha256.New()
-	hasher.Write(alpha)
-	hasher.Write(validator.Address.Bytes())
-	beta = hasher.Sum(nil)
-
-	// Crear una prueba simulada
-	pi = make([]byte, 81)
-	copy(pi, beta)
-	if len(pi) > 81 {
-		pi = pi[:81]
-	}
 
 	return beta, pi, nil
 }
@@ -183,7 +166,7 @@ func combineVRFProofs(individualPis [][]byte, alpha []byte) []byte {
 }
 
 // WeightedValidatorSelectionWithProofs selects validators using real VRF proofs from validators
-// This is the real implementation that uses actual VRF proofs submitted by validators
+// This method verifies and uses actual VRF proofs submitted by validators
 func WeightedValidatorSelectionWithProofs(
 	validators []Validator,
 	alpha []byte,
@@ -250,8 +233,7 @@ func generateCollectiveVRFWithProofs(
 	}
 
 	if len(individualBetas) == 0 {
-		// Fallback to deterministic approach if no valid proofs
-		return generateDeterministicVRF(alpha)
+		return nil, nil, errors.New("no valid VRF proofs available")
 	}
 
 	// Combine individual VRF outputs deterministically
@@ -279,24 +261,6 @@ func extractBetaFromProof(validator Validator, alpha []byte, proof []byte) ([]by
 	return hasher.Sum(nil), nil
 }
 
-// generateDeterministicVRF generates a deterministic VRF-like output
-// In production, this would use the actual VRF implementation
-func generateDeterministicVRF(alpha []byte) (beta, pi []byte, err error) {
-	// Create a deterministic hash based on alpha
-	hasher := sha256.New()
-	hasher.Write(alpha)
-	beta = hasher.Sum(nil)
-
-	// Create a mock proof (in real implementation, this would be a proper VRF proof)
-	pi = make([]byte, 81) // Standard VRF proof size
-	copy(pi, beta)
-	if len(pi) > 81 {
-		pi = pi[:81]
-	}
-
-	return beta, pi, nil
-}
-
 // selectValidatorsByWeight selects validators proportionally to their weights
 func selectValidatorsByWeight(validators []Validator, seed []byte, maxValidators int) []thor.Address {
 	if len(validators) == 0 || maxValidators <= 0 {
@@ -319,43 +283,37 @@ func selectValidatorsByWeight(validators []Validator, seed []byte, maxValidators
 	selected := make([]thor.Address, 0, maxValidators)
 	selectedSet := make(map[thor.Address]bool)
 
-	for len(selected) < maxValidators && len(selected) < len(validators) {
-		// Generate deterministic value based on seed and selection count
-		// Use a more sophisticated approach to avoid infinite loops
-		attempts := 0
-		maxAttempts := len(validators) * 2
+	// Simple deterministic selection based on seed
+	for i := 0; i < maxValidators && len(selected) < len(validators); i++ {
+		// Create a deterministic seed based on the original seed and selection count
+		attemptSeed := new(big.Int).Add(seedValue, big.NewInt(int64(i*1000)))
+		randomValue := new(big.Int).Mod(attemptSeed, totalWeight)
 
-		for attempts < maxAttempts {
-			// Create a deterministic seed based on the original seed and attempt count
-			attemptSeed := new(big.Int).Add(seedValue, big.NewInt(int64(len(selected)*1000+attempts)))
-			randomValue := new(big.Int).Mod(attemptSeed, totalWeight)
+		// Find validator based on weight
+		cumulativeWeight := new(big.Int)
+		for _, v := range validators {
+			if selectedSet[v.Address] {
+				continue
+			}
 
-			// Find validator based on weight
-			cumulativeWeight := new(big.Int)
+			cumulativeWeight.Add(cumulativeWeight, v.Weight)
+			if randomValue.Cmp(cumulativeWeight) < 0 {
+				selected = append(selected, v.Address)
+				selectedSet[v.Address] = true
+				break
+			}
+		}
+
+		// If we couldn't find a validator, try the next one
+		if len(selected) <= i {
+			// Find the first unselected validator
 			for _, v := range validators {
-				if selectedSet[v.Address] {
-					continue
-				}
-
-				cumulativeWeight.Add(cumulativeWeight, v.Weight)
-				if randomValue.Cmp(cumulativeWeight) < 0 {
+				if !selectedSet[v.Address] {
 					selected = append(selected, v.Address)
 					selectedSet[v.Address] = true
 					break
 				}
 			}
-
-			// If we found a validator, break out of the attempts loop
-			if len(selected) > attempts/len(validators) {
-				break
-			}
-
-			attempts++
-		}
-
-		// If we couldn't find a validator after max attempts, break
-		if attempts >= maxAttempts {
-			break
 		}
 	}
 

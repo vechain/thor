@@ -333,18 +333,14 @@ func (engine *Engine) computeStateWithVRF(header *block.Header) (*bftState, erro
 	validatorProofs := header.ValidatorVRFProofs()
 
 	var selectedValidators []thor.Address
-	if validatorProofs != nil && len(validatorProofs) > 0 {
+	if len(validatorProofs) > 0 {
 		// Use real VRF proofs from validators
 		selectedValidators, _, _, err = vrf.WeightedValidatorSelectionWithProofs(validators, alpha, 101, validatorProofs)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to select validators with real VRF proofs")
 		}
 	} else {
-		// Fallback to simulated VRF (for backward compatibility)
-		selectedValidators, _, _, err = vrf.WeightedValidatorSelection(validators, alpha, 101) // Max 101 validators
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to select validators with VRF")
-		}
+		return nil, errors.New("no VRF proofs available for validator selection")
 	}
 
 	// Create a set of selected validators for quick lookup
