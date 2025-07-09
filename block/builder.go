@@ -97,6 +97,7 @@ func (b *Builder) BaseFee(baseFee *big.Int) *Builder {
 	return b
 }
 
+// Evidence sets evidence.
 func (b *Builder) Evidence(evidence *[][]byte) *Builder {
 	b.headerBody.Extension.Evidence = evidence
 	return b

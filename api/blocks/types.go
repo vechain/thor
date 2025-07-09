@@ -111,17 +111,12 @@ func buildJSONBlockSummary(summary *chain.BlockSummary, isTrunk bool, isFinalize
 	var evidence []thor.Bytes32
 
 	if summary.Header.Evidence() != nil && len(*summary.Header.Evidence()) > 0 {
-		println("in the api converting evidence", len(*summary.Header.Evidence()))
-		println("initialized evidence of length", len(evidence))
 		for _, ev := range *summary.Header.Evidence() {
 			blkId := thor.BytesToBytes32(ev)
-			println("adding this evidence id", blkId.String())
 			if !blkId.IsZero() {
 				evidence = append(evidence, blkId)
 			}
-			println("evidence length is", len(evidence))
 		}
-		println("api is returning this evidence length", len(evidence))
 	}
 
 	return &JSONBlockSummary{

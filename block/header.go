@@ -95,7 +95,7 @@ func (h *Header) BaseFee() *big.Int {
 	return new(big.Int).Set(h.body.Extension.BaseFee)
 }
 
-// Evidence returns evidence of this block.
+// Evidence returns evidence in this block.
 func (h *Header) Evidence() *[][]byte {
 	if h.body.Extension.Evidence == nil {
 		return nil

@@ -450,14 +450,17 @@ func (r *Repository) NewTicker() co.Waiter {
 	return r.tick.NewWaiter()
 }
 
+// RecordDoubleSig stores evidence for block number in cache.
 func (r *Repository) RecordDoubleSig(blockNum uint32, evidence [][]byte) {
 	r.caches.doubleSig.Add(blockNum, evidence)
 }
 
+// RecordDoubleSigProcessed marks double sig as processed and removes block num from cache.
 func (r *Repository) RecordDoubleSigProcessed(blockNum uint32) {
 	r.caches.doubleSig.Remove(blockNum)
 }
 
+// GetDoubleSigEvidence retrieves double sig evidence from cache.
 func (r *Repository) GetDoubleSigEvidence() *[][]byte {
 	if r.caches.doubleSig.Len() == 0 {
 		return nil
