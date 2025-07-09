@@ -30,9 +30,9 @@ func newLinkedList(
 	countPos thor.Bytes32,
 ) *linkedList {
 	return &linkedList{
-		head:    solidity.NewBytes32(storage.Address(), storage.State(), headPos),
-		tail:    solidity.NewBytes32(storage.Address(), storage.State(), tailPos),
-		count:   solidity.NewUint256(storage.Address(), storage.State(), countPos),
+		head:    solidity.NewBytes32(storage.Root(), headPos),
+		tail:    solidity.NewBytes32(storage.Root(), tailPos),
+		count:   solidity.NewUint256(storage.Root(), countPos),
 		storage: storage,
 	}
 }

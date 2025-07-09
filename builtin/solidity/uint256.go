@@ -8,6 +8,7 @@ package solidity
 import (
 	"math/big"
 
+	"github.com/vechain/thor/v2/builtin/gascharger"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -19,10 +20,12 @@ type Uint256 struct {
 	addr  thor.Address
 	pos   thor.Bytes32
 	state *state.State
+	prev    *big.Int // previous value
+	charger *gascharger.Charger
 }
 
-func NewUint256(addr thor.Address, state *state.State, slot thor.Bytes32) *Uint256 {
-	return &Uint256{addr: addr, state: state, pos: slot}
+func NewUint256(root *Root, slot thor.Bytes32) *Uint256 {
+	return &Uint256{addr: root.address, pos: slot, state: root.state, prev: nil, charger: root.charger}
 }
 
 func (u *Uint256) Get() (*big.Int, error) {
@@ -30,11 +33,18 @@ func (u *Uint256) Get() (*big.Int, error) {
 	if err != nil {
 		return nil, err
 	}
+	u.charger.Charge(thor.SloadGas)
 	return new(big.Int).SetBytes(storage.Bytes()), nil
 }
 
 func (u *Uint256) Set(value *big.Int) {
 	storage := thor.BytesToBytes32(value.Bytes())
+	if u.prev == nil {
+		u.charger.Charge(thor.SstoreSetGas)
+	} else {
+		u.charger.Charge(thor.SstoreResetGas)
+		u.prev = value
+	}
 	u.state.SetStorage(u.addr, u.pos, storage)
 }
 

@@ -41,10 +41,10 @@ func newValidations(storage *storage) *validations {
 		storage:             storage,
 		leaderGroup:         newLinkedList(storage, slotActiveHead, slotActiveTail, slotActiveGroupSize),
 		validatorQueue:      newLinkedList(storage, slotQueuedHead, slotQueuedTail, slotQueuedGroupSize),
-		lockedVET:           solidity.NewUint256(storage.Address(), storage.State(), slotLockedVET),
-		lockedWeight:        solidity.NewUint256(storage.Address(), storage.State(), slotLockedWeight),
-		queuedVET:           solidity.NewUint256(storage.Address(), storage.State(), slotQueuedVET),
-		queuedWeight:        solidity.NewUint256(storage.Address(), storage.State(), slotQueuedWeight),
+		lockedVET:           solidity.NewUint256(storage.Root(), slotLockedVET),
+		lockedWeight:        solidity.NewUint256(storage.Root(), slotLockedWeight),
+		queuedVET:           solidity.NewUint256(storage.Root(), slotQueuedVET),
+		queuedWeight:        solidity.NewUint256(storage.Root(), slotQueuedWeight),
 		lowStakingPeriod:    LowStakingPeriod,
 		mediumStakingPeriod: MediumStakingPeriod,
 		highStakingPeriod:   HighStakingPeriod,
@@ -62,21 +62,15 @@ func (v *validations) IsActive() (bool, error) {
 
 // FirstActive returns validator address of first entry.
 func (v *validations) FirstActive() (thor.Bytes32, error) {
-	v.storage.chargeGas(thor.SloadGas)
-
 	return v.leaderGroup.head.Get()
 }
 
 // FirstQueued returns validator address of first entry.
 func (v *validations) FirstQueued() (thor.Bytes32, error) {
-	v.storage.chargeGas(thor.SloadGas)
-
 	return v.validatorQueue.head.Get()
 }
 
 func (v *validations) LeaderGroupIterator(callback func(thor.Bytes32, *Validation) error) error {
-	v.storage.chargeGas(thor.SloadGas)
-
 	return v.leaderGroup.Iter(callback)
 }
 

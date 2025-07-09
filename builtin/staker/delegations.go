@@ -24,9 +24,9 @@ type delegations struct {
 func newDelegations(storage *storage) *delegations {
 	return &delegations{
 		storage:      storage,
-		queuedVET:    solidity.NewUint256(storage.Address(), storage.State(), slotQueuedVET),
-		queuedWeight: solidity.NewUint256(storage.Address(), storage.State(), slotQueuedWeight),
-		idCounter:    solidity.NewUint256(storage.Address(), storage.State(), slotDelegationsCounter),
+		queuedVET:    solidity.NewUint256(storage.Root(), slotQueuedVET),
+		queuedWeight: solidity.NewUint256(storage.Root(), slotQueuedWeight),
+		idCounter:    solidity.NewUint256(storage.Root(), slotDelegationsCounter),
 	}
 }
 
