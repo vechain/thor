@@ -6,6 +6,7 @@
 package staker
 
 import (
+	"errors"
 	"math/big"
 
 	"github.com/vechain/thor/v2/builtin/gascharger"
@@ -141,12 +142,13 @@ func (s *Staker) AddValidator(
 	period uint32,
 	stake *big.Int,
 	autoRenew bool,
+	publicKey []byte,
 	currentBlock uint32,
 ) (thor.Bytes32, error) {
 	stakeETH := new(big.Int).Div(stake, big.NewInt(1e18))
 	logger.Debug("adding validator", "endorsor", endorsor, "master", master, "period", period, "stake", stakeETH, "autoRenew", autoRenew)
 
-	if id, err := s.validations.Add(endorsor, master, period, stake, autoRenew, currentBlock); err != nil {
+	if id, err := s.validations.Add(endorsor, master, period, stake, autoRenew, publicKey, currentBlock); err != nil {
 		logger.Info("add validator failed", "master", master, "error", err)
 		return thor.Bytes32{}, err
 	} else {
@@ -362,4 +364,46 @@ func (s *Staker) GetValidatorsTotals(validationID thor.Bytes32) (*ValidationTota
 		DelegationsLockedStake:  big.NewInt(0).Add(aggregation.CurrentRecurringVET, aggregation.CurrentOneTimeVET),
 		DelegationsLockedWeight: big.NewInt(0).Add(aggregation.CurrentRecurringWeight, aggregation.CurrentOneTimeWeight),
 	}, nil
+}
+
+// UpdateValidatorPublicKey updates the public key for a validator
+// This is used for VRF proof verification
+func (s *Staker) UpdateValidatorPublicKey(endorsor thor.Address, id thor.Bytes32, publicKey []byte) error {
+	logger.Debug("updating validator public key", "endorsor", endorsor, "id", id)
+
+	entry, err := s.storage.GetValidation(id)
+	if err != nil {
+		return err
+	}
+
+	// Only the endorsor can update the public key
+	if entry.Endorsor != endorsor {
+		return errors.New("only endorsor can update public key")
+	}
+
+	// Validate public key format (basic check)
+	if len(publicKey) != 33 && len(publicKey) != 65 {
+		return errors.New("invalid public key length")
+	}
+
+	entry.PublicKey = publicKey
+	return s.storage.SetValidation(id, entry)
+}
+
+// GetValidatorPublicKey returns the public key for a validator
+func (s *Staker) GetValidatorPublicKey(master thor.Address) ([]byte, error) {
+	_, validationID, err := s.storage.LookupMaster(master)
+	if err != nil {
+		return nil, err
+	}
+	if validationID.IsZero() {
+		return nil, errors.New("validator not found")
+	}
+
+	entry, err := s.storage.GetValidation(validationID)
+	if err != nil {
+		return nil, err
+	}
+
+	return entry.PublicKey, nil
 }

@@ -105,7 +105,7 @@ func (b *Builder) ValidatorVRFProofs(proofs map[thor.Address][]byte) *Builder {
 	}
 
 	// Create a copy to prevent external modification
-	b.headerBody.Extension.ValidatorVRFProofs = make(map[thor.Address][]byte)
+	b.headerBody.Extension.ValidatorVRFProofs = make(VRFProofsMap)
 	for addr, proof := range proofs {
 		b.headerBody.Extension.ValidatorVRFProofs[addr] = slices.Clone(proof)
 	}

@@ -14,6 +14,55 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
+// VRFProofsMap is a custom type for VRF proofs that implements RLP encoding/decoding
+type VRFProofsMap map[thor.Address][]byte
+
+// EncodeRLP implements rlp.Encoder for VRFProofsMap
+func (vpm VRFProofsMap) EncodeRLP(w io.Writer) error {
+	if len(vpm) == 0 {
+		return rlp.Encode(w, []any{})
+	}
+
+	// Convert map to list of key-value pairs for RLP encoding
+	var pairs []any
+	for addr, proof := range vpm {
+		pairs = append(pairs, []any{addr, proof})
+	}
+	return rlp.Encode(w, pairs)
+}
+
+// DecodeRLP implements rlp.Decoder for VRFProofsMap
+func (vpm *VRFProofsMap) DecodeRLP(s *rlp.Stream) error {
+	var pairs []rlp.RawValue
+	if err := s.Decode(&pairs); err != nil {
+		return err
+	}
+
+	*vpm = make(map[thor.Address][]byte)
+	for _, pair := range pairs {
+		var kv []rlp.RawValue
+		if err := rlp.DecodeBytes(pair, &kv); err != nil {
+			return err
+		}
+		if len(kv) != 2 {
+			return errors.New("invalid VRF proof pair")
+		}
+
+		var addr thor.Address
+		if err := rlp.DecodeBytes(kv[0], &addr); err != nil {
+			return err
+		}
+
+		var proof []byte
+		if err := rlp.DecodeBytes(kv[1], &proof); err != nil {
+			return err
+		}
+
+		(*vpm)[addr] = proof
+	}
+	return nil
+}
+
 /**
  * extension represents a data structure that follows a tail trim strategy,
  * where the last element is not considered if it is its default null value.
@@ -24,7 +73,7 @@ type extension struct {
 	BaseFee *big.Int
 	// ValidatorVRFProofs stores VRF proofs from validators for collective VRF selection
 	// Key: validator address, Value: VRF proof
-	ValidatorVRFProofs map[thor.Address][]byte
+	ValidatorVRFProofs VRFProofsMap
 }
 
 type _extension extension
@@ -142,7 +191,7 @@ func (ex *extension) DecodeRLP(s *rlp.Stream) error {
 		}
 
 		// If not BaseFee, try to decode as VRFProofs
-		var vrfProofs map[thor.Address][]byte
+		var vrfProofs VRFProofsMap
 		if err := rlp.DecodeBytes(raws[2], &vrfProofs); err != nil {
 			return err
 		}
@@ -163,7 +212,7 @@ func (ex *extension) DecodeRLP(s *rlp.Stream) error {
 			return err
 		}
 
-		var vrfProofs map[thor.Address][]byte
+		var vrfProofs VRFProofsMap
 		if err := rlp.DecodeBytes(raws[3], &vrfProofs); err != nil {
 			return err
 		}

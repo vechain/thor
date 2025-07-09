@@ -5,10 +5,12 @@
 package bft
 
 import (
+	"crypto/ecdsa"
 	"math/big"
 	"sort"
 	"sync/atomic"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
@@ -335,12 +337,29 @@ func (engine *Engine) computeStateWithVRF(header *block.Header) (*bftState, erro
 	var selectedValidators []thor.Address
 	if len(validatorProofs) > 0 {
 		// Use real VRF proofs from validators
-		selectedValidators, _, _, err = vrf.WeightedValidatorSelectionWithProofs(validators, alpha, int(thor.InitialMaxBlockProposers), validatorProofs)
+		validatorPublicKeys, err := engine.getValidatorPublicKeys(header.ParentID())
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to select validators with real VRF proofs")
+			logger.Debug("failed to get validator public keys, falling back to all validators", "error", err)
+			// Fallback to all validators if we can't get public keys
+			return engine.computeStateCommon(header, nil)
+		}
+
+		if len(validatorPublicKeys) > 0 {
+			selectedValidators, _, _, err = vrf.WeightedValidatorSelectionWithProofs(validators, alpha, int(thor.InitialMaxBlockProposers), validatorProofs, validatorPublicKeys)
+			if err != nil {
+				logger.Debug("failed to select validators with VRF proofs, falling back to all validators", "error", err)
+				// Fallback to all validators if VRF selection fails
+				return engine.computeStateCommon(header, nil)
+			}
+		} else {
+			logger.Debug("no validator public keys available, falling back to all validators")
+			// Fallback to all validators if no public keys are available
+			return engine.computeStateCommon(header, nil)
 		}
 	} else {
-		return nil, errors.New("no VRF proofs available for validator selection")
+		logger.Debug("no VRF proofs available, falling back to all validators")
+		// Fallback to all validators if no VRF proofs are available
+		return engine.computeStateCommon(header, nil)
 	}
 
 	// Create a set of selected validators for quick lookup
@@ -349,6 +368,7 @@ func (engine *Engine) computeStateWithVRF(header *block.Header) (*bftState, erro
 		selectedSet[addr] = true
 	}
 
+	logger.Debug("using VRF-selected validators for finality", "selected_count", len(selectedValidators), "total_validators", len(validators))
 	return engine.computeStateCommon(header, selectedSet)
 }
 
@@ -460,6 +480,43 @@ func (engine *Engine) getValidatorsWithWeights(parentID thor.Bytes32) ([]vrf.Val
 	}
 
 	return vrfValidators, nil
+}
+
+// getValidatorPublicKeys retrieves public keys for validators from the Staker contract
+func (engine *Engine) getValidatorPublicKeys(parentID thor.Bytes32) (map[thor.Address]*ecdsa.PublicKey, error) {
+	parentSummary, err := engine.repo.GetBlockSummary(parentID)
+	if err != nil {
+		return nil, err
+	}
+
+	state := engine.stater.NewState(parentSummary.Root())
+	staker := builtin.Staker.Native(state)
+
+	// Get leader group (active validators)
+	leaderGroup, err := staker.LeaderGroup()
+	if err != nil {
+		return nil, err
+	}
+
+	validatorPublicKeys := make(map[thor.Address]*ecdsa.PublicKey)
+
+	for _, validation := range leaderGroup {
+		if validation.Weight.Sign() > 0 && len(validation.PublicKey) > 0 {
+			// Convert compressed or uncompressed public key to *ecdsa.PublicKey
+			publicKey, err := crypto.UnmarshalPubkey(validation.PublicKey)
+			if err != nil {
+				logger.Warn("failed to unmarshal validator public key", "validator", validation.Master, "error", err)
+				continue
+			}
+			validatorPublicKeys[validation.Master] = publicKey
+		}
+	}
+
+	if len(validatorPublicKeys) == 0 {
+		logger.Warn("no validator public keys available for VRF verification")
+	}
+
+	return validatorPublicKeys, nil
 }
 
 // findCheckpointByQuality finds the first checkpoint reaches the given quality.

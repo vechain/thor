@@ -165,6 +165,20 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(any), txsT
 			}
 			write(toSend)
 		}
+	case proto.MsgVRFProof:
+		var vrfProof *proto.VRFProof
+		if err := msg.Decode(&vrfProof); err != nil {
+			return errors.WithMessage(err, "decode VRF proof msg")
+		}
+		c.vrfManager.HandleVRFProof(vrfProof)
+		write(&struct{}{})
+	case proto.MsgVRFProofRequest:
+		var vrfRequest *proto.VRFProofRequest
+		if err := msg.Decode(&vrfRequest); err != nil {
+			return errors.WithMessage(err, "decode VRF proof request msg")
+		}
+		proofs := c.vrfManager.HandleVRFProofRequest(vrfRequest)
+		write(proofs)
 	default:
 		return fmt.Errorf("unknown message (%v)", msg.Code)
 	}

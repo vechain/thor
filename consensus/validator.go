@@ -7,10 +7,12 @@ package consensus
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	"fmt"
 	"slices"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/builtin/staker"
@@ -403,7 +405,21 @@ func (c *Consensus) validateWeightBasedVRF(header *block.Header, parent *block.H
 
 	validatorProofs := header.ValidatorVRFProofs()
 
-	selectedValidators, _, _, err := vrf.WeightedValidatorSelectionWithProofs(validators, alpha, int(thor.InitialMaxBlockProposers), validatorProofs)
+	// Get validator public keys for VRF verification
+	validatorPublicKeys := make(map[thor.Address]*ecdsa.PublicKey)
+	for _, validation := range leaderGroup {
+		if validation.Weight.Sign() > 0 && len(validation.PublicKey) > 0 {
+			// Convert compressed or uncompressed public key to *ecdsa.PublicKey
+			publicKey, err := crypto.UnmarshalPubkey(validation.PublicKey)
+			if err != nil {
+				log.Warn("failed to unmarshal validator public key", "validator", validation.Master, "error", err)
+				continue
+			}
+			validatorPublicKeys[validation.Master] = publicKey
+		}
+	}
+
+	selectedValidators, _, _, err := vrf.WeightedValidatorSelectionWithProofs(validators, alpha, int(thor.InitialMaxBlockProposers), validatorProofs, validatorPublicKeys)
 	if err != nil {
 		return fmt.Errorf("failed to select validators with VRF: %v", err)
 	}

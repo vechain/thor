@@ -73,16 +73,19 @@ contract Staker {
     function addValidator(
         address master,
         uint32 period,
-        bool autoRenew
+        bool autoRenew,
+        bytes calldata publicKey
     ) public payable {
         require(msg.value > 0, "value is empty");
+        require(publicKey.length == 33 || publicKey.length == 65, "invalid public key length");
         (bytes32 id, string memory error) = StakerNative(address(this))
             .native_addValidator(
                 msg.sender,
                 master,
                 period,
                 msg.value,
-                autoRenew
+                autoRenew,
+                publicKey
             );
         require(bytes(error).length == 0, error);
         emit ValidatorQueued(
@@ -232,7 +235,7 @@ contract Staker {
 
     /**
      * @dev get returns the master. endorser, stake, weight, status, auto renew, online and staking period of a validator.
-     * @return (master, endorser, stake, weight, status, autoRenew, online, stakingPeriod, startBlock, exitBlock)
+     * @return (master, endorser, publicKey, stake, weight, status, autoRenew, online, stakingPeriod, startBlock, exitBlock)
      * - status (0: unknown, 1: queued, 2: active, 3: cooldown, 4: exited)
      */
     function get(
@@ -243,6 +246,7 @@ contract Staker {
         returns (
             address,
             address,
+            bytes memory,
             uint256,
             uint256,
             uint8,
@@ -256,6 +260,7 @@ contract Staker {
         (
             address master,
             address endorser,
+            bytes memory publicKey,
             uint256 stake,
             uint256 weight,
             uint8 status,
@@ -270,6 +275,7 @@ contract Staker {
         return (
             master,
             endorser,
+            publicKey,
             stake,
             weight,
             status,
@@ -384,7 +390,8 @@ interface StakerNative {
         address master,
         uint32 period,
         uint256 stake,
-        bool autoRenew
+        bool autoRenew,
+        bytes calldata publicKey
     ) external returns (bytes32, string calldata);
 
     function native_increaseStake(
@@ -461,6 +468,7 @@ interface StakerNative {
         returns (
             address,
             address,
+            bytes memory,
             uint256,
             uint256,
             uint8,

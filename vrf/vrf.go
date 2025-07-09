@@ -49,122 +49,6 @@ type Validator struct {
 	Weight  *big.Int
 }
 
-// WeightedValidatorSelection selects validators based on their weights using real VRF
-// This implementation requires validator private keys to generate real VRF proofs
-func WeightedValidatorSelection(
-	validators []Validator,
-	alpha []byte,
-	maxValidators int,
-	validatorPrivateKeys map[thor.Address]*ecdsa.PrivateKey,
-) (selected []thor.Address, beta, pi []byte, err error) {
-	if len(validators) == 0 {
-		return nil, nil, nil, nil
-	}
-
-	// Sort validators by address for deterministic selection
-	sort.Slice(validators, func(i, j int) bool {
-		return bytes.Compare(validators[i].Address.Bytes(), validators[j].Address.Bytes()) < 0
-	})
-
-	// Calculate total weight
-	totalWeight := new(big.Int)
-	for _, v := range validators {
-		totalWeight.Add(totalWeight, v.Weight)
-	}
-
-	if totalWeight.Sign() == 0 {
-		return nil, nil, nil, nil
-	}
-
-	// Generate collective VRF using real validator private keys
-	collectiveBeta, collectivePi, err := generateCollectiveVRFWithPrivateKeys(validators, alpha, validatorPrivateKeys)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	// Use collective beta as seed for weighted selection
-	selected = selectValidatorsByWeight(validators, collectiveBeta, maxValidators)
-
-	return selected, collectiveBeta, collectivePi, nil
-}
-
-// generateCollectiveVRFWithPrivateKeys generates collective VRF using validator private keys
-func generateCollectiveVRFWithPrivateKeys(
-	validators []Validator,
-	alpha []byte,
-	validatorPrivateKeys map[thor.Address]*ecdsa.PrivateKey,
-) (beta, pi []byte, err error) {
-	var individualBetas [][]byte
-	var individualPis [][]byte
-
-	for _, validator := range validators {
-		privateKey, hasKey := validatorPrivateKeys[validator.Address]
-		if !hasKey {
-			// Skip validators that don't have private keys available
-			continue
-		}
-
-		// Generate VRF proof using the validator's private key
-		validatorAlpha := append(alpha, validator.Address.Bytes()...)
-		validatorBeta, validatorPi, err := Prove(privateKey, validatorAlpha)
-		if err != nil {
-			// Skip validators with invalid VRF generation
-			continue
-		}
-
-		individualBetas = append(individualBetas, validatorBeta)
-		individualPis = append(individualPis, validatorPi)
-	}
-
-	if len(individualBetas) == 0 {
-		return nil, nil, errors.New("no validator private keys available for VRF generation")
-	}
-
-	// Combine individual VRF outputs deterministically
-	beta = combineVRFOutputs(individualBetas, alpha)
-	pi = combineVRFProofs(individualPis, alpha)
-
-	return beta, pi, nil
-}
-
-// combineVRFOutputs combines multiple VRF outputs deterministically
-func combineVRFOutputs(individualBetas [][]byte, alpha []byte) []byte {
-	hasher := sha256.New()
-	hasher.Write(alpha)
-
-	// Sort betas for deterministic combination
-	sortedBetas := make([][]byte, len(individualBetas))
-	copy(sortedBetas, individualBetas)
-	sort.Slice(sortedBetas, func(i, j int) bool {
-		return bytes.Compare(sortedBetas[i], sortedBetas[j]) < 0
-	})
-
-	for _, beta := range sortedBetas {
-		hasher.Write(beta)
-	}
-
-	return hasher.Sum(nil)
-}
-
-// combineVRFProofs combines multiple VRF proofs deterministically
-func combineVRFProofs(individualPis [][]byte, alpha []byte) []byte {
-	hasher := sha256.New()
-	hasher.Write(alpha)
-
-	// Sort proofs for deterministic combination
-	sortedPis := make([][]byte, len(individualPis))
-	copy(sortedPis, individualPis)
-	sort.Slice(sortedPis, func(i, j int) bool {
-		return bytes.Compare(sortedPis[i], sortedPis[j]) < 0
-	})
-
-	for _, pi := range sortedPis {
-		hasher.Write(pi)
-	}
-
-	return hasher.Sum(nil)
-}
-
 // WeightedValidatorSelectionWithProofs selects validators using VRF proofs from validators
 // This method verifies and uses actual VRF proofs submitted by validators
 func WeightedValidatorSelectionWithProofs(
@@ -172,6 +56,7 @@ func WeightedValidatorSelectionWithProofs(
 	alpha []byte,
 	maxValidators int,
 	validatorProofs map[thor.Address][]byte,
+	validatorPublicKeys map[thor.Address]*ecdsa.PublicKey,
 ) (selected []thor.Address, beta, pi []byte, err error) {
 	if len(validators) == 0 {
 		return nil, nil, nil, nil
@@ -193,7 +78,7 @@ func WeightedValidatorSelectionWithProofs(
 	}
 
 	// Generate collective VRF using validator proofs
-	collectiveBeta, collectivePi, err := generateCollectiveVRFWithProofs(validators, alpha, validatorProofs)
+	collectiveBeta, collectivePi, err := generateCollectiveVRFWithProofs(validators, alpha, validatorProofs, validatorPublicKeys)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -209,6 +94,7 @@ func generateCollectiveVRFWithProofs(
 	validators []Validator,
 	alpha []byte,
 	validatorProofs map[thor.Address][]byte,
+	validatorPublicKeys map[thor.Address]*ecdsa.PublicKey,
 ) (beta, pi []byte, err error) {
 	var individualBetas [][]byte
 	var individualPis [][]byte
@@ -220,9 +106,8 @@ func generateCollectiveVRFWithProofs(
 			continue
 		}
 
-		// Verify the VRF proof (in a real implementation, we'd need the validator's public key)
-		// For now, we'll assume the proof is valid and extract beta
-		validatorBeta, err := extractBetaFromProof(validator, alpha, proof)
+		// Verify the VRF proof using the validator's public key
+		validatorBeta, err := verifyVRFProof(validator, alpha, proof, validatorPublicKeys[validator.Address])
 		if err != nil {
 			// Skip invalid proofs
 			continue
@@ -243,22 +128,22 @@ func generateCollectiveVRFWithProofs(
 	return beta, pi, nil
 }
 
-// extractBetaFromProof extracts beta from a VRF proof
-// In a real implementation, this would verify the proof and extract beta
-func extractBetaFromProof(validator Validator, alpha []byte, proof []byte) ([]byte, error) {
-	// In a real implementation, we would:
-	// 1. Get the validator's public key
-	// 2. Verify the VRF proof using vrf.Verify()
-	// 3. Return the beta from the verification
+// verifyVRFProof verifies a VRF proof and returns the beta
+func verifyVRFProof(validator Validator, alpha []byte, proof []byte, publicKey *ecdsa.PublicKey) ([]byte, error) {
+	if publicKey == nil {
+		return nil, errors.New("validator public key not available")
+	}
 
-	// For now, we'll simulate this by creating a deterministic beta
-	// based on the validator address and proof
-	hasher := sha256.New()
-	hasher.Write(alpha)
-	hasher.Write(validator.Address.Bytes())
-	hasher.Write(proof)
+	// Create validator-specific alpha
+	validatorAlpha := append(alpha, validator.Address.Bytes()...)
 
-	return hasher.Sum(nil), nil
+	// Verify the VRF proof using the real VRF verification
+	beta, err := Verify(publicKey, validatorAlpha, proof)
+	if err != nil {
+		return nil, err
+	}
+
+	return beta, nil
 }
 
 // selectValidatorsByWeight selects validators proportionally to their weights
@@ -331,4 +216,42 @@ func newSeededRNG(seed []byte) *big.Int {
 
 	seedValue := binary.BigEndian.Uint64(seed[:8])
 	return big.NewInt(int64(seedValue))
+}
+
+// combineVRFOutputs combines multiple VRF outputs deterministically
+func combineVRFOutputs(individualBetas [][]byte, alpha []byte) []byte {
+	hasher := sha256.New()
+	hasher.Write(alpha)
+
+	// Sort betas for deterministic combination
+	sortedBetas := make([][]byte, len(individualBetas))
+	copy(sortedBetas, individualBetas)
+	sort.Slice(sortedBetas, func(i, j int) bool {
+		return bytes.Compare(sortedBetas[i], sortedBetas[j]) < 0
+	})
+
+	for _, beta := range sortedBetas {
+		hasher.Write(beta)
+	}
+
+	return hasher.Sum(nil)
+}
+
+// combineVRFProofs combines multiple VRF proofs deterministically
+func combineVRFProofs(individualPis [][]byte, alpha []byte) []byte {
+	hasher := sha256.New()
+	hasher.Write(alpha)
+
+	// Sort proofs for deterministic combination
+	sortedPis := make([][]byte, len(individualPis))
+	copy(sortedPis, individualPis)
+	sort.Slice(sortedPis, func(i, j int) bool {
+		return bytes.Compare(sortedPis[i], sortedPis[j]) < 0
+	})
+
+	for _, pi := range sortedPis {
+		hasher.Write(pi)
+	}
+
+	return hasher.Sum(nil)
 }

@@ -96,6 +96,7 @@ func (v *validations) Add(
 	period uint32,
 	stake *big.Int,
 	autoRenew bool,
+	publicKey []byte,
 	currentBlock uint32,
 ) (thor.Bytes32, error) {
 	if stake.Cmp(minStake) < 0 || stake.Cmp(maxStake) > 0 {
@@ -119,6 +120,7 @@ func (v *validations) Add(
 	entry := &Validation{
 		Master:             master,
 		Endorsor:           endorsor,
+		PublicKey:          publicKey,
 		Period:             period,
 		CompleteIterations: 0,
 		Status:             StatusQueued,

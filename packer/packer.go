@@ -11,6 +11,7 @@ import (
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/poa"
@@ -31,6 +32,7 @@ type Packer struct {
 	forkConfig       *thor.ForkConfig
 	seeder           *poa.Seeder
 	minTxPriorityFee *big.Int
+	communicator     *comm.Communicator
 }
 
 // New create a new Packer instance.
@@ -52,6 +54,7 @@ func New(
 		forkConfig,
 		poa.NewSeeder(repo),
 		new(big.Int).SetUint64(minTxPriorityFee),
+		nil, // communicator will be set later
 	}
 }
 
@@ -184,6 +187,11 @@ func (p *Packer) gasLimit(parentGasLimit uint64) uint64 {
 // it as it can.
 func (p *Packer) SetTargetGasLimit(gl uint64) {
 	p.targetGasLimit = gl
+}
+
+// SetCommunicator sets the communicator for VRF proof collection
+func (p *Packer) SetCommunicator(comm *comm.Communicator) {
+	p.communicator = comm
 }
 
 // syncPOS checks if POS consensus is active, or tries to activate it if conditions are met.

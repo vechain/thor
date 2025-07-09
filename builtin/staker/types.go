@@ -23,6 +23,7 @@ const (
 type Validation struct {
 	Master             thor.Address // the node address of the validation
 	Endorsor           thor.Address // the address providing the stake
+	PublicKey          []byte       // the validator's public key for VRF verification
 	Period             uint32       // the staking period of the validation
 	CompleteIterations uint32       // the completed staking periods by the validation
 	Status             Status       // status of the validation

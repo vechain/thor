@@ -223,35 +223,6 @@ func BenchmarkVRF(b *testing.B) {
 	})
 }
 
-func TestWeightedValidatorSelectionMaxValidators(t *testing.T) {
-	validators := []vrf.Validator{
-		{
-			Address: thor.BytesToAddress([]byte("validator1")),
-			Weight:  big.NewInt(100),
-		},
-		{
-			Address: thor.BytesToAddress([]byte("validator2")),
-			Weight:  big.NewInt(200),
-		},
-	}
-
-	// Create private keys for validators
-	privateKey1, _ := crypto.GenerateKey()
-	privateKey2, _ := crypto.GenerateKey()
-
-	validatorPrivateKeys := map[thor.Address]*ecdsa.PrivateKey{
-		validators[0].Address: privateKey1,
-		validators[1].Address: privateKey2,
-	}
-
-	alpha := []byte("test alpha seed")
-	maxValidators := 5 // More than available validators
-
-	selected, _, _, err := vrf.WeightedValidatorSelection(validators, alpha, maxValidators, validatorPrivateKeys)
-	assert.NoError(t, err)
-	assert.Len(t, selected, 2, "should select all available validators")
-}
-
 func TestWeightedValidatorSelectionWithProofs(t *testing.T) {
 	// Create test validators with different weights
 	validators := []vrf.Validator{
@@ -269,17 +240,38 @@ func TestWeightedValidatorSelectionWithProofs(t *testing.T) {
 		},
 	}
 
-	// Create simulated VRF proofs
-	validatorProofs := map[thor.Address][]byte{
-		validators[0].Address: []byte("proof1"),
-		validators[1].Address: []byte("proof2"),
-		validators[2].Address: []byte("proof3"),
-	}
+	// Create real VRF proofs using private keys
+	privateKey1, _ := crypto.GenerateKey()
+	privateKey2, _ := crypto.GenerateKey()
+	privateKey3, _ := crypto.GenerateKey()
 
 	alpha := []byte("test alpha seed")
+
+	// Generate real VRF proofs
+	validatorAlpha1 := append(alpha, validators[0].Address.Bytes()...)
+	validatorAlpha2 := append(alpha, validators[1].Address.Bytes()...)
+	validatorAlpha3 := append(alpha, validators[2].Address.Bytes()...)
+
+	_, proof1, _ := vrf.Prove(privateKey1, validatorAlpha1)
+	_, proof2, _ := vrf.Prove(privateKey2, validatorAlpha2)
+	_, proof3, _ := vrf.Prove(privateKey3, validatorAlpha3)
+
+	validatorProofs := map[thor.Address][]byte{
+		validators[0].Address: proof1,
+		validators[1].Address: proof2,
+		validators[2].Address: proof3,
+	}
+
+	// Create public keys for verification
+	validatorPublicKeys := map[thor.Address]*ecdsa.PublicKey{
+		validators[0].Address: &privateKey1.PublicKey,
+		validators[1].Address: &privateKey2.PublicKey,
+		validators[2].Address: &privateKey3.PublicKey,
+	}
+
 	maxValidators := 2
 
-	selected, beta, pi, err := vrf.WeightedValidatorSelectionWithProofs(validators, alpha, maxValidators, validatorProofs)
+	selected, beta, pi, err := vrf.WeightedValidatorSelectionWithProofs(validators, alpha, maxValidators, validatorProofs, validatorPublicKeys)
 	assert.NoError(t, err)
 	assert.Len(t, selected, 2, "should select exactly maxValidators")
 	assert.NotNil(t, beta, "should return beta")
@@ -298,14 +290,14 @@ func TestWeightedValidatorSelectionWithProofs(t *testing.T) {
 	}
 
 	// Test with empty validators
-	selected, beta, pi, err = vrf.WeightedValidatorSelectionWithProofs([]vrf.Validator{}, alpha, maxValidators, validatorProofs)
+	selected, beta, pi, err = vrf.WeightedValidatorSelectionWithProofs([]vrf.Validator{}, alpha, maxValidators, validatorProofs, validatorPublicKeys)
 	assert.NoError(t, err)
 	assert.Nil(t, selected)
 	assert.Nil(t, beta)
 	assert.Nil(t, pi)
 
 	// Test with no proofs - should return error
-	selected, beta, pi, err = vrf.WeightedValidatorSelectionWithProofs(validators, alpha, maxValidators, nil)
+	selected, beta, pi, err = vrf.WeightedValidatorSelectionWithProofs(validators, alpha, maxValidators, nil, validatorPublicKeys)
 	assert.Error(t, err, "should return error when no proofs available")
 	assert.Contains(t, err.Error(), "no valid VRF proofs available")
 }

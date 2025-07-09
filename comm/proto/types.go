@@ -23,6 +23,22 @@ type (
 		BestBlockID    thor.Bytes32
 		TotalScore     uint64
 	}
+
+	// VRFProof represents a VRF proof from a validator
+	VRFProof struct {
+		ValidatorAddress thor.Address
+		Alpha            []byte // seed for VRF
+		Proof            []byte // VRF proof
+		BlockNumber      uint32 // block number this proof is for
+		Timestamp        uint64 // when the proof was generated
+	}
+
+	// VRFProofRequest represents a request for VRF proofs
+	VRFProofRequest struct {
+		Alpha       []byte         // seed for VRF
+		BlockNumber uint32         // block number we need proofs for
+		Validators  []thor.Address // list of validators we need proofs from
+	}
 )
 
 // RPC defines RPC interface.
@@ -86,11 +102,25 @@ func GetBlocksFromNumber(ctx context.Context, rpc RPC, num uint32) ([]rlp.RawVal
 	return blocks, nil
 }
 
-// GetTxs get txs from remote peer.
+// GetTxs get transactions from remote peer.
 func GetTxs(ctx context.Context, rpc RPC) (tx.Transactions, error) {
-	var txs tx.Transactions
-	if err := rpc.Call(ctx, MsgGetTxs, &struct{}{}, &txs); err != nil {
+	var result tx.Transactions
+	if err := rpc.Call(ctx, MsgGetTxs, &struct{}{}, &result); err != nil {
 		return nil, err
 	}
-	return txs, nil
+	return result, nil
+}
+
+// NotifyVRFProof notify a VRF proof to remote peer
+func NotifyVRFProof(ctx context.Context, rpc RPC, proof *VRFProof) error {
+	return rpc.Notify(ctx, MsgVRFProof, proof)
+}
+
+// RequestVRFProofs request VRF proofs from remote peer
+func RequestVRFProofs(ctx context.Context, rpc RPC, request *VRFProofRequest) ([]*VRFProof, error) {
+	var proofs []*VRFProof
+	if err := rpc.Call(ctx, MsgVRFProofRequest, request, &proofs); err != nil {
+		return nil, err
+	}
+	return proofs, nil
 }

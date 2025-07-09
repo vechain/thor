@@ -49,16 +49,16 @@ func init() {
 
 			validator, err := Staker.NativeMetered(env.State(), charger).Get(thor.Bytes32(args.ValidationID))
 			if err != nil {
-				return []any{thor.Address{}, thor.Address{}, big.NewInt(0), big.NewInt(0), staker.StatusUnknown, false, false, uint32(0), uint32(0), uint32(0), fmt.Sprintf("revert: %v", err)}
+				return []any{thor.Address{}, thor.Address{}, []byte{}, big.NewInt(0), big.NewInt(0), staker.StatusUnknown, false, false, uint32(0), uint32(0), uint32(0), fmt.Sprintf("revert: %v", err)}
 			}
 			if validator.IsEmpty() {
-				return []any{thor.Address{}, thor.Address{}, big.NewInt(0), big.NewInt(0), staker.StatusUnknown, false, false, uint32(0), uint32(0), uint32(0), ""}
+				return []any{thor.Address{}, thor.Address{}, []byte{}, big.NewInt(0), big.NewInt(0), staker.StatusUnknown, false, false, uint32(0), uint32(0), uint32(0), ""}
 			}
 			exitBlock := uint32(math.MaxUint32)
 			if validator.ExitBlock != nil {
 				exitBlock = *validator.ExitBlock
 			}
-			return []any{validator.Master, validator.Endorsor, validator.LockedVET, validator.Weight, validator.Status, validator.AutoRenew, validator.Online, validator.Period, validator.StartBlock, exitBlock, ""}
+			return []any{validator.Master, validator.Endorsor, validator.PublicKey, validator.LockedVET, validator.Weight, validator.Status, validator.AutoRenew, validator.Online, validator.Period, validator.StartBlock, exitBlock, ""}
 		}},
 		{"native_lookupMaster", func(env *xenv.Environment) []any {
 			var args struct {
@@ -141,6 +141,7 @@ func init() {
 				Period    uint32
 				Stake     *big.Int
 				AutoRenew bool
+				PublicKey []byte
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
@@ -171,6 +172,7 @@ func init() {
 					thor.Address(args.Master),
 					args.Period, args.Stake,
 					args.AutoRenew,
+					args.PublicKey,
 					env.BlockContext().Number,
 				)
 			if err != nil {
@@ -337,6 +339,38 @@ func init() {
 				return []any{new(big.Int), new(big.Int), new(big.Int), new(big.Int), fmt.Sprintf("failed to validators totals: %v", err)}
 			}
 			return []any{totals.TotalLockedStake, totals.TotalLockedWeight, totals.DelegationsLockedStake, totals.DelegationsLockedWeight, ""}
+		}},
+		{"native_updateValidatorPublicKey", func(env *xenv.Environment) []any {
+			var args struct {
+				Endorsor     common.Address
+				ValidationID common.Hash
+				PublicKey    []byte
+			}
+			env.ParseArgs(&args)
+			charger := gascharger.New(env)
+
+			err := Staker.NativeMetered(env.State(), charger).UpdateValidatorPublicKey(
+				thor.Address(args.Endorsor),
+				thor.Bytes32(args.ValidationID),
+				args.PublicKey,
+			)
+			if err != nil {
+				return []any{fmt.Sprintf("revert: %v", err)}
+			}
+			return []any{""}
+		}},
+		{"native_getValidatorPublicKey", func(env *xenv.Environment) []any {
+			var args struct {
+				Master common.Address
+			}
+			env.ParseArgs(&args)
+			charger := gascharger.New(env)
+
+			publicKey, err := Staker.NativeMetered(env.State(), charger).GetValidatorPublicKey(thor.Address(args.Master))
+			if err != nil {
+				return []any{[]byte{}, fmt.Sprintf("revert: %v", err)}
+			}
+			return []any{publicKey, ""}
 		}},
 	}
 	stakerAbi := Staker.NativeABI()

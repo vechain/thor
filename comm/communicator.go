@@ -41,12 +41,13 @@ type Communicator struct {
 	feedScope      event.SubscriptionScope
 	goes           co.Goes
 	onceSynced     sync.Once
+	vrfManager     *VRFManager
 }
 
 // New create a new Communicator instance.
 func New(repo *chain.Repository, txPool *txpool.TxPool) *Communicator {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Communicator{
+	comm := &Communicator{
 		repo:           repo,
 		txPool:         txPool,
 		ctx:            ctx,
@@ -55,6 +56,8 @@ func New(repo *chain.Repository, txPool *txpool.TxPool) *Communicator {
 		syncedCh:       make(chan struct{}),
 		announcementCh: make(chan *announcement),
 	}
+	comm.vrfManager = NewVRFManager(comm)
+	return comm
 }
 
 // Synced returns a channel indicates if synchronization process passed.
@@ -281,4 +284,9 @@ func (c *Communicator) PeersStats() []*PeerStats {
 		return stats[i].Duration < stats[j].Duration
 	})
 	return stats
+}
+
+// VRFManager returns the VRF manager instance
+func (c *Communicator) VRFManager() *VRFManager {
+	return c.vrfManager
 }
