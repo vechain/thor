@@ -115,6 +115,7 @@ func buildJSONBlockSummary(summary *chain.BlockSummary, isTrunk bool, isFinalize
 		evidence = make([]thor.Bytes32, len(*summary.Header.Evidence()))
 		for _, ev := range *summary.Header.Evidence() {
 			blkId := thor.BytesToBytes32(ev)
+			println("adding this evidence id", blkId.String())
 			if !blkId.IsZero() {
 				evidence = append(evidence, blkId)
 			}
