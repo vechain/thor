@@ -32,7 +32,7 @@ type JSONBlockSummary struct {
 	IsTrunk       bool                  `json:"isTrunk"`
 	IsFinalized   bool                  `json:"isFinalized"`
 	BaseFeePerGas *math.HexOrDecimal256 `json:"baseFeePerGas,omitempty"`
-	Evidence      *[][]thor.Bytes32     `json:"evidence,omitempty"`
+	Evidence      *[]thor.Bytes32       `json:"evidence,omitempty"`
 }
 
 type JSONRawBlockSummary struct {
@@ -108,6 +108,10 @@ type JSONExpandedBlock struct {
 func buildJSONBlockSummary(summary *chain.BlockSummary, isTrunk bool, isFinalized bool) *JSONBlockSummary {
 	header := summary.Header
 	signer, _ := header.Signer()
+	evidence := make([]thor.Bytes32, len(*summary.Header.Evidence()))
+	for _, ev := range *summary.Header.Evidence() {
+		evidence = append(evidence, thor.BytesToBytes32(ev))
+	}
 
 	return &JSONBlockSummary{
 		Number:        header.Number(),
@@ -128,6 +132,7 @@ func buildJSONBlockSummary(summary *chain.BlockSummary, isTrunk bool, isFinalize
 		IsTrunk:       isTrunk,
 		IsFinalized:   isFinalized,
 		BaseFeePerGas: (*math.HexOrDecimal256)(summary.Header.BaseFee()),
+		Evidence:      &evidence,
 	}
 }
 
