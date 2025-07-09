@@ -305,96 +305,13 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 		return engine.computeStateWithVRF(header)
 	}
 
-	var (
-		js  *justifier
-		end uint32
-	)
-
-	if entry := engine.caches.justifier.Remove(header.ParentID()); !isCheckPoint(header.Number()) && entry != nil {
-		js = (entry.Entry.Value).(*justifier)
-		end = header.Number()
-	} else {
-		var err error
-		js, err = engine.newJustifier(header.ParentID())
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to create vote set")
-		}
-		end = js.checkpoint
-	}
-
-	h := header
-	for {
-		if h.Number() < engine.forkConfig.FINALITY {
-			break
-		}
-
-		signer, _ := h.Signer()
-		sum, err := engine.repo.GetBlockSummary(h.ParentID())
-		if err != nil {
-			return nil, err
-		}
-		state := engine.stater.NewState(sum.Root())
-		staker := builtin.Staker.Native(state)
-		validator, _, err := staker.LookupMaster(signer)
-		if err != nil {
-			// Error querying validator data - exclude for security
-			logger.Warn("failed to lookup validator", "signer", signer, "error", err)
-			continue
-		}
-
-		if validator == nil {
-			// Validator doesn't exist - exclude from voting
-			logger.Warn("validator not found", "signer", signer)
-			continue
-		}
-
-		if validator.IsEmpty() {
-			// Validator exists but has no stake - exclude from voting
-			logger.Warn("validator has no stake", "signer", signer)
-			continue
-		}
-
-		// Validator exists and has stake - add to voting set
-		logger.Debug("adding validator to voting set", "signer", signer, "weight", validator.Weight)
-		js.AddBlock(signer, h.COM(), validator.Weight)
-
-		if h.Number() <= end {
-			break
-		}
-
-		sum, err = engine.repo.GetBlockSummary(h.ParentID())
-		if err != nil {
-			return nil, err
-		}
-		h = sum.Header
-	}
-
-	st := js.Summarize()
-	engine.caches.state.Add(header.ID(), st)
-	engine.caches.justifier.Set(header.ID(), js, float64(header.Number()))
-	return st, nil
+	// Use all validators (no VRF filtering)
+	return engine.computeStateCommon(header, nil)
 }
 
 // computeStateWithVRF computes the bft state using weight-based VRF selection
 // This method is used when the Hayabusa fork is active
 func (engine *Engine) computeStateWithVRF(header *block.Header) (*bftState, error) {
-	var (
-		js  *justifier
-		end uint32
-	)
-
-	if entry := engine.caches.justifier.Remove(header.ParentID()); !isCheckPoint(header.Number()) && entry != nil {
-		js = (entry.Entry.Value).(*justifier)
-		end = header.Number()
-	} else {
-		var err error
-		js, err = engine.newJustifier(header.ParentID())
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to create vote set")
-		}
-		end = js.checkpoint
-	}
-
 	// Get validators with weights for VRF selection
 	validators, err := engine.getValidatorsWithWeights(header.ParentID())
 	if err != nil {
@@ -423,6 +340,29 @@ func (engine *Engine) computeStateWithVRF(header *block.Header) (*bftState, erro
 		selectedSet[addr] = true
 	}
 
+	return engine.computeStateCommon(header, selectedSet)
+}
+
+// computeStateCommon contains the common logic for computing BFT state
+// validatorFilter can be nil (no filtering) or a map of selected validators (VRF filtering)
+func (engine *Engine) computeStateCommon(header *block.Header, validatorFilter map[thor.Address]bool) (*bftState, error) {
+	var (
+		js  *justifier
+		end uint32
+	)
+
+	if entry := engine.caches.justifier.Remove(header.ParentID()); !isCheckPoint(header.Number()) && entry != nil {
+		js = (entry.Entry.Value).(*justifier)
+		end = header.Number()
+	} else {
+		var err error
+		js, err = engine.newJustifier(header.ParentID())
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to create vote set")
+		}
+		end = js.checkpoint
+	}
+
 	h := header
 	for {
 		if h.Number() < engine.forkConfig.FINALITY {
@@ -431,8 +371,8 @@ func (engine *Engine) computeStateWithVRF(header *block.Header) (*bftState, erro
 
 		signer, _ := h.Signer()
 
-		// Only include votes from selected validators
-		if !selectedSet[signer] {
+		// Apply validator filtering if provided (VRF mode)
+		if validatorFilter != nil && !validatorFilter[signer] {
 			logger.Debug("validator not selected by VRF", "signer", signer)
 			continue
 		}
@@ -449,12 +389,22 @@ func (engine *Engine) computeStateWithVRF(header *block.Header) (*bftState, erro
 			continue
 		}
 
-		if validator == nil || validator.IsEmpty() {
-			logger.Warn("validator not found or has no stake", "signer", signer)
+		if validator == nil {
+			logger.Warn("validator not found", "signer", signer)
 			continue
 		}
 
-		logger.Debug("adding VRF-selected validator to voting set", "signer", signer, "weight", validator.Weight)
+		if validator.IsEmpty() {
+			logger.Warn("validator has no stake", "signer", signer)
+			continue
+		}
+
+		// Add validator to voting set
+		loggerMsg := "adding validator to voting set"
+		if validatorFilter != nil {
+			loggerMsg = "adding VRF-selected validator to voting set"
+		}
+		logger.Debug(loggerMsg, "signer", signer, "weight", validator.Weight)
 		js.AddBlock(signer, h.COM(), validator.Weight)
 
 		if h.Number() <= end {
