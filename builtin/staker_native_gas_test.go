@@ -23,6 +23,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/vechain/thor/v2/state"
+
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,7 +33,7 @@ import (
 	"github.com/vechain/thor/v2/builtin/gascharger"
 	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -303,22 +305,48 @@ func TestStakerNativeGasCosts(t *testing.T) {
 
 // Helper functions
 type testSetup struct {
-	chain      *testchain.Chain
-	st         *state.State
-	contract   *vm.Contract
-	blkContext *xenv.BlockContext
-	txContext  *xenv.TransactionContext
-	evm        *vm.EVM
+	chain    *testchain.Chain
+	contract *vm.Contract
+	evm      *vm.EVM
+	state    *state.State
 }
 
 // Xenv creates a new builtin environment for each method that has to be called
 func (s *testSetup) Xenv(method *abi.Method) *xenv.Environment {
+	bestBlock := s.chain.Repo().BestBlockSummary()
+	master := genesis.DevAccounts()[0].Address
+
+	tx := new(tx.Builder).
+		ChainTag(s.chain.Repo().ChainTag()).
+		BlockRef(tx.NewBlockRef(bestBlock.Header.Number())).
+		Expiration(32).
+		Nonce(datagen.RandUint64()).
+		Gas(1000000).
+		Clause(tx.NewClause(nil)).
+		Build()
+
+	blkContext := &xenv.BlockContext{
+		Number:     bestBlock.Header.Number(),
+		Time:       bestBlock.Header.Timestamp(),
+		GasLimit:   bestBlock.Header.GasLimit(),
+		TotalScore: bestBlock.Header.TotalScore(),
+		Signer:     master,
+	}
+	txContext := &xenv.TransactionContext{
+		ID:         tx.ID(),
+		Origin:     master,
+		GasPayer:   master,
+		ProvedWork: big.NewInt(1000),
+		BlockRef:   tx.BlockRef(),
+		Expiration: tx.Expiration(),
+	}
+
 	return xenv.New(
 		method,
 		nil,
-		s.st,
-		s.blkContext,
-		s.txContext,
+		s.state,
+		blkContext,
+		txContext,
 		s.evm,
 		s.contract,
 		0, // Clause index
@@ -351,22 +379,10 @@ func createTestSetup(t *testing.T) *testSetup {
 	// Create test chain
 	chain, err := testchain.NewDefault()
 	require.NoError(t, err)
+	bestBlock := chain.Repo().BestBlockSummary()
 
 	// Use proper address generation from dev accounts
 	master := genesis.DevAccounts()[0].Address
-
-	// Get latest state
-	bestBlock, err := chain.BestBlock()
-	require.NoError(t, err)
-
-	// Create transaction context
-	tx := new(tx.Builder).
-		ChainTag(chain.Repo().ChainTag()).
-		BlockRef(tx.NewBlockRef(bestBlock.Header().Number())).
-		Expiration(32).
-		Gas(1000000).
-		Clause(tx.NewClause(nil)).
-		Build()
 
 	// Create mock EVM and contract
 	evm := vm.NewEVM(
@@ -385,29 +401,10 @@ func createTestSetup(t *testing.T) *testSetup {
 		1000000,
 	)
 
-	root := chain.Repo().BestBlockSummary().Root()
-	blkContext := &xenv.BlockContext{
-		Number:     bestBlock.Header().Number(),
-		Time:       bestBlock.Header().Timestamp(),
-		GasLimit:   bestBlock.Header().GasLimit(),
-		TotalScore: bestBlock.Header().TotalScore(),
-		Signer:     master,
-	}
-	txContext := &xenv.TransactionContext{
-		ID:         tx.ID(),
-		Origin:     master,
-		GasPayer:   master,
-		ProvedWork: big.NewInt(1000),
-		BlockRef:   tx.BlockRef(),
-		Expiration: tx.Expiration(),
-	}
-
 	return &testSetup{
-		chain:      chain,
-		txContext:  txContext,
-		blkContext: blkContext,
-		st:         chain.Stater().NewState(root),
-		contract:   contract,
-		evm:        evm,
+		chain:    chain,
+		contract: contract,
+		evm:      evm,
+		state:    chain.Stater().NewState(bestBlock.Root()),
 	}
 }
