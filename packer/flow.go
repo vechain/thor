@@ -31,7 +31,7 @@ type Flow struct {
 	txs          tx.Transactions
 	receipts     tx.Receipts
 	features     tx.Features
-	posActive    bool
+	PosActive    bool
 }
 
 func newFlow(
@@ -47,7 +47,7 @@ func newFlow(
 		runtime:      runtime,
 		processedTxs: make(map[thor.Bytes32]bool),
 		features:     features,
-		posActive:    posActive,
+		PosActive:    posActive,
 	}
 }
 
@@ -212,7 +212,7 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 		return nil, nil, nil, errors.New("private key mismatch")
 	}
 
-	if f.posActive {
+	if f.PosActive {
 		// TODO: We can reward priority fees here too
 		signer := crypto.PubkeyToAddress(privateKey.PublicKey)
 		staker := builtin.Staker.Native(f.runtime.State())
@@ -238,8 +238,7 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 		ReceiptsRoot(f.receipts.RootHash()).
 		StateRoot(stateRoot).
 		TransactionFeatures(f.features).
-		BaseFee(f.runtime.Context().BaseFee).
-		Evidence(evidence)
+		BaseFee(f.runtime.Context().BaseFee)
 
 	for _, tx := range f.txs {
 		builder.Transaction(tx)
@@ -249,9 +248,8 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 		builder.COM()
 	}
 
-	if newBlockConflicts > 0 && f.posActive {
-		evidence := make([][]byte, 0)
-		builder.Evidence(&evidence)
+	if newBlockConflicts > 0 && f.PosActive {
+		builder.Evidence(evidence)
 	}
 
 	if f.Number() < f.packer.forkConfig.VIP214 {

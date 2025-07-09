@@ -319,7 +319,9 @@ func TestExtensionV2(t *testing.T) {
 			name: "alpha, com and baseFee",
 			test: func(t *testing.T) {
 				baseFee := big.NewInt(123456)
-				evidence := make([][]byte, 0)
+				evidence := make([][]byte, 1)
+				id1 := thor.BytesToBytes32([]byte("testId1"))
+				evidence[0] = id1.Bytes()
 				bytes, err := rlp.EncodeToBytes(&v2{
 					Extension: extension{
 						Alpha:    thor.Bytes32{}.Bytes(),
@@ -346,6 +348,7 @@ func TestExtensionV2(t *testing.T) {
 				assert.Equal(t, thor.Bytes32{}.Bytes(), dst.Extension.Alpha)
 				assert.True(t, dst.Extension.COM)
 				assert.Equal(t, baseFee, dst.Extension.BaseFee)
+				assert.Equal(t, evidence, *dst.Extension.Evidence)
 			},
 		},
 		{
@@ -379,6 +382,7 @@ func TestExtensionV2(t *testing.T) {
 				assert.Equal(t, thor.Bytes32{}.Bytes(), dst.Extension.Alpha)
 				assert.False(t, dst.Extension.COM)
 				assert.Equal(t, baseFee, dst.Extension.BaseFee)
+				assert.Equal(t, evidence, *dst.Extension.Evidence)
 			},
 		},
 	}

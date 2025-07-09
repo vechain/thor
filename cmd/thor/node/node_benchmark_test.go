@@ -336,7 +336,8 @@ func packTxsIntoBlock(thorChain *testchain.Chain, proposerAccount *genesis.DevAc
 		}
 	}
 
-	b1, stage, receipts, err := flow.Pack(proposerAccount.PrivateKey, 0, false)
+	var evidence *[][]byte
+	b1, stage, receipts, err := flow.Pack(proposerAccount.PrivateKey, 0, false, evidence)
 	if err != nil {
 		return nil, err
 	}

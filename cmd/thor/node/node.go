@@ -316,11 +316,11 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 	var isTrunk *bool
 
 	if err := n.guardBlockProcessing(newBlock.Header().Number(), func(conflicts [][]byte) error {
+		var conflictingBlocks [][]byte
 		// Check whether the block was already there.
 		// It can be skipped if no conflicts.
 		if len(conflicts) > 0 {
 			newSigner, _ := newBlock.Header().Signer()
-			var conflictingBlocks [][]byte
 			// iter over conflicting blocks
 			for _, conflict := range conflicts {
 				conflictBlock, err := n.repo.GetBlock(thor.BytesToBytes32(conflict))
@@ -335,10 +335,6 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 					conflictingBlocks = append(conflictingBlocks, conflictBlock.Header().ID().Bytes())
 					log.Warn("Double signing", "block", shortID(newBlock.Header().ID()), "previous", shortID(thor.BytesToBytes32(conflict)))
 				}
-			}
-			if len(conflictingBlocks) > 0 {
-				conflictingBlocks = append(conflictingBlocks, newBlock.Header().ID().Bytes())
-				n.repo.RecordDoubleSig(newBlock.Header().Number(), conflictingBlocks)
 			}
 
 			_, err := n.repo.GetBlockSummary(newBlock.Header().ID())
@@ -358,6 +354,15 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 			return errParentMissing
 		}
 
+		isPos, err := n.cons.IsPosBlock(parentSummary, *newBlock.Header())
+		if err != nil {
+			return err
+		}
+		if len(conflictingBlocks) > 0 && isPos {
+			conflictingBlocks = append(conflictingBlocks, newBlock.Header().ID().Bytes())
+			n.repo.RecordDoubleSig(newBlock.Header().Number(), conflictingBlocks)
+		}
+
 		var (
 			startTime = mclock.Now()
 			oldBest   = n.repo.BestBlockSummary()
@@ -370,9 +375,11 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		}
 
 		evidence := newBlock.Header().Evidence()
-		err = n.validateEvidence(evidence)
-		if err != nil {
-			return err
+		if isPos {
+			err = n.validateEvidence(evidence)
+			if err != nil {
+				return err
+			}
 		}
 
 		// process the new block
@@ -441,7 +448,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		}
 		stats.UpdateProcessed(1, len(receipts), execElapsed, commitElapsed, realElapsed, newBlock.Header().GasUsed())
 
-		if evidence != nil && len(*evidence) > 1 {
+		if isPos && evidence != nil && len(*evidence) > 1 {
 			blockID := thor.BytesToBytes32((*evidence)[0])
 			blkSum, err := n.repo.GetBlockSummary(blockID)
 			if err != nil {

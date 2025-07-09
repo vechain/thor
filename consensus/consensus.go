@@ -67,6 +67,13 @@ func (c *Consensus) Process(parentSummary *chain.BlockSummary, blk *block.Block,
 	return stage, receipts, nil
 }
 
+func (c *Consensus) IsPosBlock(parentSummary *chain.BlockSummary, header block.Header) (bool, error) {
+	state := c.stater.NewState(parentSummary.Root())
+	staker := builtin.Staker.Native(state)
+	posActive, _, _, err := c.syncPOS(staker, header.Number())
+	return posActive, err
+}
+
 func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipValidation bool) (*runtime.Runtime, error) {
 	signer, err := header.Signer()
 	if err != nil {

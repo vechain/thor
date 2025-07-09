@@ -150,7 +150,10 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 		}
 
 		// pack the new block
-		evidence := n.repo.GetDoubleSigEvidence()
+		var evidence *[][]byte
+		if flow.PosActive {
+			evidence = n.repo.GetDoubleSigEvidence()
+		}
 		newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey, uint32(len(conflicts)), shouldVote, evidence)
 		if err != nil {
 			return errors.Wrap(err, "failed to pack block")
@@ -206,13 +209,13 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 			logger.Trace("bandwidth updated", "gps", v)
 		}
 
-		if evidence != nil {
+		if evidence != nil && flow.PosActive {
 			blockID := thor.BytesToBytes32((*evidence)[0])
-			duplBlk, err := n.repo.GetBlockSummary(blockID)
+			dupBlk, err := n.repo.GetBlockSummary(blockID)
 			if err != nil {
 				return err
 			}
-			n.repo.RecordDoubleSigProcessed(duplBlk.Header.Number())
+			n.repo.RecordDoubleSigProcessed(dupBlk.Header.Number())
 		}
 
 		metricBlockProcessedTxs().SetWithLabel(int64(len(receipts)), map[string]string{"type": "proposed"})

@@ -53,9 +53,22 @@ func TestFlow_Schedule_POS(t *testing.T) {
 	root = chain.Repo().BestBlockSummary().Root()
 	packNext(t, chain, thor.BlockInterval)
 	verifyMechanism(t, chain, false, root)
+
+	evidence := make([][]byte, 1)
+	id1 := thor.BytesToBytes32([]byte("testId1"))
+	evidence[0] = id1.Bytes()
+	packNextWithEvidence(t, chain, thor.BlockInterval, &evidence)
+	verifyMechanism(t, chain, false, root)
+	summary := chain.Repo().BestBlockSummary()
+	assert.Equal(t, evidence, *summary.Header.Evidence())
 }
 
 func packNext(t *testing.T, chain *testchain.Chain, interval uint64, txs ...*tx.Transaction) {
+	var evidence *[][]byte
+	packNextWithEvidence(t, chain, interval, evidence, txs...)
+}
+
+func packNextWithEvidence(t *testing.T, chain *testchain.Chain, interval uint64, evidence *[][]byte, txs ...*tx.Transaction) {
 	account := genesis.DevAccounts()[0]
 	p := packer.New(chain.Repo(), chain.Stater(), account.Address, &account.Address, chain.GetForkConfig(), 0)
 	parent := chain.Repo().BestBlockSummary()
@@ -66,7 +79,12 @@ func packNext(t *testing.T, chain *testchain.Chain, interval uint64, txs ...*tx.
 		assert.NoError(t, flow.Adopt(trx))
 	}
 
-	blk, stage, receipts, err := flow.Pack(account.PrivateKey, 0, false)
+	conflicts := uint32(0)
+	if evidence != nil {
+		conflicts = uint32(len(*evidence))
+	}
+
+	blk, stage, receipts, err := flow.Pack(account.PrivateKey, conflicts, false, evidence)
 	assert.NoError(t, err)
 	assert.NoError(t, chain.AddBlock(blk, stage, receipts))
 	best := chain.Repo().BestBlockSummary()

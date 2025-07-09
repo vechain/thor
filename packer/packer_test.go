@@ -95,7 +95,8 @@ func TestP(t *testing.T) {
 			flow.Adopt(tx)
 		}
 
-		blk, stage, receipts, _ := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, false)
+		var evidence *[][]byte
+		blk, stage, receipts, _ := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, false, evidence)
 		root, _ := stage.Commit()
 		assert.Equal(t, root, blk.Header().StateRoot())
 		_, _, err = consensus.New(repo, stater, &thor.NoFork).Process(best, blk, uint64(time.Now().Unix()*2), 0)
@@ -157,7 +158,8 @@ func TestForkVIP191(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	blk, stage, receipts, _ := flow.Pack(a1.PrivateKey, 0, false)
+	var evidence *[][]byte
+	blk, stage, receipts, _ := flow.Pack(a1.PrivateKey, 0, false, evidence)
 	root, _ := stage.Commit()
 	assert.Equal(t, root, blk.Header().StateRoot())
 
