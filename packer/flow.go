@@ -238,7 +238,7 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 		ReceiptsRoot(f.receipts.RootHash()).
 		StateRoot(stateRoot).
 		TransactionFeatures(f.features).
-		BaseFee(f.runtime.Context().BaseFee)
+		BaseFee(f.runtime.Context().BaseFee).
 		Evidence(evidence)
 
 	println("for block number num of txs", f.Number(), len(f.txs))
