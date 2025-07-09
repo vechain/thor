@@ -112,7 +112,6 @@ func buildJSONBlockSummary(summary *chain.BlockSummary, isTrunk bool, isFinalize
 
 	if summary.Header.Evidence() != nil && len(*summary.Header.Evidence()) > 0 {
 		println("in the api converting evidence", len(*summary.Header.Evidence()))
-		evidence = make([]thor.Bytes32, len(*summary.Header.Evidence()))
 		println("initialized evidence of length", len(evidence))
 		for _, ev := range *summary.Header.Evidence() {
 			blkId := thor.BytesToBytes32(ev)
