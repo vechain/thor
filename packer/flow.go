@@ -7,12 +7,14 @@ package packer
 
 import (
 	"crypto/ecdsa"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -285,6 +287,82 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 			return nil, nil, nil, err
 		}
 
+		// Add VRF proofs from validators if Hayabusa fork is active
+		if f.Number() >= f.packer.forkConfig.HAYABUSA {
+			validatorProofs, err := f.collectValidatorVRFProofs(alpha)
+			if err != nil {
+				// Log error but don't fail the block creation
+				log.Warn("failed to collect validator VRF proofs", "error", err)
+			} else if len(validatorProofs) > 0 {
+				// Rebuild the block with VRF proofs
+				builder.ValidatorVRFProofs(validatorProofs)
+				newBlock = builder.Alpha(alpha).Build()
+
+				// Re-sign the block with the new content
+				ec, err = crypto.Sign(newBlock.Header().SigningHash().Bytes(), privateKey)
+				if err != nil {
+					return nil, nil, nil, err
+				}
+
+				sig, err = block.NewComplexSignature(ec, proof)
+				if err != nil {
+					return nil, nil, nil, err
+				}
+			}
+		}
+
 		return newBlock.WithSignature(sig), stage, f.receipts, nil
 	}
+}
+
+// collectValidatorVRFProofs collects VRF proofs from validators
+// In a real implementation, this would communicate with validators to get their VRF proofs
+func (f *Flow) collectValidatorVRFProofs(alpha []byte) (map[thor.Address][]byte, error) {
+	// Get validators from the current state
+	staker := builtin.Staker.Native(f.runtime.State())
+	leaderGroup, err := staker.LeaderGroup()
+	if err != nil {
+		return nil, err
+	}
+
+	validatorProofs := make(map[thor.Address][]byte)
+
+	// In a real implementation, we would:
+	// 1. Send requests to validators asking for their VRF proofs
+	// 2. Wait for responses with valid VRF proofs
+	// 3. Verify each proof using the validator's public key
+
+	// For now, we'll simulate this by generating proofs for a subset of validators
+	// This is just a placeholder - in reality, validators would submit their own proofs
+
+	for _, validation := range leaderGroup {
+		if validation.Weight.Sign() > 0 {
+			// Simulate VRF proof generation for this validator
+			// In reality, the validator would generate this proof using their private key
+			validatorAlpha := append(alpha, validation.Master.Bytes()...)
+
+			// Create a simulated proof (not real VRF)
+			hasher := sha256.New()
+			hasher.Write(validatorAlpha)
+			proof := hasher.Sum(nil)
+
+			// Pad to standard VRF proof size
+			if len(proof) < 81 {
+				paddedProof := make([]byte, 81)
+				copy(paddedProof, proof)
+				proof = paddedProof
+			} else if len(proof) > 81 {
+				proof = proof[:81]
+			}
+
+			validatorProofs[validation.Master] = proof
+
+			// Limit to first few validators for demonstration
+			if len(validatorProofs) >= 10 {
+				break
+			}
+		}
+	}
+
+	return validatorProofs, nil
 }

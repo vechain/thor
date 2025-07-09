@@ -228,6 +228,20 @@ func (h *Header) COM() bool {
 	return h.body.Extension.COM
 }
 
+// ValidatorVRFProofs returns the VRF proofs from validators stored in the header.
+func (h *Header) ValidatorVRFProofs() map[thor.Address][]byte {
+	if h.body.Extension.ValidatorVRFProofs == nil {
+		return nil
+	}
+
+	// Return a copy to prevent external modification
+	proofs := make(map[thor.Address][]byte)
+	for addr, proof := range h.body.Extension.ValidatorVRFProofs {
+		proofs[addr] = slices.Clone(proof)
+	}
+	return proofs
+}
+
 // Beta verifies the VRF proof in header's signature and returns the beta.
 func (h *Header) Beta() (beta []byte, err error) {
 	if h.Number() == 0 || len(h.body.Signature) == 65 {

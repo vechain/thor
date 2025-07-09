@@ -69,7 +69,7 @@ func TestTrieVersioning(t *testing.T) {
 		roots []trie.Root
 	)
 
-	for i := uint32(0); i < 5; i++ {
+	for i := range uint32(5) {
 		var root trie.Root
 		if len(roots) > 0 {
 			root = roots[len(roots)-1]
@@ -135,7 +135,7 @@ func TestTrieCheckpoint(t *testing.T) {
 
 	tr := newTrie(name, back, trie.Root{})
 
-	for i := uint32(0); i < 3; i++ {
+	for i := range uint32(3) {
 		key := make([]byte, 4)
 		binary.BigEndian.PutUint32(key, i)
 		value := []byte("checkpoint-" + string(key))
@@ -159,7 +159,7 @@ func TestTrieCheckpoint(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	for i := uint32(0); i < 10000; i++ {
+	for i := range uint32(10000) {
 		key := make([]byte, 4)
 		binary.BigEndian.PutUint32(key, i)
 		value := []byte("checkpoint-extra-" + string(key))
@@ -182,7 +182,7 @@ func TestTrieNodeIterator(t *testing.T) {
 
 	tr := newTrie(name, back, trie.Root{})
 
-	for i := uint32(0); i < 5; i++ {
+	for i := range uint32(5) {
 		key := make([]byte, 4)
 		binary.BigEndian.PutUint32(key, i)
 		value := []byte("iter-" + string(key))

@@ -34,7 +34,7 @@ func makeTestTrie() (*memdb, *Trie, map[string][]byte) {
 
 	// Fill it with some arbitrary data
 	content := make(map[string][]byte)
-	for i := byte(0); i < 255; i++ {
+	for i := range byte(255) {
 		// Map the same data under multiple keys
 		key, val := common.LeftPadBytes([]byte{1, i}, 32), []byte{i}
 		content[string(key)] = val
@@ -99,7 +99,7 @@ func TestIteratorLargeData(t *testing.T) {
 	trie := new(Trie)
 	vals := make(map[string]*kv)
 
-	for i := byte(0); i < 255; i++ {
+	for i := range byte(255) {
 		value := &kv{common.LeftPadBytes([]byte{i}, 32), []byte{i}, false}
 		value2 := &kv{common.LeftPadBytes([]byte{10, i}, 32), []byte{i}, false}
 		trie.Update(value.k, value.v, nil)

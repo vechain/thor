@@ -8,6 +8,7 @@ package consensus
 import (
 	"bytes"
 	"fmt"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/v2/block"
@@ -410,10 +411,8 @@ func (c *Consensus) validateWeightBasedVRF(header *block.Header, parent *block.H
 	}
 
 	// Check if the signer was selected
-	for _, selected := range selectedValidators {
-		if selected == signer {
-			return nil // Signer was selected by VRF
-		}
+	if slices.Contains(selectedValidators, signer) {
+		return nil // Signer was selected by VRF
 	}
 
 	return fmt.Errorf("block signer %v was not selected by weight-based VRF", signer)

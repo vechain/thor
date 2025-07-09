@@ -97,6 +97,21 @@ func (b *Builder) BaseFee(baseFee *big.Int) *Builder {
 	return b
 }
 
+// ValidatorVRFProofs sets VRF proofs from validators.
+func (b *Builder) ValidatorVRFProofs(proofs map[thor.Address][]byte) *Builder {
+	if proofs == nil {
+		b.headerBody.Extension.ValidatorVRFProofs = nil
+		return b
+	}
+
+	// Create a copy to prevent external modification
+	b.headerBody.Extension.ValidatorVRFProofs = make(map[thor.Address][]byte)
+	for addr, proof := range proofs {
+		b.headerBody.Extension.ValidatorVRFProofs[addr] = slices.Clone(proof)
+	}
+	return b
+}
+
 // Build build a block object.
 func (b *Builder) Build() *Block {
 	header := Header{body: b.headerBody}

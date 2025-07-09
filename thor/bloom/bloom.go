@@ -15,7 +15,7 @@ import (
 
 func distribute(hash uint32, k uint8, nBits uint32, cb func(index int, bit byte) bool) bool {
 	delta := (hash >> 17) | (hash << 15) // Rotate right 17 bits
-	for i := uint8(0); i < k; i++ {
+	for range k {
 		bitPos := hash % nBits
 		if !cb(int(bitPos/8), 1<<(bitPos%8)) {
 			return false

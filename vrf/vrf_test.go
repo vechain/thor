@@ -7,6 +7,7 @@ package vrf_test
 
 import (
 	"crypto/ecdsa"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"io"
@@ -352,4 +353,156 @@ func TestWeightedValidatorSelectionMaxValidators(t *testing.T) {
 	selected, _, _, err := vrf.WeightedValidatorSelection(validators, alpha, maxValidators)
 	assert.NoError(t, err)
 	assert.Len(t, selected, 2, "should select all available validators")
+}
+
+func TestWeightedValidatorSelectionWithProofs(t *testing.T) {
+	// Create test validators with different weights
+	validators := []vrf.Validator{
+		{
+			Address: thor.BytesToAddress([]byte("validator1")),
+			Weight:  big.NewInt(100),
+		},
+		{
+			Address: thor.BytesToAddress([]byte("validator2")),
+			Weight:  big.NewInt(200),
+		},
+		{
+			Address: thor.BytesToAddress([]byte("validator3")),
+			Weight:  big.NewInt(300),
+		},
+	}
+
+	alpha := []byte("test alpha seed")
+	maxValidators := 2
+
+	// Create mock VRF proofs for validators
+	validatorProofs := make(map[thor.Address][]byte)
+	for _, v := range validators {
+		// Create a mock proof for each validator
+		hasher := sha256.New()
+		hasher.Write(alpha)
+		hasher.Write(v.Address.Bytes())
+		proof := hasher.Sum(nil)
+
+		// Pad to standard VRF proof size
+		if len(proof) < 81 {
+			paddedProof := make([]byte, 81)
+			copy(paddedProof, proof)
+			proof = paddedProof
+		} else if len(proof) > 81 {
+			proof = proof[:81]
+		}
+
+		validatorProofs[v.Address] = proof
+	}
+
+	selected, beta, pi, err := vrf.WeightedValidatorSelectionWithProofs(validators, alpha, maxValidators, validatorProofs)
+	assert.NoError(t, err)
+	assert.NotNil(t, selected)
+	assert.NotNil(t, beta)
+	assert.NotNil(t, pi)
+
+	// Should select exactly maxValidators
+	assert.Len(t, selected, maxValidators)
+
+	// Should not have duplicates
+	selectedSet := make(map[thor.Address]bool)
+	for _, addr := range selected {
+		assert.False(t, selectedSet[addr], "duplicate validator selected")
+		selectedSet[addr] = true
+	}
+
+	// All selected validators should be from the original list
+	for _, addr := range selected {
+		found := false
+		for _, v := range validators {
+			if v.Address == addr {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "selected validator not in original list")
+	}
+}
+
+func TestWeightedValidatorSelectionWithProofsEmpty(t *testing.T) {
+	validators := []vrf.Validator{}
+	alpha := []byte("test alpha seed")
+	maxValidators := 5
+	validatorProofs := make(map[thor.Address][]byte)
+
+	selected, beta, pi, err := vrf.WeightedValidatorSelectionWithProofs(validators, alpha, maxValidators, validatorProofs)
+	assert.NoError(t, err)
+	assert.Nil(t, selected)
+	assert.Nil(t, beta)
+	assert.Nil(t, pi)
+}
+
+func TestWeightedValidatorSelectionWithProofsNoProofs(t *testing.T) {
+	validators := []vrf.Validator{
+		{
+			Address: thor.BytesToAddress([]byte("validator1")),
+			Weight:  big.NewInt(100),
+		},
+		{
+			Address: thor.BytesToAddress([]byte("validator2")),
+			Weight:  big.NewInt(200),
+		},
+	}
+
+	alpha := []byte("test alpha seed")
+	maxValidators := 2
+	validatorProofs := make(map[thor.Address][]byte) // Empty proofs
+
+	// Should fallback to deterministic approach
+	selected, beta, pi, err := vrf.WeightedValidatorSelectionWithProofs(validators, alpha, maxValidators, validatorProofs)
+	assert.NoError(t, err)
+	assert.NotNil(t, selected)
+	assert.NotNil(t, beta)
+	assert.NotNil(t, pi)
+	assert.Len(t, selected, maxValidators)
+}
+
+func TestWeightedValidatorSelectionWithProofsPartialProofs(t *testing.T) {
+	validators := []vrf.Validator{
+		{
+			Address: thor.BytesToAddress([]byte("validator1")),
+			Weight:  big.NewInt(100),
+		},
+		{
+			Address: thor.BytesToAddress([]byte("validator2")),
+			Weight:  big.NewInt(200),
+		},
+		{
+			Address: thor.BytesToAddress([]byte("validator3")),
+			Weight:  big.NewInt(300),
+		},
+	}
+
+	alpha := []byte("test alpha seed")
+	maxValidators := 2
+
+	// Only provide proofs for some validators
+	validatorProofs := make(map[thor.Address][]byte)
+
+	// Create proof only for validator1
+	hasher := sha256.New()
+	hasher.Write(alpha)
+	hasher.Write(validators[0].Address.Bytes())
+	proof := hasher.Sum(nil)
+	if len(proof) < 81 {
+		paddedProof := make([]byte, 81)
+		copy(paddedProof, proof)
+		proof = paddedProof
+	} else if len(proof) > 81 {
+		proof = proof[:81]
+	}
+	validatorProofs[validators[0].Address] = proof
+
+	selected, beta, pi, err := vrf.WeightedValidatorSelectionWithProofs(validators, alpha, maxValidators, validatorProofs)
+	assert.NoError(t, err)
+	assert.NotNil(t, selected)
+	assert.NotNil(t, beta)
+	assert.NotNil(t, pi)
+	assert.Len(t, selected, maxValidators)
 }

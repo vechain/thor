@@ -739,7 +739,7 @@ func TestJustifier(t *testing.T) {
 
 				// Add votes with stake 100 each until we exceed threshold
 				// 7 votes * 100 = 700 > 666 threshold
-				for i := 0; i < 7; i++ {
+				for range 7 {
 					vs.AddBlock(datagen.RandAddress(), true, big.NewInt(100))
 				}
 
@@ -775,7 +775,7 @@ func TestJustifier(t *testing.T) {
 
 				// Add votes with stake 100 each until we reach threshold but not exceed it
 				// 6 votes * 100 = 600 < 666 threshold
-				for i := 0; i < 6; i++ {
+				for range 6 {
 					vs.AddBlock(datagen.RandAddress(), true, big.NewInt(100))
 				}
 

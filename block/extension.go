@@ -11,6 +11,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/vechain/thor/v2/thor"
 )
 
 /**
@@ -21,24 +22,41 @@ type extension struct {
 	Alpha   []byte
 	COM     bool
 	BaseFee *big.Int
+	// ValidatorVRFProofs stores VRF proofs from validators for collective VRF selection
+	// Key: validator address, Value: VRF proof
+	ValidatorVRFProofs map[thor.Address][]byte
 }
 
 type _extension extension
 
 // EncodeRLP implements rlp.Encoder.
 func (ex *extension) EncodeRLP(w io.Writer) error {
-	if ex.BaseFee != nil {
+	// Check if we have any non-default fields
+	hasBaseFee := ex.BaseFee != nil
+	hasCOM := ex.COM
+	hasAlpha := len(ex.Alpha) != 0
+	hasVRFProofs := len(ex.ValidatorVRFProofs) != 0
+
+	if hasBaseFee {
 		return rlp.Encode(w, (*_extension)(ex))
 	}
 
-	if ex.COM {
+	if hasVRFProofs {
+		return rlp.Encode(w, []any{
+			ex.Alpha,
+			ex.COM,
+			ex.ValidatorVRFProofs,
+		})
+	}
+
+	if hasCOM {
 		return rlp.Encode(w, []any{
 			ex.Alpha,
 			ex.COM,
 		})
 	}
 
-	if len(ex.Alpha) != 0 {
+	if hasAlpha {
 		return rlp.Encode(w, []any{
 			ex.Alpha,
 		})
@@ -58,12 +76,13 @@ func (ex *extension) DecodeRLP(s *rlp.Stream) error {
 				nil,
 				false,
 				nil,
+				nil,
 			}
 			return nil
 		}
 	}
 
-	if len(raws) == 0 || len(raws) > 3 {
+	if len(raws) == 0 || len(raws) > 4 {
 		return errors.New("rlp: unexpected extension")
 	}
 
@@ -80,13 +99,14 @@ func (ex *extension) DecodeRLP(s *rlp.Stream) error {
 		}
 
 		*ex = extension{
-			Alpha: alpha,
-			COM:   false,
+			Alpha:              alpha,
+			COM:                false,
+			ValidatorVRFProofs: nil,
 		}
 		return nil
 	}
 
-	// more than one filed, must have com
+	// more than one field, must have com
 	var com bool
 	if err := rlp.DecodeBytes(raws[1], &com); err != nil {
 		return err
@@ -100,22 +120,58 @@ func (ex *extension) DecodeRLP(s *rlp.Stream) error {
 		}
 
 		*ex = extension{
-			Alpha: alpha,
-			COM:   com,
+			Alpha:              alpha,
+			COM:                com,
+			ValidatorVRFProofs: nil,
 		}
 		return nil
 	}
 
-	// For three fields, decode BaseFee
+	// For three fields, check if it's BaseFee or VRFProofs
+	if len(raws) == 3 {
+		// Try to decode as BaseFee first (backward compatibility)
+		var baseFee big.Int
+		if err := rlp.DecodeBytes(raws[2], &baseFee); err == nil {
+			*ex = extension{
+				Alpha:              alpha,
+				COM:                com,
+				BaseFee:            &baseFee,
+				ValidatorVRFProofs: nil,
+			}
+			return nil
+		}
+
+		// If not BaseFee, try to decode as VRFProofs
+		var vrfProofs map[thor.Address][]byte
+		if err := rlp.DecodeBytes(raws[2], &vrfProofs); err != nil {
+			return err
+		}
+
+		*ex = extension{
+			Alpha:              alpha,
+			COM:                com,
+			BaseFee:            nil,
+			ValidatorVRFProofs: vrfProofs,
+		}
+		return nil
+	}
+
+	// For four fields, decode BaseFee and VRFProofs
 	var baseFee big.Int
 	if err := rlp.DecodeBytes(raws[2], &baseFee); err != nil {
 		return err
 	}
 
+	var vrfProofs map[thor.Address][]byte
+	if err := rlp.DecodeBytes(raws[3], &vrfProofs); err != nil {
+		return err
+	}
+
 	*ex = extension{
-		Alpha:   alpha,
-		COM:     com,
-		BaseFee: &baseFee,
+		Alpha:              alpha,
+		COM:                com,
+		BaseFee:            &baseFee,
+		ValidatorVRFProofs: vrfProofs,
 	}
 
 	return nil
