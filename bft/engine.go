@@ -378,19 +378,6 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 // computeStateWithVRF computes the bft state using weight-based VRF selection
 // This method is used when the Hayabusa fork is active
 func (engine *Engine) computeStateWithVRF(header *block.Header) (*bftState, error) {
-	if cached, ok := engine.caches.state.Get(header.ID()); ok {
-		return cached.(*bftState), nil
-	}
-
-	if header.Number() == 0 || header.Number() < engine.forkConfig.FINALITY {
-		return &bftState{}, nil
-	}
-
-	// Check if weight-based VRF is active
-	if header.Number() < engine.forkConfig.HAYABUSA {
-		return engine.computeState(header)
-	}
-
 	var (
 		js  *justifier
 		end uint32
