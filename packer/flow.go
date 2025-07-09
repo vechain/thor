@@ -298,7 +298,7 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 				if err != nil {
 					log.Warn("failed to get validators with weights", "error", err)
 				} else {
-					selectedValidators, _, _, err := vrf.WeightedValidatorSelection(validators, alpha, 101, validatorPrivateKeys)
+					selectedValidators, _, _, err := vrf.WeightedValidatorSelection(validators, alpha, int(thor.InitialMaxBlockProposers), validatorPrivateKeys)
 					if err != nil {
 						log.Warn("failed to select validators with real VRF", "error", err)
 					} else {

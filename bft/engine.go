@@ -335,7 +335,7 @@ func (engine *Engine) computeStateWithVRF(header *block.Header) (*bftState, erro
 	var selectedValidators []thor.Address
 	if len(validatorProofs) > 0 {
 		// Use real VRF proofs from validators
-		selectedValidators, _, _, err = vrf.WeightedValidatorSelectionWithProofs(validators, alpha, 101, validatorProofs)
+		selectedValidators, _, _, err = vrf.WeightedValidatorSelectionWithProofs(validators, alpha, int(thor.InitialMaxBlockProposers), validatorProofs)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to select validators with real VRF proofs")
 		}

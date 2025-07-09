@@ -403,7 +403,7 @@ func (c *Consensus) validateWeightBasedVRF(header *block.Header, parent *block.H
 
 	validatorProofs := header.ValidatorVRFProofs()
 
-	selectedValidators, _, _, err := vrf.WeightedValidatorSelectionWithProofs(validators, alpha, 101, validatorProofs)
+	selectedValidators, _, _, err := vrf.WeightedValidatorSelectionWithProofs(validators, alpha, int(thor.InitialMaxBlockProposers), validatorProofs)
 	if err != nil {
 		return fmt.Errorf("failed to select validators with VRF: %v", err)
 	}
