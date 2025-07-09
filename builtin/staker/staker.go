@@ -22,10 +22,9 @@ var (
 	minStake = big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
 	maxStake = big.NewInt(0).Mul(big.NewInt(400e6), big.NewInt(1e18))
 
-	// TODO: Enable these once customnet testing is done
-	//oneWeekStakingPeriod  = uint32(360) * 24 * 7     // 1 weeks
-	//twoWeeksStakingPeriod = oneWeekStakingPeriod * 2 // 2 weeks
-	//oneMonthStakingPeriod = uint32(360) * 24 * 30    // 30 days
+	lowStakingPeriod    = uint32(360) * 24 * 7  // 336 epochs
+	mediumStakingPeriod = uint32(360) * 24 * 15 // 720 epochs
+	highStakingPeriod   = uint32(360) * 24 * 30 // 1,440 epochs
 
 	cooldownPeriod = uint32(8640)
 	epochLength    = uint32(180)
@@ -51,19 +50,9 @@ type Staker struct {
 func New(addr thor.Address, state *state.State, params *params.Params, charger *gascharger.Charger) *Staker {
 	storage := newStorage(addr, state, charger)
 
-	if num, err := solidity.NewUint256(addr, state, thor.BytesToBytes32([]byte("epoch-length"))).Get(); err == nil {
-		numUint64 := num.Uint64()
-		if numUint64 != 0 {
-			epochLength = uint32(numUint64)
-		}
-	}
-
-	if num, err := solidity.NewUint256(addr, state, thor.BytesToBytes32([]byte("cooldown-period"))).Get(); err == nil {
-		numUint64 := num.Uint64()
-		if numUint64 != 0 {
-			cooldownPeriod = uint32(numUint64)
-		}
-	}
+	// debug overrides for testing
+	storage.debugOverride(&epochLength, thor.BytesToBytes32([]byte("epoch-length")))
+	storage.debugOverride(&cooldownPeriod, thor.BytesToBytes32([]byte("cooldown-period")))
 
 	return &Staker{
 		lockedVET:    solidity.NewUint256(addr, state, slotLockedVET),
@@ -148,26 +137,26 @@ func (s *Staker) Next(prev thor.Bytes32) (thor.Bytes32, error) {
 // AddValidator queues a new validator.
 func (s *Staker) AddValidator(
 	endorsor thor.Address,
-	master thor.Address,
+	node thor.Address,
 	period uint32,
 	stake *big.Int,
 	autoRenew bool,
 	currentBlock uint32,
 ) (thor.Bytes32, error) {
 	stakeETH := new(big.Int).Div(stake, big.NewInt(1e18))
-	logger.Debug("adding validator", "endorsor", endorsor, "master", master, "period", period, "stake", stakeETH, "autoRenew", autoRenew)
+	logger.Debug("adding validator", "endorsor", endorsor, "node", node, "period", period, "stake", stakeETH, "autoRenew", autoRenew)
 
-	if id, err := s.validations.Add(endorsor, master, period, stake, autoRenew, currentBlock); err != nil {
-		logger.Info("add validator failed", "master", master, "error", err)
+	if id, err := s.validations.Add(endorsor, node, period, stake, autoRenew, currentBlock); err != nil {
+		logger.Info("add validator failed", "node", node, "error", err)
 		return thor.Bytes32{}, err
 	} else {
-		logger.Info("added validator", "master", master, "id", id)
+		logger.Info("added validator", "node", node, "id", id)
 		return id, nil
 	}
 }
 
-func (s *Staker) LookupMaster(master thor.Address) (*Validation, thor.Bytes32, error) {
-	return s.storage.LookupMaster(master)
+func (s *Staker) LookupNode(node thor.Address) (*Validation, thor.Bytes32, error) {
+	return s.storage.LookupNode(node)
 }
 
 func (s *Staker) Get(id thor.Bytes32) (*Validation, error) {
@@ -234,7 +223,7 @@ func (s *Staker) GetWithdrawable(id thor.Bytes32, block uint32) (*big.Int, error
 }
 
 func (s *Staker) SetOnline(id thor.Bytes32, online bool) (bool, error) {
-	logger.Debug("set master online", "id", id, "online", online)
+	logger.Debug("set node online", "id", id, "online", online)
 	entry, err := s.storage.GetValidation(id)
 	if err != nil {
 		return false, err
@@ -287,9 +276,9 @@ func (s *Staker) GetDelegation(
 
 // HasDelegations returns true if the validator has any delegations.
 func (s *Staker) HasDelegations(
-	master thor.Address,
+	node thor.Address,
 ) (bool, error) {
-	_, validationID, err := s.storage.LookupMaster(master)
+	_, validationID, err := s.storage.LookupNode(node)
 	if err != nil {
 		return false, err
 	}
@@ -352,9 +341,9 @@ func (s *Staker) GetCompletedPeriods(validationID thor.Bytes32) (uint32, error) 
 	return s.storage.GetCompletedPeriods(validationID)
 }
 
-// IncreaseReward Increases reward for master address, for current staking period.
-func (s *Staker) IncreaseReward(master thor.Address, reward big.Int) error {
-	return s.storage.IncreaseReward(master, reward)
+// IncreaseReward Increases reward for node address, for current staking period.
+func (s *Staker) IncreaseReward(node thor.Address, reward big.Int) error {
+	return s.storage.IncreaseReward(node, reward)
 }
 
 // GetValidatorsTotals returns the total stake, total weight, total delegators stake and total delegators weight.

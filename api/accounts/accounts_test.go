@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package accounts_test
+package accounts
 
 import (
 	"encoding/json"
@@ -19,7 +19,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vechain/thor/v2/api/accounts"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/testchain"
@@ -121,6 +121,7 @@ func TestAccount(t *testing.T) {
 		"callContractWithNonExistingRevision": callContractWithNonExistingRevision,
 		"batchCall":                           batchCall,
 		"batchCallWithNonExistingRevision":    batchCallWithNonExistingRevision,
+		"batchCallWithNullClause":             batchCallWithNullClause,
 	} {
 		t.Run(name, tt)
 	}
@@ -132,7 +133,7 @@ func TestDeprecated(t *testing.T) {
 
 	tclient = thorclient.New(ts.URL)
 
-	body := &accounts.CallData{}
+	body := &api.CallData{}
 
 	_, statusCode, _ := tclient.RawHTTPClient().RawHTTPPost("/accounts", body)
 	assert.Equal(t, http.StatusGone, statusCode, "invalid address")
@@ -153,11 +154,11 @@ func getAccount(t *testing.T) {
 	//revision is optional default `best`
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/accounts/" + addr.String())
 	require.NoError(t, err)
-	var acc accounts.Account
+	var acc api.Account
 	if err := json.Unmarshal(res, &acc); err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, math.HexOrDecimal256(*value), acc.Balance, "balance should be equal")
+	assert.Equal(t, (*math.HexOrDecimal256)(value), acc.Balance, "balance should be equal")
 	assert.Equal(t, http.StatusOK, statusCode, "OK")
 }
 
@@ -176,7 +177,7 @@ func getAccountWithGenesisRevision(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, statusCode, "bad revision")
 
-	var acc accounts.Account
+	var acc api.Account
 	if err := json.Unmarshal(res, &acc); err != nil {
 		t.Fatal(err)
 	}
@@ -201,8 +202,8 @@ func getAccountWithFinalizedRevision(t *testing.T) {
 	finalizedAccount, err := tclient.Account(&soloAddress, thorclient.Revision(tccommon.FinalizedRevision))
 	require.NoError(t, err)
 
-	genesisEnergy := (*big.Int)(&genesisAccount.Energy)
-	finalizedEnergy := (*big.Int)(&finalizedAccount.Energy)
+	genesisEnergy := (*big.Int)(genesisAccount.Energy)
+	finalizedEnergy := (*big.Int)(finalizedAccount.Energy)
 
 	assert.Equal(t, genesisEnergy, finalizedEnergy, "finalized energy should equal genesis energy")
 }
@@ -306,7 +307,7 @@ func initAccountServer(t *testing.T, enabledDeprecated bool) {
 	)
 
 	router := mux.NewRouter()
-	accounts.New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), &thor.NoFork, thorChain.Engine(), enabledDeprecated).
+	New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), &thor.NoFork, thorChain.Engine(), enabledDeprecated).
 		Mount(router, "/accounts")
 
 	ts = httptest.NewServer(router)
@@ -324,7 +325,7 @@ func buildTxWithClauses(txType tx.Type, chainTag byte, clauses ...*tx.Clause) *t
 }
 
 func deployContractWithCall(t *testing.T) {
-	badBody := &accounts.CallData{
+	badBody := &api.CallData{
 		Gas:  10000000,
 		Data: "abc",
 	}
@@ -332,7 +333,7 @@ func deployContractWithCall(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad data")
 
-	reqBody := &accounts.CallData{
+	reqBody := &api.CallData{
 		Gas:  10000000,
 		Data: hexutil.Encode(bytecode),
 	}
@@ -344,7 +345,7 @@ func deployContractWithCall(t *testing.T) {
 	//revision is optional defaut `best`
 	res, _, err := tclient.RawHTTPClient().RawHTTPPost("/accounts", reqBody)
 	require.NoError(t, err)
-	var output *accounts.CallResult
+	var output *api.CallResult
 	if err := json.Unmarshal(res, &output); err != nil {
 		t.Fatal(err)
 	}
@@ -365,7 +366,7 @@ func callContract(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid address")
 
-	badBody := &accounts.CallData{
+	badBody := &api.CallData{
 		Data: "input",
 	}
 	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/accounts/"+contractAddr.String(), badBody)
@@ -381,7 +382,7 @@ func callContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reqBody := &accounts.CallData{
+	reqBody := &api.CallData{
 		Data: hexutil.Encode(input),
 	}
 
@@ -396,7 +397,7 @@ func callContract(t *testing.T) {
 
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/accounts/"+contractAddr.String(), reqBody)
 	require.NoError(t, err)
-	var output *accounts.CallResult
+	var output *api.CallResult
 	if err = json.Unmarshal(res, &output); err != nil {
 		t.Fatal(err)
 	}
@@ -431,14 +432,14 @@ func batchCall(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, statusCode, "malformed data")
 
 	// Request body is not a valid BatchCallData
-	badBody := &accounts.BatchCallData{
-		Clauses: accounts.Clauses{
-			accounts.Clause{
+	badBody := &api.BatchCallData{
+		Clauses: api.Clauses{
+			&api.Clause{
 				To:    &contractAddr,
 				Data:  "data1",
 				Value: nil,
 			},
-			accounts.Clause{
+			&api.Clause{
 				To:    &contractAddr,
 				Data:  "data2",
 				Value: nil,
@@ -449,7 +450,7 @@ func batchCall(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid data")
 
 	// Request body has an invalid blockRef
-	badBlockRef := &accounts.BatchCallData{
+	badBlockRef := &api.BatchCallData{
 		BlockRef: "0x00",
 	}
 	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/accounts/*", badBlockRef)
@@ -476,14 +477,14 @@ func batchCall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reqBody := &accounts.BatchCallData{
-		Clauses: accounts.Clauses{
-			accounts.Clause{
+	reqBody := &api.BatchCallData{
+		Clauses: api.Clauses{
+			&api.Clause{
 				To:    &contractAddr,
 				Data:  hexutil.Encode(input),
 				Value: nil,
 			},
-			accounts.Clause{
+			&api.Clause{
 				To:    &contractAddr,
 				Data:  hexutil.Encode(input),
 				Value: nil,
@@ -497,7 +498,7 @@ func batchCall(t *testing.T) {
 
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/accounts/*", reqBody)
 	require.NoError(t, err)
-	var results accounts.BatchCallResults
+	var results api.BatchCallResults
 	if err = json.Unmarshal(res, &results); err != nil {
 		t.Fatal(err)
 	}
@@ -517,8 +518,8 @@ func batchCall(t *testing.T) {
 
 	// Valid request
 	big := math.HexOrDecimal256(*big.NewInt(1000))
-	fullBody := &accounts.BatchCallData{
-		Clauses:    accounts.Clauses{},
+	fullBody := &api.BatchCallData{
+		Clauses:    api.Clauses{},
 		Gas:        21000,
 		GasPrice:   &big,
 		ProvedWork: &big,
@@ -532,8 +533,8 @@ func batchCall(t *testing.T) {
 	assert.Equal(t, http.StatusOK, statusCode)
 
 	// Request with not enough gas
-	tooMuchGasBody := &accounts.BatchCallData{
-		Clauses:    accounts.Clauses{},
+	tooMuchGasBody := &api.BatchCallData{
+		Clauses:    api.Clauses{},
 		Gas:        math.MaxUint64,
 		GasPrice:   &big,
 		ProvedWork: &big,
@@ -555,4 +556,24 @@ func batchCallWithNonExistingRevision(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
 	assert.Equal(t, "revision: leveldb: not found\n", string(res), "revision not found")
+}
+
+func batchCallWithNullClause(t *testing.T) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/accounts/*", []byte("{\"clauses\": [null]}"))
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, statusCode, "null clause")
+	assert.Equal(t, "clauses[0]: null not allowed\n", string(res), "null clause")
+
+	res, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/accounts/*", []byte("{\"clauses\": [{}, null]}"))
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, statusCode, "null clause")
+	assert.Equal(t, "clauses[1]: null not allowed\n", string(res), "null clause")
+
+	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/accounts/*", []byte("{\"clauses\":null }"))
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, statusCode, "null clause")
+
+	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/accounts/*", []byte("{\"clauses\":[] }"))
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, statusCode, "null clause")
 }

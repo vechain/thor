@@ -140,14 +140,14 @@ func TestEvents(t *testing.T) {
 			Transaction(newTx(tx.TypeDynamicFee)).
 			Build()
 		receipts := tx.Receipts{newReceipt(), newReceipt()}
-
-		for j := range receipts {
+		logIndex := 0
+		transferIndex := 0
+		for j, receipt := range receipts {
 			tx := b.Transactions()[j]
-			receipt := receipts[j]
 			origin, _ := tx.Origin()
 			allEvents = append(allEvents, &Event{
 				BlockNumber: b.Header().Number(),
-				LogIndex:    uint32(0),
+				LogIndex:    uint32(logIndex),
 				TxIndex:     uint32(j),
 				BlockID:     b.Header().ID(),
 				BlockTime:   b.Header().Timestamp(),
@@ -158,10 +158,11 @@ func TestEvents(t *testing.T) {
 				Topics:      [5]*thor.Bytes32{&receipt.Outputs[0].Events[0].Topics[0]},
 				Data:        receipt.Outputs[0].Events[0].Data,
 			})
+			logIndex++
 
 			allTransfers = append(allTransfers, &Transfer{
 				BlockNumber: b.Header().Number(),
-				LogIndex:    uint32(0),
+				LogIndex:    uint32(transferIndex),
 				TxIndex:     uint32(j),
 				BlockID:     b.Header().ID(),
 				BlockTime:   b.Header().Timestamp(),
@@ -172,6 +173,7 @@ func TestEvents(t *testing.T) {
 				Recipient:   receipt.Outputs[0].Transfers[0].Recipient,
 				Amount:      receipt.Outputs[0].Transfers[0].Amount,
 			})
+			transferIndex++
 		}
 
 		w := db.NewWriter()

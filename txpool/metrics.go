@@ -9,5 +9,6 @@ import (
 	"github.com/vechain/thor/v2/metrics"
 )
 
-var metricTxPoolGauge = metrics.LazyLoadGaugeVec("txpool_current_tx_count", []string{"source", "total"})
+var metricTxPoolGauge = metrics.LazyLoadGaugeVec("txpool_current_tx_count", []string{"source", "type"})
+var metricBadTxGauge = metrics.LazyLoadGaugeVec("bad_tx_count", []string{"source"})
 var metricTxPoolExecutablesGauge = metrics.LazyLoadGauge("txpool_executable_tx_count")

@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package subscriptions
+package api
 
 import (
 	"bytes"
@@ -34,7 +34,7 @@ func TestConvertBlockWithBadSignature(t *testing.T) {
 	extendedBlock := &chain.ExtendedBlock{Block: b, Obsolete: false}
 
 	// Act
-	blockMessage, err := convertBlock(extendedBlock)
+	blockMessage, err := ConvertBlock(extendedBlock)
 
 	// Assert
 	assert.Nil(t, blockMessage)
@@ -55,7 +55,7 @@ func TestConvertBlock(t *testing.T) {
 	extendedBlock := &chain.ExtendedBlock{Block: b, Obsolete: false}
 
 	// Act
-	blockMessage, err := convertBlock(extendedBlock)
+	blockMessage, err := ConvertBlock(extendedBlock)
 
 	// Assert
 	assert.NoError(t, err)
@@ -128,8 +128,8 @@ func TestConvertTransfer(t *testing.T) {
 	}
 
 	// Act
-	transferLegacyMessage, errL := convertTransfer(blk.Header(), legacyTx, 0, transfer, false)
-	transferDynFeeMessage, errD := convertTransfer(blk.Header(), dynFeeTx, 1, transfer, false)
+	transferLegacyMessage, errL := ConvertSubscriptionTransfer(blk.Header(), legacyTx, 0, transfer, false)
+	transferDynFeeMessage, errD := ConvertSubscriptionTransfer(blk.Header(), dynFeeTx, 1, transfer, false)
 
 	// Assert
 	assert.NoError(t, errL)
@@ -195,14 +195,14 @@ func TestConvertEventWithBadSignature(t *testing.T) {
 	event := &tx.Event{}
 
 	// Act
-	eventMessage, err := convertEvent(blk.Header(), transaction, 0, event, false)
+	eventMessage, err := ConvertSubscriptionEvent(blk.Header(), transaction, 0, event, false)
 
 	// Assert
 	assert.Error(t, err)
 	assert.Nil(t, eventMessage)
 }
 
-func TestConvertEvent(t *testing.T) {
+func TestConvertSubscriptionEvent(t *testing.T) {
 	// Arrange
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
@@ -247,7 +247,7 @@ func TestConvertEvent(t *testing.T) {
 	}
 
 	// Act
-	eventMessage, err := convertEvent(blk.Header(), transaction, 0, event, false)
+	eventMessage, err := ConvertSubscriptionEvent(blk.Header(), transaction, 0, event, false)
 
 	// Assert
 	assert.NoError(t, err)
@@ -270,7 +270,7 @@ func TestConvertEvent(t *testing.T) {
 func TestEventFilter_Match(t *testing.T) {
 	// Create an event filter
 	addr := thor.BytesToAddress([]byte("address"))
-	filter := &EventFilter{
+	filter := &SubscriptionEventFilter{
 		Address: &addr,
 		Topic0:  &thor.Bytes32{0x01},
 		Topic1:  &thor.Bytes32{0x02},
@@ -331,7 +331,7 @@ func TestTransferFilter_Match(t *testing.T) {
 	origin := thor.BytesToAddress([]byte("origin"))
 	sender := thor.BytesToAddress([]byte("sender"))
 	recipient := thor.BytesToAddress([]byte("recipient"))
-	filter := &TransferFilter{
+	filter := &SubscriptionTransferFilter{
 		TxOrigin:  &origin,
 		Sender:    &sender,
 		Recipient: &recipient,
