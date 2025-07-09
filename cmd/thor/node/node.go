@@ -328,11 +328,9 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 				}
 			}
 			if len(conflictingBlocks) > 0 {
-				if !newBlock.Header().ID().IsZero() {
-					conflictingBlocks = append(conflictingBlocks, newBlock.Header().ID().Bytes())
-					println("============...... Recording double signing in cache while processing  block")
-					n.repo.RecordDoubleSig(newBlock.Header().Number(), conflictingBlocks)
-				}
+				conflictingBlocks = append(conflictingBlocks, newBlock.Header().ID().Bytes())
+				println("============...... Recording double signing in cache while processing  block", len(conflictingBlocks))
+				n.repo.RecordDoubleSig(newBlock.Header().Number(), conflictingBlocks)
 			}
 
 			_, err := n.repo.GetBlockSummary(newBlock.Header().ID())
