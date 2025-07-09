@@ -120,6 +120,7 @@ func buildJSONBlockSummary(summary *chain.BlockSummary, isTrunk bool, isFinalize
 				evidence = append(evidence, blkId)
 			}
 		}
+		println("api is returning this evidence length", len(evidence))
 	}
 
 	return &JSONBlockSummary{
