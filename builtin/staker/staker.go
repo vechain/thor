@@ -20,7 +20,7 @@ import (
 var (
 	logger   = log.WithContext("pkg", "staker")
 	MinStake = big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
-	MaxStake = big.NewInt(0).Mul(big.NewInt(400e6), big.NewInt(1e18))
+	MaxStake = big.NewInt(0).Mul(big.NewInt(600e6), big.NewInt(1e18))
 
 	LowStakingPeriod    = uint32(360) * 24 * 7  // 336 epochs
 	MediumStakingPeriod = uint32(360) * 24 * 15 // 720 epochs
