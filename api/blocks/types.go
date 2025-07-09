@@ -108,9 +108,13 @@ type JSONExpandedBlock struct {
 func buildJSONBlockSummary(summary *chain.BlockSummary, isTrunk bool, isFinalized bool) *JSONBlockSummary {
 	header := summary.Header
 	signer, _ := header.Signer()
-	evidence := make([]thor.Bytes32, len(*summary.Header.Evidence()))
-	for _, ev := range *summary.Header.Evidence() {
-		evidence = append(evidence, thor.BytesToBytes32(ev))
+	var evidence []thor.Bytes32
+
+	if summary.Header.Evidence() != nil && len(*summary.Header.Evidence()) > 0 {
+		evidence = make([]thor.Bytes32, len(*summary.Header.Evidence()))
+		for _, ev := range *summary.Header.Evidence() {
+			evidence = append(evidence, thor.BytesToBytes32(ev))
+		}
 	}
 
 	return &JSONBlockSummary{
