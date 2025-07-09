@@ -6,6 +6,7 @@
 package energy
 
 import (
+	"math"
 	"math/big"
 	"testing"
 
@@ -174,6 +175,28 @@ func TestEnergyGrowth(t *testing.T) {
 	x.Div(x, big.NewInt(1e18))
 
 	assert.Equal(t, x, bal1)
+}
+
+func TestGetEnergyGrowthStopTime(t *testing.T) {
+	st := state.New(muxdb.NewMem(), trie.Root{})
+	p := params.New(thor.BytesToAddress([]byte("params")), st)
+	eng := New(thor.BytesToAddress([]byte("energy")), st, 10, p)
+
+	// no stop time set
+	stopTime, err := eng.GetEnergyGrowthStopTime()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(math.MaxUint64), stopTime)
+
+	err = eng.StopEnergyGrowth()
+	assert.NoError(t, err)
+
+	stopTime, err = eng.GetEnergyGrowthStopTime()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(10), stopTime)
+
+	// set multiple times should return error
+	err = eng.StopEnergyGrowth()
+	assert.Error(t, err, "energy growth has already stopped")
 }
 
 func TestAddIssued(t *testing.T) {
