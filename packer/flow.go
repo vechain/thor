@@ -241,8 +241,6 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 		BaseFee(f.runtime.Context().BaseFee).
 		Evidence(evidence)
 
-	println("for block number num of txs", f.Number(), len(f.txs))
-
 	for _, tx := range f.txs {
 		builder.Transaction(tx)
 	}

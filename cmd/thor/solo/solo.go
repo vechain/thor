@@ -160,7 +160,6 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 		}
 	}
 
-	println("Requesting double signing evidence2")
 	evidence := s.repo.GetDoubleSigEvidence()
 	b, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, false, evidence)
 	if err != nil {
@@ -210,12 +209,11 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 
 	if evidence != nil {
 		blockID := thor.BytesToBytes32((*evidence)[0])
-		duplBlk, err := s.repo.GetBlockSummary(blockID)
+		dupBlk, err := s.repo.GetBlockSummary(blockID)
 		if err != nil {
 			return err
 		}
-		println("============...... Removing double signing in cache while producing  block in solo")
-		s.repo.RecordDoubleSigProcessed(duplBlk.Header.Number())
+		s.repo.RecordDoubleSigProcessed(dupBlk.Header.Number())
 	}
 	logger.Debug(b.String())
 
