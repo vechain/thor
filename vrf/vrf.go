@@ -165,7 +165,7 @@ func combineVRFProofs(individualPis [][]byte, alpha []byte) []byte {
 	return hasher.Sum(nil)
 }
 
-// WeightedValidatorSelectionWithProofs selects validators using real VRF proofs from validators
+// WeightedValidatorSelectionWithProofs selects validators using VRF proofs from validators
 // This method verifies and uses actual VRF proofs submitted by validators
 func WeightedValidatorSelectionWithProofs(
 	validators []Validator,
@@ -192,7 +192,7 @@ func WeightedValidatorSelectionWithProofs(
 		return nil, nil, nil, nil
 	}
 
-	// Generate collective VRF using real validator proofs
+	// Generate collective VRF using validator proofs
 	collectiveBeta, collectivePi, err := generateCollectiveVRFWithProofs(validators, alpha, validatorProofs)
 	if err != nil {
 		return nil, nil, nil, err
@@ -204,7 +204,7 @@ func WeightedValidatorSelectionWithProofs(
 	return selected, collectiveBeta, collectivePi, nil
 }
 
-// generateCollectiveVRFWithProofs generates collective VRF using real validator proofs
+// generateCollectiveVRFWithProofs generates collective VRF using validator proofs
 func generateCollectiveVRFWithProofs(
 	validators []Validator,
 	alpha []byte,
