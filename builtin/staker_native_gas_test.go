@@ -19,15 +19,19 @@
 package builtin_test
 
 import (
+	"encoding/binary"
 	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/builtin/gascharger"
+	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -35,56 +39,221 @@ import (
 	"github.com/vechain/thor/v2/xenv"
 )
 
+type TestHook func(*testing.T, *testSetup)
+
+func accToID(acc thor.Address) thor.Bytes32 {
+	var b [4]byte
+	binary.BigEndian.PutUint32(b[:], 0)
+	return thor.Blake2b(acc.Bytes(), b[:])
+}
+
+func preTestAddValidator(acc thor.Address) TestHook {
+	stake := big.NewInt(0).Mul(staker.MinStake, big.NewInt(2))
+	return func(t *testing.T, setup *testSetup) {
+		executeNativeFunction(t, setup, "native_addValidator", []any{
+			acc,
+			acc,
+			staker.LowStakingPeriod,
+			stake,
+			true,
+		})
+	}
+}
+
+func preTestAddDelegation(acc thor.Address) TestHook {
+	return func(t *testing.T, setup *testSetup) {
+		executeNativeFunction(t, setup, "native_addDelegation", []any{
+			accToID(acc),
+			staker.MinStake,
+			true,
+			uint8(150),
+		})
+	}
+}
+
 func TestStakerNativeGasCosts(t *testing.T) {
+	account1 := genesis.DevAccounts()[0].Address
+
 	testCases := []struct {
-		name        string
-		function    string
-		expectedGas uint64
-		args        []any
-		description string
+		function     string
+		expectedGas  uint64
+		args         []any
+		description  string
+		preTestHooks []TestHook
 	}{
 		// Basic read operations (no arguments)
 		{
-			name:        "native_totalStake",
 			function:    "native_totalStake",
 			expectedGas: 400,
 			args:        []any{},
 			description: "Get total locked stake",
 		},
 		{
-			name:        "native_queuedStake",
 			function:    "native_queuedStake",
 			expectedGas: 400,
 			args:        []any{},
 			description: "Get total queued stake",
 		},
 		{
-			name:        "native_firstActive",
 			function:    "native_firstActive",
 			expectedGas: 200,
 			args:        []any{},
 			description: "Get first active validator",
 		},
 		{
-			name:        "native_firstQueued",
 			function:    "native_firstQueued",
 			expectedGas: 200,
 			args:        []any{},
 			description: "Get first queued validator",
 		},
 		{
-			name:        "native_getDelegatorContract",
 			function:    "native_getDelegatorContract",
 			expectedGas: 200,
 			args:        []any{},
 			description: "Get delegator contract address",
 		},
-		// TODO: Functions with arguments - need proper argument handling implementation
+		{
+			function:    "native_addValidator",
+			expectedGas: 15400,
+			args:        []any{account1, account1, staker.LowStakingPeriod, staker.MinStake, true},
+			description: "Add a new validator (not implemented yet)",
+		},
+		{
+			function:     "native_get",
+			expectedGas:  200,
+			args:         []any{accToID(account1)},
+			description:  "Get validator by it's ID (not implemented yet)",
+			preTestHooks: []TestHook{preTestAddValidator(account1)},
+		},
+		{
+			function:     "native_lookupNode",
+			expectedGas:  400,
+			args:         []any{genesis.DevAccounts()[0].Address},
+			description:  "Lookup node by address",
+			preTestHooks: []TestHook{preTestAddValidator(account1)},
+		},
+		{
+			function:     "native_getWithdraw",
+			expectedGas:  200,
+			args:         []any{accToID(account1)},
+			description:  "Get withdraw information for a validator",
+			preTestHooks: []TestHook{preTestAddValidator(account1)},
+		},
+		{
+			function:     "native_next",
+			expectedGas:  200,
+			args:         []any{accToID(account1)},
+			description:  "Get next validator in the queue",
+			preTestHooks: []TestHook{preTestAddValidator(account1)},
+		},
+		{
+			function:     "native_withdraw",
+			expectedGas:  15400,
+			args:         []any{account1, accToID(account1)},
+			description:  "Withdraw stake for a validator",
+			preTestHooks: []TestHook{preTestAddValidator(account1)},
+		},
+		{
+			function:    "native_updateAutoRenew",
+			expectedGas: 5200,
+			args: []any{
+				account1,
+				accToID(account1),
+				false,
+			},
+			description:  "Update auto-renew setting for a validator",
+			preTestHooks: []TestHook{preTestAddValidator(account1)},
+		},
+		{
+			function:    "native_increaseStake",
+			expectedGas: 5400,
+			args: []any{
+				account1,
+				accToID(account1),
+				staker.MinStake,
+			},
+			description:  "Increase stake for a validator",
+			preTestHooks: []TestHook{preTestAddValidator(account1)},
+		},
+		{
+			function:    "native_decreaseStake",
+			expectedGas: 10400,
+			args: []any{
+				account1,
+				accToID(account1),
+				staker.MinStake,
+			},
+			description:  "Decrease stake for a validator",
+			preTestHooks: []TestHook{preTestAddValidator(account1)},
+		},
+		{
+			function:    "native_addDelegation",
+			expectedGas: 5600,
+			args: []any{
+				accToID(account1),
+				staker.MinStake,
+				true,
+				uint8(150),
+			},
+			description:  "Add delegation to a validator",
+			preTestHooks: []TestHook{preTestAddValidator(account1)},
+		},
+		{
+			function:    "native_getDelegation",
+			expectedGas: 400,
+			args: []any{
+				thor.BytesToBytes32(big.NewInt(1).Bytes()), // IDs are incremental, starting at 1
+			},
+			description:  "Get delegation by ID",
+			preTestHooks: []TestHook{preTestAddValidator(account1), preTestAddDelegation(account1)},
+		},
+		{
+			function:    "native_withdrawDelegation",
+			expectedGas: 5800,
+			args: []any{
+				thor.BytesToBytes32(big.NewInt(1).Bytes()), // IDs are incremental, starting at 1
+			},
+			description:  "Withdraw delegation from a validator",
+			preTestHooks: []TestHook{preTestAddValidator(account1), preTestAddDelegation(account1)},
+		},
+		{
+			function:    "native_updateDelegationAutoRenew",
+			expectedGas: 5800,
+			args: []any{
+				thor.BytesToBytes32(big.NewInt(1).Bytes()), // IDs are incremental, starting at 1
+				false,
+			},
+			description:  "Update auto-renew setting for a delegation",
+			preTestHooks: []TestHook{preTestAddValidator(account1), preTestAddDelegation(account1)},
+		},
+		{
+			function:    "native_getRewards",
+			expectedGas: 200,
+			args: []any{
+				accToID(account1),
+				uint32(0),
+			},
+			description:  "Get rewards for a validator",
+			preTestHooks: []TestHook{preTestAddValidator(account1)},
+		},
+		{
+			function:    "native_getValidatorTotals",
+			expectedGas: 400,
+			args: []any{
+				accToID(account1),
+			},
+			description:  "Get total stakes and weights and stake for a validator",
+			preTestHooks: []TestHook{preTestAddValidator(account1)},
+		},
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			setup := createTestSetup(t, tc.function)
+		t.Run(tc.function, func(t *testing.T) {
+			setup := createTestSetup(t)
+
+			for _, hook := range tc.preTestHooks {
+				hook(t, setup)
+			}
 
 			// Capture the charger using test hook
 			var capturedCharger *gascharger.Charger
@@ -97,13 +266,13 @@ func TestStakerNativeGasCosts(t *testing.T) {
 			result := executeNativeFunction(t, setup, tc.function, tc.args)
 
 			// Validate we captured the charger
-			require.NotNil(t, capturedCharger, "Should have captured charger for %s", tc.name)
+			require.NotNil(t, capturedCharger, "Should have captured charger for %s", tc.function)
 			gasUsed := capturedCharger.TotalGas()
 
 			// Validate gas usage with descriptive error message
 			assert.Equal(t, tc.expectedGas, gasUsed,
 				"Gas usage mismatch for %s (%s):\nExpected: %d\nActual: %d\nBreakdown: %s",
-				tc.name, tc.description, tc.expectedGas, gasUsed, capturedCharger.Breakdown())
+				tc.function, tc.description, tc.expectedGas, gasUsed, capturedCharger.Breakdown())
 
 			// Validate function executed successfully (no revert)
 			require.NotNil(t, result, "Function %s should return result", tc.function)
@@ -118,8 +287,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 			}
 
 			// Log detailed breakdown for analysis
-			//t.Logf("=== %s ===", tc.name)
-			//t.Logf("Function: %s", tc.function)
+			//t.Logf("=== %s ===", tc.function)
 			//t.Logf("Description: %s", tc.description)
 			//t.Logf("Expected gas: %d", tc.expectedGas)
 			//t.Logf("Actual gas used: %d", gasUsed)
@@ -128,18 +296,33 @@ func TestStakerNativeGasCosts(t *testing.T) {
 
 			// Additional validation: gas should be reasonable (not zero, not excessive)
 			assert.Greater(t, gasUsed, uint64(0), "Function %s should consume some gas", tc.function)
-			assert.Less(t, gasUsed, uint64(10000), "Function %s gas usage seems excessive: %d", tc.function, gasUsed)
+			assert.Less(t, gasUsed, uint64(100_000), "Function %s gas usage seems excessive: %d", tc.function, gasUsed)
 		})
 	}
 }
 
 // Helper functions
-
 type testSetup struct {
-	chain    *testchain.Chain
-	env      *xenv.Environment
-	master   thor.Address
-	endorsor thor.Address
+	chain      *testchain.Chain
+	st         *state.State
+	contract   *vm.Contract
+	blkContext *xenv.BlockContext
+	txContext  *xenv.TransactionContext
+	evm        *vm.EVM
+}
+
+// Xenv creates a new builtin environment for each method that has to be called
+func (s *testSetup) Xenv(method *abi.Method) *xenv.Environment {
+	return xenv.New(
+		method,
+		nil,
+		s.st,
+		s.blkContext,
+		s.txContext,
+		s.evm,
+		s.contract,
+		0, // Clause index
+	)
 }
 
 func executeNativeFunction(t *testing.T, setup *testSetup, functionName string, args []any) []any {
@@ -148,11 +331,9 @@ func executeNativeFunction(t *testing.T, setup *testSetup, functionName string, 
 	method, found := stakerAbi.MethodByName(functionName)
 	require.True(t, found, "Function %s not found", functionName)
 
-	// TODO: Handle method arguments properly when test cases with args are added
-	// For now, we'll implement argument handling when we have test cases that need it
-	if len(args) > 0 {
-		t.Logf("Function %s called with %d arguments (argument handling to be implemented)", functionName, len(args))
-	}
+	data, err := method.EncodeInput(args...)
+	require.NoError(t, err, "Failed to encode input for method %s", functionName)
+	setup.contract.Input = data
 
 	// Get the native method implementation
 	methodID := method.ID()
@@ -161,19 +342,18 @@ func executeNativeFunction(t *testing.T, setup *testSetup, functionName string, 
 	require.NotNil(t, nativeMethod, "Native method is nil for %s", functionName)
 
 	// Execute the native function - this will trigger our test hook
-	result := run(setup.env)
+	result := run(setup.Xenv(nativeMethod))
 
 	return result
 }
 
-func createTestSetup(t *testing.T, functionName string) *testSetup {
+func createTestSetup(t *testing.T) *testSetup {
 	// Create test chain
 	chain, err := testchain.NewDefault()
 	require.NoError(t, err)
 
 	// Use proper address generation from dev accounts
 	master := genesis.DevAccounts()[0].Address
-	endorsor := genesis.DevAccounts()[1].Address
 
 	// Get latest state
 	bestBlock, err := chain.BestBlock()
@@ -205,40 +385,29 @@ func createTestSetup(t *testing.T, functionName string) *testSetup {
 		1000000,
 	)
 
-	// Use the actual function name being tested
-	method, ok := builtin.Staker.NativeABI().MethodByName(functionName)
-	require.True(t, ok, "Method %s not found", functionName)
-
 	root := chain.Repo().BestBlockSummary().Root()
-	// Create environment
-	env := xenv.New(
-		method,
-		nil,
-		chain.Stater().NewState(root),
-		&xenv.BlockContext{
-			Number:     bestBlock.Header().Number(),
-			Time:       bestBlock.Header().Timestamp(),
-			GasLimit:   bestBlock.Header().GasLimit(),
-			TotalScore: bestBlock.Header().TotalScore(),
-			Signer:     master,
-		},
-		&xenv.TransactionContext{
-			ID:         tx.ID(),
-			Origin:     master,
-			GasPayer:   master,
-			ProvedWork: big.NewInt(1000),
-			BlockRef:   tx.BlockRef(),
-			Expiration: tx.Expiration(),
-		},
-		evm,
-		contract,
-		0, // Clause index
-	)
+	blkContext := &xenv.BlockContext{
+		Number:     bestBlock.Header().Number(),
+		Time:       bestBlock.Header().Timestamp(),
+		GasLimit:   bestBlock.Header().GasLimit(),
+		TotalScore: bestBlock.Header().TotalScore(),
+		Signer:     master,
+	}
+	txContext := &xenv.TransactionContext{
+		ID:         tx.ID(),
+		Origin:     master,
+		GasPayer:   master,
+		ProvedWork: big.NewInt(1000),
+		BlockRef:   tx.BlockRef(),
+		Expiration: tx.Expiration(),
+	}
 
 	return &testSetup{
-		chain:    chain,
-		env:      env,
-		master:   master,
-		endorsor: endorsor,
+		chain:      chain,
+		txContext:  txContext,
+		blkContext: blkContext,
+		st:         chain.Stater().NewState(root),
+		contract:   contract,
+		evm:        evm,
 	}
 }

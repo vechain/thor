@@ -19,12 +19,12 @@ import (
 // TODO: Do these need to be set in params.sol, or some other dynamic way?
 var (
 	logger   = log.WithContext("pkg", "staker")
-	minStake = big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
-	maxStake = big.NewInt(0).Mul(big.NewInt(400e6), big.NewInt(1e18))
+	MinStake = big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
+	MaxStake = big.NewInt(0).Mul(big.NewInt(400e6), big.NewInt(1e18))
 
-	lowStakingPeriod    = uint32(360) * 24 * 7  // 336 epochs
-	mediumStakingPeriod = uint32(360) * 24 * 15 // 720 epochs
-	highStakingPeriod   = uint32(360) * 24 * 30 // 1,440 epochs
+	LowStakingPeriod    = uint32(360) * 24 * 7  // 336 epochs
+	MediumStakingPeriod = uint32(360) * 24 * 15 // 720 epochs
+	HighStakingPeriod   = uint32(360) * 24 * 30 // 1,440 epochs
 
 	cooldownPeriod = uint32(8640)
 	epochLength    = uint32(180)
@@ -51,8 +51,8 @@ func New(addr thor.Address, state *state.State, params *params.Params, charger *
 	storage := newStorage(addr, state, charger)
 
 	// debug overrides for testing
-	storage.debugOverride(&epochLength, thor.BytesToBytes32([]byte("epoch-length")))
-	storage.debugOverride(&cooldownPeriod, thor.BytesToBytes32([]byte("cooldown-period")))
+	storage.debugOverride(&epochLength, slotEpochLength)
+	storage.debugOverride(&cooldownPeriod, slotCooldownPeriod)
 
 	return &Staker{
 		lockedVET:    solidity.NewUint256(addr, state, slotLockedVET),
