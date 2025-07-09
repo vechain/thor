@@ -278,7 +278,7 @@ func (n *Node) txStashLoop(ctx context.Context) {
 }
 
 // guardBlockProcessing adds lock on block processing and maintains block conflicts.
-func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts uint32) error) (err error) {
+func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts [][]byte) error) (err error) {
 	n.processLock.Lock()
 	defer func() {
 		// post process block hook, executed only if the block is processed successfully
@@ -297,15 +297,15 @@ func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts uint
 		}
 
 		// don't increase maxBlockNum if the block is unprocessable
-		if e := process(0); e != nil {
-			return e
+		if err := process(make([][]byte, 0)); err != nil {
+			return err
 		}
 
 		n.maxBlockNum = blockNum
 		return nil
 	}
 
-	conflicts, err := n.repo.ScanConflicts(blockNum)
+	conflicts, err := n.repo.GetConflicts(blockNum)
 	if err != nil {
 		return err
 	}
@@ -315,11 +315,28 @@ func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts uint
 func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, error) {
 	var isTrunk *bool
 
-	if err := n.guardBlockProcessing(newBlock.Header().Number(), func(conflicts uint32) error {
+	if err := n.guardBlockProcessing(newBlock.Header().Number(), func(conflicts [][]byte) error {
 		// Check whether the block was already there.
 		// It can be skipped if no conflicts.
-		if conflicts > 0 {
-			if _, err := n.repo.GetBlockSummary(newBlock.Header().ID()); err != nil {
+		if len(conflicts) > 0 {
+			newSigner, _ := newBlock.Header().Signer()
+			// iter over conflicting blocks
+			for _, conflict := range conflicts {
+				conflictBlock, err := n.repo.GetBlock(thor.BytesToBytes32(conflict))
+				if err != nil {
+					return err
+				}
+				// logic to verify that the blocks are different and from the same signer
+				signer, _ := conflictBlock.Header().Signer()
+				if signer == newSigner &&
+					conflictBlock.Header().ID() != newBlock.Header().ID() &&
+					conflictBlock.Header().StateRoot() != newBlock.Header().StateRoot() {
+					log.Warn("Double signing", "block", shortID(newBlock.Header().ID()), "previous", shortID(thor.BytesToBytes32(conflict)))
+				}
+			}
+
+			_, err := n.repo.GetBlockSummary(newBlock.Header().ID())
+			if err != nil {
 				if !n.repo.IsNotFound(err) {
 					return err
 				}
@@ -347,7 +364,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		}
 
 		// process the new block
-		stage, receipts, err := n.cons.Process(parentSummary, newBlock, uint64(time.Now().Unix()), conflicts)
+		stage, receipts, err := n.cons.Process(parentSummary, newBlock, uint64(time.Now().Unix()), uint32(len(conflicts)))
 		if err != nil {
 			return err
 		}
@@ -388,7 +405,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		}
 
 		// add the new block into repository
-		if err := n.repo.AddBlock(newBlock, receipts, conflicts, becomeNewBest); err != nil {
+		if err := n.repo.AddBlock(newBlock, receipts, uint32(len(conflicts)), becomeNewBest); err != nil {
 			return errors.Wrap(err, "add block")
 		}
 
