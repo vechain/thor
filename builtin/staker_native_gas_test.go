@@ -289,10 +289,10 @@ func TestStakerNativeGasCosts(t *testing.T) {
 			}
 
 			// Log detailed breakdown for analysis
-			//t.Logf("=== %s ===", tc.function)
+			t.Logf("=== %s ===", tc.function)
 			//t.Logf("Description: %s", tc.description)
-			//t.Logf("Expected gas: %d", tc.expectedGas)
-			//t.Logf("Actual gas used: %d", gasUsed)
+			t.Logf("Expected gas: %d", tc.expectedGas)
+			t.Logf("Actual gas used: %d", gasUsed)
 			//t.Logf("Result length: %d", len(result))
 			//t.Logf("Gas breakdown: %s", capturedCharger.Breakdown())
 

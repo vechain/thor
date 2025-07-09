@@ -34,7 +34,9 @@ func (u *Uint256) Get() (*big.Int, error) {
 		return nil, err
 	}
 	u.charger.Charge(thor.SloadGas)
-	return new(big.Int).SetBytes(storage.Bytes()), nil
+	value := new(big.Int).SetBytes(storage.Bytes())
+	u.prev = value
+	return value, nil
 }
 
 func (u *Uint256) Set(value *big.Int) {
