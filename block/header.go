@@ -166,7 +166,14 @@ func (h *Header) signingFields() []any {
 		h.body.StateRoot,
 		h.body.ReceiptsRoot,
 	}
-	if h.body.Extension.BaseFee != nil {
+
+	// Include extension if it has any non-default fields
+	hasBaseFee := h.body.Extension.BaseFee != nil
+	hasCOM := h.body.Extension.COM
+	hasAlpha := len(h.body.Extension.Alpha) != 0
+	hasVRFProofs := len(h.body.Extension.ValidatorVRFProofs) != 0
+
+	if hasBaseFee || hasCOM || hasAlpha || hasVRFProofs {
 		fields = append(fields, &h.body.Extension)
 	}
 	return fields

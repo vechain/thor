@@ -372,7 +372,6 @@ func (c *Consensus) validateWeightBasedVRF(header *block.Header, parent *block.H
 		return fmt.Errorf("failed to get block signer: %v", err)
 	}
 
-	// Get validators with weights from parent state
 	parentSummary, err := c.repo.GetBlockSummary(parent.ID())
 	if err != nil {
 		return fmt.Errorf("failed to get parent summary: %v", err)
@@ -381,13 +380,11 @@ func (c *Consensus) validateWeightBasedVRF(header *block.Header, parent *block.H
 	state := c.stater.NewState(parentSummary.Root())
 	staker := builtin.Staker.Native(state)
 
-	// Get leader group (active validators)
 	leaderGroup, err := staker.LeaderGroup()
 	if err != nil {
 		return fmt.Errorf("failed to get leader group: %v", err)
 	}
 
-	// Convert to VRF validators format
 	var validators []vrf.Validator
 	for _, validation := range leaderGroup {
 		if validation.Weight.Sign() > 0 {
@@ -404,15 +401,15 @@ func (c *Consensus) validateWeightBasedVRF(header *block.Header, parent *block.H
 		alpha = parent.StateRoot().Bytes()
 	}
 
-	// Select validators using VRF
-	selectedValidators, _, _, err := vrf.WeightedValidatorSelection(validators, alpha, 101)
+	validatorProofs := header.ValidatorVRFProofs()
+
+	selectedValidators, _, _, err := vrf.WeightedValidatorSelectionWithProofs(validators, alpha, 101, validatorProofs)
 	if err != nil {
 		return fmt.Errorf("failed to select validators with VRF: %v", err)
 	}
 
-	// Check if the signer was selected
 	if slices.Contains(selectedValidators, signer) {
-		return nil // Signer was selected by VRF
+		return nil
 	}
 
 	return fmt.Errorf("block signer %v was not selected by weight-based VRF", signer)

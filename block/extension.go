@@ -157,21 +157,24 @@ func (ex *extension) DecodeRLP(s *rlp.Stream) error {
 	}
 
 	// For four fields, decode BaseFee and VRFProofs
-	var baseFee big.Int
-	if err := rlp.DecodeBytes(raws[2], &baseFee); err != nil {
-		return err
-	}
+	if len(raws) == 4 {
+		var baseFee big.Int
+		if err := rlp.DecodeBytes(raws[2], &baseFee); err != nil {
+			return err
+		}
 
-	var vrfProofs map[thor.Address][]byte
-	if err := rlp.DecodeBytes(raws[3], &vrfProofs); err != nil {
-		return err
-	}
+		var vrfProofs map[thor.Address][]byte
+		if err := rlp.DecodeBytes(raws[3], &vrfProofs); err != nil {
+			return err
+		}
 
-	*ex = extension{
-		Alpha:              alpha,
-		COM:                com,
-		BaseFee:            &baseFee,
-		ValidatorVRFProofs: vrfProofs,
+		*ex = extension{
+			Alpha:              alpha,
+			COM:                com,
+			BaseFee:            &baseFee,
+			ValidatorVRFProofs: vrfProofs,
+		}
+		return nil
 	}
 
 	return nil
