@@ -65,11 +65,12 @@ type Node struct {
 	forkConfig  *thor.ForkConfig
 	options     Options
 
-	logDBFailed bool
-	bandwidth   bandwidth.Bandwidth
-	maxBlockNum uint32
-	processLock sync.Mutex
-	logWorker   *worker
+	logDBFailed   bool
+	initialSynced bool // true if the initial synchronization process is done
+	bandwidth     bandwidth.Bandwidth
+	maxBlockNum   uint32
+	processLock   sync.Mutex
+	logWorker     *worker
 }
 
 func New(
@@ -277,9 +278,17 @@ func (n *Node) txStashLoop(ctx context.Context) {
 }
 
 // guardBlockProcessing adds lock on block processing and maintains block conflicts.
-func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts [][]byte) error) error {
+func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts [][]byte) error) (err error) {
 	n.processLock.Lock()
-	defer n.processLock.Unlock()
+	defer func() {
+		// post process block hook, executed only if the block is processed successfully
+		if err == nil {
+			if n.initialSynced && blockNum == n.forkConfig.GALACTICA {
+				printGalacticaWelcomeInfo()
+			}
+		}
+		n.processLock.Unlock()
+	}()
 
 	if blockNum > n.maxBlockNum {
 		if blockNum > n.maxBlockNum+1 {
@@ -433,17 +442,12 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		}
 		stats.UpdateProcessed(1, len(receipts), execElapsed, commitElapsed, realElapsed, newBlock.Header().GasUsed())
 
-		if newBlock.Header().Number() == n.forkConfig.GALACTICA && newBlock.Header().Number() != 0 {
-			fmt.Println(GalacticaASCIIArt)
-		}
-
 		if evidence != nil && len(*evidence) > 1 {
 			blockID := thor.BytesToBytes32((*evidence)[0])
 			blkSum, err := n.repo.GetBlockSummary(blockID)
 			if err != nil {
 				logger.Warn("Unable to extract double signed block", err)
 			}
-			println("============...... Removing double signing in cache while processing block")
 			n.repo.RecordDoubleSigProcessed(blkSum.Header.Number())
 		}
 
@@ -471,15 +475,6 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		return false, err
 	}
 	metricBlockProcessedCount().AddWithLabel(1, map[string]string{"type": "received", "success": "true"})
-
-	println("Requesting double signing evidence")
-	ev := n.repo.GetDoubleSigEvidence()
-	if ev != nil && len(*ev) > 0 {
-		println("no evidences in the cache =======")
-	} else {
-		println("evidence found in the cache =======")
-	}
-
 	return *isTrunk, nil
 }
 
@@ -598,27 +593,17 @@ side-chain:   %v  %v`,
 			n, sideIDs[n-1]))
 	}
 
-	uniqueSigners := make([]thor.Address, len(sideIDs)+1)
-	signer, err := newBlock.Header().Signer()
-	logger.Warn("failed to extract new block signer", "err", err)
-	uniqueSigners[0] = signer
-	for idx, id := range sideIDs {
+	for _, id := range sideIDs {
 		b, err := n.repo.GetBlock(id)
 		if err != nil {
 			logger.Warn("failed to process fork", "err", err)
 			return
 		}
-		signer, err = b.Header().Signer()
-		logger.Warn("failed to extract signer of side chain", "err", err)
-		uniqueSigners[idx+1] = signer
 		for _, tx := range b.Transactions() {
 			if err := n.txPool.Add(tx); err != nil {
 				logger.Debug("failed to add tx to tx pool", "err", err, "id", tx.ID())
 			}
 		}
-	}
-	for _, sig := range uniqueSigners {
-		println("unique signer is ===========", sig.String())
 	}
 }
 

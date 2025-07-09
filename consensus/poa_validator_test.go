@@ -67,6 +67,6 @@ func getMasterStake(chain *testchain.Chain, blk *block.Header) (*staker.Validati
 		return nil, err
 	}
 	staker := builtin.Staker.Native(st)
-	validator, _, err := staker.LookupMaster(signer)
+	validator, _, err := staker.LookupNode(signer)
 	return validator, err
 }

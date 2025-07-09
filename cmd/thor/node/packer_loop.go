@@ -32,6 +32,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 		return
 	case <-n.comm.Synced():
 	}
+	n.initialSynced = true
 	logger.Info("synchronization process done")
 
 	var (
@@ -117,11 +118,9 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 func (n *Node) pack(flow *packer.Flow, duplicate bool) (err error) {
 	txs := n.txPool.Executables()
-	println("Number of txs ====1", len(txs))
 	if flow.Number() == uint32(10) && duplicate {
 		txs = make(tx.Transactions, 0)
 	}
-	println("Number of txs ====2", len(txs))
 	var txsToRemove []*tx.Transaction
 	defer func() {
 		if err == nil {
@@ -143,7 +142,6 @@ func (n *Node) pack(flow *packer.Flow, duplicate bool) (err error) {
 
 		// adopt txs
 		for _, tx := range txs {
-			println("adopting tx for block", flow.Number())
 			if err := flow.Adopt(tx); err != nil {
 				if packer.IsGasLimitReached(err) {
 					break
@@ -165,7 +163,6 @@ func (n *Node) pack(flow *packer.Flow, duplicate bool) (err error) {
 		}
 
 		// pack the new block
-		println("Requesting double signing evidence")
 		evidence := n.repo.GetDoubleSigEvidence()
 		newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey, uint32(len(conflicts)), shouldVote, evidence)
 		if err != nil {
@@ -193,7 +190,6 @@ func (n *Node) pack(flow *packer.Flow, duplicate bool) (err error) {
 			}
 		}
 
-		println("this is number of conflicts", uint32(len(conflicts)))
 		// add the new block into repository
 		if err := n.repo.AddBlock(newBlock, receipts, uint32(len(conflicts)), true); err != nil {
 			return errors.Wrap(err, "add block")
@@ -211,10 +207,6 @@ func (n *Node) pack(flow *packer.Flow, duplicate bool) (err error) {
 		n.processFork(newBlock, oldBest.Header.ID())
 		commitElapsed := mclock.Now() - startTime - execElapsed
 
-		if newBlock.Header().Number() == n.forkConfig.GALACTICA {
-			fmt.Println(GalacticaASCIIArt)
-		}
-
 		n.comm.BroadcastBlock(newBlock)
 		logger.Info("📦 new block packed",
 			"txs", len(receipts),
@@ -222,12 +214,6 @@ func (n *Node) pack(flow *packer.Flow, duplicate bool) (err error) {
 			"et", fmt.Sprintf("%v|%v", common.PrettyDuration(execElapsed), common.PrettyDuration(commitElapsed)),
 			"id", shortID(newBlock.Header().ID()),
 		)
-		// TODO: log to be removed when fork is stable
-		if newBlock.Header().Number()+1 == n.forkConfig.GALACTICA {
-			logger.Info("Last block before Galactica fork activates!")
-		} else if newBlock.Header().Number() == n.forkConfig.GALACTICA {
-			logger.Info("Galactica fork activated!")
-		}
 
 		if v, updated := n.bandwidth.Update(newBlock.Header(), time.Duration(realElapsed)); updated {
 			logger.Trace("bandwidth updated", "gps", v)
@@ -239,7 +225,6 @@ func (n *Node) pack(flow *packer.Flow, duplicate bool) (err error) {
 			if err != nil {
 				return err
 			}
-			println("============...... Removing double signing in cache while producing  block")
 			n.repo.RecordDoubleSigProcessed(duplBlk.Header.Number())
 		}
 

@@ -1,0 +1,81 @@
+name: Rosetta Tests
+
+on:
+  workflow_call:
+    inputs:
+      thor_repo:
+        required: false
+        type: string
+        default: "https://github.com/vechain/thor.git"
+      thor_version:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  run-solo-tests:
+    name: Run Solo e2e Tests
+    runs-on: ubuntu-latest
+    env:
+      THOR_REPO: ${{ inputs.thor_repo }}
+      THOR_VERSION: ${{ inputs.thor_version }}
+      NETWORK: solo
+      TEST_NETWORK: solo
+      MODE: online
+    steps:
+      - name: Set Rosetta repo reference
+        id: set-ref
+        run: |
+          # Default fallback branch
+          DEFAULT_BRANCH="master"
+          REF="$DEFAULT_BRANCH"
+      
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # For pull_request events, we only look at the PR's base branch
+            if [[ "${{ github.event.pull_request.base.ref }}" == release/* ]]; then
+              REF="${{ github.event.pull_request.base.ref }}"
+            fi
+          else
+            # For push events, we check the branch or tag that was pushed
+            if [[ "${{ github.ref_name }}" == release/* ]]; then
+              REF="${{ github.ref_name }}"
+            fi
+          fi
+
+          # Verify if branch exists
+          if ! git ls-remote --heads https://github.com/vechain/rosetta.git $REF; then
+            echo "Branch does not exist, using default branch"
+            echo "ref=$DEFAULT_BRANCH" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          repository: vechain/rosetta
+          ref: ${{ steps.set-ref.outputs.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+            
+      - name: Install dependencies
+        run: npm ci
+  
+      - name: Prepare volume dir
+        run: |
+          mkdir -p rosetta_data
+          chmod -R 777 rosetta_data
+
+      - name: Build Docker images
+        run: docker compose build
+            
+      - name: Run e2e tests
+        run: npm run test:e2e:solo
+
+  

@@ -16,10 +16,11 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/consensus/fork"
+	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -157,7 +158,7 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 		return err
 	}
 
-	return utils.WriteJSON(w, &FeesHistory{
+	return utils.WriteJSON(w, &api.FeesHistory{
 		OldestBlock:   oldestBlockRevision,
 		BaseFeePerGas: baseFees,
 		GasUsedRatio:  gasUsedRatios,
@@ -170,13 +171,13 @@ func (f *Fees) handleGetPriority(w http.ResponseWriter, _ *http.Request) error {
 
 	priorityFee := (*hexutil.Big)(f.minPriorityFee)
 	if bestBlockSummary.Header.BaseFee() != nil {
-		nextBaseFee := fork.CalcBaseFee(f.forkConfig, bestBlockSummary.Header)
+		nextBaseFee := galactica.CalcBaseFee(bestBlockSummary.Header, f.forkConfig)
 		if nextBaseFee.Cmp(big.NewInt(thor.InitialBaseFee)) > 0 {
 			priorityFee = (*hexutil.Big)(calcPriorityFee(nextBaseFee, int64(f.config.PriorityIncreasePercentage)))
 		}
 	}
 
-	return utils.WriteJSON(w, &FeesPriority{
+	return utils.WriteJSON(w, &api.FeesPriority{
 		MaxPriorityFeePerGas: priorityFee,
 	})
 }

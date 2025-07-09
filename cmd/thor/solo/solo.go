@@ -245,7 +245,7 @@ func (s *Solo) init(ctx context.Context) error {
 	}
 
 	clause := tx.NewClause(&builtin.Params.Address).WithData(data)
-	baseGasePriceTx, err := s.newTx([]*tx.Clause{clause}, genesis.DevAccounts()[0])
+	baseGasPriceTx, err := s.newTx([]*tx.Clause{clause}, genesis.DevAccounts()[0])
 	if err != nil {
 		return err
 	}
@@ -258,7 +258,7 @@ func (s *Solo) init(ctx context.Context) error {
 		}
 	}
 
-	return s.packing(tx.Transactions{baseGasePriceTx}, false)
+	return s.packing(tx.Transactions{baseGasPriceTx}, false)
 }
 
 // newTx builds and signs a new transaction from the given clauses

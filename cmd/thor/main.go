@@ -19,8 +19,8 @@ import (
 	"github.com/mattn/go-isatty"
 	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/bft"
+	"github.com/vechain/thor/v2/cmd/thor/httpserver"
 	"github.com/vechain/thor/v2/cmd/thor/node"
 	"github.com/vechain/thor/v2/cmd/thor/pruner"
 	"github.com/vechain/thor/v2/cmd/thor/solo"
@@ -181,7 +181,7 @@ func defaultAction(ctx *cli.Context) error {
 	metricsURL := ""
 	if enableMetrics {
 		metrics.InitializePrometheusMetrics()
-		url, closeFunc, err := api.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
+		url, closeFunc, err := httpserver.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
 		if err != nil {
 			return fmt.Errorf("unable to start metrics server - %w", err)
 		}
@@ -249,7 +249,7 @@ func defaultAction(ctx *cli.Context) error {
 	logAPIRequests := &atomic.Bool{}
 	logAPIRequests.Store(ctx.Bool(enableAPILogsFlag.Name))
 	if ctx.Bool(enableAdminFlag.Name) {
-		url, closeFunc, err := api.StartAdminServer(
+		url, closeFunc, err := httpserver.StartAdminServer(
 			ctx.String(adminAddrFlag.Name),
 			logLevel,
 			repo,
@@ -268,7 +268,8 @@ func defaultAction(ctx *cli.Context) error {
 		return errors.Wrap(err, "init bft engine")
 	}
 
-	apiHandler, apiCloser := api.New(
+	apiURL, srvCloser, err := httpserver.StartAPIServer(
+		ctx.String(apiAddrFlag.Name),
 		repo,
 		state.NewStater(mainDB),
 		txPool,
@@ -278,9 +279,6 @@ func defaultAction(ctx *cli.Context) error {
 		forkConfig,
 		makeAPIConfig(ctx, logAPIRequests, false),
 	)
-	defer func() { log.Info("closing API..."); apiCloser() }()
-
-	apiURL, srvCloser, err := startAPIServer(ctx, apiHandler, repo.GenesisBlock().Header().ID())
 	if err != nil {
 		return err
 	}
@@ -342,7 +340,7 @@ func soloAction(ctx *cli.Context) error {
 	metricsURL := ""
 	if enableMetrics {
 		metrics.InitializePrometheusMetrics()
-		url, closeFunc, err := api.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
+		url, closeFunc, err := httpserver.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
 		if err != nil {
 			return fmt.Errorf("unable to start metrics server - %w", err)
 		}
@@ -401,7 +399,7 @@ func soloAction(ctx *cli.Context) error {
 	logAPIRequests := &atomic.Bool{}
 	logAPIRequests.Store(ctx.Bool(enableAPILogsFlag.Name))
 	if ctx.Bool(enableAdminFlag.Name) {
-		url, closeFunc, err := api.StartAdminServer(
+		url, closeFunc, err := httpserver.StartAdminServer(
 			ctx.String(adminAddrFlag.Name),
 			logLevel,
 			repo,
@@ -437,7 +435,8 @@ func soloAction(ctx *cli.Context) error {
 	txPool := txpool.New(repo, state.NewStater(mainDB), txPoolOption, forkConfig)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
-	apiHandler, apiCloser := api.New(
+	apiURL, srvCloser, err := httpserver.StartAPIServer(
+		ctx.String(apiAddrFlag.Name),
 		repo,
 		state.NewStater(mainDB),
 		txPool,
@@ -447,16 +446,10 @@ func soloAction(ctx *cli.Context) error {
 		forkConfig,
 		makeAPIConfig(ctx, logAPIRequests, true),
 	)
-	defer func() { log.Info("closing API..."); apiCloser() }()
-
-	apiURL, srvCloser, err := startAPIServer(ctx, apiHandler, repo.GenesisBlock().Header().ID())
 	if err != nil {
 		return err
 	}
-	defer func() {
-		log.Info("stopping API server...")
-		srvCloser()
-	}()
+	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
 	blockInterval := ctx.Uint64(blockInterval.Name)
 	if blockInterval == 0 {
