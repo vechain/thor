@@ -375,13 +375,15 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		}
 
 		evidence := newBlock.Header().Evidence()
-		if isPos {
+		if evidence != nil && isPos {
 			println("======= evidence is", len(*evidence))
 			println("--------cached is", len(*n.repo.GetDoubleSigEvidence()))
 			err = n.validateEvidence(evidence)
 			if err != nil {
 				return err
 			}
+		} else {
+			println("======= evidence is nil")
 		}
 
 		// process the new block
