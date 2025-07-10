@@ -221,7 +221,7 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 		if err := energy.DistributeRewards(f.runtime.Context().Beneficiary, thor.Address(signer), staker); err != nil {
 			return nil, nil, nil, err
 		}
-		if newBlockConflicts > 0 {
+		if evidence != nil && len(*evidence) > 0 {
 			builder.Evidence(evidence)
 		}
 	}
