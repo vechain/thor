@@ -62,7 +62,7 @@ func (d *delegations) Add(
 	}
 	nextPeriodStake := validation.NextPeriodStakes(aggregated)
 	nextPeriodStake = nextPeriodStake.Add(nextPeriodStake, stake)
-	if nextPeriodStake.Cmp(maxStake) > 0 {
+	if nextPeriodStake.Cmp(MaxStake) > 0 {
 		return thor.Bytes32{}, errors.New("validation's next period stake exceeds max stake")
 	}
 

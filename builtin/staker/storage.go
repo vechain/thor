@@ -39,6 +39,8 @@ var (
 	slotLowStakingPeriod    = nameToSlot("staker-low-staking-period")
 	slotMediumStakingPeriod = nameToSlot("staker-medium-staking-period")
 	slotHighStakingPeriod   = nameToSlot("staker-high-staking-period")
+	slotCooldownPeriod      = nameToSlot("cooldown-period")
+	slotEpochLength         = nameToSlot("epoch-length")
 	// exit epoch mapping
 	slotExitEpochs = nameToSlot("exit-epochs")
 )

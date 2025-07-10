@@ -33,9 +33,9 @@ type validations struct {
 
 func newValidations(storage *storage) *validations {
 	// debug overrides for testing
-	storage.debugOverride(&lowStakingPeriod, slotLowStakingPeriod)
-	storage.debugOverride(&mediumStakingPeriod, slotMediumStakingPeriod)
-	storage.debugOverride(&highStakingPeriod, slotHighStakingPeriod)
+	storage.debugOverride(&LowStakingPeriod, slotLowStakingPeriod)
+	storage.debugOverride(&MediumStakingPeriod, slotMediumStakingPeriod)
+	storage.debugOverride(&HighStakingPeriod, slotHighStakingPeriod)
 
 	return &validations{
 		storage:             storage,
@@ -45,9 +45,9 @@ func newValidations(storage *storage) *validations {
 		lockedWeight:        solidity.NewUint256(storage.Address(), storage.State(), slotLockedWeight),
 		queuedVET:           solidity.NewUint256(storage.Address(), storage.State(), slotQueuedVET),
 		queuedWeight:        solidity.NewUint256(storage.Address(), storage.State(), slotQueuedWeight),
-		lowStakingPeriod:    lowStakingPeriod,
-		mediumStakingPeriod: mediumStakingPeriod,
-		highStakingPeriod:   highStakingPeriod,
+		lowStakingPeriod:    LowStakingPeriod,
+		mediumStakingPeriod: MediumStakingPeriod,
+		highStakingPeriod:   HighStakingPeriod,
 	}
 }
 
@@ -98,7 +98,7 @@ func (v *validations) Add(
 	autoRenew bool,
 	currentBlock uint32,
 ) (thor.Bytes32, error) {
-	if stake.Cmp(minStake) < 0 || stake.Cmp(maxStake) > 0 {
+	if stake.Cmp(MinStake) < 0 || stake.Cmp(MaxStake) > 0 {
 		return thor.Bytes32{}, errors.New("stake is out of range")
 	}
 	lookup, err := v.storage.GetLookup(node)
@@ -328,7 +328,7 @@ func (v *validations) IncreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 	nextPeriodTVL := entry.NextPeriodStakes(aggregation)
 	newTVL := big.NewInt(0).Add(nextPeriodTVL, amount)
 
-	if newTVL.Cmp(maxStake) > 0 {
+	if newTVL.Cmp(MaxStake) > 0 {
 		return errors.New("stake is out of range")
 	}
 
@@ -362,7 +362,7 @@ func (v *validations) DecreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 	}
 	newStake := big.NewInt(0).Add(entry.LockedVET, entry.PendingLocked)
 	newStake = newStake.Sub(newStake, amount)
-	if newStake.Cmp(minStake) < 0 {
+	if newStake.Cmp(MinStake) < 0 {
 		return errors.New("stake is too low for validator")
 	}
 	aggregation, err := v.storage.GetAggregation(id)
