@@ -101,7 +101,7 @@ func (s *Staker) performRenewalUpdates(id thor.Bytes32, validator *Validation) e
 	// renew the validator & delegations
 	validatorRenewal := validator.Renew()
 	delegationsRenewal := aggregation.Renew()
-	if err := s.storage.SetAggregation(id, aggregation); err != nil {
+	if err := s.storage.SetAggregation(id, aggregation, false); err != nil {
 		return err
 	}
 
@@ -126,7 +126,7 @@ func (s *Staker) performRenewalUpdates(id thor.Bytes32, validator *Validation) e
 	if err := s.queuedWeight.Sub(queuedWeight); err != nil {
 		return err
 	}
-	return s.storage.SetValidation(id, validator)
+	return s.storage.SetValidation(id, validator, false)
 }
 
 func (s *Staker) activateValidators(currentBlock uint32) ([]*thor.Bytes32, error) {

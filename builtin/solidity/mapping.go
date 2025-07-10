@@ -9,7 +9,6 @@ import (
 	"reflect"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -20,33 +19,43 @@ type Key interface {
 // Mapping is a key/value storage abstraction for built-in contracts, similar to the mapping in Solidity.
 // It DOES NOT (TBD) allow for direct access to values if declared in the same `pos` in the built-in contract.
 type Mapping[K Key, V any] struct {
-	addr    thor.Address
+	context *Context
 	basePos thor.Bytes32
-	state   *state.State
 }
 
-func NewMapping[K Key, V any](addr thor.Address, state *state.State, pos thor.Bytes32) *Mapping[K, V] {
-	return &Mapping[K, V]{addr: addr, state: state, basePos: pos}
+func NewMapping[K Key, V any](context *Context, pos thor.Bytes32) *Mapping[K, V] {
+	return &Mapping[K, V]{context: context, basePos: pos}
 }
 
 func (m *Mapping[K, V]) Get(key K) (value V, err error) {
 	position := thor.Blake2b(key.Bytes(), m.basePos.Bytes())
-	err = m.state.DecodeStorage(m.addr, position, func(raw []byte) error {
+	err = m.context.State.DecodeStorage(m.context.Address, position, func(raw []byte) error {
 		if reflect.ValueOf(value).Kind() == reflect.Ptr {
 			value = reflect.New(reflect.TypeOf(value).Elem()).Interface().(V)
 		}
-
 		if len(raw) == 0 {
 			return nil
 		}
+		slots := uint64(len(raw)) / 32
+		m.context.UseGas(slots * thor.SloadGas)
 		return rlp.DecodeBytes(raw, &value)
 	})
 	return
 }
 
-func (m *Mapping[K, V]) Set(key K, value V) error {
+func (m *Mapping[K, V]) Set(key K, value V, newValue bool) error {
 	position := thor.Blake2b(key.Bytes(), m.basePos.Bytes())
-	return m.state.EncodeStorage(m.addr, position, func() ([]byte, error) {
+	return m.context.State.EncodeStorage(m.context.Address, position, func() ([]byte, error) {
+		val, err := rlp.EncodeToBytes(value)
+		if err != nil {
+			return nil, err
+		}
+		slots := uint64(len(val)) / 32
+		if newValue {
+			m.context.UseGas(slots * thor.SstoreSetGas)
+		} else {
+			m.context.UseGas(slots * thor.SstoreResetGas)
+		}
 		return rlp.EncodeToBytes(value)
 	})
 }
