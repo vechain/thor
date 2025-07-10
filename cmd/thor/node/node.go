@@ -360,8 +360,10 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		}
 		println("honest node ===== conflicts", len(conflictingBlocks), isPos)
 		if len(conflictingBlocks) > 0 && isPos {
+			println("===================writing blocks to cache")
 			conflictingBlocks = append(conflictingBlocks, *newBlock.Header())
 			n.repo.RecordDoubleSig(newBlock.Header().Number(), conflictingBlocks)
+			println("===================written")
 		}
 
 		var (
@@ -377,6 +379,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 
 		evidence := newBlock.Header().Evidence()
 		if isPos {
+			println("validating evidence", newBlock.Header().Number())
 			err = n.validateEvidence(evidence)
 			if err != nil {
 				return err
@@ -450,6 +453,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		stats.UpdateProcessed(1, len(receipts), execElapsed, commitElapsed, realElapsed, newBlock.Header().GasUsed())
 
 		if isPos && evidence != nil && len(*evidence) > 1 {
+			println("===================removing evidence from cache", newBlock.Header().Number(), len(*evidence))
 			n.repo.RecordDoubleSigProcessed((*evidence)[0].Number())
 		}
 
