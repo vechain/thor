@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/thor"
@@ -150,7 +151,7 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 		}
 
 		// pack the new block
-		var evidence *[][]byte
+		var evidence *[]block.Header
 		if flow.PosActive {
 			evidence = n.repo.GetDoubleSigEvidence()
 		}
@@ -210,12 +211,7 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 		}
 
 		if evidence != nil && flow.PosActive {
-			blockID := thor.BytesToBytes32((*evidence)[0])
-			dupBlk, err := n.repo.GetBlockSummary(blockID)
-			if err != nil {
-				return err
-			}
-			n.repo.RecordDoubleSigProcessed(dupBlk.Header.Number())
+			n.repo.RecordDoubleSigProcessed((*evidence)[0].Number())
 		}
 
 		metricBlockProcessedTxs().SetWithLabel(int64(len(receipts)), map[string]string{"type": "proposed"})

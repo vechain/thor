@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
@@ -176,7 +177,7 @@ func TestPack(t *testing.T) {
 	parentSum, _ := repo.GetBlockSummary(parent.Header().ID())
 	flow, _, _ := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval)
 
-	var evidence *[][]byte
+	var evidence *[]block.Header
 	flow.Pack(proposer.PrivateKey, 0, false, evidence)
 
 	//Test with shouldVote
@@ -208,11 +209,9 @@ func TestPackWithEvidence(t *testing.T) {
 	parentSum, _ := repo.GetBlockSummary(parent.Header().ID())
 	flow, _, _ := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval)
 
-	evidence := make([][]byte, 2)
-	id1 := thor.BytesToBytes32([]byte("testId1"))
-	id2 := thor.BytesToBytes32([]byte("testId2"))
-	evidence[0] = id1.Bytes()
-	evidence[1] = id2.Bytes()
+	evidence := make([]block.Header, 2)
+	evidence[0] = block.Header{}
+	evidence[1] = block.Header{}
 
 	blk, _, _, err := flow.Pack(proposer.PrivateKey, 0, false, &evidence)
 	assert.NoError(t, err)
@@ -239,7 +238,7 @@ func TestPackAfterGalacticaFork(t *testing.T) {
 	parentSum, _ := repo.GetBlockSummary(parent.Header().ID())
 	flow, _, _ := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval)
 
-	var evidence *[][]byte
+	var evidence *[]block.Header
 	// Block 1: Galactica is not enabled
 	block, stg, receipts, err := flow.Pack(proposer.PrivateKey, 0, false, evidence)
 	assert.Nil(t, err)

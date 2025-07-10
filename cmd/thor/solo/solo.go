@@ -208,12 +208,7 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 	)
 
 	if evidence != nil {
-		blockID := thor.BytesToBytes32((*evidence)[0])
-		dupBlk, err := s.repo.GetBlockSummary(blockID)
-		if err != nil {
-			return err
-		}
-		s.repo.RecordDoubleSigProcessed(dupBlk.Header.Number())
+		s.repo.RecordDoubleSigProcessed((*evidence)[0].Number())
 	}
 	logger.Debug(b.String())
 

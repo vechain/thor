@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/packer"
@@ -54,9 +55,8 @@ func TestFlow_Schedule_POS(t *testing.T) {
 	packNext(t, chain, thor.BlockInterval)
 	verifyMechanism(t, chain, false, root)
 
-	evidence := make([][]byte, 1)
-	id1 := thor.BytesToBytes32([]byte("testId1"))
-	evidence[0] = id1.Bytes()
+	evidence := make([]block.Header, 1)
+	evidence[0] = block.Header{}
 	packNextWithEvidence(t, chain, thor.BlockInterval, &evidence)
 	verifyMechanism(t, chain, false, root)
 	summary := chain.Repo().BestBlockSummary()
@@ -64,11 +64,11 @@ func TestFlow_Schedule_POS(t *testing.T) {
 }
 
 func packNext(t *testing.T, chain *testchain.Chain, interval uint64, txs ...*tx.Transaction) {
-	var evidence *[][]byte
+	var evidence *[]block.Header
 	packNextWithEvidence(t, chain, interval, evidence, txs...)
 }
 
-func packNextWithEvidence(t *testing.T, chain *testchain.Chain, interval uint64, evidence *[][]byte, txs ...*tx.Transaction) {
+func packNextWithEvidence(t *testing.T, chain *testchain.Chain, interval uint64, evidence *[]block.Header, txs ...*tx.Transaction) {
 	account := genesis.DevAccounts()[0]
 	p := packer.New(chain.Repo(), chain.Stater(), account.Address, &account.Address, chain.GetForkConfig(), 0)
 	parent := chain.Repo().BestBlockSummary()

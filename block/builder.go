@@ -98,7 +98,7 @@ func (b *Builder) BaseFee(baseFee *big.Int) *Builder {
 }
 
 // Evidence sets evidence.
-func (b *Builder) Evidence(evidence *[][]byte) *Builder {
+func (b *Builder) Evidence(evidence *[]Header) *Builder {
 	b.headerBody.Extension.Evidence = evidence
 	return b
 }

@@ -451,7 +451,7 @@ func (r *Repository) NewTicker() co.Waiter {
 }
 
 // RecordDoubleSig stores evidence for block number in cache.
-func (r *Repository) RecordDoubleSig(blockNum uint32, evidence [][]byte) {
+func (r *Repository) RecordDoubleSig(blockNum uint32, evidence []block.Header) {
 	r.caches.doubleSig.Add(blockNum, evidence)
 }
 
@@ -461,16 +461,14 @@ func (r *Repository) RecordDoubleSigProcessed(blockNum uint32) {
 }
 
 // GetDoubleSigEvidence retrieves double sig evidence from cache.
-func (r *Repository) GetDoubleSigEvidence() *[][]byte {
+func (r *Repository) GetDoubleSigEvidence() *[]block.Header {
 	if r.caches.doubleSig.Len() == 0 {
 		return nil
-	} else {
-		result, found := r.caches.doubleSig.Get(r.caches.doubleSig.Keys()[0])
-		if !found {
-			return nil
-		} else {
-			evidence := result.([][]byte)
-			return &evidence
-		}
 	}
+	result, found := r.caches.doubleSig.Get(r.caches.doubleSig.Keys()[0])
+	if !found {
+		return nil
+	}
+	evidence := result.([]block.Header)
+	return &evidence
 }
