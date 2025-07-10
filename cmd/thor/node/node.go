@@ -112,6 +112,8 @@ func (n *Node) Run(ctx context.Context) error {
 	}
 	n.maxBlockNum = maxBlockNum
 
+	println("============ Custom node impl")
+
 	var goes co.Goes
 	goes.Go(func() { n.comm.Sync(ctx, n.handleBlockStream) })
 	goes.Go(func() { n.houseKeeping(ctx) })
