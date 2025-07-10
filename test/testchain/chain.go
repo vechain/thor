@@ -220,8 +220,9 @@ func (c *Chain) MintBlock(account genesis.DevAccount, transactions ...*tx.Transa
 		}
 	}
 
+	var evidence *[]block.Header
 	// Pack the adopted transactions into a block.
-	newBlk, stage, receipts, err := blkFlow.Pack(account.PrivateKey, 0, false)
+	newBlk, stage, receipts, err := blkFlow.Pack(account.PrivateKey, 0, false, evidence)
 	if err != nil {
 		return fmt.Errorf("unable to pack tx: %w", err)
 	}

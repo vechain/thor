@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
@@ -176,16 +177,45 @@ func TestPack(t *testing.T) {
 	parentSum, _ := repo.GetBlockSummary(parent.Header().ID())
 	flow, _, _ := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval)
 
-	flow.Pack(proposer.PrivateKey, 0, false)
+	var evidence *[]block.Header
+	flow.Pack(proposer.PrivateKey, 0, false, evidence)
 
 	//Test with shouldVote
-	flow.Pack(proposer.PrivateKey, 0, true)
+	flow.Pack(proposer.PrivateKey, 0, true, evidence)
 
 	//Test wrong private key
 	expectedErrorMessage := "private key mismatch"
-	if _, _, _, err := flow.Pack(genesis.DevAccounts()[1].PrivateKey, 0, false); err.Error() != expectedErrorMessage {
+	if _, _, _, err := flow.Pack(genesis.DevAccounts()[1].PrivateKey, 0, false, evidence); err.Error() != expectedErrorMessage {
 		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
 	}
+}
+
+func TestPackWithEvidence(t *testing.T) {
+	db := muxdb.NewMem()
+	g := genesis.NewDevnet()
+
+	stater := state.NewStater(db)
+	parent, _, _, _ := g.Build(stater)
+
+	repo, _ := chain.NewRepository(db, parent)
+
+	forkConfig := thor.NoFork
+	forkConfig.BLOCKLIST = 0
+	forkConfig.VIP214 = 0
+	forkConfig.FINALITY = 0
+
+	proposer := genesis.DevAccounts()[0]
+	p := packer.New(repo, stater, proposer.Address, &proposer.Address, &forkConfig, 0)
+	parentSum, _ := repo.GetBlockSummary(parent.Header().ID())
+	flow, _, _ := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval)
+
+	evidence := make([]block.Header, 2)
+	evidence[0] = block.Header{}
+	evidence[1] = block.Header{}
+
+	blk, _, _, err := flow.Pack(proposer.PrivateKey, 0, false, &evidence)
+	assert.NoError(t, err)
+	assert.Nil(t, blk.Header().Evidence())
 }
 
 func TestPackAfterGalacticaFork(t *testing.T) {
@@ -208,8 +238,9 @@ func TestPackAfterGalacticaFork(t *testing.T) {
 	parentSum, _ := repo.GetBlockSummary(parent.Header().ID())
 	flow, _, _ := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval)
 
+	var evidence *[]block.Header
 	// Block 1: Galactica is not enabled
-	block, stg, receipts, err := flow.Pack(proposer.PrivateKey, 0, false)
+	block, stg, receipts, err := flow.Pack(proposer.PrivateKey, 0, false, evidence)
 	assert.Nil(t, err)
 	assert.Equal(t, uint32(1), block.Header().Number())
 	assert.Nil(t, block.Header().BaseFee())
@@ -224,7 +255,7 @@ func TestPackAfterGalacticaFork(t *testing.T) {
 	// Block 2: Galactica is enabled
 	parentSum, _ = repo.GetBlockSummary(block.Header().ID())
 	flow, _, _ = p.Schedule(parentSum, block.Header().Timestamp()+100*thor.BlockInterval)
-	block, _, _, err = flow.Pack(proposer.PrivateKey, 0, false)
+	block, _, _, err = flow.Pack(proposer.PrivateKey, 0, false, evidence)
 	assert.Nil(t, err)
 	assert.Equal(t, uint32(2), block.Header().Number())
 	assert.Equal(t, big.NewInt(thor.InitialBaseFee), block.Header().BaseFee())

@@ -188,3 +188,52 @@ func TestScanHeads(t *testing.T) {
 		assert.Equal(t, []thor.Bytes32{b3x.Header().ID(), b3.Header().ID(), b2x.Header().ID()}, heads)
 	}
 }
+
+func TestDoubleSigCache(t *testing.T) {
+	_, repo := newTestRepo()
+
+	assert.Equal(t, 0, repo.caches.doubleSig.Len())
+
+	evidence1 := make([]block.Header, 1)
+	evidence1[0] = block.Header{}
+
+	// store one evidence
+	repo.RecordDoubleSig(uint32(10), evidence1)
+	assert.Equal(t, 1, repo.caches.doubleSig.Len())
+
+	evidence2 := make([]block.Header, 2)
+	evidence2[0] = block.Header{}
+	evidence2[1] = block.Header{}
+
+	// store two evidences
+	repo.RecordDoubleSig(uint32(11), evidence2)
+	assert.Equal(t, 2, repo.caches.doubleSig.Len())
+
+	evidence3 := make([]block.Header, 1)
+	evidence2[0] = block.Header{}
+	// override
+	repo.RecordDoubleSig(uint32(11), evidence3)
+	assert.Equal(t, 2, repo.caches.doubleSig.Len())
+
+	// fetch oldest
+	fetched := repo.GetDoubleSigEvidence()
+	assert.Equal(t, evidence1, *fetched)
+	assert.Equal(t, 2, repo.caches.doubleSig.Len())
+
+	// remove cache entry
+	repo.RecordDoubleSigProcessed(10)
+	assert.Equal(t, 1, repo.caches.doubleSig.Len())
+
+	// fetch oldest
+	fetched = repo.GetDoubleSigEvidence()
+	assert.Equal(t, evidence3, *fetched)
+	assert.Equal(t, 1, repo.caches.doubleSig.Len())
+
+	// remove cache entry
+	repo.RecordDoubleSigProcessed(11)
+	assert.Equal(t, 0, repo.caches.doubleSig.Len())
+
+	// fetch oldest
+	fetched = repo.GetDoubleSigEvidence()
+	assert.Nil(t, fetched)
+}

@@ -95,6 +95,14 @@ func (h *Header) BaseFee() *big.Int {
 	return new(big.Int).Set(h.body.Extension.BaseFee)
 }
 
+// Evidence returns evidence in this block.
+func (h *Header) Evidence() *[]Header {
+	if h.body.Extension.Evidence == nil {
+		return nil
+	}
+	return h.body.Extension.Evidence
+}
+
 // Beneficiary returns reward recipient.
 func (h *Header) Beneficiary() thor.Address {
 	return h.body.Beneficiary
@@ -295,9 +303,10 @@ func (h *Header) String() string {
 	ReceiptsRoot:   %v
 	Alpha:          0x%x
 	COM:            %v
+    Evidence:       %v
 	Signature:      0x%x`, h.ID(), h.Number(), h.body.ParentID, h.body.Timestamp, signerStr,
 		h.body.Beneficiary, h.body.GasLimit, h.body.GasUsed, h.body.Extension.BaseFee, h.body.TotalScore,
-		h.body.TxsRootFeatures.Root, h.body.TxsRootFeatures.Features, h.body.StateRoot, h.body.ReceiptsRoot, h.body.Extension.Alpha, h.body.Extension.COM, h.body.Signature)
+		h.body.TxsRootFeatures.Root, h.body.TxsRootFeatures.Features, h.body.StateRoot, h.body.ReceiptsRoot, h.body.Extension.Alpha, h.body.Extension.COM, h.body.Extension.Evidence, h.body.Signature)
 }
 
 // BetterThan return if this block is better than other one.
