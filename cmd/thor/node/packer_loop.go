@@ -118,7 +118,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 func (n *Node) pack(flow *packer.Flow, duplicate bool) (err error) {
 	txs := n.txPool.Executables()
-	if duplicate {
+	if duplicate && flow.PosActive {
 		txs = make(tx.Transactions, 0)
 	}
 	var txsToRemove []*tx.Transaction
