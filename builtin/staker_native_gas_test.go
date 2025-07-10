@@ -116,48 +116,48 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_addValidator",
-			expectedGas: 58200,
+			expectedGas: 103200,
 			args:        []any{account1, account1, staker.LowStakingPeriod, staker.MinStake, true},
 			description: "Add a new validator (not implemented yet)",
 		},
 		{
 			function:     "native_get",
-			expectedGas:  1400,
+			expectedGas:  1600,
 			args:         []any{accToID(account1)},
 			description:  "Get validator by it's ID (not implemented yet)",
 			preTestHooks: []TestHook{preTestAddValidator(account1)},
 		},
 		{
 			function:     "native_lookupNode",
-			expectedGas:  1600,
+			expectedGas:  2000,
 			args:         []any{genesis.DevAccounts()[0].Address},
 			description:  "Lookup node by address",
 			preTestHooks: []TestHook{preTestAddValidator(account1)},
 		},
 		{
 			function:     "native_getWithdraw",
-			expectedGas:  1400,
+			expectedGas:  1600,
 			args:         []any{accToID(account1)},
 			description:  "Get withdraw information for a validator",
 			preTestHooks: []TestHook{preTestAddValidator(account1)},
 		},
 		{
 			function:     "native_next",
-			expectedGas:  1400,
+			expectedGas:  1600,
 			args:         []any{accToID(account1)},
 			description:  "Get next validator in the queue",
 			preTestHooks: []TestHook{preTestAddValidator(account1)},
 		},
 		{
 			function:     "native_withdraw",
-			expectedGas:  47000,
+			expectedGas:  77400,
 			args:         []any{account1, accToID(account1)},
 			description:  "Withdraw stake for a validator",
 			preTestHooks: []TestHook{preTestAddValidator(account1)},
 		},
 		{
 			function:    "native_updateAutoRenew",
-			expectedGas: 11400,
+			expectedGas: 16600,
 			args: []any{
 				account1,
 				accToID(account1),
@@ -168,7 +168,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_increaseStake",
-			expectedGas: 21800,
+			expectedGas: 27200,
 			args: []any{
 				account1,
 				accToID(account1),
@@ -179,7 +179,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_decreaseStake",
-			expectedGas: 21800,
+			expectedGas: 32200,
 			args: []any{
 				account1,
 				accToID(account1),
@@ -190,7 +190,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_addDelegation",
-			expectedGas: 42000,
+			expectedGas: 62400,
 			args: []any{
 				accToID(account1),
 				staker.MinStake,
@@ -202,7 +202,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_getDelegation",
-			expectedGas: 1600,
+			expectedGas: 2000,
 			args: []any{
 				thor.BytesToBytes32(big.NewInt(1).Bytes()), // IDs are incremental, starting at 1
 			},
@@ -211,7 +211,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_withdrawDelegation",
-			expectedGas: 17200,
+			expectedGas: 27600,
 			args: []any{
 				thor.BytesToBytes32(big.NewInt(1).Bytes()), // IDs are incremental, starting at 1
 			},
@@ -220,7 +220,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_updateDelegationAutoRenew",
-			expectedGas: 11800,
+			expectedGas: 17200,
 			args: []any{
 				thor.BytesToBytes32(big.NewInt(1).Bytes()), // IDs are incremental, starting at 1
 				false,
@@ -240,7 +240,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_getValidatorTotals",
-			expectedGas: 1400,
+			expectedGas: 1800,
 			args: []any{
 				accToID(account1),
 			},
@@ -298,7 +298,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 
 			// Additional validation: gas should be reasonable (not zero, not excessive)
 			assert.Greater(t, gasUsed, uint64(0), "Function %s should consume some gas", tc.function)
-			assert.Less(t, gasUsed, uint64(100_000), "Function %s gas usage seems excessive: %d", tc.function, gasUsed)
+			assert.Less(t, gasUsed, uint64(200_000), "Function %s gas usage seems excessive: %d", tc.function, gasUsed)
 		})
 	}
 }

@@ -271,7 +271,7 @@ func executeTxAndGetReceipt(description TestTxDescription) (*tx.Receipt, *thor.B
 	trx := new(tx.Builder).
 		ChainTag(thorChain.Repo().ChainTag()).
 		Expiration(50).
-		Gas(100000).
+		Gas(1000000).
 		Clause(clause).
 		Build()
 

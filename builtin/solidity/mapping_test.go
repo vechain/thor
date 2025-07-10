@@ -66,12 +66,12 @@ func TestMapping_Set_ExistingValue(t *testing.T) {
 }
 
 func TestMapping_Get_ExistingValue(t *testing.T) {
-	charger, mapping := newSetup()
+	_, mapping := newSetup()
 	key := datagen.RandomHash()
 	value := newTestStruct()
 	assert.NoError(t, mapping.Set(key, value, true))
 
-	charger = gascharger.New(nil) // Reset charger to measure only the SLOAD operation
+	charger := gascharger.New(nil)    // Reset charger to measure only the SLOAD operation
 	mapping.context.Charger = charger // Reset charger to measure only the SLOAD operation
 
 	retrievedValue, err := mapping.Get(key)
