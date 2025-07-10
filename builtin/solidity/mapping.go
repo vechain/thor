@@ -36,7 +36,7 @@ func (m *Mapping[K, V]) Get(key K) (value V, err error) {
 		if len(raw) == 0 {
 			return nil
 		}
-		slots := uint64(len(raw)) / 32
+		slots := (uint64(len(raw)) + 31) / 32
 		m.context.UseGas(slots * thor.SloadGas)
 		return rlp.DecodeBytes(raw, &value)
 	})
@@ -50,7 +50,7 @@ func (m *Mapping[K, V]) Set(key K, value V, newValue bool) error {
 		if err != nil {
 			return nil, err
 		}
-		slots := uint64(len(val)) / 32
+		slots := (uint64(len(val)) + 31) / 32
 		if newValue {
 			m.context.UseGas(slots * thor.SstoreSetGas)
 		} else {
