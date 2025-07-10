@@ -358,7 +358,9 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		if err != nil {
 			return err
 		}
+		println("writing conflicting blocks", len(conflictingBlocks), isPos)
 		if len(conflictingBlocks) > 0 && isPos {
+			println("writing conflicting blocks")
 			conflictingBlocks = append(conflictingBlocks, *newBlock.Header())
 			n.repo.RecordDoubleSig(newBlock.Header().Number(), conflictingBlocks)
 		}
