@@ -358,9 +358,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		if err != nil {
 			return err
 		}
-		println("writing conflicting blocks", len(conflictingBlocks), isPos)
 		if len(conflictingBlocks) > 0 && isPos {
-			println("writing conflicting blocks")
 			conflictingBlocks = append(conflictingBlocks, *newBlock.Header())
 			n.repo.RecordDoubleSig(newBlock.Header().Number(), conflictingBlocks)
 		}
@@ -378,19 +376,10 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 
 		evidence := newBlock.Header().Evidence()
 		if evidence != nil && isPos {
-			println("======= evidence is", len(*evidence))
-			cacheRecords := n.repo.GetDoubleSigEvidence()
-			if cacheRecords != nil {
-				println("--------cached is", len(*n.repo.GetDoubleSigEvidence()))
-			} else {
-				println("cache records are empty -----------")
-			}
 			err = n.validateEvidence(evidence)
 			if err != nil {
 				return err
 			}
-		} else {
-			println("======= evidence is nil")
 		}
 
 		// process the new block
