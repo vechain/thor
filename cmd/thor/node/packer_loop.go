@@ -82,9 +82,9 @@ func (n *Node) packerLoop(ctx context.Context) {
 					logger.Error("failed to pack block", "err", err)
 				}
 
-				flow, pos, err = n.packer.Schedule(bb, now)
+				flow, _, err = n.packer.Schedule(bb, now)
 				if err != nil {
-					logger.Error("failed to initalize second flow", "err", err)
+					logger.Error("failed to initialize second flow", "err", err)
 				}
 				if err := n.pack(flow, true); err != nil {
 					logger.Error("failed to pack block", "err", err)
