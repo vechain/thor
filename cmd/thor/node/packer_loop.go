@@ -52,6 +52,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			n.packer.SetTargetGasLimit(suggested)
 		}
 
+		bb := n.repo.BestBlockSummary()
 		flow, pos, err := n.packer.Schedule(n.repo.BestBlockSummary(), now)
 		if err != nil {
 			if !packer.IsSchedulingError(err) && authorized {
@@ -76,7 +77,15 @@ func (n *Node) packerLoop(ctx context.Context) {
 			if uint64(time.Now().Unix())+thor.BlockInterval/2 > flow.When() {
 				// time to pack block
 				// blockInterval/2 early to allow more time for processing txs
-				if err := n.pack(flow); err != nil {
+				if err := n.pack(flow, false); err != nil {
+					logger.Error("failed to pack block", "err", err)
+				}
+
+				flow, pos, err = n.packer.Schedule(bb, now)
+				if err != nil {
+					logger.Error("failed to initalize second flow", "err", err)
+				}
+				if err := n.pack(flow, true); err != nil {
 					logger.Error("failed to pack block", "err", err)
 				}
 				break
@@ -105,8 +114,11 @@ func (n *Node) packerLoop(ctx context.Context) {
 	}
 }
 
-func (n *Node) pack(flow *packer.Flow) (err error) {
+func (n *Node) pack(flow *packer.Flow, duplicate bool) (err error) {
 	txs := n.txPool.Executables()
+	if duplicate {
+		txs = make(tx.Transactions, 0)
+	}
 	var txsToRemove []*tx.Transaction
 	defer func() {
 		if err == nil {
