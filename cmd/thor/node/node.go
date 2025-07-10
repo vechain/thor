@@ -376,6 +376,8 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 
 		evidence := newBlock.Header().Evidence()
 		if isPos {
+			println("======= evidence is", len(*evidence))
+			println("--------cached is", len(*n.repo.GetDoubleSigEvidence()))
 			err = n.validateEvidence(evidence)
 			if err != nil {
 				return err
