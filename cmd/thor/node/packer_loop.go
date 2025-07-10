@@ -152,8 +152,14 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 
 		// pack the new block
 		var evidence *[]block.Header
+		println("packing ====== ", flow.PosActive)
 		if flow.PosActive {
 			evidence = n.repo.GetDoubleSigEvidence()
+			if evidence != nil {
+				println("packing ====== ", len(*evidence))
+			} else {
+				println("packing ====== no evidence")
+			}
 		}
 		newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey, uint32(len(conflicts)), shouldVote, evidence)
 		if err != nil {
