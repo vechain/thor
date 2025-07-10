@@ -25,20 +25,20 @@ func M(a ...any) []any {
 	return a
 }
 
-// RandomStake returns a random number between minStake and (maxStake/2)
+// RandomStake returns a random number between MinStake and (MaxStake/2)
 func RandomStake() *big.Int {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	max := big.NewInt(0).Div(maxStake, big.NewInt(2))
+	max := big.NewInt(0).Div(MaxStake, big.NewInt(2))
 
-	// Calculate the range (max - minStake)
-	rangeStake := new(big.Int).Sub(max, minStake)
+	// Calculate the range (max - MinStake)
+	rangeStake := new(big.Int).Sub(max, MinStake)
 
 	// Generate a random number within the range
 	randomOffset := new(big.Int).Rand(rng, rangeStake)
 
-	// Add minStake to ensure the value is within the desired range
-	return new(big.Int).Add(minStake, randomOffset)
+	// Add MinStake to ensure the value is within the desired range
+	return new(big.Int).Add(MinStake, randomOffset)
 }
 
 type keySet struct {
@@ -212,40 +212,40 @@ func TestStaker_TotalStake_Withdrawal(t *testing.T) {
 func TestStaker_AddValidator_MinimumStake(t *testing.T) {
 	staker, _ := newStaker(t, 68, 101, true)
 
-	tooLow := big.NewInt(0).Sub(minStake, big.NewInt(1))
+	tooLow := big.NewInt(0).Sub(MinStake, big.NewInt(1))
 	_, err := staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, tooLow, true, 0)
 	assert.ErrorContains(t, err, "stake is out of range")
-	_, err = staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, minStake, true, 0)
+	_, err = staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, MinStake, true, 0)
 	assert.NoError(t, err)
 }
 
 func TestStaker_AddValidator_MaximumStake(t *testing.T) {
 	staker, _ := newStaker(t, 68, 101, true)
 
-	tooHigh := big.NewInt(0).Add(maxStake, big.NewInt(1))
+	tooHigh := big.NewInt(0).Add(MaxStake, big.NewInt(1))
 	_, err := staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, tooHigh, true, 0)
 	assert.ErrorContains(t, err, "stake is out of range")
-	_, err = staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, maxStake, true, 0)
+	_, err = staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, MaxStake, true, 0)
 	assert.NoError(t, err)
 }
 
 func TestStaker_AddValidator_MaximumStakingPeriod(t *testing.T) {
 	staker, _ := newStaker(t, 101, 101, true)
 
-	_, err := staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*400, minStake, true, 0)
+	_, err := staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*400, MinStake, true, 0)
 	assert.ErrorContains(t, err, "period is out of boundaries")
-	_, err = staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, minStake, true, 0)
+	_, err = staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, MinStake, true, 0)
 	assert.NoError(t, err)
 }
 
 func TestStaker_AddValidator_MinimumStakingPeriod(t *testing.T) {
 	staker, _ := newStaker(t, 101, 101, true)
 
-	_, err := staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*1, minStake, true, 0)
+	_, err := staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*1, MinStake, true, 0)
 	assert.ErrorContains(t, err, "period is out of boundaries")
-	_, err = staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), 100, minStake, true, 0)
+	_, err = staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), 100, MinStake, true, 0)
 	assert.ErrorContains(t, err, "period is out of boundaries")
-	_, err = staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, minStake, true, 0)
+	_, err = staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, MinStake, true, 0)
 	assert.NoError(t, err)
 }
 
@@ -859,7 +859,7 @@ func TestStaker_ChangeStakeActiveValidatorWithQueued(t *testing.T) {
 func TestStaker_DecreaseActive(t *testing.T) {
 	staker, _ := newStaker(t, 0, 101, false)
 	addr := datagen.RandAddress()
-	stake := maxStake
+	stake := MaxStake
 	period := uint32(360) * 24 * 15
 
 	// add the validator
@@ -905,7 +905,7 @@ func TestStaker_DecreaseActive(t *testing.T) {
 func TestStaker_DecreaseActiveThenExit(t *testing.T) {
 	staker, _ := newStaker(t, 0, 101, false)
 	addr := datagen.RandAddress()
-	stake := maxStake
+	stake := MaxStake
 	period := uint32(360) * 24 * 15
 
 	// add the validator
@@ -1373,7 +1373,7 @@ func TestStaker_Initialise(t *testing.T) {
 	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(3)))
 
 	for range 3 {
-		_, err := staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, minStake, true, 0)
+		_, err := staker.AddValidator(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, MinStake, true, 0)
 		assert.NoError(t, err)
 	}
 
@@ -1381,7 +1381,7 @@ func TestStaker_Initialise(t *testing.T) {
 	assert.NoError(t, err) // should succeed
 	assert.True(t, transitioned)
 	// should be able to add validations after initialisation
-	_, err = staker.AddValidator(addr, addr, uint32(360)*24*15, minStake, true, 0)
+	_, err = staker.AddValidator(addr, addr, uint32(360)*24*15, MinStake, true, 0)
 	assert.NoError(t, err)
 
 	staker, _ = newStaker(t, 101, 101, true)
@@ -1718,7 +1718,7 @@ func TestStaker_Housekeep_RecalculateIncrease(t *testing.T) {
 	staker, _ := newStaker(t, 0, 101, false)
 	addr1 := datagen.RandAddress()
 
-	stake := minStake
+	stake := MinStake
 	period := uint32(360) * 24 * 15
 
 	// auto renew is turned on
@@ -1756,7 +1756,7 @@ func TestStaker_Housekeep_RecalculateDecrease(t *testing.T) {
 	staker, _ := newStaker(t, 0, 101, false)
 	addr1 := datagen.RandAddress()
 
-	stake := maxStake
+	stake := MaxStake
 	period := uint32(360) * 24 * 15
 
 	// auto renew is turned on
@@ -1795,7 +1795,7 @@ func TestStaker_Housekeep_DecreaseThenWithdraw(t *testing.T) {
 	staker, _ := newStaker(t, 0, 101, false)
 	addr1 := datagen.RandAddress()
 
-	stake := maxStake
+	stake := MaxStake
 	period := uint32(360) * 24 * 15
 
 	// auto renew is turned on
@@ -2250,7 +2250,7 @@ func TestStaker_MultipleUpdates_CorrectWithdraw(t *testing.T) {
 func Test_GetValidatorTotals(t *testing.T) {
 	staker, validators := newDelegationStaker(t)
 
-	stake := big.NewInt(0).Set(minStake)
+	stake := big.NewInt(0).Set(MinStake)
 
 	validator := validators[0]
 	id1, err := staker.AddDelegation(validator.ID, stake, true, 255)
