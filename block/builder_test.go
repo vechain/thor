@@ -53,9 +53,11 @@ func TestBuilder_Build(t *testing.T) {
 	baseFee := big.NewInt(1000)
 	builder.BaseFee(baseFee)
 
-	evidence := make([]Header, 1)
+	evidence := make([][]Header, 1)
+	headers := make([]Header, 1)
 	//id1 := thor.BytesToBytes32([]byte("testId1"))
-	evidence[0] = Header{}
+	headers[0] = Header{}
+	evidence[0] = headers
 	builder.Evidence(&evidence)
 
 	b := builder.Build()

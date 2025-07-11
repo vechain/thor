@@ -460,15 +460,25 @@ func (r *Repository) RecordDoubleSigProcessed(blockNum uint32) {
 	r.caches.doubleSig.Remove(blockNum)
 }
 
-// GetDoubleSigEvidence retrieves double sig evidence from cache.
-func (r *Repository) GetDoubleSigEvidence() *[]block.Header {
-	if r.caches.doubleSig.Len() == 0 {
+// GetDoubleSigEvidence retrieves double sig evidences from cache.
+func (r *Repository) GetDoubleSigEvidence(maxNumOfRecords int) *[][]block.Header {
+	if r.caches.doubleSig.Len() == 0 || maxNumOfRecords < 1 {
 		return nil
 	}
-	result, found := r.caches.doubleSig.Get(r.caches.doubleSig.Keys()[0])
-	if !found {
-		return nil
+	totalRecords := r.caches.doubleSig.Len()
+	limit := min(totalRecords, maxNumOfRecords)
+
+	evidences := make([][]block.Header, limit)
+	idx := 0
+	for idx < limit {
+		result, found := r.caches.doubleSig.Get(r.caches.doubleSig.Keys()[idx])
+		if !found {
+			return &evidences
+		}
+		evidence := result.([]block.Header)
+		evidences[idx] = evidence
+		idx += 1
 	}
-	evidence := result.([]block.Header)
-	return &evidence
+
+	return &evidences
 }

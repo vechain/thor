@@ -107,7 +107,7 @@ func newTestConsensus() (*testConsensus, error) {
 		return nil, err
 	}
 
-	var evidence *[]block.Header
+	var evidence *[][]block.Header
 	b1, stage, receipts, err := flow.Pack(proposer.PrivateKey, 0, false, evidence)
 	if err != nil {
 		return nil, err

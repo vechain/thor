@@ -216,8 +216,23 @@ func TestDoubleSigCache(t *testing.T) {
 	assert.Equal(t, 2, repo.caches.doubleSig.Len())
 
 	// fetch oldest
-	fetched := repo.GetDoubleSigEvidence()
-	assert.Equal(t, evidence1, *fetched)
+	expectedResult := make([][]block.Header, 1)
+	expectedResult[0] = evidence1
+	fetched := repo.GetDoubleSigEvidence(1)
+	assert.Equal(t, expectedResult, *fetched)
+	assert.Equal(t, 2, repo.caches.doubleSig.Len())
+
+	// fetch two oldest
+	expectedResult = make([][]block.Header, 2)
+	expectedResult[0] = evidence2
+	expectedResult[1] = evidence1
+	fetched = repo.GetDoubleSigEvidence(2)
+	assert.Equal(t, 2, len(*fetched))
+	assert.Equal(t, 2, repo.caches.doubleSig.Len())
+
+	// fetch three oldest
+	fetched = repo.GetDoubleSigEvidence(3)
+	assert.Equal(t, 2, len(*fetched))
 	assert.Equal(t, 2, repo.caches.doubleSig.Len())
 
 	// remove cache entry
@@ -225,8 +240,10 @@ func TestDoubleSigCache(t *testing.T) {
 	assert.Equal(t, 1, repo.caches.doubleSig.Len())
 
 	// fetch oldest
-	fetched = repo.GetDoubleSigEvidence()
-	assert.Equal(t, evidence3, *fetched)
+	expectedResult = make([][]block.Header, 1)
+	expectedResult[0] = evidence3
+	fetched = repo.GetDoubleSigEvidence(1)
+	assert.Equal(t, expectedResult, *fetched)
 	assert.Equal(t, 1, repo.caches.doubleSig.Len())
 
 	// remove cache entry
@@ -234,6 +251,6 @@ func TestDoubleSigCache(t *testing.T) {
 	assert.Equal(t, 0, repo.caches.doubleSig.Len())
 
 	// fetch oldest
-	fetched = repo.GetDoubleSigEvidence()
+	fetched = repo.GetDoubleSigEvidence(1)
 	assert.Nil(t, fetched)
 }

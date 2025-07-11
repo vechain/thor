@@ -207,7 +207,7 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 }
 
 // Pack build and sign the new block.
-func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shouldVote bool, evidence *[]block.Header) (*block.Block, *state.Stage, tx.Receipts, error) {
+func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shouldVote bool, evidences *[][]block.Header) (*block.Block, *state.Stage, tx.Receipts, error) {
 	if f.packer.nodeMaster != thor.Address(crypto.PubkeyToAddress(privateKey.PublicKey)) {
 		return nil, nil, nil, errors.New("private key mismatch")
 	}
@@ -221,8 +221,8 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 		if err := energy.DistributeRewards(f.runtime.Context().Beneficiary, thor.Address(signer), staker); err != nil {
 			return nil, nil, nil, err
 		}
-		if evidence != nil && len(*evidence) > 0 {
-			builder.Evidence(evidence)
+		if evidences != nil && len(*evidences) > 0 {
+			builder.Evidence(evidences)
 		}
 	}
 

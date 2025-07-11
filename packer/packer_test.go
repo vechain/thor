@@ -96,7 +96,7 @@ func TestP(t *testing.T) {
 			flow.Adopt(tx)
 		}
 
-		var evidence *[]block.Header
+		var evidence *[][]block.Header
 		blk, stage, receipts, _ := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, false, evidence)
 		root, _ := stage.Commit()
 		assert.Equal(t, root, blk.Header().StateRoot())
@@ -159,7 +159,7 @@ func TestForkVIP191(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var evidence *[]block.Header
+	var evidence *[][]block.Header
 	blk, stage, receipts, _ := flow.Pack(a1.PrivateKey, 0, false, evidence)
 	root, _ := stage.Commit()
 	assert.Equal(t, root, blk.Header().StateRoot())
