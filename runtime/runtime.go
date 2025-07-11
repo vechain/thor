@@ -592,6 +592,7 @@ func (rt *Runtime) validateEvidence(evidences *[]block.Header) error {
 	evidenceValidated := false
 	if evidences != nil && len(*evidences) > 1 {
 		var initialSum *block.Header
+		println("validating evi", len(*evidences))
 		for _, header := range *evidences {
 			if initialSum == nil {
 				initialSum = &header
