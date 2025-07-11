@@ -5,7 +5,6 @@
 package bft
 
 import (
-	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -669,9 +668,7 @@ func TestJustifier(t *testing.T) {
 				}
 
 				assert.Equal(t, uint32(0), vs.checkpoint)
-				// Mock a higher total stake for testing (1000) so threshold is meaningful (666)
-				vs.threshold = big.NewInt(666)
-				assert.True(t, vs.threshold.Cmp(big.NewInt(666)) == 0)
+				assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.threshold)
 			},
 		}, {
 			"fork in the middle of checkpoint", func(t *testing.T) {
@@ -687,9 +684,7 @@ func TestJustifier(t *testing.T) {
 				}
 
 				assert.Equal(t, uint32(0), vs.checkpoint)
-				// Mock a higher total stake for testing (1000) so threshold is meaningful (666)
-				vs.threshold = big.NewInt(666)
-				assert.True(t, vs.threshold.Cmp(big.NewInt(666)) == 0)
+				assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.threshold)
 			},
 		}, {
 			"the second bft round", func(t *testing.T) {
@@ -707,17 +702,10 @@ func TestJustifier(t *testing.T) {
 				}
 
 				assert.Equal(t, uint32(thor.CheckpointInterval*2), vs.checkpoint)
-				t.Logf("Original threshold: %s", vs.threshold.String())
-				// Mock a higher total stake for testing (1000) so threshold is meaningful (666)
-				vs.threshold = big.NewInt(666)
-				t.Logf("Threshold set to: %s", vs.threshold.String())
-				assert.True(t, vs.threshold.Cmp(big.NewInt(666)) == 0)
-
-				// With no votes, quality should be 0 and not justified
-				st := vs.Summarize()
-				assert.Equal(t, uint32(0), st.Quality)
-				assert.False(t, st.Justified)
-				assert.False(t, st.Committed)
+				assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.threshold)
+				assert.Equal(t, uint32(2), vs.Summarize().Quality)
+				assert.False(t, vs.Summarize().Justified)
+				assert.False(t, vs.Summarize().Committed)
 			},
 		}, {
 			"add votes: commits", func(t *testing.T) {
@@ -734,24 +722,19 @@ func TestJustifier(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				// Mock threshold to 666 (2/3 of 1000)
-				vs.threshold = big.NewInt(666)
-
-				// Add votes with stake 100 each until we exceed threshold
-				// 7 votes * 100 = 700 > 666 threshold
-				for i := 0; i < 7; i++ {
-					vs.AddBlock(datagen.RandAddress(), true, big.NewInt(100))
+				for i := 0; i <= MaxBlockProposers*2/3; i++ {
+					vs.AddBlock(datagen.RandAddress(), true, nil)
 				}
 
 				st := vs.Summarize()
-				assert.Equal(t, uint32(1), st.Quality) // Quality increases by 1 when justified
+				assert.Equal(t, uint32(3), st.Quality)
 				assert.True(t, st.Justified)
 				assert.True(t, st.Committed)
 
-				// Add one more vote, quality should stay the same
-				vs.AddBlock(datagen.RandAddress(), true, big.NewInt(100))
+				// add vote after commits，commit/justify stays the same
+				vs.AddBlock(datagen.RandAddress(), true, nil)
 				st = vs.Summarize()
-				assert.Equal(t, uint32(1), st.Quality)
+				assert.Equal(t, uint32(3), st.Quality)
 				assert.True(t, st.Justified)
 				assert.True(t, st.Committed)
 			},
@@ -770,26 +753,14 @@ func TestJustifier(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				// Mock threshold to 666 (2/3 of 1000)
-				vs.threshold = big.NewInt(666)
-
-				// Add votes with stake 100 each until we reach threshold but not exceed it
-				// 6 votes * 100 = 600 < 666 threshold
-				for i := 0; i < 6; i++ {
-					vs.AddBlock(datagen.RandAddress(), true, big.NewInt(100))
+				for i := 0; i <= MaxBlockProposers*2/3; i++ {
+					vs.AddBlock(datagen.RandAddress(), false, nil)
 				}
 
 				st := vs.Summarize()
-				assert.Equal(t, uint32(0), st.Quality) // Not enough stake to justify
-				assert.False(t, st.Justified)
-				assert.False(t, st.Committed)
-
-				// Add one more vote to reach threshold
-				vs.AddBlock(datagen.RandAddress(), true, big.NewInt(100))
-				st = vs.Summarize()
-				assert.Equal(t, uint32(1), st.Quality) // Quality increases by 1 when justified
+				assert.Equal(t, uint32(3), st.Quality)
 				assert.True(t, st.Justified)
-				assert.True(t, st.Committed)
+				assert.False(t, st.Committed)
 			},
 		}, {
 			"add votes: one votes WIT then changes to COM", func(t *testing.T) {
@@ -808,12 +779,12 @@ func TestJustifier(t *testing.T) {
 
 				// vote <threshold> times COM
 				for range MaxBlockProposers * 2 / 3 {
-					vs.AddBlock(datagen.RandAddress(), true, big.NewInt(100))
+					vs.AddBlock(datagen.RandAddress(), true, nil)
 				}
 
 				master := datagen.RandAddress()
 				// master votes WIT
-				vs.AddBlock(master, false, big.NewInt(100))
+				vs.AddBlock(master, false, nil)
 
 				// justifies but not committed
 				st := vs.Summarize()
@@ -821,14 +792,14 @@ func TestJustifier(t *testing.T) {
 				assert.False(t, st.Committed)
 
 				// master votes COM
-				vs.AddBlock(master, true, big.NewInt(100))
+				vs.AddBlock(master, true, nil)
 
 				// should not be committed
 				st = vs.Summarize()
 				assert.False(t, st.Committed)
 
 				// another master votes WIT
-				vs.AddBlock(datagen.RandAddress(), true, big.NewInt(100))
+				vs.AddBlock(datagen.RandAddress(), true, nil)
 				st = vs.Summarize()
 				assert.True(t, st.Committed)
 			},
@@ -845,19 +816,19 @@ func TestJustifier(t *testing.T) {
 				}
 
 				master := datagen.RandAddress()
-				vs.AddBlock(master, true, big.NewInt(100))
+				vs.AddBlock(master, true, nil)
 				assert.Equal(t, true, vs.votes[master])
 				assert.Equal(t, uint64(1), vs.comVotes)
 
-				vs.AddBlock(master, false, big.NewInt(100))
+				vs.AddBlock(master, false, nil)
 				assert.Equal(t, false, vs.votes[master])
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(master, true, big.NewInt(100))
+				vs.AddBlock(master, true, nil)
 				assert.Equal(t, false, vs.votes[master])
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(master, false, big.NewInt(100))
+				vs.AddBlock(master, false, nil)
 				assert.Equal(t, false, vs.votes[master])
 				assert.Equal(t, uint64(0), vs.comVotes)
 
@@ -865,19 +836,19 @@ func TestJustifier(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				vs.AddBlock(master, false, big.NewInt(100))
+				vs.AddBlock(master, false, nil)
 				assert.Equal(t, false, vs.votes[master])
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(master, true, big.NewInt(100))
+				vs.AddBlock(master, true, nil)
 				assert.Equal(t, false, vs.votes[master])
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(master, true, big.NewInt(100))
+				vs.AddBlock(master, true, nil)
 				assert.Equal(t, false, vs.votes[master])
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(master, false, big.NewInt(100))
+				vs.AddBlock(master, false, nil)
 				assert.Equal(t, false, vs.votes[master])
 				assert.Equal(t, uint64(0), vs.comVotes)
 			},
@@ -1059,54 +1030,4 @@ func TestJustified(t *testing.T) {
 			tt.testFunc(t)
 		})
 	}
-}
-
-func TestJustifiedStakes(t *testing.T) {
-	testBFT, err := newTestBft(defaultFC)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Simulate 10 validators with stake 100 each
-	stakes := []int64{100, 100, 100, 100, 100, 100, 100, 100, 100, 100}
-	addrs := make([]thor.Address, len(stakes))
-	for i := range stakes {
-		addrs[i] = datagen.RandAddress()
-	}
-	stakeTotal := int64(0)
-	for _, s := range stakes {
-		stakeTotal += s
-	}
-	threshold := (stakeTotal * 2) / 3
-
-	vs, err := testBFT.engine.newJustifier(testBFT.repo.BestBlockSummary().Header.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	vs.threshold = big.NewInt(threshold)
-
-	// Sum stakes until reaching exactly the threshold
-	stakeVoted := int64(0)
-	idx := 0
-	for idx < len(stakes) && stakeVoted+stakes[idx] <= threshold {
-		vs.AddBlock(addrs[idx], true, big.NewInt(stakes[idx]))
-		stakeVoted += stakes[idx]
-		idx++
-	}
-	st := vs.Summarize()
-	assert.False(t, st.Justified)
-	assert.False(t, st.Committed)
-	assert.Equal(t, stakeVoted, threshold)
-
-	// Add one more vote to exceed the threshold
-	vs.AddBlock(addrs[idx], true, big.NewInt(stakes[idx]))
-	stakeVoted += stakes[idx]
-	st = vs.Summarize()
-	assert.True(t, st.Justified)
-	assert.True(t, st.Committed)
-	assert.True(t, stakeVoted > threshold)
-
-	// The calculated threshold must be correct
-	expectedThreshold := big.NewInt(threshold)
-	assert.Equal(t, 0, vs.threshold.Cmp(expectedThreshold))
 }
