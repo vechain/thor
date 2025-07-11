@@ -53,6 +53,11 @@ func TestBuilder_Build(t *testing.T) {
 	baseFee := big.NewInt(1000)
 	builder.BaseFee(baseFee)
 
+	evidence := make([]Header, 1)
+	//id1 := thor.BytesToBytes32([]byte("testId1"))
+	evidence[0] = Header{}
+	builder.Evidence(&evidence)
+
 	b := builder.Build()
 
 	assert.Equal(t, id, b.header.ParentID())
@@ -68,4 +73,5 @@ func TestBuilder_Build(t *testing.T) {
 	assert.Equal(t, alpha, b.header.Alpha())
 	assert.True(t, b.header.COM())
 	assert.Equal(t, baseFee, b.header.BaseFee())
+	assert.Equal(t, evidence, *b.header.Evidence())
 }

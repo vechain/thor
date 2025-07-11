@@ -31,7 +31,7 @@ type Flow struct {
 	txs          tx.Transactions
 	receipts     tx.Receipts
 	features     tx.Features
-	posActive    bool
+	PosActive    bool
 }
 
 func newFlow(
@@ -47,7 +47,7 @@ func newFlow(
 		runtime:      runtime,
 		processedTxs: make(map[thor.Bytes32]bool),
 		features:     features,
-		posActive:    posActive,
+		PosActive:    posActive,
 	}
 }
 
@@ -207,18 +207,22 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 }
 
 // Pack build and sign the new block.
-func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shouldVote bool) (*block.Block, *state.Stage, tx.Receipts, error) {
+func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shouldVote bool, evidence *[]block.Header) (*block.Block, *state.Stage, tx.Receipts, error) {
 	if f.packer.nodeMaster != thor.Address(crypto.PubkeyToAddress(privateKey.PublicKey)) {
 		return nil, nil, nil, errors.New("private key mismatch")
 	}
 
-	if f.posActive {
+	builder := new(block.Builder)
+	if f.PosActive {
 		// TODO: We can reward priority fees here too
 		signer := crypto.PubkeyToAddress(privateKey.PublicKey)
 		staker := builtin.Staker.Native(f.runtime.State())
 		energy := builtin.Energy.Native(f.runtime.State(), f.runtime.Context().Time)
 		if err := energy.DistributeRewards(f.runtime.Context().Beneficiary, thor.Address(signer), staker); err != nil {
 			return nil, nil, nil, err
+		}
+		if evidence != nil && len(*evidence) > 0 {
+			builder.Evidence(evidence)
 		}
 	}
 
@@ -228,7 +232,7 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 	}
 	stateRoot := stage.Hash()
 
-	builder := new(block.Builder).
+	builder.
 		Beneficiary(f.runtime.Context().Beneficiary).
 		GasLimit(f.runtime.Context().GasLimit).
 		ParentID(f.parentHeader.ID()).

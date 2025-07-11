@@ -18,9 +18,10 @@ import (
  * where the last element is not considered if it is its default null value.
  */
 type extension struct {
-	Alpha   []byte
-	COM     bool
-	BaseFee *big.Int
+	Alpha    []byte
+	COM      bool
+	BaseFee  *big.Int
+	Evidence *[]Header
 }
 
 type _extension extension
@@ -58,12 +59,13 @@ func (ex *extension) DecodeRLP(s *rlp.Stream) error {
 				nil,
 				false,
 				nil,
+				nil,
 			}
 			return nil
 		}
 	}
 
-	if len(raws) == 0 || len(raws) > 3 {
+	if len(raws) == 0 || len(raws) > 4 {
 		return errors.New("rlp: unexpected extension")
 	}
 
@@ -112,10 +114,16 @@ func (ex *extension) DecodeRLP(s *rlp.Stream) error {
 		return err
 	}
 
+	var evidence []Header
+	if err := rlp.DecodeBytes(raws[3], &evidence); err != nil {
+		return err
+	}
+
 	*ex = extension{
-		Alpha:   alpha,
-		COM:     com,
-		BaseFee: &baseFee,
+		Alpha:    alpha,
+		COM:      com,
+		BaseFee:  &baseFee,
+		Evidence: &evidence,
 	}
 
 	return nil

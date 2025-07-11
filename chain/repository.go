@@ -59,6 +59,7 @@ type Repository struct {
 		summaries *cache
 		txs       *cache
 		receipts  *cache
+		doubleSig *cache
 
 		stats struct {
 			summaries cache2.Stats
@@ -92,6 +93,7 @@ func NewRepository(db *muxdb.MuxDB, genesis *block.Block) (*Repository, error) {
 	repo.caches.summaries = newCache(512)
 	repo.caches.txs = newCache(2048)
 	repo.caches.receipts = newCache(2048)
+	repo.caches.doubleSig = newCache(512)
 
 	if val, err := repo.propStore.Get(bestBlockIDKey); err != nil {
 		if !repo.propStore.IsNotFound(err) {
@@ -446,4 +448,27 @@ func (r *Repository) IsNotFound(err error) bool {
 // NewTicker create a signal Waiter to receive event that the best block changed.
 func (r *Repository) NewTicker() co.Waiter {
 	return r.tick.NewWaiter()
+}
+
+// RecordDoubleSig stores evidence for block number in cache.
+func (r *Repository) RecordDoubleSig(blockNum uint32, evidence []block.Header) {
+	r.caches.doubleSig.Add(blockNum, evidence)
+}
+
+// RecordDoubleSigProcessed marks double sig as processed and removes block num from cache.
+func (r *Repository) RecordDoubleSigProcessed(blockNum uint32) {
+	r.caches.doubleSig.Remove(blockNum)
+}
+
+// GetDoubleSigEvidence retrieves double sig evidence from cache.
+func (r *Repository) GetDoubleSigEvidence() *[]block.Header {
+	if r.caches.doubleSig.Len() == 0 {
+		return nil
+	}
+	result, found := r.caches.doubleSig.Get(r.caches.doubleSig.Keys()[0])
+	if !found {
+		return nil
+	}
+	evidence := result.([]block.Header)
+	return &evidence
 }

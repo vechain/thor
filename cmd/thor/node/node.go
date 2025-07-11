@@ -316,6 +316,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 	var isTrunk *bool
 
 	if err := n.guardBlockProcessing(newBlock.Header().Number(), func(conflicts [][]byte) error {
+		var conflictingBlocks []block.Header
 		// Check whether the block was already there.
 		// It can be skipped if no conflicts.
 		if len(conflicts) > 0 {
@@ -331,6 +332,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 				if signer == newSigner &&
 					conflictBlock.Header().ID() != newBlock.Header().ID() &&
 					conflictBlock.Header().StateRoot() != newBlock.Header().StateRoot() {
+					conflictingBlocks = append(conflictingBlocks, *conflictBlock.Header())
 					log.Warn("Double signing", "block", shortID(newBlock.Header().ID()), "previous", shortID(thor.BytesToBytes32(conflict)))
 				}
 			}
@@ -352,6 +354,15 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 			return errParentMissing
 		}
 
+		isPos, err := n.cons.IsPosBlock(parentSummary, *newBlock.Header())
+		if err != nil {
+			return err
+		}
+		if len(conflictingBlocks) > 0 && isPos {
+			conflictingBlocks = append(conflictingBlocks, *newBlock.Header())
+			n.repo.RecordDoubleSig(newBlock.Header().Number(), conflictingBlocks)
+		}
+
 		var (
 			startTime = mclock.Now()
 			oldBest   = n.repo.BestBlockSummary()
@@ -361,6 +372,14 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 			return errors.Wrap(err, "bft accepts")
 		} else if !ok {
 			return errBFTRejected
+		}
+
+		evidence := newBlock.Header().Evidence()
+		if isPos {
+			err = n.validateEvidence(evidence)
+			if err != nil {
+				return err
+			}
 		}
 
 		// process the new block
@@ -429,6 +448,10 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		}
 		stats.UpdateProcessed(1, len(receipts), execElapsed, commitElapsed, realElapsed, newBlock.Header().GasUsed())
 
+		if isPos && evidence != nil && len(*evidence) > 1 {
+			n.repo.RecordDoubleSigProcessed((*evidence)[0].Number())
+		}
+
 		metricBlockProcessedTxs().SetWithLabel(int64(len(receipts)), map[string]string{"type": "received"})
 		metricBlockProcessedGas().SetWithLabel(int64(newBlock.Header().GasUsed()), map[string]string{"type": "received"})
 		metricBlockProcessedDuration().Observe(time.Duration(realElapsed).Milliseconds())
@@ -454,6 +477,35 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 	}
 	metricBlockProcessedCount().AddWithLabel(1, map[string]string{"type": "received", "success": "true"})
 	return *isTrunk, nil
+}
+
+func (n *Node) validateEvidence(evidence *[]block.Header) error {
+	var initialSum *block.Header
+	evidenceValidated := false
+	if evidence != nil && len(*evidence) > 1 {
+		for _, ev := range *evidence {
+			if initialSum == nil {
+				initialSum = &ev
+			} else if initialSum.Number() == ev.Number() && initialSum.StateRoot() != ev.StateRoot() {
+				initialSigner, err := initialSum.Signer()
+				if err != nil {
+					return err
+				}
+				currentSigner, err := ev.Signer()
+				if err != nil {
+					return err
+				}
+				if initialSigner == currentSigner {
+					evidenceValidated = true
+					break
+				}
+			}
+		}
+		if !evidenceValidated {
+			return fmt.Errorf("error while validating double signing evidence")
+		}
+	}
+	return nil
 }
 
 func (n *Node) writeLogs(newBlock *block.Block, newReceipts tx.Receipts, oldBestBlockID thor.Bytes32) (err error) {

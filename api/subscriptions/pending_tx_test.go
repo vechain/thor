@@ -132,7 +132,8 @@ func addNewBlock(repo *chain.Repository, stater *state.Stater, b0 *block.Block, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	blk, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, false)
+	var evidence *[]block.Header
+	blk, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, false, evidence)
 	if err != nil {
 		t.Fatal(err)
 	}

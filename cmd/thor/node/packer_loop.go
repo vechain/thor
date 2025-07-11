@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/thor"
@@ -79,6 +80,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 				if err := n.pack(flow); err != nil {
 					logger.Error("failed to pack block", "err", err)
 				}
+
 				break
 			}
 			select {
@@ -149,7 +151,11 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 		}
 
 		// pack the new block
-		newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey, uint32(len(conflicts)), shouldVote)
+		var evidence *[]block.Header
+		if flow.PosActive {
+			evidence = n.repo.GetDoubleSigEvidence()
+		}
+		newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey, uint32(len(conflicts)), shouldVote, evidence)
 		if err != nil {
 			return errors.Wrap(err, "failed to pack block")
 		}
@@ -202,6 +208,10 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 
 		if v, updated := n.bandwidth.Update(newBlock.Header(), time.Duration(realElapsed)); updated {
 			logger.Trace("bandwidth updated", "gps", v)
+		}
+
+		if evidence != nil && flow.PosActive {
+			n.repo.RecordDoubleSigProcessed((*evidence)[0].Number())
 		}
 
 		metricBlockProcessedTxs().SetWithLabel(int64(len(receipts)), map[string]string{"type": "proposed"})

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
@@ -64,7 +65,8 @@ func TestConsensus_POS_MissedSlots(t *testing.T) {
 	blkPacker := packer.New(setup.chain.Repo(), setup.chain.Stater(), signer.Address, &signer.Address, setup.config, 0)
 	flow, _, err := blkPacker.Mock(parent, parent.Header.Timestamp()+thor.BlockInterval*2, 10_000_000)
 	assert.NoError(t, err)
-	blk, stage, receipts, err := flow.Pack(signer.PrivateKey, 0, false)
+	var evidence *[]block.Header
+	blk, stage, receipts, err := flow.Pack(signer.PrivateKey, 0, false, evidence)
 	assert.NoError(t, err)
 	assert.NoError(t, setup.chain.AddBlock(blk, stage, receipts))
 
@@ -91,7 +93,8 @@ func TestConsensus_POS_Unscheduled(t *testing.T) {
 	blkPacker := packer.New(setup.chain.Repo(), setup.chain.Stater(), signer.Address, &signer.Address, setup.config, 0)
 	flow, _, err := blkPacker.Mock(parent, parent.Header.Timestamp()+1, 10_000_000)
 	assert.NoError(t, err)
-	blk, _, _, err := flow.Pack(signer.PrivateKey, 0, false)
+	var evidence *[]block.Header
+	blk, _, _, err := flow.Pack(signer.PrivateKey, 0, false, evidence)
 	assert.NoError(t, err)
 
 	leaders, err := builtin.Staker.Native(st).LeaderGroup()
