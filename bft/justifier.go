@@ -100,12 +100,8 @@ func (js *justifier) Summarize() *bftState {
 		totalVoterWeight.Add(totalVoterWeight, weight)
 	}
 
-	// Adjust threshold based on actual participating validators
-	// This ensures consistency between total weight calculation and vote processing
-	adjustedThreshold := js.adjustThresholdForParticipatingValidators()
-
-	justified := totalVoterWeight.Cmp(adjustedThreshold) > 0
-	committed := js.comWeight.Cmp(adjustedThreshold) > 0
+	justified := totalVoterWeight.Cmp(js.threshold) > 0
+	committed := js.comWeight.Cmp(js.threshold) > 0
 
 	var quality uint32
 	if justified {
@@ -119,26 +115,4 @@ func (js *justifier) Summarize() *bftState {
 		Justified: justified,
 		Committed: committed,
 	}
-}
-
-// adjustThresholdForParticipatingValidators adjusts the threshold based on
-// the proportion of validators that actually participated in voting
-func (js *justifier) adjustThresholdForParticipatingValidators() *big.Int {
-	// Calculate total weight of participating validators
-	totalParticipatingWeight := big.NewInt(0)
-	for _, weight := range js.voterWeights {
-		totalParticipatingWeight.Add(totalParticipatingWeight, weight)
-	}
-
-	// If we have participating validators with weight, adjust threshold proportionally
-	// This ensures that the threshold is based on the actual weight that can vote
-	if totalParticipatingWeight.Sign() > 0 {
-		// Calculate 2/3 of the participating weight
-		adjustedThreshold := new(big.Int).Mul(totalParticipatingWeight, big.NewInt(2))
-		adjustedThreshold.Div(adjustedThreshold, big.NewInt(3))
-		return adjustedThreshold
-	}
-
-	// Fallback to original threshold if no participating weight
-	return js.threshold
 }

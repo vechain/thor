@@ -15,15 +15,12 @@ import (
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/kv"
-	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 
 	lru "github.com/hashicorp/golang-lru"
 )
-
-var logger = log.WithContext("pkg", "bft")
 
 const dataStoreName = "bft.engine"
 
@@ -329,27 +326,11 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 		}
 		state := engine.stater.NewState(sum.Root())
 		staker := builtin.Staker.Native(state)
-		validator, _, err := staker.LookupMaster(signer)
+		validator, _, err := staker.LookupNode(signer)
 		if err != nil {
-			// Error querying validator data - exclude for security
-			logger.Warn("failed to lookup validator", "signer", signer, "error", err)
-			continue
+			return nil, err
 		}
 
-		if validator == nil {
-			// Validator doesn't exist - exclude from voting
-			logger.Warn("validator not found", "signer", signer)
-			continue
-		}
-
-		if validator.IsEmpty() {
-			// Validator exists but has no stake - exclude from voting
-			logger.Warn("validator has no stake", "signer", signer)
-			continue
-		}
-
-		// Validator exists and has stake - add to voting set
-		logger.Debug("adding validator to voting set", "signer", signer, "weight", validator.Weight)
 		js.AddBlock(signer, h.COM(), validator.Weight)
 
 		if h.Number() <= end {
