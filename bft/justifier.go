@@ -23,6 +23,7 @@ type justifier struct {
 	parentQuality uint32
 	checkpoint    uint32
 	threshold     *big.Int // we need to represent uint256
+	isPoS         bool     // true for PoS, false for PoA
 
 	votes        map[thor.Address]bool
 	voterWeights map[thor.Address]*big.Int
@@ -30,13 +31,14 @@ type justifier struct {
 	comWeight    *big.Int
 }
 
-func newJustifier(parentQuality, checkpoint uint32, threshold *big.Int) *justifier {
+func newJustifier(parentQuality, checkpoint uint32, threshold *big.Int, isPoS bool) *justifier {
 	return &justifier{
 		votes:         make(map[thor.Address]bool),
 		voterWeights:  make(map[thor.Address]*big.Int),
 		parentQuality: parentQuality,
 		checkpoint:    checkpoint,
 		threshold:     threshold,
+		isPoS:         isPoS,
 		comWeight:     big.NewInt(0),
 	}
 }
@@ -75,20 +77,20 @@ func (engine *Engine) newJustifier(parentID thor.Bytes32) (*justifier, error) {
 		}
 		threshold := new(big.Int).Mul(totalWeight, big.NewInt(2))
 		threshold.Div(threshold, big.NewInt(3))
-		return newJustifier(parentQuality, checkpoint, threshold), nil
+		return newJustifier(parentQuality, checkpoint, threshold, true), nil
 	} else {
 		mbp, err := engine.getMaxBlockProposers(sum)
 		if err != nil {
 			return nil, err
 		}
 		threshold := mbp * 2 / 3
-		return newJustifier(parentQuality, checkpoint, new(big.Int).SetUint64(threshold)), nil
+		return newJustifier(parentQuality, checkpoint, new(big.Int).SetUint64(threshold), false), nil
 	}
 }
 
 func (js *justifier) AddBlock(signer thor.Address, isCOM bool, weight *big.Int) {
-	// Pre-HAYABUSA
-	if weight == nil {
+	if !js.isPoS {
+		// Pre-HAYABUSA
 		if prev, ok := js.votes[signer]; !ok {
 			js.votes[signer] = isCOM
 			if isCOM {
@@ -100,34 +102,36 @@ func (js *justifier) AddBlock(signer thor.Address, isCOM bool, weight *big.Int) 
 				js.comVotes--
 			}
 		}
-		return
-	}
-	// HAYABUSA
-	if prev, ok := js.votes[signer]; !ok {
-		js.votes[signer] = isCOM
-		js.voterWeights[signer] = new(big.Int).Set(weight)
-		if isCOM {
-			js.comVotes++
-			js.comWeight.Add(js.comWeight, weight)
-		}
-	} else if prev != isCOM {
-		// if one votes both COM and non-COM in one round, count as non-COM
-		js.votes[signer] = false
-		if prev {
-			js.comVotes--
-			js.comWeight.Sub(js.comWeight, js.voterWeights[signer])
+	} else {
+		// HAYABUSA
+		if prev, ok := js.voterWeights[signer]; !ok {
+			js.voterWeights[signer] = new(big.Int).Set(weight)
+			if isCOM {
+				js.comWeight.Add(js.comWeight, weight)
+			}
+		} else if !isCOM {
+			// if one votes both COM and non-COM in one round, count as non-COM
+			js.comWeight.Sub(js.comWeight, prev)
 		}
 	}
 }
 
 func (js *justifier) Summarize() *bftState {
-	totalVoterWeight := big.NewInt(0)
-	for _, weight := range js.voterWeights {
-		totalVoterWeight.Add(totalVoterWeight, weight)
-	}
+	var justified, committed bool
 
-	justified := totalVoterWeight.Cmp(js.threshold) > 0
-	committed := js.comWeight.Cmp(js.threshold) > 0
+	// Pre-HAYABUSA
+	if !js.isPoS {
+		justified = uint64(len(js.votes)) > js.threshold.Uint64()
+		committed = js.comVotes > js.threshold.Uint64()
+	} else {
+		// HAYABUSA
+		totalVoterWeight := big.NewInt(0)
+		for _, weight := range js.voterWeights {
+			totalVoterWeight.Add(totalVoterWeight, weight)
+		}
+		justified = totalVoterWeight.Cmp(js.threshold) > 0
+		committed = js.comWeight.Cmp(js.threshold) > 0
+	}
 
 	var quality uint32
 	if justified {
