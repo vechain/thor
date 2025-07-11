@@ -127,7 +127,7 @@ func TestScheduler_Distribution(t *testing.T) {
 		},
 		{
 			name:      "some whales",
-			tolerance: 0.07,
+			tolerance: 0.07, // less than 0.01 with 10m iterations
 			stakes: func(index int, acc thor.Address) *big.Int {
 				if index < 3 {
 					return big.NewInt(1200)
