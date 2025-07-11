@@ -39,10 +39,11 @@ type onlineProposer struct {
 // If `addr` is not listed in `proposers` or not active, an error returned.
 func NewScheduler(
 	addr thor.Address,
+	previous thor.Address,
 	proposers map[thor.Bytes32]*staker.Validation,
 	parentBlockNumber uint32,
 	parentBlockTime uint64,
-	seed []byte) (*Scheduler, error) {
+	seed []byte, ) (*Scheduler, error) {
 	var (
 		proposer   *staker.Validation
 		proposerID thor.Bytes32
@@ -52,6 +53,10 @@ func NewScheduler(
 
 	online := make([]*onlineProposer, 0)
 	for id, p := range proposers {
+		if p.Node == previous {
+			// skip the previous proposer
+			continue
+		}
 		if p.Node == addr {
 			proposer = p
 			proposerID = id
