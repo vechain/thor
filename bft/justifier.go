@@ -30,6 +30,17 @@ type justifier struct {
 	comWeight    *big.Int
 }
 
+func newJustifier(parentQuality, checkpoint uint32, threshold *big.Int) *justifier {
+	return &justifier{
+		votes:         make(map[thor.Address]bool),
+		voterWeights:  make(map[thor.Address]*big.Int),
+		parentQuality: parentQuality,
+		checkpoint:    checkpoint,
+		threshold:     threshold,
+		comWeight:     big.NewInt(0),
+	}
+}
+
 func (engine *Engine) newJustifier(parentID thor.Bytes32) (*justifier, error) {
 	blockNum := block.Number(parentID) + 1
 
@@ -45,15 +56,8 @@ func (engine *Engine) newJustifier(parentID thor.Bytes32) (*justifier, error) {
 	if err != nil {
 		return nil, err
 	}
-	totalWeight, err := engine.getTotalWeight(sum)
-	if err != nil {
-		return nil, err
-	}
 
-	threshold := new(big.Int).Mul(totalWeight, big.NewInt(2))
-	threshold.Div(threshold, big.NewInt(3))
-
-	var parentQuality uint32 // quality of last round
+	var parentQuality uint32
 	if absRound := blockNum/thor.CheckpointInterval - engine.forkConfig.FINALITY/thor.CheckpointInterval; absRound == 0 {
 		parentQuality = 0
 	} else {
@@ -64,18 +68,41 @@ func (engine *Engine) newJustifier(parentID thor.Bytes32) (*justifier, error) {
 		}
 	}
 
-	return &justifier{
-		votes:         make(map[thor.Address]bool),
-		voterWeights:  make(map[thor.Address]*big.Int),
-		parentQuality: parentQuality,
-		checkpoint:    checkpoint,
-		threshold:     threshold,
-		comWeight:     big.NewInt(0),
-	}, nil
+	if blockNum >= engine.forkConfig.HAYABUSA {
+		totalWeight, err := engine.getTotalWeight(sum)
+		if err != nil {
+			return nil, err
+		}
+		threshold := new(big.Int).Mul(totalWeight, big.NewInt(2))
+		threshold.Div(threshold, big.NewInt(3))
+		return newJustifier(parentQuality, checkpoint, threshold), nil
+	} else {
+		mbp, err := engine.getMaxBlockProposers(sum)
+		if err != nil {
+			return nil, err
+		}
+		threshold := mbp * 2 / 3
+		return newJustifier(parentQuality, checkpoint, new(big.Int).SetUint64(threshold)), nil
+	}
 }
 
-// AddBlock adds a new block to the set.
 func (js *justifier) AddBlock(signer thor.Address, isCOM bool, weight *big.Int) {
+	// Pre-HAYABUSA
+	if weight == nil {
+		if prev, ok := js.votes[signer]; !ok {
+			js.votes[signer] = isCOM
+			if isCOM {
+				js.comVotes++
+			}
+		} else if prev != isCOM {
+			js.votes[signer] = false
+			if prev {
+				js.comVotes--
+			}
+		}
+		return
+	}
+	// HAYABUSA
 	if prev, ok := js.votes[signer]; !ok {
 		js.votes[signer] = isCOM
 		js.voterWeights[signer] = new(big.Int).Set(weight)
@@ -93,7 +120,6 @@ func (js *justifier) AddBlock(signer thor.Address, isCOM bool, weight *big.Int) 
 	}
 }
 
-// Summarize summarizes the state of vote set.
 func (js *justifier) Summarize() *bftState {
 	totalVoterWeight := big.NewInt(0)
 	for _, weight := range js.voterWeights {

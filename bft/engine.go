@@ -324,23 +324,23 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 		if err != nil {
 			return nil, err
 		}
-		state := engine.stater.NewState(sum.Root())
-		staker := builtin.Staker.Native(state)
-		validator, _, err := staker.LookupNode(signer)
-		if err != nil {
-			return nil, err
-		}
 
-		js.AddBlock(signer, h.COM(), validator.Weight)
+		if h.Number() >= engine.forkConfig.HAYABUSA {
+			state := engine.stater.NewState(sum.Root())
+			staker := builtin.Staker.Native(state)
+			validator, _, err := staker.LookupNode(signer)
+			if err != nil {
+				return nil, err
+			}
+			js.AddBlock(signer, h.COM(), validator.Weight)
+		} else {
+			js.AddBlock(signer, h.COM(), nil)
+		}
 
 		if h.Number() <= end {
 			break
 		}
-
-		sum, err = engine.repo.GetBlockSummary(h.ParentID())
-		if err != nil {
-			return nil, err
-		}
+		
 		h = sum.Header
 	}
 
@@ -417,6 +417,19 @@ func (engine *Engine) getTotalWeight(sum *chain.BlockSummary) (*big.Int, error) 
 	}
 
 	return totalWeight, nil
+}
+
+func (engine *Engine) getMaxBlockProposers(sum *chain.BlockSummary) (uint64, error) {
+	state := engine.stater.NewState(sum.Root())
+	params, err := builtin.Params.Native(state).Get(thor.KeyMaxBlockProposers)
+	if err != nil {
+		return 0, err
+	}
+	mbp := params.Uint64()
+	if mbp == 0 || mbp > thor.InitialMaxBlockProposers {
+		mbp = thor.InitialMaxBlockProposers
+	}
+	return mbp, nil
 }
 
 func (engine *Engine) getQuality(id thor.Bytes32) (quality uint32, err error) {
