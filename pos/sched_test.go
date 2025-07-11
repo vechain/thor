@@ -143,17 +143,17 @@ func TestScheduler_Distribution(t *testing.T) {
 
 			distribution := make(map[thor.Bytes32]int)
 
-			for i := uint64(1); i <= uint64(iterations); i++ {
-				parent := i * thor.BlockInterval
-				next := parent + thor.BlockInterval
-				seed := big.NewInt(int64(i)).Bytes()
+			for parent := uint64(1); parent <= uint64(iterations); parent++ {
+				parentTime := parent * thor.BlockInterval
+				nextTime := parentTime + thor.BlockInterval
+				seed := big.NewInt(int64(parent)).Bytes()
 
-				sched, err := NewScheduler(prev, master, validators, 1, parent, seed[:])
+				sched, err := NewScheduler(prev, master, validators, uint32(parent), parentTime, seed[:])
 				assert.NoError(t, err)
 
 				for _, acc := range genesis.DevAccounts() {
 					id := thor.BytesToBytes32(acc.Address.Bytes())
-					if sched.IsScheduled(next, id) {
+					if sched.IsScheduled(nextTime, id) {
 						prev = acc.Address
 						distribution[id]++
 					}
