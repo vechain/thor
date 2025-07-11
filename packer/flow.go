@@ -222,6 +222,7 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 			return nil, nil, nil, err
 		}
 		if evidences != nil && len(*evidences) > 0 {
+			println("double sig, proceed to slashing", len(*evidences))
 			err := f.runtime.HandleSlashing(evidences)
 			if err != nil {
 				return nil, nil, nil, err

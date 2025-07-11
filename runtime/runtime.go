@@ -548,10 +548,12 @@ func (rt *Runtime) HandleSlashing(evidences *[][]block.Header) error {
 
 	for _, ev := range *evidences {
 		if len(ev) > 0 {
+			println("slashing", len(ev))
 			err := rt.validateEvidence(&ev)
 			if err != nil {
 				return nil
 			}
+			println("evidence validated", len(ev))
 			stakerBalance, err := rt.State().GetBalance(builtin.Staker.Address)
 			if err != nil {
 				return err
@@ -571,6 +573,7 @@ func (rt *Runtime) HandleSlashing(evidences *[][]block.Header) error {
 			}
 			amountToSlash := big.NewInt(0).Mul(validation.LockedVET, big.NewInt(thor.DoubleSigningSlashPercentage))
 			amountToSlash = big.NewInt(0).Div(amountToSlash, big.NewInt(100))
+			println("states set", len(ev))
 
 			if err := rt.State().SetBalance(thor.Address{}, big.NewInt(0).Add(burnBalance, amountToSlash)); err != nil {
 				return err
@@ -578,6 +581,7 @@ func (rt *Runtime) HandleSlashing(evidences *[][]block.Header) error {
 			if err := rt.State().SetBalance(builtin.Staker.Address, big.NewInt(0).Sub(stakerBalance, amountToSlash)); err != nil {
 				return err
 			}
+			println("slashing in validator", len(ev))
 			staker.SlashValidator(validationID, amountToSlash)
 		}
 	}
