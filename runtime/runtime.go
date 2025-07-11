@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/abi"
+	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/log"
@@ -540,4 +541,85 @@ func (rt *Runtime) PrepareTransaction(trx *tx.Transaction) (*TransactionExecutor
 			return receipt, nil
 		},
 	}, nil
+}
+
+func (rt *Runtime) HandleSlashing(evidences *[][]block.Header) error {
+	staker := builtin.Staker.Native(rt.State())
+
+	for _, ev := range *evidences {
+		if len(ev) > 0 {
+			err := rt.validateEvidence(&ev)
+			if err != nil {
+				return nil
+			}
+			stakerBalance, err := rt.State().GetBalance(builtin.Staker.Address)
+			if err != nil {
+				return err
+			}
+			burnBalance, err := rt.State().GetBalance(thor.Address{})
+			if err != nil {
+				return err
+			}
+
+			signer, err := ev[0].Signer()
+			if err != nil {
+				return err
+			}
+			validation, validationID, err := staker.LookupNode(signer)
+			if err != nil {
+				return err
+			}
+			amountToSlash := big.NewInt(0).Mul(validation.LockedVET, big.NewInt(thor.DoubleSigningSlashPercentage))
+			amountToSlash = big.NewInt(0).Div(amountToSlash, big.NewInt(100))
+
+			if err := rt.State().SetBalance(thor.Address{}, big.NewInt(0).Add(burnBalance, amountToSlash)); err != nil {
+				return err
+			}
+			if err := rt.State().SetBalance(builtin.Staker.Address, big.NewInt(0).Sub(stakerBalance, amountToSlash)); err != nil {
+				return err
+			}
+			staker.SlashValidator(validationID, amountToSlash)
+		}
+	}
+	return nil
+}
+
+func (rt *Runtime) validateEvidence(evidences *[]block.Header) error {
+	evidenceValidated := false
+	if evidences != nil && len(*evidences) > 1 {
+		var initialSum *block.Header
+		for _, header := range *evidences {
+			if initialSum == nil {
+				initialSum = &header
+			} else if initialSum.Number() == header.Number() && initialSum.StateRoot() != header.StateRoot() {
+				initialSigner, err := initialSum.Signer()
+				if err != nil {
+					return err
+				}
+				currentSigner, err := header.Signer()
+				if err != nil {
+					return err
+				}
+				hasSum, err := rt.chain.HasBlock(initialSum.ID())
+				if err != nil {
+					return err
+				}
+				hasHeader, err := rt.chain.HasBlock(header.ID())
+				if err != nil {
+					return err
+				}
+				if !hasSum || !hasHeader {
+					return fmt.Errorf("invalid evidence provided for double slashing")
+				}
+				if initialSigner == currentSigner {
+					evidenceValidated = true
+					break
+				}
+			}
+		}
+		if !evidenceValidated {
+			return fmt.Errorf("error while validating double signing evidence")
+		}
+	}
+	return nil
 }

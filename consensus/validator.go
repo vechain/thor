@@ -308,6 +308,13 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 		if err := energy.DistributeRewards(blk.Header().Beneficiary(), signer, staker); err != nil {
 			return nil, nil, err
 		}
+		evidences := blk.Header().Evidence()
+		if evidences != nil && len(*evidences) > 0 {
+			err := rt.HandleSlashing(evidences)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
 	}
 
 	stage, err := state.Stage(trie.Version{Major: header.Number(), Minor: blockConflicts})
