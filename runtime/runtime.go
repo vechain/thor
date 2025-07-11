@@ -550,6 +550,7 @@ func (rt *Runtime) HandleSlashing(evidences *[][]block.Header) error {
 		if len(ev) > 0 {
 			println("slashing", len(ev))
 			err := rt.validateEvidence(&ev)
+			println("evidence validated ")
 			if err != nil {
 				return nil
 			}
@@ -618,6 +619,7 @@ func (rt *Runtime) validateEvidence(evidences *[]block.Header) error {
 				}
 				if initialSigner == currentSigner {
 					evidenceValidated = true
+					println("evidence is validated evi")
 					break
 				}
 			}
