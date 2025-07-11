@@ -70,20 +70,22 @@ func TestScheduler_IsScheduled(t *testing.T) {
 }
 
 func TestScheduler_Distribution(t *testing.T) {
+	// Reduce tolerance my increasing iterations to achieve a higher level of accuracy
+	// e.g., 1 million usually gets all tolerances down to about 2% (i.e., 0.02)
 	iterations := 100_000
-	tolerance := 0.04 // 4% tolerance, reduce by increasing iterations, 2% works for 1million
-
 	type stakeFunc func(index int, acc thor.Address) *big.Int
 
 	//  pseudo-random number generator
 	randReader := mathrand.New(mathrand.NewSource(412342)) //nolint:gosec
 
 	var testCases = []struct {
-		name   string
-		stakes stakeFunc
+		name      string
+		stakes    stakeFunc
+		tolerance float64
 	}{
 		{
-			name: "some_big_some_small",
+			name:      "some_big_some_small",
+			tolerance: 0.03,
 			stakes: func(index int, acc thor.Address) *big.Int {
 				if index%2 == 0 {
 					return big.NewInt(2000)
@@ -92,13 +94,15 @@ func TestScheduler_Distribution(t *testing.T) {
 			},
 		},
 		{
-			name: "all_same",
+			name:      "all_same",
+			tolerance: 0.03,
 			stakes: func(index int, acc thor.Address) *big.Int {
 				return big.NewInt(1000)
 			},
 		},
 		{
-			name: "pseudo_random_weight",
+			name:      "pseudo_random_weight",
+			tolerance: 0.04,
 			stakes: func(index int, acc thor.Address) *big.Int {
 				eth := big.NewInt(1)
 				millionEth := new(big.Int).Mul(big.NewInt(1e6), eth)
@@ -115,9 +119,20 @@ func TestScheduler_Distribution(t *testing.T) {
 			},
 		},
 		{
-			name: "increasing",
+			name:      "increasing",
+			tolerance: 0.02,
 			stakes: func(index int, acc thor.Address) *big.Int {
 				return new(big.Int).SetInt64((int64(index) + 1) * 1000)
+			},
+		},
+		{
+			name:      "some whales",
+			tolerance: 0.07, // less than 0.01 with 10m iterations
+			stakes: func(index int, acc thor.Address) *big.Int {
+				if index < 3 {
+					return big.NewInt(1200)
+				}
+				return big.NewInt(50)
 			},
 		},
 	}
@@ -163,7 +178,7 @@ func TestScheduler_Distribution(t *testing.T) {
 				expectedCountFloat := new(big.Float).Mul(weight, big.NewFloat(float64(iterations)))
 				expectedCount, _ := expectedCountFloat.Int64()
 
-				diff := float64(expectedCount) * tolerance
+				diff := float64(expectedCount) * tc.tolerance
 				diffPercent := (float64(expectedCount) - float64(count)) / float64(expectedCount)
 				addr := thor.BytesToAddress(id[:])
 

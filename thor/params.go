@@ -64,8 +64,6 @@ var (
 	InitialProposerEndorsement = new(big.Int).Mul(big.NewInt(1e18), big.NewInt(25000000))
 	InitialStargateAddress     = common.Address{}.Big()
 
-	HayabusaEnergyGrowthStopTime = BytesToBytes32([]byte("hayabusa-energy-growth-stop-time"))
-
 	EnergyGrowthRate = big.NewInt(5000000000) // WEI THOR per token(VET) per second. about 0.000432 THOR per token per day.
 
 	ScalingFactor         = big.NewInt(64)      // scaling factor for rewards curve
