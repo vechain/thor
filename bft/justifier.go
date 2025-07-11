@@ -97,6 +97,7 @@ func (js *justifier) AddBlock(signer thor.Address, isCOM bool, weight *big.Int) 
 				js.comVotes++
 			}
 		} else if prev != isCOM {
+			// if one votes both COM and non-COM in one round, count as non-COM
 			js.votes[signer] = false
 			if prev {
 				js.comVotes--
@@ -110,7 +111,6 @@ func (js *justifier) AddBlock(signer thor.Address, isCOM bool, weight *big.Int) 
 				js.comWeight.Add(js.comWeight, weight)
 			}
 		} else if !isCOM {
-			// if one votes both COM and non-COM in one round, count as non-COM
 			js.comWeight.Sub(js.comWeight, prev)
 		}
 	}
