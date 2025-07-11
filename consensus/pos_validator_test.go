@@ -65,7 +65,7 @@ func TestConsensus_POS_MissedSlots(t *testing.T) {
 	blkPacker := packer.New(setup.chain.Repo(), setup.chain.Stater(), signer.Address, &signer.Address, setup.config, 0)
 	flow, _, err := blkPacker.Mock(parent, parent.Header.Timestamp()+thor.BlockInterval*2, 10_000_000)
 	assert.NoError(t, err)
-	var evidence *[]block.Header
+	var evidence *[][]block.Header
 	blk, stage, receipts, err := flow.Pack(signer.PrivateKey, 0, false, evidence)
 	assert.NoError(t, err)
 	assert.NoError(t, setup.chain.AddBlock(blk, stage, receipts))
@@ -93,7 +93,7 @@ func TestConsensus_POS_Unscheduled(t *testing.T) {
 	blkPacker := packer.New(setup.chain.Repo(), setup.chain.Stater(), signer.Address, &signer.Address, setup.config, 0)
 	flow, _, err := blkPacker.Mock(parent, parent.Header.Timestamp()+1, 10_000_000)
 	assert.NoError(t, err)
-	var evidence *[]block.Header
+	var evidence *[][]block.Header
 	blk, _, _, err := flow.Pack(signer.PrivateKey, 0, false, evidence)
 	assert.NoError(t, err)
 

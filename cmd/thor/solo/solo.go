@@ -160,8 +160,8 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 		}
 	}
 
-	evidence := s.repo.GetDoubleSigEvidence()
-	b, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, false, evidence)
+	evidences := s.repo.GetDoubleSigEvidence(thor.EvidenceMaxCount)
+	b, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, false, evidences)
 	if err != nil {
 		return errors.WithMessage(err, "pack")
 	}
@@ -207,8 +207,10 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 		"id", fmt.Sprintf("[#%v…%x]", block.Number(blockID), blockID[28:]),
 	)
 
-	if evidence != nil {
-		s.repo.RecordDoubleSigProcessed((*evidence)[0].Number())
+	if evidences != nil && flow.PosActive {
+		for _, headers := range *evidences {
+			s.repo.RecordDoubleSigProcessed(headers[0].Number())
+		}
 	}
 	logger.Debug(b.String())
 

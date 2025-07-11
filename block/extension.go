@@ -21,7 +21,7 @@ type extension struct {
 	Alpha    []byte
 	COM      bool
 	BaseFee  *big.Int
-	Evidence *[]Header
+	Evidence *[][]Header
 }
 
 type _extension extension
@@ -114,8 +114,8 @@ func (ex *extension) DecodeRLP(s *rlp.Stream) error {
 		return err
 	}
 
-	var evidence []Header
-	if err := rlp.DecodeBytes(raws[3], &evidence); err != nil {
+	var evidences [][]Header
+	if err := rlp.DecodeBytes(raws[3], &evidences); err != nil {
 		return err
 	}
 
@@ -123,7 +123,7 @@ func (ex *extension) DecodeRLP(s *rlp.Stream) error {
 		Alpha:    alpha,
 		COM:      com,
 		BaseFee:  &baseFee,
-		Evidence: &evidence,
+		Evidence: &evidences,
 	}
 
 	return nil

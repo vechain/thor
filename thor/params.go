@@ -48,6 +48,8 @@ const (
 	GasTargetPercentage      = 75                 // percentage of the block gas limit to determine the gas target
 	InitialBaseFee           = 10_000_000_000_000 // 10^13 wei, 0.00001 VTHO
 	BaseFeeChangeDenominator = 8                  // determines the percentage change in the base fee per block based on network utilization
+
+	EvidenceMaxCount = 16 // maximum number of evidence records which can be stored in block header
 )
 
 // Keys of governance params.
@@ -63,8 +65,6 @@ var (
 	InitialBaseGasPrice        = big.NewInt(1e15)
 	InitialProposerEndorsement = new(big.Int).Mul(big.NewInt(1e18), big.NewInt(25000000))
 	InitialStargateAddress     = common.Address{}.Big()
-
-	HayabusaEnergyGrowthStopTime = BytesToBytes32([]byte("hayabusa-energy-growth-stop-time"))
 
 	EnergyGrowthRate = big.NewInt(5000000000) // WEI THOR per token(VET) per second. about 0.000432 THOR per token per day.
 

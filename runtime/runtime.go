@@ -182,11 +182,11 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 			}
 			// touch energy balance when token balance changed
 			// SHOULD be performed before transfer
-			senderEnergy, err := rt.state.GetEnergy(thor.Address(sender), rt.ctx.Time)
+			senderEnergy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(sender))
 			if err != nil {
 				panic(err)
 			}
-			recipientEnergy, err := rt.state.GetEnergy(thor.Address(recipient), rt.ctx.Time)
+			recipientEnergy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(recipient))
 			if err != nil {
 				panic(err)
 			}
@@ -274,14 +274,14 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 		},
 		OnSuicideContract: func(_ *vm.EVM, contractAddr, tokenReceiver common.Address) {
 			// it's IMPORTANT to process energy before token
-			energy, err := rt.state.GetEnergy(thor.Address(contractAddr), rt.ctx.Time)
+			energy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(contractAddr))
 			if err != nil {
 				panic(err)
 			}
 			bal := stateDB.GetBalance(contractAddr)
 
 			if bal.Sign() != 0 || energy.Sign() != 0 {
-				receiverEnergy, err := rt.state.GetEnergy(thor.Address(tokenReceiver), rt.ctx.Time)
+				receiverEnergy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(tokenReceiver))
 				if err != nil {
 					panic(err)
 				}

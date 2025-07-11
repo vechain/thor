@@ -165,11 +165,11 @@ func (n *Node) pack(flow *packer.Flow, duplicate bool) (err error) {
 		}
 
 		// pack the new block
-		var evidence *[]block.Header
+		var evidences *[][]block.Header
 		if flow.PosActive {
-			evidence = n.repo.GetDoubleSigEvidence()
+			evidences = n.repo.GetDoubleSigEvidence(thor.EvidenceMaxCount)
 		}
-		newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey, uint32(len(conflicts)), shouldVote, evidence)
+		newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey, uint32(len(conflicts)), shouldVote, evidences)
 		if err != nil {
 			return errors.Wrap(err, "failed to pack block")
 		}
@@ -224,8 +224,10 @@ func (n *Node) pack(flow *packer.Flow, duplicate bool) (err error) {
 			logger.Trace("bandwidth updated", "gps", v)
 		}
 
-		if evidence != nil && flow.PosActive {
-			n.repo.RecordDoubleSigProcessed((*evidence)[0].Number())
+		if evidences != nil && flow.PosActive {
+			for _, headers := range *evidences {
+				n.repo.RecordDoubleSigProcessed(headers[0].Number())
+			}
 		}
 
 		metricBlockProcessedTxs().SetWithLabel(int64(len(receipts)), map[string]string{"type": "proposed"})

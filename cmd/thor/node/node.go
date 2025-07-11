@@ -374,9 +374,9 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 			return errBFTRejected
 		}
 
-		evidence := newBlock.Header().Evidence()
-		if evidence != nil && isPos {
-			err = n.validateEvidence(evidence)
+		evidences := newBlock.Header().Evidence()
+		if isPos {
+			err = n.validateEvidence(evidences)
 			if err != nil {
 				return err
 			}
@@ -448,8 +448,10 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		}
 		stats.UpdateProcessed(1, len(receipts), execElapsed, commitElapsed, realElapsed, newBlock.Header().GasUsed())
 
-		if isPos && evidence != nil && len(*evidence) > 1 {
-			n.repo.RecordDoubleSigProcessed((*evidence)[0].Number())
+		if isPos && evidences != nil && len(*evidences) > 1 {
+			for _, headers := range *evidences {
+				n.repo.RecordDoubleSigProcessed(headers[0].Number())
+			}
 		}
 
 		metricBlockProcessedTxs().SetWithLabel(int64(len(receipts)), map[string]string{"type": "received"})
@@ -479,25 +481,27 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 	return *isTrunk, nil
 }
 
-func (n *Node) validateEvidence(evidence *[]block.Header) error {
-	var initialSum *block.Header
+func (n *Node) validateEvidence(evidences *[][]block.Header) error {
 	evidenceValidated := false
-	if evidence != nil && len(*evidence) > 1 {
-		for _, ev := range *evidence {
-			if initialSum == nil {
-				initialSum = &ev
-			} else if initialSum.Number() == ev.Number() && initialSum.StateRoot() != ev.StateRoot() {
-				initialSigner, err := initialSum.Signer()
-				if err != nil {
-					return err
-				}
-				currentSigner, err := ev.Signer()
-				if err != nil {
-					return err
-				}
-				if initialSigner == currentSigner {
-					evidenceValidated = true
-					break
+	if evidences != nil && len(*evidences) > 1 {
+		for _, ev := range *evidences {
+			var initialSum *block.Header
+			for _, header := range ev {
+				if initialSum == nil {
+					initialSum = &header
+				} else if initialSum.Number() == header.Number() && initialSum.StateRoot() != header.StateRoot() {
+					initialSigner, err := initialSum.Signer()
+					if err != nil {
+						return err
+					}
+					currentSigner, err := header.Signer()
+					if err != nil {
+						return err
+					}
+					if initialSigner == currentSigner {
+						evidenceValidated = true
+						break
+					}
 				}
 			}
 		}

@@ -96,7 +96,7 @@ func (h *Header) BaseFee() *big.Int {
 }
 
 // Evidence returns evidence in this block.
-func (h *Header) Evidence() *[]Header {
+func (h *Header) Evidence() *[][]Header {
 	if h.body.Extension.Evidence == nil {
 		return nil
 	}
