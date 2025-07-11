@@ -548,13 +548,10 @@ func (rt *Runtime) HandleSlashing(evidences *[][]block.Header) error {
 
 	for _, ev := range *evidences {
 		if len(ev) > 0 {
-			println("slashing", len(ev))
 			err := rt.validateEvidence(&ev)
-			println("evidence validated ")
 			if err != nil {
 				return nil
 			}
-			println("evidence validated", len(ev))
 			stakerBalance, err := rt.State().GetBalance(builtin.Staker.Address)
 			if err != nil {
 				return err
@@ -574,7 +571,6 @@ func (rt *Runtime) HandleSlashing(evidences *[][]block.Header) error {
 			}
 			amountToSlash := big.NewInt(0).Mul(validation.LockedVET, big.NewInt(thor.DoubleSigningSlashPercentage))
 			amountToSlash = big.NewInt(0).Div(amountToSlash, big.NewInt(100))
-			println("states set", len(ev))
 
 			if err := rt.State().SetBalance(thor.Address{}, big.NewInt(0).Add(burnBalance, amountToSlash)); err != nil {
 				return err
@@ -582,7 +578,6 @@ func (rt *Runtime) HandleSlashing(evidences *[][]block.Header) error {
 			if err := rt.State().SetBalance(builtin.Staker.Address, big.NewInt(0).Sub(stakerBalance, amountToSlash)); err != nil {
 				return err
 			}
-			println("slashing in validator", len(ev))
 			staker.SlashValidator(validationID, amountToSlash)
 		}
 	}
@@ -593,13 +588,10 @@ func (rt *Runtime) validateEvidence(evidences *[]block.Header) error {
 	evidenceValidated := false
 	if evidences != nil && len(*evidences) > 1 {
 		var initialSum *block.Header
-		println("validating evi", len(*evidences))
 		for _, header := range *evidences {
 			if initialSum == nil {
-				println("initial sum set", len(*evidences))
 				initialSum = &header
 			} else if initialSum.Number() == header.Number() && initialSum.StateRoot() != header.StateRoot() {
-				println("else ", len(*evidences))
 				initialSigner, err := initialSum.Signer()
 				if err != nil {
 					return err
@@ -609,22 +601,19 @@ func (rt *Runtime) validateEvidence(evidences *[]block.Header) error {
 					return err
 				}
 
-				println("here ", len(*evidences))
-				hasSum, err := rt.chain.HasBlock(initialSum.ID())
-				if err != nil {
-					return err
-				}
-				hasHeader, err := rt.chain.HasBlock(header.ID())
-				if err != nil {
-					return err
-				}
-				println("here 1 ", hasSum, hasHeader)
+				//hasSum, err := rt.chain.HasBlock(initialSum.ID())
+				//if err != nil {
+				//	return err
+				//}
+				//hasHeader, err := rt.chain.HasBlock(header.ID())
+				//if err != nil {
+				//	return err
+				//}
 				//if !hasSum || !hasHeader {
 				//	return fmt.Errorf("invalid evidence provided for double slashing")
 				//}
 				if initialSigner == currentSigner {
 					evidenceValidated = true
-					println("evidence is validated evi")
 					break
 				}
 			}

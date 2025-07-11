@@ -310,7 +310,6 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 		}
 		evidences := blk.Header().Evidence()
 		if evidences != nil && len(*evidences) > 0 {
-			println("double sig, proceed to slashing2", len(*evidences))
 			err := rt.HandleSlashing(evidences)
 			if err != nil {
 				return nil, nil, err
