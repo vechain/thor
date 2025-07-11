@@ -83,7 +83,10 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (*Flo
 	}
 
 	if activated {
-		builtin.Energy.Native(st, parent.Header.Timestamp()).StopEnergyGrowth()
+		err := builtin.Energy.Native(st, parent.Header.Timestamp()).StopEnergyGrowth()
+		if err != nil {
+			return nil, false, err
+		}
 	}
 
 	rt := runtime.New(
@@ -120,7 +123,10 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 	}
 
 	if activated {
-		builtin.Energy.Native(state, parent.Header.Timestamp()).StopEnergyGrowth()
+		err := builtin.Energy.Native(state, parent.Header.Timestamp()).StopEnergyGrowth()
+		if err != nil {
+			return nil, false, err
+		}
 	}
 
 	var score uint64

@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/log"
@@ -284,7 +285,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		txObj.executable = executable
 		if err := p.all.Add(txObj, p.options.LimitPerAccount, func(payer thor.Address, needs *big.Int) error {
 			// check payer's balance
-			balance, err := state.GetEnergy(payer, headSummary.Header.Timestamp()+thor.BlockInterval)
+			balance, err := builtin.Energy.Native(state, headSummary.Header.Timestamp()+thor.BlockInterval).Get(payer)
 			if err != nil {
 				return err
 			}

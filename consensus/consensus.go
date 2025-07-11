@@ -99,7 +99,10 @@ func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipValidation boo
 			c.validatorsCache.Add(header.ParentID(), activeGroup)
 		}
 		if activated {
-			builtin.Energy.Native(state, parentSummary.Header.Timestamp()).StopEnergyGrowth()
+			err := builtin.Energy.Native(state, parentSummary.Header.Timestamp()).StopEnergyGrowth()
+			if err != nil {
+				return nil, err
+			}
 		}
 		if posActive {
 			err = c.validateStakingProposer(header, parentSummary.Header, staker, activeGroup)
