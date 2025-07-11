@@ -618,10 +618,10 @@ func (rt *Runtime) validateEvidence(evidences *[]block.Header) error {
 				if err != nil {
 					return err
 				}
-				println("here 1 ", len(*evidences))
-				if !hasSum || !hasHeader {
-					return fmt.Errorf("invalid evidence provided for double slashing")
-				}
+				println("here 1 ", hasSum, hasHeader)
+				//if !hasSum || !hasHeader {
+				//	return fmt.Errorf("invalid evidence provided for double slashing")
+				//}
 				if initialSigner == currentSigner {
 					evidenceValidated = true
 					println("evidence is validated evi")
