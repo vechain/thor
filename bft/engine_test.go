@@ -125,7 +125,7 @@ func (test *TestBFT) newBlock(parentSummary *chain.BlockSummary, master genesis.
 		return nil, err
 	}
 
-	var evidence *[]block.Header
+	var evidence *[][]block.Header
 	b, stg, _, err := flow.Pack(master.PrivateKey, conflicts, shouldVote, evidence)
 	if err != nil {
 		return nil, err
