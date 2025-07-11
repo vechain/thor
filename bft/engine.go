@@ -320,13 +320,14 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 		}
 
 		signer, _ := h.Signer()
-		sum, err := engine.repo.GetBlockSummary(h.ParentID())
-		if err != nil {
-			return nil, err
-		}
 
 		if h.Number() >= engine.forkConfig.HAYABUSA {
-			state := engine.stater.NewState(sum.Root())
+			// TODO: Should we use the state root of the parent block summary?
+			blockSummary, err := engine.repo.GetBlockSummary(h.ID())
+			if err != nil {
+				return nil, err
+			}
+			state := engine.stater.NewState(blockSummary.Root())
 			staker := builtin.Staker.Native(state)
 			validator, _, err := staker.LookupNode(signer)
 			if err != nil {
@@ -339,6 +340,11 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 
 		if h.Number() <= end {
 			break
+		}
+
+		sum, err := engine.repo.GetBlockSummary(h.ParentID())
+		if err != nil {
+			return nil, err
 		}
 		
 		h = sum.Header
