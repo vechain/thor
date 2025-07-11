@@ -71,7 +71,9 @@ func (d *delegations) Add(
 		return thor.Bytes32{}, err
 	}
 	id = id.Add(id, big.NewInt(1))
-	d.idCounter.Set(id)
+	if err := d.idCounter.Set(id); err != nil {
+		return thor.Bytes32{}, errors.Wrap(err, "failed to increment delegation ID counter")
+	}
 
 	delegationID := thor.BytesToBytes32(id.Bytes())
 
@@ -210,7 +212,7 @@ func (d *delegations) Withdraw(delegationID thor.Bytes32) (*big.Int, error) {
 		if aggregation.WithdrawableVET.Cmp(delegation.Stake) < 0 {
 			return nil, errors.New("not enough withdraw VET")
 		}
-		aggregation.WithdrawableVET = aggregation.WithdrawableVET.Sub(aggregation.WithdrawableVET, delegation.Stake)
+		aggregation.WithdrawableVET = big.NewInt(0).Sub(aggregation.WithdrawableVET, delegation.Stake)
 	} else {
 		if delegation.AutoRenew { // delegation's stake is pending locked
 			if aggregation.PendingRecurringVET.Cmp(delegation.Stake) < 0 {

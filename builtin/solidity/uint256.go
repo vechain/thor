@@ -6,6 +6,7 @@
 package solidity
 
 import (
+	"errors"
 	"math/big"
 
 	"github.com/vechain/thor/v2/state"
@@ -33,9 +34,13 @@ func (u *Uint256) Get() (*big.Int, error) {
 	return new(big.Int).SetBytes(storage.Bytes()), nil
 }
 
-func (u *Uint256) Set(value *big.Int) {
+func (u *Uint256) Set(value *big.Int) error {
 	storage := thor.BytesToBytes32(value.Bytes())
+	if value.Sign() == -1 {
+		return errors.New("uint cannot be negative")
+	}
 	u.state.SetStorage(u.addr, u.pos, storage)
+	return nil
 }
 
 func (u *Uint256) Add(value *big.Int) error {
@@ -47,8 +52,7 @@ func (u *Uint256) Add(value *big.Int) error {
 		return err
 	}
 	storage.Add(storage, value)
-	u.Set(storage)
-	return nil
+	return u.Set(storage)
 }
 
 func (u *Uint256) Sub(value *big.Int) error {
@@ -60,6 +64,5 @@ func (u *Uint256) Sub(value *big.Int) error {
 		return err
 	}
 	storage.Sub(storage, value)
-	u.Set(storage)
-	return nil
+	return u.Set(storage)
 }
