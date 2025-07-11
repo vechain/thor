@@ -321,7 +321,7 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 
 		signer, _ := h.Signer()
 
-		if h.Number() >= engine.forkConfig.HAYABUSA {
+		if h.Number() >= engine.forkConfig.HAYABUSA_TP {
 			// TODO: Should we use the state root of the parent block summary?
 			blockSummary, err := engine.repo.GetBlockSummary(h.ID())
 			if err != nil {
@@ -346,7 +346,7 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 		if err != nil {
 			return nil, err
 		}
-		
+
 		h = sum.Header
 	}
 

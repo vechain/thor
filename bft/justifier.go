@@ -68,7 +68,7 @@ func (engine *Engine) newJustifier(parentID thor.Bytes32) (*justifier, error) {
 		}
 	}
 
-	if blockNum >= engine.forkConfig.HAYABUSA {
+	if blockNum >= engine.forkConfig.HAYABUSA_TP {
 		totalWeight, err := engine.getTotalWeight(sum)
 		if err != nil {
 			return nil, err
