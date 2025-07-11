@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tracers"
 	"github.com/vechain/thor/v2/vm"
@@ -142,7 +143,7 @@ func (t *prestateTracer) CaptureClauseEnd(_ uint64) {
 		newBalance := t.env.StateDB.GetBalance(addr)
 		newCode := t.env.StateDB.GetCode(addr)
 
-		energy, err := t.ctx.State.GetEnergy(thor.Address(addr), t.ctx.BlockTime)
+		energy, err := builtin.Energy.Native(t.ctx.State, t.ctx.BlockTime).Get(thor.Address(addr))
 		if err != nil {
 			// panic state errors, will be recovered by runtime
 			panic(err)
@@ -278,7 +279,7 @@ func (t *prestateTracer) lookupAccount(addr common.Address) {
 		return
 	}
 
-	energy, err := t.ctx.State.GetEnergy(thor.Address(addr), t.ctx.BlockTime)
+	energy, err := builtin.Energy.Native(t.ctx.State, t.ctx.BlockTime).Get(thor.Address(addr))
 	if err != nil {
 		// panic state errors, will be recovered by runtime
 		panic(err)
