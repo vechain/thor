@@ -154,6 +154,7 @@ func TestScheduler_Distribution(t *testing.T) {
 				for _, acc := range genesis.DevAccounts() {
 					id := thor.BytesToBytes32(acc.Address.Bytes())
 					if sched.IsScheduled(next, id) {
+						prev = acc.Address
 						distribution[id]++
 					}
 				}
