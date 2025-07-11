@@ -30,9 +30,9 @@ func newLinkedList(
 	countPos thor.Bytes32,
 ) *linkedList {
 	return &linkedList{
-		head:    solidity.NewBytes32(storage.Address(), storage.State(), headPos),
-		tail:    solidity.NewBytes32(storage.Address(), storage.State(), tailPos),
-		count:   solidity.NewUint256(storage.Address(), storage.State(), countPos),
+		head:    solidity.NewBytes32(storage.context, headPos),
+		tail:    solidity.NewBytes32(storage.context, tailPos),
+		count:   solidity.NewUint256(storage.context, countPos),
 		storage: storage,
 	}
 }
@@ -82,27 +82,27 @@ func (l *linkedList) Remove(id thor.Bytes32, validator *Validation) (removed boo
 	}
 
 	if prev == nil || prev.IsZero() {
-		l.head.Set(next)
+		l.head.Set(next, false)
 	} else {
 		prevEntry, err := l.storage.GetValidation(*prev)
 		if err != nil {
 			return false, err
 		}
 		prevEntry.Next = next
-		if err := l.storage.SetValidation(*prev, prevEntry); err != nil {
+		if err := l.storage.SetValidation(*prev, prevEntry, false); err != nil {
 			return false, err
 		}
 	}
 
 	if next == nil || next.IsZero() {
-		l.tail.Set(prev)
+		l.tail.Set(prev, false)
 	} else {
 		nextEntry, err := l.storage.GetValidation(*next)
 		if err != nil {
 			return false, err
 		}
 		nextEntry.Prev = prev
-		if err := l.storage.SetValidation(*next, nextEntry); err != nil {
+		if err := l.storage.SetValidation(*next, nextEntry, false); err != nil {
 			return false, err
 		}
 	}
@@ -111,7 +111,7 @@ func (l *linkedList) Remove(id thor.Bytes32, validator *Validation) (removed boo
 	validator.Next = nil
 	validator.Prev = nil
 
-	return true, l.storage.SetValidation(id, validator)
+	return true, l.storage.SetValidation(id, validator, false)
 }
 
 // Add adds a new validator to the tail of the linked list
@@ -134,9 +134,9 @@ func (l *linkedList) Add(newTail thor.Bytes32, validation *Validation) (added bo
 	}
 	if oldTailID.IsZero() {
 		// list is currently empty, set this entry to head & tail
-		l.head.Set(&newTail)
-		l.tail.Set(&newTail)
-		return true, l.storage.SetValidation(newTail, validation)
+		l.head.Set(&newTail, false)
+		l.tail.Set(&newTail, false)
+		return true, l.storage.SetValidation(newTail, validation, false)
 	}
 
 	oldTail, err := l.storage.GetValidation(oldTailID)
@@ -146,14 +146,14 @@ func (l *linkedList) Add(newTail thor.Bytes32, validation *Validation) (added bo
 	oldTail.Next = &newTail
 	validation.Prev = &oldTailID
 
-	if err := l.storage.SetValidation(oldTailID, oldTail); err != nil {
+	if err := l.storage.SetValidation(oldTailID, oldTail, false); err != nil {
 		return false, err
 	}
-	if err := l.storage.SetValidation(newTail, validation); err != nil {
+	if err := l.storage.SetValidation(newTail, validation, false); err != nil {
 		return false, err
 	}
 
-	l.tail.Set(&newTail)
+	l.tail.Set(&newTail, false)
 
 	return true, nil
 }

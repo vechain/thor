@@ -8,7 +8,6 @@ package solidity
 import (
 	"math/big"
 
-	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -16,26 +15,27 @@ import (
 // It can also be accessed directly in the relevant built-in contract if declared in the same `pos`
 // If the provided uint exceeds 256 bits, it will be truncated to fit into thor.Bytes32
 type Uint256 struct {
-	addr  thor.Address
-	pos   thor.Bytes32
-	state *state.State
+	context *Context
+	pos     thor.Bytes32
 }
 
-func NewUint256(addr thor.Address, state *state.State, slot thor.Bytes32) *Uint256 {
-	return &Uint256{addr: addr, state: state, pos: slot}
+func NewUint256(context *Context, slot thor.Bytes32) *Uint256 {
+	return &Uint256{context: context, pos: slot}
 }
 
 func (u *Uint256) Get() (*big.Int, error) {
-	storage, err := u.state.GetStorage(u.addr, u.pos)
+	storage, err := u.context.State.GetStorage(u.context.Address, u.pos)
 	if err != nil {
 		return nil, err
 	}
+	u.context.UseGas(thor.SloadGas)
 	return new(big.Int).SetBytes(storage.Bytes()), nil
 }
 
 func (u *Uint256) Set(value *big.Int) {
 	storage := thor.BytesToBytes32(value.Bytes())
-	u.state.SetStorage(u.addr, u.pos, storage)
+	u.context.UseGas(thor.SstoreResetGas)
+	u.context.State.SetStorage(u.context.Address, u.pos, storage)
 }
 
 func (u *Uint256) Add(value *big.Int) error {
