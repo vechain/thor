@@ -21,7 +21,7 @@ const (
 )
 
 type Validation struct {
-	Master             thor.Address // the node address of the validation
+	Node               thor.Address // the node address of the validation
 	Endorsor           thor.Address // the address providing the stake
 	Period             uint32       // the staking period of the validation
 	CompleteIterations uint32       // the completed staking periods by the validation

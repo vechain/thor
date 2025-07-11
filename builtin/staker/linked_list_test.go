@@ -26,17 +26,17 @@ func Test_LinkedList_Remove_NonExistent(t *testing.T) {
 
 	validator1ID := datagen.RandomHash()
 	validator1 := &Validation{
-		Master: datagen.RandAddress(),
+		Node: datagen.RandAddress(),
 	}
 
 	validator2ID := datagen.RandomHash()
 	validator2 := &Validation{
-		Master: datagen.RandAddress(),
+		Node: datagen.RandAddress(),
 	}
 
 	validator3ID := datagen.RandomHash()
 	validator3 := &Validation{
-		Master: datagen.RandAddress(),
+		Node: datagen.RandAddress(),
 	}
 
 	if _, err := linkedList.Add(validator1ID, validator1); err != nil {
@@ -65,7 +65,7 @@ func Test_LinkedList_Remove(t *testing.T) {
 
 	validator1ID := datagen.RandomHash()
 	validator1 := &Validation{
-		Master:    datagen.RandAddress(),
+		Node:      datagen.RandAddress(),
 		Endorsor:  datagen.RandAddress(),
 		LockedVET: big.NewInt(10),
 		Weight:    big.NewInt(10),
@@ -74,7 +74,7 @@ func Test_LinkedList_Remove(t *testing.T) {
 
 	validator2ID := datagen.RandomHash()
 	validator2 := &Validation{
-		Master:    datagen.RandAddress(),
+		Node:      datagen.RandAddress(),
 		Endorsor:  datagen.RandAddress(),
 		LockedVET: big.NewInt(10),
 		Weight:    big.NewInt(10),
@@ -129,7 +129,7 @@ func Test_LinkedList_Iter(t *testing.T) {
 	// Create 3 validators
 	validator1ID := datagen.RandomHash()
 	validator1 := &Validation{
-		Master:    datagen.RandAddress(),
+		Node:      datagen.RandAddress(),
 		Endorsor:  datagen.RandAddress(),
 		LockedVET: big.NewInt(10),
 		Weight:    big.NewInt(10),
@@ -138,7 +138,7 @@ func Test_LinkedList_Iter(t *testing.T) {
 
 	validator2ID := datagen.RandomHash()
 	validator2 := &Validation{
-		Master:    datagen.RandAddress(),
+		Node:      datagen.RandAddress(),
 		Endorsor:  datagen.RandAddress(),
 		LockedVET: big.NewInt(20),
 		Weight:    big.NewInt(20),
@@ -147,7 +147,7 @@ func Test_LinkedList_Iter(t *testing.T) {
 
 	validator3ID := datagen.RandomHash()
 	validator3 := &Validation{
-		Master:    datagen.RandAddress(),
+		Node:      datagen.RandAddress(),
 		Endorsor:  datagen.RandAddress(),
 		LockedVET: big.NewInt(30),
 		Weight:    big.NewInt(30),

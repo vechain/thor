@@ -120,7 +120,7 @@ func Test_IsLocked(t *testing.T) {
 func Test_AddDelegator_AutoRenew(t *testing.T) {
 	staker, validators := newDelegationStaker(t)
 
-	stake := big.NewInt(0).Set(minStake)
+	stake := big.NewInt(0).Set(MinStake)
 
 	// Auto Renew == true
 	validator := validators[0]
@@ -164,7 +164,7 @@ func Test_AddDelegator_StakeRange(t *testing.T) {
 	assert.ErrorContains(t, err, "stake must be greater than 0")
 
 	// should NOT be able to stake greater than max stake
-	_, err = staker.AddDelegation(validator.ID, maxStake, true, 255)
+	_, err = staker.AddDelegation(validator.ID, MaxStake, true, 255)
 	assert.ErrorContains(t, err, "validation's next period stake exceeds max stake")
 
 	// should be able stake 1 VET
@@ -175,7 +175,7 @@ func Test_AddDelegator_StakeRange(t *testing.T) {
 	validator = validators[1]
 	validation, err := staker.Get(validator.ID)
 	assert.NoError(t, err)
-	remaining := big.NewInt(0).Sub(maxStake, validation.NextPeriodStakes(newAggregation()))
+	remaining := big.NewInt(0).Sub(MaxStake, validation.NextPeriodStakes(newAggregation()))
 	_, err = staker.AddDelegation(validator.ID, remaining, true, 255)
 	assert.NoError(t, err)
 }
@@ -491,9 +491,9 @@ func Test_Delegator_Queued_Weight(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).String(), queuedVetBefore.String())
 	assert.Equal(t, big.NewInt(0).String(), queuedWeightBefore.String())
 
-	nodeMaster := datagen.RandAddress()
+	node := datagen.RandAddress()
 	endorsor := datagen.RandAddress()
-	id, err := staker.AddValidator(endorsor, nodeMaster, uint32(360)*24*15, validatorStake, true, 0)
+	id, err := staker.AddValidator(endorsor, node, uint32(360)*24*15, validatorStake, true, 0)
 	assert.NoError(t, err)
 
 	validator, err := staker.Get(id)
@@ -520,13 +520,13 @@ func Test_Delegator_Queued_Weight_QueuedValidator_Withdraw(t *testing.T) {
 	staker, _ := newStaker(t, 0, 101, false)
 
 	validatorAddr := datagen.RandAddress()
-	validatorID, err := staker.AddValidator(validatorAddr, validatorAddr, uint32(360)*24*15, minStake, true, 0)
+	validatorID, err := staker.AddValidator(validatorAddr, validatorAddr, uint32(360)*24*15, MinStake, true, 0)
 	assert.NoError(t, err)
 
 	initialQueuedVET, initialQueuedWeight, err := staker.QueuedStake()
 	assert.NoError(t, err)
 
-	delegationStake := new(big.Int).Div(minStake, big.NewInt(4))
+	delegationStake := new(big.Int).Div(MinStake, big.NewInt(4))
 	delegationID, err := staker.AddDelegation(validatorID, delegationStake, true, 255)
 	assert.NoError(t, err)
 
@@ -554,8 +554,8 @@ func Test_Delegator_Queued_Weight_MultipleDelegations_Withdraw(t *testing.T) {
 	staker, validators := newDelegationStaker(t)
 
 	validator := validators[0]
-	stake1 := new(big.Int).Set(minStake)
-	stake2 := new(big.Int).Div(minStake, big.NewInt(2))
+	stake1 := new(big.Int).Set(MinStake)
+	stake2 := new(big.Int).Div(MinStake, big.NewInt(2))
 
 	initialQueuedVET, initialQueuedWeight, err := staker.QueuedStake()
 	assert.NoError(t, err)

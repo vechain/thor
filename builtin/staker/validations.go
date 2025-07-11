@@ -33,9 +33,9 @@ type validations struct {
 
 func newValidations(storage *storage) *validations {
 	// debug overrides for testing
-	storage.debugOverride(&lowStakingPeriod, slotLowStakingPeriod)
-	storage.debugOverride(&mediumStakingPeriod, slotMediumStakingPeriod)
-	storage.debugOverride(&highStakingPeriod, slotHighStakingPeriod)
+	storage.debugOverride(&LowStakingPeriod, slotLowStakingPeriod)
+	storage.debugOverride(&MediumStakingPeriod, slotMediumStakingPeriod)
+	storage.debugOverride(&HighStakingPeriod, slotHighStakingPeriod)
 
 	return &validations{
 		storage:             storage,
@@ -45,9 +45,9 @@ func newValidations(storage *storage) *validations {
 		lockedWeight:        solidity.NewUint256(storage.Address(), storage.State(), slotLockedWeight),
 		queuedVET:           solidity.NewUint256(storage.Address(), storage.State(), slotQueuedVET),
 		queuedWeight:        solidity.NewUint256(storage.Address(), storage.State(), slotQueuedWeight),
-		lowStakingPeriod:    lowStakingPeriod,
-		mediumStakingPeriod: mediumStakingPeriod,
-		highStakingPeriod:   highStakingPeriod,
+		lowStakingPeriod:    LowStakingPeriod,
+		mediumStakingPeriod: MediumStakingPeriod,
+		highStakingPeriod:   HighStakingPeriod,
 	}
 }
 
@@ -92,16 +92,16 @@ func (v *validations) LeaderGroup() (map[thor.Bytes32]*Validation, error) {
 
 func (v *validations) Add(
 	endorsor thor.Address,
-	master thor.Address,
+	node thor.Address,
 	period uint32,
 	stake *big.Int,
 	autoRenew bool,
 	currentBlock uint32,
 ) (thor.Bytes32, error) {
-	if stake.Cmp(minStake) < 0 || stake.Cmp(maxStake) > 0 {
+	if stake.Cmp(MinStake) < 0 || stake.Cmp(MaxStake) > 0 {
 		return thor.Bytes32{}, errors.New("stake is out of range")
 	}
-	lookup, err := v.storage.GetLookup(master)
+	lookup, err := v.storage.GetLookup(node)
 	if err != nil {
 		return thor.Bytes32{}, err
 	}
@@ -114,10 +114,10 @@ func (v *validations) Add(
 
 	var b [4]byte
 	binary.BigEndian.PutUint32(b[:], currentBlock)
-	id := thor.Blake2b(master.Bytes(), b[:])
+	id := thor.Blake2b(node.Bytes(), b[:])
 
 	entry := &Validation{
-		Master:             master,
+		Node:               node,
 		Endorsor:           endorsor,
 		Period:             period,
 		CompleteIterations: 0,
@@ -138,7 +138,7 @@ func (v *validations) Add(
 	if err := v.queuedWeight.Add(big.NewInt(0).Mul(stake, validatorWeightMultiplier)); err != nil {
 		return thor.Bytes32{}, err
 	}
-	if err := v.storage.SetLookup(master, id); err != nil {
+	if err := v.storage.SetLookup(node, id); err != nil {
 		return thor.Bytes32{}, err
 	}
 
@@ -193,7 +193,7 @@ func (v *validations) ActivateNext(
 		return nil, err
 	}
 
-	logger.Debug("activating validator", "id", id, "master", validator.Master, "block", currentBlock)
+	logger.Debug("activating validator", "id", id, "node", validator.Node, "block", currentBlock)
 
 	// update the validator
 	validatorLocked := big.NewInt(0).Add(validator.LockedVET, validator.PendingLocked)
@@ -254,7 +254,7 @@ func (v *validations) UpdateAutoRenew(endorsor thor.Address, id thor.Bytes32, au
 		return err
 	}
 	if validator.Endorsor != endorsor {
-		return errors.New("invalid endorsor for master")
+		return errors.New("invalid endorsor for node")
 	}
 	if validator.AutoRenew == autoRenew {
 		return fmt.Errorf("auto-renewal is already set to %t", autoRenew)
@@ -328,7 +328,7 @@ func (v *validations) IncreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 	nextPeriodTVL := entry.NextPeriodStakes(aggregation)
 	newTVL := big.NewInt(0).Add(nextPeriodTVL, amount)
 
-	if newTVL.Cmp(maxStake) > 0 {
+	if newTVL.Cmp(MaxStake) > 0 {
 		return errors.New("stake is out of range")
 	}
 
@@ -362,7 +362,7 @@ func (v *validations) DecreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 	}
 	newStake := big.NewInt(0).Add(entry.LockedVET, entry.PendingLocked)
 	newStake = newStake.Sub(newStake, amount)
-	if newStake.Cmp(minStake) < 0 {
+	if newStake.Cmp(MinStake) < 0 {
 		return errors.New("stake is too low for validator")
 	}
 	aggregation, err := v.storage.GetAggregation(id)
@@ -409,7 +409,7 @@ func (v *validations) WithdrawStake(endorsor thor.Address, id thor.Bytes32, curr
 	}
 
 	if entry.Status == StatusQueued {
-		if err := v.storage.SetLookup(entry.Master, thor.Bytes32{}); err != nil {
+		if err := v.storage.SetLookup(entry.Node, thor.Bytes32{}); err != nil {
 			return nil, err
 		}
 		entry.PendingLocked = big.NewInt(0)
@@ -497,7 +497,7 @@ func (v *validations) ExitValidator(id thor.Bytes32) error {
 	if err := v.lockedVET.Sub(exitedTVL); err != nil {
 		return err
 	}
-	if err := v.storage.SetLookup(entry.Master, thor.Bytes32{}); err != nil {
+	if err := v.storage.SetLookup(entry.Node, thor.Bytes32{}); err != nil {
 		return err
 	}
 	if _, err = v.leaderGroup.Remove(id, entry); err != nil {

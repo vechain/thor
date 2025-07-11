@@ -77,7 +77,7 @@ func (r *Rewards) handleGetBlockRewards(w http.ResponseWriter, req *http.Request
 	}
 
 	staker := builtin.Staker.Native(st)
-	_, validationID, err := staker.LookupMaster(signer)
+	_, validationID, err := staker.LookupNode(signer)
 	if err != nil {
 		if r.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "validator"))

@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 contract Staker {
     event ValidatorQueued(
         address indexed endorsor,
-        address indexed master,
+        address indexed node,
         bytes32 indexed validationID,
         uint32 period,
         uint256 stake,
@@ -71,7 +71,7 @@ contract Staker {
      * @dev addValidator adds a validator to the queue.
      */
     function addValidator(
-        address master,
+        address node,
         uint32 period,
         bool autoRenew
     ) public payable {
@@ -79,7 +79,7 @@ contract Staker {
         (bytes32 id, string memory error) = StakerNative(address(this))
             .native_addValidator(
                 msg.sender,
-                master,
+                node,
                 period,
                 msg.value,
                 autoRenew
@@ -87,7 +87,7 @@ contract Staker {
         require(bytes(error).length == 0, error);
         emit ValidatorQueued(
             msg.sender,
-            master,
+            node,
             id,
             period,
             msg.value,
@@ -231,8 +231,8 @@ contract Staker {
     }
 
     /**
-     * @dev get returns the master. endorser, stake, weight, status, auto renew, online and staking period of a validator.
-     * @return (master, endorser, stake, weight, status, autoRenew, online, stakingPeriod, startBlock, exitBlock)
+     * @dev get returns the node. endorser, stake, weight, status, auto renew, online and staking period of a validator.
+     * @return (node, endorser, stake, weight, status, autoRenew, online, stakingPeriod, startBlock, exitBlock)
      * - status (0: unknown, 1: queued, 2: active, 3: cooldown, 4: exited)
      */
     function get(
@@ -254,7 +254,7 @@ contract Staker {
         )
     {
         (
-            address master,
+            address node,
             address endorser,
             uint256 stake,
             uint256 weight,
@@ -268,7 +268,7 @@ contract Staker {
         ) = StakerNative(address(this)).native_get(id);
         require(bytes(error).length == 0, error);
         return (
-            master,
+            node,
             endorser,
             stake,
             weight,
@@ -282,10 +282,10 @@ contract Staker {
     }
 
     /**
-     * @dev lookupMaster returns a validation ID if the master address is currently queued or active.
+     * @dev lookupNode returns a validation ID if the node address exists in a queued or active validation.
      */
-    function lookupMaster(address master) public view returns (bytes32) {
-        return StakerNative(address(this)).native_lookupMaster(master);
+    function lookupNode(address node) public view returns (bytes32) {
+        return StakerNative(address(this)).native_lookupNode(node);
     }
 
     /**
@@ -381,7 +381,7 @@ interface StakerNative {
     // Write methods
     function native_addValidator(
         address endorsor,
-        address master,
+        address node,
         uint32 period,
         uint256 stake,
         bool autoRenew
@@ -472,8 +472,8 @@ interface StakerNative {
             string calldata
         );
 
-    function native_lookupMaster(
-        address master
+    function native_lookupNode(
+        address node
     ) external view returns (bytes32);
 
     function native_getWithdraw(
@@ -498,13 +498,6 @@ interface StakerNative {
         external
         view
         returns (address, string calldata);
-
-    function native_getBlockProposerAndReward(
-        uint32 blockNumber
-    )
-        external
-        view
-        returns (uint256, address, address, bytes32, string calldata);
 
     function native_getRewards(
         bytes32 validationID,
