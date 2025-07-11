@@ -596,8 +596,10 @@ func (rt *Runtime) validateEvidence(evidences *[]block.Header) error {
 		println("validating evi", len(*evidences))
 		for _, header := range *evidences {
 			if initialSum == nil {
+				println("initial sum set", len(*evidences))
 				initialSum = &header
 			} else if initialSum.Number() == header.Number() && initialSum.StateRoot() != header.StateRoot() {
+				println("else ", len(*evidences))
 				initialSigner, err := initialSum.Signer()
 				if err != nil {
 					return err
@@ -606,6 +608,8 @@ func (rt *Runtime) validateEvidence(evidences *[]block.Header) error {
 				if err != nil {
 					return err
 				}
+
+				println("here ", len(*evidences))
 				hasSum, err := rt.chain.HasBlock(initialSum.ID())
 				if err != nil {
 					return err
@@ -614,6 +618,7 @@ func (rt *Runtime) validateEvidence(evidences *[]block.Header) error {
 				if err != nil {
 					return err
 				}
+				println("here 1 ", len(*evidences))
 				if !hasSum || !hasHeader {
 					return fmt.Errorf("invalid evidence provided for double slashing")
 				}
