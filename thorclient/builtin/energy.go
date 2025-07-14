@@ -10,9 +10,8 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/vechain/thor/v2/api"
-
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
@@ -22,7 +21,7 @@ import (
 
 // Energy is a type-safe smart contract wrapper of VTHO.
 type Energy struct {
-	contract bind.Contract
+	contract *bind.Contract
 	revision string
 }
 
@@ -44,7 +43,7 @@ func (e *Energy) Revision(rev string) *Energy {
 	}
 }
 
-func (e *Energy) Raw() bind.Contract {
+func (e *Energy) Raw() *bind.Contract {
 	return e.contract
 }
 
@@ -112,22 +111,22 @@ func (e *Energy) Allowance(owner, spender thor.Address) (*big.Int, error) {
 }
 
 // Transfer transfers tokens to the specified address
-func (e *Energy) Transfer(to thor.Address, amount *big.Int) bind.MethodBuilder {
+func (e *Energy) Transfer(to thor.Address, amount *big.Int) *bind.MethodBuilder {
 	return e.contract.Method("transfer", to, amount)
 }
 
 // TransferFrom transfers tokens from one address to another
-func (e *Energy) TransferFrom(from, to thor.Address, amount *big.Int) bind.MethodBuilder {
+func (e *Energy) TransferFrom(from, to thor.Address, amount *big.Int) *bind.MethodBuilder {
 	return e.contract.Method("transferFrom", from, to, amount)
 }
 
 // Approve approves the spender to spend the specified amount of tokens
-func (e *Energy) Approve(spender thor.Address, amount *big.Int) bind.MethodBuilder {
+func (e *Energy) Approve(spender thor.Address, amount *big.Int) *bind.MethodBuilder {
 	return e.contract.Method("approve", spender, amount)
 }
 
 // Move transfers tokens from one address to another (alias for transferFrom)
-func (e *Energy) Move(from, to thor.Address, amount *big.Int) bind.MethodBuilder {
+func (e *Energy) Move(from, to thor.Address, amount *big.Int) *bind.MethodBuilder {
 	return e.contract.Method("move", from, to, amount)
 }
 
