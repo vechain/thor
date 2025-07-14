@@ -24,9 +24,9 @@ type delegations struct {
 func newDelegations(storage *storage) *delegations {
 	return &delegations{
 		storage:      storage,
-		queuedVET:    solidity.NewUint256(storage.Address(), storage.State(), slotQueuedVET),
-		queuedWeight: solidity.NewUint256(storage.Address(), storage.State(), slotQueuedWeight),
-		idCounter:    solidity.NewUint256(storage.Address(), storage.State(), slotDelegationsCounter),
+		queuedVET:    solidity.NewUint256(storage.context, slotQueuedVET),
+		queuedWeight: solidity.NewUint256(storage.context, slotQueuedWeight),
+		idCounter:    solidity.NewUint256(storage.context, slotDelegationsCounter),
 	}
 }
 
@@ -71,7 +71,9 @@ func (d *delegations) Add(
 		return thor.Bytes32{}, err
 	}
 	id = id.Add(id, big.NewInt(1))
-	d.idCounter.Set(id)
+	if err := d.idCounter.Set(id); err != nil {
+		return thor.Bytes32{}, errors.Wrap(err, "failed to increment delegation ID counter")
+	}
 
 	delegationID := thor.BytesToBytes32(id.Bytes())
 
@@ -106,11 +108,11 @@ func (d *delegations) Add(
 		aggregated.PendingOneTimeWeight = big.NewInt(0).Add(aggregated.PendingOneTimeWeight, weight)
 	}
 
-	if err := d.storage.SetAggregation(validationID, aggregated); err != nil {
+	if err := d.storage.SetAggregation(validationID, aggregated, false); err != nil {
 		return thor.Bytes32{}, err
 	}
 
-	return delegationID, d.storage.SetDelegation(delegationID, delegation)
+	return delegationID, d.storage.SetDelegation(delegationID, delegation, true)
 }
 
 func (d *delegations) DisableAutoRenew(delegationID thor.Bytes32) error {
@@ -120,6 +122,9 @@ func (d *delegations) DisableAutoRenew(delegationID thor.Bytes32) error {
 	}
 	if !delegation.AutoRenew {
 		return errors.New("delegation is not autoRenew")
+	}
+	if delegation.Stake.Sign() == 0 {
+		return errors.New("delegation is not active")
 	}
 
 	weight := delegation.Weight()
@@ -149,11 +154,11 @@ func (d *delegations) DisableAutoRenew(delegationID thor.Bytes32) error {
 	delegation.LastIteration = &lastIteration
 	delegation.AutoRenew = false
 
-	if err := d.storage.SetDelegation(delegationID, delegation); err != nil {
+	if err := d.storage.SetDelegation(delegationID, delegation, false); err != nil {
 		return err
 	}
 
-	return d.storage.SetAggregation(delegation.ValidationID, aggregation)
+	return d.storage.SetAggregation(delegation.ValidationID, aggregation, false)
 }
 
 func (d *delegations) EnableAutoRenew(delegationID thor.Bytes32) error {
@@ -184,11 +189,11 @@ func (d *delegations) EnableAutoRenew(delegationID thor.Bytes32) error {
 
 	delegation.LastIteration = nil
 	delegation.AutoRenew = true
-	if err := d.storage.SetDelegation(delegationID, delegation); err != nil {
+	if err := d.storage.SetDelegation(delegationID, delegation, false); err != nil {
 		return err
 	}
 
-	return d.storage.SetAggregation(delegation.ValidationID, aggregation)
+	return d.storage.SetAggregation(delegation.ValidationID, aggregation, false)
 }
 
 func (d *delegations) Withdraw(delegationID thor.Bytes32) (*big.Int, error) {
@@ -199,6 +204,7 @@ func (d *delegations) Withdraw(delegationID thor.Bytes32) (*big.Int, error) {
 	if delegation.IsLocked(validation) {
 		return nil, errors.New("delegation is not eligible for withdraw")
 	}
+	weight := delegation.Weight()
 
 	delegationStarted := delegation.FirstIteration <= validation.CompleteIterations
 	if delegationStarted && validation.Status != StatusQueued {
@@ -206,42 +212,38 @@ func (d *delegations) Withdraw(delegationID thor.Bytes32) (*big.Int, error) {
 		if aggregation.WithdrawableVET.Cmp(delegation.Stake) < 0 {
 			return nil, errors.New("not enough withdraw VET")
 		}
-		aggregation.WithdrawableVET = aggregation.WithdrawableVET.Sub(aggregation.WithdrawableVET, delegation.Stake)
+		aggregation.WithdrawableVET = big.NewInt(0).Sub(aggregation.WithdrawableVET, delegation.Stake)
 	} else {
 		if delegation.AutoRenew { // delegation's stake is pending locked
 			if aggregation.PendingRecurringVET.Cmp(delegation.Stake) < 0 {
 				return nil, errors.New("not enough pending locked VET")
 			}
-			aggregation.PendingRecurringVET = aggregation.PendingRecurringVET.Sub(aggregation.PendingRecurringVET, delegation.Stake)
+			aggregation.PendingRecurringVET = big.NewInt(0).Sub(aggregation.PendingRecurringVET, delegation.Stake)
+			aggregation.PendingRecurringWeight = big.NewInt(0).Sub(aggregation.PendingRecurringWeight, weight)
 		} else { // delegation's stake is pending 1 staking period only, i.e., pending non-recurring
 			if aggregation.PendingOneTimeVET.Cmp(delegation.Stake) < 0 {
 				return nil, errors.New("not enough pending non-recurring VET")
 			}
-			aggregation.PendingOneTimeVET = aggregation.PendingOneTimeVET.Sub(aggregation.PendingOneTimeVET, delegation.Stake)
+			aggregation.PendingOneTimeVET = big.NewInt(0).Sub(aggregation.PendingOneTimeVET, delegation.Stake)
+			aggregation.PendingOneTimeWeight = big.NewInt(0).Sub(aggregation.PendingOneTimeWeight, weight)
+		}
+		if err := d.queuedVET.Sub(delegation.Stake); err != nil {
+			return nil, err
+		}
+		if err := d.queuedWeight.Sub(weight); err != nil {
+			return nil, err
 		}
 	}
 
-	amount := delegation.Stake
-
-	if err := d.queuedVET.Sub(amount); err != nil {
-		return nil, err
-	}
-
-	weight := delegation.Weight()
-	if err := d.queuedWeight.Sub(weight); err != nil {
-		return nil, err
-	}
-
+	stake := delegation.Stake
 	delegation.Stake = big.NewInt(0)
-
 	// remove the delegation from the mapping after the withdraw
-	if err := d.storage.SetDelegation(delegationID, delegation); err != nil {
+	if err := d.storage.SetDelegation(delegationID, delegation, false); err != nil {
+		return nil, err
+	}
+	if err = d.storage.SetAggregation(delegation.ValidationID, aggregation, false); err != nil {
 		return nil, err
 	}
 
-	if err = d.storage.SetAggregation(delegation.ValidationID, aggregation); err != nil {
-		return nil, err
-	}
-
-	return amount, nil
+	return stake, nil
 }

@@ -37,7 +37,7 @@ func MinStake() *big.Int {
 }
 
 type Staker struct {
-	contract bind.Contract
+	contract *bind.Contract
 	revision string
 }
 
@@ -74,7 +74,7 @@ func (s *Staker) FirstActive() (*Validator, thor.Bytes32, error) {
 	return v, id, err
 }
 
-func (s *Staker) Raw() bind.Contract {
+func (s *Staker) Raw() *bind.Contract {
 	return s.contract
 }
 
@@ -191,35 +191,35 @@ func (s *Staker) Get(id thor.Bytes32) (*Validator, error) {
 	return validator, nil
 }
 
-func (s *Staker) AddValidator(master thor.Address, stake *big.Int, period uint32, autoRenew bool) bind.MethodBuilder {
+func (s *Staker) AddValidator(master thor.Address, stake *big.Int, period uint32, autoRenew bool) *bind.MethodBuilder {
 	return s.contract.Method("addValidator", master, period, autoRenew).WithValue(stake)
 }
 
-func (s *Staker) AddDelegation(validationID thor.Bytes32, stake *big.Int, autoRenew bool, multiplier uint8) bind.MethodBuilder {
+func (s *Staker) AddDelegation(validationID thor.Bytes32, stake *big.Int, autoRenew bool, multiplier uint8) *bind.MethodBuilder {
 	return s.contract.Method("addDelegation", validationID, autoRenew, multiplier).WithValue(stake)
 }
 
-func (s *Staker) UpdateDelegationAutoRenew(delegationID thor.Bytes32, autoRenew bool) bind.MethodBuilder {
+func (s *Staker) UpdateDelegationAutoRenew(delegationID thor.Bytes32, autoRenew bool) *bind.MethodBuilder {
 	return s.contract.Method("updateDelegationAutoRenew", delegationID, autoRenew)
 }
 
-func (s *Staker) UpdateAutoRenew(validationID thor.Bytes32, autoRenew bool) bind.MethodBuilder {
+func (s *Staker) UpdateAutoRenew(validationID thor.Bytes32, autoRenew bool) *bind.MethodBuilder {
 	return s.contract.Method("updateAutoRenew", validationID, autoRenew)
 }
 
-func (s *Staker) WithdrawDelegation(delegationID thor.Bytes32) bind.MethodBuilder {
+func (s *Staker) WithdrawDelegation(delegationID thor.Bytes32) *bind.MethodBuilder {
 	return s.contract.Method("withdrawDelegation", delegationID)
 }
 
-func (s *Staker) Withdraw(validationID thor.Bytes32) bind.MethodBuilder {
+func (s *Staker) Withdraw(validationID thor.Bytes32) *bind.MethodBuilder {
 	return s.contract.Method("withdraw", validationID)
 }
 
-func (s *Staker) DecreaseStake(validationID thor.Bytes32, amount *big.Int) bind.MethodBuilder {
+func (s *Staker) DecreaseStake(validationID thor.Bytes32, amount *big.Int) *bind.MethodBuilder {
 	return s.contract.Method("decreaseStake", validationID, amount)
 }
 
-func (s *Staker) IncreaseStake(validationID thor.Bytes32, amount *big.Int) bind.MethodBuilder {
+func (s *Staker) IncreaseStake(validationID thor.Bytes32, amount *big.Int) *bind.MethodBuilder {
 	return s.contract.Method("increaseStake", validationID).WithValue(amount)
 }
 

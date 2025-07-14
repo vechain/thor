@@ -36,7 +36,7 @@ func TestStaker(t *testing.T) {
 	require.NoError(t, err)
 
 	// set authorities - required for initial staker setup
-	var authorityTxs []bind.SendBuilder
+	var authorityTxs []*bind.SendBuilder
 	executor := bind.NewSigner(genesis.DevAccounts()[0].PrivateKey)
 	stargate := bind.NewSigner(genesis.DevAccounts()[0].PrivateKey)
 	for _, acc := range genesis.DevAccounts()[1:] {

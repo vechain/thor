@@ -2280,3 +2280,33 @@ func Test_GetValidatorTotals(t *testing.T) {
 	assert.Equal(t, delegation.Stake, totals.DelegationsLockedStake)
 	assert.Equal(t, delegation.Weight(), totals.DelegationsLockedWeight)
 }
+
+func Test_Validator_Decrease_Exit_Withdraw(t *testing.T) {
+	staker, _ := newStaker(t, 0, 1, false)
+
+	acc := datagen.RandAddress()
+
+	originalStake := big.NewInt(0).Mul(big.NewInt(3), MinStake)
+	id, err := staker.AddValidator(acc, acc, LowStakingPeriod, originalStake, true, 0)
+	assert.NoError(t, err)
+	_, err = staker.validations.ActivateNext(0, staker.params)
+	assert.NoError(t, err)
+
+	// Decrease stake
+	decrease := big.NewInt(0).Mul(big.NewInt(2), MinStake)
+	err = staker.DecreaseStake(acc, id, decrease)
+	assert.NoError(t, err)
+
+	// Turn off auto-renew  - can't decrease if auto-renew is false
+	err = staker.UpdateAutoRenew(acc, id, false)
+	assert.NoError(t, err)
+
+	// Housekeep, should exit the validator
+	_, _, err = staker.Housekeep(LowStakingPeriod)
+	assert.NoError(t, err)
+
+	validator, err := staker.Get(id)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusExit, validator.Status)
+	assert.Equal(t, originalStake, validator.CooldownVET)
+}

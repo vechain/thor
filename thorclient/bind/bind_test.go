@@ -28,7 +28,7 @@ import (
 type testEnv struct {
 	t            *testing.T
 	client       *thorclient.Client
-	bindContract Contract
+	bindContract *Contract
 	owner        *PrivateKeySigner
 	user         *PrivateKeySigner
 	testNode     testnode.Node

@@ -6,6 +6,7 @@
 package state
 
 import (
+	"math"
 	"math/big"
 	"testing"
 
@@ -102,15 +103,26 @@ func TestEnergy(t *testing.T) {
 
 	acc := thor.BytesToAddress([]byte("a1"))
 
+	startTime := uint64(10)
 	time1 := uint64(1000)
 
 	vetBal := big.NewInt(1e18)
 	st.SetBalance(acc, vetBal)
-	st.SetEnergy(acc, &big.Int{}, 10)
+	st.SetEnergy(acc, &big.Int{}, startTime)
 
-	bal1, _ := st.GetEnergy(acc, time1)
+	bal1, _ := st.GetEnergy(acc, time1, math.MaxUint64)
 	x := new(big.Int).Mul(thor.EnergyGrowthRate, vetBal)
-	x.Mul(x, new(big.Int).SetUint64(time1-10))
+	x.Mul(x, new(big.Int).SetUint64(time1-startTime))
+	x.Div(x, big.NewInt(1e18))
+
+	assert.Equal(t, x, bal1)
+
+	// test stop energy growth
+	stopTime := uint64(20)
+	now := uint64(30)
+	bal1, _ = st.GetEnergy(acc, now, stopTime)
+	x = new(big.Int).Mul(thor.EnergyGrowthRate, vetBal)
+	x.Mul(x, new(big.Int).SetUint64(stopTime-startTime))
 	x.Div(x, big.NewInt(1e18))
 
 	assert.Equal(t, x, bal1)

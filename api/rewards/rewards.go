@@ -55,8 +55,7 @@ func (r *Rewards) handleGetBlockRewards(w http.ResponseWriter, req *http.Request
 		return err
 	}
 
-	hayabusaTime, err := st.GetHayabusaForkTime()
-
+	hayabusaTime, err := builtin.Energy.Native(st, summary.Header.Timestamp()).GetEnergyGrowthStopTime()
 	if err != nil {
 		if r.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "hayabusa not active"))
@@ -64,7 +63,7 @@ func (r *Rewards) handleGetBlockRewards(w http.ResponseWriter, req *http.Request
 		return err
 	}
 
-	if *hayabusaTime > summary.Header.Timestamp() {
+	if hayabusaTime > summary.Header.Timestamp() {
 		return utils.BadRequest(fmt.Errorf("pre hayabusa block"))
 	}
 

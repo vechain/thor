@@ -13,51 +13,35 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-// MethodBuilder is the interface that routes to specific operation types.
-type MethodBuilder interface {
-	// WithValue sets the VET value for the operation.
-	WithValue(vet *big.Int) MethodBuilder
-
-	// Call returns a CallBuilder for read operations.
-	Call() CallBuilder
-
-	// Send returns a SendBuilder for write operations.
-	Send() SendBuilder
-
-	// Clause returns a ClauseBuilder for building transaction clauses.
-	Clause() (*tx.Clause, error)
-}
-
-// methodBuilder is the concrete implementation of MethodBuilder.
-type methodBuilder struct {
-	contract *contract
+type MethodBuilder struct {
+	contract *Contract
 	method   string
 	args     []any
 	vet      *big.Int
 }
 
 // WithValue implements MethodBuilder.WithValue.
-func (b *methodBuilder) WithValue(vet *big.Int) MethodBuilder {
+func (b *MethodBuilder) WithValue(vet *big.Int) *MethodBuilder {
 	b.vet = vet
 	return b
 }
 
 // Call implements MethodBuilder.Call.
-func (b *methodBuilder) Call() CallBuilder {
-	return &callBuilder{
+func (b *MethodBuilder) Call() *CallBuilder {
+	return &CallBuilder{
 		op: b,
 	}
 }
 
 // Send implements MethodBuilder.Send.
-func (b *methodBuilder) Send() SendBuilder {
-	return &sendBuilder{
+func (b *MethodBuilder) Send() *SendBuilder {
+	return &SendBuilder{
 		op: b,
 	}
 }
 
 // Clause implements Clause build.
-func (b *methodBuilder) Clause() (*tx.Clause, error) {
+func (b *MethodBuilder) Clause() (*tx.Clause, error) {
 	method, ok := b.contract.abi.Methods[b.method]
 	if !ok {
 		return nil, fmt.Errorf("method not found: %s", b.method)

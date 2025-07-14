@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -47,11 +46,10 @@ func (e *Error) Error() string {
 
 // State manages the world state.
 type State struct {
-	db                    *muxdb.MuxDB
-	trie                  *muxdb.Trie                    // the accounts trie reader
-	cache                 map[thor.Address]*cachedObject // cache of accounts trie
-	sm                    *stackedmap.StackedMap         // keeps revisions of accounts state
-	hayabusaForkTimestamp *uint64                        // the timestamp of the hayabusa fork block
+	db    *muxdb.MuxDB
+	trie  *muxdb.Trie                    // the accounts trie reader
+	cache map[thor.Address]*cachedObject // cache of accounts trie
+	sm    *stackedmap.StackedMap         // keeps revisions of accounts state
 }
 
 // New create state object.
@@ -179,18 +177,13 @@ func (s *State) SetBalance(addr thor.Address, balance *big.Int) error {
 }
 
 // GetEnergy get energy for the given address at block number specified.
-func (s *State) GetEnergy(addr thor.Address, blockTime uint64) (*big.Int, error) {
+func (s *State) GetEnergy(addr thor.Address, blockTime uint64, stopTime uint64) (*big.Int, error) {
 	acc, err := s.getAccount(addr)
 	if err != nil {
 		return nil, &Error{err}
 	}
 
-	hayabusaForkTime, err := s.GetHayabusaForkTime()
-	if err != nil {
-		// TODO: revisit the error handling
-		return nil, &Error{err}
-	}
-	return acc.CalcEnergy(blockTime, *hayabusaForkTime), nil
+	return acc.CalcEnergy(blockTime, stopTime), nil
 }
 
 // SetEnergy set energy at block number for the given address.
@@ -551,24 +544,6 @@ func (s *State) Stage(newVer trie.Version) (*Stage, error) {
 			return nil
 		},
 	}, nil
-}
-
-func (s *State) GetHayabusaForkTime() (*uint64, error) {
-	if s.hayabusaForkTimestamp != nil {
-		return s.hayabusaForkTimestamp, nil
-	}
-
-	forkTime, err := s.GetStorage(thor.BytesToAddress([]byte("Energy")), thor.HayabusaEnergyGrowthStopTime)
-	if err != nil {
-		return nil, err
-	}
-	// return impossible time if not set
-	hayabusaForkTime := uint64(math.MaxUint64)
-	if !forkTime.IsZero() {
-		hayabusaForkTime = new(big.Int).SetBytes(forkTime.Bytes()).Uint64()
-		s.hayabusaForkTimestamp = &hayabusaForkTime
-	}
-	return &hayabusaForkTime, nil
 }
 
 type (

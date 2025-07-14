@@ -9,9 +9,8 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/vechain/thor/v2/api"
-
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
@@ -20,7 +19,7 @@ import (
 )
 
 type Params struct {
-	contract bind.Contract
+	contract *bind.Contract
 	revision string
 }
 
@@ -42,11 +41,11 @@ func (p *Params) Revision(rev string) *Params {
 	}
 }
 
-func (p *Params) Raw() bind.Contract {
+func (p *Params) Raw() *bind.Contract {
 	return p.contract
 }
 
-func (p *Params) Set(key thor.Bytes32, value *big.Int) bind.MethodBuilder {
+func (p *Params) Set(key thor.Bytes32, value *big.Int) *bind.MethodBuilder {
 	return p.contract.Method("set", key, value)
 }
 

@@ -8,9 +8,8 @@ package builtin
 import (
 	"fmt"
 
-	"github.com/vechain/thor/v2/api"
-
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
@@ -19,7 +18,7 @@ import (
 )
 
 type Authority struct {
-	contract bind.Contract
+	contract *bind.Contract
 	revision string
 }
 
@@ -41,7 +40,7 @@ func (a *Authority) Revision(rev string) *Authority {
 	}
 }
 
-func (a *Authority) Raw() bind.Contract {
+func (a *Authority) Raw() *bind.Contract {
 	return a.contract
 }
 
@@ -103,12 +102,12 @@ func (a *Authority) Get(nodeMaster thor.Address) (*AuthorityNode, error) {
 }
 
 // Add adds a new authority node
-func (a *Authority) Add(nodeMaster, endorsor thor.Address, identity thor.Bytes32) bind.MethodBuilder {
+func (a *Authority) Add(nodeMaster, endorsor thor.Address, identity thor.Bytes32) *bind.MethodBuilder {
 	return a.contract.Method("add", common.Address(nodeMaster), common.Address(endorsor), common.Hash(identity))
 }
 
 // Revoke revokes an authority node
-func (a *Authority) Revoke(nodeMaster thor.Address) bind.MethodBuilder {
+func (a *Authority) Revoke(nodeMaster thor.Address) *bind.MethodBuilder {
 	return a.contract.Method("revoke", common.Address(nodeMaster))
 }
 

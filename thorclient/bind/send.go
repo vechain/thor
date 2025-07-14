@@ -20,21 +20,6 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-// SendBuilder is the interface for write operations.
-type SendBuilder interface {
-	// WithSigner sets the signer for the transaction.
-	WithSigner(signer Signer) SendBuilder
-
-	// WithOptions sets the transaction options.
-	WithOptions(opts *TxOptions) SendBuilder
-
-	// Submit sends the transaction without waiting for receipt.
-	Submit() (*tx.Transaction, error)
-
-	// SubmitAndConfirm sends the transaction and waits for the receipt.
-	SubmitAndConfirm(ctx context.Context) (*api.Receipt, *tx.Transaction, error)
-}
-
 // TxOptions to override default transaction parameters when building or sending a transaction.
 type TxOptions struct {
 	// Gas sets the gas limit for the transaction.
@@ -51,27 +36,27 @@ type TxOptions struct {
 	Nonce *uint64
 }
 
-// sendBuilder is the concrete implementation of SendBuilder.
-type sendBuilder struct {
-	op     *methodBuilder
+// SendBuilder is the concrete implementation of SendBuilder.
+type SendBuilder struct {
+	op     *MethodBuilder
 	signer Signer
 	opts   *TxOptions
 }
 
 // WithSigner implements SendBuilder.WithSigner.
-func (b *sendBuilder) WithSigner(signer Signer) SendBuilder {
+func (b *SendBuilder) WithSigner(signer Signer) *SendBuilder {
 	b.signer = signer
 	return b
 }
 
 // WithOptions implements SendBuilder.WithOptions.
-func (b *sendBuilder) WithOptions(opts *TxOptions) SendBuilder {
+func (b *SendBuilder) WithOptions(opts *TxOptions) *SendBuilder {
 	b.opts = opts
 	return b
 }
 
-// IssueTx implements SendBuilder.IssueTx.
-func (b *sendBuilder) Submit() (*tx.Transaction, error) {
+// Submit implements SendBuilder.IssueTx.
+func (b *SendBuilder) Submit() (*tx.Transaction, error) {
 	if b.signer == nil {
 		return nil, errors.New("signer not set")
 	}
@@ -121,6 +106,9 @@ func (b *sendBuilder) Submit() (*tx.Transaction, error) {
 			return nil, fmt.Errorf("expected 1 simulation result, got %d", len(simulation))
 		}
 		gas += simulation[0].GasUsed
+		if clause.To() != nil && len(clause.Data()) > 0 {
+			gas += 15_000 // buffer required for OP_CALL
+		}
 		opts.Gas = &gas
 	}
 
@@ -174,7 +162,7 @@ func (b *sendBuilder) Submit() (*tx.Transaction, error) {
 }
 
 // SubmitAndConfirm implements SendBuilder.Receipt.
-func (b *sendBuilder) SubmitAndConfirm(ctx context.Context) (*api.Receipt, *tx.Transaction, error) {
+func (b *SendBuilder) SubmitAndConfirm(ctx context.Context) (*api.Receipt, *tx.Transaction, error) {
 	transaction, err := b.Submit()
 	if err != nil {
 		return nil, nil, err
