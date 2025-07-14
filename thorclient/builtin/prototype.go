@@ -17,7 +17,7 @@ import (
 )
 
 type Prototype struct {
-	contract bind.Contract
+	contract *bind.Contract
 	revision string
 }
 
@@ -39,7 +39,7 @@ func (p *Prototype) Revision(rev string) *Prototype {
 	}
 }
 
-func (p *Prototype) Raw() bind.Contract {
+func (p *Prototype) Raw() *bind.Contract {
 	return p.contract
 }
 
@@ -53,7 +53,7 @@ func (p *Prototype) Master(contract thor.Address) (thor.Address, error) {
 }
 
 // SetMaster sets a new master for the contract
-func (p *Prototype) SetMaster(self thor.Address, newMaster thor.Address) bind.MethodBuilder {
+func (p *Prototype) SetMaster(self thor.Address, newMaster thor.Address) *bind.MethodBuilder {
 	return p.contract.Method("setMaster", self, newMaster)
 }
 
@@ -67,12 +67,12 @@ func (p *Prototype) IsUser(self thor.Address, user thor.Address) (bool, error) {
 }
 
 // AddUser adds a user to the contract
-func (p *Prototype) AddUser(self thor.Address, user thor.Address) bind.MethodBuilder {
+func (p *Prototype) AddUser(self thor.Address, user thor.Address) *bind.MethodBuilder {
 	return p.contract.Method("addUser", self, user)
 }
 
 // RemoveUser removes a user from the contract
-func (p *Prototype) RemoveUser(self thor.Address, user thor.Address) bind.MethodBuilder {
+func (p *Prototype) RemoveUser(self thor.Address, user thor.Address) *bind.MethodBuilder {
 	return p.contract.Method("removeUser", self, user)
 }
 
@@ -97,7 +97,7 @@ func (p *Prototype) CreditPlan(self thor.Address) (*big.Int, *big.Int, error) {
 }
 
 // SetCreditPlan sets the credit plan for the contract
-func (p *Prototype) SetCreditPlan(self thor.Address, credit *big.Int, recoveryRate *big.Int) bind.MethodBuilder {
+func (p *Prototype) SetCreditPlan(self thor.Address, credit *big.Int, recoveryRate *big.Int) *bind.MethodBuilder {
 	return p.contract.Method("setCreditPlan", self, credit, recoveryRate)
 }
 
@@ -120,17 +120,17 @@ func (p *Prototype) IsSponsor(self thor.Address, sponsor thor.Address) (bool, er
 }
 
 // SelectSponsor selects a sponsor for the contract
-func (p *Prototype) SelectSponsor(self thor.Address, sponsor thor.Address) bind.MethodBuilder {
+func (p *Prototype) SelectSponsor(self thor.Address, sponsor thor.Address) *bind.MethodBuilder {
 	return p.contract.Method("selectSponsor", self, sponsor)
 }
 
 // Sponsor sponsors the contract
-func (p *Prototype) Sponsor(self thor.Address) bind.MethodBuilder {
+func (p *Prototype) Sponsor(self thor.Address) *bind.MethodBuilder {
 	return p.contract.Method("sponsor", self)
 }
 
 // Unsponsor removes sponsorship from the contract
-func (p *Prototype) Unsponsor(self thor.Address) bind.MethodBuilder {
+func (p *Prototype) Unsponsor(self thor.Address) *bind.MethodBuilder {
 	return p.contract.Method("unsponsor", self)
 }
 
