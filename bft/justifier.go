@@ -5,6 +5,8 @@
 package bft
 
 import (
+	"fmt"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -92,6 +94,8 @@ func (js *justifier) Summarize() *bftState {
 	} else {
 		quality = js.parentQuality
 	}
+
+	fmt.Printf("justified: %t, committed: %t, quality: %d\n", justified, js.comVotes > js.threshold, quality)
 
 	return &bftState{
 		Quality:   quality,
