@@ -55,10 +55,10 @@ func New(addr thor.Address, state *state.State, params *params.Params, charger *
 	storage.debugOverride(&cooldownPeriod, slotCooldownPeriod)
 
 	return &Staker{
-		lockedVET:    solidity.NewUint256(addr, state, slotLockedVET),
-		lockedWeight: solidity.NewUint256(addr, state, slotLockedWeight),
-		queuedVET:    solidity.NewUint256(addr, state, slotQueuedVET),
-		queuedWeight: solidity.NewUint256(addr, state, slotQueuedWeight),
+		lockedVET:    solidity.NewUint256(storage.context, slotLockedVET),
+		lockedWeight: solidity.NewUint256(storage.context, slotLockedWeight),
+		queuedVET:    solidity.NewUint256(storage.context, slotQueuedVET),
+		queuedWeight: solidity.NewUint256(storage.context, slotQueuedWeight),
 		storage:      storage,
 		validations:  newValidations(storage),
 		delegations:  newDelegations(storage),
@@ -78,26 +78,22 @@ func (s *Staker) LeaderGroup() (map[thor.Bytes32]*Validation, error) {
 
 // LockedVET returns the amount of VET and weight locked by validations and delegations.
 func (s *Staker) LockedVET() (*big.Int, *big.Int, error) {
-	s.storage.chargeGas(thor.SloadGas)
 	lockedVet, err := s.lockedVET.Get()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	s.storage.chargeGas(thor.SloadGas)
 	lockedWeight, err := s.lockedWeight.Get()
 	return lockedVet, lockedWeight, err
 }
 
 // QueuedStake returns the amount of VET and weight queued by validations and delegations.
 func (s *Staker) QueuedStake() (*big.Int, *big.Int, error) {
-	s.storage.chargeGas(thor.SloadGas)
 	queuedVet, err := s.queuedVET.Get()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	s.storage.chargeGas(thor.SloadGas)
 	queuedWeight, err := s.queuedWeight.Get()
 	return queuedVet, queuedWeight, err
 }
@@ -231,7 +227,7 @@ func (s *Staker) SetOnline(id thor.Bytes32, online bool) (bool, error) {
 	hasChanged := entry.Online != online
 	entry.Online = online
 	if hasChanged {
-		err = s.storage.SetValidation(id, entry)
+		err = s.storage.SetValidation(id, entry, false)
 	} else {
 		err = nil
 	}

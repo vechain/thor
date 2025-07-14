@@ -6,28 +6,32 @@
 package solidity
 
 import (
-	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 )
 
 // Bytes32 is a wrapper for storage and retrieval of [32]byte
 type Bytes32 struct {
-	contract thor.Address
-	state    *state.State
-	pos      thor.Bytes32
+	context *Context
+	pos     thor.Bytes32
 }
 
-func NewBytes32(contract thor.Address, state *state.State, pos thor.Bytes32) *Bytes32 {
-	return &Bytes32{contract: contract, state: state, pos: pos}
+func NewBytes32(context *Context, pos thor.Bytes32) *Bytes32 {
+	return &Bytes32{context: context, pos: pos}
 }
 
 func (a *Bytes32) Get() (thor.Bytes32, error) {
-	return a.state.GetStorage(a.contract, a.pos)
+	a.context.UseGas(thor.SloadGas)
+	return a.context.state.GetStorage(a.context.address, a.pos)
 }
 
-func (a *Bytes32) Set(bytes *thor.Bytes32) {
+func (a *Bytes32) Set(bytes *thor.Bytes32, newValue bool) {
 	if bytes == nil {
 		bytes = &thor.Bytes32{}
 	}
-	a.state.SetStorage(a.contract, a.pos, *bytes)
+	if newValue {
+		a.context.UseGas(thor.SstoreSetGas)
+	} else {
+		a.context.UseGas(thor.SstoreResetGas)
+	}
+	a.context.state.SetStorage(a.context.address, a.pos, *bytes)
 }
