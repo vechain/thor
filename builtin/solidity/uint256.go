@@ -33,10 +33,15 @@ func (u *Uint256) Get() (*big.Int, error) {
 	return new(big.Int).SetBytes(storage.Bytes()), nil
 }
 
+var maxUint256 = new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1))
+
 func (u *Uint256) Set(value *big.Int) error {
 	storage := thor.BytesToBytes32(value.Bytes())
 	if value.Sign() == -1 {
 		return errors.New("uint cannot be negative")
+	}
+	if value.Cmp(maxUint256) > 0 {
+		return errors.New("uint256 overflow: value exceeds 256 bits")
 	}
 	u.context.UseGas(thor.SstoreResetGas)
 	u.context.state.SetStorage(u.context.address, u.pos, storage)

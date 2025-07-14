@@ -54,4 +54,17 @@ func TestUint256(t *testing.T) {
 	value, err = uint.Get()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(1300), value)
+
+	// test negative value
+	err = uint.Set(big.NewInt(-100))
+	if assert.Error(t, err) {
+		assert.Equal(t, "uint cannot be negative", err.Error())
+	}
+
+	// test overflow
+	val := new(big.Int).Lsh(big.NewInt(1), 256)
+	err = uint.Set(val)
+	if assert.Error(t, err) {
+		assert.Equal(t, "uint256 overflow: value exceeds 256 bits", err.Error())
+	}
 }
