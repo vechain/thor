@@ -134,8 +134,10 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 				return errors.Wrap(err, "get vote")
 			}
 		}
+		now := uint64(time.Now().Unix())
+		doubleFlow, _, err := n.packer.Schedule(n.repo.BestBlockSummary(), now)
 
-		doubleSignedBlock, doubleSignedStage, doubleSignedReceipts, err := flow.Pack(n.master.PrivateKey, uint32(len(conflicts)), shouldVote)
+		doubleSignedBlock, doubleSignedStage, doubleSignedReceipts, err := doubleFlow.Pack(n.master.PrivateKey, uint32(len(conflicts)), shouldVote)
 		if err != nil {
 			return errors.Wrap(err, "failed to pack block")
 		}
@@ -183,7 +185,7 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 
 		var becomeNewBest bool
 		// let bft engine decide the best block after fork FINALITY
-		if newBlock.Header().Number() >= n.forkConfig.FINALITY && oldBest.Header.Number() >= n.forkConfig.FINALITY {
+		if newBlock.Header().Number() >= n.forkConfig.FINALITY {
 			becomeNewBest, err = n.bft.Select(doubleSignedBlock.Header())
 			if err != nil {
 				return errors.Wrap(err, "bft select")
@@ -193,6 +195,7 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 		}
 
 		if becomeNewBest {
+			logger.Info("Fork resolved to an empty block")
 			if _, err := doubleSignedStage.Commit(); err != nil {
 				return errors.Wrap(err, "commit state")
 			}
@@ -201,6 +204,7 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 			}
 
 		} else {
+			logger.Info("Fork resolved to the filled block")
 			if _, err := stage.Commit(); err != nil {
 				return errors.Wrap(err, "commit state")
 			}
@@ -218,20 +222,20 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 		n.processFork(newBlock, oldBest.Header.ID())
 		commitElapsed := mclock.Now() - startTime - execElapsed
 
-		n.comm.BroadcastBlock(doubleSignedBlock)
-		logger.Info("📦 double-signed block",
-			"txs", len(doubleSignedReceipts),
-			"mgas", float64(doubleSignedBlock.Header().GasUsed())/1000/1000,
-			"et", fmt.Sprintf("%v|%v", common.PrettyDuration(execElapsed), common.PrettyDuration(commitElapsed)),
-			"id", shortID(doubleSignedBlock.Header().ID()),
-		)
-
 		n.comm.BroadcastBlock(newBlock)
 		logger.Info("📦 new block packed",
 			"txs", len(receipts),
 			"mgas", float64(newBlock.Header().GasUsed())/1000/1000,
 			"et", fmt.Sprintf("%v|%v", common.PrettyDuration(execElapsed), common.PrettyDuration(commitElapsed)),
 			"id", shortID(newBlock.Header().ID()),
+		)
+
+		n.comm.BroadcastBlock(doubleSignedBlock)
+		logger.Info("📦 double-signed block",
+			"txs", len(doubleSignedReceipts),
+			"mgas", float64(doubleSignedBlock.Header().GasUsed())/1000/1000,
+			"et", fmt.Sprintf("%v|%v", common.PrettyDuration(execElapsed), common.PrettyDuration(commitElapsed)),
+			"id", shortID(doubleSignedBlock.Header().ID()),
 		)
 
 		if v, updated := n.bandwidth.Update(newBlock.Header(), time.Duration(realElapsed)); updated {
