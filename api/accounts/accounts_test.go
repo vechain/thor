@@ -25,10 +25,10 @@ import (
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
+	"github.com/vechain/thor/v2/thorclient/httpclient"
 	"github.com/vechain/thor/v2/tx"
 
 	ABI "github.com/vechain/thor/v2/abi"
-	tccommon "github.com/vechain/thor/v2/thorclient/common"
 )
 
 // pragma solidity ^0.4.18;
@@ -199,7 +199,7 @@ func getAccountWithFinalizedRevision(t *testing.T) {
 	genesisAccount, err := tclient.Account(&soloAddress, thorclient.Revision(genesisBlock.Header().ID().String()))
 	require.NoError(t, err)
 
-	finalizedAccount, err := tclient.Account(&soloAddress, thorclient.Revision(tccommon.FinalizedRevision))
+	finalizedAccount, err := tclient.Account(&soloAddress, thorclient.Revision(httpclient.FinalizedRevision))
 	require.NoError(t, err)
 
 	genesisEnergy := (*big.Int)(genesisAccount.Energy)

@@ -18,7 +18,6 @@ import (
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/thorclient/common"
 	"github.com/vechain/thor/v2/thorclient/httpclient"
 	"github.com/vechain/thor/v2/thorclient/wsclient"
 	"github.com/vechain/thor/v2/tx"
@@ -70,7 +69,7 @@ type getOptions struct {
 // applyOptions applies the given functional options to the default options.
 func applyOptions(opts []Option) *getOptions {
 	options := &getOptions{
-		revision: common.BestRevision,
+		revision: httpclient.BestRevision,
 		pending:  false,
 	}
 	for _, o := range opts {
@@ -224,7 +223,7 @@ func (c *Client) FeesPriority() (feesPriority *api.FeesPriority, err error) {
 }
 
 // SubscribeBlocks subscribes to block updates over WebSocket.
-func (c *Client) SubscribeBlocks(pos string) (*common.Subscription[*api.BlockMessage], error) {
+func (c *Client) SubscribeBlocks(pos string) (*wsclient.Subscription[*api.BlockMessage], error) {
 	if c.wsConn == nil {
 		return nil, fmt.Errorf("not a websocket typed client")
 	}
@@ -232,7 +231,7 @@ func (c *Client) SubscribeBlocks(pos string) (*common.Subscription[*api.BlockMes
 }
 
 // SubscribeEvents subscribes to event updates over WebSocket.
-func (c *Client) SubscribeEvents(pos string, filter *api.SubscriptionEventFilter) (*common.Subscription[*api.EventMessage], error) {
+func (c *Client) SubscribeEvents(pos string, filter *api.SubscriptionEventFilter) (*wsclient.Subscription[*api.EventMessage], error) {
 	if c.wsConn == nil {
 		return nil, fmt.Errorf("not a websocket typed client")
 	}
@@ -240,7 +239,7 @@ func (c *Client) SubscribeEvents(pos string, filter *api.SubscriptionEventFilter
 }
 
 // SubscribeTransfers subscribes to transfer updates over WebSocket.
-func (c *Client) SubscribeTransfers(pos string, filter *api.SubscriptionTransferFilter) (*common.Subscription[*api.TransferMessage], error) {
+func (c *Client) SubscribeTransfers(pos string, filter *api.SubscriptionTransferFilter) (*wsclient.Subscription[*api.TransferMessage], error) {
 	if c.wsConn == nil {
 		return nil, fmt.Errorf("not a websocket typed client")
 	}
@@ -248,7 +247,7 @@ func (c *Client) SubscribeTransfers(pos string, filter *api.SubscriptionTransfer
 }
 
 // SubscribeBeats2 subscribes to Beat2 message updates over WebSocket.
-func (c *Client) SubscribeBeats2(pos string) (*common.Subscription[*api.Beat2Message], error) {
+func (c *Client) SubscribeBeats2(pos string) (*wsclient.Subscription[*api.Beat2Message], error) {
 	if c.wsConn == nil {
 		return nil, fmt.Errorf("not a websocket typed client")
 	}
@@ -256,7 +255,7 @@ func (c *Client) SubscribeBeats2(pos string) (*common.Subscription[*api.Beat2Mes
 }
 
 // SubscribeTxPool subscribes to pending transaction updates over WebSocket.
-func (c *Client) SubscribeTxPool(txID *thor.Bytes32) (*common.Subscription[*api.PendingTxIDMessage], error) {
+func (c *Client) SubscribeTxPool(txID *thor.Bytes32) (*wsclient.Subscription[*api.PendingTxIDMessage], error) {
 	if c.wsConn == nil {
 		return nil, fmt.Errorf("not a websocket typed client")
 	}

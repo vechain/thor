@@ -18,7 +18,6 @@ import (
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/thorclient/common"
 )
 
 func TestClient_SubscribeEvents(t *testing.T) {
@@ -281,7 +280,7 @@ func TestClient_SubscribeBlocks_ServerError(t *testing.T) {
 	// Read the error from the event channel
 	event := <-sub.EventChan
 	assert.Error(t, event.Error)
-	assert.True(t, errors.Is(event.Error, common.ErrUnexpectedMsg))
+	assert.True(t, errors.Is(event.Error, ErrUnexpectedMsg))
 }
 
 func TestClient_SubscribeBlocks_ServerShutdown(t *testing.T) {
