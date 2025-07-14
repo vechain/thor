@@ -41,10 +41,10 @@ func newValidations(storage *storage) *validations {
 		storage:             storage,
 		leaderGroup:         newLinkedList(storage, slotActiveHead, slotActiveTail, slotActiveGroupSize),
 		validatorQueue:      newLinkedList(storage, slotQueuedHead, slotQueuedTail, slotQueuedGroupSize),
-		lockedVET:           solidity.NewUint256(storage.Address(), storage.State(), slotLockedVET),
-		lockedWeight:        solidity.NewUint256(storage.Address(), storage.State(), slotLockedWeight),
-		queuedVET:           solidity.NewUint256(storage.Address(), storage.State(), slotQueuedVET),
-		queuedWeight:        solidity.NewUint256(storage.Address(), storage.State(), slotQueuedWeight),
+		lockedVET:           solidity.NewUint256(storage.context, slotLockedVET),
+		lockedWeight:        solidity.NewUint256(storage.context, slotLockedWeight),
+		queuedVET:           solidity.NewUint256(storage.context, slotQueuedVET),
+		queuedWeight:        solidity.NewUint256(storage.context, slotQueuedWeight),
 		lowStakingPeriod:    LowStakingPeriod,
 		mediumStakingPeriod: MediumStakingPeriod,
 		highStakingPeriod:   HighStakingPeriod,
@@ -62,21 +62,15 @@ func (v *validations) IsActive() (bool, error) {
 
 // FirstActive returns validator address of first entry.
 func (v *validations) FirstActive() (thor.Bytes32, error) {
-	v.storage.chargeGas(thor.SloadGas)
-
 	return v.leaderGroup.head.Get()
 }
 
 // FirstQueued returns validator address of first entry.
 func (v *validations) FirstQueued() (thor.Bytes32, error) {
-	v.storage.chargeGas(thor.SloadGas)
-
 	return v.validatorQueue.head.Get()
 }
 
 func (v *validations) LeaderGroupIterator(callback func(thor.Bytes32, *Validation) error) error {
-	v.storage.chargeGas(thor.SloadGas)
-
 	return v.leaderGroup.Iter(callback)
 }
 
@@ -150,7 +144,7 @@ func (v *validations) Add(
 		return thor.Bytes32{}, errors.New("failed to add validator to queue")
 	}
 
-	if err := v.storage.SetAggregation(id, newAggregation()); err != nil {
+	if err := v.storage.SetAggregation(id, newAggregation(), true); err != nil {
 		return thor.Bytes32{}, err
 	}
 
@@ -203,7 +197,7 @@ func (v *validations) ActivateNext(
 	validatorWeight := big.NewInt(0).Mul(validatorLocked, validatorWeightMultiplier)
 
 	renewal := aggregation.Renew()
-	if err := v.storage.SetAggregation(id, aggregation); err != nil {
+	if err := v.storage.SetAggregation(id, aggregation, false); err != nil {
 		return nil, err
 	}
 
@@ -278,7 +272,7 @@ func (v *validations) UpdateAutoRenew(endorsor thor.Address, id thor.Bytes32, au
 		}
 	}
 
-	return v.storage.SetValidation(id, validator)
+	return v.storage.SetValidation(id, validator, false)
 }
 
 // SetExitBlock sets the exit block for a validator.
@@ -340,7 +334,7 @@ func (v *validations) IncreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 		return err
 	}
 
-	return v.storage.SetValidation(id, entry)
+	return v.storage.SetValidation(id, entry, false)
 }
 
 func (v *validations) DecreaseStake(id thor.Bytes32, endorsor thor.Address, amount *big.Int) error {
@@ -384,12 +378,12 @@ func (v *validations) DecreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 			return err
 		}
 	}
-	err = v.storage.SetAggregation(id, aggregation)
+	err = v.storage.SetAggregation(id, aggregation, false)
 	if err != nil {
 		return err
 	}
 
-	return v.storage.SetValidation(id, entry)
+	return v.storage.SetValidation(id, entry, false)
 }
 
 // WithdrawStake allows validations to withdraw any withdrawable stake.
@@ -423,7 +417,7 @@ func (v *validations) WithdrawStake(endorsor thor.Address, id thor.Bytes32, curr
 	}
 
 	entry.WithdrawableVET = big.NewInt(0)
-	if err := v.storage.SetValidation(id, entry); err != nil {
+	if err := v.storage.SetValidation(id, entry, false); err != nil {
 		return nil, err
 	}
 
@@ -481,7 +475,7 @@ func (v *validations) ExitValidator(id thor.Bytes32) error {
 		return err
 	}
 	exitedTVL, queuedDecrease, exitedWeight, queuedWeightDecrease := aggregation.Exit()
-	if err := v.storage.SetAggregation(id, aggregation); err != nil {
+	if err := v.storage.SetAggregation(id, aggregation, false); err != nil {
 		return err
 	}
 	exitedTVL.Add(exitedTVL, entry.CooldownVET)

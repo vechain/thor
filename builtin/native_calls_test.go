@@ -271,7 +271,7 @@ func executeTxAndGetReceipt(description TestTxDescription) (*tx.Receipt, *thor.B
 	trx := new(tx.Builder).
 		ChainTag(thorChain.Repo().ChainTag()).
 		Expiration(50).
-		Gas(100000).
+		Gas(1000000).
 		Clause(clause).
 		Build()
 
@@ -760,7 +760,7 @@ func TestEnergyNative(t *testing.T) {
 	summary := thorChain.Repo().BestBlockSummary()
 	firstPOS := summary.Header.Number() + 1
 	st := thorChain.Stater().NewState(summary.Root())
-	energyAtBlock, err := st.GetEnergy(summary.Header.Beneficiary(), summary.Header.Timestamp())
+	energyAtBlock, err := builtin.Energy.Native(st, summary.Header.Timestamp()).Get(summary.Header.Beneficiary())
 	require.NoError(t, err)
 	validatorMap[summary.Header.Timestamp()] = energyAtBlock
 	require.NoError(t, err)
@@ -774,7 +774,7 @@ func TestEnergyNative(t *testing.T) {
 		require.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
 		summary = thorChain.Repo().BestBlockSummary()
 		st := thorChain.Stater().NewState(summary.Root())
-		energyAtBlock, err = st.GetEnergy(summary.Header.Beneficiary(), summary.Header.Timestamp())
+		energyAtBlock, err = builtin.Energy.Native(st, summary.Header.Timestamp()).Get(summary.Header.Beneficiary())
 		require.NoError(t, err)
 		validatorMap[thorChain.Repo().BestBlockSummary().Header.Timestamp()] = energyAtBlock
 

@@ -58,7 +58,10 @@ func (c *Consensus) validate(
 	}
 
 	if activated {
-		builtin.Energy.Native(state, parent.Timestamp()).StopEnergyGrowth()
+		err := builtin.Energy.Native(state, parent.Timestamp()).StopEnergyGrowth()
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	if err := c.validateBlockBody(block); err != nil {

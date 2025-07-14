@@ -8,9 +8,8 @@ package builtin
 import (
 	"fmt"
 
-	"github.com/vechain/thor/v2/api"
-
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
@@ -19,7 +18,7 @@ import (
 )
 
 type Executor struct {
-	contract bind.Contract
+	contract *bind.Contract
 	revision string
 }
 
@@ -41,7 +40,7 @@ func (e *Executor) Revision(rev string) *Executor {
 	}
 }
 
-func (e *Executor) Raw() bind.Contract {
+func (e *Executor) Raw() *bind.Contract {
 	return e.contract
 }
 
@@ -108,31 +107,31 @@ func (e *Executor) ApproverCount() (uint8, error) {
 	return count, nil
 }
 
-func (e *Executor) Propose(target thor.Address, data []byte) bind.MethodBuilder {
+func (e *Executor) Propose(target thor.Address, data []byte) *bind.MethodBuilder {
 	return e.contract.Method("propose", target, data)
 }
 
-func (e *Executor) Approve(proposalID thor.Bytes32) bind.MethodBuilder {
+func (e *Executor) Approve(proposalID thor.Bytes32) *bind.MethodBuilder {
 	return e.contract.Method("approve", proposalID)
 }
 
-func (e *Executor) Execute(proposalID thor.Bytes32) bind.MethodBuilder {
+func (e *Executor) Execute(proposalID thor.Bytes32) *bind.MethodBuilder {
 	return e.contract.Method("execute", proposalID)
 }
 
-func (e *Executor) AddApprover(address thor.Address, identity thor.Bytes32) bind.MethodBuilder {
+func (e *Executor) AddApprover(address thor.Address, identity thor.Bytes32) *bind.MethodBuilder {
 	return e.contract.Method("addApprover", address, identity)
 }
 
-func (e *Executor) RevokeApprover(address thor.Address) bind.MethodBuilder {
+func (e *Executor) RevokeApprover(address thor.Address) *bind.MethodBuilder {
 	return e.contract.Method("revokeApprover", address)
 }
 
-func (e *Executor) AttachVotingContract(votingContract thor.Address) bind.MethodBuilder {
+func (e *Executor) AttachVotingContract(votingContract thor.Address) *bind.MethodBuilder {
 	return e.contract.Method("attachVotingContract", votingContract)
 }
 
-func (e *Executor) DetachVotingContract(votingContract thor.Address) bind.MethodBuilder {
+func (e *Executor) DetachVotingContract(votingContract thor.Address) *bind.MethodBuilder {
 	return e.contract.Method("detachVotingContract", votingContract)
 }
 
