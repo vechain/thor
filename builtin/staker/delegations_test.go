@@ -267,6 +267,34 @@ func Test_QueuedDelegator_Withdraw_NonAutoRenew(t *testing.T) {
 	aggregation, err := staker.storage.GetAggregation(validator.ID)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0), aggregation.PendingOneTimeVET)
+	assert.Equal(t, big.NewInt(0), aggregation.PendingOneTimeWeight)
+
+	// And the delegation should be removed
+	delegation, _, err := staker.GetDelegation(id)
+	assert.NoError(t, err)
+	assert.False(t, delegation.IsEmpty())
+}
+
+func Test_QueuedDelegator_Withdraw_AutoRenew(t *testing.T) {
+	// Given the staker contract is setup
+	staker, validators := newDelegationStaker(t)
+
+	// And a delegation is added with auto renew enabled
+	validator := validators[0]
+	stake := RandomStake()
+	id, err := staker.AddDelegation(validator.ID, stake, true, 255)
+	assert.NoError(t, err)
+
+	// When the delegation withdraws before the next staking period
+	amount, err := staker.WithdrawDelegation(id)
+	assert.NoError(t, err)
+	assert.Equal(t, stake, amount)
+
+	// Then the aggregation should be removed
+	aggregation, err := staker.storage.GetAggregation(validator.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0), aggregation.PendingRecurringVET)
+	assert.Equal(t, big.NewInt(0), aggregation.PendingRecurringWeight)
 
 	// And the delegation should be removed
 	delegation, _, err := staker.GetDelegation(id)
