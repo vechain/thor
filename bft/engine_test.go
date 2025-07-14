@@ -350,7 +350,7 @@ func TestFinalized(t *testing.T) {
 
 		st, err := testBFT.engine.computeState(sum.Header)
 
-		fmt.Printf("block %d: justified: %t, committed: %t, quality: %d\n", i, st.Justified, st.Committed, st.Quality)
+		fmt.Printf("block %d: justified: %t, committed: %t, quality: %d, finalized: %t\n", i, st.Justified, st.Committed, st.Quality, testBFT.engine.Finalized() == sum.Header.ID())
 	}
 
 	assert.Error(t, err)
