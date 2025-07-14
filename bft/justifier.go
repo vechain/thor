@@ -5,6 +5,7 @@
 package bft
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/vechain/thor/v2/block"
@@ -118,6 +119,7 @@ func (js *justifier) Summarize() *bftState {
 	if len(js.voterWeights) == 0 {
 		justified = uint64(len(js.votes)) > js.threshold.Uint64()
 		committed = js.comVotes > js.threshold.Uint64()
+		fmt.Printf("POA: justified: %t, committed: %t\n", justified, committed)
 	} else {
 		totalVoterWeight := big.NewInt(0)
 		for _, weight := range js.voterWeights {
@@ -125,6 +127,7 @@ func (js *justifier) Summarize() *bftState {
 		}
 		justified = totalVoterWeight.Cmp(js.threshold) > 0
 		committed = js.comWeight.Cmp(js.threshold) > 0
+		fmt.Printf("POS: justified: %t, committed: %t\n", justified, committed)
 	}
 
 	var quality uint32

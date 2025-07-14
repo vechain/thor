@@ -6,6 +6,7 @@ package bft
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -463,6 +464,20 @@ func TestFinalizedHayabusa(t *testing.T) {
 	}
 	assert.Equal(t, new(big.Int).Mul(big.NewInt(int64(len(devAccounts) - 1)), validatorStake), totalStake)
 	assert.Equal(t, new(big.Int).Mul(big.NewInt(2), totalStake), totalWeight)
+
+	blockNum := testBFT.engine.repo.BestBlockSummary().Header.Number()
+	for i := 0; i < int(blockNum); i++ {
+		sum, err := testBFT.repo.NewBestChain().GetBlockSummary(uint32(i))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		st, err := testBFT.engine.computeState(sum.Header)
+
+		fmt.Printf("block %d: justified: %t, committed: %t, quality: %d\n", i, st.Justified, st.Committed, st.Quality)
+	}
+
+	assert.Error(t, err)
 }
 
 func TestAccepts(t *testing.T) {
