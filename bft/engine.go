@@ -349,9 +349,10 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 		h = sum.Header
 	}
 
+	num := header.Number()
 	st := js.Summarize()
 	engine.caches.state.Add(header.ID(), st)
-	engine.caches.justifier.Set(header.ID(), js, float64(header.Number()))
+	engine.caches.justifier.Set(header.ID(), js, float64(num))
 	return st, nil
 }
 
