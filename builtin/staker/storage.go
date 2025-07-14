@@ -62,11 +62,7 @@ type storage struct {
 
 // newStorage creates a new instance of storage.
 func newStorage(addr thor.Address, state *state.State, charger *gascharger.Charger) *storage {
-	context := &solidity.Context{
-		Address: addr,
-		State:   state,
-		Charger: charger,
-	}
+	context := solidity.NewContext(addr, state, charger)
 	return &storage{
 		context:      context,
 		validations:  solidity.NewMapping[thor.Bytes32, *Validation](context, slotValidations),

@@ -24,7 +24,7 @@ func NewUint256(context *Context, slot thor.Bytes32) *Uint256 {
 }
 
 func (u *Uint256) Get() (*big.Int, error) {
-	storage, err := u.context.State.GetStorage(u.context.Address, u.pos)
+	storage, err := u.context.state.GetStorage(u.context.address, u.pos)
 	if err != nil {
 		return nil, err
 	}
@@ -35,7 +35,7 @@ func (u *Uint256) Get() (*big.Int, error) {
 func (u *Uint256) Set(value *big.Int) {
 	storage := thor.BytesToBytes32(value.Bytes())
 	u.context.UseGas(thor.SstoreResetGas)
-	u.context.State.SetStorage(u.context.Address, u.pos, storage)
+	u.context.state.SetStorage(u.context.address, u.pos, storage)
 }
 
 func (u *Uint256) Add(value *big.Int) error {

@@ -20,24 +20,24 @@ func TestUint256(t *testing.T) {
 
 	// test `Set`
 	uint.Set(big.NewInt(1000))
-	assert.Equal(t, ctx.Charger.TotalGas(), thor.SstoreResetGas)
+	assert.Equal(t, ctx.charger.TotalGas(), thor.SstoreResetGas)
 
 	// test `Get`
 	charger := gascharger.New(nil)
-	ctx.Charger = charger
+	ctx.charger = charger
 
 	value, err := uint.Get()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(1000), value)
-	assert.Equal(t, ctx.Charger.TotalGas(), thor.SloadGas)
+	assert.Equal(t, ctx.charger.TotalGas(), thor.SloadGas)
 
 	// test `Add`
 	charger = gascharger.New(nil)
-	ctx.Charger = charger
+	ctx.charger = charger
 
 	err = uint.Add(big.NewInt(500))
 	assert.NoError(t, err)
-	assert.Equal(t, ctx.Charger.TotalGas(), thor.SstoreResetGas+thor.SloadGas)
+	assert.Equal(t, ctx.charger.TotalGas(), thor.SstoreResetGas+thor.SloadGas)
 
 	value, err = uint.Get()
 	assert.NoError(t, err)
@@ -45,11 +45,11 @@ func TestUint256(t *testing.T) {
 
 	// test `Sub`
 	charger = gascharger.New(nil)
-	ctx.Charger = charger
+	ctx.charger = charger
 
 	err = uint.Sub(big.NewInt(200))
 	assert.NoError(t, err)
-	assert.Equal(t, ctx.Charger.TotalGas(), thor.SstoreResetGas+thor.SloadGas)
+	assert.Equal(t, ctx.charger.TotalGas(), thor.SstoreResetGas+thor.SloadGas)
 
 	value, err = uint.Get()
 	assert.NoError(t, err)

@@ -21,7 +21,7 @@ func NewBytes32(context *Context, pos thor.Bytes32) *Bytes32 {
 
 func (a *Bytes32) Get() (thor.Bytes32, error) {
 	a.context.UseGas(thor.SloadGas)
-	return a.context.State.GetStorage(a.context.Address, a.pos)
+	return a.context.state.GetStorage(a.context.address, a.pos)
 }
 
 func (a *Bytes32) Set(bytes *thor.Bytes32, newValue bool) {
@@ -33,5 +33,5 @@ func (a *Bytes32) Set(bytes *thor.Bytes32, newValue bool) {
 	} else {
 		a.context.UseGas(thor.SstoreResetGas)
 	}
-	a.context.State.SetStorage(a.context.Address, a.pos, *bytes)
+	a.context.state.SetStorage(a.context.address, a.pos, *bytes)
 }

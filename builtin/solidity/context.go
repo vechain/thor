@@ -12,13 +12,29 @@ import (
 )
 
 type Context struct {
-	Address thor.Address
-	State   *state.State
-	Charger *gascharger.Charger
+	address thor.Address
+	state   *state.State
+	charger *gascharger.Charger
+}
+
+func NewContext(address thor.Address, state *state.State, charger *gascharger.Charger) *Context {
+	return &Context{
+		address: address,
+		state:   state,
+		charger: charger,
+	}
+}
+
+func (c *Context) Address() thor.Address {
+	return c.address
+}
+
+func (c *Context) State() *state.State {
+	return c.state
 }
 
 func (c *Context) UseGas(gas uint64) {
-	if c.Charger != nil {
-		c.Charger.Charge(gas)
+	if c.charger != nil {
+		c.charger.Charge(gas)
 	}
 }

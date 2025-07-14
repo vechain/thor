@@ -22,19 +22,19 @@ func TestBytes32(t *testing.T) {
 
 	// Test `Set` new value
 	bytes32.Set(&value, true)
-	assert.Equal(t, ctx.Charger.TotalGas(), thor.SstoreSetGas)
+	assert.Equal(t, ctx.charger.TotalGas(), thor.SstoreSetGas)
 	charger := gascharger.New(nil)
-	ctx.Charger = charger
+	ctx.charger = charger
 
 	// Test `Set` updated value
 	bytes32.Set(&value, false)
-	assert.Equal(t, ctx.Charger.TotalGas(), thor.SstoreResetGas)
+	assert.Equal(t, ctx.charger.TotalGas(), thor.SstoreResetGas)
 	charger = gascharger.New(nil)
-	ctx.Charger = charger
+	ctx.charger = charger
 
 	// Test `Get`
 	retrievedValue, err := bytes32.Get()
 	assert.NoError(t, err)
 	assert.Equal(t, value, retrievedValue)
-	assert.Equal(t, ctx.Charger.TotalGas(), thor.SloadGas)
+	assert.Equal(t, ctx.charger.TotalGas(), thor.SloadGas)
 }

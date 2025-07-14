@@ -29,7 +29,7 @@ func NewMapping[K Key, V any](context *Context, pos thor.Bytes32) *Mapping[K, V]
 
 func (m *Mapping[K, V]) Get(key K) (value V, err error) {
 	position := thor.Blake2b(key.Bytes(), m.basePos.Bytes())
-	err = m.context.State.DecodeStorage(m.context.Address, position, func(raw []byte) error {
+	err = m.context.state.DecodeStorage(m.context.address, position, func(raw []byte) error {
 		if reflect.ValueOf(value).Kind() == reflect.Ptr {
 			value = reflect.New(reflect.TypeOf(value).Elem()).Interface().(V)
 		}
@@ -45,7 +45,7 @@ func (m *Mapping[K, V]) Get(key K) (value V, err error) {
 
 func (m *Mapping[K, V]) Set(key K, value V, newValue bool) error {
 	position := thor.Blake2b(key.Bytes(), m.basePos.Bytes())
-	return m.context.State.EncodeStorage(m.context.Address, position, func() ([]byte, error) {
+	return m.context.state.EncodeStorage(m.context.address, position, func() ([]byte, error) {
 		val, err := rlp.EncodeToBytes(value)
 		if err != nil {
 			return nil, err

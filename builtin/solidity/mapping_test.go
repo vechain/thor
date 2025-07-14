@@ -31,9 +31,9 @@ func newContext() *Context {
 	charger := gascharger.New(nil)
 
 	return &Context{
-		Address: addr,
-		State:   st,
-		Charger: charger,
+		address: addr,
+		state:   st,
+		charger: charger,
 	}
 }
 
@@ -41,7 +41,7 @@ func newSetup() (*gascharger.Charger, *Mapping[thor.Bytes32, *TestStruct]) {
 	context := newContext()
 	mapping := NewMapping[thor.Bytes32, *TestStruct](context, thor.Bytes32{1})
 
-	return context.Charger, mapping
+	return context.charger, mapping
 }
 
 func newTestStruct() *TestStruct {
@@ -72,7 +72,7 @@ func TestMapping_Get_ExistingValue(t *testing.T) {
 	assert.NoError(t, mapping.Set(key, value, true))
 
 	charger := gascharger.New(nil)    // Reset charger to measure only the SLOAD operation
-	mapping.context.Charger = charger // Reset charger to measure only the SLOAD operation
+	mapping.context.charger = charger // Reset charger to measure only the SLOAD operation
 
 	retrievedValue, err := mapping.Get(key)
 	assert.NoError(t, err)
