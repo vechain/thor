@@ -5,11 +5,14 @@
 package bft
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin/params"
+	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
@@ -17,6 +20,7 @@ import (
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 )
 
 type TestBFT struct {
@@ -92,7 +96,7 @@ func newTestBft(forkCfg *thor.ForkConfig) (*TestBFT, error) {
 		engine: engine,
 		db:     db,
 		repo:   repo,
-		stater: state.NewStater(db),
+		stater: stater,
 		fc:     forkCfg,
 	}, nil
 }
@@ -391,6 +395,46 @@ func TestFinalized(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, jc, j)
 	assert.Equal(t, jc, testBFT.engine.justified.Load().(justified).value)
+}
+
+func TestFinalizedHayabusa(t *testing.T) {
+	testBFT, err := newTestBft(&thor.ForkConfig{
+		HAYABUSA: 1,
+		HAYABUSA_TP: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Add validators
+	eth := big.NewInt(1e18) // 1 ETH
+	minStake := new(big.Int).Mul(eth, big.NewInt(25e6))
+
+	st := state.New(testBFT.db, trie.Root{})
+	param := params.New(thor.BytesToAddress([]byte("params")), st)
+	param.Set(thor.KeyMaxBlockProposers, big.NewInt(int64(len(devAccounts))))
+
+	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(int64(len(devAccounts)))))
+	stkr := staker.New(thor.BytesToAddress([]byte("stkr")), st, param, nil)
+
+	minStakingPeriod := uint32(360) * 24 * 7 // 360 days in seconds
+	for _, acc := range devAccounts {
+		_, err := stkr.AddValidator(acc.Address, acc.Address, minStakingPeriod, minStake, true, 0)
+		assert.NoError(t, err)
+	}
+
+	transitioned, err := stkr.Transition(0)
+	assert.NoError(t, err)
+	assert.True(t, transitioned)
+
+	stake, weight, err := stkr.LockedVET()
+	assert.NoError(t, err)
+	assert.Equal(t, new(big.Int).Mul(big.NewInt(10), minStake), stake)
+	assert.Equal(t, new(big.Int).Mul(big.NewInt(20), minStake), weight)
+
+	if err = testBFT.fastForward(thor.CheckpointInterval*3 - 1); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestAccepts(t *testing.T) {
