@@ -22,8 +22,6 @@ import (
 	"github.com/vechain/thor/v2/thorclient/httpclient"
 	"github.com/vechain/thor/v2/thorclient/wsclient"
 	"github.com/vechain/thor/v2/tx"
-
-	tccommon "github.com/vechain/thor/v2/thorclient/common"
 )
 
 // Client represents the VeChainThor client, allowing communication over HTTP and WebSocket.
@@ -72,7 +70,7 @@ type getOptions struct {
 // applyOptions applies the given functional options to the default options.
 func applyOptions(opts []Option) *getOptions {
 	options := &getOptions{
-		revision: tccommon.BestRevision,
+		revision: common.BestRevision,
 		pending:  false,
 	}
 	for _, o := range opts {

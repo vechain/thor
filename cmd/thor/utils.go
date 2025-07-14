@@ -132,11 +132,12 @@ func defaultConfigDir() string {
 func defaultDataDir() string {
 	// Try to place the data folder in the user's home dir
 	if home := homeDir(); home != "" {
-		if runtime.GOOS == "darwin" {
+		switch runtime.GOOS {
+		case "darwin":
 			return filepath.Join(home, "Library", "Application Support", "org.vechain.thor")
-		} else if runtime.GOOS == "windows" {
+		case "windows":
 			return filepath.Join(home, "AppData", "Roaming", "org.vechain.thor")
-		} else {
+		default:
 			return filepath.Join(home, ".org.vechain.thor")
 		}
 	}

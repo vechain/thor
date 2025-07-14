@@ -436,7 +436,7 @@ func opBlockhash(_ *uint64, evm *EVM, _ *Contract, _ *Memory, stack *Stack) ([]b
 		return nil, nil
 	}
 	var upper, lower uint64
-	upper = evm.Context.BlockNumber.Uint64()
+	upper = evm.BlockNumber.Uint64()
 	if upper < 257 {
 		lower = 0
 	} else {
@@ -451,30 +451,30 @@ func opBlockhash(_ *uint64, evm *EVM, _ *Contract, _ *Memory, stack *Stack) ([]b
 }
 
 func opCoinbase(_ *uint64, evm *EVM, _ *Contract, _ *Memory, stack *Stack) ([]byte, error) {
-	stack.push(new(uint256.Int).SetBytes(evm.Context.Coinbase.Bytes()))
+	stack.push(new(uint256.Int).SetBytes(evm.Coinbase.Bytes()))
 	return nil, nil
 }
 
 func opTimestamp(_ *uint64, evm *EVM, _ *Contract, _ *Memory, stack *Stack) ([]byte, error) {
-	v, _ := uint256.FromBig(evm.Context.Time)
+	v, _ := uint256.FromBig(evm.Time)
 	stack.push(v)
 	return nil, nil
 }
 
 func opNumber(_ *uint64, evm *EVM, _ *Contract, _ *Memory, stack *Stack) ([]byte, error) {
-	v, _ := uint256.FromBig(evm.Context.BlockNumber)
+	v, _ := uint256.FromBig(evm.BlockNumber)
 	stack.push(v)
 	return nil, nil
 }
 
 func opDifficulty(_ *uint64, evm *EVM, _ *Contract, _ *Memory, stack *Stack) ([]byte, error) {
-	v, _ := uint256.FromBig(evm.Context.Difficulty)
+	v, _ := uint256.FromBig(evm.Difficulty)
 	stack.push(v)
 	return nil, nil
 }
 
 func opGasLimit(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	stack.push(uint256.NewInt(evm.Context.GasLimit))
+	stack.push(uint256.NewInt(evm.GasLimit))
 	return nil, nil
 }
 
@@ -798,7 +798,7 @@ func opSelfBalance(_ *uint64, evm *EVM, contract *Contract, _ *Memory, stack *St
 
 // opBaseFee implements BASEFEE opcode
 func opBaseFee(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	baseFee, _ := uint256.FromBig(evm.Context.BaseFee)
+	baseFee, _ := uint256.FromBig(evm.BaseFee)
 	stack.push(baseFee)
 	return nil, nil
 }

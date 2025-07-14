@@ -143,7 +143,6 @@ func TestExecutorApprover(t *testing.T) {
 }
 
 func TestExecutorVotingContract(t *testing.T) {
-
 	test := initExectorTest()
 	voting := thor.BytesToAddress([]byte("voting"))
 	test.Case("attachVotingContract", voting).
