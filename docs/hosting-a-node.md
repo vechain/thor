@@ -43,7 +43,6 @@ available options.
 | CPU       | 2 Core                | 4 Core                    |
 | RAM       | 8 GB                  | 16 GB                     |
 | Bandwidth | 10 Mbit               | 20 Mbit                   |
-| Disk      | 200 GB NVMe SSD       | 300 GB NVMe SSD           |
 
 ### Full Archive Nodes
 
@@ -55,7 +54,6 @@ available options.
 | CPU       | 2 Core                | 4 Core                    |
 | RAM       | 16 GB                 | 32 GB                     |
 | Bandwidth | 10 Mbit               | 20 Mbit                   |
-| Disk      | 600 GB SSD            | 1 TB SSD                  |
 
 ---
 
@@ -156,11 +154,11 @@ Response Example
 }
 ```
 
-|           Key         |           Type        |         Description       |
-|-----------------------|-----------------------|---------------------------|
-| healthy               | boolean               | If the peerCount <= `min_peers_count` and `isNetworkProgressing` is True, it will return True.(default `min_peers_count` is 2)|
-| bestBlockTime         | string                | The best block time of the node.                     |
-| peerCount             | number                | The number of peers connected to the node.                  |
-| isNetworkProgressing  | boolean               | If the node has not completed the block sync, it will return False  |
+| Key                  | Type    | Description                                                                                                                    |
+|----------------------|---------|--------------------------------------------------------------------------------------------------------------------------------|
+| healthy              | boolean | If the peerCount <= `min_peers_count` and `isNetworkProgressing` is True, it will return True.(default `min_peers_count` is 2) |
+| bestBlockTime        | string  | The best block time of the node.                                                                                               |
+| peerCount            | number  | The number of peers connected to the node.                                                                                     |
+| isNetworkProgressing | boolean | If the node has not completed the block sync, it will return False                                                             |
 
 - **Note**: if the `healthy` is False, the response status code is 503
