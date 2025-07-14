@@ -51,49 +51,30 @@ func nameToSlot(name string) thor.Bytes32 {
 
 // storage represents the root storage for the Staker contract.
 type storage struct {
-	state        *state.State
-	address      thor.Address
+	context      *solidity.Context
 	validations  *solidity.Mapping[thor.Bytes32, *Validation]
 	aggregations *solidity.Mapping[thor.Bytes32, *Aggregation]
 	delegations  *solidity.Mapping[thor.Bytes32, *Delegation]
 	lookups      *solidity.Mapping[thor.Address, thor.Bytes32] // allows lookup of Validation by node address
 	rewards      *solidity.Mapping[thor.Bytes32, *big.Int]     // stores rewards per validator staking period
 	exits        *solidity.Mapping[*big.Int, thor.Bytes32]     // exit block -> validator ID
-	charger      *gascharger.Charger                           // track storage access costs
 }
 
 // newStorage creates a new instance of storage.
 func newStorage(addr thor.Address, state *state.State, charger *gascharger.Charger) *storage {
+	context := solidity.NewContext(addr, state, charger)
 	return &storage{
-		charger:      charger,
-		state:        state,
-		address:      addr,
-		validations:  solidity.NewMapping[thor.Bytes32, *Validation](addr, state, slotValidations),
-		aggregations: solidity.NewMapping[thor.Bytes32, *Aggregation](addr, state, slotAggregations),
-		delegations:  solidity.NewMapping[thor.Bytes32, *Delegation](addr, state, slotDelegations),
-		lookups:      solidity.NewMapping[thor.Address, thor.Bytes32](addr, state, slotValidationLookups),
-		rewards:      solidity.NewMapping[thor.Bytes32, *big.Int](addr, state, slotRewards),
-		exits:        solidity.NewMapping[*big.Int, thor.Bytes32](addr, state, slotExitEpochs),
+		context:      context,
+		validations:  solidity.NewMapping[thor.Bytes32, *Validation](context, slotValidations),
+		aggregations: solidity.NewMapping[thor.Bytes32, *Aggregation](context, slotAggregations),
+		delegations:  solidity.NewMapping[thor.Bytes32, *Delegation](context, slotDelegations),
+		lookups:      solidity.NewMapping[thor.Address, thor.Bytes32](context, slotValidationLookups),
+		rewards:      solidity.NewMapping[thor.Bytes32, *big.Int](context, slotRewards),
+		exits:        solidity.NewMapping[*big.Int, thor.Bytes32](context, slotExitEpochs),
 	}
-}
-
-func (s *storage) chargeGas(cost uint64) {
-	if s.charger != nil {
-		s.charger.Charge(cost)
-	}
-}
-
-func (s *storage) Address() thor.Address {
-	return s.address
-}
-
-func (s *storage) State() *state.State {
-	return s.state
 }
 
 func (s *storage) GetValidation(id thor.Bytes32) (*Validation, error) {
-	s.chargeGas(thor.SloadGas)
-
 	v, err := s.validations.Get(id)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get validator")
@@ -101,18 +82,14 @@ func (s *storage) GetValidation(id thor.Bytes32) (*Validation, error) {
 	return v, nil
 }
 
-func (s *storage) SetValidation(id thor.Bytes32, entry *Validation) error {
-	s.chargeGas(thor.SstoreResetGas)
-
-	if err := s.validations.Set(id, entry); err != nil {
+func (s *storage) SetValidation(id thor.Bytes32, entry *Validation, isNew bool) error {
+	if err := s.validations.Set(id, entry, isNew); err != nil {
 		return errors.Wrap(err, "failed to set validator")
 	}
 	return nil
 }
 
 func (s *storage) GetAggregation(validationID thor.Bytes32) (*Aggregation, error) {
-	s.chargeGas(thor.SloadGas)
-
 	d, err := s.aggregations.Get(validationID)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get validator aggregation")
@@ -120,18 +97,14 @@ func (s *storage) GetAggregation(validationID thor.Bytes32) (*Aggregation, error
 	return d, nil
 }
 
-func (s *storage) SetAggregation(validationID thor.Bytes32, entry *Aggregation) error {
-	s.chargeGas(thor.SstoreResetGas)
-
-	if err := s.aggregations.Set(validationID, entry); err != nil {
+func (s *storage) SetAggregation(validationID thor.Bytes32, entry *Aggregation, isNew bool) error {
+	if err := s.aggregations.Set(validationID, entry, isNew); err != nil {
 		return errors.Wrap(err, "failed to set validator aggregation")
 	}
 	return nil
 }
 
 func (s *storage) GetDelegation(delegationID thor.Bytes32) (*Delegation, error) {
-	s.chargeGas(thor.SloadGas)
-
 	d, err := s.delegations.Get(delegationID)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get delegation")
@@ -139,10 +112,8 @@ func (s *storage) GetDelegation(delegationID thor.Bytes32) (*Delegation, error) 
 	return d, nil
 }
 
-func (s *storage) SetDelegation(delegationID thor.Bytes32, entry *Delegation) error {
-	s.chargeGas(thor.SloadGas)
-
-	if err := s.delegations.Set(delegationID, entry); err != nil {
+func (s *storage) SetDelegation(delegationID thor.Bytes32, entry *Delegation, isNew bool) error {
+	if err := s.delegations.Set(delegationID, entry, isNew); err != nil {
 		return errors.Wrap(err, "failed to set delegation")
 	}
 	return nil
@@ -178,8 +149,6 @@ func (s *storage) GetDelegationBundle(delegationID thor.Bytes32) (*Delegation, *
 }
 
 func (s *storage) GetLookup(address thor.Address) (thor.Bytes32, error) {
-	s.chargeGas(thor.SloadGas)
-
 	l, err := s.lookups.Get(address)
 	if err != nil {
 		return thor.Bytes32{}, errors.Wrap(err, "failed to get lookup")
@@ -188,9 +157,7 @@ func (s *storage) GetLookup(address thor.Address) (thor.Bytes32, error) {
 }
 
 func (s *storage) SetLookup(address thor.Address, id thor.Bytes32) error {
-	s.chargeGas(thor.SstoreResetGas)
-
-	if err := s.lookups.Set(address, id); err != nil {
+	if err := s.lookups.Set(address, id, true); err != nil {
 		return errors.Wrap(err, "failed to set lookup")
 	}
 	return nil
@@ -214,7 +181,6 @@ func (s *storage) LookupNode(node thor.Address) (*Validation, thor.Bytes32, erro
 func (s *storage) GetExitEpoch(block uint32) (thor.Bytes32, error) {
 	bigBlock := big.NewInt(0).SetUint64(uint64(block))
 
-	s.chargeGas(thor.SloadGas)
 	id, err := s.exits.Get(bigBlock)
 	if err != nil {
 		return thor.Bytes32{}, errors.Wrap(err, "failed to get exit epoch")
@@ -225,8 +191,7 @@ func (s *storage) GetExitEpoch(block uint32) (thor.Bytes32, error) {
 func (s *storage) SetExitEpoch(block uint32, id thor.Bytes32) error {
 	bigBlock := big.NewInt(0).SetUint64(uint64(block))
 
-	s.chargeGas(thor.SstoreResetGas)
-	if err := s.exits.Set(bigBlock, id); err != nil {
+	if err := s.exits.Set(bigBlock, id, true); err != nil {
 		return errors.Wrap(err, "failed to set exit epoch")
 	}
 	return nil
@@ -237,7 +202,6 @@ func (s *storage) GetRewards(validationID thor.Bytes32, stakingPeriod uint32) (*
 	binary.BigEndian.PutUint32(periodBytes, stakingPeriod)
 	key := thor.Blake2b([]byte("rewards"), validationID.Bytes(), periodBytes)
 
-	s.chargeGas(thor.SloadGas)
 	return s.rewards.Get(key)
 }
 
@@ -266,19 +230,16 @@ func (s *storage) IncreaseReward(node thor.Address, reward big.Int) error {
 	binary.BigEndian.PutUint32(periodBytes, val.CurrentIteration())
 	key := thor.Blake2b([]byte("rewards"), id.Bytes(), periodBytes)
 
-	s.chargeGas(thor.SloadGas)
-
 	rewards, err := s.rewards.Get(key)
 	if err != nil {
 		return err
 	}
-	s.chargeGas(thor.SstoreResetGas)
 
-	return s.rewards.Set(key, big.NewInt(0).Add(rewards, &reward))
+	return s.rewards.Set(key, big.NewInt(0).Add(rewards, &reward), false)
 }
 
 func (s *storage) debugOverride(ptr *uint32, bytes32 thor.Bytes32) {
-	if num, err := solidity.NewUint256(s.Address(), s.State(), bytes32).Get(); err == nil {
+	if num, err := solidity.NewUint256(s.context, bytes32).Get(); err == nil {
 		numUint64 := num.Uint64()
 		if numUint64 != 0 {
 			o := uint32(numUint64)

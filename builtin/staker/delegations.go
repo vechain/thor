@@ -24,9 +24,9 @@ type delegations struct {
 func newDelegations(storage *storage) *delegations {
 	return &delegations{
 		storage:      storage,
-		queuedVET:    solidity.NewUint256(storage.Address(), storage.State(), slotQueuedVET),
-		queuedWeight: solidity.NewUint256(storage.Address(), storage.State(), slotQueuedWeight),
-		idCounter:    solidity.NewUint256(storage.Address(), storage.State(), slotDelegationsCounter),
+		queuedVET:    solidity.NewUint256(storage.context, slotQueuedVET),
+		queuedWeight: solidity.NewUint256(storage.context, slotQueuedWeight),
+		idCounter:    solidity.NewUint256(storage.context, slotDelegationsCounter),
 	}
 }
 
@@ -108,11 +108,11 @@ func (d *delegations) Add(
 		aggregated.PendingOneTimeWeight = big.NewInt(0).Add(aggregated.PendingOneTimeWeight, weight)
 	}
 
-	if err := d.storage.SetAggregation(validationID, aggregated); err != nil {
+	if err := d.storage.SetAggregation(validationID, aggregated, false); err != nil {
 		return thor.Bytes32{}, err
 	}
 
-	return delegationID, d.storage.SetDelegation(delegationID, delegation)
+	return delegationID, d.storage.SetDelegation(delegationID, delegation, true)
 }
 
 func (d *delegations) DisableAutoRenew(delegationID thor.Bytes32) error {
@@ -154,11 +154,11 @@ func (d *delegations) DisableAutoRenew(delegationID thor.Bytes32) error {
 	delegation.LastIteration = &lastIteration
 	delegation.AutoRenew = false
 
-	if err := d.storage.SetDelegation(delegationID, delegation); err != nil {
+	if err := d.storage.SetDelegation(delegationID, delegation, false); err != nil {
 		return err
 	}
 
-	return d.storage.SetAggregation(delegation.ValidationID, aggregation)
+	return d.storage.SetAggregation(delegation.ValidationID, aggregation, false)
 }
 
 func (d *delegations) EnableAutoRenew(delegationID thor.Bytes32) error {
@@ -189,11 +189,11 @@ func (d *delegations) EnableAutoRenew(delegationID thor.Bytes32) error {
 
 	delegation.LastIteration = nil
 	delegation.AutoRenew = true
-	if err := d.storage.SetDelegation(delegationID, delegation); err != nil {
+	if err := d.storage.SetDelegation(delegationID, delegation, false); err != nil {
 		return err
 	}
 
-	return d.storage.SetAggregation(delegation.ValidationID, aggregation)
+	return d.storage.SetAggregation(delegation.ValidationID, aggregation, false)
 }
 
 func (d *delegations) Withdraw(delegationID thor.Bytes32) (*big.Int, error) {
@@ -238,11 +238,10 @@ func (d *delegations) Withdraw(delegationID thor.Bytes32) (*big.Int, error) {
 	stake := delegation.Stake
 	delegation.Stake = big.NewInt(0)
 	// remove the delegation from the mapping after the withdraw
-	if err := d.storage.SetDelegation(delegationID, delegation); err != nil {
+	if err := d.storage.SetDelegation(delegationID, delegation, false); err != nil {
 		return nil, err
 	}
-
-	if err = d.storage.SetAggregation(delegation.ValidationID, aggregation); err != nil {
+	if err = d.storage.SetAggregation(delegation.ValidationID, aggregation, false); err != nil {
 		return nil, err
 	}
 
