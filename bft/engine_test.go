@@ -34,12 +34,15 @@ type TestBFT struct {
 const MaxBlockProposers = 11
 
 var (
-	devAccounts = genesis.DevAccounts()
-	defaultFC   = &thor.NoFork
+	devAccounts      = genesis.DevAccounts()
+	defaultFC        = &thor.NoFork
+	validatorStake   = new(big.Int).Mul(big.NewInt(25_000_000), big.NewInt(1e18))
+	minStakingPeriod = uint32(360) * 24 * 7
 )
 
 func init() {
 	defaultFC.FINALITY = 0
+	minStakingPeriod = uint32(360) * 24 * 7
 }
 
 func newTestBft(forkCfg *thor.ForkConfig) (*TestBFT, error) {
@@ -138,9 +141,6 @@ func (test *TestBFT) newBlock(parentSummary *chain.BlockSummary, master genesis.
 	}
 
 	if parentSummary.Header.Number() > test.fc.HAYABUSA+test.fc.HAYABUSA_TP {
-		vet := big.NewInt(25_000_000)
-		vet = vet.Mul(vet, big.NewInt(1e18))
-		minStakingPeriod := uint32(360) * 24 * 7
 		methodABI, found := builtin.Staker.ABI.MethodByName("addValidator")
 		if !found {
 			return nil, errors.New("addValidator method not found")
@@ -151,7 +151,7 @@ func (test *TestBFT) newBlock(parentSummary *chain.BlockSummary, master genesis.
 		}
 
 		clause := tx.NewClause(&builtin.Staker.Address)
-		clause = clause.WithValue(vet)
+		clause = clause.WithValue(validatorStake)
 		clause = clause.WithData(data)
 
 		trx := new(tx.Builder).
@@ -454,6 +454,15 @@ func TestFinalizedHayabusa(t *testing.T) {
 	if err = testBFT.fastForward(thor.CheckpointInterval*3 - 1); err != nil {
 		t.Fatal(err)
 	}
+
+	// PoS was enabled a while ago at this stage, check that the total stake and weight are correct
+	stkr := builtin.Staker.Native(testBFT.stater.NewState(testBFT.repo.BestBlockSummary().Root()))
+	totalStake, totalWeight, err := stkr.LockedVET()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, new(big.Int).Mul(big.NewInt(int64(len(devAccounts) - 1)), validatorStake), totalStake)
+	assert.Equal(t, new(big.Int).Mul(big.NewInt(2), totalStake), totalWeight)
 }
 
 func TestAccepts(t *testing.T) {
