@@ -412,13 +412,14 @@ func TestFinalizedHayabusa(t *testing.T) {
 
 	st := state.New(testBFT.db, trie.Root{})
 	param := params.New(thor.BytesToAddress([]byte("params")), st)
-	param.Set(thor.KeyMaxBlockProposers, big.NewInt(int64(len(devAccounts))))
+	validatorAccounts := devAccounts[0:3]
+	param.Set(thor.KeyMaxBlockProposers, big.NewInt(int64(len(validatorAccounts))))
 
-	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(int64(len(devAccounts)))))
+	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(int64(len(validatorAccounts)))))
 	stkr := staker.New(thor.BytesToAddress([]byte("stkr")), st, param, nil)
 
 	minStakingPeriod := uint32(360) * 24 * 7 // 360 days in seconds
-	for _, acc := range devAccounts {
+	for _, acc := range validatorAccounts {
 		_, err := stkr.AddValidator(acc.Address, acc.Address, minStakingPeriod, minStake, true, 0)
 		assert.NoError(t, err)
 	}
@@ -429,8 +430,8 @@ func TestFinalizedHayabusa(t *testing.T) {
 
 	stake, weight, err := stkr.LockedVET()
 	assert.NoError(t, err)
-	assert.Equal(t, new(big.Int).Mul(big.NewInt(10), minStake), stake)
-	assert.Equal(t, new(big.Int).Mul(big.NewInt(20), minStake), weight)
+	assert.Equal(t, new(big.Int).Mul(big.NewInt(3), minStake), stake)
+	assert.Equal(t, new(big.Int).Mul(big.NewInt(6), minStake), weight)
 
 	if err = testBFT.fastForward(thor.CheckpointInterval*3 - 1); err != nil {
 		t.Fatal(err)
