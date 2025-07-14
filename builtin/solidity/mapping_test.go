@@ -6,6 +6,7 @@
 package solidity
 
 import (
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -15,6 +16,8 @@ import (
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
+	"github.com/vechain/thor/v2/vm"
+	"github.com/vechain/thor/v2/xenv"
 )
 
 type TestStruct struct {
@@ -28,13 +31,20 @@ func newContext() *Context {
 	db := muxdb.NewMem()
 	st := state.New(db, trie.Root{})
 	addr := thor.Address{1}
-	charger := gascharger.New(nil)
+	charger := gascharger.New(newXenv())
 
 	return &Context{
 		address: addr,
 		state:   st,
 		charger: charger,
 	}
+}
+
+func newXenv() *xenv.Environment {
+	contract := &vm.Contract{
+		Gas: math.MaxUint64,
+	}
+	return xenv.New(nil, nil, nil, nil, nil, nil, contract, 0)
 }
 
 func newSetup() (*gascharger.Charger, *Mapping[thor.Bytes32, *TestStruct]) {
@@ -71,7 +81,7 @@ func TestMapping_Get_ExistingValue(t *testing.T) {
 	value := newTestStruct()
 	assert.NoError(t, mapping.Set(key, value, true))
 
-	charger := gascharger.New(nil)    // Reset charger to measure only the SLOAD operation
+	charger := gascharger.New(newXenv())
 	mapping.context.charger = charger // Reset charger to measure only the SLOAD operation
 
 	retrievedValue, err := mapping.Get(key)

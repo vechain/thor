@@ -64,9 +64,7 @@ func (c *Charger) Charge(gas uint64) {
 		c.customGas += gas
 	}
 
-	if c.env != nil {
-		c.env.UseGas(gas)
-	}
+	c.env.UseGas(gas)
 }
 
 func (c *Charger) Breakdown() string {

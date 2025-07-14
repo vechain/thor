@@ -23,7 +23,7 @@ func TestUint256(t *testing.T) {
 	assert.Equal(t, ctx.charger.TotalGas(), thor.SstoreResetGas)
 
 	// test `Get`
-	charger := gascharger.New(nil)
+	charger := gascharger.New(newXenv())
 	ctx.charger = charger
 
 	value, err := uint.Get()
@@ -32,7 +32,7 @@ func TestUint256(t *testing.T) {
 	assert.Equal(t, ctx.charger.TotalGas(), thor.SloadGas)
 
 	// test `Add`
-	charger = gascharger.New(nil)
+	charger = gascharger.New(newXenv())
 	ctx.charger = charger
 
 	err = uint.Add(big.NewInt(500))
@@ -44,7 +44,7 @@ func TestUint256(t *testing.T) {
 	assert.Equal(t, big.NewInt(1500), value)
 
 	// test `Sub`
-	charger = gascharger.New(nil)
+	charger = gascharger.New(newXenv())
 	ctx.charger = charger
 
 	err = uint.Sub(big.NewInt(200))
