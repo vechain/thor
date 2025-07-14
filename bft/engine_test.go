@@ -5,14 +5,14 @@
 package bft
 
 import (
+	"errors"
 	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/builtin/params"
-	"github.com/vechain/thor/v2/builtin/staker"
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
@@ -20,7 +20,7 @@ import (
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/trie"
+	"github.com/vechain/thor/v2/tx"
 )
 
 type TestBFT struct {
@@ -46,11 +46,18 @@ func newTestBft(forkCfg *thor.ForkConfig) (*TestBFT, error) {
 	db := muxdb.NewMem()
 
 	auth := make([]genesis.Authority, 0, len(devAccounts))
+	accounts := make([]genesis.Account, 0, len(devAccounts))
+	bal, _ := new(big.Int).SetString("1000000000000000000000000000", 10)
 	for _, acc := range devAccounts {
 		auth = append(auth, genesis.Authority{
 			MasterAddress:   acc.Address,
 			EndorsorAddress: acc.Address,
 			Identity:        thor.BytesToBytes32([]byte("master")),
+		})
+		accounts = append(accounts, genesis.Account{
+			Address: acc.Address,
+			Balance: (*genesis.HexOrDecimal256)(bal),
+			Energy:  (*genesis.HexOrDecimal256)(bal),
 		})
 	}
 	mbp := uint64(MaxBlockProposers)
@@ -60,6 +67,7 @@ func newTestBft(forkCfg *thor.ForkConfig) (*TestBFT, error) {
 		ExtraData:  "",
 		ForkConfig: forkCfg,
 		Authority:  auth,
+		Accounts:   accounts,
 		Params: genesis.Params{
 			MaxBlockProposers: &mbp,
 		},
@@ -129,7 +137,44 @@ func (test *TestBFT) newBlock(parentSummary *chain.BlockSummary, master genesis.
 		return nil, err
 	}
 
-	b, stg, _, err := flow.Pack(master.PrivateKey, conflicts, shouldVote)
+	if parentSummary.Header.Number() > test.fc.HAYABUSA+test.fc.HAYABUSA_TP {
+		vet := big.NewInt(25_000_000)
+		vet = vet.Mul(vet, big.NewInt(1e18))
+		minStakingPeriod := uint32(360) * 24 * 7
+		methodABI, found := builtin.Staker.ABI.MethodByName("addValidator")
+		if !found {
+			return nil, errors.New("addValidator method not found")
+		}
+		data, err := methodABI.EncodeInput(master.Address, minStakingPeriod, true)
+		if err != nil {
+			return nil, err
+		}
+
+		clause := tx.NewClause(&builtin.Staker.Address)
+		clause = clause.WithValue(vet)
+		clause = clause.WithData(data)
+
+		trx := new(tx.Builder).
+			ChainTag(test.repo.ChainTag()).
+			BlockRef(tx.NewBlockRef(test.repo.BestBlockSummary().Header.Number())).
+			Expiration(32).
+			Nonce(datagen.RandUint64()).
+			Gas(1000000).
+			Clause(clause).Build()
+
+		signature, err := crypto.Sign(trx.SigningHash().Bytes(), master.PrivateKey)
+		if err != nil {
+			return nil, err
+		}
+		trx = trx.WithSignature(signature)
+
+		err = flow.Adopt(trx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	b, stg, receipts, err := flow.Pack(master.PrivateKey, conflicts, shouldVote)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +183,7 @@ func (test *TestBFT) newBlock(parentSummary *chain.BlockSummary, master genesis.
 		return nil, err
 	}
 
-	if err = test.repo.AddBlock(b, nil, conflicts, asBest); err != nil {
+	if err = test.repo.AddBlock(b, receipts, conflicts, asBest); err != nil {
 		return nil, err
 	}
 
@@ -399,39 +444,12 @@ func TestFinalized(t *testing.T) {
 
 func TestFinalizedHayabusa(t *testing.T) {
 	testBFT, err := newTestBft(&thor.ForkConfig{
-		HAYABUSA: 1,
+		HAYABUSA:    1,
 		HAYABUSA_TP: 1,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	// Add validators
-	eth := big.NewInt(1e18) // 1 ETH
-	minStake := new(big.Int).Mul(eth, big.NewInt(25e6))
-
-	st := state.New(testBFT.db, trie.Root{})
-	param := params.New(thor.BytesToAddress([]byte("params")), st)
-	validatorAccounts := devAccounts[0:3]
-	param.Set(thor.KeyMaxBlockProposers, big.NewInt(int64(len(validatorAccounts))))
-
-	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(int64(len(validatorAccounts)))))
-	stkr := staker.New(thor.BytesToAddress([]byte("stkr")), st, param, nil)
-
-	minStakingPeriod := uint32(360) * 24 * 7 // 360 days in seconds
-	for _, acc := range validatorAccounts {
-		_, err := stkr.AddValidator(acc.Address, acc.Address, minStakingPeriod, minStake, true, 0)
-		assert.NoError(t, err)
-	}
-
-	transitioned, err := stkr.Transition(0)
-	assert.NoError(t, err)
-	assert.True(t, transitioned)
-
-	stake, weight, err := stkr.LockedVET()
-	assert.NoError(t, err)
-	assert.Equal(t, new(big.Int).Mul(big.NewInt(3), minStake), stake)
-	assert.Equal(t, new(big.Int).Mul(big.NewInt(6), minStake), weight)
 
 	if err = testBFT.fastForward(thor.CheckpointInterval*3 - 1); err != nil {
 		t.Fatal(err)
