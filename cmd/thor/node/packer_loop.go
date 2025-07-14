@@ -126,6 +126,20 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 			oldBest    = n.repo.BestBlockSummary()
 		)
 
+		var shouldVote bool
+		if flow.Number() >= n.forkConfig.FINALITY {
+			var err error
+			shouldVote, err = n.bft.ShouldVote(flow.ParentHeader().ID())
+			if err != nil {
+				return errors.Wrap(err, "get vote")
+			}
+		}
+
+		doubleSignedBlock, _, doubleSignedReceipts, err := flow.Pack(n.master.PrivateKey, uint32(len(conflicts)), shouldVote)
+		if err != nil {
+			return errors.Wrap(err, "failed to pack block")
+		}
+
 		// adopt txs
 		for _, tx := range txs {
 			if err := flow.Adopt(tx); err != nil {
@@ -139,20 +153,12 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 			}
 		}
 
-		var shouldVote bool
-		if flow.Number() >= n.forkConfig.FINALITY {
-			var err error
-			shouldVote, err = n.bft.ShouldVote(flow.ParentHeader().ID())
-			if err != nil {
-				return errors.Wrap(err, "get vote")
-			}
-		}
-
 		// pack the new block
 		newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey, uint32(len(conflicts)), shouldVote)
 		if err != nil {
 			return errors.Wrap(err, "failed to pack block")
 		}
+
 		execElapsed := mclock.Now() - startTime
 
 		// write logs
@@ -198,6 +204,14 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 			"mgas", float64(newBlock.Header().GasUsed())/1000/1000,
 			"et", fmt.Sprintf("%v|%v", common.PrettyDuration(execElapsed), common.PrettyDuration(commitElapsed)),
 			"id", shortID(newBlock.Header().ID()),
+		)
+
+		n.comm.BroadcastBlock(doubleSignedBlock)
+		logger.Info("📦 double-signed block",
+			"txs", len(doubleSignedReceipts),
+			"mgas", float64(doubleSignedBlock.Header().GasUsed())/1000/1000,
+			"et", fmt.Sprintf("%v|%v", common.PrettyDuration(execElapsed), common.PrettyDuration(commitElapsed)),
+			"id", shortID(doubleSignedBlock.Header().ID()),
 		)
 
 		if v, updated := n.bandwidth.Update(newBlock.Header(), time.Duration(realElapsed)); updated {
