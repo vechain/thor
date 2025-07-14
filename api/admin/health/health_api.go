@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/vechain/thor/v2/api/utils"
+	"github.com/vechain/thor/v2/api/restutil"
 )
 
 type API struct {
@@ -55,7 +55,7 @@ func (h *API) handleGetHealth(w http.ResponseWriter, r *http.Request) error {
 	} else {
 		w.WriteHeader(http.StatusOK) // Set the status to 200
 	}
-	return utils.WriteJSON(w, acc)
+	return restutil.WriteJSON(w, acc)
 }
 
 func (h *API) Mount(root *mux.Router, pathPrefix string) {
@@ -64,5 +64,5 @@ func (h *API) Mount(root *mux.Router, pathPrefix string) {
 	sub.Path("").
 		Methods(http.MethodGet).
 		Name("health").
-		HandlerFunc(utils.WrapHandlerFunc(h.handleGetHealth))
+		HandlerFunc(restutil.WrapHandlerFunc(h.handleGetHealth))
 }

@@ -16,7 +16,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api"
-	"github.com/vechain/thor/v2/api/utils"
+	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
@@ -66,17 +66,17 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 	hexAddr := mux.Vars(req)["address"]
 	addr, err := thor.ParseAddress(hexAddr)
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "address"))
+		return restutil.BadRequest(errors.WithMessage(err, "address"))
 	}
-	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"), false)
+	revision, err := restutil.ParseRevision(req.URL.Query().Get("revision"), false)
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "revision"))
+		return restutil.BadRequest(errors.WithMessage(err, "revision"))
 	}
 
-	_, st, err := utils.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig)
+	_, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
-			return utils.BadRequest(errors.WithMessage(err, "revision"))
+			return restutil.BadRequest(errors.WithMessage(err, "revision"))
 		}
 		return err
 	}
@@ -85,7 +85,7 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 		return err
 	}
 
-	return utils.WriteJSON(w, &api.GetCodeResult{Code: hexutil.Encode(code)})
+	return restutil.WriteJSON(w, &api.GetCodeResult{Code: hexutil.Encode(code)})
 }
 
 func (a *Accounts) getAccount(addr thor.Address, header *block.Header, state *state.State) (*api.Account, error) {
@@ -120,17 +120,17 @@ func (a *Accounts) getStorage(addr thor.Address, key thor.Bytes32, state *state.
 func (a *Accounts) handleGetAccount(w http.ResponseWriter, req *http.Request) error {
 	addr, err := thor.ParseAddress(mux.Vars(req)["address"])
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "address"))
+		return restutil.BadRequest(errors.WithMessage(err, "address"))
 	}
-	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"), false)
+	revision, err := restutil.ParseRevision(req.URL.Query().Get("revision"), false)
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "revision"))
+		return restutil.BadRequest(errors.WithMessage(err, "revision"))
 	}
 
-	summary, st, err := utils.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig)
+	summary, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
-			return utils.BadRequest(errors.WithMessage(err, "revision"))
+			return restutil.BadRequest(errors.WithMessage(err, "revision"))
 		}
 		return err
 	}
@@ -139,27 +139,27 @@ func (a *Accounts) handleGetAccount(w http.ResponseWriter, req *http.Request) er
 	if err != nil {
 		return err
 	}
-	return utils.WriteJSON(w, acc)
+	return restutil.WriteJSON(w, acc)
 }
 
 func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) error {
 	addr, err := thor.ParseAddress(mux.Vars(req)["address"])
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "address"))
+		return restutil.BadRequest(errors.WithMessage(err, "address"))
 	}
 	key, err := thor.ParseBytes32(mux.Vars(req)["key"])
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "key"))
+		return restutil.BadRequest(errors.WithMessage(err, "key"))
 	}
-	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"), false)
+	revision, err := restutil.ParseRevision(req.URL.Query().Get("revision"), false)
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "revision"))
+		return restutil.BadRequest(errors.WithMessage(err, "revision"))
 	}
 
-	_, st, err := utils.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig)
+	_, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
-			return utils.BadRequest(errors.WithMessage(err, "revision"))
+			return restutil.BadRequest(errors.WithMessage(err, "revision"))
 		}
 		return err
 	}
@@ -168,22 +168,22 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 	if err != nil {
 		return err
 	}
-	return utils.WriteJSON(w, &api.GetStorageResult{Value: storage.String()})
+	return restutil.WriteJSON(w, &api.GetStorageResult{Value: storage.String()})
 }
 
 func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) error {
 	callData := &api.CallData{}
-	if err := utils.ParseJSON(req.Body, &callData); err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "body"))
+	if err := restutil.ParseJSON(req.Body, &callData); err != nil {
+		return restutil.BadRequest(errors.WithMessage(err, "body"))
 	}
-	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"), true)
+	revision, err := restutil.ParseRevision(req.URL.Query().Get("revision"), true)
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "revision"))
+		return restutil.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	summary, st, err := utils.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig)
+	summary, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
-			return utils.BadRequest(errors.WithMessage(err, "revision"))
+			return restutil.BadRequest(errors.WithMessage(err, "revision"))
 		}
 		return err
 	}
@@ -191,7 +191,7 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 	if mux.Vars(req)["address"] != "" {
 		address, err := thor.ParseAddress(mux.Vars(req)["address"])
 		if err != nil {
-			return utils.BadRequest(errors.WithMessage(err, "address"))
+			return restutil.BadRequest(errors.WithMessage(err, "address"))
 		}
 		addr = &address
 	}
@@ -211,28 +211,28 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 	if err != nil {
 		return err
 	}
-	return utils.WriteJSON(w, results[0])
+	return restutil.WriteJSON(w, results[0])
 }
 
 func (a *Accounts) handleCallBatchCode(w http.ResponseWriter, req *http.Request) error {
 	var batchCallData api.BatchCallData
-	if err := utils.ParseJSON(req.Body, &batchCallData); err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "body"))
+	if err := restutil.ParseJSON(req.Body, &batchCallData); err != nil {
+		return restutil.BadRequest(errors.WithMessage(err, "body"))
 	}
 	// reject null element in clauses, {} will be unmarshaled to default value and will be accepted/handled by the runtime
 	for i, clause := range batchCallData.Clauses {
 		if clause == nil {
-			return utils.BadRequest(fmt.Errorf("clauses[%d]: null not allowed", i))
+			return restutil.BadRequest(fmt.Errorf("clauses[%d]: null not allowed", i))
 		}
 	}
-	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"), true)
+	revision, err := restutil.ParseRevision(req.URL.Query().Get("revision"), true)
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "revision"))
+		return restutil.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	summary, st, err := utils.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig)
+	summary, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
-			return utils.BadRequest(errors.WithMessage(err, "revision"))
+			return restutil.BadRequest(errors.WithMessage(err, "revision"))
 		}
 		return err
 	}
@@ -240,7 +240,7 @@ func (a *Accounts) handleCallBatchCode(w http.ResponseWriter, req *http.Request)
 	if err != nil {
 		return err
 	}
-	return utils.WriteJSON(w, results)
+	return restutil.WriteJSON(w, results)
 }
 
 func (a *Accounts) batchCall(
@@ -299,7 +299,7 @@ func (a *Accounts) batchCall(
 
 func (a *Accounts) handleBatchCallData(batchCallData *api.BatchCallData) (txCtx *xenv.TransactionContext, gas uint64, clauses []*tx.Clause, err error) {
 	if batchCallData.Gas > a.callGasLimit {
-		return nil, 0, nil, utils.Forbidden(errors.New("gas: exceeds limit"))
+		return nil, 0, nil, restutil.Forbidden(errors.New("gas: exceeds limit"))
 	} else if batchCallData.Gas == 0 {
 		gas = a.callGasLimit
 	} else {
@@ -357,7 +357,7 @@ func (a *Accounts) handleBatchCallData(batchCallData *api.BatchCallData) (txCtx 
 		if c.Data != "" {
 			data, err = hexutil.Decode(c.Data)
 			if err != nil {
-				err = utils.BadRequest(errors.WithMessage(err, fmt.Sprintf("data[%d]", i)))
+				err = restutil.BadRequest(errors.WithMessage(err, fmt.Sprintf("data[%d]", i)))
 				return
 			}
 		}
@@ -372,31 +372,31 @@ func (a *Accounts) Mount(root *mux.Router, pathPrefix string) {
 	sub.Path("/*").
 		Methods(http.MethodPost).
 		Name("POST /accounts/*").
-		HandlerFunc(utils.WrapHandlerFunc(a.handleCallBatchCode))
+		HandlerFunc(restutil.WrapHandlerFunc(a.handleCallBatchCode))
 	sub.Path("/{address}").
 		Methods(http.MethodGet).
 		Name("GET /accounts/{address}").
-		HandlerFunc(utils.WrapHandlerFunc(a.handleGetAccount))
+		HandlerFunc(restutil.WrapHandlerFunc(a.handleGetAccount))
 	sub.Path("/{address}/code").
 		Methods(http.MethodGet).
 		Name("GET /accounts/{address}/code").
-		HandlerFunc(utils.WrapHandlerFunc(a.handleGetCode))
+		HandlerFunc(restutil.WrapHandlerFunc(a.handleGetCode))
 	sub.Path("/{address}/storage/{key}").
 		Methods("GET").
 		Name("GET /accounts/{address}/storage").
-		HandlerFunc(utils.WrapHandlerFunc(a.handleGetStorage))
+		HandlerFunc(restutil.WrapHandlerFunc(a.handleGetStorage))
 
 	// These two methods are currently deprecated
-	callContractHandler := utils.HandleGone
+	callContractHandler := restutil.HandleGone
 	if a.enabledDeprecated {
 		callContractHandler = a.handleCallContract
 	}
 	sub.Path("").
 		Methods(http.MethodPost).
 		Name("POST /accounts").
-		HandlerFunc(utils.WrapHandlerFunc(callContractHandler))
+		HandlerFunc(restutil.WrapHandlerFunc(callContractHandler))
 	sub.Path("/{address}").
 		Methods(http.MethodPost).
 		Name("POST /accounts/{address}").
-		HandlerFunc(utils.WrapHandlerFunc(callContractHandler))
+		HandlerFunc(restutil.WrapHandlerFunc(callContractHandler))
 }
