@@ -219,7 +219,7 @@ func (s *Staker) DecreaseStake(validationID thor.Bytes32, amount *big.Int) *bind
 	return s.contract.Method("decreaseStake", validationID, amount)
 }
 
-func (s *Staker) IncreaseStake(validationID thor.Bytes32, amount *big.Int)* bind.MethodBuilder {
+func (s *Staker) IncreaseStake(validationID thor.Bytes32, amount *big.Int) *bind.MethodBuilder {
 	return s.contract.Method("increaseStake", validationID).WithValue(amount)
 }
 
