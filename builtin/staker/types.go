@@ -61,10 +61,11 @@ func (v *Validation) IsPeriodEnd(current uint32) bool {
 	return diff%v.Period == 0
 }
 
-// NextPeriodStakes returns the validation stake and all the delegator stakes for the next staking period.
-func (v *Validation) NextPeriodStakes(delegation *Aggregation) *big.Int {
+// NextPeriodTVL returns the amount of VET that will be locked in the next staking period for the validator only.
+func (v *Validation) NextPeriodTVL() *big.Int {
 	validationTotal := big.NewInt(0).Add(v.LockedVET, v.PendingLocked)
-	return validationTotal.Add(validationTotal, delegation.NextPeriodLocked())
+	validationTotal = big.NewInt(0).Sub(validationTotal, v.NextPeriodDecrease)
+	return validationTotal
 }
 
 func (v *Validation) CurrentIteration() uint32 {
@@ -187,16 +188,15 @@ func (a *Aggregation) IsEmpty() bool {
 	return a.CurrentRecurringVET == nil && a.CurrentOneTimeVET == nil && a.PendingRecurringVET == nil && a.PendingOneTimeVET == nil && a.WithdrawableVET == nil
 }
 
-// PeriodLocked returns the VET locked for a given validation's delegations for the current staking period.
-func (a *Aggregation) PeriodLocked() *big.Int {
-	return big.NewInt(0).Add(a.CurrentRecurringVET, a.CurrentOneTimeVET)
-}
-
-// NextPeriodLocked returns the PeriodLocked for the next staking period
-func (a *Aggregation) NextPeriodLocked() *big.Int {
-	total := big.NewInt(0).Add(a.CurrentRecurringVET, a.PendingRecurringVET)
-	total = total.Add(total, a.PendingOneTimeVET)
-	return total
+// NextPeriodTVL is the total value locked (TVL) for the next period.
+// It is the sum of the currently recurring VET, plus any pending recurring and one-time VET.
+// Does not include CurrentOneTimeVET since that stake is due to withdraw.
+func (a *Aggregation) NextPeriodTVL() *big.Int {
+	nextTVL := big.NewInt(0)
+	nextTVL.Add(nextTVL, a.CurrentRecurringVET)
+	nextTVL.Add(nextTVL, a.PendingRecurringVET)
+	nextTVL.Add(nextTVL, a.PendingOneTimeVET)
+	return nextTVL
 }
 
 // Renew moves the stakes and weights around as follows:

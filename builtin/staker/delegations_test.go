@@ -168,16 +168,26 @@ func Test_AddDelegator_StakeRange(t *testing.T) {
 	assert.ErrorContains(t, err, "validation's next period stake exceeds max stake")
 
 	// should be able stake 1 VET
-	_, err = staker.AddDelegation(validator.ID, big.NewInt(1), true, 255)
+	id1, err := staker.AddDelegation(validator.ID, big.NewInt(1), true, 255)
 	assert.NoError(t, err)
+	delegation, _, err := staker.GetDelegation(id1)
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(1), delegation.Stake)
+	aggregation, err := staker.storage.GetAggregation(validator.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(1), aggregation.PendingRecurringVET)
 
 	// should be able stake for all remaining space
 	validator = validators[1]
 	validation, err := staker.Get(validator.ID)
 	assert.NoError(t, err)
-	remaining := big.NewInt(0).Sub(MaxStake, validation.NextPeriodStakes(newAggregation()))
+	remaining := big.NewInt(0).Sub(MaxStake, validation.NextPeriodTVL())
 	_, err = staker.AddDelegation(validator.ID, remaining, true, 255)
 	assert.NoError(t, err)
+
+	// should not be able to stake more than max stake
+	_, err = staker.AddDelegation(validator.ID, big.NewInt(1000000000000000000), true, 255)
+	assert.ErrorContains(t, err, "validation's next period stake exceeds max stake")
 }
 
 func Test_AddDelegator_ValidatorNotFound(t *testing.T) {
@@ -625,4 +635,42 @@ func Test_Delegator_Queued_Weight_MultipleDelegations_Withdraw(t *testing.T) {
 
 	assert.Equal(t, initialQueuedVET, afterWithdraw2QueuedVET)
 	assert.Equal(t, initialQueuedWeight, afterWithdraw2QueuedWeight)
+}
+
+func Test_Delegations_EnableAutoRenew_MatchStakeReached(t *testing.T) {
+	staker, validators := newDelegationStaker(t)
+
+	validator := validators[0]
+	maxStake := big.NewInt(0).Sub(MaxStake, validator.LockedVET)
+
+	// Add a delegation with auto renew enabled
+	delegationID, err := staker.AddDelegation(validator.ID, maxStake, false, 255)
+	assert.NoError(t, err)
+
+	// Should be pending
+	delegation1, _, err := staker.GetDelegation(delegationID)
+	assert.NoError(t, err)
+	validation, err := staker.Get(validator.ID)
+	assert.NoError(t, err)
+	assert.False(t, delegation1.IsLocked(validation))
+
+	// Delegation should become active
+	_, _, err = staker.Housekeep(validator.Period)
+	delegation1, _, err = staker.GetDelegation(delegationID)
+	assert.NoError(t, err)
+	validation, err = staker.Get(validator.ID)
+	assert.NoError(t, err)
+	assert.True(t, delegation1.IsLocked(validation))
+
+	// Enable auto renew for delegation. Should be possible since the max stake won't be reached.
+	assert.NoError(t, staker.UpdateDelegationAutoRenew(delegationID, true))
+	// Immediately turn it off again for the test
+	assert.NoError(t, staker.UpdateDelegationAutoRenew(delegationID, false))
+
+	// Add a new delegation. It should be possible to add the delegation since the previous one is due to withdraw.
+	_, err = staker.AddDelegation(validator.ID, maxStake, true, 255)
+	assert.NoError(t, err)
+
+	// Enable auto renew for the first delegation - should fail since the presence of other delegator's exceeds max stake
+	assert.ErrorContains(t, staker.UpdateDelegationAutoRenew(delegationID, true), "validation's next period stake exceeds max stake")
 }

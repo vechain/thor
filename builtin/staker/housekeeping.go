@@ -112,7 +112,7 @@ func (s *Staker) performRenewalUpdates(id thor.Bytes32, validator *Validation) e
 	queuedWeight := big.NewInt(0).Add(validatorRenewal.QueuedDecreaseWeight, delegationsRenewal.QueuedDecreaseWeight)
 
 	// set the new totals
-	validator.LockedVET = big.NewInt(0).Add(validator.LockedVET, changeTVL)
+	validator.LockedVET = big.NewInt(0).Add(validator.LockedVET, validatorRenewal.ChangeTVL)
 	validator.Weight = big.NewInt(0).Add(validator.Weight, changeWeight)
 	if err := s.lockedVET.Add(changeTVL); err != nil {
 		return err
