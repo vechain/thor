@@ -2269,13 +2269,19 @@ func Test_GetValidatorTotals(t *testing.T) {
 	_, _, err = staker.Housekeep(validator.Period)
 	assert.NoError(t, err)
 
+	aggregation, err = staker.storage.GetAggregation(validator.ID)
+	assert.NoError(t, err)
+
 	totals, err := staker.GetValidatorsTotals(validator.ID)
 	assert.NoError(t, err)
 
 	fetchedValidator, err := staker.Get(validator.ID)
 	assert.NoError(t, err)
 
-	assert.Equal(t, fetchedValidator.LockedVET, totals.TotalLockedStake)
+	expectedStake := big.NewInt(0).Add(aggregation.CurrentRecurringVET, aggregation.CurrentOneTimeVET)
+	expectedStake.Add(expectedStake, validator.LockedVET)
+
+	assert.Equal(t, expectedStake, totals.TotalLockedStake)
 	assert.Equal(t, fetchedValidator.Weight, totals.TotalLockedWeight)
 	assert.Equal(t, delegation.Stake, totals.DelegationsLockedStake)
 	assert.Equal(t, delegation.Weight(), totals.DelegationsLockedWeight)
