@@ -31,7 +31,7 @@ type Validation struct {
 	StartBlock         uint32       // the block number when the validation started the first staking period
 	ExitBlock          *uint32      `rlp:"nil"` // the block number when the validation moved to cooldown
 
-	LockedVET          *big.Int // the amount of VET locked for the current staking period
+	LockedVET          *big.Int // the amount of VET locked for the current staking period, for the validator only
 	NextPeriodDecrease *big.Int // the amount of VET that will be unlocked in the next staking period. DOES NOT contribute to the TVL
 	PendingLocked      *big.Int // the amount of VET that will be locked in the next staking period
 	CooldownVET        *big.Int // the amount of VET that is locked into the validation's cooldown
