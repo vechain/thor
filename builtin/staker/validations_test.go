@@ -2385,4 +2385,3 @@ func Test_Validator_IncreaseDecrease_Combinations(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 0, validator.LockedVET.Cmp(MinStake), "locked vet should be greater than or equal to min stake")
 }
-

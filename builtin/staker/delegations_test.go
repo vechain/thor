@@ -319,6 +319,9 @@ func Test_Delegator_DisableAutoRenew_InAStakingPeriod(t *testing.T) {
 	// And a delegation is added with auto renew enabled
 	validator := validators[0]
 	stake := RandomStake()
+	validation, err := staker.Get(validator.ID)
+	assert.NoError(t, err)
+	validationStake := big.NewInt(0).Set(validation.LockedVET)
 
 	id, err := staker.AddDelegation(validator.ID, stake, true, 255)
 	assert.NoError(t, err)
@@ -360,6 +363,9 @@ func Test_Delegator_DisableAutoRenew_InAStakingPeriod(t *testing.T) {
 	aggregation, err = staker.storage.GetAggregation(validator.ID)
 	assert.NoError(t, err)
 	assert.Equal(t, stake, aggregation.WithdrawableVET)
+	validation, err = staker.Get(validator.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, validationStake, validation.LockedVET)
 }
 
 func Test_Delegator_EnableAutoRenew_PendingLocked(t *testing.T) {
@@ -656,6 +662,7 @@ func Test_Delegations_EnableAutoRenew_MatchStakeReached(t *testing.T) {
 
 	// Delegation should become active
 	_, _, err = staker.Housekeep(validator.Period)
+	assert.NoError(t, err)
 	delegation1, _, err = staker.GetDelegation(delegationID)
 	assert.NoError(t, err)
 	validation, err = staker.Get(validator.ID)
