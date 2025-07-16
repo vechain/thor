@@ -35,10 +35,10 @@ func SetLogger(l log.Logger) {
 
 // Staker implements native methods of `Staker` contract.
 type Staker struct {
-	delegations  *delegations
-	validations  *validations
-	storage      *storage
-	params       *params.Params
+	delegations *delegations
+	validations *validations
+	storage     *storage
+	params      *params.Params
 }
 
 // New create a new instance.
@@ -50,10 +50,10 @@ func New(addr thor.Address, state *state.State, params *params.Params, charger *
 	storage.debugOverride(&cooldownPeriod, slotCooldownPeriod)
 
 	return &Staker{
-		storage:      storage,
-		validations:  newValidations(storage),
-		delegations:  newDelegations(storage),
-		params:       params,
+		storage:     storage,
+		validations: newValidations(storage),
+		delegations: newDelegations(storage),
+		params:      params,
 	}
 }
 

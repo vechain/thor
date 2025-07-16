@@ -15,14 +15,14 @@ import (
 
 // delegations is a struct that manages the delegations for the staker contract.
 type delegations struct {
-	storage      *storage
-	idCounter    *solidity.Uint256
+	storage   *storage
+	idCounter *solidity.Uint256
 }
 
 func newDelegations(storage *storage) *delegations {
 	return &delegations{
-		storage:      storage,
-		idCounter:    solidity.NewUint256(storage.context, slotDelegationsCounter),
+		storage:   storage,
+		idCounter: solidity.NewUint256(storage.context, slotDelegationsCounter),
 	}
 }
 
