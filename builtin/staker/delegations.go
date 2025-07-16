@@ -16,16 +16,12 @@ import (
 // delegations is a struct that manages the delegations for the staker contract.
 type delegations struct {
 	storage      *storage
-	queuedVET    *solidity.Uint256
-	queuedWeight *solidity.Uint256
 	idCounter    *solidity.Uint256
 }
 
 func newDelegations(storage *storage) *delegations {
 	return &delegations{
 		storage:      storage,
-		queuedVET:    solidity.NewUint256(storage.context, slotQueuedVET),
-		queuedWeight: solidity.NewUint256(storage.context, slotQueuedWeight),
 		idCounter:    solidity.NewUint256(storage.context, slotDelegationsCounter),
 	}
 }
@@ -95,10 +91,10 @@ func (d *delegations) Add(
 		delegation.LastIteration = &last
 	}
 
-	if err := d.queuedVET.Add(stake); err != nil {
+	if err := d.storage.queuedVET.Add(stake); err != nil {
 		return thor.Bytes32{}, err
 	}
-	if err := d.queuedWeight.Add(weight); err != nil {
+	if err := d.storage.queuedWeight.Add(weight); err != nil {
 		return thor.Bytes32{}, err
 	}
 	if err := d.storage.SetAggregation(validationID, aggregated, false); err != nil {
@@ -229,10 +225,10 @@ func (d *delegations) Withdraw(delegationID thor.Bytes32) (*big.Int, error) {
 			aggregation.PendingOneTimeVET = big.NewInt(0).Sub(aggregation.PendingOneTimeVET, delegation.Stake)
 			aggregation.PendingOneTimeWeight = big.NewInt(0).Sub(aggregation.PendingOneTimeWeight, weight)
 		}
-		if err := d.queuedVET.Sub(delegation.Stake); err != nil {
+		if err := d.storage.queuedVET.Sub(delegation.Stake); err != nil {
 			return nil, err
 		}
-		if err := d.queuedWeight.Sub(weight); err != nil {
+		if err := d.storage.queuedWeight.Sub(weight); err != nil {
 			return nil, err
 		}
 	}
