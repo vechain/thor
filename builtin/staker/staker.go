@@ -352,8 +352,9 @@ func (s *Staker) GetValidatorsTotals(validationID thor.Bytes32) (*ValidationTota
 	if err != nil {
 		return nil, err
 	}
+	delegationLockedStake := big.NewInt(0).Add(aggregation.CurrentRecurringVET, aggregation.CurrentOneTimeVET)
 	return &ValidationTotals{
-		TotalLockedStake:        validator.LockedVET,
+		TotalLockedStake:        big.NewInt(0).Add(validator.LockedVET, delegationLockedStake),
 		TotalLockedWeight:       validator.Weight,
 		DelegationsLockedStake:  big.NewInt(0).Add(aggregation.CurrentRecurringVET, aggregation.CurrentOneTimeVET),
 		DelegationsLockedWeight: big.NewInt(0).Add(aggregation.CurrentRecurringWeight, aggregation.CurrentOneTimeWeight),

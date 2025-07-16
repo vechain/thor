@@ -319,7 +319,10 @@ func (v *validations) IncreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 	if err != nil {
 		return err
 	}
-	nextPeriodTVL := entry.NextPeriodStakes(aggregation)
+	validatorTVL := entry.NextPeriodTVL()
+	// we do not consider aggregation.CurrentRecurringVET since the delegator could enable auto-renew
+	delegationTVL := big.NewInt(0).Add(aggregation.CurrentRecurringVET, aggregation.PendingRecurringVET)
+	nextPeriodTVL := big.NewInt(0).Add(validatorTVL, delegationTVL)
 	newTVL := big.NewInt(0).Add(nextPeriodTVL, amount)
 
 	if newTVL.Cmp(MaxStake) > 0 {
@@ -354,21 +357,30 @@ func (v *validations) DecreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 	if entry.Status == StatusActive && !entry.AutoRenew {
 		return errors.New("validator is not set to renew in the next period, all funds will be withdrawable")
 	}
-	newStake := big.NewInt(0).Add(entry.LockedVET, entry.PendingLocked)
-	newStake = newStake.Sub(newStake, amount)
-	if newStake.Cmp(MinStake) < 0 {
-		return errors.New("stake is too low for validator")
-	}
+
 	aggregation, err := v.storage.GetAggregation(id)
 	if err != nil {
 		return err
 	}
 
 	if entry.Status == StatusActive {
+		// We don't consider any increases, i.e., entry.PendingLocked. We only consider locked and current decreases.
+		// The reason is that validator can instantly withdraw PendingLocked at any time.
+		// We need to make sure the locked VET minus the sum of the current decreases is still above the minimum stake.
+		nextPeriodTVL := big.NewInt(0).Sub(entry.LockedVET, entry.NextPeriodDecrease)
+		nextPeriodTVL = nextPeriodTVL.Sub(nextPeriodTVL, amount)
+		if nextPeriodTVL.Cmp(MinStake) < 0 {
+			return errors.New("next period stake is too low for validator")
+		}
 		entry.NextPeriodDecrease = big.NewInt(0).Add(entry.NextPeriodDecrease, amount)
 	}
 
 	if entry.Status == StatusQueued {
+		// All the validator's stake exists within PendingLocked, so we need to make sure it maintains a minimum of MinStake.
+		nextPeriodTVL := big.NewInt(0).Sub(entry.PendingLocked, amount)
+		if nextPeriodTVL.Cmp(MinStake) < 0 {
+			return errors.New("next period stake is too low for validator")
+		}
 		entry.PendingLocked = big.NewInt(0).Sub(entry.PendingLocked, amount)
 		entry.WithdrawableVET = big.NewInt(0).Add(entry.WithdrawableVET, amount)
 		if err := v.queuedVET.Sub(amount); err != nil {
