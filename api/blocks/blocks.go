@@ -14,7 +14,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api"
-	"github.com/vechain/thor/v2/api/utils"
+	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
@@ -34,27 +34,27 @@ func New(repo *chain.Repository, bft bft.Committer) *Blocks {
 }
 
 func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error {
-	revision, err := utils.ParseRevision(mux.Vars(req)["revision"], false)
+	revision, err := restutil.ParseRevision(mux.Vars(req)["revision"], false)
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "revision"))
+		return restutil.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	raw, err := utils.StringToBoolean(req.URL.Query().Get("raw"), false)
+	raw, err := restutil.StringToBoolean(req.URL.Query().Get("raw"), false)
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "raw"))
+		return restutil.BadRequest(errors.WithMessage(err, "raw"))
 	}
-	expanded, err := utils.StringToBoolean(req.URL.Query().Get("expanded"), false)
+	expanded, err := restutil.StringToBoolean(req.URL.Query().Get("expanded"), false)
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "expanded"))
+		return restutil.BadRequest(errors.WithMessage(err, "expanded"))
 	}
 
 	if raw && expanded {
-		return utils.BadRequest(errors.WithMessage(errors.New("Raw and Expanded are mutually exclusive"), "raw&expanded"))
+		return restutil.BadRequest(errors.WithMessage(errors.New("Raw and Expanded are mutually exclusive"), "raw&expanded"))
 	}
 
-	summary, err := utils.GetSummary(revision, b.repo, b.bft)
+	summary, err := restutil.GetSummary(revision, b.repo, b.bft)
 	if err != nil {
 		if b.repo.IsNotFound(err) {
-			return utils.WriteJSON(w, nil)
+			return restutil.WriteJSON(w, nil)
 		}
 		return err
 	}
@@ -64,7 +64,7 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 		if err != nil {
 			return err
 		}
-		return utils.WriteJSON(w, &api.JSONRawBlockSummary{
+		return restutil.WriteJSON(w, &api.JSONRawBlockSummary{
 			Raw: fmt.Sprintf("0x%s", hex.EncodeToString(rlpEncoded)),
 		})
 	}
@@ -93,13 +93,13 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 			return err
 		}
 
-		return utils.WriteJSON(w, &api.JSONExpandedBlock{
+		return restutil.WriteJSON(w, &api.JSONExpandedBlock{
 			JSONBlockSummary: jSummary,
 			Transactions:     api.BuildJSONEmbeddedTxs(txs, receipts),
 		})
 	}
 
-	return utils.WriteJSON(w, &api.JSONCollapsedBlock{
+	return restutil.WriteJSON(w, &api.JSONCollapsedBlock{
 		JSONBlockSummary: jSummary,
 		Transactions:     summary.Txs,
 	})
@@ -118,5 +118,5 @@ func (b *Blocks) Mount(root *mux.Router, pathPrefix string) {
 	sub.Path("/{revision}").
 		Methods(http.MethodGet).
 		Name("GET /blocks/{revision}").
-		HandlerFunc(utils.WrapHandlerFunc(b.handleGetBlock))
+		HandlerFunc(restutil.WrapHandlerFunc(b.handleGetBlock))
 }

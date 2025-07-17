@@ -8,6 +8,7 @@
 package wsclient
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -16,10 +17,11 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/thorclient/common"
 )
 
 const readTimeout = 60 * time.Second
+
+var ErrUnexpectedMsg = errors.New("unexpected message format")
 
 // Client represents a WebSocket client that connects to the VeChainThor blockchain via WebSocket
 // for subscribing to blockchain events and updates.
@@ -54,7 +56,7 @@ func NewClient(url string) (*Client, error) {
 
 // SubscribeEvents subscribes to blockchain events based on the provided query.
 // It returns a Subscription that streams event messages or an error if the connection fails.
-func (c *Client) SubscribeEvents(pos string, filter *api.SubscriptionEventFilter) (*common.Subscription[*api.EventMessage], error) {
+func (c *Client) SubscribeEvents(pos string, filter *api.SubscriptionEventFilter) (*Subscription[*api.EventMessage], error) {
 	queryValues := &url.Values{}
 	queryValues.Add("pos", pos)
 	if filter != nil {
@@ -87,7 +89,7 @@ func (c *Client) SubscribeEvents(pos string, filter *api.SubscriptionEventFilter
 
 // SubscribeBlocks subscribes to block updates based on the provided query.
 // It returns a Subscription that streams block messages or an error if the connection fails.
-func (c *Client) SubscribeBlocks(pos string) (*common.Subscription[*api.BlockMessage], error) {
+func (c *Client) SubscribeBlocks(pos string) (*Subscription[*api.BlockMessage], error) {
 	queryValues := &url.Values{}
 	queryValues.Add("pos", pos)
 	conn, _, err := c.Connect("/subscriptions/block", queryValues)
@@ -100,7 +102,7 @@ func (c *Client) SubscribeBlocks(pos string) (*common.Subscription[*api.BlockMes
 
 // SubscribeTransfers subscribes to transfer events based on the provided query.
 // It returns a Subscription that streams transfer messages or an error if the connection fails.
-func (c *Client) SubscribeTransfers(pos string, filter *api.SubscriptionTransferFilter) (*common.Subscription[*api.TransferMessage], error) {
+func (c *Client) SubscribeTransfers(pos string, filter *api.SubscriptionTransferFilter) (*Subscription[*api.TransferMessage], error) {
 	queryValues := &url.Values{}
 	queryValues.Add("pos", pos)
 	if filter != nil {
@@ -124,7 +126,7 @@ func (c *Client) SubscribeTransfers(pos string, filter *api.SubscriptionTransfer
 
 // SubscribeTxPool subscribes to pending transaction pool updates based on the provided query.
 // It returns a Subscription that streams pending transaction messages or an error if the connection fails.
-func (c *Client) SubscribeTxPool(txID *thor.Bytes32) (*common.Subscription[*api.PendingTxIDMessage], error) {
+func (c *Client) SubscribeTxPool(txID *thor.Bytes32) (*Subscription[*api.PendingTxIDMessage], error) {
 	queryValues := &url.Values{}
 	if txID != nil {
 		queryValues.Add("id", txID.String())
@@ -140,7 +142,7 @@ func (c *Client) SubscribeTxPool(txID *thor.Bytes32) (*common.Subscription[*api.
 
 // SubscribeBeats2 subscribes to Beat2 messages based on the provided query.
 // It returns a Subscription that streams Beat2 messages or an error if the connection fails.
-func (c *Client) SubscribeBeats2(pos string) (*common.Subscription[*api.Beat2Message], error) {
+func (c *Client) SubscribeBeats2(pos string) (*Subscription[*api.Beat2Message], error) {
 	queryValues := &url.Values{}
 	queryValues.Add("pos", pos)
 	conn, _, err := c.Connect("/subscriptions/beat2", queryValues)
@@ -153,9 +155,9 @@ func (c *Client) SubscribeBeats2(pos string) (*common.Subscription[*api.Beat2Mes
 
 // subscribe starts a new subscription over the given WebSocket connection.
 // It returns a read-only channel that streams events of type T.
-func subscribe[T any](conn *websocket.Conn) *common.Subscription[*T] {
+func subscribe[T any](conn *websocket.Conn) *Subscription[*T] {
 	// Create a new channel for events
-	eventChan := make(chan common.EventWrapper[*T], 1_000)
+	eventChan := make(chan EventWrapper[*T], 1_000)
 	var closed bool
 
 	// Start a goroutine to handle receiving messages from the WebSocket connection.
@@ -171,16 +173,16 @@ func subscribe[T any](conn *websocket.Conn) *common.Subscription[*T] {
 			if err != nil {
 				if !closed {
 					// Send an EventWrapper with the error to the channel.
-					eventChan <- common.EventWrapper[*T]{Error: fmt.Errorf("%w: %w", common.ErrUnexpectedMsg, err)}
+					eventChan <- EventWrapper[*T]{Error: fmt.Errorf("%w: %w", ErrUnexpectedMsg, err)}
 				}
 				return
 			}
 
-			eventChan <- common.EventWrapper[*T]{Data: &data}
+			eventChan <- EventWrapper[*T]{Data: &data}
 		}
 	}()
 
-	return &common.Subscription[*T]{
+	return &Subscription[*T]{
 		EventChan: eventChan,
 		Unsubscribe: func() error {
 			closed = true

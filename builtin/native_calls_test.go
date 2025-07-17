@@ -247,7 +247,6 @@ func TestParamsNative(t *testing.T) {
 	test.Case("get", key).
 		ShouldOutput(value).
 		Assert(t)
-
 }
 
 func TestAuthorityNative(t *testing.T) {
@@ -269,7 +268,7 @@ func TestAuthorityNative(t *testing.T) {
 	db := muxdb.NewMem()
 	b0 := buildGenesis(db, func(state *state.State) error {
 		state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
-		state.SetBalance(thor.Address(endorsor1), thor.InitialProposerEndorsement)
+		state.SetBalance(endorsor1, thor.InitialProposerEndorsement)
 		state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
 		builtin.Params.Native(state).Set(thor.KeyExecutorAddress, new(big.Int).SetBytes(executor[:]))
 		builtin.Params.Native(state).Set(thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)
@@ -363,7 +362,6 @@ func TestAuthorityNative(t *testing.T) {
 	test.Case("revoke", master2).
 		Caller(thor.BytesToAddress([]byte("some one"))).
 		Assert(t)
-
 }
 
 func TestEnergyNative(t *testing.T) {
@@ -481,7 +479,6 @@ func TestEnergyNative(t *testing.T) {
 		Caller(thor.BytesToAddress([]byte("some one"))).
 		ShouldVMError(errReverted).
 		Assert(t)
-
 }
 
 func TestPrototypeNative(t *testing.T) {
@@ -511,8 +508,8 @@ func TestPrototypeNative(t *testing.T) {
 	st := state.New(db, trie.Root{Hash: genesisBlock.Header().StateRoot()})
 	chain := repo.NewChain(genesisBlock.Header().ID())
 
-	st.SetStorage(thor.Address(acc1), key, value)
-	st.SetBalance(thor.Address(acc1), big.NewInt(1))
+	st.SetStorage(acc1, key, value)
+	st.SetBalance(acc1, big.NewInt(1))
 
 	masterEvent := func(self, newMaster thor.Address) *tx.Event {
 		ev, _ := builtin.Prototype.Events().EventByName("$Master")
@@ -926,8 +923,8 @@ func TestExtensionNative(t *testing.T) {
 	b1 := newBlock(b0, 123, 456, privKeys[0])
 	b2 := newBlock(b1, 789, 321, privKeys[1])
 
-	b1_singer, _ := b1.Header().Signer()
-	b2_singer, _ := b2.Header().Signer()
+	b1Signer, _ := b1.Header().Signer()
+	b2Signer, _ := b2.Header().Signer()
 
 	gasPayer := thor.BytesToAddress([]byte("gasPayer"))
 
@@ -940,7 +937,7 @@ func TestExtensionNative(t *testing.T) {
 
 	chain := repo.NewChain(b2.Header().ID())
 
-	rt := runtime.New(chain, st, &xenv.BlockContext{Number: 2, Time: b2.Header().Timestamp(), TotalScore: b2.Header().TotalScore(), Signer: b2_singer}, &thor.NoFork)
+	rt := runtime.New(chain, st, &xenv.BlockContext{Number: 2, Time: b2.Header().Timestamp(), TotalScore: b2.Header().TotalScore(), Signer: b2Signer}, &thor.NoFork)
 
 	test := &ctest{
 		rt:  rt,
@@ -1039,11 +1036,11 @@ func TestExtensionNative(t *testing.T) {
 		Assert(t)
 
 	test.Case("blockSigner", big.NewInt(2)).
-		ShouldOutput(b2_singer).
+		ShouldOutput(b2Signer).
 		Assert(t)
 
 	test.Case("blockSigner", big.NewInt(1)).
-		ShouldOutput(b1_singer).
+		ShouldOutput(b1Signer).
 		Assert(t)
 
 	test.Case("txGasPayer").

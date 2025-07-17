@@ -44,8 +44,8 @@ func randomBlock(addrBytes, byteArray []byte, maxFee, gasUsed, gasLimit, totalSc
 	now := uint64(time.Now().UnixNano())
 
 	var (
-		root        thor.Bytes32 = thor.BytesToBytes32(byteArray)
-		beneficiary thor.Address = thor.BytesToAddress(byteArray)
+		root        = thor.BytesToBytes32(byteArray)
+		beneficiary = thor.BytesToAddress(byteArray)
 	)
 
 	b := new(Builder).

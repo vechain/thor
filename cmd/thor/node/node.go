@@ -194,7 +194,7 @@ func (n *Node) houseKeeping(ctx context.Context) {
 				}
 			} else if isTrunk {
 				n.comm.BroadcastBlock(newBlock.Block)
-				logger.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(newBlock.Block.Header())...)
+				logger.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(newBlock.Header())...)
 			}
 		case <-futureTicker.C:
 			// process future blocks

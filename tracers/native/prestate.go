@@ -98,7 +98,7 @@ func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 
 	t.lookupAccount(from)
 	t.lookupAccount(to)
-	t.lookupAccount(env.Context.Coinbase)
+	t.lookupAccount(env.Coinbase)
 	// tracer hooks run before value transfer, no need to touch balance
 	if create {
 		t.contractCreationCount++
