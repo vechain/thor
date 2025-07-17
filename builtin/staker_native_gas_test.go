@@ -149,7 +149,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 			preTestHooks: []TestHook{preTestAddValidator(account1)},
 		},
 		{
-			function:     "native_withdraw",
+			function:     "native_withdrawStake",
 			expectedGas:  77400,
 			args:         []any{account1, accToID(account1)},
 			description:  "Withdraw stake for a validator",
