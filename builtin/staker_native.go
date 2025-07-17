@@ -71,7 +71,7 @@ func init() {
 
 			return []any{validationID}
 		}},
-		{"native_getWithdraw", func(env *xenv.Environment) []any {
+		{"native_getWithdrawable", func(env *xenv.Environment) []any {
 			var args struct {
 				ValidationID common.Hash
 			}

@@ -135,7 +135,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 			preTestHooks: []TestHook{preTestAddValidator(account1)},
 		},
 		{
-			function:     "native_getWithdraw",
+			function:     "native_getWithdrawable",
 			expectedGas:  1600,
 			args:         []any{accToID(account1)},
 			description:  "Get withdraw information for a validator",

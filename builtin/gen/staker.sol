@@ -291,9 +291,9 @@ contract Staker {
     /**
      * @dev getWithdraw returns the amount of a validator's withdrawal.
      */
-    function getWithdraw(bytes32 id) public view returns (uint256) {
+    function getWithdrawable(bytes32 id) public view returns (uint256) {
         (uint256 withdrawal, string memory error) = StakerNative(address(this))
-            .native_getWithdraw(id);
+            .native_getWithdrawable(id);
         require(bytes(error).length == 0, error);
         return withdrawal;
     }
@@ -476,7 +476,7 @@ interface StakerNative {
         address node
     ) external view returns (bytes32);
 
-    function native_getWithdraw(
+    function native_getWithdrawable(
         bytes32 validationID
     ) external view returns (uint256, string calldata);
 
