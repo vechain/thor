@@ -58,6 +58,10 @@ type storage struct {
 	lookups      *solidity.Mapping[thor.Address, thor.Bytes32] // allows lookup of Validation by node address
 	rewards      *solidity.Mapping[thor.Bytes32, *big.Int]     // stores rewards per validator staking period
 	exits        *solidity.Mapping[*big.Int, thor.Bytes32]     // exit block -> validator ID
+	lockedVET    *solidity.Uint256
+	lockedWeight *solidity.Uint256
+	queuedVET    *solidity.Uint256
+	queuedWeight *solidity.Uint256
 }
 
 // newStorage creates a new instance of storage.
@@ -71,6 +75,10 @@ func newStorage(addr thor.Address, state *state.State, charger *gascharger.Charg
 		lookups:      solidity.NewMapping[thor.Address, thor.Bytes32](context, slotValidationLookups),
 		rewards:      solidity.NewMapping[thor.Bytes32, *big.Int](context, slotRewards),
 		exits:        solidity.NewMapping[*big.Int, thor.Bytes32](context, slotExitEpochs),
+		lockedVET:    solidity.NewUint256(context, slotLockedVET),
+		lockedWeight: solidity.NewUint256(context, slotLockedWeight),
+		queuedVET:    solidity.NewUint256(context, slotQueuedVET),
+		queuedWeight: solidity.NewUint256(context, slotQueuedWeight),
 	}
 }
 

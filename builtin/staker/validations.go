@@ -12,7 +12,6 @@ import (
 	"math/big"
 
 	"github.com/vechain/thor/v2/builtin/params"
-	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -22,10 +21,6 @@ type validations struct {
 	storage             *storage
 	leaderGroup         *linkedList
 	validatorQueue      *linkedList
-	lockedVET           *solidity.Uint256
-	lockedWeight        *solidity.Uint256
-	queuedVET           *solidity.Uint256
-	queuedWeight        *solidity.Uint256
 	lowStakingPeriod    uint32
 	mediumStakingPeriod uint32
 	highStakingPeriod   uint32
@@ -41,10 +36,6 @@ func newValidations(storage *storage) *validations {
 		storage:             storage,
 		leaderGroup:         newLinkedList(storage, slotActiveHead, slotActiveTail, slotActiveGroupSize),
 		validatorQueue:      newLinkedList(storage, slotQueuedHead, slotQueuedTail, slotQueuedGroupSize),
-		lockedVET:           solidity.NewUint256(storage.context, slotLockedVET),
-		lockedWeight:        solidity.NewUint256(storage.context, slotLockedWeight),
-		queuedVET:           solidity.NewUint256(storage.context, slotQueuedVET),
-		queuedWeight:        solidity.NewUint256(storage.context, slotQueuedWeight),
 		lowStakingPeriod:    LowStakingPeriod,
 		mediumStakingPeriod: MediumStakingPeriod,
 		highStakingPeriod:   HighStakingPeriod,
@@ -126,10 +117,10 @@ func (v *validations) Add(
 		Weight:             big.NewInt(0),
 	}
 
-	if err := v.queuedVET.Add(stake); err != nil {
+	if err := v.storage.queuedVET.Add(stake); err != nil {
 		return thor.Bytes32{}, err
 	}
-	if err := v.queuedWeight.Add(big.NewInt(0).Mul(stake, validatorWeightMultiplier)); err != nil {
+	if err := v.storage.queuedWeight.Add(big.NewInt(0).Mul(stake, validatorWeightMultiplier)); err != nil {
 		return thor.Bytes32{}, err
 	}
 	if err := v.storage.SetLookup(node, id); err != nil {
@@ -205,17 +196,17 @@ func (v *validations) ActivateNext(
 	totalLocked := big.NewInt(0).Add(validatorLocked, renewal.ChangeTVL)
 	queuedDecrease := big.NewInt(0).Add(validatorLocked, renewal.QueuedDecrease)
 
-	if err := v.lockedVET.Add(totalLocked); err != nil {
+	if err := v.storage.lockedVET.Add(totalLocked); err != nil {
 		return nil, err
 	}
-	if err := v.lockedWeight.Add(validator.Weight); err != nil {
+	if err := v.storage.lockedWeight.Add(validator.Weight); err != nil {
 		return nil, err
 	}
 
-	if err := v.queuedVET.Sub(queuedDecrease); err != nil {
+	if err := v.storage.queuedVET.Sub(queuedDecrease); err != nil {
 		return nil, err
 	}
-	if err := v.queuedWeight.Sub(validator.Weight); err != nil {
+	if err := v.storage.queuedWeight.Sub(validator.Weight); err != nil {
 		return nil, err
 	}
 
@@ -330,10 +321,10 @@ func (v *validations) IncreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 	}
 
 	entry.PendingLocked = big.NewInt(0).Add(amount, entry.PendingLocked)
-	if err := v.queuedVET.Add(amount); err != nil {
+	if err := v.storage.queuedVET.Add(amount); err != nil {
 		return err
 	}
-	if err := v.queuedWeight.Add(big.NewInt(0).Mul(amount, validatorWeightMultiplier)); err != nil {
+	if err := v.storage.queuedWeight.Add(big.NewInt(0).Mul(amount, validatorWeightMultiplier)); err != nil {
 		return err
 	}
 
@@ -383,10 +374,10 @@ func (v *validations) DecreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 		}
 		entry.PendingLocked = big.NewInt(0).Sub(entry.PendingLocked, amount)
 		entry.WithdrawableVET = big.NewInt(0).Add(entry.WithdrawableVET, amount)
-		if err := v.queuedVET.Sub(amount); err != nil {
+		if err := v.storage.queuedVET.Sub(amount); err != nil {
 			return err
 		}
-		if err := v.queuedWeight.Sub(big.NewInt(0).Mul(amount, validatorWeightMultiplier)); err != nil {
+		if err := v.storage.queuedWeight.Sub(big.NewInt(0).Mul(amount, validatorWeightMultiplier)); err != nil {
 			return err
 		}
 	}
@@ -494,13 +485,13 @@ func (v *validations) ExitValidator(id thor.Bytes32) error {
 	weight := big.NewInt(0).Sub(entry.Weight, exitedWeight)
 	entry.Weight = big.NewInt(0)
 
-	if err := v.queuedWeight.Sub(queuedWeightDecrease); err != nil {
+	if err := v.storage.queuedWeight.Sub(queuedWeightDecrease); err != nil {
 		return err
 	}
-	if err := v.queuedVET.Sub(queuedDecrease); err != nil {
+	if err := v.storage.queuedVET.Sub(queuedDecrease); err != nil {
 		return err
 	}
-	if err := v.lockedVET.Sub(exitedTVL); err != nil {
+	if err := v.storage.lockedVET.Sub(exitedTVL); err != nil {
 		return err
 	}
 	if err := v.storage.SetLookup(entry.Node, thor.Bytes32{}); err != nil {
@@ -509,5 +500,5 @@ func (v *validations) ExitValidator(id thor.Bytes32) error {
 	if _, err = v.leaderGroup.Remove(id, entry); err != nil {
 		return err
 	}
-	return v.lockedWeight.Sub(weight)
+	return v.storage.lockedWeight.Sub(weight)
 }
