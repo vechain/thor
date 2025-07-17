@@ -212,7 +212,7 @@ func (s *Staker) WithdrawDelegation(delegationID thor.Bytes32) *bind.MethodBuild
 }
 
 func (s *Staker) Withdraw(validationID thor.Bytes32) *bind.MethodBuilder {
-	return s.contract.Method("withdraw", validationID)
+	return s.contract.Method("withdrawStake", validationID)
 }
 
 func (s *Staker) DecreaseStake(validationID thor.Bytes32, amount *big.Int) *bind.MethodBuilder {

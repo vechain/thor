@@ -1890,7 +1890,7 @@ func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
 	desc = TestTxDescription{
 		t:          t,
 		abi:        abi,
-		methodName: "withdraw",
+		methodName: "withdrawStake",
 		address:    toAddr,
 		acc:        endorsor,
 		args:       withdrawArgs,
