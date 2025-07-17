@@ -33,6 +33,10 @@ func newDelegationStaker(t *testing.T) (*Staker, []*testValidators) {
 	return staker, validations
 }
 
+func delegationStake() *big.Int {
+	return big.NewInt(0).Mul(big.NewInt(1e18), big.NewInt(10_000)) // 10_000 VET
+}
+
 func Test_IsLocked(t *testing.T) {
 	t.Run("Completed Staking Periods", func(t *testing.T) {
 		last := uint32(2)
@@ -193,14 +197,14 @@ func Test_AddDelegator_StakeRange(t *testing.T) {
 func Test_AddDelegator_ValidatorNotFound(t *testing.T) {
 	staker, _ := newStaker(t, 75, 101, true)
 
-	_, err := staker.AddDelegation(datagen.RandomHash(), big.NewInt(10_000), true, 255)
+	_, err := staker.AddDelegation(datagen.RandomHash(), delegationStake(), true, 255)
 	assert.ErrorContains(t, err, "validation not found")
 }
 
 func Test_AddDelegator_ManyValidators(t *testing.T) {
 	staker, validators := newDelegationStaker(t)
 
-	stake := big.NewInt(10_000)
+	stake := delegationStake()
 
 	for _, validator := range validators {
 		_, err := staker.AddDelegation(validator.ID, stake, true, 255)
@@ -214,7 +218,7 @@ func Test_AddDelegator_ManyValidators(t *testing.T) {
 func Test_AddDelegator_ZeroMultiplier(t *testing.T) {
 	staker, validators := newDelegationStaker(t)
 
-	_, err := staker.AddDelegation(validators[0].ID, big.NewInt(10_000), true, 0)
+	_, err := staker.AddDelegation(validators[0].ID, delegationStake(), true, 0)
 	assert.ErrorContains(t, err, "multiplier cannot be 0")
 }
 
@@ -224,7 +228,7 @@ func Test_Delegator_DisableAutoRenew_PendingLocked(t *testing.T) {
 
 	// And a delegation is added with auto renew enabled
 	validator := validators[0]
-	stake := big.NewInt(10_000)
+	stake := delegationStake()
 	id, err := staker.AddDelegation(validator.ID, stake, true, 255)
 	assert.NoError(t, err)
 	aggregation, err := staker.storage.GetAggregation(validator.ID)
@@ -264,7 +268,7 @@ func Test_QueuedDelegator_Withdraw_NonAutoRenew(t *testing.T) {
 
 	// And a delegation is added with auto renew disabled
 	validator := validators[0]
-	stake := big.NewInt(10_000)
+	stake := delegationStake()
 	id, err := staker.AddDelegation(validator.ID, stake, false, 255)
 	assert.NoError(t, err)
 
@@ -291,7 +295,7 @@ func Test_QueuedDelegator_Withdraw_AutoRenew(t *testing.T) {
 
 	// And a delegation is added with auto renew enabled
 	validator := validators[0]
-	stake := big.NewInt(10_000)
+	stake := delegationStake()
 	id, err := staker.AddDelegation(validator.ID, stake, true, 255)
 	assert.NoError(t, err)
 
@@ -318,7 +322,7 @@ func Test_Delegator_DisableAutoRenew_InAStakingPeriod(t *testing.T) {
 
 	// And a delegation is added with auto renew enabled
 	validator := validators[0]
-	stake := big.NewInt(10_000)
+	stake := delegationStake()
 	validation, err := staker.Get(validator.ID)
 	assert.NoError(t, err)
 	validationStake := big.NewInt(0).Set(validation.LockedVET)
@@ -374,7 +378,7 @@ func Test_Delegator_EnableAutoRenew_PendingLocked(t *testing.T) {
 
 	// And a delegation is added with auto renew disabled
 	validator := validators[0]
-	stake := big.NewInt(10_000)
+	stake := delegationStake()
 	id, err := staker.AddDelegation(validator.ID, stake, false, 255)
 	assert.NoError(t, err)
 	aggregation, err := staker.storage.GetAggregation(validator.ID)
@@ -409,7 +413,7 @@ func Test_Delegator_EnableAutoRenew_InAStakingPeriod(t *testing.T) {
 
 	// And a delegation is added with auto renew disabled
 	validator := validators[0]
-	stake := big.NewInt(10_000)
+	stake := delegationStake()
 	id, err := staker.AddDelegation(validator.ID, stake, false, 255)
 	assert.NoError(t, err)
 
@@ -441,7 +445,7 @@ func Test_Delegator_AutoRenew_ValidatorExits(t *testing.T) {
 
 	// And a delegation is added with auto renew enabled
 	validator := validators[0]
-	stake := big.NewInt(10_000)
+	stake := delegationStake()
 	id, err := staker.AddDelegation(validator.ID, stake, true, 255)
 	assert.NoError(t, err)
 
@@ -474,7 +478,7 @@ func Test_Delegator_WithdrawWhilePending(t *testing.T) {
 
 	// And a delegation is added with auto renew enabled
 	validator := validators[0]
-	stake := big.NewInt(10_000)
+	stake := delegationStake()
 	id, err := staker.AddDelegation(validator.ID, stake, true, 255)
 	assert.NoError(t, err)
 
