@@ -811,7 +811,7 @@ func TestJustifier(t *testing.T) {
 				}
 
 				assert.Equal(t, uint32(0), vs.checkpoint)
-				assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.threshold.Uint64())
+				assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.votesThreshold)
 			},
 		}, {
 			"fork in the middle of checkpoint", func(t *testing.T) {
@@ -827,7 +827,7 @@ func TestJustifier(t *testing.T) {
 				}
 
 				assert.Equal(t, uint32(0), vs.checkpoint)
-				assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.threshold.Uint64())
+				assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.votesThreshold)
 			},
 		}, {
 			"the second bft round", func(t *testing.T) {
@@ -845,7 +845,7 @@ func TestJustifier(t *testing.T) {
 				}
 
 				assert.Equal(t, uint32(thor.CheckpointInterval*2), vs.checkpoint)
-				assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.threshold.Uint64())
+				assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.votesThreshold)
 				assert.Equal(t, uint32(2), vs.Summarize().Quality)
 				assert.False(t, vs.Summarize().Justified)
 				assert.False(t, vs.Summarize().Committed)
