@@ -380,141 +380,102 @@ func TestReCreate(t *testing.T) {
 }
 
 func TestFinalized(t *testing.T) {
-	testBFT, err := newTestBft(defaultFC)
-	if err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		name          string
+		forkCfg       *thor.ForkConfig
+		firstBlockNum uint32
+		checkPoS      bool
+	}{
+		{
+			"default fork config",
+			defaultFC,
+			uint32(MaxBlockProposers*2/3 + 1),
+			false,
+		},
+		{
+			"hayabusa fork config",
+			&thor.ForkConfig{
+				HAYABUSA:    1,
+				HAYABUSA_TP: 1,
+			},
+			uint32(thor.CheckpointInterval - 1),
+			true,
+		},
 	}
 
-	if err = testBFT.fastForward(thor.CheckpointInterval*3 - 1); err != nil {
-		t.Fatal(err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testBFT, err := newTestBft(tt.forkCfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err = testBFT.fastForward(thor.CheckpointInterval*3 - 1); err != nil {
+				t.Fatal(err)
+			}
+
+			// PoS was enabled a while ago at this stage, check that the total stake and weight are correct
+			if tt.checkPoS {
+				stkr := builtin.Staker.Native(testBFT.stater.NewState(testBFT.repo.BestBlockSummary().Root()))
+				totalStake, totalWeight, err := stkr.LockedVET()
+				if err != nil {
+					t.Fatal(err)
+				}
+				assert.Equal(t, new(big.Int).Mul(big.NewInt(int64(len(devAccounts)-1)), validatorStake), totalStake)
+				assert.Equal(t, new(big.Int).Mul(big.NewInt(2), totalStake), totalWeight)
+			}
+
+			sum, err := testBFT.repo.NewBestChain().GetBlockSummary(tt.firstBlockNum)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			st, err := testBFT.engine.computeState(sum.Header)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// should be justify and commit at firstBlockNum
+			assert.Equal(t, uint32(1), st.Quality)
+			assert.True(t, st.Justified)
+			assert.True(t, st.Committed)
+
+			blockNum := uint32(thor.CheckpointInterval*2 + MaxBlockProposers*2/3)
+
+			sum, err = testBFT.repo.NewBestChain().GetBlockSummary(blockNum)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			st, err = testBFT.engine.computeState(sum.Header)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// should be justify and commit at (bft round start) + (MaxBlockProposers*2/3) + 1
+			assert.Equal(t, uint32(3), st.Quality)
+			assert.True(t, st.Justified)
+			assert.True(t, st.Committed)
+
+			// chain stops the end of third bft round,should commit the second checkpoint
+			finalized, err := testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			assert.Equal(t, finalized, testBFT.engine.Finalized())
+
+			jc, err := testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval * 2)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			j, err := testBFT.engine.Justified()
+			assert.NoError(t, err)
+			assert.Equal(t, jc, j)
+			assert.Equal(t, jc, testBFT.engine.justified.Load().(justified).value)
+		})
 	}
-
-	blockNum := uint32(MaxBlockProposers*2/3 + 1)
-
-	sum, err := testBFT.repo.NewBestChain().GetBlockSummary(blockNum)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	st, err := testBFT.engine.computeState(sum.Header)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// should be justify and commit at (MaxBlockProposers*2/3) + 1
-	assert.Equal(t, uint32(1), st.Quality)
-	assert.True(t, st.Justified)
-	assert.True(t, st.Committed)
-
-	blockNum = uint32(thor.CheckpointInterval*2 + MaxBlockProposers*2/3)
-
-	sum, err = testBFT.repo.NewBestChain().GetBlockSummary(blockNum)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	st, err = testBFT.engine.computeState(sum.Header)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// should be justify and commit at (bft round start) + (MaxBlockProposers*2/3) + 1
-	assert.Equal(t, uint32(3), st.Quality)
-	assert.True(t, st.Justified)
-	assert.True(t, st.Committed)
-
-	// chain stops the end of third bft round,should commit the second checkpoint
-	finalized, err := testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	assert.Equal(t, finalized, testBFT.engine.Finalized())
-
-	jc, err := testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval * 2)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	j, err := testBFT.engine.Justified()
-	assert.NoError(t, err)
-	assert.Equal(t, jc, j)
-	assert.Equal(t, jc, testBFT.engine.justified.Load().(justified).value)
-}
-
-func TestFinalizedHayabusa(t *testing.T) {
-	testBFT, err := newTestBft(&thor.ForkConfig{
-		HAYABUSA:    1,
-		HAYABUSA_TP: 1,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err = testBFT.fastForward(thor.CheckpointInterval*3 - 1); err != nil {
-		t.Fatal(err)
-	}
-
-	// PoS was enabled a while ago at this stage, check that the total stake and weight are correct
-	stkr := builtin.Staker.Native(testBFT.stater.NewState(testBFT.repo.BestBlockSummary().Root()))
-	totalStake, totalWeight, err := stkr.LockedVET()
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, new(big.Int).Mul(big.NewInt(int64(len(devAccounts) - 1)), validatorStake), totalStake)
-	assert.Equal(t, new(big.Int).Mul(big.NewInt(2), totalStake), totalWeight)
-
-	blockNum := uint32(thor.CheckpointInterval - 1)
-
-	sum, err := testBFT.repo.NewBestChain().GetBlockSummary(blockNum)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	st, err := testBFT.engine.computeState(sum.Header)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// should be justify and commit at 179 (thor.CheckpointInterval - 1)
-	assert.Equal(t, uint32(1), st.Quality)
-	assert.True(t, st.Justified)
-	assert.True(t, st.Committed)
-
-	blockNum = uint32(thor.CheckpointInterval*2 + MaxBlockProposers*2/3)
-
-	sum, err = testBFT.repo.NewBestChain().GetBlockSummary(blockNum)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	st, err = testBFT.engine.computeState(sum.Header)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// should be justify and commit at (bft round start) + (MaxBlockProposers*2/3) + 1
-	assert.Equal(t, uint32(3), st.Quality)
-	assert.True(t, st.Justified)
-	assert.True(t, st.Committed)
-
-	// chain stops the end of third bft round,should commit the second checkpoint
-	finalized, err := testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	assert.Equal(t, finalized, testBFT.engine.Finalized())
-
-	jc, err := testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval * 2)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	j, err := testBFT.engine.Justified()
-	assert.NoError(t, err)
-	assert.Equal(t, jc, j)
-	assert.Equal(t, jc, testBFT.engine.justified.Load().(justified).value)
 }
 
 func TestAccepts(t *testing.T) {
