@@ -12,7 +12,6 @@ import (
 	"math/big"
 
 	"github.com/vechain/thor/v2/builtin/params"
-	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -22,10 +21,6 @@ type validations struct {
 	storage             *storage
 	leaderGroup         *linkedList
 	validatorQueue      *linkedList
-	lockedVET           *solidity.Uint256
-	lockedWeight        *solidity.Uint256
-	queuedVET           *solidity.Uint256
-	queuedWeight        *solidity.Uint256
 	lowStakingPeriod    uint32
 	mediumStakingPeriod uint32
 	highStakingPeriod   uint32
@@ -41,10 +36,6 @@ func newValidations(storage *storage) *validations {
 		storage:             storage,
 		leaderGroup:         newLinkedList(storage, slotActiveHead, slotActiveTail, slotActiveGroupSize),
 		validatorQueue:      newLinkedList(storage, slotQueuedHead, slotQueuedTail, slotQueuedGroupSize),
-		lockedVET:           solidity.NewUint256(storage.context, slotLockedVET),
-		lockedWeight:        solidity.NewUint256(storage.context, slotLockedWeight),
-		queuedVET:           solidity.NewUint256(storage.context, slotQueuedVET),
-		queuedWeight:        solidity.NewUint256(storage.context, slotQueuedWeight),
 		lowStakingPeriod:    LowStakingPeriod,
 		mediumStakingPeriod: MediumStakingPeriod,
 		highStakingPeriod:   HighStakingPeriod,
@@ -126,10 +117,10 @@ func (v *validations) Add(
 		Weight:             big.NewInt(0),
 	}
 
-	if err := v.queuedVET.Add(stake); err != nil {
+	if err := v.storage.queuedVET.Add(stake); err != nil {
 		return thor.Bytes32{}, err
 	}
-	if err := v.queuedWeight.Add(big.NewInt(0).Mul(stake, validatorWeightMultiplier)); err != nil {
+	if err := v.storage.queuedWeight.Add(big.NewInt(0).Mul(stake, validatorWeightMultiplier)); err != nil {
 		return thor.Bytes32{}, err
 	}
 	if err := v.storage.SetLookup(node, id); err != nil {
@@ -205,17 +196,17 @@ func (v *validations) ActivateNext(
 	totalLocked := big.NewInt(0).Add(validatorLocked, renewal.ChangeTVL)
 	queuedDecrease := big.NewInt(0).Add(validatorLocked, renewal.QueuedDecrease)
 
-	if err := v.lockedVET.Add(totalLocked); err != nil {
+	if err := v.storage.lockedVET.Add(totalLocked); err != nil {
 		return nil, err
 	}
-	if err := v.lockedWeight.Add(validator.Weight); err != nil {
+	if err := v.storage.lockedWeight.Add(validator.Weight); err != nil {
 		return nil, err
 	}
 
-	if err := v.queuedVET.Sub(queuedDecrease); err != nil {
+	if err := v.storage.queuedVET.Sub(queuedDecrease); err != nil {
 		return nil, err
 	}
-	if err := v.queuedWeight.Sub(validator.Weight); err != nil {
+	if err := v.storage.queuedWeight.Sub(validator.Weight); err != nil {
 		return nil, err
 	}
 
@@ -319,7 +310,10 @@ func (v *validations) IncreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 	if err != nil {
 		return err
 	}
-	nextPeriodTVL := entry.NextPeriodStakes(aggregation)
+	validatorTVL := entry.NextPeriodTVL()
+	// we do not consider aggregation.CurrentRecurringVET since the delegator could enable auto-renew
+	delegationTVL := big.NewInt(0).Add(aggregation.CurrentRecurringVET, aggregation.PendingRecurringVET)
+	nextPeriodTVL := big.NewInt(0).Add(validatorTVL, delegationTVL)
 	newTVL := big.NewInt(0).Add(nextPeriodTVL, amount)
 
 	if newTVL.Cmp(MaxStake) > 0 {
@@ -327,10 +321,10 @@ func (v *validations) IncreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 	}
 
 	entry.PendingLocked = big.NewInt(0).Add(amount, entry.PendingLocked)
-	if err := v.queuedVET.Add(amount); err != nil {
+	if err := v.storage.queuedVET.Add(amount); err != nil {
 		return err
 	}
-	if err := v.queuedWeight.Add(big.NewInt(0).Mul(amount, validatorWeightMultiplier)); err != nil {
+	if err := v.storage.queuedWeight.Add(big.NewInt(0).Mul(amount, validatorWeightMultiplier)); err != nil {
 		return err
 	}
 
@@ -354,27 +348,36 @@ func (v *validations) DecreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 	if entry.Status == StatusActive && !entry.AutoRenew {
 		return errors.New("validator is not set to renew in the next period, all funds will be withdrawable")
 	}
-	newStake := big.NewInt(0).Add(entry.LockedVET, entry.PendingLocked)
-	newStake = newStake.Sub(newStake, amount)
-	if newStake.Cmp(MinStake) < 0 {
-		return errors.New("stake is too low for validator")
-	}
+
 	aggregation, err := v.storage.GetAggregation(id)
 	if err != nil {
 		return err
 	}
 
 	if entry.Status == StatusActive {
+		// We don't consider any increases, i.e., entry.PendingLocked. We only consider locked and current decreases.
+		// The reason is that validator can instantly withdraw PendingLocked at any time.
+		// We need to make sure the locked VET minus the sum of the current decreases is still above the minimum stake.
+		nextPeriodTVL := big.NewInt(0).Sub(entry.LockedVET, entry.NextPeriodDecrease)
+		nextPeriodTVL = nextPeriodTVL.Sub(nextPeriodTVL, amount)
+		if nextPeriodTVL.Cmp(MinStake) < 0 {
+			return errors.New("next period stake is too low for validator")
+		}
 		entry.NextPeriodDecrease = big.NewInt(0).Add(entry.NextPeriodDecrease, amount)
 	}
 
 	if entry.Status == StatusQueued {
+		// All the validator's stake exists within PendingLocked, so we need to make sure it maintains a minimum of MinStake.
+		nextPeriodTVL := big.NewInt(0).Sub(entry.PendingLocked, amount)
+		if nextPeriodTVL.Cmp(MinStake) < 0 {
+			return errors.New("next period stake is too low for validator")
+		}
 		entry.PendingLocked = big.NewInt(0).Sub(entry.PendingLocked, amount)
 		entry.WithdrawableVET = big.NewInt(0).Add(entry.WithdrawableVET, amount)
-		if err := v.queuedVET.Sub(amount); err != nil {
+		if err := v.storage.queuedVET.Sub(amount); err != nil {
 			return err
 		}
-		if err := v.queuedWeight.Sub(big.NewInt(0).Mul(amount, validatorWeightMultiplier)); err != nil {
+		if err := v.storage.queuedWeight.Sub(big.NewInt(0).Mul(amount, validatorWeightMultiplier)); err != nil {
 			return err
 		}
 	}
@@ -482,13 +485,13 @@ func (v *validations) ExitValidator(id thor.Bytes32) error {
 	weight := big.NewInt(0).Sub(entry.Weight, exitedWeight)
 	entry.Weight = big.NewInt(0)
 
-	if err := v.queuedWeight.Sub(queuedWeightDecrease); err != nil {
+	if err := v.storage.queuedWeight.Sub(queuedWeightDecrease); err != nil {
 		return err
 	}
-	if err := v.queuedVET.Sub(queuedDecrease); err != nil {
+	if err := v.storage.queuedVET.Sub(queuedDecrease); err != nil {
 		return err
 	}
-	if err := v.lockedVET.Sub(exitedTVL); err != nil {
+	if err := v.storage.lockedVET.Sub(exitedTVL); err != nil {
 		return err
 	}
 	if err := v.storage.SetLookup(entry.Node, thor.Bytes32{}); err != nil {
@@ -497,5 +500,5 @@ func (v *validations) ExitValidator(id thor.Bytes32) error {
 	if _, err = v.leaderGroup.Remove(id, entry); err != nil {
 		return err
 	}
-	return v.lockedWeight.Sub(weight)
+	return v.storage.lockedWeight.Sub(weight)
 }

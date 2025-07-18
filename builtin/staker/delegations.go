@@ -15,18 +15,14 @@ import (
 
 // delegations is a struct that manages the delegations for the staker contract.
 type delegations struct {
-	storage      *storage
-	queuedVET    *solidity.Uint256
-	queuedWeight *solidity.Uint256
-	idCounter    *solidity.Uint256
+	storage   *storage
+	idCounter *solidity.Uint256
 }
 
 func newDelegations(storage *storage) *delegations {
 	return &delegations{
-		storage:      storage,
-		queuedVET:    solidity.NewUint256(storage.context, slotQueuedVET),
-		queuedWeight: solidity.NewUint256(storage.context, slotQueuedWeight),
-		idCounter:    solidity.NewUint256(storage.context, slotDelegationsCounter),
+		storage:   storage,
+		idCounter: solidity.NewUint256(storage.context, slotDelegationsCounter),
 	}
 }
 
@@ -60,9 +56,9 @@ func (d *delegations) Add(
 	if aggregated.IsEmpty() {
 		aggregated = newAggregation()
 	}
-	nextPeriodStake := validation.NextPeriodStakes(aggregated)
-	nextPeriodStake = nextPeriodStake.Add(nextPeriodStake, stake)
-	if nextPeriodStake.Cmp(MaxStake) > 0 {
+	nextPeriodTVL := big.NewInt(0).Add(validation.NextPeriodTVL(), aggregated.NextPeriodTVL())
+	nextPeriodTVL = nextPeriodTVL.Add(nextPeriodTVL, stake)
+	if nextPeriodTVL.Cmp(MaxStake) > 0 {
 		return thor.Bytes32{}, errors.New("validation's next period stake exceeds max stake")
 	}
 
@@ -84,30 +80,23 @@ func (d *delegations) Add(
 		ValidationID:   validationID,
 		FirstIteration: validation.CurrentIteration() + 1,
 	}
-
 	weight := delegation.Weight()
-
-	if !autoRenew {
-		last := validation.CurrentIteration() + 1
-		delegation.LastIteration = &last
-	}
-
-	if err := d.queuedVET.Add(stake); err != nil {
-		return thor.Bytes32{}, err
-	}
-
-	if err := d.queuedWeight.Add(weight); err != nil {
-		return thor.Bytes32{}, err
-	}
-
 	if delegation.AutoRenew {
 		aggregated.PendingRecurringVET = big.NewInt(0).Add(aggregated.PendingRecurringVET, delegation.Stake)
 		aggregated.PendingRecurringWeight = big.NewInt(0).Add(aggregated.PendingRecurringWeight, weight)
 	} else {
 		aggregated.PendingOneTimeVET = big.NewInt(0).Add(aggregated.PendingOneTimeVET, delegation.Stake)
 		aggregated.PendingOneTimeWeight = big.NewInt(0).Add(aggregated.PendingOneTimeWeight, weight)
+		last := validation.CurrentIteration() + 1
+		delegation.LastIteration = &last
 	}
 
+	if err := d.storage.queuedVET.Add(stake); err != nil {
+		return thor.Bytes32{}, err
+	}
+	if err := d.storage.queuedWeight.Add(weight); err != nil {
+		return thor.Bytes32{}, err
+	}
 	if err := d.storage.SetAggregation(validationID, aggregated, false); err != nil {
 		return thor.Bytes32{}, err
 	}
@@ -166,8 +155,17 @@ func (d *delegations) EnableAutoRenew(delegationID thor.Bytes32) error {
 	if err != nil {
 		return err
 	}
-
+	if delegation.AutoRenew {
+		return errors.New("delegation is already autoRenew")
+	}
 	weight := delegation.Weight()
+
+	// validate that the enablement does not exceed the max stake considering next staking period changes
+	nextPeriodTVL := big.NewInt(0).Add(validation.NextPeriodTVL(), aggregation.NextPeriodTVL())
+	nextPeriodTVL.Add(nextPeriodTVL, delegation.Stake)
+	if nextPeriodTVL.Cmp(MaxStake) > 0 {
+		return errors.New("validation's next period stake exceeds max stake")
+	}
 
 	if delegation.IsLocked(validation) {
 		// move the delegation's portion of non-recurring to locked.
@@ -227,10 +225,10 @@ func (d *delegations) Withdraw(delegationID thor.Bytes32) (*big.Int, error) {
 			aggregation.PendingOneTimeVET = big.NewInt(0).Sub(aggregation.PendingOneTimeVET, delegation.Stake)
 			aggregation.PendingOneTimeWeight = big.NewInt(0).Sub(aggregation.PendingOneTimeWeight, weight)
 		}
-		if err := d.queuedVET.Sub(delegation.Stake); err != nil {
+		if err := d.storage.queuedVET.Sub(delegation.Stake); err != nil {
 			return nil, err
 		}
-		if err := d.queuedWeight.Sub(weight); err != nil {
+		if err := d.storage.queuedWeight.Sub(weight); err != nil {
 			return nil, err
 		}
 	}
