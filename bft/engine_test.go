@@ -148,7 +148,7 @@ func (test *TestBFT) newBlock(parentSummary *chain.BlockSummary, master genesis.
 			return nil, err
 		}
 		if validation.IsEmpty() {
-			if err := test.adoptTx(flow, master.PrivateKey, "addValidator", validatorStake, master.Address, minStakingPeriod, true); err != nil {
+			if err := test.adoptStakerTx(flow, master.PrivateKey, "addValidator", validatorStake, master.Address, minStakingPeriod, true); err != nil {
 				return nil, err
 			}
 		}
@@ -247,7 +247,7 @@ func (test *TestBFT) pack(parentID thor.Bytes32, shouldVote bool, asBest bool) (
 	return test.repo.GetBlockSummary(blk.Header.ID())
 }
 
-func (test *TestBFT) adoptTx(flow *packer.Flow, privateKey *ecdsa.PrivateKey, methodName string, value *big.Int, args ...any) error {
+func (test *TestBFT) adoptStakerTx(flow *packer.Flow, privateKey *ecdsa.PrivateKey, methodName string, value *big.Int, args ...any) error {
 	methodABI, found := builtin.Staker.ABI.MethodByName(methodName)
 	if !found {
 		return fmt.Errorf("%s method not found", methodName)
