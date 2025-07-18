@@ -90,12 +90,10 @@ func (js *justifier) AddBlock(signer thor.Address, isCOM bool, weight *big.Int) 
 	// Boolean count is required due to COM regardless of PoS or PoA
 	if prev, ok := js.votes[signer]; !ok {
 		js.votes[signer] = isCOM
-		if weight != nil {
-			js.voterWeights[signer] = new(big.Int).Set(weight)
-		}
 		if isCOM {
 			js.comVotes++
 			if weight != nil {
+				js.voterWeights[signer] = new(big.Int).Set(weight)
 				js.comWeight.Add(js.comWeight, weight)
 			}
 		}
