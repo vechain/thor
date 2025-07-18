@@ -479,38 +479,59 @@ func TestFinalized(t *testing.T) {
 }
 
 func TestAccepts(t *testing.T) {
-	testBFT, err := newTestBft(defaultFC)
-	if err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		name    string
+		forkCfg *thor.ForkConfig
+	}{
+		{
+			"default fork config",
+			defaultFC,
+		},
+		{
+			"hayabusa fork config",
+			&thor.ForkConfig{
+				HAYABUSA:    1,
+				HAYABUSA_TP: 1,
+			},
+		},
 	}
 
-	if err = testBFT.fastForward(thor.CheckpointInterval - 1); err != nil {
-		t.Fatal(err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testBFT, err := newTestBft(tt.forkCfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err = testBFT.fastForward(thor.CheckpointInterval - 1); err != nil {
+				t.Fatal(err)
+			}
+
+			branch, err := testBFT.buildBranch(1)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err = testBFT.fastForward(thor.CheckpointInterval * 2); err != nil {
+				t.Fatal(err)
+			}
+
+			// new block in trunk should accept
+			ok, err := testBFT.engine.Accepts(testBFT.engine.repo.BestBlockSummary().Header.ID())
+			assert.Nil(t, err)
+			assert.Equal(t, ok, true)
+
+			branchID, err := branch.GetBlockID(thor.CheckpointInterval)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// blocks in trunk should be rejected
+			ok, err = testBFT.engine.Accepts(branchID)
+			assert.Nil(t, err)
+			assert.Equal(t, ok, false)
+		})
 	}
-
-	branch, err := testBFT.buildBranch(1)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err = testBFT.fastForward(thor.CheckpointInterval * 2); err != nil {
-		t.Fatal(err)
-	}
-
-	// new block in trunk should accept
-	ok, err := testBFT.engine.Accepts(testBFT.engine.repo.BestBlockSummary().Header.ID())
-	assert.Nil(t, err)
-	assert.Equal(t, ok, true)
-
-	branchID, err := branch.GetBlockID(thor.CheckpointInterval)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// blocks in trunk should be rejected
-	ok, err = testBFT.engine.Accepts(branchID)
-	assert.Nil(t, err)
-	assert.Equal(t, ok, false)
 }
 
 func TestGetVote(t *testing.T) {
