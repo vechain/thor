@@ -148,8 +148,11 @@ func (test *TestBFT) newBlock(parentSummary *chain.BlockSummary, master genesis.
 			return nil, err
 		}
 		if validation.IsEmpty() {
-			if err := test.adoptStakerTx(flow, master.PrivateKey, "addValidator", validatorStake, master.Address, minStakingPeriod, true); err != nil {
-				return nil, err
+			// Add all dev accounts as validators
+			for _, dev := range devAccounts {
+				if err := test.adoptStakerTx(flow, dev.PrivateKey, "addValidator", validatorStake, dev.Address, minStakingPeriod, true); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -437,7 +440,7 @@ func TestFinalized(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				assert.Equal(t, new(big.Int).Mul(big.NewInt(int64(len(devAccounts)-1)), validatorStake), totalStake)
+				assert.Equal(t, new(big.Int).Mul(big.NewInt(int64(len(devAccounts))), validatorStake), totalStake)
 				assert.Equal(t, new(big.Int).Mul(big.NewInt(2), totalStake), totalWeight)
 			}
 
