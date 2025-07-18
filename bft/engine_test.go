@@ -463,6 +463,58 @@ func TestFinalizedHayabusa(t *testing.T) {
 	}
 	assert.Equal(t, new(big.Int).Mul(big.NewInt(int64(len(devAccounts) - 1)), validatorStake), totalStake)
 	assert.Equal(t, new(big.Int).Mul(big.NewInt(2), totalStake), totalWeight)
+
+	blockNum := uint32(thor.CheckpointInterval - 1)
+
+	sum, err := testBFT.repo.NewBestChain().GetBlockSummary(blockNum)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := testBFT.engine.computeState(sum.Header)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// should be justify and commit at 179 (thor.CheckpointInterval - 1)
+	assert.Equal(t, uint32(1), st.Quality)
+	assert.True(t, st.Justified)
+	assert.True(t, st.Committed)
+
+	blockNum = uint32(thor.CheckpointInterval*2 + MaxBlockProposers*2/3)
+
+	sum, err = testBFT.repo.NewBestChain().GetBlockSummary(blockNum)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	st, err = testBFT.engine.computeState(sum.Header)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// should be justify and commit at (bft round start) + (MaxBlockProposers*2/3) + 1
+	assert.Equal(t, uint32(3), st.Quality)
+	assert.True(t, st.Justified)
+	assert.True(t, st.Committed)
+
+	// chain stops the end of third bft round,should commit the second checkpoint
+	finalized, err := testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, finalized, testBFT.engine.Finalized())
+
+	jc, err := testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval * 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	j, err := testBFT.engine.Justified()
+	assert.NoError(t, err)
+	assert.Equal(t, jc, j)
+	assert.Equal(t, jc, testBFT.engine.justified.Load().(justified).value)
 }
 
 func TestAccepts(t *testing.T) {
