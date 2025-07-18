@@ -5,7 +5,8 @@
 package bft
 
 import (
-	"errors"
+	"crypto/ecdsa"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -141,36 +142,15 @@ func (test *TestBFT) newBlock(parentSummary *chain.BlockSummary, master genesis.
 	}
 
 	if parentSummary.Header.Number() > test.fc.HAYABUSA+test.fc.HAYABUSA_TP {
-		methodABI, found := builtin.Staker.ABI.MethodByName("addValidator")
-		if !found {
-			return nil, errors.New("addValidator method not found")
-		}
-		data, err := methodABI.EncodeInput(master.Address, minStakingPeriod, true)
+		staker := builtin.Staker.Native(test.stater.NewState(parentSummary.Root()))
+		validation, _, err := staker.LookupNode(master.Address)
 		if err != nil {
 			return nil, err
 		}
-
-		clause := tx.NewClause(&builtin.Staker.Address)
-		clause = clause.WithValue(validatorStake)
-		clause = clause.WithData(data)
-
-		trx := new(tx.Builder).
-			ChainTag(test.repo.ChainTag()).
-			BlockRef(tx.NewBlockRef(test.repo.BestBlockSummary().Header.Number())).
-			Expiration(32).
-			Nonce(datagen.RandUint64()).
-			Gas(1000000).
-			Clause(clause).Build()
-
-		signature, err := crypto.Sign(trx.SigningHash().Bytes(), master.PrivateKey)
-		if err != nil {
-			return nil, err
-		}
-		trx = trx.WithSignature(signature)
-
-		err = flow.Adopt(trx)
-		if err != nil {
-			return nil, err
+		if validation.IsEmpty() {
+			if err := test.adoptTx(flow, master.PrivateKey, "addValidator", validatorStake, master.Address, minStakingPeriod, true); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -265,6 +245,42 @@ func (test *TestBFT) pack(parentID thor.Bytes32, shouldVote bool, asBest bool) (
 	}
 
 	return test.repo.GetBlockSummary(blk.Header.ID())
+}
+
+func (test *TestBFT) adoptTx(flow *packer.Flow, privateKey *ecdsa.PrivateKey, methodName string, value *big.Int, args ...any) error {
+	methodABI, found := builtin.Staker.ABI.MethodByName(methodName)
+	if !found {
+		return fmt.Errorf("%s method not found", methodName)
+	}
+	data, err := methodABI.EncodeInput(args...)
+	if err != nil {
+		return err
+	}
+
+	clause := tx.NewClause(&builtin.Staker.Address)
+	clause = clause.WithValue(value)
+	clause = clause.WithData(data)
+
+	trx := new(tx.Builder).
+		ChainTag(test.repo.ChainTag()).
+		BlockRef(tx.NewBlockRef(test.repo.BestBlockSummary().Header.Number())).
+		Expiration(32).
+		Nonce(datagen.RandUint64()).
+		Gas(1000000).
+		Clause(clause).Build()
+
+	signature, err := crypto.Sign(trx.SigningHash().Bytes(), privateKey)
+	if err != nil {
+		return err
+	}
+	trx = trx.WithSignature(signature)
+
+	err = flow.Adopt(trx)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func TestNewEngine(t *testing.T) {
@@ -535,13 +551,30 @@ func TestAccepts(t *testing.T) {
 }
 
 func TestGetVote(t *testing.T) {
-	tests := []struct {
-		name     string
-		testFunc func(*testing.T)
+	forkConfigs := []struct {
+		name    string
+		forkCfg *thor.ForkConfig
 	}{
 		{
-			"early stage, vote WIT", func(t *testing.T) {
-				testBFT, err := newTestBft(defaultFC)
+			"default fork config",
+			defaultFC,
+		},
+		{
+			"hayabusa fork config",
+			&thor.ForkConfig{
+				HAYABUSA:    1,
+				HAYABUSA_TP: 1,
+			},
+		},
+	}
+
+	tests := []struct {
+		name     string
+		testFunc func(*testing.T, *thor.ForkConfig)
+	}{
+		{
+			"early stage, vote WIT", func(t *testing.T, forkCfg *thor.ForkConfig) {
+				testBFT, err := newTestBft(forkCfg)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -553,8 +586,8 @@ func TestGetVote(t *testing.T) {
 				assert.Equal(t, false, v)
 			},
 		}, {
-			"never justified, vote WIT", func(t *testing.T) {
-				testBFT, err := newTestBft(defaultFC)
+			"never justified, vote WIT", func(t *testing.T, forkCfg *thor.ForkConfig) {
+				testBFT, err := newTestBft(forkCfg)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -567,8 +600,8 @@ func TestGetVote(t *testing.T) {
 				assert.Equal(t, false, v)
 			},
 		}, {
-			"never voted other checkpoint, vote COM", func(t *testing.T) {
-				testBFT, err := newTestBft(defaultFC)
+			"never voted other checkpoint, vote COM", func(t *testing.T, forkCfg *thor.ForkConfig) {
+				testBFT, err := newTestBft(forkCfg)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -581,8 +614,8 @@ func TestGetVote(t *testing.T) {
 				assert.Equal(t, true, v)
 			},
 		}, {
-			"voted other checkpoint but not conflict with recent justified, vote COM", func(t *testing.T) {
-				testBFT, err := newTestBft(defaultFC)
+			"voted other checkpoint but not conflict with recent justified, vote COM", func(t *testing.T, forkCfg *thor.ForkConfig) {
+				testBFT, err := newTestBft(forkCfg)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -626,8 +659,8 @@ func TestGetVote(t *testing.T) {
 				assert.Equal(t, true, v)
 			},
 		}, {
-			"voted another non-justified checkpoint,conflict with most recent justified checkpoint, vote WIT", func(t *testing.T) {
-				testBFT, err := newTestBft(defaultFC)
+			"voted another non-justified checkpoint,conflict with most recent justified checkpoint, vote WIT", func(t *testing.T, forkCfg *thor.ForkConfig) {
+				testBFT, err := newTestBft(forkCfg)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -688,8 +721,8 @@ func TestGetVote(t *testing.T) {
 				assert.Equal(t, false, v)
 			},
 		}, {
-			"voted another justified checkpoint,conflict with most recent justified checkpoint, vote WIT", func(t *testing.T) {
-				testBFT, err := newTestBft(defaultFC)
+			"voted another justified checkpoint,conflict with most recent justified checkpoint, vote WIT", func(t *testing.T, forkCfg *thor.ForkConfig) {
+				testBFT, err := newTestBft(forkCfg)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -733,8 +766,8 @@ func TestGetVote(t *testing.T) {
 				assert.Equal(t, false, v)
 			},
 		}, {
-			"test findCheckpointByQuality edge case, should not fail", func(t *testing.T) {
-				testBFT, err := newTestBft(defaultFC)
+			"test findCheckpointByQuality edge case, should not fail", func(t *testing.T, forkCfg *thor.ForkConfig) {
+				testBFT, err := newTestBft(forkCfg)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -751,7 +784,11 @@ func TestGetVote(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.testFunc(t)
+			for _, fc := range forkConfigs {
+				t.Run(fc.name, func(t *testing.T) {
+					tt.testFunc(t, fc.forkCfg)
+				})
+			}
 		})
 	}
 }
