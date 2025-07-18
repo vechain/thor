@@ -402,13 +402,11 @@ func TestFinalized(t *testing.T) {
 	tests := []struct {
 		name          string
 		forkCfg       *thor.ForkConfig
-		firstBlockNum uint32
 		checkPoS      bool
 	}{
 		{
 			"default fork config",
 			defaultFC,
-			uint32(MaxBlockProposers*2/3 + 1),
 			false,
 		},
 		{
@@ -417,7 +415,6 @@ func TestFinalized(t *testing.T) {
 				HAYABUSA:    1,
 				HAYABUSA_TP: 1,
 			},
-			uint32(thor.CheckpointInterval - 1),
 			true,
 		},
 	}
@@ -444,7 +441,7 @@ func TestFinalized(t *testing.T) {
 				assert.Equal(t, new(big.Int).Mul(big.NewInt(2), totalStake), totalWeight)
 			}
 
-			sum, err := testBFT.repo.NewBestChain().GetBlockSummary(tt.firstBlockNum)
+			sum, err := testBFT.repo.NewBestChain().GetBlockSummary(uint32(MaxBlockProposers*2/3 + 1))
 			if err != nil {
 				t.Fatal(err)
 			}
