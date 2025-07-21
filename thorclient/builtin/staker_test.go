@@ -69,7 +69,7 @@ func TestStaker(t *testing.T) {
 	minStake := MinStake()
 	var validatorTxs []*tx.Transaction
 	for _, acc := range genesis.DevAccounts()[0:2] {
-		addValidatorTx, err := staker.AddValidator(acc.Address, minStake, minStakingPeriod, true).
+		addValidatorTx, err := staker.AddValidator(acc.Address, minStake, minStakingPeriod).
 			Send().
 			WithSigner(bind.NewSigner(acc.PrivateKey)).
 			WithOptions(txOpts()).Submit()
@@ -143,7 +143,7 @@ func TestStaker(t *testing.T) {
 	)
 
 	// AddValidator
-	receipt, _, err := staker.AddValidator(validator.Address, minStake, minStakingPeriod, false).
+	receipt, _, err := staker.AddValidator(validator.Address, minStake, minStakingPeriod).
 		Send().
 		WithSigner(validatorKey).
 		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
@@ -203,36 +203,27 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, validator.Address, decreaseEvents[0].Endorsor)
 	require.Equal(t, minStake, decreaseEvents[0].Removed)
 
-	// UpdateAutoRenew - Disable AutoRenew
-	receipt, _, err = staker.UpdateAutoRenew(queuedID, true).
+	// DisableAutoRenew
+	receipt, _, err = staker.DisableAutoRenew(queuedID).
 		Send().
 		WithSigner(validatorKey).
 		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 
-	autoRenewEvents, err := staker.FilterValidatorUpdatedAutoRenew(newRange(receipt), nil, logdb.ASC)
+	autoRenewEvents, err := staker.FilterValidatorDisabledAutoRenew(newRange(receipt), nil, logdb.ASC)
 	require.NoError(t, err)
 	require.Len(t, autoRenewEvents, 1)
 	require.Equal(t, queuedID, autoRenewEvents[0].ValidationID)
 	require.Equal(t, validator.Address, autoRenewEvents[0].Endorsor)
-	require.True(t, autoRenewEvents[0].AutoRenew)
 
 	getRes, err = staker.Get(queuedID)
 	require.NoError(t, err)
-	require.True(t, getRes.AutoRenew)
+	require.False(t, getRes.AutoRenew)
 
-	// UpdateAutoRenew - Enable AutoRenew
-	receipt, _, err = staker.UpdateAutoRenew(queuedID, false).
-		Send().
-		WithSigner(validatorKey).
-		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
-	require.NoError(t, err)
-
-	autoRenewEvents, err = staker.FilterValidatorUpdatedAutoRenew(newRange(receipt), nil, logdb.ASC)
+	autoRenewEvents, err = staker.FilterValidatorDisabledAutoRenew(newRange(receipt), nil, logdb.ASC)
 	require.NoError(t, err)
 	require.Len(t, autoRenewEvents, 1)
 	require.Equal(t, queuedID, autoRenewEvents[0].ValidationID)
-	require.Equal(t, false, autoRenewEvents[0].AutoRenew)
 
 	// AddDelegation
 	receipt, _, err = staker.AddDelegation(queuedID, minStake, false, 100).

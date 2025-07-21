@@ -191,8 +191,8 @@ func (s *Staker) Get(id thor.Bytes32) (*Validator, error) {
 	return validator, nil
 }
 
-func (s *Staker) AddValidator(master thor.Address, stake *big.Int, period uint32, autoRenew bool) *bind.MethodBuilder {
-	return s.contract.Method("addValidator", master, period, autoRenew).WithValue(stake)
+func (s *Staker) AddValidator(master thor.Address, stake *big.Int, period uint32) *bind.MethodBuilder {
+	return s.contract.Method("addValidator", master, period).WithValue(stake)
 }
 
 func (s *Staker) AddDelegation(validationID thor.Bytes32, stake *big.Int, autoRenew bool, multiplier uint8) *bind.MethodBuilder {
@@ -203,8 +203,8 @@ func (s *Staker) UpdateDelegationAutoRenew(delegationID thor.Bytes32, autoRenew 
 	return s.contract.Method("updateDelegationAutoRenew", delegationID, autoRenew)
 }
 
-func (s *Staker) UpdateAutoRenew(validationID thor.Bytes32, autoRenew bool) *bind.MethodBuilder {
-	return s.contract.Method("updateAutoRenew", validationID, autoRenew)
+func (s *Staker) DisableAutoRenew(validationID thor.Bytes32) *bind.MethodBuilder {
+	return s.contract.Method("disableAutoRenew", validationID)
 }
 
 func (s *Staker) WithdrawDelegation(delegationID thor.Bytes32) *bind.MethodBuilder {
@@ -364,46 +364,26 @@ func (s *Staker) FilterValidatorQueued(eventsRange *api.Range, opts *api.Options
 	return out, nil
 }
 
-type ValidatorUpdatedAutoRenewEvent struct {
+type ValidatorDisabledAutoRenewEvent struct {
 	Endorsor     thor.Address
 	ValidationID thor.Bytes32
-	AutoRenew    bool
 	Log          api.FilteredEvent
 }
 
-func (s *Staker) FilterValidatorUpdatedAutoRenew(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]ValidatorUpdatedAutoRenewEvent, error) {
-	event, ok := s.contract.ABI().Events["ValidatorUpdatedAutoRenew"]
-	if !ok {
-		return nil, fmt.Errorf("event not found")
-	}
-
-	raw, err := s.contract.FilterEvent("ValidatorUpdatedAutoRenew").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+func (s *Staker) FilterValidatorDisabledAutoRenew(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]ValidatorDisabledAutoRenewEvent, error) {
+	raw, err := s.contract.FilterEvent("ValidatorDisabledAutoRenew").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}
 
-	out := make([]ValidatorUpdatedAutoRenewEvent, len(raw))
+	out := make([]ValidatorDisabledAutoRenewEvent, len(raw))
 	for i, log := range raw {
 		endorsor := thor.BytesToAddress(log.Topics[1][:]) // indexed
 		validationID := thor.Bytes32(log.Topics[2][:])    // indexed
 
-		// non-indexed
-		data := make([]any, 1)
-		data[0] = new(bool)
-
-		bytes, err := hexutil.Decode(log.Data)
-		if err != nil {
-			return nil, err
-		}
-
-		if err := event.Inputs.Unpack(&data, bytes); err != nil {
-			return nil, err
-		}
-
-		out[i] = ValidatorUpdatedAutoRenewEvent{
+		out[i] = ValidatorDisabledAutoRenewEvent{
 			Endorsor:     endorsor,
 			ValidationID: validationID,
-			AutoRenew:    *(data[0].(*bool)),
 			Log:          log,
 		}
 	}

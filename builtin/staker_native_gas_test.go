@@ -57,7 +57,6 @@ func preTestAddValidator(acc thor.Address) TestHook {
 			acc,
 			staker.LowStakingPeriod,
 			stake,
-			true,
 		})
 	}
 }
@@ -117,7 +116,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		{
 			function:    "native_addValidator",
 			expectedGas: 103200,
-			args:        []any{account1, account1, staker.LowStakingPeriod, staker.MinStake, true},
+			args:        []any{account1, account1, staker.LowStakingPeriod, staker.MinStake},
 			description: "Add a new validator (not implemented yet)",
 		},
 		{
@@ -156,12 +155,11 @@ func TestStakerNativeGasCosts(t *testing.T) {
 			preTestHooks: []TestHook{preTestAddValidator(account1)},
 		},
 		{
-			function:    "native_updateAutoRenew",
+			function:    "native_disableAutoRenew",
 			expectedGas: 16600,
 			args: []any{
 				account1,
 				accToID(account1),
-				false,
 			},
 			description:  "Update auto-renew setting for a validator",
 			preTestHooks: []TestHook{preTestAddValidator(account1)},

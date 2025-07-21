@@ -139,11 +139,10 @@ func init() {
 		}},
 		{"native_addValidator", func(env *xenv.Environment) []any {
 			var args struct {
-				Endorsor  common.Address
-				Node      common.Address
-				Period    uint32
-				Stake     *big.Int
-				AutoRenew bool
+				Endorsor common.Address
+				Node     common.Address
+				Period   uint32
+				Stake    *big.Int
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
@@ -174,7 +173,6 @@ func init() {
 					thor.Address(args.Node),
 					args.Period,
 					args.Stake,
-					args.AutoRenew,
 					env.BlockContext().Number,
 				)
 			if err != nil {
@@ -183,11 +181,10 @@ func init() {
 
 			return []any{id, ""}
 		}},
-		{"native_updateAutoRenew", func(env *xenv.Environment) []any {
+		{"native_disableAutoRenew", func(env *xenv.Environment) []any {
 			var args struct {
 				Endorsor     common.Address
 				ValidationID common.Hash
-				AutoRenew    bool
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
@@ -196,7 +193,6 @@ func init() {
 				UpdateAutoRenew(
 					thor.Address(args.Endorsor),
 					thor.Bytes32(args.ValidationID),
-					args.AutoRenew,
 				)
 			if err != nil {
 				return []any{fmt.Sprintf("revert: %v", err)}

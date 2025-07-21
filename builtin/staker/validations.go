@@ -8,7 +8,6 @@ package staker
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"math/big"
 
 	"github.com/vechain/thor/v2/builtin/params"
@@ -80,7 +79,6 @@ func (v *validations) Add(
 	node thor.Address,
 	period uint32,
 	stake *big.Int,
-	autoRenew bool,
 	currentBlock uint32,
 ) (thor.Bytes32, error) {
 	if stake.Cmp(MinStake) < 0 || stake.Cmp(MaxStake) > 0 {
@@ -108,7 +106,7 @@ func (v *validations) Add(
 		CompleteIterations: 0,
 		Status:             StatusQueued,
 		Online:             true,
-		AutoRenew:          autoRenew,
+		AutoRenew:          true,
 		LockedVET:          big.NewInt(0),
 		PendingLocked:      stake,
 		CooldownVET:        big.NewInt(0),
@@ -233,7 +231,7 @@ func (v *validations) ActivateNext(
 	return &id, nil
 }
 
-func (v *validations) UpdateAutoRenew(endorsor thor.Address, id thor.Bytes32, autoRenew bool) error {
+func (v *validations) DisableAutoRenew(endorsor thor.Address, id thor.Bytes32) error {
 	validator, err := v.storage.GetValidation(id)
 	if err != nil {
 		return err
@@ -241,26 +239,15 @@ func (v *validations) UpdateAutoRenew(endorsor thor.Address, id thor.Bytes32, au
 	if validator.Endorsor != endorsor {
 		return errors.New("invalid endorsor for node")
 	}
-	if validator.AutoRenew == autoRenew {
-		return fmt.Errorf("auto-renewal is already set to %t", autoRenew)
-	}
 
-	validator.AutoRenew = autoRenew
-
+	validator.AutoRenew = false
 	if validator.Status == StatusActive {
-		if autoRenew {
-			if err := v.storage.SetExitEpoch(*validator.ExitBlock, thor.Bytes32{}); err != nil {
-				return err
-			}
-			validator.ExitBlock = nil
-		} else {
-			minBlock := validator.StartBlock + validator.Period*(validator.CurrentIteration())
-			exitBlock, err := v.SetExitBlock(id, minBlock)
-			if err != nil {
-				return err
-			}
-			validator.ExitBlock = &exitBlock
+		minBlock := validator.StartBlock + validator.Period*(validator.CurrentIteration())
+		exitBlock, err := v.SetExitBlock(id, minBlock)
+		if err != nil {
+			return err
 		}
+		validator.ExitBlock = &exitBlock
 	}
 
 	return v.storage.SetValidation(id, validator, false)

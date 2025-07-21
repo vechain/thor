@@ -7,18 +7,16 @@ contract Staker {
         address indexed node,
         bytes32 indexed validationID,
         uint32 period,
-        uint256 stake,
-        bool autoRenew
+        uint256 stake
     );
     event ValidatorWithdrawn(
         address indexed endorsor,
         bytes32 indexed validationID,
         uint256 stake
     );
-    event ValidatorUpdatedAutoRenew(
+    event ValidatorDisabledAutoRenew(
         address indexed endorsor,
-        bytes32 indexed validationID,
-        bool autoRenew
+        bytes32 indexed validationID
     );
 
     event StakeIncreased(
@@ -72,8 +70,7 @@ contract Staker {
      */
     function addValidator(
         address node,
-        uint32 period,
-        bool autoRenew
+        uint32 period
     ) public payable {
         require(msg.value > 0, "value is empty");
         (bytes32 id, string memory error) = StakerNative(address(this))
@@ -81,8 +78,7 @@ contract Staker {
                 msg.sender,
                 node,
                 period,
-                msg.value,
-                autoRenew
+                msg.value
             );
         require(bytes(error).length == 0, error);
         emit ValidatorQueued(
@@ -90,8 +86,7 @@ contract Staker {
             node,
             id,
             period,
-            msg.value,
-            autoRenew
+            msg.value
         );
     }
 
@@ -137,13 +132,13 @@ contract Staker {
     }
 
     /**
-     * @dev updateAutoRenew updates the autoRenew flag of a validator.
+     * @dev disableAutoRenew set the autoRenew to false for a validator.
      */
-    function updateAutoRenew(bytes32 id, bool autoRenew) public {
+    function disableAutoRenew(bytes32 id) public {
         string memory error = StakerNative(address(this))
-            .native_updateAutoRenew(msg.sender, id, autoRenew);
+            .native_disableAutoRenew(msg.sender, id);
         require(bytes(error).length == 0, error);
-        emit ValidatorUpdatedAutoRenew(msg.sender, id, autoRenew);
+        emit ValidatorDisabledAutoRenew(msg.sender, id);
     }
 
     /**
@@ -383,8 +378,7 @@ interface StakerNative {
         address endorsor,
         address node,
         uint32 period,
-        uint256 stake,
-        bool autoRenew
+        uint256 stake
     ) external returns (bytes32, string calldata);
 
     function native_increaseStake(
@@ -404,10 +398,9 @@ interface StakerNative {
         bytes32 validationID
     ) external returns (uint256, string calldata);
 
-    function native_updateAutoRenew(
+    function native_disableAutoRenew(
         address endorsor,
-        bytes32 validationID,
-        bool autoRenew
+        bytes32 validationID
     ) external returns (string calldata);
 
     function native_addDelegation(

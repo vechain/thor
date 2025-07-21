@@ -751,7 +751,7 @@ func TestEnergyNative(t *testing.T) {
 	// 2: Add a validator to the queue
 	minStake := big.NewInt(25_000_000)
 	minStake = minStake.Mul(minStake, big.NewInt(1e18))
-	assert.NoError(t, staker.MintTransaction("addValidator", minStake, acc1.Address, uint32(360)*24*7, true))
+	assert.NoError(t, staker.MintTransaction("addValidator", minStake, acc1.Address, uint32(360)*24*7))
 	exSupply = exSupply.Add(exSupply, growth)
 
 	validatorMap := make(map[uint64]*big.Int)
@@ -1599,7 +1599,7 @@ func TestStakerContract_Native(t *testing.T) {
 	minStakingPeriod := uint32(360) * 24 * 15
 
 	// addValidator
-	addValidatorArgs := []any{master.Address, minStakingPeriod, true}
+	addValidatorArgs := []any{master.Address, minStakingPeriod}
 	desc := TestTxDescription{
 		t:          t,
 		abi:        abi,
@@ -1752,7 +1752,7 @@ func TestStakerContract_Native_Revert(t *testing.T) {
 	minStakingPeriod := uint32(360) * 24 * 15
 
 	// addValidator
-	addValidatorArgs := []any{master.Address, minStakingPeriod + 1, true}
+	addValidatorArgs := []any{master.Address, minStakingPeriod + 1}
 	desc := TestTxDescription{
 		t:          t,
 		abi:        abi,
@@ -1767,14 +1767,14 @@ func TestStakerContract_Native_Revert(t *testing.T) {
 	assert.True(t, receipt.Reverted)
 
 	//update auto renew
-	updateAutoRenewArgs := []any{thor.Bytes32{}, false}
+	disableAutoRenewArgs := []any{thor.Bytes32{}}
 	desc = TestTxDescription{
 		t:          t,
 		abi:        abi,
-		methodName: "updateAutoRenew",
+		methodName: "disableAutoRenew",
 		address:    toAddr,
 		acc:        genesis.DevAccounts()[2],
-		args:       updateAutoRenewArgs,
+		args:       disableAutoRenewArgs,
 	}
 	receipt, _, err = executeTxAndGetReceipt(desc)
 	assert.NoError(t, err)
@@ -1874,7 +1874,7 @@ func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
 	minStakingPeriod := uint32(360) * 24 * 15
 
 	// addValidator
-	addValidatorArgs := []any{master.Address, minStakingPeriod, false}
+	addValidatorArgs := []any{master.Address, minStakingPeriod}
 	desc := TestTxDescription{
 		t:          t,
 		abi:        abi,
