@@ -91,8 +91,8 @@ func (engine *Engine) newJustifier(parentID thor.Bytes32) (*justifier, error) {
 	}
 }
 
+// AddBlock adds a new block to the set.
 func (js *justifier) AddBlock(signer thor.Address, isCOM bool, weight *big.Int) {
-	// Boolean count is required due to COM regardless of PoS or PoA
 	if prev, ok := js.votes[signer]; !ok {
 		js.votes[signer] = vote{isCOM: isCOM, weight: weight}
 		if isCOM {
