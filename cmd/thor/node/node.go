@@ -320,7 +320,10 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		// Check whether the block was already there.
 		// It can be skipped if no conflicts.
 		if len(conflicts) > 0 {
-			newSigner, _ := newBlock.Header().Signer()
+			newSigner, err := newBlock.Header().Signer()
+			if err != nil {
+				return err
+			}
 			// iter over conflicting blocks
 			for _, conflict := range conflicts {
 				conflictBlock, err := n.repo.GetBlock(thor.BytesToBytes32(conflict))
@@ -337,7 +340,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 				}
 			}
 
-			_, err := n.repo.GetBlockSummary(newBlock.Header().ID())
+			_, err = n.repo.GetBlockSummary(newBlock.Header().ID())
 			if err != nil {
 				if !n.repo.IsNotFound(err) {
 					return err

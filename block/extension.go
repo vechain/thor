@@ -44,6 +44,12 @@ func (ex *extension) EncodeRLP(w io.Writer) error {
 			ex.Alpha,
 		})
 	}
+
+	if ex.Evidence != nil && len(*ex.Evidence) != 0 {
+		return rlp.Encode(w, []any{
+			ex.Evidence,
+		})
+	}
 	return nil
 }
 
