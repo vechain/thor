@@ -67,7 +67,10 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			_, validationID, _ := Staker.NativeMetered(env.State(), charger).LookupNode(thor.Address(args.Node))
+			_, validationID, err := Staker.NativeMetered(env.State(), charger).LookupNode(thor.Address(args.Node))
+			if err != nil {
+				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", err)}
+			}
 
 			return []any{validationID}
 		}},
@@ -169,7 +172,8 @@ func init() {
 				AddValidator(
 					thor.Address(args.Endorsor),
 					thor.Address(args.Node),
-					args.Period, args.Stake,
+					args.Period,
+					args.Stake,
 					args.AutoRenew,
 					env.BlockContext().Number,
 				)
@@ -188,7 +192,12 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			err := Staker.NativeMetered(env.State(), charger).UpdateAutoRenew(thor.Address(args.Endorsor), thor.Bytes32(args.ValidationID), args.AutoRenew)
+			err := Staker.NativeMetered(env.State(), charger).
+				UpdateAutoRenew(
+					thor.Address(args.Endorsor),
+					thor.Bytes32(args.ValidationID),
+					args.AutoRenew,
+				)
 			if err != nil {
 				return []any{fmt.Sprintf("revert: %v", err)}
 			}
@@ -203,11 +212,16 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			err := Staker.NativeMetered(env.State(), charger).IncreaseStake(thor.Address(args.Endorsor), thor.Bytes32(args.ValidationID), args.Amount)
+			err := Staker.NativeMetered(env.State(), charger).
+				IncreaseStake(
+					thor.Address(args.Endorsor),
+					thor.Bytes32(args.ValidationID),
+					args.Amount,
+				)
 			if err != nil {
 				return []any{fmt.Sprintf("revert: %v", err)}
 			}
-			env.UseGas(thor.SstoreSetGas)
+
 			return []any{""}
 		}},
 		{"native_decreaseStake", func(env *xenv.Environment) []any {
@@ -219,7 +233,12 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			err := Staker.NativeMetered(env.State(), charger).DecreaseStake(thor.Address(args.Endorsor), thor.Bytes32(args.ValidationID), args.Amount)
+			err := Staker.NativeMetered(env.State(), charger).
+				DecreaseStake(
+					thor.Address(args.Endorsor),
+					thor.Bytes32(args.ValidationID),
+					args.Amount,
+				)
 			if err != nil {
 				return []any{fmt.Sprintf("revert: %v", err)}
 			}
@@ -235,7 +254,13 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			delegationID, err := Staker.NativeMetered(env.State(), charger).AddDelegation(thor.Bytes32(args.ValidationID), args.Stake, args.AutoRenew, args.Multiplier)
+			delegationID, err := Staker.NativeMetered(env.State(), charger).
+				AddDelegation(
+					thor.Bytes32(args.ValidationID),
+					args.Stake,
+					args.AutoRenew,
+					args.Multiplier,
+				)
 			if err != nil {
 				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", err)}
 			}
@@ -281,7 +306,8 @@ func init() {
 			if err != nil {
 				return []any{thor.Bytes32{}, new(big.Int), uint32(0), uint32(0), uint8(0), false, false, fmt.Sprintf("revert: %v", err)}
 			}
-			var lastPeriod uint32 = math.MaxUint32
+
+			lastPeriod := uint32(math.MaxUint32)
 			if delegation.LastIteration != nil {
 				lastPeriod = *delegation.LastIteration
 			}
@@ -320,7 +346,7 @@ func init() {
 			charger.Charge(thor.SloadGas)
 			raw, err := Params.Native(env.State()).Get(thor.KeyStargateContractAddress)
 			if err != nil {
-				return []any{thor.Address{}, fmt.Sprintf("failed to get Stargate contract address: %v", err)}
+				return []any{thor.Address{}, fmt.Sprintf("revert: failed to get Stargate contract address: %v", err)}
 			}
 			addr := thor.BytesToAddress(raw.Bytes())
 			return []any{addr, ""}
@@ -334,7 +360,7 @@ func init() {
 
 			totals, err := Staker.NativeMetered(env.State(), charger).GetValidatorsTotals(thor.Bytes32(args.ValidationID))
 			if err != nil {
-				return []any{new(big.Int), new(big.Int), new(big.Int), new(big.Int), fmt.Sprintf("failed to validators totals: %v", err)}
+				return []any{new(big.Int), new(big.Int), new(big.Int), new(big.Int), fmt.Sprintf("revert: failed to get validators totals: %v", err)}
 			}
 			return []any{totals.TotalLockedStake, totals.TotalLockedWeight, totals.DelegationsLockedStake, totals.DelegationsLockedWeight, ""}
 		}},
