@@ -310,7 +310,6 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 		}
 		evidences := blk.Header().Evidence()
 		if evidences != nil && len(*evidences) > 0 {
-			println("evidences found ===== ")
 			err := rt.HandleSlashing(evidences, blk.Header().Number())
 			if err != nil {
 				return nil, nil, err

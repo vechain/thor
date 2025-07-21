@@ -545,16 +545,13 @@ func (rt *Runtime) PrepareTransaction(trx *tx.Transaction) (*TransactionExecutor
 
 func (rt *Runtime) HandleSlashing(evidences *[][]block.Header, blockNumber uint32) error {
 	staker := builtin.Staker.Native(rt.State())
-	println("--------Slashing validator", blockNumber)
 
 	for _, ev := range *evidences {
 		if len(ev) > 0 {
-			println("--------Validating evidence", blockNumber)
 			err := rt.validateEvidence(&ev, blockNumber)
 			if err != nil {
 				return err
 			}
-			println("--------Evidence validated", blockNumber)
 			stakerBalance, err := rt.State().GetBalance(builtin.Staker.Address)
 			if err != nil {
 				return err
@@ -568,14 +565,12 @@ func (rt *Runtime) HandleSlashing(evidences *[][]block.Header, blockNumber uint3
 			if err != nil {
 				return err
 			}
-			println("--------Slashing validator", signer.String())
 			validation, validationID, err := staker.LookupNode(signer)
 			if err != nil {
 				return err
 			}
 
 			if validation.LockedVET != nil {
-				println("--------Slashing validator, locked vet", validation.LockedVET.String())
 				amountToSlash := big.NewInt(0).Mul(validation.LockedVET, big.NewInt(thor.DoubleSigningSlashPercentage))
 				amountToSlash = big.NewInt(0).Div(amountToSlash, big.NewInt(100))
 
@@ -595,14 +590,11 @@ func (rt *Runtime) HandleSlashing(evidences *[][]block.Header, blockNumber uint3
 func (rt *Runtime) validateEvidence(evidences *[]block.Header, blockNumber uint32) error {
 	evidenceValidated := false
 	if evidences != nil && len(*evidences) > 1 {
-		println("Validating single evidence")
 		var initialSum *block.Header
 		for _, header := range *evidences {
 			if initialSum == nil {
-				println("Initial sum")
 				initialSum = &header
 				isUsed, err := rt.isEvidenceUsed(header, blockNumber)
-				println("isEvidenceUsed")
 				if err != nil {
 					return err
 				}
@@ -610,7 +602,6 @@ func (rt *Runtime) validateEvidence(evidences *[]block.Header, blockNumber uint3
 					return fmt.Errorf("evidence already used in previous blocks")
 				}
 			} else if blockNumber-initialSum.Number() > thor.EvidenceMaxHistory {
-				println("supplied evidence has expired", blockNumber, initialSum.Number(), thor.EvidenceMaxHistory)
 				return fmt.Errorf("supplied evidence has expired")
 			} else if initialSum.Number() == header.Number() && initialSum.StateRoot() != header.StateRoot() {
 				initialSigner, err := initialSum.Signer()
@@ -649,15 +640,12 @@ func (rt *Runtime) validateEvidence(evidences *[]block.Header, blockNumber uint3
 func (rt *Runtime) isEvidenceUsed(evidence block.Header, currentBlkNum uint32) (bool, error) {
 	blockNum := evidence.Number() + 1
 	for blockNum < currentBlkNum {
-		println("checking is used", blockNum)
 		blk, err := rt.Chain().GetBlockSummary(blockNum)
 		if err != nil {
 			return false, err
 		}
-		println("summary found", blockNum)
 		blockNum += 1
 		if blk.Header.Evidence() == nil {
-			println("continue with iteration", blockNum)
 			continue
 		}
 

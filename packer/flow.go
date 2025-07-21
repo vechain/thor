@@ -222,7 +222,6 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 			return nil, nil, nil, err
 		}
 		if evidences != nil && len(*evidences) > 0 {
-			println("evidences found ===== 1", signer.String())
 			err := f.runtime.HandleSlashing(evidences, f.runtime.Context().Number)
 			if err != nil {
 				return nil, nil, nil, err
