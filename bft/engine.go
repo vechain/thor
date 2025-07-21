@@ -321,12 +321,15 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 
 		signer, _ := h.Signer()
 
-		if h.Number() > engine.forkConfig.HAYABUSA + engine.forkConfig.HAYABUSA_TP {
-			blockSummary, err := engine.repo.GetBlockSummary(h.ID())
+		var parentBlockSummary *chain.BlockSummary
+		var err error
+
+		if h.Number() > engine.forkConfig.HAYABUSA+engine.forkConfig.HAYABUSA_TP {
+			parentBlockSummary, err = engine.repo.GetBlockSummary(h.ParentID())
 			if err != nil {
 				return nil, err
 			}
-			state := engine.stater.NewState(blockSummary.Root())
+			state := engine.stater.NewState(parentBlockSummary.Root())
 			staker := builtin.Staker.Native(state)
 			validator, _, err := staker.LookupNode(signer)
 			if err != nil {
@@ -341,12 +344,14 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 			break
 		}
 
-		sum, err := engine.repo.GetBlockSummary(h.ParentID())
-		if err != nil {
-			return nil, err
+		if parentBlockSummary == nil {
+			parentBlockSummary, err = engine.repo.GetBlockSummary(h.ParentID())
+			if err != nil {
+				return nil, err
+			}
 		}
 
-		h = sum.Header
+		h = parentBlockSummary.Header
 	}
 
 	st := js.Summarize()
