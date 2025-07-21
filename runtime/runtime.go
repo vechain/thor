@@ -573,16 +573,19 @@ func (rt *Runtime) HandleSlashing(evidences *[][]block.Header, blockNumber uint3
 			if err != nil {
 				return err
 			}
-			amountToSlash := big.NewInt(0).Mul(validation.LockedVET, big.NewInt(thor.DoubleSigningSlashPercentage))
-			amountToSlash = big.NewInt(0).Div(amountToSlash, big.NewInt(100))
 
-			if err := rt.State().SetBalance(thor.Address{}, big.NewInt(0).Add(burnBalance, amountToSlash)); err != nil {
-				return err
+			if validation.LockedVET != nil {
+				amountToSlash := big.NewInt(0).Mul(validation.LockedVET, big.NewInt(thor.DoubleSigningSlashPercentage))
+				amountToSlash = big.NewInt(0).Div(amountToSlash, big.NewInt(100))
+
+				if err := rt.State().SetBalance(thor.Address{}, big.NewInt(0).Add(burnBalance, amountToSlash)); err != nil {
+					return err
+				}
+				if err := rt.State().SetBalance(builtin.Staker.Address, big.NewInt(0).Sub(stakerBalance, amountToSlash)); err != nil {
+					return err
+				}
+				staker.SlashValidator(validationID, amountToSlash)
 			}
-			if err := rt.State().SetBalance(builtin.Staker.Address, big.NewInt(0).Sub(stakerBalance, amountToSlash)); err != nil {
-				return err
-			}
-			staker.SlashValidator(validationID, amountToSlash)
 		}
 	}
 	return nil
