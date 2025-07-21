@@ -331,7 +331,10 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 					return err
 				}
 				// logic to verify that the blocks are different and from the same signer
-				signer, _ := conflictBlock.Header().Signer()
+				signer, err := conflictBlock.Header().Signer()
+				if err != nil {
+					return err
+				}
 				if signer == newSigner &&
 					conflictBlock.Header().ID() != newBlock.Header().ID() &&
 					conflictBlock.Header().StateRoot() != newBlock.Header().StateRoot() {

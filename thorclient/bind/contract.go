@@ -21,34 +21,14 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-// Contract is the main interface for contract interactions.
-// It provides a unified entry point for all contract operations.
-type Contract interface {
-	// Method creates a new method builder for the specified method and arguments.
-	Method(method string, args ...any) MethodBuilder
-
-	// FilterEvent creates a new filter builder for the specified event.
-	FilterEvent(eventName string) FilterBuilder
-
-	// Address returns the contract address.
-	Address() *thor.Address
-
-	// ABI returns the contract ABI.
-	ABI() *abi.ABI
-
-	// Client returns the underlying client.
-	Client() *thorclient.Client
-}
-
-// contract is the concrete implementation of Contract.
-type contract struct {
+type Contract struct {
 	client *thorclient.Client
 	abi    *abi.ABI
 	addr   *thor.Address
 }
 
 // NewContract creates a new contract instance with the given client, ABI data and address.
-func NewContract(client *thorclient.Client, abiData []byte, address *thor.Address) (Contract, error) {
+func NewContract(client *thorclient.Client, abiData []byte, address *thor.Address) (*Contract, error) {
 	if address == nil {
 		return nil, fmt.Errorf("empty contract address")
 	}
@@ -56,7 +36,7 @@ func NewContract(client *thorclient.Client, abiData []byte, address *thor.Addres
 	if err != nil {
 		return nil, err
 	}
-	return &contract{
+	return &Contract{
 		client: client,
 		abi:    &contractABI,
 		addr:   address,
@@ -64,7 +44,7 @@ func NewContract(client *thorclient.Client, abiData []byte, address *thor.Addres
 }
 
 // DeployContract deploys a contract and creates a new contract instance with the given client, ABI data and address.
-func DeployContract(client *thorclient.Client, signer Signer, abiData []byte, bytecode string) (Contract, error) {
+func DeployContract(client *thorclient.Client, signer Signer, abiData []byte, bytecode string) (*Contract, error) {
 	bc, err := hexutil.Decode(bytecode)
 	if err != nil {
 		return nil, err
@@ -120,8 +100,8 @@ func DeployContract(client *thorclient.Client, signer Signer, abiData []byte, by
 }
 
 // Method implements Contract.Method.
-func (c *contract) Method(method string, args ...any) MethodBuilder {
-	return &methodBuilder{
+func (c *Contract) Method(method string, args ...any) *MethodBuilder {
+	return &MethodBuilder{
 		contract: c,
 		method:   method,
 		args:     args,
@@ -130,9 +110,9 @@ func (c *contract) Method(method string, args ...any) MethodBuilder {
 }
 
 // FilterEvent implements Contract.Event.
-func (c *contract) FilterEvent(eventName string) FilterBuilder {
-	return &filterBuilder{
-		op: &methodBuilder{
+func (c *Contract) FilterEvent(eventName string) *FilterBuilder {
+	return &FilterBuilder{
+		op: &MethodBuilder{
 			contract: c,
 			method:   eventName,
 		},
@@ -140,16 +120,16 @@ func (c *contract) FilterEvent(eventName string) FilterBuilder {
 }
 
 // Address returns the contract address.
-func (c *contract) Address() *thor.Address {
+func (c *Contract) Address() *thor.Address {
 	return c.addr
 }
 
 // ABI returns the contract ABI.
-func (c *contract) ABI() *abi.ABI {
+func (c *Contract) ABI() *abi.ABI {
 	return c.abi
 }
 
 // Client returns the underlying HTTP client.
-func (c *contract) Client() *thorclient.Client {
+func (c *Contract) Client() *thorclient.Client {
 	return c.client
 }
