@@ -897,7 +897,11 @@ func TestJustifier(t *testing.T) {
 				assert.True(t, st.Committed)
 
 				// add vote after commits，commit/justify stays the same
-				vs.AddBlock(datagen.RandAddress(), true, nil)
+				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
+					vs.AddBlock(datagen.RandAddress(), true, new(big.Int).Mul(validatorStake, big.NewInt(2)))
+				} else {
+					vs.AddBlock(datagen.RandAddress(), true, nil)
+				}
 				st = vs.Summarize()
 				assert.Equal(t, uint32(3), st.Quality)
 				assert.True(t, st.Justified)
@@ -959,7 +963,11 @@ func TestJustifier(t *testing.T) {
 
 				master := datagen.RandAddress()
 				// master votes WIT
-				vs.AddBlock(master, false, nil)
+				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
+					vs.AddBlock(master, false, new(big.Int).Mul(validatorStake, big.NewInt(2)))
+				} else {
+					vs.AddBlock(master, false, nil)
+				}
 
 				// justifies but not committed
 				st := vs.Summarize()
@@ -967,14 +975,22 @@ func TestJustifier(t *testing.T) {
 				assert.False(t, st.Committed)
 
 				// master votes COM
-				vs.AddBlock(master, true, nil)
+				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
+					vs.AddBlock(master, true, new(big.Int).Mul(validatorStake, big.NewInt(2)))
+				} else {
+					vs.AddBlock(master, true, nil)
+				}
 
 				// should not be committed
 				st = vs.Summarize()
 				assert.False(t, st.Committed)
 
 				// another master votes WIT
-				vs.AddBlock(datagen.RandAddress(), true, nil)
+				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
+					vs.AddBlock(datagen.RandAddress(), true, new(big.Int).Mul(validatorStake, big.NewInt(2)))
+				} else {
+					vs.AddBlock(datagen.RandAddress(), true, nil)
+				}
 				st = vs.Summarize()
 				assert.True(t, st.Committed)
 			},
@@ -990,40 +1006,72 @@ func TestJustifier(t *testing.T) {
 				}
 
 				master := datagen.RandAddress()
-				vs.AddBlock(master, true, nil)
-				assert.Equal(t, true, vs.votes[master])
+				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
+					vs.AddBlock(master, true, new(big.Int).Mul(validatorStake, big.NewInt(2)))
+				} else {
+					vs.AddBlock(master, true, nil)
+				}
+				assert.Equal(t, true, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(1), vs.comVotes)
 
-				vs.AddBlock(master, false, nil)
-				assert.Equal(t, false, vs.votes[master])
+				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
+					vs.AddBlock(master, false, new(big.Int).Mul(validatorStake, big.NewInt(2)))
+				} else {
+					vs.AddBlock(master, false, nil)
+				}
+				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(master, true, nil)
-				assert.Equal(t, false, vs.votes[master])
+				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
+					vs.AddBlock(master, true, new(big.Int).Mul(validatorStake, big.NewInt(2)))
+				} else {
+					vs.AddBlock(master, true, nil)
+				}
+				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(master, false, nil)
-				assert.Equal(t, false, vs.votes[master])
+				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
+					vs.AddBlock(master, false, new(big.Int).Mul(validatorStake, big.NewInt(2)))
+				} else {
+					vs.AddBlock(master, false, nil)
+				}
+				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 
 				vs, err = testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
 				}
-				vs.AddBlock(master, false, nil)
-				assert.Equal(t, false, vs.votes[master])
+				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
+					vs.AddBlock(master, false, new(big.Int).Mul(validatorStake, big.NewInt(2)))
+				} else {
+					vs.AddBlock(master, false, nil)
+				}
+				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(master, true, nil)
-				assert.Equal(t, false, vs.votes[master])
+				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
+					vs.AddBlock(master, true, new(big.Int).Mul(validatorStake, big.NewInt(2)))
+				} else {
+					vs.AddBlock(master, true, nil)
+				}
+				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(master, true, nil)
-				assert.Equal(t, false, vs.votes[master])
+				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
+					vs.AddBlock(master, true, new(big.Int).Mul(validatorStake, big.NewInt(2)))
+				} else {
+					vs.AddBlock(master, true, nil)
+				}
+				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(master, false, nil)
-				assert.Equal(t, false, vs.votes[master])
+				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
+					vs.AddBlock(master, false, new(big.Int).Mul(validatorStake, big.NewInt(2)))
+				} else {
+					vs.AddBlock(master, false, nil)
+				}
+				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 			},
 		},

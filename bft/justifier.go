@@ -18,6 +18,11 @@ type bftState struct {
 	Committed bool
 }
 
+type vote struct {
+	isCOM bool
+	weight *big.Int
+}
+
 // justifier tracks all block vote in one bft round and justify the round.
 type justifier struct {
 	parentQuality   uint32
@@ -25,16 +30,14 @@ type justifier struct {
 	votesThreshold  uint64
 	weightThreshold *big.Int // we need to represent uint256
 
-	votes        map[thor.Address]bool
-	voterWeights map[thor.Address]*big.Int
+	votes        map[thor.Address]vote
 	comVotes     uint64
 	comWeight    *big.Int
 }
 
 func newJustifier(parentQuality, checkpoint uint32, votesThreshold uint64, weightThreshold *big.Int) *justifier {
 	return &justifier{
-		votes:         make(map[thor.Address]bool),
-		voterWeights:  make(map[thor.Address]*big.Int),
+		votes:         make(map[thor.Address]vote),
 		parentQuality: parentQuality,
 		checkpoint:    checkpoint,
 		votesThreshold: votesThreshold,
@@ -91,21 +94,21 @@ func (engine *Engine) newJustifier(parentID thor.Bytes32) (*justifier, error) {
 func (js *justifier) AddBlock(signer thor.Address, isCOM bool, weight *big.Int) {
 	// Boolean count is required due to COM regardless of PoS or PoA
 	if prev, ok := js.votes[signer]; !ok {
-		js.votes[signer] = isCOM
+		js.votes[signer] = vote{isCOM: isCOM, weight: weight}
 		if isCOM {
 			js.comVotes++
 			if weight != nil {
-				js.voterWeights[signer] = new(big.Int).Set(weight)
 				js.comWeight.Add(js.comWeight, weight)
 			}
 		}
-	} else if prev != isCOM {
+	} else if prev.isCOM != isCOM {
 		// if one votes both COM and non-COM in one round, count as non-COM
-		js.votes[signer] = false
-		if prev {
+		js.votes[signer] = vote{isCOM: false, weight: prev.weight}
+
+		if prev.isCOM {
 			js.comVotes--
-			if prevWeight, ok := js.voterWeights[signer]; ok {
-				js.comWeight.Sub(js.comWeight, prevWeight)
+			if prev.weight != nil {
+				js.comWeight.Sub(js.comWeight, prev.weight)
 			}
 		}
 	}
@@ -120,8 +123,8 @@ func (js *justifier) Summarize() *bftState {
 		committed = js.comVotes > js.votesThreshold
 	} else {
 		totalVoterWeight := big.NewInt(0)
-		for _, weight := range js.voterWeights {
-			totalVoterWeight.Add(totalVoterWeight, weight)
+		for _, vote := range js.votes {
+			totalVoterWeight.Add(totalVoterWeight, vote.weight)
 		}
 		justified = totalVoterWeight.Cmp(js.weightThreshold) > 0
 		committed = js.comWeight.Cmp(js.weightThreshold) > 0
