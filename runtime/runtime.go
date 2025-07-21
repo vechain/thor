@@ -549,10 +549,13 @@ func (rt *Runtime) HandleSlashing(evidences *[][]block.Header, blockNumber uint3
 
 	for _, ev := range *evidences {
 		if len(ev) > 0 {
+			println("--------Validating evidence", blockNumber)
 			err := rt.validateEvidence(&ev, blockNumber)
+			println("--------error is", err.Error())
 			if err != nil {
-				return nil
+				return err
 			}
+			println("--------Evidence validated", blockNumber)
 			stakerBalance, err := rt.State().GetBalance(builtin.Staker.Address)
 			if err != nil {
 				return err
