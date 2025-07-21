@@ -952,11 +952,17 @@ func TestJustifier(t *testing.T) {
 				}
 
 				// vote <threshold> times COM
-				for range MaxBlockProposers * 2 / 3 {
-					if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
+				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
+					// With the current values, weight threshold is 2/3 of 25 * 2 (weight of each validator) * 10 validators = 333.33
+					// 2/3 of MaxBlockProposers is 7, so 7 * 25 * 2 * 10 = 350
+					// Since 350 > 333.33, committed would be true, hence the - 1 so it is false
+					// In PoA we do 2/3 of MaxBlockProposers that rounded is 7, 7 > 7 is false hence committed would be false
+					for range MaxBlockProposers * 2 / 3 - 1 {
 						// Weight, stake multiplied by default multiplier
 						vs.AddBlock(datagen.RandAddress(), true, new(big.Int).Mul(validatorStake, big.NewInt(2)))
-					} else {
+					}
+				} else {
+					for range MaxBlockProposers * 2 / 3 {
 						vs.AddBlock(datagen.RandAddress(), true, nil)
 					}
 				}
