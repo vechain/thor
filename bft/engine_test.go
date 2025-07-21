@@ -400,9 +400,9 @@ func TestReCreate(t *testing.T) {
 
 func TestFinalized(t *testing.T) {
 	tests := []struct {
-		name          string
-		forkCfg       *thor.ForkConfig
-		checkPoS      bool
+		name     string
+		forkCfg  *thor.ForkConfig
+		checkPoS bool
 	}{
 		{
 			"default fork config",
@@ -796,12 +796,11 @@ func TestGetVote(t *testing.T) {
 func TestJustifier(t *testing.T) {
 	tests := []struct {
 		name     string
-		testFunc func(*testing.T)
+		testFunc func(*testing.T, *thor.ForkConfig)
 	}{
 		{
-			"newJustifier", func(t *testing.T) {
-				fc := defaultFC
-				testBft, err := newTestBft(fc)
+			"newJustifier", func(t *testing.T, forkCfg *thor.ForkConfig) {
+				testBft, err := newTestBft(forkCfg)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -814,10 +813,10 @@ func TestJustifier(t *testing.T) {
 				assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.votesThreshold)
 			},
 		}, {
-			"fork in the middle of checkpoint", func(t *testing.T) {
-				fc := defaultFC
+			"fork in the middle of checkpoint", func(t *testing.T, forkCfg *thor.ForkConfig) {
+				fc := *forkCfg
 				fc.VIP214 = thor.CheckpointInterval / 2
-				testBft, err := newTestBft(fc)
+				testBft, err := newTestBft(&fc)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -830,10 +829,10 @@ func TestJustifier(t *testing.T) {
 				assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.votesThreshold)
 			},
 		}, {
-			"the second bft round", func(t *testing.T) {
-				fc := defaultFC
+			"the second bft round", func(t *testing.T, forkCfg *thor.ForkConfig) {
+				fc := *forkCfg
 				fc.VIP214 = thor.CheckpointInterval / 2
-				testBft, err := newTestBft(fc)
+				testBft, err := newTestBft(&fc)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -845,16 +844,22 @@ func TestJustifier(t *testing.T) {
 				}
 
 				assert.Equal(t, uint32(thor.CheckpointInterval*2), vs.checkpoint)
-				assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.votesThreshold)
+				if forkCfg.HAYABUSA == 1 {
+					expected, ok := new(big.Int).SetString("333333333333333333333333333", 10)
+					assert.True(t, ok)
+					assert.Equal(t, expected, vs.weightThreshold)
+				} else {
+					assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.votesThreshold)
+				}
 				assert.Equal(t, uint32(2), vs.Summarize().Quality)
 				assert.False(t, vs.Summarize().Justified)
 				assert.False(t, vs.Summarize().Committed)
 			},
 		}, {
-			"add votes: commits", func(t *testing.T) {
-				fc := defaultFC
+			"add votes: commits", func(t *testing.T, forkCfg *thor.ForkConfig) {
+				fc := *forkCfg
 				fc.VIP214 = thor.CheckpointInterval / 2
-				testBft, err := newTestBft(fc)
+				testBft, err := newTestBft(&fc)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -882,10 +887,10 @@ func TestJustifier(t *testing.T) {
 				assert.True(t, st.Committed)
 			},
 		}, {
-			"add votes: justifies", func(t *testing.T) {
-				fc := defaultFC
+			"add votes: justifies", func(t *testing.T, forkCfg *thor.ForkConfig) {
+				fc := *forkCfg
 				fc.VIP214 = thor.CheckpointInterval / 2
-				testBft, err := newTestBft(fc)
+				testBft, err := newTestBft(&fc)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -906,10 +911,10 @@ func TestJustifier(t *testing.T) {
 				assert.False(t, st.Committed)
 			},
 		}, {
-			"add votes: one votes WIT then changes to COM", func(t *testing.T) {
-				fc := defaultFC
+			"add votes: one votes WIT then changes to COM", func(t *testing.T, forkCfg *thor.ForkConfig) {
+				fc := *forkCfg
 				fc.VIP214 = thor.CheckpointInterval / 2
-				testBft, err := newTestBft(fc)
+				testBft, err := newTestBft(&fc)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -947,9 +952,8 @@ func TestJustifier(t *testing.T) {
 				assert.True(t, st.Committed)
 			},
 		}, {
-			"vote both WIT and COM in one round", func(t *testing.T) {
-				fc := defaultFC
-				testBft, err := newTestBft(fc)
+			"vote both WIT and COM in one round", func(t *testing.T, forkCfg *thor.ForkConfig) {
+				testBft, err := newTestBft(forkCfg)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -997,9 +1001,31 @@ func TestJustifier(t *testing.T) {
 			},
 		},
 	}
+
+	forkConfigs := []struct {
+		name    string
+		forkCfg *thor.ForkConfig
+	}{
+		{
+			"default fork config",
+			defaultFC,
+		},
+		{
+			"hayabusa fork config",
+			&thor.ForkConfig{
+				HAYABUSA:    1,
+				HAYABUSA_TP: 1,
+			},
+		},
+	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.testFunc(t)
+			for _, fc := range forkConfigs {
+				t.Run(fc.name, func(t *testing.T) {
+					tt.testFunc(t, fc.forkCfg)
+				})
+			}
 		})
 	}
 }
