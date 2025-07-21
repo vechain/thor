@@ -652,6 +652,7 @@ func (rt *Runtime) isEvidenceUsed(evidence block.Header, currentBlkNum uint32) (
 			return false, err
 		}
 		println("summary found", blockNum)
+		blockNum += 1
 		if blk.Header.Evidence() == nil {
 			println("continue with iteration", blockNum)
 			continue
