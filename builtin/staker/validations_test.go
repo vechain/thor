@@ -2269,14 +2269,125 @@ func Test_GetValidatorTotals(t *testing.T) {
 	_, _, err = staker.Housekeep(validator.Period)
 	assert.NoError(t, err)
 
+	aggregation, err = staker.storage.GetAggregation(validator.ID)
+	assert.NoError(t, err)
+
 	totals, err := staker.GetValidatorsTotals(validator.ID)
 	assert.NoError(t, err)
 
 	fetchedValidator, err := staker.Get(validator.ID)
 	assert.NoError(t, err)
 
-	assert.Equal(t, fetchedValidator.LockedVET, totals.TotalLockedStake)
+	expectedStake := big.NewInt(0).Add(aggregation.CurrentRecurringVET, aggregation.CurrentOneTimeVET)
+	expectedStake.Add(expectedStake, validator.LockedVET)
+
+	assert.Equal(t, expectedStake, totals.TotalLockedStake)
 	assert.Equal(t, fetchedValidator.Weight, totals.TotalLockedWeight)
 	assert.Equal(t, delegation.Stake, totals.DelegationsLockedStake)
 	assert.Equal(t, delegation.Weight(), totals.DelegationsLockedWeight)
+}
+
+func Test_Validator_Decrease_Exit_Withdraw(t *testing.T) {
+	staker, _ := newStaker(t, 0, 1, false)
+
+	acc := datagen.RandAddress()
+
+	originalStake := big.NewInt(0).Mul(big.NewInt(3), MinStake)
+	id, err := staker.AddValidator(acc, acc, LowStakingPeriod, originalStake, true, 0)
+	assert.NoError(t, err)
+	_, err = staker.validations.ActivateNext(0, staker.params)
+	assert.NoError(t, err)
+
+	// Decrease stake
+	decrease := big.NewInt(0).Mul(big.NewInt(2), MinStake)
+	err = staker.DecreaseStake(acc, id, decrease)
+	assert.NoError(t, err)
+
+	// Turn off auto-renew  - can't decrease if auto-renew is false
+	err = staker.UpdateAutoRenew(acc, id, false)
+	assert.NoError(t, err)
+
+	// Housekeep, should exit the validator
+	_, _, err = staker.Housekeep(LowStakingPeriod)
+	assert.NoError(t, err)
+
+	validator, err := staker.Get(id)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusExit, validator.Status)
+	assert.Equal(t, originalStake, validator.CooldownVET)
+}
+
+func Test_Validator_Decrease_SeveralTimes(t *testing.T) {
+	staker, _ := newStaker(t, 0, 1, false)
+
+	acc := datagen.RandAddress()
+
+	originalStake := big.NewInt(0).Mul(big.NewInt(3), MinStake)
+	id, err := staker.AddValidator(acc, acc, LowStakingPeriod, originalStake, true, 0)
+	assert.NoError(t, err)
+	_, err = staker.validations.ActivateNext(0, staker.params)
+	assert.NoError(t, err)
+
+	// Decrease stake - ok 75m - 25m = 50m
+	err = staker.DecreaseStake(acc, id, MinStake)
+	assert.NoError(t, err)
+
+	// Decrease stake - ok 50m - 25m = 25m
+	err = staker.DecreaseStake(acc, id, MinStake)
+	assert.NoError(t, err)
+
+	// Decrease stake - should fail, min stake is 25m
+	err = staker.DecreaseStake(acc, id, MinStake)
+	assert.ErrorContains(t, err, "next period stake is too low for validator")
+}
+
+func Test_Validator_IncreaseDecrease_Combinations(t *testing.T) {
+	staker, _ := newStaker(t, 0, 1, false)
+	acc := datagen.RandAddress()
+
+	// Add & activate validator
+	id, err := staker.AddValidator(acc, acc, LowStakingPeriod, MinStake, true, 0)
+	assert.NoError(t, err)
+
+	// Increase and decrease - both should be okay since we're only dealing with PendingLocked
+	assert.NoError(t, staker.IncreaseStake(acc, id, MinStake)) // 25m + 25m = 50m
+	assert.NoError(t, staker.DecreaseStake(acc, id, MinStake)) // 25m - 50m = 25m
+
+	// Activate the validator.
+	_, err = staker.validations.ActivateNext(0, staker.params)
+	assert.NoError(t, err)
+
+	// Withdraw the previous decrease amount
+	withdrawal, err := staker.WithdrawStake(acc, id, 0)
+	assert.NoError(t, err)
+	assert.Equal(t, MinStake, withdrawal, "withdraw should be 0 since we are withdrawing from pending locked")
+
+	// Assert previous increase/decrease had no effect since they requested the same amount
+	validation, err := staker.Get(id)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusActive, validation.Status)
+	assert.Equal(t, MinStake, validation.LockedVET)
+
+	// Increase stake (ok): 25m + 25m = 50m
+	assert.NoError(t, staker.IncreaseStake(acc, id, MinStake))
+	// Decrease stake (NOT ok): 25m - 25m = 0. The Previous increase is not applied since it is still currently withdrawable.
+	assert.ErrorContains(t, staker.DecreaseStake(acc, id, MinStake), "next period stake is too low for validator")
+	// Instantly withdraw - This is bad, it pulls from the PendingLocked, which means total stake later will be 0.
+	// The decrease previously marked as okay since the current TVL + pending TVL was greater than the min stake.
+	withdraw1, err := staker.WithdrawStake(acc, id, 0)
+	assert.NoError(t, err)
+	assert.Equal(t, MinStake, withdraw1, "withdraw should be 0 since we are withdrawing from pending locked")
+
+	// Housekeep, should move pending locked to locked, and pending withdraw to withdrawable
+	_, _, err = staker.Housekeep(LowStakingPeriod)
+	assert.NoError(t, err)
+
+	// Withdraw again
+	withdraw2, err := staker.WithdrawStake(acc, id, LowStakingPeriod+cooldownPeriod)
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0), withdraw2)
+
+	validator, err := staker.Get(id)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, validator.LockedVET.Cmp(MinStake), "locked vet should be greater than or equal to min stake")
 }

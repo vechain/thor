@@ -9,54 +9,38 @@ import (
 	"errors"
 
 	"github.com/vechain/thor/v2/api"
-
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
 )
 
-// FilterBuilder is the interface for event filtering.
-type FilterBuilder interface {
-	// InRange sets the range for event filtering.
-	InRange(r *api.Range) FilterBuilder
-
-	// WithOptions sets the filter options.
-	WithOptions(opts *api.Options) FilterBuilder
-
-	// OrderBy sets the order for event filtering.
-	OrderBy(order logdb.Order) FilterBuilder
-
-	// Execute performs the event filtering.
-	Execute() ([]api.FilteredEvent, error)
-}
-
-// filterBuilder is the concrete implementation of FilterBuilder.
-type filterBuilder struct {
-	op      *methodBuilder
+// FilterBuilder is the concrete implementation of FilterBuilder.
+type FilterBuilder struct {
+	op      *MethodBuilder
 	evRange *api.Range
 	opts    *api.Options
 	order   logdb.Order
 }
 
 // InRange implements FilterBuilder.InRange.
-func (b *filterBuilder) InRange(r *api.Range) FilterBuilder {
+func (b *FilterBuilder) InRange(r *api.Range) *FilterBuilder {
 	b.evRange = r
 	return b
 }
 
 // WithOptions implements FilterBuilder.WithOptions.
-func (b *filterBuilder) WithOptions(opts *api.Options) FilterBuilder {
+func (b *FilterBuilder) WithOptions(opts *api.Options) *FilterBuilder {
 	b.opts = opts
 	return b
 }
 
 // OrderBy implements FilterBuilder.OrderBy.
-func (b *filterBuilder) OrderBy(order logdb.Order) FilterBuilder {
+func (b *FilterBuilder) OrderBy(order logdb.Order) *FilterBuilder {
 	b.order = order
 	return b
 }
 
 // Execute implements FilterBuilder.Execute.
-func (b *filterBuilder) Execute() ([]api.FilteredEvent, error) {
+func (b *FilterBuilder) Execute() ([]api.FilteredEvent, error) {
 	event, ok := b.op.contract.abi.Events[b.op.method]
 	if !ok {
 		return nil, errors.New("event not found: " + b.op.method)

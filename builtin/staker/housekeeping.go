@@ -101,7 +101,7 @@ func (s *Staker) performRenewalUpdates(id thor.Bytes32, validator *Validation) e
 	// renew the validator & delegations
 	validatorRenewal := validator.Renew()
 	delegationsRenewal := aggregation.Renew()
-	if err := s.storage.SetAggregation(id, aggregation); err != nil {
+	if err := s.storage.SetAggregation(id, aggregation, false); err != nil {
 		return err
 	}
 
@@ -112,21 +112,21 @@ func (s *Staker) performRenewalUpdates(id thor.Bytes32, validator *Validation) e
 	queuedWeight := big.NewInt(0).Add(validatorRenewal.QueuedDecreaseWeight, delegationsRenewal.QueuedDecreaseWeight)
 
 	// set the new totals
-	validator.LockedVET = big.NewInt(0).Add(validator.LockedVET, changeTVL)
+	validator.LockedVET = big.NewInt(0).Add(validator.LockedVET, validatorRenewal.ChangeTVL)
 	validator.Weight = big.NewInt(0).Add(validator.Weight, changeWeight)
-	if err := s.lockedVET.Add(changeTVL); err != nil {
+	if err := s.storage.lockedVET.Add(changeTVL); err != nil {
 		return err
 	}
-	if err := s.lockedWeight.Add(changeWeight); err != nil {
+	if err := s.storage.lockedWeight.Add(changeWeight); err != nil {
 		return err
 	}
-	if err := s.queuedVET.Sub(queuedDecrease); err != nil {
+	if err := s.storage.queuedVET.Sub(queuedDecrease); err != nil {
 		return err
 	}
-	if err := s.queuedWeight.Sub(queuedWeight); err != nil {
+	if err := s.storage.queuedWeight.Sub(queuedWeight); err != nil {
 		return err
 	}
-	return s.storage.SetValidation(id, validator)
+	return s.storage.SetValidation(id, validator, false)
 }
 
 func (s *Staker) activateValidators(currentBlock uint32) ([]*thor.Bytes32, error) {
