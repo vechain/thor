@@ -10,7 +10,6 @@ import (
 
 	"github.com/vechain/thor/v2/builtin/gascharger"
 	"github.com/vechain/thor/v2/builtin/params"
-	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -36,14 +35,10 @@ func SetLogger(l log.Logger) {
 
 // Staker implements native methods of `Staker` contract.
 type Staker struct {
-	lockedVET    *solidity.Uint256
-	lockedWeight *solidity.Uint256
-	queuedVET    *solidity.Uint256
-	queuedWeight *solidity.Uint256
-	delegations  *delegations
-	validations  *validations
-	storage      *storage
-	params       *params.Params
+	delegations *delegations
+	validations *validations
+	storage     *storage
+	params      *params.Params
 }
 
 // New create a new instance.
@@ -55,14 +50,10 @@ func New(addr thor.Address, state *state.State, params *params.Params, charger *
 	storage.debugOverride(&cooldownPeriod, slotCooldownPeriod)
 
 	return &Staker{
-		lockedVET:    solidity.NewUint256(addr, state, slotLockedVET),
-		lockedWeight: solidity.NewUint256(addr, state, slotLockedWeight),
-		queuedVET:    solidity.NewUint256(addr, state, slotQueuedVET),
-		queuedWeight: solidity.NewUint256(addr, state, slotQueuedWeight),
-		storage:      storage,
-		validations:  newValidations(storage),
-		delegations:  newDelegations(storage),
-		params:       params,
+		storage:     storage,
+		validations: newValidations(storage),
+		delegations: newDelegations(storage),
+		params:      params,
 	}
 }
 
@@ -78,27 +69,23 @@ func (s *Staker) LeaderGroup() (map[thor.Bytes32]*Validation, error) {
 
 // LockedVET returns the amount of VET and weight locked by validations and delegations.
 func (s *Staker) LockedVET() (*big.Int, *big.Int, error) {
-	s.storage.chargeGas(thor.SloadGas)
-	lockedVet, err := s.lockedVET.Get()
+	lockedVet, err := s.storage.lockedVET.Get()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	s.storage.chargeGas(thor.SloadGas)
-	lockedWeight, err := s.lockedWeight.Get()
+	lockedWeight, err := s.storage.lockedWeight.Get()
 	return lockedVet, lockedWeight, err
 }
 
 // QueuedStake returns the amount of VET and weight queued by validations and delegations.
 func (s *Staker) QueuedStake() (*big.Int, *big.Int, error) {
-	s.storage.chargeGas(thor.SloadGas)
-	queuedVet, err := s.queuedVET.Get()
+	queuedVet, err := s.storage.queuedVET.Get()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	s.storage.chargeGas(thor.SloadGas)
-	queuedWeight, err := s.queuedWeight.Get()
+	queuedWeight, err := s.storage.queuedWeight.Get()
 	return queuedVet, queuedWeight, err
 }
 
@@ -231,7 +218,7 @@ func (s *Staker) SetOnline(id thor.Bytes32, online bool) (bool, error) {
 	hasChanged := entry.Online != online
 	entry.Online = online
 	if hasChanged {
-		err = s.storage.SetValidation(id, entry)
+		err = s.storage.SetValidation(id, entry, false)
 	} else {
 		err = nil
 	}
@@ -356,8 +343,9 @@ func (s *Staker) GetValidatorsTotals(validationID thor.Bytes32) (*ValidationTota
 	if err != nil {
 		return nil, err
 	}
+	delegationLockedStake := big.NewInt(0).Add(aggregation.CurrentRecurringVET, aggregation.CurrentOneTimeVET)
 	return &ValidationTotals{
-		TotalLockedStake:        validator.LockedVET,
+		TotalLockedStake:        big.NewInt(0).Add(validator.LockedVET, delegationLockedStake),
 		TotalLockedWeight:       validator.Weight,
 		DelegationsLockedStake:  big.NewInt(0).Add(aggregation.CurrentRecurringVET, aggregation.CurrentOneTimeVET),
 		DelegationsLockedWeight: big.NewInt(0).Add(aggregation.CurrentRecurringWeight, aggregation.CurrentOneTimeWeight),
