@@ -598,7 +598,7 @@ func (rt *Runtime) validateEvidence(evidences *[]block.Header, blockNumber uint3
 			if initialSum == nil {
 				println("Initial sum")
 				initialSum = &header
-				isUsed, err := rt.isEvidenceUsed(*initialSum, blockNumber)
+				isUsed, err := rt.isEvidenceUsed(header, blockNumber)
 				println("isEvidenceUsed")
 				if err != nil {
 					return err
@@ -646,11 +646,14 @@ func (rt *Runtime) validateEvidence(evidences *[]block.Header, blockNumber uint3
 func (rt *Runtime) isEvidenceUsed(evidence block.Header, currentBlkNum uint32) (bool, error) {
 	blockNum := evidence.Number() + 1
 	for blockNum < currentBlkNum {
+		println("checking is used", blockNum)
 		blk, err := rt.Chain().GetBlockSummary(blockNum)
 		if err != nil {
-			return false, nil
+			return false, err
 		}
+		println("summary found", blockNum)
 		if blk.Header.Evidence() == nil {
+			println("continue with iteration", blockNum)
 			continue
 		}
 
