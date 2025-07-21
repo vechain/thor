@@ -804,13 +804,25 @@ func TestJustifier(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+
+				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
+					testBft.fastForward(thor.CheckpointInterval - 1)
+				}
+
 				vs, err := testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
 				}
 
-				assert.Equal(t, uint32(0), vs.checkpoint)
-				assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.votesThreshold)
+				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
+					assert.Equal(t, uint32(180), vs.checkpoint)
+					expected, ok := new(big.Int).SetString("333333333333333333333333333", 10)
+					assert.True(t, ok)
+					assert.Equal(t, expected, vs.weightThreshold)
+				} else {
+					assert.Equal(t, uint32(0), vs.checkpoint)
+					assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.votesThreshold)
+				}
 			},
 		}, {
 			"fork in the middle of checkpoint", func(t *testing.T, forkCfg *thor.ForkConfig) {
@@ -844,7 +856,7 @@ func TestJustifier(t *testing.T) {
 				}
 
 				assert.Equal(t, uint32(thor.CheckpointInterval*2), vs.checkpoint)
-				if forkCfg.HAYABUSA == 1 {
+				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
 					expected, ok := new(big.Int).SetString("333333333333333333333333333", 10)
 					assert.True(t, ok)
 					assert.Equal(t, expected, vs.weightThreshold)
