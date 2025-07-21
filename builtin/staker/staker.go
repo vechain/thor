@@ -357,9 +357,9 @@ func (s *Staker) SlashValidator(validationID thor.Bytes32, amount *big.Int) erro
 	if err != nil {
 		return err
 	}
-	println("validation locked vet before", validation.LockedVET)
+	println("validation locked vet before", validation.LockedVET.String())
 	validation.LockedVET = big.NewInt(0).Sub(validation.LockedVET, amount)
-	println("validation locked vet after", validation.LockedVET)
+	println("validation locked vet after", validation.LockedVET.String())
 	err = s.storage.lockedVET.Sub(amount)
 	if err != nil {
 		return err
