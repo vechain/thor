@@ -575,6 +575,7 @@ func (rt *Runtime) HandleSlashing(evidences *[][]block.Header, blockNumber uint3
 			}
 
 			if validation.LockedVET != nil {
+				println("--------Slashing validator, locked vet", validation.LockedVET.String())
 				amountToSlash := big.NewInt(0).Mul(validation.LockedVET, big.NewInt(thor.DoubleSigningSlashPercentage))
 				amountToSlash = big.NewInt(0).Div(amountToSlash, big.NewInt(100))
 

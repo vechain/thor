@@ -369,7 +369,9 @@ func (s *Staker) SlashValidator(validationID thor.Bytes32, amount *big.Int) erro
 		return err
 	}
 
+	println("validator slashed, exiting if required")
 	if validation.LockedVET.Cmp(MinStake) < 0 {
+		println("validator slashed, exiting")
 		err = s.validations.ExitValidator(validationID)
 		if err != nil {
 			return err
