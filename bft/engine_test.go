@@ -957,7 +957,7 @@ func TestJustifier(t *testing.T) {
 					// 2/3 of MaxBlockProposers is 7, so 7 * 25 * 2 * 10 = 350
 					// Since 350 > 333.33, committed would be true, hence the - 1 so it is false
 					// In PoA we do 2/3 of MaxBlockProposers that rounded is 7, 7 > 7 is false hence committed would be false
-					for range MaxBlockProposers * 2 / 3 - 1 {
+					for range MaxBlockProposers*2/3 - 1 {
 						// Weight, stake multiplied by default multiplier
 						vs.AddBlock(datagen.RandAddress(), true, new(big.Int).Mul(validatorStake, big.NewInt(2)))
 					}
@@ -1114,11 +1114,11 @@ func TestJustifier(t *testing.T) {
 func TestJustified(t *testing.T) {
 	tests := []struct {
 		name     string
-		testFunc func(*testing.T)
+		testFunc func(*testing.T, *thor.ForkConfig)
 	}{
 		{
-			"first several rounds, never justified", func(t *testing.T) {
-				testBFT, err := newTestBft(defaultFC)
+			"first several rounds, never justified", func(t *testing.T, forkCfg *thor.ForkConfig) {
+				testBFT, err := newTestBft(forkCfg)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1135,8 +1135,8 @@ func TestJustified(t *testing.T) {
 				}
 			},
 		}, {
-			"first several rounds, get justified", func(t *testing.T) {
-				testBFT, err := newTestBft(defaultFC)
+			"first several rounds, get justified", func(t *testing.T, forkCfg *thor.ForkConfig) {
+				testBFT, err := newTestBft(forkCfg)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1161,8 +1161,8 @@ func TestJustified(t *testing.T) {
 				assert.Equal(t, testBFT.repo.GenesisBlock().Header().ID(), testBFT.engine.Finalized())
 			},
 		}, {
-			"first three not justified rounds, then justified", func(t *testing.T) {
-				testBFT, err := newTestBft(defaultFC)
+			"first three not justified rounds, then justified", func(t *testing.T, forkCfg *thor.ForkConfig) {
+				testBFT, err := newTestBft(forkCfg)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1185,8 +1185,8 @@ func TestJustified(t *testing.T) {
 				assert.Equal(t, testBFT.repo.GenesisBlock().Header().ID(), testBFT.engine.Finalized())
 			},
 		}, {
-			"get finalized, then justified", func(t *testing.T) {
-				testBFT, err := newTestBft(defaultFC)
+			"get finalized, then justified", func(t *testing.T, forkCfg *thor.ForkConfig) {
+				testBFT, err := newTestBft(forkCfg)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1214,9 +1214,9 @@ func TestJustified(t *testing.T) {
 				assert.Equal(t, uint32(3*thor.CheckpointInterval), block.Number(justified))
 			},
 		}, {
-			"get finalized, not justified, then justified", func(t *testing.T) {
+			"get finalized, not justified, then justified", func(t *testing.T, forkCfg *thor.ForkConfig) {
 				type tJustified = justified
-				testBFT, err := newTestBft(defaultFC)
+				testBFT, err := newTestBft(forkCfg)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1244,11 +1244,11 @@ func TestJustified(t *testing.T) {
 				assert.Equal(t, justified, testBFT.engine.justified.Load().(tJustified).value)
 			},
 		}, {
-			"fork in the middle, get justified", func(t *testing.T) {
-				fc := defaultFC
+			"fork in the middle, get justified", func(t *testing.T, forkCfg *thor.ForkConfig) {
+				fc := *forkCfg
 				fc.FINALITY = thor.CheckpointInterval
 
-				testBFT, err := newTestBft(fc)
+				testBFT, err := newTestBft(&fc)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1275,9 +1275,30 @@ func TestJustified(t *testing.T) {
 		},
 	}
 
+	forkConfigs := []struct {
+		name    string
+		forkCfg *thor.ForkConfig
+	}{
+		{
+			"default fork config",
+			defaultFC,
+		},
+		{
+			"hayabusa fork config",
+			&thor.ForkConfig{
+				HAYABUSA:    1,
+				HAYABUSA_TP: 1,
+			},
+		},
+	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.testFunc(t)
+			for _, fc := range forkConfigs {
+				t.Run(fc.name, func(t *testing.T) {
+					tt.testFunc(t, fc.forkCfg)
+				})
+			}
 		})
 	}
 }
