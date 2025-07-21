@@ -545,6 +545,7 @@ func (rt *Runtime) PrepareTransaction(trx *tx.Transaction) (*TransactionExecutor
 
 func (rt *Runtime) HandleSlashing(evidences *[][]block.Header, blockNumber uint32) error {
 	staker := builtin.Staker.Native(rt.State())
+	println("--------Slashing validator", blockNumber)
 
 	for _, ev := range *evidences {
 		if len(ev) > 0 {
