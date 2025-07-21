@@ -592,11 +592,14 @@ func (rt *Runtime) HandleSlashing(evidences *[][]block.Header, blockNumber uint3
 func (rt *Runtime) validateEvidence(evidences *[]block.Header, blockNumber uint32) error {
 	evidenceValidated := false
 	if evidences != nil && len(*evidences) > 1 {
+		println("Validating single evidence")
 		var initialSum *block.Header
 		for _, header := range *evidences {
 			if initialSum == nil {
+				println("Initial sum")
 				initialSum = &header
 				isUsed, err := rt.isEvidenceUsed(*initialSum, blockNumber)
+				println("isEvidenceUsed")
 				if err != nil {
 					return err
 				}
@@ -604,6 +607,7 @@ func (rt *Runtime) validateEvidence(evidences *[]block.Header, blockNumber uint3
 					return fmt.Errorf("evidence already used in previous blocks")
 				}
 			} else if initialSum.Number()-blockNumber > thor.EvidenceMaxHistory {
+				println("supplied evidence has expired")
 				return fmt.Errorf("supplied evidence has expired")
 			} else if initialSum.Number() == header.Number() && initialSum.StateRoot() != header.StateRoot() {
 				initialSigner, err := initialSum.Signer()
