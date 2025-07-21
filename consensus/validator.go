@@ -329,7 +329,7 @@ func (c *Consensus) syncPOS(staker *staker.Staker, current uint32) (active bool,
 		return false, false, nil, nil
 	}
 	// check if the staker contract is active
-	active, err = staker.IsActive()
+	active, err = staker.IsPoSActive()
 	if err != nil {
 		return false, false, nil, err
 	}

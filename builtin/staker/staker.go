@@ -57,8 +57,8 @@ func New(addr thor.Address, state *state.State, params *params.Params, charger *
 	}
 }
 
-// IsActive checks if the staker contract has become active, i.e. we have transitioned to PoS.
-func (s *Staker) IsActive() (bool, error) {
+// IsPoSActive checks if the staker contract has become active, i.e. we have transitioned to PoS.
+func (s *Staker) IsPoSActive() (bool, error) {
 	return s.validations.IsActive()
 }
 

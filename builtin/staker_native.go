@@ -145,12 +145,12 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			isActive, err := Staker.NativeMetered(env.State(), charger).IsActive()
+			isPoSActive, err := Staker.NativeMetered(env.State(), charger).IsPoSActive()
 			if err != nil {
 				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", err)}
 			}
 
-			if !isActive {
+			if !isPoSActive {
 				charger.Charge(thor.SloadGas) // a.getEntry(nodeMaster)
 
 				exists, endorsor, _, _, err := Authority.Native(env.State()).Get(thor.Address(args.Node))
