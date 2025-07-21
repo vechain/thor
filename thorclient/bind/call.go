@@ -9,50 +9,33 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/vechain/thor/v2/api"
-
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 )
 
-// CallBuilder is the interface for read operations.
-type CallBuilder interface {
-	// AtRevision sets the revision for the call.
-	AtRevision(rev string) CallBuilder
-
-	// Caller sets the caller for the simulation.
-	Caller(caller *thor.Address) CallBuilder
-
-	// ExecuteInto unpacks the result into the provided interface.
-	ExecuteInto(result any) error
-
-	// Execute performs the call and returns the raw result.
-	Execute() (*api.CallResult, error)
-}
-
-// callBuilder is the concrete implementation of CallBuilder.
-type callBuilder struct {
-	op     *methodBuilder
+type CallBuilder struct {
+	op     *MethodBuilder
 	rev    string
 	caller *thor.Address
 }
 
 // AtRevision implements CallBuilder.AtRevision.
-func (b *callBuilder) AtRevision(rev string) CallBuilder {
+func (b *CallBuilder) AtRevision(rev string) *CallBuilder {
 	b.rev = rev
 	return b
 }
 
 // Caller implements CallBuilder.AtRevision.
-func (b *callBuilder) Caller(caller *thor.Address) CallBuilder {
+func (b *CallBuilder) Caller(caller *thor.Address) *CallBuilder {
 	b.caller = caller
 	return b
 }
 
 // ExecuteInto implements CallBuilder.Into.
-func (b *callBuilder) ExecuteInto(result any) error {
+func (b *CallBuilder) ExecuteInto(result any) error {
 	method, ok := b.op.contract.abi.Methods[b.op.method]
 	if !ok {
 		return errors.New("method not found: " + b.op.method)
@@ -72,7 +55,7 @@ func (b *callBuilder) ExecuteInto(result any) error {
 }
 
 // Execute implements CallBuilder.Execute.
-func (b *callBuilder) Execute() (*api.CallResult, error) {
+func (b *CallBuilder) Execute() (*api.CallResult, error) {
 	// Build the clause
 	clause, err := b.op.Clause()
 	if err != nil {
@@ -100,24 +83,25 @@ func (b *callBuilder) Execute() (*api.CallResult, error) {
 		return nil, fmt.Errorf("expected 1 result, got %d", len(res))
 	}
 
-	if res[0].Reverted {
+	result := res[0]
+	if result.Reverted {
 		message := "contract call reverted"
-		if res[0].Data != "" {
-			decoded, err := hexutil.Decode(res[0].Data)
+		if result.Data != "" {
+			decoded, err := hexutil.Decode(result.Data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to decode revert data: %w", err)
+				return result, fmt.Errorf("failed to decode revert data: %w", err)
 			}
 			revertReason, err := UnpackRevert(decoded)
 			if err == nil {
 				message = fmt.Sprintf("contract call reverted: %s", revertReason)
 			}
 		}
-		return nil, errors.New(message)
+		return result, errors.New(message)
 	}
 
-	if res[0].VMError != "" {
-		return nil, fmt.Errorf("VM error: %s", res[0].VMError)
+	if result.VMError != "" {
+		return nil, fmt.Errorf("VM error: %s", result.VMError)
 	}
 
-	return res[0], nil
+	return result, nil
 }
