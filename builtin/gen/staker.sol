@@ -289,7 +289,7 @@ contract Staker {
     }
 
     /**
-     * @dev getWithdraw returns the amount of a validator's withdrawal.
+     * @dev getWithdrawable returns the amount of a validator's withdrawal.
      */
     function getWithdrawable(bytes32 id) public view returns (uint256) {
         (uint256 withdrawal, string memory error) = StakerNative(address(this))
