@@ -607,7 +607,7 @@ func (rt *Runtime) validateEvidence(evidences *[]block.Header, blockNumber uint3
 					return fmt.Errorf("evidence already used in previous blocks")
 				}
 			} else if initialSum.Number()-blockNumber > thor.EvidenceMaxHistory {
-				println("supplied evidence has expired")
+				println("supplied evidence has expired", initialSum.Number(), blockNumber, thor.EvidenceMaxHistory)
 				return fmt.Errorf("supplied evidence has expired")
 			} else if initialSum.Number() == header.Number() && initialSum.StateRoot() != header.StateRoot() {
 				initialSigner, err := initialSum.Signer()
