@@ -883,7 +883,12 @@ func TestJustifier(t *testing.T) {
 				}
 
 				for i := 0; i <= MaxBlockProposers*2/3; i++ {
-					vs.AddBlock(datagen.RandAddress(), true, nil)
+					if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
+						// Weight, stake multiplied by default multiplier
+						vs.AddBlock(datagen.RandAddress(), true, new(big.Int).Mul(validatorStake, big.NewInt(2)))
+					} else {
+						vs.AddBlock(datagen.RandAddress(), true, nil)
+					}
 				}
 
 				st := vs.Summarize()
@@ -914,7 +919,12 @@ func TestJustifier(t *testing.T) {
 				}
 
 				for i := 0; i <= MaxBlockProposers*2/3; i++ {
-					vs.AddBlock(datagen.RandAddress(), false, nil)
+					if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
+						// Weight, stake multiplied by default multiplier
+						vs.AddBlock(datagen.RandAddress(), true, new(big.Int).Mul(validatorStake, big.NewInt(2)))
+					} else {
+						vs.AddBlock(datagen.RandAddress(), true, nil)
+					}
 				}
 
 				st := vs.Summarize()
@@ -939,7 +949,12 @@ func TestJustifier(t *testing.T) {
 
 				// vote <threshold> times COM
 				for range MaxBlockProposers * 2 / 3 {
-					vs.AddBlock(datagen.RandAddress(), true, nil)
+					if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
+						// Weight, stake multiplied by default multiplier
+						vs.AddBlock(datagen.RandAddress(), true, new(big.Int).Mul(validatorStake, big.NewInt(2)))
+					} else {
+						vs.AddBlock(datagen.RandAddress(), true, nil)
+					}
 				}
 
 				master := datagen.RandAddress()
