@@ -565,6 +565,7 @@ func (rt *Runtime) HandleSlashing(evidences *[][]block.Header, blockNumber uint3
 			if err != nil {
 				return err
 			}
+			println("--------Slashing validator", signer.String())
 			validation, validationID, err := staker.LookupNode(signer)
 			if err != nil {
 				return err
