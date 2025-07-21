@@ -59,7 +59,7 @@ func (engine *Engine) newJustifier(parentID thor.Bytes32) (*justifier, error) {
 		return nil, err
 	}
 
-	var parentQuality uint32
+	var parentQuality uint32 // quality of last round
 	if absRound := blockNum/thor.CheckpointInterval - engine.forkConfig.FINALITY/thor.CheckpointInterval; absRound == 0 {
 		parentQuality = 0
 	} else {
