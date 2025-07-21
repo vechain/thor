@@ -543,12 +543,12 @@ func (rt *Runtime) PrepareTransaction(trx *tx.Transaction) (*TransactionExecutor
 	}, nil
 }
 
-func (rt *Runtime) HandleSlashing(evidences *[][]block.Header) error {
+func (rt *Runtime) HandleSlashing(evidences *[][]block.Header, blockNumber uint32) error {
 	staker := builtin.Staker.Native(rt.State())
 
 	for _, ev := range *evidences {
 		if len(ev) > 0 {
-			err := rt.validateEvidence(&ev)
+			err := rt.validateEvidence(&ev, blockNumber)
 			if err != nil {
 				return nil
 			}
@@ -584,13 +584,22 @@ func (rt *Runtime) HandleSlashing(evidences *[][]block.Header) error {
 	return nil
 }
 
-func (rt *Runtime) validateEvidence(evidences *[]block.Header) error {
+func (rt *Runtime) validateEvidence(evidences *[]block.Header, blockNumber uint32) error {
 	evidenceValidated := false
 	if evidences != nil && len(*evidences) > 1 {
 		var initialSum *block.Header
 		for _, header := range *evidences {
 			if initialSum == nil {
 				initialSum = &header
+				isUsed, err := rt.isEvidenceUsed(*initialSum, blockNumber)
+				if err != nil {
+					return err
+				}
+				if isUsed {
+					return fmt.Errorf("evidence already used in previous blocks")
+				}
+			} else if initialSum.Number()-blockNumber > thor.EvidenceMaxHistory {
+				return fmt.Errorf("supplied evidence has expired")
 			} else if initialSum.Number() == header.Number() && initialSum.StateRoot() != header.StateRoot() {
 				initialSigner, err := initialSum.Signer()
 				if err != nil {
@@ -623,4 +632,25 @@ func (rt *Runtime) validateEvidence(evidences *[]block.Header) error {
 		}
 	}
 	return nil
+}
+
+func (rt *Runtime) isEvidenceUsed(evidence block.Header, currentBlkNum uint32) (bool, error) {
+	blockNum := evidence.Number() + 1
+	for blockNum < currentBlkNum {
+		blk, err := rt.Chain().GetBlockSummary(blockNum)
+		if err != nil {
+			return false, nil
+		}
+		if blk.Header.Evidence() == nil {
+			continue
+		}
+
+		for _, ev := range *blk.Header.Evidence() {
+			header := ev[0]
+			if header.Number() == evidence.Number() {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }

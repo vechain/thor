@@ -358,13 +358,13 @@ func (s *Staker) SlashValidator(validationID thor.Bytes32, amount *big.Int) erro
 		return err
 	}
 	validation.LockedVET = big.NewInt(0).Sub(validation.LockedVET, amount)
-	err = s.lockedVET.Sub(amount)
+	err = s.storage.lockedVET.Sub(amount)
 	if err != nil {
 		return err
 	}
 	reducedWeight := big.NewInt(0).Mul(amount, big.NewInt(2))
 	validation.Weight = big.NewInt(0).Sub(validation.Weight, big.NewInt(0).Mul(amount, big.NewInt(2)))
-	err = s.lockedWeight.Sub(reducedWeight)
+	err = s.storage.lockedWeight.Sub(reducedWeight)
 	if err != nil {
 		return err
 	}

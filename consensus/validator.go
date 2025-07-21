@@ -310,9 +310,13 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 		}
 		evidences := blk.Header().Evidence()
 		if evidences != nil && len(*evidences) > 0 {
-			err := rt.HandleSlashing(evidences)
+			err := rt.HandleSlashing(evidences, blk.Header().Number())
 			if err != nil {
 				return nil, nil, err
+			}
+			for _, ev := range *evidences {
+				hdr := ev[0]
+				c.repo.RecordDoubleSigProcessed(hdr.Number())
 			}
 		}
 	}
