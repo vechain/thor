@@ -74,7 +74,6 @@ func (engine *Engine) newJustifier(parentID thor.Bytes32) (*justifier, error) {
 	}
 
 	// When the checkpoint is greater than 0, last of parent round is checkpoint - 1
-	// hence the comparison is with HAYABUSA + HAYABUSA_TP
 	if lastOfParentRound >= engine.forkConfig.HAYABUSA+engine.forkConfig.HAYABUSA_TP {
 		totalWeight, err := engine.getTotalWeight(sum)
 		if err != nil {
