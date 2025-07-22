@@ -141,6 +141,8 @@ func (d *delegations) DisableAutoRenew(delegationID thor.Bytes32) error {
 		aggregation.PendingRecurringWeight = big.NewInt(0).Sub(aggregation.PendingRecurringWeight, weight)
 	}
 
+	// TODO: In a future PR this won't be possible, so it will be removed. This is backwards compatible according to the unit tests.
+	// - In future: delegations auto added as auto-renew, then will have to signal an exit to withdraw in the next staking period.
 	// set the delegation's exit iteration
 	var lastIteration uint32
 	if delegation.Started(validation) {
