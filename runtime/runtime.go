@@ -141,6 +141,13 @@ func New(
 		if err := state.SetCode(builtin.Staker.Address, builtin.Staker.RuntimeBytecodes()); err != nil {
 			panic(err)
 		}
+
+		if err := builtin.Params.Native(state).Set(thor.KeyCurveFactor, thor.CurveFactor); err != nil {
+			panic(err)
+		}
+		if err := builtin.Params.Native(state).Set(thor.KeyRewardRatio, thor.InitialRewardRatio); err != nil {
+			panic(err)
+		}
 	}
 
 	rt := Runtime{

@@ -760,6 +760,9 @@ func TestEnergyNative(t *testing.T) {
 	summary := thorChain.Repo().BestBlockSummary()
 	firstPOS := summary.Header.Number() + 1
 	st := thorChain.Stater().NewState(summary.Root())
+	err = builtin.Params.Native(st).Set(thor.KeyCurveFactor, thor.CurveFactor)
+	assert.NoError(t, err)
+
 	energyAtBlock, err := builtin.Energy.Native(st, summary.Header.Timestamp()).Get(summary.Header.Beneficiary())
 	require.NoError(t, err)
 	validatorMap[summary.Header.Timestamp()] = energyAtBlock
@@ -806,7 +809,7 @@ func TestEnergyNative(t *testing.T) {
 
 		// there are no delegators, so the validator gets the whole reward
 		expectedReward := new(big.Int).Set(reward)
-		require.Equal(t, expectedReward, big.NewInt(0).Sub(energyAtBlock, energyBeforeBlock))
+		require.True(t, expectedReward.Cmp(big.NewInt(0).Sub(energyAtBlock, energyBeforeBlock)) == 0)
 	}
 	exSupply = exSupply.Add(exSupply, stakeRewards)
 
