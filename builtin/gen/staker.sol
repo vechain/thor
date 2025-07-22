@@ -126,14 +126,14 @@ contract Staker {
     /**
      * @dev allows the caller to withdraw a stake when their status is set to exited
      */
-    function withdraw(bytes32 id) public {
+    function withdrawStake(bytes32 id) public {
         (uint256 stake, string memory error) = StakerNative(address(this))
-            .native_withdraw(msg.sender, id);
+            .native_withdrawStake(msg.sender, id);
         require(bytes(error).length == 0, error);
-        emit ValidatorWithdrawn(msg.sender, id, stake);
 
         (bool success, ) = msg.sender.call{value: stake}("");
         require(success, "Transfer failed");
+        emit ValidatorWithdrawn(msg.sender, id, stake);
     }
 
     /**
@@ -289,11 +289,11 @@ contract Staker {
     }
 
     /**
-     * @dev getWithdraw returns the amount of a validator's withdrawal.
+     * @dev getWithdrawable returns the amount of a validator's withdrawable VET.
      */
-    function getWithdraw(bytes32 id) public view returns (uint256) {
+    function getWithdrawable(bytes32 id) public view returns (uint256) {
         (uint256 withdrawal, string memory error) = StakerNative(address(this))
-            .native_getWithdraw(id);
+            .native_getWithdrawable(id);
         require(bytes(error).length == 0, error);
         return withdrawal;
     }
@@ -399,7 +399,7 @@ interface StakerNative {
         uint256 amount
     ) external returns (string calldata);
 
-    function native_withdraw(
+    function native_withdrawStake(
         address endorsor,
         bytes32 validationID
     ) external returns (uint256, string calldata);
@@ -476,7 +476,7 @@ interface StakerNative {
         address node
     ) external view returns (bytes32);
 
-    function native_getWithdraw(
+    function native_getWithdrawable(
         bytes32 validationID
     ) external view returns (uint256, string calldata);
 
