@@ -38,7 +38,7 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Bytes32]*Validat
 			return nil
 		}
 
-		if !entry.AutoRenew { // early exit, validator is due to exit but has not reached exit block
+		if entry.ExitBlock != nil { // early exit, validator is due to exit but has not reached exit block
 			activeValidators[id] = entry
 			logger.Debug("validator exit delayed", "node", entry.Node, "exit-block", entry.ExitBlock)
 			return nil
@@ -174,7 +174,7 @@ func (s *Staker) activateValidators(currentBlock uint32) ([]*thor.Bytes32, error
 }
 
 func (s *Staker) Transition(currentBlock uint32) (bool, error) {
-	active, err := s.IsActive()
+	active, err := s.IsPoSActive()
 	if err != nil {
 		return false, err
 	}

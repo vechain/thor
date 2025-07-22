@@ -27,7 +27,6 @@ type Validation struct {
 	CompleteIterations uint32       // the completed staking periods by the validation
 	Status             Status       // status of the validation
 	Online             bool         // whether the validation is online or not
-	AutoRenew          bool         // whether the validations staking period is auto-renewed
 	StartBlock         uint32       // the block number when the validation started the first staking period
 	ExitBlock          *uint32      `rlp:"nil"` // the block number when the validation moved to cooldown
 
@@ -131,23 +130,37 @@ func (d *Delegation) Weight() *big.Int {
 	return weight
 }
 
-// IsLocked returns whether the delegator is locked for the current staking period.
-func (d *Delegation) IsLocked(validation *Validation) bool {
+// Started returns whether the delegation became locked
+func (d *Delegation) Started(validation *Validation) bool {
 	if d.IsEmpty() {
 		return false
 	}
-	// validation is not active, so the delegator is not locked
-	if validation.Status != StatusActive {
+	if validation.Status == StatusQueued {
+		return false // Delegation cannot start if the validation is not active
+	}
+	currentStakingPeriod := validation.CurrentIteration()
+	return currentStakingPeriod >= d.FirstIteration
+}
+
+// Ended returns whether the delegation has ended
+// It returns true if:
+// - the delegation's exit iteration is less than the current staking period
+// - OR if the validation is in exit status and the delegation has started
+func (d *Delegation) Ended(validation *Validation) bool {
+	if d.IsEmpty() {
 		return false
 	}
-	current := validation.CurrentIteration()
+	if validation.Status == StatusQueued {
+		return false // Delegation cannot end if the validation is not active
+	}
+	if validation.Status == StatusExit && d.Started(validation) {
+		return true // Delegation is ended if the validation is in exit status
+	}
+	currentStakingPeriod := validation.CurrentIteration()
 	if d.LastIteration == nil {
-		return current >= d.FirstIteration
-	}
-	if current < d.FirstIteration {
 		return false
 	}
-	return current == d.FirstIteration || current < *d.LastIteration
+	return *d.LastIteration < currentStakingPeriod
 }
 
 // Aggregation represents the total amount of VET locked for a given validation's delegations.

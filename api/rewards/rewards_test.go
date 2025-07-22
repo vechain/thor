@@ -36,11 +36,13 @@ func initRewardsServer(t *testing.T) *httptest.Server {
 	rewards.Mount(router, "/rewards")
 
 	staker := thorChain.Contract(builtin.Staker.Address, builtin.Staker.ABI, genesis.DevAccounts()[0])
-	err = staker.MintTransaction("addValidator", big.NewInt(0).Mul(big.NewInt(25000000), big.NewInt(1e18)), genesis.DevAccounts()[0].Address, uint32(360)*24*7, true)
+	err = staker.MintTransaction("addValidator", big.NewInt(0).Mul(big.NewInt(25000000), big.NewInt(1e18)), genesis.DevAccounts()[0].Address, uint32(360)*24*7)
 	require.NoError(t, err)
 
 	params := thorChain.Contract(builtin.Params.Address, builtin.Params.ABI, genesis.DevAccounts()[0])
 	err = params.MintTransaction("set", big.NewInt(0), thor.KeyMaxBlockProposers, big.NewInt(1))
+	assert.NoError(t, err)
+	err = params.MintTransaction("set", big.NewInt(0), thor.KeyCurveFactor, thor.CurveFactor)
 	assert.NoError(t, err)
 
 	require.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))

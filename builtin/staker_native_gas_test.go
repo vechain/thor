@@ -57,7 +57,6 @@ func preTestAddValidator(acc thor.Address) TestHook {
 			acc,
 			staker.LowStakingPeriod,
 			stake,
-			true,
 		})
 	}
 }
@@ -117,7 +116,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		{
 			function:    "native_addValidator",
 			expectedGas: 103200,
-			args:        []any{account1, account1, staker.LowStakingPeriod, staker.MinStake, true},
+			args:        []any{account1, account1, staker.LowStakingPeriod, staker.MinStake},
 			description: "Add a new validator (not implemented yet)",
 		},
 		{
@@ -135,7 +134,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 			preTestHooks: []TestHook{preTestAddValidator(account1)},
 		},
 		{
-			function:     "native_getWithdraw",
+			function:     "native_getWithdrawable",
 			expectedGas:  1600,
 			args:         []any{accToID(account1)},
 			description:  "Get withdraw information for a validator",
@@ -149,23 +148,22 @@ func TestStakerNativeGasCosts(t *testing.T) {
 			preTestHooks: []TestHook{preTestAddValidator(account1)},
 		},
 		{
-			function:     "native_withdraw",
+			function:     "native_withdrawStake",
 			expectedGas:  77400,
 			args:         []any{account1, accToID(account1)},
 			description:  "Withdraw stake for a validator",
 			preTestHooks: []TestHook{preTestAddValidator(account1)},
 		},
-		{
-			function:    "native_updateAutoRenew",
-			expectedGas: 16600,
-			args: []any{
-				account1,
-				accToID(account1),
-				false,
-			},
-			description:  "Update auto-renew setting for a validator",
-			preTestHooks: []TestHook{preTestAddValidator(account1)},
-		},
+		// {
+		// 	function:    "native_signalExit",
+		// 	expectedGas: 16600,
+		// 	args: []any{
+		// 		account1,
+		// 		accToID(account1),
+		// 	},
+		// 	description:  "Signal exit for a validator",
+		// 	preTestHooks: []TestHook{preTestAddValidator(account1)},
+		// },
 		{
 			function:    "native_increaseStake",
 			expectedGas: 27200,
