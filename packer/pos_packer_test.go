@@ -107,7 +107,7 @@ func packAddValidatorBlock(t *testing.T, chain *testchain.Chain, interval uint64
 	vet = vet.Mul(vet, big.NewInt(1e18))
 
 	contract := chain.Contract(builtin.Staker.Address, builtin.Staker.ABI, genesis.DevAccounts()[0])
-	tx, err := contract.BuildTransaction("addValidator", vet, genesis.DevAccounts()[0].Address, uint32(360)*24*7, true)
+	tx, err := contract.BuildTransaction("addValidator", vet, genesis.DevAccounts()[0].Address, uint32(360)*24*7)
 	if err != nil {
 		t.Fatal(err)
 	}

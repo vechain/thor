@@ -7,18 +7,16 @@ contract Staker {
         address indexed node,
         bytes32 indexed validationID,
         uint32 period,
-        uint256 stake,
-        bool autoRenew
+        uint256 stake
     );
     event ValidatorWithdrawn(
         address indexed endorsor,
         bytes32 indexed validationID,
         uint256 stake
     );
-    event ValidatorUpdatedAutoRenew(
+    event ValidatorSignaledExit(
         address indexed endorsor,
-        bytes32 indexed validationID,
-        bool autoRenew
+        bytes32 indexed validationID
     );
 
     event StakeIncreased(
@@ -72,8 +70,7 @@ contract Staker {
      */
     function addValidator(
         address node,
-        uint32 period,
-        bool autoRenew
+        uint32 period
     ) public payable {
         require(msg.value > 0, "value is empty");
         (bytes32 id, string memory error) = StakerNative(address(this))
@@ -81,8 +78,7 @@ contract Staker {
                 msg.sender,
                 node,
                 period,
-                msg.value,
-                autoRenew
+                msg.value
             );
         require(bytes(error).length == 0, error);
         emit ValidatorQueued(
@@ -90,8 +86,7 @@ contract Staker {
             node,
             id,
             period,
-            msg.value,
-            autoRenew
+            msg.value
         );
     }
 
@@ -137,13 +132,13 @@ contract Staker {
     }
 
     /**
-     * @dev updateAutoRenew updates the autoRenew flag of a validator.
+     * @dev signalExit signals the intent to exit a validator position at the end of the staking period.
      */
-    function updateAutoRenew(bytes32 id, bool autoRenew) public {
+    function signalExit(bytes32 id) public {
         string memory error = StakerNative(address(this))
-            .native_updateAutoRenew(msg.sender, id, autoRenew);
+            .native_signalExit(msg.sender, id);
         require(bytes(error).length == 0, error);
-        emit ValidatorUpdatedAutoRenew(msg.sender, id, autoRenew);
+        emit ValidatorSignaledExit(msg.sender, id);
     }
 
     /**
@@ -247,7 +242,6 @@ contract Staker {
             uint256,
             uint8,
             bool,
-            bool,
             uint32,
             uint32,
             uint32
@@ -259,7 +253,6 @@ contract Staker {
             uint256 stake,
             uint256 weight,
             uint8 status,
-            bool autoRenew,
             bool online,
             uint32 period,
             uint32 startBlock,
@@ -273,7 +266,6 @@ contract Staker {
             stake,
             weight,
             status,
-            autoRenew,
             online,
             period,
             startBlock,
@@ -383,8 +375,7 @@ interface StakerNative {
         address endorsor,
         address node,
         uint32 period,
-        uint256 stake,
-        bool autoRenew
+        uint256 stake
     ) external returns (bytes32, string calldata);
 
     function native_increaseStake(
@@ -404,10 +395,9 @@ interface StakerNative {
         bytes32 validationID
     ) external returns (uint256, string calldata);
 
-    function native_updateAutoRenew(
+    function native_signalExit(
         address endorsor,
-        bytes32 validationID,
-        bool autoRenew
+        bytes32 validationID
     ) external returns (string calldata);
 
     function native_addDelegation(
@@ -464,7 +454,6 @@ interface StakerNative {
             uint256,
             uint256,
             uint8,
-            bool,
             bool,
             uint32,
             uint32,

@@ -49,16 +49,16 @@ func init() {
 
 			validator, err := Staker.NativeMetered(env.State(), charger).Get(thor.Bytes32(args.ValidationID))
 			if err != nil {
-				return []any{thor.Address{}, thor.Address{}, big.NewInt(0), big.NewInt(0), staker.StatusUnknown, false, false, uint32(0), uint32(0), uint32(0), fmt.Sprintf("revert: %v", err)}
+				return []any{thor.Address{}, thor.Address{}, big.NewInt(0), big.NewInt(0), staker.StatusUnknown, false, uint32(0), uint32(0), uint32(0), fmt.Sprintf("revert: %v", err)}
 			}
 			if validator.IsEmpty() {
-				return []any{thor.Address{}, thor.Address{}, big.NewInt(0), big.NewInt(0), staker.StatusUnknown, false, false, uint32(0), uint32(0), uint32(0), ""}
+				return []any{thor.Address{}, thor.Address{}, big.NewInt(0), big.NewInt(0), staker.StatusUnknown, false, uint32(0), uint32(0), uint32(0), ""}
 			}
 			exitBlock := uint32(math.MaxUint32)
 			if validator.ExitBlock != nil {
 				exitBlock = *validator.ExitBlock
 			}
-			return []any{validator.Node, validator.Endorsor, validator.LockedVET, validator.Weight, validator.Status, validator.AutoRenew, validator.Online, validator.Period, validator.StartBlock, exitBlock, ""}
+			return []any{validator.Node, validator.Endorsor, validator.LockedVET, validator.Weight, validator.Status, validator.Online, validator.Period, validator.StartBlock, exitBlock, ""}
 		}},
 		{"native_lookupNode", func(env *xenv.Environment) []any {
 			var args struct {
@@ -139,11 +139,10 @@ func init() {
 		}},
 		{"native_addValidator", func(env *xenv.Environment) []any {
 			var args struct {
-				Endorsor  common.Address
-				Node      common.Address
-				Period    uint32
-				Stake     *big.Int
-				AutoRenew bool
+				Endorsor common.Address
+				Node     common.Address
+				Period   uint32
+				Stake    *big.Int
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
@@ -174,7 +173,6 @@ func init() {
 					thor.Address(args.Node),
 					args.Period,
 					args.Stake,
-					args.AutoRenew,
 					env.BlockContext().Number,
 				)
 			if err != nil {
@@ -183,20 +181,18 @@ func init() {
 
 			return []any{id, ""}
 		}},
-		{"native_updateAutoRenew", func(env *xenv.Environment) []any {
+		{"native_signalExit", func(env *xenv.Environment) []any {
 			var args struct {
 				Endorsor     common.Address
 				ValidationID common.Hash
-				AutoRenew    bool
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
 			err := Staker.NativeMetered(env.State(), charger).
-				UpdateAutoRenew(
+				SignalExit(
 					thor.Address(args.Endorsor),
 					thor.Bytes32(args.ValidationID),
-					args.AutoRenew,
 				)
 			if err != nil {
 				return []any{fmt.Sprintf("revert: %v", err)}

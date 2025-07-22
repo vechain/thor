@@ -164,7 +164,7 @@ func (h *hayabusaSetup) mintAddValidatorBlock(accs ...genesis.DevAccount) (*chai
 	contract := h.chain.Contract(builtin.Staker.Address, builtin.Staker.ABI, genesis.DevAccounts()[0])
 	for _, acc := range accs {
 		contract = contract.Attach(acc)
-		tx, err := contract.BuildTransaction("addValidator", minStake, acc.Address, uint32(360)*24*7, true)
+		tx, err := contract.BuildTransaction("addValidator", minStake, acc.Address, uint32(360)*24*7)
 		assert.NoError(h.t, err)
 		txs = append(txs, tx)
 	}
