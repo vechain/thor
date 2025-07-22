@@ -55,12 +55,20 @@ func TestBuilder_Build(t *testing.T) {
 
 	evidence := make([][]Header, 1)
 	headers := make([]Header, 1)
-	//id1 := thor.BytesToBytes32([]byte("testId1"))
 	headers[0] = Header{}
 	evidence[0] = headers
 	builder.Evidence(&evidence)
 
 	b := builder.Build()
+
+	evidenceIDs := make([][]thor.Bytes32, len(evidence))
+	for idx, ev := range evidence {
+		blkEvID := make([]thor.Bytes32, len(ev))
+		for blkIDx, blkEv := range evidence[idx] {
+			blkEvID[blkIDx] = blkEv.ID()
+		}
+		evidenceIDs[idx] = blkEvID
+	}
 
 	assert.Equal(t, id, b.header.ParentID())
 	assert.Equal(t, ts, b.header.Timestamp())
@@ -75,5 +83,6 @@ func TestBuilder_Build(t *testing.T) {
 	assert.Equal(t, alpha, b.header.Alpha())
 	assert.True(t, b.header.COM())
 	assert.Equal(t, baseFee, b.header.BaseFee())
-	assert.Equal(t, evidence, *b.header.Evidence())
+	assert.Equal(t, evidence, *b.Evidences())
+	assert.Equal(t, evidenceIDs, *b.header.Evidence())
 }

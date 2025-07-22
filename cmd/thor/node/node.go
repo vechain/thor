@@ -446,7 +446,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		}
 		stats.UpdateProcessed(1, len(receipts), execElapsed, commitElapsed, realElapsed, newBlock.Header().GasUsed())
 
-		evidences := newBlock.Header().Evidence()
+		evidences := newBlock.Body().Evidences
 		if isPos && evidences != nil && len(*evidences) > 1 {
 			for _, headers := range *evidences {
 				n.repo.RecordDoubleSigProcessed(headers[0].Number())

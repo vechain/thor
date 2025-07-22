@@ -17,6 +17,7 @@ import (
 type Builder struct {
 	headerBody headerBody
 	txs        tx.Transactions
+	evidences  *[][]Header
 }
 
 // ParentID set parent id.
@@ -99,7 +100,16 @@ func (b *Builder) BaseFee(baseFee *big.Int) *Builder {
 
 // Evidence sets evidence.
 func (b *Builder) Evidence(evidences *[][]Header) *Builder {
-	b.headerBody.Extension.Evidence = evidences
+	b.evidences = evidences
+	blockEvIDs := make([][]thor.Bytes32, len(*evidences))
+	for blkIdx, blockEv := range *evidences {
+		evidence := make([]thor.Bytes32, len(blockEv))
+		for idx, ev := range blockEv {
+			evidence[idx] = ev.ID()
+		}
+		blockEvIDs[blkIdx] = evidence
+	}
+	b.headerBody.Extension.Evidence = &blockEvIDs
 	return b
 }
 
@@ -109,7 +119,8 @@ func (b *Builder) Build() *Block {
 	header.body.TxsRootFeatures.Root = b.txs.RootHash()
 
 	return &Block{
-		header: &header,
-		txs:    b.txs,
+		header:    &header,
+		txs:       b.txs,
+		evidences: b.evidences,
 	}
 }

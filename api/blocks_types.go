@@ -112,7 +112,7 @@ func BuildJSONBlockSummary(summary *chain.BlockSummary, isTrunk bool, isFinalize
 
 	if summary.Header.Evidence() != nil && len(*summary.Header.Evidence()) > 0 {
 		for _, ev := range *summary.Header.Evidence() {
-			evidence = append(evidence, ev[0].ID())
+			evidence = append(evidence, ev[0])
 		}
 	}
 

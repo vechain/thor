@@ -55,12 +55,11 @@ func TestFlow_Schedule_POS(t *testing.T) {
 	packNext(t, chain, thor.BlockInterval)
 	verifyMechanism(t, chain, false, root)
 
-	evidence := make([][]block.Header, 1)
-	evidence[0] = make([]block.Header, 0)
+	evidence := make([][]block.Header, 0)
 	packNextWithEvidence(t, chain, thor.BlockInterval, &evidence)
 	verifyMechanism(t, chain, false, root)
 	summary := chain.Repo().BestBlockSummary()
-	assert.Equal(t, evidence, *summary.Header.Evidence())
+	assert.Equal(t, (*[][]block.Header)(nil), summary.Evidences)
 }
 
 func packNext(t *testing.T, chain *testchain.Chain, interval uint64, txs ...*tx.Transaction) {
@@ -86,6 +85,9 @@ func packNextWithEvidence(t *testing.T, chain *testchain.Chain, interval uint64,
 
 	blk, stage, receipts, err := flow.Pack(account.PrivateKey, conflicts, false, evidence)
 	assert.NoError(t, err)
+	if err != nil {
+		println(err.Error())
+	}
 	assert.NoError(t, chain.AddBlock(blk, stage, receipts))
 	best := chain.Repo().BestBlockSummary()
 	assert.Equal(t, best.Header.ID(), blk.Header().ID())

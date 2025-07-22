@@ -545,10 +545,19 @@ func (rt *Runtime) PrepareTransaction(trx *tx.Transaction) (*TransactionExecutor
 
 func (rt *Runtime) HandleSlashing(evidences *[][]block.Header, blockNumber uint32) error {
 	staker := builtin.Staker.Native(rt.State())
+	blockEvIDs := make([][]thor.Bytes32, len(*evidences))
+	for blkIdx, blockEv := range *evidences {
+		evidence := make([]thor.Bytes32, len(blockEv))
+		for idx, ev := range blockEv {
+			evidence[idx] = ev.ID()
+		}
+		blockEvIDs[blkIdx] = evidence
+	}
 
-	for _, ev := range *evidences {
+	for idx, ev := range *evidences {
 		if len(ev) > 0 {
-			err := rt.validateEvidence(&ev, blockNumber)
+			evIDs := blockEvIDs[idx]
+			err := rt.validateEvidence(&ev, &evIDs, blockNumber)
 			if err != nil {
 				return err
 			}
@@ -587,11 +596,14 @@ func (rt *Runtime) HandleSlashing(evidences *[][]block.Header, blockNumber uint3
 	return nil
 }
 
-func (rt *Runtime) validateEvidence(evidences *[]block.Header, blockNumber uint32) error {
+func (rt *Runtime) validateEvidence(evidences *[]block.Header, evidenceIDs *[]thor.Bytes32, blockNumber uint32) error {
 	evidenceValidated := false
 	if evidences != nil && len(*evidences) > 1 {
 		var initialSum *block.Header
-		for _, header := range *evidences {
+		for idx, header := range *evidences {
+			if header.ID() != (*evidenceIDs)[idx] {
+				return fmt.Errorf("evidence doesn't match signed evidence")
+			}
 			if initialSum == nil {
 				initialSum = &header
 				isUsed, err := rt.isEvidenceUsed(header, blockNumber)
@@ -639,7 +651,7 @@ func (rt *Runtime) isEvidenceUsed(evidence block.Header, currentBlkNum uint32) (
 
 		for _, ev := range *blk.Header.Evidence() {
 			header := ev[0]
-			if header.Number() == evidence.Number() {
+			if header == evidence.ID() {
 				return true, nil
 			}
 		}

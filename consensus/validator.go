@@ -308,13 +308,14 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 		if err := energy.DistributeRewards(blk.Header().Beneficiary(), signer, staker); err != nil {
 			return nil, nil, err
 		}
-		evidences := blk.Header().Evidence()
-		if evidences != nil && len(*evidences) > 0 {
-			err := rt.HandleSlashing(evidences, blk.Header().Number())
+		evidenceHeaders := blk.Evidences()
+		evidenceIDs := blk.Header().Evidence()
+		if evidenceIDs != nil && len(*evidenceIDs) > 0 {
+			err := rt.HandleSlashing(evidenceHeaders, blk.Header().Number())
 			if err != nil {
 				return nil, nil, err
 			}
-			for _, ev := range *evidences {
+			for _, ev := range *evidenceHeaders {
 				hdr := ev[0]
 				c.repo.RecordDoubleSigProcessed(hdr.Number())
 			}

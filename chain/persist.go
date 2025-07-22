@@ -27,6 +27,7 @@ func appendTxKey(buf []byte, blockNum, blockConflicts uint32, index uint64, flag
 type BlockSummary struct {
 	Header    *block.Header
 	Txs       []thor.Bytes32
+	Evidences *[][]block.Header
 	Size      uint64
 	Conflicts uint32
 }
