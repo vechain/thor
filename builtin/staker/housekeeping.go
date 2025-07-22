@@ -174,7 +174,7 @@ func (s *Staker) activateValidators(currentBlock uint32) ([]*thor.Bytes32, error
 }
 
 func (s *Staker) Transition(currentBlock uint32) (bool, error) {
-	active, err := s.IsActive()
+	active, err := s.IsPoSActive()
 	if err != nil {
 		return false, err
 	}
