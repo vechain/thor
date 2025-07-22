@@ -462,7 +462,7 @@ func Test_Delegator_AutoRenew_ValidatorExits(t *testing.T) {
 	assert.Equal(t, stake, aggregation.CurrentRecurringVET)
 
 	// When the validator signals an exit
-	assert.NoError(t, staker.UpdateAutoRenew(validator.Endorsor, validator.ID, false))
+	assert.NoError(t, staker.SignalExit(validator.Endorsor, validator.ID))
 
 	// And the next staking period is over
 	_, _, err = staker.Housekeep(validator.Period * 2)
@@ -546,7 +546,7 @@ func Test_Delegator_Queued_Weight(t *testing.T) {
 
 	node := datagen.RandAddress()
 	endorsor := datagen.RandAddress()
-	id, err := staker.AddValidator(endorsor, node, uint32(360)*24*15, validatorStake, true, 0)
+	id, err := staker.AddValidator(endorsor, node, uint32(360)*24*15, validatorStake, 0)
 	assert.NoError(t, err)
 
 	validator, err := staker.Get(id)
@@ -573,7 +573,7 @@ func Test_Delegator_Queued_Weight_QueuedValidator_Withdraw(t *testing.T) {
 	staker, _ := newStaker(t, 0, 101, false)
 
 	validatorAddr := datagen.RandAddress()
-	validatorID, err := staker.AddValidator(validatorAddr, validatorAddr, uint32(360)*24*15, MinStake, true, 0)
+	validatorID, err := staker.AddValidator(validatorAddr, validatorAddr, uint32(360)*24*15, MinStake, 0)
 	assert.NoError(t, err)
 
 	initialQueuedVET, initialQueuedWeight, err := staker.QueuedStake()

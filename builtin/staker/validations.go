@@ -8,7 +8,6 @@ package staker
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"math/big"
 
 	"github.com/vechain/thor/v2/builtin/params"
@@ -80,7 +79,6 @@ func (v *validations) Add(
 	node thor.Address,
 	period uint32,
 	stake *big.Int,
-	autoRenew bool,
 	currentBlock uint32,
 ) (thor.Bytes32, error) {
 	if stake.Cmp(MinStake) < 0 || stake.Cmp(MaxStake) > 0 {
@@ -108,7 +106,6 @@ func (v *validations) Add(
 		CompleteIterations: 0,
 		Status:             StatusQueued,
 		Online:             true,
-		AutoRenew:          autoRenew,
 		LockedVET:          big.NewInt(0),
 		PendingLocked:      stake,
 		CooldownVET:        big.NewInt(0),
@@ -210,14 +207,6 @@ func (v *validations) ActivateNext(
 		return nil, err
 	}
 
-	if !validator.AutoRenew {
-		exitBlock, err := v.SetExitBlock(id, currentBlock+validator.Period)
-		if err != nil {
-			return nil, err
-		}
-		validator.ExitBlock = &exitBlock
-	}
-
 	validator.Status = StatusActive
 	validator.Online = true
 	validator.StartBlock = currentBlock
@@ -233,7 +222,7 @@ func (v *validations) ActivateNext(
 	return &id, nil
 }
 
-func (v *validations) UpdateAutoRenew(endorsor thor.Address, id thor.Bytes32, autoRenew bool) error {
+func (v *validations) SignalExit(endorsor thor.Address, id thor.Bytes32) error {
 	validator, err := v.storage.GetValidation(id)
 	if err != nil {
 		return err
@@ -241,27 +230,16 @@ func (v *validations) UpdateAutoRenew(endorsor thor.Address, id thor.Bytes32, au
 	if validator.Endorsor != endorsor {
 		return errors.New("invalid endorsor for node")
 	}
-	if validator.AutoRenew == autoRenew {
-		return fmt.Errorf("auto-renewal is already set to %t", autoRenew)
+	if validator.Status != StatusActive {
+		return errors.New("can't signal exit while not active")
 	}
 
-	validator.AutoRenew = autoRenew
-
-	if validator.Status == StatusActive {
-		if autoRenew {
-			if err := v.storage.SetExitEpoch(*validator.ExitBlock, thor.Bytes32{}); err != nil {
-				return err
-			}
-			validator.ExitBlock = nil
-		} else {
-			minBlock := validator.StartBlock + validator.Period*(validator.CurrentIteration())
-			exitBlock, err := v.SetExitBlock(id, minBlock)
-			if err != nil {
-				return err
-			}
-			validator.ExitBlock = &exitBlock
-		}
+	minBlock := validator.StartBlock + validator.Period*(validator.CurrentIteration())
+	exitBlock, err := v.SetExitBlock(id, minBlock)
+	if err != nil {
+		return err
 	}
+	validator.ExitBlock = &exitBlock
 
 	return v.storage.SetValidation(id, validator, false)
 }
@@ -303,8 +281,8 @@ func (v *validations) IncreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 	if entry.Status == StatusExit {
 		return errors.New("validator status is not queued or active")
 	}
-	if entry.Status == StatusActive && !entry.AutoRenew {
-		return errors.New("validator is not set to renew in the next period")
+	if entry.Status == StatusActive && entry.ExitBlock != nil {
+		return errors.New("validator has signaled exit, cannot increase stake")
 	}
 	aggregation, err := v.storage.GetAggregation(id)
 	if err != nil {
@@ -345,8 +323,8 @@ func (v *validations) DecreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 	if entry.Status == StatusExit {
 		return errors.New("validator status is not queued or active")
 	}
-	if entry.Status == StatusActive && !entry.AutoRenew {
-		return errors.New("validator is not set to renew in the next period, all funds will be withdrawable")
+	if entry.Status == StatusActive && entry.ExitBlock != nil {
+		return errors.New("validator has signaled exit, cannot decrease stake")
 	}
 
 	aggregation, err := v.storage.GetAggregation(id)

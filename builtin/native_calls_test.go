@@ -751,7 +751,7 @@ func TestEnergyNative(t *testing.T) {
 	// 2: Add a validator to the queue
 	minStake := big.NewInt(25_000_000)
 	minStake = minStake.Mul(minStake, big.NewInt(1e18))
-	assert.NoError(t, staker.MintTransaction("addValidator", minStake, acc1.Address, uint32(360)*24*7, true))
+	assert.NoError(t, staker.MintTransaction("addValidator", minStake, acc1.Address, uint32(360)*24*7))
 	exSupply = exSupply.Add(exSupply, growth)
 
 	validatorMap := make(map[uint64]*big.Int)
@@ -1599,7 +1599,7 @@ func TestStakerContract_Native(t *testing.T) {
 	minStakingPeriod := uint32(360) * 24 * 15
 
 	// addValidator
-	addValidatorArgs := []any{master.Address, minStakingPeriod, true}
+	addValidatorArgs := []any{master.Address, minStakingPeriod}
 	desc := TestTxDescription{
 		t:          t,
 		abi:        abi,
@@ -1622,17 +1622,16 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).Mul(big.NewInt(0).SetUint64(receipt.GasUsed), block.Header().BaseFee()), big.NewInt(0).Sub(totalBurned, totalBurnedBefore))
 
 	// get
-	getRes := make([]any, 10)
+	getRes := make([]any, 9)
 	getRes[0] = new(common.Address)
 	getRes[1] = new(common.Address)
 	getRes[2] = new(*big.Int)
 	getRes[3] = new(*big.Int)
 	getRes[4] = new(uint8)
 	getRes[5] = new(bool)
-	getRes[6] = new(bool)
+	getRes[6] = new(uint32)
 	getRes[7] = new(uint32)
 	getRes[8] = new(uint32)
-	getRes[9] = new(uint32)
 	_, err = callContractAndGetOutput(abi, "get", toAddr, &getRes, id)
 	assert.NoError(t, err)
 	expectedEndorsor := common.BytesToAddress(endorsor.Address.Bytes())
@@ -1643,9 +1642,9 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).Cmp(*getRes[3].(**big.Int)), 0) // weight - should be 0 while queued
 	assert.Equal(t, staker.StatusQueued, *getRes[4].(*uint8))
 	assert.Equal(t, true, *getRes[5].(*bool)) // isMaster
-	assert.Equal(t, uint32(360*24*15), *getRes[7].(*uint32))
-	assert.Equal(t, uint32(0), *getRes[8].(*uint32))              // start period
-	assert.Equal(t, uint32(math.MaxUint32), *getRes[9].(*uint32)) // total periods
+	assert.Equal(t, uint32(360*24*15), *getRes[6].(*uint32))
+	assert.Equal(t, uint32(0), *getRes[7].(*uint32))              // start period
+	assert.Equal(t, uint32(math.MaxUint32), *getRes[8].(*uint32)) // total periods
 
 	//firstQueued
 	firstQueuedRes := new(common.Hash)
@@ -1752,7 +1751,7 @@ func TestStakerContract_Native_Revert(t *testing.T) {
 	minStakingPeriod := uint32(360) * 24 * 15
 
 	// addValidator
-	addValidatorArgs := []any{master.Address, minStakingPeriod + 1, true}
+	addValidatorArgs := []any{master.Address, minStakingPeriod + 1}
 	desc := TestTxDescription{
 		t:          t,
 		abi:        abi,
@@ -1767,14 +1766,14 @@ func TestStakerContract_Native_Revert(t *testing.T) {
 	assert.True(t, receipt.Reverted)
 
 	//update auto renew
-	updateAutoRenewArgs := []any{thor.Bytes32{}, false}
+	signalExitArgs := []any{thor.Bytes32{}}
 	desc = TestTxDescription{
 		t:          t,
 		abi:        abi,
-		methodName: "updateAutoRenew",
+		methodName: "signalExit",
 		address:    toAddr,
 		acc:        genesis.DevAccounts()[2],
-		args:       updateAutoRenewArgs,
+		args:       signalExitArgs,
 	}
 	receipt, _, err = executeTxAndGetReceipt(desc)
 	assert.NoError(t, err)
@@ -1874,7 +1873,7 @@ func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
 	minStakingPeriod := uint32(360) * 24 * 15
 
 	// addValidator
-	addValidatorArgs := []any{master.Address, minStakingPeriod, false}
+	addValidatorArgs := []any{master.Address, minStakingPeriod}
 	desc := TestTxDescription{
 		t:          t,
 		abi:        abi,
@@ -1904,17 +1903,16 @@ func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
 	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
 
 	// get
-	getRes := make([]any, 10)
+	getRes := make([]any, 9)
 	getRes[0] = new(common.Address)
 	getRes[1] = new(common.Address)
 	getRes[2] = new(*big.Int)
 	getRes[3] = new(*big.Int)
 	getRes[4] = new(uint8)
 	getRes[5] = new(bool)
-	getRes[6] = new(bool)
+	getRes[6] = new(uint32)
 	getRes[7] = new(uint32)
 	getRes[8] = new(uint32)
-	getRes[9] = new(uint32)
 	_, err = callContractAndGetOutput(abi, "get", toAddr, &getRes, id)
 	assert.NoError(t, err)
 	assert.Equal(t, staker.StatusExit, *getRes[4].(*uint8))
