@@ -341,7 +341,7 @@ func (c *Consensus) syncPOS(staker *staker.Staker, current uint32) (active bool,
 			return false, false, nil, err
 		}
 		if activated {
-			printHayabusaWelcomeInfo()
+			fmt.Println(HayabusaASCIIArt)
 			log.Info("dPoS activated", "pkg", "consensus", "block", current)
 			return true, true, nil, nil
 		}
