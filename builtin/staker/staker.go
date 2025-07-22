@@ -6,6 +6,7 @@
 package staker
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/vechain/thor/v2/builtin/gascharger"
@@ -357,18 +358,24 @@ func (s *Staker) SlashValidator(validationID thor.Bytes32, amount *big.Int) erro
 	if err != nil {
 		return err
 	}
+	if validation.LockedVET.Cmp(amount) < 0 {
+		return fmt.Errorf("slash amount is greater than locked VET")
+	}
 	validation.LockedVET = big.NewInt(0).Sub(validation.LockedVET, amount)
 	err = s.storage.lockedVET.Sub(amount)
 	if err != nil {
 		return err
 	}
 	reducedWeight := big.NewInt(0).Mul(amount, big.NewInt(2))
-	validation.Weight = big.NewInt(0).Sub(validation.Weight, big.NewInt(0).Mul(amount, big.NewInt(2)))
+	if validation.Weight.Cmp(reducedWeight) < 0 {
+		reducedWeight = validation.Weight
+	}
+	validation.Weight = big.NewInt(0).Sub(validation.Weight, reducedWeight)
 	err = s.storage.lockedWeight.Sub(reducedWeight)
 	if err != nil {
 		return err
 	}
-	err = s.storage.validations.Set(validationID, validation, false)
+	err = s.storage.SetValidation(validationID, validation, false)
 	if err != nil {
 		return err
 	}

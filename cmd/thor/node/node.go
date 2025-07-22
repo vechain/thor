@@ -468,6 +468,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 			// TODO: capture metrics
 			logger.Debug(fmt.Sprintf("block rejected by BFT engine\n%v\n", newBlock.Header()))
 		case consensus.IsCritical(err):
+			println("error is", err.Error())
 			msg := fmt.Sprintf(`failed to process block due to consensus failure\n%v\n`, newBlock.Header())
 			logger.Error(msg, "err", err)
 		default:
