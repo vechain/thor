@@ -207,20 +207,10 @@ func TestStaker(t *testing.T) {
 		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 
+	// No events for signal exit when state is queued
 	autoRenewEvents, err := staker.FilterValidatorSignaledExit(newRange(receipt), nil, logdb.ASC)
 	require.NoError(t, err)
-	require.Len(t, autoRenewEvents, 1)
-	require.Equal(t, queuedID, autoRenewEvents[0].ValidationID)
-	require.Equal(t, validator.Address, autoRenewEvents[0].Endorsor)
-
-	getRes, err = staker.Get(queuedID)
-	require.NoError(t, err)
-	require.False(t, getRes.AutoRenew)
-
-	autoRenewEvents, err = staker.FilterValidatorSignaledExit(newRange(receipt), nil, logdb.ASC)
-	require.NoError(t, err)
-	require.Len(t, autoRenewEvents, 1)
-	require.Equal(t, queuedID, autoRenewEvents[0].ValidationID)
+	require.Len(t, autoRenewEvents, 0)
 
 	// AddDelegation
 	receipt, _, err = staker.AddDelegation(queuedID, minStake, false, 100).

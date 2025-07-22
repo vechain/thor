@@ -230,17 +230,16 @@ func (v *validations) SignalExit(endorsor thor.Address, id thor.Bytes32) error {
 	if validator.Endorsor != endorsor {
 		return errors.New("invalid endorsor for node")
 	}
-
-        if validator.Status != StatusActive {
-             return errors.New("can't signal exit while not active")
-        }
-		minBlock := validator.StartBlock + validator.Period*(validator.CurrentIteration())
-		exitBlock, err := v.SetExitBlock(id, minBlock)
-		if err != nil {
-			return err
-		}
-		validator.ExitBlock = &exitBlock
+	if validator.Status != StatusActive {
+		return errors.New("can't signal exit while not active")
 	}
+
+	minBlock := validator.StartBlock + validator.Period*(validator.CurrentIteration())
+	exitBlock, err := v.SetExitBlock(id, minBlock)
+	if err != nil {
+		return err
+	}
+	validator.ExitBlock = &exitBlock
 
 	return v.storage.SetValidation(id, validator, false)
 }
