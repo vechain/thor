@@ -331,13 +331,15 @@ func (e *Energy) CalculateRewards(staker staker) (*big.Int, error) {
 		blocksPerYear = new(big.Int).Add(thor.NumberOfBlocksPerYear, big.NewInt(thor.SeederInterval))
 	}
 
-	// reward = 1 * TargetFactor * ScalingFactor * sqrt(totalStaked / 1e18) / blocksPerYear
+	curveFactor, err := e.params.Get(thor.KeyCurveFactor)
+	if err != nil {
+		return nil, err
+	}
+	// reward = 1 * curveFactor * sqrt(totalStaked / 1e18) / blocksPerYear
 	reward := big.NewInt(1)
-	reward.Mul(reward, thor.TargetFactor)
-	reward.Mul(reward, thor.ScalingFactor)
+	reward.Mul(reward, curveFactor)
 	reward.Mul(reward, sqrtStake)
 	reward.Div(reward, blocksPerYear)
-
 	return reward, nil
 }
 

@@ -42,6 +42,8 @@ func initRewardsServer(t *testing.T) *httptest.Server {
 	params := thorChain.Contract(builtin.Params.Address, builtin.Params.ABI, genesis.DevAccounts()[0])
 	err = params.MintTransaction("set", big.NewInt(0), thor.KeyMaxBlockProposers, big.NewInt(1))
 	assert.NoError(t, err)
+	err = params.MintTransaction("set", big.NewInt(0), thor.KeyCurveFactor, thor.CurveFactor)
+	assert.NoError(t, err)
 
 	require.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
 
