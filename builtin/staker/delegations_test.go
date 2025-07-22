@@ -37,89 +37,94 @@ func delegationStake() *big.Int {
 	return big.NewInt(0).Mul(big.NewInt(1e18), big.NewInt(10_000)) // 10_000 VET
 }
 
-//func Test_IsLocked(t *testing.T) {
-//	t.Run("Completed Staking Periods", func(t *testing.T) {
-//		last := uint32(2)
-//		d := &Delegation{
-//			FirstIteration: 2,
-//			LastIteration:  &last,
-//			Stake:          big.NewInt(1),
-//			Multiplier:     255,
-//		}
-//
-//		v := &Validation{
-//			Status:             StatusActive,
-//			CompleteIterations: 2,
-//		}
-//
-//		assert.False(t, d.IsLocked(v), "should not be locked when complete iterations is equal to last iteration")
-//	})
-//
-//	t.Run("Incomplete Staking Periods", func(t *testing.T) {
-//		last := uint32(5)
-//		d := &Delegation{
-//			FirstIteration: 2,
-//			LastIteration:  &last,
-//			Stake:          big.NewInt(1),
-//			Multiplier:     255,
-//		}
-//
-//		v := &Validation{
-//			Status:             StatusActive,
-//			CompleteIterations: 3,
-//		}
-//
-//		assert.True(t, d.IsLocked(v), "should be locked when first is less than current and last is greater")
-//	})
-//
-//	t.Run("Delegation Not Started", func(t *testing.T) {
-//		last := uint32(6)
-//		d := &Delegation{
-//			FirstIteration: 5,
-//			LastIteration:  &last,
-//			Stake:          big.NewInt(1),
-//			Multiplier:     255,
-//		}
-//
-//		v := &Validation{
-//			Status:             StatusActive,
-//			CompleteIterations: 3,
-//		}
-//
-//		assert.False(t, d.IsLocked(v), "should not be locked if delegation has not started yet")
-//	})
-//	t.Run("Staker is Queued", func(t *testing.T) {
-//		d := &Delegation{
-//			FirstIteration: 1,
-//			LastIteration:  nil,
-//			Stake:          big.NewInt(1),
-//			Multiplier:     255,
-//		}
-//
-//		v := &Validation{
-//			Status:             StatusQueued,
-//			CompleteIterations: 0,
-//		}
-//
-//		assert.False(t, d.IsLocked(v), "should not be locked when validation status is queued")
-//	})
-//
-//	t.Run("Exit block not defined", func(t *testing.T) {
-//		d := &Delegation{
-//			FirstIteration: 1,
-//			LastIteration:  nil,
-//			Stake:          big.NewInt(1),
-//			Multiplier:     255,
-//		}
-//
-//		v := &Validation{
-//			Status:             StatusActive,
-//			CompleteIterations: 0,
-//		}
-//
-//		assert.True(t, d.IsLocked(v), "should be locked when last iteration is nil and first equals current")
-//	})
-//}
+func Test_IsLocked(t *testing.T) {
+	t.Run("Completed Staking Periods", func(t *testing.T) {
+		last := uint32(2)
+		d := &Delegation{
+			FirstIteration: 2,
+			LastIteration:  &last,
+			Stake:          big.NewInt(1),
+			Multiplier:     255,
+		}
+
+		v := &Validation{
+			Status:             StatusActive,
+			CompleteIterations: 2,
+		}
+
+		assert.True(t, d.Started(v), "should not be locked when complete iterations is equal to last iteration")
+		assert.True(t, d.Ended(v), "should be locked when first is less than current and last is equal to current")
+	})
+
+	t.Run("Incomplete Staking Periods", func(t *testing.T) {
+		last := uint32(5)
+		d := &Delegation{
+			FirstIteration: 2,
+			LastIteration:  &last,
+			Stake:          big.NewInt(1),
+			Multiplier:     255,
+		}
+
+		v := &Validation{
+			Status:             StatusActive,
+			CompleteIterations: 3,
+		}
+
+		assert.True(t, d.Started(v), "should be started when complete iterations is greater than first iteration")
+		assert.False(t, d.Ended(v), "should not be locked when first is less than current and last is greater than current")
+	})
+
+	t.Run("Delegation Not Started", func(t *testing.T) {
+		last := uint32(6)
+		d := &Delegation{
+			FirstIteration: 5,
+			LastIteration:  &last,
+			Stake:          big.NewInt(1),
+			Multiplier:     255,
+		}
+
+		v := &Validation{
+			Status:             StatusActive,
+			CompleteIterations: 3,
+		}
+
+		assert.False(t, d.Started(v), "should not be started when complete iterations is less than first iteration")
+		assert.False(t, d.Ended(v), "should not be locked when first is greater than current and last is greater than current")
+	})
+	t.Run("Staker is Queued", func(t *testing.T) {
+		d := &Delegation{
+			FirstIteration: 1,
+			LastIteration:  nil,
+			Stake:          big.NewInt(1),
+			Multiplier:     255,
+		}
+
+		v := &Validation{
+			Status:             StatusQueued,
+			CompleteIterations: 0,
+		}
+
+		assert.False(t, d.Started(v), "should not be started when validation status is queued")
+		assert.False(t, d.Ended(v), "should not be locked when validation status is queued")
+	})
+
+	t.Run("Exit block not defined", func(t *testing.T) {
+		d := &Delegation{
+			FirstIteration: 1,
+			LastIteration:  nil,
+			Stake:          big.NewInt(1),
+			Multiplier:     255,
+		}
+
+		v := &Validation{
+			Status:             StatusActive,
+			CompleteIterations: 0,
+		}
+
+		assert.True(t, d.Started(v), "should be started when first iteration is less than current")
+		assert.False(t, d.Ended(v), "should not be locked when last iteration is nil and first equals current")
+	})
+}
 
 func Test_AddDelegator_AutoRenew(t *testing.T) {
 	staker, validators := newDelegationStaker(t)
