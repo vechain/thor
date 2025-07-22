@@ -58,7 +58,7 @@ func init() {
 			if validator.ExitBlock != nil {
 				exitBlock = *validator.ExitBlock
 			}
-			return []any{validator.Node, validator.Endorsor, validator.LockedVET, validator.Weight, validator.Status, validator.AutoRenew, validator.Online, validator.Period, validator.StartBlock, exitBlock, ""}
+			return []any{validator.Node, validator.Endorsor, validator.LockedVET, validator.Weight, validator.Status, validator.Online, validator.Period, validator.StartBlock, exitBlock, ""}
 		}},
 		{"native_lookupNode", func(env *xenv.Environment) []any {
 			var args struct {
@@ -181,7 +181,7 @@ func init() {
 
 			return []any{id, ""}
 		}},
-		{"native_disableAutoRenew", func(env *xenv.Environment) []any {
+		{"native_signalExit", func(env *xenv.Environment) []any {
 			var args struct {
 				Endorsor     common.Address
 				ValidationID common.Hash
@@ -190,7 +190,7 @@ func init() {
 			charger := gascharger.New(env)
 
 			err := Staker.NativeMetered(env.State(), charger).
-				UpdateAutoRenew(
+				SignalExit(
 					thor.Address(args.Endorsor),
 					thor.Bytes32(args.ValidationID),
 				)

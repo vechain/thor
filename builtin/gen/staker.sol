@@ -14,7 +14,7 @@ contract Staker {
         bytes32 indexed validationID,
         uint256 stake
     );
-    event ValidatorDisabledAutoRenew(
+    event ValidatorSignaledExit(
         address indexed endorsor,
         bytes32 indexed validationID
     );
@@ -132,13 +132,13 @@ contract Staker {
     }
 
     /**
-     * @dev disableAutoRenew set the autoRenew to false for a validator.
+     * @dev signalExit signals the intent to exit a validator position at the end of the staking period.
      */
-    function disableAutoRenew(bytes32 id) public {
+    function signalExit(bytes32 id) public {
         string memory error = StakerNative(address(this))
-            .native_disableAutoRenew(msg.sender, id);
+            .native_signalExit(msg.sender, id);
         require(bytes(error).length == 0, error);
-        emit ValidatorDisabledAutoRenew(msg.sender, id);
+        emit ValidatorSignaledExit(msg.sender, id);
     }
 
     /**
@@ -242,7 +242,6 @@ contract Staker {
             uint256,
             uint8,
             bool,
-            bool,
             uint32,
             uint32,
             uint32
@@ -254,7 +253,6 @@ contract Staker {
             uint256 stake,
             uint256 weight,
             uint8 status,
-            bool autoRenew,
             bool online,
             uint32 period,
             uint32 startBlock,
@@ -268,7 +266,6 @@ contract Staker {
             stake,
             weight,
             status,
-            autoRenew,
             online,
             period,
             startBlock,
@@ -398,7 +395,7 @@ interface StakerNative {
         bytes32 validationID
     ) external returns (uint256, string calldata);
 
-    function native_disableAutoRenew(
+    function native_signalExit(
         address endorsor,
         bytes32 validationID
     ) external returns (string calldata);
@@ -457,7 +454,6 @@ interface StakerNative {
             uint256,
             uint256,
             uint8,
-            bool,
             bool,
             uint32,
             uint32,

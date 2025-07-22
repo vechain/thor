@@ -168,10 +168,9 @@ func (s *Staker) Get(id thor.Bytes32) (*Validator, error) {
 	out[3] = new(*big.Int)
 	out[4] = new(uint8)
 	out[5] = new(bool)
-	out[6] = new(bool)
+	out[6] = new(uint32)
 	out[7] = new(uint32)
 	out[8] = new(uint32)
-	out[9] = new(uint32)
 	if err := s.contract.Method("get", id).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, err
 	}
@@ -181,11 +180,10 @@ func (s *Staker) Get(id thor.Bytes32) (*Validator, error) {
 		Stake:      *(out[2].(**big.Int)),
 		Weight:     *(out[3].(**big.Int)),
 		Status:     StakerStatus(*(out[4].(*uint8))),
-		AutoRenew:  *(out[5].(*bool)),
-		Online:     *(out[6].(*bool)),
-		Period:     *(out[7].(*uint32)),
-		StartBlock: *(out[8].(*uint32)),
-		ExitBlock:  *(out[9].(*uint32)),
+		Online:     *(out[5].(*bool)),
+		Period:     *(out[6].(*uint32)),
+		StartBlock: *(out[7].(*uint32)),
+		ExitBlock:  *(out[8].(*uint32)),
 	}
 
 	return validator, nil
@@ -203,8 +201,8 @@ func (s *Staker) UpdateDelegationAutoRenew(delegationID thor.Bytes32, autoRenew 
 	return s.contract.Method("updateDelegationAutoRenew", delegationID, autoRenew)
 }
 
-func (s *Staker) DisableAutoRenew(validationID thor.Bytes32) *bind.MethodBuilder {
-	return s.contract.Method("disableAutoRenew", validationID)
+func (s *Staker) SignalExit(validationID thor.Bytes32) *bind.MethodBuilder {
+	return s.contract.Method("signalExit", validationID)
 }
 
 func (s *Staker) WithdrawDelegation(delegationID thor.Bytes32) *bind.MethodBuilder {
@@ -364,24 +362,24 @@ func (s *Staker) FilterValidatorQueued(eventsRange *api.Range, opts *api.Options
 	return out, nil
 }
 
-type ValidatorDisabledAutoRenewEvent struct {
+type ValidatorSignaledExitEvent struct {
 	Endorsor     thor.Address
 	ValidationID thor.Bytes32
 	Log          api.FilteredEvent
 }
 
-func (s *Staker) FilterValidatorDisabledAutoRenew(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]ValidatorDisabledAutoRenewEvent, error) {
-	raw, err := s.contract.FilterEvent("ValidatorDisabledAutoRenew").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+func (s *Staker) FilterValidatorSignaledExit(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]ValidatorSignaledExitEvent, error) {
+	raw, err := s.contract.FilterEvent("ValidatorSignaledExit").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}
 
-	out := make([]ValidatorDisabledAutoRenewEvent, len(raw))
+	out := make([]ValidatorSignaledExitEvent, len(raw))
 	for i, log := range raw {
 		endorsor := thor.BytesToAddress(log.Topics[1][:]) // indexed
 		validationID := thor.Bytes32(log.Topics[2][:])    // indexed
 
-		out[i] = ValidatorDisabledAutoRenewEvent{
+		out[i] = ValidatorSignaledExitEvent{
 			Endorsor:     endorsor,
 			ValidationID: validationID,
 			Log:          log,

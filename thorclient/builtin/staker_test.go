@@ -103,7 +103,6 @@ func TestStaker(t *testing.T) {
 	require.False(t, getRes.Master.IsZero())
 	require.False(t, getRes.Endorsor.IsZero())
 	require.Equal(t, StakerStatusActive, getRes.Status)
-	require.True(t, firstActive.AutoRenew)
 	require.Equal(t, getRes.Stake, minStake)
 	require.Equal(t, getRes.Weight, big.NewInt(0).Mul(minStake, big.NewInt(2)))
 
@@ -112,7 +111,6 @@ func TestStaker(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, firstID.IsZero())
 	require.True(t, firstActive.Exists())
-	require.True(t, firstActive.AutoRenew)
 	require.Equal(t, minStake, firstActive.Stake)
 	require.Equal(t, big.NewInt(0).Mul(minStake, big.NewInt(2)), firstActive.Weight)
 	require.Equal(t, StakerStatusActive, firstActive.Status)
@@ -134,7 +132,6 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, StakerStatusActive, next.Status)
 	require.Equal(t, minStake, next.Stake)
 	require.Equal(t, big.NewInt(0).Mul(minStake, big.NewInt(2)), next.Weight)
-	require.True(t, next.AutoRenew)
 	require.False(t, next.Endorsor.IsZero())
 
 	var (
@@ -203,14 +200,14 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, validator.Address, decreaseEvents[0].Endorsor)
 	require.Equal(t, minStake, decreaseEvents[0].Removed)
 
-	// DisableAutoRenew
-	receipt, _, err = staker.DisableAutoRenew(queuedID).
+	// SignalExit
+	receipt, _, err = staker.SignalExit(queuedID).
 		Send().
 		WithSigner(validatorKey).
 		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 
-	autoRenewEvents, err := staker.FilterValidatorDisabledAutoRenew(newRange(receipt), nil, logdb.ASC)
+	autoRenewEvents, err := staker.FilterValidatorSignaledExit(newRange(receipt), nil, logdb.ASC)
 	require.NoError(t, err)
 	require.Len(t, autoRenewEvents, 1)
 	require.Equal(t, queuedID, autoRenewEvents[0].ValidationID)
@@ -220,7 +217,7 @@ func TestStaker(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, getRes.AutoRenew)
 
-	autoRenewEvents, err = staker.FilterValidatorDisabledAutoRenew(newRange(receipt), nil, logdb.ASC)
+	autoRenewEvents, err = staker.FilterValidatorSignaledExit(newRange(receipt), nil, logdb.ASC)
 	require.NoError(t, err)
 	require.Len(t, autoRenewEvents, 1)
 	require.Equal(t, queuedID, autoRenewEvents[0].ValidationID)

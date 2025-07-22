@@ -27,7 +27,6 @@ type Validation struct {
 	CompleteIterations uint32       // the completed staking periods by the validation
 	Status             Status       // status of the validation
 	Online             bool         // whether the validation is online or not
-	AutoRenew          bool         // whether the validations staking period is auto-renewed
 	StartBlock         uint32       // the block number when the validation started the first staking period
 	ExitBlock          *uint32      `rlp:"nil"` // the block number when the validation moved to cooldown
 

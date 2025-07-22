@@ -152,14 +152,14 @@ func (s *Staker) Get(id thor.Bytes32) (*Validation, error) {
 	return s.storage.GetValidation(id)
 }
 
-func (s *Staker) DisableAutoRenew(endorsor thor.Address, id thor.Bytes32) error {
-	logger.Debug("disable autorenew", "endorsor", endorsor, "id", id)
+func (s *Staker) SignalExit(endorsor thor.Address, id thor.Bytes32) error {
+	logger.Debug("signal exit", "endorsor", endorsor, "id", id)
 
-	if err := s.validations.DisableAutoRenew(endorsor, id); err != nil {
-		logger.Info("disable autorenew failed", "id", id, "error", err)
+	if err := s.validations.SignalExit(endorsor, id); err != nil {
+		logger.Info("signal exit failed", "id", id, "error", err)
 		return err
 	} else {
-		logger.Info("disable autorenew", "id", id)
+		logger.Info("signal", "id", id)
 		return nil
 	}
 }

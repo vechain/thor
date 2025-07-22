@@ -168,7 +168,7 @@ func TestStaker_TotalStake_Withdrawal(t *testing.T) {
 	assert.NoError(t, err)
 
 	// disable auto renew
-	err = staker.DisableAutoRenew(addr, id)
+	err = staker.SignalExit(addr, id)
 	assert.NoError(t, err)
 
 	lockedVET, lockedWeight, err := staker.LockedVET()
@@ -491,8 +491,7 @@ func TestStaker_Get_FullFlow_Renewal_Off(t *testing.T) {
 	_, err = staker.validations.ActivateNext(0, staker.params)
 	assert.NoError(t, err)
 
-	// disable auto renew
-	err = staker.DisableAutoRenew(addr, id)
+	err = staker.SignalExit(addr, id)
 	assert.NoError(t, err)
 
 	// housekeep the validator
@@ -955,7 +954,7 @@ func TestStaker_DecreaseActiveThenExit(t *testing.T) {
 	assert.Equal(t, expectedStake, validator.LockedVET)
 	assert.Equal(t, big.NewInt(0), validator.NextPeriodDecrease)
 
-	assert.NoError(t, staker.DisableAutoRenew(addr, id))
+	assert.NoError(t, staker.SignalExit(addr, id))
 
 	_, _, err = staker.Housekeep(period * 2)
 	assert.NoError(t, err)
@@ -1004,8 +1003,7 @@ func TestStaker_Get_FullFlow(t *testing.T) {
 	_, err = staker.validations.ActivateNext(0, staker.params)
 	assert.NoError(t, err)
 
-	// disable auto renew
-	err = staker.DisableAutoRenew(addr, id)
+	err = staker.SignalExit(addr, id)
 	assert.NoError(t, err)
 
 	// housekeep the validator
@@ -1125,7 +1123,7 @@ func TestStaker_Get_FullFlow_Renewal_On_Then_Off(t *testing.T) {
 	assert.NoError(t, err)
 	assert.False(t, validator.IsEmpty())
 
-	assert.NoError(t, staker.DisableAutoRenew(addr, id))
+	assert.NoError(t, staker.SignalExit(addr, id))
 
 	// housekeep the validator
 	_, _, err = staker.Housekeep(period * 2)
@@ -1206,7 +1204,7 @@ func TestStaker_RemoveValidator(t *testing.T) {
 	assert.NoError(t, err)
 
 	// disable auto renew
-	err = staker.DisableAutoRenew(addr, id)
+	err = staker.SignalExit(addr, id)
 	assert.NoError(t, err)
 
 	assert.NoError(t, staker.validations.ExitValidator(id))
@@ -1445,7 +1443,7 @@ func TestStaker_Housekeep_ExitOne(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).Mul(stake, big.NewInt(6)), totalWeight)
 
 	// disable auto renew
-	err = staker.DisableAutoRenew(addr1, id)
+	err = staker.SignalExit(addr1, id)
 	assert.NoError(t, err)
 
 	// first should be on cooldown
@@ -1510,11 +1508,11 @@ func TestStaker_Housekeep_Cooldown(t *testing.T) {
 	assert.NoError(t, err)
 
 	// disable auto renew on all validators
-	err = staker.DisableAutoRenew(addr1, id1)
+	err = staker.SignalExit(addr1, id1)
 	assert.NoError(t, err)
-	err = staker.DisableAutoRenew(addr2, id2)
+	err = staker.SignalExit(addr2, id2)
 	assert.NoError(t, err)
-	err = staker.DisableAutoRenew(addr3, id3)
+	err = staker.SignalExit(addr3, id3)
 	assert.NoError(t, err)
 
 	id, err := staker.FirstActive()
@@ -1593,11 +1591,11 @@ func TestStaker_Housekeep_CooldownToExited(t *testing.T) {
 	assert.NoError(t, err)
 
 	// disable auto renew
-	err = staker.DisableAutoRenew(addr1, id1)
+	err = staker.SignalExit(addr1, id1)
 	assert.NoError(t, err)
-	err = staker.DisableAutoRenew(addr2, id2)
+	err = staker.SignalExit(addr2, id2)
 	assert.NoError(t, err)
-	err = staker.DisableAutoRenew(addr3, id3)
+	err = staker.SignalExit(addr3, id3)
 	assert.NoError(t, err)
 
 	_, _, err = staker.Housekeep(period)
@@ -1642,9 +1640,9 @@ func TestStaker_Housekeep_ExitOrder(t *testing.T) {
 	assert.NoError(t, err)
 
 	// disable auto renew
-	err = staker.DisableAutoRenew(addr2, id2)
+	err = staker.SignalExit(addr2, id2)
 	assert.NoError(t, err)
-	err = staker.DisableAutoRenew(addr3, id3)
+	err = staker.SignalExit(addr3, id3)
 	assert.NoError(t, err)
 
 	_, _, err = staker.Housekeep(period)
@@ -1663,7 +1661,7 @@ func TestStaker_Housekeep_ExitOrder(t *testing.T) {
 	// renew validator 1 for next period
 	_, _, err = staker.Housekeep(period * 2)
 	assert.NoError(t, err)
-	assert.NoError(t, staker.DisableAutoRenew(addr1, id1))
+	assert.NoError(t, staker.SignalExit(addr1, id1))
 
 	// housekeep -> validator 3 placed intention to leave first
 	_, _, err = staker.Housekeep(period * 3)
@@ -1869,7 +1867,7 @@ func TestStaker_Housekeep_Cannot_Exit_If_It_Breaks_Finality(t *testing.T) {
 	assert.NoError(t, err)
 
 	// disable auto renew
-	err = staker.DisableAutoRenew(addr1, id1)
+	err = staker.SignalExit(addr1, id1)
 	assert.NoError(t, err)
 
 	exitBlock := uint32(360) * 24 * 15
@@ -1919,9 +1917,9 @@ func TestStaker_Housekeep_Exit_Decrements_Leader_Group_Size(t *testing.T) {
 	assert.NoError(t, err)
 
 	// disable auto renew
-	err = staker.DisableAutoRenew(addr1, id1)
+	err = staker.SignalExit(addr1, id1)
 	assert.NoError(t, err)
-	err = staker.DisableAutoRenew(addr2, id2)
+	err = staker.SignalExit(addr2, id2)
 	assert.NoError(t, err)
 
 	exitBlock := uint32(360) * 24 * 15
@@ -1954,7 +1952,7 @@ func TestStaker_Housekeep_Exit_Decrements_Leader_Group_Size(t *testing.T) {
 	assert.NoError(t, err)
 	_, err = staker.validations.ActivateNext(exitBlock, staker.params)
 	assert.NoError(t, err)
-	err = staker.DisableAutoRenew(addr3, id3)
+	err = staker.SignalExit(addr3, id3)
 	assert.NoError(t, err)
 	validator, err = staker.Get(id3)
 	assert.NoError(t, err)
@@ -2150,7 +2148,7 @@ func TestStaker_MultipleUpdates_CorrectWithdraw(t *testing.T) {
 	id, err := staker.AddValidator(acc, acc, period, initialStake, 0)
 	assert.NoError(t, err)
 
-	// assert.NoError(t, staker.DisableAutoRenew(acc, id))
+	// assert.NoError(t, staker.SignalExit(acc, id))
 	increases.Add(increases, thousand)
 	assert.NoError(t, staker.IncreaseStake(acc, id, thousand))
 	// 1st decrease
@@ -2203,7 +2201,7 @@ func TestStaker_MultipleUpdates_CorrectWithdraw(t *testing.T) {
 	assert.Equal(t, thousand, withdraw)
 	withdrawnTotal = withdrawnTotal.Add(withdrawnTotal, withdraw)
 
-	assert.NoError(t, staker.DisableAutoRenew(acc, id))
+	assert.NoError(t, staker.SignalExit(acc, id))
 
 	// EXITED
 	_, _, err = staker.Housekeep(period * 3)
@@ -2282,7 +2280,7 @@ func Test_Validator_Decrease_Exit_Withdraw(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Turn off auto-renew  - can't decrease if auto-renew is false
-	err = staker.DisableAutoRenew(acc, id)
+	err = staker.SignalExit(acc, id)
 	assert.NoError(t, err)
 
 	// Housekeep, should exit the validator

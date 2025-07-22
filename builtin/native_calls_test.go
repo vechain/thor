@@ -1629,10 +1629,9 @@ func TestStakerContract_Native(t *testing.T) {
 	getRes[3] = new(*big.Int)
 	getRes[4] = new(uint8)
 	getRes[5] = new(bool)
-	getRes[6] = new(bool)
+	getRes[6] = new(uint32)
 	getRes[7] = new(uint32)
 	getRes[8] = new(uint32)
-	getRes[9] = new(uint32)
 	_, err = callContractAndGetOutput(abi, "get", toAddr, &getRes, id)
 	assert.NoError(t, err)
 	expectedEndorsor := common.BytesToAddress(endorsor.Address.Bytes())
@@ -1643,9 +1642,9 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).Cmp(*getRes[3].(**big.Int)), 0) // weight - should be 0 while queued
 	assert.Equal(t, staker.StatusQueued, *getRes[4].(*uint8))
 	assert.Equal(t, true, *getRes[5].(*bool)) // isMaster
-	assert.Equal(t, uint32(360*24*15), *getRes[7].(*uint32))
-	assert.Equal(t, uint32(0), *getRes[8].(*uint32))              // start period
-	assert.Equal(t, uint32(math.MaxUint32), *getRes[9].(*uint32)) // total periods
+	assert.Equal(t, uint32(360*24*15), *getRes[6].(*uint32))
+	assert.Equal(t, uint32(0), *getRes[7].(*uint32))              // start period
+	assert.Equal(t, uint32(math.MaxUint32), *getRes[8].(*uint32)) // total periods
 
 	//firstQueued
 	firstQueuedRes := new(common.Hash)
@@ -1767,14 +1766,14 @@ func TestStakerContract_Native_Revert(t *testing.T) {
 	assert.True(t, receipt.Reverted)
 
 	//update auto renew
-	disableAutoRenewArgs := []any{thor.Bytes32{}}
+	signalExitArgs := []any{thor.Bytes32{}}
 	desc = TestTxDescription{
 		t:          t,
 		abi:        abi,
-		methodName: "disableAutoRenew",
+		methodName: "signalExit",
 		address:    toAddr,
 		acc:        genesis.DevAccounts()[2],
-		args:       disableAutoRenewArgs,
+		args:       signalExitArgs,
 	}
 	receipt, _, err = executeTxAndGetReceipt(desc)
 	assert.NoError(t, err)
@@ -1911,10 +1910,9 @@ func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
 	getRes[3] = new(*big.Int)
 	getRes[4] = new(uint8)
 	getRes[5] = new(bool)
-	getRes[6] = new(bool)
+	getRes[6] = new(uint32)
 	getRes[7] = new(uint32)
 	getRes[8] = new(uint32)
-	getRes[9] = new(uint32)
 	_, err = callContractAndGetOutput(abi, "get", toAddr, &getRes, id)
 	assert.NoError(t, err)
 	assert.Equal(t, staker.StatusExit, *getRes[4].(*uint8))

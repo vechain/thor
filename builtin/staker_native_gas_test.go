@@ -155,13 +155,13 @@ func TestStakerNativeGasCosts(t *testing.T) {
 			preTestHooks: []TestHook{preTestAddValidator(account1)},
 		},
 		{
-			function:    "native_disableAutoRenew",
+			function:    "native_signalExit",
 			expectedGas: 16600,
 			args: []any{
 				account1,
 				accToID(account1),
 			},
-			description:  "Update auto-renew setting for a validator",
+			description:  "Signal exit for a validator",
 			preTestHooks: []TestHook{preTestAddValidator(account1)},
 		},
 		{
