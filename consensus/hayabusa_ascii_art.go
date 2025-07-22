@@ -5,6 +5,11 @@
 
 package consensus
 
+import (
+	"os"
+	"strings"
+)
+
 const HayabusaASCIIArt = "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀                   ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀\n" +
 	"⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀                          ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⠀⠀⠀⠀⠀⠀⠀⠀⣠⣿⠀⠀⠀⡀⠀⠀⠀⠀⠀⠀\n" +
 	"⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀             ⠀⠀⠀⠀⠀⠀⠀⢠⠀⠀⠀⠀⢸⣇⠀⠀⠀⠀⠀⠀⣰⣿⣿⠀⠀⣼⣧⠀⠀⠀⠀⠀⠀\n" +
@@ -67,3 +72,14 @@ const HayabusaASCIIArt = "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 	"                                                                                             \n" +
 	"                                                                                             \n" +
 	"\n"
+
+var printed bool
+
+func printHayabusaWelcomeInfo() {
+	if !printed {
+		// remove the leading new line symbol as previous printed log will have a new line symbol
+		str, _ := strings.CutPrefix(HayabusaASCIIArt, "\n")
+		os.Stdout.WriteString(str)
+		printed = true
+	}
+}
