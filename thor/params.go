@@ -58,6 +58,7 @@ var (
 	KeyProposerEndorsement     = BytesToBytes32([]byte("proposer-endorsement"))
 	KeyMaxBlockProposers       = BytesToBytes32([]byte("max-block-proposers"))
 	KeyStargateContractAddress = BytesToBytes32([]byte("stargate-contract-address"))
+	KeyCurveFactor             = BytesToBytes32([]byte("curve-factor"))
 
 	InitialRewardRatio         = big.NewInt(3e17) // 30%
 	InitialBaseGasPrice        = big.NewInt(1e15)
@@ -66,8 +67,7 @@ var (
 
 	EnergyGrowthRate = big.NewInt(5000000000) // WEI THOR per token(VET) per second. about 0.000432 THOR per token per day.
 
-	ScalingFactor         = big.NewInt(64)      // scaling factor for rewards curve
-	TargetFactor          = big.NewInt(1200)    // target factor for rewards curve
-	NumberOfBlocksPerYear = big.NewInt(3153600) // number of blocks per year, non leap
+	CurveFactor = big.NewInt(76800)
 
+	NumberOfBlocksPerYear = big.NewInt(3153600) // number of blocks per year, non leap
 )

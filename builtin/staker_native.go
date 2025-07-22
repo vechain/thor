@@ -49,16 +49,16 @@ func init() {
 
 			validator, err := Staker.NativeMetered(env.State(), charger).Get(thor.Bytes32(args.ValidationID))
 			if err != nil {
-				return []any{thor.Address{}, thor.Address{}, big.NewInt(0), big.NewInt(0), staker.StatusUnknown, false, false, uint32(0), uint32(0), uint32(0), fmt.Sprintf("revert: %v", err)}
+				return []any{thor.Address{}, thor.Address{}, big.NewInt(0), big.NewInt(0), staker.StatusUnknown, false, uint32(0), uint32(0), uint32(0), fmt.Sprintf("revert: %v", err)}
 			}
 			if validator.IsEmpty() {
-				return []any{thor.Address{}, thor.Address{}, big.NewInt(0), big.NewInt(0), staker.StatusUnknown, false, false, uint32(0), uint32(0), uint32(0), ""}
+				return []any{thor.Address{}, thor.Address{}, big.NewInt(0), big.NewInt(0), staker.StatusUnknown, false, uint32(0), uint32(0), uint32(0), ""}
 			}
 			exitBlock := uint32(math.MaxUint32)
 			if validator.ExitBlock != nil {
 				exitBlock = *validator.ExitBlock
 			}
-			return []any{validator.Node, validator.Endorsor, validator.LockedVET, validator.Weight, validator.Status, validator.AutoRenew, validator.Online, validator.Period, validator.StartBlock, exitBlock, ""}
+			return []any{validator.Node, validator.Endorsor, validator.LockedVET, validator.Weight, validator.Status, validator.Online, validator.Period, validator.StartBlock, exitBlock, ""}
 		}},
 		{"native_lookupNode", func(env *xenv.Environment) []any {
 			var args struct {
@@ -67,11 +67,14 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			_, validationID, _ := Staker.NativeMetered(env.State(), charger).LookupNode(thor.Address(args.Node))
+			_, validationID, err := Staker.NativeMetered(env.State(), charger).LookupNode(thor.Address(args.Node))
+			if err != nil {
+				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", err)}
+			}
 
 			return []any{validationID}
 		}},
-		{"native_getWithdraw", func(env *xenv.Environment) []any {
+		{"native_getWithdrawable", func(env *xenv.Environment) []any {
 			var args struct {
 				ValidationID common.Hash
 			}
@@ -115,7 +118,7 @@ func init() {
 			}
 			return []any{next, ""}
 		}},
-		{"native_withdraw", func(env *xenv.Environment) []any {
+		{"native_withdrawStake", func(env *xenv.Environment) []any {
 			var args struct {
 				Endorsor     common.Address
 				ValidationID common.Hash
@@ -136,21 +139,20 @@ func init() {
 		}},
 		{"native_addValidator", func(env *xenv.Environment) []any {
 			var args struct {
-				Endorsor  common.Address
-				Node      common.Address
-				Period    uint32
-				Stake     *big.Int
-				AutoRenew bool
+				Endorsor common.Address
+				Node     common.Address
+				Period   uint32
+				Stake    *big.Int
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			isActive, err := Staker.NativeMetered(env.State(), charger).IsActive()
+			isPoSActive, err := Staker.NativeMetered(env.State(), charger).IsPoSActive()
 			if err != nil {
 				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", err)}
 			}
 
-			if !isActive {
+			if !isPoSActive {
 				charger.Charge(thor.SloadGas) // a.getEntry(nodeMaster)
 
 				exists, endorsor, _, _, err := Authority.Native(env.State()).Get(thor.Address(args.Node))
@@ -169,8 +171,8 @@ func init() {
 				AddValidator(
 					thor.Address(args.Endorsor),
 					thor.Address(args.Node),
-					args.Period, args.Stake,
-					args.AutoRenew,
+					args.Period,
+					args.Stake,
 					env.BlockContext().Number,
 				)
 			if err != nil {
@@ -179,16 +181,19 @@ func init() {
 
 			return []any{id, ""}
 		}},
-		{"native_updateAutoRenew", func(env *xenv.Environment) []any {
+		{"native_signalExit", func(env *xenv.Environment) []any {
 			var args struct {
 				Endorsor     common.Address
 				ValidationID common.Hash
-				AutoRenew    bool
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			err := Staker.NativeMetered(env.State(), charger).UpdateAutoRenew(thor.Address(args.Endorsor), thor.Bytes32(args.ValidationID), args.AutoRenew)
+			err := Staker.NativeMetered(env.State(), charger).
+				SignalExit(
+					thor.Address(args.Endorsor),
+					thor.Bytes32(args.ValidationID),
+				)
 			if err != nil {
 				return []any{fmt.Sprintf("revert: %v", err)}
 			}
@@ -203,11 +208,16 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			err := Staker.NativeMetered(env.State(), charger).IncreaseStake(thor.Address(args.Endorsor), thor.Bytes32(args.ValidationID), args.Amount)
+			err := Staker.NativeMetered(env.State(), charger).
+				IncreaseStake(
+					thor.Address(args.Endorsor),
+					thor.Bytes32(args.ValidationID),
+					args.Amount,
+				)
 			if err != nil {
 				return []any{fmt.Sprintf("revert: %v", err)}
 			}
-			env.UseGas(thor.SstoreSetGas)
+
 			return []any{""}
 		}},
 		{"native_decreaseStake", func(env *xenv.Environment) []any {
@@ -219,7 +229,12 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			err := Staker.NativeMetered(env.State(), charger).DecreaseStake(thor.Address(args.Endorsor), thor.Bytes32(args.ValidationID), args.Amount)
+			err := Staker.NativeMetered(env.State(), charger).
+				DecreaseStake(
+					thor.Address(args.Endorsor),
+					thor.Bytes32(args.ValidationID),
+					args.Amount,
+				)
 			if err != nil {
 				return []any{fmt.Sprintf("revert: %v", err)}
 			}
@@ -235,7 +250,13 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			delegationID, err := Staker.NativeMetered(env.State(), charger).AddDelegation(thor.Bytes32(args.ValidationID), args.Stake, args.AutoRenew, args.Multiplier)
+			delegationID, err := Staker.NativeMetered(env.State(), charger).
+				AddDelegation(
+					thor.Bytes32(args.ValidationID),
+					args.Stake,
+					args.AutoRenew,
+					args.Multiplier,
+				)
 			if err != nil {
 				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", err)}
 			}
@@ -281,11 +302,13 @@ func init() {
 			if err != nil {
 				return []any{thor.Bytes32{}, new(big.Int), uint32(0), uint32(0), uint8(0), false, false, fmt.Sprintf("revert: %v", err)}
 			}
-			var lastPeriod uint32 = math.MaxUint32
+
+			lastPeriod := uint32(math.MaxUint32)
 			if delegation.LastIteration != nil {
 				lastPeriod = *delegation.LastIteration
 			}
-			return []any{delegation.ValidationID, delegation.Stake, delegation.FirstIteration, lastPeriod, delegation.Multiplier, delegation.AutoRenew, delegation.IsLocked(validator), ""}
+			locked := delegation.Started(validator) && !delegation.Ended(validator)
+			return []any{delegation.ValidationID, delegation.Stake, delegation.FirstIteration, lastPeriod, delegation.Multiplier, delegation.AutoRenew, locked, ""}
 		}},
 		{"native_getRewards", func(env *xenv.Environment) []any {
 			var args struct {
@@ -320,7 +343,7 @@ func init() {
 			charger.Charge(thor.SloadGas)
 			raw, err := Params.Native(env.State()).Get(thor.KeyStargateContractAddress)
 			if err != nil {
-				return []any{thor.Address{}, fmt.Sprintf("failed to get Stargate contract address: %v", err)}
+				return []any{thor.Address{}, fmt.Sprintf("revert: failed to get Stargate contract address: %v", err)}
 			}
 			addr := thor.BytesToAddress(raw.Bytes())
 			return []any{addr, ""}
@@ -334,7 +357,7 @@ func init() {
 
 			totals, err := Staker.NativeMetered(env.State(), charger).GetValidatorsTotals(thor.Bytes32(args.ValidationID))
 			if err != nil {
-				return []any{new(big.Int), new(big.Int), new(big.Int), new(big.Int), fmt.Sprintf("failed to validators totals: %v", err)}
+				return []any{new(big.Int), new(big.Int), new(big.Int), new(big.Int), fmt.Sprintf("revert: failed to get validators totals: %v", err)}
 			}
 			return []any{totals.TotalLockedStake, totals.TotalLockedWeight, totals.DelegationsLockedStake, totals.DelegationsLockedWeight, ""}
 		}},
