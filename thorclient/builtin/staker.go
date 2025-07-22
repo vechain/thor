@@ -149,7 +149,6 @@ type Validator struct {
 	Stake      *big.Int
 	Weight     *big.Int
 	Status     StakerStatus
-	AutoRenew  bool
 	Online     bool
 	Period     uint32
 	StartBlock uint32
@@ -161,7 +160,7 @@ func (v *Validator) Exists() bool {
 }
 
 func (s *Staker) Get(id thor.Bytes32) (*Validator, error) {
-	var out = [10]any{}
+	var out = [9]any{}
 	out[0] = new(common.Address)
 	out[1] = new(common.Address)
 	out[2] = new(*big.Int)

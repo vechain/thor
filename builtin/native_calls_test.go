@@ -1622,7 +1622,7 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).Mul(big.NewInt(0).SetUint64(receipt.GasUsed), block.Header().BaseFee()), big.NewInt(0).Sub(totalBurned, totalBurnedBefore))
 
 	// get
-	getRes := make([]any, 10)
+	getRes := make([]any, 9)
 	getRes[0] = new(common.Address)
 	getRes[1] = new(common.Address)
 	getRes[2] = new(*big.Int)
@@ -1903,7 +1903,7 @@ func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
 	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
 
 	// get
-	getRes := make([]any, 10)
+	getRes := make([]any, 9)
 	getRes[0] = new(common.Address)
 	getRes[1] = new(common.Address)
 	getRes[2] = new(*big.Int)
