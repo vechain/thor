@@ -115,14 +115,14 @@ func (d *delegations) DisableAutoRenew(delegationID thor.Bytes32) error {
 	if delegation.Stake.Sign() == 0 {
 		return errors.New("delegation is not active")
 	}
-	if validation.Status == StatusExit {
-		return errors.New("delegation is not active, withdraw is available")
+	if delegation.Ended(validation) {
+		return errors.New("delegation is not active")
 	}
 
 	weight := delegation.Weight()
 
 	// the delegation's funds have already been locked, so we need to move them to non-recurring, but still locked
-	if delegation.IsLocked(validation) {
+	if delegation.Started(validation) {
 		// move the delegation's portion of locked to non-recurring.
 		// this will make the funds available at the end of the current iteration
 		aggregation.CurrentRecurringVET = big.NewInt(0).Sub(aggregation.CurrentRecurringVET, delegation.Stake)
@@ -142,7 +142,12 @@ func (d *delegations) DisableAutoRenew(delegationID thor.Bytes32) error {
 	}
 
 	// set the delegation's exit iteration
-	lastIteration := validation.CurrentIteration() + 1
+	var lastIteration uint32
+	if delegation.Started(validation) {
+		lastIteration = validation.CurrentIteration()
+	} else {
+		lastIteration = delegation.FirstIteration
+	}
 	delegation.LastIteration = &lastIteration
 	delegation.AutoRenew = false
 
@@ -161,8 +166,8 @@ func (d *delegations) EnableAutoRenew(delegationID thor.Bytes32) error {
 	if delegation.AutoRenew {
 		return errors.New("delegation is already autoRenew")
 	}
-	if validation.Status == StatusExit {
-		return errors.New("delegation is not active, withdraw is available")
+	if delegation.Ended(validation) {
+		return errors.New("delegation is not active")
 	}
 	weight := delegation.Weight()
 
@@ -173,7 +178,7 @@ func (d *delegations) EnableAutoRenew(delegationID thor.Bytes32) error {
 		return errors.New("validation's next period stake exceeds max stake")
 	}
 
-	if delegation.IsLocked(validation) {
+	if delegation.Started(validation) {
 		// move the delegation's portion of non-recurring to locked.
 		// this means the funds will not be available until the validator is inactive, or the delegation signals an exit
 		// and completes the current staking period
@@ -205,19 +210,14 @@ func (d *delegations) Withdraw(delegationID thor.Bytes32) (*big.Int, error) {
 	if err != nil {
 		return nil, err
 	}
-	if delegation.IsLocked(validation) {
+	started := delegation.Started(validation)
+	finished := delegation.Ended(validation)
+	if started && !finished {
 		return nil, errors.New("delegation is not eligible for withdraw")
 	}
 	weight := delegation.Weight()
 
-	delegationStarted := delegation.FirstIteration <= validation.CompleteIterations
-	if delegationStarted && validation.Status != StatusQueued {
-		// the stake has moved to withdrawable since we checked if the validation is locked above
-		if aggregation.WithdrawableVET.Cmp(delegation.Stake) < 0 {
-			return nil, errors.New("not enough withdraw VET")
-		}
-		aggregation.WithdrawableVET = big.NewInt(0).Sub(aggregation.WithdrawableVET, delegation.Stake)
-	} else {
+	if !started {
 		if delegation.AutoRenew { // delegation's stake is pending locked
 			if aggregation.PendingRecurringVET.Cmp(delegation.Stake) < 0 {
 				return nil, errors.New("not enough pending locked VET")
@@ -237,6 +237,14 @@ func (d *delegations) Withdraw(delegationID thor.Bytes32) (*big.Int, error) {
 		if err := d.storage.queuedWeight.Sub(weight); err != nil {
 			return nil, err
 		}
+	}
+
+	if finished {
+		// the stake has moved to withdrawable since we checked if the validation is locked above
+		if aggregation.WithdrawableVET.Cmp(delegation.Stake) < 0 {
+			return nil, errors.New("not enough withdraw VET")
+		}
+		aggregation.WithdrawableVET = big.NewInt(0).Sub(aggregation.WithdrawableVET, delegation.Stake)
 	}
 
 	stake := delegation.Stake

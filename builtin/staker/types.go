@@ -131,22 +131,37 @@ func (d *Delegation) Weight() *big.Int {
 	return weight
 }
 
-// IsLocked returns whether the delegator is locked for the current staking period.
-func (d *Delegation) IsLocked(validation *Validation) bool {
+// Started returns whether the delegation became locked
+func (d *Delegation) Started(validation *Validation) bool {
 	if d.IsEmpty() {
 		return false
 	}
-	// validation is not active, so the delegator is not locked
-	if validation.Status != StatusActive {
-		return false
+	if validation.Status == StatusQueued {
+		return false // Delegation cannot start if the validation is not active
 	}
 	currentStakingPeriod := validation.CurrentIteration()
-	started := currentStakingPeriod >= d.FirstIteration
-	finished := d.LastIteration != nil && *d.LastIteration < currentStakingPeriod
-	if !started || finished {
+	return currentStakingPeriod >= d.FirstIteration
+}
+
+// Ended returns whether the delegation has ended
+// It returns true if:
+// - the delegation's exit iteration is less than the current staking period
+// - OR if the validation is in exit status and the delegation has started
+func (d *Delegation) Ended(validation *Validation) bool {
+	if d.IsEmpty() {
 		return false
 	}
-	return true
+	if validation.Status == StatusQueued {
+		return false // Delegation cannot end if the validation is not active
+	}
+	if validation.Status == StatusExit && d.Started(validation) {
+		return true // Delegation is ended if the validation is in exit status
+	}
+	currentStakingPeriod := validation.CurrentIteration()
+	if d.LastIteration == nil {
+		return false
+	}
+	return *d.LastIteration < currentStakingPeriod
 }
 
 // Aggregation represents the total amount of VET locked for a given validation's delegations.

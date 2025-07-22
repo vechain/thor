@@ -311,7 +311,8 @@ func init() {
 			if delegation.LastIteration != nil {
 				lastPeriod = *delegation.LastIteration
 			}
-			return []any{delegation.ValidationID, delegation.Stake, delegation.FirstIteration, lastPeriod, delegation.Multiplier, delegation.AutoRenew, delegation.IsLocked(validator), ""}
+			locked := delegation.Started(validator) && !delegation.Ended(validator)
+			return []any{delegation.ValidationID, delegation.Stake, delegation.FirstIteration, lastPeriod, delegation.Multiplier, delegation.AutoRenew, locked, ""}
 		}},
 		{"native_getRewards", func(env *xenv.Environment) []any {
 			var args struct {
