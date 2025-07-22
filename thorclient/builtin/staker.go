@@ -209,7 +209,7 @@ func (s *Staker) WithdrawDelegation(delegationID thor.Bytes32) *bind.MethodBuild
 	return s.contract.Method("withdrawDelegation", delegationID)
 }
 
-func (s *Staker) Withdraw(validationID thor.Bytes32) *bind.MethodBuilder {
+func (s *Staker) WithdrawStake(validationID thor.Bytes32) *bind.MethodBuilder {
 	return s.contract.Method("withdrawStake", validationID)
 }
 
@@ -221,9 +221,9 @@ func (s *Staker) IncreaseStake(validationID thor.Bytes32, amount *big.Int) *bind
 	return s.contract.Method("increaseStake", validationID).WithValue(amount)
 }
 
-func (s *Staker) GetWithdraw(validationID thor.Bytes32) (*big.Int, error) {
+func (s *Staker) GetWithdrawable(validationID thor.Bytes32) (*big.Int, error) {
 	out := new(big.Int)
-	if err := s.contract.Method("getWithdraw", validationID).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
+	if err := s.contract.Method("getWithdrawable", validationID).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 	return out, nil

@@ -277,7 +277,7 @@ func TestStaker(t *testing.T) {
 	require.Len(t, delegatorAutoRenewEvents, 1)
 
 	// Withdraw
-	receipt, _, err = staker.Withdraw(queuedID).Send().WithSigner(validatorKey).WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
+	receipt, _, err = staker.WithdrawStake(queuedID).Send().WithSigner(validatorKey).WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
