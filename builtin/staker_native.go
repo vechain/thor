@@ -74,7 +74,7 @@ func init() {
 
 			return []any{validationID}
 		}},
-		{"native_getWithdraw", func(env *xenv.Environment) []any {
+		{"native_getWithdrawable", func(env *xenv.Environment) []any {
 			var args struct {
 				ValidationID common.Hash
 			}
@@ -118,7 +118,7 @@ func init() {
 			}
 			return []any{next, ""}
 		}},
-		{"native_withdraw", func(env *xenv.Environment) []any {
+		{"native_withdrawStake", func(env *xenv.Environment) []any {
 			var args struct {
 				Endorsor     common.Address
 				ValidationID common.Hash
