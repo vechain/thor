@@ -43,7 +43,6 @@ var (
 
 func init() {
 	defaultFC.FINALITY = 0
-	minStakingPeriod = uint32(360) * 24 * 7
 }
 
 func newTestBft(forkCfg *thor.ForkConfig) (*TestBFT, error) {
