@@ -19,7 +19,7 @@ type bftState struct {
 }
 
 type vote struct {
-	isCOM bool
+	isCOM  bool
 	weight *big.Int
 }
 
@@ -27,22 +27,22 @@ type vote struct {
 type justifier struct {
 	parentQuality   uint32
 	checkpoint      uint32
-	votesThreshold  uint64
-	weightThreshold *big.Int // we need to represent uint256
+	thresholdVotes  uint64
+	thresholdWeight *big.Int // we need to represent uint256
 
-	votes        map[thor.Address]vote
-	comVotes     uint64
-	comWeight    *big.Int
+	votes     map[thor.Address]vote
+	comVotes  uint64
+	comWeight *big.Int
 }
 
-func newJustifier(parentQuality, checkpoint uint32, votesThreshold uint64, weightThreshold *big.Int) *justifier {
+func newJustifier(parentQuality, checkpoint uint32, thresholdVotes uint64, thresholdWeight *big.Int) *justifier {
 	return &justifier{
-		votes:         make(map[thor.Address]vote),
-		parentQuality: parentQuality,
-		checkpoint:    checkpoint,
-		votesThreshold: votesThreshold,
-		weightThreshold: weightThreshold,
-		comWeight:     big.NewInt(0),
+		votes:           make(map[thor.Address]vote),
+		parentQuality:   parentQuality,
+		checkpoint:      checkpoint,
+		thresholdVotes:  thresholdVotes,
+		thresholdWeight: thresholdWeight,
+		comWeight:       big.NewInt(0),
 	}
 }
 
@@ -79,16 +79,16 @@ func (engine *Engine) newJustifier(parentID thor.Bytes32) (*justifier, error) {
 		if err != nil {
 			return nil, err
 		}
-		weightThreshold := new(big.Int).Mul(totalWeight, big.NewInt(2))
-		weightThreshold.Div(weightThreshold, big.NewInt(3))
-		return newJustifier(parentQuality, checkpoint, 0, weightThreshold), nil
+		thresholdWeight := new(big.Int).Mul(totalWeight, big.NewInt(2))
+		thresholdWeight.Div(thresholdWeight, big.NewInt(3))
+		return newJustifier(parentQuality, checkpoint, 0, thresholdWeight), nil
 	} else {
 		mbp, err := engine.getMaxBlockProposers(sum)
 		if err != nil {
 			return nil, err
 		}
-		votesThreshold := uint64(mbp * 2 / 3)
-		return newJustifier(parentQuality, checkpoint, votesThreshold, nil), nil
+		thresholdVotes := mbp * 2 / 3
+		return newJustifier(parentQuality, checkpoint, thresholdVotes, nil), nil
 	}
 }
 
@@ -119,16 +119,16 @@ func (js *justifier) Summarize() *bftState {
 	var justified, committed bool
 
 	// Pre-HAYABUSA
-	if js.weightThreshold == nil {
-		justified = uint64(len(js.votes)) > js.votesThreshold
-		committed = js.comVotes > js.votesThreshold
+	if js.thresholdWeight == nil {
+		justified = uint64(len(js.votes)) > js.thresholdVotes
+		committed = js.comVotes > js.thresholdVotes
 	} else {
 		totalVoterWeight := big.NewInt(0)
 		for _, vote := range js.votes {
 			totalVoterWeight.Add(totalVoterWeight, vote.weight)
 		}
-		justified = totalVoterWeight.Cmp(js.weightThreshold) > 0
-		committed = js.comWeight.Cmp(js.weightThreshold) > 0
+		justified = totalVoterWeight.Cmp(js.thresholdWeight) > 0
+		committed = js.comWeight.Cmp(js.thresholdWeight) > 0
 	}
 
 	var quality uint32

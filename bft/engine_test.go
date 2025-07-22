@@ -818,10 +818,10 @@ func TestJustifier(t *testing.T) {
 					assert.Equal(t, uint32(180), vs.checkpoint)
 					expected, ok := new(big.Int).SetString("333333333333333333333333333", 10)
 					assert.True(t, ok)
-					assert.Equal(t, expected, vs.weightThreshold)
+					assert.Equal(t, expected, vs.thresholdWeight)
 				} else {
 					assert.Equal(t, uint32(0), vs.checkpoint)
-					assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.votesThreshold)
+					assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.thresholdVotes)
 				}
 			},
 		}, {
@@ -838,7 +838,7 @@ func TestJustifier(t *testing.T) {
 				}
 
 				assert.Equal(t, uint32(0), vs.checkpoint)
-				assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.votesThreshold)
+				assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.thresholdVotes)
 			},
 		}, {
 			"the second bft round", func(t *testing.T, forkCfg *thor.ForkConfig) {
@@ -859,9 +859,9 @@ func TestJustifier(t *testing.T) {
 				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
 					expected, ok := new(big.Int).SetString("333333333333333333333333333", 10)
 					assert.True(t, ok)
-					assert.Equal(t, expected, vs.weightThreshold)
+					assert.Equal(t, expected, vs.thresholdWeight)
 				} else {
-					assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.votesThreshold)
+					assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.thresholdVotes)
 				}
 				assert.Equal(t, uint32(2), vs.Summarize().Quality)
 				assert.False(t, vs.Summarize().Justified)
