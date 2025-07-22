@@ -57,8 +57,8 @@ func New(addr thor.Address, state *state.State, params *params.Params, charger *
 	}
 }
 
-// IsActive checks if the staker contract has become active, i.e. we have transitioned to PoS.
-func (s *Staker) IsActive() (bool, error) {
+// IsPoSActive checks if the staker contract has become active, i.e. we have transitioned to PoS.
+func (s *Staker) IsPoSActive() (bool, error) {
 	return s.validations.IsActive()
 }
 
@@ -130,8 +130,12 @@ func (s *Staker) AddValidator(
 	autoRenew bool,
 	currentBlock uint32,
 ) (thor.Bytes32, error) {
-	stakeETH := new(big.Int).Div(stake, big.NewInt(1e18))
-	logger.Debug("adding validator", "endorsor", endorsor, "node", node, "period", period, "stake", stakeETH, "autoRenew", autoRenew)
+	logger.Debug("adding validator", "endorsor", endorsor,
+		"node", node,
+		"period", period,
+		"stake", new(big.Int).Div(stake, big.NewInt(1e18)),
+		"autoRenew", autoRenew,
+	)
 
 	if id, err := s.validations.Add(endorsor, node, period, stake, autoRenew, currentBlock); err != nil {
 		logger.Info("add validator failed", "node", node, "error", err)

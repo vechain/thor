@@ -115,6 +115,9 @@ func (d *delegations) DisableAutoRenew(delegationID thor.Bytes32) error {
 	if delegation.Stake.Sign() == 0 {
 		return errors.New("delegation is not active")
 	}
+	if validation.Status == StatusExit {
+		return errors.New("delegation is not active, withdraw is available")
+	}
 
 	weight := delegation.Weight()
 
@@ -157,6 +160,9 @@ func (d *delegations) EnableAutoRenew(delegationID thor.Bytes32) error {
 	}
 	if delegation.AutoRenew {
 		return errors.New("delegation is already autoRenew")
+	}
+	if validation.Status == StatusExit {
+		return errors.New("delegation is not active, withdraw is available")
 	}
 	weight := delegation.Weight()
 
