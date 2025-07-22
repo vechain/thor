@@ -1050,6 +1050,104 @@ func TestExecuteTransactionAfterHayabusa(t *testing.T) {
 	assert.Equal(t, receipt.Reward, beneficiaryEnergyBalance)
 }
 
+func TestHandleSlashing_Same_State_Root(t *testing.T) {
+	db := muxdb.NewMem()
+
+	g := genesis.NewDevnet()
+	b1, _, _, err := g.Build(state.NewStater(db))
+	assert.Nil(t, err)
+	b2, _, _, err := g.Build(state.NewStater(db))
+	assert.Nil(t, err)
+
+	repo, _ := chain.NewRepository(db, b1)
+
+	state := state.New(db, trie.Root{Hash: b1.Header().StateRoot()})
+
+	fc := thor.NoFork
+	fc.HAYABUSA = 0
+	bc := &xenv.BlockContext{}
+	bc.Number = 1
+
+	rt := runtime.New(repo.NewChain(b1.Header().ID()), state, bc, &fc)
+
+	evidences := make([][]block.Header, 1)
+	evidence := make([]block.Header, 2)
+	evidence[0] = *b1.Header()
+	evidence[1] = *b2.Header()
+	evidences[0] = evidence
+	err = rt.HandleSlashing(&evidences, 1)
+	assert.Error(t, err, "error while validating double signing evidence")
+}
+
+func TestHandleSlashing(t *testing.T) {
+	db := muxdb.NewMem()
+
+	g := genesis.NewDevnet()
+	b1, _, _, err := g.Build(state.NewStater(db))
+	assert.Nil(t, err)
+
+	repo, _ := chain.NewRepository(db, b1)
+	state := state.New(db, trie.Root{Hash: b1.Header().StateRoot()})
+
+	b2 := new(block.Builder).ParentID(b1.Header().ParentID()).Timestamp(b1.Header().Timestamp()).BaseFee(big.NewInt(thor.InitialBaseFee)).StateRoot(b1.Header().TxsRoot()).Build()
+	repo.AddBlock(b2, nil, 0, true)
+
+	fc := thor.NoFork
+	fc.HAYABUSA = 0
+	bc := &xenv.BlockContext{}
+	bc.Number = 1
+
+	rt := runtime.New(repo.NewChain(b1.Header().ID()), state, bc, &fc)
+
+	evidences := make([][]block.Header, 1)
+	evidence := make([]block.Header, 2)
+	evidence[0] = *b1.Header()
+	evidence[1] = *b2.Header()
+	evidences[0] = evidence
+	err = rt.HandleSlashing(&evidences, 1)
+	assert.NoError(t, err)
+}
+
+func TestHandleSlashing_Evidence_Used(t *testing.T) {
+	db := muxdb.NewMem()
+
+	g := genesis.NewDevnet()
+	b0, _, _, err := g.Build(state.NewStater(db))
+	assert.Nil(t, err)
+
+	repo, _ := chain.NewRepository(db, b0)
+
+	st := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
+
+	b11 := new(block.Builder).ParentID(b0.Header().ID()).Timestamp(b0.Header().Timestamp() + thor.BlockInterval).BaseFee(big.NewInt(thor.InitialBaseFee)).StateRoot(b0.Header().StateRoot()).Build()
+	repo.AddBlock(b11, nil, 0, true)
+
+	b12 := new(block.Builder).ParentID(b0.Header().ID()).Timestamp(b0.Header().Timestamp() + thor.BlockInterval).BaseFee(big.NewInt(thor.InitialBaseFee)).StateRoot(b11.Header().TxsRoot()).Build()
+	repo.AddBlock(b12, nil, 1, true)
+
+	evidences := make([][]block.Header, 1)
+	evidence := make([]block.Header, 2)
+	evidence[0] = *b11.Header()
+	evidence[1] = *b12.Header()
+	evidences[0] = evidence
+
+	b2 := new(block.Builder).ParentID(b11.Header().ID()).Timestamp(b11.Header().Timestamp()).BaseFee(big.NewInt(thor.InitialBaseFee)).Evidence(&evidences).StateRoot(b11.Header().StateRoot()).Build()
+	repo.AddBlock(b2, nil, 0, true)
+
+	b3 := new(block.Builder).ParentID(b2.Header().ID()).Timestamp(b2.Header().Timestamp()).BaseFee(big.NewInt(thor.InitialBaseFee)).Evidence(&evidences).StateRoot(b2.Header().StateRoot()).Build()
+	repo.AddBlock(b3, nil, 0, true)
+
+	fc := thor.NoFork
+	fc.HAYABUSA = 0
+	bc := &xenv.BlockContext{}
+	bc.Number = b3.Header().Number()
+
+	rt := runtime.New(repo.NewChain(b3.Header().ID()), st, bc, &fc)
+
+	err = rt.HandleSlashing(&evidences, b3.Header().Number())
+	assert.Error(t, err, "evidence already used in previous blocks")
+}
+
 func GetMockTx(repo *chain.Repository, t *testing.T) *tx.Transaction {
 	var blockRef = tx.NewBlockRef(0)
 	var chainTag = repo.ChainTag()

@@ -2391,3 +2391,88 @@ func Test_Validator_IncreaseDecrease_Combinations(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 0, validator.LockedVET.Cmp(MinStake), "locked vet should be greater than or equal to min stake")
 }
+
+func Test_Validator_Slash(t *testing.T) {
+	staker, _ := newStaker(t, 0, 1, false)
+
+	acc := datagen.RandAddress()
+
+	originalStake := big.NewInt(0).Mul(big.NewInt(3), MinStake)
+	id, err := staker.AddValidator(acc, acc, LowStakingPeriod, originalStake, true, 0)
+	assert.NoError(t, err)
+	_, err = staker.validations.ActivateNext(0, staker.params)
+	assert.NoError(t, err)
+
+	_, _, err = staker.Housekeep(LowStakingPeriod)
+	assert.NoError(t, err)
+
+	validator, err := staker.Get(id)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusActive, validator.Status)
+	assert.Equal(t, originalStake, validator.LockedVET)
+	assert.Equal(t, big.NewInt(0).Mul(originalStake, big.NewInt(2)), validator.Weight)
+
+	staked, weight, err := staker.LockedVET()
+	assert.NoError(t, err)
+	assert.Equal(t, originalStake, staked)
+	assert.Equal(t, big.NewInt(0).Mul(originalStake, big.NewInt(2)), weight)
+
+	slashAmount := big.NewInt(0).Mul(big.NewInt(1e18), big.NewInt(25000))
+	err = staker.SlashValidator(id, slashAmount)
+	assert.NoError(t, err)
+
+	validator, err = staker.Get(id)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusActive, validator.Status)
+	assert.Equal(t, big.NewInt(0).Sub(originalStake, slashAmount), validator.LockedVET)
+	assert.Equal(t, big.NewInt(0).Mul(big.NewInt(0).Sub(originalStake, slashAmount), big.NewInt(2)), validator.Weight)
+
+	staked, weight, err = staker.LockedVET()
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0).Sub(originalStake, slashAmount), staked)
+	assert.Equal(t, big.NewInt(0).Mul(big.NewInt(0).Sub(originalStake, slashAmount), big.NewInt(2)), weight)
+}
+
+func Test_Validator_Slash_With_Exit(t *testing.T) {
+	staker, _ := newStaker(t, 0, 1, false)
+
+	acc := datagen.RandAddress()
+
+	originalStake := big.NewInt(0).Mul(big.NewInt(3), MinStake)
+	id, err := staker.AddValidator(acc, acc, LowStakingPeriod, originalStake, true, 0)
+	assert.NoError(t, err)
+	_, err = staker.validations.ActivateNext(0, staker.params)
+	assert.NoError(t, err)
+
+	_, _, err = staker.Housekeep(LowStakingPeriod)
+	assert.NoError(t, err)
+
+	validator, err := staker.Get(id)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusActive, validator.Status)
+	assert.Equal(t, originalStake, validator.LockedVET)
+	assert.Equal(t, big.NewInt(0).Mul(originalStake, big.NewInt(2)), validator.Weight)
+	assert.Equal(t, big.NewInt(0), validator.CooldownVET)
+
+	staked, weight, err := staker.LockedVET()
+	assert.NoError(t, err)
+	assert.Equal(t, originalStake, staked)
+	assert.Equal(t, big.NewInt(0).Mul(originalStake, big.NewInt(2)), weight)
+
+	slashAmount := big.NewInt(0).Mul(big.NewInt(2), MinStake)
+	slashAmount = big.NewInt(0).Add(big.NewInt(1e18), slashAmount)
+	err = staker.SlashValidator(id, slashAmount)
+	assert.NoError(t, err)
+
+	validator, err = staker.Get(id)
+	assert.NoError(t, err)
+	assert.Equal(t, StatusExit, validator.Status)
+	assert.Equal(t, big.NewInt(0), validator.LockedVET)
+	assert.Equal(t, big.NewInt(0), validator.Weight)
+	assert.Equal(t, big.NewInt(0).Sub(originalStake, slashAmount), validator.CooldownVET)
+
+	staked, weight, err = staker.LockedVET()
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0).String(), staked.String())
+	assert.Equal(t, big.NewInt(0).String(), weight.String())
+}

@@ -612,18 +612,6 @@ func (rt *Runtime) validateEvidence(evidences *[]block.Header, blockNumber uint3
 				if err != nil {
 					return err
 				}
-
-				hasSum, err := rt.chain.HasBlock(initialSum.ID())
-				if err != nil {
-					return err
-				}
-				hasHeader, err := rt.chain.HasBlock(header.ID())
-				if err != nil {
-					return err
-				}
-				if !hasSum || !hasHeader {
-					return fmt.Errorf("invalid evidence provided for double slashing")
-				}
 				if initialSigner == currentSigner {
 					evidenceValidated = true
 					break
