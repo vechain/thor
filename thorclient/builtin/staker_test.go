@@ -96,7 +96,7 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, new(big.Int).Mul(minStake, big.NewInt(2)), totalStake)
 
 	// Get
-	firstActive, firstID, err := staker.FirstActive()
+	_, firstID, err := staker.FirstActive()
 	require.NoError(t, err)
 	getRes, err := staker.Get(firstID)
 	require.NoError(t, err)
@@ -107,7 +107,7 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, getRes.Weight, big.NewInt(0).Mul(minStake, big.NewInt(2)))
 
 	// FirstActive
-	firstActive, firstID, err = staker.FirstActive()
+	firstActive, firstID, err := staker.FirstActive()
 	require.NoError(t, err)
 	require.False(t, firstID.IsZero())
 	require.True(t, firstActive.Exists())
