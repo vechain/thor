@@ -49,7 +49,9 @@ const (
 	InitialBaseFee           = 10_000_000_000_000 // 10^13 wei, 0.00001 VTHO
 	BaseFeeChangeDenominator = 8                  // determines the percentage change in the base fee per block based on network utilization
 
-	EvidenceMaxCount = 16 // maximum number of evidence records which can be stored in block header
+	EvidenceMaxCount             = 16 // maximum number of evidence records which can be stored in block header
+	DoubleSigningSlashPercentage = 50 // percentage of the validators locked VET which will be slashed if double signing is detected
+	EvidenceMaxHistory           = 30 // maximum difference between current block and block number of the evidence
 )
 
 // Keys of governance params.

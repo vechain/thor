@@ -380,14 +380,6 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 			return errBFTRejected
 		}
 
-		evidences := newBlock.Header().Evidence()
-		if isPos {
-			err = n.validateEvidence(evidences)
-			if err != nil {
-				return err
-			}
-		}
-
 		// process the new block
 		stage, receipts, err := n.cons.Process(parentSummary, newBlock, uint64(time.Now().Unix()), uint32(len(conflicts)))
 		if err != nil {
@@ -454,6 +446,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		}
 		stats.UpdateProcessed(1, len(receipts), execElapsed, commitElapsed, realElapsed, newBlock.Header().GasUsed())
 
+		evidences := newBlock.Body().Evidences
 		if isPos && evidences != nil && len(*evidences) > 1 {
 			for _, headers := range *evidences {
 				n.repo.RecordDoubleSigProcessed(headers[0].Number())
@@ -485,37 +478,6 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 	}
 	metricBlockProcessedCount().AddWithLabel(1, map[string]string{"type": "received", "success": "true"})
 	return *isTrunk, nil
-}
-
-func (n *Node) validateEvidence(evidences *[][]block.Header) error {
-	evidenceValidated := false
-	if evidences != nil && len(*evidences) > 1 {
-		for _, ev := range *evidences {
-			var initialSum *block.Header
-			for _, header := range ev {
-				if initialSum == nil {
-					initialSum = &header
-				} else if initialSum.Number() == header.Number() && initialSum.StateRoot() != header.StateRoot() {
-					initialSigner, err := initialSum.Signer()
-					if err != nil {
-						return err
-					}
-					currentSigner, err := header.Signer()
-					if err != nil {
-						return err
-					}
-					if initialSigner == currentSigner {
-						evidenceValidated = true
-						break
-					}
-				}
-			}
-		}
-		if !evidenceValidated {
-			return fmt.Errorf("error while validating double signing evidence")
-		}
-	}
-	return nil
 }
 
 func (n *Node) writeLogs(newBlock *block.Block, newReceipts tx.Receipts, oldBestBlockID thor.Bytes32) (err error) {

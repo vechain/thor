@@ -308,6 +308,18 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 		if err := energy.DistributeRewards(blk.Header().Beneficiary(), signer, staker); err != nil {
 			return nil, nil, err
 		}
+		evidenceHeaders := blk.Evidences()
+		evidenceIDs := blk.Header().Evidence()
+		if evidenceIDs != nil && len(*evidenceIDs) > 0 {
+			err := rt.HandleSlashing(evidenceHeaders, blk.Header().Number())
+			if err != nil {
+				return nil, nil, err
+			}
+			for _, ev := range *evidenceHeaders {
+				hdr := ev[0]
+				c.repo.RecordDoubleSigProcessed(hdr.Number())
+			}
+		}
 	}
 
 	stage, err := state.Stage(trie.Version{Major: header.Number(), Minor: blockConflicts})

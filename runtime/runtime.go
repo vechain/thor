@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/abi"
+	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/log"
@@ -540,4 +541,120 @@ func (rt *Runtime) PrepareTransaction(trx *tx.Transaction) (*TransactionExecutor
 			return receipt, nil
 		},
 	}, nil
+}
+
+func (rt *Runtime) HandleSlashing(evidences *[][]block.Header, blockNumber uint32) error {
+	staker := builtin.Staker.Native(rt.State())
+	blockEvIDs := make([][]thor.Bytes32, len(*evidences))
+	for blkIdx, blockEv := range *evidences {
+		evidence := make([]thor.Bytes32, len(blockEv))
+		for idx, ev := range blockEv {
+			evidence[idx] = ev.ID()
+		}
+		blockEvIDs[blkIdx] = evidence
+	}
+
+	for idx, ev := range *evidences {
+		if len(ev) > 0 {
+			evIDs := blockEvIDs[idx]
+			err := rt.validateEvidence(&ev, &evIDs, blockNumber)
+			if err != nil {
+				return err
+			}
+			stakerBalance, err := rt.State().GetBalance(builtin.Staker.Address)
+			if err != nil {
+				return err
+			}
+			burnBalance, err := rt.State().GetBalance(thor.Address{})
+			if err != nil {
+				return err
+			}
+
+			signer, err := ev[0].Signer()
+			if err != nil {
+				return err
+			}
+			validation, validationID, err := staker.LookupNode(signer)
+			if err != nil {
+				return err
+			}
+
+			if validation.LockedVET != nil {
+				amountToSlash := big.NewInt(0).Mul(validation.LockedVET, big.NewInt(thor.DoubleSigningSlashPercentage))
+				amountToSlash = big.NewInt(0).Div(amountToSlash, big.NewInt(100))
+
+				if err := rt.State().SetBalance(thor.Address{}, big.NewInt(0).Add(burnBalance, amountToSlash)); err != nil {
+					return err
+				}
+				if err := rt.State().SetBalance(builtin.Staker.Address, big.NewInt(0).Sub(stakerBalance, amountToSlash)); err != nil {
+					return err
+				}
+				staker.SlashValidator(validationID, amountToSlash)
+			}
+		}
+	}
+	return nil
+}
+
+func (rt *Runtime) validateEvidence(evidences *[]block.Header, evidenceIDs *[]thor.Bytes32, blockNumber uint32) error {
+	evidenceValidated := false
+	if evidences != nil && len(*evidences) > 1 {
+		var initialSum *block.Header
+		for idx, header := range *evidences {
+			if header.ID() != (*evidenceIDs)[idx] {
+				return fmt.Errorf("evidence doesn't match signed evidence")
+			}
+			if initialSum == nil {
+				initialSum = &header
+				isUsed, err := rt.isEvidenceUsed(header, blockNumber)
+				if err != nil {
+					return err
+				}
+				if isUsed {
+					return fmt.Errorf("evidence already used in previous blocks")
+				}
+			} else if blockNumber-initialSum.Number() > thor.EvidenceMaxHistory {
+				return fmt.Errorf("supplied evidence has expired")
+			} else if initialSum.Number() == header.Number() && initialSum.StateRoot() != header.StateRoot() {
+				initialSigner, err := initialSum.Signer()
+				if err != nil {
+					return err
+				}
+				currentSigner, err := header.Signer()
+				if err != nil {
+					return err
+				}
+				if initialSigner == currentSigner {
+					evidenceValidated = true
+					break
+				}
+			}
+		}
+		if !evidenceValidated {
+			return fmt.Errorf("error while validating double signing evidence")
+		}
+	}
+	return nil
+}
+
+func (rt *Runtime) isEvidenceUsed(evidence block.Header, currentBlkNum uint32) (bool, error) {
+	blockNum := evidence.Number() + 1
+	for blockNum < currentBlkNum {
+		blk, err := rt.Chain().GetBlockSummary(blockNum)
+		if err != nil {
+			return false, err
+		}
+		blockNum += 1
+		if blk.Header.Evidence() == nil {
+			continue
+		}
+
+		for _, ev := range *blk.Header.Evidence() {
+			header := ev[0]
+			if header == evidence.ID() {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }

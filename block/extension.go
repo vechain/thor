@@ -11,6 +11,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/vechain/thor/v2/thor"
 )
 
 /**
@@ -21,7 +22,7 @@ type extension struct {
 	Alpha    []byte
 	COM      bool
 	BaseFee  *big.Int
-	Evidence *[][]Header
+	Evidence *[][]thor.Bytes32
 }
 
 type _extension extension
@@ -42,6 +43,12 @@ func (ex *extension) EncodeRLP(w io.Writer) error {
 	if len(ex.Alpha) != 0 {
 		return rlp.Encode(w, []any{
 			ex.Alpha,
+		})
+	}
+
+	if ex.Evidence != nil && len(*ex.Evidence) != 0 {
+		return rlp.Encode(w, []any{
+			ex.Evidence,
 		})
 	}
 	return nil
@@ -114,7 +121,7 @@ func (ex *extension) DecodeRLP(s *rlp.Stream) error {
 		return err
 	}
 
-	var evidences [][]Header
+	var evidences [][]thor.Bytes32
 	if err := rlp.DecodeBytes(raws[3], &evidences); err != nil {
 		return err
 	}

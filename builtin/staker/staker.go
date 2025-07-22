@@ -351,3 +351,33 @@ func (s *Staker) GetValidatorsTotals(validationID thor.Bytes32) (*ValidationTota
 		DelegationsLockedWeight: big.NewInt(0).Add(aggregation.CurrentRecurringWeight, aggregation.CurrentOneTimeWeight),
 	}, nil
 }
+
+func (s *Staker) SlashValidator(validationID thor.Bytes32, amount *big.Int) error {
+	validation, err := s.storage.GetValidation(validationID)
+	if err != nil {
+		return err
+	}
+	validation.LockedVET = big.NewInt(0).Sub(validation.LockedVET, amount)
+	err = s.storage.lockedVET.Sub(amount)
+	if err != nil {
+		return err
+	}
+	reducedWeight := big.NewInt(0).Mul(amount, big.NewInt(2))
+	validation.Weight = big.NewInt(0).Sub(validation.Weight, big.NewInt(0).Mul(amount, big.NewInt(2)))
+	err = s.storage.lockedWeight.Sub(reducedWeight)
+	if err != nil {
+		return err
+	}
+	err = s.storage.validations.Set(validationID, validation, false)
+	if err != nil {
+		return err
+	}
+
+	if validation.LockedVET.Cmp(MinStake) < 0 {
+		err = s.validations.ExitValidator(validationID)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}

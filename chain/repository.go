@@ -148,6 +148,7 @@ func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, conflic
 		num           = header.Number()
 		txs           = block.Transactions()
 		txIDs         = []thor.Bytes32{}
+		evidences     = block.Evidences()
 		bulk          = r.db.NewStore("").Bulk()
 		hdrPutter     = kv.Bucket(hdrStoreName).NewPutter(bulk)
 		bodyPutter    = kv.Bucket(bodyStoreName).NewPutter(bulk)
@@ -200,7 +201,7 @@ func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, conflic
 		return nil, err
 	}
 
-	summary := BlockSummary{header, txIDs, uint64(block.Size()), conflicts}
+	summary := BlockSummary{header, txIDs, evidences, uint64(block.Size()), conflicts}
 	if err := saveBlockSummary(hdrPutter, &summary); err != nil {
 		return nil, err
 	}
