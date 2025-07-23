@@ -205,7 +205,7 @@ func (s *Staker) IncreaseStake(validationID thor.Address, amount *big.Int) *bind
 	return s.contract.Method("increaseStake", validationID).WithValue(amount)
 }
 
-func (s *Staker) GetWithdrawable(validationID thor.Bytes32) (*big.Int, error) {
+func (s *Staker) GetWithdrawable(validationID thor.Address) (*big.Int, error) {
 	out := new(big.Int)
 	if err := s.contract.Method("getWithdrawable", validationID).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, err
@@ -213,7 +213,7 @@ func (s *Staker) GetWithdrawable(validationID thor.Bytes32) (*big.Int, error) {
 	return out, nil
 }
 
-func (s *Staker) GetRewards(validatorID thor.Bytes32, period uint32) (*big.Int, error) {
+func (s *Staker) GetRewards(validatorID thor.Address, period uint32) (*big.Int, error) {
 	out := new(big.Int)
 	if err := s.contract.Method("getRewards", validatorID, period).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, err
@@ -221,7 +221,7 @@ func (s *Staker) GetRewards(validatorID thor.Bytes32, period uint32) (*big.Int, 
 	return out, nil
 }
 
-func (s *Staker) GetCompletedPeriods(validatorID thor.Bytes32) (*uint32, error) {
+func (s *Staker) GetCompletedPeriods(validatorID thor.Address) (*uint32, error) {
 	out := uint32(0)
 	if err := s.contract.Method("getCompletedPeriods", validatorID).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, err
