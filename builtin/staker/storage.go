@@ -81,6 +81,7 @@ func newStorage(addr thor.Address, state *state.State, charger *gascharger.Charg
 
 func (s *storage) GetValidation(id thor.Address) (*Validation, error) {
 	v, err := s.validations.Get(id)
+	v.Node = id
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get validator")
 	}

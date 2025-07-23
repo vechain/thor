@@ -96,7 +96,6 @@ func (v *validations) Add(
 	}
 
 	entry := &Validation{
-		Node:               node,
 		Endorsor:           endorsor,
 		Period:             period,
 		CompleteIterations: 0,
