@@ -58,6 +58,7 @@ var (
 	KeyProposerEndorsement     = BytesToBytes32([]byte("proposer-endorsement"))
 	KeyMaxBlockProposers       = BytesToBytes32([]byte("max-block-proposers"))
 	KeyStargateContractAddress = BytesToBytes32([]byte("stargate-contract-address"))
+	KeyStargateSwitches        = BytesToBytes32([]byte("stargate-switches"))
 
 	InitialRewardRatio         = big.NewInt(3e17) // 30%
 	InitialBaseGasPrice        = big.NewInt(1e15)
