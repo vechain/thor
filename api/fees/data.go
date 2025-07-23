@@ -7,10 +7,10 @@ package fees
 
 import (
 	"math/big"
-
 	"slices"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/chain"

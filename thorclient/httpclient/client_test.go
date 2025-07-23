@@ -19,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/thor"
@@ -59,7 +60,8 @@ func TestClient_InspectClauses(t *testing.T) {
 		Transfers: []*api.Transfer{},
 		GasUsed:   1000,
 		Reverted:  false,
-		VMError:   "no error"}}
+		VMError:   "no error",
+	}}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/accounts/*", r.URL.Path)

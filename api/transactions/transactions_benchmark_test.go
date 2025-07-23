@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
+
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
@@ -409,7 +410,7 @@ func createChain(db *muxdb.MuxDB, accounts []genesis.DevAccount) (*testchain.Cha
 	}
 
 	// Initialize the genesis and retrieve the genesis block
-	//gene := genesis.NewDevnet()
+	// gene := genesis.NewDevnet()
 	geneBlk, _, _, err := builder.Build(stater)
 	if err != nil {
 		return nil, err

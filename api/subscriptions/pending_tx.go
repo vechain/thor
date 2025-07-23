@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/golang-lru/simplelru"
+
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"

@@ -7,6 +7,7 @@ package api
 
 import (
 	"github.com/ethereum/go-ethereum/common/math"
+
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -33,7 +34,7 @@ type TransferFilter struct {
 	CriteriaSet []*logdb.TransferCriteria
 	Range       *Range
 	Options     *Options
-	Order       logdb.Order //default asc
+	Order       logdb.Order // default asc
 }
 
 func ConvertTransfer(transfer *logdb.Transfer, addIndexes bool) *FilteredTransfer {

@@ -33,12 +33,15 @@ type NoopEVMCallContext struct{}
 func (NoopEVMCallContext) Call(_ ContractRef, _ common.Address, _ []byte, _, _ *big.Int) ([]byte, error) {
 	return nil, nil
 }
+
 func (NoopEVMCallContext) CallCode(_ ContractRef, _ common.Address, _ []byte, _, _ *big.Int) ([]byte, error) {
 	return nil, nil
 }
+
 func (NoopEVMCallContext) Create(_ ContractRef, _ []byte, _, _ *big.Int) ([]byte, common.Address, error) {
 	return nil, common.Address{}, nil
 }
+
 func (NoopEVMCallContext) DelegateCall(_ ContractRef, _ common.Address, _ []byte, _ *big.Int) ([]byte, error) {
 	return nil, nil
 }

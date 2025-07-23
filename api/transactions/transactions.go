@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
+
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/chain"
@@ -114,6 +115,7 @@ func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32, head thor.By
 
 	return api.ConvertReceipt(receipt, header, tx)
 }
+
 func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Request) error {
 	var rawTx *api.RawTx
 	if err := restutil.ParseJSON(req.Body, &rawTx); err != nil {

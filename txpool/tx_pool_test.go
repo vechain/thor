@@ -23,6 +23,7 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
@@ -36,8 +37,10 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-const LIMIT = 10
-const LIMIT_PER_ACCOUNT = 2
+const (
+	LIMIT             = 10
+	LIMIT_PER_ACCOUNT = 2
+)
 
 var devAccounts = genesis.DevAccounts()
 

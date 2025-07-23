@@ -14,6 +14,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
+
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/block"
@@ -42,9 +43,7 @@ type msgReader interface {
 	Read() (msgs []any, hasMore bool, err error)
 }
 
-var (
-	logger = log.WithContext("pkg", "subscriptions")
-)
+var logger = log.WithContext("pkg", "subscriptions")
 
 const (
 	// Time allowed to read the next pong message from the peer.

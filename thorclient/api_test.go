@@ -19,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/require"
+
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/api/blocks"
@@ -47,9 +48,7 @@ const (
 	priorityFeesPercentage = 5
 )
 
-var (
-	preMintedTx01 *tx.Transaction
-)
+var preMintedTx01 *tx.Transaction
 
 func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 	forks := testchain.DefaultForkConfig
@@ -421,7 +420,7 @@ func testEventsEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) {
 		_, err := c.FilterEvents(payload)
 		require.NoError(t, err)
 
-		//TODO validate the response body here
+		// TODO validate the response body here
 	})
 }
 

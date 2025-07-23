@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
+
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/bft"

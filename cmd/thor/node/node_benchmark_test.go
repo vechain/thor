@@ -21,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
+
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
@@ -65,6 +66,7 @@ func BenchmarkBlockProcess_RandomSigners_ManyClausesPerTx_RealDB(b *testing.B) {
 	// run the benchmark
 	benchmarkBlockProcess(b, db, accounts, blocks)
 }
+
 func BenchmarkBlockProcess_RandomSigners_OneClausePerTx_RealDB(b *testing.B) {
 	// create state accounts
 	accounts := getCachedAccounts(b)
@@ -82,6 +84,7 @@ func BenchmarkBlockProcess_RandomSigners_OneClausePerTx_RealDB(b *testing.B) {
 	// run the benchmark
 	benchmarkBlockProcess(b, db, accounts, blocks)
 }
+
 func BenchmarkBlockProcess_ManyClausesPerTx_RealDB(b *testing.B) {
 	// create state accounts
 	accounts := getCachedAccounts(b)
@@ -99,6 +102,7 @@ func BenchmarkBlockProcess_ManyClausesPerTx_RealDB(b *testing.B) {
 	// run the benchmark
 	benchmarkBlockProcess(b, db, accounts, blocks)
 }
+
 func BenchmarkBlockProcess_OneClausePerTx_RealDB(b *testing.B) {
 	// create state accounts
 	accounts := getCachedAccounts(b)
@@ -398,7 +402,7 @@ func createChain(db *muxdb.MuxDB, accounts []genesis.DevAccount) (*testchain.Cha
 	}
 
 	// Initialize the genesis and retrieve the genesis block
-	//gene := genesis.NewDevnet()
+	// gene := genesis.NewDevnet()
 	geneBlk, _, _, err := builder.Build(stater)
 	if err != nil {
 		return nil, err

@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 
 	"github.com/gorilla/mux"
+
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/log"

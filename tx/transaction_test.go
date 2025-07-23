@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -599,7 +600,7 @@ func TestEffectivePriorityFeePerGas(t *testing.T) {
 	// should be the maxPriorityFeePerGas
 	assert.Equal(t, effectivePriorityFeePerGas, trx.MaxPriorityFeePerGas())
 
-	//baseFee > maxFee-maxPriorityFee
+	// baseFee > maxFee-maxPriorityFee
 	baseFee := big.NewInt(8)
 	effectivePriorityFeePerGas = trx.EffectivePriorityFeePerGas(baseFee, nil, nil)
 	// should be the maxPriorityFeePerGas

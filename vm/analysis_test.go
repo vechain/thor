@@ -71,6 +71,7 @@ func BenchmarkJumpdestAnalysis_1200k(bench *testing.B) {
 	}
 	bench.StopTimer()
 }
+
 func BenchmarkJumpdestHashing_1200k(bench *testing.B) {
 	// 4 ms
 	code := make([]byte, analysisCodeSize)

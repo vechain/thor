@@ -37,6 +37,8 @@ import (
 	"github.com/mattn/go-isatty"
 	"github.com/mattn/go-tty"
 	"github.com/pkg/errors"
+	"gopkg.in/urfave/cli.v1"
+
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/httpserver"
 	"github.com/vechain/thor/v2/cmd/thor/node"
@@ -51,7 +53,6 @@ import (
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
-	"gopkg.in/urfave/cli.v1"
 )
 
 var devNetGenesisID thor.Bytes32
@@ -223,7 +224,7 @@ func parseGenesisFile(uri string) (*genesis.Genesis, *thor.ForkConfig, error) {
 	decoder := json.NewDecoder(reader)
 	decoder.DisallowUnknownFields()
 
-	var forkConfig = thor.NoFork
+	forkConfig := thor.NoFork
 	var gen genesis.CustomGenesis
 	gen.ForkConfig = &forkConfig
 
@@ -265,7 +266,7 @@ func makeConfigDir(ctx *cli.Context) (string, error) {
 	if dir == "" {
 		return "", fmt.Errorf("unable to infer default config dir, use -%s to specify", configDirFlag.Name)
 	}
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", errors.Wrapf(err, "create config dir [%v]", dir)
 	}
 	return dir, nil
@@ -283,7 +284,7 @@ func makeInstanceDir(ctx *cli.Context, gene *genesis.Genesis) (string, error) {
 	}
 
 	instanceDir := filepath.Join(dataDir, fmt.Sprintf("instance-%x-v4", gene.ID().Bytes()[24:])+suffix)
-	if err := os.MkdirAll(instanceDir, 0700); err != nil {
+	if err := os.MkdirAll(instanceDir, 0o700); err != nil {
 		return "", errors.Wrapf(err, "create instance dir [%v]", instanceDir)
 	}
 	return instanceDir, nil

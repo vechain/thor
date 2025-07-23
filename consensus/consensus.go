@@ -10,6 +10,7 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/golang-lru/simplelru"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/poa"

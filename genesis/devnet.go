@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/crypto"
+
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"

@@ -15,6 +15,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/api/restutil"
 )
 

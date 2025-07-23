@@ -19,6 +19,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/genesis"
@@ -151,7 +152,7 @@ func getAccount(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
 
-	//revision is optional default `best`
+	// revision is optional default `best`
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/accounts/" + addr.String())
 	require.NoError(t, err)
 	var acc api.Account
@@ -217,7 +218,7 @@ func getCode(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
 
-	//revision is optional defaut `best`
+	// revision is optional defaut `best`
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/accounts/" + contractAddr.String() + "/code")
 	require.NoError(t, err)
 	var code map[string]string
@@ -255,7 +256,7 @@ func getStorage(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
 
-	//revision is optional defaut `best`
+	// revision is optional defaut `best`
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/accounts/" + contractAddr.String() + "/storage/" + storageKey.String())
 	require.NoError(t, err)
 	var value map[string]string
@@ -342,7 +343,7 @@ func deployContractWithCall(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
 
-	//revision is optional defaut `best`
+	// revision is optional defaut `best`
 	res, _, err := tclient.RawHTTPClient().RawHTTPPost("/accounts", reqBody)
 	require.NoError(t, err)
 	var output *api.CallResult
@@ -443,7 +444,8 @@ func batchCall(t *testing.T) {
 				To:    &contractAddr,
 				Data:  "data2",
 				Value: nil,
-			}},
+			},
+		},
 	}
 	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/accounts/*", badBody)
 	require.NoError(t, err)
@@ -488,7 +490,8 @@ func batchCall(t *testing.T) {
 				To:    &contractAddr,
 				Data:  hexutil.Encode(input),
 				Value: nil,
-			}},
+			},
+		},
 	}
 
 	// 'next' revisoun should be valid

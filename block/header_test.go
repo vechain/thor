@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -388,7 +389,7 @@ func TestExtensionV2(t *testing.T) {
 
 func TestHeaderHash(t *testing.T) {
 	for range 100 {
-		var builder = new(Builder)
+		builder := new(Builder)
 
 		num := datagen.RandUint32()
 		parentID := datagen.RandomHash()

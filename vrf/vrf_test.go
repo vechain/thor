@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
+
 	"github.com/vechain/thor/v2/vrf"
 )
 
@@ -39,7 +40,7 @@ func readCases(fileName string) ([]Case, error) {
 		return nil, err2
 	}
 
-	var cases = make([]Case, 0)
+	cases := make([]Case, 0)
 	err3 := json.Unmarshal(byteValue, &cases)
 	if err3 != nil {
 		return cases, err3
@@ -50,7 +51,7 @@ func readCases(fileName string) ([]Case, error) {
 
 func Test_Secp256K1Sha256Tai_vrf_Prove(t *testing.T) {
 	// Know Correct cases.
-	var cases, _ = readCases("./secp256_k1_sha256_tai.json")
+	cases, _ := readCases("./secp256_k1_sha256_tai.json")
 
 	type Test struct {
 		name     string
@@ -99,7 +100,7 @@ func Test_Secp256K1Sha256Tai_vrf_Prove(t *testing.T) {
 
 func Test_Secp256K1Sha256Tai_vrf_Verify(t *testing.T) {
 	// Know Correct cases.
-	var cases, _ = readCases("./secp256_k1_sha256_tai.json")
+	cases, _ := readCases("./secp256_k1_sha256_tai.json")
 
 	type Test struct {
 		name     string

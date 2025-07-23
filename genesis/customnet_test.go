@@ -12,12 +12,13 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/thor"
 )
 
 func CustomNetWithParams(t *testing.T, executor genesis.Executor, baseGasPrice genesis.HexOrDecimal256, rewardRatio genesis.HexOrDecimal256, proposerEndorsement genesis.HexOrDecimal256) genesis.CustomGenesis {
-	var defaultFC = thor.ForkConfig{
+	defaultFC := thor.ForkConfig{
 		VIP191:    math.MaxUint32,
 		ETH_CONST: math.MaxUint32,
 		BLOCKLIST: math.MaxUint32,

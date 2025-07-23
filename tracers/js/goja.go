@@ -21,13 +21,12 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 
 	"github.com/dop251/goja"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-
-	"slices"
 
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tracers"
@@ -60,9 +59,11 @@ func init() {
 // hex strings into big ints.
 var bigIntProgram = goja.MustCompile("bigInt", bigIntegerJS, false)
 
-type toBigFn = func(vm *goja.Runtime, val string) (goja.Value, error)
-type toBufFn = func(vm *goja.Runtime, val []byte) (goja.Value, error)
-type fromBufFn = func(vm *goja.Runtime, buf goja.Value, allowString bool) ([]byte, error)
+type (
+	toBigFn   = func(vm *goja.Runtime, val string) (goja.Value, error)
+	toBufFn   = func(vm *goja.Runtime, val []byte) (goja.Value, error)
+	fromBufFn = func(vm *goja.Runtime, buf goja.Value, allowString bool) ([]byte, error)
+)
 
 func toBuf(vm *goja.Runtime, bufType goja.Value, val []byte) (goja.Value, error) {
 	// bufType is usually Uint8Array. This is equivalent to `new Uint8Array(val)` in JS.

@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
@@ -82,7 +83,7 @@ func TestAdopt(t *testing.T) {
 		t.Fatal("Error adopting tx2:", err)
 	}
 
-	//Repeat transaction
+	// Repeat transaction
 	expectedErrorMessage := "known tx"
 	if err := flow.Adopt(tx2); err.Error() != expectedErrorMessage {
 		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
@@ -138,7 +139,7 @@ func TestAdoptTypedTxs(t *testing.T) {
 		t.Fatal("Error adopting tx2:", err)
 	}
 
-	//Repeat transaction
+	// Repeat transaction
 	expectedErrorMessage := "known tx"
 	if err := flow.Adopt(tx2); err.Error() != expectedErrorMessage {
 		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
@@ -173,10 +174,10 @@ func TestPack(t *testing.T) {
 
 	flow.Pack(proposer.PrivateKey, 0, false)
 
-	//Test with shouldVote
+	// Test with shouldVote
 	flow.Pack(proposer.PrivateKey, 0, true)
 
-	//Test wrong private key
+	// Test wrong private key
 	expectedErrorMessage := "private key mismatch"
 	if _, _, _, err := flow.Pack(genesis.DevAccounts()[1].PrivateKey, 0, false); err.Error() != expectedErrorMessage {
 		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())

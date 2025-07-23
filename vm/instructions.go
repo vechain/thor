@@ -21,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
+
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -322,7 +323,7 @@ func opReturnDataCopy(_ *uint64, evm *EVM, _ *Contract, memory *Memory, stack *S
 		return nil, ErrReturnDataOutOfBounds
 	}
 	// we can reuse dataOffset now (aliasing it for clarity)
-	var end = dataOffset
+	end := dataOffset
 	end.Add(dataOffset, length)
 	end64, overflow := end.Uint64WithOverflow()
 	if overflow || uint64(len(evm.interpreter.returnData)) < end64 {
@@ -573,8 +574,8 @@ func opCreate(_ *uint64, evm *EVM, contract *Contract, memory *Memory, stack *St
 
 	contract.UseGas(gas)
 
-	//TODO: use uint256.Int instead of converting with toBig()
-	var bigVal = big0
+	// TODO: use uint256.Int instead of converting with toBig()
+	bigVal := big0
 	if !value.IsZero() {
 		bigVal = value.ToBig()
 	}
@@ -612,7 +613,7 @@ func opCreate2(_ *uint64, evm *EVM, contract *Contract, memory *Memory, stack *S
 	gas -= gas / 64
 	contract.UseGas(gas)
 
-	//TODO: use uint256.Int instead of converting with toBig()
+	// TODO: use uint256.Int instead of converting with toBig()
 	bigEndowment := big0
 	if !endowment.IsZero() {
 		bigEndowment = endowment.ToBig()
@@ -644,8 +645,8 @@ func opCall(_ *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stac
 	// Get the arguments from the memory.
 	args := memory.GetCopy(int64(inOffset), int64(inSize))
 
-	var bigVal = big0
-	//TODO: use uint256.Int instead of converting with toBig()
+	bigVal := big0
+	// TODO: use uint256.Int instead of converting with toBig()
 	// By using big0 here, we save an alloc for the most common case (non-ether-transferring contract calls),
 	// but it would make more sense to extend the usage of uint256.Int
 	if !value.IsZero() {
@@ -678,8 +679,8 @@ func opCallCode(_ *uint64, evm *EVM, contract *Contract, memory *Memory, stack *
 	// Get arguments from the memory.
 	args := memory.GetCopy(int64(inOffset), int64(inSize))
 
-	//TODO: use uint256.Int instead of converting with toBig()
-	var bigVal = big0
+	// TODO: use uint256.Int instead of converting with toBig()
+	bigVal := big0
 	if !value.IsZero() {
 		gas += params.CallStipend
 		bigVal = value.ToBig()

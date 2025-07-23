@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/cache"
 )
 
@@ -47,7 +48,8 @@ func TestPrioCache(t *testing.T) {
 		e := kvp{
 			rand.Int(),
 			rand.Int(),
-			rand.Float64()}
+			rand.Float64(),
+		}
 		kvps = append(kvps, e)
 		c.Set(e.k, e.v, e.p)
 	}
@@ -60,7 +62,8 @@ func TestPrioCache(t *testing.T) {
 		remained = append(remained, kvp{
 			entry.Key.(int),
 			entry.Value.(int),
-			entry.Priority})
+			entry.Priority,
+		})
 		return true
 	})
 

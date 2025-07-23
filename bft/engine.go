@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 
 	"github.com/pkg/errors"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/cache"

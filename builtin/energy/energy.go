@@ -9,6 +9,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/rlp"
+
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -51,6 +52,7 @@ func (e *Energy) getTotalAddSub() (total totalAddSub, err error) {
 	})
 	return
 }
+
 func (e *Energy) setTotalAddSub(total totalAddSub) error {
 	return e.state.EncodeStorage(e.addr, totalAddSubKey, func() ([]byte, error) {
 		return rlp.EncodeToBytes(&total)
@@ -88,7 +90,8 @@ func (e *Energy) TotalSupply() (*big.Int, error) {
 	acc := state.Account{
 		Balance:   initialSupply.Token,
 		Energy:    initialSupply.Energy,
-		BlockTime: initialSupply.BlockTime}
+		BlockTime: initialSupply.BlockTime,
+	}
 	return acc.CalcEnergy(e.blockTime), nil
 }
 

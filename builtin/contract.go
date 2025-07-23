@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 
 	"github.com/pkg/errors"
+
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/builtin/gen"
 	"github.com/vechain/thor/v2/thor"

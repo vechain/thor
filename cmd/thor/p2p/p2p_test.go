@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/p2p/discover"
+
 	"github.com/vechain/thor/v2/p2psrv"
 	"github.com/vechain/thor/v2/test/datagen"
 

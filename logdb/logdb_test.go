@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -292,7 +293,8 @@ func TestLogDB_NewestBlockID(t *testing.T) {
 			func() (thor.Bytes32, error) {
 				return b.Header().ID(), nil
 			},
-		}, {
+		},
+		{
 			"add empty block, best should remain unchanged",
 			func() (thor.Bytes32, error) {
 				wanted := b.Header().ID()

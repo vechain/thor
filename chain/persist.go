@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 
 	"github.com/ethereum/go-ethereum/rlp"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/kv"
 	"github.com/vechain/thor/v2/thor"

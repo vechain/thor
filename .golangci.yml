@@ -53,9 +53,14 @@ issues:
 formatters:
   enable:
     - goimports
+    - gofmt
+    - gofumpt
   settings:
     gofmt:
       simplify: true
+    goimports:
+      local-prefixes:
+        - github.com/vechain/thor
   exclusions:
     generated: lax
     paths:

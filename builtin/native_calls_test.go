@@ -17,6 +17,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
@@ -104,6 +105,7 @@ func (c *ccase) Expiration(expiration uint32) *ccase {
 	c.expiration = expiration
 	return c
 }
+
 func (c *ccase) ShouldVMError(err error) *ccase {
 	c.vmerr = err
 	return c
@@ -144,7 +146,8 @@ func (c *ccase) Assert(t *testing.T) *ccase {
 			GasPayer:   c.gasPayer,
 			ProvedWork: c.provedWork,
 			BlockRef:   c.blockRef,
-			Expiration: c.expiration})
+			Expiration: c.expiration,
+		})
 	vmout, _, err := exec()
 	assert.Nil(t, err)
 	if constant || vmout.VMErr != nil {
@@ -565,7 +568,8 @@ func TestPrototypeNative(t *testing.T) {
 		ID:         thor.Bytes32{},
 		Origin:     master,
 		GasPrice:   &big.Int{},
-		ProvedWork: &big.Int{}})
+		ProvedWork: &big.Int{},
+	})
 	out, _, _ := exec()
 
 	contract = *out.ContractAddress

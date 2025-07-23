@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/pkg/errors"
+
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/log"
@@ -30,9 +31,7 @@ const (
 	maxTxSize = 64 * 1024
 )
 
-var (
-	logger = log.WithContext("pkg", "txpool")
-)
+var logger = log.WithContext("pkg", "txpool")
 
 // Options options for tx pool.
 type Options struct {

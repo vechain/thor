@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
+
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -147,7 +148,6 @@ func TestSAR(t *testing.T) {
 
 func TestSGT(t *testing.T) {
 	tests := []twoOperandTest{
-
 		{"0000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000000"},
 		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000000"},
 		{"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000000"},
@@ -340,11 +340,13 @@ func BenchmarkOpEq(b *testing.B) {
 
 	opBenchmark(b, opEq, x, y)
 }
+
 func BenchmarkOpEq2(b *testing.B) {
 	x := "FBCDEF090807060504030201ffffffffFBCDEF090807060504030201ffffffff"
 	y := "FBCDEF090807060504030201ffffffffFBCDEF090807060504030201fffffffe"
 	opBenchmark(b, opEq, x, y)
 }
+
 func BenchmarkOpAnd(b *testing.B) {
 	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
@@ -395,18 +397,21 @@ func BenchmarkOpSHL(b *testing.B) {
 
 	opBenchmark(b, opSHL, x, y)
 }
+
 func BenchmarkOpSHR(b *testing.B) {
 	x := "FBCDEF090807060504030201ffffffffFBCDEF090807060504030201ffffffff"
 	y := "ff"
 
 	opBenchmark(b, opSHR, x, y)
 }
+
 func BenchmarkOpSAR(b *testing.B) {
 	x := "FBCDEF090807060504030201ffffffffFBCDEF090807060504030201ffffffff"
 	y := "ff"
 
 	opBenchmark(b, opSAR, x, y)
 }
+
 func BenchmarkOpIsZero(b *testing.B) {
 	x := "FBCDEF090807060504030201ffffffffFBCDEF090807060504030201ffffffff"
 	opBenchmark(b, opIszero, x)

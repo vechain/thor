@@ -117,6 +117,7 @@ func LazyLoadHistogram(name string, buckets []int64) func() HistogramMeter {
 		return Histogram(name, buckets)
 	})
 }
+
 func LazyLoadHistogramVec(name string, labels []string, buckets []int64) func() HistogramVecMeter {
 	return LazyLoad(func() HistogramVecMeter {
 		return HistogramVec(name, labels, buckets)

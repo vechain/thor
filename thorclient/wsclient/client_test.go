@@ -15,6 +15,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
@@ -145,6 +146,7 @@ func TestClient_SubscribeBeats2(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, expectedBeat2, (<-sub.EventChan).Data)
 }
+
 func TestNewClient(t *testing.T) {
 	expectedHost := "example.com"
 

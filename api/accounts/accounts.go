@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
+
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/bft"
@@ -195,7 +196,7 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 		}
 		addr = &address
 	}
-	var batchCallData = &api.BatchCallData{
+	batchCallData := &api.BatchCallData{
 		Clauses: api.Clauses{
 			&api.Clause{
 				To:    addr,

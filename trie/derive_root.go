@@ -6,6 +6,7 @@ package trie
 
 import (
 	"github.com/qianbin/drlp"
+
 	"github.com/vechain/thor/v2/thor"
 )
 

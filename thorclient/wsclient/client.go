@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/thor"
 )
