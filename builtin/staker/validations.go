@@ -289,8 +289,7 @@ func (v *validations) IncreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 		return err
 	}
 	validatorTVL := entry.NextPeriodTVL()
-	// we do not consider aggregation.CurrentRecurringVET since the delegator could enable auto-renew
-	delegationTVL := big.NewInt(0).Add(aggregation.CurrentRecurringVET, aggregation.PendingRecurringVET)
+	delegationTVL := aggregation.NextPeriodTVL()
 	nextPeriodTVL := big.NewInt(0).Add(validatorTVL, delegationTVL)
 	newTVL := big.NewInt(0).Add(nextPeriodTVL, amount)
 

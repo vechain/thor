@@ -213,7 +213,7 @@ func TestStaker(t *testing.T) {
 	require.Len(t, autoRenewEvents, 0)
 
 	// AddDelegation
-	receipt, _, err = staker.AddDelegation(queuedID, minStake, false, 100).
+	receipt, _, err = staker.AddDelegation(queuedID, minStake, 100).
 		Send().
 		WithSigner(stargate).
 		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
@@ -243,28 +243,12 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, big.NewInt(0).String(), validationTotals.DelegationsLockedStake.String())
 
 	// UpdateDelegationAutoRenew - Enable AutoRenew
-	receipt, _, err = staker.UpdateDelegationAutoRenew(delegationID, true).
+	receipt, _, err = staker.SignalDelegationExit(delegationID).
 		Send().
 		WithSigner(stargate).
 		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
-	require.False(t, receipt.Reverted)
-
-	delegatorAutoRenewEvents, err := staker.FilterDelegationUpdatedAutoRenew(newRange(receipt), nil, logdb.ASC)
-	require.NoError(t, err)
-	require.Len(t, delegatorAutoRenewEvents, 1)
-
-	// UpdateDelegationAutoRenew - Disable AutoRenew
-	receipt, _, err = staker.UpdateDelegationAutoRenew(delegationID, false).
-		Send().
-		WithSigner(stargate).
-		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
-	require.NoError(t, err)
-	require.False(t, receipt.Reverted)
-
-	delegatorAutoRenewEvents, err = staker.FilterDelegationUpdatedAutoRenew(newRange(receipt), nil, logdb.ASC)
-	require.NoError(t, err)
-	require.Len(t, delegatorAutoRenewEvents, 1)
+	require.True(t, receipt.Reverted) // should revert since it hasn't started
 
 	// Withdraw
 	receipt, _, err = staker.WithdrawStake(queuedID).Send().WithSigner(validatorKey).WithOptions(txOpts()).SubmitAndConfirm(txContext(t))

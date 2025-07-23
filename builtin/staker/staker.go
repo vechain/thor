@@ -231,12 +231,11 @@ func (s *Staker) SetOnline(id thor.Bytes32, online bool) (bool, error) {
 func (s *Staker) AddDelegation(
 	validationID thor.Bytes32,
 	stake *big.Int,
-	autoRenew bool,
 	multiplier uint8,
 ) (thor.Bytes32, error) {
 	stakeETH := new(big.Int).Div(stake, big.NewInt(1e18))
-	logger.Debug("adding delegation", "ValidationID", validationID, "stake", stakeETH, "autoRenew", autoRenew, "multiplier", multiplier)
-	if id, err := s.delegations.Add(validationID, stake, autoRenew, multiplier); err != nil {
+	logger.Debug("adding delegation", "ValidationID", validationID, "stake", stakeETH, "multiplier", multiplier)
+	if id, err := s.delegations.Add(validationID, stake, multiplier); err != nil {
 		logger.Info("failed to add delegation", "ValidationID", validationID, "error", err)
 		return thor.Bytes32{}, err
 	} else {
@@ -281,28 +280,19 @@ func (s *Staker) HasDelegations(
 	if aggregation == nil || aggregation.IsEmpty() {
 		return false, nil
 	}
-	total := new(big.Int).Add(aggregation.CurrentRecurringVET, aggregation.CurrentOneTimeVET)
-	return total.Sign() > 0, nil
+	return aggregation.LockedVET.Sign() == 1, nil
 }
 
-// UpdateDelegationAutoRenew updates the auto-renewal status of a delegation.
-func (s *Staker) UpdateDelegationAutoRenew(
-	delegationID thor.Bytes32,
-	autoRenew bool,
-) error {
-	logger.Debug("updating autorenew", "delegationID", delegationID, "autoRenew", autoRenew)
-	var err error
-	if autoRenew {
-		err = s.delegations.EnableAutoRenew(delegationID)
-	} else {
-		err = s.delegations.DisableAutoRenew(delegationID)
-	}
-	if err != nil {
+// SignalDelegationExit updates the auto-renewal status of a delegation.
+func (s *Staker) SignalDelegationExit(delegationID thor.Bytes32) error {
+	logger.Debug("updating autorenew", "delegationID", delegationID)
+	if err := s.delegations.SignalExit(delegationID); err != nil {
 		logger.Info("update autorenew failed", "delegationID", delegationID, "error", err)
-	} else {
-		logger.Info("updated autorenew", "delegationID", delegationID)
+		return err
 	}
-	return err
+
+	logger.Info("updated autorenew", "delegationID", delegationID)
+	return nil
 }
 
 // WithdrawDelegation allows expired and queued delegations to withdraw their stake.
@@ -345,11 +335,10 @@ func (s *Staker) GetValidatorsTotals(validationID thor.Bytes32) (*ValidationTota
 	if err != nil {
 		return nil, err
 	}
-	delegationLockedStake := big.NewInt(0).Add(aggregation.CurrentRecurringVET, aggregation.CurrentOneTimeVET)
 	return &ValidationTotals{
-		TotalLockedStake:        big.NewInt(0).Add(validator.LockedVET, delegationLockedStake),
+		TotalLockedStake:        big.NewInt(0).Add(validator.LockedVET, aggregation.LockedVET),
 		TotalLockedWeight:       validator.Weight,
-		DelegationsLockedStake:  big.NewInt(0).Add(aggregation.CurrentRecurringVET, aggregation.CurrentOneTimeVET),
-		DelegationsLockedWeight: big.NewInt(0).Add(aggregation.CurrentRecurringWeight, aggregation.CurrentOneTimeWeight),
+		DelegationsLockedStake:  aggregation.LockedVET,
+		DelegationsLockedWeight: aggregation.LockedWeight,
 	}, nil
 }

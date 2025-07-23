@@ -244,7 +244,6 @@ func init() {
 			var args struct {
 				ValidationID common.Hash
 				Stake        *big.Int
-				AutoRenew    bool
 				Multiplier   uint8
 			}
 			env.ParseArgs(&args)
@@ -254,7 +253,6 @@ func init() {
 				AddDelegation(
 					thor.Bytes32(args.ValidationID),
 					args.Stake,
-					args.AutoRenew,
 					args.Multiplier,
 				)
 			if err != nil {
@@ -276,15 +274,14 @@ func init() {
 
 			return []any{stake, ""}
 		}},
-		{"native_updateDelegationAutoRenew", func(env *xenv.Environment) []any {
+		{"native_signalDelegationExit", func(env *xenv.Environment) []any {
 			var args struct {
 				DelegationID common.Hash
-				AutoRenew    bool
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			err := Staker.NativeMetered(env.State(), charger).UpdateDelegationAutoRenew(thor.Bytes32(args.DelegationID), args.AutoRenew)
+			err := Staker.NativeMetered(env.State(), charger).SignalDelegationExit(thor.Bytes32(args.DelegationID))
 			if err != nil {
 				return []any{fmt.Sprintf("revert: %v", err)}
 			}
@@ -308,7 +305,7 @@ func init() {
 				lastPeriod = *delegation.LastIteration
 			}
 			locked := delegation.Started(validator) && !delegation.Ended(validator)
-			return []any{delegation.ValidationID, delegation.Stake, delegation.FirstIteration, lastPeriod, delegation.Multiplier, delegation.AutoRenew, locked, ""}
+			return []any{delegation.ValidationID, delegation.Stake, delegation.FirstIteration, lastPeriod, delegation.Multiplier, locked, ""}
 		}},
 		{"native_getRewards", func(env *xenv.Environment) []any {
 			var args struct {

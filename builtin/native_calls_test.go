@@ -1809,11 +1809,11 @@ func TestStakerContract_Native_Revert(t *testing.T) {
 	assert.True(t, receipt.Reverted)
 
 	// update delegator auto renew
-	updateDelegatorAutoRenewArgs := []any{thor.Bytes32{}, false}
+	updateDelegatorAutoRenewArgs := []any{thor.Bytes32{}}
 	desc = TestTxDescription{
 		t:          t,
 		abi:        abi,
-		methodName: "updateDelegationAutoRenew",
+		methodName: "signalDelegationExit",
 		address:    toAddr,
 		acc:        genesis.DevAccounts()[2],
 		args:       updateDelegatorAutoRenewArgs,
@@ -1823,7 +1823,7 @@ func TestStakerContract_Native_Revert(t *testing.T) {
 	assert.True(t, receipt.Reverted)
 
 	// addDelegation
-	addDelegationArgs := []any{thor.Bytes32{}, false, uint8(1)}
+	addDelegationArgs := []any{thor.Bytes32{}, uint8(1)}
 	desc = TestTxDescription{
 		t:          t,
 		abi:        abi,
