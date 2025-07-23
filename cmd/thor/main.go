@@ -422,24 +422,45 @@ func soloAction(ctx *cli.Context) error {
 		}
 	}
 
-	txPoolOption := defaultTxPoolOptions
-	txPoolOption.Limit, err = readIntFromUInt64Flag(ctx.Uint64(txPoolLimitFlag.Name))
-	if err != nil {
-		return errors.Wrap(err, "parse txpool-limit flag")
+	minTxPriorityFee := ctx.Uint64(minEffectivePriorityFeeFlag.Name)
+	if minTxPriorityFee > 0 {
+		log.Info(fmt.Sprintf("the minimum effective priority fee required in transactions is %d wei", minTxPriorityFee))
 	}
-	txPoolOption.LimitPerAccount, err = readIntFromUInt64Flag(ctx.Uint64(txPoolLimitPerAccountFlag.Name))
-	if err != nil {
-		return errors.Wrap(err, "parse txpool-limit-per-account flag")
+	options := solo.Options{
+		GasLimit:         ctx.Uint64(gasLimitFlag.Name),
+		SkipLogs:         skipLogs,
+		MinTxPriorityFee: minTxPriorityFee,
+		OnDemand:         onDemandBlockProduction,
+		BlockInterval:    blockProductionInterval,
 	}
 
-	txPool := txpool.New(repo, state.NewStater(mainDB), txPoolOption, forkConfig)
-	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
+	stater := state.NewStater(mainDB)
+	engine := solo.NewEngine(repo, stater, logDB, options, forkConfig)
+
+	var pool solo.TxPool
+	if ctx.Bool(onDemandFlag.Name) {
+		pool = solo.NewOnDemandTxPool(engine)
+	} else {
+		txPoolOption := defaultTxPoolOptions
+		txPoolOption.Limit, err = readIntFromUInt64Flag(ctx.Uint64(txPoolLimitFlag.Name))
+		if err != nil {
+			return errors.Wrap(err, "parse txpool-limit flag")
+		}
+		txPoolOption.LimitPerAccount, err = readIntFromUInt64Flag(ctx.Uint64(txPoolLimitPerAccountFlag.Name))
+		if err != nil {
+			return errors.Wrap(err, "parse txpool-limit-per-account flag")
+		}
+
+		txPool := txpool.New(repo, state.NewStater(mainDB), txPoolOption, forkConfig)
+		defer func() { log.Info("closing tx pool..."); txPool.Close() }()
+		pool = txPool
+	}
 
 	apiURL, srvCloser, err := httpserver.StartAPIServer(
 		ctx.String(apiAddrFlag.Name),
 		repo,
-		state.NewStater(mainDB),
-		txPool,
+		stater,
+		pool,
 		logDB,
 		bft.NewMockedEngine(repo.GenesisBlock().Header().ID()),
 		&solo.Communicator{},
@@ -463,25 +484,7 @@ func soloAction(ctx *cli.Context) error {
 		defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
 	}
 
-	minTxPriorityFee := ctx.Uint64(minEffectivePriorityFeeFlag.Name)
-	if minTxPriorityFee > 0 {
-		log.Info(fmt.Sprintf("the minimum effective priority fee required in transactions is %d wei", minTxPriorityFee))
-	}
-
-	options := solo.Options{
-		GasLimit:         ctx.Uint64(gasLimitFlag.Name),
-		SkipLogs:         skipLogs,
-		MinTxPriorityFee: minTxPriorityFee,
-		OnDemand:         onDemandBlockProduction,
-		BlockInterval:    blockProductionInterval,
-	}
-
-	return solo.New(repo,
-		state.NewStater(mainDB),
-		logDB,
-		txPool,
-		forkConfig,
-		options).Run(exitSignal)
+	return solo.New(repo, stater, pool, options, engine).Run(exitSignal)
 }
 
 func masterKeyAction(ctx *cli.Context) error {

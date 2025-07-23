@@ -31,13 +31,17 @@ func newSolo() *Solo {
 	repo, _ := chain.NewRepository(db, b)
 	mempool := txpool.New(repo, stater, txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute}, &thor.NoFork)
 
-	return New(repo, stater, logDb, mempool, &thor.ForkConfig{GALACTICA: math.MaxUint32, HAYABUSA_TP: 1}, Options{
+	opts := Options{
 		GasLimit:         0,
 		SkipLogs:         false,
 		MinTxPriorityFee: 0,
 		OnDemand:         true,
 		BlockInterval:    thor.BlockInterval,
-	})
+	}
+
+	engine := NewEngine(repo, stater, logDb, opts, &thor.ForkConfig{GALACTICA: math.MaxUint32, HAYABUSA_TP: 1})
+
+	return New(repo, stater, mempool, opts, engine)
 }
 
 func TestInitSolo(t *testing.T) {

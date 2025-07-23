@@ -35,7 +35,6 @@ import (
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/txpool"
 )
 
 var logger = log.WithContext("pkg", "api")
@@ -68,7 +67,7 @@ func StartAPIServer(
 	addr string,
 	repo *chain.Repository,
 	stater *state.Stater,
-	txPool *txpool.TxPool,
+	txPool transactions.Pool,
 	logDB *logdb.LogDB,
 	bft bft.Committer,
 	nw api.Network,
