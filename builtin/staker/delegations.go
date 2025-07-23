@@ -27,7 +27,7 @@ func newDelegations(storage *storage) *delegations {
 }
 
 func (d *delegations) Add(
-	validationID thor.Bytes32,
+	validationID thor.Address,
 	stake *big.Int,
 	autoRenew bool,
 	multiplier uint8,

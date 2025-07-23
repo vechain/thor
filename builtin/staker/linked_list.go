@@ -17,8 +17,8 @@ import (
 // removing, and popping validations.
 // It allows us to maintain to linked list for both the queued validations and the active validations
 type linkedList struct {
-	head    *solidity.Bytes32
-	tail    *solidity.Bytes32
+	head    *solidity.Address
+	tail    *solidity.Address
 	count   *solidity.Uint256
 	storage *storage
 }
@@ -30,37 +30,34 @@ func newLinkedList(
 	countPos thor.Bytes32,
 ) *linkedList {
 	return &linkedList{
-		head:    solidity.NewBytes32(storage.context, headPos),
-		tail:    solidity.NewBytes32(storage.context, tailPos),
+		head:    solidity.NewAddress(storage.context, headPos),
+		tail:    solidity.NewAddress(storage.context, tailPos),
 		count:   solidity.NewUint256(storage.context, countPos),
 		storage: storage,
 	}
 }
 
 // Pop removes the head of the linked list, sets the new head, and returns the removed head
-func (l *linkedList) Pop() (thor.Bytes32, *Validation, error) {
+func (l *linkedList) Pop() (thor.Address, *Validation, error) {
 	oldHeadID, err := l.head.Get()
 	if err != nil {
-		return thor.Bytes32{}, nil, err
-	}
-	if oldHeadID.IsZero() {
-		return thor.Bytes32{}, nil, errors.New("no head present")
+		return thor.Address{}, nil, errors.New("no head present")
 	}
 
-	oldHead, err := l.storage.GetValidation(oldHeadID)
+	oldHead, err := l.storage.GetValidation(*oldHeadID)
 	if err != nil {
-		return thor.Bytes32{}, nil, err
+		return thor.Address{}, nil, err
 	}
 
-	if _, err := l.Remove(oldHeadID, oldHead); err != nil {
-		return thor.Bytes32{}, nil, err
+	if _, err := l.Remove(*oldHeadID, oldHead); err != nil {
+		return thor.Address{}, nil, err
 	}
 
-	return oldHeadID, oldHead, nil
+	return *oldHeadID, oldHead, nil
 }
 
 // Remove removes a validator from the linked list
-func (l *linkedList) Remove(id thor.Bytes32, validator *Validation) (removed bool, err error) {
+func (l *linkedList) Remove(id thor.Address, validator *Validation) (removed bool, err error) {
 	defer func() {
 		if err == nil && removed {
 			if subErr := l.count.Sub(big.NewInt(1)); subErr != nil {
@@ -115,7 +112,7 @@ func (l *linkedList) Remove(id thor.Bytes32, validator *Validation) (removed boo
 }
 
 // Add adds a new validator to the tail of the linked list
-func (l *linkedList) Add(newTail thor.Bytes32, validation *Validation) (added bool, err error) {
+func (l *linkedList) Add(newTail thor.Address, validation *Validation) (added bool, err error) {
 	defer func() {
 		if err == nil && added {
 			if addErr := l.count.Add(big.NewInt(1)); addErr != nil {
@@ -139,14 +136,14 @@ func (l *linkedList) Add(newTail thor.Bytes32, validation *Validation) (added bo
 		return true, l.storage.SetValidation(newTail, validation, false)
 	}
 
-	oldTail, err := l.storage.GetValidation(oldTailID)
+	oldTail, err := l.storage.GetValidation(*oldTailID)
 	if err != nil {
 		return false, err
 	}
 	oldTail.Next = &newTail
-	validation.Prev = &oldTailID
+	validation.Prev = oldTailID
 
-	if err := l.storage.SetValidation(oldTailID, oldTail, false); err != nil {
+	if err := l.storage.SetValidation(*oldTailID, oldTail, false); err != nil {
 		return false, err
 	}
 	if err := l.storage.SetValidation(newTail, validation, false); err != nil {
@@ -164,7 +161,7 @@ func (l *linkedList) Peek() (*Validation, error) {
 	if err != nil {
 		return nil, err
 	}
-	return l.storage.GetValidation(head)
+	return l.storage.GetValidation(*head)
 }
 
 // Len returns the length of the linked list
@@ -173,7 +170,7 @@ func (l *linkedList) Len() (*big.Int, error) {
 }
 
 // Iter iterates through the linked list and calls the callback function for each entry
-func (l *linkedList) Iter(callback func(thor.Bytes32, *Validation) error) error {
+func (l *linkedList) Iter(callback func(thor.Address, *Validation) error) error {
 	ptr, err := l.head.Get()
 	if err != nil {
 		return err
@@ -183,7 +180,7 @@ func (l *linkedList) Iter(callback func(thor.Bytes32, *Validation) error) error 
 			break
 		}
 
-		entry, err := l.storage.GetValidation(ptr)
+		entry, err := l.storage.GetValidation(*ptr)
 		if err != nil {
 			return err
 		}
@@ -191,14 +188,14 @@ func (l *linkedList) Iter(callback func(thor.Bytes32, *Validation) error) error 
 			break
 		}
 
-		if err := callback(ptr, entry); err != nil {
+		if err := callback(*ptr, entry); err != nil {
 			return err
 		}
 
 		if entry.Next == nil || entry.Next.IsZero() {
 			break
 		}
-		ptr = *entry.Next
+		ptr = entry.Next
 	}
 	return nil
 }

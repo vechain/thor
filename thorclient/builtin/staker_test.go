@@ -119,9 +119,8 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, firstActive.ExitBlock, uint32(math.MaxUint32))
 
 	// LookupNode
-	getRes, id, err := staker.LookupNode(*firstActive.Master)
+	getRes, err = staker.Get(*firstActive.Master)
 	require.NoError(t, err)
-	require.False(t, id.IsZero())
 	require.True(t, getRes.Exists())
 
 	// Next
@@ -182,7 +181,7 @@ func TestStaker(t *testing.T) {
 	increaseEvents, err := staker.FilterStakeIncreased(newRange(receipt), nil, logdb.ASC)
 	require.NoError(t, err)
 	require.Len(t, increaseEvents, 1)
-	require.Equal(t, queuedID, increaseEvents[0].ValidationID)
+	require.Equal(t, validator.Address, increaseEvents[0].ValidationID)
 	require.Equal(t, validator.Address, increaseEvents[0].Endorsor)
 	require.Equal(t, minStake, increaseEvents[0].Added)
 

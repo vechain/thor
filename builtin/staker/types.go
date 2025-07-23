@@ -38,8 +38,8 @@ type Validation struct {
 
 	Weight *big.Int // LockedVET x2 + total weight from delegators
 
-	Next *thor.Bytes32 `rlp:"nil"` // doubly linked list
-	Prev *thor.Bytes32 `rlp:"nil"` // doubly linked list
+	Next *thor.Address `rlp:"nil"` // doubly linked list
+	Prev *thor.Address `rlp:"nil"` // doubly linked list
 }
 
 type ValidationTotals struct {
@@ -104,7 +104,7 @@ func (v *Validation) Renew() *Renewal {
 }
 
 type Delegation struct {
-	ValidationID   thor.Bytes32 // the ID of the validation to which the delegator is delegating
+	ValidationID   thor.Address // the ID of the validation to which the delegator is delegating
 	Stake          *big.Int
 	AutoRenew      bool
 	Multiplier     uint8
