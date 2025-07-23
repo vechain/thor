@@ -35,6 +35,6 @@ func TestAddress(t *testing.T) {
 	// Test `Get`
 	retrievedValue, err := address.Get()
 	assert.NoError(t, err)
-	assert.Equal(t, value, *retrievedValue)
+	assert.Equal(t, value, retrievedValue)
 	assert.Equal(t, ctx.charger.TotalGas(), thor.SloadGas)
 }

@@ -58,7 +58,7 @@ func init() {
 			if validator.ExitBlock != nil {
 				exitBlock = *validator.ExitBlock
 			}
-			return []any{validator.Node, validator.Endorsor, validator.LockedVET, validator.Weight, validator.Status, validator.Online, validator.Period, validator.StartBlock, exitBlock, ""}
+			return []any{thor.Address(args.ValidationID), validator.Endorsor, validator.LockedVET, validator.Weight, validator.Status, validator.Online, validator.Period, validator.StartBlock, exitBlock, ""}
 		}},
 		{"native_getWithdrawable", func(env *xenv.Environment) []any {
 			var args struct {

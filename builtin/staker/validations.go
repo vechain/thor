@@ -52,13 +52,13 @@ func (v *validations) IsActive() (bool, error) {
 // FirstActive returns validator address of first entry.
 func (v *validations) FirstActive() (*thor.Address, error) {
 	validationID, err := v.leaderGroup.head.Get()
-	return validationID, err
+	return &validationID, err
 }
 
 // FirstQueued returns validator address of first entry.
 func (v *validations) FirstQueued() (*thor.Address, error) {
 	validationID, err := v.validatorQueue.head.Get()
-	return validationID, err
+	return &validationID, err
 }
 
 func (v *validations) LeaderGroupIterator(callback func(thor.Address, *Validation) error) error {
@@ -167,7 +167,7 @@ func (v *validations) ActivateNext(
 		return nil, err
 	}
 
-	logger.Debug("activating validator", "id", id, "node", validator.Node, "block", currentBlock)
+	logger.Debug("activating validator", "id", id, "block", currentBlock)
 
 	// update the validator
 	validatorLocked := big.NewInt(0).Add(validator.LockedVET, validator.PendingLocked)

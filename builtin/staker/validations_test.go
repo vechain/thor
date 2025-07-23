@@ -283,9 +283,9 @@ func TestStaker_AddValidator_QueueOrder(t *testing.T) {
 	// iterating using the `Next` method should return the same order
 	loopID := first
 	for i := range 100 {
-		loopVal, err := staker.storage.GetValidation(*loopID)
+		_, err := staker.storage.GetValidation(*loopID)
 		assert.NoError(t, err)
-		assert.Equal(t, expectedOrder[i], loopVal.Node)
+		assert.Equal(t, expectedOrder[i], *loopID)
 
 		next, err := staker.Next(*loopID)
 		assert.NoError(t, err)
@@ -1295,9 +1295,9 @@ func TestStaker_Next(t *testing.T) {
 
 	current := firstQueued
 	for i := range 100 {
-		currentVal, err := staker.Get(*current)
+		_, err := staker.Get(*current)
 		assert.NoError(t, err)
-		assert.Equal(t, queuedGroup[i], currentVal.Node)
+		assert.Equal(t, queuedGroup[i], *current)
 
 		next, err := staker.Next(*current)
 		assert.NoError(t, err)
@@ -1962,7 +1962,7 @@ func TestStaker_Housekeep_Exit_Decrements_Leader_Group_Size(t *testing.T) {
 	assert.Equal(t, big.NewInt(1), leaderGroupSize)
 	leaderGroupHead, err = staker.validations.leaderGroup.Peek()
 	assert.NoError(t, err)
-	assert.Equal(t, addr3, leaderGroupHead.Node)
+	assert.Equal(t, addr3, leaderGroupHead.Endorsor)
 
 	_, _, err = staker.Housekeep(exitBlock * 2)
 	assert.NoError(t, err)

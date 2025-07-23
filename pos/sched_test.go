@@ -22,7 +22,6 @@ func createParams() (map[thor.Address]*staker.Validation, *big.Int) {
 	for _, acc := range genesis.DevAccounts() {
 		stake := big.NewInt(0).SetBytes(acc.Address[10:]) // use the last 10 bytes to create semi random, but deterministic stake
 		validator := &staker.Validation{
-			Node:   acc.Address,
 			Weight: stake,
 			Online: true,
 		}
@@ -145,7 +144,6 @@ func TestScheduler_Distribution(t *testing.T) {
 				stake := tc.stakes(i, acc.Address)
 				stake = stake.Mul(stake, big.NewInt(1e18)) // convert to wei
 				validators[acc.Address] = &staker.Validation{
-					Node:   acc.Address,
 					Weight: stake,
 					Online: true,
 				}
@@ -265,7 +263,6 @@ func TestScheduler_AllValidatorsScheduled(t *testing.T) {
 			stake = new(big.Int).Mul(eth, eth)
 		}
 		validator := &staker.Validation{
-			Node:   acc.Address,
 			Weight: stake,
 			Online: true,
 		}

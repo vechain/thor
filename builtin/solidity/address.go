@@ -19,14 +19,14 @@ func NewAddress(context *Context, pos thor.Bytes32) *Address {
 	return &Address{context: context, pos: pos}
 }
 
-func (a *Address) Get() (*thor.Address, error) {
+func (a *Address) Get() (thor.Address, error) {
 	storage, err := a.context.state.GetStorage(a.context.address, a.pos)
 	if err != nil {
-		return nil, err
+		return thor.Address{}, err
 	}
 	a.context.UseGas(thor.SloadGas)
 	address := thor.BytesToAddress(storage.Bytes())
-	return &address, nil
+	return address, nil
 }
 
 func (a *Address) Set(address *thor.Address, newValue bool) {

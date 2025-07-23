@@ -44,16 +44,16 @@ func (l *linkedList) Pop() (thor.Address, *Validation, error) {
 		return thor.Address{}, nil, errors.New("no head present")
 	}
 
-	oldHead, err := l.storage.GetValidation(*oldHeadID)
+	oldHead, err := l.storage.GetValidation(oldHeadID)
 	if err != nil {
 		return thor.Address{}, nil, err
 	}
 
-	if _, err := l.Remove(*oldHeadID, oldHead); err != nil {
+	if _, err := l.Remove(oldHeadID, oldHead); err != nil {
 		return thor.Address{}, nil, err
 	}
 
-	return *oldHeadID, oldHead, nil
+	return oldHeadID, oldHead, nil
 }
 
 // Remove removes a validator from the linked list
@@ -136,14 +136,14 @@ func (l *linkedList) Add(newTail thor.Address, validation *Validation) (added bo
 		return true, l.storage.SetValidation(newTail, validation, false)
 	}
 
-	oldTail, err := l.storage.GetValidation(*oldTailID)
+	oldTail, err := l.storage.GetValidation(oldTailID)
 	if err != nil {
 		return false, err
 	}
 	oldTail.Next = &newTail
-	validation.Prev = oldTailID
+	validation.Prev = &oldTailID
 
-	if err := l.storage.SetValidation(*oldTailID, oldTail, false); err != nil {
+	if err := l.storage.SetValidation(oldTailID, oldTail, false); err != nil {
 		return false, err
 	}
 	if err := l.storage.SetValidation(newTail, validation, false); err != nil {
@@ -161,7 +161,7 @@ func (l *linkedList) Peek() (*Validation, error) {
 	if err != nil {
 		return nil, err
 	}
-	return l.storage.GetValidation(*head)
+	return l.storage.GetValidation(head)
 }
 
 // Len returns the length of the linked list
@@ -180,7 +180,7 @@ func (l *linkedList) Iter(callback func(thor.Address, *Validation) error) error 
 			break
 		}
 
-		entry, err := l.storage.GetValidation(*ptr)
+		entry, err := l.storage.GetValidation(ptr)
 		if err != nil {
 			return err
 		}
@@ -188,14 +188,14 @@ func (l *linkedList) Iter(callback func(thor.Address, *Validation) error) error 
 			break
 		}
 
-		if err := callback(*ptr, entry); err != nil {
+		if err := callback(ptr, entry); err != nil {
 			return err
 		}
 
 		if entry.Next == nil || entry.Next.IsZero() {
 			break
 		}
-		ptr = entry.Next
+		ptr = *entry.Next
 	}
 	return nil
 }
