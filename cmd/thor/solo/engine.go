@@ -61,12 +61,23 @@ func NewEngine(
 	}
 }
 
-func (e *Engine) Pack(pendingTxs tx.Transactions, onDemand bool) ([]*tx.Transaction, error) {
+func (e *Engine) Pack(txs tx.Transactions, onDemand bool) ([]*tx.Transaction, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
 	best := e.repo.BestBlockSummary()
 	now := uint64(time.Now().Unix())
+
+	pendingTxs := make([]*tx.Transaction, 0)
+	for _, tx := range txs {
+		pendingTxs = append(pendingTxs, tx)
+	}
+
+	forkTxs, err := e.ForkTransactions(best)
+	if err != nil {
+		return nil, errors.WithMessage(err, "add fork transactions")
+	}
+	pendingTxs = append(pendingTxs, forkTxs...)
 
 	var txsToRemove []*tx.Transaction
 

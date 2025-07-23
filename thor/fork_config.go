@@ -69,8 +69,8 @@ var SoloFork = ForkConfig{
 	FINALITY:  0,
 	// Any subsequent fork should be started from block 1.
 	GALACTICA:   1,
-	HAYABUSA_TP: 1,
-	HAYABUSA:    1,
+	HAYABUSA_TP: 2,
+	HAYABUSA:    2,
 }
 
 // for well-known networks
