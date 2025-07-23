@@ -203,18 +203,50 @@ func TestEvents(t *testing.T) {
 			{"query all events asc", &EventFilter{Order: ASC}, allEvents},
 			{"query all events desc", &EventFilter{Order: DESC}, allEvents.Reverse()},
 			{"query all events limit offset", &EventFilter{Options: &Options{Offset: 1, Limit: 10}}, allEvents[1:11]},
-			{"query all events range", &EventFilter{Range: &Range{From: 10, To: 20}}, allEvents.Filter(func(ev *Event) bool { return ev.BlockNumber >= 10 && ev.BlockNumber <= 20 })},
-			{"query events with range and desc", &EventFilter{Range: &Range{From: 10, To: 20}, Order: DESC}, allEvents.Filter(func(ev *Event) bool { return ev.BlockNumber >= 10 && ev.BlockNumber <= 20 }).Reverse()},
+			{
+				"query all events range",
+				&EventFilter{Range: &Range{From: 10, To: 20}},
+				allEvents.Filter(func(ev *Event) bool { return ev.BlockNumber >= 10 && ev.BlockNumber <= 20 }),
+			},
+			{
+				"query events with range and desc",
+				&EventFilter{Range: &Range{From: 10, To: 20}, Order: DESC},
+				allEvents.Filter(func(ev *Event) bool { return ev.BlockNumber >= 10 && ev.BlockNumber <= 20 }).Reverse(),
+			},
 			{"query events with limit with desc", &EventFilter{Order: DESC, Options: &Options{Limit: 10}}, allEvents.Reverse()[0:10]},
-			{"query all events with criteria", &EventFilter{CriteriaSet: []*EventCriteria{{Address: &allEvents[1].Address}}}, allEvents.Filter(func(ev *Event) bool {
-				return ev.Address == allEvents[1].Address
-			})},
-			{"query all events with multi-criteria", &EventFilter{CriteriaSet: []*EventCriteria{{Address: &allEvents[1].Address}, {Topics: [5]*thor.Bytes32{allEvents[2].Topics[0]}}, {Topics: [5]*thor.Bytes32{allEvents[3].Topics[0]}}}}, allEvents.Filter(func(ev *Event) bool {
-				return ev.Address == allEvents[1].Address || *ev.Topics[0] == *allEvents[2].Topics[0] || *ev.Topics[0] == *allEvents[3].Topics[0]
-			})},
-			{"query all events with multi-value multi-criteria", &EventFilter{CriteriaSet: []*EventCriteria{{Address: &allEvents[1].Address}, {Address: &allEvents[2].Address, Topics: multiTopicsCriteria}, {Topics: [5]*thor.Bytes32{allEvents[3].Topics[0]}}}}, allEvents.Filter(func(ev *Event) bool {
-				return ev.Address == allEvents[1].Address || *ev.Topics[0] == *allEvents[3].Topics[0]
-			})},
+			{
+				"query all events with criteria",
+				&EventFilter{CriteriaSet: []*EventCriteria{{Address: &allEvents[1].Address}}},
+				allEvents.Filter(func(ev *Event) bool {
+					return ev.Address == allEvents[1].Address
+				}),
+			},
+			{
+				"query all events with multi-criteria",
+				&EventFilter{
+					CriteriaSet: []*EventCriteria{
+						{Address: &allEvents[1].Address},
+						{Topics: [5]*thor.Bytes32{allEvents[2].Topics[0]}},
+						{Topics: [5]*thor.Bytes32{allEvents[3].Topics[0]}},
+					},
+				},
+				allEvents.Filter(func(ev *Event) bool {
+					return ev.Address == allEvents[1].Address || *ev.Topics[0] == *allEvents[2].Topics[0] || *ev.Topics[0] == *allEvents[3].Topics[0]
+				}),
+			},
+			{
+				"query all events with multi-value multi-criteria",
+				&EventFilter{
+					CriteriaSet: []*EventCriteria{
+						{Address: &allEvents[1].Address},
+						{Address: &allEvents[2].Address, Topics: multiTopicsCriteria},
+						{Topics: [5]*thor.Bytes32{allEvents[3].Topics[0]}},
+					},
+				},
+				allEvents.Filter(func(ev *Event) bool {
+					return ev.Address == allEvents[1].Address || *ev.Topics[0] == *allEvents[3].Topics[0]
+				}),
+			},
 		}
 
 		for _, tt := range tests {
@@ -237,15 +269,31 @@ func TestEvents(t *testing.T) {
 			{"query all transfers asc", &TransferFilter{Order: ASC}, allTransfers},
 			{"query all transfers desc", &TransferFilter{Order: DESC}, allTransfers.Reverse()},
 			{"query all transfers limit offset", &TransferFilter{Options: &Options{Offset: 1, Limit: 10}}, allTransfers[1:11]},
-			{"query all transfers range", &TransferFilter{Range: &Range{From: 10, To: 20}}, allTransfers.Filter(func(tr *Transfer) bool { return tr.BlockNumber >= 10 && tr.BlockNumber <= 20 })},
-			{"query transfers with range and desc", &TransferFilter{Range: &Range{From: 10, To: 20}, Order: DESC}, allTransfers.Filter(func(tr *Transfer) bool { return tr.BlockNumber >= 10 && tr.BlockNumber <= 20 }).Reverse()},
+			{
+				"query all transfers range",
+				&TransferFilter{Range: &Range{From: 10, To: 20}},
+				allTransfers.Filter(func(tr *Transfer) bool { return tr.BlockNumber >= 10 && tr.BlockNumber <= 20 }),
+			},
+			{
+				"query transfers with range and desc",
+				&TransferFilter{Range: &Range{From: 10, To: 20}, Order: DESC},
+				allTransfers.Filter(func(tr *Transfer) bool { return tr.BlockNumber >= 10 && tr.BlockNumber <= 20 }).Reverse(),
+			},
 			{"query transfers with limit with desc", &TransferFilter{Order: DESC, Options: &Options{Limit: 10}}, allTransfers.Reverse()[0:10]},
-			{"query all transfers with criteria", &TransferFilter{CriteriaSet: []*TransferCriteria{{Sender: &allTransfers[1].Sender}}}, allTransfers.Filter(func(tr *Transfer) bool {
-				return tr.Sender == allTransfers[1].Sender
-			})},
-			{"query all transfers with multi-criteria", &TransferFilter{CriteriaSet: []*TransferCriteria{{Sender: &allTransfers[1].Sender}, {Recipient: &allTransfers[2].Recipient}}}, allTransfers.Filter(func(tr *Transfer) bool {
-				return tr.Sender == allTransfers[1].Sender || tr.Recipient == allTransfers[2].Recipient
-			})},
+			{
+				"query all transfers with criteria",
+				&TransferFilter{CriteriaSet: []*TransferCriteria{{Sender: &allTransfers[1].Sender}}},
+				allTransfers.Filter(func(tr *Transfer) bool {
+					return tr.Sender == allTransfers[1].Sender
+				}),
+			},
+			{
+				"query all transfers with multi-criteria",
+				&TransferFilter{CriteriaSet: []*TransferCriteria{{Sender: &allTransfers[1].Sender}, {Recipient: &allTransfers[2].Recipient}}},
+				allTransfers.Filter(func(tr *Transfer) bool {
+					return tr.Sender == allTransfers[1].Sender || tr.Recipient == allTransfers[2].Recipient
+				}),
+			},
 		}
 
 		for _, tt := range tests {

@@ -140,7 +140,9 @@ func (f *Fees) validateRewardPercentiles(req *http.Request) ([]float64, error) {
 			return nil, restutil.BadRequest(errors.New("rewardPercentiles values must be between 0 and 100"))
 		}
 		if i > 0 && val < rewardPercentiles[i-1] {
-			return nil, restutil.BadRequest(errors.New(fmt.Sprintf("reward percentiles must be in ascending order, but %f is less than %f", val, rewardPercentiles[i-1])))
+			return nil, restutil.BadRequest(
+				errors.New(fmt.Sprintf("reward percentiles must be in ascending order, but %f is less than %f", val, rewardPercentiles[i-1])),
+			)
 		}
 		rewardPercentiles = append(rewardPercentiles, val)
 	}

@@ -40,7 +40,14 @@ func TestCalcBaseFee(t *testing.T) {
 		var parentID thor.Bytes32
 		binary.BigEndian.PutUint32(parentID[:], 5)
 
-		parent := new(block.Builder).ParentID(parentID).GasLimit(test.parentGasLimit).GasUsed(test.parentGasUsed).BaseFee(big.NewInt(test.parentBaseFee)).Build().Header()
+		parent := new(
+			block.Builder,
+		).ParentID(parentID).
+			GasLimit(test.parentGasLimit).
+			GasUsed(test.parentGasUsed).
+			BaseFee(big.NewInt(test.parentBaseFee)).
+			Build().
+			Header()
 		if have, want := CalcBaseFee(parent, config()), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
 			t.Errorf("test %d: have %d  want %d, ", i, have, want)
 		}

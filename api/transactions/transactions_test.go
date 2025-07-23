@@ -343,12 +343,20 @@ func handleGetTransactionByIDWithBadQueryParams(t *testing.T) {
 }
 
 func handleGetTransactionByIDWithNonExistingHead(t *testing.T) {
-	res := httpGetAndCheckResponseStatus(t, "/transactions/"+legacyTx.ID().String()+"?head=0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 400)
+	res := httpGetAndCheckResponseStatus(
+		t,
+		"/transactions/"+legacyTx.ID().String()+"?head=0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+		400,
+	)
 	assert.Equal(t, "head: leveldb: not found", strings.TrimSpace(string(res)))
 }
 
 func handleGetTransactionReceiptByIDWithNonExistingHead(t *testing.T) {
-	res := httpGetAndCheckResponseStatus(t, "/transactions/"+legacyTx.ID().String()+"/receipt?head=0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 400)
+	res := httpGetAndCheckResponseStatus(
+		t,
+		"/transactions/"+legacyTx.ID().String()+"/receipt?head=0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+		400,
+	)
 	assert.Equal(t, "head: leveldb: not found", strings.TrimSpace(string(res)))
 }
 

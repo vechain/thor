@@ -371,7 +371,11 @@ func TestClient_GetFeesHistoryWithRewardPercentiles(t *testing.T) {
 		for i, p := range rewardPercentiles {
 			rewardPercentilesStr[i] = fmt.Sprint(p)
 		}
-		assert.Equal(t, "/fees/history?blockCount="+fmt.Sprint(blockCount)+"&newestBlock="+newestBlock+"&rewardPercentiles="+strings.Join(rewardPercentilesStr, ","), r.URL.Path+"?"+r.URL.RawQuery)
+		assert.Equal(
+			t,
+			"/fees/history?blockCount="+fmt.Sprint(blockCount)+"&newestBlock="+newestBlock+"&rewardPercentiles="+strings.Join(rewardPercentilesStr, ","),
+			r.URL.Path+"?"+r.URL.RawQuery,
+		)
 
 		feesHistoryBytes, _ := json.Marshal(expectedFeesHistory)
 		w.Write(feesHistoryBytes)

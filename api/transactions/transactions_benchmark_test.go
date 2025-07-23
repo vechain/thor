@@ -205,7 +205,13 @@ func benchmarkGetReceipt(b *testing.B, thorChain *testchain.Chain, randTxs tx.Tr
 	}
 }
 
-func createPackedChain(b *testing.B, db *muxdb.MuxDB, noBlocks int, accounts []genesis.DevAccount, createTxFunc func(chain *testchain.Chain) (tx.Transactions, error)) (*testchain.Chain, tx.Transactions) {
+func createPackedChain(
+	b *testing.B,
+	db *muxdb.MuxDB,
+	noBlocks int,
+	accounts []genesis.DevAccount,
+	createTxFunc func(chain *testchain.Chain) (tx.Transactions, error),
+) (*testchain.Chain, tx.Transactions) {
 	proposer := &accounts[0]
 
 	// mock a fake chain for block production
@@ -328,7 +334,12 @@ func createManyClausesPerTxDynFee(signerPK *ecdsa.PrivateKey, thorChain *testcha
 	return transactions, nil
 }
 
-func packTxsIntoBlock(thorChain *testchain.Chain, proposerAccount *genesis.DevAccount, parentBlk *block.Block, transactions tx.Transactions) (*block.Block, error) {
+func packTxsIntoBlock(
+	thorChain *testchain.Chain,
+	proposerAccount *genesis.DevAccount,
+	parentBlk *block.Block,
+	transactions tx.Transactions,
+) (*block.Block, error) {
 	p := packer.New(thorChain.Repo(), thorChain.Stater(), proposerAccount.Address, &proposerAccount.Address, thorChain.GetForkConfig(), 0)
 
 	parentSum, err := thorChain.Repo().GetBlockSummary(parentBlk.Header().ID())

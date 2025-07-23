@@ -503,7 +503,9 @@ func testFeesEndpoint(t *testing.T, testchain *testchain.Chain, ts *httptest.Ser
 		require.NotNil(t, feesPriority)
 
 		expectedFeesPriority := &api.FeesPriority{
-			MaxPriorityFeePerGas: (*hexutil.Big)(new(big.Int).Div(new(big.Int).Mul(big.NewInt(thor.InitialBaseFee), big.NewInt(priorityFeesPercentage)), big.NewInt(100))),
+			MaxPriorityFeePerGas: (*hexutil.Big)(
+				new(big.Int).Div(new(big.Int).Mul(big.NewInt(thor.InitialBaseFee), big.NewInt(priorityFeesPercentage)), big.NewInt(100)),
+			),
 		}
 
 		require.Equal(t, expectedFeesPriority, feesPriority)

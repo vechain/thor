@@ -67,7 +67,11 @@ func TestBeat2Reader_Read_ErrorWhenReadingBlocks(t *testing.T) {
 	thorChain := initChain(t)
 
 	// Act
-	beatReader := newBeat2Reader(thorChain.Repo(), thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), newMessageCache[api.Beat2Message](10))
+	beatReader := newBeat2Reader(
+		thorChain.Repo(),
+		thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+		newMessageCache[api.Beat2Message](10),
+	)
 	res, ok, err := beatReader.Read()
 
 	// Assert

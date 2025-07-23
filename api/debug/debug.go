@@ -78,7 +78,12 @@ func New(
 }
 
 // prepareClauseEnv prepares the runtime environment for the specified clause.
-func (d *Debug) prepareClauseEnv(ctx context.Context, block *block.Block, txID thor.Bytes32, clauseIndex uint32) (*runtime.Runtime, *runtime.TransactionExecutor, thor.Bytes32, error) {
+func (d *Debug) prepareClauseEnv(
+	ctx context.Context,
+	block *block.Block,
+	txID thor.Bytes32,
+	clauseIndex uint32,
+) (*runtime.Runtime, *runtime.TransactionExecutor, thor.Bytes32, error) {
 	rt, err := consensus.New(
 		d.repo,
 		d.stater,
@@ -257,7 +262,15 @@ func (d *Debug) createTracer(name string, config json.RawMessage) (tracers.Trace
 	return nil, errors.New("tracer is not defined")
 }
 
-func (d *Debug) traceCall(ctx context.Context, tracer tracers.Tracer, header *block.Header, st *state.State, txCtx *xenv.TransactionContext, gas uint64, clause *tx.Clause) (any, error) {
+func (d *Debug) traceCall(
+	ctx context.Context,
+	tracer tracers.Tracer,
+	header *block.Header,
+	st *state.State,
+	txCtx *xenv.TransactionContext,
+	gas uint64,
+	clause *tx.Clause,
+) (any, error) {
 	signer, _ := header.Signer()
 
 	rt := runtime.New(
@@ -301,7 +314,15 @@ func (d *Debug) traceCall(ctx context.Context, tracer tracers.Tracer, header *bl
 	return tracer.GetResult()
 }
 
-func (d *Debug) debugStorage(ctx context.Context, contractAddress thor.Address, block *block.Block, txID thor.Bytes32, clauseIndex uint32, keyStart []byte, maxResult int) (*api.StorageRangeResult, error) {
+func (d *Debug) debugStorage(
+	ctx context.Context,
+	contractAddress thor.Address,
+	block *block.Block,
+	txID thor.Bytes32,
+	clauseIndex uint32,
+	keyStart []byte,
+	maxResult int,
+) (*api.StorageRangeResult, error) {
 	rt, _, _, err := d.prepareClauseEnv(ctx, block, txID, clauseIndex)
 	if err != nil {
 		return nil, err

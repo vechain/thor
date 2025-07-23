@@ -112,7 +112,15 @@ func TestValidateBlock(t *testing.T) {
 			name: "valid block",
 			testFun: func(t *testing.T) {
 				baseFee := big.NewInt(100000)
-				tr := tx.MustSign(tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).BlockRef(tx.NewBlockRef(10)).MaxFeePerGas(new(big.Int).Sub(baseFee, common.Big1)).Gas(21000).Build(), genesis.DevAccounts()[0].PrivateKey)
+				tr := tx.MustSign(
+					tx.NewBuilder(tx.TypeDynamicFee).
+						ChainTag(repo.ChainTag()).
+						BlockRef(tx.NewBlockRef(10)).
+						MaxFeePerGas(new(big.Int).Sub(baseFee, common.Big1)).
+						Gas(21000).
+						Build(),
+					genesis.DevAccounts()[0].PrivateKey,
+				)
 				blk := new(block.Builder).BaseFee(baseFee).Transaction(tr).Build()
 
 				c := New(repo, stater, &thor.ForkConfig{GALACTICA: 0})

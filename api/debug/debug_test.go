@@ -413,7 +413,12 @@ func testHandleTraceCallWithRevisionAsNonExistingID(t *testing.T) {
 func testHandleTraceCallWithMalfomredRevision(t *testing.T) {
 	// Revision is a malformed byte array
 	traceCallOption := &api.TraceCallOption{}
-	res := httpPostAndCheckResponseStatus(t, "/debug/tracers/call?revision=012345678901234567890123456789012345678901234567890123456789012345", traceCallOption, 400)
+	res := httpPostAndCheckResponseStatus(
+		t,
+		"/debug/tracers/call?revision=012345678901234567890123456789012345678901234567890123456789012345",
+		traceCallOption,
+		400,
+	)
 	assert.Equal(t, "revision: invalid prefix", strings.TrimSpace(res))
 
 	// Revision is a not accepted string

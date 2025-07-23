@@ -563,7 +563,9 @@ func TestPrototypeNative(t *testing.T) {
 		Number: genesisBlock.Header().Number(),
 	}, &thor.NoFork)
 
-	code, _ := hex.DecodeString("60606040523415600e57600080fd5b603580601b6000396000f3006060604052600080fd00a165627a7a72305820edd8a93b651b5aac38098767f0537d9b25433278c9d155da2135efc06927fc960029")
+	code, _ := hex.DecodeString(
+		"60606040523415600e57600080fd5b603580601b6000396000f3006060604052600080fd00a165627a7a72305820edd8a93b651b5aac38098767f0537d9b25433278c9d155da2135efc06927fc960029",
+	)
 	exec, _ := rt.PrepareClause(tx.NewClause(nil).WithData(code), 0, math.MaxUint64, &xenv.TransactionContext{
 		ID:         thor.Bytes32{},
 		Origin:     master,
@@ -941,7 +943,12 @@ func TestExtensionNative(t *testing.T) {
 
 	chain := repo.NewChain(b2.Header().ID())
 
-	rt := runtime.New(chain, st, &xenv.BlockContext{Number: 2, Time: b2.Header().Timestamp(), TotalScore: b2.Header().TotalScore(), Signer: b2Signer}, &thor.NoFork)
+	rt := runtime.New(
+		chain,
+		st,
+		&xenv.BlockContext{Number: 2, Time: b2.Header().Timestamp(), TotalScore: b2.Header().TotalScore(), Signer: b2Signer},
+		&thor.NoFork,
+	)
 
 	test := &ctest{
 		rt:  rt,

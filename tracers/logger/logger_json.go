@@ -47,13 +47,33 @@ func (l *JSONLogger) CaptureStart(env *vm.EVM, _, _ common.Address, _ bool, _ []
 	l.env = env
 }
 
-func (l *JSONLogger) CaptureFault(pc uint64, op vm.OpCode, gas uint64, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, depth int, err error) {
+func (l *JSONLogger) CaptureFault(
+	pc uint64,
+	op vm.OpCode,
+	gas uint64,
+	cost uint64,
+	memory *vm.Memory,
+	stack *vm.Stack,
+	contract *vm.Contract,
+	depth int,
+	err error,
+) {
 	// TODO: Add rData to this interface as well
 	l.CaptureState(pc, op, gas, cost, memory, stack, contract, nil, depth, err)
 }
 
 // CaptureState outputs state information on the logger.
-func (l *JSONLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, _ *vm.Contract, rData []byte, depth int, err error) {
+func (l *JSONLogger) CaptureState(
+	pc uint64,
+	op vm.OpCode,
+	gas, cost uint64,
+	memory *vm.Memory,
+	stack *vm.Stack,
+	_ *vm.Contract,
+	rData []byte,
+	depth int,
+	err error,
+) {
 	log := StructLog{
 		Pc:            pc,
 		Op:            op,

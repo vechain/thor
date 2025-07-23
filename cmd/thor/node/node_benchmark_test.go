@@ -233,7 +233,12 @@ func benchmarkBlockProcess(b *testing.B, db *muxdb.MuxDB, accounts []genesis.Dev
 	}
 }
 
-func createBlocks(b *testing.B, noBlocks int, accounts []genesis.DevAccount, createTxFunc func(chain *testchain.Chain) (tx.Transactions, error)) []*block.Block {
+func createBlocks(
+	b *testing.B,
+	noBlocks int,
+	accounts []genesis.DevAccount,
+	createTxFunc func(chain *testchain.Chain) (tx.Transactions, error),
+) []*block.Block {
 	proposer := &accounts[0]
 
 	// mock a fake chain for block production
@@ -320,7 +325,12 @@ func createManyClausesPerTx(signerPK *ecdsa.PrivateKey, thorChain *testchain.Cha
 	return transactions, nil
 }
 
-func packTxsIntoBlock(thorChain *testchain.Chain, proposerAccount *genesis.DevAccount, parentBlk *block.Block, transactions tx.Transactions) (*block.Block, error) {
+func packTxsIntoBlock(
+	thorChain *testchain.Chain,
+	proposerAccount *genesis.DevAccount,
+	parentBlk *block.Block,
+	transactions tx.Transactions,
+) (*block.Block, error) {
 	p := packer.New(thorChain.Repo(), thorChain.Stater(), proposerAccount.Address, &proposerAccount.Address, thorChain.GetForkConfig(), 0)
 
 	parentSum, err := thorChain.Repo().GetBlockSummary(parentBlk.Header().ID())

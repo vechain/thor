@@ -169,7 +169,9 @@ func Test_Secp256K1Sha256Tai_vrf_Verify_bad_message(t *testing.T) {
 	// alpha, _ := hex.DecodeString("73616d706c65")
 	wrongAlpha := []byte("Hello VeChain")
 	// pi
-	wantPi, _ := hex.DecodeString("031f4dbca087a1972d04a07a779b7df1caa99e0f5db2aa21f3aecc4f9e10e85d08748c9fbe6b95d17359707bfb8e8ab0c93ba0c515333adcb8b64f372c535e115ccf66ebf5abe6fadb01b5efb37c0a0ec9")
+	wantPi, _ := hex.DecodeString(
+		"031f4dbca087a1972d04a07a779b7df1caa99e0f5db2aa21f3aecc4f9e10e85d08748c9fbe6b95d17359707bfb8e8ab0c93ba0c515333adcb8b64f372c535e115ccf66ebf5abe6fadb01b5efb37c0a0ec9",
+	)
 
 	// beta
 	wantBeta, _ := hex.DecodeString("612065e309e937ef46c2ef04d5886b9c6efd2991ac484ec64a9b014366fc5d81")
