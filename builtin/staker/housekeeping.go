@@ -6,7 +6,6 @@
 package staker
 
 import (
-	"log/slog"
 	"math/big"
 
 	"github.com/pkg/errors"
@@ -125,11 +124,6 @@ func (s *Staker) performRenewalUpdates(id thor.Bytes32, validator *Validation) e
 		return err
 	}
 	if err := s.storage.queuedWeight.Sub(queuedWeight); err != nil {
-		current, _ := s.storage.queuedWeight.Get()
-		eth := big.NewInt(1e18)
-		currentVET := big.NewInt(0).Div(current, eth)
-		currentChangeVET := big.NewInt(0).Div(queuedWeight, eth)
-		slog.Info("FUCK", "current", currentVET, "change", currentChangeVET)
 		return err
 	}
 	return s.storage.SetValidation(id, validator, false)
