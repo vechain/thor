@@ -760,7 +760,7 @@ func TestEnergyNative(t *testing.T) {
 	summary := thorChain.Repo().BestBlockSummary()
 	firstPOS := summary.Header.Number() + 1
 	st := thorChain.Stater().NewState(summary.Root())
-	err = builtin.Params.Native(st).Set(thor.KeyCurveFactor, thor.CurveFactor)
+	err = builtin.Params.Native(st).Set(thor.KeyCurveFactor, thor.InitialCurveFactor)
 	assert.NoError(t, err)
 
 	energyAtBlock, err := builtin.Energy.Native(st, summary.Header.Timestamp()).Get(summary.Header.Beneficiary())

@@ -335,6 +335,10 @@ func (e *Energy) CalculateRewards(staker staker) (*big.Int, error) {
 	if err != nil {
 		return nil, err
 	}
+	if curveFactor.Uint64() == 0 {
+		curveFactor = thor.InitialCurveFactor
+	}
+
 	// reward = 1 * curveFactor * sqrt(totalStaked / 1e18) / blocksPerYear
 	reward := big.NewInt(1)
 	reward.Mul(reward, curveFactor)

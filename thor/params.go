@@ -9,7 +9,6 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -63,11 +62,8 @@ var (
 	InitialRewardRatio         = big.NewInt(3e17) // 30%
 	InitialBaseGasPrice        = big.NewInt(1e15)
 	InitialProposerEndorsement = new(big.Int).Mul(big.NewInt(1e18), big.NewInt(25000000))
-	InitialStargateAddress     = common.Address{}.Big()
+	InitialCurveFactor         = big.NewInt(76800)
 
-	EnergyGrowthRate = big.NewInt(5000000000) // WEI THOR per token(VET) per second. about 0.000432 THOR per token per day.
-
-	CurveFactor = big.NewInt(76800)
-
-	NumberOfBlocksPerYear = big.NewInt(3153600) // number of blocks per year, non leap
+	EnergyGrowthRate      = big.NewInt(5000000000) // WEI THOR per token(VET) per second. about 0.000432 THOR per token per day.
+	NumberOfBlocksPerYear = big.NewInt(3153600)    // number of blocks per year, non leap
 )
