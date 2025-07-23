@@ -1,6 +1,7 @@
 version: "2"
 run:
   tests: true
+  timeout: 10m
 linters:
   default: none
   enable:
