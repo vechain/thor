@@ -45,7 +45,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 	n.packer.SetTargetGasLimit(n.options.TargetGasLimit)
 
-	tcpAddr, err := net.ResolveTCPAddr("tcp4", "0.0.0.0:5555")
+	tcpAddr, err := net.ResolveTCPAddr("tcp4", "0.0.0.0:45367")
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
