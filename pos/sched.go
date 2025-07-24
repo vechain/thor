@@ -22,13 +22,13 @@ import (
 // Scheduler to schedule the time when a proposer to produce a block for PoS.
 type Scheduler struct {
 	proposer        *staker.Validation
-	proposerID      thor.Bytes32
+	proposerID      thor.Address
 	parentBlockTime uint64
-	sequence        []thor.Bytes32
+	sequence        []thor.Address
 }
 
 type onlineProposer struct {
-	id         thor.Bytes32
+	id         thor.Address
 	validation *staker.Validation
 	hash       thor.Bytes32
 	score      float64
@@ -39,29 +39,29 @@ type onlineProposer struct {
 // If `addr` is not listed in `proposers` or not active, an error returned.
 func NewScheduler(
 	addr thor.Address,
-	proposers map[thor.Bytes32]*staker.Validation,
+	proposers map[thor.Address]*staker.Validation,
 	parentBlockNumber uint32,
 	parentBlockTime uint64,
 	seed []byte,
 ) (*Scheduler, error) {
 	var (
 		proposer   *staker.Validation
-		proposerID thor.Bytes32
+		proposerID thor.Address
 	)
 	var num [4]byte
 	binary.BigEndian.PutUint32(num[:], parentBlockNumber)
 
 	online := make([]*onlineProposer, 0)
 	for id, p := range proposers {
-		if p.Node == addr {
+		if id == addr {
 			proposer = p
 			proposerID = id
 		}
-		if p.Online || p.Node == addr {
+		if p.Online || id == addr {
 			online = append(online, &onlineProposer{
 				id:         id,
 				validation: p,
-				hash:       thor.Blake2b(seed, num[:], p.Node.Bytes()),
+				hash:       thor.Blake2b(seed, num[:], id.Bytes()),
 			})
 		}
 	}
@@ -112,7 +112,7 @@ func (s *Scheduler) IsTheTime(newBlockTime uint64) bool {
 }
 
 // IsScheduled returns if the schedule(proposer, blockTime) is correct.
-func (s *Scheduler) IsScheduled(blockTime uint64, proposer thor.Bytes32) bool {
+func (s *Scheduler) IsScheduled(blockTime uint64, proposer thor.Address) bool {
 	if s.parentBlockTime >= blockTime {
 		// invalid block time
 		return false
@@ -129,10 +129,10 @@ func (s *Scheduler) IsScheduled(blockTime uint64, proposer thor.Bytes32) bool {
 }
 
 // Updates returns proposers whose status are changed, and the score when new block time is assumed to be newBlockTime.
-func (s *Scheduler) Updates(newBlockTime uint64) (map[thor.Bytes32]bool, uint64) {
+func (s *Scheduler) Updates(newBlockTime uint64) (map[thor.Address]bool, uint64) {
 	T := thor.BlockInterval
 
-	updates := make(map[thor.Bytes32]bool)
+	updates := make(map[thor.Address]bool)
 
 	for i := uint64(0); i < uint64(len(s.sequence)); i++ {
 		if s.parentBlockTime+T+i*T >= newBlockTime {
@@ -153,9 +153,9 @@ func (s *Scheduler) Updates(newBlockTime uint64) (map[thor.Bytes32]bool, uint64)
 }
 
 // createSequence implements a Weighted Random Sampling algorithm using the Exponential Distribution Method.
-func createSequence(proposers []*onlineProposer, seed []byte, parentNum uint32) []thor.Bytes32 {
+func createSequence(proposers []*onlineProposer, seed []byte, parentNum uint32) []thor.Address {
 	if len(proposers) == 0 {
-		return []thor.Bytes32{}
+		return []thor.Address{}
 	}
 
 	// Step 1: Generate a deterministic seed for the random number generator
@@ -197,7 +197,7 @@ func createSequence(proposers []*onlineProposer, seed []byte, parentNum uint32) 
 	})
 
 	// Step 4: Extract the validator IDs in priority order
-	resultSequence := make([]thor.Bytes32, len(weightedProposers))
+	resultSequence := make([]thor.Address, len(weightedProposers))
 	for i, validator := range weightedProposers {
 		resultSequence[i] = validator.id
 	}

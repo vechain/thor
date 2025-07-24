@@ -143,6 +143,6 @@ func TestRewardResponseFormat(t *testing.T) {
 
 		assert.Equal(t, 20, len(*blockReward.Master), "master address should be 20 bytes")
 
-		assert.Equal(t, 32, len(*blockReward.ValidatorID), "validator ID should be 32 bytes")
+		assert.Equal(t, 20, len(*blockReward.ValidatorID), "validator ID should be 20 bytes")
 	})
 }

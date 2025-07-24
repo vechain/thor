@@ -77,7 +77,7 @@ func (r *Rewards) handleGetBlockRewards(w http.ResponseWriter, req *http.Request
 	}
 
 	staker := builtin.Staker.Native(st)
-	_, validationID, err := staker.LookupNode(signer)
+	_, err = staker.Get(signer)
 	if err != nil {
 		if r.repo.IsNotFound(err) {
 			return restutil.BadRequest(errors.WithMessage(err, "validator"))
@@ -136,7 +136,7 @@ func (r *Rewards) handleGetBlockRewards(w http.ResponseWriter, req *http.Request
 	return restutil.WriteJSON(w, &api.JSONBlockReward{
 		Reward:      &hexOrDecimalReward,
 		Master:      &signer,
-		ValidatorID: &validationID,
+		ValidatorID: &signer,
 	})
 }
 

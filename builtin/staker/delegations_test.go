@@ -16,14 +16,14 @@ import (
 )
 
 type testValidators struct {
-	ID thor.Bytes32
+	ID thor.Address
 	*Validation
 }
 
 func newDelegationStaker(t *testing.T) (*Staker, []*testValidators) {
 	staker, _ := newStaker(t, 75, 101, true)
 	validations := make([]*testValidators, 0)
-	err := staker.validations.LeaderGroupIterator(func(validatorID thor.Bytes32, validation *Validation) error {
+	err := staker.validations.LeaderGroupIterator(func(validatorID thor.Address, validation *Validation) error {
 		validations = append(validations, &testValidators{
 			ID:         validatorID,
 			Validation: validation,
@@ -203,7 +203,7 @@ func Test_AddDelegator_StakeRange(t *testing.T) {
 func Test_AddDelegator_ValidatorNotFound(t *testing.T) {
 	staker, _ := newStaker(t, 75, 101, true)
 
-	_, err := staker.AddDelegation(datagen.RandomHash(), delegationStake(), true, 255)
+	_, err := staker.AddDelegation(thor.Address{}, delegationStake(), true, 255)
 	assert.ErrorContains(t, err, "validation not found")
 }
 
@@ -547,14 +547,14 @@ func Test_Delegator_Queued_Weight(t *testing.T) {
 
 	node := datagen.RandAddress()
 	endorsor := datagen.RandAddress()
-	id, err := staker.AddValidator(endorsor, node, uint32(360)*24*15, validatorStake, 0)
+	err = staker.AddValidator(endorsor, node, uint32(360)*24*15, validatorStake)
 	assert.NoError(t, err)
 
-	validator, err := staker.Get(id)
+	validator, err := staker.Get(node)
 	assert.NoError(t, err)
 	assert.Equal(t, StatusQueued, validator.Status)
 
-	_, err = staker.AddDelegation(id, stake, true, 255)
+	_, err = staker.AddDelegation(node, stake, true, 255)
 	assert.NoError(t, err)
 
 	lockedVetAfter, lockedWeightAfter, err := staker.LockedVET()
@@ -574,14 +574,14 @@ func Test_Delegator_Queued_Weight_QueuedValidator_Withdraw(t *testing.T) {
 	staker, _ := newStaker(t, 0, 101, false)
 
 	validatorAddr := datagen.RandAddress()
-	validatorID, err := staker.AddValidator(validatorAddr, validatorAddr, uint32(360)*24*15, MinStake, 0)
+	err := staker.AddValidator(validatorAddr, validatorAddr, uint32(360)*24*15, MinStake)
 	assert.NoError(t, err)
 
 	initialQueuedVET, initialQueuedWeight, err := staker.QueuedStake()
 	assert.NoError(t, err)
 
 	delegationStake := new(big.Int).Div(MinStake, big.NewInt(4))
-	delegationID, err := staker.AddDelegation(validatorID, delegationStake, true, 255)
+	delegationID, err := staker.AddDelegation(validatorAddr, delegationStake, true, 255)
 	assert.NoError(t, err)
 
 	afterAddQueuedVET, afterAddQueuedWeight, err := staker.QueuedStake()

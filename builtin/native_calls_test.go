@@ -818,7 +818,7 @@ func TestEnergyNative(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, exSupply, bigIntOutput)
 
-	firstActiveRes := new(common.Hash)
+	firstActiveRes := new(common.Address)
 	_, err = callContractAndGetOutput(builtin.Staker.ABI, "firstActive", builtin.Staker.Address, firstActiveRes)
 	assert.NoError(t, err)
 
@@ -1622,7 +1622,7 @@ func TestStakerContract_Native(t *testing.T) {
 	receipt, trxid, err := executeTxAndGetReceipt(desc) // mint block 3
 	assert.NoError(t, err)
 	assert.False(t, receipt.Reverted)
-	id := receipt.Outputs[0].Events[0].Topics[3]
+	id := receipt.Outputs[0].Events[0].Topics[2]
 	block, err := thorChain.GetTxBlock(trxid)
 	assert.NoError(t, err)
 
@@ -1657,11 +1657,10 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.Equal(t, uint32(math.MaxUint32), *getRes[8].(*uint32)) // total periods
 
 	// firstQueued
-	firstQueuedRes := new(common.Hash)
+	firstQueuedRes := new(common.Address)
 	_, err = callContractAndGetOutput(abi, "firstQueued", toAddr, firstQueuedRes)
 	assert.NoError(t, err)
-	expectedMaster := common.BytesToHash(id.Bytes())
-	assert.Equal(t, &expectedMaster, firstQueuedRes)
+	assert.Equal(t, common.Address(master.Address), *firstQueuedRes)
 
 	// queuedStake
 	queuedStakeRes := make([]any, 2)
@@ -1678,11 +1677,10 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0])) // mint block 5: PoS should become active and active the queued validators
 
 	// firstActive
-	firstActiveRes := new(common.Hash)
+	firstActiveRes := new(common.Address)
 	_, err = callContractAndGetOutput(abi, "firstActive", toAddr, firstActiveRes)
 	assert.NoError(t, err)
-	expectedFirst := common.BytesToHash(id.Bytes())
-	assert.Equal(t, &expectedFirst, firstActiveRes)
+	assert.Equal(t, common.Address(master.Address), *firstActiveRes)
 
 	// totalStake
 	totalStakeRes := make([]any, 2)
@@ -1719,7 +1717,7 @@ func TestStakerContract_Native(t *testing.T) {
 	getValidatorsTotals[1] = new(*big.Int)
 	getValidatorsTotals[2] = new(*big.Int)
 	getValidatorsTotals[3] = new(*big.Int)
-	_, err = callContractAndGetOutput(abi, "getValidatorTotals", toAddr, &getValidatorsTotals, id)
+	_, err = callContractAndGetOutput(abi, "getValidatorTotals", toAddr, &getValidatorsTotals, common.Address(master.Address))
 	assert.NoError(t, err)
 	assert.Equal(t, minStake, *getValidatorsTotals[0].(**big.Int))
 	assert.Equal(t, big.NewInt(0).Mul(minStake, big.NewInt(2)), *getValidatorsTotals[1].(**big.Int))
@@ -1895,7 +1893,7 @@ func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
 	}
 	receipt, _, err := executeTxAndGetReceipt(desc)
 	assert.NoError(t, err)
-	id := receipt.Outputs[0].Events[0].Topics[3]
+	id := receipt.Outputs[0].Events[0].Topics[2]
 
 	// withdraw queued
 	withdrawArgs := []any{id}
@@ -1928,10 +1926,10 @@ func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
 	assert.Equal(t, staker.StatusExit, *getRes[4].(*uint8))
 
 	// firstQueued
-	firstQueuedRes := new(common.Hash)
+	firstQueuedRes := new(common.Address)
 	_, err = callContractAndGetOutput(abi, "firstQueued", toAddr, firstQueuedRes)
 	assert.NoError(t, err)
-	expectedMaster := common.Hash{}
+	expectedMaster := common.Address{}
 	assert.Equal(t, &expectedMaster, firstQueuedRes)
 }
 
