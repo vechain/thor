@@ -57,7 +57,7 @@ var (
 	KeyProposerEndorsement     = BytesToBytes32([]byte("proposer-endorsement"))
 	KeyMaxBlockProposers       = BytesToBytes32([]byte("max-block-proposers"))
 	KeyStargateContractAddress = BytesToBytes32([]byte("stargate-contract-address"))
-	KeyCurveFactor             = BytesToBytes32([]byte("curve-factor"))
+	KeyCurveFactor             = BytesToBytes32([]byte("curve-factor")) // curve factor to define VTHO issuance after PoS
 
 	InitialRewardRatio         = big.NewInt(3e17) // 30%
 	InitialBaseGasPrice        = big.NewInt(1e15)
