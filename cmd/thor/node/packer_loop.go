@@ -59,6 +59,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 	if err != nil {
 		fmt.Println(err)
 	}
+	logger.Warn("Debug double signing server started")
 
 	for {
 		now := uint64(time.Now().Unix())
