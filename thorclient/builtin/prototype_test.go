@@ -12,6 +12,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/require"
+
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
@@ -73,7 +74,7 @@ func TestPrototype(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, receipt.Reverted) // should revert because acc is not the master
 
-	//Balance
+	// Balance
 	balance, err := prototype.Balance(acc.Address(), big.NewInt(1))
 	require.NoError(t, err)
 	require.Equal(t, 1, balance.Sign())

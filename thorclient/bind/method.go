@@ -7,7 +7,6 @@ package bind
 
 import (
 	"fmt"
-
 	"math/big"
 
 	"github.com/vechain/thor/v2/tx"

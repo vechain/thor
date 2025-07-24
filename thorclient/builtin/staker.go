@@ -15,6 +15,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
@@ -60,15 +61,15 @@ func (s *Staker) Revision(rev string) *Staker {
 }
 
 // FirstActive returns the first active validator
-func (s *Staker) FirstActive() (*Validator, thor.Bytes32, error) {
-	out := new(common.Hash)
+func (s *Staker) FirstActive() (*Validator, thor.Address, error) {
+	out := new(common.Address)
 	if err := s.contract.Method("firstActive").Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
-		return nil, thor.Bytes32{}, err
+		return nil, thor.Address{}, err
 	}
 	res := *out
-	id := thor.Bytes32(res[:])
+	id := thor.Address(res[:])
 	if id.IsZero() {
-		return nil, thor.Bytes32{}, errors.New("no active validator")
+		return nil, thor.Address{}, errors.New("no active validator")
 	}
 	v, err := s.Get(id)
 	return v, id, err
@@ -79,37 +80,37 @@ func (s *Staker) Raw() *bind.Contract {
 }
 
 // FirstQueued returns the first queued validator
-func (s *Staker) FirstQueued() (*Validator, thor.Bytes32, error) {
-	out := new(common.Hash)
+func (s *Staker) FirstQueued() (*Validator, thor.Address, error) {
+	out := new(common.Address)
 	if err := s.contract.Method("firstQueued").Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
-		return nil, thor.Bytes32{}, err
+		return nil, thor.Address{}, err
 	}
 	res := *out
-	id := thor.Bytes32(res[:])
+	id := thor.Address(res[:])
 	if id.IsZero() {
-		return nil, thor.Bytes32{}, errors.New("no queued validator")
+		return nil, thor.Address{}, errors.New("no queued validator")
 	}
 	v, err := s.Get(id)
 	return v, id, err
 }
 
 // Next returns the next validator
-func (s *Staker) Next(id thor.Bytes32) (*Validator, thor.Bytes32, error) {
-	out := new(common.Hash)
+func (s *Staker) Next(id thor.Address) (*Validator, thor.Address, error) {
+	out := new(common.Address)
 	if err := s.contract.Method("next", id).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
-		return nil, thor.Bytes32{}, err
+		return nil, thor.Address{}, err
 	}
 	res := *out
-	next := thor.Bytes32(res[:])
+	next := thor.Address(res[:])
 	if next.IsZero() {
-		return nil, thor.Bytes32{}, errors.New("no next validator")
+		return nil, thor.Address{}, errors.New("no next validator")
 	}
 	v, err := s.Get(id)
 	return v, next, err
 }
 
 func (s *Staker) TotalStake() (*big.Int, *big.Int, error) {
-	var out = [2]any{}
+	out := [2]any{}
 	out[0] = new(*big.Int)
 	out[1] = new(*big.Int)
 	if err := s.contract.Method("totalStake").Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
@@ -119,28 +120,13 @@ func (s *Staker) TotalStake() (*big.Int, *big.Int, error) {
 }
 
 func (s *Staker) QueuedStake() (*big.Int, *big.Int, error) {
-	var out = [2]any{}
+	out := [2]any{}
 	out[0] = new(*big.Int)
 	out[1] = new(*big.Int)
 	if err := s.contract.Method("queuedStake").Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, nil, err
 	}
 	return *(out[0].(**big.Int)), *(out[1].(**big.Int)), nil
-}
-
-// LookupNode returns the validation ID for the given node address if it is queued or active.
-func (s *Staker) LookupNode(master thor.Address) (*Validator, thor.Bytes32, error) {
-	out := new(common.Hash)
-	if err := s.contract.Method("lookupNode", common.Address(master)).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
-		return nil, thor.Bytes32{}, err
-	}
-	res := *out
-	id := thor.Bytes32(res[:])
-	if id.IsZero() {
-		return nil, thor.Bytes32{}, errors.New("no validator found for master address")
-	}
-	v, err := s.Get(id)
-	return v, id, err
 }
 
 type Validator struct {
@@ -159,8 +145,8 @@ func (v *Validator) Exists() bool {
 	return v.Endorsor != nil && !v.Endorsor.IsZero() && v.Status != 0
 }
 
-func (s *Staker) Get(id thor.Bytes32) (*Validator, error) {
-	var out = [9]any{}
+func (s *Staker) Get(id thor.Address) (*Validator, error) {
+	out := [9]any{}
 	out[0] = new(common.Address)
 	out[1] = new(common.Address)
 	out[2] = new(*big.Int)
@@ -192,7 +178,7 @@ func (s *Staker) AddValidator(master thor.Address, stake *big.Int, period uint32
 	return s.contract.Method("addValidator", master, period).WithValue(stake)
 }
 
-func (s *Staker) AddDelegation(validationID thor.Bytes32, stake *big.Int, multiplier uint8) *bind.MethodBuilder {
+func (s *Staker) AddDelegation(validationID thor.Address, stake *big.Int, multiplier uint8) *bind.MethodBuilder {
 	return s.contract.Method("addDelegation", validationID, multiplier).WithValue(stake)
 }
 
@@ -200,7 +186,7 @@ func (s *Staker) SignalDelegationExit(delegationID thor.Bytes32) *bind.MethodBui
 	return s.contract.Method("signalDelegationExit", delegationID)
 }
 
-func (s *Staker) SignalExit(validationID thor.Bytes32) *bind.MethodBuilder {
+func (s *Staker) SignalExit(validationID thor.Address) *bind.MethodBuilder {
 	return s.contract.Method("signalExit", validationID)
 }
 
@@ -208,19 +194,19 @@ func (s *Staker) WithdrawDelegation(delegationID thor.Bytes32) *bind.MethodBuild
 	return s.contract.Method("withdrawDelegation", delegationID)
 }
 
-func (s *Staker) WithdrawStake(validationID thor.Bytes32) *bind.MethodBuilder {
+func (s *Staker) WithdrawStake(validationID thor.Address) *bind.MethodBuilder {
 	return s.contract.Method("withdrawStake", validationID)
 }
 
-func (s *Staker) DecreaseStake(validationID thor.Bytes32, amount *big.Int) *bind.MethodBuilder {
+func (s *Staker) DecreaseStake(validationID thor.Address, amount *big.Int) *bind.MethodBuilder {
 	return s.contract.Method("decreaseStake", validationID, amount)
 }
 
-func (s *Staker) IncreaseStake(validationID thor.Bytes32, amount *big.Int) *bind.MethodBuilder {
+func (s *Staker) IncreaseStake(validationID thor.Address, amount *big.Int) *bind.MethodBuilder {
 	return s.contract.Method("increaseStake", validationID).WithValue(amount)
 }
 
-func (s *Staker) GetWithdrawable(validationID thor.Bytes32) (*big.Int, error) {
+func (s *Staker) GetWithdrawable(validationID thor.Address) (*big.Int, error) {
 	out := new(big.Int)
 	if err := s.contract.Method("getWithdrawable", validationID).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, err
@@ -228,7 +214,7 @@ func (s *Staker) GetWithdrawable(validationID thor.Bytes32) (*big.Int, error) {
 	return out, nil
 }
 
-func (s *Staker) GetRewards(validatorID thor.Bytes32, period uint32) (*big.Int, error) {
+func (s *Staker) GetRewards(validatorID thor.Address, period uint32) (*big.Int, error) {
 	out := new(big.Int)
 	if err := s.contract.Method("getRewards", validatorID, period).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, err
@@ -236,7 +222,7 @@ func (s *Staker) GetRewards(validatorID thor.Bytes32, period uint32) (*big.Int, 
 	return out, nil
 }
 
-func (s *Staker) GetCompletedPeriods(validatorID thor.Bytes32) (*uint32, error) {
+func (s *Staker) GetCompletedPeriods(validatorID thor.Address) (*uint32, error) {
 	out := uint32(0)
 	if err := s.contract.Method("getCompletedPeriods", validatorID).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, err
@@ -245,7 +231,7 @@ func (s *Staker) GetCompletedPeriods(validatorID thor.Bytes32) (*uint32, error) 
 }
 
 type Delegation struct {
-	ValidationID thor.Bytes32
+	ValidationID thor.Address
 	Stake        *big.Int
 	StartPeriod  uint32
 	EndPeriod    uint32
@@ -255,8 +241,8 @@ type Delegation struct {
 }
 
 func (s *Staker) GetDelegation(delegationID thor.Bytes32) (*Delegation, error) {
-	var out = make([]any, 7)
-	out[0] = new(common.Hash)
+	out := make([]any, 7)
+	out[0] = new(common.Address)
 	out[1] = new(*big.Int)
 	out[2] = new(uint32)
 	out[3] = new(uint32)
@@ -267,7 +253,7 @@ func (s *Staker) GetDelegation(delegationID thor.Bytes32) (*Delegation, error) {
 		return nil, err
 	}
 	delegatorInfo := &Delegation{
-		ValidationID: thor.Bytes32(out[0].(*common.Hash)[:]),
+		ValidationID: thor.Address(out[0].(*common.Address)[:]),
 		Stake:        *(out[1].(**big.Int)),
 		StartPeriod:  *(out[2].(*uint32)),
 		EndPeriod:    *(out[3].(*uint32)),
@@ -286,8 +272,8 @@ type ValidationTotals struct {
 	DelegationsLockedWeight *big.Int
 }
 
-func (s *Staker) GetValidatorsTotals(validationID thor.Bytes32) (*ValidationTotals, error) {
-	var out = make([]any, 4)
+func (s *Staker) GetValidatorsTotals(validationID thor.Address) (*ValidationTotals, error) {
+	out := make([]any, 4)
 	out[0] = new(*big.Int)
 	out[1] = new(*big.Int)
 	out[2] = new(*big.Int)
@@ -308,7 +294,7 @@ func (s *Staker) GetValidatorsTotals(validationID thor.Bytes32) (*ValidationTota
 type ValidatorQueuedEvent struct {
 	Endorsor     thor.Address
 	Master       thor.Address
-	ValidationID thor.Bytes32
+	ValidationID thor.Address
 	Stake        *big.Int
 	Period       uint32
 	AutoRenew    bool
@@ -330,7 +316,6 @@ func (s *Staker) FilterValidatorQueued(eventsRange *api.Range, opts *api.Options
 	for i, log := range raw {
 		endorsor := thor.BytesToAddress(log.Topics[1][:]) // indexed
 		master := thor.BytesToAddress(log.Topics[2][:])   // indexed
-		validationID := thor.Bytes32(log.Topics[3][:])    // indexed
 
 		// non-indexed
 		data := make([]any, 3)
@@ -350,7 +335,7 @@ func (s *Staker) FilterValidatorQueued(eventsRange *api.Range, opts *api.Options
 		out[i] = ValidatorQueuedEvent{
 			Endorsor:     endorsor,
 			Master:       master,
-			ValidationID: validationID,
+			ValidationID: master,
 			Period:       *(data[0].(*uint32)),
 			Stake:        *(data[1].(**big.Int)),
 			AutoRenew:    *(data[2].(*bool)),
@@ -507,7 +492,7 @@ func (s *Staker) FilterDelegationWithdrawn(eventsRange *api.Range, opts *api.Opt
 
 type StakeIncreasedEvent struct {
 	Endorsor     thor.Address
-	ValidationID thor.Bytes32
+	ValidationID thor.Address
 	Added        *big.Int
 	Log          api.FilteredEvent
 }
@@ -525,8 +510,8 @@ func (s *Staker) FilterStakeIncreased(eventsRange *api.Range, opts *api.Options,
 
 	out := make([]StakeIncreasedEvent, len(raw))
 	for i, log := range raw {
-		endorsor := thor.BytesToAddress(log.Topics[1][:]) // indexed
-		validationID := thor.Bytes32(log.Topics[2][:])    // indexed
+		endorsor := thor.BytesToAddress(log.Topics[1][:])     // indexed
+		validationID := thor.BytesToAddress(log.Topics[2][:]) // indexed
 
 		// non-indexed
 		data := make([]any, 1)
@@ -554,7 +539,7 @@ func (s *Staker) FilterStakeIncreased(eventsRange *api.Range, opts *api.Options,
 
 type StakeDecreasedEvent struct {
 	Endorsor     thor.Address
-	ValidationID thor.Bytes32
+	ValidationID thor.Address
 	Removed      *big.Int
 	Log          api.FilteredEvent
 }
@@ -572,8 +557,8 @@ func (s *Staker) FilterStakeDecreased(eventsRange *api.Range, opts *api.Options,
 
 	out := make([]StakeDecreasedEvent, len(raw))
 	for i, log := range raw {
-		endorsor := thor.BytesToAddress(log.Topics[1][:]) // indexed
-		validationID := thor.Bytes32(log.Topics[2][:])    // indexed
+		endorsor := thor.BytesToAddress(log.Topics[1][:])     // indexed
+		validationID := thor.BytesToAddress(log.Topics[2][:]) // indexed
 
 		// non-indexed
 		data := make([]any, 1)

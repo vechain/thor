@@ -15,26 +15,26 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-func TestBytes32(t *testing.T) {
+func TestAddress(t *testing.T) {
 	ctx := newContext()
-	bytes32 := NewBytes32(ctx, thor.Bytes32{1})
+	address := NewAddress(ctx, thor.Bytes32{1})
 
-	value := datagen.RandomHash()
+	value := datagen.RandAddress()
 
 	// Test `Set` new value
-	bytes32.Set(&value, true)
+	address.Set(&value, true)
 	assert.Equal(t, ctx.charger.TotalGas(), thor.SstoreSetGas)
 	charger := gascharger.New(newXenv())
 	ctx.charger = charger
 
 	// Test `Set` updated value
-	bytes32.Set(&value, false)
+	address.Set(&value, false)
 	assert.Equal(t, ctx.charger.TotalGas(), thor.SstoreResetGas)
 	charger = gascharger.New(newXenv())
 	ctx.charger = charger
 
 	// Test `Get`
-	retrievedValue, err := bytes32.Get()
+	retrievedValue, err := address.Get()
 	assert.NoError(t, err)
 	assert.Equal(t, value, retrievedValue)
 	assert.Equal(t, ctx.charger.TotalGas(), thor.SloadGas)

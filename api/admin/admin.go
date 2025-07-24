@@ -12,6 +12,7 @@ import (
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+
 	"github.com/vechain/thor/v2/api/admin/apilogs"
 	"github.com/vechain/thor/v2/api/admin/loglevel"
 

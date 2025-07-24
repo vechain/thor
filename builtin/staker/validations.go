@@ -6,7 +6,6 @@
 package staker
 
 import (
-	"encoding/binary"
 	"errors"
 	"math/big"
 
@@ -51,23 +50,25 @@ func (v *validations) IsActive() (bool, error) {
 }
 
 // FirstActive returns validator address of first entry.
-func (v *validations) FirstActive() (thor.Bytes32, error) {
-	return v.leaderGroup.head.Get()
+func (v *validations) FirstActive() (*thor.Address, error) {
+	validationID, err := v.leaderGroup.head.Get()
+	return &validationID, err
 }
 
 // FirstQueued returns validator address of first entry.
-func (v *validations) FirstQueued() (thor.Bytes32, error) {
-	return v.validatorQueue.head.Get()
+func (v *validations) FirstQueued() (*thor.Address, error) {
+	validationID, err := v.validatorQueue.head.Get()
+	return &validationID, err
 }
 
-func (v *validations) LeaderGroupIterator(callback func(thor.Bytes32, *Validation) error) error {
+func (v *validations) LeaderGroupIterator(callback func(thor.Address, *Validation) error) error {
 	return v.leaderGroup.Iter(callback)
 }
 
 // LeaderGroup lists all registered candidates.
-func (v *validations) LeaderGroup() (map[thor.Bytes32]*Validation, error) {
-	var group = make(map[thor.Bytes32]*Validation)
-	err := v.LeaderGroupIterator(func(id thor.Bytes32, entry *Validation) error {
+func (v *validations) LeaderGroup() (map[thor.Address]*Validation, error) {
+	group := make(map[thor.Address]*Validation)
+	err := v.LeaderGroupIterator(func(id thor.Address, entry *Validation) error {
 		group[id] = entry
 		return nil
 	})
@@ -79,28 +80,22 @@ func (v *validations) Add(
 	node thor.Address,
 	period uint32,
 	stake *big.Int,
-	currentBlock uint32,
-) (thor.Bytes32, error) {
+) error {
 	if stake.Cmp(MinStake) < 0 || stake.Cmp(MaxStake) > 0 {
-		return thor.Bytes32{}, errors.New("stake is out of range")
+		return errors.New("stake is out of range")
 	}
-	lookup, err := v.storage.GetLookup(node)
+	validation, err := v.storage.GetValidation(node)
 	if err != nil {
-		return thor.Bytes32{}, err
+		return err
 	}
-	if !lookup.IsZero() {
-		return thor.Bytes32{}, errors.New("validator already exists")
+	if !validation.IsEmpty() {
+		return errors.New("validator already exists")
 	}
 	if period != v.lowStakingPeriod && period != v.mediumStakingPeriod && period != v.highStakingPeriod {
-		return thor.Bytes32{}, errors.New("period is out of boundaries")
+		return errors.New("period is out of boundaries")
 	}
 
-	var b [4]byte
-	binary.BigEndian.PutUint32(b[:], currentBlock)
-	id := thor.Blake2b(node.Bytes(), b[:])
-
 	entry := &Validation{
-		Node:               node,
 		Endorsor:           endorsor,
 		Period:             period,
 		CompleteIterations: 0,
@@ -115,34 +110,31 @@ func (v *validations) Add(
 	}
 
 	if err := v.storage.queuedVET.Add(stake); err != nil {
-		return thor.Bytes32{}, err
+		return err
 	}
 	if err := v.storage.queuedWeight.Add(big.NewInt(0).Mul(stake, validatorWeightMultiplier)); err != nil {
-		return thor.Bytes32{}, err
-	}
-	if err := v.storage.SetLookup(node, id); err != nil {
-		return thor.Bytes32{}, err
+		return err
 	}
 
-	added, err := v.validatorQueue.Add(id, entry)
+	added, err := v.validatorQueue.Add(node, entry)
 	if err != nil {
-		return thor.Bytes32{}, err
+		return err
 	}
 	if !added {
-		return thor.Bytes32{}, errors.New("failed to add validator to queue")
+		return errors.New("failed to add validator to queue")
 	}
 
-	if err := v.storage.SetAggregation(id, newAggregation(), true); err != nil {
-		return thor.Bytes32{}, err
+	if err := v.storage.SetAggregation(node, newAggregation(), true); err != nil {
+		return err
 	}
 
-	return id, nil
+	return nil
 }
 
 func (v *validations) ActivateNext(
 	currentBlock uint32,
 	params *params.Params,
-) (*thor.Bytes32, error) {
+) (*thor.Address, error) {
 	leaderGroupLength, err := v.leaderGroup.Len()
 	if err != nil {
 		return nil, err
@@ -175,7 +167,7 @@ func (v *validations) ActivateNext(
 		return nil, err
 	}
 
-	logger.Debug("activating validator", "id", id, "node", validator.Node, "block", currentBlock)
+	logger.Debug("activating validator", "id", id, "block", currentBlock)
 
 	// update the validator
 	validatorLocked := big.NewInt(0).Add(validator.LockedVET, validator.PendingLocked)
@@ -222,7 +214,7 @@ func (v *validations) ActivateNext(
 	return &id, nil
 }
 
-func (v *validations) SignalExit(endorsor thor.Address, id thor.Bytes32) error {
+func (v *validations) SignalExit(endorsor thor.Address, id thor.Address) error {
 	validator, err := v.storage.GetValidation(id)
 	if err != nil {
 		return err
@@ -247,7 +239,7 @@ func (v *validations) SignalExit(endorsor thor.Address, id thor.Bytes32) error {
 // SetExitBlock sets the exit block for a validator.
 // It ensures that the exit block is not already set for another validator.
 // A validator cannot consume several epochs at once.
-func (v *validations) SetExitBlock(id thor.Bytes32, minBlock uint32) (uint32, error) {
+func (v *validations) SetExitBlock(id thor.Address, minBlock uint32) (uint32, error) {
 	start := minBlock
 	for {
 		existing, err := v.storage.GetExitEpoch(start)
@@ -267,7 +259,7 @@ func (v *validations) SetExitBlock(id thor.Bytes32, minBlock uint32) (uint32, er
 	}
 }
 
-func (v *validations) IncreaseStake(id thor.Bytes32, endorsor thor.Address, amount *big.Int) error {
+func (v *validations) IncreaseStake(id thor.Address, endorsor thor.Address, amount *big.Int) error {
 	entry, err := v.storage.GetValidation(id)
 	if err != nil {
 		return err
@@ -308,7 +300,7 @@ func (v *validations) IncreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 	return v.storage.SetValidation(id, entry, false)
 }
 
-func (v *validations) DecreaseStake(id thor.Bytes32, endorsor thor.Address, amount *big.Int) error {
+func (v *validations) DecreaseStake(id thor.Address, endorsor thor.Address, amount *big.Int) error {
 	entry, err := v.storage.GetValidation(id)
 	if err != nil {
 		return err
@@ -368,7 +360,7 @@ func (v *validations) DecreaseStake(id thor.Bytes32, endorsor thor.Address, amou
 
 // WithdrawStake allows validations to withdraw any withdrawable stake.
 // It also verifies the endorsor and updates the validator totals.
-func (v *validations) WithdrawStake(endorsor thor.Address, id thor.Bytes32, currentBlock uint32) (*big.Int, error) {
+func (v *validations) WithdrawStake(endorsor thor.Address, id thor.Address, currentBlock uint32) (*big.Int, error) {
 	entry, withdrawable, err := v.GetWithdrawable(id, currentBlock)
 	if err != nil {
 		return nil, err
@@ -383,9 +375,6 @@ func (v *validations) WithdrawStake(endorsor thor.Address, id thor.Bytes32, curr
 	}
 
 	if entry.Status == StatusQueued {
-		if err := v.storage.SetLookup(entry.Node, thor.Bytes32{}); err != nil {
-			return nil, err
-		}
 		entry.PendingLocked = big.NewInt(0)
 		entry.Status = StatusExit
 		if _, err := v.validatorQueue.Remove(id, entry); err != nil {
@@ -406,7 +395,7 @@ func (v *validations) WithdrawStake(endorsor thor.Address, id thor.Bytes32, curr
 
 // GetWithdrawable returns the validator entry and the withdrawable amount.
 // It does not perform any updates or verify the endorsor.
-func (v *validations) GetWithdrawable(id thor.Bytes32, currentBlock uint32) (*Validation, *big.Int, error) {
+func (v *validations) GetWithdrawable(id thor.Address, currentBlock uint32) (*Validation, *big.Int, error) {
 	entry, err := v.storage.GetValidation(id)
 	if err != nil {
 		return nil, nil, err
@@ -429,7 +418,7 @@ func (v *validations) GetWithdrawable(id thor.Bytes32, currentBlock uint32) (*Va
 }
 
 // ExitValidator removes the validator from the active list and puts it in cooldown.
-func (v *validations) ExitValidator(id thor.Bytes32) error {
+func (v *validations) ExitValidator(id thor.Address) error {
 	entry, err := v.storage.GetValidation(id)
 	if err != nil {
 		return err
@@ -469,9 +458,6 @@ func (v *validations) ExitValidator(id thor.Bytes32) error {
 		return err
 	}
 	if err := v.storage.lockedVET.Sub(exitedTVL); err != nil {
-		return err
-	}
-	if err := v.storage.SetLookup(entry.Node, thor.Bytes32{}); err != nil {
 		return err
 	}
 	if _, err = v.leaderGroup.Remove(id, entry); err != nil {

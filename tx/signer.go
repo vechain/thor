@@ -11,6 +11,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
+
 	"github.com/vechain/thor/v2/thor"
 )
 

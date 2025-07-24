@@ -18,6 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb"
+
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/cache"
@@ -194,7 +195,7 @@ func (n *Node) houseKeeping(ctx context.Context) {
 				}
 			} else if isTrunk {
 				n.comm.BroadcastBlock(newBlock.Block)
-				logger.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(newBlock.Block.Header())...)
+				logger.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(newBlock.Header())...)
 			}
 		case <-futureTicker.C:
 			// process future blocks

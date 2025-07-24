@@ -20,6 +20,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/genesis"
@@ -142,9 +143,9 @@ func getTxReceipt(t *testing.T) {
 }
 
 func sendLegacyTx(t *testing.T) {
-	var blockRef = tx.NewBlockRef(0)
-	var expiration = uint32(10)
-	var gas = uint64(21000)
+	blockRef := tx.NewBlockRef(0)
+	expiration := uint32(10)
+	gas := uint64(21000)
 
 	trx := tx.NewBuilder(tx.TypeLegacy).
 		BlockRef(blockRef).
@@ -171,9 +172,9 @@ func sendLegacyTx(t *testing.T) {
 }
 
 func sendDynamicFeeTx(t *testing.T) {
-	var blockRef = tx.NewBlockRef(0)
-	var expiration = uint32(10)
-	var gas = uint64(21000)
+	blockRef := tx.NewBlockRef(0)
+	expiration := uint32(10)
+	gas := uint64(21000)
 
 	trx := tx.NewBuilder(tx.TypeDynamicFee).
 		BlockRef(blockRef).
@@ -202,9 +203,9 @@ func sendDynamicFeeTx(t *testing.T) {
 }
 
 func sendImpossibleBlockRefExpiryTx(t *testing.T) {
-	var blockRef = tx.NewBlockRef(thorChain.Repo().BestBlockSummary().Header.Number())
-	var expiration = uint32(0)
-	var gas = uint64(21000)
+	blockRef := tx.NewBlockRef(thorChain.Repo().BestBlockSummary().Header.Number())
+	expiration := uint32(0)
+	gas := uint64(21000)
 
 	trx := tx.MustSign(
 		new(tx.Builder).
@@ -342,12 +343,20 @@ func handleGetTransactionByIDWithBadQueryParams(t *testing.T) {
 }
 
 func handleGetTransactionByIDWithNonExistingHead(t *testing.T) {
-	res := httpGetAndCheckResponseStatus(t, "/transactions/"+legacyTx.ID().String()+"?head=0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 400)
+	res := httpGetAndCheckResponseStatus(
+		t,
+		"/transactions/"+legacyTx.ID().String()+"?head=0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+		400,
+	)
 	assert.Equal(t, "head: leveldb: not found", strings.TrimSpace(string(res)))
 }
 
 func handleGetTransactionReceiptByIDWithNonExistingHead(t *testing.T) {
-	res := httpGetAndCheckResponseStatus(t, "/transactions/"+legacyTx.ID().String()+"/receipt?head=0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 400)
+	res := httpGetAndCheckResponseStatus(
+		t,
+		"/transactions/"+legacyTx.ID().String()+"/receipt?head=0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+		400,
+	)
 	assert.Equal(t, "head: leveldb: not found", strings.TrimSpace(string(res)))
 }
 

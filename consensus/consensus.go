@@ -10,6 +10,7 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/golang-lru/simplelru"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
@@ -46,7 +47,12 @@ func New(repo *chain.Repository, stater *state.Stater, forkConfig *thor.ForkConf
 }
 
 // Process process a block.
-func (c *Consensus) Process(parentSummary *chain.BlockSummary, blk *block.Block, nowTimestamp uint64, blockConflicts uint32) (*state.Stage, tx.Receipts, error) {
+func (c *Consensus) Process(
+	parentSummary *chain.BlockSummary,
+	blk *block.Block,
+	nowTimestamp uint64,
+	blockConflicts uint32,
+) (*state.Stage, tx.Receipts, error) {
 	header := blk.Header()
 	state := c.stater.NewState(parentSummary.Root())
 

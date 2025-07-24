@@ -9,6 +9,7 @@ import (
 	"math/big"
 
 	"github.com/pkg/errors"
+
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -27,7 +28,7 @@ func newDelegations(storage *storage) *delegations {
 }
 
 func (d *delegations) Add(
-	validationID thor.Bytes32,
+	validationID thor.Address,
 	stake *big.Int,
 	multiplier uint8,
 ) (thor.Bytes32, error) {
