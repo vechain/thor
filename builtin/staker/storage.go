@@ -18,12 +18,7 @@ import (
 )
 
 var (
-	slotLockedVET          = nameToSlot("total-stake")
-	slotLockedWeight       = nameToSlot("total-weight")
-	slotQueuedVET          = nameToSlot("queued-stake")
-	slotQueuedWeight       = nameToSlot("queued-weight")
 	slotValidations        = nameToSlot("validations")
-	slotAggregations       = nameToSlot("aggregated-delegations")
 	slotDelegations        = nameToSlot("delegations")
 	slotDelegationsCounter = nameToSlot("delegations-counter")
 	slotRewards            = nameToSlot("period-rewards")
@@ -51,32 +46,22 @@ func nameToSlot(name string) thor.Bytes32 {
 
 // storage represents the root storage for the Staker contract.
 type storage struct {
-	context      *solidity.Context
-	validations  *solidity.Mapping[thor.Address, *Validation]
-	aggregations *solidity.Mapping[thor.Address, *Aggregation]
-	delegations  *solidity.Mapping[thor.Bytes32, *Delegation]
-	rewards      *solidity.Mapping[thor.Bytes32, *big.Int] // stores rewards per validator staking period
-	exits        *solidity.Mapping[*big.Int, thor.Address] // exit block -> validator ID
-	lockedVET    *solidity.Uint256
-	lockedWeight *solidity.Uint256
-	queuedVET    *solidity.Uint256
-	queuedWeight *solidity.Uint256
+	context     *solidity.Context
+	validations *solidity.Mapping[thor.Address, *Validation]
+	delegations *solidity.Mapping[thor.Bytes32, *Delegation]
+	rewards     *solidity.Mapping[thor.Bytes32, *big.Int] // stores rewards per validator staking period
+	exits       *solidity.Mapping[*big.Int, thor.Address] // exit block -> validator ID
 }
 
 // newStorage creates a new instance of storage.
 func newStorage(addr thor.Address, state *state.State, charger *gascharger.Charger) *storage {
 	context := solidity.NewContext(addr, state, charger)
 	return &storage{
-		context:      context,
-		validations:  solidity.NewMapping[thor.Address, *Validation](context, slotValidations),
-		aggregations: solidity.NewMapping[thor.Address, *Aggregation](context, slotAggregations),
-		delegations:  solidity.NewMapping[thor.Bytes32, *Delegation](context, slotDelegations),
-		rewards:      solidity.NewMapping[thor.Bytes32, *big.Int](context, slotRewards),
-		exits:        solidity.NewMapping[*big.Int, thor.Address](context, slotExitEpochs),
-		lockedVET:    solidity.NewUint256(context, slotLockedVET),
-		lockedWeight: solidity.NewUint256(context, slotLockedWeight),
-		queuedVET:    solidity.NewUint256(context, slotQueuedVET),
-		queuedWeight: solidity.NewUint256(context, slotQueuedWeight),
+		context:     context,
+		validations: solidity.NewMapping[thor.Address, *Validation](context, slotValidations),
+		delegations: solidity.NewMapping[thor.Bytes32, *Delegation](context, slotDelegations),
+		rewards:     solidity.NewMapping[thor.Bytes32, *big.Int](context, slotRewards),
+		exits:       solidity.NewMapping[*big.Int, thor.Address](context, slotExitEpochs),
 	}
 }
 
@@ -91,21 +76,6 @@ func (s *storage) GetValidation(id thor.Address) (*Validation, error) {
 func (s *storage) SetValidation(id thor.Address, entry *Validation, isNew bool) error {
 	if err := s.validations.Set(id, entry, isNew); err != nil {
 		return errors.Wrap(err, "failed to set validator")
-	}
-	return nil
-}
-
-func (s *storage) GetAggregation(validationID thor.Address) (*Aggregation, error) {
-	d, err := s.aggregations.Get(validationID)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get validator aggregation")
-	}
-	return d, nil
-}
-
-func (s *storage) SetAggregation(validationID thor.Address, entry *Aggregation, isNew bool) error {
-	if err := s.aggregations.Set(validationID, entry, isNew); err != nil {
-		return errors.Wrap(err, "failed to set validator aggregation")
 	}
 	return nil
 }
@@ -127,31 +97,24 @@ func (s *storage) SetDelegation(delegationID thor.Bytes32, entry *Delegation, is
 
 // GetDelegationBundle retrieves the delegation, validation, and aggregation for a given delegation ID.
 // It returns an error if any of the components are not found or are empty.
-func (s *storage) GetDelegationBundle(delegationID thor.Bytes32) (*Delegation, *Validation, *Aggregation, error) {
+func (s *storage) GetDelegationBundle(delegationID thor.Bytes32) (*Delegation, *Validation, error) {
 	delegation, err := s.GetDelegation(delegationID)
 	if err != nil {
-		return nil, nil, nil, errors.Wrap(err, "failed to get delegation")
+		return nil, nil, errors.Wrap(err, "failed to get delegation")
 	}
 	if delegation.IsEmpty() {
-		return nil, nil, nil, errors.New("delegation is empty")
+		return nil, nil, errors.New("delegation is empty")
 	}
 
 	validation, err := s.GetValidation(delegation.ValidationID)
 	if err != nil {
-		return nil, nil, nil, errors.Wrap(err, "failed to get validation")
+		return nil, nil, errors.Wrap(err, "failed to get validation")
 	}
 	if validation.IsEmpty() {
-		return nil, nil, nil, errors.New("validation is empty")
+		return nil, nil, errors.New("validation is empty")
 	}
 
-	aggregation, err := s.GetAggregation(delegation.ValidationID)
-	if err != nil {
-		return nil, nil, nil, errors.Wrap(err, "failed to get aggregation")
-	}
-	if aggregation.IsEmpty() {
-		return nil, nil, nil, errors.New("aggregation is empty")
-	}
-	return delegation, validation, aggregation, nil
+	return delegation, validation, nil
 }
 
 func (s *storage) GetExitEpoch(block uint32) (thor.Address, error) {
