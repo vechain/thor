@@ -2095,14 +2095,14 @@ func TestStaker_GetRewards(t *testing.T) {
 	_, err = staker.validations.ActivateNext(0, staker.params)
 	assert.NoError(t, err)
 
-	amount, err := staker.GetRewards(proposerAddr, 1)
+	amount, err := staker.GetDelegatorRewards(proposerAddr, 1)
 	assert.NoError(t, err)
 	assert.Equal(t, new(big.Int), amount)
 
 	reward := big.NewInt(1000)
-	staker.IncreaseReward(proposerAddr, *reward)
+	staker.IncreaseDelegatorsReward(proposerAddr, reward)
 
-	amount, err = staker.GetRewards(proposerAddr, 1)
+	amount, err = staker.GetDelegatorRewards(proposerAddr, 1)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(1000), amount)
 }

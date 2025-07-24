@@ -323,7 +323,7 @@ func init() {
 				locked, "",
 			}
 		}},
-		{"native_getRewards", func(env *xenv.Environment) []any {
+		{"native_getDelegatorsRewards", func(env *xenv.Environment) []any {
 			var args struct {
 				ValidationID  common.Address
 				StakingPeriod uint32
@@ -331,7 +331,7 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			reward, err := Staker.NativeMetered(env.State(), charger).GetRewards(thor.Address(args.ValidationID), args.StakingPeriod)
+			reward, err := Staker.NativeMetered(env.State(), charger).GetDelegatorRewards(thor.Address(args.ValidationID), args.StakingPeriod)
 			if err != nil {
 				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
 			}

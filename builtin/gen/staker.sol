@@ -290,14 +290,14 @@ contract Staker {
     }
 
     /**
-     * @dev getRewards returns the rewards received for validation id and staking period (this function returns full reward for all delegations and validator)
+     * @dev getDelegatorsRewards returns the delegators rewards for a given validation ID and staking period.
      */
-    function getRewards(
+    function getDelegatorsRewards(
         address validationID,
         uint32 stakingPeriod
     ) public view returns (uint256) {
         (uint256 reward, string memory error) = StakerNative(address(this))
-            .native_getRewards(validationID, stakingPeriod);
+            .native_getDelegatorsRewards(validationID, stakingPeriod);
         require(bytes(error).length == 0, error);
         return reward;
     }
@@ -459,7 +459,7 @@ interface StakerNative {
         view
         returns (address, string calldata);
 
-    function native_getRewards(
+    function native_getDelegatorsRewards(
         address validationID,
         uint32 stakingPeriod
     ) external view returns (uint256, string calldata);

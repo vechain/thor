@@ -214,7 +214,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 			err:          "revert: delegation has not started yet, funds can be withdrawn",
 		},
 		{
-			function:    "native_getRewards",
+			function:    "native_getDelegatorsRewards",
 			expectedGas: 1000,
 			args: []any{
 				account1,

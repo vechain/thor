@@ -821,11 +821,6 @@ func TestEnergyNative(t *testing.T) {
 	firstActiveRes := new(common.Address)
 	_, err = callContractAndGetOutput(builtin.Staker.ABI, "firstActive", builtin.Staker.Address, firstActiveRes)
 	assert.NoError(t, err)
-
-	rewards := new(*big.Int)
-	_, err = callContractAndGetOutput(builtin.Staker.ABI, "getRewards", builtin.Staker.Address, rewards, firstActiveRes, uint32(1))
-	assert.NoError(t, err)
-	assert.Equal(t, stakeRewards.String(), (*rewards).String())
 }
 
 func TestPrototypeNative(t *testing.T) {
@@ -1702,7 +1697,7 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).Int64(), (*queuedStakeRes[1].(**big.Int)).Int64())
 
 	reward := new(*big.Int)
-	_, err = callContractAndGetOutput(abi, "getRewards", toAddr, reward, id, uint32(1))
+	_, err = callContractAndGetOutput(abi, "getDelegatorsRewards", toAddr, reward, id, uint32(1))
 	assert.NoError(t, err)
 	assert.Equal(t, new(big.Int).String(), (*reward).String())
 

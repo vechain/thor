@@ -302,9 +302,9 @@ func (s *Staker) WithdrawDelegation(
 	}
 }
 
-// GetRewards returns reward amount for validation id and staking period.
-func (s *Staker) GetRewards(validationID thor.Address, stakingPeriod uint32) (*big.Int, error) {
-	return s.storage.GetRewards(validationID, stakingPeriod)
+// GetDelegatorRewards returns reward amount for validation id and staking period.
+func (s *Staker) GetDelegatorRewards(validationID thor.Address, stakingPeriod uint32) (*big.Int, error) {
+	return s.storage.GetDelegatorRewards(validationID, stakingPeriod)
 }
 
 // GetCompletedPeriods returns number of completed staking periods for validation.
@@ -312,9 +312,9 @@ func (s *Staker) GetCompletedPeriods(validationID thor.Address) (uint32, error) 
 	return s.storage.GetCompletedPeriods(validationID)
 }
 
-// IncreaseReward Increases reward for node address, for current staking period.
-func (s *Staker) IncreaseReward(node thor.Address, reward big.Int) error {
-	return s.storage.IncreaseReward(node, reward)
+// IncreaseDelegatorsReward Increases reward for validation's delegators.
+func (s *Staker) IncreaseDelegatorsReward(node thor.Address, reward *big.Int) error {
+	return s.storage.IncreaseDelegatorsReward(node, reward)
 }
 
 // GetValidatorsTotals returns the total stake, total weight, total delegators stake and total delegators weight.
