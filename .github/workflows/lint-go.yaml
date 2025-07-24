@@ -29,9 +29,9 @@ jobs:
           go run golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@v0.18.1 ./...
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6.4.1
+        uses: golangci/golangci-lint-action@v8
         with:
-          version: v1.64.8
+          version: v2.2.1
           # use the default if on main branch, otherwise use the pull request config
           args: --timeout=30m --config=.golangci.yml
           only-new-issues: false

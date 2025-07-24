@@ -11,6 +11,7 @@ import (
 	"strconv"
 
 	"github.com/syndtr/goleveldb/leveldb"
+
 	"github.com/vechain/thor/v2/metrics"
 )
 

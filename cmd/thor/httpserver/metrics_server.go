@@ -13,6 +13,7 @@ import (
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
+
 	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/metrics"
 )

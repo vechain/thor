@@ -11,8 +11,9 @@ import (
 	"sync/atomic"
 
 	"github.com/gorilla/mux"
+
 	"github.com/vechain/thor/v2/api"
-	"github.com/vechain/thor/v2/api/utils"
+	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/log"
 )
 
@@ -32,19 +33,19 @@ func (a *APILogs) Mount(root *mux.Router, pathPrefix string) {
 	sub.Path("").
 		Methods(http.MethodGet).
 		Name("get-api-logs-enabled").
-		HandlerFunc(utils.WrapHandlerFunc(a.areAPILogsEnabled))
+		HandlerFunc(restutil.WrapHandlerFunc(a.areAPILogsEnabled))
 
 	sub.Path("").
 		Methods(http.MethodPost).
 		Name("post-api-logs-enabled").
-		HandlerFunc(utils.WrapHandlerFunc(a.setAPILogsEnabled))
+		HandlerFunc(restutil.WrapHandlerFunc(a.setAPILogsEnabled))
 }
 
 func (a *APILogs) areAPILogsEnabled(w http.ResponseWriter, _ *http.Request) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	return utils.WriteJSON(w, api.LogStatus{
+	return restutil.WriteJSON(w, api.LogStatus{
 		Enabled: a.enabled.Load(),
 	})
 }
@@ -54,14 +55,14 @@ func (a *APILogs) setAPILogsEnabled(w http.ResponseWriter, r *http.Request) erro
 	defer a.mu.Unlock()
 
 	var req api.LogStatus
-	if err := utils.ParseJSON(r.Body, &req); err != nil {
-		return utils.BadRequest(err)
+	if err := restutil.ParseJSON(r.Body, &req); err != nil {
+		return restutil.BadRequest(err)
 	}
 	a.enabled.Store(req.Enabled)
 
 	log.Info("api logs updated", "pkg", "apilogs", "enabled", req.Enabled)
 
-	return utils.WriteJSON(w, api.LogStatus{
+	return restutil.WriteJSON(w, api.LogStatus{
 		Enabled: a.enabled.Load(),
 	})
 }

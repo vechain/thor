@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -133,5 +134,4 @@ func TestEnergyGrowth(t *testing.T) {
 	x.Div(x, big.NewInt(1e18))
 
 	assert.Equal(t, x, bal1)
-
 }

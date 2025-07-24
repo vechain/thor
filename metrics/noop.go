@@ -27,6 +27,7 @@ func (n *noopMetrics) GetOrCreateCountVecMeter(string, []string) CountVecMeter {
 func (n *noopMetrics) GetOrCreateGaugeMeter(string) GaugeMeter {
 	return &noopMetric
 }
+
 func (n *noopMetrics) GetOrCreateGaugeVecMeter(string, []string) GaugeVecMeter {
 	return &noopMetric
 }

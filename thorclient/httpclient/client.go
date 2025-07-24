@@ -11,6 +11,7 @@ package httpclient
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -19,7 +20,16 @@ import (
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/thorclient/common"
+)
+
+var (
+	ErrNotFound     = errors.New("not found")
+	ErrNot200Status = errors.New("not 200 status code")
+)
+
+const (
+	BestRevision      = "best"
+	FinalizedRevision = "finalized"
 )
 
 // Client represents the HTTP client for interacting with the VeChainThor blockchain.
@@ -179,7 +189,7 @@ func (c *Client) GetTransactionReceipt(txID *thor.Bytes32, head string) (*api.Re
 	}
 
 	if len(body) == 0 || bytes.Equal(bytes.TrimSpace(body), []byte("null")) {
-		return nil, common.ErrNotFound
+		return nil, ErrNotFound
 	}
 
 	var receipt api.Receipt
@@ -213,7 +223,7 @@ func (c *Client) GetBlock(blockID string) (*api.JSONCollapsedBlock, error) {
 	}
 
 	if len(body) == 0 || bytes.Equal(bytes.TrimSpace(body), []byte("null")) {
-		return nil, common.ErrNotFound
+		return nil, ErrNotFound
 	}
 
 	var block api.JSONCollapsedBlock
@@ -232,7 +242,7 @@ func (c *Client) GetExpandedBlock(revision string) (*api.JSONExpandedBlock, erro
 	}
 
 	if len(body) == 0 || bytes.Equal(bytes.TrimSpace(body), []byte("null")) {
-		return nil, common.ErrNotFound
+		return nil, ErrNotFound
 	}
 
 	var block api.JSONExpandedBlock

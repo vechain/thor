@@ -19,6 +19,8 @@ import (
 	"github.com/mattn/go-isatty"
 	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
+	"gopkg.in/urfave/cli.v1"
+
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/cmd/thor/httpserver"
 	"github.com/vechain/thor/v2/cmd/thor/node"
@@ -32,7 +34,6 @@ import (
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/txpool"
-	"gopkg.in/urfave/cli.v1"
 
 	// Force-load the tracer engines to trigger registration
 	_ "github.com/vechain/thor/v2/tracers/js"
@@ -561,7 +562,8 @@ func masterKeyAction(ctx *cli.Context) error {
 		keyjson, err := keystore.EncryptKey(&keystore.Key{
 			PrivateKey: masterKey,
 			Address:    crypto.PubkeyToAddress(masterKey.PublicKey),
-			Id:         uuid.NewRandom()},
+			Id:         uuid.NewRandom(),
+		},
 			password, keystore.StandardScryptN, keystore.StandardScryptP)
 		if err != nil {
 			return err

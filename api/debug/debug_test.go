@@ -18,6 +18,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
@@ -412,7 +413,12 @@ func testHandleTraceCallWithRevisionAsNonExistingID(t *testing.T) {
 func testHandleTraceCallWithMalfomredRevision(t *testing.T) {
 	// Revision is a malformed byte array
 	traceCallOption := &api.TraceCallOption{}
-	res := httpPostAndCheckResponseStatus(t, "/debug/tracers/call?revision=012345678901234567890123456789012345678901234567890123456789012345", traceCallOption, 400)
+	res := httpPostAndCheckResponseStatus(
+		t,
+		"/debug/tracers/call?revision=012345678901234567890123456789012345678901234567890123456789012345",
+		traceCallOption,
+		400,
+	)
 	assert.Equal(t, "revision: invalid prefix", strings.TrimSpace(res))
 
 	// Revision is a not accepted string
@@ -602,6 +608,7 @@ func httpPostAndCheckResponseStatus(t *testing.T, url string, obj any, responseS
 
 	return string(body)
 }
+
 func TestCreateTracer(t *testing.T) {
 	debug := &Debug{}
 

@@ -10,9 +10,10 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
+
 	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/api/transactions"
-	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
@@ -37,26 +38,26 @@ func (n *Node) PeersStats() []*api.PeerStats {
 }
 
 func (n *Node) handleNetwork(w http.ResponseWriter, _ *http.Request) error {
-	return utils.WriteJSON(w, n.PeersStats())
+	return restutil.WriteJSON(w, n.PeersStats())
 }
 
 func (n *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) error {
-	expanded, err := utils.StringToBoolean(req.URL.Query().Get("expanded"), false)
+	expanded, err := restutil.StringToBoolean(req.URL.Query().Get("expanded"), false)
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "expanded"))
+		return restutil.BadRequest(errors.WithMessage(err, "expanded"))
 	}
 
 	originString := req.URL.Query().Get("origin")
-	origin, err := utils.StringToAddress(originString)
+	origin, err := restutil.StringToAddress(originString)
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "origin"))
+		return restutil.BadRequest(errors.WithMessage(err, "origin"))
 	}
 
 	filteredTransactions := n.pool.Dump()
 	if origin != nil {
 		filteredTransactions, err = filterTransactions(*origin, filteredTransactions)
 		if err != nil {
-			return utils.BadRequest(err)
+			return restutil.BadRequest(err)
 		}
 	}
 
@@ -67,7 +68,7 @@ func (n *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) e
 			trxs[index] = *convertedTx
 		}
 
-		return utils.WriteJSON(w, trxs)
+		return restutil.WriteJSON(w, trxs)
 	}
 
 	transactions := make([]thor.Bytes32, len(filteredTransactions))
@@ -75,7 +76,7 @@ func (n *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) e
 		transactions[index] = tx.ID()
 	}
 
-	return utils.WriteJSON(w, transactions)
+	return restutil.WriteJSON(w, transactions)
 }
 
 func (n *Node) handleGetTxpoolStatus(w http.ResponseWriter, req *http.Request) error {
@@ -83,7 +84,7 @@ func (n *Node) handleGetTxpoolStatus(w http.ResponseWriter, req *http.Request) e
 	status := api.Status{
 		Amount: uint(total),
 	}
-	return utils.WriteJSON(w, status)
+	return restutil.WriteJSON(w, status)
 }
 
 func (n *Node) Mount(root *mux.Router, pathPrefix string) {
@@ -92,17 +93,17 @@ func (n *Node) Mount(root *mux.Router, pathPrefix string) {
 	sub.Path("/network/peers").
 		Methods(http.MethodGet).
 		Name("GET /node/network/peers").
-		HandlerFunc(utils.WrapHandlerFunc(n.handleNetwork))
+		HandlerFunc(restutil.WrapHandlerFunc(n.handleNetwork))
 
 	if n.enableTxpool {
 		sub.Path("/txpool").
 			Methods(http.MethodGet).
 			Name("GET /node/txpool").
-			HandlerFunc(utils.WrapHandlerFunc(n.handleGetTransactions))
+			HandlerFunc(restutil.WrapHandlerFunc(n.handleGetTransactions))
 		sub.Path("/txpool/status").
 			Methods(http.MethodGet).
 			Name("GET /node/txpool/status").
-			HandlerFunc(utils.WrapHandlerFunc(n.handleGetTxpoolStatus))
+			HandlerFunc(restutil.WrapHandlerFunc(n.handleGetTxpoolStatus))
 	}
 }
 
@@ -112,7 +113,7 @@ func filterTransactions(origin thor.Address, allTransactions tx.Transactions) (t
 	for _, tx := range allTransactions {
 		sender, err := tx.Origin()
 		if err != nil {
-			return nil, utils.BadRequest(errors.WithMessage(err, "filtering origin"))
+			return nil, restutil.BadRequest(errors.WithMessage(err, "filtering origin"))
 		}
 		if sender == origin {
 			filtered = append(filtered, tx)

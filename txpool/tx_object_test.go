@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
@@ -28,12 +29,32 @@ func newChainRepo() *chain.Repository {
 	return tchain.Repo()
 }
 
-func newTx(txType tx.Type, chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, features tx.Features, from genesis.DevAccount) *tx.Transaction {
+func newTx(
+	txType tx.Type,
+	chainTag byte,
+	clauses []*tx.Clause,
+	gas uint64,
+	blockRef tx.BlockRef,
+	expiration uint32,
+	dependsOn *thor.Bytes32,
+	features tx.Features,
+	from genesis.DevAccount,
+) *tx.Transaction {
 	trx := txBuilder(txType, chainTag, clauses, gas, blockRef, expiration, dependsOn, features).Build()
 	return tx.MustSign(trx, from.PrivateKey)
 }
 
-func newDelegatedTx(txType tx.Type, chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, from genesis.DevAccount, delegator genesis.DevAccount) *tx.Transaction {
+func newDelegatedTx(
+	txType tx.Type,
+	chainTag byte,
+	clauses []*tx.Clause,
+	gas uint64,
+	blockRef tx.BlockRef,
+	expiration uint32,
+	dependsOn *thor.Bytes32,
+	from genesis.DevAccount,
+	delegator genesis.DevAccount,
+) *tx.Transaction {
 	var features tx.Features
 	features.SetDelegated(true)
 
@@ -44,7 +65,16 @@ func newDelegatedTx(txType tx.Type, chainTag byte, clauses []*tx.Clause, gas uin
 	)
 }
 
-func txBuilder(txType tx.Type, chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, features tx.Features) *tx.Builder {
+func txBuilder(
+	txType tx.Type,
+	chainTag byte,
+	clauses []*tx.Clause,
+	gas uint64,
+	blockRef tx.BlockRef,
+	expiration uint32,
+	dependsOn *thor.Bytes32,
+	features tx.Features,
+) *tx.Builder {
 	builder := tx.NewBuilder(txType).ChainTag(chainTag)
 	for _, c := range clauses {
 		builder.Clause(c)
@@ -238,7 +268,13 @@ func TestExecutableRejectUnsupportedFeatures(t *testing.T) {
 	assert.Nil(t, err)
 
 	st := tchain.Stater().NewState(repo.BestBlockSummary().Root())
-	exe, err := txObj1.Executable(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig, galactica.CalcBaseFee(repo.BestBlockSummary().Header, forkConfig))
+	exe, err := txObj1.Executable(
+		repo.NewBestChain(),
+		st,
+		repo.BestBlockSummary().Header,
+		forkConfig,
+		galactica.CalcBaseFee(repo.BestBlockSummary().Header, forkConfig),
+	)
 	assert.False(t, exe)
 	assert.ErrorContains(t, err, "unsupported features")
 
@@ -246,6 +282,12 @@ func TestExecutableRejectUnsupportedFeatures(t *testing.T) {
 	tchain.MintBlock(genesis.DevAccounts()[0])
 
 	st = tchain.Stater().NewState(repo.BestBlockSummary().Root())
-	_, err = txObj1.Executable(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig, galactica.CalcBaseFee(repo.BestBlockSummary().Header, forkConfig))
+	_, err = txObj1.Executable(
+		repo.NewBestChain(),
+		st,
+		repo.BestBlockSummary().Header,
+		forkConfig,
+		galactica.CalcBaseFee(repo.BestBlockSummary().Header, forkConfig),
+	)
 	assert.Nil(t, err)
 }

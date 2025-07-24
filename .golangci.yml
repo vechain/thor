@@ -1,62 +1,76 @@
-# Please refer to the official golangci-lint config documentation for more details:
-# https://golangci-lint.run/usage/configuration/
-# https://github.com/golangci/golangci-lint/blob/master/.golangci.reference.yml
+version: "2"
 run:
-  timeout: 10m
   tests: true
-  # default is true. Enables skipping of directories:
-  #   vendor$, third_party$, testdata$, examples$, Godeps$, builtin$
-  exclude-dirs-use-default: true
-
+  timeout: 10m
 linters:
-  disable-all: true
+  default: none
   enable:
-    - goimports
-    - gosimple
+    - bidichk
+    - copyloopvar
+    - durationcheck
+    - gosec
     - govet
     - ineffassign
     - misspell
-    - unconvert
-    - typecheck
-    - unused
-    - staticcheck
-    - bidichk
-    - durationcheck
-    - copyloopvar
-    - whitespace
-    - gosec
     - revive
-
-    # - structcheck # lots of false positives
-    # - errcheck #lot of false positives
-    # - contextcheck
-    # - errchkjson # lots of false positives
-    # - errorlint # this check crashes
-    # - exhaustive # silly check
-    # - makezero # false positives
-    # - nilerr # several intentional
-
-linters-settings:
-  gofmt:
-    simplify: true
-  gosec:
-    excludes:
-      - G115
-      - G406 # ignore ripe160 deprecation
-      - G507 # ignore ripe160 deprecation
-  revive:
+    - staticcheck
+    - unconvert
+    - unused
+    - whitespace
+  settings:
+    gosec:
+      excludes:
+        - G115
+        - G406
+        - G507
+    revive:
+      rules:
+        - name: var-naming
+          arguments:
+            - []
+            - []
+            - - upperCaseConst: true
+          severity: warning
+          disabled: false
+          exclude:
+            - ""
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
     rules:
-      - name: var-naming
-        severity: warning
-        disabled: false
-        exclude: [""]
-        arguments:
-          - [] # AllowList
-          - [] # DenyList
-          - - upperCaseConst: true # Extra parameter (upperCaseConst|skipPackageNameChecks)
-
+      - path: vm/contracts.go
+        text: 'SA1019: "golang.org/x/crypto/ripemd160" is deprecated: RIPEMD-160 is a legacy hash and should not be used for new applications.'
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 issues:
   max-issues-per-linter: 1000
-  exclude-rules:
-    - path: vm/contracts.go
-      text: 'SA1019: "golang.org/x/crypto/ripemd160" is deprecated: RIPEMD-160 is a legacy hash and should not be used for new applications.'
+formatters:
+  enable:
+    - goimports
+    - gofmt
+    - gofumpt
+    - golines
+  settings:
+    gofmt:
+      simplify: true
+    goimports:
+      local-prefixes:
+        - github.com/vechain/thor
+    golines:
+      max-len: 160
+      tab-len: 4
+      shorten-comments: true
+      # Default: true
+      reformat-tags: false
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

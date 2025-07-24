@@ -19,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
@@ -38,7 +39,7 @@ func fastForwardTo(from uint32, to uint32, db *muxdb.MuxDB) (thor.Bytes32, error
 	binary.BigEndian.PutUint32(id[:], to)
 
 	blk := new(block.Builder).ParentID(parentID).Build()
-	var summary = &chain.BlockSummary{
+	summary := &chain.BlockSummary{
 		Header:    blk.Header(),
 		Conflicts: 0,
 	}

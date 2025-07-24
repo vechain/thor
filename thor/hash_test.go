@@ -12,8 +12,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/v2/thor"
 	"golang.org/x/crypto/sha3"
+
+	"github.com/vechain/thor/v2/thor"
 )
 
 func BenchmarkHash(b *testing.B) {

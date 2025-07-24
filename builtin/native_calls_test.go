@@ -17,6 +17,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
@@ -104,6 +105,7 @@ func (c *ccase) Expiration(expiration uint32) *ccase {
 	c.expiration = expiration
 	return c
 }
+
 func (c *ccase) ShouldVMError(err error) *ccase {
 	c.vmerr = err
 	return c
@@ -144,7 +146,8 @@ func (c *ccase) Assert(t *testing.T) *ccase {
 			GasPayer:   c.gasPayer,
 			ProvedWork: c.provedWork,
 			BlockRef:   c.blockRef,
-			Expiration: c.expiration})
+			Expiration: c.expiration,
+		})
 	vmout, _, err := exec()
 	assert.Nil(t, err)
 	if constant || vmout.VMErr != nil {
@@ -247,7 +250,6 @@ func TestParamsNative(t *testing.T) {
 	test.Case("get", key).
 		ShouldOutput(value).
 		Assert(t)
-
 }
 
 func TestAuthorityNative(t *testing.T) {
@@ -269,7 +271,7 @@ func TestAuthorityNative(t *testing.T) {
 	db := muxdb.NewMem()
 	b0 := buildGenesis(db, func(state *state.State) error {
 		state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
-		state.SetBalance(thor.Address(endorsor1), thor.InitialProposerEndorsement)
+		state.SetBalance(endorsor1, thor.InitialProposerEndorsement)
 		state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
 		builtin.Params.Native(state).Set(thor.KeyExecutorAddress, new(big.Int).SetBytes(executor[:]))
 		builtin.Params.Native(state).Set(thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)
@@ -363,7 +365,6 @@ func TestAuthorityNative(t *testing.T) {
 	test.Case("revoke", master2).
 		Caller(thor.BytesToAddress([]byte("some one"))).
 		Assert(t)
-
 }
 
 func TestEnergyNative(t *testing.T) {
@@ -481,7 +482,6 @@ func TestEnergyNative(t *testing.T) {
 		Caller(thor.BytesToAddress([]byte("some one"))).
 		ShouldVMError(errReverted).
 		Assert(t)
-
 }
 
 func TestPrototypeNative(t *testing.T) {
@@ -511,8 +511,8 @@ func TestPrototypeNative(t *testing.T) {
 	st := state.New(db, trie.Root{Hash: genesisBlock.Header().StateRoot()})
 	chain := repo.NewChain(genesisBlock.Header().ID())
 
-	st.SetStorage(thor.Address(acc1), key, value)
-	st.SetBalance(thor.Address(acc1), big.NewInt(1))
+	st.SetStorage(acc1, key, value)
+	st.SetBalance(acc1, big.NewInt(1))
 
 	masterEvent := func(self, newMaster thor.Address) *tx.Event {
 		ev, _ := builtin.Prototype.Events().EventByName("$Master")
@@ -563,12 +563,15 @@ func TestPrototypeNative(t *testing.T) {
 		Number: genesisBlock.Header().Number(),
 	}, &thor.NoFork)
 
-	code, _ := hex.DecodeString("60606040523415600e57600080fd5b603580601b6000396000f3006060604052600080fd00a165627a7a72305820edd8a93b651b5aac38098767f0537d9b25433278c9d155da2135efc06927fc960029")
+	code, _ := hex.DecodeString(
+		"60606040523415600e57600080fd5b603580601b6000396000f3006060604052600080fd00a165627a7a72305820edd8a93b651b5aac38098767f0537d9b25433278c9d155da2135efc06927fc960029",
+	)
 	exec, _ := rt.PrepareClause(tx.NewClause(nil).WithData(code), 0, math.MaxUint64, &xenv.TransactionContext{
 		ID:         thor.Bytes32{},
 		Origin:     master,
 		GasPrice:   &big.Int{},
-		ProvedWork: &big.Int{}})
+		ProvedWork: &big.Int{},
+	})
 	out, _, _ := exec()
 
 	contract = *out.ContractAddress
@@ -926,8 +929,8 @@ func TestExtensionNative(t *testing.T) {
 	b1 := newBlock(b0, 123, 456, privKeys[0])
 	b2 := newBlock(b1, 789, 321, privKeys[1])
 
-	b1_singer, _ := b1.Header().Signer()
-	b2_singer, _ := b2.Header().Signer()
+	b1Signer, _ := b1.Header().Signer()
+	b2Signer, _ := b2.Header().Signer()
 
 	gasPayer := thor.BytesToAddress([]byte("gasPayer"))
 
@@ -940,7 +943,12 @@ func TestExtensionNative(t *testing.T) {
 
 	chain := repo.NewChain(b2.Header().ID())
 
-	rt := runtime.New(chain, st, &xenv.BlockContext{Number: 2, Time: b2.Header().Timestamp(), TotalScore: b2.Header().TotalScore(), Signer: b2_singer}, &thor.NoFork)
+	rt := runtime.New(
+		chain,
+		st,
+		&xenv.BlockContext{Number: 2, Time: b2.Header().Timestamp(), TotalScore: b2.Header().TotalScore(), Signer: b2Signer},
+		&thor.NoFork,
+	)
 
 	test := &ctest{
 		rt:  rt,
@@ -1039,11 +1047,11 @@ func TestExtensionNative(t *testing.T) {
 		Assert(t)
 
 	test.Case("blockSigner", big.NewInt(2)).
-		ShouldOutput(b2_singer).
+		ShouldOutput(b2Signer).
 		Assert(t)
 
 	test.Case("blockSigner", big.NewInt(1)).
-		ShouldOutput(b1_singer).
+		ShouldOutput(b1Signer).
 		Assert(t)
 
 	test.Case("txGasPayer").

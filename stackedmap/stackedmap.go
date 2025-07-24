@@ -128,6 +128,7 @@ func (s *stack) pop() {
 func (s *stack) push(v any) {
 	*s = append(*s, v)
 }
+
 func (s stack) top() any {
 	return s[len(s)-1]
 }

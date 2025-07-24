@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/muxdb"
@@ -39,6 +40,7 @@ func approverEvent(approver thor.Address, action string) *tx.Event {
 		Data:    data,
 	}
 }
+
 func proposalEvent(id thor.Bytes32, action string) *tx.Event {
 	ev, _ := builtin.Executor.ABI.EventByName("Proposal")
 	var b32 thor.Bytes32
@@ -143,7 +145,6 @@ func TestExecutorApprover(t *testing.T) {
 }
 
 func TestExecutorVotingContract(t *testing.T) {
-
 	test := initExectorTest()
 	voting := thor.BytesToAddress([]byte("voting"))
 	test.Case("attachVotingContract", voting).

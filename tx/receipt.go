@@ -12,13 +12,12 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/rlp"
+
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
 )
 
-var (
-	errShortTypedReceipt = errors.New("typed receipt too short")
-)
+var errShortTypedReceipt = errors.New("typed receipt too short")
 
 // Receipt represents the results of a transaction.
 type Receipt struct {

@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
@@ -26,7 +27,17 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func createTx(txType tx.Type, chainTag byte, gasPriceCoef uint8, expiration uint32, gas uint64, nonce uint64, dependsOn *thor.Bytes32, clause *tx.Clause, br tx.BlockRef) *tx.Transaction {
+func createTx(
+	txType tx.Type,
+	chainTag byte,
+	gasPriceCoef uint8,
+	expiration uint32,
+	gas uint64,
+	nonce uint64,
+	dependsOn *thor.Bytes32,
+	clause *tx.Clause,
+	br tx.BlockRef,
+) *tx.Transaction {
 	builder := tx.NewBuilder(txType).
 		ChainTag(chainTag).
 		GasPriceCoef(gasPriceCoef).
@@ -82,7 +93,7 @@ func TestAdopt(t *testing.T) {
 		t.Fatal("Error adopting tx2:", err)
 	}
 
-	//Repeat transaction
+	// Repeat transaction
 	expectedErrorMessage := "known tx"
 	if err := flow.Adopt(tx2); err.Error() != expectedErrorMessage {
 		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
@@ -138,7 +149,7 @@ func TestAdoptTypedTxs(t *testing.T) {
 		t.Fatal("Error adopting tx2:", err)
 	}
 
-	//Repeat transaction
+	// Repeat transaction
 	expectedErrorMessage := "known tx"
 	if err := flow.Adopt(tx2); err.Error() != expectedErrorMessage {
 		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
@@ -173,10 +184,10 @@ func TestPack(t *testing.T) {
 
 	flow.Pack(proposer.PrivateKey, 0, false)
 
-	//Test with shouldVote
+	// Test with shouldVote
 	flow.Pack(proposer.PrivateKey, 0, true)
 
-	//Test wrong private key
+	// Test wrong private key
 	expectedErrorMessage := "private key mismatch"
 	if _, _, _, err := flow.Pack(genesis.DevAccounts()[1].PrivateKey, 0, false); err.Error() != expectedErrorMessage {
 		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
@@ -225,7 +236,13 @@ func TestPackAfterGalacticaFork(t *testing.T) {
 	assert.Equal(t, big.NewInt(thor.InitialBaseFee), block.Header().BaseFee())
 
 	// Adopt a tx which has not enough max fee to cover for base fee
-	badTx := tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).Gas(21000).MaxFeePerGas(big.NewInt(thor.InitialBaseFee - 1)).MaxPriorityFeePerGas(common.Big1).Expiration(100).Build()
+	badTx := tx.NewBuilder(tx.TypeDynamicFee).
+		ChainTag(repo.ChainTag()).
+		Gas(21000).
+		MaxFeePerGas(big.NewInt(thor.InitialBaseFee - 1)).
+		MaxPriorityFeePerGas(common.Big1).
+		Expiration(100).
+		Build()
 	badTx = tx.MustSign(badTx, genesis.DevAccounts()[0].PrivateKey)
 	expectedErrorMessage := "tx not adoptable now: gas price is less than block base fee"
 	if err := flow.Adopt(badTx); err.Error() != expectedErrorMessage {
@@ -372,7 +389,14 @@ func TestAdoptErrorAfterGalactica(t *testing.T) {
 	expectedBaseFee = galactica.CalcBaseFee(best.Header(), &forks)
 	maxPriorityFee := big.NewInt(10_000)
 	maxFee := new(big.Int).Add(expectedBaseFee, maxPriorityFee)
-	tr = tx.NewBuilder(tx.TypeDynamicFee).ChainTag(chain.Repo().ChainTag()).Nonce(3).MaxFeePerGas(maxFee).MaxPriorityFeePerGas(maxPriorityFee).Gas(21000).Expiration(100).Build()
+	tr = tx.NewBuilder(tx.TypeDynamicFee).
+		ChainTag(chain.Repo().ChainTag()).
+		Nonce(3).
+		MaxFeePerGas(maxFee).
+		MaxPriorityFeePerGas(maxPriorityFee).
+		Gas(21000).
+		Expiration(100).
+		Build()
 	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 	err = chain.MintBlock(genesis.DevAccounts()[0], tr)
 	assert.NoError(t, err)
@@ -391,7 +415,13 @@ func TestAdoptAfterGalacticaLowerBaseFeeThreshold(t *testing.T) {
 		best, err := chain.BestBlock()
 		assert.NoError(t, err)
 		expectedBaseFee := galactica.CalcBaseFee(best.Header(), &thor.ForkConfig{})
-		tr = tx.NewBuilder(tx.TypeDynamicFee).ChainTag(chain.Repo().ChainTag()).Nonce(uint64(i + 2)).MaxFeePerGas(expectedBaseFee).Gas(21000).Expiration(1000000).Build()
+		tr = tx.NewBuilder(tx.TypeDynamicFee).
+			ChainTag(chain.Repo().ChainTag()).
+			Nonce(uint64(i + 2)).
+			MaxFeePerGas(expectedBaseFee).
+			Gas(21000).
+			Expiration(1000000).
+			Build()
 		tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 		err = chain.MintBlock(genesis.DevAccounts()[0], tr)
 		assert.NoError(t, err)
