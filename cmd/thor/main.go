@@ -435,11 +435,11 @@ func soloAction(ctx *cli.Context) error {
 	}
 
 	stater := state.NewStater(mainDB)
-	engine := solo.NewEngine(repo, stater, logDB, options, forkConfig)
+	core := solo.NewCore(repo, stater, logDB, options, forkConfig)
 
 	var pool solo.TxPool
 	if ctx.Bool(onDemandFlag.Name) {
-		pool = solo.NewOnDemandTxPool(engine)
+		pool = solo.NewOnDemandTxPool(core)
 	} else {
 		txPoolOption := defaultTxPoolOptions
 		txPoolOption.Limit, err = readIntFromUInt64Flag(ctx.Uint64(txPoolLimitFlag.Name))
@@ -484,7 +484,7 @@ func soloAction(ctx *cli.Context) error {
 		defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
 	}
 
-	return solo.New(repo, stater, pool, options, engine).Run(exitSignal)
+	return solo.New(repo, stater, pool, options, core).Run(exitSignal)
 }
 
 func masterKeyAction(ctx *cli.Context) error {

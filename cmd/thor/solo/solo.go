@@ -43,7 +43,7 @@ type Solo struct {
 	stater  *state.Stater
 	txPool  TxPool
 	options Options
-	engine  *Engine // Engine is used to pack blocks
+	core    *Core // Core is used to pack blocks
 }
 
 type TxPool interface {
@@ -60,14 +60,14 @@ func New(
 	stater *state.Stater,
 	txPool TxPool,
 	options Options,
-	engine *Engine,
+	core *Core,
 ) *Solo {
 	return &Solo{
 		repo:    repo,
 		stater:  stater,
 		txPool:  txPool,
 		options: options,
-		engine:  engine,
+		core:    core,
 	}
 }
 
@@ -101,7 +101,7 @@ func (s *Solo) loop(ctx context.Context) {
 			return
 		case <-time.After(time.Duration(1) * time.Second):
 			if left := uint64(time.Now().Unix()) % s.options.BlockInterval; left == 0 {
-				if txs, err := s.engine.Pack(s.txPool.Executables(), false); err != nil {
+				if txs, err := s.core.Pack(s.txPool.Executables(), false); err != nil {
 					logger.Error("failed to pack block", "err", err)
 				} else {
 					for _, tx := range txs {
@@ -148,7 +148,7 @@ func (s *Solo) init(ctx context.Context) error {
 		case <-time.After(time.Duration(int64(s.options.BlockInterval)-time.Now().Unix()%int64(s.options.BlockInterval)) * time.Second):
 		}
 	}
-	if _, err := s.engine.Pack(tx.Transactions{baseGasPriceTx}, false); err != nil {
+	if _, err := s.core.Pack(tx.Transactions{baseGasPriceTx}, false); err != nil {
 		return errors.WithMessage(err, "failed to pack base gas price transaction")
 	}
 

@@ -16,7 +16,7 @@ import (
 )
 
 type OnDemandTxPool struct {
-	engine *Engine
+	engine *Core
 
 	txsByHash map[thor.Bytes32]*tx.Transaction
 	txsByID   map[thor.Bytes32]*tx.Transaction
@@ -28,7 +28,7 @@ type OnDemandTxPool struct {
 	mu sync.Mutex
 }
 
-func NewOnDemandTxPool(engine *Engine) *OnDemandTxPool {
+func NewOnDemandTxPool(engine *Core) *OnDemandTxPool {
 	return &OnDemandTxPool{
 		engine:    engine,
 		txsByHash: make(map[thor.Bytes32]*tx.Transaction),
