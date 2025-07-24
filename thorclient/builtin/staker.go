@@ -236,7 +236,6 @@ type Delegation struct {
 	StartPeriod  uint32
 	EndPeriod    uint32
 	Multiplier   uint8
-	AutoRenew    bool
 	Locked       bool
 }
 
@@ -248,7 +247,6 @@ func (s *Staker) GetDelegation(delegationID thor.Bytes32) (*Delegation, error) {
 	out[3] = new(uint32)
 	out[4] = new(uint8)
 	out[5] = new(bool)
-	out[6] = new(bool)
 	if err := s.contract.Method("getDelegation", delegationID).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, err
 	}
@@ -258,8 +256,7 @@ func (s *Staker) GetDelegation(delegationID thor.Bytes32) (*Delegation, error) {
 		StartPeriod:  *(out[2].(*uint32)),
 		EndPeriod:    *(out[3].(*uint32)),
 		Multiplier:   *(out[4].(*uint8)),
-		AutoRenew:    *(out[5].(*bool)),
-		Locked:       *(out[6].(*bool)),
+		Locked:       *(out[5].(*bool)),
 	}
 
 	return delegatorInfo, nil
@@ -297,7 +294,6 @@ type ValidatorQueuedEvent struct {
 	ValidationID thor.Address
 	Stake        *big.Int
 	Period       uint32
-	AutoRenew    bool
 	Log          api.FilteredEvent
 }
 
@@ -321,7 +317,6 @@ func (s *Staker) FilterValidatorQueued(eventsRange *api.Range, opts *api.Options
 		data := make([]any, 3)
 		data[0] = new(uint32)
 		data[1] = new(*big.Int)
-		data[2] = new(bool)
 
 		bytes, err := hexutil.Decode(log.Data)
 		if err != nil {
@@ -338,7 +333,6 @@ func (s *Staker) FilterValidatorQueued(eventsRange *api.Range, opts *api.Options
 			ValidationID: master,
 			Period:       *(data[0].(*uint32)),
 			Stake:        *(data[1].(**big.Int)),
-			AutoRenew:    *(data[2].(*bool)),
 			Log:          log,
 		}
 	}
@@ -429,7 +423,7 @@ type DelegationSignaledExitEvent struct {
 }
 
 func (s *Staker) FilterDelegationSignaledExit(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]DelegationSignaledExitEvent, error) {
-	raw, err := s.contract.FilterEvent("DelegationUpdatedAutoRenew").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	raw, err := s.contract.FilterEvent("DelegationSignaledExit").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}

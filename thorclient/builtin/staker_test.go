@@ -152,7 +152,6 @@ func TestStaker(t *testing.T) {
 	require.Len(t, queuedEvents, 1)
 	require.Equal(t, validator.Address, queuedEvents[0].Endorsor)
 	require.Equal(t, minStake, queuedEvents[0].Stake)
-	require.False(t, queuedEvents[0].AutoRenew)
 	queuedID := queuedEvents[0].ValidationID
 
 	// FirstQueued
@@ -230,7 +229,7 @@ func TestStaker(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, minStake, delegation.Stake)
 	require.Equal(t, uint8(100), delegation.Multiplier)
-	require.Equal(t, false, delegation.AutoRenew)
+	require.False(t, delegation.Locked)
 	require.Equal(t, queuedID, delegation.ValidationID)
 
 	// GetValidatorsTotals

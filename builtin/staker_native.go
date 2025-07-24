@@ -312,6 +312,7 @@ func init() {
 			if delegation.LastIteration != nil {
 				lastPeriod = *delegation.LastIteration
 			}
+
 			locked := delegation.Started(validator) && !delegation.Ended(validator)
 			return []any{
 				delegation.ValidationID,
