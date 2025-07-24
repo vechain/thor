@@ -11,23 +11,22 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/thor"
 )
 
-func createParams() (map[thor.Bytes32]*staker.Validation, *big.Int) {
-	validators := make(map[thor.Bytes32]*staker.Validation)
+func createParams() (map[thor.Address]*staker.Validation, *big.Int) {
+	validators := make(map[thor.Address]*staker.Validation)
 	totalStake := big.NewInt(0)
 	for _, acc := range genesis.DevAccounts() {
 		stake := big.NewInt(0).SetBytes(acc.Address[10:]) // use the last 10 bytes to create semi random, but deterministic stake
 		validator := &staker.Validation{
-			Node:   acc.Address,
 			Weight: stake,
 			Online: true,
 		}
-		id := thor.BytesToBytes32(acc.Address.Bytes())
-		validators[id] = validator
+		validators[acc.Address] = validator
 		totalStake.Add(totalStake, validator.Weight)
 	}
 
@@ -66,7 +65,7 @@ func TestScheduler_IsScheduled(t *testing.T) {
 	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed1"))
 	assert.NoError(t, err)
 
-	assert.True(t, sched.IsScheduled(20, thor.MustParseBytes32("0x0000000000000000000000000f872421dc479f3c11edd89512731814d0598db5")))
+	assert.True(t, sched.IsScheduled(20, genesis.DevAccounts()[2].Address))
 }
 
 func TestScheduler_Distribution(t *testing.T) {
@@ -78,7 +77,7 @@ func TestScheduler_Distribution(t *testing.T) {
 	//  pseudo-random number generator
 	randReader := mathrand.New(mathrand.NewSource(412342)) //nolint:gosec
 
-	var testCases = []struct {
+	testCases := []struct {
 		name      string
 		stakes    stakeFunc
 		tolerance float64
@@ -139,22 +138,20 @@ func TestScheduler_Distribution(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			validators := make(map[thor.Bytes32]*staker.Validation)
+			validators := make(map[thor.Address]*staker.Validation)
 			totalStake := big.NewInt(0)
 
 			for i, acc := range genesis.DevAccounts() {
-				id := thor.BytesToBytes32(acc.Address.Bytes())
 				stake := tc.stakes(i, acc.Address)
 				stake = stake.Mul(stake, big.NewInt(1e18)) // convert to wei
-				validators[id] = &staker.Validation{
-					Node:   acc.Address,
+				validators[acc.Address] = &staker.Validation{
 					Weight: stake,
 					Online: true,
 				}
 				totalStake.Add(totalStake, stake)
 			}
 
-			distribution := make(map[thor.Bytes32]int)
+			distribution := make(map[thor.Address]int)
 
 			for i := uint64(1); i <= uint64(iterations); i++ {
 				parent := i * thor.BlockInterval
@@ -165,9 +162,8 @@ func TestScheduler_Distribution(t *testing.T) {
 				assert.NoError(t, err)
 
 				for _, acc := range genesis.DevAccounts() {
-					id := thor.BytesToBytes32(acc.Address.Bytes())
-					if sched.IsScheduled(next, id) {
-						distribution[id]++
+					if sched.IsScheduled(next, acc.Address) {
+						distribution[acc.Address]++
 					}
 				}
 			}
@@ -237,8 +233,7 @@ func TestScheduler_TotalPlacements(t *testing.T) {
 	validators, totalStake := createParams()
 
 	otherAcc := genesis.DevAccounts()[1].Address
-	otherAccID := thor.BytesToBytes32(otherAcc.Bytes())
-	validators[otherAccID].Online = false
+	validators[otherAcc].Online = false
 
 	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed1"))
 	assert.NoError(t, err)
@@ -251,13 +246,13 @@ func TestScheduler_TotalPlacements(t *testing.T) {
 		total.Add(total, validators[p].Weight)
 	}
 
-	expectedStake := totalStake.Sub(totalStake, validators[otherAccID].Weight)
+	expectedStake := totalStake.Sub(totalStake, validators[otherAcc].Weight)
 
 	assert.True(t, total.Cmp(expectedStake) == 0)
 }
 
 func TestScheduler_AllValidatorsScheduled(t *testing.T) {
-	validators := make(map[thor.Bytes32]*staker.Validation)
+	validators := make(map[thor.Address]*staker.Validation)
 	lowStakeAcc := genesis.DevAccounts()[0].Address
 	for _, acc := range genesis.DevAccounts() {
 		var stake *big.Int
@@ -269,12 +264,10 @@ func TestScheduler_AllValidatorsScheduled(t *testing.T) {
 			stake = new(big.Int).Mul(eth, eth)
 		}
 		validator := &staker.Validation{
-			Node:   acc.Address,
 			Weight: stake,
 			Online: true,
 		}
-		id := thor.BytesToBytes32(acc.Address.Bytes())
-		validators[id] = validator
+		validators[acc.Address] = validator
 	}
 
 	parent := uint64(10)
@@ -285,7 +278,7 @@ func TestScheduler_AllValidatorsScheduled(t *testing.T) {
 	diff := int(thor.BlockInterval) * len(validators)
 	assert.Equal(t, int(parent)+diff, int(lowStakeBlockTime))
 
-	seen := make(map[thor.Bytes32]bool)
+	seen := make(map[thor.Address]bool)
 	for _, id := range sched.sequence {
 		if seen[id] {
 			t.Fatalf("Validator %s is scheduled multiple times", id)

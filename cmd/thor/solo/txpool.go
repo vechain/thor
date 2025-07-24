@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/event"
+
 	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"

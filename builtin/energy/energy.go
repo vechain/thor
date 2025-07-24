@@ -12,7 +12,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/rlp"
+
 	"github.com/vechain/thor/v2/builtin/params"
+
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -76,6 +78,7 @@ func (e *Energy) getTotalAddSub() (total totalAddSub, err error) {
 	})
 	return
 }
+
 func (e *Energy) setTotalAddSub(total totalAddSub) error {
 	return e.state.EncodeStorage(e.addr, totalAddSubKey, func() ([]byte, error) {
 		return rlp.EncodeToBytes(&total)
@@ -335,6 +338,10 @@ func (e *Energy) CalculateRewards(staker staker) (*big.Int, error) {
 	if err != nil {
 		return nil, err
 	}
+	if curveFactor.Uint64() == 0 {
+		curveFactor = thor.InitialCurveFactor
+	}
+
 	// reward = 1 * curveFactor * sqrt(totalStaked / 1e18) / blocksPerYear
 	reward := big.NewInt(1)
 	reward.Mul(reward, curveFactor)

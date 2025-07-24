@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	lru "github.com/hashicorp/golang-lru"
+
 	"github.com/vechain/thor/v2/stackedmap"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"

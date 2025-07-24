@@ -9,6 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
@@ -567,7 +568,7 @@ func TestGetVote(t *testing.T) {
 				err = testBFT.reCreateEngine()
 				assert.Nil(t, err)
 
-				//should be 2 checkpoints in voted
+				// should be 2 checkpoints in voted
 				votes = testBFT.engine.casts.Slice(testBFT.engine.Finalized())
 				if err != nil {
 					t.Fatal(err)

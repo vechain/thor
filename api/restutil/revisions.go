@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package utils
+package restutil
 
 import (
 	"errors"
@@ -109,7 +109,13 @@ func GetSummary(rev *Revision, repo *chain.Repository, bft bft.Committer) (sum *
 
 // GetSummaryAndState returns the block summary and state for the given revision,
 // this function supports the "next" revision.
-func GetSummaryAndState(rev *Revision, repo *chain.Repository, bft bft.Committer, stater *state.Stater, forkConfig *thor.ForkConfig) (*chain.BlockSummary, *state.State, error) {
+func GetSummaryAndState(
+	rev *Revision,
+	repo *chain.Repository,
+	bft bft.Committer,
+	stater *state.Stater,
+	forkConfig *thor.ForkConfig,
+) (*chain.BlockSummary, *state.State, error) {
 	if rev.IsNext() {
 		best := repo.BestBlockSummary()
 

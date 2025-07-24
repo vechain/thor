@@ -48,7 +48,7 @@ type TerminalStringer interface {
 
 func (h *TerminalHandler) format(buf []byte, r slog.Record, usecolor bool) []byte {
 	msg := escapeMessage(r.Message)
-	var color = ""
+	color := ""
 	if usecolor {
 		switch r.Level {
 		case LevelCrit:
@@ -83,7 +83,7 @@ func (h *TerminalHandler) format(buf []byte, r slog.Record, usecolor bool) []byt
 	b.WriteString(msg)
 
 	// try to justify the log output for short messages
-	//length := utf8.RuneCountInString(msg)
+	// length := utf8.RuneCountInString(msg)
 	length := len(msg)
 	if (r.NumAttrs()+len(h.attrs)) > 0 && length < termMsgJust {
 		b.Write(spaces[:termMsgJust-length])
@@ -120,8 +120,8 @@ func (h *TerminalHandler) formatAttributes(buf *bytes.Buffer, r slog.Record, col
 			buf.Write(spaces[:padding-length])
 		}
 	}
-	var n = 0
-	var nAttrs = len(h.attrs) + r.NumAttrs()
+	n := 0
+	nAttrs := len(h.attrs) + r.NumAttrs()
 	for _, attr := range h.attrs {
 		writeAttr(attr, n == 0, n == nAttrs-1)
 		n++

@@ -6,9 +6,8 @@
 package comm_test
 
 import (
-	"testing"
-
 	"slices"
+	"testing"
 
 	"github.com/stretchr/testify/assert"
 )

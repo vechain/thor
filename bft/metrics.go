@@ -9,6 +9,4 @@ import (
 	"github.com/vechain/thor/v2/metrics"
 )
 
-var (
-	metricBlocksCommitted = metrics.LazyLoadCounter("bft_committed_count")
-)
+var metricBlocksCommitted = metrics.LazyLoadCounter("bft_committed_count")

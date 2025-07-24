@@ -68,13 +68,19 @@ func (c *Charger) Charge(gas uint64) {
 }
 
 func (c *Charger) Breakdown() string {
-	return fmt.Sprintf("SLOAD: %d ops (%d gas) | SSTORE_SET: %d ops (%d gas) | SSTORE_RESET: %d ops (%d gas) | BALANCE: %d ops (%d gas) | CUSTOM: %d gas | TOTAL: %d gas",
-		c.sloadOps, c.sloadOps*thor.SloadGas,
-		c.sstoreSetOps, c.sstoreSetOps*thor.SstoreSetGas,
-		c.sstoreResetOps, c.sstoreResetOps*thor.SstoreResetGas,
-		c.balanceOps, c.balanceOps*thor.GetBalanceGas,
+	return fmt.Sprintf(
+		"SLOAD: %d ops (%d gas) | SSTORE_SET: %d ops (%d gas) | SSTORE_RESET: %d ops (%d gas) | BALANCE: %d ops (%d gas) | CUSTOM: %d gas | TOTAL: %d gas",
+		c.sloadOps,
+		c.sloadOps*thor.SloadGas,
+		c.sstoreSetOps,
+		c.sstoreSetOps*thor.SstoreSetGas,
+		c.sstoreResetOps,
+		c.sstoreResetOps*thor.SstoreResetGas,
+		c.balanceOps,
+		c.balanceOps*thor.GetBalanceGas,
 		c.customGas,
-		c.totalGas)
+		c.totalGas,
+	)
 }
 
 func (c *Charger) TotalGas() uint64 {
