@@ -338,6 +338,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 					conflictBlock.Header().ID() != newBlock.Header().ID() &&
 					conflictBlock.Header().StateRoot() != newBlock.Header().StateRoot() {
 					log.Warn("Double signing", "block", shortID(newBlock.Header().ID()), "previous", shortID(thor.BytesToBytes32(conflict)))
+					metricDoubleSignedBlocks().AddWithLabel(1, map[string]string{"signer": signer.String()})
 				}
 			}
 

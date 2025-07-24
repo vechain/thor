@@ -142,15 +142,14 @@ func StartAPIServer(
 	if config.Timeout > 0 {
 		router.Use(middleware.HandleAPITimeout(time.Duration(config.Timeout) * time.Millisecond))
 	}
-
 	router.Use(handlers.CompressHandler)
-	router.Use(handlers.CORS(
+
+	handler := handlers.CORS(
 		handlers.AllowedOrigins(origins),
 		handlers.AllowedHeaders([]string{"content-type", "x-genesis-id"}),
 		handlers.ExposedHeaders([]string{"x-genesis-id", "x-thorest-ver"}),
-	))
-
-	srv := &http.Server{Handler: router, ReadHeaderTimeout: time.Second, ReadTimeout: 5 * time.Second}
+	)(router)
+	srv := &http.Server{Handler: handler, ReadHeaderTimeout: time.Second, ReadTimeout: 5 * time.Second}
 	var goes co.Goes
 	goes.Go(func() {
 		srv.Serve(listener)

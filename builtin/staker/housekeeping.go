@@ -38,7 +38,7 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Bytes32]*Validat
 			return nil
 		}
 
-		if !entry.AutoRenew { // early exit, validator is due to exit but has not reached exit block
+		if entry.ExitBlock != nil { // early exit, validator is due to exit but has not reached exit block
 			activeValidators[id] = entry
 			logger.Debug("validator exit delayed", "node", entry.Node, "exit-block", entry.ExitBlock)
 			return nil
@@ -112,18 +112,18 @@ func (s *Staker) performRenewalUpdates(id thor.Bytes32, validator *Validation) e
 	queuedWeight := big.NewInt(0).Add(validatorRenewal.QueuedDecreaseWeight, delegationsRenewal.QueuedDecreaseWeight)
 
 	// set the new totals
-	validator.LockedVET = big.NewInt(0).Add(validator.LockedVET, changeTVL)
+	validator.LockedVET = big.NewInt(0).Add(validator.LockedVET, validatorRenewal.ChangeTVL)
 	validator.Weight = big.NewInt(0).Add(validator.Weight, changeWeight)
-	if err := s.lockedVET.Add(changeTVL); err != nil {
+	if err := s.storage.lockedVET.Add(changeTVL); err != nil {
 		return err
 	}
-	if err := s.lockedWeight.Add(changeWeight); err != nil {
+	if err := s.storage.lockedWeight.Add(changeWeight); err != nil {
 		return err
 	}
-	if err := s.queuedVET.Sub(queuedDecrease); err != nil {
+	if err := s.storage.queuedVET.Sub(queuedDecrease); err != nil {
 		return err
 	}
-	if err := s.queuedWeight.Sub(queuedWeight); err != nil {
+	if err := s.storage.queuedWeight.Sub(queuedWeight); err != nil {
 		return err
 	}
 	return s.storage.SetValidation(id, validator, false)
@@ -174,7 +174,7 @@ func (s *Staker) activateValidators(currentBlock uint32) ([]*thor.Bytes32, error
 }
 
 func (s *Staker) Transition(currentBlock uint32) (bool, error) {
-	active, err := s.IsActive()
+	active, err := s.IsPoSActive()
 	if err != nil {
 		return false, err
 	}

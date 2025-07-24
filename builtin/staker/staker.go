@@ -10,7 +10,6 @@ import (
 
 	"github.com/vechain/thor/v2/builtin/gascharger"
 	"github.com/vechain/thor/v2/builtin/params"
-	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -36,14 +35,10 @@ func SetLogger(l log.Logger) {
 
 // Staker implements native methods of `Staker` contract.
 type Staker struct {
-	lockedVET    *solidity.Uint256
-	lockedWeight *solidity.Uint256
-	queuedVET    *solidity.Uint256
-	queuedWeight *solidity.Uint256
-	delegations  *delegations
-	validations  *validations
-	storage      *storage
-	params       *params.Params
+	delegations *delegations
+	validations *validations
+	storage     *storage
+	params      *params.Params
 }
 
 // New create a new instance.
@@ -55,19 +50,15 @@ func New(addr thor.Address, state *state.State, params *params.Params, charger *
 	storage.debugOverride(&cooldownPeriod, slotCooldownPeriod)
 
 	return &Staker{
-		lockedVET:    solidity.NewUint256(storage.context, slotLockedVET),
-		lockedWeight: solidity.NewUint256(storage.context, slotLockedWeight),
-		queuedVET:    solidity.NewUint256(storage.context, slotQueuedVET),
-		queuedWeight: solidity.NewUint256(storage.context, slotQueuedWeight),
-		storage:      storage,
-		validations:  newValidations(storage),
-		delegations:  newDelegations(storage),
-		params:       params,
+		storage:     storage,
+		validations: newValidations(storage),
+		delegations: newDelegations(storage),
+		params:      params,
 	}
 }
 
-// IsActive checks if the staker contract has become active, i.e. we have transitioned to PoS.
-func (s *Staker) IsActive() (bool, error) {
+// IsPoSActive checks if the staker contract has become active, i.e. we have transitioned to PoS.
+func (s *Staker) IsPoSActive() (bool, error) {
 	return s.validations.IsActive()
 }
 
@@ -78,23 +69,23 @@ func (s *Staker) LeaderGroup() (map[thor.Bytes32]*Validation, error) {
 
 // LockedVET returns the amount of VET and weight locked by validations and delegations.
 func (s *Staker) LockedVET() (*big.Int, *big.Int, error) {
-	lockedVet, err := s.lockedVET.Get()
+	lockedVet, err := s.storage.lockedVET.Get()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	lockedWeight, err := s.lockedWeight.Get()
+	lockedWeight, err := s.storage.lockedWeight.Get()
 	return lockedVet, lockedWeight, err
 }
 
 // QueuedStake returns the amount of VET and weight queued by validations and delegations.
 func (s *Staker) QueuedStake() (*big.Int, *big.Int, error) {
-	queuedVet, err := s.queuedVET.Get()
+	queuedVet, err := s.storage.queuedVET.Get()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	queuedWeight, err := s.queuedWeight.Get()
+	queuedWeight, err := s.storage.queuedWeight.Get()
 	return queuedVet, queuedWeight, err
 }
 
@@ -136,13 +127,15 @@ func (s *Staker) AddValidator(
 	node thor.Address,
 	period uint32,
 	stake *big.Int,
-	autoRenew bool,
 	currentBlock uint32,
 ) (thor.Bytes32, error) {
-	stakeETH := new(big.Int).Div(stake, big.NewInt(1e18))
-	logger.Debug("adding validator", "endorsor", endorsor, "node", node, "period", period, "stake", stakeETH, "autoRenew", autoRenew)
+	logger.Debug("adding validator", "endorsor", endorsor,
+		"node", node,
+		"period", period,
+		"stake", new(big.Int).Div(stake, big.NewInt(1e18)),
+	)
 
-	if id, err := s.validations.Add(endorsor, node, period, stake, autoRenew, currentBlock); err != nil {
+	if id, err := s.validations.Add(endorsor, node, period, stake, currentBlock); err != nil {
 		logger.Info("add validator failed", "node", node, "error", err)
 		return thor.Bytes32{}, err
 	} else {
@@ -159,14 +152,14 @@ func (s *Staker) Get(id thor.Bytes32) (*Validation, error) {
 	return s.storage.GetValidation(id)
 }
 
-func (s *Staker) UpdateAutoRenew(endorsor thor.Address, id thor.Bytes32, autoRenew bool) error {
-	logger.Debug("updating autorenew", "endorsor", endorsor, "id", id, "autoRenew", autoRenew)
+func (s *Staker) SignalExit(endorsor thor.Address, id thor.Bytes32) error {
+	logger.Debug("signal exit", "endorsor", endorsor, "id", id)
 
-	if err := s.validations.UpdateAutoRenew(endorsor, id, autoRenew); err != nil {
-		logger.Info("update autorenew failed", "id", id, "error", err)
+	if err := s.validations.SignalExit(endorsor, id); err != nil {
+		logger.Info("signal exit failed", "id", id, "error", err)
 		return err
 	} else {
-		logger.Info("updated autorenew", "id", id)
+		logger.Info("signal", "id", id)
 		return nil
 	}
 }
@@ -352,8 +345,9 @@ func (s *Staker) GetValidatorsTotals(validationID thor.Bytes32) (*ValidationTota
 	if err != nil {
 		return nil, err
 	}
+	delegationLockedStake := big.NewInt(0).Add(aggregation.CurrentRecurringVET, aggregation.CurrentOneTimeVET)
 	return &ValidationTotals{
-		TotalLockedStake:        validator.LockedVET,
+		TotalLockedStake:        big.NewInt(0).Add(validator.LockedVET, delegationLockedStake),
 		TotalLockedWeight:       validator.Weight,
 		DelegationsLockedStake:  big.NewInt(0).Add(aggregation.CurrentRecurringVET, aggregation.CurrentOneTimeVET),
 		DelegationsLockedWeight: big.NewInt(0).Add(aggregation.CurrentRecurringWeight, aggregation.CurrentOneTimeWeight),
