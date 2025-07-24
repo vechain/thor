@@ -122,6 +122,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 		}
 	RE_SCHEDULE:
 	}
+	conn.Close()
 }
 
 func (n *Node) pack(flow *packer.Flow, conn net.Conn) (err error) {
