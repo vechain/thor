@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/test/datagen"
@@ -169,7 +170,7 @@ func Test_LinkedList_Iter(t *testing.T) {
 
 	// Test iteration
 	var validatorIDs []thor.Bytes32
-	var totalWeight *big.Int = big.NewInt(0)
+	totalWeight := big.NewInt(0)
 
 	err := linkedList.Iter(func(id thor.Bytes32, validator *Validation) error {
 		validatorIDs = append(validatorIDs, id)

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/builtin/params"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
@@ -102,11 +103,20 @@ func TestStaker(t *testing.T) {
 		expected any
 	}{
 		{M(stkr.LockedVET()), M(zeroStake, zeroStake, nil)},
-		{M(stkr.AddValidator(validator1, validator1, uint32(360)*24*15, stakeAmount, 0)), M(thor.MustParseBytes32("0xf97f97edb19ac8a202886795b0a2df88a126cce926e50874448ce885c7ff472e"), nil)},
-		{M(stkr.AddValidator(validator2, validator2, uint32(360)*24*15, stakeAmount, 0)), M(thor.MustParseBytes32("0xcc72fbf4d301b909215e6ae6b5e6b305843daae701fda7325d04267de4cf731d"), nil)},
+		{
+			M(stkr.AddValidator(validator1, validator1, uint32(360)*24*15, stakeAmount, 0)),
+			M(thor.MustParseBytes32("0xf97f97edb19ac8a202886795b0a2df88a126cce926e50874448ce885c7ff472e"), nil),
+		},
+		{
+			M(stkr.AddValidator(validator2, validator2, uint32(360)*24*15, stakeAmount, 0)),
+			M(thor.MustParseBytes32("0xcc72fbf4d301b909215e6ae6b5e6b305843daae701fda7325d04267de4cf731d"), nil),
+		},
 		{M(stkr.Transition(0)), M(true, nil)},
 		{M(stkr.LockedVET()), M(totalStake, big.NewInt(0).Mul(totalStake, big.NewInt(2)), nil)},
-		{M(stkr.AddValidator(validator3, validator3, uint32(360)*24*15, stakeAmount, 0)), M(thor.MustParseBytes32("0x5ab9f98c3694a90d5c55443e1ca48ff71e3e0d7523ddcfac2fc4033b780e0390"), nil)},
+		{
+			M(stkr.AddValidator(validator3, validator3, uint32(360)*24*15, stakeAmount, 0)),
+			M(thor.MustParseBytes32("0x5ab9f98c3694a90d5c55443e1ca48ff71e3e0d7523ddcfac2fc4033b780e0390"), nil),
+		},
 		{M(stkr.FirstQueued()), M(thor.MustParseBytes32("0x5ab9f98c3694a90d5c55443e1ca48ff71e3e0d7523ddcfac2fc4033b780e0390"), nil)},
 		{M(func() (thor.Bytes32, error) {
 			activated, err := stkr.validations.ActivateNext(0, stkr.params)
@@ -351,6 +361,7 @@ func TestStaker_AddValidator(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, validator.IsEmpty())
 }
+
 func TestStaker_QueueUpValidators(t *testing.T) {
 	staker, _ := newStaker(t, 101, 101, false)
 

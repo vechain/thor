@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/builtin/gascharger"
@@ -287,12 +288,12 @@ func TestStakerNativeGasCosts(t *testing.T) {
 			}
 
 			// Log detailed breakdown for analysis
-			//t.Logf("=== %s ===", tc.function)
-			//t.Logf("Description: %s", tc.description)
-			//t.Logf("Expected gas: %d", tc.expectedGas)
-			//t.Logf("Actual gas used: %d", gasUsed)
-			//t.Logf("Result length: %d", len(result))
-			//t.Logf("Gas breakdown: %s", capturedCharger.Breakdown())
+			// t.Logf("=== %s ===", tc.function)
+			// t.Logf("Description: %s", tc.description)
+			// t.Logf("Expected gas: %d", tc.expectedGas)
+			// t.Logf("Actual gas used: %d", gasUsed)
+			// t.Logf("Result length: %d", len(result))
+			// t.Logf("Gas breakdown: %s", capturedCharger.Breakdown())
 
 			// Additional validation: gas should be reasonable (not zero, not excessive)
 			assert.Greater(t, gasUsed, uint64(0), "Function %s should consume some gas", tc.function)

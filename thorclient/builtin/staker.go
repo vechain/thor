@@ -15,6 +15,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
@@ -109,7 +110,7 @@ func (s *Staker) Next(id thor.Bytes32) (*Validator, thor.Bytes32, error) {
 }
 
 func (s *Staker) TotalStake() (*big.Int, *big.Int, error) {
-	var out = [2]any{}
+	out := [2]any{}
 	out[0] = new(*big.Int)
 	out[1] = new(*big.Int)
 	if err := s.contract.Method("totalStake").Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
@@ -119,7 +120,7 @@ func (s *Staker) TotalStake() (*big.Int, *big.Int, error) {
 }
 
 func (s *Staker) QueuedStake() (*big.Int, *big.Int, error) {
-	var out = [2]any{}
+	out := [2]any{}
 	out[0] = new(*big.Int)
 	out[1] = new(*big.Int)
 	if err := s.contract.Method("queuedStake").Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
@@ -160,7 +161,7 @@ func (v *Validator) Exists() bool {
 }
 
 func (s *Staker) Get(id thor.Bytes32) (*Validator, error) {
-	var out = [9]any{}
+	out := [9]any{}
 	out[0] = new(common.Address)
 	out[1] = new(common.Address)
 	out[2] = new(*big.Int)
@@ -255,7 +256,7 @@ type Delegation struct {
 }
 
 func (s *Staker) GetDelegation(delegationID thor.Bytes32) (*Delegation, error) {
-	var out = make([]any, 7)
+	out := make([]any, 7)
 	out[0] = new(common.Hash)
 	out[1] = new(*big.Int)
 	out[2] = new(uint32)
@@ -287,7 +288,7 @@ type ValidationTotals struct {
 }
 
 func (s *Staker) GetValidatorsTotals(validationID thor.Bytes32) (*ValidationTotals, error) {
-	var out = make([]any, 4)
+	out := make([]any, 4)
 	out[0] = new(*big.Int)
 	out[1] = new(*big.Int)
 	out[2] = new(*big.Int)

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/thor"
@@ -78,7 +79,7 @@ func TestScheduler_Distribution(t *testing.T) {
 	//  pseudo-random number generator
 	randReader := mathrand.New(mathrand.NewSource(412342)) //nolint:gosec
 
-	var testCases = []struct {
+	testCases := []struct {
 		name      string
 		stakes    stakeFunc
 		tolerance float64

@@ -9,6 +9,7 @@ import (
 	"bytes"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/thor"

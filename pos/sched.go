@@ -42,7 +42,8 @@ func NewScheduler(
 	proposers map[thor.Bytes32]*staker.Validation,
 	parentBlockNumber uint32,
 	parentBlockTime uint64,
-	seed []byte) (*Scheduler, error) {
+	seed []byte,
+) (*Scheduler, error) {
 	var (
 		proposer   *staker.Validation
 		proposerID thor.Bytes32

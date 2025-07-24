@@ -66,7 +66,7 @@ func (v *validations) LeaderGroupIterator(callback func(thor.Bytes32, *Validatio
 
 // LeaderGroup lists all registered candidates.
 func (v *validations) LeaderGroup() (map[thor.Bytes32]*Validation, error) {
-	var group = make(map[thor.Bytes32]*Validation)
+	group := make(map[thor.Bytes32]*Validation)
 	err := v.LeaderGroupIterator(func(id thor.Bytes32, entry *Validation) error {
 		group[id] = entry
 		return nil

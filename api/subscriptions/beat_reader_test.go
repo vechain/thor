@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -63,7 +64,11 @@ func TestBeatReader_Read_ErrorWhenReadingBlocks(t *testing.T) {
 	thorChain := initChain(t)
 
 	// Act
-	beatReader := newBeatReader(thorChain.Repo(), thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), newMessageCache[api.BeatMessage](10))
+	beatReader := newBeatReader(
+		thorChain.Repo(),
+		thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+		newMessageCache[api.BeatMessage](10),
+	)
 	res, ok, err := beatReader.Read()
 
 	// Assert

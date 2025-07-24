@@ -10,6 +10,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/thor"

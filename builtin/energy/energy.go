@@ -12,7 +12,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/rlp"
+
 	"github.com/vechain/thor/v2/builtin/params"
+
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -76,6 +78,7 @@ func (e *Energy) getTotalAddSub() (total totalAddSub, err error) {
 	})
 	return
 }
+
 func (e *Energy) setTotalAddSub(total totalAddSub) error {
 	return e.state.EncodeStorage(e.addr, totalAddSubKey, func() ([]byte, error) {
 		return rlp.EncodeToBytes(&total)

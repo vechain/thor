@@ -11,6 +11,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+
 	"github.com/vechain/thor/v2/builtin/gascharger"
 	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/thor"
@@ -49,7 +50,18 @@ func init() {
 
 			validator, err := Staker.NativeMetered(env.State(), charger).Get(thor.Bytes32(args.ValidationID))
 			if err != nil {
-				return []any{thor.Address{}, thor.Address{}, big.NewInt(0), big.NewInt(0), staker.StatusUnknown, false, uint32(0), uint32(0), uint32(0), fmt.Sprintf("revert: %v", err)}
+				return []any{
+					thor.Address{},
+					thor.Address{},
+					big.NewInt(0),
+					big.NewInt(0),
+					staker.StatusUnknown,
+					false,
+					uint32(0),
+					uint32(0),
+					uint32(0),
+					fmt.Sprintf("revert: %v", err),
+				}
 			}
 			if validator.IsEmpty() {
 				return []any{thor.Address{}, thor.Address{}, big.NewInt(0), big.NewInt(0), staker.StatusUnknown, false, uint32(0), uint32(0), uint32(0), ""}
@@ -58,7 +70,18 @@ func init() {
 			if validator.ExitBlock != nil {
 				exitBlock = *validator.ExitBlock
 			}
-			return []any{validator.Node, validator.Endorsor, validator.LockedVET, validator.Weight, validator.Status, validator.Online, validator.Period, validator.StartBlock, exitBlock, ""}
+			return []any{
+				validator.Node,
+				validator.Endorsor,
+				validator.LockedVET,
+				validator.Weight,
+				validator.Status,
+				validator.Online,
+				validator.Period,
+				validator.StartBlock,
+				exitBlock,
+				"",
+			}
 		}},
 		{"native_lookupNode", func(env *xenv.Environment) []any {
 			var args struct {
@@ -308,7 +331,16 @@ func init() {
 				lastPeriod = *delegation.LastIteration
 			}
 			locked := delegation.Started(validator) && !delegation.Ended(validator)
-			return []any{delegation.ValidationID, delegation.Stake, delegation.FirstIteration, lastPeriod, delegation.Multiplier, delegation.AutoRenew, locked, ""}
+			return []any{
+				delegation.ValidationID,
+				delegation.Stake,
+				delegation.FirstIteration,
+				lastPeriod,
+				delegation.Multiplier,
+				delegation.AutoRenew,
+				locked,
+				"",
+			}
 		}},
 		{"native_getRewards", func(env *xenv.Environment) []any {
 			var args struct {
