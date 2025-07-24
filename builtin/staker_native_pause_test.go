@@ -257,7 +257,7 @@ func TestAddValidatorForPause(t *testing.T) {
 	_, err = unpackResult(result)
 	require.NoError(t, err, "Function native_set should not return error %s", err)
 
-	result = executeStakerNativeMethod(t, setup, "native_addValidator", []any{newValidator, newValidator, uint32(360) * 24 * 15, MinStake, true})
+	result = executeStakerNativeMethod(t, setup, "native_addValidator", []any{newValidator, newValidator, uint32(360) * 24 * 15, MinStake})
 	require.NotNil(t, result, "Function native_addValidator should return result")
 	_, err = unpackResult(result)
 	require.ErrorContains(t, err, "revert: staker is paused", "Function native_addValidator should return error 'revert: staker is paused'")
@@ -267,7 +267,7 @@ func TestAddValidatorForPause(t *testing.T) {
 	_, err = unpackResult(result)
 	require.NoError(t, err, "Function native_set should not return error %s", err)
 
-	result = executeStakerNativeMethod(t, setup, "native_addValidator", []any{newValidator, newValidator, uint32(360) * 24 * 15, MinStake, true})
+	result = executeStakerNativeMethod(t, setup, "native_addValidator", []any{newValidator, newValidator, uint32(360) * 24 * 15, MinStake})
 	require.NotNil(t, result, "Function native_addValidator should return result")
 	_, err = unpackResult(result)
 	require.NoError(t, err, "Function native_set should not return error %s", err)
@@ -279,19 +279,17 @@ func TestIncreaseStakeForPause(t *testing.T) {
 	newValidator := genesis.DevAccounts()[0].Address
 
 	// add new validator
-	result := executeStakerNativeMethod(t, setup, "native_addValidator", []any{newValidator, newValidator, uint32(360) * 24 * 15, MinStake, true})
+	result := executeStakerNativeMethod(t, setup, "native_addValidator", []any{newValidator, newValidator, uint32(360) * 24 * 15, MinStake})
 	require.NotNil(t, result, "Function native_addValidator should return result")
-	datas, err := unpackResult(result)
+	_, err := unpackResult(result)
 	require.NoError(t, err, "Function native_addValidator should not return error %s", err)
-	validationID := datas[0].(thor.Bytes32)
-	require.NotNil(t, validationID, "Function native_addValidator should return validationID")
 
 	// Set Staker pause active, so the validator could not to increased stake
 	result = executeParamesNativeMethod(t, setup, "native_set", []any{thor.KeyStargateSwitches, big.NewInt(2)}) // Set the second bit to 1
 	_, err = unpackResult(result)
 	require.NoError(t, err, "Function native_set should not return error %s", err)
 
-	result = executeStakerNativeMethod(t, setup, "native_increaseStake", []any{newValidator, validationID, big.NewInt(100)})
+	result = executeStakerNativeMethod(t, setup, "native_increaseStake", []any{newValidator, newValidator, big.NewInt(100)})
 	require.NotNil(t, result, "Function native_increaseStake should return result")
 	_, err = unpackResult(result)
 	require.ErrorContains(t, err, "revert: staker is paused", "Function native_increaseStake should return error 'revert: staker is paused'")
@@ -301,7 +299,7 @@ func TestIncreaseStakeForPause(t *testing.T) {
 	_, err = unpackResult(result)
 	require.NoError(t, err, "Function native_set should not return error %s", err)
 
-	result = executeStakerNativeMethod(t, setup, "native_increaseStake", []any{newValidator, validationID, big.NewInt(100)})
+	result = executeStakerNativeMethod(t, setup, "native_increaseStake", []any{newValidator, newValidator, big.NewInt(100)})
 	require.NotNil(t, result, "Function native_increaseStake should return result")
 	_, err = unpackResult(result)
 	require.NoError(t, err, "Function native_increaseStake should not return error %s", err)
@@ -312,20 +310,18 @@ func TestWithdrawForPause(t *testing.T) {
 	newValidator := genesis.DevAccounts()[0].Address
 
 	// add new validator
-	result := executeStakerNativeMethod(t, setup, "native_addValidator", []any{newValidator, newValidator, uint32(360) * 24 * 15, MinStake, true})
+	result := executeStakerNativeMethod(t, setup, "native_addValidator", []any{newValidator, newValidator, uint32(360) * 24 * 15, MinStake})
 	require.NotNil(t, result, "Function native_addValidator should return result")
-	datas, err := unpackResult(result)
+	_, err := unpackResult(result)
 	require.NoError(t, err, "Function native_addValidator should not return error %s", err)
-	validationID := datas[0].(thor.Bytes32)
-	require.NotNil(t, validationID, "Function native_addValidator should return validationID")
 
 	// Set Staker pause active, so the validator could not to withdrawn
 	result = executeParamesNativeMethod(t, setup, "native_set", []any{thor.KeyStargateSwitches, big.NewInt(2)}) // Set the second bit to 1
 	_, err = unpackResult(result)
 	require.NoError(t, err, "Function native_set should not return error %s", err)
 
-	result = executeStakerNativeMethod(t, setup, "native_withdraw", []any{newValidator, validationID})
-	require.NotNil(t, result, "Function native_withdraw should return result")
+	result = executeStakerNativeMethod(t, setup, "native_withdrawStake", []any{newValidator, newValidator})
+	require.NotNil(t, result, "Function native_withdrawStake should return result")
 	_, err = unpackResult(result)
 	require.ErrorContains(t, err, "revert: staker is paused", "Function native_increaseStake should return error 'revert: staker is paused'")
 
@@ -334,13 +330,13 @@ func TestWithdrawForPause(t *testing.T) {
 	_, err = unpackResult(result)
 	require.NoError(t, err, "Function native_set should not return error %s", err)
 
-	result = executeStakerNativeMethod(t, setup, "native_withdraw", []any{newValidator, validationID})
-	require.NotNil(t, result, "Function native_withdraw should return result")
-	datas, err = unpackResult(result)
-	require.NoError(t, err, "Function native_withdraw should not return error %s", err)
+	result = executeStakerNativeMethod(t, setup, "native_withdrawStake", []any{newValidator, newValidator})
+	require.NotNil(t, result, "Function native_withdrawStake should return result")
+	datas, err := unpackResult(result)
+	require.NoError(t, err, "Function native_withdrawStake should not return error %s", err)
 	stake := datas[0].(*big.Int)
-	require.NotNil(t, stake, "Function native_withdraw should return stake")
-	require.Equal(t, MinStake, stake, "Function native_withdraw should return stake equal to MinStake")
+	require.NotNil(t, stake, "Function native_withdrawStake should return stake")
+	require.Equal(t, MinStake, stake, "Function native_withdrawStake should return stake equal to MinStake")
 }
 
 func TestAddDelegationPause(t *testing.T) {
@@ -348,19 +344,17 @@ func TestAddDelegationPause(t *testing.T) {
 	newValidator := genesis.DevAccounts()[0].Address
 
 	// add new validator
-	result := executeStakerNativeMethod(t, setup, "native_addValidator", []any{newValidator, newValidator, uint32(360) * 24 * 15, MinStake, true})
+	result := executeStakerNativeMethod(t, setup, "native_addValidator", []any{newValidator, newValidator, uint32(360) * 24 * 15, MinStake})
 	require.NotNil(t, result, "Function native_addValidator should return result")
-	datas, err := unpackResult(result)
+	_, err := unpackResult(result)
 	require.NoError(t, err, "Function native_addValidator should not return error %s", err)
-	validationID := datas[0].(thor.Bytes32)
-	require.NotNil(t, validationID, "Function native_addValidator should return validationID")
 
 	// Set Stargate pause inactive and Staker pause active, so the delegator could not be added
 	result = executeParamesNativeMethod(t, setup, "native_set", []any{thor.KeyStargateSwitches, big.NewInt(1)}) // (binary: 0 1)
 	_, err = unpackResult(result)
 	require.NoError(t, err, "Function native_set should not return error %s", err)
 
-	result = executeStakerNativeMethod(t, setup, "native_addDelegation", []any{validationID, big.NewInt(100), true, uint8(1)})
+	result = executeStakerNativeMethod(t, setup, "native_addDelegation", []any{newValidator, big.NewInt(100), true, uint8(1)})
 	require.NotNil(t, result, "Function native_addDelegation should return result")
 	_, err = unpackResult(result)
 	require.ErrorContains(t, err, "revert: stargate is paused", "Function native_addDelegation should return error 'revert: stargate is paused'")
@@ -370,9 +364,9 @@ func TestAddDelegationPause(t *testing.T) {
 	_, err = unpackResult(result)
 	require.NoError(t, err, "Function native_set should not return error %s", err)
 
-	result = executeStakerNativeMethod(t, setup, "native_addDelegation", []any{validationID, big.NewInt(100), true, uint8(1)})
+	result = executeStakerNativeMethod(t, setup, "native_addDelegation", []any{newValidator, big.NewInt(100), true, uint8(1)})
 	require.NotNil(t, result, "Function native_addDelegation should return result")
-	datas, err = unpackResult(result)
+	datas, err := unpackResult(result)
 	require.NoError(t, err, "Function native_addDelegation should not return error %s", err)
 	delegationID := datas[0].(thor.Bytes32)
 	require.NotNil(t, delegationID, "Function native_addDelegation should return delegationID")
@@ -382,7 +376,7 @@ func TestAddDelegationPause(t *testing.T) {
 	_, err = unpackResult(result)
 	require.NoError(t, err, "Function native_set should not return error %s", err)
 
-	result = executeStakerNativeMethod(t, setup, "native_addDelegation", []any{validationID, big.NewInt(100), true, uint8(1)})
+	result = executeStakerNativeMethod(t, setup, "native_addDelegation", []any{newValidator, big.NewInt(100), true, uint8(1)})
 	require.NotNil(t, result, "Function native_addDelegation should return result")
 	_, err = unpackResult(result)
 	require.ErrorContains(t, err, "revert: staker is paused", "Function native_addDelegation should return error 'revert: staker is paused'")
@@ -392,7 +386,7 @@ func TestAddDelegationPause(t *testing.T) {
 	_, err = unpackResult(result)
 	require.NoError(t, err, "Function native_set should not return error %s", err)
 
-	result = executeStakerNativeMethod(t, setup, "native_addDelegation", []any{validationID, big.NewInt(100), true, uint8(1)})
+	result = executeStakerNativeMethod(t, setup, "native_addDelegation", []any{newValidator, big.NewInt(100), true, uint8(1)})
 	require.NotNil(t, result, "Function native_addDelegation should return result")
 	datas, err = unpackResult(result)
 	require.NoError(t, err, "Function native_addDelegation should not return error %s", err)
@@ -404,7 +398,7 @@ func TestAddDelegationPause(t *testing.T) {
 	_, err = unpackResult(result)
 	require.NoError(t, err, "Function native_set should not return error %s", err)
 
-	result = executeStakerNativeMethod(t, setup, "native_addDelegation", []any{validationID, big.NewInt(100), true, uint8(1)})
+	result = executeStakerNativeMethod(t, setup, "native_addDelegation", []any{newValidator, big.NewInt(100), true, uint8(1)})
 	require.NotNil(t, result, "Function native_addDelegation should return result")
 	_, err = unpackResult(result)
 	require.ErrorContains(t, err, "revert: stargate is paused", "Function native_addDelegation should return error 'revert: stargate is paused'")
@@ -417,17 +411,15 @@ func TestWithdrawDelegationPause(t *testing.T) {
 	stake_value := big.NewInt(100)
 
 	// add new validator
-	result := executeStakerNativeMethod(t, setup, "native_addValidator", []any{newValidator, newValidator, uint32(360) * 24 * 15, MinStake, true})
+	result := executeStakerNativeMethod(t, setup, "native_addValidator", []any{newValidator, newValidator, uint32(360) * 24 * 15, MinStake})
 	require.NotNil(t, result, "Function native_addValidator should return result")
-	datas, err := unpackResult(result)
+	_, err := unpackResult(result)
 	require.NoError(t, err, "Function native_addValidator should not return error %s", err)
-	validationID := datas[0].(thor.Bytes32)
-	require.NotNil(t, validationID, "Function native_addValidator should return validationID")
 
 	// add delegation
-	result = executeStakerNativeMethod(t, setup, "native_addDelegation", []any{validationID, stake_value, true, uint8(1)})
+	result = executeStakerNativeMethod(t, setup, "native_addDelegation", []any{newValidator, stake_value, true, uint8(1)})
 	require.NotNil(t, result, "Function native_addDelegation should return result")
-	datas, err = unpackResult(result)
+	datas, err := unpackResult(result)
 	require.NoError(t, err, "Function native_addDelegation should not return error %s", err)
 	delegationID := datas[0].(thor.Bytes32)
 	require.NotNil(t, delegationID, "Function native_addDelegation should return delegationID")
@@ -456,7 +448,7 @@ func TestWithdrawDelegationPause(t *testing.T) {
 	require.Equal(t, stake_value, withdraw, "Function native_withdrawDelegation should return stake equal to stake_value")
 
 	// add delegation
-	result = executeStakerNativeMethod(t, setup, "native_addDelegation", []any{validationID, stake_value, true, uint8(1)})
+	result = executeStakerNativeMethod(t, setup, "native_addDelegation", []any{newValidator, stake_value, true, uint8(1)})
 	require.NotNil(t, result, "Function native_addDelegation should return result")
 	datas, err = unpackResult(result)
 	require.NoError(t, err, "Function native_addDelegation should not return error %s", err)
@@ -487,7 +479,7 @@ func TestWithdrawDelegationPause(t *testing.T) {
 	require.Equal(t, stake_value, withdraw, "Function native_withdrawDelegation should return stake equal to stake_value")
 
 	// add delegation
-	result = executeStakerNativeMethod(t, setup, "native_addDelegation", []any{validationID, stake_value, true, uint8(1)})
+	result = executeStakerNativeMethod(t, setup, "native_addDelegation", []any{newValidator, stake_value, true, uint8(1)})
 	require.NotNil(t, result, "Function native_addDelegation should return result")
 	datas, err = unpackResult(result)
 	require.NoError(t, err, "Function native_addDelegation should not return error %s", err)
