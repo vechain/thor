@@ -18,8 +18,7 @@ import (
 type OnDemandTxPool struct {
 	engine *Core
 
-	txsByHash map[thor.Bytes32]*tx.Transaction
-	txsByID   map[thor.Bytes32]*tx.Transaction
+	txsByID map[thor.Bytes32]*tx.Transaction
 
 	txFeed event.Feed
 	scope  event.SubscriptionScope
@@ -30,9 +29,8 @@ type OnDemandTxPool struct {
 
 func NewOnDemandTxPool(engine *Core) *OnDemandTxPool {
 	return &OnDemandTxPool{
-		engine:    engine,
-		txsByHash: make(map[thor.Bytes32]*tx.Transaction),
-		txsByID:   make(map[thor.Bytes32]*tx.Transaction),
+		engine:  engine,
+		txsByID: make(map[thor.Bytes32]*tx.Transaction),
 	}
 }
 
@@ -49,7 +47,6 @@ func (o *OnDemandTxPool) AddLocal(newTx *tx.Transaction) error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
-	o.txsByHash[newTx.Hash()] = newTx
 	o.txsByID[newTx.ID()] = newTx
 
 	executable, err := o.engine.IsExecutable(newTx)
@@ -70,7 +67,6 @@ func (o *OnDemandTxPool) AddLocal(newTx *tx.Transaction) error {
 			return err
 		}
 		for _, tx := range toRemove {
-			delete(o.txsByHash, tx.Hash())
 			delete(o.txsByID, tx.ID())
 		}
 	}
@@ -82,8 +78,8 @@ func (o *OnDemandTxPool) Dump() tx.Transactions {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
-	txs := make(tx.Transactions, 0, len(o.txsByHash))
-	for _, tx := range o.txsByHash {
+	txs := make(tx.Transactions, 0, len(o.txsByID))
+	for _, tx := range o.txsByID {
 		txs = append(txs, tx)
 	}
 	return txs
@@ -93,7 +89,7 @@ func (o *OnDemandTxPool) Len() int {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
-	return len(o.txsByHash)
+	return len(o.txsByID)
 }
 
 func (o *OnDemandTxPool) SubscribeTxEvent(ch chan *txpool.TxEvent) event.Subscription {
@@ -104,8 +100,8 @@ func (o *OnDemandTxPool) Executables() tx.Transactions {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
-	txs := make(tx.Transactions, 0, len(o.txsByHash))
-	for _, tx := range o.txsByHash {
+	txs := make(tx.Transactions, 0, len(o.txsByID))
+	for _, tx := range o.txsByID {
 		executable, err := o.engine.IsExecutable(tx)
 		if err != nil {
 			continue
@@ -122,8 +118,6 @@ func (o *OnDemandTxPool) Remove(txHash thor.Bytes32, txID thor.Bytes32) bool {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
-	delete(o.txsByHash, txHash)
 	delete(o.txsByID, txID)
-
 	return true
 }
