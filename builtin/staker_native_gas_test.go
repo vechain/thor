@@ -19,7 +19,6 @@
 package builtin_test
 
 import (
-	"encoding/binary"
 	"math/big"
 	"testing"
 
@@ -43,12 +42,6 @@ import (
 
 type TestHook func(*testing.T, *testSetup)
 
-func accToID(acc thor.Address) thor.Bytes32 {
-	var b [4]byte
-	binary.BigEndian.PutUint32(b[:], 0)
-	return thor.Blake2b(acc.Bytes(), b[:])
-}
-
 func preTestAddValidator(acc thor.Address) TestHook {
 	stake := big.NewInt(0).Mul(staker.MinStake, big.NewInt(2))
 	return func(t *testing.T, setup *testSetup) {
@@ -64,7 +57,7 @@ func preTestAddValidator(acc thor.Address) TestHook {
 func preTestAddDelegation(acc thor.Address) TestHook {
 	return func(t *testing.T, setup *testSetup) {
 		executeNativeFunction(t, setup, "native_addDelegation", []any{
-			accToID(acc),
+			acc,
 			staker.MinStake,
 			true,
 			uint8(150),
@@ -115,42 +108,35 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_addValidator",
-			expectedGas: 103200,
+			expectedGas: 58200,
 			args:        []any{account1, account1, staker.LowStakingPeriod, staker.MinStake},
 			description: "Add a new validator (not implemented yet)",
 		},
 		{
 			function:     "native_get",
-			expectedGas:  1600,
-			args:         []any{accToID(account1)},
+			expectedGas:  1400,
+			args:         []any{account1},
 			description:  "Get validator by it's ID (not implemented yet)",
 			preTestHooks: []TestHook{preTestAddValidator(account1)},
 		},
 		{
-			function:     "native_lookupNode",
-			expectedGas:  2000,
-			args:         []any{genesis.DevAccounts()[0].Address},
-			description:  "Lookup node by address",
-			preTestHooks: []TestHook{preTestAddValidator(account1)},
-		},
-		{
 			function:     "native_getWithdrawable",
-			expectedGas:  1600,
-			args:         []any{accToID(account1)},
+			expectedGas:  1400,
+			args:         []any{account1},
 			description:  "Get withdraw information for a validator",
 			preTestHooks: []TestHook{preTestAddValidator(account1)},
 		},
 		{
 			function:     "native_next",
-			expectedGas:  1600,
-			args:         []any{accToID(account1)},
+			expectedGas:  1400,
+			args:         []any{account1},
 			description:  "Get next validator in the queue",
 			preTestHooks: []TestHook{preTestAddValidator(account1)},
 		},
 		{
 			function:     "native_withdrawStake",
-			expectedGas:  77400,
-			args:         []any{account1, accToID(account1)},
+			expectedGas:  37000,
+			args:         []any{account1, account1},
 			description:  "Withdraw stake for a validator",
 			preTestHooks: []TestHook{preTestAddValidator(account1)},
 		},
@@ -166,10 +152,10 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		// },
 		{
 			function:    "native_increaseStake",
-			expectedGas: 27200,
+			expectedGas: 22000,
 			args: []any{
 				account1,
-				accToID(account1),
+				account1,
 				staker.MinStake,
 			},
 			description:  "Increase stake for a validator",
@@ -177,10 +163,10 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_decreaseStake",
-			expectedGas: 32200,
+			expectedGas: 27000,
 			args: []any{
 				account1,
-				accToID(account1),
+				account1,
 				staker.MinStake,
 			},
 			description:  "Decrease stake for a validator",
@@ -188,9 +174,9 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_addDelegation",
-			expectedGas: 62400,
+			expectedGas: 62200,
 			args: []any{
-				accToID(account1),
+				account1,
 				staker.MinStake,
 				true,
 				uint8(150),
@@ -200,7 +186,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_getDelegation",
-			expectedGas: 2000,
+			expectedGas: 1800,
 			args: []any{
 				thor.BytesToBytes32(big.NewInt(1).Bytes()), // IDs are incremental, starting at 1
 			},
@@ -209,7 +195,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_withdrawDelegation",
-			expectedGas: 27600,
+			expectedGas: 22400,
 			args: []any{
 				thor.BytesToBytes32(big.NewInt(1).Bytes()), // IDs are incremental, starting at 1
 			},
@@ -218,7 +204,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_updateDelegationAutoRenew",
-			expectedGas: 17200,
+			expectedGas: 17000,
 			args: []any{
 				thor.BytesToBytes32(big.NewInt(1).Bytes()), // IDs are incremental, starting at 1
 				false,
@@ -230,7 +216,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 			function:    "native_getRewards",
 			expectedGas: 1000,
 			args: []any{
-				accToID(account1),
+				account1,
 				uint32(0),
 			},
 			description:  "Get rewards for a validator",
@@ -238,9 +224,9 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_getValidatorTotals",
-			expectedGas: 1800,
+			expectedGas: 1600,
 			args: []any{
-				accToID(account1),
+				account1,
 			},
 			description:  "Get total stakes and weights and stake for a validator",
 			preTestHooks: []TestHook{preTestAddValidator(account1)},
