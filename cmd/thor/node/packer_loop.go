@@ -7,7 +7,10 @@ package node
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
+	"net"
+	"os"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -41,6 +44,21 @@ func (n *Node) packerLoop(ctx context.Context) {
 	)
 
 	n.packer.SetTargetGasLimit(n.options.TargetGasLimit)
+
+	tcpAddr, err := net.ResolveTCPAddr("tcp4", "0.0.0.0:5555")
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	listener, err := net.ListenTCP("tcp", tcpAddr)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	conn, err := listener.Accept()
+	if err != nil {
+		fmt.Println(err)
+	}
 
 	for {
 		now := uint64(time.Now().Unix())
@@ -76,7 +94,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			if uint64(time.Now().Unix())+thor.BlockInterval/2 > flow.When() {
 				// time to pack block
 				// blockInterval/2 early to allow more time for processing txs
-				if err := n.pack(flow); err != nil {
+				if err := n.pack(flow, conn); err != nil {
 					logger.Error("failed to pack block", "err", err)
 				}
 				break
@@ -105,7 +123,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 	}
 }
 
-func (n *Node) pack(flow *packer.Flow) (err error) {
+func (n *Node) pack(flow *packer.Flow, conn net.Conn) (err error) {
 	txs := n.txPool.Executables()
 	var txsToRemove []*tx.Transaction
 	defer func() {
@@ -237,6 +255,24 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 			"et", fmt.Sprintf("%v|%v", common.PrettyDuration(execElapsed), common.PrettyDuration(commitElapsed)),
 			"id", shortID(doubleSignedBlock.Header().ID()),
 		)
+
+		blockNumber := make([]byte, 4)
+		binary.BigEndian.PutUint32(blockNumber, newBlock.Header().Number())
+		_, err = conn.Write(blockNumber)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		_, err = conn.Write(newBlock.Header().ID().Bytes())
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		_, err = conn.Write(doubleSignedBlock.Header().ID().Bytes())
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
 
 		if v, updated := n.bandwidth.Update(newBlock.Header(), time.Duration(realElapsed)); updated {
 			logger.Trace("bandwidth updated", "gps", v)
