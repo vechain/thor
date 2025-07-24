@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
@@ -27,7 +28,8 @@ func TestStage(t *testing.T) {
 	storage := map[thor.Bytes32]thor.Bytes32{
 		thor.BytesToBytes32([]byte("s1")): thor.BytesToBytes32([]byte("v1")),
 		thor.BytesToBytes32([]byte("s2")): thor.BytesToBytes32([]byte("v2")),
-		thor.BytesToBytes32([]byte("s3")): thor.BytesToBytes32([]byte("v3"))}
+		thor.BytesToBytes32([]byte("s3")): thor.BytesToBytes32([]byte("v3")),
+	}
 
 	state.SetBalance(addr, balance)
 	state.SetCode(addr, code)

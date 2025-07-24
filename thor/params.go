@@ -9,7 +9,6 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -59,16 +58,13 @@ var (
 	KeyMaxBlockProposers       = BytesToBytes32([]byte("max-block-proposers"))
 	KeyStargateContractAddress = BytesToBytes32([]byte("stargate-contract-address"))
 	KeyStargateSwitches        = BytesToBytes32([]byte("stargate-switches"))
+	KeyCurveFactor             = BytesToBytes32([]byte("curve-factor")) // curve factor to define VTHO issuance after PoS
 
 	InitialRewardRatio         = big.NewInt(3e17) // 30%
 	InitialBaseGasPrice        = big.NewInt(1e15)
 	InitialProposerEndorsement = new(big.Int).Mul(big.NewInt(1e18), big.NewInt(25000000))
-	InitialStargateAddress     = common.Address{}.Big()
+	InitialCurveFactor         = big.NewInt(76800)
 
-	EnergyGrowthRate = big.NewInt(5000000000) // WEI THOR per token(VET) per second. about 0.000432 THOR per token per day.
-
-	ScalingFactor         = big.NewInt(64)      // scaling factor for rewards curve
-	TargetFactor          = big.NewInt(1200)    // target factor for rewards curve
-	NumberOfBlocksPerYear = big.NewInt(3153600) // number of blocks per year, non leap
-
+	EnergyGrowthRate      = big.NewInt(5000000000) // WEI THOR per token(VET) per second. about 0.000432 THOR per token per day.
+	NumberOfBlocksPerYear = big.NewInt(3153600)    // number of blocks per year, non leap
 )

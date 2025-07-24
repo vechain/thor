@@ -10,6 +10,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -135,7 +136,8 @@ func ConvertReceipt(txReceipt *tx.Receipt, header *block.Header, tx *tx.Transact
 			cAddr := thor.CreateContractAddress(tx.ID(), uint32(i), 0)
 			contractAddr = &cAddr
 		}
-		otp := &Output{contractAddr,
+		otp := &Output{
+			contractAddr,
 			make([]*Event, len(output.Events)),
 			make([]*Transfer, len(output.Transfers)),
 		}

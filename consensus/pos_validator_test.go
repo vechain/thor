@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
@@ -20,9 +21,7 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-var (
-	minStake = big.NewInt(0).Mul(big.NewInt(25_000_000), big.NewInt(1e18))
-)
+var minStake = big.NewInt(0).Mul(big.NewInt(25_000_000), big.NewInt(1e18))
 
 func TestConsensus_PosFork(t *testing.T) {
 	setup := newHayabusaSetup(t)
@@ -73,7 +72,7 @@ func TestConsensus_POS_MissedSlots(t *testing.T) {
 	err = setup.consensus.validateStakingProposer(blk.Header(), parent.Header, builtin.Staker.Native(st), leaders)
 	assert.NoError(t, err)
 	staker := builtin.Staker.Native(st)
-	validator, _, err := staker.LookupNode(signer.Address)
+	validator, err := staker.Get(signer.Address)
 	assert.NoError(t, err)
 	assert.True(t, validator.Online)
 }
@@ -139,11 +138,11 @@ func (h *hayabusaSetup) mintBlock(txs ...*tx.Transaction) (*chain.BlockSummary, 
 	if activated {
 		builtin.Energy.Native(st, parent.Header.Timestamp()).StopEnergyGrowth()
 	}
-	//actualGroup, err := builtin.Staker.Native(st).LeaderGroup()
-	//assert.NoError(h.t, err)
-	//eq := reflect.DeepEqual(activeGroup, actualGroup)
-	//assert.True(h.t, eq)
-	//assert.Equal(h.t, activeGroup, actualGroup)
+	// actualGroup, err := builtin.Staker.Native(st).LeaderGroup()
+	// assert.NoError(h.t, err)
+	// eq := reflect.DeepEqual(activeGroup, actualGroup)
+	// assert.True(h.t, eq)
+	// assert.Equal(h.t, activeGroup, actualGroup)
 
 	return best, parent, st
 }
@@ -164,7 +163,7 @@ func (h *hayabusaSetup) mintAddValidatorBlock(accs ...genesis.DevAccount) (*chai
 	contract := h.chain.Contract(builtin.Staker.Address, builtin.Staker.ABI, genesis.DevAccounts()[0])
 	for _, acc := range accs {
 		contract = contract.Attach(acc)
-		tx, err := contract.BuildTransaction("addValidator", minStake, acc.Address, uint32(360)*24*7, true)
+		tx, err := contract.BuildTransaction("addValidator", minStake, acc.Address, uint32(360)*24*7)
 		assert.NoError(h.t, err)
 		txs = append(txs, tx)
 	}

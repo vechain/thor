@@ -13,6 +13,7 @@ import (
 	"github.com/vechain/thor/v2/vm"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/xenv"
 )

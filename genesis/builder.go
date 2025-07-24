@@ -10,6 +10,7 @@ import (
 	"math/big"
 
 	"github.com/pkg/errors"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/runtime"
@@ -121,7 +122,7 @@ func (b *Builder) Build(stater *state.Stater) (blk *block.Block, events tx.Event
 		return nil, nil, nil, errors.Wrap(err, "commit state")
 	}
 
-	parentID := thor.Bytes32{0xff, 0xff, 0xff, 0xff} //so, genesis number is 0
+	parentID := thor.Bytes32{0xff, 0xff, 0xff, 0xff} // so, genesis number is 0
 	copy(parentID[4:], b.extraData[:])
 
 	blkBuilder := new(block.Builder).

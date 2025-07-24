@@ -10,6 +10,7 @@ import (
 	"math/big"
 
 	"github.com/pkg/errors"
+
 	"github.com/vechain/thor/v2/builtin/gascharger"
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/state"
@@ -22,7 +23,6 @@ var (
 	slotQueuedVET          = nameToSlot("queued-stake")
 	slotQueuedWeight       = nameToSlot("queued-weight")
 	slotValidations        = nameToSlot("validations")
-	slotValidationLookups  = nameToSlot("validator-lookups")
 	slotAggregations       = nameToSlot("aggregated-delegations")
 	slotDelegations        = nameToSlot("delegations")
 	slotDelegationsCounter = nameToSlot("delegations-counter")
@@ -52,12 +52,15 @@ func nameToSlot(name string) thor.Bytes32 {
 // storage represents the root storage for the Staker contract.
 type storage struct {
 	context      *solidity.Context
-	validations  *solidity.Mapping[thor.Bytes32, *Validation]
-	aggregations *solidity.Mapping[thor.Bytes32, *Aggregation]
+	validations  *solidity.Mapping[thor.Address, *Validation]
+	aggregations *solidity.Mapping[thor.Address, *Aggregation]
 	delegations  *solidity.Mapping[thor.Bytes32, *Delegation]
-	lookups      *solidity.Mapping[thor.Address, thor.Bytes32] // allows lookup of Validation by node address
-	rewards      *solidity.Mapping[thor.Bytes32, *big.Int]     // stores rewards per validator staking period
-	exits        *solidity.Mapping[*big.Int, thor.Bytes32]     // exit block -> validator ID
+	rewards      *solidity.Mapping[thor.Bytes32, *big.Int] // stores rewards per validator staking period
+	exits        *solidity.Mapping[*big.Int, thor.Address] // exit block -> validator ID
+	lockedVET    *solidity.Uint256
+	lockedWeight *solidity.Uint256
+	queuedVET    *solidity.Uint256
+	queuedWeight *solidity.Uint256
 }
 
 // newStorage creates a new instance of storage.
@@ -65,16 +68,19 @@ func newStorage(addr thor.Address, state *state.State, charger *gascharger.Charg
 	context := solidity.NewContext(addr, state, charger)
 	return &storage{
 		context:      context,
-		validations:  solidity.NewMapping[thor.Bytes32, *Validation](context, slotValidations),
-		aggregations: solidity.NewMapping[thor.Bytes32, *Aggregation](context, slotAggregations),
+		validations:  solidity.NewMapping[thor.Address, *Validation](context, slotValidations),
+		aggregations: solidity.NewMapping[thor.Address, *Aggregation](context, slotAggregations),
 		delegations:  solidity.NewMapping[thor.Bytes32, *Delegation](context, slotDelegations),
-		lookups:      solidity.NewMapping[thor.Address, thor.Bytes32](context, slotValidationLookups),
 		rewards:      solidity.NewMapping[thor.Bytes32, *big.Int](context, slotRewards),
-		exits:        solidity.NewMapping[*big.Int, thor.Bytes32](context, slotExitEpochs),
+		exits:        solidity.NewMapping[*big.Int, thor.Address](context, slotExitEpochs),
+		lockedVET:    solidity.NewUint256(context, slotLockedVET),
+		lockedWeight: solidity.NewUint256(context, slotLockedWeight),
+		queuedVET:    solidity.NewUint256(context, slotQueuedVET),
+		queuedWeight: solidity.NewUint256(context, slotQueuedWeight),
 	}
 }
 
-func (s *storage) GetValidation(id thor.Bytes32) (*Validation, error) {
+func (s *storage) GetValidation(id thor.Address) (*Validation, error) {
 	v, err := s.validations.Get(id)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get validator")
@@ -82,14 +88,14 @@ func (s *storage) GetValidation(id thor.Bytes32) (*Validation, error) {
 	return v, nil
 }
 
-func (s *storage) SetValidation(id thor.Bytes32, entry *Validation, isNew bool) error {
+func (s *storage) SetValidation(id thor.Address, entry *Validation, isNew bool) error {
 	if err := s.validations.Set(id, entry, isNew); err != nil {
 		return errors.Wrap(err, "failed to set validator")
 	}
 	return nil
 }
 
-func (s *storage) GetAggregation(validationID thor.Bytes32) (*Aggregation, error) {
+func (s *storage) GetAggregation(validationID thor.Address) (*Aggregation, error) {
 	d, err := s.aggregations.Get(validationID)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get validator aggregation")
@@ -97,7 +103,7 @@ func (s *storage) GetAggregation(validationID thor.Bytes32) (*Aggregation, error
 	return d, nil
 }
 
-func (s *storage) SetAggregation(validationID thor.Bytes32, entry *Aggregation, isNew bool) error {
+func (s *storage) SetAggregation(validationID thor.Address, entry *Aggregation, isNew bool) error {
 	if err := s.aggregations.Set(validationID, entry, isNew); err != nil {
 		return errors.Wrap(err, "failed to set validator aggregation")
 	}
@@ -148,47 +154,17 @@ func (s *storage) GetDelegationBundle(delegationID thor.Bytes32) (*Delegation, *
 	return delegation, validation, aggregation, nil
 }
 
-func (s *storage) GetLookup(address thor.Address) (thor.Bytes32, error) {
-	l, err := s.lookups.Get(address)
-	if err != nil {
-		return thor.Bytes32{}, errors.Wrap(err, "failed to get lookup")
-	}
-	return l, err
-}
-
-func (s *storage) SetLookup(address thor.Address, id thor.Bytes32) error {
-	if err := s.lookups.Set(address, id, true); err != nil {
-		return errors.Wrap(err, "failed to set lookup")
-	}
-	return nil
-}
-
-func (s *storage) LookupNode(node thor.Address) (*Validation, thor.Bytes32, error) {
-	id, err := s.GetLookup(node)
-	if err != nil {
-		return nil, thor.Bytes32{}, err
-	}
-	if id.IsZero() {
-		return &Validation{}, thor.Bytes32{}, nil
-	}
-	val, err := s.GetValidation(id)
-	if err != nil {
-		return nil, thor.Bytes32{}, err
-	}
-	return val, id, nil
-}
-
-func (s *storage) GetExitEpoch(block uint32) (thor.Bytes32, error) {
+func (s *storage) GetExitEpoch(block uint32) (thor.Address, error) {
 	bigBlock := big.NewInt(0).SetUint64(uint64(block))
 
 	id, err := s.exits.Get(bigBlock)
 	if err != nil {
-		return thor.Bytes32{}, errors.Wrap(err, "failed to get exit epoch")
+		return thor.Address{}, errors.Wrap(err, "failed to get exit epoch")
 	}
 	return id, nil
 }
 
-func (s *storage) SetExitEpoch(block uint32, id thor.Bytes32) error {
+func (s *storage) SetExitEpoch(block uint32, id thor.Address) error {
 	bigBlock := big.NewInt(0).SetUint64(uint64(block))
 
 	if err := s.exits.Set(bigBlock, id, true); err != nil {
@@ -197,7 +173,7 @@ func (s *storage) SetExitEpoch(block uint32, id thor.Bytes32) error {
 	return nil
 }
 
-func (s *storage) GetRewards(validationID thor.Bytes32, stakingPeriod uint32) (*big.Int, error) {
+func (s *storage) GetRewards(validationID thor.Address, stakingPeriod uint32) (*big.Int, error) {
 	periodBytes := make([]byte, 4)
 	binary.BigEndian.PutUint32(periodBytes, stakingPeriod)
 	key := thor.Blake2b([]byte("rewards"), validationID.Bytes(), periodBytes)
@@ -205,7 +181,7 @@ func (s *storage) GetRewards(validationID thor.Bytes32, stakingPeriod uint32) (*
 	return s.rewards.Get(key)
 }
 
-func (s *storage) GetCompletedPeriods(validationID thor.Bytes32) (uint32, error) {
+func (s *storage) GetCompletedPeriods(validationID thor.Address) (uint32, error) {
 	v, err := s.GetValidation(validationID)
 	if err != nil {
 		return uint32(0), err
@@ -214,21 +190,14 @@ func (s *storage) GetCompletedPeriods(validationID thor.Bytes32) (uint32, error)
 }
 
 func (s *storage) IncreaseReward(node thor.Address, reward big.Int) error {
-	id, err := s.GetLookup(node)
-	if err != nil {
-		return err
-	}
-	if id.IsZero() {
-		return nil
-	}
-	val, err := s.GetValidation(id)
+	val, err := s.GetValidation(node)
 	if err != nil {
 		return err
 	}
 
 	periodBytes := make([]byte, 4)
 	binary.BigEndian.PutUint32(periodBytes, val.CurrentIteration())
-	key := thor.Blake2b([]byte("rewards"), id.Bytes(), periodBytes)
+	key := thor.Blake2b([]byte("rewards"), node.Bytes(), periodBytes)
 
 	rewards, err := s.rewards.Get(key)
 	if err != nil {

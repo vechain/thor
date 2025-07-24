@@ -12,6 +12,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/rlp"
+
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/stackedmap"
 	"github.com/vechain/thor/v2/thor"

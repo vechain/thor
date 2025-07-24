@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/pkg/errors"
+
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
@@ -22,7 +23,6 @@ import (
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
-	Tx "github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/vm"
 	"github.com/vechain/thor/v2/xenv"
 )
@@ -438,7 +438,7 @@ func (rt *Runtime) PrepareTransaction(trx *tx.Transaction) (*TransactionExecutor
 	// checkpoint to be reverted when clause failure.
 	checkpoint := rt.state.NewCheckpoint()
 
-	txOutputs := make([]*Tx.Output, 0, len(resolvedTx.Clauses))
+	txOutputs := make([]*tx.Output, 0, len(resolvedTx.Clauses))
 	reverted := false
 	finalized := false
 
@@ -481,13 +481,13 @@ func (rt *Runtime) PrepareTransaction(trx *tx.Transaction) (*TransactionExecutor
 					txOutputs = nil
 					return
 				}
-				txOutputs = append(txOutputs, &Tx.Output{Events: output.Events, Transfers: output.Transfers})
+				txOutputs = append(txOutputs, &tx.Output{Events: output.Events, Transfers: output.Transfers})
 				return
 			}
 
 			return
 		},
-		Finalize: func() (*Tx.Receipt, error) {
+		Finalize: func() (*tx.Receipt, error) {
 			if hasNext() {
 				return nil, errors.New("not all clauses processed")
 			}
@@ -496,7 +496,7 @@ func (rt *Runtime) PrepareTransaction(trx *tx.Transaction) (*TransactionExecutor
 			}
 			finalized = true
 
-			receipt := &Tx.Receipt{
+			receipt := &tx.Receipt{
 				Type:     trx.Type(),
 				Reverted: reverted,
 				Outputs:  txOutputs,

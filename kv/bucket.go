@@ -7,9 +7,8 @@ package kv
 
 import (
 	"context"
-	"sync"
-
 	"slices"
+	"sync"
 
 	"github.com/syndtr/goleveldb/leveldb/util"
 )

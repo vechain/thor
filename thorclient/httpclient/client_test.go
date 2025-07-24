@@ -19,11 +19,10 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/thor"
-
-	tccommon "github.com/vechain/thor/v2/thorclient/common"
 )
 
 func TestClient_GetTransactionReceipt(t *testing.T) {
@@ -61,7 +60,8 @@ func TestClient_InspectClauses(t *testing.T) {
 		Transfers: []*api.Transfer{},
 		GasUsed:   1000,
 		Reverted:  false,
-		VMError:   "no error"}}
+		VMError:   "no error",
+	}}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/accounts/*", r.URL.Path)
@@ -206,7 +206,7 @@ func TestClient_GetStorage(t *testing.T) {
 	defer ts.Close()
 
 	client := New(ts.URL)
-	data, err := client.GetAccountStorage(&addr, &key, tccommon.BestRevision)
+	data, err := client.GetAccountStorage(&addr, &key, BestRevision)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedStorageRsp.Value, data.Value)
@@ -276,7 +276,7 @@ func TestClient_GetNilBlock(t *testing.T) {
 	client := New(ts.URL)
 	block, err := client.GetBlock(blockID)
 
-	assert.Equal(t, tccommon.ErrNotFound, err)
+	assert.Equal(t, ErrNotFound, err)
 	assert.Equal(t, expectedBlock, block)
 }
 
@@ -293,7 +293,7 @@ func TestClient_GetTransaction(t *testing.T) {
 	defer ts.Close()
 
 	client := New(ts.URL)
-	tx, err := client.GetTransaction(&txID, tccommon.BestRevision, false)
+	tx, err := client.GetTransaction(&txID, BestRevision, false)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedTx, tx)
@@ -321,7 +321,7 @@ func TestClient_GetRawTransaction(t *testing.T) {
 	defer ts.Close()
 
 	client := New(ts.URL)
-	tx, err := client.GetRawTransaction(&txID, tccommon.BestRevision, false)
+	tx, err := client.GetRawTransaction(&txID, BestRevision, false)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedTx, tx)
@@ -371,7 +371,11 @@ func TestClient_GetFeesHistoryWithRewardPercentiles(t *testing.T) {
 		for i, p := range rewardPercentiles {
 			rewardPercentilesStr[i] = fmt.Sprint(p)
 		}
-		assert.Equal(t, "/fees/history?blockCount="+fmt.Sprint(blockCount)+"&newestBlock="+newestBlock+"&rewardPercentiles="+strings.Join(rewardPercentilesStr, ","), r.URL.Path+"?"+r.URL.RawQuery)
+		assert.Equal(
+			t,
+			"/fees/history?blockCount="+fmt.Sprint(blockCount)+"&newestBlock="+newestBlock+"&rewardPercentiles="+strings.Join(rewardPercentilesStr, ","),
+			r.URL.Path+"?"+r.URL.RawQuery,
+		)
 
 		feesHistoryBytes, _ := json.Marshal(expectedFeesHistory)
 		w.Write(feesHistoryBytes)
@@ -534,7 +538,7 @@ func TestClient_Errors(t *testing.T) {
 			name: "GetAccountStorage",
 			path: "/accounts/" + addr.String() + "/storage/" + thor.Bytes32{}.String(),
 			function: func(client *Client) (*api.GetStorageResult, error) {
-				return client.GetAccountStorage(&addr, &thor.Bytes32{}, tccommon.BestRevision)
+				return client.GetAccountStorage(&addr, &thor.Bytes32{}, BestRevision)
 			},
 		},
 		{
@@ -551,7 +555,7 @@ func TestClient_Errors(t *testing.T) {
 			name: "Transaction",
 			path: "/transactions/" + txID.String(),
 			function: func(client *Client) (*transactions.Transaction, error) {
-				return client.GetTransaction(&txID, tccommon.BestRevision, false)
+				return client.GetTransaction(&txID, BestRevision, false)
 			},
 		},
 		{

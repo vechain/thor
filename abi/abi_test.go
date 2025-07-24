@@ -11,6 +11,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/builtin/gen"
 	"github.com/vechain/thor/v2/thor"
@@ -98,7 +99,7 @@ func TestStakerABI(t *testing.T) {
 		{"totalStake", true},
 		{"queuedStake", true},
 		{"addValidator", false},
-		{"withdraw", false},
+		{"withdrawStake", false},
 	}
 
 	for _, tc := range testCases {

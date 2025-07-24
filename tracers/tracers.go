@@ -22,6 +22,7 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
+
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/vm"
@@ -48,8 +49,10 @@ type Tracer interface {
 	Stop(err error)
 }
 
-type ctorFn func(json.RawMessage) (Tracer, error)
-type jsCtorFn func(string, json.RawMessage) (Tracer, error)
+type (
+	ctorFn   func(json.RawMessage) (Tracer, error)
+	jsCtorFn func(string, json.RawMessage) (Tracer, error)
+)
 
 type elem struct {
 	ctor ctorFn

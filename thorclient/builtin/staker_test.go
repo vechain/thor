@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/test"
@@ -69,7 +70,7 @@ func TestStaker(t *testing.T) {
 	minStake := MinStake()
 	var validatorTxs []*tx.Transaction
 	for _, acc := range genesis.DevAccounts()[0:2] {
-		addValidatorTx, err := staker.AddValidator(acc.Address, minStake, minStakingPeriod, true).
+		addValidatorTx, err := staker.AddValidator(acc.Address, minStake, minStakingPeriod).
 			Send().
 			WithSigner(bind.NewSigner(acc.PrivateKey)).
 			WithOptions(txOpts()).Submit()
@@ -96,23 +97,21 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, new(big.Int).Mul(minStake, big.NewInt(2)), totalStake)
 
 	// Get
-	firstActive, firstID, err := staker.FirstActive()
+	_, firstID, err := staker.FirstActive()
 	require.NoError(t, err)
 	getRes, err := staker.Get(firstID)
 	require.NoError(t, err)
 	require.False(t, getRes.Master.IsZero())
 	require.False(t, getRes.Endorsor.IsZero())
 	require.Equal(t, StakerStatusActive, getRes.Status)
-	require.True(t, firstActive.AutoRenew)
 	require.Equal(t, getRes.Stake, minStake)
 	require.Equal(t, getRes.Weight, big.NewInt(0).Mul(minStake, big.NewInt(2)))
 
 	// FirstActive
-	firstActive, firstID, err = staker.FirstActive()
+	firstActive, firstID, err := staker.FirstActive()
 	require.NoError(t, err)
 	require.False(t, firstID.IsZero())
 	require.True(t, firstActive.Exists())
-	require.True(t, firstActive.AutoRenew)
 	require.Equal(t, minStake, firstActive.Stake)
 	require.Equal(t, big.NewInt(0).Mul(minStake, big.NewInt(2)), firstActive.Weight)
 	require.Equal(t, StakerStatusActive, firstActive.Status)
@@ -121,9 +120,8 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, firstActive.ExitBlock, uint32(math.MaxUint32))
 
 	// LookupNode
-	getRes, id, err := staker.LookupNode(*firstActive.Master)
+	getRes, err = staker.Get(*firstActive.Master)
 	require.NoError(t, err)
-	require.False(t, id.IsZero())
 	require.True(t, getRes.Exists())
 
 	// Next
@@ -134,7 +132,6 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, StakerStatusActive, next.Status)
 	require.Equal(t, minStake, next.Stake)
 	require.Equal(t, big.NewInt(0).Mul(minStake, big.NewInt(2)), next.Weight)
-	require.True(t, next.AutoRenew)
 	require.False(t, next.Endorsor.IsZero())
 
 	var (
@@ -143,7 +140,7 @@ func TestStaker(t *testing.T) {
 	)
 
 	// AddValidator
-	receipt, _, err := staker.AddValidator(validator.Address, minStake, minStakingPeriod, false).
+	receipt, _, err := staker.AddValidator(validator.Address, minStake, minStakingPeriod).
 		Send().
 		WithSigner(validatorKey).
 		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
@@ -185,7 +182,7 @@ func TestStaker(t *testing.T) {
 	increaseEvents, err := staker.FilterStakeIncreased(newRange(receipt), nil, logdb.ASC)
 	require.NoError(t, err)
 	require.Len(t, increaseEvents, 1)
-	require.Equal(t, queuedID, increaseEvents[0].ValidationID)
+	require.Equal(t, validator.Address, increaseEvents[0].ValidationID)
 	require.Equal(t, validator.Address, increaseEvents[0].Endorsor)
 	require.Equal(t, minStake, increaseEvents[0].Added)
 
@@ -203,36 +200,17 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, validator.Address, decreaseEvents[0].Endorsor)
 	require.Equal(t, minStake, decreaseEvents[0].Removed)
 
-	// UpdateAutoRenew - Disable AutoRenew
-	receipt, _, err = staker.UpdateAutoRenew(queuedID, true).
+	// SignalExit
+	receipt, _, err = staker.SignalExit(queuedID).
 		Send().
 		WithSigner(validatorKey).
 		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 
-	autoRenewEvents, err := staker.FilterValidatorUpdatedAutoRenew(newRange(receipt), nil, logdb.ASC)
+	// No events for signal exit when state is queued
+	autoRenewEvents, err := staker.FilterValidatorSignaledExit(newRange(receipt), nil, logdb.ASC)
 	require.NoError(t, err)
-	require.Len(t, autoRenewEvents, 1)
-	require.Equal(t, queuedID, autoRenewEvents[0].ValidationID)
-	require.Equal(t, validator.Address, autoRenewEvents[0].Endorsor)
-	require.True(t, autoRenewEvents[0].AutoRenew)
-
-	getRes, err = staker.Get(queuedID)
-	require.NoError(t, err)
-	require.True(t, getRes.AutoRenew)
-
-	// UpdateAutoRenew - Enable AutoRenew
-	receipt, _, err = staker.UpdateAutoRenew(queuedID, false).
-		Send().
-		WithSigner(validatorKey).
-		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
-	require.NoError(t, err)
-
-	autoRenewEvents, err = staker.FilterValidatorUpdatedAutoRenew(newRange(receipt), nil, logdb.ASC)
-	require.NoError(t, err)
-	require.Len(t, autoRenewEvents, 1)
-	require.Equal(t, queuedID, autoRenewEvents[0].ValidationID)
-	require.Equal(t, false, autoRenewEvents[0].AutoRenew)
+	require.Len(t, autoRenewEvents, 0)
 
 	// AddDelegation
 	receipt, _, err = staker.AddDelegation(queuedID, minStake, false, 100).
@@ -289,7 +267,7 @@ func TestStaker(t *testing.T) {
 	require.Len(t, delegatorAutoRenewEvents, 1)
 
 	// Withdraw
-	receipt, _, err = staker.Withdraw(queuedID).Send().WithSigner(validatorKey).WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
+	receipt, _, err = staker.WithdrawStake(queuedID).Send().WithSigner(validatorKey).WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 

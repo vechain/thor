@@ -21,17 +21,15 @@ const (
 )
 
 type Validation struct {
-	Node               thor.Address // the node address of the validation
 	Endorsor           thor.Address // the address providing the stake
 	Period             uint32       // the staking period of the validation
 	CompleteIterations uint32       // the completed staking periods by the validation
 	Status             Status       // status of the validation
 	Online             bool         // whether the validation is online or not
-	AutoRenew          bool         // whether the validations staking period is auto-renewed
 	StartBlock         uint32       // the block number when the validation started the first staking period
 	ExitBlock          *uint32      `rlp:"nil"` // the block number when the validation moved to cooldown
 
-	LockedVET          *big.Int // the amount of VET locked for the current staking period
+	LockedVET          *big.Int // the amount of VET locked for the current staking period, for the validator only
 	NextPeriodDecrease *big.Int // the amount of VET that will be unlocked in the next staking period. DOES NOT contribute to the TVL
 	PendingLocked      *big.Int // the amount of VET that will be locked in the next staking period
 	CooldownVET        *big.Int // the amount of VET that is locked into the validation's cooldown
@@ -39,8 +37,8 @@ type Validation struct {
 
 	Weight *big.Int // LockedVET x2 + total weight from delegators
 
-	Next *thor.Bytes32 `rlp:"nil"` // doubly linked list
-	Prev *thor.Bytes32 `rlp:"nil"` // doubly linked list
+	Next *thor.Address `rlp:"nil"` // doubly linked list
+	Prev *thor.Address `rlp:"nil"` // doubly linked list
 }
 
 type ValidationTotals struct {
@@ -61,10 +59,11 @@ func (v *Validation) IsPeriodEnd(current uint32) bool {
 	return diff%v.Period == 0
 }
 
-// NextPeriodStakes returns the validation stake and all the delegator stakes for the next staking period.
-func (v *Validation) NextPeriodStakes(delegation *Aggregation) *big.Int {
+// NextPeriodTVL returns the amount of VET that will be locked in the next staking period for the validator only.
+func (v *Validation) NextPeriodTVL() *big.Int {
 	validationTotal := big.NewInt(0).Add(v.LockedVET, v.PendingLocked)
-	return validationTotal.Add(validationTotal, delegation.NextPeriodLocked())
+	validationTotal = big.NewInt(0).Sub(validationTotal, v.NextPeriodDecrease)
+	return validationTotal
 }
 
 func (v *Validation) CurrentIteration() uint32 {
@@ -104,7 +103,7 @@ func (v *Validation) Renew() *Renewal {
 }
 
 type Delegation struct {
-	ValidationID   thor.Bytes32 // the ID of the validation to which the delegator is delegating
+	ValidationID   thor.Address // the ID of the validation to which the delegator is delegating
 	Stake          *big.Int
 	AutoRenew      bool
 	Multiplier     uint8
@@ -130,23 +129,37 @@ func (d *Delegation) Weight() *big.Int {
 	return weight
 }
 
-// IsLocked returns whether the delegator is locked for the current staking period.
-func (d *Delegation) IsLocked(validation *Validation) bool {
+// Started returns whether the delegation became locked
+func (d *Delegation) Started(validation *Validation) bool {
 	if d.IsEmpty() {
 		return false
 	}
-	// validation is not active, so the delegator is not locked
-	if validation.Status != StatusActive {
+	if validation.Status == StatusQueued {
+		return false // Delegation cannot start if the validation is not active
+	}
+	currentStakingPeriod := validation.CurrentIteration()
+	return currentStakingPeriod >= d.FirstIteration
+}
+
+// Ended returns whether the delegation has ended
+// It returns true if:
+// - the delegation's exit iteration is less than the current staking period
+// - OR if the validation is in exit status and the delegation has started
+func (d *Delegation) Ended(validation *Validation) bool {
+	if d.IsEmpty() {
 		return false
 	}
-	current := validation.CurrentIteration()
+	if validation.Status == StatusQueued {
+		return false // Delegation cannot end if the validation is not active
+	}
+	if validation.Status == StatusExit && d.Started(validation) {
+		return true // Delegation is ended if the validation is in exit status
+	}
+	currentStakingPeriod := validation.CurrentIteration()
 	if d.LastIteration == nil {
-		return current >= d.FirstIteration
-	}
-	if current < d.FirstIteration {
 		return false
 	}
-	return current == d.FirstIteration || current < *d.LastIteration
+	return *d.LastIteration < currentStakingPeriod
 }
 
 // Aggregation represents the total amount of VET locked for a given validation's delegations.
@@ -187,16 +200,15 @@ func (a *Aggregation) IsEmpty() bool {
 	return a.CurrentRecurringVET == nil && a.CurrentOneTimeVET == nil && a.PendingRecurringVET == nil && a.PendingOneTimeVET == nil && a.WithdrawableVET == nil
 }
 
-// PeriodLocked returns the VET locked for a given validation's delegations for the current staking period.
-func (a *Aggregation) PeriodLocked() *big.Int {
-	return big.NewInt(0).Add(a.CurrentRecurringVET, a.CurrentOneTimeVET)
-}
-
-// NextPeriodLocked returns the PeriodLocked for the next staking period
-func (a *Aggregation) NextPeriodLocked() *big.Int {
-	total := big.NewInt(0).Add(a.CurrentRecurringVET, a.PendingRecurringVET)
-	total = total.Add(total, a.PendingOneTimeVET)
-	return total
+// NextPeriodTVL is the total value locked (TVL) for the next period.
+// It is the sum of the currently recurring VET, plus any pending recurring and one-time VET.
+// Does not include CurrentOneTimeVET since that stake is due to withdraw.
+func (a *Aggregation) NextPeriodTVL() *big.Int {
+	nextTVL := big.NewInt(0)
+	nextTVL.Add(nextTVL, a.CurrentRecurringVET)
+	nextTVL.Add(nextTVL, a.PendingRecurringVET)
+	nextTVL.Add(nextTVL, a.PendingOneTimeVET)
+	return nextTVL
 }
 
 // Renew moves the stakes and weights around as follows:

@@ -31,8 +31,10 @@ disco:| go_version_check #@ Build the `disco` executable
 	@go build -v -o $(CURDIR)/bin/$@ -ldflags "-X main.version=$(DISCO_VERSION) -X main.gitCommit=$(GIT_COMMIT) -X main.gitTag=$(GIT_TAG) -X main.copyrightYear=$(COPYRIGHT_YEAR)" ./cmd/disco
 	@echo "done. executable created at 'bin/$@'"
 
-dep:| go_version_check
-	@go mod download
+dep:| go_version_check #@ Deprecated legacy dependency management
+
+generate:| go_version_check #@ Generate the `builtin` package
+	@go generate builtin/gen/gen.go
 
 go_version_check:
 	@if test $(MAJOR) -lt $(REQUIRED_GO_MAJOR); then \

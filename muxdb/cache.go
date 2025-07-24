@@ -9,13 +9,13 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"slices"
-
 	"github.com/qianbin/directcache"
+
 	"github.com/vechain/thor/v2/trie"
 )
 

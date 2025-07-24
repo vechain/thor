@@ -201,7 +201,7 @@ func (p *Packer) syncPOS(st *state.State, current uint32) (active bool, activate
 	}
 	// check if the staker contract currently is active
 	staker := builtin.Staker.Native(st)
-	active, err = staker.IsActive()
+	active, err = staker.IsPoSActive()
 	if err != nil {
 		return false, false, err
 	}

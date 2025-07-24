@@ -10,6 +10,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/builtin/staker"
@@ -323,13 +324,13 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 	return stage, receipts, nil
 }
 
-func (c *Consensus) syncPOS(staker *staker.Staker, current uint32) (active bool, activated bool, activeGroup map[thor.Bytes32]*staker.Validation, err error) {
+func (c *Consensus) syncPOS(staker *staker.Staker, current uint32) (active bool, activated bool, activeGroup map[thor.Address]*staker.Validation, err error) {
 	// still on PoA
 	if c.forkConfig.HAYABUSA+c.forkConfig.HAYABUSA_TP > current {
 		return false, false, nil, nil
 	}
 	// check if the staker contract is active
-	active, err = staker.IsActive()
+	active, err = staker.IsPoSActive()
 	if err != nil {
 		return false, false, nil, err
 	}
