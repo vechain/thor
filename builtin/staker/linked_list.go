@@ -179,7 +179,6 @@ func (l *linkedList) Iter(callback func(thor.Bytes32, *Validation) error) error 
 		return err
 	}
 	for !ptr.IsZero() {
-
 		entry, err := l.storage.GetValidation(ptr)
 		if err != nil {
 			return err
