@@ -328,7 +328,7 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 			}
 			state := engine.stater.NewState(parentBlockSummary.Root())
 			staker := builtin.Staker.Native(state)
-			validator, _, err := staker.LookupNode(signer)
+			validator, err := staker.Get(signer)
 			if err != nil {
 				return nil, err
 			}

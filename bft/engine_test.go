@@ -143,7 +143,7 @@ func (test *TestBFT) newBlock(parentSummary *chain.BlockSummary, master genesis.
 
 	if parentSummary.Header.Number() > test.fc.HAYABUSA+test.fc.HAYABUSA_TP {
 		staker := builtin.Staker.Native(test.stater.NewState(parentSummary.Root()))
-		validation, _, err := staker.LookupNode(master.Address)
+		validation, err := staker.Get(master.Address)
 		if err != nil {
 			return nil, err
 		}
