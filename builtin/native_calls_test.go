@@ -37,10 +37,11 @@ import (
 	"github.com/vechain/thor/v2/xenv"
 )
 
-var errReverted = vm.ErrExecutionReverted
-var revertABI = []byte(`[{"name": "Error","type": "function","inputs": [{"name": "message","type": "string"}]}]`)
-
-var thorChain *testchain.Chain
+var (
+	errReverted = vm.ErrExecutionReverted
+	revertABI   = []byte(`[{"name": "Error","type": "function","inputs": [{"name": "message","type": "string"}]}]`)
+	thorChain   *testchain.Chain
+)
 
 type ctest struct {
 	rt         *runtime.Runtime
