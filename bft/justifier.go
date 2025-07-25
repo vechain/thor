@@ -8,6 +8,7 @@ import (
 	"math/big"
 
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -74,7 +75,14 @@ func (engine *Engine) newJustifier(parentID thor.Bytes32) (*justifier, error) {
 	}
 
 	// When the checkpoint is greater than 0, last of parent round is checkpoint - 1
-	if lastOfParentRound >= engine.forkConfig.HAYABUSA+engine.forkConfig.HAYABUSA_TP {
+	state := engine.stater.NewState(sum.Root())
+	staker := builtin.Staker.Native(state)
+	hayabusaActive, err := staker.IsPoSActive()
+	if err != nil {
+		return nil, err
+	}
+
+	if hayabusaActive {
 		totalWeight, err := engine.getTotalWeight(sum)
 		if err != nil {
 			return nil, err
