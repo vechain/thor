@@ -29,6 +29,7 @@ type Aggregation struct {
 	WithdrawableVET *big.Int // VET available for withdrawal
 }
 
+// newAggregation creates a new zero-initialized aggregation for a validator.
 func newAggregation() *Aggregation {
 	return &Aggregation{
 		LockedVET:       big.NewInt(0),
@@ -56,11 +57,11 @@ func (a *Aggregation) NextPeriodTVL() *big.Int {
 	return nextTVL
 }
 
-// Renew moves the stakes and weights around as follows:
-// 1. Move CurrentOneTimeVET => WithdrawableVET
-// 2. Move PendingRecurringVET => CurrentRecurringVET
-// 3. Move PendingOneTimeVET => CurrentOneTimeVET
-// 4. Return the change in TVL and weight
+// Renew transitions delegations to the next staking period.
+// Pending delegations become locked, exiting delegations become withdrawable.
+// 1. Move Pending => Locked
+// 2. Remove ExitingVET from LockedVET
+// 3. Move ExitingVET to WithdrawableVET
 func (a *Aggregation) Renew() *renewal.Renewal {
 	changeTVL := big.NewInt(0)
 	changeWeight := big.NewInt(0)
@@ -94,7 +95,8 @@ func (a *Aggregation) Renew() *renewal.Renewal {
 	}
 }
 
-// Exit moves all the funds to withdrawable
+// Exit immediately moves all delegation funds to withdrawable state.
+// Called when the validator exits, making all delegations withdrawable regardless of their individual state.
 func (a *Aggregation) Exit() *renewal.Exit {
 	// Return these values to modify contract totals
 	exitedTVL := big.NewInt(0).Set(a.LockedVET)

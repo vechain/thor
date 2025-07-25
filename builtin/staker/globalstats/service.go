@@ -20,6 +20,8 @@ var (
 	slotQueuedWeight = thor.BytesToBytes32([]byte(("queued-weight")))
 )
 
+// Service manages contract-wide staking totals.
+// Tracks both locked stake (from active validators/delegations) and queued stake (pending activation).
 type Service struct {
 	lockedVET    *solidity.Uint256
 	lockedWeight *solidity.Uint256
@@ -37,6 +39,7 @@ func New(sctx *solidity.Context) *Service {
 	}
 }
 
+// QueuedStake returns the total VET and weight waiting to be activated.
 func (s *Service) QueuedStake() (*big.Int, *big.Int, error) {
 	queuedVet, err := s.queuedVET.Get()
 	if err != nil {
@@ -47,6 +50,8 @@ func (s *Service) QueuedStake() (*big.Int, *big.Int, error) {
 	return queuedVet, queuedWeight, err
 }
 
+// UpdateTotals adjusts global totals during validator/delegation transitions.
+// Called when validators are activated or delegations move between states.
 func (s *Service) UpdateTotals(validatorRenewal *renewal.Renewal, delegatorRenewal *renewal.Renewal) error {
 	// calculate the new totals for validator + delegations
 	changeTVL := big.NewInt(0).Add(validatorRenewal.ChangeTVL, delegatorRenewal.ChangeTVL)
@@ -70,6 +75,7 @@ func (s *Service) UpdateTotals(validatorRenewal *renewal.Renewal, delegatorRenew
 	return nil
 }
 
+// GetLocketVET returns the total VET and weight currently locked in active staking.
 func (s *Service) GetLocketVET() (*big.Int, *big.Int, error) {
 	lockedVet, err := s.lockedVET.Get()
 	if err != nil {
@@ -80,6 +86,7 @@ func (s *Service) GetLocketVET() (*big.Int, *big.Int, error) {
 	return lockedVet, lockedWeight, err
 }
 
+// AddQueued increases queued totals when new stake is added to the queue.
 func (s *Service) AddQueued(stake *big.Int, weight *big.Int) error {
 	if err := s.queuedVET.Add(stake); err != nil {
 		return err
@@ -92,6 +99,7 @@ func (s *Service) AddQueued(stake *big.Int, weight *big.Int) error {
 	return nil
 }
 
+// RemoveQueued decreases queued totals when stake is removed from the queue.
 func (s *Service) RemoveQueued(amount *big.Int, weight *big.Int) error {
 	if err := s.queuedVET.Sub(amount); err != nil {
 		return err
@@ -99,6 +107,8 @@ func (s *Service) RemoveQueued(amount *big.Int, weight *big.Int) error {
 	return s.queuedWeight.Sub(weight)
 }
 
+// RemoveLocked decreases locked totals when validators exit the active set.
+// Also removes any pending delegations that were queued for the exiting validator.
 func (s *Service) RemoveLocked(unlockedTVL *big.Int, unlockedTVLWeight *big.Int, aggExit *renewal.Exit) error {
 	// validator.PendingVET + agg.ExitVET are now unlocked
 	// unlockedTVL here means that it's not contributing to TVL
@@ -122,6 +132,7 @@ func (s *Service) RemoveLocked(unlockedTVL *big.Int, unlockedTVLWeight *big.Int,
 	return nil
 }
 
+// GetQueuedStake returns the total VET and weight waiting to be activated.
 func (s *Service) GetQueuedStake() (*big.Int, *big.Int, error) {
 	queuedVet, err := s.queuedVET.Get()
 	if err != nil {
