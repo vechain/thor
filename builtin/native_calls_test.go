@@ -2067,13 +2067,13 @@ func TestStakerContract_Native_CheckStake(t *testing.T) {
 		ShouldRevert("stake is not multiple of 1VET").
 		Assert(t)
 
-	test.Case("addDelegation", validation, false, uint8(100)).
+	test.Case("addDelegation", validation, uint8(100)).
 		Caller(delegator).
 		Value(big.NewInt(0)).
 		ShouldRevert("stake is empty").
 		Assert(t)
 
-	test.Case("addDelegation", validation, false, uint8(100)).
+	test.Case("addDelegation", validation, uint8(100)).
 		Caller(delegator).
 		Value(big.NewInt(1)).
 		ShouldRevert("stake is not multiple of 1VET").
