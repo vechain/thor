@@ -144,7 +144,7 @@ func TestStaker_TotalStake(t *testing.T) {
 
 	for id, stake := range stakes {
 		// todo wrap this up / use a validation service or staker api instead of direct calling and checking totals
-		onCoolDownTVL, onCoolDownTVLWeight, err := staker.validations.ExitValidator(id)
+		releaseLockedTVL, releaseLockedTVLWeight, releaseQueuedTVL, err := staker.validations.ExitValidator(id)
 		require.NoError(t, err)
 
 		// Exit the aggregation too
@@ -152,7 +152,7 @@ func TestStaker_TotalStake(t *testing.T) {
 		require.NoError(t, err)
 
 		// Update global totals
-		err = staker.globalStatsService.RemoveLocked(onCoolDownTVL, onCoolDownTVLWeight, aggExit)
+		err = staker.globalStatsService.RemoveLocked(releaseLockedTVL, releaseLockedTVLWeight, releaseQueuedTVL, aggExit)
 		require.NoError(t, err)
 
 		totalStaked = totalStaked.Sub(totalStaked, stake)
@@ -195,7 +195,7 @@ func TestStaker_TotalStake_Withdrawal(t *testing.T) {
 	assert.Equal(t, 0, queuedWeight.Sign())
 
 	// todo wrap this up / use a validation service or staker api instead of direct calling and checking totals
-	onCoolDownTVL, onCoolDownTVLWeight, err := staker.validations.ExitValidator(addr)
+	releaseLockedTVL, releaseLockedTVLWeight, releaseQueuedTVL, err := staker.validations.ExitValidator(addr)
 	require.NoError(t, err)
 
 	// Exit the aggregation too
@@ -203,7 +203,7 @@ func TestStaker_TotalStake_Withdrawal(t *testing.T) {
 	require.NoError(t, err)
 
 	// Update global totals
-	err = staker.globalStatsService.RemoveLocked(onCoolDownTVL, onCoolDownTVLWeight, aggExit)
+	err = staker.globalStatsService.RemoveLocked(releaseLockedTVL, releaseLockedTVLWeight, releaseQueuedTVL, aggExit)
 	require.NoError(t, err)
 
 	lockedVET, lockedWeight, err = staker.LockedVET()
@@ -1212,7 +1212,7 @@ func TestStaker_ActivateNextValidator(t *testing.T) {
 func TestStaker_RemoveValidator_NonExistent(t *testing.T) {
 	staker, _ := newStaker(t, 101, 101, true)
 
-	_, _, err := staker.validations.ExitValidator(datagen.RandAddress())
+	_, _, _, err := staker.validations.ExitValidator(datagen.RandAddress())
 	assert.NoError(t, err)
 }
 
@@ -1233,7 +1233,7 @@ func TestStaker_RemoveValidator(t *testing.T) {
 	assert.NoError(t, err)
 
 	// todo wrap this up / use a validation service or staker api instead of direct calling and checking totals
-	onCoolDownTVL, onCoolDownTVLWeight, err := staker.validations.ExitValidator(addr)
+	releaseLockedTVL, releaseLockedTVLWeight, releaseQueuedTVL, err := staker.validations.ExitValidator(addr)
 	require.NoError(t, err)
 
 	// Exit the aggregation too
@@ -1241,7 +1241,7 @@ func TestStaker_RemoveValidator(t *testing.T) {
 	require.NoError(t, err)
 
 	// Update global totals
-	err = staker.globalStatsService.RemoveLocked(onCoolDownTVL, onCoolDownTVLWeight, aggExit)
+	err = staker.globalStatsService.RemoveLocked(releaseLockedTVL, releaseLockedTVLWeight, releaseQueuedTVL, aggExit)
 	require.NoError(t, err)
 
 	validator, err := staker.Get(addr)
@@ -2428,7 +2428,7 @@ func TestStaker_AddValidator_CannotAddValidationWithSameMasterAfterExit(t *testi
 	err = staker.SignalExit(endorsor, master)
 	assert.NoError(t, err)
 
-	_, _, err = staker.validations.ExitValidator(master)
+	_, _, _, err = staker.validations.ExitValidator(master)
 	assert.NoError(t, err)
 
 	err = staker.AddValidator(datagen.RandAddress(), master, uint32(360)*24*15, MinStake)

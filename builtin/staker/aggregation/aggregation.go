@@ -8,6 +8,8 @@ package aggregation
 import (
 	"math/big"
 
+	"github.com/pkg/errors"
+
 	"github.com/vechain/thor/v2/builtin/staker/delta"
 )
 
@@ -99,7 +101,7 @@ func (a *Aggregation) renew() *delta.Renewal {
 
 // exit immediately moves all delegation funds to withdrawable state.
 // Called when the validator exits, making all delegations withdrawable regardless of their individual state.
-func (a *Aggregation) exit() *delta.Exit {
+func (a *Aggregation) exit() (*delta.Exit, error) {
 	// Return these values to modify contract totals
 	exitedTVL := big.NewInt(0).Set(a.LockedVET)
 	exitedWeight := big.NewInt(0).Set(a.LockedWeight)
@@ -110,6 +112,12 @@ func (a *Aggregation) exit() *delta.Exit {
 	withdrawable := big.NewInt(0).Set(a.WithdrawableVET)
 	withdrawable.Add(withdrawable, a.LockedVET)
 	withdrawable.Add(withdrawable, a.PendingVET)
+
+	// ExitingVET should always be 0 at this point
+	// as it was moved to withdrawable at the last renew()
+	if a.ExitingVET.Sign() == 1 {
+		return nil, errors.New("ExitingVET should always be 0 at this point ")
+	}
 
 	// Reset the aggregation
 	a.ExitingVET = big.NewInt(0)
@@ -127,5 +135,5 @@ func (a *Aggregation) exit() *delta.Exit {
 		ExitedTVLWeight:      exitedWeight,
 		QueuedDecrease:       queuedDecrease,
 		QueuedDecreaseWeight: queuedWeightDecrease,
-	}
+	}, nil
 }

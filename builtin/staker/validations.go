@@ -318,17 +318,18 @@ func (v *validations) GetWithdrawable(id thor.Address, currentBlock uint32) (*Va
 }
 
 // ExitValidator removes the validator from the active list and puts it in cooldown.
-func (v *validations) ExitValidator(id thor.Address) (*big.Int, *big.Int, error) {
+func (v *validations) ExitValidator(id thor.Address) (*big.Int, *big.Int, *big.Int, error) {
 	entry, err := v.storage.GetValidation(id)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if entry.IsEmpty() {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 
-	onCoolDownTVL := big.NewInt(0).Set(entry.LockedVET)
-	onCoolDownTVLWeight := big.NewInt(0).Set(entry.Weight)
+	releaseLockedTVL := big.NewInt(0).Set(entry.LockedVET)
+	releaseLockedTVLWeight := big.NewInt(0).Set(entry.Weight)
+	releaseQueuedTVL := big.NewInt(0).Set(entry.PendingLocked)
 
 	// move locked to cooldown
 	entry.Status = StatusExit
@@ -339,17 +340,15 @@ func (v *validations) ExitValidator(id thor.Address) (*big.Int, *big.Int, error)
 
 	// unlock pending stake
 	if entry.PendingLocked.Sign() == 1 {
-		onCoolDownTVL = big.NewInt(0).Add(onCoolDownTVL, entry.PendingLocked)
 		// pending never contributes to weight as it's not active
-
 		entry.WithdrawableVET = big.NewInt(0).Add(entry.WithdrawableVET, entry.PendingLocked)
 		entry.PendingLocked = big.NewInt(0)
 	}
 
 	entry.CompleteIterations++
 	if _, err = v.leaderGroup.Remove(id, entry); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	return onCoolDownTVL, onCoolDownTVLWeight, nil
+	return releaseLockedTVL, releaseLockedTVLWeight, releaseQueuedTVL, nil
 }

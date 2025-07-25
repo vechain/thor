@@ -37,7 +37,8 @@ func (s *Service) GetAggregation(validationID thor.Address) (*Aggregation, error
 	}
 
 	// never return nil pointer aggregations
-	// should never happen a case where d.LockedVET == nil and d.WithdrawableVET != nil
+	// no need to check all properties it
+	// should never happen a case where (e.g.) d.LockedVET == nil and d.WithdrawableVET != nil
 	if d == nil || d.LockedVET == nil {
 		d = newAggregation()
 	}
@@ -114,7 +115,10 @@ func (s *Service) Exit(validationID thor.Address) (*delta.Exit, error) {
 		return nil, err
 	}
 
-	exit := agg.exit()
+	exit, err := agg.exit()
+	if err != nil {
+		return nil, err
+	}
 
 	if err = s.aggregationStorage.Set(validationID, agg, false); err != nil {
 		return nil, err

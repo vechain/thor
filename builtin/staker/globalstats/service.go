@@ -75,8 +75,8 @@ func (s *Service) UpdateTotals(validatorRenewal *delta.Renewal, delegatorRenewal
 	return nil
 }
 
-// GetLocketVET returns the total VET and weight currently locked in active staking.
-func (s *Service) GetLocketVET() (*big.Int, *big.Int, error) {
+// GetLockedVET returns the total VET and weight currently locked in active staking.
+func (s *Service) GetLockedVET() (*big.Int, *big.Int, error) {
 	lockedVet, err := s.lockedVET.Get()
 	if err != nil {
 		return nil, nil, err
@@ -109,20 +109,24 @@ func (s *Service) RemoveQueued(amount *big.Int, weight *big.Int) error {
 
 // RemoveLocked decreases locked totals when validators exit the active set.
 // Also removes any pending delegations that were queued for the exiting validator.
-func (s *Service) RemoveLocked(unlockedTVL *big.Int, unlockedTVLWeight *big.Int, aggExit *delta.Exit) error {
+func (s *Service) RemoveLocked(releaseLockedTVL *big.Int, releaseLockedTVLWeight *big.Int, releaseQueuedTVL *big.Int, aggExit *delta.Exit) error {
 	// validator.PendingVET + agg.ExitVET are now unlocked
-	// unlockedTVL here means that it's not contributing to TVL
+	// releaseLockedTVL here means that it's not contributing to TVL
 	// values for the validator are still locked
-	totalUnlockedVET := big.NewInt(0).Add(unlockedTVL, aggExit.ExitedTVL)
+	totalUnlockedVET := big.NewInt(0).Add(releaseLockedTVL, aggExit.ExitedTVL)
+
+	// validator releaseQueuedTVL does not contribute to weight
+	totalQueueDecrease := big.NewInt(0).Add(releaseQueuedTVL, aggExit.QueuedDecrease)
 
 	if err := s.lockedVET.Sub(totalUnlockedVET); err != nil {
 		return err
 	}
-	// unlockedTVLWeight already has the sum of the agg weights - LockedVET x2 + total weight from delegators
-	if err := s.lockedWeight.Sub(unlockedTVLWeight); err != nil {
+	// releaseLockedTVLWeight already has the sum of the agg weights - LockedVET x2 + total weight from delegators
+	if err := s.lockedWeight.Sub(releaseLockedTVLWeight); err != nil {
 		return err
 	}
-	if err := s.queuedVET.Sub(aggExit.QueuedDecrease); err != nil {
+
+	if err := s.queuedVET.Sub(totalQueueDecrease); err != nil {
 		return err
 	}
 	if err := s.queuedWeight.Sub(aggExit.QueuedDecreaseWeight); err != nil {
