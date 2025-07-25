@@ -136,7 +136,7 @@ func (s *storage) SetExitEpoch(block uint32, id thor.Address) error {
 	return nil
 }
 
-func (s *storage) GetRewards(validationID thor.Address, stakingPeriod uint32) (*big.Int, error) {
+func (s *storage) GetDelegatorRewards(validationID thor.Address, stakingPeriod uint32) (*big.Int, error) {
 	periodBytes := make([]byte, 4)
 	binary.BigEndian.PutUint32(periodBytes, stakingPeriod)
 	key := thor.Blake2b([]byte("rewards"), validationID.Bytes(), periodBytes)
@@ -152,7 +152,7 @@ func (s *storage) GetCompletedPeriods(validationID thor.Address) (uint32, error)
 	return v.CompleteIterations, nil
 }
 
-func (s *storage) IncreaseReward(node thor.Address, reward big.Int) error {
+func (s *storage) IncreaseDelegatorsReward(node thor.Address, reward *big.Int) error {
 	val, err := s.GetValidation(node)
 	if err != nil {
 		return err
@@ -167,7 +167,7 @@ func (s *storage) IncreaseReward(node thor.Address, reward big.Int) error {
 		return err
 	}
 
-	return s.rewards.Set(key, big.NewInt(0).Add(rewards, &reward), false)
+	return s.rewards.Set(key, big.NewInt(0).Add(rewards, reward), false)
 }
 
 func (s *storage) debugOverride(ptr *uint32, bytes32 thor.Bytes32) {
@@ -175,7 +175,7 @@ func (s *storage) debugOverride(ptr *uint32, bytes32 thor.Bytes32) {
 		numUint64 := num.Uint64()
 		if numUint64 != 0 {
 			o := uint32(numUint64)
-			logger.Warn("overrode state value", "variable", bytes32.String(), "value", o)
+			logger.Debug("overrode state value", "variable", bytes32.String(), "value", o)
 			*ptr = o
 		}
 	}

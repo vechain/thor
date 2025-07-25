@@ -214,9 +214,9 @@ func (s *Staker) GetWithdrawable(validationID thor.Address) (*big.Int, error) {
 	return out, nil
 }
 
-func (s *Staker) GetRewards(validatorID thor.Address, period uint32) (*big.Int, error) {
+func (s *Staker) GetDelegatorsRewards(validatorID thor.Address, period uint32) (*big.Int, error) {
 	out := new(big.Int)
-	if err := s.contract.Method("getRewards", validatorID, period).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
+	if err := s.contract.Method("getDelegatorsRewards", validatorID, period).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 	return out, nil

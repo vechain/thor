@@ -275,4 +275,9 @@ func TestStaker(t *testing.T) {
 	delegation, err = staker.GetDelegation(delegationID)
 	require.NoError(t, err)
 	require.Equal(t, big.NewInt(0).Cmp(delegation.Stake), 0)
+
+	// GetDelegatorsRewards
+	rewards, err := staker.GetDelegatorsRewards(validator.Address, 1)
+	require.NoError(t, err)
+	require.Equal(t, 0, big.NewInt(0).Cmp(rewards))
 }

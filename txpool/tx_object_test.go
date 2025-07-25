@@ -117,7 +117,7 @@ func TestExecutableWithError(t *testing.T) {
 
 	baseFee := galactica.CalcBaseFee(b1.Header(), fc)
 	for _, tt := range tests {
-		txObj, err := resolveTx(tt.tx, false)
+		txObj, err := ResolveTx(tt.tx, false)
 		assert.Nil(t, err)
 
 		// pass custom headID
@@ -136,7 +136,7 @@ func TestExecutableWithError(t *testing.T) {
 func TestSort(t *testing.T) {
 	addr1 := thor.BytesToAddress([]byte("addr1"))
 	addr2 := thor.BytesToAddress([]byte("addr2"))
-	objs := []*txObject{
+	objs := []*TxObject{
 		{priorityGasPrice: big.NewInt(0)},
 		{priorityGasPrice: big.NewInt(10), timeAdded: 20, payer: &addr1},
 		{priorityGasPrice: big.NewInt(10), timeAdded: 3, payer: &addr2},
@@ -160,14 +160,14 @@ func TestResolve(t *testing.T) {
 	acc := genesis.DevAccounts()[0]
 	trx := newTx(tx.TypeLegacy, 0, nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
 
-	txObj, err := resolveTx(trx, false)
+	txObj, err := ResolveTx(trx, false)
 	assert.Nil(t, err)
 	assert.Equal(t, trx, txObj.Transaction)
 
 	assert.Equal(t, acc.Address, txObj.Origin())
 
 	trx = newTx(tx.TypeDynamicFee, 0, nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
-	txObj, err = resolveTx(trx, false)
+	txObj, err = ResolveTx(trx, false)
 	assert.Nil(t, err)
 	assert.Equal(t, trx, txObj.Transaction)
 	assert.Equal(t, acc.Address, txObj.Origin())
@@ -205,7 +205,7 @@ func TestExecutable(t *testing.T) {
 
 	baseFee := galactica.CalcBaseFee(b0.Header(), tchain.GetForkConfig())
 	for _, tt := range tests {
-		txObj, err := resolveTx(tt.tx, false)
+		txObj, err := ResolveTx(tt.tx, false)
 		assert.Nil(t, err)
 
 		exe, err := txObj.Executable(repo.NewChain(b0.Header().ID()), st, b0.Header(), tchain.GetForkConfig(), baseFee)
@@ -231,7 +231,7 @@ func TestExecutableRejectNonLegacyBeforeGalactica(t *testing.T) {
 	repo := tchain.Repo()
 	baseFee := galactica.CalcBaseFee(repo.BestBlockSummary().Header, forkConfig)
 
-	txObj1, err := resolveTx(dynamicFeeTx, false)
+	txObj1, err := ResolveTx(dynamicFeeTx, false)
 	assert.Nil(t, err)
 
 	st := tchain.Stater().NewState(repo.BestBlockSummary().Root())
@@ -240,7 +240,7 @@ func TestExecutableRejectNonLegacyBeforeGalactica(t *testing.T) {
 	assert.Equal(t, tx.ErrTxTypeNotSupported, err)
 
 	legacyTx := newTx(tx.TypeLegacy, 0, nil, 21000, tx.BlockRef{0}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
-	txObj2, err := resolveTx(legacyTx, false)
+	txObj2, err := ResolveTx(legacyTx, false)
 	assert.Nil(t, err)
 
 	exe, err = txObj2.Executable(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig, baseFee)
@@ -268,7 +268,7 @@ func TestExecutableRejectUnsupportedFeatures(t *testing.T) {
 	repo := tchain.Repo()
 
 	tx1 := newDelegatedTx(tx.TypeLegacy, 0, nil, 21000, tx.BlockRef{0}, 100, nil, genesis.DevAccounts()[0], genesis.DevAccounts()[1])
-	txObj1, err := resolveTx(tx1, false)
+	txObj1, err := ResolveTx(tx1, false)
 	assert.Nil(t, err)
 
 	st := tchain.Stater().NewState(repo.BestBlockSummary().Root())
