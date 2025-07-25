@@ -63,8 +63,7 @@ contract Staker {
     /**
      * @dev addValidator adds a validator to the queue.
      */
-    function addValidator(address node, uint32 period) public payable {
-        require(msg.value > 0, "value is empty");
+    function addValidator(address node, uint32 period) public payable checkStake(msg.value) {
         string memory error = StakerNative(address(this))
             .native_addValidator(msg.sender, node, period, msg.value);
         require(bytes(error).length == 0, error);
@@ -74,8 +73,7 @@ contract Staker {
     /**
      * @dev increaseStake adds VET to the current stake of the queued/active validator.
      */
-    function increaseStake(address validationID) public payable {
-        require(msg.value > 0, "value is empty");
+    function increaseStake(address validationID) public payable checkStake(msg.value) {
         string memory error = StakerNative(address(this)).native_increaseStake(
             msg.sender,
             validationID,
@@ -88,15 +86,14 @@ contract Staker {
     /**
      * @dev decreaseStake removes VET from the current stake of an active validator
      */
-    function decreaseStake(address id, uint256 amount) public {
-        require(amount > 0, "amount is empty");
+    function decreaseStake(address validationID, uint256 amount) public checkStake(amount) {
         string memory error = StakerNative(address(this)).native_decreaseStake(
             msg.sender,
-            id,
+            validationID,
             amount
         );
         require(bytes(error).length == 0, error);
-        emit StakeDecreased(msg.sender, id, amount);
+        emit StakeDecreased(msg.sender, validationID, amount);
     }
 
     /**
@@ -130,8 +127,7 @@ contract Staker {
     function addDelegation(
         address validationID,
         uint8 multiplier // (% of msg.value) 100 for x1, 200 for x2, etc. This enforces a maximum of 2.56x multiplier
-    ) public payable onlyDelegatorContract returns (bytes32) {
-        require(msg.value > 0, "value is empty");
+    ) public payable onlyDelegatorContract checkStake(msg.value) returns (bytes32) {
         (bytes32 delegationID, string memory error) = StakerNative(
             address(this)
         ).native_addDelegation(validationID, msg.value, multiplier);
@@ -329,10 +325,16 @@ contract Staker {
     }
 
     modifier onlyDelegatorContract() {
-        (address sender, string memory error) = StakerNative(address(this))
+        (address expected, string memory error) = StakerNative(address(this))
             .native_getDelegatorContract();
         require(bytes(error).length == 0, error);
-        require(msg.sender == sender, "builtin: only delegator");
+        require(msg.sender == expected, "builtin: only delegator");
+        _;
+    }
+
+    modifier checkStake(uint256 amount) {
+        require(amount > 0, "stake is empty");
+        require(amount%1e18 == 0, "stake is not multiple of 1VET");
         _;
     }
 
