@@ -21,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
+
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -322,7 +323,7 @@ func opReturnDataCopy(_ *uint64, evm *EVM, _ *Contract, memory *Memory, stack *S
 		return nil, ErrReturnDataOutOfBounds
 	}
 	// we can reuse dataOffset now (aliasing it for clarity)
-	var end = dataOffset
+	end := dataOffset
 	end.Add(dataOffset, length)
 	end64, overflow := end.Uint64WithOverflow()
 	if overflow || uint64(len(evm.interpreter.returnData)) < end64 {
@@ -436,7 +437,7 @@ func opBlockhash(_ *uint64, evm *EVM, _ *Contract, _ *Memory, stack *Stack) ([]b
 		return nil, nil
 	}
 	var upper, lower uint64
-	upper = evm.Context.BlockNumber.Uint64()
+	upper = evm.BlockNumber.Uint64()
 	if upper < 257 {
 		lower = 0
 	} else {
@@ -451,30 +452,30 @@ func opBlockhash(_ *uint64, evm *EVM, _ *Contract, _ *Memory, stack *Stack) ([]b
 }
 
 func opCoinbase(_ *uint64, evm *EVM, _ *Contract, _ *Memory, stack *Stack) ([]byte, error) {
-	stack.push(new(uint256.Int).SetBytes(evm.Context.Coinbase.Bytes()))
+	stack.push(new(uint256.Int).SetBytes(evm.Coinbase.Bytes()))
 	return nil, nil
 }
 
 func opTimestamp(_ *uint64, evm *EVM, _ *Contract, _ *Memory, stack *Stack) ([]byte, error) {
-	v, _ := uint256.FromBig(evm.Context.Time)
+	v, _ := uint256.FromBig(evm.Time)
 	stack.push(v)
 	return nil, nil
 }
 
 func opNumber(_ *uint64, evm *EVM, _ *Contract, _ *Memory, stack *Stack) ([]byte, error) {
-	v, _ := uint256.FromBig(evm.Context.BlockNumber)
+	v, _ := uint256.FromBig(evm.BlockNumber)
 	stack.push(v)
 	return nil, nil
 }
 
 func opDifficulty(_ *uint64, evm *EVM, _ *Contract, _ *Memory, stack *Stack) ([]byte, error) {
-	v, _ := uint256.FromBig(evm.Context.Difficulty)
+	v, _ := uint256.FromBig(evm.Difficulty)
 	stack.push(v)
 	return nil, nil
 }
 
 func opGasLimit(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	stack.push(uint256.NewInt(evm.Context.GasLimit))
+	stack.push(uint256.NewInt(evm.GasLimit))
 	return nil, nil
 }
 
@@ -573,8 +574,8 @@ func opCreate(_ *uint64, evm *EVM, contract *Contract, memory *Memory, stack *St
 
 	contract.UseGas(gas)
 
-	//TODO: use uint256.Int instead of converting with toBig()
-	var bigVal = big0
+	// TODO: use uint256.Int instead of converting with toBig()
+	bigVal := big0
 	if !value.IsZero() {
 		bigVal = value.ToBig()
 	}
@@ -612,7 +613,7 @@ func opCreate2(_ *uint64, evm *EVM, contract *Contract, memory *Memory, stack *S
 	gas -= gas / 64
 	contract.UseGas(gas)
 
-	//TODO: use uint256.Int instead of converting with toBig()
+	// TODO: use uint256.Int instead of converting with toBig()
 	bigEndowment := big0
 	if !endowment.IsZero() {
 		bigEndowment = endowment.ToBig()
@@ -644,8 +645,8 @@ func opCall(_ *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stac
 	// Get the arguments from the memory.
 	args := memory.GetCopy(int64(inOffset), int64(inSize))
 
-	var bigVal = big0
-	//TODO: use uint256.Int instead of converting with toBig()
+	bigVal := big0
+	// TODO: use uint256.Int instead of converting with toBig()
 	// By using big0 here, we save an alloc for the most common case (non-ether-transferring contract calls),
 	// but it would make more sense to extend the usage of uint256.Int
 	if !value.IsZero() {
@@ -678,8 +679,8 @@ func opCallCode(_ *uint64, evm *EVM, contract *Contract, memory *Memory, stack *
 	// Get arguments from the memory.
 	args := memory.GetCopy(int64(inOffset), int64(inSize))
 
-	//TODO: use uint256.Int instead of converting with toBig()
-	var bigVal = big0
+	// TODO: use uint256.Int instead of converting with toBig()
+	bigVal := big0
 	if !value.IsZero() {
 		gas += params.CallStipend
 		bigVal = value.ToBig()
@@ -798,7 +799,7 @@ func opSelfBalance(_ *uint64, evm *EVM, contract *Contract, _ *Memory, stack *St
 
 // opBaseFee implements BASEFEE opcode
 func opBaseFee(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	baseFee, _ := uint256.FromBig(evm.Context.BaseFee)
+	baseFee, _ := uint256.FromBig(evm.BaseFee)
 	stack.push(baseFee)
 	return nil, nil
 }

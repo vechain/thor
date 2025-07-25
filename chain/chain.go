@@ -9,13 +9,13 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
-	"sort"
-
 	"slices"
+	"sort"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb/util"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/kv"
 	"github.com/vechain/thor/v2/muxdb"
@@ -381,6 +381,7 @@ func (r *Repository) indexBlock(parentRoot trie.Root, newBlockID thor.Bytes32, n
 	return t.Commit(
 		trie.Version{
 			Major: block.Number(newBlockID),
-			Minor: newConflicts},
+			Minor: newConflicts,
+		},
 		true)
 }

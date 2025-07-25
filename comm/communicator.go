@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/co"
@@ -134,7 +135,8 @@ func (c *Communicator) Protocols() []*p2p.Protocol {
 			Version: proto.Version,
 			Length:  proto.Length,
 			Run:     c.servePeer,
-		}}
+		},
+	}
 }
 
 // DiscTopic returns the topic for p2p network discovery.

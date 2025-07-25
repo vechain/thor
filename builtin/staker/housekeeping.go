@@ -9,24 +9,25 @@ import (
 	"math/big"
 
 	"github.com/pkg/errors"
+
 	"github.com/vechain/thor/v2/thor"
 )
 
 // Housekeep iterates over validations, move to cooldown
 // take the oldest validator and move to exited
-func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Bytes32]*Validation, error) {
+func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Address]*Validation, error) {
 	// we only perform housekeeping at the start of epochs
 	if currentBlock%epochLength != 0 {
 		return false, nil, nil
 	}
 
-	logger.Info("performing housekeeping", "block", currentBlock)
+	logger.Info("🏠performing housekeeping", "block", currentBlock)
 
 	hasUpdates := false
-	validatorExitID := thor.Bytes32{}
-	activeValidators := make(map[thor.Bytes32]*Validation)
+	validatorExitID := thor.Address{}
+	activeValidators := make(map[thor.Address]*Validation)
 
-	iteratorLeaderGroup := func(id thor.Bytes32, entry *Validation) error {
+	iteratorLeaderGroup := func(id thor.Address, entry *Validation) error {
 		if entry.ExitBlock != nil && currentBlock == *entry.ExitBlock {
 			validatorExitID = id
 			return nil
@@ -40,7 +41,7 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Bytes32]*Validat
 
 		if entry.ExitBlock != nil { // early exit, validator is due to exit but has not reached exit block
 			activeValidators[id] = entry
-			logger.Debug("validator exit delayed", "node", entry.Node, "exit-block", entry.ExitBlock)
+			logger.Debug("validator exit delayed", "node", id.String(), "exit-block", entry.ExitBlock)
 			return nil
 		}
 
@@ -92,7 +93,7 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Bytes32]*Validat
 	return hasUpdates, nil, nil
 }
 
-func (s *Staker) performRenewalUpdates(id thor.Bytes32, validator *Validation) error {
+func (s *Staker) performRenewalUpdates(id thor.Address, validator *Validation) error {
 	aggregation, err := s.storage.GetAggregation(id)
 	if err != nil {
 		return err
@@ -129,7 +130,7 @@ func (s *Staker) performRenewalUpdates(id thor.Bytes32, validator *Validation) e
 	return s.storage.SetValidation(id, validator, false)
 }
 
-func (s *Staker) activateValidators(currentBlock uint32) ([]*thor.Bytes32, error) {
+func (s *Staker) activateValidators(currentBlock uint32) ([]*thor.Address, error) {
 	queuedSize, err := s.QueuedGroupSize()
 	if err != nil {
 		return nil, err
@@ -157,7 +158,7 @@ func (s *Staker) activateValidators(currentBlock uint32) ([]*thor.Bytes32, error
 			return nil, nil
 		}
 
-		activated := make([]*thor.Bytes32, queuedCount)
+		activated := make([]*thor.Address, queuedCount)
 
 		for i := int64(0); i < queuedCount; i++ {
 			id, err := s.validations.ActivateNext(currentBlock, s.params)

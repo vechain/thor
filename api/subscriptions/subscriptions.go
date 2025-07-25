@@ -14,9 +14,10 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
+
 	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/api/transactions"
-	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/log"
@@ -42,9 +43,7 @@ type msgReader interface {
 	Read() (msgs []any, hasMore bool, err error)
 }
 
-var (
-	logger = log.WithContext("pkg", "subscriptions")
-)
+var logger = log.WithContext("pkg", "subscriptions")
 
 const (
 	// Time allowed to read the next pong message from the peer.
@@ -103,27 +102,27 @@ func (s *Subscriptions) handleEventReader(w http.ResponseWriter, req *http.Reque
 	}
 	address, err := parseAddress(req.URL.Query().Get("addr"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "addr"))
+		return nil, restutil.BadRequest(errors.WithMessage(err, "addr"))
 	}
 	t0, err := parseTopic(req.URL.Query().Get("t0"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "t0"))
+		return nil, restutil.BadRequest(errors.WithMessage(err, "t0"))
 	}
 	t1, err := parseTopic(req.URL.Query().Get("t1"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "t1"))
+		return nil, restutil.BadRequest(errors.WithMessage(err, "t1"))
 	}
 	t2, err := parseTopic(req.URL.Query().Get("t2"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "t2"))
+		return nil, restutil.BadRequest(errors.WithMessage(err, "t2"))
 	}
 	t3, err := parseTopic(req.URL.Query().Get("t3"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "t3"))
+		return nil, restutil.BadRequest(errors.WithMessage(err, "t3"))
 	}
 	t4, err := parseTopic(req.URL.Query().Get("t4"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "t4"))
+		return nil, restutil.BadRequest(errors.WithMessage(err, "t4"))
 	}
 	eventFilter := &api.SubscriptionEventFilter{
 		Address: address,
@@ -143,15 +142,15 @@ func (s *Subscriptions) handleTransferReader(_ http.ResponseWriter, req *http.Re
 	}
 	txOrigin, err := parseAddress(req.URL.Query().Get("txOrigin"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "txOrigin"))
+		return nil, restutil.BadRequest(errors.WithMessage(err, "txOrigin"))
 	}
 	sender, err := parseAddress(req.URL.Query().Get("sender"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "sender"))
+		return nil, restutil.BadRequest(errors.WithMessage(err, "sender"))
 	}
 	recipient, err := parseAddress(req.URL.Query().Get("recipient"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "recipient"))
+		return nil, restutil.BadRequest(errors.WithMessage(err, "recipient"))
 	}
 	transferFilter := &api.SubscriptionTransferFilter{
 		TxOrigin:  txOrigin,
@@ -322,10 +321,10 @@ func (s *Subscriptions) parsePosition(posStr string) (thor.Bytes32, error) {
 	}
 	pos, err := thor.ParseBytes32(posStr)
 	if err != nil {
-		return thor.Bytes32{}, utils.BadRequest(errors.WithMessage(err, "pos"))
+		return thor.Bytes32{}, restutil.BadRequest(errors.WithMessage(err, "pos"))
 	}
 	if block.Number(bestID)-block.Number(pos) > s.backtraceLimit {
-		return thor.Bytes32{}, utils.Forbidden(errors.New("pos: backtrace limit exceeded"))
+		return thor.Bytes32{}, restutil.Forbidden(errors.New("pos: backtrace limit exceeded"))
 	}
 	return pos, nil
 }
@@ -357,7 +356,7 @@ func (s *Subscriptions) Close() {
 	s.wg.Wait()
 }
 
-func (s *Subscriptions) websocket(readerFunc func(http.ResponseWriter, *http.Request) (msgReader, error)) utils.HandlerFunc {
+func (s *Subscriptions) websocket(readerFunc func(http.ResponseWriter, *http.Request) (msgReader, error)) restutil.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) error {
 		s.wg.Add(1)
 		defer s.wg.Done()
@@ -394,35 +393,35 @@ func (s *Subscriptions) Mount(root *mux.Router, pathPrefix string) {
 	sub.Path("/txpool").
 		Methods(http.MethodGet).
 		Name("WS /subscriptions/txpool"). // metrics middleware relies on this name
-		HandlerFunc(utils.WrapHandlerFunc(s.handlePendingTransactions))
+		HandlerFunc(restutil.WrapHandlerFunc(s.handlePendingTransactions))
 
 	sub.Path("/block").
 		Methods(http.MethodGet).
 		Name("WS /subscriptions/block"). // metrics middleware relies on this name
-		HandlerFunc(utils.WrapHandlerFunc(s.websocket(s.handleBlockReader)))
+		HandlerFunc(restutil.WrapHandlerFunc(s.websocket(s.handleBlockReader)))
 
 	sub.Path("/event").
 		Methods(http.MethodGet).
 		Name("WS /subscriptions/event"). // metrics middleware relies on this name
-		HandlerFunc(utils.WrapHandlerFunc(s.websocket(s.handleEventReader)))
+		HandlerFunc(restutil.WrapHandlerFunc(s.websocket(s.handleEventReader)))
 
 	sub.Path("/transfer").
 		Methods(http.MethodGet).
 		Name("WS /subscriptions/transfer"). // metrics middleware relies on this name
-		HandlerFunc(utils.WrapHandlerFunc(s.websocket(s.handleTransferReader)))
+		HandlerFunc(restutil.WrapHandlerFunc(s.websocket(s.handleTransferReader)))
 
 	sub.Path("/beat2").
 		Methods(http.MethodGet).
 		Name("WS /subscriptions/beat2"). // metrics middleware relies on this name
-		HandlerFunc(utils.WrapHandlerFunc(s.websocket(s.handleBeat2Reader)))
+		HandlerFunc(restutil.WrapHandlerFunc(s.websocket(s.handleBeat2Reader)))
 
 	// This method is currently deprecated
-	beatHandler := utils.HandleGone
+	beatHandler := restutil.HandleGone
 	if s.enabledDeprecated {
 		beatHandler = s.websocket(s.handleBeatReader)
 	}
 	sub.Path("/beat").
 		Methods(http.MethodGet).
 		Name("WS /subscriptions/beat"). // metrics middleware relies on this name
-		HandlerFunc(utils.WrapHandlerFunc(beatHandler))
+		HandlerFunc(restutil.WrapHandlerFunc(beatHandler))
 }

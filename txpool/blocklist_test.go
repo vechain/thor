@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -26,7 +27,7 @@ func SetupTempFile(t *testing.T, dummyData string) string {
 	}
 	testFilePath := tempFile.Name()
 
-	err = os.WriteFile(testFilePath, []byte(dummyData), 0600)
+	err = os.WriteFile(testFilePath, []byte(dummyData), 0o600)
 	if err != nil {
 		t.Fatalf("Failed to write to temp file: %s", err)
 	}

@@ -21,6 +21,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/genesis"
@@ -204,7 +205,7 @@ func testGetExpandedBlockByID(t *testing.T) {
 }
 
 func testInvalidBlockNumber(t *testing.T) {
-	invalidNumberRevision := "4294967296" //invalid block number
+	invalidNumberRevision := "4294967296" // invalid block number
 	_, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/" + invalidNumberRevision)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode)

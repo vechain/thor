@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/pkg/errors"
+
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/co"
@@ -31,9 +32,7 @@ const (
 	maxTxSize = 64 * 1024
 )
 
-var (
-	logger = log.WithContext("pkg", "txpool")
-)
+var logger = log.WithContext("pkg", "txpool")
 
 // Options options for tx pool.
 type Options struct {
@@ -267,7 +266,13 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		}
 
 		state := p.stater.NewState(headSummary.Root())
-		executable, err := txObj.Executable(p.repo.NewChain(headSummary.Header.ID()), state, headSummary.Header, p.forkConfig, p.baseFeeCache.Get(headSummary.Header))
+		executable, err := txObj.Executable(
+			p.repo.NewChain(headSummary.Header.ID()),
+			state,
+			headSummary.Header,
+			p.forkConfig,
+			p.baseFeeCache.Get(headSummary.Header),
+		)
 		if err != nil {
 			return txRejectedError{err.Error()}
 		}

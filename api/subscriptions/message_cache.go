@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru/simplelru"
+
 	"github.com/vechain/thor/v2/thor"
 )
 

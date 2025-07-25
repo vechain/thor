@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/builtin/params"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
@@ -240,13 +241,13 @@ func (m *mockStaker) HasDelegations(address thor.Address) (bool, error) {
 	return m.hasDelegations, nil
 }
 
-func (m *mockStaker) IncreaseReward(master thor.Address, reward big.Int) error {
+func (m *mockStaker) IncreaseDelegatorsReward(master thor.Address, reward *big.Int) error {
 	return m.increaseRewardErr
 }
 
 func TestCalculateRewards(t *testing.T) {
 	st := state.New(muxdb.NewMem(), trie.Root{})
-	st.SetStorage(thor.BytesToAddress([]byte("par")), thor.KeyCurveFactor, thor.BytesToBytes32(thor.CurveFactor.Bytes()))
+	st.SetStorage(thor.BytesToAddress([]byte("par")), thor.KeyCurveFactor, thor.BytesToBytes32(thor.InitialCurveFactor.Bytes()))
 
 	p := params.New(thor.BytesToAddress([]byte("par")), st)
 	eng := New(thor.BytesToAddress([]byte("eng")), st, 1, p)

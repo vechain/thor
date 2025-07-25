@@ -14,7 +14,12 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-func (c *Consensus) validateStakingProposer(header *block.Header, parent *block.Header, staker *stakerContract.Staker, providedLeaders map[thor.Bytes32]*stakerContract.Validation) error {
+func (c *Consensus) validateStakingProposer(
+	header *block.Header,
+	parent *block.Header,
+	staker *stakerContract.Staker,
+	providedLeaders map[thor.Address]*stakerContract.Validation,
+) error {
 	signer, err := header.Signer()
 	if err != nil {
 		return consensusError(fmt.Sprintf("pos - block signer unavailable: %v", err))
@@ -26,9 +31,9 @@ func (c *Consensus) validateStakingProposer(header *block.Header, parent *block.
 		return err
 	}
 
-	var leaders map[thor.Bytes32]*stakerContract.Validation
+	var leaders map[thor.Address]*stakerContract.Validation
 	if entry, ok := c.validatorsCache.Get(parent.ID()); ok {
-		possiblyLeaders, ok := entry.(*map[thor.Bytes32]*stakerContract.Validation)
+		possiblyLeaders, ok := entry.(*map[thor.Address]*stakerContract.Validation)
 		if ok {
 			leaders = *possiblyLeaders
 		} else {

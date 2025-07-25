@@ -22,6 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/test/datagen"
 )
 
@@ -41,6 +42,7 @@ func benchmarkEncodeFullNode(b *testing.B, consensus, skipHash bool) {
 		}
 	}
 }
+
 func benchmarkEncodeShortNode(b *testing.B, consensus bool) {
 	var (
 		s = shortNode{
@@ -122,8 +124,10 @@ type sNode struct {
 	Key []byte
 	Val any
 }
-type vNode []byte
-type hNode []byte
+type (
+	vNode []byte
+	hNode []byte
+)
 
 func TestRefNodeEncodeConsensus(t *testing.T) {
 	for range 10 {

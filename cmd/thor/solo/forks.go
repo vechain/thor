@@ -11,6 +11,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/pkg/errors"
+
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/chain"
@@ -20,17 +21,17 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func (e *Engine) ForkTransactions(best *chain.BlockSummary) ([]*tx.Transaction, error) {
+func (c *Core) ForkTransactions(best *chain.BlockSummary) ([]*tx.Transaction, error) {
 	txs := make([]*tx.Transaction, 0)
 
-	newState := e.stater.NewState(best.Root())
+	newState := c.stater.NewState(best.Root())
 	currentBGP, err := builtin.Params.Native(newState).Get(thor.KeyLegacyTxBaseGasPrice)
 	if err != nil {
 		return nil, err
 	}
 	if currentBGP.Cmp(baseGasPrice) != 0 {
 		logger.Info("SOLO FORK: setting base gas price", "block", best.Header.Number())
-		baseGasPriceTX, err := e.BaseGasPriceTX()
+		baseGasPriceTX, err := c.baseGasPriceTX()
 		if err != nil {
 			return nil, errors.WithMessage(err, "create base gas price transaction")
 		}
@@ -38,23 +39,23 @@ func (e *Engine) ForkTransactions(best *chain.BlockSummary) ([]*tx.Transaction, 
 	}
 
 	// This sets up the authority contract will all dev accounts and sets the max block proposers to 14
-	if best.Header.Number()+1 == e.forkConfig.HAYABUSA-1 {
+	if best.Header.Number()+1 == c.forkConfig.HAYABUSA-1 {
 		logger.Info("SOLO FORK: setting up PRE-HAYABUSA transactions", "block", best.Header.Number())
-		mbpTx, err := e.MBPTransaction()
+		mbpTx, err := c.mbpTransaction()
 		if err != nil {
 			return nil, errors.WithMessage(err, "create mbp transaction")
 		}
 		txs = append(txs, mbpTx)
-		authorityTx, err := e.AddAuthorityTX()
+		authorityTx, err := c.addAuthoritiesTx()
 		if err != nil {
 			return nil, errors.WithMessage(err, "create authority transactions")
 		}
 		txs = append(txs, authorityTx)
 	}
 
-	if best.Header.Number()+1 == e.forkConfig.HAYABUSA {
+	if best.Header.Number()+1 == c.forkConfig.HAYABUSA {
 		logger.Info("SOLO FORK: setting up HAYABUSA transaction", "block", best.Header.Number())
-		stakeTXs, err := e.StakeTransactions()
+		stakeTXs, err := c.stakeTransactions()
 		if err != nil {
 			return nil, errors.WithMessage(err, "create stake transaction")
 		}
@@ -63,7 +64,7 @@ func (e *Engine) ForkTransactions(best *chain.BlockSummary) ([]*tx.Transaction, 
 	return txs, nil
 }
 
-func (e *Engine) BaseGasPriceTX() (*tx.Transaction, error) {
+func (c *Core) baseGasPriceTX() (*tx.Transaction, error) {
 	method, found := builtin.Params.ABI.MethodByName("set")
 	if !found {
 		return nil, errors.New("Params ABI: set method not found")
@@ -75,10 +76,10 @@ func (e *Engine) BaseGasPriceTX() (*tx.Transaction, error) {
 	}
 
 	clause := tx.NewClause(&builtin.Params.Address).WithData(data)
-	return e.CreateTransaction([]*tx.Clause{clause}, genesis.DevAccounts()[0])
+	return c.createTransaction([]*tx.Clause{clause}, genesis.DevAccounts()[0])
 }
 
-func (e *Engine) MBPTransaction() (*tx.Transaction, error) {
+func (c *Core) mbpTransaction() (*tx.Transaction, error) {
 	method, ok := builtin.Params.ABI.MethodByName("set")
 	if !ok {
 		return nil, errors.New("method set not found in Params ABI")
@@ -88,10 +89,10 @@ func (e *Engine) MBPTransaction() (*tx.Transaction, error) {
 		return nil, err
 	}
 	clause := tx.NewClause(&builtin.Params.Address).WithData(data)
-	return e.CreateTransaction([]*tx.Clause{clause}, genesis.DevAccounts()[0])
+	return c.createTransaction([]*tx.Clause{clause}, genesis.DevAccounts()[0])
 }
 
-func (e *Engine) AddAuthorityTX() (*tx.Transaction, error) {
+func (c *Core) addAuthoritiesTx() (*tx.Transaction, error) {
 	method, ok := builtin.Authority.ABI.MethodByName("add")
 	if !ok {
 		return nil, errors.New("method set not found in Params ABI")
@@ -107,10 +108,10 @@ func (e *Engine) AddAuthorityTX() (*tx.Transaction, error) {
 		clause := tx.NewClause(&builtin.Authority.Address).WithData(data)
 		clauses = append(clauses, clause)
 	}
-	return e.CreateTransaction(clauses, genesis.DevAccounts()[0])
+	return c.createTransaction(clauses, genesis.DevAccounts()[0])
 }
 
-func (e *Engine) StakeTransactions() ([]*tx.Transaction, error) {
+func (c *Core) stakeTransactions() ([]*tx.Transaction, error) {
 	method, ok := builtin.Staker.ABI.MethodByName("addValidator")
 	if !ok {
 		return nil, errors.New("method addValidator not found in Staker ABI")
@@ -126,7 +127,7 @@ func (e *Engine) StakeTransactions() ([]*tx.Transaction, error) {
 			WithData(data).
 			WithValue(staker.MinStake)
 
-		tx, err := e.CreateTransaction([]*tx.Clause{clause}, account)
+		tx, err := c.createTransaction([]*tx.Clause{clause}, account)
 		if err != nil {
 			return nil, errors.WithMessage(err, "create stake transaction")
 		}
@@ -135,8 +136,8 @@ func (e *Engine) StakeTransactions() ([]*tx.Transaction, error) {
 	return transactions, nil
 }
 
-func (e *Engine) CreateTransaction(clauses []*tx.Clause, signer genesis.DevAccount) (*tx.Transaction, error) {
-	best := e.repo.BestBlockSummary()
+func (c *Core) createTransaction(clauses []*tx.Clause, signer genesis.DevAccount) (*tx.Transaction, error) {
+	best := c.repo.BestBlockSummary()
 
 	var builder *tx.Builder
 	if best.Header.BaseFee() != nil {
@@ -155,7 +156,7 @@ func (e *Engine) CreateTransaction(clauses []*tx.Clause, signer genesis.DevAccou
 	}
 
 	trx := builder.BlockRef(tx.NewBlockRef(0)).
-		ChainTag(e.repo.ChainTag()).
+		ChainTag(c.repo.ChainTag()).
 		Expiration(math.MaxUint32).
 		Nonce(datagen.RandUint64()).
 		Gas(1_000_000).

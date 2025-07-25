@@ -6,10 +6,13 @@
 package solo
 
 import (
+	"context"
+	"math"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
@@ -17,19 +20,17 @@ import (
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
 )
 
-func newSolo() (*Solo, *Engine) {
-	fc := &thor.SoloFork
+func newSolo() *Solo {
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
 	gene := genesis.NewDevnet()
 	logDb, _ := logdb.NewMem()
 	b, _, _, _ := gene.Build(stater)
 	repo, _ := chain.NewRepository(db, b)
-	mempool := txpool.New(repo, stater, txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute}, fc)
+	mempool := txpool.New(repo, stater, txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute}, &thor.NoFork)
 
 	opts := Options{
 		GasLimit:         0,
@@ -39,16 +40,17 @@ func newSolo() (*Solo, *Engine) {
 		BlockInterval:    thor.BlockInterval,
 	}
 
-	engine := NewEngine(repo, stater, logDb, opts, fc)
+	engine := NewCore(repo, stater, logDb, opts, &thor.ForkConfig{GALACTICA: math.MaxUint32, HAYABUSA_TP: 1})
 
-	return New(repo, stater, mempool, opts, engine), engine
+	return New(repo, stater, mempool, opts, engine)
 }
 
 func TestInitSolo(t *testing.T) {
-	solo, engine := newSolo()
+	solo := newSolo()
 
-	_, err := engine.Pack(tx.Transactions{}, false)
-	assert.NoError(t, err)
+	// init solo -> this should mine a block with the gas price tx
+	err := solo.init(context.Background())
+	assert.Nil(t, err)
 
 	// check the gas price
 	best := solo.repo.BestBlockSummary()
@@ -56,20 +58,4 @@ func TestInitSolo(t *testing.T) {
 	currentBGP, err := builtin.Params.Native(newState).Get(thor.KeyLegacyTxBaseGasPrice)
 	assert.Nil(t, err)
 	assert.Equal(t, baseGasPrice, currentBGP)
-}
-
-func TestSolo_HayabusaFork(t *testing.T) {
-	solo, engine := newSolo()
-
-	for range 10 {
-		_, err := engine.Pack(tx.Transactions{}, false)
-		assert.NoError(t, err)
-	}
-
-	best := solo.repo.BestBlockSummary()
-	newState := solo.stater.NewState(best.Root())
-	staker := builtin.Staker.Native(newState)
-	active, err := staker.IsPoSActive()
-	assert.NoError(t, err)
-	assert.True(t, active, "PoS should be active after Hayabusa fork")
 }

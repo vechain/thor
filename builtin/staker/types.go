@@ -21,7 +21,6 @@ const (
 )
 
 type Validation struct {
-	Node               thor.Address // the node address of the validation
 	Endorsor           thor.Address // the address providing the stake
 	Period             uint32       // the staking period of the validation
 	CompleteIterations uint32       // the completed staking periods by the validation
@@ -38,8 +37,8 @@ type Validation struct {
 
 	Weight *big.Int // LockedVET x2 + total weight from delegators
 
-	Next *thor.Bytes32 `rlp:"nil"` // doubly linked list
-	Prev *thor.Bytes32 `rlp:"nil"` // doubly linked list
+	Next *thor.Address `rlp:"nil"` // doubly linked list
+	Prev *thor.Address `rlp:"nil"` // doubly linked list
 }
 
 type ValidationTotals struct {
@@ -104,9 +103,8 @@ func (v *Validation) Renew() *Renewal {
 }
 
 type Delegation struct {
-	ValidationID   thor.Bytes32 // the ID of the validation to which the delegator is delegating
+	ValidationID   thor.Address // the ID of the validation to which the delegator is delegating
 	Stake          *big.Int
-	AutoRenew      bool
 	Multiplier     uint8
 	LastIteration  *uint32 `rlp:"nil"` // the last staking period in which the delegator was active
 	FirstIteration uint32  // the iteration at which the delegator was created
@@ -165,19 +163,17 @@ func (d *Delegation) Ended(validation *Validation) bool {
 
 // Aggregation represents the total amount of VET locked for a given validation's delegations.
 type Aggregation struct {
-	// Auto-renewing (recurring) delegations
-	CurrentRecurringVET    *big.Int // VET locked this period (autoRenew == true)
-	CurrentRecurringWeight *big.Int // Weight including multipliers
+	// All locked vet for a validations delegations.
+	LockedVET    *big.Int // VET locked this period (autoRenew == true)
+	LockedWeight *big.Int // Weight including multipliers
 
-	PendingRecurringVET    *big.Int // VET to be locked next period (autoRenew == true)
-	PendingRecurringWeight *big.Int // Weight including multipliers
+	// Pending delegations, does NOT contribute to current TVL, it will increase the LockedVET in the next period and reset to 0
+	PendingVET    *big.Int // VET that is pending to be locked in the next period (autoRenew == false)
+	PendingWeight *big.Int // Weight including multipliers
 
-	// One-time (non-recurring) delegations
-	CurrentOneTimeVET    *big.Int // VET locked this period (autoRenew == false)
-	CurrentOneTimeWeight *big.Int // Weight including multipliers
-
-	PendingOneTimeVET    *big.Int // VET to be locked next period (autoRenew == false)
-	PendingOneTimeWeight *big.Int // Weight including multipliers
+	// Exiting delegations, does NOT contribute to current TVL, it will decrease the LockedVET in the next period and reset to 0
+	ExitingVET    *big.Int // VET that is exiting the next period
+	ExitingWeight *big.Int // Weight including multipliers
 
 	// Withdrawable funds
 	WithdrawableVET *big.Int // VET available for withdrawal
@@ -185,20 +181,18 @@ type Aggregation struct {
 
 func newAggregation() *Aggregation {
 	return &Aggregation{
-		CurrentRecurringVET:    big.NewInt(0),
-		CurrentRecurringWeight: big.NewInt(0),
-		PendingRecurringVET:    big.NewInt(0),
-		PendingRecurringWeight: big.NewInt(0),
-		CurrentOneTimeVET:      big.NewInt(0),
-		CurrentOneTimeWeight:   big.NewInt(0),
-		PendingOneTimeVET:      big.NewInt(0),
-		PendingOneTimeWeight:   big.NewInt(0),
-		WithdrawableVET:        big.NewInt(0),
+		LockedVET:       big.NewInt(0),
+		LockedWeight:    big.NewInt(0),
+		PendingVET:      big.NewInt(0),
+		PendingWeight:   big.NewInt(0),
+		ExitingVET:      big.NewInt(0),
+		ExitingWeight:   big.NewInt(0),
+		WithdrawableVET: big.NewInt(0),
 	}
 }
 
 func (a *Aggregation) IsEmpty() bool {
-	return a.CurrentRecurringVET == nil && a.CurrentOneTimeVET == nil && a.PendingRecurringVET == nil && a.PendingOneTimeVET == nil && a.WithdrawableVET == nil
+	return a.LockedVET == nil || a.ExitingVET == nil || a.PendingVET == nil || a.WithdrawableVET == nil
 }
 
 // NextPeriodTVL is the total value locked (TVL) for the next period.
@@ -206,9 +200,8 @@ func (a *Aggregation) IsEmpty() bool {
 // Does not include CurrentOneTimeVET since that stake is due to withdraw.
 func (a *Aggregation) NextPeriodTVL() *big.Int {
 	nextTVL := big.NewInt(0)
-	nextTVL.Add(nextTVL, a.CurrentRecurringVET)
-	nextTVL.Add(nextTVL, a.PendingRecurringVET)
-	nextTVL.Add(nextTVL, a.PendingOneTimeVET)
+	nextTVL.Add(nextTVL, a.LockedVET)
+	nextTVL.Add(nextTVL, a.PendingVET)
 	return nextTVL
 }
 
@@ -220,33 +213,27 @@ func (a *Aggregation) NextPeriodTVL() *big.Int {
 func (a *Aggregation) Renew() *Renewal {
 	changeTVL := big.NewInt(0)
 	changeWeight := big.NewInt(0)
-	queuedDecrease := big.NewInt(0)
-	queuedDecreaseWeight := big.NewInt(0).Add(a.PendingRecurringWeight, a.PendingOneTimeWeight)
+	queuedDecrease := big.NewInt(0).Set(a.PendingVET)
+	queuedDecreaseWeight := big.NewInt(0).Set(a.PendingWeight)
 
-	// Move CurrentOneTimeVET => WithdrawableVET
-	a.WithdrawableVET = big.NewInt(0).Add(a.WithdrawableVET, a.CurrentOneTimeVET)
-	changeTVL.Sub(changeTVL, a.CurrentOneTimeVET)
-	changeWeight.Sub(changeWeight, a.CurrentOneTimeWeight)
-	a.CurrentOneTimeVET = big.NewInt(0)
-	a.CurrentOneTimeWeight = big.NewInt(0)
+	// Move Pending => Locked
+	changeTVL = changeTVL.Add(changeTVL, a.PendingVET)
+	changeWeight = changeWeight.Add(changeWeight, a.PendingWeight)
+	a.LockedVET = big.NewInt(0).Add(a.LockedVET, a.PendingVET)
+	a.LockedWeight = big.NewInt(0).Add(a.LockedWeight, a.PendingWeight)
+	a.PendingVET = big.NewInt(0)
+	a.PendingWeight = big.NewInt(0)
 
-	// Move PendingRecurringVET => CurrentRecurringVET
-	a.CurrentRecurringVET = big.NewInt(0).Add(a.CurrentRecurringVET, a.PendingRecurringVET)
-	a.CurrentRecurringWeight = big.NewInt(0).Add(a.CurrentRecurringWeight, a.PendingRecurringWeight)
-	changeTVL.Add(changeTVL, a.PendingRecurringVET)
-	changeWeight.Add(changeWeight, a.PendingRecurringWeight)
-	queuedDecrease.Add(queuedDecrease, a.PendingRecurringVET)
-	a.PendingRecurringVET = big.NewInt(0)
-	a.PendingRecurringWeight = big.NewInt(0)
+	// Remove ExitingVET from LockedVET
+	changeTVL = changeTVL.Sub(changeTVL, a.ExitingVET)
+	changeWeight = changeWeight.Sub(changeWeight, a.ExitingWeight)
+	a.LockedVET = big.NewInt(0).Sub(a.LockedVET, a.ExitingVET)
+	a.LockedWeight = big.NewInt(0).Sub(a.LockedWeight, a.ExitingWeight)
 
-	// Move PendingOneTimeVET => CurrentOneTimeVET
-	a.CurrentOneTimeVET = big.NewInt(0).Set(a.PendingOneTimeVET)
-	a.CurrentOneTimeWeight = big.NewInt(0).Set(a.PendingOneTimeWeight)
-	changeTVL.Add(changeTVL, a.PendingOneTimeVET)
-	changeWeight.Add(changeWeight, a.PendingOneTimeWeight)
-	queuedDecrease.Add(queuedDecrease, a.PendingOneTimeVET)
-	a.PendingOneTimeVET = big.NewInt(0)
-	a.PendingOneTimeWeight = big.NewInt(0)
+	// Move ExitingVET to WithdrawableVET
+	a.WithdrawableVET = big.NewInt(0).Add(a.WithdrawableVET, a.ExitingVET)
+	a.ExitingVET = big.NewInt(0)
+	a.ExitingWeight = big.NewInt(0)
 
 	return &Renewal{
 		ChangeTVL:            changeTVL,
@@ -258,29 +245,26 @@ func (a *Aggregation) Renew() *Renewal {
 
 // Exit moves all the funds to withdrawable
 func (a *Aggregation) Exit() (*big.Int, *big.Int, *big.Int, *big.Int) {
+	// Return these values to modify contract totals
+	exitedTVL := big.NewInt(0).Set(a.LockedVET)
+	exitedWeight := big.NewInt(0).Set(a.LockedWeight)
+	queuedDecrease := big.NewInt(0).Set(a.PendingVET)
+	queuedWeightDecrease := big.NewInt(0).Set(a.PendingWeight)
+
+	// Move all the funds to withdrawable
 	withdrawable := big.NewInt(0).Set(a.WithdrawableVET)
-	withdrawable = withdrawable.Add(withdrawable, a.CurrentRecurringVET)
-	withdrawable = withdrawable.Add(withdrawable, a.CurrentOneTimeVET)
+	withdrawable.Add(withdrawable, a.LockedVET)
+	withdrawable.Add(withdrawable, a.PendingVET)
 
-	// The change in TVL is the amount of VET that went from locked to withdrawable
-	// Subtract the previously withdrawable amount from the new total
-	exitedTVL := big.NewInt(0).Sub(withdrawable, a.WithdrawableVET)
-	exitedWeight := big.NewInt(0).Add(a.CurrentRecurringWeight, a.CurrentOneTimeWeight)
-	queuedDecrease := big.NewInt(0).Add(a.PendingRecurringVET, a.PendingOneTimeVET)
-	queuedWeightDecrease := big.NewInt(0).Add(a.PendingRecurringWeight, a.PendingOneTimeWeight)
+	// Reset the aggregation
+	a.ExitingVET = big.NewInt(0)
+	a.ExitingWeight = big.NewInt(0)
+	a.LockedVET = big.NewInt(0)
+	a.LockedWeight = big.NewInt(0)
+	a.PendingVET = big.NewInt(0)
+	a.PendingWeight = big.NewInt(0)
 
-	// PendingRecurringVET did not previously contribute to the TVL, so we need to add it after
-	withdrawable = withdrawable.Add(withdrawable, a.PendingRecurringVET)
-	withdrawable = withdrawable.Add(withdrawable, a.PendingOneTimeVET)
-
-	a.CurrentRecurringVET = big.NewInt(0)
-	a.CurrentRecurringWeight = big.NewInt(0)
-	a.CurrentOneTimeVET = big.NewInt(0)
-	a.CurrentOneTimeWeight = big.NewInt(0)
-	a.PendingRecurringVET = big.NewInt(0)
-	a.PendingRecurringWeight = big.NewInt(0)
-	a.PendingOneTimeVET = big.NewInt(0)
-	a.PendingOneTimeWeight = big.NewInt(0)
+	// Make all funds withdrawable
 	a.WithdrawableVET = withdrawable
 
 	return exitedTVL, queuedDecrease, exitedWeight, queuedWeightDecrease

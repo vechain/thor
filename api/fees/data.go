@@ -7,10 +7,10 @@ package fees
 
 import (
 	"math/big"
-
 	"slices"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/chain"
@@ -58,7 +58,11 @@ func getBaseFee(baseFee *big.Int) *hexutil.Big {
 
 // resolveRange resolves the base fees, gas used ratios and priority fees for the given block range.
 // Assumes that the boundaries (newest block - block count) are correct and validated beforehand.
-func (fd *FeesData) resolveRange(newestBlockSummary *chain.BlockSummary, blockCount uint32, rewardPercentiles []float64) (thor.Bytes32, []*hexutil.Big, []float64, [][]*hexutil.Big, error) {
+func (fd *FeesData) resolveRange(
+	newestBlockSummary *chain.BlockSummary,
+	blockCount uint32,
+	rewardPercentiles []float64,
+) (thor.Bytes32, []*hexutil.Big, []float64, [][]*hexutil.Big, error) {
 	newestBlockID := newestBlockSummary.Header.ID()
 
 	baseFees := make([]*hexutil.Big, blockCount)

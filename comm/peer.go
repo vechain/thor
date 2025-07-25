@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	lru "github.com/hashicorp/golang-lru"
+
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/p2psrv/rpc"
 	"github.com/vechain/thor/v2/thor"

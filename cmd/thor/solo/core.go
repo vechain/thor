@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/pkg/errors"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/bandwidth"
@@ -26,7 +27,7 @@ import (
 	"github.com/vechain/thor/v2/txpool"
 )
 
-type Engine struct {
+type Core struct {
 	repo       *chain.Repository
 	stater     *state.Stater
 	packer     *packer.Packer
@@ -37,14 +38,14 @@ type Engine struct {
 	mu         sync.Mutex // protects the Pack method
 }
 
-func NewEngine(
+func NewCore(
 	repo *chain.Repository,
 	stater *state.Stater,
 	logDB *logdb.LogDB,
 	options Options,
 	forkConfig *thor.ForkConfig,
-) *Engine {
-	return &Engine{
+) *Core {
+	return &Core{
 		repo:   repo,
 		stater: stater,
 		packer: packer.New(
@@ -61,38 +62,34 @@ func NewEngine(
 	}
 }
 
-func (e *Engine) Pack(txs tx.Transactions, onDemand bool) ([]*tx.Transaction, error) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
+func (c *Core) Pack(pendingTxs tx.Transactions, onDemand bool) ([]*tx.Transaction, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	best := e.repo.BestBlockSummary()
+	best := c.repo.BestBlockSummary()
 	now := uint64(time.Now().Unix())
 
-	pendingTxs := make([]*tx.Transaction, 0)
-	for _, tx := range txs {
-		pendingTxs = append(pendingTxs, tx)
-	}
-
-	forkTxs, err := e.ForkTransactions(best)
-	if err != nil {
-		return nil, errors.WithMessage(err, "add fork transactions")
-	}
-	pendingTxs = append(pendingTxs, forkTxs...)
-
 	var txsToRemove []*tx.Transaction
-
-	if e.options.GasLimit == 0 {
-		suggested := e.bandwidth.SuggestGasLimit()
-		e.packer.SetTargetGasLimit(suggested)
+	txs, err := c.ForkTransactions(best)
+	if err != nil {
+		return nil, errors.WithMessage(err, "fork transactions")
+	}
+	for _, tx := range pendingTxs {
+		txs = append(txs, tx)
 	}
 
-	flow, _, err := e.packer.Mock(best, now, e.options.GasLimit)
+	if c.options.GasLimit == 0 {
+		suggested := c.bandwidth.SuggestGasLimit()
+		c.packer.SetTargetGasLimit(suggested)
+	}
+
+	flow, _, err := c.packer.Mock(best, now, c.options.GasLimit)
 	if err != nil {
 		return nil, errors.WithMessage(err, "mock packer")
 	}
 
 	startTime := mclock.Now()
-	for _, tx := range pendingTxs {
+	for _, tx := range txs {
 		if err := flow.Adopt(tx); err != nil {
 			if packer.IsGasLimitReached(err) {
 				break
@@ -119,8 +116,8 @@ func (e *Engine) Pack(txs tx.Transactions, onDemand bool) ([]*tx.Transaction, er
 		return nil, errors.WithMessage(err, "commit state")
 	}
 
-	if !e.options.SkipLogs {
-		w := e.logDB.NewWriter()
+	if !c.options.SkipLogs {
+		w := c.logDB.NewWriter()
 		if err := w.Write(b, receipts); err != nil {
 			return nil, errors.WithMessage(err, "write logs")
 		}
@@ -131,13 +128,13 @@ func (e *Engine) Pack(txs tx.Transactions, onDemand bool) ([]*tx.Transaction, er
 	}
 
 	// ignore fork when solo
-	if err := e.repo.AddBlock(b, receipts, 0, true); err != nil {
+	if err := c.repo.AddBlock(b, receipts, 0, true); err != nil {
 		return nil, errors.WithMessage(err, "commit block")
 	}
 	realElapsed := mclock.Now() - startTime
 	commitElapsed := mclock.Now() - startTime - execElapsed
 
-	if v, updated := e.bandwidth.Update(b.Header(), time.Duration(realElapsed)); updated {
+	if v, updated := c.bandwidth.Update(b.Header(), time.Duration(realElapsed)); updated {
 		logger.Debug("bandwidth updated", "gps", v)
 	}
 
@@ -153,17 +150,17 @@ func (e *Engine) Pack(txs tx.Transactions, onDemand bool) ([]*tx.Transaction, er
 	return txsToRemove, nil
 }
 
-func (e *Engine) IsExecutable(trx *tx.Transaction) (bool, error) {
-	best := e.repo.BestBlockSummary()
-	chain := e.repo.NewChain(best.Header.ID())
-	state := e.stater.NewState(best.Root())
+func (c *Core) IsExecutable(trx *tx.Transaction) (bool, error) {
+	best := c.repo.BestBlockSummary()
+	chain := c.repo.NewChain(best.Header.ID())
+	state := c.stater.NewState(best.Root())
 
-	baseFee := galactica.CalcBaseFee(best.Header, e.forkConfig)
+	baseFee := galactica.CalcBaseFee(best.Header, c.forkConfig)
 
 	txObject, err := txpool.ResolveTx(trx, true)
 	if err != nil {
 		return false, errors.WithMessage(err, "resolve transaction")
 	}
 
-	return txObject.Executable(chain, state, best.Header, e.forkConfig, baseFee)
+	return txObject.Executable(chain, state, best.Header, c.forkConfig, baseFee)
 }
