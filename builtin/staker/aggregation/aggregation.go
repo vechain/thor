@@ -99,8 +99,6 @@ func (a *Aggregation) Exit() *renewal.Exit {
 	// Return these values to modify contract totals
 	exitedTVL := big.NewInt(0).Set(a.LockedVET)
 	exitedWeight := big.NewInt(0).Set(a.LockedWeight)
-	// todo review why there is a queue here - perhaps because of the increase of delegation size
-	// but should that count to the totals.Queued ?
 	queuedDecrease := big.NewInt(0).Set(a.PendingVET)
 	queuedWeightDecrease := big.NewInt(0).Set(a.PendingWeight)
 

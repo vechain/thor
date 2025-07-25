@@ -116,9 +116,9 @@ func (d *Delegation) IsEmpty() bool {
 	return (d.Stake == nil || d.Stake.Sign() == 0) && d.Multiplier == 0
 }
 
-// Weight returns the weight of the delegator, which is calculated as:
+// CalcWeight returns the weight of the delegator, which is calculated as:
 // weight = stake * multiplier / 100
-func (d *Delegation) Weight() *big.Int {
+func (d *Delegation) CalcWeight() *big.Int {
 	if d.IsEmpty() {
 		return big.NewInt(0)
 	}

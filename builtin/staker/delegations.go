@@ -103,9 +103,9 @@ func (d *delegations) Withdraw(delegationID thor.Bytes32) (bool, bool, *big.Int,
 	if started && !finished {
 		return false, false, nil, nil, errors.New("delegation is not eligible for withdraw")
 	}
-	// todo ensure the pointers are copied not referenced
-	withdrawableStake := delegation.Stake
-	withdrawableStakeWeight := delegation.Weight()
+	// ensure the pointers are copied, not referenced
+	withdrawableStake := new(big.Int).Set(delegation.Stake)
+	withdrawableStakeWeight := delegation.CalcWeight()
 
 	delegation.Stake = big.NewInt(0)
 	if err = d.storage.SetDelegation(delegationID, delegation, false); err != nil {

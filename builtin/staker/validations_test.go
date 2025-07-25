@@ -2295,7 +2295,7 @@ func Test_GetValidatorTotals(t *testing.T) {
 	assert.Equal(t, expectedStake, totals.TotalLockedStake)
 	assert.Equal(t, fetchedValidator.Weight, totals.TotalLockedWeight)
 	assert.Equal(t, delegation.Stake, totals.DelegationsLockedStake)
-	assert.Equal(t, delegation.Weight(), totals.DelegationsLockedWeight)
+	assert.Equal(t, delegation.CalcWeight(), totals.DelegationsLockedWeight)
 }
 
 func Test_Validator_Decrease_Exit_Withdraw(t *testing.T) {

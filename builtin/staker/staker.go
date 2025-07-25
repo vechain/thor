@@ -292,7 +292,7 @@ func (s *Staker) AddDelegation(
 	if err != nil {
 		return thor.Bytes32{}, err
 	}
-	if err = s.aggregationService.AddPendingVET(validationID, delegation.Weight(), stake); err != nil {
+	if err = s.aggregationService.AddPendingVET(validationID, delegation.CalcWeight(), stake); err != nil {
 		return thor.Bytes32{}, err
 	}
 
@@ -306,7 +306,7 @@ func (s *Staker) AddDelegation(
 	}
 
 	// update global figures
-	if err = s.globalStatsService.AddQueued(stake, delegation.Weight()); err != nil {
+	if err = s.globalStatsService.AddQueued(stake, delegation.CalcWeight()); err != nil {
 		return thor.Bytes32{}, err
 	}
 
@@ -406,8 +406,6 @@ func (s *Staker) WithdrawDelegation(
 		if err = s.aggregationService.SubWithdrawableVET(delegation.ValidationID, withdrawableStake); err != nil {
 			return nil, err
 		}
-
-		// TODO check if moving to withdrawable removes from locked and queued
 	}
 
 	logger.Info("withdrew delegation", "delegationID", delegationID, "stake", new(big.Int).Div(withdrawableStake, big.NewInt(1e18)))
@@ -440,10 +438,10 @@ func (s *Staker) GetValidatorsTotals(validationID thor.Address) (*ValidationTota
 		return nil, err
 	}
 	return &ValidationTotals{
-		TotalLockedStake:        big.NewInt(0).Add(validator.LockedVET, agg.LockedVET),
-		TotalLockedWeight:       validator.Weight,
-		DelegationsLockedStake:  agg.LockedVET,
-		DelegationsLockedWeight: agg.LockedWeight,
+		TotalLockedStake:        new(big.Int).Add(validator.LockedVET, agg.LockedVET),
+		TotalLockedWeight:       new(big.Int).Set(validator.Weight),
+		DelegationsLockedStake:  new(big.Int).Set(agg.LockedVET),
+		DelegationsLockedWeight: new(big.Int).Set(agg.LockedWeight),
 	}, nil
 }
 
