@@ -288,6 +288,17 @@ func (s *Staker) GetValidatorsTotals(validationID thor.Address) (*ValidationTota
 	return validationTotals, nil
 }
 
+func (s *Staker) GetValidatorsNum() (*big.Int, *big.Int, error) {
+	out := make([]any, 4)
+	out[0] = new(*big.Int)
+	out[1] = new(*big.Int)
+	if err := s.contract.Method("getValidatorsNum").Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
+		return nil, nil, err
+	}
+
+	return *(out[0].(**big.Int)), *(out[1].(**big.Int)), nil
+}
+
 type ValidatorQueuedEvent struct {
 	Endorsor     thor.Address
 	Master       thor.Address

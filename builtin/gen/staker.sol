@@ -328,6 +328,16 @@ contract Staker {
         return (lockedStake, lockedWeight, delegatorsStake, delegatorsWeight);
     }
 
+    function getValidatorsNum() public view returns (uint256, uint256) {
+        (
+            uint256 leaderGroupSize,
+            uint256 queuedValidators,
+            string memory error
+        ) = StakerNative(address(this)).native_getValidatorsNum();
+        require(bytes(error).length == 0, error);
+        return (leaderGroupSize, queuedValidators);
+    }
+
     modifier onlyDelegatorContract() {
         (address sender, string memory error) = StakerNative(address(this))
             .native_getDelegatorContract();
@@ -474,4 +484,9 @@ interface StakerNative {
         external
         view
         returns (uint256, uint256, uint256, uint256, string calldata);
+
+    function native_getValidatorsNum()
+        external
+        view
+        returns (uint256, uint256, string calldata);
 }

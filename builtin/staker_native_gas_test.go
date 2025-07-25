@@ -232,6 +232,12 @@ func TestStakerNativeGasCosts(t *testing.T) {
 			description:  "Get total stakes and weights and stake for a validator",
 			preTestHooks: []TestHook{preTestAddValidator(account1)},
 		},
+		{
+			function:     "native_getValidatorsNum",
+			expectedGas:  1400,
+			description:  "Get number of active and queued validators",
+			preTestHooks: []TestHook{preTestAddValidator(account1)},
+		},
 	}
 
 	for _, tc := range testCases {
