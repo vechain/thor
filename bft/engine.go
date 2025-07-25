@@ -328,11 +328,18 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 			}
 			state := engine.stater.NewState(parentBlockSummary.Root())
 			staker := builtin.Staker.Native(state)
-			validator, err := staker.Get(signer)
+
+			_, err := staker.IsPoSActive()
 			if err != nil {
-				return nil, err
+				// PoS is not active yet
+				js.AddBlock(signer, h.COM(), nil)
+			} else {
+				validator, err := staker.Get(signer)
+				if err != nil {
+					return nil, err
+				}
+				js.AddBlock(signer, h.COM(), validator.Weight)
 			}
-			js.AddBlock(signer, h.COM(), validator.Weight)
 		} else {
 			js.AddBlock(signer, h.COM(), nil)
 		}
