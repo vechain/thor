@@ -26,6 +26,12 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Address]*Validat
 	hasUpdates := false
 	validatorExitID := thor.Address{}
 	activeValidators := make(map[thor.Address]*Validation)
+	renewal := &Renewal{
+		ChangeTVL:            big.NewInt(0),
+		ChangeWeight:         big.NewInt(0),
+		QueuedDecrease:       big.NewInt(0),
+		QueuedDecreaseWeight: big.NewInt(0),
+	}
 
 	iteratorLeaderGroup := func(id thor.Address, entry *Validation) error {
 		if entry.ExitBlock != nil && currentBlock == *entry.ExitBlock {
@@ -46,15 +52,30 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Address]*Validat
 		}
 
 		// validator has auto renew enabled and is due for renewal
-		if err := s.performRenewalUpdates(id, entry); err != nil {
+		if err := s.performRenewalUpdates(id, entry, renewal); err != nil {
 			return err
 		}
 		hasUpdates = true
 		activeValidators[id] = entry
 		return nil
 	}
+
 	// perform the iteration
 	if err := s.validations.LeaderGroupIterator(iteratorLeaderGroup); err != nil {
+		return false, nil, err
+	}
+
+	// update totals
+	if err := s.storage.lockedVET.Add(renewal.ChangeTVL); err != nil {
+		return false, nil, err
+	}
+	if err := s.storage.lockedWeight.Add(renewal.ChangeWeight); err != nil {
+		return false, nil, err
+	}
+	if err := s.storage.queuedVET.Sub(renewal.QueuedDecrease); err != nil {
+		return false, nil, err
+	}
+	if err := s.storage.queuedWeight.Sub(renewal.QueuedDecreaseWeight); err != nil {
 		return false, nil, err
 	}
 
@@ -93,7 +114,7 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Address]*Validat
 	return hasUpdates, nil, nil
 }
 
-func (s *Staker) performRenewalUpdates(id thor.Address, validator *Validation) error {
+func (s *Staker) performRenewalUpdates(id thor.Address, validator *Validation, renewal *Renewal) error {
 	aggregation, err := s.storage.GetAggregation(id)
 	if err != nil {
 		return err
@@ -115,18 +136,10 @@ func (s *Staker) performRenewalUpdates(id thor.Address, validator *Validation) e
 	// set the new totals
 	validator.LockedVET = big.NewInt(0).Add(validator.LockedVET, validatorRenewal.ChangeTVL)
 	validator.Weight = big.NewInt(0).Add(validator.Weight, changeWeight)
-	if err := s.storage.lockedVET.Add(changeTVL); err != nil {
-		return err
-	}
-	if err := s.storage.lockedWeight.Add(changeWeight); err != nil {
-		return err
-	}
-	if err := s.storage.queuedVET.Sub(queuedDecrease); err != nil {
-		return err
-	}
-	if err := s.storage.queuedWeight.Sub(queuedWeight); err != nil {
-		return err
-	}
+	renewal.ChangeTVL = big.NewInt(0).Add(renewal.ChangeTVL, changeTVL)
+	renewal.ChangeWeight = big.NewInt(0).Add(renewal.ChangeWeight, changeWeight)
+	renewal.QueuedDecrease = big.NewInt(0).Add(renewal.QueuedDecrease, queuedDecrease)
+	renewal.QueuedDecreaseWeight = big.NewInt(0).Add(renewal.QueuedDecreaseWeight, queuedWeight)
 	return s.storage.SetValidation(id, validator, false)
 }
 
