@@ -109,7 +109,7 @@ func Test_IsLocked(t *testing.T) {
 		assert.False(t, d.Ended(v), "should not be locked when validation status is queued")
 	})
 
-	t.Run("Exit block not defined", func(t *testing.T) {
+	t.Run("exit block not defined", func(t *testing.T) {
 		d := &Delegation{
 			FirstIteration: 1,
 			LastIteration:  nil,

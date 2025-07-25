@@ -96,7 +96,8 @@ func (s *Service) Renew(validationID thor.Address) (*delta.Renewal, error) {
 	if err != nil {
 		return nil, err
 	}
-	renew := agg.Renew()
+
+	renew := agg.renew()
 
 	if err = s.aggregationStorage.Set(validationID, agg, false); err != nil {
 		return nil, err
@@ -112,7 +113,8 @@ func (s *Service) Exit(validationID thor.Address) (*delta.Exit, error) {
 	if err != nil {
 		return nil, err
 	}
-	exit := agg.Exit()
+	
+	exit := agg.exit()
 
 	if err = s.aggregationStorage.Set(validationID, agg, false); err != nil {
 		return nil, err
