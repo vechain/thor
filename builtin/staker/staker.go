@@ -226,12 +226,11 @@ func (s *Staker) SetOnline(id thor.Address, online bool) (bool, error) {
 func (s *Staker) AddDelegation(
 	validationID thor.Address,
 	stake *big.Int,
-	autoRenew bool,
 	multiplier uint8,
 ) (thor.Bytes32, error) {
 	stakeETH := new(big.Int).Div(stake, big.NewInt(1e18))
-	logger.Debug("adding delegation", "ValidationID", validationID, "stake", stakeETH, "autoRenew", autoRenew, "multiplier", multiplier)
-	if id, err := s.delegations.Add(validationID, stake, autoRenew, multiplier); err != nil {
+	logger.Debug("adding delegation", "ValidationID", validationID, "stake", stakeETH, "multiplier", multiplier)
+	if id, err := s.delegations.Add(validationID, stake, multiplier); err != nil {
 		logger.Info("failed to add delegation", "ValidationID", validationID, "error", err)
 		return thor.Bytes32{}, err
 	} else {
@@ -273,28 +272,19 @@ func (s *Staker) HasDelegations(
 	if aggregation == nil || aggregation.IsEmpty() {
 		return false, nil
 	}
-	total := new(big.Int).Add(aggregation.CurrentRecurringVET, aggregation.CurrentOneTimeVET)
-	return total.Sign() > 0, nil
+	return aggregation.LockedVET.Sign() == 1, nil
 }
 
-// UpdateDelegationAutoRenew updates the auto-renewal status of a delegation.
-func (s *Staker) UpdateDelegationAutoRenew(
-	delegationID thor.Bytes32,
-	autoRenew bool,
-) error {
-	logger.Debug("updating autorenew", "delegationID", delegationID, "autoRenew", autoRenew)
-	var err error
-	if autoRenew {
-		err = s.delegations.EnableAutoRenew(delegationID)
-	} else {
-		err = s.delegations.DisableAutoRenew(delegationID)
-	}
-	if err != nil {
+// SignalDelegationExit updates the auto-renewal status of a delegation.
+func (s *Staker) SignalDelegationExit(delegationID thor.Bytes32) error {
+	logger.Debug("updating autorenew", "delegationID", delegationID)
+	if err := s.delegations.SignalExit(delegationID); err != nil {
 		logger.Info("update autorenew failed", "delegationID", delegationID, "error", err)
-	} else {
-		logger.Info("updated autorenew", "delegationID", delegationID)
+		return err
 	}
-	return err
+
+	logger.Info("updated autorenew", "delegationID", delegationID)
+	return nil
 }
 
 // WithdrawDelegation allows expired and queued delegations to withdraw their stake.
@@ -312,9 +302,9 @@ func (s *Staker) WithdrawDelegation(
 	}
 }
 
-// GetRewards returns reward amount for validation id and staking period.
-func (s *Staker) GetRewards(validationID thor.Address, stakingPeriod uint32) (*big.Int, error) {
-	return s.storage.GetRewards(validationID, stakingPeriod)
+// GetDelegatorRewards returns reward amount for validation id and staking period.
+func (s *Staker) GetDelegatorRewards(validationID thor.Address, stakingPeriod uint32) (*big.Int, error) {
+	return s.storage.GetDelegatorRewards(validationID, stakingPeriod)
 }
 
 // GetCompletedPeriods returns number of completed staking periods for validation.
@@ -322,9 +312,9 @@ func (s *Staker) GetCompletedPeriods(validationID thor.Address) (uint32, error) 
 	return s.storage.GetCompletedPeriods(validationID)
 }
 
-// IncreaseReward Increases reward for node address, for current staking period.
-func (s *Staker) IncreaseReward(node thor.Address, reward big.Int) error {
-	return s.storage.IncreaseReward(node, reward)
+// IncreaseDelegatorsReward Increases reward for validation's delegators.
+func (s *Staker) IncreaseDelegatorsReward(node thor.Address, reward *big.Int) error {
+	return s.storage.IncreaseDelegatorsReward(node, reward)
 }
 
 // GetValidatorsTotals returns the total stake, total weight, total delegators stake and total delegators weight.
@@ -337,11 +327,10 @@ func (s *Staker) GetValidatorsTotals(validationID thor.Address) (*ValidationTota
 	if err != nil {
 		return nil, err
 	}
-	delegationLockedStake := big.NewInt(0).Add(aggregation.CurrentRecurringVET, aggregation.CurrentOneTimeVET)
 	return &ValidationTotals{
-		TotalLockedStake:        big.NewInt(0).Add(validator.LockedVET, delegationLockedStake),
+		TotalLockedStake:        big.NewInt(0).Add(validator.LockedVET, aggregation.LockedVET),
 		TotalLockedWeight:       validator.Weight,
-		DelegationsLockedStake:  big.NewInt(0).Add(aggregation.CurrentRecurringVET, aggregation.CurrentOneTimeVET),
-		DelegationsLockedWeight: big.NewInt(0).Add(aggregation.CurrentRecurringWeight, aggregation.CurrentOneTimeWeight),
+		DelegationsLockedStake:  aggregation.LockedVET,
+		DelegationsLockedWeight: aggregation.LockedWeight,
 	}, nil
 }

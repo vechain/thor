@@ -101,7 +101,7 @@ func init() {
 
 			first, err := Staker.NativeMetered(env.State(), charger).FirstActive()
 			if err != nil {
-				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", err)}
+				return []any{thor.Address{}, fmt.Sprintf("revert: %v", err)}
 			}
 			return []any{first, ""}
 		}},
@@ -252,7 +252,6 @@ func init() {
 			var args struct {
 				ValidationID common.Address
 				Stake        *big.Int
-				AutoRenew    bool
 				Multiplier   uint8
 			}
 			env.ParseArgs(&args)
@@ -262,7 +261,6 @@ func init() {
 				AddDelegation(
 					thor.Address(args.ValidationID),
 					args.Stake,
-					args.AutoRenew,
 					args.Multiplier,
 				)
 			if err != nil {
@@ -284,15 +282,14 @@ func init() {
 
 			return []any{stake, ""}
 		}},
-		{"native_updateDelegationAutoRenew", func(env *xenv.Environment) []any {
+		{"native_signalDelegationExit", func(env *xenv.Environment) []any {
 			var args struct {
 				DelegationID common.Hash
-				AutoRenew    bool
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			err := Staker.NativeMetered(env.State(), charger).UpdateDelegationAutoRenew(thor.Bytes32(args.DelegationID), args.AutoRenew)
+			err := Staker.NativeMetered(env.State(), charger).SignalDelegationExit(thor.Bytes32(args.DelegationID))
 			if err != nil {
 				return []any{fmt.Sprintf("revert: %v", err)}
 			}
@@ -315,6 +312,7 @@ func init() {
 			if delegation.LastIteration != nil {
 				lastPeriod = *delegation.LastIteration
 			}
+
 			locked := delegation.Started(validator) && !delegation.Ended(validator)
 			return []any{
 				delegation.ValidationID,
@@ -322,12 +320,10 @@ func init() {
 				delegation.FirstIteration,
 				lastPeriod,
 				delegation.Multiplier,
-				delegation.AutoRenew,
-				locked,
-				"",
+				locked, "",
 			}
 		}},
-		{"native_getRewards", func(env *xenv.Environment) []any {
+		{"native_getDelegatorsRewards", func(env *xenv.Environment) []any {
 			var args struct {
 				ValidationID  common.Address
 				StakingPeriod uint32
@@ -335,7 +331,7 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			reward, err := Staker.NativeMetered(env.State(), charger).GetRewards(thor.Address(args.ValidationID), args.StakingPeriod)
+			reward, err := Staker.NativeMetered(env.State(), charger).GetDelegatorRewards(thor.Address(args.ValidationID), args.StakingPeriod)
 			if err != nil {
 				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
 			}
