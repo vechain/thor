@@ -84,7 +84,7 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Address]*Validat
 
 		hasUpdates = true
 
-		validatorUnlockedTVL, validatorUnlockedTVLWeight, err := s.validations.ExitValidator(validatorExitID)
+		releaseLockedTVL, releaseLockedTVLWeight, releaseQueuedTVL, err := s.validations.ExitValidator(validatorExitID)
 		if err != nil {
 			return false, nil, err
 		}
@@ -94,7 +94,7 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Address]*Validat
 			return false, nil, err
 		}
 
-		if err = s.globalStatsService.RemoveLocked(validatorUnlockedTVL, validatorUnlockedTVLWeight, aggExit); err != nil {
+		if err = s.globalStatsService.RemoveLocked(releaseLockedTVL, releaseLockedTVLWeight, releaseQueuedTVL, aggExit); err != nil {
 			return false, nil, err
 		}
 	}

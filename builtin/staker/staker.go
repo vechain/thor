@@ -81,7 +81,7 @@ func (s *Staker) LeaderGroup() (map[thor.Address]*Validation, error) {
 
 // LockedVET returns the amount of VET and weight locked by validations and delegations.
 func (s *Staker) LockedVET() (*big.Int, *big.Int, error) {
-	return s.globalStatsService.GetLocketVET()
+	return s.globalStatsService.GetLockedVET()
 }
 
 // QueuedStake returns the amount of VET and weight queued by validations and delegations.
