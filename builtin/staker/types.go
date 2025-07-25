@@ -8,7 +8,7 @@ package staker
 import (
 	"math/big"
 
-	"github.com/vechain/thor/v2/builtin/staker/renewal"
+	"github.com/vechain/thor/v2/builtin/staker/delta"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -80,7 +80,7 @@ func (v *Validation) CurrentIteration() uint32 {
 // 3. Increase WithdrawableVET by NextPeriodDecrease
 // 4. Set PendingLocked to 0
 // 5. Set NextPeriodDecrease to 0
-func (v *Validation) Renew() *renewal.Renewal {
+func (v *Validation) Renew() *delta.Renewal {
 	changeTVL := big.NewInt(0)
 
 	changeTVL.Add(changeTVL, v.PendingLocked)
@@ -95,7 +95,7 @@ func (v *Validation) Renew() *renewal.Renewal {
 
 	v.CompleteIterations++
 
-	return &renewal.Renewal{
+	return &delta.Renewal{
 		ChangeTVL:            changeTVL,
 		ChangeWeight:         changeWeight,
 		QueuedDecrease:       queuedDecrease,

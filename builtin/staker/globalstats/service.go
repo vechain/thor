@@ -9,7 +9,7 @@ import (
 	"math/big"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
-	"github.com/vechain/thor/v2/builtin/staker/renewal"
+	"github.com/vechain/thor/v2/builtin/staker/delta"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -52,7 +52,7 @@ func (s *Service) QueuedStake() (*big.Int, *big.Int, error) {
 
 // UpdateTotals adjusts global totals during validator/delegation transitions.
 // Called when validators are activated or delegations move between states.
-func (s *Service) UpdateTotals(validatorRenewal *renewal.Renewal, delegatorRenewal *renewal.Renewal) error {
+func (s *Service) UpdateTotals(validatorRenewal *delta.Renewal, delegatorRenewal *delta.Renewal) error {
 	// calculate the new totals for validator + delegations
 	changeTVL := big.NewInt(0).Add(validatorRenewal.ChangeTVL, delegatorRenewal.ChangeTVL)
 	changeWeight := big.NewInt(0).Add(validatorRenewal.ChangeWeight, delegatorRenewal.ChangeWeight)
@@ -109,7 +109,7 @@ func (s *Service) RemoveQueued(amount *big.Int, weight *big.Int) error {
 
 // RemoveLocked decreases locked totals when validators exit the active set.
 // Also removes any pending delegations that were queued for the exiting validator.
-func (s *Service) RemoveLocked(unlockedTVL *big.Int, unlockedTVLWeight *big.Int, aggExit *renewal.Exit) error {
+func (s *Service) RemoveLocked(unlockedTVL *big.Int, unlockedTVLWeight *big.Int, aggExit *delta.Exit) error {
 	// validator.PendingVET + agg.ExitVET are now unlocked
 	// unlockedTVL here means that it's not contributing to TVL
 	// values for the validator are still locked

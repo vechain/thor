@@ -8,7 +8,7 @@ package aggregation
 import (
 	"math/big"
 
-	"github.com/vechain/thor/v2/builtin/staker/renewal"
+	"github.com/vechain/thor/v2/builtin/staker/delta"
 )
 
 // Aggregation represents the total amount of VET locked for a given validation's delegations.
@@ -62,7 +62,7 @@ func (a *Aggregation) NextPeriodTVL() *big.Int {
 // 1. Move Pending => Locked
 // 2. Remove ExitingVET from LockedVET
 // 3. Move ExitingVET to WithdrawableVET
-func (a *Aggregation) Renew() *renewal.Renewal {
+func (a *Aggregation) Renew() *delta.Renewal {
 	changeTVL := big.NewInt(0)
 	changeWeight := big.NewInt(0)
 	queuedDecrease := big.NewInt(0).Set(a.PendingVET)
@@ -87,7 +87,7 @@ func (a *Aggregation) Renew() *renewal.Renewal {
 	a.ExitingVET = big.NewInt(0)
 	a.ExitingWeight = big.NewInt(0)
 
-	return &renewal.Renewal{
+	return &delta.Renewal{
 		ChangeTVL:            changeTVL,
 		ChangeWeight:         changeWeight,
 		QueuedDecrease:       queuedDecrease,
@@ -97,7 +97,7 @@ func (a *Aggregation) Renew() *renewal.Renewal {
 
 // Exit immediately moves all delegation funds to withdrawable state.
 // Called when the validator exits, making all delegations withdrawable regardless of their individual state.
-func (a *Aggregation) Exit() *renewal.Exit {
+func (a *Aggregation) Exit() *delta.Exit {
 	// Return these values to modify contract totals
 	exitedTVL := big.NewInt(0).Set(a.LockedVET)
 	exitedWeight := big.NewInt(0).Set(a.LockedWeight)
@@ -120,7 +120,7 @@ func (a *Aggregation) Exit() *renewal.Exit {
 	// Make all funds withdrawable
 	a.WithdrawableVET = withdrawable
 
-	return &renewal.Exit{
+	return &delta.Exit{
 		ExitedTVL:            exitedTVL,
 		ExitedTVLWeight:      exitedWeight,
 		QueuedDecrease:       queuedDecrease,

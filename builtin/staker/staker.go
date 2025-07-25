@@ -14,8 +14,8 @@ import (
 	"github.com/vechain/thor/v2/builtin/params"
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/builtin/staker/aggregation"
+	"github.com/vechain/thor/v2/builtin/staker/delta"
 	"github.com/vechain/thor/v2/builtin/staker/globalstats"
-	"github.com/vechain/thor/v2/builtin/staker/renewal"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -494,7 +494,7 @@ func (s *Staker) ActivateNextValidator(currentBlk uint32, maxLeaderGroupSize *bi
 		return nil, errors.New("failed to add validator to active list")
 	}
 
-	validatorRenewal := &renewal.Renewal{
+	validatorRenewal := &delta.Renewal{
 		ChangeTVL:            validator.LockedVET,
 		ChangeWeight:         validator.Weight,
 		QueuedDecrease:       validator.LockedVET,
