@@ -113,7 +113,7 @@ func (s *Service) Exit(validationID thor.Address) (*delta.Exit, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	exit := agg.exit()
 
 	if err = s.aggregationStorage.Set(validationID, agg, false); err != nil {
