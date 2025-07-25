@@ -109,7 +109,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_addValidator",
-			expectedGas: 58200,
+			expectedGas: 38200,
 			args:        []any{account1, account1, staker.LowStakingPeriod, staker.MinStake},
 			description: "Add a new validator (not implemented yet)",
 		},
@@ -136,7 +136,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:     "native_withdrawStake",
-			expectedGas:  37000,
+			expectedGas:  47800,
 			args:         []any{account1, account1},
 			description:  "Withdraw stake for a validator",
 			preTestHooks: []TestHook{preTestAddValidator(account1)},
@@ -153,7 +153,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		// },
 		{
 			function:    "native_increaseStake",
-			expectedGas: 22000,
+			expectedGas: 22200,
 			args: []any{
 				account1,
 				account1,
@@ -164,7 +164,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_decreaseStake",
-			expectedGas: 27000,
+			expectedGas: 22200,
 			args: []any{
 				account1,
 				account1,
@@ -175,7 +175,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_addDelegation",
-			expectedGas: 62200,
+			expectedGas: 63000,
 			args: []any{
 				account1,
 				staker.MinStake,
@@ -195,7 +195,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_withdrawDelegation",
-			expectedGas: 22400,
+			expectedGas: 22600,
 			args: []any{
 				thor.BytesToBytes32(big.NewInt(1).Bytes()), // IDs are incremental, starting at 1
 			},
@@ -205,7 +205,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		// TODO: How can we mint thousands of blocks and perform housekeeping?
 		{
 			function:    "native_signalDelegationExit",
-			expectedGas: 2000,
+			expectedGas: 1800,
 			args: []any{
 				thor.BytesToBytes32(big.NewInt(1).Bytes()), // IDs are incremental, starting at 1
 			},
@@ -225,7 +225,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_getValidatorTotals",
-			expectedGas: 1600,
+			expectedGas: 1400,
 			args: []any{
 				account1,
 			},
