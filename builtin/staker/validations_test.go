@@ -2095,14 +2095,14 @@ func TestStaker_GetRewards(t *testing.T) {
 	_, err = staker.validations.ActivateNext(0, staker.params)
 	assert.NoError(t, err)
 
-	amount, err := staker.GetRewards(proposerAddr, 1)
+	amount, err := staker.GetDelegatorRewards(proposerAddr, 1)
 	assert.NoError(t, err)
 	assert.Equal(t, new(big.Int), amount)
 
 	reward := big.NewInt(1000)
-	staker.IncreaseReward(proposerAddr, *reward)
+	staker.IncreaseDelegatorsReward(proposerAddr, reward)
 
-	amount, err = staker.GetRewards(proposerAddr, 1)
+	amount, err = staker.GetDelegatorRewards(proposerAddr, 1)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(1000), amount)
 }
@@ -2231,12 +2231,12 @@ func Test_GetValidatorTotals(t *testing.T) {
 	stake := big.NewInt(0).Set(MinStake)
 
 	validator := validators[0]
-	id1, err := staker.AddDelegation(validator.ID, stake, true, 255)
+	id1, err := staker.AddDelegation(validator.ID, stake, 255)
 	assert.NoError(t, err)
 	assert.False(t, id1.IsZero())
 	aggregation, err := staker.storage.GetAggregation(validator.ID)
 	assert.NoError(t, err)
-	assert.Equal(t, aggregation.PendingRecurringVET, stake)
+	assert.Equal(t, aggregation.PendingVET, stake)
 	delegation, _, err := staker.GetDelegation(id1)
 	assert.NoError(t, err)
 	assert.Equal(t, stake, delegation.Stake)
@@ -2256,7 +2256,7 @@ func Test_GetValidatorTotals(t *testing.T) {
 	fetchedValidator, err := staker.Get(validator.ID)
 	assert.NoError(t, err)
 
-	expectedStake := big.NewInt(0).Add(aggregation.CurrentRecurringVET, aggregation.CurrentOneTimeVET)
+	expectedStake := big.NewInt(0).Set(aggregation.LockedVET)
 	expectedStake.Add(expectedStake, validator.LockedVET)
 
 	assert.Equal(t, expectedStake, totals.TotalLockedStake)

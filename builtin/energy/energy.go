@@ -264,7 +264,7 @@ func (e *Energy) addIssued(issued *big.Int) error {
 type staker interface {
 	LockedVET() (*big.Int, *big.Int, error)
 	HasDelegations(address thor.Address) (bool, error)
-	IncreaseReward(master thor.Address, reward big.Int) error
+	IncreaseDelegatorsReward(master thor.Address, reward *big.Int) error
 }
 
 func (e *Energy) DistributeRewards(beneficiary, signer thor.Address, staker staker) error {
@@ -293,7 +293,11 @@ func (e *Energy) DistributeRewards(beneficiary, signer thor.Address, staker stak
 		if err != nil {
 			return err
 		}
-		if err := e.state.SetEnergy(addr, new(big.Int).Add(addrEng, big.NewInt(0).Sub(reward, proposerReward)), e.blockTime); err != nil {
+		delegationReward := new(big.Int).Sub(reward, proposerReward)
+		if err := staker.IncreaseDelegatorsReward(signer, delegationReward); err != nil {
+			return err
+		}
+		if err := e.state.SetEnergy(addr, new(big.Int).Add(addrEng, delegationReward), e.blockTime); err != nil {
 			return err
 		}
 	}
@@ -311,9 +315,7 @@ func (e *Energy) DistributeRewards(beneficiary, signer thor.Address, staker stak
 	if err := e.addIssued(reward); err != nil {
 		return err
 	}
-	if err := staker.IncreaseReward(signer, *reward); err != nil {
-		return err
-	}
+
 	return nil
 }
 
