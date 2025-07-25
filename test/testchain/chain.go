@@ -177,7 +177,7 @@ func (c *Chain) Contract(addr thor.Address, abi *abi.ABI, acc genesis.DevAccount
 
 // MintClauses creates a transaction with the provided clauses and adds it to the blockchain.
 func (c *Chain) MintClauses(account genesis.DevAccount, clauses []*tx.Clause) error {
-	builer := new(tx.Builder).GasPriceCoef(255).
+	builder := new(tx.Builder).GasPriceCoef(255).
 		BlockRef(tx.NewBlockRef(c.Repo().BestBlockSummary().Header.Number())).
 		Expiration(1000).
 		ChainTag(c.Repo().ChainTag()).
@@ -185,10 +185,10 @@ func (c *Chain) MintClauses(account genesis.DevAccount, clauses []*tx.Clause) er
 		Nonce(rand.Uint64()) //#nosec G404
 
 	for _, clause := range clauses {
-		builer.Clause(clause)
+		builder.Clause(clause)
 	}
 
-	tx := builer.Build()
+	tx := builder.Build()
 	signature, err := crypto.Sign(tx.SigningHash().Bytes(), account.PrivateKey)
 	if err != nil {
 		return fmt.Errorf("unable to sign tx: %w", err)
