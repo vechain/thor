@@ -18,22 +18,23 @@ import (
 var slotAggregations = thor.BytesToBytes32([]byte("aggregated-delegations"))
 
 type Service struct {
-	storage *solidity.Mapping[thor.Address, *Aggregation]
+	aggregationStorage *solidity.Mapping[thor.Address, *Aggregation]
 }
 
 func New(sctx *solidity.Context) *Service {
 	return &Service{
-		storage: solidity.NewMapping[thor.Address, *Aggregation](sctx, slotAggregations),
+		aggregationStorage: solidity.NewMapping[thor.Address, *Aggregation](sctx, slotAggregations),
 	}
 }
 
 func (s *Service) GetAggregation(validationID thor.Address) (*Aggregation, error) {
-	d, err := s.storage.Get(validationID)
+	d, err := s.aggregationStorage.Get(validationID)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get validator aggregation")
 	}
 
 	// never return nil pointer aggregations
+	// should never happen a case where d.LockedVET == nil and d.WithdrawableVET != nil
 	if d == nil || d.LockedVET == nil {
 		d = newAggregation()
 	}
@@ -49,7 +50,7 @@ func (s *Service) AddPendingVET(validationID thor.Address, weight *big.Int, stak
 	agg.PendingVET = big.NewInt(0).Add(agg.PendingVET, stake)
 	agg.PendingWeight = big.NewInt(0).Add(agg.PendingWeight, weight)
 
-	return s.storage.Set(validationID, agg, false)
+	return s.aggregationStorage.Set(validationID, agg, false)
 }
 
 func (s *Service) SubPendingVet(validationID thor.Address, stake *big.Int, weight *big.Int) error {
@@ -61,7 +62,7 @@ func (s *Service) SubPendingVet(validationID thor.Address, stake *big.Int, weigh
 	agg.PendingVET = big.NewInt(0).Sub(agg.PendingVET, stake)
 	agg.PendingWeight = big.NewInt(0).Sub(agg.PendingWeight, weight)
 
-	return s.storage.Set(validationID, agg, false)
+	return s.aggregationStorage.Set(validationID, agg, false)
 }
 
 func (s *Service) SubWithdrawableVET(validationID thor.Address, stake *big.Int) error {
@@ -76,7 +77,7 @@ func (s *Service) SubWithdrawableVET(validationID thor.Address, stake *big.Int) 
 
 	agg.WithdrawableVET = big.NewInt(0).Sub(agg.WithdrawableVET, stake)
 
-	return s.storage.Set(validationID, agg, false)
+	return s.aggregationStorage.Set(validationID, agg, false)
 }
 
 func (s *Service) Renew(validationID thor.Address) (*renewal.Renewal, error) {
@@ -86,7 +87,7 @@ func (s *Service) Renew(validationID thor.Address) (*renewal.Renewal, error) {
 	}
 	renew := agg.Renew()
 
-	if err = s.storage.Set(validationID, agg, false); err != nil {
+	if err = s.aggregationStorage.Set(validationID, agg, false); err != nil {
 		return nil, err
 	}
 
@@ -100,7 +101,7 @@ func (s *Service) Exit(validationID thor.Address) (*renewal.Exit, error) {
 	}
 	exit := agg.Exit()
 
-	if err = s.storage.Set(validationID, agg, false); err != nil {
+	if err = s.aggregationStorage.Set(validationID, agg, false); err != nil {
 		return nil, err
 	}
 
@@ -116,5 +117,5 @@ func (s *Service) SignalExit(id thor.Address) error {
 	agg.ExitingVET = big.NewInt(0).Add(agg.ExitingVET, agg.LockedVET)
 	agg.ExitingWeight = big.NewInt(0).Add(agg.ExitingWeight, agg.LockedWeight)
 
-	return s.storage.Set(id, agg, false)
+	return s.aggregationStorage.Set(id, agg, false)
 }
