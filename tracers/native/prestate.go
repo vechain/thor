@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tracers"
@@ -99,7 +100,7 @@ func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 
 	t.lookupAccount(from)
 	t.lookupAccount(to)
-	t.lookupAccount(env.Context.Coinbase)
+	t.lookupAccount(env.Coinbase)
 	// tracer hooks run before value transfer, no need to touch balance
 	if create {
 		t.contractCreationCount++
@@ -198,7 +199,17 @@ func (t *prestateTracer) CaptureClauseEnd(_ uint64) {
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
-func (t *prestateTracer) CaptureState(_ uint64, op vm.OpCode, _, _ uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, _ []byte, _ int, err error) {
+func (t *prestateTracer) CaptureState(
+	_ uint64,
+	op vm.OpCode,
+	_, _ uint64,
+	memory *vm.Memory,
+	stack *vm.Stack,
+	contract *vm.Contract,
+	_ []byte,
+	_ int,
+	err error,
+) {
 	if err != nil {
 		return
 	}

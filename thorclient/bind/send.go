@@ -14,8 +14,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/test/datagen"
+	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/tx"
 )
@@ -34,6 +36,8 @@ type TxOptions struct {
 	BlockRef *tx.BlockRef
 	// Nonce sets the transaction nonce.
 	Nonce *uint64
+	// DependsOn is an optional transaction ID that this transaction depends on.
+	DependsOn *thor.Bytes32
 }
 
 // SendBuilder is the concrete implementation of SendBuilder.
@@ -136,7 +140,8 @@ func (b *SendBuilder) Submit() (*tx.Transaction, error) {
 		ChainTag(chainTag).
 		Expiration(*opts.Expiration).
 		BlockRef(*opts.BlockRef).
-		Nonce(*opts.Nonce)
+		Nonce(*opts.Nonce).
+		DependsOn(opts.DependsOn)
 
 	switch txType {
 	case tx.TypeLegacy:

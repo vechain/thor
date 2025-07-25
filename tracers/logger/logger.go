@@ -21,17 +21,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"math/big"
 	"strings"
 	"sync/atomic"
-
-	"maps"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/holiman/uint256"
+
 	"github.com/vechain/thor/v2/tracers"
 	"github.com/vechain/thor/v2/vm"
 )
@@ -154,7 +154,17 @@ func (l *StructLogger) CaptureStart(env *vm.EVM, from common.Address, to common.
 // CaptureState logs a new structured log message and pushes it out to the environment
 //
 // CaptureState also tracks SLOAD/SSTORE ops to track storage change.
-func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, rData []byte, depth int, err error) {
+func (l *StructLogger) CaptureState(
+	pc uint64,
+	op vm.OpCode,
+	gas, cost uint64,
+	memory *vm.Memory,
+	stack *vm.Stack,
+	contract *vm.Contract,
+	rData []byte,
+	depth int,
+	err error,
+) {
 	// If tracing was interrupted, set the error and stop
 	if stop := l.interrupt.Load(); stop != nil && stop.(bool) {
 		return
@@ -218,7 +228,16 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, m
 
 // CaptureFault implements the EVMLogger interface to trace an execution fault
 // while running an opcode.
-func (l *StructLogger) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, depth int, err error) {
+func (l *StructLogger) CaptureFault(
+	pc uint64,
+	op vm.OpCode,
+	gas, cost uint64,
+	memory *vm.Memory,
+	stack *vm.Stack,
+	contract *vm.Contract,
+	depth int,
+	err error,
+) {
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.

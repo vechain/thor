@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -62,9 +63,11 @@ func TestAuthority(t *testing.T) {
 		{M(aut.Candidates(&big.Int{}, thor.InitialMaxBlockProposers)), M(
 			[]*Candidate{{p2, p2, thor.Bytes32{}, true}, {p3, p3, thor.Bytes32{}, true}}, nil,
 		)},
-		{M(aut.AllCandidates()), M([]*Candidate{
-			{p2, p2, thor.Bytes32{}, true},
-			{p3, p3, thor.Bytes32{}, true}}, nil),
+		{
+			M(aut.AllCandidates()), M([]*Candidate{
+				{p2, p2, thor.Bytes32{}, true},
+				{p3, p3, thor.Bytes32{}, true},
+			}, nil),
 		},
 		{M(aut.First()), M(&p2, nil)},
 		{M(aut.Next(p2)), M(&p3, nil)},

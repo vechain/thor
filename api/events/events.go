@@ -13,8 +13,9 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
+
 	"github.com/vechain/thor/v2/api"
-	"github.com/vechain/thor/v2/api/utils"
+	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/logdb"
 )
@@ -53,22 +54,22 @@ func (e *Events) filter(ctx context.Context, ef *api.EventFilter) ([]*api.Filter
 
 func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
 	var filter api.EventFilter
-	if err := utils.ParseJSON(req.Body, &filter); err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "body"))
+	if err := restutil.ParseJSON(req.Body, &filter); err != nil {
+		return restutil.BadRequest(errors.WithMessage(err, "body"))
 	}
 	if filter.Options != nil && filter.Options.Limit > e.limit {
-		return utils.Forbidden(fmt.Errorf("options.limit exceeds the maximum allowed value of %d", e.limit))
+		return restutil.Forbidden(fmt.Errorf("options.limit exceeds the maximum allowed value of %d", e.limit))
 	}
 	if filter.Options != nil && filter.Options.Offset > math.MaxInt64 {
-		return utils.BadRequest(fmt.Errorf("options.offset exceeds the maximum allowed value of %d", math.MaxInt64))
+		return restutil.BadRequest(fmt.Errorf("options.offset exceeds the maximum allowed value of %d", math.MaxInt64))
 	}
 	if filter.Range != nil && filter.Range.From != nil && filter.Range.To != nil && *filter.Range.From > *filter.Range.To {
-		return utils.BadRequest(fmt.Errorf("filter.Range.To must be greater than or equal to filter.Range.From"))
+		return restutil.BadRequest(fmt.Errorf("filter.Range.To must be greater than or equal to filter.Range.From"))
 	}
 	// reject null element in CriteriaSet, {} will be unmarshaled to default value and will be accepted/handled by the filter engine
 	for i, criterion := range filter.CriteriaSet {
 		if criterion == nil {
-			return utils.BadRequest(fmt.Errorf("criteriaSet[%d]: null not allowed", i))
+			return restutil.BadRequest(fmt.Errorf("criteriaSet[%d]: null not allowed", i))
 		}
 	}
 	if filter.Options == nil {
@@ -88,10 +89,10 @@ func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
 
 	// ensure the result size is less than the configured limit
 	if len(fes) > int(e.limit) {
-		return utils.Forbidden(fmt.Errorf("the number of filtered logs exceeds the maximum allowed value of %d, please use pagination", e.limit))
+		return restutil.Forbidden(fmt.Errorf("the number of filtered logs exceeds the maximum allowed value of %d, please use pagination", e.limit))
 	}
 
-	return utils.WriteJSON(w, fes)
+	return restutil.WriteJSON(w, fes)
 }
 
 func (e *Events) Mount(root *mux.Router, pathPrefix string) {
@@ -100,5 +101,5 @@ func (e *Events) Mount(root *mux.Router, pathPrefix string) {
 	sub.Path("").
 		Methods(http.MethodPost).
 		Name("POST /logs/event").
-		HandlerFunc(utils.WrapHandlerFunc(e.handleFilter))
+		HandlerFunc(restutil.WrapHandlerFunc(e.handleFilter))
 }

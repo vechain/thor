@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -41,7 +42,17 @@ func TestBandwithUpdate(t *testing.T) {
 		lock:  sync.Mutex{},
 	}
 
-	block := new(block.Builder).ParentID(thor.Bytes32{1}).Timestamp(1).GasLimit(100000).Beneficiary(thor.Address{1}).GasUsed(11234).TotalScore(1).StateRoot(thor.Bytes32{1}).ReceiptsRoot(thor.Bytes32{1}).Build()
+	block := new(
+		block.Builder,
+	).ParentID(thor.Bytes32{1}).
+		Timestamp(1).
+		GasLimit(100000).
+		Beneficiary(thor.Address{1}).
+		GasUsed(11234).
+		TotalScore(1).
+		StateRoot(thor.Bytes32{1}).
+		ReceiptsRoot(thor.Bytes32{1}).
+		Build()
 	header := block.Header()
 
 	bandwidth.Update(header, 1)
@@ -56,7 +67,17 @@ func TestBandwidthSuggestGasLimit(t *testing.T) {
 		lock:  sync.Mutex{},
 	}
 
-	block := new(block.Builder).ParentID(thor.Bytes32{1}).Timestamp(1).GasLimit(100000).Beneficiary(thor.Address{1}).GasUsed(11234).TotalScore(1).StateRoot(thor.Bytes32{1}).ReceiptsRoot(thor.Bytes32{1}).Build()
+	block := new(
+		block.Builder,
+	).ParentID(thor.Bytes32{1}).
+		Timestamp(1).
+		GasLimit(100000).
+		Beneficiary(thor.Address{1}).
+		GasUsed(11234).
+		TotalScore(1).
+		StateRoot(thor.Bytes32{1}).
+		ReceiptsRoot(thor.Bytes32{1}).
+		Build()
 	header := block.Header()
 	bandwidth.Update(header, 1)
 	val := bandwidth.SuggestGasLimit()

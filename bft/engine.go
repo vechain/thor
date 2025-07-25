@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 
 	"github.com/pkg/errors"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/cache"
@@ -302,7 +303,7 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 	)
 
 	if entry := engine.caches.justifier.Remove(header.ParentID()); !isCheckPoint(header.Number()) && entry != nil {
-		js = (entry.Entry.Value).(*justifier)
+		js = (entry.Value).(*justifier)
 		end = header.Number()
 	} else {
 		var err error
@@ -314,11 +315,7 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 	}
 
 	h := header
-	for {
-		if h.Number() < engine.forkConfig.FINALITY {
-			break
-		}
-
+	for h.Number() >= engine.forkConfig.FINALITY {
 		signer, _ := h.Signer()
 
 		var parentBlockSummary *chain.BlockSummary

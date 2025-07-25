@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
@@ -260,7 +261,12 @@ func (c *Chain) ClauseCall(account genesis.DevAccount, trx *tx.Transaction, clau
 		return nil, 0, err
 	}
 	st := state.New(c.db, trie.Root{Hash: summary.Header.StateRoot(), Ver: trie.Version{Major: summary.Header.Number()}})
-	rt := runtime.New(ch, st, &xenv.BlockContext{Number: summary.Header.Number(), Time: summary.Header.Timestamp(), TotalScore: summary.Header.TotalScore(), Signer: account.Address}, c.forkConfig)
+	rt := runtime.New(
+		ch,
+		st,
+		&xenv.BlockContext{Number: summary.Header.Number(), Time: summary.Header.Timestamp(), TotalScore: summary.Header.TotalScore(), Signer: account.Address},
+		c.forkConfig,
+	)
 	maxGas := uint64(math.MaxUint32)
 	exec, _ := rt.PrepareClause(trx.Clauses()[clauseIdx],
 		0, maxGas, &xenv.TransactionContext{
@@ -270,7 +276,8 @@ func (c *Chain) ClauseCall(account genesis.DevAccount, trx *tx.Transaction, clau
 			GasPayer:   account.Address,
 			ProvedWork: trx.UnprovedWork(),
 			BlockRef:   trx.BlockRef(),
-			Expiration: trx.Expiration()})
+			Expiration: trx.Expiration(),
+		})
 
 	out, _, err := exec()
 	if err != nil {
