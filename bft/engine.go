@@ -329,17 +329,17 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 			state := engine.stater.NewState(parentBlockSummary.Root())
 			staker := builtin.Staker.Native(state)
 
-			_, err := staker.IsPoSActive()
-			if err != nil {
-				// PoS is not active yet
-				js.AddBlock(signer, h.COM(), nil)
-			} else {
+			var weight *big.Int
+			if posActive, _ := staker.IsPoSActive(); posActive {
+				// PoS is active, get validator weight
 				validator, err := staker.Get(signer)
 				if err != nil {
 					return nil, err
 				}
-				js.AddBlock(signer, h.COM(), validator.Weight)
+				weight = validator.Weight
 			}
+			// If PoS is not active or error occurred, weight remains nil
+			js.AddBlock(signer, h.COM(), weight)
 		} else {
 			js.AddBlock(signer, h.COM(), nil)
 		}
