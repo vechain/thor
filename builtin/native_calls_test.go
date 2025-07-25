@@ -560,6 +560,7 @@ func TestEnergyNative(t *testing.T) {
 
 	fc := &thor.SoloFork
 	fc.HAYABUSA = 4
+	fc.HAYABUSA_TP = 1
 	thorChain, _ = testchain.NewWithFork(fc)
 
 	var stringOutput string
@@ -1930,6 +1931,8 @@ func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
 
 func TestExtensionV3(t *testing.T) {
 	fc := thor.SoloFork
+	fc.HAYABUSA = 1
+	fc.HAYABUSA_TP = 1
 	chain, err := testchain.NewWithFork(&fc)
 	assert.Nil(t, err)
 

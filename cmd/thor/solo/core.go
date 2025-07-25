@@ -70,6 +70,13 @@ func (c *Core) Pack(pendingTxs tx.Transactions, onDemand bool) ([]*tx.Transactio
 	now := uint64(time.Now().Unix())
 
 	var txsToRemove []*tx.Transaction
+	txs, err := c.ForkTransactions(best)
+	if err != nil {
+		return nil, errors.WithMessage(err, "fork transactions")
+	}
+	for _, tx := range pendingTxs {
+		txs = append(txs, tx)
+	}
 
 	if c.options.GasLimit == 0 {
 		suggested := c.bandwidth.SuggestGasLimit()
@@ -82,7 +89,7 @@ func (c *Core) Pack(pendingTxs tx.Transactions, onDemand bool) ([]*tx.Transactio
 	}
 
 	startTime := mclock.Now()
-	for _, tx := range pendingTxs {
+	for _, tx := range txs {
 		if err := flow.Adopt(tx); err != nil {
 			if packer.IsGasLimitReached(err) {
 				break
