@@ -74,15 +74,14 @@ func (engine *Engine) newJustifier(parentID thor.Bytes32) (*justifier, error) {
 		}
 	}
 
-	// When the checkpoint is greater than 0, last of parent round is checkpoint - 1
 	state := engine.stater.NewState(sum.Root())
 	staker := builtin.Staker.Native(state)
-	hayabusaActive, err := staker.IsPoSActive()
+	posActive, err := staker.IsPoSActive()
 	if err != nil {
 		return nil, err
 	}
 
-	if hayabusaActive {
+	if posActive {
 		totalWeight, err := engine.getTotalWeight(sum)
 		if err != nil {
 			return nil, err
