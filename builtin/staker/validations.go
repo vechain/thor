@@ -9,7 +9,6 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/vechain/thor/v2/builtin/params"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -109,13 +108,6 @@ func (v *validations) Add(
 		Weight:             big.NewInt(0),
 	}
 
-	if err := v.storage.queuedVET.Add(stake); err != nil {
-		return err
-	}
-	if err := v.storage.queuedWeight.Add(big.NewInt(0).Mul(stake, validatorWeightMultiplier)); err != nil {
-		return err
-	}
-
 	added, err := v.validatorQueue.Add(node, entry)
 	if err != nil {
 		return err
@@ -124,94 +116,35 @@ func (v *validations) Add(
 		return errors.New("failed to add validator to queue")
 	}
 
-	if err := v.storage.SetAggregation(node, newAggregation(), true); err != nil {
-		return err
-	}
-
 	return nil
 }
 
-func (v *validations) ActivateNext(
-	currentBlock uint32,
-	params *params.Params,
-) (*thor.Address, error) {
+func (v *validations) NextToActivate(maxLeaderGroupSize *big.Int) (*thor.Address, *Validation, error) {
 	leaderGroupLength, err := v.leaderGroup.Len()
 	if err != nil {
-		return nil, err
-	}
-	maxLeaderGroupSize, err := params.Get(thor.KeyMaxBlockProposers)
-	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if leaderGroupLength.Cmp(maxLeaderGroupSize) >= 0 {
-		return nil, errors.New("leader group is full")
+		return nil, nil, errors.New("leader group is full")
 	}
 	// Check if queue is empty
 	queuedSize, err := v.validatorQueue.Len()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if queuedSize.Cmp(big.NewInt(0)) <= 0 {
-		return nil, errors.New("no validator in the queue")
+		return nil, nil, errors.New("no validator in the queue")
 	}
 	// pop the head of the queue
 	id, validator, err := v.validatorQueue.Pop()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if validator.IsEmpty() {
-		return nil, errors.New("no validator in the queue")
-	}
-	aggregation, err := v.storage.GetAggregation(id)
-	if err != nil {
-		return nil, err
+		return nil, nil, errors.New("no validator in the queue")
 	}
 
-	logger.Debug("activating validator", "id", id, "block", currentBlock)
-
-	// update the validator
-	validatorLocked := big.NewInt(0).Add(validator.LockedVET, validator.PendingLocked)
-	validator.PendingLocked = big.NewInt(0)
-	validator.LockedVET = validatorLocked
-	// x2 multiplier for validator's stake
-	validatorWeight := big.NewInt(0).Mul(validatorLocked, validatorWeightMultiplier)
-
-	renewal := aggregation.Renew()
-	if err := v.storage.SetAggregation(id, aggregation, false); err != nil {
-		return nil, err
-	}
-
-	validator.Weight = big.NewInt(0).Add(validatorWeight, renewal.ChangeWeight)
-	totalLocked := big.NewInt(0).Add(validatorLocked, renewal.ChangeTVL)
-	queuedDecrease := big.NewInt(0).Add(validatorLocked, renewal.QueuedDecrease)
-
-	if err := v.storage.lockedVET.Add(totalLocked); err != nil {
-		return nil, err
-	}
-	if err := v.storage.lockedWeight.Add(validator.Weight); err != nil {
-		return nil, err
-	}
-
-	if err := v.storage.queuedVET.Sub(queuedDecrease); err != nil {
-		return nil, err
-	}
-	if err := v.storage.queuedWeight.Sub(validator.Weight); err != nil {
-		return nil, err
-	}
-
-	validator.Status = StatusActive
-	validator.Online = true
-	validator.StartBlock = currentBlock
-	// add to the active list
-	added, err := v.leaderGroup.Add(id, validator)
-	if err != nil {
-		return nil, err
-	}
-	if !added {
-		return nil, errors.New("failed to add validator to active list")
-	}
-
-	return &id, nil
+	return &id, validator, nil
 }
 
 func (v *validations) SignalExit(endorsor thor.Address, id thor.Address) error {
@@ -276,26 +209,8 @@ func (v *validations) IncreaseStake(id thor.Address, endorsor thor.Address, amou
 	if entry.Status == StatusActive && entry.ExitBlock != nil {
 		return errors.New("validator has signaled exit, cannot increase stake")
 	}
-	aggregation, err := v.storage.GetAggregation(id)
-	if err != nil {
-		return err
-	}
-	validatorTVL := entry.NextPeriodTVL()
-	delegationTVL := aggregation.NextPeriodTVL()
-	nextPeriodTVL := big.NewInt(0).Add(validatorTVL, delegationTVL)
-	newTVL := big.NewInt(0).Add(nextPeriodTVL, amount)
-
-	if newTVL.Cmp(MaxStake) > 0 {
-		return errors.New("stake is out of range")
-	}
 
 	entry.PendingLocked = big.NewInt(0).Add(amount, entry.PendingLocked)
-	if err := v.storage.queuedVET.Add(amount); err != nil {
-		return err
-	}
-	if err := v.storage.queuedWeight.Add(big.NewInt(0).Mul(amount, validatorWeightMultiplier)); err != nil {
-		return err
-	}
 
 	return v.storage.SetValidation(id, entry, false)
 }
@@ -318,11 +233,6 @@ func (v *validations) DecreaseStake(id thor.Address, endorsor thor.Address, amou
 		return errors.New("validator has signaled exit, cannot decrease stake")
 	}
 
-	aggregation, err := v.storage.GetAggregation(id)
-	if err != nil {
-		return err
-	}
-
 	if entry.Status == StatusActive {
 		// We don't consider any increases, i.e., entry.PendingLocked. We only consider locked and current decreases.
 		// The reason is that validator can instantly withdraw PendingLocked at any time.
@@ -343,16 +253,6 @@ func (v *validations) DecreaseStake(id thor.Address, endorsor thor.Address, amou
 		}
 		entry.PendingLocked = big.NewInt(0).Sub(entry.PendingLocked, amount)
 		entry.WithdrawableVET = big.NewInt(0).Add(entry.WithdrawableVET, amount)
-		if err := v.storage.queuedVET.Sub(amount); err != nil {
-			return err
-		}
-		if err := v.storage.queuedWeight.Sub(big.NewInt(0).Mul(amount, validatorWeightMultiplier)); err != nil {
-			return err
-		}
-	}
-	err = v.storage.SetAggregation(id, aggregation, false)
-	if err != nil {
-		return err
 	}
 
 	return v.storage.SetValidation(id, entry, false)
@@ -418,50 +318,38 @@ func (v *validations) GetWithdrawable(id thor.Address, currentBlock uint32) (*Va
 }
 
 // ExitValidator removes the validator from the active list and puts it in cooldown.
-func (v *validations) ExitValidator(id thor.Address) error {
+func (v *validations) ExitValidator(id thor.Address) (*big.Int, *big.Int, error) {
 	entry, err := v.storage.GetValidation(id)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	if entry.IsEmpty() {
-		return nil
+		return nil, nil, nil
 	}
+
+	onCoolDownTVL := big.NewInt(0).Set(entry.LockedVET)
+	onCoolDownTVLWeight := big.NewInt(0).Set(entry.Weight)
+
 	// move locked to cooldown
 	entry.Status = StatusExit
 	entry.CooldownVET = big.NewInt(0).Set(entry.LockedVET)
 	entry.LockedVET = big.NewInt(0)
 	entry.NextPeriodDecrease = big.NewInt(0)
-	// unlock delegator's stakes and remove their weight
-	entry.CompleteIterations++
+	entry.Weight = big.NewInt(0)
 
+	// unlock pending stake
 	if entry.PendingLocked.Sign() == 1 {
+		onCoolDownTVL = big.NewInt(0).Add(onCoolDownTVL, entry.PendingLocked)
+		// pending never contributes to weight as it's not active
+
 		entry.WithdrawableVET = big.NewInt(0).Add(entry.WithdrawableVET, entry.PendingLocked)
 		entry.PendingLocked = big.NewInt(0)
 	}
 
-	aggregation, err := v.storage.GetAggregation(id)
-	if err != nil {
-		return err
-	}
-	exitedTVL, queuedDecrease, exitedWeight, queuedWeightDecrease := aggregation.Exit()
-	if err := v.storage.SetAggregation(id, aggregation, false); err != nil {
-		return err
-	}
-	exitedTVL.Add(exitedTVL, entry.CooldownVET)
-	weight := big.NewInt(0).Sub(entry.Weight, exitedWeight)
-	entry.Weight = big.NewInt(0)
-
-	if err := v.storage.queuedWeight.Sub(queuedWeightDecrease); err != nil {
-		return err
-	}
-	if err := v.storage.queuedVET.Sub(queuedDecrease); err != nil {
-		return err
-	}
-	if err := v.storage.lockedVET.Sub(exitedTVL); err != nil {
-		return err
-	}
+	entry.CompleteIterations++
 	if _, err = v.leaderGroup.Remove(id, entry); err != nil {
-		return err
+		return nil, nil, err
 	}
-	return v.storage.lockedWeight.Sub(weight)
+
+	return onCoolDownTVL, onCoolDownTVLWeight, nil
 }
