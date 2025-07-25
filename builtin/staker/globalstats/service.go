@@ -54,21 +54,18 @@ func (s *Service) QueuedStake() (*big.Int, *big.Int, error) {
 // Called when validators are activated or delegations move between states.
 func (s *Service) UpdateTotals(validatorRenewal *delta.Renewal, delegatorRenewal *delta.Renewal) error {
 	// calculate the new totals for validator + delegations
-	changeTVL := big.NewInt(0).Add(validatorRenewal.ChangeTVL, delegatorRenewal.ChangeTVL)
-	changeWeight := big.NewInt(0).Add(validatorRenewal.ChangeWeight, delegatorRenewal.ChangeWeight)
-	queuedDecrease := big.NewInt(0).Add(validatorRenewal.QueuedDecrease, delegatorRenewal.QueuedDecrease)
-	queuedWeight := big.NewInt(0).Add(validatorRenewal.QueuedDecreaseWeight, delegatorRenewal.QueuedDecreaseWeight)
+	renewal := validatorRenewal.AddRenewals(*delegatorRenewal)
 
-	if err := s.lockedVET.Add(changeTVL); err != nil {
+	if err := s.lockedVET.Add(renewal.ChangeTVL); err != nil {
 		return err
 	}
-	if err := s.lockedWeight.Add(changeWeight); err != nil {
+	if err := s.lockedWeight.Add(renewal.ChangeWeight); err != nil {
 		return err
 	}
-	if err := s.queuedVET.Sub(queuedDecrease); err != nil {
+	if err := s.queuedVET.Sub(renewal.QueuedDecrease); err != nil {
 		return err
 	}
-	if err := s.queuedWeight.Sub(queuedWeight); err != nil {
+	if err := s.queuedWeight.Sub(renewal.QueuedDecreaseWeight); err != nil {
 		return err
 	}
 

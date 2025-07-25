@@ -10,6 +10,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/vechain/thor/v2/builtin/staker/delta"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -26,6 +27,20 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Address]*Validat
 	hasUpdates := false
 	validatorExitID := thor.Address{}
 	activeValidators := make(map[thor.Address]*Validation)
+
+	// accumulated validator and delegator renewals
+	validatorsRenewal := &delta.Renewal{
+		ChangeTVL:            big.NewInt(0),
+		ChangeWeight:         big.NewInt(0),
+		QueuedDecrease:       big.NewInt(0),
+		QueuedDecreaseWeight: big.NewInt(0),
+	}
+	delegatorsRenewal := &delta.Renewal{
+		ChangeTVL:            big.NewInt(0),
+		ChangeWeight:         big.NewInt(0),
+		QueuedDecrease:       big.NewInt(0),
+		QueuedDecreaseWeight: big.NewInt(0),
+	}
 
 	iteratorLeaderGroup := func(validationID thor.Address, entry *Validation) error {
 		if entry.ExitBlock != nil && currentBlock == *entry.ExitBlock {
@@ -46,7 +61,7 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Address]*Validat
 		}
 
 		// validator has auto renew enabled and is due for renewal
-		if err := s.performRenewalUpdates(validationID, entry); err != nil {
+		if err := s.performRenewalUpdates(validationID, entry, validatorsRenewal, delegatorsRenewal); err != nil {
 			return err
 		}
 		hasUpdates = true
@@ -56,6 +71,11 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Address]*Validat
 
 	// perform the iteration
 	if err := s.validations.LeaderGroupIterator(iteratorLeaderGroup); err != nil {
+		return false, nil, err
+	}
+
+	// update all at once
+	if err := s.globalStatsService.UpdateTotals(validatorsRenewal, delegatorsRenewal); err != nil {
 		return false, nil, err
 	}
 
@@ -106,7 +126,12 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Address]*Validat
 	return hasUpdates, nil, nil
 }
 
-func (s *Staker) performRenewalUpdates(validationID thor.Address, validator *Validation) error {
+func (s *Staker) performRenewalUpdates(
+	validationID thor.Address,
+	validator *Validation,
+	validatorsRenewal *delta.Renewal,
+	delegatorsRenewal *delta.Renewal,
+) error {
 	// renew the validator & delegations
 	validatorRenewal := validator.Renew()
 	// todo make this decoupled from the delegations
@@ -115,9 +140,8 @@ func (s *Staker) performRenewalUpdates(validationID thor.Address, validator *Val
 		return err
 	}
 
-	if err = s.globalStatsService.UpdateTotals(validatorRenewal, delegationsRenewal); err != nil {
-		return err
-	}
+	validatorsRenewal.AddRenewals(*validatorRenewal)
+	delegatorsRenewal.AddRenewals(*delegationsRenewal)
 
 	// calculate the new weight for validator + delegations and weights
 	changeWeight := big.NewInt(0).Add(validatorRenewal.ChangeWeight, delegationsRenewal.ChangeWeight)

@@ -20,3 +20,11 @@ type Exit struct {
 	QueuedDecrease       *big.Int
 	QueuedDecreaseWeight *big.Int
 }
+
+func (r *Renewal) AddRenewals(right Renewal) Renewal {
+	r.ChangeTVL = big.NewInt(0).Add(r.ChangeTVL, right.ChangeTVL)
+	r.ChangeWeight = big.NewInt(0).Add(r.ChangeWeight, right.ChangeWeight)
+	r.QueuedDecrease = big.NewInt(0).Add(r.QueuedDecrease, right.QueuedDecrease)
+	r.QueuedDecreaseWeight = big.NewInt(0).Add(r.QueuedDecreaseWeight, right.QueuedDecreaseWeight)
+	return *r
+}
