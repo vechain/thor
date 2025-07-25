@@ -363,7 +363,10 @@ func (s *Staker) SignalDelegationExit(delegationID thor.Bytes32) error {
 		return err
 	}
 
-	err = s.aggregationService.SignalExit(delegation.ValidationID)
+	// Calculate the specific delegation's stake and weight
+	delegationWeight := delegation.CalcWeight()
+
+	err = s.aggregationService.SignalExit(delegation.ValidationID, delegation.Stake, delegationWeight)
 	if err != nil {
 		return err
 	}

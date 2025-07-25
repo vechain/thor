@@ -125,14 +125,16 @@ func (s *Service) Exit(validationID thor.Address) (*delta.Exit, error) {
 
 // SignalExit marks locked delegations as exiting for the next period.
 // Called when a validator signals intent to exit but hasn't exited yet.
-func (s *Service) SignalExit(id thor.Address) error {
-	agg, err := s.GetAggregation(id)
+func (s *Service) SignalExit(validationID thor.Address, exitingStake *big.Int, exitingWeight *big.Int) error {
+	agg, err := s.GetAggregation(validationID)
 	if err != nil {
 		return err
 	}
 
-	agg.ExitingVET = big.NewInt(0).Add(agg.ExitingVET, agg.LockedVET)
-	agg.ExitingWeight = big.NewInt(0).Add(agg.ExitingWeight, agg.LockedWeight)
+	// Only move to exiting pools - don't subtract from locked yet
+	// The subtraction happens during renewal
+	agg.ExitingVET = big.NewInt(0).Add(agg.ExitingVET, exitingStake)
+	agg.ExitingWeight = big.NewInt(0).Add(agg.ExitingWeight, exitingWeight)
 
-	return s.aggregationStorage.Set(id, agg, false)
+	return s.aggregationStorage.Set(validationID, agg, false)
 }
