@@ -21,7 +21,7 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Address]*Validat
 		return false, nil, nil
 	}
 
-	logger.Info("performing housekeeping", "block", currentBlock)
+	logger.Info("🏠performing housekeeping", "block", currentBlock)
 
 	hasUpdates := false
 	validatorExitID := thor.Address{}

@@ -178,12 +178,12 @@ func (s *Staker) AddValidator(master thor.Address, stake *big.Int, period uint32
 	return s.contract.Method("addValidator", master, period).WithValue(stake)
 }
 
-func (s *Staker) AddDelegation(validationID thor.Address, stake *big.Int, autoRenew bool, multiplier uint8) *bind.MethodBuilder {
-	return s.contract.Method("addDelegation", validationID, autoRenew, multiplier).WithValue(stake)
+func (s *Staker) AddDelegation(validationID thor.Address, stake *big.Int, multiplier uint8) *bind.MethodBuilder {
+	return s.contract.Method("addDelegation", validationID, multiplier).WithValue(stake)
 }
 
-func (s *Staker) UpdateDelegationAutoRenew(delegationID thor.Bytes32, autoRenew bool) *bind.MethodBuilder {
-	return s.contract.Method("updateDelegationAutoRenew", delegationID, autoRenew)
+func (s *Staker) SignalDelegationExit(delegationID thor.Bytes32) *bind.MethodBuilder {
+	return s.contract.Method("signalDelegationExit", delegationID)
 }
 
 func (s *Staker) SignalExit(validationID thor.Address) *bind.MethodBuilder {
@@ -214,9 +214,9 @@ func (s *Staker) GetWithdrawable(validationID thor.Address) (*big.Int, error) {
 	return out, nil
 }
 
-func (s *Staker) GetRewards(validatorID thor.Address, period uint32) (*big.Int, error) {
+func (s *Staker) GetDelegatorsRewards(validatorID thor.Address, period uint32) (*big.Int, error) {
 	out := new(big.Int)
-	if err := s.contract.Method("getRewards", validatorID, period).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
+	if err := s.contract.Method("getDelegatorsRewards", validatorID, period).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -236,7 +236,6 @@ type Delegation struct {
 	StartPeriod  uint32
 	EndPeriod    uint32
 	Multiplier   uint8
-	AutoRenew    bool
 	Locked       bool
 }
 
@@ -248,7 +247,6 @@ func (s *Staker) GetDelegation(delegationID thor.Bytes32) (*Delegation, error) {
 	out[3] = new(uint32)
 	out[4] = new(uint8)
 	out[5] = new(bool)
-	out[6] = new(bool)
 	if err := s.contract.Method("getDelegation", delegationID).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, err
 	}
@@ -258,8 +256,7 @@ func (s *Staker) GetDelegation(delegationID thor.Bytes32) (*Delegation, error) {
 		StartPeriod:  *(out[2].(*uint32)),
 		EndPeriod:    *(out[3].(*uint32)),
 		Multiplier:   *(out[4].(*uint8)),
-		AutoRenew:    *(out[5].(*bool)),
-		Locked:       *(out[6].(*bool)),
+		Locked:       *(out[5].(*bool)),
 	}
 
 	return delegatorInfo, nil
@@ -297,7 +294,6 @@ type ValidatorQueuedEvent struct {
 	ValidationID thor.Address
 	Stake        *big.Int
 	Period       uint32
-	AutoRenew    bool
 	Log          api.FilteredEvent
 }
 
@@ -321,7 +317,6 @@ func (s *Staker) FilterValidatorQueued(eventsRange *api.Range, opts *api.Options
 		data := make([]any, 3)
 		data[0] = new(uint32)
 		data[1] = new(*big.Int)
-		data[2] = new(bool)
 
 		bytes, err := hexutil.Decode(log.Data)
 		if err != nil {
@@ -338,7 +333,6 @@ func (s *Staker) FilterValidatorQueued(eventsRange *api.Range, opts *api.Options
 			ValidationID: master,
 			Period:       *(data[0].(*uint32)),
 			Stake:        *(data[1].(**big.Int)),
-			AutoRenew:    *(data[2].(*bool)),
 			Log:          log,
 		}
 	}
@@ -377,7 +371,6 @@ type DelegationAddedEvent struct {
 	ValidationID thor.Bytes32
 	DelegationID thor.Bytes32
 	Stake        *big.Int
-	AutoRenew    bool
 	Multiplier   uint8
 	Log          api.FilteredEvent
 }
@@ -401,8 +394,7 @@ func (s *Staker) FilterDelegationAdded(eventsRange *api.Range, opts *api.Options
 		// non-indexed
 		data := make([]any, 4)
 		data[0] = new(*big.Int)
-		data[1] = new(bool)
-		data[2] = new(uint8)
+		data[1] = new(uint8)
 
 		bytes, err := hexutil.Decode(log.Data)
 		if err != nil {
@@ -417,8 +409,7 @@ func (s *Staker) FilterDelegationAdded(eventsRange *api.Range, opts *api.Options
 			ValidationID: validationID,
 			DelegationID: delegationID,
 			Stake:        *(data[0].(**big.Int)),
-			AutoRenew:    *(data[1].(*bool)),
-			Multiplier:   *(data[2].(*uint8)),
+			Multiplier:   *(data[1].(*uint8)),
 			Log:          log,
 		}
 	}
@@ -426,43 +417,22 @@ func (s *Staker) FilterDelegationAdded(eventsRange *api.Range, opts *api.Options
 	return out, nil
 }
 
-type DelegationUpdatedAutoRenewEvent struct {
+type DelegationSignaledExitEvent struct {
 	DelegationID thor.Bytes32
-	AutoRenew    bool
 	Log          api.FilteredEvent
 }
 
-func (s *Staker) FilterDelegationUpdatedAutoRenew(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]DelegationUpdatedAutoRenewEvent, error) {
-	event, ok := s.contract.ABI().Events["DelegationUpdatedAutoRenew"]
-	if !ok {
-		return nil, fmt.Errorf("event not found")
-	}
-
-	raw, err := s.contract.FilterEvent("DelegationUpdatedAutoRenew").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+func (s *Staker) FilterDelegationSignaledExit(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]DelegationSignaledExitEvent, error) {
+	raw, err := s.contract.FilterEvent("DelegationSignaledExit").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}
 
-	out := make([]DelegationUpdatedAutoRenewEvent, len(raw))
+	out := make([]DelegationSignaledExitEvent, len(raw))
 	for i, log := range raw {
-		delegationID := thor.Bytes32(log.Topics[1][:])
-
-		// non-indexed
-		data := make([]any, 1)
-		data[0] = new(bool)
-
-		bytes, err := hexutil.Decode(log.Data)
-		if err != nil {
-			return nil, err
-		}
-
-		if err := event.Inputs.Unpack(&data, bytes); err != nil {
-			return nil, err
-		}
-
-		out[i] = DelegationUpdatedAutoRenewEvent{
+		delegationID := thor.Bytes32(log.Topics[1][:]) // indexed
+		out[i] = DelegationSignaledExitEvent{
 			DelegationID: delegationID,
-			AutoRenew:    *(data[0].(*bool)),
 			Log:          log,
 		}
 	}

@@ -5,6 +5,7 @@
 package bft
 
 import (
+	"math/big"
 	"sort"
 	"sync/atomic"
 
@@ -305,7 +306,6 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 		js = (entry.Value).(*justifier)
 		end = header.Number()
 	} else {
-		// create a new vote set if cache missed or new block is checkpoint
 		var err error
 		js, err = engine.newJustifier(header.ParentID())
 		if err != nil {
@@ -317,17 +317,45 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 	h := header
 	for h.Number() >= engine.forkConfig.FINALITY {
 		signer, _ := h.Signer()
-		js.AddBlock(signer, h.COM())
+
+		var parentBlockSummary *chain.BlockSummary
+		var err error
+
+		if h.Number() > engine.forkConfig.HAYABUSA+engine.forkConfig.HAYABUSA_TP {
+			parentBlockSummary, err = engine.repo.GetBlockSummary(h.ParentID())
+			if err != nil {
+				return nil, err
+			}
+			state := engine.stater.NewState(parentBlockSummary.Root())
+			staker := builtin.Staker.Native(state)
+
+			var weight *big.Int
+			if posActive, _ := staker.IsPoSActive(); posActive {
+				// PoS is active, get validator weight
+				validator, err := staker.Get(signer)
+				if err != nil {
+					return nil, err
+				}
+				weight = validator.Weight
+			}
+			// If PoS is not active or error occurred, weight remains nil
+			js.AddBlock(signer, h.COM(), weight)
+		} else {
+			js.AddBlock(signer, h.COM(), nil)
+		}
 
 		if h.Number() <= end {
 			break
 		}
 
-		sum, err := engine.repo.GetBlockSummary(h.ParentID())
-		if err != nil {
-			return nil, err
+		if parentBlockSummary == nil {
+			parentBlockSummary, err = engine.repo.GetBlockSummary(h.ParentID())
+			if err != nil {
+				return nil, err
+			}
 		}
-		h = sum.Header
+
+		h = parentBlockSummary.Header
 	}
 
 	st := js.Summarize()
@@ -388,6 +416,23 @@ func (engine *Engine) findCheckpointByQuality(target uint32, finalized, headID t
 	return c.GetBlockID(searchStart + uint32(num)*thor.CheckpointInterval)
 }
 
+func (engine *Engine) getTotalWeight(sum *chain.BlockSummary) (*big.Int, error) {
+	state := engine.stater.NewState(sum.Root())
+	staker := builtin.Staker.Native(state)
+
+	// Get total weight including delegations
+	_, totalWeight, err := staker.LockedVET()
+	if err != nil {
+		return nil, err
+	}
+
+	if totalWeight == nil || totalWeight.Sign() == 0 {
+		return nil, errors.New("total weight is zero or nil")
+	}
+
+	return totalWeight, nil
+}
+
 func (engine *Engine) getMaxBlockProposers(sum *chain.BlockSummary) (uint64, error) {
 	state := engine.stater.NewState(sum.Root())
 	params, err := builtin.Params.Native(state).Get(thor.KeyMaxBlockProposers)
@@ -398,7 +443,6 @@ func (engine *Engine) getMaxBlockProposers(sum *chain.BlockSummary) (uint64, err
 	if mbp == 0 || mbp > thor.InitialMaxBlockProposers {
 		mbp = thor.InitialMaxBlockProposers
 	}
-
 	return mbp, nil
 }
 
