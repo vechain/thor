@@ -14,11 +14,39 @@ import (
 
 	"github.com/vechain/thor/v2/builtin/gascharger"
 	"github.com/vechain/thor/v2/builtin/staker"
+	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/xenv"
 )
 
+// The stargate pause switch at binary position 0. (binary: 1 0 [1])
+func IsStargatePaused(state *state.State, charger *gascharger.Charger) (bool, error) {
+	charger.Charge(thor.SloadGas)
+	switches, err := Params.Native(state).Get(thor.KeyStargateSwitches)
+	if err != nil {
+		return false, err
+	}
+	if switches == nil {
+		return false, nil
+	}
+	return switches.Bit(0) == 1, nil
+}
+
+// The staker pause switch at binary position 1. (binary: 1 [1] 0)
+func IsStakerPaused(state *state.State, charger *gascharger.Charger) (bool, error) {
+	charger.Charge(thor.SloadGas)
+	switches, err := Params.Native(state).Get(thor.KeyStargateSwitches)
+	if err != nil {
+		return false, err
+	}
+	if switches == nil {
+		return false, nil
+	}
+	return switches.Bit(1) == 1, nil
+}
+
 func init() {
+
 	defines := []struct {
 		name string
 		run  func(env *xenv.Environment) []any
@@ -135,6 +163,15 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
+			isPaused, sp_err := IsStakerPaused(env.State(), charger)
+			if sp_err != nil {
+				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", sp_err)}
+			}
+
+			if isPaused {
+				return []any{thor.Bytes32{}, "revert: staker is paused"}
+			}
+
 			stake, err := Staker.NativeMetered(env.State(), charger).WithdrawStake(
 				thor.Address(args.Endorsor),
 				thor.Address(args.ValidationID),
@@ -155,6 +192,15 @@ func init() {
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
+
+			isPaused, sp_err := IsStakerPaused(env.State(), charger)
+			if sp_err != nil {
+				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", sp_err)}
+			}
+
+			if isPaused {
+				return []any{thor.Bytes32{}, "revert: staker is paused"}
+			}
 
 			isPoSActive, err := Staker.NativeMetered(env.State(), charger).IsPoSActive()
 			if err != nil {
@@ -216,12 +262,22 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
+			isPaused, sp_err := IsStakerPaused(env.State(), charger)
+			if sp_err != nil {
+				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", sp_err)}
+			}
+
+			if isPaused {
+				return []any{thor.Bytes32{}, "revert: staker is paused"}
+			}
+
 			err := Staker.NativeMetered(env.State(), charger).
 				IncreaseStake(
 					thor.Address(args.Endorsor),
 					thor.Address(args.ValidationID),
 					args.Amount,
 				)
+
 			if err != nil {
 				return []any{fmt.Sprintf("revert: %v", err)}
 			}
@@ -257,6 +313,25 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
+
+			isPaused, sp_err := IsStargatePaused(env.State(), charger)
+			if sp_err != nil {
+				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", sp_err)}
+			}
+
+			if isPaused {
+				return []any{thor.Bytes32{}, "revert: stargate is paused"}
+			}
+
+			isPaused, sp_err = IsStakerPaused(env.State(), charger)
+			if sp_err != nil {
+				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", sp_err)}
+			}
+
+			if isPaused {
+				return []any{thor.Bytes32{}, "revert: staker is paused"}
+			}
+
 			delegationID, err := Staker.NativeMetered(env.State(), charger).
 				AddDelegation(
 					thor.Address(args.ValidationID),
@@ -274,6 +349,24 @@ func init() {
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
+
+			isPaused, sp_err := IsStargatePaused(env.State(), charger)
+			if sp_err != nil {
+				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", sp_err)}
+			}
+
+			if isPaused {
+				return []any{thor.Bytes32{}, "revert: stargate is paused"}
+			}
+
+			isPaused, sp_err = IsStakerPaused(env.State(), charger)
+			if sp_err != nil {
+				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", sp_err)}
+			}
+
+			if isPaused {
+				return []any{thor.Bytes32{}, "revert: staker is paused"}
+			}
 
 			stake, err := Staker.NativeMetered(env.State(), charger).WithdrawDelegation(thor.Bytes32(args.DelegationID))
 			if err != nil {
