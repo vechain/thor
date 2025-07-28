@@ -1686,7 +1686,7 @@ func TestStakerContract_Native(t *testing.T) {
 	_, err = callContractAndGetOutput(abi, "queuedStake", toAddr, &queuedStakeRes)
 	assert.NoError(t, err)
 	expectedTotalStake := big.NewInt(25_000_000)
-	expectedTotalStake = expectedTotalStake.Mul(expectedTotalStake, big.NewInt(1e18))
+	expectedTotalStake = big.NewInt(0).Mul(expectedTotalStake, big.NewInt(1e18))
 	assert.Equal(t, expectedTotalStake, *queuedStakeRes[0].(**big.Int))
 	assert.Equal(t, big.NewInt(0).Mul(expectedTotalStake, big.NewInt(2)), *queuedStakeRes[1].(**big.Int))
 

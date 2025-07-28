@@ -49,19 +49,6 @@ func (d *delegations) Add(
 		return thor.Bytes32{}, errors.New("validation is not queued or active")
 	}
 
-	aggregated, err := d.storage.GetAggregation(validationID)
-	if err != nil {
-		return thor.Bytes32{}, err
-	}
-	if aggregated.IsEmpty() {
-		aggregated = newAggregation()
-	}
-	nextPeriodTVL := big.NewInt(0).Add(validation.NextPeriodTVL(), aggregated.NextPeriodTVL())
-	nextPeriodTVL = nextPeriodTVL.Add(nextPeriodTVL, stake)
-	if nextPeriodTVL.Cmp(MaxStake) > 0 {
-		return thor.Bytes32{}, errors.New("validation's next period stake exceeds max stake")
-	}
-
 	id, err := d.idCounter.Get()
 	if err != nil {
 		return thor.Bytes32{}, err
@@ -72,31 +59,18 @@ func (d *delegations) Add(
 	}
 
 	delegationID := thor.BytesToBytes32(id.Bytes())
-
 	delegation := &Delegation{
 		Multiplier:     multiplier,
 		Stake:          stake,
 		ValidationID:   validationID,
 		FirstIteration: validation.CurrentIteration() + 1,
 	}
-	aggregated.PendingVET = big.NewInt(0).Add(aggregated.PendingVET, stake)
-	aggregated.PendingWeight = big.NewInt(0).Add(aggregated.PendingWeight, delegation.Weight())
-
-	if err := d.storage.queuedVET.Add(stake); err != nil {
-		return thor.Bytes32{}, err
-	}
-	if err := d.storage.queuedWeight.Add(delegation.Weight()); err != nil {
-		return thor.Bytes32{}, err
-	}
-	if err := d.storage.SetAggregation(validationID, aggregated, false); err != nil {
-		return thor.Bytes32{}, err
-	}
 
 	return delegationID, d.storage.SetDelegation(delegationID, delegation, true)
 }
 
 func (d *delegations) SignalExit(delegationID thor.Bytes32) error {
-	delegation, validation, aggregation, err := d.storage.GetDelegationBundle(delegationID)
+	delegation, validation, err := d.storage.GetDelegationBundle(delegationID)
 	if err != nil {
 		return err
 	}
@@ -112,58 +86,31 @@ func (d *delegations) SignalExit(delegationID thor.Bytes32) error {
 	if delegation.Ended(validation) {
 		return errors.New("delegation has ended, funds can be withdrawn")
 	}
-	aggregation.ExitingVET = big.NewInt(0).Add(aggregation.ExitingVET, delegation.Stake)
-	aggregation.ExitingWeight = big.NewInt(0).Add(aggregation.ExitingWeight, delegation.Weight())
 
 	last := validation.CurrentIteration()
 	delegation.LastIteration = &last
 
-	if err := d.storage.SetDelegation(delegationID, delegation, false); err != nil {
-		return err
-	}
-
-	return d.storage.SetAggregation(delegation.ValidationID, aggregation, false)
+	return d.storage.SetDelegation(delegationID, delegation, false)
 }
 
-func (d *delegations) Withdraw(delegationID thor.Bytes32) (*big.Int, error) {
-	delegation, validation, aggregation, err := d.storage.GetDelegationBundle(delegationID)
+func (d *delegations) Withdraw(delegationID thor.Bytes32) (bool, bool, *big.Int, *big.Int, error) {
+	delegation, validation, err := d.storage.GetDelegationBundle(delegationID)
 	if err != nil {
-		return nil, err
+		return false, false, nil, nil, err
 	}
 	started := delegation.Started(validation)
 	finished := delegation.Ended(validation)
 	if started && !finished {
-		return nil, errors.New("delegation is not eligible for withdraw")
+		return false, false, nil, nil, errors.New("delegation is not eligible for withdraw")
 	}
-	weight := delegation.Weight()
+	// ensure the pointers are copied, not referenced
+	withdrawableStake := new(big.Int).Set(delegation.Stake)
+	withdrawableStakeWeight := delegation.CalcWeight()
 
-	if !started { // delegation's funds are still pending
-		aggregation.PendingVET = big.NewInt(0).Sub(aggregation.PendingVET, delegation.Stake)
-		aggregation.PendingWeight = big.NewInt(0).Sub(aggregation.PendingWeight, weight)
-
-		if err := d.storage.queuedVET.Sub(delegation.Stake); err != nil {
-			return nil, err
-		}
-		if err := d.storage.queuedWeight.Sub(weight); err != nil {
-			return nil, err
-		}
-	}
-
-	if finished { // delegation's funds have move to withdrawable
-		if aggregation.WithdrawableVET.Cmp(delegation.Stake) < 0 {
-			return nil, errors.New("not enough withdraw VET")
-		}
-		aggregation.WithdrawableVET = big.NewInt(0).Sub(aggregation.WithdrawableVET, delegation.Stake)
-	}
-
-	stake := delegation.Stake
 	delegation.Stake = big.NewInt(0)
-	if err := d.storage.SetDelegation(delegationID, delegation, false); err != nil {
-		return nil, err
-	}
-	if err = d.storage.SetAggregation(delegation.ValidationID, aggregation, false); err != nil {
-		return nil, err
+	if err = d.storage.SetDelegation(delegationID, delegation, false); err != nil {
+		return false, false, nil, nil, err
 	}
 
-	return stake, nil
+	return started, finished, withdrawableStake, withdrawableStakeWeight, nil
 }
