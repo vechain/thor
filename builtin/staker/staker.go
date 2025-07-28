@@ -334,3 +334,16 @@ func (s *Staker) GetValidatorsTotals(validationID thor.Address) (*ValidationTota
 		DelegationsLockedWeight: aggregation.LockedWeight,
 	}, nil
 }
+
+// GetValidatorsNum returns the number of validators in the leader group and number of queued validators.
+func (s *Staker) GetValidatorsNum() (*big.Int, *big.Int, error) {
+	leaderGroupSize, err := s.LeaderGroupSize()
+	if err != nil {
+		return nil, nil, err
+	}
+	queuedGroupSize, err := s.QueuedGroupSize()
+	if err != nil {
+		return leaderGroupSize, nil, err
+	}
+	return leaderGroupSize, queuedGroupSize, nil
+}
