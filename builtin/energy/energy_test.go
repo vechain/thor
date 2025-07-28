@@ -6,6 +6,7 @@
 package energy
 
 import (
+	"errors"
 	"math"
 	"math/big"
 	"testing"
@@ -268,4 +269,93 @@ func TestCalculateRewards(t *testing.T) {
 	reward, err = leapEng.CalculateRewards(mockStaker)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(121432908318154219), reward)
+}
+
+func TestDistributeRewards(t *testing.T) {
+	st := state.New(muxdb.NewMem(), trie.Root{})
+
+	beneficiary := thor.BytesToAddress([]byte("beneficiary"))
+	signer := thor.BytesToAddress([]byte("signer"))
+	stargateAddr := thor.BytesToAddress([]byte("stargate"))
+	energyAddr := thor.BytesToAddress([]byte("eng"))
+
+	paramsAddr := thor.BytesToAddress([]byte("par"))
+	p := params.New(paramsAddr, st)
+
+	st.SetStorage(paramsAddr, thor.KeyValidatorRewardPercentage, thor.BytesToBytes32(big.NewInt(int64(thor.InitialValidatorRewardPercentage)).Bytes()))
+	st.SetStorage(paramsAddr, thor.KeyStargateContractAddress, thor.BytesToBytes32(stargateAddr.Bytes()))
+
+	eng := New(thor.BytesToAddress([]byte("eng")), st, 1, p)
+
+	stake := big.NewInt(0).Mul(big.NewInt(25), big.NewInt(1e18))
+	expectedReward := big.NewInt(121765601217656012)
+
+	expectedBeneficiaryReward := big.NewInt(0).Mul(expectedReward, big.NewInt(3))
+	expectedBeneficiaryReward = big.NewInt(0).Div(expectedBeneficiaryReward, big.NewInt(10))
+
+	tests := []struct {
+		name                      string
+		hasDelegations            bool
+		expectedErr               error
+		expectedBeneficiaryReward *big.Int
+		expectedDelegatorReward   *big.Int
+		expectedIssued            *big.Int
+	}{
+		{
+			name:                      "No delegations - full reward to beneficiary",
+			hasDelegations:            false,
+			expectedErr:               nil,
+			expectedBeneficiaryReward: expectedReward,
+			expectedDelegatorReward:   big.NewInt(0),
+			expectedIssued:            expectedReward,
+		},
+		{
+			name:                      "With delegations - split reward",
+			hasDelegations:            true,
+			expectedErr:               nil,
+			expectedBeneficiaryReward: expectedBeneficiaryReward,
+			expectedDelegatorReward:   new(big.Int).Sub(expectedReward, expectedBeneficiaryReward),
+			expectedIssued:            expectedReward,
+		},
+		{
+			name:                      "With delegations - IncreaseDelegatorsReward fails",
+			hasDelegations:            true,
+			expectedErr:               errors.New("increase reward failed"),
+			expectedBeneficiaryReward: big.NewInt(0),
+			expectedDelegatorReward:   big.NewInt(0),
+			expectedIssued:            big.NewInt(0),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset state for each test
+			st.SetEnergy(beneficiary, big.NewInt(0), 1)
+			st.SetEnergy(stargateAddr, big.NewInt(0), 1)
+			st.SetStorage(energyAddr, issuedKey, thor.Bytes32{})
+
+			mockStaker := &mockStaker{
+				lockedVET:         stake,
+				hasDelegations:    tt.hasDelegations,
+				increaseRewardErr: tt.expectedErr,
+			}
+
+			err := eng.DistributeRewards(beneficiary, signer, mockStaker)
+			assert.Equal(t, tt.expectedErr, err)
+
+			beneficiaryEnergy, err := eng.Get(beneficiary)
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expectedBeneficiaryReward, beneficiaryEnergy)
+
+			if tt.hasDelegations {
+				stargateEnergy, err := eng.Get(stargateAddr)
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expectedDelegatorReward, stargateEnergy)
+			}
+
+			issued, err := eng.getIssued()
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expectedIssued, issued)
+		})
+	}
 }
