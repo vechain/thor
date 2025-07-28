@@ -7,22 +7,23 @@ package pos
 
 import (
 	"math/big"
-	mathrand "math/rand"
 	"testing"
+
+	mathrand "math/rand"
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vechain/thor/v2/builtin/staker"
+	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/thor"
 )
 
-func createParams() (map[thor.Address]*staker.Validation, *big.Int) {
-	validators := make(map[thor.Address]*staker.Validation)
+func createParams() (map[thor.Address]*validation.Validation, *big.Int) {
+	validators := make(map[thor.Address]*validation.Validation)
 	totalStake := big.NewInt(0)
 	for _, acc := range genesis.DevAccounts() {
 		stake := big.NewInt(0).SetBytes(acc.Address[10:]) // use the last 10 bytes to create semi random, but deterministic stake
-		validator := &staker.Validation{
+		validator := &validation.Validation{
 			Weight: stake,
 			Online: true,
 		}
@@ -138,13 +139,13 @@ func TestScheduler_Distribution(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			validators := make(map[thor.Address]*staker.Validation)
+			validators := make(map[thor.Address]*validation.Validation)
 			totalStake := big.NewInt(0)
 
 			for i, acc := range genesis.DevAccounts() {
 				stake := tc.stakes(i, acc.Address)
 				stake = stake.Mul(stake, big.NewInt(1e18)) // convert to wei
-				validators[acc.Address] = &staker.Validation{
+				validators[acc.Address] = &validation.Validation{
 					Weight: stake,
 					Online: true,
 				}
@@ -252,7 +253,7 @@ func TestScheduler_TotalPlacements(t *testing.T) {
 }
 
 func TestScheduler_AllValidatorsScheduled(t *testing.T) {
-	validators := make(map[thor.Address]*staker.Validation)
+	validators := make(map[thor.Address]*validation.Validation)
 	lowStakeAcc := genesis.DevAccounts()[0].Address
 	for _, acc := range genesis.DevAccounts() {
 		var stake *big.Int
@@ -263,7 +264,7 @@ func TestScheduler_AllValidatorsScheduled(t *testing.T) {
 			eth := big.NewInt(1e18)
 			stake = new(big.Int).Mul(eth, eth)
 		}
-		validator := &staker.Validation{
+		validator := &validation.Validation{
 			Weight: stake,
 			Online: true,
 		}
