@@ -60,15 +60,7 @@ func (u *Uint256) Set(value *big.Int) error {
 
 func (u *Uint256) Add(value *big.Int) error {
 	if u.debug {
-		stack := string(debug.Stack())
-		// only take top 12 lines of the stack trace
-		lines := strings.Split(stack, "\n")
-		if len(lines) > 12 {
-			lines = lines[:12]
-		}
-		stack = strings.Join(lines, "\n")
-		log.Info("ADD Uint256", "name", u.name(), "value", value.String())
-		println(stack)
+		u.debugStack("ADD", value, debug.Stack())
 	}
 	if value.Sign() == 0 {
 		return nil
@@ -83,15 +75,7 @@ func (u *Uint256) Add(value *big.Int) error {
 
 func (u *Uint256) Sub(value *big.Int) error {
 	if u.debug {
-		stack := string(debug.Stack())
-		// only take top 12 lines of the stack trace
-		lines := strings.Split(stack, "\n")
-		if len(lines) > 12 {
-			lines = lines[:12]
-		}
-		stack = strings.Join(lines, "\n")
-		log.Info("SUB Uint256", "name", u.name(), "value", value.String())
-		println(stack)
+		u.debugStack("SUB", value, debug.Stack())
 	}
 	if value.Sign() == 0 {
 		return nil
@@ -114,4 +98,13 @@ func (u *Uint256) name() string {
 
 	name := pos[i:]
 	return string(name)
+}
+
+func (u *Uint256) debugStack(op string, value *big.Int, stack []byte) {
+	lines := strings.Split(string(stack), "\n")
+	if len(lines) > 12 {
+		lines = lines[:12]
+	}
+	log.Info("Uint256 debug", "name", u.name(), "operation", op, "value", value.String())
+	println(strings.Join(lines, "\n"))
 }
