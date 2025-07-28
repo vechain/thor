@@ -30,15 +30,18 @@ import (
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
+	_ "github.com/vechain/thor/v2/tracers/native"
 	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/vm"
 	"github.com/vechain/thor/v2/xenv"
 )
 
-var errReverted = vm.ErrExecutionReverted
-
-var thorChain *testchain.Chain
+var (
+	errReverted = vm.ErrExecutionReverted
+	revertABI   = []byte(`[{"name": "Error","type": "function","inputs": [{"name": "message","type": "string"}]}]`)
+	thorChain   *testchain.Chain
+)
 
 type ctest struct {
 	rt         *runtime.Runtime
@@ -60,8 +63,9 @@ type ccase struct {
 	expiration uint32
 	value      *big.Int
 
-	output *[]any
-	vmerr  error
+	output    *[]any
+	vmerr     error
+	revertMsg string
 }
 
 type TestTxDescription struct {
@@ -141,6 +145,12 @@ func (c *ccase) ShouldOutput(outputs ...any) *ccase {
 	return c
 }
 
+func (c *ccase) ShouldRevert(revertMsg string) *ccase {
+	c.revertMsg = revertMsg
+	c.vmerr = errReverted
+	return c
+}
+
 func (c *ccase) Assert(t *testing.T) *ccase {
 	method, ok := c.abi.MethodByName(c.name)
 	assert.True(t, ok, "should have method")
@@ -159,7 +169,7 @@ func (c *ccase) Assert(t *testing.T) *ccase {
 	}
 
 	exec, _ := c.rt.PrepareClause(clause,
-		0, math.MaxUint64, &xenv.TransactionContext{
+		0, 40000000, &xenv.TransactionContext{
 			ID:         c.txID,
 			Origin:     c.caller,
 			GasPrice:   &big.Int{},
@@ -202,9 +212,21 @@ func (c *ccase) Assert(t *testing.T) *ccase {
 		}
 	}
 
+	if c.revertMsg != "" {
+		abis, err := abi.New(revertABI)
+		assert.NoError(t, err)
+		method, ok := abis.MethodByName("Error")
+		assert.True(t, ok)
+		var revertMsg string
+		err = method.DecodeInput(vmout.Data, &revertMsg)
+		assert.NoError(t, err)
+		assert.Equal(t, c.revertMsg, revertMsg)
+	}
+
 	c.output = nil
 	c.vmerr = nil
 	c.events = nil
+	c.revertMsg = ""
 
 	return c
 }
@@ -821,11 +843,6 @@ func TestEnergyNative(t *testing.T) {
 	firstActiveRes := new(common.Address)
 	_, err = callContractAndGetOutput(builtin.Staker.ABI, "firstActive", builtin.Staker.Address, firstActiveRes)
 	assert.NoError(t, err)
-
-	rewards := new(*big.Int)
-	_, err = callContractAndGetOutput(builtin.Staker.ABI, "getRewards", builtin.Staker.Address, rewards, firstActiveRes, uint32(1))
-	assert.NoError(t, err)
-	assert.Equal(t, stakeRewards.String(), (*rewards).String())
 }
 
 func TestPrototypeNative(t *testing.T) {
@@ -1669,7 +1686,7 @@ func TestStakerContract_Native(t *testing.T) {
 	_, err = callContractAndGetOutput(abi, "queuedStake", toAddr, &queuedStakeRes)
 	assert.NoError(t, err)
 	expectedTotalStake := big.NewInt(25_000_000)
-	expectedTotalStake = expectedTotalStake.Mul(expectedTotalStake, big.NewInt(1e18))
+	expectedTotalStake = big.NewInt(0).Mul(expectedTotalStake, big.NewInt(1e18))
 	assert.Equal(t, expectedTotalStake, *queuedStakeRes[0].(**big.Int))
 	assert.Equal(t, big.NewInt(0).Mul(expectedTotalStake, big.NewInt(2)), *queuedStakeRes[1].(**big.Int))
 
@@ -1702,7 +1719,7 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).Int64(), (*queuedStakeRes[1].(**big.Int)).Int64())
 
 	reward := new(*big.Int)
-	_, err = callContractAndGetOutput(abi, "getRewards", toAddr, reward, id, uint32(1))
+	_, err = callContractAndGetOutput(abi, "getDelegatorsRewards", toAddr, reward, id, uint32(1))
 	assert.NoError(t, err)
 	assert.Equal(t, new(big.Int).String(), (*reward).String())
 
@@ -1817,11 +1834,11 @@ func TestStakerContract_Native_Revert(t *testing.T) {
 	assert.True(t, receipt.Reverted)
 
 	// update delegator auto renew
-	updateDelegatorAutoRenewArgs := []any{thor.Bytes32{}, false}
+	updateDelegatorAutoRenewArgs := []any{thor.Bytes32{}}
 	desc = TestTxDescription{
 		t:          t,
 		abi:        abi,
-		methodName: "updateDelegationAutoRenew",
+		methodName: "signalDelegationExit",
 		address:    toAddr,
 		acc:        genesis.DevAccounts()[2],
 		args:       updateDelegatorAutoRenewArgs,
@@ -1831,7 +1848,7 @@ func TestStakerContract_Native_Revert(t *testing.T) {
 	assert.True(t, receipt.Reverted)
 
 	// addDelegation
-	addDelegationArgs := []any{thor.Bytes32{}, false, uint8(1)}
+	addDelegationArgs := []any{thor.Bytes32{}, uint8(1)}
 	desc = TestTxDescription{
 		t:          t,
 		abi:        abi,
@@ -1979,4 +1996,86 @@ func TestExtensionV3(t *testing.T) {
 	assert.Nil(t, err)
 	val = new(big.Int).SetBytes(out.Data)
 	assert.Equal(t, uint64(clauseCount), val.Uint64())
+}
+
+func TestStakerContract_Native_CheckStake(t *testing.T) {
+	var (
+		caller     = genesis.DevAccounts()[0].Address
+		master     = thor.BytesToAddress([]byte("master"))
+		validation = thor.BytesToBytes32([]byte("validation"))
+		delegator  = thor.Address{}
+	)
+
+	fc := &thor.SoloFork
+	fc.HAYABUSA = 1
+	fc.HAYABUSA_TP = 2
+	var err error
+	thorChain, err = testchain.NewWithFork(fc)
+	assert.NoError(t, err)
+	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
+	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
+
+	thorChain.MintClauses(genesis.DevAccounts()[0], []*tx.Clause{
+		tx.NewClause(&delegator).WithValue(big.NewInt(1e18)),
+	})
+
+	rt := runtime.New(
+		thorChain.Repo().NewBestChain(),
+		thorChain.Stater().NewState(thorChain.Repo().BestBlockSummary().Root()),
+		&xenv.BlockContext{Time: thorChain.Repo().BestBlockSummary().Header.Timestamp()},
+		thorChain.GetForkConfig(),
+	)
+
+	test := &ctest{
+		rt:     rt,
+		abi:    builtin.Staker.ABI,
+		to:     builtin.Staker.Address,
+		caller: builtin.Staker.Address,
+	}
+
+	test.Case("addValidator", master, staker.LowStakingPeriod).
+		Value(big.NewInt(0)).
+		Caller(caller).
+		ShouldRevert("stake is empty").
+		Assert(t)
+
+	test.Case("addValidator", master, staker.LowStakingPeriod).
+		Value(big.NewInt(1)).
+		Caller(caller).
+		ShouldRevert("stake is not multiple of 1VET").
+		Assert(t)
+
+	test.Case("increaseStake", validation).
+		Value(big.NewInt(0)).
+		Caller(caller).
+		ShouldRevert("stake is empty").
+		Assert(t)
+
+	test.Case("increaseStake", validation).
+		Value(big.NewInt(1)).
+		Caller(caller).
+		ShouldRevert("stake is not multiple of 1VET").
+		Assert(t)
+
+	test.Case("decreaseStake", validation, big.NewInt(0)).
+		Caller(caller).
+		ShouldRevert("stake is empty").
+		Assert(t)
+
+	test.Case("decreaseStake", validation, big.NewInt(1)).
+		Caller(caller).
+		ShouldRevert("stake is not multiple of 1VET").
+		Assert(t)
+
+	test.Case("addDelegation", validation, uint8(100)).
+		Caller(delegator).
+		Value(big.NewInt(0)).
+		ShouldRevert("stake is empty").
+		Assert(t)
+
+	test.Case("addDelegation", validation, uint8(100)).
+		Caller(delegator).
+		Value(big.NewInt(1)).
+		ShouldRevert("stake is not multiple of 1VET").
+		Assert(t)
 }
