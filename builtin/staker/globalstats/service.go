@@ -35,7 +35,7 @@ func New(sctx *solidity.Context) *Service {
 		lockedVET:    solidity.NewUint256(sctx, slotLockedVET),
 		lockedWeight: solidity.NewUint256(sctx, slotLockedWeight),
 		queuedVET:    solidity.NewUint256(sctx, slotQueuedVET),
-		queuedWeight: solidity.NewUint256(sctx, slotQueuedWeight),
+		queuedWeight: solidity.NewUint256Debugged(sctx, slotQueuedWeight),
 	}
 }
 
