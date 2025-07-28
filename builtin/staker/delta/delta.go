@@ -8,8 +8,8 @@ package delta
 import "math/big"
 
 type Renewal struct {
-	ChangeTVL            *big.Int
-	ChangeWeight         *big.Int
+	NewLockedVET         *big.Int
+	NewLockedWeight      *big.Int
 	QueuedDecrease       *big.Int
 	QueuedDecreaseWeight *big.Int
 }

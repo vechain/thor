@@ -81,25 +81,27 @@ func (v *Validation) CurrentIteration() uint32 {
 // 4. Set PendingLocked to 0
 // 5. Set NextPeriodDecrease to 0
 func (v *Validation) Renew() *delta.Renewal {
-	changeTVL := big.NewInt(0)
+	newLockedVET := big.NewInt(0)
 
-	changeTVL.Add(changeTVL, v.PendingLocked)
-	changeTVL.Sub(changeTVL, v.NextPeriodDecrease)
+	newLockedVET.Add(newLockedVET, v.PendingLocked)
+	newLockedVET.Sub(newLockedVET, v.NextPeriodDecrease)
 
 	queuedDecrease := big.NewInt(0).Set(v.PendingLocked)
 	v.WithdrawableVET = big.NewInt(0).Add(v.WithdrawableVET, v.NextPeriodDecrease)
 	v.PendingLocked = big.NewInt(0)
 	v.NextPeriodDecrease = big.NewInt(0)
 
-	changeWeight := big.NewInt(0).Mul(changeTVL, validatorWeightMultiplier) // Apply x2 multiplier for validation's stake
+	// Apply x2 multiplier for validation's stake
+	newLockedWeight := big.NewInt(0).Mul(newLockedVET, validatorWeightMultiplier)
+	queuedDecreaseWeight := big.NewInt(0).Mul(queuedDecrease, validatorWeightMultiplier)
 
 	v.CompleteIterations++
 
 	return &delta.Renewal{
-		ChangeTVL:            changeTVL,
-		ChangeWeight:         changeWeight,
+		NewLockedVET:         newLockedVET,
+		NewLockedWeight:      newLockedWeight,
 		QueuedDecrease:       queuedDecrease,
-		QueuedDecreaseWeight: big.NewInt(0).Mul(queuedDecrease, validatorWeightMultiplier),
+		QueuedDecreaseWeight: queuedDecreaseWeight,
 	}
 }
 

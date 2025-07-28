@@ -482,7 +482,7 @@ func (s *Staker) ActivateNextValidator(currentBlk uint32, maxLeaderGroupSize *bi
 	validator.LockedVET = validatorLocked
 	// x2 multiplier for validator's stake
 	validatorWeight := big.NewInt(0).Mul(validatorLocked, validatorWeightMultiplier)
-	validator.Weight = big.NewInt(0).Add(validatorWeight, aggRenew.ChangeWeight)
+	validator.Weight = big.NewInt(0).Add(validatorWeight, aggRenew.NewLockedWeight)
 
 	// update the validator statuses
 	validator.Status = StatusActive
@@ -498,10 +498,10 @@ func (s *Staker) ActivateNextValidator(currentBlk uint32, maxLeaderGroupSize *bi
 	}
 
 	validatorRenewal := &delta.Renewal{
-		ChangeTVL:            validator.LockedVET,
-		ChangeWeight:         validator.Weight,
+		NewLockedVET:         validator.LockedVET,
+		NewLockedWeight:      validator.Weight,
 		QueuedDecrease:       validator.LockedVET,
-		QueuedDecreaseWeight: validator.Weight,
+		QueuedDecreaseWeight: big.NewInt(0).Mul(validator.LockedVET, validatorWeightMultiplier), // Only decrease validator's own weight
 	}
 	if err = s.globalStatsService.UpdateTotals(validatorRenewal, aggRenew); err != nil {
 		return nil, err

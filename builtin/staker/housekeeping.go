@@ -54,6 +54,9 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Address]*Validat
 		return nil
 	}
 
+	// todo Imagine that some sort of a transition function that applies every cycle, and updates the totals.
+	// todo A centralized point, then we don't have to consider tracing other behaviours.
+	// todo example: this leadergroup iterator doesnot deal with existing validators
 	// perform the iteration
 	if err := s.validations.LeaderGroupIterator(iteratorLeaderGroup); err != nil {
 		return false, nil, err
@@ -120,10 +123,10 @@ func (s *Staker) performRenewalUpdates(validationID thor.Address, validator *Val
 	}
 
 	// calculate the new weight for validator + delegations and weights
-	changeWeight := big.NewInt(0).Add(validatorRenewal.ChangeWeight, delegationsRenewal.ChangeWeight)
+	changeWeight := big.NewInt(0).Add(validatorRenewal.NewLockedWeight, delegationsRenewal.NewLockedWeight)
 
 	// set the new totals
-	validator.LockedVET = big.NewInt(0).Add(validator.LockedVET, validatorRenewal.ChangeTVL)
+	validator.LockedVET = big.NewInt(0).Add(validator.LockedVET, validatorRenewal.NewLockedVET)
 	validator.Weight = big.NewInt(0).Add(validator.Weight, changeWeight)
 
 	return s.storage.SetValidation(validationID, validator, false)

@@ -92,8 +92,8 @@ func (a *Aggregation) renew() *delta.Renewal {
 	a.ExitingWeight = big.NewInt(0)
 
 	return &delta.Renewal{
-		ChangeTVL:            changeTVL,
-		ChangeWeight:         changeWeight,
+		NewLockedVET:         changeTVL,
+		NewLockedWeight:      changeWeight,
 		QueuedDecrease:       queuedDecrease,
 		QueuedDecreaseWeight: queuedDecreaseWeight,
 	}
@@ -115,6 +115,11 @@ func (a *Aggregation) exit() (*delta.Exit, error) {
 
 	// ExitingVET should always be 0 at this point
 	// as it was moved to withdrawable at the last renew()
+	// TODO implement a test that breaks this:
+	// The auto renew validator could, in their last staking period:
+	// increase stake (pending)
+	// signal exit
+	// exit at the end
 	if a.ExitingVET.Sign() == 1 {
 		return nil, errors.New("ExitingVET should always be 0 at this point ")
 	}
