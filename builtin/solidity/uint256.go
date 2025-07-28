@@ -61,10 +61,10 @@ func (u *Uint256) Set(value *big.Int) error {
 func (u *Uint256) Add(value *big.Int) error {
 	if u.debug {
 		stack := string(debug.Stack())
-		// only take top 8 lines of the stack trace
+		// only take top 12 lines of the stack trace
 		lines := strings.Split(stack, "\n")
-		if len(lines) > 8 {
-			lines = lines[:8]
+		if len(lines) > 12 {
+			lines = lines[:12]
 		}
 		stack = strings.Join(lines, "\n")
 		log.Info("ADD Uint256", "name", u.name(), "value", value.String())
@@ -84,10 +84,10 @@ func (u *Uint256) Add(value *big.Int) error {
 func (u *Uint256) Sub(value *big.Int) error {
 	if u.debug {
 		stack := string(debug.Stack())
-		// only take top 8 lines of the stack trace
+		// only take top 12 lines of the stack trace
 		lines := strings.Split(stack, "\n")
-		if len(lines) > 8 {
-			lines = lines[:8]
+		if len(lines) > 12 {
+			lines = lines[:12]
 		}
 		stack = strings.Join(lines, "\n")
 		log.Info("SUB Uint256", "name", u.name(), "value", value.String())
