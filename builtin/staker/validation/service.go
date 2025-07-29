@@ -197,7 +197,7 @@ func (s *Service) Add(
 }
 
 func (s *Service) SignalExit(endorsor thor.Address, id thor.Address) error {
-	validator, err := s.GetValidation(id)
+	validator, err := s.GetExistingValidation(id)
 	if err != nil {
 		return err
 	}
