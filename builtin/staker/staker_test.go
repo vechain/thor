@@ -50,8 +50,12 @@ func (ts *TestSequence) AssertLockedVET(expectedVET, expectedWeight *big.Int) *T
 	return ts.AddFunc(func(t *testing.T) {
 		locked, weight, err := ts.staker.LockedVET()
 		assert.NoError(t, err, "failed to get locked VET")
-		assert.Equal(t, expectedVET, locked, "locked VET mismatch")
-		assert.Equal(t, expectedWeight, weight, "locked weight mismatch")
+		if expectedVET != nil {
+			assert.Equal(t, 0, expectedVET.Cmp(locked), "locked VET mismatch")
+		}
+		if expectedWeight != nil {
+			assert.Equal(t, 0, expectedWeight.Cmp(weight), "locked weight mismatch")
+		}
 	})
 }
 
@@ -59,8 +63,12 @@ func (ts *TestSequence) AssertQueuedVET(expectedVET, expectedWeight *big.Int) *T
 	return ts.AddFunc(func(t *testing.T) {
 		queued, weight, err := ts.staker.QueuedStake()
 		assert.NoError(t, err, "failed to get queued VET")
-		assert.Equal(t, expectedVET, queued, "queued VET mismatch")
-		assert.Equal(t, expectedWeight, weight, "queued weight mismatch")
+		if expectedVET != nil {
+			assert.Equal(t, 0, expectedVET.Cmp(queued), "queued VET mismatch")
+		}
+		if expectedWeight != nil {
+			assert.Equal(t, 0, expectedWeight.Cmp(weight), "queued weight mismatch")
+		}
 	})
 }
 
@@ -148,7 +156,15 @@ func (ts *TestSequence) WithdrawStake(endorsor, master thor.Address, block uint3
 	return ts.AddFunc(func(t *testing.T) {
 		amount, err := ts.staker.WithdrawStake(endorsor, master, block)
 		assert.NoError(t, err, "failed to withdraw stake for validator %s with endorsor %s at block %d: %v", master.String(), endorsor.String(), block, err)
-		assert.Equal(t, expectedOut, amount, "withdrawn amount mismatch for validator %s", master.String())
+		assert.Equal(
+			t,
+			0,
+			amount.Cmp(expectedOut),
+			"withdrawn amount mismatch for validator %s with endorsor %s at block %d",
+			master.String(),
+			endorsor.String(),
+			block,
+		)
 	})
 }
 
