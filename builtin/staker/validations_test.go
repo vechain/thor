@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vechain/thor/v2/builtin/staker/validation"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -110,7 +112,7 @@ func TestStaker_TotalStake(t *testing.T) {
 
 	for id, stake := range stakes {
 		// todo wrap this up / use a validation service or staker api instead of direct calling and checking totals
-		releaseLockedTVL, releaseLockedTVLWeight, releaseQueuedTVL, err := staker.validations.ExitValidator(id)
+		releaseLockedTVL, releaseLockedTVLWeight, releaseQueuedTVL, err := staker.validationService.ExitValidator(id)
 		require.NoError(t, err)
 
 		// Exit the aggregation too
@@ -146,7 +148,7 @@ func TestStaker_TotalStake_Withdrawal(t *testing.T) {
 		Run(t)
 
 	// todo wrap this up / use a validation service or staker api instead of direct calling and checking totals
-	releaseLockedTVL, releaseLockedTVLWeight, releaseQueuedTVL, err := staker.validations.ExitValidator(addr)
+	releaseLockedTVL, releaseLockedTVLWeight, releaseQueuedTVL, err := staker.validationService.ExitValidator(addr)
 	require.NoError(t, err)
 
 	// Exit the aggregation too
@@ -158,10 +160,10 @@ func TestStaker_TotalStake_Withdrawal(t *testing.T) {
 	require.NoError(t, err)
 
 	NewSequence(staker).AssertLockedVET(big.NewInt(0), big.NewInt(0)).Run(t)
-	AssertValidator(t, staker, addr).Status(StatusExit).CooldownVET(stakeAmount)
+	AssertValidator(t, staker, addr).Status(validation.StatusExit).CooldownVET(stakeAmount)
 
 	NewSequence(staker).WithdrawStake(addr, addr, period+cooldownPeriod, stakeAmount).Run(t)
-	AssertValidator(t, staker, addr).Status(StatusExit).WithdrawableVET(big.NewInt(0))
+	AssertValidator(t, staker, addr).Status(validation.StatusExit).WithdrawableVET(big.NewInt(0))
 
 	NewSequence(staker).
 		AssertLockedVET(big.NewInt(0), big.NewInt(0)).
@@ -239,7 +241,7 @@ func TestStaker_AddValidator_QueueOrder(t *testing.T) {
 	// iterating using the `Next` method should return the same order
 	loopID := first
 	for i := range 100 {
-		_, err := staker.storage.GetValidation(*loopID)
+		_, err := staker.Get(*loopID)
 		assert.NoError(t, err)
 		assert.Equal(t, expectedOrder[i], *loopID)
 
@@ -283,17 +285,17 @@ func TestStaker_AddValidator(t *testing.T) {
 	AssertValidator(t, staker, addr1).
 		IsEmpty(false).
 		PendingLocked(stake).
-		Status(StatusQueued)
+		Status(validation.StatusQueued)
 
 	AssertValidator(t, staker, addr2).
 		IsEmpty(false).
 		PendingLocked(stake).
-		Status(StatusQueued)
+		Status(validation.StatusQueued)
 
 	AssertValidator(t, staker, addr3).
 		IsEmpty(false).
 		PendingLocked(stake).
-		Status(StatusQueued)
+		Status(validation.StatusQueued)
 
 	// Error case - keep as is since framework doesn't handle errors
 	err := staker.AddValidator(addr4, addr4, uint32(360)*24*14, stake)
@@ -319,14 +321,14 @@ func TestStaker_QueueUpValidators(t *testing.T) {
 	AssertValidator(t, staker, addr1).
 		IsEmpty(false).
 		PendingLocked(stake).
-		Status(StatusQueued)
+		Status(validation.StatusQueued)
 
 	NewSequence(staker).Housekeep(180).Run(t)
 
 	AssertValidator(t, staker, addr1).
 		IsEmpty(false).
 		LockedVET(stake).
-		Status(StatusActive)
+		Status(validation.StatusActive)
 
 	NewSequence(staker).
 		AddValidator(addr2, addr2, uint32(360)*24*15, stake).
@@ -336,12 +338,12 @@ func TestStaker_QueueUpValidators(t *testing.T) {
 	AssertValidator(t, staker, addr2).
 		IsEmpty(false).
 		PendingLocked(stake).
-		Status(StatusQueued)
+		Status(validation.StatusQueued)
 
 	AssertValidator(t, staker, addr3).
 		IsEmpty(false).
 		PendingLocked(stake).
-		Status(StatusQueued)
+		Status(validation.StatusQueued)
 
 	// Error case - keep as is since framework doesn't handle errors
 	err := staker.AddValidator(addr4, addr4, uint32(360)*24*14, stake)
@@ -351,19 +353,19 @@ func TestStaker_QueueUpValidators(t *testing.T) {
 	AssertValidator(t, staker, addr1).
 		IsEmpty(false).
 		LockedVET(stake).
-		Status(StatusActive)
+		Status(validation.StatusActive)
 
 	NewSequence(staker).Housekeep(180 * 2).Run(t)
 
 	AssertValidator(t, staker, addr2).
 		IsEmpty(false).
 		LockedVET(stake).
-		Status(StatusActive)
+		Status(validation.StatusActive)
 
 	AssertValidator(t, staker, addr1).
 		IsEmpty(false).
 		LockedVET(stake).
-		Status(StatusActive)
+		Status(validation.StatusActive)
 }
 
 func TestStaker_Get_NonExistent(t *testing.T) {
@@ -384,13 +386,13 @@ func TestStaker_Get(t *testing.T) {
 		Run(t)
 
 	AssertValidator(t, staker, addr).
-		Status(StatusQueued).
+		Status(validation.StatusQueued).
 		PendingLocked(stake)
 
 	NewSequence(staker).ActivateNext(0).Run(t)
 
 	AssertValidator(t, staker, addr).
-		Status(StatusActive).
+		Status(validation.StatusActive).
 		LockedVET(stake)
 }
 
@@ -409,7 +411,7 @@ func TestStaker_Get_FullFlow_Renewal_Off(t *testing.T) {
 		Run(t)
 
 	AssertValidator(t, staker, addr).
-		Status(StatusQueued).
+		Status(validation.StatusQueued).
 		PendingLocked(stake).
 		Weight(big.NewInt(0))
 
@@ -420,7 +422,7 @@ func TestStaker_Get_FullFlow_Renewal_Off(t *testing.T) {
 		Run(t)
 
 	AssertValidator(t, staker, addr).
-		Status(StatusActive).
+		Status(validation.StatusActive).
 		LockedVET(stake).
 		Weight(big.NewInt(0).Mul(stake, big.NewInt(2)))
 
@@ -430,7 +432,7 @@ func TestStaker_Get_FullFlow_Renewal_Off(t *testing.T) {
 		Run(t)
 
 	AssertValidator(t, staker, addr).
-		Status(StatusExit).
+		Status(validation.StatusExit).
 		LockedVET(big.NewInt(0)).
 		CooldownVET(stake).
 		WithdrawableVET(big.NewInt(0))
@@ -452,7 +454,7 @@ func TestStaker_WithdrawQueued(t *testing.T) {
 		Run(t)
 
 	AssertValidator(t, staker, addr).
-		Status(StatusQueued).
+		Status(validation.StatusQueued).
 		PendingLocked(stake).
 		Weight(big.NewInt(0))
 
@@ -477,7 +479,7 @@ func TestStaker_IncreaseQueued(t *testing.T) {
 		Run(t)
 
 	AssertValidator(t, staker, addr).
-		Status(StatusQueued).
+		Status(validation.StatusQueued).
 		PendingLocked(stake).
 		Weight(big.NewInt(0))
 
@@ -494,7 +496,7 @@ func TestStaker_IncreaseQueued(t *testing.T) {
 
 	AssertValidator(t, staker, addr).
 		IsEmpty(false).
-		Status(StatusQueued).
+		Status(validation.StatusQueued).
 		PendingLocked(expectedStake).
 		Weight(big.NewInt(0))
 }
@@ -517,12 +519,12 @@ func TestStaker_IncreaseQueued_Order(t *testing.T) {
 		Run(t)
 
 	AssertValidator(t, staker, addr).
-		Status(StatusQueued).
+		Status(validation.StatusQueued).
 		PendingLocked(stake).
 		Weight(big.NewInt(0))
 
 	AssertValidator(t, staker, addr1).
-		Status(StatusQueued).
+		Status(validation.StatusQueued).
 		PendingLocked(stake).
 		Weight(big.NewInt(0))
 
@@ -571,12 +573,12 @@ func TestStaker_DecreaseQueued_Order(t *testing.T) {
 		Run(t)
 
 	AssertValidator(t, staker, addr).
-		Status(StatusQueued).
+		Status(validation.StatusQueued).
 		PendingLocked(stake).
 		Weight(big.NewInt(0))
 
 	AssertValidator(t, staker, addr1).
-		Status(StatusQueued).
+		Status(validation.StatusQueued).
 		PendingLocked(stake).
 		Weight(big.NewInt(0))
 
@@ -619,7 +621,7 @@ func TestStaker_IncreaseActive(t *testing.T) {
 		Run(t)
 
 	AssertValidator(t, staker, addr).
-		Status(StatusActive).
+		Status(validation.StatusActive).
 		LockedVET(stake).
 		Weight(big.NewInt(0).Mul(stake, big.NewInt(2)))
 
@@ -656,12 +658,12 @@ func TestStaker_ChangeStakeActiveValidatorWithQueued(t *testing.T) {
 		Run(t)
 
 	AssertValidator(t, staker, addr).
-		Status(StatusActive).
+		Status(validation.StatusActive).
 		LockedVET(stake).
 		Weight(big.NewInt(0).Mul(stake, big.NewInt(2)))
 
 	AssertValidator(t, staker, addr2).
-		Status(StatusQueued).
+		Status(validation.StatusQueued).
 		PendingLocked(stake).
 		Weight(big.NewInt(0))
 
@@ -739,7 +741,7 @@ func TestStaker_DecreaseActive(t *testing.T) {
 		Run(t)
 
 	AssertValidator(t, staker, addr).
-		Status(StatusActive).
+		Status(validation.StatusActive).
 		LockedVET(stake).
 		Weight(big.NewInt(0).Mul(stake, big.NewInt(2))).
 		WithdrawableVET(big.NewInt(0))
@@ -779,7 +781,7 @@ func TestStaker_DecreaseActiveThenExit(t *testing.T) {
 		Run(t)
 
 	AssertValidator(t, staker, addr).
-		Status(StatusActive).
+		Status(validation.StatusActive).
 		LockedVET(stake).
 		Weight(big.NewInt(0).Mul(stake, big.NewInt(2))).
 		WithdrawableVET(big.NewInt(0))
@@ -804,7 +806,7 @@ func TestStaker_DecreaseActiveThenExit(t *testing.T) {
 		Run(t)
 
 	AssertValidator(t, staker, addr).
-		Status(StatusExit).
+		Status(validation.StatusExit).
 		WithdrawableVET(big.NewInt(1000)).
 		LockedVET(big.NewInt(0)).
 		CooldownVET(expectedStake).
@@ -826,7 +828,7 @@ func TestStaker_Get_FullFlow(t *testing.T) {
 		Run(t)
 
 	AssertValidator(t, staker, addr).
-		Status(StatusQueued).
+		Status(validation.StatusQueued).
 		PendingLocked(stake).
 		Weight(big.NewInt(0))
 
@@ -837,7 +839,7 @@ func TestStaker_Get_FullFlow(t *testing.T) {
 		Run(t)
 
 	AssertValidator(t, staker, addr).
-		Status(StatusActive).
+		Status(validation.StatusActive).
 		LockedVET(stake).
 		Weight(big.NewInt(0).Mul(stake, big.NewInt(2)))
 
@@ -847,14 +849,14 @@ func TestStaker_Get_FullFlow(t *testing.T) {
 		Run(t)
 
 	AssertValidator(t, staker, addr).
-		Status(StatusExit).
+		Status(validation.StatusExit).
 		LockedVET(big.NewInt(0)).
 		Weight(big.NewInt(0))
 
 	NewSequence(staker).Housekeep(period + cooldownPeriod).Run(t)
 
 	AssertValidator(t, staker, addr).
-		Status(StatusExit).
+		Status(validation.StatusExit).
 		LockedVET(big.NewInt(0)).
 		Weight(big.NewInt(0))
 
@@ -870,14 +872,14 @@ func TestStaker_Get_FullFlow_Renewal_On(t *testing.T) {
 	NewSequence(staker).AddValidator(addr, addr, period, stake).Run(t)
 
 	AssertValidator(t, staker, addr).
-		Status(StatusQueued).
+		Status(validation.StatusQueued).
 		PendingLocked(stake).
 		Weight(big.NewInt(0))
 
 	NewSequence(staker).ActivateNext(0).Run(t)
 
 	AssertValidator(t, staker, addr).
-		Status(StatusActive).
+		Status(validation.StatusActive).
 		LockedVET(stake).
 		Weight(big.NewInt(0).Mul(stake, big.NewInt(2)))
 
@@ -885,7 +887,7 @@ func TestStaker_Get_FullFlow_Renewal_On(t *testing.T) {
 	NewSequence(staker).Housekeep(period).Run(t)
 
 	AssertValidator(t, staker, addr).
-		Status(StatusActive).
+		Status(validation.StatusActive).
 		LockedVET(stake).
 		Weight(big.NewInt(0).Mul(stake, big.NewInt(2)))
 
@@ -912,7 +914,7 @@ func TestStaker_Get_FullFlow_Renewal_On_Then_Off(t *testing.T) {
 		Run(t)
 
 	AssertValidator(t, staker, addr).
-		Status(StatusQueued).
+		Status(validation.StatusQueued).
 		PendingLocked(stake).
 		Weight(big.NewInt(0))
 
@@ -923,14 +925,14 @@ func TestStaker_Get_FullFlow_Renewal_On_Then_Off(t *testing.T) {
 		Run(t)
 
 	AssertValidator(t, staker, addr).
-		Status(StatusActive).
+		Status(validation.StatusActive).
 		LockedVET(stake).
 		Weight(big.NewInt(0).Mul(stake, big.NewInt(2)))
 
 	NewSequence(staker).Housekeep(period).Run(t)
 
 	AssertValidator(t, staker, addr).
-		Status(StatusActive).
+		Status(validation.StatusActive).
 		LockedVET(stake).
 		Weight(big.NewInt(0).Mul(stake, big.NewInt(2)))
 
@@ -948,7 +950,7 @@ func TestStaker_Get_FullFlow_Renewal_On_Then_Off(t *testing.T) {
 		Run(t)
 
 	AssertValidator(t, staker, addr).
-		Status(StatusExit).
+		Status(validation.StatusExit).
 		CooldownVET(stake).
 		Weight(big.NewInt(0)).
 		LockedVET(big.NewInt(0)).
@@ -959,7 +961,7 @@ func TestStaker_Get_FullFlow_Renewal_On_Then_Off(t *testing.T) {
 
 	AssertValidator(t, staker, addr).IsEmpty(false)
 	AssertValidator(t, staker, addr1).
-		Status(StatusActive).
+		Status(validation.StatusActive).
 		LockedVET(stake)
 
 	NewSequence(staker).
@@ -968,7 +970,7 @@ func TestStaker_Get_FullFlow_Renewal_On_Then_Off(t *testing.T) {
 		Run(t)
 
 	AssertValidator(t, staker, addr1).
-		Status(StatusActive).
+		Status(validation.StatusActive).
 		LockedVET(stake).
 		Weight(big.NewInt(0).Mul(stake, big.NewInt(2))).
 		WithdrawableVET(big.NewInt(0)).
@@ -1036,7 +1038,7 @@ func TestStaker_MultipleUpdates_CorrectWithdraw(t *testing.T) {
 		DecreaseStake(acc, acc, fiveHundred).
 		Run(t)
 
-	AssertValidator(t, staker, acc).Status(StatusQueued)
+	AssertValidator(t, staker, acc).Status(validation.StatusQueued)
 
 	// 1st STAKING PERIOD
 	NewSequence(staker).Housekeep(period).Run(t)
@@ -1045,7 +1047,7 @@ func TestStaker_MultipleUpdates_CorrectWithdraw(t *testing.T) {
 	expected = expected.Add(expected, increases)
 
 	AssertValidator(t, staker, acc).
-		Status(StatusActive).
+		Status(validation.StatusActive).
 		LockedVET(expected)
 
 	// See `1st decrease` -> validator should be able withdraw the decrease amount
@@ -1068,7 +1070,7 @@ func TestStaker_MultipleUpdates_CorrectWithdraw(t *testing.T) {
 		Housekeep(period * 2).
 		Run(t)
 
-	AssertValidator(t, staker, acc).Status(StatusActive)
+	AssertValidator(t, staker, acc).Status(validation.StatusActive)
 
 	// See `2nd decrease` -> validator should be able withdraw the decrease amount
 	withdraw, err = staker.WithdrawStake(acc, acc, period*2+cooldownPeriod)
@@ -1085,7 +1087,7 @@ func TestStaker_MultipleUpdates_CorrectWithdraw(t *testing.T) {
 	expectedLocked = expectedLocked.Add(expectedLocked, increases)
 
 	AssertValidator(t, staker, acc).
-		Status(StatusExit).
+		Status(validation.StatusExit).
 		CooldownVET(expectedLocked)
 
 	withdraw, err = staker.WithdrawStake(acc, acc, period*3+cooldownPeriod)
@@ -1153,7 +1155,7 @@ func Test_Validator_Decrease_Exit_Withdraw(t *testing.T) {
 		Run(t)
 
 	AssertValidator(t, staker, acc).
-		Status(StatusActive).
+		Status(validation.StatusActive).
 		LockedVET(big.NewInt(0).Sub(originalStake, decrease))
 }
 
@@ -1173,14 +1175,14 @@ func Test_Validator_Decrease_SeveralTimes(t *testing.T) {
 	assert.ErrorContains(t, staker.DecreaseStake(acc, acc, MinStake), "next period stake is too low for validator")
 
 	AssertValidator(t, staker, acc).
-		Status(StatusActive).
+		Status(validation.StatusActive).
 		LockedVET(originalStake).
 		NextPeriodDecrease(big.NewInt(0).Mul(big.NewInt(2), MinStake))
 
 	NewSequence(staker).Housekeep(LowStakingPeriod * 2).Run(t)
 
 	AssertValidator(t, staker, acc).
-		Status(StatusActive).
+		Status(validation.StatusActive).
 		LockedVET(MinStake).
 		NextPeriodDecrease(big.NewInt(0))
 }
@@ -1197,7 +1199,7 @@ func Test_Validator_IncreaseDecrease_Combinations(t *testing.T) {
 		WithdrawStake(acc, acc, 0, MinStake).
 		Run(t)
 
-	AssertValidator(t, staker, acc).Status(StatusActive).LockedVET(MinStake)
+	AssertValidator(t, staker, acc).Status(validation.StatusActive).LockedVET(MinStake)
 
 	assert.NoError(t, staker.IncreaseStake(acc, acc, MinStake))
 	assert.ErrorContains(t, staker.DecreaseStake(acc, acc, MinStake), "next period stake is too low for validator")

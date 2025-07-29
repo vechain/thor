@@ -13,7 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/vechain/thor/v2/builtin/gascharger"
-	"github.com/vechain/thor/v2/builtin/staker"
+	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/xenv"
 )
@@ -55,7 +55,7 @@ func init() {
 					thor.Address{},
 					big.NewInt(0),
 					big.NewInt(0),
-					staker.StatusUnknown,
+					validation.StatusUnknown,
 					false,
 					uint32(0),
 					uint32(0),
@@ -64,7 +64,7 @@ func init() {
 				}
 			}
 			if validator.IsEmpty() {
-				return []any{thor.Address{}, thor.Address{}, big.NewInt(0), big.NewInt(0), staker.StatusUnknown, false, uint32(0), uint32(0), uint32(0), ""}
+				return []any{thor.Address{}, thor.Address{}, big.NewInt(0), big.NewInt(0), validation.StatusUnknown, false, uint32(0), uint32(0), uint32(0), ""}
 			}
 			exitBlock := uint32(math.MaxUint32)
 			if validator.ExitBlock != nil {

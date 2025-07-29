@@ -14,6 +14,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/builtin/staker/aggregation"
+	"github.com/vechain/thor/v2/builtin/staker/delegation"
+	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -294,7 +296,7 @@ func (ts *TestSequence) Run(t *testing.T) {
 type ValidatorAssertions struct {
 	staker    *Staker
 	addr      thor.Address
-	validator *Validation
+	validator *validation.Validation
 	t         *testing.T
 }
 
@@ -304,7 +306,7 @@ func AssertValidator(t *testing.T, staker *Staker, addr thor.Address) *Validator
 	return &ValidatorAssertions{staker: staker, addr: addr, validator: validator, t: t}
 }
 
-func (va *ValidatorAssertions) Status(expected Status) *ValidatorAssertions {
+func (va *ValidatorAssertions) Status(expected validation.Status) *ValidatorAssertions {
 	assert.Equal(va.t, expected, va.validator.Status, "validator %s status mismatch", va.addr.String())
 	return va
 }
@@ -413,8 +415,8 @@ type DelegationAssertions struct {
 	staker       *Staker
 	delegationID thor.Bytes32
 	t            *testing.T
-	delegation   *Delegation
-	validation   *Validation
+	delegation   *delegation.Delegation
+	validation   *validation.Validation
 }
 
 func AssertDelegation(t *testing.T, staker *Staker, delegationID thor.Bytes32) *DelegationAssertions {

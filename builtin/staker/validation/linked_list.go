@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package staker
+package validation
 
 import (
 	"errors"
@@ -13,38 +13,33 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-// linkedList is a doubly linked list implementation for validations, providing convenient operations for adding,
+// LinkedList is a doubly linked list implementation for validations, providing convenient operations for adding,
 // removing, and popping validations.
 // It allows us to maintain to linked list for both the queued validations and the active validations
-type linkedList struct {
-	head    *solidity.Address
-	tail    *solidity.Address
-	count   *solidity.Uint256
-	storage *storage
+type LinkedList struct {
+	head  *solidity.Address
+	tail  *solidity.Address
+	count *solidity.Uint256
+	repo  *Repository
 }
 
-func newLinkedList(
-	storage *storage,
-	headPos thor.Bytes32,
-	tailPos thor.Bytes32,
-	countPos thor.Bytes32,
-) *linkedList {
-	return &linkedList{
-		head:    solidity.NewAddress(storage.context, headPos),
-		tail:    solidity.NewAddress(storage.context, tailPos),
-		count:   solidity.NewUint256(storage.context, countPos),
-		storage: storage,
+func NewLinkedList(sctx *solidity.Context, repo *Repository, headPos thor.Bytes32, tailPos thor.Bytes32, countPos thor.Bytes32) *LinkedList {
+	return &LinkedList{
+		head:  solidity.NewAddress(sctx, headPos),
+		tail:  solidity.NewAddress(sctx, tailPos),
+		count: solidity.NewUint256(sctx, countPos),
+		repo:  repo,
 	}
 }
 
 // Pop removes the head of the linked list, sets the new head, and returns the removed head
-func (l *linkedList) Pop() (thor.Address, *Validation, error) {
+func (l *LinkedList) Pop() (thor.Address, *Validation, error) {
 	oldHeadID, err := l.head.Get()
 	if err != nil {
 		return thor.Address{}, nil, errors.New("no head present")
 	}
 
-	oldHead, err := l.storage.GetValidation(oldHeadID)
+	oldHead, err := l.repo.GetValidation(oldHeadID)
 	if err != nil {
 		return thor.Address{}, nil, err
 	}
@@ -57,7 +52,7 @@ func (l *linkedList) Pop() (thor.Address, *Validation, error) {
 }
 
 // Remove removes a validator from the linked list
-func (l *linkedList) Remove(id thor.Address, validator *Validation) (removed bool, err error) {
+func (l *LinkedList) Remove(id thor.Address, validator *Validation) (removed bool, err error) {
 	defer func() {
 		if err == nil && removed {
 			if subErr := l.count.Sub(big.NewInt(1)); subErr != nil {
@@ -70,7 +65,7 @@ func (l *linkedList) Remove(id thor.Address, validator *Validation) (removed boo
 	next := validator.Next
 
 	// verify the entry exists in the linked list
-	validatorEntry, err := l.storage.GetValidation(id)
+	validatorEntry, err := l.repo.GetValidation(id)
 	if err != nil {
 		return false, err
 	}
@@ -81,12 +76,12 @@ func (l *linkedList) Remove(id thor.Address, validator *Validation) (removed boo
 	if prev == nil || prev.IsZero() {
 		l.head.Set(next, false)
 	} else {
-		prevEntry, err := l.storage.GetValidation(*prev)
+		prevEntry, err := l.repo.GetValidation(*prev)
 		if err != nil {
 			return false, err
 		}
 		prevEntry.Next = next
-		if err := l.storage.SetValidation(*prev, prevEntry, false); err != nil {
+		if err := l.repo.SetValidation(*prev, prevEntry, false); err != nil {
 			return false, err
 		}
 	}
@@ -94,12 +89,12 @@ func (l *linkedList) Remove(id thor.Address, validator *Validation) (removed boo
 	if next == nil || next.IsZero() {
 		l.tail.Set(prev, false)
 	} else {
-		nextEntry, err := l.storage.GetValidation(*next)
+		nextEntry, err := l.repo.GetValidation(*next)
 		if err != nil {
 			return false, err
 		}
 		nextEntry.Prev = prev
-		if err := l.storage.SetValidation(*next, nextEntry, false); err != nil {
+		if err := l.repo.SetValidation(*next, nextEntry, false); err != nil {
 			return false, err
 		}
 	}
@@ -108,11 +103,11 @@ func (l *linkedList) Remove(id thor.Address, validator *Validation) (removed boo
 	validator.Next = nil
 	validator.Prev = nil
 
-	return true, l.storage.SetValidation(id, validator, false)
+	return true, l.repo.SetValidation(id, validator, false)
 }
 
 // Add adds a new validator to the tail of the linked list
-func (l *linkedList) Add(newTail thor.Address, validation *Validation) (added bool, err error) {
+func (l *LinkedList) Add(newTail thor.Address, validation *Validation) (added bool, err error) {
 	defer func() {
 		if err == nil && added {
 			if addErr := l.count.Add(big.NewInt(1)); addErr != nil {
@@ -133,20 +128,20 @@ func (l *linkedList) Add(newTail thor.Address, validation *Validation) (added bo
 		// list is currently empty, set this entry to head & tail
 		l.head.Set(&newTail, false)
 		l.tail.Set(&newTail, false)
-		return true, l.storage.SetValidation(newTail, validation, false)
+		return true, l.repo.SetValidation(newTail, validation, false)
 	}
 
-	oldTail, err := l.storage.GetValidation(oldTailID)
+	oldTail, err := l.repo.GetValidation(oldTailID)
 	if err != nil {
 		return false, err
 	}
 	oldTail.Next = &newTail
 	validation.Prev = &oldTailID
 
-	if err := l.storage.SetValidation(oldTailID, oldTail, false); err != nil {
+	if err := l.repo.SetValidation(oldTailID, oldTail, false); err != nil {
 		return false, err
 	}
-	if err := l.storage.SetValidation(newTail, validation, false); err != nil {
+	if err := l.repo.SetValidation(newTail, validation, false); err != nil {
 		return false, err
 	}
 
@@ -156,27 +151,27 @@ func (l *linkedList) Add(newTail thor.Address, validation *Validation) (added bo
 }
 
 // Peek returns the head of the linked list
-func (l *linkedList) Peek() (*Validation, error) {
+func (l *LinkedList) Peek() (*Validation, error) {
 	head, err := l.head.Get()
 	if err != nil {
 		return nil, err
 	}
-	return l.storage.GetValidation(head)
+	return l.repo.GetValidation(head)
 }
 
 // Len returns the length of the linked list
-func (l *linkedList) Len() (*big.Int, error) {
+func (l *LinkedList) Len() (*big.Int, error) {
 	return l.count.Get()
 }
 
 // Iter iterates through the linked list and calls the callback function for each entry
-func (l *linkedList) Iter(callback func(thor.Address, *Validation) error) error {
+func (l *LinkedList) Iter(callback func(thor.Address, *Validation) error) error {
 	ptr, err := l.head.Get()
 	if err != nil {
 		return err
 	}
 	for !ptr.IsZero() {
-		entry, err := l.storage.GetValidation(ptr)
+		entry, err := l.repo.GetValidation(ptr)
 		if err != nil {
 			return err
 		}
@@ -194,4 +189,12 @@ func (l *linkedList) Iter(callback func(thor.Address, *Validation) error) error 
 		ptr = *entry.Next
 	}
 	return nil
+}
+
+func (l *LinkedList) Count() (*big.Int, error) {
+	return l.count.Get()
+}
+
+func (l *LinkedList) Head() (thor.Address, error) {
+	return l.head.Get()
 }

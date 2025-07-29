@@ -10,12 +10,13 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
 )
 
 // Housekeep iterates over validations, move to cooldown
 // take the oldest validator and move to exited
-func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Address]*Validation, error) {
+func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Address]*validation.Validation, error) {
 	// we only perform housekeeping at the start of epochs
 	if currentBlock%epochLength != 0 {
 		return false, nil, nil
@@ -25,9 +26,9 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Address]*Validat
 
 	hasUpdates := false
 	validatorExitID := thor.Address{}
-	activeValidators := make(map[thor.Address]*Validation)
+	activeValidators := make(map[thor.Address]*validation.Validation)
 
-	iteratorLeaderGroup := func(validationID thor.Address, entry *Validation) error {
+	iteratorLeaderGroup := func(validationID thor.Address, entry *validation.Validation) error {
 		if entry.ExitBlock != nil && currentBlock == *entry.ExitBlock {
 			validatorExitID = validationID
 			return nil
@@ -58,7 +59,7 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Address]*Validat
 	// todo A centralized point, then we don't have to consider tracing other behaviours.
 	// todo example: this leadergroup iterator doesnot deal with existing validators
 	// perform the iteration
-	if err := s.validations.LeaderGroupIterator(iteratorLeaderGroup); err != nil {
+	if err := s.validationService.LeaderGroupIterator(iteratorLeaderGroup); err != nil {
 		return false, nil, err
 	}
 
@@ -67,7 +68,7 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Address]*Validat
 
 		hasUpdates = true
 
-		releaseLockedTVL, releaseLockedTVLWeight, releaseQueuedTVL, err := s.validations.ExitValidator(validatorExitID)
+		releaseLockedTVL, releaseLockedTVLWeight, releaseQueuedTVL, err := s.validationService.ExitValidator(validatorExitID)
 		if err != nil {
 			return false, nil, err
 		}
@@ -109,9 +110,9 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Address]*Validat
 	return hasUpdates, nil, nil
 }
 
-func (s *Staker) performRenewalUpdates(validationID thor.Address, validator *Validation) error {
+func (s *Staker) performRenewalUpdates(validationID thor.Address, val *validation.Validation) error {
 	// renew the validator & delegations
-	validatorRenewal := validator.Renew()
+	validatorRenewal := val.Renew()
 	// todo make this decoupled from the delegations
 	delegationsRenewal, err := s.aggregationService.Renew(validationID)
 	if err != nil {
@@ -126,10 +127,10 @@ func (s *Staker) performRenewalUpdates(validationID thor.Address, validator *Val
 	changeWeight := big.NewInt(0).Add(validatorRenewal.NewLockedWeight, delegationsRenewal.NewLockedWeight)
 
 	// set the new totals
-	validator.LockedVET = big.NewInt(0).Add(validator.LockedVET, validatorRenewal.NewLockedVET)
-	validator.Weight = big.NewInt(0).Add(validator.Weight, changeWeight)
+	val.LockedVET = big.NewInt(0).Add(val.LockedVET, validatorRenewal.NewLockedVET)
+	val.Weight = big.NewInt(0).Add(val.Weight, changeWeight)
 
-	return s.storage.SetValidation(validationID, validator, false)
+	return s.validationService.SetValidation(validationID, val, false)
 }
 
 func (s *Staker) activateValidators(currentBlock uint32) ([]*thor.Address, error) {
@@ -195,7 +196,7 @@ func (s *Staker) Transition(currentBlock uint32) (bool, error) {
 		maxProposers = big.NewInt(0).SetUint64(thor.InitialMaxBlockProposers)
 	}
 
-	queueSize, err := s.validations.validatorQueue.Len()
+	queueSize, err := s.validationService.QueuedGroupSize()
 	if err != nil {
 		return false, err
 	}
