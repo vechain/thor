@@ -273,7 +273,6 @@ func (va *ValidatorAssertions) CooldownVET(expected *big.Int) *ValidatorAssertio
 }
 
 func (va *ValidatorAssertions) ExitingVET(expected *big.Int) *ValidatorAssertions {
-	// Alias for WithdrawableVET, used for backward compatibility
 	va.exitingVET = expected
 	return va
 }
@@ -519,8 +518,11 @@ func (da *DelegationAssertions) Assert(t *testing.T) {
 			assert.True(t, delegation.Started(validator), "delegation %s locked state mismatch", da.delegationID.String())
 			assert.False(t, delegation.Ended(validator), "delegation %s ended state mismatch", da.delegationID.String())
 		} else {
-			assert.False(t, delegation.Started(validator), "delegation %s locked state mismatch", da.delegationID.String())
-			assert.False(t, delegation.Ended(validator), "delegation %s ended state mismatch", da.delegationID.String())
+			started := delegation.Started(validator)
+			ended := delegation.Ended(validator)
+			if started && !ended {
+				t.Fatalf("delegation %s is expected to be not locked, but it is", da.delegationID.String())
+			}
 		}
 	}
 
