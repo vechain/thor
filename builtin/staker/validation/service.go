@@ -168,8 +168,8 @@ func (s *Service) GetWithdrawable(id thor.Address, currentBlock uint32) (*Valida
 		withdrawAmount = withdrawAmount.Add(withdrawAmount, entry.CooldownVET)
 	}
 
-	if entry.PendingLocked.Sign() > 0 {
-		withdrawAmount = withdrawAmount.Add(withdrawAmount, entry.PendingLocked)
+	if entry.QueuedVET.Sign() > 0 {
+		withdrawAmount = withdrawAmount.Add(withdrawAmount, entry.QueuedVET)
 	}
 
 	return entry, withdrawAmount, nil
@@ -202,9 +202,9 @@ func (s *Service) Add(
 		Status:             StatusQueued,
 		Online:             true,
 		LockedVET:          big.NewInt(0),
-		PendingLocked:      stake,
+		QueuedVET:          stake,
 		CooldownVET:        big.NewInt(0),
-		NextPeriodDecrease: big.NewInt(0),
+		PendingUnlockVET:   big.NewInt(0),
 		WithdrawableVET:    big.NewInt(0),
 		Weight:             big.NewInt(0),
 	}
@@ -260,7 +260,7 @@ func (s *Service) IncreaseStake(id thor.Address, endorsor thor.Address, amount *
 		return errors.New("validator has signaled exit, cannot increase stake")
 	}
 
-	entry.PendingLocked = big.NewInt(0).Add(amount, entry.PendingLocked)
+	entry.QueuedVET = big.NewInt(0).Add(amount, entry.QueuedVET)
 
 	return s.SetValidation(id, entry, false)
 }
@@ -284,24 +284,24 @@ func (s *Service) DecreaseStake(id thor.Address, endorsor thor.Address, amount *
 	}
 
 	if entry.Status == StatusActive {
-		// We don't consider any increases, i.e., entry.PendingLocked. We only consider locked and current decreases.
-		// The reason is that validator can instantly withdraw PendingLocked at any time.
+		// We don't consider any increases, i.e., entry.QueuedVET. We only consider locked and current decreases.
+		// The reason is that validator can instantly withdraw QueuedVET at any time.
 		// We need to make sure the locked VET minus the sum of the current decreases is still above the minimum stake.
-		nextPeriodTVL := big.NewInt(0).Sub(entry.LockedVET, entry.NextPeriodDecrease)
+		nextPeriodTVL := big.NewInt(0).Sub(entry.LockedVET, entry.PendingUnlockVET)
 		nextPeriodTVL = nextPeriodTVL.Sub(nextPeriodTVL, amount)
 		if nextPeriodTVL.Cmp(s.minStake) < 0 {
 			return errors.New("next period stake is too low for validator")
 		}
-		entry.NextPeriodDecrease = big.NewInt(0).Add(entry.NextPeriodDecrease, amount)
+		entry.PendingUnlockVET = big.NewInt(0).Add(entry.PendingUnlockVET, amount)
 	}
 
 	if entry.Status == StatusQueued {
-		// All the validator's stake exists within PendingLocked, so we need to make sure it maintains a minimum of MinStake.
-		nextPeriodTVL := big.NewInt(0).Sub(entry.PendingLocked, amount)
+		// All the validator's stake exists within QueuedVET, so we need to make sure it maintains a minimum of MinStake.
+		nextPeriodTVL := big.NewInt(0).Sub(entry.QueuedVET, amount)
 		if nextPeriodTVL.Cmp(s.minStake) < 0 {
 			return errors.New("next period stake is too low for validator")
 		}
-		entry.PendingLocked = big.NewInt(0).Sub(entry.PendingLocked, amount)
+		entry.QueuedVET = big.NewInt(0).Sub(entry.QueuedVET, amount)
 		entry.WithdrawableVET = big.NewInt(0).Add(entry.WithdrawableVET, amount)
 	}
 
@@ -325,14 +325,14 @@ func (s *Service) WithdrawStake(endorsor thor.Address, id thor.Address, currentB
 	}
 
 	if val.Status == StatusQueued {
-		val.PendingLocked = big.NewInt(0)
+		val.QueuedVET = big.NewInt(0)
 		val.Status = StatusExit
 		if _, err := s.validatorQueue.Remove(id, val); err != nil {
 			return nil, err
 		}
 	}
-	if val.PendingLocked.Sign() > 0 {
-		val.PendingLocked = big.NewInt(0)
+	if val.QueuedVET.Sign() > 0 {
+		val.QueuedVET = big.NewInt(0)
 	}
 
 	val.WithdrawableVET = big.NewInt(0)
@@ -383,20 +383,20 @@ func (s *Service) ExitValidator(id thor.Address) (*big.Int, *big.Int, *big.Int, 
 
 	releaseLockedTVL := big.NewInt(0).Set(entry.LockedVET)
 	releaseLockedTVLWeight := big.NewInt(0).Set(entry.Weight)
-	releaseQueuedTVL := big.NewInt(0).Set(entry.PendingLocked)
+	releaseQueuedTVL := big.NewInt(0).Set(entry.QueuedVET)
 
 	// move locked to cooldown
 	entry.Status = StatusExit
 	entry.CooldownVET = big.NewInt(0).Set(entry.LockedVET)
 	entry.LockedVET = big.NewInt(0)
-	entry.NextPeriodDecrease = big.NewInt(0)
+	entry.PendingUnlockVET = big.NewInt(0)
 	entry.Weight = big.NewInt(0)
 
 	// unlock pending stake
-	if entry.PendingLocked.Sign() == 1 {
+	if entry.QueuedVET.Sign() == 1 {
 		// pending never contributes to weight as it's not active
-		entry.WithdrawableVET = big.NewInt(0).Add(entry.WithdrawableVET, entry.PendingLocked)
-		entry.PendingLocked = big.NewInt(0)
+		entry.WithdrawableVET = big.NewInt(0).Add(entry.WithdrawableVET, entry.QueuedVET)
+		entry.QueuedVET = big.NewInt(0)
 	}
 
 	entry.CompleteIterations++
