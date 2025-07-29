@@ -17,10 +17,10 @@ import (
 
 // State transition types
 type EpochTransition struct {
-	Block           uint32
-	Renewals        []ValidatorRenewal
-	ExitValidatorID *thor.Address
-	ActivationCount int64
+	Block         uint32
+	Renewals      []ValidatorRenewal
+	ValidatorExit *ValidatorExit
+	Activations   []ValidatorActivation
 }
 
 type ValidatorRenewal struct {
@@ -28,6 +28,15 @@ type ValidatorRenewal struct {
 	NewState        *validation.Validation
 	ValidatorDelta  *delta.Renewal
 	DelegationDelta *delta.Renewal
+}
+
+type ValidatorExit struct {
+	ValidatorID thor.Address
+	Validation  *validation.Validation
+}
+
+type ValidatorActivation struct {
+	ValidatorID thor.Address
 }
 
 // Housekeep performs epoch transitions at epoch boundaries
@@ -43,7 +52,7 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Address]*validat
 		return false, nil, err
 	}
 
-	if transition == nil || (len(transition.Renewals) == 0 && transition.ExitValidatorID == nil && transition.ActivationCount == 0) {
+	if transition == nil || (len(transition.Renewals) == 0 && transition.ValidatorExit == nil && len(transition.Activations) == 0) {
 		return false, nil, nil
 	}
 
@@ -74,13 +83,13 @@ func (s *Staker) ComputeEpochTransition(currentBlock uint32) (*EpochTransition, 
 	}
 
 	// 2. Compute all exits
-	transition.ExitValidatorID, err = s.computeExits(currentBlock)
+	transition.ValidatorExit, err = s.computeExits(currentBlock)
 	if err != nil {
 		return nil, err
 	}
 
 	// 3. Compute all activations
-	transition.ActivationCount, err = s.computeActivations()
+	transition.Activations, err = s.computeActivations()
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +137,7 @@ func (s *Staker) computeRenewals(currentBlock uint32) ([]ValidatorRenewal, error
 	return renewals, err
 }
 
-func (s *Staker) computeExits(currentBlock uint32) (*thor.Address, error) {
+func (s *Staker) computeExits(currentBlock uint32) (*ValidatorExit, error) {
 	var exitValidatorID thor.Address
 
 	// Find the last validator in iteration order that should exit this block
@@ -148,44 +157,59 @@ func (s *Staker) computeExits(currentBlock uint32) (*thor.Address, error) {
 		return nil, err
 	}
 
-	// If we found a validator to exit, prepare the exit
+	// If we found a validator to exit, prepare the exit data structure
 	if !exitValidatorID.IsZero() {
-		return &exitValidatorID, nil
+		// Get the validation for the exit record
+		val, err := s.validationService.GetValidation(exitValidatorID)
+		if err != nil {
+			return nil, err
+		}
+
+		return &ValidatorExit{
+			ValidatorID: exitValidatorID,
+			Validation:  val,
+		}, nil
 	}
 
 	return nil, nil
 }
 
-func (s *Staker) computeActivations() (int64, error) {
+func (s *Staker) computeActivations() ([]ValidatorActivation, error) {
 	// Calculate how many validators can be activated
 	queuedSize, err := s.QueuedGroupSize()
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	leaderSize, err := s.LeaderGroupSize()
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	maxSize, err := s.params.Get(thor.KeyMaxBlockProposers)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	// If full or nothing queued then no activations
-	if leaderSize.Cmp(maxSize) >= 0 || queuedSize.Sign() <= 0 {
-		return 0, nil
-	}
-
-	leaderDelta := maxSize.Int64() - leaderSize.Int64()
-	if leaderDelta <= 0 {
-		return 0, nil
+	if leaderSize.Cmp(maxSize) >= 0 || queuedSize.Cmp(big.NewInt(0)) <= 0 {
+		return nil, nil
 	}
 
 	queuedCount := queuedSize.Int64()
-	if leaderDelta < queuedCount {
-		return leaderDelta, nil
+	leaderDelta := maxSize.Int64() - leaderSize.Int64()
+	if leaderDelta > 0 && leaderDelta < queuedCount {
+		queuedCount = leaderDelta
+	} else if leaderDelta <= 0 {
+		return nil, nil
 	}
-	return queuedCount, nil
+
+	// Create activation entries (ValidatorID will be set during application)
+	activations := make([]ValidatorActivation, queuedCount)
+	for i := int64(0); i < queuedCount; i++ {
+		activations[i] = ValidatorActivation{
+			ValidatorID: thor.Address{}, // Will be set during application
+		}
+	}
+
+	return activations, nil
 }
 
 // ApplyEpochTransition applies all computed changes
@@ -195,7 +219,6 @@ func (s *Staker) ApplyEpochTransition(transition *EpochTransition) error {
 	// Apply renewals
 	for _, renewal := range transition.Renewals {
 		// Update global stats with existing service methods
-		// TODO it's possible to accumulate these and write only once
 		if err := s.globalStatsService.UpdateTotals(renewal.ValidatorDelta, renewal.DelegationDelta); err != nil {
 			return err
 		}
@@ -207,16 +230,16 @@ func (s *Staker) ApplyEpochTransition(transition *EpochTransition) error {
 	}
 
 	// Apply exits
-	if transition.ExitValidatorID != nil {
-		logger.Info("exiting validator", "id", transition.ExitValidatorID)
+	if transition.ValidatorExit != nil {
+		logger.Info("exiting validator", "id", transition.ValidatorExit.ValidatorID)
 
 		// Now call ExitValidator to get the actual exit details and perform the exit
-		releaseLockedTVL, releaseLockedTVLWeight, releaseQueuedTVL, err := s.validationService.ExitValidator(*transition.ExitValidatorID)
+		releaseLockedTVL, releaseLockedTVLWeight, releaseQueuedTVL, err := s.validationService.ExitValidator(transition.ValidatorExit.ValidatorID)
 		if err != nil {
 			return err
 		}
 
-		aggExit, err := s.aggregationService.Exit(*transition.ExitValidatorID)
+		aggExit, err := s.aggregationService.Exit(transition.ValidatorExit.ValidatorID)
 		if err != nil {
 			return err
 		}
@@ -237,11 +260,13 @@ func (s *Staker) ApplyEpochTransition(transition *EpochTransition) error {
 		return err
 	}
 
-	for range transition.ActivationCount {
-		_, err := s.ActivateNextValidator(transition.Block, maxLeaderGroupSize)
+	for i := range transition.Activations {
+		id, err := s.ActivateNextValidator(transition.Block, maxLeaderGroupSize)
 		if err != nil {
 			return err
 		}
+		// Update the activation record with the actual validator ID
+		transition.Activations[i].ValidatorID = *id
 	}
 
 	return nil
