@@ -2176,13 +2176,13 @@ func Test_Validator_Decrease_Exit_Withdraw(t *testing.T) {
 		AddValidator(acc, acc, LowStakingPeriod, originalStake).
 		ActivateNext(0).
 		DecreaseStake(acc, acc, decrease). // 75m - 25m = 50m
-		SignalExit(acc, acc).              // signal exit
 		Housekeep(LowStakingPeriod).
+		WithdrawStake(acc, acc, LowStakingPeriod+cooldownPeriod, decrease).
 		Run(t)
 
 	AssertValidator(t, staker, acc).
-		Status(StatusExit).
-		CooldownVET(originalStake)
+		Status(StatusActive).
+		LockedVET(big.NewInt(0).Sub(originalStake, decrease))
 }
 
 func Test_Validator_Decrease_SeveralTimes(t *testing.T) {
@@ -2256,6 +2256,7 @@ func TestStaker_AddValidator_CannotAddValidationWithSameMasterAfterExit(t *testi
 	master := datagen.RandAddress()
 	endorsor := datagen.RandAddress()
 
+	// Add, activate and exit a validator
 	NewSequence(staker).
 		AddValidator(endorsor, master, MediumStakingPeriod, MinStake).
 		ActivateNext(0).
