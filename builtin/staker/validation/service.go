@@ -151,30 +151,6 @@ func (s *Service) LeaderGroup() (map[thor.Address]*Validation, error) {
 	return group, err
 }
 
-// GetWithdrawable returns the validator entry and the withdrawable amount.
-// It does not perform any updates or verify the endorsor.
-func (s *Service) GetWithdrawable(id thor.Address, currentBlock uint32) (*Validation, *big.Int, error) {
-	entry, err := s.GetValidation(id)
-	if err != nil {
-		return nil, nil, err
-	}
-	if entry.IsEmpty() {
-		return nil, nil, errors.New("validator doesn't exist")
-	}
-	withdrawAmount := big.NewInt(0).Set(entry.WithdrawableVET)
-
-	// validator has exited and waited for the cooldown period
-	if entry.ExitBlock != nil && *entry.ExitBlock+s.cooldownPeriod <= currentBlock {
-		withdrawAmount = withdrawAmount.Add(withdrawAmount, entry.CooldownVET)
-	}
-
-	if entry.QueuedVET.Sign() > 0 {
-		withdrawAmount = withdrawAmount.Add(withdrawAmount, entry.QueuedVET)
-	}
-
-	return entry, withdrawAmount, nil
-}
-
 func (s *Service) Add(
 	endorsor thor.Address,
 	node thor.Address,
@@ -243,12 +219,9 @@ func (s *Service) SignalExit(endorsor thor.Address, id thor.Address) error {
 }
 
 func (s *Service) IncreaseStake(id thor.Address, endorsor thor.Address, amount *big.Int) error {
-	entry, err := s.GetValidation(id)
+	entry, err := s.GetExistingValidation(id)
 	if err != nil {
 		return err
-	}
-	if entry.IsEmpty() {
-		return errors.New("validator doesn't exist")
 	}
 	if entry.Endorsor != endorsor {
 		return errors.New("invalid endorser")
@@ -266,12 +239,9 @@ func (s *Service) IncreaseStake(id thor.Address, endorsor thor.Address, amount *
 }
 
 func (s *Service) DecreaseStake(id thor.Address, endorsor thor.Address, amount *big.Int) error {
-	entry, err := s.GetValidation(id)
+	entry, err := s.GetExistingValidation(id)
 	if err != nil {
 		return err
-	}
-	if entry.IsEmpty() {
-		return errors.New("validator doesn't exist")
 	}
 	if entry.Endorsor != endorsor {
 		return errors.New("invalid endorser")
@@ -311,7 +281,7 @@ func (s *Service) DecreaseStake(id thor.Address, endorsor thor.Address, amount *
 // WithdrawStake allows validations to withdraw any withdrawable stake.
 // It also verifies the endorsor and updates the validator totals.
 func (s *Service) WithdrawStake(endorsor thor.Address, id thor.Address, currentBlock uint32) (*big.Int, error) {
-	val, withdrawable, err := s.GetWithdrawable(id, currentBlock)
+	val, err := s.GetExistingValidation(id)
 	if err != nil {
 		return nil, err
 	}
@@ -319,11 +289,15 @@ func (s *Service) WithdrawStake(endorsor thor.Address, id thor.Address, currentB
 		return big.NewInt(0), errors.New("invalid endorser")
 	}
 
+	// calculate currently available VET to withdraw
+	withdrawable := val.CalculateWithdrawableVET(currentBlock, s.cooldownPeriod)
+
 	// val has exited and waited for the cooldown period
 	if val.ExitBlock != nil && *val.ExitBlock+s.cooldownPeriod <= currentBlock {
 		val.CooldownVET = big.NewInt(0)
 	}
 
+	// if the validator is queued make sure to exit it
 	if val.Status == StatusQueued {
 		val.QueuedVET = big.NewInt(0)
 		val.Status = StatusExit
@@ -331,10 +305,12 @@ func (s *Service) WithdrawStake(endorsor thor.Address, id thor.Address, currentB
 			return nil, err
 		}
 	}
+	// remove any que
 	if val.QueuedVET.Sign() > 0 {
 		val.QueuedVET = big.NewInt(0)
 	}
 
+	// no more withdraw after this
 	val.WithdrawableVET = big.NewInt(0)
 	if err := s.SetValidation(id, val, false); err != nil {
 		return nil, err
@@ -454,6 +430,17 @@ func (s *Service) GetDelegatorRewards(validationID thor.Address, stakingPeriod u
 
 func (s *Service) GetValidation(id thor.Address) (*Validation, error) {
 	return s.repo.GetValidation(id)
+}
+
+func (s *Service) GetExistingValidation(id thor.Address) (*Validation, error) {
+	v, err := s.GetValidation(id)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get validator")
+	}
+	if v.IsEmpty() {
+		return nil, errors.New("failed to get validator")
+	}
+	return v, nil
 }
 
 func (s *Service) SetValidation(id thor.Address, entry *Validation, isNew bool) error {

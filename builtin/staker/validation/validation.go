@@ -104,3 +104,19 @@ func (v *Validation) Renew() *delta.Renewal {
 		QueuedDecreaseWeight: queuedDecreaseWeight,
 	}
 }
+
+// CalculateWithdrawableVET returns the validator withdrawable amount for a given block + period
+func (v *Validation) CalculateWithdrawableVET(currentBlock uint32, cooldownPeriod uint32) *big.Int {
+	withdrawAmount := big.NewInt(0).Set(v.WithdrawableVET)
+
+	// validator has exited and waited for the cooldown period
+	if v.ExitBlock != nil && *v.ExitBlock+cooldownPeriod <= currentBlock {
+		withdrawAmount = withdrawAmount.Add(withdrawAmount, v.CooldownVET)
+	}
+
+	if v.QueuedVET.Sign() > 0 {
+		withdrawAmount = withdrawAmount.Add(withdrawAmount, v.QueuedVET)
+	}
+
+	return withdrawAmount
+}
