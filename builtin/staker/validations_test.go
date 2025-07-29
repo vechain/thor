@@ -2442,3 +2442,22 @@ func getTestMaxLeaderSize(param *params.Params) *big.Int {
 	}
 	return maxLeaderGroupSize
 }
+
+func TestStaker_BuilderTest(t *testing.T) {
+	staker, _ := newStaker(t, 0, 3, false)
+
+	acc1 := datagen.RandAddress()
+	stake := MinStake
+
+	NewSequence(staker).
+		AddValidator(acc1, stake, LowStakingPeriod).
+		ActivateNext(0).
+		Housekeep(LowStakingPeriod).
+		Run(t)
+
+	AssertValidator(staker, acc1).
+		Status(StatusActive).
+		Stake(stake).
+		Weight(big.NewInt(0).Mul(stake, big.NewInt(2))).
+		Assert(t)
+}
