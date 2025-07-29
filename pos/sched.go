@@ -15,13 +15,13 @@ import (
 	"slices"
 	"sort"
 
-	"github.com/vechain/thor/v2/builtin/staker"
+	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
 )
 
 // Scheduler to schedule the time when a proposer to produce a block for PoS.
 type Scheduler struct {
-	proposer        *staker.Validation
+	proposer        *validation.Validation
 	proposerID      thor.Address
 	parentBlockTime uint64
 	sequence        []thor.Address
@@ -29,7 +29,7 @@ type Scheduler struct {
 
 type onlineProposer struct {
 	id         thor.Address
-	validation *staker.Validation
+	validation *validation.Validation
 	hash       thor.Bytes32
 	score      float64
 }
@@ -39,13 +39,13 @@ type onlineProposer struct {
 // If `addr` is not listed in `proposers` or not active, an error returned.
 func NewScheduler(
 	addr thor.Address,
-	proposers map[thor.Address]*staker.Validation,
+	proposers map[thor.Address]*validation.Validation,
 	parentBlockNumber uint32,
 	parentBlockTime uint64,
 	seed []byte,
 ) (*Scheduler, error) {
 	var (
-		proposer   *staker.Validation
+		proposer   *validation.Validation
 		proposerID thor.Address
 	)
 	var num [4]byte

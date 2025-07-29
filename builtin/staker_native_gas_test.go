@@ -175,7 +175,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_addDelegation",
-			expectedGas: 63000,
+			expectedGas: 33000,
 			args: []any{
 				account1,
 				staker.MinStake,
@@ -195,7 +195,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_withdrawDelegation",
-			expectedGas: 22600,
+			expectedGas: 23000,
 			args: []any{
 				thor.BytesToBytes32(big.NewInt(1).Bytes()), // IDs are incremental, starting at 1
 			},
@@ -205,7 +205,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		// TODO: How can we mint thousands of blocks and perform housekeeping?
 		{
 			function:    "native_signalDelegationExit",
-			expectedGas: 1800,
+			expectedGas: 2200,
 			args: []any{
 				thor.BytesToBytes32(big.NewInt(1).Bytes()), // IDs are incremental, starting at 1
 			},
