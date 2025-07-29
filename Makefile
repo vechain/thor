@@ -94,7 +94,10 @@ lint-fix: | go_version_check lint_command_check #@ Attempt to fix linting issues
 	@go run golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@v0.18.1 --fix ./...
 	@echo "running builtin generator..."
 	@go generate ./builtin/gen
+	@echo "running license check..."
+	@docker run -it --rm -v $(PWD):/github/workspace apache/skywalking-eyes header fix
 	@echo "done."
+	@
 
 license-check: #@ Check license headers
 	@FILE_COUNT=$$(find . -type f -name '*.go' | wc -l); \
