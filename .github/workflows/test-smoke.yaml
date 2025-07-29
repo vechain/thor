@@ -63,29 +63,10 @@ jobs:
       THOR_IMAGE: vechain/thor:${{ github.sha }}
     name: Run Smoke Tests
     steps:
-      - name: Set draupnir repo reference
-        id: set-ref
-        run: |
-          DEFAULT_COMMIT="main"
-          REF="$DEFAULT_COMMIT"
-      
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            if [[ "${{ github.event.pull_request.base.ref }}" == release/* ]]; then
-              REF="${{ github.event.pull_request.base.ref }}"
-            fi
-          else
-            if [[ "${{ github.ref_name }}" == release/* ]]; then
-              REF="${{ github.ref_name }}"
-            fi
-          fi
-
-          echo "ref=$REF" >> "$GITHUB_OUTPUT"
-
       - name: Checkout
         uses: actions/checkout@v4
         with:
           repository: vechain/draupnir
-          #ref: ${{ steps.set-ref.outputs.ref }}
           token: ${{ secrets.DRAUPNIR_TOKEN }}
 
       - name: Setup Go
@@ -101,12 +82,10 @@ jobs:
             vechain/thor:${{ github.sha }} \
             solo --gas-limit=40000000 --api-cors="*" --enable-metrics
 
-      #- name: Wait for Thor to be ready
-      #  run: |
-      #    timeout 60 bash -c 'until curl -s http://localhost:8669/accounts; do sleep 2; done'
       - name: Wait for Thor to be ready
         run: |
-          sleep 5
+          timeout 60 bash -c 'until curl -s http://localhost:8669/accounts; do sleep 2; done'
+
 
       - name: Run Smoke Test Separately
         run: |
