@@ -13,6 +13,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"

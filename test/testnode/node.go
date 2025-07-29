@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 
 	"github.com/gorilla/mux"
+
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/api/debug"

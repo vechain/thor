@@ -11,6 +11,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
+
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thorclient/bind"
@@ -79,7 +80,11 @@ func TestEnergy(t *testing.T) {
 		require.Equal(t, allowanceAmount, allowance, "Allowance should match the approved amount")
 
 		transferAmount := big.NewInt(500)
-		receipt, _, err = energy.TransferFrom(acc1.Address(), acc3.Address(), transferAmount).Send().WithSigner(acc2).WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
+		receipt, _, err = energy.TransferFrom(acc1.Address(), acc3.Address(), transferAmount).
+			Send().
+			WithSigner(acc2).
+			WithOptions(txOpts()).
+			SubmitAndConfirm(txContext(t))
 		require.NoError(t, err)
 		require.False(t, receipt.Reverted, "TransferFrom should not be reverted")
 	})

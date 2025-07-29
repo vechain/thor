@@ -15,7 +15,8 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vechain/thor/v2/api/utils"
+
+	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
@@ -187,7 +188,7 @@ func TestPendingTx_UnsubscribeOnWebSocketClose(t *testing.T) {
 	// Subscriptions setup
 	sub := New(thorChain.Repo(), []string{"*"}, 100, txPool, false)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		utils.WrapHandlerFunc(sub.handlePendingTransactions)(w, r)
+		restutil.WrapHandlerFunc(sub.handlePendingTransactions)(w, r)
 	}))
 	defer server.Close()
 

@@ -12,12 +12,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient/httpclient"
 	"github.com/vechain/thor/v2/tx"
-
-	tccommon "github.com/vechain/thor/v2/thorclient/common"
 )
 
 func TestConvertToBatchCallData(t *testing.T) {
@@ -107,7 +107,7 @@ func TestGetTransaction(t *testing.T) {
 		},
 		{
 			name:      "GetTransactionPending",
-			function:  func(client *Client) { client.Transaction(&expectedTx.ID, Revision(tccommon.BestRevision), Pending()) },
+			function:  func(client *Client) { client.Transaction(&expectedTx.ID, Revision(httpclient.BestRevision), Pending()) },
 			isPending: true,
 		},
 	} {

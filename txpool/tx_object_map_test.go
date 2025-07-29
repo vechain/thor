@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/testchain"
@@ -27,9 +28,9 @@ func TestGetByID(t *testing.T) {
 	tx3 := newTx(tx.TypeDynamicFee, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[2])
 
 	// Resolving transactions into txObjects
-	txObj1, _ := resolveTx(tx1, false)
-	txObj2, _ := resolveTx(tx2, false)
-	txObj3, _ := resolveTx(tx3, false)
+	txObj1, _ := ResolveTx(tx1, false)
+	txObj2, _ := ResolveTx(tx2, false)
+	txObj3, _ := ResolveTx(tx3, false)
 
 	// Creating a new txObjectMap and adding transactions
 	m := newTxObjectMap()
@@ -62,15 +63,15 @@ func TestFill(t *testing.T) {
 	tx3 := newDelegatedTx(tx.TypeDynamicFee, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[3], genesis.DevAccounts()[4])
 
 	// Resolving transactions into txObjects
-	txObj1, _ := resolveTx(tx1, false)
-	txObj2, _ := resolveTx(tx2, false)
-	txObj3, _ := resolveTx(tx3, false)
+	txObj1, _ := ResolveTx(tx1, false)
+	txObj2, _ := ResolveTx(tx2, false)
+	txObj3, _ := ResolveTx(tx3, false)
 
 	// Creating a new txObjectMap
 	m := newTxObjectMap()
 
 	// Filling the map with transactions
-	m.Fill([]*txObject{txObj1, txObj2, txObj1, txObj3})
+	m.Fill([]*TxObject{txObj1, txObj2, txObj1, txObj3})
 
 	// Asserting the length of the map
 	assert.Equal(t, 3, m.Len(), "Map should contain only 2 unique transactions")
@@ -99,9 +100,9 @@ func TestTxObjMap(t *testing.T) {
 	tx2 := newTx(tx.TypeDynamicFee, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
 	tx3 := newTx(tx.TypeLegacy, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[1])
 
-	txObj1, _ := resolveTx(tx1, false)
-	txObj2, _ := resolveTx(tx2, false)
-	txObj3, _ := resolveTx(tx3, false)
+	txObj1, _ := ResolveTx(tx1, false)
+	txObj2, _ := ResolveTx(tx2, false)
+	txObj3, _ := ResolveTx(tx3, false)
 
 	m := newTxObjectMap()
 	assert.Zero(t, m.Len())
@@ -124,7 +125,7 @@ func TestTxObjMap(t *testing.T) {
 	assert.False(t, m.ContainsHash(tx1.Hash()))
 	assert.False(t, m.RemoveByHash(tx2.Hash()))
 
-	assert.Equal(t, []*txObject{txObj3}, m.ToTxObjects())
+	assert.Equal(t, []*TxObject{txObj3}, m.ToTxObjects())
 	assert.Equal(t, tx.Transactions{tx3}, m.ToTxs())
 }
 
@@ -135,9 +136,9 @@ func TestLimitByDelegator(t *testing.T) {
 	tx2 := newDelegatedTx(tx.TypeDynamicFee, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[0], genesis.DevAccounts()[1])
 	tx3 := newDelegatedTx(tx.TypeLegacy, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[2], genesis.DevAccounts()[1])
 
-	txObj1, _ := resolveTx(tx1, false)
-	txObj2, _ := resolveTx(tx2, false)
-	txObj3, _ := resolveTx(tx3, false)
+	txObj1, _ := ResolveTx(tx1, false)
+	txObj2, _ := ResolveTx(tx2, false)
+	txObj3, _ := ResolveTx(tx3, false)
 
 	m := newTxObjectMap()
 	assert.Nil(t, m.Add(txObj1, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
@@ -165,9 +166,9 @@ func TestPendingCost(t *testing.T) {
 	tx3 := newDelegatedTx(tx.TypeDynamicFee, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[1], genesis.DevAccounts()[2])
 
 	// Resolving transactions into txObjects
-	txObj1, _ := resolveTx(tx1, false)
-	txObj2, _ := resolveTx(tx2, false)
-	txObj3, _ := resolveTx(tx3, false)
+	txObj1, _ := ResolveTx(tx1, false)
+	txObj2, _ := ResolveTx(tx2, false)
+	txObj3, _ := ResolveTx(tx3, false)
 
 	chain := repo.NewBestChain()
 	best := repo.BestBlockSummary()

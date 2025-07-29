@@ -16,8 +16,9 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
+
 	"github.com/vechain/thor/v2/api"
-	"github.com/vechain/thor/v2/api/utils"
+	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
@@ -78,26 +79,26 @@ func (f *Fees) validateBlockCount(req *http.Request) (uint64, error) {
 	blockCountParam := req.URL.Query().Get("blockCount")
 	blockCount, err := strconv.ParseUint(blockCountParam, 10, 32)
 	if err != nil {
-		return 0, utils.BadRequest(errors.WithMessage(err, "invalid blockCount, it should represent an integer"))
+		return 0, restutil.BadRequest(errors.WithMessage(err, "invalid blockCount, it should represent an integer"))
 	}
 
 	if blockCount == 0 {
-		return 0, utils.BadRequest(errors.New("invalid blockCount, it should not be 0"))
+		return 0, restutil.BadRequest(errors.New("invalid blockCount, it should not be 0"))
 	}
 
 	return blockCount, nil
 }
 
 func (f *Fees) validateNewestBlock(req *http.Request, blockCount uint64) (*chain.BlockSummary, uint64, error) {
-	newestBlock, err := utils.ParseRevision(req.URL.Query().Get("newestBlock"), true)
+	newestBlock, err := restutil.ParseRevision(req.URL.Query().Get("newestBlock"), true)
 	if err != nil {
-		return nil, 0, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
+		return nil, 0, restutil.BadRequest(errors.WithMessage(err, "newestBlock"))
 	}
 
-	newestBlockSummary, _, err := utils.GetSummaryAndState(newestBlock, f.data.repo, f.bft, f.data.stater, f.forkConfig)
+	newestBlockSummary, _, err := restutil.GetSummaryAndState(newestBlock, f.data.repo, f.bft, f.data.stater, f.forkConfig)
 	if err != nil {
 		if f.data.repo.IsNotFound(err) {
-			return nil, 0, utils.BadRequest(errors.WithMessage(err, "newestBlock"))
+			return nil, 0, restutil.BadRequest(errors.WithMessage(err, "newestBlock"))
 		}
 		return nil, 0, err
 	}
@@ -106,7 +107,7 @@ func (f *Fees) validateNewestBlock(req *http.Request, blockCount uint64) (*chain
 	minAllowedBlock := uint32(math.Max(0, float64(int(bestBlockNumber)-f.config.APIBacktraceLimit+1)))
 
 	if newestBlockSummary.Header.Number() < minAllowedBlock {
-		return nil, 0, utils.BadRequest(errors.New("invalid newestBlock, it is below the minimum allowed block"))
+		return nil, 0, restutil.BadRequest(errors.New("invalid newestBlock, it is below the minimum allowed block"))
 	}
 
 	adjustedBlockCount := blockCount
@@ -127,19 +128,21 @@ func (f *Fees) validateRewardPercentiles(req *http.Request) ([]float64, error) {
 	rewardPercentiles := make([]float64, 0, len(percentileStrs))
 
 	if len(percentileStrs) > maxRewardPercentiles {
-		return nil, utils.BadRequest(errors.New(fmt.Sprintf("there can be at most %d rewardPercentiles", maxRewardPercentiles)))
+		return nil, restutil.BadRequest(errors.New(fmt.Sprintf("there can be at most %d rewardPercentiles", maxRewardPercentiles)))
 	}
 
 	for i, str := range percentileStrs {
 		val, err := strconv.ParseFloat(str, 64)
 		if err != nil {
-			return nil, utils.BadRequest(errors.WithMessage(err, "invalid rewardPercentiles value"))
+			return nil, restutil.BadRequest(errors.WithMessage(err, "invalid rewardPercentiles value"))
 		}
 		if val < 0 || val > 100 {
-			return nil, utils.BadRequest(errors.New("rewardPercentiles values must be between 0 and 100"))
+			return nil, restutil.BadRequest(errors.New("rewardPercentiles values must be between 0 and 100"))
 		}
 		if i > 0 && val < rewardPercentiles[i-1] {
-			return nil, utils.BadRequest(errors.New(fmt.Sprintf("reward percentiles must be in ascending order, but %f is less than %f", val, rewardPercentiles[i-1])))
+			return nil, restutil.BadRequest(
+				errors.New(fmt.Sprintf("reward percentiles must be in ascending order, but %f is less than %f", val, rewardPercentiles[i-1])),
+			)
 		}
 		rewardPercentiles = append(rewardPercentiles, val)
 	}
@@ -158,7 +161,7 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 		return err
 	}
 
-	return utils.WriteJSON(w, &api.FeesHistory{
+	return restutil.WriteJSON(w, &api.FeesHistory{
 		OldestBlock:   oldestBlockRevision,
 		BaseFeePerGas: baseFees,
 		GasUsedRatio:  gasUsedRatios,
@@ -177,7 +180,7 @@ func (f *Fees) handleGetPriority(w http.ResponseWriter, _ *http.Request) error {
 		}
 	}
 
-	return utils.WriteJSON(w, &api.FeesPriority{
+	return restutil.WriteJSON(w, &api.FeesPriority{
 		MaxPriorityFeePerGas: priorityFee,
 	})
 }
@@ -187,9 +190,9 @@ func (f *Fees) Mount(root *mux.Router, pathPrefix string) {
 	sub.Path("/history").
 		Methods(http.MethodGet).
 		Name("GET /fees/history").
-		HandlerFunc(utils.WrapHandlerFunc(f.handleGetFeesHistory))
+		HandlerFunc(restutil.WrapHandlerFunc(f.handleGetFeesHistory))
 	sub.Path("/priority").
 		Methods(http.MethodGet).
 		Name("GET /fees/priority").
-		HandlerFunc(utils.WrapHandlerFunc(f.handleGetPriority))
+		HandlerFunc(restutil.WrapHandlerFunc(f.handleGetPriority))
 }

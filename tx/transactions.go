@@ -10,9 +10,7 @@ import (
 	"github.com/vechain/thor/v2/trie"
 )
 
-var (
-	emptyRoot = trie.DeriveRoot(&derivableTxs{})
-)
+var emptyRoot = trie.DeriveRoot(&derivableTxs{})
 
 // Transactions a slice of transactions.
 type Transactions []*Transaction

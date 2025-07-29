@@ -1,0 +1,133 @@
+// Copyright (c) 2025 The VeChainThor developers
+//
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
+package delegation
+
+import (
+	"math/big"
+
+	"github.com/pkg/errors"
+
+	"github.com/vechain/thor/v2/builtin/solidity"
+	"github.com/vechain/thor/v2/builtin/staker/validation"
+	"github.com/vechain/thor/v2/thor"
+)
+
+var (
+	slotDelegations        = thor.BytesToBytes32([]byte(("delegations")))
+	slotDelegationsCounter = thor.BytesToBytes32([]byte(("delegations-counter")))
+)
+
+type Service struct {
+	delegations *solidity.Mapping[thor.Bytes32, *Delegation]
+	idCounter   *solidity.Uint256
+}
+
+func New(sctx *solidity.Context) *Service {
+	return &Service{
+		delegations: solidity.NewMapping[thor.Bytes32, *Delegation](sctx, slotDelegations),
+		idCounter:   solidity.NewUint256(sctx, slotDelegationsCounter),
+	}
+}
+
+func (s *Service) GetDelegation(delegationID thor.Bytes32) (*Delegation, error) {
+	d, err := s.delegations.Get(delegationID)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get delegation")
+	}
+	return d, nil
+}
+
+func (s *Service) SetDelegation(delegationID thor.Bytes32, entry *Delegation, isNew bool) error {
+	if err := s.delegations.Set(delegationID, entry, isNew); err != nil {
+		return errors.Wrap(err, "failed to set delegation")
+	}
+	return nil
+}
+
+func (s *Service) Add(
+	validationID thor.Address,
+	firstIteration uint32,
+	stake *big.Int,
+	multiplier uint8,
+) (thor.Bytes32, error) {
+	// ensure input is sane
+	if multiplier == 0 {
+		return thor.Bytes32{}, errors.New("multiplier cannot be 0")
+	}
+	if stake.Cmp(big.NewInt(0)) <= 0 {
+		return thor.Bytes32{}, errors.New("stake must be greater than 0")
+	}
+
+	// update the global delegation counter
+	// todo: should this counter be per validation ?
+	id, err := s.idCounter.Get()
+	if err != nil {
+		return thor.Bytes32{}, err
+	}
+
+	id = id.Add(id, big.NewInt(1))
+	if err := s.idCounter.Set(id); err != nil {
+		return thor.Bytes32{}, errors.Wrap(err, "failed to increment delegation ID counter")
+	}
+
+	delegationID := thor.BytesToBytes32(id.Bytes())
+	delegation := &Delegation{
+		Multiplier:     multiplier,
+		Stake:          stake,
+		ValidationID:   validationID,
+		FirstIteration: firstIteration,
+	}
+
+	if err := s.delegations.Set(delegationID, delegation, false); err != nil {
+		return thor.Bytes32{}, errors.Wrap(err, "failed to set delegation")
+	}
+
+	return delegationID, nil
+}
+
+// todo uncouple this
+func (s *Service) SignalExit(delegationID thor.Bytes32, val *validation.Validation) error {
+	delegation, err := s.GetDelegation(delegationID)
+	if err != nil {
+		return err
+	}
+
+	if delegation.LastIteration != nil {
+		return errors.New("delegation is already disabled for auto-renew")
+	}
+	if delegation.Stake.Sign() == 0 {
+		return errors.New("delegation is not active")
+	}
+	if !delegation.Started(val) {
+		return errors.New("delegation has not started yet, funds can be withdrawn")
+	}
+	if delegation.Ended(val) {
+		return errors.New("delegation has ended, funds can be withdrawn")
+	}
+
+	last := val.CurrentIteration()
+	delegation.LastIteration = &last
+
+	return s.SetDelegation(delegationID, delegation, false)
+}
+
+func (s *Service) Withdraw(delegationID thor.Bytes32) (*big.Int, *big.Int, error) {
+	del, err := s.GetDelegation(delegationID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// ensure the pointers are copied, not referenced
+	withdrawableStake := new(big.Int).Set(del.Stake)
+	withdrawableStakeWeight := del.CalcWeight()
+
+	del.Stake = big.NewInt(0)
+	if err := s.SetDelegation(delegationID, del, false); err != nil {
+		return nil, nil, err
+	}
+
+	return withdrawableStake, withdrawableStakeWeight, nil
+}

@@ -16,6 +16,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/testchain"
@@ -42,7 +43,7 @@ func initRewardsServer(t *testing.T) *httptest.Server {
 	params := thorChain.Contract(builtin.Params.Address, builtin.Params.ABI, genesis.DevAccounts()[0])
 	err = params.MintTransaction("set", big.NewInt(0), thor.KeyMaxBlockProposers, big.NewInt(1))
 	assert.NoError(t, err)
-	err = params.MintTransaction("set", big.NewInt(0), thor.KeyCurveFactor, thor.CurveFactor)
+	err = params.MintTransaction("set", big.NewInt(0), thor.KeyCurveFactor, thor.InitialCurveFactor)
 	assert.NoError(t, err)
 
 	require.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
@@ -142,6 +143,6 @@ func TestRewardResponseFormat(t *testing.T) {
 
 		assert.Equal(t, 20, len(*blockReward.Master), "master address should be 20 bytes")
 
-		assert.Equal(t, 32, len(*blockReward.ValidatorID), "validator ID should be 32 bytes")
+		assert.Equal(t, 20, len(*blockReward.ValidatorID), "validator ID should be 20 bytes")
 	})
 }

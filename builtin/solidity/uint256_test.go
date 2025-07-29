@@ -10,13 +10,14 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/builtin/gascharger"
 	"github.com/vechain/thor/v2/thor"
 )
 
 func TestUint256(t *testing.T) {
 	ctx := newContext()
-	uint := NewUint256(ctx, thor.Bytes32{01})
+	uint := NewUint256(ctx, thor.Bytes32{0o1})
 
 	// test `Set`
 	uint.Set(big.NewInt(1000))

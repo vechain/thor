@@ -11,8 +11,9 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
+
 	"github.com/vechain/thor/v2/api"
-	"github.com/vechain/thor/v2/api/utils"
+	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/log"
 )
 
@@ -31,16 +32,16 @@ func (l *LogLevel) Mount(root *mux.Router, pathPrefix string) {
 	sub.Path("").
 		Methods(http.MethodGet).
 		Name("get-log-level").
-		HandlerFunc(utils.WrapHandlerFunc(l.getLogLevelHandler))
+		HandlerFunc(restutil.WrapHandlerFunc(l.getLogLevelHandler))
 
 	sub.Path("").
 		Methods(http.MethodPost).
 		Name("post-log-level").
-		HandlerFunc(utils.WrapHandlerFunc(l.postLogLevelHandler))
+		HandlerFunc(restutil.WrapHandlerFunc(l.postLogLevelHandler))
 }
 
 func (l *LogLevel) getLogLevelHandler(w http.ResponseWriter, _ *http.Request) error {
-	return utils.WriteJSON(w, api.LogLevelResponse{
+	return restutil.WriteJSON(w, api.LogLevelResponse{
 		CurrentLevel: l.logLevel.Level().String(),
 	})
 }
@@ -48,8 +49,8 @@ func (l *LogLevel) getLogLevelHandler(w http.ResponseWriter, _ *http.Request) er
 func (l *LogLevel) postLogLevelHandler(w http.ResponseWriter, r *http.Request) error {
 	var req api.LogLevelRequest
 
-	if err := utils.ParseJSON(r.Body, &req); err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "Invalid request body"))
+	if err := restutil.ParseJSON(r.Body, &req); err != nil {
+		return restutil.BadRequest(errors.WithMessage(err, "Invalid request body"))
 	}
 
 	switch req.Level {
@@ -66,12 +67,12 @@ func (l *LogLevel) postLogLevelHandler(w http.ResponseWriter, r *http.Request) e
 	case "crit":
 		l.logLevel.Set(log.LevelCrit)
 	default:
-		return utils.BadRequest(errors.New("Invalid verbosity level"))
+		return restutil.BadRequest(errors.New("Invalid verbosity level"))
 	}
 
 	log.Info("log level changed", "pkg", "loglevel", "level", l.logLevel.Level().String())
 
-	return utils.WriteJSON(w, api.LogLevelResponse{
+	return restutil.WriteJSON(w, api.LogLevelResponse{
 		CurrentLevel: l.logLevel.Level().String(),
 	})
 }

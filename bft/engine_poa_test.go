@@ -5,10 +5,12 @@
 package bft
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
@@ -42,11 +44,18 @@ func newTestBft(forkCfg *thor.ForkConfig) (*TestBFT, error) {
 	db := muxdb.NewMem()
 
 	auth := make([]genesis.Authority, 0, len(devAccounts))
+	accounts := make([]genesis.Account, 0, len(devAccounts))
+	bal, _ := new(big.Int).SetString("1000000000000000000000000000", 10)
 	for _, acc := range devAccounts {
 		auth = append(auth, genesis.Authority{
 			MasterAddress:   acc.Address,
 			EndorsorAddress: acc.Address,
 			Identity:        thor.BytesToBytes32([]byte("master")),
+		})
+		accounts = append(accounts, genesis.Account{
+			Address: acc.Address,
+			Balance: (*genesis.HexOrDecimal256)(bal),
+			Energy:  (*genesis.HexOrDecimal256)(bal),
 		})
 	}
 	mbp := uint64(MaxBlockProposers)
@@ -56,6 +65,7 @@ func newTestBft(forkCfg *thor.ForkConfig) (*TestBFT, error) {
 		ExtraData:  "",
 		ForkConfig: forkCfg,
 		Authority:  auth,
+		Accounts:   accounts,
 		Params: genesis.Params{
 			MaxBlockProposers: &mbp,
 		},
@@ -92,7 +102,7 @@ func newTestBft(forkCfg *thor.ForkConfig) (*TestBFT, error) {
 		engine: engine,
 		db:     db,
 		repo:   repo,
-		stater: state.NewStater(db),
+		stater: stater,
 		fc:     forkCfg,
 	}, nil
 }
@@ -567,7 +577,7 @@ func TestGetVote(t *testing.T) {
 				err = testBFT.reCreateEngine()
 				assert.Nil(t, err)
 
-				//should be 2 checkpoints in voted
+				// should be 2 checkpoints in voted
 				votes = testBFT.engine.casts.Slice(testBFT.engine.Finalized())
 				if err != nil {
 					t.Fatal(err)
@@ -668,7 +678,7 @@ func TestJustifier(t *testing.T) {
 				}
 
 				assert.Equal(t, uint32(0), vs.checkpoint)
-				assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.threshold)
+				assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.thresholdVotes)
 			},
 		}, {
 			"fork in the middle of checkpoint", func(t *testing.T) {
@@ -684,7 +694,7 @@ func TestJustifier(t *testing.T) {
 				}
 
 				assert.Equal(t, uint32(0), vs.checkpoint)
-				assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.threshold)
+				assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.thresholdVotes)
 			},
 		}, {
 			"the second bft round", func(t *testing.T) {
@@ -702,7 +712,7 @@ func TestJustifier(t *testing.T) {
 				}
 
 				assert.Equal(t, uint32(thor.CheckpointInterval*2), vs.checkpoint)
-				assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.threshold)
+				assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.thresholdVotes)
 				assert.Equal(t, uint32(2), vs.Summarize().Quality)
 				assert.False(t, vs.Summarize().Justified)
 				assert.False(t, vs.Summarize().Committed)
@@ -723,7 +733,7 @@ func TestJustifier(t *testing.T) {
 				}
 
 				for i := 0; i <= MaxBlockProposers*2/3; i++ {
-					vs.AddBlock(datagen.RandAddress(), true)
+					vs.AddBlock(datagen.RandAddress(), true, nil)
 				}
 
 				st := vs.Summarize()
@@ -732,7 +742,7 @@ func TestJustifier(t *testing.T) {
 				assert.True(t, st.Committed)
 
 				// add vote after commits，commit/justify stays the same
-				vs.AddBlock(datagen.RandAddress(), true)
+				vs.AddBlock(datagen.RandAddress(), true, nil)
 				st = vs.Summarize()
 				assert.Equal(t, uint32(3), st.Quality)
 				assert.True(t, st.Justified)
@@ -754,7 +764,7 @@ func TestJustifier(t *testing.T) {
 				}
 
 				for i := 0; i <= MaxBlockProposers*2/3; i++ {
-					vs.AddBlock(datagen.RandAddress(), false)
+					vs.AddBlock(datagen.RandAddress(), false, nil)
 				}
 
 				st := vs.Summarize()
@@ -779,12 +789,12 @@ func TestJustifier(t *testing.T) {
 
 				// vote <threshold> times COM
 				for range MaxBlockProposers * 2 / 3 {
-					vs.AddBlock(datagen.RandAddress(), true)
+					vs.AddBlock(datagen.RandAddress(), true, nil)
 				}
 
 				master := datagen.RandAddress()
 				// master votes WIT
-				vs.AddBlock(master, false)
+				vs.AddBlock(master, false, nil)
 
 				// justifies but not committed
 				st := vs.Summarize()
@@ -792,14 +802,14 @@ func TestJustifier(t *testing.T) {
 				assert.False(t, st.Committed)
 
 				// master votes COM
-				vs.AddBlock(master, true)
+				vs.AddBlock(master, true, nil)
 
 				// should not be committed
 				st = vs.Summarize()
 				assert.False(t, st.Committed)
 
 				// another master votes WIT
-				vs.AddBlock(datagen.RandAddress(), true)
+				vs.AddBlock(datagen.RandAddress(), true, nil)
 				st = vs.Summarize()
 				assert.True(t, st.Committed)
 			},
@@ -816,40 +826,40 @@ func TestJustifier(t *testing.T) {
 				}
 
 				master := datagen.RandAddress()
-				vs.AddBlock(master, true)
-				assert.Equal(t, true, vs.votes[master])
+				vs.AddBlock(master, true, nil)
+				assert.Equal(t, true, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(1), vs.comVotes)
 
-				vs.AddBlock(master, false)
-				assert.Equal(t, false, vs.votes[master])
+				vs.AddBlock(master, false, nil)
+				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(master, true)
-				assert.Equal(t, false, vs.votes[master])
+				vs.AddBlock(master, true, nil)
+				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(master, false)
-				assert.Equal(t, false, vs.votes[master])
+				vs.AddBlock(master, false, nil)
+				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 
 				vs, err = testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
 				}
-				vs.AddBlock(master, false)
-				assert.Equal(t, false, vs.votes[master])
+				vs.AddBlock(master, false, nil)
+				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(master, true)
-				assert.Equal(t, false, vs.votes[master])
+				vs.AddBlock(master, true, nil)
+				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(master, true)
-				assert.Equal(t, false, vs.votes[master])
+				vs.AddBlock(master, true, nil)
+				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(master, false)
-				assert.Equal(t, false, vs.votes[master])
+				vs.AddBlock(master, false, nil)
+				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 			},
 		},

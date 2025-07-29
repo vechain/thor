@@ -17,16 +17,16 @@ import (
 // txObjectMap to maintain mapping of tx hash to tx object, account quota and pending cost.
 type txObjectMap struct {
 	lock      sync.RWMutex
-	mapByHash map[thor.Bytes32]*txObject
-	mapByID   map[thor.Bytes32]*txObject
+	mapByHash map[thor.Bytes32]*TxObject
+	mapByID   map[thor.Bytes32]*TxObject
 	quota     map[thor.Address]int
 	cost      map[thor.Address]*big.Int
 }
 
 func newTxObjectMap() *txObjectMap {
 	return &txObjectMap{
-		mapByHash: make(map[thor.Bytes32]*txObject),
-		mapByID:   make(map[thor.Bytes32]*txObject),
+		mapByHash: make(map[thor.Bytes32]*TxObject),
+		mapByID:   make(map[thor.Bytes32]*TxObject),
 		quota:     make(map[thor.Address]int),
 		cost:      make(map[thor.Address]*big.Int),
 	}
@@ -39,7 +39,7 @@ func (m *txObjectMap) ContainsHash(txHash thor.Bytes32) bool {
 	return found
 }
 
-func (m *txObjectMap) Add(txObj *txObject, limitPerAccount int, validatePayer func(payer thor.Address, needs *big.Int) error) error {
+func (m *txObjectMap) Add(txObj *TxObject, limitPerAccount int, validatePayer func(payer thor.Address, needs *big.Int) error) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -93,7 +93,7 @@ func (m *txObjectMap) Add(txObj *txObject, limitPerAccount int, validatePayer fu
 	return nil
 }
 
-func (m *txObjectMap) GetByID(id thor.Bytes32) *txObject {
+func (m *txObjectMap) GetByID(id thor.Bytes32) *TxObject {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 	return m.mapByID[id]
@@ -136,7 +136,7 @@ func (m *txObjectMap) RemoveByHash(txHash thor.Bytes32) bool {
 	return false
 }
 
-func (m *txObjectMap) UpdatePendingCost(txObj *txObject) {
+func (m *txObjectMap) UpdatePendingCost(txObj *TxObject) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -147,11 +147,11 @@ func (m *txObjectMap) UpdatePendingCost(txObj *txObject) {
 	}
 }
 
-func (m *txObjectMap) ToTxObjects() []*txObject {
+func (m *txObjectMap) ToTxObjects() []*TxObject {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 
-	txObjs := make([]*txObject, 0, len(m.mapByHash))
+	txObjs := make([]*TxObject, 0, len(m.mapByHash))
 	for _, txObj := range m.mapByHash {
 		txObjs = append(txObjs, txObj)
 	}
@@ -169,7 +169,7 @@ func (m *txObjectMap) ToTxs() tx.Transactions {
 	return txs
 }
 
-func (m *txObjectMap) Fill(txObjs []*txObject) {
+func (m *txObjectMap) Fill(txObjs []*TxObject) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	for _, txObj := range txObjs {

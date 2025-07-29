@@ -16,6 +16,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/syndtr/goleveldb/leveldb/storage"
+
 	"github.com/vechain/thor/v2/kv"
 	"github.com/vechain/thor/v2/trie"
 )
@@ -167,7 +168,7 @@ func TestCorruptDBRecovery(t *testing.T) {
 	db.Close()
 
 	corruptFile := filepath.Join(path, "CURRENT")
-	err = os.WriteFile(corruptFile, []byte("corrupted"), 0600)
+	err = os.WriteFile(corruptFile, []byte("corrupted"), 0o600)
 	assert.Nil(t, err)
 
 	db, err = Open(path, opts)

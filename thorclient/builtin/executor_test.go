@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/test/datagen"
@@ -42,7 +43,11 @@ func TestExecutor(t *testing.T) {
 	// Propose - Add another approver
 	addApproverClause, err := executor.AddApprover(newApprover.Address(), datagen.RandomHash()).Clause()
 	require.NoError(t, err)
-	receipt, _, err := executor.Propose(*addApproverClause.To(), addApproverClause.Data()).Send().WithSigner(approver1).WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
+	receipt, _, err := executor.Propose(*addApproverClause.To(), addApproverClause.Data()).
+		Send().
+		WithSigner(approver1).
+		WithOptions(txOpts()).
+		SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 

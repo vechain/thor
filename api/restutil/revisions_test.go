@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package utils
+package restutil
 
 import (
 	"fmt"
@@ -13,6 +13,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -48,7 +49,8 @@ func TestParseRevision(t *testing.T) {
 			revision: "finalized",
 			err:      nil,
 			expected: &Revision{revFinalized},
-		}, {
+		},
+		{
 			revision: "next",
 			err:      nil,
 			expected: &Revision{revNext},

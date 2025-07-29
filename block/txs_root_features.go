@@ -9,6 +9,7 @@ import (
 	"io"
 
 	"github.com/ethereum/go-ethereum/rlp"
+
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )

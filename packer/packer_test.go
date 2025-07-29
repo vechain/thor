@@ -13,6 +13,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus"
@@ -39,6 +40,7 @@ var nonce = uint64(time.Now().UnixNano())
 func (ti *txIterator) HasNext() bool {
 	return ti.i < 100
 }
+
 func (ti *txIterator) Next() *tx.Transaction {
 	ti.i++
 
@@ -140,7 +142,6 @@ func TestForkVIP191(t *testing.T) {
 			return nil
 		}).
 		Build(stater)
-
 	if err != nil {
 		t.Fatal(err)
 	}

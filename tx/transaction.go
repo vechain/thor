@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -632,7 +633,7 @@ func IntrinsicGas(clauses ...*Clause) (uint64, error) {
 		return thor.TxGas + thor.ClauseGas, nil
 	}
 
-	var total = thor.TxGas
+	total := thor.TxGas
 	var overflow bool
 	for _, c := range clauses {
 		gas, err := dataGas(c.body.Data)

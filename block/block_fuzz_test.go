@@ -13,6 +13,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
+
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
@@ -44,8 +45,8 @@ func randomBlock(addrBytes, byteArray []byte, maxFee, gasUsed, gasLimit, totalSc
 	now := uint64(time.Now().UnixNano())
 
 	var (
-		root        thor.Bytes32 = thor.BytesToBytes32(byteArray)
-		beneficiary thor.Address = thor.BytesToAddress(byteArray)
+		root        = thor.BytesToBytes32(byteArray)
+		beneficiary = thor.BytesToAddress(byteArray)
 	)
 
 	b := new(Builder).

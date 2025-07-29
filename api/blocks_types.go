@@ -8,6 +8,7 @@ package api
 import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -46,7 +47,7 @@ type JSONCollapsedBlock struct {
 type JSONBlockReward struct {
 	Reward      *math.HexOrDecimal256 `json:"reward"`
 	Master      *thor.Address         `json:"master"`
-	ValidatorID *thor.Bytes32         `json:"validatorId"`
+	ValidatorID *thor.Address         `json:"validatorId"`
 }
 
 type JSONClause struct {

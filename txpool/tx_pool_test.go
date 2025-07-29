@@ -23,6 +23,7 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
@@ -36,8 +37,10 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-const LIMIT = 10
-const LIMIT_PER_ACCOUNT = 2
+const (
+	LIMIT             = 10
+	LIMIT_PER_ACCOUNT = 2
+)
 
 var devAccounts = genesis.DevAccounts()
 
@@ -50,11 +53,26 @@ func newPool(limit int, limitPerAccount int, forkConfig *thor.ForkConfig) *TxPoo
 	}, forkConfig)
 }
 
-func newPoolWithParams(limit int, limitPerAccount int, BlocklistCacheFilePath string, BlocklistFetchURL string, timestamp uint64, forks *thor.ForkConfig) *TxPool {
+func newPoolWithParams(
+	limit int,
+	limitPerAccount int,
+	BlocklistCacheFilePath string,
+	BlocklistFetchURL string,
+	timestamp uint64,
+	forks *thor.ForkConfig,
+) *TxPool {
 	return newPoolWithMaxLifetime(limit, limitPerAccount, BlocklistCacheFilePath, BlocklistFetchURL, timestamp, time.Hour, forks)
 }
 
-func newPoolWithMaxLifetime(limit int, limitPerAccount int, BlocklistCacheFilePath string, BlocklistFetchURL string, timestamp uint64, maxLifetime time.Duration, forks *thor.ForkConfig) *TxPool {
+func newPoolWithMaxLifetime(
+	limit int,
+	limitPerAccount int,
+	BlocklistCacheFilePath string,
+	BlocklistFetchURL string,
+	timestamp uint64,
+	maxLifetime time.Duration,
+	forks *thor.ForkConfig,
+) *TxPool {
 	db := muxdb.NewMem()
 	gene := new(genesis.Builder).
 		GasLimit(thor.InitialGasLimit).
@@ -502,11 +520,11 @@ func TestWashTxs(t *testing.T) {
 	assert.Equal(t, tx.Transactions{tx1}, txs)
 
 	tx2 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[1])
-	txObj2, _ := resolveTx(tx2, false)
+	txObj2, _ := ResolveTx(tx2, false)
 	assert.Nil(t, pool.all.Add(txObj2, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })) // this tx will participate in the wash out.
 
 	tx3 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[2])
-	txObj3, _ := resolveTx(tx3, false)
+	txObj3, _ := ResolveTx(tx3, false)
 	assert.Nil(t, pool.all.Add(txObj3, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })) // this tx will participate in the wash out.
 
 	txs, removedLegacy, removedDynamicFee, err := pool.wash(pool.repo.BestBlockSummary())
@@ -822,9 +840,12 @@ func TestAdd(t *testing.T) {
 		}
 	}
 
-	raw, _ := hex.DecodeString(fmt.Sprintf("f8dc81%v84aabbccdd20f840df947567d83b7b8d80addcb281a71d54fc7b3364ffed82271086000000606060df947567d83b7b8d80addcb281a71d54fc7b3364ffed824e20860000006060608180830334508083bc614ec20108b88256e32450c1907f627d2c11fe5a9d0216be1712f4938b5feb04e37edef236c56266c3378acf97994beff22698b70023f486645d29cb23b479a7b044f7c6b104d2000584fcb3964446d4d832dcc849e2d76ea7e04a4ebdc3a4b61e7997e93277363d4e7fe9315e7f6dd8d9c0a8bff5879503f5c04adab8b08772499e74d34f67923501",
-		hex.EncodeToString([]byte{pool.repo.ChainTag()}),
-	))
+	raw, _ := hex.DecodeString(
+		fmt.Sprintf(
+			"f8dc81%v84aabbccdd20f840df947567d83b7b8d80addcb281a71d54fc7b3364ffed82271086000000606060df947567d83b7b8d80addcb281a71d54fc7b3364ffed824e20860000006060608180830334508083bc614ec20108b88256e32450c1907f627d2c11fe5a9d0216be1712f4938b5feb04e37edef236c56266c3378acf97994beff22698b70023f486645d29cb23b479a7b044f7c6b104d2000584fcb3964446d4d832dcc849e2d76ea7e04a4ebdc3a4b61e7997e93277363d4e7fe9315e7f6dd8d9c0a8bff5879503f5c04adab8b08772499e74d34f67923501",
+			hex.EncodeToString([]byte{pool.repo.ChainTag()}),
+		),
+	)
 	badReserved := new(tx.Transaction)
 	if err := badReserved.UnmarshalBinary(raw); err != nil {
 		t.Log(pool.repo.ChainTag())
@@ -840,15 +861,56 @@ func TestAdd(t *testing.T) {
 	}{
 		{newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(10), 100, nil, tx.Features(0), acc), "tx rejected: tx is not executable"},
 		{newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(100), 100, nil, tx.Features(0), acc), "tx rejected: block ref out of schedule"},
-		{newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(0), acc), "tx rejected: tx is not executable"},
-		{newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(2), acc), "tx rejected: unsupported features"},
-		{newTx(tx.TypeLegacy, pool.repo.ChainTag(), []*tx.Clause{tx.NewClause(nil).WithData(data[:])}, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(0), acc), "tx rejected: size too large"},
+		{
+			newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(0), acc),
+			"tx rejected: tx is not executable",
+		},
+		{
+			newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(2), acc),
+			"tx rejected: unsupported features",
+		},
+		{
+			newTx(
+				tx.TypeLegacy,
+				pool.repo.ChainTag(),
+				[]*tx.Clause{tx.NewClause(nil).WithData(data[:])},
+				21000,
+				tx.BlockRef{},
+				100,
+				&thor.Bytes32{1},
+				tx.Features(0),
+				acc,
+			),
+			"tx rejected: size too large",
+		},
 		{badReserved, "tx rejected: unsupported features"},
 		{newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(10), 100, nil, tx.Features(0), acc), "tx rejected: tx is not executable"},
-		{newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(100), 100, nil, tx.Features(0), acc), "tx rejected: block ref out of schedule"},
-		{newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(0), acc), "tx rejected: tx is not executable"},
-		{newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(2), acc), "tx rejected: unsupported features"},
-		{newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), []*tx.Clause{tx.NewClause(nil).WithData(data[:])}, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(0), acc), "tx rejected: size too large"},
+		{
+			newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(100), 100, nil, tx.Features(0), acc),
+			"tx rejected: block ref out of schedule",
+		},
+		{
+			newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(0), acc),
+			"tx rejected: tx is not executable",
+		},
+		{
+			newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(2), acc),
+			"tx rejected: unsupported features",
+		},
+		{
+			newTx(
+				tx.TypeDynamicFee,
+				pool.repo.ChainTag(),
+				[]*tx.Clause{tx.NewClause(nil).WithData(data[:])},
+				21000,
+				tx.BlockRef{},
+				100,
+				&thor.Bytes32{1},
+				tx.Features(0),
+				acc,
+			),
+			"tx rejected: size too large",
+		},
 	}
 
 	for _, tt := range tests {
@@ -952,14 +1014,20 @@ func TestNonExecutables(t *testing.T) {
 
 	// loop 90 times
 	for i := range 90 {
-		assert.NoError(t, pool.AddLocal(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i%len(devAccounts)])))
+		assert.NoError(
+			t,
+			pool.AddLocal(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i%len(devAccounts)])),
+		)
 	}
 
 	executables, _, _, _ := pool.wash(pool.repo.BestBlockSummary())
 	pool.executables.Store(executables)
 
 	// add 1 non-executable
-	assert.NoError(t, pool.AddLocal(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(0), devAccounts[2])))
+	assert.NoError(
+		t,
+		pool.AddLocal(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(0), devAccounts[2])),
+	)
 }
 
 func TestExpiredTxs(t *testing.T) {
@@ -967,7 +1035,10 @@ func TestExpiredTxs(t *testing.T) {
 
 	// loop 90 times
 	for i := range 90 {
-		assert.NoError(t, pool.Add(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i%len(devAccounts)])))
+		assert.NoError(
+			t,
+			pool.Add(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i%len(devAccounts)])),
+		)
 	}
 
 	executables, _, _, _ := pool.wash(pool.repo.BestBlockSummary())
@@ -1008,7 +1079,7 @@ func TestBlocked(t *testing.T) {
 	assert.Nil(t, err)
 
 	// added into all, will be washed out
-	txObj, err := resolveTx(trx, false)
+	txObj, err := ResolveTx(trx, false)
 	assert.Nil(t, err)
 	pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
@@ -1052,7 +1123,7 @@ func TestWash(t *testing.T) {
 
 				trx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
 
-				txObj, err := resolveTx(trx, false)
+				txObj, err := ResolveTx(trx, false)
 				assert.Nil(t, err)
 				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
@@ -1076,14 +1147,24 @@ func TestWash(t *testing.T) {
 
 				trx1 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
 				trx2 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
-				trx3 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(pool.repo.BestBlockSummary().Header.Number()+10), 100, nil, tx.Features(0), acc)
+				trx3 := newTx(
+					tx.TypeLegacy,
+					pool.repo.ChainTag(),
+					nil,
+					21000,
+					tx.NewBlockRef(pool.repo.BestBlockSummary().Header.Number()+10),
+					100,
+					nil,
+					tx.Features(0),
+					acc,
+				)
 				pool.add(trx1, false, false)
 
-				txObj, err := resolveTx(trx2, false)
+				txObj, err := ResolveTx(trx2, false)
 				assert.Nil(t, err)
 				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
-				txObj, err = resolveTx(trx3, false)
+				txObj, err = ResolveTx(trx3, false)
 				assert.Nil(t, err)
 				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
@@ -1106,15 +1187,35 @@ func TestWash(t *testing.T) {
 				}
 
 				trx1 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
-				trx2 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(pool.repo.BestBlockSummary().Header.Number()+10), 100, nil, tx.Features(0), devAccounts[0])
-				trx3 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(pool.repo.BestBlockSummary().Header.Number()+10), 100, nil, tx.Features(0), acc)
+				trx2 := newTx(
+					tx.TypeLegacy,
+					pool.repo.ChainTag(),
+					nil,
+					21000,
+					tx.NewBlockRef(pool.repo.BestBlockSummary().Header.Number()+10),
+					100,
+					nil,
+					tx.Features(0),
+					devAccounts[0],
+				)
+				trx3 := newTx(
+					tx.TypeLegacy,
+					pool.repo.ChainTag(),
+					nil,
+					21000,
+					tx.NewBlockRef(pool.repo.BestBlockSummary().Header.Number()+10),
+					100,
+					nil,
+					tx.Features(0),
+					acc,
+				)
 				pool.add(trx1, false, false)
 
-				txObj, err := resolveTx(trx2, false)
+				txObj, err := ResolveTx(trx2, false)
 				assert.Nil(t, err)
 				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
-				txObj, err = resolveTx(trx3, false)
+				txObj, err = ResolveTx(trx3, false)
 				assert.Nil(t, err)
 				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
@@ -1185,7 +1286,7 @@ func TestWashWithDynFeeTx(t *testing.T) {
 
 				trx := newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
 
-				txObj, err := resolveTx(trx, false)
+				txObj, err := ResolveTx(trx, false)
 				assert.Nil(t, err)
 				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
@@ -1240,14 +1341,24 @@ func TestWashWithDynFeeTxAndPoolLimit(t *testing.T) {
 
 				trx1 := newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
 				trx2 := newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
-				trx3 := newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(pool.repo.BestBlockSummary().Header.Number()+10), 100, nil, tx.Features(0), acc)
+				trx3 := newTx(
+					tx.TypeDynamicFee,
+					pool.repo.ChainTag(),
+					nil,
+					21000,
+					tx.NewBlockRef(pool.repo.BestBlockSummary().Header.Number()+10),
+					100,
+					nil,
+					tx.Features(0),
+					acc,
+				)
 				pool.add(trx1, false, false)
 
-				txObj, err := resolveTx(trx2, false)
+				txObj, err := ResolveTx(trx2, false)
 				assert.Nil(t, err)
 				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
-				txObj, err = resolveTx(trx3, false)
+				txObj, err = ResolveTx(trx3, false)
 				assert.Nil(t, err)
 				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
@@ -1267,15 +1378,35 @@ func TestWashWithDynFeeTxAndPoolLimit(t *testing.T) {
 				}
 
 				trx1 := newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
-				trx2 := newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(pool.repo.BestBlockSummary().Header.Number()+10), 100, nil, tx.Features(0), devAccounts[0])
-				trx3 := newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(pool.repo.BestBlockSummary().Header.Number()+10), 100, nil, tx.Features(0), acc)
+				trx2 := newTx(
+					tx.TypeDynamicFee,
+					pool.repo.ChainTag(),
+					nil,
+					21000,
+					tx.NewBlockRef(pool.repo.BestBlockSummary().Header.Number()+10),
+					100,
+					nil,
+					tx.Features(0),
+					devAccounts[0],
+				)
+				trx3 := newTx(
+					tx.TypeDynamicFee,
+					pool.repo.ChainTag(),
+					nil,
+					21000,
+					tx.NewBlockRef(pool.repo.BestBlockSummary().Header.Number()+10),
+					100,
+					nil,
+					tx.Features(0),
+					acc,
+				)
 				pool.add(trx1, false, false)
 
-				txObj, err := resolveTx(trx2, false)
+				txObj, err := ResolveTx(trx2, false)
 				assert.Nil(t, err)
 				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
-				txObj, err = resolveTx(trx3, false)
+				txObj, err = ResolveTx(trx3, false)
 				assert.Nil(t, err)
 				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 

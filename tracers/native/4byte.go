@@ -19,12 +19,12 @@ package native
 import (
 	"encoding/json"
 	"math/big"
+	"slices"
 	"strconv"
 	"sync/atomic"
 
-	"slices"
-
 	"github.com/ethereum/go-ethereum/common"
+
 	"github.com/vechain/thor/v2/tracers"
 	"github.com/vechain/thor/v2/vm"
 )
@@ -78,7 +78,7 @@ func (t *fourByteTracer) store(id []byte, size int) {
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
 func (t *fourByteTracer) CaptureStart(env *vm.EVM, _ common.Address, _ common.Address, _ bool, input []byte, _ uint64, _ *big.Int) {
 	// Update list of precompiles based on current block
-	rules := env.ChainConfig().Rules(env.Context.BlockNumber)
+	rules := env.ChainConfig().Rules(env.BlockNumber)
 	t.activePrecompiles = vm.ActivePrecompiles(rules)
 
 	// Save the outer calldata also

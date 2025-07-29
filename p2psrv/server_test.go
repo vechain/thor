@@ -19,7 +19,9 @@ func TestNewServer(t *testing.T) {
 		t.Fatalf("Unable to generate private key: %v", err)
 	}
 
-	node := discover.MustParseNode("enode://1234cf28ab5f0255a3923ac094d0168ce884a9fa5f3998b1844986b4a2b1eac52fcccd8f2916be9b8b0f7798147ee5592ec3c83518925fac50f812577515d6ad@10.3.58.6:30303?discport=30301")
+	node := discover.MustParseNode(
+		"enode://1234cf28ab5f0255a3923ac094d0168ce884a9fa5f3998b1844986b4a2b1eac52fcccd8f2916be9b8b0f7798147ee5592ec3c83518925fac50f812577515d6ad@10.3.58.6:30303?discport=30301",
+	)
 	opts := &Options{
 		Name:        "testNode",
 		PrivateKey:  privateKey,
@@ -50,7 +52,9 @@ func TestNewServerConnectOnly(t *testing.T) {
 		t.Fatalf("Unable to generate private key: %v", err)
 	}
 
-	knownNode := discover.MustParseNode("enode://1234cf28ab5f0255a3923ac094d0168ce884a9fa5f3998b1844986b4a2b1eac52fcccd8f2916be9b8b0f7798147ee5592ec3c83518925fac50f812577515d6ad@10.3.58.6:30303?discport=30301")
+	knownNode := discover.MustParseNode(
+		"enode://1234cf28ab5f0255a3923ac094d0168ce884a9fa5f3998b1844986b4a2b1eac52fcccd8f2916be9b8b0f7798147ee5592ec3c83518925fac50f812577515d6ad@10.3.58.6:30303?discport=30301",
+	)
 	opts := &Options{
 		Name:        "testNode",
 		PrivateKey:  privateKey,

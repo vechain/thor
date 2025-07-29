@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+
 	"github.com/vechain/thor/v2/api/admin"
 	"github.com/vechain/thor/v2/api/admin/health"
 	"github.com/vechain/thor/v2/chain"

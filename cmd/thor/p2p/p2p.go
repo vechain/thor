@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
+
 	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/p2psrv"
@@ -107,7 +108,7 @@ func (p *P2P) Stop() {
 		log.Warn("failed to encode cached peers", "err", err)
 		return
 	}
-	if err := os.WriteFile(p.peersCachePath, data, 0600); err != nil {
+	if err := os.WriteFile(p.peersCachePath, data, 0o600); err != nil {
 		log.Warn("failed to write peers cache", "err", err)
 	}
 }

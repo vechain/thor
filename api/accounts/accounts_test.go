@@ -19,16 +19,17 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
+	"github.com/vechain/thor/v2/thorclient/httpclient"
 	"github.com/vechain/thor/v2/tx"
 
 	ABI "github.com/vechain/thor/v2/abi"
-	tccommon "github.com/vechain/thor/v2/thorclient/common"
 )
 
 // pragma solidity ^0.4.18;
@@ -90,16 +91,20 @@ const (
 )
 
 var (
-	gasLimit        = math.MaxUint32
-	addr            = thor.BytesToAddress([]byte("to"))
-	value           = big.NewInt(10000)
-	storageKey      = thor.Bytes32{}
-	genesisBlock    *block.Block
-	contractAddr    thor.Address
-	bytecode        = common.Hex2Bytes("608060405234801561001057600080fd5b50610125806100206000396000f3006080604052600436106049576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff16806324b8ba5f14604e578063bb4e3f4d14607b575b600080fd5b348015605957600080fd5b506079600480360381019080803560ff16906020019092919050505060cf565b005b348015608657600080fd5b5060b3600480360381019080803560ff169060200190929190803560ff16906020019092919050505060ec565b604051808260ff1660ff16815260200191505060405180910390f35b806000806101000a81548160ff021916908360ff16021790555050565b60008183019050929150505600a165627a7a723058201584add23e31d36c569b468097fe01033525686b59bbb263fb3ab82e9553dae50029")
-	runtimeBytecode = common.Hex2Bytes("6080604052600436106049576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff16806324b8ba5f14604e578063bb4e3f4d14607b575b600080fd5b348015605957600080fd5b506079600480360381019080803560ff16906020019092919050505060cf565b005b348015608657600080fd5b5060b3600480360381019080803560ff169060200190929190803560ff16906020019092919050505060ec565b604051808260ff1660ff16815260200191505060405180910390f35b806000806101000a81548160ff021916908360ff16021790555050565b60008183019050929150505600a165627a7a723058201584add23e31d36c569b468097fe01033525686b59bbb263fb3ab82e9553dae50029")
-	ts              *httptest.Server
-	tclient         *thorclient.Client
+	gasLimit     = math.MaxUint32
+	addr         = thor.BytesToAddress([]byte("to"))
+	value        = big.NewInt(10000)
+	storageKey   = thor.Bytes32{}
+	genesisBlock *block.Block
+	contractAddr thor.Address
+	bytecode     = common.Hex2Bytes(
+		"608060405234801561001057600080fd5b50610125806100206000396000f3006080604052600436106049576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff16806324b8ba5f14604e578063bb4e3f4d14607b575b600080fd5b348015605957600080fd5b506079600480360381019080803560ff16906020019092919050505060cf565b005b348015608657600080fd5b5060b3600480360381019080803560ff169060200190929190803560ff16906020019092919050505060ec565b604051808260ff1660ff16815260200191505060405180910390f35b806000806101000a81548160ff021916908360ff16021790555050565b60008183019050929150505600a165627a7a723058201584add23e31d36c569b468097fe01033525686b59bbb263fb3ab82e9553dae50029",
+	)
+	runtimeBytecode = common.Hex2Bytes(
+		"6080604052600436106049576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff16806324b8ba5f14604e578063bb4e3f4d14607b575b600080fd5b348015605957600080fd5b506079600480360381019080803560ff16906020019092919050505060cf565b005b348015608657600080fd5b5060b3600480360381019080803560ff169060200190929190803560ff16906020019092919050505060ec565b604051808260ff1660ff16815260200191505060405180910390f35b806000806101000a81548160ff021916908360ff16021790555050565b60008183019050929150505600a165627a7a723058201584add23e31d36c569b468097fe01033525686b59bbb263fb3ab82e9553dae50029",
+	)
+	ts      *httptest.Server
+	tclient *thorclient.Client
 )
 
 func TestAccount(t *testing.T) {
@@ -151,7 +156,7 @@ func getAccount(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
 
-	//revision is optional default `best`
+	// revision is optional default `best`
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/accounts/" + addr.String())
 	require.NoError(t, err)
 	var acc api.Account
@@ -199,7 +204,7 @@ func getAccountWithFinalizedRevision(t *testing.T) {
 	genesisAccount, err := tclient.Account(&soloAddress, thorclient.Revision(genesisBlock.Header().ID().String()))
 	require.NoError(t, err)
 
-	finalizedAccount, err := tclient.Account(&soloAddress, thorclient.Revision(tccommon.FinalizedRevision))
+	finalizedAccount, err := tclient.Account(&soloAddress, thorclient.Revision(httpclient.FinalizedRevision))
 	require.NoError(t, err)
 
 	genesisEnergy := (*big.Int)(genesisAccount.Energy)
@@ -217,7 +222,7 @@ func getCode(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
 
-	//revision is optional defaut `best`
+	// revision is optional defaut `best`
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/accounts/" + contractAddr.String() + "/code")
 	require.NoError(t, err)
 	var code map[string]string
@@ -251,11 +256,12 @@ func getStorage(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad storage key")
 
-	_, statusCode, err = tclient.RawHTTPClient().RawHTTPGet("/accounts/" + contractAddr.String() + "/storage/" + storageKey.String() + "?revision=" + invalidNumberRevision)
+	_, statusCode, err = tclient.RawHTTPClient().
+		RawHTTPGet("/accounts/" + contractAddr.String() + "/storage/" + storageKey.String() + "?revision=" + invalidNumberRevision)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
 
-	//revision is optional defaut `best`
+	// revision is optional defaut `best`
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/accounts/" + contractAddr.String() + "/storage/" + storageKey.String())
 	require.NoError(t, err)
 	var value map[string]string
@@ -273,7 +279,8 @@ func getStorage(t *testing.T) {
 func getStorageWithNonExistingRevision(t *testing.T) {
 	revision64Len := "0x00000000851caf3cfdb6e899cf5958bfb1ac3413d346d43539627e6be7ec1b4a"
 
-	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/accounts/" + contractAddr.String() + "/storage/" + storageKey.String() + "?revision=" + revision64Len)
+	res, statusCode, err := tclient.RawHTTPClient().
+		RawHTTPGet("/accounts/" + contractAddr.String() + "/storage/" + storageKey.String() + "?revision=" + revision64Len)
 	require.NoError(t, err)
 
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
@@ -342,7 +349,7 @@ func deployContractWithCall(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
 
-	//revision is optional defaut `best`
+	// revision is optional defaut `best`
 	res, _, err := tclient.RawHTTPClient().RawHTTPPost("/accounts", reqBody)
 	require.NoError(t, err)
 	var output *api.CallResult
@@ -443,7 +450,8 @@ func batchCall(t *testing.T) {
 				To:    &contractAddr,
 				Data:  "data2",
 				Value: nil,
-			}},
+			},
+		},
 	}
 	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/accounts/*", badBody)
 	require.NoError(t, err)
@@ -488,7 +496,8 @@ func batchCall(t *testing.T) {
 				To:    &contractAddr,
 				Data:  hexutil.Encode(input),
 				Value: nil,
-			}},
+			},
+		},
 	}
 
 	// 'next' revisoun should be valid

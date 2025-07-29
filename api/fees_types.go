@@ -7,6 +7,7 @@ package api
 
 import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
+
 	"github.com/vechain/thor/v2/thor"
 )
 

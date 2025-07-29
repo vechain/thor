@@ -19,6 +19,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+
 	"github.com/vechain/thor/v2/muxdb"
 	State "github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/trie"

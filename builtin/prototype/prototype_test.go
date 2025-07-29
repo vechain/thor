@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/builtin/prototype"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
@@ -37,7 +38,6 @@ func TestPrototype(t *testing.T) {
 		expected any
 		msg      string
 	}{
-
 		{func() any { return M(binding.IsUser(user)) }, M(false, nil), "should not be user"},
 		{func() any { return binding.AddUser(user, 1) }, nil, ""},
 		{func() any { return M(binding.IsUser(user)) }, M(true, nil), "should be user"},

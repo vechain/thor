@@ -10,6 +10,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
@@ -87,7 +88,7 @@ func (p *Prototype) UserCredit(self thor.Address, user thor.Address) (*big.Int, 
 
 // CreditPlan returns the credit plan for the contract
 func (p *Prototype) CreditPlan(self thor.Address) (*big.Int, *big.Int, error) {
-	var out = [2]any{}
+	out := [2]any{}
 	out[0] = new(*big.Int)
 	out[1] = new(*big.Int)
 	if err := p.contract.Method("creditPlan", self).Call().AtRevision(p.revision).ExecuteInto(&out); err != nil {

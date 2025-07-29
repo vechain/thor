@@ -23,6 +23,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/genesis"
@@ -33,8 +34,10 @@ import (
 	"github.com/vechain/thor/v2/txpool"
 )
 
-var ts *httptest.Server
-var blocks []*block.Block
+var (
+	ts     *httptest.Server
+	blocks []*block.Block
+)
 
 func TestSubscriptions(t *testing.T) {
 	initSubscriptionsServer(t, true)
@@ -338,6 +341,7 @@ func TestSubscriptionsBacktrace(t *testing.T) {
 
 	t.Run("testHandleSubjectWithTransferBacktraceLimit", testHandleSubjectWithTransferBacktraceLimit)
 }
+
 func testHandleSubjectWithTransferBacktraceLimit(t *testing.T) {
 	genesisBlock := blocks[0]
 	queryArg := fmt.Sprintf("pos=%s", genesisBlock.Header().ID().String())

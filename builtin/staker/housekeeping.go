@@ -9,58 +9,76 @@ import (
 	"math/big"
 
 	"github.com/pkg/errors"
+
+	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
 )
 
 // Housekeep iterates over validations, move to cooldown
 // take the oldest validator and move to exited
-func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Bytes32]*Validation, error) {
+func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Address]*validation.Validation, error) {
 	// we only perform housekeeping at the start of epochs
 	if currentBlock%epochLength != 0 {
 		return false, nil, nil
 	}
 
-	logger.Info("performing housekeeping", "block", currentBlock)
+	logger.Info("🏠performing housekeeping", "block", currentBlock)
 
 	hasUpdates := false
-	validatorExitID := thor.Bytes32{}
-	activeValidators := make(map[thor.Bytes32]*Validation)
+	validatorExitID := thor.Address{}
+	activeValidators := make(map[thor.Address]*validation.Validation)
 
-	iteratorLeaderGroup := func(id thor.Bytes32, entry *Validation) error {
+	iteratorLeaderGroup := func(validationID thor.Address, entry *validation.Validation) error {
 		if entry.ExitBlock != nil && currentBlock == *entry.ExitBlock {
-			validatorExitID = id
+			validatorExitID = validationID
 			return nil
 		}
 
 		isPeriodEnd := entry.IsPeriodEnd(currentBlock)
 		if !isPeriodEnd { // early exit - validator is not due for renewal
-			activeValidators[id] = entry
+			activeValidators[validationID] = entry
 			return nil
 		}
 
 		if entry.ExitBlock != nil { // early exit, validator is due to exit but has not reached exit block
-			activeValidators[id] = entry
-			logger.Debug("validator exit delayed", "node", entry.Node, "exit-block", entry.ExitBlock)
+			activeValidators[validationID] = entry
+			logger.Debug("validator exit delayed", "node", validationID.String(), "exit-block", entry.ExitBlock)
 			return nil
 		}
 
 		// validator has auto renew enabled and is due for renewal
-		if err := s.performRenewalUpdates(id, entry); err != nil {
+		if err := s.performRenewalUpdates(validationID, entry); err != nil {
 			return err
 		}
 		hasUpdates = true
-		activeValidators[id] = entry
+		activeValidators[validationID] = entry
 		return nil
 	}
+
+	// todo Imagine that some sort of a transition function that applies every cycle, and updates the totals.
+	// todo A centralized point, then we don't have to consider tracing other behaviours.
+	// todo example: this leadergroup iterator doesnot deal with existing validators
 	// perform the iteration
-	if err := s.validations.LeaderGroupIterator(iteratorLeaderGroup); err != nil {
+	if err := s.validationService.LeaderGroupIterator(iteratorLeaderGroup); err != nil {
 		return false, nil, err
 	}
 
 	if !validatorExitID.IsZero() {
-		hasUpdates = true
 		logger.Info("exiting validator", "id", validatorExitID)
-		if err := s.validations.ExitValidator(validatorExitID); err != nil {
+
+		hasUpdates = true
+
+		releaseLockedTVL, releaseLockedTVLWeight, releaseQueuedTVL, err := s.validationService.ExitValidator(validatorExitID)
+		if err != nil {
+			return false, nil, err
+		}
+
+		aggExit, err := s.aggregationService.Exit(validatorExitID)
+		if err != nil {
+			return false, nil, err
+		}
+
+		if err = s.globalStatsService.RemoveLocked(releaseLockedTVL, releaseLockedTVLWeight, releaseQueuedTVL, aggExit); err != nil {
 			return false, nil, err
 		}
 	}
@@ -92,44 +110,30 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Bytes32]*Validat
 	return hasUpdates, nil, nil
 }
 
-func (s *Staker) performRenewalUpdates(id thor.Bytes32, validator *Validation) error {
-	aggregation, err := s.storage.GetAggregation(id)
+func (s *Staker) performRenewalUpdates(validationID thor.Address, val *validation.Validation) error {
+	// renew the validator & delegations
+	validatorRenewal := val.Renew()
+	// todo make this decoupled from the delegations
+	delegationsRenewal, err := s.aggregationService.Renew(validationID)
 	if err != nil {
 		return err
 	}
 
-	// renew the validator & delegations
-	validatorRenewal := validator.Renew()
-	delegationsRenewal := aggregation.Renew()
-	if err := s.storage.SetAggregation(id, aggregation, false); err != nil {
+	if err = s.globalStatsService.UpdateTotals(validatorRenewal, delegationsRenewal); err != nil {
 		return err
 	}
 
-	// calculate the new totals for validator + delegations
-	changeTVL := big.NewInt(0).Add(validatorRenewal.ChangeTVL, delegationsRenewal.ChangeTVL)
-	changeWeight := big.NewInt(0).Add(validatorRenewal.ChangeWeight, delegationsRenewal.ChangeWeight)
-	queuedDecrease := big.NewInt(0).Add(validatorRenewal.QueuedDecrease, delegationsRenewal.QueuedDecrease)
-	queuedWeight := big.NewInt(0).Add(validatorRenewal.QueuedDecreaseWeight, delegationsRenewal.QueuedDecreaseWeight)
+	// calculate the new weight for validator + delegations and weights
+	changeWeight := big.NewInt(0).Add(validatorRenewal.NewLockedWeight, delegationsRenewal.NewLockedWeight)
 
 	// set the new totals
-	validator.LockedVET = big.NewInt(0).Add(validator.LockedVET, validatorRenewal.ChangeTVL)
-	validator.Weight = big.NewInt(0).Add(validator.Weight, changeWeight)
-	if err := s.storage.lockedVET.Add(changeTVL); err != nil {
-		return err
-	}
-	if err := s.storage.lockedWeight.Add(changeWeight); err != nil {
-		return err
-	}
-	if err := s.storage.queuedVET.Sub(queuedDecrease); err != nil {
-		return err
-	}
-	if err := s.storage.queuedWeight.Sub(queuedWeight); err != nil {
-		return err
-	}
-	return s.storage.SetValidation(id, validator, false)
+	val.LockedVET = big.NewInt(0).Add(val.LockedVET, validatorRenewal.NewLockedVET)
+	val.Weight = big.NewInt(0).Add(val.Weight, changeWeight)
+
+	return s.validationService.SetValidation(validationID, val, false)
 }
 
-func (s *Staker) activateValidators(currentBlock uint32) ([]*thor.Bytes32, error) {
+func (s *Staker) activateValidators(currentBlock uint32) ([]*thor.Address, error) {
 	queuedSize, err := s.QueuedGroupSize()
 	if err != nil {
 		return nil, err
@@ -146,31 +150,36 @@ func (s *Staker) activateValidators(currentBlock uint32) ([]*thor.Bytes32, error
 		return nil, nil
 	}
 
-	if queuedSize.Cmp(big.NewInt(0)) > 0 {
-		queuedCount := queuedSize.Int64()
-		leaderDelta := maxSize.Int64() - leaderSize.Int64()
-		if leaderDelta > 0 {
-			if leaderDelta < queuedCount {
-				queuedCount = leaderDelta
-			}
-		} else {
-			return nil, nil
-		}
-
-		activated := make([]*thor.Bytes32, queuedCount)
-
-		for i := int64(0); i < queuedCount; i++ {
-			id, err := s.validations.ActivateNext(currentBlock, s.params)
-			if err != nil {
-				return nil, err
-			}
-			activated[i] = id
-		}
-
-		return activated, nil
+	// no one is in the queue
+	if queuedSize.Cmp(big.NewInt(0)) <= 0 {
+		return nil, nil
 	}
 
-	return nil, nil
+	queuedCount := queuedSize.Int64()
+	leaderDelta := maxSize.Int64() - leaderSize.Int64()
+	if leaderDelta > 0 {
+		if leaderDelta < queuedCount {
+			queuedCount = leaderDelta
+		}
+	} else {
+		return nil, nil
+	}
+
+	activated := make([]*thor.Address, queuedCount)
+	maxLeaderGroupSize, err := s.params.Get(thor.KeyMaxBlockProposers)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := int64(0); i < queuedCount; i++ {
+		id, err := s.ActivateNextValidator(currentBlock, maxLeaderGroupSize)
+		if err != nil {
+			return nil, err
+		}
+		activated[i] = id
+	}
+
+	return activated, nil
 }
 
 func (s *Staker) Transition(currentBlock uint32) (bool, error) {
@@ -187,7 +196,7 @@ func (s *Staker) Transition(currentBlock uint32) (bool, error) {
 		maxProposers = big.NewInt(0).SetUint64(thor.InitialMaxBlockProposers)
 	}
 
-	queueSize, err := s.validations.validatorQueue.Len()
+	queueSize, err := s.validationService.QueuedGroupSize()
 	if err != nil {
 		return false, err
 	}

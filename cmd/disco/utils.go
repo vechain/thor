@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	ethlog "github.com/ethereum/go-ethereum/log"
 	"github.com/mattn/go-isatty"
+
 	"github.com/vechain/thor/v2/log"
 )
 

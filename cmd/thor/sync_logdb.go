@@ -14,13 +14,14 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/pmezard/go-difflib/difflib"
+	"gopkg.in/cheggaaa/pb.v1"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
-	"gopkg.in/cheggaaa/pb.v1"
 )
 
 func syncLogDB(ctx context.Context, repo *chain.Repository, logDB *logdb.LogDB, verify bool) error {

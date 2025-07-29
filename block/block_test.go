@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
@@ -26,11 +27,11 @@ func TestBlock(t *testing.T) {
 	now := uint64(time.Now().UnixNano())
 
 	var (
-		gasUsed     uint64       = 1000
-		gasLimit    uint64       = 14000
-		totalScore  uint64       = 101
-		emptyRoot   thor.Bytes32 = thor.BytesToBytes32([]byte("0"))
-		beneficiary thor.Address = thor.BytesToAddress([]byte("abc"))
+		gasUsed     uint64 = 1000
+		gasLimit    uint64 = 14000
+		totalScore  uint64 = 101
+		emptyRoot          = thor.BytesToBytes32([]byte("0"))
+		beneficiary        = thor.BytesToAddress([]byte("abc"))
 	)
 
 	blk := new(Builder).

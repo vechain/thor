@@ -10,9 +10,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/builtin/staker"
+	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/test/testchain"
 )
 
@@ -60,13 +61,13 @@ func getEndorsorBalance(blk *block.Header, chain *testchain.Chain) (*big.Int, er
 	return balance, nil
 }
 
-func getMasterStake(chain *testchain.Chain, blk *block.Header) (*staker.Validation, error) {
+func getMasterStake(chain *testchain.Chain, blk *block.Header) (*validation.Validation, error) {
 	st := chain.Stater().NewState(chain.Repo().BestBlockSummary().Root())
 	signer, err := blk.Signer()
 	if err != nil {
 		return nil, err
 	}
 	staker := builtin.Staker.Native(st)
-	validator, _, err := staker.LookupNode(signer)
+	validator, err := staker.Get(signer)
 	return validator, err
 }

@@ -8,7 +8,7 @@ package thor
 var blocklist = make(map[Address]bool)
 
 func init() {
-	var list = [...]string{
+	list := [...]string{
 		"0x4427be8010dd870395975a8fbaa7afa9439b5332",
 		"0x4dec6d9c0b8fed1872f127fb8bae8f502de859ad",
 		"0x0f68b9e2a07e6d4ce9fa43e6eff17ccfbcd511fa",

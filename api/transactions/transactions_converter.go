@@ -8,6 +8,7 @@ package transactions
 import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
@@ -35,7 +36,7 @@ type Transaction struct {
 
 // ConvertTransaction convert a raw transaction into a json format transaction
 func ConvertTransaction(trx *tx.Transaction, header *block.Header) *Transaction {
-	//tx origin
+	// tx origin
 	origin, _ := trx.Origin()
 	delegator, _ := trx.Delegator()
 

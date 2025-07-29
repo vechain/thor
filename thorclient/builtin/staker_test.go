@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/test"
@@ -119,9 +120,8 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, firstActive.ExitBlock, uint32(math.MaxUint32))
 
 	// LookupNode
-	getRes, id, err := staker.LookupNode(*firstActive.Master)
+	getRes, err = staker.Get(*firstActive.Master)
 	require.NoError(t, err)
-	require.False(t, id.IsZero())
 	require.True(t, getRes.Exists())
 
 	// Next
@@ -152,7 +152,6 @@ func TestStaker(t *testing.T) {
 	require.Len(t, queuedEvents, 1)
 	require.Equal(t, validator.Address, queuedEvents[0].Endorsor)
 	require.Equal(t, minStake, queuedEvents[0].Stake)
-	require.False(t, queuedEvents[0].AutoRenew)
 	queuedID := queuedEvents[0].ValidationID
 
 	// FirstQueued
@@ -182,7 +181,7 @@ func TestStaker(t *testing.T) {
 	increaseEvents, err := staker.FilterStakeIncreased(newRange(receipt), nil, logdb.ASC)
 	require.NoError(t, err)
 	require.Len(t, increaseEvents, 1)
-	require.Equal(t, queuedID, increaseEvents[0].ValidationID)
+	require.Equal(t, validator.Address, increaseEvents[0].ValidationID)
 	require.Equal(t, validator.Address, increaseEvents[0].Endorsor)
 	require.Equal(t, minStake, increaseEvents[0].Added)
 
@@ -213,7 +212,7 @@ func TestStaker(t *testing.T) {
 	require.Len(t, autoRenewEvents, 0)
 
 	// AddDelegation
-	receipt, _, err = staker.AddDelegation(queuedID, minStake, false, 100).
+	receipt, _, err = staker.AddDelegation(queuedID, minStake, 100).
 		Send().
 		WithSigner(stargate).
 		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
@@ -230,7 +229,7 @@ func TestStaker(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, minStake, delegation.Stake)
 	require.Equal(t, uint8(100), delegation.Multiplier)
-	require.Equal(t, false, delegation.AutoRenew)
+	require.False(t, delegation.Locked)
 	require.Equal(t, queuedID, delegation.ValidationID)
 
 	// GetValidatorsTotals
@@ -243,28 +242,12 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, big.NewInt(0).String(), validationTotals.DelegationsLockedStake.String())
 
 	// UpdateDelegationAutoRenew - Enable AutoRenew
-	receipt, _, err = staker.UpdateDelegationAutoRenew(delegationID, true).
+	receipt, _, err = staker.SignalDelegationExit(delegationID).
 		Send().
 		WithSigner(stargate).
 		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
-	require.False(t, receipt.Reverted)
-
-	delegatorAutoRenewEvents, err := staker.FilterDelegationUpdatedAutoRenew(newRange(receipt), nil, logdb.ASC)
-	require.NoError(t, err)
-	require.Len(t, delegatorAutoRenewEvents, 1)
-
-	// UpdateDelegationAutoRenew - Disable AutoRenew
-	receipt, _, err = staker.UpdateDelegationAutoRenew(delegationID, false).
-		Send().
-		WithSigner(stargate).
-		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
-	require.NoError(t, err)
-	require.False(t, receipt.Reverted)
-
-	delegatorAutoRenewEvents, err = staker.FilterDelegationUpdatedAutoRenew(newRange(receipt), nil, logdb.ASC)
-	require.NoError(t, err)
-	require.Len(t, delegatorAutoRenewEvents, 1)
+	require.True(t, receipt.Reverted) // should revert since it hasn't started
 
 	// Withdraw
 	receipt, _, err = staker.WithdrawStake(queuedID).Send().WithSigner(validatorKey).WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
@@ -292,4 +275,9 @@ func TestStaker(t *testing.T) {
 	delegation, err = staker.GetDelegation(delegationID)
 	require.NoError(t, err)
 	require.Equal(t, big.NewInt(0).Cmp(delegation.Stake), 0)
+
+	// GetDelegatorsRewards
+	rewards, err := staker.GetDelegatorsRewards(validator.Address, 1)
+	require.NoError(t, err)
+	require.Equal(t, 0, big.NewInt(0).Cmp(rewards))
 }

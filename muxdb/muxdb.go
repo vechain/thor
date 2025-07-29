@@ -17,6 +17,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/filter"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/storage"
+
 	"github.com/vechain/thor/v2/kv"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/muxdb/engine"

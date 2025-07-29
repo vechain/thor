@@ -12,7 +12,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/rlp"
+
 	"github.com/vechain/thor/v2/builtin/params"
+
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -76,6 +78,7 @@ func (e *Energy) getTotalAddSub() (total totalAddSub, err error) {
 	})
 	return
 }
+
 func (e *Energy) setTotalAddSub(total totalAddSub) error {
 	return e.state.EncodeStorage(e.addr, totalAddSubKey, func() ([]byte, error) {
 		return rlp.EncodeToBytes(&total)
@@ -261,7 +264,7 @@ func (e *Energy) addIssued(issued *big.Int) error {
 type staker interface {
 	LockedVET() (*big.Int, *big.Int, error)
 	HasDelegations(address thor.Address) (bool, error)
-	IncreaseReward(master thor.Address, reward big.Int) error
+	IncreaseDelegatorsReward(master thor.Address, reward *big.Int) error
 }
 
 func (e *Energy) DistributeRewards(beneficiary, signer thor.Address, staker staker) error {
@@ -273,12 +276,19 @@ func (e *Energy) DistributeRewards(beneficiary, signer thor.Address, staker stak
 	if err != nil {
 		return err
 	}
+	validatorRewardPerc, err := e.params.Get(thor.KeyValidatorRewardPercentage)
+	if err != nil {
+		return err
+	}
+	if validatorRewardPerc.Uint64() == 0 {
+		validatorRewardPerc = big.NewInt(int64(thor.InitialValidatorRewardPercentage))
+	}
 
 	// If delegated amount of VET is 0 then transfer the whole reward to the validator
 	proposerReward := new(big.Int).Set(reward)
 	if hasDelegations {
-		proposerReward.Mul(proposerReward, big.NewInt(3))
-		proposerReward.Div(proposerReward, big.NewInt(10))
+		proposerReward.Mul(proposerReward, validatorRewardPerc)
+		proposerReward.Div(proposerReward, big.NewInt(100))
 
 		val, err := e.params.Get(thor.KeyStargateContractAddress)
 		if err != nil {
@@ -290,7 +300,11 @@ func (e *Energy) DistributeRewards(beneficiary, signer thor.Address, staker stak
 		if err != nil {
 			return err
 		}
-		if err := e.state.SetEnergy(addr, new(big.Int).Add(addrEng, big.NewInt(0).Sub(reward, proposerReward)), e.blockTime); err != nil {
+		delegationReward := new(big.Int).Sub(reward, proposerReward)
+		if err := staker.IncreaseDelegatorsReward(signer, delegationReward); err != nil {
+			return err
+		}
+		if err := e.state.SetEnergy(addr, new(big.Int).Add(addrEng, delegationReward), e.blockTime); err != nil {
 			return err
 		}
 	}
@@ -308,9 +322,7 @@ func (e *Energy) DistributeRewards(beneficiary, signer thor.Address, staker stak
 	if err := e.addIssued(reward); err != nil {
 		return err
 	}
-	if err := staker.IncreaseReward(signer, *reward); err != nil {
-		return err
-	}
+
 	return nil
 }
 
@@ -335,6 +347,10 @@ func (e *Energy) CalculateRewards(staker staker) (*big.Int, error) {
 	if err != nil {
 		return nil, err
 	}
+	if curveFactor.Uint64() == 0 {
+		curveFactor = thor.InitialCurveFactor
+	}
+
 	// reward = 1 * curveFactor * sqrt(totalStaked / 1e18) / blocksPerYear
 	reward := big.NewInt(1)
 	reward.Mul(reward, curveFactor)

@@ -7,6 +7,7 @@ package abi
 
 import (
 	ethabi "github.com/ethereum/go-ethereum/accounts/abi"
+
 	"github.com/vechain/thor/v2/thor"
 )
 

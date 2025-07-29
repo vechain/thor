@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package staker
+package validation
 
 import (
 	"errors"
@@ -11,6 +11,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/test/datagen"
@@ -22,98 +24,96 @@ func Test_LinkedList_Remove_NonExistent(t *testing.T) {
 	db := muxdb.NewMem()
 	st := state.New(db, trie.Root{})
 	addr := thor.BytesToAddress([]byte("test"))
-	linkedList := newLinkedList(newStorage(addr, st, nil), thor.Bytes32{0x1}, thor.Bytes32{0x2}, thor.Bytes32{0x3})
 
-	validator1ID := datagen.RandomHash()
-	validator1 := &Validation{
-		Node: datagen.RandAddress(),
-	}
+	sctx := solidity.NewContext(addr, st, nil)
+	repo := NewRepository(sctx)
 
-	validator2ID := datagen.RandomHash()
-	validator2 := &Validation{
-		Node: datagen.RandAddress(),
-	}
+	linkedList := NewLinkedList(sctx, repo, thor.Bytes32{0x1}, thor.Bytes32{0x2}, thor.Bytes32{0x3})
 
-	validator3ID := datagen.RandomHash()
-	validator3 := &Validation{
-		Node: datagen.RandAddress(),
-	}
+	validator1 := &Validation{}
+	id1 := datagen.RandAddress()
 
-	if _, err := linkedList.Add(validator1ID, validator1); err != nil {
+	validator2 := &Validation{}
+	id2 := datagen.RandAddress()
+
+	validator3 := &Validation{}
+	id3 := datagen.RandAddress()
+
+	if _, err := linkedList.Add(id1, validator1); err != nil {
 		t.Fatalf("failed to add validator 1: %v", err)
 	}
 
-	if _, err := linkedList.Add(validator2ID, validator2); err != nil {
+	if _, err := linkedList.Add(id2, validator2); err != nil {
 		t.Fatalf("failed to add validator 2: %v", err)
 	}
 
-	if _, err := linkedList.Remove(validator3ID, validator3); err != nil {
+	if _, err := linkedList.Remove(id3, validator3); err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
 
 	head, err := linkedList.head.Get()
 	assert.NoError(t, err)
-	assert.Equal(t, validator1ID, head)
+	assert.Equal(t, id1, head)
 }
 
 func Test_LinkedList_Remove(t *testing.T) {
 	db := muxdb.NewMem()
 	st := state.New(db, trie.Root{})
 	addr := thor.BytesToAddress([]byte("test"))
-	storage := newStorage(addr, st, nil)
-	linkedList := newLinkedList(storage, thor.Bytes32{0x1}, thor.Bytes32{0x2}, thor.Bytes32{0x3})
+	sctx := solidity.NewContext(addr, st, nil)
+	repo := NewRepository(sctx)
 
-	validator1ID := datagen.RandomHash()
+	linkedList := NewLinkedList(sctx, repo, thor.Bytes32{0x1}, thor.Bytes32{0x2}, thor.Bytes32{0x3})
+
 	validator1 := &Validation{
-		Node:      datagen.RandAddress(),
 		Endorsor:  datagen.RandAddress(),
 		LockedVET: big.NewInt(10),
 		Weight:    big.NewInt(10),
 		Status:    2,
 	}
+	id1 := datagen.RandAddress()
 
-	validator2ID := datagen.RandomHash()
 	validator2 := &Validation{
-		Node:      datagen.RandAddress(),
 		Endorsor:  datagen.RandAddress(),
 		LockedVET: big.NewInt(10),
 		Weight:    big.NewInt(10),
 		Status:    2,
 	}
+	id2 := datagen.RandAddress()
 
-	if _, err := linkedList.Add(validator1ID, validator1); err != nil {
+	if _, err := linkedList.Add(id1, validator1); err != nil {
 		t.Fatalf("failed to add validator 1: %v", err)
 	}
 
-	if _, err := linkedList.Add(validator2ID, validator2); err != nil {
+	if _, err := linkedList.Add(id2, validator2); err != nil {
 		t.Fatalf("failed to add validator 2: %v", err)
 	}
 
 	head, err := linkedList.head.Get()
 	assert.NoError(t, err)
-	assert.Equal(t, validator1ID, head)
-	validator1, err = storage.GetValidation(validator1ID)
+	assert.Equal(t, id1, head)
+	validator1, err = repo.GetValidation(id1)
 	assert.NoError(t, err)
 
-	if _, err := linkedList.Remove(validator1ID, validator1); err != nil {
+	if _, err := linkedList.Remove(id1, validator1); err != nil {
 		t.Fatalf("failed to remove validator 1: %v", err)
 	}
 
 	head, err = linkedList.head.Get()
 	assert.NoError(t, err)
-	assert.Equal(t, validator2ID, head)
-	validator, err := storage.GetValidation(validator1ID)
+	assert.Equal(t, id2, head)
+	validator, err := repo.GetValidation(id1)
 	assert.NoError(t, err)
 	assert.Nil(t, validator.Next)
 	assert.Nil(t, validator.Prev)
 
-	if _, err := linkedList.Remove(validator2ID, validator1); err != nil {
+	if _, err := linkedList.Remove(id2, validator1); err != nil {
 		t.Fatalf("failed to remove validator 2: %v", err)
 	}
 	head, err = linkedList.head.Get()
 	assert.NoError(t, err)
 	assert.True(t, head.IsZero())
-	validator, err = storage.GetValidation(validator2ID)
+	validator, err = repo.GetValidation(id2)
 	assert.NoError(t, err)
 	assert.Nil(t, validator.Next)
 	assert.Nil(t, validator.Prev)
@@ -123,55 +123,54 @@ func Test_LinkedList_Iter(t *testing.T) {
 	db := muxdb.NewMem()
 	st := state.New(db, trie.Root{})
 	addr := thor.BytesToAddress([]byte("test"))
-	storage := newStorage(addr, st, nil)
-	linkedList := newLinkedList(storage, thor.Bytes32{0x1}, thor.Bytes32{0x2}, thor.Bytes32{0x3})
+	sctx := solidity.NewContext(addr, st, nil)
+	repo := NewRepository(sctx)
+
+	linkedList := NewLinkedList(sctx, repo, thor.Bytes32{0x1}, thor.Bytes32{0x2}, thor.Bytes32{0x3})
 
 	// Create 3 validators
-	validator1ID := datagen.RandomHash()
 	validator1 := &Validation{
-		Node:      datagen.RandAddress(),
 		Endorsor:  datagen.RandAddress(),
 		LockedVET: big.NewInt(10),
 		Weight:    big.NewInt(10),
 		Status:    2,
 	}
+	id1 := datagen.RandAddress()
 
-	validator2ID := datagen.RandomHash()
 	validator2 := &Validation{
-		Node:      datagen.RandAddress(),
 		Endorsor:  datagen.RandAddress(),
 		LockedVET: big.NewInt(20),
 		Weight:    big.NewInt(20),
 		Status:    2,
 	}
+	id2 := datagen.RandAddress()
 
-	validator3ID := datagen.RandomHash()
 	validator3 := &Validation{
-		Node:      datagen.RandAddress(),
 		Endorsor:  datagen.RandAddress(),
 		LockedVET: big.NewInt(30),
 		Weight:    big.NewInt(30),
 		Status:    2,
 	}
+	id3 := datagen.RandAddress()
 
 	// Add validators to the linked list
-	if _, err := linkedList.Add(validator1ID, validator1); err != nil {
+	if _, err := linkedList.Add(id1, validator1); err != nil {
 		t.Fatalf("failed to add validator 1: %v", err)
 	}
 
-	if _, err := linkedList.Add(validator2ID, validator2); err != nil {
+	if _, err := linkedList.Add(id2, validator2); err != nil {
 		t.Fatalf("failed to add validator 2: %v", err)
 	}
 
-	if _, err := linkedList.Add(validator3ID, validator3); err != nil {
+	if _, err := linkedList.Add(id3, validator3); err != nil {
 		t.Fatalf("failed to add validator 3: %v", err)
 	}
 
 	// Test iteration
-	var validatorIDs []thor.Bytes32
-	var totalWeight *big.Int = big.NewInt(0)
+	var validatorIDs []thor.Address
+	totalWeight := big.NewInt(0)
 
-	err := linkedList.Iter(func(id thor.Bytes32, validator *Validation) error {
+	err := linkedList.Iter(func(id thor.Address, validator *Validation) error {
 		validatorIDs = append(validatorIDs, id)
 		totalWeight = totalWeight.Add(totalWeight, validator.Weight)
 		return nil
@@ -179,14 +178,14 @@ func Test_LinkedList_Iter(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, 3, len(validatorIDs))
-	assert.Equal(t, validator1ID, validatorIDs[0])
-	assert.Equal(t, validator2ID, validatorIDs[1])
-	assert.Equal(t, validator3ID, validatorIDs[2])
+	assert.Equal(t, id1, validatorIDs[0])
+	assert.Equal(t, id2, validatorIDs[1])
+	assert.Equal(t, id3, validatorIDs[2])
 	assert.Equal(t, big.NewInt(60), totalWeight)
 
 	// Test early termination
-	validatorIDs = []thor.Bytes32{}
-	err = linkedList.Iter(func(id thor.Bytes32, validator *Validation) error {
+	validatorIDs = []thor.Address{}
+	err = linkedList.Iter(func(id thor.Address, validator *Validation) error {
 		validatorIDs = append(validatorIDs, id)
 		if len(validatorIDs) >= 2 {
 			return errors.New("early termination")
@@ -197,14 +196,17 @@ func Test_LinkedList_Iter(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, "early termination", err.Error())
 	assert.Equal(t, 2, len(validatorIDs))
-	assert.Equal(t, validator1ID, validatorIDs[0])
-	assert.Equal(t, validator2ID, validatorIDs[1])
+	assert.Equal(t, id1, validatorIDs[0])
+	assert.Equal(t, id2, validatorIDs[1])
+
+	sctx = solidity.NewContext(addr, st, nil)
+	repo = NewRepository(sctx)
 
 	// Test iteration on empty list
-	emptyList := newLinkedList(storage, thor.Bytes32{0x4}, thor.Bytes32{0x5}, thor.Bytes32{0x6})
-	var emptyResult []thor.Bytes32
+	emptyList := NewLinkedList(sctx, repo, thor.Bytes32{0x4}, thor.Bytes32{0x5}, thor.Bytes32{0x6})
+	var emptyResult []thor.Address
 
-	err = emptyList.Iter(func(id thor.Bytes32, validator *Validation) error {
+	err = emptyList.Iter(func(id thor.Address, validator *Validation) error {
 		emptyResult = append(emptyResult, id)
 		return nil
 	})

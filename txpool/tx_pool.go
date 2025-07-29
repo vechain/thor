@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/pkg/errors"
+
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/co"
@@ -31,9 +32,7 @@ const (
 	maxTxSize = 64 * 1024
 )
 
-var (
-	logger = log.WithContext("pkg", "txpool")
-)
+var logger = log.WithContext("pkg", "txpool")
 
 // Options options for tx pool.
 type Options struct {
@@ -252,7 +251,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		return err
 	}
 
-	txObj, err := resolveTx(newTx, localSubmitted)
+	txObj, err := ResolveTx(newTx, localSubmitted)
 	if err != nil {
 		return badTxError{err.Error()}
 	}
@@ -267,7 +266,13 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		}
 
 		state := p.stater.NewState(headSummary.Root())
-		executable, err := txObj.Executable(p.repo.NewChain(headSummary.Header.ID()), state, headSummary.Header, p.forkConfig, p.baseFeeCache.Get(headSummary.Header))
+		executable, err := txObj.Executable(
+			p.repo.NewChain(headSummary.Header.ID()),
+			state,
+			headSummary.Header,
+			p.forkConfig,
+			p.baseFeeCache.Get(headSummary.Header),
+		)
 		if err != nil {
 			return txRejectedError{err.Error()}
 		}
@@ -378,7 +383,7 @@ func (p *TxPool) Executables() tx.Transactions {
 
 // Fill fills txs into pool.
 func (p *TxPool) Fill(txs tx.Transactions) {
-	txObjs := make([]*txObject, 0, len(txs))
+	txObjs := make([]*TxObject, 0, len(txs))
 	for _, tx := range txs {
 		origin, _ := tx.Origin()
 		if thor.IsOriginBlocked(origin) || p.blocklist.Contains(origin) {
@@ -389,7 +394,7 @@ func (p *TxPool) Fill(txs tx.Transactions) {
 			continue
 		}
 		// here we ignore errors
-		if txObj, err := resolveTx(tx, false); err == nil {
+		if txObj, err := ResolveTx(tx, false); err == nil {
 			txObjs = append(txObjs, txObj)
 		}
 	}
@@ -405,8 +410,8 @@ func (p *TxPool) Dump() tx.Transactions {
 // this method should only be called in housekeeping go routine
 func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transactions, removedLegacy int, removedDynamicFee int, err error) {
 	all := p.all.ToTxObjects()
-	var toRemove []*txObject
-	var toUpdateCost []*txObject
+	var toRemove []*TxObject
+	var toUpdateCost []*TxObject
 	defer func() {
 		if err != nil {
 			// in case of error, simply cut pool size to limit
@@ -444,9 +449,9 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 
 	var (
 		chain               = p.repo.NewChain(headSummary.Header.ID())
-		executableObjs      = make([]*txObject, 0, len(all))
-		nonExecutableObjs   = make([]*txObject, 0, len(all))
-		localExecutableObjs = make([]*txObject, 0, len(all))
+		executableObjs      = make([]*TxObject, 0, len(all))
+		nonExecutableObjs   = make([]*TxObject, 0, len(all))
+		localExecutableObjs = make([]*TxObject, 0, len(all))
 		now                 = time.Now().UnixNano()
 		baseFee             = p.baseFeeCache.Get(headSummary.Header)
 	)

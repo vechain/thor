@@ -37,6 +37,7 @@ func (m mem) Delete(k []byte) error {
 	delete(m, string(k))
 	return nil
 }
+
 func (m mem) IsNotFound(error) bool {
 	return true
 }

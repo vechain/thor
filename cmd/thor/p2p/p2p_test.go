@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/p2p/discover"
+
 	"github.com/vechain/thor/v2/p2psrv"
 	"github.com/vechain/thor/v2/test/datagen"
 
@@ -71,10 +72,16 @@ func TestNewThorP2P(t *testing.T) {
 			expectedKnownNodes:     p2psrv.Nodes{{ID: discover.NodeID{3}}, {ID: discover.NodeID{2}}, {ID: discover.NodeID{22}}, {ID: discover.NodeID{222}}},
 		},
 		{
-			name:                   "Duplicated nodes are removed (cached and bootstrap nodes) ",
-			maxPeers:               datagen.RandInt(),
-			listenAddr:             datagen.RandHostPort(),
-			cachedPeers:            []*discover.Node{{ID: discover.NodeID{2}}, {ID: discover.NodeID{5}}, {ID: discover.NodeID{2}}, {ID: discover.NodeID{2}}, {ID: discover.NodeID{5}}},
+			name:       "Duplicated nodes are removed (cached and bootstrap nodes) ",
+			maxPeers:   datagen.RandInt(),
+			listenAddr: datagen.RandHostPort(),
+			cachedPeers: []*discover.Node{
+				{ID: discover.NodeID{2}},
+				{ID: discover.NodeID{5}},
+				{ID: discover.NodeID{2}},
+				{ID: discover.NodeID{2}},
+				{ID: discover.NodeID{5}},
+			},
 			bootstrapNodes:         []*discover.Node{{ID: discover.NodeID{3}}, {ID: discover.NodeID{33}}, {ID: discover.NodeID{33}}, {ID: discover.NodeID{3}}},
 			expectedDiscoveryNodes: []*discover.Node{{ID: discover.NodeID{3}}, {ID: discover.NodeID{33}}, {ID: discover.NodeID{33}}, {ID: discover.NodeID{3}}},
 			expectedKnownNodes:     p2psrv.Nodes{{ID: discover.NodeID{3}}, {ID: discover.NodeID{33}}, {ID: discover.NodeID{2}}, {ID: discover.NodeID{5}}},

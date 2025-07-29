@@ -11,8 +11,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-
-	"github.com/vechain/thor/v2/thorclient/common"
 )
 
 func (c *Client) httpRequest(method, url string, payload io.Reader) ([]byte, error) {
@@ -21,7 +19,7 @@ func (c *Client) httpRequest(method, url string, payload io.Reader) ([]byte, err
 		return nil, err
 	}
 	if !statusCodeIs2xx(statusCode) {
-		return nil, fmt.Errorf("http error - Status Code %d - %s - %w", statusCode, body, common.ErrNot200Status)
+		return nil, fmt.Errorf("http error - Status Code %d - %s - %w", statusCode, body, ErrNot200Status)
 	}
 	return body, nil
 }

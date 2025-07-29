@@ -20,7 +20,7 @@ type Event struct {
 	BlockTime   uint64
 	TxID        thor.Bytes32
 	TxIndex     uint32
-	TxOrigin    thor.Address //contract caller
+	TxOrigin    thor.Address // contract caller
 	ClauseIndex uint32
 	Address     thor.Address // always a contract address
 	Topics      [5]*thor.Bytes32
@@ -84,13 +84,13 @@ type EventFilter struct {
 	CriteriaSet []*EventCriteria
 	Range       *Range
 	Options     *Options
-	Order       Order //default asc
+	Order       Order // default asc
 }
 
 type TransferCriteria struct {
-	TxOrigin  *thor.Address //who send transaction
-	Sender    *thor.Address //who transferred tokens
-	Recipient *thor.Address //who received tokens
+	TxOrigin  *thor.Address // who send transaction
+	Sender    *thor.Address // who transferred tokens
+	Recipient *thor.Address // who received tokens
 }
 
 func (c *TransferCriteria) toWhereCondition() (cond string, args []any) {
@@ -114,5 +114,5 @@ type TransferFilter struct {
 	CriteriaSet []*TransferCriteria
 	Range       *Range
 	Options     *Options
-	Order       Order //default asc
+	Order       Order // default asc
 }

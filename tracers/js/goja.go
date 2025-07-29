@@ -21,13 +21,12 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 
 	"github.com/dop251/goja"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-
-	"slices"
 
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tracers"
@@ -60,9 +59,11 @@ func init() {
 // hex strings into big ints.
 var bigIntProgram = goja.MustCompile("bigInt", bigIntegerJS, false)
 
-type toBigFn = func(vm *goja.Runtime, val string) (goja.Value, error)
-type toBufFn = func(vm *goja.Runtime, val []byte) (goja.Value, error)
-type fromBufFn = func(vm *goja.Runtime, buf goja.Value, allowString bool) ([]byte, error)
+type (
+	toBigFn   = func(vm *goja.Runtime, val string) (goja.Value, error)
+	toBufFn   = func(vm *goja.Runtime, val []byte) (goja.Value, error)
+	fromBufFn = func(vm *goja.Runtime, buf goja.Value, allowString bool) ([]byte, error)
+)
 
 func toBuf(vm *goja.Runtime, bufType goja.Value, val []byte) (goja.Value, error) {
 	// bufType is usually Uint8Array. This is equivalent to `new Uint8Array(val)` in JS.
@@ -236,14 +237,24 @@ func (t *jsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Addr
 		return
 	}
 	t.ctx["value"] = valueBig
-	t.ctx["block"] = t.vm.ToValue(env.Context.BlockNumber.Uint64())
+	t.ctx["block"] = t.vm.ToValue(env.BlockNumber.Uint64())
 	// Update list of precompiles based on current block
-	rules := env.ChainConfig().Rules(env.Context.BlockNumber)
+	rules := env.ChainConfig().Rules(env.BlockNumber)
 	t.activePrecompiles = vm.ActivePrecompiles(rules)
 }
 
 // CaptureState implements the Tracer interface to trace a single step of VM execution.
-func (t *jsTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, _ []byte, depth int, err error) {
+func (t *jsTracer) CaptureState(
+	pc uint64,
+	op vm.OpCode,
+	gas, cost uint64,
+	memory *vm.Memory,
+	stack *vm.Stack,
+	contract *vm.Contract,
+	_ []byte,
+	depth int,
+	err error,
+) {
 	if !t.traceStep {
 		return
 	}

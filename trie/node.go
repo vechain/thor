@@ -110,12 +110,15 @@ func (n *fullNode) fstring(ind string) string {
 	}
 	return resp + fmt.Sprintf("\n%s] ", ind)
 }
+
 func (n *shortNode) fstring(ind string) string {
 	return fmt.Sprintf("{%x: %v} ", n.key, n.child.fstring(ind+"  "))
 }
+
 func (n *refNode) fstring(ind string) string {
 	return fmt.Sprintf("<%x> #%v", n.hash, n.ver)
 }
+
 func (n *valueNode) fstring(ind string) string {
 	return fmt.Sprintf("%x - %x", n.val, n.meta)
 }

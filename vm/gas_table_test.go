@@ -115,7 +115,13 @@ func TestGasFunctions(t *testing.T) {
 		if err != nil {
 			t.Errorf("Function %v returned an error: %v", runtime.FuncForPC(reflect.ValueOf(test.function).Pointer()).Name(), err)
 		}
-		assert.Equal(t, result, test.expected, "Mismatch in gas calculation for function %v", runtime.FuncForPC(reflect.ValueOf(test.function).Pointer()).Name())
+		assert.Equal(
+			t,
+			result,
+			test.expected,
+			"Mismatch in gas calculation for function %v",
+			runtime.FuncForPC(reflect.ValueOf(test.function).Pointer()).Name(),
+		)
 	}
 }
 

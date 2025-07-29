@@ -14,6 +14,7 @@ import (
 	"github.com/vechain/thor/v2/api"
 
 	"github.com/stretchr/testify/require"
+
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/test/testchain"

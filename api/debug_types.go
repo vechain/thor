@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 
 	"github.com/ethereum/go-ethereum/common/math"
+
 	"github.com/vechain/thor/v2/thor"
 )
 

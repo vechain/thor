@@ -13,12 +13,12 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"sync/atomic"
-
 	"slices"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
+
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/vrf"
@@ -279,7 +279,8 @@ func (h *Header) String() string {
 		signerStr = signer.String()
 	}
 
-	return fmt.Sprintf(`Header(%v):
+	return fmt.Sprintf(
+		`Header(%v):
 	Number:         %v
 	ParentID:       %v
 	Timestamp:      %v
@@ -295,9 +296,25 @@ func (h *Header) String() string {
 	ReceiptsRoot:   %v
 	Alpha:          0x%x
 	COM:            %v
-	Signature:      0x%x`, h.ID(), h.Number(), h.body.ParentID, h.body.Timestamp, signerStr,
-		h.body.Beneficiary, h.body.GasLimit, h.body.GasUsed, h.body.Extension.BaseFee, h.body.TotalScore,
-		h.body.TxsRootFeatures.Root, h.body.TxsRootFeatures.Features, h.body.StateRoot, h.body.ReceiptsRoot, h.body.Extension.Alpha, h.body.Extension.COM, h.body.Signature)
+	Signature:      0x%x`,
+		h.ID(),
+		h.Number(),
+		h.body.ParentID,
+		h.body.Timestamp,
+		signerStr,
+		h.body.Beneficiary,
+		h.body.GasLimit,
+		h.body.GasUsed,
+		h.body.Extension.BaseFee,
+		h.body.TotalScore,
+		h.body.TxsRootFeatures.Root,
+		h.body.TxsRootFeatures.Features,
+		h.body.StateRoot,
+		h.body.ReceiptsRoot,
+		h.body.Extension.Alpha,
+		h.body.Extension.COM,
+		h.body.Signature,
+	)
 }
 
 // BetterThan return if this block is better than other one.

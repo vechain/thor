@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+
 	"github.com/vechain/thor/v2/tracers"
 	"github.com/vechain/thor/v2/vm"
 )
@@ -139,7 +140,17 @@ func (t *callTracer) CaptureEnd(output []byte, _ uint64, err error) {
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
-func (t *callTracer) CaptureState(pc uint64, op vm.OpCode, _, _ uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, rData []byte, depth int, err error) {
+func (t *callTracer) CaptureState(
+	pc uint64,
+	op vm.OpCode,
+	_, _ uint64,
+	memory *vm.Memory,
+	stack *vm.Stack,
+	contract *vm.Contract,
+	rData []byte,
+	depth int,
+	err error,
+) {
 	// skip if the previous op caused an error
 	if err != nil {
 		return

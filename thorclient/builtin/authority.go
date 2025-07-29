@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
+
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/logdb"
@@ -81,7 +82,7 @@ type AuthorityNode struct {
 
 // Get returns the authority node information for the given node master
 func (a *Authority) Get(nodeMaster thor.Address) (*AuthorityNode, error) {
-	var out = [4]any{}
+	out := [4]any{}
 	out[0] = new(bool)
 	out[1] = new(common.Address)
 	out[2] = new(common.Hash)

@@ -83,6 +83,7 @@ func BenchmarkTerminalHandler(b *testing.B) {
 	l := NewLogger(NewTerminalHandler(io.Discard, false))
 	benchmarkLogger(b, l)
 }
+
 func BenchmarkLogfmtHandler(b *testing.B) {
 	l := NewLogger(LogfmtHandler(io.Discard))
 	benchmarkLogger(b, l)
@@ -163,7 +164,7 @@ func TestLoggerOutput(t *testing.T) {
 const termTimeFormat = "01-02|15:04:05.000"
 
 func BenchmarkAppendFormat(b *testing.B) {
-	var now = time.Now()
+	now := time.Now()
 	b.Run("fmt time.Format", func(b *testing.B) {
 		for b.Loop() {
 			fmt.Fprintf(io.Discard, "%s", now.Format(termTimeFormat))
@@ -174,7 +175,7 @@ func BenchmarkAppendFormat(b *testing.B) {
 			now.AppendFormat(nil, termTimeFormat)
 		}
 	})
-	var buf = new(bytes.Buffer)
+	buf := new(bytes.Buffer)
 	b.Run("time.Custom", func(b *testing.B) {
 		for b.Loop() {
 			writeTimeTermFormat(buf, now)
@@ -184,9 +185,9 @@ func BenchmarkAppendFormat(b *testing.B) {
 }
 
 func TestTermTimeFormat(t *testing.T) {
-	var now = time.Now()
+	now := time.Now()
 	want := now.AppendFormat(nil, termTimeFormat)
-	var b = new(bytes.Buffer)
+	b := new(bytes.Buffer)
 	writeTimeTermFormat(b, now)
 	have := b.Bytes()
 	if !bytes.Equal(have, want) {

@@ -9,12 +9,14 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/stackedmap"
 )
 
 func M(a ...any) []any {
 	return a
 }
+
 func TestStackedMap(t *testing.T) {
 	assert := assert.New(t)
 	src := make(map[string]string)

@@ -21,14 +21,19 @@ type noopTracer struct{}
 
 func (t *noopTracer) CaptureStart(_ *EVM, _ common.Address, _ common.Address, _ bool, _ []byte, _ uint64, _ *big.Int) {
 }
+
 func (t *noopTracer) CaptureEnd(_ []byte, _ uint64, _ error) {
 }
+
 func (t *noopTracer) CaptureState(_ uint64, _ OpCode, _, _ uint64, _ *Memory, _ *Stack, _ *Contract, _ []byte, _ int, _ error) {
 }
+
 func (t *noopTracer) CaptureFault(_ uint64, _ OpCode, _, _ uint64, _ *Memory, _ *Stack, _ *Contract, _ int, _ error) {
 }
+
 func (t *noopTracer) CaptureEnter(_ OpCode, _ common.Address, _ common.Address, _ []byte, _ uint64, _ *big.Int) {
 }
+
 func (t *noopTracer) CaptureExit(_ []byte, _ uint64, _ error) {
 }
 func (*noopTracer) CaptureClauseStart(_ uint64) {}
