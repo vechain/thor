@@ -51,19 +51,21 @@ const (
 
 // Keys of governance params.
 var (
-	KeyExecutorAddress         = BytesToBytes32([]byte("executor"))
-	KeyRewardRatio             = BytesToBytes32([]byte("reward-ratio"))
-	KeyLegacyTxBaseGasPrice    = BytesToBytes32([]byte("base-gas-price")) // the legacy tx default gas price
-	KeyProposerEndorsement     = BytesToBytes32([]byte("proposer-endorsement"))
-	KeyMaxBlockProposers       = BytesToBytes32([]byte("max-block-proposers"))
-	KeyStargateContractAddress = BytesToBytes32([]byte("stargate-contract-address"))
-	KeyStargateSwitches        = BytesToBytes32([]byte("stargate-switches"))
-	KeyCurveFactor             = BytesToBytes32([]byte("curve-factor")) // curve factor to define VTHO issuance after PoS
+	KeyExecutorAddress           = BytesToBytes32([]byte("executor"))
+	KeyRewardRatio               = BytesToBytes32([]byte("reward-ratio"))
+	KeyValidatorRewardPercentage = BytesToBytes32([]byte("validator-reward-percentage"))
+	KeyLegacyTxBaseGasPrice      = BytesToBytes32([]byte("base-gas-price")) // the legacy tx default gas price
+	KeyProposerEndorsement       = BytesToBytes32([]byte("proposer-endorsement"))
+	KeyMaxBlockProposers         = BytesToBytes32([]byte("max-block-proposers"))
+	KeyStargateContractAddress   = BytesToBytes32([]byte("stargate-contract-address"))
+	KeyCurveFactor               = BytesToBytes32([]byte("curve-factor"))      // curve factor to define VTHO issuance after PoS
+	KeyStargateSwitches          = BytesToBytes32([]byte("stargate-switches")) // Stargate switches to control the pause of staker and stargate
 
-	InitialRewardRatio         = big.NewInt(3e17) // 30%
-	InitialBaseGasPrice        = big.NewInt(1e15)
-	InitialProposerEndorsement = new(big.Int).Mul(big.NewInt(1e18), big.NewInt(25000000))
-	InitialCurveFactor         = big.NewInt(76800)
+	InitialRewardRatio               = big.NewInt(3e17) // 30%
+	InitialValidatorRewardPercentage = 30               // 30%
+	InitialBaseGasPrice              = big.NewInt(1e15)
+	InitialProposerEndorsement       = new(big.Int).Mul(big.NewInt(1e18), big.NewInt(25000000))
+	InitialCurveFactor               = big.NewInt(76800)
 
 	EnergyGrowthRate      = big.NewInt(5000000000) // WEI THOR per token(VET) per second. about 0.000432 THOR per token per day.
 	NumberOfBlocksPerYear = big.NewInt(3153600)    // number of blocks per year, non leap
