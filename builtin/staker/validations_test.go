@@ -1612,44 +1612,26 @@ func TestStaker_Housekeep_CooldownToExited(t *testing.T) {
 	stake := RandomStake()
 	period := uint32(360) * 24 * 15
 
-	err := staker.AddValidator(addr1, addr1, period, stake)
-	assert.NoError(t, err)
-	_, err = staker.ActivateNextValidator(0, getTestMaxLeaderSize(staker.params))
-	assert.NoError(t, err)
-	err = staker.AddValidator(addr2, addr2, period, stake)
-	assert.NoError(t, err)
-	_, err = staker.ActivateNextValidator(0, getTestMaxLeaderSize(staker.params))
-	assert.NoError(t, err)
-	err = staker.AddValidator(addr3, addr3, period, stake)
-	assert.NoError(t, err)
-	_, err = staker.ActivateNextValidator(0, getTestMaxLeaderSize(staker.params))
-	assert.NoError(t, err)
+	NewSequence(staker).
+		AddValidator(addr1, addr1, period, stake).
+		AddValidator(addr2, addr2, period, stake).
+		AddValidator(addr3, addr3, period, stake).
+		ActivateNext(0).
+		ActivateNext(0).
+		ActivateNext(0).
+		SignalExit(addr1, addr1).
+		SignalExit(addr2, addr2).
+		SignalExit(addr3, addr3).
+		Housekeep(period).
+		Run(t)
 
-	// disable auto renew
-	err = staker.SignalExit(addr1, addr1)
-	assert.NoError(t, err)
-	err = staker.SignalExit(addr2, addr2)
-	assert.NoError(t, err)
-	err = staker.SignalExit(addr3, addr3)
-	assert.NoError(t, err)
+	AssertValidator(t, staker, addr1).Status(StatusExit)   // addr1 signaled exit first
+	AssertValidator(t, staker, addr2).Status(StatusActive) // addr2 signaled exit, so should exit on next epoch
+	AssertValidator(t, staker, addr3).Status(StatusActive)
 
-	_, _, err = staker.Housekeep(period)
-	assert.NoError(t, err)
-	validator, err := staker.Get(addr1)
-	assert.NoError(t, err)
-	assert.Equal(t, StatusExit, validator.Status)
-	validator, err = staker.Get(addr2)
-	assert.NoError(t, err)
-	assert.Equal(t, StatusActive, validator.Status)
-
-	_, _, err = staker.Housekeep(period + epochLength)
-	assert.NoError(t, err)
-	validator, err = staker.Get(addr1)
-	assert.NoError(t, err)
-	assert.Equal(t, StatusExit, validator.Status)
-	validator, err = staker.Get(addr2)
-	assert.NoError(t, err)
-	assert.Equal(t, StatusExit, validator.Status)
+	NewSequence(staker).Housekeep(period + epochLength).Run(t)
+	AssertValidator(t, staker, addr2).Status(StatusExit) // addr2 should exit
+	AssertValidator(t, staker, addr3).Status(StatusActive)
 }
 
 func TestStaker_Housekeep_ExitOrder(t *testing.T) {
@@ -1661,60 +1643,32 @@ func TestStaker_Housekeep_ExitOrder(t *testing.T) {
 	stake := RandomStake()
 	period := uint32(360) * 24 * 15
 
-	err := staker.AddValidator(addr1, addr1, period, stake)
-	assert.NoError(t, err)
-	_, err = staker.ActivateNextValidator(0, getTestMaxLeaderSize(staker.params))
-	assert.NoError(t, err)
-	err = staker.AddValidator(addr2, addr2, period, stake)
-	assert.NoError(t, err)
-	_, err = staker.ActivateNextValidator(0, getTestMaxLeaderSize(staker.params))
-	assert.NoError(t, err)
-	err = staker.AddValidator(addr3, addr3, period, stake)
-	assert.NoError(t, err)
-	_, err = staker.ActivateNextValidator(period*2, getTestMaxLeaderSize(staker.params))
-	assert.NoError(t, err)
+	NewSequence(staker).
+		AddValidator(addr1, addr1, period, stake).
+		AddValidator(addr2, addr2, period, stake).
+		AddValidator(addr3, addr3, period, stake).
+		ActivateNext(0).
+		ActivateNext(0).
+		ActivateNext(0).
+		SignalExit(addr2, addr2).
+		SignalExit(addr3, addr3).
+		Housekeep(period).
+		Run(t)
 
-	// disable auto renew
-	err = staker.SignalExit(addr2, addr2)
-	assert.NoError(t, err)
-	err = staker.SignalExit(addr3, addr3)
-	assert.NoError(t, err)
+	AssertValidator(t, staker, addr2).Status(StatusExit)   // addr2 signaled exit first
+	AssertValidator(t, staker, addr1).Status(StatusActive) // addr3 signaled exit, so should exit on next epoch
+	AssertValidator(t, staker, addr3).Status(StatusActive)
 
-	_, _, err = staker.Housekeep(period)
-	assert.NoError(t, err)
-	validator2, err := staker.Get(addr2)
-	assert.NoError(t, err)
-	assert.Equal(t, StatusExit, validator2.Status)
-	validator3, err := staker.Get(addr3)
-	assert.NoError(t, err)
-	assert.Equal(t, StatusActive, validator3.Status)
-	assert.NoError(t, err)
-	validator1, err := staker.Get(addr1)
-	assert.NoError(t, err)
-	assert.Equal(t, StatusActive, validator1.Status)
+	NewSequence(staker).
+		Housekeep(period+epochLength).
+		SignalExit(addr1, addr1).
+		Run(t)
+	AssertValidator(t, staker, addr2).Status(StatusExit)
+	AssertValidator(t, staker, addr3).Status(StatusExit)
+	AssertValidator(t, staker, addr1).Status(StatusActive)
 
-	// renew validator 1 for next period
-	_, _, err = staker.Housekeep(period * 2)
-	assert.NoError(t, err)
-	assert.NoError(t, staker.SignalExit(addr1, addr1))
-
-	// housekeep -> validator 3 placed intention to leave first
-	_, _, err = staker.Housekeep(period * 3)
-	assert.NoError(t, err)
-	validator3, err = staker.Get(addr3)
-	assert.NoError(t, err)
-	assert.Equal(t, StatusExit, validator3.Status)
-	assert.NoError(t, err)
-	validator1, err = staker.Get(addr1)
-	assert.NoError(t, err)
-	assert.Equal(t, StatusActive, validator1.Status)
-
-	// housekeep -> validator 1 waited 1 epoch after validator 3
-	_, _, err = staker.Housekeep(period*3 + epochLength)
-	assert.NoError(t, err)
-	validator1, err = staker.Get(addr1)
-	assert.NoError(t, err)
-	assert.Equal(t, StatusExit, validator1.Status)
+	NewSequence(staker).Housekeep(period * 2).Run(t)
+	AssertValidator(t, staker, addr1).Status(StatusExit)
 }
 
 func TestStaker_Housekeep_RecalculateIncrease(t *testing.T) {
