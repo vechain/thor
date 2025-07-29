@@ -193,9 +193,9 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			isPaused, sp_err := IsStakerPaused(env.State(), charger)
-			if sp_err != nil {
-				return []any{fmt.Sprintf("revert: %v", sp_err)}
+			isPaused, err := IsStakerPaused(env.State(), charger)
+			if err != nil {
+				return []any{fmt.Sprintf("revert: %v", err)}
 			}
 
 			if isPaused {
@@ -401,11 +401,11 @@ func init() {
 
 			isPaused, sp_err := IsStargatePaused(env.State(), charger)
 			if sp_err != nil {
-				return []any{new(big.Int), fmt.Sprintf("revert: %v", sp_err)}
+				return []any{fmt.Sprintf("revert: %v", sp_err)}
 			}
 
 			if isPaused {
-				return []any{new(big.Int), "revert: stargate is paused"}
+				return []any{"revert: stargate is paused"}
 			}
 
 			isPaused, sp_err = IsStakerPaused(env.State(), charger)
