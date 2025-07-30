@@ -7,12 +7,12 @@ package validation
 
 import (
 	"encoding/binary"
-	"github.com/vechain/thor/v2/builtin/staker/delta"
 	"math/big"
 
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
+	"github.com/vechain/thor/v2/builtin/staker/delta"
 	"github.com/vechain/thor/v2/thor"
 )
 
