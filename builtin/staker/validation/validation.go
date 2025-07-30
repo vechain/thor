@@ -8,9 +8,8 @@ package validation
 import (
 	"math/big"
 
-	"github.com/vechain/thor/v2/builtin/staker/stakes"
-
 	"github.com/vechain/thor/v2/builtin/staker/delta"
+	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/thor"
 )
 
