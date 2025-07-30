@@ -305,7 +305,7 @@ func (s *Service) WithdrawStake(endorsor thor.Address, id thor.Address, currentB
 			return nil, err
 		}
 	}
-	// remove any que
+	// remove any queued
 	if val.QueuedVET.Sign() > 0 {
 		val.QueuedVET = big.NewInt(0)
 	}
