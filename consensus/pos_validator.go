@@ -10,6 +10,7 @@ import (
 
 	"github.com/vechain/thor/v2/block"
 	stakerContract "github.com/vechain/thor/v2/builtin/staker"
+	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/pos"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -18,7 +19,7 @@ func (c *Consensus) validateStakingProposer(
 	header *block.Header,
 	parent *block.Header,
 	staker *stakerContract.Staker,
-	providedLeaders map[thor.Address]*stakerContract.Validation,
+	providedLeaders map[thor.Address]*validation.Validation,
 ) error {
 	signer, err := header.Signer()
 	if err != nil {
@@ -31,9 +32,9 @@ func (c *Consensus) validateStakingProposer(
 		return err
 	}
 
-	var leaders map[thor.Address]*stakerContract.Validation
+	var leaders map[thor.Address]*validation.Validation
 	if entry, ok := c.validatorsCache.Get(parent.ID()); ok {
-		possiblyLeaders, ok := entry.(*map[thor.Address]*stakerContract.Validation)
+		possiblyLeaders, ok := entry.(*map[thor.Address]*validation.Validation)
 		if ok {
 			leaders = *possiblyLeaders
 		} else {

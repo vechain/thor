@@ -24,6 +24,7 @@ import (
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/builtin/staker"
+	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/runtime"
@@ -1667,7 +1668,7 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.Equal(t, &expectedEndorsor, getRes[1])
 	assert.Equal(t, big.NewInt(0).Cmp(*getRes[2].(**big.Int)), 0) // stake - should be 0 while queued
 	assert.Equal(t, big.NewInt(0).Cmp(*getRes[3].(**big.Int)), 0) // weight - should be 0 while queued
-	assert.Equal(t, staker.StatusQueued, *getRes[4].(*uint8))
+	assert.Equal(t, validation.StatusQueued, *getRes[4].(*uint8))
 	assert.Equal(t, true, *getRes[5].(*bool)) // isMaster
 	assert.Equal(t, uint32(360*24*15), *getRes[6].(*uint32))
 	assert.Equal(t, uint32(0), *getRes[7].(*uint32))              // start period
@@ -1940,7 +1941,7 @@ func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
 	getRes[8] = new(uint32)
 	_, err = callContractAndGetOutput(abi, "get", toAddr, &getRes, id)
 	assert.NoError(t, err)
-	assert.Equal(t, staker.StatusExit, *getRes[4].(*uint8))
+	assert.Equal(t, validation.StatusExit, *getRes[4].(*uint8))
 
 	// firstQueued
 	firstQueuedRes := new(common.Address)

@@ -13,7 +13,7 @@ import (
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/builtin/staker"
+	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/test/testchain"
 )
 
@@ -61,7 +61,7 @@ func getEndorsorBalance(blk *block.Header, chain *testchain.Chain) (*big.Int, er
 	return balance, nil
 }
 
-func getMasterStake(chain *testchain.Chain, blk *block.Header) (*staker.Validation, error) {
+func getMasterStake(chain *testchain.Chain, blk *block.Header) (*validation.Validation, error) {
 	st := chain.Stater().NewState(chain.Repo().BestBlockSummary().Root())
 	signer, err := blk.Signer()
 	if err != nil {
