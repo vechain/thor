@@ -6,9 +6,9 @@
 package delegation
 
 import (
-	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"math/big"
 
+	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
 )
