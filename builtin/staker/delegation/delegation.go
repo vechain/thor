@@ -6,6 +6,7 @@
 package delegation
 
 import (
+	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"math/big"
 
 	"github.com/vechain/thor/v2/builtin/staker/validation"
@@ -31,11 +32,7 @@ func (d *Delegation) CalcWeight() *big.Int {
 	if d.IsEmpty() {
 		return big.NewInt(0)
 	}
-
-	weight := big.NewInt(0).Mul(d.Stake, big.NewInt(int64(d.Multiplier))) // multiplier is %
-	weight = weight.Quo(weight, big.NewInt(100))                          // convert to %
-
-	return weight
+	return stakes.CalculateWeight(d.Stake, d.Multiplier)
 }
 
 // Started returns whether the delegation became locked
