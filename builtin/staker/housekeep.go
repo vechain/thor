@@ -11,7 +11,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/builtin/staker/delta"
-	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -372,7 +371,7 @@ func (s *Staker) ActivateNextValidator(currentBlk uint32, maxLeaderGroupSize *bi
 	val.QueuedVET = big.NewInt(0)
 	val.LockedVET = validatorLocked
 	// x2 multiplier for validator's stake
-	validatorWeight := stakes.CalculateWeight(validatorLocked, validation.Multiplier)
+	validatorWeight := validation.WeightedStake(validatorLocked).Weight()
 	val.Weight = big.NewInt(0).Add(validatorWeight, aggRenew.NewLockedWeight)
 
 	// update the validator statuses
@@ -392,7 +391,7 @@ func (s *Staker) ActivateNextValidator(currentBlk uint32, maxLeaderGroupSize *bi
 		NewLockedVET:         val.LockedVET,
 		NewLockedWeight:      val.Weight,
 		QueuedDecrease:       val.LockedVET,
-		QueuedDecreaseWeight: stakes.CalculateWeight(val.LockedVET, validation.Multiplier),
+		QueuedDecreaseWeight: validatorWeight,
 	}
 	if err = s.globalStatsService.ApplyRenewal(validatorRenewal.Add(aggRenew)); err != nil {
 		return nil, err

@@ -30,8 +30,6 @@ type Service struct {
 	epochLength uint32
 }
 
-const Multiplier = uint8(200) // 200%
-
 var (
 	// active validations linked list
 	slotActiveTail      = thor.BytesToBytes32([]byte(("validations-active-tail")))

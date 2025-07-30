@@ -16,6 +16,7 @@ import (
 	"github.com/vechain/thor/v2/builtin/staker/aggregation"
 	"github.com/vechain/thor/v2/builtin/staker/delegation"
 	"github.com/vechain/thor/v2/builtin/staker/globalstats"
+	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/state"
@@ -247,7 +248,7 @@ func (s *Staker) AddValidator(
 	}
 
 	// update global totals
-	err := s.globalStatsService.AddQueued(stake, validation.Multiplier)
+	err := s.globalStatsService.AddQueued(validation.WeightedStake(stake))
 	if err != nil {
 		return err
 	}
@@ -284,7 +285,7 @@ func (s *Staker) IncreaseStake(endorsor thor.Address, validationID thor.Address,
 	}
 
 	// update global totals
-	if err := s.globalStatsService.AddQueued(amount, validation.Multiplier); err != nil {
+	if err := s.globalStatsService.AddQueued(validation.WeightedStake(amount)); err != nil {
 		return err
 	}
 
@@ -306,7 +307,7 @@ func (s *Staker) DecreaseStake(endorsor thor.Address, validationID thor.Address,
 		return err
 	}
 	if val.Status == validation.StatusQueued {
-		err = s.globalStatsService.RemoveQueued(amount, validation.Multiplier)
+		err = s.globalStatsService.RemoveQueued(validation.WeightedStake(amount))
 		if err != nil {
 			return err
 		}
@@ -326,7 +327,7 @@ func (s *Staker) WithdrawStake(endorsor thor.Address, validationID thor.Address,
 		return nil, err
 	}
 	if val.Status == validation.StatusQueued {
-		err = s.globalStatsService.RemoveQueued(val.QueuedVET, validation.Multiplier)
+		err = s.globalStatsService.RemoveQueued(validation.WeightedStake(val.QueuedVET))
 		if err != nil {
 			return nil, err
 		}
@@ -382,14 +383,9 @@ func (s *Staker) AddDelegation(
 		logger.Info("failed to add delegation", "ValidationID", validationID, "error", err)
 		return thor.Bytes32{}, err
 	}
+	weightedStake := stakes.NewWeightedStake(stake, multiplier)
 
-	// update delegation aggregations
-	// TODO use service + cleanup multiple calls
-	del, err := s.delegationService.GetDelegation(delegationID)
-	if err != nil {
-		return thor.Bytes32{}, err
-	}
-	if err = s.aggregationService.AddPendingVET(validationID, stake, del.Multiplier); err != nil {
+	if err = s.aggregationService.AddPendingVET(validationID, weightedStake); err != nil {
 		return thor.Bytes32{}, err
 	}
 
@@ -399,7 +395,7 @@ func (s *Staker) AddDelegation(
 	}
 
 	// update global figures
-	if err = s.globalStatsService.AddQueued(stake, del.Multiplier); err != nil {
+	if err = s.globalStatsService.AddQueued(weightedStake); err != nil {
 		return thor.Bytes32{}, err
 	}
 
@@ -430,7 +426,7 @@ func (s *Staker) SignalDelegationExit(delegationID thor.Bytes32) error {
 		return err
 	}
 
-	err = s.aggregationService.SignalExit(del.ValidationID, del.Stake, del.Multiplier)
+	err = s.aggregationService.SignalExit(del.ValidationID, stakes.NewWeightedStake(del.Stake, del.Multiplier))
 	if err != nil {
 		return err
 	}
@@ -477,11 +473,13 @@ func (s *Staker) WithdrawDelegation(
 	}
 
 	if !started { // delegation's funds are still pending
-		if err := s.aggregationService.SubPendingVet(del.ValidationID, withdrawableStake, del.Multiplier); err != nil {
+		weightedStake := stakes.NewWeightedStake(withdrawableStake, del.Multiplier)
+
+		if err := s.aggregationService.SubPendingVet(del.ValidationID, weightedStake); err != nil {
 			return nil, err
 		}
 
-		if err := s.globalStatsService.RemoveQueued(withdrawableStake, del.Multiplier); err != nil {
+		if err := s.globalStatsService.RemoveQueued(weightedStake); err != nil {
 			return nil, err
 		}
 	}

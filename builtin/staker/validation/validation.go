@@ -23,6 +23,17 @@ const (
 	StatusExit                   // Validation should not be used again
 )
 
+const (
+	Multiplier = 200 //
+)
+
+func WeightedStake(amount *big.Int) *stakes.WeightedStake {
+	if amount == nil {
+		amount = big.NewInt(0)
+	}
+	return stakes.NewWeightedStake(amount, Multiplier)
+}
+
 type Validation struct {
 	Endorsor           thor.Address // the address providing the stake
 	Period             uint32       // the staking period of the validation
@@ -94,14 +105,14 @@ func (v *Validation) Renew() *delta.Renewal {
 	v.PendingUnlockVET = big.NewInt(0)
 
 	// Apply x2 multiplier for validation's stake
-	newLockedWeight := stakes.CalculateWeight(newLockedVET, Multiplier)
-	queuedDecreaseWeight := stakes.CalculateWeight(queuedDecrease, Multiplier)
+	weight := WeightedStake(newLockedVET).Weight()
+	queuedDecreaseWeight := WeightedStake(queuedDecrease).Weight()
 
 	v.CompleteIterations++
 
 	return &delta.Renewal{
 		NewLockedVET:         newLockedVET,
-		NewLockedWeight:      newLockedWeight,
+		NewLockedWeight:      weight,
 		QueuedDecrease:       queuedDecrease,
 		QueuedDecreaseWeight: queuedDecreaseWeight,
 	}
@@ -130,9 +141,9 @@ func (v *Validation) Exit() *delta.Exit {
 	// We only return the change in the validation's TVL and weight
 	return &delta.Exit{
 		ExitedTVL:            releaseLockedTVL,
-		ExitedTVLWeight:      stakes.CalculateWeight(releaseLockedTVL, Multiplier),
+		ExitedTVLWeight:      WeightedStake(releaseLockedTVL).Weight(),
 		QueuedDecrease:       releaseQueuedTVL,
-		QueuedDecreaseWeight: stakes.CalculateWeight(releaseQueuedTVL, Multiplier),
+		QueuedDecreaseWeight: WeightedStake(releaseQueuedTVL).Weight(),
 	}
 }
 

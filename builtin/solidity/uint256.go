@@ -8,6 +8,7 @@ package solidity
 import (
 	"errors"
 	"math/big"
+	"strings"
 
 	"github.com/vechain/thor/v2/thor"
 )
@@ -38,7 +39,8 @@ var maxUint256 = new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewI
 func (u *Uint256) Set(value *big.Int) error {
 	storage := thor.BytesToBytes32(value.Bytes())
 	if value.Sign() == -1 {
-		return errors.New("uint cannot be negative")
+		key := strings.TrimRight(string(u.pos.Bytes()), "0")
+		return errors.New(key + " uint256 cannot be negative")
 	}
 	if value.Cmp(maxUint256) > 0 {
 		return errors.New("uint256 overflow: value exceeds 256 bits")

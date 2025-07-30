@@ -32,7 +32,7 @@ func (d *Delegation) CalcWeight() *big.Int {
 	if d.IsEmpty() {
 		return big.NewInt(0)
 	}
-	return stakes.CalculateWeight(d.Stake, d.Multiplier)
+	return stakes.NewWeightedStake(d.Stake, d.Multiplier).Weight()
 }
 
 // Started returns whether the delegation became locked

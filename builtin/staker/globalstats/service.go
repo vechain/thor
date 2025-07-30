@@ -99,12 +99,11 @@ func (s *Service) GetLockedVET() (*big.Int, *big.Int, error) {
 }
 
 // AddQueued increases queued totals when new stake is added to the queue.
-func (s *Service) AddQueued(stake *big.Int, multiplier uint8) error {
-	if err := s.queuedVET.Add(stake); err != nil {
+func (s *Service) AddQueued(stake *stakes.WeightedStake) error {
+	if err := s.queuedVET.Add(stake.VET()); err != nil {
 		return err
 	}
-	weight := stakes.CalculateWeight(stake, multiplier)
-	if err := s.queuedWeight.Add(weight); err != nil {
+	if err := s.queuedWeight.Add(stake.Weight()); err != nil {
 		return err
 	}
 
@@ -112,12 +111,11 @@ func (s *Service) AddQueued(stake *big.Int, multiplier uint8) error {
 }
 
 // RemoveQueued decreases queued totals when stake is removed from the queue.
-func (s *Service) RemoveQueued(amount *big.Int, multiplier uint8) error {
-	if err := s.queuedVET.Sub(amount); err != nil {
+func (s *Service) RemoveQueued(stake *stakes.WeightedStake) error {
+	if err := s.queuedVET.Sub(stake.VET()); err != nil {
 		return err
 	}
-	weight := stakes.CalculateWeight(amount, multiplier)
-	return s.queuedWeight.Sub(weight)
+	return s.queuedWeight.Sub(stake.Weight())
 }
 
 // GetQueuedStake returns the total VET and weight waiting to be activated.
