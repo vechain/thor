@@ -134,10 +134,6 @@ func (s *Service) LeaderGroupSize() (*big.Int, error) {
 	return s.leaderGroup.Len()
 }
 
-func (s *Service) AddLeaderGroup(address thor.Address, val *Validation) (bool, error) {
-	return s.leaderGroup.Add(address, val)
-}
-
 func (s *Service) GetLeaderGroupHead() (*Validation, error) {
 	return s.leaderGroup.Peek()
 }
@@ -433,18 +429,17 @@ func (s *Service) ActivateValidator(
 	currentBlock uint32,
 	aggRenew *delta.Renewal,
 ) (*delta.Renewal, error) {
-	val, err := s.GetValidation(validationID)
+	val, err := s.GetExistingValidation(validationID)
 	if err != nil {
 		return nil, err
 	}
-	if val.IsEmpty() {
-		return nil, errors.New("validator not found")
-	}
 
 	// Update validator values
-	validatorLocked := big.NewInt(0).Add(val.LockedVET, val.QueuedVET)
-	val.QueuedVET = big.NewInt(0)
+	validatorLocked := big.NewInt(0).Add(val.LockedVET, val.QueuedVET) // lock exiting + pending vet
 	val.LockedVET = validatorLocked
+
+	val.QueuedVET = big.NewInt(0) // queued vet already locked-in
+
 	// x2 multiplier for validator's stake
 	validatorWeight := big.NewInt(0).Mul(validatorLocked, pkgValidatorWeightMultiplier)
 	val.Weight = big.NewInt(0).Add(validatorWeight, aggRenew.NewLockedWeight)
@@ -455,7 +450,7 @@ func (s *Service) ActivateValidator(
 	val.StartBlock = currentBlock
 
 	// Add to active list
-	added, err := s.AddLeaderGroup(validationID, val)
+	added, err := s.leaderGroup.Add(validationID, val)
 	if err != nil {
 		return nil, err
 	}
