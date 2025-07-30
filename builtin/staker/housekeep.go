@@ -11,6 +11,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/builtin/staker/delta"
+	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -192,18 +193,20 @@ func (s *Staker) computeActivations() (int64, error) {
 func (s *Staker) ApplyEpochTransition(transition *EpochTransition) error {
 	logger.Info("applying epoch transition", "block", transition.Block)
 
+	accumulatedRenewal := delta.NewRenewal()
 	// Apply renewals
 	for _, renewal := range transition.Renewals {
-		// Update global stats with existing service methods
-		// TODO it's possible to accumulate these and write only once
-		if err := s.globalStatsService.UpdateTotals(renewal.ValidatorDelta, renewal.DelegationDelta); err != nil {
-			return err
-		}
+		accumulatedRenewal.Add(renewal.ValidatorDelta)
+		accumulatedRenewal.Add(renewal.DelegationDelta)
 
 		// Update validator state
 		if err := s.validationService.SetValidation(renewal.ValidatorID, renewal.NewState, false); err != nil {
 			return err
 		}
+	}
+	// Apply accumulated renewals to global stats
+	if err := s.globalStatsService.ApplyRenewal(accumulatedRenewal); err != nil {
+		return err
 	}
 
 	// Apply exits
@@ -211,7 +214,7 @@ func (s *Staker) ApplyEpochTransition(transition *EpochTransition) error {
 		logger.Info("exiting validator", "id", transition.ExitValidatorID)
 
 		// Now call ExitValidator to get the actual exit details and perform the exit
-		releaseLockedTVL, releaseLockedTVLWeight, releaseQueuedTVL, err := s.validationService.ExitValidator(*transition.ExitValidatorID)
+		exit, err := s.validationService.ExitValidator(*transition.ExitValidatorID)
 		if err != nil {
 			return err
 		}
@@ -221,12 +224,7 @@ func (s *Staker) ApplyEpochTransition(transition *EpochTransition) error {
 			return err
 		}
 
-		if err := s.globalStatsService.RemoveLocked(
-			releaseLockedTVL,
-			releaseLockedTVLWeight,
-			releaseQueuedTVL,
-			aggExit,
-		); err != nil {
+		if err := s.globalStatsService.ApplyExit(exit.Add(aggExit)); err != nil {
 			return err
 		}
 	}
@@ -374,7 +372,7 @@ func (s *Staker) ActivateNextValidator(currentBlk uint32, maxLeaderGroupSize *bi
 	val.QueuedVET = big.NewInt(0)
 	val.LockedVET = validatorLocked
 	// x2 multiplier for validator's stake
-	validatorWeight := big.NewInt(0).Mul(validatorLocked, validatorWeightMultiplier)
+	validatorWeight := stakes.WeightedStake(validatorLocked, validation.Multiplier)
 	val.Weight = big.NewInt(0).Add(validatorWeight, aggRenew.NewLockedWeight)
 
 	// update the validator statuses
@@ -394,9 +392,9 @@ func (s *Staker) ActivateNextValidator(currentBlk uint32, maxLeaderGroupSize *bi
 		NewLockedVET:         val.LockedVET,
 		NewLockedWeight:      val.Weight,
 		QueuedDecrease:       val.LockedVET,
-		QueuedDecreaseWeight: big.NewInt(0).Mul(val.LockedVET, validatorWeightMultiplier), // Only decrease validator's own weight
+		QueuedDecreaseWeight: stakes.WeightedStake(val.LockedVET, validation.Multiplier),
 	}
-	if err = s.globalStatsService.UpdateTotals(validatorRenewal, aggRenew); err != nil {
+	if err = s.globalStatsService.ApplyRenewal(validatorRenewal.Add(aggRenew)); err != nil {
 		return nil, err
 	}
 

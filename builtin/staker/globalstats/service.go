@@ -10,6 +10,7 @@ import (
 
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/builtin/staker/delta"
+	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -50,25 +51,36 @@ func (s *Service) QueuedStake() (*big.Int, *big.Int, error) {
 	return queuedVet, queuedWeight, err
 }
 
-// UpdateTotals adjusts global totals during validator/delegation transitions.
+// ApplyRenewal adjusts global totals during validator/delegation transitions.
 // Called when validators are activated or delegations move between states.
-func (s *Service) UpdateTotals(validatorRenewal *delta.Renewal, delegatorRenewal *delta.Renewal) error {
-	// calculate the new totals for validator + delegations
-	changeTVL := big.NewInt(0).Add(validatorRenewal.NewLockedVET, delegatorRenewal.NewLockedVET)
-	changeWeight := big.NewInt(0).Add(validatorRenewal.NewLockedWeight, delegatorRenewal.NewLockedWeight)
-	queuedDecrease := big.NewInt(0).Add(validatorRenewal.QueuedDecrease, delegatorRenewal.QueuedDecrease)
-	queuedWeight := big.NewInt(0).Add(validatorRenewal.QueuedDecreaseWeight, delegatorRenewal.QueuedDecreaseWeight)
+func (s *Service) ApplyRenewal(renewal *delta.Renewal) error {
+	if err := s.lockedVET.Add(renewal.NewLockedVET); err != nil {
+		return err
+	}
+	if err := s.lockedWeight.Add(renewal.NewLockedWeight); err != nil {
+		return err
+	}
+	if err := s.queuedVET.Sub(renewal.QueuedDecrease); err != nil {
+		return err
+	}
+	if err := s.queuedWeight.Sub(renewal.QueuedDecreaseWeight); err != nil {
+		return err
+	}
 
-	if err := s.lockedVET.Add(changeTVL); err != nil {
+	return nil
+}
+
+func (s *Service) ApplyExit(exit *delta.Exit) error {
+	if err := s.lockedVET.Sub(exit.ExitedTVL); err != nil {
 		return err
 	}
-	if err := s.lockedWeight.Add(changeWeight); err != nil {
+	if err := s.lockedWeight.Sub(exit.ExitedTVLWeight); err != nil {
 		return err
 	}
-	if err := s.queuedVET.Sub(queuedDecrease); err != nil {
+	if err := s.queuedVET.Sub(exit.QueuedDecrease); err != nil {
 		return err
 	}
-	if err := s.queuedWeight.Sub(queuedWeight); err != nil {
+	if err := s.queuedWeight.Sub(exit.QueuedDecreaseWeight); err != nil {
 		return err
 	}
 
@@ -87,11 +99,11 @@ func (s *Service) GetLockedVET() (*big.Int, *big.Int, error) {
 }
 
 // AddQueued increases queued totals when new stake is added to the queue.
-func (s *Service) AddQueued(stake *big.Int, weight *big.Int) error {
+func (s *Service) AddQueued(stake *big.Int, multiplier uint8) error {
 	if err := s.queuedVET.Add(stake); err != nil {
 		return err
 	}
-
+	weight := stakes.WeightedStake(stake, multiplier)
 	if err := s.queuedWeight.Add(weight); err != nil {
 		return err
 	}
@@ -100,40 +112,12 @@ func (s *Service) AddQueued(stake *big.Int, weight *big.Int) error {
 }
 
 // RemoveQueued decreases queued totals when stake is removed from the queue.
-func (s *Service) RemoveQueued(amount *big.Int, weight *big.Int) error {
+func (s *Service) RemoveQueued(amount *big.Int, multiplier uint8) error {
 	if err := s.queuedVET.Sub(amount); err != nil {
 		return err
 	}
+	weight := stakes.WeightedStake(amount, multiplier)
 	return s.queuedWeight.Sub(weight)
-}
-
-// RemoveLocked decreases locked totals when validators exit the active set.
-// Also removes any pending delegations that were queued for the exiting validator.
-func (s *Service) RemoveLocked(releaseLockedTVL *big.Int, releaseLockedTVLWeight *big.Int, releaseQueuedTVL *big.Int, aggExit *delta.Exit) error {
-	// validator.PendingVET + agg.ExitVET are now unlocked
-	// releaseLockedTVL here means that it's not contributing to TVL
-	// values for the validator are still locked
-	totalUnlockedVET := big.NewInt(0).Add(releaseLockedTVL, aggExit.ExitedTVL)
-
-	// validator releaseQueuedTVL does not contribute to weight
-	totalQueueDecrease := big.NewInt(0).Add(releaseQueuedTVL, aggExit.QueuedDecrease)
-
-	if err := s.lockedVET.Sub(totalUnlockedVET); err != nil {
-		return err
-	}
-	// releaseLockedTVLWeight already has the sum of the agg weights - LockedVET x2 + total weight from delegators
-	if err := s.lockedWeight.Sub(releaseLockedTVLWeight); err != nil {
-		return err
-	}
-
-	if err := s.queuedVET.Sub(totalQueueDecrease); err != nil {
-		return err
-	}
-	if err := s.queuedWeight.Sub(aggExit.QueuedDecreaseWeight); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // GetQueuedStake returns the total VET and weight waiting to be activated.

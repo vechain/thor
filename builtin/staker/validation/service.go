@@ -12,6 +12,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
+	"github.com/vechain/thor/v2/builtin/staker/delta"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -30,8 +31,7 @@ type Service struct {
 }
 
 var (
-	// todo fix this
-	pkgValidatorWeightMultiplier *big.Int
+	Multiplier = uint8(200) // 200%
 
 	// active validations linked list
 	slotActiveTail      = thor.BytesToBytes32([]byte(("validations-active-tail")))
@@ -45,7 +45,6 @@ var (
 )
 
 func New(sctx *solidity.Context,
-	validatorWeightMultiplier *big.Int,
 	cooldownPeriod uint32,
 	epochLength uint32,
 	lowStakingPeriod uint32,
@@ -55,7 +54,6 @@ func New(sctx *solidity.Context,
 	maxStake *big.Int,
 ) *Service {
 	repo := NewRepository(sctx)
-	pkgValidatorWeightMultiplier = validatorWeightMultiplier
 
 	return &Service{
 		repo: repo,
@@ -348,39 +346,20 @@ func (s *Service) NextToActivate(maxLeaderGroupSize *big.Int) (*thor.Address, *V
 }
 
 // ExitValidator removes the validator from the active list and puts it in cooldown.
-func (s *Service) ExitValidator(id thor.Address) (*big.Int, *big.Int, *big.Int, error) {
+func (s *Service) ExitValidator(id thor.Address) (*delta.Exit, error) {
 	entry, err := s.GetValidation(id)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 	if entry.IsEmpty() {
-		return nil, nil, nil, nil
+		return nil, nil
+	}
+	exit := entry.Exit()
+	if _, err := s.leaderGroup.Remove(id, entry); err != nil {
+		return nil, errors.Wrap(err, "failed to remove validator from active group")
 	}
 
-	releaseLockedTVL := big.NewInt(0).Set(entry.LockedVET)
-	releaseLockedTVLWeight := big.NewInt(0).Set(entry.Weight)
-	releaseQueuedTVL := big.NewInt(0).Set(entry.QueuedVET)
-
-	// move locked to cooldown
-	entry.Status = StatusExit
-	entry.CooldownVET = big.NewInt(0).Set(entry.LockedVET)
-	entry.LockedVET = big.NewInt(0)
-	entry.PendingUnlockVET = big.NewInt(0)
-	entry.Weight = big.NewInt(0)
-
-	// unlock pending stake
-	if entry.QueuedVET.Sign() == 1 {
-		// pending never contributes to weight as it's not active
-		entry.WithdrawableVET = big.NewInt(0).Add(entry.WithdrawableVET, entry.QueuedVET)
-		entry.QueuedVET = big.NewInt(0)
-	}
-
-	entry.CompleteIterations++
-	if _, err = s.leaderGroup.Remove(id, entry); err != nil {
-		return nil, nil, nil, err
-	}
-
-	return releaseLockedTVL, releaseLockedTVLWeight, releaseQueuedTVL, nil
+	return exit, nil
 }
 
 // SetExitBlock sets the exit block for a validator.
