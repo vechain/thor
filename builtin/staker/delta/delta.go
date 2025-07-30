@@ -23,6 +23,7 @@ func NewRenewal() *Renewal {
 	}
 }
 
+// Add sets r to the sum of itself and other.
 func (r *Renewal) Add(other *Renewal) *Renewal {
 	if other == nil {
 		return r
@@ -42,6 +43,7 @@ type Exit struct {
 	QueuedDecreaseWeight *big.Int
 }
 
+// Add sets e to the sum of itself and other.
 func (e *Exit) Add(other *Exit) *Exit {
 	if other == nil {
 		return e
