@@ -54,7 +54,7 @@ func (s *Service) AddPendingVET(validationID thor.Address, stake *big.Int, multi
 	if err != nil {
 		return err
 	}
-	weight := stakes.WeightedStake(stake, multiplier)
+	weight := stakes.CalculateWeight(stake, multiplier)
 	agg.PendingVET = big.NewInt(0).Add(agg.PendingVET, stake)
 	agg.PendingWeight = big.NewInt(0).Add(agg.PendingWeight, weight)
 
@@ -68,7 +68,7 @@ func (s *Service) SubPendingVet(validationID thor.Address, stake *big.Int, multi
 	if err != nil {
 		return err
 	}
-	weight := stakes.WeightedStake(stake, multiplier)
+	weight := stakes.CalculateWeight(stake, multiplier)
 	agg.PendingVET = big.NewInt(0).Sub(agg.PendingVET, stake)
 	agg.PendingWeight = big.NewInt(0).Sub(agg.PendingWeight, weight)
 
@@ -139,7 +139,7 @@ func (s *Service) SignalExit(validationID thor.Address, stake *big.Int, multipli
 
 	// Only move to exiting pools - don't subtract from locked yet
 	// The subtraction happens during renewal
-	weight := stakes.WeightedStake(stake, multiplier)
+	weight := stakes.CalculateWeight(stake, multiplier)
 	agg.ExitingVET = big.NewInt(0).Add(agg.ExitingVET, stake)
 	agg.ExitingWeight = big.NewInt(0).Add(agg.ExitingWeight, weight)
 

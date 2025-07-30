@@ -94,8 +94,8 @@ func (v *Validation) Renew() *delta.Renewal {
 	v.PendingUnlockVET = big.NewInt(0)
 
 	// Apply x2 multiplier for validation's stake
-	newLockedWeight := stakes.WeightedStake(newLockedVET, Multiplier)
-	queuedDecreaseWeight := stakes.WeightedStake(queuedDecrease, Multiplier)
+	newLockedWeight := stakes.CalculateWeight(newLockedVET, Multiplier)
+	queuedDecreaseWeight := stakes.CalculateWeight(queuedDecrease, Multiplier)
 
 	v.CompleteIterations++
 
@@ -130,9 +130,9 @@ func (v *Validation) Exit() *delta.Exit {
 	// We only return the change in the validation's TVL and weight
 	return &delta.Exit{
 		ExitedTVL:            releaseLockedTVL,
-		ExitedTVLWeight:      stakes.WeightedStake(releaseLockedTVL, Multiplier),
+		ExitedTVLWeight:      stakes.CalculateWeight(releaseLockedTVL, Multiplier),
 		QueuedDecrease:       releaseQueuedTVL,
-		QueuedDecreaseWeight: stakes.WeightedStake(releaseQueuedTVL, Multiplier),
+		QueuedDecreaseWeight: stakes.CalculateWeight(releaseQueuedTVL, Multiplier),
 	}
 }
 

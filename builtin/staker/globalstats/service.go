@@ -103,7 +103,7 @@ func (s *Service) AddQueued(stake *big.Int, multiplier uint8) error {
 	if err := s.queuedVET.Add(stake); err != nil {
 		return err
 	}
-	weight := stakes.WeightedStake(stake, multiplier)
+	weight := stakes.CalculateWeight(stake, multiplier)
 	if err := s.queuedWeight.Add(weight); err != nil {
 		return err
 	}
@@ -116,7 +116,7 @@ func (s *Service) RemoveQueued(amount *big.Int, multiplier uint8) error {
 	if err := s.queuedVET.Sub(amount); err != nil {
 		return err
 	}
-	weight := stakes.WeightedStake(amount, multiplier)
+	weight := stakes.CalculateWeight(amount, multiplier)
 	return s.queuedWeight.Sub(weight)
 }
 

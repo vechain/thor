@@ -2,9 +2,9 @@ package stakes
 
 import "math/big"
 
-// WeightedStake calculates weight based on a stake and a multiplier
+// CalculateWeight calculates weight based on a stake and a multiplier
 // TODO: Does this deserve its own package?
-func WeightedStake(stake *big.Int, multiplier uint8) *big.Int {
+func CalculateWeight(stake *big.Int, multiplier uint8) *big.Int {
 	if multiplier == 0 {
 		return big.NewInt(0)
 	}
