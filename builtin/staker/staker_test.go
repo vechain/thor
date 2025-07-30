@@ -312,27 +312,27 @@ func (va *ValidatorAssertions) Status(expected validation.Status) *ValidatorAsse
 }
 
 func (va *ValidatorAssertions) Weight(expected *big.Int) *ValidatorAssertions {
-	assert.Equal(va.t, expected, va.validator.Weight, "validator %s weight mismatch", va.addr.String())
+	assert.Equal(va.t, 0, expected.Cmp(va.validator.Weight), "validator %s weight mismatch", va.addr.String())
 	return va
 }
 
 func (va *ValidatorAssertions) LockedVET(expected *big.Int) *ValidatorAssertions {
-	assert.Equal(va.t, expected, va.validator.LockedVET, "validator %s locked VET mismatch", va.addr.String())
+	assert.Equal(va.t, 0, expected.Cmp(va.validator.LockedVET), "validator %s locked VET mismatch", va.addr.String())
 	return va
 }
 
 func (va *ValidatorAssertions) PendingLocked(expected *big.Int) *ValidatorAssertions {
-	assert.Equal(va.t, expected, va.validator.PendingLocked, "validator %s pending locked VET mismatch", va.addr.String())
+	assert.Equal(va.t, 0, expected.Cmp(va.validator.PendingLocked), "validator %s pending locked VET mismatch", va.addr.String())
 	return va
 }
 
 func (va *ValidatorAssertions) CooldownVET(expected *big.Int) *ValidatorAssertions {
-	assert.Equal(va.t, expected, va.validator.CooldownVET, "validator %s cooldown VET mismatch", va.addr.String())
+	assert.Equal(va.t, 0, expected.Cmp(va.validator.CooldownVET), "validator %s cooldown VET mismatch", va.addr.String())
 	return va
 }
 
 func (va *ValidatorAssertions) WithdrawableVET(expected *big.Int) *ValidatorAssertions {
-	assert.Equal(va.t, expected, va.validator.WithdrawableVET, "validator %s withdrawable VET mismatch", va.addr.String())
+	assert.Equal(va.t, 0, expected.Cmp(va.validator.WithdrawableVET), "validator %s withdrawable VET mismatch", va.addr.String())
 	return va
 }
 
