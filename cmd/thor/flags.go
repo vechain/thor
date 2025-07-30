@@ -199,7 +199,7 @@ var (
 	}
 
 	// solo mode only flags
-	hayabusa = cli.BoolFlag{
+	hayabusaFlag = cli.BoolFlag{
 		Name:  "hayabusa",
 		Usage: "start solo immidetaly as hayabusa",
 	}

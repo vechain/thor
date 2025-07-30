@@ -145,7 +145,7 @@ func main() {
 					enableAdminFlag,
 					allowedTracersFlag,
 					minEffectivePriorityFeeFlag,
-					hayabusa,
+					hayabusaFlag,
 				},
 				Action: soloAction,
 			},
@@ -331,7 +331,7 @@ func soloAction(ctx *cli.Context) error {
 		return err
 	}
 
-	isHayabusa := ctx.Bool(hayabusa.Name)
+	isHayabusa := ctx.Bool(hayabusaFlag.Name)
 	onDemandBlockProduction := ctx.Bool(onDemandFlag.Name)
 	blockProductionInterval := ctx.Uint64(blockInterval.Name)
 	if blockProductionInterval == 0 {
