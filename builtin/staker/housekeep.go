@@ -80,7 +80,7 @@ func (s *Staker) ComputeEpochTransition(currentBlock uint32) (*EpochTransition, 
 	}
 
 	// 3. Compute all activations
-	transition.ActivationCount, err = s.computeActivations()
+	transition.ActivationCount, err = s.computeActivations(transition.ExitValidatorID != nil)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +156,7 @@ func (s *Staker) computeExits(currentBlock uint32) (*thor.Address, error) {
 	return nil, nil
 }
 
-func (s *Staker) computeActivations() (int64, error) {
+func (s *Staker) computeActivations(hasValidatorExited bool) (int64, error) {
 	// Calculate how many validators can be activated
 	queuedSize, err := s.QueuedGroupSize()
 	if err != nil {
@@ -166,6 +166,11 @@ func (s *Staker) computeActivations() (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+	// the current leaderSize might have changed for the next activations
+	if hasValidatorExited {
+		leaderSize = big.NewInt(0).Sub(leaderSize, big.NewInt(1))
+	}
+
 	maxSize, err := s.params.Get(thor.KeyMaxBlockProposers)
 	if err != nil {
 		return 0, err
