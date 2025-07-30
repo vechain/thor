@@ -15,7 +15,10 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
+//
 // State transition types
+//
+
 type EpochTransition struct {
 	Block           uint32
 	Renewals        []ValidatorRenewal
@@ -38,7 +41,7 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Address]*validat
 
 	logger.Info("🏠performing housekeeping", "block", currentBlock)
 
-	transition, err := s.ComputeEpochTransition(currentBlock)
+	transition, err := s.computeEpochTransition(currentBlock)
 	if err != nil {
 		return false, nil, err
 	}
@@ -47,7 +50,7 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Address]*validat
 		return false, nil, nil
 	}
 
-	if err := s.ApplyEpochTransition(transition); err != nil {
+	if err := s.applyEpochTransition(transition); err != nil {
 		return false, nil, err
 	}
 
@@ -58,8 +61,8 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Address]*validat
 	return true, activeValidators, nil
 }
 
-// ComputeEpochTransition calculates all state changes needed for an epoch transition
-func (s *Staker) ComputeEpochTransition(currentBlock uint32) (*EpochTransition, error) {
+// computeEpochTransition calculates all state changes needed for an epoch transition
+func (s *Staker) computeEpochTransition(currentBlock uint32) (*EpochTransition, error) {
 	var err error
 	if currentBlock%epochLength != 0 {
 		return nil, nil // No transition needed
@@ -193,8 +196,8 @@ func (s *Staker) computeActivations(hasValidatorExited bool) (int64, error) {
 	return queuedCount, nil
 }
 
-// ApplyEpochTransition applies all computed changes
-func (s *Staker) ApplyEpochTransition(transition *EpochTransition) error {
+// applyEpochTransition applies all computed changes
+func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 	logger.Info("applying epoch transition", "block", transition.Block)
 
 	// Apply renewals
@@ -243,7 +246,7 @@ func (s *Staker) ApplyEpochTransition(transition *EpochTransition) error {
 	}
 
 	for range transition.ActivationCount {
-		_, err := s.ActivateNextValidator(transition.Block, maxLeaderGroupSize)
+		_, err := s.activateNextValidator(transition.Block, maxLeaderGroupSize)
 		if err != nil {
 			return err
 		}
@@ -273,108 +276,25 @@ func (s *Staker) buildActiveValidatorsFromTransition(transition *EpochTransition
 	return activeValidators
 }
 
-// Transition activates the staker contract when sufficient validators are queued
-func (s *Staker) Transition(currentBlock uint32) (bool, error) {
-	active, err := s.IsPoSActive()
-	if err != nil {
-		return false, err
-	}
-	if active {
-		return false, nil
-	}
-
-	maxProposers, err := s.params.Get(thor.KeyMaxBlockProposers)
-	if err != nil || maxProposers.Cmp(big.NewInt(0)) == 0 {
-		maxProposers = big.NewInt(0).SetUint64(thor.InitialMaxBlockProposers)
-	}
-
-	queueSize, err := s.validationService.QueuedGroupSize()
-	if err != nil {
-		return false, err
-	}
-
-	// if the queue size is not AT LEAST 2/3 of the maxProposers, then return nil
-	minimum := big.NewFloat(0).SetInt(maxProposers)
-	minimum.Mul(minimum, big.NewFloat(2))
-	minimum.Quo(minimum, big.NewFloat(3))
-	if big.NewFloat(0).SetInt(queueSize).Cmp(minimum) < 0 {
-		return false, nil
-	}
-
-	// Use existing activateValidators method for transition
-	ids, err := s.activateValidators(currentBlock)
-	if err != nil {
-		return false, err
-	}
-	logger.Info("activated validations", "count", len(ids))
-
-	return true, nil
-}
-
-// activateValidators is kept for the Transition method
-func (s *Staker) activateValidators(currentBlock uint32) ([]*thor.Address, error) {
-	queuedSize, err := s.QueuedGroupSize()
-	if err != nil {
-		return nil, err
-	}
-	leaderSize, err := s.LeaderGroupSize()
-	if err != nil {
-		return nil, err
-	}
-	maxSize, err := s.params.Get(thor.KeyMaxBlockProposers)
-	if err != nil {
-		return nil, err
-	}
-	if leaderSize.Cmp(maxSize) >= 0 {
-		return nil, nil
-	}
-
-	// no one is in the queue
-	if queuedSize.Cmp(big.NewInt(0)) <= 0 {
-		return nil, nil
-	}
-
-	queuedCount := queuedSize.Int64()
-	leaderDelta := maxSize.Int64() - leaderSize.Int64()
-	if leaderDelta > 0 {
-		if leaderDelta < queuedCount {
-			queuedCount = leaderDelta
-		}
-	} else {
-		return nil, nil
-	}
-
-	activated := make([]*thor.Address, queuedCount)
-	maxLeaderGroupSize, err := s.params.Get(thor.KeyMaxBlockProposers)
-	if err != nil {
-		return nil, err
-	}
-
-	for i := int64(0); i < queuedCount; i++ {
-		id, err := s.ActivateNextValidator(currentBlock, maxLeaderGroupSize)
-		if err != nil {
-			return nil, err
-		}
-		activated[i] = id
-	}
-
-	return activated, nil
-}
-
-func (s *Staker) ActivateNextValidator(currentBlk uint32, maxLeaderGroupSize *big.Int) (*thor.Address, error) {
+func (s *Staker) activateNextValidator(currentBlk uint32, maxLeaderGroupSize *big.Int) (*thor.Address, error) {
 	validatorID, val, err := s.validationService.NextToActivate(maxLeaderGroupSize)
 	if err != nil {
 		return nil, err
 	}
 	logger.Debug("activating validator", "validatorID", validatorID, "block", currentBlk)
 
+	// renew the current delegations aggregation
 	aggRenew, err := s.aggregationService.Renew(*validatorID)
 	if err != nil {
 		return nil, err
 	}
 
+	//
 	// update the validator values
+
 	// TODO move this to the validatorservice at some point
+	// TODO it should follow the same structure of stateless services
+	// TODO it should likely receive the renew agg, update state and return any result needed
 	validatorLocked := big.NewInt(0).Add(val.LockedVET, val.QueuedVET)
 	val.QueuedVET = big.NewInt(0)
 	val.LockedVET = validatorLocked
