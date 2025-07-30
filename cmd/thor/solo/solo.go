@@ -36,7 +36,6 @@ type Options struct {
 	MinTxPriorityFee uint64
 	OnDemand         bool
 	BlockInterval    uint64
-	IsHayabusa       bool
 }
 
 // Solo mode is the standalone client without p2p server

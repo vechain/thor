@@ -443,7 +443,6 @@ func soloAction(ctx *cli.Context) error {
 		MinTxPriorityFee: minTxPriorityFee,
 		OnDemand:         onDemandBlockProduction,
 		BlockInterval:    blockProductionInterval,
-		IsHayabusa:       isHayabusa,
 	}
 
 	stater := state.NewStater(mainDB)
