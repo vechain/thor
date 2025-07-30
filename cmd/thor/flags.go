@@ -199,6 +199,10 @@ var (
 	}
 
 	// solo mode only flags
+	hayabusa = cli.BoolFlag{
+		Name:  "hayabusa",
+		Usage: "start solo immidetaly as hayabusa",
+	}
 	onDemandFlag = cli.BoolFlag{
 		Name:  "on-demand",
 		Usage: "create new block when there is pending transaction",

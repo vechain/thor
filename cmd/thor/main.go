@@ -145,6 +145,7 @@ func main() {
 					enableAdminFlag,
 					allowedTracersFlag,
 					minEffectivePriorityFeeFlag,
+					hayabusa,
 				},
 				Action: soloAction,
 			},
@@ -330,6 +331,7 @@ func soloAction(ctx *cli.Context) error {
 		return err
 	}
 
+	isHayabusa := ctx.Bool(hayabusa.Name)
 	onDemandBlockProduction := ctx.Bool(onDemandFlag.Name)
 	blockProductionInterval := ctx.Uint64(blockInterval.Name)
 	if blockProductionInterval == 0 {
@@ -356,8 +358,16 @@ func soloAction(ctx *cli.Context) error {
 
 	flagGenesis := ctx.String(genesisFlag.Name)
 	if flagGenesis == "" {
-		gene = genesis.NewDevnet()
-		forkConfig = &thor.SoloFork
+		if isHayabusa {
+			thor.SoloFork.GALACTICA = 0
+			thor.SoloFork.HAYABUSA = 0
+			thor.SoloFork.HAYABUSA_TP = 1
+			gene = genesis.NewHayabusaDevnet()
+			forkConfig = &thor.SoloFork
+		} else {
+			gene = genesis.NewDevnet()
+			forkConfig = &thor.SoloFork
+		}
 	} else {
 		gene, forkConfig, err = parseGenesisFile(flagGenesis)
 		if err != nil {
@@ -433,6 +443,7 @@ func soloAction(ctx *cli.Context) error {
 		MinTxPriorityFee: minTxPriorityFee,
 		OnDemand:         onDemandBlockProduction,
 		BlockInterval:    blockProductionInterval,
+		IsHayabusa:       isHayabusa,
 	}
 
 	stater := state.NewStater(mainDB)
