@@ -7,7 +7,6 @@ package staker
 
 import (
 	"math/big"
-	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -25,7 +24,6 @@ type TestSequence struct {
 	staker *Staker
 
 	funcs []TestFunc
-	mu    sync.Mutex
 }
 
 func NewSequence(staker *Staker) *TestSequence {
@@ -33,9 +31,6 @@ func NewSequence(staker *Staker) *TestSequence {
 }
 
 func (ts *TestSequence) AddFunc(f TestFunc) *TestSequence {
-	ts.mu.Lock()
-	defer ts.mu.Unlock()
-
 	ts.funcs = append(ts.funcs, f)
 	return ts
 }
@@ -285,9 +280,6 @@ func (ts *TestSequence) IncreaseDelegatorsReward(node thor.Address, reward *big.
 }
 
 func (ts *TestSequence) Run(t *testing.T) {
-	ts.mu.Lock()
-	defer ts.mu.Unlock()
-
 	for _, f := range ts.funcs {
 		f(t)
 	}
