@@ -44,7 +44,7 @@ func TestAuthority_Hayabusa_TransitionPeriod(t *testing.T) {
 	// check the staker contract has the correct stake
 	masterStake, err := getMasterStake(setup.chain, blk.Header)
 	assert.NoError(t, err)
-	assert.Equal(t, masterStake.PendingLocked.Cmp(minStake), 0)
+	assert.Equal(t, masterStake.QueuedVET.Cmp(minStake), 0)
 }
 
 func getEndorsorBalance(blk *block.Header, chain *testchain.Chain) (*big.Int, error) {

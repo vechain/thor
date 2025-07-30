@@ -30,11 +30,11 @@ type Validation struct {
 	StartBlock         uint32       // the block number when the validation started the first staking period
 	ExitBlock          *uint32      `rlp:"nil"` // the block number when the validation moved to cooldown
 
-	LockedVET          *big.Int // the amount of VET locked for the current staking period, for the validator only
-	NextPeriodDecrease *big.Int // the amount of VET that will be unlocked in the next staking period. DOES NOT contribute to the TVL
-	PendingLocked      *big.Int // the amount of VET that will be locked in the next staking period
-	CooldownVET        *big.Int // the amount of VET that is locked into the validation's cooldown
-	WithdrawableVET    *big.Int // the amount of VET that is currently withdrawable
+	LockedVET        *big.Int // the amount of VET locked for the current staking period, for the validator only
+	PendingUnlockVET *big.Int // the amount of VET that will be unlocked in the next staking period. DOES NOT contribute to the TVL
+	QueuedVET        *big.Int // the amount of VET queued to be locked in the next staking period
+	CooldownVET      *big.Int // the amount of VET that is locked into the validation's cooldown
+	WithdrawableVET  *big.Int // the amount of VET that is currently withdrawable
 
 	Weight *big.Int // LockedVET x2 + total weight from delegators
 
@@ -62,8 +62,8 @@ func (v *Validation) IsPeriodEnd(current uint32) bool {
 
 // NextPeriodTVL returns the amount of VET that will be locked in the next staking period for the validator only.
 func (v *Validation) NextPeriodTVL() *big.Int {
-	validationTotal := big.NewInt(0).Add(v.LockedVET, v.PendingLocked)
-	validationTotal = big.NewInt(0).Sub(validationTotal, v.NextPeriodDecrease)
+	validationTotal := big.NewInt(0).Add(v.LockedVET, v.QueuedVET)
+	validationTotal = big.NewInt(0).Sub(validationTotal, v.PendingUnlockVET)
 	return validationTotal
 }
 
@@ -75,21 +75,21 @@ func (v *Validation) CurrentIteration() uint32 {
 }
 
 // Renew moves the stakes and weights around as follows:
-// 1. Move PendingLocked => Locked
-// 2. Decrease LockedVET by NextPeriodDecrease
-// 3. Increase WithdrawableVET by NextPeriodDecrease
-// 4. Set PendingLocked to 0
-// 5. Set NextPeriodDecrease to 0
+// 1. Move QueuedVET => Locked
+// 2. Decrease LockedVET by PendingUnlockVET
+// 3. Increase WithdrawableVET by PendingUnlockVET
+// 4. Set QueuedVET to 0
+// 5. Set PendingUnlockVET to 0
 func (v *Validation) Renew() *delta.Renewal {
 	newLockedVET := big.NewInt(0)
 
-	newLockedVET.Add(newLockedVET, v.PendingLocked)
-	newLockedVET.Sub(newLockedVET, v.NextPeriodDecrease)
+	newLockedVET.Add(newLockedVET, v.QueuedVET)
+	newLockedVET.Sub(newLockedVET, v.PendingUnlockVET)
 
-	queuedDecrease := big.NewInt(0).Set(v.PendingLocked)
-	v.WithdrawableVET = big.NewInt(0).Add(v.WithdrawableVET, v.NextPeriodDecrease)
-	v.PendingLocked = big.NewInt(0)
-	v.NextPeriodDecrease = big.NewInt(0)
+	queuedDecrease := big.NewInt(0).Set(v.QueuedVET)
+	v.WithdrawableVET = big.NewInt(0).Add(v.WithdrawableVET, v.PendingUnlockVET)
+	v.QueuedVET = big.NewInt(0)
+	v.PendingUnlockVET = big.NewInt(0)
 
 	// Apply x2 multiplier for validation's stake
 	newLockedWeight := big.NewInt(0).Mul(newLockedVET, pkgValidatorWeightMultiplier)
@@ -103,4 +103,20 @@ func (v *Validation) Renew() *delta.Renewal {
 		QueuedDecrease:       queuedDecrease,
 		QueuedDecreaseWeight: queuedDecreaseWeight,
 	}
+}
+
+// CalculateWithdrawableVET returns the validator withdrawable amount for a given block + period
+func (v *Validation) CalculateWithdrawableVET(currentBlock uint32, cooldownPeriod uint32) *big.Int {
+	withdrawAmount := big.NewInt(0).Set(v.WithdrawableVET)
+
+	// validator has exited and waited for the cooldown period
+	if v.ExitBlock != nil && *v.ExitBlock+cooldownPeriod <= currentBlock {
+		withdrawAmount = withdrawAmount.Add(withdrawAmount, v.CooldownVET)
+	}
+
+	if v.QueuedVET.Sign() > 0 {
+		withdrawAmount = withdrawAmount.Add(withdrawAmount, v.QueuedVET)
+	}
+
+	return withdrawAmount
 }

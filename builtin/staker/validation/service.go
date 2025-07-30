@@ -151,30 +151,6 @@ func (s *Service) LeaderGroup() (map[thor.Address]*Validation, error) {
 	return group, err
 }
 
-// GetWithdrawable returns the validator entry and the withdrawable amount.
-// It does not perform any updates or verify the endorsor.
-func (s *Service) GetWithdrawable(id thor.Address, currentBlock uint32) (*Validation, *big.Int, error) {
-	entry, err := s.GetValidation(id)
-	if err != nil {
-		return nil, nil, err
-	}
-	if entry.IsEmpty() {
-		return nil, nil, errors.New("validator doesn't exist")
-	}
-	withdrawAmount := big.NewInt(0).Set(entry.WithdrawableVET)
-
-	// validator has exited and waited for the cooldown period
-	if entry.ExitBlock != nil && *entry.ExitBlock+s.cooldownPeriod <= currentBlock {
-		withdrawAmount = withdrawAmount.Add(withdrawAmount, entry.CooldownVET)
-	}
-
-	if entry.PendingLocked.Sign() > 0 {
-		withdrawAmount = withdrawAmount.Add(withdrawAmount, entry.PendingLocked)
-	}
-
-	return entry, withdrawAmount, nil
-}
-
 func (s *Service) Add(
 	endorsor thor.Address,
 	node thor.Address,
@@ -202,9 +178,9 @@ func (s *Service) Add(
 		Status:             StatusQueued,
 		Online:             true,
 		LockedVET:          big.NewInt(0),
-		PendingLocked:      stake,
+		QueuedVET:          stake,
 		CooldownVET:        big.NewInt(0),
-		NextPeriodDecrease: big.NewInt(0),
+		PendingUnlockVET:   big.NewInt(0),
 		WithdrawableVET:    big.NewInt(0),
 		Weight:             big.NewInt(0),
 	}
@@ -243,12 +219,9 @@ func (s *Service) SignalExit(endorsor thor.Address, id thor.Address) error {
 }
 
 func (s *Service) IncreaseStake(id thor.Address, endorsor thor.Address, amount *big.Int) error {
-	entry, err := s.GetValidation(id)
+	entry, err := s.GetExistingValidation(id)
 	if err != nil {
 		return err
-	}
-	if entry.IsEmpty() {
-		return errors.New("validator doesn't exist")
 	}
 	if entry.Endorsor != endorsor {
 		return errors.New("invalid endorser")
@@ -260,18 +233,15 @@ func (s *Service) IncreaseStake(id thor.Address, endorsor thor.Address, amount *
 		return errors.New("validator has signaled exit, cannot increase stake")
 	}
 
-	entry.PendingLocked = big.NewInt(0).Add(amount, entry.PendingLocked)
+	entry.QueuedVET = big.NewInt(0).Add(amount, entry.QueuedVET)
 
 	return s.SetValidation(id, entry, false)
 }
 
 func (s *Service) DecreaseStake(id thor.Address, endorsor thor.Address, amount *big.Int) error {
-	entry, err := s.GetValidation(id)
+	entry, err := s.GetExistingValidation(id)
 	if err != nil {
 		return err
-	}
-	if entry.IsEmpty() {
-		return errors.New("validator doesn't exist")
 	}
 	if entry.Endorsor != endorsor {
 		return errors.New("invalid endorser")
@@ -284,24 +254,24 @@ func (s *Service) DecreaseStake(id thor.Address, endorsor thor.Address, amount *
 	}
 
 	if entry.Status == StatusActive {
-		// We don't consider any increases, i.e., entry.PendingLocked. We only consider locked and current decreases.
-		// The reason is that validator can instantly withdraw PendingLocked at any time.
+		// We don't consider any increases, i.e., entry.QueuedVET. We only consider locked and current decreases.
+		// The reason is that validator can instantly withdraw QueuedVET at any time.
 		// We need to make sure the locked VET minus the sum of the current decreases is still above the minimum stake.
-		nextPeriodTVL := big.NewInt(0).Sub(entry.LockedVET, entry.NextPeriodDecrease)
+		nextPeriodTVL := big.NewInt(0).Sub(entry.LockedVET, entry.PendingUnlockVET)
 		nextPeriodTVL = nextPeriodTVL.Sub(nextPeriodTVL, amount)
 		if nextPeriodTVL.Cmp(s.minStake) < 0 {
 			return errors.New("next period stake is too low for validator")
 		}
-		entry.NextPeriodDecrease = big.NewInt(0).Add(entry.NextPeriodDecrease, amount)
+		entry.PendingUnlockVET = big.NewInt(0).Add(entry.PendingUnlockVET, amount)
 	}
 
 	if entry.Status == StatusQueued {
-		// All the validator's stake exists within PendingLocked, so we need to make sure it maintains a minimum of MinStake.
-		nextPeriodTVL := big.NewInt(0).Sub(entry.PendingLocked, amount)
+		// All the validator's stake exists within QueuedVET, so we need to make sure it maintains a minimum of MinStake.
+		nextPeriodTVL := big.NewInt(0).Sub(entry.QueuedVET, amount)
 		if nextPeriodTVL.Cmp(s.minStake) < 0 {
 			return errors.New("next period stake is too low for validator")
 		}
-		entry.PendingLocked = big.NewInt(0).Sub(entry.PendingLocked, amount)
+		entry.QueuedVET = big.NewInt(0).Sub(entry.QueuedVET, amount)
 		entry.WithdrawableVET = big.NewInt(0).Add(entry.WithdrawableVET, amount)
 	}
 
@@ -311,7 +281,7 @@ func (s *Service) DecreaseStake(id thor.Address, endorsor thor.Address, amount *
 // WithdrawStake allows validations to withdraw any withdrawable stake.
 // It also verifies the endorsor and updates the validator totals.
 func (s *Service) WithdrawStake(endorsor thor.Address, id thor.Address, currentBlock uint32) (*big.Int, error) {
-	val, withdrawable, err := s.GetWithdrawable(id, currentBlock)
+	val, err := s.GetExistingValidation(id)
 	if err != nil {
 		return nil, err
 	}
@@ -319,22 +289,28 @@ func (s *Service) WithdrawStake(endorsor thor.Address, id thor.Address, currentB
 		return big.NewInt(0), errors.New("invalid endorser")
 	}
 
+	// calculate currently available VET to withdraw
+	withdrawable := val.CalculateWithdrawableVET(currentBlock, s.cooldownPeriod)
+
 	// val has exited and waited for the cooldown period
 	if val.ExitBlock != nil && *val.ExitBlock+s.cooldownPeriod <= currentBlock {
 		val.CooldownVET = big.NewInt(0)
 	}
 
+	// if the validator is queued make sure to exit it
 	if val.Status == StatusQueued {
-		val.PendingLocked = big.NewInt(0)
+		val.QueuedVET = big.NewInt(0)
 		val.Status = StatusExit
 		if _, err := s.validatorQueue.Remove(id, val); err != nil {
 			return nil, err
 		}
 	}
-	if val.PendingLocked.Sign() > 0 {
-		val.PendingLocked = big.NewInt(0)
+	// remove any queued
+	if val.QueuedVET.Sign() > 0 {
+		val.QueuedVET = big.NewInt(0)
 	}
 
+	// no more withdraw after this
 	val.WithdrawableVET = big.NewInt(0)
 	if err := s.SetValidation(id, val, false); err != nil {
 		return nil, err
@@ -383,20 +359,20 @@ func (s *Service) ExitValidator(id thor.Address) (*big.Int, *big.Int, *big.Int, 
 
 	releaseLockedTVL := big.NewInt(0).Set(entry.LockedVET)
 	releaseLockedTVLWeight := big.NewInt(0).Set(entry.Weight)
-	releaseQueuedTVL := big.NewInt(0).Set(entry.PendingLocked)
+	releaseQueuedTVL := big.NewInt(0).Set(entry.QueuedVET)
 
 	// move locked to cooldown
 	entry.Status = StatusExit
 	entry.CooldownVET = big.NewInt(0).Set(entry.LockedVET)
 	entry.LockedVET = big.NewInt(0)
-	entry.NextPeriodDecrease = big.NewInt(0)
+	entry.PendingUnlockVET = big.NewInt(0)
 	entry.Weight = big.NewInt(0)
 
 	// unlock pending stake
-	if entry.PendingLocked.Sign() == 1 {
+	if entry.QueuedVET.Sign() == 1 {
 		// pending never contributes to weight as it's not active
-		entry.WithdrawableVET = big.NewInt(0).Add(entry.WithdrawableVET, entry.PendingLocked)
-		entry.PendingLocked = big.NewInt(0)
+		entry.WithdrawableVET = big.NewInt(0).Add(entry.WithdrawableVET, entry.QueuedVET)
+		entry.QueuedVET = big.NewInt(0)
 	}
 
 	entry.CompleteIterations++
@@ -454,6 +430,17 @@ func (s *Service) GetDelegatorRewards(validationID thor.Address, stakingPeriod u
 
 func (s *Service) GetValidation(id thor.Address) (*Validation, error) {
 	return s.repo.GetValidation(id)
+}
+
+func (s *Service) GetExistingValidation(id thor.Address) (*Validation, error) {
+	v, err := s.GetValidation(id)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get validator")
+	}
+	if v.IsEmpty() {
+		return nil, errors.New("failed to get validator")
+	}
+	return v, nil
 }
 
 func (s *Service) SetValidation(id thor.Address, entry *Validation, isNew bool) error {
