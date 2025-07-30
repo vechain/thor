@@ -64,9 +64,6 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Address]*validat
 // computeEpochTransition calculates all state changes needed for an epoch transition
 func (s *Staker) computeEpochTransition(currentBlock uint32) (*EpochTransition, error) {
 	var err error
-	if currentBlock%epochLength != 0 {
-		return nil, nil // No transition needed
-	}
 
 	transition := &EpochTransition{Block: currentBlock}
 
@@ -83,7 +80,7 @@ func (s *Staker) computeEpochTransition(currentBlock uint32) (*EpochTransition, 
 	}
 
 	// 3. Compute all activations
-	transition.ActivationCount, err = s.computeActivations(transition.ExitValidatorID != nil)
+	transition.ActivationCount, err = s.computeActivationCount(transition.ExitValidatorID != nil)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +156,8 @@ func (s *Staker) computeExits(currentBlock uint32) (*thor.Address, error) {
 	return nil, nil
 }
 
-func (s *Staker) computeActivations(hasValidatorExited bool) (int64, error) {
+// computeActivationCount calculates how many validators can be activated
+func (s *Staker) computeActivationCount(hasValidatorExited bool) (int64, error) {
 	// Calculate how many validators can be activated
 	queuedSize, err := s.QueuedGroupSize()
 	if err != nil {
