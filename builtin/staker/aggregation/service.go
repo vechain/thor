@@ -8,12 +8,11 @@ package aggregation
 import (
 	"math/big"
 
-	"github.com/vechain/thor/v2/builtin/staker/stakes"
-
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/builtin/staker/delta"
+	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/thor"
 )
 
