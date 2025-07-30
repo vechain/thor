@@ -15,7 +15,6 @@ import (
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/builtin/staker/aggregation"
 	"github.com/vechain/thor/v2/builtin/staker/delegation"
-	"github.com/vechain/thor/v2/builtin/staker/delta"
 	"github.com/vechain/thor/v2/builtin/staker/globalstats"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/log"
@@ -508,53 +507,6 @@ func (s *Staker) WithdrawDelegation(
 // IncreaseDelegatorsReward Increases reward for validation's delegators.
 func (s *Staker) IncreaseDelegatorsReward(node thor.Address, reward *big.Int) error {
 	return s.validationService.IncreaseDelegatorsReward(node, reward)
-}
-
-func (s *Staker) ActivateNextValidator(currentBlk uint32, maxLeaderGroupSize *big.Int) (*thor.Address, error) {
-	validatorID, val, err := s.validationService.NextToActivate(maxLeaderGroupSize)
-	if err != nil {
-		return nil, err
-	}
-	logger.Debug("activating validator", "validatorID", validatorID, "block", currentBlk)
-
-	aggRenew, err := s.aggregationService.Renew(*validatorID)
-	if err != nil {
-		return nil, err
-	}
-
-	// update the validator values
-	// TODO move this to the validatorservice at some point
-	validatorLocked := big.NewInt(0).Add(val.LockedVET, val.QueuedVET)
-	val.QueuedVET = big.NewInt(0)
-	val.LockedVET = validatorLocked
-	// x2 multiplier for validator's stake
-	validatorWeight := big.NewInt(0).Mul(validatorLocked, validatorWeightMultiplier)
-	val.Weight = big.NewInt(0).Add(validatorWeight, aggRenew.NewLockedWeight)
-
-	// update the validator statuses
-	val.Status = validation.StatusActive
-	val.Online = true
-	val.StartBlock = currentBlk
-	// add to the active list
-	added, err := s.validationService.AddLeaderGroup(*validatorID, val)
-	if err != nil {
-		return nil, err
-	}
-	if !added {
-		return nil, errors.New("failed to add validator to active list")
-	}
-
-	validatorRenewal := &delta.Renewal{
-		NewLockedVET:         val.LockedVET,
-		NewLockedWeight:      val.Weight,
-		QueuedDecrease:       val.LockedVET,
-		QueuedDecreaseWeight: big.NewInt(0).Mul(val.LockedVET, validatorWeightMultiplier), // Only decrease validator's own weight
-	}
-	if err = s.globalStatsService.UpdateTotals(validatorRenewal, aggRenew); err != nil {
-		return nil, err
-	}
-
-	return validatorID, nil
 }
 
 func (s *Staker) validateNextPeriodTVL(id thor.Address) error {
