@@ -7,6 +7,7 @@ package validation
 
 import (
 	"encoding/binary"
+	"github.com/vechain/thor/v2/builtin/staker/delta"
 	"math/big"
 
 	"github.com/pkg/errors"
@@ -319,32 +320,32 @@ func (s *Service) WithdrawStake(endorsor thor.Address, id thor.Address, currentB
 	return withdrawable, nil
 }
 
-func (s *Service) NextToActivate(maxLeaderGroupSize *big.Int) (*thor.Address, *Validation, error) {
+func (s *Service) NextToActivate(maxLeaderGroupSize *big.Int) (*thor.Address, error) {
 	leaderGroupLength, err := s.leaderGroup.Len()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if leaderGroupLength.Cmp(maxLeaderGroupSize) >= 0 {
-		return nil, nil, errors.New("leader group is full")
+		return nil, errors.New("leader group is full")
 	}
 	// Check if queue is empty
 	queuedSize, err := s.validatorQueue.Len()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if queuedSize.Cmp(big.NewInt(0)) <= 0 {
-		return nil, nil, errors.New("no validator in the queue")
+		return nil, errors.New("no validator in the queue")
 	}
 	// pop the head of the queue
 	id, val, err := s.validatorQueue.Pop()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if val.IsEmpty() {
-		return nil, nil, errors.New("no validator in the queue")
+		return nil, errors.New("no validator in the queue")
 	}
 
-	return &id, val, nil
+	return &id, nil
 }
 
 // ExitValidator removes the validator from the active list and puts it in cooldown.
@@ -422,6 +423,60 @@ func (s *Service) GetDelegatorRewards(validationID thor.Address, stakingPeriod u
 	key := thor.Blake2b([]byte("rewards"), validationID.Bytes(), periodBytes)
 
 	return s.repo.GetReward(key)
+}
+
+// ActivateValidator transitions a validator from queued to active status.
+// It updates the validator's state and adds it to the leader group.
+// Returns a delta object representing the state changes.
+func (s *Service) ActivateValidator(
+	validationID thor.Address,
+	currentBlock uint32,
+	aggRenew *delta.Renewal,
+) (*delta.Renewal, error) {
+	val, err := s.GetValidation(validationID)
+	if err != nil {
+		return nil, err
+	}
+	if val.IsEmpty() {
+		return nil, errors.New("validator not found")
+	}
+
+	// Update validator values
+	validatorLocked := big.NewInt(0).Add(val.LockedVET, val.QueuedVET)
+	val.QueuedVET = big.NewInt(0)
+	val.LockedVET = validatorLocked
+	// x2 multiplier for validator's stake
+	validatorWeight := big.NewInt(0).Mul(validatorLocked, pkgValidatorWeightMultiplier)
+	val.Weight = big.NewInt(0).Add(validatorWeight, aggRenew.NewLockedWeight)
+
+	// Update validator status
+	val.Status = StatusActive
+	val.Online = true
+	val.StartBlock = currentBlock
+
+	// Add to active list
+	added, err := s.AddLeaderGroup(validationID, val)
+	if err != nil {
+		return nil, err
+	}
+	if !added {
+		return nil, errors.New("failed to add validator to active list")
+	}
+
+	// Persist the updated validation state
+	if err = s.SetValidation(validationID, val, false); err != nil {
+		return nil, err
+	}
+
+	// Return delta representing the state changes
+	validatorRenewal := &delta.Renewal{
+		NewLockedVET:         val.LockedVET,
+		NewLockedWeight:      val.Weight,
+		QueuedDecrease:       val.LockedVET,
+		QueuedDecreaseWeight: big.NewInt(0).Mul(val.LockedVET, pkgValidatorWeightMultiplier),
+	}
+
+	return validatorRenewal, nil
 }
 
 //

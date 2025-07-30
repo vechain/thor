@@ -246,8 +246,7 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 	}
 
 	for range transition.ActivationCount {
-		_, err := s.activateNextValidator(transition.Block, maxLeaderGroupSize)
-		if err != nil {
+		if _, err := s.activateNextValidator(transition.Block, maxLeaderGroupSize); err != nil {
 			return err
 		}
 	}
@@ -277,7 +276,7 @@ func (s *Staker) buildActiveValidatorsFromTransition(transition *EpochTransition
 }
 
 func (s *Staker) activateNextValidator(currentBlk uint32, maxLeaderGroupSize *big.Int) (*thor.Address, error) {
-	validatorID, val, err := s.validationService.NextToActivate(maxLeaderGroupSize)
+	validatorID, err := s.validationService.NextToActivate(maxLeaderGroupSize)
 	if err != nil {
 		return nil, err
 	}
@@ -289,38 +288,13 @@ func (s *Staker) activateNextValidator(currentBlk uint32, maxLeaderGroupSize *bi
 		return nil, err
 	}
 
-	//
-	// update the validator values
-
-	// TODO move this to the validatorservice at some point
-	// TODO it should follow the same structure of stateless services
-	// TODO it should likely receive the renew agg, update state and return any result needed
-	validatorLocked := big.NewInt(0).Add(val.LockedVET, val.QueuedVET)
-	val.QueuedVET = big.NewInt(0)
-	val.LockedVET = validatorLocked
-	// x2 multiplier for validator's stake
-	validatorWeight := big.NewInt(0).Mul(validatorLocked, validatorWeightMultiplier)
-	val.Weight = big.NewInt(0).Add(validatorWeight, aggRenew.NewLockedWeight)
-
-	// update the validator statuses
-	val.Status = validation.StatusActive
-	val.Online = true
-	val.StartBlock = currentBlk
-	// add to the active list
-	added, err := s.validationService.AddLeaderGroup(*validatorID, val)
+	// Activate the validator using the validation service
+	validatorRenewal, err := s.validationService.ActivateValidator(*validatorID, currentBlk, aggRenew)
 	if err != nil {
 		return nil, err
 	}
-	if !added {
-		return nil, errors.New("failed to add validator to active list")
-	}
 
-	validatorRenewal := &delta.Renewal{
-		NewLockedVET:         val.LockedVET,
-		NewLockedWeight:      val.Weight,
-		QueuedDecrease:       val.LockedVET,
-		QueuedDecreaseWeight: big.NewInt(0).Mul(val.LockedVET, validatorWeightMultiplier), // Only decrease validator's own weight
-	}
+	// Update global stats with both validator and delegation renewals
 	if err = s.globalStatsService.UpdateTotals(validatorRenewal, aggRenew); err != nil {
 		return nil, err
 	}
