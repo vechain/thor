@@ -361,7 +361,7 @@ func soloAction(ctx *cli.Context) error {
 		if isHayabusa {
 			thor.SoloFork.GALACTICA = 0
 			thor.SoloFork.HAYABUSA = 0
-			thor.SoloFork.HAYABUSA_TP = 1
+			thor.SoloFork.HAYABUSA_TP = 0
 			gene = genesis.NewHayabusaDevnet()
 			forkConfig = &thor.SoloFork
 		} else {

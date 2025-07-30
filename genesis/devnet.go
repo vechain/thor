@@ -7,6 +7,7 @@ package genesis
 
 import (
 	"crypto/ecdsa"
+	"errors"
 	"math/big"
 	"sync/atomic"
 
@@ -202,6 +203,32 @@ func NewHayabusaDevnet() *Genesis {
 			if err := builtin.Params.Native(state).Set(thor.KeyMaxBlockProposers, big.NewInt(1)); err != nil {
 				return err
 			}
+
+			// adding a soloBlockSigner as a validator and manage balances manually
+			// NOTE: does not manage energy, as it is not a transaction
+			if err := builtin.Staker.Native(state).AddValidator(soloBlockSigner.Address, soloBlockSigner.Address, staker.HighStakingPeriod, staker.MinStake); err != nil {
+				return err
+			}
+			currentBalance, err := state.GetBalance(soloBlockSigner.Address)
+			if err != nil {
+				return err
+			}
+			currentBalance = big.NewInt(0).Sub(currentBalance, staker.MinStake)
+			if err := state.SetBalance(soloBlockSigner.Address, currentBalance); err != nil {
+				return err
+			}
+			if err := state.SetBalance(builtin.Staker.Address, staker.MinStake); err != nil {
+				return err
+			}
+
+			transitioned, err := builtin.Staker.Native(state).Transition(0)
+			if err != nil {
+				return err
+			}
+			if !transitioned {
+				return errors.New("the transition of the validator state didn't happen")
+			}
+
 			return nil
 		}).
 		Call(
@@ -221,11 +248,11 @@ func NewHayabusaDevnet() *Genesis {
 		Call(
 			tx.NewClause(&builtin.Authority.Address).
 				WithData(mustEncodeInput(builtin.Authority.ABI, "add", soloBlockSigner.Address, soloBlockSigner.Address, thor.BytesToBytes32([]byte("Solo Block Signer")))),
-			executor).
-		Call(
-			tx.NewClause(&builtin.Staker.Address).
-				WithData(mustEncodeInput(builtin.Staker.ABI, "addValidator", soloBlockSigner.Address, staker.HighStakingPeriod)).WithValue(staker.MinStake),
 			executor)
+		//Call(
+		//	tx.NewClause(&builtin.Staker.Address).
+		//		WithData(mustEncodeInput(builtin.Staker.ABI, "addValidator", soloBlockSigner.Address, staker.HighStakingPeriod)).WithValue(staker.MinStake),
+		//	executor)
 
 	id, err := builder.ComputeID()
 	if err != nil {
