@@ -33,7 +33,6 @@ type Service struct {
 const Multiplier = uint8(200) // 200%
 
 var (
-
 	// active validations linked list
 	slotActiveTail      = thor.BytesToBytes32([]byte(("validations-active-tail")))
 	slotActiveHead      = thor.BytesToBytes32([]byte(("validations-active-head")))
