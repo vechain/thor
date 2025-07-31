@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/builtin/gascharger"
@@ -147,7 +148,7 @@ func createPauseTestSetup(t *testing.T) *pauseTestSetup {
 		&vm.ChainConfig{ChainConfig: *params.TestChainConfig}, vm.Config{})
 
 	// Create Staker contract
-	new_staker := vm.NewContract(
+	newStaker := vm.NewContract(
 		vm.AccountRef(master),
 		vm.AccountRef(builtin.Staker.Address),
 		big.NewInt(0),
@@ -155,19 +156,17 @@ func createPauseTestSetup(t *testing.T) *pauseTestSetup {
 	)
 
 	// Create Params contract
-	new_params := vm.NewContract(
+	newParams := vm.NewContract(
 		vm.AccountRef(master),
 		vm.AccountRef(builtin.Params.Address),
 		big.NewInt(0),
 		1000000,
 	)
 
-	//Create Params contract
-
 	return &pauseTestSetup{
 		chain:  chain,
-		staker: new_staker,
-		params: new_params,
+		staker: newStaker,
+		params: newParams,
 		evm:    evm,
 		state:  chain.Stater().NewState(bestBlock.Root()),
 	}
@@ -264,7 +263,7 @@ func TestAddAndExitValidatorForPause(t *testing.T) {
 		require.NotNil(t, result, "Function native_addValidation should return result")
 		datas, err := unpackResult(result)
 		require.True(t, len(datas) == 0, "Function native_addValidation not run datas")
-		require.ErrorContains(t, err, "revert: staker is paused", "Function native_addValidation should return error 'revert: staker is paused'")
+		require.ErrorContains(t, err, "revert: staker is paused")
 	})
 
 	// Set Staker pause inactive, so the validator could be added
@@ -290,7 +289,7 @@ func TestAddAndExitValidatorForPause(t *testing.T) {
 		require.NotNil(t, result, "Function native_signalExit should return result")
 		datas, err := unpackResult(result)
 		require.True(t, len(datas) == 0, "Function native_signalExit not run datas")
-		require.ErrorContains(t, err, "revert: staker is paused", "Function native_signalExit should return error 'revert: staker is paused'")
+		require.ErrorContains(t, err, "revert: staker is paused")
 	})
 
 	// Set Staker pause inactive, so the validator could be exited
@@ -331,7 +330,7 @@ func TestIncreaseAndDecreaseStakeForPause(t *testing.T) {
 		require.NotNil(t, result, "Function native_increaseStake should return result")
 		datas, err = unpackResult(result)
 		require.True(t, len(datas) == 0, "Function native_addValidation not run datas")
-		require.ErrorContains(t, err, "revert: staker is paused", "Function native_increaseStake should return error 'revert: staker is paused'")
+		require.ErrorContains(t, err, "revert: staker is paused")
 	})
 
 	// Set Staker pause inactive， so the validator could to increased stake
@@ -365,7 +364,7 @@ func TestIncreaseAndDecreaseStakeForPause(t *testing.T) {
 		require.NotNil(t, result, "Function native_decreaseStake should return result")
 		datas, err = unpackResult(result)
 		require.True(t, len(datas) == 0, "Function native_addValidation not run datas")
-		require.ErrorContains(t, err, "revert: staker is paused", "Function native_increaseStake should return error 'revert: staker is paused'")
+		require.ErrorContains(t, err, "revert: staker is paused")
 	})
 }
 
@@ -392,7 +391,7 @@ func TestWithdrawStakeForPause(t *testing.T) {
 		require.True(t, len(datas) == 1, "Function native_withdrawStake will return a data")
 		require.IsType(t, datas[0], &big.Int{}, "Function native_withdrawStake will return a big.Int data")
 		require.Equal(t, datas[0].(*big.Int), big.NewInt(0), "Function native_withdrawStake will return a big.Int data with value 0")
-		require.ErrorContains(t, err, "revert: staker is paused", "Function native_increaseStake should return error 'revert: staker is paused'")
+		require.ErrorContains(t, err, "revert: staker is paused")
 	})
 
 	// Set Staker pause inactive, so the validator could to withdrawn
@@ -407,7 +406,7 @@ func TestWithdrawStakeForPause(t *testing.T) {
 		require.NoError(t, err, "Function native_withdrawStake should not return error %s", err)
 		require.True(t, len(datas) == 1, "Function native_withdrawStake will return a data")
 		require.IsType(t, datas[0], &big.Int{}, "Function native_withdrawStake will return a big.Int data")
-		require.Equal(t, datas[0].(*big.Int), MinStake, "Function native_withdrawStake should return stake equal to MinStake")
+		require.Equal(t, datas[0].(*big.Int), MinStake)
 	})
 }
 
@@ -436,9 +435,9 @@ func TestDelegationAddAndExitForPause(t *testing.T) {
 		require.NotNil(t, result, "Function native_addDelegation should return result")
 		datas, err = unpackResult(result)
 		require.True(t, len(datas) == 1, "Function native_withdrawStake will return a data")
-		require.IsType(t, datas[0], thor.Bytes32{}, "Function native_withdrawStake will return a thor.Bytes32 data")
-		require.Equal(t, datas[0].(thor.Bytes32), thor.Bytes32{}, "Function native_withdrawStake should return stake equal to an empty Bytes32")
-		require.ErrorContains(t, err, "revert: stargate is paused", "Function native_addDelegation should return error 'revert: stargate is paused'")
+		require.IsType(t, datas[0], thor.Bytes32{})
+		require.Equal(t, datas[0].(thor.Bytes32), thor.Bytes32{})
+		require.ErrorContains(t, err, "revert: stargate is paused")
 	})
 
 	// Set Stargate pause inactive and Staker pause active, so the delegator could not be added
@@ -452,8 +451,8 @@ func TestDelegationAddAndExitForPause(t *testing.T) {
 		datas, err = unpackResult(result)
 		require.True(t, len(datas) == 1, "Function native_withdrawStake will return a data")
 		require.IsType(t, datas[0], thor.Bytes32{}, "Function native_withdrawStake will return a thor.Bytes32 data")
-		require.Equal(t, datas[0].(thor.Bytes32), thor.Bytes32{}, "Function native_withdrawStake should return stake equal to an empty Bytes32")
-		require.ErrorContains(t, err, "revert: staker is paused", "Function native_addDelegation should return error 'revert: staker is paused'")
+		require.Equal(t, datas[0].(thor.Bytes32), thor.Bytes32{})
+		require.ErrorContains(t, err, "revert: staker is paused")
 	})
 
 	// Set Stargate pause and Staker pause both active, so the delegator could not be added
@@ -467,8 +466,8 @@ func TestDelegationAddAndExitForPause(t *testing.T) {
 		datas, err = unpackResult(result)
 		require.True(t, len(datas) == 1, "Function native_withdrawStake will return a data")
 		require.IsType(t, datas[0], thor.Bytes32{}, "Function native_withdrawStake will return a thor.Bytes32 data")
-		require.Equal(t, datas[0].(thor.Bytes32), thor.Bytes32{}, "Function native_withdrawStake should return stake equal to an empty Bytes32")
-		require.ErrorContains(t, err, "revert: stargate is paused", "Function native_addDelegation should return error 'revert: stargate is paused'")
+		require.Equal(t, datas[0].(thor.Bytes32), thor.Bytes32{})
+		require.ErrorContains(t, err, "revert: stargate is paused")
 	})
 
 	// Set Stargate pause and Staker pause both inactive, so the delegator could be added
@@ -482,8 +481,8 @@ func TestDelegationAddAndExitForPause(t *testing.T) {
 		datas, err = unpackResult(result)
 		require.NoError(t, err, "Function native_addDelegation should not return error %s", err)
 		require.True(t, len(datas) == 1, " Function native_addDelegation will run a data")
-		require.IsType(t, datas[0], thor.Bytes32{}, "Function native_addDelegation will return a thor.Bytes32 data")
-		require.NotNil(t, datas[0].(thor.Bytes32), "Function native_addDelegation should return delegationID")
+		require.IsType(t, datas[0], thor.Bytes32{})
+		require.NotNil(t, datas[0].(thor.Bytes32))
 		delegationID = datas[0].(thor.Bytes32)
 	})
 
@@ -496,8 +495,8 @@ func TestDelegationAddAndExitForPause(t *testing.T) {
 		result = executeStakerNativeMethod(t, setup, "native_signalDelegationExit", []any{delegationID})
 		require.NotNil(t, result, "Function native_signalDelegationExit should return result")
 		datas, err = unpackResult(result)
-		require.True(t, len(datas) == 0, " Function native_signalDelegationExit will run a data")
-		require.ErrorContains(t, err, "revert: stargate is paused", "Function native_signalDelegationExit should return error 'revert: stargate is paused'")
+		require.True(t, len(datas) == 0)
+		require.ErrorContains(t, err, "revert: stargate is paused")
 	})
 
 	// Set Stargate pause inactive and Staker pause active, so the delegator could not be exited
@@ -507,10 +506,10 @@ func TestDelegationAddAndExitForPause(t *testing.T) {
 		require.NoError(t, err, "Function native_set should not return error %s", err)
 
 		result = executeStakerNativeMethod(t, setup, "native_signalDelegationExit", []any{delegationID})
-		require.NotNil(t, result, "Function native_signalDelegationExit should return result")
+		require.NotNil(t, result)
 		datas, err = unpackResult(result)
-		require.True(t, len(datas) == 0, " Function native_signalDelegationExit will run a data")
-		require.ErrorContains(t, err, "revert: staker is paused", "Function native_signalDelegationExit should return error 'revert: staker is paused'")
+		require.True(t, len(datas) == 0)
+		require.ErrorContains(t, err, "revert: staker is paused")
 	})
 
 	// Set Stargate pause and Staker pause both active, so the delegator could not be exited
@@ -520,10 +519,10 @@ func TestDelegationAddAndExitForPause(t *testing.T) {
 		require.NoError(t, err, "Function native_set should not return error %s", err)
 
 		result = executeStakerNativeMethod(t, setup, "native_signalDelegationExit", []any{delegationID})
-		require.NotNil(t, result, "Function native_signalDelegationExit should return result")
+		require.NotNil(t, result)
 		datas, err = unpackResult(result)
-		require.True(t, len(datas) == 0, " Function native_signalDelegationExit will run a data")
-		require.ErrorContains(t, err, "revert: stargate is paused", "Function native_signalDelegationExit should return error 'revert: stargate is paused'")
+		require.True(t, len(datas) == 0)
+		require.ErrorContains(t, err, "revert: stargate is paused")
 	})
 
 	// Set Stargate pause and Staker pause both inactive, so the delegator could be exited
@@ -533,20 +532,19 @@ func TestDelegationAddAndExitForPause(t *testing.T) {
 		require.NoError(t, err, "Function native_set should not return error %s", err)
 
 		result = executeStakerNativeMethod(t, setup, "native_signalDelegationExit", []any{delegationID})
-		require.NotNil(t, result, "Function native_signalDelegationExit should return result")
+		require.NotNil(t, result)
 		datas, err = unpackResult(result)
-		require.True(t, len(datas) == 0, " Function native_signalDelegationExit will run a data")
+		require.True(t, len(datas) == 0)
 		if err != nil {
-			assert.False(t, strings.Contains(err.Error(), "revert: staker is paused"), "Function native_signalDelegationExit should not return error 'revert: staker is paused'")
+			assert.False(t, strings.Contains(err.Error(), "revert: staker is paused"))
 		}
-
 	})
 }
 
 func TestWithdrawDelegationPause(t *testing.T) {
 	setup := createPauseTestSetup(t)
 	newValidator := genesis.DevAccounts()[0].Address
-	stake_value := big.NewInt(1000)
+	stakeValue := big.NewInt(1000)
 
 	// add new validator
 	result := executeStakerNativeMethod(t, setup, "native_addValidation", []any{newValidator, newValidator, uint32(360) * 24 * 15, MinStake})
@@ -555,14 +553,14 @@ func TestWithdrawDelegationPause(t *testing.T) {
 	require.NoError(t, err, "Function native_addValidation should not return error %s", err)
 
 	// add delegation
-	result = executeStakerNativeMethod(t, setup, "native_addDelegation", []any{newValidator, stake_value, uint8(1)})
+	result = executeStakerNativeMethod(t, setup, "native_addDelegation", []any{newValidator, stakeValue, uint8(1)})
 	require.NotNil(t, result, "Function native_addDelegation should return result")
 	datas, err := unpackResult(result)
 	require.NoError(t, err, "Function native_addDelegation should not return error %s", err)
-	require.True(t, len(datas) == 1, "Function native_addDelegation will run a data")
-	require.IsType(t, datas[0], thor.Bytes32{}, "Function native_addDelegation will return a thor.Bytes32 data")
+	require.True(t, len(datas) == 1)
+	require.IsType(t, datas[0], thor.Bytes32{})
 	delegationID := datas[0].(thor.Bytes32)
-	require.NotNil(t, delegationID, "Function native_addDelegation should return delegationID")
+	require.NotNil(t, delegationID)
 
 	// Set Stargate pause active and Staker pause inactive, so the delegator could not to withdrawn
 	t.Run("Step1", func(t *testing.T) {
@@ -573,10 +571,10 @@ func TestWithdrawDelegationPause(t *testing.T) {
 		result = executeStakerNativeMethod(t, setup, "native_withdrawDelegation", []any{delegationID})
 		require.NotNil(t, result, "Function native_withdrawDelegation should return result")
 		datas, err = unpackResult(result)
-		require.True(t, len(datas) == 1, "Function native_withdrawDelegation will run a data")
-		require.IsType(t, datas[0], &big.Int{}, "Function native_withdrawDeleg ation will return a thor.Bytes32 data")
-		require.IsType(t, datas[0].(*big.Int), big.NewInt(0), "Function native_withdrawDelegation will return a big.Int data with value 0")
-		require.ErrorContains(t, err, "revert: stargate is paused", "Function native_withdrawDelegation should return error 'revert: stargate is paused'")
+		require.True(t, len(datas) == 1)
+		require.IsType(t, datas[0], &big.Int{})
+		require.IsType(t, datas[0].(*big.Int), big.NewInt(0))
+		require.ErrorContains(t, err, "revert: stargate is paused")
 	})
 
 	// Set Stargate pause inactive and Staker pause active, so the delegator could not to withdrawn
@@ -588,10 +586,10 @@ func TestWithdrawDelegationPause(t *testing.T) {
 		result = executeStakerNativeMethod(t, setup, "native_withdrawDelegation", []any{delegationID})
 		require.NotNil(t, result, "Function native_withdrawDelegation should return result")
 		datas, err = unpackResult(result)
-		require.True(t, len(datas) == 1, "Function native_withdrawDelegation will run a data")
-		require.IsType(t, datas[0], &big.Int{}, "Function native_withdrawDeleg ation will return a thor.Bytes32 data")
-		require.IsType(t, datas[0].(*big.Int), big.NewInt(0), "Function native_withdrawDelegation will return a big.Int data with value 0")
-		require.ErrorContains(t, err, "revert: staker is paused", "Function native_withdrawDelegation should return error 'revert: staker is paused'")
+		require.True(t, len(datas) == 1)
+		require.IsType(t, datas[0], &big.Int{})
+		require.IsType(t, datas[0].(*big.Int), big.NewInt(0))
+		require.ErrorContains(t, err, "revert: staker is paused")
 	})
 
 	// Set Stargate pause and Staker pause both active, so the delegator could not to withdrawn
@@ -603,10 +601,10 @@ func TestWithdrawDelegationPause(t *testing.T) {
 		result = executeStakerNativeMethod(t, setup, "native_withdrawDelegation", []any{delegationID})
 		require.NotNil(t, result, "Function native_withdrawDelegation should return result")
 		datas, err = unpackResult(result)
-		require.True(t, len(datas) == 1, "Function native_withdrawDelegation will run a data")
-		require.IsType(t, datas[0], &big.Int{}, "Function native_withdrawDeleg ation will return a thor.Bytes32 data")
-		require.IsType(t, datas[0].(*big.Int), big.NewInt(0), "Function native_withdrawDelegation will return a big.Int data with value 0")
-		require.ErrorContains(t, err, "revert: stargate is paused", "Function native_withdrawDelegation should return error 'revert: stargate is paused'")
+		require.True(t, len(datas) == 1)
+		require.IsType(t, datas[0], &big.Int{})
+		require.IsType(t, datas[0].(*big.Int), big.NewInt(0))
+		require.ErrorContains(t, err, "revert: stargate is paused")
 	})
 
 	// Set Stargate pause and Staker pause both inactive, so the delegator could be withdrawn
@@ -616,12 +614,11 @@ func TestWithdrawDelegationPause(t *testing.T) {
 		require.NoError(t, err, "Function native_set should not return error %s", err)
 
 		result := executeStakerNativeMethod(t, setup, "native_withdrawDelegation", []any{delegationID})
-		require.NotNil(t, result, "Function native_withdrawDelegation should return result")
+		require.NotNil(t, result)
 		datas, err := unpackResult(result)
 		require.NoError(t, err, "Function native_withdrawDelegation should not return error %s", err)
-		require.True(t, len(datas) == 1, "Function native_withdrawDelegation will run a data")
-		require.IsType(t, datas[0], &big.Int{}, "Function native_withdrawDeleg ation will return a thor.Bytes32 data")
-		require.Equal(t, datas[0].(*big.Int), stake_value, "Function native_withdrawDelegation should return stake equal to stake_value")
+		require.True(t, len(datas) == 1)
+		require.IsType(t, datas[0], &big.Int{})
+		require.Equal(t, datas[0].(*big.Int), stakeValue)
 	})
-
 }

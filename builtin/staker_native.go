@@ -46,7 +46,6 @@ func IsStakerPaused(state *state.State, charger *gascharger.Charger) (bool, erro
 }
 
 func init() {
-
 	defines := []struct {
 		name string
 		run  func(env *xenv.Environment) []any
@@ -161,9 +160,9 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			isPaused, sp_err := IsStakerPaused(env.State(), charger)
-			if sp_err != nil {
-				return []any{new(big.Int), fmt.Sprintf("revert: %v", sp_err)}
+			isPaused, err := IsStakerPaused(env.State(), charger)
+			if err != nil {
+				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
 			}
 
 			if isPaused {
@@ -241,16 +240,16 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			isPaused, sp_err := IsStakerPaused(env.State(), charger)
-			if sp_err != nil {
-				return []any{fmt.Sprintf("revert: %v", sp_err)}
+			isPaused, err := IsStakerPaused(env.State(), charger)
+			if err != nil {
+				return []any{fmt.Sprintf("revert: %v", err)}
 			}
 
 			if isPaused {
 				return []any{"revert: staker is paused"}
 			}
 
-			err := Staker.NativeMetered(env.State(), charger).
+			err = Staker.NativeMetered(env.State(), charger).
 				SignalExit(
 					thor.Address(args.Validator),
 					thor.Address(args.Endorsor),
@@ -269,22 +268,21 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			isPaused, sp_err := IsStakerPaused(env.State(), charger)
-			if sp_err != nil {
-				return []any{fmt.Sprintf("revert: %v", sp_err)}
+			isPaused, err := IsStakerPaused(env.State(), charger)
+			if err != nil {
+				return []any{fmt.Sprintf("revert: %v", err)}
 			}
 
 			if isPaused {
 				return []any{"revert: staker is paused"}
 			}
 
-			err := Staker.NativeMetered(env.State(), charger).
+			err = Staker.NativeMetered(env.State(), charger).
 				IncreaseStake(
 					thor.Address(args.Validator),
 					thor.Address(args.Endorsor),
 					args.Amount,
 				)
-
 			if err != nil {
 				return []any{fmt.Sprintf("revert: %v", err)}
 			}
@@ -300,16 +298,16 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			isPaused, sp_err := IsStakerPaused(env.State(), charger)
-			if sp_err != nil {
-				return []any{fmt.Sprintf("revert: %v", sp_err)}
+			isPaused, err := IsStakerPaused(env.State(), charger)
+			if err != nil {
+				return []any{fmt.Sprintf("revert: %v", err)}
 			}
 
 			if isPaused {
 				return []any{"revert: staker is paused"}
 			}
 
-			err := Staker.NativeMetered(env.State(), charger).
+			err = Staker.NativeMetered(env.State(), charger).
 				DecreaseStake(
 					thor.Address(args.Validator),
 					thor.Address(args.Endorsor),
@@ -329,18 +327,18 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			isPaused, sp_err := IsStargatePaused(env.State(), charger)
-			if sp_err != nil {
-				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", sp_err)}
+			isPaused, err := IsStargatePaused(env.State(), charger)
+			if err != nil {
+				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", err)}
 			}
 
 			if isPaused {
 				return []any{thor.Bytes32{}, "revert: stargate is paused"}
 			}
 
-			isPaused, sp_err = IsStakerPaused(env.State(), charger)
-			if sp_err != nil {
-				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", sp_err)}
+			isPaused, err = IsStakerPaused(env.State(), charger)
+			if err != nil {
+				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", err)}
 			}
 
 			if isPaused {
@@ -365,18 +363,18 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			isPaused, sp_err := IsStargatePaused(env.State(), charger)
-			if sp_err != nil {
-				return []any{new(big.Int), fmt.Sprintf("revert: %v", sp_err)}
+			isPaused, err := IsStargatePaused(env.State(), charger)
+			if err != nil {
+				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
 			}
 
 			if isPaused {
 				return []any{new(big.Int), "revert: stargate is paused"}
 			}
 
-			isPaused, sp_err = IsStakerPaused(env.State(), charger)
-			if sp_err != nil {
-				return []any{new(big.Int), fmt.Sprintf("revert: %v", sp_err)}
+			isPaused, err = IsStakerPaused(env.State(), charger)
+			if err != nil {
+				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
 			}
 
 			if isPaused {
@@ -397,25 +395,25 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			isPaused, sp_err := IsStargatePaused(env.State(), charger)
-			if sp_err != nil {
-				return []any{fmt.Sprintf("revert: %v", sp_err)}
+			isPaused, err := IsStargatePaused(env.State(), charger)
+			if err != nil {
+				return []any{fmt.Sprintf("revert: %v", err)}
 			}
 
 			if isPaused {
 				return []any{"revert: stargate is paused"}
 			}
 
-			isPaused, sp_err = IsStakerPaused(env.State(), charger)
-			if sp_err != nil {
-				return []any{fmt.Sprintf("revert: %v", sp_err)}
+			isPaused, err = IsStakerPaused(env.State(), charger)
+			if err != nil {
+				return []any{fmt.Sprintf("revert: %v", err)}
 			}
 
 			if isPaused {
 				return []any{"revert: staker is paused"}
 			}
 
-			err := Staker.NativeMetered(env.State(), charger).SignalDelegationExit(thor.Bytes32(args.DelegationID))
+			err = Staker.NativeMetered(env.State(), charger).SignalDelegationExit(thor.Bytes32(args.DelegationID))
 			if err != nil {
 				return []any{fmt.Sprintf("revert: %v", err)}
 			}
