@@ -69,7 +69,7 @@ func (fd *FeesData) resolveRange(
 	gasUsedRatios := make([]float64, blockCount)
 	var rewards [][]*hexutil.Big
 	if len(rewardPercentiles) > 0 {
-		rewards = make([][]*hexutil.Big, blockCount)
+		rewards = make([][]*hexutil.Big, blockCount) // blockCount is now validated in api/fees/fees.go
 	}
 
 	var oldestBlockID thor.Bytes32

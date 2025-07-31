@@ -27,6 +27,7 @@ import (
 )
 
 const maxRewardPercentiles = 100
+const maxBlockCount = 10000 // Define a reasonable upper limit for blockCount
 
 type Config struct {
 	APIBacktraceLimit          int
@@ -84,6 +85,10 @@ func (f *Fees) validateBlockCount(req *http.Request) (uint64, error) {
 
 	if blockCount == 0 {
 		return 0, restutil.BadRequest(errors.New("invalid blockCount, it should not be 0"))
+	}
+
+	if blockCount > maxBlockCount {
+		return 0, restutil.BadRequest(errors.New(fmt.Sprintf("invalid blockCount, it should not exceed %d", maxBlockCount)))
 	}
 
 	return blockCount, nil
