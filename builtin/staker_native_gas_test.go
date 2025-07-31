@@ -109,7 +109,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_addValidator",
-			expectedGas: 36200,
+			expectedGas: 36400,
 			args:        []any{account1, account1, staker.LowStakingPeriod.Get(), staker.MinStake},
 			description: "Add a new validator (not implemented yet)",
 		},
@@ -153,7 +153,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		// },
 		{
 			function:    "native_increaseStake",
-			expectedGas: 21200,
+			expectedGas: 21400,
 			args: []any{
 				account1,
 				account1,
@@ -175,7 +175,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_addDelegation",
-			expectedGas: 32000,
+			expectedGas: 32200,
 			args: []any{
 				account1,
 				staker.MinStake,
@@ -225,7 +225,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_getValidatorTotals",
-			expectedGas: 400,
+			expectedGas: 600,
 			args: []any{
 				account1,
 			},
