@@ -534,11 +534,6 @@ func newConfigVar(name string, defaultValue uint32) *configVar {
 	}
 }
 
-func (c *configVar) init(value uint32) {
-	c.initialised = true
-	c.value = value
-}
-
 func (c *configVar) Get() uint32 {
 	return c.value
 }
