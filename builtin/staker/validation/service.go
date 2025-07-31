@@ -348,12 +348,9 @@ func (s *Service) NextToActivate(maxLeaderGroupSize *big.Int) (*thor.Address, er
 	if err != nil {
 		return nil, err
 	}
-	val, err := s.GetExistingValidation(validatorID)
-	if err != nil {
+	// ensure validation exists
+	if _, err = s.GetExistingValidation(validatorID); err != nil {
 		return nil, err
-	}
-	if val.IsEmpty() {
-		return nil, errors.New("no validator in the queue")
 	}
 
 	return &validatorID, nil
