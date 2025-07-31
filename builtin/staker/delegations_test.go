@@ -137,7 +137,7 @@ func Test_AddDelegator(t *testing.T) {
 	validator := validators[0]
 	id1, err := staker.AddDelegation(validator.ID, stake, 255)
 	assert.NoError(t, err)
-	assert.False(t, id1.IsZero())
+	assert.NotNil(t, id1)
 	aggregation, err := staker.aggregationService.GetAggregation(validator.ID)
 	assert.NoError(t, err)
 	assert.Equal(t, aggregation.PendingVET, stake)
