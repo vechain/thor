@@ -48,7 +48,7 @@ func (s *Service) SetDelegation(delegationID thor.Bytes32, entry *Delegation, is
 }
 
 func (s *Service) Add(
-	validationID thor.Address,
+	validator thor.Address,
 	firstIteration uint32,
 	stake *big.Int,
 	multiplier uint8,
@@ -75,9 +75,9 @@ func (s *Service) Add(
 
 	delegationID := thor.BytesToBytes32(id.Bytes())
 	delegation := &Delegation{
+		Validator:      validator,
 		Multiplier:     multiplier,
 		Stake:          stake,
-		ValidationID:   validationID,
 		FirstIteration: firstIteration,
 	}
 
