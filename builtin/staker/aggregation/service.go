@@ -30,8 +30,8 @@ func New(sctx *solidity.Context) *Service {
 
 // GetAggregation retrieves the delegation aggregation for a validator.
 // Returns a zero-initialized aggregation if none exists.
-func (s *Service) GetAggregation(validationID thor.Address) (*Aggregation, error) {
-	d, err := s.aggregationStorage.Get(validationID)
+func (s *Service) GetAggregation(validator thor.Address) (*Aggregation, error) {
+	d, err := s.aggregationStorage.Get(validator)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get validator aggregation")
 	}
@@ -47,8 +47,8 @@ func (s *Service) GetAggregation(validationID thor.Address) (*Aggregation, error
 
 // AddPendingVET adds a new delegation to the validator's pending pool.
 // Called when a delegator creates a new delegation.
-func (s *Service) AddPendingVET(validationID thor.Address, weight *big.Int, stake *big.Int) error {
-	agg, err := s.GetAggregation(validationID)
+func (s *Service) AddPendingVET(validator thor.Address, weight *big.Int, stake *big.Int) error {
+	agg, err := s.GetAggregation(validator)
 	if err != nil {
 		return err
 	}
@@ -56,13 +56,13 @@ func (s *Service) AddPendingVET(validationID thor.Address, weight *big.Int, stak
 	agg.PendingVET = big.NewInt(0).Add(agg.PendingVET, stake)
 	agg.PendingWeight = big.NewInt(0).Add(agg.PendingWeight, weight)
 
-	return s.aggregationStorage.Set(validationID, agg, false)
+	return s.aggregationStorage.Set(validator, agg, false)
 }
 
 // SubPendingVet removes VET from the validator's pending pool.
 // Called when a delegation is withdrawn before becoming active.
-func (s *Service) SubPendingVet(validationID thor.Address, stake *big.Int, weight *big.Int) error {
-	agg, err := s.GetAggregation(validationID)
+func (s *Service) SubPendingVet(validator thor.Address, stake *big.Int, weight *big.Int) error {
+	agg, err := s.GetAggregation(validator)
 	if err != nil {
 		return err
 	}
@@ -70,13 +70,13 @@ func (s *Service) SubPendingVet(validationID thor.Address, stake *big.Int, weigh
 	agg.PendingVET = big.NewInt(0).Sub(agg.PendingVET, stake)
 	agg.PendingWeight = big.NewInt(0).Sub(agg.PendingWeight, weight)
 
-	return s.aggregationStorage.Set(validationID, agg, false)
+	return s.aggregationStorage.Set(validator, agg, false)
 }
 
 // SubWithdrawableVET removes VET from the validator's withdrawable pool.
 // Called when a delegator completes withdrawal of their delegation.
-func (s *Service) SubWithdrawableVET(validationID thor.Address, stake *big.Int) error {
-	agg, err := s.GetAggregation(validationID)
+func (s *Service) SubWithdrawableVET(validator thor.Address, stake *big.Int) error {
+	agg, err := s.GetAggregation(validator)
 	if err != nil {
 		return err
 	}
@@ -87,20 +87,20 @@ func (s *Service) SubWithdrawableVET(validationID thor.Address, stake *big.Int) 
 
 	agg.WithdrawableVET = big.NewInt(0).Sub(agg.WithdrawableVET, stake)
 
-	return s.aggregationStorage.Set(validationID, agg, false)
+	return s.aggregationStorage.Set(validator, agg, false)
 }
 
 // Renew transitions the validator's delegations to the next staking period.
 // Called during staking period renewal process.
-func (s *Service) Renew(validationID thor.Address) (*delta.Renewal, error) {
-	agg, err := s.GetAggregation(validationID)
+func (s *Service) Renew(validator thor.Address) (*delta.Renewal, error) {
+	agg, err := s.GetAggregation(validator)
 	if err != nil {
 		return nil, err
 	}
 
 	renew := agg.renew()
 
-	if err = s.aggregationStorage.Set(validationID, agg, false); err != nil {
+	if err = s.aggregationStorage.Set(validator, agg, false); err != nil {
 		return nil, err
 	}
 
@@ -109,8 +109,8 @@ func (s *Service) Renew(validationID thor.Address) (*delta.Renewal, error) {
 
 // Exit moves all delegations to withdrawable state when validator exits.
 // Called when a validator is removed from the active set.
-func (s *Service) Exit(validationID thor.Address) (*delta.Exit, error) {
-	agg, err := s.GetAggregation(validationID)
+func (s *Service) Exit(validator thor.Address) (*delta.Exit, error) {
+	agg, err := s.GetAggregation(validator)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +120,7 @@ func (s *Service) Exit(validationID thor.Address) (*delta.Exit, error) {
 		return nil, err
 	}
 
-	if err = s.aggregationStorage.Set(validationID, agg, false); err != nil {
+	if err = s.aggregationStorage.Set(validator, agg, false); err != nil {
 		return nil, err
 	}
 
@@ -129,8 +129,8 @@ func (s *Service) Exit(validationID thor.Address) (*delta.Exit, error) {
 
 // SignalExit marks locked delegations as exiting for the next period.
 // Called when a validator signals intent to exit but hasn't exited yet.
-func (s *Service) SignalExit(validationID thor.Address, exitingStake *big.Int, exitingWeight *big.Int) error {
-	agg, err := s.GetAggregation(validationID)
+func (s *Service) SignalExit(validator thor.Address, exitingStake *big.Int, exitingWeight *big.Int) error {
+	agg, err := s.GetAggregation(validator)
 	if err != nil {
 		return err
 	}
@@ -140,5 +140,5 @@ func (s *Service) SignalExit(validationID thor.Address, exitingStake *big.Int, e
 	agg.ExitingVET = big.NewInt(0).Add(agg.ExitingVET, exitingStake)
 	agg.ExitingWeight = big.NewInt(0).Add(agg.ExitingWeight, exitingWeight)
 
-	return s.aggregationStorage.Set(validationID, agg, false)
+	return s.aggregationStorage.Set(validator, agg, false)
 }

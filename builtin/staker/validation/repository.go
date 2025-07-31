@@ -35,16 +35,16 @@ func NewRepository(sctx *solidity.Context) *Repository {
 	}
 }
 
-func (r *Repository) GetValidation(id thor.Address) (*Validation, error) {
-	v, err := r.validations.Get(id)
+func (r *Repository) GetValidation(validator thor.Address) (*Validation, error) {
+	v, err := r.validations.Get(validator)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get validator")
 	}
 	return v, nil
 }
 
-func (r *Repository) SetValidation(id thor.Address, entry *Validation, isNew bool) error {
-	if err := r.validations.Set(id, entry, isNew); err != nil {
+func (r *Repository) SetValidation(validator thor.Address, entry *Validation, isNew bool) error {
+	if err := r.validations.Set(validator, entry, isNew); err != nil {
 		return errors.Wrap(err, "failed to set validator")
 	}
 	return nil
@@ -62,10 +62,10 @@ func (r *Repository) GetExit(block *big.Int) (thor.Address, error) {
 	return r.exits.Get(block)
 }
 
-func (r *Repository) SetExit(block uint32, id thor.Address) error {
+func (r *Repository) SetExit(block uint32, validator thor.Address) error {
 	bigBlock := big.NewInt(0).SetUint64(uint64(block))
 
-	if err := r.exits.Set(bigBlock, id, true); err != nil {
+	if err := r.exits.Set(bigBlock, validator, true); err != nil {
 		return errors.Wrap(err, "failed to set exit epoch")
 	}
 	return nil
