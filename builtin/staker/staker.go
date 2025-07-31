@@ -6,6 +6,7 @@
 package staker
 
 import (
+	"bytes"
 	"math/big"
 
 	"github.com/pkg/errors"
@@ -29,20 +30,12 @@ var (
 	MaxStake                  = big.NewInt(0).Mul(big.NewInt(600e6), big.NewInt(1e18))
 	validatorWeightMultiplier = big.NewInt(2)
 
-	// init params
-	slotLowStakingPeriod    = thor.BytesToBytes32([]byte(("staker-low-staking-period")))
-	slotMediumStakingPeriod = thor.BytesToBytes32([]byte(("staker-medium-staking-period")))
-	slotHighStakingPeriod   = thor.BytesToBytes32([]byte(("staker-high-staking-period")))
-	slotCooldownPeriod      = thor.BytesToBytes32([]byte(("cooldown-period")))
-	slotEpochLength         = thor.BytesToBytes32([]byte(("epoch-length")))
+	LowStakingPeriod    = newConfigVar("staker-low-staking-period", uint32(360)*24*7)     // 504 epochs
+	MediumStakingPeriod = newConfigVar("staker-medium-staking-period", uint32(360)*24*30) // 1,440 epochs
+	HighStakingPeriod   = newConfigVar("staker-high-staking-period", uint32(360)*24*90)   // 4,320 epochs
 
-	// todo these do not need to be publicly changeable
-	LowStakingPeriod    = uint32(360) * 24 * 7  // 336 epochs
-	MediumStakingPeriod = uint32(360) * 24 * 15 // 720 epochs
-	HighStakingPeriod   = uint32(360) * 24 * 30 // 1,440 epochs
-
-	cooldownPeriod = uint32(8640)
-	epochLength    = uint32(180)
+	CooldownPeriod = newConfigVar("cooldown-period", uint32(8640)) // 8640 epochs, 180 days
+	EpochLength    = newConfigVar("epoch-length", uint32(180))     // 180 seconds
 )
 
 func SetLogger(l log.Logger) {
@@ -66,11 +59,11 @@ func New(addr thor.Address, state *state.State, params *params.Params, charger *
 	sctx := solidity.NewContext(addr, state, charger)
 
 	// debug overrides for testing
-	debugOverride(sctx, &LowStakingPeriod, slotLowStakingPeriod)
-	debugOverride(sctx, &MediumStakingPeriod, slotMediumStakingPeriod)
-	debugOverride(sctx, &HighStakingPeriod, slotHighStakingPeriod)
-	debugOverride(sctx, &epochLength, slotEpochLength)
-	debugOverride(sctx, &cooldownPeriod, slotCooldownPeriod)
+	debugOverride(sctx, LowStakingPeriod)
+	debugOverride(sctx, MediumStakingPeriod)
+	debugOverride(sctx, HighStakingPeriod)
+	debugOverride(sctx, EpochLength)
+	debugOverride(sctx, CooldownPeriod)
 
 	return &Staker{
 		params:                    params,
@@ -82,11 +75,11 @@ func New(addr thor.Address, state *state.State, params *params.Params, charger *
 		validationService: validation.New(
 			sctx,
 			validatorWeightMultiplier,
-			cooldownPeriod,
-			epochLength,
-			LowStakingPeriod,
-			MediumStakingPeriod,
-			HighStakingPeriod,
+			CooldownPeriod.Get(),
+			EpochLength.Get(),
+			LowStakingPeriod.Get(),
+			MediumStakingPeriod.Get(),
+			HighStakingPeriod.Get(),
 			MinStake,
 			MaxStake,
 		),
@@ -149,7 +142,7 @@ func (s *Staker) GetWithdrawable(id thor.Address, block uint32) (*big.Int, error
 		return nil, err
 	}
 
-	return val.CalculateWithdrawableVET(block, cooldownPeriod), err
+	return val.CalculateWithdrawableVET(block, CooldownPeriod.Get()), err
 }
 
 // GetDelegation returns the delegation.
@@ -528,13 +521,51 @@ func (s *Staker) validateNextPeriodTVL(id thor.Address) error {
 	return nil
 }
 
-func debugOverride(sctx *solidity.Context, ptr *uint32, bytes32 thor.Bytes32) {
-	if num, err := solidity.NewUint256(sctx, bytes32).Get(); err == nil {
-		numUint64 := num.Uint64()
-		if numUint64 != 0 {
-			o := uint32(numUint64)
-			logger.Debug("overrode state value", "variable", bytes32.String(), "value", o)
-			*ptr = o
-		}
+type configVar struct {
+	slot        thor.Bytes32
+	value       uint32
+	initialised bool
+}
+
+func newConfigVar(name string, defaultValue uint32) *configVar {
+	return &configVar{
+		slot:  thor.BytesToBytes32([]byte(name)),
+		value: defaultValue,
+	}
+}
+
+func (c *configVar) init(value uint32) {
+	c.initialised = true
+	c.value = value
+}
+
+func (c *configVar) Get() uint32 {
+	return c.value
+}
+
+func (c *configVar) Name() string {
+	return string(bytes.TrimLeft(c.slot[:], "0"))
+}
+
+func (c *configVar) Slot() thor.Bytes32 {
+	return c.slot
+}
+
+func debugOverride(sctx *solidity.Context, config *configVar) {
+	if config.initialised { // early return to prevent subsequent reads
+		return
+	}
+	num, err := solidity.NewUint256(sctx, config.slot).Get()
+	if err != nil {
+		logger.Warn("failed to read config value", "slot", config.Name(), "error", err)
+		return
+	}
+	config.initialised = true
+
+	if num.Uint64() != 0 {
+		config.value = uint32(num.Uint64())
+		logger.Debug("debug override found new config value", "slot", config.Name(), "value", config.Get())
+	} else {
+		logger.Debug("using default config value", "slot", config.Name(), "value", config.value)
 	}
 }
