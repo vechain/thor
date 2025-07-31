@@ -79,7 +79,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		// Basic read operations (no arguments)
 		{
 			function:    "native_totalStake",
-			expectedGas: 1400,
+			expectedGas: 400,
 			args:        []any{},
 			description: "Get total locked stake",
 		},
