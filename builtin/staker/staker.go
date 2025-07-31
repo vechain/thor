@@ -30,12 +30,12 @@ var (
 	MaxStake                  = big.NewInt(0).Mul(big.NewInt(600e6), big.NewInt(1e18))
 	validatorWeightMultiplier = big.NewInt(2)
 
-	LowStakingPeriod    = newConfigVar("staker-low-staking-period", uint32(360)*24*7)     // 504 epochs
-	MediumStakingPeriod = newConfigVar("staker-medium-staking-period", uint32(360)*24*30) // 1,440 epochs
-	HighStakingPeriod   = newConfigVar("staker-high-staking-period", uint32(360)*24*90)   // 4,320 epochs
+	LowStakingPeriod    = newConfigVar("staker-low-staking-period", 360*24*7)     // 7 Days
+	MediumStakingPeriod = newConfigVar("staker-medium-staking-period", 360*24*15) // 15 Days
+	HighStakingPeriod   = newConfigVar("staker-high-staking-period", 360*24*30)   // 30 Days
 
-	CooldownPeriod = newConfigVar("cooldown-period", uint32(8640)) // 8640 epochs, 180 days
-	EpochLength    = newConfigVar("epoch-length", uint32(180))     // 180 seconds
+	CooldownPeriod = newConfigVar("cooldown-period", 8640) // 8640 epochs, 180 days
+	EpochLength    = newConfigVar("epoch-length",180))    // 180 seconds
 )
 
 func SetLogger(l log.Logger) {
