@@ -202,11 +202,11 @@ func (s *Staker) AddDelegation(validator thor.Address, stake *big.Int, multiplie
 	return s.contract.Method("addDelegation", validator, multiplier).WithValue(stake)
 }
 
-func (s *Staker) SignalDelegationExit(delegationID thor.Bytes32) *bind.MethodBuilder {
+func (s *Staker) SignalDelegationExit(delegationID *big.Int) *bind.MethodBuilder {
 	return s.contract.Method("signalDelegationExit", delegationID)
 }
 
-func (s *Staker) WithdrawDelegation(delegationID thor.Bytes32) *bind.MethodBuilder {
+func (s *Staker) WithdrawDelegation(delegationID *big.Int) *bind.MethodBuilder {
 	return s.contract.Method("withdrawDelegation", delegationID)
 }
 
@@ -235,7 +235,7 @@ type Delegation struct {
 	Locked      bool
 }
 
-func (s *Staker) GetDelegation(delegationID thor.Bytes32) (*Delegation, error) {
+func (s *Staker) GetDelegation(delegationID *big.Int) (*Delegation, error) {
 	out := make([]any, 7)
 	out[0] = new(common.Address)
 	out[1] = new(*big.Int)
@@ -360,7 +360,7 @@ func (s *Staker) FilterValidationSignaledExit(eventsRange *api.Range, opts *api.
 
 type DelegationAddedEvent struct {
 	Validator    thor.Address
-	DelegationID thor.Bytes32
+	DelegationID *big.Int
 	Stake        *big.Int
 	Multiplier   uint8
 	Log          api.FilteredEvent
@@ -379,8 +379,8 @@ func (s *Staker) FilterDelegationAdded(eventsRange *api.Range, opts *api.Options
 
 	out := make([]DelegationAddedEvent, len(raw))
 	for i, log := range raw {
-		validator := thor.BytesToAddress(log.Topics[1][:]) // indexed
-		delegationID := thor.Bytes32(log.Topics[2][:])     // indexed
+		validator := thor.BytesToAddress(log.Topics[1][:])      // indexed
+		delegationID := new(big.Int).SetBytes(log.Topics[2][:]) // indexed
 
 		// non-indexed
 		data := make([]any, 2)
@@ -409,7 +409,7 @@ func (s *Staker) FilterDelegationAdded(eventsRange *api.Range, opts *api.Options
 }
 
 type DelegationSignaledExitEvent struct {
-	DelegationID thor.Bytes32
+	DelegationID *big.Int
 	Log          api.FilteredEvent
 }
 
@@ -421,7 +421,7 @@ func (s *Staker) FilterDelegationSignaledExit(eventsRange *api.Range, opts *api.
 
 	out := make([]DelegationSignaledExitEvent, len(raw))
 	for i, log := range raw {
-		delegationID := thor.Bytes32(log.Topics[1][:]) // indexed
+		delegationID := new(big.Int).SetBytes(log.Topics[1][:]) // indexed
 		out[i] = DelegationSignaledExitEvent{
 			DelegationID: delegationID,
 			Log:          log,
@@ -432,7 +432,7 @@ func (s *Staker) FilterDelegationSignaledExit(eventsRange *api.Range, opts *api.
 }
 
 type DelegationWithdrawnEvent struct {
-	DelegationID thor.Bytes32
+	DelegationID *big.Int
 	Stake        *big.Int
 	Log          api.FilteredEvent
 }
@@ -450,7 +450,7 @@ func (s *Staker) FilterDelegationWithdrawn(eventsRange *api.Range, opts *api.Opt
 
 	out := make([]DelegationWithdrawnEvent, len(raw))
 	for i, log := range raw {
-		delegationID := thor.Bytes32(log.Topics[1][:]) // indexed
+		delegationID := new(big.Int).SetBytes(log.Topics[1][:]) // indexed
 
 		// non-indexed
 		data := make([]any, 1)
