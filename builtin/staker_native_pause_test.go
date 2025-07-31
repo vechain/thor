@@ -465,8 +465,8 @@ func TestDelegationAddAndExitForPause(t *testing.T) {
 		require.NotNil(t, result, "Function native_addDelegation should return result")
 		datas, err = unpackResult(result)
 		require.True(t, len(datas) == 1, "Function native_withdrawStake will return a data")
-		require.IsType(t, datas[0], thor.Bytes32{}, "Function native_withdrawStake will return a thor.Bytes32 data")
-		require.Equal(t, datas[0].(thor.Bytes32), thor.Bytes32{})
+		require.IsType(t, datas[0], &big.Int{})
+		require.Equal(t, datas[0].(*big.Int), big.NewInt(0))
 		require.ErrorContains(t, err, "revert: stargate is paused")
 	})
 
