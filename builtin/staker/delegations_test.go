@@ -158,7 +158,7 @@ func Test_AddDelegator_StakeRange(t *testing.T) {
 
 	// should NOT be able to stake greater than max stake
 	_, err = staker.AddDelegation(validators[1].ID, MaxStake, 255)
-	assert.ErrorContains(t, err, "validation's next period stake exceeds max stake")
+	assert.ErrorContains(t, err, "stake is out of range")
 
 	// should be able stake 1 VET
 	id1, err := staker.AddDelegation(validators[2].ID, big.NewInt(1), 255)
@@ -180,14 +180,14 @@ func Test_AddDelegator_StakeRange(t *testing.T) {
 
 	// should not be able to stake more than max stake
 	_, err = staker.AddDelegation(validator.ID, big.NewInt(1000000000000000000), 255)
-	assert.ErrorContains(t, err, "validation's next period stake exceeds max stake")
+	assert.ErrorContains(t, err, "stake is out of range")
 }
 
 func Test_AddDelegator_ValidatorNotFound(t *testing.T) {
 	staker, _ := newStaker(t, 75, 101, true)
 
 	_, err := staker.AddDelegation(thor.Address{}, delegationStake(), 255)
-	assert.ErrorContains(t, err, "validation not found")
+	assert.ErrorContains(t, err, "failed to get validator")
 }
 
 func Test_AddDelegator_ManyValidators(t *testing.T) {
@@ -377,7 +377,7 @@ func Test_Delegator_AutoRenew_ValidatorExits(t *testing.T) {
 	assert.Equal(t, stake, aggregation.LockedVET)
 
 	// When the validator signals an exit
-	assert.NoError(t, staker.SignalExit(validator.Endorsor, validator.ID))
+	assert.NoError(t, staker.SignalExit(validator.ID, validator.Endorsor))
 
 	// And the next staking period is over
 	_, _, err = staker.Housekeep(validator.Period * 2)
@@ -461,7 +461,7 @@ func Test_Delegator_Queued_Weight(t *testing.T) {
 
 	node := datagen.RandAddress()
 	endorsor := datagen.RandAddress()
-	err = staker.AddValidator(endorsor, node, uint32(360)*24*15, validatorStake)
+	err = staker.AddValidation(node, endorsor, uint32(360)*24*15, validatorStake)
 	assert.NoError(t, err)
 
 	validator, err := staker.Get(node)
@@ -488,7 +488,7 @@ func Test_Delegator_Queued_Weight_QueuedValidator_Withdraw(t *testing.T) {
 	staker, _ := newStaker(t, 0, 101, false)
 
 	validatorAddr := datagen.RandAddress()
-	err := staker.AddValidator(validatorAddr, validatorAddr, uint32(360)*24*15, MinStake)
+	err := staker.AddValidation(validatorAddr, validatorAddr, uint32(360)*24*15, MinStake)
 	assert.NoError(t, err)
 
 	initialQueuedVET, initialQueuedWeight, err := staker.QueuedStake()

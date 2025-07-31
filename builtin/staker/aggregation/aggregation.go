@@ -51,12 +51,8 @@ func (a *Aggregation) IsEmpty() bool {
 
 // NextPeriodTVL is the total value locked (TVL) for the next period.
 // It is the sum of the currently recurring VET, plus any pending recurring and one-time VET.
-// Does not include CurrentOneTimeVET since that stake is due to withdraw.
 func (a *Aggregation) NextPeriodTVL() *big.Int {
-	nextTVL := big.NewInt(0)
-	nextTVL.Add(nextTVL, a.LockedVET)
-	nextTVL.Add(nextTVL, a.PendingVET)
-	return nextTVL
+	return big.NewInt(0).Add(a.LockedVET, a.PendingVET)
 }
 
 // renew transitions delegations to the next staking period.

@@ -149,9 +149,9 @@ func (c *Consensus) authorityBalanceCheck(header *block.Header, st *state.State,
 		if err != nil {
 			return false, err
 		}
-		if validator.IsEmpty() || validator.PendingLocked == nil {
+		if validator.IsEmpty() || validator.QueuedVET == nil {
 			return false, nil
 		}
-		return validator.PendingLocked.Cmp(minBalance) >= 0, nil
+		return validator.QueuedVET.Cmp(minBalance) >= 0, nil
 	}
 }

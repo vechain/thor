@@ -7,12 +7,14 @@ package genesis
 
 import (
 	"crypto/ecdsa"
+	"errors"
 	"math/big"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -143,4 +145,122 @@ func NewDevnetWithConfig(config DevConfig) *Genesis {
 	}
 
 	return &Genesis{builder, id, "devnet"}
+}
+
+// NewDevnet create genesis for solo mode.
+func NewHayabusaDevnet(forkConfig *thor.ForkConfig) *Genesis {
+	launchTime := uint64(1526400000) // Default launch time 'Wed May 16 2018 00:00:00 GMT+0800 (CST)'
+	if launchTime == 0 {
+		launchTime = uint64(1526400000) // Default launch time 'Wed May 16 2018 00:00:00 GMT+0800 (CST)'
+	}
+
+	executor := DevAccounts()[0].Address
+	soloBlockSigner := DevAccounts()[0]
+	keyBaseGasPrice := thor.InitialBaseGasPrice
+
+	builder := new(Builder).
+		GasLimit(thor.InitialGasLimit).
+		Timestamp(launchTime).
+		ForkConfig(forkConfig).
+		State(func(state *state.State) error {
+			// setup builtin contracts
+			if err := state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes()); err != nil {
+				return err
+			}
+			if err := state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes()); err != nil {
+				return err
+			}
+			if err := state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes()); err != nil {
+				return err
+			}
+			if err := state.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes()); err != nil {
+				return err
+			}
+			if err := state.SetCode(builtin.Extension.Address, builtin.Extension.RuntimeBytecodes()); err != nil {
+				return err
+			}
+			if err := state.SetCode(builtin.Staker.Address, builtin.Staker.RuntimeBytecodes()); err != nil {
+				return err
+			}
+
+			// set parameters
+			state.SetStorage(builtin.Staker.Address, thor.BytesToBytes32([]byte(("staker-low-staking-period"))), thor.BytesToBytes32(big.NewInt(12).Bytes()))
+			state.SetStorage(builtin.Staker.Address, thor.BytesToBytes32([]byte(("staker-medium-staking-period"))), thor.BytesToBytes32(big.NewInt(30).Bytes()))
+			state.SetStorage(builtin.Staker.Address, thor.BytesToBytes32([]byte(("staker-high-staking-period"))), thor.BytesToBytes32(big.NewInt(90).Bytes()))
+			state.SetStorage(builtin.Staker.Address, thor.BytesToBytes32([]byte(("cooldown-period"))), thor.BytesToBytes32(big.NewInt(12).Bytes()))
+			state.SetStorage(builtin.Staker.Address, thor.BytesToBytes32([]byte(("epoch-length"))), thor.BytesToBytes32(big.NewInt(6).Bytes()))
+
+			tokenSupply := &big.Int{}
+			energySupply := &big.Int{}
+			for _, a := range DevAccounts() {
+				bal, _ := new(big.Int).SetString("1000000000000000000000000000", 10)
+				if err := state.SetBalance(a.Address, bal); err != nil {
+					return err
+				}
+				if err := state.SetEnergy(a.Address, bal, launchTime); err != nil {
+					return err
+				}
+				tokenSupply.Add(tokenSupply, bal)
+				energySupply.Add(energySupply, bal)
+			}
+			if err := builtin.Energy.Native(state, launchTime).SetInitialSupply(tokenSupply, energySupply); err != nil {
+				return err
+			}
+
+			if err := builtin.Params.Native(state).Set(thor.KeyMaxBlockProposers, big.NewInt(1)); err != nil {
+				return err
+			}
+
+			// adding a soloBlockSigner as a validator and manage balances manually
+			// NOTE: does not manage energy, as it is not a transaction
+			if err := builtin.Staker.Native(state).AddValidation(soloBlockSigner.Address, soloBlockSigner.Address, staker.HighStakingPeriod, staker.MinStake); err != nil {
+				return err
+			}
+			currentBalance, err := state.GetBalance(soloBlockSigner.Address)
+			if err != nil {
+				return err
+			}
+			currentBalance = big.NewInt(0).Sub(currentBalance, staker.MinStake)
+			if err := state.SetBalance(soloBlockSigner.Address, currentBalance); err != nil {
+				return err
+			}
+			if err := state.SetBalance(builtin.Staker.Address, staker.MinStake); err != nil {
+				return err
+			}
+
+			transitioned, err := builtin.Staker.Native(state).Transition(0)
+			if err != nil {
+				return err
+			}
+			if !transitioned {
+				return errors.New("the transition of the validator state didn't happen")
+			}
+
+			return nil
+		}).
+		Call(
+			tx.NewClause(&builtin.Params.Address).
+				WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyExecutorAddress, new(big.Int).SetBytes(executor[:]))),
+			thor.Address{}).
+		Call(
+			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyRewardRatio, thor.InitialRewardRatio)),
+			executor).
+		Call(
+			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyLegacyTxBaseGasPrice, keyBaseGasPrice)),
+			executor).
+		Call(
+			tx.NewClause(&builtin.Params.Address).
+				WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)),
+			executor).
+		Call(
+			tx.NewClause(&builtin.Authority.Address).
+				WithData(mustEncodeInput(builtin.Authority.ABI, "add", soloBlockSigner.Address, soloBlockSigner.Address, thor.BytesToBytes32([]byte("Solo Block Signer")))),
+			executor)
+
+	id, err := builder.ComputeID()
+	if err != nil {
+		panic(err)
+	}
+
+	return &Genesis{builder, id, "devnetHayabusa"}
 }
