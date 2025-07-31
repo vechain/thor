@@ -22,6 +22,7 @@ type LinkedList struct {
 	prev  *solidity.Mapping[thor.Address, thor.Address]
 }
 
+// NewLinkedList creates a new linked list with persistent storage mappings for staker management
 func NewLinkedList(sctx *solidity.Context, headPos, tailPos, countPos thor.Bytes32) *LinkedList {
 	return &LinkedList{
 		head:  solidity.NewAddress(sctx, headPos),
@@ -32,7 +33,7 @@ func NewLinkedList(sctx *solidity.Context, headPos, tailPos, countPos thor.Bytes
 	}
 }
 
-// Add adds a new address to the tail of the linked list
+// Add appends an address to the end of the list, maintaining FIFO order for staker processing
 func (l *LinkedList) Add(address thor.Address) error {
 	oldTail, err := l.tail.Get()
 	if err != nil {
@@ -40,7 +41,7 @@ func (l *LinkedList) Add(address thor.Address) error {
 	}
 
 	if oldTail.IsZero() {
-		// list is currently empty, set this entry to head & tail
+		// the list is currently empty, set this entry to head & tail
 		l.head.Set(&address, false)
 		l.tail.Set(&address, false)
 		return l.count.Add(big.NewInt(1))
@@ -62,7 +63,7 @@ func (l *LinkedList) Add(address thor.Address) error {
 	return l.count.Add(big.NewInt(1))
 }
 
-// Remove removes an address from the linked list
+// Remove extracts an address from anywhere in the list, reconnecting adjacent nodes and clearing removed node's pointers
 func (l *LinkedList) Remove(address thor.Address) error {
 	if address.IsZero() {
 		return nil
@@ -114,7 +115,7 @@ func (l *LinkedList) Remove(address thor.Address) error {
 	return l.count.Sub(big.NewInt(1))
 }
 
-// Pop removes the head of the linked list and returns the removed address
+// Pop removes and returns the oldest entry (head) for FIFO processing order
 func (l *LinkedList) Pop() (thor.Address, error) {
 	head, err := l.head.Get()
 	if err != nil {
@@ -132,17 +133,17 @@ func (l *LinkedList) Pop() (thor.Address, error) {
 	return head, nil
 }
 
-// Peek returns the head address without removing it
+// Peek returns the next address to be processed without removing it from the queue
 func (l *LinkedList) Peek() (thor.Address, error) {
 	return l.head.Get()
 }
 
-// Len returns the length of the linked list
+// Len returns the current number of addresses in the staker queue
 func (l *LinkedList) Len() (*big.Int, error) {
 	return l.count.Get()
 }
 
-// Iter iterates through the linked list and calls the callback function for each address
+// Iter traverses the list in FIFO order, calling callback for each address until completion or error
 func (l *LinkedList) Iter(callback func(thor.Address) error) error {
 	ptr, err := l.head.Get()
 	if err != nil {
@@ -168,7 +169,7 @@ func (l *LinkedList) Iter(callback func(thor.Address) error) error {
 	return nil
 }
 
-// Next returns the next address in the list
+// Next returns the successor address in the list, or zero address if at the end
 func (l *LinkedList) Next(address thor.Address) (thor.Address, error) {
 	return l.next.Get(address)
 }
@@ -182,6 +183,7 @@ func (l *LinkedList) isHead(address thor.Address) bool {
 	return head == address
 }
 
+// Head returns the oldest address in the queue (next to be processed)
 func (l *LinkedList) Head() (thor.Address, error) {
 	return l.head.Get()
 }
