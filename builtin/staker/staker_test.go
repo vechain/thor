@@ -115,7 +115,7 @@ func (ts *TestSequence) AddValidator(
 	stake *big.Int,
 ) *TestSequence {
 	return ts.AddFunc(func(t *testing.T) {
-		err := ts.staker.AddValidator(endorsor, master, period, stake)
+		err := ts.staker.AddValidation(endorsor, master, period, stake)
 		assert.NoError(t, err, "failed to add validator %s with endorsor %s", master.String(), endorsor.String())
 	})
 }
@@ -313,8 +313,8 @@ func (va *ValidatorAssertions) LockedVET(expected *big.Int) *ValidatorAssertions
 	return va
 }
 
-func (va *ValidatorAssertions) PendingLocked(expected *big.Int) *ValidatorAssertions {
-	assert.Equal(va.t, 0, expected.Cmp(va.validator.PendingLocked), "validator %s pending locked VET mismatch", va.addr.String())
+func (va *ValidatorAssertions) QueuedVET(expected *big.Int) *ValidatorAssertions {
+	assert.Equal(va.t, 0, expected.Cmp(va.validator.QueuedVET), "validator %s pending locked VET mismatch", va.addr.String())
 	return va
 }
 
@@ -338,8 +338,8 @@ func (va *ValidatorAssertions) CompletedPeriods(expected uint32) *ValidatorAsser
 	return va
 }
 
-func (va *ValidatorAssertions) NextPeriodDecrease(expected *big.Int) *ValidatorAssertions {
-	assert.Equal(va.t, expected, va.validator.NextPeriodDecrease, "validator %s next period decrease mismatch", va.addr.String())
+func (va *ValidatorAssertions) PendingUnlockVET(expected *big.Int) *ValidatorAssertions {
+	assert.Equal(va.t, expected, va.validator.PendingUnlockVET, "validator %s next period decrease mismatch", va.addr.String())
 	return va
 }
 
@@ -417,8 +417,8 @@ func AssertDelegation(t *testing.T, staker *Staker, delegationID thor.Bytes32) *
 	return &DelegationAssertions{staker: staker, delegationID: delegationID, t: t, delegation: delegation, validation: validation}
 }
 
-func (da *DelegationAssertions) ValidationID(expected thor.Address) *DelegationAssertions {
-	assert.Equal(da.t, expected, da.delegation.ValidationID, "delegation %s validation ID mismatch", da.delegationID.String())
+func (da *DelegationAssertions) Validator(expected thor.Address) *DelegationAssertions {
+	assert.Equal(da.t, expected, da.delegation.Validator, "delegation %s validation ID mismatch", da.delegationID.String())
 	return da
 }
 
