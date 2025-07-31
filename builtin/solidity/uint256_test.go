@@ -17,7 +17,7 @@ import (
 
 func TestUint256(t *testing.T) {
 	ctx := newContext()
-	uint := NewUint256(ctx, thor.Bytes32{0o1})
+	uint := NewUint256(ctx, thor.BytesToBytes32([]byte("test-uint256")))
 
 	// test `Set`
 	uint.Set(big.NewInt(1000))
@@ -58,7 +58,7 @@ func TestUint256(t *testing.T) {
 
 	// test negative value
 	err = uint.Set(big.NewInt(-100))
-	assert.ErrorContains(t, err, "uint256 cannot be negative")
+	assert.ErrorContains(t, err, "test-uint256 uint256 cannot be negative")
 
 	// test overflow
 	val := new(big.Int).Lsh(big.NewInt(1), 256)

@@ -6,11 +6,10 @@
 package solidity
 
 import (
+	"bytes"
 	"errors"
-	"math/big"
-	"strings"
-
 	"github.com/vechain/thor/v2/thor"
+	"math/big"
 )
 
 // Uint256 is a wrapper for storage and retrieval of an uint256. Similar to storing an uint256 in a smart contract.
@@ -39,7 +38,8 @@ var maxUint256 = new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewI
 func (u *Uint256) Set(value *big.Int) error {
 	storage := thor.BytesToBytes32(value.Bytes())
 	if value.Sign() == -1 {
-		key := strings.TrimRight(string(u.pos.Bytes()), "0")
+		// provide extra context in error message by providing slot name
+		key := string(bytes.TrimLeft(u.pos[:], string([]byte{0x00})))
 		return errors.New(key + " uint256 cannot be negative")
 	}
 	if value.Cmp(maxUint256) > 0 {
