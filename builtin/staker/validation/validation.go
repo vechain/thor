@@ -23,7 +23,7 @@ const (
 )
 
 const (
-	Multiplier = 200// 200% for validators
+	Multiplier = 200 // 200% for validators
 )
 
 func WeightedStake(amount *big.Int) *stakes.WeightedStake {
