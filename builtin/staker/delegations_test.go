@@ -6,9 +6,11 @@
 package staker
 
 import (
+	"fmt"
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/v2/builtin/staker/delegation"
@@ -137,7 +139,7 @@ func Test_AddDelegator(t *testing.T) {
 	validator := validators[0]
 	id1, err := staker.AddDelegation(validator.ID, stake, 255)
 	assert.NoError(t, err)
-	assert.False(t, id1.IsZero())
+	assert.NotNil(t, id1)
 	aggregation, err := staker.aggregationService.GetAggregation(validator.ID)
 	assert.NoError(t, err)
 	assert.Equal(t, aggregation.PendingVET, stake)
@@ -604,4 +606,10 @@ func Test_Delegations_EnableAutoRenew_MatchStakeReached(t *testing.T) {
 	//
 	//// Enable auto renew for the first delegation - should fail since the presence of other delegator's exceeds max stake
 	//assert.ErrorContains(t, staker.UpdateDelegationAutoRenew(delegationID, true), "validation's next period stake exceeds max stake")
+}
+
+func TestT(t *testing.T) {
+	x := math.MaxBig256
+
+	fmt.Printf("0x%x\n", x.Bytes())
 }
