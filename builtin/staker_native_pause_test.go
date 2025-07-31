@@ -413,7 +413,7 @@ func TestWithdrawStakeForPause(t *testing.T) {
 func TestDelegationAddAndExitForPause(t *testing.T) {
 	setup := createPauseTestSetup(t)
 	newValidator := genesis.DevAccounts()[0].Address
-	delegationID := thor.Bytes32{}
+	delegationID := big.NewInt(0)
 
 	// add new validator
 	result := executeStakerNativeMethod(t, setup, "native_addValidation", []any{newValidator, newValidator, uint32(360) * 24 * 15, MinStake})
@@ -481,9 +481,9 @@ func TestDelegationAddAndExitForPause(t *testing.T) {
 		datas, err = unpackResult(result)
 		require.NoError(t, err, "Function native_addDelegation should not return error %s", err)
 		require.True(t, len(datas) == 1, " Function native_addDelegation will run a data")
-		require.IsType(t, datas[0], thor.Bytes32{})
-		require.NotNil(t, datas[0].(thor.Bytes32))
-		delegationID = datas[0].(thor.Bytes32)
+		require.IsType(t, datas[0], &big.Int{}, "Function native_addDelegation will return a big.Int data")
+		require.NotNil(t, datas[0].(*big.Int))
+		delegationID = datas[0].(*big.Int)
 	})
 
 	// Set Stargate pause active and Staker pause inactive, so the delegator could not be exited
@@ -558,8 +558,8 @@ func TestWithdrawDelegationPause(t *testing.T) {
 	datas, err := unpackResult(result)
 	require.NoError(t, err, "Function native_addDelegation should not return error %s", err)
 	require.True(t, len(datas) == 1)
-	require.IsType(t, datas[0], thor.Bytes32{})
-	delegationID := datas[0].(thor.Bytes32)
+	require.IsType(t, datas[0], &big.Int{})
+	delegationID := datas[0].(*big.Int)
 	require.NotNil(t, delegationID)
 
 	// Set Stargate pause active and Staker pause inactive, so the delegator could not to withdrawn
