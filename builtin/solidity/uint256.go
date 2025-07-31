@@ -8,8 +8,9 @@ package solidity
 import (
 	"bytes"
 	"errors"
-	"github.com/vechain/thor/v2/thor"
 	"math/big"
+
+	"github.com/vechain/thor/v2/thor"
 )
 
 // Uint256 is a wrapper for storage and retrieval of an uint256. Similar to storing an uint256 in a smart contract.
