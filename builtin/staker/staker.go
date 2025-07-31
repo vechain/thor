@@ -544,7 +544,7 @@ func (c *configVar) Get() uint32 {
 }
 
 func (c *configVar) Name() string {
-	return string(bytes.TrimLeft(c.slot[:], "0"))
+	return string(bytes.TrimLeft(c.slot[:], string([]byte{0x00})))
 }
 
 func (c *configVar) Slot() thor.Bytes32 {
