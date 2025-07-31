@@ -34,11 +34,13 @@ func (m *Mapping[K, V]) Get(key K) (value V, err error) {
 		if reflect.ValueOf(value).Kind() == reflect.Ptr {
 			value = reflect.New(reflect.TypeOf(value).Elem()).Interface().(V)
 		}
+		slots := (uint64(len(raw)) + 31) / 32
+		slots = max(1, slots)
+		m.context.UseGas(slots * thor.SloadGas)
+
 		if len(raw) == 0 {
 			return nil
 		}
-		slots := (uint64(len(raw)) + 31) / 32
-		m.context.UseGas(slots * thor.SloadGas)
 		return rlp.DecodeBytes(raw, &value)
 	})
 	return
