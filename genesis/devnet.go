@@ -148,7 +148,7 @@ func NewDevnetWithConfig(config DevConfig) *Genesis {
 }
 
 // NewDevnet create genesis for solo mode.
-func NewHayabusaDevnet() *Genesis {
+func NewHayabusaDevnet(forkConfig *thor.ForkConfig) *Genesis {
 	launchTime := uint64(1526400000) // Default launch time 'Wed May 16 2018 00:00:00 GMT+0800 (CST)'
 	if launchTime == 0 {
 		launchTime = uint64(1526400000) // Default launch time 'Wed May 16 2018 00:00:00 GMT+0800 (CST)'
@@ -161,7 +161,7 @@ func NewHayabusaDevnet() *Genesis {
 	builder := new(Builder).
 		GasLimit(thor.InitialGasLimit).
 		Timestamp(launchTime).
-		ForkConfig(&thor.SoloFork).
+		ForkConfig(forkConfig).
 		State(func(state *state.State) error {
 			// setup builtin contracts
 			if err := state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes()); err != nil {
@@ -182,6 +182,13 @@ func NewHayabusaDevnet() *Genesis {
 			if err := state.SetCode(builtin.Staker.Address, builtin.Staker.RuntimeBytecodes()); err != nil {
 				return err
 			}
+
+			// set parameters
+			state.SetStorage(builtin.Staker.Address, thor.BytesToBytes32([]byte(("staker-low-staking-period"))), thor.BytesToBytes32(big.NewInt(12).Bytes()))
+			state.SetStorage(builtin.Staker.Address, thor.BytesToBytes32([]byte(("staker-medium-staking-period"))), thor.BytesToBytes32(big.NewInt(30).Bytes()))
+			state.SetStorage(builtin.Staker.Address, thor.BytesToBytes32([]byte(("staker-high-staking-period"))), thor.BytesToBytes32(big.NewInt(90).Bytes()))
+			state.SetStorage(builtin.Staker.Address, thor.BytesToBytes32([]byte(("cooldown-period"))), thor.BytesToBytes32(big.NewInt(12).Bytes()))
+			state.SetStorage(builtin.Staker.Address, thor.BytesToBytes32([]byte(("epoch-length"))), thor.BytesToBytes32(big.NewInt(6).Bytes()))
 
 			tokenSupply := &big.Int{}
 			energySupply := &big.Int{}
