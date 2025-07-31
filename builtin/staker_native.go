@@ -329,20 +329,20 @@ func init() {
 
 			isPaused, err := IsStargatePaused(env.State(), charger)
 			if err != nil {
-				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", err)}
+				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
 			}
 
 			if isPaused {
-				return []any{thor.Bytes32{}, "revert: stargate is paused"}
+				return []any{new(big.Int), "revert: stargate is paused"}
 			}
 
 			isPaused, err = IsStakerPaused(env.State(), charger)
 			if err != nil {
-				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", err)}
+				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
 			}
 
 			if isPaused {
-				return []any{thor.Bytes32{}, "revert: staker is paused"}
+				return []any{new(big.Int), "revert: staker is paused"}
 			}
 
 			delegationID, err := Staker.NativeMetered(env.State(), charger).
