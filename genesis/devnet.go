@@ -249,10 +249,6 @@ func NewHayabusaDevnet() *Genesis {
 			tx.NewClause(&builtin.Authority.Address).
 				WithData(mustEncodeInput(builtin.Authority.ABI, "add", soloBlockSigner.Address, soloBlockSigner.Address, thor.BytesToBytes32([]byte("Solo Block Signer")))),
 			executor)
-		//Call(
-		//	tx.NewClause(&builtin.Staker.Address).
-		//		WithData(mustEncodeInput(builtin.Staker.ABI, "addValidator", soloBlockSigner.Address, staker.HighStakingPeriod)).WithValue(staker.MinStake),
-		//	executor)
 
 	id, err := builder.ComputeID()
 	if err != nil {

@@ -359,11 +359,12 @@ func soloAction(ctx *cli.Context) error {
 	flagGenesis := ctx.String(genesisFlag.Name)
 	if flagGenesis == "" {
 		if isHayabusa {
-			thor.SoloFork.GALACTICA = 0
-			thor.SoloFork.HAYABUSA = 0
-			thor.SoloFork.HAYABUSA_TP = 0
 			gene = genesis.NewHayabusaDevnet()
-			forkConfig = &thor.SoloFork
+			forkConfigClone := thor.SoloFork
+			forkConfigClone.GALACTICA = 0
+			forkConfigClone.HAYABUSA = 0
+			forkConfigClone.HAYABUSA_TP = 0
+			forkConfig = &forkConfigClone
 		} else {
 			gene = genesis.NewDevnet()
 			forkConfig = &thor.SoloFork
