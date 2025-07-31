@@ -566,6 +566,6 @@ func debugOverride(sctx *solidity.Context, config *configVar) {
 		config.value = uint32(num.Uint64())
 		logger.Debug("debug override found new config value", "slot", config.Name(), "value", config.Get())
 	} else {
-		logger.Debug("using default config value", "slot", config.Name(), "value", config.value)
+		logger.Debug("using default config value", "slot", config.Name(), "value", config.Get())
 	}
 }
