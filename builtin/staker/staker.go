@@ -131,13 +131,13 @@ func (s *Staker) LeaderGroupSize() (*big.Int, error) {
 }
 
 // Get returns a validation
-func (s *Staker) Get(id thor.Address) (*validation.Validation, error) {
-	return s.validationService.GetValidation(id)
+func (s *Staker) Get(validator thor.Address) (*validation.Validation, error) {
+	return s.validationService.GetValidation(validator)
 }
 
 // GetWithdrawable returns the withdrawable stake of a validator.
-func (s *Staker) GetWithdrawable(id thor.Address, block uint32) (*big.Int, error) {
-	val, err := s.validationService.GetExistingValidation(id)
+func (s *Staker) GetWithdrawable(validator thor.Address, block uint32) (*big.Int, error) {
+	val, err := s.validationService.GetExistingValidation(validator)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +156,7 @@ func (s *Staker) GetDelegation(
 	if del.IsEmpty() {
 		return &delegation.Delegation{}, nil, nil
 	}
-	val, err := s.validationService.GetValidation(del.ValidationID)
+	val, err := s.validationService.GetValidation(del.Validator)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -180,36 +180,36 @@ func (s *Staker) HasDelegations(
 	return !agg.IsEmpty(), nil
 }
 
-// GetDelegatorRewards returns reward amount for validation id and staking period.
-func (s *Staker) GetDelegatorRewards(validationID thor.Address, stakingPeriod uint32) (*big.Int, error) {
-	return s.validationService.GetDelegatorRewards(validationID, stakingPeriod)
+// GetDelegatorRewards returns reward amount for validator and staking period.
+func (s *Staker) GetDelegatorRewards(validator thor.Address, stakingPeriod uint32) (*big.Int, error) {
+	return s.validationService.GetDelegatorRewards(validator, stakingPeriod)
 }
 
 // GetCompletedPeriods returns number of completed staking periods for validation.
-func (s *Staker) GetCompletedPeriods(validationID thor.Address) (uint32, error) {
-	return s.validationService.GetCompletedPeriods(validationID)
+func (s *Staker) GetCompletedPeriods(validator thor.Address) (uint32, error) {
+	return s.validationService.GetCompletedPeriods(validator)
 }
 
 // GetValidatorsTotals returns the total stake, total weight, total delegators stake and total delegators weight.
-func (s *Staker) GetValidatorsTotals(validationID thor.Address) (*validation.ValidationTotals, error) {
-	validator, err := s.validationService.GetValidation(validationID)
+func (s *Staker) GetValidationTotals(validator thor.Address) (*validation.ValidationTotals, error) {
+	val, err := s.validationService.GetValidation(validator)
 	if err != nil {
 		return nil, err
 	}
-	agg, err := s.aggregationService.GetAggregation(validationID)
+	agg, err := s.aggregationService.GetAggregation(validator)
 	if err != nil {
 		return nil, err
 	}
 	return &validation.ValidationTotals{
-		TotalLockedStake:        new(big.Int).Add(validator.LockedVET, agg.LockedVET),
-		TotalLockedWeight:       new(big.Int).Set(validator.Weight),
+		TotalLockedStake:        new(big.Int).Add(val.LockedVET, agg.LockedVET),
+		TotalLockedWeight:       new(big.Int).Set(val.Weight),
 		DelegationsLockedStake:  new(big.Int).Set(agg.LockedVET),
 		DelegationsLockedWeight: new(big.Int).Set(agg.LockedWeight),
 	}, nil
 }
 
 // Next returns the next validator in a linked list.
-// If the provided ID is not in a list, it will return empty bytes.
+// If the provided address is not in a list, it will return empty bytes.
 func (s *Staker) Next(prev thor.Address) (thor.Address, error) {
 	entry, err := s.validationService.GetValidation(prev)
 	if err != nil {
@@ -225,22 +225,22 @@ func (s *Staker) Next(prev thor.Address) (thor.Address, error) {
 // Setters - state change
 //
 
-// AddValidator queues a new validator.
-func (s *Staker) AddValidator(
+// AddValidation queues a new validator.
+func (s *Staker) AddValidation(
+	validator thor.Address,
 	endorsor thor.Address,
-	node thor.Address,
 	period uint32,
 	stake *big.Int,
 ) error {
-	logger.Debug("adding validator", "endorsor", endorsor,
-		"node", node,
+	logger.Debug("adding validator", "validator", validator,
+		"endorsor", endorsor,
 		"period", period,
 		"stake", new(big.Int).Div(stake, big.NewInt(1e18)),
 	)
 
 	// create a new validation
-	if err := s.validationService.Add(endorsor, node, period, stake); err != nil {
-		logger.Info("add validator failed", "node", node, "error", err)
+	if err := s.validationService.Add(validator, endorsor, period, stake); err != nil {
+		logger.Info("add validator failed", "validator", validator, "error", err)
 		return err
 	}
 
@@ -250,15 +250,15 @@ func (s *Staker) AddValidator(
 		return err
 	}
 
-	logger.Info("added validator", "node", node)
+	logger.Info("added validator", "validator", validator)
 	return nil
 }
 
-func (s *Staker) SignalExit(endorsor thor.Address, id thor.Address) error {
-	logger.Debug("signal exit", "endorsor", endorsor, "id", id)
+func (s *Staker) SignalExit(validator thor.Address, endorsor thor.Address) error {
+	logger.Debug("signal exit", "endorsor", endorsor, "validator", validator)
 
-	if err := s.validationService.SignalExit(endorsor, id); err != nil {
-		logger.Info("signal exit failed", "id", id, "error", err)
+	if err := s.validationService.SignalExit(validator, endorsor); err != nil {
+		logger.Info("signal exit failed", "validator", validator, "error", err)
 		return err
 	}
 
@@ -268,16 +268,16 @@ func (s *Staker) SignalExit(endorsor thor.Address, id thor.Address) error {
 // IncreaseStake increases the stake of a queued or active validator
 // if a validator is active, the QueuedVET is increase, but the weight stays the same
 // the weight will be recalculated at the end of the staking period, by the housekeep function
-func (s *Staker) IncreaseStake(endorsor thor.Address, validationID thor.Address, amount *big.Int) error {
-	logger.Debug("increasing stake", "endorsor", endorsor, "validationID", validationID, "amount", new(big.Int).Div(amount, big.NewInt(1e18)))
+func (s *Staker) IncreaseStake(validator thor.Address, endorsor thor.Address, amount *big.Int) error {
+	logger.Debug("increasing stake", "endorsor", endorsor, "validator", validator, "amount", new(big.Int).Div(amount, big.NewInt(1e18)))
 
-	if err := s.validationService.IncreaseStake(validationID, endorsor, amount); err != nil {
-		logger.Info("increase stake failed", "validationID", validationID, "error", err)
+	if err := s.validationService.IncreaseStake(validator, endorsor, amount); err != nil {
+		logger.Info("increase stake failed", "validator", validator, "error", err)
 		return err
 	}
 
 	// validate that new TVL is <= Max stake
-	if err := s.validateNextPeriodTVL(validationID); err != nil {
+	if err := s.validateNextPeriodTVL(validator); err != nil {
 		return err
 	}
 
@@ -286,20 +286,20 @@ func (s *Staker) IncreaseStake(endorsor thor.Address, validationID thor.Address,
 		return err
 	}
 
-	logger.Info("increased stake", "validationID", validationID)
+	logger.Info("increased stake", "validator", validator)
 	return nil
 }
 
-func (s *Staker) DecreaseStake(endorsor thor.Address, validationID thor.Address, amount *big.Int) error {
-	logger.Debug("decreasing stake", "endorsor", endorsor, "validationID", validationID, "amount", new(big.Int).Div(amount, big.NewInt(1e18)))
+func (s *Staker) DecreaseStake(validator thor.Address, endorsor thor.Address, amount *big.Int) error {
+	logger.Debug("decreasing stake", "endorsor", endorsor, "validator", validator, "amount", new(big.Int).Div(amount, big.NewInt(1e18)))
 
-	if err := s.validationService.DecreaseStake(validationID, endorsor, amount); err != nil {
-		logger.Info("decrease stake failed", "validationID", validationID, "error", err)
+	if err := s.validationService.DecreaseStake(validator, endorsor, amount); err != nil {
+		logger.Info("decrease stake failed", "validator", validator, "error", err)
 		return err
 	}
 
 	// remove queued VET from the global stats if validator is queued
-	val, err := s.validationService.GetValidation(validationID)
+	val, err := s.validationService.GetValidation(validator)
 	if err != nil {
 		return err
 	}
@@ -310,16 +310,16 @@ func (s *Staker) DecreaseStake(endorsor thor.Address, validationID thor.Address,
 		}
 	}
 
-	logger.Info("decreased stake", "validationID", validationID)
+	logger.Info("decreased stake", "validator", validator)
 	return nil
 }
 
 // WithdrawStake allows expired validations to withdraw their stake.
-func (s *Staker) WithdrawStake(endorsor thor.Address, validationID thor.Address, currentBlock uint32) (*big.Int, error) {
-	logger.Debug("withdrawing stake", "endorsor", endorsor, "validationID", validationID)
+func (s *Staker) WithdrawStake(validator thor.Address, endorsor thor.Address, currentBlock uint32) (*big.Int, error) {
+	logger.Debug("withdrawing stake", "endorsor", endorsor, "validator", validator)
 
 	// remove validator QueuedVET if the validator is still queued
-	val, err := s.validationService.GetValidation(validationID)
+	val, err := s.validationService.GetValidation(validator)
 	if err != nil {
 		return nil, err
 	}
@@ -330,26 +330,26 @@ func (s *Staker) WithdrawStake(endorsor thor.Address, validationID thor.Address,
 		}
 	}
 
-	stake, err := s.validationService.WithdrawStake(endorsor, validationID, currentBlock)
+	stake, err := s.validationService.WithdrawStake(validator, endorsor, currentBlock)
 	if err != nil {
-		logger.Info("withdraw failed", "validationID", validationID, "error", err)
+		logger.Info("withdraw failed", "validator", validator, "error", err)
 		return nil, err
 	}
 
-	logger.Info("withdrew validator staker", "validationID", validationID)
+	logger.Info("withdrew validator staker", "validator", validator)
 	return stake, nil
 }
 
-func (s *Staker) SetOnline(id thor.Address, online bool) (bool, error) {
-	logger.Debug("set node online", "id", id, "online", online)
-	entry, err := s.validationService.GetValidation(id)
+func (s *Staker) SetOnline(validator thor.Address, online bool) (bool, error) {
+	logger.Debug("set node online", "validator", validator, "online", online)
+	entry, err := s.validationService.GetValidation(validator)
 	if err != nil {
 		return false, err
 	}
 	hasChanged := entry.Online != online
 	entry.Online = online
 	if hasChanged {
-		err = s.validationService.SetValidation(id, entry, false)
+		err = s.validationService.SetValidation(validator, entry, false)
 	} else {
 		err = nil
 	}
@@ -358,14 +358,14 @@ func (s *Staker) SetOnline(id thor.Address, online bool) (bool, error) {
 
 // AddDelegation adds a new delegation.
 func (s *Staker) AddDelegation(
-	validationID thor.Address,
+	validator thor.Address,
 	stake *big.Int,
 	multiplier uint8,
 ) (thor.Bytes32, error) {
-	logger.Debug("adding delegation", "ValidationID", validationID, "stake", new(big.Int).Div(stake, big.NewInt(1e18)), "multiplier", multiplier)
+	logger.Debug("adding delegation", "validator", validator, "stake", new(big.Int).Div(stake, big.NewInt(1e18)), "multiplier", multiplier)
 
 	// ensure validation is ok to receive a new delegation
-	val, err := s.validationService.GetExistingValidation(validationID)
+	val, err := s.validationService.GetExistingValidation(validator)
 	if err != nil {
 		return thor.Bytes32{}, err
 	}
@@ -375,9 +375,9 @@ func (s *Staker) AddDelegation(
 	}
 
 	// add delegation on the next iteration - val.CurrentIteration() + 1,
-	delegationID, err := s.delegationService.Add(validationID, val.CurrentIteration()+1, stake, multiplier)
+	delegationID, err := s.delegationService.Add(validator, val.CurrentIteration()+1, stake, multiplier)
 	if err != nil {
-		logger.Info("failed to add delegation", "ValidationID", validationID, "error", err)
+		logger.Info("failed to add delegation", "validator", validator, "error", err)
 		return thor.Bytes32{}, err
 	}
 
@@ -387,12 +387,12 @@ func (s *Staker) AddDelegation(
 	if err != nil {
 		return thor.Bytes32{}, err
 	}
-	if err = s.aggregationService.AddPendingVET(validationID, del.CalcWeight(), stake); err != nil {
+	if err = s.aggregationService.AddPendingVET(validator, del.CalcWeight(), stake); err != nil {
 		return thor.Bytes32{}, err
 	}
 
 	// validate that new TVL is <= Max stake
-	if err := s.validateNextPeriodTVL(validationID); err != nil {
+	if err := s.validateNextPeriodTVL(validator); err != nil {
 		return thor.Bytes32{}, err
 	}
 
@@ -401,7 +401,7 @@ func (s *Staker) AddDelegation(
 		return thor.Bytes32{}, err
 	}
 
-	logger.Info("added delegation", "ValidationID", validationID, "delegationID", delegationID)
+	logger.Info("added delegation", "validator", validator, "delegationID", delegationID)
 	return delegationID, nil
 }
 
@@ -418,7 +418,7 @@ func (s *Staker) SignalDelegationExit(delegationID thor.Bytes32) error {
 		return errors.New("delegation is empty")
 	}
 
-	val, err := s.validationService.GetValidation(del.ValidationID)
+	val, err := s.validationService.GetValidation(del.Validator)
 	if err != nil {
 		return err
 	}
@@ -431,7 +431,7 @@ func (s *Staker) SignalDelegationExit(delegationID thor.Bytes32) error {
 	// Calculate the specific delegation's stake and weight
 	delegationWeight := del.CalcWeight()
 
-	err = s.aggregationService.SignalExit(del.ValidationID, del.Stake, delegationWeight)
+	err = s.aggregationService.SignalExit(del.Validator, del.Stake, delegationWeight)
 	if err != nil {
 		return err
 	}
@@ -452,7 +452,7 @@ func (s *Staker) WithdrawDelegation(
 		return nil, err
 	}
 
-	val, err := s.validationService.GetValidation(del.ValidationID)
+	val, err := s.validationService.GetValidation(del.Validator)
 	if err != nil {
 		return nil, err
 	}
@@ -478,7 +478,7 @@ func (s *Staker) WithdrawDelegation(
 	}
 
 	if !started { // delegation's funds are still pending
-		if err := s.aggregationService.SubPendingVet(del.ValidationID, withdrawableStake, withdrawableStakeWeight); err != nil {
+		if err := s.aggregationService.SubPendingVet(del.Validator, withdrawableStake, withdrawableStakeWeight); err != nil {
 			return nil, err
 		}
 
@@ -488,7 +488,7 @@ func (s *Staker) WithdrawDelegation(
 	}
 
 	if finished { // delegation's funds have move to withdrawable
-		if err = s.aggregationService.SubWithdrawableVET(del.ValidationID, withdrawableStake); err != nil {
+		if err = s.aggregationService.SubWithdrawableVET(del.Validator, withdrawableStake); err != nil {
 			return nil, err
 		}
 	}
@@ -502,19 +502,19 @@ func (s *Staker) IncreaseDelegatorsReward(node thor.Address, reward *big.Int) er
 	return s.validationService.IncreaseDelegatorsReward(node, reward)
 }
 
-func (s *Staker) validateNextPeriodTVL(id thor.Address) error {
-	validator, err := s.validationService.GetValidation(id)
+func (s *Staker) validateNextPeriodTVL(validator thor.Address) error {
+	val, err := s.validationService.GetValidation(validator)
 	if err != nil {
 		return err
 	}
 
-	agg, err := s.aggregationService.GetAggregation(id)
+	agg, err := s.aggregationService.GetAggregation(validator)
 	if err != nil {
 		return err
 	}
 
 	// accumulated TVL should cannot be more than MaxStake
-	if big.NewInt(0).Add(validator.NextPeriodTVL(), agg.NextPeriodTVL()).Cmp(MaxStake) > 0 {
+	if big.NewInt(0).Add(val.NextPeriodTVL(), agg.NextPeriodTVL()).Cmp(MaxStake) > 0 {
 		return errors.New("stake is out of range")
 	}
 
