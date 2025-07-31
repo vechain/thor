@@ -426,7 +426,7 @@ func (s *Staker) SignalDelegationExit(delegationID thor.Bytes32) error {
 		return err
 	}
 
-	err = s.aggregationService.SignalExit(del.ValidationID, stakes.NewWeightedStake(del.Stake, del.Multiplier))
+	err = s.aggregationService.SignalExit(del.ValidationID, del.WeightedStake())
 	if err != nil {
 		return err
 	}
