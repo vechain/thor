@@ -34,8 +34,8 @@ var (
 	MediumStakingPeriod = newConfigVar("staker-medium-staking-period", 360*24*15) // 15 Days
 	HighStakingPeriod   = newConfigVar("staker-high-staking-period", 360*24*30)   // 30 Days
 
-	CooldownPeriod = newConfigVar("cooldown-period", 8640) // 8640 epochs, 180 days
-	EpochLength    = newConfigVar("epoch-length",180))    // 180 seconds
+	CooldownPeriod = newConfigVar("cooldown-period", 8640) // 8640 blocks, 1 day
+	EpochLength    = newConfigVar("epoch-length", 180)     // 180 epochs
 )
 
 func SetLogger(l log.Logger) {
