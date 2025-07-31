@@ -352,13 +352,13 @@ func init() {
 					args.Multiplier,
 				)
 			if err != nil {
-				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", err)}
+				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
 			}
 			return []any{delegationID, ""}
 		}},
 		{"native_withdrawDelegation", func(env *xenv.Environment) []any {
 			var args struct {
-				DelegationID common.Hash
+				DelegationID *big.Int
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
@@ -381,7 +381,7 @@ func init() {
 				return []any{new(big.Int), "revert: staker is paused"}
 			}
 
-			stake, err := Staker.NativeMetered(env.State(), charger).WithdrawDelegation(thor.Bytes32(args.DelegationID))
+			stake, err := Staker.NativeMetered(env.State(), charger).WithdrawDelegation(args.DelegationID)
 			if err != nil {
 				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
 			}
@@ -390,7 +390,7 @@ func init() {
 		}},
 		{"native_signalDelegationExit", func(env *xenv.Environment) []any {
 			var args struct {
-				DelegationID common.Hash
+				DelegationID *big.Int
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
@@ -413,7 +413,7 @@ func init() {
 				return []any{"revert: staker is paused"}
 			}
 
-			err = Staker.NativeMetered(env.State(), charger).SignalDelegationExit(thor.Bytes32(args.DelegationID))
+			err = Staker.NativeMetered(env.State(), charger).SignalDelegationExit(args.DelegationID)
 			if err != nil {
 				return []any{fmt.Sprintf("revert: %v", err)}
 			}
@@ -422,12 +422,12 @@ func init() {
 		}},
 		{"native_getDelegation", func(env *xenv.Environment) []any {
 			var args struct {
-				DelegationID common.Hash
+				DelegationID *big.Int
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			delegation, validator, err := Staker.NativeMetered(env.State(), charger).GetDelegation(thor.Bytes32(args.DelegationID))
+			delegation, validator, err := Staker.NativeMetered(env.State(), charger).GetDelegation(args.DelegationID)
 			if err != nil {
 				return []any{thor.Bytes32{}, new(big.Int), uint32(0), uint32(0), uint8(0), false, false, fmt.Sprintf("revert: %v", err)}
 			}

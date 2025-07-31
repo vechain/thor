@@ -2,25 +2,25 @@
 pragma solidity ^0.8.20;
 
 contract Staker {
-    event ValidationQueued( 
+    event ValidationQueued(
         address indexed validator,
         address indexed endorsor,
-        uint32 period, 
+        uint32 period,
         uint256 stake
     );
-    event ValidationWithdrawn(address indexed validator,uint256 stake);
+    event ValidationWithdrawn(address indexed validator, uint256 stake);
     event ValidationSignaledExit(address indexed validator);
-    event StakeIncreased(address indexed validator,uint256 added);
-    event StakeDecreased(address indexed validator,uint256 removed);
+    event StakeIncreased(address indexed validator, uint256 added);
+    event StakeDecreased(address indexed validator, uint256 removed);
 
     event DelegationAdded(
         address indexed validator,
-        bytes32 indexed delegationID,
+        uint256 indexed delegationID,
         uint256 stake,
         uint8 multiplier
     );
-    event DelegationWithdrawn(bytes32 indexed delegationID, uint256 stake);
-    event DelegationSignaledExit(bytes32 indexed delegationID);
+    event DelegationWithdrawn(uint256 indexed delegationID, uint256 stake);
+    event DelegationSignaledExit(uint256 indexed delegationID);
 
     /**
      * @dev totalStake returns all stakes and weight by active validators.
@@ -47,9 +47,16 @@ contract Staker {
     /**
      * @dev addValidation creates a validation to the queue.
      */
-    function addValidation(address validator, uint32 period) public payable checkStake(msg.value) {
-        string memory error = StakerNative(address(this))
-            .native_addValidation(validator, msg.sender, period, msg.value);
+    function addValidation(
+        address validator,
+        uint32 period
+    ) public payable checkStake(msg.value) {
+        string memory error = StakerNative(address(this)).native_addValidation(
+            validator,
+            msg.sender,
+            period,
+            msg.value
+        );
         require(bytes(error).length == 0, error);
         emit ValidationQueued(validator, msg.sender, period, msg.value);
     }
@@ -57,7 +64,9 @@ contract Staker {
     /**
      * @dev increaseStake adds VET to the current stake of the queued/active validator.
      */
-    function increaseStake(address validator) public payable checkStake(msg.value) {
+    function increaseStake(
+        address validator
+    ) public payable checkStake(msg.value) {
         string memory error = StakerNative(address(this)).native_increaseStake(
             msg.sender,
             validator,
@@ -70,7 +79,10 @@ contract Staker {
     /**
      * @dev decreaseStake removes VET from the current stake of an active validator
      */
-    function decreaseStake(address validator, uint256 amount) public checkStake(amount) {
+    function decreaseStake(
+        address validator,
+        uint256 amount
+    ) public checkStake(amount) {
         string memory error = StakerNative(address(this)).native_decreaseStake(
             msg.sender,
             validator,
@@ -111,8 +123,14 @@ contract Staker {
     function addDelegation(
         address validator,
         uint8 multiplier // (% of msg.value) 100 for x1, 200 for x2, etc. This enforces a maximum of 2.56x multiplier
-    ) public payable onlyDelegatorContract checkStake(msg.value) returns (bytes32) {
-        (bytes32 delegationID, string memory error) = StakerNative(
+    )
+        public
+        payable
+        onlyDelegatorContract
+        checkStake(msg.value)
+        returns (uint256)
+    {
+        (uint256 delegationID, string memory error) = StakerNative(
             address(this)
         ).native_addDelegation(validator, msg.value, multiplier);
         require(bytes(error).length == 0, error);
@@ -125,7 +143,7 @@ contract Staker {
      * Funds are available once the current staking period ends.
      */
     function signalDelegationExit(
-        bytes32 delegationID
+        uint256 delegationID
     ) public onlyDelegatorContract {
         string memory error = StakerNative(address(this))
             .native_signalDelegationExit(delegationID);
@@ -137,7 +155,7 @@ contract Staker {
      * @dev withdrawDelegation withdraws the delegation position funds.
      */
     function withdrawDelegation(
-        bytes32 delegationID
+        uint256 delegationID
     ) public onlyDelegatorContract {
         (uint256 stake, string memory error) = StakerNative(address(this))
             .native_withdrawDelegation(delegationID);
@@ -152,7 +170,7 @@ contract Staker {
      * @return (validator, stake, startPeriod, endPeriod, multiplier, isLocked)
      */
     function getDelegation(
-        bytes32 delegationID
+        uint256 delegationID
     ) public view returns (address, uint256, uint32, uint32, uint8, bool) {
         (
             address validator,
@@ -164,14 +182,7 @@ contract Staker {
             string memory error
         ) = StakerNative(address(this)).native_getDelegation(delegationID);
         require(bytes(error).length == 0, error);
-        return (
-            validator,
-            stake,
-            startPeriod,
-            endPeriod,
-            multiplier,
-            isLocked
-        );
+        return (validator, stake, startPeriod, endPeriod, multiplier, isLocked);
     }
 
     /**
@@ -184,16 +195,7 @@ contract Staker {
     )
         public
         view
-        returns (
-            address,
-            uint256,
-            uint256,
-            uint8,
-            bool,
-            uint32,
-            uint32,
-            uint32
-        )
+        returns (address, uint256, uint256, uint8, bool, uint32, uint32, uint32)
     {
         (
             address endorsor,
@@ -308,7 +310,7 @@ contract Staker {
 
     modifier checkStake(uint256 amount) {
         require(amount > 0, "stake is empty");
-        require(amount%1e18 == 0, "stake is not multiple of 1VET");
+        require(amount % 1e18 == 0, "stake is not multiple of 1VET");
         _;
     }
 
@@ -356,14 +358,14 @@ interface StakerNative {
         address validator,
         uint256 stake,
         uint8 multiplier
-    ) external returns (bytes32, string calldata);
+    ) external returns (uint256, string calldata);
 
     function native_withdrawDelegation(
-        bytes32 delegationID
+        uint256 delegationID
     ) external returns (uint256, string calldata);
 
     function native_signalDelegationExit(
-        bytes32 delegationID
+        uint256 delegationID
     ) external returns (string calldata);
 
     // Read methods
@@ -378,7 +380,7 @@ interface StakerNative {
         returns (uint256, uint256, string calldata);
 
     function native_getDelegation(
-        bytes32 delegationID
+        uint256 delegationID
     )
         external
         view
@@ -408,7 +410,6 @@ interface StakerNative {
             uint32,
             string calldata
         );
-
 
     function native_getWithdrawable(
         address validator
