@@ -58,7 +58,8 @@ var (
 	KeyProposerEndorsement       = BytesToBytes32([]byte("proposer-endorsement"))
 	KeyMaxBlockProposers         = BytesToBytes32([]byte("max-block-proposers"))
 	KeyStargateContractAddress   = BytesToBytes32([]byte("stargate-contract-address"))
-	KeyCurveFactor               = BytesToBytes32([]byte("curve-factor")) // curve factor to define VTHO issuance after PoS
+	KeyCurveFactor               = BytesToBytes32([]byte("curve-factor"))      // curve factor to define VTHO issuance after PoS
+	KeyStargateSwitches          = BytesToBytes32([]byte("stargate-switches")) // Stargate switches to control the pause of staker and stargate
 
 	InitialRewardRatio               = big.NewInt(3e17) // 30%
 	InitialValidatorRewardPercentage = 30               // 30%
