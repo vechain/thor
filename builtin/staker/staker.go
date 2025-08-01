@@ -6,7 +6,6 @@
 package staker
 
 import (
-	"bytes"
 	"math/big"
 
 	"github.com/pkg/errors"
@@ -30,12 +29,12 @@ var (
 	MaxStake                  = big.NewInt(0).Mul(big.NewInt(600e6), big.NewInt(1e18))
 	validatorWeightMultiplier = big.NewInt(2)
 
-	LowStakingPeriod    = newConfigVar("staker-low-staking-period", 360*24*7)     // 7 Days
-	MediumStakingPeriod = newConfigVar("staker-medium-staking-period", 360*24*15) // 15 Days
-	HighStakingPeriod   = newConfigVar("staker-high-staking-period", 360*24*30)   // 30 Days
+	LowStakingPeriod    = solidity.NewConfigVariable("staker-low-staking-period", 360*24*7)     // 7 Days
+	MediumStakingPeriod = solidity.NewConfigVariable("staker-medium-staking-period", 360*24*15) // 15 Days
+	HighStakingPeriod   = solidity.NewConfigVariable("staker-high-staking-period", 360*24*30)   // 30 Days
 
-	CooldownPeriod = newConfigVar("cooldown-period", 8640) // 8640 blocks, 1 day
-	EpochLength    = newConfigVar("epoch-length", 180)     // 180 epochs
+	CooldownPeriod = solidity.NewConfigVariable("cooldown-period", 8640) // 8640 blocks, 1 day
+	EpochLength    = solidity.NewConfigVariable("epoch-length", 180)     // 180 epochs
 )
 
 func SetLogger(l log.Logger) {
@@ -59,11 +58,11 @@ func New(addr thor.Address, state *state.State, params *params.Params, charger *
 	sctx := solidity.NewContext(addr, state, charger)
 
 	// debug overrides for testing
-	debugOverride(sctx, LowStakingPeriod)
-	debugOverride(sctx, MediumStakingPeriod)
-	debugOverride(sctx, HighStakingPeriod)
-	debugOverride(sctx, EpochLength)
-	debugOverride(sctx, CooldownPeriod)
+	LowStakingPeriod.Override(sctx)
+	MediumStakingPeriod.Override(sctx)
+	HighStakingPeriod.Override(sctx)
+	CooldownPeriod.Override(sctx)
+	EpochLength.Override(sctx)
 
 	return &Staker{
 		params:                    params,
@@ -519,48 +518,4 @@ func (s *Staker) validateNextPeriodTVL(validator thor.Address) error {
 	}
 
 	return nil
-}
-
-type configVar struct {
-	slot        thor.Bytes32
-	value       uint32
-	initialised bool
-}
-
-func newConfigVar(name string, defaultValue uint32) *configVar {
-	return &configVar{
-		slot:  thor.BytesToBytes32([]byte(name)),
-		value: defaultValue,
-	}
-}
-
-func (c *configVar) Get() uint32 {
-	return c.value
-}
-
-func (c *configVar) Name() string {
-	return string(bytes.TrimLeft(c.slot[:], string([]byte{0x00})))
-}
-
-func (c *configVar) Slot() thor.Bytes32 {
-	return c.slot
-}
-
-func debugOverride(sctx *solidity.Context, config *configVar) {
-	if config.initialised { // early return to prevent subsequent reads
-		return
-	}
-	num, err := solidity.NewUint256(sctx, config.slot).Get()
-	if err != nil {
-		logger.Warn("failed to read config value", "slot", config.Name(), "error", err)
-		return
-	}
-	config.initialised = true
-
-	if num.Uint64() != 0 {
-		config.value = uint32(num.Uint64())
-		logger.Debug("debug override found new config value", "slot", config.Name(), "value", config.Get())
-	} else {
-		logger.Debug("using default config value", "slot", config.Name(), "value", config.Get())
-	}
 }
