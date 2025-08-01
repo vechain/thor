@@ -51,7 +51,7 @@ func (l *LinkedList) Pop() (thor.Address, *Validation, error) {
 	return oldHeadID, oldHead, nil
 }
 
-// Remove removes a validator from the linked list
+// Remove removes a validation from the linked list and updates the validation in the repository.
 func (l *LinkedList) Remove(validator thor.Address, validation *Validation) (removed bool, err error) {
 	defer func() {
 		if err == nil && removed {
@@ -63,16 +63,6 @@ func (l *LinkedList) Remove(validator thor.Address, validation *Validation) (rem
 
 	prev := validation.Prev
 	next := validation.Next
-
-	// verify the entry exists in the linked list
-	validatorEntry, err := l.repo.GetValidation(validator)
-	if err != nil {
-		return false, err
-	}
-	if validatorEntry.IsEmpty() {
-		return false, nil
-	}
-
 	if prev == nil || prev.IsZero() {
 		l.head.Set(next, false)
 	} else {
@@ -99,7 +89,7 @@ func (l *LinkedList) Remove(validator thor.Address, validation *Validation) (rem
 		}
 	}
 
-	// Clear references in the popped validator
+	// Clear references in the popped validation
 	validation.Next = nil
 	validation.Prev = nil
 
@@ -116,7 +106,7 @@ func (l *LinkedList) Add(newTail thor.Address, validation *Validation) (added bo
 		}
 	}()
 
-	// Clear any previous references in the new validator
+	// Clear any previous references in the new validation
 	validation.Next = nil
 	validation.Prev = nil
 
