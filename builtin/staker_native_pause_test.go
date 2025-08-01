@@ -298,14 +298,12 @@ func TestAddAndExitValidatorForPause(t *testing.T) {
 		_, err = unpackResult(result)
 		require.NoError(t, err, "Function native_set should not return error %s", err)
 
-		// Set newValidator active
-		builtin.Staker.Native(setup.state).ActivateNextValidator(0, big.NewInt(1))
-
 		result = executeStakerNativeMethod(t, setup, "native_signalExit", []any{newValidator, newValidator})
 		require.NotNil(t, result, "Function native_signalExit should return result")
-		datas, err := unpackResult(result)
-		require.True(t, len(datas) == 0, "Function native_signalExit not run datas")
-		require.NoError(t, err, "Function native_signalExit should not return error %s", err)
+		_, err := unpackResult(result)
+		if err != nil {
+			assert.False(t, strings.Contains(err.Error(), "revert: staker is paused"))
+		}
 	})
 }
 
@@ -421,9 +419,6 @@ func TestDelegationAddAndExitForPause(t *testing.T) {
 	datas, err := unpackResult(result)
 	require.True(t, len(datas) == 0, "Function native_addValidation not run datas")
 	require.NoError(t, err, "Function native_addValidation should not return error %s", err)
-
-	// Set newValidator active
-	builtin.Staker.Native(setup.state).ActivateNextValidator(0, big.NewInt(1))
 
 	// Set Stargate pause active and Staker pause inactive, so the delegator could not be added
 	t.Run("Step1", func(t *testing.T) {

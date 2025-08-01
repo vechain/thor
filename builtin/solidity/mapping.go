@@ -79,12 +79,12 @@ func (m *Mapping[K, V]) Set(key K, value V, newValue bool) error {
 // ---------- RLP pooling helpers ----------
 
 var encodeBufPool = sync.Pool{
-	New: func() interface{} { return new(bytes.Buffer) },
+	New: func() any { return new(bytes.Buffer) },
 }
 
 // encodeValue reuses a bytes.Buffer from the pool and copies out the result.
 // avoids repeated buffer allocations in Set
-func encodeValue(v interface{}) ([]byte, error) {
+func encodeValue(v any) ([]byte, error) {
 	buf := encodeBufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer encodeBufPool.Put(buf)
@@ -99,12 +99,12 @@ func encodeValue(v interface{}) ([]byte, error) {
 }
 
 var readerPool = sync.Pool{
-	New: func() interface{} { return new(bytes.Reader) },
+	New: func() any { return new(bytes.Reader) },
 }
 
 // decodeValue reuses a bytes.Reader from the pool.
 // avoids allocating a new reader on each Get
-func decodeValue(raw []byte, out interface{}) error {
+func decodeValue(raw []byte, out any) error {
 	rdr := readerPool.Get().(*bytes.Reader)
 	rdr.Reset(raw)
 	defer readerPool.Put(rdr)
