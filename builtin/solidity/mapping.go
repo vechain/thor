@@ -6,7 +6,9 @@
 package solidity
 
 import (
+	"bytes"
 	"reflect"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/rlp"
 
@@ -29,34 +31,83 @@ func NewMapping[K Key, V any](context *Context, pos thor.Bytes32) *Mapping[K, V]
 }
 
 func (m *Mapping[K, V]) Get(key K) (value V, err error) {
+	// compute the storage slot from key + base position
 	position := thor.Blake2b(key.Bytes(), m.basePos.Bytes())
+
 	err = m.context.state.DecodeStorage(m.context.address, position, func(raw []byte) error {
-		if reflect.ValueOf(value).Kind() == reflect.Ptr {
-			value = reflect.New(reflect.TypeOf(value).Elem()).Interface().(V)
-		}
 		if len(raw) == 0 {
+			// on missing-key, allocate a fresh pointer if V is a pointer type
+			typ := reflect.TypeOf(&value).Elem()
+			if typ.Kind() == reflect.Ptr {
+				value = reflect.New(typ.Elem()).Interface().(V)
+			}
 			return nil
 		}
+
+		// charge gas per 32-byte word
 		slots := (uint64(len(raw)) + 31) / 32
 		m.context.UseGas(slots * thor.SloadGas)
-		return rlp.DecodeBytes(raw, &value)
+
+		// DECODE via pooled reader to avoid bytes.Reader alloc
+		return decodeValue(raw, &value)
 	})
 	return
 }
 
 func (m *Mapping[K, V]) Set(key K, value V, newValue bool) error {
 	position := thor.Blake2b(key.Bytes(), m.basePos.Bytes())
+
 	return m.context.state.EncodeStorage(m.context.address, position, func() ([]byte, error) {
-		val, err := rlp.EncodeToBytes(value)
+		// ENCODE via pooled buffer to cut down on allocations
+		buf, err := encodeValue(value)
 		if err != nil {
 			return nil, err
 		}
-		slots := (uint64(len(val)) + 31) / 32
+
+		// charge gas per 32-byte word
+		slots := (uint64(len(buf)) + 31) / 32
 		if newValue {
 			m.context.UseGas(slots * thor.SstoreSetGas)
 		} else {
 			m.context.UseGas(slots * thor.SstoreResetGas)
 		}
-		return rlp.EncodeToBytes(value)
+
+		return buf, nil
 	})
+}
+
+// ---------- RLP pooling helpers ----------
+
+var encodeBufPool = sync.Pool{
+	New: func() interface{} { return new(bytes.Buffer) },
+}
+
+// encodeValue reuses a bytes.Buffer from the pool and copies out the result.
+// avoids repeated buffer allocations in Set
+func encodeValue(v interface{}) ([]byte, error) {
+	buf := encodeBufPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer encodeBufPool.Put(buf)
+
+	if err := rlp.Encode(buf, v); err != nil {
+		return nil, err
+	}
+	// copy to independent slice for storage safety
+	out := make([]byte, buf.Len())
+	copy(out, buf.Bytes())
+	return out, nil
+}
+
+var readerPool = sync.Pool{
+	New: func() interface{} { return new(bytes.Reader) },
+}
+
+// decodeValue reuses a bytes.Reader from the pool.
+// avoids allocating a new reader on each Get
+func decodeValue(raw []byte, out interface{}) error {
+	rdr := readerPool.Get().(*bytes.Reader)
+	rdr.Reset(raw)
+	defer readerPool.Put(rdr)
+
+	return rlp.NewStream(rdr, 0).Decode(out)
 }
