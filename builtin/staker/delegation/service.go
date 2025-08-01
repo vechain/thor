@@ -113,20 +113,19 @@ func (s *Service) SignalExit(delegationID *big.Int, val *validation.Validation) 
 	return s.SetDelegation(delegationID, delegation, false)
 }
 
-func (s *Service) Withdraw(delegationID *big.Int) (*big.Int, *big.Int, error) {
+func (s *Service) Withdraw(delegationID *big.Int) (*big.Int, error) {
 	del, err := s.GetDelegation(delegationID)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	// ensure the pointers are copied, not referenced
 	withdrawableStake := new(big.Int).Set(del.Stake)
-	withdrawableStakeWeight := del.CalcWeight()
 
 	del.Stake = big.NewInt(0)
 	if err := s.SetDelegation(delegationID, del, false); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	return withdrawableStake, withdrawableStakeWeight, nil
+	return withdrawableStake, nil
 }
