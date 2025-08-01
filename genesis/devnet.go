@@ -184,11 +184,11 @@ func NewHayabusaDevnet(forkConfig *thor.ForkConfig) *Genesis {
 			}
 
 			// set parameters
-			state.SetStorage(builtin.Staker.Address, thor.BytesToBytes32([]byte(("staker-low-staking-period"))), thor.BytesToBytes32(big.NewInt(12).Bytes()))
-			state.SetStorage(builtin.Staker.Address, thor.BytesToBytes32([]byte(("staker-medium-staking-period"))), thor.BytesToBytes32(big.NewInt(30).Bytes()))
-			state.SetStorage(builtin.Staker.Address, thor.BytesToBytes32([]byte(("staker-high-staking-period"))), thor.BytesToBytes32(big.NewInt(90).Bytes()))
-			state.SetStorage(builtin.Staker.Address, thor.BytesToBytes32([]byte(("cooldown-period"))), thor.BytesToBytes32(big.NewInt(12).Bytes()))
-			state.SetStorage(builtin.Staker.Address, thor.BytesToBytes32([]byte(("epoch-length"))), thor.BytesToBytes32(big.NewInt(6).Bytes()))
+			state.SetStorage(builtin.Staker.Address, staker.LowStakingPeriod.Slot(), thor.BytesToBytes32(big.NewInt(12).Bytes()))
+			state.SetStorage(builtin.Staker.Address, staker.MediumStakingPeriod.Slot(), thor.BytesToBytes32(big.NewInt(30).Bytes()))
+			state.SetStorage(builtin.Staker.Address, staker.HighStakingPeriod.Slot(), thor.BytesToBytes32(big.NewInt(90).Bytes()))
+			state.SetStorage(builtin.Staker.Address, staker.CooldownPeriod.Slot(), thor.BytesToBytes32(big.NewInt(12).Bytes()))
+			state.SetStorage(builtin.Staker.Address, staker.EpochLength.Slot(), thor.BytesToBytes32(big.NewInt(6).Bytes()))
 
 			tokenSupply := &big.Int{}
 			energySupply := &big.Int{}
@@ -213,7 +213,7 @@ func NewHayabusaDevnet(forkConfig *thor.ForkConfig) *Genesis {
 
 			// adding a soloBlockSigner as a validator and manage balances manually
 			// NOTE: does not manage energy, as it is not a transaction
-			if err := builtin.Staker.Native(state).AddValidation(soloBlockSigner.Address, soloBlockSigner.Address, staker.HighStakingPeriod, staker.MinStake); err != nil {
+			if err := builtin.Staker.Native(state).AddValidation(soloBlockSigner.Address, soloBlockSigner.Address, staker.HighStakingPeriod.Get(), staker.MinStake); err != nil {
 				return err
 			}
 			currentBalance, err := state.GetBalance(soloBlockSigner.Address)

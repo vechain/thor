@@ -2031,13 +2031,13 @@ func TestStakerContract_Native_CheckStake(t *testing.T) {
 		caller: builtin.Staker.Address,
 	}
 
-	test.Case("addValidation", master, staker.LowStakingPeriod).
+	test.Case("addValidation", master, staker.LowStakingPeriod.Get()).
 		Value(big.NewInt(0)).
 		Caller(caller).
 		ShouldRevert("stake is empty").
 		Assert(t)
 
-	test.Case("addValidation", master, staker.LowStakingPeriod).
+	test.Case("addValidation", master, staker.LowStakingPeriod.Get()).
 		Value(big.NewInt(1)).
 		Caller(caller).
 		ShouldRevert("stake is not multiple of 1VET").
