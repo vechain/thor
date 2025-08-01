@@ -163,9 +163,7 @@ func init() {
 			isPaused, err := IsStakerPaused(env.State(), charger)
 			if err != nil {
 				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
-			}
-
-			if isPaused {
+			} else if isPaused {
 				return []any{new(big.Int), "revert: staker is paused"}
 			}
 
@@ -193,9 +191,7 @@ func init() {
 			isPaused, err := IsStakerPaused(env.State(), charger)
 			if err != nil {
 				return []any{fmt.Sprintf("revert: %v", err)}
-			}
-
-			if isPaused {
+			} else if isPaused {
 				return []any{"revert: staker is paused"}
 			}
 
@@ -243,9 +239,7 @@ func init() {
 			isPaused, err := IsStakerPaused(env.State(), charger)
 			if err != nil {
 				return []any{fmt.Sprintf("revert: %v", err)}
-			}
-
-			if isPaused {
+			} else if isPaused {
 				return []any{"revert: staker is paused"}
 			}
 
@@ -271,9 +265,7 @@ func init() {
 			isPaused, err := IsStakerPaused(env.State(), charger)
 			if err != nil {
 				return []any{fmt.Sprintf("revert: %v", err)}
-			}
-
-			if isPaused {
+			} else if isPaused {
 				return []any{"revert: staker is paused"}
 			}
 
@@ -301,9 +293,7 @@ func init() {
 			isPaused, err := IsStakerPaused(env.State(), charger)
 			if err != nil {
 				return []any{fmt.Sprintf("revert: %v", err)}
-			}
-
-			if isPaused {
+			} else if isPaused {
 				return []any{"revert: staker is paused"}
 			}
 
@@ -337,9 +327,7 @@ func init() {
 			isPaused, err = IsStakerPaused(env.State(), charger)
 			if err != nil {
 				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
-			}
-
-			if isPaused {
+			} else if isPaused {
 				return []any{new(big.Int), "revert: staker is paused"}
 			}
 
@@ -364,18 +352,14 @@ func init() {
 			isPaused, err := IsStargatePaused(env.State(), charger)
 			if err != nil {
 				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
-			}
-
-			if isPaused {
+			} else if isPaused {
 				return []any{new(big.Int), "revert: stargate is paused"}
 			}
 
 			isPaused, err = IsStakerPaused(env.State(), charger)
 			if err != nil {
 				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
-			}
-
-			if isPaused {
+			} else if isPaused {
 				return []any{new(big.Int), "revert: staker is paused"}
 			}
 
@@ -396,18 +380,14 @@ func init() {
 			isPaused, err := IsStargatePaused(env.State(), charger)
 			if err != nil {
 				return []any{fmt.Sprintf("revert: %v", err)}
-			}
-
-			if isPaused {
+			} else if isPaused {
 				return []any{"revert: stargate is paused"}
 			}
 
 			isPaused, err = IsStakerPaused(env.State(), charger)
 			if err != nil {
 				return []any{fmt.Sprintf("revert: %v", err)}
-			}
-
-			if isPaused {
+			} else if isPaused {
 				return []any{"revert: staker is paused"}
 			}
 
