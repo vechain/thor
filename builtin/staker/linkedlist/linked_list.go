@@ -80,8 +80,14 @@ func (l *LinkedList) Remove(address thor.Address) error {
 	}
 
 	// If address is not in the list (no prev and not head)
-	if prev.IsZero() && !l.isHead(address) {
-		return nil // not in list
+	if prev.IsZero() {
+		isHead, err := l.isHead(address)
+		if err != nil {
+			return err
+		}
+		if !isHead {
+			return nil // not in list
+		}
 	}
 
 	// Update previous node's next pointer
@@ -175,12 +181,12 @@ func (l *LinkedList) Next(address thor.Address) (thor.Address, error) {
 }
 
 // isHead checks if the given address is the head of the list
-func (l *LinkedList) isHead(address thor.Address) bool {
+func (l *LinkedList) isHead(address thor.Address) (bool, error) {
 	head, err := l.head.Get()
 	if err != nil {
-		return false
+		return false, err
 	}
-	return head == address
+	return head == address, nil
 }
 
 // Head returns the oldest address in the queue (next to be processed)
