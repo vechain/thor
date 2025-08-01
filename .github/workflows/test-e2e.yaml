@@ -51,34 +51,35 @@ jobs:
       THOR_IMAGE: vechain/thor:${{ github.sha }}
     name: Run Tests
     steps:
-      # Main: https://github.com/vechain/thor-e2e-tests/tree/8a6ad2f22c8657206377b503500b0d4c5d12ed5d
+      # Main: https://github.com/vechain/thor-e2e-tests/tree/650d77bcf8f6a2ebab1e5334c34917bfb2eebe9b
       # For release branches, names in the thor and thor-e2e-tests repos should match
       - name: Set e2e repo reference
         id: set-ref
         run: |
           # Default fallback commit
-          DEFAULT_COMMIT="8a6ad2f22c8657206377b503500b0d4c5d12ed5d"
+          DEFAULT_COMMIT="650d77bcf8f6a2ebab1e5334c34917bfb2eebe9b"
           REF="$DEFAULT_COMMIT"
-      
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
+          
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
             # For pull_request events, we only look at the PR's base branch
-            if [[ "${{ github.event.pull_request.base.ref }}" == release/* ]]; then
-              REF="${{ github.event.pull_request.base.ref }}"
+            if [[ "$GITHUB_BASE_REF" == release/* ]]; then
+              REF="$GITHUB_BASE_REF"
             fi
           else
             # For push events, we check the branch or tag that was pushed
-            if [[ "${{ github.ref_name }}" == release/* ]]; then
-              REF="${{ github.ref_name }}"
+            if [[ "$GITHUB_REF_NAME" == release/* ]]; then
+              REF="$GITHUB_REF_NAME"
             fi
           fi
-
+          
           # Verify if branch exists
-          if ! git ls-remote --heads https://github.com/vechain/thor-e2e-tests.git $REF; then
+          if ! git ls-remote --heads https://github.com/vechain/thor-e2e-tests.git "$REF"; then
             echo "Branch does not exist, using default commit"
             echo "ref=$DEFAULT_COMMIT" >> "$GITHUB_OUTPUT"
           else
             echo "ref=$REF" >> "$GITHUB_OUTPUT"
           fi
+
 
       - name: Checkout
         uses: actions/checkout@v4
