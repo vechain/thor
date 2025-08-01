@@ -1833,7 +1833,7 @@ func TestStakerContract_Native_Revert(t *testing.T) {
 	assert.True(t, receipt.Reverted)
 
 	// update delegator auto renew
-	updateDelegatorAutoRenewArgs := []any{thor.Bytes32{}}
+	updateDelegatorAutoRenewArgs := []any{big.NewInt(0)}
 	desc = TestTxDescription{
 		t:          t,
 		abi:        abi,
@@ -1862,7 +1862,7 @@ func TestStakerContract_Native_Revert(t *testing.T) {
 	assert.True(t, receipt.Reverted)
 
 	// withdrawDelegation
-	withdrawDelegationArgs := []any{thor.Bytes32{}}
+	withdrawDelegationArgs := []any{big.NewInt(0)}
 	desc = TestTxDescription{
 		t:          t,
 		abi:        abi,

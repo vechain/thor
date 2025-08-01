@@ -21,18 +21,18 @@ var (
 )
 
 type Service struct {
-	delegations *solidity.Mapping[thor.Bytes32, *Delegation]
+	delegations *solidity.Mapping[*big.Int, *Delegation]
 	idCounter   *solidity.Uint256
 }
 
 func New(sctx *solidity.Context) *Service {
 	return &Service{
-		delegations: solidity.NewMapping[thor.Bytes32, *Delegation](sctx, slotDelegations),
+		delegations: solidity.NewMapping[*big.Int, *Delegation](sctx, slotDelegations),
 		idCounter:   solidity.NewUint256(sctx, slotDelegationsCounter),
 	}
 }
 
-func (s *Service) GetDelegation(delegationID thor.Bytes32) (*Delegation, error) {
+func (s *Service) GetDelegation(delegationID *big.Int) (*Delegation, error) {
 	d, err := s.delegations.Get(delegationID)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get delegation")
@@ -40,7 +40,7 @@ func (s *Service) GetDelegation(delegationID thor.Bytes32) (*Delegation, error) 
 	return d, nil
 }
 
-func (s *Service) SetDelegation(delegationID thor.Bytes32, entry *Delegation, isNew bool) error {
+func (s *Service) SetDelegation(delegationID *big.Int, entry *Delegation, isNew bool) error {
 	if err := s.delegations.Set(delegationID, entry, isNew); err != nil {
 		return errors.Wrap(err, "failed to set delegation")
 	}
@@ -52,28 +52,27 @@ func (s *Service) Add(
 	firstIteration uint32,
 	stake *big.Int,
 	multiplier uint8,
-) (thor.Bytes32, error) {
+) (*big.Int, error) {
 	// ensure input is sane
 	if multiplier == 0 {
-		return thor.Bytes32{}, errors.New("multiplier cannot be 0")
+		return nil, errors.New("multiplier cannot be 0")
 	}
 	if stake.Cmp(big.NewInt(0)) <= 0 {
-		return thor.Bytes32{}, errors.New("stake must be greater than 0")
+		return nil, errors.New("stake must be greater than 0")
 	}
 
 	// update the global delegation counter
-	// todo: should this counter be per validation ?
 	id, err := s.idCounter.Get()
 	if err != nil {
-		return thor.Bytes32{}, err
+		return nil, err
 	}
 
 	id = id.Add(id, big.NewInt(1))
 	if err := s.idCounter.Set(id); err != nil {
-		return thor.Bytes32{}, errors.Wrap(err, "failed to increment delegation ID counter")
+		return nil, errors.Wrap(err, "failed to increment delegation ID counter")
 	}
 
-	delegationID := thor.BytesToBytes32(id.Bytes())
+	delegationID := new(big.Int).Set(id)
 	delegation := &Delegation{
 		Validator:      validator,
 		Multiplier:     multiplier,
@@ -82,14 +81,14 @@ func (s *Service) Add(
 	}
 
 	if err := s.delegations.Set(delegationID, delegation, false); err != nil {
-		return thor.Bytes32{}, errors.Wrap(err, "failed to set delegation")
+		return nil, errors.Wrap(err, "failed to set delegation")
 	}
 
 	return delegationID, nil
 }
 
 // todo uncouple this
-func (s *Service) SignalExit(delegationID thor.Bytes32, val *validation.Validation) error {
+func (s *Service) SignalExit(delegationID *big.Int, val *validation.Validation) error {
 	delegation, err := s.GetDelegation(delegationID)
 	if err != nil {
 		return err
@@ -114,7 +113,7 @@ func (s *Service) SignalExit(delegationID thor.Bytes32, val *validation.Validati
 	return s.SetDelegation(delegationID, delegation, false)
 }
 
-func (s *Service) Withdraw(delegationID thor.Bytes32) (*big.Int, error) {
+func (s *Service) Withdraw(delegationID *big.Int) (*big.Int, error) {
 	del, err := s.GetDelegation(delegationID)
 	if err != nil {
 		return nil, err
