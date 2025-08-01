@@ -9,7 +9,7 @@ import (
 	"math/big"
 
 	"github.com/pkg/errors"
-	
+
 	"github.com/vechain/thor/v2/builtin/staker/delta"
 )
 
