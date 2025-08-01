@@ -218,14 +218,21 @@ func (s *Staker) GetValidationTotals(validator thor.Address) (*validation.Valida
 // Next returns the next validator in a linked list.
 // If the provided address is not in a list, it will return empty bytes.
 func (s *Staker) Next(prev thor.Address) (thor.Address, error) {
-	entry, err := s.validationService.GetValidation(prev)
+	// First check leader group
+	next, err := s.validationService.LeaderGroupNext(prev)
 	if err != nil {
 		return thor.Address{}, err
 	}
-	if entry.IsEmpty() || entry.Next == nil {
-		return thor.Address{}, nil
+	if !next.IsZero() {
+		return next, nil
 	}
-	return *entry.Next, nil
+
+	// Then check validator queue
+	next, err = s.validationService.ValidatorQueueNext(prev)
+	if err != nil {
+		return thor.Address{}, err
+	}
+	return next, nil
 }
 
 //
