@@ -244,7 +244,7 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 	}
 
 	for range transition.ActivationCount {
-		if _, err := s.activateNextValidator(transition.Block, maxLeaderGroupSize); err != nil {
+		if _, err := s.ActivateNextValidator(transition.Block, maxLeaderGroupSize); err != nil {
 			return err
 		}
 	}
@@ -273,7 +273,8 @@ func (s *Staker) buildActiveValidatorsFromTransition(transition *EpochTransition
 	return activeValidators
 }
 
-func (s *Staker) activateNextValidator(currentBlk uint32, maxLeaderGroupSize *big.Int) (*thor.Address, error) {
+// TODO this should be a public method, it's ever only used in the pause test
+func (s *Staker) ActivateNextValidator(currentBlk uint32, maxLeaderGroupSize *big.Int) (*thor.Address, error) {
 	validatorID, err := s.validationService.NextToActivate(maxLeaderGroupSize)
 	if err != nil {
 		return nil, err
