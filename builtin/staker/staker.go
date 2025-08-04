@@ -494,12 +494,6 @@ func (s *Staker) WithdrawDelegation(
 		}
 	}
 
-	if finished { // delegation's funds have move to withdrawable
-		if err = s.aggregationService.SubWithdrawableVET(del.Validator, withdrawableStake); err != nil {
-			return nil, err
-		}
-	}
-
 	logger.Info("withdrew delegation", "delegationID", delegationID, "stake", new(big.Int).Div(withdrawableStake, big.NewInt(1e18)))
 	return withdrawableStake, nil
 }
