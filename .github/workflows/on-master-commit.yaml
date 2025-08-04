@@ -31,7 +31,6 @@ jobs:
     uses: ./.github/workflows/test-e2e.yaml
 
   run-smoke-tests:
-    if: github.ref == 'refs/heads/master'
     name: Smoke Tests
     uses: ./.github/workflows/test-smoke.yaml
     permissions:

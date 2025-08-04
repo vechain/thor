@@ -63,11 +63,45 @@ jobs:
       THOR_IMAGE: vechain/thor:${{ github.sha }}
     name: Run Smoke Tests
     steps:
+      - name: Set up git credentials
+        run: |
+          git config --global url."https://${{ secrets.DRAUPNIR_TOKEN }}@github.com/".insteadOf "https://github.com/"
+
+      - name: Set draupnir repo reference
+        id: set-ref
+        run: |
+          # Default fallback commit
+          DEFAULT_COMMIT="87786521c01be03d7a39cedb3b34d640f9f8632e"
+          REF="$DEFAULT_COMMIT"
+      
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # For pull_request events, we only look at the PR's base branch
+            if [[ "${{ github.event.pull_request.base.ref }}" == release/* ]]; then
+              REF="${{ github.event.pull_request.base.ref }}"
+            fi
+          else
+            # For push events, we check the branch or tag that was pushed
+            if [[ "${{ github.ref_name }}" == release/* ]]; then
+              REF="${{ github.ref_name }}"
+            fi
+          fi
+
+          # Verify if branch exists
+          if ! git ls-remote --heads https://github.com/vechain/draupnir.git $REF; then
+            echo "Branch does not exist, using default commit"
+            echo "ref=$DEFAULT_COMMIT" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "DRAUPNIR REF: $(<$GITHUB_OUTPUT)"
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
           repository: vechain/draupnir
           token: ${{ secrets.DRAUPNIR_TOKEN }}
+          ref: ${{ steps.set-ref.outputs.ref }}
 
       - name: Setup Go
         uses: actions/setup-go@v5
