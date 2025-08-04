@@ -12,8 +12,24 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/v2/builtin/gascharger"
+	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 )
+
+func newContext() *Context {
+	db := muxdb.NewMem()
+	st := state.New(db, trie.Root{})
+	addr := thor.Address{1}
+	charger := gascharger.New(newXenv())
+
+	return &Context{
+		address: addr,
+		state:   st,
+		charger: charger,
+	}
+}
 
 func TestUint256(t *testing.T) {
 	ctx := newContext()
