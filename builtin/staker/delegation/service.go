@@ -21,13 +21,13 @@ var (
 )
 
 type Service struct {
-	delegations *solidity.Mapping[*big.Int, *Delegation]
+	delegations *solidity.Mapping[*big.Int, Delegation]
 	idCounter   *solidity.Uint256
 }
 
 func New(sctx *solidity.Context) *Service {
 	return &Service{
-		delegations: solidity.NewMapping[*big.Int, *Delegation](sctx, slotDelegations),
+		delegations: solidity.NewMapping[*big.Int, Delegation](sctx, slotDelegations),
 		idCounter:   solidity.NewUint256(sctx, slotDelegationsCounter),
 	}
 }
@@ -37,11 +37,11 @@ func (s *Service) GetDelegation(delegationID *big.Int) (*Delegation, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get delegation")
 	}
-	return d, nil
+	return &d, nil
 }
 
 func (s *Service) SetDelegation(delegationID *big.Int, entry *Delegation, isNew bool) error {
-	if err := s.delegations.Set(delegationID, entry, isNew); err != nil {
+	if err := s.delegations.Set(delegationID, *entry, isNew); err != nil {
 		return errors.Wrap(err, "failed to set delegation")
 	}
 	return nil
@@ -73,7 +73,7 @@ func (s *Service) Add(
 	}
 
 	delegationID := new(big.Int).Set(id)
-	delegation := &Delegation{
+	delegation := Delegation{
 		Validator:      validator,
 		Multiplier:     multiplier,
 		Stake:          stake,
