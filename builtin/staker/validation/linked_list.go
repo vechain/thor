@@ -81,6 +81,7 @@ func (l *LinkedList) Remove(validator thor.Address, validation *Validation) (rem
 			return false, err
 		}
 		prevEntry.Next = next
+		// TODO keep the LL separated from the Validation storage ops
 		if err := l.repo.SetValidation(*prev, prevEntry, false); err != nil {
 			return false, err
 		}
@@ -94,6 +95,7 @@ func (l *LinkedList) Remove(validator thor.Address, validation *Validation) (rem
 			return false, err
 		}
 		nextEntry.Prev = prev
+		// TODO keep the LL separated from the Validation storage ops
 		if err := l.repo.SetValidation(*next, nextEntry, false); err != nil {
 			return false, err
 		}
@@ -128,6 +130,7 @@ func (l *LinkedList) Add(newTail thor.Address, validation *Validation) (added bo
 		// list is currently empty, set this entry to head & tail
 		l.head.Set(&newTail, false)
 		l.tail.Set(&newTail, false)
+		// TODO keep the LL separated from the Validation storage ops
 		return true, l.repo.SetValidation(newTail, validation, false)
 	}
 
@@ -138,6 +141,7 @@ func (l *LinkedList) Add(newTail thor.Address, validation *Validation) (added bo
 	oldTail.Next = &newTail
 	validation.Prev = &oldTailID
 
+	// TODO keep the LL separated from the Validation storage ops
 	if err := l.repo.SetValidation(oldTailID, oldTail, false); err != nil {
 		return false, err
 	}

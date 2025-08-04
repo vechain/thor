@@ -12,6 +12,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
+	"github.com/vechain/thor/v2/builtin/staker/delta"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -131,10 +132,6 @@ func (s *Service) QueuedGroupSize() (*big.Int, error) {
 
 func (s *Service) LeaderGroupSize() (*big.Int, error) {
 	return s.leaderGroup.Len()
-}
-
-func (s *Service) AddLeaderGroup(address thor.Address, val *Validation) (bool, error) {
-	return s.leaderGroup.Add(address, val)
 }
 
 func (s *Service) GetLeaderGroupHead() (*Validation, error) {
@@ -305,7 +302,7 @@ func (s *Service) WithdrawStake(validator thor.Address, endorsor thor.Address, c
 			return nil, err
 		}
 	}
-	// remove any queued
+	// remove any que
 	if val.QueuedVET.Sign() > 0 {
 		val.QueuedVET = big.NewInt(0)
 	}
@@ -319,32 +316,32 @@ func (s *Service) WithdrawStake(validator thor.Address, endorsor thor.Address, c
 	return withdrawable, nil
 }
 
-func (s *Service) NextToActivate(maxLeaderGroupSize *big.Int) (*thor.Address, *Validation, error) {
+func (s *Service) NextToActivate(maxLeaderGroupSize *big.Int) (*thor.Address, error) {
 	leaderGroupLength, err := s.leaderGroup.Len()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if leaderGroupLength.Cmp(maxLeaderGroupSize) >= 0 {
-		return nil, nil, errors.New("leader group is full")
+		return nil, errors.New("leader group is full")
 	}
 	// Check if queue is empty
 	queuedSize, err := s.validatorQueue.Len()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if queuedSize.Cmp(big.NewInt(0)) <= 0 {
-		return nil, nil, errors.New("no validator in the queue")
+		return nil, errors.New("no validator in the queue")
 	}
 	// pop the head of the queue
 	validator, val, err := s.validatorQueue.Pop()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if val.IsEmpty() {
-		return nil, nil, errors.New("no validator in the queue")
+		return nil, errors.New("no validator in the queue")
 	}
 
-	return &validator, val, nil
+	return &validator, nil
 }
 
 // ExitValidator removes the validator from the active list and puts it in cooldown.
@@ -422,6 +419,63 @@ func (s *Service) GetDelegatorRewards(validator thor.Address, stakingPeriod uint
 	key := thor.Blake2b([]byte("rewards"), validator.Bytes(), periodBytes)
 
 	return s.repo.GetReward(key)
+}
+
+// ActivateValidator transitions a validator from queued to active status.
+// It updates the validator's state and adds it to the leader group.
+// Returns a delta object representing the state changes.
+func (s *Service) ActivateValidator(
+	validationID thor.Address,
+	currentBlock uint32,
+	aggRenew *delta.Renewal,
+) (*delta.Renewal, error) {
+	val, err := s.GetExistingValidation(validationID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update validator values
+	// ensure a queued validator does not have locked vet
+	if val.LockedVET.Sign() > 0 {
+		return nil, errors.New("cannot activate validator with already locked vet")
+	}
+	// QueuedVET is now locked
+	val.LockedVET = big.NewInt(0).Set(val.QueuedVET)
+	// Reset QueuedVET - already locked-in
+	val.QueuedVET = big.NewInt(0)
+
+	// x2 multiplier for validator's stake
+	validatorWeight := big.NewInt(0).Mul(val.LockedVET, pkgValidatorWeightMultiplier)
+	val.Weight = big.NewInt(0).Add(validatorWeight, aggRenew.NewLockedWeight)
+
+	// Update validator status
+	val.Status = StatusActive
+	val.Online = true
+	val.StartBlock = currentBlock
+
+	// Add to active list
+	added, err := s.leaderGroup.Add(validationID, val)
+	if err != nil {
+		return nil, err
+	}
+	if !added {
+		return nil, errors.New("failed to add validator to active list")
+	}
+
+	// Persist the updated validation state
+	if err = s.SetValidation(validationID, val, false); err != nil {
+		return nil, err
+	}
+
+	// Return delta representing the state changes
+	validatorRenewal := &delta.Renewal{
+		NewLockedVET:         val.LockedVET,
+		NewLockedWeight:      val.Weight,
+		QueuedDecrease:       val.LockedVET,
+		QueuedDecreaseWeight: big.NewInt(0).Mul(val.LockedVET, pkgValidatorWeightMultiplier),
+	}
+
+	return validatorRenewal, nil
 }
 
 //
