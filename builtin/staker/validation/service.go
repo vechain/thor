@@ -435,7 +435,7 @@ func (s *Service) ActivateValidator(
 	}
 
 	// Update validator values
-	validatorLocked := big.NewInt(0).Add(val.LockedVET, val.QueuedVET) // lock exiting + pending vet
+	validatorLocked := big.NewInt(0).Add(val.LockedVET, val.QueuedVET) // lock existing + pending vet
 	val.LockedVET = validatorLocked
 
 	val.QueuedVET = big.NewInt(0) // queued vet already locked-in
