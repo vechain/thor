@@ -13,12 +13,13 @@ import (
 
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/builtin/staker/delta"
+	"github.com/vechain/thor/v2/builtin/staker/linkedlist"
 	"github.com/vechain/thor/v2/thor"
 )
 
 type Service struct {
-	leaderGroup         *LinkedList
-	validatorQueue      *LinkedList
+	leaderGroup         *linkedlist.LinkedList
+	validatorQueue      *linkedlist.LinkedList
 	lowStakingPeriod    uint32
 	mediumStakingPeriod uint32
 	highStakingPeriod   uint32
@@ -61,8 +62,8 @@ func New(sctx *solidity.Context,
 	return &Service{
 		repo: repo,
 
-		leaderGroup:         NewLinkedList(sctx, repo, slotActiveHead, slotActiveTail, slotActiveGroupSize),
-		validatorQueue:      NewLinkedList(sctx, repo, slotQueuedHead, slotQueuedTail, slotQueuedGroupSize),
+		leaderGroup:         linkedlist.NewLinkedList(sctx, slotActiveHead, slotActiveTail, slotActiveGroupSize),
+		validatorQueue:      linkedlist.NewLinkedList(sctx, slotQueuedHead, slotQueuedTail, slotQueuedGroupSize),
 		lowStakingPeriod:    lowStakingPeriod,
 		mediumStakingPeriod: mediumStakingPeriod,
 		highStakingPeriod:   highStakingPeriod,
@@ -102,12 +103,21 @@ func (s *Service) IncreaseDelegatorsReward(node thor.Address, reward *big.Int) e
 }
 
 func (s *Service) LeaderGroupIterator(callback func(thor.Address, *Validation) error) error {
-	return s.leaderGroup.Iter(callback)
+	return s.leaderGroup.Iter(func(address thor.Address) error {
+		// Fetch the validation object for this address
+		validation, err := s.repo.GetValidation(address)
+		if err != nil {
+			return err
+		}
+
+		// Call the original callback with both address and validation
+		return callback(address, validation)
+	})
 }
 
 // IsActive returns true if there are active validations.
 func (s *Service) IsActive() (bool, error) {
-	activeCount, err := s.leaderGroup.Count()
+	activeCount, err := s.leaderGroup.Len()
 	if err != nil {
 		return false, err
 	}
@@ -135,7 +145,12 @@ func (s *Service) LeaderGroupSize() (*big.Int, error) {
 }
 
 func (s *Service) GetLeaderGroupHead() (*Validation, error) {
-	return s.leaderGroup.Peek()
+	validatorID, err := s.leaderGroup.Head()
+	if err != nil {
+		return nil, err
+	}
+
+	return s.GetValidation(validatorID)
 }
 
 // LeaderGroup lists all registered candidates.
@@ -182,15 +197,11 @@ func (s *Service) Add(
 		Weight:             big.NewInt(0),
 	}
 
-	added, err := s.validatorQueue.Add(validator, entry)
-	if err != nil {
+	if err = s.validatorQueue.Add(validator); err != nil {
 		return err
 	}
-	if !added {
-		return errors.New("failed to add validator to queue")
-	}
 
-	return nil
+	return s.SetValidation(validator, entry, true)
 }
 
 func (s *Service) SignalExit(validator thor.Address, endorsor thor.Address) error {
@@ -298,7 +309,7 @@ func (s *Service) WithdrawStake(validator thor.Address, endorsor thor.Address, c
 	if val.Status == StatusQueued {
 		val.QueuedVET = big.NewInt(0)
 		val.Status = StatusExit
-		if _, err := s.validatorQueue.Remove(validator, val); err != nil {
+		if err = s.validatorQueue.Remove(validator); err != nil {
 			return nil, err
 		}
 	}
@@ -333,15 +344,16 @@ func (s *Service) NextToActivate(maxLeaderGroupSize *big.Int) (*thor.Address, er
 		return nil, errors.New("no validator in the queue")
 	}
 	// pop the head of the queue
-	validator, val, err := s.validatorQueue.Pop()
+	validatorID, err := s.validatorQueue.Pop()
 	if err != nil {
 		return nil, err
 	}
-	if val.IsEmpty() {
-		return nil, errors.New("no validator in the queue")
+	// ensure validation exists
+	if _, err = s.GetExistingValidation(validatorID); err != nil {
+		return nil, err
 	}
 
-	return &validator, nil
+	return &validatorID, nil
 }
 
 // ExitValidator removes the validator from the active list and puts it in cooldown.
@@ -373,7 +385,11 @@ func (s *Service) ExitValidator(validator thor.Address) (*big.Int, *big.Int, *bi
 	}
 
 	entry.CompleteIterations++
-	if _, err = s.leaderGroup.Remove(validator, entry); err != nil {
+	if err = s.leaderGroup.Remove(validator); err != nil {
+		return nil, nil, nil, err
+	}
+
+	if err = s.SetValidation(validator, entry, false); err != nil {
 		return nil, nil, nil, err
 	}
 
@@ -453,13 +469,9 @@ func (s *Service) ActivateValidator(
 	val.Online = true
 	val.StartBlock = currentBlock
 
-	// Add to active list
-	added, err := s.leaderGroup.Add(validationID, val)
-	if err != nil {
+	// Add to the leader group list
+	if err := s.leaderGroup.Add(validationID); err != nil {
 		return nil, err
-	}
-	if !added {
-		return nil, errors.New("failed to add validator to active list")
 	}
 
 	// Persist the updated validation state
@@ -499,4 +511,12 @@ func (s *Service) GetExistingValidation(validator thor.Address) (*Validation, er
 
 func (s *Service) SetValidation(validator thor.Address, entry *Validation, isNew bool) error {
 	return s.repo.SetValidation(validator, entry, isNew)
+}
+
+func (s *Service) LeaderGroupNext(prev thor.Address) (thor.Address, error) {
+	return s.leaderGroup.Next(prev)
+}
+
+func (s *Service) ValidatorQueueNext(prev thor.Address) (thor.Address, error) {
+	return s.validatorQueue.Next(prev)
 }
