@@ -37,6 +37,7 @@ func (m *Mapping[K, V]) Get(key K) (value V, err error) {
 	err = m.context.state.DecodeStorage(m.context.address, position, func(raw []byte) error {
 		if len(raw) == 0 {
 			// on missing-key, allocate a fresh pointer if V is a pointer type
+			// this allows the calling of type.IsEmpty if not found 
 			typ := reflect.TypeOf(&value).Elem()
 			if typ.Kind() == reflect.Ptr {
 				value = reflect.New(typ.Elem()).Interface().(V)
