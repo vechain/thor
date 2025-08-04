@@ -26,7 +26,6 @@ type Aggregation struct {
 	// Exiting delegations, does NOT contribute to current TVL, it will decrease the LockedVET in the next period and reset to 0
 	ExitingVET    *big.Int // VET that is exiting the next period
 	ExitingWeight *big.Int // Weight including multipliers
-
 }
 
 // newAggregation creates a new zero-initialized aggregation for a validator.
