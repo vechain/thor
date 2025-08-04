@@ -451,13 +451,17 @@ func (s *Service) ActivateValidator(
 	}
 
 	// Update validator values
-	validatorLocked := big.NewInt(0).Add(val.LockedVET, val.QueuedVET) // lock exiting + pending vet
-	val.LockedVET = validatorLocked
-
-	val.QueuedVET = big.NewInt(0) // queued vet already locked-in
+	// ensure a queued validator does not have locked vet
+	if val.LockedVET.Sign() > 0 {
+		return nil, errors.New("cannot activate validator with already locked vet")
+	}
+	// QueuedVET is now locked
+	val.LockedVET = big.NewInt(0).Set(val.QueuedVET)
+	// Reset QueuedVET - already locked-in
+	val.QueuedVET = big.NewInt(0)
 
 	// x2 multiplier for validator's stake
-	validatorWeight := big.NewInt(0).Mul(validatorLocked, pkgValidatorWeightMultiplier)
+	validatorWeight := big.NewInt(0).Mul(val.LockedVET, pkgValidatorWeightMultiplier)
 	val.Weight = big.NewInt(0).Add(validatorWeight, aggRenew.NewLockedWeight)
 
 	// Update validator status
