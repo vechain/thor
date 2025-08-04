@@ -52,23 +52,35 @@ func NewMapping[K Key, V comparable](context *Context, pos thor.Bytes32) *Mappin
 
 // Get retrieves the value for the given key, charging SloadGas per 32-byte word.
 // If no value is present, returns the zero-value of V.
-func (m *Mapping[K, V]) Get(key K) (value V, err error) {
+func (m *Mapping[K, V]) Get(key K) (V, error) {
 	// compute the storage slot from key + base position
 	position := thor.Blake2b(key.Bytes(), m.basePos.Bytes())
 
-	err = m.context.state.DecodeStorage(m.context.address, position, func(raw []byte) error {
-		if len(raw) == 0 {
-			return nil
-		}
+	// prepare a zero-value container for decoding
+	var value V
 
-		// charge gas per 32-byte word
-		slots := (uint64(len(raw)) + 31) / 32
-		m.context.UseGas(slots * thor.SloadGas)
+	// attempt to decode storage into value
+	err := m.context.state.DecodeStorage(
+		m.context.address, position, func(raw []byte) error {
+			if len(raw) == 0 {
+				// no data, leave value as zero
+				return nil
+			}
 
-		// decode RLP in-place
-		return rlp.DecodeBytes(raw, &value)
-	})
-	return
+			// charge gas per 32-byte word
+			slots := (uint64(len(raw)) + 31) / 32
+			m.context.UseGas(slots * thor.SloadGas)
+
+			// decode RLP in-place
+			return rlp.DecodeBytes(raw, &value)
+		})
+	if err != nil {
+		// return zero type value
+		var zero V
+		return zero, err
+	}
+
+	return value, nil
 }
 
 // Set stores the given value at key, charging Sstore gas per 32-byte word.
@@ -83,6 +95,7 @@ func (m *Mapping[K, V]) Set(key K, value V, newValue bool) error {
 		return nil
 	}
 
+	// encode and store
 	return m.context.state.EncodeStorage(m.context.address, position, func() ([]byte, error) {
 		// encode via rlp library's internal pooling
 		buf, err := rlp.EncodeToBytes(value)
