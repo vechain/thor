@@ -79,25 +79,25 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		// Basic read operations (no arguments)
 		{
 			function:    "native_totalStake",
-			expectedGas: 400,
+			expectedGas: 1400,
 			args:        []any{},
 			description: "Get total locked stake",
 		},
 		{
 			function:    "native_queuedStake",
-			expectedGas: 400,
+			expectedGas: 1400,
 			args:        []any{},
 			description: "Get total queued stake",
 		},
 		{
 			function:    "native_firstActive",
-			expectedGas: 200,
+			expectedGas: 1200,
 			args:        []any{},
 			description: "Get first active validator",
 		},
 		{
 			function:    "native_firstQueued",
-			expectedGas: 200,
+			expectedGas: 1200,
 			args:        []any{},
 			description: "Get first queued validator",
 		},
@@ -109,34 +109,34 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_addValidation",
-			expectedGas: 66600,
+			expectedGas: 68600,
 			args:        []any{account1, account1, staker.LowStakingPeriod.Get(), staker.MinStake},
 			description: "Add a new validator (not implemented yet)",
 		},
 		{
 			function:     "native_get",
-			expectedGas:  400,
+			expectedGas:  1400,
 			args:         []any{account1},
 			description:  "Get validator by it's ID (not implemented yet)",
 			preTestHooks: []TestHook{preTestAddValidation(account1)},
 		},
 		{
 			function:     "native_getWithdrawable",
-			expectedGas:  400,
+			expectedGas:  1400,
 			args:         []any{account1},
 			description:  "Get withdraw information for a validator",
 			preTestHooks: []TestHook{preTestAddValidation(account1)},
 		},
 		{
 			function:     "native_next",
-			expectedGas:  400,
+			expectedGas:  1400,
 			args:         []any{account1},
 			description:  "Get next validator in the queue",
 			preTestHooks: []TestHook{preTestAddValidation(account1)},
 		},
 		{
 			function:     "native_withdrawStake",
-			expectedGas:  37200,
+			expectedGas:  38200,
 			args:         []any{account1, account1},
 			description:  "Withdraw stake for a validator",
 			preTestHooks: []TestHook{preTestAddValidation(account1)},
@@ -153,7 +153,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		// },
 		{
 			function:    "native_increaseStake",
-			expectedGas: 21600,
+			expectedGas: 22600,
 			args: []any{
 				account1,
 				account1,
@@ -164,7 +164,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_decreaseStake",
-			expectedGas: 21400,
+			expectedGas: 22400,
 			args: []any{
 				account1,
 				account1,
@@ -175,7 +175,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_addDelegation",
-			expectedGas: 32200,
+			expectedGas: 33200,
 			args: []any{
 				account1,
 				staker.MinStake,
@@ -186,7 +186,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_getDelegation",
-			expectedGas: 800,
+			expectedGas: 1800,
 			args: []any{
 				big.NewInt(1), // IDs are incremental, starting at 1
 			},
@@ -195,7 +195,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_withdrawDelegation",
-			expectedGas: 22400,
+			expectedGas: 23400,
 			args: []any{
 				big.NewInt(1), // IDs are incremental, starting at 1
 			},
@@ -205,7 +205,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		// TODO: How can we mint thousands of blocks and perform housekeeping?
 		{
 			function:    "native_signalDelegationExit",
-			expectedGas: 1600,
+			expectedGas: 2600,
 			args: []any{
 				big.NewInt(1), // IDs are incremental, starting at 1
 			},
@@ -215,7 +215,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_getDelegatorsRewards",
-			expectedGas: 200,
+			expectedGas: 1200,
 			args: []any{
 				account1,
 				uint32(0),
@@ -225,7 +225,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_getValidationTotals",
-			expectedGas: 600,
+			expectedGas: 1600,
 			args: []any{
 				account1,
 			},

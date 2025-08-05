@@ -39,9 +39,13 @@ func (c *ConfigVariable) Slot() thor.Bytes32 {
 }
 
 func (c *ConfigVariable) Override(ctx *Context) {
-	if c.initialised { // early return to prevent subsequent reads
-		return
-	}
+	// TODO: fix and uncomment this code. It seems to cause consensus issues
+	// TODO: when starting a node with fork block = 0, the staker contract produces gas mismatches
+	// TODO: are the variables being overridden at different points? eg. 1 node during consensus, another during transactions?
+	//if c.initialised { // early return to prevent subsequent reads
+	//	return
+	//}
+	//log.Warn("🛑🛑overriding config variable", "slot", c.Name(), "value", c.Get())
 	num, err := NewUint256(ctx, c.slot).Get()
 	if err != nil {
 		log.Warn("failed to read config value", "slot", c.Name(), "error", err)
