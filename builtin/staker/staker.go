@@ -146,7 +146,7 @@ func (s *Staker) GetWithdrawable(validator thor.Address, block uint32) (*big.Int
 
 // GetDelegation returns the delegation.
 func (s *Staker) GetDelegation(
-	delegationID thor.Bytes32,
+	delegationID *big.Int,
 ) (*delegation.Delegation, *validation.Validation, error) {
 	del, err := s.delegationService.GetDelegation(delegationID)
 	if err != nil {
@@ -210,14 +210,21 @@ func (s *Staker) GetValidationTotals(validator thor.Address) (*validation.Valida
 // Next returns the next validator in a linked list.
 // If the provided address is not in a list, it will return empty bytes.
 func (s *Staker) Next(prev thor.Address) (thor.Address, error) {
-	entry, err := s.validationService.GetValidation(prev)
+	// First check leader group
+	next, err := s.validationService.LeaderGroupNext(prev)
 	if err != nil {
 		return thor.Address{}, err
 	}
-	if entry.IsEmpty() || entry.Next == nil {
-		return thor.Address{}, nil
+	if !next.IsZero() {
+		return next, nil
 	}
-	return *entry.Next, nil
+
+	// Then check validator queue
+	next, err = s.validationService.ValidatorQueueNext(prev)
+	if err != nil {
+		return thor.Address{}, err
+	}
+	return next, nil
 }
 
 //
@@ -360,44 +367,44 @@ func (s *Staker) AddDelegation(
 	validator thor.Address,
 	stake *big.Int,
 	multiplier uint8,
-) (thor.Bytes32, error) {
+) (*big.Int, error) {
 	logger.Debug("adding delegation", "validator", validator, "stake", new(big.Int).Div(stake, big.NewInt(1e18)), "multiplier", multiplier)
 
 	// ensure validation is ok to receive a new delegation
 	val, err := s.validationService.GetExistingValidation(validator)
 	if err != nil {
-		return thor.Bytes32{}, err
+		return nil, err
 	}
 
 	if val.Status != validation.StatusQueued && val.Status != validation.StatusActive {
-		return thor.Bytes32{}, errors.New("validation is not queued or active")
+		return nil, errors.New("validation is not queued or active")
 	}
 
 	// add delegation on the next iteration - val.CurrentIteration() + 1,
 	delegationID, err := s.delegationService.Add(validator, val.CurrentIteration()+1, stake, multiplier)
 	if err != nil {
 		logger.Info("failed to add delegation", "validator", validator, "error", err)
-		return thor.Bytes32{}, err
+		return nil, err
 	}
 
 	// update delegation aggregations
 	// TODO use service + cleanup multiple calls
 	del, err := s.delegationService.GetDelegation(delegationID)
 	if err != nil {
-		return thor.Bytes32{}, err
+		return nil, err
 	}
 	if err = s.aggregationService.AddPendingVET(validator, del.CalcWeight(), stake); err != nil {
-		return thor.Bytes32{}, err
+		return nil, err
 	}
 
 	// validate that new TVL is <= Max stake
 	if err := s.validateNextPeriodTVL(validator); err != nil {
-		return thor.Bytes32{}, err
+		return nil, err
 	}
 
 	// update global figures
 	if err = s.globalStatsService.AddQueued(stake, del.CalcWeight()); err != nil {
-		return thor.Bytes32{}, err
+		return nil, err
 	}
 
 	logger.Info("added delegation", "validator", validator, "delegationID", delegationID)
@@ -405,7 +412,7 @@ func (s *Staker) AddDelegation(
 }
 
 // SignalDelegationExit updates the auto-renewal status of a delegation.
-func (s *Staker) SignalDelegationExit(delegationID thor.Bytes32) error {
+func (s *Staker) SignalDelegationExit(delegationID *big.Int) error {
 	logger.Debug("updating autorenew", "delegationID", delegationID)
 
 	del, err := s.delegationService.GetDelegation(delegationID)
@@ -441,7 +448,7 @@ func (s *Staker) SignalDelegationExit(delegationID thor.Bytes32) error {
 
 // WithdrawDelegation allows expired and queued delegations to withdraw their stake.
 func (s *Staker) WithdrawDelegation(
-	delegationID thor.Bytes32,
+	delegationID *big.Int,
 ) (*big.Int, error) {
 	logger.Debug("withdrawing delegation", "delegationID", delegationID)
 

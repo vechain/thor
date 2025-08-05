@@ -6,6 +6,7 @@
 package builtin
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -14,9 +15,42 @@ import (
 
 	"github.com/vechain/thor/v2/builtin/gascharger"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
+	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/xenv"
 )
+
+func isContractPaused(state *state.State, charger *gascharger.Charger, pauseBit int) (bool, error) {
+	charger.Charge(thor.SloadGas)
+	switches, err := Params.Native(state).Get(thor.KeyStargateSwitches)
+	if err != nil {
+		return false, err
+	}
+	return switches.Bit(pauseBit) == 1, nil
+}
+
+func IsStargatePaused(state *state.State, charger *gascharger.Charger) error {
+	isPaused, err := isContractPaused(state, charger, 0)
+	if err != nil {
+		return err
+	}
+	if isPaused {
+		return errors.New("stargate is paused")
+	}
+	return nil
+}
+
+// The staker pause switch at binary position 1. (binary: 1 [1] 0)
+func IsStakerPaused(state *state.State, charger *gascharger.Charger) error {
+	isPaused, err := isContractPaused(state, charger, 1)
+	if err != nil {
+		return err
+	}
+	if isPaused {
+		return errors.New("staker is paused")
+	}
+	return nil
+}
 
 func init() {
 	defines := []struct {
@@ -133,6 +167,11 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
+			err := IsStakerPaused(env.State(), charger)
+			if err != nil {
+				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
+			}
+
 			stake, err := Staker.NativeMetered(env.State(), charger).WithdrawStake(
 				thor.Address(args.Validator),
 				thor.Address(args.Endorsor),
@@ -153,6 +192,11 @@ func init() {
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
+
+			err := IsStakerPaused(env.State(), charger)
+			if err != nil {
+				return []any{fmt.Sprintf("revert: %v", err)}
+			}
 
 			isPoSActive, err := Staker.NativeMetered(env.State(), charger).IsPoSActive()
 			if err != nil {
@@ -195,7 +239,12 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			err := Staker.NativeMetered(env.State(), charger).
+			err := IsStakerPaused(env.State(), charger)
+			if err != nil {
+				return []any{fmt.Sprintf("revert: %v", err)}
+			}
+
+			err = Staker.NativeMetered(env.State(), charger).
 				SignalExit(
 					thor.Address(args.Validator),
 					thor.Address(args.Endorsor),
@@ -214,7 +263,12 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			err := Staker.NativeMetered(env.State(), charger).
+			err := IsStakerPaused(env.State(), charger)
+			if err != nil {
+				return []any{fmt.Sprintf("revert: %v", err)}
+			}
+
+			err = Staker.NativeMetered(env.State(), charger).
 				IncreaseStake(
 					thor.Address(args.Validator),
 					thor.Address(args.Endorsor),
@@ -235,7 +289,12 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			err := Staker.NativeMetered(env.State(), charger).
+			err := IsStakerPaused(env.State(), charger)
+			if err != nil {
+				return []any{fmt.Sprintf("revert: %v", err)}
+			}
+
+			err = Staker.NativeMetered(env.State(), charger).
 				DecreaseStake(
 					thor.Address(args.Validator),
 					thor.Address(args.Endorsor),
@@ -255,6 +314,16 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
+			err := IsStargatePaused(env.State(), charger)
+			if err != nil {
+				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
+			}
+
+			err = IsStakerPaused(env.State(), charger)
+			if err != nil {
+				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
+			}
+
 			delegationID, err := Staker.NativeMetered(env.State(), charger).
 				AddDelegation(
 					thor.Address(args.Validator),
@@ -262,18 +331,28 @@ func init() {
 					args.Multiplier,
 				)
 			if err != nil {
-				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", err)}
+				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
 			}
 			return []any{delegationID, ""}
 		}},
 		{"native_withdrawDelegation", func(env *xenv.Environment) []any {
 			var args struct {
-				DelegationID common.Hash
+				DelegationID *big.Int
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			stake, err := Staker.NativeMetered(env.State(), charger).WithdrawDelegation(thor.Bytes32(args.DelegationID))
+			err := IsStargatePaused(env.State(), charger)
+			if err != nil {
+				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
+			}
+
+			err = IsStakerPaused(env.State(), charger)
+			if err != nil {
+				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
+			}
+
+			stake, err := Staker.NativeMetered(env.State(), charger).WithdrawDelegation(args.DelegationID)
 			if err != nil {
 				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
 			}
@@ -282,12 +361,22 @@ func init() {
 		}},
 		{"native_signalDelegationExit", func(env *xenv.Environment) []any {
 			var args struct {
-				DelegationID common.Hash
+				DelegationID *big.Int
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			err := Staker.NativeMetered(env.State(), charger).SignalDelegationExit(thor.Bytes32(args.DelegationID))
+			err := IsStargatePaused(env.State(), charger)
+			if err != nil {
+				return []any{fmt.Sprintf("revert: %v", err)}
+			}
+
+			err = IsStakerPaused(env.State(), charger)
+			if err != nil {
+				return []any{fmt.Sprintf("revert: %v", err)}
+			}
+
+			err = Staker.NativeMetered(env.State(), charger).SignalDelegationExit(args.DelegationID)
 			if err != nil {
 				return []any{fmt.Sprintf("revert: %v", err)}
 			}
@@ -296,12 +385,12 @@ func init() {
 		}},
 		{"native_getDelegation", func(env *xenv.Environment) []any {
 			var args struct {
-				DelegationID common.Hash
+				DelegationID *big.Int
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			delegation, validator, err := Staker.NativeMetered(env.State(), charger).GetDelegation(thor.Bytes32(args.DelegationID))
+			delegation, validator, err := Staker.NativeMetered(env.State(), charger).GetDelegation(args.DelegationID)
 			if err != nil {
 				return []any{thor.Bytes32{}, new(big.Int), uint32(0), uint32(0), uint8(0), false, false, fmt.Sprintf("revert: %v", err)}
 			}
