@@ -198,18 +198,20 @@ func (s *Staker) computeActivationCount(hasValidatorExited bool) (int64, error) 
 func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 	logger.Info("applying epoch transition", "block", transition.Block)
 
+	accumulatedRenewal := delta.NewRenewal()
 	// Apply renewals
 	for _, renewal := range transition.Renewals {
-		// Update global stats with existing service methods
-		// TODO it's possible to accumulate these and write only once
-		if err := s.globalStatsService.UpdateTotals(renewal.ValidatorDelta, renewal.DelegationDelta); err != nil {
-			return err
-		}
+		accumulatedRenewal.Add(renewal.ValidatorDelta)
+		accumulatedRenewal.Add(renewal.DelegationDelta)
 
 		// Update validator state
 		if err := s.validationService.SetValidation(renewal.Validator, renewal.NewState, false); err != nil {
 			return err
 		}
+	}
+	// Apply accumulated renewals to global stats
+	if err := s.globalStatsService.ApplyRenewal(accumulatedRenewal); err != nil {
+		return err
 	}
 
 	// Apply exits
@@ -217,7 +219,7 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 		logger.Info("exiting validator", "validator", transition.ExitValidator)
 
 		// Now call ExitValidator to get the actual exit details and perform the exit
-		releaseLockedTVL, releaseLockedTVLWeight, releaseQueuedTVL, err := s.validationService.ExitValidator(*transition.ExitValidator)
+		exit, err := s.validationService.ExitValidator(*transition.ExitValidator)
 		if err != nil {
 			return err
 		}
@@ -227,12 +229,7 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 			return err
 		}
 
-		if err := s.globalStatsService.RemoveLocked(
-			releaseLockedTVL,
-			releaseLockedTVLWeight,
-			releaseQueuedTVL,
-			aggExit,
-		); err != nil {
+		if err := s.globalStatsService.ApplyExit(exit.Add(aggExit)); err != nil {
 			return err
 		}
 	}
@@ -244,7 +241,7 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 	}
 
 	for range transition.ActivationCount {
-		if _, err := s.ActivateNextValidator(transition.Block, maxLeaderGroupSize); err != nil {
+		if _, err := s.activateNextValidator(transition.Block, maxLeaderGroupSize); err != nil {
 			return err
 		}
 	}
@@ -273,8 +270,7 @@ func (s *Staker) buildActiveValidatorsFromTransition(transition *EpochTransition
 	return activeValidators
 }
 
-// TODO this should be a public method, it's ever only used in the pause test
-func (s *Staker) ActivateNextValidator(currentBlk uint32, maxLeaderGroupSize *big.Int) (*thor.Address, error) {
+func (s *Staker) activateNextValidator(currentBlk uint32, maxLeaderGroupSize *big.Int) (*thor.Address, error) {
 	validatorID, err := s.validationService.NextToActivate(maxLeaderGroupSize)
 	if err != nil {
 		return nil, err
@@ -294,7 +290,7 @@ func (s *Staker) ActivateNextValidator(currentBlk uint32, maxLeaderGroupSize *bi
 	}
 
 	// Update global stats with both validator and delegation renewals
-	if err = s.globalStatsService.UpdateTotals(validatorRenewal, aggRenew); err != nil {
+	if err = s.globalStatsService.ApplyRenewal(validatorRenewal.Add(aggRenew)); err != nil {
 		return nil, err
 	}
 

@@ -16,6 +16,7 @@ import (
 	"github.com/vechain/thor/v2/builtin/staker/aggregation"
 	"github.com/vechain/thor/v2/builtin/staker/delegation"
 	"github.com/vechain/thor/v2/builtin/staker/globalstats"
+	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/state"
@@ -24,10 +25,9 @@ import (
 
 // TODO: Do these need to be set in params.sol, or some other dynamic way?
 var (
-	logger                    = log.WithContext("pkg", "staker")
-	MinStake                  = big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
-	MaxStake                  = big.NewInt(0).Mul(big.NewInt(600e6), big.NewInt(1e18))
-	validatorWeightMultiplier = big.NewInt(2)
+	logger   = log.WithContext("pkg", "staker")
+	MinStake = big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
+	MaxStake = big.NewInt(0).Mul(big.NewInt(600e6), big.NewInt(1e18))
 
 	LowStakingPeriod    = solidity.NewConfigVariable("staker-low-staking-period", 360*24*7)     // 7 Days
 	MediumStakingPeriod = solidity.NewConfigVariable("staker-medium-staking-period", 360*24*15) // 15 Days
@@ -49,8 +49,6 @@ type Staker struct {
 	globalStatsService *globalstats.Service
 	validationService  *validation.Service
 	delegationService  *delegation.Service
-
-	validatorWeightMultiplier *big.Int
 }
 
 // New create a new instance.
@@ -65,15 +63,13 @@ func New(addr thor.Address, state *state.State, params *params.Params, charger *
 	EpochLength.Override(sctx)
 
 	return &Staker{
-		params:                    params,
-		validatorWeightMultiplier: validatorWeightMultiplier,
+		params: params,
 
 		aggregationService: aggregation.New(sctx),
 		globalStatsService: globalstats.New(sctx),
 		delegationService:  delegation.New(sctx),
 		validationService: validation.New(
 			sctx,
-			validatorWeightMultiplier,
 			CooldownPeriod.Get(),
 			EpochLength.Get(),
 			LowStakingPeriod.Get(),
@@ -153,7 +149,7 @@ func (s *Staker) GetDelegation(
 		return nil, nil, err
 	}
 	if del.IsEmpty() {
-		return &delegation.Delegation{}, nil, nil
+		return nil, nil, nil
 	}
 	val, err := s.validationService.GetValidation(del.Validator)
 	if err != nil {
@@ -189,8 +185,8 @@ func (s *Staker) GetCompletedPeriods(validator thor.Address) (uint32, error) {
 	return s.validationService.GetCompletedPeriods(validator)
 }
 
-// GetValidatorsTotals returns the total stake, total weight, total delegators stake and total delegators weight.
-func (s *Staker) GetValidationTotals(validator thor.Address) (*validation.ValidationTotals, error) {
+// GetValidationTotals returns the total stake, total weight, total delegators stake and total delegators weight.
+func (s *Staker) GetValidationTotals(validator thor.Address) (*validation.Totals, error) {
 	val, err := s.validationService.GetValidation(validator)
 	if err != nil {
 		return nil, err
@@ -199,7 +195,7 @@ func (s *Staker) GetValidationTotals(validator thor.Address) (*validation.Valida
 	if err != nil {
 		return nil, err
 	}
-	return &validation.ValidationTotals{
+	return &validation.Totals{
 		TotalLockedStake:        new(big.Int).Add(val.LockedVET, agg.LockedVET),
 		TotalLockedWeight:       new(big.Int).Set(val.Weight),
 		DelegationsLockedStake:  new(big.Int).Set(agg.LockedVET),
@@ -251,7 +247,7 @@ func (s *Staker) AddValidation(
 	}
 
 	// update global totals
-	err := s.globalStatsService.AddQueued(stake, big.NewInt(0).Mul(stake, s.validatorWeightMultiplier))
+	err := s.globalStatsService.AddQueued(validation.WeightedStake(stake))
 	if err != nil {
 		return err
 	}
@@ -288,7 +284,7 @@ func (s *Staker) IncreaseStake(validator thor.Address, endorsor thor.Address, am
 	}
 
 	// update global totals
-	if err := s.globalStatsService.AddQueued(amount, big.NewInt(0).Mul(amount, validatorWeightMultiplier)); err != nil {
+	if err := s.globalStatsService.AddQueued(validation.WeightedStake(amount)); err != nil {
 		return err
 	}
 
@@ -310,7 +306,7 @@ func (s *Staker) DecreaseStake(validator thor.Address, endorsor thor.Address, am
 		return err
 	}
 	if val.Status == validation.StatusQueued {
-		err = s.globalStatsService.RemoveQueued(amount, big.NewInt(0).Mul(amount, validatorWeightMultiplier))
+		err = s.globalStatsService.RemoveQueued(validation.WeightedStake(amount))
 		if err != nil {
 			return err
 		}
@@ -330,7 +326,7 @@ func (s *Staker) WithdrawStake(validator thor.Address, endorsor thor.Address, cu
 		return nil, err
 	}
 	if val.Status == validation.StatusQueued {
-		err = s.globalStatsService.RemoveQueued(val.QueuedVET, big.NewInt(0).Mul(val.QueuedVET, validatorWeightMultiplier))
+		err = s.globalStatsService.RemoveQueued(validation.WeightedStake(val.QueuedVET))
 		if err != nil {
 			return nil, err
 		}
@@ -386,24 +382,19 @@ func (s *Staker) AddDelegation(
 		logger.Info("failed to add delegation", "validator", validator, "error", err)
 		return nil, err
 	}
+	weightedStake := stakes.NewWeightedStake(stake, multiplier)
 
-	// update delegation aggregations
-	// TODO use service + cleanup multiple calls
-	del, err := s.delegationService.GetDelegation(delegationID)
-	if err != nil {
-		return nil, err
-	}
-	if err = s.aggregationService.AddPendingVET(validator, del.CalcWeight(), stake); err != nil {
+	if err = s.aggregationService.AddPendingVET(validator, weightedStake); err != nil {
 		return nil, err
 	}
 
 	// validate that new TVL is <= Max stake
-	if err := s.validateNextPeriodTVL(validator); err != nil {
+	if err = s.validateNextPeriodTVL(validator); err != nil {
 		return nil, err
 	}
 
 	// update global figures
-	if err = s.globalStatsService.AddQueued(stake, del.CalcWeight()); err != nil {
+	if err = s.globalStatsService.AddQueued(weightedStake); err != nil {
 		return nil, err
 	}
 
@@ -429,15 +420,20 @@ func (s *Staker) SignalDelegationExit(delegationID *big.Int) error {
 		return err
 	}
 
-	if err := s.delegationService.SignalExit(delegationID, val); err != nil {
+	// ensure delegation can be signaled ( delegation has started and has not ended )
+	if !del.Started(val) {
+		return errors.New("delegation has not started yet, funds can be withdrawn")
+	}
+	if del.Ended(val) {
+		return errors.New("delegation has ended, funds can be withdrawn")
+	}
+
+	if err = s.delegationService.SignalExit(delegationID, val.CurrentIteration()); err != nil {
 		logger.Info("update autorenew failed", "delegationID", delegationID, "error", err)
 		return err
 	}
 
-	// Calculate the specific delegation's stake and weight
-	delegationWeight := del.CalcWeight()
-
-	err = s.aggregationService.SignalExit(del.Validator, del.Stake, delegationWeight)
+	err = s.aggregationService.SignalExit(del.Validator, del.WeightedStake())
 	if err != nil {
 		return err
 	}
@@ -452,7 +448,6 @@ func (s *Staker) WithdrawDelegation(
 ) (*big.Int, error) {
 	logger.Debug("withdrawing delegation", "delegationID", delegationID)
 
-	// todo refactor to make less calls to the repo
 	del, err := s.delegationService.GetDelegation(delegationID)
 	if err != nil {
 		return nil, err
@@ -463,37 +458,36 @@ func (s *Staker) WithdrawDelegation(
 		return nil, err
 	}
 
+	// ensure the delegation is either queued or finished
 	started := del.Started(val)
 	finished := del.Ended(val)
 	if started && !finished {
 		return nil, errors.New("delegation is not eligible for withdraw")
 	}
 
-	// withdraw from delegation
-	withdrawableStake, withdrawableStakeWeight, err := s.delegationService.Withdraw(delegationID)
+	// withdraw delegation
+	withdrawableStake, err := s.delegationService.Withdraw(delegationID)
 	if err != nil {
 		logger.Info("failed to withdraw", "delegationID", delegationID, "error", err)
 		return nil, err
 	}
+
 	// start and finish values are sanitized: !started and finished is impossible
+	// delegation is still queued
+	if !started {
+		weightedStake := stakes.NewWeightedStake(withdrawableStake, del.Multiplier)
 
-	// update the aggregation
-	del, err = s.delegationService.GetDelegation(delegationID)
-	if err != nil {
-		return nil, err
-	}
-
-	if !started { // delegation's funds are still pending
-		if err := s.aggregationService.SubPendingVet(del.Validator, withdrawableStake, withdrawableStakeWeight); err != nil {
+		if err = s.aggregationService.SubPendingVet(del.Validator, weightedStake); err != nil {
 			return nil, err
 		}
 
-		if err := s.globalStatsService.RemoveQueued(withdrawableStake, withdrawableStakeWeight); err != nil {
+		if err = s.globalStatsService.RemoveQueued(weightedStake); err != nil {
 			return nil, err
 		}
 	}
 
-	if finished { // delegation's funds have move to withdrawable
+	// delegation has finished
+	if finished {
 		if err = s.aggregationService.SubWithdrawableVET(del.Validator, withdrawableStake); err != nil {
 			return nil, err
 		}
