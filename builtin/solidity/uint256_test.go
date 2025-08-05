@@ -33,7 +33,7 @@ func newContext() *Context {
 
 func TestUint256(t *testing.T) {
 	ctx := newContext()
-	uint := NewUint256(ctx, thor.Bytes32{0o1})
+	uint := NewUint256(ctx, thor.BytesToBytes32([]byte("test-uint256")))
 
 	// test `Set`
 	uint.Set(big.NewInt(1000))
@@ -74,9 +74,7 @@ func TestUint256(t *testing.T) {
 
 	// test negative value
 	err = uint.Set(big.NewInt(-100))
-	if assert.Error(t, err) {
-		assert.Equal(t, "uint cannot be negative", err.Error())
-	}
+	assert.ErrorContains(t, err, "test-uint256 uint256 cannot be negative")
 
 	// test overflow
 	val := new(big.Int).Lsh(big.NewInt(1), 256)
