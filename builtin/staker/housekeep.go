@@ -35,7 +35,7 @@ type ValidatorRenewal struct {
 
 // Housekeep performs epoch transitions at epoch boundaries
 func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Address]*validation.Validation, error) {
-	if currentBlock%epochLength != 0 {
+	if currentBlock%EpochLength.Get() != 0 {
 		return false, nil, nil
 	}
 
