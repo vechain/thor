@@ -14,6 +14,7 @@ import (
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/builtin/staker"
+	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/poa"
@@ -324,7 +325,10 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 	return stage, receipts, nil
 }
 
-func (c *Consensus) syncPOS(staker *staker.Staker, current uint32) (active bool, activated bool, activeGroup map[thor.Address]*staker.Validation, err error) {
+func (c *Consensus) syncPOS(
+	staker *staker.Staker,
+	current uint32,
+) (active bool, activated bool, activeGroup map[thor.Address]*validation.Validation, err error) {
 	// still on PoA
 	if c.forkConfig.HAYABUSA+c.forkConfig.HAYABUSA_TP > current {
 		return false, false, nil, nil

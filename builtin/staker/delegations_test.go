@@ -11,19 +11,21 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/vechain/thor/v2/builtin/staker/delegation"
+	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 )
 
 type testValidators struct {
 	ID thor.Address
-	*Validation
+	*validation.Validation
 }
 
 func newDelegationStaker(t *testing.T) (*Staker, []*testValidators) {
 	staker, _ := newStaker(t, 75, 101, true)
 	validations := make([]*testValidators, 0)
-	err := staker.validations.LeaderGroupIterator(func(validatorID thor.Address, validation *Validation) error {
+	err := staker.validationService.LeaderGroupIterator(func(validatorID thor.Address, validation *validation.Validation) error {
 		validations = append(validations, &testValidators{
 			ID:         validatorID,
 			Validation: validation,
@@ -41,15 +43,15 @@ func delegationStake() *big.Int {
 func Test_IsLocked(t *testing.T) {
 	t.Run("Completed Staking Periods", func(t *testing.T) {
 		last := uint32(2)
-		d := &Delegation{
+		d := &delegation.Delegation{
 			FirstIteration: 2,
 			LastIteration:  &last,
 			Stake:          big.NewInt(1),
 			Multiplier:     255,
 		}
 
-		v := &Validation{
-			Status:             StatusActive,
+		v := &validation.Validation{
+			Status:             validation.StatusActive,
 			CompleteIterations: 2,
 		}
 
@@ -59,15 +61,15 @@ func Test_IsLocked(t *testing.T) {
 
 	t.Run("Incomplete Staking Periods", func(t *testing.T) {
 		last := uint32(5)
-		d := &Delegation{
+		d := &delegation.Delegation{
 			FirstIteration: 2,
 			LastIteration:  &last,
 			Stake:          big.NewInt(1),
 			Multiplier:     255,
 		}
 
-		v := &Validation{
-			Status:             StatusActive,
+		v := &validation.Validation{
+			Status:             validation.StatusActive,
 			CompleteIterations: 3,
 		}
 
@@ -77,15 +79,15 @@ func Test_IsLocked(t *testing.T) {
 
 	t.Run("Delegation Not Started", func(t *testing.T) {
 		last := uint32(6)
-		d := &Delegation{
+		d := &delegation.Delegation{
 			FirstIteration: 5,
 			LastIteration:  &last,
 			Stake:          big.NewInt(1),
 			Multiplier:     255,
 		}
 
-		v := &Validation{
-			Status:             StatusActive,
+		v := &validation.Validation{
+			Status:             validation.StatusActive,
 			CompleteIterations: 3,
 		}
 
@@ -93,15 +95,15 @@ func Test_IsLocked(t *testing.T) {
 		assert.False(t, d.Ended(v), "should not be locked when first is greater than current and last is greater than current")
 	})
 	t.Run("Staker is Queued", func(t *testing.T) {
-		d := &Delegation{
+		d := &delegation.Delegation{
 			FirstIteration: 1,
 			LastIteration:  nil,
 			Stake:          big.NewInt(1),
 			Multiplier:     255,
 		}
 
-		v := &Validation{
-			Status:             StatusQueued,
+		v := &validation.Validation{
+			Status:             validation.StatusQueued,
 			CompleteIterations: 0,
 		}
 
@@ -110,15 +112,15 @@ func Test_IsLocked(t *testing.T) {
 	})
 
 	t.Run("exit block not defined", func(t *testing.T) {
-		d := &Delegation{
+		d := &delegation.Delegation{
 			FirstIteration: 1,
 			LastIteration:  nil,
 			Stake:          big.NewInt(1),
 			Multiplier:     255,
 		}
 
-		v := &Validation{
-			Status:             StatusActive,
+		v := &validation.Validation{
+			Status:             validation.StatusActive,
 			CompleteIterations: 0,
 		}
 
@@ -135,7 +137,7 @@ func Test_AddDelegator(t *testing.T) {
 	validator := validators[0]
 	id1, err := staker.AddDelegation(validator.ID, stake, 255)
 	assert.NoError(t, err)
-	assert.False(t, id1.IsZero())
+	assert.NotNil(t, id1)
 	aggregation, err := staker.aggregationService.GetAggregation(validator.ID)
 	assert.NoError(t, err)
 	assert.Equal(t, aggregation.PendingVET, stake)
@@ -156,7 +158,7 @@ func Test_AddDelegator_StakeRange(t *testing.T) {
 
 	// should NOT be able to stake greater than max stake
 	_, err = staker.AddDelegation(validators[1].ID, MaxStake, 255)
-	assert.ErrorContains(t, err, "validation's next period stake exceeds max stake")
+	assert.ErrorContains(t, err, "stake is out of range")
 
 	// should be able stake 1 VET
 	id1, err := staker.AddDelegation(validators[2].ID, big.NewInt(1), 255)
@@ -178,14 +180,14 @@ func Test_AddDelegator_StakeRange(t *testing.T) {
 
 	// should not be able to stake more than max stake
 	_, err = staker.AddDelegation(validator.ID, big.NewInt(1000000000000000000), 255)
-	assert.ErrorContains(t, err, "validation's next period stake exceeds max stake")
+	assert.ErrorContains(t, err, "stake is out of range")
 }
 
 func Test_AddDelegator_ValidatorNotFound(t *testing.T) {
 	staker, _ := newStaker(t, 75, 101, true)
 
 	_, err := staker.AddDelegation(thor.Address{}, delegationStake(), 255)
-	assert.ErrorContains(t, err, "validation not found")
+	assert.ErrorContains(t, err, "failed to get validator")
 }
 
 func Test_AddDelegator_ManyValidators(t *testing.T) {
@@ -375,7 +377,7 @@ func Test_Delegator_AutoRenew_ValidatorExits(t *testing.T) {
 	assert.Equal(t, stake, aggregation.LockedVET)
 
 	// When the validator signals an exit
-	assert.NoError(t, staker.SignalExit(validator.Endorsor, validator.ID))
+	assert.NoError(t, staker.SignalExit(validator.ID, validator.Endorsor))
 
 	// And the next staking period is over
 	_, _, err = staker.Housekeep(validator.Period * 2)
@@ -459,12 +461,12 @@ func Test_Delegator_Queued_Weight(t *testing.T) {
 
 	node := datagen.RandAddress()
 	endorsor := datagen.RandAddress()
-	err = staker.AddValidator(endorsor, node, uint32(360)*24*15, validatorStake)
+	err = staker.AddValidation(node, endorsor, uint32(360)*24*15, validatorStake)
 	assert.NoError(t, err)
 
 	validator, err := staker.Get(node)
 	assert.NoError(t, err)
-	assert.Equal(t, StatusQueued, validator.Status)
+	assert.Equal(t, validation.StatusQueued, validator.Status)
 
 	_, err = staker.AddDelegation(node, stake, 255)
 	assert.NoError(t, err)
@@ -486,7 +488,7 @@ func Test_Delegator_Queued_Weight_QueuedValidator_Withdraw(t *testing.T) {
 	staker, _ := newStaker(t, 0, 101, false)
 
 	validatorAddr := datagen.RandAddress()
-	err := staker.AddValidator(validatorAddr, validatorAddr, uint32(360)*24*15, MinStake)
+	err := staker.AddValidation(validatorAddr, validatorAddr, uint32(360)*24*15, MinStake)
 	assert.NoError(t, err)
 
 	initialQueuedVET, initialQueuedWeight, err := staker.QueuedStake()

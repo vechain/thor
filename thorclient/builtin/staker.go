@@ -66,13 +66,12 @@ func (s *Staker) FirstActive() (*Validator, thor.Address, error) {
 	if err := s.contract.Method("firstActive").Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, thor.Address{}, err
 	}
-	res := *out
-	id := thor.Address(res[:])
-	if id.IsZero() {
+	validator := thor.Address(*out)
+	if validator.IsZero() {
 		return nil, thor.Address{}, errors.New("no active validator")
 	}
-	v, err := s.Get(id)
-	return v, id, err
+	v, err := s.Get(validator)
+	return v, validator, err
 }
 
 func (s *Staker) Raw() *bind.Contract {
@@ -85,27 +84,25 @@ func (s *Staker) FirstQueued() (*Validator, thor.Address, error) {
 	if err := s.contract.Method("firstQueued").Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, thor.Address{}, err
 	}
-	res := *out
-	id := thor.Address(res[:])
-	if id.IsZero() {
+	validator := thor.Address(*out)
+	if validator.IsZero() {
 		return nil, thor.Address{}, errors.New("no queued validator")
 	}
-	v, err := s.Get(id)
-	return v, id, err
+	v, err := s.Get(validator)
+	return v, validator, err
 }
 
 // Next returns the next validator
-func (s *Staker) Next(id thor.Address) (*Validator, thor.Address, error) {
+func (s *Staker) Next(validator thor.Address) (*Validator, thor.Address, error) {
 	out := new(common.Address)
-	if err := s.contract.Method("next", id).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
+	if err := s.contract.Method("next", validator).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, thor.Address{}, err
 	}
-	res := *out
-	next := thor.Address(res[:])
+	next := thor.Address(*out)
 	if next.IsZero() {
 		return nil, thor.Address{}, errors.New("no next validator")
 	}
-	v, err := s.Get(id)
+	v, err := s.Get(next)
 	return v, next, err
 }
 
@@ -130,8 +127,8 @@ func (s *Staker) QueuedStake() (*big.Int, *big.Int, error) {
 }
 
 type Validator struct {
-	Master     *thor.Address
-	Endorsor   *thor.Address
+	Address    thor.Address
+	Endorsor   thor.Address
 	Stake      *big.Int
 	Weight     *big.Int
 	Status     StakerStatus
@@ -142,76 +139,75 @@ type Validator struct {
 }
 
 func (v *Validator) Exists() bool {
-	return v.Endorsor != nil && !v.Endorsor.IsZero() && v.Status != 0
+	return !v.Endorsor.IsZero() && v.Status != 0
 }
 
-func (s *Staker) Get(id thor.Address) (*Validator, error) {
-	out := [9]any{}
+func (s *Staker) Get(node thor.Address) (*Validator, error) {
+	out := [8]any{}
 	out[0] = new(common.Address)
-	out[1] = new(common.Address)
+	out[1] = new(*big.Int)
 	out[2] = new(*big.Int)
-	out[3] = new(*big.Int)
-	out[4] = new(uint8)
-	out[5] = new(bool)
+	out[3] = new(uint8)
+	out[4] = new(bool)
+	out[5] = new(uint32)
 	out[6] = new(uint32)
 	out[7] = new(uint32)
-	out[8] = new(uint32)
-	if err := s.contract.Method("get", id).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
+	if err := s.contract.Method("get", node).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 	validator := &Validator{
-		Master:     (*thor.Address)(out[0].(*common.Address)),
-		Endorsor:   (*thor.Address)(out[1].(*common.Address)),
-		Stake:      *(out[2].(**big.Int)),
-		Weight:     *(out[3].(**big.Int)),
-		Status:     StakerStatus(*(out[4].(*uint8))),
-		Online:     *(out[5].(*bool)),
-		Period:     *(out[6].(*uint32)),
-		StartBlock: *(out[7].(*uint32)),
-		ExitBlock:  *(out[8].(*uint32)),
+		Address:    node,
+		Endorsor:   thor.Address(out[0].(*common.Address)[:]),
+		Stake:      *(out[1].(**big.Int)),
+		Weight:     *(out[2].(**big.Int)),
+		Status:     StakerStatus(*(out[3].(*uint8))),
+		Online:     *(out[4].(*bool)),
+		Period:     *(out[5].(*uint32)),
+		StartBlock: *(out[6].(*uint32)),
+		ExitBlock:  *(out[7].(*uint32)),
 	}
 
 	return validator, nil
 }
 
-func (s *Staker) AddValidator(master thor.Address, stake *big.Int, period uint32) *bind.MethodBuilder {
-	return s.contract.Method("addValidator", master, period).WithValue(stake)
+func (s *Staker) AddValidation(validator thor.Address, stake *big.Int, period uint32) *bind.MethodBuilder {
+	return s.contract.Method("addValidation", validator, period).WithValue(stake)
 }
 
-func (s *Staker) AddDelegation(validationID thor.Address, stake *big.Int, multiplier uint8) *bind.MethodBuilder {
-	return s.contract.Method("addDelegation", validationID, multiplier).WithValue(stake)
+func (s *Staker) SignalExit(validator thor.Address) *bind.MethodBuilder {
+	return s.contract.Method("signalExit", validator)
 }
 
-func (s *Staker) SignalDelegationExit(delegationID thor.Bytes32) *bind.MethodBuilder {
-	return s.contract.Method("signalDelegationExit", delegationID)
-}
-
-func (s *Staker) SignalExit(validationID thor.Address) *bind.MethodBuilder {
-	return s.contract.Method("signalExit", validationID)
-}
-
-func (s *Staker) WithdrawDelegation(delegationID thor.Bytes32) *bind.MethodBuilder {
-	return s.contract.Method("withdrawDelegation", delegationID)
-}
-
-func (s *Staker) WithdrawStake(validationID thor.Address) *bind.MethodBuilder {
-	return s.contract.Method("withdrawStake", validationID)
-}
-
-func (s *Staker) DecreaseStake(validationID thor.Address, amount *big.Int) *bind.MethodBuilder {
-	return s.contract.Method("decreaseStake", validationID, amount)
-}
-
-func (s *Staker) IncreaseStake(validationID thor.Address, amount *big.Int) *bind.MethodBuilder {
-	return s.contract.Method("increaseStake", validationID).WithValue(amount)
-}
-
-func (s *Staker) GetWithdrawable(validationID thor.Address) (*big.Int, error) {
+func (s *Staker) GetWithdrawable(validator thor.Address) (*big.Int, error) {
 	out := new(big.Int)
-	if err := s.contract.Method("getWithdrawable", validationID).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
+	if err := s.contract.Method("getWithdrawable", validator).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 	return out, nil
+}
+
+func (s *Staker) WithdrawStake(validator thor.Address) *bind.MethodBuilder {
+	return s.contract.Method("withdrawStake", validator)
+}
+
+func (s *Staker) DecreaseStake(validator thor.Address, amount *big.Int) *bind.MethodBuilder {
+	return s.contract.Method("decreaseStake", validator, amount)
+}
+
+func (s *Staker) IncreaseStake(validator thor.Address, amount *big.Int) *bind.MethodBuilder {
+	return s.contract.Method("increaseStake", validator).WithValue(amount)
+}
+
+func (s *Staker) AddDelegation(validator thor.Address, stake *big.Int, multiplier uint8) *bind.MethodBuilder {
+	return s.contract.Method("addDelegation", validator, multiplier).WithValue(stake)
+}
+
+func (s *Staker) SignalDelegationExit(delegationID *big.Int) *bind.MethodBuilder {
+	return s.contract.Method("signalDelegationExit", delegationID)
+}
+
+func (s *Staker) WithdrawDelegation(delegationID *big.Int) *bind.MethodBuilder {
+	return s.contract.Method("withdrawDelegation", delegationID)
 }
 
 func (s *Staker) GetDelegatorsRewards(validatorID thor.Address, period uint32) (*big.Int, error) {
@@ -231,15 +227,15 @@ func (s *Staker) GetCompletedPeriods(validatorID thor.Address) (*uint32, error) 
 }
 
 type Delegation struct {
-	ValidationID thor.Address
-	Stake        *big.Int
-	StartPeriod  uint32
-	EndPeriod    uint32
-	Multiplier   uint8
-	Locked       bool
+	Validator   thor.Address
+	Stake       *big.Int
+	StartPeriod uint32
+	EndPeriod   uint32
+	Multiplier  uint8
+	Locked      bool
 }
 
-func (s *Staker) GetDelegation(delegationID thor.Bytes32) (*Delegation, error) {
+func (s *Staker) GetDelegation(delegationID *big.Int) (*Delegation, error) {
 	out := make([]any, 7)
 	out[0] = new(common.Address)
 	out[1] = new(*big.Int)
@@ -251,12 +247,12 @@ func (s *Staker) GetDelegation(delegationID thor.Bytes32) (*Delegation, error) {
 		return nil, err
 	}
 	delegatorInfo := &Delegation{
-		ValidationID: thor.Address(out[0].(*common.Address)[:]),
-		Stake:        *(out[1].(**big.Int)),
-		StartPeriod:  *(out[2].(*uint32)),
-		EndPeriod:    *(out[3].(*uint32)),
-		Multiplier:   *(out[4].(*uint8)),
-		Locked:       *(out[5].(*bool)),
+		Validator:   thor.Address(out[0].(*common.Address)[:]),
+		Stake:       *(out[1].(**big.Int)),
+		StartPeriod: *(out[2].(*uint32)),
+		EndPeriod:   *(out[3].(*uint32)),
+		Multiplier:  *(out[4].(*uint8)),
+		Locked:      *(out[5].(*bool)),
 	}
 
 	return delegatorInfo, nil
@@ -269,13 +265,13 @@ type ValidationTotals struct {
 	DelegationsLockedWeight *big.Int
 }
 
-func (s *Staker) GetValidatorsTotals(validationID thor.Address) (*ValidationTotals, error) {
+func (s *Staker) GetValidationTotals(node thor.Address) (*ValidationTotals, error) {
 	out := make([]any, 4)
 	out[0] = new(*big.Int)
 	out[1] = new(*big.Int)
 	out[2] = new(*big.Int)
 	out[3] = new(*big.Int)
-	if err := s.contract.Method("getValidatorTotals", validationID).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
+	if err := s.contract.Method("getValidationTotals", node).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 	validationTotals := &ValidationTotals{
@@ -288,33 +284,32 @@ func (s *Staker) GetValidatorsTotals(validationID thor.Address) (*ValidationTota
 	return validationTotals, nil
 }
 
-type ValidatorQueuedEvent struct {
-	Endorsor     thor.Address
-	Master       thor.Address
-	ValidationID thor.Address
-	Stake        *big.Int
-	Period       uint32
-	Log          api.FilteredEvent
+type ValidationQueuedEvent struct {
+	Node     thor.Address
+	Endorsor thor.Address
+	Period   uint32
+	Stake    *big.Int
+	Log      api.FilteredEvent
 }
 
-func (s *Staker) FilterValidatorQueued(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]ValidatorQueuedEvent, error) {
-	event, ok := s.contract.ABI().Events["ValidatorQueued"]
+func (s *Staker) FilterValidatorQueued(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]ValidationQueuedEvent, error) {
+	event, ok := s.contract.ABI().Events["ValidationQueued"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.FilterEvent("ValidatorQueued").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	raw, err := s.contract.FilterEvent(event.Name).WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}
 
-	out := make([]ValidatorQueuedEvent, len(raw))
+	out := make([]ValidationQueuedEvent, len(raw))
 	for i, log := range raw {
-		endorsor := thor.BytesToAddress(log.Topics[1][:]) // indexed
-		master := thor.BytesToAddress(log.Topics[2][:])   // indexed
+		node := thor.BytesToAddress(log.Topics[1][:])     // indexed
+		endorsor := thor.BytesToAddress(log.Topics[2][:]) // indexed
 
 		// non-indexed
-		data := make([]any, 3)
+		data := make([]any, 2)
 		data[0] = new(uint32)
 		data[1] = new(*big.Int)
 
@@ -327,40 +322,36 @@ func (s *Staker) FilterValidatorQueued(eventsRange *api.Range, opts *api.Options
 			return nil, err
 		}
 
-		out[i] = ValidatorQueuedEvent{
-			Endorsor:     endorsor,
-			Master:       master,
-			ValidationID: master,
-			Period:       *(data[0].(*uint32)),
-			Stake:        *(data[1].(**big.Int)),
-			Log:          log,
+		out[i] = ValidationQueuedEvent{
+			Node:     node,
+			Endorsor: endorsor,
+			Period:   *(data[0].(*uint32)),
+			Stake:    *(data[1].(**big.Int)),
+			Log:      log,
 		}
 	}
 
 	return out, nil
 }
 
-type ValidatorSignaledExitEvent struct {
-	Endorsor     thor.Address
-	ValidationID thor.Bytes32
-	Log          api.FilteredEvent
+type ValidationSignaledExitEvent struct {
+	Node thor.Address
+	Log  api.FilteredEvent
 }
 
-func (s *Staker) FilterValidatorSignaledExit(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]ValidatorSignaledExitEvent, error) {
-	raw, err := s.contract.FilterEvent("ValidatorSignaledExit").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+func (s *Staker) FilterValidationSignaledExit(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]ValidationSignaledExitEvent, error) {
+	raw, err := s.contract.FilterEvent("ValidationSignaledExit").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}
 
-	out := make([]ValidatorSignaledExitEvent, len(raw))
+	out := make([]ValidationSignaledExitEvent, len(raw))
 	for i, log := range raw {
-		endorsor := thor.BytesToAddress(log.Topics[1][:]) // indexed
-		validationID := thor.Bytes32(log.Topics[2][:])    // indexed
+		node := thor.BytesToAddress(log.Topics[1][:]) // indexed
 
-		out[i] = ValidatorSignaledExitEvent{
-			Endorsor:     endorsor,
-			ValidationID: validationID,
-			Log:          log,
+		out[i] = ValidationSignaledExitEvent{
+			Node: node,
+			Log:  log,
 		}
 	}
 
@@ -368,8 +359,8 @@ func (s *Staker) FilterValidatorSignaledExit(eventsRange *api.Range, opts *api.O
 }
 
 type DelegationAddedEvent struct {
-	ValidationID thor.Bytes32
-	DelegationID thor.Bytes32
+	Validator    thor.Address
+	DelegationID *big.Int
 	Stake        *big.Int
 	Multiplier   uint8
 	Log          api.FilteredEvent
@@ -381,18 +372,18 @@ func (s *Staker) FilterDelegationAdded(eventsRange *api.Range, opts *api.Options
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.FilterEvent("DelegationAdded").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	raw, err := s.contract.FilterEvent(event.Name).WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}
 
 	out := make([]DelegationAddedEvent, len(raw))
 	for i, log := range raw {
-		validationID := thor.Bytes32(log.Topics[1][:]) // indexed
-		delegationID := thor.Bytes32(log.Topics[2][:]) // indexed
+		validator := thor.BytesToAddress(log.Topics[1][:])      // indexed
+		delegationID := new(big.Int).SetBytes(log.Topics[2][:]) // indexed
 
 		// non-indexed
-		data := make([]any, 4)
+		data := make([]any, 2)
 		data[0] = new(*big.Int)
 		data[1] = new(uint8)
 
@@ -406,7 +397,7 @@ func (s *Staker) FilterDelegationAdded(eventsRange *api.Range, opts *api.Options
 		}
 
 		out[i] = DelegationAddedEvent{
-			ValidationID: validationID,
+			Validator:    validator,
 			DelegationID: delegationID,
 			Stake:        *(data[0].(**big.Int)),
 			Multiplier:   *(data[1].(*uint8)),
@@ -418,7 +409,7 @@ func (s *Staker) FilterDelegationAdded(eventsRange *api.Range, opts *api.Options
 }
 
 type DelegationSignaledExitEvent struct {
-	DelegationID thor.Bytes32
+	DelegationID *big.Int
 	Log          api.FilteredEvent
 }
 
@@ -430,7 +421,7 @@ func (s *Staker) FilterDelegationSignaledExit(eventsRange *api.Range, opts *api.
 
 	out := make([]DelegationSignaledExitEvent, len(raw))
 	for i, log := range raw {
-		delegationID := thor.Bytes32(log.Topics[1][:]) // indexed
+		delegationID := new(big.Int).SetBytes(log.Topics[1][:]) // indexed
 		out[i] = DelegationSignaledExitEvent{
 			DelegationID: delegationID,
 			Log:          log,
@@ -441,7 +432,7 @@ func (s *Staker) FilterDelegationSignaledExit(eventsRange *api.Range, opts *api.
 }
 
 type DelegationWithdrawnEvent struct {
-	DelegationID thor.Bytes32
+	DelegationID *big.Int
 	Stake        *big.Int
 	Log          api.FilteredEvent
 }
@@ -459,7 +450,7 @@ func (s *Staker) FilterDelegationWithdrawn(eventsRange *api.Range, opts *api.Opt
 
 	out := make([]DelegationWithdrawnEvent, len(raw))
 	for i, log := range raw {
-		delegationID := thor.Bytes32(log.Topics[1][:]) // indexed
+		delegationID := new(big.Int).SetBytes(log.Topics[1][:]) // indexed
 
 		// non-indexed
 		data := make([]any, 1)
@@ -485,10 +476,9 @@ func (s *Staker) FilterDelegationWithdrawn(eventsRange *api.Range, opts *api.Opt
 }
 
 type StakeIncreasedEvent struct {
-	Endorsor     thor.Address
-	ValidationID thor.Address
-	Added        *big.Int
-	Log          api.FilteredEvent
+	Validator thor.Address
+	Added     *big.Int
+	Log       api.FilteredEvent
 }
 
 func (s *Staker) FilterStakeIncreased(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]StakeIncreasedEvent, error) {
@@ -497,15 +487,14 @@ func (s *Staker) FilterStakeIncreased(eventsRange *api.Range, opts *api.Options,
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.FilterEvent("StakeIncreased").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	raw, err := s.contract.FilterEvent(event.Name).WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}
 
 	out := make([]StakeIncreasedEvent, len(raw))
 	for i, log := range raw {
-		endorsor := thor.BytesToAddress(log.Topics[1][:])     // indexed
-		validationID := thor.BytesToAddress(log.Topics[2][:]) // indexed
+		node := thor.BytesToAddress(log.Topics[1][:]) // indexed
 
 		// non-indexed
 		data := make([]any, 1)
@@ -521,10 +510,9 @@ func (s *Staker) FilterStakeIncreased(eventsRange *api.Range, opts *api.Options,
 		}
 
 		out[i] = StakeIncreasedEvent{
-			Endorsor:     endorsor,
-			ValidationID: validationID,
-			Added:        *(data[0].(**big.Int)),
-			Log:          log,
+			Validator: node,
+			Added:     *(data[0].(**big.Int)),
+			Log:       log,
 		}
 	}
 
@@ -532,10 +520,9 @@ func (s *Staker) FilterStakeIncreased(eventsRange *api.Range, opts *api.Options,
 }
 
 type StakeDecreasedEvent struct {
-	Endorsor     thor.Address
-	ValidationID thor.Address
-	Removed      *big.Int
-	Log          api.FilteredEvent
+	Validator thor.Address
+	Removed   *big.Int
+	Log       api.FilteredEvent
 }
 
 func (s *Staker) FilterStakeDecreased(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]StakeDecreasedEvent, error) {
@@ -544,15 +531,14 @@ func (s *Staker) FilterStakeDecreased(eventsRange *api.Range, opts *api.Options,
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.FilterEvent("StakeDecreased").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	raw, err := s.contract.FilterEvent(event.Name).WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}
 
 	out := make([]StakeDecreasedEvent, len(raw))
 	for i, log := range raw {
-		endorsor := thor.BytesToAddress(log.Topics[1][:])     // indexed
-		validationID := thor.BytesToAddress(log.Topics[2][:]) // indexed
+		node := thor.BytesToAddress(log.Topics[1][:]) // indexed
 
 		// non-indexed
 		data := make([]any, 1)
@@ -568,38 +554,35 @@ func (s *Staker) FilterStakeDecreased(eventsRange *api.Range, opts *api.Options,
 		}
 
 		out[i] = StakeDecreasedEvent{
-			Endorsor:     endorsor,
-			ValidationID: validationID,
-			Removed:      *(data[0].(**big.Int)),
-			Log:          log,
+			Validator: node,
+			Removed:   *(data[0].(**big.Int)),
+			Log:       log,
 		}
 	}
 
 	return out, nil
 }
 
-type ValidatorWithdrawnEvent struct {
-	Endorsor     thor.Address
-	ValidationID thor.Bytes32
-	Stake        *big.Int
-	Log          api.FilteredEvent
+type ValidationWithdrawnEvent struct {
+	Validator thor.Address
+	Stake     *big.Int
+	Log       api.FilteredEvent
 }
 
-func (s *Staker) FilterValidatorWithdrawn(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]ValidatorWithdrawnEvent, error) {
-	event, ok := s.contract.ABI().Events["ValidatorWithdrawn"]
+func (s *Staker) FilterValidationWithdrawn(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]ValidationWithdrawnEvent, error) {
+	event, ok := s.contract.ABI().Events["ValidationWithdrawn"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.FilterEvent("ValidatorWithdrawn").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	raw, err := s.contract.FilterEvent(event.Name).WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
 	}
 
-	out := make([]ValidatorWithdrawnEvent, len(raw))
+	out := make([]ValidationWithdrawnEvent, len(raw))
 	for i, log := range raw {
-		endorsor := thor.BytesToAddress(log.Topics[1][:]) // indexed
-		validationID := thor.Bytes32(log.Topics[2][:])    // indexed
+		node := thor.BytesToAddress(log.Topics[1][:]) // indexed
 
 		// non-indexed
 		data := make([]any, 1)
@@ -614,11 +597,10 @@ func (s *Staker) FilterValidatorWithdrawn(eventsRange *api.Range, opts *api.Opti
 			return nil, err
 		}
 
-		out[i] = ValidatorWithdrawnEvent{
-			Endorsor:     endorsor,
-			ValidationID: validationID,
-			Stake:        *(data[0].(**big.Int)),
-			Log:          log,
+		out[i] = ValidationWithdrawnEvent{
+			Validator: node,
+			Stake:     *(data[0].(**big.Int)),
+			Log:       log,
 		}
 	}
 

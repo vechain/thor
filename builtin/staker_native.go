@@ -6,6 +6,7 @@
 package builtin
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -13,10 +14,43 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/vechain/thor/v2/builtin/gascharger"
-	"github.com/vechain/thor/v2/builtin/staker"
+	"github.com/vechain/thor/v2/builtin/staker/validation"
+	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/xenv"
 )
+
+func isContractPaused(state *state.State, charger *gascharger.Charger, pauseBit int) (bool, error) {
+	charger.Charge(thor.SloadGas)
+	switches, err := Params.Native(state).Get(thor.KeyStargateSwitches)
+	if err != nil {
+		return false, err
+	}
+	return switches.Bit(pauseBit) == 1, nil
+}
+
+func IsStargatePaused(state *state.State, charger *gascharger.Charger) error {
+	isPaused, err := isContractPaused(state, charger, 0)
+	if err != nil {
+		return err
+	}
+	if isPaused {
+		return errors.New("stargate is paused")
+	}
+	return nil
+}
+
+// The staker pause switch at binary position 1. (binary: 1 [1] 0)
+func IsStakerPaused(state *state.State, charger *gascharger.Charger) error {
+	isPaused, err := isContractPaused(state, charger, 1)
+	if err != nil {
+		return err
+	}
+	if isPaused {
+		return errors.New("staker is paused")
+	}
+	return nil
+}
 
 func init() {
 	defines := []struct {
@@ -43,19 +77,18 @@ func init() {
 		}},
 		{"native_get", func(env *xenv.Environment) []any {
 			var args struct {
-				ValidationID common.Address
+				Validator common.Address
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			validator, err := Staker.NativeMetered(env.State(), charger).Get(thor.Address(args.ValidationID))
+			validator, err := Staker.NativeMetered(env.State(), charger).Get(thor.Address(args.Validator))
 			if err != nil {
 				return []any{
 					thor.Address{},
-					thor.Address{},
 					big.NewInt(0),
 					big.NewInt(0),
-					staker.StatusUnknown,
+					validation.StatusUnknown,
 					false,
 					uint32(0),
 					uint32(0),
@@ -64,14 +97,13 @@ func init() {
 				}
 			}
 			if validator.IsEmpty() {
-				return []any{thor.Address{}, thor.Address{}, big.NewInt(0), big.NewInt(0), staker.StatusUnknown, false, uint32(0), uint32(0), uint32(0), ""}
+				return []any{thor.Address{}, thor.Address{}, big.NewInt(0), big.NewInt(0), validation.StatusUnknown, false, uint32(0), uint32(0), uint32(0), ""}
 			}
 			exitBlock := uint32(math.MaxUint32)
 			if validator.ExitBlock != nil {
 				exitBlock = *validator.ExitBlock
 			}
 			return []any{
-				thor.Address(args.ValidationID),
 				validator.Endorsor,
 				validator.LockedVET,
 				validator.Weight,
@@ -85,12 +117,12 @@ func init() {
 		}},
 		{"native_getWithdrawable", func(env *xenv.Environment) []any {
 			var args struct {
-				ValidationID common.Address
+				Validator common.Address
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			amount, err := Staker.NativeMetered(env.State(), charger).GetWithdrawable(thor.Address(args.ValidationID), env.BlockContext().Number)
+			amount, err := Staker.NativeMetered(env.State(), charger).GetWithdrawable(thor.Address(args.Validator), env.BlockContext().Number)
 			if err != nil {
 				return []any{big.NewInt(0), fmt.Sprintf("revert: %v", err)}
 			}
@@ -129,15 +161,20 @@ func init() {
 		}},
 		{"native_withdrawStake", func(env *xenv.Environment) []any {
 			var args struct {
-				Endorsor     common.Address
-				ValidationID common.Address
+				Validator common.Address
+				Endorsor  common.Address
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
+			err := IsStakerPaused(env.State(), charger)
+			if err != nil {
+				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
+			}
+
 			stake, err := Staker.NativeMetered(env.State(), charger).WithdrawStake(
+				thor.Address(args.Validator),
 				thor.Address(args.Endorsor),
-				thor.Address(args.ValidationID),
 				env.BlockContext().Number,
 			)
 			if err != nil {
@@ -146,15 +183,20 @@ func init() {
 
 			return []any{stake, ""}
 		}},
-		{"native_addValidator", func(env *xenv.Environment) []any {
+		{"native_addValidation", func(env *xenv.Environment) []any {
 			var args struct {
-				Endorsor common.Address
-				Node     common.Address
-				Period   uint32
-				Stake    *big.Int
+				Validator common.Address
+				Endorsor  common.Address
+				Period    uint32
+				Stake     *big.Int
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
+
+			err := IsStakerPaused(env.State(), charger)
+			if err != nil {
+				return []any{fmt.Sprintf("revert: %v", err)}
+			}
 
 			isPoSActive, err := Staker.NativeMetered(env.State(), charger).IsPoSActive()
 			if err != nil {
@@ -162,14 +204,14 @@ func init() {
 			}
 
 			if !isPoSActive {
-				charger.Charge(thor.SloadGas) // a.getEntry(nodeMaster)
+				charger.Charge(thor.SloadGas) // a.getEntry(ValidatorMaster)
 
-				exists, endorsor, _, _, err := Authority.Native(env.State()).Get(thor.Address(args.Node))
+				exists, endorsor, _, _, err := Authority.Native(env.State()).Get(thor.Address(args.Validator))
 				if err != nil {
 					return []any{fmt.Sprintf("revert: %v", err)}
 				}
 				if !exists {
-					return []any{"revert: node is not present in the Authority"}
+					return []any{"revert: Validator is not present in the Authority"}
 				}
 				if thor.Address(args.Endorsor) != endorsor {
 					return []any{"revert: endorsor is not present in the Authority"}
@@ -177,9 +219,9 @@ func init() {
 			}
 
 			err = Staker.NativeMetered(env.State(), charger).
-				AddValidator(
+				AddValidation(
+					thor.Address(args.Validator),
 					thor.Address(args.Endorsor),
-					thor.Address(args.Node),
 					args.Period,
 					args.Stake,
 				)
@@ -191,16 +233,21 @@ func init() {
 		}},
 		{"native_signalExit", func(env *xenv.Environment) []any {
 			var args struct {
-				Endorsor     common.Address
-				ValidationID common.Address
+				Validator common.Address
+				Endorsor  common.Address
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			err := Staker.NativeMetered(env.State(), charger).
+			err := IsStakerPaused(env.State(), charger)
+			if err != nil {
+				return []any{fmt.Sprintf("revert: %v", err)}
+			}
+
+			err = Staker.NativeMetered(env.State(), charger).
 				SignalExit(
+					thor.Address(args.Validator),
 					thor.Address(args.Endorsor),
-					thor.Address(args.ValidationID),
 				)
 			if err != nil {
 				return []any{fmt.Sprintf("revert: %v", err)}
@@ -209,17 +256,22 @@ func init() {
 		}},
 		{"native_increaseStake", func(env *xenv.Environment) []any {
 			var args struct {
-				Endorsor     common.Address
-				ValidationID common.Address
-				Amount       *big.Int
+				Validator common.Address
+				Endorsor  common.Address
+				Amount    *big.Int
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			err := Staker.NativeMetered(env.State(), charger).
+			err := IsStakerPaused(env.State(), charger)
+			if err != nil {
+				return []any{fmt.Sprintf("revert: %v", err)}
+			}
+
+			err = Staker.NativeMetered(env.State(), charger).
 				IncreaseStake(
+					thor.Address(args.Validator),
 					thor.Address(args.Endorsor),
-					thor.Address(args.ValidationID),
 					args.Amount,
 				)
 			if err != nil {
@@ -230,17 +282,22 @@ func init() {
 		}},
 		{"native_decreaseStake", func(env *xenv.Environment) []any {
 			var args struct {
-				Endorsor     common.Address
-				ValidationID common.Address
-				Amount       *big.Int
+				Validator common.Address
+				Endorsor  common.Address
+				Amount    *big.Int
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			err := Staker.NativeMetered(env.State(), charger).
+			err := IsStakerPaused(env.State(), charger)
+			if err != nil {
+				return []any{fmt.Sprintf("revert: %v", err)}
+			}
+
+			err = Staker.NativeMetered(env.State(), charger).
 				DecreaseStake(
+					thor.Address(args.Validator),
 					thor.Address(args.Endorsor),
-					thor.Address(args.ValidationID),
 					args.Amount,
 				)
 			if err != nil {
@@ -250,32 +307,52 @@ func init() {
 		}},
 		{"native_addDelegation", func(env *xenv.Environment) []any {
 			var args struct {
-				ValidationID common.Address
-				Stake        *big.Int
-				Multiplier   uint8
+				Validator  common.Address
+				Stake      *big.Int
+				Multiplier uint8
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
+			err := IsStargatePaused(env.State(), charger)
+			if err != nil {
+				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
+			}
+
+			err = IsStakerPaused(env.State(), charger)
+			if err != nil {
+				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
+			}
+
 			delegationID, err := Staker.NativeMetered(env.State(), charger).
 				AddDelegation(
-					thor.Address(args.ValidationID),
+					thor.Address(args.Validator),
 					args.Stake,
 					args.Multiplier,
 				)
 			if err != nil {
-				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", err)}
+				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
 			}
 			return []any{delegationID, ""}
 		}},
 		{"native_withdrawDelegation", func(env *xenv.Environment) []any {
 			var args struct {
-				DelegationID common.Hash
+				DelegationID *big.Int
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			stake, err := Staker.NativeMetered(env.State(), charger).WithdrawDelegation(thor.Bytes32(args.DelegationID))
+			err := IsStargatePaused(env.State(), charger)
+			if err != nil {
+				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
+			}
+
+			err = IsStakerPaused(env.State(), charger)
+			if err != nil {
+				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
+			}
+
+			stake, err := Staker.NativeMetered(env.State(), charger).WithdrawDelegation(args.DelegationID)
 			if err != nil {
 				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
 			}
@@ -284,12 +361,22 @@ func init() {
 		}},
 		{"native_signalDelegationExit", func(env *xenv.Environment) []any {
 			var args struct {
-				DelegationID common.Hash
+				DelegationID *big.Int
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			err := Staker.NativeMetered(env.State(), charger).SignalDelegationExit(thor.Bytes32(args.DelegationID))
+			err := IsStargatePaused(env.State(), charger)
+			if err != nil {
+				return []any{fmt.Sprintf("revert: %v", err)}
+			}
+
+			err = IsStakerPaused(env.State(), charger)
+			if err != nil {
+				return []any{fmt.Sprintf("revert: %v", err)}
+			}
+
+			err = Staker.NativeMetered(env.State(), charger).SignalDelegationExit(args.DelegationID)
 			if err != nil {
 				return []any{fmt.Sprintf("revert: %v", err)}
 			}
@@ -298,12 +385,12 @@ func init() {
 		}},
 		{"native_getDelegation", func(env *xenv.Environment) []any {
 			var args struct {
-				DelegationID common.Hash
+				DelegationID *big.Int
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			delegation, validator, err := Staker.NativeMetered(env.State(), charger).GetDelegation(thor.Bytes32(args.DelegationID))
+			delegation, validator, err := Staker.NativeMetered(env.State(), charger).GetDelegation(args.DelegationID)
 			if err != nil {
 				return []any{thor.Bytes32{}, new(big.Int), uint32(0), uint32(0), uint8(0), false, false, fmt.Sprintf("revert: %v", err)}
 			}
@@ -315,7 +402,7 @@ func init() {
 
 			locked := delegation.Started(validator) && !delegation.Ended(validator)
 			return []any{
-				delegation.ValidationID,
+				delegation.Validator,
 				delegation.Stake,
 				delegation.FirstIteration,
 				lastPeriod,
@@ -325,13 +412,13 @@ func init() {
 		}},
 		{"native_getDelegatorsRewards", func(env *xenv.Environment) []any {
 			var args struct {
-				ValidationID  common.Address
+				Validator     common.Address
 				StakingPeriod uint32
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			reward, err := Staker.NativeMetered(env.State(), charger).GetDelegatorRewards(thor.Address(args.ValidationID), args.StakingPeriod)
+			reward, err := Staker.NativeMetered(env.State(), charger).GetDelegatorRewards(thor.Address(args.Validator), args.StakingPeriod)
 			if err != nil {
 				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
 			}
@@ -339,12 +426,12 @@ func init() {
 		}},
 		{"native_getCompletedPeriods", func(env *xenv.Environment) []any {
 			var args struct {
-				ValidationID common.Address
+				Validator common.Address
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			periods, err := Staker.NativeMetered(env.State(), charger).GetCompletedPeriods(thor.Address(args.ValidationID))
+			periods, err := Staker.NativeMetered(env.State(), charger).GetCompletedPeriods(thor.Address(args.Validator))
 			if err != nil {
 				return []any{uint32(0), fmt.Sprintf("revert: %v", err)}
 			}
@@ -361,14 +448,14 @@ func init() {
 			addr := thor.BytesToAddress(raw.Bytes())
 			return []any{addr, ""}
 		}},
-		{"native_getValidatorTotals", func(env *xenv.Environment) []any {
+		{"native_getValidationTotals", func(env *xenv.Environment) []any {
 			var args struct {
-				ValidationID common.Address
+				Validator common.Address
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			totals, err := Staker.NativeMetered(env.State(), charger).GetValidatorsTotals(thor.Address(args.ValidationID))
+			totals, err := Staker.NativeMetered(env.State(), charger).GetValidationTotals(thor.Address(args.Validator))
 			if err != nil {
 				return []any{new(big.Int), new(big.Int), new(big.Int), new(big.Int), fmt.Sprintf("revert: failed to get validators totals: %v", err)}
 			}

@@ -5,8 +5,6 @@
 package bft
 
 import (
-	"crypto/ecdsa"
-	"fmt"
 	"math/big"
 	"testing"
 
@@ -14,7 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
@@ -22,7 +19,6 @@ import (
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/tx"
 )
 
 type TestBFT struct {
@@ -36,10 +32,8 @@ type TestBFT struct {
 const MaxBlockProposers = 11
 
 var (
-	devAccounts      = genesis.DevAccounts()
-	defaultFC        = &thor.NoFork
-	validatorStake   = new(big.Int).Mul(big.NewInt(25_000_000), big.NewInt(1e18))
-	minStakingPeriod = uint32(360) * 24 * 7
+	devAccounts = genesis.DevAccounts()
+	defaultFC   = &thor.NoFork
 )
 
 func init() {
@@ -141,23 +135,7 @@ func (test *TestBFT) newBlock(parentSummary *chain.BlockSummary, master genesis.
 		return nil, err
 	}
 
-	if parentSummary.Header.Number() > test.fc.HAYABUSA+test.fc.HAYABUSA_TP {
-		staker := builtin.Staker.Native(test.stater.NewState(parentSummary.Root()))
-		validation, err := staker.Get(master.Address)
-		if err != nil {
-			return nil, err
-		}
-		if validation.IsEmpty() {
-			// Add all dev accounts as validators
-			for _, dev := range devAccounts {
-				if err := test.adoptStakerTx(flow, dev.PrivateKey, "addValidator", validatorStake, dev.Address, minStakingPeriod); err != nil {
-					return nil, err
-				}
-			}
-		}
-	}
-
-	b, stg, receipts, err := flow.Pack(master.PrivateKey, conflicts, shouldVote)
+	b, stg, _, err := flow.Pack(master.PrivateKey, conflicts, shouldVote)
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +144,7 @@ func (test *TestBFT) newBlock(parentSummary *chain.BlockSummary, master genesis.
 		return nil, err
 	}
 
-	if err = test.repo.AddBlock(b, receipts, conflicts, asBest); err != nil {
+	if err = test.repo.AddBlock(b, nil, conflicts, asBest); err != nil {
 		return nil, err
 	}
 
@@ -248,42 +226,6 @@ func (test *TestBFT) pack(parentID thor.Bytes32, shouldVote bool, asBest bool) (
 	}
 
 	return test.repo.GetBlockSummary(blk.Header.ID())
-}
-
-func (test *TestBFT) adoptStakerTx(flow *packer.Flow, privateKey *ecdsa.PrivateKey, methodName string, value *big.Int, args ...any) error {
-	methodABI, found := builtin.Staker.ABI.MethodByName(methodName)
-	if !found {
-		return fmt.Errorf("%s method not found", methodName)
-	}
-	data, err := methodABI.EncodeInput(args...)
-	if err != nil {
-		return err
-	}
-
-	clause := tx.NewClause(&builtin.Staker.Address)
-	clause = clause.WithValue(value)
-	clause = clause.WithData(data)
-
-	trx := new(tx.Builder).
-		ChainTag(test.repo.ChainTag()).
-		BlockRef(tx.NewBlockRef(test.repo.BestBlockSummary().Header.Number())).
-		Expiration(32).
-		Nonce(datagen.RandUint64()).
-		Gas(1000000).
-		Clause(clause).Build()
-
-	signature, err := crypto.Sign(trx.SigningHash().Bytes(), privateKey)
-	if err != nil {
-		return err
-	}
-	trx = trx.WithSignature(signature)
-
-	err = flow.Adopt(trx)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func TestNewEngine(t *testing.T) {
@@ -399,182 +341,111 @@ func TestReCreate(t *testing.T) {
 }
 
 func TestFinalized(t *testing.T) {
-	tests := []struct {
-		name     string
-		forkCfg  *thor.ForkConfig
-		checkPoS bool
-	}{
-		{
-			"default fork config",
-			defaultFC,
-			false,
-		},
-		{
-			"hayabusa fork config",
-			&thor.ForkConfig{
-				HAYABUSA:    1,
-				HAYABUSA_TP: 1,
-			},
-			true,
-		},
+	testBFT, err := newTestBft(defaultFC)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			testBFT, err := newTestBft(tt.forkCfg)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			if err = testBFT.fastForward(thor.CheckpointInterval*3 - 1); err != nil {
-				t.Fatal(err)
-			}
-
-			// PoS was enabled a while ago at this stage, check that the total stake and weight are correct
-			if tt.checkPoS {
-				stkr := builtin.Staker.Native(testBFT.stater.NewState(testBFT.repo.BestBlockSummary().Root()))
-				totalStake, totalWeight, err := stkr.LockedVET()
-				if err != nil {
-					t.Fatal(err)
-				}
-				assert.Equal(t, new(big.Int).Mul(big.NewInt(int64(len(devAccounts))), validatorStake), totalStake)
-				assert.Equal(t, new(big.Int).Mul(big.NewInt(2), totalStake), totalWeight)
-			}
-
-			sum, err := testBFT.repo.NewBestChain().GetBlockSummary(uint32(MaxBlockProposers*2/3 + 1))
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			st, err := testBFT.engine.computeState(sum.Header)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			// should be justify and commit at firstBlockNum
-			assert.Equal(t, uint32(1), st.Quality)
-			assert.True(t, st.Justified)
-			assert.True(t, st.Committed)
-
-			blockNum := uint32(thor.CheckpointInterval*2 + MaxBlockProposers*2/3)
-
-			sum, err = testBFT.repo.NewBestChain().GetBlockSummary(blockNum)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			st, err = testBFT.engine.computeState(sum.Header)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			// should be justify and commit at (bft round start) + (MaxBlockProposers*2/3) + 1
-			assert.Equal(t, uint32(3), st.Quality)
-			assert.True(t, st.Justified)
-			assert.True(t, st.Committed)
-
-			// chain stops the end of third bft round,should commit the second checkpoint
-			finalized, err := testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			assert.Equal(t, finalized, testBFT.engine.Finalized())
-
-			jc, err := testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval * 2)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			j, err := testBFT.engine.Justified()
-			assert.NoError(t, err)
-			assert.Equal(t, jc, j)
-			assert.Equal(t, jc, testBFT.engine.justified.Load().(justified).value)
-		})
+	if err = testBFT.fastForward(thor.CheckpointInterval*3 - 1); err != nil {
+		t.Fatal(err)
 	}
+
+	blockNum := uint32(MaxBlockProposers*2/3 + 1)
+
+	sum, err := testBFT.repo.NewBestChain().GetBlockSummary(blockNum)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := testBFT.engine.computeState(sum.Header)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// should be justify and commit at (MaxBlockProposers*2/3) + 1
+	assert.Equal(t, uint32(1), st.Quality)
+	assert.True(t, st.Justified)
+	assert.True(t, st.Committed)
+
+	blockNum = uint32(thor.CheckpointInterval*2 + MaxBlockProposers*2/3)
+
+	sum, err = testBFT.repo.NewBestChain().GetBlockSummary(blockNum)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	st, err = testBFT.engine.computeState(sum.Header)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// should be justify and commit at (bft round start) + (MaxBlockProposers*2/3) + 1
+	assert.Equal(t, uint32(3), st.Quality)
+	assert.True(t, st.Justified)
+	assert.True(t, st.Committed)
+
+	// chain stops the end of third bft round,should commit the second checkpoint
+	finalized, err := testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, finalized, testBFT.engine.Finalized())
+
+	jc, err := testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval * 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	j, err := testBFT.engine.Justified()
+	assert.NoError(t, err)
+	assert.Equal(t, jc, j)
+	assert.Equal(t, jc, testBFT.engine.justified.Load().(justified).value)
 }
 
 func TestAccepts(t *testing.T) {
-	tests := []struct {
-		name    string
-		forkCfg *thor.ForkConfig
-	}{
-		{
-			"default fork config",
-			defaultFC,
-		},
-		{
-			"hayabusa fork config",
-			&thor.ForkConfig{
-				HAYABUSA:    1,
-				HAYABUSA_TP: 1,
-			},
-		},
+	testBFT, err := newTestBft(defaultFC)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			testBFT, err := newTestBft(tt.forkCfg)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			if err = testBFT.fastForward(thor.CheckpointInterval - 1); err != nil {
-				t.Fatal(err)
-			}
-
-			branch, err := testBFT.buildBranch(1)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			if err = testBFT.fastForward(thor.CheckpointInterval * 2); err != nil {
-				t.Fatal(err)
-			}
-
-			// new block in trunk should accept
-			ok, err := testBFT.engine.Accepts(testBFT.engine.repo.BestBlockSummary().Header.ID())
-			assert.Nil(t, err)
-			assert.Equal(t, ok, true)
-
-			branchID, err := branch.GetBlockID(thor.CheckpointInterval)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			// blocks in trunk should be rejected
-			ok, err = testBFT.engine.Accepts(branchID)
-			assert.Nil(t, err)
-			assert.Equal(t, ok, false)
-		})
+	if err = testBFT.fastForward(thor.CheckpointInterval - 1); err != nil {
+		t.Fatal(err)
 	}
+
+	branch, err := testBFT.buildBranch(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = testBFT.fastForward(thor.CheckpointInterval * 2); err != nil {
+		t.Fatal(err)
+	}
+
+	// new block in trunk should accept
+	ok, err := testBFT.engine.Accepts(testBFT.engine.repo.BestBlockSummary().Header.ID())
+	assert.Nil(t, err)
+	assert.Equal(t, ok, true)
+
+	branchID, err := branch.GetBlockID(thor.CheckpointInterval)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// blocks in trunk should be rejected
+	ok, err = testBFT.engine.Accepts(branchID)
+	assert.Nil(t, err)
+	assert.Equal(t, ok, false)
 }
 
 func TestGetVote(t *testing.T) {
-	forkConfigs := []struct {
-		name    string
-		forkCfg *thor.ForkConfig
-	}{
-		{
-			"default fork config",
-			defaultFC,
-		},
-		{
-			"hayabusa fork config",
-			&thor.ForkConfig{
-				HAYABUSA:    1,
-				HAYABUSA_TP: 1,
-			},
-		},
-	}
-
 	tests := []struct {
 		name     string
-		testFunc func(*testing.T, *thor.ForkConfig)
+		testFunc func(*testing.T)
 	}{
 		{
-			"early stage, vote WIT", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				testBFT, err := newTestBft(forkCfg)
+			"early stage, vote WIT", func(t *testing.T) {
+				testBFT, err := newTestBft(defaultFC)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -586,8 +457,8 @@ func TestGetVote(t *testing.T) {
 				assert.Equal(t, false, v)
 			},
 		}, {
-			"never justified, vote WIT", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				testBFT, err := newTestBft(forkCfg)
+			"never justified, vote WIT", func(t *testing.T) {
+				testBFT, err := newTestBft(defaultFC)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -600,8 +471,8 @@ func TestGetVote(t *testing.T) {
 				assert.Equal(t, false, v)
 			},
 		}, {
-			"never voted other checkpoint, vote COM", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				testBFT, err := newTestBft(forkCfg)
+			"never voted other checkpoint, vote COM", func(t *testing.T) {
+				testBFT, err := newTestBft(defaultFC)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -614,8 +485,8 @@ func TestGetVote(t *testing.T) {
 				assert.Equal(t, true, v)
 			},
 		}, {
-			"voted other checkpoint but not conflict with recent justified, vote COM", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				testBFT, err := newTestBft(forkCfg)
+			"voted other checkpoint but not conflict with recent justified, vote COM", func(t *testing.T) {
+				testBFT, err := newTestBft(defaultFC)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -659,8 +530,8 @@ func TestGetVote(t *testing.T) {
 				assert.Equal(t, true, v)
 			},
 		}, {
-			"voted another non-justified checkpoint,conflict with most recent justified checkpoint, vote WIT", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				testBFT, err := newTestBft(forkCfg)
+			"voted another non-justified checkpoint,conflict with most recent justified checkpoint, vote WIT", func(t *testing.T) {
+				testBFT, err := newTestBft(defaultFC)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -721,8 +592,8 @@ func TestGetVote(t *testing.T) {
 				assert.Equal(t, false, v)
 			},
 		}, {
-			"voted another justified checkpoint,conflict with most recent justified checkpoint, vote WIT", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				testBFT, err := newTestBft(forkCfg)
+			"voted another justified checkpoint,conflict with most recent justified checkpoint, vote WIT", func(t *testing.T) {
+				testBFT, err := newTestBft(defaultFC)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -766,8 +637,8 @@ func TestGetVote(t *testing.T) {
 				assert.Equal(t, false, v)
 			},
 		}, {
-			"test findCheckpointByQuality edge case, should not fail", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				testBFT, err := newTestBft(forkCfg)
+			"test findCheckpointByQuality edge case, should not fail", func(t *testing.T) {
+				testBFT, err := newTestBft(defaultFC)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -784,11 +655,7 @@ func TestGetVote(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			for _, fc := range forkConfigs {
-				t.Run(fc.name, func(t *testing.T) {
-					tt.testFunc(t, fc.forkCfg)
-				})
-			}
+			tt.testFunc(t)
 		})
 	}
 }
@@ -796,39 +663,12 @@ func TestGetVote(t *testing.T) {
 func TestJustifier(t *testing.T) {
 	tests := []struct {
 		name     string
-		testFunc func(*testing.T, *thor.ForkConfig)
+		testFunc func(*testing.T)
 	}{
 		{
-			"newJustifier", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				testBft, err := newTestBft(forkCfg)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
-					testBft.fastForward(thor.CheckpointInterval - 1)
-				}
-
-				vs, err := testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
-					assert.Equal(t, uint32(180), vs.checkpoint)
-					expected, ok := new(big.Int).SetString("333333333333333333333333333", 10)
-					assert.True(t, ok)
-					assert.Equal(t, expected, vs.thresholdWeight)
-				} else {
-					assert.Equal(t, uint32(0), vs.checkpoint)
-					assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.thresholdVotes)
-				}
-			},
-		}, {
-			"fork in the middle of checkpoint", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				fc := *forkCfg
-				fc.VIP214 = thor.CheckpointInterval / 2
-				testBft, err := newTestBft(&fc)
+			"newJustifier", func(t *testing.T) {
+				fc := defaultFC
+				testBft, err := newTestBft(fc)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -841,10 +681,26 @@ func TestJustifier(t *testing.T) {
 				assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.thresholdVotes)
 			},
 		}, {
-			"the second bft round", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				fc := *forkCfg
+			"fork in the middle of checkpoint", func(t *testing.T) {
+				fc := defaultFC
 				fc.VIP214 = thor.CheckpointInterval / 2
-				testBft, err := newTestBft(&fc)
+				testBft, err := newTestBft(fc)
+				if err != nil {
+					t.Fatal(err)
+				}
+				vs, err := testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				assert.Equal(t, uint32(0), vs.checkpoint)
+				assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.thresholdVotes)
+			},
+		}, {
+			"the second bft round", func(t *testing.T) {
+				fc := defaultFC
+				fc.VIP214 = thor.CheckpointInterval / 2
+				testBft, err := newTestBft(fc)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -856,22 +712,16 @@ func TestJustifier(t *testing.T) {
 				}
 
 				assert.Equal(t, uint32(thor.CheckpointInterval*2), vs.checkpoint)
-				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
-					expected, ok := new(big.Int).SetString("333333333333333333333333333", 10)
-					assert.True(t, ok)
-					assert.Equal(t, expected, vs.thresholdWeight)
-				} else {
-					assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.thresholdVotes)
-				}
+				assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.thresholdVotes)
 				assert.Equal(t, uint32(2), vs.Summarize().Quality)
 				assert.False(t, vs.Summarize().Justified)
 				assert.False(t, vs.Summarize().Committed)
 			},
 		}, {
-			"add votes: commits", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				fc := *forkCfg
+			"add votes: commits", func(t *testing.T) {
+				fc := defaultFC
 				fc.VIP214 = thor.CheckpointInterval / 2
-				testBft, err := newTestBft(&fc)
+				testBft, err := newTestBft(fc)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -883,12 +733,7 @@ func TestJustifier(t *testing.T) {
 				}
 
 				for i := 0; i <= MaxBlockProposers*2/3; i++ {
-					if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
-						// Weight, stake multiplied by default multiplier
-						vs.AddBlock(datagen.RandAddress(), true, new(big.Int).Mul(validatorStake, big.NewInt(2)))
-					} else {
-						vs.AddBlock(datagen.RandAddress(), true, nil)
-					}
+					vs.AddBlock(datagen.RandAddress(), true, nil)
 				}
 
 				st := vs.Summarize()
@@ -897,21 +742,17 @@ func TestJustifier(t *testing.T) {
 				assert.True(t, st.Committed)
 
 				// add vote after commits，commit/justify stays the same
-				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
-					vs.AddBlock(datagen.RandAddress(), true, new(big.Int).Mul(validatorStake, big.NewInt(2)))
-				} else {
-					vs.AddBlock(datagen.RandAddress(), true, nil)
-				}
+				vs.AddBlock(datagen.RandAddress(), true, nil)
 				st = vs.Summarize()
 				assert.Equal(t, uint32(3), st.Quality)
 				assert.True(t, st.Justified)
 				assert.True(t, st.Committed)
 			},
 		}, {
-			"add votes: justifies", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				fc := *forkCfg
+			"add votes: justifies", func(t *testing.T) {
+				fc := defaultFC
 				fc.VIP214 = thor.CheckpointInterval / 2
-				testBft, err := newTestBft(&fc)
+				testBft, err := newTestBft(fc)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -923,12 +764,7 @@ func TestJustifier(t *testing.T) {
 				}
 
 				for i := 0; i <= MaxBlockProposers*2/3; i++ {
-					if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
-						// Weight, stake multiplied by default multiplier
-						vs.AddBlock(datagen.RandAddress(), false, new(big.Int).Mul(validatorStake, big.NewInt(2)))
-					} else {
-						vs.AddBlock(datagen.RandAddress(), false, nil)
-					}
+					vs.AddBlock(datagen.RandAddress(), false, nil)
 				}
 
 				st := vs.Summarize()
@@ -937,10 +773,10 @@ func TestJustifier(t *testing.T) {
 				assert.False(t, st.Committed)
 			},
 		}, {
-			"add votes: one votes WIT then changes to COM", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				fc := *forkCfg
+			"add votes: one votes WIT then changes to COM", func(t *testing.T) {
+				fc := defaultFC
 				fc.VIP214 = thor.CheckpointInterval / 2
-				testBft, err := newTestBft(&fc)
+				testBft, err := newTestBft(fc)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -952,28 +788,13 @@ func TestJustifier(t *testing.T) {
 				}
 
 				// vote <threshold> times COM
-				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
-					// With the current values, weight threshold is 2/3 of 25 * 2 (weight of each validator) * 10 validators = 333.33
-					// 2/3 of MaxBlockProposers is 7, so 7 * 25 * 2 * 10 = 350
-					// Since 350 > 333.33, committed would be true, hence the - 1 so it is false
-					// In PoA we do 2/3 of MaxBlockProposers that rounded is 7, 7 > 7 is false hence committed would be false
-					for range MaxBlockProposers*2/3 - 1 {
-						// Weight, stake multiplied by default multiplier
-						vs.AddBlock(datagen.RandAddress(), true, new(big.Int).Mul(validatorStake, big.NewInt(2)))
-					}
-				} else {
-					for range MaxBlockProposers * 2 / 3 {
-						vs.AddBlock(datagen.RandAddress(), true, nil)
-					}
+				for range MaxBlockProposers * 2 / 3 {
+					vs.AddBlock(datagen.RandAddress(), true, nil)
 				}
 
 				master := datagen.RandAddress()
 				// master votes WIT
-				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
-					vs.AddBlock(master, false, new(big.Int).Mul(validatorStake, big.NewInt(2)))
-				} else {
-					vs.AddBlock(master, false, nil)
-				}
+				vs.AddBlock(master, false, nil)
 
 				// justifies but not committed
 				st := vs.Summarize()
@@ -981,28 +802,21 @@ func TestJustifier(t *testing.T) {
 				assert.False(t, st.Committed)
 
 				// master votes COM
-				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
-					vs.AddBlock(master, true, new(big.Int).Mul(validatorStake, big.NewInt(2)))
-				} else {
-					vs.AddBlock(master, true, nil)
-				}
+				vs.AddBlock(master, true, nil)
 
 				// should not be committed
 				st = vs.Summarize()
 				assert.False(t, st.Committed)
 
 				// another master votes WIT
-				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
-					vs.AddBlock(datagen.RandAddress(), true, new(big.Int).Mul(validatorStake, big.NewInt(2)))
-				} else {
-					vs.AddBlock(datagen.RandAddress(), true, nil)
-				}
+				vs.AddBlock(datagen.RandAddress(), true, nil)
 				st = vs.Summarize()
 				assert.True(t, st.Committed)
 			},
 		}, {
-			"vote both WIT and COM in one round", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				testBft, err := newTestBft(forkCfg)
+			"vote both WIT and COM in one round", func(t *testing.T) {
+				fc := defaultFC
+				testBft, err := newTestBft(fc)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1012,35 +826,19 @@ func TestJustifier(t *testing.T) {
 				}
 
 				master := datagen.RandAddress()
-				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
-					vs.AddBlock(master, true, new(big.Int).Mul(validatorStake, big.NewInt(2)))
-				} else {
-					vs.AddBlock(master, true, nil)
-				}
+				vs.AddBlock(master, true, nil)
 				assert.Equal(t, true, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(1), vs.comVotes)
 
-				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
-					vs.AddBlock(master, false, new(big.Int).Mul(validatorStake, big.NewInt(2)))
-				} else {
-					vs.AddBlock(master, false, nil)
-				}
+				vs.AddBlock(master, false, nil)
 				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
-					vs.AddBlock(master, true, new(big.Int).Mul(validatorStake, big.NewInt(2)))
-				} else {
-					vs.AddBlock(master, true, nil)
-				}
+				vs.AddBlock(master, true, nil)
 				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
-					vs.AddBlock(master, false, new(big.Int).Mul(validatorStake, big.NewInt(2)))
-				} else {
-					vs.AddBlock(master, false, nil)
-				}
+				vs.AddBlock(master, false, nil)
 				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 
@@ -1048,65 +846,27 @@ func TestJustifier(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
-					vs.AddBlock(master, false, new(big.Int).Mul(validatorStake, big.NewInt(2)))
-				} else {
-					vs.AddBlock(master, false, nil)
-				}
+				vs.AddBlock(master, false, nil)
 				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
-					vs.AddBlock(master, true, new(big.Int).Mul(validatorStake, big.NewInt(2)))
-				} else {
-					vs.AddBlock(master, true, nil)
-				}
+				vs.AddBlock(master, true, nil)
 				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
-					vs.AddBlock(master, true, new(big.Int).Mul(validatorStake, big.NewInt(2)))
-				} else {
-					vs.AddBlock(master, true, nil)
-				}
+				vs.AddBlock(master, true, nil)
 				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
-					vs.AddBlock(master, false, new(big.Int).Mul(validatorStake, big.NewInt(2)))
-				} else {
-					vs.AddBlock(master, false, nil)
-				}
+				vs.AddBlock(master, false, nil)
 				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 			},
 		},
 	}
-
-	forkConfigs := []struct {
-		name    string
-		forkCfg *thor.ForkConfig
-	}{
-		{
-			"default fork config",
-			defaultFC,
-		},
-		{
-			"hayabusa fork config",
-			&thor.ForkConfig{
-				HAYABUSA:    1,
-				HAYABUSA_TP: 1,
-			},
-		},
-	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			for _, fc := range forkConfigs {
-				t.Run(fc.name, func(t *testing.T) {
-					tt.testFunc(t, fc.forkCfg)
-				})
-			}
+			tt.testFunc(t)
 		})
 	}
 }
@@ -1114,11 +874,11 @@ func TestJustifier(t *testing.T) {
 func TestJustified(t *testing.T) {
 	tests := []struct {
 		name     string
-		testFunc func(*testing.T, *thor.ForkConfig)
+		testFunc func(*testing.T)
 	}{
 		{
-			"first several rounds, never justified", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				testBFT, err := newTestBft(forkCfg)
+			"first several rounds, never justified", func(t *testing.T) {
+				testBFT, err := newTestBft(defaultFC)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1135,8 +895,8 @@ func TestJustified(t *testing.T) {
 				}
 			},
 		}, {
-			"first several rounds, get justified", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				testBFT, err := newTestBft(forkCfg)
+			"first several rounds, get justified", func(t *testing.T) {
+				testBFT, err := newTestBft(defaultFC)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1161,8 +921,8 @@ func TestJustified(t *testing.T) {
 				assert.Equal(t, testBFT.repo.GenesisBlock().Header().ID(), testBFT.engine.Finalized())
 			},
 		}, {
-			"first three not justified rounds, then justified", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				testBFT, err := newTestBft(forkCfg)
+			"first three not justified rounds, then justified", func(t *testing.T) {
+				testBFT, err := newTestBft(defaultFC)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1185,8 +945,8 @@ func TestJustified(t *testing.T) {
 				assert.Equal(t, testBFT.repo.GenesisBlock().Header().ID(), testBFT.engine.Finalized())
 			},
 		}, {
-			"get finalized, then justified", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				testBFT, err := newTestBft(forkCfg)
+			"get finalized, then justified", func(t *testing.T) {
+				testBFT, err := newTestBft(defaultFC)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1214,9 +974,9 @@ func TestJustified(t *testing.T) {
 				assert.Equal(t, uint32(3*thor.CheckpointInterval), block.Number(justified))
 			},
 		}, {
-			"get finalized, not justified, then justified", func(t *testing.T, forkCfg *thor.ForkConfig) {
+			"get finalized, not justified, then justified", func(t *testing.T) {
 				type tJustified = justified
-				testBFT, err := newTestBft(forkCfg)
+				testBFT, err := newTestBft(defaultFC)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1244,11 +1004,11 @@ func TestJustified(t *testing.T) {
 				assert.Equal(t, justified, testBFT.engine.justified.Load().(tJustified).value)
 			},
 		}, {
-			"fork in the middle, get justified", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				fc := *forkCfg
+			"fork in the middle, get justified", func(t *testing.T) {
+				fc := defaultFC
 				fc.FINALITY = thor.CheckpointInterval
 
-				testBFT, err := newTestBft(&fc)
+				testBFT, err := newTestBft(fc)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1275,30 +1035,9 @@ func TestJustified(t *testing.T) {
 		},
 	}
 
-	forkConfigs := []struct {
-		name    string
-		forkCfg *thor.ForkConfig
-	}{
-		{
-			"default fork config",
-			defaultFC,
-		},
-		{
-			"hayabusa fork config",
-			&thor.ForkConfig{
-				HAYABUSA:    1,
-				HAYABUSA_TP: 1,
-			},
-		},
-	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			for _, fc := range forkConfigs {
-				t.Run(fc.name, func(t *testing.T) {
-					tt.testFunc(t, fc.forkCfg)
-				})
-			}
+			tt.testFunc(t)
 		})
 	}
 }

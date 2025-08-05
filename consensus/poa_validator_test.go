@@ -13,7 +13,7 @@ import (
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/builtin/staker"
+	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/test/testchain"
 )
 
@@ -44,7 +44,7 @@ func TestAuthority_Hayabusa_TransitionPeriod(t *testing.T) {
 	// check the staker contract has the correct stake
 	masterStake, err := getMasterStake(setup.chain, blk.Header)
 	assert.NoError(t, err)
-	assert.Equal(t, masterStake.PendingLocked.Cmp(minStake), 0)
+	assert.Equal(t, masterStake.QueuedVET.Cmp(minStake), 0)
 }
 
 func getEndorsorBalance(blk *block.Header, chain *testchain.Chain) (*big.Int, error) {
@@ -61,7 +61,7 @@ func getEndorsorBalance(blk *block.Header, chain *testchain.Chain) (*big.Int, er
 	return balance, nil
 }
 
-func getMasterStake(chain *testchain.Chain, blk *block.Header) (*staker.Validation, error) {
+func getMasterStake(chain *testchain.Chain, blk *block.Header) (*validation.Validation, error) {
 	st := chain.Stater().NewState(chain.Repo().BestBlockSummary().Root())
 	signer, err := blk.Signer()
 	if err != nil {

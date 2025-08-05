@@ -276,12 +276,19 @@ func (e *Energy) DistributeRewards(beneficiary, signer thor.Address, staker stak
 	if err != nil {
 		return err
 	}
+	validatorRewardPerc, err := e.params.Get(thor.KeyValidatorRewardPercentage)
+	if err != nil {
+		return err
+	}
+	if validatorRewardPerc.Uint64() == 0 {
+		validatorRewardPerc = big.NewInt(int64(thor.InitialValidatorRewardPercentage))
+	}
 
 	// If delegated amount of VET is 0 then transfer the whole reward to the validator
 	proposerReward := new(big.Int).Set(reward)
 	if hasDelegations {
-		proposerReward.Mul(proposerReward, big.NewInt(3))
-		proposerReward.Div(proposerReward, big.NewInt(10))
+		proposerReward.Mul(proposerReward, validatorRewardPerc)
+		proposerReward.Div(proposerReward, big.NewInt(100))
 
 		val, err := e.params.Get(thor.KeyStargateContractAddress)
 		if err != nil {
