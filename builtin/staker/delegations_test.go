@@ -605,3 +605,30 @@ func Test_Delegations_EnableAutoRenew_MatchStakeReached(t *testing.T) {
 	//// Enable auto renew for the first delegation - should fail since the presence of other delegator's exceeds max stake
 	//assert.ErrorContains(t, staker.UpdateDelegationAutoRenew(delegationID, true), "validation's next period stake exceeds max stake")
 }
+
+func TestStaker_DelegationExitingVET(t *testing.T) {
+	staker, _ := newStaker(t, 1, 1, true)
+
+	firstActive, err := staker.FirstActive()
+	assert.NoError(t, err)
+
+	delegationID, err := staker.AddDelegation(*firstActive, big.NewInt(1000), 200)
+	assert.NoError(t, err)
+
+	delegation, validation, err := staker.GetDelegation(delegationID)
+	assert.NoError(t, err)
+	assert.False(t, delegation.Started(validation))
+
+	_, _, err = staker.Housekeep(MediumStakingPeriod)
+	assert.NoError(t, err)
+
+	delegation, validation, err = staker.GetDelegation(delegationID)
+	assert.NoError(t, err)
+	assert.True(t, delegation.Started(validation))
+
+	assert.NoError(t, staker.SignalDelegationExit(delegationID))
+	assert.NoError(t, staker.SignalExit(*firstActive, validation.Endorsor))
+
+	_, _, err = staker.Housekeep(MediumStakingPeriod * 2)
+	assert.NoError(t, err)
+}
