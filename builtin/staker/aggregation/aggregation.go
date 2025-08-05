@@ -8,8 +8,6 @@ package aggregation
 import (
 	"math/big"
 
-	"github.com/pkg/errors"
-
 	"github.com/vechain/thor/v2/builtin/staker/delta"
 )
 
@@ -108,17 +106,6 @@ func (a *Aggregation) exit() (*delta.Exit, error) {
 	withdrawable := big.NewInt(0).Set(a.WithdrawableVET)
 	withdrawable.Add(withdrawable, a.LockedVET)
 	withdrawable.Add(withdrawable, a.PendingVET)
-
-	// ExitingVET should always be 0 at this point
-	// as it was moved to withdrawable at the last renew()
-	// TODO implement a test that breaks this:
-	// The auto renew validator could, in their last staking period:
-	// increase stake (pending)
-	// signal exit
-	// exit at the end
-	if a.ExitingVET.Sign() == 1 {
-		return nil, errors.New("ExitingVET should always be 0 at this point ")
-	}
 
 	// Reset the aggregation
 	a.ExitingVET = big.NewInt(0)
