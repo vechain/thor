@@ -135,9 +135,15 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 		if err != nil {
 			return nil, false, err
 		}
+		_, totalWeight, err := builtin.Staker.Native(state).LockedVET()
+		if err != nil {
+			return nil, false, err
+		}
 		for _, leader := range leaders {
 			if leader.Online {
-				score++
+				percentage := new(big.Int).Mul(leader.Weight, big.NewInt(100))
+				percentage.Div(percentage, totalWeight)
+				score = score + percentage.Uint64()
 			}
 		}
 	} else {

@@ -217,7 +217,13 @@ func TestScheduler_Updates(t *testing.T) {
 	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, parentTime, []byte("seed1"))
 	assert.NoError(t, err)
 
-	updates, score := sched.Updates(nowTime)
+	totalWeight := big.NewInt(0)
+	for validator := range validators {
+		val := validators[validator]
+		totalWeight = big.NewInt(0).Add(val.Weight, totalWeight)
+	}
+
+	updates, score := sched.Updates(nowTime, *totalWeight)
 
 	offline := 0
 	for _, online := range updates {
@@ -227,7 +233,7 @@ func TestScheduler_Updates(t *testing.T) {
 	}
 
 	assert.Equal(t, 1, offline)
-	assert.Equal(t, 9, int(score))
+	assert.Equal(t, uint64(2), score)
 }
 
 func TestScheduler_TotalPlacements(t *testing.T) {
@@ -244,7 +250,7 @@ func TestScheduler_TotalPlacements(t *testing.T) {
 	// check total stake in scheduler, should only use online validators
 	total := big.NewInt(0)
 	for _, p := range sched.sequence {
-		total.Add(total, validators[p].Weight)
+		total.Add(total, validators[p.id].Weight)
 	}
 
 	expectedStake := totalStake.Sub(totalStake, validators[otherAcc].Weight)
@@ -281,10 +287,10 @@ func TestScheduler_AllValidatorsScheduled(t *testing.T) {
 
 	seen := make(map[thor.Address]bool)
 	for _, id := range sched.sequence {
-		if seen[id] {
-			t.Fatalf("Validator %s is scheduled multiple times", id)
+		if seen[id.id] {
+			t.Fatalf("Validator %s is scheduled multiple times", id.id)
 		}
-		seen[id] = true
+		seen[id.id] = true
 	}
 	assert.Equal(t, len(seen), len(validators))
 }

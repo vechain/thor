@@ -24,7 +24,7 @@ type Scheduler struct {
 	proposer        *validation.Validation
 	proposerID      thor.Address
 	parentBlockTime uint64
-	sequence        []thor.Address
+	sequence        []proposer
 }
 
 type onlineProposer struct {
@@ -32,6 +32,11 @@ type onlineProposer struct {
 	validation *validation.Validation
 	hash       thor.Bytes32
 	score      float64
+}
+
+type proposer struct {
+	id         thor.Address
+	validation *validation.Validation
 }
 
 // NewScheduler create a Scheduler object.
@@ -97,7 +102,7 @@ func (s *Scheduler) Schedule(nowTime uint64) (newBlockTime uint64) {
 	offset := (newBlockTime-s.parentBlockTime)/T - 1
 	for i, n := uint64(0), uint64(len(s.sequence)); i < n; i++ {
 		index := (i + offset) % n
-		if s.sequence[index] == s.proposerID {
+		if s.sequence[index].id == s.proposerID {
 			return newBlockTime + i*T
 		}
 	}
@@ -125,37 +130,53 @@ func (s *Scheduler) IsScheduled(blockTime uint64, proposer thor.Address) bool {
 	}
 
 	index := (blockTime - s.parentBlockTime - T) / T % uint64(len(s.sequence))
-	return s.sequence[index] == proposer
+	return s.sequence[index].id == proposer
 }
 
 // Updates returns proposers whose status are changed, and the score when new block time is assumed to be newBlockTime.
-func (s *Scheduler) Updates(newBlockTime uint64) (map[thor.Address]bool, uint64) {
+func (s *Scheduler) Updates(newBlockTime uint64, totalWeight big.Int) (map[thor.Address]bool, uint64) {
 	T := thor.BlockInterval
 
 	updates := make(map[thor.Address]bool)
+	activeWeight := big.NewInt(0)
 
+	proposerWeightAdded := false
 	for i := uint64(0); i < uint64(len(s.sequence)); i++ {
 		if s.parentBlockTime+T+i*T >= newBlockTime {
 			break
 		}
-		id := s.sequence[i]
-		if s.sequence[i] != s.proposerID {
+		id := s.sequence[i].id
+		if id != s.proposerID {
 			updates[id] = false
+		} else {
+			activeWeight.Add(activeWeight, s.sequence[i].validation.Weight)
+			proposerWeightAdded = true
 		}
 	}
 
-	score := uint64(len(s.sequence) - len(updates))
-
 	if !s.proposer.Online {
 		updates[s.proposerID] = true
+	} else if !proposerWeightAdded {
+		activeWeight.Add(activeWeight, s.proposer.Weight)
 	}
-	return updates, score
+
+	// Calculate weighted score as percentage of total weight
+	if totalWeight.Sign() > 0 {
+		// Convert to percentage (multiply by 100 for precision)
+		percentage := new(big.Int).Mul(activeWeight, big.NewInt(100))
+		percentage.Div(percentage, &totalWeight)
+
+		score := percentage.Uint64()
+		return updates, score
+	}
+
+	return updates, 0
 }
 
 // createSequence implements a Weighted Random Sampling algorithm using the Exponential Distribution Method.
-func createSequence(proposers []*onlineProposer, seed []byte, parentNum uint32) []thor.Address {
+func createSequence(proposers []*onlineProposer, seed []byte, parentNum uint32) []proposer {
 	if len(proposers) == 0 {
-		return []thor.Address{}
+		return []proposer{}
 	}
 
 	// Step 1: Generate a deterministic seed for the random number generator
@@ -197,9 +218,12 @@ func createSequence(proposers []*onlineProposer, seed []byte, parentNum uint32) 
 	})
 
 	// Step 4: Extract the validator IDs in priority order
-	resultSequence := make([]thor.Address, len(weightedProposers))
+	resultSequence := make([]proposer, len(weightedProposers))
 	for i, validator := range weightedProposers {
-		resultSequence[i] = validator.id
+		resultSequence[i] = proposer{
+			id:         validator.id,
+			validation: validator.validation,
+		}
 	}
 
 	return resultSequence
