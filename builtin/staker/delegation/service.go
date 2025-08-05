@@ -11,7 +11,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
-	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -87,8 +86,7 @@ func (s *Service) Add(
 	return delegationID, nil
 }
 
-// todo uncouple this
-func (s *Service) SignalExit(delegationID *big.Int, val *validation.Validation) error {
+func (s *Service) SignalExit(delegationID *big.Int, valCurrentIteration uint32) error {
 	delegation, err := s.GetDelegation(delegationID)
 	if err != nil {
 		return err
@@ -100,15 +98,8 @@ func (s *Service) SignalExit(delegationID *big.Int, val *validation.Validation) 
 	if delegation.Stake.Sign() == 0 {
 		return errors.New("delegation is not active")
 	}
-	if !delegation.Started(val) {
-		return errors.New("delegation has not started yet, funds can be withdrawn")
-	}
-	if delegation.Ended(val) {
-		return errors.New("delegation has ended, funds can be withdrawn")
-	}
 
-	last := val.CurrentIteration()
-	delegation.LastIteration = &last
+	delegation.LastIteration = &valCurrentIteration
 
 	return s.SetDelegation(delegationID, delegation, false)
 }

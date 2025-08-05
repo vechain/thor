@@ -149,7 +149,7 @@ func (s *Staker) GetDelegation(
 		return nil, nil, err
 	}
 	if del.IsEmpty() {
-		return &delegation.Delegation{}, nil, nil
+		return nil, nil, nil
 	}
 	val, err := s.validationService.GetValidation(del.Validator)
 	if err != nil {
@@ -185,7 +185,7 @@ func (s *Staker) GetCompletedPeriods(validator thor.Address) (uint32, error) {
 	return s.validationService.GetCompletedPeriods(validator)
 }
 
-// GetValidatorsTotals returns the total stake, total weight, total delegators stake and total delegators weight.
+// GetValidationTotals returns the total stake, total weight, total delegators stake and total delegators weight.
 func (s *Staker) GetValidationTotals(validator thor.Address) (*validation.Totals, error) {
 	val, err := s.validationService.GetValidation(validator)
 	if err != nil {
@@ -389,7 +389,7 @@ func (s *Staker) AddDelegation(
 	}
 
 	// validate that new TVL is <= Max stake
-	if err := s.validateNextPeriodTVL(validator); err != nil {
+	if err = s.validateNextPeriodTVL(validator); err != nil {
 		return nil, err
 	}
 
@@ -420,7 +420,15 @@ func (s *Staker) SignalDelegationExit(delegationID *big.Int) error {
 		return err
 	}
 
-	if err := s.delegationService.SignalExit(delegationID, val); err != nil {
+	// ensure delegation can be signaled ( delegation has started and has not ended )
+	if !del.Started(val) {
+		return errors.New("delegation has not started yet, funds can be withdrawn")
+	}
+	if del.Ended(val) {
+		return errors.New("delegation has ended, funds can be withdrawn")
+	}
+
+	if err = s.delegationService.SignalExit(delegationID, val.CurrentIteration()); err != nil {
 		logger.Info("update autorenew failed", "delegationID", delegationID, "error", err)
 		return err
 	}
@@ -440,7 +448,6 @@ func (s *Staker) WithdrawDelegation(
 ) (*big.Int, error) {
 	logger.Debug("withdrawing delegation", "delegationID", delegationID)
 
-	// todo refactor to make less calls to the repo
 	del, err := s.delegationService.GetDelegation(delegationID)
 	if err != nil {
 		return nil, err
@@ -451,39 +458,36 @@ func (s *Staker) WithdrawDelegation(
 		return nil, err
 	}
 
+	// ensure the delegation is either queued or finished
 	started := del.Started(val)
 	finished := del.Ended(val)
 	if started && !finished {
 		return nil, errors.New("delegation is not eligible for withdraw")
 	}
 
-	// withdraw from delegation
+	// withdraw delegation
 	withdrawableStake, err := s.delegationService.Withdraw(delegationID)
 	if err != nil {
 		logger.Info("failed to withdraw", "delegationID", delegationID, "error", err)
 		return nil, err
 	}
+
 	// start and finish values are sanitized: !started and finished is impossible
-
-	// update the aggregation
-	del, err = s.delegationService.GetDelegation(delegationID)
-	if err != nil {
-		return nil, err
-	}
-
-	if !started { // delegation's funds are still pending
+	// delegation is still queued
+	if !started {
 		weightedStake := stakes.NewWeightedStake(withdrawableStake, del.Multiplier)
 
-		if err := s.aggregationService.SubPendingVet(del.Validator, weightedStake); err != nil {
+		if err = s.aggregationService.SubPendingVet(del.Validator, weightedStake); err != nil {
 			return nil, err
 		}
 
-		if err := s.globalStatsService.RemoveQueued(weightedStake); err != nil {
+		if err = s.globalStatsService.RemoveQueued(weightedStake); err != nil {
 			return nil, err
 		}
 	}
 
-	if finished { // delegation's funds have move to withdrawable
+	// delegation has finished
+	if finished {
 		if err = s.aggregationService.SubWithdrawableVET(del.Validator, withdrawableStake); err != nil {
 			return nil, err
 		}
