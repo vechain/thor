@@ -29,20 +29,12 @@ var (
 	MinStake = big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
 	MaxStake = big.NewInt(0).Mul(big.NewInt(600e6), big.NewInt(1e18))
 
-	// init params
-	slotLowStakingPeriod    = thor.BytesToBytes32([]byte(("staker-low-staking-period")))
-	slotMediumStakingPeriod = thor.BytesToBytes32([]byte(("staker-medium-staking-period")))
-	slotHighStakingPeriod   = thor.BytesToBytes32([]byte(("staker-high-staking-period")))
-	slotCooldownPeriod      = thor.BytesToBytes32([]byte(("cooldown-period")))
-	slotEpochLength         = thor.BytesToBytes32([]byte(("epoch-length")))
+	LowStakingPeriod    = solidity.NewConfigVariable("staker-low-staking-period", 360*24*7)     // 7 Days
+	MediumStakingPeriod = solidity.NewConfigVariable("staker-medium-staking-period", 360*24*15) // 15 Days
+	HighStakingPeriod   = solidity.NewConfigVariable("staker-high-staking-period", 360*24*30)   // 30 Days
 
-	// todo these do not need to be publicly changeable
-	LowStakingPeriod    = uint32(360) * 24 * 7  // 336 epochs
-	MediumStakingPeriod = uint32(360) * 24 * 15 // 720 epochs
-	HighStakingPeriod   = uint32(360) * 24 * 30 // 1,440 epochs
-
-	cooldownPeriod = uint32(8640)
-	epochLength    = uint32(180)
+	CooldownPeriod = solidity.NewConfigVariable("cooldown-period", 8640) // 8640 blocks, 1 day
+	EpochLength    = solidity.NewConfigVariable("epoch-length", 180)     // 180 epochs
 )
 
 func SetLogger(l log.Logger) {
@@ -64,11 +56,11 @@ func New(addr thor.Address, state *state.State, params *params.Params, charger *
 	sctx := solidity.NewContext(addr, state, charger)
 
 	// debug overrides for testing
-	debugOverride(sctx, &LowStakingPeriod, slotLowStakingPeriod)
-	debugOverride(sctx, &MediumStakingPeriod, slotMediumStakingPeriod)
-	debugOverride(sctx, &HighStakingPeriod, slotHighStakingPeriod)
-	debugOverride(sctx, &epochLength, slotEpochLength)
-	debugOverride(sctx, &cooldownPeriod, slotCooldownPeriod)
+	LowStakingPeriod.Override(sctx)
+	MediumStakingPeriod.Override(sctx)
+	HighStakingPeriod.Override(sctx)
+	CooldownPeriod.Override(sctx)
+	EpochLength.Override(sctx)
 
 	return &Staker{
 		params: params,
@@ -78,11 +70,11 @@ func New(addr thor.Address, state *state.State, params *params.Params, charger *
 		delegationService:  delegation.New(sctx),
 		validationService: validation.New(
 			sctx,
-			cooldownPeriod,
-			epochLength,
-			LowStakingPeriod,
-			MediumStakingPeriod,
-			HighStakingPeriod,
+			CooldownPeriod.Get(),
+			EpochLength.Get(),
+			LowStakingPeriod.Get(),
+			MediumStakingPeriod.Get(),
+			HighStakingPeriod.Get(),
 			MinStake,
 			MaxStake,
 		),
@@ -145,7 +137,7 @@ func (s *Staker) GetWithdrawable(validator thor.Address, block uint32) (*big.Int
 		return nil, err
 	}
 
-	return val.CalculateWithdrawableVET(block, cooldownPeriod), err
+	return val.CalculateWithdrawableVET(block, CooldownPeriod.Get()), err
 }
 
 // GetDelegation returns the delegation.
@@ -214,14 +206,21 @@ func (s *Staker) GetValidationTotals(validator thor.Address) (*validation.Totals
 // Next returns the next validator in a linked list.
 // If the provided address is not in a list, it will return empty bytes.
 func (s *Staker) Next(prev thor.Address) (thor.Address, error) {
-	entry, err := s.validationService.GetValidation(prev)
+	// First check leader group
+	next, err := s.validationService.LeaderGroupNext(prev)
 	if err != nil {
 		return thor.Address{}, err
 	}
-	if entry.IsEmpty() || entry.Next == nil {
-		return thor.Address{}, nil
+	if !next.IsZero() {
+		return next, nil
 	}
-	return *entry.Next, nil
+
+	// Then check validator queue
+	next, err = s.validationService.ValidatorQueueNext(prev)
+	if err != nil {
+		return thor.Address{}, err
+	}
+	return next, nil
 }
 
 //
@@ -516,15 +515,4 @@ func (s *Staker) validateNextPeriodTVL(validator thor.Address) error {
 	}
 
 	return nil
-}
-
-func debugOverride(sctx *solidity.Context, ptr *uint32, bytes32 thor.Bytes32) {
-	if num, err := solidity.NewUint256(sctx, bytes32).Get(); err == nil {
-		numUint64 := num.Uint64()
-		if numUint64 != 0 {
-			o := uint32(numUint64)
-			logger.Debug("overrode state value", "variable", bytes32.String(), "value", o)
-			*ptr = o
-		}
-	}
 }

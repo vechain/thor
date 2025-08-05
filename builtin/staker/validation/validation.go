@@ -49,9 +49,6 @@ type Validation struct {
 	WithdrawableVET  *big.Int // the amount of VET that is currently withdrawable
 
 	Weight *big.Int // LockedVET x2 + total weight from delegators
-
-	Next *thor.Address `rlp:"nil"` // doubly linked list
-	Prev *thor.Address `rlp:"nil"` // doubly linked list
 }
 
 type Totals struct {

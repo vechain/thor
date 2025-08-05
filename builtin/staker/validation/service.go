@@ -13,12 +13,13 @@ import (
 
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/builtin/staker/delta"
+	"github.com/vechain/thor/v2/builtin/staker/linkedlist"
 	"github.com/vechain/thor/v2/thor"
 )
 
 type Service struct {
-	leaderGroup         *LinkedList
-	validatorQueue      *LinkedList
+	leaderGroup         *linkedlist.LinkedList
+	validatorQueue      *linkedlist.LinkedList
 	lowStakingPeriod    uint32
 	mediumStakingPeriod uint32
 	highStakingPeriod   uint32
@@ -56,8 +57,8 @@ func New(sctx *solidity.Context,
 	return &Service{
 		repo: repo,
 
-		leaderGroup:         NewLinkedList(sctx, repo, slotActiveHead, slotActiveTail, slotActiveGroupSize),
-		validatorQueue:      NewLinkedList(sctx, repo, slotQueuedHead, slotQueuedTail, slotQueuedGroupSize),
+		leaderGroup:         linkedlist.NewLinkedList(sctx, slotActiveHead, slotActiveTail, slotActiveGroupSize),
+		validatorQueue:      linkedlist.NewLinkedList(sctx, slotQueuedHead, slotQueuedTail, slotQueuedGroupSize),
 		lowStakingPeriod:    lowStakingPeriod,
 		mediumStakingPeriod: mediumStakingPeriod,
 		highStakingPeriod:   highStakingPeriod,
@@ -97,12 +98,21 @@ func (s *Service) IncreaseDelegatorsReward(node thor.Address, reward *big.Int) e
 }
 
 func (s *Service) LeaderGroupIterator(callback func(thor.Address, *Validation) error) error {
-	return s.leaderGroup.Iter(callback)
+	return s.leaderGroup.Iter(func(address thor.Address) error {
+		// Fetch the validation object for this address
+		validation, err := s.repo.GetValidation(address)
+		if err != nil {
+			return err
+		}
+
+		// Call the original callback with both address and validation
+		return callback(address, validation)
+	})
 }
 
 // IsActive returns true if there are active validations.
 func (s *Service) IsActive() (bool, error) {
-	activeCount, err := s.leaderGroup.Count()
+	activeCount, err := s.leaderGroup.Len()
 	if err != nil {
 		return false, err
 	}
@@ -129,12 +139,13 @@ func (s *Service) LeaderGroupSize() (*big.Int, error) {
 	return s.leaderGroup.Len()
 }
 
-func (s *Service) AddLeaderGroup(address thor.Address, val *Validation) (bool, error) {
-	return s.leaderGroup.Add(address, val)
-}
-
 func (s *Service) GetLeaderGroupHead() (*Validation, error) {
-	return s.leaderGroup.Peek()
+	validatorID, err := s.leaderGroup.Head()
+	if err != nil {
+		return nil, err
+	}
+
+	return s.GetValidation(validatorID)
 }
 
 // LeaderGroup lists all registered candidates.
@@ -181,15 +192,11 @@ func (s *Service) Add(
 		Weight:             big.NewInt(0),
 	}
 
-	added, err := s.validatorQueue.Add(validator, entry)
-	if err != nil {
+	if err = s.validatorQueue.Add(validator); err != nil {
 		return err
 	}
-	if !added {
-		return errors.New("failed to add validator to queue")
-	}
 
-	return nil
+	return s.SetValidation(validator, entry, true)
 }
 
 func (s *Service) SignalExit(validator thor.Address, endorsor thor.Address) error {
@@ -297,11 +304,11 @@ func (s *Service) WithdrawStake(validator thor.Address, endorsor thor.Address, c
 	if val.Status == StatusQueued {
 		val.QueuedVET = big.NewInt(0)
 		val.Status = StatusExit
-		if _, err := s.validatorQueue.Remove(validator, val); err != nil {
+		if err = s.validatorQueue.Remove(validator); err != nil {
 			return nil, err
 		}
 	}
-	// remove any queued
+	// remove any que
 	if val.QueuedVET.Sign() > 0 {
 		val.QueuedVET = big.NewInt(0)
 	}
@@ -315,32 +322,33 @@ func (s *Service) WithdrawStake(validator thor.Address, endorsor thor.Address, c
 	return withdrawable, nil
 }
 
-func (s *Service) NextToActivate(maxLeaderGroupSize *big.Int) (*thor.Address, *Validation, error) {
+func (s *Service) NextToActivate(maxLeaderGroupSize *big.Int) (*thor.Address, error) {
 	leaderGroupLength, err := s.leaderGroup.Len()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if leaderGroupLength.Cmp(maxLeaderGroupSize) >= 0 {
-		return nil, nil, errors.New("leader group is full")
+		return nil, errors.New("leader group is full")
 	}
 	// Check if queue is empty
 	queuedSize, err := s.validatorQueue.Len()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if queuedSize.Cmp(big.NewInt(0)) <= 0 {
-		return nil, nil, errors.New("no validator in the queue")
+		return nil, errors.New("no validator in the queue")
 	}
 	// pop the head of the queue
-	validator, val, err := s.validatorQueue.Pop()
+	validatorID, err := s.validatorQueue.Pop()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	if val.IsEmpty() {
-		return nil, nil, errors.New("no validator in the queue")
+	// ensure validation exists
+	if _, err = s.GetExistingValidation(validatorID); err != nil {
+		return nil, err
 	}
 
-	return &validator, val, nil
+	return &validatorID, nil
 }
 
 // ExitValidator removes the validator from the active list and puts it in cooldown.
@@ -353,8 +361,12 @@ func (s *Service) ExitValidator(validator thor.Address) (*delta.Exit, error) {
 		return nil, nil
 	}
 	exit := entry.Exit()
-	if _, err := s.leaderGroup.Remove(validator, entry); err != nil {
-		return nil, errors.Wrap(err, "failed to remove validator from active group")
+	if err = s.leaderGroup.Remove(validator); err != nil {
+		return nil, err
+	}
+
+	if err = s.SetValidation(validator, entry, false); err != nil {
+		return nil, err
 	}
 
 	return exit, nil
@@ -401,6 +413,59 @@ func (s *Service) GetDelegatorRewards(validator thor.Address, stakingPeriod uint
 	return s.repo.GetReward(key)
 }
 
+// ActivateValidator transitions a validator from queued to active status.
+// It updates the validator's state and adds it to the leader group.
+// Returns a delta object representing the state changes.
+func (s *Service) ActivateValidator(
+	validationID thor.Address,
+	currentBlock uint32,
+	aggRenew *delta.Renewal,
+) (*delta.Renewal, error) {
+	val, err := s.GetExistingValidation(validationID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update validator values
+	// ensure a queued validator does not have locked vet
+	if val.LockedVET.Sign() > 0 {
+		return nil, errors.New("cannot activate validator with already locked vet")
+	}
+	// QueuedVET is now locked
+	val.LockedVET = big.NewInt(0).Set(val.QueuedVET)
+	// Reset QueuedVET - already locked-in
+	val.QueuedVET = big.NewInt(0)
+
+	// x2 multiplier for validator's stake
+	weightedStake := WeightedStake(val.LockedVET)
+	val.Weight = big.NewInt(0).Add(weightedStake.Weight(), aggRenew.NewLockedWeight)
+
+	// Update validator status
+	val.Status = StatusActive
+	val.Online = true
+	val.StartBlock = currentBlock
+
+	// Add to the leader group list
+	if err := s.leaderGroup.Add(validationID); err != nil {
+		return nil, err
+	}
+
+	// Persist the updated validation state
+	if err = s.SetValidation(validationID, val, false); err != nil {
+		return nil, err
+	}
+
+	// Return delta representing the state changes
+	validatorRenewal := &delta.Renewal{
+		NewLockedVET:         val.LockedVET,
+		NewLockedWeight:      val.Weight,
+		QueuedDecrease:       val.LockedVET,
+		QueuedDecreaseWeight: weightedStake.Weight(),
+	}
+
+	return validatorRenewal, nil
+}
+
 //
 // Repository methods
 //
@@ -422,4 +487,12 @@ func (s *Service) GetExistingValidation(validator thor.Address) (*Validation, er
 
 func (s *Service) SetValidation(validator thor.Address, entry *Validation, isNew bool) error {
 	return s.repo.SetValidation(validator, entry, isNew)
+}
+
+func (s *Service) LeaderGroupNext(prev thor.Address) (thor.Address, error) {
+	return s.leaderGroup.Next(prev)
+}
+
+func (s *Service) ValidatorQueueNext(prev thor.Address) (thor.Address, error) {
+	return s.validatorQueue.Next(prev)
 }
