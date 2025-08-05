@@ -6,6 +6,8 @@
 package solidity
 
 import (
+	"math/big"
+
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -42,11 +44,15 @@ func (c *ConfigVariable) Override(ctx *Context) {
 	if c.initialised { // early return to prevent subsequent reads
 		return
 	}
-	num, err := NewUint256(ctx, c.slot).Get()
+	// Not using NewUint256 because it will charge gas for reading the storage slot.
+	// Can cause consensus issues.
+	storage, err := ctx.state.GetStorage(ctx.address, c.slot)
 	if err != nil {
 		log.Warn("failed to read config value", "slot", c.Name(), "error", err)
 		return
 	}
+	num := new(big.Int).SetBytes(storage.Bytes())
+
 	c.initialised = true
 
 	if num.Uint64() != 0 {
