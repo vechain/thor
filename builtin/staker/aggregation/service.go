@@ -19,12 +19,12 @@ var slotAggregations = thor.BytesToBytes32([]byte("aggregated-delegations"))
 
 // Service manages delegation aggregations for each validator.
 type Service struct {
-	aggregationStorage *solidity.Mapping[thor.Address, *Aggregation]
+	aggregationStorage *solidity.Mapping[thor.Address, Aggregation]
 }
 
 func New(sctx *solidity.Context) *Service {
 	return &Service{
-		aggregationStorage: solidity.NewMapping[thor.Address, *Aggregation](sctx, slotAggregations),
+		aggregationStorage: solidity.NewMapping[thor.Address, Aggregation](sctx, slotAggregations),
 	}
 }
 
@@ -36,13 +36,15 @@ func (s *Service) GetAggregation(validator thor.Address) (*Aggregation, error) {
 		return nil, errors.Wrap(err, "failed to get validator aggregation")
 	}
 
-	// never return nil pointer aggregations
-	// no need to check all properties it
-	// should never happen a case where (e.g.) d.LockedVET == nil and d.WithdrawableVET != nil
-	if d == nil || d.LockedVET == nil {
-		d = newAggregation()
+	if d.LockedVET == nil {
+		return newAggregation(), nil
 	}
-	return d, nil
+	return &d, nil
+}
+
+// setAggregation stores the Aggregation
+func (s *Service) setAggregation(validator thor.Address, agg *Aggregation, newValue bool) error {
+	return s.aggregationStorage.Set(validator, *agg, newValue)
 }
 
 // AddPendingVET adds a new delegation to the validator's pending pool.
@@ -56,7 +58,7 @@ func (s *Service) AddPendingVET(validator thor.Address, weight *big.Int, stake *
 	agg.PendingVET = big.NewInt(0).Add(agg.PendingVET, stake)
 	agg.PendingWeight = big.NewInt(0).Add(agg.PendingWeight, weight)
 
-	return s.aggregationStorage.Set(validator, agg, false)
+	return s.setAggregation(validator, agg, false)
 }
 
 // SubPendingVet removes VET from the validator's pending pool.
@@ -70,7 +72,7 @@ func (s *Service) SubPendingVet(validator thor.Address, stake *big.Int, weight *
 	agg.PendingVET = big.NewInt(0).Sub(agg.PendingVET, stake)
 	agg.PendingWeight = big.NewInt(0).Sub(agg.PendingWeight, weight)
 
-	return s.aggregationStorage.Set(validator, agg, false)
+	return s.setAggregation(validator, agg, false)
 }
 
 // Renew transitions the validator's delegations to the next staking period.
@@ -83,7 +85,7 @@ func (s *Service) Renew(validator thor.Address) (*delta.Renewal, error) {
 
 	renew := agg.renew()
 
-	if err = s.aggregationStorage.Set(validator, agg, false); err != nil {
+	if err = s.setAggregation(validator, agg, false); err != nil {
 		return nil, err
 	}
 
@@ -103,7 +105,7 @@ func (s *Service) Exit(validator thor.Address) (*delta.Exit, error) {
 		return nil, err
 	}
 
-	if err = s.aggregationStorage.Set(validator, agg, false); err != nil {
+	if err = s.setAggregation(validator, agg, false); err != nil {
 		return nil, err
 	}
 
@@ -123,5 +125,5 @@ func (s *Service) SignalExit(validator thor.Address, exitingStake *big.Int, exit
 	agg.ExitingVET = big.NewInt(0).Add(agg.ExitingVET, exitingStake)
 	agg.ExitingWeight = big.NewInt(0).Add(agg.ExitingWeight, exitingWeight)
 
-	return s.aggregationStorage.Set(validator, agg, false)
+	return s.setAggregation(validator, agg, false)
 }

@@ -193,27 +193,24 @@ func TestIsStargatePaused(t *testing.T) {
 	charger := gascharger.New(setup.Xenv(setup.params, nil))
 
 	// The KeyStargateSwitches not initialized, so the stargate is not paused
-	isPaused, err := builtin.IsStargatePaused(setup.state, charger)
+	err := builtin.IsStargatePaused(setup.state, charger)
 	require.NoError(t, err, "Function IsStargatePaused should not return error %s", err)
-	require.False(t, isPaused, "Stargate should not be paused")
 
 	// Set Stargate pause active
 	result := executeParamesNativeMethod(t, setup, "native_set", []any{thor.KeyStargateSwitches, big.NewInt(3)}) // Set the first bit to 1
 	_, err = unpackResult(result)
 	require.NoError(t, err, "Function native_set should not return error %s", err)
 
-	isPaused, err = builtin.IsStargatePaused(setup.state, charger)
-	require.NoError(t, err, "Function IsStargatePaused should not return error %s", err)
-	require.True(t, isPaused, "Stargate should be paused")
+	err = builtin.IsStargatePaused(setup.state, charger)
+	require.ErrorContains(t, err, "stargate is paused", "Function IsStargatePaused should return error")
 
 	// Set Stargate pause inactive
 	result = executeParamesNativeMethod(t, setup, "native_set", []any{thor.KeyStargateSwitches, big.NewInt(0)}) // Set the first bit to 0
 	_, err = unpackResult(result)
 	require.NoError(t, err, "Function native_set should not return error %s", err)
 
-	isPaused, err = builtin.IsStargatePaused(setup.state, charger)
+	err = builtin.IsStargatePaused(setup.state, charger)
 	require.NoError(t, err, "Function IsStargatePaused should not return error %s", err)
-	require.False(t, isPaused, "Stargate should not be paused")
 }
 
 func TestIsStakerPaused(t *testing.T) {
@@ -221,27 +218,24 @@ func TestIsStakerPaused(t *testing.T) {
 	charger := gascharger.New(setup.Xenv(setup.params, nil))
 
 	// The KeyStargateSwitches not initialized, so the Staker is not paused
-	isPaused, err := builtin.IsStakerPaused(setup.state, charger)
+	err := builtin.IsStakerPaused(setup.state, charger)
 	require.NoError(t, err, "Function IsStakerPaused should not return error %s", err)
-	require.False(t, isPaused, "Staker should not be paused")
 
 	// Set Staker pause active
 	result := executeParamesNativeMethod(t, setup, "native_set", []any{thor.KeyStargateSwitches, big.NewInt(2)}) // Set the second bit to 1
 	_, err = unpackResult(result)
 	require.NoError(t, err, "Function native_set should not return error %s", err)
 
-	isPaused, err = builtin.IsStakerPaused(setup.state, charger)
-	require.NoError(t, err, "Function IsStakerPaused should not return error %s", err)
-	require.True(t, isPaused, "Staker should be paused")
+	err = builtin.IsStakerPaused(setup.state, charger)
+	require.ErrorContains(t, err, "staker is paused", "Function IsStakerPaused should return error")
 
 	// Set Staker pause inactive
 	result = executeParamesNativeMethod(t, setup, "native_set", []any{thor.KeyStargateSwitches, big.NewInt(4)}) // Set the second bit to 0
 	_, err = unpackResult(result)
 	require.NoError(t, err, "Function native_set should not return error %s", err)
 
-	isPaused, err = builtin.IsStakerPaused(setup.state, charger)
+	err = builtin.IsStakerPaused(setup.state, charger)
 	require.NoError(t, err, "Function IsStakerPaused should not return error %s", err)
-	require.False(t, isPaused, "Staker should not be paused")
 }
 
 func TestAddAndExitValidatorForPause(t *testing.T) {

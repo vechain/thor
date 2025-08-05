@@ -109,7 +109,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_addValidation",
-			expectedGas: 38400,
+			expectedGas: 68400,
 			args:        []any{account1, account1, staker.LowStakingPeriod, staker.MinStake},
 			description: "Add a new validator (not implemented yet)",
 		},
@@ -129,14 +129,14 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:     "native_next",
-			expectedGas:  1400,
+			expectedGas:  1000,
 			args:         []any{account1},
 			description:  "Get next validator in the queue",
 			preTestHooks: []TestHook{preTestAddValidation(account1)},
 		},
 		{
 			function:     "native_withdrawStake",
-			expectedGas:  48000,
+			expectedGas:  37800,
 			args:         []any{account1, account1},
 			description:  "Withdraw stake for a validator",
 			preTestHooks: []TestHook{preTestAddValidation(account1)},

@@ -21,7 +21,7 @@ var (
 )
 
 type Repository struct {
-	validations *solidity.Mapping[thor.Address, *Validation]
+	validations *solidity.Mapping[thor.Address, Validation]
 	rewards     *solidity.Mapping[thor.Bytes32, *big.Int] // stores rewards per validator staking period
 
 	exits *solidity.Mapping[*big.Int, thor.Address] // exit block -> validator ID
@@ -29,7 +29,7 @@ type Repository struct {
 
 func NewRepository(sctx *solidity.Context) *Repository {
 	return &Repository{
-		validations: solidity.NewMapping[thor.Address, *Validation](sctx, slotValidations),
+		validations: solidity.NewMapping[thor.Address, Validation](sctx, slotValidations),
 		rewards:     solidity.NewMapping[thor.Bytes32, *big.Int](sctx, slotRewards),
 		exits:       solidity.NewMapping[*big.Int, thor.Address](sctx, slotExitEpochs),
 	}
@@ -40,18 +40,25 @@ func (r *Repository) GetValidation(validator thor.Address) (*Validation, error) 
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get validator")
 	}
-	return v, nil
+	return &v, nil
 }
 
 func (r *Repository) SetValidation(validator thor.Address, entry *Validation, isNew bool) error {
-	if err := r.validations.Set(validator, entry, isNew); err != nil {
+	if err := r.validations.Set(validator, *entry, isNew); err != nil {
 		return errors.Wrap(err, "failed to set validator")
 	}
 	return nil
 }
 
 func (r *Repository) GetReward(key thor.Bytes32) (*big.Int, error) {
-	return r.rewards.Get(key)
+	reward, err := r.rewards.Get(key)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get reward")
+	}
+	if reward == nil {
+		return new(big.Int), nil
+	}
+	return reward, nil
 }
 
 func (r *Repository) SetReward(key thor.Bytes32, val *big.Int, isNew bool) error {
