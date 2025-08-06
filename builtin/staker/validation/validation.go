@@ -9,6 +9,7 @@ import (
 	"math/big"
 
 	"github.com/vechain/thor/v2/builtin/staker/delta"
+	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -20,6 +21,17 @@ const (
 	StatusActive                 // When activated by protocol
 	StatusExit                   // Validation should not be used again
 )
+
+const (
+	Multiplier = 200 // 200% for validators
+)
+
+func WeightedStake(amount *big.Int) *stakes.WeightedStake {
+	if amount == nil {
+		amount = big.NewInt(0)
+	}
+	return stakes.NewWeightedStake(amount, Multiplier)
+}
 
 type Validation struct {
 	Endorsor           thor.Address // the address providing the stake
@@ -37,12 +49,9 @@ type Validation struct {
 	WithdrawableVET  *big.Int // the amount of VET that is currently withdrawable
 
 	Weight *big.Int // LockedVET x2 + total weight from delegators
-
-	Next *thor.Address `rlp:"nil"` // doubly linked list
-	Prev *thor.Address `rlp:"nil"` // doubly linked list
 }
 
-type ValidationTotals struct {
+type Totals struct {
 	TotalLockedStake        *big.Int // total locked stake in validation (current period), validation's stake + all delegators stake
 	TotalLockedWeight       *big.Int // total locked weight in validation (current period), validation's weight + all delegators weight
 	DelegationsLockedStake  *big.Int // total locked stake in validation (current period) by all delegators
@@ -92,16 +101,45 @@ func (v *Validation) Renew() *delta.Renewal {
 	v.PendingUnlockVET = big.NewInt(0)
 
 	// Apply x2 multiplier for validation's stake
-	newLockedWeight := big.NewInt(0).Mul(newLockedVET, pkgValidatorWeightMultiplier)
-	queuedDecreaseWeight := big.NewInt(0).Mul(queuedDecrease, pkgValidatorWeightMultiplier)
+	weight := WeightedStake(newLockedVET).Weight()
+	queuedDecreaseWeight := WeightedStake(queuedDecrease).Weight()
 
 	v.CompleteIterations++
 
 	return &delta.Renewal{
 		NewLockedVET:         newLockedVET,
-		NewLockedWeight:      newLockedWeight,
+		NewLockedWeight:      weight,
 		QueuedDecrease:       queuedDecrease,
 		QueuedDecreaseWeight: queuedDecreaseWeight,
+	}
+}
+
+func (v *Validation) Exit() *delta.Exit {
+	releaseLockedTVL := big.NewInt(0).Set(v.LockedVET)
+	releaseQueuedTVL := big.NewInt(0).Set(v.QueuedVET)
+
+	// move locked to cooldown
+	v.Status = StatusExit
+	v.CooldownVET = big.NewInt(0).Set(v.LockedVET)
+	v.LockedVET = big.NewInt(0)
+	v.PendingUnlockVET = big.NewInt(0)
+	v.Weight = big.NewInt(0)
+
+	// unlock pending stake
+	if v.QueuedVET.Sign() == 1 {
+		// pending never contributes to weight as it's not active
+		v.WithdrawableVET = big.NewInt(0).Add(v.WithdrawableVET, v.QueuedVET)
+		v.QueuedVET = big.NewInt(0)
+	}
+
+	v.CompleteIterations++
+
+	// We only return the change in the validation's TVL and weight
+	return &delta.Exit{
+		ExitedTVL:            releaseLockedTVL,
+		ExitedTVLWeight:      WeightedStake(releaseLockedTVL).Weight(),
+		QueuedDecrease:       releaseQueuedTVL,
+		QueuedDecreaseWeight: WeightedStake(releaseQueuedTVL).Weight(),
 	}
 }
 

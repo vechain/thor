@@ -47,6 +47,8 @@ const (
 	GasTargetPercentage      = 75                 // percentage of the block gas limit to determine the gas target
 	InitialBaseFee           = 10_000_000_000_000 // 10^13 wei, 0.00001 VTHO
 	BaseFeeChangeDenominator = 8                  // determines the percentage change in the base fee per block based on network utilization
+
+	MaxPosScore = 10000 // max total score after PoS fork
 )
 
 // Keys of governance params.
@@ -58,7 +60,8 @@ var (
 	KeyProposerEndorsement       = BytesToBytes32([]byte("proposer-endorsement"))
 	KeyMaxBlockProposers         = BytesToBytes32([]byte("max-block-proposers"))
 	KeyStargateContractAddress   = BytesToBytes32([]byte("stargate-contract-address"))
-	KeyCurveFactor               = BytesToBytes32([]byte("curve-factor")) // curve factor to define VTHO issuance after PoS
+	KeyCurveFactor               = BytesToBytes32([]byte("curve-factor"))      // curve factor to define VTHO issuance after PoS
+	KeyStargateSwitches          = BytesToBytes32([]byte("stargate-switches")) // Stargate switches to control the pause of staker and stargate
 
 	InitialRewardRatio               = big.NewInt(3e17) // 30%
 	InitialValidatorRewardPercentage = 30               // 30%
