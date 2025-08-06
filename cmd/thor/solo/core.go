@@ -69,6 +69,12 @@ func (c *Core) Pack(pendingTxs tx.Transactions, onDemand bool) ([]*tx.Transactio
 	best := c.repo.BestBlockSummary()
 	now := uint64(time.Now().Unix())
 
+	// If on-demand and now equals the best timestamp, this will create blocks with future timestamps
+	// Otherwise, new blocks have the same timestamp as the best block
+	if c.options.OnDemand {
+		now = best.Header.Timestamp() + c.options.BlockInterval
+	}
+
 	var txsToRemove []*tx.Transaction
 
 	if c.options.GasLimit == 0 {

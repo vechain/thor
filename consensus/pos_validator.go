@@ -10,6 +10,7 @@ import (
 
 	"github.com/vechain/thor/v2/block"
 	stakerContract "github.com/vechain/thor/v2/builtin/staker"
+	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/pos"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -18,7 +19,7 @@ func (c *Consensus) validateStakingProposer(
 	header *block.Header,
 	parent *block.Header,
 	staker *stakerContract.Staker,
-	providedLeaders map[thor.Address]*stakerContract.Validation,
+	providedLeaders map[thor.Address]*validation.Validation,
 ) error {
 	signer, err := header.Signer()
 	if err != nil {
@@ -31,9 +32,9 @@ func (c *Consensus) validateStakingProposer(
 		return err
 	}
 
-	var leaders map[thor.Address]*stakerContract.Validation
+	var leaders map[thor.Address]*validation.Validation
 	if entry, ok := c.validatorsCache.Get(parent.ID()); ok {
-		possiblyLeaders, ok := entry.(*map[thor.Address]*stakerContract.Validation)
+		possiblyLeaders, ok := entry.(*map[thor.Address]*validation.Validation)
 		if ok {
 			leaders = *possiblyLeaders
 		} else {
@@ -59,7 +60,12 @@ func (c *Consensus) validateStakingProposer(
 	if !sched.IsTheTime(header.Timestamp()) {
 		return consensusError(fmt.Sprintf("pos - block timestamp unscheduled: t %v, s %v", header.Timestamp(), signer))
 	}
-	updates, score := sched.Updates(header.Timestamp())
+
+	_, totalWeight, err := staker.LockedVET()
+	if err != nil {
+		return consensusError(fmt.Sprintf("pos - cannot get total weight: %v", err))
+	}
+	updates, score := sched.Updates(header.Timestamp(), totalWeight)
 	if parent.TotalScore()+score != header.TotalScore() {
 		return consensusError(fmt.Sprintf("pos - block total score invalid: want %v, have %v", parent.TotalScore()+score, header.TotalScore()))
 	}

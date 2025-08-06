@@ -7,22 +7,23 @@ package pos
 
 import (
 	"math/big"
-	mathrand "math/rand"
 	"testing"
+
+	mathrand "math/rand"
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vechain/thor/v2/builtin/staker"
+	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/thor"
 )
 
-func createParams() (map[thor.Address]*staker.Validation, *big.Int) {
-	validators := make(map[thor.Address]*staker.Validation)
+func createParams() (map[thor.Address]*validation.Validation, *big.Int) {
+	validators := make(map[thor.Address]*validation.Validation)
 	totalStake := big.NewInt(0)
 	for _, acc := range genesis.DevAccounts() {
 		stake := big.NewInt(0).SetBytes(acc.Address[10:]) // use the last 10 bytes to create semi random, but deterministic stake
-		validator := &staker.Validation{
+		validator := &validation.Validation{
 			Weight: stake,
 			Online: true,
 		}
@@ -138,13 +139,13 @@ func TestScheduler_Distribution(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			validators := make(map[thor.Address]*staker.Validation)
+			validators := make(map[thor.Address]*validation.Validation)
 			totalStake := big.NewInt(0)
 
 			for i, acc := range genesis.DevAccounts() {
 				stake := tc.stakes(i, acc.Address)
 				stake = stake.Mul(stake, big.NewInt(1e18)) // convert to wei
-				validators[acc.Address] = &staker.Validation{
+				validators[acc.Address] = &validation.Validation{
 					Weight: stake,
 					Online: true,
 				}
@@ -216,17 +217,32 @@ func TestScheduler_Updates(t *testing.T) {
 	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, parentTime, []byte("seed1"))
 	assert.NoError(t, err)
 
-	updates, score := sched.Updates(nowTime)
+	totalWeight := big.NewInt(0)
+	for validator := range validators {
+		val := validators[validator]
+		totalWeight = big.NewInt(0).Add(val.Weight, totalWeight)
+	}
+
+	updates, score := sched.Updates(nowTime, totalWeight)
 
 	offline := 0
-	for _, online := range updates {
+	offlineWeight := big.NewInt(0)
+	for id, online := range updates {
 		if !online {
 			offline++
+			val := validators[id]
+			offlineWeight = offlineWeight.Add(offlineWeight, val.Weight)
 		}
 	}
 
+	scaledScore := new(big.Int).Sub(totalWeight, offlineWeight)
+	scaledScore = new(big.Int).Mul(scaledScore, big.NewInt(thor.MaxPosScore))
+	scaledScore.Div(scaledScore, totalWeight)
+
+	expected := scaledScore.Uint64()
+
 	assert.Equal(t, 1, offline)
-	assert.Equal(t, 9, int(score))
+	assert.Equal(t, expected, score)
 }
 
 func TestScheduler_TotalPlacements(t *testing.T) {
@@ -243,7 +259,7 @@ func TestScheduler_TotalPlacements(t *testing.T) {
 	// check total stake in scheduler, should only use online validators
 	total := big.NewInt(0)
 	for _, p := range sched.sequence {
-		total.Add(total, validators[p].Weight)
+		total.Add(total, validators[p.id].Weight)
 	}
 
 	expectedStake := totalStake.Sub(totalStake, validators[otherAcc].Weight)
@@ -252,7 +268,7 @@ func TestScheduler_TotalPlacements(t *testing.T) {
 }
 
 func TestScheduler_AllValidatorsScheduled(t *testing.T) {
-	validators := make(map[thor.Address]*staker.Validation)
+	validators := make(map[thor.Address]*validation.Validation)
 	lowStakeAcc := genesis.DevAccounts()[0].Address
 	for _, acc := range genesis.DevAccounts() {
 		var stake *big.Int
@@ -263,7 +279,7 @@ func TestScheduler_AllValidatorsScheduled(t *testing.T) {
 			eth := big.NewInt(1e18)
 			stake = new(big.Int).Mul(eth, eth)
 		}
-		validator := &staker.Validation{
+		validator := &validation.Validation{
 			Weight: stake,
 			Online: true,
 		}
@@ -280,10 +296,36 @@ func TestScheduler_AllValidatorsScheduled(t *testing.T) {
 
 	seen := make(map[thor.Address]bool)
 	for _, id := range sched.sequence {
-		if seen[id] {
-			t.Fatalf("Validator %s is scheduled multiple times", id)
+		if seen[id.id] {
+			t.Fatalf("Validator %s is scheduled multiple times", id.id)
 		}
-		seen[id] = true
+		seen[id.id] = true
 	}
 	assert.Equal(t, len(seen), len(validators))
+}
+
+func TestScheduler_Schedule_TotalScore(t *testing.T) {
+	validators := make(map[thor.Address]*validation.Validation)
+	totalStake := big.NewInt(0)
+	weight := big.NewInt(10_000)
+	for _, acc := range genesis.DevAccounts() {
+		validator := &validation.Validation{
+			Weight: weight,
+			Online: true,
+		}
+		validators[acc.Address] = validator
+		totalStake.Add(totalStake, validator.Weight)
+	}
+
+	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed1"))
+	assert.NoError(t, err)
+
+	updates, score := sched.Updates(30, totalStake)
+	assert.Equal(t, 1, len(updates), "There should be one update")
+
+	onlineWeight := big.NewInt(0).Mul(weight, big.NewInt(int64(len(validators)-1)))
+
+	expectedScore := big.NewInt(0).Mul(onlineWeight, big.NewInt(thor.MaxPosScore))
+	expectedScore = expectedScore.Div(expectedScore, totalStake)
+	assert.Equal(t, int(expectedScore.Uint64()), int(score), "Score should be equal to the expected score")
 }

@@ -43,13 +43,13 @@ import (
 
 type TestHook func(*testing.T, *testSetup)
 
-func preTestAddValidator(acc thor.Address) TestHook {
+func preTestAddValidation(acc thor.Address) TestHook {
 	stake := big.NewInt(0).Mul(staker.MinStake, big.NewInt(2))
 	return func(t *testing.T, setup *testSetup) {
-		executeNativeFunction(t, setup, "native_addValidator", []any{
+		executeNativeFunction(t, setup, "native_addValidation", []any{
 			acc,
 			acc,
-			staker.LowStakingPeriod,
+			staker.LowStakingPeriod.Get(),
 			stake,
 		})
 	}
@@ -79,25 +79,25 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		// Basic read operations (no arguments)
 		{
 			function:    "native_totalStake",
-			expectedGas: 1400,
+			expectedGas: 400,
 			args:        []any{},
 			description: "Get total locked stake",
 		},
 		{
 			function:    "native_queuedStake",
-			expectedGas: 1400,
+			expectedGas: 400,
 			args:        []any{},
 			description: "Get total queued stake",
 		},
 		{
 			function:    "native_firstActive",
-			expectedGas: 1200,
+			expectedGas: 200,
 			args:        []any{},
 			description: "Get first active validator",
 		},
 		{
 			function:    "native_firstQueued",
-			expectedGas: 1200,
+			expectedGas: 200,
 			args:        []any{},
 			description: "Get first queued validator",
 		},
@@ -108,38 +108,38 @@ func TestStakerNativeGasCosts(t *testing.T) {
 			description: "Get delegator contract address",
 		},
 		{
-			function:    "native_addValidator",
-			expectedGas: 58200,
-			args:        []any{account1, account1, staker.LowStakingPeriod, staker.MinStake},
+			function:    "native_addValidation",
+			expectedGas: 66600,
+			args:        []any{account1, account1, staker.LowStakingPeriod.Get(), staker.MinStake},
 			description: "Add a new validator (not implemented yet)",
 		},
 		{
 			function:     "native_get",
-			expectedGas:  1400,
+			expectedGas:  400,
 			args:         []any{account1},
 			description:  "Get validator by it's ID (not implemented yet)",
-			preTestHooks: []TestHook{preTestAddValidator(account1)},
+			preTestHooks: []TestHook{preTestAddValidation(account1)},
 		},
 		{
 			function:     "native_getWithdrawable",
-			expectedGas:  1400,
+			expectedGas:  400,
 			args:         []any{account1},
 			description:  "Get withdraw information for a validator",
-			preTestHooks: []TestHook{preTestAddValidator(account1)},
+			preTestHooks: []TestHook{preTestAddValidation(account1)},
 		},
 		{
 			function:     "native_next",
-			expectedGas:  1400,
+			expectedGas:  400,
 			args:         []any{account1},
 			description:  "Get next validator in the queue",
-			preTestHooks: []TestHook{preTestAddValidator(account1)},
+			preTestHooks: []TestHook{preTestAddValidation(account1)},
 		},
 		{
 			function:     "native_withdrawStake",
-			expectedGas:  37000,
+			expectedGas:  37200,
 			args:         []any{account1, account1},
 			description:  "Withdraw stake for a validator",
-			preTestHooks: []TestHook{preTestAddValidator(account1)},
+			preTestHooks: []TestHook{preTestAddValidation(account1)},
 		},
 		// {
 		// 	function:    "native_signalExit",
@@ -149,88 +149,88 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		// 		accToID(account1),
 		// 	},
 		// 	description:  "Signal exit for a validator",
-		// 	preTestHooks: []TestHook{preTestAddValidator(account1)},
+		// 	preTestHooks: []TestHook{preTestAddValidation(account1)},
 		// },
 		{
 			function:    "native_increaseStake",
-			expectedGas: 22000,
+			expectedGas: 21600,
 			args: []any{
 				account1,
 				account1,
 				staker.MinStake,
 			},
 			description:  "Increase stake for a validator",
-			preTestHooks: []TestHook{preTestAddValidator(account1)},
+			preTestHooks: []TestHook{preTestAddValidation(account1)},
 		},
 		{
 			function:    "native_decreaseStake",
-			expectedGas: 27000,
+			expectedGas: 21400,
 			args: []any{
 				account1,
 				account1,
 				staker.MinStake,
 			},
 			description:  "Decrease stake for a validator",
-			preTestHooks: []TestHook{preTestAddValidator(account1)},
+			preTestHooks: []TestHook{preTestAddValidation(account1)},
 		},
 		{
 			function:    "native_addDelegation",
-			expectedGas: 62200,
+			expectedGas: 32200,
 			args: []any{
 				account1,
 				staker.MinStake,
 				uint8(150),
 			},
 			description:  "Add delegation to a validator",
-			preTestHooks: []TestHook{preTestAddValidator(account1)},
+			preTestHooks: []TestHook{preTestAddValidation(account1)},
 		},
 		{
 			function:    "native_getDelegation",
-			expectedGas: 1800,
+			expectedGas: 800,
 			args: []any{
-				thor.BytesToBytes32(big.NewInt(1).Bytes()), // IDs are incremental, starting at 1
+				big.NewInt(1), // IDs are incremental, starting at 1
 			},
 			description:  "Get delegation by ID",
-			preTestHooks: []TestHook{preTestAddValidator(account1), preTestAddDelegation(account1)},
+			preTestHooks: []TestHook{preTestAddValidation(account1), preTestAddDelegation(account1)},
 		},
 		{
 			function:    "native_withdrawDelegation",
-			expectedGas: 22400,
+			expectedGas: 22200,
 			args: []any{
-				thor.BytesToBytes32(big.NewInt(1).Bytes()), // IDs are incremental, starting at 1
+				big.NewInt(1), // IDs are incremental, starting at 1
 			},
 			description:  "Withdraw delegation from a validator",
-			preTestHooks: []TestHook{preTestAddValidator(account1), preTestAddDelegation(account1)},
+			preTestHooks: []TestHook{preTestAddValidation(account1), preTestAddDelegation(account1)},
 		},
 		// TODO: How can we mint thousands of blocks and perform housekeeping?
 		{
 			function:    "native_signalDelegationExit",
-			expectedGas: 2000,
+			expectedGas: 1200,
 			args: []any{
-				thor.BytesToBytes32(big.NewInt(1).Bytes()), // IDs are incremental, starting at 1
+				big.NewInt(1), // IDs are incremental, starting at 1
 			},
 			description:  "Update auto-renew setting for a delegation",
-			preTestHooks: []TestHook{preTestAddValidator(account1), preTestAddDelegation(account1)},
+			preTestHooks: []TestHook{preTestAddValidation(account1), preTestAddDelegation(account1)},
 			err:          "revert: delegation has not started yet, funds can be withdrawn",
 		},
 		{
 			function:    "native_getDelegatorsRewards",
-			expectedGas: 1000,
+			expectedGas: 200,
 			args: []any{
 				account1,
 				uint32(0),
 			},
 			description:  "Get rewards for a validator",
-			preTestHooks: []TestHook{preTestAddValidator(account1)},
+			preTestHooks: []TestHook{preTestAddValidation(account1)},
 		},
 		{
-			function:    "native_getValidatorTotals",
-			expectedGas: 1600,
+			function:    "native_getValidationTotals",
+			expectedGas: 600,
 			args: []any{
 				account1,
 			},
 			description:  "Get total stakes and weights and stake for a validator",
-			preTestHooks: []TestHook{preTestAddValidator(account1)},
+			preTestHooks: []TestHook{preTestAddValidation(account1)},
 		},
 		{
 			function:     "native_getValidatorsNum",

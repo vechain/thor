@@ -70,7 +70,7 @@ func TestStaker(t *testing.T) {
 	minStake := MinStake()
 	var validatorTxs []*tx.Transaction
 	for _, acc := range genesis.DevAccounts()[0:2] {
-		addValidatorTx, err := staker.AddValidator(acc.Address, minStake, minStakingPeriod).
+		addValidatorTx, err := staker.AddValidation(acc.Address, minStake, minStakingPeriod).
 			Send().
 			WithSigner(bind.NewSigner(acc.PrivateKey)).
 			WithOptions(txOpts()).Submit()
@@ -101,7 +101,7 @@ func TestStaker(t *testing.T) {
 	require.NoError(t, err)
 	getRes, err := staker.Get(firstID)
 	require.NoError(t, err)
-	require.False(t, getRes.Master.IsZero())
+	require.False(t, getRes.Address.IsZero())
 	require.False(t, getRes.Endorsor.IsZero())
 	require.Equal(t, StakerStatusActive, getRes.Status)
 	require.Equal(t, getRes.Stake, minStake)
@@ -120,7 +120,7 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, firstActive.ExitBlock, uint32(math.MaxUint32))
 
 	// LookupNode
-	getRes, err = staker.Get(*firstActive.Master)
+	getRes, err = staker.Get(firstActive.Address)
 	require.NoError(t, err)
 	require.True(t, getRes.Exists())
 
@@ -140,7 +140,7 @@ func TestStaker(t *testing.T) {
 	)
 
 	// AddValidator
-	receipt, _, err := staker.AddValidator(validator.Address, minStake, minStakingPeriod).
+	receipt, _, err := staker.AddValidation(validator.Address, minStake, minStakingPeriod).
 		Send().
 		WithSigner(validatorKey).
 		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
@@ -152,7 +152,7 @@ func TestStaker(t *testing.T) {
 	require.Len(t, queuedEvents, 1)
 	require.Equal(t, validator.Address, queuedEvents[0].Endorsor)
 	require.Equal(t, minStake, queuedEvents[0].Stake)
-	queuedID := queuedEvents[0].ValidationID
+	queuedID := queuedEvents[0].Node
 
 	// FirstQueued
 	firstQueued, id, err := staker.FirstQueued()
@@ -181,8 +181,7 @@ func TestStaker(t *testing.T) {
 	increaseEvents, err := staker.FilterStakeIncreased(newRange(receipt), nil, logdb.ASC)
 	require.NoError(t, err)
 	require.Len(t, increaseEvents, 1)
-	require.Equal(t, validator.Address, increaseEvents[0].ValidationID)
-	require.Equal(t, validator.Address, increaseEvents[0].Endorsor)
+	require.Equal(t, validator.Address, increaseEvents[0].Validator)
 	require.Equal(t, minStake, increaseEvents[0].Added)
 
 	// DecreaseStake
@@ -195,8 +194,7 @@ func TestStaker(t *testing.T) {
 	decreaseEvents, err := staker.FilterStakeDecreased(newRange(receipt), nil, logdb.ASC)
 	require.NoError(t, err)
 	require.Len(t, decreaseEvents, 1)
-	require.Equal(t, queuedID, decreaseEvents[0].ValidationID)
-	require.Equal(t, validator.Address, decreaseEvents[0].Endorsor)
+	require.Equal(t, queuedID, decreaseEvents[0].Validator)
 	require.Equal(t, minStake, decreaseEvents[0].Removed)
 
 	// SignalExit
@@ -207,7 +205,7 @@ func TestStaker(t *testing.T) {
 	require.NoError(t, err)
 
 	// No events for signal exit when state is queued
-	autoRenewEvents, err := staker.FilterValidatorSignaledExit(newRange(receipt), nil, logdb.ASC)
+	autoRenewEvents, err := staker.FilterValidationSignaledExit(newRange(receipt), nil, logdb.ASC)
 	require.NoError(t, err)
 	require.Len(t, autoRenewEvents, 0)
 
@@ -230,10 +228,10 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, minStake, delegation.Stake)
 	require.Equal(t, uint8(100), delegation.Multiplier)
 	require.False(t, delegation.Locked)
-	require.Equal(t, queuedID, delegation.ValidationID)
+	require.Equal(t, queuedID, delegation.Validator)
 
 	// GetValidatorsTotals
-	validationTotals, err := staker.GetValidatorsTotals(firstID)
+	validationTotals, err := staker.GetValidationTotals(firstID)
 	require.NoError(t, err)
 
 	require.Equal(t, minStake, validationTotals.TotalLockedStake)
@@ -260,7 +258,7 @@ func TestStaker(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
-	withdrawEvents, err := staker.FilterValidatorWithdrawn(newRange(receipt), nil, logdb.ASC)
+	withdrawEvents, err := staker.FilterValidationWithdrawn(newRange(receipt), nil, logdb.ASC)
 	require.NoError(t, err)
 	require.Len(t, withdrawEvents, 1)
 
