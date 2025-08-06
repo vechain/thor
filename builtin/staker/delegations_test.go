@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/v2/builtin/staker/delegation"
+	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
@@ -134,19 +135,21 @@ func Test_AddDelegator(t *testing.T) {
 
 	stake := big.NewInt(0).Set(MinStake)
 
-	validator := validators[0]
-	id1, err := staker.AddDelegation(validator.ID, stake, 255)
-	assert.NoError(t, err)
-	assert.NotNil(t, id1)
-	aggregation, err := staker.aggregationService.GetAggregation(validator.ID)
-	assert.NoError(t, err)
-	assert.Equal(t, aggregation.PendingVET, stake)
-	delegation, _, err := staker.GetDelegation(id1)
-	assert.NoError(t, err)
-	assert.Equal(t, stake, delegation.Stake)
-	assert.Equal(t, uint8(255), delegation.Multiplier)
-	assert.Equal(t, uint32(2), delegation.FirstIteration)
-	assert.Nil(t, delegation.LastIteration) // auto renew, so exit iteration is nil
+	id := big.NewInt(0)
+	validatorID := validators[0].ID
+
+	newTestSequence(t, staker).
+		AddDelegation(validatorID, stake, 255, id)
+
+	assertDelegation(t, staker, id).
+		IsStarted(false).
+		LastIteration(nil)
+
+	weightedStake := stakes.NewWeightedStake(stake, 255)
+
+	assertAggregation(t, staker, validatorID).
+		PendingVET(stake).
+		PendingWeight(weightedStake.Weight())
 }
 
 func Test_AddDelegator_StakeRange(t *testing.T) {

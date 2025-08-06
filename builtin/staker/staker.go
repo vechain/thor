@@ -151,7 +151,7 @@ func (s *Staker) GetDelegation(
 	if del.IsEmpty() {
 		return nil, nil, nil
 	}
-	val, err := s.validationService.GetValidation(del.Validator)
+	val, err := s.validationService.GetValidation(del.Validation)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -162,17 +162,13 @@ func (s *Staker) GetDelegation(
 func (s *Staker) HasDelegations(
 	node thor.Address,
 ) (bool, error) {
-	_, err := s.validationService.GetValidation(node)
-	if err != nil {
-		return false, err
-	}
-
 	agg, err := s.aggregationService.GetAggregation(node)
 	if err != nil {
 		return false, err
 	}
 
-	return !agg.IsEmpty(), nil
+	// Only return true if there is locked VET in the aggregation.
+	return agg.LockedVET.Sign() == 1, nil
 }
 
 // GetDelegatorRewards returns reward amount for validator and staking period.
@@ -415,7 +411,7 @@ func (s *Staker) SignalDelegationExit(delegationID *big.Int) error {
 		return errors.New("delegation is empty")
 	}
 
-	val, err := s.validationService.GetValidation(del.Validator)
+	val, err := s.validationService.GetValidation(del.Validation)
 	if err != nil {
 		return err
 	}
@@ -433,7 +429,7 @@ func (s *Staker) SignalDelegationExit(delegationID *big.Int) error {
 		return err
 	}
 
-	err = s.aggregationService.SignalExit(del.Validator, del.WeightedStake())
+	err = s.aggregationService.SignalExit(del.Validation, del.WeightedStake())
 	if err != nil {
 		return err
 	}
@@ -453,7 +449,7 @@ func (s *Staker) WithdrawDelegation(
 		return nil, err
 	}
 
-	val, err := s.validationService.GetValidation(del.Validator)
+	val, err := s.validationService.GetValidation(del.Validation)
 	if err != nil {
 		return nil, err
 	}
@@ -477,7 +473,7 @@ func (s *Staker) WithdrawDelegation(
 	if !started {
 		weightedStake := stakes.NewWeightedStake(withdrawableStake, del.Multiplier)
 
-		if err = s.aggregationService.SubPendingVet(del.Validator, weightedStake); err != nil {
+		if err = s.aggregationService.SubPendingVet(del.Validation, weightedStake); err != nil {
 			return nil, err
 		}
 
@@ -488,7 +484,7 @@ func (s *Staker) WithdrawDelegation(
 
 	// delegation has finished
 	if finished {
-		if err = s.aggregationService.SubWithdrawableVET(del.Validator, withdrawableStake); err != nil {
+		if err = s.aggregationService.SubWithdrawableVET(del.Validation, withdrawableStake); err != nil {
 			return nil, err
 		}
 	}
@@ -519,4 +515,17 @@ func (s *Staker) validateNextPeriodTVL(validator thor.Address) error {
 	}
 
 	return nil
+}
+
+// GetValidatorsNum returns the number of validators in the leader group and number of queued validators.
+func (s *Staker) GetValidatorsNum() (*big.Int, *big.Int, error) {
+	leaderGroupSize, err := s.LeaderGroupSize()
+	if err != nil {
+		return nil, nil, err
+	}
+	queuedGroupSize, err := s.QueuedGroupSize()
+	if err != nil {
+		return leaderGroupSize, nil, err
+	}
+	return leaderGroupSize, queuedGroupSize, nil
 }
