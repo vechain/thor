@@ -461,6 +461,15 @@ func init() {
 			}
 			return []any{totals.TotalLockedStake, totals.TotalLockedWeight, totals.DelegationsLockedStake, totals.DelegationsLockedWeight, ""}
 		}},
+		{"native_getValidatorsNum", func(env *xenv.Environment) []any {
+			charger := gascharger.New(env)
+
+			leaderGroupSize, queuedGroupSize, err := Staker.NativeMetered(env.State(), charger).GetValidatorsNum()
+			if err != nil {
+				return []any{new(big.Int), new(big.Int), fmt.Sprintf("revert: failed to get validators totals: %v", err)}
+			}
+			return []any{leaderGroupSize, queuedGroupSize, ""}
+		}},
 	}
 	stakerAbi := Staker.NativeABI()
 	for _, def := range defines {

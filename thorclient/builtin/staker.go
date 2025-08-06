@@ -284,12 +284,32 @@ func (s *Staker) GetValidationTotals(node thor.Address) (*ValidationTotals, erro
 	return validationTotals, nil
 }
 
+func (s *Staker) GetValidatorsNum() (*big.Int, *big.Int, error) {
+	out := make([]any, 4)
+	out[0] = new(*big.Int)
+	out[1] = new(*big.Int)
+	if err := s.contract.Method("getValidatorsNum").Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
+		return nil, nil, err
+	}
+
+	return *(out[0].(**big.Int)), *(out[1].(**big.Int)), nil
+}
+
 type ValidationQueuedEvent struct {
 	Node     thor.Address
 	Endorsor thor.Address
 	Period   uint32
 	Stake    *big.Int
 	Log      api.FilteredEvent
+}
+
+type ValidatorQueuedEvent struct {
+	Endorsor     thor.Address
+	Master       thor.Address
+	ValidationID thor.Address
+	Stake        *big.Int
+	Period       uint32
+	Log          api.FilteredEvent
 }
 
 func (s *Staker) FilterValidatorQueued(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]ValidationQueuedEvent, error) {
