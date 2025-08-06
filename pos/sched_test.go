@@ -226,14 +226,23 @@ func TestScheduler_Updates(t *testing.T) {
 	updates, score := sched.Updates(nowTime, totalWeight)
 
 	offline := 0
-	for _, online := range updates {
+	offlineWeight := big.NewInt(0)
+	for id, online := range updates {
 		if !online {
 			offline++
+			val := validators[id]
+			offlineWeight = offlineWeight.Add(offlineWeight, val.Weight)
 		}
 	}
 
+	scaledScore := new(big.Int).Sub(totalWeight, offlineWeight)
+	scaledScore = new(big.Int).Mul(scaledScore, big.NewInt(thor.MaxPosScore))
+	scaledScore.Div(scaledScore, totalWeight)
+
+	expected := scaledScore.Uint64()
+
 	assert.Equal(t, 1, offline)
-	assert.Equal(t, uint64(thor.MaxPosScore), score)
+	assert.Equal(t, expected, score)
 }
 
 func TestScheduler_TotalPlacements(t *testing.T) {

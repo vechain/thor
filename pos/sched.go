@@ -138,7 +138,10 @@ func (s *Scheduler) Updates(newBlockTime uint64, totalWeight *big.Int) (map[thor
 	T := thor.BlockInterval
 
 	updates := make(map[thor.Address]bool)
-	activeWeight := totalWeight
+	activeWeight := big.NewInt(0)
+	for idx := range s.sequence {
+		activeWeight = activeWeight.Add(activeWeight, s.sequence[idx].validation.Weight)
+	}
 
 	for i := uint64(0); i < uint64(len(s.sequence)); i++ {
 		if s.parentBlockTime+T+i*T >= newBlockTime {
