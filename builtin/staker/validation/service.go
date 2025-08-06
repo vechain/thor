@@ -97,7 +97,7 @@ func (s *Service) IncreaseDelegatorsReward(node thor.Address, reward *big.Int) e
 	return s.repo.SetReward(key, big.NewInt(0).Add(rewards, reward), false)
 }
 
-func (s *Service) LeaderGroupIterator(callback func(thor.Address, *Validation) error) error {
+func (s *Service) LeaderGroupIterator(callbacks ...func(thor.Address, *Validation) error) error {
 	return s.leaderGroup.Iter(func(address thor.Address) error {
 		// Fetch the validation object for this address
 		validation, err := s.repo.GetValidation(address)
@@ -105,8 +105,12 @@ func (s *Service) LeaderGroupIterator(callback func(thor.Address, *Validation) e
 			return err
 		}
 
-		// Call the original callback with both address and validation
-		return callback(address, validation)
+		for _, callback := range callbacks {
+			if err := callback(address, validation); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 
