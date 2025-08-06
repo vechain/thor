@@ -162,17 +162,13 @@ func (s *Staker) GetDelegation(
 func (s *Staker) HasDelegations(
 	node thor.Address,
 ) (bool, error) {
-	_, err := s.validationService.GetValidation(node)
-	if err != nil {
-		return false, err
-	}
-
 	agg, err := s.aggregationService.GetAggregation(node)
 	if err != nil {
 		return false, err
 	}
 
-	return !agg.IsEmpty(), nil
+	// Only return true if there is locked VET in the aggregation.
+	return agg.LockedVET.Sign() == 1, nil
 }
 
 // GetDelegatorRewards returns reward amount for validator and staking period.
