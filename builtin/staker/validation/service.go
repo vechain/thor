@@ -241,19 +241,19 @@ func (s *Service) IncreaseStake(validator thor.Address, endorsor thor.Address, a
 	return s.SetValidation(validator, entry, false)
 }
 
-func (s *Service) DecreaseStake(validator thor.Address, endorsor thor.Address, amount *big.Int) error {
+func (s *Service) DecreaseStake(validator thor.Address, endorsor thor.Address, amount *big.Int) (bool, error) {
 	entry, err := s.GetExistingValidation(validator)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if entry.Endorsor != endorsor {
-		return errors.New("invalid endorser")
+		return false, errors.New("invalid endorser")
 	}
 	if entry.Status == StatusExit {
-		return errors.New("validator status is not queued or active")
+		return false, errors.New("validator status is not queued or active")
 	}
 	if entry.Status == StatusActive && entry.ExitBlock != nil {
-		return errors.New("validator has signaled exit, cannot decrease stake")
+		return false, errors.New("validator has signaled exit, cannot decrease stake")
 	}
 
 	if entry.Status == StatusActive {
@@ -263,7 +263,7 @@ func (s *Service) DecreaseStake(validator thor.Address, endorsor thor.Address, a
 		nextPeriodTVL := big.NewInt(0).Sub(entry.LockedVET, entry.PendingUnlockVET)
 		nextPeriodTVL = nextPeriodTVL.Sub(nextPeriodTVL, amount)
 		if nextPeriodTVL.Cmp(s.minStake) < 0 {
-			return errors.New("next period stake is too low for validator")
+			return false, errors.New("next period stake is too low for validator")
 		}
 		entry.PendingUnlockVET = big.NewInt(0).Add(entry.PendingUnlockVET, amount)
 	}
@@ -272,13 +272,13 @@ func (s *Service) DecreaseStake(validator thor.Address, endorsor thor.Address, a
 		// All the validator's stake exists within QueuedVET, so we need to make sure it maintains a minimum of MinStake.
 		nextPeriodTVL := big.NewInt(0).Sub(entry.QueuedVET, amount)
 		if nextPeriodTVL.Cmp(s.minStake) < 0 {
-			return errors.New("next period stake is too low for validator")
+			return false, errors.New("next period stake is too low for validator")
 		}
 		entry.QueuedVET = big.NewInt(0).Sub(entry.QueuedVET, amount)
 		entry.WithdrawableVET = big.NewInt(0).Add(entry.WithdrawableVET, amount)
 	}
 
-	return s.SetValidation(validator, entry, false)
+	return entry.Status == StatusQueued, s.SetValidation(validator, entry, false)
 }
 
 // WithdrawStake allows validations to withdraw any withdrawable stake.

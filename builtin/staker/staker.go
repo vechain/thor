@@ -295,17 +295,13 @@ func (s *Staker) IncreaseStake(validator thor.Address, endorsor thor.Address, am
 func (s *Staker) DecreaseStake(validator thor.Address, endorsor thor.Address, amount *big.Int) error {
 	logger.Debug("decreasing stake", "endorsor", endorsor, "validator", validator, "amount", new(big.Int).Div(amount, big.NewInt(1e18)))
 
-	if err := s.validationService.DecreaseStake(validator, endorsor, amount); err != nil {
+	queued, err := s.validationService.DecreaseStake(validator, endorsor, amount)
+	if err != nil {
 		logger.Info("decrease stake failed", "validator", validator, "error", err)
 		return err
 	}
 
-	// remove queued VET from the global stats if validator is queued
-	val, err := s.validationService.GetValidation(validator)
-	if err != nil {
-		return err
-	}
-	if val.Status == validation.StatusQueued {
+	if queued {
 		err = s.globalStatsService.RemoveQueued(validation.WeightedStake(amount))
 		if err != nil {
 			return err
