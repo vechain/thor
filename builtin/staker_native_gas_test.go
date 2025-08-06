@@ -234,9 +234,9 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:     "native_getValidatorsNum",
-			expectedGas:  1400,
+			expectedGas:  400,
 			description:  "Get number of active and queued validators",
-			preTestHooks: []TestHook{preTestAddValidator(account1)},
+			preTestHooks: []TestHook{preTestAddValidation(account1)},
 		},
 	}
 

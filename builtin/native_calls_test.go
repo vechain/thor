@@ -1612,18 +1612,21 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.NotNil(t, receipt)
 	assert.NotNil(t, a)
 
+	abi := builtin.Staker.ABI
+	toAddr := builtin.Staker.Address
+
 	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0])) // mint block 2: hayabusa should fork here and set the contract bytecode
+
+	totalNumRes := make([]any, 2)
+	totalNumRes[0] = new(*big.Int)
+	totalNumRes[1] = new(*big.Int)
+	_, err = callContractAndGetOutput(abi, "getValidatorsNum", toAddr, &totalNumRes)
+	assert.NoError(t, err, "dsada")
 
 	totalBurnedBefore := new(big.Int)
 	_, err = callContractAndGetOutput(energyAbi, "totalBurned", energyAddress, &totalBurnedBefore)
 	assert.NoError(t, err)
 
-	abi := builtin.Staker.ABI
-	toAddr := builtin.Staker.Address
-
-	totalNumRes := make([]any, 2)
-	totalNumRes[0] = new(*big.Int)
-	totalNumRes[1] = new(*big.Int)
 	_, err = callContractAndGetOutput(abi, "getValidatorsNum", toAddr, &totalNumRes)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).Cmp(*totalNumRes[0].(**big.Int)), 0)
