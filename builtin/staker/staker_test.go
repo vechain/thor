@@ -26,7 +26,7 @@ type TestSequence struct {
 	funcs []TestFunc
 }
 
-func NewSequence(staker *Staker) *TestSequence {
+func newTestSequence(staker *Staker) *TestSequence {
 	return &TestSequence{funcs: make([]TestFunc, 0), staker: staker}
 }
 
@@ -109,7 +109,7 @@ func (ts *TestSequence) AssertNext(prev thor.Address, expected thor.Address) *Te
 	})
 }
 
-func (ts *TestSequence) AddValidator(
+func (ts *TestSequence) AddValidation(
 	endorsor, master thor.Address,
 	period uint32,
 	stake *big.Int,
@@ -254,7 +254,7 @@ func (ts *TestSequence) ActivateNext(block uint32) *TestSequence {
 	return ts.AddFunc(func(t *testing.T) {
 		mbp, err := ts.staker.params.Get(thor.KeyMaxBlockProposers)
 		assert.NoError(t, err, "failed to get max block proposers")
-		_, err = ts.staker.activateNextValidator(block, mbp)
+		_, err = ts.staker.activateNextValidation(block, mbp)
 		assert.NoError(t, err, "failed to activate next validator at block %d", block)
 	})
 }
@@ -279,76 +279,76 @@ func (ts *TestSequence) IncreaseDelegatorsReward(node thor.Address, reward *big.
 	})
 }
 
-func (ts *TestSequence) Run(t *testing.T) {
+func (ts *TestSequence) Execute(t *testing.T) {
 	for _, f := range ts.funcs {
 		f(t)
 	}
 }
 
-type ValidatorAssertions struct {
+type ValidationAssertions struct {
 	staker    *Staker
 	addr      thor.Address
 	validator *validation.Validation
 	t         *testing.T
 }
 
-func AssertValidator(t *testing.T, staker *Staker, addr thor.Address) *ValidatorAssertions {
+func assertValidation(t *testing.T, staker *Staker, addr thor.Address) *ValidationAssertions {
 	validator, err := staker.Get(addr)
 	require.NoError(t, err, "failed to get validator %s", addr.String())
-	return &ValidatorAssertions{staker: staker, addr: addr, validator: validator, t: t}
+	return &ValidationAssertions{staker: staker, addr: addr, validator: validator, t: t}
 }
 
-func (va *ValidatorAssertions) Status(expected validation.Status) *ValidatorAssertions {
+func (va *ValidationAssertions) Status(expected validation.Status) *ValidationAssertions {
 	assert.Equal(va.t, expected, va.validator.Status, "validator %s status mismatch", va.addr.String())
 	return va
 }
 
-func (va *ValidatorAssertions) Weight(expected *big.Int) *ValidatorAssertions {
+func (va *ValidationAssertions) Weight(expected *big.Int) *ValidationAssertions {
 	assert.Equal(va.t, 0, expected.Cmp(va.validator.Weight), "validator %s weight mismatch", va.addr.String())
 	return va
 }
 
-func (va *ValidatorAssertions) LockedVET(expected *big.Int) *ValidatorAssertions {
+func (va *ValidationAssertions) LockedVET(expected *big.Int) *ValidationAssertions {
 	assert.Equal(va.t, 0, expected.Cmp(va.validator.LockedVET), "validator %s locked VET mismatch", va.addr.String())
 	return va
 }
 
-func (va *ValidatorAssertions) QueuedVET(expected *big.Int) *ValidatorAssertions {
+func (va *ValidationAssertions) QueuedVET(expected *big.Int) *ValidationAssertions {
 	assert.Equal(va.t, 0, expected.Cmp(va.validator.QueuedVET), "validator %s pending locked VET mismatch", va.addr.String())
 	return va
 }
 
-func (va *ValidatorAssertions) CooldownVET(expected *big.Int) *ValidatorAssertions {
+func (va *ValidationAssertions) CooldownVET(expected *big.Int) *ValidationAssertions {
 	assert.Equal(va.t, 0, expected.Cmp(va.validator.CooldownVET), "validator %s cooldown VET mismatch", va.addr.String())
 	return va
 }
 
-func (va *ValidatorAssertions) WithdrawableVET(expected *big.Int) *ValidatorAssertions {
+func (va *ValidationAssertions) WithdrawableVET(expected *big.Int) *ValidationAssertions {
 	assert.Equal(va.t, 0, expected.Cmp(va.validator.WithdrawableVET), "validator %s withdrawable VET mismatch", va.addr.String())
 	return va
 }
 
-func (va *ValidatorAssertions) Period(expected uint32) *ValidatorAssertions {
+func (va *ValidationAssertions) Period(expected uint32) *ValidationAssertions {
 	assert.Equal(va.t, expected, va.validator.Period, "validator %s period mismatch", va.addr.String())
 	return va
 }
 
-func (va *ValidatorAssertions) CompletedPeriods(expected uint32) *ValidatorAssertions {
+func (va *ValidationAssertions) CompletedPeriods(expected uint32) *ValidationAssertions {
 	assert.Equal(va.t, expected, va.validator.CompleteIterations, "validator %s completed periods mismatch", va.addr.String())
 	return va
 }
 
-func (va *ValidatorAssertions) PendingUnlockVET(expected *big.Int) *ValidatorAssertions {
+func (va *ValidationAssertions) PendingUnlockVET(expected *big.Int) *ValidationAssertions {
 	assert.Equal(va.t, expected, va.validator.PendingUnlockVET, "validator %s next period decrease mismatch", va.addr.String())
 	return va
 }
 
-func (va *ValidatorAssertions) IsEmpty(expected bool) *ValidatorAssertions {
+func (va *ValidationAssertions) IsEmpty(expected bool) *ValidationAssertions {
 	assert.Equal(va.t, expected, va.validator.IsEmpty(), "validator %s empty state mismatch", va.addr.String())
 	return va
 }
 
-func (va *ValidatorAssertions) Rewards(period uint32, expected *big.Int) *ValidatorAssertions {
+func (va *ValidationAssertions) Rewards(period uint32, expected *big.Int) *ValidationAssertions {
 	reward, err := va.staker.GetDelegatorRewards(va.addr, period)
 	assert.NoError(va.t, err, "failed to get rewards for validator %s at period %d", va.addr.String(), period)
 	assert.Equal(va.t, expected, reward, "validator %s rewards mismatch for period %d", va.addr.String(), period)
@@ -356,16 +356,15 @@ func (va *ValidatorAssertions) Rewards(period uint32, expected *big.Int) *Valida
 }
 
 type AggregationAssertions struct {
-	staker       *Staker
 	validationID thor.Address
 	aggregation  *aggregation.Aggregation
 	t            *testing.T
 }
 
-func AssertAggregation(t *testing.T, staker *Staker, validationID thor.Address) *AggregationAssertions {
+func assertAggregation(t *testing.T, staker *Staker, validationID thor.Address) *AggregationAssertions {
 	agg, err := staker.aggregationService.GetAggregation(validationID)
 	require.NoError(t, err, "failed to get aggregation for validator %s", validationID.String())
-	return &AggregationAssertions{staker: staker, validationID: validationID, aggregation: agg, t: t}
+	return &AggregationAssertions{validationID: validationID, aggregation: agg, t: t}
 }
 
 func (aa *AggregationAssertions) PendingVET(expected *big.Int) *AggregationAssertions {
@@ -404,21 +403,20 @@ func (aa *AggregationAssertions) WithdrawableVET(expected *big.Int) *Aggregation
 }
 
 type DelegationAssertions struct {
-	staker       *Staker
 	delegationID *big.Int
 	t            *testing.T
 	delegation   *delegation.Delegation
 	validation   *validation.Validation
 }
 
-func AssertDelegation(t *testing.T, staker *Staker, delegationID *big.Int) *DelegationAssertions {
+func assertDelegation(t *testing.T, staker *Staker, delegationID *big.Int) *DelegationAssertions {
 	delegation, validation, err := staker.GetDelegation(delegationID)
 	require.NoError(t, err, "failed to get delegation %s", delegationID.String())
-	return &DelegationAssertions{staker: staker, delegationID: delegationID, t: t, delegation: delegation, validation: validation}
+	return &DelegationAssertions{delegationID: delegationID, t: t, delegation: delegation, validation: validation}
 }
 
-func (da *DelegationAssertions) Validator(expected thor.Address) *DelegationAssertions {
-	assert.Equal(da.t, expected, da.delegation.Validator, "delegation %s validation ID mismatch", da.delegationID.String())
+func (da *DelegationAssertions) Validation(expected thor.Address) *DelegationAssertions {
+	assert.Equal(da.t, expected, da.delegation.Validation, "delegation %s validation ID mismatch", da.delegationID.String())
 	return da
 }
 
@@ -442,7 +440,7 @@ func (da *DelegationAssertions) FirstIteration(expected uint32) *DelegationAsser
 	return da
 }
 
-func (da *DelegationAssertions) LastIteration(expected uint32) *DelegationAssertions {
+func (da *DelegationAssertions) LastIteration(expected *uint32) *DelegationAssertions {
 	assert.Equal(da.t, expected, da.delegation.LastIteration, "delegation %s last iteration mismatch", da.delegationID.String())
 	return da
 }

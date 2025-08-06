@@ -180,7 +180,7 @@ func TestScheduler_Distribution(t *testing.T) {
 				addr := thor.BytesToAddress(id[:])
 
 				assert.InDeltaf(t, float64(count), float64(expectedCount), diff,
-					"Validator %s has a distribution of %d, expected %d, diff %v",
+					"Validation %s has a distribution of %d, expected %d, diff %v",
 					addr.String(), count, expectedCount, diffPercent,
 				)
 			}
@@ -297,7 +297,7 @@ func TestScheduler_AllValidatorsScheduled(t *testing.T) {
 	seen := make(map[thor.Address]bool)
 	for _, id := range sched.sequence {
 		if seen[id.id] {
-			t.Fatalf("Validator %s is scheduled multiple times", id.id)
+			t.Fatalf("Validation %s is scheduled multiple times", id.id)
 		}
 		seen[id.id] = true
 	}

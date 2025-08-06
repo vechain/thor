@@ -151,7 +151,7 @@ func (s *Staker) GetDelegation(
 	if del.IsEmpty() {
 		return nil, nil, nil
 	}
-	val, err := s.validationService.GetValidation(del.Validator)
+	val, err := s.validationService.GetValidation(del.Validation)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -415,7 +415,7 @@ func (s *Staker) SignalDelegationExit(delegationID *big.Int) error {
 		return errors.New("delegation is empty")
 	}
 
-	val, err := s.validationService.GetValidation(del.Validator)
+	val, err := s.validationService.GetValidation(del.Validation)
 	if err != nil {
 		return err
 	}
@@ -433,7 +433,7 @@ func (s *Staker) SignalDelegationExit(delegationID *big.Int) error {
 		return err
 	}
 
-	err = s.aggregationService.SignalExit(del.Validator, del.WeightedStake())
+	err = s.aggregationService.SignalExit(del.Validation, del.WeightedStake())
 	if err != nil {
 		return err
 	}
@@ -453,7 +453,7 @@ func (s *Staker) WithdrawDelegation(
 		return nil, err
 	}
 
-	val, err := s.validationService.GetValidation(del.Validator)
+	val, err := s.validationService.GetValidation(del.Validation)
 	if err != nil {
 		return nil, err
 	}
@@ -477,7 +477,7 @@ func (s *Staker) WithdrawDelegation(
 	if !started {
 		weightedStake := stakes.NewWeightedStake(withdrawableStake, del.Multiplier)
 
-		if err = s.aggregationService.SubPendingVet(del.Validator, weightedStake); err != nil {
+		if err = s.aggregationService.SubPendingVet(del.Validation, weightedStake); err != nil {
 			return nil, err
 		}
 
@@ -488,7 +488,7 @@ func (s *Staker) WithdrawDelegation(
 
 	// delegation has finished
 	if finished {
-		if err = s.aggregationService.SubWithdrawableVET(del.Validator, withdrawableStake); err != nil {
+		if err = s.aggregationService.SubWithdrawableVET(del.Validation, withdrawableStake); err != nil {
 			return nil, err
 		}
 	}
