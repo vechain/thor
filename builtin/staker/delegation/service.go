@@ -73,7 +73,7 @@ func (s *Service) Add(
 
 	delegationID := new(big.Int).Set(id)
 	delegation := Delegation{
-		Validator:      validator,
+		Validation:     validator,
 		Multiplier:     multiplier,
 		Stake:          stake,
 		FirstIteration: firstIteration,
