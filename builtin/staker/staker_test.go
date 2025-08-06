@@ -188,7 +188,7 @@ func (ts *TestSequence) AddDelegation(
 	master thor.Address,
 	amount *big.Int,
 	multiplier uint8,
-	id *thor.Bytes32,
+	id **big.Int,
 ) *TestSequence {
 	return ts.AddFunc(func(t *testing.T) {
 		delegationID, err := ts.staker.AddDelegation(master, amount, multiplier)
@@ -213,13 +213,13 @@ func (ts *TestSequence) AssertHasDelegations(node thor.Address, expected bool) *
 	})
 }
 
-func (ts *TestSequence) SignalDelegationExit(delegationID thor.Bytes32) *TestSequence {
+func (ts *TestSequence) SignalDelegationExit(delegationID *big.Int) *TestSequence {
 	return ts.AddFunc(func(t *testing.T) {
 		assert.NoError(t, ts.staker.SignalDelegationExit(delegationID))
 	})
 }
 
-func (ts *TestSequence) WithdrawDelegation(delegationID thor.Bytes32, expectedOut *big.Int) *TestSequence {
+func (ts *TestSequence) WithdrawDelegation(delegationID *big.Int, expectedOut *big.Int) *TestSequence {
 	return ts.AddFunc(func(t *testing.T) {
 		amount, err := ts.staker.WithdrawDelegation(delegationID)
 		assert.NoError(t, err, "failed to withdraw delegation %s: %v", delegationID.String(), err)
@@ -254,7 +254,7 @@ func (ts *TestSequence) ActivateNext(block uint32) *TestSequence {
 	return ts.AddFunc(func(t *testing.T) {
 		mbp, err := ts.staker.params.Get(thor.KeyMaxBlockProposers)
 		assert.NoError(t, err, "failed to get max block proposers")
-		_, err = ts.staker.ActivateNextValidator(block, mbp)
+		_, err = ts.staker.activateNextValidator(block, mbp)
 		assert.NoError(t, err, "failed to activate next validator at block %d", block)
 	})
 }
@@ -405,13 +405,13 @@ func (aa *AggregationAssertions) WithdrawableVET(expected *big.Int) *Aggregation
 
 type DelegationAssertions struct {
 	staker       *Staker
-	delegationID thor.Bytes32
+	delegationID *big.Int
 	t            *testing.T
 	delegation   *delegation.Delegation
 	validation   *validation.Validation
 }
 
-func AssertDelegation(t *testing.T, staker *Staker, delegationID thor.Bytes32) *DelegationAssertions {
+func AssertDelegation(t *testing.T, staker *Staker, delegationID *big.Int) *DelegationAssertions {
 	delegation, validation, err := staker.GetDelegation(delegationID)
 	require.NoError(t, err, "failed to get delegation %s", delegationID.String())
 	return &DelegationAssertions{staker: staker, delegationID: delegationID, t: t, delegation: delegation, validation: validation}
@@ -423,12 +423,12 @@ func (da *DelegationAssertions) Validator(expected thor.Address) *DelegationAsse
 }
 
 func (da *DelegationAssertions) Stake(expected *big.Int) *DelegationAssertions {
-	assert.Equal(da.t, expected, da.delegation.Stake, "delegation %s stake mismatch", da.delegationID.String())
+	assert.Equal(da.t, 0, expected.Cmp(da.delegation.Stake), "delegation %s stake mismatch", da.delegationID.String())
 	return da
 }
 
 func (da *DelegationAssertions) Weight(expected *big.Int) *DelegationAssertions {
-	assert.Equal(da.t, expected, da.delegation.CalcWeight(), "delegation %s weight mismatch", da.delegationID.String())
+	assert.Equal(da.t, 0, expected.Cmp(da.delegation.WeightedStake().Weight()), "delegation %s weight mismatch", da.delegationID.String())
 	return da
 }
 
