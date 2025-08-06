@@ -1944,7 +1944,7 @@ func TestStaker_Housekeep_Exit_Decrements_Leader_Group_Size(t *testing.T) {
 	stake := RandomStake()
 	period := uint32(360) * 24 * 15
 
-	newTestSequence(staker).
+	newTestSequence(t, staker).
 		AddValidation(addr1, addr1, period, stake).
 		ActivateNext(0).
 		AddValidation(addr2, addr2, period, stake).
@@ -1953,33 +1953,30 @@ func TestStaker_Housekeep_Exit_Decrements_Leader_Group_Size(t *testing.T) {
 		SignalExit(addr2, addr2).
 		Housekeep(period).
 		AssertLeaderGroupSize(1).
-		AssertFirstActive(addr2).
-		Execute(t)
+		AssertFirstActive(addr2)
 
 	assertValidation(t, staker, addr1).Status(validation.StatusExit)
 	assertValidation(t, staker, addr2).Status(validation.StatusActive)
 
 	block := period + EpochLength.Get()
-	newTestSequence(staker).
+	newTestSequence(t, staker).
 		Housekeep(block).
 		AssertLeaderGroupSize(0).
-		AssertFirstActive(thor.Address{}).
-		Execute(t)
+		AssertFirstActive(thor.Address{})
 
 	assertValidation(t, staker, addr2).Status(validation.StatusExit)
 
-	newTestSequence(staker).
+	newTestSequence(t, staker).
 		AddValidation(addr3, addr3, period, stake).
 		ActivateNext(block).
 		SignalExit(addr3, addr3).
 		AssertFirstActive(addr3).
-		AssertLeaderGroupSize(1).
-		Execute(t)
+		AssertLeaderGroupSize(1)
 
 	assertValidation(t, staker, addr3).Status(validation.StatusActive)
 
 	block = block + period
-	newTestSequence(staker).Housekeep(block).Execute(t)
+	newTestSequence(t, staker).Housekeep(block)
 
 	assertValidation(t, staker, addr3).Status(validation.StatusExit)
 }
@@ -2402,6 +2399,32 @@ func TestStaker_AddValidation_CannotAddValidationWithSameMasterAfterExit(t *test
 
 	err = staker.AddValidation(master, datagen.RandAddress(), uint32(360)*24*15, MinStake)
 	assert.Error(t, err, "validator already exists")
+}
+
+func TestStaker_HasDelegations(t *testing.T) {
+	staker, _ := newStaker(t, 1, 1, true)
+
+	validator, err := staker.FirstActive()
+	assert.NoError(t, err)
+	dStake := delegationStake()
+	stakingPeriod := MediumStakingPeriod.Get()
+
+	delegationID := big.NewInt(0)
+	newTestSequence(t, staker).
+		// no delegations, should be false
+		AssertHasDelegations(*validator, false).
+		// delegation added, housekeeping not performed, should be false
+		AddDelegation(*validator, dStake, 200, delegationID).
+		AssertHasDelegations(*validator, false).
+		// housekeeping performed, should be true
+		Housekeep(stakingPeriod).
+		AssertHasDelegations(*validator, true).
+		// housekeeping not performed, should still have delegations
+		SignalDelegationExit(delegationID).
+		AssertHasDelegations(*validator, true).
+		// housekeeping performed, should be false
+		Housekeep(stakingPeriod*2).
+		AssertHasDelegations(*validator, false)
 }
 
 func getTestMaxLeaderSize(param *params.Params) *big.Int {
