@@ -223,7 +223,7 @@ func TestScheduler_Updates(t *testing.T) {
 		totalWeight = big.NewInt(0).Add(val.Weight, totalWeight)
 	}
 
-	updates, score := sched.Updates(nowTime, *totalWeight)
+	updates, score := sched.Updates(nowTime, totalWeight)
 
 	offline := 0
 	for _, online := range updates {
@@ -233,7 +233,7 @@ func TestScheduler_Updates(t *testing.T) {
 	}
 
 	assert.Equal(t, 1, offline)
-	assert.Equal(t, uint64(2), score)
+	assert.Equal(t, uint64(thor.MaxPosScore), score)
 }
 
 func TestScheduler_TotalPlacements(t *testing.T) {
@@ -293,4 +293,30 @@ func TestScheduler_AllValidatorsScheduled(t *testing.T) {
 		seen[id.id] = true
 	}
 	assert.Equal(t, len(seen), len(validators))
+}
+
+func TestScheduler_Schedule_TotalScore(t *testing.T) {
+	validators := make(map[thor.Address]*validation.Validation)
+	totalStake := big.NewInt(0)
+	weight := big.NewInt(10_000)
+	for _, acc := range genesis.DevAccounts() {
+		validator := &validation.Validation{
+			Weight: weight,
+			Online: true,
+		}
+		validators[acc.Address] = validator
+		totalStake.Add(totalStake, validator.Weight)
+	}
+
+	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed1"))
+	assert.NoError(t, err)
+
+	updates, score := sched.Updates(30, totalStake)
+	assert.Equal(t, 1, len(updates), "There should be one update")
+
+	onlineWeight := big.NewInt(0).Mul(weight, big.NewInt(int64(len(validators)-1)))
+
+	expectedScore := big.NewInt(0).Mul(onlineWeight, big.NewInt(thor.MaxPosScore))
+	expectedScore = expectedScore.Div(expectedScore, totalStake)
+	assert.Equal(t, int(expectedScore.Uint64()), int(score), "Score should be equal to the expected score")
 }

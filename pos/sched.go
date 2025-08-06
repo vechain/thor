@@ -134,13 +134,12 @@ func (s *Scheduler) IsScheduled(blockTime uint64, proposer thor.Address) bool {
 }
 
 // Updates returns proposers whose status are changed, and the score when new block time is assumed to be newBlockTime.
-func (s *Scheduler) Updates(newBlockTime uint64, totalWeight big.Int) (map[thor.Address]bool, uint64) {
+func (s *Scheduler) Updates(newBlockTime uint64, totalWeight *big.Int) (map[thor.Address]bool, uint64) {
 	T := thor.BlockInterval
 
 	updates := make(map[thor.Address]bool)
-	activeWeight := big.NewInt(0)
+	activeWeight := totalWeight
 
-	proposerWeightAdded := false
 	for i := uint64(0); i < uint64(len(s.sequence)); i++ {
 		if s.parentBlockTime+T+i*T >= newBlockTime {
 			break
@@ -148,25 +147,19 @@ func (s *Scheduler) Updates(newBlockTime uint64, totalWeight big.Int) (map[thor.
 		id := s.sequence[i].id
 		if id != s.proposerID {
 			updates[id] = false
-		} else {
-			activeWeight.Add(activeWeight, s.sequence[i].validation.Weight)
-			proposerWeightAdded = true
+			activeWeight.Sub(activeWeight, s.sequence[i].validation.Weight)
 		}
 	}
 
 	if !s.proposer.Online {
 		updates[s.proposerID] = true
-	} else if !proposerWeightAdded {
-		activeWeight.Add(activeWeight, s.proposer.Weight)
 	}
 
-	// Calculate weighted score as percentage of total weight
 	if totalWeight.Sign() > 0 {
-		// Convert to percentage (multiply by 100 for precision)
-		percentage := new(big.Int).Mul(activeWeight, big.NewInt(100))
-		percentage.Div(percentage, &totalWeight)
+		scaledScore := new(big.Int).Mul(activeWeight, big.NewInt(thor.MaxPosScore))
+		scaledScore.Div(scaledScore, totalWeight)
 
-		score := percentage.Uint64()
+		score := scaledScore.Uint64()
 		return updates, score
 	}
 

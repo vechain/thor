@@ -65,7 +65,7 @@ func (c *Consensus) validateStakingProposer(
 	if err != nil {
 		return consensusError(fmt.Sprintf("pos - cannot get total weight: %v", err))
 	}
-	updates, score := sched.Updates(header.Timestamp(), *totalWeight)
+	updates, score := sched.Updates(header.Timestamp(), totalWeight)
 	if parent.TotalScore()+score != header.TotalScore() {
 		return consensusError(fmt.Sprintf("pos - block total score invalid: want %v, have %v", parent.TotalScore()+score, header.TotalScore()))
 	}

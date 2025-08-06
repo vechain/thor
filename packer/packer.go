@@ -141,7 +141,7 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 		}
 		for _, leader := range leaders {
 			if leader.Online {
-				percentage := new(big.Int).Mul(leader.Weight, big.NewInt(100))
+				percentage := new(big.Int).Mul(leader.Weight, big.NewInt(thor.MaxPosScore))
 				percentage.Div(percentage, totalWeight)
 				score = score + percentage.Uint64()
 			}

@@ -49,7 +49,7 @@ func (p *Packer) schedulePOS(parent *chain.BlockSummary, nowTimestamp uint64, st
 	if err != nil {
 		return thor.Address{}, 0, 0, err
 	}
-	updates, score := sched.Updates(newBlockTime, *weight)
+	updates, score := sched.Updates(newBlockTime, weight)
 
 	for addr, online := range updates {
 		_, err := staker.SetOnline(addr, online)
