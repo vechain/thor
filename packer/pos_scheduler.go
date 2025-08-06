@@ -35,7 +35,7 @@ func (p *Packer) schedulePOS(parent *chain.BlockSummary, nowTimestamp uint64, st
 	if err != nil {
 		return thor.Address{}, 0, 0, err
 	}
-	leaderGroup, err := staker.LeaderGroup()
+	leaderGroup, err := staker.LeaderGroup(parent.Header.Number() + 1)
 	if err != nil {
 		return thor.Address{}, 0, 0, err
 	}

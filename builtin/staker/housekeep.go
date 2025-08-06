@@ -67,16 +67,17 @@ func (s *Staker) computeEpochTransition(currentBlock uint32) (*EpochTransition, 
 
 	transition := &EpochTransition{Block: currentBlock}
 
-	// 1. Compute all renewals
-	transition.Renewals, err = s.computeRenewals(currentBlock)
+	var renewals []ValidatorRenewal
+	exitValidator := thor.Address{}
+	err = s.validationService.LeaderGroupIterator(currentBlock, s.renewalCallback(currentBlock, &renewals), s.exitsCallback(currentBlock, &exitValidator))
 	if err != nil {
 		return nil, err
 	}
 
-	// 2. Compute all exits
-	transition.ExitValidator, err = s.computeExits(currentBlock)
-	if err != nil {
-		return nil, err
+	transition.Renewals = renewals
+
+	if !exitValidator.IsZero() {
+		transition.ExitValidator = &exitValidator
 	}
 
 	// 3. Compute all activations
@@ -88,11 +89,9 @@ func (s *Staker) computeEpochTransition(currentBlock uint32) (*EpochTransition, 
 	return transition, nil
 }
 
-func (s *Staker) computeRenewals(currentBlock uint32) ([]ValidatorRenewal, error) {
-	var renewals []ValidatorRenewal
-
+func (s *Staker) renewalCallback(currentBlock uint32, renewals *[]ValidatorRenewal) func(thor.Address, *validation.Validation) error {
 	// Collect all validators due for renewal
-	err := s.validationService.LeaderGroupIterator(func(validator thor.Address, entry *validation.Validation) error {
+	return func(validator thor.Address, entry *validation.Validation) error {
 		// Skip validators due to exit
 		if entry.ExitBlock != nil {
 			return nil
@@ -115,7 +114,7 @@ func (s *Staker) computeRenewals(currentBlock uint32) ([]ValidatorRenewal, error
 		entry.LockedVET = big.NewInt(0).Add(entry.LockedVET, validatorRenewal.NewLockedVET)
 		entry.Weight = big.NewInt(0).Add(entry.Weight, changeWeight)
 
-		renewals = append(renewals, ValidatorRenewal{
+		*renewals = append(*renewals, ValidatorRenewal{
 			Validator:       validator,
 			NewState:        entry,
 			ValidatorDelta:  validatorRenewal,
@@ -123,37 +122,23 @@ func (s *Staker) computeRenewals(currentBlock uint32) ([]ValidatorRenewal, error
 		})
 
 		return nil
-	})
-
-	return renewals, err
+	}
 }
 
-func (s *Staker) computeExits(currentBlock uint32) (*thor.Address, error) {
-	var exitValidatorID thor.Address
-
+func (s *Staker) exitsCallback(currentBlock uint32, exitAddress *thor.Address) func(thor.Address, *validation.Validation) error {
 	// Find the last validator in iteration order that should exit this block
 	// Do NOT call ExitValidator here - just identify which validator should exit
-	err := s.validationService.LeaderGroupIterator(func(validator thor.Address, entry *validation.Validation) error {
+	return func(validator thor.Address, entry *validation.Validation) error {
 		if entry.ExitBlock != nil && currentBlock == *entry.ExitBlock {
 			// should never be possible for two validators to exit at the same block
-			if !exitValidatorID.IsZero() {
-				return errors.Errorf("found more than one validator exit in the same block: ValidatorID: %s, ValidatorID: %s", exitValidatorID, validator)
+			if !exitAddress.IsZero() {
+				return errors.Errorf("found more than one validator exit in the same block: ValidatorID: %s, ValidatorID: %s", exitAddress, validator)
 			}
 			// Just record which validator should exit (matches original behavior)
-			exitValidatorID = validator
+			*exitAddress = validator
 		}
 		return nil
-	})
-	if err != nil {
-		return nil, err
 	}
-
-	// If we found a validator to exit, prepare the exit
-	if !exitValidatorID.IsZero() {
-		return &exitValidatorID, nil
-	}
-
-	return nil, nil
 }
 
 // computeActivationCount calculates how many validators can be activated
@@ -258,7 +243,7 @@ func (s *Staker) buildActiveValidatorsFromTransition(transition *EpochTransition
 
 	// After all transitions are applied, just read the current leader group
 	// This captures renewed validators, excludes exited ones, and includes newly activated ones
-	err := s.validationService.LeaderGroupIterator(func(validator thor.Address, entry *validation.Validation) error {
+	err := s.validationService.LeaderGroupIterator(transition.Block, func(validator thor.Address, entry *validation.Validation) error {
 		activeValidators[validator] = entry
 		return nil
 	})

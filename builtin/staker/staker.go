@@ -91,8 +91,8 @@ func (s *Staker) IsPoSActive() (bool, error) {
 }
 
 // LeaderGroup lists all registered candidates.
-func (s *Staker) LeaderGroup() (map[thor.Address]*validation.Validation, error) {
-	return s.validationService.LeaderGroup()
+func (s *Staker) LeaderGroup(blockNumber uint32) (map[thor.Address]*validation.Validation, error) {
+	return s.validationService.LeaderGroup(blockNumber)
 }
 
 // LockedVET returns the amount of VET and weight locked by validations and delegations.

@@ -160,7 +160,7 @@ func Test_LinkedList_Iter(t *testing.T) {
 	var addresses []thor.Address
 	count := 0
 
-	err := linkedList.Iter(func(address thor.Address) error {
+	err := linkedList.Iter(0, func(address thor.Address) error {
 		addresses = append(addresses, address)
 		count++
 		return nil
@@ -175,7 +175,7 @@ func Test_LinkedList_Iter(t *testing.T) {
 
 	// Test early termination
 	addresses = []thor.Address{}
-	err = linkedList.Iter(func(address thor.Address) error {
+	err = linkedList.Iter(0, func(address thor.Address) error {
 		addresses = append(addresses, address)
 		if len(addresses) >= 2 {
 			return errors.New("early termination")
@@ -193,7 +193,7 @@ func Test_LinkedList_Iter(t *testing.T) {
 	emptyList := NewLinkedList(sctx, thor.Bytes32{0x4}, thor.Bytes32{0x5}, thor.Bytes32{0x6})
 	var emptyResult []thor.Address
 
-	err = emptyList.Iter(func(address thor.Address) error {
+	err = emptyList.Iter(0, func(address thor.Address) error {
 		emptyResult = append(emptyResult, address)
 		return nil
 	})
