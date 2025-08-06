@@ -211,7 +211,7 @@ func init() {
 					return []any{fmt.Sprintf("revert: %v", err)}
 				}
 				if !exists {
-					return []any{"revert: Validator is not present in the Authority"}
+					return []any{"revert: Validation is not present in the Authority"}
 				}
 				if thor.Address(args.Endorsor) != endorsor {
 					return []any{"revert: endorsor is not present in the Authority"}
@@ -402,7 +402,7 @@ func init() {
 
 			locked := delegation.Started(validator) && !delegation.Ended(validator)
 			return []any{
-				delegation.Validator,
+				delegation.Validation,
 				delegation.Stake,
 				delegation.FirstIteration,
 				lastPeriod,

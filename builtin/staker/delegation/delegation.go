@@ -14,7 +14,7 @@ import (
 )
 
 type Delegation struct {
-	Validator      thor.Address // the validator to which the delegator is delegating
+	Validation     thor.Address // the validator to which the delegator is delegating
 	Stake          *big.Int
 	Multiplier     uint8
 	LastIteration  *uint32 `rlp:"nil"` // the last staking period in which the delegator was active

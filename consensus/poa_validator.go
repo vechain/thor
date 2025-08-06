@@ -143,7 +143,7 @@ func (c *Consensus) authorityBalanceCheck(header *block.Header, st *state.State,
 			return false, nil
 		}
 		// `signer` is the node master, not the endorsor
-		// We are checking if the signer of the block has a `Validator` entry with a stake
+		// We are checking if the signer of the block has a `Validation` entry with a stake
 		// NOT if the given endorsor has a staked
 		validator, err := staker.Get(signer)
 		if err != nil {
