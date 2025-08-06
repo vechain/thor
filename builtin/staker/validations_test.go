@@ -2419,7 +2419,7 @@ func TestStaker_HasDelegations(t *testing.T) {
 		// housekeeping performed, should be true
 		Housekeep(stakingPeriod).
 		AssertHasDelegations(*validator, true).
-		// housekeeping not performed, should still have delegations
+		// signal exit, housekeeping not performed, should still be true
 		SignalDelegationExit(delegationID).
 		AssertHasDelegations(*validator, true).
 		// housekeeping performed, should be false
