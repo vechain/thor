@@ -283,11 +283,12 @@ func (s *Service) DecreaseStake(validator thor.Address, endorsor thor.Address, a
 
 // WithdrawStake allows validations to withdraw any withdrawable stake.
 // It also verifies the endorsor and updates the validator totals.
-func (s *Service) WithdrawStake(validator thor.Address, endorsor thor.Address, currentBlock uint32) (*big.Int, error) {
-	val, err := s.GetExistingValidation(validator)
-	if err != nil {
-		return nil, err
-	}
+func (s *Service) WithdrawStake(
+	val *Validation,
+	validator thor.Address,
+	endorsor thor.Address,
+	currentBlock uint32,
+) (*big.Int, error) {
 	if val.Endorsor != endorsor {
 		return big.NewInt(0), errors.New("invalid endorser")
 	}
@@ -304,7 +305,7 @@ func (s *Service) WithdrawStake(validator thor.Address, endorsor thor.Address, c
 	if val.Status == StatusQueued {
 		val.QueuedVET = big.NewInt(0)
 		val.Status = StatusExit
-		if err = s.validatorQueue.Remove(validator); err != nil {
+		if err := s.validatorQueue.Remove(validator); err != nil {
 			return nil, err
 		}
 	}

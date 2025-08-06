@@ -86,12 +86,7 @@ func (s *Service) Add(
 	return delegationID, nil
 }
 
-func (s *Service) SignalExit(delegationID *big.Int, valCurrentIteration uint32) error {
-	delegation, err := s.GetDelegation(delegationID)
-	if err != nil {
-		return err
-	}
-
+func (s *Service) SignalExit(delegation *Delegation, delegationID *big.Int, valCurrentIteration uint32) error {
 	if delegation.LastIteration != nil {
 		return errors.New("delegation is already disabled for auto-renew")
 	}
@@ -104,12 +99,7 @@ func (s *Service) SignalExit(delegationID *big.Int, valCurrentIteration uint32) 
 	return s.SetDelegation(delegationID, delegation, false)
 }
 
-func (s *Service) Withdraw(delegationID *big.Int) (*big.Int, error) {
-	del, err := s.GetDelegation(delegationID)
-	if err != nil {
-		return nil, err
-	}
-
+func (s *Service) Withdraw(del *Delegation, delegationID *big.Int) (*big.Int, error) {
 	// ensure the pointers are copied, not referenced
 	withdrawableStake := new(big.Int).Set(del.Stake)
 

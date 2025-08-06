@@ -328,7 +328,7 @@ func (s *Staker) WithdrawStake(validator thor.Address, endorsor thor.Address, cu
 		}
 	}
 
-	stake, err := s.validationService.WithdrawStake(validator, endorsor, currentBlock)
+	stake, err := s.validationService.WithdrawStake(val, validator, endorsor, currentBlock)
 	if err != nil {
 		logger.Info("withdraw failed", "validator", validator, "error", err)
 		return nil, err
@@ -424,7 +424,7 @@ func (s *Staker) SignalDelegationExit(delegationID *big.Int) error {
 		return errors.New("delegation has ended, funds can be withdrawn")
 	}
 
-	if err = s.delegationService.SignalExit(delegationID, val.CurrentIteration()); err != nil {
+	if err = s.delegationService.SignalExit(del, delegationID, val.CurrentIteration()); err != nil {
 		logger.Info("update autorenew failed", "delegationID", delegationID, "error", err)
 		return err
 	}
@@ -462,7 +462,7 @@ func (s *Staker) WithdrawDelegation(
 	}
 
 	// withdraw delegation
-	withdrawableStake, err := s.delegationService.Withdraw(delegationID)
+	withdrawableStake, err := s.delegationService.Withdraw(del, delegationID)
 	if err != nil {
 		logger.Info("failed to withdraw", "delegationID", delegationID, "error", err)
 		return nil, err
