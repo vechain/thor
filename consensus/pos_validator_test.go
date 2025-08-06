@@ -31,7 +31,7 @@ func TestConsensus_PosFork(t *testing.T) {
 
 	// mint block 2: chain should set the staker contract, still using PoA
 	best, parent, st := setup.mintBlock()
-	leaders, err := builtin.Staker.Native(st).LeaderGroup(best.Header.Number())
+	leaders, err := builtin.Staker.Native(st).LeaderGroup()
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(leaders))
 	err = setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st), leaders)
@@ -44,7 +44,7 @@ func TestConsensus_PosFork(t *testing.T) {
 
 	// mint block 4: chain should switch to PoS
 	best, parent, st = setup.mintBlock()
-	leaders, err = builtin.Staker.Native(st).LeaderGroup(best.Header.Number())
+	leaders, err = builtin.Staker.Native(st).LeaderGroup()
 	assert.NoError(t, err)
 	err = setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st), leaders)
 	assert.NoError(t, err)
@@ -67,7 +67,7 @@ func TestConsensus_POS_MissedSlots(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NoError(t, setup.chain.AddBlock(blk, stage, receipts))
 
-	leaders, err := builtin.Staker.Native(st).LeaderGroup(blk.Header().Number())
+	leaders, err := builtin.Staker.Native(st).LeaderGroup()
 	assert.NoError(t, err)
 	err = setup.consensus.validateStakingProposer(blk.Header(), parent.Header, builtin.Staker.Native(st), leaders)
 	assert.NoError(t, err)
@@ -93,7 +93,7 @@ func TestConsensus_POS_Unscheduled(t *testing.T) {
 	blk, _, _, err := flow.Pack(signer.PrivateKey, 0, false)
 	assert.NoError(t, err)
 
-	leaders, err := builtin.Staker.Native(st).LeaderGroup(blk.Header().Number())
+	leaders, err := builtin.Staker.Native(st).LeaderGroup()
 	assert.NoError(t, err)
 	err = setup.consensus.validateStakingProposer(blk.Header(), parent.Header, builtin.Staker.Native(st), leaders)
 	assert.ErrorContains(t, err, "block timestamp unscheduled")

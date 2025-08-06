@@ -82,7 +82,7 @@ func verifyMechanism(t *testing.T, chain *testchain.Chain, isPoA bool, root trie
 	assert.NoError(t, err)
 
 	staker := builtin.Staker.Native(st)
-	stakers, err := staker.LeaderGroup(0)
+	stakers, err := staker.LeaderGroup()
 	assert.NoError(t, err)
 
 	if isPoA {

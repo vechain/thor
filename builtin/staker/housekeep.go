@@ -69,7 +69,7 @@ func (s *Staker) computeEpochTransition(currentBlock uint32) (*EpochTransition, 
 
 	var renewals []ValidatorRenewal
 	exitValidator := thor.Address{}
-	err = s.validationService.LeaderGroupIterator(currentBlock, s.renewalCallback(currentBlock, &renewals), s.exitsCallback(currentBlock, &exitValidator))
+	err = s.validationService.LeaderGroupIterator(s.renewalCallback(currentBlock, &renewals), s.exitsCallback(currentBlock, &exitValidator))
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +243,7 @@ func (s *Staker) buildActiveValidatorsFromTransition(transition *EpochTransition
 
 	// After all transitions are applied, just read the current leader group
 	// This captures renewed validators, excludes exited ones, and includes newly activated ones
-	err := s.validationService.LeaderGroupIterator(transition.Block, func(validator thor.Address, entry *validation.Validation) error {
+	err := s.validationService.LeaderGroupIterator(func(validator thor.Address, entry *validation.Validation) error {
 		activeValidators[validator] = entry
 		return nil
 	})

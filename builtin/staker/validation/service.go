@@ -97,8 +97,8 @@ func (s *Service) IncreaseDelegatorsReward(node thor.Address, reward *big.Int) e
 	return s.repo.SetReward(key, big.NewInt(0).Add(rewards, reward), false)
 }
 
-func (s *Service) LeaderGroupIterator(blockNumber uint32, callbacks ...func(thor.Address, *Validation) error) error {
-	return s.leaderGroup.Iter(blockNumber, func(address thor.Address) error {
+func (s *Service) LeaderGroupIterator(callbacks ...func(thor.Address, *Validation) error) error {
+	return s.leaderGroup.Iter(func(address thor.Address) error {
 		// Fetch the validation object for this address
 		validation, err := s.repo.GetValidation(address)
 		if err != nil {
@@ -153,9 +153,9 @@ func (s *Service) GetLeaderGroupHead() (*Validation, error) {
 }
 
 // LeaderGroup lists all registered candidates.
-func (s *Service) LeaderGroup(blockNumber uint32) (map[thor.Address]*Validation, error) {
+func (s *Service) LeaderGroup() (map[thor.Address]*Validation, error) {
 	group := make(map[thor.Address]*Validation)
-	err := s.LeaderGroupIterator(blockNumber, func(validator thor.Address, entry *Validation) error {
+	err := s.LeaderGroupIterator(func(validator thor.Address, entry *Validation) error {
 		group[validator] = entry
 		return nil
 	})

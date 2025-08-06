@@ -38,7 +38,7 @@ func (c *Consensus) validateStakingProposer(
 		if ok {
 			leaders = *possiblyLeaders
 		} else {
-			leaders, err = staker.LeaderGroup(header.Number())
+			leaders, err = staker.LeaderGroup()
 			if err != nil {
 				return err
 			}
@@ -47,7 +47,7 @@ func (c *Consensus) validateStakingProposer(
 		if len(providedLeaders) > 0 {
 			leaders = providedLeaders
 		} else {
-			leaders, err = staker.LeaderGroup(header.Number())
+			leaders, err = staker.LeaderGroup()
 			if err != nil {
 				return err
 			}

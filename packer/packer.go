@@ -131,7 +131,7 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 
 	var score uint64
 	if posActive {
-		leaders, err := builtin.Staker.Native(state).LeaderGroup(parent.Header.Number() + 1)
+		leaders, err := builtin.Staker.Native(state).LeaderGroup()
 		if err != nil {
 			return nil, false, err
 		}

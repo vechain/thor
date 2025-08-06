@@ -45,8 +45,8 @@ func NewLinkedList(sctx *solidity.Context, headPos, tailPos, countPos thor.Bytes
 	}
 }
 
-func (l *LinkedList) loadCache(blockNumber uint32) (*cacheEntry, error) {
-	if cached, ok := l.cache.Get(blockNumber); ok {
+func (l *LinkedList) loadCache(headAddr *solidity.Address) (*cacheEntry, error) {
+	if cached, ok := l.cache.Get(headAddr); ok {
 		return cached.(*cacheEntry), nil
 	}
 
@@ -71,14 +71,13 @@ func (l *LinkedList) loadCache(blockNumber uint32) (*cacheEntry, error) {
 		nextMap:     nextMap,
 	}
 
-	l.cache.Add(blockNumber, entry)
+	l.cache.Add(entry.headAddress, entry)
 	return entry, nil
 }
 
 // Iter traverses the list in FIFO order, calling callback for each address until completion or error
-
-func (l *LinkedList) Iter(blockNumber uint32, callbacks ...func(thor.Address) error) error {
-	entry, err := l.loadCache(blockNumber)
+func (l *LinkedList) Iter(callbacks ...func(thor.Address) error) error {
+	entry, err := l.loadCache(l.head)
 	if err != nil {
 		return err
 	}

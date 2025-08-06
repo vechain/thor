@@ -1300,7 +1300,7 @@ func TestStaker_LeaderGroup(t *testing.T) {
 		stakes[addr] = stake
 	}
 
-	leaderGroup, err := staker.LeaderGroup(0)
+	leaderGroup, err := staker.LeaderGroup()
 	assert.NoError(t, err)
 
 	for id, stake := range stakes {
