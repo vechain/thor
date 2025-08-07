@@ -1667,10 +1667,11 @@ func TestStakerContract_Native(t *testing.T) {
 
 	node := master.Address
 	// getStake
-	getStakeRes := make([]any, 3)
+	getStakeRes := make([]any, 4)
 	getStakeRes[0] = new(common.Address)
 	getStakeRes[1] = new(*big.Int)
 	getStakeRes[2] = new(*big.Int)
+	getStakeRes[3] = new(*big.Int)
 	_, err = callContractAndGetOutput(abi, "getValidatorStake", toAddr, &getStakeRes, node)
 	assert.NoError(t, err)
 
@@ -1678,6 +1679,7 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.Equal(t, &expectedEndorsor, getStakeRes[0])
 	assert.Equal(t, big.NewInt(0).Cmp(*getStakeRes[1].(**big.Int)), 0) // stake - should be 0 while queued
 	assert.Equal(t, big.NewInt(0).Cmp(*getStakeRes[2].(**big.Int)), 0) // weight - should be 0 while queued
+	assert.Equal(t, minStake.Cmp(*getStakeRes[3].(**big.Int)), 0)      // queue stake
 
 	// getStatus
 	getStatusRes := make([]any, 2)
@@ -1689,15 +1691,17 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.Equal(t, true, *getStatusRes[1].(*bool)) // online
 
 	// getPeriod
-	getPeriodRes := make([]any, 3)
+	getPeriodRes := make([]any, 4)
 	getPeriodRes[0] = new(uint32)
 	getPeriodRes[1] = new(uint32)
 	getPeriodRes[2] = new(uint32)
+	getPeriodRes[3] = new(uint32)
 	_, err = callContractAndGetOutput(abi, "getValidatorPeriodDetails", toAddr, &getPeriodRes, node)
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(360*24*15), *getPeriodRes[0].(*uint32))
 	assert.Equal(t, uint32(0), *getPeriodRes[1].(*uint32))              // start period
 	assert.Equal(t, uint32(math.MaxUint32), *getPeriodRes[2].(*uint32)) // exit block
+	assert.Equal(t, uint32(0), *getPeriodRes[3].(*uint32))              // completed periods
 
 	// firstQueued
 	firstQueuedRes := new(common.Address)
@@ -1753,11 +1757,6 @@ func TestStakerContract_Native(t *testing.T) {
 	_, err = callContractAndGetOutput(abi, "getDelegatorsRewards", toAddr, reward, node, uint32(1))
 	assert.NoError(t, err)
 	assert.Equal(t, new(big.Int).String(), (*reward).String())
-
-	periods := uint32(1)
-	_, err = callContractAndGetOutput(abi, "getCompletedPeriods", toAddr, &periods, node)
-	assert.NoError(t, err)
-	assert.Equal(t, uint32(0), periods)
 
 	// GetValidatorsTotals
 	getValidatorsTotals := make([]any, 4)

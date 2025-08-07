@@ -208,19 +208,21 @@ contract Staker {
     )
         public
         view
-        returns (address, uint256, uint256)
+        returns (address, uint256, uint256, uint256)
     {
         (
             address endorsor,
             uint256 stake,
             uint256 weight,
+            uint256 queuedStakeAmount,
             string memory error
         ) = StakerNative(address(this)).native_getValidatorStake(validator);
         require(bytes(error).length == 0, error);
         return (
             endorsor,
             stake,
-            weight
+            weight,
+            queuedStakeAmount
         );
     }
 
@@ -249,7 +251,7 @@ contract Staker {
 
 
     /**
-     * @dev get returns the validator period details. period, startBlock and exitBlock for a validator.
+     * @dev get returns the validator period details. period, startBlock, exitBlock and completed periods for a validator.
      * @return (period, startBlock, exitBlock)
      */
     function getValidatorPeriodDetails(
@@ -257,19 +259,21 @@ contract Staker {
     )
     public
     view
-    returns (uint32, uint32, uint32)
+    returns (uint32, uint32, uint32, uint32)
     {
         (
             uint32 period,
             uint32 startBlock,
             uint32 exitBlock,
+            uint32 completedPeriods,
             string memory error
         ) = StakerNative(address(this)).native_getValidatorPeriodDetails(validator);
         require(bytes(error).length == 0, error);
         return (
             period,
             startBlock,
-            exitBlock
+            exitBlock,
+            completedPeriods
         );
     }
 
@@ -324,18 +328,6 @@ contract Staker {
             .native_getDelegatorsRewards(validator, stakingPeriod);
         require(bytes(error).length == 0, error);
         return reward;
-    }
-
-    /**
-     * @dev getCompletedPeriods returns the number of completed periods for validation
-     */
-    function getCompletedPeriods(
-        address validator
-    ) public view returns (uint32) {
-        (uint32 periods, string memory error) = StakerNative(address(this))
-            .native_getCompletedPeriods(validator);
-        require(bytes(error).length == 0, error);
-        return periods;
     }
 
     function getValidationTotals(
@@ -484,6 +476,7 @@ interface StakerNative {
             address,
             uint256,
             uint256,
+            uint256,
             string calldata
         );
 
@@ -504,6 +497,7 @@ interface StakerNative {
         external
         view
         returns (
+            uint32,
             uint32,
             uint32,
             uint32,
@@ -537,10 +531,6 @@ interface StakerNative {
         address validator,
         uint32 stakingPeriod
     ) external view returns (uint256, string calldata);
-
-    function native_getCompletedPeriods(
-        address validator
-    ) external view returns (uint32, string calldata);
 
     function native_getValidationTotals(
         address validator

@@ -99,6 +99,7 @@ func init() {
 				validator.Endorsor,
 				validator.LockedVET,
 				validator.Weight,
+				validator.QueuedVET,
 				"",
 			}
 		}},
@@ -139,11 +140,12 @@ func init() {
 					uint32(0),
 					uint32(0),
 					uint32(0),
+					uint32(0),
 					fmt.Sprintf("revert: %v", err),
 				}
 			}
 			if validator.IsEmpty() {
-				return []any{uint32(0), uint32(0), uint32(0), ""}
+				return []any{uint32(0), uint32(0), uint32(0), uint32(0), ""}
 			}
 			exitBlock := uint32(math.MaxUint32)
 			if validator.ExitBlock != nil {
@@ -153,6 +155,7 @@ func init() {
 				validator.Period,
 				validator.StartBlock,
 				exitBlock,
+				validator.CompleteIterations,
 				"",
 			}
 		}},
@@ -482,19 +485,6 @@ func init() {
 				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
 			}
 			return []any{reward, ""}
-		}},
-		{"native_getCompletedPeriods", func(env *xenv.Environment) []any {
-			var args struct {
-				Validator common.Address
-			}
-			env.ParseArgs(&args)
-			charger := gascharger.New(env)
-
-			periods, err := Staker.NativeMetered(env.State(), charger).GetCompletedPeriods(thor.Address(args.Validator))
-			if err != nil {
-				return []any{uint32(0), fmt.Sprintf("revert: %v", err)}
-			}
-			return []any{periods, ""}
 		}},
 		{"native_getDelegatorContract", func(env *xenv.Environment) []any {
 			charger := gascharger.New(env)

@@ -122,6 +122,7 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, minStakingPeriod, getPeriodDetailsRes.Period)
 	require.Equal(t, uint32(15), getPeriodDetailsRes.StartBlock)
 	require.Equal(t, uint32(math.MaxUint32), getPeriodDetailsRes.ExitBlock)
+	require.Equal(t, uint32(0), getPeriodDetailsRes.CompletedPeriods)
 
 	// FirstActive
 	firstActive, firstID, err := staker.FirstActive()
