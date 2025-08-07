@@ -61,7 +61,7 @@ func (s *Staker) Revision(rev string) *Staker {
 }
 
 // FirstActive returns the first active validator
-func (s *Staker) FirstActive() (*Validator, thor.Address, error) {
+func (s *Staker) FirstActive() (*ValidatorStake, thor.Address, error) {
 	out := new(common.Address)
 	if err := s.contract.Method("firstActive").Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, thor.Address{}, err
@@ -70,7 +70,7 @@ func (s *Staker) FirstActive() (*Validator, thor.Address, error) {
 	if validator.IsZero() {
 		return nil, thor.Address{}, errors.New("no active validator")
 	}
-	v, err := s.Get(validator)
+	v, err := s.GetValidatorStake(validator)
 	return v, validator, err
 }
 
@@ -79,7 +79,7 @@ func (s *Staker) Raw() *bind.Contract {
 }
 
 // FirstQueued returns the first queued validator
-func (s *Staker) FirstQueued() (*Validator, thor.Address, error) {
+func (s *Staker) FirstQueued() (*ValidatorStake, thor.Address, error) {
 	out := new(common.Address)
 	if err := s.contract.Method("firstQueued").Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, thor.Address{}, err
@@ -88,12 +88,12 @@ func (s *Staker) FirstQueued() (*Validator, thor.Address, error) {
 	if validator.IsZero() {
 		return nil, thor.Address{}, errors.New("no queued validator")
 	}
-	v, err := s.Get(validator)
+	v, err := s.GetValidatorStake(validator)
 	return v, validator, err
 }
 
 // Next returns the next validator
-func (s *Staker) Next(validator thor.Address) (*Validator, thor.Address, error) {
+func (s *Staker) Next(validator thor.Address) (*ValidatorStake, thor.Address, error) {
 	out := new(common.Address)
 	if err := s.contract.Method("next", validator).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, thor.Address{}, err
@@ -102,7 +102,7 @@ func (s *Staker) Next(validator thor.Address) (*Validator, thor.Address, error) 
 	if next.IsZero() {
 		return nil, thor.Address{}, errors.New("no next validator")
 	}
-	v, err := s.Get(next)
+	v, err := s.GetValidatorStake(next)
 	return v, next, err
 }
 
@@ -126,48 +126,80 @@ func (s *Staker) QueuedStake() (*big.Int, *big.Int, error) {
 	return *(out[0].(**big.Int)), *(out[1].(**big.Int)), nil
 }
 
-type Validator struct {
+type ValidatorStake struct {
+	Address  thor.Address
+	Endorsor thor.Address
+	Stake    *big.Int
+	Weight   *big.Int
+}
+
+type ValidatorStatus struct {
+	Address thor.Address
+	Status  StakerStatus
+	Online  bool
+}
+
+type ValidatorPeriodDetails struct {
 	Address    thor.Address
-	Endorsor   thor.Address
-	Stake      *big.Int
-	Weight     *big.Int
-	Status     StakerStatus
-	Online     bool
 	Period     uint32
 	StartBlock uint32
 	ExitBlock  uint32
 }
 
-func (v *Validator) Exists() bool {
-	return !v.Endorsor.IsZero() && v.Status != 0
+func (v *ValidatorStake) Exists(status ValidatorStatus) bool {
+	return !v.Endorsor.IsZero() && status.Status != 0
 }
 
-func (s *Staker) Get(node thor.Address) (*Validator, error) {
-	out := [8]any{}
+func (s *Staker) GetValidatorStake(node thor.Address) (*ValidatorStake, error) {
+	out := [3]any{}
 	out[0] = new(common.Address)
 	out[1] = new(*big.Int)
 	out[2] = new(*big.Int)
-	out[3] = new(uint8)
-	out[4] = new(bool)
-	out[5] = new(uint32)
-	out[6] = new(uint32)
-	out[7] = new(uint32)
-	if err := s.contract.Method("get", node).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
+	if err := s.contract.Method("getValidatorStake", node).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, err
 	}
-	validator := &Validator{
-		Address:    node,
-		Endorsor:   thor.Address(out[0].(*common.Address)[:]),
-		Stake:      *(out[1].(**big.Int)),
-		Weight:     *(out[2].(**big.Int)),
-		Status:     StakerStatus(*(out[3].(*uint8))),
-		Online:     *(out[4].(*bool)),
-		Period:     *(out[5].(*uint32)),
-		StartBlock: *(out[6].(*uint32)),
-		ExitBlock:  *(out[7].(*uint32)),
+	validatorStake := &ValidatorStake{
+		Address:  node,
+		Endorsor: thor.Address(out[0].(*common.Address)[:]),
+		Stake:    *(out[1].(**big.Int)),
+		Weight:   *(out[2].(**big.Int)),
 	}
 
-	return validator, nil
+	return validatorStake, nil
+}
+
+func (s *Staker) GetValidatorStatus(node thor.Address) (*ValidatorStatus, error) {
+	out := [2]any{}
+	out[0] = new(uint8)
+	out[1] = new(bool)
+	if err := s.contract.Method("getValidatorStatus", node).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
+		return nil, err
+	}
+	validatorStatus := &ValidatorStatus{
+		Address: node,
+		Status:  StakerStatus(*(out[0].(*uint8))),
+		Online:  *(out[1].(*bool)),
+	}
+
+	return validatorStatus, nil
+}
+
+func (s *Staker) GetValidatorPeriodDetails(node thor.Address) (*ValidatorPeriodDetails, error) {
+	out := [3]any{}
+	out[0] = new(uint32)
+	out[1] = new(uint32)
+	out[2] = new(uint32)
+	if err := s.contract.Method("getValidatorPeriodDetails", node).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
+		return nil, err
+	}
+	validatorPeriodDetails := &ValidatorPeriodDetails{
+		Address:    node,
+		Period:     *(out[0].(*uint32)),
+		StartBlock: *(out[1].(*uint32)),
+		ExitBlock:  *(out[2].(*uint32)),
+	}
+
+	return validatorPeriodDetails, nil
 }
 
 func (s *Staker) AddValidation(validator thor.Address, stake *big.Int, period uint32) *bind.MethodBuilder {
@@ -226,36 +258,50 @@ func (s *Staker) GetCompletedPeriods(validatorID thor.Address) (*uint32, error) 
 	return &out, nil
 }
 
-type Delegation struct {
-	Validator   thor.Address
-	Stake       *big.Int
+type DelegationStake struct {
+	Validator  thor.Address
+	Stake      *big.Int
+	Multiplier uint8
+}
+
+type DelegationPeriodDetails struct {
 	StartPeriod uint32
 	EndPeriod   uint32
-	Multiplier  uint8
 	Locked      bool
 }
 
-func (s *Staker) GetDelegation(delegationID *big.Int) (*Delegation, error) {
-	out := make([]any, 7)
+func (s *Staker) GetDelegationStake(delegationID *big.Int) (*DelegationStake, error) {
+	out := make([]any, 3)
 	out[0] = new(common.Address)
 	out[1] = new(*big.Int)
-	out[2] = new(uint32)
-	out[3] = new(uint32)
-	out[4] = new(uint8)
-	out[5] = new(bool)
-	if err := s.contract.Method("getDelegation", delegationID).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
+	out[2] = new(uint8)
+	if err := s.contract.Method("getDelegationStake", delegationID).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, err
 	}
-	delegatorInfo := &Delegation{
-		Validator:   thor.Address(out[0].(*common.Address)[:]),
-		Stake:       *(out[1].(**big.Int)),
-		StartPeriod: *(out[2].(*uint32)),
-		EndPeriod:   *(out[3].(*uint32)),
-		Multiplier:  *(out[4].(*uint8)),
-		Locked:      *(out[5].(*bool)),
+	delegatorStake := &DelegationStake{
+		Validator:  thor.Address(out[0].(*common.Address)[:]),
+		Stake:      *(out[1].(**big.Int)),
+		Multiplier: *(out[2].(*uint8)),
 	}
 
-	return delegatorInfo, nil
+	return delegatorStake, nil
+}
+
+func (s *Staker) GetDelegationPeriodDetails(delegationID *big.Int) (*DelegationPeriodDetails, error) {
+	out := make([]any, 3)
+	out[0] = new(uint32)
+	out[1] = new(uint32)
+	out[2] = new(bool)
+	if err := s.contract.Method("getDelegationPeriodDetails", delegationID).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
+		return nil, err
+	}
+	delegatorPeriodDetails := &DelegationPeriodDetails{
+		StartPeriod: *(out[0].(*uint32)),
+		EndPeriod:   *(out[1].(*uint32)),
+		Locked:      *(out[2].(*bool)),
+	}
+
+	return delegatorPeriodDetails, nil
 }
 
 type ValidationTotals struct {

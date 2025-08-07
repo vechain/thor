@@ -11,10 +11,11 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/vechain/thor/v2/builtin/staker/validation"
+
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/vechain/thor/v2/builtin/gascharger"
-	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/xenv"
@@ -75,7 +76,7 @@ func init() {
 			}
 			return []any{staked, weight, ""}
 		}},
-		{"native_get", func(env *xenv.Environment) []any {
+		{"native_getValidatorStake", func(env *xenv.Environment) []any {
 			var args struct {
 				Validator common.Address
 			}
@@ -88,8 +89,53 @@ func init() {
 					thor.Address{},
 					big.NewInt(0),
 					big.NewInt(0),
+					fmt.Sprintf("revert: %v", err),
+				}
+			}
+			if validator.IsEmpty() {
+				return []any{thor.Address{}, big.NewInt(0), big.NewInt(0), ""}
+			}
+			return []any{
+				validator.Endorsor,
+				validator.LockedVET,
+				validator.Weight,
+				"",
+			}
+		}},
+		{"native_getValidatorStatus", func(env *xenv.Environment) []any {
+			var args struct {
+				Validator common.Address
+			}
+			env.ParseArgs(&args)
+			charger := gascharger.New(env)
+
+			validator, err := Staker.NativeMetered(env.State(), charger).Get(thor.Address(args.Validator))
+			if err != nil {
+				return []any{
 					validation.StatusUnknown,
 					false,
+					fmt.Sprintf("revert: %v", err),
+				}
+			}
+			if validator.IsEmpty() {
+				return []any{validation.StatusUnknown, false, ""}
+			}
+			return []any{
+				validator.Status,
+				validator.Online,
+				"",
+			}
+		}},
+		{"native_getValidatorPeriodDetails", func(env *xenv.Environment) []any {
+			var args struct {
+				Validator common.Address
+			}
+			env.ParseArgs(&args)
+			charger := gascharger.New(env)
+
+			validator, err := Staker.NativeMetered(env.State(), charger).Get(thor.Address(args.Validator))
+			if err != nil {
+				return []any{
 					uint32(0),
 					uint32(0),
 					uint32(0),
@@ -97,18 +143,13 @@ func init() {
 				}
 			}
 			if validator.IsEmpty() {
-				return []any{thor.Address{}, thor.Address{}, big.NewInt(0), big.NewInt(0), validation.StatusUnknown, false, uint32(0), uint32(0), uint32(0), ""}
+				return []any{uint32(0), uint32(0), uint32(0), ""}
 			}
 			exitBlock := uint32(math.MaxUint32)
 			if validator.ExitBlock != nil {
 				exitBlock = *validator.ExitBlock
 			}
 			return []any{
-				validator.Endorsor,
-				validator.LockedVET,
-				validator.Weight,
-				validator.Status,
-				validator.Online,
 				validator.Period,
 				validator.StartBlock,
 				exitBlock,
@@ -383,7 +424,26 @@ func init() {
 
 			return []any{""}
 		}},
-		{"native_getDelegation", func(env *xenv.Environment) []any {
+		{"native_getDelegationStake", func(env *xenv.Environment) []any {
+			var args struct {
+				DelegationID *big.Int
+			}
+			env.ParseArgs(&args)
+			charger := gascharger.New(env)
+
+			delegation, _, err := Staker.NativeMetered(env.State(), charger).GetDelegation(args.DelegationID)
+			if err != nil {
+				return []any{thor.Address{}, new(big.Int), uint8(0), fmt.Sprintf("revert: %v", err)}
+			}
+
+			return []any{
+				delegation.Validation,
+				delegation.Stake,
+				delegation.Multiplier,
+				"",
+			}
+		}},
+		{"native_getDelegationPeriodDetails", func(env *xenv.Environment) []any {
 			var args struct {
 				DelegationID *big.Int
 			}
@@ -392,7 +452,7 @@ func init() {
 
 			delegation, validator, err := Staker.NativeMetered(env.State(), charger).GetDelegation(args.DelegationID)
 			if err != nil {
-				return []any{thor.Bytes32{}, new(big.Int), uint32(0), uint32(0), uint8(0), false, false, fmt.Sprintf("revert: %v", err)}
+				return []any{uint32(0), uint32(0), false, fmt.Sprintf("revert: %v", err)}
 			}
 
 			lastPeriod := uint32(math.MaxUint32)
@@ -401,13 +461,12 @@ func init() {
 			}
 
 			locked := delegation.Started(validator) && !delegation.Ended(validator)
+
 			return []any{
-				delegation.Validation,
-				delegation.Stake,
 				delegation.FirstIteration,
 				lastPeriod,
-				delegation.Multiplier,
-				locked, "",
+				locked,
+				"",
 			}
 		}},
 		{"native_getDelegatorsRewards", func(env *xenv.Environment) []any {
