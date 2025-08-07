@@ -106,6 +106,7 @@ func TestStaker(t *testing.T) {
 	require.False(t, getStakeRes.Endorsor.IsZero())
 	require.Equal(t, getStakeRes.Stake, minStake)
 	require.Equal(t, getStakeRes.Weight, big.NewInt(0).Mul(minStake, big.NewInt(2)))
+	require.Equal(t, getStakeRes.QueuedStake.String(), big.NewInt(0).String())
 
 	// GetStatus
 	getStatusRes, err := staker.GetValidatorStatus(firstID)
