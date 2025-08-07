@@ -366,10 +366,10 @@ contract Staker {
      * @dev issuance returns the total amount of VTHO generated
      */
     function issuance() public view returns (uint256) {
-        (uint256 issuance, string memory error) = StakerNative(address(this))
+        (uint256 issuanceAmount, string memory error) = StakerNative(address(this))
             .native_issuance();
         require(bytes(error).length == 0, error);
-        return issuance;
+        return issuanceAmount;
     }
 
     modifier onlyDelegatorContract() {
