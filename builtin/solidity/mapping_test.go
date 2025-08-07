@@ -118,7 +118,7 @@ func TestMapping_SetGet_StructPointer(t *testing.T) {
 		got, err := mapping.Get(datagen.RandomHash())
 		require.NoError(t, err)
 		assert.Nil(t, got)
-		assert.Equal(t, uint64(0), charger.TotalGas(), "expected no gas for empty key")
+		assert.Equal(t, thor.SloadGas, charger.TotalGas(), "expected no gas for empty key")
 	})
 
 	t.Run("reset existing with newValue=false charges ResetGas", func(t *testing.T) {
@@ -161,12 +161,12 @@ func TestMapping_SetGet_AddressValue(t *testing.T) {
 		got, err := mapping.Get(datagen.RandomHash())
 		require.NoError(t, err)
 		assert.Equal(t, thor.Address{}, got)
-		assert.Equal(t, uint64(0), charger.TotalGas(), "expected no gas for empty address key")
+		assert.Equal(t, thor.SloadGas, charger.TotalGas(), "expected no gas for empty address key")
 	})
 
 	t.Run("clear address by setting zero-value and no gas", func(t *testing.T) {
 		require.NoError(t, mapping.Set(key, thor.Address{}, true))
-		assert.Equal(t, uint64(0), charger.TotalGas())
+		assert.Equal(t, thor.SloadGas, charger.TotalGas())
 	})
 }
 
@@ -187,12 +187,12 @@ func TestMapping_SetGet_AddressPointer(t *testing.T) {
 		got, err := mapping.Get(datagen.RandomHash())
 		require.NoError(t, err)
 		assert.Nil(t, got)
-		assert.Equal(t, uint64(0), charger.TotalGas(), "expected no gas for empty pointer key")
+		assert.Equal(t, thor.SloadGas, charger.TotalGas(), "expected no gas for empty pointer key")
 	})
 
 	t.Run("clear pointer by setting nil and no gas", func(t *testing.T) {
 		require.NoError(t, mapping.Set(key, nil, true))
-		assert.Equal(t, uint64(0), charger.TotalGas(), "expected no gas for clearing pointer slot")
+		assert.Equal(t, thor.SloadGas, charger.TotalGas(), "expected no gas for clearing pointer slot")
 		got, err := mapping.Get(key)
 		require.NoError(t, err)
 		assert.Nil(t, got)
@@ -215,12 +215,12 @@ func TestMapping_SetGet_Uint64Value(t *testing.T) {
 		got, err := mapping.Get(datagen.RandomHash())
 		require.NoError(t, err)
 		assert.Equal(t, uint64(0), got)
-		assert.Equal(t, uint64(0), charger.TotalGas(), "expected no gas for empty uint64 key")
+		assert.Equal(t, thor.SloadGas, charger.TotalGas(), "expected no gas for empty uint64 key")
 	})
 
 	t.Run("clear uint64 by setting zero-value and no gas", func(t *testing.T) {
 		require.NoError(t, mapping.Set(key, 0, true))
-		assert.Equal(t, uint64(0), charger.TotalGas(), "expected no gas for clearing uint64 slot")
+		assert.Equal(t, thor.SloadGas, charger.TotalGas(), "expected no gas for clearing uint64 slot")
 	})
 }
 

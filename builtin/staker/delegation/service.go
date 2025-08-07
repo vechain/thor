@@ -11,7 +11,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
-	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -74,7 +73,7 @@ func (s *Service) Add(
 
 	delegationID := new(big.Int).Set(id)
 	delegation := Delegation{
-		Validator:      validator,
+		Validation:     validator,
 		Multiplier:     multiplier,
 		Stake:          stake,
 		FirstIteration: firstIteration,
@@ -87,46 +86,27 @@ func (s *Service) Add(
 	return delegationID, nil
 }
 
-// todo uncouple this
-func (s *Service) SignalExit(delegationID *big.Int, val *validation.Validation) error {
-	delegation, err := s.GetDelegation(delegationID)
-	if err != nil {
-		return err
-	}
-
+func (s *Service) SignalExit(delegation *Delegation, delegationID *big.Int, valCurrentIteration uint32) error {
 	if delegation.LastIteration != nil {
 		return errors.New("delegation is already disabled for auto-renew")
 	}
 	if delegation.Stake.Sign() == 0 {
 		return errors.New("delegation is not active")
 	}
-	if !delegation.Started(val) {
-		return errors.New("delegation has not started yet, funds can be withdrawn")
-	}
-	if delegation.Ended(val) {
-		return errors.New("delegation has ended, funds can be withdrawn")
-	}
 
-	last := val.CurrentIteration()
-	delegation.LastIteration = &last
+	delegation.LastIteration = &valCurrentIteration
 
 	return s.SetDelegation(delegationID, delegation, false)
 }
 
-func (s *Service) Withdraw(delegationID *big.Int) (*big.Int, *big.Int, error) {
-	del, err := s.GetDelegation(delegationID)
-	if err != nil {
-		return nil, nil, err
-	}
-
+func (s *Service) Withdraw(del *Delegation, delegationID *big.Int) (*big.Int, error) {
 	// ensure the pointers are copied, not referenced
 	withdrawableStake := new(big.Int).Set(del.Stake)
-	withdrawableStakeWeight := del.CalcWeight()
 
 	del.Stake = big.NewInt(0)
 	if err := s.SetDelegation(delegationID, del, false); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	return withdrawableStake, withdrawableStakeWeight, nil
+	return withdrawableStake, nil
 }

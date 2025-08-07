@@ -33,6 +33,34 @@ func NewLinkedList(sctx *solidity.Context, headPos, tailPos, countPos thor.Bytes
 	}
 }
 
+// Iter traverses the list in FIFO order, calling callback for each address until completion or error
+func (l *LinkedList) Iter(callbacks ...func(thor.Address) error) error {
+	ptr, err := l.head.Get()
+	if err != nil {
+		return err
+	}
+
+	for !ptr.IsZero() {
+		for _, callback := range callbacks {
+			if err := callback(ptr); err != nil {
+				return err
+			}
+		}
+
+		next, err := l.next.Get(ptr)
+		if err != nil {
+			return err
+		}
+
+		if next.IsZero() {
+			break
+		}
+		ptr = next
+	}
+
+	return nil
+}
+
 // Add appends an address to the end of the list, maintaining FIFO order for staker processing
 func (l *LinkedList) Add(address thor.Address) error {
 	oldTail, err := l.tail.Get()
@@ -60,7 +88,11 @@ func (l *LinkedList) Add(address thor.Address) error {
 	// Update tail pointer
 	l.tail.Set(&address, false)
 
-	return l.count.Add(big.NewInt(1))
+	if err := l.count.Add(big.NewInt(1)); err != nil {
+		return err
+	}
+
+	return err
 }
 
 // Remove extracts an address from anywhere in the list, reconnecting adjacent nodes and clearing removed node's pointers
@@ -118,7 +150,11 @@ func (l *LinkedList) Remove(address thor.Address) error {
 		return err
 	}
 
-	return l.count.Sub(big.NewInt(1))
+	if err := l.count.Sub(big.NewInt(1)); err != nil {
+		return err
+	}
+
+	return err
 }
 
 // Pop removes and returns the oldest entry (head) for FIFO processing order
@@ -147,32 +183,6 @@ func (l *LinkedList) Peek() (thor.Address, error) {
 // Len returns the current number of addresses in the staker queue
 func (l *LinkedList) Len() (*big.Int, error) {
 	return l.count.Get()
-}
-
-// Iter traverses the list in FIFO order, calling callback for each address until completion or error
-func (l *LinkedList) Iter(callback func(thor.Address) error) error {
-	ptr, err := l.head.Get()
-	if err != nil {
-		return err
-	}
-
-	for !ptr.IsZero() {
-		if err := callback(ptr); err != nil {
-			return err
-		}
-
-		next, err := l.next.Get(ptr)
-		if err != nil {
-			return err
-		}
-
-		if next.IsZero() {
-			break
-		}
-		ptr = next
-	}
-
-	return nil
 }
 
 // Next returns the successor address in the list, or zero address if at the end

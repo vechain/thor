@@ -211,7 +211,7 @@ func init() {
 					return []any{fmt.Sprintf("revert: %v", err)}
 				}
 				if !exists {
-					return []any{"revert: Validator is not present in the Authority"}
+					return []any{"revert: Validation is not present in the Authority"}
 				}
 				if thor.Address(args.Endorsor) != endorsor {
 					return []any{"revert: endorsor is not present in the Authority"}
@@ -402,7 +402,7 @@ func init() {
 
 			locked := delegation.Started(validator) && !delegation.Ended(validator)
 			return []any{
-				delegation.Validator,
+				delegation.Validation,
 				delegation.Stake,
 				delegation.FirstIteration,
 				lastPeriod,
@@ -460,6 +460,25 @@ func init() {
 				return []any{new(big.Int), new(big.Int), new(big.Int), new(big.Int), fmt.Sprintf("revert: failed to get validators totals: %v", err)}
 			}
 			return []any{totals.TotalLockedStake, totals.TotalLockedWeight, totals.DelegationsLockedStake, totals.DelegationsLockedWeight, ""}
+		}},
+		{"native_getValidatorsNum", func(env *xenv.Environment) []any {
+			charger := gascharger.New(env)
+
+			leaderGroupSize, queuedGroupSize, err := Staker.NativeMetered(env.State(), charger).GetValidatorsNum()
+			if err != nil {
+				return []any{new(big.Int), new(big.Int), fmt.Sprintf("revert: failed to get validators totals: %v", err)}
+			}
+			return []any{leaderGroupSize, queuedGroupSize, ""}
+		}},
+		{"native_issuance", func(env *xenv.Environment) []any {
+			charger := gascharger.New(env)
+
+			staker := Staker.NativeMetered(env.State(), charger)
+			issuance, err := Energy.Native(env.State(), env.BlockContext().Time).CalculateRewards(staker)
+			if err != nil {
+				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
+			}
+			return []any{issuance, ""}
 		}},
 	}
 	stakerAbi := Staker.NativeABI()

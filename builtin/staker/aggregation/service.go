@@ -12,6 +12,7 @@ import (
 
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/builtin/staker/delta"
+	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -49,28 +50,26 @@ func (s *Service) setAggregation(validator thor.Address, agg *Aggregation, newVa
 
 // AddPendingVET adds a new delegation to the validator's pending pool.
 // Called when a delegator creates a new delegation.
-func (s *Service) AddPendingVET(validator thor.Address, weight *big.Int, stake *big.Int) error {
+func (s *Service) AddPendingVET(validator thor.Address, stake *stakes.WeightedStake) error {
 	agg, err := s.GetAggregation(validator)
 	if err != nil {
 		return err
 	}
-
-	agg.PendingVET = big.NewInt(0).Add(agg.PendingVET, stake)
-	agg.PendingWeight = big.NewInt(0).Add(agg.PendingWeight, weight)
+	agg.PendingVET = big.NewInt(0).Add(agg.PendingVET, stake.VET())
+	agg.PendingWeight = big.NewInt(0).Add(agg.PendingWeight, stake.Weight())
 
 	return s.setAggregation(validator, agg, false)
 }
 
 // SubPendingVet removes VET from the validator's pending pool.
 // Called when a delegation is withdrawn before becoming active.
-func (s *Service) SubPendingVet(validator thor.Address, stake *big.Int, weight *big.Int) error {
+func (s *Service) SubPendingVet(validator thor.Address, stake *stakes.WeightedStake) error {
 	agg, err := s.GetAggregation(validator)
 	if err != nil {
 		return err
 	}
-
-	agg.PendingVET = big.NewInt(0).Sub(agg.PendingVET, stake)
-	agg.PendingWeight = big.NewInt(0).Sub(agg.PendingWeight, weight)
+	agg.PendingVET = big.NewInt(0).Sub(agg.PendingVET, stake.VET())
+	agg.PendingWeight = big.NewInt(0).Sub(agg.PendingWeight, stake.Weight())
 
 	return s.setAggregation(validator, agg, false)
 }
@@ -114,7 +113,7 @@ func (s *Service) Exit(validator thor.Address) (*delta.Exit, error) {
 
 // SignalExit marks locked delegations as exiting for the next period.
 // Called when a validator signals intent to exit but hasn't exited yet.
-func (s *Service) SignalExit(validator thor.Address, exitingStake *big.Int, exitingWeight *big.Int) error {
+func (s *Service) SignalExit(validator thor.Address, stake *stakes.WeightedStake) error {
 	agg, err := s.GetAggregation(validator)
 	if err != nil {
 		return err
@@ -122,8 +121,8 @@ func (s *Service) SignalExit(validator thor.Address, exitingStake *big.Int, exit
 
 	// Only move to exiting pools - don't subtract from locked yet
 	// The subtraction happens during renewal
-	agg.ExitingVET = big.NewInt(0).Add(agg.ExitingVET, exitingStake)
-	agg.ExitingWeight = big.NewInt(0).Add(agg.ExitingWeight, exitingWeight)
+	agg.ExitingVET = big.NewInt(0).Add(agg.ExitingVET, stake.VET())
+	agg.ExitingWeight = big.NewInt(0).Add(agg.ExitingWeight, stake.Weight())
 
 	return s.setAggregation(validator, agg, false)
 }

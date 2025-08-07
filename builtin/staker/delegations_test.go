@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/v2/builtin/staker/delegation"
+	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
@@ -134,19 +135,21 @@ func Test_AddDelegator(t *testing.T) {
 
 	stake := big.NewInt(0).Set(MinStake)
 
-	validator := validators[0]
-	id1, err := staker.AddDelegation(validator.ID, stake, 255)
-	assert.NoError(t, err)
-	assert.NotNil(t, id1)
-	aggregation, err := staker.aggregationService.GetAggregation(validator.ID)
-	assert.NoError(t, err)
-	assert.Equal(t, aggregation.PendingVET, stake)
-	delegation, _, err := staker.GetDelegation(id1)
-	assert.NoError(t, err)
-	assert.Equal(t, stake, delegation.Stake)
-	assert.Equal(t, uint8(255), delegation.Multiplier)
-	assert.Equal(t, uint32(2), delegation.FirstIteration)
-	assert.Nil(t, delegation.LastIteration) // auto renew, so exit iteration is nil
+	id := big.NewInt(0)
+	validatorID := validators[0].ID
+
+	newTestSequence(t, staker).
+		AddDelegation(validatorID, stake, 255, id)
+
+	assertDelegation(t, staker, id).
+		IsStarted(false).
+		LastIteration(nil)
+
+	weightedStake := stakes.NewWeightedStake(stake, 255)
+
+	assertAggregation(t, staker, validatorID).
+		PendingVET(stake).
+		PendingWeight(weightedStake.Weight())
 }
 
 func Test_AddDelegator_StakeRange(t *testing.T) {
@@ -601,4 +604,31 @@ func Test_Delegations_EnableAutoRenew_MatchStakeReached(t *testing.T) {
 	//
 	//// Enable auto renew for the first delegation - should fail since the presence of other delegator's exceeds max stake
 	//assert.ErrorContains(t, staker.UpdateDelegationAutoRenew(delegationID, true), "validation's next period stake exceeds max stake")
+}
+
+func TestStaker_DelegationExitingVET(t *testing.T) {
+	staker, _ := newStaker(t, 1, 1, true)
+
+	firstActive, err := staker.FirstActive()
+	assert.NoError(t, err)
+
+	delegationID, err := staker.AddDelegation(*firstActive, big.NewInt(1000), 200)
+	assert.NoError(t, err)
+
+	delegation, validation, err := staker.GetDelegation(delegationID)
+	assert.NoError(t, err)
+	assert.False(t, delegation.Started(validation))
+
+	_, _, err = staker.Housekeep(MediumStakingPeriod.Get())
+	assert.NoError(t, err)
+
+	delegation, validation, err = staker.GetDelegation(delegationID)
+	assert.NoError(t, err)
+	assert.True(t, delegation.Started(validation))
+
+	assert.NoError(t, staker.SignalDelegationExit(delegationID))
+	assert.NoError(t, staker.SignalExit(*firstActive, validation.Endorsor))
+
+	_, _, err = staker.Housekeep(MediumStakingPeriod.Get() * 2)
+	assert.NoError(t, err)
 }

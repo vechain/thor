@@ -180,7 +180,7 @@ func TestScheduler_Distribution(t *testing.T) {
 				addr := thor.BytesToAddress(id[:])
 
 				assert.InDeltaf(t, float64(count), float64(expectedCount), diff,
-					"Validator %s has a distribution of %d, expected %d, diff %v",
+					"Validation %s has a distribution of %d, expected %d, diff %v",
 					addr.String(), count, expectedCount, diffPercent,
 				)
 			}
@@ -217,17 +217,32 @@ func TestScheduler_Updates(t *testing.T) {
 	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, parentTime, []byte("seed1"))
 	assert.NoError(t, err)
 
-	updates, score := sched.Updates(nowTime)
+	totalWeight := big.NewInt(0)
+	for validator := range validators {
+		val := validators[validator]
+		totalWeight = big.NewInt(0).Add(val.Weight, totalWeight)
+	}
+
+	updates, score := sched.Updates(nowTime, totalWeight)
 
 	offline := 0
-	for _, online := range updates {
+	offlineWeight := big.NewInt(0)
+	for id, online := range updates {
 		if !online {
 			offline++
+			val := validators[id]
+			offlineWeight = offlineWeight.Add(offlineWeight, val.Weight)
 		}
 	}
 
+	scaledScore := new(big.Int).Sub(totalWeight, offlineWeight)
+	scaledScore = new(big.Int).Mul(scaledScore, big.NewInt(thor.MaxPosScore))
+	scaledScore.Div(scaledScore, totalWeight)
+
+	expected := scaledScore.Uint64()
+
 	assert.Equal(t, 1, offline)
-	assert.Equal(t, 9, int(score))
+	assert.Equal(t, expected, score)
 }
 
 func TestScheduler_TotalPlacements(t *testing.T) {
@@ -244,7 +259,7 @@ func TestScheduler_TotalPlacements(t *testing.T) {
 	// check total stake in scheduler, should only use online validators
 	total := big.NewInt(0)
 	for _, p := range sched.sequence {
-		total.Add(total, validators[p].Weight)
+		total.Add(total, validators[p.id].Weight)
 	}
 
 	expectedStake := totalStake.Sub(totalStake, validators[otherAcc].Weight)
@@ -281,10 +296,36 @@ func TestScheduler_AllValidatorsScheduled(t *testing.T) {
 
 	seen := make(map[thor.Address]bool)
 	for _, id := range sched.sequence {
-		if seen[id] {
-			t.Fatalf("Validator %s is scheduled multiple times", id)
+		if seen[id.id] {
+			t.Fatalf("Validation %s is scheduled multiple times", id.id)
 		}
-		seen[id] = true
+		seen[id.id] = true
 	}
 	assert.Equal(t, len(seen), len(validators))
+}
+
+func TestScheduler_Schedule_TotalScore(t *testing.T) {
+	validators := make(map[thor.Address]*validation.Validation)
+	totalStake := big.NewInt(0)
+	weight := big.NewInt(10_000)
+	for _, acc := range genesis.DevAccounts() {
+		validator := &validation.Validation{
+			Weight: weight,
+			Online: true,
+		}
+		validators[acc.Address] = validator
+		totalStake.Add(totalStake, validator.Weight)
+	}
+
+	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed1"))
+	assert.NoError(t, err)
+
+	updates, score := sched.Updates(30, totalStake)
+	assert.Equal(t, 1, len(updates), "There should be one update")
+
+	onlineWeight := big.NewInt(0).Mul(weight, big.NewInt(int64(len(validators)-1)))
+
+	expectedScore := big.NewInt(0).Mul(onlineWeight, big.NewInt(thor.MaxPosScore))
+	expectedScore = expectedScore.Div(expectedScore, totalStake)
+	assert.Equal(t, int(expectedScore.Uint64()), int(score), "Score should be equal to the expected score")
 }

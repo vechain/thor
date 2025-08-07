@@ -32,9 +32,6 @@ type Service struct {
 }
 
 var (
-	// todo fix this
-	pkgValidatorWeightMultiplier *big.Int
-
 	// active validations linked list
 	slotActiveTail      = thor.BytesToBytes32([]byte(("validations-active-tail")))
 	slotActiveHead      = thor.BytesToBytes32([]byte(("validations-active-head")))
@@ -47,7 +44,6 @@ var (
 )
 
 func New(sctx *solidity.Context,
-	validatorWeightMultiplier *big.Int,
 	cooldownPeriod uint32,
 	epochLength uint32,
 	lowStakingPeriod uint32,
@@ -57,7 +53,6 @@ func New(sctx *solidity.Context,
 	maxStake *big.Int,
 ) *Service {
 	repo := NewRepository(sctx)
-	pkgValidatorWeightMultiplier = validatorWeightMultiplier
 
 	return &Service{
 		repo: repo,
@@ -102,7 +97,7 @@ func (s *Service) IncreaseDelegatorsReward(node thor.Address, reward *big.Int) e
 	return s.repo.SetReward(key, big.NewInt(0).Add(rewards, reward), false)
 }
 
-func (s *Service) LeaderGroupIterator(callback func(thor.Address, *Validation) error) error {
+func (s *Service) LeaderGroupIterator(callbacks ...func(thor.Address, *Validation) error) error {
 	return s.leaderGroup.Iter(func(address thor.Address) error {
 		// Fetch the validation object for this address
 		validation, err := s.repo.GetValidation(address)
@@ -110,8 +105,12 @@ func (s *Service) LeaderGroupIterator(callback func(thor.Address, *Validation) e
 			return err
 		}
 
-		// Call the original callback with both address and validation
-		return callback(address, validation)
+		for _, callback := range callbacks {
+			if err := callback(address, validation); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 
@@ -246,19 +245,19 @@ func (s *Service) IncreaseStake(validator thor.Address, endorsor thor.Address, a
 	return s.SetValidation(validator, entry, false)
 }
 
-func (s *Service) DecreaseStake(validator thor.Address, endorsor thor.Address, amount *big.Int) error {
+func (s *Service) DecreaseStake(validator thor.Address, endorsor thor.Address, amount *big.Int) (bool, error) {
 	entry, err := s.GetExistingValidation(validator)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if entry.Endorsor != endorsor {
-		return errors.New("invalid endorser")
+		return false, errors.New("invalid endorser")
 	}
 	if entry.Status == StatusExit {
-		return errors.New("validator status is not queued or active")
+		return false, errors.New("validator status is not queued or active")
 	}
 	if entry.Status == StatusActive && entry.ExitBlock != nil {
-		return errors.New("validator has signaled exit, cannot decrease stake")
+		return false, errors.New("validator has signaled exit, cannot decrease stake")
 	}
 
 	if entry.Status == StatusActive {
@@ -268,7 +267,7 @@ func (s *Service) DecreaseStake(validator thor.Address, endorsor thor.Address, a
 		nextPeriodTVL := big.NewInt(0).Sub(entry.LockedVET, entry.PendingUnlockVET)
 		nextPeriodTVL = nextPeriodTVL.Sub(nextPeriodTVL, amount)
 		if nextPeriodTVL.Cmp(s.minStake) < 0 {
-			return errors.New("next period stake is too low for validator")
+			return false, errors.New("next period stake is too low for validator")
 		}
 		entry.PendingUnlockVET = big.NewInt(0).Add(entry.PendingUnlockVET, amount)
 	}
@@ -277,22 +276,23 @@ func (s *Service) DecreaseStake(validator thor.Address, endorsor thor.Address, a
 		// All the validator's stake exists within QueuedVET, so we need to make sure it maintains a minimum of MinStake.
 		nextPeriodTVL := big.NewInt(0).Sub(entry.QueuedVET, amount)
 		if nextPeriodTVL.Cmp(s.minStake) < 0 {
-			return errors.New("next period stake is too low for validator")
+			return false, errors.New("next period stake is too low for validator")
 		}
 		entry.QueuedVET = big.NewInt(0).Sub(entry.QueuedVET, amount)
 		entry.WithdrawableVET = big.NewInt(0).Add(entry.WithdrawableVET, amount)
 	}
 
-	return s.SetValidation(validator, entry, false)
+	return entry.Status == StatusQueued, s.SetValidation(validator, entry, false)
 }
 
 // WithdrawStake allows validations to withdraw any withdrawable stake.
 // It also verifies the endorsor and updates the validator totals.
-func (s *Service) WithdrawStake(validator thor.Address, endorsor thor.Address, currentBlock uint32) (*big.Int, error) {
-	val, err := s.GetExistingValidation(validator)
-	if err != nil {
-		return nil, err
-	}
+func (s *Service) WithdrawStake(
+	val *Validation,
+	validator thor.Address,
+	endorsor thor.Address,
+	currentBlock uint32,
+) (*big.Int, error) {
 	if val.Endorsor != endorsor {
 		return big.NewInt(0), errors.New("invalid endorser")
 	}
@@ -309,7 +309,7 @@ func (s *Service) WithdrawStake(validator thor.Address, endorsor thor.Address, c
 	if val.Status == StatusQueued {
 		val.QueuedVET = big.NewInt(0)
 		val.Status = StatusExit
-		if err = s.validatorQueue.Remove(validator); err != nil {
+		if err := s.validatorQueue.Remove(validator); err != nil {
 			return nil, err
 		}
 	}
@@ -357,43 +357,24 @@ func (s *Service) NextToActivate(maxLeaderGroupSize *big.Int) (*thor.Address, er
 }
 
 // ExitValidator removes the validator from the active list and puts it in cooldown.
-func (s *Service) ExitValidator(validator thor.Address) (*big.Int, *big.Int, *big.Int, error) {
+func (s *Service) ExitValidator(validator thor.Address) (*delta.Exit, error) {
 	entry, err := s.GetValidation(validator)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 	if entry.IsEmpty() {
-		return nil, nil, nil, nil
+		return nil, nil
 	}
-
-	releaseLockedTVL := big.NewInt(0).Set(entry.LockedVET)
-	releaseLockedTVLWeight := big.NewInt(0).Set(entry.Weight)
-	releaseQueuedTVL := big.NewInt(0).Set(entry.QueuedVET)
-
-	// move locked to cooldown
-	entry.Status = StatusExit
-	entry.CooldownVET = big.NewInt(0).Set(entry.LockedVET)
-	entry.LockedVET = big.NewInt(0)
-	entry.PendingUnlockVET = big.NewInt(0)
-	entry.Weight = big.NewInt(0)
-
-	// unlock pending stake
-	if entry.QueuedVET.Sign() == 1 {
-		// pending never contributes to weight as it's not active
-		entry.WithdrawableVET = big.NewInt(0).Add(entry.WithdrawableVET, entry.QueuedVET)
-		entry.QueuedVET = big.NewInt(0)
-	}
-
-	entry.CompleteIterations++
+	exit := entry.Exit()
 	if err = s.leaderGroup.Remove(validator); err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
 	if err = s.SetValidation(validator, entry, false); err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
-	return releaseLockedTVL, releaseLockedTVLWeight, releaseQueuedTVL, nil
+	return exit, nil
 }
 
 // SetExitBlock sets the exit block for a validator.
@@ -461,8 +442,8 @@ func (s *Service) ActivateValidator(
 	val.QueuedVET = big.NewInt(0)
 
 	// x2 multiplier for validator's stake
-	validatorWeight := big.NewInt(0).Mul(val.LockedVET, pkgValidatorWeightMultiplier)
-	val.Weight = big.NewInt(0).Add(validatorWeight, aggRenew.NewLockedWeight)
+	weightedStake := WeightedStake(val.LockedVET)
+	val.Weight = big.NewInt(0).Add(weightedStake.Weight(), aggRenew.NewLockedWeight)
 
 	// Update validator status
 	val.Status = StatusActive
@@ -484,7 +465,7 @@ func (s *Service) ActivateValidator(
 		NewLockedVET:         val.LockedVET,
 		NewLockedWeight:      val.Weight,
 		QueuedDecrease:       val.LockedVET,
-		QueuedDecreaseWeight: big.NewInt(0).Mul(val.LockedVET, pkgValidatorWeightMultiplier),
+		QueuedDecreaseWeight: weightedStake.Weight(),
 	}
 
 	return validatorRenewal, nil

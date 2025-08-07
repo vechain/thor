@@ -47,6 +47,8 @@ const (
 	GasTargetPercentage      = 75                 // percentage of the block gas limit to determine the gas target
 	InitialBaseFee           = 10_000_000_000_000 // 10^13 wei, 0.00001 VTHO
 	BaseFeeChangeDenominator = 8                  // determines the percentage change in the base fee per block based on network utilization
+
+	MaxPosScore = 10000 // max total score after PoS fork
 )
 
 // Keys of governance params.

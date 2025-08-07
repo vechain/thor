@@ -1612,14 +1612,25 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.NotNil(t, receipt)
 	assert.NotNil(t, a)
 
+	abi := builtin.Staker.ABI
+	toAddr := builtin.Staker.Address
+
 	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0])) // mint block 2: hayabusa should fork here and set the contract bytecode
+
+	totalNumRes := make([]any, 2)
+	totalNumRes[0] = new(*big.Int)
+	totalNumRes[1] = new(*big.Int)
+	_, err = callContractAndGetOutput(abi, "getValidatorsNum", toAddr, &totalNumRes)
+	assert.NoError(t, err, "dsada")
 
 	totalBurnedBefore := new(big.Int)
 	_, err = callContractAndGetOutput(energyAbi, "totalBurned", energyAddress, &totalBurnedBefore)
 	assert.NoError(t, err)
 
-	abi := builtin.Staker.ABI
-	toAddr := builtin.Staker.Address
+	_, err = callContractAndGetOutput(abi, "getValidatorsNum", toAddr, &totalNumRes)
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0).Cmp(*totalNumRes[0].(**big.Int)), 0)
+	assert.Equal(t, big.NewInt(0).Cmp(*totalNumRes[1].(**big.Int)), 0)
 
 	// parameters
 	minStake := big.NewInt(25_000_000)
@@ -1643,6 +1654,12 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.Equal(t, master.Address, thor.BytesToAddress(receipt.Outputs[0].Events[0].Topics[1][:]))
 	block, err := thorChain.GetTxBlock(trxid)
 	assert.NoError(t, err)
+
+	_, err = callContractAndGetOutput(abi, "getValidatorsNum", toAddr, &totalNumRes)
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0).Cmp(*totalNumRes[0].(**big.Int)), 0)
+	assert.Equal(t, big.NewInt(1).Cmp(*totalNumRes[1].(**big.Int)), 0)
+
 	totalBurned := new(big.Int)
 	_, err = callContractAndGetOutput(energyAbi, "totalBurned", energyAddress, &totalBurned)
 	assert.NoError(t, err)
@@ -1716,6 +1733,11 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).Int64(), (*queuedStakeRes[0].(**big.Int)).Int64())
 	assert.Equal(t, big.NewInt(0).Int64(), (*queuedStakeRes[1].(**big.Int)).Int64())
+
+	_, err = callContractAndGetOutput(abi, "getValidatorsNum", toAddr, &totalNumRes)
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(1).Cmp(*totalNumRes[0].(**big.Int)), 0)
+	assert.Equal(t, big.NewInt(0).Cmp(*totalNumRes[1].(**big.Int)), 0)
 
 	reward := new(*big.Int)
 	_, err = callContractAndGetOutput(abi, "getDelegatorsRewards", toAddr, reward, node, uint32(1))
@@ -2031,13 +2053,13 @@ func TestStakerContract_Native_CheckStake(t *testing.T) {
 		caller: builtin.Staker.Address,
 	}
 
-	test.Case("addValidation", master, staker.LowStakingPeriod).
+	test.Case("addValidation", master, staker.LowStakingPeriod.Get()).
 		Value(big.NewInt(0)).
 		Caller(caller).
 		ShouldRevert("stake is empty").
 		Assert(t)
 
-	test.Case("addValidation", master, staker.LowStakingPeriod).
+	test.Case("addValidation", master, staker.LowStakingPeriod.Get()).
 		Value(big.NewInt(1)).
 		Caller(caller).
 		ShouldRevert("stake is not multiple of 1VET").

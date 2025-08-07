@@ -63,6 +63,8 @@ func (m *Mapping[K, V]) Get(key K) (V, error) {
 	err := m.context.state.DecodeStorage(
 		m.context.address, position, func(raw []byte) error {
 			if len(raw) == 0 {
+				// use at least one SLOAD
+				m.context.UseGas(thor.SloadGas)
 				// no data, leave value as zero
 				return nil
 			}
