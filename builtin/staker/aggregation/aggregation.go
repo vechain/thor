@@ -24,27 +24,23 @@ type Aggregation struct {
 	// Exiting delegations, does NOT contribute to current TVL, it will decrease the LockedVET in the next period and reset to 0
 	ExitingVET    *big.Int // VET that is exiting the next period
 	ExitingWeight *big.Int // Weight including multipliers
-
-	// Withdrawable funds
-	WithdrawableVET *big.Int // VET available for withdrawal
 }
 
 // newAggregation creates a new zero-initialized aggregation for a validator.
 func newAggregation() *Aggregation {
 	return &Aggregation{
-		LockedVET:       big.NewInt(0),
-		LockedWeight:    big.NewInt(0),
-		PendingVET:      big.NewInt(0),
-		PendingWeight:   big.NewInt(0),
-		ExitingVET:      big.NewInt(0),
-		ExitingWeight:   big.NewInt(0),
-		WithdrawableVET: big.NewInt(0),
+		LockedVET:     big.NewInt(0),
+		LockedWeight:  big.NewInt(0),
+		PendingVET:    big.NewInt(0),
+		PendingWeight: big.NewInt(0),
+		ExitingVET:    big.NewInt(0),
+		ExitingWeight: big.NewInt(0),
 	}
 }
 
 func (a *Aggregation) IsEmpty() bool {
 	// aggregation subfields are expected to never be nil
-	return a.LockedVET.Sign() == 0 && a.ExitingVET.Sign() == 0 && a.PendingVET.Sign() == 0 && a.WithdrawableVET.Sign() == 0
+	return a.LockedVET.Sign() == 0 && a.ExitingVET.Sign() == 0 && a.PendingVET.Sign() == 0
 }
 
 // NextPeriodTVL is the total value locked (TVL) for the next period.
@@ -81,7 +77,6 @@ func (a *Aggregation) renew() *delta.Renewal {
 	a.LockedWeight = big.NewInt(0).Sub(a.LockedWeight, a.ExitingWeight)
 
 	// Move ExitingVET to WithdrawableVET
-	a.WithdrawableVET = big.NewInt(0).Add(a.WithdrawableVET, a.ExitingVET)
 	a.ExitingVET = big.NewInt(0)
 	a.ExitingWeight = big.NewInt(0)
 
@@ -102,11 +97,6 @@ func (a *Aggregation) exit() (*delta.Exit, error) {
 	queuedDecrease := big.NewInt(0).Set(a.PendingVET)
 	queuedWeightDecrease := big.NewInt(0).Set(a.PendingWeight)
 
-	// Move all the funds to withdrawable
-	withdrawable := big.NewInt(0).Set(a.WithdrawableVET)
-	withdrawable.Add(withdrawable, a.LockedVET)
-	withdrawable.Add(withdrawable, a.PendingVET)
-
 	// Reset the aggregation
 	a.ExitingVET = big.NewInt(0)
 	a.ExitingWeight = big.NewInt(0)
@@ -114,9 +104,6 @@ func (a *Aggregation) exit() (*delta.Exit, error) {
 	a.LockedWeight = big.NewInt(0)
 	a.PendingVET = big.NewInt(0)
 	a.PendingWeight = big.NewInt(0)
-
-	// Make all funds withdrawable
-	a.WithdrawableVET = withdrawable
 
 	return &delta.Exit{
 		ExitedTVL:            exitedTVL,
