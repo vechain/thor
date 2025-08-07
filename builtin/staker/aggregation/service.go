@@ -74,23 +74,6 @@ func (s *Service) SubPendingVet(validator thor.Address, stake *stakes.WeightedSt
 	return s.setAggregation(validator, agg, false)
 }
 
-// SubWithdrawableVET removes VET from the validator's withdrawable pool.
-// Called when a delegator completes withdrawal of their delegation.
-func (s *Service) SubWithdrawableVET(validator thor.Address, stake *big.Int) error {
-	agg, err := s.GetAggregation(validator)
-	if err != nil {
-		return err
-	}
-
-	if agg.WithdrawableVET.Cmp(stake) < 0 {
-		return errors.New("not enough withdraw VET")
-	}
-
-	agg.WithdrawableVET = big.NewInt(0).Sub(agg.WithdrawableVET, stake)
-
-	return s.setAggregation(validator, agg, false)
-}
-
 // Renew transitions the validator's delegations to the next staking period.
 // Called during staking period renewal process.
 func (s *Service) Renew(validator thor.Address) (*delta.Renewal, error) {

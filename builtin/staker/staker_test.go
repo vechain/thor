@@ -359,11 +359,6 @@ func (aa *AggregationAssertions) ExitingWeight(expected *big.Int) *AggregationAs
 	return aa
 }
 
-func (aa *AggregationAssertions) WithdrawableVET(expected *big.Int) *AggregationAssertions {
-	assert.Equal(aa.t, expected, aa.aggregation.WithdrawableVET, "aggregation for validator %s withdrawable VET mismatch", aa.validationID.String())
-	return aa
-}
-
 type DelegationAssertions struct {
 	delegationID *big.Int
 	t            *testing.T

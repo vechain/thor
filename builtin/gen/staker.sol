@@ -362,6 +362,16 @@ contract Staker {
         return (leaderGroupSize, queuedValidators);
     }
 
+    /**
+     * @dev issuance returns the total amount of VTHO generated
+     */
+    function issuance() public view returns (uint256) {
+        (uint256 issuance, string memory error) = StakerNative(address(this))
+            .native_issuance();
+        require(bytes(error).length == 0, error);
+        return issuance;
+    }
+
     modifier onlyDelegatorContract() {
         (address expected, string memory error) = StakerNative(address(this))
             .native_getDelegatorContract();
@@ -543,4 +553,6 @@ interface StakerNative {
         external
         view
         returns (uint256, uint256, string calldata);
+
+    function native_issuance() external view returns (uint256, string calldata);
 }
