@@ -198,10 +198,11 @@ func (s *Staker) GetValidatorPeriodDetails(node thor.Address) (*ValidatorPeriodD
 		return nil, err
 	}
 	validatorPeriodDetails := &ValidatorPeriodDetails{
-		Address:    node,
-		Period:     *(out[0].(*uint32)),
-		StartBlock: *(out[1].(*uint32)),
-		ExitBlock:  *(out[2].(*uint32)),
+		Address:          node,
+		Period:           *(out[0].(*uint32)),
+		StartBlock:       *(out[1].(*uint32)),
+		ExitBlock:        *(out[2].(*uint32)),
+		CompletedPeriods: *(out[3].(*uint32)),
 	}
 
 	return validatorPeriodDetails, nil
