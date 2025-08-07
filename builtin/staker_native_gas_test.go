@@ -238,6 +238,11 @@ func TestStakerNativeGasCosts(t *testing.T) {
 			description:  "Get number of active and queued validators",
 			preTestHooks: []TestHook{preTestAddValidation(account1)},
 		},
+		{
+			function:    "native_issuance",
+			expectedGas: 400,
+			description: "Get issuance for the current block",
+		},
 	}
 
 	for _, tc := range testCases {

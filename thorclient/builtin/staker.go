@@ -295,6 +295,14 @@ func (s *Staker) GetValidatorsNum() (*big.Int, *big.Int, error) {
 	return *(out[0].(**big.Int)), *(out[1].(**big.Int)), nil
 }
 
+func (s *Staker) Issuance(revision string) (*big.Int, error) {
+	out := new(big.Int)
+	if err := s.contract.Method("issuance").Call().AtRevision(revision).ExecuteInto(&out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 type ValidationQueuedEvent struct {
 	Node     thor.Address
 	Endorsor thor.Address
