@@ -470,6 +470,16 @@ func init() {
 			}
 			return []any{leaderGroupSize, queuedGroupSize, ""}
 		}},
+		{"native_issuance", func(env *xenv.Environment) []any {
+			charger := gascharger.New(env)
+
+			staker := Staker.NativeMetered(env.State(), charger)
+			issuance, err := Energy.Native(env.State(), env.BlockContext().Time).CalculateRewards(staker)
+			if err != nil {
+				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
+			}
+			return []any{issuance, ""}
+		}},
 	}
 	stakerAbi := Staker.NativeABI()
 	for _, def := range defines {

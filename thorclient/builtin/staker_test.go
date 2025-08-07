@@ -13,6 +13,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/test"
@@ -284,4 +285,18 @@ func TestStaker(t *testing.T) {
 	rewards, err := staker.GetDelegatorsRewards(validator.Address, 1)
 	require.NoError(t, err)
 	require.Equal(t, 0, big.NewInt(0).Cmp(rewards))
+
+	// Issuance
+	issuance, err := staker.Issuance("best")
+	require.NoError(t, err)
+	require.Equal(t, 1, issuance.Sign())
+
+	best := node.Chain().Repo().BestBlockSummary()
+	state := node.Chain().Stater().NewState(best.Root())
+	energy := builtin.Energy.Native(state, best.Header.Timestamp())
+	stakerNative := builtin.Staker.Native(state)
+
+	rewards, err = energy.CalculateRewards(stakerNative)
+	require.NoError(t, err)
+	require.Equal(t, rewards, issuance)
 }
