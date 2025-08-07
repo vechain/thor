@@ -12,8 +12,6 @@ import (
 
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/thor"
-
-	lru "github.com/hashicorp/golang-lru"
 )
 
 type LinkedList struct {
@@ -22,74 +20,42 @@ type LinkedList struct {
 	count *solidity.Uint256
 	next  *solidity.Mapping[thor.Address, thor.Address]
 	prev  *solidity.Mapping[thor.Address, thor.Address]
-
-	cache *lru.Cache
-}
-
-type cacheEntry struct {
-	headAddress thor.Address
-	nextMap     map[thor.Address]thor.Address
 }
 
 // NewLinkedList creates a new linked list with persistent storage mappings for staker management
 func NewLinkedList(sctx *solidity.Context, headPos, tailPos, countPos thor.Bytes32) *LinkedList {
-	cache, _ := lru.New(16)
-
 	return &LinkedList{
 		head:  solidity.NewAddress(sctx, headPos),
 		tail:  solidity.NewAddress(sctx, tailPos),
 		count: solidity.NewUint256(sctx, countPos),
 		next:  solidity.NewMapping[thor.Address, thor.Address](sctx, headPos),
 		prev:  solidity.NewMapping[thor.Address, thor.Address](sctx, tailPos),
-		cache: cache,
 	}
-}
-
-func (l *LinkedList) loadCache(headAddr *solidity.Address) (*cacheEntry, error) {
-	if cached, ok := l.cache.Get(headAddr); ok {
-		return cached.(*cacheEntry), nil
-	}
-
-	head, err := l.head.Get()
-	if err != nil {
-		return nil, err
-	}
-
-	nextMap := make(map[thor.Address]thor.Address)
-	ptr := head
-	for !ptr.IsZero() {
-		next, err := l.next.Get(ptr)
-		if err != nil {
-			return nil, err
-		}
-		nextMap[ptr] = next
-		ptr = next
-	}
-
-	entry := &cacheEntry{
-		headAddress: head,
-		nextMap:     nextMap,
-	}
-
-	l.cache.Add(entry.headAddress, entry)
-	return entry, nil
 }
 
 // Iter traverses the list in FIFO order, calling callback for each address until completion or error
 func (l *LinkedList) Iter(callbacks ...func(thor.Address) error) error {
-	entry, err := l.loadCache(l.head)
+	ptr, err := l.head.Get()
 	if err != nil {
 		return err
 	}
 
-	ptr := entry.headAddress
 	for !ptr.IsZero() {
 		for _, callback := range callbacks {
 			if err := callback(ptr); err != nil {
 				return err
 			}
 		}
-		ptr = entry.nextMap[ptr]
+
+		next, err := l.next.Get(ptr)
+		if err != nil {
+			return err
+		}
+
+		if next.IsZero() {
+			break
+		}
+		ptr = next
 	}
 
 	return nil
@@ -126,7 +92,6 @@ func (l *LinkedList) Add(address thor.Address) error {
 		return err
 	}
 
-	l.cache.Purge()
 	return err
 }
 
@@ -189,7 +154,6 @@ func (l *LinkedList) Remove(address thor.Address) error {
 		return err
 	}
 
-	l.cache.Purge()
 	return err
 }
 
