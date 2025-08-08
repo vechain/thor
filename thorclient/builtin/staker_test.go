@@ -97,40 +97,51 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, 1, totalWeight.Sign())
 	require.Equal(t, new(big.Int).Mul(minStake, big.NewInt(2)), totalStake)
 
-	// Get
+	// GetStake
 	_, firstID, err := staker.FirstActive()
 	require.NoError(t, err)
-	getRes, err := staker.Get(firstID)
+	getStakeRes, err := staker.GetValidatorStake(firstID)
 	require.NoError(t, err)
-	require.False(t, getRes.Address.IsZero())
-	require.False(t, getRes.Endorsor.IsZero())
-	require.Equal(t, StakerStatusActive, getRes.Status)
-	require.Equal(t, getRes.Stake, minStake)
-	require.Equal(t, getRes.Weight, big.NewInt(0).Mul(minStake, big.NewInt(2)))
+	require.False(t, getStakeRes.Address.IsZero())
+	require.False(t, getStakeRes.Endorsor.IsZero())
+	require.Equal(t, getStakeRes.Stake, minStake)
+	require.Equal(t, getStakeRes.Weight, big.NewInt(0).Mul(minStake, big.NewInt(2)))
+	require.Equal(t, getStakeRes.QueuedStake.String(), big.NewInt(0).String())
+
+	// GetStatus
+	getStatusRes, err := staker.GetValidatorStatus(firstID)
+	require.NoError(t, err)
+	require.Equal(t, firstID, getStatusRes.Address)
+	require.Equal(t, StakerStatusActive, getStatusRes.Status)
+	require.True(t, getStatusRes.Online)
+	require.True(t, getStakeRes.Exists(*getStatusRes))
+
+	// GetPeriodDetails
+	getPeriodDetailsRes, err := staker.GetValidatorPeriodDetails(firstID)
+	require.NoError(t, err)
+	require.Equal(t, firstID, getPeriodDetailsRes.Address)
+	require.Equal(t, minStakingPeriod, getPeriodDetailsRes.Period)
+	require.Equal(t, uint32(15), getPeriodDetailsRes.StartBlock)
+	require.Equal(t, uint32(math.MaxUint32), getPeriodDetailsRes.ExitBlock)
+	require.Equal(t, uint32(0), getPeriodDetailsRes.CompletedPeriods)
 
 	// FirstActive
 	firstActive, firstID, err := staker.FirstActive()
 	require.NoError(t, err)
 	require.False(t, firstID.IsZero())
-	require.True(t, firstActive.Exists())
+	require.True(t, firstActive.Exists(*getStatusRes))
 	require.Equal(t, minStake, firstActive.Stake)
 	require.Equal(t, big.NewInt(0).Mul(minStake, big.NewInt(2)), firstActive.Weight)
-	require.Equal(t, StakerStatusActive, firstActive.Status)
 	require.False(t, firstActive.Endorsor.IsZero())
-	require.Greater(t, firstActive.StartBlock, uint32(0))
-	require.Equal(t, firstActive.ExitBlock, uint32(math.MaxUint32))
-
-	// LookupNode
-	getRes, err = staker.Get(firstActive.Address)
-	require.NoError(t, err)
-	require.True(t, getRes.Exists())
 
 	// Next
 	next, id, err := staker.Next(firstID)
 	require.NoError(t, err)
 	require.False(t, id.IsZero())
-	require.True(t, next.Exists())
-	require.Equal(t, StakerStatusActive, next.Status)
+	nextStatus, err := staker.GetValidatorStatus(next.Address)
+	require.True(t, next.Exists(*nextStatus))
+	require.NoError(t, err)
+	require.Equal(t, StakerStatusActive, nextStatus.Status)
 	require.Equal(t, minStake, next.Stake)
 	require.Equal(t, big.NewInt(0).Mul(minStake, big.NewInt(2)), next.Weight)
 	require.False(t, next.Endorsor.IsZero())
@@ -159,9 +170,11 @@ func TestStaker(t *testing.T) {
 	firstQueued, id, err := staker.FirstQueued()
 	require.NoError(t, err)
 	require.False(t, id.IsZero())
-	require.True(t, firstQueued.Exists())
+	firstQueuedStatus, err := staker.GetValidatorStatus(firstQueued.Address)
+	require.NoError(t, err)
+	require.True(t, firstQueued.Exists(*firstQueuedStatus))
 	require.Equal(t, 0, firstQueued.Stake.Sign())
-	require.Equal(t, StakerStatusQueued, firstQueued.Status)
+	require.Equal(t, StakerStatusQueued, firstQueuedStatus.Status)
 	require.False(t, firstQueued.Endorsor.IsZero())
 
 	// TotalQueued
@@ -223,13 +236,19 @@ func TestStaker(t *testing.T) {
 	require.Len(t, delegationEvents, 1)
 	delegationID := delegationEvents[0].DelegationID
 
-	// GetDelegation
-	delegation, err := staker.GetDelegation(delegationID)
+	// GetDelegationStake
+	delegationStake, err := staker.GetDelegationStake(delegationID)
 	require.NoError(t, err)
-	require.Equal(t, minStake, delegation.Stake)
-	require.Equal(t, uint8(100), delegation.Multiplier)
-	require.False(t, delegation.Locked)
-	require.Equal(t, queuedID, delegation.Validator)
+	require.Equal(t, minStake, delegationStake.Stake)
+	require.Equal(t, uint8(100), delegationStake.Multiplier)
+	require.Equal(t, queuedID, delegationStake.Validator)
+
+	// GetDelegationPeriodDetails
+	delegationPeriodDetails, err := staker.GetDelegationPeriodDetails(delegationID)
+	require.NoError(t, err)
+	require.Equal(t, uint32(1), delegationPeriodDetails.StartPeriod)
+	require.Equal(t, uint32(math.MaxUint32), delegationPeriodDetails.EndPeriod)
+	require.False(t, delegationPeriodDetails.Locked)
 
 	// GetValidatorsTotals
 	validationTotals, err := staker.GetValidationTotals(firstID)
@@ -263,9 +282,9 @@ func TestStaker(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, withdrawEvents, 1)
 
-	getRes, err = staker.Get(queuedID)
+	getStatusRes, err = staker.GetValidatorStatus(queuedID)
 	require.NoError(t, err)
-	require.Equal(t, StakerStatusExited, getRes.Status)
+	require.Equal(t, StakerStatusExited, getStatusRes.Status)
 
 	// WithdrawDelegation
 	receipt, _, err = staker.WithdrawDelegation(delegationID).Send().WithSigner(stargate).WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
@@ -277,9 +296,9 @@ func TestStaker(t *testing.T) {
 	require.Len(t, withdrawDelegationEvents, 1)
 
 	// GetDelegation after withdrawal
-	delegation, err = staker.GetDelegation(delegationID)
+	delegationStake, err = staker.GetDelegationStake(delegationID)
 	require.NoError(t, err)
-	require.Equal(t, big.NewInt(0).Cmp(delegation.Stake), 0)
+	require.Equal(t, big.NewInt(0).Cmp(delegationStake.Stake), 0)
 
 	// GetDelegatorsRewards
 	rewards, err := staker.GetDelegatorsRewards(validator.Address, 1)

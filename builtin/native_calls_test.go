@@ -1666,28 +1666,42 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).Mul(big.NewInt(0).SetUint64(receipt.GasUsed), block.Header().BaseFee()), big.NewInt(0).Sub(totalBurned, totalBurnedBefore))
 
 	node := master.Address
-	// get
-	getRes := make([]any, 9)
-	getRes[0] = new(common.Address)
-	getRes[1] = new(*big.Int)
-	getRes[2] = new(*big.Int)
-	getRes[3] = new(uint8)
-	getRes[4] = new(bool)
-	getRes[5] = new(uint32)
-	getRes[6] = new(uint32)
-	getRes[7] = new(uint32)
-	_, err = callContractAndGetOutput(abi, "get", toAddr, &getRes, node)
+	// getStake
+	getStakeRes := make([]any, 4)
+	getStakeRes[0] = new(common.Address)
+	getStakeRes[1] = new(*big.Int)
+	getStakeRes[2] = new(*big.Int)
+	getStakeRes[3] = new(*big.Int)
+	_, err = callContractAndGetOutput(abi, "getValidatorStake", toAddr, &getStakeRes, node)
 	assert.NoError(t, err)
 
 	expectedEndorsor := common.BytesToAddress(endorsor.Address.Bytes())
-	assert.Equal(t, &expectedEndorsor, getRes[0])
-	assert.Equal(t, big.NewInt(0).Cmp(*getRes[1].(**big.Int)), 0) // stake - should be 0 while queued
-	assert.Equal(t, big.NewInt(0).Cmp(*getRes[2].(**big.Int)), 0) // weight - should be 0 while queued
-	assert.Equal(t, validation.StatusQueued, *getRes[3].(*uint8))
-	assert.Equal(t, true, *getRes[4].(*bool)) // online
-	assert.Equal(t, uint32(360*24*15), *getRes[5].(*uint32))
-	assert.Equal(t, uint32(0), *getRes[6].(*uint32))              // start period
-	assert.Equal(t, uint32(math.MaxUint32), *getRes[7].(*uint32)) // exit block
+	assert.Equal(t, &expectedEndorsor, getStakeRes[0])
+	assert.Equal(t, big.NewInt(0).Cmp(*getStakeRes[1].(**big.Int)), 0) // stake - should be 0 while queued
+	assert.Equal(t, big.NewInt(0).Cmp(*getStakeRes[2].(**big.Int)), 0) // weight - should be 0 while queued
+	assert.Equal(t, minStake.Cmp(*getStakeRes[3].(**big.Int)), 0)      // queue stake
+
+	// getStatus
+	getStatusRes := make([]any, 2)
+	getStatusRes[0] = new(uint8)
+	getStatusRes[1] = new(bool)
+	_, err = callContractAndGetOutput(abi, "getValidatorStatus", toAddr, &getStatusRes, node)
+	assert.NoError(t, err)
+	assert.Equal(t, validation.StatusQueued, *getStatusRes[0].(*uint8))
+	assert.Equal(t, true, *getStatusRes[1].(*bool)) // online
+
+	// getPeriod
+	getPeriodRes := make([]any, 4)
+	getPeriodRes[0] = new(uint32)
+	getPeriodRes[1] = new(uint32)
+	getPeriodRes[2] = new(uint32)
+	getPeriodRes[3] = new(uint32)
+	_, err = callContractAndGetOutput(abi, "getValidatorPeriodDetails", toAddr, &getPeriodRes, node)
+	assert.NoError(t, err)
+	assert.Equal(t, uint32(360*24*15), *getPeriodRes[0].(*uint32))
+	assert.Equal(t, uint32(0), *getPeriodRes[1].(*uint32))              // start period
+	assert.Equal(t, uint32(math.MaxUint32), *getPeriodRes[2].(*uint32)) // exit block
+	assert.Equal(t, uint32(0), *getPeriodRes[3].(*uint32))              // completed periods
 
 	// firstQueued
 	firstQueuedRes := new(common.Address)
@@ -1743,11 +1757,6 @@ func TestStakerContract_Native(t *testing.T) {
 	_, err = callContractAndGetOutput(abi, "getDelegatorsRewards", toAddr, reward, node, uint32(1))
 	assert.NoError(t, err)
 	assert.Equal(t, new(big.Int).String(), (*reward).String())
-
-	periods := uint32(1)
-	_, err = callContractAndGetOutput(abi, "getCompletedPeriods", toAddr, &periods, node)
-	assert.NoError(t, err)
-	assert.Equal(t, uint32(0), periods)
 
 	// GetValidatorsTotals
 	getValidatorsTotals := make([]any, 4)
@@ -1948,19 +1957,13 @@ func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
 
-	// get
-	getRes := make([]any, 8)
-	getRes[0] = new(common.Address)
-	getRes[1] = new(*big.Int)
-	getRes[2] = new(*big.Int)
-	getRes[3] = new(uint8)
-	getRes[4] = new(bool)
-	getRes[5] = new(uint32)
-	getRes[6] = new(uint32)
-	getRes[7] = new(uint32)
-	_, err = callContractAndGetOutput(abi, "get", toAddr, &getRes, id)
+	// getStatus
+	getStatusRes := make([]any, 2)
+	getStatusRes[0] = new(uint8)
+	getStatusRes[1] = new(bool)
+	_, err = callContractAndGetOutput(abi, "getValidatorStatus", toAddr, &getStatusRes, id)
 	assert.NoError(t, err)
-	assert.Equal(t, validation.StatusExit, *getRes[3].(*uint8))
+	assert.Equal(t, validation.StatusExit, *getStatusRes[0].(*uint8))
 
 	// firstQueued
 	firstQueuedRes := new(common.Address)

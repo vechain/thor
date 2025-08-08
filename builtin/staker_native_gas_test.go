@@ -114,10 +114,24 @@ func TestStakerNativeGasCosts(t *testing.T) {
 			description: "Add a new validator (not implemented yet)",
 		},
 		{
-			function:     "native_get",
+			function:     "native_getValidatorStake",
 			expectedGas:  400,
 			args:         []any{account1},
-			description:  "Get validator by it's ID (not implemented yet)",
+			description:  "Get validator stake by it's ID",
+			preTestHooks: []TestHook{preTestAddValidation(account1)},
+		},
+		{
+			function:     "native_getValidatorStatus",
+			expectedGas:  400,
+			args:         []any{account1},
+			description:  "Get validator status by it's ID",
+			preTestHooks: []TestHook{preTestAddValidation(account1)},
+		},
+		{
+			function:     "native_getValidatorPeriodDetails",
+			expectedGas:  400,
+			args:         []any{account1},
+			description:  "Get validator period details by it's ID",
 			preTestHooks: []TestHook{preTestAddValidation(account1)},
 		},
 		{
@@ -185,12 +199,21 @@ func TestStakerNativeGasCosts(t *testing.T) {
 			preTestHooks: []TestHook{preTestAddValidation(account1)},
 		},
 		{
-			function:    "native_getDelegation",
+			function:    "native_getDelegationStake",
 			expectedGas: 800,
 			args: []any{
 				big.NewInt(1), // IDs are incremental, starting at 1
 			},
-			description:  "Get delegation by ID",
+			description:  "Get delegation stake by ID",
+			preTestHooks: []TestHook{preTestAddValidation(account1), preTestAddDelegation(account1)},
+		},
+		{
+			function:    "native_getDelegationPeriodDetails",
+			expectedGas: 800,
+			args: []any{
+				big.NewInt(1), // IDs are incremental, starting at 1
+			},
+			description:  "Get delegation period details by ID",
 			preTestHooks: []TestHook{preTestAddValidation(account1), preTestAddDelegation(account1)},
 		},
 		{
