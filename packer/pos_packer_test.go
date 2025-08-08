@@ -13,6 +13,9 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/builtin/params"
+	"github.com/vechain/thor/v2/builtin/solidity"
+	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/test/testchain"
@@ -22,6 +25,13 @@ import (
 )
 
 func TestFlow_Schedule_POS(t *testing.T) {
+
+	staker.LowStakingPeriod = solidity.NewConfigVariable("staker-low-staking-period", 360*24*7)
+	staker.MediumStakingPeriod = solidity.NewConfigVariable("staker-medium-staking-period", 360*24*15)
+	staker.HighStakingPeriod = solidity.NewConfigVariable("staker-high-staking-period", 360*24*30)
+	staker.CooldownPeriod = solidity.NewConfigVariable("cooldown-period", 8640)
+	staker.EpochLength = solidity.NewConfigVariable("epoch-length", 180)
+
 	config := &thor.SoloFork
 	config.HAYABUSA = 2
 	config.HAYABUSA_TP = 1
@@ -30,8 +40,17 @@ func TestFlow_Schedule_POS(t *testing.T) {
 	chain, err := testchain.NewWithFork(config)
 	assert.NoError(t, err)
 
-	// mint block 1: using PoA
 	root := chain.Repo().BestBlockSummary().Root()
+	state := chain.Stater().NewState(root)
+	state.SetCode(builtin.Staker.Address, []byte{0x60})
+	state.SetStorage(builtin.Staker.Address, staker.EpochLength.Slot(), thor.BytesToBytes32(big.NewInt(1).Bytes()))
+	param := params.New(thor.BytesToAddress([]byte("params")), state)
+	staker.New(builtin.Staker.Address, state, param, nil)
+	err = builtin.Params.Native(state).Set(thor.KeyMaxBlockProposers, big.NewInt(1))
+	assert.NoError(t, err)
+
+	// mint block 1: using PoA
+	root = chain.Repo().BestBlockSummary().Root()
 	packMbpBlock(t, chain, thor.BlockInterval)
 	verifyMechanism(t, chain, true, root)
 
@@ -51,8 +70,8 @@ func TestFlow_Schedule_POS(t *testing.T) {
 	verifyMechanism(t, chain, true, root)
 
 	// mint block 5: full PoS
-	root = chain.Repo().BestBlockSummary().Root()
 	packNext(t, chain, thor.BlockInterval)
+	root = chain.Repo().BestBlockSummary().Root()
 	verifyMechanism(t, chain, false, root)
 }
 

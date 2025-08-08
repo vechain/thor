@@ -206,6 +206,9 @@ func NewHayabusaDevnet(forkConfig *thor.ForkConfig) *Genesis {
 			if err := builtin.Energy.Native(state, launchTime).SetInitialSupply(tokenSupply, energySupply); err != nil {
 				return err
 			}
+			if err := builtin.Energy.Native(state, launchTime).StopEnergyGrowth(); err != nil {
+				return err
+			}
 
 			if err := builtin.Params.Native(state).Set(thor.KeyMaxBlockProposers, big.NewInt(1)); err != nil {
 				return err

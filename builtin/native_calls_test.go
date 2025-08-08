@@ -23,6 +23,8 @@ import (
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/builtin/params"
+	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/genesis"
@@ -570,6 +572,12 @@ func TestAuthorityNative(t *testing.T) {
 }
 
 func TestEnergyNative(t *testing.T) {
+	staker.LowStakingPeriod = solidity.NewConfigVariable("staker-low-staking-period", 360*24*7)
+	staker.MediumStakingPeriod = solidity.NewConfigVariable("staker-medium-staking-period", 360*24*15)
+	staker.HighStakingPeriod = solidity.NewConfigVariable("staker-high-staking-period", 360*24*30)
+	staker.CooldownPeriod = solidity.NewConfigVariable("cooldown-period", 8640)
+	staker.EpochLength = solidity.NewConfigVariable("epoch-length", 180)
+
 	var (
 		acc1 = genesis.DevAccounts()[0]
 		acc2 = genesis.DevAccounts()[1]
@@ -585,8 +593,17 @@ func TestEnergyNative(t *testing.T) {
 	fc.HAYABUSA = 4
 	thorChain, _ = testchain.NewWithFork(fc)
 
+	root := thorChain.Repo().BestBlockSummary().Root()
+	state := thorChain.Stater().NewState(root)
+	state.SetCode(builtin.Staker.Address, []byte{0x60})
+	state.SetStorage(builtin.Staker.Address, staker.EpochLength.Slot(), thor.BytesToBytes32(big.NewInt(1).Bytes()))
+	param := params.New(thor.BytesToAddress([]byte("params")), state)
+	staker.New(builtin.Staker.Address, state, param, nil)
+	err := builtin.Params.Native(state).Set(thor.KeyMaxBlockProposers, big.NewInt(1))
+	assert.NoError(t, err)
+
 	var stringOutput string
-	_, err := callContractAndGetOutput(abi, "name", toAddr, &stringOutput)
+	_, err = callContractAndGetOutput(abi, "name", toAddr, &stringOutput)
 
 	veThor := "VeThor"
 	require.NoError(t, err)
