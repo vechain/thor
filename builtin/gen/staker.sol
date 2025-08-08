@@ -9,8 +9,8 @@ enum Status {
     Exited
 }
 uint32 constant MAX_UINT32 = type(uint32).max;
-uint256 constant STAKER_PAUSED_BIT = 1 << 0;
-uint256 constant DELEGATOR_PAUSED_BIT = 1 << 1;
+uint256 constant DELEGATOR_PAUSED_BIT = 1 << 0;
+uint256 constant STAKER_PAUSED_BIT = 1 << 1;
 
 contract Staker {
     event ValidationQueued(address indexed validator, address indexed endorsor, uint32 period, uint256 stake);
@@ -140,7 +140,7 @@ contract Staker {
         address validator,
         uint8 multiplier // (% of msg.value) 100 for x1, 200 for x2, etc. This enforces a maximum of 2.56x multiplier
     ) public payable onlyDelegatorContract delegatorNotPaused checkStake(msg.value) returns (uint256) {
-        require(multiplier != 0 && multiplier < 200, "staker: invalid multiplier");
+        require(multiplier != 0 && multiplier <= 200, "staker: invalid multiplier");
         (, , , , Status status, , , , , ) = StakerNative(address(this)).native_getValidation(validator);
         require(status != Status.Unknown, "staker: validation not found");
         require(status == Status.Active || status == Status.Queued, "staker: validation not active or queued");

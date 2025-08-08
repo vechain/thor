@@ -636,7 +636,7 @@ func TestStakerContract_Delegation(t *testing.T) {
 		ShouldRevert("staker: validation not found").
 		Assert(t)
 
-	test.Case("addDelegation", validator1, uint8(200)).
+	test.Case("addDelegation", validator1, uint8(201)).
 		Caller(delegator).
 		Value(minStake).
 		ShouldRevert("staker: invalid multiplier").
@@ -854,7 +854,7 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 		Assert(t)
 
 	// change switch to pause delegator only
-	builtin.Params.Native(state).Set(thor.KeyStakerSwitches, big.NewInt(0b10))
+	builtin.Params.Native(state).Set(thor.KeyStakerSwitches, big.NewInt(0b01))
 
 	// delegation 1 to active validator1
 	test.Case("addDelegation", validator1, uint8(100)).
