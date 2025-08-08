@@ -60,7 +60,7 @@ func TestStaker(t *testing.T) {
 		t.Fatal(err)
 	}
 	// set stargate address
-	if _, _, err := params.Set(thor.KeyStargateContractAddress, new(big.Int).SetBytes(stargate.Address().Bytes())).
+	if _, _, err := params.Set(thor.KeyDelegatorContractAddress, new(big.Int).SetBytes(stargate.Address().Bytes())).
 		Send().
 		WithSigner(executor).
 		WithOptions(txOpts()).SubmitAndConfirm(txContext(t)); err != nil {
@@ -100,24 +100,18 @@ func TestStaker(t *testing.T) {
 	// GetStake
 	_, firstID, err := staker.FirstActive()
 	require.NoError(t, err)
-	getStakeRes, err := staker.GetValidatorStake(firstID)
+	getStakeRes, err := staker.GetValidation(firstID)
 	require.NoError(t, err)
 	require.False(t, getStakeRes.Address.IsZero())
 	require.False(t, getStakeRes.Endorsor.IsZero())
 	require.Equal(t, getStakeRes.Stake, minStake)
 	require.Equal(t, getStakeRes.Weight, big.NewInt(0).Mul(minStake, big.NewInt(2)))
 	require.Equal(t, getStakeRes.QueuedStake.String(), big.NewInt(0).String())
-
-	// GetStatus
-	getStatusRes, err := staker.GetValidatorStatus(firstID)
-	require.NoError(t, err)
-	require.Equal(t, firstID, getStatusRes.Address)
-	require.Equal(t, StakerStatusActive, getStatusRes.Status)
-	require.True(t, getStatusRes.Online)
-	require.True(t, getStakeRes.Exists(*getStatusRes))
+	require.Equal(t, StakerStatusActive, getStakeRes.Status)
+	require.True(t, getStakeRes.Online)
 
 	// GetPeriodDetails
-	getPeriodDetailsRes, err := staker.GetValidatorPeriodDetails(firstID)
+	getPeriodDetailsRes, err := staker.GetValidationPeriodDetails(firstID)
 	require.NoError(t, err)
 	require.Equal(t, firstID, getPeriodDetailsRes.Address)
 	require.Equal(t, minStakingPeriod, getPeriodDetailsRes.Period)
@@ -129,7 +123,7 @@ func TestStaker(t *testing.T) {
 	firstActive, firstID, err := staker.FirstActive()
 	require.NoError(t, err)
 	require.False(t, firstID.IsZero())
-	require.True(t, firstActive.Exists(*getStatusRes))
+	require.True(t, firstActive.Exists())
 	require.Equal(t, minStake, firstActive.Stake)
 	require.Equal(t, big.NewInt(0).Mul(minStake, big.NewInt(2)), firstActive.Weight)
 	require.False(t, firstActive.Endorsor.IsZero())
@@ -138,10 +132,7 @@ func TestStaker(t *testing.T) {
 	next, id, err := staker.Next(firstID)
 	require.NoError(t, err)
 	require.False(t, id.IsZero())
-	nextStatus, err := staker.GetValidatorStatus(next.Address)
-	require.True(t, next.Exists(*nextStatus))
-	require.NoError(t, err)
-	require.Equal(t, StakerStatusActive, nextStatus.Status)
+	require.True(t, next.Exists())
 	require.Equal(t, minStake, next.Stake)
 	require.Equal(t, big.NewInt(0).Mul(minStake, big.NewInt(2)), next.Weight)
 	require.False(t, next.Endorsor.IsZero())
@@ -170,11 +161,9 @@ func TestStaker(t *testing.T) {
 	firstQueued, id, err := staker.FirstQueued()
 	require.NoError(t, err)
 	require.False(t, id.IsZero())
-	firstQueuedStatus, err := staker.GetValidatorStatus(firstQueued.Address)
-	require.NoError(t, err)
-	require.True(t, firstQueued.Exists(*firstQueuedStatus))
+	require.True(t, firstQueued.Exists())
 	require.Equal(t, 0, firstQueued.Stake.Sign())
-	require.Equal(t, StakerStatusQueued, firstQueuedStatus.Status)
+	require.Equal(t, StakerStatusQueued, firstQueued.Status)
 	require.False(t, firstQueued.Endorsor.IsZero())
 
 	// TotalQueued
@@ -191,6 +180,7 @@ func TestStaker(t *testing.T) {
 		WithSigner(validatorKey).
 		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
+	require.False(t, receipt.Reverted)
 
 	increaseEvents, err := staker.FilterStakeIncreased(newRange(receipt), nil, logdb.ASC)
 	require.NoError(t, err)
@@ -237,20 +227,20 @@ func TestStaker(t *testing.T) {
 	delegationID := delegationEvents[0].DelegationID
 
 	// GetDelegationStake
-	delegationStake, err := staker.GetDelegationStake(delegationID)
+	delegationStake, err := staker.GetDelegation(delegationID)
 	require.NoError(t, err)
 	require.Equal(t, minStake, delegationStake.Stake)
 	require.Equal(t, uint8(100), delegationStake.Multiplier)
 	require.Equal(t, queuedID, delegationStake.Validator)
+	require.False(t, delegationStake.IsLocked)
 
 	// GetDelegationPeriodDetails
 	delegationPeriodDetails, err := staker.GetDelegationPeriodDetails(delegationID)
 	require.NoError(t, err)
 	require.Equal(t, uint32(1), delegationPeriodDetails.StartPeriod)
 	require.Equal(t, uint32(math.MaxUint32), delegationPeriodDetails.EndPeriod)
-	require.False(t, delegationPeriodDetails.Locked)
 
-	// GetValidatorsTotals
+	// GetValidationTotals
 	validationTotals, err := staker.GetValidationTotals(firstID)
 	require.NoError(t, err)
 
@@ -262,12 +252,13 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, big.NewInt(0).String(), validationTotals.TotalExitingWeight.String())
 
 	// GetValidatorsNum
-	active, queued, err := staker.GetValidatorsNum()
+	active, queued, err := staker.GetValidationNum()
 	require.NoError(t, err)
 	require.Equal(t, big.NewInt(2), active)
 	require.Equal(t, big.NewInt(1), queued)
 
 	// UpdateDelegationAutoRenew - Enable AutoRenew
+	// Signal Delegation Exit
 	receipt, _, err = staker.SignalDelegationExit(delegationID).
 		Send().
 		WithSigner(stargate).
@@ -284,9 +275,9 @@ func TestStaker(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, withdrawEvents, 1)
 
-	getStatusRes, err = staker.GetValidatorStatus(queuedID)
+	validation, err := staker.GetValidation(queuedID)
 	require.NoError(t, err)
-	require.Equal(t, StakerStatusExited, getStatusRes.Status)
+	require.Equal(t, StakerStatusExited, validation.Status)
 
 	// WithdrawDelegation
 	receipt, _, err = staker.WithdrawDelegation(delegationID).Send().WithSigner(stargate).WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
@@ -298,12 +289,12 @@ func TestStaker(t *testing.T) {
 	require.Len(t, withdrawDelegationEvents, 1)
 
 	// GetDelegation after withdrawal
-	delegationStake, err = staker.GetDelegationStake(delegationID)
+	delegationStake, err = staker.GetDelegation(delegationID)
 	require.NoError(t, err)
 	require.Equal(t, big.NewInt(0).Cmp(delegationStake.Stake), 0)
 
-	// GetDelegatorsRewards
-	rewards, err := staker.GetDelegatorsRewards(validator.Address, 1)
+	// GetDelegationRewards
+	rewards, err := staker.GetDelegatorRewards(validator.Address, 1)
 	require.NoError(t, err)
 	require.Equal(t, 0, big.NewInt(0).Cmp(rewards))
 
@@ -317,7 +308,10 @@ func TestStaker(t *testing.T) {
 	energy := builtin.Energy.Native(state, best.Header.Timestamp())
 	stakerNative := builtin.Staker.Native(state)
 
-	rewards, err = energy.CalculateRewards(stakerNative)
+	totalLockedVET, _, err := stakerNative.LockedVET()
+	require.NoError(t, err)
+
+	rewards, err = energy.CalculateRewards(totalLockedVET)
 	require.NoError(t, err)
 	require.Equal(t, rewards, issuance)
 }

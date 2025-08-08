@@ -17,25 +17,24 @@ import (
 )
 
 type Contract struct {
-	chain *Chain
-	abi   *abi.ABI
-	addr  thor.Address
-	acc   genesis.DevAccount
+	chain  *Chain
+	abi    *abi.ABI
+	addr   thor.Address
+	signer genesis.DevAccount
 }
 
-func NewContract(chain *Chain, acc genesis.DevAccount, addr thor.Address, abi *abi.ABI) *Contract {
+func NewContract(chain *Chain, signer genesis.DevAccount, addr thor.Address, abi *abi.ABI) *Contract {
 	return &Contract{
-		chain: chain,
-		abi:   abi,
-		addr:  addr,
-		acc:   acc,
+		chain:  chain,
+		abi:    abi,
+		addr:   addr,
+		signer: signer,
 	}
 }
 
-func (c *Contract) Attach(acc genesis.DevAccount) *Contract {
-	contract := *c
-	contract.acc = acc
-	return &contract
+func (c *Contract) Attach(signer genesis.DevAccount) *Contract {
+	c.signer = signer
+	return c
 }
 
 // Call calls a contract method and returns the result.
@@ -45,7 +44,7 @@ func (c *Contract) Call(method string, args ...any) ([]byte, error) {
 		return nil, err
 	}
 	trx := new(tx.Builder).Clause(clause).Build()
-	output, _, err := c.chain.ClauseCall(c.acc, trx, 0)
+	output, _, err := c.chain.ClauseCall(c.signer, trx, 0)
 	return output, err
 }
 
@@ -82,7 +81,7 @@ func (c *Contract) MintTransaction(method string, vet *big.Int, args ...any) err
 	if vet != nil {
 		clause = clause.WithValue(vet)
 	}
-	return c.chain.MintClauses(c.acc, []*tx.Clause{clause})
+	return c.chain.MintClauses(c.signer, []*tx.Clause{clause})
 }
 
 func (c *Contract) BuildTransaction(method string, vet *big.Int, args ...any) (*tx.Transaction, error) {
@@ -100,7 +99,7 @@ func (c *Contract) BuildTransaction(method string, vet *big.Int, args ...any) (*
 		BlockRef(tx.NewBlockRef(c.chain.Repo().BestBlockSummary().Header.Number())).
 		Build()
 
-	trx = tx.MustSign(trx, c.acc.PrivateKey)
+	trx = tx.MustSign(trx, c.signer.PrivateKey)
 
 	return trx, nil
 }

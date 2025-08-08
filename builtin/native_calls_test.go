@@ -12,21 +12,16 @@ import (
 	"fmt"
 	"math"
 	"math/big"
-	"reflect"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/abi"
-	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/test/testchain"
@@ -34,40 +29,10 @@ import (
 	_ "github.com/vechain/thor/v2/tracers/native"
 	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
-	"github.com/vechain/thor/v2/vm"
 	"github.com/vechain/thor/v2/xenv"
 )
 
-var (
-	errReverted = vm.ErrExecutionReverted
-	revertABI   = []byte(`[{"name": "Error","type": "function","inputs": [{"name": "message","type": "string"}]}]`)
-	thorChain   *testchain.Chain
-)
-
-type ctest struct {
-	rt         *runtime.Runtime
-	abi        *abi.ABI
-	to, caller thor.Address
-}
-
-type ccase struct {
-	rt         *runtime.Runtime
-	abi        *abi.ABI
-	to, caller thor.Address
-	name       string
-	args       []any
-	events     tx.Events
-	provedWork *big.Int
-	txID       thor.Bytes32
-	blockRef   tx.BlockRef
-	gasPayer   thor.Address
-	expiration uint32
-	value      *big.Int
-
-	output    *[]any
-	vmerr     error
-	revertMsg string
-}
+var thorChain *testchain.Chain
 
 type TestTxDescription struct {
 	t          *testing.T
@@ -78,167 +43,6 @@ type TestTxDescription struct {
 	args       []any
 	duplicate  bool
 	vet        *big.Int
-}
-
-func (c *ctest) Case(name string, args ...any) *ccase {
-	return &ccase{
-		rt:     c.rt,
-		abi:    c.abi,
-		to:     c.to,
-		caller: c.caller,
-		name:   name,
-		args:   args,
-	}
-}
-
-func (c *ccase) To(to thor.Address) *ccase {
-	c.to = to
-	return c
-}
-
-func (c *ccase) Caller(caller thor.Address) *ccase {
-	c.caller = caller
-	return c
-}
-
-func (c *ccase) Value(value *big.Int) *ccase {
-	c.value = value
-	return c
-}
-
-func (c *ccase) ProvedWork(provedWork *big.Int) *ccase {
-	c.provedWork = provedWork
-	return c
-}
-
-func (c *ccase) TxID(txID thor.Bytes32) *ccase {
-	c.txID = txID
-	return c
-}
-
-func (c *ccase) BlockRef(blockRef tx.BlockRef) *ccase {
-	c.blockRef = blockRef
-	return c
-}
-
-func (c *ccase) GasPayer(gasPayer thor.Address) *ccase {
-	c.gasPayer = gasPayer
-	return c
-}
-
-func (c *ccase) Expiration(expiration uint32) *ccase {
-	c.expiration = expiration
-	return c
-}
-
-func (c *ccase) ShouldVMError(err error) *ccase {
-	c.vmerr = err
-	return c
-}
-
-func (c *ccase) ShouldLog(events ...*tx.Event) *ccase {
-	c.events = events
-	return c
-}
-
-func (c *ccase) ShouldOutput(outputs ...any) *ccase {
-	c.output = &outputs
-	return c
-}
-
-func (c *ccase) ShouldRevert(revertMsg string) *ccase {
-	c.revertMsg = revertMsg
-	c.vmerr = errReverted
-	return c
-}
-
-func (c *ccase) Assert(t *testing.T) *ccase {
-	method, ok := c.abi.MethodByName(c.name)
-	assert.True(t, ok, "should have method")
-
-	constant := method.Const()
-	stage, err := c.rt.State().Stage(trie.Version{})
-	assert.Nil(t, err, "should stage state")
-	stateRoot := stage.Hash()
-
-	data, err := method.EncodeInput(c.args...)
-	assert.Nil(t, err, "should encode input")
-
-	clause := tx.NewClause(&c.to).WithData(data)
-	if c.value != nil {
-		clause = clause.WithValue(c.value)
-	}
-
-	exec, _ := c.rt.PrepareClause(clause,
-		0, 40000000, &xenv.TransactionContext{
-			ID:         c.txID,
-			Origin:     c.caller,
-			GasPrice:   &big.Int{},
-			GasPayer:   c.gasPayer,
-			ProvedWork: c.provedWork,
-			BlockRef:   c.blockRef,
-			Expiration: c.expiration,
-		})
-	vmout, _, err := exec()
-	assert.Nil(t, err)
-	if constant || vmout.VMErr != nil {
-		stage, err := c.rt.State().Stage(trie.Version{})
-		assert.Nil(t, err, "should stage state")
-		newStateRoot := stage.Hash()
-		assert.Equal(t, stateRoot, newStateRoot)
-	}
-	if c.vmerr != nil {
-		assert.Equal(t, c.vmerr, vmout.VMErr)
-	} else {
-		assert.Nil(t, vmout.VMErr)
-	}
-
-	if c.output != nil {
-		out, err := method.EncodeOutput((*c.output)...)
-		assert.Nil(t, err, "should encode output")
-		assert.Equal(t, out, vmout.Data, "should match output")
-	}
-
-	if len(c.events) > 0 {
-		for _, ev := range c.events {
-			found := func() bool {
-				for _, outEv := range vmout.Events {
-					if reflect.DeepEqual(ev, outEv) {
-						return true
-					}
-				}
-				return false
-			}()
-			assert.True(t, found, "event should appear")
-		}
-	}
-
-	if c.revertMsg != "" {
-		abis, err := abi.New(revertABI)
-		assert.NoError(t, err)
-		method, ok := abis.MethodByName("Error")
-		assert.True(t, ok)
-		var revertMsg string
-		err = method.DecodeInput(vmout.Data, &revertMsg)
-		assert.NoError(t, err)
-		assert.Equal(t, c.revertMsg, revertMsg)
-	}
-
-	c.output = nil
-	c.vmerr = nil
-	c.events = nil
-	c.revertMsg = ""
-
-	return c
-}
-
-func buildGenesis(db *muxdb.MuxDB, proc func(state *state.State) error) *block.Block {
-	blk, _, _, _ := new(genesis.Builder).
-		Timestamp(uint64(time.Now().Unix())).
-		State(proc).
-		ForkConfig(&thor.NoFork).
-		Build(state.NewStater(db))
-	return blk
 }
 
 func inspectClauseWithBlockRef(clause *tx.Clause, blockRef *tx.BlockRef) ([]byte, uint64, error) {
@@ -769,7 +573,7 @@ func TestEnergyNative(t *testing.T) {
 	staker := thorChain.Contract(builtin.Staker.Address, builtin.Staker.ABI, genesis.DevAccounts()[0])
 	assert.NoError(t, params.MintTransaction("set", big.NewInt(0), thor.KeyMaxBlockProposers, big.NewInt(1)))
 	exSupply = exSupply.Add(exSupply, growth)
-	assert.NoError(t, params.MintTransaction("set", big.NewInt(0), thor.KeyStargateContractAddress, big.NewInt(0).SetBytes(acc4.Bytes())))
+	assert.NoError(t, params.MintTransaction("set", big.NewInt(0), thor.KeyDelegatorContractAddress, big.NewInt(0).SetBytes(acc4.Bytes())))
 	exSupply = exSupply.Add(exSupply, growth)
 
 	// 2: Add a validator to the queue
@@ -824,7 +628,10 @@ func TestEnergyNative(t *testing.T) {
 		st = thorChain.Stater().NewState(summary.Root())
 		staker := builtin.Staker.Native(st)
 		energy := builtin.Energy.Native(st, summary.Header.Timestamp())
-		reward, err := energy.CalculateRewards(staker)
+
+		totalStaked, _, err := staker.LockedVET()
+		require.NoError(t, err)
+		reward, err := energy.CalculateRewards(totalStaked)
 		require.NoError(t, err)
 		stakeRewards.Add(stakeRewards, reward)
 
@@ -1620,14 +1427,14 @@ func TestStakerContract_Native(t *testing.T) {
 	totalNumRes := make([]any, 2)
 	totalNumRes[0] = new(*big.Int)
 	totalNumRes[1] = new(*big.Int)
-	_, err = callContractAndGetOutput(abi, "getValidatorsNum", toAddr, &totalNumRes)
+	_, err = callContractAndGetOutput(abi, "getValidationNum", toAddr, &totalNumRes)
 	assert.NoError(t, err, "dsada")
 
 	totalBurnedBefore := new(big.Int)
 	_, err = callContractAndGetOutput(energyAbi, "totalBurned", energyAddress, &totalBurnedBefore)
 	assert.NoError(t, err)
 
-	_, err = callContractAndGetOutput(abi, "getValidatorsNum", toAddr, &totalNumRes)
+	_, err = callContractAndGetOutput(abi, "getValidationNum", toAddr, &totalNumRes)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).Cmp(*totalNumRes[0].(**big.Int)), 0)
 	assert.Equal(t, big.NewInt(0).Cmp(*totalNumRes[1].(**big.Int)), 0)
@@ -1655,7 +1462,7 @@ func TestStakerContract_Native(t *testing.T) {
 	block, err := thorChain.GetTxBlock(trxid)
 	assert.NoError(t, err)
 
-	_, err = callContractAndGetOutput(abi, "getValidatorsNum", toAddr, &totalNumRes)
+	_, err = callContractAndGetOutput(abi, "getValidationNum", toAddr, &totalNumRes)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).Cmp(*totalNumRes[0].(**big.Int)), 0)
 	assert.Equal(t, big.NewInt(1).Cmp(*totalNumRes[1].(**big.Int)), 0)
@@ -1666,29 +1473,24 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).Mul(big.NewInt(0).SetUint64(receipt.GasUsed), block.Header().BaseFee()), big.NewInt(0).Sub(totalBurned, totalBurnedBefore))
 
 	node := master.Address
-	// getStake
-	getStakeRes := make([]any, 4)
-	getStakeRes[0] = new(common.Address)
-	getStakeRes[1] = new(*big.Int)
-	getStakeRes[2] = new(*big.Int)
-	getStakeRes[3] = new(*big.Int)
-	_, err = callContractAndGetOutput(abi, "getValidatorStake", toAddr, &getStakeRes, node)
+	// getValidation
+	getValidation := make([]any, 6)
+	getValidation[0] = new(common.Address)
+	getValidation[1] = new(*big.Int)
+	getValidation[2] = new(*big.Int)
+	getValidation[3] = new(*big.Int)
+	getValidation[4] = new(uint8)
+	getValidation[5] = new(bool)
+	_, err = callContractAndGetOutput(abi, "getValidation", toAddr, &getValidation, node)
 	assert.NoError(t, err)
 
 	expectedEndorsor := common.BytesToAddress(endorsor.Address.Bytes())
-	assert.Equal(t, &expectedEndorsor, getStakeRes[0])
-	assert.Equal(t, big.NewInt(0).Cmp(*getStakeRes[1].(**big.Int)), 0) // stake - should be 0 while queued
-	assert.Equal(t, big.NewInt(0).Cmp(*getStakeRes[2].(**big.Int)), 0) // weight - should be 0 while queued
-	assert.Equal(t, minStake.Cmp(*getStakeRes[3].(**big.Int)), 0)      // queue stake
-
-	// getStatus
-	getStatusRes := make([]any, 2)
-	getStatusRes[0] = new(uint8)
-	getStatusRes[1] = new(bool)
-	_, err = callContractAndGetOutput(abi, "getValidatorStatus", toAddr, &getStatusRes, node)
-	assert.NoError(t, err)
-	assert.Equal(t, validation.StatusQueued, *getStatusRes[0].(*uint8))
-	assert.Equal(t, true, *getStatusRes[1].(*bool)) // online
+	assert.Equal(t, &expectedEndorsor, getValidation[0])
+	assert.Equal(t, big.NewInt(0).Cmp(*getValidation[1].(**big.Int)), 0) // stake - should be 0 while queued
+	assert.Equal(t, big.NewInt(0).Cmp(*getValidation[2].(**big.Int)), 0) // weight - should be 0 while queued
+	assert.Equal(t, minStake.Cmp(*getValidation[3].(**big.Int)), 0)      // queue stake
+	assert.Equal(t, validation.StatusQueued, *getValidation[4].(*uint8))
+	assert.Equal(t, true, *getValidation[5].(*bool)) // online
 
 	// getPeriod
 	getPeriodRes := make([]any, 4)
@@ -1696,7 +1498,7 @@ func TestStakerContract_Native(t *testing.T) {
 	getPeriodRes[1] = new(uint32)
 	getPeriodRes[2] = new(uint32)
 	getPeriodRes[3] = new(uint32)
-	_, err = callContractAndGetOutput(abi, "getValidatorPeriodDetails", toAddr, &getPeriodRes, node)
+	_, err = callContractAndGetOutput(abi, "getValidationPeriodDetails", toAddr, &getPeriodRes, node)
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(360*24*15), *getPeriodRes[0].(*uint32))
 	assert.Equal(t, uint32(0), *getPeriodRes[1].(*uint32))              // start period
@@ -1748,13 +1550,13 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).Int64(), (*queuedStakeRes[0].(**big.Int)).Int64())
 	assert.Equal(t, big.NewInt(0).Int64(), (*queuedStakeRes[1].(**big.Int)).Int64())
 
-	_, err = callContractAndGetOutput(abi, "getValidatorsNum", toAddr, &totalNumRes)
+	_, err = callContractAndGetOutput(abi, "getValidationNum", toAddr, &totalNumRes)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(1).Cmp(*totalNumRes[0].(**big.Int)), 0)
 	assert.Equal(t, big.NewInt(0).Cmp(*totalNumRes[1].(**big.Int)), 0)
 
 	reward := new(*big.Int)
-	_, err = callContractAndGetOutput(abi, "getDelegatorsRewards", toAddr, reward, node, uint32(1))
+	_, err = callContractAndGetOutput(abi, "getDelegatorRewards", toAddr, reward, node, uint32(1))
 	assert.NoError(t, err)
 	assert.Equal(t, new(big.Int).String(), (*reward).String())
 
@@ -1963,12 +1765,18 @@ func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
 	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
 
 	// getStatus
-	getStatusRes := make([]any, 2)
-	getStatusRes[0] = new(uint8)
-	getStatusRes[1] = new(bool)
-	_, err = callContractAndGetOutput(abi, "getValidatorStatus", toAddr, &getStatusRes, id)
+	// getValidation
+	getValidation := make([]any, 6)
+	getValidation[0] = new(common.Address)
+	getValidation[1] = new(*big.Int)
+	getValidation[2] = new(*big.Int)
+	getValidation[3] = new(*big.Int)
+	getValidation[4] = new(uint8)
+	getValidation[5] = new(bool)
+
+	_, err = callContractAndGetOutput(abi, "getValidation", toAddr, &getValidation, id)
 	assert.NoError(t, err)
-	assert.Equal(t, validation.StatusExit, *getStatusRes[0].(*uint8))
+	assert.Equal(t, validation.StatusExit, *getValidation[4].(*uint8))
 
 	// firstQueued
 	firstQueuedRes := new(common.Address)
@@ -2024,86 +1832,4 @@ func TestExtensionV3(t *testing.T) {
 	assert.Nil(t, err)
 	val = new(big.Int).SetBytes(out.Data)
 	assert.Equal(t, uint64(clauseCount), val.Uint64())
-}
-
-func TestStakerContract_Native_CheckStake(t *testing.T) {
-	var (
-		caller     = genesis.DevAccounts()[0].Address
-		master     = thor.BytesToAddress([]byte("master"))
-		validation = thor.BytesToBytes32([]byte("validation"))
-		delegator  = thor.Address{}
-	)
-
-	fc := &thor.SoloFork
-	fc.HAYABUSA = 1
-	fc.HAYABUSA_TP = 2
-	var err error
-	thorChain, err = testchain.NewWithFork(fc)
-	assert.NoError(t, err)
-	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
-	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
-
-	thorChain.MintClauses(genesis.DevAccounts()[0], []*tx.Clause{
-		tx.NewClause(&delegator).WithValue(big.NewInt(1e18)),
-	})
-
-	rt := runtime.New(
-		thorChain.Repo().NewBestChain(),
-		thorChain.Stater().NewState(thorChain.Repo().BestBlockSummary().Root()),
-		&xenv.BlockContext{Time: thorChain.Repo().BestBlockSummary().Header.Timestamp()},
-		thorChain.GetForkConfig(),
-	)
-
-	test := &ctest{
-		rt:     rt,
-		abi:    builtin.Staker.ABI,
-		to:     builtin.Staker.Address,
-		caller: builtin.Staker.Address,
-	}
-
-	test.Case("addValidation", master, staker.LowStakingPeriod.Get()).
-		Value(big.NewInt(0)).
-		Caller(caller).
-		ShouldRevert("stake is empty").
-		Assert(t)
-
-	test.Case("addValidation", master, staker.LowStakingPeriod.Get()).
-		Value(big.NewInt(1)).
-		Caller(caller).
-		ShouldRevert("stake is not multiple of 1VET").
-		Assert(t)
-
-	test.Case("increaseStake", validation).
-		Value(big.NewInt(0)).
-		Caller(caller).
-		ShouldRevert("stake is empty").
-		Assert(t)
-
-	test.Case("increaseStake", validation).
-		Value(big.NewInt(1)).
-		Caller(caller).
-		ShouldRevert("stake is not multiple of 1VET").
-		Assert(t)
-
-	test.Case("decreaseStake", validation, big.NewInt(0)).
-		Caller(caller).
-		ShouldRevert("stake is empty").
-		Assert(t)
-
-	test.Case("decreaseStake", validation, big.NewInt(1)).
-		Caller(caller).
-		ShouldRevert("stake is not multiple of 1VET").
-		Assert(t)
-
-	test.Case("addDelegation", validation, uint8(100)).
-		Caller(delegator).
-		Value(big.NewInt(0)).
-		ShouldRevert("stake is empty").
-		Assert(t)
-
-	test.Case("addDelegation", validation, uint8(100)).
-		Caller(delegator).
-		Value(big.NewInt(1)).
-		ShouldRevert("stake is not multiple of 1VET").
-		Assert(t)
 }

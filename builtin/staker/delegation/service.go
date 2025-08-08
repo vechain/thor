@@ -52,14 +52,6 @@ func (s *Service) Add(
 	stake *big.Int,
 	multiplier uint8,
 ) (*big.Int, error) {
-	// ensure input is sane
-	if multiplier == 0 {
-		return nil, errors.New("multiplier cannot be 0")
-	}
-	if stake.Cmp(big.NewInt(0)) <= 0 {
-		return nil, errors.New("stake must be greater than 0")
-	}
-
 	// update the global delegation counter
 	id, err := s.idCounter.Get()
 	if err != nil {
@@ -73,7 +65,7 @@ func (s *Service) Add(
 
 	delegationID := new(big.Int).Set(id)
 	delegation := Delegation{
-		Validation:     validator,
+		Validator:      validator,
 		Multiplier:     multiplier,
 		Stake:          stake,
 		FirstIteration: firstIteration,
@@ -87,13 +79,6 @@ func (s *Service) Add(
 }
 
 func (s *Service) SignalExit(delegation *Delegation, delegationID *big.Int, valCurrentIteration uint32) error {
-	if delegation.LastIteration != nil {
-		return errors.New("delegation is already disabled for auto-renew")
-	}
-	if delegation.Stake.Sign() == 0 {
-		return errors.New("delegation is not active")
-	}
-
 	delegation.LastIteration = &valCurrentIteration
 
 	return s.SetDelegation(delegationID, delegation, false)

@@ -264,11 +264,15 @@ func (e *Energy) addIssued(issued *big.Int) error {
 type staker interface {
 	LockedVET() (*big.Int, *big.Int, error)
 	HasDelegations(address thor.Address) (bool, error)
-	IncreaseDelegatorsReward(master thor.Address, reward *big.Int) error
+	IncreaseDelegatorReward(master thor.Address, reward *big.Int) error
 }
 
 func (e *Energy) DistributeRewards(beneficiary, signer thor.Address, staker staker) error {
-	reward, err := e.CalculateRewards(staker)
+	totalStaked, _, err := staker.LockedVET()
+	if err != nil {
+		return err
+	}
+	reward, err := e.CalculateRewards(totalStaked)
 	if err != nil {
 		return err
 	}
@@ -290,7 +294,7 @@ func (e *Energy) DistributeRewards(beneficiary, signer thor.Address, staker stak
 		proposerReward.Mul(proposerReward, validatorRewardPerc)
 		proposerReward.Div(proposerReward, big.NewInt(100))
 
-		val, err := e.params.Get(thor.KeyStargateContractAddress)
+		val, err := e.params.Get(thor.KeyDelegatorContractAddress)
 		if err != nil {
 			return err
 		}
@@ -301,7 +305,7 @@ func (e *Energy) DistributeRewards(beneficiary, signer thor.Address, staker stak
 			return err
 		}
 		delegationReward := new(big.Int).Sub(reward, proposerReward)
-		if err := staker.IncreaseDelegatorsReward(signer, delegationReward); err != nil {
+		if err := staker.IncreaseDelegatorReward(signer, delegationReward); err != nil {
 			return err
 		}
 		if err := e.state.SetEnergy(addr, new(big.Int).Add(addrEng, delegationReward), e.blockTime); err != nil {
@@ -326,11 +330,7 @@ func (e *Energy) DistributeRewards(beneficiary, signer thor.Address, staker stak
 	return nil
 }
 
-func (e *Energy) CalculateRewards(staker staker) (*big.Int, error) {
-	totalStaked, _, err := staker.LockedVET()
-	if err != nil {
-		return nil, err
-	}
+func (e *Energy) CalculateRewards(totalStaked *big.Int) (*big.Int, error) {
 	bigE18 := big.NewInt(1e18)
 	// sqrt(totalStaked / 1e18) * 1e18, we are calculating sqrt on VET and then converting to wei
 	sqrtStake := new(big.Int).Sqrt(new(big.Int).Div(totalStaked, bigE18))

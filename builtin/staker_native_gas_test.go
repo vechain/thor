@@ -108,29 +108,15 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_addValidation",
-			expectedGas: 66600,
+			expectedGas: 66200,
 			args:        []any{account1, account1, staker.LowStakingPeriod.Get(), staker.MinStake},
 			description: "Add a new validator (not implemented yet)",
 		},
 		{
-			function:     "native_getValidatorStake",
+			function:     "native_getValidation",
 			expectedGas:  400,
 			args:         []any{account1},
 			description:  "Get validator stake by it's ID",
-			preTestHooks: []TestHook{preTestAddValidation(account1)},
-		},
-		{
-			function:     "native_getValidatorStatus",
-			expectedGas:  400,
-			args:         []any{account1},
-			description:  "Get validator status by it's ID",
-			preTestHooks: []TestHook{preTestAddValidation(account1)},
-		},
-		{
-			function:     "native_getValidatorPeriodDetails",
-			expectedGas:  400,
-			args:         []any{account1},
-			description:  "Get validator period details by it's ID",
 			preTestHooks: []TestHook{preTestAddValidation(account1)},
 		},
 		{
@@ -149,8 +135,8 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:     "native_withdrawStake",
-			expectedGas:  36800,
-			args:         []any{account1, account1},
+			expectedGas:  36600,
+			args:         []any{account1},
 			description:  "Withdraw stake for a validator",
 			preTestHooks: []TestHook{preTestAddValidation(account1)},
 		},
@@ -166,9 +152,8 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		// },
 		{
 			function:    "native_increaseStake",
-			expectedGas: 21600,
+			expectedGas: 20800,
 			args: []any{
-				account1,
 				account1,
 				staker.MinStake,
 			},
@@ -177,9 +162,8 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_decreaseStake",
-			expectedGas: 21000,
+			expectedGas: 20800,
 			args: []any{
-				account1,
 				account1,
 				staker.MinStake,
 			},
@@ -188,7 +172,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_addDelegation",
-			expectedGas: 32200,
+			expectedGas: 31200,
 			args: []any{
 				account1,
 				staker.MinStake,
@@ -198,7 +182,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 			preTestHooks: []TestHook{preTestAddValidation(account1)},
 		},
 		{
-			function:    "native_getDelegationStake",
+			function:    "native_getDelegation",
 			expectedGas: 800,
 			args: []any{
 				big.NewInt(1), // IDs are incremental, starting at 1
@@ -207,17 +191,8 @@ func TestStakerNativeGasCosts(t *testing.T) {
 			preTestHooks: []TestHook{preTestAddValidation(account1), preTestAddDelegation(account1)},
 		},
 		{
-			function:    "native_getDelegationPeriodDetails",
-			expectedGas: 800,
-			args: []any{
-				big.NewInt(1), // IDs are incremental, starting at 1
-			},
-			description:  "Get delegation period details by ID",
-			preTestHooks: []TestHook{preTestAddValidation(account1), preTestAddDelegation(account1)},
-		},
-		{
 			function:    "native_withdrawDelegation",
-			expectedGas: 21800,
+			expectedGas: 21400,
 			args: []any{
 				big.NewInt(1), // IDs are incremental, starting at 1
 			},
@@ -227,7 +202,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		// TODO: How can we mint thousands of blocks and perform housekeeping?
 		{
 			function:    "native_signalDelegationExit",
-			expectedGas: 1200,
+			expectedGas: 21000,
 			args: []any{
 				big.NewInt(1), // IDs are incremental, starting at 1
 			},
@@ -236,7 +211,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 			err:          "revert: delegation has not started yet, funds can be withdrawn",
 		},
 		{
-			function:    "native_getDelegatorsRewards",
+			function:    "native_getDelegatorRewards",
 			expectedGas: 200,
 			args: []any{
 				account1,
@@ -255,7 +230,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 			preTestHooks: []TestHook{preTestAddValidation(account1)},
 		},
 		{
-			function:     "native_getValidatorsNum",
+			function:     "native_getValidationNum",
 			expectedGas:  400,
 			description:  "Get number of active and queued validators",
 			preTestHooks: []TestHook{preTestAddValidation(account1)},
@@ -296,7 +271,6 @@ func TestStakerNativeGasCosts(t *testing.T) {
 
 			// Validate function executed successfully (no revert)
 			require.NotNil(t, result, "Function %s should return result", tc.function)
-			require.Greater(t, len(result), 0, "Function %s should return at least one value", tc.function)
 
 			// Check if last element is an error string (staker native functions return error as last element)
 			if len(result) > 0 {

@@ -332,7 +332,7 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 			var weight *big.Int
 			if posActive, _ := staker.IsPoSActive(); posActive {
 				// PoS is active, get validator weight
-				validator, err := staker.Get(signer)
+				validator, err := staker.GetValidation(signer)
 				if err != nil {
 					return nil, err
 				}

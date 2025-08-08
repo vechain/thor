@@ -155,14 +155,6 @@ func Test_AddDelegator(t *testing.T) {
 func Test_AddDelegator_StakeRange(t *testing.T) {
 	staker, validators := newDelegationStaker(t)
 
-	// should NOT be able to stake 0 VET
-	_, err := staker.AddDelegation(validators[0].ID, big.NewInt(0), 255)
-	assert.ErrorContains(t, err, "stake must be greater than 0")
-
-	// should NOT be able to stake greater than max stake
-	_, err = staker.AddDelegation(validators[1].ID, MaxStake, 255)
-	assert.ErrorContains(t, err, "stake is out of range")
-
 	// should be able stake 1 VET
 	id1, err := staker.AddDelegation(validators[2].ID, big.NewInt(1), 255)
 	assert.NoError(t, err)
@@ -175,15 +167,11 @@ func Test_AddDelegator_StakeRange(t *testing.T) {
 
 	// should be able stake for all remaining space
 	validator := validators[3]
-	validation, err := staker.Get(validator.ID)
+	validation, err := staker.GetValidation(validator.ID)
 	assert.NoError(t, err)
 	remaining := big.NewInt(0).Sub(MaxStake, validation.NextPeriodTVL())
 	_, err = staker.AddDelegation(validator.ID, remaining, 255)
 	assert.NoError(t, err)
-
-	// should not be able to stake more than max stake
-	_, err = staker.AddDelegation(validator.ID, big.NewInt(1000000000000000000), 255)
-	assert.ErrorContains(t, err, "stake is out of range")
 }
 
 func Test_AddDelegator_ValidatorNotFound(t *testing.T) {
@@ -207,13 +195,6 @@ func Test_AddDelegator_ManyValidators(t *testing.T) {
 	}
 }
 
-func Test_AddDelegator_ZeroMultiplier(t *testing.T) {
-	staker, validators := newDelegationStaker(t)
-
-	_, err := staker.AddDelegation(validators[0].ID, delegationStake(), 0)
-	assert.ErrorContains(t, err, "multiplier cannot be 0")
-}
-
 func Test_Delegator_DisableAutoRenew_PendingLocked(t *testing.T) {
 	// Given the staker contract is setup
 	staker, validators := newDelegationStaker(t)
@@ -227,8 +208,6 @@ func Test_Delegator_DisableAutoRenew_PendingLocked(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, stake, aggregation.PendingVET)
 
-	// Then the delegation can't signal an exit until it has started
-	assert.ErrorContains(t, staker.SignalDelegationExit(id), "delegation has not started yet")
 	_, _, err = staker.Housekeep(validator.Period)
 	assert.NoError(t, err)
 	assert.NoError(t, staker.SignalDelegationExit(id))
@@ -312,7 +291,7 @@ func Test_Delegator_DisableAutoRenew_InAStakingPeriod(t *testing.T) {
 	// And a delegation is added with auto renew enabled
 	validator := validators[0]
 	stake := delegationStake()
-	validation, err := staker.Get(validator.ID)
+	validation, err := staker.GetValidation(validator.ID)
 	assert.NoError(t, err)
 	validationStake := big.NewInt(0).Set(validation.LockedVET)
 
@@ -355,7 +334,7 @@ func Test_Delegator_DisableAutoRenew_InAStakingPeriod(t *testing.T) {
 	assert.NoError(t, err)
 	_, err = staker.aggregationService.GetAggregation(validator.ID)
 	assert.NoError(t, err)
-	validation, err = staker.Get(validator.ID)
+	validation, err = staker.GetValidation(validator.ID)
 	assert.NoError(t, err)
 	assert.Equal(t, validationStake, validation.LockedVET)
 }
@@ -378,7 +357,7 @@ func Test_Delegator_AutoRenew_ValidatorExits(t *testing.T) {
 	assert.Equal(t, stake, aggregation.LockedVET)
 
 	// When the validator signals an exit
-	assert.NoError(t, staker.SignalExit(validator.ID, validator.Endorsor))
+	assert.NoError(t, staker.SignalExit(validator.ID))
 
 	// And the next staking period is over
 	_, _, err = staker.Housekeep(validator.Period * 2)
@@ -464,7 +443,7 @@ func Test_Delegator_Queued_Weight(t *testing.T) {
 	err = staker.AddValidation(node, endorsor, uint32(360)*24*15, validatorStake)
 	assert.NoError(t, err)
 
-	validator, err := staker.Get(node)
+	validator, err := staker.GetValidation(node)
 	assert.NoError(t, err)
 	assert.Equal(t, validation.StatusQueued, validator.Status)
 
@@ -580,7 +559,7 @@ func Test_Delegations_EnableAutoRenew_MatchStakeReached(t *testing.T) {
 	// Should be pending
 	delegation1, _, err := staker.GetDelegation(delegationID)
 	assert.NoError(t, err)
-	validation, err := staker.Get(validator.ID)
+	validation, err := staker.GetValidation(validator.ID)
 	assert.NoError(t, err)
 	assert.False(t, delegation1.Started(validation))
 
@@ -589,7 +568,7 @@ func Test_Delegations_EnableAutoRenew_MatchStakeReached(t *testing.T) {
 	assert.NoError(t, err)
 	delegation1, _, err = staker.GetDelegation(delegationID)
 	assert.NoError(t, err)
-	validation, err = staker.Get(validator.ID)
+	validation, err = staker.GetValidation(validator.ID)
 	assert.NoError(t, err)
 	assert.True(t, delegation1.Started(validation))
 	//
@@ -627,7 +606,7 @@ func TestStaker_DelegationExitingVET(t *testing.T) {
 	assert.True(t, delegation.Started(validation))
 
 	assert.NoError(t, staker.SignalDelegationExit(delegationID))
-	assert.NoError(t, staker.SignalExit(*firstActive, validation.Endorsor))
+	assert.NoError(t, staker.SignalExit(*firstActive))
 
 	_, _, err = staker.Housekeep(MediumStakingPeriod.Get() * 2)
 	assert.NoError(t, err)

@@ -20,7 +20,7 @@ func (p *Packer) schedulePOS(parent *chain.BlockSummary, nowTimestamp uint64, st
 	if p.beneficiary != nil {
 		beneficiary = *p.beneficiary
 	} else {
-		validator, err := staker.Get(p.nodeMaster)
+		validator, err := staker.GetValidation(p.nodeMaster)
 		if err != nil {
 			return thor.Address{}, 0, 0, err
 		}
