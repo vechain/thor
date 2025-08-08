@@ -232,7 +232,7 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, minStake, delegationStake.Stake)
 	require.Equal(t, uint8(100), delegationStake.Multiplier)
 	require.Equal(t, queuedID, delegationStake.Validator)
-	require.False(t, delegationStake.IsLocked)
+	require.False(t, delegationStake.Locked)
 
 	// GetDelegationPeriodDetails
 	delegationPeriodDetails, err := staker.GetDelegationPeriodDetails(delegationID)

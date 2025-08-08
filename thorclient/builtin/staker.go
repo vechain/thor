@@ -244,7 +244,7 @@ type Delegation struct {
 	Validator  thor.Address
 	Stake      *big.Int
 	Multiplier uint8
-	IsLocked   bool
+	Locked     bool
 }
 
 type DelegationPeriodDetails struct {
@@ -265,7 +265,7 @@ func (s *Staker) GetDelegation(delegationID *big.Int) (*Delegation, error) {
 		Validator:  thor.Address(out[0].(*common.Address)[:]),
 		Stake:      *(out[1].(**big.Int)),
 		Multiplier: *(out[2].(*uint8)),
-		IsLocked:   *(out[3].(*bool)),
+		Locked:     *(out[3].(*bool)),
 	}
 
 	return delegation, nil
