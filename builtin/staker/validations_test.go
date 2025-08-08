@@ -2075,6 +2075,9 @@ func TestStaker_IncreaseStake_Withdraw(t *testing.T) {
 
 	assert.NoError(t, staker.IncreaseStake(addr1, big.NewInt(100)))
 	withdrawAmount, err := staker.WithdrawStake(addr1, period+CooldownPeriod.Get())
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(100), withdrawAmount)
+
 	assert.NoError(t, staker.IncreaseStake(addr1, big.NewInt(100)))
 	withdrawAmount, err = staker.WithdrawStake(addr1, period+CooldownPeriod.Get())
 	assert.NoError(t, err)

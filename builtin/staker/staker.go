@@ -488,7 +488,8 @@ func (s *Staker) ValidateStakeChange(validator thor.Address, increase *big.Int, 
 
 	// decrease stake
 	if decrease.Sign() > 0 {
-		if val.Status == validation.StatusActive {
+		switch val.Status {
+		case validation.StatusActive:
 			// We don't consider any queued increases, i.e., QueuedVET. We only consider locked and current decreases.
 			// The reason is that validator can instantly withdraw QueuedVET at any time.
 			// We need to make sure the locked VET minus the sum of the current decreases is still above the minimum stake.
@@ -497,7 +498,7 @@ func (s *Staker) ValidateStakeChange(validator thor.Address, increase *big.Int, 
 				return false, nil
 			}
 			return true, nil
-		} else if val.Status == validation.StatusQueued {
+		case validation.StatusQueued:
 			// All the validator's stake exists within QueuedVET, so we need to make sure it maintains a minimum of MinStake.
 			tvl := big.NewInt(0).Sub(val.QueuedVET, decrease)
 			if tvl.Cmp(MinStake) < 0 {

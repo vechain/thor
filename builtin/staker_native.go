@@ -54,7 +54,18 @@ func init() {
 
 			// IMPORTANT, DO NOT return zero value for pointer type, subsequent abi.EncodeOutput will panic due to call of reflect.ValueOf.
 			if validator.IsEmpty() {
-				return []any{thor.Address{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), validation.StatusUnknown, false, uint32(0), uint32(0), uint32(math.MaxUint32), uint32(0)}
+				return []any{
+					thor.Address{},
+					big.NewInt(0),
+					big.NewInt(0),
+					big.NewInt(0),
+					validation.StatusUnknown,
+					false,
+					uint32(0),
+					uint32(0),
+					uint32(math.MaxUint32),
+					uint32(0),
+				}
 			}
 			exitBlock := uint32(math.MaxUint32)
 			if validator.ExitBlock != nil {

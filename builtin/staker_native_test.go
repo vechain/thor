@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
@@ -243,7 +244,7 @@ func TestStakerContract_Validation(t *testing.T) {
 	fc.HAYABUSA = 0
 	fc.HAYABUSA_TP = 0
 
-	var db = muxdb.NewMem()
+	db := muxdb.NewMem()
 
 	gene := buildGenesis(db, func(state *state.State) error {
 		state.SetCode(builtin.Staker.Address, builtin.Staker.RuntimeBytecodes())
@@ -525,7 +526,7 @@ func TestStakerContract_Delegation(t *testing.T) {
 	fc.HAYABUSA = 0
 	fc.HAYABUSA_TP = 0
 
-	var db = muxdb.NewMem()
+	db := muxdb.NewMem()
 
 	gene := buildGenesis(db, func(state *state.State) error {
 		state.SetCode(builtin.Staker.Address, builtin.Staker.RuntimeBytecodes())
@@ -704,7 +705,7 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 	fc.HAYABUSA = 0
 	fc.HAYABUSA_TP = 0
 
-	var db = muxdb.NewMem()
+	db := muxdb.NewMem()
 
 	gene := buildGenesis(db, func(state *state.State) error {
 		state.SetCode(builtin.Staker.Address, builtin.Staker.RuntimeBytecodes())
