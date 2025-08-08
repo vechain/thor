@@ -16,10 +16,9 @@ func (s *Staker) Transition(currentBlock uint32) (bool, error) {
 	// TODO review how to change this elegantly for unit tests
 	// if this check is enabled the epochLength is defaulted to 180 blocks
 	// which breaks most of tests that rely on a HAYABUSA_TP = 1
-	//
-	//if currentBlock%epochLength != 0 {
-	//	return false, nil // No transition needed
-	//}
+	if currentBlock%EpochLength.Get() != 0 {
+		return false, nil // No transition needed
+	}
 
 	active, err := s.IsPoSActive()
 	if err != nil {
