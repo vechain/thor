@@ -88,8 +88,15 @@ func TestStaker(t *testing.T) {
 		}, 100*time.Millisecond, 10*time.Second))
 	}
 
-	// pack a new block
-	require.NoError(t, node.Chain().MintBlock(genesis.DevAccounts()[0]))
+	// NOTE: Might not be the best way of doing it
+	// changing the epoch length was breaking the contract logic
+	// for this exact test in a weird way
+	bestBlock, err := client.Block("best")
+	require.NoError(t, err)
+	for range 180 - bestBlock.Number {
+		// pack a new block
+		require.NoError(t, node.Chain().MintBlock(genesis.DevAccounts()[0]))
+	}
 
 	// TotalStake
 	totalStake, totalWeight, err := staker.TotalStake()
@@ -121,7 +128,7 @@ func TestStaker(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, firstID, getPeriodDetailsRes.Address)
 	require.Equal(t, minStakingPeriod, getPeriodDetailsRes.Period)
-	require.Equal(t, uint32(15), getPeriodDetailsRes.StartBlock)
+	require.Equal(t, uint32(180), getPeriodDetailsRes.StartBlock)
 	require.Equal(t, uint32(math.MaxUint32), getPeriodDetailsRes.ExitBlock)
 	require.Equal(t, uint32(0), getPeriodDetailsRes.CompletedPeriods)
 
@@ -176,6 +183,7 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, 0, firstQueued.Stake.Sign())
 	require.Equal(t, StakerStatusQueued, firstQueuedStatus.Status)
 	require.False(t, firstQueued.Endorsor.IsZero())
+	require.Equal(t, validator.Address, firstQueued.Address)
 
 	// TotalQueued
 	queuedStake, queuedWeight, err := staker.QueuedStake()
@@ -191,6 +199,7 @@ func TestStaker(t *testing.T) {
 		WithSigner(validatorKey).
 		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
+	require.False(t, receipt.Reverted)
 
 	increaseEvents, err := staker.FilterStakeIncreased(newRange(receipt), nil, logdb.ASC)
 	require.NoError(t, err)
@@ -204,6 +213,7 @@ func TestStaker(t *testing.T) {
 		WithSigner(validatorKey).
 		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
+	require.False(t, receipt.Reverted)
 
 	decreaseEvents, err := staker.FilterStakeDecreased(newRange(receipt), nil, logdb.ASC)
 	require.NoError(t, err)

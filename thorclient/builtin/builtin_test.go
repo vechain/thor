@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/builtin/solidity"
+	"github.com/vechain/thor/v2/builtin/staker"
 
 	"github.com/stretchr/testify/require"
 
@@ -100,6 +102,12 @@ func newTestNode(t *testing.T, useExecutor bool) (testnode.Node, *thorclient.Cli
 	gene, err := genesis.NewCustomNet(&genConfig)
 	require.NoError(t, err, "failed to create genesis builder")
 
+	staker.LowStakingPeriod = solidity.NewConfigVariable("staker-low-staking-period", 360*24*7)
+	staker.MediumStakingPeriod = solidity.NewConfigVariable("staker-medium-staking-period", 360*24*15)
+	staker.HighStakingPeriod = solidity.NewConfigVariable("staker-high-staking-period", 360*24*30)
+	staker.CooldownPeriod = solidity.NewConfigVariable("cooldown-period", 8640)
+	staker.EpochLength = solidity.NewConfigVariable("epoch-length", 180)
+
 	chain, err := testchain.NewIntegrationTestChainWithGenesis(gene, &thor.SoloFork)
 	if err != nil {
 		t.Fatalf("failed to create test chain: %v", err)
@@ -115,6 +123,7 @@ func newTestNode(t *testing.T, useExecutor bool) (testnode.Node, *thorclient.Cli
 		chain.LogDB(),
 		chain.GetForkConfig(),
 	)
+
 	if err := chain.MintBlock(genesis.DevAccounts()[0]); err != nil {
 		require.NoErrorf(t, err, "failed to mint genesis block")
 	}
