@@ -104,9 +104,9 @@ func (ts *TestSequence) AddValidation(
 	return ts
 }
 
-func (ts *TestSequence) SignalExit(endorsor, master thor.Address) *TestSequence {
-	err := ts.staker.SignalExit(endorsor, master)
-	assert.NoError(ts.t, err, "failed to signal exit for validator %s with endorsor %s", master.String(), endorsor.String())
+func (ts *TestSequence) SignalExit(validator, endorsor thor.Address) *TestSequence {
+	err := ts.staker.SignalExit(validator, endorsor)
+	assert.NoError(ts.t, err, "failed to signal exit for validator %s with endorsor %s", validator.String(), endorsor.String())
 	return ts
 }
 
@@ -166,7 +166,7 @@ func (ts *TestSequence) AddDelegation(
 	master thor.Address,
 	amount *big.Int,
 	multiplier uint8,
-	id *big.Int,
+	idSetter *big.Int,
 ) *TestSequence {
 	delegationID, err := ts.staker.AddDelegation(master, amount, multiplier)
 	assert.NoError(
@@ -178,7 +178,7 @@ func (ts *TestSequence) AddDelegation(
 		multiplier,
 		err,
 	)
-	id.Set(delegationID)
+	idSetter.Set(delegationID)
 	return ts
 }
 
@@ -219,6 +219,43 @@ func (ts *TestSequence) AssertCompletedPeriods(
 	periods, err := ts.staker.GetCompletedPeriods(validationID)
 	assert.NoError(ts.t, err, "failed to get completed periods for validator %s: %v", validationID.String(), err)
 	assert.Equal(ts.t, expectedPeriods, periods, "completed periods mismatch for validator %s", validationID.String())
+	return ts
+}
+
+func (ts *TestSequence) AssertTotals(validationID thor.Address, expected *validation.Totals) *TestSequence {
+	totals, err := ts.staker.GetValidationTotals(validationID)
+	assert.NoError(ts.t, err, "failed to get totals for validator %s", validationID.String())
+
+	// exiting
+	if expected.TotalExitingStake != nil {
+		assert.Equal(ts.t, 0, expected.TotalExitingStake.Cmp(totals.TotalExitingStake), "total exiting stake mismatch for validator %s", validationID.String())
+	}
+	if expected.TotalExitingWeight != nil {
+		assert.Equal(
+			ts.t,
+			0,
+			expected.TotalExitingWeight.Cmp(totals.TotalExitingWeight),
+			"total exiting weight mismatch for validator %s",
+			validationID.String(),
+		)
+	}
+
+	// locked
+	if expected.TotalLockedStake != nil {
+		assert.Equal(ts.t, 0, expected.TotalLockedStake.Cmp(totals.TotalLockedStake), "total locked stake mismatch for validator %s", validationID.String())
+	}
+	if expected.TotalLockedWeight != nil {
+		assert.Equal(ts.t, 0, expected.TotalLockedWeight.Cmp(totals.TotalLockedWeight), "total locked weight mismatch for validator %s", validationID.String())
+	}
+
+	// queued
+	if expected.TotalQueuedStake != nil {
+		assert.Equal(ts.t, 0, expected.TotalQueuedStake.Cmp(totals.TotalQueuedStake), "total queued stake mismatch for validator %s", validationID.String())
+	}
+	if expected.TotalQueuedWeight != nil {
+		assert.Equal(ts.t, 0, expected.TotalQueuedWeight.Cmp(totals.TotalQueuedWeight), "total queued weight mismatch for validator %s", validationID.String())
+	}
+
 	return ts
 }
 

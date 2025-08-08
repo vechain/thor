@@ -8,6 +8,7 @@ package validation
 import (
 	"math/big"
 
+	"github.com/vechain/thor/v2/builtin/staker/aggregation"
 	"github.com/vechain/thor/v2/builtin/staker/delta"
 	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/thor"
@@ -52,10 +53,39 @@ type Validation struct {
 }
 
 type Totals struct {
-	TotalLockedStake        *big.Int // total locked stake in validation (current period), validation's stake + all delegators stake
-	TotalLockedWeight       *big.Int // total locked weight in validation (current period), validation's weight + all delegators weight
-	DelegationsLockedStake  *big.Int // total locked stake in validation (current period) by all delegators
-	DelegationsLockedWeight *big.Int // total locked weight in validation (current period) by all delegators
+	TotalLockedStake   *big.Int // total locked stake in validation (current period), validation's stake + all delegators stake
+	TotalLockedWeight  *big.Int // total locked weight in validation (current period), validation's weight + all delegators weight
+	TotalQueuedStake   *big.Int // total queued stake in validation (next period), validation's stake + all delegators stake
+	TotalQueuedWeight  *big.Int // total queued weight in validation (next period), validation's
+	TotalExitingStake  *big.Int // total exiting stake in validation (next period), validation's stake + all delegators stake
+	TotalExitingWeight *big.Int // total exiting weight in validation (next period),
+}
+
+func (v *Validation) Totals(agg *aggregation.Aggregation) *Totals {
+	var exitingVET *big.Int
+	var exitingWeight *big.Int
+
+	// If the validation is due to exit, then all locked VET is considered exiting.
+	if v.Status == StatusActive && v.ExitBlock != nil {
+		exitingVET = big.NewInt(0).Add(v.LockedVET, agg.LockedVET)
+		exitingWeight = v.Weight
+	} else {
+		vExiting := WeightedStake(v.PendingUnlockVET)
+		exitingVET = big.NewInt(0).Add(vExiting.VET(), agg.ExitingVET)
+		exitingWeight = big.NewInt(0).Add(vExiting.Weight(), agg.ExitingWeight)
+	}
+
+	queued := WeightedStake(v.QueuedVET)
+
+	return &Totals{
+		// Delegation totals can be calculated by subtracting validators stakes / weights from the global totals.
+		TotalLockedStake:   new(big.Int).Add(v.LockedVET, agg.LockedVET),
+		TotalLockedWeight:  new(big.Int).Set(v.Weight),
+		TotalQueuedStake:   new(big.Int).Add(queued.VET(), agg.PendingVET),
+		TotalQueuedWeight:  new(big.Int).Add(queued.Weight(), agg.PendingWeight),
+		TotalExitingStake:  exitingVET,
+		TotalExitingWeight: exitingWeight,
+	}
 }
 
 // IsEmpty returns whether the entry can be treated as empty.
