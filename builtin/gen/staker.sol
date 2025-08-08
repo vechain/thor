@@ -42,7 +42,7 @@ contract Staker {
      */
     function addValidation(address validator, uint32 period) public payable stakerNotPaused checkStake(msg.value) {
         require(validator != address(0), "staker: invalid validator");
-        (, , , ,Status status, , , , ,) = StakerNative(address(this)).native_getValidation(validator);
+        (, , , , Status status, , , , , ) = StakerNative(address(this)).native_getValidation(validator);
         require(status == Status.Unknown, "staker: validation exists");
         require(
             StakerNative(address(this)).native_validateStakeChange(validator, msg.value, 0),
@@ -63,9 +63,8 @@ contract Staker {
      * @dev increaseStake adds VET to the current stake of the queued/active validator.
      */
     function increaseStake(address validator) public payable stakerNotPaused checkStake(msg.value) {
-        (address endorsor, , , , Status status, , , , uint32 exitBlock,  ) = StakerNative(address(this)).native_getValidation(
-            validator
-        );
+        (address endorsor, , , , Status status, , , , uint32 exitBlock, ) = StakerNative(address(this))
+            .native_getValidation(validator);
         require(status != Status.Unknown, "staker: validation not found");
         require(endorsor == msg.sender, "staker: endorsor required");
         require(status == Status.Active || status == Status.Queued, "staker: validation not active or queued");
@@ -85,9 +84,8 @@ contract Staker {
      * @dev decreaseStake removes VET from the current stake of an active validator
      */
     function decreaseStake(address validator, uint256 amount) public stakerNotPaused checkStake(amount) {
-        (address endorsor, , , , Status status, , , , uint32 exitBlock, ) = StakerNative(address(this)).native_getValidation(
-            validator
-        );
+        (address endorsor, , , , Status status, , , , uint32 exitBlock, ) = StakerNative(address(this))
+            .native_getValidation(validator);
         require(status != Status.Unknown, "staker: validation not found");
         require(endorsor == msg.sender, "staker: endorsor required");
         require(status == Status.Active || status == Status.Queued, "staker: validation not active or queued");
@@ -124,9 +122,8 @@ contract Staker {
      * @dev signalExit signals the intent to exit a validator position at the end of the staking period.
      */
     function signalExit(address validator) public stakerNotPaused {
-        (address endorsor, , , , Status status, , ,, uint32 exitBlock, ) = StakerNative(address(this)).native_getValidation(
-            validator
-        );
+        (address endorsor, , , , Status status, , , , uint32 exitBlock, ) = StakerNative(address(this))
+            .native_getValidation(validator);
         require(status != Status.Unknown, "staker: validation not found");
         require(status == Status.Active, "staker: validation is not active");
         require(endorsor == msg.sender, "staker: endorsor required");
@@ -214,9 +211,7 @@ contract Staker {
      * @return (startPeriod, endPeriod, isLocked)
      */
     function getDelegationPeriodDetails(uint256 delegationID) public view returns (uint32, uint32) {
-        (, , uint32 startPeriod, uint32 endPeriod, , ) = StakerNative(address(this)).native_getDelegation(
-            delegationID
-        );
+        (, , uint32 startPeriod, uint32 endPeriod, , ) = StakerNative(address(this)).native_getDelegation(delegationID);
         return (startPeriod, endPeriod);
     }
 
@@ -224,9 +219,7 @@ contract Staker {
      * @dev getValidation returns the validation basic. endorsor, stake, weight, queuedStake, status,online of a validator.
      * @return (endorsor, stake, weight)
      */
-    function getValidation(
-        address validator
-    ) public view returns (address, uint256, uint256, uint256, Status, bool) {
+    function getValidation(address validator) public view returns (address, uint256, uint256, uint256, Status, bool) {
         (
             address endorsor,
             uint256 stake,
@@ -247,7 +240,7 @@ contract Staker {
      * @return (period, startBlock, exitBlock)
      */
     function getValidationPeriodDetails(address validator) public view returns (uint32, uint32, uint32, uint32) {
-        (, , ,, , , uint32 period, uint32 startBlock, uint32 exitBlock, uint32 completedPeriods) = StakerNative(
+        (, , , , , , uint32 period, uint32 startBlock, uint32 exitBlock, uint32 completedPeriods) = StakerNative(
             address(this)
         ).native_getValidation(validator);
         return (period, startBlock, exitBlock, completedPeriods);
@@ -292,26 +285,14 @@ contract Staker {
         address validator
     ) public view returns (uint256, uint256, uint256, uint256, uint256, uint256) {
         (
-            uint256 lockedStake,
+            uint256 lockedVET,
             uint256 lockedWeight,
-            uint256 queuedStake,
+            uint256 queuedVET,
             uint256 queuedWeight,
-            uint256 exitingStake,
-            uint256 exitingWeight,
-            string memory error
+            uint256 exitingVET,
+            uint256 exitingWeight
         ) = StakerNative(address(this)).native_getValidationTotals(validator);
-        require(bytes(error).length == 0, error);
-        return (lockedStake, lockedWeight, queuedStake, queuedWeight, exitingStake, exitingWeight);
-    }
-
-    function getValidatorsNum() public view returns (uint256, uint256) {
-        (
-            uint256 leaderGroupSize,
-            uint256 queuedValidators,
-            string memory error
-        ) = StakerNative(address(this)).native_getValidatorsNum();
-        require(bytes(error).length == 0, error);
-        return (leaderGroupSize, queuedValidators);
+        return (lockedVET, lockedWeight, queuedVET, queuedWeight, exitingVET, exitingWeight);
     }
 
     /**
@@ -434,22 +415,15 @@ interface StakerNative {
 
     function native_getDelegatorRewards(address validator, uint32 stakingPeriod) external view returns (uint256);
 
-    function native_getValidationTotals(address validator) external view returns (uint256, uint256, uint256, uint256);
-
     function native_getDelegatorContract() external view returns (address);
 
     function native_getControlSwitches() external view returns (uint256);
 
     function native_getValidationTotals(
         address validator
-    )
-        external
-        view
-        returns (uint256, uint256, uint256, uint256,uint256, uint256, string calldata);
+    ) external view returns (uint256, uint256, uint256, uint256, uint256, uint256);
+
     function native_getValidationNum() external view returns (uint256, uint256);
 
     function native_issuance() external view returns (uint256);
 }
-
-// 40c868d10efeaaf9da6994ca9ea166ec7171bac6
-// f7b15dc5969b84ce5b8a99324fd4490ac8acef96

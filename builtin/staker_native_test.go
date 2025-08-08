@@ -666,9 +666,15 @@ func TestStakerContract_Delegation(t *testing.T) {
 		Caller(delegator).
 		Assert(t)
 
+	// delegation 5 to queued validator4
+	test.Case("addDelegation", validator4, uint8(100)).
+		Value(minStake).
+		Caller(delegator).
+		Assert(t)
+
 	// NOTE: not able to create a test case for validation not found
 
-	test.Case("withdrawDelegation", big.NewInt(5)).
+	test.Case("withdrawDelegation", big.NewInt(10)).
 		Caller(delegator).
 		ShouldRevert("staker: delegation not found or withdrawn").
 		Assert(t)
@@ -686,6 +692,29 @@ func TestStakerContract_Delegation(t *testing.T) {
 	// withdraw delegation4 on queued validator4
 	test.Case("withdrawDelegation", big.NewInt(4)).
 		Caller(delegator).
+		Assert(t)
+
+	// NOTE: not able to create a test case for validation not found
+	test.Case("signalDelegationExit", big.NewInt(10)).
+		Caller(delegator).
+		ShouldRevert("staker: delegation not found or withdrawn").
+		Assert(t)
+
+	// signal exit delegation5 on queued validator4
+	test.Case("signalDelegationExit", big.NewInt(5)).
+		ShouldRevert("staker: delegation is withdrawable").
+		Caller(delegator).
+		Assert(t)
+
+	// signal exit delegation1 on validator1
+	test.Case("signalDelegationExit", big.NewInt(1)).
+		Caller(delegator).
+		Assert(t)
+
+	// signal exit delegation1 again should revert
+	test.Case("signalDelegationExit", big.NewInt(1)).
+		Caller(delegator).
+		ShouldRevert("staker: delegation already signaled exit").
 		Assert(t)
 }
 
@@ -818,6 +847,12 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 		ShouldRevert("staker: staker is paused").
 		Assert(t)
 
+	// signal exit delegation1 on validator1
+	test.Case("signalDelegationExit", big.NewInt(1)).
+		Caller(delegator).
+		ShouldRevert("staker: staker is paused").
+		Assert(t)
+
 	// change switch to pause delegator only
 	builtin.Params.Native(state).Set(thor.KeyStakerSwitches, big.NewInt(0b10))
 
@@ -830,6 +865,12 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 
 	// withdraw delegation2 on exited validator3
 	test.Case("withdrawDelegation", big.NewInt(2)).
+		Caller(delegator).
+		ShouldRevert("staker: delegator is paused").
+		Assert(t)
+
+	// signal exit delegation1 on validator1
+	test.Case("signalDelegationExit", big.NewInt(1)).
 		Caller(delegator).
 		ShouldRevert("staker: delegator is paused").
 		Assert(t)
@@ -869,6 +910,11 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 
 	// withdraw delegation2 on exited validator3
 	test.Case("withdrawDelegation", big.NewInt(2)).
+		Caller(delegator).
+		Assert(t)
+
+	// signal exit delegation1 on validator1
+	test.Case("signalDelegationExit", big.NewInt(1)).
 		Caller(delegator).
 		Assert(t)
 }

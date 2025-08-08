@@ -2260,7 +2260,7 @@ func Test_GetValidatorTotals_ValidatorExiting(t *testing.T) {
 			TotalLockedStake:  big.NewInt(0).Add(vStake.VET(), dStake.VET()),
 			TotalLockedWeight: big.NewInt(0).Add(vStake.Weight(), dStake.Weight()),
 		}).
-		SignalExit(validator.ID, validator.Endorsor).
+		SignalExit(validator.ID).
 		AssertTotals(validator.ID, &validation.Totals{
 			TotalLockedStake:   big.NewInt(0).Add(vStake.VET(), dStake.VET()),
 			TotalLockedWeight:  big.NewInt(0).Add(vStake.Weight(), dStake.Weight()),
