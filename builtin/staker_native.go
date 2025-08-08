@@ -506,9 +506,25 @@ func init() {
 
 			totals, err := Staker.NativeMetered(env.State(), charger).GetValidationTotals(thor.Address(args.Validator))
 			if err != nil {
-				return []any{new(big.Int), new(big.Int), new(big.Int), new(big.Int), fmt.Sprintf("revert: failed to get validators totals: %v", err)}
+				return []any{
+					new(big.Int),
+					new(big.Int),
+					new(big.Int),
+					new(big.Int),
+					new(big.Int),
+					new(big.Int),
+					fmt.Sprintf("revert: failed to get validators totals: %v", err),
+				}
 			}
-			return []any{totals.TotalLockedStake, totals.TotalLockedWeight, totals.DelegationsLockedStake, totals.DelegationsLockedWeight, ""}
+			return []any{
+				totals.TotalLockedStake,
+				totals.TotalLockedWeight,
+				totals.TotalQueuedStake,
+				totals.TotalQueuedWeight,
+				totals.TotalExitingStake,
+				totals.TotalExitingWeight,
+				"",
+			}
 		}},
 		{"native_getValidatorsNum", func(env *xenv.Environment) []any {
 			charger := gascharger.New(env)

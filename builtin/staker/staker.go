@@ -191,12 +191,7 @@ func (s *Staker) GetValidationTotals(validator thor.Address) (*validation.Totals
 	if err != nil {
 		return nil, err
 	}
-	return &validation.Totals{
-		TotalLockedStake:        new(big.Int).Add(val.LockedVET, agg.LockedVET),
-		TotalLockedWeight:       new(big.Int).Set(val.Weight),
-		DelegationsLockedStake:  new(big.Int).Set(agg.LockedVET),
-		DelegationsLockedWeight: new(big.Int).Set(agg.LockedWeight),
-	}, nil
+	return val.Totals(agg), nil
 }
 
 // Next returns the next validator in a linked list.

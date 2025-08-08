@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/builtin/params"
+	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
@@ -2249,44 +2250,88 @@ func TestStaker_MultipleUpdates_CorrectWithdraw(t *testing.T) {
 	assert.Equal(t, depositTotal, withdrawnTotal)
 }
 
-func Test_GetValidatorTotals(t *testing.T) {
+func Test_GetValidatorTotals_ValidatorExiting(t *testing.T) {
 	staker, validators := newDelegationStaker(t)
 
-	stake := big.NewInt(0).Set(MinStake)
+	validator := validators[0]
+
+	vStake := validation.WeightedStake(validators[0].LockedVET)
+	dStake := stakes.NewWeightedStake(MinStake, 255)
+
+	delegationID := new(big.Int)
+	newTestSequence(t, staker).AddDelegation(validator.ID, dStake.VET(), 255, delegationID)
+
+	newTestSequence(t, staker).AssertTotals(validator.ID, &validation.Totals{
+		TotalQueuedWeight: dStake.Weight(),
+		TotalQueuedStake:  dStake.VET(),
+		TotalLockedWeight: vStake.Weight(),
+		TotalLockedStake:  vStake.VET(),
+	})
+
+	newTestSequence(t, staker).
+		Housekeep(validator.Period).
+		AssertTotals(validator.ID, &validation.Totals{
+			TotalLockedStake:  big.NewInt(0).Add(vStake.VET(), dStake.VET()),
+			TotalLockedWeight: big.NewInt(0).Add(vStake.Weight(), dStake.Weight()),
+		}).
+		SignalExit(validator.ID, validator.Endorsor).
+		AssertTotals(validator.ID, &validation.Totals{
+			TotalLockedStake:   big.NewInt(0).Add(vStake.VET(), dStake.VET()),
+			TotalLockedWeight:  big.NewInt(0).Add(vStake.Weight(), dStake.Weight()),
+			TotalExitingStake:  big.NewInt(0).Add(vStake.VET(), dStake.VET()),
+			TotalExitingWeight: big.NewInt(0).Add(vStake.Weight(), dStake.Weight()),
+		})
+}
+
+func Test_GetValidatorTotals_DelegatorExiting_ThenValidator(t *testing.T) {
+	staker, validators := newDelegationStaker(t)
 
 	validator := validators[0]
-	id1, err := staker.AddDelegation(validator.ID, stake, 255)
-	assert.NoError(t, err)
-	assert.NotNil(t, id1)
-	aggregation, err := staker.aggregationService.GetAggregation(validator.ID)
-	assert.NoError(t, err)
-	assert.Equal(t, aggregation.PendingVET, stake)
-	delegation, _, err := staker.GetDelegation(id1)
-	assert.NoError(t, err)
-	assert.Equal(t, stake, delegation.Stake)
-	assert.Equal(t, uint8(255), delegation.Multiplier)
-	assert.Equal(t, uint32(2), delegation.FirstIteration)
-	assert.Nil(t, delegation.LastIteration)
 
-	_, _, err = staker.Housekeep(validator.Period)
-	assert.NoError(t, err)
+	vStake := validation.WeightedStake(validators[0].LockedVET)
+	dStake := stakes.NewWeightedStake(MinStake, 255)
 
-	aggregation, err = staker.aggregationService.GetAggregation(validator.ID)
-	assert.NoError(t, err)
+	delegationID := new(big.Int)
+	newTestSequence(t, staker).AddDelegation(validator.ID, dStake.VET(), 255, delegationID)
 
-	totals, err := staker.GetValidationTotals(validator.ID)
-	assert.NoError(t, err)
+	newTestSequence(t, staker).AssertTotals(validator.ID, &validation.Totals{
+		TotalQueuedWeight: dStake.Weight(),
+		TotalQueuedStake:  dStake.VET(),
+		TotalLockedWeight: vStake.Weight(),
+		TotalLockedStake:  vStake.VET(),
+	})
 
-	fetchedValidator, err := staker.Get(validator.ID)
-	assert.NoError(t, err)
-
-	expectedStake := big.NewInt(0).Set(aggregation.LockedVET)
-	expectedStake.Add(expectedStake, validator.LockedVET)
-
-	assert.Equal(t, expectedStake, totals.TotalLockedStake)
-	assert.Equal(t, fetchedValidator.Weight, totals.TotalLockedWeight)
-	assert.Equal(t, delegation.Stake, totals.DelegationsLockedStake)
-	assert.Equal(t, delegation.WeightedStake().Weight(), totals.DelegationsLockedWeight)
+	newTestSequence(t, staker).
+		Housekeep(validator.Period).
+		AssertTotals(validator.ID, &validation.Totals{
+			TotalLockedStake:  big.NewInt(0).Add(vStake.VET(), dStake.VET()),
+			TotalLockedWeight: big.NewInt(0).Add(vStake.Weight(), dStake.Weight()),
+			TotalQueuedStake:  big.NewInt(0),
+			TotalQueuedWeight: big.NewInt(0),
+		}).
+		SignalDelegationExit(delegationID).
+		AssertTotals(validator.ID, &validation.Totals{
+			TotalLockedStake:   big.NewInt(0).Add(vStake.VET(), dStake.VET()),
+			TotalLockedWeight:  big.NewInt(0).Add(vStake.Weight(), dStake.Weight()),
+			TotalQueuedStake:   big.NewInt(0),
+			TotalQueuedWeight:  big.NewInt(0),
+			TotalExitingStake:  dStake.VET(),
+			TotalExitingWeight: dStake.Weight(),
+		}).
+		SignalExit(validator.ID, validator.Endorsor).
+		AssertTotals(validator.ID, &validation.Totals{
+			TotalLockedStake:   big.NewInt(0).Add(vStake.VET(), dStake.VET()),
+			TotalLockedWeight:  big.NewInt(0).Add(vStake.Weight(), dStake.Weight()),
+			TotalExitingStake:  big.NewInt(0).Add(vStake.VET(), dStake.VET()),
+			TotalExitingWeight: big.NewInt(0).Add(vStake.Weight(), dStake.Weight()),
+		}).
+		Housekeep(validator.Period*2).
+		AssertTotals(validator.ID, &validation.Totals{
+			TotalLockedStake:   big.NewInt(0),
+			TotalLockedWeight:  big.NewInt(0),
+			TotalExitingStake:  big.NewInt(0),
+			TotalExitingWeight: big.NewInt(0),
+		})
 }
 
 func Test_Validator_Decrease_Exit_Withdraw(t *testing.T) {

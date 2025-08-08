@@ -303,26 +303,32 @@ func (s *Staker) GetDelegationPeriodDetails(delegationID *big.Int) (*DelegationP
 }
 
 type ValidationTotals struct {
-	TotalLockedStake        *big.Int
-	TotalLockedWeight       *big.Int
-	DelegationsLockedStake  *big.Int
-	DelegationsLockedWeight *big.Int
+	TotalLockedStake   *big.Int
+	TotalLockedWeight  *big.Int
+	TotalQueuedStake   *big.Int
+	TotalQueuedWeight  *big.Int
+	TotalExitingStake  *big.Int
+	TotalExitingWeight *big.Int
 }
 
 func (s *Staker) GetValidationTotals(node thor.Address) (*ValidationTotals, error) {
-	out := make([]any, 4)
+	out := make([]any, 6)
 	out[0] = new(*big.Int)
 	out[1] = new(*big.Int)
 	out[2] = new(*big.Int)
 	out[3] = new(*big.Int)
+	out[4] = new(*big.Int)
+	out[5] = new(*big.Int)
 	if err := s.contract.Method("getValidationTotals", node).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 	validationTotals := &ValidationTotals{
-		TotalLockedStake:        *(out[0].(**big.Int)),
-		TotalLockedWeight:       *(out[1].(**big.Int)),
-		DelegationsLockedStake:  *(out[2].(**big.Int)),
-		DelegationsLockedWeight: *(out[3].(**big.Int)),
+		TotalLockedStake:   *(out[0].(**big.Int)),
+		TotalLockedWeight:  *(out[1].(**big.Int)),
+		TotalQueuedStake:   *(out[2].(**big.Int)),
+		TotalQueuedWeight:  *(out[3].(**big.Int)),
+		TotalExitingStake:  *(out[4].(**big.Int)),
+		TotalExitingWeight: *(out[5].(**big.Int)),
 	}
 
 	return validationTotals, nil

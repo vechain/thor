@@ -332,16 +332,18 @@ contract Staker {
 
     function getValidationTotals(
         address validator
-    ) public view returns (uint256, uint256, uint256, uint256) {
+    ) public view returns (uint256, uint256, uint256, uint256, uint256, uint256) {
         (
             uint256 lockedStake,
             uint256 lockedWeight,
-            uint256 delegatorsStake,
-            uint256 delegatorsWeight,
+            uint256 queuedStake,
+            uint256 queuedWeight,
+            uint256 exitingStake,
+            uint256 exitingWeight,
             string memory error
         ) = StakerNative(address(this)).native_getValidationTotals(validator);
         require(bytes(error).length == 0, error);
-        return (lockedStake, lockedWeight, delegatorsStake, delegatorsWeight);
+        return (lockedStake, lockedWeight, queuedStake, queuedWeight, exitingStake, exitingWeight);
     }
 
     function getValidatorsNum() public view returns (uint256, uint256) {
@@ -537,7 +539,7 @@ interface StakerNative {
     )
         external
         view
-        returns (uint256, uint256, uint256, uint256, string calldata);
+        returns (uint256, uint256, uint256, uint256,uint256, uint256, string calldata);
 
     function native_getValidatorsNum()
         external

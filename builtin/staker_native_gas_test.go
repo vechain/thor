@@ -22,8 +22,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/vechain/thor/v2/state"
-
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -33,6 +31,7 @@ import (
 	"github.com/vechain/thor/v2/builtin/gascharger"
 	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
