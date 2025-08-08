@@ -18,12 +18,9 @@ import (
 )
 
 type Service struct {
-	leaderGroup         *linkedlist.LinkedList
-	validatorQueue      *linkedlist.LinkedList
-	lowStakingPeriod    uint32
-	mediumStakingPeriod uint32
-	highStakingPeriod   uint32
-	cooldownPeriod      uint32
+	leaderGroup    *linkedlist.LinkedList
+	validatorQueue *linkedlist.LinkedList
+	cooldownPeriod uint32
 
 	minStake    *big.Int
 	maxStake    *big.Int
@@ -46,9 +43,6 @@ var (
 func New(sctx *solidity.Context,
 	cooldownPeriod uint32,
 	epochLength uint32,
-	lowStakingPeriod uint32,
-	mediumStakingPeriod uint32,
-	highStakingPeriod uint32,
 	minStake *big.Int,
 	maxStake *big.Int,
 ) *Service {
@@ -57,11 +51,8 @@ func New(sctx *solidity.Context,
 	return &Service{
 		repo: repo,
 
-		leaderGroup:         linkedlist.NewLinkedList(sctx, slotActiveHead, slotActiveTail, slotActiveGroupSize),
-		validatorQueue:      linkedlist.NewLinkedList(sctx, slotQueuedHead, slotQueuedTail, slotQueuedGroupSize),
-		lowStakingPeriod:    lowStakingPeriod,
-		mediumStakingPeriod: mediumStakingPeriod,
-		highStakingPeriod:   highStakingPeriod,
+		leaderGroup:    linkedlist.NewLinkedList(sctx, slotActiveHead, slotActiveTail, slotActiveGroupSize),
+		validatorQueue: linkedlist.NewLinkedList(sctx, slotQueuedHead, slotQueuedTail, slotQueuedGroupSize),
 
 		cooldownPeriod: cooldownPeriod,
 		epochLength:    epochLength,
@@ -168,10 +159,6 @@ func (s *Service) Add(
 	period uint32,
 	stake *big.Int,
 ) error {
-	if period != s.lowStakingPeriod && period != s.mediumStakingPeriod && period != s.highStakingPeriod {
-		return errors.New("period is out of boundaries")
-	}
-
 	entry := &Validation{
 		Endorsor:           endorsor,
 		Period:             period,

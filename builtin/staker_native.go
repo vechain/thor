@@ -157,23 +157,26 @@ func init() {
 					panic(err)
 				}
 				if !exists {
-					return []any{"validator is not present in the Authority"}
+					return []any{"staker:validator is not present in the authority"}
 				}
 				if thor.Address(args.Endorsor) != endorsor {
-					return []any{"invalid endorsor"} // TODO: check if this is correct
+					return []any{"staker: invalid endorsor"} // TODO: check if this is correct
 				}
 			}
 
-			err = Staker.NativeMetered(env.State(), charger).
+			ok, err := Staker.NativeMetered(env.State(), charger).
 				AddValidation(
 					thor.Address(args.Validator),
 					thor.Address(args.Endorsor),
 					args.Period,
 					args.Stake,
 				)
-			// cannot panic here, period check is done in the service
 			if err != nil {
-				return []any{err}
+				panic(err)
+			}
+
+			if !ok {
+				return []any{"staker: invalid period"}
 			}
 
 			return []any{""}

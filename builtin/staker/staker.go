@@ -70,9 +70,6 @@ func New(addr thor.Address, state *state.State, params *params.Params, charger *
 			sctx,
 			CooldownPeriod.Get(),
 			EpochLength.Get(),
-			LowStakingPeriod.Get(),
-			MediumStakingPeriod.Get(),
-			HighStakingPeriod.Get(),
 			MinStake,
 			MaxStake,
 		),
@@ -223,27 +220,31 @@ func (s *Staker) AddValidation(
 	endorsor thor.Address,
 	period uint32,
 	stake *big.Int,
-) error {
+) (bool, error) {
 	logger.Debug("adding validator", "validator", validator,
 		"endorsor", endorsor,
 		"period", period,
 		"stake", new(big.Int).Div(stake, big.NewInt(1e18)),
 	)
 
+	if period != LowStakingPeriod.Get() && period != MediumStakingPeriod.Get() && period != HighStakingPeriod.Get() {
+		return false, nil
+	}
+
 	// create a new validation
 	if err := s.validationService.Add(validator, endorsor, period, stake); err != nil {
 		logger.Info("add validator failed", "validator", validator, "error", err)
-		return err
+		return false, err
 	}
 
 	// update global totals
 	err := s.globalStatsService.AddQueued(validation.WeightedStake(stake))
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	logger.Info("added validator", "validator", validator)
-	return nil
+	return true, nil
 }
 
 func (s *Staker) SignalExit(validator thor.Address) error {

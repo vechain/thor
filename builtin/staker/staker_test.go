@@ -99,7 +99,7 @@ func (ts *TestSequence) AddValidation(
 	period uint32,
 	stake *big.Int,
 ) *TestSequence {
-	err := ts.staker.AddValidation(endorsor, master, period, stake)
+	_, err := ts.staker.AddValidation(endorsor, master, period, stake)
 	assert.NoError(ts.t, err, "failed to add validator %s with endorsor %s", master.String(), endorsor.String())
 	return ts
 }

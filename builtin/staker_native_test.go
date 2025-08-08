@@ -254,15 +254,15 @@ func TestStakerContract_Validation(t *testing.T) {
 		builtin.Params.Native(state).Set(thor.KeyDelegatorContractAddress, new(big.Int).SetBytes(delegator.Bytes()))
 
 		stakerNative := builtin.Staker.Native(state)
-		err := stakerNative.AddValidation(validator1, endorsor, staker.LowStakingPeriod.Get(), minStake)
+		_, err := stakerNative.AddValidation(validator1, endorsor, staker.LowStakingPeriod.Get(), minStake)
 		if err != nil {
 			return err
 		}
-		err = stakerNative.AddValidation(validator5, endorsor, staker.LowStakingPeriod.Get(), minStake)
+		_, err = stakerNative.AddValidation(validator5, endorsor, staker.LowStakingPeriod.Get(), minStake)
 		if err != nil {
 			return err
 		}
-		err = stakerNative.AddValidation(validator6, endorsor, staker.LowStakingPeriod.Get(), minStake)
+		_, err = stakerNative.AddValidation(validator6, endorsor, staker.LowStakingPeriod.Get(), minStake)
 		if err != nil {
 			return err
 		}
@@ -290,12 +290,17 @@ func TestStakerContract_Validation(t *testing.T) {
 
 	// withdraw validator3 to make it in status exit
 	stakerNative := builtin.Staker.Native(state)
-	assert.NoError(t, stakerNative.AddValidation(validator3, endorsor, staker.LowStakingPeriod.Get(), minStake))
+	ok, err := stakerNative.AddValidation(validator3, endorsor, staker.LowStakingPeriod.Get(), minStake)
+	assert.NoError(t, err)
+	assert.True(t, ok)
+
 	_, err = stakerNative.WithdrawStake(validator3, 1)
 	assert.NoError(t, err)
 
 	// queued validator4
-	assert.NoError(t, stakerNative.AddValidation(validator4, endorsor, staker.LowStakingPeriod.Get(), minStake))
+	ok, err = stakerNative.AddValidation(validator4, endorsor, staker.LowStakingPeriod.Get(), minStake)
+	assert.NoError(t, err)
+	assert.True(t, ok)
 
 	// signaled exit validator5
 	assert.NoError(t, stakerNative.SignalExit(validator5))
@@ -349,6 +354,12 @@ func TestStakerContract_Validation(t *testing.T) {
 		Value(minStake).
 		ShouldRevert("staker: validation exists").
 		Caller(endorsor).
+		Assert(t)
+
+	test.Case("addValidation", master, uint32(1)).
+		Value(minStake).
+		Caller(endorsor).
+		ShouldRevert("staker: invalid period").
 		Assert(t)
 
 	test.Case("addValidation", master, staker.LowStakingPeriod.Get()).
@@ -525,7 +536,7 @@ func TestStakerContract_Delegation(t *testing.T) {
 		builtin.Params.Native(state).Set(thor.KeyDelegatorContractAddress, new(big.Int).SetBytes(delegator.Bytes()))
 
 		stakerNative := builtin.Staker.Native(state)
-		err := stakerNative.AddValidation(validator1, endorsor, staker.LowStakingPeriod.Get(), minStake)
+		_, err := stakerNative.AddValidation(validator1, endorsor, staker.LowStakingPeriod.Get(), minStake)
 		if err != nil {
 			return err
 		}
@@ -536,11 +547,11 @@ func TestStakerContract_Delegation(t *testing.T) {
 			return err
 		}
 
-		err = stakerNative.AddValidation(validator5, endorsor, staker.LowStakingPeriod.Get(), minStake)
+		_, err = stakerNative.AddValidation(validator5, endorsor, staker.LowStakingPeriod.Get(), minStake)
 		if err != nil {
 			return err
 		}
-		err = stakerNative.AddValidation(validator6, endorsor, staker.LowStakingPeriod.Get(), minStake)
+		_, err = stakerNative.AddValidation(validator6, endorsor, staker.LowStakingPeriod.Get(), minStake)
 		if err != nil {
 			return err
 		}
@@ -568,7 +579,9 @@ func TestStakerContract_Delegation(t *testing.T) {
 
 	// withdraw validator3 to make it in status exit
 	stakerNative := builtin.Staker.Native(state)
-	assert.NoError(t, stakerNative.AddValidation(validator3, endorsor, staker.LowStakingPeriod.Get(), minStake))
+	ok, err := stakerNative.AddValidation(validator3, endorsor, staker.LowStakingPeriod.Get(), minStake)
+	assert.NoError(t, err)
+	assert.True(t, ok)
 
 	// add delegation2 to queued validator3
 	_, err = stakerNative.AddDelegation(validator3, minStake, 100)
@@ -578,7 +591,9 @@ func TestStakerContract_Delegation(t *testing.T) {
 	assert.NoError(t, err)
 
 	// queued validator4
-	assert.NoError(t, stakerNative.AddValidation(validator4, endorsor, staker.LowStakingPeriod.Get(), minStake))
+	ok, err = stakerNative.AddValidation(validator4, endorsor, staker.LowStakingPeriod.Get(), minStake)
+	assert.NoError(t, err)
+	assert.True(t, ok)
 
 	// signaled exit validator5
 	assert.NoError(t, stakerNative.SignalExit(validator5))
@@ -702,7 +717,7 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 		builtin.Params.Native(state).Set(thor.KeyStakerSwitches, big.NewInt(0b11))
 
 		stakerNative := builtin.Staker.Native(state)
-		err := stakerNative.AddValidation(validator1, endorsor, staker.LowStakingPeriod.Get(), minStake)
+		_, err := stakerNative.AddValidation(validator1, endorsor, staker.LowStakingPeriod.Get(), minStake)
 		if err != nil {
 			return err
 		}
@@ -737,7 +752,9 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 
 	// withdraw validator3 to make it in status exit
 	stakerNative := builtin.Staker.Native(state)
-	assert.NoError(t, stakerNative.AddValidation(validator3, endorsor, staker.LowStakingPeriod.Get(), minStake))
+	ok, err := stakerNative.AddValidation(validator3, endorsor, staker.LowStakingPeriod.Get(), minStake)
+	assert.NoError(t, err)
+	assert.True(t, ok)
 
 	// add delegation2 to queued validator3
 	_, err = stakerNative.AddDelegation(validator3, minStake, 100)
