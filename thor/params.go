@@ -59,9 +59,9 @@ var (
 	KeyLegacyTxBaseGasPrice      = BytesToBytes32([]byte("base-gas-price")) // the legacy tx default gas price
 	KeyProposerEndorsement       = BytesToBytes32([]byte("proposer-endorsement"))
 	KeyMaxBlockProposers         = BytesToBytes32([]byte("max-block-proposers"))
-	KeyStargateContractAddress   = BytesToBytes32([]byte("stargate-contract-address"))
-	KeyCurveFactor               = BytesToBytes32([]byte("curve-factor"))      // curve factor to define VTHO issuance after PoS
-	KeyStargateSwitches          = BytesToBytes32([]byte("stargate-switches")) // Stargate switches to control the pause of staker and stargate
+	KeyCurveFactor               = BytesToBytes32([]byte("curve-factor")) // curve factor to define VTHO issuance after PoS
+	KeyDelegatorContractAddress  = BytesToBytes32([]byte("delegator-contract-address"))
+	KeyStakerSwitches            = BytesToBytes32([]byte("staker-contract-switches")) // switches to control the pause of staker or stargate
 
 	InitialRewardRatio               = big.NewInt(3e17) // 30%
 	InitialValidatorRewardPercentage = 30               // 30%
