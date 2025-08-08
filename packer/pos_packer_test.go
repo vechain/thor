@@ -25,7 +25,6 @@ import (
 )
 
 func TestFlow_Schedule_POS(t *testing.T) {
-
 	staker.LowStakingPeriod = solidity.NewConfigVariable("staker-low-staking-period", 360*24*7)
 	staker.MediumStakingPeriod = solidity.NewConfigVariable("staker-medium-staking-period", 360*24*15)
 	staker.HighStakingPeriod = solidity.NewConfigVariable("staker-high-staking-period", 360*24*30)
