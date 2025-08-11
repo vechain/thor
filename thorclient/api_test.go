@@ -38,7 +38,7 @@ var preMintedTx01 *tx.Transaction
 func initTestNode(t *testing.T) testnode.Node {
 	forks := testchain.DefaultForkConfig
 	forks.GALACTICA = 1
-	thorChain, err := testchain.NewWithFork(&forks)
+	thorChain, err := testchain.NewWithFork(&forks, 180)
 	require.NoError(t, err)
 
 	// mint some transactions to be used in the endpoints

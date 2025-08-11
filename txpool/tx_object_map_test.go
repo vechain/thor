@@ -151,7 +151,7 @@ func TestLimitByDelegator(t *testing.T) {
 }
 
 func TestPendingCost(t *testing.T) {
-	tchain, err := testchain.NewWithFork(&thor.SoloFork)
+	tchain, err := testchain.NewWithFork(&thor.SoloFork, 180)
 	assert.Nil(t, err)
 
 	repo := tchain.Repo()

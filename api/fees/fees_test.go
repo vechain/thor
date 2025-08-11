@@ -130,7 +130,7 @@ func TestFeeHistoryHugeBlockCountClamped(t *testing.T) {
 func initFeesServer(t *testing.T, backtraceLimit int, fixedCacheSize int, numberOfBlocks int) (*httptest.Server, *chain.Chain) {
 	forkConfig := thor.NoFork
 	forkConfig.GALACTICA = 1
-	thorChain, err := testchain.NewWithFork(&forkConfig)
+	thorChain, err := testchain.NewWithFork(&forkConfig, 180)
 	require.NoError(t, err)
 
 	router := mux.NewRouter()

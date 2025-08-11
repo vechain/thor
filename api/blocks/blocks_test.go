@@ -235,7 +235,7 @@ func initBlockServer(t *testing.T) {
 		HAYABUSA:    math.MaxUint32,
 		HAYABUSA_TP: math.MaxUint32,
 	}
-	thorChain, err := testchain.NewWithFork(&forks)
+	thorChain, err := testchain.NewWithFork(&forks, 180)
 	require.NoError(t, err)
 
 	addr := thor.BytesToAddress([]byte("to"))
