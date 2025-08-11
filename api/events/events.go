@@ -8,7 +8,6 @@ package events
 import (
 	"context"
 	"fmt"
-	"math"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -57,14 +56,11 @@ func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
 	if err := restutil.ParseJSON(req.Body, &filter); err != nil {
 		return restutil.BadRequest(errors.WithMessage(err, "body"))
 	}
-	if filter.Options != nil && filter.Options.Limit > e.limit {
-		return restutil.Forbidden(fmt.Errorf("options.limit exceeds the maximum allowed value of %d", e.limit))
+	if err := filter.Options.Validate(e.limit); err != nil {
+		return restutil.Forbidden(err)
 	}
-	if filter.Options != nil && filter.Options.Offset > math.MaxInt64 {
-		return restutil.BadRequest(fmt.Errorf("options.offset exceeds the maximum allowed value of %d", math.MaxInt64))
-	}
-	if filter.Range != nil && filter.Range.From != nil && filter.Range.To != nil && *filter.Range.From > *filter.Range.To {
-		return restutil.BadRequest(fmt.Errorf("filter.Range.To must be greater than or equal to filter.Range.From"))
+	if err := filter.Range.Validate(); err != nil {
+		return restutil.BadRequest(err)
 	}
 	// reject null element in CriteriaSet, {} will be unmarshaled to default value and will be accepted/handled by the filter engine
 	for i, criterion := range filter.CriteriaSet {
@@ -73,13 +69,13 @@ func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
 		}
 	}
 	if filter.Options == nil {
-		// if filter.Options is nil, set to the default limit +1
+		filter.Options = &api.Options{}
+	}
+	if filter.Options.Limit == nil {
+		// if filter.Options.Limit is nil, set to the default limit +1
 		// to detect whether there are more logs than the default limit
-		filter.Options = &api.Options{
-			Offset:         0,
-			Limit:          e.limit + 1,
-			IncludeIndexes: false,
-		}
+		limit := e.limit + 1
+		filter.Options.Limit = &limit
 	}
 
 	fes, err := e.filter(req.Context(), &filter)
