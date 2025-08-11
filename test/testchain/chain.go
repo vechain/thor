@@ -100,7 +100,12 @@ func NewIntegrationTestChain(config genesis.DevConfig) (*Chain, error) {
 	}
 
 	// Initialize the genesis and retrieve the genesis block
-	gene := genesis.NewDevnetWithConfig(config)
+	var gene *genesis.Genesis
+	if config.ForkConfig.HAYABUSA == 0 {
+		gene = genesis.NewHayabusaDevnet(config.ForkConfig)
+	} else {
+		gene = genesis.NewDevnetWithConfig(config)
+	}
 	return NewIntegrationTestChainWithGenesis(gene, config.ForkConfig)
 }
 

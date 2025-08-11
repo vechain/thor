@@ -76,6 +76,7 @@ func newStaker(t *testing.T, amount int, maxValidators int64, initialise bool) (
 	staker := New(thor.BytesToAddress([]byte("stkr")), st, param, nil)
 	totalStake := big.NewInt(0)
 	if initialise {
+		st.SetStorage(thor.BytesToAddress([]byte("Staker")), thor.BytesToBytes32([]byte("epoch-length")), thor.BytesToBytes32(big.NewInt(1).Bytes()))
 		for _, key := range keys {
 			stake := RandomStake()
 			totalStake = totalStake.Add(totalStake, stake)

@@ -15,6 +15,9 @@ import (
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/builtin/params"
+	"github.com/vechain/thor/v2/builtin/solidity"
+	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/packer"
@@ -38,7 +41,7 @@ func TestFinalizedPos(t *testing.T) {
 		HAYABUSA_TP: 1,
 	}
 
-	testBFT, err := newTestBftPos(forkCfg)
+	testBFT, err := newTestBftPos(t, forkCfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +108,7 @@ func TestAcceptsPos(t *testing.T) {
 		HAYABUSA_TP: 1,
 	}
 
-	testBFT, err := newTestBftPos(forkCfg)
+	testBFT, err := newTestBftPos(t, forkCfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +150,7 @@ func TestGetVotePos(t *testing.T) {
 	}{
 		{
 			"early stage, vote WIT", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				testBFT, err := newTestBftPos(forkCfg)
+				testBFT, err := newTestBftPos(t, forkCfg)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -160,7 +163,7 @@ func TestGetVotePos(t *testing.T) {
 			},
 		}, {
 			"never justified, vote WIT", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				testBFT, err := newTestBftPos(forkCfg)
+				testBFT, err := newTestBftPos(t, forkCfg)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -175,7 +178,7 @@ func TestGetVotePos(t *testing.T) {
 			},
 		}, {
 			"never voted other checkpoint, vote COM", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				testBFT, err := newTestBftPos(forkCfg)
+				testBFT, err := newTestBftPos(t, forkCfg)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -190,7 +193,7 @@ func TestGetVotePos(t *testing.T) {
 			},
 		}, {
 			"voted other checkpoint but not conflict with recent justified, vote COM", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				testBFT, err := newTestBftPos(forkCfg)
+				testBFT, err := newTestBftPos(t, forkCfg)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -236,7 +239,7 @@ func TestGetVotePos(t *testing.T) {
 			},
 		}, {
 			"voted another non-justified checkpoint,conflict with most recent justified checkpoint, vote WIT", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				testBFT, err := newTestBftPos(forkCfg)
+				testBFT, err := newTestBftPos(t, forkCfg)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -299,7 +302,7 @@ func TestGetVotePos(t *testing.T) {
 			},
 		}, {
 			"voted another justified checkpoint,conflict with most recent justified checkpoint, vote WIT", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				testBFT, err := newTestBftPos(forkCfg)
+				testBFT, err := newTestBftPos(t, forkCfg)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -345,7 +348,7 @@ func TestGetVotePos(t *testing.T) {
 			},
 		}, {
 			"test findCheckpointByQuality edge case, should not fail", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				testBFT, err := newTestBftPos(forkCfg)
+				testBFT, err := newTestBftPos(t, forkCfg)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -380,7 +383,7 @@ func TestJustifierPos(t *testing.T) {
 	}{
 		{
 			"newJustifier", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				testBft, err := newTestBftPos(forkCfg)
+				testBft, err := newTestBftPos(t, forkCfg)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -407,7 +410,7 @@ func TestJustifierPos(t *testing.T) {
 			"fork in the middle of checkpoint", func(t *testing.T, forkCfg *thor.ForkConfig) {
 				fc := *forkCfg
 				fc.VIP214 = thor.CheckpointInterval / 2
-				testBft, err := newTestBftPos(&fc)
+				testBft, err := newTestBftPos(t, &fc)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -423,7 +426,7 @@ func TestJustifierPos(t *testing.T) {
 			"the second bft round", func(t *testing.T, forkCfg *thor.ForkConfig) {
 				fc := *forkCfg
 				fc.VIP214 = thor.CheckpointInterval / 2
-				testBft, err := newTestBftPos(&fc)
+				testBft, err := newTestBftPos(t, &fc)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -447,7 +450,7 @@ func TestJustifierPos(t *testing.T) {
 			"add votes: commits", func(t *testing.T, forkCfg *thor.ForkConfig) {
 				fc := *forkCfg
 				fc.VIP214 = thor.CheckpointInterval / 2
-				testBft, err := newTestBftPos(&fc)
+				testBft, err := newTestBftPos(t, &fc)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -481,7 +484,7 @@ func TestJustifierPos(t *testing.T) {
 			"add votes: justifies", func(t *testing.T, forkCfg *thor.ForkConfig) {
 				fc := *forkCfg
 				fc.VIP214 = thor.CheckpointInterval / 2
-				testBft, err := newTestBftPos(&fc)
+				testBft, err := newTestBftPos(t, &fc)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -507,7 +510,7 @@ func TestJustifierPos(t *testing.T) {
 			"add votes: one votes WIT then changes to COM", func(t *testing.T, forkCfg *thor.ForkConfig) {
 				fc := *forkCfg
 				fc.VIP214 = thor.CheckpointInterval / 2
-				testBft, err := newTestBftPos(&fc)
+				testBft, err := newTestBftPos(t, &fc)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -564,7 +567,7 @@ func TestJustifierPos(t *testing.T) {
 			},
 		}, {
 			"vote both WIT and COM in one round", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				testBft, err := newTestBftPos(forkCfg)
+				testBft, err := newTestBftPos(t, forkCfg)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -638,7 +641,7 @@ func TestJustifiedPos(t *testing.T) {
 	}{
 		{
 			"first several rounds, never justified", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				testBFT, err := newTestBftPos(forkCfg)
+				testBFT, err := newTestBftPos(t, forkCfg)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -656,7 +659,7 @@ func TestJustifiedPos(t *testing.T) {
 			},
 		}, {
 			"first several rounds, get justified", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				testBFT, err := newTestBftPos(forkCfg)
+				testBFT, err := newTestBftPos(t, forkCfg)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -687,7 +690,7 @@ func TestJustifiedPos(t *testing.T) {
 			},
 		}, {
 			"first three not justified rounds, then justified", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				testBFT, err := newTestBftPos(forkCfg)
+				testBFT, err := newTestBftPos(t, forkCfg)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -711,7 +714,7 @@ func TestJustifiedPos(t *testing.T) {
 			},
 		}, {
 			"get finalized, then justified", func(t *testing.T, forkCfg *thor.ForkConfig) {
-				testBFT, err := newTestBftPos(forkCfg)
+				testBFT, err := newTestBftPos(t, forkCfg)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -743,7 +746,7 @@ func TestJustifiedPos(t *testing.T) {
 		}, {
 			"get finalized, not justified, then justified", func(t *testing.T, forkCfg *thor.ForkConfig) {
 				type tJustified = justified
-				testBFT, err := newTestBftPos(forkCfg)
+				testBFT, err := newTestBftPos(t, forkCfg)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -775,7 +778,7 @@ func TestJustifiedPos(t *testing.T) {
 				fc := *forkCfg
 				fc.FINALITY = thor.CheckpointInterval
 
-				testBFT, err := newTestBftPos(&fc)
+				testBFT, err := newTestBftPos(t, &fc)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -819,11 +822,30 @@ func TestJustifiedPos(t *testing.T) {
 	}
 }
 
-func newTestBftPos(forkCfg *thor.ForkConfig) (*TestBFT, error) {
+func clearStakerSingletons() {
+	staker.LowStakingPeriod = solidity.NewConfigVariable("staker-low-staking-period", 360*24*7)
+	staker.MediumStakingPeriod = solidity.NewConfigVariable("staker-medium-staking-period", 360*24*15)
+	staker.HighStakingPeriod = solidity.NewConfigVariable("staker-high-staking-period", 360*24*30)
+	staker.CooldownPeriod = solidity.NewConfigVariable("cooldown-period", 8640)
+	staker.EpochLength = solidity.NewConfigVariable("epoch-length", 180)
+}
+
+func newTestBftPos(t assert.TestingT, forkCfg *thor.ForkConfig) (*TestBFT, error) {
 	testBFT, err := newTestBft(forkCfg)
 	if err != nil {
 		return nil, err
 	}
+
+	clearStakerSingletons()
+
+	root := testBFT.repo.BestBlockSummary().Root()
+	state := testBFT.stater.NewState(root)
+	state.SetCode(builtin.Staker.Address, []byte{0x60})
+	state.SetStorage(builtin.Staker.Address, staker.EpochLength.Slot(), thor.BytesToBytes32(big.NewInt(1).Bytes()))
+	param := params.New(thor.BytesToAddress([]byte("params")), state)
+	staker.New(builtin.Staker.Address, state, param, nil)
+	err = builtin.Params.Native(state).Set(thor.KeyMaxBlockProposers, big.NewInt(1))
+	assert.NoError(t, err)
 
 	if err = testBFT.fastForward(int(forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP)); err != nil {
 		return nil, err
