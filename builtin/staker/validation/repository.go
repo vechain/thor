@@ -9,7 +9,6 @@ import (
 	"math/big"
 
 	"github.com/pkg/errors"
-
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -21,17 +20,17 @@ var (
 )
 
 type Repository struct {
-	validations *solidity.Mapping[thor.Address, Validation]
-	rewards     *solidity.Mapping[thor.Bytes32, *big.Int] // stores rewards per validator staking period
+	validations *solidity.ComplexMapping[thor.Address, *Validation]
+	rewards     *solidity.SimpleMapping[thor.Bytes32, *big.Int] // stores rewards per validator staking period
 
-	exits *solidity.Mapping[*big.Int, thor.Address] // exit block -> validator ID
+	exits *solidity.SimpleMapping[*big.Int, thor.Address] // exit block -> validator ID
 }
 
 func NewRepository(sctx *solidity.Context) *Repository {
 	return &Repository{
-		validations: solidity.NewMapping[thor.Address, Validation](sctx, slotValidations),
-		rewards:     solidity.NewMapping[thor.Bytes32, *big.Int](sctx, slotRewards),
-		exits:       solidity.NewMapping[*big.Int, thor.Address](sctx, slotExitEpochs),
+		validations: solidity.NewComplexMapping[thor.Address, *Validation](sctx, solidity.NumToSlot(13)),
+		rewards:     solidity.NewSimpleMapping[thor.Bytes32, *big.Int](sctx, solidity.NumToSlot(18)),
+		exits:       solidity.NewSimpleMapping[*big.Int, thor.Address](sctx, solidity.NumToSlot(14)),
 	}
 }
 
@@ -40,13 +39,11 @@ func (r *Repository) GetValidation(validator thor.Address) (*Validation, error) 
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get validator")
 	}
-	return &v, nil
+	return v, nil
 }
 
-func (r *Repository) SetValidation(validator thor.Address, entry *Validation, isNew bool) error {
-	if err := r.validations.Set(validator, *entry, isNew); err != nil {
-		return errors.Wrap(err, "failed to set validator")
-	}
+func (r *Repository) SetValidation(validator thor.Address, entry *Validation) error {
+	r.validations.Set(validator, entry)
 	return nil
 }
 

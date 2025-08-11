@@ -211,11 +211,12 @@ func NewHayabusaDevnet(forkConfig *thor.ForkConfig) *Genesis {
 				return err
 			}
 
-			// adding a soloBlockSigner as a validator and manage balances manually
-			// NOTE: does not manage energy, as it is not a transaction
-			if err := builtin.Staker.Native(state).AddValidation(soloBlockSigner.Address, soloBlockSigner.Address, staker.HighStakingPeriod.Get(), staker.MinStake); err != nil {
-				return err
-			}
+			// TODO: Fix
+			//// adding a soloBlockSigner as a validator and manage balances manually
+			//// NOTE: does not manage energy, as it is not a transaction
+			//if err := builtin.Staker.Native(state).AddValidation(soloBlockSigner.Address, soloBlockSigner.Address, staker.HighStakingPeriod.Get(), staker.MinStake); err != nil {
+			//	return err
+			//}
 			currentBalance, err := state.GetBalance(soloBlockSigner.Address)
 			if err != nil {
 				return err

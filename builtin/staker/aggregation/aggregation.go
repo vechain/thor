@@ -6,24 +6,63 @@
 package aggregation
 
 import (
+	"errors"
 	"math/big"
 
 	"github.com/vechain/thor/v2/builtin/staker/delta"
+	"github.com/vechain/thor/v2/thor"
 )
+
+const SlotsUsed = 6 // Number of slots used in the Aggregation struct
 
 // Aggregation represents the total amount of VET locked for a given validation's delegations.
 type Aggregation struct {
 	// All locked vet for a validations delegations.
+	// ---- Slot 0 ----
 	LockedVET    *big.Int // VET locked this period (autoRenew == true)
+	// ---- Slot 1 ----
 	LockedWeight *big.Int // Weight including multipliers
 
 	// Pending delegations, does NOT contribute to current TVL, it will increase the LockedVET in the next period and reset to 0
+	// ---- Slot 2 ----
 	PendingVET    *big.Int // VET that is pending to be locked in the next period (autoRenew == false)
+	// ---- Slot 3 ----
 	PendingWeight *big.Int // Weight including multipliers
 
 	// Exiting delegations, does NOT contribute to current TVL, it will decrease the LockedVET in the next period and reset to 0
+	// ---- Slot 4 ----
 	ExitingVET    *big.Int // VET that is exiting the next period
+	// ---- Slot 5 ----
 	ExitingWeight *big.Int // Weight including multipliers
+}
+
+func (a *Aggregation) DecodeSlots(slots []thor.Bytes32) error {
+	if len(slots) != SlotsUsed {
+		return errors.New("invalid number of slots for aggregation")
+	}
+	a.LockedVET = new(big.Int).SetBytes(slots[0][:])
+	a.LockedWeight = new(big.Int).SetBytes(slots[1][:])
+	a.PendingVET = new(big.Int).SetBytes(slots[2][:])
+	a.PendingWeight = new(big.Int).SetBytes(slots[3][:])
+	a.ExitingVET = new(big.Int).SetBytes(slots[4][:])
+	a.ExitingWeight = new(big.Int).SetBytes(slots[5][:])
+	return nil
+}
+
+func (a *Aggregation) EncodeSlots() []thor.Bytes32 {
+	slots := make([]thor.Bytes32, SlotsUsed)
+	slots[0] = thor.BytesToBytes32(a.LockedVET.Bytes())
+	slots[1] = thor.BytesToBytes32(a.LockedWeight.Bytes())
+	slots[2] = thor.BytesToBytes32(a.PendingVET.Bytes())
+	slots[3] = thor.BytesToBytes32(a.PendingWeight.Bytes())
+	slots[4] = thor.BytesToBytes32(a.ExitingVET.Bytes())
+	slots[5] = thor.BytesToBytes32(a.ExitingWeight.Bytes())
+
+	return slots
+}
+
+func (a *Aggregation) UsedSlots() int {
+	return SlotsUsed
 }
 
 // newAggregation creates a new zero-initialized aggregation for a validator.
@@ -36,17 +75,6 @@ func newAggregation() *Aggregation {
 		ExitingVET:    big.NewInt(0),
 		ExitingWeight: big.NewInt(0),
 	}
-}
-
-func (a *Aggregation) IsEmpty() bool {
-	// aggregation subfields are expected to never be nil
-	return a.LockedVET.Sign() == 0 && a.ExitingVET.Sign() == 0 && a.PendingVET.Sign() == 0
-}
-
-// NextPeriodTVL is the total value locked (TVL) for the next period.
-// It is the sum of the currently recurring VET, plus any pending recurring and one-time VET.
-func (a *Aggregation) NextPeriodTVL() *big.Int {
-	return big.NewInt(0).Add(a.LockedVET, a.PendingVET)
 }
 
 // renew transitions delegations to the next staking period.

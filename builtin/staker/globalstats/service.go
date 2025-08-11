@@ -10,15 +10,6 @@ import (
 
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/builtin/staker/delta"
-	"github.com/vechain/thor/v2/builtin/staker/stakes"
-	"github.com/vechain/thor/v2/thor"
-)
-
-var (
-	slotLockedVET    = thor.BytesToBytes32([]byte(("total-stake")))
-	slotLockedWeight = thor.BytesToBytes32([]byte(("total-weight")))
-	slotQueuedVET    = thor.BytesToBytes32([]byte(("queued-stake")))
-	slotQueuedWeight = thor.BytesToBytes32([]byte(("queued-weight")))
 )
 
 // Service manages contract-wide staking totals.
@@ -33,22 +24,11 @@ type Service struct {
 
 func New(sctx *solidity.Context) *Service {
 	return &Service{
-		lockedVET:    solidity.NewUint256(sctx, slotLockedVET),
-		lockedWeight: solidity.NewUint256(sctx, slotLockedWeight),
-		queuedVET:    solidity.NewUint256(sctx, slotQueuedVET),
-		queuedWeight: solidity.NewUint256(sctx, slotQueuedWeight),
+		lockedVET:    solidity.NewUint256(sctx, solidity.NumToSlot(1)),
+		lockedWeight: solidity.NewUint256(sctx, solidity.NumToSlot(2)),
+		queuedVET:    solidity.NewUint256(sctx, solidity.NumToSlot(3)),
+		queuedWeight: solidity.NewUint256(sctx, solidity.NumToSlot(4)),
 	}
-}
-
-// QueuedStake returns the total VET and weight waiting to be activated.
-func (s *Service) QueuedStake() (*big.Int, *big.Int, error) {
-	queuedVet, err := s.queuedVET.Get()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	queuedWeight, err := s.queuedWeight.Get()
-	return queuedVet, queuedWeight, err
 }
 
 // ApplyRenewal adjusts global totals during validator/delegation transitions.
@@ -96,35 +76,4 @@ func (s *Service) GetLockedVET() (*big.Int, *big.Int, error) {
 
 	lockedWeight, err := s.lockedWeight.Get()
 	return lockedVet, lockedWeight, err
-}
-
-// AddQueued increases queued totals when new stake is added to the queue.
-func (s *Service) AddQueued(stake *stakes.WeightedStake) error {
-	if err := s.queuedVET.Add(stake.VET()); err != nil {
-		return err
-	}
-	if err := s.queuedWeight.Add(stake.Weight()); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// RemoveQueued decreases queued totals when stake is removed from the queue.
-func (s *Service) RemoveQueued(stake *stakes.WeightedStake) error {
-	if err := s.queuedVET.Sub(stake.VET()); err != nil {
-		return err
-	}
-	return s.queuedWeight.Sub(stake.Weight())
-}
-
-// GetQueuedStake returns the total VET and weight waiting to be activated.
-func (s *Service) GetQueuedStake() (*big.Int, *big.Int, error) {
-	queuedVet, err := s.queuedVET.Get()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	queuedWeight, err := s.queuedWeight.Get()
-	return queuedVet, queuedWeight, err
 }

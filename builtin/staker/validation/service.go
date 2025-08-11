@@ -31,18 +31,6 @@ type Service struct {
 	epochLength uint32
 }
 
-var (
-	// active validations linked list
-	slotActiveTail      = thor.BytesToBytes32([]byte(("validations-active-tail")))
-	slotActiveHead      = thor.BytesToBytes32([]byte(("validations-active-head")))
-	slotActiveGroupSize = thor.BytesToBytes32([]byte(("validations-active-group-size")))
-
-	// queued validations linked list
-	slotQueuedHead      = thor.BytesToBytes32([]byte(("validations-queued-head")))
-	slotQueuedTail      = thor.BytesToBytes32([]byte(("validations-queued-tail")))
-	slotQueuedGroupSize = thor.BytesToBytes32([]byte(("validations-queued-group-size")))
-)
-
 func New(sctx *solidity.Context,
 	cooldownPeriod uint32,
 	epochLength uint32,
@@ -53,31 +41,20 @@ func New(sctx *solidity.Context,
 	maxStake *big.Int,
 ) *Service {
 	repo := NewRepository(sctx)
-
 	return &Service{
 		repo: repo,
-
-		leaderGroup:         linkedlist.NewLinkedList(sctx, slotActiveHead, slotActiveTail, slotActiveGroupSize),
-		validatorQueue:      linkedlist.NewLinkedList(sctx, slotQueuedHead, slotQueuedTail, slotQueuedGroupSize),
+		validatorQueue: linkedlist.NewLinkedList(sctx, solidity.NumToSlot(5)),
+		leaderGroup:    linkedlist.NewLinkedList(sctx, solidity.NumToSlot(9)),
 		lowStakingPeriod:    lowStakingPeriod,
 		mediumStakingPeriod: mediumStakingPeriod,
 		highStakingPeriod:   highStakingPeriod,
-
 		cooldownPeriod: cooldownPeriod,
 		epochLength:    epochLength,
-
 		minStake: minStake,
 		maxStake: maxStake,
 	}
 }
 
-func (s *Service) GetCompletedPeriods(validator thor.Address) (uint32, error) {
-	v, err := s.GetValidation(validator)
-	if err != nil {
-		return uint32(0), err
-	}
-	return v.CompleteIterations, nil
-}
 
 func (s *Service) IncreaseDelegatorsReward(node thor.Address, reward *big.Int) error {
 	val, err := s.GetValidation(node)
@@ -87,7 +64,7 @@ func (s *Service) IncreaseDelegatorsReward(node thor.Address, reward *big.Int) e
 
 	periodBytes := make([]byte, 4)
 	binary.BigEndian.PutUint32(periodBytes, val.CurrentIteration())
-	key := thor.Blake2b([]byte("rewards"), node.Bytes(), periodBytes)
+	key := thor.Keccak256(node.Bytes(), periodBytes)
 
 	rewards, err := s.repo.GetReward(key)
 	if err != nil {
@@ -123,17 +100,6 @@ func (s *Service) IsActive() (bool, error) {
 	return activeCount.Cmp(big.NewInt(0)) > 0, nil
 }
 
-// FirstActive returns validator address of first entry.
-func (s *Service) FirstActive() (*thor.Address, error) {
-	validator, err := s.leaderGroup.Head()
-	return &validator, err
-}
-
-// FirstQueued returns validator address of first entry.
-func (s *Service) FirstQueued() (*thor.Address, error) {
-	validator, err := s.validatorQueue.Head()
-	return &validator, err
-}
 
 func (s *Service) QueuedGroupSize() (*big.Int, error) {
 	return s.validatorQueue.Len()
@@ -141,15 +107,6 @@ func (s *Service) QueuedGroupSize() (*big.Int, error) {
 
 func (s *Service) LeaderGroupSize() (*big.Int, error) {
 	return s.leaderGroup.Len()
-}
-
-func (s *Service) GetLeaderGroupHead() (*Validation, error) {
-	validatorID, err := s.leaderGroup.Head()
-	if err != nil {
-		return nil, err
-	}
-
-	return s.GetValidation(validatorID)
 }
 
 // LeaderGroup lists all registered candidates.
@@ -160,171 +117,6 @@ func (s *Service) LeaderGroup() (map[thor.Address]*Validation, error) {
 		return nil
 	})
 	return group, err
-}
-
-func (s *Service) Add(
-	validator thor.Address,
-	endorsor thor.Address,
-	period uint32,
-	stake *big.Int,
-) error {
-	if stake.Cmp(s.minStake) < 0 || stake.Cmp(s.maxStake) > 0 {
-		return errors.New("stake is out of range")
-	}
-	val, err := s.GetValidation(validator)
-	if err != nil {
-		return err
-	}
-	if !val.IsEmpty() {
-		return errors.New("validator already exists")
-	}
-	if period != s.lowStakingPeriod && period != s.mediumStakingPeriod && period != s.highStakingPeriod {
-		return errors.New("period is out of boundaries")
-	}
-
-	entry := &Validation{
-		Endorsor:           endorsor,
-		Period:             period,
-		CompleteIterations: 0,
-		Status:             StatusQueued,
-		Online:             true,
-		LockedVET:          big.NewInt(0),
-		QueuedVET:          stake,
-		CooldownVET:        big.NewInt(0),
-		PendingUnlockVET:   big.NewInt(0),
-		WithdrawableVET:    big.NewInt(0),
-		Weight:             big.NewInt(0),
-	}
-
-	if err = s.validatorQueue.Add(validator); err != nil {
-		return err
-	}
-
-	return s.SetValidation(validator, entry, true)
-}
-
-func (s *Service) SignalExit(validator thor.Address, endorsor thor.Address) error {
-	validation, err := s.GetExistingValidation(validator)
-	if err != nil {
-		return err
-	}
-	if validation.Endorsor != endorsor {
-		return errors.New("invalid endorsor for node")
-	}
-	if validation.Status != StatusActive {
-		return errors.New("can't signal exit while not active")
-	}
-
-	minBlock := validation.StartBlock + validation.Period*(validation.CurrentIteration())
-	exitBlock, err := s.SetExitBlock(validator, minBlock)
-	if err != nil {
-		return err
-	}
-	validation.ExitBlock = &exitBlock
-
-	return s.repo.SetValidation(validator, validation, false)
-}
-
-func (s *Service) IncreaseStake(validator thor.Address, endorsor thor.Address, amount *big.Int) error {
-	entry, err := s.GetExistingValidation(validator)
-	if err != nil {
-		return err
-	}
-	if entry.Endorsor != endorsor {
-		return errors.New("invalid endorser")
-	}
-	if entry.Status == StatusExit {
-		return errors.New("validator status is not queued or active")
-	}
-	if entry.Status == StatusActive && entry.ExitBlock != nil {
-		return errors.New("validator has signaled exit, cannot increase stake")
-	}
-
-	entry.QueuedVET = big.NewInt(0).Add(amount, entry.QueuedVET)
-
-	return s.SetValidation(validator, entry, false)
-}
-
-func (s *Service) DecreaseStake(validator thor.Address, endorsor thor.Address, amount *big.Int) (bool, error) {
-	entry, err := s.GetExistingValidation(validator)
-	if err != nil {
-		return false, err
-	}
-	if entry.Endorsor != endorsor {
-		return false, errors.New("invalid endorser")
-	}
-	if entry.Status == StatusExit {
-		return false, errors.New("validator status is not queued or active")
-	}
-	if entry.Status == StatusActive && entry.ExitBlock != nil {
-		return false, errors.New("validator has signaled exit, cannot decrease stake")
-	}
-
-	if entry.Status == StatusActive {
-		// We don't consider any increases, i.e., entry.QueuedVET. We only consider locked and current decreases.
-		// The reason is that validator can instantly withdraw QueuedVET at any time.
-		// We need to make sure the locked VET minus the sum of the current decreases is still above the minimum stake.
-		nextPeriodTVL := big.NewInt(0).Sub(entry.LockedVET, entry.PendingUnlockVET)
-		nextPeriodTVL = nextPeriodTVL.Sub(nextPeriodTVL, amount)
-		if nextPeriodTVL.Cmp(s.minStake) < 0 {
-			return false, errors.New("next period stake is too low for validator")
-		}
-		entry.PendingUnlockVET = big.NewInt(0).Add(entry.PendingUnlockVET, amount)
-	}
-
-	if entry.Status == StatusQueued {
-		// All the validator's stake exists within QueuedVET, so we need to make sure it maintains a minimum of MinStake.
-		nextPeriodTVL := big.NewInt(0).Sub(entry.QueuedVET, amount)
-		if nextPeriodTVL.Cmp(s.minStake) < 0 {
-			return false, errors.New("next period stake is too low for validator")
-		}
-		entry.QueuedVET = big.NewInt(0).Sub(entry.QueuedVET, amount)
-		entry.WithdrawableVET = big.NewInt(0).Add(entry.WithdrawableVET, amount)
-	}
-
-	return entry.Status == StatusQueued, s.SetValidation(validator, entry, false)
-}
-
-// WithdrawStake allows validations to withdraw any withdrawable stake.
-// It also verifies the endorsor and updates the validator totals.
-func (s *Service) WithdrawStake(
-	val *Validation,
-	validator thor.Address,
-	endorsor thor.Address,
-	currentBlock uint32,
-) (*big.Int, error) {
-	if val.Endorsor != endorsor {
-		return big.NewInt(0), errors.New("invalid endorser")
-	}
-
-	// calculate currently available VET to withdraw
-	withdrawable := val.CalculateWithdrawableVET(currentBlock, s.cooldownPeriod)
-
-	// val has exited and waited for the cooldown period
-	if val.ExitBlock != nil && *val.ExitBlock+s.cooldownPeriod <= currentBlock {
-		val.CooldownVET = big.NewInt(0)
-	}
-
-	// if the validator is queued make sure to exit it
-	if val.Status == StatusQueued {
-		val.QueuedVET = big.NewInt(0)
-		val.Status = StatusExit
-		if err := s.validatorQueue.Remove(validator); err != nil {
-			return nil, err
-		}
-	}
-	// remove any que
-	if val.QueuedVET.Sign() > 0 {
-		val.QueuedVET = big.NewInt(0)
-	}
-
-	// no more withdraw after this
-	val.WithdrawableVET = big.NewInt(0)
-	if err := s.SetValidation(validator, val, false); err != nil {
-		return nil, err
-	}
-
-	return withdrawable, nil
 }
 
 func (s *Service) NextToActivate(maxLeaderGroupSize *big.Int) (*thor.Address, error) {
@@ -375,47 +167,6 @@ func (s *Service) ExitValidator(validator thor.Address) (*delta.Exit, error) {
 	}
 
 	return exit, nil
-}
-
-// SetExitBlock sets the exit block for a validator.
-// It ensures that the exit block is not already set for another validator.
-// A validator cannot consume several epochs at once.
-func (s *Service) SetExitBlock(validator thor.Address, minBlock uint32) (uint32, error) {
-	start := minBlock
-	for {
-		existing, err := s.GetExitEpoch(start)
-		if err != nil {
-			return 0, err
-		}
-		if existing == validator {
-			return start, nil
-		}
-		if existing.IsZero() {
-			if err = s.repo.SetExit(start, validator); err != nil {
-				return 0, errors.Wrap(err, "failed to set exit epoch")
-			}
-			return start, nil
-		}
-		start += s.epochLength
-	}
-}
-
-func (s *Service) GetExitEpoch(block uint32) (thor.Address, error) {
-	bigBlock := big.NewInt(0).SetUint64(uint64(block))
-
-	validator, err := s.repo.GetExit(bigBlock)
-	if err != nil {
-		return thor.Address{}, errors.Wrap(err, "failed to get exit epoch")
-	}
-	return validator, nil
-}
-
-func (s *Service) GetDelegatorRewards(validator thor.Address, stakingPeriod uint32) (*big.Int, error) {
-	periodBytes := make([]byte, 4)
-	binary.BigEndian.PutUint32(periodBytes, stakingPeriod)
-	key := thor.Blake2b([]byte("rewards"), validator.Bytes(), periodBytes)
-
-	return s.repo.GetReward(key)
 }
 
 // ActivateValidator transitions a validator from queued to active status.
@@ -491,13 +242,5 @@ func (s *Service) GetExistingValidation(validator thor.Address) (*Validation, er
 }
 
 func (s *Service) SetValidation(validator thor.Address, entry *Validation, isNew bool) error {
-	return s.repo.SetValidation(validator, entry, isNew)
-}
-
-func (s *Service) LeaderGroupNext(prev thor.Address) (thor.Address, error) {
-	return s.leaderGroup.Next(prev)
-}
-
-func (s *Service) ValidatorQueueNext(prev thor.Address) (thor.Address, error) {
-	return s.validatorQueue.Next(prev)
+	return s.repo.SetValidation(validator, entry)
 }

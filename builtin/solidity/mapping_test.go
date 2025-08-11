@@ -51,10 +51,10 @@ func newTestContext() *Context {
 	return &Context{address: thor.Address{1}, state: st, charger: charger}
 }
 
-// SetupMapping returns a new Mapping and its associated Charger.
-func SetupMapping[V comparable]() (*gascharger.Charger, *Mapping[thor.Bytes32, V]) {
+// SetupMapping returns a new SimpleMapping and its associated Charger.
+func SetupMapping[V comparable]() (*gascharger.Charger, *SimpleMapping[thor.Bytes32, V]) {
 	ctx := newTestContext()
-	mapping := NewMapping[thor.Bytes32, V](ctx, thor.Bytes32{1})
+	mapping := NewSimpleMapping[thor.Bytes32, V](ctx, thor.Bytes32{1})
 	return ctx.charger, mapping
 }
 

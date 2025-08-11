@@ -74,7 +74,8 @@ func TestStaker(t *testing.T) {
 		addValidatorTx, err := staker.AddValidation(acc.Address, minStake, minStakingPeriod).
 			Send().
 			WithSigner(bind.NewSigner(acc.PrivateKey)).
-			WithOptions(txOpts()).Submit()
+			WithOptions(txOpts()).
+			Submit()
 		require.NoError(t, err)
 		validatorTxs = append(validatorTxs, addValidatorTx)
 	}
@@ -87,6 +88,10 @@ func TestStaker(t *testing.T) {
 			return nil
 		}, 100*time.Millisecond, 10*time.Second))
 	}
+
+	validation, err := staker.GetValidatorStake(genesis.DevAccounts()[0].Address)
+	require.NoError(t, err)
+	require.Equal(t, genesis.DevAccounts()[0].Address, validation.Address)
 
 	// pack a new block
 	require.NoError(t, node.Chain().MintBlock(genesis.DevAccounts()[0]))

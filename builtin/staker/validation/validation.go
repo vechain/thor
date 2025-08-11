@@ -6,9 +6,10 @@
 package validation
 
 import (
+	"encoding/binary"
+	"errors"
 	"math/big"
 
-	"github.com/vechain/thor/v2/builtin/staker/aggregation"
 	"github.com/vechain/thor/v2/builtin/staker/delta"
 	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/thor"
@@ -34,58 +35,90 @@ func WeightedStake(amount *big.Int) *stakes.WeightedStake {
 	return stakes.NewWeightedStake(amount, Multiplier)
 }
 
+const SlotsUsed = 8
+
 type Validation struct {
+	// ---- Slot 0 ----
 	Endorsor           thor.Address // the address providing the stake
 	Period             uint32       // the staking period of the validation
 	CompleteIterations uint32       // the completed staking periods by the validation
 	Status             Status       // status of the validation
 	Online             bool         // whether the validation is online or not
-	StartBlock         uint32       // the block number when the validation started the first staking period
-	ExitBlock          *uint32      `rlp:"nil"` // the block number when the validation moved to cooldown
 
+	// ---- Slot 1 ----
+	StartBlock         uint32       // the block number when the validation started the first staking period
+	ExitBlock          uint32      // the block number when the validation moved to cooldown
+
+	// ---- Slot 2 ----
 	LockedVET        *big.Int // the amount of VET locked for the current staking period, for the validator only
+	// ---- Slot 3 ----
 	PendingUnlockVET *big.Int // the amount of VET that will be unlocked in the next staking period. DOES NOT contribute to the TVL
+	// ---- Slot 4 ----
 	QueuedVET        *big.Int // the amount of VET queued to be locked in the next staking period
+	// ---- Slot 5 ----
 	CooldownVET      *big.Int // the amount of VET that is locked into the validation's cooldown
+	// ---- Slot 6 ----
 	WithdrawableVET  *big.Int // the amount of VET that is currently withdrawable
 
+	// ---- Slot 7 ----
 	Weight *big.Int // LockedVET x2 + total weight from delegators
 }
 
-type Totals struct {
-	TotalLockedStake   *big.Int // total locked stake in validation (current period), validation's stake + all delegators stake
-	TotalLockedWeight  *big.Int // total locked weight in validation (current period), validation's weight + all delegators weight
-	TotalQueuedStake   *big.Int // total queued stake in validation (next period), validation's stake + all delegators stake
-	TotalQueuedWeight  *big.Int // total queued weight in validation (next period), validation's
-	TotalExitingStake  *big.Int // total exiting stake in validation (next period), validation's stake + all delegators stake
-	TotalExitingWeight *big.Int // total exiting weight in validation (next period),
+func (v *Validation) DecodeSlots(slots []thor.Bytes32) error {
+	if len(slots) != SlotsUsed {
+		return errors.New("invalid number of slots for validation")
+	}
+
+	v.Endorsor = thor.BytesToAddress(slots[0][0:20])
+	v.Period = binary.BigEndian.Uint32(slots[0][20:24])
+	v.CompleteIterations = binary.BigEndian.Uint32(slots[0][24:28])
+	v.Status = slots[0][28]
+	v.Online = slots[0][29] == 1 // 1 means online, 0 means offline
+
+	v.StartBlock = binary.BigEndian.Uint32(slots[1][:4])
+	v.ExitBlock = binary.BigEndian.Uint32(slots[1][4:8])
+
+	v.LockedVET = new(big.Int).SetBytes(slots[2][:])
+	v.PendingUnlockVET = new(big.Int).SetBytes(slots[3][:])
+	v.QueuedVET = new(big.Int).SetBytes(slots[4][:])
+	v.CooldownVET = new(big.Int).SetBytes(slots[5][:])
+	v.WithdrawableVET = new(big.Int).SetBytes(slots[6][:])
+	v.Weight = new(big.Int).SetBytes(slots[7][:])
+
+	return nil
 }
 
-func (v *Validation) Totals(agg *aggregation.Aggregation) *Totals {
-	var exitingVET *big.Int
-	var exitingWeight *big.Int
+func (v *Validation) EncodeSlots() []thor.Bytes32 {
+	slots := make([]thor.Bytes32, SlotsUsed)
 
-	// If the validation is due to exit, then all locked VET is considered exiting.
-	if v.Status == StatusActive && v.ExitBlock != nil {
-		exitingVET = big.NewInt(0).Add(v.LockedVET, agg.LockedVET)
-		exitingWeight = v.Weight
+	// Slot 0: Endorsor (20 bytes), Period (4 bytes), CompleteIterations (4 bytes), Status (1 byte), Online (1 byte), 2 bytes padding
+	copy(slots[0][0:20], v.Endorsor.Bytes())
+	binary.BigEndian.PutUint32(slots[0][20:24], v.Period)
+	binary.BigEndian.PutUint32(slots[0][24:28], v.CompleteIterations)
+	slots[0][28] = v.Status
+	if v.Online {
+		slots[0][29] = 1
 	} else {
-		vExiting := WeightedStake(v.PendingUnlockVET)
-		exitingVET = big.NewInt(0).Add(vExiting.VET(), agg.ExitingVET)
-		exitingWeight = big.NewInt(0).Add(vExiting.Weight(), agg.ExitingWeight)
+		slots[0][29] = 0
 	}
 
-	queued := WeightedStake(v.QueuedVET)
+	// Slot 1: StartBlock (4 bytes), ExitBlock (4 bytes), remaining bytes zeroed
+	binary.BigEndian.PutUint32(slots[1][0:4], v.StartBlock)
+	binary.BigEndian.PutUint32(slots[1][4:8], v.ExitBlock)
+	// slots[1][8:32] remain zero
 
-	return &Totals{
-		// Delegation totals can be calculated by subtracting validators stakes / weights from the global totals.
-		TotalLockedStake:   new(big.Int).Add(v.LockedVET, agg.LockedVET),
-		TotalLockedWeight:  new(big.Int).Set(v.Weight),
-		TotalQueuedStake:   new(big.Int).Add(queued.VET(), agg.PendingVET),
-		TotalQueuedWeight:  new(big.Int).Add(queued.Weight(), agg.PendingWeight),
-		TotalExitingStake:  exitingVET,
-		TotalExitingWeight: exitingWeight,
-	}
+	slots[2] = thor.BytesToBytes32(v.LockedVET.Bytes())
+	slots[3] = thor.BytesToBytes32(v.PendingUnlockVET.Bytes())
+	slots[4] = thor.BytesToBytes32(v.QueuedVET.Bytes())
+	slots[5] = thor.BytesToBytes32(v.CooldownVET.Bytes())
+	slots[6] = thor.BytesToBytes32(v.WithdrawableVET.Bytes())
+	slots[7] = thor.BytesToBytes32(v.Weight.Bytes())
+
+	return slots
+}
+
+func (v *Validation) UsedSlots() int {
+	return SlotsUsed
 }
 
 // IsEmpty returns whether the entry can be treated as empty.
@@ -97,13 +130,6 @@ func (v *Validation) IsEmpty() bool {
 func (v *Validation) IsPeriodEnd(current uint32) bool {
 	diff := current - v.StartBlock
 	return diff%v.Period == 0
-}
-
-// NextPeriodTVL returns the amount of VET that will be locked in the next staking period for the validator only.
-func (v *Validation) NextPeriodTVL() *big.Int {
-	validationTotal := big.NewInt(0).Add(v.LockedVET, v.QueuedVET)
-	validationTotal = big.NewInt(0).Sub(validationTotal, v.PendingUnlockVET)
-	return validationTotal
 }
 
 func (v *Validation) CurrentIteration() uint32 {
@@ -171,20 +197,4 @@ func (v *Validation) Exit() *delta.Exit {
 		QueuedDecrease:       releaseQueuedTVL,
 		QueuedDecreaseWeight: WeightedStake(releaseQueuedTVL).Weight(),
 	}
-}
-
-// CalculateWithdrawableVET returns the validator withdrawable amount for a given block + period
-func (v *Validation) CalculateWithdrawableVET(currentBlock uint32, cooldownPeriod uint32) *big.Int {
-	withdrawAmount := big.NewInt(0).Set(v.WithdrawableVET)
-
-	// validator has exited and waited for the cooldown period
-	if v.ExitBlock != nil && *v.ExitBlock+cooldownPeriod <= currentBlock {
-		withdrawAmount = withdrawAmount.Add(withdrawAmount, v.CooldownVET)
-	}
-
-	if v.QueuedVET.Sign() > 0 {
-		withdrawAmount = withdrawAmount.Add(withdrawAmount, v.QueuedVET)
-	}
-
-	return withdrawAmount
 }

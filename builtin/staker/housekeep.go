@@ -8,6 +8,7 @@ package staker
 import (
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/builtin/staker/delta"
@@ -93,7 +94,7 @@ func (s *Staker) renewalCallback(currentBlock uint32, renewals *[]ValidatorRenew
 	// Collect all validators due for renewal
 	return func(validator thor.Address, entry *validation.Validation) error {
 		// Skip validators due to exit
-		if entry.ExitBlock != nil {
+		if entry.ExitBlock != math.MaxUint32 {
 			return nil
 		}
 
@@ -129,7 +130,7 @@ func (s *Staker) exitsCallback(currentBlock uint32, exitAddress *thor.Address) f
 	// Find the last validator in iteration order that should exit this block
 	// Do NOT call ExitValidator here - just identify which validator should exit
 	return func(validator thor.Address, entry *validation.Validation) error {
-		if entry.ExitBlock != nil && currentBlock == *entry.ExitBlock {
+		if currentBlock == entry.ExitBlock {
 			// should never be possible for two validators to exit at the same block
 			if !exitAddress.IsZero() {
 				return errors.Errorf("found more than one validator exit in the same block: ValidatorID: %s, ValidatorID: %s", exitAddress, validator)

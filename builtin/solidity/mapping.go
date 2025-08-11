@@ -15,46 +15,46 @@ type Key interface {
 	Bytes() []byte
 }
 
-// Mapping is a key/value storage abstraction for built-in contracts, similar to the mapping in Solidity.
+// SimpleMapping is a key/value storage abstraction for built-in contracts, similar to the mapping in Solidity.
 // It DOES NOT (TBD) allow for direct access to values if declared in the same `pos` in the built-in contract.
 //
-// Mapping behavior:
+// SimpleMapping behavior:
 //
 //   - Setting the default type value means removing the value from storage
 //
-//   - If Mapping[thor.Bytes32, *thor.Address]:
+//   - If SimpleMapping[thor.Bytes32, *thor.Address]:
 //     ex: SET (k:0x123, v:nil) -> stores nil
 //     ex: SET (k:0x123, v:&thor.Address{})  -> stores nil
 //
-//   - If Mapping[thor.Bytes32, thor.Address]:
+//   - If SimpleMapping[thor.Bytes32, thor.Address]:
 //     ex: SET (k:0x123, v:thor.Address{}) -> stores nil (default empty value)
 //
 //   - Getting a nil storage value will always return default value of V not an empty pointer of the instance
 //
-//   - If Mapping[thor.Bytes32, *thor.Address]:
+//   - If SimpleMapping[thor.Bytes32, *thor.Address]:
 //     ex: SET (k:0x123, v:nil) GET (k:0x123)-> returns nil
 //     ex: SET (k:0x123, v:&thor.Address{}) GET (k:0x123)-> returns nil
 //
-//   - If Mapping[thor.Bytes32, thor.Address]:
+//   - If SimpleMapping[thor.Bytes32, thor.Address]:
 //     ex: SET (k:0x123, v:nil) GET (k:0x123)-> returns thor.Address{} (default empty value)
 //     ex: SET (k:0x123, v:thor.Address{}) GET (k:0x123)-> returns thor.Address{} (default empty value)
 //
 // - Getting a non-existing storage will always return the default value of the type defined in the V comparable mapping
-type Mapping[K Key, V comparable] struct {
+type SimpleMapping[K Key, V comparable] struct {
 	context *Context
 	basePos thor.Bytes32
 }
 
-// NewMapping creates a new persistent mapping at the given storage position.
-func NewMapping[K Key, V comparable](context *Context, pos thor.Bytes32) *Mapping[K, V] {
-	return &Mapping[K, V]{context: context, basePos: pos}
+// NewSimpleMapping creates a new persistent mapping at the given storage position.
+func NewSimpleMapping[K Key, V comparable](context *Context, pos thor.Bytes32) *SimpleMapping[K, V] {
+	return &SimpleMapping[K, V]{context: context, basePos: pos}
 }
 
 // Get retrieves the value for the given key, charging SloadGas per 32-byte word.
 // If no value is present, returns the zero-value of V.
-func (m *Mapping[K, V]) Get(key K) (V, error) {
+func (m *SimpleMapping[K, V]) Get(key K) (V, error) {
 	// compute the storage slot from key + base position
-	position := thor.Blake2b(key.Bytes(), m.basePos.Bytes())
+	position := thor.Keccak256(key.Bytes(), m.basePos.Bytes())
 
 	// prepare a zero-value container for decoding
 	var value V
@@ -87,8 +87,8 @@ func (m *Mapping[K, V]) Get(key K) (V, error) {
 
 // Set stores the given value at key, charging Sstore gas per 32-byte word.
 // Passing the zero-value of V clears the storage slot.
-func (m *Mapping[K, V]) Set(key K, value V, newValue bool) error {
-	position := thor.Blake2b(key.Bytes(), m.basePos.Bytes())
+func (m *SimpleMapping[K, V]) Set(key K, value V, newValue bool) error {
+	position := thor.Keccak256(key.Bytes(), m.basePos.Bytes())
 
 	// do not RLP-encode nil values, instead set raw storage to nil
 	var zero V

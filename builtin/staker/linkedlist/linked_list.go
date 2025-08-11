@@ -14,22 +14,69 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
+type Node struct {
+	Next *thor.Address `rlp:"nil"`
+	Prev *thor.Address `rlp:"nil"`
+}
+
+func (n Node) DecodeSlots(slots []thor.Bytes32) error {
+	if len(slots) != 2 {
+		return errors.New("invalid number of slots for Node")
+	}
+
+	if !slots[0].IsZero() {
+		next := thor.BytesToAddress(slots[0].Bytes())
+		n.Next = &next
+	}
+
+	if !slots[1].IsZero() {
+		prev := thor.BytesToAddress(slots[1].Bytes())
+		n.Prev = &prev
+	}
+
+	return nil
+}
+
+func (n Node) EncodeSlots() []thor.Bytes32 {
+	slots := make([]thor.Bytes32, 2)
+
+	if n.Next != nil {
+		slots[0] = thor.BytesToBytes32(n.Next.Bytes())
+	}
+
+	if n.Prev != nil {
+		slots[1] = thor.BytesToBytes32(n.Prev.Bytes())
+	}
+
+	return slots
+}
+
+func (n Node) UsedSlots() int {
+	return 2 // Each node uses two slots: one for Next and one for Prev
+}
+
+var _ solidity.ComplexValue[Node] = (*Node)(nil)
+
 type LinkedList struct {
+	mapping *solidity.ComplexMapping[thor.Address, Node]
 	head  *solidity.Address
 	tail  *solidity.Address
 	count *solidity.Uint256
-	next  *solidity.Mapping[thor.Address, thor.Address]
-	prev  *solidity.Mapping[thor.Address, thor.Address]
 }
 
 // NewLinkedList creates a new linked list with persistent storage mappings for staker management
-func NewLinkedList(sctx *solidity.Context, headPos, tailPos, countPos thor.Bytes32) *LinkedList {
+func NewLinkedList(
+	sctx *solidity.Context,
+	firstSlot thor.Bytes32,
+) *LinkedList {
+	headSlot := solidity.IncrementSlot(firstSlot[:], 1)
+	tailSlot := solidity.IncrementSlot(firstSlot[:], 2)
+	countPos := solidity.IncrementSlot(firstSlot[:], 3)
 	return &LinkedList{
-		head:  solidity.NewAddress(sctx, headPos),
-		tail:  solidity.NewAddress(sctx, tailPos),
+		mapping: solidity.NewComplexMapping[thor.Address, Node](sctx, firstSlot),
+		head:  solidity.NewAddress(sctx, headSlot),
+		tail:  solidity.NewAddress(sctx, tailSlot),
 		count: solidity.NewUint256(sctx, countPos),
-		next:  solidity.NewMapping[thor.Address, thor.Address](sctx, headPos),
-		prev:  solidity.NewMapping[thor.Address, thor.Address](sctx, tailPos),
 	}
 }
 
@@ -41,21 +88,19 @@ func (l *LinkedList) Iter(callbacks ...func(thor.Address) error) error {
 	}
 
 	for !ptr.IsZero() {
+		node, err := l.mapping.Get(ptr)
+		if err != nil {
+			return errors.Wrapf(err, "failed to get node for address %s", ptr)
+		}
 		for _, callback := range callbacks {
 			if err := callback(ptr); err != nil {
 				return err
 			}
 		}
-
-		next, err := l.next.Get(ptr)
-		if err != nil {
-			return err
-		}
-
-		if next.IsZero() {
+		if node.Next == nil {
 			break
 		}
-		ptr = next
+		ptr = *node.Next
 	}
 
 	return nil
@@ -75,17 +120,19 @@ func (l *LinkedList) Add(address thor.Address) error {
 		return l.count.Add(big.NewInt(1))
 	}
 
-	// Update old tail's next pointer
-	if err := l.next.Set(oldTail, address, false); err != nil {
-		return err
+	prev, err := l.mapping.Get(oldTail)
+	if err != nil {
+		return errors.Wrapf(err, "failed to get previous tail node for address %s", oldTail)
 	}
 
-	// Set new tail's prev pointer
-	if err := l.prev.Set(address, oldTail, false); err != nil {
-		return err
-	}
+	// Set new address as next of old tail
+	prev.Next = &address
+	l.mapping.Set(oldTail, prev)
 
-	// Update tail pointer
+	// Create new node for the new address
+	newNode := Node{Prev: &oldTail}
+	l.mapping.Set(address, newNode)
+	// Update tail pointer to the new address
 	l.tail.Set(&address, false)
 
 	if err := l.count.Add(big.NewInt(1)); err != nil {
@@ -101,53 +148,15 @@ func (l *LinkedList) Remove(address thor.Address) error {
 		return nil
 	}
 
-	prev, err := l.prev.Get(address)
+	node, err := l.mapping.Get(address)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "failed to get node for address %s", address)
 	}
+	if node.Prev == nil && node.Next == nil {
+		return errors.New("address not found in the list")
+	}
+	if node.Prev != nil {
 
-	next, err := l.next.Get(address)
-	if err != nil {
-		return err
-	}
-
-	// If address is not in the list (no prev and not head)
-	if prev.IsZero() {
-		isHead, err := l.isHead(address)
-		if err != nil {
-			return err
-		}
-		if !isHead {
-			return nil // not in list
-		}
-	}
-
-	// Update previous node's next pointer
-	if !prev.IsZero() {
-		if err := l.next.Set(prev, next, false); err != nil {
-			return err
-		}
-	} else {
-		// This is the head, update head pointer
-		l.head.Set(&next, false)
-	}
-
-	// Update next node's prev pointer
-	if !next.IsZero() {
-		if err := l.prev.Set(next, prev, false); err != nil {
-			return err
-		}
-	} else {
-		// This is the tail, update tail pointer
-		l.tail.Set(&prev, false)
-	}
-
-	// Clear the removed node's pointers
-	if err = l.next.Set(address, thor.Address{}, false); err != nil {
-		return err
-	}
-	if err = l.prev.Set(address, thor.Address{}, false); err != nil {
-		return err
 	}
 
 	if err := l.count.Sub(big.NewInt(1)); err != nil {
@@ -187,7 +196,14 @@ func (l *LinkedList) Len() (*big.Int, error) {
 
 // Next returns the successor address in the list, or zero address if at the end
 func (l *LinkedList) Next(address thor.Address) (thor.Address, error) {
-	return l.next.Get(address)
+	node, err := l.mapping.Get(address)
+	if err != nil {
+		return thor.Address{}, errors.Wrapf(err, "failed to get node for address %s", address)
+	}
+	if node.Next == nil {
+		return thor.Address{}, nil // No next address, return zero address
+	}
+	return *node.Next, nil
 }
 
 // isHead checks if the given address is the head of the list
