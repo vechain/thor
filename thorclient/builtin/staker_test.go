@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
+	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
@@ -23,19 +23,37 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
+func DebugRevert(t *testing.T, receipt *api.Receipt, sender *bind.MethodBuilder) {
+	if receipt == nil {
+		assert.Fail(t, "receipt is nil")
+		return
+	}
+	if receipt.Reverted {
+		_, err := sender.Call().
+			AtRevision(receipt.Meta.BlockID.String()).
+			Caller(&receipt.Meta.TxOrigin).
+			Execute()
+		if err != nil {
+			assert.Fail(t, "transaction reverted", err)
+		} else {
+			assert.Fail(t, "transaction reverted for unknown reason")
+		}
+	}
+}
+
 func TestStaker(t *testing.T) {
-	minStakingPeriod := uint32(360) * 24 * 7 // 360 days in seconds
+	minStakingPeriod := uint32(360 * 24 * 7) // 7 days in blocks
 
 	node, client := newTestNode(t, false)
 	defer node.Stop()
 
 	// builtins
 	staker, err := NewStaker(client)
-	require.NoError(t, err)
+	assert.NoError(t, err)
 	authority, err := NewAuthority(client)
-	require.NoError(t, err)
+	assert.NoError(t, err)
 	params, err := NewParams(client)
-	require.NoError(t, err)
+	assert.NoError(t, err)
 
 	// set authorities - required for initial staker setup
 	var authorityTxs []*bind.SendBuilder
@@ -76,80 +94,78 @@ func TestStaker(t *testing.T) {
 			WithSigner(bind.NewSigner(acc.PrivateKey)).
 			WithOptions(txOpts()).
 			Submit()
-		require.NoError(t, err)
+		assert.NoError(t, err)
 		validatorTxs = append(validatorTxs, addValidatorTx)
 	}
-	for _, trx := range validatorTxs {
-		require.NoError(t, test.Retry(func() error {
+	for i, trx := range validatorTxs {
+		assert.NoError(t, test.Retry(func() error {
 			id := trx.ID()
-			if _, err = client.TransactionReceipt(&id); err != nil {
+			receipt, err := client.TransactionReceipt(&id)
+			if err != nil {
 				return err
 			}
+			DebugRevert(t, receipt, staker.AddValidation(genesis.DevAccounts()[i].Address, minStake, minStakingPeriod))
 			return nil
 		}, 100*time.Millisecond, 10*time.Second))
 	}
 
-	validation, err := staker.GetValidatorStake(genesis.DevAccounts()[0].Address)
-	require.NoError(t, err)
-	require.Equal(t, genesis.DevAccounts()[0].Address, validation.Address)
-
 	// pack a new block
-	require.NoError(t, node.Chain().MintBlock(genesis.DevAccounts()[0]))
+	assert.NoError(t, node.Chain().MintBlock(genesis.DevAccounts()[0]))
 
 	// TotalStake
 	totalStake, totalWeight, err := staker.TotalStake()
-	require.NoError(t, err)
-	require.Equal(t, 1, totalWeight.Sign())
-	require.Equal(t, new(big.Int).Mul(minStake, big.NewInt(2)), totalStake)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, totalWeight.Sign())
+	assert.Equal(t, new(big.Int).Mul(minStake, big.NewInt(2)), totalStake)
 
 	// GetStake
 	_, firstID, err := staker.FirstActive()
-	require.NoError(t, err)
+	assert.NoError(t, err)
 	getStakeRes, err := staker.GetValidatorStake(firstID)
-	require.NoError(t, err)
-	require.False(t, getStakeRes.Address.IsZero())
-	require.False(t, getStakeRes.Endorsor.IsZero())
-	require.Equal(t, getStakeRes.Stake, minStake)
-	require.Equal(t, getStakeRes.Weight, big.NewInt(0).Mul(minStake, big.NewInt(2)))
-	require.Equal(t, getStakeRes.QueuedStake.String(), big.NewInt(0).String())
+	assert.NoError(t, err)
+	assert.False(t, getStakeRes.Address.IsZero())
+	assert.False(t, getStakeRes.Endorsor.IsZero())
+	assert.Equal(t, getStakeRes.Stake, minStake)
+	assert.Equal(t, getStakeRes.Weight, big.NewInt(0).Mul(minStake, big.NewInt(2)))
+	assert.Equal(t, getStakeRes.QueuedStake.String(), big.NewInt(0).String())
 
 	// GetStatus
 	getStatusRes, err := staker.GetValidatorStatus(firstID)
-	require.NoError(t, err)
-	require.Equal(t, firstID, getStatusRes.Address)
-	require.Equal(t, StakerStatusActive, getStatusRes.Status)
-	require.True(t, getStatusRes.Online)
-	require.True(t, getStakeRes.Exists(*getStatusRes))
+	assert.NoError(t, err)
+	assert.Equal(t, firstID, getStatusRes.Address)
+	assert.Equal(t, StakerStatusActive, getStatusRes.Status)
+	assert.True(t, getStatusRes.Online)
+	assert.True(t, getStakeRes.Exists(*getStatusRes))
 
 	// GetPeriodDetails
 	getPeriodDetailsRes, err := staker.GetValidatorPeriodDetails(firstID)
-	require.NoError(t, err)
-	require.Equal(t, firstID, getPeriodDetailsRes.Address)
-	require.Equal(t, minStakingPeriod, getPeriodDetailsRes.Period)
-	require.Equal(t, uint32(15), getPeriodDetailsRes.StartBlock)
-	require.Equal(t, uint32(math.MaxUint32), getPeriodDetailsRes.ExitBlock)
-	require.Equal(t, uint32(0), getPeriodDetailsRes.CompletedPeriods)
+	assert.NoError(t, err)
+	assert.Equal(t, firstID, getPeriodDetailsRes.Address)
+	assert.Equal(t, minStakingPeriod, getPeriodDetailsRes.Period)
+	assert.Equal(t, uint32(15), getPeriodDetailsRes.StartBlock)
+	assert.Equal(t, uint32(math.MaxUint32), getPeriodDetailsRes.ExitBlock)
+	assert.Equal(t, uint32(0), getPeriodDetailsRes.CompletedPeriods)
 
 	// FirstActive
 	firstActive, firstID, err := staker.FirstActive()
-	require.NoError(t, err)
-	require.False(t, firstID.IsZero())
-	require.True(t, firstActive.Exists(*getStatusRes))
-	require.Equal(t, minStake, firstActive.Stake)
-	require.Equal(t, big.NewInt(0).Mul(minStake, big.NewInt(2)), firstActive.Weight)
-	require.False(t, firstActive.Endorsor.IsZero())
+	assert.NoError(t, err)
+	assert.False(t, firstID.IsZero())
+	assert.True(t, firstActive.Exists(*getStatusRes))
+	assert.Equal(t, minStake, firstActive.Stake)
+	assert.Equal(t, big.NewInt(0).Mul(minStake, big.NewInt(2)), firstActive.Weight)
+	assert.False(t, firstActive.Endorsor.IsZero())
 
 	// Next
 	next, id, err := staker.Next(firstID)
-	require.NoError(t, err)
-	require.False(t, id.IsZero())
+	assert.NoError(t, err)
+	assert.False(t, id.IsZero())
 	nextStatus, err := staker.GetValidatorStatus(next.Address)
-	require.True(t, next.Exists(*nextStatus))
-	require.NoError(t, err)
-	require.Equal(t, StakerStatusActive, nextStatus.Status)
-	require.Equal(t, minStake, next.Stake)
-	require.Equal(t, big.NewInt(0).Mul(minStake, big.NewInt(2)), next.Weight)
-	require.False(t, next.Endorsor.IsZero())
+	assert.True(t, next.Exists(*nextStatus))
+	assert.NoError(t, err)
+	assert.Equal(t, StakerStatusActive, nextStatus.Status)
+	assert.Equal(t, minStake, next.Stake)
+	assert.Equal(t, big.NewInt(0).Mul(minStake, big.NewInt(2)), next.Weight)
+	assert.False(t, next.Endorsor.IsZero())
 
 	var (
 		validator    = genesis.DevAccounts()[9]
@@ -161,161 +177,163 @@ func TestStaker(t *testing.T) {
 		Send().
 		WithSigner(validatorKey).
 		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
-	require.NoError(t, err)
-	require.False(t, receipt.Reverted)
+	assert.NoError(t, err)
+	assert.False(t, receipt.Reverted)
 
 	queuedEvents, err := staker.FilterValidatorQueued(newRange(receipt), nil, logdb.ASC)
-	require.NoError(t, err)
-	require.Len(t, queuedEvents, 1)
-	require.Equal(t, validator.Address, queuedEvents[0].Endorsor)
-	require.Equal(t, minStake, queuedEvents[0].Stake)
+	assert.NoError(t, err)
+	assert.Len(t, queuedEvents, 1)
+	assert.Equal(t, validator.Address, queuedEvents[0].Endorsor)
+	assert.Equal(t, minStake, queuedEvents[0].Stake)
 	queuedID := queuedEvents[0].Node
 
 	// FirstQueued
 	firstQueued, id, err := staker.FirstQueued()
-	require.NoError(t, err)
-	require.False(t, id.IsZero())
+	assert.NoError(t, err)
+	assert.False(t, id.IsZero())
 	firstQueuedStatus, err := staker.GetValidatorStatus(firstQueued.Address)
-	require.NoError(t, err)
-	require.True(t, firstQueued.Exists(*firstQueuedStatus))
-	require.Equal(t, 0, firstQueued.Stake.Sign())
-	require.Equal(t, StakerStatusQueued, firstQueuedStatus.Status)
-	require.False(t, firstQueued.Endorsor.IsZero())
+	assert.NoError(t, err)
+	assert.True(t, firstQueued.Exists(*firstQueuedStatus))
+	assert.Equal(t, 0, firstQueued.Stake.Sign())
+	assert.Equal(t, StakerStatusQueued, firstQueuedStatus.Status)
+	assert.False(t, firstQueued.Endorsor.IsZero())
 
 	// TotalQueued
 	queuedStake, queuedWeight, err := staker.QueuedStake()
-	require.NoError(t, err)
+	assert.NoError(t, err)
 	stake := big.NewInt(0).Mul(big.NewInt(1e18), big.NewInt(25))
 	stake = big.NewInt(0).Mul(stake, big.NewInt(1e6))
-	require.Equal(t, stake, queuedStake)
-	require.Equal(t, big.NewInt(0).Mul(stake, big.NewInt(2)), queuedWeight)
+	assert.Equal(t, stake, queuedStake)
+	assert.Equal(t, big.NewInt(0).Mul(stake, big.NewInt(2)), queuedWeight)
 
 	// IncreaseStake
 	receipt, _, err = staker.IncreaseStake(queuedID, minStake).
 		Send().
 		WithSigner(validatorKey).
 		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
-	require.NoError(t, err)
+	assert.NoError(t, err)
 
 	increaseEvents, err := staker.FilterStakeIncreased(newRange(receipt), nil, logdb.ASC)
-	require.NoError(t, err)
-	require.Len(t, increaseEvents, 1)
-	require.Equal(t, validator.Address, increaseEvents[0].Validator)
-	require.Equal(t, minStake, increaseEvents[0].Added)
+	assert.NoError(t, err)
+	assert.Len(t, increaseEvents, 1)
+	assert.Equal(t, validator.Address, increaseEvents[0].Validator)
+	assert.Equal(t, minStake, increaseEvents[0].Added)
 
 	// DecreaseStake
 	receipt, _, err = staker.DecreaseStake(queuedID, minStake).
 		Send().
 		WithSigner(validatorKey).
 		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
-	require.NoError(t, err)
+	assert.NoError(t, err)
 
 	decreaseEvents, err := staker.FilterStakeDecreased(newRange(receipt), nil, logdb.ASC)
-	require.NoError(t, err)
-	require.Len(t, decreaseEvents, 1)
-	require.Equal(t, queuedID, decreaseEvents[0].Validator)
-	require.Equal(t, minStake, decreaseEvents[0].Removed)
+	assert.NoError(t, err)
+	assert.Len(t, decreaseEvents, 1)
+	assert.Equal(t, queuedID, decreaseEvents[0].Validator)
+	assert.Equal(t, minStake, decreaseEvents[0].Removed)
 
 	// SignalExit
 	receipt, _, err = staker.SignalExit(queuedID).
 		Send().
 		WithSigner(validatorKey).
 		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
-	require.NoError(t, err)
+	assert.NoError(t, err)
 
 	// No events for signal exit when state is queued
 	autoRenewEvents, err := staker.FilterValidationSignaledExit(newRange(receipt), nil, logdb.ASC)
-	require.NoError(t, err)
-	require.Len(t, autoRenewEvents, 0)
+	assert.NoError(t, err)
+	assert.Len(t, autoRenewEvents, 0)
 
 	// AddDelegation
-	receipt, _, err = staker.AddDelegation(queuedID, minStake, 100).
+	method := staker.AddDelegation(queuedID, minStake, 100)
+	receipt, _, err = method.
 		Send().
 		WithSigner(stargate).
-		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
-	require.NoError(t, err)
-	require.False(t, receipt.Reverted)
+		WithOptions(txOpts()).
+		SubmitAndConfirm(txContext(t))
+	assert.NoError(t, err)
+	DebugRevert(t, receipt, method)
 
 	delegationEvents, err := staker.FilterDelegationAdded(newRange(receipt), nil, logdb.ASC)
-	require.NoError(t, err)
-	require.Len(t, delegationEvents, 1)
+	assert.NoError(t, err)
+	assert.Len(t, delegationEvents, 1)
 	delegationID := delegationEvents[0].DelegationID
 
 	// GetDelegationStake
 	delegationStake, err := staker.GetDelegationStake(delegationID)
-	require.NoError(t, err)
-	require.Equal(t, minStake, delegationStake.Stake)
-	require.Equal(t, uint8(100), delegationStake.Multiplier)
-	require.Equal(t, queuedID, delegationStake.Validator)
+	assert.NoError(t, err)
+	assert.Equal(t, minStake, delegationStake.Stake)
+	assert.Equal(t, uint8(100), delegationStake.Multiplier)
+	assert.Equal(t, queuedID, delegationStake.Validator)
 
 	// GetDelegationPeriodDetails
 	delegationPeriodDetails, err := staker.GetDelegationPeriodDetails(delegationID)
-	require.NoError(t, err)
-	require.Equal(t, uint32(1), delegationPeriodDetails.StartPeriod)
-	require.Equal(t, uint32(math.MaxUint32), delegationPeriodDetails.EndPeriod)
-	require.False(t, delegationPeriodDetails.Locked)
+	assert.NoError(t, err)
+	assert.Equal(t, uint32(1), delegationPeriodDetails.StartPeriod)
+	assert.Equal(t, uint32(math.MaxUint32), delegationPeriodDetails.EndPeriod)
+	assert.False(t, delegationPeriodDetails.Locked)
 
 	// GetValidatorsTotals
 	validationTotals, err := staker.GetValidationTotals(firstID)
-	require.NoError(t, err)
+	assert.NoError(t, err)
 
-	require.Equal(t, minStake, validationTotals.TotalLockedStake)
-	require.Equal(t, big.NewInt(0).Mul(minStake, big.NewInt(2)), validationTotals.TotalLockedWeight)
-	require.Equal(t, big.NewInt(0).String(), validationTotals.TotalQueuedStake.String())
-	require.Equal(t, big.NewInt(0).String(), validationTotals.TotalQueuedWeight.String())
-	require.Equal(t, big.NewInt(0).String(), validationTotals.TotalExitingStake.String())
-	require.Equal(t, big.NewInt(0).String(), validationTotals.TotalExitingWeight.String())
+	assert.Equal(t, minStake, validationTotals.TotalLockedStake)
+	assert.Equal(t, big.NewInt(0).Mul(minStake, big.NewInt(2)), validationTotals.TotalLockedWeight)
+	assert.Equal(t, big.NewInt(0).String(), validationTotals.TotalQueuedStake.String())
+	assert.Equal(t, big.NewInt(0).String(), validationTotals.TotalQueuedWeight.String())
+	assert.Equal(t, big.NewInt(0).String(), validationTotals.TotalExitingStake.String())
+	assert.Equal(t, big.NewInt(0).String(), validationTotals.TotalExitingWeight.String())
 
 	// GetValidatorsNum
 	active, queued, err := staker.GetValidatorsNum()
-	require.NoError(t, err)
-	require.Equal(t, big.NewInt(2), active)
-	require.Equal(t, big.NewInt(1), queued)
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(2), active)
+	assert.Equal(t, big.NewInt(1), queued)
 
 	// UpdateDelegationAutoRenew - Enable AutoRenew
 	receipt, _, err = staker.SignalDelegationExit(delegationID).
 		Send().
 		WithSigner(stargate).
 		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
-	require.NoError(t, err)
-	require.True(t, receipt.Reverted) // should revert since it hasn't started
+	assert.NoError(t, err)
+	assert.True(t, receipt.Reverted) // should revert since it hasn't started
 
 	// Withdraw
 	receipt, _, err = staker.WithdrawStake(queuedID).Send().WithSigner(validatorKey).WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
-	require.NoError(t, err)
-	require.False(t, receipt.Reverted)
+	assert.NoError(t, err)
+	assert.False(t, receipt.Reverted)
 
 	withdrawEvents, err := staker.FilterValidationWithdrawn(newRange(receipt), nil, logdb.ASC)
-	require.NoError(t, err)
-	require.Len(t, withdrawEvents, 1)
+	assert.NoError(t, err)
+	assert.Len(t, withdrawEvents, 1)
 
 	getStatusRes, err = staker.GetValidatorStatus(queuedID)
-	require.NoError(t, err)
-	require.Equal(t, StakerStatusExited, getStatusRes.Status)
+	assert.NoError(t, err)
+	assert.Equal(t, StakerStatusExited, getStatusRes.Status)
 
 	// WithdrawDelegation
 	receipt, _, err = staker.WithdrawDelegation(delegationID).Send().WithSigner(stargate).WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
-	require.NoError(t, err)
-	require.False(t, receipt.Reverted)
+	assert.NoError(t, err)
+	DebugRevert(t, receipt, staker.WithdrawDelegation(delegationID))
 
 	withdrawDelegationEvents, err := staker.FilterDelegationWithdrawn(newRange(receipt), nil, logdb.ASC)
-	require.NoError(t, err)
-	require.Len(t, withdrawDelegationEvents, 1)
+	assert.NoError(t, err)
+	assert.Len(t, withdrawDelegationEvents, 1)
 
 	// GetDelegation after withdrawal
 	delegationStake, err = staker.GetDelegationStake(delegationID)
-	require.NoError(t, err)
-	require.Equal(t, big.NewInt(0).Cmp(delegationStake.Stake), 0)
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0).Cmp(delegationStake.Stake), 0)
 
 	// GetDelegatorsRewards
 	rewards, err := staker.GetDelegatorsRewards(validator.Address, 1)
-	require.NoError(t, err)
-	require.Equal(t, 0, big.NewInt(0).Cmp(rewards))
+	assert.NoError(t, err)
+	assert.Equal(t, 0, big.NewInt(0).Cmp(rewards))
 
 	// Issuance
 	issuance, err := staker.Issuance("best")
-	require.NoError(t, err)
-	require.Equal(t, 1, issuance.Sign())
+	assert.NoError(t, err)
+	assert.Equal(t, 1, issuance.Sign())
 
 	best := node.Chain().Repo().BestBlockSummary()
 	state := node.Chain().Stater().NewState(best.Root())
@@ -323,6 +341,6 @@ func TestStaker(t *testing.T) {
 	stakerNative := builtin.Staker.Native(state)
 
 	rewards, err = energy.CalculateRewards(stakerNative)
-	require.NoError(t, err)
-	require.Equal(t, rewards, issuance)
+	assert.NoError(t, err)
+	assert.Equal(t, rewards, issuance)
 }

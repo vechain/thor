@@ -6,7 +6,6 @@
 package solidity
 
 import (
-	"github.com/vechain/thor/v2/builtin/gascharger"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -14,14 +13,12 @@ import (
 type Context struct {
 	address thor.Address
 	state   *state.State
-	charger *gascharger.Charger
 }
 
-func NewContext(address thor.Address, state *state.State, charger *gascharger.Charger) *Context {
+func NewContext(address thor.Address, state *state.State) *Context {
 	return &Context{
 		address: address,
 		state:   state,
-		charger: charger,
 	}
 }
 
@@ -34,7 +31,5 @@ func (c *Context) State() *state.State {
 }
 
 func (c *Context) UseGas(gas uint64) {
-	if c.charger != nil {
-		c.charger.Charge(gas)
-	}
+	// TODO: Remove this
 }

@@ -41,14 +41,6 @@ struct Aggregation {
     uint256 exitingWeight; // Weight including multipliers
 }
 
-struct Config {
-    uint32 epochLength; // in blocks
-    uint32 cooldownPeriod; // in blocks
-    uint32 lowStakePeriodLength; // in blocks
-    uint32 midStakePeriodLength; // in blocks
-    uint32 highStakePeriodLength; // in blocks
-}
-
 struct Delegation {
     // ---- Slot 0 ----
     address validator; // 20 bytes
@@ -62,19 +54,12 @@ struct Delegation {
 }
 
 contract Staker {
-    uint256 public constant MAX_STAKE = 600e6 ether; // 600 million VET
-    uint256 public constant MIN_STAKE = 1e18 ether; // 1 VET
+    uint256 public constant MAX_STAKE = 600e6 * 1e18; // 600 million VET
+    uint256 public constant MIN_STAKE = 25e6 * 1e18; // 25 million VET
     uint8 public constant VALIDATOR_MULTIPLIER = 200;
 
-    // slot 0 - config valiables
-    Config private _config =
-        Config({
-            epochLength: 180,
-            cooldownPeriod: 360 * 24, // 24 hours in blocks;
-            lowStakePeriodLength: 360 * 24 * 7, // 7 days in blocks
-            midStakePeriodLength: 360 * 24 * 15, // 15 days in blocks
-            highStakePeriodLength: 360 * 24 * 30 // 30 days in blocks
-        });
+    // slot 0
+    uint256 private _unused;
 
     // slot 1
     uint256 private _lockedVET;
@@ -149,10 +134,11 @@ contract Staker {
         address validator,
         uint32 period
     ) public payable checkStake(msg.value) {
+        (uint32 lowPeriod, uint32 midPeriod, uint32 highPeriod) = StakerNative(
+            address(this)
+        ).native_stakingPeriods();
         require(
-            period == _config.lowStakePeriodLength ||
-                period == _config.midStakePeriodLength ||
-                period == _config.highStakePeriodLength,
+            period == lowPeriod || period == midPeriod || period == highPeriod,
             "invalid staking period"
         );
         require(
@@ -272,11 +258,6 @@ contract Staker {
         require(multiplier <= 256, "multiplier cannot exceed 256 (2.56x)"); // 256 is the maximum multiplier allowed
 
         require(
-            _validators[validator].status == ValidatorStatus.Active,
-            "validator not active"
-        );
-
-        require(
             _validators[validator].endorsor != msg.sender,
             "delegator cannot be the endorsor"
         );
@@ -321,6 +302,10 @@ contract Staker {
             "delegation already exiting or exited"
         );
         address validator = _delegations[delegationID].validator;
+        require(
+            _validators[validator].status == ValidatorStatus.Active,
+            "validator not active"
+        );
 
         _delegations[delegationID].lastIteration = _validatorNextPeriod(
             validator
@@ -400,10 +385,8 @@ contract Staker {
     function getValidatorStatus(
         address validator
     ) public view returns (uint8, bool) {
-        return (
-            uint8(_validators[validator].status),
-            _validators[validator].online
-        );
+        Validation storage v = _validators[validator];
+        return (uint8(v.status), v.online);
     }
 
     function getValidatorPeriodDetails(
@@ -460,7 +443,7 @@ contract Staker {
         uint256 exitingVET;
         uint256 exitingWeight;
 
-        if (v.status == ValidatorStatus.Active && v.exitBlock != 0) {
+        if (v.status == ValidatorStatus.Active && v.exitBlock != type(uint32).max) {
             exitingVET = v.lockedVET + agg.lockedVET;
             exitingWeight = v.weight;
         } else {
@@ -495,15 +478,17 @@ contract Staker {
     }
 
     function _addToQueue(address validator) internal {
-        Node storage node = _queuedValidators[validator];
-        node.prev = _lastQueuedValidator;
-        _queuedValidators[validator] = node;
+        Node memory node = Node({
+            next: address(0),
+            prev: _lastQueuedValidator
+        });
         if (_queuedValidatorsCount == 0) {
             _firstQueuedValidator = validator;
         } else {
             _queuedValidators[_lastQueuedValidator].next = validator;
         }
         _lastQueuedValidator = validator;
+        _queuedValidators[validator] = node;
         _queuedValidatorsCount++;
     }
 
@@ -529,7 +514,9 @@ contract Staker {
     ) internal returns (uint32) {
         uint32 exitBlock = minBlock;
         while (_exitBlocks[exitBlock] != address(0)) {
-            exitBlock = exitBlock + _config.epochLength;
+            exitBlock =
+                exitBlock +
+                StakerNative(address(this)).native_epochLength();
         }
         _exitBlocks[exitBlock] = validator;
         return exitBlock;
@@ -541,7 +528,8 @@ contract Staker {
         return
             _validators[validator].status == ValidatorStatus.Exited && // validator has exited
             block.number >=
-            _validators[validator].exitBlock + _config.cooldownPeriod; // cooldown period has passed
+            _validators[validator].exitBlock +
+                StakerNative(address(this)).native_cooldownPeriod();
     }
 
     function _addQueuedStake(uint256 amount, uint8 multiplier) internal {
@@ -576,6 +564,9 @@ contract Staker {
         uint256 delegationID,
         address validator
     ) internal view returns (bool) {
+        if (_validators[validator].status != ValidatorStatus.Active) {
+            return false;
+        }
         bool started = _hasDelegationStarted(delegationID, validator);
         bool ended = _hasDelegationEnded(delegationID, validator);
         return started && !ended;
@@ -585,6 +576,9 @@ contract Staker {
         uint256 delegationID,
         address validator
     ) internal view returns (bool) {
+        if (_validators[validator].status != ValidatorStatus.Active) {
+            return false;
+        }
         return
             _delegations[delegationID].firstIteration >
             _validators[validator].completeIterations;
@@ -680,4 +674,12 @@ contract Staker {
 interface StakerNative {
     function native_issuance() external view returns (uint256, string calldata);
     function native_delegatorContract() external view returns (address);
+
+    // config
+    function native_stakingPeriods()
+        external
+        view
+        returns (uint32, uint32, uint32);
+    function native_epochLength() external view returns (uint32);
+    function native_cooldownPeriod() external view returns (uint32);
 }

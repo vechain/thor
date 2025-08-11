@@ -19,7 +19,7 @@ type Node struct {
 	Prev *thor.Address `rlp:"nil"`
 }
 
-func (n Node) DecodeSlots(slots []thor.Bytes32) error {
+func (n *Node) DecodeSlots(slots []thor.Bytes32) error {
 	if len(slots) != 2 {
 		return errors.New("invalid number of slots for Node")
 	}
@@ -37,7 +37,7 @@ func (n Node) DecodeSlots(slots []thor.Bytes32) error {
 	return nil
 }
 
-func (n Node) EncodeSlots() []thor.Bytes32 {
+func (n *Node) EncodeSlots() []thor.Bytes32 {
 	slots := make([]thor.Bytes32, 2)
 
 	if n.Next != nil {
@@ -51,14 +51,14 @@ func (n Node) EncodeSlots() []thor.Bytes32 {
 	return slots
 }
 
-func (n Node) UsedSlots() int {
+func (n *Node) UsedSlots() int {
 	return 2 // Each node uses two slots: one for Next and one for Prev
 }
 
 var _ solidity.ComplexValue[Node] = (*Node)(nil)
 
 type LinkedList struct {
-	mapping *solidity.ComplexMapping[thor.Address, Node]
+	mapping *solidity.ComplexMapping[thor.Address, *Node]
 	head  *solidity.Address
 	tail  *solidity.Address
 	count *solidity.Uint256
@@ -73,7 +73,7 @@ func NewLinkedList(
 	tailSlot := solidity.IncrementSlot(firstSlot[:], 2)
 	countPos := solidity.IncrementSlot(firstSlot[:], 3)
 	return &LinkedList{
-		mapping: solidity.NewComplexMapping[thor.Address, Node](sctx, firstSlot),
+		mapping: solidity.NewComplexMapping[thor.Address, *Node](sctx, firstSlot),
 		head:  solidity.NewAddress(sctx, headSlot),
 		tail:  solidity.NewAddress(sctx, tailSlot),
 		count: solidity.NewUint256(sctx, countPos),
@@ -131,7 +131,7 @@ func (l *LinkedList) Add(address thor.Address) error {
 
 	// Create new node for the new address
 	newNode := Node{Prev: &oldTail}
-	l.mapping.Set(address, newNode)
+	l.mapping.Set(address, &newNode)
 	// Update tail pointer to the new address
 	l.tail.Set(&address, false)
 
@@ -152,11 +152,41 @@ func (l *LinkedList) Remove(address thor.Address) error {
 	if err != nil {
 		return errors.Wrapf(err, "failed to get node for address %s", address)
 	}
-	if node.Prev == nil && node.Next == nil {
-		return errors.New("address not found in the list")
+
+	if node.Next == nil && node.Prev == nil {
+		head, err := l.isHead(address)
+		if err != nil {
+			return errors.Wrapf(err, "failed to check if address %s is head", address)
+		}
+		if !head {
+			return errors.New("address not found in the list")
+		}
+		l.head.Set(&thor.Address{}, false) // If it's the only node, reset head
+		l.tail.Set(&thor.Address{}, false) // and tail
+		return l.count.Sub(big.NewInt(1))  // Decrement count
 	}
 	if node.Prev != nil {
+		prevNode, err := l.mapping.Get(*node.Prev)
+		if err != nil {
+			return errors.Wrapf(err, "failed to get previous node for address %s", *node.Prev)
+		}
+		prevNode.Next = node.Next // Link previous node to next
+		l.mapping.Set(*node.Prev, prevNode)
+	} else {
+		// If no previous node, this is the head
+		l.head.Set(node.Next, false)
+	}
 
+	if node.Next != nil {
+		nextNode, err := l.mapping.Get(*node.Next)
+		if err != nil {
+			return errors.Wrapf(err, "failed to get next node for address %s", *node.Next)
+		}
+		nextNode.Prev = node.Prev // Link next node to previous
+		l.mapping.Set(*node.Next, nextNode)
+	} else {
+		// If no next node, this is the tail
+		l.tail.Set(node.Prev, false)
 	}
 
 	if err := l.count.Sub(big.NewInt(1)); err != nil {
@@ -191,6 +221,28 @@ func (l *LinkedList) Peek() (thor.Address, error) {
 
 // Len returns the current number of addresses in the staker queue
 func (l *LinkedList) Len() (*big.Int, error) {
+	//count := big.NewInt(0)
+	//current, err := l.head.Get()
+	//if err != nil {
+	//	return count, errors.Wrap(err, "failed to get head address")
+	//}
+	//if current.IsZero() {
+	//	return count, nil // If the list is empty, return zero count
+	//}
+	//
+	//for {
+	//	node, err := l.mapping.Get(current)
+	//	if err != nil {
+	//		return count, errors.Wrapf(err, "failed to get node for address %s", current)
+	//	}
+	//	count.Add(count, big.NewInt(1))
+	//	if node.Next == nil {
+	//		break // Reached the end of the list
+	//	}
+	//	current = *node.Next
+	//}
+	//
+	//return count, nil
 	return l.count.Get()
 }
 

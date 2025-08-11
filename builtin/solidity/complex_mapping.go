@@ -9,7 +9,6 @@ import (
 	"math/big"
 	"reflect"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -31,7 +30,8 @@ func NewComplexMapping[K Key, V ComplexValue[any]](context *Context, pos thor.By
 
 func (m *ComplexMapping[K, V]) Get(key K) (V, error) {
 	// compute base slot = keccak256(key + basePos)
-	base := thor.Keccak256(key.Bytes(), m.basePos.Bytes()).Bytes()
+	keyBytes32 := thor.BytesToBytes32(key.Bytes())
+	base := thor.Keccak256(keyBytes32.Bytes(), m.basePos.Bytes()).Bytes()
 
 	var output V
 
@@ -45,12 +45,10 @@ func (m *ComplexMapping[K, V]) Get(key K) (V, error) {
 
 	for i := 0; i < slotsUsed; i++ {
 		slot := IncrementSlot(base, i)
-		println("getting slot:", hexutil.Encode(slot[:]))
 		data, err := m.context.state.GetStorage(m.context.address, slot)
 		if err != nil {
 			return output, err
 		}
-		println("got slot:", hexutil.Encode(data[:]))
 		storage[i] = data
 	}
 
@@ -62,13 +60,12 @@ func (m *ComplexMapping[K, V]) Get(key K) (V, error) {
 }
 
 func (m *ComplexMapping[K, V]) Set(key K, value V) {
-	base := thor.Keccak256(key.Bytes(), m.basePos.Bytes()).Bytes()
+	keyBytes32 := thor.BytesToBytes32(key.Bytes())
+	base := thor.Keccak256(keyBytes32.Bytes(), m.basePos.Bytes()).Bytes()
 	slots := value.EncodeSlots()
 
 	for i, slotValue := range slots {
-
 		slot := IncrementSlot(base, i)
-		println("setting slot:" + hexutil.Encode(slotValue[:])+ "for key" + hexutil.Encode(slot[:]))
 		m.context.state.SetStorage(m.context.address, slot, slotValue)
 	}
 }

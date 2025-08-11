@@ -8,7 +8,6 @@ package staker
 import (
 	"math/big"
 
-	"github.com/vechain/thor/v2/builtin/gascharger"
 	"github.com/vechain/thor/v2/builtin/params"
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/builtin/staker/aggregation"
@@ -27,13 +26,12 @@ var (
 	MinStake = big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
 	MaxStake = big.NewInt(0).Mul(big.NewInt(600e6), big.NewInt(1e18))
 
+	LowStakingPeriod    = solidity.NewConfigVariable("staker-low-staking-period", 360*24*7)     // 7 Days
+	MediumStakingPeriod = solidity.NewConfigVariable("staker-medium-staking-period", 360*24*15) // 15 Days
+	HighStakingPeriod   = solidity.NewConfigVariable("staker-high-staking-period", 360*24*30)   // 30 Days
 
-	CooldownPeriod = solidity.NewConfigVariable(solidity.NumToSlot(0), 8640) // 8640 blocks, 1 day
-	EpochLength    = solidity.NewConfigVariable(solidity.NumToSlot(0), 180)     // 180
-
-	LowStakingPeriod    = solidity.NewConfigVariable(solidity.NumToSlot(0), 360*24*7)     // 7 Days
-	MediumStakingPeriod = solidity.NewConfigVariable(solidity.NumToSlot(0), 360*24*15) // 15 Days
-	HighStakingPeriod   = solidity.NewConfigVariable(solidity.NumToSlot(0), 360*24*30)   // 30 Days
+	CooldownPeriod = solidity.NewConfigVariable("cooldown-period", 8640) // 8640 blocks, 1 day
+	EpochLength    = solidity.NewConfigVariable("epoch-length", 180)     // 180 epochs
 )
 
 func SetLogger(l log.Logger) {
@@ -50,8 +48,8 @@ type Staker struct {
 }
 
 // New create a new instance.
-func New(addr thor.Address, state *state.State, params *params.Params, charger *gascharger.Charger) *Staker {
-	sctx := solidity.NewContext(addr, state, charger)
+func New(addr thor.Address, state *state.State, params *params.Params) *Staker {
+	sctx := solidity.NewContext(addr, state)
 
 	// debug overrides for testing
 	LowStakingPeriod.Override(sctx)
@@ -65,16 +63,7 @@ func New(addr thor.Address, state *state.State, params *params.Params, charger *
 
 		aggregationService: aggregation.New(sctx),
 		globalStatsService: globalstats.New(sctx),
-		validationService: validation.New(
-			sctx,
-			CooldownPeriod.Get(),
-			EpochLength.Get(),
-			LowStakingPeriod.Get(),
-			MediumStakingPeriod.Get(),
-			HighStakingPeriod.Get(),
-			MinStake,
-			MaxStake,
-		),
+		validationService: validation.New(sctx),
 	}
 }
 

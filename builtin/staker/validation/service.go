@@ -20,38 +20,18 @@ import (
 type Service struct {
 	leaderGroup         *linkedlist.LinkedList
 	validatorQueue      *linkedlist.LinkedList
-	lowStakingPeriod    uint32
-	mediumStakingPeriod uint32
-	highStakingPeriod   uint32
-	cooldownPeriod      uint32
 
-	minStake    *big.Int
-	maxStake    *big.Int
+
 	repo        *Repository
-	epochLength uint32
+
 }
 
-func New(sctx *solidity.Context,
-	cooldownPeriod uint32,
-	epochLength uint32,
-	lowStakingPeriod uint32,
-	mediumStakingPeriod uint32,
-	highStakingPeriod uint32,
-	minStake *big.Int,
-	maxStake *big.Int,
-) *Service {
+func New(sctx *solidity.Context) *Service {
 	repo := NewRepository(sctx)
 	return &Service{
 		repo: repo,
 		validatorQueue: linkedlist.NewLinkedList(sctx, solidity.NumToSlot(5)),
 		leaderGroup:    linkedlist.NewLinkedList(sctx, solidity.NumToSlot(9)),
-		lowStakingPeriod:    lowStakingPeriod,
-		mediumStakingPeriod: mediumStakingPeriod,
-		highStakingPeriod:   highStakingPeriod,
-		cooldownPeriod: cooldownPeriod,
-		epochLength:    epochLength,
-		minStake: minStake,
-		maxStake: maxStake,
 	}
 }
 

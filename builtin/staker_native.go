@@ -10,14 +10,13 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/vechain/thor/v2/builtin/gascharger"
+	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/xenv"
 )
 
-func isContractPaused(state *state.State, charger *gascharger.Charger, pauseBit int) (bool, error) {
-	charger.Charge(thor.SloadGas)
+func isContractPaused(state *state.State, pauseBit int) (bool, error) {
 	switches, err := Params.Native(state).Get(thor.KeyStargateSwitches)
 	if err != nil {
 		return false, err
@@ -25,8 +24,8 @@ func isContractPaused(state *state.State, charger *gascharger.Charger, pauseBit 
 	return switches.Bit(pauseBit) == 1, nil
 }
 
-func IsStargatePaused(state *state.State, charger *gascharger.Charger) error {
-	isPaused, err := isContractPaused(state, charger, 0)
+func IsStargatePaused(state *state.State) error {
+	isPaused, err := isContractPaused(state, 0)
 	if err != nil {
 		return err
 	}
@@ -37,8 +36,8 @@ func IsStargatePaused(state *state.State, charger *gascharger.Charger) error {
 }
 
 // The staker pause switch at binary position 1. (binary: 1 [1] 0)
-func IsStakerPaused(state *state.State, charger *gascharger.Charger) error {
-	isPaused, err := isContractPaused(state, charger, 1)
+func IsStakerPaused(state *state.State) error {
+	isPaused, err := isContractPaused(state, 1)
 	if err != nil {
 		return err
 	}
@@ -54,9 +53,7 @@ func init() {
 		run  func(env *xenv.Environment) []any
 	}{
 		{"native_issuance", func(env *xenv.Environment) []any {
-			charger := gascharger.New(env)
-
-			staker := Staker.NativeMetered(env.State(), charger)
+			staker := Staker.Native(env.State())
 			issuance, err := Energy.Native(env.State(), env.BlockContext().Time).CalculateRewards(staker)
 			if err != nil {
 				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
@@ -71,6 +68,30 @@ func init() {
 			}
 			delegatorContract := thor.BytesToAddress(contractBig.Bytes())
 			return []any{delegatorContract}
+		}},
+		{"native_stakingPeriods", func(env *xenv.Environment) []any {
+			env.UseGas(thor.SloadGas)
+			env.UseGas(thor.SloadGas)
+			env.UseGas(thor.SloadGas)
+
+			Staker.Native(env.State())
+			return []any{
+				staker.LowStakingPeriod.Get(),
+				staker.MediumStakingPeriod.Get(),
+				staker.HighStakingPeriod.Get(),
+			}
+		}},
+		{"native_epochLength", func(env *xenv.Environment) []any {
+			env.UseGas(thor.SloadGas)
+
+			Staker.Native(env.State())
+			return []any{staker.EpochLength.Get(),}
+		}},
+		{"native_cooldownPeriod", func(env *xenv.Environment) []any {
+			env.UseGas(thor.SloadGas)
+
+			Staker.Native(env.State())
+			return []any{staker.CooldownPeriod.Get()}
 		}},
 	}
 	stakerAbi := Staker.NativeABI()

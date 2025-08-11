@@ -27,7 +27,7 @@ func Test_LinkedList_Remove_NonExistent(t *testing.T) {
 
 	sctx := solidity.NewContext(addr, st, nil)
 
-	linkedList := NewLinkedList(sctx, thor.Bytes32{0x1}, thor.Bytes32{0x2}, thor.Bytes32{0x3})
+	linkedList := NewLinkedList(sctx, thor.Bytes32{0x1})
 
 	id1 := datagen.RandAddress()
 	id2 := datagen.RandAddress()

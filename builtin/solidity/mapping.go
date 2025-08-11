@@ -54,7 +54,8 @@ func NewSimpleMapping[K Key, V comparable](context *Context, pos thor.Bytes32) *
 // If no value is present, returns the zero-value of V.
 func (m *SimpleMapping[K, V]) Get(key K) (V, error) {
 	// compute the storage slot from key + base position
-	position := thor.Keccak256(key.Bytes(), m.basePos.Bytes())
+	keyBytes32 := thor.BytesToBytes32(key.Bytes())
+	position := thor.Keccak256(keyBytes32.Bytes(), m.basePos.Bytes())
 
 	// prepare a zero-value container for decoding
 	var value V
@@ -88,7 +89,8 @@ func (m *SimpleMapping[K, V]) Get(key K) (V, error) {
 // Set stores the given value at key, charging Sstore gas per 32-byte word.
 // Passing the zero-value of V clears the storage slot.
 func (m *SimpleMapping[K, V]) Set(key K, value V, newValue bool) error {
-	position := thor.Keccak256(key.Bytes(), m.basePos.Bytes())
+	keyBytes32 := thor.BytesToBytes32(key.Bytes())
+	position := thor.Keccak256(keyBytes32.Bytes(), m.basePos.Bytes())
 
 	// do not RLP-encode nil values, instead set raw storage to nil
 	var zero V

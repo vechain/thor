@@ -46,38 +46,45 @@ type Validation struct {
 	Online             bool         // whether the validation is online or not
 
 	// ---- Slot 1 ----
-	StartBlock         uint32       // the block number when the validation started the first staking period
-	ExitBlock          uint32      // the block number when the validation moved to cooldown
+	StartBlock uint32 // the block number when the validation started the first staking period
+	ExitBlock  uint32 // the block number when the validation moved to cooldown
 
 	// ---- Slot 2 ----
-	LockedVET        *big.Int // the amount of VET locked for the current staking period, for the validator only
+	LockedVET *big.Int // the amount of VET locked for the current staking period, for the validator only
 	// ---- Slot 3 ----
 	PendingUnlockVET *big.Int // the amount of VET that will be unlocked in the next staking period. DOES NOT contribute to the TVL
 	// ---- Slot 4 ----
-	QueuedVET        *big.Int // the amount of VET queued to be locked in the next staking period
+	QueuedVET *big.Int // the amount of VET queued to be locked in the next staking period
 	// ---- Slot 5 ----
-	CooldownVET      *big.Int // the amount of VET that is locked into the validation's cooldown
+	CooldownVET *big.Int // the amount of VET that is locked into the validation's cooldown
 	// ---- Slot 6 ----
-	WithdrawableVET  *big.Int // the amount of VET that is currently withdrawable
+	WithdrawableVET *big.Int // the amount of VET that is currently withdrawable
 
 	// ---- Slot 7 ----
 	Weight *big.Int // LockedVET x2 + total weight from delegators
 }
+
+// ... existing code ...
 
 func (v *Validation) DecodeSlots(slots []thor.Bytes32) error {
 	if len(slots) != SlotsUsed {
 		return errors.New("invalid number of slots for validation")
 	}
 
-	v.Endorsor = thor.BytesToAddress(slots[0][0:20])
-	v.Period = binary.BigEndian.Uint32(slots[0][20:24])
-	v.CompleteIterations = binary.BigEndian.Uint32(slots[0][24:28])
-	v.Status = slots[0][28]
-	v.Online = slots[0][29] == 1 // 1 means online, 0 means offline
+	// Slot 0 (right-aligned packing):
+	// [0..1]=padding, [2]=Online(1), [3]=Status(1), [4..7]=CompleteIterations, [8..11]=Period, [12..31]=Endorsor
+	v.Endorsor = thor.BytesToAddress(slots[0][12:32])
+	v.Period = binary.BigEndian.Uint32(slots[0][8:12])
+	v.CompleteIterations = binary.BigEndian.Uint32(slots[0][4:8])
+	v.Status = slots[0][3]
+	v.Online = slots[0][2] == 1
 
-	v.StartBlock = binary.BigEndian.Uint32(slots[1][:4])
-	v.ExitBlock = binary.BigEndian.Uint32(slots[1][4:8])
+	// Slot 1 (right-aligned packing):
+	// [24..27]=ExitBlock, [28..31]=StartBlock
+	v.StartBlock = binary.BigEndian.Uint32(slots[1][28:32])
+	v.ExitBlock = binary.BigEndian.Uint32(slots[1][24:28])
 
+	// Slots 2..7 are full 32-byte words (big-endian), already correct.
 	v.LockedVET = new(big.Int).SetBytes(slots[2][:])
 	v.PendingUnlockVET = new(big.Int).SetBytes(slots[3][:])
 	v.QueuedVET = new(big.Int).SetBytes(slots[4][:])
@@ -91,22 +98,24 @@ func (v *Validation) DecodeSlots(slots []thor.Bytes32) error {
 func (v *Validation) EncodeSlots() []thor.Bytes32 {
 	slots := make([]thor.Bytes32, SlotsUsed)
 
-	// Slot 0: Endorsor (20 bytes), Period (4 bytes), CompleteIterations (4 bytes), Status (1 byte), Online (1 byte), 2 bytes padding
-	copy(slots[0][0:20], v.Endorsor.Bytes())
-	binary.BigEndian.PutUint32(slots[0][20:24], v.Period)
-	binary.BigEndian.PutUint32(slots[0][24:28], v.CompleteIterations)
-	slots[0][28] = v.Status
+	// Slot 0 (right-aligned):
+	// [12..31]=Endorsor, [8..11]=Period, [4..7]=CompleteIterations, [3]=Status, [2]=Online, [0..1]=padding
+	copy(slots[0][12:32], v.Endorsor.Bytes())
+	binary.BigEndian.PutUint32(slots[0][8:12], v.Period)
+	binary.BigEndian.PutUint32(slots[0][4:8], v.CompleteIterations)
+	slots[0][3] = v.Status
 	if v.Online {
-		slots[0][29] = 1
+		slots[0][2] = 1
 	} else {
-		slots[0][29] = 0
+		slots[0][2] = 0
 	}
 
-	// Slot 1: StartBlock (4 bytes), ExitBlock (4 bytes), remaining bytes zeroed
-	binary.BigEndian.PutUint32(slots[1][0:4], v.StartBlock)
-	binary.BigEndian.PutUint32(slots[1][4:8], v.ExitBlock)
-	// slots[1][8:32] remain zero
+	// Slot 1 (right-aligned):
+	// [28..31]=StartBlock, [24..27]=ExitBlock
+	binary.BigEndian.PutUint32(slots[1][28:32], v.StartBlock)
+	binary.BigEndian.PutUint32(slots[1][24:28], v.ExitBlock)
 
+	// Slots 2..7 unchanged
 	slots[2] = thor.BytesToBytes32(v.LockedVET.Bytes())
 	slots[3] = thor.BytesToBytes32(v.PendingUnlockVET.Bytes())
 	slots[4] = thor.BytesToBytes32(v.QueuedVET.Bytes())
