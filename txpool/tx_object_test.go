@@ -25,7 +25,7 @@ import (
 )
 
 func newChainRepo() *chain.Repository {
-	tchain, _ := testchain.NewWithFork(&thor.SoloFork)
+	tchain, _ := testchain.NewWithFork(&thor.SoloFork, 180)
 	return tchain.Repo()
 }
 
@@ -91,7 +91,7 @@ func txBuilder(
 }
 
 func SetupTest() (genesis.DevAccount, *chain.Repository, *block.Block, *state.State, *thor.ForkConfig) {
-	tchain, _ := testchain.NewWithFork(&thor.SoloFork)
+	tchain, _ := testchain.NewWithFork(&thor.SoloFork, 180)
 	repo := tchain.Repo()
 	db := tchain.Database()
 
@@ -176,7 +176,7 @@ func TestResolve(t *testing.T) {
 func TestExecutable(t *testing.T) {
 	acc := genesis.DevAccounts()[0]
 
-	tchain, err := testchain.NewWithFork(&thor.SoloFork)
+	tchain, err := testchain.NewWithFork(&thor.SoloFork, 180)
 	assert.Nil(t, err)
 	repo := tchain.Repo()
 	db := tchain.Database()
@@ -227,7 +227,7 @@ func TestExecutableRejectNonLegacyBeforeGalactica(t *testing.T) {
 
 	dynamicFeeTx := newTx(tx.TypeDynamicFee, 0, nil, 21000, tx.BlockRef{0}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
 
-	tchain, _ := testchain.NewWithFork(forkConfig)
+	tchain, _ := testchain.NewWithFork(forkConfig, 180)
 	repo := tchain.Repo()
 	baseFee := galactica.CalcBaseFee(repo.BestBlockSummary().Header, forkConfig)
 
@@ -264,7 +264,7 @@ func TestExecutableRejectUnsupportedFeatures(t *testing.T) {
 		HAYABUSA_TP: math.MaxUint32,
 	}
 
-	tchain, _ := testchain.NewWithFork(forkConfig)
+	tchain, _ := testchain.NewWithFork(forkConfig, 180)
 	repo := tchain.Repo()
 
 	tx1 := newDelegatedTx(tx.TypeLegacy, 0, nil, 21000, tx.BlockRef{0}, 100, nil, genesis.DevAccounts()[0], genesis.DevAccounts()[1])

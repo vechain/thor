@@ -11,6 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vechain/thor/v2/builtin/solidity"
+	builtinStaker "github.com/vechain/thor/v2/builtin/staker"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/builtin"
@@ -70,6 +73,8 @@ func TestStaker(t *testing.T) {
 	// add validators - trigger PoS activation
 	minStake := MinStake()
 	var validatorTxs []*tx.Transaction
+
+	builtinStaker.EpochLength = solidity.NewConfigVariable("epoch-length", 1)
 	for _, acc := range genesis.DevAccounts()[0:2] {
 		addValidatorTx, err := staker.AddValidation(acc.Address, minStake, minStakingPeriod).
 			Send().
@@ -184,6 +189,8 @@ func TestStaker(t *testing.T) {
 	stake = big.NewInt(0).Mul(stake, big.NewInt(1e6))
 	require.Equal(t, stake, queuedStake)
 	require.Equal(t, big.NewInt(0).Mul(stake, big.NewInt(2)), queuedWeight)
+
+	builtinStaker.EpochLength = solidity.NewConfigVariable("epoch-length", 180)
 
 	// IncreaseStake
 	receipt, _, err = staker.IncreaseStake(queuedID, minStake).

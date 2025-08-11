@@ -27,7 +27,7 @@ func TestFlow_Schedule_POS(t *testing.T) {
 	config.HAYABUSA_TP = 1
 	config.BLOCKLIST = math.MaxUint32
 
-	chain, err := testchain.NewWithFork(config)
+	chain, err := testchain.NewWithFork(config, 1)
 	assert.NoError(t, err)
 
 	// mint block 1: using PoA

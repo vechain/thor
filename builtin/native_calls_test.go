@@ -583,7 +583,7 @@ func TestEnergyNative(t *testing.T) {
 
 	fc := &thor.SoloFork
 	fc.HAYABUSA = 4
-	thorChain, _ = testchain.NewWithFork(fc)
+	thorChain, _ = testchain.NewWithFork(fc, 1)
 
 	var stringOutput string
 	_, err := callContractAndGetOutput(abi, "name", toAddr, &stringOutput)
@@ -1576,7 +1576,7 @@ func TestStakerContract_Native(t *testing.T) {
 	fc.HAYABUSA = 2
 	fc.HAYABUSA_TP = 2
 	var err error
-	thorChain, err = testchain.NewWithFork(fc)
+	thorChain, err = testchain.NewWithFork(fc, 1)
 	assert.NoError(t, err)
 
 	// add validator as authority
@@ -1782,7 +1782,7 @@ func TestStakerContract_Native_Revert(t *testing.T) {
 	fc.HAYABUSA = 2
 	fc.HAYABUSA_TP = 2
 	var err error
-	thorChain, err = testchain.NewWithFork(fc)
+	thorChain, err = testchain.NewWithFork(fc, 180)
 	assert.NoError(t, err)
 
 	mbp := TestTxDescription{
@@ -1917,7 +1917,7 @@ func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
 	fc.HAYABUSA = 1
 	fc.HAYABUSA_TP = 2
 	var err error
-	thorChain, err = testchain.NewWithFork(fc)
+	thorChain, err = testchain.NewWithFork(fc, 180)
 	assert.NoError(t, err)
 	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
 	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
@@ -1980,7 +1980,7 @@ func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
 
 func TestExtensionV3(t *testing.T) {
 	fc := thor.SoloFork
-	chain, err := testchain.NewWithFork(&fc)
+	chain, err := testchain.NewWithFork(&fc, 180)
 	assert.Nil(t, err)
 
 	// galactica fork happens at block 1
@@ -2038,7 +2038,7 @@ func TestStakerContract_Native_CheckStake(t *testing.T) {
 	fc.HAYABUSA = 1
 	fc.HAYABUSA_TP = 2
 	var err error
-	thorChain, err = testchain.NewWithFork(fc)
+	thorChain, err = testchain.NewWithFork(fc, 180)
 	assert.NoError(t, err)
 	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
 	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))

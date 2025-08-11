@@ -110,7 +110,7 @@ func TestGetSummary(t *testing.T) {
 		FINALITY:  0,
 		GALACTICA: 100,
 	}
-	thorChain, err := testchain.NewWithFork(&forks)
+	thorChain, err := testchain.NewWithFork(&forks, 180)
 	require.NoError(t, err)
 
 	customRevision := thorChain.Repo().BestBlockSummary().Header.ID()
