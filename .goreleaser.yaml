@@ -16,12 +16,51 @@ before:
     - go generate ./...
 
 builds:
-  - env:
+  - id: thor
+    main: ./cmd/thor
+    binary: thor
+    env:
       - CGO_ENABLED=0
+    ldflags:
+      - >-
+        -X main.version={{.Env.THOR_VERSION}}
+        -X main.gitCommit={{.Commit}}
+        -X main.gitTag={{.Tag}}
+        -X main.copyrightYear={{.Env.COPYRIGHT_YEAR}}
+    hooks:
+      pre:
+        - export THOR_VERSION=$(cat cmd/thor/VERSION)
+        - export COPYRIGHT_YEAR=$(git log -1 --format=%ad --date=format:%Y)
     goos:
       - linux
-      - windows
       - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+  - id: disco
+    main: ./cmd/disco
+    binary: disco
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - >-
+        -X main.version={{.Env.DISCO_VERSION}}
+        -X main.gitCommit={{.Commit}}
+        -X main.gitTag={{.Tag}}
+        -X main.copyrightYear={{.Env.COPYRIGHT_YEAR}}
+    hooks:
+      pre:
+        - export DISCO_VERSION=$(cat cmd/disco/VERSION)
+        - export COPYRIGHT_YEAR=$(git log -1 --format=%ad --date=format:%Y)
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
 
 archives:
   - format: tar.gz
