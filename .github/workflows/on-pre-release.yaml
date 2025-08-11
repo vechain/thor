@@ -41,3 +41,12 @@ jobs:
         ghcr.io/${{ github.repository }}
       tags: |
         type=raw,value=${{ github.ref_name }}
+
+  publish-binaries:
+    name: Publish Binaries
+    uses: ./.github/workflows/release-binaries.yaml
+    secrets: inherit
+    needs:
+      - validate
+    permissions:
+      contents: write

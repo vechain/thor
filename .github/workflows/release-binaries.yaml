@@ -1,0 +1,78 @@
+name: Release Binaries
+
+on:
+  workflow_dispatch:
+    inputs:
+      binary:
+        options:
+          - thor
+          - disco
+        description: 'Select the binary to build and release'
+        type: choice
+        required: true
+        default: thor
+  workflow_call:
+    inputs:
+      binary:
+        description: 'Select the binary to build and release'
+        type: string
+        required: true
+        default: thor
+
+permissions:
+  contents: write
+
+jobs:
+  build-binaries:
+    runs-on: ${{ matrix.hostos }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - goos: linux
+          goarch: amd64
+          hostos: ubuntu-latest
+        - goos: linux
+          goarch: arm64
+          hostos: ubuntu-24.04-arm
+        - goos: darwin
+          goarch: arm64
+          hostos: macos-latest
+        - goos: windows
+          goarch: amd64
+          hostos: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.24
+
+      - name: Install GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          install-only: true
+
+      - name: Set Env
+        run: |
+          echo "BINARY=${{ inputs.binary || 'thor' }}" >> $GITHUB_ENV
+          echo "BIN_EXT=${{ matrix.goos == 'windows' && '.exe' || '' }}" >> $GITHUB_ENV
+
+      - name: Build Binary
+        run: make ${{ env.BINARY }}
+
+      - name: Rename Binary
+        run: |
+          mkdir -p ./dist
+          mv ./bin/${{ env.BINARY }}${{ env.BIN_EXT }} ./dist/${{ env.BINARY }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}
+
+      - name: Upload Binary
+        uses: alexellis/upload-assets@0.4.1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          asset_paths: '["./dist/*"]'
+
