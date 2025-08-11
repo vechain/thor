@@ -20,10 +20,11 @@ import (
 //
 
 type EpochTransition struct {
-	Block           uint32
-	Renewals        []ValidatorRenewal
-	ExitValidator   *thor.Address
-	ActivationCount int64
+	Block            uint32
+	Renewals         []ValidatorRenewal
+	ExitValidator    *thor.Address
+	ActivationCount  int64
+	ActiveValidators map[thor.Address]*validation.Validation
 }
 
 type ValidatorRenewal struct {
@@ -55,7 +56,7 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Address]*validat
 	}
 
 	// Build active validators map
-	activeValidators := s.buildActiveValidatorsFromTransition(transition)
+	activeValidators := transition.ActiveValidators
 
 	logger.Info("performed housekeeping", "block", currentBlock, "updates", true)
 	return true, activeValidators, nil
@@ -68,8 +69,13 @@ func (s *Staker) computeEpochTransition(currentBlock uint32) (*EpochTransition, 
 	transition := &EpochTransition{Block: currentBlock}
 
 	var renewals []ValidatorRenewal
+	active := make(map[thor.Address]*validation.Validation)
 	exitValidator := thor.Address{}
-	err = s.validationService.LeaderGroupIterator(s.renewalCallback(currentBlock, &renewals), s.exitsCallback(currentBlock, &exitValidator))
+	err = s.validationService.LeaderGroupIterator(
+		s.renewalCallback(currentBlock, &renewals),
+		s.exitsCallback(currentBlock, &exitValidator),
+		s.collectActiveCallback(active),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -85,6 +91,7 @@ func (s *Staker) computeEpochTransition(currentBlock uint32) (*EpochTransition, 
 	if err != nil {
 		return nil, err
 	}
+	transition.ActiveValidators = active
 
 	return transition, nil
 }
@@ -139,6 +146,10 @@ func (s *Staker) exitsCallback(currentBlock uint32, exitAddress *thor.Address) f
 		}
 		return nil
 	}
+}
+
+func (s *Staker) collectActiveCallback(active map[thor.Address]*validation.Validation) func(thor.Address, *validation.Validation) error {
+	return func(id thor.Address, v *validation.Validation) error { active[id] = v; return nil }
 }
 
 // computeActivationCount calculates how many validators can be activated
@@ -217,6 +228,7 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 		if err := s.globalStatsService.ApplyExit(exit.Add(aggExit)); err != nil {
 			return err
 		}
+		delete(transition.ActiveValidators, *transition.ExitValidator)
 	}
 
 	// Apply activations using existing method
@@ -226,33 +238,18 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 	}
 
 	for range transition.ActivationCount {
-		if _, err := s.activateNextValidation(transition.Block, maxLeaderGroupSize); err != nil {
+		address, err := s.activateNextValidation(transition.Block, maxLeaderGroupSize)
+		if err != nil {
 			return err
 		}
+		validator, err := s.Get(*address)
+		if err != nil {
+			return err
+		}
+		transition.ActiveValidators[*address] = validator
 	}
 
 	return nil
-}
-
-func (s *Staker) buildActiveValidatorsFromTransition(transition *EpochTransition) map[thor.Address]*validation.Validation {
-	if transition == nil {
-		return nil
-	}
-
-	activeValidators := make(map[thor.Address]*validation.Validation)
-
-	// After all transitions are applied, just read the current leader group
-	// This captures renewed validators, excludes exited ones, and includes newly activated ones
-	err := s.validationService.LeaderGroupIterator(func(validator thor.Address, entry *validation.Validation) error {
-		activeValidators[validator] = entry
-		return nil
-	})
-	if err != nil {
-		logger.Error("failed to build active validators map", "error", err)
-		return nil
-	}
-
-	return activeValidators
 }
 
 func (s *Staker) activateNextValidation(currentBlk uint32, maxLeaderGroupSize *big.Int) (*thor.Address, error) {
