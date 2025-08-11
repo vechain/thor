@@ -23,20 +23,17 @@ type Key interface {
 //   - Setting the default type value means removing the value from storage
 //
 //   - If Mapping[thor.Bytes32, *thor.Address]:
-//     ex: SET (k:0x123, v:nil) -> stores nil
-//     ex: SET (k:0x123, v:&thor.Address{})  -> stores nil
+//     ex: SET (k:0x123, v:nil) -> stores nil (default empty value)
 //
 //   - If Mapping[thor.Bytes32, thor.Address]:
 //     ex: SET (k:0x123, v:thor.Address{}) -> stores nil (default empty value)
 //
-//   - Getting a nil storage value will always return default value of V not an empty pointer of the instance
+//   - Getting a nil storage value will always return default value of V
 //
 //   - If Mapping[thor.Bytes32, *thor.Address]:
 //     ex: SET (k:0x123, v:nil) GET (k:0x123)-> returns nil
-//     ex: SET (k:0x123, v:&thor.Address{}) GET (k:0x123)-> returns nil
 //
 //   - If Mapping[thor.Bytes32, thor.Address]:
-//     ex: SET (k:0x123, v:nil) GET (k:0x123)-> returns thor.Address{} (default empty value)
 //     ex: SET (k:0x123, v:thor.Address{}) GET (k:0x123)-> returns thor.Address{} (default empty value)
 //
 // - Getting a non-existing storage will always return the default value of the type defined in the V comparable mapping
@@ -58,7 +55,6 @@ func (m *Mapping[K, V]) Get(key K) (V, error) {
 
 	// prepare a zero-value container for decoding
 	var value V
-
 	// attempt to decode storage into value
 	err := m.context.state.DecodeStorage(
 		m.context.address, position, func(raw []byte) error {
@@ -77,9 +73,7 @@ func (m *Mapping[K, V]) Get(key K) (V, error) {
 			return rlp.DecodeBytes(raw, &value)
 		})
 	if err != nil {
-		// return zero type value
-		var zero V
-		return zero, err
+		return value, err
 	}
 
 	return value, nil
@@ -90,7 +84,7 @@ func (m *Mapping[K, V]) Get(key K) (V, error) {
 func (m *Mapping[K, V]) Set(key K, value V, newValue bool) error {
 	position := thor.Blake2b(key.Bytes(), m.basePos.Bytes())
 
-	// do not RLP-encode nil values, instead set raw storage to nil
+	// do not RLP-encode zero values, instead set raw storage to nil as remove operation
 	var zero V
 	if value == zero {
 		m.context.state.SetRawStorage(m.context.address, position, nil)

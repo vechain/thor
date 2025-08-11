@@ -14,7 +14,7 @@ import (
 )
 
 type Delegation struct {
-	Validation     thor.Address // the validator to which the delegator is delegating
+	Validator      thor.Address // the validator to which the delegator is delegating
 	Stake          *big.Int
 	Multiplier     uint8
 	LastIteration  *uint32 `rlp:"nil"` // the last staking period in which the delegator was active
@@ -43,8 +43,7 @@ func (d *Delegation) Started(val *validation.Validation) bool {
 	if val.Status == validation.StatusQueued {
 		return false // Delegation cannot start if the validation is not active
 	}
-	currentStakingPeriod := val.CurrentIteration()
-	return currentStakingPeriod >= d.FirstIteration
+	return val.CurrentIteration() >= d.FirstIteration
 }
 
 // Ended returns whether the delegation has ended
@@ -61,9 +60,8 @@ func (d *Delegation) Ended(val *validation.Validation) bool {
 	if val.Status == validation.StatusExit && d.Started(val) {
 		return true // Delegation is ended if the validation is in exit status
 	}
-	currentStakingPeriod := val.CurrentIteration()
 	if d.LastIteration == nil {
 		return false
 	}
-	return *d.LastIteration < currentStakingPeriod
+	return *d.LastIteration < val.CurrentIteration()
 }

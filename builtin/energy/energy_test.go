@@ -242,7 +242,7 @@ func (m *mockStaker) HasDelegations(address thor.Address) (bool, error) {
 	return m.hasDelegations, nil
 }
 
-func (m *mockStaker) IncreaseDelegatorsReward(master thor.Address, reward *big.Int) error {
+func (m *mockStaker) IncreaseDelegatorReward(master thor.Address, reward *big.Int) error {
 	return m.increaseRewardErr
 }
 
@@ -255,18 +255,12 @@ func TestCalculateRewards(t *testing.T) {
 
 	stake := big.NewInt(0).Mul(big.NewInt(25), big.NewInt(1e18))
 
-	mockStaker := &mockStaker{
-		lockedVET:         stake,
-		hasDelegations:    false,
-		increaseRewardErr: nil,
-	}
-
-	reward, err := eng.CalculateRewards(mockStaker)
+	reward, err := eng.CalculateRewards(stake)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(121765601217656012), reward)
 
 	leapEng := New(thor.BytesToAddress([]byte("eng")), st, 69638400, p)
-	reward, err = leapEng.CalculateRewards(mockStaker)
+	reward, err = leapEng.CalculateRewards(stake)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(121432908318154219), reward)
 }
@@ -283,7 +277,7 @@ func TestDistributeRewards(t *testing.T) {
 	p := params.New(paramsAddr, st)
 
 	st.SetStorage(paramsAddr, thor.KeyValidatorRewardPercentage, thor.BytesToBytes32(big.NewInt(int64(thor.InitialValidatorRewardPercentage)).Bytes()))
-	st.SetStorage(paramsAddr, thor.KeyStargateContractAddress, thor.BytesToBytes32(stargateAddr.Bytes()))
+	st.SetStorage(paramsAddr, thor.KeyDelegatorContractAddress, thor.BytesToBytes32(stargateAddr.Bytes()))
 
 	eng := New(thor.BytesToAddress([]byte("eng")), st, 1, p)
 
