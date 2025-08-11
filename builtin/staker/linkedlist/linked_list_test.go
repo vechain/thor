@@ -85,6 +85,29 @@ func Test_LinkedList_Remove_NonExistent(t *testing.T) {
 	assert.Equal(t, id2, next)
 }
 
+func Test_LinkedList_Remove_NegativeTests(t *testing.T) {
+	db := muxdb.NewMem()
+	st := state.New(db, trie.Root{})
+	addr := thor.BytesToAddress([]byte("test"))
+
+	sctx := solidity.NewContext(addr, st, nil)
+
+	linkedList := NewLinkedList(sctx, thor.Bytes32{0x1}, thor.Bytes32{0x2}, thor.Bytes32{0x3})
+
+	id1 := thor.Address{}
+	id2 := thor.Address{}
+
+	if err := linkedList.Add(id1); err != nil {
+		t.Fatalf("failed to add id1: %v", err)
+	}
+
+	if err := linkedList.Add(id2); err != nil {
+		t.Fatalf("failed to add id2: %v", err)
+	}
+
+	assert.Nil(t, linkedList.Remove(thor.Address{}))
+}
+
 func Test_LinkedList_Remove(t *testing.T) {
 	db := muxdb.NewMem()
 	st := state.New(db, trie.Root{})
