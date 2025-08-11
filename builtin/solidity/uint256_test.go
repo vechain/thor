@@ -9,6 +9,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/rlp"
+
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/v2/builtin/gascharger"
@@ -82,4 +84,31 @@ func TestUint256(t *testing.T) {
 	if assert.Error(t, err) {
 		assert.Equal(t, "uint256 overflow: value exceeds 256 bits", err.Error())
 	}
+
+	// add 0
+	err = uint.Add(big.NewInt(0))
+	assert.NoError(t, err)
+
+	// sub 0
+	err = uint.Sub(big.NewInt(0))
+	assert.NoError(t, err)
+
+	db := muxdb.NewMem()
+	st := state.New(db, trie.Root{})
+	addr := thor.BytesToAddress([]byte("cfg"))
+	ctx = NewContext(addr, st, nil)
+
+	uint = NewUint256(ctx, thor.BytesToBytes32([]byte("test-uint256")))
+	st.SetRawStorage(addr, thor.BytesToBytes32([]byte("test-uint256")), rlp.RawValue{0xFF})
+	value, err = uint.Get()
+	assert.Nil(t, value)
+	assert.Error(t, err, "")
+
+	err = uint.Add(big.NewInt(1))
+	assert.Nil(t, value)
+	assert.Error(t, err, "")
+
+	err = uint.Sub(big.NewInt(1))
+	assert.Nil(t, value)
+	assert.Error(t, err, "")
 }

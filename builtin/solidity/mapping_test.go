@@ -9,6 +9,8 @@ import (
 	"math"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/rlp"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -247,4 +249,36 @@ func TestMapping_MultiSlotValue(t *testing.T) {
 		assert.Equal(t, value, got)
 		assert.Equal(t, 4*thor.SloadGas, charger.TotalGas(), "wrong gas for big struct get")
 	})
+}
+
+func TestMappingGetSet_ErrorReturnsZeroAndErr(t *testing.T) {
+	db := muxdb.NewMem()
+	st := state.New(db, trie.Root{})
+
+	contract := thor.BytesToAddress([]byte("map"))
+	ctx := NewContext(contract, st, nil)
+
+	basePos := thor.BytesToBytes32([]byte("base"))
+	m := NewMapping[thor.Address, thor.Address](ctx, basePos)
+
+	key := thor.BytesToAddress([]byte("k"))
+	slot := thor.Blake2b(key.Bytes(), basePos.Bytes())
+
+	st.SetRawStorage(contract, slot, rlp.RawValue{0xFF})
+
+	val, err := m.Get(key)
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	if val != (thor.Address{}) {
+		t.Fatalf("expected zero value, got %v", val)
+	}
+
+	m2 := NewMapping[thor.Address, chan int](ctx, basePos)
+	value := make(chan int)
+
+	err = m2.Set(key, value, true)
+	if err == nil {
+		t.Fatalf("expected encode error, got nil")
+	}
 }
