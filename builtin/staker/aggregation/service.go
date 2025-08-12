@@ -15,12 +15,12 @@ import (
 
 // Service manages delegation aggregations for each validator.
 type Service struct {
-	aggregationStorage *solidity.SimpleMapping[thor.Address, Aggregation]
+	aggregationStorage *solidity.ComplexMapping[thor.Address, *Aggregation]
 }
 
 func New(sctx *solidity.Context) *Service {
 	return &Service{
-		aggregationStorage: solidity.NewSimpleMapping[thor.Address, Aggregation](sctx, solidity.NumToSlot(15)),
+		aggregationStorage: solidity.NewComplexMapping[thor.Address, *Aggregation](sctx, solidity.NumToSlot(15)),
 	}
 }
 
@@ -35,12 +35,7 @@ func (s *Service) GetAggregation(validator thor.Address) (*Aggregation, error) {
 	if d.LockedVET == nil {
 		return newAggregation(), nil
 	}
-	return &d, nil
-}
-
-// setAggregation stores the Aggregation
-func (s *Service) setAggregation(validator thor.Address, agg *Aggregation, newValue bool) error {
-	return s.aggregationStorage.Set(validator, *agg, newValue)
+	return d, nil
 }
 
 // Renew transitions the validator's delegations to the next staking period.
@@ -52,10 +47,7 @@ func (s *Service) Renew(validator thor.Address) (*delta.Renewal, error) {
 	}
 
 	renew := agg.renew()
-
-	if err = s.setAggregation(validator, agg, false); err != nil {
-		return nil, err
-	}
+	s.aggregationStorage.Set(validator, agg)
 
 	return renew, nil
 }
@@ -64,15 +56,11 @@ func (s *Service) Renew(validator thor.Address) (*delta.Renewal, error) {
 // Called when a validator is removed from the active set.
 func (s *Service) Exit(validator thor.Address) (*delta.Exit, error) {
 	agg, err := s.GetAggregation(validator)
-	if err != nil {
+	if err != nil{
 		return nil, err
 	}
-
 	exit := agg.exit()
-
-	if err = s.setAggregation(validator, agg, false); err != nil {
-		return nil, err
-	}
+	s.aggregationStorage.Set(validator, agg)
 
 	return exit, nil
 }

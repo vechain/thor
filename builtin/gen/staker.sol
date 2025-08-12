@@ -13,9 +13,11 @@ enum ValidatorStatus {
     Exited
 }
 
+// TODO: Convert VET and weight amounts to uint32 (divide by 1e18). Will only consume 3 slots
+// TODO: Must copy changes to validation.go
 struct Validation {
     // ---- Slot 0 ----
-    address endorsor; // 20 bytes
+    address endorser; // 20 bytes
     uint32 period; // 4 bytes
     uint32 completeIterations; // 4 bytes
     ValidatorStatus status; // 1 byte
@@ -32,6 +34,8 @@ struct Validation {
     uint256 weight;
 }
 
+// TODO: Convert VET and weight amounts to uint32 (divide by 1e18). Will only consume 1 slot
+// TODO: Must copy changes to aggregation.go
 struct Aggregation {
     uint256 lockedVET; // VET locked this period (autoRenew == true)
     uint256 lockedWeight; // Weight including multipliers
@@ -53,6 +57,15 @@ struct Delegation {
     uint256 stake; // full 32 bytes
 }
 
+interface POAContract {
+    function get(
+        address _nodeMaster
+    )
+        external
+        view
+        returns (bool listed, address endorsor, bytes32 identity, bool active);
+}
+
 contract Staker {
     uint256 public constant MAX_STAKE = 600e6 * 1e18; // 600 million VET
     uint256 public constant MIN_STAKE = 25e6 * 1e18; // 25 million VET
@@ -61,31 +74,22 @@ contract Staker {
     // slot 0
     uint256 private _unused;
 
-    // slot 1
+    // slot 1-4 (contract totals)
     uint256 private _lockedVET;
-    // slot 2
     uint256 private _lockedWeight;
-    // slot 3
     uint256 private _queuedVET;
-    // slot 4
     uint256 private _queuedWeight;
 
-    // slot 5
+    // slot 5-8 (LinkedList)
     mapping(address => Node) private _queuedValidators;
-    // slot 6
     address private _firstQueuedValidator;
-    // slot 7
     address private _lastQueuedValidator;
-    // slot 8
     uint256 private _queuedValidatorsCount;
 
-    // slot 9
+    // slot 9-12 (LinkedList)
     mapping(address => Node) private _activeValidators;
-    // slot 10
     address private _firstActiveValidator;
-    // slot 11
     address private _lastActiveValidator;
-    // slot 12
     uint256 private _activeValidatorsCount;
 
     // slot 13
@@ -104,7 +108,7 @@ contract Staker {
 
     event ValidationQueued(
         address indexed validator,
-        address indexed endorsor,
+        address indexed endorser,
         uint32 period,
         uint256 stake
     );
@@ -122,18 +126,35 @@ contract Staker {
     event DelegationWithdrawn(uint256 indexed delegationID, uint256 stake);
     event DelegationSignaledExit(uint256 indexed delegationID);
 
-    function totalStake() public view returns (uint256, uint256) {
+    function isActive() public view returns (bool active) {
+        return _activeValidatorsCount > 0;
+    }
+
+    function totalStake()
+        public
+        view
+        returns (uint256 lockedVET, uint256 lockedWeight)
+    {
         return (_lockedVET, _lockedWeight);
     }
 
-    function queuedStake() public view returns (uint256, uint256) {
+    function queuedStake()
+        public
+        view
+        returns (uint256 queuedVET, uint256 queuedWeight)
+    {
         return (_queuedVET, _queuedWeight);
     }
 
     function addValidation(
         address validator,
         uint32 period
-    ) public payable checkStake(msg.value) {
+    )
+        external
+        payable
+        checkStake(msg.value)
+        checkAuthority(validator, msg.sender)
+    {
         (uint32 lowPeriod, uint32 midPeriod, uint32 highPeriod) = StakerNative(
             address(this)
         ).native_stakingPeriods();
@@ -150,12 +171,11 @@ contract Staker {
 
         // store the validator
         Validation storage v = _validators[validator];
-        v.endorsor = msg.sender;
+        v.endorser = msg.sender;
         v.period = period;
         v.status = ValidatorStatus.Queued;
         v.queuedVET = msg.value;
         v.exitBlock = type(uint32).max; // set to max, will be updated later
-        _validators[validator] = v;
 
         // add to the queue
         _addToQueue(validator);
@@ -167,11 +187,11 @@ contract Staker {
     function increaseStake(
         address validator
     )
-        public
+        external
         payable
         checkStake(msg.value)
         checkMaxStake(validator, msg.value)
-        onlyEndorsor(validator)
+        onlyEndorser(validator)
         queuedOrActive(validator)
     {
         _validators[validator].queuedVET += msg.value;
@@ -183,10 +203,10 @@ contract Staker {
         address validator,
         uint256 amount
     )
-        public
+        external
         checkStake(amount)
         checkMinStake(validator, amount)
-        onlyEndorsor(validator)
+        onlyEndorser(validator)
         queuedOrActive(validator)
     {
         if (_validators[validator].status == ValidatorStatus.Queued) {
@@ -199,7 +219,7 @@ contract Staker {
         emit StakeDecreased(validator, amount);
     }
 
-    function withdrawStake(address validator) public onlyEndorsor(validator) {
+    function withdrawStake(address validator) external onlyEndorser(validator) {
         uint256 queued = _validators[validator].queuedVET;
         uint256 withdrawable = _validators[validator].withdrawableVET + queued;
 
@@ -209,14 +229,13 @@ contract Staker {
         _validators[validator].withdrawableVET = 0;
 
         if (_validators[validator].status == ValidatorStatus.Queued) {
-            _validators[validator].status = ValidatorStatus.Exited; // move the validator to exited status
-            _removeFromQueue(validator); // remove from the queue
+            // move the validator to exited status and remove from the queue
+            _validators[validator].status = ValidatorStatus.Exited;
+            _removeFromQueue(validator);
         } else if (_hasPassedCooldown(validator)) {
             withdrawable += _validators[validator].cooldownVET;
             _validators[validator].cooldownVET = 0;
         }
-
-        _validators[validator].withdrawableVET = 0;
 
         // send the withdrawable amount
         (bool success, ) = msg.sender.call{value: withdrawable}("");
@@ -224,15 +243,19 @@ contract Staker {
         emit ValidationWithdrawn(validator, withdrawable);
     }
 
-    function signalExit(address validator) public onlyEndorsor(validator) {
+    function signalExit(address validator) external onlyEndorser(validator) {
         require(
             _validators[validator].status == ValidatorStatus.Active,
             "validator not active"
         );
+        require(
+            _validators[validator].exitBlock != type(uint32).max,
+            "exit already signaled or not active"
+        );
 
         uint32 minExitBlock = _validators[validator].startBlock +
             _validators[validator].period *
-            (_validators[validator].completeIterations + 1);
+            (_validators[validator].completeIterations + 1); // +1 for current period.
 
         _validators[validator].exitBlock = _setExitBlock(
             validator,
@@ -245,22 +268,17 @@ contract Staker {
         address validator,
         uint8 multiplier // (% of msg.value) 100 for x1, 200 for x2, etc. This enforces a maximum of 2.56x multiplier
     )
-        public
+        external
         payable
         onlyDelegatorContract
         checkStake(msg.value)
         queuedOrActive(validator)
         checkMaxStake(validator, msg.value)
-        returns (uint256)
+        returns (uint256 delegationID)
     {
+        // validation checks
         require(multiplier != 0, "multiplier cannot be zero");
-
         require(multiplier <= 256, "multiplier cannot exceed 256 (2.56x)"); // 256 is the maximum multiplier allowed
-
-        require(
-            _validators[validator].endorsor != msg.sender,
-            "delegator cannot be the endorsor"
-        );
 
         // create a new delegation
         _delegationCounter++;
@@ -269,19 +287,16 @@ contract Staker {
         delegation.multiplier = multiplier;
         delegation.stake = msg.value;
         delegation.lastIteration = type(uint32).max;
+        delegation.firstIteration = _validatorNextPeriod(validator);
 
-        if (_validators[validator].status == ValidatorStatus.Queued) {
-            delegation.firstIteration = 1;
-        } else {
-            delegation.firstIteration =
-                _validators[validator].completeIterations +
-                2;
-        }
-
+        // update the validator's aggregation
         _aggregations[validator].pendingVET += msg.value;
-        _aggregations[validator].pendingWeight +=
-            (msg.value * multiplier) /
-            100;
+        _aggregations[validator].pendingWeight += _calcWeight(
+            msg.value,
+            multiplier
+        );
+
+        // update contract totals
         _addQueuedStake(msg.value, multiplier);
 
         emit DelegationAdded(
@@ -295,7 +310,8 @@ contract Staker {
 
     function signalDelegationExit(
         uint256 delegationID
-    ) public onlyDelegatorContract {
+    ) external onlyDelegatorContract {
+        // validation checks
         require(_delegations[delegationID].stake > 0, "delegation not found");
         require(
             _delegations[delegationID].lastIteration == type(uint32).max,
@@ -307,26 +323,28 @@ contract Staker {
             "validator not active"
         );
 
+        // update the delegation
         _delegations[delegationID].lastIteration = _validatorNextPeriod(
             validator
         );
+
+        // update the validator's aggregation
         _aggregations[validator].exitingVET += _delegations[delegationID].stake;
-        _aggregations[validator].exitingWeight +=
-            (_delegations[delegationID].stake *
-                _delegations[delegationID].multiplier) /
-            100; // Convert percentage to multiplier
+        _aggregations[validator].exitingWeight += _calcWeight(
+            _delegations[delegationID].stake,
+            _delegations[delegationID].multiplier
+        );
 
         emit DelegationSignaledExit(delegationID);
     }
 
     function withdrawDelegation(
         uint256 delegationID
-    ) public onlyDelegatorContract {
+    ) external onlyDelegatorContract {
+        // validation checks
         require(_delegations[delegationID].stake > 0, "delegation not found");
-
         address validator = _delegations[delegationID].validator;
         bool started = _hasDelegationStarted(delegationID, validator);
-
         require(
             _isDelegationLocked(delegationID, validator) == false,
             "delegation is locked"
@@ -335,6 +353,7 @@ contract Staker {
         uint256 stake = _delegations[delegationID].stake;
         uint8 multiplier = _delegations[delegationID].multiplier;
 
+        // update the aggregations if still queued
         if (!started) {
             _aggregations[validator].pendingVET -= _delegations[delegationID]
                 .stake;
@@ -354,7 +373,11 @@ contract Staker {
 
     function getDelegationStake(
         uint256 delegationID
-    ) public view returns (address, uint256, uint8) {
+    )
+        external
+        view
+        returns (address validator, uint256 stakeVET, uint8 multiplier)
+    {
         return (
             _delegations[delegationID].validator,
             _delegations[delegationID].stake,
@@ -364,7 +387,11 @@ contract Staker {
 
     function getDelegationPeriodDetails(
         uint256 delegationID
-    ) public view returns (uint32, uint32, bool) {
+    )
+        external
+        view
+        returns (uint32 firstIteration, uint32 lastIteration, bool isLocked)
+    {
         return (
             _delegations[delegationID].firstIteration,
             _delegations[delegationID].lastIteration,
@@ -377,26 +404,46 @@ contract Staker {
 
     function getValidatorStake(
         address validator
-    ) public view returns (address, uint256, uint256, uint256) {
+    )
+        external
+        view
+        returns (
+            address endorsor,
+            uint256 lockedVET, // validator only
+            uint256 combinedLockedWeight, // validator + delegations
+            uint256 queuedVET // validator only
+        )
+    {
         Validation storage v = _validators[validator];
-        return (v.endorsor, v.lockedVET, v.weight, v.queuedVET);
+        return (v.endorser, v.lockedVET, v.weight, v.queuedVET);
     }
 
     function getValidatorStatus(
         address validator
-    ) public view returns (uint8, bool) {
+    ) public view returns (uint8 status, bool online) {
         Validation storage v = _validators[validator];
         return (uint8(v.status), v.online);
     }
 
     function getValidatorPeriodDetails(
         address validator
-    ) public view returns (uint32, uint32, uint32, uint32) {
+    )
+        external
+        view
+        returns (
+            uint32 stakingPeriodLength,
+            uint32 startBlock,
+            uint32 exitBlock,
+            uint32 completeIterations
+        )
+    {
         Validation storage v = _validators[validator];
         return (v.period, v.startBlock, v.exitBlock, v.completeIterations);
     }
 
-    function getWithdrawable(address id) public view returns (uint256) {
+    function getWithdrawable(
+        address id
+    ) external view returns (uint256 withdrawableVET) {
         uint256 withdrawable = _validators[id].withdrawableVET;
         if (_validators[id].status == ValidatorStatus.Queued) {
             withdrawable += _validators[id].queuedVET;
@@ -406,15 +453,15 @@ contract Staker {
         return withdrawable;
     }
 
-    function firstActive() public view returns (address) {
+    function firstActive() external view returns (address) {
         return _firstActiveValidator;
     }
 
-    function firstQueued() public view returns (address) {
+    function firstQueued() external view returns (address) {
         return _firstQueuedValidator;
     }
 
-    function next(address prev) public view returns (address) {
+    function next(address prev) external view returns (address) {
         address activeNext = _activeValidators[prev].next;
         if (activeNext != address(0)) {
             return activeNext;
@@ -425,7 +472,7 @@ contract Staker {
     function getDelegatorsRewards(
         address validator,
         uint32 stakingPeriod
-    ) public view returns (uint256) {
+    ) external view returns (uint256) {
         bytes32 key = keccak256(abi.encodePacked(validator, stakingPeriod));
         return _delegatorsRewards[key];
     }
@@ -433,22 +480,34 @@ contract Staker {
     function getValidationTotals(
         address validator
     )
-        public
+        external
         view
-        returns (uint256, uint256, uint256, uint256, uint256, uint256)
+        returns (
+            uint256 combinedLockedVET,
+            uint256 combinedLockedWeight,
+            uint256 combinedQueuedVET,
+            uint256 combinedQueuedWeight,
+            uint256 combinedExitingVET,
+            uint256 combinedExitingWeight
+        )
     {
-        Validation storage v = _validators[validator];
-        Aggregation storage agg = _aggregations[validator];
+        Validation memory v = _validators[validator];
+        Aggregation memory agg = _aggregations[validator];
 
         uint256 exitingVET;
         uint256 exitingWeight;
 
-        if (v.status == ValidatorStatus.Active && v.exitBlock != type(uint32).max) {
+        if (
+            v.status == ValidatorStatus.Active &&
+            v.exitBlock != type(uint32).max
+        ) {
             exitingVET = v.lockedVET + agg.lockedVET;
             exitingWeight = v.weight;
         } else {
             exitingVET = v.pendingUnlockVET + agg.exitingVET;
-            exitingWeight = v.weight + agg.exitingWeight;
+            exitingWeight =
+                _calcWeight(v.pendingUnlockVET, VALIDATOR_MULTIPLIER) +
+                agg.exitingWeight;
         }
 
         uint256 queuedVET = v.queuedVET + agg.pendingVET;
@@ -465,11 +524,15 @@ contract Staker {
         );
     }
 
-    function getValidatorsNum() public view returns (uint256, uint256) {
+    function getValidatorsNum()
+        external
+        view
+        returns (uint256 activeValidatorCount, uint256 queuedValidatorCount)
+    {
         return (_activeValidatorsCount, _queuedValidatorsCount);
     }
 
-    function issuance() public view returns (uint256) {
+    function issuance() external view returns (uint256 blockIssuanceVTHO) {
         (uint256 issuanceAmount, string memory error) = StakerNative(
             address(this)
         ).native_issuance();
@@ -478,10 +541,7 @@ contract Staker {
     }
 
     function _addToQueue(address validator) internal {
-        Node memory node = Node({
-            next: address(0),
-            prev: _lastQueuedValidator
-        });
+        Node memory node = Node({next: address(0), prev: _lastQueuedValidator});
         if (_queuedValidatorsCount == 0) {
             _firstQueuedValidator = validator;
         } else {
@@ -495,14 +555,18 @@ contract Staker {
     function _removeFromQueue(address validator) internal {
         Node storage node = _queuedValidators[validator];
         if (node.prev != address(0)) {
+            // link the previous node to the next
             _queuedValidators[node.prev].next = node.next;
         } else {
-            _firstQueuedValidator = node.next; // update first if this was the first
+            // this is the first node in the queue
+            _firstQueuedValidator = node.next;
         }
         if (node.next != address(0)) {
+            // link the next node to the previous
             _queuedValidators[node.next].prev = node.prev;
         } else {
-            _lastQueuedValidator = node.prev; // update last if this was the last
+            // this is the last node in the queue
+            _lastQueuedValidator = node.prev;
         }
         delete _queuedValidators[validator];
         _queuedValidatorsCount--;
@@ -513,10 +577,12 @@ contract Staker {
         uint32 minBlock
     ) internal returns (uint32) {
         uint32 exitBlock = minBlock;
+        uint32 epochLength;
         while (_exitBlocks[exitBlock] != address(0)) {
-            exitBlock =
-                exitBlock +
-                StakerNative(address(this)).native_epochLength();
+            if (epochLength == 0) {
+                epochLength = StakerNative(address(this)).native_epochLength();
+            }
+            exitBlock = exitBlock + epochLength;
         }
         _exitBlocks[exitBlock] = validator;
         return exitBlock;
@@ -525,11 +591,11 @@ contract Staker {
     function _hasPassedCooldown(
         address validator
     ) internal view returns (bool) {
+        uint32 cooldownPeriod = StakerNative(address(this))
+            .native_cooldownPeriod();
         return
             _validators[validator].status == ValidatorStatus.Exited && // validator has exited
-            block.number >=
-            _validators[validator].exitBlock +
-                StakerNative(address(this)).native_cooldownPeriod();
+            block.number >= _validators[validator].exitBlock + cooldownPeriod; // cooldown period has passed
     }
 
     function _addQueuedStake(uint256 amount, uint8 multiplier) internal {
@@ -579,9 +645,9 @@ contract Staker {
         if (_validators[validator].status != ValidatorStatus.Active) {
             return false;
         }
-        return
-            _delegations[delegationID].firstIteration >
-            _validators[validator].completeIterations;
+        uint32 first = _delegations[delegationID].firstIteration;
+        uint32 completed = _validators[validator].completeIterations;
+        return first >= completed;
     }
 
     function _hasDelegationEnded(
@@ -610,10 +676,10 @@ contract Staker {
         _;
     }
 
-    modifier onlyEndorsor(address validator) {
+    modifier onlyEndorser(address validator) {
         require(
-            _validators[validator].endorsor == msg.sender,
-            "not endorsor of the validator"
+            _validators[validator].endorser == msg.sender,
+            "not endorser of the validator"
         );
         _;
     }
@@ -658,6 +724,22 @@ contract Staker {
                 currentNextPeriod - amount >= MIN_STAKE,
                 "not enough locked stake"
             );
+        }
+        _;
+    }
+
+    modifier checkAuthority(address validator, address endorser) {
+        if (!isActive()) {
+            (
+                bool listed,
+                address currentEndorser,
+                bytes32 identity,
+                bool active
+            ) = POAContract(0x0000000000000000000000417574686f72697479).get(
+                    validator
+                );
+            require(listed, "validator not listed");
+            require(currentEndorser == endorser, "endorser mismatch");
         }
         _;
     }

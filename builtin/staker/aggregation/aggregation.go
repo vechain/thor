@@ -16,6 +16,8 @@ import (
 const SlotsUsed = 6 // Number of slots used in the Aggregation struct
 
 // Aggregation represents the total amount of VET locked for a given validation's delegations.
+// TODO: Convert VET and weight amounts to uint32 (divide by 1e18). Will only consume 1 slot
+// TODO: Must copy changes to staker.sol
 type Aggregation struct {
 	// All locked vet for a validations delegations.
 	// ---- Slot 0 ----

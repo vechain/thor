@@ -1,0 +1,1 @@
+[{"inputs":[{"internalType":"address","name":"_nodeMaster","type":"address"}],"name":"get","outputs":[{"internalType":"bool","name":"listed","type":"bool"},{"internalType":"address","name":"endorsor","type":"address"},{"internalType":"bytes32","name":"identity","type":"bytes32"},{"internalType":"bool","name":"active","type":"bool"}],"stateMutability":"view","type":"function"}]

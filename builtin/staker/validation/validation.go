@@ -8,6 +8,7 @@ package validation
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/vechain/thor/v2/builtin/staker/delta"
@@ -37,6 +38,8 @@ func WeightedStake(amount *big.Int) *stakes.WeightedStake {
 
 const SlotsUsed = 8
 
+// TODO: Convert VET and weight amounts to uint32 (divide by 1e18). Will only consume 3 slots
+// TODO: Must copy changes to staker.sol
 type Validation struct {
 	// ---- Slot 0 ----
 	Endorsor           thor.Address // the address providing the stake
@@ -65,6 +68,31 @@ type Validation struct {
 }
 
 // ... existing code ...
+
+func (v *Validation) String() string {
+	toVet := func(amount *big.Int) string {
+		if amount == nil {
+			return "0"
+		}
+		return big.NewInt(0).Div(amount, big.NewInt(1e18)).String()
+	}
+
+	return fmt.Sprintf("Validation{Endorsor: %s, Period: %d, CompleteIterations: %d, Status: %d, Online: %t, StartBlock: %d, ExitBlock: %d, LockedVET: %s, PendingUnlockVET: %s, QueuedVET: %s, CooldownVET: %s, WithdrawableVET: %s, Weight: %s}",
+		v.Endorsor.String(),
+		v.Period,
+		v.CompleteIterations,
+		v.Status,
+		v.Online,
+		v.StartBlock,
+		v.ExitBlock,
+		toVet(v.LockedVET),
+		toVet(v.PendingUnlockVET),
+		toVet(v.QueuedVET),
+		toVet(v.CooldownVET),
+		toVet(v.WithdrawableVET),
+		toVet(v.Weight),
+	)
+}
 
 func (v *Validation) DecodeSlots(slots []thor.Bytes32) error {
 	if len(slots) != SlotsUsed {

@@ -121,7 +121,7 @@ func NewIntegrationTestChainWithGenesis(gene *genesis.Genesis, forkConfig *thor.
 	var be4 [4]byte
 	binary.BigEndian.PutUint32(be4[:], epochLength)
 	st.SetStorage(builtin.Staker.Address, thor.BytesToBytes32([]byte("epoch-length")), thor.BytesToBytes32(be4[:]))
-	_ = staker.New(builtin.Staker.Address, st, prm, nil)
+	_ = staker.New(builtin.Staker.Address, st, prm)
 
 	// Create the state manager (Stater) with the initialized database.
 	stater := state.NewStater(db)

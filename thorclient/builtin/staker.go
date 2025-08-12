@@ -148,8 +148,8 @@ type ValidatorPeriodDetails struct {
 	CompletedPeriods uint32
 }
 
-func (v *ValidatorStake) Exists(status ValidatorStatus) bool {
-	return !v.Endorsor.IsZero() && status.Status != 0
+func (v *ValidatorStake) Exists() bool {
+	return !v.Endorsor.IsZero()
 }
 
 func (s *Staker) GetValidatorStake(node thor.Address) (*ValidatorStake, error) {

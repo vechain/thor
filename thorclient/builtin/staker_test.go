@@ -11,12 +11,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vechain/thor/v2/builtin/solidity"
-	builtinStaker "github.com/vechain/thor/v2/builtin/staker"
-
 	"github.com/stretchr/testify/require"
+	"github.com/vechain/thor/v2/api"
 
 	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/builtin/solidity"
+	builtinStaker "github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/test"
@@ -25,6 +25,24 @@ import (
 	"github.com/vechain/thor/v2/thorclient/bind"
 	"github.com/vechain/thor/v2/tx"
 )
+
+func DebugRevert(t *testing.T, receipt *api.Receipt, sender *bind.MethodBuilder) {
+	if receipt == nil {
+		require.Fail(t, "receipt is nil")
+		return
+	}
+	if receipt.Reverted {
+		_, err := sender.Call().
+			AtRevision(receipt.Meta.BlockID.String()).
+			Caller(&receipt.Meta.TxOrigin).
+			Execute()
+		if err != nil {
+			require.Fail(t, "transaction reverted", err)
+		} else {
+			require.Fail(t, "transaction reverted for unknown reason")
+		}
+	}
+}
 
 func TestStaker(t *testing.T) {
 	minStakingPeriod := uint32(360) * 24 * 7 // 360 days in seconds
@@ -93,18 +111,25 @@ func TestStaker(t *testing.T) {
 		}, 100*time.Millisecond, 10*time.Second))
 	}
 
-	// pack a new block
+	// pack a new block - should trigger PoS activation
 	require.NoError(t, node.Chain().MintBlock(genesis.DevAccounts()[0]))
 
 	// TotalStake
 	totalStake, totalWeight, err := staker.TotalStake()
 	require.NoError(t, err)
-	require.Equal(t, 1, totalWeight.Sign())
+	require.Equal(t, new(big.Int).Mul(minStake, big.NewInt(4)), totalWeight)
 	require.Equal(t, new(big.Int).Mul(minStake, big.NewInt(2)), totalStake)
 
-	// GetStake
-	_, firstID, err := staker.FirstActive()
+	// FirstActive
+	firstActive, firstID, err := staker.FirstActive()
 	require.NoError(t, err)
+	require.False(t, firstID.IsZero())
+	require.True(t, firstActive.Exists())
+	require.Equal(t, minStake, firstActive.Stake)
+	require.Equal(t, big.NewInt(0).Mul(minStake, big.NewInt(2)), firstActive.Weight)
+	require.False(t, firstActive.Endorsor.IsZero())
+
+	// GetStake
 	getStakeRes, err := staker.GetValidatorStake(firstID)
 	require.NoError(t, err)
 	require.False(t, getStakeRes.Address.IsZero())
@@ -119,7 +144,7 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, firstID, getStatusRes.Address)
 	require.Equal(t, StakerStatusActive, getStatusRes.Status)
 	require.True(t, getStatusRes.Online)
-	require.True(t, getStakeRes.Exists(*getStatusRes))
+	require.True(t, getStakeRes.Exists())
 
 	// GetPeriodDetails
 	getPeriodDetailsRes, err := staker.GetValidatorPeriodDetails(firstID)
@@ -130,21 +155,12 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, uint32(math.MaxUint32), getPeriodDetailsRes.ExitBlock)
 	require.Equal(t, uint32(0), getPeriodDetailsRes.CompletedPeriods)
 
-	// FirstActive
-	firstActive, firstID, err := staker.FirstActive()
-	require.NoError(t, err)
-	require.False(t, firstID.IsZero())
-	require.True(t, firstActive.Exists(*getStatusRes))
-	require.Equal(t, minStake, firstActive.Stake)
-	require.Equal(t, big.NewInt(0).Mul(minStake, big.NewInt(2)), firstActive.Weight)
-	require.False(t, firstActive.Endorsor.IsZero())
-
 	// Next
 	next, id, err := staker.Next(firstID)
 	require.NoError(t, err)
 	require.False(t, id.IsZero())
 	nextStatus, err := staker.GetValidatorStatus(next.Address)
-	require.True(t, next.Exists(*nextStatus))
+	require.True(t, next.Exists())
 	require.NoError(t, err)
 	require.Equal(t, StakerStatusActive, nextStatus.Status)
 	require.Equal(t, minStake, next.Stake)
@@ -177,7 +193,7 @@ func TestStaker(t *testing.T) {
 	require.False(t, id.IsZero())
 	firstQueuedStatus, err := staker.GetValidatorStatus(firstQueued.Address)
 	require.NoError(t, err)
-	require.True(t, firstQueued.Exists(*firstQueuedStatus))
+	require.True(t, firstQueued.Exists())
 	require.Equal(t, 0, firstQueued.Stake.Sign())
 	require.Equal(t, StakerStatusQueued, firstQueuedStatus.Status)
 	require.False(t, firstQueued.Endorsor.IsZero())
@@ -224,6 +240,7 @@ func TestStaker(t *testing.T) {
 		WithSigner(validatorKey).
 		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
+	require.True(t, receipt.Reverted)
 
 	// No events for signal exit when state is queued
 	autoRenewEvents, err := staker.FilterValidationSignaledExit(newRange(receipt), nil, logdb.ASC)
@@ -234,7 +251,8 @@ func TestStaker(t *testing.T) {
 	receipt, _, err = staker.AddDelegation(queuedID, minStake, 100).
 		Send().
 		WithSigner(stargate).
-		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
+		WithOptions(txOpts()).
+		SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
