@@ -236,6 +236,10 @@ func (s *Staker) IncreaseStake(validator thor.Address, amount *big.Int) *bind.Me
 	return s.contract.Method("increaseStake", validator).WithValue(amount)
 }
 
+func (s *Staker) SetBeneficiary(validator, beneficiary thor.Address) *bind.MethodBuilder {
+	return s.contract.Method("setBeneficiary", validator, beneficiary)
+}
+
 func (s *Staker) AddDelegation(validator thor.Address, stake *big.Int, multiplier uint8) *bind.MethodBuilder {
 	return s.contract.Method("addDelegation", validator, multiplier).WithValue(stake)
 }
@@ -635,6 +639,53 @@ func (s *Staker) FilterStakeDecreased(eventsRange *api.Range, opts *api.Options,
 			Validator: node,
 			Removed:   *(data[0].(**big.Int)),
 			Log:       log,
+		}
+	}
+
+	return out, nil
+}
+
+type BeneficiarySetEvent struct {
+	Validator   thor.Address
+	Endorsor    thor.Address
+	Beneficiary thor.Address
+	Log         api.FilteredEvent
+}
+
+func (s *Staker) FilterBeneficiarySet(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]BeneficiarySetEvent, error) {
+	event, ok := s.contract.ABI().Events["BeneficiarySet"]
+	if !ok {
+		return nil, fmt.Errorf("event not found")
+	}
+
+	raw, err := s.contract.FilterEvent(event.Name).WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]BeneficiarySetEvent, len(raw))
+	for i, log := range raw {
+		validator := thor.BytesToAddress(log.Topics[1][:]) // indexed
+		endorsor := thor.BytesToAddress(log.Topics[2][:])  // indexed
+
+		// non-indexed
+		data := make([]any, 1)
+		data[0] = new(common.Address)
+
+		bytes, err := hexutil.Decode(log.Data)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := event.Inputs.Unpack(&data, bytes); err != nil {
+			return nil, err
+		}
+
+		out[i] = BeneficiarySetEvent{
+			Validator:   validator,
+			Endorsor:    endorsor,
+			Beneficiary: thor.Address(*data[0].(*common.Address)),
+			Log:         log,
 		}
 	}
 
