@@ -6,6 +6,9 @@
 package api
 
 import (
+	"fmt"
+	"math"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
 	"github.com/vechain/thor/v2/block"
@@ -65,16 +68,30 @@ type EventCriteria struct {
 }
 
 type Options struct {
-	Offset         uint64
-	Limit          uint64
-	IncludeIndexes bool
+	Offset         uint64  `json:"offset,omitempty"`
+	Limit          *uint64 `json:"limit,omitempty"`
+	IncludeIndexes bool    `json:"includeIndexes,omitempty"`
+}
+
+func (o *Options) Validate(limit uint64) error {
+	if o == nil {
+		return nil
+	}
+	if o.Limit != nil && *o.Limit > limit {
+		return fmt.Errorf("options.limit exceeds the maximum allowed value of %d", limit)
+	}
+	if o.Offset > math.MaxInt64 {
+		return fmt.Errorf("options.offset exceeds the maximum allowed value of %d", math.MaxInt64)
+	}
+
+	return nil
 }
 
 type EventFilter struct {
-	CriteriaSet []*EventCriteria
-	Range       *Range
-	Options     *Options
-	Order       logdb.Order // default asc
+	CriteriaSet []*EventCriteria `json:"criteriaSet,omitempty"`
+	Range       *Range           `json:"range,omitempty"`
+	Options     *Options         `json:"options,omitempty"`
+	Order       logdb.Order      `json:"order,omitempty"`
 }
 
 func ConvertEventFilter(chain *chain.Chain, filter *EventFilter) (*logdb.EventFilter, error) {
@@ -86,7 +103,8 @@ func ConvertEventFilter(chain *chain.Chain, filter *EventFilter) (*logdb.EventFi
 		Range: rng,
 		Options: &logdb.Options{
 			Offset: filter.Options.Offset,
-			Limit:  filter.Options.Limit,
+			// validated or default value set at the API level
+			Limit: *filter.Options.Limit,
 		},
 		Order: filter.Order,
 	}
@@ -116,9 +134,29 @@ const (
 )
 
 type Range struct {
-	Unit RangeType
-	From *uint64 `json:"from,omitempty"`
-	To   *uint64 `json:"to,omitempty"`
+	Unit RangeType `json:"unit,omitempty"`
+	From *uint64   `json:"from,omitempty"`
+	To   *uint64   `json:"to,omitempty"`
+}
+
+func (r *Range) Validate() error {
+	if r == nil {
+		return nil
+	}
+	if r.Unit != "" {
+		if r.Unit != BlockRangeType && r.Unit != TimeRangeType {
+			return fmt.Errorf("filter.Range.Unit must be either 'block' or 'time', got '%s'", r.Unit)
+		}
+	}
+
+	if r.From == nil || r.To == nil {
+		return nil // No range specified, which is valid
+	}
+	if *r.From > *r.To {
+		return fmt.Errorf("filter.Range.To must be greater than or equal to filter.Range.From")
+	}
+
+	return nil
 }
 
 var emptyRange = logdb.Range{
