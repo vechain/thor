@@ -54,6 +54,18 @@ func (s *Service) QueuedStake() (*big.Int, *big.Int, error) {
 // ApplyRenewal adjusts global totals during validator/delegation transitions.
 // Called when validators are activated or delegations move between states.
 func (s *Service) ApplyRenewal(renewal *delta.Renewal) error {
+	if renewal.NewLockedVET == nil {
+		renewal.NewLockedVET = new(big.Int)
+	}
+	if renewal.NewLockedWeight == nil {
+		renewal.NewLockedWeight = new(big.Int)
+	}
+	if renewal.QueuedDecreaseWeight == nil {
+		renewal.QueuedDecreaseWeight = new(big.Int)
+	}
+	if renewal.QueuedDecrease == nil {
+		renewal.QueuedDecrease = new(big.Int)
+	}
 	if err := s.lockedVET.Add(renewal.NewLockedVET); err != nil {
 		return err
 	}
@@ -71,6 +83,19 @@ func (s *Service) ApplyRenewal(renewal *delta.Renewal) error {
 }
 
 func (s *Service) ApplyExit(exit *delta.Exit) error {
+	if exit.ExitedTVL == nil {
+		exit.ExitedTVL = new(big.Int)
+	}
+	if exit.ExitedTVLWeight == nil {
+		exit.ExitedTVLWeight = new(big.Int)
+	}
+	if exit.QueuedDecreaseWeight == nil {
+		exit.QueuedDecreaseWeight = new(big.Int)
+	}
+	if exit.QueuedDecrease == nil {
+		exit.QueuedDecrease = new(big.Int)
+	}
+
 	if err := s.lockedVET.Sub(exit.ExitedTVL); err != nil {
 		return err
 	}
