@@ -548,7 +548,7 @@ func initDebugServer(t *testing.T) {
 		HAYABUSA:    math.MaxUint32,
 		HAYABUSA_TP: math.MaxUint32,
 	}
-	thorChain, err := testchain.NewWithFork(&forkConfig)
+	thorChain, err := testchain.NewWithFork(&forkConfig, 180)
 	require.NoError(t, err)
 
 	addr := thor.BytesToAddress([]byte("to"))

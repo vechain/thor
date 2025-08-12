@@ -118,7 +118,7 @@ func (a *Aggregation) renew() *delta.Renewal {
 
 // exit immediately moves all delegation funds to withdrawable state.
 // Called when the validator exits, making all delegations withdrawable regardless of their individual state.
-func (a *Aggregation) exit() (*delta.Exit, error) {
+func (a *Aggregation) exit() *delta.Exit {
 	// Return these values to modify contract totals
 	exitedTVL := big.NewInt(0).Set(a.LockedVET)
 	exitedWeight := big.NewInt(0).Set(a.LockedWeight)
@@ -138,5 +138,5 @@ func (a *Aggregation) exit() (*delta.Exit, error) {
 		ExitedTVLWeight:      exitedWeight,
 		QueuedDecrease:       queuedDecrease,
 		QueuedDecreaseWeight: queuedWeightDecrease,
-	}, nil
+	}
 }

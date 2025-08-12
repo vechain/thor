@@ -110,7 +110,7 @@ func newHayabusaSetup(t *testing.T) *hayabusaSetup {
 	config := &thor.SoloFork
 	config.HAYABUSA = 2
 
-	chain, err := testchain.NewWithFork(config)
+	chain, err := testchain.NewWithFork(config, 1)
 	assert.NoError(t, err)
 
 	consensus := New(chain.Repo(), chain.Stater(), config)

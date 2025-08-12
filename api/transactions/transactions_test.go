@@ -373,7 +373,7 @@ func initTransactionServer(t *testing.T) {
 	forkConfig.GALACTICA = 2
 
 	var err error
-	thorChain, err = testchain.NewWithFork(&forkConfig)
+	thorChain, err = testchain.NewWithFork(&forkConfig, 180)
 	require.NoError(t, err)
 
 	chainTag = thorChain.Repo().ChainTag()

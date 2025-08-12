@@ -10,6 +10,9 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/vechain/thor/v2/builtin/solidity"
+	"github.com/vechain/thor/v2/builtin/staker"
+
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 
@@ -824,6 +827,7 @@ func newTestBftPos(forkCfg *thor.ForkConfig) (*TestBFT, error) {
 	if err != nil {
 		return nil, err
 	}
+	staker.EpochLength = solidity.NewConfigVariable("epoch-length", 1)
 
 	if err = testBFT.fastForward(int(forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP)); err != nil {
 		return nil, err

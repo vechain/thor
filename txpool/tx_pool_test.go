@@ -45,7 +45,7 @@ const (
 var devAccounts = genesis.DevAccounts()
 
 func newPool(limit int, limitPerAccount int, forkConfig *thor.ForkConfig) *TxPool {
-	tchain, _ := testchain.NewWithFork(forkConfig)
+	tchain, _ := testchain.NewWithFork(forkConfig, 180)
 	return New(tchain.Repo(), tchain.Stater(), Options{
 		Limit:           limit,
 		LimitPerAccount: limitPerAccount,
@@ -793,7 +793,7 @@ func TestAdd(t *testing.T) {
 		ForkConfig: &forkConfig,
 		LaunchTime: 1526300000,
 	}
-	tchain, err := testchain.NewIntegrationTestChain(config)
+	tchain, err := testchain.NewIntegrationTestChain(config, 180)
 	assert.Nil(t, err)
 	pool := New(tchain.Repo(), tchain.Stater(), Options{
 		Limit:           LIMIT,
@@ -924,7 +924,7 @@ func TestAdd(t *testing.T) {
 }
 
 func TestBeforeVIP191Add(t *testing.T) {
-	tchain, err := testchain.NewWithFork(&thor.SoloFork)
+	tchain, err := testchain.NewWithFork(&thor.SoloFork, 180)
 	assert.Nil(t, err)
 	acc := devAccounts[0]
 
