@@ -86,8 +86,8 @@ contract Staker {
      */
     function setBeneficiary(address validator, address beneficiary) public {
         string memory error = StakerNative(address(this)).native_setBeneficiary(
-            msg.sender,
             validator,
+            msg.sender,
             beneficiary
         );
         require(bytes(error).length == 0, error);
