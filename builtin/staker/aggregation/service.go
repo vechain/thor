@@ -99,10 +99,7 @@ func (s *Service) Exit(validator thor.Address) (*delta.Exit, error) {
 		return nil, err
 	}
 
-	exit, err := agg.exit()
-	if err != nil {
-		return nil, err
-	}
+	exit := agg.exit()
 
 	if err = s.setAggregation(validator, agg, false); err != nil {
 		return nil, err
