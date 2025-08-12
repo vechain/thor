@@ -249,8 +249,8 @@ contract Staker {
             "validator not active"
         );
         require(
-            _validators[validator].exitBlock != type(uint32).max,
-            "exit already signaled or not active"
+            _validators[validator].exitBlock == type(uint32).max,
+            "exit already signaled"
         );
 
         uint32 minExitBlock = _validators[validator].startBlock +

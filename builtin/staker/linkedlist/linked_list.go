@@ -58,7 +58,7 @@ func (n *Node) UsedSlots() int {
 var _ solidity.ComplexValue[Node] = (*Node)(nil)
 
 type LinkedList struct {
-	mapping *solidity.ComplexMapping[thor.Address, *Node]
+	mapping *solidity.StructMapping[thor.Address, *Node]
 	head  *solidity.Address
 	tail  *solidity.Address
 	count *solidity.Uint256
@@ -73,7 +73,7 @@ func NewLinkedList(
 	tailSlot := solidity.IncrementSlot(firstSlot[:], 2)
 	countPos := solidity.IncrementSlot(firstSlot[:], 3)
 	return &LinkedList{
-		mapping: solidity.NewComplexMapping[thor.Address, *Node](sctx, firstSlot),
+		mapping: solidity.NewStructMapping[thor.Address, *Node](sctx, firstSlot),
 		head:  solidity.NewAddress(sctx, headSlot),
 		tail:  solidity.NewAddress(sctx, tailSlot),
 		count: solidity.NewUint256(sctx, countPos),

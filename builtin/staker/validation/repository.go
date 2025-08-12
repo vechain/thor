@@ -20,7 +20,7 @@ var (
 )
 
 type Repository struct {
-	validations *solidity.ComplexMapping[thor.Address, *Validation]
+	validations *solidity.StructMapping[thor.Address, *Validation]
 	rewards     *solidity.SimpleMapping[thor.Bytes32, *big.Int] // stores rewards per validator staking period
 
 	exits *solidity.SimpleMapping[*big.Int, thor.Address] // exit block -> validator ID
@@ -28,7 +28,7 @@ type Repository struct {
 
 func NewRepository(sctx *solidity.Context) *Repository {
 	return &Repository{
-		validations: solidity.NewComplexMapping[thor.Address, *Validation](sctx, solidity.NumToSlot(13)),
+		validations: solidity.NewStructMapping[thor.Address, *Validation](sctx, solidity.NumToSlot(13)),
 		rewards:     solidity.NewSimpleMapping[thor.Bytes32, *big.Int](sctx, solidity.NumToSlot(18)),
 		exits:       solidity.NewSimpleMapping[*big.Int, thor.Address](sctx, solidity.NumToSlot(14)),
 	}

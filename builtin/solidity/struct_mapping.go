@@ -18,17 +18,17 @@ type ComplexValue [T any]interface {
 	UsedSlots() int
 }
 
-type ComplexMapping[K Key, V ComplexValue[any]] struct {
+type StructMapping[K Key, V ComplexValue[any]] struct {
 	context *Context
 	basePos thor.Bytes32
 }
 
-// NewComplexMapping creates a new persistent mapping at the given storage position.
-func NewComplexMapping[K Key, V ComplexValue[any]](context *Context, pos thor.Bytes32) *ComplexMapping[K, V] {
-	return &ComplexMapping[K, V]{context: context, basePos: pos}
+// NewStructMapping creates a new persistent mapping at the given storage position.
+func NewStructMapping[K Key, V ComplexValue[any]](context *Context, pos thor.Bytes32) *StructMapping[K, V] {
+	return &StructMapping[K, V]{context: context, basePos: pos}
 }
 
-func (m *ComplexMapping[K, V]) Get(key K) (V, error) {
+func (m *StructMapping[K, V]) Get(key K) (V, error) {
 	// compute base slot = keccak256(key + basePos)
 	keyBytes32 := thor.BytesToBytes32(key.Bytes())
 	base := thor.Keccak256(keyBytes32.Bytes(), m.basePos.Bytes()).Bytes()
@@ -59,7 +59,7 @@ func (m *ComplexMapping[K, V]) Get(key K) (V, error) {
 	return output, nil
 }
 
-func (m *ComplexMapping[K, V]) Set(key K, value V) {
+func (m *StructMapping[K, V]) Set(key K, value V) {
 	keyBytes32 := thor.BytesToBytes32(key.Bytes())
 	base := thor.Keccak256(keyBytes32.Bytes(), m.basePos.Bytes()).Bytes()
 	slots := value.EncodeSlots()

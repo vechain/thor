@@ -15,12 +15,12 @@ import (
 
 // Service manages delegation aggregations for each validator.
 type Service struct {
-	aggregationStorage *solidity.ComplexMapping[thor.Address, *Aggregation]
+	aggregationStorage *solidity.StructMapping[thor.Address, *Aggregation]
 }
 
 func New(sctx *solidity.Context) *Service {
 	return &Service{
-		aggregationStorage: solidity.NewComplexMapping[thor.Address, *Aggregation](sctx, solidity.NumToSlot(15)),
+		aggregationStorage: solidity.NewStructMapping[thor.Address, *Aggregation](sctx, solidity.NumToSlot(15)),
 	}
 }
 

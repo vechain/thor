@@ -16,6 +16,7 @@ type Key interface {
 }
 
 // SimpleMapping is a key/value storage abstraction for built-in contracts, similar to the mapping in Solidity.
+// Should only be used for simple values, eg uint32, uint256, address. Not to be used with structs or complex types.
 // It DOES NOT (TBD) allow for direct access to values if declared in the same `pos` in the built-in contract.
 //
 // SimpleMapping behavior:
