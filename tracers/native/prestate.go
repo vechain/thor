@@ -30,7 +30,7 @@ import (
 	"github.com/vechain/thor/v2/vm"
 )
 
-//go:generate go run github.com/fjl/gencodec -type account -field-override accountMarshaling -out gen_account_json.go
+//go:generate go run github.com/fjl/gencodec@v0.1.1 -type account -field-override accountMarshaling -out gen_account_json.go
 
 func init() {
 	tracers.DefaultDirectory.Register("prestateTracer", newPrestateTracer, false)
