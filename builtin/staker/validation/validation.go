@@ -123,6 +123,15 @@ func (v *Validation) CurrentIteration() uint32 {
 func (v *Validation) Renew() *delta.Renewal {
 	newLockedVET := big.NewInt(0)
 
+	if v.QueuedVET == nil {
+		v.QueuedVET = new(big.Int)
+	}
+	if v.PendingUnlockVET == nil {
+		v.PendingUnlockVET = new(big.Int)
+	}
+	if v.WithdrawableVET == nil {
+		v.WithdrawableVET = new(big.Int)
+	}
 	newLockedVET.Add(newLockedVET, v.QueuedVET)
 	newLockedVET.Sub(newLockedVET, v.PendingUnlockVET)
 
