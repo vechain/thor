@@ -36,7 +36,7 @@ func (c *Consensus) validate(
 	header := block.Header()
 
 	staker := builtin.Staker.Native(state)
-	posActive, activated, activeGroup, err := c.syncPOS(staker, header.Number())
+	posActive, _, activeGroup, err := c.syncPOS(staker, header.Number())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -59,9 +59,8 @@ func (c *Consensus) validate(
 		return nil, nil, err
 	}
 
-	if activated {
-		err := builtin.Energy.Native(state, parent.Timestamp()).StopEnergyGrowth()
-		if err != nil {
+	if header.Number() == c.forkConfig.HAYABUSA {
+		if err := builtin.Energy.Native(state, header.Timestamp()).StopEnergyGrowth(); err != nil {
 			return nil, nil, err
 		}
 	}

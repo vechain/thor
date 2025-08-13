@@ -7,6 +7,7 @@ package builtin
 
 import (
 	"math/big"
+	"strconv"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -129,10 +130,12 @@ func TestEnergy_Revision(t *testing.T) {
 	require.NoError(t, node.Chain().MintBlock(genesis.DevAccounts()[0]))
 	require.NoError(t, node.Chain().MintBlock(genesis.DevAccounts()[0]))
 
-	supplyBlock1, err := energy.Revision("2").TotalSupply()
+	hayabusa := int(node.Chain().GetForkConfig().HAYABUSA)
+	supplyAtFork, err := energy.Revision(strconv.Itoa(hayabusa)).TotalSupply()
 	require.NoError(t, err)
-	supplyBlock2, err := energy.Revision("3").TotalSupply()
+	supplyAfterFork, err := energy.Revision(strconv.Itoa(hayabusa + 1)).TotalSupply()
 	require.NoError(t, err)
 
-	require.Greater(t, supplyBlock2.Cmp(supplyBlock1), 0, "Total supply should increase with each block")
+	// Ensure no growth after the hardfork block
+	require.Equal(t, 0, supplyAfterFork.Cmp(supplyAtFork), "Total supply should stop increasing after the hardfork block")
 }

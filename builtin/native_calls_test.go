@@ -755,7 +755,9 @@ func TestEnergyNative(t *testing.T) {
 	growth.Mul(growth, exSupply)
 	growth.Mul(growth, thor.EnergyGrowthRate)
 	growth.Div(growth, big.NewInt(1e18))
-	for i := uint32(0); i < best; i++ {
+
+	hayabusa := thorChain.GetForkConfig().HAYABUSA
+	for i := uint32(0); i < best && i < hayabusa; i++ {
 		exSupply = exSupply.Add(exSupply, growth)
 	}
 	require.Equal(t, exSupply, bigIntOutput)
@@ -767,16 +769,23 @@ func TestEnergyNative(t *testing.T) {
 	// 1: Set MaxBlockProposers to 1
 	params := thorChain.Contract(builtin.Params.Address, builtin.Params.ABI, genesis.DevAccounts()[0])
 	staker := thorChain.Contract(builtin.Staker.Address, builtin.Staker.ABI, genesis.DevAccounts()[0])
+
+	shouldCollectEnergy := func() {
+		if thorChain.Repo().BestBlockSummary().Header.Number() <= hayabusa {
+			exSupply = exSupply.Add(exSupply, growth)
+		}
+	}
+
 	assert.NoError(t, params.MintTransaction("set", big.NewInt(0), thor.KeyMaxBlockProposers, big.NewInt(1)))
-	exSupply = exSupply.Add(exSupply, growth)
+	shouldCollectEnergy()
 	assert.NoError(t, params.MintTransaction("set", big.NewInt(0), thor.KeyStargateContractAddress, big.NewInt(0).SetBytes(acc4.Bytes())))
-	exSupply = exSupply.Add(exSupply, growth)
+	shouldCollectEnergy()
 
 	// 2: Add a validator to the queue
 	minStake := big.NewInt(25_000_000)
 	minStake = minStake.Mul(minStake, big.NewInt(1e18))
 	assert.NoError(t, staker.MintTransaction("addValidation", minStake, acc1.Address, uint32(360)*24*7))
-	exSupply = exSupply.Add(exSupply, growth)
+	shouldCollectEnergy()
 
 	validatorMap := make(map[uint64]*big.Int)
 

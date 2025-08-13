@@ -68,7 +68,7 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (*Flo
 	}
 
 	var sched scheduler
-	posActive, activated, err := p.syncPOS(st, parent.Header.Number()+1)
+	posActive, _, err := p.syncPOS(st, parent.Header.Number()+1)
 	if err != nil {
 		return nil, false, err
 	}
@@ -83,9 +83,8 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (*Flo
 		return nil, false, err
 	}
 
-	if activated {
-		err := builtin.Energy.Native(st, parent.Header.Timestamp()).StopEnergyGrowth()
-		if err != nil {
+	if parent.Header.Number()+1 == p.forkConfig.HAYABUSA {
+		if err := builtin.Energy.Native(st, newBlockTime).StopEnergyGrowth(); err != nil {
 			return nil, false, err
 		}
 	}
@@ -118,14 +117,14 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 		features |= tx.DelegationFeature
 	}
 
-	posActive, activated, err := p.syncPOS(state, parent.Header.Number()+1)
+	posActive, _, err := p.syncPOS(state, parent.Header.Number()+1)
 	if err != nil {
 		return nil, false, err
 	}
 
-	if activated {
-		err := builtin.Energy.Native(state, parent.Header.Timestamp()).StopEnergyGrowth()
-		if err != nil {
+	// Stop VTHO generation on the hardfork block (HAYABUSA), not on activation
+	if parent.Header.Number()+1 == p.forkConfig.HAYABUSA {
+		if err := builtin.Energy.Native(state, targetTime).StopEnergyGrowth(); err != nil {
 			return nil, false, err
 		}
 	}
