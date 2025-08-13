@@ -247,6 +247,28 @@ func (s *Service) IncreaseStake(validator thor.Address, endorsor thor.Address, a
 	return s.SetValidation(validator, entry, false)
 }
 
+func (s *Service) SetBeneficiary(validator, endorser, beneficiary thor.Address) error {
+	entry, err := s.GetExistingValidation(validator)
+	if err != nil {
+		return err
+	}
+	if entry.Endorsor != endorser {
+		return errors.New("invalid endorser")
+	}
+	if entry.Status == StatusExit || entry.ExitBlock != nil {
+		return errors.New("validator has exited or signaled exit, cannot set beneficiary")
+	}
+	if beneficiary.IsZero() {
+		entry.Beneficiary = nil
+	} else {
+		entry.Beneficiary = &beneficiary
+	}
+	if err = s.SetValidation(validator, entry, false); err != nil {
+		return errors.Wrap(err, "failed to set beneficiary")
+	}
+	return nil
+}
+
 func (s *Service) DecreaseStake(validator thor.Address, endorsor thor.Address, amount *big.Int) (bool, error) {
 	entry, err := s.GetExistingValidation(validator)
 	if err != nil {

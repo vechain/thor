@@ -2501,6 +2501,32 @@ func TestStaker_HasDelegations(t *testing.T) {
 		AssertHasDelegations(*validator, false)
 }
 
+func TestStaker_SetBeneficiary(t *testing.T) {
+	staker, _ := newStaker(t, 0, 1, false)
+
+	master := datagen.RandAddress()
+	endorsor := datagen.RandAddress()
+	beneficiary := datagen.RandAddress()
+
+	testSetup := newTestSequence(t, staker)
+
+	// add validation without a beneficiary
+	testSetup.AddValidation(master, endorsor, MediumStakingPeriod.Get(), MinStake).ActivateNext(0)
+	assertValidation(t, staker, master).Beneficiary(nil)
+
+	// negative cases
+	assert.ErrorContains(t, staker.SetBeneficiary(master, master, beneficiary), "invalid endorser")
+	assert.ErrorContains(t, staker.SetBeneficiary(endorsor, endorsor, beneficiary), "failed to get validator")
+
+	// set beneficiary, should be successful
+	testSetup.SetBeneficiary(master, endorsor, beneficiary)
+	assertValidation(t, staker, master).Beneficiary(&beneficiary)
+
+	// remove the beneficiary
+	testSetup.SetBeneficiary(master, endorsor, thor.Address{})
+	assertValidation(t, staker, master).Beneficiary(nil)
+}
+
 func getTestMaxLeaderSize(param *params.Params) *big.Int {
 	maxLeaderGroupSize, err := param.Get(thor.KeyMaxBlockProposers)
 	if err != nil {

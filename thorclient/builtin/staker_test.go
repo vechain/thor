@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/builtin/solidity"
 	builtinStaker "github.com/vechain/thor/v2/builtin/staker"
 
@@ -25,6 +26,24 @@ import (
 	"github.com/vechain/thor/v2/thorclient/bind"
 	"github.com/vechain/thor/v2/tx"
 )
+
+func DebugRevert(t *testing.T, receipt *api.Receipt, sender *bind.MethodBuilder) {
+	if receipt == nil {
+		require.Fail(t, "receipt is nil")
+		return
+	}
+	if receipt.Reverted {
+		_, err := sender.Call().
+			AtRevision(receipt.Meta.BlockID.String()).
+			Caller(&receipt.Meta.TxOrigin).
+			Execute()
+		if err != nil {
+			require.Fail(t, "transaction reverted", err)
+		} else {
+			require.Fail(t, "transaction reverted for unknown reason")
+		}
+	}
+}
 
 func TestStaker(t *testing.T) {
 	minStakingPeriod := uint32(360) * 24 * 7 // 360 days in seconds
@@ -44,6 +63,7 @@ func TestStaker(t *testing.T) {
 	var authorityTxs []*bind.SendBuilder
 	executor := bind.NewSigner(genesis.DevAccounts()[0].PrivateKey)
 	stargate := bind.NewSigner(genesis.DevAccounts()[0].PrivateKey)
+	validators := genesis.DevAccounts()[0:2]
 	for _, acc := range genesis.DevAccounts()[1:] {
 		sender := authority.Add(acc.Address, acc.Address, datagen.RandomHash()).Send().WithSigner(executor).WithOptions(txOpts())
 		authorityTxs = append(authorityTxs, sender)
@@ -75,7 +95,7 @@ func TestStaker(t *testing.T) {
 	var validatorTxs []*tx.Transaction
 
 	builtinStaker.EpochLength = solidity.NewConfigVariable("epoch-length", 1)
-	for _, acc := range genesis.DevAccounts()[0:2] {
+	for _, acc := range validators {
 		addValidatorTx, err := staker.AddValidation(acc.Address, minStake, minStakingPeriod).
 			Send().
 			WithSigner(bind.NewSigner(acc.PrivateKey)).
@@ -327,4 +347,22 @@ func TestStaker(t *testing.T) {
 	rewards, err = energy.CalculateRewards(stakerNative)
 	require.NoError(t, err)
 	require.Equal(t, rewards, issuance)
+
+	// SetBeneficiary
+	validator1 := bind.NewSigner(validators[0].PrivateKey)
+	beneficiary := datagen.RandAddress()
+	receipt, _, err = staker.SetBeneficiary(firstID, beneficiary).
+		Send().
+		WithSigner(validator1).
+		WithOptions(txOpts()).
+		SubmitAndConfirm(txContext(t))
+	require.NoError(t, err)
+	DebugRevert(t, receipt, staker.SetBeneficiary(queuedID, beneficiary))
+
+	beneficiaryEvents, err := staker.FilterBeneficiarySet(newRange(receipt), nil, logdb.ASC)
+	require.NoError(t, err)
+	require.Len(t, beneficiaryEvents, 1)
+	require.Equal(t, validator1.Address(), beneficiaryEvents[0].Validator)
+	require.Equal(t, beneficiary, beneficiaryEvents[0].Beneficiary)
+	require.Equal(t, validator1.Address(), beneficiaryEvents[0].Endorsor)
 }

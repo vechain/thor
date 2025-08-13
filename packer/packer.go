@@ -6,6 +6,7 @@
 package packer
 
 import (
+	"errors"
 	"math/big"
 
 	"github.com/vechain/thor/v2/block"
@@ -128,6 +129,7 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 			return nil, false, err
 		}
 	}
+	beneficiary := p.beneficiary
 
 	var score uint64
 	if posActive {
@@ -139,11 +141,18 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 		if err != nil {
 			return nil, false, err
 		}
-		for _, leader := range leaders {
+		for node, leader := range leaders {
 			if leader.Online {
 				percentage := new(big.Int).Mul(leader.Weight, big.NewInt(thor.MaxPosScore))
 				percentage.Div(percentage, totalWeight)
 				score = score + percentage.Uint64()
+			}
+			if node == p.nodeMaster {
+				if leader.Beneficiary != nil {
+					beneficiary = leader.Beneficiary
+				} else if beneficiary == nil {
+					beneficiary = &leader.Endorsor
+				}
 			}
 		}
 	} else {
@@ -155,7 +164,13 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 			if authority.Active {
 				score++
 			}
+			if beneficiary == nil && authority.NodeMaster == p.nodeMaster {
+				beneficiary = &authority.Endorsor
+			}
 		}
+	}
+	if beneficiary == nil {
+		return nil, false, errors.New("no beneficiary set, cannot pack block")
 	}
 
 	gl := gasLimit
@@ -172,7 +187,7 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 		p.repo.NewChain(parent.Header.ID()),
 		state,
 		&xenv.BlockContext{
-			Beneficiary: p.nodeMaster,
+			Beneficiary: *beneficiary,
 			Signer:      p.nodeMaster,
 			Number:      parent.Header.Number() + 1,
 			Time:        targetTime,

@@ -145,6 +145,16 @@ func (ts *TestSequence) WithdrawStake(endorsor, master thor.Address, block uint3
 	return ts
 }
 
+func (ts *TestSequence) SetBeneficiary(
+	validator thor.Address,
+	endorsor thor.Address,
+	beneficiary thor.Address,
+) *TestSequence {
+	err := ts.staker.SetBeneficiary(validator, endorsor, beneficiary)
+	assert.NoError(ts.t, err, "failed to set beneficiary for validator %s with endorsor %s: %v", validator.String(), endorsor.String(), err)
+	return ts
+}
+
 func (ts *TestSequence) AssertWithdrawable(
 	master thor.Address,
 	block uint32,
@@ -351,6 +361,15 @@ func (va *ValidationAssertions) Rewards(period uint32, expected *big.Int) *Valid
 	reward, err := va.staker.GetDelegatorRewards(va.addr, period)
 	assert.NoError(va.t, err, "failed to get rewards for validator %s at period %d", va.addr.String(), period)
 	assert.Equal(va.t, expected, reward, "validator %s rewards mismatch for period %d", va.addr.String(), period)
+	return va
+}
+
+func (va *ValidationAssertions) Beneficiary(expected *thor.Address) *ValidationAssertions {
+	if expected == nil {
+		assert.Nil(va.t, va.validator.Beneficiary, "validator %s beneficiary mismatch", va.addr.String())
+	} else {
+		assert.Equal(va.t, *expected, *va.validator.Beneficiary, "validator %s beneficiary mismatch", va.addr.String())
+	}
 	return va
 }
 

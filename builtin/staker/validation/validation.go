@@ -29,13 +29,14 @@ const (
 )
 
 type Validation struct {
-	Endorsor           thor.Address // the address providing the stake
-	Period             uint32       // the staking period of the validation
-	CompleteIterations uint32       // the completed staking periods by the validation
-	Status             Status       // status of the validation
-	Online             bool         // whether the validation is online or not
-	StartBlock         uint32       // the block number when the validation started the first staking period
-	ExitBlock          *uint32      `rlp:"nil"` // the block number when the validation moved to cooldown
+	Endorsor           thor.Address  // the address providing the stake
+	Beneficiary        *thor.Address `rlp:"nil"` // the address receiving the rewards
+	Period             uint32        // the staking period of the validation
+	CompleteIterations uint32        // the completed staking periods by the validation
+	Status             Status        // status of the validation
+	Online             bool          // whether the validation is online or not
+	StartBlock         uint32        // the block number when the validation started the first staking period
+	ExitBlock          *uint32       `rlp:"nil"` // the block number when the validation moved to cooldown
 
 	LockedVET        *big.Int // the amount of VET locked for the current staking period, for the validator only
 	PendingUnlockVET *big.Int // the amount of VET that will be unlocked in the next staking period. DOES NOT contribute to the TVL
@@ -116,6 +117,15 @@ func (v *Validation) CurrentIteration() uint32 {
 func (v *Validation) Renew() *delta.Renewal {
 	newLockedVET := big.NewInt(0)
 
+	if v.QueuedVET == nil {
+		v.QueuedVET = new(big.Int)
+	}
+	if v.PendingUnlockVET == nil {
+		v.PendingUnlockVET = new(big.Int)
+	}
+	if v.WithdrawableVET == nil {
+		v.WithdrawableVET = new(big.Int)
+	}
 	newLockedVET.Add(newLockedVET, v.QueuedVET)
 	newLockedVET.Sub(newLockedVET, v.PendingUnlockVET)
 

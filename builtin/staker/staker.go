@@ -345,6 +345,15 @@ func (s *Staker) SetOnline(validator thor.Address, online bool) (bool, error) {
 	return hasChanged, err
 }
 
+func (s *Staker) SetBeneficiary(validator, endorsor, beneficiary thor.Address) error {
+	logger.Debug("set beneficiary", "validator", validator, "beneficiary", beneficiary)
+	if err := s.validationService.SetBeneficiary(validator, endorsor, beneficiary); err != nil {
+		logger.Info("set beneficiary failed", "validator", validator, "error", err)
+		return err
+	}
+	return nil
+}
+
 // AddDelegation adds a new delegation.
 func (s *Staker) AddDelegation(
 	validator thor.Address,

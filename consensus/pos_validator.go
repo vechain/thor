@@ -69,6 +69,13 @@ func (c *Consensus) validateStakingProposer(
 	if parent.TotalScore()+score != header.TotalScore() {
 		return consensusError(fmt.Sprintf("pos - block total score invalid: want %v, have %v", parent.TotalScore()+score, header.TotalScore()))
 	}
+	validator, ok := leaders[signer]
+	if !ok {
+		return consensusError(fmt.Sprintf("pos - block proposer %v not found in leader group", signer))
+	}
+	if validator.Beneficiary != nil && *validator.Beneficiary != header.Beneficiary() {
+		return consensusError(fmt.Sprintf("pos - stake beneficiary mismatch: want %v, have %v", *validator.Beneficiary, header.Beneficiary()))
+	}
 
 	hasUpdates := false
 	for addr, online := range updates {

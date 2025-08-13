@@ -89,6 +89,7 @@ func init() {
 					thor.Address{},
 					big.NewInt(0),
 					big.NewInt(0),
+					big.NewInt(0),
 					fmt.Sprintf("revert: %v", err),
 				}
 			}
@@ -322,6 +323,31 @@ func init() {
 				return []any{fmt.Sprintf("revert: %v", err)}
 			}
 
+			return []any{""}
+		}},
+		{"native_setBeneficiary", func(env *xenv.Environment) []any {
+			var args struct {
+				Validator   common.Address
+				Endorsor    common.Address
+				Beneficiary common.Address
+			}
+			env.ParseArgs(&args)
+			charger := gascharger.New(env)
+
+			err := IsStakerPaused(env.State(), charger)
+			if err != nil {
+				return []any{fmt.Sprintf("revert: %v", err)}
+			}
+
+			err = Staker.NativeMetered(env.State(), charger).
+				SetBeneficiary(
+					thor.Address(args.Validator),
+					thor.Address(args.Endorsor),
+					thor.Address(args.Beneficiary),
+				)
+			if err != nil {
+				return []any{fmt.Sprintf("revert: %v", err)}
+			}
 			return []any{""}
 		}},
 		{"native_decreaseStake", func(env *xenv.Environment) []any {
