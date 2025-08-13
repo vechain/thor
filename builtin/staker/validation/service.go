@@ -9,6 +9,8 @@ import (
 	"encoding/binary"
 	"math/big"
 
+	"github.com/vechain/thor/v2/builtin/staker/stakes"
+
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
@@ -441,8 +443,7 @@ func (s *Service) ActivateValidator(
 	// Reset QueuedVET - already locked-in
 	val.QueuedVET = big.NewInt(0)
 
-	// x2 multiplier for validator's stake
-	weightedStake := WeightedStake(val.LockedVET)
+	weightedStake := stakes.NewWeightedStake(val.LockedVET, Multiplier)
 	val.Weight = big.NewInt(0).Add(weightedStake.Weight(), aggRenew.NewLockedWeight)
 
 	// Update validator status

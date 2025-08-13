@@ -188,7 +188,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_addDelegation",
-			expectedGas: 32200,
+			expectedGas: 32400,
 			args: []any{
 				account1,
 				staker.MinStake,
@@ -217,7 +217,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_withdrawDelegation",
-			expectedGas: 21800,
+			expectedGas: 22000,
 			args: []any{
 				big.NewInt(1), // IDs are incremental, starting at 1
 			},

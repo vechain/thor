@@ -58,7 +58,8 @@ func TestService_AddAndSub_Pending(t *testing.T) {
 	assert.Equal(t, big.NewInt(1000), agg.PendingVET)
 	assert.Equal(t, big.NewInt(2000), agg.PendingWeight)
 
-	assert.NoError(t, svc.SubPendingVet(v, ws))
+	err = svc.SubPendingVet(v, ws)
+	assert.NoError(t, err)
 
 	agg, err = svc.GetAggregation(v)
 	assert.NoError(t, err)
@@ -78,7 +79,7 @@ func TestService_Renew(t *testing.T) {
 	assert.Equal(t, big.NewInt(3000), renew1.NewLockedVET)
 	assert.Equal(t, big.NewInt(6000), renew1.NewLockedWeight)
 
-	assert.NoError(t, svc.SignalExit(v, stakes.NewWeightedStake(big.NewInt(1000), 200)))
+	assert.NoError(t, svc.SignalExit(v, stakes.NewWeightedStake(big.NewInt(1000), 200), renew1.NewLockedVET))
 
 	assert.NoError(t, svc.AddPendingVET(v, stakes.NewWeightedStake(big.NewInt(500), 200)))
 
@@ -124,12 +125,12 @@ func TestService_SignalExit(t *testing.T) {
 	v := thor.BytesToAddress([]byte("v"))
 
 	ws := stakes.NewWeightedStake(big.NewInt(1500), 200) // weight 3000
-	assert.NoError(t, svc.SignalExit(v, ws))
+	assert.NoError(t, svc.SignalExit(v, ws, ws.VET()))
 
 	agg, err := svc.GetAggregation(v)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(1500), agg.ExitingVET)
-	assert.Equal(t, big.NewInt(3000), agg.ExitingWeight)
+	assert.Equal(t, big.NewInt(4500), agg.ExitingWeight)
 }
 
 func TestService_GetAggregation_Error(t *testing.T) {
@@ -182,6 +183,6 @@ func TestService_SignalExit_ErrorOnGet(t *testing.T) {
 	v := thor.BytesToAddress([]byte("v"))
 	poisonMapping(st, contract, v)
 
-	err := svc.SignalExit(v, stakes.NewWeightedStake(big.NewInt(1000), 100))
+	err := svc.SignalExit(v, stakes.NewWeightedStake(big.NewInt(1000), 100), big.NewInt(0))
 	assert.ErrorContains(t, err, "failed to get validator aggregation")
 }

@@ -110,7 +110,7 @@ func TestStaker(t *testing.T) {
 	require.False(t, getStakeRes.Address.IsZero())
 	require.False(t, getStakeRes.Endorsor.IsZero())
 	require.Equal(t, getStakeRes.Stake, minStake)
-	require.Equal(t, getStakeRes.Weight, big.NewInt(0).Mul(minStake, big.NewInt(2)))
+	require.Equal(t, getStakeRes.Weight, minStake)
 	require.Equal(t, getStakeRes.QueuedStake.String(), big.NewInt(0).String())
 
 	// GetStatus
@@ -136,7 +136,7 @@ func TestStaker(t *testing.T) {
 	require.False(t, firstID.IsZero())
 	require.True(t, firstActive.Exists(*getStatusRes))
 	require.Equal(t, minStake, firstActive.Stake)
-	require.Equal(t, big.NewInt(0).Mul(minStake, big.NewInt(2)), firstActive.Weight)
+	require.Equal(t, minStake, firstActive.Weight)
 	require.False(t, firstActive.Endorsor.IsZero())
 
 	// Next
@@ -148,7 +148,7 @@ func TestStaker(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, StakerStatusActive, nextStatus.Status)
 	require.Equal(t, minStake, next.Stake)
-	require.Equal(t, big.NewInt(0).Mul(minStake, big.NewInt(2)), next.Weight)
+	require.Equal(t, minStake, next.Weight)
 	require.False(t, next.Endorsor.IsZero())
 
 	var (
@@ -188,7 +188,7 @@ func TestStaker(t *testing.T) {
 	stake := big.NewInt(0).Mul(big.NewInt(1e18), big.NewInt(25))
 	stake = big.NewInt(0).Mul(stake, big.NewInt(1e6))
 	require.Equal(t, stake, queuedStake)
-	require.Equal(t, big.NewInt(0).Mul(stake, big.NewInt(2)), queuedWeight)
+	require.Equal(t, minStake, queuedWeight)
 
 	builtinStaker.EpochLength = solidity.NewConfigVariable("epoch-length", 180)
 
@@ -262,7 +262,7 @@ func TestStaker(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, minStake, validationTotals.TotalLockedStake)
-	require.Equal(t, big.NewInt(0).Mul(minStake, big.NewInt(2)), validationTotals.TotalLockedWeight)
+	require.Equal(t, minStake, validationTotals.TotalLockedWeight)
 	require.Equal(t, big.NewInt(0).String(), validationTotals.TotalQueuedStake.String())
 	require.Equal(t, big.NewInt(0).String(), validationTotals.TotalQueuedWeight.String())
 	require.Equal(t, big.NewInt(0).String(), validationTotals.TotalExitingStake.String())

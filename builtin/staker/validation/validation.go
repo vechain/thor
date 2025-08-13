@@ -8,9 +8,10 @@ package validation
 import (
 	"math/big"
 
+	"github.com/vechain/thor/v2/builtin/staker/stakes"
+
 	"github.com/vechain/thor/v2/builtin/staker/aggregation"
 	"github.com/vechain/thor/v2/builtin/staker/delta"
-	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -24,15 +25,8 @@ const (
 )
 
 const (
-	Multiplier = 200 // 200% for validators
+	Multiplier = uint8(100) // 200% for validators
 )
-
-func WeightedStake(amount *big.Int) *stakes.WeightedStake {
-	if amount == nil {
-		amount = big.NewInt(0)
-	}
-	return stakes.NewWeightedStake(amount, Multiplier)
-}
 
 type Validation struct {
 	Endorsor           thor.Address // the address providing the stake
@@ -49,7 +43,7 @@ type Validation struct {
 	CooldownVET      *big.Int // the amount of VET that is locked into the validation's cooldown
 	WithdrawableVET  *big.Int // the amount of VET that is currently withdrawable
 
-	Weight *big.Int // LockedVET x2 + total weight from delegators
+	Weight *big.Int // LockedVET x1 if no delegations, otherwise x2 + total weight from delegators
 }
 
 type Totals struct {
@@ -70,12 +64,12 @@ func (v *Validation) Totals(agg *aggregation.Aggregation) *Totals {
 		exitingVET = big.NewInt(0).Add(v.LockedVET, agg.LockedVET)
 		exitingWeight = v.Weight
 	} else {
-		vExiting := WeightedStake(v.PendingUnlockVET)
+		vExiting := stakes.NewWeightedStake(v.PendingUnlockVET, Multiplier)
 		exitingVET = big.NewInt(0).Add(vExiting.VET(), agg.ExitingVET)
 		exitingWeight = big.NewInt(0).Add(vExiting.Weight(), agg.ExitingWeight)
 	}
 
-	queued := WeightedStake(v.QueuedVET)
+	queued := stakes.NewWeightedStake(v.QueuedVET, Multiplier)
 
 	return &Totals{
 		// Delegation totals can be calculated by subtracting validators stakes / weights from the global totals.
@@ -130,9 +124,8 @@ func (v *Validation) Renew() *delta.Renewal {
 	v.QueuedVET = big.NewInt(0)
 	v.PendingUnlockVET = big.NewInt(0)
 
-	// Apply x2 multiplier for validation's stake
-	weight := WeightedStake(newLockedVET).Weight()
-	queuedDecreaseWeight := WeightedStake(queuedDecrease).Weight()
+	weight := stakes.NewWeightedStake(newLockedVET, Multiplier).Weight()
+	queuedDecreaseWeight := stakes.NewWeightedStake(queuedDecrease, Multiplier).Weight()
 
 	v.CompleteIterations++
 
@@ -167,9 +160,9 @@ func (v *Validation) Exit() *delta.Exit {
 	// We only return the change in the validation's TVL and weight
 	return &delta.Exit{
 		ExitedTVL:            releaseLockedTVL,
-		ExitedTVLWeight:      WeightedStake(releaseLockedTVL).Weight(),
+		ExitedTVLWeight:      stakes.NewWeightedStake(releaseLockedTVL, Multiplier).Weight(),
 		QueuedDecrease:       releaseQueuedTVL,
-		QueuedDecreaseWeight: WeightedStake(releaseQueuedTVL).Weight(),
+		QueuedDecreaseWeight: stakes.NewWeightedStake(releaseQueuedTVL, Multiplier).Weight(),
 	}
 }
 
