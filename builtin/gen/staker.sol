@@ -128,7 +128,7 @@ contract Staker {
      */
     function signalExit(address validator) public {
         string memory error = StakerNative(address(this)).native_signalExit(
-        validator,
+            validator,
             msg.sender
         );
         require(bytes(error).length == 0, error);
