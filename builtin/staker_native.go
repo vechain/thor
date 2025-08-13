@@ -89,6 +89,7 @@ func init() {
 					thor.Address{},
 					big.NewInt(0),
 					big.NewInt(0),
+					big.NewInt(0),
 					fmt.Sprintf("revert: %v", err),
 				}
 			}

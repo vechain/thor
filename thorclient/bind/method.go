@@ -59,24 +59,22 @@ func (b *MethodBuilder) Clause() (*tx.Clause, error) {
 }
 
 func (b *MethodBuilder) String() string {
-	builder := strings.Builder{}
-	builder.WriteString("contract=")
-	builder.WriteString(b.contract.addr.String())
-	builder.WriteString(", method=")
-	builder.WriteString(b.method)
+	parts := []string{
+		"contract=" + b.contract.addr.String(),
+		"method=" + b.method,
+	}
+
 	if b.vet != nil && b.vet.Sign() != 0 {
-		builder.WriteString(", value=")
-		builder.WriteString(b.vet.String())
+		parts = append(parts, "value="+b.vet.String())
 	}
+
 	if len(b.args) > 0 {
-		builder.WriteString(", args=[")
+		args := make([]string, len(b.args))
 		for i, arg := range b.args {
-			if i > 0 {
-				builder.WriteString(", ")
-			}
-			builder.WriteString(fmt.Sprintf("%v", arg))
+			args[i] = fmt.Sprintf("%v", arg)
 		}
-		builder.WriteString("]")
+		parts = append(parts, "args=["+strings.Join(args, ", ")+"]")
 	}
-	return builder.String()
+
+	return strings.Join(parts, ", ")
 }
