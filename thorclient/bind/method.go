@@ -8,6 +8,7 @@ package bind
 import (
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/vechain/thor/v2/tx"
 )
@@ -55,4 +56,27 @@ func (b *MethodBuilder) Clause() (*tx.Clause, error) {
 	clause := tx.NewClause(b.contract.addr).WithData(data).WithValue(b.vet)
 
 	return clause, nil
+}
+
+func (b *MethodBuilder) String() string {
+	builder := strings.Builder{}
+	builder.WriteString("contract=")
+	builder.WriteString(b.contract.addr.String())
+	builder.WriteString(", method=")
+	builder.WriteString(b.method)
+	if b.vet != nil && b.vet.Sign() != 0 {
+		builder.WriteString(", value=")
+		builder.WriteString(b.vet.String())
+	}
+	if len(b.args) > 0 {
+		builder.WriteString(", args=[")
+		for i, arg := range b.args {
+			if i > 0 {
+				builder.WriteString(", ")
+			}
+			builder.WriteString(fmt.Sprintf("%v", arg))
+		}
+		builder.WriteString("]")
+	}
+	return builder.String()
 }

@@ -104,7 +104,7 @@ func (b *SendBuilder) Submit() (*tx.Transaction, error) {
 				Clauses: api.Clauses{{To: b.op.contract.addr, Data: hexutil.Encode(clause.Data()), Value: (*math.HexOrDecimal256)(clause.Value())}},
 			}, thorclient.Revision("best"))
 		if err != nil {
-			return nil, fmt.Errorf("simulation failed: %w", err)
+			return nil, fmt.Errorf("failed to simulate clauses (%s): %w", b.op.String(), err)
 		}
 		if len(simulation) != 1 {
 			return nil, fmt.Errorf("expected 1 simulation result, got %d", len(simulation))
@@ -160,7 +160,7 @@ func (b *SendBuilder) Submit() (*tx.Transaction, error) {
 	}
 
 	if _, err = b.op.contract.client.SendTransaction(transaction); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to send transaction (%s): %w", b.op.String(), err)
 	}
 
 	return transaction, nil
@@ -177,7 +177,7 @@ func (b *SendBuilder) SubmitAndConfirm(ctx context.Context) (*api.Receipt, *tx.T
 	for {
 		select {
 		case <-ctx.Done():
-			return nil, nil, fmt.Errorf("context cancelled while waiting for receipt (method: %s, transaction ID: %s)", b.op.method, id.String())
+			return nil, nil, fmt.Errorf("context cancelled while waiting for receipt (context: %s, transaction ID: %s)", b.op.String(), id.String())
 		default:
 			receipt, err := b.op.contract.client.TransactionReceipt(&id)
 			if err != nil || receipt == nil {
