@@ -135,7 +135,7 @@ func (h *hayabusaSetup) mintBlock(txs ...*tx.Transaction) (*chain.BlockSummary, 
 	staker := builtin.Staker.Native(st)
 	_, _, _, err = h.consensus.syncPOS(staker, best.Header.Number())
 	assert.NoError(h.t, err)
-	// Stop VTHO generation on the hardfork block
+
 	if best.Header.Number() == h.config.HAYABUSA {
 		builtin.Energy.Native(st, best.Header.Timestamp()).StopEnergyGrowth()
 	}

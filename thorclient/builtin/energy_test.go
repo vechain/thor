@@ -136,6 +136,5 @@ func TestEnergy_Revision(t *testing.T) {
 	supplyAfterFork, err := energy.Revision(strconv.Itoa(hayabusa + 1)).TotalSupply()
 	require.NoError(t, err)
 
-	// Ensure no growth after the hardfork block
 	require.Equal(t, 0, supplyAfterFork.Cmp(supplyAtFork), "Total supply should stop increasing after the hardfork block")
 }

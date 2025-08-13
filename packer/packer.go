@@ -122,7 +122,6 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 		return nil, false, err
 	}
 
-	// Stop VTHO generation on the hardfork block (HAYABUSA), not on activation
 	if parent.Header.Number()+1 == p.forkConfig.HAYABUSA {
 		if err := builtin.Energy.Native(state, targetTime).StopEnergyGrowth(); err != nil {
 			return nil, false, err
