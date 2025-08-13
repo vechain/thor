@@ -73,8 +73,8 @@ contract Staker {
         address validator
     ) public payable checkStake(msg.value) {
         string memory error = StakerNative(address(this)).native_increaseStake(
-            msg.sender,
             validator,
+            msg.sender,
             msg.value
         );
         require(bytes(error).length == 0, error);
@@ -102,8 +102,8 @@ contract Staker {
         uint256 amount
     ) public checkStake(amount) {
         string memory error = StakerNative(address(this)).native_decreaseStake(
-            msg.sender,
             validator,
+            msg.sender,
             amount
         );
         require(bytes(error).length == 0, error);
@@ -115,7 +115,7 @@ contract Staker {
      */
     function withdrawStake(address validator) public {
         (uint256 stake, string memory error) = StakerNative(address(this))
-            .native_withdrawStake(msg.sender, validator);
+            .native_withdrawStake(validator, msg.sender);
         require(bytes(error).length == 0, error);
 
         (bool success, ) = msg.sender.call{value: stake}("");
