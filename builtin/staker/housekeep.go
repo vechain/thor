@@ -75,6 +75,7 @@ func (s *Staker) computeEpochTransition(currentBlock uint32) (*EpochTransition, 
 		s.renewalCallback(currentBlock, &renewals),
 		s.exitsCallback(currentBlock, &exitValidator),
 		s.collectActiveCallback(active),
+		s.evictionCallback(currentBlock),
 	)
 	if err != nil {
 		return nil, err
@@ -143,6 +144,24 @@ func (s *Staker) exitsCallback(currentBlock uint32, exitAddress *thor.Address) f
 			}
 			// Just record which validator should exit (matches original behavior)
 			*exitAddress = validator
+		}
+		return nil
+	}
+}
+
+func (s *Staker) evictionCallback(currentBlock uint32) func(thor.Address, *validation.Validation) error {
+	return func(validator thor.Address, entry *validation.Validation) error {
+		if entry.OfflineBlock != nil && currentBlock > *entry.OfflineBlock+(thor.OfflineValidatorEvictionThresholdEpochs*EpochLength.Get()) {
+			exitBlock, err := s.validationService.SetExitBlock(validator, currentBlock+EpochLength.Get())
+			if err != nil {
+				return err
+			}
+			if entry.ExitBlock != nil && *entry.ExitBlock < exitBlock {
+				exitBlock = *entry.ExitBlock
+			}
+			entry.ExitBlock = &exitBlock
+
+			return s.validationService.SetValidation(validator, entry, false)
 		}
 		return nil
 	}

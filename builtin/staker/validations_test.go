@@ -2928,3 +2928,73 @@ func TestStaker_TestWeights(t *testing.T) {
 	assert.Equal(t, stake, totals2.TotalQueuedStake)
 	assert.Equal(t, stake, totals2.TotalQueuedWeight)
 }
+
+func TestStaker_OfflineValidator(t *testing.T) {
+	staker, _ := newStaker(t, 5, 5, true)
+
+	testSetup := newTestSequence(t, staker)
+
+	validator1, err := testSetup.staker.FirstActive()
+	assert.NoError(t, err)
+
+	validator2, err := testSetup.staker.Next(*validator1)
+	assert.NoError(t, err)
+
+	val1, err := testSetup.staker.Get(*validator1)
+	assert.NoError(t, err)
+	assert.Nil(t, val1.OfflineBlock)
+	assert.Nil(t, val1.ExitBlock)
+
+	val2, err := testSetup.staker.Get(validator2)
+	assert.NoError(t, err)
+	assert.Nil(t, val2.OfflineBlock)
+	assert.Nil(t, val2.ExitBlock)
+
+	// setting validator offline will record offline block
+	testSetup.SetOnline(*validator1, 4, false)
+
+	expectedOfflineBlock := uint32(4)
+	val1, err = testSetup.staker.Get(*validator1)
+	assert.NoError(t, err)
+	assert.Equal(t, &expectedOfflineBlock, val1.OfflineBlock)
+	assert.Nil(t, val1.ExitBlock)
+
+	// setting validator online will clear offline block
+	testSetup.SetOnline(*validator1, 8, true)
+
+	val1, err = testSetup.staker.Get(*validator1)
+	assert.NoError(t, err)
+	assert.Nil(t, val1.OfflineBlock)
+	assert.Nil(t, val1.ExitBlock)
+
+	// setting validator offline will not trigger eviction until threshold is met
+	testSetup.SetOnline(*validator1, 8, false)
+	// Epoch length is 180, 336 is the number of epochs in 7 days which is threshold, 8 is the block number when val wen't offline
+	testSetup.Housekeep(EpochLength.Get() * 336)
+
+	expectedOfflineBlock = uint32(8)
+	val1, err = testSetup.staker.Get(*validator1)
+	assert.NoError(t, err)
+	assert.Equal(t, &expectedOfflineBlock, val1.OfflineBlock)
+	assert.Nil(t, val1.ExitBlock)
+
+	// exit status is set to first free epoch after current one
+	testSetup.Housekeep(EpochLength.Get() * 337)
+	expectedExitBlock := EpochLength.Get() * 338
+
+	expectedOfflineBlock = uint32(8)
+	val1, err = testSetup.staker.Get(*validator1)
+	assert.NoError(t, err)
+	assert.Equal(t, validation.StatusActive, val1.Status)
+	assert.Equal(t, &expectedOfflineBlock, val1.OfflineBlock)
+	assert.Equal(t, expectedExitBlock, *val1.ExitBlock)
+
+	// validator should exit here
+	testSetup.Housekeep(expectedExitBlock)
+
+	val1, err = testSetup.staker.Get(*validator1)
+	assert.NoError(t, err)
+	assert.Equal(t, validation.StatusExit, val1.Status)
+	assert.Equal(t, &expectedOfflineBlock, val1.OfflineBlock)
+	assert.Equal(t, expectedExitBlock, *val1.ExitBlock)
+}
