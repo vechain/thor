@@ -21,6 +21,14 @@ func NewWeightedStake(vet *big.Int, multiplier uint8) *WeightedStake {
 	}
 }
 
+func (s *WeightedStake) AddWeight(weight big.Int) {
+	s.weight = big.NewInt(0).Add(s.weight, &weight)
+}
+
+func (s *WeightedStake) SubWeight(weight big.Int) {
+	s.weight = big.NewInt(0).Sub(s.weight, &weight)
+}
+
 func (s *WeightedStake) Weight() *big.Int {
 	return s.weight
 }
