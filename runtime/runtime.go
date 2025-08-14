@@ -141,6 +141,9 @@ func New(
 		if err := state.SetCode(builtin.Staker.Address, builtin.Staker.RuntimeBytecodes()); err != nil {
 			panic(err)
 		}
+		if err := builtin.Energy.Native(state, ctx.Time).StopEnergyGrowth(); err != nil {
+			panic(err)
+		}
 	}
 
 	rt := Runtime{

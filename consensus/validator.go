@@ -36,7 +36,7 @@ func (c *Consensus) validate(
 	header := block.Header()
 
 	staker := builtin.Staker.Native(state)
-	posActive, activated, activeGroup, err := c.syncPOS(staker, header.Number())
+	posActive, _, activeGroup, err := c.syncPOS(staker, header.Number())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -57,13 +57,6 @@ func (c *Consensus) validate(
 	}
 	if err != nil {
 		return nil, nil, err
-	}
-
-	if activated {
-		err := builtin.Energy.Native(state, parent.Timestamp()).StopEnergyGrowth()
-		if err != nil {
-			return nil, nil, err
-		}
 	}
 
 	if err := c.validateBlockBody(block); err != nil {
