@@ -6,25 +6,23 @@
 package builtin
 
 import (
+	"context"
 	"math"
 	"math/big"
 	"testing"
-	"time"
 
-	"github.com/vechain/thor/v2/api"
-	"github.com/vechain/thor/v2/builtin/solidity"
-	builtinStaker "github.com/vechain/thor/v2/builtin/staker"
-
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/builtin/solidity"
+	builtinStaker "github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
-	"github.com/vechain/thor/v2/test"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/bind"
-	"github.com/vechain/thor/v2/tx"
 )
 
 func DebugRevert(t *testing.T, receipt *api.Receipt, sender *bind.MethodBuilder) {
@@ -45,6 +43,19 @@ func DebugRevert(t *testing.T, receipt *api.Receipt, sender *bind.MethodBuilder)
 	}
 }
 
+func ExpectRevert(t *testing.T, receipt *api.Receipt, sender *bind.MethodBuilder, expectedMessage string) {
+	if receipt == nil {
+		require.Fail(t, "receipt is nil")
+		return
+	}
+	assert.True(t, receipt.Reverted, "expected transaction to revert but it did not")
+	_, err := sender.Call().
+		AtRevision(receipt.Meta.BlockID.String()).
+		Caller(&receipt.Meta.TxOrigin).
+		Execute()
+	require.Contains(t, err.Error(), expectedMessage, "transaction did not revert as expected")
+}
+
 func TestStaker(t *testing.T) {
 	minStakingPeriod := uint32(360) * 24 * 7 // 360 days in seconds
 
@@ -60,18 +71,18 @@ func TestStaker(t *testing.T) {
 	require.NoError(t, err)
 
 	// set authorities - required for initial staker setup
-	var authorityTxs []*bind.SendBuilder
 	executor := bind.NewSigner(genesis.DevAccounts()[0].PrivateKey)
 	stargate := bind.NewSigner(genesis.DevAccounts()[0].PrivateKey)
 	validators := genesis.DevAccounts()[0:2]
 	for _, acc := range genesis.DevAccounts()[1:] {
-		sender := authority.Add(acc.Address, acc.Address, datagen.RandomHash()).Send().WithSigner(executor).WithOptions(txOpts())
-		authorityTxs = append(authorityTxs, sender)
-	}
-	for _, tx := range authorityTxs {
-		if _, err := tx.Submit(); err != nil {
-			t.Fatal(err)
-		}
+		method := authority.Add(acc.Address, acc.Address, datagen.RandomHash())
+		receipt, _, err := method.
+			Send().
+			WithSigner(executor).
+			WithOptions(txOpts()).
+			SubmitAndConfirm(context.Background())
+		assert.NoError(t, err)
+		DebugRevert(t, receipt, method)
 	}
 
 	// set max block proposers
@@ -92,25 +103,17 @@ func TestStaker(t *testing.T) {
 
 	// add validators - trigger PoS activation
 	minStake := MinStake()
-	var validatorTxs []*tx.Transaction
 
 	builtinStaker.EpochLength = solidity.NewConfigVariable("epoch-length", 1)
 	for _, acc := range validators {
-		addValidatorTx, err := staker.AddValidation(acc.Address, minStake, minStakingPeriod).
+		method := staker.AddValidation(acc.Address, minStake, minStakingPeriod)
+		receipt, _, err := method.
 			Send().
 			WithSigner(bind.NewSigner(acc.PrivateKey)).
-			WithOptions(txOpts()).Submit()
+			WithOptions(txOpts()).
+			SubmitAndConfirm(txContext(t))
 		require.NoError(t, err)
-		validatorTxs = append(validatorTxs, addValidatorTx)
-	}
-	for _, trx := range validatorTxs {
-		require.NoError(t, test.Retry(func() error {
-			id := trx.ID()
-			if _, err = client.TransactionReceipt(&id); err != nil {
-				return err
-			}
-			return nil
-		}, 100*time.Millisecond, 10*time.Second))
+		DebugRevert(t, receipt, method)
 	}
 
 	// pack a new block
@@ -298,9 +301,10 @@ func TestStaker(t *testing.T) {
 	receipt, _, err = staker.SignalDelegationExit(delegationID).
 		Send().
 		WithSigner(stargate).
-		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
+		WithOptions(txOpts()).
+		SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
-	require.True(t, receipt.Reverted) // should revert since it hasn't started
+	ExpectRevert(t, receipt, staker.SignalDelegationExit(delegationID), "delegation has not started yet, funds can be withdrawn")
 
 	// Withdraw
 	receipt, _, err = staker.WithdrawStake(queuedID).Send().WithSigner(validatorKey).WithOptions(txOpts()).SubmitAndConfirm(txContext(t))

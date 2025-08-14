@@ -14,6 +14,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/abi"
+	"github.com/vechain/thor/v2/builtin/reverts"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -124,6 +125,10 @@ func (env *Environment) Call(proc func(env *Environment) []any) (output []byte, 
 		if e := recover(); e != nil {
 			if e == vm.ErrOutOfGas {
 				err = vm.ErrOutOfGas
+			} else if reverts.IsRevertErr(e) {
+				revertErr := e.(*reverts.ErrRequire)
+				err = revertErr
+				output = revertErr.Bytes()
 			} else {
 				panic(e)
 			}

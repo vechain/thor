@@ -6,16 +6,15 @@
 package builtin
 
 import (
-	"errors"
-	"fmt"
 	"math"
 	"math/big"
 
-	"github.com/vechain/thor/v2/builtin/staker/validation"
-
 	"github.com/ethereum/go-ethereum/common"
 
+	"github.com/vechain/thor/v2/builtin/reverts"
+
 	"github.com/vechain/thor/v2/builtin/gascharger"
+	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/xenv"
@@ -36,7 +35,7 @@ func IsStargatePaused(state *state.State, charger *gascharger.Charger) error {
 		return err
 	}
 	if isPaused {
-		return errors.New("stargate is paused")
+		return reverts.NewRequireError("stargate is paused")
 	}
 	return nil
 }
@@ -48,7 +47,7 @@ func IsStakerPaused(state *state.State, charger *gascharger.Charger) error {
 		return err
 	}
 	if isPaused {
-		return errors.New("staker is paused")
+		return reverts.NewRequireError("staker is paused")
 	}
 	return nil
 }
@@ -63,18 +62,18 @@ func init() {
 
 			staked, weight, err := Staker.NativeMetered(env.State(), charger).LockedVET()
 			if err != nil {
-				return []any{new(big.Int), new(big.Int), fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
-			return []any{staked, weight, ""}
+			return []any{staked, weight}
 		}},
 		{"native_queuedStake", func(env *xenv.Environment) []any {
 			charger := gascharger.New(env)
 
 			staked, weight, err := Staker.NativeMetered(env.State(), charger).QueuedStake()
 			if err != nil {
-				return []any{new(big.Int), new(big.Int), fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
-			return []any{staked, weight, ""}
+			return []any{staked, weight}
 		}},
 		{"native_getValidatorStake", func(env *xenv.Environment) []any {
 			var args struct {
@@ -85,23 +84,16 @@ func init() {
 
 			validator, err := Staker.NativeMetered(env.State(), charger).Get(thor.Address(args.Validator))
 			if err != nil {
-				return []any{
-					thor.Address{},
-					big.NewInt(0),
-					big.NewInt(0),
-					big.NewInt(0),
-					fmt.Sprintf("revert: %v", err),
-				}
+				panic(err)
 			}
 			if validator.IsEmpty() {
-				return []any{thor.Address{}, big.NewInt(0), big.NewInt(0), ""}
+				return []any{thor.Address{}, big.NewInt(0), big.NewInt(0)}
 			}
 			return []any{
 				validator.Endorsor,
 				validator.LockedVET,
 				validator.Weight,
 				validator.QueuedVET,
-				"",
 			}
 		}},
 		{"native_getValidatorStatus", func(env *xenv.Environment) []any {
@@ -113,19 +105,14 @@ func init() {
 
 			validator, err := Staker.NativeMetered(env.State(), charger).Get(thor.Address(args.Validator))
 			if err != nil {
-				return []any{
-					validation.StatusUnknown,
-					false,
-					fmt.Sprintf("revert: %v", err),
-				}
+				panic(err)
 			}
 			if validator.IsEmpty() {
-				return []any{validation.StatusUnknown, false, ""}
+				return []any{validation.StatusUnknown, false}
 			}
 			return []any{
 				validator.Status,
 				validator.Online,
-				"",
 			}
 		}},
 		{"native_getValidatorPeriodDetails", func(env *xenv.Environment) []any {
@@ -137,16 +124,10 @@ func init() {
 
 			validator, err := Staker.NativeMetered(env.State(), charger).Get(thor.Address(args.Validator))
 			if err != nil {
-				return []any{
-					uint32(0),
-					uint32(0),
-					uint32(0),
-					uint32(0),
-					fmt.Sprintf("revert: %v", err),
-				}
+				panic(err)
 			}
 			if validator.IsEmpty() {
-				return []any{uint32(0), uint32(0), uint32(0), uint32(0), ""}
+				return []any{uint32(0), uint32(0), uint32(0), uint32(0)}
 			}
 			exitBlock := uint32(math.MaxUint32)
 			if validator.ExitBlock != nil {
@@ -157,7 +138,6 @@ func init() {
 				validator.StartBlock,
 				exitBlock,
 				validator.CompleteIterations,
-				"",
 			}
 		}},
 		{"native_getWithdrawable", func(env *xenv.Environment) []any {
@@ -169,27 +149,27 @@ func init() {
 
 			amount, err := Staker.NativeMetered(env.State(), charger).GetWithdrawable(thor.Address(args.Validator), env.BlockContext().Number)
 			if err != nil {
-				return []any{big.NewInt(0), fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
-			return []any{amount, ""}
+			return []any{amount}
 		}},
 		{"native_firstActive", func(env *xenv.Environment) []any {
 			charger := gascharger.New(env)
 
 			first, err := Staker.NativeMetered(env.State(), charger).FirstActive()
 			if err != nil {
-				return []any{thor.Address{}, fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
-			return []any{first, ""}
+			return []any{first}
 		}},
 		{"native_firstQueued", func(env *xenv.Environment) []any {
 			charger := gascharger.New(env)
 
 			first, err := Staker.NativeMetered(env.State(), charger).FirstQueued()
 			if err != nil {
-				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
-			return []any{first, ""}
+			return []any{first}
 		}},
 		{"native_next", func(env *xenv.Environment) []any {
 			var args struct {
@@ -200,9 +180,9 @@ func init() {
 
 			next, err := Staker.NativeMetered(env.State(), charger).Next(thor.Address(args.Prev))
 			if err != nil {
-				return []any{thor.Bytes32{}, fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
-			return []any{next, ""}
+			return []any{next}
 		}},
 		{"native_withdrawStake", func(env *xenv.Environment) []any {
 			var args struct {
@@ -214,7 +194,7 @@ func init() {
 
 			err := IsStakerPaused(env.State(), charger)
 			if err != nil {
-				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
 
 			stake, err := Staker.NativeMetered(env.State(), charger).WithdrawStake(
@@ -223,10 +203,10 @@ func init() {
 				env.BlockContext().Number,
 			)
 			if err != nil {
-				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
 
-			return []any{stake, ""}
+			return []any{stake}
 		}},
 		{"native_addValidation", func(env *xenv.Environment) []any {
 			var args struct {
@@ -240,12 +220,12 @@ func init() {
 
 			err := IsStakerPaused(env.State(), charger)
 			if err != nil {
-				return []any{fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
 
 			isPoSActive, err := Staker.NativeMetered(env.State(), charger).IsPoSActive()
 			if err != nil {
-				return []any{fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
 
 			if !isPoSActive {
@@ -253,13 +233,13 @@ func init() {
 
 				exists, endorsor, _, _, err := Authority.Native(env.State()).Get(thor.Address(args.Validator))
 				if err != nil {
-					return []any{fmt.Sprintf("revert: %v", err)}
+					panic(err)
 				}
 				if !exists {
-					return []any{"revert: Validation is not present in the Authority"}
+					panic(reverts.NewRequireError("validator is not registered in the Authority"))
 				}
 				if thor.Address(args.Endorsor) != endorsor {
-					return []any{"revert: endorsor is not present in the Authority"}
+					panic(reverts.NewRequireError("endorsor is not present in the Authority"))
 				}
 			}
 
@@ -271,10 +251,10 @@ func init() {
 					args.Stake,
 				)
 			if err != nil {
-				return []any{fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
 
-			return []any{""}
+			return []any{}
 		}},
 		{"native_signalExit", func(env *xenv.Environment) []any {
 			var args struct {
@@ -286,7 +266,7 @@ func init() {
 
 			err := IsStakerPaused(env.State(), charger)
 			if err != nil {
-				return []any{fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
 
 			err = Staker.NativeMetered(env.State(), charger).
@@ -295,9 +275,9 @@ func init() {
 					thor.Address(args.Endorsor),
 				)
 			if err != nil {
-				return []any{fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
-			return []any{""}
+			return []any{}
 		}},
 		{"native_increaseStake", func(env *xenv.Environment) []any {
 			var args struct {
@@ -310,7 +290,7 @@ func init() {
 
 			err := IsStakerPaused(env.State(), charger)
 			if err != nil {
-				return []any{fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
 
 			err = Staker.NativeMetered(env.State(), charger).
@@ -320,10 +300,10 @@ func init() {
 					args.Amount,
 				)
 			if err != nil {
-				return []any{fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
 
-			return []any{""}
+			return []any{}
 		}},
 		{"native_setBeneficiary", func(env *xenv.Environment) []any {
 			var args struct {
@@ -336,7 +316,7 @@ func init() {
 
 			err := IsStakerPaused(env.State(), charger)
 			if err != nil {
-				return []any{fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
 
 			err = Staker.NativeMetered(env.State(), charger).
@@ -346,9 +326,9 @@ func init() {
 					thor.Address(args.Beneficiary),
 				)
 			if err != nil {
-				return []any{fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
-			return []any{""}
+			return []any{}
 		}},
 		{"native_decreaseStake", func(env *xenv.Environment) []any {
 			var args struct {
@@ -361,7 +341,7 @@ func init() {
 
 			err := IsStakerPaused(env.State(), charger)
 			if err != nil {
-				return []any{fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
 
 			err = Staker.NativeMetered(env.State(), charger).
@@ -371,9 +351,9 @@ func init() {
 					args.Amount,
 				)
 			if err != nil {
-				return []any{fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
-			return []any{""}
+			return []any{}
 		}},
 		{"native_addDelegation", func(env *xenv.Environment) []any {
 			var args struct {
@@ -386,12 +366,12 @@ func init() {
 
 			err := IsStargatePaused(env.State(), charger)
 			if err != nil {
-				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
 
 			err = IsStakerPaused(env.State(), charger)
 			if err != nil {
-				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
 
 			delegationID, err := Staker.NativeMetered(env.State(), charger).
@@ -401,9 +381,9 @@ func init() {
 					args.Multiplier,
 				)
 			if err != nil {
-				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
-			return []any{delegationID, ""}
+			return []any{delegationID}
 		}},
 		{"native_withdrawDelegation", func(env *xenv.Environment) []any {
 			var args struct {
@@ -414,20 +394,20 @@ func init() {
 
 			err := IsStargatePaused(env.State(), charger)
 			if err != nil {
-				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
 
 			err = IsStakerPaused(env.State(), charger)
 			if err != nil {
-				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
 
 			stake, err := Staker.NativeMetered(env.State(), charger).WithdrawDelegation(args.DelegationID)
 			if err != nil {
-				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
 
-			return []any{stake, ""}
+			return []any{stake}
 		}},
 		{"native_signalDelegationExit", func(env *xenv.Environment) []any {
 			var args struct {
@@ -438,20 +418,20 @@ func init() {
 
 			err := IsStargatePaused(env.State(), charger)
 			if err != nil {
-				return []any{fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
 
 			err = IsStakerPaused(env.State(), charger)
 			if err != nil {
-				return []any{fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
 
 			err = Staker.NativeMetered(env.State(), charger).SignalDelegationExit(args.DelegationID)
 			if err != nil {
-				return []any{fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
 
-			return []any{""}
+			return []any{}
 		}},
 		{"native_getDelegationStake", func(env *xenv.Environment) []any {
 			var args struct {
@@ -462,14 +442,13 @@ func init() {
 
 			delegation, _, err := Staker.NativeMetered(env.State(), charger).GetDelegation(args.DelegationID)
 			if err != nil {
-				return []any{thor.Address{}, new(big.Int), uint8(0), fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
 
 			return []any{
 				delegation.Validation,
 				delegation.Stake,
 				delegation.Multiplier,
-				"",
 			}
 		}},
 		{"native_getDelegationPeriodDetails", func(env *xenv.Environment) []any {
@@ -481,7 +460,7 @@ func init() {
 
 			delegation, validator, err := Staker.NativeMetered(env.State(), charger).GetDelegation(args.DelegationID)
 			if err != nil {
-				return []any{uint32(0), uint32(0), false, fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
 
 			lastPeriod := uint32(math.MaxUint32)
@@ -495,7 +474,6 @@ func init() {
 				delegation.FirstIteration,
 				lastPeriod,
 				locked,
-				"",
 			}
 		}},
 		{"native_getDelegatorsRewards", func(env *xenv.Environment) []any {
@@ -508,9 +486,9 @@ func init() {
 
 			reward, err := Staker.NativeMetered(env.State(), charger).GetDelegatorRewards(thor.Address(args.Validator), args.StakingPeriod)
 			if err != nil {
-				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
-			return []any{reward, ""}
+			return []any{reward}
 		}},
 		{"native_getDelegatorContract", func(env *xenv.Environment) []any {
 			charger := gascharger.New(env)
@@ -518,10 +496,10 @@ func init() {
 			charger.Charge(thor.SloadGas)
 			raw, err := Params.Native(env.State()).Get(thor.KeyStargateContractAddress)
 			if err != nil {
-				return []any{thor.Address{}, fmt.Sprintf("revert: failed to get Stargate contract address: %v", err)}
+				panic(err)
 			}
 			addr := thor.BytesToAddress(raw.Bytes())
-			return []any{addr, ""}
+			return []any{addr}
 		}},
 		{"native_getValidationTotals", func(env *xenv.Environment) []any {
 			var args struct {
@@ -532,15 +510,7 @@ func init() {
 
 			totals, err := Staker.NativeMetered(env.State(), charger).GetValidationTotals(thor.Address(args.Validator))
 			if err != nil {
-				return []any{
-					new(big.Int),
-					new(big.Int),
-					new(big.Int),
-					new(big.Int),
-					new(big.Int),
-					new(big.Int),
-					fmt.Sprintf("revert: failed to get validators totals: %v", err),
-				}
+				panic(err)
 			}
 			return []any{
 				totals.TotalLockedStake,
@@ -549,7 +519,6 @@ func init() {
 				totals.TotalQueuedWeight,
 				totals.TotalExitingStake,
 				totals.TotalExitingWeight,
-				"",
 			}
 		}},
 		{"native_getValidatorsNum", func(env *xenv.Environment) []any {
@@ -557,9 +526,9 @@ func init() {
 
 			leaderGroupSize, queuedGroupSize, err := Staker.NativeMetered(env.State(), charger).GetValidatorsNum()
 			if err != nil {
-				return []any{new(big.Int), new(big.Int), fmt.Sprintf("revert: failed to get validators totals: %v", err)}
+				panic(err)
 			}
-			return []any{leaderGroupSize, queuedGroupSize, ""}
+			return []any{leaderGroupSize, queuedGroupSize}
 		}},
 		{"native_issuance", func(env *xenv.Environment) []any {
 			charger := gascharger.New(env)
@@ -567,9 +536,9 @@ func init() {
 			staker := Staker.NativeMetered(env.State(), charger)
 			issuance, err := Energy.Native(env.State(), env.BlockContext().Time).CalculateRewards(staker)
 			if err != nil {
-				return []any{new(big.Int), fmt.Sprintf("revert: %v", err)}
+				panic(err)
 			}
-			return []any{issuance, ""}
+			return []any{issuance}
 		}},
 	}
 	stakerAbi := Staker.NativeABI()

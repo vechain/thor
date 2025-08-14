@@ -29,6 +29,7 @@ import (
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/builtin/gascharger"
+	"github.com/vechain/thor/v2/builtin/reverts"
 	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/state"
@@ -233,7 +234,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 			},
 			description:  "Update auto-renew setting for a delegation",
 			preTestHooks: []TestHook{preTestAddValidation(account1), preTestAddDelegation(account1)},
-			err:          "revert: delegation has not started yet, funds can be withdrawn",
+			err:          "delegation has not started yet, funds can be withdrawn",
 		},
 		{
 			function:    "native_getDelegatorsRewards",
@@ -296,7 +297,6 @@ func TestStakerNativeGasCosts(t *testing.T) {
 
 			// Validate function executed successfully (no revert)
 			require.NotNil(t, result, "Function %s should return result", tc.function)
-			require.Greater(t, len(result), 0, "Function %s should return at least one value", tc.function)
 
 			// Check if last element is an error string (staker native functions return error as last element)
 			if len(result) > 0 {
@@ -371,7 +371,17 @@ func (s *testSetup) Xenv(method *abi.Method) *xenv.Environment {
 	)
 }
 
-func executeNativeFunction(t *testing.T, setup *testSetup, functionName string, args []any) []any {
+func executeNativeFunction(t *testing.T, setup *testSetup, functionName string, args []any) (result []any) {
+	defer func() {
+		if e := recover(); e != nil {
+			if !reverts.IsRevertErr(e) {
+				t.Fatalf("Unexpected panic during execution: %v", e)
+			}
+			revertErr := (e).(*reverts.ErrRequire)
+			result = []any{revertErr.Error()}
+		}
+	}()
+
 	// Find the native function
 	stakerAbi := builtin.Staker.NativeABI()
 	method, found := stakerAbi.MethodByName(functionName)
@@ -388,7 +398,7 @@ func executeNativeFunction(t *testing.T, setup *testSetup, functionName string, 
 	require.NotNil(t, nativeMethod, "Native method is nil for %s", functionName)
 
 	// Execute the native function - this will trigger our test hook
-	result := run(setup.Xenv(nativeMethod))
+	result = run(setup.Xenv(nativeMethod))
 
 	return result
 }

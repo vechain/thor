@@ -9,13 +9,13 @@ import (
 	"encoding/binary"
 	"math/big"
 
-	"github.com/vechain/thor/v2/builtin/staker/stakes"
-
 	"github.com/pkg/errors"
 
+	"github.com/vechain/thor/v2/builtin/reverts"
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/builtin/staker/delta"
 	"github.com/vechain/thor/v2/builtin/staker/linkedlist"
+	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -171,17 +171,17 @@ func (s *Service) Add(
 	stake *big.Int,
 ) error {
 	if stake.Cmp(s.minStake) < 0 || stake.Cmp(s.maxStake) > 0 {
-		return errors.New("stake is out of range")
+		return reverts.NewRequireError("stake is out of range")
 	}
 	val, err := s.GetValidation(validator)
 	if err != nil {
 		return err
 	}
 	if !val.IsEmpty() {
-		return errors.New("validator already exists")
+		return reverts.NewRequireError("validator already exists")
 	}
 	if period != s.lowStakingPeriod && period != s.mediumStakingPeriod && period != s.highStakingPeriod {
-		return errors.New("period is out of boundaries")
+		return reverts.NewRequireError("period is out of boundaries")
 	}
 
 	entry := &Validation{
@@ -211,10 +211,10 @@ func (s *Service) SignalExit(validator thor.Address, endorsor thor.Address) erro
 		return err
 	}
 	if validation.Endorsor != endorsor {
-		return errors.New("invalid endorsor for node")
+		return reverts.NewRequireError("invalid endorsor for node")
 	}
 	if validation.Status != StatusActive {
-		return errors.New("can't signal exit while not active")
+		return reverts.NewRequireError("can't signal exit while not active")
 	}
 
 	minBlock := validation.StartBlock + validation.Period*(validation.CurrentIteration())
@@ -233,13 +233,13 @@ func (s *Service) IncreaseStake(validator thor.Address, endorsor thor.Address, a
 		return err
 	}
 	if entry.Endorsor != endorsor {
-		return errors.New("invalid endorser")
+		return reverts.NewRequireError("invalid endorser")
 	}
 	if entry.Status == StatusExit {
-		return errors.New("validator status is not queued or active")
+		return reverts.NewRequireError("validator status is not queued or active")
 	}
 	if entry.Status == StatusActive && entry.ExitBlock != nil {
-		return errors.New("validator has signaled exit, cannot increase stake")
+		return reverts.NewRequireError("validator has signaled exit, cannot increase stake")
 	}
 
 	entry.QueuedVET = big.NewInt(0).Add(amount, entry.QueuedVET)
@@ -253,10 +253,10 @@ func (s *Service) SetBeneficiary(validator, endorser, beneficiary thor.Address) 
 		return err
 	}
 	if entry.Endorsor != endorser {
-		return errors.New("invalid endorser")
+		return reverts.NewRequireError("invalid endorser")
 	}
 	if entry.Status == StatusExit || entry.ExitBlock != nil {
-		return errors.New("validator has exited or signaled exit, cannot set beneficiary")
+		return reverts.NewRequireError("validator has exited or signaled exit, cannot set beneficiary")
 	}
 	if beneficiary.IsZero() {
 		entry.Beneficiary = nil
@@ -275,13 +275,13 @@ func (s *Service) DecreaseStake(validator thor.Address, endorsor thor.Address, a
 		return false, err
 	}
 	if entry.Endorsor != endorsor {
-		return false, errors.New("invalid endorser")
+		return false, reverts.NewRequireError("invalid endorser")
 	}
 	if entry.Status == StatusExit {
-		return false, errors.New("validator status is not queued or active")
+		return false, reverts.NewRequireError("validator status is not queued or active")
 	}
 	if entry.Status == StatusActive && entry.ExitBlock != nil {
-		return false, errors.New("validator has signaled exit, cannot decrease stake")
+		return false, reverts.NewRequireError("validator has signaled exit, cannot decrease stake")
 	}
 
 	if entry.Status == StatusActive {
@@ -291,7 +291,7 @@ func (s *Service) DecreaseStake(validator thor.Address, endorsor thor.Address, a
 		nextPeriodTVL := big.NewInt(0).Sub(entry.LockedVET, entry.PendingUnlockVET)
 		nextPeriodTVL = nextPeriodTVL.Sub(nextPeriodTVL, amount)
 		if nextPeriodTVL.Cmp(s.minStake) < 0 {
-			return false, errors.New("next period stake is too low for validator")
+			return false, reverts.NewRequireError("next period stake is too low for validator")
 		}
 		entry.PendingUnlockVET = big.NewInt(0).Add(entry.PendingUnlockVET, amount)
 	}
@@ -300,7 +300,7 @@ func (s *Service) DecreaseStake(validator thor.Address, endorsor thor.Address, a
 		// All the validator's stake exists within QueuedVET, so we need to make sure it maintains a minimum of MinStake.
 		nextPeriodTVL := big.NewInt(0).Sub(entry.QueuedVET, amount)
 		if nextPeriodTVL.Cmp(s.minStake) < 0 {
-			return false, errors.New("next period stake is too low for validator")
+			return false, reverts.NewRequireError("next period stake is too low for validator")
 		}
 		entry.QueuedVET = big.NewInt(0).Sub(entry.QueuedVET, amount)
 		entry.WithdrawableVET = big.NewInt(0).Add(entry.WithdrawableVET, amount)
@@ -318,7 +318,7 @@ func (s *Service) WithdrawStake(
 	currentBlock uint32,
 ) (*big.Int, error) {
 	if val.Endorsor != endorsor {
-		return big.NewInt(0), errors.New("invalid endorser")
+		return big.NewInt(0), reverts.NewRequireError("invalid endorser")
 	}
 
 	// calculate currently available VET to withdraw
@@ -508,7 +508,7 @@ func (s *Service) GetExistingValidation(validator thor.Address) (*Validation, er
 		return nil, errors.Wrap(err, "failed to get validator")
 	}
 	if v.IsEmpty() {
-		return nil, errors.New("failed to get validator")
+		return nil, reverts.NewRequireError("failed to get validator")
 	}
 	return v, nil
 }
