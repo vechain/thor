@@ -34,7 +34,6 @@ type Validation struct {
 	Period             uint32        // the staking period of the validation
 	CompleteIterations uint32        // the completed staking periods by the validation
 	Status             Status        // status of the validation
-	Online             bool          // whether the validation is online or not
 	StartBlock         uint32        // the block number when the validation started the first staking period
 	ExitBlock          *uint32       `rlp:"nil"` // the block number when the validation moved to cooldown
 	OfflineBlock       *uint32       `rlp:"nil"` // the block when validator went offline, it will be cleared once online

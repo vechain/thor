@@ -2942,13 +2942,11 @@ func TestStaker_OfflineValidator(t *testing.T) {
 
 	val1, err := testSetup.staker.Get(*validator1)
 	assert.NoError(t, err)
-	assert.True(t, val1.Online)
 	assert.Nil(t, val1.OfflineBlock)
 	assert.Nil(t, val1.ExitBlock)
 
 	val2, err := testSetup.staker.Get(validator2)
 	assert.NoError(t, err)
-	assert.True(t, val2.Online)
 	assert.Nil(t, val2.OfflineBlock)
 	assert.Nil(t, val2.ExitBlock)
 
@@ -2958,7 +2956,6 @@ func TestStaker_OfflineValidator(t *testing.T) {
 	expectedOfflineBlock := uint32(4)
 	val1, err = testSetup.staker.Get(*validator1)
 	assert.NoError(t, err)
-	assert.False(t, val1.Online)
 	assert.Equal(t, &expectedOfflineBlock, val1.OfflineBlock)
 	assert.Nil(t, val1.ExitBlock)
 
@@ -2967,7 +2964,6 @@ func TestStaker_OfflineValidator(t *testing.T) {
 
 	val1, err = testSetup.staker.Get(*validator1)
 	assert.NoError(t, err)
-	assert.True(t, val1.Online)
 	assert.Nil(t, val1.OfflineBlock)
 	assert.Nil(t, val1.ExitBlock)
 
@@ -2979,7 +2975,6 @@ func TestStaker_OfflineValidator(t *testing.T) {
 	expectedOfflineBlock = uint32(8)
 	val1, err = testSetup.staker.Get(*validator1)
 	assert.NoError(t, err)
-	assert.False(t, val1.Online)
 	assert.Equal(t, &expectedOfflineBlock, val1.OfflineBlock)
 	assert.Nil(t, val1.ExitBlock)
 
@@ -2990,7 +2985,6 @@ func TestStaker_OfflineValidator(t *testing.T) {
 	expectedOfflineBlock = uint32(8)
 	val1, err = testSetup.staker.Get(*validator1)
 	assert.NoError(t, err)
-	assert.False(t, val1.Online)
 	assert.Equal(t, validation.StatusActive, val1.Status)
 	assert.Equal(t, &expectedOfflineBlock, val1.OfflineBlock)
 	assert.Equal(t, expectedExitBlock, *val1.ExitBlock)
@@ -3000,7 +2994,6 @@ func TestStaker_OfflineValidator(t *testing.T) {
 
 	val1, err = testSetup.staker.Get(*validator1)
 	assert.NoError(t, err)
-	assert.False(t, val1.Online)
 	assert.Equal(t, validation.StatusExit, val1.Status)
 	assert.Equal(t, &expectedOfflineBlock, val1.OfflineBlock)
 	assert.Equal(t, expectedExitBlock, *val1.ExitBlock)

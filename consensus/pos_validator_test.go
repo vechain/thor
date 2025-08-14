@@ -74,7 +74,7 @@ func TestConsensus_POS_MissedSlots(t *testing.T) {
 	staker := builtin.Staker.Native(st)
 	validator, err := staker.Get(signer.Address)
 	assert.NoError(t, err)
-	assert.True(t, validator.Online)
+	assert.Nil(t, validator.OfflineBlock)
 }
 
 func TestConsensus_POS_Unscheduled(t *testing.T) {

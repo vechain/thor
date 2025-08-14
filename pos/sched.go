@@ -62,7 +62,7 @@ func NewScheduler(
 			proposer = p
 			proposerID = id
 		}
-		if p.Online || id == addr {
+		if p.OfflineBlock == nil || id == addr {
 			online = append(online, &onlineProposer{
 				id:         id,
 				validation: p,
@@ -154,7 +154,7 @@ func (s *Scheduler) Updates(newBlockTime uint64, totalWeight *big.Int) (map[thor
 		}
 	}
 
-	if !s.proposer.Online {
+	if s.proposer.OfflineBlock != nil {
 		updates[s.proposerID] = true
 	}
 

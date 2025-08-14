@@ -27,13 +27,14 @@ func TestDelegation(t *testing.T) {
 	wStake := del.WeightedStake()
 	assert.Equal(t, big.NewInt(0), wStake.VET())
 	assert.Equal(t, big.NewInt(0), wStake.Weight())
+	offlineBlock := uint32(0)
 
 	val := validation.Validation{
 		Endorsor:           thor.Address{},
 		Period:             0,
 		CompleteIterations: 0,
 		Status:             0,
-		Online:             false,
+		OfflineBlock:       &offlineBlock,
 		StartBlock:         0,
 		ExitBlock:          nil,
 		LockedVET:          nil,

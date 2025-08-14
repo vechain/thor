@@ -335,8 +335,7 @@ func (s *Staker) SetOnline(validator thor.Address, blockNum uint32, online bool)
 	if err != nil {
 		return false, err
 	}
-	hasChanged := entry.Online != online
-	entry.Online = online
+	hasChanged := entry.OfflineBlock == nil != online
 	if hasChanged {
 		s.setOfflineBlock(validator, online, blockNum, entry)
 		err = s.validationService.SetValidation(validator, entry, false)
