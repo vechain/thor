@@ -2780,9 +2780,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	)
 
 	// exit queued
-	staker.SignalDelegationExit(delegationID3)
-	staker.Housekeep(stakingPeriod * 2)
-	staker.WithdrawDelegation(delegationID3)
+	newTestSequence(t, staker).WithdrawDelegation(delegationID3, dStake.VET())
 
 	lStake, lWeight, err = staker.LockedVET()
 	assert.NoError(t, err)
@@ -2817,9 +2815,8 @@ func TestStaker_TestWeights(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).Add(big.NewInt(0).Mul(stake, big.NewInt(2)), dStake.Weight()), totals2.TotalQueuedWeight)
 
 	// exit second queued, multiplier should be one
-	staker.SignalDelegationExit(delegationID4)
-	staker.Housekeep(stakingPeriod * 3)
-	staker.WithdrawDelegation(delegationID4)
+	newTestSequence(t, staker).WithdrawDelegation(delegationID4, dStake.VET())
+	newTestSequence(t, staker).Housekeep(stakingPeriod * 3)
 
 	lStake, lWeight, err = staker.LockedVET()
 	assert.NoError(t, err)
@@ -2858,8 +2855,8 @@ func TestStaker_TestWeights(t *testing.T) {
 	assert.Equal(t, stake, totals2.TotalQueuedWeight)
 
 	// exit first active, multiplier should not change
-	staker.SignalDelegationExit(delegationID)
-	staker.Housekeep(stakingPeriod * 4)
+	newTestSequence(t, staker).SignalDelegationExit(delegationID)
+	newTestSequence(t, staker).Housekeep(stakingPeriod * 3)
 
 	lStake, lWeight, err = staker.LockedVET()
 	assert.NoError(t, err)
@@ -2890,7 +2887,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	assert.Equal(t, stake, totals2.TotalQueuedWeight)
 
 	// exit second active, multiplier should change to 1
-	staker.SignalDelegationExit(delegationID2)
+	newTestSequence(t, staker).SignalDelegationExit(delegationID2)
 	totals, err = staker.GetValidationTotals(*validator)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).Add(val.LockedVET, dStake.VET()), totals.TotalLockedStake)
@@ -2900,7 +2897,8 @@ func TestStaker_TestWeights(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).String(), totals.TotalQueuedStake.String())
 	assert.Equal(t, big.NewInt(0).String(), totals.TotalQueuedWeight.String())
 
-	staker.Housekeep(stakingPeriod * 5)
+	newTestSequence(t, staker).Housekeep(stakingPeriod * 5)
+	assert.NoError(t, err)
 
 	lStake, lWeight, err = staker.LockedVET()
 	assert.NoError(t, err)
