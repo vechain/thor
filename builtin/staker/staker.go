@@ -329,7 +329,7 @@ func (s *Staker) WithdrawStake(validator thor.Address, endorsor thor.Address, cu
 	return stake, nil
 }
 
-func (s *Staker) SetOnline(validator thor.Address, online bool) (bool, error) {
+func (s *Staker) SetOnline(validator thor.Address, blockNum uint32, online bool) (bool, error) {
 	logger.Debug("set node online", "validator", validator, "online", online)
 	entry, err := s.validationService.GetValidation(validator)
 	if err != nil {
@@ -338,11 +338,22 @@ func (s *Staker) SetOnline(validator thor.Address, online bool) (bool, error) {
 	hasChanged := entry.Online != online
 	entry.Online = online
 	if hasChanged {
+		s.setOfflineBlock(validator, online, blockNum, entry)
 		err = s.validationService.SetValidation(validator, entry, false)
 	} else {
 		err = nil
 	}
 	return hasChanged, err
+}
+
+func (s *Staker) setOfflineBlock(validator thor.Address, online bool, blockNum uint32, val *validation.Validation) {
+	if online {
+		logger.Info("clearing offline block", "validator", validator, "online", online)
+		val.OfflineBlock = nil
+	} else {
+		logger.Info("setting offline block", "validator", validator, "online", online, "offline block", blockNum)
+		val.OfflineBlock = &blockNum
+	}
 }
 
 func (s *Staker) SetBeneficiary(validator, endorsor, beneficiary thor.Address) error {

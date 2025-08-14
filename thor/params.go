@@ -49,6 +49,8 @@ const (
 	BaseFeeChangeDenominator = 8                  // determines the percentage change in the base fee per block based on network utilization
 
 	MaxPosScore = 10000 // max total score after PoS fork
+
+	OfflineValidatorEvictionThresholdEpochs = 336 // the number of epochs after which offline validator will be evicted from leader group (7 days)
 )
 
 // Keys of governance params.

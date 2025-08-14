@@ -79,7 +79,7 @@ func (c *Consensus) validateStakingProposer(
 
 	hasUpdates := false
 	for addr, online := range updates {
-		updated, err := staker.SetOnline(addr, online)
+		updated, err := staker.SetOnline(addr, header.Number(), online)
 		if err != nil {
 			return err
 		}
