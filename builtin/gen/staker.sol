@@ -137,8 +137,11 @@ contract Staker {
         checkStake(msg.value)
         returns (uint256)
     {
-        (uint256 delegationID) = StakerNative(address(this))
-            .native_addDelegation(validator, msg.value, multiplier);
+        uint256 delegationID = StakerNative(address(this)).native_addDelegation(
+            validator,
+            msg.value,
+            multiplier
+        );
         emit DelegationAdded(validator, delegationID, msg.value, multiplier);
         return delegationID;
     }
