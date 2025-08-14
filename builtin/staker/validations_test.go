@@ -2781,6 +2781,7 @@ func TestStaker_TestWeights(t *testing.T) {
 
 	// exit queued
 	staker.SignalDelegationExit(delegationID3)
+	staker.Housekeep(stakingPeriod * 2)
 	staker.WithdrawDelegation(delegationID3)
 
 	lStake, lWeight, err = staker.LockedVET()
@@ -2817,6 +2818,7 @@ func TestStaker_TestWeights(t *testing.T) {
 
 	// exit second queued, multiplier should be one
 	staker.SignalDelegationExit(delegationID4)
+	staker.Housekeep(stakingPeriod * 3)
 	staker.WithdrawDelegation(delegationID4)
 
 	lStake, lWeight, err = staker.LockedVET()
@@ -2857,7 +2859,7 @@ func TestStaker_TestWeights(t *testing.T) {
 
 	// exit first active, multiplier should not change
 	staker.SignalDelegationExit(delegationID)
-	staker.Housekeep(stakingPeriod * 2)
+	staker.Housekeep(stakingPeriod * 4)
 
 	lStake, lWeight, err = staker.LockedVET()
 	assert.NoError(t, err)
@@ -2898,7 +2900,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).String(), totals.TotalQueuedStake.String())
 	assert.Equal(t, big.NewInt(0).String(), totals.TotalQueuedWeight.String())
 
-	staker.Housekeep(stakingPeriod * 3)
+	staker.Housekeep(stakingPeriod * 5)
 
 	lStake, lWeight, err = staker.LockedVET()
 	assert.NoError(t, err)
