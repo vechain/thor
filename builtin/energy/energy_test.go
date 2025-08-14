@@ -224,9 +224,9 @@ func TestGetEnergyGrowthStopTime(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(10), stopTime)
 
-	// set multiple times should return error
+	// set multiple times should return nil
 	err = eng.StopEnergyGrowth()
-	assert.Error(t, err, "energy growth has already stopped")
+	assert.NoError(t, err)
 }
 
 func TestAddIssued(t *testing.T) {

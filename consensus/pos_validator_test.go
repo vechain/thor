@@ -136,9 +136,6 @@ func (h *hayabusaSetup) mintBlock(txs ...*tx.Transaction) (*chain.BlockSummary, 
 	_, _, _, err = h.consensus.syncPOS(staker, best.Header.Number())
 	assert.NoError(h.t, err)
 
-	if best.Header.Number() == h.config.HAYABUSA {
-		builtin.Energy.Native(st, best.Header.Timestamp()).StopEnergyGrowth()
-	}
 	// actualGroup, err := builtin.Staker.Native(st).LeaderGroup()
 	// assert.NoError(h.t, err)
 	// eq := reflect.DeepEqual(activeGroup, actualGroup)

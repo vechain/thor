@@ -97,11 +97,6 @@ func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipValidation boo
 			// invalidate cache
 			c.validatorsCache.Add(header.ParentID(), activeGroup)
 		}
-		if header.Number() == c.forkConfig.HAYABUSA {
-			if err := builtin.Energy.Native(state, header.Timestamp()).StopEnergyGrowth(); err != nil {
-				return nil, err
-			}
-		}
 		if posActive {
 			err = c.validateStakingProposer(header, parentSummary.Header, staker, activeGroup)
 		} else {

@@ -59,12 +59,6 @@ func (c *Consensus) validate(
 		return nil, nil, err
 	}
 
-	if header.Number() == c.forkConfig.HAYABUSA {
-		if err := builtin.Energy.Native(state, header.Timestamp()).StopEnergyGrowth(); err != nil {
-			return nil, nil, err
-		}
-	}
-
 	if err := c.validateBlockBody(block); err != nil {
 		return nil, nil, err
 	}

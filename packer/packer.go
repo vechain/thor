@@ -83,12 +83,6 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (*Flo
 		return nil, false, err
 	}
 
-	if parent.Header.Number()+1 == p.forkConfig.HAYABUSA {
-		if err := builtin.Energy.Native(st, newBlockTime).StopEnergyGrowth(); err != nil {
-			return nil, false, err
-		}
-	}
-
 	rt := runtime.New(
 		p.repo.NewChain(parent.Header.ID()),
 		st,
@@ -122,11 +116,6 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 		return nil, false, err
 	}
 
-	if parent.Header.Number()+1 == p.forkConfig.HAYABUSA {
-		if err := builtin.Energy.Native(state, targetTime).StopEnergyGrowth(); err != nil {
-			return nil, false, err
-		}
-	}
 	beneficiary := p.beneficiary
 
 	var score uint64
