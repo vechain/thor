@@ -34,7 +34,6 @@ func TestRepository_Validation_RoundTrip(t *testing.T) {
 		Period:             15,
 		CompleteIterations: 2,
 		Status:             StatusQueued,
-		Online:             true,
 	}
 
 	assert.NoError(t, repo.SetValidation(id, entry, true))
@@ -45,7 +44,7 @@ func TestRepository_Validation_RoundTrip(t *testing.T) {
 	assert.Equal(t, uint32(15), got.Period)
 	assert.Equal(t, uint32(2), got.CompleteIterations)
 	assert.Equal(t, StatusQueued, got.Status)
-	assert.True(t, got.Online)
+	assert.True(t, got.OfflineBlock == nil)
 }
 
 func TestRepository_Validation_GetError(t *testing.T) {

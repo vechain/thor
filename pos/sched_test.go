@@ -25,7 +25,6 @@ func createParams() (map[thor.Address]*validation.Validation, *big.Int) {
 		stake := big.NewInt(0).SetBytes(acc.Address[10:]) // use the last 10 bytes to create semi random, but deterministic stake
 		validator := &validation.Validation{
 			Weight: stake,
-			Online: true,
 		}
 		validators[acc.Address] = validator
 		totalStake.Add(totalStake, validator.Weight)
@@ -147,7 +146,6 @@ func TestScheduler_Distribution(t *testing.T) {
 				stake = stake.Mul(stake, big.NewInt(1e18)) // convert to wei
 				validators[acc.Address] = &validation.Validation{
 					Weight: stake,
-					Online: true,
 				}
 				totalStake.Add(totalStake, stake)
 			}
@@ -249,7 +247,8 @@ func TestScheduler_TotalPlacements(t *testing.T) {
 	validators, totalStake := createParams()
 
 	otherAcc := genesis.DevAccounts()[1].Address
-	validators[otherAcc].Online = false
+	offlineBlock := uint32(0)
+	validators[otherAcc].OfflineBlock = &offlineBlock
 
 	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed1"))
 	assert.NoError(t, err)
@@ -281,7 +280,6 @@ func TestScheduler_AllValidatorsScheduled(t *testing.T) {
 		}
 		validator := &validation.Validation{
 			Weight: stake,
-			Online: true,
 		}
 		validators[acc.Address] = validator
 	}
@@ -311,7 +309,6 @@ func TestScheduler_Schedule_TotalScore(t *testing.T) {
 	for _, acc := range genesis.DevAccounts() {
 		validator := &validation.Validation{
 			Weight: weight,
-			Online: true,
 		}
 		validators[acc.Address] = validator
 		totalStake.Add(totalStake, validator.Weight)

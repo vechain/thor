@@ -6,7 +6,6 @@
 package energy
 
 import (
-	"errors"
 	"math"
 	"math/big"
 	"time"
@@ -211,7 +210,8 @@ func (e *Energy) StopEnergyGrowth() error {
 	if ts, err := e.GetEnergyGrowthStopTime(); err != nil {
 		return err
 	} else if ts != math.MaxUint64 {
-		return errors.New("energy growth has already stopped")
+		// We simply ignore multiple calls to this function
+		return nil
 	}
 
 	if err := e.state.EncodeStorage(e.addr, growthStopTimeKey, func() ([]byte, error) {

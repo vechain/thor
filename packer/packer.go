@@ -68,7 +68,7 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (*Flo
 	}
 
 	var sched scheduler
-	posActive, activated, err := p.syncPOS(st, parent.Header.Number()+1)
+	posActive, _, err := p.syncPOS(st, parent.Header.Number()+1)
 	if err != nil {
 		return nil, false, err
 	}
@@ -81,13 +81,6 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (*Flo
 	beneficiary, newBlockTime, score, err := sched(parent, nowTimestamp, st)
 	if err != nil {
 		return nil, false, err
-	}
-
-	if activated {
-		err := builtin.Energy.Native(st, parent.Header.Timestamp()).StopEnergyGrowth()
-		if err != nil {
-			return nil, false, err
-		}
 	}
 
 	rt := runtime.New(
@@ -118,17 +111,11 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 		features |= tx.DelegationFeature
 	}
 
-	posActive, activated, err := p.syncPOS(state, parent.Header.Number()+1)
+	posActive, _, err := p.syncPOS(state, parent.Header.Number()+1)
 	if err != nil {
 		return nil, false, err
 	}
 
-	if activated {
-		err := builtin.Energy.Native(state, parent.Header.Timestamp()).StopEnergyGrowth()
-		if err != nil {
-			return nil, false, err
-		}
-	}
 	beneficiary := p.beneficiary
 
 	var score uint64
@@ -142,7 +129,7 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 			return nil, false, err
 		}
 		for node, leader := range leaders {
-			if leader.Online {
+			if leader.OfflineBlock == nil {
 				percentage := new(big.Int).Mul(leader.Weight, big.NewInt(thor.MaxPosScore))
 				percentage.Div(percentage, totalWeight)
 				score = score + percentage.Uint64()

@@ -115,3 +115,38 @@ func packAddValidatorBlock(t *testing.T, chain *testchain.Chain, interval uint64
 
 	packNext(t, chain, interval, tx)
 }
+
+func TestPacker_StopsEnergyAtHardfork(t *testing.T) {
+	cases := []struct {
+		name       string
+		hayabusa   uint32
+		expectStop bool
+	}{
+		{"stops at hardfork block", 2, true},
+		{"does not stop without fork", math.MaxUint32, false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := thor.SoloFork
+			cfg.HAYABUSA = tc.hayabusa
+			cfg.HAYABUSA_TP = 1
+
+			chain, err := testchain.NewWithFork(&cfg, 1)
+			assert.NoError(t, err)
+
+			packNext(t, chain, thor.BlockInterval)
+			packNext(t, chain, thor.BlockInterval)
+
+			best := chain.Repo().BestBlockSummary()
+			st := chain.Stater().NewState(best.Root())
+			stop, err := builtin.Energy.Native(st, best.Header.Timestamp()).GetEnergyGrowthStopTime()
+			assert.NoError(t, err)
+			if tc.expectStop {
+				assert.Equal(t, best.Header.Timestamp(), stop)
+			} else {
+				assert.Equal(t, uint64(math.MaxUint64), stop)
+			}
+		})
+	}
+}

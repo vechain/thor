@@ -166,8 +166,8 @@ func (ts *TestSequence) AssertWithdrawable(
 	return ts
 }
 
-func (ts *TestSequence) SetOnline(id thor.Address, online bool) *TestSequence {
-	_, err := ts.staker.SetOnline(id, online)
+func (ts *TestSequence) SetOnline(id thor.Address, blockNum uint32, online bool) *TestSequence {
+	_, err := ts.staker.SetOnline(id, blockNum, online)
 	assert.NoError(ts.t, err, "failed to set online status for validator %s: %v", id.String(), err)
 	return ts
 }

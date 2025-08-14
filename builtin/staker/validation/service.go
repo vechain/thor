@@ -189,7 +189,6 @@ func (s *Service) Add(
 		Period:             period,
 		CompleteIterations: 0,
 		Status:             StatusQueued,
-		Online:             true,
 		LockedVET:          big.NewInt(0),
 		QueuedVET:          stake,
 		CooldownVET:        big.NewInt(0),
@@ -470,7 +469,6 @@ func (s *Service) ActivateValidator(
 
 	// Update validator status
 	val.Status = StatusActive
-	val.Online = true
 	val.StartBlock = currentBlock
 
 	// Add to the leader group list

@@ -40,7 +40,7 @@ func IsStargatePaused(state *state.State, charger *gascharger.Charger) error {
 	return nil
 }
 
-// The staker pause switch at binary position 1. (binary: 1 [1] 0)
+// IsStakerPaused The staker pause switch at binary position 1. (binary: 1 [1] 0)
 func IsStakerPaused(state *state.State, charger *gascharger.Charger) error {
 	isPaused, err := isContractPaused(state, charger, 1)
 	if err != nil {
@@ -112,7 +112,7 @@ func init() {
 			}
 			return []any{
 				validator.Status,
-				validator.Online,
+				validator.OfflineBlock == nil,
 			}
 		}},
 		{"native_getValidatorPeriodDetails", func(env *xenv.Environment) []any {
