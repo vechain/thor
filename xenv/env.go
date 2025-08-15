@@ -124,6 +124,9 @@ func (env *Environment) Call(proc func(env *Environment) []any) (output []byte, 
 		if e := recover(); e != nil {
 			if e == vm.ErrOutOfGas {
 				err = vm.ErrOutOfGas
+			} else if isReverted(e) {
+				err = vm.ErrExecutionReverted
+				output = e.(ErrReverted).ReturnData
 			} else {
 				panic(e)
 			}
@@ -134,4 +137,12 @@ func (env *Environment) Call(proc func(env *Environment) []any) (output []byte, 
 		panic(errors.WithMessage(err, "encode native output"))
 	}
 	return data, nil
+}
+
+func (env *Environment) Revert(msg string) {
+	abi, _ := abi.New(revertABI)
+	method, _ := abi.MethodByName("Error")
+	data, _ := method.EncodeInput([]any{msg})
+
+	panic(ErrReverted{ReturnData: data})
 }
