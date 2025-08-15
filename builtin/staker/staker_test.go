@@ -95,51 +95,51 @@ func (ts *TestSequence) AssertNext(prev thor.Address, expected thor.Address) *Te
 }
 
 func (ts *TestSequence) AddValidation(
-	endorsor, master thor.Address,
+	endorser, master thor.Address,
 	period uint32,
 	stake *big.Int,
 ) *TestSequence {
-	err := ts.staker.AddValidation(endorsor, master, period, stake)
-	assert.NoError(ts.t, err, "failed to add validator %s with endorsor %s", master.String(), endorsor.String())
+	err := ts.staker.AddValidation(endorser, master, period, stake)
+	assert.NoError(ts.t, err, "failed to add validator %s with endorser %s", master.String(), endorser.String())
 	return ts
 }
 
-func (ts *TestSequence) SignalExit(validator, endorsor thor.Address) *TestSequence {
-	err := ts.staker.SignalExit(validator, endorsor)
-	assert.NoError(ts.t, err, "failed to signal exit for validator %s with endorsor %s", validator.String(), endorsor.String())
+func (ts *TestSequence) SignalExit(validator, endorser thor.Address) *TestSequence {
+	err := ts.staker.SignalExit(validator, endorser)
+	assert.NoError(ts.t, err, "failed to signal exit for validator %s with endorser %s", validator.String(), endorser.String())
 	return ts
 }
 
 func (ts *TestSequence) IncreaseStake(
 	addr thor.Address,
-	endorsor thor.Address,
+	endorser thor.Address,
 	amount *big.Int,
 ) *TestSequence {
-	err := ts.staker.IncreaseStake(addr, endorsor, amount)
+	err := ts.staker.IncreaseStake(addr, endorser, amount)
 	assert.NoError(ts.t, err, "failed to increase stake for validator %s by %s: %v", addr.String(), amount.String(), err)
 	return ts
 }
 
 func (ts *TestSequence) DecreaseStake(
 	addr thor.Address,
-	endorsor thor.Address,
+	endorser thor.Address,
 	amount *big.Int,
 ) *TestSequence {
-	err := ts.staker.DecreaseStake(addr, endorsor, amount)
+	err := ts.staker.DecreaseStake(addr, endorser, amount)
 	assert.NoError(ts.t, err, "failed to decrease stake for validator %s by %s: %v", addr.String(), amount.String(), err)
 	return ts
 }
 
-func (ts *TestSequence) WithdrawStake(endorsor, master thor.Address, block uint32, expectedOut *big.Int) *TestSequence {
-	amount, err := ts.staker.WithdrawStake(endorsor, master, block)
-	assert.NoError(ts.t, err, "failed to withdraw stake for validator %s with endorsor %s at block %d: %v", master.String(), endorsor.String(), block, err)
+func (ts *TestSequence) WithdrawStake(endorser, master thor.Address, block uint32, expectedOut *big.Int) *TestSequence {
+	amount, err := ts.staker.WithdrawStake(endorser, master, block)
+	assert.NoError(ts.t, err, "failed to withdraw stake for validator %s with endorser %s at block %d: %v", master.String(), endorser.String(), block, err)
 	assert.Equal(
 		ts.t,
 		0,
 		amount.Cmp(expectedOut),
-		"withdrawn amount mismatch for validator %s with endorsor %s at block %d",
+		"withdrawn amount mismatch for validator %s with endorser %s at block %d",
 		master.String(),
-		endorsor.String(),
+		endorser.String(),
 		block,
 	)
 	return ts
@@ -147,11 +147,11 @@ func (ts *TestSequence) WithdrawStake(endorsor, master thor.Address, block uint3
 
 func (ts *TestSequence) SetBeneficiary(
 	validator thor.Address,
-	endorsor thor.Address,
+	endorser thor.Address,
 	beneficiary thor.Address,
 ) *TestSequence {
-	err := ts.staker.SetBeneficiary(validator, endorsor, beneficiary)
-	assert.NoError(ts.t, err, "failed to set beneficiary for validator %s with endorsor %s: %v", validator.String(), endorsor.String(), err)
+	err := ts.staker.SetBeneficiary(validator, endorser, beneficiary)
+	assert.NoError(ts.t, err, "failed to set beneficiary for validator %s with endorser %s: %v", validator.String(), endorser.String(), err)
 	return ts
 }
 

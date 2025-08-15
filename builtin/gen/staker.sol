@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 contract Staker {
     event ValidationQueued(
         address indexed validator,
-        address indexed endorsor,
+        address indexed endorser,
         uint32 period,
         uint256 stake
     );
@@ -14,7 +14,7 @@ contract Staker {
     event StakeDecreased(address indexed validator, uint256 removed);
     event BeneficiarySet(
         address indexed validator,
-        address indexed endorsor,
+        address indexed endorser,
         address beneficiary
     );
 
@@ -220,21 +220,21 @@ contract Staker {
     }
 
     /**
-     * @dev get returns the validator stake. endorsor, stake, weight of a validator.
-     * @return (endorsor, stake, weight)
+     * @dev get returns the validator stake. endorser, stake, weight of a validator.
+     * @return (endorser, stake, weight)
      */
     function getValidatorStake(
         address validator
     ) public view returns (address, uint256, uint256, uint256) {
         (
-            address endorsor,
+            address endorser,
             uint256 stake,
             uint256 weight,
             uint256 queuedStakeAmount,
             string memory error
         ) = StakerNative(address(this)).native_getValidatorStake(validator);
         require(bytes(error).length == 0, error);
-        return (endorsor, stake, weight, queuedStakeAmount);
+        return (endorser, stake, weight, queuedStakeAmount);
     }
 
     /**
@@ -399,37 +399,37 @@ interface StakerNative {
     // Write methods
     function native_addValidation(
         address validator,
-        address endorsor,
+        address endorser,
         uint32 period,
         uint256 stake
     ) external returns (string calldata);
 
     function native_increaseStake(
         address validator,
-        address endorsor,
+        address endorser,
         uint256 amount
     ) external returns (string calldata);
 
     function native_setBeneficiary(
         address validator,
-        address endorsor,
+        address endorser,
         address beneficiary
     ) external returns (string calldata);
 
     function native_decreaseStake(
         address validator,
-        address endorsor,
+        address endorser,
         uint256 amount
     ) external returns (string calldata);
 
     function native_withdrawStake(
         address validator,
-        address endorsor
+        address endorser
     ) external returns (uint256, string calldata);
 
     function native_signalExit(
         address validator,
-        address endorsor
+        address endorser
     ) external returns (string calldata);
 
     function native_addDelegation(

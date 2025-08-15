@@ -166,7 +166,7 @@ func (s *Service) LeaderGroup() (map[thor.Address]*Validation, error) {
 
 func (s *Service) Add(
 	validator thor.Address,
-	endorsor thor.Address,
+	endorser thor.Address,
 	period uint32,
 	stake *big.Int,
 ) error {
@@ -185,7 +185,7 @@ func (s *Service) Add(
 	}
 
 	entry := &Validation{
-		Endorsor:           endorsor,
+		Endorser:           endorser,
 		Period:             period,
 		CompleteIterations: 0,
 		Status:             StatusQueued,
@@ -204,13 +204,13 @@ func (s *Service) Add(
 	return s.SetValidation(validator, entry, true)
 }
 
-func (s *Service) SignalExit(validator thor.Address, endorsor thor.Address) error {
+func (s *Service) SignalExit(validator thor.Address, endorser thor.Address) error {
 	validation, err := s.GetExistingValidation(validator)
 	if err != nil {
 		return err
 	}
-	if validation.Endorsor != endorsor {
-		return errors.New("invalid endorsor for node")
+	if validation.Endorser != endorser {
+		return errors.New("invalid endorser for node")
 	}
 	if validation.Status != StatusActive {
 		return errors.New("can't signal exit while not active")
@@ -226,12 +226,12 @@ func (s *Service) SignalExit(validator thor.Address, endorsor thor.Address) erro
 	return s.repo.SetValidation(validator, validation, false)
 }
 
-func (s *Service) IncreaseStake(validator thor.Address, endorsor thor.Address, amount *big.Int) error {
+func (s *Service) IncreaseStake(validator thor.Address, endorser thor.Address, amount *big.Int) error {
 	entry, err := s.GetExistingValidation(validator)
 	if err != nil {
 		return err
 	}
-	if entry.Endorsor != endorsor {
+	if entry.Endorser != endorser {
 		return errors.New("invalid endorser")
 	}
 	if entry.Status == StatusExit {
@@ -251,7 +251,7 @@ func (s *Service) SetBeneficiary(validator, endorser, beneficiary thor.Address) 
 	if err != nil {
 		return err
 	}
-	if entry.Endorsor != endorser {
+	if entry.Endorser != endorser {
 		return errors.New("invalid endorser")
 	}
 	if entry.Status == StatusExit || entry.ExitBlock != nil {
@@ -268,12 +268,12 @@ func (s *Service) SetBeneficiary(validator, endorser, beneficiary thor.Address) 
 	return nil
 }
 
-func (s *Service) DecreaseStake(validator thor.Address, endorsor thor.Address, amount *big.Int) (bool, error) {
+func (s *Service) DecreaseStake(validator thor.Address, endorser thor.Address, amount *big.Int) (bool, error) {
 	entry, err := s.GetExistingValidation(validator)
 	if err != nil {
 		return false, err
 	}
-	if entry.Endorsor != endorsor {
+	if entry.Endorser != endorser {
 		return false, errors.New("invalid endorser")
 	}
 	if entry.Status == StatusExit {
@@ -309,14 +309,14 @@ func (s *Service) DecreaseStake(validator thor.Address, endorsor thor.Address, a
 }
 
 // WithdrawStake allows validations to withdraw any withdrawable stake.
-// It also verifies the endorsor and updates the validator totals.
+// It also verifies the endorser and updates the validator totals.
 func (s *Service) WithdrawStake(
 	val *Validation,
 	validator thor.Address,
-	endorsor thor.Address,
+	endorser thor.Address,
 	currentBlock uint32,
 ) (*big.Int, error) {
-	if val.Endorsor != endorsor {
+	if val.Endorser != endorser {
 		return big.NewInt(0), errors.New("invalid endorser")
 	}
 

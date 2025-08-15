@@ -30,7 +30,7 @@ func TestRepository_Validation_RoundTrip(t *testing.T) {
 	repo, _, _ := newRepo(t)
 	id := thor.BytesToAddress([]byte("v1"))
 	entry := &Validation{
-		Endorsor:           thor.BytesToAddress([]byte("e1")),
+		Endorser:           thor.BytesToAddress([]byte("e1")),
 		Period:             15,
 		CompleteIterations: 2,
 		Status:             StatusQueued,
@@ -40,7 +40,7 @@ func TestRepository_Validation_RoundTrip(t *testing.T) {
 
 	got, err := repo.GetValidation(id)
 	assert.NoError(t, err)
-	assert.Equal(t, entry.Endorsor, got.Endorsor)
+	assert.Equal(t, entry.Endorser, got.Endorser)
 	assert.Equal(t, uint32(15), got.Period)
 	assert.Equal(t, uint32(2), got.CompleteIterations)
 	assert.Equal(t, StatusQueued, got.Status)

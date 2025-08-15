@@ -54,7 +54,7 @@ func (p *Packer) schedulePOS(parent *chain.BlockSummary, nowTimestamp uint64, st
 	} else if p.beneficiary != nil {
 		beneficiary = *p.beneficiary
 	} else {
-		beneficiary = validator.Endorsor
+		beneficiary = validator.Endorser
 	}
 
 	return beneficiary, newBlockTime, score, nil
