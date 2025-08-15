@@ -11,6 +11,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
+	"github.com/vechain/thor/v2/builtin/staker/reverts"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -54,10 +55,10 @@ func (s *Service) Add(
 ) (*big.Int, error) {
 	// ensure input is sane
 	if multiplier == 0 {
-		return nil, errors.New("multiplier cannot be 0")
+		return nil, reverts.New("multiplier cannot be 0")
 	}
 	if stake.Cmp(big.NewInt(0)) <= 0 {
-		return nil, errors.New("stake must be greater than 0")
+		return nil, reverts.New("stake must be greater than 0")
 	}
 
 	// update the global delegation counter
@@ -88,10 +89,10 @@ func (s *Service) Add(
 
 func (s *Service) SignalExit(delegation *Delegation, delegationID *big.Int, valCurrentIteration uint32) error {
 	if delegation.LastIteration != nil {
-		return errors.New("delegation is already disabled for auto-renew")
+		return reverts.New("delegation is already disabled for auto-renew")
 	}
 	if delegation.Stake.Sign() == 0 {
-		return errors.New("delegation is not active")
+		return reverts.New("delegation is not active")
 	}
 
 	delegation.LastIteration = &valCurrentIteration

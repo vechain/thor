@@ -93,6 +93,10 @@ func (env *Environment) UseGas(gas uint64) {
 	}
 }
 
+func (env *Environment) Revert(msg string) {
+	panic(&errReverted{message: msg})
+}
+
 func (env *Environment) ParseArgs(val any) {
 	if err := env.abi.DecodeInput(env.contract.Input, val); err != nil {
 		// as vm error
@@ -124,6 +128,10 @@ func (env *Environment) Call(proc func(env *Environment) []any) (output []byte, 
 		if e := recover(); e != nil {
 			if e == vm.ErrOutOfGas {
 				err = vm.ErrOutOfGas
+			} else if isReverted(e) {
+				revertErr := e.(*errReverted)
+				err = vm.ErrExecutionReverted
+				output = revertErr.Bytes()
 			} else {
 				panic(e)
 			}
