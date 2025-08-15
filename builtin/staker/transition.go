@@ -11,8 +11,8 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-// Transition activates the staker contract when sufficient validators are queued
-func (s *Staker) Transition(currentBlock uint32) (bool, error) {
+// transition activates the staker contract when sufficient validators are queued
+func (s *Staker) transition(currentBlock uint32) (bool, error) {
 	if currentBlock%EpochLength.Get() != 0 {
 		return false, nil // No transition needed
 	}

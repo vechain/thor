@@ -13,7 +13,6 @@ import (
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
-	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/poa"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
@@ -68,11 +67,11 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (*Flo
 	}
 
 	var sched scheduler
-	posActive, _, err := p.syncPOS(st, parent.Header.Number()+1)
+	dPosStatus, err := builtin.Staker.Native(st).EvaluateOrUpdate(p.forkConfig, parent.Header.Number()+1)
 	if err != nil {
 		return nil, false, err
 	}
-	if posActive {
+	if dPosStatus.Active {
 		sched = p.schedulePOS
 	} else {
 		sched = p.schedulePOA
@@ -97,7 +96,7 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (*Flo
 		},
 		p.forkConfig)
 
-	return newFlow(p, parent.Header, rt, features, posActive), posActive, nil
+	return newFlow(p, parent.Header, rt, features, dPosStatus.Active), dPosStatus.Active, nil
 }
 
 // Mock create a packing flow upon given parent, but with a designated timestamp.
@@ -111,7 +110,7 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 		features |= tx.DelegationFeature
 	}
 
-	posActive, _, err := p.syncPOS(state, parent.Header.Number()+1)
+	dPosStatus, err := builtin.Staker.Native(state).EvaluateOrUpdate(p.forkConfig, parent.Header.Number()+1)
 	if err != nil {
 		return nil, false, err
 	}
@@ -119,7 +118,7 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 	beneficiary := p.beneficiary
 
 	var score uint64
-	if posActive {
+	if dPosStatus.Active {
 		leaders, err := builtin.Staker.Native(state).LeaderGroup()
 		if err != nil {
 			return nil, false, err
@@ -184,7 +183,7 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 		},
 		p.forkConfig)
 
-	return newFlow(p, parent.Header, rt, features, posActive), posActive, nil
+	return newFlow(p, parent.Header, rt, features, dPosStatus.Active), dPosStatus.Active, nil
 }
 
 func (p *Packer) gasLimit(parentGasLimit uint64) uint64 {
@@ -198,42 +197,4 @@ func (p *Packer) gasLimit(parentGasLimit uint64) uint64 {
 // it as it can.
 func (p *Packer) SetTargetGasLimit(gl uint64) {
 	p.targetGasLimit = gl
-}
-
-// syncPOS checks if POS consensus is active, or tries to activate it if conditions are met.
-// If the staker contract is active, it will perform housekeeping.
-func (p *Packer) syncPOS(st *state.State, current uint32) (active bool, activated bool, err error) {
-	// still on PoA
-	if p.forkConfig.HAYABUSA+p.forkConfig.HAYABUSA_TP > current {
-		return false, false, nil
-	}
-	// check if the staker contract currently is active
-	staker := builtin.Staker.Native(st)
-	active, err = staker.IsPoSActive()
-	if err != nil {
-		return false, false, err
-	}
-
-	// attempt to transition if we're on a transition block and the staker contract is not active
-	if !active && current%p.forkConfig.HAYABUSA_TP == 0 {
-		activated, err = staker.Transition(current)
-		if err != nil {
-			return false, false, err
-		}
-		if activated {
-			log.Info("dPoS activated", "pkg", "packer", "block", current)
-			return true, true, nil
-		}
-	}
-
-	// perform housekeeping if the staker contract is active
-	if active {
-		_, _, err := staker.Housekeep(current)
-		if err != nil {
-			return false, false, err
-		}
-		return true, false, nil
-	}
-
-	return active, false, nil
 }
