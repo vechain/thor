@@ -16,11 +16,11 @@ type Status struct {
 	Updates bool // indicates if there are updates to the staker contract
 }
 
-// EvaluateOrUpdate checks the status of the staker contract and updates its state based on the current block number.
+// SyncPOS checks the status of the staker contract and updates its state based on the current block number.
 // It returns a Status object containing the activation status and the current leader group.
 // If the staker contract is not active, it attempts to transition to dPoS on transition blocks.
 // If the staker contract is active, it performs housekeeping on epoch blocks.
-func (s *Staker) EvaluateOrUpdate(forkConfig *thor.ForkConfig, current uint32) (Status, error) {
+func (s *Staker) SyncPOS(forkConfig *thor.ForkConfig, current uint32) (Status, error) {
 	status := Status{}
 	// still on PoA
 	if forkConfig.HAYABUSA+forkConfig.HAYABUSA_TP > current {

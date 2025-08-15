@@ -67,7 +67,7 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (*Flo
 	}
 
 	var sched scheduler
-	dPosStatus, err := builtin.Staker.Native(st).EvaluateOrUpdate(p.forkConfig, parent.Header.Number()+1)
+	dPosStatus, err := builtin.Staker.Native(st).SyncPOS(p.forkConfig, parent.Header.Number()+1)
 	if err != nil {
 		return nil, false, err
 	}
@@ -110,7 +110,7 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 		features |= tx.DelegationFeature
 	}
 
-	dPosStatus, err := builtin.Staker.Native(state).EvaluateOrUpdate(p.forkConfig, parent.Header.Number()+1)
+	dPosStatus, err := builtin.Staker.Native(state).SyncPOS(p.forkConfig, parent.Header.Number()+1)
 	if err != nil {
 		return nil, false, err
 	}

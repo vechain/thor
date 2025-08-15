@@ -123,7 +123,7 @@ func (h *hayabusaSetup) mintBlock(txs ...*tx.Transaction) (*chain.BlockSummary, 
 	assert.NoError(h.t, err)
 
 	st := h.chain.Stater().NewState(parent.Root())
-	_, err = builtin.Staker.Native(st).EvaluateOrUpdate(h.config, best.Header.Number())
+	_, err = builtin.Staker.Native(st).SyncPOS(h.config, best.Header.Number())
 	assert.NoError(h.t, err)
 
 	// actualGroup, err := builtin.Staker.Native(st).LeaderGroup()

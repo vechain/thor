@@ -228,7 +228,7 @@ func NewHayabusaDevnet(forkConfig *thor.ForkConfig) *Genesis {
 				return err
 			}
 
-			status, err := builtin.Staker.Native(state).EvaluateOrUpdate(forkConfig, 0)
+			status, err := builtin.Staker.Native(state).SyncPOS(forkConfig, 0)
 			if err != nil {
 				return err
 			}

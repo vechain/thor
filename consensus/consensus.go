@@ -89,7 +89,7 @@ func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipValidation boo
 
 	if !skipValidation {
 		staker := builtin.Staker.Native(state)
-		dPosStatus, err := staker.EvaluateOrUpdate(c.forkConfig, header.Number())
+		dPosStatus, err := staker.SyncPOS(c.forkConfig, header.Number())
 		if err != nil {
 			return nil, err
 		}

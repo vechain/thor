@@ -33,7 +33,7 @@ func (c *Consensus) validate(
 	header := block.Header()
 
 	staker := builtin.Staker.Native(state)
-	dPosStatus, err := staker.EvaluateOrUpdate(c.forkConfig, header.Number())
+	dPosStatus, err := staker.SyncPOS(c.forkConfig, header.Number())
 	if err != nil {
 		return nil, nil, err
 	}
