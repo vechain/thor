@@ -9,17 +9,17 @@ import (
 	"errors"
 )
 
-type ErrRequire struct {
+type ErrRevert struct {
 	message string
 }
 
-func New(message string) *ErrRequire {
-	return &ErrRequire{
+func New(message string) *ErrRevert {
+	return &ErrRevert{
 		message: message,
 	}
 }
 
-func (e *ErrRequire) Error() string {
+func (e *ErrRevert) Error() string {
 	return e.message
 }
 
@@ -31,6 +31,6 @@ func IsRevertErr(err any) bool {
 	if !ok {
 		return false
 	}
-	var ve *ErrRequire
+	var ve *ErrRevert
 	return errors.As(e, &ve)
 }
