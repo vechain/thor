@@ -130,7 +130,7 @@ func (env *Environment) Call(proc func(env *Environment) []any) (output []byte, 
 				err = vm.ErrOutOfGas
 			} else if isReverted(e) {
 				revertErr := e.(*errReverted)
-				err = revertErr
+				err = vm.ErrExecutionReverted
 				output = revertErr.Bytes()
 			} else {
 				panic(e)
