@@ -20,27 +20,27 @@ type Status struct {
 // It returns a Status object containing the activation status and the current leader group.
 // If the staker contract is not active, it attempts to transition to dPoS on transition blocks.
 // If the staker contract is active, it performs housekeeping on epoch blocks.
-func (s *Staker) EvaluateOrUpdate(forkConfig *thor.ForkConfig, current uint32) (*Status, error) {
+func (s *Staker) EvaluateOrUpdate(forkConfig *thor.ForkConfig, current uint32) (Status, error) {
+	status := Status{}
 	// still on PoA
 	if forkConfig.HAYABUSA+forkConfig.HAYABUSA_TP > current {
-		return &Status{Active: false}, nil
+		return status, nil
 	}
 
 	var err error
 	var activated bool
-	status := &Status{}
 
 	// check if the staker contract is active
 	status.Active, err = s.IsPoSActive()
 	if err != nil {
-		return nil, err
+		return status, err
 	}
 
 	// attempt to transition if we're on a transition block and the staker contract is not active
 	if !status.Active && current%forkConfig.HAYABUSA_TP == 0 {
 		activated, err = s.transition(current)
 		if err != nil {
-			return nil, fmt.Errorf("failed to transition to dPoS: %w", err)
+			return status, fmt.Errorf("failed to transition to dPoS: %w", err)
 		}
 		if activated {
 			status.Active = true
@@ -52,7 +52,7 @@ func (s *Staker) EvaluateOrUpdate(forkConfig *thor.ForkConfig, current uint32) (
 	if status.Active && !activated {
 		status.Updates, err = s.Housekeep(current)
 		if err != nil {
-			return nil, err
+			return status, err
 		}
 	}
 
