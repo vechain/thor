@@ -568,7 +568,7 @@ func printStartupMessage1(
 				return fmt.Sprintf(`
     Master       [ %v ]
     Beneficiary  [ %v ]`,
-					master.Address(),
+					common.Address(master.Address().Bytes()).String(),
 					func() string {
 						if master.Beneficiary == nil {
 							return "not set, defaults to endorser"
