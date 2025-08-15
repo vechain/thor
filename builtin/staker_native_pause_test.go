@@ -18,7 +18,6 @@ import (
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/builtin/gascharger"
-	"github.com/vechain/thor/v2/builtin/reverts"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/test/datagen"
@@ -109,11 +108,12 @@ func executeParamesNativeMethod(t *testing.T, setup *pauseTestSetup, functionNam
 func executeStakerNativeMethod(t *testing.T, setup *pauseTestSetup, functionName string, args []any) (result []any) {
 	defer func() {
 		if e := recover(); e != nil {
-			if !reverts.IsRevertErr(e) {
-				t.Fatalf("Unexpected panic during execution: %v", e)
+			// if its an err
+			if revertErr, ok := e.(error); ok {
+				result = []any{revertErr.Error()}
+			} else {
+				panic(e) // re-throw the panic after handling it
 			}
-			revertErr := (e).(*reverts.ErrRequire)
-			result = []any{revertErr.Error()}
 		}
 	}()
 	// Find the native function

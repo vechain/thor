@@ -10,11 +10,11 @@ import (
 
 	"github.com/vechain/thor/v2/builtin/gascharger"
 	"github.com/vechain/thor/v2/builtin/params"
-	"github.com/vechain/thor/v2/builtin/reverts"
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/builtin/staker/aggregation"
 	"github.com/vechain/thor/v2/builtin/staker/delegation"
 	"github.com/vechain/thor/v2/builtin/staker/globalstats"
+	"github.com/vechain/thor/v2/builtin/staker/reverts"
 	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/log"
@@ -378,7 +378,7 @@ func (s *Staker) AddDelegation(
 	}
 
 	if val.Status != validation.StatusQueued && val.Status != validation.StatusActive {
-		return nil, reverts.NewRequireError("validation is not queued or active")
+		return nil, reverts.New("validation is not queued or active")
 	}
 
 	// add delegation on the next iteration - val.CurrentIteration() + 1,
@@ -437,7 +437,7 @@ func (s *Staker) SignalDelegationExit(delegationID *big.Int) error {
 	}
 
 	if del.IsEmpty() {
-		return reverts.NewRequireError("delegation is empty")
+		return reverts.New("delegation is empty")
 	}
 
 	val, err := s.validationService.GetValidation(del.Validation)
@@ -447,10 +447,10 @@ func (s *Staker) SignalDelegationExit(delegationID *big.Int) error {
 
 	// ensure delegation can be signaled ( delegation has started and has not ended )
 	if !del.Started(val) {
-		return reverts.NewRequireError("delegation has not started yet, funds can be withdrawn")
+		return reverts.New("delegation has not started yet, funds can be withdrawn")
 	}
 	if del.Ended(val) {
-		return reverts.NewRequireError("delegation has ended, funds can be withdrawn")
+		return reverts.New("delegation has ended, funds can be withdrawn")
 	}
 
 	if err = s.delegationService.SignalExit(del, delegationID, val.CurrentIteration()); err != nil {
@@ -487,7 +487,7 @@ func (s *Staker) WithdrawDelegation(
 	started := del.Started(val)
 	finished := del.Ended(val)
 	if started && !finished {
-		return nil, reverts.NewRequireError("delegation is not eligible for withdraw")
+		return nil, reverts.New("delegation is not eligible for withdraw")
 	}
 
 	// withdraw delegation
@@ -548,7 +548,7 @@ func (s *Staker) validateNextPeriodTVL(validator thor.Address) error {
 
 	// accumulated TVL should cannot be more than MaxStake
 	if big.NewInt(0).Add(val.NextPeriodTVL(), agg.NextPeriodTVL()).Cmp(MaxStake) > 0 {
-		return reverts.NewRequireError("stake is out of range")
+		return reverts.New("stake is out of range")
 	}
 
 	return nil
