@@ -46,7 +46,7 @@ func RandomStake() *big.Int {
 }
 
 type keySet struct {
-	endorsor thor.Address
+	endorser thor.Address
 	node     thor.Address
 }
 
@@ -54,10 +54,10 @@ func createKeys(amount int) map[thor.Address]keySet {
 	keys := make(map[thor.Address]keySet)
 	for range amount {
 		node := datagen.RandAddress()
-		endorsor := datagen.RandAddress()
+		endorser := datagen.RandAddress()
 
 		keys[node] = keySet{
-			endorsor: endorsor,
+			endorser: endorser,
 			node:     node,
 		}
 	}
@@ -79,7 +79,7 @@ func newStaker(t *testing.T, amount int, maxValidators int64, initialise bool) (
 		for _, key := range keys {
 			stake := RandomStake()
 			totalStake = totalStake.Add(totalStake, stake)
-			if err := staker.AddValidation(key.node, key.endorsor, uint32(360)*24*15, stake); err != nil {
+			if err := staker.AddValidation(key.node, key.endorser, uint32(360)*24*15, stake); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -2275,7 +2275,7 @@ func Test_GetValidatorTotals_ValidatorExiting(t *testing.T) {
 			TotalLockedStake:  big.NewInt(0).Add(vStake.VET(), dStake.VET()),
 			TotalLockedWeight: big.NewInt(0).Add(vStake.Weight(), dStake.Weight()),
 		}).
-		SignalExit(validator.ID, validator.Endorsor).
+		SignalExit(validator.ID, validator.Endorser).
 		AssertTotals(validator.ID, &validation.Totals{
 			TotalLockedStake:   big.NewInt(0).Add(vStake.VET(), dStake.VET()),
 			TotalLockedWeight:  big.NewInt(0).Add(vStake.VET(), dStake.Weight()),
@@ -2322,7 +2322,7 @@ func Test_GetValidatorTotals_DelegatorExiting_ThenValidator(t *testing.T) {
 			TotalExitingStake:  dStake.VET(),
 			TotalExitingWeight: dStake.Weight(),
 		}).
-		SignalExit(validator.ID, validator.Endorsor).
+		SignalExit(validator.ID, validator.Endorser).
 		AssertTotals(validator.ID, &validation.Totals{
 			TotalLockedStake:   big.NewInt(0).Add(vStake.VET(), dStake.VET()),
 			TotalLockedWeight:  big.NewInt(0).Add(vStake.Weight(), dStake.Weight()),
@@ -2458,14 +2458,14 @@ func TestStaker_AddValidation_CannotAddValidationWithSameMasterAfterExit(t *test
 	staker, _ := newStaker(t, 68, 101, true)
 
 	master := datagen.RandAddress()
-	endorsor := datagen.RandAddress()
-	err := staker.AddValidation(master, endorsor, uint32(360)*24*15, MinStake)
+	endorser := datagen.RandAddress()
+	err := staker.AddValidation(master, endorser, uint32(360)*24*15, MinStake)
 	assert.NoError(t, err)
 
 	_, err = staker.activateNextValidation(0, getTestMaxLeaderSize(staker.params))
 	assert.NoError(t, err)
 
-	err = staker.SignalExit(master, endorsor)
+	err = staker.SignalExit(master, endorser)
 	assert.NoError(t, err)
 
 	_, err = staker.validationService.ExitValidator(master)
@@ -2505,25 +2505,25 @@ func TestStaker_SetBeneficiary(t *testing.T) {
 	staker, _ := newStaker(t, 0, 1, false)
 
 	master := datagen.RandAddress()
-	endorsor := datagen.RandAddress()
+	endorser := datagen.RandAddress()
 	beneficiary := datagen.RandAddress()
 
 	testSetup := newTestSequence(t, staker)
 
 	// add validation without a beneficiary
-	testSetup.AddValidation(master, endorsor, MediumStakingPeriod.Get(), MinStake).ActivateNext(0)
+	testSetup.AddValidation(master, endorser, MediumStakingPeriod.Get(), MinStake).ActivateNext(0)
 	assertValidation(t, staker, master).Beneficiary(nil)
 
 	// negative cases
 	assert.ErrorContains(t, staker.SetBeneficiary(master, master, beneficiary), "invalid endorser")
-	assert.ErrorContains(t, staker.SetBeneficiary(endorsor, endorsor, beneficiary), "failed to get validator")
+	assert.ErrorContains(t, staker.SetBeneficiary(endorser, endorser, beneficiary), "failed to get validator")
 
 	// set beneficiary, should be successful
-	testSetup.SetBeneficiary(master, endorsor, beneficiary)
+	testSetup.SetBeneficiary(master, endorser, beneficiary)
 	assertValidation(t, staker, master).Beneficiary(&beneficiary)
 
 	// remove the beneficiary
-	testSetup.SetBeneficiary(master, endorsor, thor.Address{})
+	testSetup.SetBeneficiary(master, endorser, thor.Address{})
 	assertValidation(t, staker, master).Beneficiary(nil)
 }
 
@@ -2570,7 +2570,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	validator2 := thor.Address{}
 	for _, key := range keys {
 		validator2 = key.node
-		if err := staker.AddValidation(key.node, key.endorsor, uint32(360)*24*15, stake); err != nil {
+		if err := staker.AddValidation(key.node, key.endorser, uint32(360)*24*15, stake); err != nil {
 			t.Fatal(err)
 		}
 	}
