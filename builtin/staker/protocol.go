@@ -14,7 +14,7 @@ import (
 
 type Status struct {
 	Active      bool                                    // indicates if the staker contract is currently active
-	LeaderGroup map[thor.Address]*validation.Validation // the current leader group, if the staker contract is active
+	LeaderGroup map[thor.Address]*validation.Validation // the current leader group, if housekeeping performed updates
 }
 
 // EvaluateOrUpdate checks the status of the staker contract and updates its state based on the current block number.
