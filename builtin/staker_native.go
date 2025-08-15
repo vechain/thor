@@ -89,7 +89,7 @@ func init() {
 				return []any{thor.Address{}, big.NewInt(0), big.NewInt(0)}, nil
 			}
 			return []any{
-				validator.Endorsor,
+				validator.Endorser,
 				validator.LockedVET,
 				validator.Weight,
 				validator.QueuedVET,
@@ -186,7 +186,7 @@ func init() {
 		{"native_withdrawStake", func(env *xenv.Environment) ([]any, error) {
 			var args struct {
 				Validator common.Address
-				Endorsor  common.Address
+				Endorser  common.Address
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
@@ -198,7 +198,7 @@ func init() {
 
 			stake, err := Staker.NativeMetered(env.State(), charger).WithdrawStake(
 				thor.Address(args.Validator),
-				thor.Address(args.Endorsor),
+				thor.Address(args.Endorser),
 				env.BlockContext().Number,
 			)
 			if err != nil {
@@ -210,7 +210,7 @@ func init() {
 		{"native_addValidation", func(env *xenv.Environment) ([]any, error) {
 			var args struct {
 				Validator common.Address
-				Endorsor  common.Address
+				Endorser  common.Address
 				Period    uint32
 				Stake     *big.Int
 			}
@@ -230,22 +230,22 @@ func init() {
 			if !isPoSActive {
 				charger.Charge(thor.SloadGas) // a.getEntry(ValidatorMaster)
 
-				exists, endorsor, _, _, err := Authority.Native(env.State()).Get(thor.Address(args.Validator))
+				exists, endorser, _, _, err := Authority.Native(env.State()).Get(thor.Address(args.Validator))
 				if err != nil {
 					return nil, err
 				}
 				if !exists {
 					return nil, reverts.New("validator is not registered in the Authority")
 				}
-				if thor.Address(args.Endorsor) != endorsor {
-					return nil, reverts.New("endorsor is not present in the Authority")
+				if thor.Address(args.Endorser) != endorser {
+					return nil, reverts.New("endorser is not present in the Authority")
 				}
 			}
 
 			err = Staker.NativeMetered(env.State(), charger).
 				AddValidation(
 					thor.Address(args.Validator),
-					thor.Address(args.Endorsor),
+					thor.Address(args.Endorser),
 					args.Period,
 					args.Stake,
 				)
@@ -258,7 +258,7 @@ func init() {
 		{"native_signalExit", func(env *xenv.Environment) ([]any, error) {
 			var args struct {
 				Validator common.Address
-				Endorsor  common.Address
+				Endorser  common.Address
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
@@ -271,7 +271,7 @@ func init() {
 			err = Staker.NativeMetered(env.State(), charger).
 				SignalExit(
 					thor.Address(args.Validator),
-					thor.Address(args.Endorsor),
+					thor.Address(args.Endorser),
 				)
 			if err != nil {
 				return nil, err
@@ -281,7 +281,7 @@ func init() {
 		{"native_increaseStake", func(env *xenv.Environment) ([]any, error) {
 			var args struct {
 				Validator common.Address
-				Endorsor  common.Address
+				Endorser  common.Address
 				Amount    *big.Int
 			}
 			env.ParseArgs(&args)
@@ -295,7 +295,7 @@ func init() {
 			err = Staker.NativeMetered(env.State(), charger).
 				IncreaseStake(
 					thor.Address(args.Validator),
-					thor.Address(args.Endorsor),
+					thor.Address(args.Endorser),
 					args.Amount,
 				)
 			if err != nil {
@@ -307,7 +307,7 @@ func init() {
 		{"native_setBeneficiary", func(env *xenv.Environment) ([]any, error) {
 			var args struct {
 				Validator   common.Address
-				Endorsor    common.Address
+				Endorser    common.Address
 				Beneficiary common.Address
 			}
 			env.ParseArgs(&args)
@@ -321,7 +321,7 @@ func init() {
 			err = Staker.NativeMetered(env.State(), charger).
 				SetBeneficiary(
 					thor.Address(args.Validator),
-					thor.Address(args.Endorsor),
+					thor.Address(args.Endorser),
 					thor.Address(args.Beneficiary),
 				)
 			if err != nil {
@@ -332,7 +332,7 @@ func init() {
 		{"native_decreaseStake", func(env *xenv.Environment) ([]any, error) {
 			var args struct {
 				Validator common.Address
-				Endorsor  common.Address
+				Endorser  common.Address
 				Amount    *big.Int
 			}
 			env.ParseArgs(&args)
@@ -346,7 +346,7 @@ func init() {
 			err = Staker.NativeMetered(env.State(), charger).
 				DecreaseStake(
 					thor.Address(args.Validator),
-					thor.Address(args.Endorsor),
+					thor.Address(args.Endorser),
 					args.Amount,
 				)
 			if err != nil {

@@ -571,7 +571,7 @@ func printStartupMessage1(
 					master.Address(),
 					func() string {
 						if master.Beneficiary == nil {
-							return "not set, defaults to endorsor"
+							return "not set, defaults to endorser"
 						}
 						return master.Beneficiary.String()
 					}(),

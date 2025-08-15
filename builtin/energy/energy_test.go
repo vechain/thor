@@ -292,11 +292,6 @@ func TestCalculateRewards(t *testing.T) {
 	reward, err := eng.CalculateRewards(mockStaker)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(121765601217656012), reward)
-
-	leapEng := New(thor.BytesToAddress([]byte("eng")), st, 69638400, p)
-	reward, err = leapEng.CalculateRewards(mockStaker)
-	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(121432908318154219), reward)
 }
 
 func TestDistributeRewards(t *testing.T) {

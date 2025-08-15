@@ -44,7 +44,7 @@ func (p *Packer) schedulePOA(parent *chain.BlockSummary, nowTimestamp uint64, st
 
 	for _, c := range candidates {
 		if p.beneficiary == nil && c.NodeMaster == p.nodeMaster {
-			// no beneficiary not set, set it to endorsor
+			// no beneficiary not set, set it to endorser
 			beneficiary = c.Endorsor
 		}
 		proposers = append(proposers, poa.Proposer{

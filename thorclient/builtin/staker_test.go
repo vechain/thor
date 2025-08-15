@@ -131,7 +131,7 @@ func TestStaker(t *testing.T) {
 	getStakeRes, err := staker.GetValidatorStake(firstID)
 	require.NoError(t, err)
 	require.False(t, getStakeRes.Address.IsZero())
-	require.False(t, getStakeRes.Endorsor.IsZero())
+	require.False(t, getStakeRes.Endorser.IsZero())
 	require.Equal(t, getStakeRes.Stake, minStake)
 	require.Equal(t, getStakeRes.Weight, minStake)
 	require.Equal(t, getStakeRes.QueuedStake.String(), big.NewInt(0).String())
@@ -160,7 +160,7 @@ func TestStaker(t *testing.T) {
 	require.True(t, firstActive.Exists(*getStatusRes))
 	require.Equal(t, minStake, firstActive.Stake)
 	require.Equal(t, minStake, firstActive.Weight)
-	require.False(t, firstActive.Endorsor.IsZero())
+	require.False(t, firstActive.Endorser.IsZero())
 
 	// Next
 	next, id, err := staker.Next(firstID)
@@ -172,7 +172,7 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, StakerStatusActive, nextStatus.Status)
 	require.Equal(t, minStake, next.Stake)
 	require.Equal(t, minStake, next.Weight)
-	require.False(t, next.Endorsor.IsZero())
+	require.False(t, next.Endorser.IsZero())
 
 	var (
 		validator    = genesis.DevAccounts()[9]
@@ -190,7 +190,7 @@ func TestStaker(t *testing.T) {
 	queuedEvents, err := staker.FilterValidatorQueued(newRange(receipt), nil, logdb.ASC)
 	require.NoError(t, err)
 	require.Len(t, queuedEvents, 1)
-	require.Equal(t, validator.Address, queuedEvents[0].Endorsor)
+	require.Equal(t, validator.Address, queuedEvents[0].Endorser)
 	require.Equal(t, minStake, queuedEvents[0].Stake)
 	queuedID := queuedEvents[0].Node
 
@@ -203,7 +203,7 @@ func TestStaker(t *testing.T) {
 	require.True(t, firstQueued.Exists(*firstQueuedStatus))
 	require.Equal(t, 0, firstQueued.Stake.Sign())
 	require.Equal(t, StakerStatusQueued, firstQueuedStatus.Status)
-	require.False(t, firstQueued.Endorsor.IsZero())
+	require.False(t, firstQueued.Endorser.IsZero())
 
 	// TotalQueued
 	queuedStake, queuedWeight, err := staker.QueuedStake()
@@ -368,5 +368,5 @@ func TestStaker(t *testing.T) {
 	require.Len(t, beneficiaryEvents, 1)
 	require.Equal(t, validator1.Address(), beneficiaryEvents[0].Validator)
 	require.Equal(t, beneficiary, beneficiaryEvents[0].Beneficiary)
-	require.Equal(t, validator1.Address(), beneficiaryEvents[0].Endorsor)
+	require.Equal(t, validator1.Address(), beneficiaryEvents[0].Endorser)
 }

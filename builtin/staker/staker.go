@@ -220,18 +220,18 @@ func (s *Staker) Next(prev thor.Address) (thor.Address, error) {
 // AddValidation queues a new validator.
 func (s *Staker) AddValidation(
 	validator thor.Address,
-	endorsor thor.Address,
+	endorser thor.Address,
 	period uint32,
 	stake *big.Int,
 ) error {
 	logger.Debug("adding validator", "validator", validator,
-		"endorsor", endorsor,
+		"endorser", endorser,
 		"period", period,
 		"stake", new(big.Int).Div(stake, big.NewInt(1e18)),
 	)
 
 	// create a new validation
-	if err := s.validationService.Add(validator, endorsor, period, stake); err != nil {
+	if err := s.validationService.Add(validator, endorser, period, stake); err != nil {
 		logger.Info("add validator failed", "validator", validator, "error", err)
 		return err
 	}
@@ -246,10 +246,10 @@ func (s *Staker) AddValidation(
 	return nil
 }
 
-func (s *Staker) SignalExit(validator thor.Address, endorsor thor.Address) error {
-	logger.Debug("signal exit", "endorsor", endorsor, "validator", validator)
+func (s *Staker) SignalExit(validator thor.Address, endorser thor.Address) error {
+	logger.Debug("signal exit", "endorser", endorser, "validator", validator)
 
-	if err := s.validationService.SignalExit(validator, endorsor); err != nil {
+	if err := s.validationService.SignalExit(validator, endorser); err != nil {
 		logger.Info("signal exit failed", "validator", validator, "error", err)
 		return err
 	}
@@ -260,10 +260,10 @@ func (s *Staker) SignalExit(validator thor.Address, endorsor thor.Address) error
 // IncreaseStake increases the stake of a queued or active validator
 // if a validator is active, the QueuedVET is increase, but the weight stays the same
 // the weight will be recalculated at the end of the staking period, by the housekeep function
-func (s *Staker) IncreaseStake(validator thor.Address, endorsor thor.Address, amount *big.Int) error {
-	logger.Debug("increasing stake", "endorsor", endorsor, "validator", validator, "amount", new(big.Int).Div(amount, big.NewInt(1e18)))
+func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, amount *big.Int) error {
+	logger.Debug("increasing stake", "endorser", endorser, "validator", validator, "amount", new(big.Int).Div(amount, big.NewInt(1e18)))
 
-	if err := s.validationService.IncreaseStake(validator, endorsor, amount); err != nil {
+	if err := s.validationService.IncreaseStake(validator, endorser, amount); err != nil {
 		logger.Info("increase stake failed", "validator", validator, "error", err)
 		return err
 	}
@@ -282,10 +282,10 @@ func (s *Staker) IncreaseStake(validator thor.Address, endorsor thor.Address, am
 	return nil
 }
 
-func (s *Staker) DecreaseStake(validator thor.Address, endorsor thor.Address, amount *big.Int) error {
-	logger.Debug("decreasing stake", "endorsor", endorsor, "validator", validator, "amount", new(big.Int).Div(amount, big.NewInt(1e18)))
+func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, amount *big.Int) error {
+	logger.Debug("decreasing stake", "endorser", endorser, "validator", validator, "amount", new(big.Int).Div(amount, big.NewInt(1e18)))
 
-	queued, err := s.validationService.DecreaseStake(validator, endorsor, amount)
+	queued, err := s.validationService.DecreaseStake(validator, endorser, amount)
 	if err != nil {
 		logger.Info("decrease stake failed", "validator", validator, "error", err)
 		return err
@@ -303,8 +303,8 @@ func (s *Staker) DecreaseStake(validator thor.Address, endorsor thor.Address, am
 }
 
 // WithdrawStake allows expired validations to withdraw their stake.
-func (s *Staker) WithdrawStake(validator thor.Address, endorsor thor.Address, currentBlock uint32) (*big.Int, error) {
-	logger.Debug("withdrawing stake", "endorsor", endorsor, "validator", validator)
+func (s *Staker) WithdrawStake(validator thor.Address, endorser thor.Address, currentBlock uint32) (*big.Int, error) {
+	logger.Debug("withdrawing stake", "endorser", endorser, "validator", validator)
 
 	// remove validator QueuedVET if the validator is still queued
 	val, err := s.validationService.GetValidation(validator)
@@ -318,7 +318,7 @@ func (s *Staker) WithdrawStake(validator thor.Address, endorsor thor.Address, cu
 		}
 	}
 
-	stake, err := s.validationService.WithdrawStake(val, validator, endorsor, currentBlock)
+	stake, err := s.validationService.WithdrawStake(val, validator, endorser, currentBlock)
 	if err != nil {
 		logger.Info("withdraw failed", "validator", validator, "error", err)
 		return nil, err
@@ -354,9 +354,9 @@ func (s *Staker) setOfflineBlock(validator thor.Address, online bool, blockNum u
 	}
 }
 
-func (s *Staker) SetBeneficiary(validator, endorsor, beneficiary thor.Address) error {
+func (s *Staker) SetBeneficiary(validator, endorser, beneficiary thor.Address) error {
 	logger.Debug("set beneficiary", "validator", validator, "beneficiary", beneficiary)
-	if err := s.validationService.SetBeneficiary(validator, endorsor, beneficiary); err != nil {
+	if err := s.validationService.SetBeneficiary(validator, endorser, beneficiary); err != nil {
 		logger.Info("set beneficiary failed", "validator", validator, "error", err)
 		return err
 	}

@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 contract Staker {
     event ValidationQueued(
         address indexed validator,
-        address indexed endorsor,
+        address indexed endorser,
         uint32 period,
         uint256 stake
     );
@@ -14,7 +14,7 @@ contract Staker {
     event StakeDecreased(address indexed validator, uint256 removed);
     event BeneficiarySet(
         address indexed validator,
-        address indexed endorsor,
+        address indexed endorser,
         address beneficiary
     );
 
@@ -197,8 +197,8 @@ contract Staker {
     }
 
     /**
-     * @dev get returns the validator stake. endorsor, stake, weight of a validator.
-     * @return (endorsor, stake, weight)
+     * @dev get returns the validator stake. endorser, stake, weight of a validator.
+     * @return (endorser, stake, weight)
      */
     function getValidatorStake(
         address validator
@@ -322,35 +322,35 @@ interface StakerNative {
     // Write methods
     function native_addValidation(
         address validator,
-        address endorsor,
+        address endorser,
         uint32 period,
         uint256 stake
     ) external;
 
     function native_increaseStake(
         address validator,
-        address endorsor,
+        address endorser,
         uint256 amount
     ) external;
 
     function native_setBeneficiary(
         address validator,
-        address endorsor,
+        address endorser,
         address beneficiary
     ) external;
 
     function native_decreaseStake(
         address validator,
-        address endorsor,
+        address endorser,
         uint256 amount
     ) external;
 
     function native_withdrawStake(
         address validator,
-        address endorsor
+        address endorser
     ) external returns (uint256);
 
-    function native_signalExit(address validator, address endorsor) external;
+    function native_signalExit(address validator, address endorser) external;
 
     function native_addDelegation(
         address validator,
