@@ -20,11 +20,10 @@ import (
 //
 
 type EpochTransition struct {
-	Block            uint32
-	Renewals         []ValidatorRenewal
-	ExitValidator    *thor.Address
-	ActivationCount  int64
-	ActiveValidators map[thor.Address]*validation.Validation
+	Block           uint32
+	Renewals        []ValidatorRenewal
+	ExitValidator   *thor.Address
+	ActivationCount int64
 }
 
 type ValidatorRenewal struct {
@@ -35,31 +34,28 @@ type ValidatorRenewal struct {
 }
 
 // Housekeep performs epoch transitions at epoch boundaries
-func (s *Staker) Housekeep(currentBlock uint32) (bool, map[thor.Address]*validation.Validation, error) {
+func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 	if currentBlock%EpochLength.Get() != 0 {
-		return false, nil, nil
+		return false, nil
 	}
 
 	logger.Info("🏠performing housekeeping", "block", currentBlock)
 
 	transition, err := s.computeEpochTransition(currentBlock)
 	if err != nil {
-		return false, nil, err
+		return false, err
 	}
 
 	if transition == nil || (len(transition.Renewals) == 0 && transition.ExitValidator == nil && transition.ActivationCount == 0) {
-		return false, nil, nil
+		return false, nil
 	}
 
 	if err := s.applyEpochTransition(transition); err != nil {
-		return false, nil, err
+		return false, err
 	}
 
-	// Build active validators map
-	activeValidators := transition.ActiveValidators
-
 	logger.Info("performed housekeeping", "block", currentBlock, "updates", true)
-	return true, activeValidators, nil
+	return true, nil
 }
 
 // computeEpochTransition calculates all state changes needed for an epoch transition
@@ -92,7 +88,6 @@ func (s *Staker) computeEpochTransition(currentBlock uint32) (*EpochTransition, 
 	if err != nil {
 		return nil, err
 	}
-	transition.ActiveValidators = active
 
 	return transition, nil
 }
@@ -247,7 +242,6 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 		if err := s.globalStatsService.ApplyExit(exit.Add(aggExit)); err != nil {
 			return err
 		}
-		delete(transition.ActiveValidators, *transition.ExitValidator)
 	}
 
 	// Apply activations using existing method
@@ -257,15 +251,10 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 	}
 
 	for range transition.ActivationCount {
-		address, err := s.activateNextValidation(transition.Block, maxLeaderGroupSize)
+		_, err := s.activateNextValidation(transition.Block, maxLeaderGroupSize)
 		if err != nil {
 			return err
 		}
-		validator, err := s.Get(*address)
-		if err != nil {
-			return err
-		}
-		transition.ActiveValidators[*address] = validator
 	}
 
 	return nil

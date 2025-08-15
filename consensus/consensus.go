@@ -89,16 +89,12 @@ func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipValidation boo
 
 	if !skipValidation {
 		staker := builtin.Staker.Native(state)
-		posActive, _, activeGroup, err := c.syncPOS(staker, header.Number())
+		dPosStatus, err := staker.SyncPOS(c.forkConfig, header.Number())
 		if err != nil {
 			return nil, err
 		}
-		if len(activeGroup) > 0 {
-			// invalidate cache
-			c.validatorsCache.Add(header.ParentID(), activeGroup)
-		}
-		if posActive {
-			err = c.validateStakingProposer(header, parentSummary.Header, staker, activeGroup)
+		if dPosStatus.Active {
+			err = c.validateStakingProposer(header, parentSummary.Header, staker)
 		} else {
 			_, err = c.validateAuthorityProposer(header, parentSummary.Header, state)
 		}

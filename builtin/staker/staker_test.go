@@ -167,7 +167,7 @@ func (ts *TestSequence) AssertWithdrawable(
 }
 
 func (ts *TestSequence) SetOnline(id thor.Address, blockNum uint32, online bool) *TestSequence {
-	_, err := ts.staker.SetOnline(id, blockNum, online)
+	err := ts.staker.SetOnline(id, blockNum, online)
 	assert.NoError(ts.t, err, "failed to set online status for validator %s: %v", id.String(), err)
 	return ts
 }
@@ -278,13 +278,13 @@ func (ts *TestSequence) ActivateNext(block uint32) *TestSequence {
 }
 
 func (ts *TestSequence) Housekeep(block uint32) *TestSequence {
-	_, _, err := ts.staker.Housekeep(block)
+	_, err := ts.staker.Housekeep(block)
 	assert.NoError(ts.t, err, "failed to perform housekeeping at block %d", block)
 	return ts
 }
 
 func (ts *TestSequence) Transition(block uint32) *TestSequence {
-	_, err := ts.staker.Transition(block)
+	_, err := ts.staker.transition(block)
 	assert.NoError(ts.t, err, "failed to transition at block %d", block)
 	return ts
 }

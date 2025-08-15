@@ -492,6 +492,21 @@ func (s *Service) ActivateValidator(
 	return validatorRenewal, nil
 }
 
+// UpdateOfflineBlock updates the offline block for a validator.
+func (s *Service) UpdateOfflineBlock(validator thor.Address, block uint32, online bool) error {
+	validation, err := s.GetExistingValidation(validator)
+	if err != nil {
+		return err
+	}
+	if online {
+		validation.OfflineBlock = nil
+	} else {
+		validation.OfflineBlock = &block
+	}
+
+	return s.SetValidation(validator, validation, false)
+}
+
 //
 // Repository methods
 //

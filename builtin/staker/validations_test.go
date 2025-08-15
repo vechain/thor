@@ -83,7 +83,7 @@ func newStaker(t *testing.T, amount int, maxValidators int64, initialise bool) (
 				t.Fatal(err)
 			}
 		}
-		transitioned, err := staker.Transition(0)
+		transitioned, err := staker.transition(0)
 		assert.NoError(t, err)
 		assert.True(t, transitioned)
 	}
@@ -108,7 +108,7 @@ func TestStaker(t *testing.T) {
 		{M(stkr.LockedVET()), M(zeroStake, zeroStake, nil)},
 		{M(stkr.AddValidation(validator1, validator1, uint32(360)*24*15, stakeAmount)), M(nil)},
 		{M(stkr.AddValidation(validator2, validator2, uint32(360)*24*15, stakeAmount)), M(nil)},
-		{M(stkr.Transition(0)), M(true, nil)},
+		{M(stkr.transition(0)), M(true, nil)},
 		{M(stkr.LockedVET()), M(totalStake, totalStake, nil)},
 		{M(stkr.AddValidation(validator3, validator3, uint32(360)*24*15, stakeAmount)), M(nil)},
 		{M(stkr.FirstQueued()), M(&validator3, nil)},
@@ -393,7 +393,7 @@ func TestStaker_QueueUpValidators(t *testing.T) {
 	assert.Equal(t, stake, validator.QueuedVET)
 	assert.Equal(t, validation.StatusQueued, validator.Status)
 
-	_, _, err = staker.Housekeep(180)
+	_, err = staker.Housekeep(180)
 	assert.NoError(t, err)
 	validator, err = staker.Get(addr1)
 	assert.NoError(t, err)
@@ -432,7 +432,7 @@ func TestStaker_QueueUpValidators(t *testing.T) {
 	assert.Equal(t, stake, validator.LockedVET)
 	assert.Equal(t, validation.StatusActive, validator.Status)
 
-	_, _, err = staker.Housekeep(180 * 2)
+	_, err = staker.Housekeep(180 * 2)
 	assert.NoError(t, err)
 
 	validator, err = staker.Get(addr2)
@@ -539,7 +539,7 @@ func TestStaker_Get_FullFlow_Renewal_Off(t *testing.T) {
 	assert.NoError(t, err)
 
 	// housekeep the validator
-	_, _, err = staker.Housekeep(period)
+	_, err = staker.Housekeep(period)
 	assert.NoError(t, err)
 	validator, err = staker.Get(addr)
 	assert.NoError(t, err)
@@ -812,7 +812,7 @@ func TestStaker_IncreaseActive(t *testing.T) {
 	assert.Equal(t, validator.LockedVET, validator.Weight)
 
 	// verify withdraw amount decrease
-	_, _, err = staker.Housekeep(period)
+	_, err = staker.Housekeep(period)
 	assert.NoError(t, err)
 	validator, err = staker.Get(addr)
 	assert.NoError(t, err)
@@ -870,7 +870,7 @@ func TestStaker_ChangeStakeActiveValidatorWithQueued(t *testing.T) {
 	assert.Equal(t, stake, validator.Weight)
 
 	// verify withdraw amount decrease
-	_, _, err = staker.Housekeep(period)
+	_, err = staker.Housekeep(period)
 	assert.NoError(t, err)
 	validator, err = staker.Get(addr)
 	assert.NoError(t, err)
@@ -898,7 +898,7 @@ func TestStaker_ChangeStakeActiveValidatorWithQueued(t *testing.T) {
 	assert.Equal(t, stake, queuedWeight)
 
 	// verify queued weight is decreased
-	_, _, err = staker.Housekeep(period)
+	_, err = staker.Housekeep(period)
 	assert.NoError(t, err)
 	validator, err = staker.Get(addr)
 	assert.NoError(t, err)
@@ -950,7 +950,7 @@ func TestStaker_DecreaseActive(t *testing.T) {
 	assert.Equal(t, stake, validator.Weight)
 
 	// verify withdraw amount decrease
-	_, _, err = staker.Housekeep(period)
+	_, err = staker.Housekeep(period)
 	assert.NoError(t, err)
 	validator, err = staker.Get(addr)
 	assert.NoError(t, err)
@@ -995,7 +995,7 @@ func TestStaker_DecreaseActiveThenExit(t *testing.T) {
 	assert.Equal(t, stake, validator.Weight)
 
 	// verify withdraw amount decrease
-	_, _, err = staker.Housekeep(period)
+	_, err = staker.Housekeep(period)
 	assert.NoError(t, err)
 	validator, err = staker.Get(addr)
 	assert.NoError(t, err)
@@ -1005,7 +1005,7 @@ func TestStaker_DecreaseActiveThenExit(t *testing.T) {
 
 	assert.NoError(t, staker.SignalExit(addr, addr))
 
-	_, _, err = staker.Housekeep(period * 2)
+	_, err = staker.Housekeep(period * 2)
 	assert.NoError(t, err)
 
 	validator, err = staker.Get(addr)
@@ -1056,7 +1056,7 @@ func TestStaker_Get_FullFlow(t *testing.T) {
 	assert.NoError(t, err)
 
 	// housekeep the validator
-	_, _, err = staker.Housekeep(period)
+	_, err = staker.Housekeep(period)
 	assert.NoError(t, err)
 	validator, err = staker.Get(addr)
 	assert.NoError(t, err)
@@ -1064,7 +1064,7 @@ func TestStaker_Get_FullFlow(t *testing.T) {
 	assert.Equal(t, big.NewInt(0), validator.LockedVET)
 	assert.Equal(t, big.NewInt(0), validator.Weight)
 
-	_, _, err = staker.Housekeep(period + CooldownPeriod.Get())
+	_, err = staker.Housekeep(period + CooldownPeriod.Get())
 	assert.NoError(t, err)
 	validator, err = staker.Get(addr)
 	assert.NoError(t, err)
@@ -1104,7 +1104,7 @@ func TestStaker_Get_FullFlow_Renewal_On(t *testing.T) {
 	assert.Equal(t, stake, validator.Weight)
 
 	// housekeep the validator
-	_, _, err = staker.Housekeep(period)
+	_, err = staker.Housekeep(period)
 	assert.NoError(t, err)
 	validator, err = staker.Get(addr)
 	assert.NoError(t, err)
@@ -1157,7 +1157,7 @@ func TestStaker_Get_FullFlow_Renewal_On_Then_Off(t *testing.T) {
 	assert.NoError(t, err)
 
 	// housekeep the validator
-	_, _, err = staker.Housekeep(period)
+	_, err = staker.Housekeep(period)
 	assert.NoError(t, err)
 	validator, err = staker.Get(addr)
 	assert.NoError(t, err)
@@ -1175,7 +1175,7 @@ func TestStaker_Get_FullFlow_Renewal_On_Then_Off(t *testing.T) {
 	assert.NoError(t, staker.SignalExit(addr, addr))
 
 	// housekeep the validator
-	_, _, err = staker.Housekeep(period * 2)
+	_, err = staker.Housekeep(period * 2)
 	assert.NoError(t, err)
 	validator, err = staker.Get(addr)
 	assert.NoError(t, err)
@@ -1379,7 +1379,7 @@ func TestStaker_Initialise(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	transitioned, err := staker.Transition(0)
+	transitioned, err := staker.transition(0)
 	assert.NoError(t, err) // should succeed
 	assert.True(t, transitioned)
 	// should be able to add validations after initialisation
@@ -1413,7 +1413,7 @@ func TestStaker_Housekeep_TooEarly(t *testing.T) {
 	_, err = staker.activateNextValidation(0, getTestMaxLeaderSize(staker.params))
 	assert.NoError(t, err)
 
-	_, _, err = staker.Housekeep(0)
+	_, err = staker.Housekeep(0)
 	assert.NoError(t, err)
 	validator, err := staker.Get(addr1)
 	assert.NoError(t, err)
@@ -1507,7 +1507,7 @@ func TestStaker_Housekeep_ExitOne(t *testing.T) {
 	assert.NoError(t, err)
 
 	// first should be on cooldown
-	_, _, err = staker.Housekeep(period)
+	_, err = staker.Housekeep(period)
 	assert.NoError(t, err)
 	validator, err := staker.Get(addr1)
 	assert.NoError(t, err)
@@ -1525,7 +1525,7 @@ func TestStaker_Housekeep_ExitOne(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).Mul(stake, big.NewInt(2)), totalLocked)
 	assert.Equal(t, big.NewInt(0).Mul(stake, big.NewInt(2)), totalWeight)
 
-	_, _, err = staker.Housekeep(period + CooldownPeriod.Get())
+	_, err = staker.Housekeep(period + CooldownPeriod.Get())
 	assert.NoError(t, err)
 	validator, err = staker.Get(addr1)
 	assert.NoError(t, err)
@@ -1588,7 +1588,7 @@ func TestStaker_Housekeep_Cooldown(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).Mul(stake, big.NewInt(3)), totalWeight)
 
 	// housekeep and exit validator 1
-	_, _, err = staker.Housekeep(period)
+	_, err = staker.Housekeep(period)
 	assert.NoError(t, err)
 	validator, err := staker.Get(addr1)
 	assert.NoError(t, err)
@@ -1605,7 +1605,7 @@ func TestStaker_Housekeep_Cooldown(t *testing.T) {
 	assert.Equal(t, 1, totalLocked.Sign())
 
 	// housekeep and exit validator 2
-	_, _, err = staker.Housekeep(period + EpochLength.Get())
+	_, err = staker.Housekeep(period + EpochLength.Get())
 	assert.NoError(t, err)
 	validator, err = staker.Get(addr2)
 	assert.NoError(t, err)
@@ -1615,7 +1615,7 @@ func TestStaker_Housekeep_Cooldown(t *testing.T) {
 	assert.Equal(t, big.NewInt(0), validator.WithdrawableVET)
 
 	// housekeep and exit validator 3
-	_, _, err = staker.Housekeep(period + EpochLength.Get()*2)
+	_, err = staker.Housekeep(period + EpochLength.Get()*2)
 	assert.NoError(t, err)
 
 	totalLocked, totalWeight, err = staker.LockedVET()
@@ -1658,7 +1658,7 @@ func TestStaker_Housekeep_CooldownToExited(t *testing.T) {
 	err = staker.SignalExit(addr3, addr3)
 	assert.NoError(t, err)
 
-	_, _, err = staker.Housekeep(period)
+	_, err = staker.Housekeep(period)
 	assert.NoError(t, err)
 	validator, err := staker.Get(addr1)
 	assert.NoError(t, err)
@@ -1667,7 +1667,7 @@ func TestStaker_Housekeep_CooldownToExited(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, validation.StatusActive, validator.Status)
 
-	_, _, err = staker.Housekeep(period + EpochLength.Get())
+	_, err = staker.Housekeep(period + EpochLength.Get())
 	assert.NoError(t, err)
 	validator, err = staker.Get(addr1)
 	assert.NoError(t, err)
@@ -1705,7 +1705,7 @@ func TestStaker_Housekeep_ExitOrder(t *testing.T) {
 	err = staker.SignalExit(addr3, addr3)
 	assert.NoError(t, err)
 
-	_, _, err = staker.Housekeep(period)
+	_, err = staker.Housekeep(period)
 	assert.NoError(t, err)
 	validator2, err := staker.Get(addr2)
 	assert.NoError(t, err)
@@ -1719,12 +1719,12 @@ func TestStaker_Housekeep_ExitOrder(t *testing.T) {
 	assert.Equal(t, validation.StatusActive, validator1.Status)
 
 	// renew validator 1 for next period
-	_, _, err = staker.Housekeep(period * 2)
+	_, err = staker.Housekeep(period * 2)
 	assert.NoError(t, err)
 	assert.NoError(t, staker.SignalExit(addr1, addr1))
 
 	// housekeep -> validator 3 placed intention to leave first
-	_, _, err = staker.Housekeep(period * 3)
+	_, err = staker.Housekeep(period * 3)
 	assert.NoError(t, err)
 	validator3, err = staker.Get(addr3)
 	assert.NoError(t, err)
@@ -1735,7 +1735,7 @@ func TestStaker_Housekeep_ExitOrder(t *testing.T) {
 	assert.Equal(t, validation.StatusActive, validator1.Status)
 
 	// housekeep -> validator 1 waited 1 epoch after validator 3
-	_, _, err = staker.Housekeep(period*3 + EpochLength.Get())
+	_, err = staker.Housekeep(period*3 + EpochLength.Get())
 	assert.NoError(t, err)
 	validator1, err = staker.Get(addr1)
 	assert.NoError(t, err)
@@ -1759,7 +1759,7 @@ func TestStaker_Housekeep_RecalculateIncrease(t *testing.T) {
 	assert.NoError(t, err)
 
 	// housekeep half way through the period, validator's locked vet should not change
-	_, _, err = staker.Housekeep(period / 2)
+	_, err = staker.Housekeep(period / 2)
 	assert.NoError(t, err)
 	validator, err := staker.Get(addr1)
 	assert.NoError(t, err)
@@ -1768,7 +1768,7 @@ func TestStaker_Housekeep_RecalculateIncrease(t *testing.T) {
 	assert.Equal(t, big.NewInt(1), validator.QueuedVET)
 	assert.Equal(t, stake, validator.Weight)
 
-	_, _, err = staker.Housekeep(period)
+	_, err = staker.Housekeep(period)
 	assert.NoError(t, err)
 	validator, err = staker.Get(addr1)
 	assert.NoError(t, err)
@@ -1798,7 +1798,7 @@ func TestStaker_Housekeep_RecalculateDecrease(t *testing.T) {
 	assert.NoError(t, err)
 
 	block := uint32(360) * 24 * 13
-	_, _, err = staker.Housekeep(block)
+	_, err = staker.Housekeep(block)
 	assert.NoError(t, err)
 	validator, err := staker.Get(addr1)
 	assert.NoError(t, err)
@@ -1808,7 +1808,7 @@ func TestStaker_Housekeep_RecalculateDecrease(t *testing.T) {
 	assert.Equal(t, decrease, validator.PendingUnlockVET)
 
 	block = uint32(360) * 24 * 15
-	_, _, err = staker.Housekeep(block)
+	_, err = staker.Housekeep(block)
 	assert.NoError(t, err)
 	validator, err = staker.Get(addr1)
 	assert.NoError(t, err)
@@ -1836,7 +1836,7 @@ func TestStaker_Housekeep_DecreaseThenWithdraw(t *testing.T) {
 	assert.NoError(t, err)
 
 	block := uint32(360) * 24 * 13
-	_, _, err = staker.Housekeep(block)
+	_, err = staker.Housekeep(block)
 	assert.NoError(t, err)
 	validator, err := staker.Get(addr1)
 	assert.NoError(t, err)
@@ -1846,7 +1846,7 @@ func TestStaker_Housekeep_DecreaseThenWithdraw(t *testing.T) {
 	assert.Equal(t, validator.PendingUnlockVET, big.NewInt(1))
 
 	block = uint32(360) * 24 * 15
-	_, _, err = staker.Housekeep(block)
+	_, err = staker.Housekeep(block)
 	assert.NoError(t, err)
 	validator, err = staker.Get(addr1)
 	assert.NoError(t, err)
@@ -1903,7 +1903,7 @@ func TestStaker_DecreaseActive_DecreaseMultipleTimes(t *testing.T) {
 	assert.Equal(t, stake, validator.LockedVET)
 	assert.Equal(t, validator.PendingUnlockVET, big.NewInt(2))
 
-	_, _, err = staker.Housekeep(period)
+	_, err = staker.Housekeep(period)
 	assert.NoError(t, err)
 	validator, err = staker.Get(addr1)
 	assert.NoError(t, err)
@@ -1931,13 +1931,13 @@ func TestStaker_Housekeep_Cannot_Exit_If_It_Breaks_Finality(t *testing.T) {
 	assert.NoError(t, err)
 
 	exitBlock := uint32(360) * 24 * 15
-	_, _, err = staker.Housekeep(exitBlock)
+	_, err = staker.Housekeep(exitBlock)
 	assert.NoError(t, err)
 	validator, err := staker.Get(addr1)
 	assert.NoError(t, err)
 	assert.Equal(t, validation.StatusExit, validator.Status)
 
-	_, _, err = staker.Housekeep(exitBlock + 8640)
+	_, err = staker.Housekeep(exitBlock + 8640)
 	assert.NoError(t, err)
 	validator, err = staker.Get(addr1)
 	assert.NoError(t, err)
@@ -1952,7 +1952,7 @@ func TestStaker_Housekeep_Cannot_Exit_If_It_Breaks_Finality(t *testing.T) {
 	_, err = staker.activateNextValidation(exitBlock+8640, getTestMaxLeaderSize(staker.params))
 	assert.NoError(t, err)
 
-	_, _, err = staker.Housekeep(exitBlock + 8640 + 360)
+	_, err = staker.Housekeep(exitBlock + 8640 + 360)
 	assert.NoError(t, err)
 	validator, err = staker.Get(addr1)
 	assert.NoError(t, err)
@@ -2030,7 +2030,7 @@ func TestStaker_Housekeep_Adds_Queued_Validators_Up_To_Limit(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).String(), leaderGroupSize.String())
 
 	block := uint32(360) * 24 * 13
-	_, _, err = staker.Housekeep(block)
+	_, err = staker.Housekeep(block)
 	assert.NoError(t, err)
 	validator, err := staker.Get(addr1)
 	assert.NoError(t, err)
@@ -2082,7 +2082,7 @@ func TestStaker_IncreaseStake_Withdraw(t *testing.T) {
 	err := staker.AddValidation(addr1, addr1, period, stake)
 	assert.NoError(t, err)
 
-	_, _, err = staker.Housekeep(period)
+	_, err = staker.Housekeep(period)
 	assert.NoError(t, err)
 
 	val, err := staker.Get(addr1)
@@ -2148,7 +2148,7 @@ func TestStaker_GetCompletedPeriods(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(0), periods)
 
-	_, _, err = staker.Housekeep(period)
+	_, err = staker.Housekeep(period)
 	assert.NoError(t, err)
 
 	periods, err = staker.GetCompletedPeriods(proposerAddr)
@@ -2185,7 +2185,7 @@ func TestStaker_MultipleUpdates_CorrectWithdraw(t *testing.T) {
 	assert.Equal(t, validation.StatusQueued, validator.Status)
 
 	// 1st STAKING PERIOD
-	_, _, err = staker.Housekeep(period)
+	_, err = staker.Housekeep(period)
 	assert.NoError(t, err)
 
 	validator, err = staker.Get(acc)
@@ -2214,7 +2214,7 @@ func TestStaker_MultipleUpdates_CorrectWithdraw(t *testing.T) {
 	assert.NoError(t, staker.IncreaseStake(acc, acc, fiveHundred))
 
 	// 2nd STAKING PERIOD
-	_, _, err = staker.Housekeep(period * 2)
+	_, err = staker.Housekeep(period * 2)
 	assert.NoError(t, err)
 	validator, err = staker.Get(acc)
 	assert.NoError(t, err)
@@ -2229,7 +2229,7 @@ func TestStaker_MultipleUpdates_CorrectWithdraw(t *testing.T) {
 	assert.NoError(t, staker.SignalExit(acc, acc))
 
 	// EXITED
-	_, _, err = staker.Housekeep(period * 3)
+	_, err = staker.Housekeep(period * 3)
 	assert.NoError(t, err)
 
 	validator, err = staker.Get(acc)
@@ -2359,7 +2359,7 @@ func Test_Validator_Decrease_Exit_Withdraw(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Housekeep, should exit the validator
-	_, _, err = staker.Housekeep(LowStakingPeriod.Get())
+	_, err = staker.Housekeep(LowStakingPeriod.Get())
 	assert.NoError(t, err)
 
 	validator, err := staker.Get(acc)
@@ -2430,7 +2430,7 @@ func Test_Validator_IncreaseDecrease_Combinations(t *testing.T) {
 	assert.Equal(t, MinStake, withdraw1, "withdraw should be 0 since we are withdrawing from pending locked")
 
 	// Housekeep, should move pending locked to locked, and pending withdraw to withdrawable
-	_, _, err = staker.Housekeep(LowStakingPeriod.Get())
+	_, err = staker.Housekeep(LowStakingPeriod.Get())
 	assert.NoError(t, err)
 
 	// Withdraw again

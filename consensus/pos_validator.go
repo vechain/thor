@@ -19,7 +19,6 @@ func (c *Consensus) validateStakingProposer(
 	header *block.Header,
 	parent *block.Header,
 	staker *stakerContract.Staker,
-	providedLeaders map[thor.Address]*validation.Validation,
 ) error {
 	signer, err := header.Signer()
 	if err != nil {
@@ -31,28 +30,20 @@ func (c *Consensus) validateStakingProposer(
 	if err != nil {
 		return err
 	}
-
 	var leaders map[thor.Address]*validation.Validation
-	if entry, ok := c.validatorsCache.Get(parent.ID()); ok {
-		possiblyLeaders, ok := entry.(*map[thor.Address]*validation.Validation)
-		if ok {
-			leaders = *possiblyLeaders
-		} else {
-			leaders, err = staker.LeaderGroup()
-			if err != nil {
-				return err
-			}
-		}
-	} else {
-		if len(providedLeaders) > 0 {
-			leaders = providedLeaders
-		} else {
-			leaders, err = staker.LeaderGroup()
-			if err != nil {
-				return err
-			}
+	if cached, ok := c.validatorsCache.Get(header.ParentID()); ok {
+		if cachedLeaders, ok := cached.(map[thor.Address]*validation.Validation); ok {
+			leaders = cachedLeaders
 		}
 	}
+	// not cached
+	if len(leaders) == 0 {
+		leaders, err = staker.LeaderGroup()
+		if err != nil {
+			return consensusError(fmt.Sprintf("pos - cannot get leader group: %v", err))
+		}
+	}
+
 	sched, err := pos.NewScheduler(signer, leaders, parent.Number(), parent.Timestamp(), seed)
 	if err != nil {
 		return consensusError(fmt.Sprintf("pos - block signer invalid: %v %v", signer, err))
@@ -77,17 +68,12 @@ func (c *Consensus) validateStakingProposer(
 		return consensusError(fmt.Sprintf("pos - stake beneficiary mismatch: want %v, have %v", *validator.Beneficiary, header.Beneficiary()))
 	}
 
-	hasUpdates := false
 	for addr, online := range updates {
-		updated, err := staker.SetOnline(addr, header.Number(), online)
-		if err != nil {
+		if err := staker.SetOnline(addr, header.Number(), online); err != nil {
 			return err
 		}
-		if updated {
-			hasUpdates = true
-		}
 	}
-	if !hasUpdates {
+	if len(updates) == 0 {
 		c.validatorsCache.Add(header.ID(), leaders)
 	}
 
