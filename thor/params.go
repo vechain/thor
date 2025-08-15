@@ -72,5 +72,5 @@ var (
 	InitialCurveFactor               = big.NewInt(76800)
 
 	EnergyGrowthRate      = big.NewInt(5000000000) // WEI THOR per token(VET) per second. about 0.000432 THOR per token per day.
-	NumberOfBlocksPerYear = big.NewInt(3153600)    // number of blocks per year, non leap
+	NumberOfBlocksPerYear = big.NewInt(3153600)    // number of blocks per year, non leap (365 days)
 )
