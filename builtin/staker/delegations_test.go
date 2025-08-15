@@ -380,7 +380,7 @@ func Test_Delegator_AutoRenew_ValidatorExits(t *testing.T) {
 	assert.Equal(t, stake, aggregation.LockedVET)
 
 	// When the validator signals an exit
-	assert.NoError(t, staker.SignalExit(validator.ID, validator.Endorsor))
+	assert.NoError(t, staker.SignalExit(validator.ID, validator.Endorser))
 
 	// And the next staking period is over
 	_, _, err = staker.Housekeep(validator.Period * 2)
@@ -462,8 +462,8 @@ func Test_Delegator_Queued_Weight(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).String(), queuedWeightBefore.String())
 
 	node := datagen.RandAddress()
-	endorsor := datagen.RandAddress()
-	err = staker.AddValidation(node, endorsor, uint32(360)*24*15, validatorStake)
+	endorser := datagen.RandAddress()
+	err = staker.AddValidation(node, endorser, uint32(360)*24*15, validatorStake)
 	assert.NoError(t, err)
 
 	validator, err := staker.Get(node)
@@ -655,7 +655,7 @@ func TestStaker_DelegationExitingVET(t *testing.T) {
 	assert.True(t, delegation.Started(validation))
 
 	assert.NoError(t, staker.SignalDelegationExit(delegationID))
-	assert.NoError(t, staker.SignalExit(*firstActive, validation.Endorsor))
+	assert.NoError(t, staker.SignalExit(*firstActive, validation.Endorser))
 
 	_, _, err = staker.Housekeep(MediumStakingPeriod.Get() * 2)
 	assert.NoError(t, err)
