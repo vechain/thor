@@ -278,7 +278,7 @@ func (ts *TestSequence) ActivateNext(block uint32) *TestSequence {
 }
 
 func (ts *TestSequence) Housekeep(block uint32) *TestSequence {
-	_, _, err := ts.staker.Housekeep(block)
+	_, err := ts.staker.Housekeep(block)
 	assert.NoError(ts.t, err, "failed to perform housekeeping at block %d", block)
 	return ts
 }

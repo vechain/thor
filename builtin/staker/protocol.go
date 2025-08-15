@@ -8,13 +8,12 @@ package staker
 import (
 	"fmt"
 
-	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
 )
 
 type Status struct {
-	Active      bool                                    // indicates if the staker contract is currently active
-	LeaderGroup map[thor.Address]*validation.Validation // the current leader group, if housekeeping performed updates
+	Active  bool // indicates if the staker contract is currently active
+	Updates bool // indicates if there are updates to the staker contract
 }
 
 // EvaluateOrUpdate checks the status of the staker contract and updates its state based on the current block number.
@@ -29,9 +28,7 @@ func (s *Staker) EvaluateOrUpdate(forkConfig *thor.ForkConfig, current uint32) (
 
 	var err error
 	var activated bool
-	status := &Status{
-		LeaderGroup: make(map[thor.Address]*validation.Validation),
-	}
+	status := &Status{}
 
 	// check if the staker contract is active
 	status.Active, err = s.IsPoSActive()
@@ -47,12 +44,13 @@ func (s *Staker) EvaluateOrUpdate(forkConfig *thor.ForkConfig, current uint32) (
 		}
 		if activated {
 			status.Active = true
+			status.Updates = true
 		}
 	}
 
 	// perform housekeeping if the staker contract is active
 	if status.Active && !activated {
-		_, status.LeaderGroup, err = s.Housekeep(current)
+		status.Updates, err = s.Housekeep(current)
 		if err != nil {
 			return nil, err
 		}

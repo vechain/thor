@@ -94,7 +94,7 @@ func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipValidation boo
 			return nil, err
 		}
 		if dPosStatus.Active {
-			err = c.validateStakingProposer(header, parentSummary.Header, staker, dPosStatus.LeaderGroup)
+			err = c.validateStakingProposer(header, parentSummary.Header, staker)
 		} else {
 			_, err = c.validateAuthorityProposer(header, parentSummary.Header, state)
 		}

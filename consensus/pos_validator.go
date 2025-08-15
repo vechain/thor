@@ -19,7 +19,6 @@ func (c *Consensus) validateStakingProposer(
 	header *block.Header,
 	parent *block.Header,
 	staker *stakerContract.Staker,
-	providedLeaders map[thor.Address]*validation.Validation,
 ) error {
 	signer, err := header.Signer()
 	if err != nil {
@@ -32,11 +31,13 @@ func (c *Consensus) validateStakingProposer(
 		return err
 	}
 	var leaders map[thor.Address]*validation.Validation
-	if len(providedLeaders) > 0 {
-		leaders = providedLeaders
-	} else if cached, ok := c.validatorsCache.Get(header.ParentID()); ok {
-		leaders = (cached).(map[thor.Address]*validation.Validation)
-	} else {
+	if cached, ok := c.validatorsCache.Get(header.ParentID()); ok {
+		if cachedLeaders, ok := cached.(map[thor.Address]*validation.Validation); ok {
+			leaders = cachedLeaders
+		}
+	}
+	// not cached
+	if len(leaders) == 0 {
 		leaders, err = staker.LeaderGroup()
 		if err != nil {
 			return consensusError(fmt.Sprintf("pos - cannot get leader group: %v", err))

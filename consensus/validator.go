@@ -37,6 +37,9 @@ func (c *Consensus) validate(
 	if err != nil {
 		return nil, nil, err
 	}
+	if dPosStatus.Updates {
+		c.validatorsCache.Remove(parent.ID())
+	}
 
 	if err := c.validateBlockHeader(header, parent, nowTimestamp); err != nil {
 		return nil, nil, err
@@ -44,7 +47,7 @@ func (c *Consensus) validate(
 
 	var candidates *poa.Candidates
 	if dPosStatus.Active {
-		err = c.validateStakingProposer(header, parent, staker, dPosStatus.LeaderGroup)
+		err = c.validateStakingProposer(header, parent, staker)
 	} else {
 		candidates, err = c.validateAuthorityProposer(header, parent, state)
 	}
