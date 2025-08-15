@@ -301,7 +301,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 			if len(result) > 0 {
 				lastElem := result[len(result)-1]
 				if errorStr, ok := lastElem.(string); ok {
-					assert.Equal(t, tc.err, errorStr)
+					assert.Contains(t, errorStr, tc.err)
 				}
 			}
 
