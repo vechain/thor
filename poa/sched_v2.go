@@ -84,7 +84,7 @@ func NewSchedulerV2(
 // Schedule to determine time of the proposer to produce a block, according to `nowTime`.
 // `newBlockTime` is promised to be >= nowTime and > parentBlockTime
 func (s *SchedulerV2) Schedule(nowTime uint64) (newBlockTime uint64) {
-	const T = thor.BlockInterval
+	T := thor.BlockInterval
 
 	newBlockTime = s.parentBlockTime + T
 	if nowTime > newBlockTime {

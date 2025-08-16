@@ -6,7 +6,6 @@
 package testchain
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -22,7 +21,6 @@ import (
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/builtin/params"
-	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
@@ -114,13 +112,11 @@ func NewIntegrationTestChainWithGenesis(gene *genesis.Genesis, forkConfig *thor.
 	db := muxdb.NewMem()
 	st := state.New(db, trie.Root{})
 
-	prm := params.New(thor.BytesToAddress([]byte("params")), st)
+	thor.SetConfig(thor.Config{
+		EpochLength: epochLength,
+	})
 
-	staker.EpochLength = solidity.NewConfigVariable("epoch-length", staker.EpochLength.Get())
-	// write storage override, then construct staker:
-	var be4 [4]byte
-	binary.BigEndian.PutUint32(be4[:], epochLength)
-	st.SetStorage(builtin.Staker.Address, thor.BytesToBytes32([]byte("epoch-length")), thor.BytesToBytes32(be4[:]))
+	prm := params.New(thor.BytesToAddress([]byte("params")), st)
 	_ = staker.New(builtin.Staker.Address, st, prm, nil)
 
 	// Create the state manager (Stater) with the initialized database.

@@ -182,11 +182,11 @@ func (v *Validation) exit() *delta.Exit {
 }
 
 // CalculateWithdrawableVET returns the validator withdrawable amount for a given block + period
-func (v *Validation) CalculateWithdrawableVET(currentBlock uint32, cooldownPeriod uint32) *big.Int {
+func (v *Validation) CalculateWithdrawableVET(currentBlock uint32) *big.Int {
 	withdrawAmount := big.NewInt(0).Set(v.WithdrawableVET)
 
 	// validator has exited and waited for the cooldown period
-	if v.ExitBlock != nil && *v.ExitBlock+cooldownPeriod <= currentBlock {
+	if v.ExitBlock != nil && *v.ExitBlock+thor.CooldownPeriod <= currentBlock {
 		withdrawAmount = withdrawAmount.Add(withdrawAmount, v.CooldownVET)
 	}
 

@@ -19,10 +19,9 @@ type Health struct {
 	p2p  *comm.Communicator
 }
 
-const (
-	defaultBlockTolerance = time.Duration(2*thor.BlockInterval) * time.Second // 2 blocks tolerance
-	defaultMinPeerCount   = 2
-)
+const defaultMinPeerCount = 2
+
+var defaultBlockTolerance = time.Duration(2*thor.BlockInterval) * time.Second // 2 blocks tolerance
 
 func New(repo *chain.Repository, p2p *comm.Communicator) *Health {
 	return &Health{

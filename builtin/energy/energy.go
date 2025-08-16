@@ -335,8 +335,6 @@ func (e *Energy) CalculateRewards(staker staker) (*big.Int, error) {
 	sqrtStake := new(big.Int).Sqrt(new(big.Int).Div(totalStaked, bigE18))
 	sqrtStake.Mul(sqrtStake, bigE18)
 
-	blocksPerYear := thor.NumberOfBlocksPerYear
-
 	curveFactor, err := e.params.Get(thor.KeyCurveFactor)
 	if err != nil {
 		return nil, err
@@ -349,6 +347,6 @@ func (e *Energy) CalculateRewards(staker staker) (*big.Int, error) {
 	reward := big.NewInt(1)
 	reward.Mul(reward, curveFactor)
 	reward.Mul(reward, sqrtStake)
-	reward.Div(reward, blocksPerYear)
+	reward.Div(reward, thor.NumberOfBlocksPerYear)
 	return reward, nil
 }

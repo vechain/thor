@@ -71,7 +71,7 @@ func (s *SchedulerV1) whoseTurn(t uint64) Proposer {
 // Schedule to determine time of the proposer to produce a block, according to `nowTime`.
 // `newBlockTime` is promised to be >= nowTime and > parentBlockTime
 func (s *SchedulerV1) Schedule(nowTime uint64) (newBlockTime uint64) {
-	const T = thor.BlockInterval
+	T := thor.BlockInterval
 
 	newBlockTime = s.parentBlockTime + T
 

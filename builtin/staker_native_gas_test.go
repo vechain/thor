@@ -48,7 +48,7 @@ func preTestAddValidation(acc thor.Address) TestHook {
 		executeNativeFunction(t, setup, "native_addValidation", []any{
 			acc,
 			acc,
-			staker.LowStakingPeriod.Get(),
+			thor.LowStakingPeriod,
 			stake,
 		})
 	}
@@ -109,7 +109,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		{
 			function:    "native_addValidation",
 			expectedGas: 66600,
-			args:        []any{account1, account1, staker.LowStakingPeriod.Get(), staker.MinStake},
+			args:        []any{account1, account1, thor.LowStakingPeriod, staker.MinStake},
 			description: "Add a new validator (not implemented yet)",
 		},
 		{
