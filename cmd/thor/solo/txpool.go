@@ -6,10 +6,12 @@
 package solo
 
 import (
+	"errors"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/event"
 
+	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -52,7 +54,8 @@ func (o *OnDemandTxPool) AddLocal(newTx *tx.Transaction) error {
 
 	executable, err := o.engine.IsExecutable(newTx)
 	if err != nil {
-		return err
+		// simulate API call for adding a transaction that gets rejected
+		return restutil.Forbidden(errors.New("tx rejected: " + err.Error()))
 	}
 
 	o.goes.Go(func() {

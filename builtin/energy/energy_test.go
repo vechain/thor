@@ -179,6 +179,34 @@ func TestEnergyGrowth(t *testing.T) {
 	assert.Equal(t, x, bal1)
 }
 
+func TestCalcEnergyCappedAtStopTime(t *testing.T) {
+	st := state.New(muxdb.NewMem(), trie.Root{})
+
+	acc := thor.BytesToAddress([]byte("a1"))
+
+	st.SetEnergy(acc, &big.Int{}, 10)
+	vetBal := big.NewInt(1e18)
+	st.SetBalance(acc, vetBal)
+
+	p := params.New(thor.BytesToAddress([]byte("par")), st)
+	eng := New(thor.Address{}, st, 1000, p)
+
+	// Set stop time at 500
+	eng.blockTime = 500
+	assert.NoError(t, eng.StopEnergyGrowth())
+
+	// Later time should not accrue further energy beyond stop time
+	eng.blockTime = 2000
+	bal, err := eng.Get(acc)
+	assert.NoError(t, err)
+
+	// growth should be (500 - 10) * rate * balance / 1e18
+	expected := new(big.Int).Mul(thor.EnergyGrowthRate, vetBal)
+	expected.Mul(expected, new(big.Int).SetUint64(500-10))
+	expected.Div(expected, big.NewInt(1e18))
+	assert.Equal(t, expected, bal)
+}
+
 func TestGetEnergyGrowthStopTime(t *testing.T) {
 	st := state.New(muxdb.NewMem(), trie.Root{})
 	p := params.New(thor.BytesToAddress([]byte("params")), st)
@@ -196,9 +224,9 @@ func TestGetEnergyGrowthStopTime(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(10), stopTime)
 
-	// set multiple times should return error
+	// set multiple times should return nil
 	err = eng.StopEnergyGrowth()
-	assert.Error(t, err, "energy growth has already stopped")
+	assert.NoError(t, err)
 }
 
 func TestAddIssued(t *testing.T) {
@@ -264,11 +292,6 @@ func TestCalculateRewards(t *testing.T) {
 	reward, err := eng.CalculateRewards(mockStaker)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(121765601217656012), reward)
-
-	leapEng := New(thor.BytesToAddress([]byte("eng")), st, 69638400, p)
-	reward, err = leapEng.CalculateRewards(mockStaker)
-	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(121432908318154219), reward)
 }
 
 func TestDistributeRewards(t *testing.T) {

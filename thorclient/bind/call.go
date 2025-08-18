@@ -77,7 +77,7 @@ func (b *CallBuilder) Execute() (*api.CallResult, error) {
 	var res []*api.CallResult
 	res, err = b.op.contract.client.InspectClauses(body, thorclient.Revision(b.rev))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to inspect clauses (%s): %w", b.op.String(), err)
 	}
 
 	if len(res) != 1 {
@@ -86,7 +86,7 @@ func (b *CallBuilder) Execute() (*api.CallResult, error) {
 
 	result := res[0]
 	if result.Reverted {
-		message := "contract call reverted"
+		message := fmt.Sprintf("contract call reverted (%s)", b.op.String())
 		if result.Data != "" {
 			decoded, err := hexutil.Decode(result.Data)
 			if err != nil {
@@ -94,7 +94,7 @@ func (b *CallBuilder) Execute() (*api.CallResult, error) {
 			}
 			revertReason, err := UnpackRevert(decoded)
 			if err == nil {
-				message = fmt.Sprintf("contract call reverted: %s", revertReason)
+				message = fmt.Sprintf("%s: %s", message, revertReason)
 			}
 		}
 		return result, errors.New(message)

@@ -38,4 +38,9 @@ func TestBytes32(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, value, retrievedValue)
 	assert.Equal(t, ctx.charger.TotalGas(), thor.SloadGas)
+
+	bytes32.Set(nil, false)
+	retrievedValue, err = bytes32.Get()
+	assert.NoError(t, err)
+	assert.Equal(t, thor.Bytes32{}, retrievedValue)
 }

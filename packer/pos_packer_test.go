@@ -27,7 +27,7 @@ func TestFlow_Schedule_POS(t *testing.T) {
 	config.HAYABUSA_TP = 1
 	config.BLOCKLIST = math.MaxUint32
 
-	chain, err := testchain.NewWithFork(config)
+	chain, err := testchain.NewWithFork(config, 1)
 	assert.NoError(t, err)
 
 	// mint block 1: using PoA
@@ -108,10 +108,45 @@ func packAddValidatorBlock(t *testing.T, chain *testchain.Chain, interval uint64
 	vet = vet.Mul(vet, big.NewInt(1e18))
 
 	contract := chain.Contract(builtin.Staker.Address, builtin.Staker.ABI, genesis.DevAccounts()[0])
-	tx, err := contract.BuildTransaction("addValidator", vet, genesis.DevAccounts()[0].Address, uint32(360)*24*7)
+	tx, err := contract.BuildTransaction("addValidation", vet, genesis.DevAccounts()[0].Address, uint32(360)*24*7)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	packNext(t, chain, interval, tx)
+}
+
+func TestPacker_StopsEnergyAtHardfork(t *testing.T) {
+	cases := []struct {
+		name       string
+		hayabusa   uint32
+		expectStop bool
+	}{
+		{"stops at hardfork block", 2, true},
+		{"does not stop without fork", math.MaxUint32, false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := thor.SoloFork
+			cfg.HAYABUSA = tc.hayabusa
+			cfg.HAYABUSA_TP = 1
+
+			chain, err := testchain.NewWithFork(&cfg, 1)
+			assert.NoError(t, err)
+
+			packNext(t, chain, thor.BlockInterval)
+			packNext(t, chain, thor.BlockInterval)
+
+			best := chain.Repo().BestBlockSummary()
+			st := chain.Stater().NewState(best.Root())
+			stop, err := builtin.Energy.Native(st, best.Header.Timestamp()).GetEnergyGrowthStopTime()
+			assert.NoError(t, err)
+			if tc.expectStop {
+				assert.Equal(t, best.Header.Timestamp(), stop)
+			} else {
+				assert.Equal(t, uint64(math.MaxUint64), stop)
+			}
+		})
+	}
 }

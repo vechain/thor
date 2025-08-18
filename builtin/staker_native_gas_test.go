@@ -22,8 +22,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/vechain/thor/v2/state"
-
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -33,6 +31,7 @@ import (
 	"github.com/vechain/thor/v2/builtin/gascharger"
 	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
@@ -43,13 +42,13 @@ import (
 
 type TestHook func(*testing.T, *testSetup)
 
-func preTestAddValidator(acc thor.Address) TestHook {
+func preTestAddValidation(acc thor.Address) TestHook {
 	stake := big.NewInt(0).Mul(staker.MinStake, big.NewInt(2))
 	return func(t *testing.T, setup *testSetup) {
-		executeNativeFunction(t, setup, "native_addValidator", []any{
+		executeNativeFunction(t, setup, "native_addValidation", []any{
 			acc,
 			acc,
-			staker.LowStakingPeriod,
+			staker.LowStakingPeriod.Get(),
 			stake,
 		})
 	}
@@ -79,25 +78,25 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		// Basic read operations (no arguments)
 		{
 			function:    "native_totalStake",
-			expectedGas: 1400,
+			expectedGas: 400,
 			args:        []any{},
 			description: "Get total locked stake",
 		},
 		{
 			function:    "native_queuedStake",
-			expectedGas: 1400,
+			expectedGas: 400,
 			args:        []any{},
 			description: "Get total queued stake",
 		},
 		{
 			function:    "native_firstActive",
-			expectedGas: 1200,
+			expectedGas: 200,
 			args:        []any{},
 			description: "Get first active validator",
 		},
 		{
 			function:    "native_firstQueued",
-			expectedGas: 1200,
+			expectedGas: 200,
 			args:        []any{},
 			description: "Get first queued validator",
 		},
@@ -108,38 +107,52 @@ func TestStakerNativeGasCosts(t *testing.T) {
 			description: "Get delegator contract address",
 		},
 		{
-			function:    "native_addValidator",
-			expectedGas: 38200,
-			args:        []any{account1, account1, staker.LowStakingPeriod, staker.MinStake},
+			function:    "native_addValidation",
+			expectedGas: 66600,
+			args:        []any{account1, account1, staker.LowStakingPeriod.Get(), staker.MinStake},
 			description: "Add a new validator (not implemented yet)",
 		},
 		{
-			function:     "native_get",
-			expectedGas:  1400,
+			function:     "native_getValidatorStake",
+			expectedGas:  400,
 			args:         []any{account1},
-			description:  "Get validator by it's ID (not implemented yet)",
-			preTestHooks: []TestHook{preTestAddValidator(account1)},
+			description:  "Get validator stake by it's ID",
+			preTestHooks: []TestHook{preTestAddValidation(account1)},
+		},
+		{
+			function:     "native_getValidatorStatus",
+			expectedGas:  400,
+			args:         []any{account1},
+			description:  "Get validator status by it's ID",
+			preTestHooks: []TestHook{preTestAddValidation(account1)},
+		},
+		{
+			function:     "native_getValidatorPeriodDetails",
+			expectedGas:  400,
+			args:         []any{account1},
+			description:  "Get validator period details by it's ID",
+			preTestHooks: []TestHook{preTestAddValidation(account1)},
 		},
 		{
 			function:     "native_getWithdrawable",
-			expectedGas:  1400,
+			expectedGas:  400,
 			args:         []any{account1},
 			description:  "Get withdraw information for a validator",
-			preTestHooks: []TestHook{preTestAddValidator(account1)},
+			preTestHooks: []TestHook{preTestAddValidation(account1)},
 		},
 		{
 			function:     "native_next",
-			expectedGas:  1400,
+			expectedGas:  400,
 			args:         []any{account1},
 			description:  "Get next validator in the queue",
-			preTestHooks: []TestHook{preTestAddValidator(account1)},
+			preTestHooks: []TestHook{preTestAddValidation(account1)},
 		},
 		{
 			function:     "native_withdrawStake",
-			expectedGas:  47800,
+			expectedGas:  26400,
 			args:         []any{account1, account1},
 			description:  "Withdraw stake for a validator",
-			preTestHooks: []TestHook{preTestAddValidator(account1)},
+			preTestHooks: []TestHook{preTestAddValidation(account1)},
 		},
 		// {
 		// 	function:    "native_signalExit",
@@ -149,88 +162,108 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		// 		accToID(account1),
 		// 	},
 		// 	description:  "Signal exit for a validator",
-		// 	preTestHooks: []TestHook{preTestAddValidator(account1)},
+		// 	preTestHooks: []TestHook{preTestAddValidation(account1)},
 		// },
 		{
 			function:    "native_increaseStake",
-			expectedGas: 22200,
+			expectedGas: 21600,
 			args: []any{
 				account1,
 				account1,
 				staker.MinStake,
 			},
 			description:  "Increase stake for a validator",
-			preTestHooks: []TestHook{preTestAddValidator(account1)},
+			preTestHooks: []TestHook{preTestAddValidation(account1)},
 		},
 		{
 			function:    "native_decreaseStake",
-			expectedGas: 22200,
+			expectedGas: 21000,
 			args: []any{
 				account1,
 				account1,
 				staker.MinStake,
 			},
 			description:  "Decrease stake for a validator",
-			preTestHooks: []TestHook{preTestAddValidator(account1)},
+			preTestHooks: []TestHook{preTestAddValidation(account1)},
 		},
 		{
 			function:    "native_addDelegation",
-			expectedGas: 33000,
+			expectedGas: 32400,
 			args: []any{
 				account1,
 				staker.MinStake,
 				uint8(150),
 			},
 			description:  "Add delegation to a validator",
-			preTestHooks: []TestHook{preTestAddValidator(account1)},
+			preTestHooks: []TestHook{preTestAddValidation(account1)},
 		},
 		{
-			function:    "native_getDelegation",
-			expectedGas: 1800,
+			function:    "native_getDelegationStake",
+			expectedGas: 800,
 			args: []any{
-				thor.BytesToBytes32(big.NewInt(1).Bytes()), // IDs are incremental, starting at 1
+				big.NewInt(1), // IDs are incremental, starting at 1
 			},
-			description:  "Get delegation by ID",
-			preTestHooks: []TestHook{preTestAddValidator(account1), preTestAddDelegation(account1)},
+			description:  "Get delegation stake by ID",
+			preTestHooks: []TestHook{preTestAddValidation(account1), preTestAddDelegation(account1)},
+		},
+		{
+			function:    "native_getDelegationPeriodDetails",
+			expectedGas: 800,
+			args: []any{
+				big.NewInt(1), // IDs are incremental, starting at 1
+			},
+			description:  "Get delegation period details by ID",
+			preTestHooks: []TestHook{preTestAddValidation(account1), preTestAddDelegation(account1)},
 		},
 		{
 			function:    "native_withdrawDelegation",
-			expectedGas: 23000,
+			expectedGas: 22000,
 			args: []any{
-				thor.BytesToBytes32(big.NewInt(1).Bytes()), // IDs are incremental, starting at 1
+				big.NewInt(1), // IDs are incremental, starting at 1
 			},
 			description:  "Withdraw delegation from a validator",
-			preTestHooks: []TestHook{preTestAddValidator(account1), preTestAddDelegation(account1)},
+			preTestHooks: []TestHook{preTestAddValidation(account1), preTestAddDelegation(account1)},
 		},
 		// TODO: How can we mint thousands of blocks and perform housekeeping?
 		{
 			function:    "native_signalDelegationExit",
-			expectedGas: 2200,
+			expectedGas: 1200,
 			args: []any{
-				thor.BytesToBytes32(big.NewInt(1).Bytes()), // IDs are incremental, starting at 1
+				big.NewInt(1), // IDs are incremental, starting at 1
 			},
 			description:  "Update auto-renew setting for a delegation",
-			preTestHooks: []TestHook{preTestAddValidator(account1), preTestAddDelegation(account1)},
-			err:          "revert: delegation has not started yet, funds can be withdrawn",
+			preTestHooks: []TestHook{preTestAddValidation(account1), preTestAddDelegation(account1)},
+			err:          "delegation has not started yet, funds can be withdrawn",
 		},
 		{
 			function:    "native_getDelegatorsRewards",
-			expectedGas: 1000,
+			expectedGas: 200,
 			args: []any{
 				account1,
 				uint32(0),
 			},
 			description:  "Get rewards for a validator",
-			preTestHooks: []TestHook{preTestAddValidator(account1)},
+			preTestHooks: []TestHook{preTestAddValidation(account1)},
 		},
 		{
-			function:    "native_getValidatorTotals",
-			expectedGas: 1400,
+			function:    "native_getValidationTotals",
+			expectedGas: 600,
 			args: []any{
 				account1,
 			},
 			description:  "Get total stakes and weights and stake for a validator",
-			preTestHooks: []TestHook{preTestAddValidator(account1)},
+			preTestHooks: []TestHook{preTestAddValidation(account1)},
+		},
+		{
+			function:     "native_getValidatorsNum",
+			expectedGas:  400,
+			description:  "Get number of active and queued validators",
+			preTestHooks: []TestHook{preTestAddValidation(account1)},
+		},
+		{
+			function:    "native_issuance",
+			expectedGas: 400,
+			description: "Get issuance for the current block",
 		},
 	}
 
@@ -263,13 +296,12 @@ func TestStakerNativeGasCosts(t *testing.T) {
 
 			// Validate function executed successfully (no revert)
 			require.NotNil(t, result, "Function %s should return result", tc.function)
-			require.Greater(t, len(result), 0, "Function %s should return at least one value", tc.function)
 
 			// Check if last element is an error string (staker native functions return error as last element)
 			if len(result) > 0 {
 				lastElem := result[len(result)-1]
 				if errorStr, ok := lastElem.(string); ok {
-					assert.Equal(t, tc.err, errorStr)
+					assert.Contains(t, errorStr, tc.err)
 				}
 			}
 
@@ -338,7 +370,17 @@ func (s *testSetup) Xenv(method *abi.Method) *xenv.Environment {
 	)
 }
 
-func executeNativeFunction(t *testing.T, setup *testSetup, functionName string, args []any) []any {
+func executeNativeFunction(t *testing.T, setup *testSetup, functionName string, args []any) (result []any) {
+	defer func() {
+		if e := recover(); e != nil {
+			if revertErr, ok := e.(error); ok {
+				result = []any{revertErr.Error()}
+			} else {
+				panic(e) // re-throw the panic after handling it
+			}
+		}
+	}()
+
 	// Find the native function
 	stakerAbi := builtin.Staker.NativeABI()
 	method, found := stakerAbi.MethodByName(functionName)
@@ -355,7 +397,7 @@ func executeNativeFunction(t *testing.T, setup *testSetup, functionName string, 
 	require.NotNil(t, nativeMethod, "Native method is nil for %s", functionName)
 
 	// Execute the native function - this will trigger our test hook
-	result := run(setup.Xenv(nativeMethod))
+	result = run(setup.Xenv(nativeMethod))
 
 	return result
 }

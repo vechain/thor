@@ -6,10 +6,8 @@
 package energy
 
 import (
-	"errors"
 	"math"
 	"math/big"
-	"time"
 
 	"github.com/ethereum/go-ethereum/rlp"
 
@@ -211,7 +209,8 @@ func (e *Energy) StopEnergyGrowth() error {
 	if ts, err := e.GetEnergyGrowthStopTime(); err != nil {
 		return err
 	} else if ts != math.MaxUint64 {
-		return errors.New("energy growth has already stopped")
+		// We simply ignore multiple calls to this function
+		return nil
 	}
 
 	if err := e.state.EncodeStorage(e.addr, growthStopTimeKey, func() ([]byte, error) {
@@ -336,12 +335,7 @@ func (e *Energy) CalculateRewards(staker staker) (*big.Int, error) {
 	sqrtStake := new(big.Int).Sqrt(new(big.Int).Div(totalStaked, bigE18))
 	sqrtStake.Mul(sqrtStake, bigE18)
 
-	blockTime := time.Unix(int64(e.blockTime), 0)
-	isLeap := isLeapYear(blockTime.Year())
 	blocksPerYear := thor.NumberOfBlocksPerYear
-	if isLeap {
-		blocksPerYear = new(big.Int).Add(thor.NumberOfBlocksPerYear, big.NewInt(thor.SeederInterval))
-	}
 
 	curveFactor, err := e.params.Get(thor.KeyCurveFactor)
 	if err != nil {
@@ -357,14 +351,4 @@ func (e *Energy) CalculateRewards(staker staker) (*big.Int, error) {
 	reward.Mul(reward, sqrtStake)
 	reward.Div(reward, blocksPerYear)
 	return reward, nil
-}
-
-func isLeapYear(year int) bool {
-	if year%4 == 0 {
-		if year%100 == 0 {
-			return year%400 == 0
-		}
-		return true
-	}
-	return false
 }

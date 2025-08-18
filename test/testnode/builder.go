@@ -40,7 +40,7 @@ func (b *NodeBuilder) Build() (Node, error) {
 	// Create the chain first
 	chain := b.chain
 	if chain == nil {
-		chain, err = testchain.NewWithFork(&testchain.DefaultForkConfig)
+		chain, err = testchain.NewWithFork(&testchain.DefaultForkConfig, 180)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create default chain: %w", err)
 		}

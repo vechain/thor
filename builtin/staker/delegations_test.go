@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/v2/builtin/staker/delegation"
+	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
@@ -134,19 +135,22 @@ func Test_AddDelegator(t *testing.T) {
 
 	stake := big.NewInt(0).Set(MinStake)
 
-	validator := validators[0]
-	id1, err := staker.AddDelegation(validator.ID, stake, 255)
-	assert.NoError(t, err)
-	assert.False(t, id1.IsZero())
-	aggregation, err := staker.aggregationService.GetAggregation(validator.ID)
-	assert.NoError(t, err)
-	assert.Equal(t, aggregation.PendingVET, stake)
-	delegation, _, err := staker.GetDelegation(id1)
-	assert.NoError(t, err)
-	assert.Equal(t, stake, delegation.Stake)
-	assert.Equal(t, uint8(255), delegation.Multiplier)
-	assert.Equal(t, uint32(2), delegation.FirstIteration)
-	assert.Nil(t, delegation.LastIteration) // auto renew, so exit iteration is nil
+	id := big.NewInt(0)
+	validatorID := validators[0].ID
+
+	newTestSequence(t, staker).
+		AddDelegation(validatorID, stake, 255, id)
+
+	assertDelegation(t, staker, id).
+		IsStarted(false).
+		LastIteration(nil)
+
+	weightedStake := stakes.NewWeightedStake(stake, 255)
+	weightedStake.AddWeight(*validators[0].LockedVET)
+
+	assertAggregation(t, staker, validatorID).
+		PendingVET(stake).
+		PendingWeight(weightedStake.Weight())
 }
 
 func Test_AddDelegator_StakeRange(t *testing.T) {
@@ -158,7 +162,7 @@ func Test_AddDelegator_StakeRange(t *testing.T) {
 
 	// should NOT be able to stake greater than max stake
 	_, err = staker.AddDelegation(validators[1].ID, MaxStake, 255)
-	assert.ErrorContains(t, err, "validation's next period stake exceeds max stake")
+	assert.ErrorContains(t, err, "stake is out of range")
 
 	// should be able stake 1 VET
 	id1, err := staker.AddDelegation(validators[2].ID, big.NewInt(1), 255)
@@ -180,14 +184,14 @@ func Test_AddDelegator_StakeRange(t *testing.T) {
 
 	// should not be able to stake more than max stake
 	_, err = staker.AddDelegation(validator.ID, big.NewInt(1000000000000000000), 255)
-	assert.ErrorContains(t, err, "validation's next period stake exceeds max stake")
+	assert.ErrorContains(t, err, "stake is out of range")
 }
 
 func Test_AddDelegator_ValidatorNotFound(t *testing.T) {
 	staker, _ := newStaker(t, 75, 101, true)
 
 	_, err := staker.AddDelegation(thor.Address{}, delegationStake(), 255)
-	assert.ErrorContains(t, err, "validation not found")
+	assert.ErrorContains(t, err, "failed to get validator")
 }
 
 func Test_AddDelegator_ManyValidators(t *testing.T) {
@@ -226,7 +230,7 @@ func Test_Delegator_DisableAutoRenew_PendingLocked(t *testing.T) {
 
 	// Then the delegation can't signal an exit until it has started
 	assert.ErrorContains(t, staker.SignalDelegationExit(id), "delegation has not started yet")
-	_, _, err = staker.Housekeep(validator.Period)
+	_, err = staker.Housekeep(validator.Period)
 	assert.NoError(t, err)
 	assert.NoError(t, staker.SignalDelegationExit(id))
 	aggregation, err = staker.aggregationService.GetAggregation(validator.ID)
@@ -235,13 +239,12 @@ func Test_Delegator_DisableAutoRenew_PendingLocked(t *testing.T) {
 	assert.Equal(t, stake, aggregation.ExitingVET) // ExitingVET takes effect in next staking period
 
 	// When the staking period is completed
-	_, _, err = staker.Housekeep(validator.Period)
+	_, err = staker.Housekeep(validator.Period)
 	assert.NoError(t, err)
 	aggregation, err = staker.aggregationService.GetAggregation(validator.ID)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0), aggregation.LockedVET)  // LockedVET should be 0
 	assert.Equal(t, big.NewInt(0), aggregation.ExitingVET) // WithdrawableVET should be equal to the stake
-	assert.Equal(t, stake, aggregation.WithdrawableVET)    // WithdrawableVET should be equal to the stake
 
 	// And the delegation should be withdrawable
 	amount, err := staker.WithdrawDelegation(id)
@@ -319,6 +322,7 @@ func Test_Delegator_DisableAutoRenew_InAStakingPeriod(t *testing.T) {
 
 	weight := big.NewInt(0).Mul(stake, big.NewInt(255))
 	weight = big.NewInt(0).Quo(weight, big.NewInt(100))
+	weight = big.NewInt(0).Add(weight, validation.LockedVET)
 
 	queuedVet, queuedWeight, err := staker.QueuedStake()
 	assert.NoError(t, err)
@@ -326,7 +330,7 @@ func Test_Delegator_DisableAutoRenew_InAStakingPeriod(t *testing.T) {
 	assert.Equal(t, weight, queuedWeight)
 
 	// And the first staking period has occurred
-	_, _, err = staker.Housekeep(validator.Period)
+	_, err = staker.Housekeep(validator.Period)
 	assert.NoError(t, err)
 	aggregation, err := staker.aggregationService.GetAggregation(validator.ID)
 	assert.NoError(t, err)
@@ -349,11 +353,10 @@ func Test_Delegator_DisableAutoRenew_InAStakingPeriod(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).String(), queuedWeight.String())
 
 	// And the funds should be withdrawable after the next iteration
-	_, _, err = staker.Housekeep(2 * validator.Period)
+	_, err = staker.Housekeep(2 * validator.Period)
 	assert.NoError(t, err)
-	aggregation, err = staker.aggregationService.GetAggregation(validator.ID)
+	_, err = staker.aggregationService.GetAggregation(validator.ID)
 	assert.NoError(t, err)
-	assert.Equal(t, stake, aggregation.WithdrawableVET)
 	validation, err = staker.Get(validator.ID)
 	assert.NoError(t, err)
 	assert.Equal(t, validationStake, validation.LockedVET)
@@ -370,21 +373,20 @@ func Test_Delegator_AutoRenew_ValidatorExits(t *testing.T) {
 	assert.NoError(t, err)
 
 	// And the first staking period has occurred
-	_, _, err = staker.Housekeep(validator.Period)
+	_, err = staker.Housekeep(validator.Period)
 	assert.NoError(t, err)
 	aggregation, err := staker.aggregationService.GetAggregation(validator.ID)
 	assert.NoError(t, err)
 	assert.Equal(t, stake, aggregation.LockedVET)
 
 	// When the validator signals an exit
-	assert.NoError(t, staker.SignalExit(validator.Endorsor, validator.ID))
+	assert.NoError(t, staker.SignalExit(validator.ID, validator.Endorser))
 
 	// And the next staking period is over
-	_, _, err = staker.Housekeep(validator.Period * 2)
+	_, err = staker.Housekeep(validator.Period * 2)
 	assert.NoError(t, err)
-	aggregation, err = staker.aggregationService.GetAggregation(validator.ID)
+	_, err = staker.aggregationService.GetAggregation(validator.ID)
 	assert.NoError(t, err)
-	assert.Equal(t, stake, aggregation.WithdrawableVET)
 
 	// Then the funds should be withdrawable
 	amount, err := staker.WithdrawDelegation(id)
@@ -455,13 +457,13 @@ func Test_Delegator_Queued_Weight(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Equal(t, totalStaked, lockedVetBefore)
-	assert.Equal(t, big.NewInt(0).Mul(lockedVetBefore, big.NewInt(2)), lockedWeightBefore)
+	assert.Equal(t, lockedVetBefore, lockedWeightBefore)
 	assert.Equal(t, big.NewInt(0).String(), queuedVetBefore.String())
 	assert.Equal(t, big.NewInt(0).String(), queuedWeightBefore.String())
 
 	node := datagen.RandAddress()
-	endorsor := datagen.RandAddress()
-	err = staker.AddValidator(endorsor, node, uint32(360)*24*15, validatorStake)
+	endorser := datagen.RandAddress()
+	err = staker.AddValidation(node, endorser, uint32(360)*24*15, validatorStake)
 	assert.NoError(t, err)
 
 	validator, err := staker.Get(node)
@@ -488,7 +490,7 @@ func Test_Delegator_Queued_Weight_QueuedValidator_Withdraw(t *testing.T) {
 	staker, _ := newStaker(t, 0, 101, false)
 
 	validatorAddr := datagen.RandAddress()
-	err := staker.AddValidator(validatorAddr, validatorAddr, uint32(360)*24*15, MinStake)
+	err := staker.AddValidation(validatorAddr, validatorAddr, uint32(360)*24*15, MinStake)
 	assert.NoError(t, err)
 
 	initialQueuedVET, initialQueuedWeight, err := staker.QueuedStake()
@@ -505,7 +507,7 @@ func Test_Delegator_Queued_Weight_QueuedValidator_Withdraw(t *testing.T) {
 	expectedWeight = new(big.Int).Quo(expectedWeight, big.NewInt(100))
 
 	assert.Equal(t, new(big.Int).Add(initialQueuedVET, delegationStake), afterAddQueuedVET)
-	assert.Equal(t, new(big.Int).Add(initialQueuedWeight, expectedWeight), afterAddQueuedWeight)
+	assert.Equal(t, new(big.Int).Add(big.NewInt(0).Mul(initialQueuedWeight, big.NewInt(2)), expectedWeight), afterAddQueuedWeight)
 
 	withdrawnAmount, err := staker.WithdrawDelegation(delegationID)
 	assert.NoError(t, err)
@@ -542,6 +544,7 @@ func Test_Delegator_Queued_Weight_MultipleDelegations_Withdraw(t *testing.T) {
 	expectedWeight2 := new(big.Int).Mul(stake2, big.NewInt(150))
 	expectedWeight2 = new(big.Int).Quo(expectedWeight2, big.NewInt(100))
 	totalExpectedWeight := new(big.Int).Add(expectedWeight1, expectedWeight2)
+	totalExpectedWeight = new(big.Int).Add(totalExpectedWeight, validator.LockedVET)
 
 	assert.Equal(t, new(big.Int).Add(initialQueuedVET, new(big.Int).Add(stake1, stake2)), afterAddQueuedVET)
 	assert.Equal(t, new(big.Int).Add(initialQueuedWeight, totalExpectedWeight), afterAddQueuedWeight)
@@ -554,7 +557,7 @@ func Test_Delegator_Queued_Weight_MultipleDelegations_Withdraw(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Equal(t, new(big.Int).Add(initialQueuedVET, stake2), afterWithdraw1QueuedVET)
-	assert.Equal(t, new(big.Int).Add(initialQueuedWeight, expectedWeight2), afterWithdraw1QueuedWeight)
+	assert.Equal(t, new(big.Int).Sub(totalExpectedWeight, expectedWeight1), afterWithdraw1QueuedWeight)
 
 	withdrawnAmount2, err := staker.WithdrawDelegation(id2)
 	assert.NoError(t, err)
@@ -585,7 +588,7 @@ func Test_Delegations_EnableAutoRenew_MatchStakeReached(t *testing.T) {
 	assert.False(t, delegation1.Started(validation))
 
 	// Delegation should become active
-	_, _, err = staker.Housekeep(validator.Period)
+	_, err = staker.Housekeep(validator.Period)
 	assert.NoError(t, err)
 	delegation1, _, err = staker.GetDelegation(delegationID)
 	assert.NoError(t, err)
@@ -604,4 +607,56 @@ func Test_Delegations_EnableAutoRenew_MatchStakeReached(t *testing.T) {
 	//
 	//// Enable auto renew for the first delegation - should fail since the presence of other delegator's exceeds max stake
 	//assert.ErrorContains(t, staker.UpdateDelegationAutoRenew(delegationID, true), "validation's next period stake exceeds max stake")
+}
+
+func TestStaker_DelegationExitingVET(t *testing.T) {
+	staker, totalStake := newStaker(t, 1, 1, true)
+
+	firstActive, err := staker.FirstActive()
+	assert.NoError(t, err)
+
+	stake, weight, err := staker.LockedVET()
+	assert.NoError(t, err)
+	assert.Equal(t, totalStake, stake)
+	assert.Equal(t, totalStake, weight)
+	qStake, qWeight, err := staker.QueuedStake()
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0).String(), qStake.String())
+	assert.Equal(t, big.NewInt(0).String(), qWeight.String())
+
+	validator, err := staker.Get(*firstActive)
+	assert.NoError(t, err)
+	assert.Equal(t, validator.LockedVET, validator.Weight)
+
+	delStake := big.NewInt(1000)
+	delWeight := big.NewInt(0).Mul(delStake, big.NewInt(2))
+	delWeight = big.NewInt(0).Add(delWeight, stake)
+	delegationID, err := staker.AddDelegation(*firstActive, delStake, 200)
+	assert.NoError(t, err)
+
+	delegation, validation, err := staker.GetDelegation(delegationID)
+	assert.NoError(t, err)
+	assert.False(t, delegation.Started(validation))
+
+	stake, weight, err = staker.LockedVET()
+	assert.NoError(t, err)
+	assert.Equal(t, totalStake, stake)
+	assert.Equal(t, totalStake, weight)
+	qStake, qWeight, err = staker.QueuedStake()
+	assert.NoError(t, err)
+	assert.Equal(t, delStake, qStake)
+	assert.Equal(t, delWeight, qWeight)
+
+	_, err = staker.Housekeep(MediumStakingPeriod.Get())
+	assert.NoError(t, err)
+
+	delegation, validation, err = staker.GetDelegation(delegationID)
+	assert.NoError(t, err)
+	assert.True(t, delegation.Started(validation))
+
+	assert.NoError(t, staker.SignalDelegationExit(delegationID))
+	assert.NoError(t, staker.SignalExit(*firstActive, validation.Endorser))
+
+	_, err = staker.Housekeep(MediumStakingPeriod.Get() * 2)
+	assert.NoError(t, err)
 }

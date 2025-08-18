@@ -8,6 +8,7 @@ package bind
 import (
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/vechain/thor/v2/tx"
 )
@@ -55,4 +56,25 @@ func (b *MethodBuilder) Clause() (*tx.Clause, error) {
 	clause := tx.NewClause(b.contract.addr).WithData(data).WithValue(b.vet)
 
 	return clause, nil
+}
+
+func (b *MethodBuilder) String() string {
+	parts := []string{
+		"contract=" + b.contract.addr.String(),
+		"method=" + b.method,
+	}
+
+	if b.vet != nil && b.vet.Sign() != 0 {
+		parts = append(parts, "value="+b.vet.String())
+	}
+
+	if len(b.args) > 0 {
+		args := make([]string, len(b.args))
+		for i, arg := range b.args {
+			args[i] = fmt.Sprintf("%v", arg)
+		}
+		parts = append(parts, "args=["+strings.Join(args, ", ")+"]")
+	}
+
+	return strings.Join(parts, ", ")
 }

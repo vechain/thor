@@ -9,6 +9,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"fmt"
+	"math"
 	"math/big"
 	"strings"
 	"testing"
@@ -467,7 +468,7 @@ func TestValidateBlockHeaderWithBadBaseFee(t *testing.T) {
 	forkConfig.GALACTICA = 1
 	forkConfig.VIP214 = 2
 
-	chain, err := testchain.NewWithFork(&forkConfig)
+	chain, err := testchain.NewWithFork(&forkConfig, 180)
 	assert.NoError(t, err)
 
 	con := New(chain.Repo(), chain.Stater(), &forkConfig)
@@ -884,6 +885,64 @@ func TestValidateProposer(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.testFunc(t)
+		})
+	}
+}
+
+func TestConsensus_StopsEnergyAtHardfork(t *testing.T) {
+	cfg := &thor.SoloFork
+	cfg.HAYABUSA = 2
+	cfg.HAYABUSA_TP = 1
+
+	chain, err := testchain.NewWithFork(cfg, 1)
+	assert.NoError(t, err)
+
+	assert.NoError(t, chain.MintBlock(genesis.DevAccounts()[0]))
+	assert.NoError(t, chain.MintBlock(genesis.DevAccounts()[0]))
+
+	best := chain.Repo().BestBlockSummary()
+	st := chain.Stater().NewState(best.Root())
+	stop, err := builtin.Energy.Native(st, best.Header.Timestamp()).GetEnergyGrowthStopTime()
+	assert.NoError(t, err)
+	assert.Equal(t, best.Header.Timestamp(), stop)
+}
+
+func TestConsensus_ReplayStopsEnergyAtHardfork_Matrix(t *testing.T) {
+	cases := []struct {
+		name       string
+		hayabusa   uint32
+		expectStop bool
+	}{
+		{"replay stops at hardfork", 2, true},
+		{"replay does not stop without fork", math.MaxUint32, false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := thor.SoloFork
+			cfg.HAYABUSA = tc.hayabusa
+			cfg.HAYABUSA_TP = 1
+
+			chain, err := testchain.NewWithFork(&cfg, 1)
+			assert.NoError(t, err)
+
+			assert.NoError(t, chain.MintBlock(genesis.DevAccounts()[0]))
+			assert.NoError(t, chain.MintBlock(genesis.DevAccounts()[0]))
+
+			best := chain.Repo().BestBlockSummary()
+			c := New(chain.Repo(), chain.Stater(), &cfg)
+
+			_, err = c.NewRuntimeForReplay(best.Header, false)
+			assert.NoError(t, err)
+
+			st := chain.Stater().NewState(best.Root())
+			stop, err := builtin.Energy.Native(st, best.Header.Timestamp()).GetEnergyGrowthStopTime()
+			assert.NoError(t, err)
+			if tc.expectStop {
+				assert.Equal(t, best.Header.Timestamp(), stop)
+			} else {
+				assert.Equal(t, uint64(math.MaxUint64), stop)
+			}
 		})
 	}
 }

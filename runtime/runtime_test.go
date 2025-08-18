@@ -811,7 +811,7 @@ func TestExecuteTransaction(t *testing.T) {
 		st := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
 		prevPayerEnergy, err := builtin.Energy.Native(st, b0.Header().Timestamp()).Get(genesis.DevAccounts()[0].Address)
 		assert.Nil(t, err)
-		prevEndorserEnergy, err := builtin.Energy.Native(st, b0.Header().Timestamp()).Get(thor.Address{})
+		prevEndorsorEnergy, err := builtin.Energy.Native(st, b0.Header().Timestamp()).Get(thor.Address{})
 		assert.Nil(t, err)
 
 		rt := runtime.New(repo.NewChain(b0.Header().ID()), st, &xenv.BlockContext{}, fc)
@@ -824,7 +824,7 @@ func TestExecuteTransaction(t *testing.T) {
 
 		currentPayerEnergy, err := builtin.Energy.Native(st, b0.Header().Timestamp()+10).Get(genesis.DevAccounts()[0].Address)
 		assert.Nil(t, err)
-		currentEndorserEnergy, err := builtin.Energy.Native(st, b0.Header().Timestamp()+10).Get(thor.Address{})
+		currentEndorsorEnergy, err := builtin.Energy.Native(st, b0.Header().Timestamp()+10).Get(thor.Address{})
 		assert.Nil(t, err)
 
 		// Expecting to consume just the intrinsic gas portion
@@ -835,17 +835,17 @@ func TestExecuteTransaction(t *testing.T) {
 		assert.True(t, balanceDelta.Cmp(receipt.Paid) == 0)
 		assert.True(t, receipt.Paid.Cmp(common.Big0) > 0)
 
-		// Endorser
-		assert.True(t, currentEndorserEnergy.Cmp(prevEndorserEnergy) > 0)
-		endorserEnergyDelta := new(big.Int).Sub(currentEndorserEnergy, prevEndorserEnergy)
-		assert.True(t, endorserEnergyDelta.Cmp(receipt.Reward) == 0)
+		// Endorsor
+		assert.True(t, currentEndorsorEnergy.Cmp(prevEndorsorEnergy) > 0)
+		EndorsorEnergyDelta := new(big.Int).Sub(currentEndorsorEnergy, prevEndorsorEnergy)
+		assert.True(t, EndorsorEnergyDelta.Cmp(receipt.Reward) == 0)
 	})
 
 	t.Run("Receipt check with legacy tx after galactica fork", func(t *testing.T) {
 		st := state.New(db, trie.Root{Hash: b1.Header().StateRoot(), Ver: trie.Version{Major: b1.Header().Number(), Minor: 0}})
 		prevPayerEnergy, err := builtin.Energy.Native(st, b0.Header().Timestamp()).Get(genesis.DevAccounts()[0].Address)
 		assert.Nil(t, err)
-		prevEndorserEnergy, err := builtin.Energy.Native(st, b0.Header().Timestamp()).Get(thor.Address{})
+		prevEndorsorEnergy, err := builtin.Energy.Native(st, b0.Header().Timestamp()).Get(thor.Address{})
 		assert.Nil(t, err)
 
 		rt := runtime.New(repo.NewChain(b0.Header().ID()), st, &xenv.BlockContext{BaseFee: big.NewInt(thor.InitialBaseFee)}, fc)
@@ -858,7 +858,7 @@ func TestExecuteTransaction(t *testing.T) {
 
 		currentPayerEnergy, err := builtin.Energy.Native(st, b0.Header().Timestamp()+10).Get(genesis.DevAccounts()[0].Address)
 		assert.Nil(t, err)
-		currentEndorserEnergy, err := builtin.Energy.Native(st, b0.Header().Timestamp()+10).Get(thor.Address{})
+		currentEndorsorEnergy, err := builtin.Energy.Native(st, b0.Header().Timestamp()+10).Get(thor.Address{})
 		assert.Nil(t, err)
 
 		// Expecting to consume just the intrinsic gas portion
@@ -869,17 +869,17 @@ func TestExecuteTransaction(t *testing.T) {
 		assert.True(t, balanceDelta.Cmp(receipt.Paid) == 0)
 		assert.True(t, receipt.Paid.Cmp(common.Big0) > 0)
 
-		// Endorser
-		assert.True(t, currentEndorserEnergy.Cmp(prevEndorserEnergy) > 0)
-		endorserEnergyDelta := new(big.Int).Sub(currentEndorserEnergy, prevEndorserEnergy)
-		assert.True(t, endorserEnergyDelta.Cmp(receipt.Reward) == 0)
+		// Endorsor
+		assert.True(t, currentEndorsorEnergy.Cmp(prevEndorsorEnergy) > 0)
+		EndorsorEnergyDelta := new(big.Int).Sub(currentEndorsorEnergy, prevEndorsorEnergy)
+		assert.True(t, EndorsorEnergyDelta.Cmp(receipt.Reward) == 0)
 	})
 
 	t.Run("Receipt check with dyn fee tx after galactica fork", func(t *testing.T) {
 		st := state.New(db, trie.Root{Hash: b1.Header().StateRoot(), Ver: trie.Version{Major: b1.Header().Number(), Minor: 0}})
 		prevPayerEnergy, err := builtin.Energy.Native(st, b0.Header().Timestamp()).Get(genesis.DevAccounts()[0].Address)
 		assert.Nil(t, err)
-		prevEndorserEnergy, err := builtin.Energy.Native(st, b0.Header().Timestamp()).Get(thor.Address{})
+		prevEndorsorEnergy, err := builtin.Energy.Native(st, b0.Header().Timestamp()).Get(thor.Address{})
 		assert.Nil(t, err)
 
 		rt := runtime.New(repo.NewChain(b0.Header().ID()), st, &xenv.BlockContext{BaseFee: big.NewInt(thor.InitialBaseFee)}, fc)
@@ -892,7 +892,7 @@ func TestExecuteTransaction(t *testing.T) {
 
 		currentPayerEnergy, err := builtin.Energy.Native(st, b0.Header().Timestamp()+10).Get(genesis.DevAccounts()[0].Address)
 		assert.Nil(t, err)
-		currentEndorserEnergy, err := builtin.Energy.Native(st, b0.Header().Timestamp()+10).Get(thor.Address{})
+		currentEndorsorEnergy, err := builtin.Energy.Native(st, b0.Header().Timestamp()+10).Get(thor.Address{})
 		assert.Nil(t, err)
 
 		// Expecting to consume just the intrinsic gas portion
@@ -903,10 +903,10 @@ func TestExecuteTransaction(t *testing.T) {
 		assert.True(t, balanceDelta.Cmp(receipt.Paid) == 0)
 		assert.True(t, receipt.Paid.Cmp(common.Big0) > 0)
 
-		// Endorser
-		assert.True(t, currentEndorserEnergy.Cmp(prevEndorserEnergy) > 0)
-		endorserEnergyDelta := new(big.Int).Sub(currentEndorserEnergy, prevEndorserEnergy)
-		assert.True(t, endorserEnergyDelta.Cmp(receipt.Reward) == 0)
+		// Endorsor
+		assert.True(t, currentEndorsorEnergy.Cmp(prevEndorsorEnergy) > 0)
+		EndorsorEnergyDelta := new(big.Int).Sub(currentEndorsorEnergy, prevEndorsorEnergy)
+		assert.True(t, EndorsorEnergyDelta.Cmp(receipt.Reward) == 0)
 	})
 
 	t.Run("Test mixed txs", func(t *testing.T) {
@@ -974,7 +974,7 @@ func TestNoRewards(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			prevEndorserEnergy, err := builtin.Energy.Native(state, b0.Header().Timestamp()).Get(thor.Address{})
+			prevEndorsorEnergy, err := builtin.Energy.Native(state, b0.Header().Timestamp()).Get(thor.Address{})
 			assert.Nil(t, err)
 
 			rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{BaseFee: big.NewInt(thor.InitialBaseFee)}, &thor.ForkConfig{})
@@ -985,11 +985,11 @@ func TestNoRewards(t *testing.T) {
 			assert.False(t, receipt.Reverted)
 			assert.NotNil(t, receipt)
 
-			currentEndorserEnergy, err := builtin.Energy.Native(state, b0.Header().Timestamp()+10).Get(thor.Address{})
+			currentEndorsorEnergy, err := builtin.Energy.Native(state, b0.Header().Timestamp()+10).Get(thor.Address{})
 			assert.Nil(t, err)
 
-			// Endorser gets no rewards
-			assert.True(t, currentEndorserEnergy.Cmp(prevEndorserEnergy) == 0)
+			// Endorsor gets no rewards
+			assert.True(t, currentEndorsorEnergy.Cmp(prevEndorsorEnergy) == 0)
 			assert.True(t, receipt.Reward.Cmp(common.Big0) == 0)
 		})
 	}

@@ -125,7 +125,7 @@ func TestRewardsBeforeAndAfterGalactica(t *testing.T) {
 	forkConfig := thor.NoFork
 	forkConfig.GALACTICA = 2
 
-	thorChain, err := testchain.NewWithFork(&forkConfig)
+	thorChain, err := testchain.NewWithFork(&forkConfig, 180)
 	assert.NoError(t, err)
 
 	addr := thor.BytesToAddress([]byte("to"))

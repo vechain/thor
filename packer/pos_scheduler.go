@@ -16,20 +16,6 @@ import (
 func (p *Packer) schedulePOS(parent *chain.BlockSummary, nowTimestamp uint64, state *state.State) (thor.Address, uint64, uint64, error) {
 	staker := builtin.Staker.Native(state)
 
-	var beneficiary thor.Address
-	if p.beneficiary != nil {
-		beneficiary = *p.beneficiary
-	} else {
-		validator, err := staker.Get(p.nodeMaster)
-		if err != nil {
-			return thor.Address{}, 0, 0, err
-		}
-		if validator.IsEmpty() {
-			return thor.Address{}, 0, 0, errNotScheduled
-		}
-		beneficiary = validator.Endorsor
-	}
-
 	var seed []byte
 	seed, err := p.seeder.Generate(parent.Header.ID())
 	if err != nil {
@@ -39,18 +25,35 @@ func (p *Packer) schedulePOS(parent *chain.BlockSummary, nowTimestamp uint64, st
 	if err != nil {
 		return thor.Address{}, 0, 0, err
 	}
+	validator, ok := leaderGroup[p.nodeMaster]
+	if !ok {
+		return thor.Address{}, 0, 0, errNotScheduled
+	}
 	sched, err := pos.NewScheduler(p.nodeMaster, leaderGroup, parent.Header.Number(), parent.Header.Timestamp(), seed)
 	if err != nil {
 		return thor.Address{}, 0, 0, err
 	}
 	newBlockTime := sched.Schedule(nowTimestamp)
-	updates, score := sched.Updates(newBlockTime)
+
+	_, weight, err := staker.LockedVET()
+	if err != nil {
+		return thor.Address{}, 0, 0, err
+	}
+	updates, score := sched.Updates(newBlockTime, weight)
 
 	for addr, online := range updates {
-		_, err := staker.SetOnline(addr, online)
-		if err != nil {
+		if err := staker.SetOnline(addr, parent.Header.Number()+1, online); err != nil {
 			return thor.Address{}, 0, 0, err
 		}
+	}
+
+	var beneficiary thor.Address
+	if validator.Beneficiary != nil { // contract beneficiary get's validated in consensus
+		beneficiary = *validator.Beneficiary
+	} else if p.beneficiary != nil {
+		beneficiary = *p.beneficiary
+	} else {
+		beneficiary = validator.Endorser
 	}
 
 	return beneficiary, newBlockTime, score, nil

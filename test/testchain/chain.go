@@ -6,6 +6,7 @@
 package testchain
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -19,6 +20,10 @@ import (
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/builtin/params"
+	"github.com/vechain/thor/v2/builtin/solidity"
+	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
@@ -82,17 +87,17 @@ var DefaultForkConfig = thor.ForkConfig{
 
 // NewDefault is a wrapper function that creates a Chain for testing with the default fork config.
 func NewDefault() (*Chain, error) {
-	return NewIntegrationTestChain(genesis.DevConfig{ForkConfig: &DefaultForkConfig})
+	return NewIntegrationTestChain(genesis.DevConfig{ForkConfig: &DefaultForkConfig}, 180)
 }
 
 // NewWithFork is a wrapper function that creates a Chain for testing with custom forkConfig.
-func NewWithFork(forkConfig *thor.ForkConfig) (*Chain, error) {
-	return NewIntegrationTestChain(genesis.DevConfig{ForkConfig: forkConfig})
+func NewWithFork(forkConfig *thor.ForkConfig, epochLength uint32) (*Chain, error) {
+	return NewIntegrationTestChain(genesis.DevConfig{ForkConfig: forkConfig}, epochLength)
 }
 
 // NewIntegrationTestChain is a convenience function that creates a Chain for testing.
 // It uses an in-memory database, development network genesis, and a solo BFT engine.
-func NewIntegrationTestChain(config genesis.DevConfig) (*Chain, error) {
+func NewIntegrationTestChain(config genesis.DevConfig, epochLength uint32) (*Chain, error) {
 	// If the launch time is not set, set it to the current time minus the current time aligned with the block interval
 	if config.LaunchTime == 0 {
 		now := uint64(time.Now().Unix())
@@ -101,12 +106,22 @@ func NewIntegrationTestChain(config genesis.DevConfig) (*Chain, error) {
 
 	// Initialize the genesis and retrieve the genesis block
 	gene := genesis.NewDevnetWithConfig(config)
-	return NewIntegrationTestChainWithGenesis(gene, config.ForkConfig)
+	return NewIntegrationTestChainWithGenesis(gene, config.ForkConfig, epochLength)
 }
 
-func NewIntegrationTestChainWithGenesis(gene *genesis.Genesis, forkConfig *thor.ForkConfig) (*Chain, error) {
+func NewIntegrationTestChainWithGenesis(gene *genesis.Genesis, forkConfig *thor.ForkConfig, epochLength uint32) (*Chain, error) {
 	// Initialize the database
 	db := muxdb.NewMem()
+	st := state.New(db, trie.Root{})
+
+	prm := params.New(thor.BytesToAddress([]byte("params")), st)
+
+	staker.EpochLength = solidity.NewConfigVariable("epoch-length", staker.EpochLength.Get())
+	// write storage override, then construct staker:
+	var be4 [4]byte
+	binary.BigEndian.PutUint32(be4[:], epochLength)
+	st.SetStorage(builtin.Staker.Address, thor.BytesToBytes32([]byte("epoch-length")), thor.BytesToBytes32(be4[:]))
+	_ = staker.New(builtin.Staker.Address, st, prm, nil)
 
 	// Create the state manager (Stater) with the initialized database.
 	stater := state.NewStater(db)
