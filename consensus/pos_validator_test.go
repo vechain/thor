@@ -9,15 +9,23 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/rlp"
+
+	"github.com/hashicorp/golang-lru/simplelru"
+
 	"github.com/stretchr/testify/assert"
 
+	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
 )
 
@@ -32,7 +40,7 @@ func TestConsensus_PosFork(t *testing.T) {
 	// mint block 2: chain should set the staker contract, still using PoA
 	best, parent, st := setup.mintBlock()
 	err := setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st))
-	assert.Error(t, err)
+	assert.ErrorContains(t, err, "pos - block signer invalid")
 	_, err = setup.consensus.validateAuthorityProposer(best.Header, parent.Header, st)
 	assert.NoError(t, err)
 
@@ -43,6 +51,137 @@ func TestConsensus_PosFork(t *testing.T) {
 	best, parent, st = setup.mintBlock()
 	err = setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st))
 	assert.NoError(t, err)
+
+	cache, err := simplelru.NewLRU(16, nil)
+	assert.NoError(t, err)
+
+	staker := builtin.Staker.Native(st)
+	leaders, err := staker.LeaderGroup()
+	assert.NoError(t, err)
+
+	signer, err := best.Header.Signer()
+	assert.NoError(t, err)
+
+	delete(leaders, signer)
+	parentSig, err := parent.Header.Signer()
+	assert.NoError(t, err)
+
+	beneficiary := thor.BytesToAddress([]byte("test"))
+	offlineBlock := uint32(1)
+	leaders[parentSig] = &validation.Validation{
+		Endorser:           thor.Address{},
+		Beneficiary:        &beneficiary,
+		Period:             0,
+		CompleteIterations: 0,
+		Status:             0,
+		StartBlock:         0,
+		ExitBlock:          nil,
+		OfflineBlock:       &offlineBlock,
+		LockedVET:          nil,
+		PendingUnlockVET:   nil,
+		QueuedVET:          nil,
+		CooldownVET:        nil,
+		WithdrawableVET:    nil,
+		Weight:             big.NewInt(10),
+	}
+	cache.Add(parent.Header.ID(), leaders)
+	setup.consensus.validatorsCache = cache
+
+	newParentHeader := new(block.Builder).
+		ParentID(parent.Header.ParentID()).
+		Timestamp(parent.Header.Timestamp()).
+		GasLimit(parent.Header.GasLimit()).
+		GasUsed(parent.Header.GasUsed()).
+		TotalScore(10003).
+		StateRoot(parent.Header.StateRoot()).
+		ReceiptsRoot(parent.Header.ReceiptsRoot()).
+		Beneficiary(parent.Header.Beneficiary()).
+		Build().Header()
+
+	err = setup.consensus.validateStakingProposer(best.Header, newParentHeader, builtin.Staker.Native(st))
+	assert.ErrorContains(t, err, "pos - stake beneficiary mismatch")
+
+	leaders[parentSig] = &validation.Validation{
+		Endorser:           thor.Address{},
+		Beneficiary:        nil,
+		Period:             0,
+		CompleteIterations: 0,
+		Status:             0,
+		StartBlock:         0,
+		ExitBlock:          nil,
+		OfflineBlock:       &offlineBlock,
+		LockedVET:          nil,
+		PendingUnlockVET:   nil,
+		QueuedVET:          nil,
+		CooldownVET:        nil,
+		WithdrawableVET:    nil,
+		Weight:             big.NewInt(10),
+	}
+	cache.Add(parent.Header.ID(), leaders)
+	setup.consensus.validatorsCache = cache
+
+	newParentHeader = new(block.Builder).
+		ParentID(parent.Header.ParentID()).
+		Timestamp(parent.Header.Timestamp()).
+		GasLimit(parent.Header.GasLimit()).
+		GasUsed(parent.Header.GasUsed()).
+		TotalScore(10003).
+		StateRoot(parent.Header.StateRoot()).
+		ReceiptsRoot(parent.Header.ReceiptsRoot()).
+		Beneficiary(parent.Header.Beneficiary()).
+		Build().Header()
+
+	slotValidation := thor.BytesToBytes32([]byte(("validations")))
+	slot := thor.Blake2b(parentSig.Bytes(), slotValidation.Bytes())
+	st.SetRawStorage(builtin.Staker.Address, slot, rlp.RawValue{0xFF})
+
+	err = setup.consensus.validateStakingProposer(best.Header, newParentHeader, builtin.Staker.Native(st))
+	assert.ErrorContains(t, err, "failed to get validator")
+
+	newParentHeader = new(block.Builder).
+		ParentID(parent.Header.ParentID()).
+		Timestamp(parent.Header.Timestamp()).
+		GasLimit(parent.Header.GasLimit()).
+		GasUsed(parent.Header.GasUsed()).
+		TotalScore(999).
+		StateRoot(parent.Header.StateRoot()).
+		ReceiptsRoot(parent.Header.ReceiptsRoot()).
+		Beneficiary(parent.Header.Beneficiary()).
+		Build().Header()
+
+	err = setup.consensus.validateStakingProposer(best.Header, newParentHeader, builtin.Staker.Native(st))
+	assert.ErrorContains(t, err, "pos - block total score invalid")
+
+	slotLockedVET := thor.BytesToBytes32([]byte(("total-stake")))
+	st.SetRawStorage(builtin.Staker.Address, slotLockedVET, rlp.RawValue{0xFF})
+
+	err = setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st))
+	assert.ErrorContains(t, err, "pos - cannot get total weight")
+}
+
+func TestConsensus_CannotGetLeaderGroup(t *testing.T) {
+	setup := newHayabusaSetup(t)
+
+	setup.mintMbpBlock(1)
+
+	best, parent, st := setup.mintBlock()
+	err := setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st))
+	assert.ErrorContains(t, err, "pos - block signer invalid")
+	_, err = setup.consensus.validateAuthorityProposer(best.Header, parent.Header, st)
+	assert.NoError(t, err)
+
+	setup.mintAddValidatorBlock()
+
+	best, parent, st = setup.mintBlock()
+	err = setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st))
+	assert.NoError(t, err)
+
+	slotValidationsActiveHead := thor.BytesToBytes32([]byte("validations-active-head"))
+
+	st.SetRawStorage(builtin.Staker.Address, slotValidationsActiveHead, rlp.RawValue{0xFF})
+
+	err = setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st))
+	assert.ErrorContains(t, err, "pos - cannot get leader group")
 }
 
 func TestConsensus_POS_MissedSlots(t *testing.T) {
@@ -88,6 +227,51 @@ func TestConsensus_POS_Unscheduled(t *testing.T) {
 
 	err = setup.consensus.validateStakingProposer(blk.Header(), parent.Header, builtin.Staker.Native(st))
 	assert.ErrorContains(t, err, "block timestamp unscheduled")
+}
+
+func TestValidateStakingProposer_LockedVETError(t *testing.T) {
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+
+	mockRepo := &chain.Repository{}
+	mockForkConfig := &thor.ForkConfig{}
+
+	consensus := New(mockRepo, stater, mockForkConfig)
+
+	parent := &block.Header{}
+
+	st := stater.NewState(trie.Root{})
+
+	stakerAddr := builtin.Staker.Address
+	st.SetCode(stakerAddr, builtin.Staker.RuntimeBytecodes())
+
+	paramsAddr := builtin.Params.Address
+	st.SetCode(paramsAddr, builtin.Params.RuntimeBytecodes())
+
+	paramKey := thor.BytesToBytes32([]byte("some_param"))
+	paramValue := []byte("valid_value")
+	st.SetStorage(paramsAddr, paramKey, thor.BytesToBytes32(paramValue))
+
+	staker := builtin.Staker.Native(st)
+
+	builder := new(block.Builder).
+		ParentID(thor.Bytes32{}).
+		Timestamp(1000).
+		GasLimit(1000000).
+		GasUsed(0).
+		TotalScore(0).
+		StateRoot(thor.Bytes32{}).
+		ReceiptsRoot(thor.Bytes32{}).
+		Beneficiary(thor.Address{})
+
+	blk := builder.Build()
+	validSignature := make([]byte, 65)
+	copy(validSignature, []byte("valid_signature_65_bytes_long_for_testing"))
+	blk = blk.WithSignature(validSignature)
+	header := blk.Header()
+
+	err := consensus.validateStakingProposer(header, parent, staker)
+	assert.ErrorContains(t, err, "pos - block signer invalid")
 }
 
 type hayabusaSetup struct {

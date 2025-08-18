@@ -6,14 +6,17 @@
 package consensus
 
 import (
+	"crypto/rand"
 	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
@@ -156,4 +159,46 @@ func TestValidateBlock(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, tt.testFun)
 	}
+}
+
+func TestValidate_NegativeCases(t *testing.T) {
+	db := muxdb.NewMem()
+	gen := genesis.NewDevnet()
+	stater := state.NewStater(db)
+
+	genesisBlock, _, _, err := gen.Build(stater)
+	assert.NoError(t, err)
+
+	state := stater.NewState(trie.Root{Hash: genesisBlock.Header().StateRoot()})
+	repo, err := chain.NewRepository(db, genesisBlock)
+	assert.NoError(t, err)
+
+	baseFee := big.NewInt(100000)
+	tr := tx.MustSign(
+		tx.NewBuilder(tx.TypeDynamicFee).
+			ChainTag(repo.ChainTag()).
+			BlockRef(tx.NewBlockRef(10)).
+			MaxFeePerGas(new(big.Int).Sub(baseFee, common.Big1)).
+			Gas(21000).
+			Build(),
+		genesis.DevAccounts()[0].PrivateKey,
+	)
+	blk := new(block.Builder).
+		BaseFee(baseFee).
+		Timestamp(genesisBlock.Header().Timestamp() + 10).
+		TotalScore(uint64(1)).GasLimit(10000000).
+		Transaction(tr).
+		Build()
+	var sig [146]byte
+	rand.Read(sig[:])
+	blk = blk.WithSignature(sig[:])
+
+	c := New(repo, stater, &thor.ForkConfig{GALACTICA: 0})
+
+	activeGroupSizeSlot := thor.BytesToBytes32([]byte(("validations-active-group-size")))
+	state.SetRawStorage(builtin.Staker.Address, activeGroupSizeSlot, rlp.RawValue{0xFF})
+	s, r, err := c.validate(state, blk, genesisBlock.Header(), genesisBlock.Header().Timestamp()+10, uint32(0))
+	assert.Nil(t, s)
+	assert.Nil(t, r)
+	assert.Error(t, err)
 }
