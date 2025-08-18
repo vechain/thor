@@ -306,22 +306,18 @@ func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, am
 func (s *Staker) WithdrawStake(validator thor.Address, endorser thor.Address, currentBlock uint32) (*big.Int, error) {
 	logger.Debug("withdrawing stake", "endorser", endorser, "validator", validator)
 
-	// remove validator QueuedVET if the validator is still queued
-	val, err := s.validationService.GetValidation(validator)
-	if err != nil {
-		return nil, err
-	}
-	if val.Status == validation.StatusQueued {
-		err = s.globalStatsService.RemoveQueued(stakes.NewWeightedStake(val.QueuedVET, validation.Multiplier))
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	stake, err := s.validationService.WithdrawStake(val, validator, endorser, currentBlock)
+	stake, queued, err := s.validationService.WithdrawStake(validator, endorser, currentBlock)
 	if err != nil {
 		logger.Info("withdraw failed", "validator", validator, "error", err)
 		return nil, err
+	}
+
+	// remove validator QueuedVET if the validator is still queued or had a pending increase
+	if queued.Sign() == 1 {
+		err = s.globalStatsService.RemoveQueued(stakes.NewWeightedStake(queued, validation.Multiplier))
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	logger.Info("withdrew validator staker", "validator", validator)

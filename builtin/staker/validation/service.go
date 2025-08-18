@@ -329,13 +329,16 @@ func (s *Service) DecreaseStake(validator thor.Address, endorser thor.Address, a
 // WithdrawStake allows validations to withdraw any withdrawable stake.
 // It also verifies the endorser and updates the validator totals.
 func (s *Service) WithdrawStake(
-	val *Validation,
 	validator thor.Address,
 	endorser thor.Address,
 	currentBlock uint32,
-) (*big.Int, error) {
+) (*big.Int, *big.Int, error) {
+	val, err := s.GetExistingValidation(validator)
+	if err != nil {
+		return nil, nil, err
+	}
 	if val.Endorser != endorser {
-		return big.NewInt(0), reverts.New("invalid endorser")
+		return big.NewInt(0), big.NewInt(0), reverts.New("invalid endorser")
 	}
 
 	// calculate currently available VET to withdraw
@@ -351,9 +354,10 @@ func (s *Service) WithdrawStake(
 		val.QueuedVET = big.NewInt(0)
 		val.Status = StatusExit
 		if err := s.validatorQueue.Remove(validator); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
+	queuedVET := big.NewInt(0).Set(val.QueuedVET)
 	// remove any que
 	if val.QueuedVET.Sign() > 0 {
 		val.QueuedVET = big.NewInt(0)
@@ -362,10 +366,10 @@ func (s *Service) WithdrawStake(
 	// no more withdraw after this
 	val.WithdrawableVET = big.NewInt(0)
 	if err := s.repo.SetValidation(validator, val, false); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return withdrawable, nil
+	return withdrawable, queuedVET, nil
 }
 
 func (s *Service) NextToActivate(maxLeaderGroupSize *big.Int) (*thor.Address, error) {

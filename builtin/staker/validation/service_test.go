@@ -447,10 +447,7 @@ func TestService_WithdrawStake_InvalidEndorser(t *testing.T) {
 	endorser := id
 	assert.NoError(t, svc.Add(id, endorser, 1, big.NewInt(10)))
 
-	val, err := svc.GetValidation(id)
-	assert.NoError(t, err)
-
-	amt, err := svc.WithdrawStake(val, id, thor.BytesToAddress([]byte("wrong")), 0)
+	amt, _, err := svc.WithdrawStake(id, thor.BytesToAddress([]byte("wrong")), 0)
 	assert.Equal(t, big.NewInt(0).String(), amt.String())
 	assert.ErrorContains(t, err, "invalid endorser")
 }
@@ -466,7 +463,7 @@ func TestService_WithdrawStake_QueuedToExit(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, StatusQueued, val.Status)
 
-	amt, err := svc.WithdrawStake(val, id, endorser, 0)
+	amt, _, err := svc.WithdrawStake(id, endorser, 0)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(50), amt)
 
@@ -488,10 +485,7 @@ func TestService_WithdrawStake_ClearCooldownWhenMatured(t *testing.T) {
 		ExitBlock: &eb, CooldownVET: big.NewInt(40), WithdrawableVET: big.NewInt(5),
 	}, true))
 
-	val, err := svc.GetValidation(id)
-	assert.NoError(t, err)
-
-	amt, err := svc.WithdrawStake(val, id, endorser, 11)
+	amt, _, err := svc.WithdrawStake(id, endorser, 11)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(45), amt)
 
@@ -511,10 +505,7 @@ func TestService_WithdrawStake_ActiveClearsQueuedAndWithdrawable(t *testing.T) {
 		QueuedVET: big.NewInt(12), WithdrawableVET: big.NewInt(3),
 	}, true))
 
-	val, err := svc.GetValidation(id)
-	assert.NoError(t, err)
-
-	amt, err := svc.WithdrawStake(val, id, endorser, 0)
+	amt, _, err := svc.WithdrawStake(id, endorser, 0)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(15), amt)
 
