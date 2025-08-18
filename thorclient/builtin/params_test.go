@@ -111,3 +111,47 @@ func TestParams_FilterSet_EventNotFound(t *testing.T) {
 	_, err = bad.FilterSet(nil, nil, logdb.ASC)
 	require.Error(t, err)
 }
+
+func TestParams_NegativeMatrix(t *testing.T) {
+	node, client := newTestNode(t, false)
+	defer node.Stop()
+
+	cases := []struct {
+		name string
+		run  func(t *testing.T)
+	}{
+		{
+			name: "WrongABI_Get",
+			run: func(t *testing.T) {
+				badContract, err := bind.NewContract(client, contracts.Energy.RawABI(), &contracts.Params.Address)
+				require.NoError(t, err)
+				bad := &Params{contract: badContract}
+				_, err = bad.Get(thor.KeyMaxBlockProposers)
+				require.Error(t, err)
+			},
+		},
+		{
+			name: "WrongABI_SetClause",
+			run: func(t *testing.T) {
+				badContract, err := bind.NewContract(client, contracts.Energy.RawABI(), &contracts.Params.Address)
+				require.NoError(t, err)
+				bad := &Params{contract: badContract}
+				_, err = bad.Set(thor.KeyMaxBlockProposers, big.NewInt(1)).Clause()
+				require.Error(t, err)
+			},
+		},
+		{
+			name: "BadRevision_Get",
+			run: func(t *testing.T) {
+				p, err := NewParams(client)
+				require.NoError(t, err)
+				_, err = p.Revision("bad-revision").Get(thor.KeyExecutorAddress)
+				require.Error(t, err)
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, tc.run)
+	}
+}
