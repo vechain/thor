@@ -7,10 +7,12 @@ package builtin
 
 import (
 	"math/big"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	contracts "github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
@@ -48,4 +50,64 @@ func TestParams(t *testing.T) {
 		require.Equal(t, thor.KeyMaxBlockProposers, events[0].Key)
 		require.Equal(t, big.NewInt(2), events[0].Value)
 	})
+}
+
+func TestParams_RawContract(t *testing.T) {
+	node, client := newTestNode(t, false)
+	defer node.Stop()
+
+	p, err := NewParams(client)
+	require.NoError(t, err)
+
+	raw := p.Raw()
+	require.NotNil(t, raw)
+	require.Equal(t, contracts.Params.Address, *raw.Address())
+	_, ok := raw.ABI().Methods["get"]
+	require.True(t, ok, "expected method 'get' in ABI")
+}
+
+func TestParams_Revision(t *testing.T) {
+	executor := bind.NewSigner(genesis.DevAccounts()[0].PrivateKey)
+
+	node, client := newTestNode(t, false)
+	defer node.Stop()
+
+	p, err := NewParams(client)
+	require.NoError(t, err)
+
+	valBefore, err := p.Revision("0").Get(thor.KeyMaxBlockProposers)
+	require.NoError(t, err)
+	require.Equal(t, big.NewInt(1000), valBefore)
+
+	receipt, _, err := p.Set(thor.KeyMaxBlockProposers, big.NewInt(2)).
+		Send().
+		WithSigner(executor).
+		WithOptions(txOpts()).
+		SubmitAndConfirm(txContext(t))
+	require.NoError(t, err)
+	require.False(t, receipt.Reverted)
+
+	blockSet := uint64(receipt.Meta.BlockNumber)
+	valAtSet, err := p.Revision(strconv.FormatUint(blockSet, 10)).Get(thor.KeyMaxBlockProposers)
+	require.NoError(t, err)
+	require.Equal(t, big.NewInt(2), valAtSet)
+
+	// Previous block should still see the old value
+	prev := strconv.FormatUint(blockSet-1, 10)
+	valPrev, err := p.Revision(prev).Get(thor.KeyMaxBlockProposers)
+	require.NoError(t, err)
+	require.Equal(t, big.NewInt(1000), valPrev)
+}
+
+func TestParams_FilterSet_EventNotFound(t *testing.T) {
+	node, client := newTestNode(t, false)
+	defer node.Stop()
+
+	// Use an ABI without the 'Set' event
+	badContract, err := bind.NewContract(client, contracts.Energy.RawABI(), &contracts.Params.Address)
+	require.NoError(t, err)
+	bad := &Params{contract: badContract}
+
+	_, err = bad.FilterSet(nil, nil, logdb.ASC)
+	require.Error(t, err)
 }
