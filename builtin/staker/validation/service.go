@@ -166,7 +166,7 @@ func (s *Service) Add(
 		return reverts.New("validator already exists")
 	}
 	if period != thor.LowStakingPeriod && period != thor.MediumStakingPeriod && period != thor.HighStakingPeriod {
-		return errors.New("period is out of boundaries")
+		return reverts.New("period is out of boundaries")
 	}
 
 	entry := &Validation{
