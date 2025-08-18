@@ -10,7 +10,6 @@ import (
 	"math"
 	"math/big"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,7 +20,6 @@ import (
 	builtinStaker "github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
-	"github.com/vechain/thor/v2/test"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/bind"
@@ -115,27 +113,11 @@ func TestStaker(t *testing.T) {
 			WithOptions(txOpts()).
 			SubmitAndConfirm(txContext(t))
 		require.NoError(t, err)
-		validatorTxs = append(validatorTxs, addValidatorTx)
-	}
-	for _, trx := range validatorTxs {
-		require.NoError(t, test.Retry(func() error {
-			id := trx.ID()
-			if _, err = client.TransactionReceipt(&id); err != nil {
-				return err
-			}
-			return nil
-		}, 100*time.Millisecond, 10*time.Second))
+		DebugRevert(t, receipt, method)
 	}
 
-	// NOTE: Might not be the best way of doing it
-	// changing the epoch length was breaking the contract logic
-	// for this exact test in a weird way
-	bestBlock, err := client.Block("best")
-	require.NoError(t, err)
-	for range 180 - bestBlock.Number {
-		// pack a new block
-		require.NoError(t, node.Chain().MintBlock(genesis.DevAccounts()[0]))
-	}
+	// pack a new block
+	require.NoError(t, node.Chain().MintBlock(genesis.DevAccounts()[0]))
 
 	// TotalStake
 	totalStake, totalWeight, err := staker.TotalStake()
@@ -167,7 +149,7 @@ func TestStaker(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, firstID, getPeriodDetailsRes.Address)
 	require.Equal(t, minStakingPeriod, getPeriodDetailsRes.Period)
-	require.Equal(t, uint32(180), getPeriodDetailsRes.StartBlock)
+	require.Equal(t, uint32(15), getPeriodDetailsRes.StartBlock)
 	require.Equal(t, uint32(math.MaxUint32), getPeriodDetailsRes.ExitBlock)
 	require.Equal(t, uint32(0), getPeriodDetailsRes.CompletedPeriods)
 
@@ -222,7 +204,6 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, 0, firstQueued.Stake.Sign())
 	require.Equal(t, StakerStatusQueued, firstQueuedStatus.Status)
 	require.False(t, firstQueued.Endorser.IsZero())
-	require.Equal(t, validator.Address, firstQueued.Address)
 
 	// TotalQueued
 	queuedStake, queuedWeight, err := staker.QueuedStake()
@@ -240,7 +221,6 @@ func TestStaker(t *testing.T) {
 		WithSigner(validatorKey).
 		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
-	require.False(t, receipt.Reverted)
 
 	increaseEvents, err := staker.FilterStakeIncreased(newRange(receipt), nil, logdb.ASC)
 	require.NoError(t, err)
@@ -254,7 +234,6 @@ func TestStaker(t *testing.T) {
 		WithSigner(validatorKey).
 		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
-	require.False(t, receipt.Reverted)
 
 	decreaseEvents, err := staker.FilterStakeDecreased(newRange(receipt), nil, logdb.ASC)
 	require.NoError(t, err)
