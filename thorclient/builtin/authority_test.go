@@ -155,3 +155,45 @@ func TestAuthority_FilterCandidate_EventNotFound(t *testing.T) {
 	_, err = bad.FilterCandidate(nil, nil, logdb.ASC)
 	require.Error(t, err)
 }
+
+func TestAuthority_Methods_MethodNotFound(t *testing.T) {
+	node, client := newTestNode(t, false)
+	defer node.Stop()
+
+	// Wrong ABI: Energy instead of Authority, so methods like first/get are missing
+	badContract, err := bind.NewContract(client, contracts.Energy.RawABI(), &contracts.Authority.Address)
+	require.NoError(t, err)
+	bad := &Authority{contract: badContract}
+
+	acc := genesis.DevAccounts()[0].Address
+	identity := datagen.RandomHash()
+
+	tests := []struct {
+		name string
+		call func() error
+	}{
+		{"First", func() error { _, err := bad.First(); return err }},
+		{"Next", func() error { _, err := bad.Next(acc); return err }},
+		{"Executor", func() error { _, err := bad.Executor(); return err }},
+		{"Get", func() error { _, err := bad.Get(acc); return err }},
+		{"AddClause", func() error { _, err := bad.Add(acc, acc, identity).Clause(); return err }},
+		{"RevokeClause", func() error { _, err := bad.Revoke(acc).Clause(); return err }},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Error(t, tc.call())
+		})
+	}
+}
+
+func TestAuthority_BadRevision_CallError(t *testing.T) {
+	node, client := newTestNode(t, false)
+	defer node.Stop()
+
+	a, err := NewAuthority(client)
+	require.NoError(t, err)
+
+	_, err = a.Revision("bad-revision").First()
+	require.Error(t, err)
+}
