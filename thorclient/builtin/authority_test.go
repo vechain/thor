@@ -94,7 +94,6 @@ func TestAuthority_RawContract(t *testing.T) {
 	raw := authority.Raw()
 	require.NotNil(t, raw)
 
-	// address should be the Authority contract address
 	require.Equal(t, contracts.Authority.Address, *raw.Address())
 	// sanity check that ABI exposes known method
 	_, ok := raw.ABI().Methods["first"]
@@ -113,12 +112,10 @@ func TestAuthority_Revision(t *testing.T) {
 	acc := genesis.DevAccounts()[1]
 	identity := datagen.RandomHash()
 
-	// Before add at genesis, the candidate is not listed
 	nodeBefore, err := auth.Revision("0").Get(acc.Address)
 	require.NoError(t, err)
 	require.False(t, nodeBefore.Listed)
 
-	// Add candidate and capture block number
 	receiptAdd, _, err := auth.Add(acc.Address, acc.Address, identity).
 		Send().
 		WithSigner(executor).
@@ -127,13 +124,11 @@ func TestAuthority_Revision(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, receiptAdd.Reverted)
 
-	// State at add block: listed
 	blockAdd := uint64(receiptAdd.Meta.BlockNumber)
 	nodeAtAdd, err := auth.Revision(strconv.FormatUint(blockAdd, 10)).Get(acc.Address)
 	require.NoError(t, err)
 	require.True(t, nodeAtAdd.Listed)
 
-	// Revoke and capture block number
 	receiptRevoke, _, err := auth.Revoke(acc.Address).
 		Send().
 		WithSigner(executor).
