@@ -7,6 +7,7 @@ package builtin
 
 import (
 	"math/big"
+	"strconv"
 	"testing"
 	"time"
 
@@ -175,4 +176,96 @@ func TestPrototype(t *testing.T) {
 		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
+}
+
+func TestPrototype_RawContract(t *testing.T) {
+	node, client := newTestNode(t, false)
+	defer node.Stop()
+
+	p, err := NewPrototype(client)
+	require.NoError(t, err)
+
+	raw := p.Raw()
+	require.NotNil(t, raw)
+	require.Equal(t, builtin.Prototype.Address, *raw.Address())
+	_, ok := raw.ABI().Methods["master"]
+	require.True(t, ok, "expected method 'master' in ABI")
+}
+
+func TestPrototype_Revision(t *testing.T) {
+	node, client := newTestNode(t, false)
+	defer node.Stop()
+
+	chainTag, err := client.ChainTag()
+	require.NoError(t, err)
+
+	p, err := NewPrototype(client)
+	require.NoError(t, err)
+	accKey := genesis.DevAccounts()[0].PrivateKey
+	acc := bind.NewSigner(accKey)
+	acc2 := bind.NewSigner(genesis.DevAccounts()[1].PrivateKey)
+
+	contractBytecode := "0x6080604052348015600f57600080fd5b5060c88061001e6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c8063b8d1c87214602d575b600080fd5b605660048036036020811015604157600080fd5b81019080803590602001909291905050506058565b005b7fa66e3d99cea58d39cb278611964329fa8d4b08252d747eced50565286fb225c0816040518082815260200191505060405180910390a15056fea2646970667358221220be91f5a1548580d479fc71c4ee668fdb51566550b04fa3632f1d4c453053d3e264736f6c63430006020033"
+	bytecode, err := hexutil.Decode(contractBytecode)
+	require.NoError(t, err)
+	contractClause := tx.NewClause(nil).WithData(bytecode)
+
+	trx := tx.NewBuilder(tx.TypeLegacy).
+		ChainTag(chainTag).
+		Clause(contractClause).
+		Expiration(10000).
+		Gas(10_000_000).
+		Build()
+	trx = tx.MustSign(trx, accKey)
+
+	res, err := client.SendTransaction(trx)
+	require.NoError(t, err)
+
+	var receipt *api.Receipt
+	require.NoError(t,
+		test.Retry(func() error {
+			if receipt, err = client.TransactionReceipt(res.ID); err != nil {
+				return err
+			}
+			return nil
+		}, time.Second, 10*time.Second))
+	contractAddr := receipt.Outputs[0].Events[0].Address
+
+	// initial master is deployer (acc)
+	masterBefore, err := p.Master(contractAddr)
+	require.NoError(t, err)
+	require.Equal(t, acc.Address(), masterBefore)
+
+	// change master
+	setReceipt, _, err := p.SetMaster(contractAddr, acc2.Address()).
+		Send().
+		WithSigner(acc).
+		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
+	require.NoError(t, err)
+	require.False(t, setReceipt.Reverted)
+
+	setBlock := uint64(setReceipt.Meta.BlockNumber)
+	prevBlock := setBlock - 1
+
+	// at previous block, master should still be acc
+	masterPrev, err := p.Revision(strconv.FormatUint(prevBlock, 10)).Master(contractAddr)
+	require.NoError(t, err)
+	require.Equal(t, acc.Address(), masterPrev)
+
+	// at set block, master should be acc2
+	masterAtSet, err := p.Revision(strconv.FormatUint(setBlock, 10)).Master(contractAddr)
+	require.NoError(t, err)
+	require.Equal(t, acc2.Address(), masterAtSet)
+}
+
+func TestPrototype_MethodNotFound_WithBadABI(t *testing.T) {
+	node, client := newTestNode(t, false)
+	defer node.Stop()
+
+	badContract, err := bind.NewContract(client, builtin.Energy.RawABI(), &builtin.Prototype.Address)
+	require.NoError(t, err)
+	bad := &Prototype{contract: badContract}
+
+	_, err = bad.Master(builtin.Authority.Address)
+	require.Error(t, err)
 }
