@@ -155,3 +155,16 @@ func TestParams_NegativeMatrix(t *testing.T) {
 		t.Run(tc.name, tc.run)
 	}
 }
+
+func TestParams_SetClause_PackError(t *testing.T) {
+	node, client := newTestNode(t, false)
+	defer node.Stop()
+
+	p, err := NewParams(client)
+	require.NoError(t, err)
+
+	var nilVal *big.Int
+	require.Panics(t, func() {
+		_, _ = p.Set(thor.KeyMaxBlockProposers, nilVal).Clause()
+	})
+}
