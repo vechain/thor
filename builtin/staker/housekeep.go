@@ -21,16 +21,20 @@ import (
 
 type EpochTransition struct {
 	Block           uint32
-	Renewals        []ValidatorRenewal
+	Renewals        []thor.Address
 	ExitValidator   *thor.Address
+	Evictions       []thor.Address
 	ActivationCount int64
 }
 
-type ValidatorRenewal struct {
-	Validator       thor.Address
-	NewState        *validation.Validation
-	ValidatorDelta  *delta.Renewal
-	DelegationDelta *delta.Renewal
+func (et *EpochTransition) HasUpdates() bool {
+	if et == nil {
+		return false
+	}
+	return len(et.Renewals) > 0 || // renewing existing staking periods
+		(et.ExitValidator != nil && !et.ExitValidator.IsZero()) || // exiting 1 validator
+		len(et.Evictions) > 0 || // forcing eviction of offline validators
+		et.ActivationCount > 0 // activating new validators
 }
 
 // Housekeep performs epoch transitions at epoch boundaries
@@ -46,7 +50,7 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 		return false, err
 	}
 
-	if transition == nil || (len(transition.Renewals) == 0 && transition.ExitValidator == nil && transition.ActivationCount == 0) {
+	if !transition.HasUpdates() {
 		return false, nil
 	}
 
@@ -62,22 +66,21 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 func (s *Staker) computeEpochTransition(currentBlock uint32) (*EpochTransition, error) {
 	var err error
 
-	transition := &EpochTransition{Block: currentBlock}
-
-	var renewals []ValidatorRenewal
+	var renewals []thor.Address
+	var evictions []thor.Address
 	active := make(map[thor.Address]*validation.Validation)
 	exitValidator := thor.Address{}
 	err = s.validationService.LeaderGroupIterator(
 		s.renewalCallback(currentBlock, &renewals),
 		s.exitsCallback(currentBlock, &exitValidator),
 		s.collectActiveCallback(active),
-		s.evictionCallback(currentBlock),
+		s.evictionCallback(currentBlock, &evictions),
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	transition.Renewals = renewals
+	transition := &EpochTransition{Block: currentBlock, Renewals: renewals, Evictions: evictions}
 
 	if !exitValidator.IsZero() {
 		transition.ExitValidator = &exitValidator
@@ -92,7 +95,7 @@ func (s *Staker) computeEpochTransition(currentBlock uint32) (*EpochTransition, 
 	return transition, nil
 }
 
-func (s *Staker) renewalCallback(currentBlock uint32, renewals *[]ValidatorRenewal) func(thor.Address, *validation.Validation) error {
+func (s *Staker) renewalCallback(currentBlock uint32, renewals *[]thor.Address) func(thor.Address, *validation.Validation) error {
 	// Collect all validators due for renewal
 	return func(validator thor.Address, entry *validation.Validation) error {
 		// Skip validators due to exit
@@ -105,24 +108,7 @@ func (s *Staker) renewalCallback(currentBlock uint32, renewals *[]ValidatorRenew
 			return nil
 		}
 
-		// Compute renewal deltas
-		validatorRenewal := entry.Renew()
-		delegationsRenewal, err := s.aggregationService.Renew(validator)
-		if err != nil {
-			return err
-		}
-
-		// Calculate new weight and locked VET
-		changeWeight := big.NewInt(0).Add(validatorRenewal.NewLockedWeight, delegationsRenewal.NewLockedWeight)
-		entry.LockedVET = big.NewInt(0).Add(entry.LockedVET, validatorRenewal.NewLockedVET)
-		entry.Weight = big.NewInt(0).Add(entry.Weight, changeWeight)
-
-		*renewals = append(*renewals, ValidatorRenewal{
-			Validator:       validator,
-			NewState:        entry,
-			ValidatorDelta:  validatorRenewal,
-			DelegationDelta: delegationsRenewal,
-		})
+		*renewals = append(*renewals, validator)
 
 		return nil
 	}
@@ -144,19 +130,11 @@ func (s *Staker) exitsCallback(currentBlock uint32, exitAddress *thor.Address) f
 	}
 }
 
-func (s *Staker) evictionCallback(currentBlock uint32) func(thor.Address, *validation.Validation) error {
+func (s *Staker) evictionCallback(currentBlock uint32, evictions *[]thor.Address) func(thor.Address, *validation.Validation) error {
 	return func(validator thor.Address, entry *validation.Validation) error {
 		if entry.OfflineBlock != nil && currentBlock > *entry.OfflineBlock+(thor.OfflineValidatorEvictionThresholdEpochs*EpochLength.Get()) {
-			exitBlock, err := s.validationService.SetExitBlock(validator, currentBlock+EpochLength.Get())
-			if err != nil {
-				return err
-			}
-			if entry.ExitBlock != nil && *entry.ExitBlock < exitBlock {
-				exitBlock = *entry.ExitBlock
-			}
-			entry.ExitBlock = &exitBlock
-
-			return s.validationService.SetValidation(validator, entry, false)
+			*evictions = append(*evictions, validator)
+			return nil
 		}
 		return nil
 	}
@@ -210,14 +188,18 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 
 	accumulatedRenewal := delta.NewRenewal()
 	// Apply renewals
-	for _, renewal := range transition.Renewals {
-		accumulatedRenewal.Add(renewal.ValidatorDelta)
-		accumulatedRenewal.Add(renewal.DelegationDelta)
-
-		// Update validator state
-		if err := s.validationService.SetValidation(renewal.Validator, renewal.NewState, false); err != nil {
+	for _, validator := range transition.Renewals {
+		aggRenewal, err := s.aggregationService.Renew(validator)
+		if err != nil {
 			return err
 		}
+		accumulatedRenewal.Add(aggRenewal)
+		// Update validator state
+		valRenewal, err := s.validationService.Renew(validator, aggRenewal)
+		if err != nil {
+			return err
+		}
+		accumulatedRenewal.Add(valRenewal)
 	}
 	// Apply accumulated renewals to global stats
 	if err := s.globalStatsService.ApplyRenewal(accumulatedRenewal); err != nil {
@@ -240,6 +222,14 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 		}
 
 		if err := s.globalStatsService.ApplyExit(exit.Add(aggExit)); err != nil {
+			return err
+		}
+	}
+
+	// Apply evictions
+	for _, validator := range transition.Evictions {
+		logger.Info("evicting validator", "validator", validator)
+		if err := s.validationService.Evict(validator, transition.Block); err != nil {
 			return err
 		}
 	}
