@@ -398,7 +398,7 @@ func TestJustifierPos(t *testing.T) {
 
 				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
 					assert.Equal(t, uint32(180), vs.checkpoint)
-					expected, ok := new(big.Int).SetString("333333333333333333333333333", 10)
+					expected, ok := new(big.Int).SetString("166666666666666666666666666", 10)
 					assert.True(t, ok)
 					assert.Equal(t, expected, vs.thresholdWeight)
 				} else {
@@ -439,7 +439,7 @@ func TestJustifierPos(t *testing.T) {
 				}
 
 				assert.Equal(t, uint32(thor.CheckpointInterval*2), vs.checkpoint)
-				expected, ok := new(big.Int).SetString("333333333333333333333333333", 10)
+				expected, ok := new(big.Int).SetString("166666666666666666666666666", 10)
 				assert.True(t, ok)
 				assert.Equal(t, expected, vs.thresholdWeight)
 				assert.Equal(t, uint32(2), vs.Summarize().Quality)
@@ -529,13 +529,13 @@ func TestJustifierPos(t *testing.T) {
 				// In PoA we do 2/3 of MaxBlockProposers that rounded is 7, 7 > 7 is false hence committed would be false
 				for range MaxBlockProposers*2/3 - 1 {
 					// Weight, stake multiplied by default multiplier
-					vs.AddBlock(datagen.RandAddress(), true, new(big.Int).Mul(validatorStake, big.NewInt(2)))
+					vs.AddBlock(datagen.RandAddress(), true, validatorStake)
 				}
 
 				master := datagen.RandAddress()
 				// master votes WIT
 				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
-					vs.AddBlock(master, false, new(big.Int).Mul(validatorStake, big.NewInt(2)))
+					vs.AddBlock(master, false, validatorStake)
 				} else {
 					vs.AddBlock(master, false, nil)
 				}
@@ -835,6 +835,7 @@ func newTestBftPos(t assert.TestingT, forkCfg *thor.ForkConfig) (*TestBFT, error
 	if err != nil {
 		return nil, err
 	}
+	staker.EpochLength = solidity.NewConfigVariable("epoch-length", 1)
 
 	clearStakerSingletons()
 

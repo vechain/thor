@@ -6,22 +6,57 @@
 package builtin
 
 import (
+	"context"
 	"math"
 	"math/big"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/builtin/solidity"
+	builtinStaker "github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/test"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/bind"
-	"github.com/vechain/thor/v2/tx"
 )
+
+func DebugRevert(t *testing.T, receipt *api.Receipt, sender *bind.MethodBuilder) {
+	if receipt == nil {
+		require.Fail(t, "receipt is nil")
+		return
+	}
+	if receipt.Reverted {
+		_, err := sender.Call().
+			AtRevision(receipt.Meta.BlockID.String()).
+			Caller(&receipt.Meta.TxOrigin).
+			Execute()
+		if err != nil {
+			require.Fail(t, "transaction reverted", err)
+		} else {
+			require.Fail(t, "transaction reverted for unknown reason")
+		}
+	}
+}
+
+func ExpectRevert(t *testing.T, receipt *api.Receipt, sender *bind.MethodBuilder, expectedMessage string) {
+	if receipt == nil {
+		require.Fail(t, "receipt is nil")
+		return
+	}
+	assert.True(t, receipt.Reverted, "expected transaction to revert but it did not")
+	_, err := sender.Call().
+		AtRevision(receipt.Meta.BlockID.String()).
+		Caller(&receipt.Meta.TxOrigin).
+		Execute()
+	require.Contains(t, err.Error(), expectedMessage, "transaction did not revert as expected")
+}
 
 func TestStaker(t *testing.T) {
 	minStakingPeriod := uint32(360) * 24 * 7 // 360 days in seconds
@@ -38,17 +73,18 @@ func TestStaker(t *testing.T) {
 	require.NoError(t, err)
 
 	// set authorities - required for initial staker setup
-	var authorityTxs []*bind.SendBuilder
 	executor := bind.NewSigner(genesis.DevAccounts()[0].PrivateKey)
 	stargate := bind.NewSigner(genesis.DevAccounts()[0].PrivateKey)
+	validators := genesis.DevAccounts()[0:2]
 	for _, acc := range genesis.DevAccounts()[1:] {
-		sender := authority.Add(acc.Address, acc.Address, datagen.RandomHash()).Send().WithSigner(executor).WithOptions(txOpts())
-		authorityTxs = append(authorityTxs, sender)
-	}
-	for _, tx := range authorityTxs {
-		if _, err := tx.Submit(); err != nil {
-			t.Fatal(err)
-		}
+		method := authority.Add(acc.Address, acc.Address, datagen.RandomHash())
+		receipt, _, err := method.
+			Send().
+			WithSigner(executor).
+			WithOptions(txOpts()).
+			SubmitAndConfirm(context.Background())
+		assert.NoError(t, err)
+		DebugRevert(t, receipt, method)
 	}
 
 	// set max block proposers
@@ -69,12 +105,15 @@ func TestStaker(t *testing.T) {
 
 	// add validators - trigger PoS activation
 	minStake := MinStake()
-	var validatorTxs []*tx.Transaction
-	for _, acc := range genesis.DevAccounts()[0:2] {
-		addValidatorTx, err := staker.AddValidation(acc.Address, minStake, minStakingPeriod).
+
+	builtinStaker.EpochLength = solidity.NewConfigVariable("epoch-length", 1)
+	for _, acc := range validators {
+		method := staker.AddValidation(acc.Address, minStake, minStakingPeriod)
+		receipt, _, err := method.
 			Send().
 			WithSigner(bind.NewSigner(acc.PrivateKey)).
-			WithOptions(txOpts()).Submit()
+			WithOptions(txOpts()).
+			SubmitAndConfirm(txContext(t))
 		require.NoError(t, err)
 		validatorTxs = append(validatorTxs, addValidatorTx)
 	}
@@ -110,9 +149,9 @@ func TestStaker(t *testing.T) {
 	getStakeRes, err := staker.GetValidatorStake(firstID)
 	require.NoError(t, err)
 	require.False(t, getStakeRes.Address.IsZero())
-	require.False(t, getStakeRes.Endorsor.IsZero())
+	require.False(t, getStakeRes.Endorser.IsZero())
 	require.Equal(t, getStakeRes.Stake, minStake)
-	require.Equal(t, getStakeRes.Weight, big.NewInt(0).Mul(minStake, big.NewInt(2)))
+	require.Equal(t, getStakeRes.Weight, minStake)
 	require.Equal(t, getStakeRes.QueuedStake.String(), big.NewInt(0).String())
 
 	// GetStatus
@@ -138,8 +177,8 @@ func TestStaker(t *testing.T) {
 	require.False(t, firstID.IsZero())
 	require.True(t, firstActive.Exists(*getStatusRes))
 	require.Equal(t, minStake, firstActive.Stake)
-	require.Equal(t, big.NewInt(0).Mul(minStake, big.NewInt(2)), firstActive.Weight)
-	require.False(t, firstActive.Endorsor.IsZero())
+	require.Equal(t, minStake, firstActive.Weight)
+	require.False(t, firstActive.Endorser.IsZero())
 
 	// Next
 	next, id, err := staker.Next(firstID)
@@ -150,8 +189,8 @@ func TestStaker(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, StakerStatusActive, nextStatus.Status)
 	require.Equal(t, minStake, next.Stake)
-	require.Equal(t, big.NewInt(0).Mul(minStake, big.NewInt(2)), next.Weight)
-	require.False(t, next.Endorsor.IsZero())
+	require.Equal(t, minStake, next.Weight)
+	require.False(t, next.Endorser.IsZero())
 
 	var (
 		validator    = genesis.DevAccounts()[9]
@@ -169,7 +208,7 @@ func TestStaker(t *testing.T) {
 	queuedEvents, err := staker.FilterValidatorQueued(newRange(receipt), nil, logdb.ASC)
 	require.NoError(t, err)
 	require.Len(t, queuedEvents, 1)
-	require.Equal(t, validator.Address, queuedEvents[0].Endorsor)
+	require.Equal(t, validator.Address, queuedEvents[0].Endorser)
 	require.Equal(t, minStake, queuedEvents[0].Stake)
 	queuedID := queuedEvents[0].Node
 
@@ -182,7 +221,7 @@ func TestStaker(t *testing.T) {
 	require.True(t, firstQueued.Exists(*firstQueuedStatus))
 	require.Equal(t, 0, firstQueued.Stake.Sign())
 	require.Equal(t, StakerStatusQueued, firstQueuedStatus.Status)
-	require.False(t, firstQueued.Endorsor.IsZero())
+	require.False(t, firstQueued.Endorser.IsZero())
 	require.Equal(t, validator.Address, firstQueued.Address)
 
 	// TotalQueued
@@ -191,7 +230,9 @@ func TestStaker(t *testing.T) {
 	stake := big.NewInt(0).Mul(big.NewInt(1e18), big.NewInt(25))
 	stake = big.NewInt(0).Mul(stake, big.NewInt(1e6))
 	require.Equal(t, stake, queuedStake)
-	require.Equal(t, big.NewInt(0).Mul(stake, big.NewInt(2)), queuedWeight)
+	require.Equal(t, minStake, queuedWeight)
+
+	builtinStaker.EpochLength = solidity.NewConfigVariable("epoch-length", 180)
 
 	// IncreaseStake
 	receipt, _, err = staker.IncreaseStake(queuedID, minStake).
@@ -265,7 +306,7 @@ func TestStaker(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, minStake, validationTotals.TotalLockedStake)
-	require.Equal(t, big.NewInt(0).Mul(minStake, big.NewInt(2)), validationTotals.TotalLockedWeight)
+	require.Equal(t, minStake, validationTotals.TotalLockedWeight)
 	require.Equal(t, big.NewInt(0).String(), validationTotals.TotalQueuedStake.String())
 	require.Equal(t, big.NewInt(0).String(), validationTotals.TotalQueuedWeight.String())
 	require.Equal(t, big.NewInt(0).String(), validationTotals.TotalExitingStake.String())
@@ -281,9 +322,10 @@ func TestStaker(t *testing.T) {
 	receipt, _, err = staker.SignalDelegationExit(delegationID).
 		Send().
 		WithSigner(stargate).
-		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
+		WithOptions(txOpts()).
+		SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
-	require.True(t, receipt.Reverted) // should revert since it hasn't started
+	ExpectRevert(t, receipt, staker.SignalDelegationExit(delegationID), "delegation has not started yet, funds can be withdrawn")
 
 	// Withdraw
 	receipt, _, err = staker.WithdrawStake(queuedID).Send().WithSigner(validatorKey).WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
@@ -330,4 +372,22 @@ func TestStaker(t *testing.T) {
 	rewards, err = energy.CalculateRewards(stakerNative)
 	require.NoError(t, err)
 	require.Equal(t, rewards, issuance)
+
+	// SetBeneficiary
+	validator1 := bind.NewSigner(validators[0].PrivateKey)
+	beneficiary := datagen.RandAddress()
+	receipt, _, err = staker.SetBeneficiary(firstID, beneficiary).
+		Send().
+		WithSigner(validator1).
+		WithOptions(txOpts()).
+		SubmitAndConfirm(txContext(t))
+	require.NoError(t, err)
+	DebugRevert(t, receipt, staker.SetBeneficiary(queuedID, beneficiary))
+
+	beneficiaryEvents, err := staker.FilterBeneficiarySet(newRange(receipt), nil, logdb.ASC)
+	require.NoError(t, err)
+	require.Len(t, beneficiaryEvents, 1)
+	require.Equal(t, validator1.Address(), beneficiaryEvents[0].Validator)
+	require.Equal(t, beneficiary, beneficiaryEvents[0].Beneficiary)
+	require.Equal(t, validator1.Address(), beneficiaryEvents[0].Endorser)
 }

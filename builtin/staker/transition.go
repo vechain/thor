@@ -11,11 +11,8 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-// Transition activates the staker contract when sufficient validators are queued
-func (s *Staker) Transition(currentBlock uint32) (bool, error) {
-	// TODO review how to change this elegantly for unit tests
-	// if this check is enabled the epochLength is defaulted to 180 blocks
-	// which breaks most of tests that rely on a HAYABUSA_TP = 1
+// transition activates the staker contract when sufficient validators are queued
+func (s *Staker) transition(currentBlock uint32) (bool, error) {
 	if currentBlock%EpochLength.Get() != 0 {
 		return false, nil // No transition needed
 	}

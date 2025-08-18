@@ -40,7 +40,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 	// Create test chain
 	forks := testchain.DefaultForkConfig
 	forks.GALACTICA = 1
-	testChain, err := testchain.NewWithFork(&forks)
+	testChain, err := testchain.NewWithFork(&forks, 180)
 	require.NoError(t, err)
 	testNode, err := testnode.NewNodeBuilder().WithChain(testChain).Build()
 	require.NoError(t, err)

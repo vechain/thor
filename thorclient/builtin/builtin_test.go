@@ -108,7 +108,7 @@ func newTestNode(t *testing.T, useExecutor bool) (testnode.Node, *thorclient.Cli
 	staker.CooldownPeriod = solidity.NewConfigVariable("cooldown-period", 8640)
 	staker.EpochLength = solidity.NewConfigVariable("epoch-length", 180)
 
-	chain, err := testchain.NewIntegrationTestChainWithGenesis(gene, &thor.SoloFork)
+	chain, err := testchain.NewIntegrationTestChainWithGenesis(gene, &thor.SoloFork, 180)
 	if err != nil {
 		t.Fatalf("failed to create test chain: %v", err)
 	}

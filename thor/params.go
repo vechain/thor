@@ -49,6 +49,8 @@ const (
 	BaseFeeChangeDenominator = 8                  // determines the percentage change in the base fee per block based on network utilization
 
 	MaxPosScore = 10000 // max total score after PoS fork
+
+	OfflineValidatorEvictionThresholdEpochs = 336 // the number of epochs after which offline validator will be evicted from leader group (7 days)
 )
 
 // Keys of governance params.
@@ -70,5 +72,5 @@ var (
 	InitialCurveFactor               = big.NewInt(76800)
 
 	EnergyGrowthRate      = big.NewInt(5000000000) // WEI THOR per token(VET) per second. about 0.000432 THOR per token per day.
-	NumberOfBlocksPerYear = big.NewInt(3153600)    // number of blocks per year, non leap
+	NumberOfBlocksPerYear = big.NewInt(3153600)    // number of blocks per year, non leap (365 days)
 )

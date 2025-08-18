@@ -13,10 +13,7 @@ import (
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/builtin/staker"
-	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
-	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/poa"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
@@ -36,13 +33,12 @@ func (c *Consensus) validate(
 	header := block.Header()
 
 	staker := builtin.Staker.Native(state)
-	posActive, activated, activeGroup, err := c.syncPOS(staker, header.Number())
+	dPosStatus, err := staker.SyncPOS(c.forkConfig, header.Number())
 	if err != nil {
 		return nil, nil, err
 	}
-	if len(activeGroup) > 0 {
-		// invalidate cache
-		c.validatorsCache.Add(parent.ID(), activeGroup)
+	if dPosStatus.Updates {
+		c.validatorsCache.Remove(parent.ID())
 	}
 
 	if err := c.validateBlockHeader(header, parent, nowTimestamp); err != nil {
@@ -50,8 +46,8 @@ func (c *Consensus) validate(
 	}
 
 	var candidates *poa.Candidates
-	if posActive {
-		err = c.validateStakingProposer(header, parent, staker, activeGroup)
+	if dPosStatus.Active {
+		err = c.validateStakingProposer(header, parent, staker)
 	} else {
 		candidates, err = c.validateAuthorityProposer(header, parent, state)
 	}
@@ -59,23 +55,16 @@ func (c *Consensus) validate(
 		return nil, nil, err
 	}
 
-	if activated {
-		err := builtin.Energy.Native(state, parent.Timestamp()).StopEnergyGrowth()
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
 	if err := c.validateBlockBody(block); err != nil {
 		return nil, nil, err
 	}
 
-	stage, receipts, err := c.verifyBlock(block, state, blockConflicts, posActive)
+	stage, receipts, err := c.verifyBlock(block, state, blockConflicts, dPosStatus.Active)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if !posActive {
+	if !dPosStatus.Active {
 		if err := c.authorityCacheHandler(candidates, header, receipts); err != nil {
 			return nil, nil, err
 		}
@@ -323,43 +312,4 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 	}
 
 	return stage, receipts, nil
-}
-
-func (c *Consensus) syncPOS(
-	staker *staker.Staker,
-	current uint32,
-) (active bool, activated bool, activeGroup map[thor.Address]*validation.Validation, err error) {
-	// still on PoA
-	if c.forkConfig.HAYABUSA+c.forkConfig.HAYABUSA_TP > current {
-		return false, false, nil, nil
-	}
-	// check if the staker contract is active
-	active, err = staker.IsPoSActive()
-	if err != nil {
-		return false, false, nil, err
-	}
-
-	// attempt to transition if we're on a transition block and the staker contract is not active
-	if !active && current%c.forkConfig.HAYABUSA_TP == 0 {
-		activated, err = staker.Transition(current)
-		if err != nil {
-			return false, false, nil, err
-		}
-		if activated {
-			fmt.Println(HayabusaASCIIArt)
-			log.Info("dPoS activated", "pkg", "consensus", "block", current)
-			return true, true, nil, nil
-		}
-	}
-
-	// perform housekeeping if the staker contract is active
-	if active {
-		_, activeGroup, err := staker.Housekeep(current)
-		if err != nil {
-			return false, false, nil, err
-		}
-		return true, false, activeGroup, nil
-	}
-
-	return active, false, nil, nil
 }

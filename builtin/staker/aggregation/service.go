@@ -99,10 +99,7 @@ func (s *Service) Exit(validator thor.Address) (*delta.Exit, error) {
 		return nil, err
 	}
 
-	exit, err := agg.exit()
-	if err != nil {
-		return nil, err
-	}
+	exit := agg.exit()
 
 	if err = s.setAggregation(validator, agg, false); err != nil {
 		return nil, err
@@ -113,7 +110,7 @@ func (s *Service) Exit(validator thor.Address) (*delta.Exit, error) {
 
 // SignalExit marks locked delegations as exiting for the next period.
 // Called when a validator signals intent to exit but hasn't exited yet.
-func (s *Service) SignalExit(validator thor.Address, stake *stakes.WeightedStake) error {
+func (s *Service) SignalExit(validator thor.Address, stake *stakes.WeightedStake, valStake *big.Int) error {
 	agg, err := s.GetAggregation(validator)
 	if err != nil {
 		return err
@@ -121,8 +118,12 @@ func (s *Service) SignalExit(validator thor.Address, stake *stakes.WeightedStake
 
 	// Only move to exiting pools - don't subtract from locked yet
 	// The subtraction happens during renewal
+	exitingWeight := stake.Weight()
+	if agg.LockedVET.Cmp(stake.VET()) <= 0 {
+		exitingWeight = big.NewInt(0).Add(exitingWeight, valStake)
+	}
 	agg.ExitingVET = big.NewInt(0).Add(agg.ExitingVET, stake.VET())
-	agg.ExitingWeight = big.NewInt(0).Add(agg.ExitingWeight, stake.Weight())
+	agg.ExitingWeight = big.NewInt(0).Add(agg.ExitingWeight, exitingWeight)
 
 	return s.setAggregation(validator, agg, false)
 }

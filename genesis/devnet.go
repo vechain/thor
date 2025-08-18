@@ -231,11 +231,11 @@ func NewHayabusaDevnet(forkConfig *thor.ForkConfig) *Genesis {
 				return err
 			}
 
-			transitioned, err := builtin.Staker.Native(state).Transition(0)
+			status, err := builtin.Staker.Native(state).SyncPOS(forkConfig, 0)
 			if err != nil {
 				return err
 			}
-			if !transitioned {
+			if !status.Active {
 				return errors.New("the transition of the validator state didn't happen")
 			}
 

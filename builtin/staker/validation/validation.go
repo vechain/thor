@@ -8,9 +8,10 @@ package validation
 import (
 	"math/big"
 
+	"github.com/vechain/thor/v2/builtin/staker/stakes"
+
 	"github.com/vechain/thor/v2/builtin/staker/aggregation"
 	"github.com/vechain/thor/v2/builtin/staker/delta"
-	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -24,24 +25,18 @@ const (
 )
 
 const (
-	Multiplier = 200 // 200% for validators
+	Multiplier = uint8(100) // 200% for validators
 )
 
-func WeightedStake(amount *big.Int) *stakes.WeightedStake {
-	if amount == nil {
-		amount = big.NewInt(0)
-	}
-	return stakes.NewWeightedStake(amount, Multiplier)
-}
-
 type Validation struct {
-	Endorsor           thor.Address // the address providing the stake
-	Period             uint32       // the staking period of the validation
-	CompleteIterations uint32       // the completed staking periods by the validation
-	Status             Status       // status of the validation
-	Online             bool         // whether the validation is online or not
-	StartBlock         uint32       // the block number when the validation started the first staking period
-	ExitBlock          *uint32      `rlp:"nil"` // the block number when the validation moved to cooldown
+	Endorser           thor.Address  // the address providing the stake
+	Beneficiary        *thor.Address `rlp:"nil"` // the address receiving the rewards
+	Period             uint32        // the staking period of the validation
+	CompleteIterations uint32        // the completed staking periods by the validation
+	Status             Status        // status of the validation
+	StartBlock         uint32        // the block number when the validation started the first staking period
+	ExitBlock          *uint32       `rlp:"nil"` // the block number when the validation moved to cooldown
+	OfflineBlock       *uint32       `rlp:"nil"` // the block when validator went offline, it will be cleared once online
 
 	LockedVET        *big.Int // the amount of VET locked for the current staking period, for the validator only
 	PendingUnlockVET *big.Int // the amount of VET that will be unlocked in the next staking period. DOES NOT contribute to the TVL
@@ -49,7 +44,7 @@ type Validation struct {
 	CooldownVET      *big.Int // the amount of VET that is locked into the validation's cooldown
 	WithdrawableVET  *big.Int // the amount of VET that is currently withdrawable
 
-	Weight *big.Int // LockedVET x2 + total weight from delegators
+	Weight *big.Int // LockedVET x1 if no delegations, otherwise x2 + total weight from delegators
 }
 
 type Totals struct {
@@ -70,12 +65,12 @@ func (v *Validation) Totals(agg *aggregation.Aggregation) *Totals {
 		exitingVET = big.NewInt(0).Add(v.LockedVET, agg.LockedVET)
 		exitingWeight = v.Weight
 	} else {
-		vExiting := WeightedStake(v.PendingUnlockVET)
+		vExiting := stakes.NewWeightedStake(v.PendingUnlockVET, Multiplier)
 		exitingVET = big.NewInt(0).Add(vExiting.VET(), agg.ExitingVET)
 		exitingWeight = big.NewInt(0).Add(vExiting.Weight(), agg.ExitingWeight)
 	}
 
-	queued := WeightedStake(v.QueuedVET)
+	queued := stakes.NewWeightedStake(v.QueuedVET, Multiplier)
 
 	return &Totals{
 		// Delegation totals can be calculated by subtracting validators stakes / weights from the global totals.
@@ -122,6 +117,15 @@ func (v *Validation) CurrentIteration() uint32 {
 func (v *Validation) Renew() *delta.Renewal {
 	newLockedVET := big.NewInt(0)
 
+	if v.QueuedVET == nil {
+		v.QueuedVET = new(big.Int)
+	}
+	if v.PendingUnlockVET == nil {
+		v.PendingUnlockVET = new(big.Int)
+	}
+	if v.WithdrawableVET == nil {
+		v.WithdrawableVET = new(big.Int)
+	}
 	newLockedVET.Add(newLockedVET, v.QueuedVET)
 	newLockedVET.Sub(newLockedVET, v.PendingUnlockVET)
 
@@ -130,9 +134,8 @@ func (v *Validation) Renew() *delta.Renewal {
 	v.QueuedVET = big.NewInt(0)
 	v.PendingUnlockVET = big.NewInt(0)
 
-	// Apply x2 multiplier for validation's stake
-	weight := WeightedStake(newLockedVET).Weight()
-	queuedDecreaseWeight := WeightedStake(queuedDecrease).Weight()
+	weight := stakes.NewWeightedStake(newLockedVET, Multiplier).Weight()
+	queuedDecreaseWeight := stakes.NewWeightedStake(queuedDecrease, Multiplier).Weight()
 
 	v.CompleteIterations++
 
@@ -167,9 +170,9 @@ func (v *Validation) Exit() *delta.Exit {
 	// We only return the change in the validation's TVL and weight
 	return &delta.Exit{
 		ExitedTVL:            releaseLockedTVL,
-		ExitedTVLWeight:      WeightedStake(releaseLockedTVL).Weight(),
+		ExitedTVLWeight:      stakes.NewWeightedStake(releaseLockedTVL, Multiplier).Weight(),
 		QueuedDecrease:       releaseQueuedTVL,
-		QueuedDecreaseWeight: WeightedStake(releaseQueuedTVL).Weight(),
+		QueuedDecreaseWeight: stakes.NewWeightedStake(releaseQueuedTVL, Multiplier).Weight(),
 	}
 }
 

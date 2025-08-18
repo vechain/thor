@@ -128,7 +128,7 @@ func (s *Staker) QueuedStake() (*big.Int, *big.Int, error) {
 
 type ValidatorStake struct {
 	Address     thor.Address
-	Endorsor    thor.Address
+	Endorser    thor.Address
 	Stake       *big.Int
 	Weight      *big.Int
 	QueuedStake *big.Int
@@ -149,7 +149,7 @@ type ValidatorPeriodDetails struct {
 }
 
 func (v *ValidatorStake) Exists(status ValidatorStatus) bool {
-	return !v.Endorsor.IsZero() && status.Status != 0
+	return !v.Endorser.IsZero() && status.Status != 0
 }
 
 func (s *Staker) GetValidatorStake(node thor.Address) (*ValidatorStake, error) {
@@ -163,7 +163,7 @@ func (s *Staker) GetValidatorStake(node thor.Address) (*ValidatorStake, error) {
 	}
 	validatorStake := &ValidatorStake{
 		Address:     node,
-		Endorsor:    thor.Address(out[0].(*common.Address)[:]),
+		Endorser:    thor.Address(out[0].(*common.Address)[:]),
 		Stake:       *(out[1].(**big.Int)),
 		Weight:      *(out[2].(**big.Int)),
 		QueuedStake: *(out[3].(**big.Int)),
@@ -234,6 +234,10 @@ func (s *Staker) DecreaseStake(validator thor.Address, amount *big.Int) *bind.Me
 
 func (s *Staker) IncreaseStake(validator thor.Address, amount *big.Int) *bind.MethodBuilder {
 	return s.contract.Method("increaseStake", validator).WithValue(amount)
+}
+
+func (s *Staker) SetBeneficiary(validator, beneficiary thor.Address) *bind.MethodBuilder {
+	return s.contract.Method("setBeneficiary", validator, beneficiary)
 }
 
 func (s *Staker) AddDelegation(validator thor.Address, stake *big.Int, multiplier uint8) *bind.MethodBuilder {
@@ -355,14 +359,14 @@ func (s *Staker) Issuance(revision string) (*big.Int, error) {
 
 type ValidationQueuedEvent struct {
 	Node     thor.Address
-	Endorsor thor.Address
+	Endorser thor.Address
 	Period   uint32
 	Stake    *big.Int
 	Log      api.FilteredEvent
 }
 
 type ValidatorQueuedEvent struct {
-	Endorsor     thor.Address
+	Endorser     thor.Address
 	Master       thor.Address
 	ValidationID thor.Address
 	Stake        *big.Int
@@ -384,7 +388,7 @@ func (s *Staker) FilterValidatorQueued(eventsRange *api.Range, opts *api.Options
 	out := make([]ValidationQueuedEvent, len(raw))
 	for i, log := range raw {
 		node := thor.BytesToAddress(log.Topics[1][:])     // indexed
-		endorsor := thor.BytesToAddress(log.Topics[2][:]) // indexed
+		endorser := thor.BytesToAddress(log.Topics[2][:]) // indexed
 
 		// non-indexed
 		data := make([]any, 2)
@@ -402,7 +406,7 @@ func (s *Staker) FilterValidatorQueued(eventsRange *api.Range, opts *api.Options
 
 		out[i] = ValidationQueuedEvent{
 			Node:     node,
-			Endorsor: endorsor,
+			Endorser: endorser,
 			Period:   *(data[0].(*uint32)),
 			Stake:    *(data[1].(**big.Int)),
 			Log:      log,
@@ -635,6 +639,53 @@ func (s *Staker) FilterStakeDecreased(eventsRange *api.Range, opts *api.Options,
 			Validator: node,
 			Removed:   *(data[0].(**big.Int)),
 			Log:       log,
+		}
+	}
+
+	return out, nil
+}
+
+type BeneficiarySetEvent struct {
+	Validator   thor.Address
+	Endorser    thor.Address
+	Beneficiary thor.Address
+	Log         api.FilteredEvent
+}
+
+func (s *Staker) FilterBeneficiarySet(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]BeneficiarySetEvent, error) {
+	event, ok := s.contract.ABI().Events["BeneficiarySet"]
+	if !ok {
+		return nil, fmt.Errorf("event not found")
+	}
+
+	raw, err := s.contract.FilterEvent(event.Name).WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]BeneficiarySetEvent, len(raw))
+	for i, log := range raw {
+		validator := thor.BytesToAddress(log.Topics[1][:]) // indexed
+		endorser := thor.BytesToAddress(log.Topics[2][:])  // indexed
+
+		// non-indexed
+		data := make([]any, 1)
+		data[0] = new(common.Address)
+
+		bytes, err := hexutil.Decode(log.Data)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := event.Inputs.Unpack(&data, bytes); err != nil {
+			return nil, err
+		}
+
+		out[i] = BeneficiarySetEvent{
+			Validator:   validator,
+			Endorser:    endorser,
+			Beneficiary: thor.Address(*data[0].(*common.Address)),
+			Log:         log,
 		}
 	}
 

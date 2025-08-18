@@ -34,10 +34,7 @@ func TestConsensus_PosFork(t *testing.T) {
 
 	// mint block 2: chain should set the staker contract, still using PoA
 	best, parent, st := setup.mintBlock()
-	leaders, err := builtin.Staker.Native(st).LeaderGroup()
-	assert.NoError(t, err)
-	assert.Equal(t, 0, len(leaders))
-	err = setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st), leaders)
+	err := setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st))
 	assert.Error(t, err)
 	_, err = setup.consensus.validateAuthorityProposer(best.Header, parent.Header, st)
 	assert.NoError(t, err)
@@ -47,9 +44,7 @@ func TestConsensus_PosFork(t *testing.T) {
 
 	// mint block 4: chain should switch to PoS
 	best, parent, st = setup.mintBlock()
-	leaders, err = builtin.Staker.Native(st).LeaderGroup()
-	assert.NoError(t, err)
-	err = setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st), leaders)
+	err = setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st))
 	assert.NoError(t, err)
 }
 
@@ -70,14 +65,12 @@ func TestConsensus_POS_MissedSlots(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NoError(t, setup.chain.AddBlock(blk, stage, receipts))
 
-	leaders, err := builtin.Staker.Native(st).LeaderGroup()
-	assert.NoError(t, err)
-	err = setup.consensus.validateStakingProposer(blk.Header(), parent.Header, builtin.Staker.Native(st), leaders)
+	err = setup.consensus.validateStakingProposer(blk.Header(), parent.Header, builtin.Staker.Native(st))
 	assert.NoError(t, err)
 	staker := builtin.Staker.Native(st)
 	validator, err := staker.Get(signer.Address)
 	assert.NoError(t, err)
-	assert.True(t, validator.Online)
+	assert.Nil(t, validator.OfflineBlock)
 }
 
 func TestConsensus_POS_Unscheduled(t *testing.T) {
@@ -96,9 +89,7 @@ func TestConsensus_POS_Unscheduled(t *testing.T) {
 	blk, _, _, err := flow.Pack(signer.PrivateKey, 0, false)
 	assert.NoError(t, err)
 
-	leaders, err := builtin.Staker.Native(st).LeaderGroup()
-	assert.NoError(t, err)
-	err = setup.consensus.validateStakingProposer(blk.Header(), parent.Header, builtin.Staker.Native(st), leaders)
+	err = setup.consensus.validateStakingProposer(blk.Header(), parent.Header, builtin.Staker.Native(st))
 	assert.ErrorContains(t, err, "block timestamp unscheduled")
 }
 
@@ -119,7 +110,7 @@ func newHayabusaSetup(t *testing.T) *hayabusaSetup {
 	config := &thor.SoloFork
 	config.HAYABUSA = 2
 
-	chain, err := testchain.NewWithFork(config)
+	chain, err := testchain.NewWithFork(config, 1)
 	assert.NoError(t, err)
 
 	root := chain.Repo().BestBlockSummary().Root()
@@ -150,12 +141,9 @@ func (h *hayabusaSetup) mintBlock(txs ...*tx.Transaction) (*chain.BlockSummary, 
 	assert.NoError(h.t, err)
 
 	st := h.chain.Stater().NewState(parent.Root())
-	staker := builtin.Staker.Native(st)
-	_, activated, _, err := h.consensus.syncPOS(staker, best.Header.Number())
+	_, err = builtin.Staker.Native(st).SyncPOS(h.config, best.Header.Number())
 	assert.NoError(h.t, err)
-	if activated {
-		builtin.Energy.Native(st, parent.Header.Timestamp()).StopEnergyGrowth()
-	}
+
 	// actualGroup, err := builtin.Staker.Native(st).LeaderGroup()
 	// assert.NoError(h.t, err)
 	// eq := reflect.DeepEqual(activeGroup, actualGroup)
