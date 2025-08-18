@@ -208,11 +208,11 @@ contract Staker {
 
     /**
      * @dev get returns the validator status. status and offline / online for a validator.
-     * @return (status, online status)
+     * @return (status, online status, block when the validator went offline (max value if online))
      */
     function getValidatorStatus(
         address validator
-    ) public view returns (uint8, bool) {
+    ) public view returns (uint8, bool, uint32) {
         return StakerNative(address(this)).native_getValidatorStatus(validator);
     }
 
@@ -383,7 +383,7 @@ interface StakerNative {
 
     function native_getValidatorStatus(
         address validator
-    ) external view returns (uint8, bool);
+    ) external view returns (uint8, bool, uint32);
 
     function native_getValidatorPeriodDetails(
         address validator

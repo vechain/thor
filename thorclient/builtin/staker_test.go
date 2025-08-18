@@ -143,6 +143,7 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, StakerStatusActive, getStatusRes.Status)
 	require.True(t, getStatusRes.Online)
 	require.True(t, getStakeRes.Exists(*getStatusRes))
+	require.Equal(t, uint32(math.MaxUint32), getStatusRes.OfflineBlock)
 
 	// GetPeriodDetails
 	getPeriodDetailsRes, err := staker.GetValidatorPeriodDetails(firstID)

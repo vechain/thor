@@ -109,9 +109,14 @@ func init() {
 			if validator.IsEmpty() {
 				return []any{validation.StatusUnknown, false}, nil
 			}
+			offlineBlock := uint32(math.MaxUint32)
+			if validator.OfflineBlock != nil {
+				offlineBlock = *validator.OfflineBlock
+			}
 			return []any{
 				validator.Status,
 				validator.OfflineBlock == nil,
+				offlineBlock,
 			}, nil
 		}},
 		{"native_getValidatorPeriodDetails", func(env *xenv.Environment) ([]any, error) {
