@@ -108,13 +108,13 @@ func (v *Validation) CurrentIteration() uint32 {
 	return v.CompleteIterations
 }
 
-// Renew moves the stakes and weights around as follows:
+// renew moves the stakes and weights around as follows:
 // 1. Move QueuedVET => Locked
 // 2. Decrease LockedVET by PendingUnlockVET
 // 3. Increase WithdrawableVET by PendingUnlockVET
 // 4. Set QueuedVET to 0
 // 5. Set PendingUnlockVET to 0
-func (v *Validation) Renew() *delta.Renewal {
+func (v *Validation) renew(aggregations *delta.Renewal) *delta.Renewal {
 	newLockedVET := big.NewInt(0)
 
 	if v.QueuedVET == nil {
@@ -134,10 +134,15 @@ func (v *Validation) Renew() *delta.Renewal {
 	v.QueuedVET = big.NewInt(0)
 	v.PendingUnlockVET = big.NewInt(0)
 
+	v.CompleteIterations++
+
+	changeWeight := big.NewInt(0).Add(newLockedVET, aggregations.NewLockedWeight)
+	v.LockedVET = big.NewInt(0).Add(v.LockedVET, newLockedVET)
+	v.Weight = big.NewInt(0).Add(v.Weight, changeWeight)
+
+	// deltas
 	weight := stakes.NewWeightedStake(newLockedVET, Multiplier).Weight()
 	queuedDecreaseWeight := stakes.NewWeightedStake(queuedDecrease, Multiplier).Weight()
-
-	v.CompleteIterations++
 
 	return &delta.Renewal{
 		NewLockedVET:         newLockedVET,
@@ -147,7 +152,7 @@ func (v *Validation) Renew() *delta.Renewal {
 	}
 }
 
-func (v *Validation) Exit() *delta.Exit {
+func (v *Validation) exit() *delta.Exit {
 	releaseLockedTVL := big.NewInt(0).Set(v.LockedVET)
 	releaseQueuedTVL := big.NewInt(0).Set(v.QueuedVET)
 

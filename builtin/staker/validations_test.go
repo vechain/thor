@@ -149,7 +149,7 @@ func TestStaker_TotalStake(t *testing.T) {
 		exit, err := staker.validationService.ExitValidator(id)
 		require.NoError(t, err)
 
-		// Exit the aggregation too
+		// exit the aggregation too
 		aggExit, err := staker.aggregationService.Exit(id)
 		require.NoError(t, err)
 
@@ -199,7 +199,7 @@ func TestStaker_TotalStake_Withdrawal(t *testing.T) {
 	exit, err := staker.validationService.ExitValidator(addr)
 	require.NoError(t, err)
 
-	// Exit the aggregation too
+	// exit the aggregation too
 	aggExit, err := staker.aggregationService.Exit(addr)
 	require.NoError(t, err)
 
@@ -1262,7 +1262,7 @@ func TestStaker_RemoveValidator(t *testing.T) {
 	exit, err := staker.validationService.ExitValidator(addr)
 	require.NoError(t, err)
 
-	// Exit the aggregation too
+	// exit the aggregation too
 	aggExit, err := staker.aggregationService.Exit(addr)
 	require.NoError(t, err)
 
