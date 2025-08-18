@@ -37,7 +37,7 @@ func (s *Staker) SyncPOS(forkConfig *thor.ForkConfig, current uint32) (Status, e
 	}
 
 	// attempt to transition if we're on a transition block and the staker contract is not active
-	if !status.Active && current%forkConfig.HAYABUSA_TP == 0 {
+	if !status.Active && (forkConfig.HAYABUSA_TP == 0 || current%forkConfig.HAYABUSA_TP == 0) {
 		activated, err = s.transition(current)
 		if err != nil {
 			return status, fmt.Errorf("failed to transition to dPoS: %w", err)
