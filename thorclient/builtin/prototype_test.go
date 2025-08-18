@@ -269,3 +269,62 @@ func TestPrototype_MethodNotFound_WithBadABI(t *testing.T) {
 	_, err = bad.Master(builtin.Authority.Address)
 	require.Error(t, err)
 }
+
+func TestPrototype_UserCredit(t *testing.T) {
+	node, client := newTestNode(t, false)
+	defer node.Stop()
+
+	chainTag, err := client.ChainTag()
+	require.NoError(t, err)
+
+	p, err := NewPrototype(client)
+	require.NoError(t, err)
+
+	accKey := genesis.DevAccounts()[0].PrivateKey
+	acc := bind.NewSigner(accKey)
+	user := bind.NewSigner(genesis.DevAccounts()[1].PrivateKey)
+
+	contractBytecode := "0x6080604052348015600f57600080fd5b5060c88061001e6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c8063b8d1c87214602d575b600080fd5b605660048036036020811015604157600080fd5b81019080803590602001909291905050506058565b005b7fa66e3d99cea58d39cb278611964329fa8d4b08252d747eced50565286fb225c0816040518082815260200191505060405180910390a15056fea2646970667358221220be91f5a1548580d479fc71c4ee668fdb51566550b04fa3632f1d4c453053d3e264736f6c63430006020033"
+	bytecode, err := hexutil.Decode(contractBytecode)
+	require.NoError(t, err)
+	contractClause := tx.NewClause(nil).WithData(bytecode)
+
+	trx := tx.NewBuilder(tx.TypeLegacy).
+		ChainTag(chainTag).
+		Clause(contractClause).
+		Expiration(10000).
+		Gas(10_000_000).
+		Build()
+	trx = tx.MustSign(trx, accKey)
+
+	res, err := client.SendTransaction(trx)
+	require.NoError(t, err)
+
+	var receipt *api.Receipt
+	require.NoError(t,
+		test.Retry(func() error {
+			if receipt, err = client.TransactionReceipt(res.ID); err != nil {
+				return err
+			}
+			return nil
+		}, time.Second, 10*time.Second))
+	contractAddr := receipt.Outputs[0].Events[0].Address
+
+	receipt, _, err = p.SetCreditPlan(contractAddr, big.NewInt(100), big.NewInt(1)).
+		Send().
+		WithSigner(acc).
+		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
+	require.NoError(t, err)
+	require.False(t, receipt.Reverted)
+
+	receipt, _, err = p.AddUser(contractAddr, user.Address()).
+		Send().
+		WithSigner(acc).
+		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
+	require.NoError(t, err)
+	require.False(t, receipt.Reverted)
+
+	credit, err := p.UserCredit(contractAddr, user.Address())
+	require.NoError(t, err)
+	require.Equal(t, big.NewInt(100), credit)
+}
