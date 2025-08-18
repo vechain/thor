@@ -306,6 +306,11 @@ func TestStaker(t *testing.T) {
 	require.NoError(t, err)
 	ExpectRevert(t, receipt, staker.SignalDelegationExit(delegationID), "delegation has not started yet, funds can be withdrawn")
 
+	// DelegationSignaledExit may not emit while queued; ensure no crash and zero events
+	delegationSignaledExit, err := staker.FilterDelegationSignaledExit(newRange(receipt), nil, logdb.ASC)
+	require.NoError(t, err)
+	require.Len(t, delegationSignaledExit, 0)
+
 	// Withdraw
 	receipt, _, err = staker.WithdrawStake(queuedID).Send().WithSigner(validatorKey).WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
@@ -369,4 +374,66 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, validator1.Address(), beneficiaryEvents[0].Validator)
 	require.Equal(t, beneficiary, beneficiaryEvents[0].Beneficiary)
 	require.Equal(t, validator1.Address(), beneficiaryEvents[0].Endorser)
+}
+
+func TestStaker_Raw_MinStake_And_EmptyQueues(t *testing.T) {
+	node, client := newTestNode(t, false)
+	defer node.Stop()
+
+	s, err := NewStaker(client)
+	require.NoError(t, err)
+
+	// Raw contract sanity checks
+	raw := s.Raw()
+	require.NotNil(t, raw)
+	require.Equal(t, builtin.Staker.Address, *raw.Address())
+	_, ok := raw.ABI().Methods["totalStake"]
+	require.True(t, ok)
+
+	// MinStake value
+	expected := new(big.Int).Mul(big.NewInt(1e18), big.NewInt(25_000_000))
+	require.Equal(t, expected, MinStake())
+
+	// Before any validators are added, queues should be empty
+	_, _, err = s.FirstActive()
+	require.Error(t, err)
+	_, _, err = s.FirstQueued()
+	require.Error(t, err)
+}
+
+func TestValidatorStake_Exists_False(t *testing.T) {
+	status := ValidatorStatus{Status: StakerStatusUnknown}
+	v := &ValidatorStake{Endorser: thor.Address{}}
+	require.False(t, v.Exists(status))
+}
+
+func TestStaker_Filter_EventNotFound(t *testing.T) {
+	node, client := newTestNode(t, false)
+	defer node.Stop()
+
+	// build staker with wrong ABI so events are unknown
+	badContract, err := bind.NewContract(client, builtin.Energy.RawABI(), &builtin.Staker.Address)
+	require.NoError(t, err)
+	bad := &Staker{contract: badContract}
+
+	cases := []struct {
+		name string
+		call func() error
+	}{
+		{"ValidationQueued", func() error { _, err := bad.FilterValidatorQueued(nil, nil, logdb.ASC); return err }},
+		{"ValidationSignaledExit", func() error { _, err := bad.FilterValidationSignaledExit(nil, nil, logdb.ASC); return err }},
+		{"DelegationAdded", func() error { _, err := bad.FilterDelegationAdded(nil, nil, logdb.ASC); return err }},
+		{"DelegationSignaledExit", func() error { _, err := bad.FilterDelegationSignaledExit(nil, nil, logdb.ASC); return err }},
+		{"DelegationWithdrawn", func() error { _, err := bad.FilterDelegationWithdrawn(nil, nil, logdb.ASC); return err }},
+		{"StakeIncreased", func() error { _, err := bad.FilterStakeIncreased(nil, nil, logdb.ASC); return err }},
+		{"StakeDecreased", func() error { _, err := bad.FilterStakeDecreased(nil, nil, logdb.ASC); return err }},
+		{"BeneficiarySet", func() error { _, err := bad.FilterBeneficiarySet(nil, nil, logdb.ASC); return err }},
+		{"ValidationWithdrawn", func() error { _, err := bad.FilterValidationWithdrawn(nil, nil, logdb.ASC); return err }},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Error(t, tc.call())
+		})
+	}
 }
