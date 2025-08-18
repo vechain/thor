@@ -8,24 +8,11 @@ package thor
 // Config is the configurable parameters of the thor. Most of the parameters will have default values and
 // will be 'locked' for production networks. For testing purposes or custom networks, the parameters can be updated.
 
-type Config struct {
-	BlockInterval              uint64
-	EpochLength                uint32
-	SeederInterval             uint32
-	ValidatorEvictionThreshold uint32
-
-	LowStakingPeriod    uint32
-	MediumStakingPeriod uint32
-	HighStakingPeriod   uint32
-	CooldownPeriod      uint32
-}
-
 var (
-	BlockInterval  uint64 = 10   // time interval between two consecutive blocks.
-	EpochLength    uint32 = 180  // number of blocks per epoch, also the number of blocks between two checkpoints.
-	SeederInterval uint32 = 8640 // blocks between two scheduler seeder epochs.
-
-	ValidatorEvictionThreshold uint32 = 7 * 8640 // the number of blocks after which offline validator will be evicted from the leader group (7 days)
+	BlockInterval              uint64 = 10       // 10 seconds
+	EpochLength                uint32 = 180      // 180 blocks, 30 minutes
+	SeederInterval             uint32 = 8640     // 8640 blocks, 1 day
+	ValidatorEvictionThreshold uint32 = 7 * 8640 // 7 days
 
 	// Staker parameters
 	LowStakingPeriod    uint32 = 8640 * 7  // 7 Days
@@ -35,6 +22,19 @@ var (
 
 	locked bool
 )
+
+type Config struct {
+	BlockInterval              uint64 `json:"blockInterval"`              // time interval between two consecutive blocks.
+	EpochLength                uint32 `json:"epochLength"`                // number of blocks per epoch, also the number of blocks between two checkpoints.
+	SeederInterval             uint32 `json:"seederInterval"`             // blocks between two scheduler seeder epochs.
+	ValidatorEvictionThreshold uint32 `json:"validatorEvictionThreshold"` // the number of blocks after which offline validator will be evicted from the leader group (7 days)
+
+	// staker parameters
+	LowStakingPeriod    uint32 `json:"lowStakingPeriod"`
+	MediumStakingPeriod uint32 `json:"mediumStakingPeriod"`
+	HighStakingPeriod   uint32 `json:"highStakingPeriod"`
+	CooldownPeriod      uint32 `json:"cooldownPeriod"`
+}
 
 // SetConfig sets the config.
 // If the config is not set, the default values will be used.

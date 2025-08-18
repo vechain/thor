@@ -64,7 +64,7 @@ func TestFinalizedPos(t *testing.T) {
 	assert.True(t, st.Justified)
 	assert.True(t, st.Committed)
 
-	blockNum := uint32(thor.EpochLength*2 + MaxBlockProposers*2/3)
+	blockNum := thor.EpochLength*2 + MaxBlockProposers*2/3
 
 	sum, err = testBFT.repo.NewBestChain().GetBlockSummary(blockNum)
 	if err != nil {
@@ -421,7 +421,8 @@ func TestJustifierPos(t *testing.T) {
 				assert.Equal(t, uint32(0), vs.checkpoint)
 				assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.thresholdVotes)
 			},
-		}, {
+		},
+		{
 			"the second bft round", func(t *testing.T, forkCfg *thor.ForkConfig) {
 				fc := *forkCfg
 				fc.VIP214 = thor.EpochLength / 2
@@ -437,7 +438,7 @@ func TestJustifierPos(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				assert.Equal(t, uint32(thor.EpochLength*2), vs.checkpoint)
+				assert.Equal(t, thor.EpochLength*2, vs.checkpoint)
 				expected, ok := new(big.Int).SetString("166666666666666666666666666", 10)
 				assert.True(t, ok)
 				assert.Equal(t, expected, vs.thresholdWeight)
@@ -445,7 +446,8 @@ func TestJustifierPos(t *testing.T) {
 				assert.False(t, vs.Summarize().Justified)
 				assert.False(t, vs.Summarize().Committed)
 			},
-		}, {
+		},
+		{
 			"add votes: commits", func(t *testing.T, forkCfg *thor.ForkConfig) {
 				fc := *forkCfg
 				fc.VIP214 = thor.EpochLength / 2
@@ -479,7 +481,8 @@ func TestJustifierPos(t *testing.T) {
 				assert.True(t, st.Justified)
 				assert.True(t, st.Committed)
 			},
-		}, {
+		},
+		{
 			"add votes: justifies", func(t *testing.T, forkCfg *thor.ForkConfig) {
 				fc := *forkCfg
 				fc.VIP214 = thor.EpochLength / 2
@@ -505,7 +508,8 @@ func TestJustifierPos(t *testing.T) {
 				assert.True(t, st.Justified)
 				assert.False(t, st.Committed)
 			},
-		}, {
+		},
+		{
 			"add votes: one votes WIT then changes to COM", func(t *testing.T, forkCfg *thor.ForkConfig) {
 				fc := *forkCfg
 				fc.VIP214 = thor.EpochLength / 2
@@ -564,7 +568,8 @@ func TestJustifierPos(t *testing.T) {
 				st = vs.Summarize()
 				assert.True(t, st.Committed)
 			},
-		}, {
+		},
+		{
 			"vote both WIT and COM in one round", func(t *testing.T, forkCfg *thor.ForkConfig) {
 				testBft, err := newTestBftPos(forkCfg)
 				if err != nil {
@@ -684,7 +689,7 @@ func TestJustifiedPos(t *testing.T) {
 				}
 				justified, err := testBFT.engine.Justified()
 				assert.Nil(t, err)
-				assert.Equal(t, uint32(thor.EpochLength), block.Number(justified))
+				assert.Equal(t, thor.EpochLength, block.Number(justified))
 				assert.Equal(t, testBFT.repo.GenesisBlock().Header().ID(), testBFT.engine.Finalized())
 			},
 		}, {
@@ -708,7 +713,7 @@ func TestJustifiedPos(t *testing.T) {
 				}
 				justified, err = testBFT.engine.Justified()
 				assert.Nil(t, err)
-				assert.Equal(t, uint32(3*thor.EpochLength), block.Number(justified))
+				assert.Equal(t, 3*thor.EpochLength, block.Number(justified))
 				assert.Equal(t, testBFT.repo.GenesisBlock().Header().ID(), testBFT.engine.Finalized())
 			},
 		}, {
@@ -724,7 +729,7 @@ func TestJustifiedPos(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				assert.Equal(t, uint32(thor.EpochLength), block.Number(testBFT.engine.Finalized()))
+				assert.Equal(t, thor.EpochLength, block.Number(testBFT.engine.Finalized()))
 
 				if err = testBFT.fastForward(thor.EpochLength - 1); err != nil {
 					t.Fatal(err)
@@ -733,14 +738,14 @@ func TestJustifiedPos(t *testing.T) {
 				justified, err := testBFT.engine.Justified()
 				assert.Nil(t, err)
 				// current epoch is not concluded
-				assert.Equal(t, uint32(2*thor.EpochLength), block.Number(justified))
+				assert.Equal(t, 2*thor.EpochLength, block.Number(justified))
 
 				if err = testBFT.fastForward(1); err != nil {
 					t.Fatal(err)
 				}
 				justified, err = testBFT.engine.Justified()
 				assert.Nil(t, err)
-				assert.Equal(t, uint32(3*thor.EpochLength), block.Number(justified))
+				assert.Equal(t, 3*thor.EpochLength, block.Number(justified))
 			},
 		}, {
 			"get finalized, not justified, then justified", func(t *testing.T, forkCfg *thor.ForkConfig) {
@@ -754,21 +759,21 @@ func TestJustifiedPos(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				assert.Equal(t, uint32(thor.EpochLength), block.Number(testBFT.engine.Finalized()))
+				assert.Equal(t, thor.EpochLength, block.Number(testBFT.engine.Finalized()))
 
 				if err = testBFT.fastForwardWithMinority(thor.EpochLength); err != nil {
 					t.Fatal(err)
 				}
 				justified, err := testBFT.engine.Justified()
 				assert.Nil(t, err)
-				assert.Equal(t, uint32(2*thor.EpochLength), block.Number(justified))
+				assert.Equal(t, 2*thor.EpochLength, block.Number(justified))
 
 				if err = testBFT.fastForward(thor.EpochLength); err != nil {
 					t.Fatal(err)
 				}
 				justified, err = testBFT.engine.Justified()
 				assert.Nil(t, err)
-				assert.Equal(t, uint32(4*thor.EpochLength), block.Number(justified))
+				assert.Equal(t, 4*thor.EpochLength, block.Number(justified))
 				// test cache
 				assert.Equal(t, justified, testBFT.engine.justified.Load().(tJustified).value)
 			},
@@ -803,7 +808,7 @@ func TestJustifiedPos(t *testing.T) {
 				}
 				justified, err := testBFT.engine.Justified()
 				assert.Nil(t, err)
-				assert.Equal(t, uint32(thor.EpochLength), block.Number(justified))
+				assert.Equal(t, thor.EpochLength, block.Number(justified))
 				assert.Equal(t, testBFT.repo.GenesisBlock().Header().ID(), testBFT.engine.Finalized())
 			},
 		},
