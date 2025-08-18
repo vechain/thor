@@ -93,7 +93,7 @@ jobs:
               echo "✅ Healthcheck passed"
               exit 0
             fi
-            echo "Healthcheck failed (status: $status). Retrying in 5s..."
+            echo "Healthcheck failed (status: $status). Retrying in 1s..."
             sleep 1
           done
           echo "❌ Healthcheck failed after 30 attempts"
