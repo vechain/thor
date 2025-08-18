@@ -383,18 +383,15 @@ func TestStaker_Raw_MinStake_And_EmptyQueues(t *testing.T) {
 	s, err := NewStaker(client)
 	require.NoError(t, err)
 
-	// Raw contract sanity checks
 	raw := s.Raw()
 	require.NotNil(t, raw)
 	require.Equal(t, builtin.Staker.Address, *raw.Address())
 	_, ok := raw.ABI().Methods["totalStake"]
 	require.True(t, ok)
 
-	// MinStake value
 	expected := new(big.Int).Mul(big.NewInt(1e18), big.NewInt(25_000_000))
 	require.Equal(t, expected, MinStake())
 
-	// Before any validators are added, queues should be empty
 	_, _, err = s.FirstActive()
 	require.Error(t, err)
 	_, _, err = s.FirstQueued()
@@ -436,4 +433,135 @@ func TestStaker_Filter_EventNotFound(t *testing.T) {
 			require.Error(t, tc.call())
 		})
 	}
+}
+
+func TestStaker_NegativeMatrix_MethodNotFound(t *testing.T) {
+	node, client := newTestNode(t, false)
+	defer node.Stop()
+
+	// Wrong ABI so all method lookups fail
+	badContract, err := bind.NewContract(client, builtin.Energy.RawABI(), &builtin.Staker.Address)
+	require.NoError(t, err)
+	bad := &Staker{contract: badContract}
+
+	nodeAddr := genesis.DevAccounts()[0].Address
+
+	reads := []struct {
+		name string
+		run  func() error
+	}{
+		{"TotalStake", func() error { _, _, err := bad.TotalStake(); return err }},
+		{"QueuedStake", func() error { _, _, err := bad.QueuedStake(); return err }},
+		{"GetValidatorStake", func() error { _, err := bad.GetValidatorStake(nodeAddr); return err }},
+		{"GetValidatorStatus", func() error { _, err := bad.GetValidatorStatus(nodeAddr); return err }},
+		{"GetValidatorPeriodDetails", func() error { _, err := bad.GetValidatorPeriodDetails(nodeAddr); return err }},
+		{"GetWithdrawable", func() error { _, err := bad.GetWithdrawable(nodeAddr); return err }},
+		{"GetDelegatorsRewards", func() error { _, err := bad.GetDelegatorsRewards(nodeAddr, 1); return err }},
+		{"GetDelegationStake", func() error { _, err := bad.GetDelegationStake(big.NewInt(1)); return err }},
+		{"GetDelegationPeriodDetails", func() error { _, err := bad.GetDelegationPeriodDetails(big.NewInt(1)); return err }},
+		{"GetValidationTotals", func() error { _, err := bad.GetValidationTotals(nodeAddr); return err }},
+		{"GetValidatorsNum", func() error { _, _, err := bad.GetValidatorsNum(); return err }},
+		{"Issuance", func() error { _, err := bad.Issuance("best"); return err }},
+	}
+
+	for _, tc := range reads {
+		t.Run("WrongABI_"+tc.name, func(t *testing.T) {
+			require.Error(t, tc.run())
+		})
+	}
+
+	clauses := []struct {
+		name string
+		run  func() error
+	}{
+		{"AddValidation", func() error { _, err := bad.AddValidation(nodeAddr, MinStake(), 1).Clause(); return err }},
+		{"SignalExit", func() error { _, err := bad.SignalExit(nodeAddr).Clause(); return err }},
+		{"WithdrawStake", func() error { _, err := bad.WithdrawStake(nodeAddr).Clause(); return err }},
+		{"DecreaseStake", func() error { _, err := bad.DecreaseStake(nodeAddr, big.NewInt(1)).Clause(); return err }},
+		{"IncreaseStake", func() error { _, err := bad.IncreaseStake(nodeAddr, big.NewInt(1)).Clause(); return err }},
+		{"SetBeneficiary", func() error { _, err := bad.SetBeneficiary(nodeAddr, nodeAddr).Clause(); return err }},
+		{"AddDelegation", func() error { _, err := bad.AddDelegation(nodeAddr, MinStake(), 1).Clause(); return err }},
+		{"SignalDelegationExit", func() error { _, err := bad.SignalDelegationExit(big.NewInt(1)).Clause(); return err }},
+		{"WithdrawDelegation", func() error { _, err := bad.WithdrawDelegation(big.NewInt(1)).Clause(); return err }},
+	}
+
+	for _, tc := range clauses {
+		t.Run("WrongABI_Clause_"+tc.name, func(t *testing.T) {
+			require.Error(t, tc.run())
+		})
+	}
+}
+
+func TestStaker_BadRevision_Reads(t *testing.T) {
+	node, client := newTestNode(t, false)
+	defer node.Stop()
+
+	s, err := NewStaker(client)
+	require.NoError(t, err)
+
+	addr := genesis.DevAccounts()[0].Address
+
+	_, _, err = s.Revision("bad").TotalStake()
+	require.Error(t, err)
+	_, _, err = s.Revision("bad").QueuedStake()
+	require.Error(t, err)
+	_, err = s.Revision("bad").GetValidatorStake(addr)
+	require.Error(t, err)
+	_, err = s.Revision("bad").GetValidatorStatus(addr)
+	require.Error(t, err)
+	_, err = s.Revision("bad").GetValidatorPeriodDetails(addr)
+	require.Error(t, err)
+	_, err = s.Revision("bad").GetWithdrawable(addr)
+	require.Error(t, err)
+	_, _, err = s.Revision("bad").GetValidatorsNum()
+	require.Error(t, err)
+	_, err = s.Issuance("bad")
+	require.Error(t, err)
+}
+
+func TestStaker_Next_NoNext(t *testing.T) {
+	minStakingPeriod := uint32(360) * 24 * 7
+
+	node, client := newTestNode(t, false)
+	defer node.Stop()
+
+	staker, err := NewStaker(client)
+	require.NoError(t, err)
+	authority, err := NewAuthority(client)
+	require.NoError(t, err)
+	params, err := NewParams(client)
+	require.NoError(t, err)
+
+	executor := bind.NewSigner(genesis.DevAccounts()[0].PrivateKey)
+	stargate := bind.NewSigner(genesis.DevAccounts()[0].PrivateKey)
+
+	for _, acc := range genesis.DevAccounts()[1:] {
+		method := authority.Add(acc.Address, acc.Address, datagen.RandomHash())
+		receipt, _, err := method.Send().WithSigner(executor).WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
+		require.NoError(t, err)
+		DebugRevert(t, receipt, method)
+	}
+
+	_, _, err = params.Set(thor.KeyMaxBlockProposers, big.NewInt(3)).Send().WithSigner(executor).WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
+	require.NoError(t, err)
+	_, _, err = params.Set(thor.KeyStargateContractAddress, new(big.Int).SetBytes(stargate.Address().Bytes())).
+		Send().
+		WithSigner(executor).
+		WithOptions(txOpts()).
+		SubmitAndConfirm(txContext(t))
+	require.NoError(t, err)
+
+	minStake := MinStake()
+	valAcc := genesis.DevAccounts()[4]
+	method := staker.AddValidation(valAcc.Address, minStake, minStakingPeriod)
+	receipt, _, err := method.Send().WithSigner(bind.NewSigner(valAcc.PrivateKey)).WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
+	require.NoError(t, err)
+	DebugRevert(t, receipt, method)
+
+	queuedEvents, err := staker.FilterValidatorQueued(newRange(receipt), nil, logdb.ASC)
+	require.NoError(t, err)
+	require.Len(t, queuedEvents, 1)
+	queuedID := queuedEvents[0].Node
+	_, _, err = staker.Next(queuedID)
+	require.Error(t, err)
 }

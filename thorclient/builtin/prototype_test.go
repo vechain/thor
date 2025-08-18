@@ -328,3 +328,66 @@ func TestPrototype_UserCredit(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, big.NewInt(100), credit)
 }
+
+func TestPrototype_NegativeMatrix(t *testing.T) {
+	node, client := newTestNode(t, false)
+	defer node.Stop()
+
+	// Wrong ABI to trigger method-not-found for reads and clauses
+	badContract, err := bind.NewContract(client, builtin.Energy.RawABI(), &builtin.Prototype.Address)
+	require.NoError(t, err)
+	bad := &Prototype{contract: badContract}
+
+	self := builtin.Authority.Address
+	user := genesis.DevAccounts()[1].Address
+	key := thor.Bytes32{}
+
+	readCases := []struct {
+		name string
+		run  func() error
+	}{
+		{"Master", func() error { _, err := bad.Master(self); return err }},
+		{"IsUser", func() error { _, err := bad.IsUser(self, user); return err }},
+		{"UserCredit", func() error { _, err := bad.UserCredit(self, user); return err }},
+		{"CreditPlan", func() error { _, _, err := bad.CreditPlan(self); return err }},
+		{"CurrentSponsor", func() error { _, err := bad.CurrentSponsor(self); return err }},
+		{"IsSponsor", func() error { _, err := bad.IsSponsor(self, user); return err }},
+		{"Balance", func() error { _, err := bad.Balance(self, big.NewInt(1)); return err }},
+		{"Energy", func() error { _, err := bad.Energy(self, big.NewInt(1)); return err }},
+		{"HasCode", func() error { _, err := bad.HasCode(self); return err }},
+		{"StorageFor", func() error { _, err := bad.StorageFor(self, key); return err }},
+	}
+
+	for _, tc := range readCases {
+		t.Run("WrongABI_"+tc.name, func(t *testing.T) {
+			require.Error(t, tc.run())
+		})
+	}
+
+	clauseCases := []struct {
+		name string
+		run  func() error
+	}{
+		{"SetMaster", func() error { _, err := bad.SetMaster(self, user).Clause(); return err }},
+		{"AddUser", func() error { _, err := bad.AddUser(self, user).Clause(); return err }},
+		{"RemoveUser", func() error { _, err := bad.RemoveUser(self, user).Clause(); return err }},
+		{"SetCreditPlan", func() error { _, err := bad.SetCreditPlan(self, big.NewInt(1), big.NewInt(1)).Clause(); return err }},
+		{"SelectSponsor", func() error { _, err := bad.SelectSponsor(self, user).Clause(); return err }},
+		{"Sponsor", func() error { _, err := bad.Sponsor(self).Clause(); return err }},
+		{"Unsponsor", func() error { _, err := bad.Unsponsor(self).Clause(); return err }},
+	}
+
+	for _, tc := range clauseCases {
+		t.Run("WrongABI_Clause_"+tc.name, func(t *testing.T) {
+			require.Error(t, tc.run())
+		})
+	}
+
+	// Bad revision should trigger call/inspect error on a valid contract
+	p, err := NewPrototype(client)
+	require.NoError(t, err)
+	_, err = p.Revision("bad-revision").Master(self)
+	require.Error(t, err)
+	_, err = p.Revision("bad-revision").Balance(self, big.NewInt(1))
+	require.Error(t, err)
+}
