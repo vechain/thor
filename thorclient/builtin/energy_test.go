@@ -231,3 +231,35 @@ func TestEnergy_FilterEvents_EventNotFound(t *testing.T) {
 		})
 	}
 }
+
+func TestEnergy_Methods_MethodNotFound(t *testing.T) {
+	node, client := newTestNode(t, false)
+	defer node.Stop()
+
+	// Use wrong ABI (Authority) so method lookups like name/symbol/... are missing
+	badContract, err := bind.NewContract(client, contracts.Authority.RawABI(), &contracts.Energy.Address)
+	require.NoError(t, err)
+	bad := &Energy{contract: badContract}
+
+	owner := genesis.DevAccounts()[0].Address
+	spender := genesis.DevAccounts()[1].Address
+
+	tests := []struct {
+		name string
+		call func() error
+	}{
+		{"Name", func() error { _, err := bad.Name(); return err }},
+		{"Symbol", func() error { _, err := bad.Symbol(); return err }},
+		{"Decimals", func() error { _, err := bad.Decimals(); return err }},
+		{"TotalSupply", func() error { _, err := bad.TotalSupply(); return err }},
+		{"TotalBurned", func() error { _, err := bad.TotalBurned(); return err }},
+		{"BalanceOf", func() error { _, err := bad.BalanceOf(owner); return err }},
+		{"Allowance", func() error { _, err := bad.Allowance(owner, spender); return err }},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Error(t, tc.call())
+		})
+	}
+}
