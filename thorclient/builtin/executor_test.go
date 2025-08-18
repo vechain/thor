@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	builtinpkg "github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/test/datagen"
@@ -107,4 +108,25 @@ func TestExecutor(t *testing.T) {
 	// DetachVotingContract - Clause only
 	_, err = executor.DetachVotingContract(thor.Address{}).Clause()
 	require.NoError(t, err)
+}
+
+func TestExecutor_NegativePaths(t *testing.T) {
+	node, client := newTestNode(t, true)
+	defer node.Stop()
+
+	badContract, err := bind.NewContract(client, builtinpkg.Energy.RawABI(), &builtinpkg.Executor.Address)
+	require.NoError(t, err)
+	bad := &Executor{contract: badContract}
+
+	_, err = bad.FilterProposals(nil, nil, logdb.ASC)
+	require.Error(t, err)
+	exec, err := NewExecutor(client)
+	require.NoError(t, err)
+
+	_, err = exec.Revision("bad").ApproverCount()
+	require.Error(t, err)
+	_, err = exec.Revision("bad").Approvers(genesis.DevAccounts()[0].Address)
+	require.Error(t, err)
+	_, err = exec.Revision("bad").Proposals(datagen.RandomHash())
+	require.Error(t, err)
 }
