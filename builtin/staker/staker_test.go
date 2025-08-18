@@ -284,7 +284,7 @@ func (ts *TestSequence) Housekeep(block uint32) *TestSequence {
 }
 
 func (ts *TestSequence) Transition(block uint32) *TestSequence {
-	_, err := ts.staker.Transition(block)
+	_, err := ts.staker.transition(block)
 	assert.NoError(ts.t, err, "failed to transition at block %d", block)
 	return ts
 }

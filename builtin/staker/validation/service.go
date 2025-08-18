@@ -217,7 +217,7 @@ func (s *Service) Evict(validator thor.Address, currentBlock uint32) error {
 		return err
 	}
 
-	exitBlock, err := s.SetExitBlock(validator, currentBlock+s.epochLength)
+	exitBlock, err := s.SetExitBlock(validator, currentBlock+thor.EpochLength)
 	if err != nil {
 		return err
 	}
