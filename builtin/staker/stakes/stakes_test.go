@@ -42,3 +42,27 @@ func TestNewWeightedStake_LargeValues(t *testing.T) {
 	assert.Equal(t, vet, ws.VET())
 	assert.Equal(t, want, ws.Weight())
 }
+
+func TestAddWeightedStake(t *testing.T) {
+	vet := big.NewInt(1_000_000_000)
+	ws := NewWeightedStake(vet, 25)
+	expectedWeight := big.NewInt(0).Mul(vet, big.NewInt(25))
+	expectedWeight = big.NewInt(0).Div(expectedWeight, big.NewInt(100))
+	assert.Equal(t, vet, ws.VET())
+	assert.Equal(t, expectedWeight, ws.Weight())
+	ws.AddWeight(*vet)
+	assert.Equal(t, vet, ws.VET())
+	assert.Equal(t, big.NewInt(0).Add(vet, expectedWeight), ws.Weight())
+}
+
+func TestSubWeightedStake(t *testing.T) {
+	vet := big.NewInt(1_000_000_000)
+	ws := NewWeightedStake(vet, 25)
+	expectedWeight := big.NewInt(0).Mul(vet, big.NewInt(25))
+	expectedWeight = big.NewInt(0).Div(expectedWeight, big.NewInt(100))
+	assert.Equal(t, vet, ws.VET())
+	assert.Equal(t, expectedWeight, ws.Weight())
+	ws.SubWeight(*vet)
+	assert.Equal(t, vet, ws.VET())
+	assert.Equal(t, big.NewInt(0).Sub(expectedWeight, vet), ws.Weight())
+}

@@ -10,6 +10,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/rlp"
+
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
@@ -435,4 +437,111 @@ func Test_LinkedList_Grow_Empty_Grow(t *testing.T) {
 	ln, err = ll.Len()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(2), ln)
+}
+
+func Test_LinkedList_Iter_NegativeCases(t *testing.T) {
+	db := muxdb.NewMem()
+	st := state.New(db, trie.Root{})
+	addr := thor.BytesToAddress([]byte("test"))
+	sctx := solidity.NewContext(addr, st, nil)
+	headPos := thor.Bytes32{0x1}
+	tailPos := thor.Bytes32{0x2}
+	countPos := thor.Bytes32{0x3}
+
+	linkedList := NewLinkedList(sctx, headPos, tailPos, countPos)
+
+	id1 := datagen.RandAddress()
+	id2 := datagen.RandAddress()
+	id3 := datagen.RandAddress()
+
+	if err := linkedList.Add(id1); err != nil {
+		t.Fatalf("failed to add id1: %v", err)
+	}
+	if err := linkedList.Add(id2); err != nil {
+		t.Fatalf("failed to add id2: %v", err)
+	}
+
+	if err := linkedList.Add(id3); err != nil {
+		t.Fatalf("failed to add id3: %v", err)
+	}
+
+	var addresses []thor.Address
+	count := 0
+
+	raw, err := st.GetRawStorage(addr, headPos)
+	assert.NoError(t, err)
+	st.SetRawStorage(addr, headPos, rlp.RawValue{0xFF})
+	err = linkedList.Iter(func(address thor.Address) error {
+		addresses = append(addresses, address)
+		count++
+		return nil
+	})
+	assert.ErrorContains(t, err, "state: unexpected EOF")
+
+	st.SetRawStorage(addr, headPos, raw)
+	slot := thor.Blake2b(id1.Bytes(), headPos.Bytes())
+	raw, err = st.GetRawStorage(addr, slot)
+	assert.NoError(t, err)
+	st.SetRawStorage(addr, slot, rlp.RawValue{0xFF})
+	err = linkedList.Iter(func(address thor.Address) error {
+		addresses = append(addresses, address)
+		count++
+		return nil
+	})
+	assert.ErrorContains(t, err, "state: rlp: value size exceeds available input length")
+
+	st.SetRawStorage(addr, slot, raw)
+	raw, err = st.GetRawStorage(addr, tailPos)
+	assert.NoError(t, err)
+	st.SetRawStorage(addr, tailPos, rlp.RawValue{0xFF})
+	err = linkedList.Add(id1)
+	assert.ErrorContains(t, err, "state: unexpected EOF")
+
+	st.SetRawStorage(addr, tailPos, raw)
+	st.SetRawStorage(addr, countPos, rlp.RawValue{0xFF})
+	err = linkedList.Add(id1)
+	assert.ErrorContains(t, err, "state: unexpected EOF")
+
+	st.SetRawStorage(addr, countPos, rlp.RawValue{0x3})
+	slot = thor.Blake2b(id1.Bytes(), headPos.Bytes())
+	raw, err = st.GetRawStorage(addr, slot)
+	assert.NoError(t, err)
+	st.SetRawStorage(addr, slot, rlp.RawValue{0xFF})
+	err = linkedList.Remove(id1)
+	assert.ErrorContains(t, err, "state: rlp: value size exceeds available input length")
+
+	st.SetRawStorage(addr, slot, raw)
+	slot = thor.Blake2b(id1.Bytes(), tailPos.Bytes())
+	raw, err = st.GetRawStorage(addr, slot)
+	assert.NoError(t, err)
+	st.SetRawStorage(addr, slot, rlp.RawValue{0xFF})
+	err = linkedList.Remove(id1)
+	assert.ErrorContains(t, err, "state: rlp: value size exceeds available input length")
+
+	st.SetRawStorage(addr, slot, raw)
+	raw, err = st.GetRawStorage(addr, headPos)
+	assert.NoError(t, err)
+	st.SetRawStorage(addr, headPos, rlp.RawValue{0xFF})
+	err = linkedList.Remove(datagen.RandAddress())
+	assert.ErrorContains(t, err, "state: unexpected EOF")
+
+	st.SetRawStorage(addr, headPos, raw)
+	st.SetRawStorage(addr, countPos, rlp.RawValue{0xFF})
+	err = linkedList.Remove(id1)
+	assert.ErrorContains(t, err, "state: unexpected EOF")
+
+	st.SetRawStorage(addr, countPos, rlp.RawValue{0x3})
+	head, err := linkedList.Head()
+	assert.NoError(t, err)
+	assert.Equal(t, id1, head)
+
+	st.SetRawStorage(addr, headPos, rlp.RawValue{0xFF})
+	address, err := linkedList.Pop()
+	assert.ErrorContains(t, err, "no head present")
+	assert.Equal(t, thor.Address{}, address)
+
+	st.SetRawStorage(addr, headPos, raw)
+	st.SetRawStorage(addr, slot, rlp.RawValue{0xFF})
+	_, err = linkedList.Pop()
+	assert.ErrorContains(t, err, "state: rlp: value size exceeds available input length")
 }

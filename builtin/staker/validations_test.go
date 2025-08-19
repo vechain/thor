@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/rlp"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -2997,4 +2999,145 @@ func TestStaker_OfflineValidator(t *testing.T) {
 	assert.Equal(t, validation.StatusExit, val1.Status)
 	assert.Equal(t, &expectedOfflineBlock, val1.OfflineBlock)
 	assert.Equal(t, expectedExitBlock, *val1.ExitBlock)
+}
+
+func TestStaker_Housekeep_NegativeCases(t *testing.T) {
+	db := muxdb.NewMem()
+	st := state.New(db, trie.Root{})
+	stakerAddr := thor.BytesToAddress([]byte("stkr"))
+	paramsAddr := thor.BytesToAddress([]byte("params"))
+
+	param := params.New(paramsAddr, st)
+
+	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(2)))
+	staker := New(stakerAddr, st, param, nil)
+
+	var et *EpochTransition = nil
+	assert.False(t, et.HasUpdates())
+
+	housekeep, err := staker.Housekeep(EpochLength.Get() - 1)
+	assert.NoError(t, err)
+	assert.False(t, housekeep)
+
+	activeHeadSlot := thor.BytesToBytes32([]byte(("validations-active-head")))
+	st.SetRawStorage(stakerAddr, activeHeadSlot, rlp.RawValue{0xFF})
+
+	_, err = staker.Housekeep(EpochLength.Get())
+	assert.Error(t, err)
+
+	keys := createKeys(2)
+
+	st.SetRawStorage(stakerAddr, activeHeadSlot, rlp.RawValue{0x0})
+	slotLockedVET := thor.BytesToBytes32([]byte(("total-stake")))
+	valAddr := thor.Address{}
+	for _, key := range keys {
+		stake := RandomStake()
+		valAddr = key.node
+		if err := staker.AddValidation(key.node, key.endorser, uint32(360)*24*15, stake); err != nil {
+			t.Fatal(err)
+		}
+	}
+	lockedVet, err := st.GetRawStorage(stakerAddr, slotLockedVET)
+	assert.NoError(t, err)
+	st.SetRawStorage(stakerAddr, slotLockedVET, rlp.RawValue{0xFF})
+	_, err = staker.Housekeep(EpochLength.Get())
+	assert.Error(t, err)
+
+	_, err = staker.Housekeep(EpochLength.Get() * 2)
+	assert.Error(t, err)
+
+	slotQueuedGroupSize := thor.BytesToBytes32([]byte(("validations-queued-group-size")))
+	st.SetRawStorage(stakerAddr, slotLockedVET, lockedVet)
+	st.SetRawStorage(stakerAddr, slotQueuedGroupSize, rlp.RawValue{0xFF})
+	_, err = staker.Housekeep(EpochLength.Get() * 4)
+	assert.Error(t, err)
+
+	st.SetRawStorage(stakerAddr, slotLockedVET, rlp.RawValue{0x0})
+	st.SetRawStorage(stakerAddr, slotQueuedGroupSize, rlp.RawValue{0x0})
+
+	addr := thor.BytesToAddress([]byte("a"))
+	blockNum := uint32(10)
+	funcA := staker.exitsCallback(blockNum, &addr)
+	err = funcA(addr, &validation.Validation{
+		Endorser:           thor.Address{},
+		Beneficiary:        nil,
+		Period:             0,
+		CompleteIterations: 0,
+		Status:             0,
+		StartBlock:         0,
+		ExitBlock:          &blockNum,
+		OfflineBlock:       nil,
+		LockedVET:          nil,
+		PendingUnlockVET:   nil,
+		QueuedVET:          nil,
+		CooldownVET:        nil,
+		WithdrawableVET:    nil,
+		Weight:             nil,
+	})
+	assert.ErrorContains(t, err, "found more than one validator exit in the same block")
+
+	slotActiveGroupSize := thor.BytesToBytes32([]byte(("validations-active-group-size")))
+	st.SetRawStorage(stakerAddr, slotActiveGroupSize, rlp.RawValue{0xFF})
+	count, err := staker.computeActivationCount(true)
+	assert.Error(t, err)
+	assert.Equal(t, int64(0), count)
+
+	st.SetRawStorage(stakerAddr, slotActiveGroupSize, rlp.RawValue{0x0})
+	st.SetRawStorage(paramsAddr, thor.KeyMaxBlockProposers, rlp.RawValue{0xFF})
+	count, err = staker.computeActivationCount(true)
+	assert.Error(t, err)
+	assert.Equal(t, int64(0), count)
+
+	slotAggregations := thor.BytesToBytes32([]byte("aggregated-delegations"))
+	validatorAddr := thor.BytesToAddress([]byte("renewal1"))
+	slot := thor.Blake2b(validatorAddr.Bytes(), slotAggregations.Bytes())
+	st.SetRawStorage(stakerAddr, slot, []byte{0xFF, 0xFF, 0xFF, 0xFF})
+	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(0)))
+	err = staker.applyEpochTransition(&EpochTransition{
+		Block:           0,
+		Renewals:        []thor.Address{validatorAddr},
+		ExitValidator:   nil,
+		Evictions:       nil,
+		ActivationCount: 0,
+	})
+	assert.ErrorContains(t, err, "failed to get validator aggregation")
+
+	err = staker.applyEpochTransition(&EpochTransition{
+		Block:           0,
+		Renewals:        []thor.Address{thor.BytesToAddress([]byte("renewal2"))},
+		ExitValidator:   nil,
+		Evictions:       nil,
+		ActivationCount: 0,
+	})
+	assert.ErrorContains(t, err, "failed to get validator")
+
+	slotValidations := thor.BytesToBytes32([]byte(("validations")))
+	slot = thor.Blake2b(valAddr.Bytes(), slotValidations.Bytes())
+	raw, err := st.GetRawStorage(stakerAddr, slot)
+	assert.NoError(t, err)
+	st.SetRawStorage(stakerAddr, slot, rlp.RawValue{0xFF})
+
+	err = staker.applyEpochTransition(&EpochTransition{
+		Block:           0,
+		Renewals:        []thor.Address{},
+		ExitValidator:   &valAddr,
+		Evictions:       nil,
+		ActivationCount: 0,
+	})
+
+	assert.ErrorContains(t, err, "failed to get validator")
+
+	st.SetRawStorage(stakerAddr, slot, raw)
+	slot = thor.Blake2b(valAddr.Bytes(), slotAggregations.Bytes())
+	st.SetRawStorage(stakerAddr, slot, []byte{0xFF, 0xFF, 0xFF, 0xFF})
+	st.SetRawStorage(stakerAddr, slotActiveGroupSize, rlp.RawValue{0x2})
+	err = staker.applyEpochTransition(&EpochTransition{
+		Block:           0,
+		Renewals:        []thor.Address{},
+		ExitValidator:   &valAddr,
+		Evictions:       nil,
+		ActivationCount: 0,
+	})
+
+	assert.ErrorContains(t, err, "failed to get validator")
 }
