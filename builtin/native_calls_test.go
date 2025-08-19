@@ -1709,13 +1709,15 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.Equal(t, minStake.Cmp(*getStakeRes[3].(**big.Int)), 0)      // queue stake
 
 	// getStatus
-	getStatusRes := make([]any, 2)
+	getStatusRes := make([]any, 3)
 	getStatusRes[0] = new(uint8)
 	getStatusRes[1] = new(bool)
+	getStatusRes[2] = new(uint32)
 	_, err = callContractAndGetOutput(abi, "getValidatorStatus", toAddr, &getStatusRes, node)
 	assert.NoError(t, err)
 	assert.Equal(t, validation.StatusQueued, *getStatusRes[0].(*uint8))
-	assert.Equal(t, true, *getStatusRes[1].(*bool)) // online
+	assert.Equal(t, true, *getStatusRes[1].(*bool))                     // online
+	assert.Equal(t, uint32(math.MaxUint32), *getStatusRes[2].(*uint32)) // last active period
 
 	// getPeriod
 	getPeriodRes := make([]any, 4)
@@ -1990,9 +1992,10 @@ func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
 	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
 
 	// getStatus
-	getStatusRes := make([]any, 2)
+	getStatusRes := make([]any, 3)
 	getStatusRes[0] = new(uint8)
 	getStatusRes[1] = new(bool)
+	getStatusRes[2] = new(uint32)
 	_, err = callContractAndGetOutput(abi, "getValidatorStatus", toAddr, &getStatusRes, id)
 	assert.NoError(t, err)
 	assert.Equal(t, validation.StatusExit, *getStatusRes[0].(*uint8))
