@@ -195,7 +195,7 @@ func TestConsensus_POS_MissedSlots(t *testing.T) {
 	_, parent, st := setup.mintBlock() // mint block 5: Full PoS
 
 	blkPacker := packer.New(setup.chain.Repo(), setup.chain.Stater(), signer.Address, &signer.Address, setup.config, 0)
-	flow, _, err := blkPacker.Mock(parent, parent.Header.Timestamp()+thor.BlockInterval*2, 10_000_000)
+	flow, _, err := blkPacker.Mock(parent, parent.Header.Timestamp()+thor.BlockInterval()*2, 10_000_000)
 	assert.NoError(t, err)
 	blk, stage, receipts, err := flow.Pack(signer.PrivateKey, 0, false)
 	assert.NoError(t, err)

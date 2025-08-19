@@ -27,13 +27,6 @@ var (
 	logger   = log.WithContext("pkg", "staker")
 	MinStake = big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
 	MaxStake = big.NewInt(0).Mul(big.NewInt(600e6), big.NewInt(1e18))
-
-	LowStakingPeriod    = solidity.NewConfigVariable("staker-low-staking-period", 360*24*7)     // 7 Days
-	MediumStakingPeriod = solidity.NewConfigVariable("staker-medium-staking-period", 360*24*15) // 15 Days
-	HighStakingPeriod   = solidity.NewConfigVariable("staker-high-staking-period", 360*24*30)   // 30 Days
-
-	CooldownPeriod = solidity.NewConfigVariable("cooldown-period", 8640) // 8640 blocks, 1 day
-	EpochLength    = solidity.NewConfigVariable("epoch-length", 180)     // 180 epochs
 )
 
 func SetLogger(l log.Logger) {
@@ -54,13 +47,6 @@ type Staker struct {
 func New(addr thor.Address, state *state.State, params *params.Params, charger *gascharger.Charger) *Staker {
 	sctx := solidity.NewContext(addr, state, charger)
 
-	// debug overrides for testing
-	LowStakingPeriod.Override(sctx)
-	MediumStakingPeriod.Override(sctx)
-	HighStakingPeriod.Override(sctx)
-	CooldownPeriod.Override(sctx)
-	EpochLength.Override(sctx)
-
 	return &Staker{
 		params: params,
 
@@ -69,11 +55,6 @@ func New(addr thor.Address, state *state.State, params *params.Params, charger *
 		delegationService:  delegation.New(sctx),
 		validationService: validation.New(
 			sctx,
-			CooldownPeriod.Get(),
-			EpochLength.Get(),
-			LowStakingPeriod.Get(),
-			MediumStakingPeriod.Get(),
-			HighStakingPeriod.Get(),
 			MinStake,
 			MaxStake,
 		),
@@ -136,7 +117,7 @@ func (s *Staker) GetWithdrawable(validator thor.Address, block uint32) (*big.Int
 		return nil, err
 	}
 
-	return val.CalculateWithdrawableVET(block, CooldownPeriod.Get()), err
+	return val.CalculateWithdrawableVET(block), err
 }
 
 // GetDelegation returns the delegation.

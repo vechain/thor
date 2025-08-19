@@ -783,7 +783,7 @@ func TestExecuteTransaction(t *testing.T) {
 	b1 := new(
 		block.Builder,
 	).ParentID(b0.Header().ID()).
-		Timestamp(b0.Header().Timestamp() + thor.BlockInterval).
+		Timestamp(b0.Header().Timestamp() + thor.BlockInterval()).
 		BaseFee(big.NewInt(thor.InitialBaseFee)).
 		StateRoot(root).
 		Build()

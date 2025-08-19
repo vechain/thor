@@ -91,7 +91,7 @@ func NewScheduler(
 // Schedule to determine time of the proposer to produce a block, according to `nowTime`.
 // `newBlockTime` is promised to be >= nowTime and > parentBlockTime
 func (s *Scheduler) Schedule(nowTime uint64) (newBlockTime uint64) {
-	const T = thor.BlockInterval
+	T := thor.BlockInterval()
 
 	newBlockTime = s.parentBlockTime + T
 	if nowTime > newBlockTime {
@@ -123,7 +123,7 @@ func (s *Scheduler) IsScheduled(blockTime uint64, proposer thor.Address) bool {
 		return false
 	}
 
-	T := thor.BlockInterval
+	T := thor.BlockInterval()
 	if (blockTime-s.parentBlockTime)%T != 0 {
 		// invalid block time
 		return false
@@ -135,7 +135,7 @@ func (s *Scheduler) IsScheduled(blockTime uint64, proposer thor.Address) bool {
 
 // Updates returns proposers whose status are changed, and the score when new block time is assumed to be newBlockTime.
 func (s *Scheduler) Updates(newBlockTime uint64, totalWeight *big.Int) (map[thor.Address]bool, uint64) {
-	T := thor.BlockInterval
+	T := thor.BlockInterval()
 
 	updates := make(map[thor.Address]bool)
 	activeWeight := big.NewInt(0)

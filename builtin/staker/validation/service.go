@@ -20,17 +20,13 @@ import (
 )
 
 type Service struct {
-	leaderGroup         *linkedlist.LinkedList
-	validatorQueue      *linkedlist.LinkedList
-	lowStakingPeriod    uint32
-	mediumStakingPeriod uint32
-	highStakingPeriod   uint32
-	cooldownPeriod      uint32
+	leaderGroup    *linkedlist.LinkedList
+	validatorQueue *linkedlist.LinkedList
 
-	minStake    *big.Int
-	maxStake    *big.Int
-	repo        *Repository
-	epochLength uint32
+	minStake *big.Int
+	maxStake *big.Int
+
+	repo *Repository
 }
 
 var (
@@ -46,11 +42,6 @@ var (
 )
 
 func New(sctx *solidity.Context,
-	cooldownPeriod uint32,
-	epochLength uint32,
-	lowStakingPeriod uint32,
-	mediumStakingPeriod uint32,
-	highStakingPeriod uint32,
 	minStake *big.Int,
 	maxStake *big.Int,
 ) *Service {
@@ -59,14 +50,8 @@ func New(sctx *solidity.Context,
 	return &Service{
 		repo: repo,
 
-		leaderGroup:         linkedlist.NewLinkedList(sctx, slotActiveHead, slotActiveTail, slotActiveGroupSize),
-		validatorQueue:      linkedlist.NewLinkedList(sctx, slotQueuedHead, slotQueuedTail, slotQueuedGroupSize),
-		lowStakingPeriod:    lowStakingPeriod,
-		mediumStakingPeriod: mediumStakingPeriod,
-		highStakingPeriod:   highStakingPeriod,
-
-		cooldownPeriod: cooldownPeriod,
-		epochLength:    epochLength,
+		leaderGroup:    linkedlist.NewLinkedList(sctx, slotActiveHead, slotActiveTail, slotActiveGroupSize),
+		validatorQueue: linkedlist.NewLinkedList(sctx, slotQueuedHead, slotQueuedTail, slotQueuedGroupSize),
 
 		minStake: minStake,
 		maxStake: maxStake,
@@ -180,7 +165,7 @@ func (s *Service) Add(
 	if !val.IsEmpty() {
 		return reverts.New("validator already exists")
 	}
-	if period != s.lowStakingPeriod && period != s.mediumStakingPeriod && period != s.highStakingPeriod {
+	if period != thor.LowStakingPeriod() && period != thor.MediumStakingPeriod() && period != thor.HighStakingPeriod() {
 		return reverts.New("period is out of boundaries")
 	}
 
@@ -232,7 +217,7 @@ func (s *Service) Evict(validator thor.Address, currentBlock uint32) error {
 		return err
 	}
 
-	exitBlock, err := s.SetExitBlock(validator, currentBlock+s.epochLength)
+	exitBlock, err := s.SetExitBlock(validator, currentBlock+thor.EpochLength())
 	if err != nil {
 		return err
 	}
@@ -342,10 +327,10 @@ func (s *Service) WithdrawStake(
 	}
 
 	// calculate currently available VET to withdraw
-	withdrawable := val.CalculateWithdrawableVET(currentBlock, s.cooldownPeriod)
+	withdrawable := val.CalculateWithdrawableVET(currentBlock)
 
 	// val has exited and waited for the cooldown period
-	if val.ExitBlock != nil && *val.ExitBlock+s.cooldownPeriod <= currentBlock {
+	if val.ExitBlock != nil && *val.ExitBlock+thor.CooldownPeriod() <= currentBlock {
 		val.CooldownVET = big.NewInt(0)
 	}
 
@@ -441,7 +426,7 @@ func (s *Service) SetExitBlock(validator thor.Address, minBlock uint32) (uint32,
 			}
 			return start, nil
 		}
-		start += s.epochLength
+		start += thor.EpochLength()
 	}
 }
 

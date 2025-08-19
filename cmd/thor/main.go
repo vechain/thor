@@ -333,8 +333,8 @@ func soloAction(ctx *cli.Context) error {
 
 	isHayabusa := ctx.Bool(hayabusaFlag.Name)
 	onDemandBlockProduction := ctx.Bool(onDemandFlag.Name)
-	blockProductionInterval := ctx.Uint64(blockInterval.Name)
-	if blockProductionInterval == 0 {
+	blockInterval := ctx.Uint64(blockInterval.Name)
+	if blockInterval == 0 {
 		return errors.New("block-interval cannot be zero")
 	}
 
@@ -359,12 +359,13 @@ func soloAction(ctx *cli.Context) error {
 	flagGenesis := ctx.String(genesisFlag.Name)
 	if flagGenesis == "" {
 		if isHayabusa {
-			forkConfigClone := thor.SoloFork
-			forkConfigClone.GALACTICA = 0
-			forkConfigClone.HAYABUSA = 0
-			forkConfigClone.HAYABUSA_TP = 0
-			forkConfig = &forkConfigClone
-			gene = genesis.NewHayabusaDevnet(&forkConfigClone)
+			fc := thor.SoloFork
+			fc.GALACTICA = 0
+			fc.HAYABUSA = 0
+			fc.HAYABUSA_TP = 0
+
+			forkConfig = &fc
+			gene = genesis.NewHayabusaDevnet(&fc)
 		} else {
 			gene = genesis.NewDevnet()
 			forkConfig = &thor.SoloFork
@@ -443,7 +444,7 @@ func soloAction(ctx *cli.Context) error {
 		SkipLogs:         skipLogs,
 		MinTxPriorityFee: minTxPriorityFee,
 		OnDemand:         onDemandBlockProduction,
-		BlockInterval:    blockProductionInterval,
+		BlockInterval:    blockInterval,
 	}
 
 	stater := state.NewStater(mainDB)
@@ -483,11 +484,6 @@ func soloAction(ctx *cli.Context) error {
 		return err
 	}
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
-
-	blockInterval := ctx.Uint64(blockInterval.Name)
-	if blockInterval == 0 {
-		return errors.New("block-interval cannot be zero")
-	}
 
 	printStartupMessage2(gene, apiURL, "", metricsURL, adminURL)
 

@@ -6,7 +6,6 @@
 package testchain
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -22,7 +21,6 @@ import (
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/builtin/params"
-	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
@@ -101,7 +99,7 @@ func NewIntegrationTestChain(config genesis.DevConfig, epochLength uint32) (*Cha
 	// If the launch time is not set, set it to the current time minus the current time aligned with the block interval
 	if config.LaunchTime == 0 {
 		now := uint64(time.Now().Unix())
-		config.LaunchTime = now - now%thor.BlockInterval
+		config.LaunchTime = now - now%thor.BlockInterval()
 	}
 
 	// Initialize the genesis and retrieve the genesis block
@@ -114,13 +112,11 @@ func NewIntegrationTestChainWithGenesis(gene *genesis.Genesis, forkConfig *thor.
 	db := muxdb.NewMem()
 	st := state.New(db, trie.Root{})
 
-	prm := params.New(thor.BytesToAddress([]byte("params")), st)
+	thor.SetConfig(thor.Config{
+		EpochLength: epochLength,
+	})
 
-	staker.EpochLength = solidity.NewConfigVariable("epoch-length", staker.EpochLength.Get())
-	// write storage override, then construct staker:
-	var be4 [4]byte
-	binary.BigEndian.PutUint32(be4[:], epochLength)
-	st.SetStorage(builtin.Staker.Address, thor.BytesToBytes32([]byte("epoch-length")), thor.BytesToBytes32(be4[:]))
+	prm := params.New(thor.BytesToAddress([]byte("params")), st)
 	_ = staker.New(builtin.Staker.Address, st, prm, nil)
 
 	// Create the state manager (Stater) with the initialized database.
@@ -222,7 +218,7 @@ func (c *Chain) MintBlock(account genesis.DevAccount, transactions ...*tx.Transa
 	// Create a new block
 	blkFlow, _, err := blkPacker.Mock(
 		c.Repo().BestBlockSummary(),
-		c.Repo().BestBlockSummary().Header.Timestamp()+thor.BlockInterval,
+		c.Repo().BestBlockSummary().Header.Timestamp()+thor.BlockInterval(),
 		c.Repo().BestBlockSummary().Header.GasLimit(),
 	)
 	if err != nil {
