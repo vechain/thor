@@ -1673,6 +1673,24 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).Mul(big.NewInt(0).SetUint64(receipt.GasUsed), block.Header().BaseFee()), big.NewInt(0).Sub(totalBurned, totalBurnedBefore))
 
+	// setBeneficiary
+	beneficiary := genesis.DevAccounts()[9].Address
+	setBeneficiaryArgs := []any{master.Address, beneficiary}
+	desc = TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "setBeneficiary",
+		address:    toAddr,
+		acc:        genesis.DevAccounts()[0],
+		args:       setBeneficiaryArgs,
+	}
+	receipt, trxid, err = executeTxAndGetReceipt(desc) // mint block 4
+	assert.NoError(t, err)
+	assert.False(t, receipt.Reverted)
+	assert.Equal(t, master.Address, thor.BytesToAddress(receipt.Outputs[0].Events[0].Topics[1][:]))
+	_, err = thorChain.GetTxBlock(trxid)
+	assert.NoError(t, err)
+
 	node := master.Address
 	// getStake
 	getStakeRes := make([]any, 4)

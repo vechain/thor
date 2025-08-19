@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/rlp"
+
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -246,6 +248,14 @@ func TestIsStakerPaused(t *testing.T) {
 
 	err = builtin.IsStakerPaused(setup.state, charger)
 	require.NoError(t, err, "Function IsStakerPaused should not return error %s", err)
+
+	setup.state.SetRawStorage(builtin.Params.Address, thor.KeyStargateSwitches, rlp.RawValue{0xFF})
+
+	err = builtin.IsStakerPaused(setup.state, charger)
+	require.Error(t, err)
+
+	err = builtin.IsStargatePaused(setup.state, charger)
+	require.Error(t, err)
 }
 
 func TestAddAndExitValidatorForPause(t *testing.T) {
