@@ -147,8 +147,8 @@ func TestService_QueuedAndLeader_LenAndHead(t *testing.T) {
 
 	q1 := thor.BytesToAddress([]byte("q1"))
 	q2 := thor.BytesToAddress([]byte("q2"))
-	assert.NoError(t, svc.Add(q1, q1, thor.LowStakingPeriod, big.NewInt(1)))
-	assert.NoError(t, svc.Add(q2, q2, thor.LowStakingPeriod, big.NewInt(1)))
+	assert.NoError(t, svc.Add(q1, q1, thor.LowStakingPeriod(), big.NewInt(1)))
+	assert.NoError(t, svc.Add(q2, q2, thor.LowStakingPeriod(), big.NewInt(1)))
 
 	id, err := svc.NextToActivate(big.NewInt(10))
 	assert.NoError(t, err)
@@ -173,8 +173,8 @@ func TestService_IsActive_Flag(t *testing.T) {
 	assert.False(t, ok)
 
 	id := thor.BytesToAddress([]byte("x"))
-	assert.NoError(t, svc.Add(id, id, thor.LowStakingPeriod, big.NewInt(1)))
-	_, err = svc.ActivateValidator(id, thor.LowStakingPeriod, &delta.Renewal{NewLockedWeight: big.NewInt(0)})
+	assert.NoError(t, svc.Add(id, id, thor.LowStakingPeriod(), big.NewInt(1)))
+	_, err = svc.ActivateValidator(id, thor.LowStakingPeriod(), &delta.Renewal{NewLockedWeight: big.NewInt(0)})
 	assert.NoError(t, err)
 
 	ok, err = svc.IsActive()
@@ -189,7 +189,7 @@ func TestService_SignalExit_InvalidEndorser(t *testing.T) {
 	end := thor.BytesToAddress([]byte("endorse"))
 
 	assert.NoError(t, svc.repo.setValidation(id, &Validation{
-		Endorser: end, Status: StatusActive, Period: thor.MediumStakingPeriod, StartBlock: 100, CompleteIterations: 0,
+		Endorser: end, Status: StatusActive, Period: thor.MediumStakingPeriod(), StartBlock: 100, CompleteIterations: 0,
 	}, true))
 
 	err := svc.SignalExit(id, thor.BytesToAddress([]byte("wrong")))
@@ -442,7 +442,7 @@ func TestService_WithdrawStake_InvalidEndorser(t *testing.T) {
 
 	id := thor.BytesToAddress([]byte("v"))
 	endorsor := id
-	assert.NoError(t, svc.Add(id, endorsor, thor.LowStakingPeriod, big.NewInt(10)))
+	assert.NoError(t, svc.Add(id, endorsor, thor.LowStakingPeriod(), big.NewInt(10)))
 
 	amt, _, err := svc.WithdrawStake(id, thor.BytesToAddress([]byte("wrong")), 0)
 	assert.Equal(t, big.NewInt(0).String(), amt.String())
@@ -454,7 +454,7 @@ func TestService_WithdrawStake_QueuedToExit(t *testing.T) {
 
 	id := thor.BytesToAddress([]byte("q"))
 	endorser := id
-	assert.NoError(t, svc.Add(id, endorser, thor.LowStakingPeriod, big.NewInt(50)))
+	assert.NoError(t, svc.Add(id, endorser, thor.LowStakingPeriod(), big.NewInt(50)))
 
 	val, err := svc.GetValidation(id)
 	assert.NoError(t, err)
@@ -558,9 +558,9 @@ func TestService_ValidatorQueueNext_Order(t *testing.T) {
 	q1 := thor.BytesToAddress([]byte("q1"))
 	q2 := thor.BytesToAddress([]byte("q2"))
 	q3 := thor.BytesToAddress([]byte("q3"))
-	assert.NoError(t, svc.Add(q1, q1, thor.LowStakingPeriod, big.NewInt(1)))
-	assert.NoError(t, svc.Add(q2, q2, thor.LowStakingPeriod, big.NewInt(1)))
-	assert.NoError(t, svc.Add(q3, q3, thor.LowStakingPeriod, big.NewInt(1)))
+	assert.NoError(t, svc.Add(q1, q1, thor.LowStakingPeriod(), big.NewInt(1)))
+	assert.NoError(t, svc.Add(q2, q2, thor.LowStakingPeriod(), big.NewInt(1)))
+	assert.NoError(t, svc.Add(q3, q3, thor.LowStakingPeriod(), big.NewInt(1)))
 
 	head, err := svc.FirstQueued()
 	assert.NoError(t, err)
@@ -586,7 +586,7 @@ func TestService_LeaderGroupNext_Order(t *testing.T) {
 	a2 := thor.BytesToAddress([]byte("a2"))
 	a3 := thor.BytesToAddress([]byte("a3"))
 	for _, id := range []thor.Address{a1, a2, a3} {
-		assert.NoError(t, svc.Add(id, id, thor.LowStakingPeriod, big.NewInt(1)))
+		assert.NoError(t, svc.Add(id, id, thor.LowStakingPeriod(), big.NewInt(1)))
 		idPtr, err := svc.NextToActivate(big.NewInt(10))
 		assert.NoError(t, err)
 		assert.Equal(t, id, *idPtr)

@@ -647,7 +647,7 @@ func TestStaker_DelegationExitingVET(t *testing.T) {
 	assert.Equal(t, delStake, qStake)
 	assert.Equal(t, delWeight, qWeight)
 
-	_, err = staker.Housekeep(thor.MediumStakingPeriod)
+	_, err = staker.Housekeep(thor.MediumStakingPeriod())
 	assert.NoError(t, err)
 
 	delegation, validation, err = staker.GetDelegation(delegationID)
@@ -657,6 +657,6 @@ func TestStaker_DelegationExitingVET(t *testing.T) {
 	assert.NoError(t, staker.SignalDelegationExit(delegationID))
 	assert.NoError(t, staker.SignalExit(*firstActive, validation.Endorser))
 
-	_, err = staker.Housekeep(thor.MediumStakingPeriod * 2)
+	_, err = staker.Housekeep(thor.MediumStakingPeriod() * 2)
 	assert.NoError(t, err)
 }

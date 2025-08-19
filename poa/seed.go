@@ -29,11 +29,11 @@ func NewSeeder(repo *chain.Repository) *Seeder {
 func (seeder *Seeder) Generate(parentID thor.Bytes32) (seed []byte, err error) {
 	blockNum := block.Number(parentID) + 1
 
-	epoch := blockNum / thor.SeederInterval
+	epoch := blockNum / thor.SeederInterval()
 	if epoch <= 1 {
 		return
 	}
-	seedNum := (epoch - 1) * thor.SeederInterval
+	seedNum := (epoch - 1) * thor.SeederInterval()
 
 	seedID, err := seeder.repo.NewChain(parentID).GetBlockID(seedNum)
 	if err != nil {

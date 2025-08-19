@@ -60,7 +60,7 @@ func (p *pendingTx) DispatchLoop(done <-chan struct{}) {
 			}
 			now := time.Now().Unix()
 			// ignored if seen within half block interval
-			if seen, ok := knownTx.Get(txEv.Tx.ID()); ok && now-seen.(int64) <= int64(thor.BlockInterval/2) {
+			if seen, ok := knownTx.Get(txEv.Tx.ID()); ok && now-seen.(int64) <= int64(thor.BlockInterval()/2) {
 				continue
 			}
 			knownTx.Add(txEv.Tx.ID(), now)

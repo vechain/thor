@@ -9,16 +9,16 @@ package thor
 // will be 'locked' for production networks. For testing purposes or custom networks, the parameters can be updated.
 
 var (
-	BlockInterval              uint64 = 10       // 10 seconds
-	EpochLength                uint32 = 180      // 180 blocks, 30 minutes
-	SeederInterval             uint32 = 8640     // 8640 blocks, 1 day
-	ValidatorEvictionThreshold uint32 = 7 * 8640 // 7 days
+	blockInterval              uint64 = 10       // 10 seconds
+	epochLength                uint32 = 180      // 180 blocks, 30 minutes
+	seederInterval             uint32 = 8640     // 8640 blocks, 1 day
+	validatorEvictionThreshold uint32 = 7 * 8640 // 7 days
 
 	// Staker parameters
-	LowStakingPeriod    uint32 = 8640 * 7  // 7 Days
-	MediumStakingPeriod uint32 = 8640 * 15 // 15 Days
-	HighStakingPeriod   uint32 = 8640 * 30 // 30 Days
-	CooldownPeriod      uint32 = 8640      // 8640 blocks, 1 day
+	lowStakingPeriod    uint32 = 8640 * 7  // 7 Days
+	mediumStakingPeriod uint32 = 8640 * 15 // 15 Days
+	highStakingPeriod   uint32 = 8640 * 30 // 30 Days
+	cooldownPeriod      uint32 = 8640      // 8640 blocks, 1 day
 
 	locked bool
 )
@@ -45,35 +45,35 @@ func SetConfig(cfg Config) {
 	}
 
 	if cfg.BlockInterval != 0 {
-		BlockInterval = cfg.BlockInterval
+		blockInterval = cfg.BlockInterval
 	}
 
 	if cfg.EpochLength != 0 {
-		EpochLength = cfg.EpochLength
+		epochLength = cfg.EpochLength
 	}
 
 	if cfg.SeederInterval != 0 {
-		SeederInterval = cfg.SeederInterval
+		seederInterval = cfg.SeederInterval
 	}
 
 	if cfg.ValidatorEvictionThreshold != 0 {
-		ValidatorEvictionThreshold = cfg.ValidatorEvictionThreshold
+		validatorEvictionThreshold = cfg.ValidatorEvictionThreshold
 	}
 
 	if cfg.LowStakingPeriod != 0 {
-		LowStakingPeriod = cfg.LowStakingPeriod
+		lowStakingPeriod = cfg.LowStakingPeriod
 	}
 
 	if cfg.MediumStakingPeriod != 0 {
-		MediumStakingPeriod = cfg.MediumStakingPeriod
+		mediumStakingPeriod = cfg.MediumStakingPeriod
 	}
 
 	if cfg.HighStakingPeriod != 0 {
-		HighStakingPeriod = cfg.HighStakingPeriod
+		highStakingPeriod = cfg.HighStakingPeriod
 	}
 
 	if cfg.CooldownPeriod != 0 {
-		CooldownPeriod = cfg.CooldownPeriod
+		cooldownPeriod = cfg.CooldownPeriod
 	}
 }
 
@@ -81,4 +81,36 @@ func SetConfig(cfg Config) {
 // Required for mainnet and testnet.
 func LockConfig() {
 	locked = true
+}
+
+func BlockInterval() uint64 {
+	return blockInterval
+}
+
+func EpochLength() uint32 {
+	return epochLength
+}
+
+func SeederInterval() uint32 {
+	return seederInterval
+}
+
+func ValidatorEvictionThreshold() uint32 {
+	return validatorEvictionThreshold
+}
+
+func LowStakingPeriod() uint32 {
+	return lowStakingPeriod
+}
+
+func MediumStakingPeriod() uint32 {
+	return mediumStakingPeriod
+}
+
+func HighStakingPeriod() uint32 {
+	return highStakingPeriod
+}
+
+func CooldownPeriod() uint32 {
+	return cooldownPeriod
 }

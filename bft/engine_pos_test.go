@@ -45,7 +45,7 @@ func TestFinalizedPos(t *testing.T) {
 	}
 
 	numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
-	if err = testBFT.fastForward(thor.EpochLength*3 - 1 - numBlksNeededForPos); err != nil {
+	if err = testBFT.fastForward(thor.EpochLength()*3 - 1 - numBlksNeededForPos); err != nil {
 		t.Fatal(err)
 	}
 
@@ -64,7 +64,7 @@ func TestFinalizedPos(t *testing.T) {
 	assert.True(t, st.Justified)
 	assert.True(t, st.Committed)
 
-	blockNum := thor.EpochLength*2 + MaxBlockProposers*2/3
+	blockNum := thor.EpochLength()*2 + MaxBlockProposers*2/3
 
 	sum, err = testBFT.repo.NewBestChain().GetBlockSummary(blockNum)
 	if err != nil {
@@ -82,14 +82,14 @@ func TestFinalizedPos(t *testing.T) {
 	assert.True(t, st.Committed)
 
 	// chain stops the end of third bft round,should commit the second checkpoint
-	finalized, err := testBFT.repo.NewBestChain().GetBlockID(thor.EpochLength)
+	finalized, err := testBFT.repo.NewBestChain().GetBlockID(thor.EpochLength())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	assert.Equal(t, finalized, testBFT.engine.Finalized())
 
-	jc, err := testBFT.repo.NewBestChain().GetBlockID(thor.EpochLength * 2)
+	jc, err := testBFT.repo.NewBestChain().GetBlockID(thor.EpochLength() * 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestAcceptsPos(t *testing.T) {
 	}
 
 	numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
-	if err = testBFT.fastForward(thor.EpochLength - 1 - numBlksNeededForPos); err != nil {
+	if err = testBFT.fastForward(thor.EpochLength() - 1 - numBlksNeededForPos); err != nil {
 		t.Fatal(err)
 	}
 
@@ -121,7 +121,7 @@ func TestAcceptsPos(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = testBFT.fastForward(thor.EpochLength * 2); err != nil {
+	if err = testBFT.fastForward(thor.EpochLength() * 2); err != nil {
 		t.Fatal(err)
 	}
 
@@ -130,7 +130,7 @@ func TestAcceptsPos(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, ok, true)
 
-	branchID, err := branch.GetBlockID(thor.EpochLength)
+	branchID, err := branch.GetBlockID(thor.EpochLength())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +167,7 @@ func TestGetVotePos(t *testing.T) {
 				}
 
 				numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
-				testBFT.fastForwardWithMinority(thor.EpochLength*3 - numBlksNeededForPos)
+				testBFT.fastForwardWithMinority(thor.EpochLength()*3 - numBlksNeededForPos)
 				v, err := testBFT.engine.ShouldVote(testBFT.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
@@ -182,7 +182,7 @@ func TestGetVotePos(t *testing.T) {
 				}
 
 				numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
-				testBFT.fastForward(thor.EpochLength*3 - numBlksNeededForPos)
+				testBFT.fastForward(thor.EpochLength()*3 - numBlksNeededForPos)
 				v, err := testBFT.engine.ShouldVote(testBFT.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
@@ -197,7 +197,7 @@ func TestGetVotePos(t *testing.T) {
 				}
 
 				numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
-				if err = testBFT.fastForward(thor.EpochLength*3 - 1 - numBlksNeededForPos); err != nil {
+				if err = testBFT.fastForward(thor.EpochLength()*3 - 1 - numBlksNeededForPos); err != nil {
 					t.Fatal(err)
 				}
 
@@ -243,7 +243,7 @@ func TestGetVotePos(t *testing.T) {
 				}
 
 				numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
-				if err = testBFT.fastForward(thor.EpochLength*3 - 1 - numBlksNeededForPos); err != nil {
+				if err = testBFT.fastForward(thor.EpochLength()*3 - 1 - numBlksNeededForPos); err != nil {
 					t.Fatal(err)
 				}
 
@@ -306,7 +306,7 @@ func TestGetVotePos(t *testing.T) {
 				}
 
 				numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
-				if err = testBFT.fastForward(thor.EpochLength*3 - 1 - numBlksNeededForPos); err != nil {
+				if err = testBFT.fastForward(thor.EpochLength()*3 - 1 - numBlksNeededForPos); err != nil {
 					t.Fatal(err)
 				}
 
@@ -352,8 +352,8 @@ func TestGetVotePos(t *testing.T) {
 				}
 
 				numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
-				testBFT.fastForwardWithMinority(thor.EpochLength*3 - numBlksNeededForPos)
-				testBFT.fastForward(thor.EpochLength*1 + 3)
+				testBFT.fastForwardWithMinority(thor.EpochLength()*3 - numBlksNeededForPos)
+				testBFT.fastForward(thor.EpochLength()*1 + 3)
 				_, err = testBFT.engine.ShouldVote(testBFT.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
@@ -387,7 +387,7 @@ func TestJustifierPos(t *testing.T) {
 				}
 
 				numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
-				testBft.fastForward(thor.EpochLength - 1 - numBlksNeededForPos)
+				testBft.fastForward(thor.EpochLength() - 1 - numBlksNeededForPos)
 
 				vs, err := testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
 				if err != nil {
@@ -408,7 +408,7 @@ func TestJustifierPos(t *testing.T) {
 		{
 			"fork in the middle of checkpoint", func(t *testing.T, forkCfg *thor.ForkConfig) {
 				fc := *forkCfg
-				fc.VIP214 = thor.EpochLength / 2
+				fc.VIP214 = thor.EpochLength() / 2
 				testBft, err := newTestBftPos(&fc)
 				if err != nil {
 					t.Fatal(err)
@@ -425,20 +425,20 @@ func TestJustifierPos(t *testing.T) {
 		{
 			"the second bft round", func(t *testing.T, forkCfg *thor.ForkConfig) {
 				fc := *forkCfg
-				fc.VIP214 = thor.EpochLength / 2
+				fc.VIP214 = thor.EpochLength() / 2
 				testBft, err := newTestBftPos(&fc)
 				if err != nil {
 					t.Fatal(err)
 				}
 
 				numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
-				testBft.fastForward(thor.EpochLength*2 - numBlksNeededForPos)
+				testBft.fastForward(thor.EpochLength()*2 - numBlksNeededForPos)
 				vs, err := testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
 				}
 
-				assert.Equal(t, thor.EpochLength*2, vs.checkpoint)
+				assert.Equal(t, thor.EpochLength()*2, vs.checkpoint)
 				expected, ok := new(big.Int).SetString("166666666666666666666666666", 10)
 				assert.True(t, ok)
 				assert.Equal(t, expected, vs.thresholdWeight)
@@ -450,14 +450,14 @@ func TestJustifierPos(t *testing.T) {
 		{
 			"add votes: commits", func(t *testing.T, forkCfg *thor.ForkConfig) {
 				fc := *forkCfg
-				fc.VIP214 = thor.EpochLength / 2
+				fc.VIP214 = thor.EpochLength() / 2
 				testBft, err := newTestBftPos(&fc)
 				if err != nil {
 					t.Fatal(err)
 				}
 
 				numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
-				testBft.fastForward(thor.EpochLength*2 - 1 - numBlksNeededForPos)
+				testBft.fastForward(thor.EpochLength()*2 - 1 - numBlksNeededForPos)
 				vs, err := testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
@@ -485,14 +485,14 @@ func TestJustifierPos(t *testing.T) {
 		{
 			"add votes: justifies", func(t *testing.T, forkCfg *thor.ForkConfig) {
 				fc := *forkCfg
-				fc.VIP214 = thor.EpochLength / 2
+				fc.VIP214 = thor.EpochLength() / 2
 				testBft, err := newTestBftPos(&fc)
 				if err != nil {
 					t.Fatal(err)
 				}
 
 				numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
-				testBft.fastForward(thor.EpochLength*2 - 1 - numBlksNeededForPos)
+				testBft.fastForward(thor.EpochLength()*2 - 1 - numBlksNeededForPos)
 				vs, err := testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
@@ -512,14 +512,14 @@ func TestJustifierPos(t *testing.T) {
 		{
 			"add votes: one votes WIT then changes to COM", func(t *testing.T, forkCfg *thor.ForkConfig) {
 				fc := *forkCfg
-				fc.VIP214 = thor.EpochLength / 2
+				fc.VIP214 = thor.EpochLength() / 2
 				testBft, err := newTestBftPos(&fc)
 				if err != nil {
 					t.Fatal(err)
 				}
 
 				numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
-				testBft.fastForward(thor.EpochLength*2 - 1 - numBlksNeededForPos)
+				testBft.fastForward(thor.EpochLength()*2 - 1 - numBlksNeededForPos)
 				vs, err := testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
@@ -650,7 +650,7 @@ func TestJustifiedPos(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				for range 3 * thor.EpochLength {
+				for range 3 * thor.EpochLength() {
 					if err = testBFT.fastForwardWithMinority(1); err != nil {
 						t.Fatal(err)
 					}
@@ -669,11 +669,11 @@ func TestJustifiedPos(t *testing.T) {
 				}
 
 				numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
-				if err = testBFT.fastForward(thor.EpochLength - numBlksNeededForPos); err != nil {
+				if err = testBFT.fastForward(thor.EpochLength() - numBlksNeededForPos); err != nil {
 					t.Fatal(err)
 				}
 
-				for range thor.EpochLength - 2 {
+				for range thor.EpochLength() - 2 {
 					if err = testBFT.fastForward(1); err != nil {
 						t.Fatal(err)
 					}
@@ -689,7 +689,7 @@ func TestJustifiedPos(t *testing.T) {
 				}
 				justified, err := testBFT.engine.Justified()
 				assert.Nil(t, err)
-				assert.Equal(t, thor.EpochLength, block.Number(justified))
+				assert.Equal(t, thor.EpochLength(), block.Number(justified))
 				assert.Equal(t, testBFT.repo.GenesisBlock().Header().ID(), testBFT.engine.Finalized())
 			},
 		}, {
@@ -699,7 +699,7 @@ func TestJustifiedPos(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				if err = testBFT.fastForwardWithMinority(3*thor.EpochLength - 1); err != nil {
+				if err = testBFT.fastForwardWithMinority(3*thor.EpochLength() - 1); err != nil {
 					t.Fatal(err)
 				}
 
@@ -708,12 +708,12 @@ func TestJustifiedPos(t *testing.T) {
 				assert.Equal(t, testBFT.repo.GenesisBlock().Header().ID(), justified)
 				assert.Equal(t, testBFT.repo.GenesisBlock().Header().ID(), testBFT.engine.Finalized())
 
-				if err = testBFT.fastForward(thor.EpochLength); err != nil {
+				if err = testBFT.fastForward(thor.EpochLength()); err != nil {
 					t.Fatal(err)
 				}
 				justified, err = testBFT.engine.Justified()
 				assert.Nil(t, err)
-				assert.Equal(t, 3*thor.EpochLength, block.Number(justified))
+				assert.Equal(t, 3*thor.EpochLength(), block.Number(justified))
 				assert.Equal(t, testBFT.repo.GenesisBlock().Header().ID(), testBFT.engine.Finalized())
 			},
 		}, {
@@ -725,27 +725,27 @@ func TestJustifiedPos(t *testing.T) {
 
 				numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
 
-				if err = testBFT.fastForward(3*thor.EpochLength - 1 - numBlksNeededForPos); err != nil {
+				if err = testBFT.fastForward(3*thor.EpochLength() - 1 - numBlksNeededForPos); err != nil {
 					t.Fatal(err)
 				}
 
-				assert.Equal(t, thor.EpochLength, block.Number(testBFT.engine.Finalized()))
+				assert.Equal(t, thor.EpochLength(), block.Number(testBFT.engine.Finalized()))
 
-				if err = testBFT.fastForward(thor.EpochLength - 1); err != nil {
+				if err = testBFT.fastForward(thor.EpochLength() - 1); err != nil {
 					t.Fatal(err)
 				}
 
 				justified, err := testBFT.engine.Justified()
 				assert.Nil(t, err)
 				// current epoch is not concluded
-				assert.Equal(t, 2*thor.EpochLength, block.Number(justified))
+				assert.Equal(t, 2*thor.EpochLength(), block.Number(justified))
 
 				if err = testBFT.fastForward(1); err != nil {
 					t.Fatal(err)
 				}
 				justified, err = testBFT.engine.Justified()
 				assert.Nil(t, err)
-				assert.Equal(t, 3*thor.EpochLength, block.Number(justified))
+				assert.Equal(t, 3*thor.EpochLength(), block.Number(justified))
 			},
 		}, {
 			"get finalized, not justified, then justified", func(t *testing.T, forkCfg *thor.ForkConfig) {
@@ -755,32 +755,32 @@ func TestJustifiedPos(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				if err = testBFT.fastForward(3*thor.EpochLength - 1); err != nil {
+				if err = testBFT.fastForward(3*thor.EpochLength() - 1); err != nil {
 					t.Fatal(err)
 				}
 
-				assert.Equal(t, thor.EpochLength, block.Number(testBFT.engine.Finalized()))
+				assert.Equal(t, thor.EpochLength(), block.Number(testBFT.engine.Finalized()))
 
-				if err = testBFT.fastForwardWithMinority(thor.EpochLength); err != nil {
+				if err = testBFT.fastForwardWithMinority(thor.EpochLength()); err != nil {
 					t.Fatal(err)
 				}
 				justified, err := testBFT.engine.Justified()
 				assert.Nil(t, err)
-				assert.Equal(t, 2*thor.EpochLength, block.Number(justified))
+				assert.Equal(t, 2*thor.EpochLength(), block.Number(justified))
 
-				if err = testBFT.fastForward(thor.EpochLength); err != nil {
+				if err = testBFT.fastForward(thor.EpochLength()); err != nil {
 					t.Fatal(err)
 				}
 				justified, err = testBFT.engine.Justified()
 				assert.Nil(t, err)
-				assert.Equal(t, 4*thor.EpochLength, block.Number(justified))
+				assert.Equal(t, 4*thor.EpochLength(), block.Number(justified))
 				// test cache
 				assert.Equal(t, justified, testBFT.engine.justified.Load().(tJustified).value)
 			},
 		}, {
 			"fork in the middle, get justified", func(t *testing.T, forkCfg *thor.ForkConfig) {
 				fc := *forkCfg
-				fc.FINALITY = thor.EpochLength
+				fc.FINALITY = thor.EpochLength()
 
 				testBFT, err := newTestBftPos(&fc)
 				if err != nil {
@@ -788,11 +788,11 @@ func TestJustifiedPos(t *testing.T) {
 				}
 
 				numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
-				if err = testBFT.fastForward(thor.EpochLength - numBlksNeededForPos); err != nil {
+				if err = testBFT.fastForward(thor.EpochLength() - numBlksNeededForPos); err != nil {
 					t.Fatal(err)
 				}
 
-				for range thor.EpochLength - 2 {
+				for range thor.EpochLength() - 2 {
 					if err = testBFT.fastForward(1); err != nil {
 						t.Fatal(err)
 					}
@@ -808,7 +808,7 @@ func TestJustifiedPos(t *testing.T) {
 				}
 				justified, err := testBFT.engine.Justified()
 				assert.Nil(t, err)
-				assert.Equal(t, thor.EpochLength, block.Number(justified))
+				assert.Equal(t, thor.EpochLength(), block.Number(justified))
 				assert.Equal(t, testBFT.repo.GenesisBlock().Header().ID(), testBFT.engine.Finalized())
 			},
 		},
@@ -850,7 +850,7 @@ func (test *TestBFT) transitionToPosBlock(parentSummary *chain.BlockSummary, mas
 	thor.SetConfig(thor.Config{
 		EpochLength: 1,
 	})
-	flow, _, err := packer.Mock(parentSummary, parentSummary.Header.Timestamp()+thor.BlockInterval, parentSummary.Header.GasLimit())
+	flow, _, err := packer.Mock(parentSummary, parentSummary.Header.Timestamp()+thor.BlockInterval(), parentSummary.Header.GasLimit())
 	if err != nil {
 		return nil, err
 	}

@@ -165,7 +165,7 @@ func (s *Service) Add(
 	if !val.IsEmpty() {
 		return reverts.New("validator already exists")
 	}
-	if period != thor.LowStakingPeriod && period != thor.MediumStakingPeriod && period != thor.HighStakingPeriod {
+	if period != thor.LowStakingPeriod() && period != thor.MediumStakingPeriod() && period != thor.HighStakingPeriod() {
 		return reverts.New("period is out of boundaries")
 	}
 
@@ -217,7 +217,7 @@ func (s *Service) Evict(validator thor.Address, currentBlock uint32) error {
 		return err
 	}
 
-	exitBlock, err := s.SetExitBlock(validator, currentBlock+thor.EpochLength)
+	exitBlock, err := s.SetExitBlock(validator, currentBlock+thor.EpochLength())
 	if err != nil {
 		return err
 	}
@@ -330,7 +330,7 @@ func (s *Service) WithdrawStake(
 	withdrawable := val.CalculateWithdrawableVET(currentBlock)
 
 	// val has exited and waited for the cooldown period
-	if val.ExitBlock != nil && *val.ExitBlock+thor.CooldownPeriod <= currentBlock {
+	if val.ExitBlock != nil && *val.ExitBlock+thor.CooldownPeriod() <= currentBlock {
 		val.CooldownVET = big.NewInt(0)
 	}
 
@@ -426,7 +426,7 @@ func (s *Service) SetExitBlock(validator thor.Address, minBlock uint32) (uint32,
 			}
 			return start, nil
 		}
-		start += thor.EpochLength
+		start += thor.EpochLength()
 	}
 }
 

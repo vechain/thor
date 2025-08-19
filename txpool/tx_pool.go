@@ -290,7 +290,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		txObj.executable = executable
 		if err := p.all.Add(txObj, p.options.LimitPerAccount, func(payer thor.Address, needs *big.Int) error {
 			// check payer's balance
-			balance, err := builtin.Energy.Native(state, headSummary.Header.Timestamp()+thor.BlockInterval).Get(payer)
+			balance, err := builtin.Energy.Native(state, headSummary.Header.Timestamp()+thor.BlockInterval()).Get(payer)
 			if err != nil {
 				return err
 			}
@@ -578,5 +578,5 @@ func isChainSynced(nowTimestamp, blockTimestamp uint64) bool {
 	if blockTimestamp > nowTimestamp {
 		timeDiff = blockTimestamp - nowTimestamp
 	}
-	return timeDiff < thor.BlockInterval*6
+	return timeDiff < thor.BlockInterval()*6
 }

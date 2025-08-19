@@ -99,7 +99,7 @@ func NewIntegrationTestChain(config genesis.DevConfig, epochLength uint32) (*Cha
 	// If the launch time is not set, set it to the current time minus the current time aligned with the block interval
 	if config.LaunchTime == 0 {
 		now := uint64(time.Now().Unix())
-		config.LaunchTime = now - now%thor.BlockInterval
+		config.LaunchTime = now - now%thor.BlockInterval()
 	}
 
 	// Initialize the genesis and retrieve the genesis block
@@ -218,7 +218,7 @@ func (c *Chain) MintBlock(account genesis.DevAccount, transactions ...*tx.Transa
 	// Create a new block
 	blkFlow, _, err := blkPacker.Mock(
 		c.Repo().BestBlockSummary(),
-		c.Repo().BestBlockSummary().Header.Timestamp()+thor.BlockInterval,
+		c.Repo().BestBlockSummary().Header.Timestamp()+thor.BlockInterval(),
 		c.Repo().BestBlockSummary().Header.GasLimit(),
 	)
 	if err != nil {
