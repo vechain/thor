@@ -333,9 +333,9 @@ func soloAction(ctx *cli.Context) error {
 
 	isHayabusa := ctx.Bool(hayabusaFlag.Name)
 	onDemandBlockProduction := ctx.Bool(onDemandFlag.Name)
-	blockProductionInterval := ctx.Uint64(blockInterval.Name)
-	if blockProductionInterval <= 1 {
-		return errors.New("block-interval cannot be zero or one")
+	blockInterval := ctx.Uint64(blockInterval.Name)
+	if blockInterval == 0 {
+		return errors.New("block-interval cannot be zero")
 	}
 
 	// enable metrics as soon as possible
@@ -444,7 +444,7 @@ func soloAction(ctx *cli.Context) error {
 		SkipLogs:         skipLogs,
 		MinTxPriorityFee: minTxPriorityFee,
 		OnDemand:         onDemandBlockProduction,
-		BlockInterval:    blockProductionInterval,
+		BlockInterval:    blockInterval,
 	}
 
 	stater := state.NewStater(mainDB)
@@ -484,11 +484,6 @@ func soloAction(ctx *cli.Context) error {
 		return err
 	}
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
-
-	blockInterval := ctx.Uint64(blockInterval.Name)
-	if blockInterval == 0 {
-		return errors.New("block-interval cannot be zero")
-	}
 
 	printStartupMessage2(gene, apiURL, "", metricsURL, adminURL)
 
