@@ -3015,14 +3015,14 @@ func TestStaker_Housekeep_NegativeCases(t *testing.T) {
 	var et *EpochTransition = nil
 	assert.False(t, et.HasUpdates())
 
-	housekeep, err := staker.Housekeep(EpochLength.Get() - 1)
+	housekeep, err := staker.Housekeep(thor.EpochLength() - 1)
 	assert.NoError(t, err)
 	assert.False(t, housekeep)
 
 	activeHeadSlot := thor.BytesToBytes32([]byte(("validations-active-head")))
 	st.SetRawStorage(stakerAddr, activeHeadSlot, rlp.RawValue{0xFF})
 
-	_, err = staker.Housekeep(EpochLength.Get())
+	_, err = staker.Housekeep(thor.EpochLength())
 	assert.Error(t, err)
 
 	keys := createKeys(2)
@@ -3040,16 +3040,16 @@ func TestStaker_Housekeep_NegativeCases(t *testing.T) {
 	lockedVet, err := st.GetRawStorage(stakerAddr, slotLockedVET)
 	assert.NoError(t, err)
 	st.SetRawStorage(stakerAddr, slotLockedVET, rlp.RawValue{0xFF})
-	_, err = staker.Housekeep(EpochLength.Get())
+	_, err = staker.Housekeep(thor.EpochLength())
 	assert.Error(t, err)
 
-	_, err = staker.Housekeep(EpochLength.Get() * 2)
+	_, err = staker.Housekeep(thor.EpochLength() * 2)
 	assert.Error(t, err)
 
 	slotQueuedGroupSize := thor.BytesToBytes32([]byte(("validations-queued-group-size")))
 	st.SetRawStorage(stakerAddr, slotLockedVET, lockedVet)
 	st.SetRawStorage(stakerAddr, slotQueuedGroupSize, rlp.RawValue{0xFF})
-	_, err = staker.Housekeep(EpochLength.Get() * 4)
+	_, err = staker.Housekeep(thor.EpochLength() * 4)
 	assert.Error(t, err)
 
 	st.SetRawStorage(stakerAddr, slotLockedVET, rlp.RawValue{0x0})
