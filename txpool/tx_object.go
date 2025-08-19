@@ -69,14 +69,14 @@ func (o *TxObject) Payer() *thor.Address {
 func (o *TxObject) Executable(chain *chain.Chain, state *state.State, headBlock *block.Header, forkConfig *thor.ForkConfig, baseFee *big.Int) (bool, error) {
 	// evaluate the tx on the next block as head block is already history
 	nextBlockNum := headBlock.Number() + 1
-	nextBlockTime := headBlock.Timestamp() + thor.BlockInterval
+	nextBlockTime := headBlock.Timestamp() + thor.BlockInterval()
 
 	switch {
 	case o.Gas() > headBlock.GasLimit():
 		return false, errors.New("gas too large")
 	case o.IsExpired(nextBlockNum): // Check tx expiration on top of next block
 		return false, errors.New("expired")
-	case o.BlockRef().Number() > nextBlockNum+uint32(5*60/thor.BlockInterval):
+	case o.BlockRef().Number() > nextBlockNum+uint32(5*60/thor.BlockInterval()):
 		// reject deferred tx which will be applied after 5mins
 		return false, errors.New("block ref out of schedule")
 	case nextBlockNum < forkConfig.GALACTICA && o.Type() != tx.TypeLegacy:

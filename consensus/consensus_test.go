@@ -94,7 +94,7 @@ func newTestConsensus() (*testConsensus, error) {
 	proposer := genesis.DevAccounts()[0]
 	p := packer.New(repo, stater, proposer.Address, &proposer.Address, &forkConfig, 0)
 	parentSum, _ := repo.GetBlockSummary(parent.Header().ID())
-	flow, _, err := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval)
+	flow, _, err := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval())
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +131,7 @@ func newTestConsensus() (*testConsensus, error) {
 	proposer2 := genesis.DevAccounts()[1]
 	p2 := packer.New(repo, stater, proposer2.Address, &proposer2.Address, &forkConfig, 0)
 	b1sum, _ := repo.GetBlockSummary(b1.Header().ID())
-	flow2, _, err := p2.Schedule(b1sum, b1.Header().Timestamp()+100*thor.BlockInterval)
+	flow2, _, err := p2.Schedule(b1sum, b1.Header().Timestamp()+100*thor.BlockInterval())
 	if err != nil {
 		return nil, err
 	}
@@ -339,7 +339,7 @@ func TestValidateBlockHeader(t *testing.T) {
 		{
 			"ErrFutureBlock", func(t *testing.T) {
 				builder := tc.builder(tc.original.Header())
-				blk, err := tc.sign(builder.Timestamp(tc.time + thor.BlockInterval*2))
+				blk, err := tc.sign(builder.Timestamp(tc.time + thor.BlockInterval()*2))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -484,7 +484,7 @@ func TestValidateBlockHeaderWithBadBaseFee(t *testing.T) {
 	rand.Read(sig[:])
 	newBlock := new(block.Builder).
 		ParentID(best.Header().ID()).
-		Timestamp(best.Header().Timestamp() + thor.BlockInterval).
+		Timestamp(best.Header().Timestamp() + thor.BlockInterval()).
 		TotalScore(best.Header().TotalScore() + 1).
 		BaseFee(big.NewInt(thor.InitialBaseFee * 123)).
 		TransactionFeatures(1).

@@ -30,12 +30,25 @@ type CustomGenesis struct {
 	Params     Params           `json:"params"`
 	Executor   Executor         `json:"executor"`
 	ForkConfig *thor.ForkConfig `json:"forkConfig"`
+	Config     *thor.Config     `json:"config"`
 }
 
 // NewCustomNet create custom network genesis.
 func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
-	launchTime := gen.LaunchTime
+	if gen.Config != nil {
+		if gen.Config.BlockInterval <= 1 {
+			return nil, errors.New("BlockInterval can not be zero or one")
+		}
 
+		if gen.Config.EpochLength <= 1 {
+			return nil, errors.New("EpochLength can not be zero or one")
+		}
+
+		thor.SetConfig(*gen.Config)
+		thor.LockConfig()
+	}
+
+	launchTime := gen.LaunchTime
 	if gen.GasLimit == 0 {
 		gen.GasLimit = thor.InitialGasLimit
 	}

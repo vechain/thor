@@ -55,7 +55,7 @@ func TestNewScheduler_Schedule_ShouldNotPanic(t *testing.T) {
 	assert.NoError(t, err)
 
 	for i := range uint64(1000) {
-		next := parentTime + thor.BlockInterval*(i+1)
+		next := parentTime + thor.BlockInterval()*(i+1)
 		sched.Schedule(next)
 	}
 }
@@ -153,8 +153,8 @@ func TestScheduler_Distribution(t *testing.T) {
 			distribution := make(map[thor.Address]int)
 
 			for i := uint64(1); i <= uint64(iterations); i++ {
-				parent := i * thor.BlockInterval
-				next := parent + thor.BlockInterval
+				parent := i * thor.BlockInterval()
+				next := parent + thor.BlockInterval()
 				seed := big.NewInt(int64(i)).Bytes()
 
 				sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, parent, seed[:])
@@ -193,7 +193,7 @@ func TestScheduler_Schedule(t *testing.T) {
 	addr := thor.Address{}
 
 	for i := uint64(1); i <= 1000; i++ {
-		expectedNext := parentTime + thor.BlockInterval*i
+		expectedNext := parentTime + thor.BlockInterval()*i
 		for _, acc := range genesis.DevAccounts() {
 			sched, err := NewScheduler(acc.Address, validators, 1, parentTime, []byte("seed1"))
 			assert.NoError(t, err)
@@ -289,7 +289,7 @@ func TestScheduler_AllValidatorsScheduled(t *testing.T) {
 	assert.NoError(t, err)
 
 	lowStakeBlockTime := sched.Schedule(20)
-	diff := int(thor.BlockInterval) * len(validators)
+	diff := int(thor.BlockInterval()) * len(validators)
 	assert.Equal(t, int(parent)+diff, int(lowStakeBlockTime))
 
 	seen := make(map[thor.Address]bool)

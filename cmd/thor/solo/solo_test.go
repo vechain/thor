@@ -37,7 +37,7 @@ func newSolo() *Solo {
 		SkipLogs:         false,
 		MinTxPriorityFee: 0,
 		OnDemand:         true,
-		BlockInterval:    thor.BlockInterval,
+		BlockInterval:    thor.BlockInterval(),
 	}
 
 	engine := NewCore(repo, stater, logDb, opts, &thor.ForkConfig{GALACTICA: math.MaxUint32, HAYABUSA_TP: 1})

@@ -23,7 +23,6 @@ import (
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
@@ -751,7 +750,7 @@ func TestEnergyNative(t *testing.T) {
 	best := thorChain.Repo().BestBlockSummary().Header.Number()
 
 	growth := new(big.Int)
-	growth.SetUint64(thor.BlockInterval)
+	growth.SetUint64(thor.BlockInterval())
 	growth.Mul(growth, exSupply)
 	growth.Mul(growth, thor.EnergyGrowthRate)
 	growth.Div(growth, big.NewInt(1e18))
@@ -2073,13 +2072,13 @@ func TestStakerContract_Native_CheckStake(t *testing.T) {
 		caller: builtin.Staker.Address,
 	}
 
-	test.Case("addValidation", master, staker.LowStakingPeriod.Get()).
+	test.Case("addValidation", master, thor.LowStakingPeriod()).
 		Value(big.NewInt(0)).
 		Caller(caller).
 		ShouldRevert("stake is empty").
 		Assert(t)
 
-	test.Case("addValidation", master, staker.LowStakingPeriod.Get()).
+	test.Case("addValidation", master, thor.LowStakingPeriod()).
 		Value(big.NewInt(1)).
 		Caller(caller).
 		ShouldRevert("stake is not multiple of 1VET").
