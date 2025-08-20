@@ -514,12 +514,12 @@ func (s *Service) UpdateOfflineBlock(validator thor.Address, block uint32, onlin
 	return s.repo.setValidation(validator, validation, false)
 }
 
-func (s *Service) Renew(validator thor.Address, aggRenew *delta.Renewal) (*delta.Renewal, error) {
+func (s *Service) Renew(validator thor.Address, aggRenew *delta.Renewal, hasDelegations bool) (*delta.Renewal, error) {
 	validation, err := s.GetExistingValidation(validator)
 	if err != nil {
 		return nil, err
 	}
-	delta := validation.renew(aggRenew)
+	delta := validation.renew(aggRenew, hasDelegations)
 	if err = s.repo.setValidation(validator, validation, false); err != nil {
 		return nil, errors.Wrap(err, "failed to renew validator")
 	}

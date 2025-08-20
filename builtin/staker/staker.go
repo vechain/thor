@@ -253,9 +253,24 @@ func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, am
 	if err := s.validateNextPeriodTVL(validator); err != nil {
 		return err
 	}
+	agg, err := s.aggregationService.GetAggregation(validator)
+	if err != nil {
+		return err
+	}
+
+	weightedStake := stakes.NewWeightedStake(amount, validation.Multiplier)
+	if agg.LockedVET.Sign() == 1 || agg.PendingVET.Sign() == 1 {
+		weightedStake.AddWeight(*amount)
+		aggWeightIncrease := stakes.NewWeightedStake(big.NewInt(0), validation.Multiplier)
+		aggWeightIncrease.AddWeight(*amount)
+		err = s.aggregationService.AddPendingVET(validator, aggWeightIncrease)
+		if err != nil {
+			return err
+		}
+	}
 
 	// update global totals
-	if err := s.globalStatsService.AddQueued(stakes.NewWeightedStake(amount, validation.Multiplier)); err != nil {
+	if err := s.globalStatsService.AddQueued(weightedStake); err != nil {
 		return err
 	}
 
@@ -272,8 +287,20 @@ func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, am
 		return err
 	}
 
+	agg, err := s.aggregationService.GetAggregation(validator)
+	if err != nil {
+		return err
+	}
+
+	weightedStake := stakes.NewWeightedStake(amount, validation.Multiplier)
+	if agg.LockedVET.Sign() == 1 || agg.PendingVET.Sign() == 1 {
+		weightedStake.AddWeight(*amount)
+		aggWeightDecrease := stakes.NewWeightedStake(big.NewInt(0), validation.Multiplier)
+		aggWeightDecrease.AddWeight(*amount)
+	}
+
 	if queued {
-		err = s.globalStatsService.RemoveQueued(stakes.NewWeightedStake(amount, validation.Multiplier))
+		err = s.globalStatsService.RemoveQueued(weightedStake)
 		if err != nil {
 			return err
 		}
@@ -357,6 +384,9 @@ func (s *Staker) AddDelegation(
 		}
 		if agg.PendingWeight.Cmp(big.NewInt(0).Add(valStake, stake)) < 0 {
 			weightedStake.AddWeight(*valStake)
+			if val.Status != validation.StatusQueued {
+				weightedStake.AddWeight(*val.QueuedVET)
+			}
 		}
 	}
 
@@ -374,7 +404,9 @@ func (s *Staker) AddDelegation(
 	}
 
 	// update global figures
-	weightedStake.AddWeight(*val.QueuedVET)
+	if val.Status == validation.StatusQueued {
+		weightedStake.AddWeight(*val.QueuedVET)
+	}
 	if err = s.globalStatsService.AddQueued(weightedStake); err != nil {
 		return nil, err
 	}
