@@ -76,19 +76,20 @@ func (s *Service) SubPendingVet(validator thor.Address, stake *stakes.WeightedSt
 
 // Renew transitions the validator's delegations to the next staking period.
 // Called during staking period renewal process.
-func (s *Service) Renew(validator thor.Address) (*delta.Renewal, error) {
+func (s *Service) Renew(validator thor.Address) (*delta.Renewal, bool, error) {
 	agg, err := s.GetAggregation(validator)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	renew := agg.renew()
 
 	if err = s.setAggregation(validator, agg, false); err != nil {
-		return nil, err
+		return nil, false, err
 	}
+	hasDelegations := agg.LockedVET.Sign() == 1
 
-	return renew, nil
+	return renew, hasDelegations, nil
 }
 
 // Exit moves all delegations to withdrawable state when validator exits.

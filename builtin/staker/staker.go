@@ -259,7 +259,7 @@ func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, am
 	}
 
 	weightedStake := stakes.NewWeightedStake(amount, validation.Multiplier)
-	if agg.LockedVET.Cmp(big.NewInt(0)) > 0 || agg.PendingVET.Cmp(big.NewInt(0)) > 0 {
+	if agg.LockedVET.Sign() == 1 || agg.PendingVET.Sign() == 1 {
 		weightedStake.AddWeight(*amount)
 		aggWeightIncrease := stakes.NewWeightedStake(big.NewInt(0), validation.Multiplier)
 		aggWeightIncrease.AddWeight(*amount)
@@ -293,7 +293,7 @@ func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, am
 	}
 
 	weightedStake := stakes.NewWeightedStake(amount, validation.Multiplier)
-	if agg.LockedVET.Cmp(big.NewInt(0)) > 0 || agg.PendingVET.Cmp(big.NewInt(0)) > 0 {
+	if agg.LockedVET.Sign() == 1 || agg.PendingVET.Sign() == 1 {
 		weightedStake.AddWeight(*amount)
 		aggWeightDecrease := stakes.NewWeightedStake(big.NewInt(0), validation.Multiplier)
 		aggWeightDecrease.AddWeight(*amount)

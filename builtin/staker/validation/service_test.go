@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
-	"github.com/vechain/thor/v2/builtin/staker/aggregation"
 	"github.com/vechain/thor/v2/builtin/staker/delta"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
@@ -103,14 +102,7 @@ func TestService_ActivateAndExit_Flow(t *testing.T) {
 	}
 	assert.NoError(t, svc.repo.setValidation(id, val, true))
 
-	renew := (&Validation{QueuedVET: big.NewInt(100), LockedVET: big.NewInt(0), Weight: big.NewInt(0)}).renew(delta.NewRenewal(), aggregation.Aggregation{
-		LockedVET:     big.NewInt(0),
-		LockedWeight:  big.NewInt(0),
-		PendingVET:    big.NewInt(0),
-		PendingWeight: big.NewInt(0),
-		ExitingVET:    big.NewInt(0),
-		ExitingWeight: big.NewInt(0),
-	})
+	renew := (&Validation{QueuedVET: big.NewInt(100), LockedVET: big.NewInt(0), Weight: big.NewInt(0)}).renew(delta.NewRenewal(), false)
 
 	_, err := svc.ActivateValidator(id, 1, renew)
 	assert.NoError(t, err)

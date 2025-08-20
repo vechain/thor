@@ -114,7 +114,7 @@ func (v *Validation) CurrentIteration() uint32 {
 // 3. Increase WithdrawableVET by PendingUnlockVET
 // 4. Set QueuedVET to 0
 // 5. Set PendingUnlockVET to 0
-func (v *Validation) renew(aggregations *delta.Renewal, agg aggregation.Aggregation) *delta.Renewal {
+func (v *Validation) renew(aggregations *delta.Renewal, hasDelegations bool) *delta.Renewal {
 	newLockedVET := big.NewInt(0)
 
 	if v.QueuedVET == nil {
@@ -139,7 +139,7 @@ func (v *Validation) renew(aggregations *delta.Renewal, agg aggregation.Aggregat
 
 	v.LockedVET = big.NewInt(0).Add(v.LockedVET, newLockedVET)
 	newLockedWeight := newLockedVET
-	if agg.LockedVET.Cmp(big.NewInt(0)) > 0 {
+	if hasDelegations {
 		newLockedWeight = big.NewInt(0).Sub(newLockedWeight, pendingUnlock)
 	}
 
