@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
+	"github.com/vechain/thor/v2/builtin/staker/aggregation"
 	"github.com/vechain/thor/v2/builtin/staker/delta"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
@@ -102,7 +103,14 @@ func TestService_ActivateAndExit_Flow(t *testing.T) {
 	}
 	assert.NoError(t, svc.repo.setValidation(id, val, true))
 
-	renew := (&Validation{QueuedVET: big.NewInt(100), LockedVET: big.NewInt(0), Weight: big.NewInt(0)}).renew(delta.NewRenewal())
+	renew := (&Validation{QueuedVET: big.NewInt(100), LockedVET: big.NewInt(0), Weight: big.NewInt(0)}).renew(delta.NewRenewal(), aggregation.Aggregation{
+		LockedVET:     big.NewInt(0),
+		LockedWeight:  big.NewInt(0),
+		PendingVET:    big.NewInt(0),
+		PendingWeight: big.NewInt(0),
+		ExitingVET:    big.NewInt(0),
+		ExitingWeight: big.NewInt(0),
+	})
 
 	_, err := svc.ActivateValidator(id, 1, renew)
 	assert.NoError(t, err)
@@ -609,4 +617,24 @@ func TestService_LeaderGroupNext_Order(t *testing.T) {
 	n4, err := svc.LeaderGroupNext(n3)
 	assert.NoError(t, err)
 	assert.Equal(t, thor.Address{}, n4)
+}
+
+func TestService_GetCompletedPeriods(t *testing.T) {
+	svc, _, _ := newSvc()
+
+	a1 := thor.BytesToAddress([]byte("a1"))
+	a2 := thor.BytesToAddress([]byte("a2"))
+	a3 := thor.BytesToAddress([]byte("a3"))
+	for _, id := range []thor.Address{a1, a2, a3} {
+		assert.NoError(t, svc.Add(id, id, thor.LowStakingPeriod(), big.NewInt(1)))
+		idPtr, err := svc.NextToActivate(big.NewInt(10))
+		assert.NoError(t, err)
+		assert.Equal(t, id, *idPtr)
+		_, err = svc.ActivateValidator(*idPtr, 1, &delta.Renewal{NewLockedWeight: big.NewInt(0)})
+		assert.NoError(t, err)
+	}
+
+	periods, err := svc.GetCompletedPeriods(a1)
+	assert.NoError(t, err)
+	assert.Equal(t, uint32(0), periods)
 }

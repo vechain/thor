@@ -12,6 +12,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
+	"github.com/vechain/thor/v2/builtin/staker/aggregation"
 	"github.com/vechain/thor/v2/builtin/staker/delta"
 	"github.com/vechain/thor/v2/builtin/staker/linkedlist"
 	"github.com/vechain/thor/v2/builtin/staker/reverts"
@@ -514,12 +515,12 @@ func (s *Service) UpdateOfflineBlock(validator thor.Address, block uint32, onlin
 	return s.repo.setValidation(validator, validation, false)
 }
 
-func (s *Service) Renew(validator thor.Address, aggRenew *delta.Renewal) (*delta.Renewal, error) {
+func (s *Service) Renew(validator thor.Address, aggRenew *delta.Renewal, agg aggregation.Aggregation) (*delta.Renewal, error) {
 	validation, err := s.GetExistingValidation(validator)
 	if err != nil {
 		return nil, err
 	}
-	delta := validation.renew(aggRenew)
+	delta := validation.renew(aggRenew, agg)
 	if err = s.repo.setValidation(validator, validation, false); err != nil {
 		return nil, errors.Wrap(err, "failed to renew validator")
 	}
