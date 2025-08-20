@@ -20,17 +20,13 @@ import (
 )
 
 type Service struct {
-	leaderGroup         *linkedlist.LinkedList
-	validatorQueue      *linkedlist.LinkedList
-	lowStakingPeriod    uint32
-	mediumStakingPeriod uint32
-	highStakingPeriod   uint32
-	cooldownPeriod      uint32
+	leaderGroup    *linkedlist.LinkedList
+	validatorQueue *linkedlist.LinkedList
 
-	minStake    *big.Int
-	maxStake    *big.Int
-	repo        *Repository
-	epochLength uint32
+	minStake *big.Int
+	maxStake *big.Int
+
+	repo *Repository
 }
 
 var (
@@ -46,11 +42,6 @@ var (
 )
 
 func New(sctx *solidity.Context,
-	cooldownPeriod uint32,
-	epochLength uint32,
-	lowStakingPeriod uint32,
-	mediumStakingPeriod uint32,
-	highStakingPeriod uint32,
 	minStake *big.Int,
 	maxStake *big.Int,
 ) *Service {
@@ -59,14 +50,8 @@ func New(sctx *solidity.Context,
 	return &Service{
 		repo: repo,
 
-		leaderGroup:         linkedlist.NewLinkedList(sctx, slotActiveHead, slotActiveTail, slotActiveGroupSize),
-		validatorQueue:      linkedlist.NewLinkedList(sctx, slotQueuedHead, slotQueuedTail, slotQueuedGroupSize),
-		lowStakingPeriod:    lowStakingPeriod,
-		mediumStakingPeriod: mediumStakingPeriod,
-		highStakingPeriod:   highStakingPeriod,
-
-		cooldownPeriod: cooldownPeriod,
-		epochLength:    epochLength,
+		leaderGroup:    linkedlist.NewLinkedList(sctx, slotActiveHead, slotActiveTail, slotActiveGroupSize),
+		validatorQueue: linkedlist.NewLinkedList(sctx, slotQueuedHead, slotQueuedTail, slotQueuedGroupSize),
 
 		minStake: minStake,
 		maxStake: maxStake,
@@ -180,7 +165,7 @@ func (s *Service) Add(
 	if !val.IsEmpty() {
 		return reverts.New("validator already exists")
 	}
-	if period != s.lowStakingPeriod && period != s.mediumStakingPeriod && period != s.highStakingPeriod {
+	if period != thor.LowStakingPeriod() && period != thor.MediumStakingPeriod() && period != thor.HighStakingPeriod() {
 		return reverts.New("period is out of boundaries")
 	}
 
@@ -201,7 +186,7 @@ func (s *Service) Add(
 		return err
 	}
 
-	return s.repo.SetValidation(validator, entry, true)
+	return s.repo.setValidation(validator, entry, true)
 }
 
 func (s *Service) SignalExit(validator thor.Address, endorser thor.Address) error {
@@ -223,7 +208,7 @@ func (s *Service) SignalExit(validator thor.Address, endorser thor.Address) erro
 	}
 	validation.ExitBlock = &exitBlock
 
-	return s.repo.SetValidation(validator, validation, false)
+	return s.repo.setValidation(validator, validation, false)
 }
 
 func (s *Service) Evict(validator thor.Address, currentBlock uint32) error {
@@ -232,7 +217,7 @@ func (s *Service) Evict(validator thor.Address, currentBlock uint32) error {
 		return err
 	}
 
-	exitBlock, err := s.SetExitBlock(validator, currentBlock+s.epochLength)
+	exitBlock, err := s.SetExitBlock(validator, currentBlock+thor.EpochLength())
 	if err != nil {
 		return err
 	}
@@ -241,7 +226,7 @@ func (s *Service) Evict(validator thor.Address, currentBlock uint32) error {
 	}
 	validation.ExitBlock = &exitBlock
 
-	return s.repo.SetValidation(validator, validation, false)
+	return s.repo.setValidation(validator, validation, false)
 }
 
 func (s *Service) IncreaseStake(validator thor.Address, endorser thor.Address, amount *big.Int) error {
@@ -261,7 +246,7 @@ func (s *Service) IncreaseStake(validator thor.Address, endorser thor.Address, a
 
 	entry.QueuedVET = big.NewInt(0).Add(amount, entry.QueuedVET)
 
-	return s.repo.SetValidation(validator, entry, false)
+	return s.repo.setValidation(validator, entry, false)
 }
 
 func (s *Service) SetBeneficiary(validator, endorser, beneficiary thor.Address) error {
@@ -280,7 +265,7 @@ func (s *Service) SetBeneficiary(validator, endorser, beneficiary thor.Address) 
 	} else {
 		entry.Beneficiary = &beneficiary
 	}
-	if err = s.repo.SetValidation(validator, entry, false); err != nil {
+	if err = s.repo.setValidation(validator, entry, false); err != nil {
 		return errors.Wrap(err, "failed to set beneficiary")
 	}
 	return nil
@@ -323,7 +308,7 @@ func (s *Service) DecreaseStake(validator thor.Address, endorser thor.Address, a
 		entry.WithdrawableVET = big.NewInt(0).Add(entry.WithdrawableVET, amount)
 	}
 
-	return entry.Status == StatusQueued, s.repo.SetValidation(validator, entry, false)
+	return entry.Status == StatusQueued, s.repo.setValidation(validator, entry, false)
 }
 
 // WithdrawStake allows validations to withdraw any withdrawable stake.
@@ -342,10 +327,10 @@ func (s *Service) WithdrawStake(
 	}
 
 	// calculate currently available VET to withdraw
-	withdrawable := val.CalculateWithdrawableVET(currentBlock, s.cooldownPeriod)
+	withdrawable := val.CalculateWithdrawableVET(currentBlock)
 
 	// val has exited and waited for the cooldown period
-	if val.ExitBlock != nil && *val.ExitBlock+s.cooldownPeriod <= currentBlock {
+	if val.ExitBlock != nil && *val.ExitBlock+thor.CooldownPeriod() <= currentBlock {
 		val.CooldownVET = big.NewInt(0)
 	}
 
@@ -365,7 +350,7 @@ func (s *Service) WithdrawStake(
 
 	// no more withdraw after this
 	val.WithdrawableVET = big.NewInt(0)
-	if err := s.repo.SetValidation(validator, val, false); err != nil {
+	if err := s.repo.setValidation(validator, val, false); err != nil {
 		return nil, nil, err
 	}
 
@@ -415,7 +400,7 @@ func (s *Service) ExitValidator(validator thor.Address) (*delta.Exit, error) {
 		return nil, err
 	}
 
-	if err = s.repo.SetValidation(validator, entry, false); err != nil {
+	if err = s.repo.setValidation(validator, entry, false); err != nil {
 		return nil, err
 	}
 
@@ -441,7 +426,7 @@ func (s *Service) SetExitBlock(validator thor.Address, minBlock uint32) (uint32,
 			}
 			return start, nil
 		}
-		start += s.epochLength
+		start += thor.EpochLength()
 	}
 }
 
@@ -499,7 +484,7 @@ func (s *Service) ActivateValidator(
 	}
 
 	// Persist the updated validation state
-	if err = s.repo.SetValidation(validationID, val, false); err != nil {
+	if err = s.repo.setValidation(validationID, val, false); err != nil {
 		return nil, err
 	}
 
@@ -526,7 +511,7 @@ func (s *Service) UpdateOfflineBlock(validator thor.Address, block uint32, onlin
 		validation.OfflineBlock = &block
 	}
 
-	return s.repo.SetValidation(validator, validation, false)
+	return s.repo.setValidation(validator, validation, false)
 }
 
 func (s *Service) Renew(validator thor.Address, aggRenew *delta.Renewal) (*delta.Renewal, error) {
@@ -535,7 +520,7 @@ func (s *Service) Renew(validator thor.Address, aggRenew *delta.Renewal) (*delta
 		return nil, err
 	}
 	delta := validation.renew(aggRenew)
-	if err = s.repo.SetValidation(validator, validation, false); err != nil {
+	if err = s.repo.setValidation(validator, validation, false); err != nil {
 		return nil, errors.Wrap(err, "failed to renew validator")
 	}
 

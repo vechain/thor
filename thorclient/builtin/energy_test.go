@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
 
+	contracts "github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thorclient/bind"
@@ -137,4 +138,128 @@ func TestEnergy_Revision(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, 0, supplyAfterFork.Cmp(supplyAtFork), "Total supply should stop increasing after the hardfork block")
+}
+
+func TestEnergy_RawContract(t *testing.T) {
+	node, client := newTestNode(t, false)
+	defer node.Stop()
+
+	energy, err := NewEnergy(client)
+	require.NoError(t, err)
+
+	raw := energy.Raw()
+	require.NotNil(t, raw)
+	require.Equal(t, contracts.Energy.Address, *raw.Address())
+	_, ok := raw.ABI().Methods["name"]
+	require.True(t, ok, "expected method 'name' in ABI")
+}
+
+func TestEnergy_Move(t *testing.T) {
+	node, client := newTestNode(t, false)
+	defer node.Stop()
+
+	energy, err := NewEnergy(client)
+	require.NoError(t, err)
+
+	acc1 := bind.NewSigner(genesis.DevAccounts()[1].PrivateKey)
+	acc2 := bind.NewSigner(genesis.DevAccounts()[2].PrivateKey)
+	acc3 := bind.NewSigner(genesis.DevAccounts()[3].PrivateKey)
+
+	// Set acc2 as master of acc1 so that acc2 can move acc1's balance
+	prototype, err := NewPrototype(client)
+	require.NoError(t, err)
+	_, _, err = prototype.SetMaster(acc1.Address(), acc2.Address()).
+		Send().
+		WithSigner(acc1).
+		WithOptions(txOpts()).
+		SubmitAndConfirm(txContext(t))
+	require.NoError(t, err)
+
+	transferAmount := big.NewInt(777)
+	receipt, _, err := energy.Move(acc1.Address(), acc3.Address(), transferAmount).
+		Send().
+		WithSigner(acc2).
+		WithOptions(txOpts()).
+		SubmitAndConfirm(txContext(t))
+	require.NoError(t, err)
+	require.False(t, receipt.Reverted)
+
+	transfers, err := energy.FilterTransfer(newRange(receipt), nil, logdb.ASC)
+	require.NoError(t, err)
+	found := false
+	for _, tr := range transfers {
+		if tr.From == acc1.Address() && tr.To == acc3.Address() && tr.Value.Cmp(transferAmount) == 0 {
+			found = true
+			break
+		}
+	}
+	require.True(t, found, "Move should emit a matching Transfer event")
+}
+
+func TestEnergy_FilterEvents_EventNotFound(t *testing.T) {
+	node, client := newTestNode(t, false)
+	defer node.Stop()
+
+	badContract, err := bind.NewContract(client, contracts.Authority.RawABI(), &contracts.Energy.Address)
+	require.NoError(t, err)
+	bad := &Energy{contract: badContract}
+
+	testCases := []struct {
+		name string
+		call func() error
+	}{
+		{
+			name: "Transfer",
+			call: func() error {
+				_, err := bad.FilterTransfer(nil, nil, logdb.ASC)
+				return err
+			},
+		},
+		{
+			name: "Approval",
+			call: func() error {
+				_, err := bad.FilterApproval(nil, nil, logdb.ASC)
+				return err
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.call()
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestEnergy_Methods_MethodNotFound(t *testing.T) {
+	node, client := newTestNode(t, false)
+	defer node.Stop()
+
+	// Use wrong ABI (Authority) so method lookups like name/symbol/... are missing
+	badContract, err := bind.NewContract(client, contracts.Authority.RawABI(), &contracts.Energy.Address)
+	require.NoError(t, err)
+	bad := &Energy{contract: badContract}
+
+	owner := genesis.DevAccounts()[0].Address
+	spender := genesis.DevAccounts()[1].Address
+
+	tests := []struct {
+		name string
+		call func() error
+	}{
+		{"Name", func() error { _, err := bad.Name(); return err }},
+		{"Symbol", func() error { _, err := bad.Symbol(); return err }},
+		{"Decimals", func() error { _, err := bad.Decimals(); return err }},
+		{"TotalSupply", func() error { _, err := bad.TotalSupply(); return err }},
+		{"TotalBurned", func() error { _, err := bad.TotalBurned(); return err }},
+		{"BalanceOf", func() error { _, err := bad.BalanceOf(owner); return err }},
+		{"Allowance", func() error { _, err := bad.Allowance(owner, spender); return err }},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Error(t, tc.call())
+		})
+	}
 }

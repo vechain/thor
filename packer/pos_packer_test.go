@@ -32,27 +32,27 @@ func TestFlow_Schedule_POS(t *testing.T) {
 
 	// mint block 1: using PoA
 	root := chain.Repo().BestBlockSummary().Root()
-	packMbpBlock(t, chain, thor.BlockInterval)
+	packMbpBlock(t, chain, thor.BlockInterval())
 	verifyMechanism(t, chain, true, root)
 
 	// mint block 2: deploy staker contract, still using PoA
 	root = chain.Repo().BestBlockSummary().Root()
-	packNext(t, chain, thor.BlockInterval)
+	packNext(t, chain, thor.BlockInterval())
 	verifyMechanism(t, chain, true, root)
 
 	// mint block 3: add validator tx
 	root = chain.Repo().BestBlockSummary().Root()
-	packAddValidatorBlock(t, chain, thor.BlockInterval)
+	packAddValidatorBlock(t, chain, thor.BlockInterval())
 	verifyMechanism(t, chain, true, root)
 
 	// mint block 4: should switch to PoS
 	root = chain.Repo().BestBlockSummary().Root()
-	packNext(t, chain, thor.BlockInterval)
+	packNext(t, chain, thor.BlockInterval())
 	verifyMechanism(t, chain, true, root)
 
 	// mint block 5: full PoS
 	root = chain.Repo().BestBlockSummary().Root()
-	packNext(t, chain, thor.BlockInterval)
+	packNext(t, chain, thor.BlockInterval())
 	verifyMechanism(t, chain, false, root)
 }
 
@@ -135,8 +135,8 @@ func TestPacker_StopsEnergyAtHardfork(t *testing.T) {
 			chain, err := testchain.NewWithFork(&cfg, 1)
 			assert.NoError(t, err)
 
-			packNext(t, chain, thor.BlockInterval)
-			packNext(t, chain, thor.BlockInterval)
+			packNext(t, chain, thor.BlockInterval())
+			packNext(t, chain, thor.BlockInterval())
 
 			best := chain.Repo().BestBlockSummary()
 			st := chain.Stater().NewState(best.Root())

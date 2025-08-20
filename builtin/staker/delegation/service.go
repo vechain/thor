@@ -40,7 +40,7 @@ func (s *Service) GetDelegation(delegationID *big.Int) (*Delegation, error) {
 	return &d, nil
 }
 
-func (s *Service) SetDelegation(delegationID *big.Int, entry *Delegation, isNew bool) error {
+func (s *Service) setDelegation(delegationID *big.Int, entry *Delegation, isNew bool) error {
 	if err := s.delegations.Set(delegationID, *entry, isNew); err != nil {
 		return errors.Wrap(err, "failed to set delegation")
 	}
@@ -97,7 +97,7 @@ func (s *Service) SignalExit(delegation *Delegation, delegationID *big.Int, valC
 
 	delegation.LastIteration = &valCurrentIteration
 
-	return s.SetDelegation(delegationID, delegation, false)
+	return s.setDelegation(delegationID, delegation, false)
 }
 
 func (s *Service) Withdraw(del *Delegation, delegationID *big.Int) (*big.Int, error) {
@@ -105,7 +105,7 @@ func (s *Service) Withdraw(del *Delegation, delegationID *big.Int) (*big.Int, er
 	withdrawableStake := new(big.Int).Set(del.Stake)
 
 	del.Stake = big.NewInt(0)
-	if err := s.SetDelegation(delegationID, del, false); err != nil {
+	if err := s.setDelegation(delegationID, del, false); err != nil {
 		return nil, err
 	}
 

@@ -171,7 +171,7 @@ func (n *Node) houseKeeping(ctx context.Context) {
 	newBlockCh := make(chan *comm.NewBlockEvent)
 	scope.Track(n.comm.SubscribeBlock(newBlockCh))
 
-	futureTicker := time.NewTicker(time.Duration(thor.BlockInterval) * time.Second)
+	futureTicker := time.NewTicker(time.Duration(thor.BlockInterval()) * time.Second)
 	defer futureTicker.Stop()
 
 	connectivityTicker := time.NewTicker(time.Second)
@@ -564,7 +564,7 @@ func checkClockOffset() {
 		logger.Debug("failed to access NTP", "err", err)
 		return
 	}
-	if resp.ClockOffset > time.Duration(thor.BlockInterval)*time.Second/2 {
+	if resp.ClockOffset > time.Duration(thor.BlockInterval())*time.Second/2 {
 		logger.Warn("clock offset detected", "offset", common.PrettyDuration(resp.ClockOffset))
 	}
 }

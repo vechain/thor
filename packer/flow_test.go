@@ -185,7 +185,7 @@ func TestPack(t *testing.T) {
 	proposer := genesis.DevAccounts()[0]
 	p := packer.New(repo, stater, proposer.Address, &proposer.Address, &forkConfig, 0)
 	parentSum, _ := repo.GetBlockSummary(parent.Header().ID())
-	flow, _, _ := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval)
+	flow, _, _ := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval())
 
 	flow.Pack(proposer.PrivateKey, 0, false)
 
@@ -217,7 +217,7 @@ func TestPackAfterGalacticaFork(t *testing.T) {
 	proposer := genesis.DevAccounts()[0]
 	p := packer.New(repo, stater, proposer.Address, &proposer.Address, &forkConfig, 0)
 	parentSum, _ := repo.GetBlockSummary(parent.Header().ID())
-	flow, _, _ := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval)
+	flow, _, _ := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval())
 
 	// Block 1: Galactica is not enabled
 	block, stg, receipts, err := flow.Pack(proposer.PrivateKey, 0, false)
@@ -234,7 +234,7 @@ func TestPackAfterGalacticaFork(t *testing.T) {
 
 	// Block 2: Galactica is enabled
 	parentSum, _ = repo.GetBlockSummary(block.Header().ID())
-	flow, _, _ = p.Schedule(parentSum, block.Header().Timestamp()+100*thor.BlockInterval)
+	flow, _, _ = p.Schedule(parentSum, block.Header().Timestamp()+100*thor.BlockInterval())
 	block, _, _, err = flow.Pack(proposer.PrivateKey, 0, false)
 	assert.Nil(t, err)
 	assert.Equal(t, uint32(2), block.Header().Number())

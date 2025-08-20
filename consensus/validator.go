@@ -78,11 +78,11 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 		return consensusError(fmt.Sprintf("block timestamp behind parents: parent %v, current %v", parent.Timestamp(), header.Timestamp()))
 	}
 
-	if (header.Timestamp()-parent.Timestamp())%thor.BlockInterval != 0 {
+	if (header.Timestamp()-parent.Timestamp())%thor.BlockInterval() != 0 {
 		return consensusError(fmt.Sprintf("block interval not rounded: parent %v, current %v", parent.Timestamp(), header.Timestamp()))
 	}
 
-	if header.Timestamp() > nowTimestamp+thor.BlockInterval {
+	if header.Timestamp() > nowTimestamp+thor.BlockInterval() {
 		return errFutureBlock
 	}
 

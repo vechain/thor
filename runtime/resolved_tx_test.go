@@ -272,7 +272,7 @@ func (tr *testResolvedTransaction) TestBuyGas() {
 		return txBuilder(tr.repo.ChainTag(), tx.TypeLegacy)
 	}
 
-	targetTime := tr.repo.BestBlockSummary().Header.Timestamp() + thor.BlockInterval
+	targetTime := tr.repo.BestBlockSummary().Header.Timestamp() + thor.BlockInterval()
 
 	buyGas := func(tx *tx.Transaction) thor.Address {
 		resolve, err := runtime.ResolveTransaction(tx)

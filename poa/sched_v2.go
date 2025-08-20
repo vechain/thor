@@ -84,7 +84,7 @@ func NewSchedulerV2(
 // Schedule to determine time of the proposer to produce a block, according to `nowTime`.
 // `newBlockTime` is promised to be >= nowTime and > parentBlockTime
 func (s *SchedulerV2) Schedule(nowTime uint64) (newBlockTime uint64) {
-	const T = thor.BlockInterval
+	T := thor.BlockInterval()
 
 	newBlockTime = s.parentBlockTime + T
 	if nowTime > newBlockTime {
@@ -116,7 +116,7 @@ func (s *SchedulerV2) IsScheduled(blockTime uint64, proposer thor.Address) bool 
 		return false
 	}
 
-	T := thor.BlockInterval
+	T := thor.BlockInterval()
 	if (blockTime-s.parentBlockTime)%T != 0 {
 		// invalid block time
 		return false
@@ -128,7 +128,7 @@ func (s *SchedulerV2) IsScheduled(blockTime uint64, proposer thor.Address) bool 
 
 // Updates returns proposers whose status are changed, and the score when new block time is assumed to be newBlockTime.
 func (s *SchedulerV2) Updates(newBlockTime uint64) (updates []Proposer, score uint64) {
-	T := thor.BlockInterval
+	T := thor.BlockInterval()
 
 	for i := uint64(0); i < uint64(len(s.shuffled)); i++ {
 		if s.parentBlockTime+T+i*T >= newBlockTime {

@@ -135,9 +135,10 @@ type ValidatorStake struct {
 }
 
 type ValidatorStatus struct {
-	Address thor.Address
-	Status  StakerStatus
-	Online  bool
+	Address      thor.Address
+	Status       StakerStatus
+	OfflineBlock uint32
+	Online       bool
 }
 
 type ValidatorPeriodDetails struct {
@@ -173,16 +174,18 @@ func (s *Staker) GetValidatorStake(node thor.Address) (*ValidatorStake, error) {
 }
 
 func (s *Staker) GetValidatorStatus(node thor.Address) (*ValidatorStatus, error) {
-	out := [2]any{}
+	out := [3]any{}
 	out[0] = new(uint8)
 	out[1] = new(bool)
+	out[2] = new(uint32)
 	if err := s.contract.Method("getValidatorStatus", node).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 	validatorStatus := &ValidatorStatus{
-		Address: node,
-		Status:  StakerStatus(*(out[0].(*uint8))),
-		Online:  *(out[1].(*bool)),
+		Address:      node,
+		Status:       StakerStatus(*(out[0].(*uint8))),
+		Online:       *(out[1].(*bool)),
+		OfflineBlock: *(out[2].(*uint32)),
 	}
 
 	return validatorStatus, nil

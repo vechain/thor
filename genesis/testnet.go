@@ -16,6 +16,7 @@ import (
 
 // NewTestnet create genesis for testnet.
 func NewTestnet() *Genesis {
+	thor.LockConfig()                // mark config as locked for testnet
 	launchTime := uint64(1530014400) // 'Tue Jun 26 2018 20:00:00 GMT+0800 (CST)'
 
 	// use this address as executor instead of builtin one, for test purpose

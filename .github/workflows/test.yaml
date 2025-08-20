@@ -44,7 +44,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Go
         uses: actions/setup-go@v5
@@ -64,3 +64,41 @@ jobs:
           fail_ci_if_error: true
           files: ./coverage.out
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  solo-test:
+    strategy:
+        matrix:
+            args:
+              - 'solo'
+              - 'solo --hayabusa'
+              - 'solo --on-demand'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.24.x
+
+      - name: Start Solo
+        run: nohup go run ./cmd/thor ${{matrix.args}} > thor-solo.log 2>&1 &
+
+      - name: Wait for block 1
+        run: |
+          for i in {1..30}; do
+            status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8669/blocks/1 || true)
+            if [ "$status" -eq 200 ]; then
+              echo "✅ Healthcheck passed"
+              exit 0
+            fi
+            echo "Healthcheck failed (status: $status). Retrying in 1s..."
+            sleep 1
+          done
+          echo "❌ Healthcheck failed after 30 attempts"
+          exit 1
+
+      - name: Print Logs
+        if: failure()
+        run: cat thor-solo.log

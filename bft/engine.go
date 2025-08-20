@@ -93,14 +93,14 @@ func (engine *Engine) Justified() (thor.Bytes32, error) {
 	finalized := engine.Finalized()
 
 	// if head is in the first epoch and not concluded yet
-	if head.Number() < getCheckPoint(engine.forkConfig.FINALITY)+thor.CheckpointInterval-1 {
+	if head.Number() < getCheckPoint(engine.forkConfig.FINALITY)+thor.EpochLength()-1 {
 		return finalized, nil
 	}
 
 	// find the recent concluded checkpoint
 	concluded := getCheckPoint(head.Number())
 	if head.Number() < getStorePoint(head.Number()) {
-		concluded -= thor.CheckpointInterval
+		concluded -= thor.EpochLength()
 	}
 
 	headChain := engine.repo.NewChain(head.ID())
@@ -222,7 +222,7 @@ func (engine *Engine) ShouldVote(parentID thor.Bytes32) (bool, error) {
 	}
 
 	// do not vote COM at the first round
-	if absRound := (block.Number(parentID)+1)/thor.CheckpointInterval - engine.forkConfig.FINALITY/thor.CheckpointInterval; absRound == 0 {
+	if absRound := (block.Number(parentID)+1)/thor.EpochLength() - engine.forkConfig.FINALITY/thor.EpochLength(); absRound == 0 {
 		return false, nil
 	}
 
@@ -252,7 +252,7 @@ func (engine *Engine) ShouldVote(parentID thor.Bytes32) (bool, error) {
 		recentJC = checkpoint
 	} else {
 		// if current round is not justified, find the most recent justified checkpoint
-		prev, err := chain.GetBlockID(getStorePoint(block.Number(parentID) - thor.CheckpointInterval))
+		prev, err := chain.GetBlockID(getStorePoint(block.Number(parentID) - thor.EpochLength()))
 		if err != nil {
 			return false, err
 		}
@@ -381,7 +381,7 @@ func (engine *Engine) findCheckpointByQuality(target uint32, finalized, headID t
 
 	c := engine.repo.NewChain(headID)
 	get := func(i int) (uint32, error) {
-		id, err := c.GetBlockID(getStorePoint(searchStart + uint32(i)*thor.CheckpointInterval))
+		id, err := c.GetBlockID(getStorePoint(searchStart + uint32(i)*thor.EpochLength()))
 		if err != nil {
 			return 0, err
 		}
@@ -389,7 +389,7 @@ func (engine *Engine) findCheckpointByQuality(target uint32, finalized, headID t
 	}
 
 	// sort.Search searches from [0, n)
-	n := int((block.Number(headID)-searchStart)/thor.CheckpointInterval) + 1
+	n := int((block.Number(headID)-searchStart)/thor.EpochLength()) + 1
 	num := sort.Search(n, func(i int) bool {
 		quality, err := get(i)
 		if err != nil {
@@ -413,7 +413,7 @@ func (engine *Engine) findCheckpointByQuality(target uint32, finalized, headID t
 		return thor.Bytes32{}, errors.New("failed to find the block by quality")
 	}
 
-	return c.GetBlockID(searchStart + uint32(num)*thor.CheckpointInterval)
+	return c.GetBlockID(searchStart + uint32(num)*thor.EpochLength())
 }
 
 func (engine *Engine) getTotalWeight(sum *chain.BlockSummary) (*big.Int, error) {
@@ -466,7 +466,7 @@ func (engine *Engine) getQuality(id thor.Bytes32) (quality uint32, err error) {
 }
 
 func getCheckPoint(blockNum uint32) uint32 {
-	return blockNum / thor.CheckpointInterval * thor.CheckpointInterval
+	return blockNum / thor.EpochLength() * thor.EpochLength()
 }
 
 func isCheckPoint(blockNum uint32) bool {
@@ -475,7 +475,7 @@ func isCheckPoint(blockNum uint32) bool {
 
 // save quality at the end of round
 func getStorePoint(blockNum uint32) uint32 {
-	return getCheckPoint(blockNum) + thor.CheckpointInterval - 1
+	return getCheckPoint(blockNum) + thor.EpochLength() - 1
 }
 
 type mockedEngine thor.Bytes32

@@ -123,11 +123,41 @@ func (test *TestBFT) reCreateEngine() error {
 	return nil
 }
 
+func (test *TestBFT) newMockedEpochBlock(
+	parentSummary *chain.BlockSummary,
+	master genesis.DevAccount,
+	shouldVote bool,
+	asBest bool,
+) (*chain.BlockSummary, error) {
+	return test.addBlock(parentSummary, master, shouldVote, asBest, true)
+}
+
 func (test *TestBFT) newBlock(parentSummary *chain.BlockSummary, master genesis.DevAccount, shouldVote bool, asBest bool) (*chain.BlockSummary, error) {
+	return test.addBlock(parentSummary, master, shouldVote, asBest, false)
+}
+
+func (test *TestBFT) addBlock(
+	parentSummary *chain.BlockSummary,
+	master genesis.DevAccount,
+	shouldVote bool,
+	asBest bool,
+	quickTransition bool,
+) (*chain.BlockSummary, error) {
 	packer := packer.New(test.repo, test.stater, master.Address, &thor.Address{}, test.fc, 0)
-	flow, _, err := packer.Mock(parentSummary, parentSummary.Header.Timestamp()+thor.BlockInterval, parentSummary.Header.GasLimit())
+
+	if quickTransition {
+		thor.SetConfig(thor.Config{
+			EpochLength: 1,
+		})
+	}
+	flow, _, err := packer.Mock(parentSummary, parentSummary.Header.Timestamp()+thor.BlockInterval(), parentSummary.Header.GasLimit())
 	if err != nil {
 		return nil, err
+	}
+	if quickTransition {
+		thor.SetConfig(thor.Config{
+			EpochLength: defaultEpochLength,
+		})
 	}
 
 	conflicts, err := test.repo.ScanConflicts(parentSummary.Header.Number() + 1)
@@ -157,15 +187,15 @@ func (test *TestBFT) newBlock(parentSummary *chain.BlockSummary, master genesis.
 	return test.repo.GetBlockSummary(b.Header().ID())
 }
 
-func (test *TestBFT) fastForward(cnt int) error {
+func (test *TestBFT) fastForward(cnt uint32) error {
 	parent := test.repo.BestBlockSummary()
 
 	devCnt := len(devAccounts) - 1
-	for i := 1; i <= cnt; i++ {
+	for i := 1; i <= int(cnt); i++ {
 		acc := devAccounts[(int(parent.Header.Number())+1)%devCnt]
 
 		var err error
-		parent, err = test.newBlock(parent, acc, true, true)
+		parent, err = test.newMockedEpochBlock(parent, acc, true, true)
 		if err != nil {
 			return err
 		}
@@ -174,11 +204,11 @@ func (test *TestBFT) fastForward(cnt int) error {
 	return nil
 }
 
-func (test *TestBFT) fastForwardWithMinority(cnt int) error {
+func (test *TestBFT) fastForwardWithMinority(cnt uint32) error {
 	parent := test.repo.BestBlockSummary()
 
 	devCnt := len(devAccounts) - 1
-	for i := 1; i <= cnt; i++ {
+	for i := 1; i <= int(cnt); i++ {
 		acc := devAccounts[(int(parent.Header.Number())+1)%(devCnt/3)]
 
 		var err error
@@ -248,7 +278,7 @@ func TestNewBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = testBFT.fastForward(thor.CheckpointInterval - 1); err != nil {
+	if err = testBFT.fastForward(thor.EpochLength() - 1); err != nil {
 		t.Fatal(err)
 	}
 
@@ -278,7 +308,7 @@ func TestNeverReachJustified(t *testing.T) {
 	}
 
 	genesisID := testBFT.repo.GenesisBlock().Header().ID()
-	if err := testBFT.fastForwardWithMinority(thor.CheckpointInterval - 1); err != nil {
+	if err := testBFT.fastForwardWithMinority(thor.EpochLength() - 1); err != nil {
 		t.Fatal(err)
 	}
 
@@ -292,7 +322,7 @@ func TestNeverReachJustified(t *testing.T) {
 	assert.Equal(t, genesisID, testBFT.engine.Finalized())
 
 	for range 3 {
-		if err := testBFT.fastForwardWithMinority(thor.CheckpointInterval); err != nil {
+		if err := testBFT.fastForwardWithMinority(thor.EpochLength()); err != nil {
 			t.Fatal(err)
 		}
 
@@ -314,7 +344,7 @@ func TestReCreate(t *testing.T) {
 	}
 
 	genesisID := testBFT.repo.GenesisBlock().Header().ID()
-	if err := testBFT.fastForwardWithMinority(thor.CheckpointInterval - 2); err != nil {
+	if err := testBFT.fastForwardWithMinority(thor.EpochLength() - 2); err != nil {
 		t.Fatal(err)
 	}
 
@@ -323,7 +353,7 @@ func TestReCreate(t *testing.T) {
 	}
 	assert.Equal(t, genesisID, testBFT.engine.Finalized())
 
-	if err := testBFT.fastForwardWithMinority(thor.CheckpointInterval*2 - 1); err != nil {
+	if err := testBFT.fastForwardWithMinority(thor.EpochLength()*2 - 1); err != nil {
 		t.Fatal(err)
 	}
 
@@ -346,7 +376,7 @@ func TestFinalized(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = testBFT.fastForward(thor.CheckpointInterval*3 - 1); err != nil {
+	if err = testBFT.fastForward(thor.EpochLength()*3 - 1); err != nil {
 		t.Fatal(err)
 	}
 
@@ -367,7 +397,7 @@ func TestFinalized(t *testing.T) {
 	assert.True(t, st.Justified)
 	assert.True(t, st.Committed)
 
-	blockNum = uint32(thor.CheckpointInterval*2 + MaxBlockProposers*2/3)
+	blockNum = thor.EpochLength()*2 + MaxBlockProposers*2/3
 
 	sum, err = testBFT.repo.NewBestChain().GetBlockSummary(blockNum)
 	if err != nil {
@@ -385,14 +415,14 @@ func TestFinalized(t *testing.T) {
 	assert.True(t, st.Committed)
 
 	// chain stops the end of third bft round,should commit the second checkpoint
-	finalized, err := testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval)
+	finalized, err := testBFT.repo.NewBestChain().GetBlockID(thor.EpochLength())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	assert.Equal(t, finalized, testBFT.engine.Finalized())
 
-	jc, err := testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval * 2)
+	jc, err := testBFT.repo.NewBestChain().GetBlockID(thor.EpochLength() * 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -409,7 +439,7 @@ func TestAccepts(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = testBFT.fastForward(thor.CheckpointInterval - 1); err != nil {
+	if err = testBFT.fastForward(thor.EpochLength() - 1); err != nil {
 		t.Fatal(err)
 	}
 
@@ -418,7 +448,7 @@ func TestAccepts(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = testBFT.fastForward(thor.CheckpointInterval * 2); err != nil {
+	if err = testBFT.fastForward(thor.EpochLength() * 2); err != nil {
 		t.Fatal(err)
 	}
 
@@ -427,7 +457,7 @@ func TestAccepts(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, ok, true)
 
-	branchID, err := branch.GetBlockID(thor.CheckpointInterval)
+	branchID, err := branch.GetBlockID(thor.EpochLength())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -463,7 +493,7 @@ func TestGetVote(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				testBFT.fastForwardWithMinority(thor.CheckpointInterval * 3)
+				testBFT.fastForwardWithMinority(thor.EpochLength() * 3)
 				v, err := testBFT.engine.ShouldVote(testBFT.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
@@ -477,7 +507,7 @@ func TestGetVote(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				testBFT.fastForward(thor.CheckpointInterval * 3)
+				testBFT.fastForward(thor.EpochLength() * 3)
 				v, err := testBFT.engine.ShouldVote(testBFT.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
@@ -491,7 +521,7 @@ func TestGetVote(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				if err = testBFT.fastForward(thor.CheckpointInterval*3 - 1); err != nil {
+				if err = testBFT.fastForward(thor.EpochLength()*3 - 1); err != nil {
 					t.Fatal(err)
 				}
 
@@ -536,7 +566,7 @@ func TestGetVote(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				if err = testBFT.fastForward(thor.CheckpointInterval*3 - 1); err != nil {
+				if err = testBFT.fastForward(thor.EpochLength()*3 - 1); err != nil {
 					t.Fatal(err)
 				}
 
@@ -598,7 +628,7 @@ func TestGetVote(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				if err = testBFT.fastForward(thor.CheckpointInterval*3 - 1); err != nil {
+				if err = testBFT.fastForward(thor.EpochLength()*3 - 1); err != nil {
 					t.Fatal(err)
 				}
 
@@ -643,8 +673,8 @@ func TestGetVote(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				testBFT.fastForwardWithMinority(thor.CheckpointInterval * 3)
-				testBFT.fastForward(thor.CheckpointInterval*1 + 3)
+				testBFT.fastForwardWithMinority(thor.EpochLength() * 3)
+				testBFT.fastForward(thor.EpochLength()*1 + 3)
 				_, err = testBFT.engine.ShouldVote(testBFT.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
@@ -683,7 +713,7 @@ func TestJustifier(t *testing.T) {
 		}, {
 			"fork in the middle of checkpoint", func(t *testing.T) {
 				fc := defaultFC
-				fc.VIP214 = thor.CheckpointInterval / 2
+				fc.VIP214 = thor.EpochLength() / 2
 				testBft, err := newTestBft(fc)
 				if err != nil {
 					t.Fatal(err)
@@ -699,19 +729,19 @@ func TestJustifier(t *testing.T) {
 		}, {
 			"the second bft round", func(t *testing.T) {
 				fc := defaultFC
-				fc.VIP214 = thor.CheckpointInterval / 2
+				fc.VIP214 = thor.EpochLength() / 2
 				testBft, err := newTestBft(fc)
 				if err != nil {
 					t.Fatal(err)
 				}
 
-				testBft.fastForward(thor.CheckpointInterval * 2)
+				testBft.fastForward(thor.EpochLength() * 2)
 				vs, err := testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
 				}
 
-				assert.Equal(t, uint32(thor.CheckpointInterval*2), vs.checkpoint)
+				assert.Equal(t, thor.EpochLength()*2, vs.checkpoint)
 				assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.thresholdVotes)
 				assert.Equal(t, uint32(2), vs.Summarize().Quality)
 				assert.False(t, vs.Summarize().Justified)
@@ -720,13 +750,13 @@ func TestJustifier(t *testing.T) {
 		}, {
 			"add votes: commits", func(t *testing.T) {
 				fc := defaultFC
-				fc.VIP214 = thor.CheckpointInterval / 2
+				fc.VIP214 = thor.EpochLength() / 2
 				testBft, err := newTestBft(fc)
 				if err != nil {
 					t.Fatal(err)
 				}
 
-				testBft.fastForward(thor.CheckpointInterval*2 - 1)
+				testBft.fastForward(thor.EpochLength()*2 - 1)
 				vs, err := testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
@@ -751,13 +781,13 @@ func TestJustifier(t *testing.T) {
 		}, {
 			"add votes: justifies", func(t *testing.T) {
 				fc := defaultFC
-				fc.VIP214 = thor.CheckpointInterval / 2
+				fc.VIP214 = thor.EpochLength() / 2
 				testBft, err := newTestBft(fc)
 				if err != nil {
 					t.Fatal(err)
 				}
 
-				testBft.fastForward(thor.CheckpointInterval*2 - 1)
+				testBft.fastForward(thor.EpochLength()*2 - 1)
 				vs, err := testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
@@ -775,13 +805,13 @@ func TestJustifier(t *testing.T) {
 		}, {
 			"add votes: one votes WIT then changes to COM", func(t *testing.T) {
 				fc := defaultFC
-				fc.VIP214 = thor.CheckpointInterval / 2
+				fc.VIP214 = thor.EpochLength() / 2
 				testBft, err := newTestBft(fc)
 				if err != nil {
 					t.Fatal(err)
 				}
 
-				testBft.fastForward(thor.CheckpointInterval*2 - 1)
+				testBft.fastForward(thor.EpochLength()*2 - 1)
 				vs, err := testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
@@ -883,7 +913,7 @@ func TestJustified(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				for range 3 * thor.CheckpointInterval {
+				for range 3 * thor.EpochLength() {
 					if err = testBFT.fastForwardWithMinority(1); err != nil {
 						t.Fatal(err)
 					}
@@ -901,7 +931,7 @@ func TestJustified(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				for range 2*thor.CheckpointInterval - 2 {
+				for range 2*thor.EpochLength() - 2 {
 					if err = testBFT.fastForward(1); err != nil {
 						t.Fatal(err)
 					}
@@ -917,7 +947,7 @@ func TestJustified(t *testing.T) {
 				}
 				justified, err := testBFT.engine.Justified()
 				assert.Nil(t, err)
-				assert.Equal(t, uint32(thor.CheckpointInterval), block.Number(justified))
+				assert.Equal(t, thor.EpochLength(), block.Number(justified))
 				assert.Equal(t, testBFT.repo.GenesisBlock().Header().ID(), testBFT.engine.Finalized())
 			},
 		}, {
@@ -927,7 +957,7 @@ func TestJustified(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				if err = testBFT.fastForwardWithMinority(3*thor.CheckpointInterval - 1); err != nil {
+				if err = testBFT.fastForwardWithMinority(3*thor.EpochLength() - 1); err != nil {
 					t.Fatal(err)
 				}
 
@@ -936,12 +966,12 @@ func TestJustified(t *testing.T) {
 				assert.Equal(t, testBFT.repo.GenesisBlock().Header().ID(), justified)
 				assert.Equal(t, testBFT.repo.GenesisBlock().Header().ID(), testBFT.engine.Finalized())
 
-				if err = testBFT.fastForward(thor.CheckpointInterval); err != nil {
+				if err = testBFT.fastForward(thor.EpochLength()); err != nil {
 					t.Fatal(err)
 				}
 				justified, err = testBFT.engine.Justified()
 				assert.Nil(t, err)
-				assert.Equal(t, uint32(3*thor.CheckpointInterval), block.Number(justified))
+				assert.Equal(t, 3*thor.EpochLength(), block.Number(justified))
 				assert.Equal(t, testBFT.repo.GenesisBlock().Header().ID(), testBFT.engine.Finalized())
 			},
 		}, {
@@ -951,27 +981,27 @@ func TestJustified(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				if err = testBFT.fastForward(3*thor.CheckpointInterval - 1); err != nil {
+				if err = testBFT.fastForward(3*thor.EpochLength() - 1); err != nil {
 					t.Fatal(err)
 				}
 
-				assert.Equal(t, uint32(thor.CheckpointInterval), block.Number(testBFT.engine.Finalized()))
+				assert.Equal(t, thor.EpochLength(), block.Number(testBFT.engine.Finalized()))
 
-				if err = testBFT.fastForward(thor.CheckpointInterval - 1); err != nil {
+				if err = testBFT.fastForward(thor.EpochLength() - 1); err != nil {
 					t.Fatal(err)
 				}
 
 				justified, err := testBFT.engine.Justified()
 				assert.Nil(t, err)
 				// current epoch is not concluded
-				assert.Equal(t, uint32(2*thor.CheckpointInterval), block.Number(justified))
+				assert.Equal(t, 2*thor.EpochLength(), block.Number(justified))
 
 				if err = testBFT.fastForward(1); err != nil {
 					t.Fatal(err)
 				}
 				justified, err = testBFT.engine.Justified()
 				assert.Nil(t, err)
-				assert.Equal(t, uint32(3*thor.CheckpointInterval), block.Number(justified))
+				assert.Equal(t, 3*thor.EpochLength(), block.Number(justified))
 			},
 		}, {
 			"get finalized, not justified, then justified", func(t *testing.T) {
@@ -981,39 +1011,39 @@ func TestJustified(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				if err = testBFT.fastForward(3*thor.CheckpointInterval - 1); err != nil {
+				if err = testBFT.fastForward(3*thor.EpochLength() - 1); err != nil {
 					t.Fatal(err)
 				}
 
-				assert.Equal(t, uint32(thor.CheckpointInterval), block.Number(testBFT.engine.Finalized()))
+				assert.Equal(t, thor.EpochLength(), block.Number(testBFT.engine.Finalized()))
 
-				if err = testBFT.fastForwardWithMinority(thor.CheckpointInterval); err != nil {
+				if err = testBFT.fastForwardWithMinority(thor.EpochLength()); err != nil {
 					t.Fatal(err)
 				}
 				justified, err := testBFT.engine.Justified()
 				assert.Nil(t, err)
-				assert.Equal(t, uint32(2*thor.CheckpointInterval), block.Number(justified))
+				assert.Equal(t, 2*thor.EpochLength(), block.Number(justified))
 
-				if err = testBFT.fastForward(thor.CheckpointInterval); err != nil {
+				if err = testBFT.fastForward(thor.EpochLength()); err != nil {
 					t.Fatal(err)
 				}
 				justified, err = testBFT.engine.Justified()
 				assert.Nil(t, err)
-				assert.Equal(t, uint32(4*thor.CheckpointInterval), block.Number(justified))
+				assert.Equal(t, 4*thor.EpochLength(), block.Number(justified))
 				// test cache
 				assert.Equal(t, justified, testBFT.engine.justified.Load().(tJustified).value)
 			},
 		}, {
 			"fork in the middle, get justified", func(t *testing.T) {
 				fc := defaultFC
-				fc.FINALITY = thor.CheckpointInterval
+				fc.FINALITY = thor.EpochLength()
 
 				testBFT, err := newTestBft(fc)
 				if err != nil {
 					t.Fatal(err)
 				}
 
-				for range 2*thor.CheckpointInterval - 2 {
+				for range 2*thor.EpochLength() - 2 {
 					if err = testBFT.fastForward(1); err != nil {
 						t.Fatal(err)
 					}
@@ -1029,7 +1059,7 @@ func TestJustified(t *testing.T) {
 				}
 				justified, err := testBFT.engine.Justified()
 				assert.Nil(t, err)
-				assert.Equal(t, uint32(thor.CheckpointInterval), block.Number(justified))
+				assert.Equal(t, thor.EpochLength(), block.Number(justified))
 				assert.Equal(t, testBFT.repo.GenesisBlock().Header().ID(), testBFT.engine.Finalized())
 			},
 		},

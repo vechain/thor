@@ -149,6 +149,15 @@ func NewDevnetWithConfig(config DevConfig) *Genesis {
 
 // NewDevnet create genesis for solo mode.
 func NewHayabusaDevnet(forkConfig *thor.ForkConfig) *Genesis {
+	thor.SetConfig(thor.Config{
+		LowStakingPeriod:    12,
+		MediumStakingPeriod: 30,
+		HighStakingPeriod:   90,
+		CooldownPeriod:      12,
+		EpochLength:         6,
+	})
+	thor.LockConfig()
+
 	launchTime := uint64(1526400000) // Default launch time 'Wed May 16 2018 00:00:00 GMT+0800 (CST)'
 	if launchTime == 0 {
 		launchTime = uint64(1526400000) // Default launch time 'Wed May 16 2018 00:00:00 GMT+0800 (CST)'
@@ -183,13 +192,6 @@ func NewHayabusaDevnet(forkConfig *thor.ForkConfig) *Genesis {
 				return err
 			}
 
-			// set parameters
-			state.SetStorage(builtin.Staker.Address, staker.LowStakingPeriod.Slot(), thor.BytesToBytes32(big.NewInt(12).Bytes()))
-			state.SetStorage(builtin.Staker.Address, staker.MediumStakingPeriod.Slot(), thor.BytesToBytes32(big.NewInt(30).Bytes()))
-			state.SetStorage(builtin.Staker.Address, staker.HighStakingPeriod.Slot(), thor.BytesToBytes32(big.NewInt(90).Bytes()))
-			state.SetStorage(builtin.Staker.Address, staker.CooldownPeriod.Slot(), thor.BytesToBytes32(big.NewInt(12).Bytes()))
-			state.SetStorage(builtin.Staker.Address, staker.EpochLength.Slot(), thor.BytesToBytes32(big.NewInt(6).Bytes()))
-
 			tokenSupply := &big.Int{}
 			energySupply := &big.Int{}
 			for _, a := range DevAccounts() {
@@ -213,7 +215,7 @@ func NewHayabusaDevnet(forkConfig *thor.ForkConfig) *Genesis {
 
 			// adding a soloBlockSigner as a validator and manage balances manually
 			// NOTE: does not manage energy, as it is not a transaction
-			if err := builtin.Staker.Native(state).AddValidation(soloBlockSigner.Address, soloBlockSigner.Address, staker.HighStakingPeriod.Get(), staker.MinStake); err != nil {
+			if err := builtin.Staker.Native(state).AddValidation(soloBlockSigner.Address, soloBlockSigner.Address, thor.HighStakingPeriod(), staker.MinStake); err != nil {
 				return err
 			}
 			currentBalance, err := state.GetBalance(soloBlockSigner.Address)

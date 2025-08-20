@@ -13,7 +13,7 @@ import (
 
 // transition activates the staker contract when sufficient validators are queued
 func (s *Staker) transition(currentBlock uint32) (bool, error) {
-	if currentBlock%EpochLength.Get() != 0 {
+	if currentBlock%thor.EpochLength() != 0 {
 		return false, nil // No transition needed
 	}
 

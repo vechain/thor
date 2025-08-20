@@ -179,7 +179,7 @@ func TestGetSummaryAndState(t *testing.T) {
 	summary, _, err = GetSummaryAndState(&Revision{revNext}, thorChain.Repo(), thorChain.Engine(), thorChain.Stater(), thorChain.GetForkConfig())
 	assert.Nil(t, err)
 	assert.Equal(t, summary.Header.Number(), b.Header().Number()+1)
-	assert.Equal(t, summary.Header.Timestamp(), b.Header().Timestamp()+thor.BlockInterval)
+	assert.Equal(t, summary.Header.Timestamp(), b.Header().Timestamp()+thor.BlockInterval())
 	assert.Equal(t, summary.Header.GasUsed(), uint64(0))
 	assert.Equal(t, summary.Header.ReceiptsRoot(), tx.Receipts{}.RootHash())
 	assert.Equal(t, len(summary.Txs), 0)

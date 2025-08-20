@@ -39,7 +39,7 @@ func (et *EpochTransition) HasUpdates() bool {
 
 // Housekeep performs epoch transitions at epoch boundaries
 func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
-	if currentBlock%EpochLength.Get() != 0 {
+	if currentBlock%thor.EpochLength() != 0 {
 		return false, nil
 	}
 
@@ -132,7 +132,7 @@ func (s *Staker) exitsCallback(currentBlock uint32, exitAddress *thor.Address) f
 
 func (s *Staker) evictionCallback(currentBlock uint32, evictions *[]thor.Address) func(thor.Address, *validation.Validation) error {
 	return func(validator thor.Address, entry *validation.Validation) error {
-		if entry.OfflineBlock != nil && currentBlock > *entry.OfflineBlock+(thor.OfflineValidatorEvictionThresholdEpochs*EpochLength.Get()) {
+		if entry.OfflineBlock != nil && currentBlock > *entry.OfflineBlock+thor.ValidatorEvictionThreshold() {
 			*evictions = append(*evictions, validator)
 			return nil
 		}

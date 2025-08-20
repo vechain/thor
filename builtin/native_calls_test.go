@@ -23,7 +23,6 @@ import (
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
@@ -751,7 +750,7 @@ func TestEnergyNative(t *testing.T) {
 	best := thorChain.Repo().BestBlockSummary().Header.Number()
 
 	growth := new(big.Int)
-	growth.SetUint64(thor.BlockInterval)
+	growth.SetUint64(thor.BlockInterval())
 	growth.Mul(growth, exSupply)
 	growth.Mul(growth, thor.EnergyGrowthRate)
 	growth.Div(growth, big.NewInt(1e18))
@@ -1674,6 +1673,24 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).Mul(big.NewInt(0).SetUint64(receipt.GasUsed), block.Header().BaseFee()), big.NewInt(0).Sub(totalBurned, totalBurnedBefore))
 
+	// setBeneficiary
+	beneficiary := genesis.DevAccounts()[9].Address
+	setBeneficiaryArgs := []any{master.Address, beneficiary}
+	desc = TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "setBeneficiary",
+		address:    toAddr,
+		acc:        genesis.DevAccounts()[0],
+		args:       setBeneficiaryArgs,
+	}
+	receipt, trxid, err = executeTxAndGetReceipt(desc) // mint block 4
+	assert.NoError(t, err)
+	assert.False(t, receipt.Reverted)
+	assert.Equal(t, master.Address, thor.BytesToAddress(receipt.Outputs[0].Events[0].Topics[1][:]))
+	_, err = thorChain.GetTxBlock(trxid)
+	assert.NoError(t, err)
+
 	node := master.Address
 	// getStake
 	getStakeRes := make([]any, 4)
@@ -1691,13 +1708,15 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.Equal(t, minStake.Cmp(*getStakeRes[3].(**big.Int)), 0)      // queue stake
 
 	// getStatus
-	getStatusRes := make([]any, 2)
+	getStatusRes := make([]any, 3)
 	getStatusRes[0] = new(uint8)
 	getStatusRes[1] = new(bool)
+	getStatusRes[2] = new(uint32)
 	_, err = callContractAndGetOutput(abi, "getValidatorStatus", toAddr, &getStatusRes, node)
 	assert.NoError(t, err)
 	assert.Equal(t, validation.StatusQueued, *getStatusRes[0].(*uint8))
-	assert.Equal(t, true, *getStatusRes[1].(*bool)) // online
+	assert.Equal(t, true, *getStatusRes[1].(*bool))                     // online
+	assert.Equal(t, uint32(math.MaxUint32), *getStatusRes[2].(*uint32)) // last active period
 
 	// getPeriod
 	getPeriodRes := make([]any, 4)
@@ -1972,9 +1991,10 @@ func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
 	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
 
 	// getStatus
-	getStatusRes := make([]any, 2)
+	getStatusRes := make([]any, 3)
 	getStatusRes[0] = new(uint8)
 	getStatusRes[1] = new(bool)
+	getStatusRes[2] = new(uint32)
 	_, err = callContractAndGetOutput(abi, "getValidatorStatus", toAddr, &getStatusRes, id)
 	assert.NoError(t, err)
 	assert.Equal(t, validation.StatusExit, *getStatusRes[0].(*uint8))
@@ -2070,13 +2090,13 @@ func TestStakerContract_Native_CheckStake(t *testing.T) {
 		caller: builtin.Staker.Address,
 	}
 
-	test.Case("addValidation", master, staker.LowStakingPeriod.Get()).
+	test.Case("addValidation", master, thor.LowStakingPeriod()).
 		Value(big.NewInt(0)).
 		Caller(caller).
 		ShouldRevert("stake is empty").
 		Assert(t)
 
-	test.Case("addValidation", master, staker.LowStakingPeriod.Get()).
+	test.Case("addValidation", master, thor.LowStakingPeriod()).
 		Value(big.NewInt(1)).
 		Caller(caller).
 		ShouldRevert("stake is not multiple of 1VET").

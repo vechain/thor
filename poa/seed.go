@@ -11,16 +11,6 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-var epochInterval uint32 = thor.SeederInterval
-
-// mockEpochInterval mocks the epoch interval。
-// TEST ONLY
-//
-//nolint:unused
-func mockEpochInterval(interval uint32) {
-	epochInterval = interval
-}
-
 // Seeder generates seed for poa scheduler.
 type Seeder struct {
 	repo  *chain.Repository
@@ -39,11 +29,11 @@ func NewSeeder(repo *chain.Repository) *Seeder {
 func (seeder *Seeder) Generate(parentID thor.Bytes32) (seed []byte, err error) {
 	blockNum := block.Number(parentID) + 1
 
-	epoch := blockNum / epochInterval
+	epoch := blockNum / thor.SeederInterval()
 	if epoch <= 1 {
 		return
 	}
-	seedNum := (epoch - 1) * epochInterval
+	seedNum := (epoch - 1) * thor.SeederInterval()
 
 	seedID, err := seeder.repo.NewChain(parentID).GetBlockID(seedNum)
 	if err != nil {

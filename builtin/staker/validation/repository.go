@@ -43,7 +43,7 @@ func (r *Repository) GetValidation(validator thor.Address) (*Validation, error) 
 	return &v, nil
 }
 
-func (r *Repository) SetValidation(validator thor.Address, entry *Validation, isNew bool) error {
+func (r *Repository) setValidation(validator thor.Address, entry *Validation, isNew bool) error {
 	if err := r.validations.Set(validator, *entry, isNew); err != nil {
 		return errors.Wrap(err, "failed to set validator")
 	}

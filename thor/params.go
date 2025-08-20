@@ -19,8 +19,6 @@ import (
 */
 // Constants of block chain.
 const (
-	BlockInterval uint64 = 10 // time interval between two consecutive blocks.
-
 	TxGas                     uint64 = 5000
 	ClauseGas                 uint64 = params.TxGas - TxGas
 	ClauseGasContractCreation uint64 = params.TxGasContractCreation - TxGas
@@ -33,24 +31,15 @@ const (
 	SstoreSetGas         uint64 = params.SstoreSetGas
 	SstoreResetGas       uint64 = params.SstoreResetGas
 
-	MaxTxWorkDelay uint32 = 30 // (unit: block) if tx delay exceeds this value, no energy can be exchanged.
-
-	InitialMaxBlockProposers uint64 = 101
-
-	TolerableBlockPackingTime = 500 * time.Millisecond // the indicator to adjust target block gas limit
-
-	MaxStateHistory = 65535 // max guaranteed state history allowed to be accessed in EVM, presented in block number
-
-	SeederInterval     = 8640 // blocks between two seeder epochs.
-	CheckpointInterval = 180  // blocks between two bft checkpoints.
+	MaxTxWorkDelay            uint32 = 30                     // (unit: block) if tx delay exceeds this value, no energy can be exchanged.
+	TolerableBlockPackingTime        = 500 * time.Millisecond // the indicator to adjust target block gas limit
+	MaxStateHistory                  = 65535                  // max guaranteed state history allowed to be accessed in EVM, presented in block number
 
 	GasTargetPercentage      = 75                 // percentage of the block gas limit to determine the gas target
 	InitialBaseFee           = 10_000_000_000_000 // 10^13 wei, 0.00001 VTHO
 	BaseFeeChangeDenominator = 8                  // determines the percentage change in the base fee per block based on network utilization
 
 	MaxPosScore = 10000 // max total score after PoS fork
-
-	OfflineValidatorEvictionThresholdEpochs = 336 // the number of epochs after which offline validator will be evicted from leader group (7 days)
 )
 
 // Keys of governance params.
@@ -65,11 +54,12 @@ var (
 	KeyCurveFactor               = BytesToBytes32([]byte("curve-factor"))      // curve factor to define VTHO issuance after PoS
 	KeyStargateSwitches          = BytesToBytes32([]byte("stargate-switches")) // Stargate switches to control the pause of staker and stargate
 
-	InitialRewardRatio               = big.NewInt(3e17) // 30%
-	InitialValidatorRewardPercentage = 30               // 30%
-	InitialBaseGasPrice              = big.NewInt(1e15)
-	InitialProposerEndorsement       = new(big.Int).Mul(big.NewInt(1e18), big.NewInt(25000000))
-	InitialCurveFactor               = big.NewInt(76800)
+	InitialMaxBlockProposers         uint64 = 101
+	InitialRewardRatio                      = big.NewInt(3e17) // 30%
+	InitialValidatorRewardPercentage        = 30               // 30%
+	InitialBaseGasPrice                     = big.NewInt(1e15)
+	InitialProposerEndorsement              = new(big.Int).Mul(big.NewInt(1e18), big.NewInt(25000000))
+	InitialCurveFactor                      = big.NewInt(76800)
 
 	EnergyGrowthRate      = big.NewInt(5000000000) // WEI THOR per token(VET) per second. about 0.000432 THOR per token per day.
 	NumberOfBlocksPerYear = big.NewInt(3153600)    // number of blocks per year, non leap (365 days)

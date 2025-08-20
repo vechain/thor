@@ -11,6 +11,17 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/ethereum/go-ethereum/rlp"
+
+	"github.com/vechain/thor/v2/builtin/authority"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/poa"
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
+	"github.com/vechain/thor/v2/tx"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
@@ -45,6 +56,813 @@ func TestAuthority_Hayabusa_TransitionPeriod(t *testing.T) {
 	masterStake, err := getMasterStake(setup.chain, blk.Header)
 	assert.NoError(t, err)
 	assert.Equal(t, masterStake.QueuedVET.Cmp(minStake), 0)
+}
+
+func TestAuthority_Hayabusa_NegativeCases(t *testing.T) {
+	setup := newHayabusaSetup(t)
+
+	_, _, _ = setup.mintMbpBlock(1)
+
+	best, parent, st := setup.mintBlock()
+	st.SetRawStorage(builtin.Params.Address, thor.KeyProposerEndorsement, rlp.RawValue{0x0})
+
+	_, err := setup.consensus.validateAuthorityProposer(best.Header, parent.Header, st)
+	assert.Error(t, err)
+
+	headKey := thor.Blake2b([]byte("head"))
+	st.SetRawStorage(builtin.Authority.Address, headKey, rlp.RawValue{0xFF})
+	_, err = setup.consensus.validateAuthorityProposer(best.Header, parent.Header, st)
+	assert.Error(t, err)
+}
+
+func TestAuthorityCacheHandler_Success(t *testing.T) {
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+
+	mockRepo := &chain.Repository{}
+	mockForkConfig := &thor.ForkConfig{}
+	mockForkConfig.HAYABUSA = 0
+
+	consensus := New(mockRepo, stater, mockForkConfig)
+
+	candidateList := []*authority.Candidate{
+		{
+			NodeMaster: thor.BytesToAddress([]byte("master1")),
+			Endorsor:   thor.BytesToAddress([]byte("endorsor1")),
+			Identity:   thor.BytesToBytes32([]byte("identity1")),
+			Active:     true,
+		},
+		{
+			NodeMaster: thor.BytesToAddress([]byte("master2")),
+			Endorsor:   thor.BytesToAddress([]byte("endorsor2")),
+			Identity:   thor.BytesToBytes32([]byte("identity2")),
+			Active:     true,
+		},
+	}
+
+	candidates := poa.NewCandidates(candidateList)
+
+	header := new(block.Builder).
+		ParentID(thor.BytesToBytes32([]byte("parent123"))).
+		Timestamp(1000).
+		GasLimit(1000000).
+		GasUsed(0).
+		TotalScore(0).
+		StateRoot(thor.Bytes32{}).
+		ReceiptsRoot(thor.Bytes32{}).
+		Beneficiary(thor.Address{}).
+		Build().Header()
+
+	receipts := tx.Receipts{
+		&tx.Receipt{
+			Outputs: []*tx.Output{
+				{
+					Events: []*tx.Event{
+						{
+							Address: builtin.Staker.Address,
+							Topics: []thor.Bytes32{
+								thor.BytesToBytes32([]byte("event1")),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	err := consensus.authorityCacheHandler(candidates, header, receipts)
+	assert.NoError(t, err)
+}
+
+func TestAuthorityCacheHandler_NilCandidates(t *testing.T) {
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+
+	mockRepo := &chain.Repository{}
+	mockForkConfig := &thor.ForkConfig{}
+
+	consensus := New(mockRepo, stater, mockForkConfig)
+
+	header := new(block.Builder).
+		ParentID(thor.BytesToBytes32([]byte("parent123"))).
+		Timestamp(1000).
+		GasLimit(1000000).
+		GasUsed(0).
+		TotalScore(0).
+		StateRoot(thor.Bytes32{}).
+		ReceiptsRoot(thor.Bytes32{}).
+		Beneficiary(thor.Address{}).
+		Build().Header()
+
+	receipts := tx.Receipts{}
+
+	err := consensus.authorityCacheHandler(nil, header, receipts)
+	assert.NoError(t, err)
+}
+
+func TestAuthorityCacheHandler_EmptyCandidates(t *testing.T) {
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+
+	mockRepo := &chain.Repository{}
+	mockForkConfig := &thor.ForkConfig{}
+
+	consensus := New(mockRepo, stater, mockForkConfig)
+
+	candidates := poa.NewCandidates([]*authority.Candidate{})
+
+	header := new(block.Builder).
+		ParentID(thor.BytesToBytes32([]byte("parent123"))).
+		Timestamp(1000).
+		GasLimit(1000000).
+		GasUsed(0).
+		TotalScore(0).
+		StateRoot(thor.Bytes32{}).
+		ReceiptsRoot(thor.Bytes32{}).
+		Beneficiary(thor.Address{}).
+		Build().Header()
+
+	receipts := tx.Receipts{}
+
+	err := consensus.authorityCacheHandler(candidates, header, receipts)
+	assert.NoError(t, err)
+}
+
+func TestAuthorityCacheHandler_WithAuthorityEvents(t *testing.T) {
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+
+	mockRepo := &chain.Repository{}
+	mockForkConfig := &thor.ForkConfig{}
+
+	consensus := New(mockRepo, stater, mockForkConfig)
+
+	candidateList := []*authority.Candidate{
+		{
+			NodeMaster: thor.BytesToAddress([]byte("master1")),
+			Endorsor:   thor.BytesToAddress([]byte("endorsor1")),
+			Identity:   thor.BytesToBytes32([]byte("identity1")),
+			Active:     true,
+		},
+	}
+
+	candidates := poa.NewCandidates(candidateList)
+
+	header := new(block.Builder).
+		ParentID(thor.BytesToBytes32([]byte("parent123"))).
+		Timestamp(1000).
+		GasLimit(1000000).
+		GasUsed(0).
+		TotalScore(0).
+		StateRoot(thor.Bytes32{}).
+		ReceiptsRoot(thor.Bytes32{}).
+		Beneficiary(thor.Address{}).
+		Build().Header()
+
+	receipts := tx.Receipts{
+		&tx.Receipt{
+			Outputs: []*tx.Output{
+				{
+					Events: []*tx.Event{
+						{
+							Address: builtin.Authority.Address,
+							Topics: []thor.Bytes32{
+								thor.BytesToBytes32([]byte("candidate_added")),
+								thor.BytesToBytes32(thor.BytesToAddress([]byte("new_candidate")).Bytes()),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	err := consensus.authorityCacheHandler(candidates, header, receipts)
+	assert.NoError(t, err)
+}
+
+func TestAuthorityCacheHandler_WithStakerEvents(t *testing.T) {
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+
+	mockRepo := &chain.Repository{}
+	mockForkConfig := &thor.ForkConfig{
+		HAYABUSA: 100,
+	}
+
+	consensus := New(mockRepo, stater, mockForkConfig)
+
+	candidateList := []*authority.Candidate{
+		{
+			NodeMaster: thor.BytesToAddress([]byte("master1")),
+			Endorsor:   thor.BytesToAddress([]byte("endorsor1")),
+			Identity:   thor.BytesToBytes32([]byte("identity1")),
+			Active:     true,
+		},
+	}
+
+	candidates := poa.NewCandidates(candidateList)
+
+	header := new(block.Builder).
+		ParentID(thor.BytesToBytes32([]byte("parent123"))).
+		Timestamp(1000).
+		GasLimit(1000000).
+		GasUsed(0).
+		TotalScore(0).
+		StateRoot(thor.Bytes32{}).
+		ReceiptsRoot(thor.Bytes32{}).
+		Beneficiary(thor.Address{}).
+		Build().Header()
+
+	receipts := tx.Receipts{
+		&tx.Receipt{
+			Outputs: []*tx.Output{
+				{
+					Events: []*tx.Event{
+						{
+							Address: builtin.Staker.Address,
+							Topics: []thor.Bytes32{
+								thor.BytesToBytes32([]byte("staker_event")),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	err := consensus.authorityCacheHandler(candidates, header, receipts)
+	assert.NoError(t, err)
+}
+
+func TestAuthorityCacheHandler_WithParamsEvents(t *testing.T) {
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+
+	mockRepo := &chain.Repository{}
+	mockForkConfig := &thor.ForkConfig{}
+
+	consensus := New(mockRepo, stater, mockForkConfig)
+
+	candidateList := []*authority.Candidate{
+		{
+			NodeMaster: thor.BytesToAddress([]byte("master1")),
+			Endorsor:   thor.BytesToAddress([]byte("endorsor1")),
+			Identity:   thor.BytesToBytes32([]byte("identity1")),
+			Active:     true,
+		},
+	}
+
+	candidates := poa.NewCandidates(candidateList)
+
+	header := new(block.Builder).
+		ParentID(thor.BytesToBytes32([]byte("parent123"))).
+		Timestamp(1000).
+		GasLimit(1000000).
+		GasUsed(0).
+		TotalScore(0).
+		StateRoot(thor.Bytes32{}).
+		ReceiptsRoot(thor.Bytes32{}).
+		Beneficiary(thor.Address{}).
+		Build().Header()
+
+	receipts := tx.Receipts{
+		&tx.Receipt{
+			Outputs: []*tx.Output{
+				{
+					Events: []*tx.Event{
+						{
+							Address: builtin.Params.Address,
+							Topics: []thor.Bytes32{
+								thor.BytesToBytes32([]byte("params_event")),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	err := consensus.authorityCacheHandler(candidates, header, receipts)
+	assert.NoError(t, err)
+}
+
+func TestAuthorityCacheHandler_WithEndorsorTransfers(t *testing.T) {
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+
+	mockRepo := &chain.Repository{}
+	mockForkConfig := &thor.ForkConfig{}
+
+	consensus := New(mockRepo, stater, mockForkConfig)
+
+	candidateList := []*authority.Candidate{
+		{
+			NodeMaster: thor.BytesToAddress([]byte("master1")),
+			Endorsor:   thor.BytesToAddress([]byte("endorsor1")),
+			Identity:   thor.BytesToBytes32([]byte("identity1")),
+			Active:     true,
+		},
+	}
+
+	candidates := poa.NewCandidates(candidateList)
+
+	header := new(block.Builder).
+		ParentID(thor.BytesToBytes32([]byte("parent123"))).
+		Timestamp(1000).
+		GasLimit(1000000).
+		GasUsed(0).
+		TotalScore(0).
+		StateRoot(thor.Bytes32{}).
+		ReceiptsRoot(thor.Bytes32{}).
+		Beneficiary(thor.Address{}).
+		Build().Header()
+
+	receipts := tx.Receipts{
+		&tx.Receipt{
+			Outputs: []*tx.Output{
+				{
+					Transfers: []*tx.Transfer{
+						{
+							Sender:    thor.BytesToAddress([]byte("endorsor1")),
+							Recipient: thor.BytesToAddress([]byte("recipient")),
+							Amount:    big.NewInt(1000),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	err := consensus.authorityCacheHandler(candidates, header, receipts)
+	assert.NoError(t, err)
+}
+
+func TestAuthorityCacheHandler_WithMultipleEvents(t *testing.T) {
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+
+	mockRepo := &chain.Repository{}
+	mockForkConfig := &thor.ForkConfig{}
+
+	consensus := New(mockRepo, stater, mockForkConfig)
+
+	candidateList := []*authority.Candidate{
+		{
+			NodeMaster: thor.BytesToAddress([]byte("master1")),
+			Endorsor:   thor.BytesToAddress([]byte("endorsor1")),
+			Identity:   thor.BytesToBytes32([]byte("identity1")),
+			Active:     true,
+		},
+	}
+
+	candidates := poa.NewCandidates(candidateList)
+
+	header := new(block.Builder).
+		ParentID(thor.BytesToBytes32([]byte("parent123"))).
+		Timestamp(1000).
+		GasLimit(1000000).
+		GasUsed(0).
+		TotalScore(0).
+		StateRoot(thor.Bytes32{}).
+		ReceiptsRoot(thor.Bytes32{}).
+		Beneficiary(thor.Address{}).
+		Build().Header()
+
+	receipts := tx.Receipts{
+		&tx.Receipt{
+			Outputs: []*tx.Output{
+				{
+					Events: []*tx.Event{
+						{
+							Address: thor.BytesToAddress([]byte("contract1")),
+							Topics: []thor.Bytes32{
+								thor.BytesToBytes32([]byte("event1")),
+							},
+						},
+						{
+							Address: thor.BytesToAddress([]byte("contract2")),
+							Topics: []thor.Bytes32{
+								thor.BytesToBytes32([]byte("event2")),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	err := consensus.authorityCacheHandler(candidates, header, receipts)
+	assert.NoError(t, err)
+}
+
+func TestAuthorityCacheHandler_WithNilReceipts(t *testing.T) {
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+
+	mockRepo := &chain.Repository{}
+	mockForkConfig := &thor.ForkConfig{}
+
+	consensus := New(mockRepo, stater, mockForkConfig)
+
+	candidateList := []*authority.Candidate{
+		{
+			NodeMaster: thor.BytesToAddress([]byte("master1")),
+			Endorsor:   thor.BytesToAddress([]byte("endorsor1")),
+			Identity:   thor.BytesToBytes32([]byte("identity1")),
+			Active:     true,
+		},
+	}
+
+	candidates := poa.NewCandidates(candidateList)
+
+	header := new(block.Builder).
+		ParentID(thor.BytesToBytes32([]byte("parent123"))).
+		Timestamp(1000).
+		GasLimit(1000000).
+		GasUsed(0).
+		TotalScore(0).
+		StateRoot(thor.Bytes32{}).
+		ReceiptsRoot(thor.Bytes32{}).
+		Beneficiary(thor.Address{}).
+		Build().Header()
+
+	err := consensus.authorityCacheHandler(candidates, header, nil)
+	assert.NoError(t, err)
+}
+
+func TestAuthorityCacheHandler_WithEmptyReceipts(t *testing.T) {
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+
+	mockRepo := &chain.Repository{}
+	mockForkConfig := &thor.ForkConfig{}
+
+	consensus := New(mockRepo, stater, mockForkConfig)
+
+	candidateList := []*authority.Candidate{
+		{
+			NodeMaster: thor.BytesToAddress([]byte("master1")),
+			Endorsor:   thor.BytesToAddress([]byte("endorsor1")),
+			Identity:   thor.BytesToBytes32([]byte("identity1")),
+			Active:     true,
+		},
+	}
+
+	candidates := poa.NewCandidates(candidateList)
+
+	header := new(block.Builder).
+		ParentID(thor.BytesToBytes32([]byte("parent123"))).
+		Timestamp(1000).
+		GasLimit(1000000).
+		GasUsed(0).
+		TotalScore(0).
+		StateRoot(thor.Bytes32{}).
+		ReceiptsRoot(thor.Bytes32{}).
+		Beneficiary(thor.Address{}).
+		Build().Header()
+
+	receipts := tx.Receipts{}
+
+	err := consensus.authorityCacheHandler(candidates, header, receipts)
+	assert.NoError(t, err)
+}
+
+func TestAuthorityBalanceCheck_BeforeHayabusaFork_AccountBalanceSufficient(t *testing.T) {
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+
+	mockRepo := &chain.Repository{}
+	mockForkConfig := &thor.ForkConfig{
+		HAYABUSA: 100,
+	}
+
+	consensus := New(mockRepo, stater, mockForkConfig)
+
+	header := new(block.Builder).
+		ParentID(thor.BytesToBytes32([]byte("parent123"))).
+		Timestamp(1000).
+		GasLimit(1000000).
+		GasUsed(0).
+		TotalScore(0).
+		StateRoot(thor.Bytes32{}).
+		ReceiptsRoot(thor.Bytes32{}).
+		Beneficiary(thor.Address{}).
+		Build().Header()
+
+	st := stater.NewState(trie.Root{})
+	signer := thor.BytesToAddress([]byte("signer"))
+	endorsor := thor.BytesToAddress([]byte("endorsor"))
+	minBalance := big.NewInt(1000)
+
+	st.SetBalance(endorsor, big.NewInt(2000))
+
+	checker := consensus.authorityBalanceCheck(header, st, signer)
+
+	hasBalance, err := checker(endorsor, minBalance)
+
+	assert.NoError(t, err)
+	assert.True(t, hasBalance, "Should have sufficient account balance before HAYABUSA fork")
+}
+
+func TestAuthorityBalanceCheck_BeforeHayabusaFork_AccountBalanceInsufficient(t *testing.T) {
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+
+	mockRepo := &chain.Repository{}
+	mockForkConfig := &thor.ForkConfig{
+		HAYABUSA: 100,
+	}
+
+	consensus := New(mockRepo, stater, mockForkConfig)
+
+	header := new(block.Builder).
+		ParentID(thor.BytesToBytes32([]byte("parent123"))).
+		Timestamp(1000).
+		GasLimit(1000000).
+		GasUsed(0).
+		TotalScore(0).
+		StateRoot(thor.Bytes32{}).
+		ReceiptsRoot(thor.Bytes32{}).
+		Beneficiary(thor.Address{}).
+		Build().Header()
+
+	st := stater.NewState(trie.Root{})
+	signer := thor.BytesToAddress([]byte("signer"))
+	endorsor := thor.BytesToAddress([]byte("endorsor"))
+	minBalance := big.NewInt(1000)
+
+	st.SetBalance(endorsor, big.NewInt(500))
+
+	checker := consensus.authorityBalanceCheck(header, st, signer)
+
+	hasBalance, err := checker(endorsor, minBalance)
+
+	assert.NoError(t, err)
+	assert.False(t, hasBalance, "Should not have sufficient account balance before HAYABUSA fork")
+}
+
+func TestAuthorityBalanceCheck_AfterHayabusaFork_AccountBalanceSufficient(t *testing.T) {
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+
+	mockRepo := &chain.Repository{}
+	mockForkConfig := &thor.ForkConfig{
+		HAYABUSA: 100,
+	}
+
+	consensus := New(mockRepo, stater, mockForkConfig)
+
+	header := new(block.Builder).
+		ParentID(thor.BytesToBytes32([]byte("block150"))).
+		Timestamp(1000).
+		GasLimit(1000000).
+		GasUsed(0).
+		TotalScore(0).
+		StateRoot(thor.Bytes32{}).
+		ReceiptsRoot(thor.Bytes32{}).
+		Beneficiary(thor.Address{}).
+		Build().Header()
+
+	st := stater.NewState(trie.Root{})
+	signer := thor.BytesToAddress([]byte("signer"))
+	endorsor := thor.BytesToAddress([]byte("endorsor"))
+	minBalance := big.NewInt(1000)
+
+	st.SetBalance(endorsor, big.NewInt(2000))
+
+	checker := consensus.authorityBalanceCheck(header, st, signer)
+
+	hasBalance, err := checker(endorsor, minBalance)
+
+	assert.NoError(t, err)
+	assert.True(t, hasBalance, "Should have sufficient account balance after HAYABUSA fork")
+}
+
+func TestAuthorityBalanceCheck_AfterHayabusaFork_AccountBalanceInsufficient_StakeInsufficient(t *testing.T) {
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+
+	mockRepo := &chain.Repository{}
+	mockForkConfig := &thor.ForkConfig{
+		HAYABUSA: 100,
+	}
+
+	consensus := New(mockRepo, stater, mockForkConfig)
+
+	header := new(block.Builder).
+		ParentID(thor.BytesToBytes32([]byte("block150"))).
+		Timestamp(1000).
+		GasLimit(1000000).
+		GasUsed(0).
+		TotalScore(0).
+		StateRoot(thor.Bytes32{}).
+		ReceiptsRoot(thor.Bytes32{}).
+		Beneficiary(thor.Address{}).
+		Build().Header()
+
+	st := stater.NewState(trie.Root{})
+	signer := thor.BytesToAddress([]byte("signer"))
+	endorsor := thor.BytesToAddress([]byte("endorsor"))
+	minBalance := big.NewInt(1000)
+
+	st.SetBalance(endorsor, big.NewInt(500))
+
+	stakerAddr := builtin.Staker.Address
+	st.SetCode(stakerAddr, builtin.Staker.RuntimeBytecodes())
+
+	validator := &validation.Validation{
+		Endorser:           endorsor,
+		Beneficiary:        nil,
+		Period:             0,
+		CompleteIterations: 0,
+		Status:             0,
+		StartBlock:         0,
+		ExitBlock:          nil,
+		OfflineBlock:       nil,
+		LockedVET:          nil,
+		PendingUnlockVET:   nil,
+		QueuedVET:          big.NewInt(500),
+		CooldownVET:        nil,
+		WithdrawableVET:    nil,
+		Weight:             big.NewInt(100),
+	}
+
+	slot := thor.Blake2b(signer.Bytes(), thor.BytesToBytes32([]byte("validations")).Bytes())
+	validatorData, err := rlp.EncodeToBytes(validator)
+	assert.NoError(t, err)
+	st.SetRawStorage(stakerAddr, slot, validatorData)
+
+	checker := consensus.authorityBalanceCheck(header, st, signer)
+
+	hasBalance, err := checker(endorsor, minBalance)
+
+	assert.NoError(t, err)
+	assert.False(t, hasBalance, "Should not have sufficient balance or stake after HAYABUSA fork")
+}
+
+func TestAuthorityBalanceCheck_AfterHayabusaFork_AccountBalanceInsufficient_NoValidatorEntry(t *testing.T) {
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+
+	mockRepo := &chain.Repository{}
+	mockForkConfig := &thor.ForkConfig{
+		HAYABUSA: 100,
+	}
+
+	consensus := New(mockRepo, stater, mockForkConfig)
+
+	header := new(block.Builder).
+		ParentID(thor.BytesToBytes32([]byte("block150"))).
+		Timestamp(1000).
+		GasLimit(1000000).
+		GasUsed(0).
+		TotalScore(0).
+		StateRoot(thor.Bytes32{}).
+		ReceiptsRoot(thor.Bytes32{}).
+		Beneficiary(thor.Address{}).
+		Build().Header()
+
+	st := stater.NewState(trie.Root{})
+	signer := thor.BytesToAddress([]byte("signer"))
+	endorsor := thor.BytesToAddress([]byte("endorsor"))
+	minBalance := big.NewInt(1000)
+
+	st.SetBalance(endorsor, big.NewInt(500))
+
+	stakerAddr := builtin.Staker.Address
+	st.SetCode(stakerAddr, builtin.Staker.RuntimeBytecodes())
+
+	checker := consensus.authorityBalanceCheck(header, st, signer)
+
+	hasBalance, err := checker(endorsor, minBalance)
+
+	assert.NoError(t, err)
+	assert.False(t, hasBalance, "Should not have sufficient balance when no validator entry exists")
+}
+
+func TestAuthorityBalanceCheck_AfterHayabusaFork_AccountBalanceInsufficient_EmptyValidatorEntry(t *testing.T) {
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+
+	mockRepo := &chain.Repository{}
+	mockForkConfig := &thor.ForkConfig{
+		HAYABUSA: 100,
+	}
+
+	consensus := New(mockRepo, stater, mockForkConfig)
+
+	header := new(block.Builder).
+		ParentID(thor.BytesToBytes32([]byte("block150"))).
+		Timestamp(1000).
+		GasLimit(1000000).
+		GasUsed(0).
+		TotalScore(0).
+		StateRoot(thor.Bytes32{}).
+		ReceiptsRoot(thor.Bytes32{}).
+		Beneficiary(thor.Address{}).
+		Build().Header()
+
+	st := stater.NewState(trie.Root{})
+	signer := thor.BytesToAddress([]byte("signer"))
+	endorsor := thor.BytesToAddress([]byte("endorsor"))
+	minBalance := big.NewInt(1000)
+
+	st.SetBalance(endorsor, big.NewInt(500))
+
+	stakerAddr := builtin.Staker.Address
+	st.SetCode(stakerAddr, builtin.Staker.RuntimeBytecodes())
+
+	validator := &validation.Validation{
+		Endorser:           thor.Address{},
+		Beneficiary:        nil,
+		Period:             0,
+		CompleteIterations: 0,
+		Status:             0,
+		StartBlock:         0,
+		ExitBlock:          nil,
+		OfflineBlock:       nil,
+		LockedVET:          nil,
+		PendingUnlockVET:   nil,
+		QueuedVET:          nil,
+		CooldownVET:        nil,
+		WithdrawableVET:    nil,
+		Weight:             big.NewInt(0),
+	}
+
+	slot := thor.Blake2b(signer.Bytes(), thor.BytesToBytes32([]byte("validations")).Bytes())
+	validatorData, err := rlp.EncodeToBytes(validator)
+	assert.NoError(t, err)
+	st.SetRawStorage(stakerAddr, slot, validatorData)
+
+	checker := consensus.authorityBalanceCheck(header, st, signer)
+
+	hasBalance, err := checker(endorsor, minBalance)
+
+	assert.NoError(t, err)
+	assert.False(t, hasBalance, "Should not have sufficient balance when validator entry is empty")
+}
+
+func TestAuthorityBalanceCheck_AfterHayabusaFork_AccountBalanceInsufficient_NilQueuedVET(t *testing.T) {
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+
+	mockRepo := &chain.Repository{}
+	mockForkConfig := &thor.ForkConfig{
+		HAYABUSA: 100,
+	}
+
+	consensus := New(mockRepo, stater, mockForkConfig)
+
+	header := new(block.Builder).
+		ParentID(thor.BytesToBytes32([]byte("block150"))).
+		Timestamp(1000).
+		GasLimit(1000000).
+		GasUsed(0).
+		TotalScore(0).
+		StateRoot(thor.Bytes32{}).
+		ReceiptsRoot(thor.Bytes32{}).
+		Beneficiary(thor.Address{}).
+		Build().Header()
+
+	st := stater.NewState(trie.Root{})
+	signer := thor.BytesToAddress([]byte("signer"))
+	endorsor := thor.BytesToAddress([]byte("endorsor"))
+	minBalance := big.NewInt(1000)
+
+	st.SetBalance(endorsor, big.NewInt(500))
+
+	stakerAddr := builtin.Staker.Address
+	st.SetCode(stakerAddr, builtin.Staker.RuntimeBytecodes())
+
+	validator := &validation.Validation{
+		Endorser:           endorsor,
+		Beneficiary:        nil,
+		Period:             0,
+		CompleteIterations: 0,
+		Status:             0,
+		StartBlock:         0,
+		ExitBlock:          nil,
+		OfflineBlock:       nil,
+		LockedVET:          nil,
+		PendingUnlockVET:   nil,
+		QueuedVET:          nil,
+		CooldownVET:        nil,
+		WithdrawableVET:    nil,
+		Weight:             big.NewInt(100),
+	}
+
+	slot := thor.Blake2b(signer.Bytes(), thor.BytesToBytes32([]byte("validations")).Bytes())
+	validatorData, err := rlp.EncodeToBytes(validator)
+	assert.NoError(t, err)
+	st.SetRawStorage(stakerAddr, slot, validatorData)
+
+	checker := consensus.authorityBalanceCheck(header, st, signer)
+
+	hasBalance, err := checker(endorsor, minBalance)
+
+	assert.NoError(t, err)
+	assert.False(t, hasBalance, "Should not have sufficient balance when QueuedVET is nil")
 }
 
 func getEndorsorBalance(blk *block.Header, chain *testchain.Chain) (*big.Int, error) {

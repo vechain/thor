@@ -66,6 +66,7 @@ func (s *Service) ApplyRenewal(renewal *delta.Renewal) error {
 	if renewal.QueuedDecrease == nil {
 		renewal.QueuedDecrease = new(big.Int)
 	}
+
 	if err := s.lockedVET.Add(renewal.NewLockedVET); err != nil {
 		return err
 	}

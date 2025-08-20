@@ -36,7 +36,7 @@ func TestRepository_Validation_RoundTrip(t *testing.T) {
 		Status:             StatusQueued,
 	}
 
-	assert.NoError(t, repo.SetValidation(id, entry, true))
+	assert.NoError(t, repo.setValidation(id, entry, true))
 
 	got, err := repo.GetValidation(id)
 	assert.NoError(t, err)
