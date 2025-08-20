@@ -141,7 +141,7 @@ contract Staker {
     function withdrawDelegation(
         uint256 delegationID
     ) public onlyDelegatorContract delegatorNotPaused {
-        (uint256 stake) = StakerNative(address(this)).native_withdrawDelegation(delegationID);
+        uint256 stake = StakerNative(address(this)).native_withdrawDelegation(delegationID);
 
         emit DelegationWithdrawn(delegationID, stake);
         (bool success, ) = msg.sender.call{value: stake}("");
