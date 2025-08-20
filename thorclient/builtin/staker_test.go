@@ -92,7 +92,7 @@ func TestStaker(t *testing.T) {
 		t.Fatal(err)
 	}
 	// set stargate address
-	if _, _, err := params.Set(thor.KeyStargateContractAddress, new(big.Int).SetBytes(stargate.Address().Bytes())).
+	if _, _, err := params.Set(thor.KeyDelegatorContractAddress, new(big.Int).SetBytes(stargate.Address().Bytes())).
 		Send().
 		WithSigner(executor).
 		WithOptions(txOpts()).SubmitAndConfirm(txContext(t)); err != nil {
@@ -547,7 +547,7 @@ func TestStaker_Next_NoNext(t *testing.T) {
 
 	_, _, err = params.Set(thor.KeyMaxBlockProposers, big.NewInt(3)).Send().WithSigner(executor).WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
-	_, _, err = params.Set(thor.KeyStargateContractAddress, new(big.Int).SetBytes(stargate.Address().Bytes())).
+	_, _, err = params.Set(thor.KeyDelegatorContractAddress, new(big.Int).SetBytes(stargate.Address().Bytes())).
 		Send().
 		WithSigner(executor).
 		WithOptions(txOpts()).

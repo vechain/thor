@@ -108,7 +108,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_addValidation",
-			expectedGas: 66600,
+			expectedGas: 66400,
 			args:        []any{account1, account1, thor.LowStakingPeriod(), staker.MinStake},
 			description: "Add a new validator (not implemented yet)",
 		},
@@ -149,7 +149,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:     "native_withdrawStake",
-			expectedGas:  26400,
+			expectedGas:  26200,
 			args:         []any{account1, account1},
 			description:  "Withdraw stake for a validator",
 			preTestHooks: []TestHook{preTestAddValidation(account1)},
@@ -166,7 +166,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		// },
 		{
 			function:    "native_increaseStake",
-			expectedGas: 21600,
+			expectedGas: 21400,
 			args: []any{
 				account1,
 				account1,
@@ -177,7 +177,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_decreaseStake",
-			expectedGas: 21000,
+			expectedGas: 20800,
 			args: []any{
 				account1,
 				account1,
@@ -188,7 +188,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_addDelegation",
-			expectedGas: 32400,
+			expectedGas: 32000,
 			args: []any{
 				account1,
 				staker.MinStake,
@@ -217,7 +217,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_withdrawDelegation",
-			expectedGas: 22000,
+			expectedGas: 21600,
 			args: []any{
 				big.NewInt(1), // IDs are incremental, starting at 1
 			},
@@ -227,7 +227,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		// TODO: How can we mint thousands of blocks and perform housekeeping?
 		{
 			function:    "native_signalDelegationExit",
-			expectedGas: 1200,
+			expectedGas: 800,
 			args: []any{
 				big.NewInt(1), // IDs are incremental, starting at 1
 			},
