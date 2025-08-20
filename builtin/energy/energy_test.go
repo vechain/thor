@@ -306,7 +306,7 @@ func TestDistributeRewards(t *testing.T) {
 	p := params.New(paramsAddr, st)
 
 	st.SetStorage(paramsAddr, thor.KeyValidatorRewardPercentage, thor.BytesToBytes32(big.NewInt(int64(thor.InitialValidatorRewardPercentage)).Bytes()))
-	st.SetStorage(paramsAddr, thor.KeyStargateContractAddress, thor.BytesToBytes32(stargateAddr.Bytes()))
+	st.SetStorage(paramsAddr, thor.KeyDelegatorContractAddress, thor.BytesToBytes32(stargateAddr.Bytes()))
 
 	eng := New(thor.BytesToAddress([]byte("eng")), st, 1, p)
 

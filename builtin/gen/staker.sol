@@ -1,6 +1,9 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+uint256 constant DELEGATOR_PAUSED_BIT = 1 << 0;
+uint256 constant STAKER_PAUSED_BIT = 1 << 1;
+
 contract Staker {
     event ValidationQueued(
         address indexed validator,
@@ -12,11 +15,7 @@ contract Staker {
     event ValidationSignaledExit(address indexed validator);
     event StakeIncreased(address indexed validator, uint256 added);
     event StakeDecreased(address indexed validator, uint256 removed);
-    event BeneficiarySet(
-        address indexed validator,
-        address indexed endorser,
-        address beneficiary
-    );
+    event BeneficiarySet(address indexed validator, address indexed endorser, address beneficiary);
 
     event DelegationAdded(
         address indexed validator,
@@ -47,13 +46,8 @@ contract Staker {
     function addValidation(
         address validator,
         uint32 period
-    ) public payable checkStake(msg.value) {
-        StakerNative(address(this)).native_addValidation(
-            validator,
-            msg.sender,
-            period,
-            msg.value
-        );
+    ) public payable checkStake(msg.value) stakerNotPaused {
+        StakerNative(address(this)).native_addValidation(validator, msg.sender, period, msg.value);
 
         emit ValidationQueued(validator, msg.sender, period, msg.value);
     }
@@ -61,14 +55,8 @@ contract Staker {
     /**
      * @dev increaseStake adds VET to the current stake of the queued/active validator.
      */
-    function increaseStake(
-        address validator
-    ) public payable checkStake(msg.value) {
-        StakerNative(address(this)).native_increaseStake(
-            validator,
-            msg.sender,
-            msg.value
-        );
+    function increaseStake(address validator) public payable checkStake(msg.value) stakerNotPaused {
+        StakerNative(address(this)).native_increaseStake(validator, msg.sender, msg.value);
 
         emit StakeIncreased(validator, msg.value);
     }
@@ -76,12 +64,8 @@ contract Staker {
     /**
      * @dev setBeneficiary sets the beneficiary address for a validator.
      */
-    function setBeneficiary(address validator, address beneficiary) public {
-        StakerNative(address(this)).native_setBeneficiary(
-            validator,
-            msg.sender,
-            beneficiary
-        );
+    function setBeneficiary(address validator, address beneficiary) public stakerNotPaused {
+        StakerNative(address(this)).native_setBeneficiary(validator, msg.sender, beneficiary);
 
         emit BeneficiarySet(validator, msg.sender, beneficiary);
     }
@@ -92,12 +76,8 @@ contract Staker {
     function decreaseStake(
         address validator,
         uint256 amount
-    ) public checkStake(amount) {
-        StakerNative(address(this)).native_decreaseStake(
-            validator,
-            msg.sender,
-            amount
-        );
+    ) public checkStake(amount) stakerNotPaused {
+        StakerNative(address(this)).native_decreaseStake(validator, msg.sender, amount);
 
         emit StakeDecreased(validator, amount);
     }
@@ -105,11 +85,8 @@ contract Staker {
     /**
      * @dev allows the caller to withdraw a stake when their status is set to exited
      */
-    function withdrawStake(address validator) public {
-        uint256 stake = StakerNative(address(this)).native_withdrawStake(
-            validator,
-            msg.sender
-        );
+    function withdrawStake(address validator) public stakerNotPaused {
+        uint256 stake = StakerNative(address(this)).native_withdrawStake(validator, msg.sender);
 
         (bool success, ) = msg.sender.call{value: stake}("");
         require(success, "Transfer failed");
@@ -119,7 +96,7 @@ contract Staker {
     /**
      * @dev signalExit signals the intent to exit a validator position at the end of the staking period.
      */
-    function signalExit(address validator) public {
+    function signalExit(address validator) public stakerNotPaused {
         StakerNative(address(this)).native_signalExit(validator, msg.sender);
         emit ValidationSignaledExit(validator);
     }
@@ -135,6 +112,7 @@ contract Staker {
         payable
         onlyDelegatorContract
         checkStake(msg.value)
+        delegatorNotPaused
         returns (uint256)
     {
         uint256 delegationID = StakerNative(address(this)).native_addDelegation(
@@ -152,7 +130,7 @@ contract Staker {
      */
     function signalDelegationExit(
         uint256 delegationID
-    ) public onlyDelegatorContract {
+    ) public onlyDelegatorContract delegatorNotPaused {
         StakerNative(address(this)).native_signalDelegationExit(delegationID);
         emit DelegationSignaledExit(delegationID);
     }
@@ -162,10 +140,8 @@ contract Staker {
      */
     function withdrawDelegation(
         uint256 delegationID
-    ) public onlyDelegatorContract {
-        (uint256 stake) = StakerNative(address(this)).native_withdrawDelegation(
-            delegationID
-        );
+    ) public onlyDelegatorContract delegatorNotPaused {
+        uint256 stake = StakerNative(address(this)).native_withdrawDelegation(delegationID);
 
         emit DelegationWithdrawn(delegationID, stake);
         (bool success, ) = msg.sender.call{value: stake}("");
@@ -179,8 +155,7 @@ contract Staker {
     function getDelegationStake(
         uint256 delegationID
     ) public view returns (address, uint256, uint8) {
-        return
-            StakerNative(address(this)).native_getDelegationStake(delegationID);
+        return StakerNative(address(this)).native_getDelegationStake(delegationID);
     }
 
     /**
@@ -190,10 +165,7 @@ contract Staker {
     function getDelegationPeriodDetails(
         uint256 delegationID
     ) public view returns (uint32, uint32, bool) {
-        return
-            StakerNative(address(this)).native_getDelegationPeriodDetails(
-                delegationID
-            );
+        return StakerNative(address(this)).native_getDelegationPeriodDetails(delegationID);
     }
 
     /**
@@ -210,9 +182,7 @@ contract Staker {
      * @dev get returns the validator status. status and offline / online for a validator.
      * @return (status, online status, block when the validator went offline (max value if online))
      */
-    function getValidatorStatus(
-        address validator
-    ) public view returns (uint8, bool, uint32) {
+    function getValidatorStatus(address validator) public view returns (uint8, bool, uint32) {
         return StakerNative(address(this)).native_getValidatorStatus(validator);
     }
 
@@ -223,10 +193,7 @@ contract Staker {
     function getValidatorPeriodDetails(
         address validator
     ) public view returns (uint32, uint32, uint32, uint32) {
-        return
-            StakerNative(address(this)).native_getValidatorPeriodDetails(
-                validator
-            );
+        return StakerNative(address(this)).native_getValidatorPeriodDetails(validator);
     }
 
     /**
@@ -264,22 +231,13 @@ contract Staker {
         address validator,
         uint32 stakingPeriod
     ) public view returns (uint256) {
-        return
-            StakerNative(address(this)).native_getDelegatorsRewards(
-                validator,
-                stakingPeriod
-            );
+        return StakerNative(address(this)).native_getDelegatorsRewards(validator, stakingPeriod);
     }
 
     function getValidationTotals(
         address validator
-    )
-        public
-        view
-        returns (uint256, uint256, uint256, uint256, uint256, uint256)
-    {
-        return
-            StakerNative(address(this)).native_getValidationTotals(validator);
+    ) public view returns (uint256, uint256, uint256, uint256, uint256, uint256) {
+        return StakerNative(address(this)).native_getValidationTotals(validator);
     }
 
     function getValidatorsNum() public view returns (uint256, uint256) {
@@ -296,25 +254,37 @@ contract Staker {
     }
 
     modifier onlyDelegatorContract() {
-        address expected = StakerNative(address(this))
-            .native_getDelegatorContract();
+        address expected = StakerNative(address(this)).native_getDelegatorContract();
 
-        require(msg.sender == expected, "builtin: only delegator");
+        require(msg.sender == expected, "staker:only delegator");
         _;
     }
 
     modifier checkStake(uint256 amount) {
-        require(amount > 0, "stake is empty");
-        require(amount % 1e18 == 0, "stake is not multiple of 1VET");
+        require(amount > 0, "staker: stake is empty");
+        require(amount % 1e18 == 0, "staker: stake is not multiple of 1VET");
+        _;
+    }
+
+    modifier stakerNotPaused() {
+        uint256 switches = StakerNative(address(this)).native_getControlSwitches();
+        require((switches & STAKER_PAUSED_BIT) == 0, "staker: staker is paused");
+        _;
+    }
+
+    modifier delegatorNotPaused() {
+        uint256 switches = StakerNative(address(this)).native_getControlSwitches();
+        require((switches & STAKER_PAUSED_BIT) == 0, "staker: staker is paused");
+        require((switches & DELEGATOR_PAUSED_BIT) == 0, "staker: delegator is paused");
         _;
     }
 
     receive() external payable {
-        revert("receive function not allowed");
+        revert("staker: receive function not allowed");
     }
 
     fallback() external {
-        revert("fallback function not allowed");
+        revert("staker: fallback function not allowed");
     }
 }
 
@@ -327,11 +297,7 @@ interface StakerNative {
         uint256 stake
     ) external;
 
-    function native_increaseStake(
-        address validator,
-        address endorser,
-        uint256 amount
-    ) external;
+    function native_increaseStake(address validator, address endorser, uint256 amount) external;
 
     function native_setBeneficiary(
         address validator,
@@ -339,16 +305,9 @@ interface StakerNative {
         address beneficiary
     ) external;
 
-    function native_decreaseStake(
-        address validator,
-        address endorser,
-        uint256 amount
-    ) external;
+    function native_decreaseStake(address validator, address endorser, uint256 amount) external;
 
-    function native_withdrawStake(
-        address validator,
-        address endorser
-    ) external returns (uint256);
+    function native_withdrawStake(address validator, address endorser) external returns (uint256);
 
     function native_signalExit(address validator, address endorser) external;
 
@@ -358,9 +317,7 @@ interface StakerNative {
         uint8 multiplier
     ) external returns (uint256);
 
-    function native_withdrawDelegation(
-        uint256 delegationID
-    ) external returns (uint256);
+    function native_withdrawDelegation(uint256 delegationID) external returns (uint256);
 
     function native_signalDelegationExit(uint256 delegationID) external;
 
@@ -389,9 +346,7 @@ interface StakerNative {
         address validator
     ) external view returns (uint32, uint32, uint32, uint32);
 
-    function native_getWithdrawable(
-        address validator
-    ) external view returns (uint256);
+    function native_getWithdrawable(address validator) external view returns (uint256);
 
     function native_firstActive() external view returns (address);
 
@@ -408,12 +363,11 @@ interface StakerNative {
 
     function native_getValidationTotals(
         address validator
-    )
-        external
-        view
-        returns (uint256, uint256, uint256, uint256, uint256, uint256);
+    ) external view returns (uint256, uint256, uint256, uint256, uint256, uint256);
 
     function native_getValidatorsNum() external view returns (uint256, uint256);
 
     function native_issuance() external view returns (uint256);
+
+    function native_getControlSwitches() external view returns (uint256);
 }

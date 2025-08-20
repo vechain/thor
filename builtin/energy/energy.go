@@ -289,7 +289,7 @@ func (e *Energy) DistributeRewards(beneficiary, signer thor.Address, staker stak
 		proposerReward.Mul(proposerReward, validatorRewardPerc)
 		proposerReward.Div(proposerReward, big.NewInt(100))
 
-		val, err := e.params.Get(thor.KeyStargateContractAddress)
+		val, err := e.params.Get(thor.KeyDelegatorContractAddress)
 		if err != nil {
 			return err
 		}
