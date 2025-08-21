@@ -69,10 +69,10 @@ Sync time from genesis to the latest mainnet block depends on hardware, configur
 
 ## Installation
 
-Use either the source or Docker instructions below to start a mainnet full node. Becoming a validator requires additional steps, 
+Use either the source or Docker instructions below to start a mainnet full node with the logs and pruner enabled. Becoming a validator requires additional steps, 
 meeting the endorsement criteria and being voted in. See [Becoming a Validator](#) for more details.
 
-The thor build, below, uses minimal configuration options, both the logs and pruner enabled. For more configuration options, see [Command Line Arguments](#).
+For more configuration options, see [Command Line Arguments](#), and for a full description of the nodes types, see [Node Types](#).
 
 ### Build and Run from Source
 
