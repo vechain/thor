@@ -372,6 +372,7 @@ func testEventsEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) {
 	// 1. Test POST /events (Filter events)
 	t.Run("FilterEvents", func(t *testing.T) {
 		// Define the payload for filtering events
+		limit := uint64(10)
 		payload := &api.EventFilter{
 			CriteriaSet: []*api.EventCriteria{
 				{
@@ -384,7 +385,7 @@ func testEventsEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) {
 			Range: nil,
 			Options: &api.Options{
 				Offset: 0,
-				Limit:  10,
+				Limit:  &limit,
 			},
 			Order: "",
 		}
