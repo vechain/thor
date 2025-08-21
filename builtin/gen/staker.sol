@@ -150,19 +150,21 @@ contract Staker {
      */
     function getDelegation(
         uint256 delegationID
-     ) public view returns (address validator, uint256 stake, uint8 multiplier, bool isLocked) {
-        (validator, stake, multiplier, isLocked, , ) = StakerNative(
-            address(this)
-        ).native_getDelegation(delegationID);
+    ) public view returns (address validator, uint256 stake, uint8 multiplier, bool isLocked) {
+        (validator, stake, multiplier, isLocked, , ) = StakerNative(address(this))
+            .native_getDelegation(delegationID);
         return (validator, stake, multiplier, isLocked);
     }
 
     /**
      * @dev getDelegationPeriodDetails returns the start, end period and isLocked status of a delegation.
      */
-    function getDelegationPeriodDetails(uint256 delegationID ) public view returns (uint32 startPeriod, uint32 endPeriod) {
-        (, , , ,  startPeriod,  endPeriod) = StakerNative(address(this))
-            .native_getDelegation(delegationID);
+    function getDelegationPeriodDetails(
+        uint256 delegationID
+    ) public view returns (uint32 startPeriod, uint32 endPeriod) {
+        (, , , , startPeriod, endPeriod) = StakerNative(address(this)).native_getDelegation(
+            delegationID
+        );
         return (startPeriod, endPeriod);
     }
 
@@ -171,19 +173,21 @@ contract Staker {
      */
     function getValidation(
         address validator
-    ) public view returns (address endorser, uint256 stake, uint256 weight, uint256 queuedStake, uint8 status, uint32 offlineBlock) {
-        (
-             endorser,
-             stake,
-             weight,
-             queuedStake,
-             status,
-             offlineBlock,
-            ,
-            ,
-            ,
-
-        ) = StakerNative(address(this)).native_getValidation(validator);
+    )
+        public
+        view
+        returns (
+            address endorser,
+            uint256 stake,
+            uint256 weight,
+            uint256 queuedStake,
+            uint8 status,
+            uint32 offlineBlock
+        )
+    {
+        (endorser, stake, weight, queuedStake, status, offlineBlock, , , , ) = StakerNative(
+            address(this)
+        ).native_getValidation(validator);
         return (endorser, stake, weight, queuedStake, status, offlineBlock);
     }
 
@@ -192,19 +196,13 @@ contract Staker {
      */
     function getValidationPeriodDetails(
         address validator
-    ) public view returns (uint32 period, uint32 startBlock, uint32 exitBlock, uint32 completedPeriods) {
-        (
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-             period,
-             startBlock,
-             exitBlock,
-             completedPeriods
-        ) = StakerNative(address(this)).native_getValidation(validator);
+    )
+        public
+        view
+        returns (uint32 period, uint32 startBlock, uint32 exitBlock, uint32 completedPeriods)
+    {
+        (, , , , , , period, startBlock, exitBlock, completedPeriods) = StakerNative(address(this))
+            .native_getValidation(validator);
         return (period, startBlock, exitBlock, completedPeriods);
     }
 
@@ -252,7 +250,18 @@ contract Staker {
      */
     function getValidationTotals(
         address validator
-    ) public view returns (uint256 lockedVET, uint256 lockedWeight, uint256 queuedVET, uint256 queuedWeight, uint256 exitingVET, uint256 exitingWeight) {
+    )
+        public
+        view
+        returns (
+            uint256 lockedVET,
+            uint256 lockedWeight,
+            uint256 queuedVET,
+            uint256 queuedWeight,
+            uint256 exitingVET,
+            uint256 exitingWeight
+        )
+    {
         return StakerNative(address(this)).native_getValidationTotals(validator);
     }
 
@@ -345,7 +354,7 @@ interface StakerNative {
 
     function native_getDelegation(
         uint256 delegationID
-    ) external view returns (address, uint256, uint8, bool,uint32, uint32);
+    ) external view returns (address, uint256, uint8, bool, uint32, uint32);
 
     function native_getValidation(
         address validator
