@@ -191,10 +191,8 @@ func createSequence(proposers []*onlineProposer, seed []byte, parentNum uint32) 
 		// Convert weight from wei to a manageable float value
 		weight := new(big.Float).SetInt(proposer.validation.Weight)
 		weight = weight.Quo(weight, bigE18)
+		// the scheduler relies on the staker to have healthy validator weights
 		weightFloat, _ := weight.Float64()
-		if weightFloat < 1 {
-			weightFloat = 1 // Ensure a minimum weight threshold
-		}
 
 		// Generate random value and calculate priority using exponential distribution
 		randomValue := randomSource.Float64()
