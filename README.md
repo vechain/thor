@@ -33,11 +33,9 @@
 
 # Thor: The VeChainThor Client
 
-Thor is the official Golang client for VeChainThor, the public blockchain powering the VeChain ecosystem.  
-VeChainThor is designed for real-world adoption, enabling scalable, low-cost, and sustainable applications.
+Thor is the official Golang client for VeChainThor, the public blockchain powering the VeChain ecosystem. VeChainThor is designed for real-world adoption, enabling scalable, low-cost, and sustainable applications.
 
-> VeChainThor is currently up-to-date with the EVM's `shanghai` hardfork.  
-> Set [`evmVersion`](https://docs.soliditylang.org/en/latest/using-the-compiler.html#setting-the-evm-version-to-target) to `shanghai` if you are using Solidity compiler version `0.8.25` or above.
+> VeChainThor is currently up-to-date with the EVM's `shanghai` hardfork. Set [`evmVersion`](https://docs.soliditylang.org/en/latest/using-the-compiler.html#setting-the-evm-version-to-target) to `shanghai` if you are using Solidity compiler version `0.8.25` or above.
 
 ## Hardware Requirements
 
@@ -165,12 +163,12 @@ Thor will begin syncing the mainnet and can be accessed at [http://localhost:866
 ## Contributing
 
 Contributions are welcome and appreciated!  
+
 Please review our [Contribution Guidelines](https://github.com/vechain/thor/blob/master/docs/CONTRIBUTING.md) before submitting a PR.
 
 ## Security
 
-If you discover a security vulnerability, please report it according to our  
-[Security Policy](https://github.com/vechain/thor/blob/master/docs/SECURITY.md).
+If you discover a security vulnerability, please report it according to our [Security Policy](https://github.com/vechain/thor/blob/master/docs/SECURITY.md).
 
 ## Acknowledgements
 
