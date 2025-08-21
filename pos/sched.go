@@ -9,14 +9,12 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"math"
 	"math/big"
 	"math/rand"
 	"slices"
 	"sort"
 
-	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -58,9 +56,6 @@ func NewScheduler(
 	var num [4]byte
 	binary.BigEndian.PutUint32(num[:], parentBlockNumber)
 
-	maxWeight := new(big.Int).Mul(staker.MaxStake, big.NewInt(2))
-	minWeight := new(big.Int).Mul(staker.MinStake, big.NewInt(2))
-
 	online := make([]*onlineProposer, 0)
 	for id, p := range proposers {
 		if id == addr {
@@ -68,18 +63,6 @@ func NewScheduler(
 			proposerID = id
 		}
 		if p.OfflineBlock == nil || id == addr {
-			// ensure staker must have a minimum stake
-			if p.Weight.Cmp(minWeight) < 0 {
-				return nil, fmt.Errorf("validator %v has insufficient stake: %v wei, minimum required: %v wei",
-					id, p.Weight, minWeight)
-			}
-
-			// ensure staker does not exceed maximum stake (including delegations)
-			if p.Weight.Cmp(maxWeight) > 0 {
-				return nil, fmt.Errorf("validator %v has excessive stake: %v wei, maximum allowed: %v wei",
-					id, p.Weight, maxWeight)
-			}
-
 			online = append(online, &onlineProposer{
 				id:         id,
 				validation: p,
@@ -208,6 +191,7 @@ func createSequence(proposers []*onlineProposer, seed []byte, parentNum uint32) 
 		// Convert weight from wei to a manageable float value
 		weight := new(big.Float).SetInt(proposer.validation.Weight)
 		weight = weight.Quo(weight, bigE18)
+		// the scheduler relies on the staker to have healthy validator weights
 		weightFloat, _ := weight.Float64()
 
 		// Generate random value and calculate priority using exponential distribution
