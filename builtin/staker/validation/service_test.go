@@ -43,6 +43,10 @@ func poisonValidationSlot(st *state.State, contract thor.Address, id thor.Addres
 	st.SetRawStorage(contract, slot, rlp.RawValue{0xFF})
 }
 
+func poisonQueueSlot(st *state.State, contract thor.Address) {
+	st.SetRawStorage(contract, slotQueuedGroupSize, rlp.RawValue{0xFF})
+}
+
 func TestService_SetGetValidation_RoundTrip(t *testing.T) {
 	svc, _, _ := newSvc()
 
@@ -629,4 +633,221 @@ func TestService_GetCompletedPeriods(t *testing.T) {
 	periods, err := svc.GetCompletedPeriods(a1)
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(0), periods)
+}
+
+func TestService_GetQueuedAndLeaderGroups(t *testing.T) {
+	svc, _, _ := newSvc()
+
+	a1 := thor.BytesToAddress([]byte("a1"))
+	a2 := thor.BytesToAddress([]byte("a2"))
+	a3 := thor.BytesToAddress([]byte("a3"))
+	for _, id := range []thor.Address{a1, a2, a3} {
+		assert.NoError(t, svc.Add(id, id, thor.LowStakingPeriod(), big.NewInt(1)))
+	}
+
+	queuedCnt, err := svc.QueuedGroupSize()
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(3), queuedCnt)
+
+	leaderCnt, err := svc.LeaderGroupSize()
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0).String(), leaderCnt.String())
+
+	idPtr, err := svc.NextToActivate(big.NewInt(10))
+	assert.NoError(t, err)
+	assert.Equal(t, a1, *idPtr)
+	_, err = svc.ActivateValidator(*idPtr, 1, &delta.Renewal{NewLockedWeight: big.NewInt(0)})
+	assert.NoError(t, err)
+
+	queuedCnt, err = svc.QueuedGroupSize()
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(2), queuedCnt)
+
+	leaderCnt, err = svc.LeaderGroupSize()
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(1), leaderCnt)
+
+	val, err := svc.GetLeaderGroupHead()
+	assert.NoError(t, err)
+	assert.Equal(t, a1, val.Endorser)
+	assert.Nil(t, val.Beneficiary)
+	assert.Equal(t, big.NewInt(1), val.LockedVET)
+	assert.Equal(t, big.NewInt(1), val.Weight)
+	assert.Equal(t, thor.LowStakingPeriod(), val.Period)
+	assert.Equal(t, uint32(0), val.CompleteIterations)
+	assert.Equal(t, StatusActive, val.Status)
+	assert.Equal(t, uint32(1), val.StartBlock)
+	assert.Nil(t, val.ExitBlock)
+	assert.Nil(t, val.OfflineBlock)
+	assert.Equal(t, big.NewInt(0), val.PendingUnlockVET)
+	assert.Equal(t, big.NewInt(0), val.QueuedVET)
+	assert.Equal(t, big.NewInt(0), val.CooldownVET)
+	assert.Equal(t, big.NewInt(0), val.WithdrawableVET)
+}
+
+func TestService_Add_Error(t *testing.T) {
+	svc, addr, st := newSvc()
+	id1 := thor.BytesToAddress([]byte("id1"))
+	id2 := thor.BytesToAddress([]byte("id2"))
+
+	assert.ErrorContains(t, svc.Add(id1, id1, uint32(1), big.NewInt(1)), "period is out of boundaries")
+	assert.ErrorContains(t, svc.Add(id1, id1, thor.LowStakingPeriod(), big.NewInt(0)), "stake is out of range")
+	assert.NoError(t, svc.Add(id1, id1, thor.LowStakingPeriod(), big.NewInt(1)))
+	assert.ErrorContains(t, svc.Add(id1, id1, thor.LowStakingPeriod(), big.NewInt(1)), "validator already exists")
+
+	poisonValidationSlot(st, addr, id1)
+	assert.Error(t, svc.Add(id1, id1, thor.LowStakingPeriod(), big.NewInt(1)))
+
+	slot := thor.Blake2b(id1.Bytes(), slotValidations.Bytes())
+	st.SetRawStorage(addr, slot, rlp.RawValue{0x0})
+	poisonQueueSlot(st, addr)
+	assert.Error(t, svc.Add(id2, id2, thor.LowStakingPeriod(), big.NewInt(1)))
+}
+
+func TestService_Evict(t *testing.T) {
+	svc, addr, st := newSvc()
+	id1 := thor.BytesToAddress([]byte("id1"))
+
+	assert.NoError(t, svc.Add(id1, id1, thor.LowStakingPeriod(), big.NewInt(1)))
+
+	assert.NoError(t, svc.Evict(id1, 5))
+	val, err := svc.GetValidation(id1)
+	assert.NoError(t, err)
+	expectedExitBlock := uint32(5) + thor.EpochLength()
+	assert.Equal(t, &expectedExitBlock, val.ExitBlock)
+
+	assert.NoError(t, svc.Evict(id1, 7))
+	val, err = svc.GetValidation(id1)
+	assert.NoError(t, err)
+	assert.Equal(t, &expectedExitBlock, val.ExitBlock)
+
+	poisonExitSlot(st, addr, 7+thor.EpochLength())
+	assert.Error(t, svc.Evict(id1, 7))
+
+	poisonValidationSlot(st, addr, id1)
+	assert.Error(t, svc.Evict(id1, 8))
+}
+
+func TestService_SetBeneficiary(t *testing.T) {
+	svc, addr, st := newSvc()
+	id1 := thor.BytesToAddress([]byte("id1"))
+	assert.NoError(t, svc.Add(id1, id1, thor.LowStakingPeriod(), big.NewInt(1)))
+
+	val, err := svc.GetValidation(id1)
+	assert.NoError(t, err)
+	assert.Nil(t, val.Beneficiary)
+
+	assert.NoError(t, svc.SetBeneficiary(id1, id1, id1))
+	val, err = svc.GetValidation(id1)
+	assert.NoError(t, err)
+	assert.Equal(t, &id1, val.Beneficiary)
+
+	assert.NoError(t, svc.SetBeneficiary(id1, id1, thor.Address{}))
+	val, err = svc.GetValidation(id1)
+	assert.NoError(t, err)
+	assert.Nil(t, val.Beneficiary)
+
+	assert.ErrorContains(t, svc.SetBeneficiary(id1, thor.Address{}, id1), "invalid endorser")
+	assert.NoError(t, svc.Evict(id1, 2))
+	assert.ErrorContains(t, svc.SetBeneficiary(id1, id1, id1), "validator has exited or signaled exit, cannot set beneficiary")
+
+	poisonValidationSlot(st, addr, id1)
+	assert.Error(t, svc.SetBeneficiary(id1, id1, id1))
+}
+
+func TestService_UpdateOfflineBlock(t *testing.T) {
+	svc, _, _ := newSvc()
+
+	id1 := thor.BytesToAddress([]byte("id1"))
+	assert.NoError(t, svc.Add(id1, id1, thor.LowStakingPeriod(), big.NewInt(1)))
+
+	val, err := svc.GetValidation(id1)
+	assert.NoError(t, err)
+	assert.Nil(t, val.OfflineBlock)
+
+	assert.NoError(t, svc.UpdateOfflineBlock(id1, 2, false))
+
+	expectedOfflineBlk := uint32(2)
+	val, err = svc.GetValidation(id1)
+	assert.NoError(t, err)
+	assert.Equal(t, &expectedOfflineBlk, val.OfflineBlock)
+
+	assert.NoError(t, svc.UpdateOfflineBlock(id1, 2, true))
+
+	val, err = svc.GetValidation(id1)
+	assert.NoError(t, err)
+	assert.Nil(t, val.OfflineBlock)
+}
+
+func TestService_Renew(t *testing.T) {
+	svc, _, _ := newSvc()
+
+	id1 := thor.BytesToAddress([]byte("id1"))
+	assert.NoError(t, svc.Add(id1, id1, thor.LowStakingPeriod(), big.NewInt(50)))
+
+	err := svc.IncreaseStake(id1, id1, big.NewInt(600))
+	assert.NoError(t, err)
+	_, err = svc.DecreaseStake(id1, id1, big.NewInt(300))
+	assert.NoError(t, err)
+
+	val, err := svc.GetValidation(id1)
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0), val.LockedVET)
+	assert.Equal(t, big.NewInt(0), val.Weight)
+	assert.Equal(t, big.NewInt(0), val.PendingUnlockVET)
+	assert.Equal(t, big.NewInt(350), val.QueuedVET)
+	assert.Equal(t, big.NewInt(0), val.CooldownVET)
+	assert.Equal(t, big.NewInt(300), val.WithdrawableVET)
+
+	renewal := delta.Renewal{
+		NewLockedVET:         big.NewInt(1000),
+		NewLockedWeight:      big.NewInt(1500),
+		QueuedDecrease:       big.NewInt(100),
+		QueuedDecreaseWeight: big.NewInt(15),
+	}
+	delta, err := svc.Renew(id1, &renewal, false)
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(350), delta.NewLockedVET)
+	assert.Equal(t, big.NewInt(350), delta.NewLockedWeight)
+	assert.Equal(t, big.NewInt(350), delta.QueuedDecrease)
+	assert.Equal(t, big.NewInt(350), delta.QueuedDecreaseWeight)
+
+	val, err = svc.GetValidation(id1)
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(350), val.LockedVET)
+	assert.Equal(t, big.NewInt(1850), val.Weight)
+	assert.Equal(t, big.NewInt(0), val.PendingUnlockVET)
+	assert.Equal(t, big.NewInt(0), val.QueuedVET)
+	assert.Equal(t, big.NewInt(0), val.CooldownVET)
+	assert.Equal(t, big.NewInt(300), val.WithdrawableVET)
+
+	err = svc.IncreaseStake(id1, id1, big.NewInt(400))
+	assert.NoError(t, err)
+	_, err = svc.DecreaseStake(id1, id1, big.NewInt(200))
+	assert.NoError(t, err)
+
+	val, err = svc.GetValidation(id1)
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(350), val.LockedVET)
+	assert.Equal(t, big.NewInt(1850), val.Weight)
+	assert.Equal(t, big.NewInt(0), val.PendingUnlockVET)
+	assert.Equal(t, big.NewInt(200), val.QueuedVET)
+	assert.Equal(t, big.NewInt(0), val.CooldownVET)
+	assert.Equal(t, big.NewInt(500), val.WithdrawableVET)
+
+	delta, err = svc.Renew(id1, &renewal, true)
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(200), delta.NewLockedVET)
+	assert.Equal(t, big.NewInt(200), delta.NewLockedWeight)
+	assert.Equal(t, big.NewInt(200), delta.QueuedDecrease)
+	assert.Equal(t, big.NewInt(200), delta.QueuedDecreaseWeight)
+
+	val, err = svc.GetValidation(id1)
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(550), val.LockedVET)
+	assert.Equal(t, big.NewInt(3550), val.Weight)
+	assert.Equal(t, big.NewInt(0), val.PendingUnlockVET)
+	assert.Equal(t, big.NewInt(0), val.QueuedVET)
+	assert.Equal(t, big.NewInt(0), val.CooldownVET)
+	assert.Equal(t, big.NewInt(500), val.WithdrawableVET)
 }
