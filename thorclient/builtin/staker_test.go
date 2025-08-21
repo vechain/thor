@@ -128,25 +128,20 @@ func TestStaker(t *testing.T) {
 	// GetStake
 	_, firstID, err := staker.FirstActive()
 	require.NoError(t, err)
-	getStakeRes, err := staker.GetValidatorStake(firstID)
+	getStakeRes, err := staker.GetValidation(firstID)
 	require.NoError(t, err)
 	require.False(t, getStakeRes.Address.IsZero())
 	require.False(t, getStakeRes.Endorser.IsZero())
 	require.Equal(t, getStakeRes.Stake, minStake)
 	require.Equal(t, getStakeRes.Weight, minStake)
 	require.Equal(t, getStakeRes.QueuedStake.String(), big.NewInt(0).String())
-
-	// GetStatus
-	getStatusRes, err := staker.GetValidatorStatus(firstID)
-	require.NoError(t, err)
-	require.Equal(t, firstID, getStatusRes.Address)
-	require.Equal(t, StakerStatusActive, getStatusRes.Status)
-	require.True(t, getStatusRes.Online)
-	require.True(t, getStakeRes.Exists(*getStatusRes))
-	require.Equal(t, uint32(math.MaxUint32), getStatusRes.OfflineBlock)
+	require.True(t, getStakeRes.Exists())
+	require.Equal(t, uint32(math.MaxUint32), getStakeRes.OfflineBlock)
+	require.Equal(t, StakerStatusActive, getStakeRes.Status)
+	require.True(t, getStakeRes.IsOnline())
 
 	// GetPeriodDetails
-	getPeriodDetailsRes, err := staker.GetValidatorPeriodDetails(firstID)
+	getPeriodDetailsRes, err := staker.GetValidationPeriodDetails(firstID)
 	require.NoError(t, err)
 	require.Equal(t, firstID, getPeriodDetailsRes.Address)
 	require.Equal(t, minStakingPeriod, getPeriodDetailsRes.Period)
@@ -158,7 +153,7 @@ func TestStaker(t *testing.T) {
 	firstActive, firstID, err := staker.FirstActive()
 	require.NoError(t, err)
 	require.False(t, firstID.IsZero())
-	require.True(t, firstActive.Exists(*getStatusRes))
+	require.True(t, firstActive.Exists())
 	require.Equal(t, minStake, firstActive.Stake)
 	require.Equal(t, minStake, firstActive.Weight)
 	require.False(t, firstActive.Endorser.IsZero())
@@ -167,8 +162,8 @@ func TestStaker(t *testing.T) {
 	next, id, err := staker.Next(firstID)
 	require.NoError(t, err)
 	require.False(t, id.IsZero())
-	nextStatus, err := staker.GetValidatorStatus(next.Address)
-	require.True(t, next.Exists(*nextStatus))
+	nextStatus, err := staker.GetValidation(next.Address)
+	require.True(t, next.Exists())
 	require.NoError(t, err)
 	require.Equal(t, StakerStatusActive, nextStatus.Status)
 	require.Equal(t, minStake, next.Stake)
@@ -199,9 +194,9 @@ func TestStaker(t *testing.T) {
 	firstQueued, id, err := staker.FirstQueued()
 	require.NoError(t, err)
 	require.False(t, id.IsZero())
-	firstQueuedStatus, err := staker.GetValidatorStatus(firstQueued.Address)
+	firstQueuedStatus, err := staker.GetValidation(firstQueued.Address)
 	require.NoError(t, err)
-	require.True(t, firstQueued.Exists(*firstQueuedStatus))
+	require.True(t, firstQueued.Exists())
 	require.Equal(t, 0, firstQueued.Stake.Sign())
 	require.Equal(t, StakerStatusQueued, firstQueuedStatus.Status)
 	require.False(t, firstQueued.Endorser.IsZero())
@@ -270,18 +265,18 @@ func TestStaker(t *testing.T) {
 	delegationID := delegationEvents[0].DelegationID
 
 	// GetDelegationStake
-	delegationStake, err := staker.GetDelegationStake(delegationID)
+	delegationStake, err := staker.GetDelegation(delegationID)
 	require.NoError(t, err)
 	require.Equal(t, minStake, delegationStake.Stake)
 	require.Equal(t, uint8(100), delegationStake.Multiplier)
 	require.Equal(t, queuedID, delegationStake.Validator)
+	require.False(t, delegationStake.Locked)
 
 	// GetDelegationPeriodDetails
 	delegationPeriodDetails, err := staker.GetDelegationPeriodDetails(delegationID)
 	require.NoError(t, err)
 	require.Equal(t, uint32(1), delegationPeriodDetails.StartPeriod)
 	require.Equal(t, uint32(math.MaxUint32), delegationPeriodDetails.EndPeriod)
-	require.False(t, delegationPeriodDetails.Locked)
 
 	// GetValidatorsTotals
 	validationTotals, err := staker.GetValidationTotals(firstID)
@@ -294,8 +289,8 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, big.NewInt(0).String(), validationTotals.TotalExitingStake.String())
 	require.Equal(t, big.NewInt(0).String(), validationTotals.TotalExitingWeight.String())
 
-	// GetValidatorsNum
-	active, queued, err := staker.GetValidatorsNum()
+	// GetValidationsNum
+	active, queued, err := staker.GetValidationsNum()
 	require.NoError(t, err)
 	require.Equal(t, big.NewInt(2), active)
 	require.Equal(t, big.NewInt(1), queued)
@@ -323,7 +318,7 @@ func TestStaker(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, withdrawEvents, 1)
 
-	getStatusRes, err = staker.GetValidatorStatus(queuedID)
+	getStatusRes, err := staker.GetValidation(queuedID)
 	require.NoError(t, err)
 	require.Equal(t, StakerStatusExited, getStatusRes.Status)
 
@@ -337,7 +332,7 @@ func TestStaker(t *testing.T) {
 	require.Len(t, withdrawDelegationEvents, 1)
 
 	// GetDelegation after withdrawal
-	delegationStake, err = staker.GetDelegationStake(delegationID)
+	delegationStake, err = staker.GetDelegation(delegationID)
 	require.NoError(t, err)
 	require.Equal(t, big.NewInt(0).Cmp(delegationStake.Stake), 0)
 
@@ -376,7 +371,6 @@ func TestStaker(t *testing.T) {
 	require.Len(t, beneficiaryEvents, 1)
 	require.Equal(t, validator1.Address(), beneficiaryEvents[0].Validator)
 	require.Equal(t, beneficiary, beneficiaryEvents[0].Beneficiary)
-	require.Equal(t, validator1.Address(), beneficiaryEvents[0].Endorser)
 }
 
 func TestStaker_Raw_MinStake_And_EmptyQueues(t *testing.T) {
@@ -402,9 +396,8 @@ func TestStaker_Raw_MinStake_And_EmptyQueues(t *testing.T) {
 }
 
 func TestValidatorStake_Exists_False(t *testing.T) {
-	status := ValidatorStatus{Status: StakerStatusUnknown}
-	v := &ValidatorStake{Endorser: thor.Address{}}
-	require.False(t, v.Exists(status))
+	v := Validation{Endorser: thor.Address{}, Status: StakerStatusUnknown}
+	require.False(t, v.Exists())
 }
 
 func TestStaker_Filter_EventNotFound(t *testing.T) {
@@ -455,15 +448,14 @@ func TestStaker_NegativeMatrix_MethodNotFound(t *testing.T) {
 	}{
 		{"TotalStake", func() error { _, _, err := bad.TotalStake(); return err }},
 		{"QueuedStake", func() error { _, _, err := bad.QueuedStake(); return err }},
-		{"GetValidatorStake", func() error { _, err := bad.GetValidatorStake(nodeAddr); return err }},
-		{"GetValidatorStatus", func() error { _, err := bad.GetValidatorStatus(nodeAddr); return err }},
-		{"GetValidatorPeriodDetails", func() error { _, err := bad.GetValidatorPeriodDetails(nodeAddr); return err }},
+		{"GetValidation", func() error { _, err := bad.GetValidation(nodeAddr); return err }},
+		{"GetValidationPeriodDetails", func() error { _, err := bad.GetValidationPeriodDetails(nodeAddr); return err }},
 		{"GetWithdrawable", func() error { _, err := bad.GetWithdrawable(nodeAddr); return err }},
 		{"GetDelegatorsRewards", func() error { _, err := bad.GetDelegatorsRewards(nodeAddr, 1); return err }},
-		{"GetDelegationStake", func() error { _, err := bad.GetDelegationStake(big.NewInt(1)); return err }},
+		{"GetDelegation", func() error { _, err := bad.GetDelegation(big.NewInt(1)); return err }},
 		{"GetDelegationPeriodDetails", func() error { _, err := bad.GetDelegationPeriodDetails(big.NewInt(1)); return err }},
 		{"GetValidationTotals", func() error { _, err := bad.GetValidationTotals(nodeAddr); return err }},
-		{"GetValidatorsNum", func() error { _, _, err := bad.GetValidatorsNum(); return err }},
+		{"GetValidationsNum", func() error { _, _, err := bad.GetValidationsNum(); return err }},
 		{"Issuance", func() error { _, err := bad.Issuance("best"); return err }},
 	}
 
@@ -508,15 +500,14 @@ func TestStaker_BadRevision_Reads(t *testing.T) {
 	require.Error(t, err)
 	_, _, err = s.Revision("bad").QueuedStake()
 	require.Error(t, err)
-	_, err = s.Revision("bad").GetValidatorStake(addr)
+	_, err = s.Revision("bad").GetValidation(addr)
 	require.Error(t, err)
-	_, err = s.Revision("bad").GetValidatorStatus(addr)
 	require.Error(t, err)
-	_, err = s.Revision("bad").GetValidatorPeriodDetails(addr)
+	_, err = s.Revision("bad").GetValidationPeriodDetails(addr)
 	require.Error(t, err)
 	_, err = s.Revision("bad").GetWithdrawable(addr)
 	require.Error(t, err)
-	_, _, err = s.Revision("bad").GetValidatorsNum()
+	_, _, err = s.Revision("bad").GetValidationsNum()
 	require.Error(t, err)
 	_, err = s.Issuance("bad")
 	require.Error(t, err)

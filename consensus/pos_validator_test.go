@@ -204,7 +204,7 @@ func TestConsensus_POS_MissedSlots(t *testing.T) {
 	err = setup.consensus.validateStakingProposer(blk.Header(), parent.Header, builtin.Staker.Native(st))
 	assert.NoError(t, err)
 	staker := builtin.Staker.Native(st)
-	validator, err := staker.Get(signer.Address)
+	validator, err := staker.GetValidation(signer.Address)
 	assert.NoError(t, err)
 	assert.Nil(t, validator.OfflineBlock)
 }

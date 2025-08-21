@@ -1433,14 +1433,14 @@ func TestStakerContract_Native(t *testing.T) {
 	totalNumRes := make([]any, 2)
 	totalNumRes[0] = new(*big.Int)
 	totalNumRes[1] = new(*big.Int)
-	_, err = callContractAndGetOutput(abi, "getValidatorsNum", toAddr, &totalNumRes)
+	_, err = callContractAndGetOutput(abi, "getValidationsNum", toAddr, &totalNumRes)
 	assert.NoError(t, err, "dsada")
 
 	totalBurnedBefore := new(big.Int)
 	_, err = callContractAndGetOutput(energyAbi, "totalBurned", energyAddress, &totalBurnedBefore)
 	assert.NoError(t, err)
 
-	_, err = callContractAndGetOutput(abi, "getValidatorsNum", toAddr, &totalNumRes)
+	_, err = callContractAndGetOutput(abi, "getValidationsNum", toAddr, &totalNumRes)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).Cmp(*totalNumRes[0].(**big.Int)), 0)
 	assert.Equal(t, big.NewInt(0).Cmp(*totalNumRes[1].(**big.Int)), 0)
@@ -1468,7 +1468,7 @@ func TestStakerContract_Native(t *testing.T) {
 	block, err := thorChain.GetTxBlock(trxid)
 	assert.NoError(t, err)
 
-	_, err = callContractAndGetOutput(abi, "getValidatorsNum", toAddr, &totalNumRes)
+	_, err = callContractAndGetOutput(abi, "getValidationsNum", toAddr, &totalNumRes)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).Cmp(*totalNumRes[0].(**big.Int)), 0)
 	assert.Equal(t, big.NewInt(1).Cmp(*totalNumRes[1].(**big.Int)), 0)
@@ -1498,12 +1498,15 @@ func TestStakerContract_Native(t *testing.T) {
 
 	node := master.Address
 	// getStake
-	getStakeRes := make([]any, 4)
+	getStakeRes := make([]any, 6)
 	getStakeRes[0] = new(common.Address)
 	getStakeRes[1] = new(*big.Int)
 	getStakeRes[2] = new(*big.Int)
 	getStakeRes[3] = new(*big.Int)
-	_, err = callContractAndGetOutput(abi, "getValidatorStake", toAddr, &getStakeRes, node)
+	getStakeRes[4] = new(uint8)
+	getStakeRes[5] = new(uint32)
+
+	_, err = callContractAndGetOutput(abi, "getValidation", toAddr, &getStakeRes, node)
 	assert.NoError(t, err)
 
 	expectedEndorsor := common.BytesToAddress(endorsor.Address.Bytes())
@@ -1511,17 +1514,8 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).Cmp(*getStakeRes[1].(**big.Int)), 0) // stake - should be 0 while queued
 	assert.Equal(t, big.NewInt(0).Cmp(*getStakeRes[2].(**big.Int)), 0) // weight - should be 0 while queued
 	assert.Equal(t, minStake.Cmp(*getStakeRes[3].(**big.Int)), 0)      // queue stake
-
-	// getStatus
-	getStatusRes := make([]any, 3)
-	getStatusRes[0] = new(uint8)
-	getStatusRes[1] = new(bool)
-	getStatusRes[2] = new(uint32)
-	_, err = callContractAndGetOutput(abi, "getValidatorStatus", toAddr, &getStatusRes, node)
-	assert.NoError(t, err)
-	assert.Equal(t, validation.StatusQueued, *getStatusRes[0].(*uint8))
-	assert.Equal(t, true, *getStatusRes[1].(*bool))                     // online
-	assert.Equal(t, uint32(math.MaxUint32), *getStatusRes[2].(*uint32)) // last active period
+	assert.Equal(t, validation.StatusQueued, *getStakeRes[4].(*uint8))
+	assert.Equal(t, uint32(math.MaxUint32), *getStakeRes[5].(*uint32)) // last offline block
 
 	// getPeriod
 	getPeriodRes := make([]any, 4)
@@ -1529,7 +1523,7 @@ func TestStakerContract_Native(t *testing.T) {
 	getPeriodRes[1] = new(uint32)
 	getPeriodRes[2] = new(uint32)
 	getPeriodRes[3] = new(uint32)
-	_, err = callContractAndGetOutput(abi, "getValidatorPeriodDetails", toAddr, &getPeriodRes, node)
+	_, err = callContractAndGetOutput(abi, "getValidationPeriodDetails", toAddr, &getPeriodRes, node)
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(360*24*15), *getPeriodRes[0].(*uint32))
 	assert.Equal(t, uint32(0), *getPeriodRes[1].(*uint32))              // start period
@@ -1581,7 +1575,7 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).Int64(), (*queuedStakeRes[0].(**big.Int)).Int64())
 	assert.Equal(t, big.NewInt(0).Int64(), (*queuedStakeRes[1].(**big.Int)).Int64())
 
-	_, err = callContractAndGetOutput(abi, "getValidatorsNum", toAddr, &totalNumRes)
+	_, err = callContractAndGetOutput(abi, "getValidationsNum", toAddr, &totalNumRes)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(1).Cmp(*totalNumRes[0].(**big.Int)), 0)
 	assert.Equal(t, big.NewInt(0).Cmp(*totalNumRes[1].(**big.Int)), 0)
@@ -1795,14 +1789,17 @@ func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
 
-	// getStatus
-	getStatusRes := make([]any, 3)
-	getStatusRes[0] = new(uint8)
-	getStatusRes[1] = new(bool)
-	getStatusRes[2] = new(uint32)
-	_, err = callContractAndGetOutput(abi, "getValidatorStatus", toAddr, &getStatusRes, id)
+	// getValidation
+	getRes := make([]any, 6)
+	getRes[0] = new(common.Address)
+	getRes[1] = new(*big.Int)
+	getRes[2] = new(*big.Int)
+	getRes[3] = new(*big.Int)
+	getRes[4] = new(uint8)
+	getRes[5] = new(uint32)
+	_, err = callContractAndGetOutput(abi, "getValidation", toAddr, &getRes, id)
 	assert.NoError(t, err)
-	assert.Equal(t, validation.StatusExit, *getStatusRes[0].(*uint8))
+	assert.Equal(t, validation.StatusExit, *getRes[4].(*uint8))
 
 	// firstQueued
 	firstQueuedRes := new(common.Address)
