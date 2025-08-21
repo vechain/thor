@@ -1,78 +1,8 @@
-## VechainThor Usage
+# Command Line Arguments
 
-___
+##TODO rearrange content in a more appropriate format.
 
-### Table of Contents
 
-- [Running from source](#running-from-source)
-- [Running a discovery node](#running-a-discovery-node)
-- [Running with Docker](#running-with-docker)
-- [Docker Compose](#docker-compose)
-- [Sub-commands](#sub-commands)
-    - [Thor Solo](#thor-solo)
-    - [Master Key](#master-key)
-- [Command line options](#command-line-options)
-    - [Thor Solo Flags](#thor-solo-flags)
-    - [Discovery Node](#discovery-node-flags)
-- [Open API Documentation](#open-api-documentation)
-
-___
-
-### Running from source
-
-- To install the `thor` binary, follow the instructions in the [build](https://github.com/vechain/thor/blob/master/docs/build.md) guide.
-
-Connect to vechain's mainnet:
-
-```shell
-bin/thor --network main
-```
-
-Connect to vechain's testnet:
-
-```shell
-bin/thor --network test
-```
-
-Start a custom network:
-
-```shell
-bin/thor --network <custom-net-genesis.json>
-```
-
-An example genesis config file can be found
-at [genesis/example.json](https://raw.githubusercontent.com/vechain/thor/master/genesis/example.json).
-
-___
-
-### Running a discovery node
-
-- To install the `disco` binary, follow the instructions in the [build](https://github.com/vechain/thor/blob/master/docs/build.md) guide.
-
-Start a discovery node:
-
-```shell
-disco
-```
-
-Output:
-
-```shell
-Running enode://e32e5960781ce0b43d8c2952eeea4b95e286b1bb5f8c1f0c9f09983ba7141d2fdd7dfbec798aefb30dcd8c3b9b7cda8e9a94396a0192bfa54ab285c2cec515ab@[::]:55555
-```
-
-___
-
-### Running with Docker
-
-Docker is one quick way for running a vechain node:
-
-```shell
-docker run -d\
-  -v {path-to-your-data-directory}/.org.vechain.thor:/home/thor/.org.vechain.thor\
-  -p 127.0.0.1:8669:8669 -p 11235:11235 -p 11235:11235/udp\
-  --name thor-node vechain/thor --network test
-```
 
 
 Notes: 
@@ -85,34 +15,6 @@ the flag._
 to `thor` (UID: 1000). Ensure that UID 1000 has `rwx` permissions on the data directory of the docker host. You can do
 that with ACL `sudo setfacl -R -m u:1000:rwx {path-to-your-data-directory}`, or update ownership
 with `sudo chown -R 1000:1000 {path-to-your-data-directory}`.
-
-___
-
-### Docker Compose
-
-A `docker-compose.yml` file is provided for convenience. It will create a container with the same configuration as the
-command above.
-
-```yaml
-version: '3'
-
-services:
-  thor-node:
-    image: vechain/thor
-    container_name: thor-node
-    command: --network test --api-addr 0.0.0.0:8669
-    volumes:
-      - thor-data:/home/thor
-    ports:
-      - "8669:8669"
-      - "11235:11235"
-      - "11235:11235/udp"
-
-volumes:
-  thor-data:
-```
-
-___
 
 ### Sub-commands
 
@@ -191,7 +93,7 @@ bin/thor -h
 | `--help, -h`                     | Show help                                                                                                                      |
 | `--version, -v`                  | Print the version                                                                                                              |
 
-#### Thor Solo Flags
+### Thor Solo Flags
 
 | Flag                         | Description                                        |
 |------------------------------|----------------------------------------------------|
@@ -203,7 +105,13 @@ bin/thor -h
 | `--txpool-limit`             | Transaction pool size limit                        |
 
 
-#### Discovery Node Flags
+### Discovery Node Flags
+
+To show all command line options:
+
+```shell
+bin/disco -h
+```
 
 | Flag            | Description                                                                             |
 |-----------------|-----------------------------------------------------------------------------------------|
@@ -216,11 +124,65 @@ bin/thor -h
 | `--help`        | Show the help message for the discovery node.                                           |
 | `--version`     | Show the version of the discovery node.                                                 |
 
-___
+### Metrics
 
-### Open API Documentation
+Telemetry plays a critical role in monitoring and managing blockchain nodes efficiently.
+Below is an overview of how metrics is integrated and utilized within our node systems.
 
-Once `thor` has started, the online *OpenAPI* documentation can be accessed in your browser.
-e.g. [http://localhost:8669/](http://localhost:8669) by default.
+Metrics is enabled in nodes by default. It's possible to disable it by setting  `--enable-metrics=false`.
+By default, a [prometheus](https://prometheus.io/docs/introduction/overview/) server is available at
+`localhost:2112/metrics` with the metrics.
 
-[![Thorest](https://raw.githubusercontent.com/vechain/thor/master/thorest.png)](http://localhost:8669/)
+```shell
+curl localhost:2112/metrics
+```
+
+Instrumentation is in a beta phase at this stage. You can read more about the metric
+types [here](https://prometheus.io/docs/concepts/metric_types/).
+
+### Admin
+
+Admin is used to allow privileged actions to the node by the administrator.
+
+Admin is not enabled in nodes by default. It's possible to enable it by setting  `--enable-admin`. Once enabled, an
+Admin server is available at `localhost:2113/admin` with the following capabilities:
+
+Retrieve the current log level via a GET request to /admin/loglevel.
+
+```shell
+curl http://localhost:2113/admin/loglevel
+```
+
+Change the log level via a POST request to /admin/loglevel.
+
+```shell
+curl -X POST -H "Content-Type: application/json" -d '{"level": "trace"}' http://localhost:2113/admin/loglevel
+```
+
+#### Health
+
+Retrieve the node health infomation via a GET request to /admin/health.
+
+```shell
+curl http://localhost:2113/admin/health
+```
+
+Response Example
+
+```json
+{
+    "healthy": true,
+    "bestBlockTime": "2025-07-01T06:50:00Z",
+    "peerCount": 5,
+    "isNetworkProgressing": true
+}
+```
+
+|           Key         |           Type        |         Description       |
+|-----------------------|-----------------------|---------------------------|
+| healthy               | boolean               | If the peerCount <= `min_peers_count` and `isNetworkProgressing` is True, it will return True.(default `min_peers_count` is 2)|
+| bestBlockTime         | string                | The best block time of the node.                     |
+| peerCount             | number                | The number of peers connected to the node.                  |
+| isNetworkProgressing  | boolean               | If the node has not completed the block sync, it will return False  |
+
+- **Note**: if the `healthy` is False, the response status code is 503
