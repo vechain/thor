@@ -57,3 +57,10 @@ In order to get whitelisted the master key of a synched validator must be attach
 The process of attaching the master key and the endorser involves an offchain identification and verification process under the current Proof of Authority (PoA) consensus mechanism. 
 To begin the process of getting whitelisted reach out to our [support team](https://support.vechain.org/support/home) who will direct your to our dedicated onboarding team.
 
+### Useful Commands
+
+Use the following command to obtain the validator master key
+
+```shell
+bin/thor master-key
+```
