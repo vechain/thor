@@ -70,3 +70,15 @@ jobs:
       tags: |
         type=raw,value=${{ github.ref_name }}
         type=raw,value=latest
+
+  publish-binaries:
+    name: Publish Binaries
+    uses: ./.github/workflows/release-binaries.yaml
+    secrets: inherit
+    needs:
+      - validate
+    permissions:
+      contents: write
+      packages: write
+    with:
+      binary: 'thor'
