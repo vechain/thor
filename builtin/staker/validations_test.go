@@ -72,7 +72,6 @@ func newStaker(t *testing.T, amount int, maxValidators int64, initialise bool) (
 
 	keys := createKeys(amount)
 	param := params.New(thor.BytesToAddress([]byte("params")), st)
-	param.Set(thor.KeyMaxBlockProposers, big.NewInt(maxValidators))
 
 	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(maxValidators)))
 	staker := New(thor.BytesToAddress([]byte("stkr")), st, param, nil)
@@ -217,6 +216,10 @@ func TestStaker_TotalStake_Withdrawal(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, validation.StatusExit, validator.Status)
 	assert.Equal(t, stakeAmount, validator.CooldownVET)
+
+	withdrawableAmount, err := staker.GetWithdrawable(addr, period+thor.CooldownPeriod())
+	assert.NoError(t, err)
+	assert.Equal(t, stakeAmount, withdrawableAmount)
 
 	withdrawnAmount, err := staker.WithdrawStake(addr, addr, period+thor.CooldownPeriod())
 	assert.NoError(t, err)
@@ -3457,4 +3460,41 @@ func TestStaker_Housekeep_NegativeCases(t *testing.T) {
 	})
 
 	assert.ErrorContains(t, err, "failed to get validator")
+}
+
+func TestValidation_NegativeCases(t *testing.T) {
+	db := muxdb.NewMem()
+	st := state.New(db, trie.Root{})
+
+	param := params.New(thor.BytesToAddress([]byte("params")), st)
+
+	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(2)))
+	stakerAddr := thor.BytesToAddress([]byte("stkr"))
+	staker := New(stakerAddr, st, param, nil)
+
+	node1 := datagen.RandAddress()
+	stake := RandomStake()
+	err := staker.AddValidation(node1, node1, uint32(360)*24*15, stake)
+	assert.NoError(t, err)
+
+	validationsSlot := thor.BytesToBytes32([]byte(("validations")))
+	slot := thor.Blake2b(node1.Bytes(), validationsSlot.Bytes())
+	st.SetRawStorage(stakerAddr, slot, rlp.RawValue{0xFF})
+	_, err = staker.GetWithdrawable(node1, thor.EpochLength())
+	assert.Error(t, err)
+
+	_, err = staker.GetValidationTotals(node1)
+	assert.Error(t, err)
+
+	_, err = staker.WithdrawStake(node1, node1, thor.EpochLength())
+	assert.Error(t, err)
+
+	err = staker.SignalExit(node1, node1)
+	assert.Error(t, err)
+
+	err = staker.SignalDelegationExit(big.NewInt(0))
+	assert.Error(t, err)
+
+	err = staker.validateNextPeriodTVL(node1)
+	assert.Error(t, err)
 }
