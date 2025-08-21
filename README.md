@@ -183,6 +183,4 @@ Special thanks to the following projects:
 
 ## License
 
-VeChainThor is licensed under the  
-[GNU Lesser General Public License v3.0](https://www.gnu.org/licenses/lgpl-3.0.html),  
-also available in the `LICENSE` file in this repository.
+VeChainThor is licensed under the [GNU Lesser General Public License v3.0](https://www.gnu.org/licenses/lgpl-3.0.html), also available in the `LICENSE` file in this repository.
