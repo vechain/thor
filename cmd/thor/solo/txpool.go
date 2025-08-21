@@ -50,14 +50,20 @@ func (o *OnDemandTxPool) AddLocal(newTx *tx.Transaction) error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
-	o.txsByID[newTx.ID()] = newTx
+	if newTx.ChainTag() != o.engine.repo.ChainTag() {
+		return restutil.BadRequest(errors.New("bad tx: chain tag mismatch"))
+	}
 
+	if newTx.Size() > txpool.MaxTxSize {
+		return restutil.Forbidden(errors.New("tx rejected: size too large"))
+	}
 	executable, err := o.engine.IsExecutable(newTx)
 	if err != nil {
 		// simulate API call for adding a transaction that gets rejected
 		return restutil.Forbidden(errors.New("tx rejected: " + err.Error()))
 	}
 
+	o.txsByID[newTx.ID()] = newTx
 	o.goes.Go(func() {
 		o.txFeed.Send(&txpool.TxEvent{
 			Tx:         newTx,
