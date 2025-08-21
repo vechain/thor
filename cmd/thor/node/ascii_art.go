@@ -69,8 +69,18 @@ _|  |  |  |_  _/ /   \ \_ _|  |_  / /   \ \_  _| |__) | \ \__ / /   | \____) | _
    _/ /   \ \_\ ` + "`" + `.___.'\   _| |_    _| |_     \ ' /_/ /   \ \_  _| |_    _| |__/ | _| |_.' / 
   |____| |____|` + "`" + `.____ .'  |_____|  |_____|     \_/|____| |____||_____|  |________||______.'`
 
-func printHayabusaWelcomeInfo() {
+var printed bool
+
+func printWelcomeInfo() {
+	if printed {
+		return
+	}
+	printed = true
 	// remove the leading new line symbol as previous printed log will have a new line symbol
 	str, _ := strings.CutPrefix(HayabusaASCIIArt, "\n")
 	os.Stdout.WriteString(str)
+}
+
+func needPrintWelcomeInfo() bool {
+	return !printed
 }
