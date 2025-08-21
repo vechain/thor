@@ -2940,7 +2940,7 @@ func TestStaker_TestWeights_IncreaseStake(t *testing.T) {
 
 	validator, err := staker.FirstActive()
 	assert.NoError(t, err)
-	val, err := staker.Get(*validator)
+	val, err := staker.GetValidation(*validator)
 	assert.NoError(t, err)
 	assert.Equal(t, val.LockedVET, val.Weight)
 
@@ -3078,7 +3078,7 @@ func TestStaker_TestWeights_DecreaseStake(t *testing.T) {
 
 	validator, err := staker.FirstActive()
 	assert.NoError(t, err)
-	val, err := staker.Get(*validator)
+	val, err := staker.GetValidation(*validator)
 	assert.NoError(t, err)
 	assert.Equal(t, val.LockedVET, val.Weight)
 
