@@ -56,12 +56,12 @@ Sync time from genesis to the latest mainnet block depends on hardware, configur
 
 ### Validator
 
-| Build                                         | Sync Time            | AWS SKU                                                      | Notes                           |
-|-----------------------------------------------|----------------------|--------------------------------------------------------------|---------------------------------|
-| 2 CPU, 16 GB, 10 Mbit, 468 NVMe SSD, 16K IOPS | 75 Hours, 00 Minutes | [I4g.large](https://aws.amazon.com/ec2/instance-types/i4g/)  | Not recommended, reference only |
-| 4 CPU, 32 GB, 10 Mbit, 937 NVMe SSD, 10K IOPS | 54 Hours, 08 Minutes | [I4g.xlarge](https://aws.amazon.com/ec2/instance-types/i4g/) |                                 |
-| 2 CPU, 16 GB, 10 Mbit, 468 NVMe SSD, 35K IOPS | 38 Hours, 41 Minutes | [I8g.large](https://aws.amazon.com/ec2/instance-types/i8g/)  |                                 |
-| 4 CPU, 32 GB, 10 Mbit, 937 NVMe SSD, 45K IOPS | 30 Hours, 00 Minutes | [I8g.xlarge](https://aws.amazon.com/ec2/instance-types/i8g/) |                                 |
+| Build                                         | Sync Time            | AWS SKU                                                      | Notes           |
+|-----------------------------------------------|----------------------|--------------------------------------------------------------|-----------------|
+| 2 CPU, 16 GB, 10 Mbit, 468 NVMe SSD, 16K IOPS | 75 Hours, 00 Minutes | [I4g.large](https://aws.amazon.com/ec2/instance-types/i4g/)  | Not recommended |
+| 4 CPU, 32 GB, 10 Mbit, 937 NVMe SSD, 10K IOPS | 54 Hours, 08 Minutes | [I4g.xlarge](https://aws.amazon.com/ec2/instance-types/i4g/) |                 |
+| 2 CPU, 16 GB, 10 Mbit, 468 NVMe SSD, 35K IOPS | 38 Hours, 41 Minutes | [I8g.large](https://aws.amazon.com/ec2/instance-types/i8g/)  |                 |
+| 4 CPU, 32 GB, 10 Mbit, 937 NVMe SSD, 45K IOPS | 30 Hours, 00 Minutes | [I8g.xlarge](https://aws.amazon.com/ec2/instance-types/i8g/) |                 |
 
 ### Public Full Node
 
