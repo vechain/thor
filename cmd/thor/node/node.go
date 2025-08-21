@@ -21,6 +21,7 @@ import (
 
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/bandwidth"
@@ -59,6 +60,7 @@ type Node struct {
 	master      *Master
 	repo        *chain.Repository
 	bft         *bft.Engine
+	stater      *state.Stater
 	logDB       *logdb.LogDB
 	txPool      *txpool.TxPool
 	txStashPath string
@@ -92,6 +94,7 @@ func New(
 		master:      master,
 		repo:        repo,
 		bft:         bft,
+		stater:      stater,
 		logDB:       logDB,
 		txPool:      txPool,
 		txStashPath: txStashPath,
@@ -279,13 +282,41 @@ func (n *Node) txStashLoop(ctx context.Context) {
 }
 
 // guardBlockProcessing adds lock on block processing and maintains block conflicts.
-func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts [][]byte) error) (err error) {
+func (n *Node) guardBlockProcessing(header *block.Header, process func(conflicts [][]byte) error) (err error) {
 	n.processLock.Lock()
+
+	var (
+		printed  bool
+		blockNum = header.Number()
+	)
+
 	defer func() {
 		// post process block hook, executed only if the block is processed successfully
 		if err == nil {
-			if n.initialSynced && blockNum == n.forkConfig.GALACTICA {
-				printGalacticaWelcomeInfo()
+			if hookErr := func() error {
+				if n.initialSynced {
+					if !printed &&
+						blockNum >= n.forkConfig.HAYABUSA+n.forkConfig.HAYABUSA_TP &&
+						// if transition period are set to 0, transition will attempt to happen on every block
+						(n.forkConfig.HAYABUSA_TP == 0 || (blockNum-n.forkConfig.HAYABUSA)%n.forkConfig.HAYABUSA_TP == 0) {
+						summary, err := n.repo.GetBlockSummary(header.ID())
+						if err != nil {
+							return err
+						}
+						state := n.stater.NewState(summary.Root())
+						active, err := builtin.Staker.Native(state).IsPoSActive()
+						if err != nil {
+							return nil
+						}
+						if active {
+							printHayabusaWelcomeInfo()
+							printed = true
+						}
+					}
+				}
+				return nil
+			}(); hookErr != nil {
+				logger.Warn("failed to run post process hook", "err", hookErr)
 			}
 		}
 		n.processLock.Unlock()
@@ -316,7 +347,7 @@ func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts [][]
 func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, error) {
 	var isTrunk *bool
 
-	if err := n.guardBlockProcessing(newBlock.Header().Number(), func(conflicts [][]byte) error {
+	if err := n.guardBlockProcessing(newBlock.Header(), func(conflicts [][]byte) error {
 		// Check whether the block was already there.
 		// It can be skipped if no conflicts.
 		if len(conflicts) > 0 {
