@@ -120,7 +120,7 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 		}
 	}()
 
-	return n.guardBlockProcessing(flow.Number(), func(conflicts [][]byte) error {
+	return n.guardBlockProcessing(flow.Number(), func(conflicts [][]byte) (thor.Bytes32, error) {
 		var (
 			startTime  = mclock.Now()
 			logEnabled = !n.options.SkipLogs && !n.logDBFailed
@@ -145,27 +145,27 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 			var err error
 			shouldVote, err = n.bft.ShouldVote(flow.ParentHeader().ID())
 			if err != nil {
-				return errors.Wrap(err, "get vote")
+				return thor.Bytes32{}, errors.Wrap(err, "get vote")
 			}
 		}
 
 		// pack the new block
 		newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey, uint32(len(conflicts)), shouldVote)
 		if err != nil {
-			return errors.Wrap(err, "failed to pack block")
+			return thor.Bytes32{}, errors.Wrap(err, "failed to pack block")
 		}
 		execElapsed := mclock.Now() - startTime
 
 		// write logs
 		if logEnabled {
 			if err := n.writeLogs(newBlock, receipts, oldBest.Header.ID()); err != nil {
-				return errors.Wrap(err, "write logs")
+				return thor.Bytes32{}, errors.Wrap(err, "write logs")
 			}
 		}
 
 		// commit the state
 		if _, err := stage.Commit(); err != nil {
-			return errors.Wrap(err, "commit state")
+			return thor.Bytes32{}, errors.Wrap(err, "commit state")
 		}
 
 		// sync the log-writing task
@@ -178,13 +178,13 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 
 		// add the new block into repository
 		if err := n.repo.AddBlock(newBlock, receipts, uint32(len(conflicts)), true); err != nil {
-			return errors.Wrap(err, "add block")
+			return thor.Bytes32{}, errors.Wrap(err, "add block")
 		}
 
 		// commit block in bft engine
 		if newBlock.Header().Number() >= n.forkConfig.FINALITY {
 			if err := n.bft.CommitBlock(newBlock.Header(), true); err != nil {
-				return errors.Wrap(err, "bft commits")
+				return thor.Bytes32{}, errors.Wrap(err, "bft commits")
 			}
 		}
 
@@ -208,6 +208,6 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 		metricBlockProcessedTxs().SetWithLabel(int64(len(receipts)), map[string]string{"type": "proposed"})
 		metricBlockProcessedGas().SetWithLabel(int64(newBlock.Header().GasUsed()), map[string]string{"type": "proposed"})
 		metricBlockProcessedDuration().Observe(time.Duration(realElapsed).Milliseconds())
-		return nil
+		return newBlock.Header().ID(), nil
 	})
 }
