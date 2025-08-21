@@ -37,24 +37,16 @@ func (ts *TestSequence) AssertActive(active bool) *TestSequence {
 func (ts *TestSequence) AssertLockedVET(expectedVET, expectedWeight *big.Int) *TestSequence {
 	locked, weight, err := ts.staker.LockedVET()
 	assert.NoError(ts.t, err, "failed to get locked VET")
-	if expectedVET != nil {
-		assert.Equal(ts.t, 0, expectedVET.Cmp(locked), "locked VET mismatch")
-	}
-	if expectedWeight != nil {
-		assert.Equal(ts.t, 0, expectedWeight.Cmp(weight), "locked weight mismatch")
-	}
+	assertBigInts(ts.t, expectedVET, locked, "locked VET mismatch")
+	assertBigInts(ts.t, expectedWeight, weight, "locked weight mismatch")
 	return ts
 }
 
 func (ts *TestSequence) AssertQueuedVET(expectedVET, expectedWeight *big.Int) *TestSequence {
 	queued, weight, err := ts.staker.QueuedStake()
 	assert.NoError(ts.t, err, "failed to get queued VET")
-	if expectedVET != nil {
-		assert.Equal(ts.t, 0, expectedVET.Cmp(queued), "queued VET mismatch")
-	}
-	if expectedWeight != nil {
-		assert.Equal(ts.t, 0, expectedWeight.Cmp(weight), "queued weight mismatch")
-	}
+	assertBigInts(ts.t, expectedVET, queued, "queued VET mismatch")
+	assertBigInts(ts.t, expectedWeight, weight, "queued weight mismatch")
 
 	return ts
 }
@@ -133,15 +125,7 @@ func (ts *TestSequence) DecreaseStake(
 func (ts *TestSequence) WithdrawStake(endorser, master thor.Address, block uint32, expectedOut *big.Int) *TestSequence {
 	amount, err := ts.staker.WithdrawStake(endorser, master, block)
 	assert.NoError(ts.t, err, "failed to withdraw stake for validator %s with endorser %s at block %d: %v", master.String(), endorser.String(), block, err)
-	assert.Equal(
-		ts.t,
-		0,
-		amount.Cmp(expectedOut),
-		"withdrawn amount mismatch for validator %s with endorser %s at block %d",
-		master.String(),
-		endorser.String(),
-		block,
-	)
+	assertBigInts(ts.t, expectedOut, amount, "withdrawn amount mismatch")
 	return ts
 }
 
@@ -162,7 +146,7 @@ func (ts *TestSequence) AssertWithdrawable(
 ) *TestSequence {
 	withdrawable, err := ts.staker.GetWithdrawable(master, block)
 	assert.NoError(ts.t, err, "failed to get withdrawable amount for validator %s at block %d: %v", master.String(), block, err)
-	assert.Equal(ts.t, expectedWithdrawable, withdrawable, "withdrawable amount mismatch for validator %s", master.String())
+	assertBigInts(ts.t, expectedWithdrawable, withdrawable, "withdrawable amount mismatch for validator")
 	return ts
 }
 
@@ -207,7 +191,7 @@ func (ts *TestSequence) SignalDelegationExit(delegationID *big.Int) *TestSequenc
 func (ts *TestSequence) WithdrawDelegation(delegationID *big.Int, expectedOut *big.Int) *TestSequence {
 	amount, err := ts.staker.WithdrawDelegation(delegationID)
 	assert.NoError(ts.t, err, "failed to withdraw delegation %s: %v", delegationID.String(), err)
-	assert.Equal(ts.t, expectedOut, amount, "withdrawn amount mismatch for delegation %s", delegationID.String())
+	assertBigInts(ts.t, expectedOut, amount, "withdrawn delegation amount mismatch")
 	return ts
 }
 
@@ -218,7 +202,7 @@ func (ts *TestSequence) AssertDelegatorRewards(
 ) *TestSequence {
 	reward, err := ts.staker.GetDelegatorRewards(validationID, period)
 	assert.NoError(ts.t, err, "failed to get rewards for validator %s at period %d: %v", validationID.String(), period, err)
-	assert.Equal(ts.t, expectedReward, reward, "reward mismatch for validator %s at period %d", validationID.String(), period)
+	assertBigInts(ts.t, expectedReward, reward, "delegator rewards mismatch")
 	return ts
 }
 
@@ -232,39 +216,22 @@ func (ts *TestSequence) AssertCompletedPeriods(
 	return ts
 }
 
+// AssertTotals for the contract. If any fields not set, it asserts they are zero.
 func (ts *TestSequence) AssertTotals(validationID thor.Address, expected *validation.Totals) *TestSequence {
 	totals, err := ts.staker.GetValidationTotals(validationID)
 	assert.NoError(ts.t, err, "failed to get totals for validator %s", validationID.String())
 
 	// exiting
-	if expected.TotalExitingStake != nil {
-		assert.Equal(ts.t, 0, expected.TotalExitingStake.Cmp(totals.TotalExitingStake), "total exiting stake mismatch for validator %s", validationID.String())
-	}
-	if expected.TotalExitingWeight != nil {
-		assert.Equal(
-			ts.t,
-			0,
-			expected.TotalExitingWeight.Cmp(totals.TotalExitingWeight),
-			"total exiting weight mismatch for validator %s",
-			validationID.String(),
-		)
-	}
+	assertBigInts(ts.t, expected.TotalExitingStake, totals.TotalExitingStake, "total exiting stake mismatch")
+	assertBigInts(ts.t, expected.TotalExitingWeight, totals.TotalExitingWeight, "total exiting weight mismatch")
 
 	// locked
-	if expected.TotalLockedStake != nil {
-		assert.Equal(ts.t, 0, expected.TotalLockedStake.Cmp(totals.TotalLockedStake), "total locked stake mismatch for validator %s", validationID.String())
-	}
-	if expected.TotalLockedWeight != nil {
-		assert.Equal(ts.t, 0, expected.TotalLockedWeight.Cmp(totals.TotalLockedWeight), "total locked weight mismatch for validator %s", validationID.String())
-	}
+	assertBigInts(ts.t, expected.TotalLockedStake, totals.TotalLockedStake, "total locked stake mismatch")
+	assertBigInts(ts.t, expected.TotalLockedWeight, totals.TotalLockedWeight, "total locked weight mismatch")
 
 	// queued
-	if expected.TotalQueuedStake != nil {
-		assert.Equal(ts.t, 0, expected.TotalQueuedStake.Cmp(totals.TotalQueuedStake), "total queued stake mismatch for validator %s", validationID.String())
-	}
-	if expected.TotalQueuedWeight != nil {
-		assert.Equal(ts.t, 0, expected.TotalQueuedWeight.Cmp(totals.TotalQueuedWeight), "total queued weight mismatch for validator %s", validationID.String())
-	}
+	assertBigInts(ts.t, expected.TotalQueuedStake, totals.TotalQueuedStake, "total queued stake mismatch")
+	assertBigInts(ts.t, expected.TotalQueuedWeight, totals.TotalQueuedWeight, "total queued weight mismatch")
 
 	return ts
 }
@@ -313,27 +280,27 @@ func (va *ValidationAssertions) Status(expected validation.Status) *ValidationAs
 }
 
 func (va *ValidationAssertions) Weight(expected *big.Int) *ValidationAssertions {
-	assert.Equal(va.t, 0, expected.Cmp(va.validator.Weight), "validator %s weight mismatch", va.addr.String())
+	assertBigInts(va.t, expected, va.validator.Weight, "validator weight mismatch")
 	return va
 }
 
 func (va *ValidationAssertions) LockedVET(expected *big.Int) *ValidationAssertions {
-	assert.Equal(va.t, 0, expected.Cmp(va.validator.LockedVET), "validator %s locked VET mismatch", va.addr.String())
+	assertBigInts(va.t, expected, va.validator.LockedVET, "validator locked VET mismatch")
 	return va
 }
 
 func (va *ValidationAssertions) QueuedVET(expected *big.Int) *ValidationAssertions {
-	assert.Equal(va.t, 0, expected.Cmp(va.validator.QueuedVET), "validator %s pending locked VET mismatch", va.addr.String())
+	assertBigInts(va.t, expected, va.validator.QueuedVET, "validator queued VET mismatch")
 	return va
 }
 
 func (va *ValidationAssertions) CooldownVET(expected *big.Int) *ValidationAssertions {
-	assert.Equal(va.t, 0, expected.Cmp(va.validator.CooldownVET), "validator %s cooldown VET mismatch", va.addr.String())
+	assertBigInts(va.t, expected, va.validator.CooldownVET, "validator cooldown VET mismatch")
 	return va
 }
 
 func (va *ValidationAssertions) WithdrawableVET(expected *big.Int) *ValidationAssertions {
-	assert.Equal(va.t, 0, expected.Cmp(va.validator.WithdrawableVET), "validator %s withdrawable VET mismatch", va.addr.String())
+	assertBigInts(va.t, expected, va.validator.WithdrawableVET, "validator withdrawable VET mismatch")
 	return va
 }
 
@@ -348,7 +315,7 @@ func (va *ValidationAssertions) CompletedPeriods(expected uint32) *ValidationAss
 }
 
 func (va *ValidationAssertions) PendingUnlockVET(expected *big.Int) *ValidationAssertions {
-	assert.Equal(va.t, expected, va.validator.PendingUnlockVET, "validator %s next period decrease mismatch", va.addr.String())
+	assertBigInts(va.t, expected, va.validator.PendingUnlockVET, "validator pending unlock VET mismatch")
 	return va
 }
 
@@ -360,7 +327,7 @@ func (va *ValidationAssertions) IsEmpty(expected bool) *ValidationAssertions {
 func (va *ValidationAssertions) Rewards(period uint32, expected *big.Int) *ValidationAssertions {
 	reward, err := va.staker.GetDelegatorRewards(va.addr, period)
 	assert.NoError(va.t, err, "failed to get rewards for validator %s at period %d", va.addr.String(), period)
-	assert.Equal(va.t, expected, reward, "validator %s rewards mismatch for period %d", va.addr.String(), period)
+	assertBigInts(va.t, expected, reward, "validator rewards mismatch")
 	return va
 }
 
@@ -386,32 +353,32 @@ func assertAggregation(t *testing.T, staker *Staker, validationID thor.Address) 
 }
 
 func (aa *AggregationAssertions) PendingVET(expected *big.Int) *AggregationAssertions {
-	assert.Equal(aa.t, expected, aa.aggregation.PendingVET, "aggregation for validator %s pending VET mismatch", aa.validationID.String())
+	assertBigInts(aa.t, expected, aa.aggregation.PendingVET, "aggregation PendingVET mismatch")
 	return aa
 }
 
 func (aa *AggregationAssertions) PendingWeight(expected *big.Int) *AggregationAssertions {
-	assert.Equal(aa.t, expected, aa.aggregation.PendingWeight, "aggregation for validator %s pending weight mismatch", aa.validationID.String())
+	assertBigInts(aa.t, expected, aa.aggregation.PendingWeight, "aggregation PendingWeight mismatch")
 	return aa
 }
 
 func (aa *AggregationAssertions) LockedVET(expected *big.Int) *AggregationAssertions {
-	assert.Equal(aa.t, expected, aa.aggregation.LockedVET, "aggregation for validator %s locked VET mismatch", aa.validationID.String())
+	assertBigInts(aa.t, expected, aa.aggregation.LockedVET, "aggregation LockedVET mismatch")
 	return aa
 }
 
 func (aa *AggregationAssertions) LockedWeight(expected *big.Int) *AggregationAssertions {
-	assert.Equal(aa.t, expected, aa.aggregation.LockedWeight, "aggregation for validator %s locked weight mismatch", aa.validationID.String())
+	assertBigInts(aa.t, expected, aa.aggregation.LockedWeight, "aggregation LockedWeight mismatch")
 	return aa
 }
 
 func (aa *AggregationAssertions) ExitingVET(expected *big.Int) *AggregationAssertions {
-	assert.Equal(aa.t, expected, aa.aggregation.ExitingVET, "aggregation for validator %s exiting VET mismatch", aa.validationID.String())
+	assertBigInts(aa.t, expected, aa.aggregation.ExitingVET, "aggregation ExitingVET mismatch")
 	return aa
 }
 
 func (aa *AggregationAssertions) ExitingWeight(expected *big.Int) *AggregationAssertions {
-	assert.Equal(aa.t, expected, aa.aggregation.ExitingWeight, "aggregation for validator %s exiting weight mismatch", aa.validationID.String())
+	assertBigInts(aa.t, expected, aa.aggregation.ExitingWeight, "aggregation ExitingWeight mismatch")
 	return aa
 }
 
@@ -434,12 +401,12 @@ func (da *DelegationAssertions) Validation(expected thor.Address) *DelegationAss
 }
 
 func (da *DelegationAssertions) Stake(expected *big.Int) *DelegationAssertions {
-	assert.Equal(da.t, 0, expected.Cmp(da.delegation.Stake), "delegation %s stake mismatch", da.delegationID.String())
+	assertBigInts(da.t, expected, da.delegation.Stake, "delegation stake mismatch")
 	return da
 }
 
 func (da *DelegationAssertions) Weight(expected *big.Int) *DelegationAssertions {
-	assert.Equal(da.t, 0, expected.Cmp(da.delegation.WeightedStake().Weight()), "delegation %s weight mismatch", da.delegationID.String())
+	assertBigInts(da.t, expected, da.delegation.WeightedStake().Weight(), "delegation weight mismatch")
 	return da
 }
 
@@ -480,4 +447,20 @@ func (da *DelegationAssertions) IsStarted(expected bool) *DelegationAssertions {
 func (da *DelegationAssertions) IsFinished(expected bool) *DelegationAssertions {
 	assert.Equal(da.t, expected, da.delegation.Ended(da.validation), "delegation %s finished state mismatch", da.delegationID.String())
 	return da
+}
+
+func assertBigInts(t *testing.T, expected, actual *big.Int, msg string) {
+	if expected == nil && actual == nil {
+		return
+	}
+	if expected == nil {
+		assert.True(t, actual.Sign() == 0, "%s: expected 0, got %s", msg, actual.String())
+		return
+	}
+	if actual == nil {
+		assert.True(t, expected.Sign() == 0, "%s: expected %s, got 0", msg, expected.String())
+		return
+	}
+
+	assert.True(t, expected.Cmp(actual) == 0, "%s: expected %s, got %s", msg, expected.String(), actual.String())
 }
