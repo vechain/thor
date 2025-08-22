@@ -63,17 +63,16 @@ func (h *Health) Status(blockTolerance time.Duration, minPeerCount int, master *
 	// Calculate overall health status
 	healthy := networkProgressing && nodeConnected
 
-	var masterAddress *string = nil
-	var beneficiaryAddress *string = nil
+	var masterAddress, beneficiaryAddress *string
 
 	if master != nil {
-		masterAddr := master.Address().String()
-		masterAddress = &masterAddr
-	}
+		addr := master.Address().String()
+		masterAddress = &addr
 
-	if master != nil && master.Beneficiary != nil {
-		beneAddr := master.Beneficiary.String()
-		beneficiaryAddress = &beneAddr
+		if master.Beneficiary != nil {
+			beneAddr := master.Beneficiary.String()
+			beneficiaryAddress = &beneAddr
+		}
 	}
 
 	// Return the current status
