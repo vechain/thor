@@ -19,6 +19,7 @@ var (
 	mediumStakingPeriod uint32 = 8640 * 15 // 15 Days
 	highStakingPeriod   uint32 = 8640 * 30 // 30 Days
 	cooldownPeriod      uint32 = 8640      // 8640 blocks, 1 day
+	hayabusaTP          uint32 = 360 * 24 * 14
 
 	locked bool
 )
@@ -34,13 +35,14 @@ type Config struct {
 	MediumStakingPeriod uint32 `json:"mediumStakingPeriod"`
 	HighStakingPeriod   uint32 `json:"highStakingPeriod"`
 	CooldownPeriod      uint32 `json:"cooldownPeriod"`
+	HayabusaTP          uint32 `json:"hayabusaTP"`
 }
 
 // SetConfig sets the config.
 // If the config is not set, the default values will be used.
 // If the config is locked, will panic.
-func SetConfig(cfg Config) {
-	if locked {
+func SetConfig(cfg Config, force bool) {
+	if locked && !force {
 		panic("config is locked, cannot be set")
 	}
 
@@ -74,6 +76,10 @@ func SetConfig(cfg Config) {
 
 	if cfg.CooldownPeriod != 0 {
 		cooldownPeriod = cfg.CooldownPeriod
+	}
+
+	if cfg.HayabusaTP != 0 || force {
+		hayabusaTP = cfg.HayabusaTP
 	}
 }
 
@@ -113,4 +119,8 @@ func HighStakingPeriod() uint32 {
 
 func CooldownPeriod() uint32 {
 	return cooldownPeriod
+}
+
+func HayabusaTP() uint32 {
+	return hayabusaTP
 }

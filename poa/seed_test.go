@@ -25,7 +25,7 @@ import (
 func TestSeeder_Generate(t *testing.T) {
 	thor.SetConfig(thor.Config{
 		SeederInterval: 10,
-	})
+	}, false)
 
 	db := muxdb.NewMem()
 	g := genesis.NewDevnet()

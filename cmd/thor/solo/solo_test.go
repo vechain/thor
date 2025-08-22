@@ -40,7 +40,8 @@ func newSolo() *Solo {
 		BlockInterval:    thor.BlockInterval(),
 	}
 
-	engine := NewCore(repo, stater, logDb, opts, &thor.ForkConfig{GALACTICA: math.MaxUint32, HAYABUSA_TP: 1})
+	thor.SetConfig(thor.Config{HayabusaTP: 1}, false)
+	engine := NewCore(repo, stater, logDb, opts, &thor.ForkConfig{GALACTICA: math.MaxUint32})
 
 	return New(repo, stater, mempool, opts, engine)
 }

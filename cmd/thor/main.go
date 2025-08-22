@@ -362,7 +362,6 @@ func soloAction(ctx *cli.Context) error {
 			fc := thor.SoloFork
 			fc.GALACTICA = 0
 			fc.HAYABUSA = 0
-			fc.HAYABUSA_TP = 0
 
 			forkConfig = &fc
 			gene = genesis.NewHayabusaDevnet(&fc)

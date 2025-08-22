@@ -488,7 +488,7 @@ func TestService_WithdrawStake_ClearCooldownWhenMatured(t *testing.T) {
 
 	thor.SetConfig(thor.Config{
 		CooldownPeriod: 1,
-	})
+	}, false)
 	amt, _, err := svc.WithdrawStake(id, endorser, 11)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(45), amt)

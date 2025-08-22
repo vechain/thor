@@ -155,7 +155,8 @@ func NewHayabusaDevnet(forkConfig *thor.ForkConfig) *Genesis {
 		HighStakingPeriod:   90,
 		CooldownPeriod:      12,
 		EpochLength:         6,
-	})
+		HayabusaTP:          0,
+	}, true)
 	thor.LockConfig()
 
 	launchTime := uint64(1526400000) // Default launch time 'Wed May 16 2018 00:00:00 GMT+0800 (CST)'

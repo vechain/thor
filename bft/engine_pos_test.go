@@ -35,16 +35,16 @@ func init() {
 
 func TestFinalizedPos(t *testing.T) {
 	forkCfg := &thor.ForkConfig{
-		HAYABUSA:    1,
-		HAYABUSA_TP: 1,
+		HAYABUSA: 1,
 	}
+	thor.SetConfig(thor.Config{HayabusaTP: 1}, false)
 
 	testBFT, err := newTestBftPos(forkCfg)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
+	numBlksNeededForPos := forkCfg.HAYABUSA + thor.HayabusaTP() + 1
 	if err = testBFT.fastForward(thor.EpochLength()*3 - 1 - numBlksNeededForPos); err != nil {
 		t.Fatal(err)
 	}
@@ -102,16 +102,16 @@ func TestFinalizedPos(t *testing.T) {
 
 func TestAcceptsPos(t *testing.T) {
 	forkCfg := &thor.ForkConfig{
-		HAYABUSA:    1,
-		HAYABUSA_TP: 1,
+		HAYABUSA: 1,
 	}
+	thor.SetConfig(thor.Config{HayabusaTP: 1}, false)
 
 	testBFT, err := newTestBftPos(forkCfg)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
+	numBlksNeededForPos := forkCfg.HAYABUSA + thor.HayabusaTP() + 1
 	if err = testBFT.fastForward(thor.EpochLength() - 1 - numBlksNeededForPos); err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +166,7 @@ func TestGetVotePos(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
+				numBlksNeededForPos := forkCfg.HAYABUSA + thor.HayabusaTP() + 1
 				testBFT.fastForwardWithMinority(thor.EpochLength()*3 - numBlksNeededForPos)
 				v, err := testBFT.engine.ShouldVote(testBFT.repo.BestBlockSummary().Header.ID())
 				if err != nil {
@@ -181,7 +181,7 @@ func TestGetVotePos(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
+				numBlksNeededForPos := forkCfg.HAYABUSA + thor.HayabusaTP() + 1
 				testBFT.fastForward(thor.EpochLength()*3 - numBlksNeededForPos)
 				v, err := testBFT.engine.ShouldVote(testBFT.repo.BestBlockSummary().Header.ID())
 				if err != nil {
@@ -196,7 +196,7 @@ func TestGetVotePos(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
+				numBlksNeededForPos := forkCfg.HAYABUSA + thor.HayabusaTP() + 1
 				if err = testBFT.fastForward(thor.EpochLength()*3 - 1 - numBlksNeededForPos); err != nil {
 					t.Fatal(err)
 				}
@@ -242,7 +242,7 @@ func TestGetVotePos(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
+				numBlksNeededForPos := forkCfg.HAYABUSA + thor.HayabusaTP() + 1
 				if err = testBFT.fastForward(thor.EpochLength()*3 - 1 - numBlksNeededForPos); err != nil {
 					t.Fatal(err)
 				}
@@ -305,7 +305,7 @@ func TestGetVotePos(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
+				numBlksNeededForPos := forkCfg.HAYABUSA + thor.HayabusaTP() + 1
 				if err = testBFT.fastForward(thor.EpochLength()*3 - 1 - numBlksNeededForPos); err != nil {
 					t.Fatal(err)
 				}
@@ -351,7 +351,7 @@ func TestGetVotePos(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
+				numBlksNeededForPos := forkCfg.HAYABUSA + thor.HayabusaTP() + 1
 				testBFT.fastForwardWithMinority(thor.EpochLength()*3 - numBlksNeededForPos)
 				testBFT.fastForward(thor.EpochLength()*1 + 3)
 				_, err = testBFT.engine.ShouldVote(testBFT.repo.BestBlockSummary().Header.ID())
@@ -363,9 +363,9 @@ func TestGetVotePos(t *testing.T) {
 	}
 
 	forkCfg := &thor.ForkConfig{
-		HAYABUSA:    1,
-		HAYABUSA_TP: 1,
+		HAYABUSA: 1,
 	}
+	thor.SetConfig(thor.Config{HayabusaTP: 1}, false)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -386,7 +386,7 @@ func TestJustifierPos(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
+				numBlksNeededForPos := forkCfg.HAYABUSA + thor.HayabusaTP() + 1
 				testBft.fastForward(thor.EpochLength() - 1 - numBlksNeededForPos)
 
 				vs, err := testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
@@ -431,7 +431,7 @@ func TestJustifierPos(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
+				numBlksNeededForPos := forkCfg.HAYABUSA + thor.HayabusaTP() + 1
 				testBft.fastForward(thor.EpochLength()*2 - numBlksNeededForPos)
 				vs, err := testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
 				if err != nil {
@@ -456,7 +456,7 @@ func TestJustifierPos(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
+				numBlksNeededForPos := forkCfg.HAYABUSA + thor.HayabusaTP() + 1
 				testBft.fastForward(thor.EpochLength()*2 - 1 - numBlksNeededForPos)
 				vs, err := testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
 				if err != nil {
@@ -491,7 +491,7 @@ func TestJustifierPos(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
+				numBlksNeededForPos := forkCfg.HAYABUSA + thor.HayabusaTP() + 1
 				testBft.fastForward(thor.EpochLength()*2 - 1 - numBlksNeededForPos)
 				vs, err := testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
 				if err != nil {
@@ -518,7 +518,7 @@ func TestJustifierPos(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
+				numBlksNeededForPos := forkCfg.HAYABUSA + thor.HayabusaTP() + 1
 				testBft.fastForward(thor.EpochLength()*2 - 1 - numBlksNeededForPos)
 				vs, err := testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
 				if err != nil {
@@ -627,9 +627,9 @@ func TestJustifierPos(t *testing.T) {
 	}
 
 	forkCfg := &thor.ForkConfig{
-		HAYABUSA:    1,
-		HAYABUSA_TP: 1,
+		HAYABUSA: 1,
 	}
+	thor.SetConfig(thor.Config{HayabusaTP: 1}, false)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -668,7 +668,7 @@ func TestJustifiedPos(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
+				numBlksNeededForPos := forkCfg.HAYABUSA + thor.HayabusaTP() + 1
 				if err = testBFT.fastForward(thor.EpochLength() - numBlksNeededForPos); err != nil {
 					t.Fatal(err)
 				}
@@ -723,7 +723,7 @@ func TestJustifiedPos(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
+				numBlksNeededForPos := forkCfg.HAYABUSA + thor.HayabusaTP() + 1
 
 				if err = testBFT.fastForward(3*thor.EpochLength() - 1 - numBlksNeededForPos); err != nil {
 					t.Fatal(err)
@@ -787,7 +787,7 @@ func TestJustifiedPos(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				numBlksNeededForPos := forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP + 1
+				numBlksNeededForPos := forkCfg.HAYABUSA + thor.HayabusaTP() + 1
 				if err = testBFT.fastForward(thor.EpochLength() - numBlksNeededForPos); err != nil {
 					t.Fatal(err)
 				}
@@ -815,9 +815,9 @@ func TestJustifiedPos(t *testing.T) {
 	}
 
 	forkCfg := &thor.ForkConfig{
-		HAYABUSA:    1,
-		HAYABUSA_TP: 1,
+		HAYABUSA: 1,
 	}
+	thor.SetConfig(thor.Config{HayabusaTP: 1}, false)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -832,7 +832,7 @@ func newTestBftPos(forkCfg *thor.ForkConfig) (*TestBFT, error) {
 		return nil, err
 	}
 
-	if err = testBFT.fastForward(forkCfg.HAYABUSA + forkCfg.HAYABUSA_TP); err != nil {
+	if err = testBFT.fastForward(forkCfg.HAYABUSA + thor.HayabusaTP()); err != nil {
 		return nil, err
 	}
 
@@ -849,14 +849,14 @@ func (test *TestBFT) transitionToPosBlock(parentSummary *chain.BlockSummary, mas
 	packer := packer.New(test.repo, test.stater, master.Address, &thor.Address{}, test.fc, 0)
 	thor.SetConfig(thor.Config{
 		EpochLength: 1,
-	})
+	}, false)
 	flow, _, err := packer.Mock(parentSummary, parentSummary.Header.Timestamp()+thor.BlockInterval(), parentSummary.Header.GasLimit())
 	if err != nil {
 		return nil, err
 	}
 	thor.SetConfig(thor.Config{
 		EpochLength: defaultEpochLength,
-	})
+	}, false)
 
 	conflicts, err := test.repo.ScanConflicts(parentSummary.Header.Number() + 1)
 	if err != nil {

@@ -766,7 +766,7 @@ func TestExecuteTransactionFailure(t *testing.T) {
 func TestExecuteTransaction(t *testing.T) {
 	db := muxdb.NewMem()
 	fc := &thor.SoloFork
-	fc.HAYABUSA_TP = math.MaxUint32
+	thor.SetConfig(thor.Config{HayabusaTP: math.MaxUint32}, false)
 	fc.HAYABUSA = math.MaxUint32
 	g := genesis.NewDevnetWithConfig(genesis.DevConfig{
 		ForkConfig: fc,

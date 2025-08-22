@@ -541,13 +541,13 @@ func testStorageRangeDefaultOption(t *testing.T) {
 
 func initDebugServer(t *testing.T) {
 	forkConfig := thor.ForkConfig{
-		BLOCKLIST:   0,
-		VIP191:      1,
-		GALACTICA:   1,
-		VIP214:      2,
-		HAYABUSA:    math.MaxUint32,
-		HAYABUSA_TP: math.MaxUint32,
+		BLOCKLIST: 0,
+		VIP191:    1,
+		GALACTICA: 1,
+		VIP214:    2,
+		HAYABUSA:  math.MaxUint32,
 	}
+	thor.SetConfig(thor.Config{HayabusaTP: math.MaxUint32}, false)
 	thorChain, err := testchain.NewWithFork(&forkConfig, 180)
 	require.NoError(t, err)
 
