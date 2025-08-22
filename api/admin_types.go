@@ -18,7 +18,7 @@ type HealthStatus struct {
 	BestBlockTime        *time.Time `json:"bestBlockTime"`
 	PeerCount            int        `json:"peerCount"`
 	IsNetworkProgressing bool       `json:"isNetworkProgressing"`
-	Master               *string    `json:"nodeMaster"`
+	NodeMaster           *string    `json:"nodeMaster"`
 	Beneficiary          *string    `json:"beneficiary"`
 }
 
