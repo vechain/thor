@@ -105,8 +105,8 @@ func (s *Staker) LeaderGroupSize() (*big.Int, error) {
 	return s.validationService.LeaderGroupSize()
 }
 
-// Get returns a validation
-func (s *Staker) Get(validator thor.Address) (*validation.Validation, error) {
+// GetValidation returns a validation
+func (s *Staker) GetValidation(validator thor.Address) (*validation.Validation, error) {
 	return s.validationService.GetValidation(validator)
 }
 
@@ -542,8 +542,8 @@ func (s *Staker) validateNextPeriodTVL(validator thor.Address) error {
 	return nil
 }
 
-// GetValidatorsNum returns the number of validators in the leader group and number of queued validators.
-func (s *Staker) GetValidatorsNum() (*big.Int, *big.Int, error) {
+// GetValidationsNum returns the number of validators in the leader group and number of queued validators.
+func (s *Staker) GetValidationsNum() (*big.Int, *big.Int, error) {
 	leaderGroupSize, err := s.LeaderGroupSize()
 	if err != nil {
 		return nil, nil, err

@@ -864,7 +864,7 @@ func (test *TestBFT) transitionToPosBlock(parentSummary *chain.BlockSummary, mas
 	}
 
 	staker := builtin.Staker.Native(test.stater.NewState(parentSummary.Root()))
-	validation, err := staker.Get(master.Address)
+	validation, err := staker.GetValidation(master.Address)
 	if err != nil {
 		return nil, err
 	}

@@ -31,10 +31,10 @@ type FilteredTransfer struct {
 }
 
 type TransferFilter struct {
-	CriteriaSet []*logdb.TransferCriteria
-	Range       *Range
-	Options     *Options
-	Order       logdb.Order // default asc
+	CriteriaSet []*logdb.TransferCriteria `json:"criteriaSet,omitempty"`
+	Range       *Range                    `json:"range,omitempty"`
+	Options     *Options                  `json:"options,omitempty"`
+	Order       logdb.Order               `json:"order,omitempty"`
 }
 
 func ConvertTransfer(transfer *logdb.Transfer, addIndexes bool) *FilteredTransfer {
