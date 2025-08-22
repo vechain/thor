@@ -1,6 +1,6 @@
 # Running a Discovery Node
 
-Refer to the [Hardware Requirements](https://github.com/vechain/thor/tree/neil/docs-update?tab=readme-ov-file#hardware-requirements) and [Command Line Arguments](#) for 
+Refer to the [Hardware Requirements](https://github.com/vechain/thor/tree/neil/docs-update?tab=readme-ov-file#hardware-requirements) and [Command Line Arguments](docs/command_line_arguments.md) for 
 guidance on the hardware requirements and advanced node configuration.
 
 To operate a discovery node the `disco` binary must be installed.
