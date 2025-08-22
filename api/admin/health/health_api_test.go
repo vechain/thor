@@ -45,7 +45,7 @@ func TestHealth(t *testing.T) {
 	require.NoError(t, json.Unmarshal(respBody, &healthStatus))
 	assert.False(t, healthStatus.Healthy)
 	assert.Equal(t, http.StatusServiceUnavailable, statusCode)
-	assert.Equal(t, healthStatus.Master, &masterAddr)
+	assert.Equal(t, healthStatus.NodeMaster, &masterAddr)
 	assert.Nil(t, healthStatus.Beneficiary)
 }
 

@@ -81,7 +81,7 @@ func (h *Health) Status(blockTolerance time.Duration, minPeerCount int, master *
 		BestBlockTime:        &bestBlockTimestamp,
 		IsNetworkProgressing: networkProgressing,
 		PeerCount:            connectedPeerCount,
-		Master:               masterAddress,
+		NodeMaster:           masterAddress,
 		Beneficiary:          beneficiaryAddress,
 	}, nil
 }
