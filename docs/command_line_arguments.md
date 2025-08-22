@@ -1,57 +1,6 @@
 # Command Line Arguments
 
-##TODO rearrange content in a more appropriate format.
-
-
-
-
-Notes: 
-
-- Add the `--api-addr 0.0.0.0:8669` flag if you want other containers and/or hosts to have access to the
-RESTful API. `Thor` binds to `localhost` by default and it will not accept requests outside the container itself without
-the flag._
-
-- Release [v2.0.4](https://github.com/vechain/thor/releases/tag/v2.0.4) changed the default user from `root` (UID: 0)
-to `thor` (UID: 1000). Ensure that UID 1000 has `rwx` permissions on the data directory of the docker host. You can do
-that with ACL `sudo setfacl -R -m u:1000:rwx {path-to-your-data-directory}`, or update ownership
-with `sudo chown -R 1000:1000 {path-to-your-data-directory}`.
-
-### Sub-commands
-
-#### Thor Solo
-
-`thor solo` is a sub-command for running a single node in a standalone mode. It is useful for testing and development.
-
-```shell
-# create new block when there is pending transaction
-bin/thor solo --on-demand
-
-# save blockchain data to disk(default to memory)
-bin/thor solo --persist
-
-# two options can work together
-bin/thor solo --persist --on-demand
-```
-
-#### Master Key
-
-`thor master-key` is a sub-command for managing the node's master key.
-
-```shell
-# print the master address
-bin/thor master-key
-
-# export master key to keystore
-bin/thor master-key --export > keystore.json
-
-
-# import master key from keystore
-cat keystore.json | bin/thor master-key --import
-```
-
-___
-
-### Command line options
+Thor, Thor Solo and Discovery nodes all have advanced configurations available to help customise the Thor Client to the users desires. Below you will see a list of all of the available command line options.
 
 To show usages of all command line options:
 
@@ -59,7 +8,9 @@ To show usages of all command line options:
 bin/thor -h
 ```
 
-| Flag                             | Description                                                                                                                    |
+## Thor Commands
+
+| Commands                         | Description                                                                                                                    |
 |----------------------------------|--------------------------------------------------------------------------------------------------------------------------------|
 | `--network`                      | The network to join (main\|test) or path to the genesis file                                                                   |
 | `--data-dir`                     | Directory for blockchain databases                                                                                             |
@@ -93,9 +44,9 @@ bin/thor -h
 | `--help, -h`                     | Show help                                                                                                                      |
 | `--version, -v`                  | Print the version                                                                                                              |
 
-### Thor Solo Flags
+## Thor Solo Commands
 
-| Flag                         | Description                                        |
+| Commands                     | Description                                        |
 |------------------------------|----------------------------------------------------|
 | `--genesis`                  | Path to genesis file(default: builtin devnet)      |
 | `--on-demand`                | Create new block when there is pending transaction |
@@ -105,7 +56,7 @@ bin/thor -h
 | `--txpool-limit`             | Transaction pool size limit                        |
 
 
-### Discovery Node Flags
+## Discovery Node Commands
 
 To show all command line options:
 
@@ -124,7 +75,51 @@ bin/disco -h
 | `--help`        | Show the help message for the discovery node.                                           |
 | `--version`     | Show the version of the discovery node.                                                 |
 
-### Metrics
+## Useful Notes
+
+- Add the `--api-addr 0.0.0.0:8669` flag if you want other containers and/or hosts to have access to the
+RESTful API. `Thor` binds to `localhost` by default and it will not accept requests outside the container itself without
+the flag._
+
+- Release [v2.0.4](https://github.com/vechain/thor/releases/tag/v2.0.4) changed the default user from `root` (UID: 0)
+to `thor` (UID: 1000). Ensure that UID 1000 has `rwx` permissions on the data directory of the docker host. You can do
+that with ACL `sudo setfacl -R -m u:1000:rwx {path-to-your-data-directory}`, or update ownership
+with `sudo chown -R 1000:1000 {path-to-your-data-directory}`.
+
+### Sub-commands
+
+#### Thor Solo
+
+`thor solo` is a sub-command for running a single node in a standalone mode. It is useful for testing and development. See [Thor Solo](docs/thor_solo.md) for more information.
+
+```shell
+# create new block when there is pending transaction
+bin/thor solo --on-demand
+
+# save blockchain data to disk(default to memory)
+bin/thor solo --persist
+
+# two options can work together
+bin/thor solo --persist --on-demand
+```
+
+#### Master Key
+
+`thor master-key` is a sub-command for managing the node's master key.
+
+```shell
+# print the master address
+bin/thor master-key
+
+# export master key to keystore
+bin/thor master-key --export > keystore.json
+
+
+# import master key from keystore
+cat keystore.json | bin/thor master-key --import
+```
+
+#### Metrics
 
 Telemetry plays a critical role in monitoring and managing blockchain nodes efficiently.
 Below is an overview of how metrics is integrated and utilized within our node systems.
@@ -140,7 +135,7 @@ curl localhost:2112/metrics
 Instrumentation is in a beta phase at this stage. You can read more about the metric
 types [here](https://prometheus.io/docs/concepts/metric_types/).
 
-### Admin
+#### Admin
 
 Admin is used to allow privileged actions to the node by the administrator.
 
