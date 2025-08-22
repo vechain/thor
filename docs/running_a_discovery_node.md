@@ -31,7 +31,7 @@ Checkout the latest stable release:
 git checkout $(git describe --tags `git rev-list --tags --max-count=1`)
 ```
 
-Build Thor:
+Build Thor and Disco:
 
 ```sh
 make all
