@@ -6,7 +6,7 @@ This document will outline the process of becoming an elected mainnet validator.
 
 ## Validator Build
 
-Refer to the [Hardware Requirements](https://github.com/vechain/thor/tree/neil/docs-update?tab=readme-ov-file#hardware-requirements), [Command Line Arguments](#) and [Sync Time](https://github.com/vechain/thor/tree/neil/docs-update?tab=readme-ov-file#sync-time) for 
+Refer to the [Hardware Requirements](https://github.com/vechain/thor/tree/neil/docs-update?tab=readme-ov-file#hardware-requirements), [Command Line Arguments](docs/command_line_arguments.md) and [Sync Time](https://github.com/vechain/thor/tree/neil/docs-update?tab=readme-ov-file#sync-time) for 
 guidance on the hardware requirements, advanced node configuration and time required to sync the blockchain.
 
 When operating a validator the recommended configuration is without logs.
