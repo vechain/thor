@@ -253,24 +253,9 @@ func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, am
 	if err := s.validateNextPeriodTVL(validator); err != nil {
 		return err
 	}
-	agg, err := s.aggregationService.GetAggregation(validator)
-	if err != nil {
-		return err
-	}
-
-	weightedStake := stakes.NewWeightedStake(amount, validation.Multiplier)
-	if agg.LockedVET.Sign() == 1 || agg.PendingVET.Sign() == 1 {
-		weightedStake.AddWeight(*amount)
-		aggWeightIncrease := stakes.NewWeightedStake(big.NewInt(0), validation.Multiplier)
-		aggWeightIncrease.AddWeight(*amount)
-		err = s.aggregationService.AddPendingVET(validator, aggWeightIncrease)
-		if err != nil {
-			return err
-		}
-	}
 
 	// update global totals
-	if err := s.globalStatsService.AddQueued(weightedStake); err != nil {
+	if err := s.globalStatsService.AddQueued(stakes.NewWeightedStake(amount, validation.Multiplier)); err != nil {
 		return err
 	}
 
@@ -287,20 +272,8 @@ func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, am
 		return err
 	}
 
-	agg, err := s.aggregationService.GetAggregation(validator)
-	if err != nil {
-		return err
-	}
-
-	weightedStake := stakes.NewWeightedStake(amount, validation.Multiplier)
-	if agg.LockedVET.Sign() == 1 || agg.PendingVET.Sign() == 1 {
-		weightedStake.AddWeight(*amount)
-		aggWeightDecrease := stakes.NewWeightedStake(big.NewInt(0), validation.Multiplier)
-		aggWeightDecrease.AddWeight(*amount)
-	}
-
 	if queued {
-		err = s.globalStatsService.RemoveQueued(weightedStake)
+		err = s.globalStatsService.RemoveQueued(stakes.NewWeightedStake(amount, validation.Multiplier))
 		if err != nil {
 			return err
 		}
@@ -372,24 +345,6 @@ func (s *Staker) AddDelegation(
 	}
 	weightedStake := stakes.NewWeightedStake(stake, multiplier)
 
-	valStake := val.LockedVET
-	if val.Status == validation.StatusQueued {
-		valStake = val.QueuedVET
-	}
-
-	if val.Weight.Cmp(big.NewInt(0).Mul(valStake, big.NewInt(2))) < 0 && stake.Cmp(big.NewInt(0)) > 0 {
-		agg, err := s.aggregationService.GetAggregation(validator)
-		if err != nil {
-			return nil, err
-		}
-		if agg.PendingWeight.Cmp(big.NewInt(0).Add(valStake, stake)) < 0 {
-			weightedStake.AddWeight(*valStake)
-			if val.Status != validation.StatusQueued {
-				weightedStake.AddWeight(*val.QueuedVET)
-			}
-		}
-	}
-
 	if err = s.aggregationService.AddPendingVET(validator, weightedStake); err != nil {
 		return nil, err
 	}
@@ -399,14 +354,7 @@ func (s *Staker) AddDelegation(
 		return nil, err
 	}
 
-	if val.Status == validation.StatusQueued {
-		weightedStake.SubWeight(*valStake)
-	}
-
 	// update global figures
-	if val.Status == validation.StatusQueued {
-		weightedStake.AddWeight(*val.QueuedVET)
-	}
 	if err = s.globalStatsService.AddQueued(weightedStake); err != nil {
 		return nil, err
 	}
@@ -446,7 +394,7 @@ func (s *Staker) SignalDelegationExit(delegationID *big.Int) error {
 		return err
 	}
 
-	err = s.aggregationService.SignalExit(del.Validation, del.WeightedStake(), val.LockedVET)
+	err = s.aggregationService.SignalExit(del.Validation, del.WeightedStake())
 	if err != nil {
 		return err
 	}
@@ -485,26 +433,10 @@ func (s *Staker) WithdrawDelegation(
 		return nil, err
 	}
 
-	valStake := val.LockedVET
-	if val.Status == validation.StatusQueued {
-		valStake = val.QueuedVET
-	}
-
 	// start and finish values are sanitized: !started and finished is impossible
 	// delegation is still queued
 	if !started {
 		weightedStake := stakes.NewWeightedStake(withdrawableStake, del.Multiplier)
-		agg, err := s.aggregationService.GetAggregation(del.Validation)
-		if err != nil {
-			return nil, err
-		}
-		agg.PendingVET = big.NewInt(0).Sub(agg.PendingVET, weightedStake.VET())
-		agg.PendingWeight = big.NewInt(0).Sub(agg.PendingWeight, weightedStake.Weight())
-
-		if agg.PendingWeight.Cmp(big.NewInt(0).Add(valStake, agg.PendingVET)) >= 0 && agg.PendingVET.Cmp(big.NewInt(0)) <= 0 {
-			weightedStake.AddWeight(*valStake)
-		}
-
 		if err = s.aggregationService.SubPendingVet(del.Validation, weightedStake); err != nil {
 			return nil, err
 		}

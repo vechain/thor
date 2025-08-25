@@ -25,7 +25,8 @@ const (
 )
 
 const (
-	Multiplier = uint8(100) // 100% for validators if no delegations
+	Multiplier                = uint8(100) // 100% for validators if no delegations
+	MultiplierWithDelegations = uint8(200) // 200% for validators with delegations
 )
 
 type Validation struct {
@@ -132,26 +133,34 @@ func (v *Validation) renew(aggregations *delta.Renewal, hasDelegations bool) *de
 	queuedDecrease := big.NewInt(0).Set(v.QueuedVET)
 	v.WithdrawableVET = big.NewInt(0).Add(v.WithdrawableVET, v.PendingUnlockVET)
 	v.QueuedVET = big.NewInt(0)
-	pendingUnlock := v.PendingUnlockVET
 	v.PendingUnlockVET = big.NewInt(0)
 
 	v.CompleteIterations++
 
+	changeWeight := big.NewInt(0).Add(newLockedVET, aggregations.NewLockedWeight)
 	v.LockedVET = big.NewInt(0).Add(v.LockedVET, newLockedVET)
-	newLockedWeight := newLockedVET
-	if hasDelegations {
-		newLockedWeight = big.NewInt(0).Sub(newLockedWeight, pendingUnlock)
-	}
-
-	changeWeight := big.NewInt(0).Add(newLockedWeight, aggregations.NewLockedWeight)
 	v.Weight = big.NewInt(0).Add(v.Weight, changeWeight)
 
 	// deltas
+	weight := stakes.NewWeightedStake(newLockedVET, Multiplier).Weight()
+	if !hasDelegations {
+		weight = big.NewInt(0).Sub(weight, big.NewInt(0).Sub(v.Weight, v.LockedVET))
+		v.Weight = v.LockedVET
+	} else {
+		minStake := stakes.NewWeightedStake(v.LockedVET, MultiplierWithDelegations)
+		if v.Weight.Cmp(minStake.Weight()) < 0 {
+			weight = big.NewInt(0).Add(weight, v.LockedVET)
+			v.Weight = big.NewInt(0).Add(v.Weight, v.LockedVET)
+		} else {
+			v.Weight = big.NewInt(0).Add(v.Weight, newLockedVET)
+			weight = big.NewInt(0).Add(weight, newLockedVET)
+		}
+	}
 	queuedDecreaseWeight := stakes.NewWeightedStake(queuedDecrease, Multiplier).Weight()
 
 	return &delta.Renewal{
 		NewLockedVET:         newLockedVET,
-		NewLockedWeight:      newLockedWeight,
+		NewLockedWeight:      weight,
 		QueuedDecrease:       queuedDecrease,
 		QueuedDecreaseWeight: queuedDecreaseWeight,
 	}
