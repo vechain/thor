@@ -257,6 +257,7 @@ func defaultAction(ctx *cli.Context) error {
 			repo,
 			p2pCommunicator.Communicator(),
 			logAPIRequests,
+			master,
 		)
 		if err != nil {
 			return fmt.Errorf("unable to start admin server - %w", err)
@@ -417,6 +418,7 @@ func soloAction(ctx *cli.Context) error {
 			repo,
 			nil,
 			logAPIRequests,
+			nil,
 		)
 		if err != nil {
 			return fmt.Errorf("unable to start admin server - %w", err)
