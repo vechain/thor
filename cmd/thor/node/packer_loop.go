@@ -120,7 +120,7 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 		}
 	}()
 
-	return n.guardBlockProcessing(flow.Number(), func(conflicts [][]byte) (thor.Bytes32, error) {
+	return n.guardBlockProcessing(flow.Number(), func(conflicts uint32) (thor.Bytes32, error) {
 		var (
 			startTime  = mclock.Now()
 			logEnabled = !n.options.SkipLogs && !n.logDBFailed
@@ -150,7 +150,7 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 		}
 
 		// pack the new block
-		newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey, uint32(len(conflicts)), shouldVote)
+		newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey, conflicts, shouldVote)
 		if err != nil {
 			return thor.Bytes32{}, errors.Wrap(err, "failed to pack block")
 		}
@@ -177,7 +177,7 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 		}
 
 		// add the new block into repository
-		if err := n.repo.AddBlock(newBlock, receipts, uint32(len(conflicts)), true); err != nil {
+		if err := n.repo.AddBlock(newBlock, receipts, conflicts, true); err != nil {
 			return thor.Bytes32{}, errors.Wrap(err, "add block")
 		}
 

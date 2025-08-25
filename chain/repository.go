@@ -255,17 +255,17 @@ func (r *Repository) ScanConflicts(blockNum uint32) (uint32, error) {
 }
 
 // GetConflicts returns an array of found conflicts
-func (r *Repository) GetConflicts(blockNum uint32) ([][]byte, error) {
+func (r *Repository) GetConflicts(blockNum uint32) ([]thor.Bytes32, error) {
 	prefix := binary.BigEndian.AppendUint32(nil, blockNum)
 
 	iter := r.hdrStore.Iterate(kv.Range(*util.BytesPrefix(prefix)))
 	defer iter.Release()
 
-	conflicts := make([][]byte, 0, 1)
+	conflicts := make([]thor.Bytes32, 0, 1)
 	for iter.Next() {
 		key := make([]byte, 32)
 		copy(key, iter.Key())
-		conflicts = append(conflicts, key)
+		conflicts = append(conflicts, thor.BytesToBytes32(key))
 	}
 	return conflicts, iter.Error()
 }
