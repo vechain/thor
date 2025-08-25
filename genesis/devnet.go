@@ -149,14 +149,15 @@ func NewDevnetWithConfig(config DevConfig) *Genesis {
 
 // NewDevnet create genesis for solo mode.
 func NewHayabusaDevnet(forkConfig *thor.ForkConfig) *Genesis {
+	hayabusaTP := uint32(0)
 	thor.SetConfig(thor.Config{
 		LowStakingPeriod:    12,
 		MediumStakingPeriod: 30,
 		HighStakingPeriod:   90,
 		CooldownPeriod:      12,
 		EpochLength:         6,
-		HayabusaTP:          0,
-	}, true)
+		HayabusaTP:          &hayabusaTP,
+	})
 	thor.LockConfig()
 
 	launchTime := uint64(1526400000) // Default launch time 'Wed May 16 2018 00:00:00 GMT+0800 (CST)'

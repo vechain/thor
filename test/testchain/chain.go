@@ -113,7 +113,7 @@ func NewIntegrationTestChainWithGenesis(gene *genesis.Genesis, forkConfig *thor.
 
 	thor.SetConfig(thor.Config{
 		EpochLength: epochLength,
-	}, false)
+	})
 
 	prm := params.New(thor.BytesToAddress([]byte("params")), st)
 	_ = staker.New(builtin.Staker.Address, st, prm, nil)

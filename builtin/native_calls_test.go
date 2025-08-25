@@ -1387,7 +1387,8 @@ func TestExtensionNative(t *testing.T) {
 func TestStakerContract_Native(t *testing.T) {
 	fc := &thor.SoloFork
 	fc.HAYABUSA = 2
-	thor.SetConfig(thor.Config{HayabusaTP: 2}, true)
+	hayabusaTP := uint32(2)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 	var err error
 	thorChain, err = testchain.NewWithFork(fc, 1)
 	assert.NoError(t, err)
@@ -1607,7 +1608,8 @@ func TestStakerContract_Native(t *testing.T) {
 func TestStakerContract_Native_Revert(t *testing.T) {
 	fc := &thor.SoloFork
 	fc.HAYABUSA = 2
-	thor.SetConfig(thor.Config{HayabusaTP: 2}, true)
+	hayabusaTP := uint32(2)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 	var err error
 	thorChain, err = testchain.NewWithFork(fc, 180)
 	assert.NoError(t, err)
@@ -1742,7 +1744,8 @@ func TestStakerContract_Native_Revert(t *testing.T) {
 func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
 	fc := &thor.SoloFork
 	fc.HAYABUSA = 1
-	thor.SetConfig(thor.Config{HayabusaTP: 2}, true)
+	hayabusaTP := uint32(2)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 	var err error
 	thorChain, err = testchain.NewWithFork(fc, 180)
 	assert.NoError(t, err)

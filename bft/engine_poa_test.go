@@ -148,7 +148,7 @@ func (test *TestBFT) addBlock(
 	if quickTransition {
 		thor.SetConfig(thor.Config{
 			EpochLength: 1,
-		}, false)
+		})
 	}
 	flow, _, err := packer.Mock(parentSummary, parentSummary.Header.Timestamp()+thor.BlockInterval(), parentSummary.Header.GasLimit())
 	if err != nil {
@@ -157,7 +157,7 @@ func (test *TestBFT) addBlock(
 	if quickTransition {
 		thor.SetConfig(thor.Config{
 			EpochLength: defaultEpochLength,
-		}, false)
+		})
 	}
 
 	conflicts, err := test.repo.ScanConflicts(parentSummary.Header.Number() + 1)

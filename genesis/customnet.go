@@ -44,7 +44,7 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 			return nil, errors.New("EpochLength can not be zero or one")
 		}
 
-		thor.SetConfig(*gen.Config, true)
+		thor.SetConfig(*gen.Config)
 		thor.LockConfig()
 	}
 

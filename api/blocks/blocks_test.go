@@ -234,7 +234,8 @@ func initBlockServer(t *testing.T) {
 		VIP214:    2,
 		HAYABUSA:  math.MaxUint32,
 	}
-	thor.SetConfig(thor.Config{HayabusaTP: math.MaxUint32}, false)
+	hayabusaTP := uint32(math.MaxUint32)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 	thorChain, err := testchain.NewWithFork(&forks, 180)
 	require.NoError(t, err)
 

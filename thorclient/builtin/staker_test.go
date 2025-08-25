@@ -104,7 +104,7 @@ func TestStaker(t *testing.T) {
 
 	thor.SetConfig(thor.Config{
 		EpochLength: 1,
-	}, false)
+	})
 	for _, acc := range validators {
 		method := staker.AddValidation(acc.Address, minStake, minStakingPeriod)
 		receipt, _, err := method.
@@ -211,7 +211,7 @@ func TestStaker(t *testing.T) {
 
 	thor.SetConfig(thor.Config{
 		EpochLength: 180,
-	}, false)
+	})
 
 	// IncreaseStake
 	receipt, _, err = staker.IncreaseStake(queuedID, minStake).

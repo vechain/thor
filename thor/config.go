@@ -31,18 +31,18 @@ type Config struct {
 	ValidatorEvictionThreshold uint32 `json:"validatorEvictionThreshold"` // the number of blocks after which offline validator will be evicted from the leader group (7 days)
 
 	// staker parameters
-	LowStakingPeriod    uint32 `json:"lowStakingPeriod"`
-	MediumStakingPeriod uint32 `json:"mediumStakingPeriod"`
-	HighStakingPeriod   uint32 `json:"highStakingPeriod"`
-	CooldownPeriod      uint32 `json:"cooldownPeriod"`
-	HayabusaTP          uint32 `json:"hayabusaTP"`
+	LowStakingPeriod    uint32  `json:"lowStakingPeriod"`
+	MediumStakingPeriod uint32  `json:"mediumStakingPeriod"`
+	HighStakingPeriod   uint32  `json:"highStakingPeriod"`
+	CooldownPeriod      uint32  `json:"cooldownPeriod"`
+	HayabusaTP          *uint32 `json:"hayabusaTP"`
 }
 
 // SetConfig sets the config.
 // If the config is not set, the default values will be used.
 // If the config is locked, will panic.
-func SetConfig(cfg Config, force bool) {
-	if locked && !force {
+func SetConfig(cfg Config) {
+	if locked && cfg.HayabusaTP == nil {
 		panic("config is locked, cannot be set")
 	}
 
@@ -78,8 +78,8 @@ func SetConfig(cfg Config, force bool) {
 		cooldownPeriod = cfg.CooldownPeriod
 	}
 
-	if cfg.HayabusaTP != 0 || force {
-		hayabusaTP = cfg.HayabusaTP
+	if cfg.HayabusaTP != nil {
+		hayabusaTP = *cfg.HayabusaTP
 	}
 }
 

@@ -34,8 +34,9 @@ func CustomNetWithParams(
 		GALACTICA: math.MaxUint32,
 		HAYABUSA:  math.MaxUint32,
 	}
+	hayabusaTP := uint32(math.MaxUint32)
 	config := thor.Config{
-		HayabusaTP:                 math.MaxUint32,
+		HayabusaTP:                 &hayabusaTP,
 		BlockInterval:              thor.BlockInterval(),
 		EpochLength:                thor.EpochLength(),
 		SeederInterval:             thor.SeederInterval(),
@@ -45,7 +46,7 @@ func CustomNetWithParams(
 		HighStakingPeriod:          thor.HighStakingPeriod(),
 		CooldownPeriod:             thor.CooldownPeriod(),
 	}
-	thor.SetConfig(config, true)
+	thor.SetConfig(config)
 
 	devAccounts := genesis.DevAccounts()
 

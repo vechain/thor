@@ -37,7 +37,8 @@ func TestFinalizedPos(t *testing.T) {
 	forkCfg := &thor.ForkConfig{
 		HAYABUSA: 1,
 	}
-	thor.SetConfig(thor.Config{HayabusaTP: 1}, false)
+	hayabusaTP := uint32(1)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 
 	testBFT, err := newTestBftPos(forkCfg)
 	if err != nil {
@@ -104,7 +105,8 @@ func TestAcceptsPos(t *testing.T) {
 	forkCfg := &thor.ForkConfig{
 		HAYABUSA: 1,
 	}
-	thor.SetConfig(thor.Config{HayabusaTP: 1}, false)
+	hayabusaTP := uint32(1)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 
 	testBFT, err := newTestBftPos(forkCfg)
 	if err != nil {
@@ -365,7 +367,8 @@ func TestGetVotePos(t *testing.T) {
 	forkCfg := &thor.ForkConfig{
 		HAYABUSA: 1,
 	}
-	thor.SetConfig(thor.Config{HayabusaTP: 1}, false)
+	hayabusaTP := uint32(1)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -629,7 +632,8 @@ func TestJustifierPos(t *testing.T) {
 	forkCfg := &thor.ForkConfig{
 		HAYABUSA: 1,
 	}
-	thor.SetConfig(thor.Config{HayabusaTP: 1}, false)
+	hayabusaTP := uint32(1)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -817,7 +821,8 @@ func TestJustifiedPos(t *testing.T) {
 	forkCfg := &thor.ForkConfig{
 		HAYABUSA: 1,
 	}
-	thor.SetConfig(thor.Config{HayabusaTP: 1}, false)
+	hayabusaTP := uint32(1)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -849,14 +854,14 @@ func (test *TestBFT) transitionToPosBlock(parentSummary *chain.BlockSummary, mas
 	packer := packer.New(test.repo, test.stater, master.Address, &thor.Address{}, test.fc, 0)
 	thor.SetConfig(thor.Config{
 		EpochLength: 1,
-	}, false)
+	})
 	flow, _, err := packer.Mock(parentSummary, parentSummary.Header.Timestamp()+thor.BlockInterval(), parentSummary.Header.GasLimit())
 	if err != nil {
 		return nil, err
 	}
 	thor.SetConfig(thor.Config{
 		EpochLength: defaultEpochLength,
-	}, false)
+	})
 
 	conflicts, err := test.repo.ScanConflicts(parentSummary.Header.Number() + 1)
 	if err != nil {
