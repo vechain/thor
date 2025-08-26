@@ -42,7 +42,7 @@ type Config struct {
 // If the config is not set, the default values will be used.
 // If the config is locked, will panic.
 func SetConfig(cfg Config) {
-	if locked && cfg.HayabusaTP == nil {
+	if locked {
 		panic("config is locked, cannot be set")
 	}
 
