@@ -170,8 +170,12 @@ func (v *Validation) renew(aggregations *delta.Renewal, delegationWeight *big.In
 	}
 }
 
-func (v *Validation) exit() *delta.Exit {
+func (v *Validation) exit(aggWeight *big.Int) *delta.Exit {
+	if aggWeight == nil {
+		aggWeight = big.NewInt(0)
+	}
 	releaseLockedTVL := big.NewInt(0).Set(v.LockedVET)
+	releaseLockedWeight := big.NewInt(0).Sub(v.Weight, aggWeight)
 	releaseQueuedTVL := big.NewInt(0).Set(v.QueuedVET)
 
 	// move locked to cooldown
@@ -193,7 +197,7 @@ func (v *Validation) exit() *delta.Exit {
 	// We only return the change in the validation's TVL and weight
 	return &delta.Exit{
 		ExitedTVL:            releaseLockedTVL,
-		ExitedTVLWeight:      stakes.NewWeightedStake(releaseLockedTVL, Multiplier).Weight(),
+		ExitedTVLWeight:      releaseLockedWeight,
 		QueuedDecrease:       releaseQueuedTVL,
 		QueuedDecreaseWeight: stakes.NewWeightedStake(releaseQueuedTVL, Multiplier).Weight(),
 	}

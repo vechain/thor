@@ -387,7 +387,7 @@ func (s *Service) NextToActivate(maxLeaderGroupSize *big.Int) (*thor.Address, er
 }
 
 // ExitValidator removes the validator from the active list and puts it in cooldown.
-func (s *Service) ExitValidator(validator thor.Address) (*delta.Exit, error) {
+func (s *Service) ExitValidator(validator thor.Address, aggWeight *big.Int) (*delta.Exit, error) {
 	entry, err := s.GetValidation(validator)
 	if err != nil {
 		return nil, err
@@ -395,7 +395,7 @@ func (s *Service) ExitValidator(validator thor.Address) (*delta.Exit, error) {
 	if entry.IsEmpty() {
 		return nil, nil
 	}
-	exit := entry.exit()
+	exit := entry.exit(aggWeight)
 	if err = s.leaderGroup.Remove(validator); err != nil {
 		return nil, err
 	}

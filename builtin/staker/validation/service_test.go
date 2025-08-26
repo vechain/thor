@@ -117,7 +117,7 @@ func TestService_ActivateAndExit_Flow(t *testing.T) {
 	assert.Equal(t, big.NewInt(100), after.LockedVET)
 	assert.Equal(t, big.NewInt(0), after.QueuedVET)
 
-	exit, err := svc.ExitValidator(id)
+	exit, err := svc.ExitValidator(id, nil)
 	assert.NoError(t, err)
 	assert.True(t, exit.ExitedTVL.Sign() >= 0)
 
