@@ -115,7 +115,7 @@ func (v *Validation) CurrentIteration() uint32 {
 // 3. Increase WithdrawableVET by PendingUnlockVET
 // 4. Set QueuedVET to 0
 // 5. Set PendingUnlockVET to 0
-func (v *Validation) renew(aggregations *delta.Renewal, hasDelegations bool) *delta.Renewal {
+func (v *Validation) renew(aggregations *delta.Renewal, delegationWeight *big.Int) *delta.Renewal {
 	newLockedVET := big.NewInt(0)
 
 	if v.QueuedVET == nil {
@@ -143,17 +143,19 @@ func (v *Validation) renew(aggregations *delta.Renewal, hasDelegations bool) *de
 
 	// deltas
 	weight := stakes.NewWeightedStake(newLockedVET, Multiplier).Weight()
-	if !hasDelegations {
+	if delegationWeight.Sign() < 1 {
 		println("no delegations, setting weight to locked vet", v.Endorser.String())
 		weight = big.NewInt(0).Sub(weight, big.NewInt(0).Sub(v.Weight, v.LockedVET))
 		v.Weight = v.LockedVET
 	} else {
 		println("has delegations")
 		minStake := stakes.NewWeightedStake(v.LockedVET, MultiplierWithDelegations)
-		if v.Weight.Cmp(minStake.Weight()) < 0 {
-			println("weight is less ======", v.Endorser.String())
-			weight = big.NewInt(0).Add(weight, v.LockedVET)
-			v.Weight = big.NewInt(0).Add(v.Weight, v.LockedVET)
+		valWeight := big.NewInt(0).Sub(v.Weight, delegationWeight)
+		println("sdadsada", big.NewInt(0).Sub(v.Weight, delegationWeight).String(), minStake.Weight().String(), v.LockedVET.String())
+		if valWeight.Cmp(minStake.Weight()) < 0 {
+			println("weight is less ======", v.Endorser.String(), v.Weight.String(), delegationWeight.String(), minStake.Weight().String(), changeWeight.String())
+			weight = big.NewInt(0).Add(weight, big.NewInt(0).Sub(minStake.Weight(), valWeight))
+			v.Weight = big.NewInt(0).Add(v.Weight, big.NewInt(0).Sub(minStake.Weight(), valWeight))
 		} else {
 			println("weight is more, recalculating ======", v.Weight.String(), newLockedVET.String(), weight.String(), v.Endorser.String(), changeWeight.String(), v.LockedVET.String())
 			v.Weight = big.NewInt(0).Add(v.Weight, newLockedVET)
