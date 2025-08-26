@@ -8,7 +8,6 @@ package staker
 import (
 	"math/big"
 
-	"github.com/vechain/thor/v2/builtin/authority"
 	"github.com/vechain/thor/v2/builtin/gascharger"
 	"github.com/vechain/thor/v2/builtin/params"
 	"github.com/vechain/thor/v2/builtin/solidity"
@@ -71,32 +70,6 @@ func New(addr thor.Address, state *state.State, params *params.Params, charger *
 // IsPoSActive checks if the staker contract has become active, i.e. we have transitioned to PoS.
 func (s *Staker) IsPoSActive() (bool, error) {
 	return s.validationService.IsActive()
-}
-
-// TransitionPeriodBalanceCheck returns a BalanceChecker function that checks if an endorser has enough VET soft staked
-// for the transition period whereby the endorser can leverage queued VET to meet the requirement.
-// It defaults to checking the account balance first and then checks the queued VET if in transition period.
-func (s *Staker) TransitionPeriodBalanceCheck(fc *thor.ForkConfig, currentBlock uint32, endorsement *big.Int) authority.BalanceChecker {
-	return func(validator, endorser thor.Address) (bool, error) {
-		balance, err := s.state.GetBalance(endorser)
-		if err != nil {
-			return false, err
-		}
-		if balance.Cmp(endorsement) >= 0 {
-			return true, nil
-		}
-		if currentBlock < fc.HAYABUSA { // before HAYABUSA fork, we only check the account balance
-			return false, nil
-		}
-		validation, err := s.validationService.GetValidation(validator)
-		if err != nil {
-			return false, err
-		}
-		if validation.IsEmpty() || validation.QueuedVET == nil {
-			return false, nil
-		}
-		return validation.QueuedVET.Cmp(endorsement) >= 0, nil
-	}
 }
 
 // LeaderGroup lists all registered candidates.
