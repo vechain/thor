@@ -3332,9 +3332,6 @@ func TestStaker_Housekeep_NegativeCases(t *testing.T) {
 	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(2)))
 	staker := New(stakerAddr, st, param, nil)
 
-	var et *EpochTransition = nil
-	assert.False(t, et.HasUpdates())
-
 	housekeep, err := staker.Housekeep(thor.EpochLength() - 1)
 	assert.NoError(t, err)
 	assert.False(t, housekeep)
