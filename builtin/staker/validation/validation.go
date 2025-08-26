@@ -146,7 +146,7 @@ func (v *Validation) renew(aggregations *delta.Renewal, delegationWeight *big.In
 	if delegationWeight.Sign() < 1 {
 		// no delegations - if there is a validator weight multiplied by 2 will be set to 1
 		weight = big.NewInt(0).Sub(weight, big.NewInt(0).Sub(v.Weight, v.LockedVET))
-		v.Weight = v.LockedVET
+		v.Weight = big.NewInt(0).Set(v.LockedVET)
 	} else {
 		minStake := stakes.NewWeightedStake(v.LockedVET, MultiplierWithDelegations)
 		valWeight := big.NewInt(0).Sub(v.Weight, delegationWeight)
