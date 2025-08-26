@@ -76,20 +76,19 @@ func (s *Service) SubPendingVet(validator thor.Address, stake *stakes.WeightedSt
 
 // Renew transitions the validator's delegations to the next staking period.
 // Called during staking period renewal process.
-func (s *Service) Renew(validator thor.Address) (*delta.Renewal, bool, error) {
+func (s *Service) Renew(validator thor.Address) (*delta.Renewal, *big.Int, error) {
 	agg, err := s.GetAggregation(validator)
 	if err != nil {
-		return nil, false, err
+		return nil, new(big.Int), err
 	}
 
 	renew := agg.renew()
 
 	if err = s.setAggregation(validator, agg, false); err != nil {
-		return nil, false, err
+		return nil, new(big.Int), err
 	}
-	hasDelegations := agg.LockedVET.Sign() == 1
 
-	return renew, hasDelegations, nil
+	return renew, agg.LockedWeight, nil
 }
 
 // Exit moves all delegations to withdrawable state when validator exits.
@@ -111,7 +110,7 @@ func (s *Service) Exit(validator thor.Address) (*delta.Exit, error) {
 
 // SignalExit marks locked delegations as exiting for the next period.
 // Called when a validator signals intent to exit but hasn't exited yet.
-func (s *Service) SignalExit(validator thor.Address, stake *stakes.WeightedStake, valStake *big.Int) error {
+func (s *Service) SignalExit(validator thor.Address, stake *stakes.WeightedStake) error {
 	agg, err := s.GetAggregation(validator)
 	if err != nil {
 		return err
@@ -119,12 +118,8 @@ func (s *Service) SignalExit(validator thor.Address, stake *stakes.WeightedStake
 
 	// Only move to exiting pools - don't subtract from locked yet
 	// The subtraction happens during renewal
-	exitingWeight := stake.Weight()
-	if agg.LockedVET.Cmp(stake.VET()) <= 0 {
-		exitingWeight = big.NewInt(0).Add(exitingWeight, valStake)
-	}
 	agg.ExitingVET = big.NewInt(0).Add(agg.ExitingVET, stake.VET())
-	agg.ExitingWeight = big.NewInt(0).Add(agg.ExitingWeight, exitingWeight)
+	agg.ExitingWeight = big.NewInt(0).Add(agg.ExitingWeight, stake.Weight())
 
 	return s.setAggregation(validator, agg, false)
 }

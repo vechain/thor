@@ -387,7 +387,7 @@ func (s *Service) NextToActivate(maxLeaderGroupSize *big.Int) (*thor.Address, er
 }
 
 // ExitValidator removes the validator from the active list and puts it in cooldown.
-func (s *Service) ExitValidator(validator thor.Address) (*delta.Exit, error) {
+func (s *Service) ExitValidator(validator thor.Address, aggWeight *big.Int) (*delta.Exit, error) {
 	entry, err := s.GetValidation(validator)
 	if err != nil {
 		return nil, err
@@ -395,7 +395,7 @@ func (s *Service) ExitValidator(validator thor.Address) (*delta.Exit, error) {
 	if entry.IsEmpty() {
 		return nil, nil
 	}
-	exit := entry.exit()
+	exit := entry.exit(aggWeight)
 	if err = s.leaderGroup.Remove(validator); err != nil {
 		return nil, err
 	}
@@ -514,12 +514,12 @@ func (s *Service) UpdateOfflineBlock(validator thor.Address, block uint32, onlin
 	return s.repo.setValidation(validator, validation, false)
 }
 
-func (s *Service) Renew(validator thor.Address, aggRenew *delta.Renewal, hasDelegations bool) (*delta.Renewal, error) {
+func (s *Service) Renew(validator thor.Address, aggRenew *delta.Renewal, delegationWeight *big.Int) (*delta.Renewal, error) {
 	validation, err := s.GetExistingValidation(validator)
 	if err != nil {
 		return nil, err
 	}
-	delta := validation.renew(aggRenew, hasDelegations)
+	delta := validation.renew(aggRenew, delegationWeight)
 	if err = s.repo.setValidation(validator, validation, false); err != nil {
 		return nil, errors.Wrap(err, "failed to renew validator")
 	}
