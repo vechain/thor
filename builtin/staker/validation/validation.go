@@ -155,7 +155,7 @@ func (v *Validation) renew(aggregations *delta.Renewal, hasDelegations bool) *de
 			weight = big.NewInt(0).Add(weight, v.LockedVET)
 			v.Weight = big.NewInt(0).Add(v.Weight, v.LockedVET)
 		} else {
-			println("weight is more, recalculating ======")
+			println("weight is more, recalculating ======", v.Weight.String(), newLockedVET.String(), weight.String(), v.Endorser.String())
 			v.Weight = big.NewInt(0).Add(v.Weight, newLockedVET)
 			weight = big.NewInt(0).Add(weight, newLockedVET)
 		}
