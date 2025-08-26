@@ -654,4 +654,23 @@ func TestStaker_DelegationExitingVET(t *testing.T) {
 
 	_, err = staker.Housekeep(thor.MediumStakingPeriod() * 2)
 	assert.NoError(t, err)
+
+	lVet, lWeight, err := staker.LockedVET()
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0).String(), lVet.String())
+	assert.Equal(t, big.NewInt(0).String(), lWeight.String())
+
+	qVet, qWeight, err := staker.QueuedStake()
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0).String(), qVet.String())
+	assert.Equal(t, big.NewInt(0).String(), qWeight.String())
+
+	total, err := staker.GetValidationTotals(*firstActive)
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0), total.TotalLockedStake)
+	assert.Equal(t, big.NewInt(0), total.TotalLockedWeight)
+	assert.Equal(t, big.NewInt(0), total.TotalQueuedStake)
+	assert.Equal(t, big.NewInt(0), total.TotalQueuedWeight)
+	assert.Equal(t, big.NewInt(0), total.TotalExitingStake)
+	assert.Equal(t, big.NewInt(0), total.TotalExitingWeight)
 }
