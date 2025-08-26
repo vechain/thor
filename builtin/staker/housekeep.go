@@ -28,9 +28,6 @@ type EpochTransition struct {
 }
 
 func (et *EpochTransition) HasUpdates() bool {
-	if et == nil {
-		return false
-	}
 	return len(et.Renewals) > 0 || // renewing existing staking periods
 		(et.ExitValidator != nil && !et.ExitValidator.IsZero()) || // exiting 1 validator
 		len(et.Evictions) > 0 || // forcing eviction of offline validators
@@ -68,12 +65,10 @@ func (s *Staker) computeEpochTransition(currentBlock uint32) (*EpochTransition, 
 
 	var renewals []thor.Address
 	var evictions []thor.Address
-	active := make(map[thor.Address]*validation.Validation)
 	exitValidator := thor.Address{}
 	err = s.validationService.LeaderGroupIterator(
 		s.renewalCallback(currentBlock, &renewals),
 		s.exitsCallback(currentBlock, &exitValidator),
-		s.collectActiveCallback(active),
 		s.evictionCallback(currentBlock, &evictions),
 	)
 	if err != nil {
@@ -138,10 +133,6 @@ func (s *Staker) evictionCallback(currentBlock uint32, evictions *[]thor.Address
 		}
 		return nil
 	}
-}
-
-func (s *Staker) collectActiveCallback(active map[thor.Address]*validation.Validation) func(thor.Address, *validation.Validation) error {
-	return func(id thor.Address, v *validation.Validation) error { active[id] = v; return nil }
 }
 
 // computeActivationCount calculates how many validators can be activated
