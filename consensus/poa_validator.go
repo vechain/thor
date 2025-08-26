@@ -7,7 +7,6 @@ package consensus
 
 import (
 	"fmt"
-	"math/big"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
@@ -34,8 +33,14 @@ func (c *Consensus) validateAuthorityProposer(header *block.Header, parent *bloc
 		}
 		candidates = poa.NewCandidates(list)
 	}
+	staker := builtin.Staker.Native(st)
+	endorsement, err := builtin.Params.Native(st).Get(thor.KeyProposerEndorsement)
+	if err != nil {
+		return nil, err
+	}
+	balanceCheck := staker.TransitionPeriodBalanceCheck(c.forkConfig, header.Number(), endorsement)
 
-	proposers, err := candidates.Pick(st, c.authorityBalanceCheck(header, st, signer))
+	proposers, err := candidates.Pick(st, balanceCheck)
 	if err != nil {
 		return nil, err
 	}
@@ -124,34 +129,4 @@ func (c *Consensus) authorityCacheHandler(candidates *poa.Candidates, header *bl
 	}
 
 	return nil
-}
-
-func (c *Consensus) authorityBalanceCheck(header *block.Header, st *state.State, signer thor.Address) poa.BalancerChecker {
-	transitionPeriod := header.Number() >= c.forkConfig.HAYABUSA
-	staker := builtin.Staker.Native(st)
-
-	return func(endorsor thor.Address, minBalance *big.Int) (bool, error) {
-		bal, err := st.GetBalance(endorsor)
-		if err != nil {
-			return false, err
-		}
-		hasAccountBalance := bal.Cmp(minBalance) >= 0
-		if hasAccountBalance {
-			return true, nil
-		}
-		if !transitionPeriod { // before HAYABUSA fork, we only check the account balance
-			return false, nil
-		}
-		// `signer` is the node master, not the endorsor
-		// We are checking if the signer of the block has a `Validation` entry with a stake
-		// NOT if the given endorsor has a staked
-		validator, err := staker.GetValidation(signer)
-		if err != nil {
-			return false, err
-		}
-		if validator.IsEmpty() || validator.QueuedVET == nil {
-			return false, nil
-		}
-		return validator.QueuedVET.Cmp(minBalance) >= 0, nil
-	}
 }
