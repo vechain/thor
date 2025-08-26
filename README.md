@@ -50,7 +50,7 @@ Minimum of 45,000 IOPS required for an approximate 30 hour sync time.
 
 ## Sync Time
 
-Sync time from genesis to the latest mainnet block depends on hardware, configuration, and bandwidth.
+Sync time from genesis to the latest mainnet block depends on hardware, configuration, and bandwidth. As at August 2025.
 
 ### Validator
 
@@ -60,12 +60,16 @@ Sync time from genesis to the latest mainnet block depends on hardware, configur
 | 2 CPU, 16 GB, 10 Mbit, 468 NVMe SSD, 35K IOPS | 38 Hours, 41 Minutes | [I8g.large](https://aws.amazon.com/ec2/instance-types/i8g/)  |
 | 4 CPU, 32 GB, 10 Mbit, 937 NVMe SSD, 45K IOPS | 30 Hours, 00 Minutes | [I8g.xlarge](https://aws.amazon.com/ec2/instance-types/i8g/) |
 
+Note: The build used the `--skip-logs` command.
+
 ### Public Full Node
 
 | Build                                          | Sync Time            | AWS SKU                                                       |
 |------------------------------------------------|----------------------|---------------------------------------------------------------|
 | 8 CPU, 64 GB, 12 Mbit, 1875 NVMe SSD, 15K IOPS | 59 Hours, 04 Minutes | [I4g.2xlarge](https://aws.amazon.com/ec2/instance-types/i4g)  |
 | 8 CPU, 64 GB, 12 Mbit, 1875 NVMe SSD, 42K IOPS | 32 Hours, 17 Minutes | [I8g.2xlarge](https://aws.amazon.com/ec2/instance-types/i8g/) |
+
+Note: The build used the `-disable-pruner` command.
 
 ## Installation
 
