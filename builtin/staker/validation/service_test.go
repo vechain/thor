@@ -106,7 +106,7 @@ func TestService_ActivateAndExit_Flow(t *testing.T) {
 	}
 	assert.NoError(t, svc.repo.setValidation(id, val, true))
 
-	renew := (&Validation{QueuedVET: big.NewInt(100), LockedVET: big.NewInt(0), Weight: big.NewInt(0)}).renew(delta.NewRenewal(), false)
+	renew := (&Validation{QueuedVET: big.NewInt(100), LockedVET: big.NewInt(0), Weight: big.NewInt(0)}).renew(delta.NewRenewal(), big.NewInt(0))
 
 	_, err := svc.ActivateValidator(id, 1, renew)
 	assert.NoError(t, err)
@@ -805,17 +805,17 @@ func TestService_Renew(t *testing.T) {
 		QueuedDecrease:       big.NewInt(100),
 		QueuedDecreaseWeight: big.NewInt(15),
 	}
-	delta, err := svc.Renew(id1, &renewal, false)
+	delta, err := svc.Renew(id1, &renewal, big.NewInt(1500))
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(350), delta.NewLockedVET)
-	assert.Equal(t, big.NewInt(350), delta.NewLockedWeight)
+	assert.Equal(t, big.NewInt(700), delta.NewLockedWeight)
 	assert.Equal(t, big.NewInt(350), delta.QueuedDecrease)
 	assert.Equal(t, big.NewInt(350), delta.QueuedDecreaseWeight)
 
 	val, err = svc.GetValidation(id1)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(350), val.LockedVET)
-	assert.Equal(t, big.NewInt(1850), val.Weight)
+	assert.Equal(t, big.NewInt(2200), val.Weight)
 	assert.Equal(t, big.NewInt(0), val.PendingUnlockVET)
 	assert.Equal(t, big.NewInt(0), val.QueuedVET)
 	assert.Equal(t, big.NewInt(0), val.CooldownVET)
@@ -829,23 +829,23 @@ func TestService_Renew(t *testing.T) {
 	val, err = svc.GetValidation(id1)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(350), val.LockedVET)
-	assert.Equal(t, big.NewInt(1850), val.Weight)
+	assert.Equal(t, big.NewInt(2200), val.Weight)
 	assert.Equal(t, big.NewInt(0), val.PendingUnlockVET)
 	assert.Equal(t, big.NewInt(200), val.QueuedVET)
 	assert.Equal(t, big.NewInt(0), val.CooldownVET)
 	assert.Equal(t, big.NewInt(500), val.WithdrawableVET)
 
-	delta, err = svc.Renew(id1, &renewal, true)
+	delta, err = svc.Renew(id1, &renewal, big.NewInt(1500))
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(200), delta.NewLockedVET)
-	assert.Equal(t, big.NewInt(200), delta.NewLockedWeight)
+	assert.Equal(t, big.NewInt(400), delta.NewLockedWeight)
 	assert.Equal(t, big.NewInt(200), delta.QueuedDecrease)
 	assert.Equal(t, big.NewInt(200), delta.QueuedDecreaseWeight)
 
 	val, err = svc.GetValidation(id1)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(550), val.LockedVET)
-	assert.Equal(t, big.NewInt(3550), val.Weight)
+	assert.Equal(t, big.NewInt(4100), val.Weight)
 	assert.Equal(t, big.NewInt(0), val.PendingUnlockVET)
 	assert.Equal(t, big.NewInt(0), val.QueuedVET)
 	assert.Equal(t, big.NewInt(0), val.CooldownVET)

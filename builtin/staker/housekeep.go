@@ -189,13 +189,13 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 	accumulatedRenewal := delta.NewRenewal()
 	// Apply renewals
 	for _, validator := range transition.Renewals {
-		aggRenewal, hasDelegations, err := s.aggregationService.Renew(validator)
+		aggRenewal, delegationWeight, err := s.aggregationService.Renew(validator)
 		if err != nil {
 			return err
 		}
 		accumulatedRenewal.Add(aggRenewal)
 		// Update validator state
-		valRenewal, err := s.validationService.Renew(validator, aggRenewal, hasDelegations)
+		valRenewal, err := s.validationService.Renew(validator, aggRenewal, delegationWeight)
 		if err != nil {
 			return err
 		}
