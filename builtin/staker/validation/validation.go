@@ -144,14 +144,18 @@ func (v *Validation) renew(aggregations *delta.Renewal, hasDelegations bool) *de
 	// deltas
 	weight := stakes.NewWeightedStake(newLockedVET, Multiplier).Weight()
 	if !hasDelegations {
+		println("no delegations, setting weight to locked vet")
 		weight = big.NewInt(0).Sub(weight, big.NewInt(0).Sub(v.Weight, v.LockedVET))
 		v.Weight = v.LockedVET
 	} else {
+		println("has delegations")
 		minStake := stakes.NewWeightedStake(v.LockedVET, MultiplierWithDelegations)
 		if v.Weight.Cmp(minStake.Weight()) < 0 {
+			println("weight is less ======")
 			weight = big.NewInt(0).Add(weight, v.LockedVET)
 			v.Weight = big.NewInt(0).Add(v.Weight, v.LockedVET)
 		} else {
+			println("weight is more, recalculating ======")
 			v.Weight = big.NewInt(0).Add(v.Weight, newLockedVET)
 			weight = big.NewInt(0).Add(weight, newLockedVET)
 		}
