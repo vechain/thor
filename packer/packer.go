@@ -7,7 +7,6 @@ package packer
 
 import (
 	"errors"
-	"github.com/vechain/thor/v2/log"
 	"math/big"
 
 	"github.com/vechain/thor/v2/block"
@@ -68,11 +67,9 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (*Flo
 	}
 
 	var sched scheduler
-	checkpoint := st.NewCheckpoint()
 	dPosStatus, err := builtin.Staker.Native(st).SyncPOS(p.forkConfig, parent.Header.Number()+1)
 	if err != nil {
-		log.Error("staker sync pos failed - reverting state", "err", err, "height", parent.Header.Number()+1, "parent", parent, "checkpoint", checkpoint)
-		st.RevertTo(checkpoint)
+		return nil, false, err
 	}
 	if dPosStatus.Active {
 		sched = p.schedulePOS

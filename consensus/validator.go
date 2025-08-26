@@ -8,7 +8,6 @@ package consensus
 import (
 	"bytes"
 	"fmt"
-	"github.com/vechain/thor/v2/log"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
@@ -37,13 +36,10 @@ func (c *Consensus) validate(
 		return nil, nil, err
 	}
 
-	checkpoint := state.NewCheckpoint()
 	staker := builtin.Staker.Native(state)
 	dPosStatus, err := staker.SyncPOS(c.forkConfig, header.Number())
 	if err != nil {
-		log.Error("staker sync pos failed - reverting state", "err", err, "height", header.Number(), "parent", parent, "checkpoint", checkpoint)
-		dPosStatus.Updates = false // no need to clear validators cache
-		state.RevertTo(checkpoint)
+		return nil, nil, err
 	}
 	if dPosStatus.Updates {
 		c.validatorsCache.Remove(parent.ID())

@@ -8,8 +8,6 @@ package staker
 import (
 	"math/big"
 
-	"github.com/pkg/errors"
-
 	"github.com/vechain/thor/v2/builtin/staker/delta"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
@@ -110,16 +108,12 @@ func (s *Staker) renewalCallback(currentBlock uint32, renewals *[]thor.Address) 
 }
 
 func (s *Staker) exitsCallback(currentBlock uint32, exitAddress *thor.Address) func(thor.Address, *validation.Validation) error {
-	// Find the last validator in iteration order that should exit this block
+	// Find the 1st validator in iteration order that should exit this block
 	// Do NOT call ExitValidator here - just identify which validator should exit
 	return func(validator thor.Address, entry *validation.Validation) error {
 		if entry.ExitBlock != nil && currentBlock == *entry.ExitBlock {
-			// should never be possible for two validators to exit at the same block
-			if !exitAddress.IsZero() {
-				return errors.Errorf("found more than one validator exit in the same block: ValidatorID: %s, ValidatorID: %s", exitAddress, validator)
-			}
-			// Just record which validator should exit (matches original behavior)
 			*exitAddress = validator
+			return nil
 		}
 		return nil
 	}
@@ -133,10 +127,6 @@ func (s *Staker) evictionCallback(currentBlock uint32, evictions *[]thor.Address
 		}
 		return nil
 	}
-}
-
-func (s *Staker) collectActiveCallback(active map[thor.Address]*validation.Validation) func(thor.Address, *validation.Validation) error {
-	return func(id thor.Address, v *validation.Validation) error { active[id] = v; return nil }
 }
 
 // computeActivationCount calculates how many validators can be activated
