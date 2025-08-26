@@ -2260,7 +2260,6 @@ func Test_GetValidatorTotals_ValidatorExiting(t *testing.T) {
 
 	delegationID := new(big.Int)
 	dStake := stakes.NewWeightedStake(MinStake, 255)
-	dStake.AddWeight(*validator.LockedVET)
 	newTestSequence(t, staker).AddDelegation(validator.ID, dStake.VET(), 255, delegationID)
 
 	_, err := staker.aggregationService.GetAggregation(validators[0].ID)
@@ -2274,6 +2273,8 @@ func Test_GetValidatorTotals_ValidatorExiting(t *testing.T) {
 		TotalLockedStake:  vStake.VET(),
 	})
 
+	vStake.AddWeight(*validators[0].LockedVET)
+
 	newTestSequence(t, staker).
 		Housekeep(validator.Period).
 		AssertTotals(validator.ID, &validation.Totals{
@@ -2283,9 +2284,9 @@ func Test_GetValidatorTotals_ValidatorExiting(t *testing.T) {
 		SignalExit(validator.ID, validator.Endorser).
 		AssertTotals(validator.ID, &validation.Totals{
 			TotalLockedStake:   big.NewInt(0).Add(vStake.VET(), dStake.VET()),
-			TotalLockedWeight:  big.NewInt(0).Add(vStake.VET(), dStake.Weight()),
+			TotalLockedWeight:  big.NewInt(0).Add(vStake.Weight(), dStake.Weight()),
 			TotalExitingStake:  big.NewInt(0).Add(vStake.VET(), dStake.VET()),
-			TotalExitingWeight: big.NewInt(0).Add(vStake.VET(), dStake.Weight()),
+			TotalExitingWeight: big.NewInt(0).Add(vStake.Weight(), dStake.Weight()),
 		})
 }
 
@@ -2298,7 +2299,6 @@ func Test_GetValidatorTotals_DelegatorExiting_ThenValidator(t *testing.T) {
 	require.NoError(t, err)
 	vStake := stakes.NewWeightedStake(validators[0].LockedVET, validation.Multiplier)
 	dStake := stakes.NewWeightedStake(MinStake, 255)
-	dStake.AddWeight(*validators[0].LockedVET)
 
 	delegationID := new(big.Int)
 	newTestSequence(t, staker).AddDelegation(validator.ID, dStake.VET(), 255, delegationID)
@@ -2310,18 +2310,19 @@ func Test_GetValidatorTotals_DelegatorExiting_ThenValidator(t *testing.T) {
 		TotalLockedStake:  vStake.VET(),
 	})
 
+	vStake.AddWeight(*validators[0].LockedVET)
 	newTestSequence(t, staker).
 		Housekeep(validator.Period).
 		AssertTotals(validator.ID, &validation.Totals{
 			TotalLockedStake:  big.NewInt(0).Add(vStake.VET(), dStake.VET()),
-			TotalLockedWeight: big.NewInt(0).Add(vStake.VET(), dStake.Weight()),
+			TotalLockedWeight: big.NewInt(0).Add(vStake.Weight(), dStake.Weight()),
 			TotalQueuedStake:  big.NewInt(0),
 			TotalQueuedWeight: big.NewInt(0),
 		}).
 		SignalDelegationExit(delegationID).
 		AssertTotals(validator.ID, &validation.Totals{
 			TotalLockedStake:   big.NewInt(0).Add(vStake.VET(), dStake.VET()),
-			TotalLockedWeight:  big.NewInt(0).Add(vStake.VET(), dStake.Weight()),
+			TotalLockedWeight:  big.NewInt(0).Add(vStake.Weight(), dStake.Weight()),
 			TotalQueuedStake:   big.NewInt(0),
 			TotalQueuedWeight:  big.NewInt(0),
 			TotalExitingStake:  dStake.VET(),
@@ -2621,7 +2622,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	qStake, qWeight, err = staker.QueuedStake()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).Add(stake, dStake.VET()), qStake)
-	assert.Equal(t, big.NewInt(0).Add(big.NewInt(0).Add(val.LockedVET, stake), dStake.Weight()), qWeight)
+	assert.Equal(t, big.NewInt(0).Add(stake, dStake.Weight()), qWeight)
 
 	totals, err = staker.GetValidationTotals(*validator)
 	assert.NoError(t, err)
@@ -2630,7 +2631,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).String(), totals.TotalExitingStake.String())
 	assert.Equal(t, big.NewInt(0).String(), totals.TotalExitingWeight.String())
 	assert.Equal(t, dStake.VET(), totals.TotalQueuedStake)
-	assert.Equal(t, big.NewInt(0).Add(val.LockedVET, dStake.Weight()), totals.TotalQueuedWeight)
+	assert.Equal(t, dStake.Weight(), totals.TotalQueuedWeight)
 
 	totals2, err = staker.GetValidationTotals(validator2)
 	assert.NoError(t, err)
@@ -2653,7 +2654,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	qStake, qWeight, err = staker.QueuedStake()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).Add(stake, big.NewInt(0).Mul(dStake.VET(), big.NewInt(2))), qStake)
-	assert.Equal(t, big.NewInt(0).Add(big.NewInt(0).Add(val.LockedVET, stake), big.NewInt(0).Mul(dStake.Weight(), big.NewInt(2))), qWeight)
+	assert.Equal(t, big.NewInt(0).Add(stake, big.NewInt(0).Mul(dStake.Weight(), big.NewInt(2))), qWeight)
 
 	totals, err = staker.GetValidationTotals(*validator)
 	assert.NoError(t, err)
@@ -2662,7 +2663,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).String(), totals.TotalExitingStake.String())
 	assert.Equal(t, big.NewInt(0).String(), totals.TotalExitingWeight.String())
 	assert.Equal(t, big.NewInt(0).Mul(dStake.VET(), big.NewInt(2)), totals.TotalQueuedStake)
-	assert.Equal(t, big.NewInt(0).Add(val.LockedVET, big.NewInt(0).Mul(dStake.Weight(), big.NewInt(2))), totals.TotalQueuedWeight)
+	assert.Equal(t, big.NewInt(0).Mul(dStake.Weight(), big.NewInt(2)), totals.TotalQueuedWeight)
 
 	totals2, err = staker.GetValidationTotals(validator2)
 	assert.NoError(t, err)
@@ -2685,9 +2686,8 @@ func TestStaker_TestWeights(t *testing.T) {
 	qStake, qWeight, err = staker.QueuedStake()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).Add(stake, big.NewInt(0).Mul(dStake.VET(), big.NewInt(3))), qStake)
-	assert.Equal(t, big.NewInt(0).Add(big.NewInt(0).Add(
-		val.LockedVET,
-		big.NewInt(0).Mul(stake, big.NewInt(2))),
+	assert.Equal(t, big.NewInt(0).Add(
+		stake,
 		big.NewInt(0).Mul(dStake.Weight(), big.NewInt(3))), qWeight)
 
 	totals, err = staker.GetValidationTotals(*validator)
@@ -2697,7 +2697,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).String(), totals.TotalExitingStake.String())
 	assert.Equal(t, big.NewInt(0).String(), totals.TotalExitingWeight.String())
 	assert.Equal(t, big.NewInt(0).Mul(dStake.VET(), big.NewInt(2)), totals.TotalQueuedStake)
-	assert.Equal(t, big.NewInt(0).Add(val.LockedVET, big.NewInt(0).Mul(dStake.Weight(), big.NewInt(2))), totals.TotalQueuedWeight)
+	assert.Equal(t, big.NewInt(0).Mul(dStake.Weight(), big.NewInt(2)), totals.TotalQueuedWeight)
 
 	totals2, err = staker.GetValidationTotals(validator2)
 	assert.NoError(t, err)
@@ -2706,7 +2706,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).String(), totals2.TotalExitingStake.String())
 	assert.Equal(t, big.NewInt(0).String(), totals2.TotalExitingWeight.String())
 	assert.Equal(t, big.NewInt(0).Add(stake, dStake.VET()), totals2.TotalQueuedStake)
-	assert.Equal(t, big.NewInt(0).Add(big.NewInt(0).Mul(stake, big.NewInt(2)), dStake.Weight()), totals2.TotalQueuedWeight)
+	assert.Equal(t, big.NewInt(0).Add(stake, dStake.Weight()), totals2.TotalQueuedWeight)
 
 	// second delegator on queued should not multiply
 	delegationID4 := big.NewInt(4)
@@ -2720,11 +2720,9 @@ func TestStaker_TestWeights(t *testing.T) {
 	qStake, qWeight, err = staker.QueuedStake()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).Add(stake, big.NewInt(0).Mul(dStake.VET(), big.NewInt(4))), qStake)
-	assert.Equal(t, big.NewInt(0).Add(big.NewInt(0).Add(
-		val.LockedVET,
-		big.NewInt(0).Mul(stake, big.NewInt(2))),
-		big.NewInt(0).Mul(dStake.Weight(),
-			big.NewInt(4))), qWeight)
+	assert.Equal(t, big.NewInt(0).Add(
+		stake,
+		big.NewInt(0).Mul(dStake.Weight(), big.NewInt(4))), qWeight)
 
 	totals, err = staker.GetValidationTotals(*validator)
 	assert.NoError(t, err)
@@ -2733,7 +2731,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).String(), totals.TotalExitingStake.String())
 	assert.Equal(t, big.NewInt(0).String(), totals.TotalExitingWeight.String())
 	assert.Equal(t, big.NewInt(0).Mul(dStake.VET(), big.NewInt(2)), totals.TotalQueuedStake)
-	assert.Equal(t, big.NewInt(0).Add(val.LockedVET, big.NewInt(0).Mul(dStake.Weight(), big.NewInt(2))), totals.TotalQueuedWeight)
+	assert.Equal(t, big.NewInt(0).Mul(dStake.Weight(), big.NewInt(2)), totals.TotalQueuedWeight)
 
 	totals2, err = staker.GetValidationTotals(validator2)
 	assert.NoError(t, err)
@@ -2742,7 +2740,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).String(), totals2.TotalExitingStake.String())
 	assert.Equal(t, big.NewInt(0).String(), totals2.TotalExitingWeight.String())
 	assert.Equal(t, big.NewInt(0).Add(stake, big.NewInt(0).Mul(dStake.VET(), big.NewInt(2))), totals2.TotalQueuedStake)
-	assert.Equal(t, big.NewInt(0).Add(big.NewInt(0).Mul(stake, big.NewInt(2)), big.NewInt(0).Mul(dStake.Weight(), big.NewInt(2))), totals2.TotalQueuedWeight)
+	assert.Equal(t, big.NewInt(0).Add(stake, big.NewInt(0).Mul(dStake.Weight(), big.NewInt(2))), totals2.TotalQueuedWeight)
 
 	// Housekeep, first validator should have both delegations active
 	stakingPeriod := thor.MediumStakingPeriod()
@@ -2756,7 +2754,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	qStake, qWeight, err = staker.QueuedStake()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).Add(stake, big.NewInt(0).Mul(dStake.VET(), big.NewInt(2))), qStake)
-	assert.Equal(t, big.NewInt(0).Add(big.NewInt(0).Mul(stake, big.NewInt(2)), big.NewInt(0).Mul(dStake.Weight(), big.NewInt(2))), qWeight)
+	assert.Equal(t, big.NewInt(0).Add(stake, big.NewInt(0).Mul(dStake.Weight(), big.NewInt(2))), qWeight)
 
 	totals, err = staker.GetValidationTotals(*validator)
 	assert.NoError(t, err)
@@ -2779,7 +2777,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).String(), totals2.TotalExitingWeight.String())
 	assert.Equal(t, big.NewInt(0).Add(stake, big.NewInt(0).Mul(dStake.VET(), big.NewInt(2))), totals2.TotalQueuedStake)
 	assert.Equal(t, big.NewInt(0).Add(
-		big.NewInt(0).Mul(stake, big.NewInt(2)),
+		stake,
 		big.NewInt(0).Mul(dStake.Weight(), big.NewInt(2))),
 		totals2.TotalQueuedWeight,
 	)
@@ -2795,7 +2793,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	qStake, qWeight, err = staker.QueuedStake()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).Add(stake, dStake.VET()), qStake)
-	assert.Equal(t, big.NewInt(0).Add(big.NewInt(0).Mul(stake, big.NewInt(2)), dStake.Weight()), qWeight)
+	assert.Equal(t, big.NewInt(0).Add(stake, dStake.Weight()), qWeight)
 
 	totals, err = staker.GetValidationTotals(*validator)
 	assert.NoError(t, err)
@@ -2817,7 +2815,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).String(), totals2.TotalExitingStake.String())
 	assert.Equal(t, big.NewInt(0).String(), totals2.TotalExitingWeight.String())
 	assert.Equal(t, big.NewInt(0).Add(stake, dStake.VET()), totals2.TotalQueuedStake)
-	assert.Equal(t, big.NewInt(0).Add(big.NewInt(0).Mul(stake, big.NewInt(2)), dStake.Weight()), totals2.TotalQueuedWeight)
+	assert.Equal(t, big.NewInt(0).Add(stake, dStake.Weight()), totals2.TotalQueuedWeight)
 
 	// exit second queued, multiplier should be one
 	stakeIncrease := big.NewInt(1000)
@@ -2902,7 +2900,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).Add(increasedLocked, dStake.VET()), totals.TotalLockedStake)
 	assert.Equal(t, big.NewInt(0).Add(increasedLockedWeight, dStake.Weight()), totals.TotalLockedWeight)
 	assert.Equal(t, dStake.VET(), totals.TotalExitingStake)
-	assert.Equal(t, big.NewInt(0).Add(increasedLocked, dStake.Weight()), totals.TotalExitingWeight)
+	assert.Equal(t, dStake.Weight(), totals.TotalExitingWeight)
 	assert.Equal(t, big.NewInt(0).String(), totals.TotalQueuedStake.String())
 	assert.Equal(t, big.NewInt(0).String(), totals.TotalQueuedWeight.String())
 
@@ -3004,10 +3002,7 @@ func TestStaker_TestWeights_IncreaseStake(t *testing.T) {
 	qStake, qWeight, err = staker.QueuedStake()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).Add(stakeIncrease, delStake), qStake)
-	// baseStake is added since now multiplier is 2, stakeIncrease is multiplied by2
-	expectedWeight := big.NewInt(0).Add(baseStake, big.NewInt(0).Mul(stakeIncrease, big.NewInt(2)))
-	// adding delegation stake with multiplier
-	expectedWeight = big.NewInt(0).Add(expectedWeight, big.NewInt(0).Mul(delStake, big.NewInt(2)))
+	expectedWeight := big.NewInt(0).Add(stakeIncrease, big.NewInt(0).Mul(delStake, big.NewInt(2)))
 	assert.Equal(t, expectedWeight, qWeight)
 
 	totals, err = staker.GetValidationTotals(*validator)
@@ -3032,10 +3027,7 @@ func TestStaker_TestWeights_IncreaseStake(t *testing.T) {
 	qStake, qWeight, err = staker.QueuedStake()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).Add(stakeIncrease, delStake), qStake)
-	// baseStake is added since now multiplier is 2, stakeIncrease is multiplied by2
-	expectedWeight = big.NewInt(0).Add(baseStake, big.NewInt(0).Mul(stakeIncrease, big.NewInt(2)))
-	// adding delegation stake with multiplier
-	expectedWeight = big.NewInt(0).Add(expectedWeight, big.NewInt(0).Mul(delStake, big.NewInt(2)))
+	expectedWeight = big.NewInt(0).Add(stakeIncrease, big.NewInt(0).Mul(delStake, big.NewInt(2)))
 	assert.Equal(t, expectedWeight, qWeight)
 
 	totals, err = staker.GetValidationTotals(*validator)
@@ -3142,8 +3134,7 @@ func TestStaker_TestWeights_DecreaseStake(t *testing.T) {
 	qStake, qWeight, err = staker.QueuedStake()
 	assert.NoError(t, err)
 	assert.Equal(t, delStake, qStake)
-	// baseStake is added since now multiplier is 2, stake now is multiplied by2
-	expectedWeight := big.NewInt(0).Add(baseStake, big.NewInt(0).Mul(delStake, big.NewInt(2)))
+	expectedWeight := big.NewInt(0).Mul(delStake, big.NewInt(2))
 	assert.Equal(t, expectedWeight, qWeight)
 
 	totals, err = staker.GetValidationTotals(*validator)
@@ -3168,8 +3159,7 @@ func TestStaker_TestWeights_DecreaseStake(t *testing.T) {
 	qStake, qWeight, err = staker.QueuedStake()
 	assert.NoError(t, err)
 	assert.Equal(t, delStake, qStake)
-	// baseStake is added since now multiplier is 2, stakeIncrease is multiplied by2
-	expectedWeight = big.NewInt(0).Add(baseStake, big.NewInt(0).Mul(delStake, big.NewInt(2)))
+	expectedWeight = big.NewInt(0).Mul(delStake, big.NewInt(2))
 	assert.Equal(t, expectedWeight, qWeight)
 
 	totals, err = staker.GetValidationTotals(*validator)
@@ -3224,7 +3214,7 @@ func TestStaker_TestWeights_DecreaseStake(t *testing.T) {
 	assert.Equal(t, expectedStake, totals.TotalLockedStake)
 	assert.Equal(t, expectedWeight, totals.TotalLockedWeight)
 	assert.Equal(t, delStake, totals.TotalExitingStake)
-	assert.Equal(t, big.NewInt(0).Add(big.NewInt(0).Mul(delStake, big.NewInt(2)), big.NewInt(0).Sub(baseStake, stakeDecrease)), totals.TotalExitingWeight)
+	assert.Equal(t, big.NewInt(0).Mul(delStake, big.NewInt(2)), totals.TotalExitingWeight)
 	assert.Equal(t, big.NewInt(0).String(), totals.TotalQueuedStake.String())
 	assert.Equal(t, big.NewInt(0).String(), totals.TotalQueuedWeight.String())
 
