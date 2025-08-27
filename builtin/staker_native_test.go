@@ -238,7 +238,8 @@ func TestStakerContract_Native_CheckStake(t *testing.T) {
 
 	fc := &thor.SoloFork
 	fc.HAYABUSA = 1
-	fc.HAYABUSA_TP = 2
+	hayabusaTP := uint32(2)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 	var err error
 	thorChain, err := testchain.NewWithFork(fc, 180)
 	assert.NoError(t, err)
@@ -324,7 +325,8 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 
 	fc := &thor.SoloFork
 	fc.HAYABUSA = 0
-	fc.HAYABUSA_TP = 0
+	hayabusaTP := uint32(0)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 
 	db := muxdb.NewMem()
 

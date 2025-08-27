@@ -24,7 +24,8 @@ import (
 func TestFlow_Schedule_POS(t *testing.T) {
 	config := &thor.SoloFork
 	config.HAYABUSA = 2
-	config.HAYABUSA_TP = 1
+	hayabusaTP := uint32(1)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 	config.BLOCKLIST = math.MaxUint32
 
 	chain, err := testchain.NewWithFork(config, 1)
@@ -130,7 +131,8 @@ func TestPacker_StopsEnergyAtHardfork(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := thor.SoloFork
 			cfg.HAYABUSA = tc.hayabusa
-			cfg.HAYABUSA_TP = 1
+			hayabusaTP := uint32(1)
+			thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 
 			chain, err := testchain.NewWithFork(&cfg, 1)
 			assert.NoError(t, err)

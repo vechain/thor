@@ -896,7 +896,8 @@ func TestValidateProposer(t *testing.T) {
 func TestConsensus_StopsEnergyAtHardfork(t *testing.T) {
 	cfg := &thor.SoloFork
 	cfg.HAYABUSA = 2
-	cfg.HAYABUSA_TP = 1
+	hayabusaTP := uint32(1)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 
 	chain, err := testchain.NewWithFork(cfg, 1)
 	assert.NoError(t, err)
@@ -925,7 +926,8 @@ func TestConsensus_ReplayStopsEnergyAtHardfork_Matrix(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := thor.SoloFork
 			cfg.HAYABUSA = tc.hayabusa
-			cfg.HAYABUSA_TP = 1
+			hayabusaTP := uint32(1)
+			thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 
 			chain, err := testchain.NewWithFork(&cfg, 1)
 			assert.NoError(t, err)

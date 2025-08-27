@@ -363,7 +363,6 @@ func soloAction(ctx *cli.Context) error {
 			fc := thor.SoloFork
 			fc.GALACTICA = 0
 			fc.HAYABUSA = 0
-			fc.HAYABUSA_TP = 0
 
 			forkConfig = &fc
 			gene = genesis.NewHayabusaDevnet(&fc)
@@ -514,7 +513,7 @@ func masterKeyAction(ctx *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		fmt.Println("Master:", thor.Address(crypto.PubkeyToAddress(masterKey.PublicKey)))
+		fmt.Println("Master:", crypto.PubkeyToAddress(masterKey.PublicKey).Hex())
 		return nil
 	}
 
@@ -543,7 +542,7 @@ func masterKeyAction(ctx *cli.Context) error {
 		if err := crypto.SaveECDSA(keyPath, key.PrivateKey); err != nil {
 			return err
 		}
-		fmt.Println("Master key imported:", thor.Address(key.Address))
+		fmt.Println("Master key imported:", key.Address.Hex())
 		return nil
 	}
 
