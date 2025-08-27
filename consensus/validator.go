@@ -14,6 +14,7 @@ import (
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/poa"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
@@ -32,17 +33,20 @@ func (c *Consensus) validate(
 ) (*state.Stage, tx.Receipts, error) {
 	header := block.Header()
 
+	if err := c.validateBlockHeader(header, parent, nowTimestamp); err != nil {
+		return nil, nil, err
+	}
+
+	checkpoint := state.NewCheckpoint()
 	staker := builtin.Staker.Native(state)
 	dPosStatus, err := staker.SyncPOS(c.forkConfig, header.Number())
 	if err != nil {
-		return nil, nil, err
+		log.Error("staker sync pos failed - reverting state", "err", err, "height", header.Number(), "parent", parent, "checkpoint", checkpoint)
+		dPosStatus.Updates = false // reset since no changes actually occurred
+		state.RevertTo(checkpoint)
 	}
 	if dPosStatus.Updates {
 		c.validatorsCache.Remove(parent.ID())
-	}
-
-	if err := c.validateBlockHeader(header, parent, nowTimestamp); err != nil {
-		return nil, nil, err
 	}
 
 	var candidates *poa.Candidates

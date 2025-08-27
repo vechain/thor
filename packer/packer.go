@@ -13,6 +13,7 @@ import (
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/poa"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
@@ -67,9 +68,11 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (*Flo
 	}
 
 	var sched scheduler
+	checkpoint := st.NewCheckpoint()
 	dPosStatus, err := builtin.Staker.Native(st).SyncPOS(p.forkConfig, parent.Header.Number()+1)
 	if err != nil {
-		return nil, false, err
+		log.Error("staker sync pos failed - reverting state", "err", err, "height", parent.Header.Number()+1, "parent", parent, "checkpoint", checkpoint)
+		st.RevertTo(checkpoint)
 	}
 	if dPosStatus.Active {
 		sched = p.schedulePOS
