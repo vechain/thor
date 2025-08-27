@@ -29,7 +29,7 @@ import (
 	"github.com/vechain/thor/v2/vm"
 )
 
-//go:generate go run github.com/fjl/gencodec -type callFrame -field-override callFrameMarshaling -out gen_callframe_json.go
+//go:generate go run github.com/fjl/gencodec@v0.1.1 -type callFrame -field-override callFrameMarshaling -out gen_callframe_json.go
 
 func init() {
 	tracers.DefaultDirectory.Register("callTracer", newCallTracer, false)

@@ -29,9 +29,10 @@ func TestSyncPOS_StillOnPoA(t *testing.T) {
 	staker := New(thor.BytesToAddress([]byte("stkr")), st, param, nil)
 
 	forkConfig := &thor.ForkConfig{
-		HAYABUSA:    100,
-		HAYABUSA_TP: 50,
+		HAYABUSA: 100,
 	}
+	hayabusaTP := uint32(50)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 	current := uint32(120)
 
 	status, err := staker.SyncPOS(forkConfig, current)
@@ -48,9 +49,10 @@ func TestSyncPOS_TransitionBlock_NotActive(t *testing.T) {
 	staker := New(thor.BytesToAddress([]byte("stkr")), st, param, nil)
 
 	forkConfig := &thor.ForkConfig{
-		HAYABUSA:    100,
-		HAYABUSA_TP: 50,
+		HAYABUSA: 100,
 	}
+	hayabusaTP := uint32(50)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 	current := uint32(150)
 
 	status, err := staker.SyncPOS(forkConfig, current)
@@ -83,9 +85,10 @@ func TestSyncPOS_TransitionBlock_WithValidators(t *testing.T) {
 	require.NoError(t, err)
 
 	forkConfig := &thor.ForkConfig{
-		HAYABUSA:    10,
-		HAYABUSA_TP: 10,
+		HAYABUSA: 10,
 	}
+	hayabusaTP := uint32(10)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 	current := uint32(180)
 	status, err := staker.SyncPOS(forkConfig, current)
 
@@ -101,9 +104,10 @@ func TestSyncPOS_TransitionBlock_ZeroTransitionPeriod(t *testing.T) {
 	staker := New(thor.BytesToAddress([]byte("stkr")), st, param, nil)
 
 	forkConfig := &thor.ForkConfig{
-		HAYABUSA:    100,
-		HAYABUSA_TP: 0,
+		HAYABUSA: 100,
 	}
+	hayabusaTP := uint32(0)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 	current := uint32(100)
 
 	status, err := staker.SyncPOS(forkConfig, current)
@@ -140,9 +144,10 @@ func TestSyncPOS_AlreadyActive_NoTransition(t *testing.T) {
 	assert.True(t, transitioned)
 
 	forkConfig := &thor.ForkConfig{
-		HAYABUSA:    100,
-		HAYABUSA_TP: 50,
+		HAYABUSA: 100,
 	}
+	hayabusaTP := uint32(50)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 	current := uint32(200)
 
 	status, err := staker.SyncPOS(forkConfig, current)
@@ -159,9 +164,10 @@ func TestSyncPOS_TransitionBlock_TransitionFails(t *testing.T) {
 	staker := New(thor.BytesToAddress([]byte("stkr")), st, param, nil)
 
 	forkConfig := &thor.ForkConfig{
-		HAYABUSA:    100,
-		HAYABUSA_TP: 50,
+		HAYABUSA: 100,
 	}
+	hayabusaTP := uint32(50)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 	current := uint32(150)
 
 	status, err := staker.SyncPOS(forkConfig, current)
@@ -178,9 +184,10 @@ func TestSyncPOS_NotTransitionBlock(t *testing.T) {
 	staker := New(thor.BytesToAddress([]byte("stkr")), st, param, nil)
 
 	forkConfig := &thor.ForkConfig{
-		HAYABUSA:    100,
-		HAYABUSA_TP: 50,
+		HAYABUSA: 100,
 	}
+	hayabusaTP := uint32(50)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 	current := uint32(175)
 
 	status, err := staker.SyncPOS(forkConfig, current)
@@ -197,9 +204,10 @@ func TestSyncPOS_IsPoSActiveError(t *testing.T) {
 	staker := New(thor.BytesToAddress([]byte("stkr")), st, param, nil)
 
 	forkConfig := &thor.ForkConfig{
-		HAYABUSA:    100,
-		HAYABUSA_TP: 50,
+		HAYABUSA: 100,
 	}
+	hayabusaTP := uint32(50)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 	current := uint32(150)
 
 	status, err := staker.SyncPOS(forkConfig, current)
@@ -216,9 +224,10 @@ func TestSyncPOS_TransitionError(t *testing.T) {
 	staker := New(thor.BytesToAddress([]byte("stkr")), st, param, nil)
 
 	forkConfig := &thor.ForkConfig{
-		HAYABUSA:    100,
-		HAYABUSA_TP: 50,
+		HAYABUSA: 100,
 	}
+	hayabusaTP := uint32(50)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 	current := uint32(150)
 
 	status, err := staker.SyncPOS(forkConfig, current)
@@ -255,9 +264,10 @@ func TestSyncPOS_HousekeepError(t *testing.T) {
 	assert.True(t, transitioned)
 
 	forkConfig := &thor.ForkConfig{
-		HAYABUSA:    100,
-		HAYABUSA_TP: 50,
+		HAYABUSA: 100,
 	}
+	hayabusaTP := uint32(50)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 	current := uint32(200)
 
 	status, err := staker.SyncPOS(forkConfig, current)
@@ -317,9 +327,9 @@ func TestSyncPOS_EdgeCases(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			forkConfig := &thor.ForkConfig{
-				HAYABUSA:    tc.hayabusa,
-				HAYABUSA_TP: tc.hayabusaTP,
+				HAYABUSA: tc.hayabusa,
 			}
+			thor.SetConfig(thor.Config{HayabusaTP: &tc.hayabusaTP})
 
 			status, err := staker.SyncPOS(forkConfig, tc.current)
 
@@ -336,9 +346,10 @@ func TestSyncPOS_StatusFields(t *testing.T) {
 	staker := New(thor.BytesToAddress([]byte("stkr")), st, param, nil)
 
 	forkConfig := &thor.ForkConfig{
-		HAYABUSA:    100,
-		HAYABUSA_TP: 50,
+		HAYABUSA: 100,
 	}
+	hayabusaTP := uint32(50)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 	current := uint32(120)
 
 	status, err := staker.SyncPOS(forkConfig, current)
@@ -358,9 +369,10 @@ func TestSyncPOS_NegativeCases(t *testing.T) {
 	staker := New(stakerAddr, st, param, nil)
 
 	forkConfig := &thor.ForkConfig{
-		HAYABUSA:    10,
-		HAYABUSA_TP: 10,
+		HAYABUSA: 10,
 	}
+	hayabusaTP := uint32(10)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 	current := uint32(180)
 
 	st.SetRawStorage(paramsAddr, thor.KeyMaxBlockProposers, rlp.RawValue{0xFF})

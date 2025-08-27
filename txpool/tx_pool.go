@@ -29,7 +29,7 @@ import (
 
 const (
 	// max size of tx allowed
-	maxTxSize = 64 * 1024
+	MaxTxSize = 64 * 1024
 )
 
 var logger = log.WithContext("pkg", "txpool")
@@ -566,7 +566,7 @@ func (p *TxPool) validateTxBasics(trx *tx.Transaction) error {
 		return badTxError{"chain tag mismatch"}
 	}
 
-	if trx.Size() > maxTxSize {
+	if trx.Size() > MaxTxSize {
 		return txRejectedError{"size too large"}
 	}
 

@@ -1,0 +1,142 @@
+name: Release Binaries
+
+on:
+  workflow_dispatch:
+    inputs:
+      binary:
+        options:
+          - thor
+          - disco
+        description: 'Select the binary to build and release'
+        type: choice
+        required: true
+        default: thor
+  workflow_call:
+    inputs:
+      binary:
+        description: 'Select the binary to build and release'
+        type: string
+        required: true
+        default: thor
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build-unix:
+    name: Build Linux/macOS binaries
+    runs-on: ${{ matrix.hostos }}
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            hostos: ubuntu-latest
+          - goos: linux
+            goarch: arm64
+            hostos: ubuntu-24.04-arm
+          - goos: darwin
+            goarch: arm64
+            hostos: macos-latest
+    env:
+      BINARY: ${{ inputs.binary || 'thor' }}
+      RELEASE_BINARY_NAME: ./dist/${{ inputs.binary || 'thor' }}-${{ matrix.goos }}-${{ matrix.goarch }}
+      ARCHIVE_NAME: ./dist/${{ inputs.binary || 'thor' }}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
+
+    environment: binary-publish
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.24
+
+      - name: Build Binary
+        shell: bash
+        run: |
+          make $BINARY
+          mkdir -p ./dist
+          mv ./bin/${BINARY} $RELEASE_BINARY_NAME
+          chmod +x $RELEASE_BINARY_NAME
+
+      - name: Import GPG Private Key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+
+      - name: Sign Executable with GPG
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        shell: bash
+        run: |
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --armor --detach-sign "$RELEASE_BINARY_NAME"
+
+      - name: Create archive
+        shell: bash
+        run: |
+          cd dist
+          tar czf "${ARCHIVE_NAME##*/}" "$(basename "$RELEASE_BINARY_NAME")"
+
+      - name: Upload Binary
+        uses: alexellis/upload-assets@0.4.1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          asset_paths: '["${{env.RELEASE_BINARY_NAME}}", "${{env.ARCHIVE_NAME}}"]'
+
+  build-windows:
+    name: Build Windows binary
+    runs-on: windows-latest
+    env:
+      BINARY: ${{ inputs.binary || 'thor' }}
+      RELEASE_BINARY_NAME: ./dist/${{ inputs.binary || 'thor' }}-windows-amd64.exe
+      ARCHIVE_NAME: ./dist/${{ inputs.binary || 'thor' }}-windows-amd64.zip
+    environment: binary-publish
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.24
+
+      - name: Build Binary
+        shell: pwsh
+        run: |
+          make $Env:BINARY
+          New-Item -ItemType Directory -Force -Path ./dist | Out-Null
+          Move-Item -Force "./bin/$Env:BINARY" $Env:RELEASE_BINARY_NAME
+
+      - name: Import GPG Private Key
+        shell: pwsh
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          $gpgKey = $Env:GPG_PRIVATE_KEY -replace "`r`n", "`n"
+          $gpgKey | Out-File -Encoding ascii private.key
+          gpg --batch --import private.key
+
+      - name: Sign Executable with GPG
+        shell: pwsh
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$Env:GPG_PASSPHRASE" --armor --detach-sign "$Env:RELEASE_BINARY_NAME"
+
+      - name: Create archive
+        shell: pwsh
+        run: |
+          Set-Location ./dist
+          Compress-Archive -Path (Split-Path -Leaf $Env:RELEASE_BINARY_NAME) -DestinationPath (Split-Path -Leaf $Env:ARCHIVE_NAME)
+
+      - name: Upload Binary
+        uses: alexellis/upload-assets@0.4.1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          asset_paths: '["${{env.RELEASE_BINARY_NAME}}", "${{env.ARCHIVE_NAME}}"]'

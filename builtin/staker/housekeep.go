@@ -28,9 +28,6 @@ type EpochTransition struct {
 }
 
 func (et *EpochTransition) HasUpdates() bool {
-	if et == nil {
-		return false
-	}
 	return len(et.Renewals) > 0 || // renewing existing staking periods
 		(et.ExitValidator != nil && !et.ExitValidator.IsZero()) || // exiting 1 validator
 		len(et.Evictions) > 0 || // forcing eviction of offline validators
@@ -68,12 +65,10 @@ func (s *Staker) computeEpochTransition(currentBlock uint32) (*EpochTransition, 
 
 	var renewals []thor.Address
 	var evictions []thor.Address
-	active := make(map[thor.Address]*validation.Validation)
 	exitValidator := thor.Address{}
 	err = s.validationService.LeaderGroupIterator(
 		s.renewalCallback(currentBlock, &renewals),
 		s.exitsCallback(currentBlock, &exitValidator),
-		s.collectActiveCallback(active),
 		s.evictionCallback(currentBlock, &evictions),
 	)
 	if err != nil {
@@ -140,10 +135,6 @@ func (s *Staker) evictionCallback(currentBlock uint32, evictions *[]thor.Address
 	}
 }
 
-func (s *Staker) collectActiveCallback(active map[thor.Address]*validation.Validation) func(thor.Address, *validation.Validation) error {
-	return func(id thor.Address, v *validation.Validation) error { active[id] = v; return nil }
-}
-
 // computeActivationCount calculates how many validators can be activated
 func (s *Staker) computeActivationCount(hasValidatorExited bool) (int64, error) {
 	// Calculate how many validators can be activated
@@ -189,13 +180,13 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 	accumulatedRenewal := delta.NewRenewal()
 	// Apply renewals
 	for _, validator := range transition.Renewals {
-		aggRenewal, err := s.aggregationService.Renew(validator)
+		aggRenewal, delegationWeight, err := s.aggregationService.Renew(validator)
 		if err != nil {
 			return err
 		}
 		accumulatedRenewal.Add(aggRenewal)
 		// Update validator state
-		valRenewal, err := s.validationService.Renew(validator, aggRenewal)
+		valRenewal, err := s.validationService.Renew(validator, aggRenewal, delegationWeight)
 		if err != nil {
 			return err
 		}
@@ -211,7 +202,11 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 		logger.Info("exiting validator", "validator", transition.ExitValidator)
 
 		// Now call ExitValidator to get the actual exit details and perform the exit
-		exit, err := s.validationService.ExitValidator(*transition.ExitValidator)
+		agg, err := s.aggregationService.GetAggregation(*transition.ExitValidator)
+		if err != nil {
+			return err
+		}
+		exit, err := s.validationService.ExitValidator(*transition.ExitValidator, agg.LockedWeight)
 		if err != nil {
 			return err
 		}
@@ -258,7 +253,7 @@ func (s *Staker) activateNextValidation(currentBlk uint32, maxLeaderGroupSize *b
 	logger.Debug("activating validator", "validatorID", validatorID, "block", currentBlk)
 
 	// renew the current delegations aggregation
-	aggRenew, err := s.aggregationService.Renew(*validatorID)
+	aggRenew, _, err := s.aggregationService.Renew(*validatorID)
 	if err != nil {
 		return nil, err
 	}

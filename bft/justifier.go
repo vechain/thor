@@ -31,9 +31,10 @@ type justifier struct {
 	thresholdVotes  uint64
 	thresholdWeight *big.Int // we need to represent uint256
 
-	votes     map[thor.Address]vote
-	comVotes  uint64
-	comWeight *big.Int
+	votes           map[thor.Address]vote
+	comVotes        uint64
+	comWeight       *big.Int
+	justifiedWeight *big.Int
 }
 
 func newJustifier(parentQuality, checkpoint uint32, thresholdVotes uint64, thresholdWeight *big.Int) *justifier {
@@ -44,6 +45,7 @@ func newJustifier(parentQuality, checkpoint uint32, thresholdVotes uint64, thres
 		thresholdVotes:  thresholdVotes,
 		thresholdWeight: thresholdWeight,
 		comWeight:       big.NewInt(0),
+		justifiedWeight: big.NewInt(0),
 	}
 }
 
@@ -103,6 +105,9 @@ func (engine *Engine) newJustifier(parentID thor.Bytes32) (*justifier, error) {
 func (js *justifier) AddBlock(signer thor.Address, isCOM bool, weight *big.Int) {
 	if prev, ok := js.votes[signer]; !ok {
 		js.votes[signer] = vote{isCOM: isCOM, weight: weight}
+		if weight != nil {
+			js.justifiedWeight.Add(js.justifiedWeight, weight)
+		}
 		if isCOM {
 			js.comVotes++
 			if weight != nil {
@@ -130,11 +135,7 @@ func (js *justifier) Summarize() *bftState {
 		justified = uint64(len(js.votes)) > js.thresholdVotes
 		committed = js.comVotes > js.thresholdVotes
 	} else {
-		totalVoterWeight := big.NewInt(0)
-		for _, vote := range js.votes {
-			totalVoterWeight.Add(totalVoterWeight, vote.weight)
-		}
-		justified = totalVoterWeight.Cmp(js.thresholdWeight) > 0
+		justified = js.justifiedWeight.Cmp(js.thresholdWeight) > 0
 		committed = js.comWeight.Cmp(js.thresholdWeight) > 0
 	}
 

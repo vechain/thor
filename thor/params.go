@@ -50,9 +50,10 @@ var (
 	KeyLegacyTxBaseGasPrice      = BytesToBytes32([]byte("base-gas-price")) // the legacy tx default gas price
 	KeyProposerEndorsement       = BytesToBytes32([]byte("proposer-endorsement"))
 	KeyMaxBlockProposers         = BytesToBytes32([]byte("max-block-proposers"))
-	KeyStargateContractAddress   = BytesToBytes32([]byte("stargate-contract-address"))
-	KeyCurveFactor               = BytesToBytes32([]byte("curve-factor"))      // curve factor to define VTHO issuance after PoS
-	KeyStargateSwitches          = BytesToBytes32([]byte("stargate-switches")) // Stargate switches to control the pause of staker and stargate
+	KeyCurveFactor               = BytesToBytes32([]byte("curve-factor")) // curve factor to define VTHO issuance after PoS
+	KeyDelegatorContractAddress  = BytesToBytes32([]byte("delegator-contract-address"))
+	// staker switches to control the pause of staker and stargate, last bit pauses the delegator contract, second-to-last bit pauses  the staker contract
+	KeyStakerSwitches = BytesToBytes32([]byte("staker-switches"))
 
 	InitialMaxBlockProposers         uint64 = 101
 	InitialRewardRatio                      = big.NewInt(3e17) // 30%
@@ -62,5 +63,5 @@ var (
 	InitialCurveFactor                      = big.NewInt(76800)
 
 	EnergyGrowthRate      = big.NewInt(5000000000) // WEI THOR per token(VET) per second. about 0.000432 THOR per token per day.
-	NumberOfBlocksPerYear = big.NewInt(3153600)    // number of blocks per year, non leap (365 days)
+	NumberOfBlocksPerYear = big.NewInt(8640 * 365) // number of blocks per year, non leap (365 days)
 )

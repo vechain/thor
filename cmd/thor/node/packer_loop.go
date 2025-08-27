@@ -140,7 +140,7 @@ func (n *Node) pack(flow *packer.Flow, conn net.Conn) (err error) {
 		}
 	}()
 
-	return n.guardBlockProcessing(flow.Number(), func(conflicts [][]byte) error {
+	return n.guardBlockProcessing(flow.Number(), func(conflicts uint32) (thor.Bytes32, error) {
 		var (
 			startTime  = mclock.Now()
 			logEnabled = !n.options.SkipLogs && !n.logDBFailed
@@ -152,15 +152,15 @@ func (n *Node) pack(flow *packer.Flow, conn net.Conn) (err error) {
 			var err error
 			shouldVote, err = n.bft.ShouldVote(flow.ParentHeader().ID())
 			if err != nil {
-				return errors.Wrap(err, "get vote")
+				return thor.Bytes32{}, errors.Wrap(err, "get vote")
 			}
 		}
 		now := uint64(time.Now().Unix())
 		doubleFlow, _, err := n.packer.Schedule(n.repo.BestBlockSummary(), now)
 
-		doubleSignedBlock, doubleSignedStage, doubleSignedReceipts, err := doubleFlow.Pack(n.master.PrivateKey, uint32(len(conflicts)), shouldVote)
+		doubleSignedBlock, _, doubleSignedReceipts, err := doubleFlow.Pack(n.master.PrivateKey, conflicts, shouldVote)
 		if err != nil {
-			return errors.Wrap(err, "failed to pack block")
+			return thor.Bytes32{}, errors.Wrap(err, "failed to pack block")
 		}
 
 		// adopt txs
@@ -176,10 +176,18 @@ func (n *Node) pack(flow *packer.Flow, conn net.Conn) (err error) {
 			}
 		}
 
+		if flow.Number() >= n.forkConfig.FINALITY {
+			var err error
+			shouldVote, err = n.bft.ShouldVote(flow.ParentHeader().ID())
+			if err != nil {
+				return thor.Bytes32{}, errors.Wrap(err, "get vote")
+			}
+		}
+
 		// pack the new block
-		newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey, uint32(len(conflicts)), shouldVote)
+		newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey, conflicts, shouldVote)
 		if err != nil {
-			return errors.Wrap(err, "failed to pack block")
+			return thor.Bytes32{}, errors.Wrap(err, "failed to pack block")
 		}
 
 		execElapsed := mclock.Now() - startTime
@@ -187,8 +195,13 @@ func (n *Node) pack(flow *packer.Flow, conn net.Conn) (err error) {
 		// write logs
 		if logEnabled {
 			if err := n.writeLogs(newBlock, receipts, oldBest.Header.ID()); err != nil {
-				return errors.Wrap(err, "write logs")
+				return thor.Bytes32{}, errors.Wrap(err, "write logs")
 			}
+		}
+
+		// commit the state
+		if _, err := stage.Commit(); err != nil {
+			return thor.Bytes32{}, errors.Wrap(err, "commit state")
 		}
 
 		// sync the log-writing task
@@ -200,41 +213,14 @@ func (n *Node) pack(flow *packer.Flow, conn net.Conn) (err error) {
 		}
 
 		// add the new block into repository
-		if err := n.repo.AddBlock(newBlock, receipts, uint32(len(conflicts)), true); err != nil {
-			return errors.Wrap(err, "add block")
-		}
-
-		var becomeNewBest bool
-		// let bft engine decide the best block after fork FINALITY
-		if newBlock.Header().Number() >= n.forkConfig.FINALITY {
-			becomeNewBest, err = n.bft.Select(doubleSignedBlock.Header())
-			if err != nil {
-				return errors.Wrap(err, "bft select")
-			}
-		} else {
-			becomeNewBest = newBlock.Header().BetterThan(oldBest.Header)
-		}
-
-		if becomeNewBest {
-			logger.Info("Fork resolved to an empty block")
-			if _, err := doubleSignedStage.Commit(); err != nil {
-				return errors.Wrap(err, "commit state")
-			}
-			if err := n.repo.AddBlock(doubleSignedBlock, doubleSignedReceipts, uint32(len(conflicts)), true); err != nil {
-				return errors.Wrap(err, "add block")
-			}
-
-		} else {
-			logger.Info("Fork resolved to the filled block")
-			if _, err := stage.Commit(); err != nil {
-				return errors.Wrap(err, "commit state")
-			}
+		if err := n.repo.AddBlock(newBlock, receipts, conflicts, true); err != nil {
+			return thor.Bytes32{}, errors.Wrap(err, "add block")
 		}
 
 		// commit block in bft engine
 		if newBlock.Header().Number() >= n.forkConfig.FINALITY {
 			if err := n.bft.CommitBlock(newBlock.Header(), true); err != nil {
-				return errors.Wrap(err, "bft commits")
+				return thor.Bytes32{}, errors.Wrap(err, "bft commits")
 			}
 		}
 
@@ -284,6 +270,6 @@ func (n *Node) pack(flow *packer.Flow, conn net.Conn) (err error) {
 		metricBlockProcessedTxs().SetWithLabel(int64(len(receipts)), map[string]string{"type": "proposed"})
 		metricBlockProcessedGas().SetWithLabel(int64(newBlock.Header().GasUsed()), map[string]string{"type": "proposed"})
 		metricBlockProcessedDuration().Observe(time.Duration(realElapsed).Milliseconds())
-		return nil
+		return newBlock.Header().ID(), nil
 	})
 }

@@ -19,6 +19,7 @@ var (
 	mediumStakingPeriod uint32 = 8640 * 15 // 15 Days
 	highStakingPeriod   uint32 = 8640 * 30 // 30 Days
 	cooldownPeriod      uint32 = 8640      // 8640 blocks, 1 day
+	hayabusaTP          uint32 = 360 * 24 * 14
 
 	locked bool
 )
@@ -30,10 +31,11 @@ type Config struct {
 	ValidatorEvictionThreshold uint32 `json:"validatorEvictionThreshold"` // the number of blocks after which offline validator will be evicted from the leader group (7 days)
 
 	// staker parameters
-	LowStakingPeriod    uint32 `json:"lowStakingPeriod"`
-	MediumStakingPeriod uint32 `json:"mediumStakingPeriod"`
-	HighStakingPeriod   uint32 `json:"highStakingPeriod"`
-	CooldownPeriod      uint32 `json:"cooldownPeriod"`
+	LowStakingPeriod    uint32  `json:"lowStakingPeriod"`
+	MediumStakingPeriod uint32  `json:"mediumStakingPeriod"`
+	HighStakingPeriod   uint32  `json:"highStakingPeriod"`
+	CooldownPeriod      uint32  `json:"cooldownPeriod"`
+	HayabusaTP          *uint32 `json:"hayabusaTP"`
 }
 
 // SetConfig sets the config.
@@ -75,6 +77,10 @@ func SetConfig(cfg Config) {
 	if cfg.CooldownPeriod != 0 {
 		cooldownPeriod = cfg.CooldownPeriod
 	}
+
+	if cfg.HayabusaTP != nil {
+		hayabusaTP = *cfg.HayabusaTP
+	}
 }
 
 // LockConfig locks the config, preventing any further changes.
@@ -113,4 +119,8 @@ func HighStakingPeriod() uint32 {
 
 func CooldownPeriod() uint32 {
 	return cooldownPeriod
+}
+
+func HayabusaTP() uint32 {
+	return hayabusaTP
 }

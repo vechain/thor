@@ -321,7 +321,7 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 		var parentBlockSummary *chain.BlockSummary
 		var err error
 
-		if h.Number() > engine.forkConfig.HAYABUSA+engine.forkConfig.HAYABUSA_TP {
+		if h.Number() > engine.forkConfig.HAYABUSA+thor.HayabusaTP() {
 			parentBlockSummary, err = engine.repo.GetBlockSummary(h.ParentID())
 			if err != nil {
 				return nil, err
@@ -332,7 +332,7 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 			var weight *big.Int
 			if posActive, _ := staker.IsPoSActive(); posActive {
 				// PoS is active, get validator weight
-				validator, err := staker.Get(signer)
+				validator, err := staker.GetValidation(signer)
 				if err != nil {
 					return nil, err
 				}

@@ -65,6 +65,11 @@ func (a *Address) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// Hex returns an EIP55-compliant hex string representation of the address.
+func (a Address) Hex() string {
+	return common.HexToAddress(a.String()).Hex()
+}
+
 // ParseAddress convert string presented address into Address type.
 func ParseAddress(s string) (Address, error) {
 	if len(s) == AddressLength*2 {

@@ -14,42 +14,9 @@ import (
 	"github.com/vechain/thor/v2/builtin/gascharger"
 	"github.com/vechain/thor/v2/builtin/staker/reverts"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
-	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/xenv"
 )
-
-func isContractPaused(state *state.State, charger *gascharger.Charger, pauseBit int) (bool, error) {
-	charger.Charge(thor.SloadGas)
-	switches, err := Params.Native(state).Get(thor.KeyStargateSwitches)
-	if err != nil {
-		return false, err
-	}
-	return switches.Bit(pauseBit) == 1, nil
-}
-
-func IsStargatePaused(state *state.State, charger *gascharger.Charger) error {
-	isPaused, err := isContractPaused(state, charger, 0)
-	if err != nil {
-		return err
-	}
-	if isPaused {
-		return reverts.New("stargate is paused")
-	}
-	return nil
-}
-
-// IsStakerPaused The staker pause switch at binary position 1. (binary: 1 [1] 0)
-func IsStakerPaused(state *state.State, charger *gascharger.Charger) error {
-	isPaused, err := isContractPaused(state, charger, 1)
-	if err != nil {
-		return err
-	}
-	if isPaused {
-		return reverts.New("staker is paused")
-	}
-	return nil
-}
 
 func init() {
 	defines := []struct {
@@ -74,70 +41,49 @@ func init() {
 			}
 			return []any{staked, weight}, nil
 		}},
-		{"native_getValidatorStake", func(env *xenv.Environment) ([]any, error) {
+		{"native_getValidation", func(env *xenv.Environment) ([]any, error) {
 			var args struct {
 				Validator common.Address
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			validator, err := Staker.NativeMetered(env.State(), charger).Get(thor.Address(args.Validator))
+			validator, err := Staker.NativeMetered(env.State(), charger).GetValidation(thor.Address(args.Validator))
 			if err != nil {
 				return nil, err
 			}
+
+			// IMPORTANT, DO NOT return zero value for pointer type, subsequent abi.EncodeOutput will panic due to call of reflect.ValueOf.
 			if validator.IsEmpty() {
-				return []any{thor.Address{}, big.NewInt(0), big.NewInt(0)}, nil
+				return []any{
+					thor.Address{},
+					big.NewInt(0),
+					big.NewInt(0),
+					big.NewInt(0),
+					validation.StatusUnknown,
+					uint32(math.MaxUint32),
+					uint32(0),
+					uint32(0),
+					uint32(math.MaxUint32),
+					uint32(0),
+				}, nil
+			}
+			exitBlock := uint32(math.MaxUint32)
+			if validator.ExitBlock != nil {
+				exitBlock = *validator.ExitBlock
+			}
+
+			offlineBlock := uint32(math.MaxUint32)
+			if validator.OfflineBlock != nil {
+				offlineBlock = *validator.OfflineBlock
 			}
 			return []any{
 				validator.Endorser,
 				validator.LockedVET,
 				validator.Weight,
 				validator.QueuedVET,
-			}, nil
-		}},
-		{"native_getValidatorStatus", func(env *xenv.Environment) ([]any, error) {
-			var args struct {
-				Validator common.Address
-			}
-			env.ParseArgs(&args)
-			charger := gascharger.New(env)
-
-			validator, err := Staker.NativeMetered(env.State(), charger).Get(thor.Address(args.Validator))
-			if err != nil {
-				return nil, err
-			}
-			if validator.IsEmpty() {
-				return []any{validation.StatusUnknown, false}, nil
-			}
-			offlineBlock := uint32(math.MaxUint32)
-			if validator.OfflineBlock != nil {
-				offlineBlock = *validator.OfflineBlock
-			}
-			return []any{
 				validator.Status,
-				validator.OfflineBlock == nil,
 				offlineBlock,
-			}, nil
-		}},
-		{"native_getValidatorPeriodDetails", func(env *xenv.Environment) ([]any, error) {
-			var args struct {
-				Validator common.Address
-			}
-			env.ParseArgs(&args)
-			charger := gascharger.New(env)
-
-			validator, err := Staker.NativeMetered(env.State(), charger).Get(thor.Address(args.Validator))
-			if err != nil {
-				return nil, err
-			}
-			if validator.IsEmpty() {
-				return []any{uint32(0), uint32(0), uint32(0), uint32(0)}, nil
-			}
-			exitBlock := uint32(math.MaxUint32)
-			if validator.ExitBlock != nil {
-				exitBlock = *validator.ExitBlock
-			}
-			return []any{
 				validator.Period,
 				validator.StartBlock,
 				exitBlock,
@@ -196,11 +142,6 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			err := IsStakerPaused(env.State(), charger)
-			if err != nil {
-				return nil, err
-			}
-
 			stake, err := Staker.NativeMetered(env.State(), charger).WithdrawStake(
 				thor.Address(args.Validator),
 				thor.Address(args.Endorser),
@@ -222,11 +163,6 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			err := IsStakerPaused(env.State(), charger)
-			if err != nil {
-				return nil, err
-			}
-
 			isPoSActive, err := Staker.NativeMetered(env.State(), charger).IsPoSActive()
 			if err != nil {
 				return nil, err
@@ -240,10 +176,10 @@ func init() {
 					return nil, err
 				}
 				if !exists {
-					return nil, reverts.New("validator is not registered in the Authority")
+					return nil, reverts.New("authority required in transition period")
 				}
 				if thor.Address(args.Endorser) != endorser {
-					return nil, reverts.New("endorser is not present in the Authority")
+					return nil, reverts.New("endorser required")
 				}
 			}
 
@@ -268,12 +204,7 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			err := IsStakerPaused(env.State(), charger)
-			if err != nil {
-				return nil, err
-			}
-
-			err = Staker.NativeMetered(env.State(), charger).
+			err := Staker.NativeMetered(env.State(), charger).
 				SignalExit(
 					thor.Address(args.Validator),
 					thor.Address(args.Endorser),
@@ -292,12 +223,7 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			err := IsStakerPaused(env.State(), charger)
-			if err != nil {
-				return nil, err
-			}
-
-			err = Staker.NativeMetered(env.State(), charger).
+			err := Staker.NativeMetered(env.State(), charger).
 				IncreaseStake(
 					thor.Address(args.Validator),
 					thor.Address(args.Endorser),
@@ -318,12 +244,7 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			err := IsStakerPaused(env.State(), charger)
-			if err != nil {
-				return nil, err
-			}
-
-			err = Staker.NativeMetered(env.State(), charger).
+			err := Staker.NativeMetered(env.State(), charger).
 				SetBeneficiary(
 					thor.Address(args.Validator),
 					thor.Address(args.Endorser),
@@ -343,12 +264,7 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			err := IsStakerPaused(env.State(), charger)
-			if err != nil {
-				return nil, err
-			}
-
-			err = Staker.NativeMetered(env.State(), charger).
+			err := Staker.NativeMetered(env.State(), charger).
 				DecreaseStake(
 					thor.Address(args.Validator),
 					thor.Address(args.Endorser),
@@ -368,16 +284,6 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			err := IsStargatePaused(env.State(), charger)
-			if err != nil {
-				return nil, err
-			}
-
-			err = IsStakerPaused(env.State(), charger)
-			if err != nil {
-				return nil, err
-			}
-
 			delegationID, err := Staker.NativeMetered(env.State(), charger).
 				AddDelegation(
 					thor.Address(args.Validator),
@@ -396,16 +302,6 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			err := IsStargatePaused(env.State(), charger)
-			if err != nil {
-				return nil, err
-			}
-
-			err = IsStakerPaused(env.State(), charger)
-			if err != nil {
-				return nil, err
-			}
-
 			stake, err := Staker.NativeMetered(env.State(), charger).WithdrawDelegation(args.DelegationID)
 			if err != nil {
 				return nil, err
@@ -420,51 +316,28 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			err := IsStargatePaused(env.State(), charger)
-			if err != nil {
-				return nil, err
-			}
-
-			err = IsStakerPaused(env.State(), charger)
-			if err != nil {
-				return nil, err
-			}
-
-			err = Staker.NativeMetered(env.State(), charger).SignalDelegationExit(args.DelegationID)
+			err := Staker.NativeMetered(env.State(), charger).SignalDelegationExit(args.DelegationID)
 			if err != nil {
 				return nil, err
 			}
 
 			return []any{}, nil
 		}},
-		{"native_getDelegationStake", func(env *xenv.Environment) ([]any, error) {
+		{"native_getDelegation", func(env *xenv.Environment) ([]any, error) {
 			var args struct {
 				DelegationID *big.Int
 			}
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			delegation, _, err := Staker.NativeMetered(env.State(), charger).GetDelegation(args.DelegationID)
+			delegation, validation, err := Staker.NativeMetered(env.State(), charger).GetDelegation(args.DelegationID)
 			if err != nil {
 				return nil, err
 			}
 
-			return []any{
-				delegation.Validation,
-				delegation.Stake,
-				delegation.Multiplier,
-			}, nil
-		}},
-		{"native_getDelegationPeriodDetails", func(env *xenv.Environment) ([]any, error) {
-			var args struct {
-				DelegationID *big.Int
-			}
-			env.ParseArgs(&args)
-			charger := gascharger.New(env)
-
-			delegation, validator, err := Staker.NativeMetered(env.State(), charger).GetDelegation(args.DelegationID)
-			if err != nil {
-				return nil, err
+			// IMPORTANT, DO NOT return zero value for pointer type, subsequent abi.EncodeOutput will panic due to call of reflect.ValueOf.
+			if delegation.IsEmpty() {
+				return []any{thor.Address{}, big.NewInt(0), uint8(0), false, uint32(0), uint32(math.MaxUint32)}, nil
 			}
 
 			lastPeriod := uint32(math.MaxUint32)
@@ -472,12 +345,14 @@ func init() {
 				lastPeriod = *delegation.LastIteration
 			}
 
-			locked := delegation.Started(validator) && !delegation.Ended(validator)
-
+			locked := delegation.Started(validation) && !delegation.Ended(validation)
 			return []any{
+				delegation.Validation,
+				delegation.Stake,
+				delegation.Multiplier,
+				locked,
 				delegation.FirstIteration,
 				lastPeriod,
-				locked,
 			}, nil
 		}},
 		{"native_getDelegatorsRewards", func(env *xenv.Environment) ([]any, error) {
@@ -498,7 +373,7 @@ func init() {
 			charger := gascharger.New(env)
 
 			charger.Charge(thor.SloadGas)
-			raw, err := Params.Native(env.State()).Get(thor.KeyStargateContractAddress)
+			raw, err := Params.Native(env.State()).Get(thor.KeyDelegatorContractAddress)
 			if err != nil {
 				return nil, err
 			}
@@ -525,10 +400,10 @@ func init() {
 				totals.TotalExitingWeight,
 			}, nil
 		}},
-		{"native_getValidatorsNum", func(env *xenv.Environment) ([]any, error) {
+		{"native_getValidationsNum", func(env *xenv.Environment) ([]any, error) {
 			charger := gascharger.New(env)
 
-			leaderGroupSize, queuedGroupSize, err := Staker.NativeMetered(env.State(), charger).GetValidatorsNum()
+			leaderGroupSize, queuedGroupSize, err := Staker.NativeMetered(env.State(), charger).GetValidationsNum()
 			if err != nil {
 				return nil, err
 			}
@@ -543,6 +418,16 @@ func init() {
 				return nil, err
 			}
 			return []any{issuance}, nil
+		}},
+		{"native_getControlSwitches", func(env *xenv.Environment) ([]any, error) {
+			charger := gascharger.New(env)
+			charger.Charge(thor.SloadGas)
+
+			switches, err := Params.Native(env.State()).Get(thor.KeyStakerSwitches)
+			if err != nil {
+				return nil, err
+			}
+			return []any{switches}, nil
 		}},
 	}
 	stakerAbi := Staker.NativeABI()

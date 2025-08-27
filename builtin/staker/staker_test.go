@@ -302,7 +302,7 @@ type ValidationAssertions struct {
 }
 
 func assertValidation(t *testing.T, staker *Staker, addr thor.Address) *ValidationAssertions {
-	validator, err := staker.Get(addr)
+	validator, err := staker.GetValidation(addr)
 	require.NoError(t, err, "failed to get validator %s", addr.String())
 	return &ValidationAssertions{staker: staker, addr: addr, validator: validator, t: t}
 }
