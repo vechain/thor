@@ -5,7 +5,6 @@
 package bft
 
 import (
-	"math/big"
 	"sort"
 	"sync/atomic"
 
@@ -329,7 +328,7 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 			state := engine.stater.NewState(parentBlockSummary.Root())
 			staker := builtin.Staker.Native(state)
 
-			var weight *big.Int
+			var weight uint64
 			if posActive, _ := staker.IsPoSActive(); posActive {
 				// PoS is active, get validator weight
 				validator, err := staker.GetValidation(signer)
@@ -341,7 +340,7 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 			// If PoS is not active or error occurred, weight remains nil
 			js.AddBlock(signer, h.COM(), weight)
 		} else {
-			js.AddBlock(signer, h.COM(), nil)
+			js.AddBlock(signer, h.COM(), 0)
 		}
 
 		if h.Number() <= end {
@@ -416,18 +415,18 @@ func (engine *Engine) findCheckpointByQuality(target uint32, finalized, headID t
 	return c.GetBlockID(searchStart + uint32(num)*thor.EpochLength())
 }
 
-func (engine *Engine) getTotalWeight(sum *chain.BlockSummary) (*big.Int, error) {
+func (engine *Engine) getTotalWeight(sum *chain.BlockSummary) (uint64, error) {
 	state := engine.stater.NewState(sum.Root())
 	staker := builtin.Staker.Native(state)
 
 	// Get total weight including delegations
-	_, totalWeight, err := staker.LockedVET()
+	_, totalWeight, err := staker.LockedStake()
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 
-	if totalWeight == nil || totalWeight.Sign() == 0 {
-		return nil, errors.New("total weight is zero or nil")
+	if totalWeight == 0 {
+		return 0, errors.New("total weight is zero or nil")
 	}
 
 	return totalWeight, nil

@@ -763,7 +763,7 @@ func TestJustifier(t *testing.T) {
 				}
 
 				for i := 0; i <= MaxBlockProposers*2/3; i++ {
-					vs.AddBlock(datagen.RandAddress(), true, nil)
+					vs.AddBlock(datagen.RandAddress(), true, 0)
 				}
 
 				st := vs.Summarize()
@@ -772,7 +772,7 @@ func TestJustifier(t *testing.T) {
 				assert.True(t, st.Committed)
 
 				// add vote after commits，commit/justify stays the same
-				vs.AddBlock(datagen.RandAddress(), true, nil)
+				vs.AddBlock(datagen.RandAddress(), true, 0)
 				st = vs.Summarize()
 				assert.Equal(t, uint32(3), st.Quality)
 				assert.True(t, st.Justified)
@@ -794,7 +794,7 @@ func TestJustifier(t *testing.T) {
 				}
 
 				for i := 0; i <= MaxBlockProposers*2/3; i++ {
-					vs.AddBlock(datagen.RandAddress(), false, nil)
+					vs.AddBlock(datagen.RandAddress(), false, 0)
 				}
 
 				st := vs.Summarize()
@@ -819,12 +819,12 @@ func TestJustifier(t *testing.T) {
 
 				// vote <threshold> times COM
 				for range MaxBlockProposers * 2 / 3 {
-					vs.AddBlock(datagen.RandAddress(), true, nil)
+					vs.AddBlock(datagen.RandAddress(), true, 0)
 				}
 
 				master := datagen.RandAddress()
 				// master votes WIT
-				vs.AddBlock(master, false, nil)
+				vs.AddBlock(master, false, 0)
 
 				// justifies but not committed
 				st := vs.Summarize()
@@ -832,14 +832,14 @@ func TestJustifier(t *testing.T) {
 				assert.False(t, st.Committed)
 
 				// master votes COM
-				vs.AddBlock(master, true, nil)
+				vs.AddBlock(master, true, 0)
 
 				// should not be committed
 				st = vs.Summarize()
 				assert.False(t, st.Committed)
 
 				// another master votes WIT
-				vs.AddBlock(datagen.RandAddress(), true, nil)
+				vs.AddBlock(datagen.RandAddress(), true, 0)
 				st = vs.Summarize()
 				assert.True(t, st.Committed)
 			},
@@ -856,19 +856,19 @@ func TestJustifier(t *testing.T) {
 				}
 
 				master := datagen.RandAddress()
-				vs.AddBlock(master, true, nil)
+				vs.AddBlock(master, true, 0)
 				assert.Equal(t, true, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(1), vs.comVotes)
 
-				vs.AddBlock(master, false, nil)
+				vs.AddBlock(master, false, 0)
 				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(master, true, nil)
+				vs.AddBlock(master, true, 0)
 				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(master, false, nil)
+				vs.AddBlock(master, false, 0)
 				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 
@@ -876,19 +876,19 @@ func TestJustifier(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				vs.AddBlock(master, false, nil)
+				vs.AddBlock(master, false, 0)
 				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(master, true, nil)
+				vs.AddBlock(master, true, 0)
 				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(master, true, nil)
+				vs.AddBlock(master, true, 0)
 				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(master, false, nil)
+				vs.AddBlock(master, false, 0)
 				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 			},

@@ -18,6 +18,16 @@ import (
 	"github.com/vechain/thor/v2/xenv"
 )
 
+var bigE18 = big.NewInt(1e18)
+
+func toVET(wei *big.Int) uint64 {
+	return new(big.Int).Div(wei, bigE18).Uint64()
+}
+
+func toWei(vet uint64) *big.Int {
+	return new(big.Int).Mul(new(big.Int).SetUint64(vet), bigE18)
+}
+
 func init() {
 	defines := []struct {
 		name string
@@ -26,11 +36,14 @@ func init() {
 		{"native_totalStake", func(env *xenv.Environment) ([]any, error) {
 			charger := gascharger.New(env)
 
-			staked, weight, err := Staker.NativeMetered(env.State(), charger).LockedVET()
+			staked, weight, err := Staker.NativeMetered(env.State(), charger).LockedStake()
 			if err != nil {
 				return nil, err
 			}
-			return []any{staked, weight}, nil
+			return []any{
+				toWei(staked),
+				toWei(weight),
+			}, nil
 		}},
 		{"native_queuedStake", func(env *xenv.Environment) ([]any, error) {
 			charger := gascharger.New(env)
@@ -39,7 +52,10 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return []any{staked, weight}, nil
+			return []any{
+				toWei(staked),
+				toWei(weight),
+			}, nil
 		}},
 		{"native_getValidation", func(env *xenv.Environment) ([]any, error) {
 			var args struct {
@@ -79,9 +95,9 @@ func init() {
 			}
 			return []any{
 				validator.Endorser,
-				validator.LockedVET,
-				validator.Weight,
-				validator.QueuedVET,
+				toWei(validator.LockedVET),
+				toWei(validator.Weight),
+				toWei(validator.QueuedVET),
 				validator.Status,
 				offlineBlock,
 				validator.Period,
@@ -101,7 +117,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return []any{amount}, nil
+			return []any{toWei(amount)}, nil
 		}},
 		{"native_firstActive", func(env *xenv.Environment) ([]any, error) {
 			charger := gascharger.New(env)
@@ -151,7 +167,7 @@ func init() {
 				return nil, err
 			}
 
-			return []any{stake}, nil
+			return []any{toWei(stake)}, nil
 		}},
 		{"native_addValidation", func(env *xenv.Environment) ([]any, error) {
 			var args struct {
@@ -188,7 +204,7 @@ func init() {
 					thor.Address(args.Validator),
 					thor.Address(args.Endorser),
 					args.Period,
-					args.Stake,
+					toVET(args.Stake), // convert from wei to VET
 				)
 			if err != nil {
 				return nil, err
@@ -227,7 +243,7 @@ func init() {
 				IncreaseStake(
 					thor.Address(args.Validator),
 					thor.Address(args.Endorser),
-					args.Amount,
+					toVET(args.Amount), // convert from wei to VET
 				)
 			if err != nil {
 				return nil, err
@@ -268,7 +284,7 @@ func init() {
 				DecreaseStake(
 					thor.Address(args.Validator),
 					thor.Address(args.Endorser),
-					args.Amount,
+					toVET(args.Amount), // convert from wei to VET,
 				)
 			if err != nil {
 				return nil, err
@@ -287,7 +303,7 @@ func init() {
 			delegationID, err := Staker.NativeMetered(env.State(), charger).
 				AddDelegation(
 					thor.Address(args.Validator),
-					args.Stake,
+					toVET(args.Stake), // convert from wei to VET,
 					args.Multiplier,
 				)
 			if err != nil {
@@ -307,7 +323,7 @@ func init() {
 				return nil, err
 			}
 
-			return []any{stake}, nil
+			return []any{toWei(stake)}, nil
 		}},
 		{"native_signalDelegationExit", func(env *xenv.Environment) ([]any, error) {
 			var args struct {
@@ -348,7 +364,7 @@ func init() {
 			locked := delegation.Started(validation) && !delegation.Ended(validation)
 			return []any{
 				delegation.Validation,
-				delegation.Stake,
+				toWei(delegation.Stake),
 				delegation.Multiplier,
 				locked,
 				delegation.FirstIteration,
@@ -392,12 +408,12 @@ func init() {
 				return nil, err
 			}
 			return []any{
-				totals.TotalLockedStake,
-				totals.TotalLockedWeight,
-				totals.TotalQueuedStake,
-				totals.TotalQueuedWeight,
-				totals.TotalExitingStake,
-				totals.TotalExitingWeight,
+				toWei(totals.TotalLockedStake),
+				toWei(totals.TotalLockedWeight),
+				toWei(totals.TotalQueuedStake),
+				toWei(totals.TotalQueuedWeight),
+				toWei(totals.TotalExitingStake),
+				toWei(totals.TotalExitingWeight),
 			}, nil
 		}},
 		{"native_getValidationsNum", func(env *xenv.Environment) ([]any, error) {

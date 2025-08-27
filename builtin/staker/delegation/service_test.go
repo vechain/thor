@@ -38,7 +38,7 @@ func newSvc() (*Service, thor.Address, *state.State) {
 func TestService_Add_And_GetDelegation(t *testing.T) {
 	svc, _, _ := newSvc()
 
-	id, err := svc.Add(thor.BytesToAddress([]byte("v")), 2, big.NewInt(1000), 50)
+	id, err := svc.Add(thor.BytesToAddress([]byte("v")), 2, 1000, 50)
 	assert.NoError(t, err)
 	assert.NotNil(t, id)
 
@@ -46,7 +46,7 @@ func TestService_Add_And_GetDelegation(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, thor.BytesToAddress([]byte("v")), del.Validation)
 	assert.Equal(t, uint32(2), del.FirstIteration)
-	assert.Equal(t, big.NewInt(1000), del.Stake)
+	assert.Equal(t, uint64(1000), del.Stake)
 	assert.Equal(t, uint8(50), del.Multiplier)
 	assert.Nil(t, del.LastIteration)
 }
@@ -54,17 +54,14 @@ func TestService_Add_And_GetDelegation(t *testing.T) {
 func TestService_Add_InputValidation(t *testing.T) {
 	svc, _, _ := newSvc()
 
-	_, err := svc.Add(thor.Address{}, 1, big.NewInt(0), 10)
-	assert.ErrorContains(t, err, "stake must be greater than 0")
-
-	_, err = svc.Add(thor.Address{}, 1, big.NewInt(1), 0)
+	_, err := svc.Add(thor.Address{}, 1, 1, 0)
 	assert.ErrorContains(t, err, "multiplier cannot be 0")
 }
 
 func TestService_SetDelegation_RoundTrip(t *testing.T) {
 	svc, _, _ := newSvc()
 	v := thor.BytesToAddress([]byte("v"))
-	id, err := svc.Add(v, 1, big.NewInt(100), 25)
+	id, err := svc.Add(v, 1, 100, 25)
 	assert.NoError(t, err)
 
 	del, err := svc.GetDelegation(id)
@@ -83,7 +80,7 @@ func TestService_SetDelegation_RoundTrip(t *testing.T) {
 func TestService_SignalExit(t *testing.T) {
 	svc, _, _ := newSvc()
 	v := thor.BytesToAddress([]byte("v"))
-	id, err := svc.Add(v, 3, big.NewInt(1000), 10)
+	id, err := svc.Add(v, 3, 1000, 10)
 	assert.NoError(t, err)
 
 	del, err := svc.GetDelegation(id)
@@ -102,20 +99,20 @@ func TestService_SignalExit(t *testing.T) {
 func TestService_SignalExit_NotActive(t *testing.T) {
 	svc, _, _ := newSvc()
 	v := thor.BytesToAddress([]byte("v"))
-	id, err := svc.Add(v, 1, big.NewInt(100), 10)
+	id, err := svc.Add(v, 1, 100, 10)
 	assert.NoError(t, err)
 
 	del, err := svc.GetDelegation(id)
 	assert.NoError(t, err)
 
-	del.Stake = big.NewInt(0)
+	del.Stake = 0
 	assert.ErrorContains(t, svc.SignalExit(del, id, 5), "delegation is not active")
 }
 
 func TestService_Withdraw(t *testing.T) {
 	svc, _, _ := newSvc()
 	v := thor.BytesToAddress([]byte("v"))
-	id, err := svc.Add(v, 1, big.NewInt(12345), 10)
+	id, err := svc.Add(v, 1, 12345, 10)
 	assert.NoError(t, err)
 
 	del, err := svc.GetDelegation(id)
@@ -123,11 +120,11 @@ func TestService_Withdraw(t *testing.T) {
 
 	withdraw, err := svc.Withdraw(del, id)
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(12345), withdraw)
+	assert.Equal(t, uint64(12345), withdraw)
 
 	after, err := svc.GetDelegation(id)
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(0), after.Stake)
+	assert.Equal(t, uint64(0), after.Stake)
 }
 
 func TestService_GetDelegation_NotFoundZeroValue(t *testing.T) {
@@ -153,7 +150,7 @@ func TestService_Add_CounterGetError(t *testing.T) {
 	svc, contract, st := newSvc()
 	poisonCounterGet(st, contract)
 
-	_, err := svc.Add(thor.BytesToAddress([]byte("v")), 1, big.NewInt(10), 1)
+	_, err := svc.Add(thor.BytesToAddress([]byte("v")), 1, 10, 1)
 	assert.Error(t, err)
 }
 
@@ -162,7 +159,7 @@ func TestService_Add_CounterSetOverflow(t *testing.T) {
 	max := new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1))
 	st.SetStorage(contract, slotDelegationsCounter, thor.BytesToBytes32(max.Bytes()))
 
-	_, err := svc.Add(thor.BytesToAddress([]byte("v")), 1, big.NewInt(10), 1)
+	_, err := svc.Add(thor.BytesToAddress([]byte("v")), 1, 10, 1)
 	assert.ErrorContains(t, err, "failed to increment delegation ID counter")
 	assert.ErrorContains(t, err, "uint256 overflow")
 }

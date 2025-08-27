@@ -78,13 +78,13 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		// Basic read operations (no arguments)
 		{
 			function:    "native_totalStake",
-			expectedGas: 400,
+			expectedGas: 200,
 			args:        []any{},
 			description: "Get total locked stake",
 		},
 		{
 			function:    "native_queuedStake",
-			expectedGas: 400,
+			expectedGas: 200,
 			args:        []any{},
 			description: "Get total queued stake",
 		},
@@ -108,7 +108,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_addValidation",
-			expectedGas: 66400,
+			expectedGas: 61200,
 			args:        []any{account1, account1, thor.LowStakingPeriod(), staker.MinStake},
 			description: "Add a new validator (not implemented yet)",
 		},
@@ -152,7 +152,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		// },
 		{
 			function:    "native_increaseStake",
-			expectedGas: 21400,
+			expectedGas: 16200,
 			args: []any{
 				account1,
 				account1,
@@ -163,7 +163,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_decreaseStake",
-			expectedGas: 20800,
+			expectedGas: 15600,
 			args: []any{
 				account1,
 				account1,
@@ -174,7 +174,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_addDelegation",
-			expectedGas: 31800,
+			expectedGas: 21600,
 			args: []any{
 				account1,
 				staker.MinStake,
@@ -185,7 +185,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_getDelegation",
-			expectedGas: 800,
+			expectedGas: 600,
 			args: []any{
 				big.NewInt(1), // IDs are incremental, starting at 1
 			},
@@ -194,7 +194,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_withdrawDelegation",
-			expectedGas: 21400,
+			expectedGas: 11000,
 			args: []any{
 				big.NewInt(1), // IDs are incremental, starting at 1
 			},
@@ -204,7 +204,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		// TODO: How can we mint thousands of blocks and perform housekeeping?
 		{
 			function:    "native_signalDelegationExit",
-			expectedGas: 800,
+			expectedGas: 600,
 			args: []any{
 				big.NewInt(1), // IDs are incremental, starting at 1
 			},
@@ -239,7 +239,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_issuance",
-			expectedGas: 400,
+			expectedGas: 200,
 			description: "Get issuance for the current block",
 		},
 	}

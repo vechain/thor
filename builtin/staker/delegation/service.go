@@ -50,15 +50,12 @@ func (s *Service) setDelegation(delegationID *big.Int, entry *Delegation, isNew 
 func (s *Service) Add(
 	validator thor.Address,
 	firstIteration uint32,
-	stake *big.Int,
+	stake uint64,
 	multiplier uint8,
 ) (*big.Int, error) {
 	// ensure input is sane
 	if multiplier == 0 {
 		return nil, reverts.New("multiplier cannot be 0")
-	}
-	if stake.Cmp(big.NewInt(0)) <= 0 {
-		return nil, reverts.New("stake must be greater than 0")
 	}
 
 	// update the global delegation counter
@@ -91,7 +88,7 @@ func (s *Service) SignalExit(delegation *Delegation, delegationID *big.Int, valC
 	if delegation.LastIteration != nil {
 		return reverts.New("delegation is already disabled for auto-renew")
 	}
-	if delegation.Stake.Sign() == 0 {
+	if delegation.Stake == 0 {
 		return reverts.New("delegation is not active")
 	}
 
@@ -100,13 +97,13 @@ func (s *Service) SignalExit(delegation *Delegation, delegationID *big.Int, valC
 	return s.setDelegation(delegationID, delegation, false)
 }
 
-func (s *Service) Withdraw(del *Delegation, delegationID *big.Int) (*big.Int, error) {
+func (s *Service) Withdraw(del *Delegation, delegationID *big.Int) (uint64, error) {
 	// ensure the pointers are copied, not referenced
-	withdrawableStake := new(big.Int).Set(del.Stake)
+	withdrawableStake := del.Stake
 
-	del.Stake = big.NewInt(0)
+	del.Stake = 0
 	if err := s.setDelegation(delegationID, del, false); err != nil {
-		return nil, err
+		return 0, err
 	}
 
 	return withdrawableStake, nil
