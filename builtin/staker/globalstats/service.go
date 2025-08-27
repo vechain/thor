@@ -144,13 +144,7 @@ func (s *Service) RemoveQueued(stake *stakes.WeightedStake) error {
 	return s.queuedWeight.Sub(stake.Weight())
 }
 
-// GetQueuedStake returns the total VET and weight waiting to be activated.
-func (s *Service) GetQueuedStake() (*big.Int, *big.Int, error) {
-	queuedVet, err := s.queuedVET.Get()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	queuedWeight, err := s.queuedWeight.Get()
-	return queuedVet, queuedWeight, err
+// GetQueuedStake returns the total VET waiting to be activated.
+func (s *Service) GetQueuedStake() (*big.Int, error) {
+	return s.queuedVET.Get()
 }

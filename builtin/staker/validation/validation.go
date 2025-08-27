@@ -71,7 +71,24 @@ func (v *Validation) Totals(agg *aggregation.Aggregation) *Totals {
 		exitingWeight = big.NewInt(0).Add(vExiting.Weight(), agg.ExitingWeight)
 	}
 
-	queued := stakes.NewWeightedStake(v.QueuedVET, Multiplier)
+	multiplier := Multiplier
+	queued := stakes.NewWeightedStake(v.QueuedVET, multiplier)
+	validatorStake := stakes.NewWeightedStake(v.LockedVET, MultiplierWithDelegations)
+	// if there is locked or pending delegations, multiplier should be 2
+	if agg.LockedVET.Sign() > 0 || agg.PendingVET.Sign() > 0 {
+		multiplier = MultiplierWithDelegations
+		queued = stakes.NewWeightedStake(v.QueuedVET, multiplier)
+		// we are adding to queued weight missing portion
+		if validatorStake.Weight().Cmp(big.NewInt(0).Sub(v.Weight, agg.LockedWeight)) > 0 {
+			weightDiff := big.NewInt(0).Sub(validatorStake.Weight(), v.Weight)
+			queued.AddWeight(*weightDiff)
+		}
+	}
+
+	// if the last delegation is exiting, we need to re-set multiplier to 1 so we are exiting locked VET
+	if agg.LockedVET.Cmp(agg.ExitingVET) == 0 && big.NewInt(0).Add(validatorStake.Weight(), exitingWeight).Cmp(v.Weight) <= 0 {
+		exitingWeight = big.NewInt(0).Add(exitingWeight, v.LockedVET)
+	}
 
 	return &Totals{
 		// Delegation totals can be calculated by subtracting validators stakes / weights from the global totals.

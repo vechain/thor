@@ -1538,15 +1538,12 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.Equal(t, common.Address(master.Address), *firstQueuedRes)
 
 	// queuedStake
-	queuedStakeRes := make([]any, 2)
-	queuedStakeRes[0] = new(*big.Int)
-	queuedStakeRes[1] = new(*big.Int)
+	queuedStakeRes := new(*big.Int)
 	_, err = callContractAndGetOutput(abi, "queuedStake", toAddr, &queuedStakeRes)
 	assert.NoError(t, err)
 	expectedTotalStake := big.NewInt(25_000_000)
 	expectedTotalStake = big.NewInt(0).Mul(expectedTotalStake, big.NewInt(1e18))
-	assert.Equal(t, expectedTotalStake, *queuedStakeRes[0].(**big.Int))
-	assert.Equal(t, expectedTotalStake, *queuedStakeRes[1].(**big.Int))
+	assert.Equal(t, expectedTotalStake, *queuedStakeRes)
 
 	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0])) // mint block 4: Transition period block
 	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0])) // mint block 5: PoS should become active and active the queued validators
@@ -1569,12 +1566,10 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.Equal(t, expectedTotalStake, *totalStakeRes[1].(**big.Int))
 
 	// queuedStake
-	queuedStakeRes[0] = new(*big.Int)
-	queuedStakeRes[1] = new(*big.Int)
+	queuedStakeRes = new(*big.Int)
 	_, err = callContractAndGetOutput(abi, "queuedStake", toAddr, &queuedStakeRes)
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(0).Int64(), (*queuedStakeRes[0].(**big.Int)).Int64())
-	assert.Equal(t, big.NewInt(0).Int64(), (*queuedStakeRes[1].(**big.Int)).Int64())
+	assert.Equal(t, big.NewInt(0).Int64(), (*queuedStakeRes).Int64())
 
 	_, err = callContractAndGetOutput(abi, "getValidationsNum", toAddr, &totalNumRes)
 	assert.NoError(t, err)

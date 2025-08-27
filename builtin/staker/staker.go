@@ -80,8 +80,8 @@ func (s *Staker) LockedVET() (*big.Int, *big.Int, error) {
 	return s.globalStatsService.GetLockedVET()
 }
 
-// QueuedStake returns the amount of VET and weight queued by validations and delegations.
-func (s *Staker) QueuedStake() (*big.Int, *big.Int, error) {
+// QueuedStake returns the amount of VET queued by validations and delegations.
+func (s *Staker) QueuedStake() (*big.Int, error) {
 	return s.globalStatsService.GetQueuedStake()
 }
 

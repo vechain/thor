@@ -47,10 +47,9 @@ func TestService_QueuedStake_Empty(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).String(), qVET.String())
 	assert.Equal(t, big.NewInt(0).String(), qW.String())
 
-	qVET, qW, err = svc.GetQueuedStake()
+	qVET, err = svc.GetQueuedStake()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).String(), qVET.String())
-	assert.Equal(t, big.NewInt(0).String(), qW.String())
 }
 
 func TestService_AddRemove_Queued(t *testing.T) {

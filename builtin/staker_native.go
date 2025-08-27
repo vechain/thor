@@ -35,11 +35,11 @@ func init() {
 		{"native_queuedStake", func(env *xenv.Environment) ([]any, error) {
 			charger := gascharger.New(env)
 
-			staked, weight, err := Staker.NativeMetered(env.State(), charger).QueuedStake()
+			staked, err := Staker.NativeMetered(env.State(), charger).QueuedStake()
 			if err != nil {
 				return nil, err
 			}
-			return []any{staked, weight}, nil
+			return []any{staked}, nil
 		}},
 		{"native_getValidation", func(env *xenv.Environment) ([]any, error) {
 			var args struct {

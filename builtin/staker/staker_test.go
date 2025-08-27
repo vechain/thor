@@ -46,14 +46,11 @@ func (ts *TestSequence) AssertLockedVET(expectedVET, expectedWeight *big.Int) *T
 	return ts
 }
 
-func (ts *TestSequence) AssertQueuedVET(expectedVET, expectedWeight *big.Int) *TestSequence {
-	queued, weight, err := ts.staker.QueuedStake()
+func (ts *TestSequence) AssertQueuedVET(expectedVET *big.Int) *TestSequence {
+	queued, err := ts.staker.QueuedStake()
 	assert.NoError(ts.t, err, "failed to get queued VET")
 	if expectedVET != nil {
 		assert.Equal(ts.t, 0, expectedVET.Cmp(queued), "queued VET mismatch")
-	}
-	if expectedWeight != nil {
-		assert.Equal(ts.t, 0, expectedWeight.Cmp(weight), "queued weight mismatch")
 	}
 
 	return ts

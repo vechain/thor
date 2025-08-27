@@ -117,14 +117,12 @@ func (s *Staker) TotalStake() (*big.Int, *big.Int, error) {
 	return *(out[0].(**big.Int)), *(out[1].(**big.Int)), nil
 }
 
-func (s *Staker) QueuedStake() (*big.Int, *big.Int, error) {
-	out := [2]any{}
-	out[0] = new(*big.Int)
-	out[1] = new(*big.Int)
+func (s *Staker) QueuedStake() (*big.Int, error) {
+	out := new(*big.Int)
 	if err := s.contract.Method("queuedStake").Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return *(out[0].(**big.Int)), *(out[1].(**big.Int)), nil
+	return *out, nil
 }
 
 type Validation struct {

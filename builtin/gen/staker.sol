@@ -34,9 +34,9 @@ contract Staker {
     }
 
     /**
-     * @dev queuedStake returns all stakes and weight by queued validators.
+     * @dev queuedStake returns all stakes by queued validators.
      */
-    function queuedStake() public view returns (uint256 queuedStake, uint256 queuedWeight) {
+    function queuedStake() public view returns (uint256 queuedStake) {
         return StakerNative(address(this)).native_queuedStake();
     }
 
@@ -350,7 +350,7 @@ interface StakerNative {
     // Read methods
     function native_totalStake() external pure returns (uint256, uint256);
 
-    function native_queuedStake() external pure returns (uint256, uint256);
+    function native_queuedStake() external pure returns (uint256);
 
     function native_getDelegation(
         uint256 delegationID

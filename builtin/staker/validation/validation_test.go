@@ -44,7 +44,7 @@ func TestValidation_Totals(t *testing.T) {
 	assert.Equal(t, big.NewInt(1500), totals.TotalLockedStake)
 	assert.Equal(t, big.NewInt(1000), totals.TotalLockedWeight)
 	assert.Equal(t, big.NewInt(1200), totals.TotalQueuedStake)
-	assert.Equal(t, big.NewInt(1600), totals.TotalQueuedWeight)
+	assert.Equal(t, big.NewInt(3400), totals.TotalQueuedWeight)
 	assert.Equal(t, big.NewInt(1200), totals.TotalExitingStake)
 	assert.Equal(t, big.NewInt(1500), totals.TotalExitingWeight)
 
@@ -55,7 +55,7 @@ func TestValidation_Totals(t *testing.T) {
 	assert.Equal(t, big.NewInt(1500), totals.TotalLockedStake)
 	assert.Equal(t, big.NewInt(1000), totals.TotalLockedWeight)
 	assert.Equal(t, big.NewInt(1200), totals.TotalQueuedStake)
-	assert.Equal(t, big.NewInt(1600), totals.TotalQueuedWeight)
+	assert.Equal(t, big.NewInt(3400), totals.TotalQueuedWeight)
 	assert.Equal(t, big.NewInt(1500), totals.TotalExitingStake)
 	assert.Equal(t, big.NewInt(1000), totals.TotalExitingWeight)
 }
