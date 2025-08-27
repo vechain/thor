@@ -66,11 +66,11 @@ func (h *Health) Status(blockTolerance time.Duration, minPeerCount int, master *
 	var masterAddress, beneficiaryAddress *string
 
 	if master != nil {
-		addr := master.Address().String()
+		addr := master.Address().Hex()
 		masterAddress = &addr
 
 		if master.Beneficiary != nil {
-			beneAddr := master.Beneficiary.String()
+			beneAddr := master.Beneficiary.Hex()
 			beneficiaryAddress = &beneAddr
 		}
 	}
