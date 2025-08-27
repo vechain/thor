@@ -403,7 +403,7 @@ func TestJustifierPos(t *testing.T) {
 
 				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
 					assert.Equal(t, uint32(180), vs.checkpoint)
-					assert.Equal(t, uint64(166666667), vs.thresholdWeight)
+					assert.Equal(t, uint64(166666666), vs.thresholdWeight)
 				} else {
 					assert.Equal(t, uint32(0), vs.checkpoint)
 					assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.thresholdVotes)
@@ -444,7 +444,7 @@ func TestJustifierPos(t *testing.T) {
 				}
 
 				assert.Equal(t, thor.EpochLength()*2, vs.checkpoint)
-				assert.Equal(t, uint64(166666667), vs.thresholdWeight)
+				assert.Equal(t, uint64(166666666), vs.thresholdWeight)
 				assert.Equal(t, uint32(2), vs.Summarize().Quality)
 				assert.False(t, vs.Summarize().Justified)
 				assert.False(t, vs.Summarize().Committed)
