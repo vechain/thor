@@ -23,7 +23,7 @@ type Status struct {
 func (s *Staker) SyncPOS(forkConfig *thor.ForkConfig, current uint32) (Status, error) {
 	status := Status{}
 	// still on PoA
-	if forkConfig.HAYABUSA+forkConfig.HAYABUSA_TP > current {
+	if forkConfig.HAYABUSA+thor.HayabusaTP() > current {
 		return status, nil
 	}
 
@@ -37,7 +37,7 @@ func (s *Staker) SyncPOS(forkConfig *thor.ForkConfig, current uint32) (Status, e
 	}
 
 	// attempt to transition if we're on a transition block and the staker contract is not active
-	if !status.Active && (forkConfig.HAYABUSA_TP == 0 || (current-forkConfig.HAYABUSA)%forkConfig.HAYABUSA_TP == 0) {
+	if !status.Active && (thor.HayabusaTP() == 0 || (current-forkConfig.HAYABUSA)%thor.HayabusaTP() == 0) {
 		activated, err = s.transition(current)
 		if err != nil {
 			return status, fmt.Errorf("failed to transition to dPoS: %w", err)

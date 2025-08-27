@@ -320,9 +320,9 @@ func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts uint
 	if err = func() error {
 		if n.initialSynced {
 			if needPrintWelcomeInfo() &&
-				blockNum >= n.forkConfig.HAYABUSA+n.forkConfig.HAYABUSA_TP &&
+				blockNum >= n.forkConfig.HAYABUSA+thor.HayabusaTP() &&
 				// if transition period are set to 0, transition will attempt to happen on every block
-				(n.forkConfig.HAYABUSA_TP == 0 || (blockNum-n.forkConfig.HAYABUSA)%n.forkConfig.HAYABUSA_TP == 0) {
+				(thor.HayabusaTP() == 0 || (blockNum-n.forkConfig.HAYABUSA)%thor.HayabusaTP() == 0) {
 				summary, err := n.repo.GetBlockSummary(blockID)
 				if err != nil {
 					return err

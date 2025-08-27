@@ -100,6 +100,8 @@ func newTestNode(t *testing.T, useExecutor bool) (testnode.Node, *thorclient.Cli
 	gene, err := genesis.NewCustomNet(&genConfig)
 	require.NoError(t, err, "failed to create genesis builder")
 
+	hayabusaTP := uint32(1)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 	chain, err := testchain.NewIntegrationTestChainWithGenesis(gene, &thor.SoloFork, 180)
 	if err != nil {
 		t.Fatalf("failed to create test chain: %v", err)

@@ -321,7 +321,7 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 		var parentBlockSummary *chain.BlockSummary
 		var err error
 
-		if h.Number() > engine.forkConfig.HAYABUSA+engine.forkConfig.HAYABUSA_TP {
+		if h.Number() > engine.forkConfig.HAYABUSA+thor.HayabusaTP() {
 			parentBlockSummary, err = engine.repo.GetBlockSummary(h.ParentID())
 			if err != nil {
 				return nil, err
