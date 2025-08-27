@@ -6,47 +6,46 @@
 package aggregation
 
 import (
-	"math/big"
-
 	"github.com/vechain/thor/v2/builtin/staker/delta"
+	"github.com/vechain/thor/v2/builtin/staker/stakes"
 )
 
 // Aggregation represents the total amount of VET locked for a given validation's delegations.
 type Aggregation struct {
 	// All locked vet for a validations delegations.
-	LockedVET    *big.Int // VET locked this period (autoRenew == true)
-	LockedWeight *big.Int // Weight including multipliers
+	LockedVET    uint64 // VET locked this period
+	LockedWeight uint64 // Weight including multipliers
 
 	// Pending delegations, does NOT contribute to current TVL, it will increase the LockedVET in the next period and reset to 0
-	PendingVET    *big.Int // VET that is pending to be locked in the next period (autoRenew == false)
-	PendingWeight *big.Int // Weight including multipliers
+	PendingVET    uint64 // VET that is pending to be locked in the next period
+	PendingWeight uint64 // Weight including multipliers
 
 	// Exiting delegations, does NOT contribute to current TVL, it will decrease the LockedVET in the next period and reset to 0
-	ExitingVET    *big.Int // VET that is exiting the next period
-	ExitingWeight *big.Int // Weight including multipliers
+	ExitingVET    uint64 // VET that is exiting the next period
+	ExitingWeight uint64 // Weight including multipliers
 }
 
 // newAggregation creates a new zero-initialized aggregation for a validator.
 func newAggregation() *Aggregation {
 	return &Aggregation{
-		LockedVET:     big.NewInt(0),
-		LockedWeight:  big.NewInt(0),
-		PendingVET:    big.NewInt(0),
-		PendingWeight: big.NewInt(0),
-		ExitingVET:    big.NewInt(0),
-		ExitingWeight: big.NewInt(0),
+		LockedVET:     0,
+		LockedWeight:  0,
+		PendingVET:    0,
+		PendingWeight: 0,
+		ExitingVET:    0,
+		ExitingWeight: 0,
 	}
 }
 
 func (a *Aggregation) IsEmpty() bool {
 	// aggregation subfields are expected to never be nil
-	return a.LockedVET.Sign() == 0 && a.ExitingVET.Sign() == 0 && a.PendingVET.Sign() == 0
+	return a.LockedVET == 0 && a.ExitingVET == 0 && a.PendingVET == 0
 }
 
 // NextPeriodTVL is the total value locked (TVL) for the next period.
 // It is the sum of the currently recurring VET, plus any pending recurring and one-time VET.
-func (a *Aggregation) NextPeriodTVL() *big.Int {
-	return big.NewInt(0).Add(a.LockedVET, a.PendingVET)
+func (a *Aggregation) NextPeriodTVL() uint64 {
+	return a.LockedVET + a.PendingVET
 }
 
 // renew transitions delegations to the next staking period.
@@ -56,35 +55,30 @@ func (a *Aggregation) NextPeriodTVL() *big.Int {
 // 3. Move ExitingVET to WithdrawableVET
 // return a delta object
 func (a *Aggregation) renew() *delta.Renewal {
-	changeTVL := big.NewInt(0)
-	changeWeight := big.NewInt(0)
-
-	queuedDecrease := big.NewInt(0).Set(a.PendingVET)
-	queuedDecreaseWeight := big.NewInt(0).Set(a.PendingWeight)
+	lockedIncrease := stakes.NewWeightedStake(a.PendingVET, a.PendingWeight)
+	lockedDecrease := stakes.NewWeightedStake(a.ExitingVET, a.ExitingWeight)
+	queuedDecrease := stakes.NewWeightedStake(a.PendingVET, a.PendingWeight)
 
 	// Move Pending => Locked
-	changeTVL = changeTVL.Add(changeTVL, a.PendingVET)
-	changeWeight = changeWeight.Add(changeWeight, a.PendingWeight)
-	a.LockedVET = big.NewInt(0).Add(a.LockedVET, a.PendingVET)
-	a.LockedWeight = big.NewInt(0).Add(a.LockedWeight, a.PendingWeight)
-	a.PendingVET = big.NewInt(0)
-	a.PendingWeight = big.NewInt(0)
+	a.LockedVET += a.PendingVET
+	a.LockedWeight += a.PendingWeight
+
+	a.PendingVET = 0
+	a.PendingWeight = 0
 
 	// Remove ExitingVET from LockedVET
-	changeTVL = changeTVL.Sub(changeTVL, a.ExitingVET)
-	changeWeight = changeWeight.Sub(changeWeight, a.ExitingWeight)
-	a.LockedVET = big.NewInt(0).Sub(a.LockedVET, a.ExitingVET)
-	a.LockedWeight = big.NewInt(0).Sub(a.LockedWeight, a.ExitingWeight)
+	a.LockedVET -= a.ExitingVET
+	a.LockedWeight -= a.ExitingWeight
 
+	// TODO: No WithdrawableVET?
 	// Move ExitingVET to WithdrawableVET
-	a.ExitingVET = big.NewInt(0)
-	a.ExitingWeight = big.NewInt(0)
+	a.ExitingVET = 0
+	a.ExitingWeight = 0
 
 	return &delta.Renewal{
-		NewLockedVET:         changeTVL,
-		NewLockedWeight:      changeWeight,
-		QueuedDecrease:       queuedDecrease,
-		QueuedDecreaseWeight: queuedDecreaseWeight,
+		LockedIncrease: lockedIncrease,
+		LockedDecrease: lockedDecrease,
+		QueuedDecrease: queuedDecrease,
 	}
 }
 
@@ -92,23 +86,18 @@ func (a *Aggregation) renew() *delta.Renewal {
 // Called when the validator exits, making all delegations withdrawable regardless of their individual state.
 func (a *Aggregation) exit() *delta.Exit {
 	// Return these values to modify contract totals
-	exitedTVL := big.NewInt(0).Set(a.LockedVET)
-	exitedWeight := big.NewInt(0).Set(a.LockedWeight)
-	queuedDecrease := big.NewInt(0).Set(a.PendingVET)
-	queuedWeightDecrease := big.NewInt(0).Set(a.PendingWeight)
+	var exit = delta.Exit{
+		ExitedTVL:      stakes.NewWeightedStake(a.LockedVET, a.LockedWeight),
+		QueuedDecrease: stakes.NewWeightedStake(a.PendingVET, a.PendingWeight),
+	}
 
 	// Reset the aggregation
-	a.ExitingVET = big.NewInt(0)
-	a.ExitingWeight = big.NewInt(0)
-	a.LockedVET = big.NewInt(0)
-	a.LockedWeight = big.NewInt(0)
-	a.PendingVET = big.NewInt(0)
-	a.PendingWeight = big.NewInt(0)
+	a.ExitingVET = 0
+	a.ExitingWeight = 0
+	a.LockedVET = 0
+	a.LockedWeight = 0
+	a.PendingVET = 0
+	a.PendingWeight = 0
 
-	return &delta.Exit{
-		ExitedTVL:            exitedTVL,
-		ExitedTVLWeight:      exitedWeight,
-		QueuedDecrease:       queuedDecrease,
-		QueuedDecreaseWeight: queuedWeightDecrease,
-	}
+	return &exit
 }

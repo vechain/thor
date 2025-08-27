@@ -186,7 +186,7 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 		}
 		accumulatedRenewal.Add(aggRenewal)
 		// Update validator state
-		valRenewal, err := s.validationService.Renew(validator, aggRenewal, delegationWeight)
+		valRenewal, err := s.validationService.Renew(validator, delegationWeight)
 		if err != nil {
 			return err
 		}

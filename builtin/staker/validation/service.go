@@ -23,8 +23,8 @@ type Service struct {
 	leaderGroup    *linkedlist.LinkedList
 	validatorQueue *linkedlist.LinkedList
 
-	minStake *big.Int
-	maxStake *big.Int
+	minStake uint64
+	maxStake uint64
 
 	repo *Repository
 }
@@ -42,8 +42,8 @@ var (
 )
 
 func New(sctx *solidity.Context,
-	minStake *big.Int,
-	maxStake *big.Int,
+	minStake uint64,
+	maxStake uint64,
 ) *Service {
 	repo := NewRepository(sctx)
 
@@ -153,9 +153,9 @@ func (s *Service) Add(
 	validator thor.Address,
 	endorser thor.Address,
 	period uint32,
-	stake *big.Int,
+	stake uint64,
 ) error {
-	if stake.Cmp(s.minStake) < 0 || stake.Cmp(s.maxStake) > 0 {
+	if stake < s.minStake || stake > s.maxStake {
 		return reverts.New("stake is out of range")
 	}
 	val, err := s.GetValidation(validator)
@@ -174,12 +174,12 @@ func (s *Service) Add(
 		Period:             period,
 		CompleteIterations: 0,
 		Status:             StatusQueued,
-		LockedVET:          big.NewInt(0),
+		LockedVET:          0,
 		QueuedVET:          stake,
-		CooldownVET:        big.NewInt(0),
-		PendingUnlockVET:   big.NewInt(0),
-		WithdrawableVET:    big.NewInt(0),
-		Weight:             big.NewInt(0),
+		CooldownVET:        0,
+		PendingUnlockVET:   0,
+		WithdrawableVET:    0,
+		Weight:             0,
 	}
 
 	if err = s.validatorQueue.Add(validator); err != nil {
@@ -229,7 +229,7 @@ func (s *Service) Evict(validator thor.Address, currentBlock uint32) error {
 	return s.repo.setValidation(validator, validation, false)
 }
 
-func (s *Service) IncreaseStake(validator thor.Address, endorser thor.Address, amount *big.Int) error {
+func (s *Service) IncreaseStake(validator thor.Address, endorser thor.Address, amount uint64) error {
 	entry, err := s.GetExistingValidation(validator)
 	if err != nil {
 		return err
@@ -244,7 +244,7 @@ func (s *Service) IncreaseStake(validator thor.Address, endorser thor.Address, a
 		return reverts.New("validator has signaled exit, cannot increase stake")
 	}
 
-	entry.QueuedVET = big.NewInt(0).Add(amount, entry.QueuedVET)
+	entry.QueuedVET = amount + entry.QueuedVET
 
 	return s.repo.setValidation(validator, entry, false)
 }
@@ -271,7 +271,7 @@ func (s *Service) SetBeneficiary(validator, endorser, beneficiary thor.Address) 
 	return nil
 }
 
-func (s *Service) DecreaseStake(validator thor.Address, endorser thor.Address, amount *big.Int) (bool, error) {
+func (s *Service) DecreaseStake(validator thor.Address, endorser thor.Address, amount uint64) (bool, error) {
 	entry, err := s.GetExistingValidation(validator)
 	if err != nil {
 		return false, err
@@ -290,22 +290,22 @@ func (s *Service) DecreaseStake(validator thor.Address, endorser thor.Address, a
 		// We don't consider any increases, i.e., entry.QueuedVET. We only consider locked and current decreases.
 		// The reason is that validator can instantly withdraw QueuedVET at any time.
 		// We need to make sure the locked VET minus the sum of the current decreases is still above the minimum stake.
-		nextPeriodTVL := big.NewInt(0).Sub(entry.LockedVET, entry.PendingUnlockVET)
-		nextPeriodTVL = nextPeriodTVL.Sub(nextPeriodTVL, amount)
-		if nextPeriodTVL.Cmp(s.minStake) < 0 {
+		nextPeriodTVL := entry.LockedVET - entry.PendingUnlockVET
+		nextPeriodTVL -= amount
+		if nextPeriodTVL < s.minStake {
 			return false, reverts.New("next period stake is too low for validator")
 		}
-		entry.PendingUnlockVET = big.NewInt(0).Add(entry.PendingUnlockVET, amount)
+		entry.PendingUnlockVET += amount
 	}
 
 	if entry.Status == StatusQueued {
 		// All the validator's stake exists within QueuedVET, so we need to make sure it maintains a minimum of MinStake.
-		nextPeriodTVL := big.NewInt(0).Sub(entry.QueuedVET, amount)
-		if nextPeriodTVL.Cmp(s.minStake) < 0 {
+		nextPeriodTVL := entry.QueuedVET - amount
+		if nextPeriodTVL < s.minStake {
 			return false, reverts.New("next period stake is too low for validator")
 		}
-		entry.QueuedVET = big.NewInt(0).Sub(entry.QueuedVET, amount)
-		entry.WithdrawableVET = big.NewInt(0).Add(entry.WithdrawableVET, amount)
+		entry.QueuedVET -= amount
+		entry.WithdrawableVET += amount
 	}
 
 	return entry.Status == StatusQueued, s.repo.setValidation(validator, entry, false)
@@ -317,13 +317,13 @@ func (s *Service) WithdrawStake(
 	validator thor.Address,
 	endorser thor.Address,
 	currentBlock uint32,
-) (*big.Int, *big.Int, error) {
+) (uint64, uint64, error) {
 	val, err := s.GetExistingValidation(validator)
 	if err != nil {
-		return nil, nil, err
+		return 0, 0, err
 	}
 	if val.Endorser != endorser {
-		return big.NewInt(0), big.NewInt(0), reverts.New("invalid endorser")
+		return 0, 0, reverts.New("invalid endorser")
 	}
 
 	// calculate currently available VET to withdraw
@@ -331,27 +331,27 @@ func (s *Service) WithdrawStake(
 
 	// val has exited and waited for the cooldown period
 	if val.ExitBlock != nil && *val.ExitBlock+thor.CooldownPeriod() <= currentBlock {
-		val.CooldownVET = big.NewInt(0)
+		val.CooldownVET = 0
 	}
 
 	// if the validator is queued make sure to exit it
 	if val.Status == StatusQueued {
-		val.QueuedVET = big.NewInt(0)
+		val.QueuedVET = 0
 		val.Status = StatusExit
 		if err := s.validatorQueue.Remove(validator); err != nil {
-			return nil, nil, err
+			return 0, 0, err
 		}
 	}
-	queuedVET := big.NewInt(0).Set(val.QueuedVET)
+	queuedVET := val.QueuedVET
 	// remove any que
-	if val.QueuedVET.Sign() > 0 {
-		val.QueuedVET = big.NewInt(0)
+	if val.QueuedVET > 0 {
+		val.QueuedVET = 0
 	}
 
 	// no more withdraw after this
-	val.WithdrawableVET = big.NewInt(0)
+	val.WithdrawableVET = 0
 	if err := s.repo.setValidation(validator, val, false); err != nil {
-		return nil, nil, err
+		return 0, 0, err
 	}
 
 	return withdrawable, queuedVET, nil
@@ -463,16 +463,27 @@ func (s *Service) ActivateValidator(
 
 	// Update validator values
 	// ensure a queued validator does not have locked vet
-	if val.LockedVET.Sign() > 0 {
+	if val.LockedVET > 0 {
 		return nil, errors.New("cannot activate validator with already locked vet")
 	}
-	// QueuedVET is now locked
-	val.LockedVET = big.NewInt(0).Set(val.QueuedVET)
-	// Reset QueuedVET - already locked-in
-	val.QueuedVET = big.NewInt(0)
 
-	weightedStake := stakes.NewWeightedStake(val.LockedVET, Multiplier)
-	val.Weight = big.NewInt(0).Add(weightedStake.Weight(), aggRenew.NewLockedWeight)
+	// queued stake always use the initial multiplier
+	queuedDecrease := stakes.NewWeightedStakeWithMultiplier(val.QueuedVET, Multiplier)
+
+	// QueuedVET is now locked
+	val.LockedVET = val.QueuedVET
+	// Reset QueuedVET - already locked-in
+	val.QueuedVET = 0
+
+	mul := Multiplier
+	if aggRenew.LockedIncrease.VET-aggRenew.LockedDecrease.VET > 0 {
+		// if validator has delegations, multiplier is 200%
+		mul = MultiplierWithDelegations
+	}
+	lockedIncrease := stakes.NewWeightedStakeWithMultiplier(val.LockedVET, mul)
+
+	// attach all delegation's weight
+	val.Weight = lockedIncrease.Weight + aggRenew.LockedIncrease.Weight - aggRenew.LockedDecrease.Weight
 
 	// Update validator status
 	val.Status = StatusActive
@@ -488,12 +499,11 @@ func (s *Service) ActivateValidator(
 		return nil, err
 	}
 
-	// Return delta representing the state changes
+	// Return renewal that only representing the state changes of this validator
 	validatorRenewal := &delta.Renewal{
-		NewLockedVET:         val.LockedVET,
-		NewLockedWeight:      val.Weight,
-		QueuedDecrease:       val.LockedVET,
-		QueuedDecreaseWeight: weightedStake.Weight(),
+		LockedIncrease: lockedIncrease,
+		LockedDecrease: stakes.NewWeightedStake(0, 0), // New validator does not have locked decrease
+		QueuedDecrease: queuedDecrease,
 	}
 
 	return validatorRenewal, nil
@@ -514,12 +524,12 @@ func (s *Service) UpdateOfflineBlock(validator thor.Address, block uint32, onlin
 	return s.repo.setValidation(validator, validation, false)
 }
 
-func (s *Service) Renew(validator thor.Address, aggRenew *delta.Renewal, delegationWeight *big.Int) (*delta.Renewal, error) {
+func (s *Service) Renew(validator thor.Address, delegationWeight uint64) (*delta.Renewal, error) {
 	validation, err := s.GetExistingValidation(validator)
 	if err != nil {
 		return nil, err
 	}
-	delta := validation.renew(aggRenew, delegationWeight)
+	delta := validation.renew(delegationWeight)
 	if err = s.repo.setValidation(validator, validation, false); err != nil {
 		return nil, errors.Wrap(err, "failed to renew validator")
 	}

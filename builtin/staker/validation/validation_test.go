@@ -5,7 +5,6 @@
 package validation
 
 import (
-	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -23,41 +22,41 @@ var baseVal = Validation{
 	StartBlock:         0,
 	ExitBlock:          nil,
 	OfflineBlock:       nil,
-	LockedVET:          big.NewInt(1000),
-	PendingUnlockVET:   big.NewInt(900),
-	QueuedVET:          big.NewInt(800),
-	CooldownVET:        big.NewInt(700),
-	WithdrawableVET:    big.NewInt(600),
-	Weight:             big.NewInt(1000),
+	LockedVET:          1000,
+	PendingUnlockVET:   900,
+	QueuedVET:          800,
+	CooldownVET:        700,
+	WithdrawableVET:    600,
+	Weight:             1000,
 }
 
 func TestValidation_Totals(t *testing.T) {
 	agg := aggregation.Aggregation{
-		LockedVET:     big.NewInt(500),
-		LockedWeight:  big.NewInt(1000),
-		PendingVET:    big.NewInt(400),
-		PendingWeight: big.NewInt(800),
-		ExitingVET:    big.NewInt(300),
-		ExitingWeight: big.NewInt(600),
+		LockedVET:     500,
+		LockedWeight:  1000,
+		PendingVET:    400,
+		PendingWeight: 800,
+		ExitingVET:    300,
+		ExitingWeight: 600,
 	}
 	totals := baseVal.Totals(&agg)
-	assert.Equal(t, big.NewInt(1500), totals.TotalLockedStake)
-	assert.Equal(t, big.NewInt(1000), totals.TotalLockedWeight)
-	assert.Equal(t, big.NewInt(1200), totals.TotalQueuedStake)
-	assert.Equal(t, big.NewInt(1600), totals.TotalQueuedWeight)
-	assert.Equal(t, big.NewInt(1200), totals.TotalExitingStake)
-	assert.Equal(t, big.NewInt(1500), totals.TotalExitingWeight)
+	assert.Equal(t, uint64(1500), totals.TotalLockedStake)
+	assert.Equal(t, uint64(1000), totals.TotalLockedWeight)
+	assert.Equal(t, uint64(1200), totals.TotalQueuedStake)
+	assert.Equal(t, uint64(1600), totals.TotalQueuedWeight)
+	assert.Equal(t, uint64(1200), totals.TotalExitingStake)
+	assert.Equal(t, uint64(1500), totals.TotalExitingWeight)
 
 	exitBlock := uint32(2)
 	val := baseVal
 	val.ExitBlock = &exitBlock
 	totals = val.Totals(&agg)
-	assert.Equal(t, big.NewInt(1500), totals.TotalLockedStake)
-	assert.Equal(t, big.NewInt(1000), totals.TotalLockedWeight)
-	assert.Equal(t, big.NewInt(1200), totals.TotalQueuedStake)
-	assert.Equal(t, big.NewInt(1600), totals.TotalQueuedWeight)
-	assert.Equal(t, big.NewInt(1500), totals.TotalExitingStake)
-	assert.Equal(t, big.NewInt(1000), totals.TotalExitingWeight)
+	assert.Equal(t, uint64(1500), totals.TotalLockedStake)
+	assert.Equal(t, uint64(1000), totals.TotalLockedWeight)
+	assert.Equal(t, uint64(1200), totals.TotalQueuedStake)
+	assert.Equal(t, uint64(1600), totals.TotalQueuedWeight)
+	assert.Equal(t, uint64(1500), totals.TotalExitingStake)
+	assert.Equal(t, uint64(1000), totals.TotalExitingWeight)
 }
 
 func TestValidation_IsPeriodEnd(t *testing.T) {
@@ -66,20 +65,20 @@ func TestValidation_IsPeriodEnd(t *testing.T) {
 }
 
 func TestValidation_NextPeriodTVL(t *testing.T) {
-	assert.Equal(t, big.NewInt(900), baseVal.NextPeriodTVL())
+	assert.Equal(t, uint64(900), baseVal.NextPeriodTVL())
 }
 
 func TestValidation_Exit(t *testing.T) {
 	val := baseVal
 	delta := val.exit(nil)
 	assert.Equal(t, StatusExit, val.Status)
-	assert.Equal(t, big.NewInt(1000), val.CooldownVET)
-	assert.Equal(t, big.NewInt(0), val.LockedVET)
-	assert.Equal(t, big.NewInt(0), val.PendingUnlockVET)
-	assert.Equal(t, big.NewInt(0), val.Weight)
+	assert.Equal(t, uint64(1000), val.CooldownVET)
+	assert.Equal(t, uint64(0), val.LockedVET)
+	assert.Equal(t, uint64(0), val.PendingUnlockVET)
+	assert.Equal(t, uint64(0), val.Weight)
 
-	assert.Equal(t, big.NewInt(1000), delta.ExitedTVL)
-	assert.Equal(t, big.NewInt(1000), delta.ExitedTVLWeight)
-	assert.Equal(t, big.NewInt(800), delta.QueuedDecrease)
-	assert.Equal(t, big.NewInt(800), delta.QueuedDecreaseWeight)
+	assert.Equal(t, uint64(1000), delta.ExitedTVL.VET)
+	assert.Equal(t, uint64(1000), delta.ExitedTVL.Weight)
+	assert.Equal(t, uint64(800), delta.QueuedDecrease.VET)
+	assert.Equal(t, uint64(800), delta.QueuedDecrease.Weight)
 }

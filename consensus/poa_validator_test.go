@@ -9,24 +9,29 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/ethereum/go-ethereum/rlp"
-
+	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/builtin/authority"
+	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/poa"
 	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
-
-	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/builtin/staker/validation"
-	"github.com/vechain/thor/v2/test/testchain"
 )
+
+func toWei(vet uint64) *big.Int {
+	return new(big.Int).Mul(new(big.Int).SetUint64(vet), big.NewInt(1e18))
+}
+
+func toVet(wei *big.Int) uint64 {
+	return wei.Div(wei, big.NewInt(1e18)).Uint64()
+}
 
 func TestAuthority_Hayabusa_TransitionPeriod(t *testing.T) {
 	setup := newHayabusaSetup(t)
@@ -50,12 +55,12 @@ func TestAuthority_Hayabusa_TransitionPeriod(t *testing.T) {
 	// check the endorsor balance has reduced
 	newEndorsorBal, err := getEndorsorBalance(best.Header, setup.chain)
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(0).Add(newEndorsorBal, minStake).Cmp(endorsorBal), 0)
+	assert.Equal(t, toVet(newEndorsorBal)+minStake, toVet(endorsorBal))
 
 	// check the staker contract has the correct stake
 	masterStake, err := getMasterStake(setup.chain, blk.Header)
 	assert.NoError(t, err)
-	assert.Equal(t, masterStake.QueuedVET.Cmp(minStake), 0)
+	assert.Equal(t, masterStake.QueuedVET, minStake)
 }
 
 func TestAuthority_Hayabusa_NegativeCases(t *testing.T) {
@@ -680,12 +685,12 @@ func TestAuthorityBalanceCheck_AfterHayabusaFork_AccountBalanceInsufficient_Stak
 		StartBlock:         0,
 		ExitBlock:          nil,
 		OfflineBlock:       nil,
-		LockedVET:          nil,
-		PendingUnlockVET:   nil,
-		QueuedVET:          big.NewInt(500),
-		CooldownVET:        nil,
-		WithdrawableVET:    nil,
-		Weight:             big.NewInt(100),
+		LockedVET:          0,
+		PendingUnlockVET:   0,
+		QueuedVET:          500,
+		CooldownVET:        0,
+		WithdrawableVET:    0,
+		Weight:             100,
 	}
 
 	slot := thor.Blake2b(signer.Bytes(), thor.BytesToBytes32([]byte("validations")).Bytes())
@@ -782,12 +787,12 @@ func TestAuthorityBalanceCheck_AfterHayabusaFork_AccountBalanceInsufficient_Empt
 		StartBlock:         0,
 		ExitBlock:          nil,
 		OfflineBlock:       nil,
-		LockedVET:          nil,
-		PendingUnlockVET:   nil,
-		QueuedVET:          nil,
-		CooldownVET:        nil,
-		WithdrawableVET:    nil,
-		Weight:             big.NewInt(0),
+		LockedVET:          0,
+		PendingUnlockVET:   0,
+		QueuedVET:          0,
+		CooldownVET:        0,
+		WithdrawableVET:    0,
+		Weight:             0,
 	}
 
 	slot := thor.Blake2b(signer.Bytes(), thor.BytesToBytes32([]byte("validations")).Bytes())
@@ -844,12 +849,12 @@ func TestAuthorityBalanceCheck_AfterHayabusaFork_AccountBalanceInsufficient_NilQ
 		StartBlock:         0,
 		ExitBlock:          nil,
 		OfflineBlock:       nil,
-		LockedVET:          nil,
-		PendingUnlockVET:   nil,
-		QueuedVET:          nil,
-		CooldownVET:        nil,
-		WithdrawableVET:    nil,
-		Weight:             big.NewInt(100),
+		LockedVET:          0,
+		PendingUnlockVET:   0,
+		QueuedVET:          0,
+		CooldownVET:        0,
+		WithdrawableVET:    0,
+		Weight:             100,
 	}
 
 	slot := thor.Blake2b(signer.Bytes(), thor.BytesToBytes32([]byte("validations")).Bytes())

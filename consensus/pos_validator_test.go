@@ -10,11 +10,8 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/rlp"
-
 	"github.com/hashicorp/golang-lru/simplelru"
-
 	"github.com/stretchr/testify/assert"
-
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
@@ -29,7 +26,7 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-var minStake = big.NewInt(0).Mul(big.NewInt(25_000_000), big.NewInt(1e18))
+var minStake = uint64(25_000_000)
 
 func TestConsensus_PosFork(t *testing.T) {
 	setup := newHayabusaSetup(t)
@@ -77,12 +74,12 @@ func TestConsensus_PosFork(t *testing.T) {
 		StartBlock:         0,
 		ExitBlock:          nil,
 		OfflineBlock:       &offlineBlock,
-		LockedVET:          nil,
-		PendingUnlockVET:   nil,
-		QueuedVET:          nil,
-		CooldownVET:        nil,
-		WithdrawableVET:    nil,
-		Weight:             big.NewInt(10),
+		LockedVET:          0,
+		PendingUnlockVET:   0,
+		QueuedVET:          0,
+		CooldownVET:        0,
+		WithdrawableVET:    0,
+		Weight:             10,
 	}
 	cache.Add(parent.Header.ID(), leaders)
 	setup.consensus.validatorsCache = cache
@@ -110,12 +107,12 @@ func TestConsensus_PosFork(t *testing.T) {
 		StartBlock:         0,
 		ExitBlock:          nil,
 		OfflineBlock:       &offlineBlock,
-		LockedVET:          nil,
-		PendingUnlockVET:   nil,
-		QueuedVET:          nil,
-		CooldownVET:        nil,
-		WithdrawableVET:    nil,
-		Weight:             big.NewInt(10),
+		LockedVET:          0,
+		PendingUnlockVET:   0,
+		QueuedVET:          0,
+		CooldownVET:        0,
+		WithdrawableVET:    0,
+		Weight:             10,
 	}
 	cache.Add(parent.Header.ID(), leaders)
 	setup.consensus.validatorsCache = cache
@@ -152,7 +149,7 @@ func TestConsensus_PosFork(t *testing.T) {
 	err = setup.consensus.validateStakingProposer(best.Header, newParentHeader, builtin.Staker.Native(st))
 	assert.ErrorContains(t, err, "pos - block total score invalid")
 
-	slotLockedVET := thor.BytesToBytes32([]byte(("total-stake")))
+	slotLockedVET := thor.BytesToBytes32([]byte(("total-weighted-stake")))
 	st.SetRawStorage(builtin.Staker.Address, slotLockedVET, rlp.RawValue{0xFF})
 
 	err = setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st))
@@ -335,7 +332,7 @@ func (h *hayabusaSetup) mintAddValidatorBlock(accs ...genesis.DevAccount) (*chai
 	contract := h.chain.Contract(builtin.Staker.Address, builtin.Staker.ABI, genesis.DevAccounts()[0])
 	for _, acc := range accs {
 		contract = contract.Attach(acc)
-		tx, err := contract.BuildTransaction("addValidation", minStake, acc.Address, uint32(360)*24*7)
+		tx, err := contract.BuildTransaction("addValidation", toWei(minStake), acc.Address, uint32(360)*24*7)
 		assert.NoError(h.t, err)
 		txs = append(txs, tx)
 	}
