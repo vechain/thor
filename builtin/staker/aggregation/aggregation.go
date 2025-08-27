@@ -86,7 +86,7 @@ func (a *Aggregation) renew() *delta.Renewal {
 // Called when the validator exits, making all delegations withdrawable regardless of their individual state.
 func (a *Aggregation) exit() *delta.Exit {
 	// Return these values to modify contract totals
-	var exit = delta.Exit{
+	exit := delta.Exit{
 		ExitedTVL:      stakes.NewWeightedStake(a.LockedVET, a.LockedWeight),
 		QueuedDecrease: stakes.NewWeightedStake(a.PendingVET, a.PendingWeight),
 	}

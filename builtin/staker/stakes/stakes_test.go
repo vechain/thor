@@ -35,7 +35,7 @@ func TestNewWeightedStakeWithMultiplier_RoundingDown(t *testing.T) {
 }
 
 func TestNewWeightedStakeWithMultiplier_LargeValues(t *testing.T) {
-	vet := uint64(1e15) //1e10
+	vet := uint64(1e15) // 1e15
 	ws := NewWeightedStakeWithMultiplier(vet, 25)
 	want := uint64(1e15 * 25 / 100)
 	assert.Equal(t, vet, ws.VET)

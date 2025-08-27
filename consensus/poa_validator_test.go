@@ -11,6 +11,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/builtin/authority"

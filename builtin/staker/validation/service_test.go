@@ -178,7 +178,11 @@ func TestService_IsActive_Flag(t *testing.T) {
 
 	id := thor.BytesToAddress([]byte("x"))
 	assert.NoError(t, svc.Add(id, id, thor.LowStakingPeriod(), 1))
-	_, err = svc.ActivateValidator(id, thor.LowStakingPeriod(), &delta.Renewal{LockedIncrease: &stakes.WeightedStake{}, LockedDecrease: &stakes.WeightedStake{}})
+	_, err = svc.ActivateValidator(
+		id,
+		thor.LowStakingPeriod(),
+		&delta.Renewal{LockedIncrease: &stakes.WeightedStake{}, LockedDecrease: &stakes.WeightedStake{}},
+	)
 	assert.NoError(t, err)
 
 	ok, err = svc.IsActive()

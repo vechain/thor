@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/thor"
@@ -105,7 +106,7 @@ func TestScheduler_Distribution(t *testing.T) {
 				diff := maxWeight - minWeight
 
 				// Generate random number in [0, diff)
-				n := rand.Intn(int(diff))
+				n := rand.Intn(int(diff)) //nolint:gosec
 				// Add min to shift range to [min, max)
 				randomValue := minWeight + uint64(n)
 
