@@ -35,22 +35,22 @@ func (ts *TestSequence) AssertActive(active bool) *TestSequence {
 }
 
 func (ts *TestSequence) AssertLockedVET(expectedVET, expectedWeight *big.Int) *TestSequence {
-	locked, weight, err := ts.staker.LockedVET()
+	locked, weight, err := ts.staker.LockedStake()
 	assert.NoError(ts.t, err, "failed to get locked VET")
 	if expectedVET != nil {
-		assert.Equal(ts.t, 0, expectedVET.Cmp(locked), "locked VET mismatch")
+		assert.Equal(ts.t, expectedVET, locked, "locked VET mismatch")
 	}
 	if expectedWeight != nil {
-		assert.Equal(ts.t, 0, expectedWeight.Cmp(weight), "locked weight mismatch")
+		assert.Equal(ts.t, expectedWeight, weight, "locked weight mismatch")
 	}
 	return ts
 }
 
-func (ts *TestSequence) AssertQueuedVET(expectedVET *big.Int) *TestSequence {
+func (ts *TestSequence) AssertQueuedVET(expectedVET, expectedWeight *big.Int) *TestSequence {
 	queued, err := ts.staker.QueuedStake()
 	assert.NoError(ts.t, err, "failed to get queued VET")
 	if expectedVET != nil {
-		assert.Equal(ts.t, 0, expectedVET.Cmp(queued), "queued VET mismatch")
+		assert.Equal(ts.t, expectedVET, queued, "queued VET mismatch")
 	}
 
 	return ts
@@ -94,7 +94,7 @@ func (ts *TestSequence) AssertNext(prev thor.Address, expected thor.Address) *Te
 func (ts *TestSequence) AddValidation(
 	endorser, master thor.Address,
 	period uint32,
-	stake *big.Int,
+	stake uint64,
 ) *TestSequence {
 	err := ts.staker.AddValidation(endorser, master, period, stake)
 	assert.NoError(ts.t, err, "failed to add validator %s with endorser %s", master.String(), endorser.String())
@@ -110,30 +110,29 @@ func (ts *TestSequence) SignalExit(validator, endorser thor.Address) *TestSequen
 func (ts *TestSequence) IncreaseStake(
 	addr thor.Address,
 	endorser thor.Address,
-	amount *big.Int,
+	amount uint64,
 ) *TestSequence {
 	err := ts.staker.IncreaseStake(addr, endorser, amount)
-	assert.NoError(ts.t, err, "failed to increase stake for validator %s by %s: %v", addr.String(), amount.String(), err)
+	assert.NoError(ts.t, err, "failed to increase stake for validator %s by %d: %v", addr.String(), amount, err)
 	return ts
 }
 
 func (ts *TestSequence) DecreaseStake(
 	addr thor.Address,
 	endorser thor.Address,
-	amount *big.Int,
+	amount uint64,
 ) *TestSequence {
 	err := ts.staker.DecreaseStake(addr, endorser, amount)
-	assert.NoError(ts.t, err, "failed to decrease stake for validator %s by %s: %v", addr.String(), amount.String(), err)
+	assert.NoError(ts.t, err, "failed to decrease stake for validator %s by %d: %v", addr.String(), amount, err)
 	return ts
 }
 
-func (ts *TestSequence) WithdrawStake(endorser, master thor.Address, block uint32, expectedOut *big.Int) *TestSequence {
+func (ts *TestSequence) WithdrawStake(endorser, master thor.Address, block uint32, expectedOut uint64) *TestSequence {
 	amount, err := ts.staker.WithdrawStake(endorser, master, block)
 	assert.NoError(ts.t, err, "failed to withdraw stake for validator %s with endorser %s at block %d: %v", master.String(), endorser.String(), block, err)
 	assert.Equal(
 		ts.t,
-		0,
-		amount.Cmp(expectedOut),
+		amount, expectedOut,
 		"withdrawn amount mismatch for validator %s with endorser %s at block %d",
 		master.String(),
 		endorser.String(),
@@ -171,7 +170,7 @@ func (ts *TestSequence) SetOnline(id thor.Address, blockNum uint32, online bool)
 
 func (ts *TestSequence) AddDelegation(
 	master thor.Address,
-	amount *big.Int,
+	amount uint64,
 	multiplier uint8,
 	idSetter *big.Int,
 ) *TestSequence {
@@ -179,9 +178,9 @@ func (ts *TestSequence) AddDelegation(
 	assert.NoError(
 		ts.t,
 		err,
-		"failed to add delegation for validator %s with amount %s and multiplier %d: %v",
+		"failed to add delegation for validator %s with amount %d and multiplier %d: %v",
 		master.String(),
-		amount.String(),
+		amount,
 		multiplier,
 		err,
 	)
@@ -201,7 +200,7 @@ func (ts *TestSequence) SignalDelegationExit(delegationID *big.Int) *TestSequenc
 	return ts
 }
 
-func (ts *TestSequence) WithdrawDelegation(delegationID *big.Int, expectedOut *big.Int) *TestSequence {
+func (ts *TestSequence) WithdrawDelegation(delegationID *big.Int, expectedOut uint64) *TestSequence {
 	amount, err := ts.staker.WithdrawDelegation(delegationID)
 	assert.NoError(ts.t, err, "failed to withdraw delegation %s: %v", delegationID.String(), err)
 	assert.Equal(ts.t, expectedOut, amount, "withdrawn amount mismatch for delegation %s", delegationID.String())
@@ -234,34 +233,16 @@ func (ts *TestSequence) AssertTotals(validationID thor.Address, expected *valida
 	assert.NoError(ts.t, err, "failed to get totals for validator %s", validationID.String())
 
 	// exiting
-	if expected.TotalExitingStake != nil {
-		assert.Equal(ts.t, 0, expected.TotalExitingStake.Cmp(totals.TotalExitingStake), "total exiting stake mismatch for validator %s", validationID.String())
-	}
-	if expected.TotalExitingWeight != nil {
-		assert.Equal(
-			ts.t,
-			0,
-			expected.TotalExitingWeight.Cmp(totals.TotalExitingWeight),
-			"total exiting weight mismatch for validator %s",
-			validationID.String(),
-		)
-	}
+	assert.Equal(ts.t, expected.TotalExitingStake, totals.TotalExitingStake, "total exiting stake mismatch for validator %s", validationID.String())
+	assert.Equal(ts.t, expected.TotalExitingWeight, totals.TotalExitingWeight, "total exiting weight mismatch for validator %s", validationID.String())
 
 	// locked
-	if expected.TotalLockedStake != nil {
-		assert.Equal(ts.t, 0, expected.TotalLockedStake.Cmp(totals.TotalLockedStake), "total locked stake mismatch for validator %s", validationID.String())
-	}
-	if expected.TotalLockedWeight != nil {
-		assert.Equal(ts.t, 0, expected.TotalLockedWeight.Cmp(totals.TotalLockedWeight), "total locked weight mismatch for validator %s", validationID.String())
-	}
+	assert.Equal(ts.t, expected.TotalLockedStake, totals.TotalLockedStake, "total locked stake mismatch for validator %s", validationID.String())
+	assert.Equal(ts.t, expected.TotalLockedWeight, totals.TotalLockedWeight, "total locked weight mismatch for validator %s", validationID.String())
 
 	// queued
-	if expected.TotalQueuedStake != nil {
-		assert.Equal(ts.t, 0, expected.TotalQueuedStake.Cmp(totals.TotalQueuedStake), "total queued stake mismatch for validator %s", validationID.String())
-	}
-	if expected.TotalQueuedWeight != nil {
-		assert.Equal(ts.t, 0, expected.TotalQueuedWeight.Cmp(totals.TotalQueuedWeight), "total queued weight mismatch for validator %s", validationID.String())
-	}
+	assert.Equal(ts.t, expected.TotalQueuedStake, totals.TotalQueuedStake, "total queued stake mismatch for validator %s", validationID.String())
+	assert.Equal(ts.t, expected.TotalQueuedWeight, totals.TotalQueuedWeight, "total queued weight mismatch for validator %s", validationID.String())
 
 	return ts
 }
@@ -309,28 +290,28 @@ func (va *ValidationAssertions) Status(expected validation.Status) *ValidationAs
 	return va
 }
 
-func (va *ValidationAssertions) Weight(expected *big.Int) *ValidationAssertions {
-	assert.Equal(va.t, 0, expected.Cmp(va.validator.Weight), "validator %s weight mismatch", va.addr.String())
+func (va *ValidationAssertions) Weight(expected uint64) *ValidationAssertions {
+	assert.Equal(va.t, expected, va.validator.Weight, "validator %s weight mismatch", va.addr.String())
 	return va
 }
 
-func (va *ValidationAssertions) LockedVET(expected *big.Int) *ValidationAssertions {
-	assert.Equal(va.t, 0, expected.Cmp(va.validator.LockedVET), "validator %s locked VET mismatch", va.addr.String())
+func (va *ValidationAssertions) LockedVET(expected uint64) *ValidationAssertions {
+	assert.Equal(va.t, expected, va.validator.LockedVET, "validator %s locked VET mismatch", va.addr.String())
 	return va
 }
 
-func (va *ValidationAssertions) QueuedVET(expected *big.Int) *ValidationAssertions {
-	assert.Equal(va.t, 0, expected.Cmp(va.validator.QueuedVET), "validator %s pending locked VET mismatch", va.addr.String())
+func (va *ValidationAssertions) QueuedVET(expected uint64) *ValidationAssertions {
+	assert.Equal(va.t, expected, va.validator.QueuedVET, "validator %s pending locked VET mismatch", va.addr.String())
 	return va
 }
 
-func (va *ValidationAssertions) CooldownVET(expected *big.Int) *ValidationAssertions {
-	assert.Equal(va.t, 0, expected.Cmp(va.validator.CooldownVET), "validator %s cooldown VET mismatch", va.addr.String())
+func (va *ValidationAssertions) CooldownVET(expected uint64) *ValidationAssertions {
+	assert.Equal(va.t, expected, va.validator.CooldownVET, "validator %s cooldown VET mismatch", va.addr.String())
 	return va
 }
 
-func (va *ValidationAssertions) WithdrawableVET(expected *big.Int) *ValidationAssertions {
-	assert.Equal(va.t, 0, expected.Cmp(va.validator.WithdrawableVET), "validator %s withdrawable VET mismatch", va.addr.String())
+func (va *ValidationAssertions) WithdrawableVET(expected uint64) *ValidationAssertions {
+	assert.Equal(va.t, expected, va.validator.WithdrawableVET, "validator %s withdrawable VET mismatch", va.addr.String())
 	return va
 }
 
@@ -382,32 +363,32 @@ func assertAggregation(t *testing.T, staker *Staker, validationID thor.Address) 
 	return &AggregationAssertions{validationID: validationID, aggregation: agg, t: t}
 }
 
-func (aa *AggregationAssertions) PendingVET(expected *big.Int) *AggregationAssertions {
+func (aa *AggregationAssertions) PendingVET(expected uint64) *AggregationAssertions {
 	assert.Equal(aa.t, expected, aa.aggregation.PendingVET, "aggregation for validator %s pending VET mismatch", aa.validationID.String())
 	return aa
 }
 
-func (aa *AggregationAssertions) PendingWeight(expected *big.Int) *AggregationAssertions {
+func (aa *AggregationAssertions) PendingWeight(expected uint64) *AggregationAssertions {
 	assert.Equal(aa.t, expected, aa.aggregation.PendingWeight, "aggregation for validator %s pending weight mismatch", aa.validationID.String())
 	return aa
 }
 
-func (aa *AggregationAssertions) LockedVET(expected *big.Int) *AggregationAssertions {
+func (aa *AggregationAssertions) LockedVET(expected uint64) *AggregationAssertions {
 	assert.Equal(aa.t, expected, aa.aggregation.LockedVET, "aggregation for validator %s locked VET mismatch", aa.validationID.String())
 	return aa
 }
 
-func (aa *AggregationAssertions) LockedWeight(expected *big.Int) *AggregationAssertions {
+func (aa *AggregationAssertions) LockedWeight(expected uint64) *AggregationAssertions {
 	assert.Equal(aa.t, expected, aa.aggregation.LockedWeight, "aggregation for validator %s locked weight mismatch", aa.validationID.String())
 	return aa
 }
 
-func (aa *AggregationAssertions) ExitingVET(expected *big.Int) *AggregationAssertions {
+func (aa *AggregationAssertions) ExitingVET(expected uint64) *AggregationAssertions {
 	assert.Equal(aa.t, expected, aa.aggregation.ExitingVET, "aggregation for validator %s exiting VET mismatch", aa.validationID.String())
 	return aa
 }
 
-func (aa *AggregationAssertions) ExitingWeight(expected *big.Int) *AggregationAssertions {
+func (aa *AggregationAssertions) ExitingWeight(expected uint64) *AggregationAssertions {
 	assert.Equal(aa.t, expected, aa.aggregation.ExitingWeight, "aggregation for validator %s exiting weight mismatch", aa.validationID.String())
 	return aa
 }
@@ -430,13 +411,13 @@ func (da *DelegationAssertions) Validation(expected thor.Address) *DelegationAss
 	return da
 }
 
-func (da *DelegationAssertions) Stake(expected *big.Int) *DelegationAssertions {
-	assert.Equal(da.t, 0, expected.Cmp(da.delegation.Stake), "delegation %s stake mismatch", da.delegationID.String())
+func (da *DelegationAssertions) Stake(expected uint64) *DelegationAssertions {
+	assert.Equal(da.t, expected, da.delegation.Stake, "delegation %s stake mismatch", da.delegationID.String())
 	return da
 }
 
-func (da *DelegationAssertions) Weight(expected *big.Int) *DelegationAssertions {
-	assert.Equal(da.t, 0, expected.Cmp(da.delegation.WeightedStake().Weight()), "delegation %s weight mismatch", da.delegationID.String())
+func (da *DelegationAssertions) Weight(expected uint64) *DelegationAssertions {
+	assert.Equal(da.t, expected, da.delegation.WeightedStake().Weight, "delegation %s weight mismatch", da.delegationID.String())
 	return da
 }
 

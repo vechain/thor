@@ -25,10 +25,6 @@ func NewContext(address thor.Address, state *state.State, charger *gascharger.Ch
 	}
 }
 
-func (c *Context) Address() thor.Address {
-	return c.address
-}
-
 func (c *Context) State() *state.State {
 	return c.state
 }
