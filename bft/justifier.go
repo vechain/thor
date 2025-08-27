@@ -86,7 +86,7 @@ func (engine *Engine) newJustifier(parentID thor.Bytes32) (*justifier, error) {
 		if err != nil {
 			return nil, err
 		}
-		thresholdWeight := totalWeight*2/3 + 1
+		thresholdWeight := totalWeight * 2 / 3
 		return newJustifier(parentQuality, checkpoint, 0, thresholdWeight), nil
 	} else {
 		mbp, err := engine.getMaxBlockProposers(sum)

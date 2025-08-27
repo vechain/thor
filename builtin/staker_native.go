@@ -20,6 +20,14 @@ import (
 
 var bigE18 = big.NewInt(1e18)
 
+func toVET(wei *big.Int) uint64 {
+	return new(big.Int).Div(wei, bigE18).Uint64()
+}
+
+func toWei(vet uint64) *big.Int {
+	return new(big.Int).Mul(new(big.Int).SetUint64(vet), bigE18)
+}
+
 func init() {
 	defines := []struct {
 		name string
@@ -33,8 +41,8 @@ func init() {
 				return nil, err
 			}
 			return []any{
-				new(big.Int).Mul(new(big.Int).SetUint64(staked), bigE18),
-				new(big.Int).Mul(new(big.Int).SetUint64(weight), bigE18),
+				toWei(staked),
+				toWei(weight),
 			}, nil
 		}},
 		{"native_queuedStake", func(env *xenv.Environment) ([]any, error) {
@@ -45,8 +53,8 @@ func init() {
 				return nil, err
 			}
 			return []any{
-				new(big.Int).Mul(new(big.Int).SetUint64(staked), bigE18),
-				new(big.Int).Mul(new(big.Int).SetUint64(weight), bigE18),
+				toWei(staked),
+				toWei(weight),
 			}, nil
 		}},
 		{"native_getValidation", func(env *xenv.Environment) ([]any, error) {
@@ -87,9 +95,9 @@ func init() {
 			}
 			return []any{
 				validator.Endorser,
-				new(big.Int).Mul(new(big.Int).SetUint64(validator.LockedVET), bigE18),
-				new(big.Int).Mul(new(big.Int).SetUint64(validator.Weight), bigE18),
-				new(big.Int).Mul(new(big.Int).SetUint64(validator.QueuedVET), bigE18),
+				toWei(validator.LockedVET),
+				toWei(validator.Weight),
+				toWei(validator.QueuedVET),
 				validator.Status,
 				offlineBlock,
 				validator.Period,
@@ -109,7 +117,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return []any{new(big.Int).Mul(new(big.Int).SetUint64(amount), bigE18)}, nil
+			return []any{toWei(amount)}, nil
 		}},
 		{"native_firstActive", func(env *xenv.Environment) ([]any, error) {
 			charger := gascharger.New(env)
@@ -159,7 +167,7 @@ func init() {
 				return nil, err
 			}
 
-			return []any{new(big.Int).Mul(new(big.Int).SetUint64(stake), bigE18)}, nil
+			return []any{toWei(stake)}, nil
 		}},
 		{"native_addValidation", func(env *xenv.Environment) ([]any, error) {
 			var args struct {
@@ -196,7 +204,7 @@ func init() {
 					thor.Address(args.Validator),
 					thor.Address(args.Endorser),
 					args.Period,
-					new(big.Int).Div(args.Stake, big.NewInt(1e18)).Uint64(), // convert from wei to VET
+					toVET(args.Stake), // convert from wei to VET
 				)
 			if err != nil {
 				return nil, err
@@ -235,7 +243,7 @@ func init() {
 				IncreaseStake(
 					thor.Address(args.Validator),
 					thor.Address(args.Endorser),
-					new(big.Int).Div(args.Amount, bigE18).Uint64(), // convert from wei to VET
+					toVET(args.Amount), // convert from wei to VET
 				)
 			if err != nil {
 				return nil, err
@@ -276,7 +284,7 @@ func init() {
 				DecreaseStake(
 					thor.Address(args.Validator),
 					thor.Address(args.Endorser),
-					new(big.Int).Div(args.Amount, bigE18).Uint64(), // convert from wei to VET,
+					toVET(args.Amount), // convert from wei to VET,
 				)
 			if err != nil {
 				return nil, err
@@ -295,7 +303,7 @@ func init() {
 			delegationID, err := Staker.NativeMetered(env.State(), charger).
 				AddDelegation(
 					thor.Address(args.Validator),
-					new(big.Int).Div(args.Stake, bigE18).Uint64(), // convert from wei to VET,
+					toVET(args.Stake), // convert from wei to VET,
 					args.Multiplier,
 				)
 			if err != nil {
@@ -315,7 +323,7 @@ func init() {
 				return nil, err
 			}
 
-			return []any{new(big.Int).Mul(new(big.Int).SetUint64(stake), bigE18)}, nil
+			return []any{toWei(stake)}, nil
 		}},
 		{"native_signalDelegationExit", func(env *xenv.Environment) ([]any, error) {
 			var args struct {
@@ -356,7 +364,7 @@ func init() {
 			locked := delegation.Started(validation) && !delegation.Ended(validation)
 			return []any{
 				delegation.Validation,
-				new(big.Int).Mul(new(big.Int).SetUint64(delegation.Stake), bigE18),
+				toWei(delegation.Stake),
 				delegation.Multiplier,
 				locked,
 				delegation.FirstIteration,
@@ -400,12 +408,12 @@ func init() {
 				return nil, err
 			}
 			return []any{
-				new(big.Int).Mul(new(big.Int).SetUint64(totals.TotalLockedStake), bigE18),
-				new(big.Int).Mul(new(big.Int).SetUint64(totals.TotalLockedWeight), bigE18),
-				new(big.Int).Mul(new(big.Int).SetUint64(totals.TotalQueuedStake), bigE18),
-				new(big.Int).Mul(new(big.Int).SetUint64(totals.TotalQueuedWeight), bigE18),
-				new(big.Int).Mul(new(big.Int).SetUint64(totals.TotalExitingStake), bigE18),
-				new(big.Int).Mul(new(big.Int).SetUint64(totals.TotalExitingWeight), bigE18),
+				toWei(totals.TotalLockedStake),
+				toWei(totals.TotalLockedWeight),
+				toWei(totals.TotalQueuedStake),
+				toWei(totals.TotalQueuedWeight),
+				toWei(totals.TotalExitingStake),
+				toWei(totals.TotalExitingWeight),
 			}, nil
 		}},
 		{"native_getValidationsNum", func(env *xenv.Environment) ([]any, error) {
