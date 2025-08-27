@@ -514,7 +514,7 @@ func masterKeyAction(ctx *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		fmt.Println("Master:", thor.Address(crypto.PubkeyToAddress(masterKey.PublicKey)))
+		fmt.Println("Master:", crypto.PubkeyToAddress(masterKey.PublicKey).Hex())
 		return nil
 	}
 
@@ -543,7 +543,7 @@ func masterKeyAction(ctx *cli.Context) error {
 		if err := crypto.SaveECDSA(keyPath, key.PrivateKey); err != nil {
 			return err
 		}
-		fmt.Println("Master key imported:", thor.Address(key.Address))
+		fmt.Println("Master key imported:", key.Address.Hex())
 		return nil
 	}
 

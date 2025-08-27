@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -33,7 +32,7 @@ func masterNode() (*node.Master, string) {
 	masterNode := &node.Master{
 		PrivateKey: privKey,
 	}
-	return masterNode, strings.ToLower(crypto.PubkeyToAddress(privKey.PublicKey).Hex())
+	return masterNode, crypto.PubkeyToAddress(privKey.PublicKey).Hex()
 }
 
 func TestHealth(t *testing.T) {

@@ -568,12 +568,12 @@ func printStartupMessage1(
 				return fmt.Sprintf(`
     Master       [ %v ]
     Beneficiary  [ %v ]`,
-					common.Address(master.Address().Bytes()).String(),
+					master.Address().Hex(),
 					func() string {
 						if master.Beneficiary == nil {
 							return "not set, defaults to endorser"
 						}
-						return master.Beneficiary.String()
+						return master.Beneficiary.Hex()
 					}(),
 				)
 			}
