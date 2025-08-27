@@ -144,7 +144,7 @@ func TestStaker_TotalStake(t *testing.T) {
 	}
 
 	for id, stake := range stakes {
-		exit, err := staker.validationService.ExitValidator(id, nil)
+		exit, err := staker.validationService.ExitValidator(id)
 		require.NoError(t, err)
 
 		// exit the aggregation too
@@ -194,7 +194,7 @@ func TestStaker_TotalStake_Withdrawal(t *testing.T) {
 	assert.Equal(t, uint64(0), queuedStake)
 	assert.Equal(t, uint64(0), queuedWeight)
 
-	exit, err := staker.validationService.ExitValidator(addr, nil)
+	exit, err := staker.validationService.ExitValidator(addr)
 	require.NoError(t, err)
 
 	// exit the aggregation too
@@ -1241,7 +1241,7 @@ func TestStaker_RemoveValidator_NonExistent(t *testing.T) {
 	staker, _ := newStaker(t, 101, 101, true)
 
 	addr := datagen.RandAddress()
-	_, err := staker.validationService.ExitValidator(addr, nil)
+	_, err := staker.validationService.ExitValidator(addr)
 	assert.NoError(t, err)
 }
 
@@ -1261,7 +1261,7 @@ func TestStaker_RemoveValidator(t *testing.T) {
 	err = staker.SignalExit(addr, addr)
 	assert.NoError(t, err)
 
-	exit, err := staker.validationService.ExitValidator(addr, nil)
+	exit, err := staker.validationService.ExitValidator(addr)
 	require.NoError(t, err)
 
 	// exit the aggregation too
@@ -2472,7 +2472,7 @@ func TestStaker_AddValidation_CannotAddValidationWithSameMasterAfterExit(t *test
 	err = staker.SignalExit(master, endorser)
 	assert.NoError(t, err)
 
-	_, err = staker.validationService.ExitValidator(master, nil)
+	_, err = staker.validationService.ExitValidator(master)
 	assert.NoError(t, err)
 
 	err = staker.AddValidation(master, datagen.RandAddress(), uint32(360)*24*15, MinStakeVET)

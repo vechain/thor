@@ -70,7 +70,7 @@ func TestValidation_NextPeriodTVL(t *testing.T) {
 
 func TestValidation_Exit(t *testing.T) {
 	val := baseVal
-	delta := val.exit(nil)
+	delta := val.exit()
 	assert.Equal(t, StatusExit, val.Status)
 	assert.Equal(t, uint64(1000), val.CooldownVET)
 	assert.Equal(t, uint64(0), val.LockedVET)

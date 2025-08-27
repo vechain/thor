@@ -202,11 +202,7 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 		logger.Info("exiting validator", "validator", transition.ExitValidator)
 
 		// Now call ExitValidator to get the actual exit details and perform the exit
-		agg, err := s.aggregationService.GetAggregation(*transition.ExitValidator)
-		if err != nil {
-			return err
-		}
-		exit, err := s.validationService.ExitValidator(*transition.ExitValidator, agg.LockedWeight)
+		exit, err := s.validationService.ExitValidator(*transition.ExitValidator)
 		if err != nil {
 			return err
 		}
