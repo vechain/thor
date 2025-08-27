@@ -75,9 +75,10 @@ func TestTransition(t *testing.T) {
 
 func TestStaker_TransitionPeriodBalanceCheck(t *testing.T) {
 	fc := &thor.ForkConfig{
-		HAYABUSA:    10,
-		HAYABUSA_TP: 20,
+		HAYABUSA: 10,
 	}
+	tp := uint32(10)
+	thor.SetConfig(thor.Config{HayabusaTP: &tp})
 
 	endorsement := big.NewInt(1000)
 	endorser := datagen.RandAddress()
