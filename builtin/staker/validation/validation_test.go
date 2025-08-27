@@ -40,23 +40,23 @@ func TestValidation_Totals(t *testing.T) {
 		ExitingWeight: 600,
 	}
 	totals := baseVal.Totals(&agg)
-	assert.Equal(t, big.NewInt(1500), totals.TotalLockedStake)
-	assert.Equal(t, big.NewInt(1000), totals.TotalLockedWeight)
-	assert.Equal(t, big.NewInt(1200), totals.TotalQueuedStake)
-	assert.Equal(t, big.NewInt(3400), totals.TotalQueuedWeight)
-	assert.Equal(t, big.NewInt(1200), totals.TotalExitingStake)
-	assert.Equal(t, big.NewInt(1500), totals.TotalExitingWeight)
+	assert.Equal(t, uint64(1500), totals.TotalLockedStake)
+	assert.Equal(t, uint64(1000), totals.TotalLockedWeight)
+	assert.Equal(t, uint64(1200), totals.TotalQueuedStake)
+	assert.Equal(t, uint64(3400), totals.TotalQueuedWeight)
+	assert.Equal(t, uint64(1200), totals.TotalExitingStake)
+	assert.Equal(t, uint64(1500), totals.TotalExitingWeight)
 
 	exitBlock := uint32(2)
 	val := baseVal
 	val.ExitBlock = &exitBlock
 	totals = val.Totals(&agg)
-	assert.Equal(t, big.NewInt(1500), totals.TotalLockedStake)
-	assert.Equal(t, big.NewInt(1000), totals.TotalLockedWeight)
-	assert.Equal(t, big.NewInt(1200), totals.TotalQueuedStake)
-	assert.Equal(t, big.NewInt(3400), totals.TotalQueuedWeight)
-	assert.Equal(t, big.NewInt(1500), totals.TotalExitingStake)
-	assert.Equal(t, big.NewInt(1000), totals.TotalExitingWeight)
+	assert.Equal(t, uint64(1500), totals.TotalLockedStake)
+	assert.Equal(t, uint64(1000), totals.TotalLockedWeight)
+	assert.Equal(t, uint64(1200), totals.TotalQueuedStake)
+	assert.Equal(t, uint64(3400), totals.TotalQueuedWeight)
+	assert.Equal(t, uint64(1500), totals.TotalExitingStake)
+	assert.Equal(t, uint64(1000), totals.TotalExitingWeight)
 }
 
 func TestValidation_IsPeriodEnd(t *testing.T) {

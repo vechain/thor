@@ -6,10 +6,9 @@
 package validation
 
 import (
-	"github.com/vechain/thor/v2/builtin/staker/stakes"
-
 	"github.com/vechain/thor/v2/builtin/staker/aggregation"
 	"github.com/vechain/thor/v2/builtin/staker/delta"
+	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -69,22 +68,22 @@ func (v *Validation) Totals(agg *aggregation.Aggregation) *Totals {
 	}
 
 	multiplier := Multiplier
-	queued := stakes.NewWeightedStake(v.QueuedVET, multiplier)
-	validatorStake := stakes.NewWeightedStake(v.LockedVET, MultiplierWithDelegations)
+	queued := stakes.NewWeightedStakeWithMultiplier(v.QueuedVET, multiplier)
+	validatorStake := stakes.NewWeightedStakeWithMultiplier(v.LockedVET, MultiplierWithDelegations)
 	// if there is locked or pending delegations, multiplier should be 2
-	if agg.LockedVET.Sign() > 0 || agg.PendingVET.Sign() > 0 {
+	if agg.LockedVET > 0 || agg.PendingVET > 0 {
 		multiplier = MultiplierWithDelegations
-		queued = stakes.NewWeightedStake(v.QueuedVET, multiplier)
+		queued = stakes.NewWeightedStakeWithMultiplier(v.QueuedVET, multiplier)
 		// we are adding to queued weight missing portion
-		if validatorStake.Weight().Cmp(big.NewInt(0).Sub(v.Weight, agg.LockedWeight)) > 0 {
-			weightDiff := big.NewInt(0).Sub(validatorStake.Weight(), v.Weight)
-			queued.AddWeight(*weightDiff)
+		if validatorStake.Weight > v.Weight-agg.LockedWeight {
+			weightDiff := validatorStake.Weight - v.Weight
+			queued.AddWeight(weightDiff)
 		}
 	}
 
 	// if the last delegation is exiting, we need to re-set multiplier to 1 so we are exiting locked VET
-	if agg.LockedVET.Cmp(agg.ExitingVET) == 0 && big.NewInt(0).Add(validatorStake.Weight(), exitingWeight).Cmp(v.Weight) <= 0 {
-		exitingWeight = big.NewInt(0).Add(exitingWeight, v.LockedVET)
+	if agg.LockedVET == agg.ExitingVET && validatorStake.Weight+exitingWeight <= v.Weight {
+		exitingWeight = exitingWeight + v.LockedVET
 	}
 
 	return &Totals{

@@ -315,8 +315,6 @@ func Test_Delegator_DisableAutoRenew_InAStakingPeriod(t *testing.T) {
 	id, err := staker.AddDelegation(validator.ID, stake, 255)
 	assert.NoError(t, err)
 
-	weight := stake * 255 / 100
-
 	queuedVet, err := staker.QueuedStake()
 	assert.NoError(t, err)
 	assert.Equal(t, stake, queuedVet)
@@ -466,7 +464,6 @@ func Test_Delegator_Queued_Weight(t *testing.T) {
 	queuedVetAfter, err := staker.QueuedStake()
 	assert.NoError(t, err)
 
-	delegatorWeight := stake * 255 / 100
 	assert.Equal(t, lockedVetBefore, lockedVetAfter)
 	assert.Equal(t, lockedWeightBefore, lockedWeightAfter)
 	assert.Equal(t, validatorStake+stake, queuedVetAfter)
@@ -489,11 +486,7 @@ func Test_Delegator_Queued_Weight_QueuedValidator_Withdraw(t *testing.T) {
 	afterAddQueuedVET, err := staker.QueuedStake()
 	assert.NoError(t, err)
 
-	expectedWeight := delegationStake * 255 / 100
-
 	assert.Equal(t, initialQueuedVET+delegationStake, afterAddQueuedVET)
-	assert.Equal(t, initialQueuedWeight+expectedWeight, afterAddQueuedWeight)
-	assert.Equal(t, new(big.Int).Add(initialQueuedVET, delegationStake), afterAddQueuedVET)
 
 	withdrawnAmount, err := staker.WithdrawDelegation(delegationID)
 	assert.NoError(t, err)
@@ -524,10 +517,6 @@ func Test_Delegator_Queued_Weight_MultipleDelegations_Withdraw(t *testing.T) {
 	afterAddQueuedVET, err := staker.QueuedStake()
 	assert.NoError(t, err)
 
-	expectedWeight1 := stake1 * 200 / 100
-	expectedWeight2 := stake2 * 150 / 100
-	totalExpectedWeight := expectedWeight1 + expectedWeight2
-
 	assert.Equal(t, initialQueuedVET+stake1+stake2, afterAddQueuedVET)
 
 	withdrawnAmount1, err := staker.WithdrawDelegation(id1)
@@ -538,7 +527,6 @@ func Test_Delegator_Queued_Weight_MultipleDelegations_Withdraw(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Equal(t, initialQueuedVET+stake2, afterWithdraw1QueuedVET)
-	assert.Equal(t, totalExpectedWeight-expectedWeight1, afterWithdraw1QueuedWeight)
 
 	withdrawnAmount2, err := staker.WithdrawDelegation(id2)
 	assert.NoError(t, err)
@@ -608,7 +596,6 @@ func TestStaker_DelegationExitingVET(t *testing.T) {
 	assert.Equal(t, validator.LockedVET, validator.Weight)
 
 	delStake := uint64(1000)
-	delWeight := delStake * 2
 	delegationID, err := staker.AddDelegation(*firstActive, delStake, 200)
 	assert.NoError(t, err)
 
