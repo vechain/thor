@@ -85,6 +85,9 @@ func (s *Staker) TransitionPeriodBalanceCheck(fc *thor.ForkConfig, currentBlock 
 		if validation.IsEmpty() || validation.QueuedVET == nil {
 			return false, nil
 		}
+		if validation.Endorser != endorser {
+			return false, nil // endorser mismatch
+		}
 		return validation.QueuedVET.Cmp(endorsement) >= 0, nil
 	}
 }
