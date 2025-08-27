@@ -46,6 +46,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 	n.packer.SetTargetGasLimit(n.options.TargetGasLimit)
 
+	logger.Warn("Debug double signing server starting")
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", "0.0.0.0:45367")
 	if err != nil {
 		fmt.Println(err)
@@ -60,7 +61,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 	if err != nil {
 		fmt.Println(err)
 	}
-	logger.Warn("Debug double signing server started")
+	logger.Warn("Debug double signing server started and connection accepted")
 
 	for {
 		now := uint64(time.Now().Unix())
