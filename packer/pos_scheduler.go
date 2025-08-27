@@ -35,7 +35,7 @@ func (p *Packer) schedulePOS(parent *chain.BlockSummary, nowTimestamp uint64, st
 	}
 	newBlockTime := sched.Schedule(nowTimestamp)
 
-	_, weight, err := staker.LockedVET()
+	_, weight, err := staker.LockedStake()
 	if err != nil {
 		return thor.Address{}, 0, 0, err
 	}

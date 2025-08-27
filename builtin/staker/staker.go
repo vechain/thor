@@ -24,9 +24,13 @@ import (
 
 // TODO: Do these need to be set in params.sol, or some other dynamic way?
 var (
-	logger   = log.WithContext("pkg", "staker")
-	MinStake = big.NewInt(0).Mul(big.NewInt(25e6), big.NewInt(1e18))
-	MaxStake = big.NewInt(0).Mul(big.NewInt(600e6), big.NewInt(1e18))
+	logger = log.WithContext("pkg", "staker")
+
+	MinStakeVET = uint64(25e6)  // 25M VET
+	MaxStakeVET = uint64(600e6) // 600M VET
+	// exported for other packages to use
+	MinStake = big.NewInt(0).Mul(new(big.Int).SetUint64(MinStakeVET), big.NewInt(1e18))
+	MaxStake = big.NewInt(0).Mul(new(big.Int).SetUint64(MaxStakeVET), big.NewInt(1e18))
 )
 
 func SetLogger(l log.Logger) {
@@ -57,8 +61,8 @@ func New(addr thor.Address, state *state.State, params *params.Params, charger *
 		delegationService:  delegation.New(sctx),
 		validationService: validation.New(
 			sctx,
-			MinStake,
-			MaxStake,
+			MinStakeVET,
+			MaxStakeVET,
 		),
 	}
 }
@@ -77,13 +81,13 @@ func (s *Staker) LeaderGroup() (map[thor.Address]*validation.Validation, error) 
 	return s.validationService.LeaderGroup()
 }
 
-// LockedVET returns the amount of VET and weight locked by validations and delegations.
-func (s *Staker) LockedVET() (*big.Int, *big.Int, error) {
-	return s.globalStatsService.GetLockedVET()
+// LockedStake returns the amount of VET and weight locked by validations and delegations.
+func (s *Staker) LockedStake() (uint64, uint64, error) {
+	return s.globalStatsService.GetLockedStake()
 }
 
 // QueuedStake returns the amount of VET and weight queued by validations and delegations.
-func (s *Staker) QueuedStake() (*big.Int, *big.Int, error) {
+func (s *Staker) QueuedStake() (uint64, uint64, error) {
 	return s.globalStatsService.GetQueuedStake()
 }
 
@@ -113,10 +117,10 @@ func (s *Staker) GetValidation(validator thor.Address) (*validation.Validation, 
 }
 
 // GetWithdrawable returns the withdrawable stake of a validator.
-func (s *Staker) GetWithdrawable(validator thor.Address, block uint32) (*big.Int, error) {
+func (s *Staker) GetWithdrawable(validator thor.Address, block uint32) (uint64, error) {
 	val, err := s.validationService.GetExistingValidation(validator)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 
 	return val.CalculateWithdrawableVET(block), err
@@ -150,7 +154,7 @@ func (s *Staker) HasDelegations(
 	}
 
 	// Only return true if there is locked VET in the aggregation.
-	return agg.LockedVET.Sign() == 1, nil
+	return agg.LockedVET > 0, nil
 }
 
 // GetDelegatorRewards returns reward amount for validator and staking period.
@@ -205,12 +209,12 @@ func (s *Staker) AddValidation(
 	validator thor.Address,
 	endorser thor.Address,
 	period uint32,
-	stake *big.Int,
+	stake uint64,
 ) error {
 	logger.Debug("adding validator", "validator", validator,
 		"endorser", endorser,
 		"period", period,
-		"stake", new(big.Int).Div(stake, big.NewInt(1e18)),
+		"stake", stake,
 	)
 
 	// create a new validation
@@ -220,7 +224,7 @@ func (s *Staker) AddValidation(
 	}
 
 	// update global totals
-	err := s.globalStatsService.AddQueued(stakes.NewWeightedStake(stake, validation.Multiplier))
+	err := s.globalStatsService.AddQueued(stakes.NewWeightedStakeWithMultiplier(stake, validation.Multiplier))
 	if err != nil {
 		return err
 	}
@@ -243,8 +247,8 @@ func (s *Staker) SignalExit(validator thor.Address, endorser thor.Address) error
 // IncreaseStake increases the stake of a queued or active validator
 // if a validator is active, the QueuedVET is increase, but the weight stays the same
 // the weight will be recalculated at the end of the staking period, by the housekeep function
-func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, amount *big.Int) error {
-	logger.Debug("increasing stake", "endorser", endorser, "validator", validator, "amount", new(big.Int).Div(amount, big.NewInt(1e18)))
+func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, amount uint64) error {
+	logger.Debug("increasing stake", "endorser", endorser, "validator", validator, "amount", amount)
 
 	if err := s.validationService.IncreaseStake(validator, endorser, amount); err != nil {
 		logger.Info("increase stake failed", "validator", validator, "error", err)
@@ -256,8 +260,8 @@ func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, am
 		return err
 	}
 
-	// update global totals
-	if err := s.globalStatsService.AddQueued(stakes.NewWeightedStake(amount, validation.Multiplier)); err != nil {
+	// update global queued, use the initial multiplier
+	if err := s.globalStatsService.AddQueued(stakes.NewWeightedStakeWithMultiplier(amount, validation.Multiplier)); err != nil {
 		return err
 	}
 
@@ -265,8 +269,8 @@ func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, am
 	return nil
 }
 
-func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, amount *big.Int) error {
-	logger.Debug("decreasing stake", "endorser", endorser, "validator", validator, "amount", new(big.Int).Div(amount, big.NewInt(1e18)))
+func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, amount uint64) error {
+	logger.Debug("decreasing stake", "endorser", endorser, "validator", validator, "amount", amount)
 
 	queued, err := s.validationService.DecreaseStake(validator, endorser, amount)
 	if err != nil {
@@ -275,7 +279,8 @@ func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, am
 	}
 
 	if queued {
-		err = s.globalStatsService.RemoveQueued(stakes.NewWeightedStake(amount, validation.Multiplier))
+		// update global totals, use the initial multiplier
+		err = s.globalStatsService.RemoveQueued(stakes.NewWeightedStakeWithMultiplier(amount, validation.Multiplier))
 		if err != nil {
 			return err
 		}
@@ -286,20 +291,20 @@ func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, am
 }
 
 // WithdrawStake allows expired validations to withdraw their stake.
-func (s *Staker) WithdrawStake(validator thor.Address, endorser thor.Address, currentBlock uint32) (*big.Int, error) {
+func (s *Staker) WithdrawStake(validator thor.Address, endorser thor.Address, currentBlock uint32) (uint64, error) {
 	logger.Debug("withdrawing stake", "endorser", endorser, "validator", validator)
 
 	stake, queued, err := s.validationService.WithdrawStake(validator, endorser, currentBlock)
 	if err != nil {
 		logger.Info("withdraw failed", "validator", validator, "error", err)
-		return nil, err
+		return 0, err
 	}
 
 	// remove validator QueuedVET if the validator is still queued or had a pending increase
-	if queued.Sign() == 1 {
-		err = s.globalStatsService.RemoveQueued(stakes.NewWeightedStake(queued, validation.Multiplier))
+	if queued > 0 {
+		err = s.globalStatsService.RemoveQueued(stakes.NewWeightedStakeWithMultiplier(queued, validation.Multiplier))
 		if err != nil {
-			return nil, err
+			return 0, err
 		}
 	}
 
@@ -324,10 +329,10 @@ func (s *Staker) SetBeneficiary(validator, endorser, beneficiary thor.Address) e
 // AddDelegation adds a new delegation.
 func (s *Staker) AddDelegation(
 	validator thor.Address,
-	stake *big.Int,
+	stake uint64,
 	multiplier uint8,
 ) (*big.Int, error) {
-	logger.Debug("adding delegation", "validator", validator, "stake", new(big.Int).Div(stake, big.NewInt(1e18)), "multiplier", multiplier)
+	logger.Debug("adding delegation", "validator", validator, "stake", stake, "multiplier", multiplier)
 
 	// ensure validation is ok to receive a new delegation
 	val, err := s.validationService.GetExistingValidation(validator)
@@ -345,7 +350,7 @@ func (s *Staker) AddDelegation(
 		logger.Info("failed to add delegation", "validator", validator, "error", err)
 		return nil, err
 	}
-	weightedStake := stakes.NewWeightedStake(stake, multiplier)
+	weightedStake := stakes.NewWeightedStakeWithMultiplier(stake, multiplier)
 
 	if err = s.aggregationService.AddPendingVET(validator, weightedStake); err != nil {
 		return nil, err
@@ -408,47 +413,47 @@ func (s *Staker) SignalDelegationExit(delegationID *big.Int) error {
 // WithdrawDelegation allows expired and queued delegations to withdraw their stake.
 func (s *Staker) WithdrawDelegation(
 	delegationID *big.Int,
-) (*big.Int, error) {
+) (uint64, error) {
 	logger.Debug("withdrawing delegation", "delegationID", delegationID)
 
 	del, err := s.delegationService.GetDelegation(delegationID)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 
 	val, err := s.validationService.GetValidation(del.Validation)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 
 	// ensure the delegation is either queued or finished
 	started := del.Started(val)
 	finished := del.Ended(val)
 	if started && !finished {
-		return nil, reverts.New("delegation is not eligible for withdraw")
+		return 0, reverts.New("delegation is not eligible for withdraw")
 	}
 
 	// withdraw delegation
 	withdrawableStake, err := s.delegationService.Withdraw(del, delegationID)
 	if err != nil {
 		logger.Info("failed to withdraw", "delegationID", delegationID, "error", err)
-		return nil, err
+		return 0, err
 	}
 
 	// start and finish values are sanitized: !started and finished is impossible
 	// delegation is still queued
 	if !started {
-		weightedStake := stakes.NewWeightedStake(withdrawableStake, del.Multiplier)
+		weightedStake := stakes.NewWeightedStakeWithMultiplier(withdrawableStake, del.Multiplier)
 		if err = s.aggregationService.SubPendingVet(del.Validation, weightedStake); err != nil {
-			return nil, err
+			return 0, err
 		}
 
 		if err = s.globalStatsService.RemoveQueued(weightedStake); err != nil {
-			return nil, err
+			return 0, err
 		}
 	}
 
-	logger.Info("withdrew delegation", "delegationID", delegationID, "stake", new(big.Int).Div(withdrawableStake, big.NewInt(1e18)))
+	logger.Info("withdrew delegation", "delegationID", delegationID, "stake", withdrawableStake)
 	return withdrawableStake, nil
 }
 
@@ -469,7 +474,7 @@ func (s *Staker) validateNextPeriodTVL(validator thor.Address) error {
 	}
 
 	// accumulated TVL should cannot be more than MaxStake
-	if big.NewInt(0).Add(val.NextPeriodTVL(), agg.NextPeriodTVL()).Cmp(MaxStake) > 0 {
+	if val.NextPeriodTVL()+agg.NextPeriodTVL() > MaxStakeVET {
 		return reverts.New("stake is out of range")
 	}
 

@@ -79,6 +79,7 @@ func TestStaker_TransitionPeriodBalanceCheck(t *testing.T) {
 	}
 	tp := uint32(10)
 	thor.SetConfig(thor.Config{HayabusaTP: &tp})
+	bigE18 := big.NewInt(1e18)
 
 	endorsement := big.NewInt(1000)
 	endorser := datagen.RandAddress()
@@ -134,7 +135,8 @@ func TestStaker_TransitionPeriodBalanceCheck(t *testing.T) {
 			name:         "during transition period, validator has staked",
 			currentBlock: 15,
 			preTestHook: func(staker *Staker) {
-				assert.NoError(t, staker.AddValidation(master, endorser, thor.MediumStakingPeriod(), MinStake))
+				stake := big.NewInt(0).Div(MinStake, bigE18).Uint64()
+				assert.NoError(t, staker.AddValidation(master, endorser, thor.MediumStakingPeriod(), stake))
 			},
 			ok: true,
 		},

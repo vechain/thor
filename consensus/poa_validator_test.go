@@ -9,23 +9,29 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/ethereum/go-ethereum/rlp"
-
+	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/builtin/authority"
+	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/poa"
 	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
-
-	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/builtin/staker/validation"
-	"github.com/vechain/thor/v2/test/testchain"
 )
+
+func toWei(vet uint64) *big.Int {
+	return new(big.Int).Mul(new(big.Int).SetUint64(vet), big.NewInt(1e18))
+}
+
+func toVet(wei *big.Int) uint64 {
+	return wei.Div(wei, big.NewInt(1e18)).Uint64()
+}
 
 func TestAuthority_Hayabusa_TransitionPeriod(t *testing.T) {
 	setup := newHayabusaSetup(t)
@@ -49,12 +55,12 @@ func TestAuthority_Hayabusa_TransitionPeriod(t *testing.T) {
 	// check the endorsor balance has reduced
 	newEndorsorBal, err := getEndorsorBalance(best.Header, setup.chain)
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(0).Add(newEndorsorBal, minStake).Cmp(endorsorBal), 0)
+	assert.Equal(t, toVet(newEndorsorBal)+minStake, toVet(endorsorBal))
 
 	// check the staker contract has the correct stake
 	masterStake, err := getMasterStake(setup.chain, blk.Header)
 	assert.NoError(t, err)
-	assert.Equal(t, masterStake.QueuedVET.Cmp(minStake), 0)
+	assert.Equal(t, masterStake.QueuedVET, minStake)
 }
 
 func TestAuthority_Hayabusa_NegativeCases(t *testing.T) {
