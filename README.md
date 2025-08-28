@@ -2,7 +2,7 @@
 <p align="center">
   <a href="https://www.vechain.org/vechainthor/">
     <picture style="padding: 80px;">
-        <img src="docs/assets/banner.png" style="padding: 20px;">
+        <img src="https://raw.githubusercontent.com/vechain/thor/refs/heads/master/docs/assets/banner.png" style="padding: 20px;">
     </picture>
   </a>
 </p>
