@@ -6,6 +6,7 @@
 package staker
 
 import (
+	"math"
 	"math/big"
 	"testing"
 
@@ -640,4 +641,53 @@ func TestStaker_DelegationExitingVET(t *testing.T) {
 	assert.Equal(t, uint64(0), total.TotalQueuedStake)
 	assert.Equal(t, uint64(0), total.TotalExitingStake)
 	assert.Equal(t, uint64(0), total.NextPeriodWeight)
+}
+
+func TestStaker_DelegationWithdrawPending(t *testing.T) {
+	staker, totalStake := newStaker(t, 1, 1, true)
+
+	firstActive, err := staker.FirstActive()
+	assert.NoError(t, err)
+
+	stake, weight, err := staker.LockedStake()
+	assert.NoError(t, err)
+	assert.Equal(t, totalStake, stake)
+	assert.Equal(t, totalStake, weight)
+	qStake, err := staker.QueuedStake()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(0), qStake)
+
+	validator, err := staker.GetValidation(*firstActive)
+	assert.NoError(t, err)
+	assert.Equal(t, validator.LockedVET, validator.Weight)
+
+	delStake := uint64(1000)
+	delegationID, err := staker.AddDelegation(*firstActive, delStake, 200)
+	assert.NoError(t, err)
+
+	delegation, validation, err := staker.GetDelegation(delegationID)
+	assert.NoError(t, err)
+	assert.False(t, delegation.Started(validation))
+
+	stake, weight, err = staker.LockedStake()
+	assert.NoError(t, err)
+	assert.Equal(t, totalStake, stake)
+	assert.Equal(t, totalStake, weight)
+	qStake, err = staker.QueuedStake()
+	assert.NoError(t, err)
+	assert.Equal(t, delStake, qStake)
+
+	withdrawnStake, err := staker.WithdrawDelegation(delegationID)
+	assert.NoError(t, err)
+	assert.Equal(t, delStake, withdrawnStake)
+
+	_, err = staker.Housekeep(thor.MediumStakingPeriod())
+	assert.NoError(t, err)
+
+	delegation, validation, err = staker.GetDelegation(delegationID)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(0), delegation.Stake)
+	assert.Equal(t, uint32(math.MaxUint32), delegation.FirstIteration)
+	assert.Nil(t, delegation.LastIteration)
+	assert.False(t, delegation.Started(validation))
 }

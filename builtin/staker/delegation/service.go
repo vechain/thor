@@ -10,8 +10,11 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/ethereum/go-ethereum/common/math"
+
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/builtin/staker/reverts"
+	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -97,11 +100,14 @@ func (s *Service) SignalExit(delegation *Delegation, delegationID *big.Int, valC
 	return s.setDelegation(delegationID, delegation, false)
 }
 
-func (s *Service) Withdraw(del *Delegation, delegationID *big.Int) (uint64, error) {
+func (s *Service) Withdraw(del *Delegation, delegationID *big.Int, val *validation.Validation) (uint64, error) {
 	// ensure the pointers are copied, not referenced
 	withdrawableStake := del.Stake
 
 	del.Stake = 0
+	if val.CurrentIteration() < del.FirstIteration {
+		del.FirstIteration = math.MaxUint32
+	}
 	if err := s.setDelegation(delegationID, del, false); err != nil {
 		return 0, err
 	}
