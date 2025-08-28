@@ -7,11 +7,11 @@ package poa
 
 import (
 	"crypto/rand"
-	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/builtin/authority"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
@@ -113,8 +113,11 @@ func TestPick(t *testing.T) {
 	// Call NewCandidates with the mock data
 	candidates := NewCandidates(candidateList)
 
-	checkBalance := func(address thor.Address, endorsement *big.Int) (bool, error) {
-		bal, err := state.GetBalance(address)
+	endorsement, err := builtin.Params.Native(state).Get(thor.KeyProposerEndorsement)
+	assert.NoError(t, err)
+
+	checkBalance := func(master, endorser thor.Address) (bool, error) {
+		bal, err := state.GetBalance(endorser)
 		if err != nil {
 			return false, err
 		}

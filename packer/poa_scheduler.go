@@ -19,6 +19,7 @@ func (p *Packer) schedulePOA(parent *chain.BlockSummary, nowTimestamp uint64, st
 	if err != nil {
 		return thor.Address{}, 0, 0, err
 	}
+	staker := builtin.Staker.Native(state)
 
 	mbp, err := builtin.Params.Native(state).Get(thor.KeyMaxBlockProposers)
 	if err != nil {
@@ -30,7 +31,8 @@ func (p *Packer) schedulePOA(parent *chain.BlockSummary, nowTimestamp uint64, st
 		maxBlockProposers = thor.InitialMaxBlockProposers
 	}
 
-	candidates, err := authority.Candidates(endorsement, maxBlockProposers)
+	balanceCheck := staker.TransitionPeriodBalanceCheck(p.forkConfig, parent.Header.Number()+1, endorsement)
+	candidates, err := authority.Candidates(balanceCheck, maxBlockProposers)
 	if err != nil {
 		return thor.Address{}, 0, 0, err
 	}
