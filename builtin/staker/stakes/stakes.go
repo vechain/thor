@@ -37,3 +37,7 @@ func (s *WeightedStake) Sub(new *WeightedStake) {
 	s.VET -= new.VET
 	s.Weight -= new.Weight
 }
+
+func (s *WeightedStake) AddWeight(weight uint64) {
+	s.Weight += weight
+}

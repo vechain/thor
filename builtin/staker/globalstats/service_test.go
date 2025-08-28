@@ -34,10 +34,9 @@ func newSvc() (*Service, thor.Address, *state.State) {
 func TestService_QueuedStake_Empty(t *testing.T) {
 	svc, _, _ := newSvc()
 
-	qVET, qW, err := svc.GetQueuedStake()
+	qVET, err := svc.GetQueuedStake()
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(0), qVET)
-	assert.Equal(t, uint64(0), qW)
 }
 
 func TestService_AddRemove_Queued(t *testing.T) {
@@ -47,10 +46,9 @@ func TestService_AddRemove_Queued(t *testing.T) {
 	assert.NoError(t, svc.AddQueued(st))
 
 	assert.NoError(t, svc.RemoveQueued(st))
-	qVET, qW, err := svc.GetQueuedStake()
+	qVET, err := svc.GetQueuedStake()
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(0), qVET)
-	assert.Equal(t, uint64(0), qW)
 }
 
 func TestService_ApplyRenewal(t *testing.T) {
@@ -71,10 +69,9 @@ func TestService_ApplyRenewal(t *testing.T) {
 	assert.Equal(t, uint64(300), lockedV)
 	assert.Equal(t, uint64(600), lockedW)
 
-	qVET, qW, err := svc.GetQueuedStake()
+	qVET, err := svc.GetQueuedStake()
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(0), qVET)
-	assert.Equal(t, uint64(0), qW)
 }
 
 func TestService_ApplyExit(t *testing.T) {
@@ -100,17 +97,16 @@ func TestService_ApplyExit(t *testing.T) {
 	assert.Equal(t, uint64(600), lockedV)  // 1000 - 400
 	assert.Equal(t, uint64(1200), lockedW) // 2000 - 800
 
-	qVET, qW, err := svc.GetQueuedStake()
+	qVET, err := svc.GetQueuedStake()
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(0), qVET)
-	assert.Equal(t, uint64(0), qW)
 }
 
 func TestService_QueuedStake_GetQueuedError(t *testing.T) {
 	svc, addr, st := newSvc()
 	poisonUintSlot(st, addr, slotQueued)
 
-	_, _, err := svc.GetQueuedStake()
+	_, err := svc.GetQueuedStake()
 	assert.Error(t, err)
 }
 

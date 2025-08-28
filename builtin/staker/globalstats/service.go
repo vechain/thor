@@ -140,11 +140,11 @@ func (s *Service) GetLockedStake() (uint64, uint64, error) {
 }
 
 // GetQueuedStake returns the total VET and weight waiting to be activated.
-func (s *Service) GetQueuedStake() (uint64, uint64, error) {
+func (s *Service) GetQueuedStake() (uint64, error) {
 	queued, err := s.getQueued()
 	if err != nil {
-		return 0, 0, err
+		return 0, err
 	}
 
-	return queued.VET, queued.Weight, nil
+	return queued.VET, nil
 }

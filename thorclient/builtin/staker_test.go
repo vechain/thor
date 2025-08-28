@@ -202,12 +202,11 @@ func TestStaker(t *testing.T) {
 	require.False(t, firstQueued.Endorser.IsZero())
 
 	// TotalQueued
-	queuedStake, queuedWeight, err := staker.QueuedStake()
+	queuedStake, err := staker.QueuedStake()
 	require.NoError(t, err)
 	stake := big.NewInt(0).Mul(big.NewInt(1e18), big.NewInt(25))
 	stake = big.NewInt(0).Mul(stake, big.NewInt(1e6))
 	require.Equal(t, stake, queuedStake)
-	require.Equal(t, minStake, queuedWeight)
 
 	thor.SetConfig(thor.Config{
 		EpochLength: 180,
@@ -285,9 +284,8 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, minStake, validationTotals.TotalLockedStake)
 	require.Equal(t, minStake, validationTotals.TotalLockedWeight)
 	require.Equal(t, big.NewInt(0).String(), validationTotals.TotalQueuedStake.String())
-	require.Equal(t, big.NewInt(0).String(), validationTotals.TotalQueuedWeight.String())
 	require.Equal(t, big.NewInt(0).String(), validationTotals.TotalExitingStake.String())
-	require.Equal(t, big.NewInt(0).String(), validationTotals.TotalExitingWeight.String())
+	require.Equal(t, minStake, validationTotals.NextPeriodWeight)
 
 	// GetValidationsNum
 	active, queued, err := staker.GetValidationsNum()
@@ -447,7 +445,7 @@ func TestStaker_NegativeMatrix_MethodNotFound(t *testing.T) {
 		run  func() error
 	}{
 		{"TotalStake", func() error { _, _, err := bad.TotalStake(); return err }},
-		{"QueuedStake", func() error { _, _, err := bad.QueuedStake(); return err }},
+		{"QueuedStake", func() error { _, err := bad.QueuedStake(); return err }},
 		{"GetValidation", func() error { _, err := bad.GetValidation(nodeAddr); return err }},
 		{"GetValidationPeriodDetails", func() error { _, err := bad.GetValidationPeriodDetails(nodeAddr); return err }},
 		{"GetWithdrawable", func() error { _, err := bad.GetWithdrawable(nodeAddr); return err }},
@@ -498,7 +496,7 @@ func TestStaker_BadRevision_Reads(t *testing.T) {
 
 	_, _, err = s.Revision("bad").TotalStake()
 	require.Error(t, err)
-	_, _, err = s.Revision("bad").QueuedStake()
+	_, err = s.Revision("bad").QueuedStake()
 	require.Error(t, err)
 	_, err = s.Revision("bad").GetValidation(addr)
 	require.Error(t, err)

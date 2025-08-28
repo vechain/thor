@@ -76,18 +76,18 @@ func (s *Service) IncreaseDelegatorsReward(node thor.Address, reward *big.Int) e
 	binary.BigEndian.PutUint32(periodBytes, val.CurrentIteration())
 	key := thor.Blake2b([]byte("rewards"), node.Bytes(), periodBytes)
 
-	rewards, err := s.repo.GetReward(key)
+	rewards, err := s.repo.getReward(key)
 	if err != nil {
 		return err
 	}
 
-	return s.repo.SetReward(key, big.NewInt(0).Add(rewards, reward), false)
+	return s.repo.setReward(key, big.NewInt(0).Add(rewards, reward), false)
 }
 
 func (s *Service) LeaderGroupIterator(callbacks ...func(thor.Address, *Validation) error) error {
 	return s.leaderGroup.Iter(func(address thor.Address) error {
 		// Fetch the validation object for this address
-		validation, err := s.repo.GetValidation(address)
+		validation, err := s.repo.getValidation(address)
 		if err != nil {
 			return err
 		}
@@ -421,7 +421,7 @@ func (s *Service) SetExitBlock(validator thor.Address, minBlock uint32) (uint32,
 			return start, nil
 		}
 		if existing.IsZero() {
-			if err = s.repo.SetExit(start, validator); err != nil {
+			if err = s.repo.setExit(start, validator); err != nil {
 				return 0, errors.Wrap(err, "failed to set exit epoch")
 			}
 			return start, nil
@@ -431,9 +431,7 @@ func (s *Service) SetExitBlock(validator thor.Address, minBlock uint32) (uint32,
 }
 
 func (s *Service) GetExitEpoch(block uint32) (thor.Address, error) {
-	bigBlock := big.NewInt(0).SetUint64(uint64(block))
-
-	validator, err := s.repo.GetExit(bigBlock)
+	validator, err := s.repo.getExit(block)
 	if err != nil {
 		return thor.Address{}, errors.Wrap(err, "failed to get exit epoch")
 	}
@@ -445,7 +443,7 @@ func (s *Service) GetDelegatorRewards(validator thor.Address, stakingPeriod uint
 	binary.BigEndian.PutUint32(periodBytes, stakingPeriod)
 	key := thor.Blake2b([]byte("rewards"), validator.Bytes(), periodBytes)
 
-	return s.repo.GetReward(key)
+	return s.repo.getReward(key)
 }
 
 // ActivateValidator transitions a validator from queued to active status.
@@ -542,7 +540,7 @@ func (s *Service) Renew(validator thor.Address, delegationWeight uint64) (*delta
 //
 
 func (s *Service) GetValidation(validator thor.Address) (*Validation, error) {
-	return s.repo.GetValidation(validator)
+	return s.repo.getValidation(validator)
 }
 
 func (s *Service) GetExistingValidation(validator thor.Address) (*Validation, error) {
