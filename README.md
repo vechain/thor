@@ -162,7 +162,6 @@ Thor will begin syncing the mainnet and can be accessed at [http://localhost:866
 - [Command Line Arguments](docs/command_line_arguments.md)
 - [Node Types](docs/node_types.md)
 - [Thor Solo](docs/thor_solo.md)
-- [Running a Discovery Node](docs/running_a_discovery_node.md)
 
 ## Contributing
 
