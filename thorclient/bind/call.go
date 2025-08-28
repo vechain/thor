@@ -97,6 +97,9 @@ func (b *CallBuilder) Execute() (*api.CallResult, error) {
 				message = fmt.Sprintf("%s: %s", message, revertReason)
 			}
 		}
+		if result.VMError != "" {
+			message = fmt.Sprintf("%s | VM error: %s", message, result.VMError)
+		}
 		return result, errors.New(message)
 	}
 
