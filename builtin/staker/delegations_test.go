@@ -638,7 +638,6 @@ func TestStaker_DelegationExitingVET(t *testing.T) {
 	assert.Equal(t, uint64(0), total.TotalLockedStake)
 	assert.Equal(t, uint64(0), total.TotalLockedWeight)
 	assert.Equal(t, uint64(0), total.TotalQueuedStake)
-	assert.Equal(t, uint64(0), total.TotalQueuedWeight)
 	assert.Equal(t, uint64(0), total.TotalExitingStake)
-	assert.Equal(t, uint64(0), total.TotalExitingWeight)
+	assert.Equal(t, uint64(0), total.NextPeriodWeight)
 }

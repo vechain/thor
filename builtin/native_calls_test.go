@@ -1582,13 +1582,12 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.Equal(t, new(big.Int).String(), (*reward).String())
 
 	// GetValidatorsTotals
-	getValidatorsTotals := make([]any, 6)
+	getValidatorsTotals := make([]any, 5)
 	getValidatorsTotals[0] = new(*big.Int)
 	getValidatorsTotals[1] = new(*big.Int)
 	getValidatorsTotals[2] = new(*big.Int)
 	getValidatorsTotals[3] = new(*big.Int)
 	getValidatorsTotals[4] = new(*big.Int)
-	getValidatorsTotals[5] = new(*big.Int)
 
 	_, err = callContractAndGetOutput(abi, "getValidationTotals", toAddr, &getValidatorsTotals, common.Address(master.Address))
 	assert.NoError(t, err)
@@ -1596,8 +1595,7 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.Equal(t, minStake, *getValidatorsTotals[1].(**big.Int))
 	assert.Equal(t, big.NewInt(0).String(), (*getValidatorsTotals[2].(**big.Int)).String())
 	assert.Equal(t, big.NewInt(0).String(), (*getValidatorsTotals[3].(**big.Int)).String())
-	assert.Equal(t, big.NewInt(0).String(), (*getValidatorsTotals[4].(**big.Int)).String())
-	assert.Equal(t, big.NewInt(0).String(), (*getValidatorsTotals[5].(**big.Int)).String())
+	assert.Equal(t, minStake, *getValidatorsTotals[4].(**big.Int))
 }
 
 func TestStakerContract_Native_Revert(t *testing.T) {

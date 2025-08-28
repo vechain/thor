@@ -410,9 +410,8 @@ func init() {
 				toWei(totals.TotalLockedStake),
 				toWei(totals.TotalLockedWeight),
 				toWei(totals.TotalQueuedStake),
-				toWei(totals.TotalQueuedWeight),
 				toWei(totals.TotalExitingStake),
-				toWei(totals.TotalExitingWeight),
+				toWei(totals.NextPeriodWeight),
 			}, nil
 		}},
 		{"native_getValidationsNum", func(env *xenv.Environment) ([]any, error) {

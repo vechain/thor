@@ -284,9 +284,8 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, minStake, validationTotals.TotalLockedStake)
 	require.Equal(t, minStake, validationTotals.TotalLockedWeight)
 	require.Equal(t, big.NewInt(0).String(), validationTotals.TotalQueuedStake.String())
-	require.Equal(t, big.NewInt(0).String(), validationTotals.TotalQueuedWeight.String())
 	require.Equal(t, big.NewInt(0).String(), validationTotals.TotalExitingStake.String())
-	require.Equal(t, big.NewInt(0).String(), validationTotals.TotalExitingWeight.String())
+	require.Equal(t, minStake, validationTotals.NextPeriodWeight)
 
 	// GetValidationsNum
 	active, queued, err := staker.GetValidationsNum()

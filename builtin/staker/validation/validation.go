@@ -46,12 +46,11 @@ type Validation struct {
 }
 
 type Totals struct {
-	TotalLockedStake   uint64 // total locked stake in validation (current period), validation's stake + all delegators stake
-	TotalLockedWeight  uint64 // total locked weight in validation (current period), validation's weight + all delegators weight
-	TotalQueuedStake   uint64 // total queued stake in validation (next period), validation's stake + all delegators stake
-	TotalQueuedWeight  uint64 // total queued weight in validation (next period), validation's
-	TotalExitingStake  uint64 // total exiting stake in validation (next period), validation's stake + all delegators stake
-	TotalExitingWeight uint64 // total exiting weight in validation (next period),
+	TotalLockedStake  uint64 // total locked stake in validation (current period), validation's stake + all delegators stake
+	TotalLockedWeight uint64 // total locked weight in validation (current period), validation's weight + all delegators weight
+	TotalQueuedStake  uint64 // total queued stake in validation (next period), validation's stake + all delegators stake
+	TotalExitingStake uint64 // total exiting stake in validation (next period), validation's stake + all delegators stake
+	NextPeriodWeight  uint64 // total weight which will be effective (next period), validations weight + all delegators weight
 }
 
 func (v *Validation) Totals(agg *aggregation.Aggregation) *Totals {
@@ -88,12 +87,11 @@ func (v *Validation) Totals(agg *aggregation.Aggregation) *Totals {
 
 	return &Totals{
 		// Delegation totals can be calculated by subtracting validators stakes / weights from the global totals.
-		TotalLockedStake:   v.LockedVET + agg.LockedVET,
-		TotalLockedWeight:  v.Weight,
-		TotalQueuedStake:   queued.VET + agg.PendingVET,
-		TotalQueuedWeight:  queued.Weight + agg.PendingWeight,
-		TotalExitingStake:  exitingVET,
-		TotalExitingWeight: exitingWeight,
+		TotalLockedStake:  v.LockedVET + agg.LockedVET,
+		TotalLockedWeight: v.Weight,
+		TotalQueuedStake:  queued.VET + agg.PendingVET,
+		TotalExitingStake: exitingVET,
+		NextPeriodWeight:  v.Weight + queued.Weight + agg.PendingWeight - exitingWeight,
 	}
 }
 

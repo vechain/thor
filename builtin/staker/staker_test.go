@@ -46,7 +46,7 @@ func (ts *TestSequence) AssertLockedVET(expectedVET, expectedWeight *big.Int) *T
 	return ts
 }
 
-func (ts *TestSequence) AssertQueuedVET(expectedVET, expectedWeight *big.Int) *TestSequence {
+func (ts *TestSequence) AssertQueuedVET(expectedVET *big.Int) *TestSequence {
 	queued, err := ts.staker.QueuedStake()
 	assert.NoError(ts.t, err, "failed to get queued VET")
 	if expectedVET != nil {
@@ -234,7 +234,6 @@ func (ts *TestSequence) AssertTotals(validationID thor.Address, expected *valida
 
 	// exiting
 	assert.Equal(ts.t, expected.TotalExitingStake, totals.TotalExitingStake, "total exiting stake mismatch for validator %s", validationID.String())
-	assert.Equal(ts.t, expected.TotalExitingWeight, totals.TotalExitingWeight, "total exiting weight mismatch for validator %s", validationID.String())
 
 	// locked
 	assert.Equal(ts.t, expected.TotalLockedStake, totals.TotalLockedStake, "total locked stake mismatch for validator %s", validationID.String())
@@ -242,7 +241,8 @@ func (ts *TestSequence) AssertTotals(validationID thor.Address, expected *valida
 
 	// queued
 	assert.Equal(ts.t, expected.TotalQueuedStake, totals.TotalQueuedStake, "total queued stake mismatch for validator %s", validationID.String())
-	assert.Equal(ts.t, expected.TotalQueuedWeight, totals.TotalQueuedWeight, "total queued weight mismatch for validator %s", validationID.String())
+
+	assert.Equal(ts.t, expected.NextPeriodWeight, totals.NextPeriodWeight, "next period weight mismatch for validator %s", validationID.String())
 
 	return ts
 }

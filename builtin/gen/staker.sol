@@ -257,9 +257,8 @@ contract Staker {
             uint256 lockedVET,
             uint256 lockedWeight,
             uint256 queuedVET,
-            uint256 queuedWeight,
             uint256 exitingVET,
-            uint256 exitingWeight
+            uint256 nextPeriodWeight
         )
     {
         return StakerNative(address(this)).native_getValidationTotals(validator);
@@ -380,7 +379,7 @@ interface StakerNative {
 
     function native_getValidationTotals(
         address validator
-    ) external view returns (uint256, uint256, uint256, uint256, uint256, uint256);
+    ) external view returns (uint256, uint256, uint256, uint256, uint256);
 
     function native_getValidationsNum() external view returns (uint256, uint256);
 
