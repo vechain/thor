@@ -126,15 +126,15 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 		if err != nil {
 			return nil, false, err
 		}
-		_, totalWeight, err := builtin.Staker.Native(state).LockedVET()
+		_, totalWeight, err := builtin.Staker.Native(state).LockedStake()
 		if err != nil {
 			return nil, false, err
 		}
+
+		onlineWeight := uint64(0)
 		for node, leader := range leaders {
-			if leader.OfflineBlock == nil {
-				percentage := new(big.Int).Mul(leader.Weight, big.NewInt(thor.MaxPosScore))
-				percentage.Div(percentage, totalWeight)
-				score = score + percentage.Uint64()
+			if leader.IsOnline() {
+				onlineWeight += leader.Weight
 			}
 			if node == p.nodeMaster {
 				if leader.Beneficiary != nil {
@@ -144,6 +144,7 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 				}
 			}
 		}
+		score = onlineWeight * thor.MaxPosScore / totalWeight
 	} else {
 		authorities, err := builtin.Authority.Native(state).Candidates(big.NewInt(0), thor.InitialMaxBlockProposers)
 		if err != nil {

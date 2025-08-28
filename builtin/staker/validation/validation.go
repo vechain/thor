@@ -6,8 +6,6 @@
 package validation
 
 import (
-	"math/big"
-
 	"github.com/vechain/thor/v2/builtin/staker/stakes"
 
 	"github.com/vechain/thor/v2/builtin/staker/aggregation"
@@ -39,46 +37,45 @@ type Validation struct {
 	ExitBlock          *uint32       `rlp:"nil"` // the block number when the validation moved to cooldown
 	OfflineBlock       *uint32       `rlp:"nil"` // the block when validator went offline, it will be cleared once online
 
-	LockedVET        *big.Int // the amount of VET locked for the current staking period, for the validator only
-	PendingUnlockVET *big.Int // the amount of VET that will be unlocked in the next staking period. DOES NOT contribute to the TVL
-	QueuedVET        *big.Int // the amount of VET queued to be locked in the next staking period
-	CooldownVET      *big.Int // the amount of VET that is locked into the validation's cooldown
-	WithdrawableVET  *big.Int // the amount of VET that is currently withdrawable
+	LockedVET        uint64 // the amount(in VET not wei) locked for the current staking period, for the validator only
+	PendingUnlockVET uint64 // the amount(in VET not wei) that will be unlocked in the next staking period. DOES NOT contribute to the TVL
+	QueuedVET        uint64 // the amount(in VET not wei) queued to be locked in the next staking period
+	CooldownVET      uint64 // the amount(in VET not wei) that is locked into the validation's cooldown
+	WithdrawableVET  uint64 // the amount(in VET not wei) that is currently withdrawable
 
-	Weight *big.Int // LockedVET x1 if no delegations, otherwise x2 + total weight from delegators
+	Weight uint64 // The weight(in VET not wei), LockedVET x1 if no delegations, otherwise x2 + total weight from all delegators
 }
 
 type Totals struct {
-	TotalLockedStake   *big.Int // total locked stake in validation (current period), validation's stake + all delegators stake
-	TotalLockedWeight  *big.Int // total locked weight in validation (current period), validation's weight + all delegators weight
-	TotalQueuedStake   *big.Int // total queued stake in validation (next period), validation's stake + all delegators stake
-	TotalQueuedWeight  *big.Int // total queued weight in validation (next period), validation's
-	TotalExitingStake  *big.Int // total exiting stake in validation (next period), validation's stake + all delegators stake
-	TotalExitingWeight *big.Int // total exiting weight in validation (next period),
+	TotalLockedStake   uint64 // total locked stake in validation (current period), validation's stake + all delegators stake
+	TotalLockedWeight  uint64 // total locked weight in validation (current period), validation's weight + all delegators weight
+	TotalQueuedStake   uint64 // total queued stake in validation (next period), validation's stake + all delegators stake
+	TotalQueuedWeight  uint64 // total queued weight in validation (next period), validation's
+	TotalExitingStake  uint64 // total exiting stake in validation (next period), validation's stake + all delegators stake
+	TotalExitingWeight uint64 // total exiting weight in validation (next period),
 }
 
 func (v *Validation) Totals(agg *aggregation.Aggregation) *Totals {
-	var exitingVET *big.Int
-	var exitingWeight *big.Int
-
+	var exitingVET uint64
+	var exitingWeight uint64
 	// If the validation is due to exit, then all locked VET is considered exiting.
 	if v.Status == StatusActive && v.ExitBlock != nil {
-		exitingVET = big.NewInt(0).Add(v.LockedVET, agg.LockedVET)
+		exitingVET = v.LockedVET + agg.LockedVET
 		exitingWeight = v.Weight
 	} else {
-		vExiting := stakes.NewWeightedStake(v.PendingUnlockVET, Multiplier)
-		exitingVET = big.NewInt(0).Add(vExiting.VET(), agg.ExitingVET)
-		exitingWeight = big.NewInt(0).Add(vExiting.Weight(), agg.ExitingWeight)
+		vExiting := stakes.NewWeightedStakeWithMultiplier(v.PendingUnlockVET, Multiplier)
+		exitingVET = vExiting.VET + agg.ExitingVET
+		exitingWeight = vExiting.Weight + agg.ExitingWeight
 	}
 
-	queued := stakes.NewWeightedStake(v.QueuedVET, Multiplier)
+	queued := stakes.NewWeightedStakeWithMultiplier(v.QueuedVET, Multiplier)
 
 	return &Totals{
 		// Delegation totals can be calculated by subtracting validators stakes / weights from the global totals.
-		TotalLockedStake:   new(big.Int).Add(v.LockedVET, agg.LockedVET),
-		TotalLockedWeight:  new(big.Int).Set(v.Weight),
-		TotalQueuedStake:   new(big.Int).Add(queued.VET(), agg.PendingVET),
-		TotalQueuedWeight:  new(big.Int).Add(queued.Weight(), agg.PendingWeight),
+		TotalLockedStake:   v.LockedVET + agg.LockedVET,
+		TotalLockedWeight:  v.Weight,
+		TotalQueuedStake:   queued.VET + agg.PendingVET,
+		TotalQueuedWeight:  queued.Weight + agg.PendingWeight,
 		TotalExitingStake:  exitingVET,
 		TotalExitingWeight: exitingWeight,
 	}
@@ -89,6 +86,10 @@ func (v *Validation) IsEmpty() bool {
 	return v.Status == StatusUnknown
 }
 
+func (v *Validation) IsOnline() bool {
+	return v.OfflineBlock == nil
+}
+
 // IsPeriodEnd returns whether the provided block is the last block of the current staking period.
 func (v *Validation) IsPeriodEnd(current uint32) bool {
 	diff := current - v.StartBlock
@@ -96,10 +97,8 @@ func (v *Validation) IsPeriodEnd(current uint32) bool {
 }
 
 // NextPeriodTVL returns the amount of VET that will be locked in the next staking period for the validator only.
-func (v *Validation) NextPeriodTVL() *big.Int {
-	validationTotal := big.NewInt(0).Add(v.LockedVET, v.QueuedVET)
-	validationTotal = big.NewInt(0).Sub(validationTotal, v.PendingUnlockVET)
-	return validationTotal
+func (v *Validation) NextPeriodTVL() uint64 {
+	return v.LockedVET + v.QueuedVET - v.PendingUnlockVET
 }
 
 func (v *Validation) CurrentIteration() uint32 {
@@ -115,106 +114,103 @@ func (v *Validation) CurrentIteration() uint32 {
 // 3. Increase WithdrawableVET by PendingUnlockVET
 // 4. Set QueuedVET to 0
 // 5. Set PendingUnlockVET to 0
-func (v *Validation) renew(aggregations *delta.Renewal, delegationWeight *big.Int) *delta.Renewal {
-	newLockedVET := big.NewInt(0)
+func (v *Validation) renew(delegationWeight uint64) *delta.Renewal {
+	queuedDecrease := stakes.NewWeightedStakeWithMultiplier(v.QueuedVET, Multiplier)
 
-	if v.QueuedVET == nil {
-		v.QueuedVET = new(big.Int)
+	var prev, after struct {
+		lockedVET  uint64
+		valWeight  uint64
+		multiplier uint8
 	}
-	if v.PendingUnlockVET == nil {
-		v.PendingUnlockVET = new(big.Int)
+	prev.lockedVET = v.LockedVET
+	prev.valWeight = stakes.CalcWeight(v.LockedVET, v.multiplier())
+
+	// in renew, the multiplier is based on the actual delegation weight
+	after.multiplier = Multiplier
+	if delegationWeight > 0 {
+		after.multiplier = MultiplierWithDelegations
 	}
-	if v.WithdrawableVET == nil {
-		v.WithdrawableVET = new(big.Int)
-	}
-	newLockedVET.Add(newLockedVET, v.QueuedVET)
-	newLockedVET.Sub(newLockedVET, v.PendingUnlockVET)
 
-	queuedDecrease := big.NewInt(0).Set(v.QueuedVET)
-	v.WithdrawableVET = big.NewInt(0).Add(v.WithdrawableVET, v.PendingUnlockVET)
-	v.QueuedVET = big.NewInt(0)
-	v.PendingUnlockVET = big.NewInt(0)
+	after.lockedVET = v.LockedVET + v.QueuedVET - v.PendingUnlockVET
+	after.valWeight = stakes.CalcWeight(after.lockedVET, after.multiplier)
 
-	v.CompleteIterations++
+	lockedIncrease := stakes.NewWeightedStake(0, 0)
+	lockedDecrease := stakes.NewWeightedStake(0, 0)
 
-	changeWeight := big.NewInt(0).Add(newLockedVET, aggregations.NewLockedWeight)
-	v.LockedVET = big.NewInt(0).Add(v.LockedVET, newLockedVET)
-	v.Weight = big.NewInt(0).Add(v.Weight, changeWeight)
-
-	// deltas
-	weight := stakes.NewWeightedStake(newLockedVET, Multiplier).Weight()
-	if delegationWeight.Sign() < 1 {
-		// no delegations - if there is a validator weight multiplied by 2 will be set to 1
-		weight = big.NewInt(0).Sub(weight, big.NewInt(0).Sub(v.Weight, v.LockedVET))
-		v.Weight = big.NewInt(0).Set(v.LockedVET)
+	// calculate the locked stake change based on the validator's weight
+	if prev.valWeight < after.valWeight {
+		lockedIncrease.Weight = after.valWeight - prev.valWeight
 	} else {
-		minStake := stakes.NewWeightedStake(v.LockedVET, MultiplierWithDelegations)
-		valWeight := big.NewInt(0).Sub(v.Weight, delegationWeight)
-		if valWeight.Cmp(minStake.Weight()) < 0 {
-			// handles the case when first delegation is added
-			weight = big.NewInt(0).Add(weight, big.NewInt(0).Sub(minStake.Weight(), valWeight))
-			v.Weight = big.NewInt(0).Add(v.Weight, big.NewInt(0).Sub(minStake.Weight(), valWeight))
-		} else {
-			// standard stake increase when there are delegations
-			v.Weight = big.NewInt(0).Add(v.Weight, newLockedVET)
-			weight = big.NewInt(0).Add(weight, newLockedVET)
-		}
+		lockedDecrease.Weight = prev.valWeight - after.valWeight
 	}
-	queuedDecreaseWeight := stakes.NewWeightedStake(queuedDecrease, Multiplier).Weight()
+
+	if prev.lockedVET < after.lockedVET {
+		lockedIncrease.VET = after.lockedVET - prev.lockedVET
+	} else {
+		lockedDecrease.VET = prev.lockedVET - after.lockedVET
+	}
+
+	v.LockedVET = after.lockedVET
+	v.WithdrawableVET += v.PendingUnlockVET
+	v.Weight = after.valWeight + delegationWeight
+	v.CompleteIterations++
+	v.QueuedVET = 0
+	v.PendingUnlockVET = 0
 
 	return &delta.Renewal{
-		NewLockedVET:         newLockedVET,
-		NewLockedWeight:      weight,
-		QueuedDecrease:       queuedDecrease,
-		QueuedDecreaseWeight: queuedDecreaseWeight,
+		LockedIncrease: lockedIncrease,
+		LockedDecrease: lockedDecrease,
+		QueuedDecrease: queuedDecrease,
 	}
 }
 
-func (v *Validation) exit(aggWeight *big.Int) *delta.Exit {
-	if aggWeight == nil {
-		aggWeight = big.NewInt(0)
-	}
-	releaseLockedTVL := big.NewInt(0).Set(v.LockedVET)
-	releaseLockedWeight := big.NewInt(0).Sub(v.Weight, aggWeight)
-	releaseQueuedTVL := big.NewInt(0).Set(v.QueuedVET)
+func (v *Validation) exit() *delta.Exit {
+	ExitedTVL := stakes.NewWeightedStakeWithMultiplier(v.LockedVET, v.multiplier())  // use the acting multiplier for locked stake
+	QueuedDecrease := stakes.NewWeightedStakeWithMultiplier(v.QueuedVET, Multiplier) // queued weight is always initial weight
 
-	// move locked to cooldown
 	v.Status = StatusExit
-	v.CooldownVET = big.NewInt(0).Set(v.LockedVET)
-	v.LockedVET = big.NewInt(0)
-	v.PendingUnlockVET = big.NewInt(0)
-	v.Weight = big.NewInt(0)
+	// move locked to cooldown
+	v.CooldownVET = v.LockedVET
+	v.LockedVET = 0
+	v.PendingUnlockVET = 0
+	v.Weight = 0
+	v.CompleteIterations++
 
 	// unlock pending stake
-	if v.QueuedVET.Sign() == 1 {
+	if v.QueuedVET > 0 {
 		// pending never contributes to weight as it's not active
-		v.WithdrawableVET = big.NewInt(0).Add(v.WithdrawableVET, v.QueuedVET)
-		v.QueuedVET = big.NewInt(0)
+		v.WithdrawableVET += v.QueuedVET
+		v.QueuedVET = 0
 	}
-
-	v.CompleteIterations++
 
 	// We only return the change in the validation's TVL and weight
 	return &delta.Exit{
-		ExitedTVL:            releaseLockedTVL,
-		ExitedTVLWeight:      releaseLockedWeight,
-		QueuedDecrease:       releaseQueuedTVL,
-		QueuedDecreaseWeight: stakes.NewWeightedStake(releaseQueuedTVL, Multiplier).Weight(),
+		ExitedTVL:      ExitedTVL,
+		QueuedDecrease: QueuedDecrease,
 	}
 }
 
 // CalculateWithdrawableVET returns the validator withdrawable amount for a given block + period
-func (v *Validation) CalculateWithdrawableVET(currentBlock uint32) *big.Int {
-	withdrawAmount := big.NewInt(0).Set(v.WithdrawableVET)
+func (v *Validation) CalculateWithdrawableVET(currentBlock uint32) uint64 {
+	withdrawAmount := v.WithdrawableVET
 
 	// validator has exited and waited for the cooldown period
 	if v.ExitBlock != nil && *v.ExitBlock+thor.CooldownPeriod() <= currentBlock {
-		withdrawAmount = withdrawAmount.Add(withdrawAmount, v.CooldownVET)
+		withdrawAmount += v.CooldownVET
 	}
 
-	if v.QueuedVET.Sign() > 0 {
-		withdrawAmount = withdrawAmount.Add(withdrawAmount, v.QueuedVET)
+	if v.QueuedVET > 0 {
+		withdrawAmount += v.QueuedVET
 	}
 
 	return withdrawAmount
+}
+
+// multiplier returns the acting multiplier for the validation of the current staking period
+func (v *Validation) multiplier() uint8 {
+	// no delegation and multiplier is 1
+	if v.Weight == v.LockedVET {
+		return Multiplier
+	}
+	return MultiplierWithDelegations
 }

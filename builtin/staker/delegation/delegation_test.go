@@ -5,7 +5,6 @@
 package delegation
 
 import (
-	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -17,7 +16,7 @@ import (
 func TestDelegation(t *testing.T) {
 	del := Delegation{
 		Validation:     thor.Address{},
-		Stake:          big.NewInt(0),
+		Stake:          0,
 		Multiplier:     0,
 		LastIteration:  nil,
 		FirstIteration: 0,
@@ -25,8 +24,8 @@ func TestDelegation(t *testing.T) {
 
 	assert.True(t, del.IsEmpty())
 	wStake := del.WeightedStake()
-	assert.Equal(t, big.NewInt(0), wStake.VET())
-	assert.Equal(t, big.NewInt(0), wStake.Weight())
+	assert.Equal(t, uint64(0), wStake.VET)
+	assert.Equal(t, uint64(0), wStake.Weight)
 	offlineBlock := uint32(0)
 
 	val := validation.Validation{
@@ -37,12 +36,12 @@ func TestDelegation(t *testing.T) {
 		OfflineBlock:       &offlineBlock,
 		StartBlock:         0,
 		ExitBlock:          nil,
-		LockedVET:          nil,
-		PendingUnlockVET:   nil,
-		QueuedVET:          nil,
-		CooldownVET:        nil,
-		WithdrawableVET:    nil,
-		Weight:             nil,
+		LockedVET:          0,
+		PendingUnlockVET:   0,
+		QueuedVET:          0,
+		CooldownVET:        0,
+		WithdrawableVET:    0,
+		Weight:             0,
 	}
 
 	assert.False(t, del.Started(&val))
@@ -50,7 +49,7 @@ func TestDelegation(t *testing.T) {
 
 	del = Delegation{
 		Validation:     thor.Address{},
-		Stake:          big.NewInt(1000),
+		Stake:          1000,
 		Multiplier:     200,
 		LastIteration:  nil,
 		FirstIteration: 0,
@@ -58,8 +57,8 @@ func TestDelegation(t *testing.T) {
 
 	assert.False(t, del.IsEmpty())
 	wStake = del.WeightedStake()
-	assert.Equal(t, big.NewInt(1000), wStake.VET())
-	assert.Equal(t, big.NewInt(2000), wStake.Weight())
+	assert.Equal(t, uint64(1000), wStake.VET)
+	assert.Equal(t, uint64(2000), wStake.Weight)
 
 	val.Status = validation.StatusQueued
 	assert.False(t, del.Started(&val))

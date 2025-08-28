@@ -52,7 +52,7 @@ func (c *Consensus) validateStakingProposer(
 		return consensusError(fmt.Sprintf("pos - block timestamp unscheduled: t %v, s %v", header.Timestamp(), signer))
 	}
 
-	_, totalWeight, err := staker.LockedVET()
+	_, totalWeight, err := staker.LockedStake()
 	if err != nil {
 		return consensusError(fmt.Sprintf("pos - cannot get total weight: %v", err))
 	}

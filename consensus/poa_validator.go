@@ -149,9 +149,12 @@ func (c *Consensus) authorityBalanceCheck(header *block.Header, st *state.State,
 		if err != nil {
 			return false, err
 		}
-		if validator.IsEmpty() || validator.QueuedVET == nil {
+		if validator.IsEmpty() || validator.QueuedVET == 0 {
 			return false, nil
 		}
-		return validator.QueuedVET.Cmp(minBalance) >= 0, nil
+
+		// convert the queued VET to wei
+		queuedVET := new(big.Int).Mul(new(big.Int).SetUint64(validator.QueuedVET), big.NewInt(1e18))
+		return queuedVET.Cmp(minBalance) >= 0, nil
 	}
 }

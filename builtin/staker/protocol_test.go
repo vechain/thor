@@ -73,7 +73,7 @@ func TestSyncPOS_TransitionBlock_WithValidators(t *testing.T) {
 
 	validator1 := thor.BytesToAddress([]byte("validator1"))
 	endorser1 := thor.BytesToAddress([]byte("endorser1"))
-	stake := big.NewInt(0).Mul(big.NewInt(25_000_000), big.NewInt(1e18))
+	stake := uint64(25_000_000)
 
 	err := staker.AddValidation(validator1, endorser1, uint32(360)*24*15, stake)
 	require.NoError(t, err)
@@ -128,7 +128,7 @@ func TestSyncPOS_AlreadyActive_NoTransition(t *testing.T) {
 
 	validator1 := thor.BytesToAddress([]byte("validator1"))
 	endorser1 := thor.BytesToAddress([]byte("endorser1"))
-	stake := big.NewInt(0).Mul(big.NewInt(25_000_000), big.NewInt(1e18))
+	stake := uint64(25_000_000)
 
 	err := staker.AddValidation(validator1, endorser1, uint32(360)*24*15, stake)
 	require.NoError(t, err)
@@ -248,7 +248,7 @@ func TestSyncPOS_HousekeepError(t *testing.T) {
 
 	validator1 := thor.BytesToAddress([]byte("validator1"))
 	endorser1 := thor.BytesToAddress([]byte("endorser1"))
-	stake := big.NewInt(0).Mul(big.NewInt(25_000_000), big.NewInt(1e18))
+	stake := uint64(25_000_000)
 
 	err := staker.AddValidation(validator1, endorser1, uint32(360)*24*15, stake)
 	require.NoError(t, err)

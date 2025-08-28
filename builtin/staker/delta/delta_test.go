@@ -5,90 +5,83 @@
 package delta
 
 import (
-	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/vechain/thor/v2/builtin/staker/stakes"
 )
 
 func TestNewRenewal_Defaults(t *testing.T) {
 	r := NewRenewal()
-	assert.Equal(t, big.NewInt(0), r.NewLockedVET)
-	assert.Equal(t, big.NewInt(0), r.NewLockedWeight)
-	assert.Equal(t, big.NewInt(0), r.QueuedDecrease)
-	assert.Equal(t, big.NewInt(0), r.QueuedDecreaseWeight)
+	assert.Equal(t, uint64(0), r.LockedIncrease.VET)
+	assert.Equal(t, uint64(0), r.LockedIncrease.Weight)
+	assert.Equal(t, uint64(0), r.LockedDecrease.VET)
+	assert.Equal(t, uint64(0), r.LockedDecrease.Weight)
 }
 
 func TestRenewal_Add(t *testing.T) {
 	base := &Renewal{
-		NewLockedVET:         big.NewInt(10),
-		NewLockedWeight:      big.NewInt(20),
-		QueuedDecrease:       big.NewInt(30),
-		QueuedDecreaseWeight: big.NewInt(40),
+		LockedIncrease: stakes.NewWeightedStake(10, 20),
+		LockedDecrease: stakes.NewWeightedStake(30, 40),
+		QueuedDecrease: stakes.NewWeightedStake(50, 60),
 	}
 	inc := &Renewal{
-		NewLockedVET:         big.NewInt(1),
-		NewLockedWeight:      big.NewInt(2),
-		QueuedDecrease:       big.NewInt(3),
-		QueuedDecreaseWeight: big.NewInt(4),
+		LockedIncrease: stakes.NewWeightedStake(1, 2),
+		LockedDecrease: stakes.NewWeightedStake(3, 4),
+		QueuedDecrease: stakes.NewWeightedStake(1, 2),
 	}
 
 	got := base.Add(inc)
 	assert.Same(t, base, got)
-	assert.Equal(t, big.NewInt(11), got.NewLockedVET)
-	assert.Equal(t, big.NewInt(22), got.NewLockedWeight)
-	assert.Equal(t, big.NewInt(33), got.QueuedDecrease)
-	assert.Equal(t, big.NewInt(44), got.QueuedDecreaseWeight)
+	assert.Equal(t, uint64(11), got.LockedIncrease.VET)
+	assert.Equal(t, uint64(22), got.LockedIncrease.Weight)
+	assert.Equal(t, uint64(33), got.LockedDecrease.VET)
+	assert.Equal(t, uint64(44), got.LockedDecrease.Weight)
+	assert.Equal(t, uint64(51), got.QueuedDecrease.VET)
+	assert.Equal(t, uint64(62), got.QueuedDecrease.Weight)
 }
 
 func TestRenewal_Add_Nil(t *testing.T) {
 	base := &Renewal{
-		NewLockedVET:         big.NewInt(5),
-		NewLockedWeight:      big.NewInt(6),
-		QueuedDecrease:       big.NewInt(7),
-		QueuedDecreaseWeight: big.NewInt(8),
+		LockedIncrease: stakes.NewWeightedStake(5, 6),
+		LockedDecrease: stakes.NewWeightedStake(7, 8),
 	}
 	got := base.Add(nil)
 	assert.Same(t, base, got)
-	assert.Equal(t, big.NewInt(5), got.NewLockedVET)
-	assert.Equal(t, big.NewInt(6), got.NewLockedWeight)
-	assert.Equal(t, big.NewInt(7), got.QueuedDecrease)
-	assert.Equal(t, big.NewInt(8), got.QueuedDecreaseWeight)
+	assert.Equal(t, uint64(5), got.LockedIncrease.VET)
+	assert.Equal(t, uint64(6), got.LockedIncrease.Weight)
+	assert.Equal(t, uint64(7), got.LockedDecrease.VET)
+	assert.Equal(t, uint64(8), got.LockedDecrease.Weight)
 }
 
 func TestExit_Add(t *testing.T) {
 	base := &Exit{
-		ExitedTVL:            big.NewInt(100),
-		ExitedTVLWeight:      big.NewInt(200),
-		QueuedDecrease:       big.NewInt(300),
-		QueuedDecreaseWeight: big.NewInt(400),
+		ExitedTVL:      stakes.NewWeightedStake(100, 200),
+		QueuedDecrease: stakes.NewWeightedStake(300, 400),
 	}
 	inc := &Exit{
-		ExitedTVL:            big.NewInt(1),
-		ExitedTVLWeight:      big.NewInt(2),
-		QueuedDecrease:       big.NewInt(3),
-		QueuedDecreaseWeight: big.NewInt(4),
+		ExitedTVL:      stakes.NewWeightedStake(1, 2),
+		QueuedDecrease: stakes.NewWeightedStake(3, 4),
 	}
 
 	got := base.Add(inc)
 	assert.Same(t, base, got)
-	assert.Equal(t, big.NewInt(101), got.ExitedTVL)
-	assert.Equal(t, big.NewInt(202), got.ExitedTVLWeight)
-	assert.Equal(t, big.NewInt(303), got.QueuedDecrease)
-	assert.Equal(t, big.NewInt(404), got.QueuedDecreaseWeight)
+	assert.Equal(t, uint64(101), got.ExitedTVL.VET)
+	assert.Equal(t, uint64(202), got.ExitedTVL.Weight)
+	assert.Equal(t, uint64(303), got.QueuedDecrease.VET)
+	assert.Equal(t, uint64(404), got.QueuedDecrease.Weight)
 }
 
 func TestExit_Add_Nil(t *testing.T) {
 	base := &Exit{
-		ExitedTVL:            big.NewInt(10),
-		ExitedTVLWeight:      big.NewInt(20),
-		QueuedDecrease:       big.NewInt(30),
-		QueuedDecreaseWeight: big.NewInt(40),
+		ExitedTVL:      stakes.NewWeightedStake(10, 20),
+		QueuedDecrease: stakes.NewWeightedStake(30, 40),
 	}
 	got := base.Add(nil)
 	assert.Same(t, base, got)
-	assert.Equal(t, big.NewInt(10), got.ExitedTVL)
-	assert.Equal(t, big.NewInt(20), got.ExitedTVLWeight)
-	assert.Equal(t, big.NewInt(30), got.QueuedDecrease)
-	assert.Equal(t, big.NewInt(40), got.QueuedDecreaseWeight)
+	assert.Equal(t, uint64(10), got.ExitedTVL.VET)
+	assert.Equal(t, uint64(20), got.ExitedTVL.Weight)
+	assert.Equal(t, uint64(30), got.QueuedDecrease.VET)
+	assert.Equal(t, uint64(40), got.QueuedDecrease.Weight)
 }

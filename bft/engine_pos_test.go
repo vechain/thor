@@ -24,13 +24,17 @@ import (
 )
 
 var (
-	validatorStake     = new(big.Int).Mul(big.NewInt(25_000_000), big.NewInt(1e18))
+	validatorStake     = uint64(25_000_000)
 	minStakingPeriod   = uint32(360) * 24 * 7
 	defaultEpochLength = uint32(180)
 )
 
 func init() {
 	defaultFC.FINALITY = 0
+}
+
+func toWei(vet uint64) *big.Int {
+	return new(big.Int).Mul(new(big.Int).SetUint64(vet), big.NewInt(1e18))
 }
 
 func TestFinalizedPos(t *testing.T) {
@@ -399,9 +403,7 @@ func TestJustifierPos(t *testing.T) {
 
 				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
 					assert.Equal(t, uint32(180), vs.checkpoint)
-					expected, ok := new(big.Int).SetString("166666666666666666666666666", 10)
-					assert.True(t, ok)
-					assert.Equal(t, expected, vs.thresholdWeight)
+					assert.Equal(t, uint64(166666666), vs.thresholdWeight)
 				} else {
 					assert.Equal(t, uint32(0), vs.checkpoint)
 					assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.thresholdVotes)
@@ -442,9 +444,7 @@ func TestJustifierPos(t *testing.T) {
 				}
 
 				assert.Equal(t, thor.EpochLength()*2, vs.checkpoint)
-				expected, ok := new(big.Int).SetString("166666666666666666666666666", 10)
-				assert.True(t, ok)
-				assert.Equal(t, expected, vs.thresholdWeight)
+				assert.Equal(t, uint64(166666666), vs.thresholdWeight)
 				assert.Equal(t, uint32(2), vs.Summarize().Quality)
 				assert.False(t, vs.Summarize().Justified)
 				assert.False(t, vs.Summarize().Committed)
@@ -468,7 +468,7 @@ func TestJustifierPos(t *testing.T) {
 
 				for i := 0; i <= MaxBlockProposers*2/3; i++ {
 					// Weight, stake multiplied by default multiplier
-					vs.AddBlock(datagen.RandAddress(), true, new(big.Int).Mul(validatorStake, big.NewInt(2)))
+					vs.AddBlock(datagen.RandAddress(), true, validatorStake*2)
 				}
 
 				st := vs.Summarize()
@@ -477,7 +477,7 @@ func TestJustifierPos(t *testing.T) {
 				assert.True(t, st.Committed)
 
 				// add vote after commits，commit/justify stays the same
-				vs.AddBlock(datagen.RandAddress(), true, new(big.Int).Mul(validatorStake, big.NewInt(2)))
+				vs.AddBlock(datagen.RandAddress(), true, validatorStake*2)
 
 				st = vs.Summarize()
 				assert.Equal(t, uint32(3), st.Quality)
@@ -503,7 +503,7 @@ func TestJustifierPos(t *testing.T) {
 
 				for i := 0; i <= MaxBlockProposers*2/3; i++ {
 					// Weight, stake multiplied by default multiplier
-					vs.AddBlock(datagen.RandAddress(), false, new(big.Int).Mul(validatorStake, big.NewInt(2)))
+					vs.AddBlock(datagen.RandAddress(), false, validatorStake*2)
 				}
 
 				st := vs.Summarize()
@@ -543,7 +543,7 @@ func TestJustifierPos(t *testing.T) {
 				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
 					vs.AddBlock(master, false, validatorStake)
 				} else {
-					vs.AddBlock(master, false, nil)
+					vs.AddBlock(master, false, 0)
 				}
 
 				// justifies but not committed
@@ -553,9 +553,9 @@ func TestJustifierPos(t *testing.T) {
 
 				// master votes COM
 				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
-					vs.AddBlock(master, true, new(big.Int).Mul(validatorStake, big.NewInt(2)))
+					vs.AddBlock(master, true, validatorStake*2)
 				} else {
-					vs.AddBlock(master, true, nil)
+					vs.AddBlock(master, true, 0)
 				}
 
 				// should not be committed
@@ -564,9 +564,9 @@ func TestJustifierPos(t *testing.T) {
 
 				// another master votes WIT
 				if forkCfg.HAYABUSA != thor.NoFork.HAYABUSA {
-					vs.AddBlock(datagen.RandAddress(), true, new(big.Int).Mul(validatorStake, big.NewInt(2)))
+					vs.AddBlock(datagen.RandAddress(), true, validatorStake*2)
 				} else {
-					vs.AddBlock(datagen.RandAddress(), true, nil)
+					vs.AddBlock(datagen.RandAddress(), true, 0)
 				}
 				st = vs.Summarize()
 				assert.True(t, st.Committed)
@@ -584,20 +584,20 @@ func TestJustifierPos(t *testing.T) {
 				}
 
 				master := datagen.RandAddress()
-				vs.AddBlock(master, true, new(big.Int).Mul(validatorStake, big.NewInt(2)))
+				vs.AddBlock(master, true, validatorStake*2)
 				assert.Equal(t, true, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(1), vs.comVotes)
 
-				vs.AddBlock(master, false, new(big.Int).Mul(validatorStake, big.NewInt(2)))
+				vs.AddBlock(master, false, validatorStake*2)
 				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(master, true, new(big.Int).Mul(validatorStake, big.NewInt(2)))
+				vs.AddBlock(master, true, validatorStake*2)
 
 				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(master, false, new(big.Int).Mul(validatorStake, big.NewInt(2)))
+				vs.AddBlock(master, false, validatorStake*2)
 
 				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
@@ -606,22 +606,22 @@ func TestJustifierPos(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				vs.AddBlock(master, false, new(big.Int).Mul(validatorStake, big.NewInt(2)))
+				vs.AddBlock(master, false, validatorStake*2)
 
 				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(master, true, new(big.Int).Mul(validatorStake, big.NewInt(2)))
+				vs.AddBlock(master, true, validatorStake*2)
 
 				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(master, true, new(big.Int).Mul(validatorStake, big.NewInt(2)))
+				vs.AddBlock(master, true, validatorStake*2)
 
 				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(master, false, new(big.Int).Mul(validatorStake, big.NewInt(2)))
+				vs.AddBlock(master, false, validatorStake*2)
 
 				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
@@ -876,7 +876,7 @@ func (test *TestBFT) transitionToPosBlock(parentSummary *chain.BlockSummary, mas
 	if validation.IsEmpty() {
 		// Add all dev accounts as validators
 		for _, dev := range devAccounts {
-			if err := test.adoptStakerTx(flow, dev.PrivateKey, "addValidation", validatorStake, dev.Address, minStakingPeriod); err != nil {
+			if err := test.adoptStakerTx(flow, dev.PrivateKey, "addValidation", toWei(validatorStake), dev.Address, minStakingPeriod); err != nil {
 				return nil, err
 			}
 		}

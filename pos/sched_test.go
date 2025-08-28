@@ -6,10 +6,10 @@
 package pos
 
 import (
+	"encoding/binary"
 	"math/big"
+	"math/rand"
 	"testing"
-
-	mathrand "math/rand"
 
 	"github.com/stretchr/testify/assert"
 
@@ -18,16 +18,16 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-func createParams() (map[thor.Address]*validation.Validation, *big.Int) {
+func createParams() (map[thor.Address]*validation.Validation, uint64) {
 	validators := make(map[thor.Address]*validation.Validation)
-	totalStake := big.NewInt(0)
+	totalStake := uint64(0)
 	for _, acc := range genesis.DevAccounts() {
-		stake := big.NewInt(0).SetBytes(acc.Address[10:]) // use the last 10 bytes to create semi random, but deterministic stake
+		stake := binary.BigEndian.Uint64(acc.Address[4:]) // use the last 4 bytes to create semi random, but deterministic stake
 		validator := &validation.Validation{
 			Weight: stake,
 		}
 		validators[acc.Address] = validator
-		totalStake.Add(totalStake, validator.Weight)
+		totalStake += validator.Weight
 	}
 
 	return validators, totalStake
@@ -65,17 +65,14 @@ func TestScheduler_IsScheduled(t *testing.T) {
 	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed1"))
 	assert.NoError(t, err)
 
-	assert.True(t, sched.IsScheduled(20, genesis.DevAccounts()[2].Address))
+	assert.True(t, sched.IsScheduled(110, genesis.DevAccounts()[2].Address))
 }
 
 func TestScheduler_Distribution(t *testing.T) {
 	// Reduce tolerance my increasing iterations to achieve a higher level of accuracy
 	// e.g., 1 million usually gets all tolerances down to about 2% (i.e., 0.02)
 	iterations := 100_000
-	type stakeFunc func(index int, acc thor.Address) *big.Int
-
-	//  pseudo-random number generator
-	randReader := mathrand.New(mathrand.NewSource(412342)) //nolint:gosec
+	type stakeFunc func(index int, acc thor.Address) uint64
 
 	testCases := []struct {
 		name      string
@@ -85,34 +82,33 @@ func TestScheduler_Distribution(t *testing.T) {
 		{
 			name:      "some_big_some_small",
 			tolerance: 0.03,
-			stakes: func(index int, acc thor.Address) *big.Int {
+			stakes: func(index int, acc thor.Address) uint64 {
 				if index%2 == 0 {
-					return big.NewInt(2000)
+					return 2000
 				}
-				return big.NewInt(1000)
+				return 1000
 			},
 		},
 		{
 			name:      "all_same",
 			tolerance: 0.03,
-			stakes: func(index int, acc thor.Address) *big.Int {
-				return big.NewInt(1000)
+			stakes: func(index int, acc thor.Address) uint64 {
+				return 1000
 			},
 		},
 		{
 			name:      "pseudo_random_weight",
 			tolerance: 0.04,
-			stakes: func(index int, acc thor.Address) *big.Int {
-				eth := big.NewInt(1)
-				millionEth := new(big.Int).Mul(big.NewInt(1e6), eth)
-				maxWeight := new(big.Int).Mul(big.NewInt(1200), millionEth) // max with multipliers
-				minWeight := new(big.Int).Mul(big.NewInt(50), millionEth)   // min with multipliers
-				diff := new(big.Int).Sub(maxWeight, minWeight)
+			stakes: func(index int, acc thor.Address) uint64 {
+				millionEth := uint64(1e6)
+				maxWeight := uint64(1200) * millionEth // max with multipliers
+				minWeight := uint64(50) * millionEth   // min with multipliers
+				diff := maxWeight - minWeight
 
 				// Generate random number in [0, diff)
-				n := new(big.Int).Rand(randReader, diff)
+				n := rand.Intn(int(diff)) //nolint:gosec
 				// Add min to shift range to [min, max)
-				randomValue := new(big.Int).Add(minWeight, n)
+				randomValue := minWeight + uint64(n)
 
 				return randomValue
 			},
@@ -120,18 +116,18 @@ func TestScheduler_Distribution(t *testing.T) {
 		{
 			name:      "increasing",
 			tolerance: 0.02,
-			stakes: func(index int, acc thor.Address) *big.Int {
-				return new(big.Int).SetInt64((int64(index) + 1) * 1000)
+			stakes: func(index int, acc thor.Address) uint64 {
+				return uint64((index + 1) * 1000)
 			},
 		},
 		{
 			name:      "some whales",
 			tolerance: 0.07, // less than 0.01 with 10m iterations
-			stakes: func(index int, acc thor.Address) *big.Int {
+			stakes: func(index int, acc thor.Address) uint64 {
 				if index < 3 {
-					return big.NewInt(1200)
+					return 1200
 				}
-				return big.NewInt(50)
+				return 50
 			},
 		},
 	}
@@ -139,15 +135,14 @@ func TestScheduler_Distribution(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			validators := make(map[thor.Address]*validation.Validation)
-			totalStake := big.NewInt(0)
+			totalStake := uint64(0)
 
 			for i, acc := range genesis.DevAccounts() {
 				stake := tc.stakes(i, acc.Address)
-				stake = stake.Mul(stake, big.NewInt(1e18)) // convert to wei
 				validators[acc.Address] = &validation.Validation{
 					Weight: stake,
 				}
-				totalStake.Add(totalStake, stake)
+				totalStake += stake
 			}
 
 			distribution := make(map[thor.Address]int)
@@ -168,10 +163,9 @@ func TestScheduler_Distribution(t *testing.T) {
 			}
 
 			for id, count := range distribution {
-				weight := new(big.Float).SetInt(validators[id].Weight)
-				weight.Quo(weight, new(big.Float).SetInt(totalStake))
-				expectedCountFloat := new(big.Float).Mul(weight, big.NewFloat(float64(iterations)))
-				expectedCount, _ := expectedCountFloat.Int64()
+				weight := float64(validators[id].Weight)
+				weight = weight / float64(totalStake)
+				expectedCount := weight * float64(iterations)
 
 				diff := float64(expectedCount) * tc.tolerance
 				diffPercent := (float64(expectedCount) - float64(count)) / float64(expectedCount)
@@ -215,32 +209,30 @@ func TestScheduler_Updates(t *testing.T) {
 	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, parentTime, []byte("seed1"))
 	assert.NoError(t, err)
 
-	totalWeight := big.NewInt(0)
+	totalWeight := uint64(0)
 	for validator := range validators {
 		val := validators[validator]
-		totalWeight = big.NewInt(0).Add(val.Weight, totalWeight)
+		totalWeight += val.Weight
 	}
 
 	updates, score := sched.Updates(nowTime, totalWeight)
 
 	offline := 0
-	offlineWeight := big.NewInt(0)
+	offlineWeight := uint64(0)
 	for id, online := range updates {
 		if !online {
 			offline++
 			val := validators[id]
-			offlineWeight = offlineWeight.Add(offlineWeight, val.Weight)
+			offlineWeight += val.Weight
 		}
 	}
 
-	scaledScore := new(big.Int).Sub(totalWeight, offlineWeight)
-	scaledScore = new(big.Int).Mul(scaledScore, big.NewInt(thor.MaxPosScore))
-	scaledScore.Div(scaledScore, totalWeight)
-
-	expected := scaledScore.Uint64()
+	scaledScore := totalWeight - offlineWeight
+	scaledScore = scaledScore * thor.MaxPosScore
+	scaledScore = scaledScore / totalWeight
 
 	assert.Equal(t, 1, offline)
-	assert.Equal(t, expected, score)
+	assert.Equal(t, scaledScore, score)
 }
 
 func TestScheduler_TotalPlacements(t *testing.T) {
@@ -256,27 +248,26 @@ func TestScheduler_TotalPlacements(t *testing.T) {
 	assert.Equal(t, 9, len(sched.sequence))
 
 	// check total stake in scheduler, should only use online validators
-	total := big.NewInt(0)
+	total := uint64(0)
 	for _, p := range sched.sequence {
-		total.Add(total, validators[p.id].Weight)
+		total += validators[p.id].Weight
 	}
 
-	expectedStake := totalStake.Sub(totalStake, validators[otherAcc].Weight)
+	expectedStake := totalStake - validators[otherAcc].Weight
 
-	assert.True(t, total.Cmp(expectedStake) == 0)
+	assert.Equal(t, expectedStake, total)
 }
 
 func TestScheduler_AllValidatorsScheduled(t *testing.T) {
 	validators := make(map[thor.Address]*validation.Validation)
 	lowStakeAcc := genesis.DevAccounts()[0].Address
 	for _, acc := range genesis.DevAccounts() {
-		var stake *big.Int
+		var stake uint64
 		// this ensures the first account will be last in the list
 		if acc.Address == lowStakeAcc {
-			stake = big.NewInt(1)
+			stake = 1
 		} else {
-			eth := big.NewInt(1e18)
-			stake = new(big.Int).Mul(eth, eth)
+			stake = 1e18
 		}
 		validator := &validation.Validation{
 			Weight: stake,
@@ -304,14 +295,14 @@ func TestScheduler_AllValidatorsScheduled(t *testing.T) {
 
 func TestScheduler_Schedule_TotalScore(t *testing.T) {
 	validators := make(map[thor.Address]*validation.Validation)
-	totalStake := big.NewInt(0)
-	weight := big.NewInt(10_000)
+	totalStake := uint64(0)
+	weight := uint64(10_000)
 	for _, acc := range genesis.DevAccounts() {
 		validator := &validation.Validation{
 			Weight: weight,
 		}
 		validators[acc.Address] = validator
-		totalStake.Add(totalStake, validator.Weight)
+		totalStake += validator.Weight
 	}
 
 	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed1"))
@@ -320,9 +311,9 @@ func TestScheduler_Schedule_TotalScore(t *testing.T) {
 	updates, score := sched.Updates(30, totalStake)
 	assert.Equal(t, 1, len(updates), "There should be one update")
 
-	onlineWeight := big.NewInt(0).Mul(weight, big.NewInt(int64(len(validators)-1)))
+	onlineWeight := weight * uint64(len(validators)-1)
 
-	expectedScore := big.NewInt(0).Mul(onlineWeight, big.NewInt(thor.MaxPosScore))
-	expectedScore = expectedScore.Div(expectedScore, totalStake)
-	assert.Equal(t, int(expectedScore.Uint64()), int(score), "Score should be equal to the expected score")
+	expectedScore := onlineWeight * thor.MaxPosScore
+	expectedScore = expectedScore / totalStake
+	assert.Equal(t, expectedScore, score, "Score should be equal to the expected score")
 }

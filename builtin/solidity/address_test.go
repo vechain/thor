@@ -50,9 +50,6 @@ func TestAddress(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, thor.Address{}, retrievedValue)
 
-	ctxAddr := ctx.Address()
-	assert.Equal(t, thor.Address{1}, ctxAddr)
-
 	ctxState := ctx.State()
 	assert.Equal(t, state, ctxState)
 }

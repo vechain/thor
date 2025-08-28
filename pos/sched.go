@@ -10,7 +10,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"math"
-	"math/big"
 	"math/rand"
 	"slices"
 	"sort"
@@ -62,7 +61,7 @@ func NewScheduler(
 			proposer = p
 			proposerID = id
 		}
-		if p.OfflineBlock == nil || id == addr {
+		if p.IsOnline() || id == addr {
 			online = append(online, &onlineProposer{
 				id:         id,
 				validation: p,
@@ -134,13 +133,13 @@ func (s *Scheduler) IsScheduled(blockTime uint64, proposer thor.Address) bool {
 }
 
 // Updates returns proposers whose status are changed, and the score when new block time is assumed to be newBlockTime.
-func (s *Scheduler) Updates(newBlockTime uint64, totalWeight *big.Int) (map[thor.Address]bool, uint64) {
+func (s *Scheduler) Updates(newBlockTime uint64, totalWeight uint64) (map[thor.Address]bool, uint64) {
 	T := thor.BlockInterval()
 
 	updates := make(map[thor.Address]bool)
-	activeWeight := big.NewInt(0)
+	activeWeight := uint64(0)
 	for idx := range s.sequence {
-		activeWeight = activeWeight.Add(activeWeight, s.sequence[idx].validation.Weight)
+		activeWeight += s.sequence[idx].validation.Weight
 	}
 
 	for i := uint64(0); i < uint64(len(s.sequence)); i++ {
@@ -150,7 +149,7 @@ func (s *Scheduler) Updates(newBlockTime uint64, totalWeight *big.Int) (map[thor
 		id := s.sequence[i].id
 		if id != s.proposerID {
 			updates[id] = false
-			activeWeight.Sub(activeWeight, s.sequence[i].validation.Weight)
+			activeWeight -= s.sequence[i].validation.Weight
 		}
 	}
 
@@ -158,11 +157,8 @@ func (s *Scheduler) Updates(newBlockTime uint64, totalWeight *big.Int) (map[thor
 		updates[s.proposerID] = true
 	}
 
-	if totalWeight.Sign() > 0 {
-		scaledScore := new(big.Int).Mul(activeWeight, big.NewInt(thor.MaxPosScore))
-		scaledScore.Div(scaledScore, totalWeight)
-
-		score := scaledScore.Uint64()
+	if totalWeight > 0 {
+		score := activeWeight * thor.MaxPosScore / totalWeight
 		return updates, score
 	}
 
@@ -185,14 +181,9 @@ func createSequence(proposers []*onlineProposer, seed []byte, parentNum uint32) 
 	// Step 2: Calculate priority scores for each validator based on their weight
 	// using the exponential distribution method for weighted random sampling
 	weightedProposers := make([]*onlineProposer, len(proposers))
-	bigE18 := big.NewFloat(1e18) // Divisor constant to convert from wei to ether (10^18)
-
 	for i, proposer := range proposers {
-		// Convert weight from wei to a manageable float value
-		weight := new(big.Float).SetInt(proposer.validation.Weight)
-		weight = weight.Quo(weight, bigE18)
 		// the scheduler relies on the staker to have healthy validator weights
-		weightFloat, _ := weight.Float64()
+		weightFloat := float64(proposer.validation.Weight)
 
 		// Generate random value and calculate priority using exponential distribution
 		randomValue := randomSource.Float64()

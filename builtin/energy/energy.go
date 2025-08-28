@@ -22,6 +22,7 @@ var (
 	totalAddSubKey    = thor.Blake2b([]byte("total-add-sub"))
 	issuedKey         = thor.Blake2b([]byte("issued"))
 	growthStopTimeKey = thor.Blake2b([]byte("growth-stop-time"))
+	bigE18            = big.NewInt(1e18)
 )
 
 // Energy implements energy operations.
@@ -261,7 +262,7 @@ func (e *Energy) addIssued(issued *big.Int) error {
 }
 
 type staker interface {
-	LockedVET() (*big.Int, *big.Int, error)
+	LockedStake() (uint64, uint64, error)
 	HasDelegations(address thor.Address) (bool, error)
 	IncreaseDelegatorsReward(master thor.Address, reward *big.Int) error
 }
@@ -326,13 +327,12 @@ func (e *Energy) DistributeRewards(beneficiary, signer thor.Address, staker stak
 }
 
 func (e *Energy) CalculateRewards(staker staker) (*big.Int, error) {
-	totalStaked, _, err := staker.LockedVET()
+	totalStaked, _, err := staker.LockedStake()
 	if err != nil {
 		return nil, err
 	}
-	bigE18 := big.NewInt(1e18)
-	// sqrt(totalStaked / 1e18) * 1e18, we are calculating sqrt on VET and then converting to wei
-	sqrtStake := new(big.Int).Sqrt(new(big.Int).Div(totalStaked, bigE18))
+	// sqrt(totalStaked in VET) * 1e18, we are calculating sqrt on VET and then converting to wei
+	sqrtStake := new(big.Int).Sqrt(new(big.Int).SetUint64(totalStaked))
 	sqrtStake.Mul(sqrtStake, bigE18)
 
 	curveFactor, err := e.params.Get(thor.KeyCurveFactor)

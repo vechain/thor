@@ -320,7 +320,8 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 		validator1 = thor.BytesToAddress([]byte("validator1"))
 		validator3 = thor.BytesToAddress([]byte("validator3")) // exit
 
-		minStake = staker.MinStake
+		minStakeVET = staker.MinStakeVET
+		minStake    = staker.MinStake
 	)
 
 	fc := &thor.SoloFork
@@ -341,13 +342,13 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 		builtin.Params.Native(state).Set(thor.KeyStakerSwitches, big.NewInt(0b11))
 
 		stakerNative := builtin.Staker.Native(state)
-		err := stakerNative.AddValidation(validator1, endorser, thor.LowStakingPeriod(), new(big.Int).Mul(minStake, big.NewInt(2)))
+		err := stakerNative.AddValidation(validator1, endorser, thor.LowStakingPeriod(), minStakeVET*2)
 		if err != nil {
 			return err
 		}
 
 		// add delegation1 to validator1
-		_, err = stakerNative.AddDelegation(validator1, minStake, 100)
+		_, err = stakerNative.AddDelegation(validator1, minStakeVET, 100)
 		if err != nil {
 			return err
 		}
@@ -376,11 +377,11 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 
 	// withdraw validator3 to make it in status exit
 	stakerNative := builtin.Staker.Native(state)
-	err = stakerNative.AddValidation(validator3, endorser, thor.LowStakingPeriod(), minStake)
+	err = stakerNative.AddValidation(validator3, endorser, thor.LowStakingPeriod(), minStakeVET)
 	assert.NoError(t, err)
 
 	// add delegation2 to queued validator3
-	_, err = stakerNative.AddDelegation(validator3, minStake, 100)
+	_, err = stakerNative.AddDelegation(validator3, minStakeVET, 100)
 	assert.NoError(t, err)
 
 	_, err = stakerNative.WithdrawStake(validator3, endorser, 1)

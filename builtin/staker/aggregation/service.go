@@ -6,8 +6,6 @@
 package aggregation
 
 import (
-	"math/big"
-
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
@@ -37,7 +35,7 @@ func (s *Service) GetAggregation(validator thor.Address) (*Aggregation, error) {
 		return nil, errors.Wrap(err, "failed to get validator aggregation")
 	}
 
-	if d.LockedVET == nil {
+	if d.IsEmpty() {
 		return newAggregation(), nil
 	}
 	return &d, nil
@@ -55,8 +53,8 @@ func (s *Service) AddPendingVET(validator thor.Address, stake *stakes.WeightedSt
 	if err != nil {
 		return err
 	}
-	agg.PendingVET = big.NewInt(0).Add(agg.PendingVET, stake.VET())
-	agg.PendingWeight = big.NewInt(0).Add(agg.PendingWeight, stake.Weight())
+	agg.PendingVET += stake.VET
+	agg.PendingWeight += stake.Weight
 
 	return s.setAggregation(validator, agg, false)
 }
@@ -68,24 +66,24 @@ func (s *Service) SubPendingVet(validator thor.Address, stake *stakes.WeightedSt
 	if err != nil {
 		return err
 	}
-	agg.PendingVET = big.NewInt(0).Sub(agg.PendingVET, stake.VET())
-	agg.PendingWeight = big.NewInt(0).Sub(agg.PendingWeight, stake.Weight())
+	agg.PendingVET -= stake.VET
+	agg.PendingWeight -= stake.Weight
 
 	return s.setAggregation(validator, agg, false)
 }
 
 // Renew transitions the validator's delegations to the next staking period.
 // Called during staking period renewal process.
-func (s *Service) Renew(validator thor.Address) (*delta.Renewal, *big.Int, error) {
+func (s *Service) Renew(validator thor.Address) (*delta.Renewal, uint64, error) {
 	agg, err := s.GetAggregation(validator)
 	if err != nil {
-		return nil, new(big.Int), err
+		return nil, 0, err
 	}
 
 	renew := agg.renew()
 
 	if err = s.setAggregation(validator, agg, false); err != nil {
-		return nil, new(big.Int), err
+		return nil, 0, err
 	}
 
 	return renew, agg.LockedWeight, nil
@@ -118,8 +116,8 @@ func (s *Service) SignalExit(validator thor.Address, stake *stakes.WeightedStake
 
 	// Only move to exiting pools - don't subtract from locked yet
 	// The subtraction happens during renewal
-	agg.ExitingVET = big.NewInt(0).Add(agg.ExitingVET, stake.VET())
-	agg.ExitingWeight = big.NewInt(0).Add(agg.ExitingWeight, stake.Weight())
+	agg.ExitingVET += stake.VET
+	agg.ExitingWeight += stake.Weight
 
 	return s.setAggregation(validator, agg, false)
 }

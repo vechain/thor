@@ -6,8 +6,6 @@
 package delegation
 
 import (
-	"math/big"
-
 	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
@@ -15,7 +13,7 @@ import (
 
 type Delegation struct {
 	Validation     thor.Address // the validator to which the delegator is delegating
-	Stake          *big.Int
+	Stake          uint64       // the amount of VET delegated(in VET, not wei)
 	Multiplier     uint8
 	LastIteration  *uint32 `rlp:"nil"` // the last staking period in which the delegator was active
 	FirstIteration uint32  // the iteration at which the delegator was created
@@ -23,16 +21,16 @@ type Delegation struct {
 
 // IsEmpty returns whether the entry can be treated as empty.
 func (d *Delegation) IsEmpty() bool {
-	return (d.Stake == nil || d.Stake.Sign() == 0) && d.Multiplier == 0
+	return (d.Stake == 0) && d.Multiplier == 0
 }
 
 // WeightedStake returns the weight of the delegator, which is calculated as:
 // weight = stake * multiplier / 100
 func (d *Delegation) WeightedStake() *stakes.WeightedStake {
 	if d.IsEmpty() {
-		return stakes.NewWeightedStake(big.NewInt(0), 0)
+		return stakes.NewWeightedStake(0, 0)
 	}
-	return stakes.NewWeightedStake(d.Stake, d.Multiplier)
+	return stakes.NewWeightedStakeWithMultiplier(d.Stake, d.Multiplier)
 }
 
 // Started returns whether the delegation became locked

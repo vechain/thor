@@ -5,34 +5,35 @@
 
 package stakes
 
-import "math/big"
-
 type WeightedStake struct {
-	vet    *big.Int // The amount of VET staked
-	weight *big.Int // The weight of the stake, calculated as (stake * multiplier / 100%)
+	VET    uint64 // The amount of VET staked(in VET, not wei)
+	Weight uint64 // The weight of the stake, calculated as (stake * multiplier / 100%)
 }
 
-func NewWeightedStake(vet *big.Int, multiplier uint8) *WeightedStake {
-	weight := new(big.Int).Mul(vet, big.NewInt(int64(multiplier)))
-	weight = weight.Div(weight, big.NewInt(100)) // weight = stake * multiplier / 100%
+func CalcWeight(vet uint64, multiplier uint8) uint64 {
+	return vet * uint64(multiplier) / 100
+}
+
+func NewWeightedStakeWithMultiplier(vet uint64, multiplier uint8) *WeightedStake {
 	return &WeightedStake{
-		vet:    vet,
-		weight: weight,
+		VET:    vet,
+		Weight: CalcWeight(vet, multiplier),
 	}
 }
 
-func (s *WeightedStake) AddWeight(weight big.Int) {
-	s.weight = big.NewInt(0).Add(s.weight, &weight)
+func NewWeightedStake(stake uint64, weight uint64) *WeightedStake {
+	return &WeightedStake{
+		VET:    stake,
+		Weight: weight,
+	}
 }
 
-func (s *WeightedStake) SubWeight(weight big.Int) {
-	s.weight = big.NewInt(0).Sub(s.weight, &weight)
+func (s *WeightedStake) Add(new *WeightedStake) {
+	s.VET += new.VET
+	s.Weight += new.Weight
 }
 
-func (s *WeightedStake) Weight() *big.Int {
-	return s.weight
-}
-
-func (s *WeightedStake) VET() *big.Int {
-	return s.vet
+func (s *WeightedStake) Sub(new *WeightedStake) {
+	s.VET -= new.VET
+	s.Weight -= new.Weight
 }
