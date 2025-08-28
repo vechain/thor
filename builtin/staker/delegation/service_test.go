@@ -136,7 +136,7 @@ func TestService_Withdraw(t *testing.T) {
 		Weight:             0,
 	}
 
-	withdraw, err := svc.Withdraw(del, id, val)
+	withdraw, err := svc.Withdraw(del, id, &val)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(12345), withdraw)
 

@@ -100,7 +100,7 @@ func (s *Service) SignalExit(delegation *Delegation, delegationID *big.Int, valC
 	return s.setDelegation(delegationID, delegation, false)
 }
 
-func (s *Service) Withdraw(del *Delegation, delegationID *big.Int, val validation.Validation) (uint64, error) {
+func (s *Service) Withdraw(del *Delegation, delegationID *big.Int, val *validation.Validation) (uint64, error) {
 	// ensure the pointers are copied, not referenced
 	withdrawableStake := del.Stake
 
