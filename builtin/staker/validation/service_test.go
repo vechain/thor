@@ -22,8 +22,9 @@ import (
 )
 
 func poisonExitSlot(st *state.State, contract thor.Address, block uint32) {
-	bigBlock := big.NewInt(0).SetUint64(uint64(block))
-	slot := thor.Blake2b(bigBlock.Bytes(), slotExitEpochs.Bytes())
+	var key thor.Bytes32
+	binary.BigEndian.PutUint32(key[:], block)
+	slot := thor.Blake2b(key[:], slotExitEpochs.Bytes())
 	st.SetRawStorage(contract, slot, rlp.RawValue{0xFF})
 }
 

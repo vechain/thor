@@ -19,7 +19,7 @@ var (
 	mediumStakingPeriod uint32 = 8640 * 15 // 15 Days
 	highStakingPeriod   uint32 = 8640 * 30 // 30 Days
 	cooldownPeriod      uint32 = 8640      // 8640 blocks, 1 day
-	hayabusaTP          uint32 = 360 * 24 * 14
+	hayabusaTP          uint32 = 8640 * 14 // 14 days
 
 	locked bool
 )
@@ -89,38 +89,47 @@ func LockConfig() {
 	locked = true
 }
 
+// default value is 10 seconds
 func BlockInterval() uint64 {
 	return blockInterval
 }
 
+// default value is 180 blocks, 30 minutes
 func EpochLength() uint32 {
 	return epochLength
 }
 
+// default value is 8640 blocks, 1 day
 func SeederInterval() uint32 {
 	return seederInterval
 }
 
+// default value is 7 days
 func ValidatorEvictionThreshold() uint32 {
 	return validatorEvictionThreshold
 }
 
+// default value is 7 days
 func LowStakingPeriod() uint32 {
 	return lowStakingPeriod
 }
 
+// default value is 15 days
 func MediumStakingPeriod() uint32 {
 	return mediumStakingPeriod
 }
 
+// default value is 30 days
 func HighStakingPeriod() uint32 {
 	return highStakingPeriod
 }
 
+// default value is 1 day
 func CooldownPeriod() uint32 {
 	return cooldownPeriod
 }
 
+// default value is 14 days
 func HayabusaTP() uint32 {
 	return hayabusaTP
 }
