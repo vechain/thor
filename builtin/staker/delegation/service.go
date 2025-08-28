@@ -10,8 +10,11 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/ethereum/go-ethereum/common/math"
+
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/builtin/staker/reverts"
+	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -41,6 +44,7 @@ func (s *Service) GetDelegation(delegationID *big.Int) (*Delegation, error) {
 }
 
 func (s *Service) setDelegation(delegationID *big.Int, entry *Delegation, isNew bool) error {
+	println("invoking set", entry.Stake, entry.FirstIteration, entry.LastIteration)
 	if err := s.delegations.Set(delegationID, *entry, isNew); err != nil {
 		return errors.Wrap(err, "failed to set delegation")
 	}
@@ -53,6 +57,7 @@ func (s *Service) Add(
 	stake uint64,
 	multiplier uint8,
 ) (*big.Int, error) {
+	println("invoking add", firstIteration, stake, multiplier)
 	// ensure input is sane
 	if multiplier == 0 {
 		return nil, reverts.New("multiplier cannot be 0")
@@ -97,11 +102,16 @@ func (s *Service) SignalExit(delegation *Delegation, delegationID *big.Int, valC
 	return s.setDelegation(delegationID, delegation, false)
 }
 
-func (s *Service) Withdraw(del *Delegation, delegationID *big.Int) (uint64, error) {
+func (s *Service) Withdraw(del *Delegation, delegationID *big.Int, val validation.Validation) (uint64, error) {
 	// ensure the pointers are copied, not referenced
 	withdrawableStake := del.Stake
 
+	println("Withdrawing", del.FirstIteration)
+
 	del.Stake = 0
+	if val.CurrentIteration() < del.FirstIteration {
+		del.FirstIteration = math.MaxUint32
+	}
 	if err := s.setDelegation(delegationID, del, false); err != nil {
 		return 0, err
 	}

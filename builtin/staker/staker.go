@@ -432,7 +432,7 @@ func (s *Staker) WithdrawDelegation(
 	}
 
 	// withdraw delegation
-	withdrawableStake, err := s.delegationService.Withdraw(del, delegationID)
+	withdrawableStake, err := s.delegationService.Withdraw(del, delegationID, *val)
 	if err != nil {
 		logger.Info("failed to withdraw", "delegationID", delegationID, "error", err)
 		return 0, err

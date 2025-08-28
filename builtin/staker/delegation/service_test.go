@@ -8,6 +8,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/vechain/thor/v2/builtin/staker/validation"
+
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 
@@ -117,8 +119,24 @@ func TestService_Withdraw(t *testing.T) {
 
 	del, err := svc.GetDelegation(id)
 	assert.NoError(t, err)
+	val := validation.Validation{
+		Endorser:           thor.Address{},
+		Beneficiary:        nil,
+		Period:             0,
+		CompleteIterations: 0,
+		Status:             0,
+		StartBlock:         0,
+		ExitBlock:          nil,
+		OfflineBlock:       nil,
+		LockedVET:          0,
+		PendingUnlockVET:   0,
+		QueuedVET:          0,
+		CooldownVET:        0,
+		WithdrawableVET:    0,
+		Weight:             0,
+	}
 
-	withdraw, err := svc.Withdraw(del, id)
+	withdraw, err := svc.Withdraw(del, id, val)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(12345), withdraw)
 
