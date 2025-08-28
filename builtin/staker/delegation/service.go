@@ -44,7 +44,6 @@ func (s *Service) GetDelegation(delegationID *big.Int) (*Delegation, error) {
 }
 
 func (s *Service) setDelegation(delegationID *big.Int, entry *Delegation, isNew bool) error {
-	println("invoking set", entry.Stake, entry.FirstIteration, entry.LastIteration)
 	if err := s.delegations.Set(delegationID, *entry, isNew); err != nil {
 		return errors.Wrap(err, "failed to set delegation")
 	}
@@ -57,7 +56,6 @@ func (s *Service) Add(
 	stake uint64,
 	multiplier uint8,
 ) (*big.Int, error) {
-	println("invoking add", firstIteration, stake, multiplier)
 	// ensure input is sane
 	if multiplier == 0 {
 		return nil, reverts.New("multiplier cannot be 0")
@@ -105,8 +103,6 @@ func (s *Service) SignalExit(delegation *Delegation, delegationID *big.Int, valC
 func (s *Service) Withdraw(del *Delegation, delegationID *big.Int, val validation.Validation) (uint64, error) {
 	// ensure the pointers are copied, not referenced
 	withdrawableStake := del.Stake
-
-	println("Withdrawing", del.FirstIteration)
 
 	del.Stake = 0
 	if val.CurrentIteration() < del.FirstIteration {
