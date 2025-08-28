@@ -18,7 +18,7 @@ type errReverted struct {
 }
 
 func (e *errReverted) Error() string {
-	return "builtin reverted: " + e.message
+	return e.message
 }
 
 func (e *errReverted) Bytes() []byte {
