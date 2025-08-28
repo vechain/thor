@@ -113,7 +113,8 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 		features |= tx.DelegationFeature
 	}
 
-	dPosStatus, err := builtin.Staker.Native(state).SyncPOS(p.forkConfig, parent.Header.Number()+1)
+	staker := builtin.Staker.Native(state)
+	dPosStatus, err := staker.SyncPOS(p.forkConfig, parent.Header.Number()+1)
 	if err != nil {
 		return nil, false, err
 	}
@@ -122,11 +123,11 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 
 	var score uint64
 	if dPosStatus.Active {
-		leaders, err := builtin.Staker.Native(state).LeaderGroup()
+		leaders, err := staker.LeaderGroup()
 		if err != nil {
 			return nil, false, err
 		}
-		_, totalWeight, err := builtin.Staker.Native(state).LockedStake()
+		_, totalWeight, err := staker.LockedStake()
 		if err != nil {
 			return nil, false, err
 		}
@@ -146,7 +147,12 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 		}
 		score = onlineWeight * thor.MaxPosScore / totalWeight
 	} else {
-		authorities, err := builtin.Authority.Native(state).Candidates(big.NewInt(0), thor.InitialMaxBlockProposers)
+		endorsement, err := builtin.Params.Native(state).Get(thor.KeyProposerEndorsement)
+		if err != nil {
+			return nil, false, err
+		}
+		checker := staker.TransitionPeriodBalanceCheck(p.forkConfig, parent.Header.Number()+1, endorsement)
+		authorities, err := builtin.Authority.Native(state).Candidates(checker, thor.InitialMaxBlockProposers)
 		if err != nil {
 			return nil, false, err
 		}

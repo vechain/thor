@@ -6,7 +6,6 @@
 package poa
 
 import (
-	"math/big"
 	"slices"
 
 	"github.com/vechain/thor/v2/builtin"
@@ -51,18 +50,10 @@ func (c *Candidates) Copy() *Candidates {
 	return &cpy
 }
 
-type BalancerChecker func(thor.Address, *big.Int) (bool, error)
-
 // Pick picks a list of proposers, which satisfy preset conditions.
-func (c *Candidates) Pick(state *state.State, checkBalance BalancerChecker) ([]Proposer, error) {
+func (c *Candidates) Pick(state *state.State, checkBalance authority.BalanceChecker) ([]Proposer, error) {
 	satisfied := c.satisfied
 	if len(satisfied) == 0 {
-		// re-pick
-		endorsement, err := builtin.Params.Native(state).Get(thor.KeyProposerEndorsement)
-		if err != nil {
-			return nil, err
-		}
-
 		mbp, err := builtin.Params.Native(state).Get(thor.KeyMaxBlockProposers)
 		if err != nil {
 			return nil, err
@@ -74,7 +65,7 @@ func (c *Candidates) Pick(state *state.State, checkBalance BalancerChecker) ([]P
 
 		satisfied = make([]int, 0, len(c.list))
 		for i := 0; i < len(c.list) && uint64(len(satisfied)) < maxBlockProposers; i++ {
-			hasBalance, err := checkBalance(c.list[i].Endorsor, endorsement)
+			hasBalance, err := checkBalance(c.list[i].NodeMaster, c.list[i].Endorsor)
 			if err != nil {
 				return nil, err
 			}

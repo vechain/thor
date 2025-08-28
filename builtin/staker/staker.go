@@ -40,6 +40,7 @@ func SetLogger(l log.Logger) {
 // Staker implements native methods of `Staker` contract.
 type Staker struct {
 	params *params.Params
+	state  *state.State
 
 	aggregationService *aggregation.Service
 	globalStatsService *globalstats.Service
@@ -53,6 +54,7 @@ func New(addr thor.Address, state *state.State, params *params.Params, charger *
 
 	return &Staker{
 		params: params,
+		state:  state,
 
 		aggregationService: aggregation.New(sctx),
 		globalStatsService: globalstats.New(sctx),
