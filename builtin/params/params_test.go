@@ -27,4 +27,17 @@ func TestParamsGetSet(t *testing.T) {
 	getv, err := p.Get(key)
 	assert.Nil(t, err)
 	assert.Equal(t, setv, getv)
+
+	err = p.Set(thor.KeyMaxBlockProposers, big.NewInt(2))
+	assert.Nil(t, err)
+	getMbp, err := p.Get(thor.KeyMaxBlockProposers)
+	assert.Nil(t, err)
+	assert.Equal(t, big.NewInt(2), getMbp)
+
+	thor.LockConfig()
+	err = p.Set(thor.KeyMaxBlockProposers, big.NewInt(10))
+	assert.ErrorContains(t, err, "cannot set max-block-proposers config param")
+	getMbp, err = p.Get(thor.KeyMaxBlockProposers)
+	assert.Nil(t, err)
+	assert.Equal(t, big.NewInt(2), getMbp)
 }

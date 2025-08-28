@@ -89,6 +89,10 @@ func LockConfig() {
 	locked = true
 }
 
+func IsLocked() bool {
+	return locked
+}
+
 func BlockInterval() uint64 {
 	return blockInterval
 }

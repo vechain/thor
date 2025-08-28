@@ -6,6 +6,7 @@
 package params
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -38,6 +39,10 @@ func (p *Params) Get(key thor.Bytes32) (value *big.Int, err error) {
 
 // Set native way to set param.
 func (p *Params) Set(key thor.Bytes32, value *big.Int) error {
+	if key == thor.KeyMaxBlockProposers && thor.IsLocked() {
+		return fmt.Errorf("cannot set max-block-proposers config param")
+	}
+
 	return p.state.EncodeStorage(p.addr, key, func() ([]byte, error) {
 		if value.Sign() == 0 {
 			return nil, nil
