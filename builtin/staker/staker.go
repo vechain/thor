@@ -481,7 +481,7 @@ func (s *Staker) AddDelegation(
 
 // SignalDelegationExit updates the auto-renewal status of a delegation.
 func (s *Staker) SignalDelegationExit(delegationID *big.Int) error {
-	logger.Debug("updating autorenew", "delegationID", delegationID)
+	logger.Debug("signal delegation exit", "delegationID", delegationID)
 
 	del, err := s.delegationService.GetDelegation(delegationID)
 	if err != nil {
@@ -492,6 +492,9 @@ func (s *Staker) SignalDelegationExit(delegationID *big.Int) error {
 	}
 	if del.LastIteration != nil {
 		return reverts.New("delegation is already signaled exit")
+	}
+	if del.Stake == 0 {
+		return reverts.New("delegation has already been withdrawn")
 	}
 
 	val, err := s.validationService.GetValidation(del.Validation)
@@ -508,7 +511,7 @@ func (s *Staker) SignalDelegationExit(delegationID *big.Int) error {
 	}
 
 	if err = s.delegationService.SignalExit(del, delegationID, val.CurrentIteration()); err != nil {
-		logger.Info("update autorenew failed", "delegationID", delegationID, "error", err)
+		logger.Info("signal delegation exit failed", "delegationID", delegationID, "error", err)
 		return err
 	}
 
@@ -517,7 +520,7 @@ func (s *Staker) SignalDelegationExit(delegationID *big.Int) error {
 		return err
 	}
 
-	logger.Info("updated autorenew", "delegationID", delegationID)
+	logger.Info("signal delegation exit", "delegationID", delegationID)
 	return nil
 }
 

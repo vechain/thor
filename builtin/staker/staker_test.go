@@ -750,6 +750,24 @@ func TestDelegation_SignalExit(t *testing.T) {
 	assert.ErrorContains(t, staker.SignalDelegationExit(id), "delegation is already signaled exit")
 }
 
+func TestDelegation_SignalExit_AlreadyWithdrawn(t *testing.T) {
+	staker := newTestStaker()
+
+	v := thor.BytesToAddress([]byte("v"))
+	assert.NoError(t, staker.AddValidation(v, v, thor.MediumStakingPeriod(), MinStakeVET))
+
+	id, err := staker.AddDelegation(v, 3, 100)
+	assert.NoError(t, err)
+
+	_, _, err = staker.GetDelegation(id)
+	assert.NoError(t, err)
+	amt, err := staker.WithdrawDelegation(id)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(3), amt)
+
+	assert.ErrorContains(t, staker.SignalDelegationExit(id), "delegation has already been withdrawn")
+}
+
 func TestDelegation_SignalExit_Empty(t *testing.T) {
 	staker := newTestStaker()
 
