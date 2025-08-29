@@ -2377,7 +2377,7 @@ func Test_Validator_Decrease_SeveralTimes(t *testing.T) {
 
 	// Decrease stake - should fail, min stake is 25m
 	err = staker.DecreaseStake(acc, acc, MinStakeVET)
-	assert.ErrorContains(t, err, "next period stake is too low for validator")
+	assert.ErrorContains(t, err, "next period stake is lower than minimum stake")
 }
 
 func Test_Validator_IncreaseDecrease_Combinations(t *testing.T) {
@@ -2410,7 +2410,7 @@ func Test_Validator_IncreaseDecrease_Combinations(t *testing.T) {
 	// Increase stake (ok): 25m + 25m = 50m
 	assert.NoError(t, staker.IncreaseStake(acc, acc, MinStakeVET))
 	// Decrease stake (NOT ok): 25m - 25m = 0. The Previous increase is not applied since it is still currently withdrawable.
-	assert.ErrorContains(t, staker.DecreaseStake(acc, acc, MinStakeVET), "next period stake is too low for validator")
+	assert.ErrorContains(t, staker.DecreaseStake(acc, acc, MinStakeVET), "next period stake is lower than minimum stake")
 	// Instantly withdraw - This is bad, it pulls from the QueuedVET, which means total stake later will be 0.
 	// The decrease previously marked as okay since the current TVL + pending TVL was greater than the min stake.
 	withdraw1, err := staker.WithdrawStake(acc, acc, 0)
@@ -2503,8 +2503,8 @@ func TestStaker_SetBeneficiary(t *testing.T) {
 	assertValidation(t, staker, master).Beneficiary(nil)
 
 	// negative cases
-	assert.ErrorContains(t, staker.SetBeneficiary(master, master, beneficiary), "invalid endorser")
-	assert.ErrorContains(t, staker.SetBeneficiary(endorser, endorser, beneficiary), "failed to get validator")
+	assert.ErrorContains(t, staker.SetBeneficiary(master, master, beneficiary), "endorser required")
+	assert.ErrorContains(t, staker.SetBeneficiary(endorser, endorser, beneficiary), "validation does not exist")
 
 	// set beneficiary, should be successful
 	testSetup.SetBeneficiary(master, endorser, beneficiary)
@@ -3316,7 +3316,7 @@ func TestStaker_Housekeep_NegativeCases(t *testing.T) {
 		Evictions:       nil,
 		ActivationCount: 0,
 	})
-	assert.ErrorContains(t, err, "failed to get validator")
+	assert.ErrorContains(t, err, "failed to get existing validator")
 
 	slotValidations := thor.BytesToBytes32([]byte(("validations")))
 	slot = thor.Blake2b(valAddr.Bytes(), slotValidations.Bytes())
@@ -3382,6 +3382,6 @@ func TestValidation_NegativeCases(t *testing.T) {
 	err = staker.SignalDelegationExit(big.NewInt(0))
 	assert.Error(t, err)
 
-	err = staker.validateNextPeriodTVL(node1)
+	_, err = staker.GetValidation(node1)
 	assert.Error(t, err)
 }

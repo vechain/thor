@@ -7,7 +7,7 @@ package validation
 
 import (
 	"github.com/vechain/thor/v2/builtin/staker/aggregation"
-	"github.com/vechain/thor/v2/builtin/staker/delta"
+	"github.com/vechain/thor/v2/builtin/staker/globalstats"
 	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -128,7 +128,7 @@ func (v *Validation) CurrentIteration() uint32 {
 // 3. Increase WithdrawableVET by PendingUnlockVET
 // 4. Set QueuedVET to 0
 // 5. Set PendingUnlockVET to 0
-func (v *Validation) renew(delegationWeight uint64) *delta.Renewal {
+func (v *Validation) renew(delegationWeight uint64) *globalstats.Renewal {
 	queuedDecrease := stakes.NewWeightedStakeWithMultiplier(v.QueuedVET, Multiplier)
 
 	var prev, after struct {
@@ -137,7 +137,7 @@ func (v *Validation) renew(delegationWeight uint64) *delta.Renewal {
 		multiplier uint8
 	}
 	prev.lockedVET = v.LockedVET
-	prev.valWeight = stakes.CalcWeight(v.LockedVET, v.multiplier())
+	prev.valWeight = stakes.NewWeightedStakeWithMultiplier(v.LockedVET, v.multiplier()).Weight
 
 	// in renew, the multiplier is based on the actual delegation weight
 	after.multiplier = Multiplier
@@ -146,7 +146,7 @@ func (v *Validation) renew(delegationWeight uint64) *delta.Renewal {
 	}
 
 	after.lockedVET = v.LockedVET + v.QueuedVET - v.PendingUnlockVET
-	after.valWeight = stakes.CalcWeight(after.lockedVET, after.multiplier)
+	after.valWeight = stakes.NewWeightedStakeWithMultiplier(after.lockedVET, after.multiplier).Weight
 
 	lockedIncrease := stakes.NewWeightedStake(0, 0)
 	lockedDecrease := stakes.NewWeightedStake(0, 0)
@@ -171,14 +171,14 @@ func (v *Validation) renew(delegationWeight uint64) *delta.Renewal {
 	v.QueuedVET = 0
 	v.PendingUnlockVET = 0
 
-	return &delta.Renewal{
+	return &globalstats.Renewal{
 		LockedIncrease: lockedIncrease,
 		LockedDecrease: lockedDecrease,
 		QueuedDecrease: queuedDecrease,
 	}
 }
 
-func (v *Validation) exit() *delta.Exit {
+func (v *Validation) exit() *globalstats.Exit {
 	ExitedTVL := stakes.NewWeightedStakeWithMultiplier(v.LockedVET, v.multiplier())  // use the acting multiplier for locked stake
 	QueuedDecrease := stakes.NewWeightedStakeWithMultiplier(v.QueuedVET, Multiplier) // queued weight is always initial weight
 
@@ -198,7 +198,7 @@ func (v *Validation) exit() *delta.Exit {
 	}
 
 	// We only return the change in the validation's TVL and weight
-	return &delta.Exit{
+	return &globalstats.Exit{
 		ExitedTVL:      ExitedTVL,
 		QueuedDecrease: QueuedDecrease,
 	}

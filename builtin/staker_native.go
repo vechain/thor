@@ -6,13 +6,14 @@
 package builtin
 
 import (
+	"fmt"
 	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/vechain/thor/v2/builtin/gascharger"
-	"github.com/vechain/thor/v2/builtin/staker/reverts"
+	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/xenv"
@@ -191,10 +192,10 @@ func init() {
 					return nil, err
 				}
 				if !exists {
-					return nil, reverts.New("authority required in transition period")
+					return nil, staker.NewReverts("authority required in transition period")
 				}
 				if thor.Address(args.Endorser) != endorser {
-					return nil, reverts.New("endorser required")
+					return nil, staker.NewReverts("endorser required")
 				}
 			}
 
@@ -360,12 +361,11 @@ func init() {
 				lastPeriod = *delegation.LastIteration
 			}
 
-			locked := delegation.Started(validation) && !delegation.Ended(validation)
 			return []any{
 				delegation.Validation,
 				toWei(delegation.Stake),
 				delegation.Multiplier,
-				locked,
+				delegation.IsLocked(validation),
 				delegation.FirstIteration,
 				lastPeriod,
 			}, nil
@@ -454,8 +454,8 @@ func init() {
 					if err == nil {
 						return results
 					}
-					if reverts.IsRevertErr(err) {
-						env.Revert(err.Error())
+					if staker.IsRevertErr(err) {
+						env.Revert(fmt.Sprintf("staker: %s", err.Error()))
 						return nil
 					}
 					panic(err) // unexpected error

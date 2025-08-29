@@ -186,7 +186,7 @@ func Test_AddDelegator_ValidatorNotFound(t *testing.T) {
 	staker, _ := newStaker(t, 75, 101, true)
 
 	_, err := staker.AddDelegation(thor.Address{}, delegationStake(), 255)
-	assert.ErrorContains(t, err, "failed to get validator")
+	assert.ErrorContains(t, err, "validation does not exist")
 }
 
 func Test_AddDelegator_ManyValidators(t *testing.T) {
@@ -640,4 +640,53 @@ func TestStaker_DelegationExitingVET(t *testing.T) {
 	assert.Equal(t, uint64(0), total.TotalQueuedStake)
 	assert.Equal(t, uint64(0), total.TotalExitingStake)
 	assert.Equal(t, uint64(0), total.NextPeriodWeight)
+}
+
+func TestStaker_DelegationWithdrawPending(t *testing.T) {
+	staker, totalStake := newStaker(t, 1, 1, true)
+
+	firstActive, err := staker.FirstActive()
+	assert.NoError(t, err)
+
+	stake, weight, err := staker.LockedStake()
+	assert.NoError(t, err)
+	assert.Equal(t, totalStake, stake)
+	assert.Equal(t, totalStake, weight)
+	qStake, err := staker.QueuedStake()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(0), qStake)
+
+	validator, err := staker.GetValidation(*firstActive)
+	assert.NoError(t, err)
+	assert.Equal(t, validator.LockedVET, validator.Weight)
+
+	delStake := uint64(1000)
+	delegationID, err := staker.AddDelegation(*firstActive, delStake, 200)
+	assert.NoError(t, err)
+
+	delegation, validation, err := staker.GetDelegation(delegationID)
+	assert.NoError(t, err)
+	assert.False(t, delegation.Started(validation))
+
+	stake, weight, err = staker.LockedStake()
+	assert.NoError(t, err)
+	assert.Equal(t, totalStake, stake)
+	assert.Equal(t, totalStake, weight)
+	qStake, err = staker.QueuedStake()
+	assert.NoError(t, err)
+	assert.Equal(t, delStake, qStake)
+
+	withdrawnStake, err := staker.WithdrawDelegation(delegationID)
+	assert.NoError(t, err)
+	assert.Equal(t, delStake, withdrawnStake)
+
+	_, err = staker.Housekeep(thor.MediumStakingPeriod())
+	assert.NoError(t, err)
+
+	delegation, validation, err = staker.GetDelegation(delegationID)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(0), delegation.Stake)
+	assert.Nil(t, delegation.LastIteration)
+
+	assert.False(t, delegation.IsLocked(validation))
 }

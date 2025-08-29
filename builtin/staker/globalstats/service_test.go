@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
-	"github.com/vechain/thor/v2/builtin/staker/delta"
 	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
@@ -57,7 +56,7 @@ func TestService_ApplyRenewal(t *testing.T) {
 	// seed some queued for decrease
 	assert.NoError(t, svc.AddQueued(stakes.NewWeightedStakeWithMultiplier(500, 200))) // weight 1000
 
-	r := &delta.Renewal{
+	r := &Renewal{
 		LockedIncrease: stakes.NewWeightedStake(500, 1000),
 		LockedDecrease: stakes.NewWeightedStake(200, 400),
 		QueuedDecrease: stakes.NewWeightedStake(500, 1000),
@@ -78,7 +77,7 @@ func TestService_ApplyExit(t *testing.T) {
 	svc, _, _ := newSvc()
 
 	assert.NoError(t, svc.AddQueued(stakes.NewWeightedStakeWithMultiplier(1000, 200)))
-	assert.NoError(t, svc.ApplyRenewal(&delta.Renewal{
+	assert.NoError(t, svc.ApplyRenewal(&Renewal{
 		LockedIncrease: stakes.NewWeightedStake(1000, 2000),
 		LockedDecrease: stakes.NewWeightedStake(0, 0),
 		QueuedDecrease: stakes.NewWeightedStake(1000, 2000),
@@ -86,7 +85,7 @@ func TestService_ApplyExit(t *testing.T) {
 
 	assert.NoError(t, svc.AddQueued(stakes.NewWeightedStakeWithMultiplier(300, 200))) // weight 600
 
-	exit := &delta.Exit{
+	exit := &Exit{
 		ExitedTVL:      stakes.NewWeightedStake(400, 800),
 		QueuedDecrease: stakes.NewWeightedStake(300, 600),
 	}

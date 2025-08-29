@@ -183,6 +183,23 @@ func TestStaker(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
+	maxUint32 := uint32(math.MaxUint32)
+	nonExistentValidator, err := staker.GetValidation(thor.Address{})
+	require.NoError(t, err)
+	require.Equal(t, nonExistentValidator.Address, thor.Address{})
+	require.Equal(t, nonExistentValidator.Stake.String(), big.NewInt(0).String())
+	require.Equal(t, nonExistentValidator.Weight.String(), big.NewInt(0).String())
+	require.Equal(t, nonExistentValidator.QueuedStake.String(), big.NewInt(0).String())
+	require.Equal(t, nonExistentValidator.Status, StakerStatusUnknown)
+	require.Equal(t, nonExistentValidator.OfflineBlock, maxUint32)
+
+	nonExistentDelegator, err := staker.GetDelegation(big.NewInt(6))
+	require.NoError(t, err)
+	require.Equal(t, nonExistentDelegator.Validator, thor.Address{})
+	require.Equal(t, nonExistentDelegator.Stake.String(), big.NewInt(0).String())
+	require.Equal(t, nonExistentDelegator.Multiplier, uint8(0))
+	require.False(t, nonExistentDelegator.Locked)
+
 	queuedEvents, err := staker.FilterValidatorQueued(newRange(receipt), nil, logdb.ASC)
 	require.NoError(t, err)
 	require.Len(t, queuedEvents, 1)
@@ -266,6 +283,7 @@ func TestStaker(t *testing.T) {
 	// GetDelegationStake
 	delegationStake, err := staker.GetDelegation(delegationID)
 	require.NoError(t, err)
+
 	require.Equal(t, minStake, delegationStake.Stake)
 	require.Equal(t, uint8(100), delegationStake.Multiplier)
 	require.Equal(t, queuedID, delegationStake.Validator)

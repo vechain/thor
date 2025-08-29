@@ -11,7 +11,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
-	"github.com/vechain/thor/v2/builtin/staker/reverts"
+	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -53,11 +53,6 @@ func (s *Service) Add(
 	stake uint64,
 	multiplier uint8,
 ) (*big.Int, error) {
-	// ensure input is sane
-	if multiplier == 0 {
-		return nil, reverts.New("multiplier cannot be 0")
-	}
-
 	// update the global delegation counter
 	id, err := s.idCounter.Get()
 	if err != nil {
@@ -85,19 +80,12 @@ func (s *Service) Add(
 }
 
 func (s *Service) SignalExit(delegation *Delegation, delegationID *big.Int, valCurrentIteration uint32) error {
-	if delegation.LastIteration != nil {
-		return reverts.New("delegation is already disabled for auto-renew")
-	}
-	if delegation.Stake == 0 {
-		return reverts.New("delegation is not active")
-	}
-
 	delegation.LastIteration = &valCurrentIteration
 
 	return s.setDelegation(delegationID, delegation, false)
 }
 
-func (s *Service) Withdraw(del *Delegation, delegationID *big.Int) (uint64, error) {
+func (s *Service) Withdraw(del *Delegation, delegationID *big.Int, val *validation.Validation) (uint64, error) {
 	// ensure the pointers are copied, not referenced
 	withdrawableStake := del.Stake
 
