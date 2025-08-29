@@ -135,7 +135,7 @@ func (s *Staker) GetDelegation(
 		return nil, nil, err
 	}
 	if del.IsEmpty() {
-		return nil, nil, nil
+		return del, nil, nil
 	}
 	val, err := s.validationService.GetValidation(del.Validation)
 	if err != nil {
