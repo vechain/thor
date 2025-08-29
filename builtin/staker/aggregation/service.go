@@ -9,8 +9,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
-	"github.com/vechain/thor/v2/builtin/staker/delta"
-	"github.com/vechain/thor/v2/builtin/staker/stakes"
+	"github.com/vechain/thor/v2/builtin/staker/types"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -48,7 +47,7 @@ func (s *Service) setAggregation(validator thor.Address, agg *Aggregation, newVa
 
 // AddPendingVET adds a new delegation to the validator's pending pool.
 // Called when a delegator creates a new delegation.
-func (s *Service) AddPendingVET(validator thor.Address, stake *stakes.WeightedStake) error {
+func (s *Service) AddPendingVET(validator thor.Address, stake *types.WeightedStake) error {
 	agg, err := s.GetAggregation(validator)
 	if err != nil {
 		return err
@@ -61,7 +60,7 @@ func (s *Service) AddPendingVET(validator thor.Address, stake *stakes.WeightedSt
 
 // SubPendingVet removes VET from the validator's pending pool.
 // Called when a delegation is withdrawn before becoming active.
-func (s *Service) SubPendingVet(validator thor.Address, stake *stakes.WeightedStake) error {
+func (s *Service) SubPendingVet(validator thor.Address, stake *types.WeightedStake) error {
 	agg, err := s.GetAggregation(validator)
 	if err != nil {
 		return err
@@ -74,7 +73,7 @@ func (s *Service) SubPendingVet(validator thor.Address, stake *stakes.WeightedSt
 
 // Renew transitions the validator's delegations to the next staking period.
 // Called during staking period renewal process.
-func (s *Service) Renew(validator thor.Address) (*delta.Renewal, uint64, error) {
+func (s *Service) Renew(validator thor.Address) (*types.Renewal, uint64, error) {
 	agg, err := s.GetAggregation(validator)
 	if err != nil {
 		return nil, 0, err
@@ -91,7 +90,7 @@ func (s *Service) Renew(validator thor.Address) (*delta.Renewal, uint64, error) 
 
 // Exit moves all delegations to withdrawable state when validator exits.
 // Called when a validator is removed from the active set.
-func (s *Service) Exit(validator thor.Address) (*delta.Exit, error) {
+func (s *Service) Exit(validator thor.Address) (*types.Exit, error) {
 	agg, err := s.GetAggregation(validator)
 	if err != nil {
 		return nil, err
@@ -108,7 +107,7 @@ func (s *Service) Exit(validator thor.Address) (*delta.Exit, error) {
 
 // SignalExit marks locked delegations as exiting for the next period.
 // Called when a validator signals intent to exit but hasn't exited yet.
-func (s *Service) SignalExit(validator thor.Address, stake *stakes.WeightedStake) error {
+func (s *Service) SignalExit(validator thor.Address, stake *types.WeightedStake) error {
 	agg, err := s.GetAggregation(validator)
 	if err != nil {
 		return err

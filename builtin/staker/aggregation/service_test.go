@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
-	"github.com/vechain/thor/v2/builtin/staker/stakes"
+	"github.com/vechain/thor/v2/builtin/staker/types"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -48,7 +48,7 @@ func TestService_AddAndSub_Pending(t *testing.T) {
 	svc, _, _ := newSvc()
 
 	v := thor.BytesToAddress([]byte("v"))
-	ws := stakes.NewWeightedStakeWithMultiplier(1000, 200)
+	ws := types.NewWeightedStakeWithMultiplier(1000, 200)
 
 	assert.NoError(t, svc.AddPendingVET(v, ws))
 
@@ -70,7 +70,7 @@ func TestService_Renew(t *testing.T) {
 	svc, _, _ := newSvc()
 	v := thor.BytesToAddress([]byte("v"))
 
-	wsAdd := stakes.NewWeightedStakeWithMultiplier(3000, 200)
+	wsAdd := types.NewWeightedStakeWithMultiplier(3000, 200)
 	assert.NoError(t, svc.AddPendingVET(v, wsAdd))
 
 	renew1, _, err := svc.Renew(v)
@@ -78,9 +78,9 @@ func TestService_Renew(t *testing.T) {
 	assert.Equal(t, uint64(3000), renew1.LockedIncrease.VET)
 	assert.Equal(t, uint64(6000), renew1.LockedIncrease.Weight)
 
-	assert.NoError(t, svc.SignalExit(v, stakes.NewWeightedStakeWithMultiplier(uint64(1000), 200)))
+	assert.NoError(t, svc.SignalExit(v, types.NewWeightedStakeWithMultiplier(uint64(1000), 200)))
 
-	assert.NoError(t, svc.AddPendingVET(v, stakes.NewWeightedStakeWithMultiplier(500, 200)))
+	assert.NoError(t, svc.AddPendingVET(v, types.NewWeightedStakeWithMultiplier(500, 200)))
 
 	renew2, _, err := svc.Renew(v)
 	assert.NoError(t, err)
@@ -104,11 +104,11 @@ func TestService_Exit(t *testing.T) {
 	svc, _, _ := newSvc()
 	v := thor.BytesToAddress([]byte("v"))
 
-	assert.NoError(t, svc.AddPendingVET(v, stakes.NewWeightedStakeWithMultiplier(uint64(2000), 200)))
+	assert.NoError(t, svc.AddPendingVET(v, types.NewWeightedStakeWithMultiplier(uint64(2000), 200)))
 	_, _, err := svc.Renew(v)
 	assert.NoError(t, err)
 
-	assert.NoError(t, svc.AddPendingVET(v, stakes.NewWeightedStakeWithMultiplier(uint64(800), 200)))
+	assert.NoError(t, svc.AddPendingVET(v, types.NewWeightedStakeWithMultiplier(uint64(800), 200)))
 
 	exit, err := svc.Exit(v)
 	assert.NoError(t, err)
@@ -126,7 +126,7 @@ func TestService_SignalExit(t *testing.T) {
 	svc, _, _ := newSvc()
 	v := thor.BytesToAddress([]byte("v"))
 
-	ws := stakes.NewWeightedStakeWithMultiplier(uint64(1500), 200) // weight 3000
+	ws := types.NewWeightedStakeWithMultiplier(uint64(1500), 200) // weight 3000
 	assert.NoError(t, svc.SignalExit(v, ws))
 
 	agg, err := svc.GetAggregation(v)
@@ -149,7 +149,7 @@ func TestService_AddPendingVET_ErrorOnGet(t *testing.T) {
 	v := thor.BytesToAddress([]byte("v"))
 	poisonMapping(st, contract, v)
 
-	err := svc.AddPendingVET(v, stakes.NewWeightedStakeWithMultiplier(uint64(1000), 100))
+	err := svc.AddPendingVET(v, types.NewWeightedStakeWithMultiplier(uint64(1000), 100))
 	assert.ErrorContains(t, err, "failed to get validator aggregation")
 }
 
@@ -158,7 +158,7 @@ func TestService_SubPendingVet_ErrorOnGet(t *testing.T) {
 	v := thor.BytesToAddress([]byte("v"))
 	poisonMapping(st, contract, v)
 
-	err := svc.SubPendingVet(v, stakes.NewWeightedStakeWithMultiplier(uint64(1000), 100))
+	err := svc.SubPendingVet(v, types.NewWeightedStakeWithMultiplier(uint64(1000), 100))
 	assert.ErrorContains(t, err, "failed to get validator aggregation")
 }
 
@@ -185,6 +185,6 @@ func TestService_SignalExit_ErrorOnGet(t *testing.T) {
 	v := thor.BytesToAddress([]byte("v"))
 	poisonMapping(st, contract, v)
 
-	err := svc.SignalExit(v, stakes.NewWeightedStakeWithMultiplier(uint64(1000), 100))
+	err := svc.SignalExit(v, types.NewWeightedStakeWithMultiplier(uint64(1000), 100))
 	assert.ErrorContains(t, err, "failed to get validator aggregation")
 }

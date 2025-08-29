@@ -12,9 +12,8 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
-	"github.com/vechain/thor/v2/builtin/staker/delta"
 	"github.com/vechain/thor/v2/builtin/staker/linkedlist"
-	"github.com/vechain/thor/v2/builtin/staker/stakes"
+	"github.com/vechain/thor/v2/builtin/staker/types"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -302,7 +301,7 @@ func (s *Service) NextToActivate(maxLeaderGroupSize *big.Int) (*thor.Address, er
 }
 
 // ExitValidator removes the validator from the active list and puts it in cooldown.
-func (s *Service) ExitValidator(validator thor.Address) (*delta.Exit, error) {
+func (s *Service) ExitValidator(validator thor.Address) (*types.Exit, error) {
 	entry, err := s.GetValidation(validator)
 	if err != nil {
 		return nil, err
@@ -367,8 +366,8 @@ func (s *Service) GetDelegatorRewards(validator thor.Address, stakingPeriod uint
 func (s *Service) ActivateValidator(
 	validationID thor.Address,
 	currentBlock uint32,
-	aggRenew *delta.Renewal,
-) (*delta.Renewal, error) {
+	aggRenew *types.Renewal,
+) (*types.Renewal, error) {
 	val, err := s.GetExistingValidation(validationID)
 	if err != nil {
 		return nil, err
@@ -381,7 +380,7 @@ func (s *Service) ActivateValidator(
 	}
 
 	// queued stake always use the initial multiplier
-	queuedDecrease := stakes.NewWeightedStakeWithMultiplier(val.QueuedVET, Multiplier)
+	queuedDecrease := types.NewWeightedStakeWithMultiplier(val.QueuedVET, Multiplier)
 
 	// QueuedVET is now locked
 	val.LockedVET = val.QueuedVET
@@ -393,7 +392,7 @@ func (s *Service) ActivateValidator(
 		// if validator has delegations, multiplier is 200%
 		mul = MultiplierWithDelegations
 	}
-	lockedIncrease := stakes.NewWeightedStakeWithMultiplier(val.LockedVET, mul)
+	lockedIncrease := types.NewWeightedStakeWithMultiplier(val.LockedVET, mul)
 
 	// attach all delegation's weight
 	val.Weight = lockedIncrease.Weight + aggRenew.LockedIncrease.Weight - aggRenew.LockedDecrease.Weight
@@ -413,9 +412,9 @@ func (s *Service) ActivateValidator(
 	}
 
 	// Return renewal that only representing the state changes of this validator
-	validatorRenewal := &delta.Renewal{
+	validatorRenewal := &types.Renewal{
 		LockedIncrease: lockedIncrease,
-		LockedDecrease: stakes.NewWeightedStake(0, 0), // New validator does not have locked decrease
+		LockedDecrease: types.NewWeightedStake(0, 0), // New validator does not have locked decrease
 		QueuedDecrease: queuedDecrease,
 	}
 
@@ -437,7 +436,7 @@ func (s *Service) UpdateOfflineBlock(validator thor.Address, block uint32, onlin
 	return s.repo.setValidation(validator, validation, false)
 }
 
-func (s *Service) Renew(validator thor.Address, delegationWeight uint64) (*delta.Renewal, error) {
+func (s *Service) Renew(validator thor.Address, delegationWeight uint64) (*types.Renewal, error) {
 	validation, err := s.GetExistingValidation(validator)
 	if err != nil {
 		return nil, err

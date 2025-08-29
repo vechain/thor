@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package reverts
+package types
 
 import (
 	"fmt"
@@ -14,7 +14,7 @@ import (
 )
 
 func Test_Reverts(t *testing.T) {
-	revert := New("test")
+	revert := NewReverts("test")
 	assert.Equal(t, "test", revert.message)
 	assert.Equal(t, revert.Error(), revert.message)
 

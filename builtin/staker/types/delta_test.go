@@ -2,14 +2,12 @@
 //
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
-package delta
+package types
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/vechain/thor/v2/builtin/staker/stakes"
 )
 
 func TestNewRenewal_Defaults(t *testing.T) {
@@ -22,14 +20,14 @@ func TestNewRenewal_Defaults(t *testing.T) {
 
 func TestRenewal_Add(t *testing.T) {
 	base := &Renewal{
-		LockedIncrease: stakes.NewWeightedStake(10, 20),
-		LockedDecrease: stakes.NewWeightedStake(30, 40),
-		QueuedDecrease: stakes.NewWeightedStake(50, 60),
+		LockedIncrease: NewWeightedStake(10, 20),
+		LockedDecrease: NewWeightedStake(30, 40),
+		QueuedDecrease: NewWeightedStake(50, 60),
 	}
 	inc := &Renewal{
-		LockedIncrease: stakes.NewWeightedStake(1, 2),
-		LockedDecrease: stakes.NewWeightedStake(3, 4),
-		QueuedDecrease: stakes.NewWeightedStake(1, 2),
+		LockedIncrease: NewWeightedStake(1, 2),
+		LockedDecrease: NewWeightedStake(3, 4),
+		QueuedDecrease: NewWeightedStake(1, 2),
 	}
 
 	got := base.Add(inc)
@@ -44,8 +42,8 @@ func TestRenewal_Add(t *testing.T) {
 
 func TestRenewal_Add_Nil(t *testing.T) {
 	base := &Renewal{
-		LockedIncrease: stakes.NewWeightedStake(5, 6),
-		LockedDecrease: stakes.NewWeightedStake(7, 8),
+		LockedIncrease: NewWeightedStake(5, 6),
+		LockedDecrease: NewWeightedStake(7, 8),
 	}
 	got := base.Add(nil)
 	assert.Same(t, base, got)
@@ -57,12 +55,12 @@ func TestRenewal_Add_Nil(t *testing.T) {
 
 func TestExit_Add(t *testing.T) {
 	base := &Exit{
-		ExitedTVL:      stakes.NewWeightedStake(100, 200),
-		QueuedDecrease: stakes.NewWeightedStake(300, 400),
+		ExitedTVL:      NewWeightedStake(100, 200),
+		QueuedDecrease: NewWeightedStake(300, 400),
 	}
 	inc := &Exit{
-		ExitedTVL:      stakes.NewWeightedStake(1, 2),
-		QueuedDecrease: stakes.NewWeightedStake(3, 4),
+		ExitedTVL:      NewWeightedStake(1, 2),
+		QueuedDecrease: NewWeightedStake(3, 4),
 	}
 
 	got := base.Add(inc)
@@ -75,8 +73,8 @@ func TestExit_Add(t *testing.T) {
 
 func TestExit_Add_Nil(t *testing.T) {
 	base := &Exit{
-		ExitedTVL:      stakes.NewWeightedStake(10, 20),
-		QueuedDecrease: stakes.NewWeightedStake(30, 40),
+		ExitedTVL:      NewWeightedStake(10, 20),
+		QueuedDecrease: NewWeightedStake(30, 40),
 	}
 	got := base.Add(nil)
 	assert.Same(t, base, got)

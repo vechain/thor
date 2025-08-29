@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package reverts
+package types
 
 import (
 	"errors"
@@ -13,7 +13,7 @@ type ErrRevert struct {
 	message string
 }
 
-func New(message string) *ErrRevert {
+func NewReverts(message string) *ErrRevert {
 	return &ErrRevert{
 		message: message,
 	}
@@ -24,9 +24,6 @@ func (e *ErrRevert) Error() string {
 }
 
 func IsRevertErr(err any) bool {
-	if err == nil {
-		return false
-	}
 	e, ok := err.(error)
 	if !ok {
 		return false

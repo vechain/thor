@@ -6,8 +6,7 @@
 package aggregation
 
 import (
-	"github.com/vechain/thor/v2/builtin/staker/delta"
-	"github.com/vechain/thor/v2/builtin/staker/stakes"
+	"github.com/vechain/thor/v2/builtin/staker/types"
 )
 
 // Aggregation represents the total amount of VET locked for a given validation's delegations.
@@ -54,10 +53,10 @@ func (a *Aggregation) NextPeriodTVL() uint64 {
 // 2. Remove ExitingVET from LockedVET
 // 3. Move ExitingVET to WithdrawableVET
 // return a delta object
-func (a *Aggregation) renew() *delta.Renewal {
-	lockedIncrease := stakes.NewWeightedStake(a.PendingVET, a.PendingWeight)
-	lockedDecrease := stakes.NewWeightedStake(a.ExitingVET, a.ExitingWeight)
-	queuedDecrease := stakes.NewWeightedStake(a.PendingVET, a.PendingWeight)
+func (a *Aggregation) renew() *types.Renewal {
+	lockedIncrease := types.NewWeightedStake(a.PendingVET, a.PendingWeight)
+	lockedDecrease := types.NewWeightedStake(a.ExitingVET, a.ExitingWeight)
+	queuedDecrease := types.NewWeightedStake(a.PendingVET, a.PendingWeight)
 
 	// Move Pending => Locked
 	a.LockedVET += a.PendingVET
@@ -75,7 +74,7 @@ func (a *Aggregation) renew() *delta.Renewal {
 	a.ExitingVET = 0
 	a.ExitingWeight = 0
 
-	return &delta.Renewal{
+	return &types.Renewal{
 		LockedIncrease: lockedIncrease,
 		LockedDecrease: lockedDecrease,
 		QueuedDecrease: queuedDecrease,
@@ -84,11 +83,11 @@ func (a *Aggregation) renew() *delta.Renewal {
 
 // exit immediately moves all delegation funds to withdrawable state.
 // Called when the validator exits, making all delegations withdrawable regardless of their individual state.
-func (a *Aggregation) exit() *delta.Exit {
+func (a *Aggregation) exit() *types.Exit {
 	// Return these values to modify contract totals
-	exit := delta.Exit{
-		ExitedTVL:      stakes.NewWeightedStake(a.LockedVET, a.LockedWeight),
-		QueuedDecrease: stakes.NewWeightedStake(a.PendingVET, a.PendingWeight),
+	exit := types.Exit{
+		ExitedTVL:      types.NewWeightedStake(a.LockedVET, a.LockedWeight),
+		QueuedDecrease: types.NewWeightedStake(a.PendingVET, a.PendingWeight),
 	}
 
 	// Reset the aggregation

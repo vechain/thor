@@ -3,21 +3,19 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package delta
-
-import "github.com/vechain/thor/v2/builtin/staker/stakes"
+package types
 
 type Renewal struct {
-	LockedIncrease *stakes.WeightedStake
-	LockedDecrease *stakes.WeightedStake
-	QueuedDecrease *stakes.WeightedStake
+	LockedIncrease *WeightedStake
+	LockedDecrease *WeightedStake
+	QueuedDecrease *WeightedStake
 }
 
 func NewRenewal() *Renewal {
 	return &Renewal{
-		LockedIncrease: &stakes.WeightedStake{},
-		LockedDecrease: &stakes.WeightedStake{},
-		QueuedDecrease: &stakes.WeightedStake{},
+		LockedIncrease: &WeightedStake{},
+		LockedDecrease: &WeightedStake{},
+		QueuedDecrease: &WeightedStake{},
 	}
 }
 
@@ -34,8 +32,8 @@ func (r *Renewal) Add(other *Renewal) *Renewal {
 }
 
 type Exit struct {
-	ExitedTVL      *stakes.WeightedStake
-	QueuedDecrease *stakes.WeightedStake
+	ExitedTVL      *WeightedStake
+	QueuedDecrease *WeightedStake
 }
 
 // Add sets e to the sum of itself and other.

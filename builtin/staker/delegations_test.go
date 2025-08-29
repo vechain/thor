@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/v2/builtin/staker/delegation"
-	"github.com/vechain/thor/v2/builtin/staker/stakes"
+	"github.com/vechain/thor/v2/builtin/staker/types"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
@@ -145,7 +145,7 @@ func Test_AddDelegator(t *testing.T) {
 		IsStarted(false).
 		LastIteration(nil)
 
-	weightedStake := stakes.NewWeightedStakeWithMultiplier(stake, 255)
+	weightedStake := types.NewWeightedStakeWithMultiplier(stake, 255)
 
 	assertAggregation(t, staker, validatorID).
 		PendingVET(stake).

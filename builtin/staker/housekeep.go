@@ -10,7 +10,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/vechain/thor/v2/builtin/staker/delta"
+	"github.com/vechain/thor/v2/builtin/staker/types"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -177,7 +177,7 @@ func (s *Staker) computeActivationCount(hasValidatorExited bool) (int64, error) 
 func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 	logger.Info("applying epoch transition", "block", transition.Block)
 
-	accumulatedRenewal := delta.NewRenewal()
+	accumulatedRenewal := types.NewRenewal()
 	// Apply renewals
 	for _, validator := range transition.Renewals {
 		aggRenewal, delegationWeight, err := s.aggregationService.Renew(validator)

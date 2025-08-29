@@ -15,8 +15,7 @@ import (
 	"github.com/vechain/thor/v2/builtin/params"
 	"github.com/vechain/thor/v2/builtin/staker/aggregation"
 	"github.com/vechain/thor/v2/builtin/staker/delegation"
-	"github.com/vechain/thor/v2/builtin/staker/delta"
-	"github.com/vechain/thor/v2/builtin/staker/stakes"
+	"github.com/vechain/thor/v2/builtin/staker/types"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
@@ -540,10 +539,10 @@ func TestValidation_IncreaseStake_ActiveHasExitBlock(t *testing.T) {
 
 	assert.NoError(t, staker.validationService.Add(id, end, thor.MediumStakingPeriod(), 100))
 
-	staker.validationService.ActivateValidator(id, 0, &delta.Renewal{
-		LockedIncrease: stakes.NewWeightedStake(0, 0),
-		LockedDecrease: stakes.NewWeightedStake(0, 0),
-		QueuedDecrease: stakes.NewWeightedStake(0, 0),
+	staker.validationService.ActivateValidator(id, 0, &types.Renewal{
+		LockedIncrease: types.NewWeightedStake(0, 0),
+		LockedDecrease: types.NewWeightedStake(0, 0),
+		QueuedDecrease: types.NewWeightedStake(0, 0),
 	})
 
 	err := staker.SignalExit(id, end)
@@ -580,10 +579,10 @@ func TestValidation_DecreaseStake_StatusExit(t *testing.T) {
 
 	assert.NoError(t, staker.validationService.Add(id, end, thor.MediumStakingPeriod(), 100))
 
-	staker.validationService.ActivateValidator(id, 0, &delta.Renewal{
-		LockedIncrease: stakes.NewWeightedStake(0, 0),
-		LockedDecrease: stakes.NewWeightedStake(0, 0),
-		QueuedDecrease: stakes.NewWeightedStake(0, 0),
+	staker.validationService.ActivateValidator(id, 0, &types.Renewal{
+		LockedIncrease: types.NewWeightedStake(0, 0),
+		LockedDecrease: types.NewWeightedStake(0, 0),
+		QueuedDecrease: types.NewWeightedStake(0, 0),
 	})
 
 	err := staker.SignalExit(id, end)
@@ -601,10 +600,10 @@ func TestValidation_DecreaseStake_ActiveHasExitBlock(t *testing.T) {
 
 	assert.NoError(t, staker.validationService.Add(id, end, thor.MediumStakingPeriod(), 100))
 
-	staker.validationService.ActivateValidator(id, 0, &delta.Renewal{
-		LockedIncrease: stakes.NewWeightedStake(0, 0),
-		LockedDecrease: stakes.NewWeightedStake(0, 0),
-		QueuedDecrease: stakes.NewWeightedStake(0, 0),
+	staker.validationService.ActivateValidator(id, 0, &types.Renewal{
+		LockedIncrease: types.NewWeightedStake(0, 0),
+		LockedDecrease: types.NewWeightedStake(0, 0),
+		QueuedDecrease: types.NewWeightedStake(0, 0),
 	})
 
 	err := staker.SignalExit(id, end)
@@ -634,10 +633,10 @@ func TestValidation_DecreaseStake_ActiveSuccess(t *testing.T) {
 
 	assert.NoError(t, staker.validationService.Add(id, end, thor.MediumStakingPeriod(), MinStakeVET+100))
 
-	staker.validationService.ActivateValidator(id, 0, &delta.Renewal{
-		LockedIncrease: stakes.NewWeightedStake(0, 0),
-		LockedDecrease: stakes.NewWeightedStake(0, 0),
-		QueuedDecrease: stakes.NewWeightedStake(0, 0),
+	staker.validationService.ActivateValidator(id, 0, &types.Renewal{
+		LockedIncrease: types.NewWeightedStake(0, 0),
+		LockedDecrease: types.NewWeightedStake(0, 0),
+		QueuedDecrease: types.NewWeightedStake(0, 0),
 	})
 
 	err := staker.DecreaseStake(id, end, 100)
@@ -731,10 +730,10 @@ func TestDelegation_SignalExit(t *testing.T) {
 	id, err := staker.AddDelegation(v, 3, 100)
 	assert.NoError(t, err)
 
-	staker.validationService.ActivateValidator(v, 0, &delta.Renewal{
-		LockedIncrease: stakes.NewWeightedStake(0, 0),
-		LockedDecrease: stakes.NewWeightedStake(0, 0),
-		QueuedDecrease: stakes.NewWeightedStake(0, 0),
+	staker.validationService.ActivateValidator(v, 0, &types.Renewal{
+		LockedIncrease: types.NewWeightedStake(0, 0),
+		LockedDecrease: types.NewWeightedStake(0, 0),
+		QueuedDecrease: types.NewWeightedStake(0, 0),
 	})
 
 	_, _, err = staker.GetDelegation(id)

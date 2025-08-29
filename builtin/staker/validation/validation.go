@@ -7,8 +7,7 @@ package validation
 
 import (
 	"github.com/vechain/thor/v2/builtin/staker/aggregation"
-	"github.com/vechain/thor/v2/builtin/staker/delta"
-	"github.com/vechain/thor/v2/builtin/staker/stakes"
+	"github.com/vechain/thor/v2/builtin/staker/types"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -61,18 +60,18 @@ func (v *Validation) Totals(agg *aggregation.Aggregation) *Totals {
 		exitingVET = v.LockedVET + agg.LockedVET
 		exitingWeight = v.Weight
 	} else {
-		vExiting := stakes.NewWeightedStakeWithMultiplier(v.PendingUnlockVET, Multiplier)
+		vExiting := types.NewWeightedStakeWithMultiplier(v.PendingUnlockVET, Multiplier)
 		exitingVET = vExiting.VET + agg.ExitingVET
 		exitingWeight = vExiting.Weight + agg.ExitingWeight
 	}
 
 	multiplier := Multiplier
-	queued := stakes.NewWeightedStakeWithMultiplier(v.QueuedVET, multiplier)
-	validatorStake := stakes.NewWeightedStakeWithMultiplier(v.LockedVET, MultiplierWithDelegations)
+	queued := types.NewWeightedStakeWithMultiplier(v.QueuedVET, multiplier)
+	validatorStake := types.NewWeightedStakeWithMultiplier(v.LockedVET, MultiplierWithDelegations)
 	// if there is locked or pending delegations, multiplier should be 2
 	if agg.LockedVET > 0 || agg.PendingVET > 0 {
 		multiplier = MultiplierWithDelegations
-		queued = stakes.NewWeightedStakeWithMultiplier(v.QueuedVET, multiplier)
+		queued = types.NewWeightedStakeWithMultiplier(v.QueuedVET, multiplier)
 		// we are adding to queued weight missing portion
 		if validatorStake.Weight > v.Weight-agg.LockedWeight {
 			weightDiff := validatorStake.Weight - v.Weight
@@ -128,8 +127,8 @@ func (v *Validation) CurrentIteration() uint32 {
 // 3. Increase WithdrawableVET by PendingUnlockVET
 // 4. Set QueuedVET to 0
 // 5. Set PendingUnlockVET to 0
-func (v *Validation) renew(delegationWeight uint64) *delta.Renewal {
-	queuedDecrease := stakes.NewWeightedStakeWithMultiplier(v.QueuedVET, Multiplier)
+func (v *Validation) renew(delegationWeight uint64) *types.Renewal {
+	queuedDecrease := types.NewWeightedStakeWithMultiplier(v.QueuedVET, Multiplier)
 
 	var prev, after struct {
 		lockedVET  uint64
@@ -137,7 +136,7 @@ func (v *Validation) renew(delegationWeight uint64) *delta.Renewal {
 		multiplier uint8
 	}
 	prev.lockedVET = v.LockedVET
-	prev.valWeight = stakes.CalcWeight(v.LockedVET, v.multiplier())
+	prev.valWeight = types.NewWeightedStakeWithMultiplier(v.LockedVET, v.multiplier()).Weight
 
 	// in renew, the multiplier is based on the actual delegation weight
 	after.multiplier = Multiplier
@@ -146,10 +145,10 @@ func (v *Validation) renew(delegationWeight uint64) *delta.Renewal {
 	}
 
 	after.lockedVET = v.LockedVET + v.QueuedVET - v.PendingUnlockVET
-	after.valWeight = stakes.CalcWeight(after.lockedVET, after.multiplier)
+	after.valWeight = types.NewWeightedStakeWithMultiplier(after.lockedVET, after.multiplier).Weight
 
-	lockedIncrease := stakes.NewWeightedStake(0, 0)
-	lockedDecrease := stakes.NewWeightedStake(0, 0)
+	lockedIncrease := types.NewWeightedStake(0, 0)
+	lockedDecrease := types.NewWeightedStake(0, 0)
 
 	// calculate the locked stake change based on the validator's weight
 	if prev.valWeight < after.valWeight {
@@ -171,16 +170,16 @@ func (v *Validation) renew(delegationWeight uint64) *delta.Renewal {
 	v.QueuedVET = 0
 	v.PendingUnlockVET = 0
 
-	return &delta.Renewal{
+	return &types.Renewal{
 		LockedIncrease: lockedIncrease,
 		LockedDecrease: lockedDecrease,
 		QueuedDecrease: queuedDecrease,
 	}
 }
 
-func (v *Validation) exit() *delta.Exit {
-	ExitedTVL := stakes.NewWeightedStakeWithMultiplier(v.LockedVET, v.multiplier())  // use the acting multiplier for locked stake
-	QueuedDecrease := stakes.NewWeightedStakeWithMultiplier(v.QueuedVET, Multiplier) // queued weight is always initial weight
+func (v *Validation) exit() *types.Exit {
+	ExitedTVL := types.NewWeightedStakeWithMultiplier(v.LockedVET, v.multiplier())  // use the acting multiplier for locked stake
+	QueuedDecrease := types.NewWeightedStakeWithMultiplier(v.QueuedVET, Multiplier) // queued weight is always initial weight
 
 	v.Status = StatusExit
 	// move locked to cooldown
@@ -198,7 +197,7 @@ func (v *Validation) exit() *delta.Exit {
 	}
 
 	// We only return the change in the validation's TVL and weight
-	return &delta.Exit{
+	return &types.Exit{
 		ExitedTVL:      ExitedTVL,
 		QueuedDecrease: QueuedDecrease,
 	}
