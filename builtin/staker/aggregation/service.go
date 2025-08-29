@@ -9,7 +9,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
-	"github.com/vechain/thor/v2/builtin/staker/delta"
+	"github.com/vechain/thor/v2/builtin/staker/globalstats"
 	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -74,7 +74,7 @@ func (s *Service) SubPendingVet(validator thor.Address, stake *stakes.WeightedSt
 
 // Renew transitions the validator's delegations to the next staking period.
 // Called during staking period renewal process.
-func (s *Service) Renew(validator thor.Address) (*delta.Renewal, uint64, error) {
+func (s *Service) Renew(validator thor.Address) (*globalstats.Renewal, uint64, error) {
 	agg, err := s.GetAggregation(validator)
 	if err != nil {
 		return nil, 0, err
@@ -91,7 +91,7 @@ func (s *Service) Renew(validator thor.Address) (*delta.Renewal, uint64, error) 
 
 // Exit moves all delegations to withdrawable state when validator exits.
 // Called when a validator is removed from the active set.
-func (s *Service) Exit(validator thor.Address) (*delta.Exit, error) {
+func (s *Service) Exit(validator thor.Address) (*globalstats.Exit, error) {
 	agg, err := s.GetAggregation(validator)
 	if err != nil {
 		return nil, err

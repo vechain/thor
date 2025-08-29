@@ -33,7 +33,7 @@ linters:
           severity: warning
           disabled: false
           exclude:
-            - ""
+            - "builtin/staker/types/*"
   exclusions:
     generated: lax
     presets:

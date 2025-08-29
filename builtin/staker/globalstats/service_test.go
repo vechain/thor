@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
-	"github.com/vechain/thor/v2/builtin/staker/delta"
 	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
@@ -34,10 +33,9 @@ func newSvc() (*Service, thor.Address, *state.State) {
 func TestService_QueuedStake_Empty(t *testing.T) {
 	svc, _, _ := newSvc()
 
-	qVET, qW, err := svc.GetQueuedStake()
+	qVET, err := svc.GetQueuedStake()
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(0), qVET)
-	assert.Equal(t, uint64(0), qW)
 }
 
 func TestService_AddRemove_Queued(t *testing.T) {
@@ -47,10 +45,9 @@ func TestService_AddRemove_Queued(t *testing.T) {
 	assert.NoError(t, svc.AddQueued(st))
 
 	assert.NoError(t, svc.RemoveQueued(st))
-	qVET, qW, err := svc.GetQueuedStake()
+	qVET, err := svc.GetQueuedStake()
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(0), qVET)
-	assert.Equal(t, uint64(0), qW)
 }
 
 func TestService_ApplyRenewal(t *testing.T) {
@@ -59,7 +56,7 @@ func TestService_ApplyRenewal(t *testing.T) {
 	// seed some queued for decrease
 	assert.NoError(t, svc.AddQueued(stakes.NewWeightedStakeWithMultiplier(500, 200))) // weight 1000
 
-	r := &delta.Renewal{
+	r := &Renewal{
 		LockedIncrease: stakes.NewWeightedStake(500, 1000),
 		LockedDecrease: stakes.NewWeightedStake(200, 400),
 		QueuedDecrease: stakes.NewWeightedStake(500, 1000),
@@ -71,17 +68,16 @@ func TestService_ApplyRenewal(t *testing.T) {
 	assert.Equal(t, uint64(300), lockedV)
 	assert.Equal(t, uint64(600), lockedW)
 
-	qVET, qW, err := svc.GetQueuedStake()
+	qVET, err := svc.GetQueuedStake()
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(0), qVET)
-	assert.Equal(t, uint64(0), qW)
 }
 
 func TestService_ApplyExit(t *testing.T) {
 	svc, _, _ := newSvc()
 
 	assert.NoError(t, svc.AddQueued(stakes.NewWeightedStakeWithMultiplier(1000, 200)))
-	assert.NoError(t, svc.ApplyRenewal(&delta.Renewal{
+	assert.NoError(t, svc.ApplyRenewal(&Renewal{
 		LockedIncrease: stakes.NewWeightedStake(1000, 2000),
 		LockedDecrease: stakes.NewWeightedStake(0, 0),
 		QueuedDecrease: stakes.NewWeightedStake(1000, 2000),
@@ -89,7 +85,7 @@ func TestService_ApplyExit(t *testing.T) {
 
 	assert.NoError(t, svc.AddQueued(stakes.NewWeightedStakeWithMultiplier(300, 200))) // weight 600
 
-	exit := &delta.Exit{
+	exit := &Exit{
 		ExitedTVL:      stakes.NewWeightedStake(400, 800),
 		QueuedDecrease: stakes.NewWeightedStake(300, 600),
 	}
@@ -100,17 +96,16 @@ func TestService_ApplyExit(t *testing.T) {
 	assert.Equal(t, uint64(600), lockedV)  // 1000 - 400
 	assert.Equal(t, uint64(1200), lockedW) // 2000 - 800
 
-	qVET, qW, err := svc.GetQueuedStake()
+	qVET, err := svc.GetQueuedStake()
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(0), qVET)
-	assert.Equal(t, uint64(0), qW)
 }
 
 func TestService_QueuedStake_GetQueuedError(t *testing.T) {
 	svc, addr, st := newSvc()
 	poisonUintSlot(st, addr, slotQueued)
 
-	_, _, err := svc.GetQueuedStake()
+	_, err := svc.GetQueuedStake()
 	assert.Error(t, err)
 }
 

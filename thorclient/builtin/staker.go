@@ -117,14 +117,12 @@ func (s *Staker) TotalStake() (*big.Int, *big.Int, error) {
 	return *(out[0].(**big.Int)), *(out[1].(**big.Int)), nil
 }
 
-func (s *Staker) QueuedStake() (*big.Int, *big.Int, error) {
-	out := [2]any{}
-	out[0] = new(*big.Int)
-	out[1] = new(*big.Int)
+func (s *Staker) QueuedStake() (*big.Int, error) {
+	out := new(*big.Int)
 	if err := s.contract.Method("queuedStake").Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return *(out[0].(**big.Int)), *(out[1].(**big.Int)), nil
+	return *out, nil
 }
 
 type Validation struct {
@@ -296,32 +294,29 @@ func (s *Staker) GetDelegationPeriodDetails(delegationID *big.Int) (*DelegationP
 }
 
 type ValidationTotals struct {
-	TotalLockedStake   *big.Int
-	TotalLockedWeight  *big.Int
-	TotalQueuedStake   *big.Int
-	TotalQueuedWeight  *big.Int
-	TotalExitingStake  *big.Int
-	TotalExitingWeight *big.Int
+	TotalLockedStake  *big.Int
+	TotalLockedWeight *big.Int
+	TotalQueuedStake  *big.Int
+	TotalExitingStake *big.Int
+	NextPeriodWeight  *big.Int
 }
 
 func (s *Staker) GetValidationTotals(node thor.Address) (*ValidationTotals, error) {
-	out := make([]any, 6)
+	out := make([]any, 5)
 	out[0] = new(*big.Int)
 	out[1] = new(*big.Int)
 	out[2] = new(*big.Int)
 	out[3] = new(*big.Int)
 	out[4] = new(*big.Int)
-	out[5] = new(*big.Int)
 	if err := s.contract.Method("getValidationTotals", node).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 	validationTotals := &ValidationTotals{
-		TotalLockedStake:   *(out[0].(**big.Int)),
-		TotalLockedWeight:  *(out[1].(**big.Int)),
-		TotalQueuedStake:   *(out[2].(**big.Int)),
-		TotalQueuedWeight:  *(out[3].(**big.Int)),
-		TotalExitingStake:  *(out[4].(**big.Int)),
-		TotalExitingWeight: *(out[5].(**big.Int)),
+		TotalLockedStake:  *(out[0].(**big.Int)),
+		TotalLockedWeight: *(out[1].(**big.Int)),
+		TotalQueuedStake:  *(out[2].(**big.Int)),
+		TotalExitingStake: *(out[3].(**big.Int)),
+		NextPeriodWeight:  *(out[4].(**big.Int)),
 	}
 
 	return validationTotals, nil

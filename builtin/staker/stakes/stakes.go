@@ -10,14 +10,14 @@ type WeightedStake struct {
 	Weight uint64 // The weight of the stake, calculated as (stake * multiplier / 100%)
 }
 
-func CalcWeight(vet uint64, multiplier uint8) uint64 {
+func calcWeight(vet uint64, multiplier uint8) uint64 {
 	return vet * uint64(multiplier) / 100
 }
 
 func NewWeightedStakeWithMultiplier(vet uint64, multiplier uint8) *WeightedStake {
 	return &WeightedStake{
 		VET:    vet,
-		Weight: CalcWeight(vet, multiplier),
+		Weight: calcWeight(vet, multiplier),
 	}
 }
 
@@ -36,4 +36,8 @@ func (s *WeightedStake) Add(new *WeightedStake) {
 func (s *WeightedStake) Sub(new *WeightedStake) {
 	s.VET -= new.VET
 	s.Weight -= new.Weight
+}
+
+func (s *WeightedStake) AddWeight(weight uint64) {
+	s.Weight += weight
 }

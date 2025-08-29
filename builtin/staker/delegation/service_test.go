@@ -8,6 +8,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/vechain/thor/v2/builtin/staker/validation"
+
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 
@@ -51,13 +53,6 @@ func TestService_Add_And_GetDelegation(t *testing.T) {
 	assert.Nil(t, del.LastIteration)
 }
 
-func TestService_Add_InputValidation(t *testing.T) {
-	svc, _, _ := newSvc()
-
-	_, err := svc.Add(thor.Address{}, 1, 1, 0)
-	assert.ErrorContains(t, err, "multiplier cannot be 0")
-}
-
 func TestService_SetDelegation_RoundTrip(t *testing.T) {
 	svc, _, _ := newSvc()
 	v := thor.BytesToAddress([]byte("v"))
@@ -77,38 +72,6 @@ func TestService_SetDelegation_RoundTrip(t *testing.T) {
 	assert.Equal(t, uint32(5), got.FirstIteration)
 }
 
-func TestService_SignalExit(t *testing.T) {
-	svc, _, _ := newSvc()
-	v := thor.BytesToAddress([]byte("v"))
-	id, err := svc.Add(v, 3, 1000, 10)
-	assert.NoError(t, err)
-
-	del, err := svc.GetDelegation(id)
-	assert.NoError(t, err)
-
-	assert.NoError(t, svc.SignalExit(del, id, 7))
-
-	del2, err := svc.GetDelegation(id)
-	assert.NoError(t, err)
-	assert.NotNil(t, del2.LastIteration)
-	assert.Equal(t, uint32(7), *del2.LastIteration)
-
-	assert.ErrorContains(t, svc.SignalExit(del2, id, 8), "already disabled")
-}
-
-func TestService_SignalExit_NotActive(t *testing.T) {
-	svc, _, _ := newSvc()
-	v := thor.BytesToAddress([]byte("v"))
-	id, err := svc.Add(v, 1, 100, 10)
-	assert.NoError(t, err)
-
-	del, err := svc.GetDelegation(id)
-	assert.NoError(t, err)
-
-	del.Stake = 0
-	assert.ErrorContains(t, svc.SignalExit(del, id, 5), "delegation is not active")
-}
-
 func TestService_Withdraw(t *testing.T) {
 	svc, _, _ := newSvc()
 	v := thor.BytesToAddress([]byte("v"))
@@ -117,8 +80,24 @@ func TestService_Withdraw(t *testing.T) {
 
 	del, err := svc.GetDelegation(id)
 	assert.NoError(t, err)
+	val := validation.Validation{
+		Endorser:           thor.Address{},
+		Beneficiary:        nil,
+		Period:             0,
+		CompleteIterations: 0,
+		Status:             0,
+		StartBlock:         0,
+		ExitBlock:          nil,
+		OfflineBlock:       nil,
+		LockedVET:          0,
+		PendingUnlockVET:   0,
+		QueuedVET:          0,
+		CooldownVET:        0,
+		WithdrawableVET:    0,
+		Weight:             0,
+	}
 
-	withdraw, err := svc.Withdraw(del, id)
+	withdraw, err := svc.Withdraw(del, id, &val)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(12345), withdraw)
 

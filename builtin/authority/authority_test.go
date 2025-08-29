@@ -33,6 +33,17 @@ func TestAuthority(t *testing.T) {
 	st.SetBalance(p3, big.NewInt(30))
 
 	aut := New(thor.BytesToAddress([]byte("aut")), st)
+
+	checker := func(amount *big.Int) BalanceChecker {
+		return func(master, endorser thor.Address) (bool, error) {
+			bal, err := st.GetBalance(endorser)
+			if err != nil {
+				return false, err
+			}
+			return bal.Cmp(amount) >= 0, nil
+		}
+	}
+
 	tests := []struct {
 		ret      any
 		expected any
@@ -41,16 +52,16 @@ func TestAuthority(t *testing.T) {
 		{M(aut.Get(p1)), M(true, p1, thor.Bytes32{}, true, nil)},
 		{M(aut.Add(p2, p2, thor.Bytes32{})), M(true, nil)},
 		{M(aut.Add(p3, p3, thor.Bytes32{})), M(true, nil)},
-		{M(aut.Candidates(big.NewInt(10), thor.InitialMaxBlockProposers)), M(
+		{M(aut.Candidates(checker(big.NewInt(10)), thor.InitialMaxBlockProposers)), M(
 			[]*Candidate{{p1, p1, thor.Bytes32{}, true}, {p2, p2, thor.Bytes32{}, true}, {p3, p3, thor.Bytes32{}, true}}, nil,
 		)},
-		{M(aut.Candidates(big.NewInt(20), thor.InitialMaxBlockProposers)), M(
+		{M(aut.Candidates(checker(big.NewInt(20)), thor.InitialMaxBlockProposers)), M(
 			[]*Candidate{{p2, p2, thor.Bytes32{}, true}, {p3, p3, thor.Bytes32{}, true}}, nil,
 		)},
-		{M(aut.Candidates(big.NewInt(30), thor.InitialMaxBlockProposers)), M(
+		{M(aut.Candidates(checker(big.NewInt(30)), thor.InitialMaxBlockProposers)), M(
 			[]*Candidate{{p3, p3, thor.Bytes32{}, true}}, nil,
 		)},
-		{M(aut.Candidates(big.NewInt(10), 2)), M(
+		{M(aut.Candidates(checker(big.NewInt(10)), 2)), M(
 			[]*Candidate{{p1, p1, thor.Bytes32{}, true}, {p2, p2, thor.Bytes32{}, true}}, nil,
 		)},
 		{M(aut.Get(p1)), M(true, p1, thor.Bytes32{}, true, nil)},
@@ -60,7 +71,7 @@ func TestAuthority(t *testing.T) {
 		{M(aut.Get(p1)), M(true, p1, thor.Bytes32{}, true, nil)},
 		{M(aut.Revoke(p1)), M(true, nil)},
 		{M(aut.Get(p1)), M(false, p1, thor.Bytes32{}, false, nil)},
-		{M(aut.Candidates(&big.Int{}, thor.InitialMaxBlockProposers)), M(
+		{M(aut.Candidates(checker(&big.Int{}), thor.InitialMaxBlockProposers)), M(
 			[]*Candidate{{p2, p2, thor.Bytes32{}, true}, {p3, p3, thor.Bytes32{}, true}}, nil,
 		)},
 		{

@@ -73,6 +73,7 @@ func TestScheduler_Distribution(t *testing.T) {
 	// e.g., 1 million usually gets all tolerances down to about 2% (i.e., 0.02)
 	iterations := 100_000
 	type stakeFunc func(index int, acc thor.Address) uint64
+	rnd := rand.New(rand.NewSource(412342)) //nolint:gosec
 
 	testCases := []struct {
 		name      string
@@ -106,7 +107,7 @@ func TestScheduler_Distribution(t *testing.T) {
 				diff := maxWeight - minWeight
 
 				// Generate random number in [0, diff)
-				n := rand.Intn(int(diff)) //nolint:gosec
+				n := rnd.Intn(int(diff)) //nolint:gosec
 				// Add min to shift range to [min, max)
 				randomValue := minWeight + uint64(n)
 

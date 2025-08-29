@@ -34,9 +34,9 @@ contract Staker {
     }
 
     /**
-     * @dev queuedStake returns all stakes and weight by queued validators.
+     * @dev queuedStake returns all stakes by queued validators.
      */
-    function queuedStake() public view returns (uint256 queuedStake, uint256 queuedWeight) {
+    function queuedStake() public view returns (uint256 queuedStake) {
         return StakerNative(address(this)).native_queuedStake();
     }
 
@@ -257,9 +257,8 @@ contract Staker {
             uint256 lockedVET,
             uint256 lockedWeight,
             uint256 queuedVET,
-            uint256 queuedWeight,
             uint256 exitingVET,
-            uint256 exitingWeight
+            uint256 nextPeriodWeight
         )
     {
         return StakerNative(address(this)).native_getValidationTotals(validator);
@@ -350,7 +349,7 @@ interface StakerNative {
     // Read methods
     function native_totalStake() external pure returns (uint256, uint256);
 
-    function native_queuedStake() external pure returns (uint256, uint256);
+    function native_queuedStake() external pure returns (uint256);
 
     function native_getDelegation(
         uint256 delegationID
@@ -380,7 +379,7 @@ interface StakerNative {
 
     function native_getValidationTotals(
         address validator
-    ) external view returns (uint256, uint256, uint256, uint256, uint256, uint256);
+    ) external view returns (uint256, uint256, uint256, uint256, uint256);
 
     function native_getValidationsNum() external view returns (uint256, uint256);
 

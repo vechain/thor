@@ -6,10 +6,9 @@
 package validation
 
 import (
-	"github.com/vechain/thor/v2/builtin/staker/stakes"
-
 	"github.com/vechain/thor/v2/builtin/staker/aggregation"
-	"github.com/vechain/thor/v2/builtin/staker/delta"
+	"github.com/vechain/thor/v2/builtin/staker/globalstats"
+	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -47,12 +46,11 @@ type Validation struct {
 }
 
 type Totals struct {
-	TotalLockedStake   uint64 // total locked stake in validation (current period), validation's stake + all delegators stake
-	TotalLockedWeight  uint64 // total locked weight in validation (current period), validation's weight + all delegators weight
-	TotalQueuedStake   uint64 // total queued stake in validation (next period), validation's stake + all delegators stake
-	TotalQueuedWeight  uint64 // total queued weight in validation (next period), validation's
-	TotalExitingStake  uint64 // total exiting stake in validation (next period), validation's stake + all delegators stake
-	TotalExitingWeight uint64 // total exiting weight in validation (next period),
+	TotalLockedStake  uint64 // total locked stake in validation (current period), validation's stake + all delegators stake
+	TotalLockedWeight uint64 // total locked weight in validation (current period), validation's weight + all delegators weight
+	TotalQueuedStake  uint64 // total queued stake in validation (next period), validation's stake + all delegators stake
+	TotalExitingStake uint64 // total exiting stake in validation (next period), validation's stake + all delegators stake
+	NextPeriodWeight  uint64 // total weight which will be effective (next period), validations weight + all delegators weight
 }
 
 func (v *Validation) Totals(agg *aggregation.Aggregation) *Totals {
@@ -68,16 +66,32 @@ func (v *Validation) Totals(agg *aggregation.Aggregation) *Totals {
 		exitingWeight = vExiting.Weight + agg.ExitingWeight
 	}
 
-	queued := stakes.NewWeightedStakeWithMultiplier(v.QueuedVET, Multiplier)
+	multiplier := Multiplier
+	queued := stakes.NewWeightedStakeWithMultiplier(v.QueuedVET, multiplier)
+	validatorStake := stakes.NewWeightedStakeWithMultiplier(v.LockedVET, MultiplierWithDelegations)
+	// if there is locked or pending delegations, multiplier should be 2
+	if agg.LockedVET > 0 || agg.PendingVET > 0 {
+		multiplier = MultiplierWithDelegations
+		queued = stakes.NewWeightedStakeWithMultiplier(v.QueuedVET, multiplier)
+		// we are adding to queued weight missing portion
+		if validatorStake.Weight > v.Weight-agg.LockedWeight {
+			weightDiff := validatorStake.Weight - v.Weight
+			queued.AddWeight(weightDiff)
+		}
+	}
+
+	// if the last delegation is exiting, we need to re-set multiplier to 1 so we are exiting locked VET
+	if agg.LockedVET == agg.ExitingVET && validatorStake.Weight+exitingWeight <= v.Weight {
+		exitingWeight = exitingWeight + v.LockedVET
+	}
 
 	return &Totals{
 		// Delegation totals can be calculated by subtracting validators stakes / weights from the global totals.
-		TotalLockedStake:   v.LockedVET + agg.LockedVET,
-		TotalLockedWeight:  v.Weight,
-		TotalQueuedStake:   queued.VET + agg.PendingVET,
-		TotalQueuedWeight:  queued.Weight + agg.PendingWeight,
-		TotalExitingStake:  exitingVET,
-		TotalExitingWeight: exitingWeight,
+		TotalLockedStake:  v.LockedVET + agg.LockedVET,
+		TotalLockedWeight: v.Weight,
+		TotalQueuedStake:  queued.VET + agg.PendingVET,
+		TotalExitingStake: exitingVET,
+		NextPeriodWeight:  v.Weight + queued.Weight + agg.PendingWeight - exitingWeight,
 	}
 }
 
@@ -114,7 +128,7 @@ func (v *Validation) CurrentIteration() uint32 {
 // 3. Increase WithdrawableVET by PendingUnlockVET
 // 4. Set QueuedVET to 0
 // 5. Set PendingUnlockVET to 0
-func (v *Validation) renew(delegationWeight uint64) *delta.Renewal {
+func (v *Validation) renew(delegationWeight uint64) *globalstats.Renewal {
 	queuedDecrease := stakes.NewWeightedStakeWithMultiplier(v.QueuedVET, Multiplier)
 
 	var prev, after struct {
@@ -123,7 +137,7 @@ func (v *Validation) renew(delegationWeight uint64) *delta.Renewal {
 		multiplier uint8
 	}
 	prev.lockedVET = v.LockedVET
-	prev.valWeight = stakes.CalcWeight(v.LockedVET, v.multiplier())
+	prev.valWeight = stakes.NewWeightedStakeWithMultiplier(v.LockedVET, v.multiplier()).Weight
 
 	// in renew, the multiplier is based on the actual delegation weight
 	after.multiplier = Multiplier
@@ -132,7 +146,7 @@ func (v *Validation) renew(delegationWeight uint64) *delta.Renewal {
 	}
 
 	after.lockedVET = v.LockedVET + v.QueuedVET - v.PendingUnlockVET
-	after.valWeight = stakes.CalcWeight(after.lockedVET, after.multiplier)
+	after.valWeight = stakes.NewWeightedStakeWithMultiplier(after.lockedVET, after.multiplier).Weight
 
 	lockedIncrease := stakes.NewWeightedStake(0, 0)
 	lockedDecrease := stakes.NewWeightedStake(0, 0)
@@ -157,14 +171,14 @@ func (v *Validation) renew(delegationWeight uint64) *delta.Renewal {
 	v.QueuedVET = 0
 	v.PendingUnlockVET = 0
 
-	return &delta.Renewal{
+	return &globalstats.Renewal{
 		LockedIncrease: lockedIncrease,
 		LockedDecrease: lockedDecrease,
 		QueuedDecrease: queuedDecrease,
 	}
 }
 
-func (v *Validation) exit() *delta.Exit {
+func (v *Validation) exit() *globalstats.Exit {
 	ExitedTVL := stakes.NewWeightedStakeWithMultiplier(v.LockedVET, v.multiplier())  // use the acting multiplier for locked stake
 	QueuedDecrease := stakes.NewWeightedStakeWithMultiplier(v.QueuedVET, Multiplier) // queued weight is always initial weight
 
@@ -184,7 +198,7 @@ func (v *Validation) exit() *delta.Exit {
 	}
 
 	// We only return the change in the validation's TVL and weight
-	return &delta.Exit{
+	return &globalstats.Exit{
 		ExitedTVL:      ExitedTVL,
 		QueuedDecrease: QueuedDecrease,
 	}

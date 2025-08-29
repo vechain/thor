@@ -65,3 +65,20 @@ func (d *Delegation) Ended(val *validation.Validation) bool {
 	}
 	return *d.LastIteration < currentStakingPeriod
 }
+
+// IsLocked returns whether the delegation is locked
+// It returns true if:
+// - the delegation has started
+// - AND the delegation has not ended
+// - AND the delegation has stake
+func (d *Delegation) IsLocked(val *validation.Validation) bool {
+	if d.IsEmpty() {
+		return false
+	}
+
+	if d.Stake == 0 {
+		return false
+	}
+
+	return d.Started(val) && !d.Ended(val)
+}

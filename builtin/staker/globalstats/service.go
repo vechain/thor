@@ -7,7 +7,6 @@ package globalstats
 
 import (
 	"github.com/vechain/thor/v2/builtin/solidity"
-	"github.com/vechain/thor/v2/builtin/staker/delta"
 	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -55,7 +54,7 @@ func (s *Service) getQueued() (*stakes.WeightedStake, error) {
 
 // ApplyRenewal adjusts global totals during validator/delegation transitions.
 // Called when validators are activated or delegations move between states.
-func (s *Service) ApplyRenewal(renewal *delta.Renewal) error {
+func (s *Service) ApplyRenewal(renewal *Renewal) error {
 	locked, err := s.getLocked()
 	if err != nil {
 		return err
@@ -80,7 +79,7 @@ func (s *Service) ApplyRenewal(renewal *delta.Renewal) error {
 	return nil
 }
 
-func (s *Service) ApplyExit(exit *delta.Exit) error {
+func (s *Service) ApplyExit(exit *Exit) error {
 	locked, err := s.getLocked()
 	if err != nil {
 		return err
@@ -140,11 +139,11 @@ func (s *Service) GetLockedStake() (uint64, uint64, error) {
 }
 
 // GetQueuedStake returns the total VET and weight waiting to be activated.
-func (s *Service) GetQueuedStake() (uint64, uint64, error) {
+func (s *Service) GetQueuedStake() (uint64, error) {
 	queued, err := s.getQueued()
 	if err != nil {
-		return 0, 0, err
+		return 0, err
 	}
 
-	return queued.VET, queued.Weight, nil
+	return queued.VET, nil
 }
