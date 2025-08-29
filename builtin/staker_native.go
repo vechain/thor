@@ -6,6 +6,7 @@
 package builtin
 
 import (
+	"fmt"
 	"math"
 	"math/big"
 
@@ -454,7 +455,7 @@ func init() {
 						return results
 					}
 					if reverts.IsRevertErr(err) {
-						env.Revert(err.Error())
+						env.Revert(fmt.Sprintf("staker: %s", err.Error()))
 						return nil
 					}
 					panic(err) // unexpected error

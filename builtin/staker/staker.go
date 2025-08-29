@@ -217,6 +217,22 @@ func (s *Staker) AddValidation(
 		"stake", stake,
 	)
 
+	if stake < MinStakeVET || stake > MaxStakeVET {
+		return reverts.New("stake is out of range")
+	}
+
+	val, err := s.validationService.GetValidation(validator)
+	if err != nil {
+		return err
+	}
+	if !val.IsEmpty() {
+		return reverts.New("validator already exists")
+	}
+
+	if period != thor.LowStakingPeriod() && period != thor.MediumStakingPeriod() && period != thor.HighStakingPeriod() {
+		return reverts.New("period is out of boundaries")
+	}
+
 	// create a new validation
 	if err := s.validationService.Add(validator, endorser, period, stake); err != nil {
 		logger.Info("add validator failed", "validator", validator, "error", err)
@@ -224,8 +240,7 @@ func (s *Staker) AddValidation(
 	}
 
 	// update global totals
-	err := s.globalStatsService.AddQueued(stakes.NewWeightedStakeWithMultiplier(stake, validation.Multiplier))
-	if err != nil {
+	if err := s.globalStatsService.AddQueued(stakes.NewWeightedStakeWithMultiplier(stake, validation.Multiplier)); err != nil {
 		return err
 	}
 
@@ -236,7 +251,21 @@ func (s *Staker) AddValidation(
 func (s *Staker) SignalExit(validator thor.Address, endorser thor.Address) error {
 	logger.Debug("signal exit", "endorser", endorser, "validator", validator)
 
-	if err := s.validationService.SignalExit(validator, endorser); err != nil {
+	val, err := s.validationService.GetValidation(validator)
+	if err != nil {
+		return err
+	}
+	if val.IsEmpty() {
+		return reverts.New("validation does not exist")
+	}
+	if val.Endorser != endorser {
+		return reverts.New("endorser required")
+	}
+	if val.Status != validation.StatusActive {
+		return reverts.New("can't signal exit while not active")
+	}
+
+	if err := s.validationService.SignalExit(validator, val); err != nil {
 		logger.Info("signal exit failed", "validator", validator, "error", err)
 		return err
 	}
@@ -250,13 +279,30 @@ func (s *Staker) SignalExit(validator thor.Address, endorser thor.Address) error
 func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, amount uint64) error {
 	logger.Debug("increasing stake", "endorser", endorser, "validator", validator, "amount", amount)
 
-	if err := s.validationService.IncreaseStake(validator, endorser, amount); err != nil {
+	val, err := s.validationService.GetValidation(validator)
+	if err != nil {
+		return err
+	}
+	if val.IsEmpty() {
+		return reverts.New("validation does not exist")
+	}
+	if val.Endorser != endorser {
+		return reverts.New("endorser required")
+	}
+	if val.Status == validation.StatusExit {
+		return reverts.New("validator exited")
+	}
+	if val.Status == validation.StatusActive && val.ExitBlock != nil {
+		return reverts.New("validator has signaled exit, cannot increase stake")
+	}
+
+	if err := s.validationService.IncreaseStake(validator, val, amount); err != nil {
 		logger.Info("increase stake failed", "validator", validator, "error", err)
 		return err
 	}
 
 	// validate that new TVL is <= Max stake
-	if err := s.validateNextPeriodTVL(validator); err != nil {
+	if err := s.validateNextPeriodTVL(validator, val); err != nil {
 		return err
 	}
 
@@ -272,13 +318,45 @@ func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, am
 func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, amount uint64) error {
 	logger.Debug("decreasing stake", "endorser", endorser, "validator", validator, "amount", amount)
 
-	queued, err := s.validationService.DecreaseStake(validator, endorser, amount)
+	val, err := s.GetValidation(validator)
 	if err != nil {
+		return err
+	}
+	if val.IsEmpty() {
+		return reverts.New("validation does not exist")
+	}
+	if val.Endorser != endorser {
+		return reverts.New("endorser required")
+	}
+	if val.Status == validation.StatusExit {
+		return reverts.New("validator exited")
+	}
+	if val.Status == validation.StatusActive && val.ExitBlock != nil {
+		return reverts.New("validator has signaled exit, cannot decrease stake")
+	}
+
+	if val.Status == validation.StatusActive {
+		// We don't consider any increases, i.e., entry.QueuedVET. We only consider locked and current decreases.
+		// The reason is that validator can instantly withdraw QueuedVET at any time.
+		// We need to make sure the locked VET minus the sum of the current decreases is still above the minimum stake.
+		if val.LockedVET-val.PendingUnlockVET-amount < MinStakeVET {
+			return reverts.New("next period stake is lower than minimum stake")
+		}
+	}
+
+	if val.Status == validation.StatusQueued {
+		// All the validator's stake exists within QueuedVET, so we need to make sure it maintains a minimum of MinStake.
+		if val.QueuedVET-amount < MinStakeVET {
+			return reverts.New("next period stake is lower than minimum stake")
+		}
+	}
+
+	if err = s.validationService.DecreaseStake(validator, val, amount); err != nil {
 		logger.Info("decrease stake failed", "validator", validator, "error", err)
 		return err
 	}
 
-	if queued {
+	if val.Status == validation.StatusQueued {
 		// update global totals, use the initial multiplier
 		err = s.globalStatsService.RemoveQueued(stakes.NewWeightedStakeWithMultiplier(amount, validation.Multiplier))
 		if err != nil {
@@ -293,8 +371,18 @@ func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, am
 // WithdrawStake allows expired validations to withdraw their stake.
 func (s *Staker) WithdrawStake(validator thor.Address, endorser thor.Address, currentBlock uint32) (uint64, error) {
 	logger.Debug("withdrawing stake", "endorser", endorser, "validator", validator)
+	val, err := s.GetValidation(validator)
+	if err != nil {
+		return 0, err
+	}
+	if val.IsEmpty() {
+		return 0, reverts.New("validation does not exist")
+	}
+	if val.Endorser != endorser {
+		return 0, reverts.New("endorser required")
+	}
 
-	stake, queued, err := s.validationService.WithdrawStake(validator, endorser, currentBlock)
+	stake, queued, err := s.validationService.WithdrawStake(validator, val, currentBlock)
 	if err != nil {
 		logger.Info("withdraw failed", "validator", validator, "error", err)
 		return 0, err
@@ -319,7 +407,22 @@ func (s *Staker) SetOnline(validator thor.Address, blockNum uint32, online bool)
 
 func (s *Staker) SetBeneficiary(validator, endorser, beneficiary thor.Address) error {
 	logger.Debug("set beneficiary", "validator", validator, "beneficiary", beneficiary)
-	if err := s.validationService.SetBeneficiary(validator, endorser, beneficiary); err != nil {
+
+	val, err := s.GetValidation(validator)
+	if err != nil {
+		return err
+	}
+	if val.IsEmpty() {
+		return reverts.New("validation does not exist")
+	}
+	if val.Endorser != endorser {
+		return reverts.New("endorser required")
+	}
+	if val.Status == validation.StatusExit || val.ExitBlock != nil {
+		return reverts.New("validator has exited or signaled exit, cannot set beneficiary")
+	}
+
+	if err := s.validationService.SetBeneficiary(validator, val, beneficiary); err != nil {
 		logger.Info("set beneficiary failed", "validator", validator, "error", err)
 		return err
 	}
@@ -334,10 +437,16 @@ func (s *Staker) AddDelegation(
 ) (*big.Int, error) {
 	logger.Debug("adding delegation", "validator", validator, "stake", stake, "multiplier", multiplier)
 
+	if multiplier == 0 {
+		return nil, reverts.New("multiplier cannot be 0")
+	}
 	// ensure validation is ok to receive a new delegation
-	val, err := s.validationService.GetExistingValidation(validator)
+	val, err := s.validationService.GetValidation(validator)
 	if err != nil {
 		return nil, err
+	}
+	if val.IsEmpty() {
+		return nil, reverts.New("validation does not exist")
 	}
 
 	if val.Status != validation.StatusQueued && val.Status != validation.StatusActive {
@@ -357,7 +466,7 @@ func (s *Staker) AddDelegation(
 	}
 
 	// validate that new TVL is <= Max stake
-	if err = s.validateNextPeriodTVL(validator); err != nil {
+	if err = s.validateNextPeriodTVL(validator, val); err != nil {
 		return nil, err
 	}
 
@@ -372,15 +481,20 @@ func (s *Staker) AddDelegation(
 
 // SignalDelegationExit updates the auto-renewal status of a delegation.
 func (s *Staker) SignalDelegationExit(delegationID *big.Int) error {
-	logger.Debug("updating autorenew", "delegationID", delegationID)
+	logger.Debug("signal delegation exit", "delegationID", delegationID)
 
 	del, err := s.delegationService.GetDelegation(delegationID)
 	if err != nil {
 		return err
 	}
-
 	if del.IsEmpty() {
 		return reverts.New("delegation is empty")
+	}
+	if del.LastIteration != nil {
+		return reverts.New("delegation is already signaled exit")
+	}
+	if del.Stake == 0 {
+		return reverts.New("delegation has already been withdrawn")
 	}
 
 	val, err := s.validationService.GetValidation(del.Validation)
@@ -397,7 +511,7 @@ func (s *Staker) SignalDelegationExit(delegationID *big.Int) error {
 	}
 
 	if err = s.delegationService.SignalExit(del, delegationID, val.CurrentIteration()); err != nil {
-		logger.Info("update autorenew failed", "delegationID", delegationID, "error", err)
+		logger.Info("signal delegation exit failed", "delegationID", delegationID, "error", err)
 		return err
 	}
 
@@ -406,7 +520,7 @@ func (s *Staker) SignalDelegationExit(delegationID *big.Int) error {
 		return err
 	}
 
-	logger.Info("updated autorenew", "delegationID", delegationID)
+	logger.Info("signal delegation exit", "delegationID", delegationID)
 	return nil
 }
 
@@ -462,19 +576,14 @@ func (s *Staker) IncreaseDelegatorsReward(node thor.Address, reward *big.Int) er
 	return s.validationService.IncreaseDelegatorsReward(node, reward)
 }
 
-func (s *Staker) validateNextPeriodTVL(validator thor.Address) error {
-	val, err := s.validationService.GetValidation(validator)
-	if err != nil {
-		return err
-	}
-
+func (s *Staker) validateNextPeriodTVL(validator thor.Address, validation *validation.Validation) error {
 	agg, err := s.aggregationService.GetAggregation(validator)
 	if err != nil {
 		return err
 	}
 
 	// accumulated TVL should cannot be more than MaxStake
-	if val.NextPeriodTVL()+agg.NextPeriodTVL() > MaxStakeVET {
+	if validation.NextPeriodTVL()+agg.NextPeriodTVL() > MaxStakeVET {
 		return reverts.New("stake is out of range")
 	}
 

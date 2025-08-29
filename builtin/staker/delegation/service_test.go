@@ -53,13 +53,6 @@ func TestService_Add_And_GetDelegation(t *testing.T) {
 	assert.Nil(t, del.LastIteration)
 }
 
-func TestService_Add_InputValidation(t *testing.T) {
-	svc, _, _ := newSvc()
-
-	_, err := svc.Add(thor.Address{}, 1, 1, 0)
-	assert.ErrorContains(t, err, "multiplier cannot be 0")
-}
-
 func TestService_SetDelegation_RoundTrip(t *testing.T) {
 	svc, _, _ := newSvc()
 	v := thor.BytesToAddress([]byte("v"))
@@ -77,38 +70,6 @@ func TestService_SetDelegation_RoundTrip(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint8(99), got.Multiplier)
 	assert.Equal(t, uint32(5), got.FirstIteration)
-}
-
-func TestService_SignalExit(t *testing.T) {
-	svc, _, _ := newSvc()
-	v := thor.BytesToAddress([]byte("v"))
-	id, err := svc.Add(v, 3, 1000, 10)
-	assert.NoError(t, err)
-
-	del, err := svc.GetDelegation(id)
-	assert.NoError(t, err)
-
-	assert.NoError(t, svc.SignalExit(del, id, 7))
-
-	del2, err := svc.GetDelegation(id)
-	assert.NoError(t, err)
-	assert.NotNil(t, del2.LastIteration)
-	assert.Equal(t, uint32(7), *del2.LastIteration)
-
-	assert.ErrorContains(t, svc.SignalExit(del2, id, 8), "already disabled")
-}
-
-func TestService_SignalExit_NotActive(t *testing.T) {
-	svc, _, _ := newSvc()
-	v := thor.BytesToAddress([]byte("v"))
-	id, err := svc.Add(v, 1, 100, 10)
-	assert.NoError(t, err)
-
-	del, err := svc.GetDelegation(id)
-	assert.NoError(t, err)
-
-	del.Stake = 0
-	assert.ErrorContains(t, svc.SignalExit(del, id, 5), "delegation is not active")
 }
 
 func TestService_Withdraw(t *testing.T) {

@@ -186,7 +186,7 @@ func Test_AddDelegator_ValidatorNotFound(t *testing.T) {
 	staker, _ := newStaker(t, 75, 101, true)
 
 	_, err := staker.AddDelegation(thor.Address{}, delegationStake(), 255)
-	assert.ErrorContains(t, err, "failed to get validator")
+	assert.ErrorContains(t, err, "validation does not exist")
 }
 
 func Test_AddDelegator_ManyValidators(t *testing.T) {
