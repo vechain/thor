@@ -6,7 +6,6 @@
 package staker
 
 import (
-	"math"
 	"math/big"
 	"testing"
 
@@ -687,7 +686,7 @@ func TestStaker_DelegationWithdrawPending(t *testing.T) {
 	delegation, validation, err = staker.GetDelegation(delegationID)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(0), delegation.Stake)
-	assert.Equal(t, uint32(math.MaxUint32), delegation.FirstIteration)
 	assert.Nil(t, delegation.LastIteration)
-	assert.False(t, delegation.Started(validation))
+
+	assert.False(t, delegation.IsLocked(validation))
 }

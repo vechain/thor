@@ -360,12 +360,11 @@ func init() {
 				lastPeriod = *delegation.LastIteration
 			}
 
-			locked := delegation.Started(validation) && !delegation.Ended(validation)
 			return []any{
 				delegation.Validation,
 				toWei(delegation.Stake),
 				delegation.Multiplier,
-				locked,
+				delegation.IsLocked(validation),
 				delegation.FirstIteration,
 				lastPeriod,
 			}, nil

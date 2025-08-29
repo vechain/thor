@@ -82,3 +82,39 @@ func TestDelegation(t *testing.T) {
 	del.LastIteration = &lastIter
 	assert.False(t, del.Ended(&val))
 }
+
+func TestDelegation_IsLocked(t *testing.T) {
+	del := Delegation{
+		Validation:     thor.Address{},
+		Stake:          0,
+		Multiplier:     0,
+		LastIteration:  nil,
+		FirstIteration: 0,
+	}
+
+	val := validation.Validation{
+		Endorser:           thor.Address{},
+		Period:             0,
+		CompleteIterations: 0,
+		Status:             validation.StatusActive,
+		OfflineBlock:       nil,
+		StartBlock:         0,
+		ExitBlock:          nil,
+		LockedVET:          0,
+		PendingUnlockVET:   0,
+		QueuedVET:          0,
+		CooldownVET:        0,
+		WithdrawableVET:    0,
+		Weight:             0,
+	}
+	assert.False(t, del.IsLocked(&val))
+
+	val.CompleteIterations = 1
+	assert.False(t, del.IsLocked(&val))
+
+	del.Stake = 1000
+	assert.True(t, del.IsLocked(&val))
+
+	val.Status = validation.StatusExit
+	assert.False(t, del.IsLocked(&val))
+}

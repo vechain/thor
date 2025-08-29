@@ -10,8 +10,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/ethereum/go-ethereum/common/math"
-
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/builtin/staker/reverts"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
@@ -105,9 +103,6 @@ func (s *Service) Withdraw(del *Delegation, delegationID *big.Int, val *validati
 	withdrawableStake := del.Stake
 
 	del.Stake = 0
-	if val.CurrentIteration() < del.FirstIteration {
-		del.FirstIteration = math.MaxUint32
-	}
 	if err := s.setDelegation(delegationID, del, false); err != nil {
 		return 0, err
 	}
