@@ -90,7 +90,7 @@ with `sudo chown -R 1000:1000 {path-to-your-data-directory}`.
 
 #### Thor Solo
 
-`thor solo` is a sub-command for running a single node in a standalone mode. It is useful for testing and development. See [Thor Solo](docs/thor_solo.md) for more information.
+`thor solo` is a sub-command for running a single node in a standalone mode. It is useful for testing and development. See [Thor Solo](https://github.com/vechain/thor/blob/master/docs/thor_solo.md) for more information.
 
 ```shell
 # create new block when there is pending transaction
