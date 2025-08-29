@@ -76,7 +76,7 @@ Note: The build used the `-disable-pruner` command.
 Use either the source or Docker instructions below to start a mainnet full node with the logs and pruner enabled. Becoming a validator requires additional steps, 
 meeting the endorsement criteria and being voted in. See [Becoming a Validator](https://github.com/vechain/thor/blob/master/docs/becoming_a_validator.md) for more details.
 
-For more configuration options, see [Command Line Arguments]([docs/command_line_arguments.md](https://github.com/vechain/thor/blob/master/docs/command_line_arguments.md)), and for a full description of the nodes types, see [Node Types](https://github.com/vechain/thor/blob/master/docs/node_types.md).
+For more configuration options, see [Command Line Arguments](https://github.com/vechain/thor/blob/master/docs/command_line_arguments.md), and for a full description of the nodes types, see [Node Types](https://github.com/vechain/thor/blob/master/docs/node_types.md).
 
 ### Build and Run from Source
 
