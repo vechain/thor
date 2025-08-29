@@ -2953,7 +2953,7 @@ func TestStaker_TestWeights_IncreaseStake(t *testing.T) {
 	assert.Equal(t, baseStake, totals.TotalLockedWeight)
 	assert.Equal(t, stakeDecrease, totals.TotalExitingStake)
 	assert.Equal(t, stakeIncrease+delStake, totals.TotalQueuedStake)
-	assert.Equal(t, baseStake+expectedWeight-stakeDecrease, totals.NextPeriodWeight)
+	assert.Equal(t, baseStake+expectedWeight-stakeDecrease*2, totals.NextPeriodWeight)
 
 	stakingPeriod := thor.MediumStakingPeriod()
 	newTestSequence(t, staker).Housekeep(stakingPeriod * 2)
@@ -3052,7 +3052,7 @@ func TestStaker_TestWeights_DecreaseStake(t *testing.T) {
 	assert.Equal(t, baseStake, totals.TotalLockedWeight)
 	assert.Equal(t, stakeDecrease, totals.TotalExitingStake)
 	assert.Equal(t, delStake, totals.TotalQueuedStake)
-	assert.Equal(t, baseStake+expectedWeight-stakeDecrease, totals.NextPeriodWeight)
+	assert.Equal(t, baseStake+expectedWeight-stakeDecrease*2, totals.NextPeriodWeight)
 
 	// decreasing stake shouldn't affect multipliers
 	additionalDecrease := uint64(500)
@@ -3075,7 +3075,7 @@ func TestStaker_TestWeights_DecreaseStake(t *testing.T) {
 	assert.Equal(t, baseStake, totals.TotalLockedWeight)
 	assert.Equal(t, stakeDecrease, totals.TotalExitingStake)
 	assert.Equal(t, delStake, totals.TotalQueuedStake)
-	assert.Equal(t, baseStake+expectedWeight-stakeDecrease, totals.NextPeriodWeight)
+	assert.Equal(t, baseStake+expectedWeight-stakeDecrease*2, totals.NextPeriodWeight)
 
 	stakingPeriod := thor.MediumStakingPeriod()
 	newTestSequence(t, staker).Housekeep(stakingPeriod * 2)

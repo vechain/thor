@@ -624,8 +624,7 @@ func TestService_Renew(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(350), delta.LockedIncrease.VET)
 	assert.Equal(t, uint64(700), delta.LockedIncrease.Weight)
-	assert.Equal(t, uint64(350), delta.QueuedDecrease.VET)
-	assert.Equal(t, uint64(350), delta.QueuedDecrease.Weight)
+	assert.Equal(t, uint64(350), delta.QueuedDecrease)
 
 	val, err = svc.GetValidation(id1)
 	assert.NoError(t, err)
@@ -654,8 +653,7 @@ func TestService_Renew(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(200), delta.LockedIncrease.VET)
 	assert.Equal(t, uint64(400), delta.LockedIncrease.Weight)
-	assert.Equal(t, uint64(200), delta.QueuedDecrease.VET)
-	assert.Equal(t, uint64(200), delta.QueuedDecrease.Weight)
+	assert.Equal(t, uint64(200), delta.QueuedDecrease)
 
 	val, err = svc.GetValidation(id1)
 	assert.NoError(t, err)

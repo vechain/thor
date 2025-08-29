@@ -239,7 +239,7 @@ func (s *Staker) AddValidation(
 	}
 
 	// update global totals
-	if err := s.globalStatsService.AddQueued(stakes.NewWeightedStakeWithMultiplier(stake, validation.Multiplier)); err != nil {
+	if err := s.globalStatsService.AddQueued(stake); err != nil {
 		return err
 	}
 
@@ -295,18 +295,18 @@ func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, am
 		return NewReverts("validator has signaled exit, cannot increase stake")
 	}
 
+	// validate that new TVL is <= Max stake
+	if err := s.validateStakeIncrease(validator, val, amount); err != nil {
+		return err
+	}
+
 	if err := s.validationService.IncreaseStake(validator, val, amount); err != nil {
 		logger.Info("increase stake failed", "validator", validator, "error", err)
 		return err
 	}
 
-	// validate that new TVL is <= Max stake
-	if err := s.validateNextPeriodTVL(validator, val); err != nil {
-		return err
-	}
-
 	// update global queued, use the initial multiplier
-	if err := s.globalStatsService.AddQueued(stakes.NewWeightedStakeWithMultiplier(amount, validation.Multiplier)); err != nil {
+	if err := s.globalStatsService.AddQueued(amount); err != nil {
 		return err
 	}
 
@@ -357,7 +357,7 @@ func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, am
 
 	if val.Status == validation.StatusQueued {
 		// update global totals, use the initial multiplier
-		err = s.globalStatsService.RemoveQueued(stakes.NewWeightedStakeWithMultiplier(amount, validation.Multiplier))
+		err = s.globalStatsService.RemoveQueued(amount)
 		if err != nil {
 			return err
 		}
@@ -389,7 +389,7 @@ func (s *Staker) WithdrawStake(validator thor.Address, endorser thor.Address, cu
 
 	// remove validator QueuedVET if the validator is still queued or had a pending increase
 	if queued > 0 {
-		err = s.globalStatsService.RemoveQueued(stakes.NewWeightedStakeWithMultiplier(queued, validation.Multiplier))
+		err = s.globalStatsService.RemoveQueued(queued)
 		if err != nil {
 			return 0, err
 		}
@@ -452,6 +452,11 @@ func (s *Staker) AddDelegation(
 		return nil, NewReverts("validation is not queued or active")
 	}
 
+	// validate that new TVL is <= Max stake
+	if err = s.validateStakeIncrease(validator, val, stake); err != nil {
+		return nil, err
+	}
+
 	// add delegation on the next iteration - val.CurrentIteration() + 1,
 	delegationID, err := s.delegationService.Add(validator, val.CurrentIteration()+1, stake, multiplier)
 	if err != nil {
@@ -464,13 +469,8 @@ func (s *Staker) AddDelegation(
 		return nil, err
 	}
 
-	// validate that new TVL is <= Max stake
-	if err = s.validateNextPeriodTVL(validator, val); err != nil {
-		return nil, err
-	}
-
 	// update global figures
-	if err = s.globalStatsService.AddQueued(weightedStake); err != nil {
+	if err = s.globalStatsService.AddQueued(stake); err != nil {
 		return nil, err
 	}
 
@@ -561,7 +561,7 @@ func (s *Staker) WithdrawDelegation(
 			return 0, err
 		}
 
-		if err = s.globalStatsService.RemoveQueued(weightedStake); err != nil {
+		if err = s.globalStatsService.RemoveQueued(withdrawableStake); err != nil {
 			return 0, err
 		}
 	}
@@ -575,14 +575,14 @@ func (s *Staker) IncreaseDelegatorsReward(node thor.Address, reward *big.Int) er
 	return s.validationService.IncreaseDelegatorsReward(node, reward)
 }
 
-func (s *Staker) validateNextPeriodTVL(validator thor.Address, validation *validation.Validation) error {
+func (s *Staker) validateStakeIncrease(validator thor.Address, validation *validation.Validation, amount uint64) error {
 	agg, err := s.aggregationService.GetAggregation(validator)
 	if err != nil {
 		return err
 	}
 
 	// accumulated TVL should cannot be more than MaxStake
-	if validation.NextPeriodTVL()+agg.NextPeriodTVL() > MaxStakeVET {
+	if validation.NextPeriodTVL()+agg.NextPeriodTVL()+amount > MaxStakeVET {
 		return NewReverts("stake is out of range")
 	}
 

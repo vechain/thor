@@ -22,7 +22,7 @@ func TestAggregation(t *testing.T) {
 	agg.ExitingVET = uint64(8000)
 	agg.ExitingWeight = uint64(16000)
 
-	assert.Equal(t, uint64(19000), agg.NextPeriodTVL())
+	assert.Equal(t, uint64(11000), agg.NextPeriodTVL()) // 10000+9000-8000
 
 	renewal := agg.renew()
 
@@ -44,8 +44,7 @@ func TestAggregation(t *testing.T) {
 	exit := agg.exit()
 	assert.Equal(t, uint64(11000), exit.ExitedTVL.VET)
 	assert.Equal(t, uint64(22000), exit.ExitedTVL.Weight)
-	assert.Equal(t, uint64(7000), exit.QueuedDecrease.VET)
-	assert.Equal(t, uint64(14000), exit.QueuedDecrease.Weight)
+	assert.Equal(t, uint64(7000), exit.QueuedDecrease)
 
 	assert.Equal(t, uint64(0), agg.LockedVET)
 	assert.Equal(t, uint64(0), agg.LockedWeight)

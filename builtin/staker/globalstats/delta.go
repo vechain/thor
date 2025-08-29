@@ -10,14 +10,14 @@ import "github.com/vechain/thor/v2/builtin/staker/stakes"
 type Renewal struct {
 	LockedIncrease *stakes.WeightedStake
 	LockedDecrease *stakes.WeightedStake
-	QueuedDecrease *stakes.WeightedStake
+	QueuedDecrease uint64 // stake/VET only
 }
 
 func NewRenewal() *Renewal {
 	return &Renewal{
 		LockedIncrease: &stakes.WeightedStake{},
 		LockedDecrease: &stakes.WeightedStake{},
-		QueuedDecrease: &stakes.WeightedStake{},
+		QueuedDecrease: 0,
 	}
 }
 
@@ -29,13 +29,13 @@ func (r *Renewal) Add(other *Renewal) *Renewal {
 
 	r.LockedIncrease.Add(other.LockedIncrease)
 	r.LockedDecrease.Add(other.LockedDecrease)
-	r.QueuedDecrease.Add(other.QueuedDecrease)
+	r.QueuedDecrease += other.QueuedDecrease
 	return r
 }
 
 type Exit struct {
 	ExitedTVL      *stakes.WeightedStake
-	QueuedDecrease *stakes.WeightedStake
+	QueuedDecrease uint64 // stake/VET only
 }
 
 // Add sets e to the sum of itself and other.
@@ -45,6 +45,6 @@ func (e *Exit) Add(other *Exit) *Exit {
 	}
 
 	e.ExitedTVL.Add(other.ExitedTVL)
-	e.QueuedDecrease.Add(other.QueuedDecrease)
+	e.QueuedDecrease += other.QueuedDecrease
 	return e
 }
