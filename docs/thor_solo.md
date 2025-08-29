@@ -81,7 +81,7 @@ The Thor Solo node can be configured with additional commands to assist in speed
 
 ### Useful Thor Commands
 
-The following are a subset of the key Thor commands that can be used when operating a Thor Solo Node. A full list of Thor commands are available [here](https://github.com/vechain/thor/blob/neil/docs-update/docs/command_line_arguments.md).
+The following are a subset of the key Thor commands that can be used when operating a Thor Solo Node. A full list of Thor commands are available [here](https://github.com/vechain/thor/blob/master/docs/command_line_arguments.md).
 
 | Commands                         | Description                                                                                                                    |
 |----------------------------------|--------------------------------------------------------------------------------------------------------------------------------|
