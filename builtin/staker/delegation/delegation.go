@@ -6,7 +6,7 @@
 package delegation
 
 import (
-	"github.com/vechain/thor/v2/builtin/staker/types"
+	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -26,11 +26,11 @@ func (d *Delegation) IsEmpty() bool {
 
 // WeightedStake returns the weight of the delegator, which is calculated as:
 // weight = stake * multiplier / 100
-func (d *Delegation) WeightedStake() *types.WeightedStake {
+func (d *Delegation) WeightedStake() *stakes.WeightedStake {
 	if d.IsEmpty() {
-		return types.NewWeightedStake(0, 0)
+		return stakes.NewWeightedStake(0, 0)
 	}
-	return types.NewWeightedStakeWithMultiplier(d.Stake, d.Multiplier)
+	return stakes.NewWeightedStakeWithMultiplier(d.Stake, d.Multiplier)
 }
 
 // Started returns whether the delegation became locked

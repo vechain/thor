@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package types
+package stakes
 
 type WeightedStake struct {
 	VET    uint64 // The amount of VET staked(in VET, not wei)

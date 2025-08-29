@@ -13,7 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/vechain/thor/v2/builtin/gascharger"
-	"github.com/vechain/thor/v2/builtin/staker/types"
+	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/xenv"
@@ -192,10 +192,10 @@ func init() {
 					return nil, err
 				}
 				if !exists {
-					return nil, types.NewReverts("authority required in transition period")
+					return nil, staker.NewReverts("authority required in transition period")
 				}
 				if thor.Address(args.Endorser) != endorser {
-					return nil, types.NewReverts("endorser required")
+					return nil, staker.NewReverts("endorser required")
 				}
 			}
 
@@ -454,7 +454,7 @@ func init() {
 					if err == nil {
 						return results
 					}
-					if types.IsRevertErr(err) {
+					if staker.IsRevertErr(err) {
 						env.Revert(fmt.Sprintf("staker: %s", err.Error()))
 						return nil
 					}
