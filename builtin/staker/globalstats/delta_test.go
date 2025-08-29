@@ -24,12 +24,12 @@ func TestRenewal_Add(t *testing.T) {
 	base := &Renewal{
 		LockedIncrease: stakes.NewWeightedStake(10, 20),
 		LockedDecrease: stakes.NewWeightedStake(30, 40),
-		QueuedDecrease: stakes.NewWeightedStake(50, 60),
+		QueuedDecrease: 50,
 	}
 	inc := &Renewal{
 		LockedIncrease: stakes.NewWeightedStake(1, 2),
 		LockedDecrease: stakes.NewWeightedStake(3, 4),
-		QueuedDecrease: stakes.NewWeightedStake(1, 2),
+		QueuedDecrease: 1,
 	}
 
 	got := base.Add(inc)
@@ -38,8 +38,7 @@ func TestRenewal_Add(t *testing.T) {
 	assert.Equal(t, uint64(22), got.LockedIncrease.Weight)
 	assert.Equal(t, uint64(33), got.LockedDecrease.VET)
 	assert.Equal(t, uint64(44), got.LockedDecrease.Weight)
-	assert.Equal(t, uint64(51), got.QueuedDecrease.VET)
-	assert.Equal(t, uint64(62), got.QueuedDecrease.Weight)
+	assert.Equal(t, uint64(51), got.QueuedDecrease)
 }
 
 func TestRenewal_Add_Nil(t *testing.T) {
@@ -58,30 +57,28 @@ func TestRenewal_Add_Nil(t *testing.T) {
 func TestExit_Add(t *testing.T) {
 	base := &Exit{
 		ExitedTVL:      stakes.NewWeightedStake(100, 200),
-		QueuedDecrease: stakes.NewWeightedStake(300, 400),
+		QueuedDecrease: 300,
 	}
 	inc := &Exit{
 		ExitedTVL:      stakes.NewWeightedStake(1, 2),
-		QueuedDecrease: stakes.NewWeightedStake(3, 4),
+		QueuedDecrease: 3,
 	}
 
 	got := base.Add(inc)
 	assert.Same(t, base, got)
 	assert.Equal(t, uint64(101), got.ExitedTVL.VET)
 	assert.Equal(t, uint64(202), got.ExitedTVL.Weight)
-	assert.Equal(t, uint64(303), got.QueuedDecrease.VET)
-	assert.Equal(t, uint64(404), got.QueuedDecrease.Weight)
+	assert.Equal(t, uint64(303), got.QueuedDecrease)
 }
 
 func TestExit_Add_Nil(t *testing.T) {
 	base := &Exit{
 		ExitedTVL:      stakes.NewWeightedStake(10, 20),
-		QueuedDecrease: stakes.NewWeightedStake(30, 40),
+		QueuedDecrease: 30,
 	}
 	got := base.Add(nil)
 	assert.Same(t, base, got)
 	assert.Equal(t, uint64(10), got.ExitedTVL.VET)
 	assert.Equal(t, uint64(20), got.ExitedTVL.Weight)
-	assert.Equal(t, uint64(30), got.QueuedDecrease.VET)
-	assert.Equal(t, uint64(40), got.QueuedDecrease.Weight)
+	assert.Equal(t, uint64(30), got.QueuedDecrease)
 }

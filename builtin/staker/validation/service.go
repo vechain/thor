@@ -204,7 +204,7 @@ func (s *Service) Evict(validator thor.Address, currentBlock uint32) error {
 }
 
 func (s *Service) IncreaseStake(validator thor.Address, validation *Validation, amount uint64) error {
-	validation.QueuedVET = amount + validation.QueuedVET
+	validation.QueuedVET += amount
 
 	return s.repo.setValidation(validator, validation, false)
 }
@@ -380,8 +380,7 @@ func (s *Service) ActivateValidator(
 		return nil, errors.New("cannot activate validator with already locked vet")
 	}
 
-	// queued stake always use the initial multiplier
-	queuedDecrease := stakes.NewWeightedStakeWithMultiplier(val.QueuedVET, Multiplier)
+	queuedDecrease := val.QueuedVET
 
 	// QueuedVET is now locked
 	val.LockedVET = val.QueuedVET

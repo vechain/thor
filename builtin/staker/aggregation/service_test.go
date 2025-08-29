@@ -89,8 +89,7 @@ func TestService_Renew(t *testing.T) {
 	assert.Equal(t, uint64(1000), renew2.LockedIncrease.Weight)
 	assert.Equal(t, uint64(1000), renew2.LockedDecrease.VET)
 	assert.Equal(t, uint64(2000), renew2.LockedDecrease.Weight)
-	assert.Equal(t, uint64(500), renew2.QueuedDecrease.VET)
-	assert.Equal(t, uint64(1000), renew2.QueuedDecrease.Weight)
+	assert.Equal(t, uint64(500), renew2.QueuedDecrease)
 
 	agg, err := svc.GetAggregation(v)
 	assert.NoError(t, err)
@@ -114,8 +113,7 @@ func TestService_Exit(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(2000), exit.ExitedTVL.VET)
 	assert.Equal(t, uint64(4000), exit.ExitedTVL.Weight)
-	assert.Equal(t, uint64(800), exit.QueuedDecrease.VET)
-	assert.Equal(t, uint64(1600), exit.QueuedDecrease.Weight)
+	assert.Equal(t, uint64(800), exit.QueuedDecrease)
 
 	agg, err := svc.GetAggregation(v)
 	assert.NoError(t, err)

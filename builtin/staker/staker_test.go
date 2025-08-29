@@ -543,7 +543,7 @@ func TestValidation_IncreaseStake_ActiveHasExitBlock(t *testing.T) {
 	staker.validationService.ActivateValidator(id, 0, &globalstats.Renewal{
 		LockedIncrease: stakes.NewWeightedStake(0, 0),
 		LockedDecrease: stakes.NewWeightedStake(0, 0),
-		QueuedDecrease: stakes.NewWeightedStake(0, 0),
+		QueuedDecrease: 0,
 	})
 
 	err := staker.SignalExit(id, end)
@@ -583,7 +583,7 @@ func TestValidation_DecreaseStake_StatusExit(t *testing.T) {
 	staker.validationService.ActivateValidator(id, 0, &globalstats.Renewal{
 		LockedIncrease: stakes.NewWeightedStake(0, 0),
 		LockedDecrease: stakes.NewWeightedStake(0, 0),
-		QueuedDecrease: stakes.NewWeightedStake(0, 0),
+		QueuedDecrease: 0,
 	})
 
 	err := staker.SignalExit(id, end)
@@ -604,7 +604,7 @@ func TestValidation_DecreaseStake_ActiveHasExitBlock(t *testing.T) {
 	staker.validationService.ActivateValidator(id, 0, &globalstats.Renewal{
 		LockedIncrease: stakes.NewWeightedStake(0, 0),
 		LockedDecrease: stakes.NewWeightedStake(0, 0),
-		QueuedDecrease: stakes.NewWeightedStake(0, 0),
+		QueuedDecrease: 0,
 	})
 
 	err := staker.SignalExit(id, end)
@@ -637,7 +637,7 @@ func TestValidation_DecreaseStake_ActiveSuccess(t *testing.T) {
 	staker.validationService.ActivateValidator(id, 0, &globalstats.Renewal{
 		LockedIncrease: stakes.NewWeightedStake(0, 0),
 		LockedDecrease: stakes.NewWeightedStake(0, 0),
-		QueuedDecrease: stakes.NewWeightedStake(0, 0),
+		QueuedDecrease: 0,
 	})
 
 	err := staker.DecreaseStake(id, end, 100)
@@ -734,7 +734,7 @@ func TestDelegation_SignalExit(t *testing.T) {
 	staker.validationService.ActivateValidator(v, 0, &globalstats.Renewal{
 		LockedIncrease: stakes.NewWeightedStake(0, 0),
 		LockedDecrease: stakes.NewWeightedStake(0, 0),
-		QueuedDecrease: stakes.NewWeightedStake(0, 0),
+		QueuedDecrease: 0,
 	})
 
 	_, _, err = staker.GetDelegation(id)
