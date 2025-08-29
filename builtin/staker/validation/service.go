@@ -12,7 +12,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
-	"github.com/vechain/thor/v2/builtin/staker/delta"
+	"github.com/vechain/thor/v2/builtin/staker/globalstats"
 	"github.com/vechain/thor/v2/builtin/staker/linkedlist"
 	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/thor"
@@ -302,7 +302,7 @@ func (s *Service) NextToActivate(maxLeaderGroupSize *big.Int) (*thor.Address, er
 }
 
 // ExitValidator removes the validator from the active list and puts it in cooldown.
-func (s *Service) ExitValidator(validator thor.Address) (*delta.Exit, error) {
+func (s *Service) ExitValidator(validator thor.Address) (*globalstats.Exit, error) {
 	entry, err := s.GetValidation(validator)
 	if err != nil {
 		return nil, err
@@ -367,8 +367,8 @@ func (s *Service) GetDelegatorRewards(validator thor.Address, stakingPeriod uint
 func (s *Service) ActivateValidator(
 	validationID thor.Address,
 	currentBlock uint32,
-	aggRenew *delta.Renewal,
-) (*delta.Renewal, error) {
+	aggRenew *globalstats.Renewal,
+) (*globalstats.Renewal, error) {
 	val, err := s.GetExistingValidation(validationID)
 	if err != nil {
 		return nil, err
@@ -413,7 +413,7 @@ func (s *Service) ActivateValidator(
 	}
 
 	// Return renewal that only representing the state changes of this validator
-	validatorRenewal := &delta.Renewal{
+	validatorRenewal := &globalstats.Renewal{
 		LockedIncrease: lockedIncrease,
 		LockedDecrease: stakes.NewWeightedStake(0, 0), // New validator does not have locked decrease
 		QueuedDecrease: queuedDecrease,
@@ -437,7 +437,7 @@ func (s *Service) UpdateOfflineBlock(validator thor.Address, block uint32, onlin
 	return s.repo.setValidation(validator, validation, false)
 }
 
-func (s *Service) Renew(validator thor.Address, delegationWeight uint64) (*delta.Renewal, error) {
+func (s *Service) Renew(validator thor.Address, delegationWeight uint64) (*globalstats.Renewal, error) {
 	validation, err := s.GetExistingValidation(validator)
 	if err != nil {
 		return nil, err

@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
-	"github.com/vechain/thor/v2/builtin/staker/delta"
+	"github.com/vechain/thor/v2/builtin/staker/globalstats"
 	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
@@ -136,7 +136,7 @@ func TestService_LeaderGroup_ReturnsActiveOnly(t *testing.T) {
 	a := thor.BytesToAddress([]byte("a"))
 	assert.NoError(t, svc.repo.setValidation(a, &Validation{Status: StatusActive}, true))
 
-	_, err := svc.ActivateValidator(a, 1, &delta.Renewal{LockedIncrease: &stakes.WeightedStake{}, LockedDecrease: &stakes.WeightedStake{}})
+	_, err := svc.ActivateValidator(a, 1, &globalstats.Renewal{LockedIncrease: &stakes.WeightedStake{}, LockedDecrease: &stakes.WeightedStake{}})
 	assert.NoError(t, err)
 
 	group, err := svc.LeaderGroup()
@@ -159,7 +159,7 @@ func TestService_QueuedAndLeader_LenAndHead(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, q1, *id)
 
-	_, err = svc.ActivateValidator(*id, 1, &delta.Renewal{LockedIncrease: &stakes.WeightedStake{}, LockedDecrease: &stakes.WeightedStake{}})
+	_, err = svc.ActivateValidator(*id, 1, &globalstats.Renewal{LockedIncrease: &stakes.WeightedStake{}, LockedDecrease: &stakes.WeightedStake{}})
 	assert.NoError(t, err)
 
 	headActive, err := svc.FirstActive()
@@ -182,7 +182,7 @@ func TestService_IsActive_Flag(t *testing.T) {
 	_, err = svc.ActivateValidator(
 		id,
 		thor.LowStakingPeriod(),
-		&delta.Renewal{LockedIncrease: &stakes.WeightedStake{}, LockedDecrease: &stakes.WeightedStake{}},
+		&globalstats.Renewal{LockedIncrease: &stakes.WeightedStake{}, LockedDecrease: &stakes.WeightedStake{}},
 	)
 	assert.NoError(t, err)
 
@@ -421,7 +421,7 @@ func TestService_LeaderGroupNext_Order(t *testing.T) {
 		idPtr, err := svc.NextToActivate(big.NewInt(10))
 		assert.NoError(t, err)
 		assert.Equal(t, id, *idPtr)
-		_, err = svc.ActivateValidator(*idPtr, 1, &delta.Renewal{LockedIncrease: &stakes.WeightedStake{}, LockedDecrease: &stakes.WeightedStake{}})
+		_, err = svc.ActivateValidator(*idPtr, 1, &globalstats.Renewal{LockedIncrease: &stakes.WeightedStake{}, LockedDecrease: &stakes.WeightedStake{}})
 		assert.NoError(t, err)
 	}
 
@@ -453,7 +453,7 @@ func TestService_GetCompletedPeriods(t *testing.T) {
 		idPtr, err := svc.NextToActivate(big.NewInt(10))
 		assert.NoError(t, err)
 		assert.Equal(t, id, *idPtr)
-		_, err = svc.ActivateValidator(*idPtr, 1, &delta.Renewal{LockedIncrease: &stakes.WeightedStake{}, LockedDecrease: &stakes.WeightedStake{}})
+		_, err = svc.ActivateValidator(*idPtr, 1, &globalstats.Renewal{LockedIncrease: &stakes.WeightedStake{}, LockedDecrease: &stakes.WeightedStake{}})
 		assert.NoError(t, err)
 	}
 
@@ -483,7 +483,7 @@ func TestService_GetQueuedAndLeaderGroups(t *testing.T) {
 	idPtr, err := svc.NextToActivate(big.NewInt(10))
 	assert.NoError(t, err)
 	assert.Equal(t, a1, *idPtr)
-	_, err = svc.ActivateValidator(*idPtr, 1, &delta.Renewal{LockedIncrease: &stakes.WeightedStake{}, LockedDecrease: &stakes.WeightedStake{}})
+	_, err = svc.ActivateValidator(*idPtr, 1, &globalstats.Renewal{LockedIncrease: &stakes.WeightedStake{}, LockedDecrease: &stakes.WeightedStake{}})
 	assert.NoError(t, err)
 
 	queuedCnt, err = svc.QueuedGroupSize()
