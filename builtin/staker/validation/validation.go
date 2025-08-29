@@ -172,7 +172,7 @@ func (v *Validation) renew(delegationWeight uint64) *globalstats.Renewal {
 
 func (v *Validation) exit() *globalstats.Exit {
 	ExitedTVL := stakes.NewWeightedStakeWithMultiplier(v.LockedVET, v.multiplier()) // use the acting multiplier for locked stake
-	QueuedDecrease := v.QueuedVET                                                  // queued weight is always initial weight
+	QueuedDecrease := v.QueuedVET                                                   // queued weight is always initial weight
 
 	v.Status = StatusExit
 	// move locked to cooldown
