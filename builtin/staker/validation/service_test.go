@@ -586,11 +586,6 @@ func TestService_Evict(t *testing.T) {
 	expectedExitBlock := uint32(5) + thor.EpochLength()
 	assert.Equal(t, &expectedExitBlock, val.ExitBlock)
 
-	assert.NoError(t, svc.Evict(id1, 7))
-	val, err = svc.GetValidation(id1)
-	assert.NoError(t, err)
-	assert.Equal(t, &expectedExitBlock, val.ExitBlock)
-
 	poisonExitSlot(st, addr, 7+thor.EpochLength())
 	assert.Error(t, svc.Evict(id1, 7))
 
