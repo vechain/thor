@@ -3346,7 +3346,7 @@ func TestStaker_Housekeep_NegativeCases(t *testing.T) {
 		ActivationCount: 0,
 	})
 
-	assert.ErrorContains(t, err, "failed to get validator")
+	assert.ErrorContains(t, err, "input string too short for thor.Address")
 }
 
 func TestValidation_NegativeCases(t *testing.T) {

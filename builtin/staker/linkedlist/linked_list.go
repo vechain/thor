@@ -15,8 +15,8 @@ import (
 )
 
 type LinkedList struct {
-	head  *solidity.Address
-	tail  *solidity.Address
+	head  *solidity.Raw[thor.Address]
+	tail  *solidity.Raw[thor.Address]
 	count *solidity.Uint256
 	next  *solidity.Mapping[thor.Address, thor.Address]
 	prev  *solidity.Mapping[thor.Address, thor.Address]
@@ -25,8 +25,8 @@ type LinkedList struct {
 // NewLinkedList creates a new linked list with persistent storage mappings for staker management
 func NewLinkedList(sctx *solidity.Context, headPos, tailPos, countPos thor.Bytes32) *LinkedList {
 	return &LinkedList{
-		head:  solidity.NewAddress(sctx, headPos),
-		tail:  solidity.NewAddress(sctx, tailPos),
+		head:  solidity.NewRaw[thor.Address](sctx, headPos),
+		tail:  solidity.NewRaw[thor.Address](sctx, tailPos),
 		count: solidity.NewUint256(sctx, countPos),
 		next:  solidity.NewMapping[thor.Address, thor.Address](sctx, headPos),
 		prev:  solidity.NewMapping[thor.Address, thor.Address](sctx, tailPos),
@@ -70,8 +70,12 @@ func (l *LinkedList) Add(address thor.Address) error {
 
 	if oldTail.IsZero() {
 		// the list is currently empty, set this entry to head & tail
-		l.head.Set(&address, false)
-		l.tail.Set(&address, false)
+		if err = l.head.Insert(address); err != nil {
+			return err
+		}
+		if err = l.tail.Insert(address); err != nil {
+			return err
+		}
 		return l.count.Add(big.NewInt(1))
 	}
 
@@ -86,13 +90,15 @@ func (l *LinkedList) Add(address thor.Address) error {
 	}
 
 	// Update tail pointer
-	l.tail.Set(&address, false)
+	if err = l.tail.Insert(address); err != nil {
+		return err
+	}
 
 	if err := l.count.Add(big.NewInt(1)); err != nil {
 		return err
 	}
 
-	return err
+	return nil
 }
 
 // Remove extracts an address from anywhere in the list, reconnecting adjacent nodes and clearing removed node's pointers
@@ -129,7 +135,9 @@ func (l *LinkedList) Remove(address thor.Address) error {
 		}
 	} else {
 		// This is the head, update head pointer
-		l.head.Set(&next, false)
+		if err = l.head.Insert(next); err != nil {
+			return err
+		}
 	}
 
 	// Update next node's prev pointer
@@ -139,7 +147,9 @@ func (l *LinkedList) Remove(address thor.Address) error {
 		}
 	} else {
 		// This is the tail, update tail pointer
-		l.tail.Set(&prev, false)
+		if err = l.tail.Update(prev); err != nil {
+			return err
+		}
 	}
 
 	// Clear the removed node's pointers
