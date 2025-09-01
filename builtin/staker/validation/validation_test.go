@@ -39,7 +39,8 @@ func TestValidation_Totals(t *testing.T) {
 		ExitingVET:    300,
 		ExitingWeight: 600,
 	}
-	totals := baseVal.Totals(&agg)
+	totals, err := baseVal.Totals(&agg)
+	assert.NoError(t, err)
 	assert.Equal(t, uint64(1500), totals.TotalLockedStake)
 	assert.Equal(t, uint64(1000), totals.TotalLockedWeight)
 	assert.Equal(t, uint64(1200), totals.TotalQueuedStake)
@@ -49,7 +50,8 @@ func TestValidation_Totals(t *testing.T) {
 	exitBlock := uint32(2)
 	val := baseVal
 	val.ExitBlock = &exitBlock
-	totals = val.Totals(&agg)
+	totals, err = val.Totals(&agg)
+	assert.NoError(t, err)
 	assert.Equal(t, uint64(1500), totals.TotalLockedStake)
 	assert.Equal(t, uint64(1000), totals.TotalLockedWeight)
 	assert.Equal(t, uint64(1200), totals.TotalQueuedStake)
@@ -63,7 +65,9 @@ func TestValidation_IsPeriodEnd(t *testing.T) {
 }
 
 func TestValidation_NextPeriodTVL(t *testing.T) {
-	assert.Equal(t, uint64(900), baseVal.NextPeriodTVL())
+	valNextPeriodTVL, err := baseVal.NextPeriodTVL()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(900), valNextPeriodTVL)
 }
 
 func TestValidation_Exit(t *testing.T) {

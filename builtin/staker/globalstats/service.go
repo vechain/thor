@@ -48,26 +48,23 @@ func (s *Service) ApplyRenewal(renewal *Renewal) error {
 	if err != nil {
 		return err
 	}
-	empty := locked.VET == 0 && locked.Weight == 0
 	queued, err := s.queued.Get()
 	if err != nil {
 		return err
 	}
 
 	locked.Add(renewal.LockedIncrease)
-	locked.Sub(renewal.LockedDecrease)
+	if err := locked.Sub(renewal.LockedDecrease); err != nil {
+		return err
+	}
 	queued -= renewal.QueuedDecrease
 
-	if empty {
-		if err := s.locked.Insert(locked); err != nil {
-			return err
-		}
-	} else {
-		if err := s.locked.Update(locked); err != nil {
-			return err
-		}
+	// for the initial state, use upsert to handle correct gas cost
+	if err := s.locked.Upsert(locked); err != nil {
+		return err
 	}
 
+	// queued here is already touched by addQueued
 	if err := s.queued.Update(queued); err != nil {
 		return err
 	}
@@ -86,7 +83,9 @@ func (s *Service) ApplyExit(exit *Exit) error {
 		return err
 	}
 
-	locked.Sub(exit.ExitedTVL)
+	if err := locked.Sub(exit.ExitedTVL); err != nil {
+		return err
+	}
 	queued -= exit.QueuedDecrease
 
 	if err := s.locked.Update(locked); err != nil {
@@ -106,15 +105,10 @@ func (s *Service) AddQueued(stake uint64) error {
 	if err != nil {
 		return err
 	}
-	empty := queued == 0
 
 	queued += stake
-
-	if empty {
-		return s.queued.Insert(queued)
-	} else {
-		return s.queued.Update(queued)
-	}
+	// for the initial state, use upsert to handle correct gas cost
+	return s.queued.Upsert(queued)
 }
 
 // RemoveQueued decreases queued totals when stake is removed from the queue.
@@ -125,7 +119,7 @@ func (s *Service) RemoveQueued(stake uint64) error {
 	}
 
 	queued -= stake
-
+	// queued here is already touched by addQueued
 	return s.queued.Update(queued)
 }
 
