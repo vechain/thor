@@ -234,8 +234,8 @@ func TestMapping_MultiSlotValue(t *testing.T) {
 
 	t.Run("set big struct charges correct SstoreSetGas", func(t *testing.T) {
 		require.NoError(t, mapping.Set(key, value, true))
-		// approximate slots: ceil((1+3*(1+32))/32)=4
-		expected := 4 * thor.SstoreSetGas
+		// maximum 2 slots, defined by gas.go
+		expected := 2 * thor.SstoreSetGas
 		assert.Equal(t, expected, charger.TotalGas(), "wrong gas for big struct set")
 	})
 
@@ -247,7 +247,8 @@ func TestMapping_MultiSlotValue(t *testing.T) {
 		got, err := mapping.Get(key)
 		require.NoError(t, err)
 		assert.Equal(t, value, got)
-		assert.Equal(t, 4*thor.SloadGas, charger.TotalGas(), "wrong gas for big struct get")
+		// maximum 2 slots, defined by gas.go
+		assert.Equal(t, 2*thor.SloadGas, charger.TotalGas(), "wrong gas for big struct get")
 	})
 }
 
