@@ -48,6 +48,7 @@ func (s *Service) ApplyRenewal(renewal *Renewal) error {
 	if err != nil {
 		return err
 	}
+	empty := locked.VET == 0 && locked.Weight == 0
 	queued, err := s.queued.Get()
 	if err != nil {
 		return err
@@ -57,8 +58,14 @@ func (s *Service) ApplyRenewal(renewal *Renewal) error {
 	locked.Sub(renewal.LockedDecrease)
 	queued -= renewal.QueuedDecrease
 
-	if err := s.locked.Update(locked); err != nil {
-		return err
+	if empty {
+		if err := s.locked.Insert(locked); err != nil {
+			return err
+		}
+	} else {
+		if err := s.locked.Update(locked); err != nil {
+			return err
+		}
 	}
 
 	if err := s.queued.Update(queued); err != nil {
@@ -99,10 +106,15 @@ func (s *Service) AddQueued(stake uint64) error {
 	if err != nil {
 		return err
 	}
+	empty := queued == 0
 
 	queued += stake
 
-	return s.queued.Upsert(queued)
+	if empty {
+		return s.queued.Insert(queued)
+	} else {
+		return s.queued.Update(queued)
+	}
 }
 
 // RemoveQueued decreases queued totals when stake is removed from the queue.
