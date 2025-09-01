@@ -27,7 +27,7 @@ func (p *Packer) schedulePOS(parent *chain.BlockSummary, nowTimestamp uint64, st
 
 	var (
 		beneficiary thor.Address
-		proposers   []pos.Proposer = make([]pos.Proposer, 0, len(leaderGroup))
+		proposers   = make([]pos.Proposer, 0, len(leaderGroup))
 	)
 
 	for _, leader := range leaderGroup {

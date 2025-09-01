@@ -50,7 +50,7 @@ func NewScheduler(
 	var (
 		listed   = false
 		proposer Proposer
-		shuffled []entry = make([]entry, 0, len(proposers))
+		shuffled = make([]entry, 0, len(proposers))
 	)
 
 	var num [4]byte
@@ -79,11 +79,11 @@ func NewScheduler(
 
 	// Step 2: Generate a deterministic seed for the random number generator
 	hashedSeed := thor.Blake2b(seed, num[:])
-	pseudoRND := rand.New(rand.NewSource(uint64ToI64(binary.LittleEndian.Uint64(hashedSeed[:]))))
+	pseudoRND := rand.New(rand.NewSource(uint64ToI64(binary.LittleEndian.Uint64(hashedSeed[:])))) //#nosec G404
 
 	// Step 3: Calculate priority scores for each validator based on their weight
 	// using the exponential distribution method for weighted random sampling
-	var sequence []entry = make([]entry, 0, len(shuffled))
+	sequence := make([]entry, 0, len(shuffled))
 	for _, entry := range shuffled {
 		// IMPORTANT: Every validator in the leader group should be allocated
 		// with the deterministic random number sequence from the same source.

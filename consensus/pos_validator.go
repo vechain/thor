@@ -45,7 +45,7 @@ func (c *Consensus) validateStakingProposer(
 	}
 
 	var (
-		proposers   []pos.Proposer = make([]pos.Proposer, 0, len(leaders))
+		proposers   = make([]pos.Proposer, 0, len(leaders))
 		beneficiary *thor.Address
 	)
 	for _, leader := range leaders {

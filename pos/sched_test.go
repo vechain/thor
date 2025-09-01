@@ -22,7 +22,7 @@ func createParams() ([]Proposer, uint64) {
 	validators := make([]Proposer, 0)
 	totalStake := uint64(0)
 	for _, acc := range genesis.DevAccounts() {
-		stake := binary.BigEndian.Uint64(acc.Address[2:]) // use the last 4 bytes to create semi random, but deterministic stake
+		stake := binary.BigEndian.Uint64(acc.Address[4:]) // use the last 4 bytes to create semi random, but deterministic stake
 		validators = append(validators, Proposer{
 			Address: acc.Address,
 			Active:  true,
@@ -139,7 +139,7 @@ func TestScheduler_Distribution(t *testing.T) {
 			validators := make([]Proposer, 0)
 			totalStake := uint64(0)
 
-			var weightMap = make(map[thor.Address]uint64)
+			weightMap := make(map[thor.Address]uint64)
 			for i, acc := range genesis.DevAccounts() {
 				stake := tc.stakes(i, acc.Address)
 				validators = append(validators, Proposer{
