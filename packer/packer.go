@@ -133,11 +133,11 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 		}
 
 		onlineWeight := uint64(0)
-		for node, leader := range leaders {
-			if leader.IsOnline() {
+		for _, leader := range leaders {
+			if leader.Active {
 				onlineWeight += leader.Weight
 			}
-			if node == p.nodeMaster {
+			if leader.Address == p.nodeMaster {
 				if leader.Beneficiary != nil {
 					beneficiary = leader.Beneficiary
 				} else if beneficiary == nil {
