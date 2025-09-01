@@ -7,6 +7,7 @@ package validation
 import (
 	"encoding/binary"
 	"math/big"
+	"strconv"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -220,6 +221,44 @@ func TestService_SignalExit_SetsExitBlockAndPersists(t *testing.T) {
 	if assert.NotNil(t, after.ExitBlock) {
 		assert.Equal(t, uint32(130), *after.ExitBlock)
 	}
+}
+
+func TestService_SignalExit_ExitBlockLimitReached(t *testing.T) {
+	svc, _, _ := newSvc()
+
+	validator := thor.BytesToAddress([]byte("validator"))
+	endorser := validator
+	validation := &Validation{
+		Endorser:           endorser,
+		Status:             StatusActive,
+		StartBlock:         100,
+		Period:             10,
+		CompleteIterations: 0,
+	}
+
+	assert.NoError(t, svc.repo.setValidation(validator, validation, true))
+
+	minBlock := validation.StartBlock + validation.Period*(validation.CurrentIteration())
+
+	for idx := range 20 {
+		blockNum := minBlock + uint32(idx*int(thor.EpochLength()))
+
+		exitValidator := thor.BytesToAddress([]byte("exit" + strconv.Itoa(idx)))
+
+		assert.NoError(t, svc.repo.setExit(blockNum, exitValidator))
+	}
+
+	val, err := svc.GetExistingValidation(validator)
+	assert.NoError(t, err)
+
+	err = svc.SignalExit(validator, val)
+
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "max try reached")
+
+	updatedVal, err := svc.GetValidation(validator)
+	assert.NoError(t, err)
+	assert.Nil(t, updatedVal.ExitBlock)
 }
 
 func TestService_SignalExit_SetExitBlock_Error(t *testing.T) {

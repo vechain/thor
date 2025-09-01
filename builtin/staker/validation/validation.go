@@ -28,6 +28,8 @@ const (
 	MultiplierWithDelegations = uint8(200) // 200% for validators with delegations
 )
 
+var ErrMaxTryReached = errors.New("max try reached")
+
 type Validation struct {
 	Endorser           thor.Address  // the address providing the stake
 	Beneficiary        *thor.Address `rlp:"nil"` // the address receiving the rewards

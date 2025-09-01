@@ -265,6 +265,9 @@ func (s *Staker) SignalExit(validator thor.Address, endorser thor.Address) error
 	}
 
 	if err := s.validationService.SignalExit(validator, val); err != nil {
+		if err == validation.ErrMaxTryReached {
+			return NewReverts(validation.ErrMaxTryReached.Error())
+		}
 		logger.Info("signal exit failed", "validator", validator, "error", err)
 		return err
 	}
