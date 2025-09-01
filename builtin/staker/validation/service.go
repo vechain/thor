@@ -47,7 +47,7 @@ var (
 	slotQueuedTail      = thor.BytesToBytes32([]byte(("validations-queued-tail")))
 	slotQueuedGroupSize = thor.BytesToBytes32([]byte(("validations-queued-group-size")))
 
-	exitMaxTry = 20 // virtual limited the exit queue size to 20
+	exitMaxTry = 20 // revert transaction if after these attempts an exit block is not found
 )
 
 func New(sctx *solidity.Context,
