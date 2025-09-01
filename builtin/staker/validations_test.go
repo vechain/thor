@@ -1283,7 +1283,7 @@ func TestStaker_RemoveValidator(t *testing.T) {
 func TestStaker_LeaderGroup(t *testing.T) {
 	staker, _ := newStaker(t, 68, 101, true)
 
-	stakes := make(map[thor.Address]uint64)
+	added := make(map[thor.Address]bool)
 	for range 10 {
 		addr := datagen.RandAddress()
 		stake := RandomStake()
@@ -1291,15 +1291,19 @@ func TestStaker_LeaderGroup(t *testing.T) {
 		assert.NoError(t, err)
 		_, err = staker.activateNextValidation(0, getTestMaxLeaderSize(staker.params))
 		assert.NoError(t, err)
-		stakes[addr] = stake
+		added[addr] = true
 	}
 
 	leaderGroup, err := staker.LeaderGroup()
 	assert.NoError(t, err)
 
-	for id, stake := range stakes {
-		assert.Contains(t, leaderGroup, id)
-		assert.Equal(t, stake, leaderGroup[id].LockedVET)
+	leaders := make(map[thor.Address]bool)
+	for _, leader := range leaderGroup {
+		leaders[leader.Address] = true
+	}
+
+	for addr := range added {
+		assert.Contains(t, leaders, addr)
 	}
 }
 

@@ -12,30 +12,29 @@ import (
 	"math"
 	"math/rand"
 	"slices"
-	"sort"
 
-	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
 )
 
+type Proposer struct {
+	Address thor.Address
+	Active  bool
+	Weight  uint64
+}
+
+type entry struct {
+	address thor.Address
+	weight  uint64
+	hash    thor.Bytes32
+	active  bool
+	score   float64
+}
+
 // Scheduler to schedule the time when a proposer to produce a block for PoS.
 type Scheduler struct {
-	proposer        *validation.Validation
-	proposerID      thor.Address
+	proposer        Proposer
 	parentBlockTime uint64
-	sequence        []proposer
-}
-
-type onlineProposer struct {
-	id         thor.Address
-	validation *validation.Validation
-	hash       thor.Bytes32
-	score      float64
-}
-
-type proposer struct {
-	id         thor.Address
-	validation *validation.Validation
+	sequence        []entry
 }
 
 // NewScheduler create a Scheduler object.
@@ -43,47 +42,73 @@ type proposer struct {
 // If `addr` is not listed in `proposers` or not active, an error returned.
 func NewScheduler(
 	addr thor.Address,
-	proposers map[thor.Address]*validation.Validation,
+	proposers []Proposer,
 	parentBlockNumber uint32,
 	parentBlockTime uint64,
 	seed []byte,
 ) (*Scheduler, error) {
 	var (
-		proposer   *validation.Validation
-		proposerID thor.Address
+		listed   = false
+		proposer Proposer
+		shuffled = make([]entry, 0, len(proposers))
 	)
+
 	var num [4]byte
 	binary.BigEndian.PutUint32(num[:], parentBlockNumber)
 
-	online := make([]*onlineProposer, 0)
-	for id, p := range proposers {
-		if id == addr {
+	// Step 1: shuffle the all proposers using the seed, including offline proposers
+	for _, p := range proposers {
+		if p.Address == addr {
 			proposer = p
-			proposerID = id
+			listed = true
 		}
-		if p.IsOnline() || id == addr {
-			online = append(online, &onlineProposer{
-				id:         id,
-				validation: p,
-				hash:       thor.Blake2b(seed, num[:], id.Bytes()),
-			})
-		}
+		shuffled = append(shuffled, entry{
+			address: p.Address,
+			weight:  p.Weight,
+			active:  p.Active,
+			hash:    thor.Blake2b(seed, num[:], p.Address.Bytes()),
+		})
 	}
-
-	if proposerID.IsZero() {
+	if !listed {
 		return nil, errors.New("unauthorized block proposer")
 	}
 
-	// initial sort -> this is required to ensure the same order for the random source generator
-	slices.SortFunc(online, func(i, j *onlineProposer) int {
-		return bytes.Compare(i.hash.Bytes(), j.hash.Bytes())
+	slices.SortStableFunc(shuffled, func(a, b entry) int {
+		return bytes.Compare(a.hash.Bytes(), b.hash.Bytes())
+	})
+
+	// Step 2: Generate a deterministic seed for the random number generator
+	hashedSeed := thor.Blake2b(seed, num[:])
+	pseudoRND := rand.New(rand.NewSource(uint64ToI64(binary.LittleEndian.Uint64(hashedSeed[:])))) //#nosec G404
+
+	// Step 3: Calculate priority scores for each validator based on their weight
+	// using the exponential distribution method for weighted random sampling
+	sequence := make([]entry, 0, len(shuffled))
+	for _, entry := range shuffled {
+		// IMPORTANT: Every validator in the leader group should be allocated
+		// with the deterministic random number sequence from the same source.
+		random := pseudoRND.Float64()
+		// but only active/online validators will be picked for block production
+		if entry.active || entry.address == addr {
+			entry.score = math.Pow(random, 1.0/float64(entry.weight))
+			sequence = append(sequence, entry)
+		}
+	}
+
+	// Step 4: Sort validators by priority score in descending order
+	slices.SortStableFunc(sequence, func(a, b entry) int {
+		if a.score < b.score {
+			return 1
+		} else if a.score > b.score {
+			return -1
+		}
+		return 0
 	})
 
 	return &Scheduler{
 		proposer,
-		proposerID,
 		parentBlockTime,
-		createSequence(online, seed, parentBlockNumber),
+		sequence,
 	}, nil
 }
 
@@ -101,7 +126,7 @@ func (s *Scheduler) Schedule(nowTime uint64) (newBlockTime uint64) {
 	offset := (newBlockTime-s.parentBlockTime)/T - 1
 	for i, n := uint64(0), uint64(len(s.sequence)); i < n; i++ {
 		index := (i + offset) % n
-		if s.sequence[index].id == s.proposerID {
+		if s.sequence[index].address == s.proposer.Address {
 			return newBlockTime + i*T
 		}
 	}
@@ -112,7 +137,7 @@ func (s *Scheduler) Schedule(nowTime uint64) (newBlockTime uint64) {
 
 // IsTheTime returns if the newBlockTime is correct for the proposer.
 func (s *Scheduler) IsTheTime(newBlockTime uint64) bool {
-	return s.IsScheduled(newBlockTime, s.proposerID)
+	return s.IsScheduled(newBlockTime, s.proposer.Address)
 }
 
 // IsScheduled returns if the schedule(proposer, blockTime) is correct.
@@ -129,32 +154,36 @@ func (s *Scheduler) IsScheduled(blockTime uint64, proposer thor.Address) bool {
 	}
 
 	index := (blockTime - s.parentBlockTime - T) / T % uint64(len(s.sequence))
-	return s.sequence[index].id == proposer
+	return s.sequence[index].address == proposer
 }
 
 // Updates returns proposers whose status are changed, and the score when new block time is assumed to be newBlockTime.
-func (s *Scheduler) Updates(newBlockTime uint64, totalWeight uint64) (map[thor.Address]bool, uint64) {
+func (s *Scheduler) Updates(newBlockTime uint64, totalWeight uint64) ([]Proposer, uint64) {
 	T := thor.BlockInterval()
 
-	updates := make(map[thor.Address]bool)
-	activeWeight := uint64(0)
+	updates := make([]Proposer, 0)
+
+	// calculate all online weight
+	onlineWeight := uint64(0)
 	for idx := range s.sequence {
-		activeWeight += s.sequence[idx].validation.Weight
+		onlineWeight += s.sequence[idx].weight
 	}
 
+	activeWeight := onlineWeight
 	for i := uint64(0); i < uint64(len(s.sequence)); i++ {
 		if s.parentBlockTime+T+i*T >= newBlockTime {
 			break
 		}
-		id := s.sequence[i].id
-		if id != s.proposerID {
-			updates[id] = false
-			activeWeight -= s.sequence[i].validation.Weight
+		if s.sequence[i].address != s.proposer.Address {
+			updates = append(updates, Proposer{Address: s.sequence[i].address, Active: false})
+
+			// subtract the weight from active weight
+			activeWeight -= s.sequence[i].weight
 		}
 	}
 
-	if s.proposer.OfflineBlock != nil {
-		updates[s.proposerID] = true
+	if !s.proposer.Active {
+		updates = append(updates, Proposer{Address: s.proposer.Address, Active: true})
 	}
 
 	if totalWeight > 0 {
@@ -165,51 +194,6 @@ func (s *Scheduler) Updates(newBlockTime uint64, totalWeight uint64) (map[thor.A
 	return updates, 0
 }
 
-// createSequence implements a Weighted Random Sampling algorithm using the Exponential Distribution Method.
-func createSequence(proposers []*onlineProposer, seed []byte, parentNum uint32) []proposer {
-	if len(proposers) == 0 {
-		return []proposer{}
-	}
-
-	// Step 1: Generate a deterministic seed for the random number generator
-	var num [4]byte
-	binary.BigEndian.PutUint32(num[:], parentNum)
-
-	hashedSeed := thor.Blake2b(seed, num[:])
-	randomSource := rand.New(rand.NewSource(int64(binary.LittleEndian.Uint64(hashedSeed[:])))) //nolint:gosec
-
-	// Step 2: Calculate priority scores for each validator based on their weight
-	// using the exponential distribution method for weighted random sampling
-	weightedProposers := make([]*onlineProposer, len(proposers))
-	for i, proposer := range proposers {
-		// the scheduler relies on the staker to have healthy validator weights
-		weightFloat := float64(proposer.validation.Weight)
-
-		// Generate random value and calculate priority using exponential distribution
-		randomValue := randomSource.Float64()
-		priorityScore := math.Pow(randomValue, 1.0/weightFloat)
-
-		weightedProposers[i] = &onlineProposer{
-			id:         proposer.id,
-			score:      priorityScore,
-			hash:       proposer.hash,
-			validation: proposer.validation,
-		}
-	}
-
-	// Step 3: Sort validators by priority score in descending order
-	sort.Slice(weightedProposers, func(i, j int) bool {
-		return weightedProposers[i].score > weightedProposers[j].score
-	})
-
-	// Step 4: Extract the validator IDs in priority order
-	resultSequence := make([]proposer, len(weightedProposers))
-	for i, validator := range weightedProposers {
-		resultSequence[i] = proposer{
-			id:         validator.id,
-			validation: validator.validation,
-		}
-	}
-
-	return resultSequence
+func uint64ToI64(u uint64) int64 {
+	return int64(u ^ (1 << 63))
 }
