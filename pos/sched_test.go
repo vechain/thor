@@ -7,6 +7,7 @@ package pos
 
 import (
 	"encoding/binary"
+	"math"
 	"math/big"
 	"math/rand"
 	"testing"
@@ -118,7 +119,7 @@ func TestScheduler_Distribution(t *testing.T) {
 			name:      "increasing",
 			tolerance: 0.02,
 			stakes: func(index int, acc thor.Address) uint64 {
-				return uint64((index + 1) * 1000)
+				return uint64(index * 1000)
 			},
 		},
 		{
@@ -329,4 +330,12 @@ func TestScheduler_Schedule_TotalScore(t *testing.T) {
 	expectedScore := onlineWeight * thor.MaxPosScore
 	expectedScore = expectedScore / totalStake
 	assert.Equal(t, expectedScore, score, "Score should be equal to the expected score")
+}
+
+func TestU64ToI64(t *testing.T) {
+	assert.Equal(t, int64(math.MaxInt64), uint64ToI64(math.MaxUint64))
+	assert.Equal(t, int64(0), uint64ToI64(1<<63))
+	assert.Equal(t, int64(-1), uint64ToI64(1<<63-1))
+	assert.Equal(t, int64(-22), uint64ToI64(1<<63-22))
+	assert.Equal(t, int64(math.MinInt64), uint64ToI64(0))
 }

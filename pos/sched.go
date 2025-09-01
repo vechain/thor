@@ -79,7 +79,7 @@ func NewScheduler(
 
 	// Step 2: Generate a deterministic seed for the random number generator
 	hashedSeed := thor.Blake2b(seed, num[:])
-	pseudoRND := rand.New(rand.NewSource(int64(binary.LittleEndian.Uint64(hashedSeed[:]))))
+	pseudoRND := rand.New(rand.NewSource(uint64ToI64(binary.LittleEndian.Uint64(hashedSeed[:]))))
 
 	// Step 3: Calculate priority scores for each validator based on their weight
 	// using the exponential distribution method for weighted random sampling
@@ -192,4 +192,8 @@ func (s *Scheduler) Updates(newBlockTime uint64, totalWeight uint64) ([]Proposer
 	}
 
 	return updates, 0
+}
+
+func uint64ToI64(u uint64) int64 {
+	return int64(u ^ (1 << 63))
 }

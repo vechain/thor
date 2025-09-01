@@ -49,10 +49,8 @@ func (c *Consensus) validateStakingProposer(
 		beneficiary *thor.Address
 	)
 	for _, leader := range leaders {
-		if leader.Address == signer {
-			if leader.Beneficiary != nil {
-				beneficiary = leader.Beneficiary
-			}
+		if leader.Address == signer && leader.Beneficiary != nil {
+			beneficiary = leader.Beneficiary
 		}
 		proposers = append(proposers, pos.Proposer{
 			Address: leader.Address,
