@@ -176,7 +176,7 @@ func (s *Staker) GetValidationTotals(validator thor.Address) (*validation.Totals
 	if err != nil {
 		return nil, err
 	}
-	return val.Totals(agg), nil
+	return val.Totals(agg)
 }
 
 // Next returns the next validator in a linked list.
@@ -338,7 +338,8 @@ func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, am
 		// We don't consider any increases, i.e., entry.QueuedVET. We only consider locked and current decreases.
 		// The reason is that validator can instantly withdraw QueuedVET at any time.
 		// We need to make sure the locked VET minus the sum of the current decreases is still above the minimum stake.
-		if val.LockedVET-val.PendingUnlockVET-amount < MinStakeVET {
+		pendingAndDecrease := val.PendingUnlockVET + amount
+		if pendingAndDecrease > val.LockedVET || val.LockedVET-pendingAndDecrease < MinStakeVET {
 			return NewReverts("next period stake is lower than minimum stake")
 		}
 	}
@@ -582,7 +583,15 @@ func (s *Staker) validateStakeIncrease(validator thor.Address, validation *valid
 	}
 
 	// accumulated TVL should cannot be more than MaxStake
-	if validation.NextPeriodTVL()+agg.NextPeriodTVL()+amount > MaxStakeVET {
+	aggNextPeriodTVL, err := agg.NextPeriodTVL()
+	if err != nil {
+		return err
+	}
+	valNextPeriodTVL, err := validation.NextPeriodTVL()
+	if err != nil {
+		return err
+	}
+	if valNextPeriodTVL+aggNextPeriodTVL+amount > MaxStakeVET {
 		return NewReverts("stake is out of range")
 	}
 

@@ -18,6 +18,8 @@ import (
 var (
 	slotDelegations        = thor.BytesToBytes32([]byte(("delegations")))
 	slotDelegationsCounter = thor.BytesToBytes32([]byte(("delegations-counter")))
+
+	maxUint256 = new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1))
 )
 
 type Service struct {
@@ -59,6 +61,9 @@ func (s *Service) Add(
 		return nil, err
 	}
 
+	if id.Cmp(maxUint256) >= 0 {
+		return nil, errors.New("delegation ID counter overflow: maximum delegations reached")
+	}
 	id = id.Add(id, big.NewInt(1))
 	if err := s.idCounter.Set(id); err != nil {
 		return nil, errors.Wrap(err, "failed to increment delegation ID counter")

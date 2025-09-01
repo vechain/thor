@@ -441,7 +441,10 @@ func (s *Service) Renew(validator thor.Address, delegationWeight uint64) (*globa
 	if err != nil {
 		return nil, err
 	}
-	delta := validation.renew(delegationWeight)
+	delta, err := validation.renew(delegationWeight)
+	if err != nil {
+		return nil, err
+	}
 	if err = s.repo.setValidation(validator, validation, false); err != nil {
 		return nil, errors.Wrap(err, "failed to renew validator")
 	}

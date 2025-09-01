@@ -6,6 +6,8 @@
 package aggregation
 
 import (
+	"errors"
+
 	"github.com/vechain/thor/v2/builtin/staker/globalstats"
 	"github.com/vechain/thor/v2/builtin/staker/stakes"
 )
@@ -44,8 +46,13 @@ func (a *Aggregation) IsEmpty() bool {
 
 // NextPeriodTVL is the total value locked (TVL) for the next period.
 // It is the sum of the currently recurring VET, plus any pending recurring and one-time VET.
-func (a *Aggregation) NextPeriodTVL() uint64 {
-	return a.LockedVET + a.PendingVET - a.ExitingVET
+func (a *Aggregation) NextPeriodTVL() (uint64, error) {
+	nextPeriodLocked := a.LockedVET + a.PendingVET
+	if a.ExitingVET > nextPeriodLocked {
+		return 0, errors.New("insufficient locked and pending VET to subtract")
+	}
+
+	return nextPeriodLocked - a.ExitingVET, nil
 }
 
 // renew transitions delegations to the next staking period.
@@ -54,7 +61,13 @@ func (a *Aggregation) NextPeriodTVL() uint64 {
 // 2. Remove ExitingVET from LockedVET
 // 3. Move ExitingVET to WithdrawableVET
 // return a delta object
-func (a *Aggregation) renew() *globalstats.Renewal {
+func (a *Aggregation) renew() (*globalstats.Renewal, error) {
+	if a.ExitingVET > a.LockedVET+a.PendingVET {
+		return nil, errors.New("exiting VET cannot exceed locked VET")
+	}
+	if a.ExitingWeight > a.LockedWeight+a.PendingWeight {
+		return nil, errors.New("exiting weight cannot exceed locked weight")
+	}
 	lockedIncrease := stakes.NewWeightedStake(a.PendingVET, a.PendingWeight)
 	lockedDecrease := stakes.NewWeightedStake(a.ExitingVET, a.ExitingWeight)
 	queuedDecrease := a.PendingVET
@@ -79,7 +92,7 @@ func (a *Aggregation) renew() *globalstats.Renewal {
 		LockedIncrease: lockedIncrease,
 		LockedDecrease: lockedDecrease,
 		QueuedDecrease: queuedDecrease,
-	}
+	}, nil
 }
 
 // exit immediately moves all delegation funds to withdrawable state.

@@ -6,6 +6,8 @@
 package validation
 
 import (
+	"errors"
+
 	"github.com/vechain/thor/v2/builtin/staker/aggregation"
 	"github.com/vechain/thor/v2/builtin/staker/globalstats"
 	"github.com/vechain/thor/v2/builtin/staker/stakes"
@@ -53,7 +55,7 @@ type Totals struct {
 	NextPeriodWeight  uint64 // total weight which will be effective (next period), validations weight + all delegators weight
 }
 
-func (v *Validation) Totals(agg *aggregation.Aggregation) *Totals {
+func (v *Validation) Totals(agg *aggregation.Aggregation) (*Totals, error) {
 	var exitingVET uint64
 	var exiting bool
 	// If the validation is due to exit, then all locked VET is considered exiting.
@@ -69,11 +71,19 @@ func (v *Validation) Totals(agg *aggregation.Aggregation) *Totals {
 	nextPeriodWeight := uint64(0)
 	if !exiting {
 		multiplier := Multiplier
-		if agg.NextPeriodTVL() > 0 {
+		nextPeriodTvl, err := agg.NextPeriodTVL()
+		if err != nil {
+			return nil, err
+		}
+		if nextPeriodTvl > 0 {
 			multiplier = MultiplierWithDelegations
 		}
 
-		nextPeriodWeight = stakes.NewWeightedStakeWithMultiplier(v.NextPeriodTVL(), multiplier).Weight +
+		valNextPeriodTVL, err := v.NextPeriodTVL()
+		if err != nil {
+			return nil, err
+		}
+		nextPeriodWeight = stakes.NewWeightedStakeWithMultiplier(valNextPeriodTVL, multiplier).Weight +
 			agg.LockedWeight + agg.PendingWeight - agg.ExitingWeight
 	}
 
@@ -84,7 +94,7 @@ func (v *Validation) Totals(agg *aggregation.Aggregation) *Totals {
 		TotalQueuedStake:  v.QueuedVET + agg.PendingVET,
 		TotalExitingStake: exitingVET,
 		NextPeriodWeight:  nextPeriodWeight,
-	}
+	}, nil
 }
 
 // IsEmpty returns whether the entry can be treated as empty.
@@ -103,8 +113,12 @@ func (v *Validation) IsPeriodEnd(current uint32) bool {
 }
 
 // NextPeriodTVL returns the amount of VET that will be locked in the next staking period for the validator only.
-func (v *Validation) NextPeriodTVL() uint64 {
-	return v.LockedVET + v.QueuedVET - v.PendingUnlockVET
+func (v *Validation) NextPeriodTVL() (uint64, error) {
+	nextPeriodLocked := v.LockedVET + v.QueuedVET
+	if v.PendingUnlockVET > nextPeriodLocked {
+		return 0, errors.New("insufficient locked and queued VET to subtract")
+	}
+	return nextPeriodLocked - v.PendingUnlockVET, nil
 }
 
 func (v *Validation) CurrentIteration() uint32 {
@@ -120,7 +134,7 @@ func (v *Validation) CurrentIteration() uint32 {
 // 3. Increase WithdrawableVET by PendingUnlockVET
 // 4. Set QueuedVET to 0
 // 5. Set PendingUnlockVET to 0
-func (v *Validation) renew(delegationWeight uint64) *globalstats.Renewal {
+func (v *Validation) renew(delegationWeight uint64) (*globalstats.Renewal, error) {
 	queuedDecrease := v.QueuedVET
 
 	var prev, after struct {
@@ -137,7 +151,11 @@ func (v *Validation) renew(delegationWeight uint64) *globalstats.Renewal {
 		after.multiplier = MultiplierWithDelegations
 	}
 
-	after.lockedVET = v.LockedVET + v.QueuedVET - v.PendingUnlockVET
+	after.lockedVET = v.LockedVET + v.QueuedVET
+	if v.PendingUnlockVET > after.lockedVET {
+		return nil, errors.New("pending unlock VET exceeds total locked VET")
+	}
+	after.lockedVET -= v.PendingUnlockVET
 	after.valWeight = stakes.NewWeightedStakeWithMultiplier(after.lockedVET, after.multiplier).Weight
 
 	lockedIncrease := stakes.NewWeightedStake(0, 0)
@@ -167,7 +185,7 @@ func (v *Validation) renew(delegationWeight uint64) *globalstats.Renewal {
 		LockedIncrease: lockedIncrease,
 		LockedDecrease: lockedDecrease,
 		QueuedDecrease: queuedDecrease,
-	}
+	}, nil
 }
 
 func (v *Validation) exit() *globalstats.Exit {

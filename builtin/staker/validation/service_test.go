@@ -108,9 +108,10 @@ func TestService_ActivateAndExit_Flow(t *testing.T) {
 	}
 	assert.NoError(t, svc.repo.setValidation(id, val, true))
 
-	renew := (&Validation{QueuedVET: uint64(100), LockedVET: uint64(0), Weight: uint64(0)}).renew(uint64(0))
+	renew, err := (&Validation{QueuedVET: uint64(100), LockedVET: uint64(0), Weight: uint64(0)}).renew(uint64(0))
+	assert.NoError(t, err)
 
-	_, err := svc.ActivateValidator(id, 1, renew)
+	_, err = svc.ActivateValidator(id, 1, renew)
 	assert.NoError(t, err)
 
 	after, err := svc.GetValidation(id)

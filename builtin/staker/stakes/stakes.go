@@ -5,6 +5,8 @@
 
 package stakes
 
+import "errors"
+
 type WeightedStake struct {
 	VET    uint64 // The amount of VET staked(in VET, not wei)
 	Weight uint64 // The weight of the stake, calculated as (stake * multiplier / 100%)
@@ -33,7 +35,14 @@ func (s *WeightedStake) Add(new *WeightedStake) {
 	s.Weight += new.Weight
 }
 
-func (s *WeightedStake) Sub(new *WeightedStake) {
+func (s *WeightedStake) Sub(new *WeightedStake) error {
+	if new.VET > s.VET {
+		return errors.New("cannot subtract more VET than available")
+	}
+	if new.Weight > s.Weight {
+		return errors.New("cannot subtract more weight than available")
+	}
 	s.VET -= new.VET
 	s.Weight -= new.Weight
+	return nil
 }
