@@ -212,9 +212,10 @@ func (s *Service) Evict(validator thor.Address, currentBlock uint32) error {
 	if err != nil {
 		return err
 	}
-	if validation.ExitBlock != nil && *validation.ExitBlock < exitBlock {
-		exitBlock = *validation.ExitBlock
-	}
+	// todo this shouldnt be needed as the exit block
+	//if validation.ExitBlock != nil && *validation.ExitBlock < exitBlock {
+	//	exitBlock = *validation.ExitBlock
+	//}
 	validation.ExitBlock = &exitBlock
 
 	return s.repo.setValidation(validator, validation, false)

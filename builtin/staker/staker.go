@@ -6,6 +6,8 @@
 package staker
 
 import (
+	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/vechain/thor/v2/builtin/gascharger"
@@ -264,8 +266,12 @@ func (s *Staker) SignalExit(validator thor.Address, endorser thor.Address) error
 		return NewReverts("can't signal exit while not active")
 	}
 
+	if val.ExitBlock != nil {
+		return NewReverts(fmt.Sprintf("exit block already set to %d", *val.ExitBlock))
+	}
+
 	if err := s.validationService.SignalExit(validator, val); err != nil {
-		if err == validation.ErrMaxTryReached {
+		if errors.Is(err, validation.ErrMaxTryReached) {
 			return NewReverts(validation.ErrMaxTryReached.Error())
 		}
 		logger.Info("signal exit failed", "validator", validator, "error", err)
