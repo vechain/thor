@@ -66,7 +66,7 @@ func (a *Aggregation) renew() (*globalstats.Renewal, error) {
 		return nil, errors.New("exiting VET cannot exceed locked VET")
 	}
 	if a.ExitingWeight > a.LockedWeight {
-		return nil, errors.New("exiting weight cannot exceed locked weight\"")
+		return nil, errors.New("exiting weight cannot exceed locked weight")
 	}
 	lockedIncrease := stakes.NewWeightedStake(a.PendingVET, a.PendingWeight)
 	lockedDecrease := stakes.NewWeightedStake(a.ExitingVET, a.ExitingWeight)
