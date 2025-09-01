@@ -16,7 +16,6 @@ import (
 func (p *Packer) schedulePOS(parent *chain.BlockSummary, nowTimestamp uint64, state *state.State) (thor.Address, uint64, uint64, error) {
 	staker := builtin.Staker.Native(state)
 
-	var seed []byte
 	seed, err := p.seeder.Generate(parent.Header.ID())
 	if err != nil {
 		return thor.Address{}, 0, 0, err
@@ -25,11 +24,30 @@ func (p *Packer) schedulePOS(parent *chain.BlockSummary, nowTimestamp uint64, st
 	if err != nil {
 		return thor.Address{}, 0, 0, err
 	}
-	validator, ok := leaderGroup[p.nodeMaster]
-	if !ok {
-		return thor.Address{}, 0, 0, errNotScheduled
+
+	var (
+		beneficiary thor.Address
+		proposers   []pos.Proposer = make([]pos.Proposer, 0, len(leaderGroup))
+	)
+
+	for _, leader := range leaderGroup {
+		if leader.Address == p.nodeMaster {
+			if leader.Beneficiary != nil { // staker contract beneficiary first
+				beneficiary = *leader.Beneficiary
+			} else if p.beneficiary != nil { // packer beneficiary option second
+				beneficiary = *p.beneficiary
+			} else { // fallback to endorser
+				beneficiary = leader.Endorser
+			}
+		}
+
+		proposers = append(proposers, pos.Proposer{
+			Address: leader.Address,
+			Active:  leader.Active,
+			Weight:  leader.Weight,
+		})
 	}
-	sched, err := pos.NewScheduler(p.nodeMaster, leaderGroup, parent.Header.Number(), parent.Header.Timestamp(), seed)
+	sched, err := pos.NewScheduler(p.nodeMaster, proposers, parent.Header.Number(), parent.Header.Timestamp(), seed)
 	if err != nil {
 		return thor.Address{}, 0, 0, err
 	}
@@ -41,19 +59,10 @@ func (p *Packer) schedulePOS(parent *chain.BlockSummary, nowTimestamp uint64, st
 	}
 	updates, score := sched.Updates(newBlockTime, weight)
 
-	for addr, online := range updates {
-		if err := staker.SetOnline(addr, parent.Header.Number()+1, online); err != nil {
+	for _, u := range updates {
+		if err := staker.SetOnline(u.Address, parent.Header.Number()+1, u.Active); err != nil {
 			return thor.Address{}, 0, 0, err
 		}
-	}
-
-	var beneficiary thor.Address
-	if validator.Beneficiary != nil { // contract beneficiary get's validated in consensus
-		beneficiary = *validator.Beneficiary
-	} else if p.beneficiary != nil {
-		beneficiary = *p.beneficiary
-	} else {
-		beneficiary = validator.Endorser
 	}
 
 	return beneficiary, newBlockTime, score, nil

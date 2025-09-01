@@ -30,9 +30,9 @@ func (c *Consensus) validateStakingProposer(
 	if err != nil {
 		return err
 	}
-	var leaders map[thor.Address]*validation.Validation
+	var leaders []validation.Leader
 	if cached, ok := c.validatorsCache.Get(header.ParentID()); ok {
-		if cachedLeaders, ok := cached.(map[thor.Address]*validation.Validation); ok {
+		if cachedLeaders, ok := cached.([]validation.Leader); ok {
 			leaders = cachedLeaders
 		}
 	}
@@ -44,7 +44,24 @@ func (c *Consensus) validateStakingProposer(
 		}
 	}
 
-	sched, err := pos.NewScheduler(signer, leaders, parent.Number(), parent.Timestamp(), seed)
+	var (
+		proposers   []pos.Proposer = make([]pos.Proposer, 0, len(leaders))
+		beneficiary *thor.Address
+	)
+	for _, leader := range leaders {
+		if leader.Address == signer {
+			if leader.Beneficiary != nil {
+				beneficiary = leader.Beneficiary
+			}
+		}
+		proposers = append(proposers, pos.Proposer{
+			Address: leader.Address,
+			Active:  leader.Active,
+			Weight:  leader.Weight,
+		})
+	}
+
+	sched, err := pos.NewScheduler(signer, proposers, parent.Number(), parent.Timestamp(), seed)
 	if err != nil {
 		return consensusError(fmt.Sprintf("pos - block signer invalid: %v %v", signer, err))
 	}
@@ -60,16 +77,12 @@ func (c *Consensus) validateStakingProposer(
 	if parent.TotalScore()+score != header.TotalScore() {
 		return consensusError(fmt.Sprintf("pos - block total score invalid: want %v, have %v", parent.TotalScore()+score, header.TotalScore()))
 	}
-	validator, ok := leaders[signer]
-	if !ok {
-		return consensusError(fmt.Sprintf("pos - block proposer %v not found in leader group", signer))
-	}
-	if validator.Beneficiary != nil && *validator.Beneficiary != header.Beneficiary() {
-		return consensusError(fmt.Sprintf("pos - stake beneficiary mismatch: want %v, have %v", *validator.Beneficiary, header.Beneficiary()))
+	if beneficiary != nil && *beneficiary != header.Beneficiary() {
+		return consensusError(fmt.Sprintf("pos - stake beneficiary mismatch: want %v, have %v", *beneficiary, header.Beneficiary()))
 	}
 
-	for addr, online := range updates {
-		if err := staker.SetOnline(addr, header.Number(), online); err != nil {
+	for _, u := range updates {
+		if err := staker.SetOnline(u.Address, header.Number(), u.Active); err != nil {
 			return err
 		}
 	}

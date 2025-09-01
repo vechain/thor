@@ -18,6 +18,14 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
+type Leader struct {
+	Address     thor.Address
+	Endorser    thor.Address
+	Beneficiary *thor.Address
+	Active      bool
+	Weight      uint64
+}
+
 type Service struct {
 	leaderGroup    *linkedlist.LinkedList
 	validatorQueue *linkedlist.LinkedList
@@ -139,10 +147,17 @@ func (s *Service) GetLeaderGroupHead() (*Validation, error) {
 }
 
 // LeaderGroup lists all registered candidates.
-func (s *Service) LeaderGroup() (map[thor.Address]*Validation, error) {
-	group := make(map[thor.Address]*Validation)
+func (s *Service) LeaderGroup() ([]Leader, error) {
+	group := make([]Leader, 0, thor.InitialMaxBlockProposers)
 	err := s.LeaderGroupIterator(func(validator thor.Address, entry *Validation) error {
-		group[validator] = entry
+		group = append(group, Leader{
+			Address:     validator,
+			Endorser:    entry.Endorser,
+			Beneficiary: entry.Beneficiary,
+			Active:      entry.IsOnline(),
+			Weight:      entry.Weight,
+		})
+
 		return nil
 	})
 	return group, err
