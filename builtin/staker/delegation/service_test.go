@@ -135,7 +135,7 @@ func TestService_Add_CounterGetError(t *testing.T) {
 
 func TestService_Add_CounterSetOverflow(t *testing.T) {
 	svc, contract, st := newSvc()
-	max := new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1))
+	max := new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(2))
 	st.SetStorage(contract, slotDelegationsCounter, thor.BytesToBytes32(max.Bytes()))
 
 	_, err := svc.Add(thor.BytesToAddress([]byte("v")), 1, 10, 1)

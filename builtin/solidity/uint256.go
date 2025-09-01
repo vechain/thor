@@ -51,26 +51,26 @@ func (u *Uint256) Set(value *big.Int) error {
 	return nil
 }
 
-func (u *Uint256) Add(value *big.Int) error {
+func (u *Uint256) Add(value *big.Int) (*big.Int, error) {
 	if value.Sign() == 0 {
-		return nil
+		return value, nil
 	}
 	storage, err := u.Get()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	storage.Add(storage, value)
-	return u.Set(storage)
+	return storage, u.Set(storage)
 }
 
-func (u *Uint256) Sub(value *big.Int) error {
+func (u *Uint256) Sub(value *big.Int) (*big.Int, error) {
 	if value.Sign() == 0 {
-		return nil
+		return value, nil
 	}
 	storage, err := u.Get()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	storage.Sub(storage, value)
-	return u.Set(storage)
+	return storage, u.Set(storage)
 }
