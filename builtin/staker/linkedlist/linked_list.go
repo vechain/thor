@@ -72,7 +72,8 @@ func (l *LinkedList) Add(address thor.Address) error {
 		// the list is currently empty, set this entry to head & tail
 		l.head.Set(&address, false)
 		l.tail.Set(&address, false)
-		return l.count.Add(big.NewInt(1))
+		_, err = l.count.Add(big.NewInt(1))
+		return err
 	}
 
 	// Update old tail's next pointer
@@ -88,7 +89,7 @@ func (l *LinkedList) Add(address thor.Address) error {
 	// Update tail pointer
 	l.tail.Set(&address, false)
 
-	if err := l.count.Add(big.NewInt(1)); err != nil {
+	if _, err = l.count.Add(big.NewInt(1)); err != nil {
 		return err
 	}
 
@@ -150,7 +151,7 @@ func (l *LinkedList) Remove(address thor.Address) error {
 		return err
 	}
 
-	if err := l.count.Sub(big.NewInt(1)); err != nil {
+	if _, err := l.count.Sub(big.NewInt(1)); err != nil {
 		return err
 	}
 
