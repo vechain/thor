@@ -46,6 +46,8 @@ var (
 	slotQueuedHead      = thor.BytesToBytes32([]byte(("validations-queued-head")))
 	slotQueuedTail      = thor.BytesToBytes32([]byte(("validations-queued-tail")))
 	slotQueuedGroupSize = thor.BytesToBytes32([]byte(("validations-queued-group-size")))
+
+	exitMaxTry = 20 // virtual limited the exit queue size to 20
 )
 
 func New(sctx *solidity.Context,
@@ -191,7 +193,7 @@ func (s *Service) Add(
 
 func (s *Service) SignalExit(validator thor.Address, validation *Validation) error {
 	minBlock := validation.StartBlock + validation.Period*(validation.CurrentIteration())
-	exitBlock, err := s.SetExitBlock(validator, minBlock, 20) // virtual limited the exit queue size to 20
+	exitBlock, err := s.SetExitBlock(validator, minBlock, exitMaxTry)
 	if err != nil {
 		return err
 	}
