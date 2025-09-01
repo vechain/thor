@@ -142,8 +142,14 @@ func TestService_LeaderGroup_ReturnsActiveOnly(t *testing.T) {
 
 	group, err := svc.LeaderGroup()
 	assert.NoError(t, err)
-	_, inQueued := group[q]
-	_, inActive := group[a]
+
+	leaders := make(map[thor.Address]bool)
+	for _, leader := range group {
+		leaders[leader.Address] = true
+	}
+
+	_, inQueued := leaders[q]
+	_, inActive := leaders[a]
 	assert.False(t, inQueued)
 	assert.True(t, inActive)
 }

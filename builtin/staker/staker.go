@@ -76,7 +76,7 @@ func (s *Staker) IsPoSActive() (bool, error) {
 }
 
 // LeaderGroup lists all registered candidates.
-func (s *Staker) LeaderGroup() (map[thor.Address]*validation.Validation, error) {
+func (s *Staker) LeaderGroup() ([]validation.Leader, error) {
 	return s.validationService.LeaderGroup()
 }
 
