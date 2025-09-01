@@ -107,10 +107,19 @@ func (v *Validation) NextPeriodTVL() uint64 {
 	return v.LockedVET + v.QueuedVET - v.PendingUnlockVET
 }
 
-func (v *Validation) CurrentIteration() uint32 {
+func (v *Validation) CurrentIteration(currentBlock uint32) uint32 {
 	if v.Status == StatusActive {
-		return v.CompleteIterations + 1 // +1 because the current iteration is not completed yet
+		// For active validators, compute from blocks
+		elapsedBlocks := currentBlock - v.StartBlock
+		if elapsedBlocks < 0 {
+			return 0 // Haven't started yet
+		}
+
+		completePeriods := elapsedBlocks / v.Period
+		return completePeriods + 1 // +1 for current active period
 	}
+
+	// For non-active validators, use stored value
 	return v.CompleteIterations
 }
 

@@ -80,14 +80,14 @@ func (s *Service) GetCompletedPeriods(validator thor.Address) (uint32, error) {
 	return v.CompleteIterations, nil
 }
 
-func (s *Service) IncreaseDelegatorsReward(node thor.Address, reward *big.Int) error {
+func (s *Service) IncreaseDelegatorsReward(node thor.Address, reward *big.Int, currentBlock uint32) error {
 	val, err := s.GetValidation(node)
 	if err != nil {
 		return err
 	}
 
 	periodBytes := make([]byte, 4)
-	binary.BigEndian.PutUint32(periodBytes, val.CurrentIteration())
+	binary.BigEndian.PutUint32(periodBytes, val.CurrentIteration(currentBlock))
 	key := thor.Blake2b([]byte("rewards"), node.Bytes(), periodBytes)
 
 	rewards, err := s.repo.getReward(key)
@@ -189,8 +189,8 @@ func (s *Service) Add(
 	return s.repo.setValidation(validator, entry, true)
 }
 
-func (s *Service) SignalExit(validator thor.Address, validation *Validation) error {
-	minBlock := validation.StartBlock + validation.Period*(validation.CurrentIteration())
+func (s *Service) SignalExit(validator thor.Address, validation *Validation, currentBlock uint32) error {
+	minBlock := validation.StartBlock + validation.Period*(validation.CurrentIteration(currentBlock))
 	println("signaling exit at block", minBlock)
 	exitBlock, err := s.SetExitBlock(validator, minBlock)
 	if err != nil {

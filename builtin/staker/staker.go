@@ -247,7 +247,7 @@ func (s *Staker) AddValidation(
 	return nil
 }
 
-func (s *Staker) SignalExit(validator thor.Address, endorser thor.Address) error {
+func (s *Staker) SignalExit(validator thor.Address, endorser thor.Address, currentBlock uint32) error {
 	logger.Debug("signal exit", "endorser", endorser, "validator", validator)
 
 	val, err := s.validationService.GetValidation(validator)
@@ -265,7 +265,7 @@ func (s *Staker) SignalExit(validator thor.Address, endorser thor.Address) error
 	}
 
 	println("signaling exit now")
-	if err := s.validationService.SignalExit(validator, val); err != nil {
+	if err := s.validationService.SignalExit(validator, val, currentBlock); err != nil {
 		logger.Info("signal exit failed", "validator", validator, "error", err)
 		return err
 	}
@@ -434,6 +434,7 @@ func (s *Staker) AddDelegation(
 	validator thor.Address,
 	stake uint64,
 	multiplier uint8,
+	currentBlock uint32,
 ) (*big.Int, error) {
 	logger.Debug("adding delegation", "validator", validator, "stake", stake, "multiplier", multiplier)
 
@@ -459,7 +460,7 @@ func (s *Staker) AddDelegation(
 	}
 
 	// add delegation on the next iteration - val.CurrentIteration() + 1,
-	delegationID, err := s.delegationService.Add(validator, val.CurrentIteration()+1, stake, multiplier)
+	delegationID, err := s.delegationService.Add(validator, val.CurrentIteration(currentBlock)+1, stake, multiplier)
 	if err != nil {
 		logger.Info("failed to add delegation", "validator", validator, "error", err)
 		return nil, err
@@ -486,7 +487,7 @@ func (s *Staker) AddDelegation(
 }
 
 // SignalDelegationExit updates the auto-renewal status of a delegation.
-func (s *Staker) SignalDelegationExit(delegationID *big.Int) error {
+func (s *Staker) SignalDelegationExit(delegationID *big.Int, currentBlock uint32) error {
 	logger.Debug("signal delegation exit", "delegationID", delegationID)
 
 	del, err := s.delegationService.GetDelegation(delegationID)
@@ -509,14 +510,14 @@ func (s *Staker) SignalDelegationExit(delegationID *big.Int) error {
 	}
 
 	// ensure delegation can be signaled ( delegation has started and has not ended )
-	if !del.Started(val) {
+	if !del.Started(val, currentBlock) {
 		return NewReverts("delegation has not started yet, funds can be withdrawn")
 	}
-	if del.Ended(val) {
+	if del.Ended(val, currentBlock) {
 		return NewReverts("delegation has ended, funds can be withdrawn")
 	}
 
-	if err = s.delegationService.SignalExit(del, delegationID, val.CurrentIteration()); err != nil {
+	if err = s.delegationService.SignalExit(del, delegationID, val.CurrentIteration(currentBlock)); err != nil {
 		logger.Info("signal delegation exit failed", "delegationID", delegationID, "error", err)
 		return err
 	}
@@ -538,7 +539,7 @@ func (s *Staker) SignalDelegationExit(delegationID *big.Int) error {
 
 // WithdrawDelegation allows expired and queued delegations to withdraw their stake.
 func (s *Staker) WithdrawDelegation(
-	delegationID *big.Int,
+	delegationID *big.Int, currentBlock uint32,
 ) (uint64, error) {
 	logger.Debug("withdrawing delegation", "delegationID", delegationID)
 
@@ -553,8 +554,8 @@ func (s *Staker) WithdrawDelegation(
 	}
 
 	// ensure the delegation is either queued or finished
-	started := del.Started(val)
-	finished := del.Ended(val)
+	started := del.Started(val, currentBlock)
+	finished := del.Ended(val, currentBlock)
 	if started && !finished {
 		return 0, NewReverts("delegation is not eligible for withdraw")
 	}
@@ -584,8 +585,8 @@ func (s *Staker) WithdrawDelegation(
 }
 
 // IncreaseDelegatorsReward Increases reward for validation's delegators.
-func (s *Staker) IncreaseDelegatorsReward(node thor.Address, reward *big.Int) error {
-	return s.validationService.IncreaseDelegatorsReward(node, reward)
+func (s *Staker) IncreaseDelegatorsReward(node thor.Address, reward *big.Int, currentBlock uint32) error {
+	return s.validationService.IncreaseDelegatorsReward(node, reward, currentBlock)
 }
 
 func (s *Staker) validateStakeIncrease(validator thor.Address, validation *validation.Validation, amount uint64) error {

@@ -224,6 +224,7 @@ func init() {
 				SignalExit(
 					thor.Address(args.Validator),
 					thor.Address(args.Endorser),
+					env.BlockContext().Number,
 				)
 			if err != nil {
 				return nil, err
@@ -305,6 +306,7 @@ func init() {
 					thor.Address(args.Validator),
 					toVET(args.Stake), // convert from wei to VET,
 					args.Multiplier,
+					env.BlockContext().Number,
 				)
 			if err != nil {
 				return nil, err
@@ -318,7 +320,7 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			stake, err := Staker.NativeMetered(env.State(), charger).WithdrawDelegation(args.DelegationID)
+			stake, err := Staker.NativeMetered(env.State(), charger).WithdrawDelegation(args.DelegationID, env.BlockContext().Number)
 			if err != nil {
 				return nil, err
 			}
@@ -332,7 +334,7 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			err := Staker.NativeMetered(env.State(), charger).SignalDelegationExit(args.DelegationID)
+			err := Staker.NativeMetered(env.State(), charger).SignalDelegationExit(args.DelegationID, env.BlockContext().Number)
 			if err != nil {
 				return nil, err
 			}
@@ -365,7 +367,7 @@ func init() {
 				delegation.Validation,
 				toWei(delegation.Stake),
 				delegation.Multiplier,
-				delegation.IsLocked(validation),
+				delegation.IsLocked(validation, env.BlockContext().Number),
 				delegation.FirstIteration,
 				lastPeriod,
 			}, nil

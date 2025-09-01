@@ -34,14 +34,14 @@ func (d *Delegation) WeightedStake() *stakes.WeightedStake {
 }
 
 // Started returns whether the delegation became locked
-func (d *Delegation) Started(val *validation.Validation) bool {
+func (d *Delegation) Started(val *validation.Validation, currentBlock uint32) bool {
 	if d.IsEmpty() {
 		return false
 	}
 	if val.Status == validation.StatusQueued {
 		return false // Delegation cannot start if the validation is not active
 	}
-	currentStakingPeriod := val.CurrentIteration()
+	currentStakingPeriod := val.CurrentIteration(currentBlock)
 	return currentStakingPeriod >= d.FirstIteration
 }
 
@@ -49,17 +49,17 @@ func (d *Delegation) Started(val *validation.Validation) bool {
 // It returns true if:
 // - the delegation's exit iteration is less than the current staking period
 // - OR if the validation is in exit status and the delegation has started
-func (d *Delegation) Ended(val *validation.Validation) bool {
+func (d *Delegation) Ended(val *validation.Validation, currentBlock uint32) bool {
 	if d.IsEmpty() {
 		return false
 	}
 	if val.Status == validation.StatusQueued {
 		return false // Delegation cannot end if the validation is not active
 	}
-	if val.Status == validation.StatusExit && d.Started(val) {
+	if val.Status == validation.StatusExit && d.Started(val, currentBlock) {
 		return true // Delegation is ended if the validation is in exit status
 	}
-	currentStakingPeriod := val.CurrentIteration()
+	currentStakingPeriod := val.CurrentIteration(currentBlock)
 	if d.LastIteration == nil {
 		return false
 	}
@@ -71,7 +71,7 @@ func (d *Delegation) Ended(val *validation.Validation) bool {
 // - the delegation has started
 // - AND the delegation has not ended
 // - AND the delegation has stake
-func (d *Delegation) IsLocked(val *validation.Validation) bool {
+func (d *Delegation) IsLocked(val *validation.Validation, currentBlock uint32) bool {
 	if d.IsEmpty() {
 		return false
 	}
@@ -80,5 +80,5 @@ func (d *Delegation) IsLocked(val *validation.Validation) bool {
 		return false
 	}
 
-	return d.Started(val) && !d.Ended(val)
+	return d.Started(val, currentBlock) && !d.Ended(val, currentBlock)
 }
