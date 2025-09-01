@@ -45,7 +45,7 @@ func (a *Aggregation) IsEmpty() bool {
 // NextPeriodTVL is the total value locked (TVL) for the next period.
 // It is the sum of the currently recurring VET, plus any pending recurring and one-time VET.
 func (a *Aggregation) NextPeriodTVL() uint64 {
-	return a.LockedVET + a.PendingVET
+	return a.LockedVET + a.PendingVET - a.ExitingVET
 }
 
 // renew transitions delegations to the next staking period.
@@ -57,7 +57,7 @@ func (a *Aggregation) NextPeriodTVL() uint64 {
 func (a *Aggregation) renew() *globalstats.Renewal {
 	lockedIncrease := stakes.NewWeightedStake(a.PendingVET, a.PendingWeight)
 	lockedDecrease := stakes.NewWeightedStake(a.ExitingVET, a.ExitingWeight)
-	queuedDecrease := stakes.NewWeightedStake(a.PendingVET, a.PendingWeight)
+	queuedDecrease := a.PendingVET
 
 	// Move Pending => Locked
 	a.LockedVET += a.PendingVET
@@ -88,7 +88,7 @@ func (a *Aggregation) exit() *globalstats.Exit {
 	// Return these values to modify contract totals
 	exit := globalstats.Exit{
 		ExitedTVL:      stakes.NewWeightedStake(a.LockedVET, a.LockedWeight),
-		QueuedDecrease: stakes.NewWeightedStake(a.PendingVET, a.PendingWeight),
+		QueuedDecrease: a.PendingVET,
 	}
 
 	// Reset the aggregation
