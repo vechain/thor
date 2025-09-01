@@ -56,17 +56,13 @@ func (s *Service) Add(
 	multiplier uint8,
 ) (*big.Int, error) {
 	// update the global delegation counter
-	id, err := s.idCounter.Get()
+	id, err := s.idCounter.Add(big.NewInt(1))
 	if err != nil {
 		return nil, err
 	}
 
 	if id.Cmp(maxUint256) >= 0 {
 		return nil, errors.New("delegation ID counter overflow: maximum delegations reached")
-	}
-	id = id.Add(id, big.NewInt(1))
-	if err := s.idCounter.Set(id); err != nil {
-		return nil, errors.Wrap(err, "failed to increment delegation ID counter")
 	}
 
 	delegationID := new(big.Int).Set(id)

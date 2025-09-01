@@ -54,9 +54,10 @@ func TestUint256(t *testing.T) {
 	charger = gascharger.New(newXenv())
 	ctx.charger = charger
 
-	err = uint.Add(big.NewInt(500))
+	value, err = uint.Add(big.NewInt(500))
 	assert.NoError(t, err)
 	assert.Equal(t, ctx.charger.TotalGas(), thor.SstoreResetGas+thor.SloadGas)
+	assert.Equal(t, big.NewInt(1500), value)
 
 	value, err = uint.Get()
 	assert.NoError(t, err)
@@ -66,7 +67,7 @@ func TestUint256(t *testing.T) {
 	charger = gascharger.New(newXenv())
 	ctx.charger = charger
 
-	err = uint.Sub(big.NewInt(200))
+	_, err = uint.Sub(big.NewInt(200))
 	assert.NoError(t, err)
 	assert.Equal(t, ctx.charger.TotalGas(), thor.SstoreResetGas+thor.SloadGas)
 
@@ -86,11 +87,11 @@ func TestUint256(t *testing.T) {
 	}
 
 	// add 0
-	err = uint.Add(big.NewInt(0))
+	_, err = uint.Add(big.NewInt(0))
 	assert.NoError(t, err)
 
 	// sub 0
-	err = uint.Sub(big.NewInt(0))
+	_, err = uint.Sub(big.NewInt(0))
 	assert.NoError(t, err)
 
 	db := muxdb.NewMem()
@@ -104,11 +105,11 @@ func TestUint256(t *testing.T) {
 	assert.Nil(t, value)
 	assert.Error(t, err, "")
 
-	err = uint.Add(big.NewInt(1))
+	value, err = uint.Add(big.NewInt(1))
 	assert.Nil(t, value)
 	assert.Error(t, err, "")
 
-	err = uint.Sub(big.NewInt(1))
+	value, err = uint.Sub(big.NewInt(1))
 	assert.Nil(t, value)
 	assert.Error(t, err, "")
 }
