@@ -21,6 +21,7 @@ import (
 type Service struct {
 	leaderGroup    *linkedlist.LinkedList
 	validatorQueue *linkedlist.LinkedList
+	updateGroup    *linkedlist.LinkedList
 
 	minStake uint64
 	maxStake uint64
@@ -38,6 +39,11 @@ var (
 	slotQueuedHead      = thor.BytesToBytes32([]byte(("validations-queued-head")))
 	slotQueuedTail      = thor.BytesToBytes32([]byte(("validations-queued-tail")))
 	slotQueuedGroupSize = thor.BytesToBytes32([]byte(("validations-queued-group-size")))
+
+	// updated validations linked list
+	slotUpdateHead      = thor.BytesToBytes32([]byte(("validations-update-head")))
+	slotUpdateTail      = thor.BytesToBytes32([]byte(("validations-update-tail")))
+	slotUpdateGroupSize = thor.BytesToBytes32([]byte(("validations-update-group-size")))
 )
 
 func New(sctx *solidity.Context,
@@ -51,10 +57,19 @@ func New(sctx *solidity.Context,
 
 		leaderGroup:    linkedlist.NewLinkedList(sctx, slotActiveHead, slotActiveTail, slotActiveGroupSize),
 		validatorQueue: linkedlist.NewLinkedList(sctx, slotQueuedHead, slotQueuedTail, slotQueuedGroupSize),
+		updateGroup:    linkedlist.NewLinkedList(sctx, slotUpdateHead, slotUpdateTail, slotUpdateGroupSize),
 
 		minStake: minStake,
 		maxStake: maxStake,
 	}
+}
+
+func (s *Service) GetValidatorForExitBlock(blockNum uint32) (thor.Address, error) {
+	val, err := s.repo.getExit(blockNum)
+	if err != nil {
+		return thor.Address{}, err
+	}
+	return val, nil
 }
 
 func (s *Service) GetCompletedPeriods(validator thor.Address) (uint32, error) {
@@ -176,6 +191,7 @@ func (s *Service) Add(
 
 func (s *Service) SignalExit(validator thor.Address, validation *Validation) error {
 	minBlock := validation.StartBlock + validation.Period*(validation.CurrentIteration())
+	println("signaling exit at block", minBlock)
 	exitBlock, err := s.SetExitBlock(validator, minBlock)
 	if err != nil {
 		return err
@@ -205,6 +221,11 @@ func (s *Service) Evict(validator thor.Address, currentBlock uint32) error {
 
 func (s *Service) IncreaseStake(validator thor.Address, validation *Validation, amount uint64) error {
 	validation.QueuedVET += amount
+	if validation.Status == StatusActive {
+		if err := s.AddToUpdateGroup(validator); err != nil {
+			return errors.Wrap(err, "failed to add to update group")
+		}
+	}
 
 	return s.repo.setValidation(validator, validation, false)
 }
@@ -224,6 +245,9 @@ func (s *Service) SetBeneficiary(validator thor.Address, validation *Validation,
 func (s *Service) DecreaseStake(validator thor.Address, validation *Validation, amount uint64) error {
 	if validation.Status == StatusActive {
 		validation.PendingUnlockVET += amount
+		if err := s.AddToUpdateGroup(validator); err != nil {
+			return errors.Wrap(err, "failed to add to update group")
+		}
 	}
 
 	if validation.Status == StatusQueued {
@@ -232,6 +256,42 @@ func (s *Service) DecreaseStake(validator thor.Address, validation *Validation, 
 	}
 
 	return s.repo.setValidation(validator, validation, false)
+}
+
+func (s *Service) AddToUpdateGroup(validator thor.Address) error {
+	contains, err := s.updateGroup.Contains(validator)
+	if err != nil {
+		return err
+	}
+	if contains {
+		return nil
+	}
+	return s.updateGroup.Add(validator)
+}
+
+func (s *Service) ResetUpdateGroup() error {
+	return s.updateGroup.Reset()
+}
+
+// UpdateGroup lists all registered candidates.
+func (s *Service) UpdateGroup() ([]thor.Address, error) {
+	group := make([]thor.Address, 0)
+	err := s.UpdateGroupIterator(func(validator thor.Address) error {
+		group = append(group, validator)
+		return nil
+	})
+	return group, err
+}
+
+func (s *Service) UpdateGroupIterator(callbacks ...func(thor.Address) error) error {
+	return s.updateGroup.Iter(func(address thor.Address) error {
+		for _, callback := range callbacks {
+			if err := callback(address); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // WithdrawStake allows validations to withdraw any withdrawable stake.

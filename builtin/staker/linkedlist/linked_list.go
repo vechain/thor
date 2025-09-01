@@ -95,6 +95,32 @@ func (l *LinkedList) Add(address thor.Address) error {
 	return err
 }
 
+// Contains checks if the given address exists in the linked list
+func (l *LinkedList) Contains(address thor.Address) (bool, error) {
+	if address.IsZero() {
+		return false, nil
+	}
+
+	// Check if it's the head (most common case for recently added items)
+	head, err := l.head.Get()
+	if err != nil {
+		return false, err
+	}
+	if head == address {
+		return true, nil
+	}
+
+	// Check if it has a previous node (this works for any position in the list)
+	prev, err := l.prev.Get(address)
+	if err != nil {
+		return false, err
+	}
+
+	// If it has a previous node, it's in the list
+	// If it's zero and not the head, it's not in the list
+	return !prev.IsZero(), nil
+}
+
 // Remove extracts an address from anywhere in the list, reconnecting adjacent nodes and clearing removed node's pointers
 func (l *LinkedList) Remove(address thor.Address) error {
 	if address.IsZero() {
@@ -202,4 +228,10 @@ func (l *LinkedList) isHead(address thor.Address) (bool, error) {
 // Head returns the oldest address in the queue (next to be processed)
 func (l *LinkedList) Head() (thor.Address, error) {
 	return l.head.Get()
+}
+
+func (l *LinkedList) Reset() error {
+	l.head.Set(nil, false)
+	l.tail.Set(nil, false)
+	return l.count.Set(big.NewInt(0))
 }

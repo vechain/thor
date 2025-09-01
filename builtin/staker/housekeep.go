@@ -8,8 +8,6 @@ package staker
 import (
 	"math/big"
 
-	"github.com/pkg/errors"
-
 	"github.com/vechain/thor/v2/builtin/staker/globalstats"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
@@ -55,6 +53,10 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 		return false, err
 	}
 
+	if err := s.validationService.ResetUpdateGroup(); err != nil {
+		return false, err
+	}
+
 	logger.Info("performed housekeeping", "block", currentBlock, "updates", true)
 	return true, nil
 }
@@ -63,14 +65,22 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 func (s *Staker) computeEpochTransition(currentBlock uint32) (*EpochTransition, error) {
 	var err error
 
-	var renewals []thor.Address
 	var evictions []thor.Address
-	exitValidator := thor.Address{}
 	err = s.validationService.LeaderGroupIterator(
-		s.renewalCallback(currentBlock, &renewals),
-		s.exitsCallback(currentBlock, &exitValidator),
+		//s.renewalCallback(currentBlock, &renewals),
 		s.evictionCallback(currentBlock, &evictions),
 	)
+	if err != nil {
+		return nil, err
+	}
+	renewals, err := s.validationService.UpdateGroup()
+	if err != nil {
+		return nil, err
+	}
+	println("renewals =====", len(renewals))
+
+	exitValidator, err := s.validationService.GetValidatorForExitBlock(currentBlock)
+	println("exit val =========", exitValidator.String())
 	if err != nil {
 		return nil, err
 	}
@@ -105,22 +115,6 @@ func (s *Staker) renewalCallback(currentBlock uint32, renewals *[]thor.Address) 
 
 		*renewals = append(*renewals, validator)
 
-		return nil
-	}
-}
-
-func (s *Staker) exitsCallback(currentBlock uint32, exitAddress *thor.Address) func(thor.Address, *validation.Validation) error {
-	// Find the last validator in iteration order that should exit this block
-	// Do NOT call ExitValidator here - just identify which validator should exit
-	return func(validator thor.Address, entry *validation.Validation) error {
-		if entry.ExitBlock != nil && currentBlock == *entry.ExitBlock {
-			// should never be possible for two validators to exit at the same block
-			if !exitAddress.IsZero() {
-				return errors.Errorf("found more than one validator exit in the same block: ValidatorID: %s, ValidatorID: %s", exitAddress, validator)
-			}
-			// Just record which validator should exit (matches original behavior)
-			*exitAddress = validator
-		}
 		return nil
 	}
 }

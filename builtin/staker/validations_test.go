@@ -1170,7 +1170,7 @@ func TestStaker_Get_FullFlow_Renewal_On_Then_Off(t *testing.T) {
 	assert.NoError(t, staker.SignalExit(addr, addr))
 
 	// housekeep the validator
-	_, err = staker.Housekeep(period * 2)
+	_, err = staker.Housekeep(period * 1)
 	assert.NoError(t, err)
 	validator, err = staker.GetValidation(addr)
 	assert.NoError(t, err)
@@ -1726,6 +1726,7 @@ func TestStaker_Housekeep_ExitOrder(t *testing.T) {
 	assert.NoError(t, err)
 	validator1, err = staker.GetValidation(addr1)
 	assert.NoError(t, err)
+	println("address is", addr1.String())
 	assert.Equal(t, validation.StatusExit, validator1.Status)
 }
 
@@ -3261,27 +3262,6 @@ func TestStaker_Housekeep_NegativeCases(t *testing.T) {
 
 	st.SetRawStorage(stakerAddr, slotLockedVET, rlp.RawValue{0xc2, 0x80, 0x80})
 	st.SetRawStorage(stakerAddr, slotQueuedGroupSize, rlp.RawValue{0x0})
-
-	addr := thor.BytesToAddress([]byte("a"))
-	blockNum := uint32(10)
-	funcA := staker.exitsCallback(blockNum, &addr)
-	err = funcA(addr, &validation.Validation{
-		Endorser:           thor.Address{},
-		Beneficiary:        nil,
-		Period:             0,
-		CompleteIterations: 0,
-		Status:             0,
-		StartBlock:         0,
-		ExitBlock:          &blockNum,
-		OfflineBlock:       nil,
-		LockedVET:          0,
-		PendingUnlockVET:   0,
-		QueuedVET:          0,
-		CooldownVET:        0,
-		WithdrawableVET:    0,
-		Weight:             0,
-	})
-	assert.ErrorContains(t, err, "found more than one validator exit in the same block")
 
 	slotActiveGroupSize := thor.BytesToBytes32([]byte(("validations-active-group-size")))
 	st.SetRawStorage(stakerAddr, slotActiveGroupSize, rlp.RawValue{0xFF})

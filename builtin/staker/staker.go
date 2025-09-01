@@ -264,6 +264,7 @@ func (s *Staker) SignalExit(validator thor.Address, endorser thor.Address) error
 		return NewReverts("can't signal exit while not active")
 	}
 
+	println("signaling exit now")
 	if err := s.validationService.SignalExit(validator, val); err != nil {
 		logger.Info("signal exit failed", "validator", validator, "error", err)
 		return err
@@ -474,6 +475,12 @@ func (s *Staker) AddDelegation(
 		return nil, err
 	}
 
+	if val.Status == validation.StatusActive {
+		if err = s.validationService.AddToUpdateGroup(validator); err != nil {
+			return nil, err
+		}
+	}
+
 	logger.Info("added delegation", "validator", validator, "delegationID", delegationID)
 	return delegationID, nil
 }
@@ -517,6 +524,12 @@ func (s *Staker) SignalDelegationExit(delegationID *big.Int) error {
 	err = s.aggregationService.SignalExit(del.Validation, del.WeightedStake())
 	if err != nil {
 		return err
+	}
+
+	if val.Status == validation.StatusActive {
+		if err = s.validationService.AddToUpdateGroup(del.Validation); err != nil {
+			return err
+		}
 	}
 
 	logger.Info("signal delegation exit", "delegationID", delegationID)
