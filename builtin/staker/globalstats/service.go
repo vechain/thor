@@ -20,13 +20,13 @@ var (
 // Tracks both locked stake (from active validators/delegations) and queued stake (pending activation).
 type Service struct {
 	locked *solidity.Raw[*stakes.WeightedStake]
-	queued *solidity.Raw[*stakes.WeightedStake]
+	queued *solidity.Raw[uint64]
 }
 
 func New(sctx *solidity.Context) *Service {
 	return &Service{
 		locked: solidity.NewRaw[*stakes.WeightedStake](sctx, slotLocked),
-		queued: solidity.NewRaw[*stakes.WeightedStake](sctx, slotQueued),
+		queued: solidity.NewRaw[uint64](sctx, slotQueued),
 	}
 }
 
@@ -41,17 +41,6 @@ func (s *Service) getLocked() (*stakes.WeightedStake, error) {
 	return locked, nil
 }
 
-func (s *Service) getQueued() (*stakes.WeightedStake, error) {
-	queued, err := s.queued.Get()
-	if err != nil {
-		return nil, err
-	}
-	if queued == nil {
-		queued = &stakes.WeightedStake{}
-	}
-	return queued, nil
-}
-
 // ApplyRenewal adjusts global totals during validator/delegation transitions.
 // Called when validators are activated or delegations move between states.
 func (s *Service) ApplyRenewal(renewal *Renewal) error {
@@ -59,14 +48,14 @@ func (s *Service) ApplyRenewal(renewal *Renewal) error {
 	if err != nil {
 		return err
 	}
-	queued, err := s.getQueued()
+	queued, err := s.queued.Get()
 	if err != nil {
 		return err
 	}
 
 	locked.Add(renewal.LockedIncrease)
 	locked.Sub(renewal.LockedDecrease)
-	queued.Sub(renewal.QueuedDecrease)
+	queued -= renewal.QueuedDecrease
 
 	if err := s.locked.Set(locked); err != nil {
 		return err
@@ -85,13 +74,13 @@ func (s *Service) ApplyExit(exit *Exit) error {
 		return err
 	}
 
-	queued, err := s.getQueued()
+	queued, err := s.queued.Get()
 	if err != nil {
 		return err
 	}
 
 	locked.Sub(exit.ExitedTVL)
-	queued.Sub(exit.QueuedDecrease)
+	queued -= exit.QueuedDecrease
 
 	if err := s.locked.Set(locked); err != nil {
 		return err
@@ -105,25 +94,25 @@ func (s *Service) ApplyExit(exit *Exit) error {
 }
 
 // AddQueued increases queued totals when new stake is added to the queue.
-func (s *Service) AddQueued(stake *stakes.WeightedStake) error {
-	queued, err := s.getQueued()
+func (s *Service) AddQueued(stake uint64) error {
+	queued, err := s.queued.Get()
 	if err != nil {
 		return err
 	}
 
-	queued.Add(stake)
+	queued += stake
 
 	return s.queued.Set(queued)
 }
 
 // RemoveQueued decreases queued totals when stake is removed from the queue.
-func (s *Service) RemoveQueued(stake *stakes.WeightedStake) error {
-	queued, err := s.getQueued()
+func (s *Service) RemoveQueued(stake uint64) error {
+	queued, err := s.queued.Get()
 	if err != nil {
 		return err
 	}
 
-	queued.Sub(stake)
+	queued -= stake
 
 	return s.queued.Set(queued)
 }
@@ -140,10 +129,5 @@ func (s *Service) GetLockedStake() (uint64, uint64, error) {
 
 // GetQueuedStake returns the total VET and weight waiting to be activated.
 func (s *Service) GetQueuedStake() (uint64, error) {
-	queued, err := s.getQueued()
-	if err != nil {
-		return 0, err
-	}
-
-	return queued.VET, nil
+	return s.queued.Get()
 }
