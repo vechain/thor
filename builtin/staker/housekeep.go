@@ -127,7 +127,7 @@ func (s *Staker) exitsCallback(currentBlock uint32, exitAddress *thor.Address) f
 
 func (s *Staker) evictionCallback(currentBlock uint32, evictions *[]thor.Address) func(thor.Address, *validation.Validation) error {
 	return func(validator thor.Address, entry *validation.Validation) error {
-		if entry.OfflineBlock != nil && currentBlock > *entry.OfflineBlock+thor.ValidatorEvictionThreshold() {
+		if entry.OfflineBlock != nil && currentBlock > *entry.OfflineBlock+thor.ValidatorEvictionThreshold() && entry.ExitBlock == nil {
 			*evictions = append(*evictions, validator)
 			return nil
 		}
