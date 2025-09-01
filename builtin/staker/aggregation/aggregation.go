@@ -62,10 +62,10 @@ func (a *Aggregation) NextPeriodTVL() (uint64, error) {
 // 3. Move ExitingVET to WithdrawableVET
 // return a delta object
 func (a *Aggregation) renew() (*globalstats.Renewal, error) {
-	if a.ExitingVET > a.LockedVET {
+	if a.ExitingVET > a.LockedVET+a.PendingVET {
 		return nil, errors.New("exiting VET cannot exceed locked VET")
 	}
-	if a.ExitingWeight > a.LockedWeight {
+	if a.ExitingWeight > a.LockedWeight+a.PendingWeight {
 		return nil, errors.New("exiting weight cannot exceed locked weight")
 	}
 	lockedIncrease := stakes.NewWeightedStake(a.PendingVET, a.PendingWeight)
