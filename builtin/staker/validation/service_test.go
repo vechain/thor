@@ -6,8 +6,8 @@ package validation
 
 import (
 	"encoding/binary"
-	"fmt"
 	"math/big"
+	"strconv"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -240,10 +240,10 @@ func TestService_SignalExit_ExitBlockLimitReached(t *testing.T) {
 
 	minBlock := validation.StartBlock + validation.Period*(validation.CurrentIteration())
 
-	for i := 0; i < 20; i++ {
-		blockNum := minBlock + uint32(i*int(thor.EpochLength()))
+	for idx := range 20 {
+		blockNum := minBlock + uint32(idx*int(thor.EpochLength()))
 
-		exitValidator := thor.BytesToAddress([]byte(fmt.Sprintf("exit%d", i)))
+		exitValidator := thor.BytesToAddress([]byte("exit" + strconv.Itoa(idx)))
 
 		assert.NoError(t, svc.repo.setExit(blockNum, exitValidator))
 	}
