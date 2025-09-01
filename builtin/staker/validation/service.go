@@ -191,7 +191,7 @@ func (s *Service) Add(
 
 func (s *Service) SignalExit(validator thor.Address, validation *Validation) error {
 	minBlock := validation.StartBlock + validation.Period*(validation.CurrentIteration())
-	exitBlock, err := s.SetExitBlock(validator, minBlock)
+	exitBlock, err := s.SetExitBlock(validator, minBlock, 20) // virtual limited the exit queue size to 20
 	if err != nil {
 		return err
 	}
@@ -206,7 +206,7 @@ func (s *Service) Evict(validator thor.Address, currentBlock uint32) error {
 		return err
 	}
 
-	exitBlock, err := s.SetExitBlock(validator, currentBlock+thor.EpochLength())
+	exitBlock, err := s.SetExitBlock(validator, currentBlock+thor.EpochLength(), int(thor.InitialMaxBlockProposers))
 	if err != nil {
 		return err
 	}
@@ -340,9 +340,9 @@ func (s *Service) ExitValidator(validator thor.Address) (*globalstats.Exit, erro
 // SetExitBlock sets the exit block for a validator.
 // It ensures that the exit block is not already set for another validator.
 // A validator cannot consume several epochs at once.
-func (s *Service) SetExitBlock(validator thor.Address, minBlock uint32) (uint32, error) {
+func (s *Service) SetExitBlock(validator thor.Address, minBlock uint32, maxTry int) (uint32, error) {
 	start := minBlock
-	for {
+	for range maxTry {
 		existing, err := s.GetExitEpoch(start)
 		if err != nil {
 			return 0, err
@@ -358,6 +358,8 @@ func (s *Service) SetExitBlock(validator thor.Address, minBlock uint32) (uint32,
 		}
 		start += thor.EpochLength()
 	}
+
+	return 0, ErrMaxTryReached
 }
 
 func (s *Service) GetExitEpoch(block uint32) (thor.Address, error) {
