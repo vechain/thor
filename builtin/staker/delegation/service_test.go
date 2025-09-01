@@ -139,6 +139,6 @@ func TestService_Add_CounterSetOverflow(t *testing.T) {
 	st.SetStorage(contract, slotDelegationsCounter, thor.BytesToBytes32(max.Bytes()))
 
 	_, err := svc.Add(thor.BytesToAddress([]byte("v")), 1, 10, 1)
-	assert.ErrorContains(t, err, "failed to increment delegation ID counter")
-	assert.ErrorContains(t, err, "uint256 overflow")
+	assert.ErrorContains(t, err, "delegation ID counter overflow")
+	assert.ErrorContains(t, err, " maximum delegations reached")
 }

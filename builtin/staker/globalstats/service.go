@@ -54,7 +54,9 @@ func (s *Service) ApplyRenewal(renewal *Renewal) error {
 	}
 
 	locked.Add(renewal.LockedIncrease)
-	locked.Sub(renewal.LockedDecrease)
+	if err := locked.Sub(renewal.LockedDecrease); err != nil {
+		return err
+	}
 	queued -= renewal.QueuedDecrease
 
 	if err := s.locked.Set(locked); err != nil {
@@ -79,7 +81,9 @@ func (s *Service) ApplyExit(exit *Exit) error {
 		return err
 	}
 
-	locked.Sub(exit.ExitedTVL)
+	if err := locked.Sub(exit.ExitedTVL); err != nil {
+		return err
+	}
 	queued -= exit.QueuedDecrease
 
 	if err := s.locked.Set(locked); err != nil {

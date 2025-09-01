@@ -173,7 +173,9 @@ func Test_AddDelegator_StakeRange(t *testing.T) {
 	validator := validators[3]
 	validation, err := staker.GetValidation(validator.ID)
 	assert.NoError(t, err)
-	remaining := MaxStakeVET - validation.NextPeriodTVL()
+	valNextPeriodTVL, err := validation.NextPeriodTVL()
+	assert.NoError(t, err)
+	remaining := MaxStakeVET - valNextPeriodTVL
 	_, err = staker.AddDelegation(validator.ID, remaining, 255)
 	assert.NoError(t, err)
 
