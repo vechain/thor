@@ -476,7 +476,7 @@ func Test_LinkedList_Iter_NegativeCases(t *testing.T) {
 		count++
 		return nil
 	})
-	assert.ErrorContains(t, err, "state: rlp: value size exceeds available input length")
+	assert.ErrorContains(t, err, "state: unexpected EOF")
 
 	st.SetRawStorage(addr, headPos, raw)
 	slot := thor.Blake2b(id1.Bytes(), headPos.Bytes())
@@ -495,7 +495,7 @@ func Test_LinkedList_Iter_NegativeCases(t *testing.T) {
 	assert.NoError(t, err)
 	st.SetRawStorage(addr, tailPos, rlp.RawValue{0xFF})
 	err = linkedList.Add(id1)
-	assert.ErrorContains(t, err, "state: rlp: value size exceeds available input length")
+	assert.ErrorContains(t, err, "state: unexpected EOF")
 
 	st.SetRawStorage(addr, tailPos, raw)
 	st.SetRawStorage(addr, countPos, rlp.RawValue{0xFF})
@@ -523,7 +523,7 @@ func Test_LinkedList_Iter_NegativeCases(t *testing.T) {
 	assert.NoError(t, err)
 	st.SetRawStorage(addr, headPos, rlp.RawValue{0xFF})
 	err = linkedList.Remove(datagen.RandAddress())
-	assert.ErrorContains(t, err, "state: rlp: value size exceeds available input length")
+	assert.ErrorContains(t, err, "state: unexpected EOF")
 
 	st.SetRawStorage(addr, headPos, raw)
 	st.SetRawStorage(addr, countPos, rlp.RawValue{0xFF})

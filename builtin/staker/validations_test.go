@@ -3346,7 +3346,7 @@ func TestStaker_Housekeep_NegativeCases(t *testing.T) {
 		ActivationCount: 0,
 	})
 
-	assert.ErrorContains(t, err, "input string too short for thor.Address")
+	assert.ErrorContains(t, err, "value size exceeds available input length")
 }
 
 func TestValidation_NegativeCases(t *testing.T) {

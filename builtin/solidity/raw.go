@@ -12,14 +12,22 @@ import (
 )
 
 type Raw[V comparable] struct {
-	context *Context
-	pos     thor.Bytes32
+	context    *Context
+	pos        thor.Bytes32
+	directSlot bool // when true, store directly in the 32-byte slot (no RLP)
 }
 
 // NewRaw creates a new Raw instance at the given storage position.
 // Raw is a simple wrapper for a single storage slot of simple types(1 word gas cost).
 func NewRaw[V comparable](context *Context, pos thor.Bytes32) *Raw[V] {
 	return &Raw[V]{context: context, pos: pos}
+}
+
+// NewAddress returns a Raw[thor.Address] configured to use slot storage (no RLP).
+func NewAddress(ctx *Context, pos thor.Bytes32) *Raw[thor.Address] {
+	r := NewRaw[thor.Address](ctx, pos)
+	r.directSlot = true
+	return r
 }
 
 // Get retrieves the value for the given key, charging SloadGas.
@@ -60,6 +68,15 @@ func (r *Raw[V]) get() (V, error) {
 	// prepare a zero-value container for decoding
 	var value V
 
+	if r.directSlot { // directSlot is only set by NewAddress
+		word, err := r.context.state.GetStorage(r.context.address, r.pos)
+		if err != nil {
+			return value, err
+		}
+
+		return any(thor.BytesToAddress(word.Bytes())).(V), nil
+	}
+
 	// attempt to decode storage into value
 	err := r.context.state.DecodeStorage(r.context.address, r.pos, func(raw []byte) error {
 		if len(raw) == 0 {
@@ -78,6 +95,12 @@ func (r *Raw[V]) set(value V) error {
 	var zero V
 	if value == zero {
 		r.context.state.SetRawStorage(r.context.address, r.pos, nil)
+		return nil
+	}
+
+	if r.directSlot { // directSlot is only set by NewAddress
+		a := any(value).(thor.Address)
+		r.context.state.SetStorage(r.context.address, r.pos, thor.BytesToBytes32(a.Bytes()))
 		return nil
 	}
 

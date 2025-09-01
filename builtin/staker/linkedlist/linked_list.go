@@ -25,8 +25,8 @@ type LinkedList struct {
 // NewLinkedList creates a new linked list with persistent storage mappings for staker management
 func NewLinkedList(sctx *solidity.Context, headPos, tailPos, countPos thor.Bytes32) *LinkedList {
 	return &LinkedList{
-		head:  solidity.NewRaw[thor.Address](sctx, headPos),
-		tail:  solidity.NewRaw[thor.Address](sctx, tailPos),
+		head:  solidity.NewAddress(sctx, headPos),
+		tail:  solidity.NewAddress(sctx, tailPos),
 		count: solidity.NewUint256(sctx, countPos),
 		next:  solidity.NewMapping[thor.Address, thor.Address](sctx, headPos),
 		prev:  solidity.NewMapping[thor.Address, thor.Address](sctx, tailPos),
