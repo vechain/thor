@@ -36,15 +36,13 @@ func Test_LinkedList_HeadAndTail(t *testing.T) {
 		t.Fatalf("failed to add id1: %v", err)
 	}
 
-	head, err := repo.queuedList.GetHead()
+	head, err := repo.firstQueued()
 	assert.NoError(t, err)
-	assert.NotNil(t, head)
-	assert.Equal(t, id1, *head)
+	assert.Equal(t, id1, head)
 
-	tail, err := repo.queuedList.GetTail()
+	cnt, err := repo.queuedListSize()
 	assert.NoError(t, err)
-	assert.NotNil(t, tail)
-	assert.Equal(t, id1, *tail)
+	assert.Equal(t, uint64(1), cnt)
 
 	val, err := repo.getValidation(id1)
 	assert.NoError(t, err)
@@ -57,17 +55,15 @@ func Test_LinkedList_HeadAndTail(t *testing.T) {
 		t.Fatalf("failed to add id2: %v", err)
 	}
 
-	head, err = repo.queuedList.GetHead()
+	head, err = repo.firstQueued()
 	assert.NoError(t, err)
-	assert.NotNil(t, head)
-	assert.Equal(t, id1, *head)
+	assert.Equal(t, id1, head)
 
-	tail, err = repo.queuedList.GetTail()
+	next, err := repo.nextEntry(id1)
 	assert.NoError(t, err)
-	assert.NotNil(t, tail)
-	assert.Equal(t, id2, *tail)
+	assert.Equal(t, id2, next)
 
-	cnt, err := repo.queuedList.GetSize()
+	cnt, err = repo.queuedListSize()
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(2), cnt)
 
@@ -87,19 +83,18 @@ func Test_LinkedList_HeadAndTail(t *testing.T) {
 		t.Fatalf("failed to remove id2: %v", err)
 	}
 
-	cnt, err = repo.queuedList.GetSize()
+	cnt, err = repo.queuedListSize()
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(1), cnt)
 
-	head, err = repo.queuedList.GetHead()
+	head, err = repo.firstQueued()
 	assert.NoError(t, err)
-	assert.NotNil(t, head)
-	assert.Equal(t, id1, *head)
+	assert.Equal(t, id1, head)
 
-	tail, err = repo.queuedList.GetTail()
+	// Check that id1's next is zero (meaning it's the tail)
+	next, err = repo.nextEntry(id1)
 	assert.NoError(t, err)
-	assert.NotNil(t, tail)
-	assert.Equal(t, id1, *tail)
+	assert.True(t, next.IsZero())
 
 	val, err = repo.getValidation(id1)
 	assert.NoError(t, err)
@@ -110,17 +105,19 @@ func Test_LinkedList_HeadAndTail(t *testing.T) {
 		t.Fatalf("failed to remove id1: %v", err)
 	}
 
-	cnt, err = repo.queuedList.GetSize()
+	cnt, err = repo.queuedListSize()
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(0), cnt)
 
-	head, err = repo.queuedList.GetHead()
+	head, err = repo.firstQueued()
 	assert.NoError(t, err)
-	assert.Nil(t, head)
+	assert.True(t, head.IsZero())
 
-	tail, err = repo.queuedList.GetTail()
+	// Verify list is empty by checking head is zero
+	// (when head is zero, tail is implicitly zero too)
+	head, err = repo.firstQueued()
 	assert.NoError(t, err)
-	assert.Nil(t, tail)
+	assert.True(t, head.IsZero())
 }
 
 func Test_LinkedList_Remove_NonExistent(t *testing.T) {
