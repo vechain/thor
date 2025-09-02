@@ -32,6 +32,8 @@ var (
 	// exported for other packages to use
 	MinStake = big.NewInt(0).Mul(new(big.Int).SetUint64(MinStakeVET), big.NewInt(1e18))
 	MaxStake = big.NewInt(0).Mul(new(big.Int).SetUint64(MaxStakeVET), big.NewInt(1e18))
+
+	exitMaxTry = 20 // revert transaction if after these attempts an exit block is not found
 )
 
 func SetLogger(l log.Logger) {
@@ -270,7 +272,8 @@ func (s *Staker) SignalExit(validator thor.Address, endorser thor.Address) error
 		return NewReverts(fmt.Sprintf("exit block already set to %d", *val.ExitBlock))
 	}
 
-	if err := s.validationService.SignalExit(validator, val); err != nil {
+	minBlock := val.StartBlock + val.Period*(val.CurrentIteration())
+	if err := s.validationService.SignalExit(validator, minBlock, exitMaxTry); err != nil {
 		if errors.Is(err, validation.ErrMaxTryReached) {
 			return NewReverts(validation.ErrMaxTryReached.Error())
 		}
