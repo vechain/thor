@@ -13,6 +13,8 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
+var evictionEpochDivider = thor.EpochLength() * 48 * 3 // every three days, 48 epochs in the day, three days
+
 //
 // State transition types
 //
@@ -53,10 +55,6 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 		return false, err
 	}
 
-	if err := s.validationService.ResetUpdateGroup(); err != nil {
-		return false, err
-	}
-
 	logger.Info("performed housekeeping", "block", currentBlock, "updates", true)
 	return true, nil
 }
@@ -66,21 +64,20 @@ func (s *Staker) computeEpochTransition(currentBlock uint32) (*EpochTransition, 
 	var err error
 
 	var evictions []thor.Address
-	err = s.validationService.LeaderGroupIterator(
-		//s.renewalCallback(currentBlock, &renewals),
-		s.evictionCallback(currentBlock, &evictions),
-	)
+	if currentBlock != 0 && currentBlock%evictionEpochDivider == 0 {
+		err = s.validationService.LeaderGroupIterator(
+			s.evictionCallback(currentBlock, &evictions),
+		)
+	}
 	if err != nil {
 		return nil, err
 	}
-	renewals, err := s.validationService.UpdateGroup()
+	renewals, err := s.validationService.UpdateGroup(currentBlock)
 	if err != nil {
 		return nil, err
 	}
-	println("renewals =====", len(renewals))
 
 	exitValidator, err := s.validationService.GetValidatorForExitBlock(currentBlock)
-	println("exit val =========", exitValidator.String())
 	if err != nil {
 		return nil, err
 	}
@@ -98,25 +95,6 @@ func (s *Staker) computeEpochTransition(currentBlock uint32) (*EpochTransition, 
 	}
 
 	return transition, nil
-}
-
-func (s *Staker) renewalCallback(currentBlock uint32, renewals *[]thor.Address) func(thor.Address, *validation.Validation) error {
-	// Collect all validators due for renewal
-	return func(validator thor.Address, entry *validation.Validation) error {
-		// Skip validators due to exit
-		if entry.ExitBlock != nil {
-			return nil
-		}
-
-		// Check if period is ending
-		if !entry.IsPeriodEnd(currentBlock) {
-			return nil
-		}
-
-		*renewals = append(*renewals, validator)
-
-		return nil
-	}
 }
 
 func (s *Staker) evictionCallback(currentBlock uint32, evictions *[]thor.Address) func(thor.Address, *validation.Validation) error {
@@ -185,6 +163,11 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 			return err
 		}
 		accumulatedRenewal.Add(valRenewal)
+
+		s.validationService.RemoveFromUpdateGroup(validator)
+		if err != nil {
+			return err
+		}
 	}
 	// Apply accumulated renewals to global stats
 	if err := s.globalStatsService.ApplyRenewal(accumulatedRenewal); err != nil {

@@ -162,8 +162,8 @@ func (s *Staker) GetDelegatorRewards(validator thor.Address, stakingPeriod uint3
 }
 
 // GetCompletedPeriods returns number of completed staking periods for validation.
-func (s *Staker) GetCompletedPeriods(validator thor.Address) (uint32, error) {
-	return s.validationService.GetCompletedPeriods(validator)
+func (s *Staker) GetCompletedPeriods(validator thor.Address, currentBlock uint32) (uint32, error) {
+	return s.validationService.GetCompletedPeriods(validator, currentBlock)
 }
 
 // GetValidationTotals returns the total stake, total weight, total delegators stake and total delegators weight.
@@ -264,7 +264,6 @@ func (s *Staker) SignalExit(validator thor.Address, endorser thor.Address, curre
 		return NewReverts("can't signal exit while not active")
 	}
 
-	println("signaling exit now")
 	if err := s.validationService.SignalExit(validator, val, currentBlock); err != nil {
 		logger.Info("signal exit failed", "validator", validator, "error", err)
 		return err
@@ -460,7 +459,11 @@ func (s *Staker) AddDelegation(
 	}
 
 	// add delegation on the next iteration - val.CurrentIteration() + 1,
-	delegationID, err := s.delegationService.Add(validator, val.CurrentIteration(currentBlock)+1, stake, multiplier)
+	current, err := val.CurrentIteration(currentBlock)
+	if err != nil {
+		return nil, err
+	}
+	delegationID, err := s.delegationService.Add(validator, current+1, stake, multiplier)
 	if err != nil {
 		logger.Info("failed to add delegation", "validator", validator, "error", err)
 		return nil, err
@@ -510,14 +513,26 @@ func (s *Staker) SignalDelegationExit(delegationID *big.Int, currentBlock uint32
 	}
 
 	// ensure delegation can be signaled ( delegation has started and has not ended )
-	if !del.Started(val, currentBlock) {
+	started, err := del.Started(val, currentBlock)
+	if err != nil {
+		return err
+	}
+	if !started {
 		return NewReverts("delegation has not started yet, funds can be withdrawn")
 	}
-	if del.Ended(val, currentBlock) {
+	ended, err := del.Ended(val, currentBlock)
+	if err != nil {
+		return err
+	}
+	if ended {
 		return NewReverts("delegation has ended, funds can be withdrawn")
 	}
 
-	if err = s.delegationService.SignalExit(del, delegationID, val.CurrentIteration(currentBlock)); err != nil {
+	current, err := val.CurrentIteration(currentBlock)
+	if err != nil {
+		return err
+	}
+	if err = s.delegationService.SignalExit(del, delegationID, current); err != nil {
 		logger.Info("signal delegation exit failed", "delegationID", delegationID, "error", err)
 		return err
 	}
@@ -554,8 +569,14 @@ func (s *Staker) WithdrawDelegation(
 	}
 
 	// ensure the delegation is either queued or finished
-	started := del.Started(val, currentBlock)
-	finished := del.Ended(val, currentBlock)
+	started, err := del.Started(val, currentBlock)
+	if err != nil {
+		return 0, err
+	}
+	finished, err := del.Ended(val, currentBlock)
+	if err != nil {
+		return 0, err
+	}
 	if started && !finished {
 		return 0, NewReverts("delegation is not eligible for withdraw")
 	}

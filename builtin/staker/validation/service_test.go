@@ -199,13 +199,13 @@ func TestService_SignalExit_SetsExitBlockAndPersists(t *testing.T) {
 
 	assert.NoError(t, svc.repo.setValidation(id, &Validation{
 		Endorser: end, Status: StatusActive,
-		StartBlock: 100, Period: 10, CompleteIterations: 2,
+		StartBlock: 100, Period: 10,
 	}, true))
 
 	val, err := svc.GetExistingValidation(id)
 	assert.NoError(t, err)
 
-	err = svc.SignalExit(id, val)
+	err = svc.SignalExit(id, val, 120)
 	assert.NoError(t, err)
 
 	after, err := svc.GetValidation(id)
@@ -230,7 +230,7 @@ func TestService_SignalExit_SetExitBlock_Error(t *testing.T) {
 
 	val, err := svc.GetExistingValidation(id)
 	assert.NoError(t, err)
-	err = svc.SignalExit(id, val)
+	err = svc.SignalExit(id, val, 10)
 	assert.Error(t, err)
 }
 
@@ -329,16 +329,17 @@ func TestService_GetDelegatorRewards_Positive(t *testing.T) {
 	id := thor.BytesToAddress([]byte("v"))
 	assert.NoError(t, svc.repo.setValidation(id, &Validation{
 		Endorser: id, Status: StatusActive,
-		CompleteIterations: 1,
+		StartBlock: 50,
+		Period:     50,
 	}, true))
 
-	assert.NoError(t, svc.IncreaseDelegatorsReward(id, big.NewInt(100)))
+	assert.NoError(t, svc.IncreaseDelegatorsReward(id, big.NewInt(100), 100))
 
 	got, err := svc.GetDelegatorRewards(id, 2)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(100), got)
 
-	assert.NoError(t, svc.IncreaseDelegatorsReward(id, big.NewInt(40)))
+	assert.NoError(t, svc.IncreaseDelegatorsReward(id, big.NewInt(40), 100))
 	got, err = svc.GetDelegatorRewards(id, 2)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(140), got)
@@ -457,7 +458,7 @@ func TestService_GetCompletedPeriods(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	periods, err := svc.GetCompletedPeriods(a1)
+	periods, err := svc.GetCompletedPeriods(a1, 10)
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(0), periods)
 }

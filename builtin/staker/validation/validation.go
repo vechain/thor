@@ -6,6 +6,8 @@
 package validation
 
 import (
+	"github.com/pkg/errors"
+
 	"github.com/vechain/thor/v2/builtin/staker/aggregation"
 	"github.com/vechain/thor/v2/builtin/staker/globalstats"
 	"github.com/vechain/thor/v2/builtin/staker/stakes"
@@ -107,20 +109,20 @@ func (v *Validation) NextPeriodTVL() uint64 {
 	return v.LockedVET + v.QueuedVET - v.PendingUnlockVET
 }
 
-func (v *Validation) CurrentIteration(currentBlock uint32) uint32 {
+func (v *Validation) CurrentIteration(currentBlock uint32) (uint32, error) {
 	if v.Status == StatusActive {
-		// For active validators, compute from blocks
-		elapsedBlocks := currentBlock - v.StartBlock
-		if elapsedBlocks < 0 {
-			return 0 // Haven't started yet
+		if currentBlock < v.StartBlock {
+			return 0, errors.New("curren block cannot be less than start block")
 		}
-
+		if v.Period == 0 {
+			return 0, errors.New("period cannot be zero")
+		}
+		elapsedBlocks := currentBlock - v.StartBlock
 		completePeriods := elapsedBlocks / v.Period
-		return completePeriods + 1 // +1 for current active period
+		return completePeriods + 1, nil
 	}
 
-	// For non-active validators, use stored value
-	return v.CompleteIterations
+	return v.CompleteIterations, nil
 }
 
 // renew moves the stakes and weights around as follows:

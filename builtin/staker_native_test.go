@@ -348,7 +348,7 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 		}
 
 		// add delegation1 to validator1
-		_, err = stakerNative.AddDelegation(validator1, minStakeVET, 100)
+		_, err = stakerNative.AddDelegation(validator1, minStakeVET, 100, 10)
 		if err != nil {
 			return err
 		}
@@ -381,7 +381,7 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 	assert.NoError(t, err)
 
 	// add delegation2 to queued validator3
-	_, err = stakerNative.AddDelegation(validator3, minStakeVET, 100)
+	_, err = stakerNative.AddDelegation(validator3, minStakeVET, 100, 10)
 	assert.NoError(t, err)
 
 	_, err = stakerNative.WithdrawStake(validator3, endorser, 1)

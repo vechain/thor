@@ -34,36 +34,46 @@ func (d *Delegation) WeightedStake() *stakes.WeightedStake {
 }
 
 // Started returns whether the delegation became locked
-func (d *Delegation) Started(val *validation.Validation, currentBlock uint32) bool {
+func (d *Delegation) Started(val *validation.Validation, currentBlock uint32) (bool, error) {
 	if d.IsEmpty() {
-		return false
+		return false, nil
 	}
 	if val.Status == validation.StatusQueued {
-		return false // Delegation cannot start if the validation is not active
+		return false, nil // Delegation cannot start if the validation is not active
 	}
-	currentStakingPeriod := val.CurrentIteration(currentBlock)
-	return currentStakingPeriod >= d.FirstIteration
+	currentStakingPeriod, err := val.CurrentIteration(currentBlock)
+	if err != nil {
+		return false, err
+	}
+	return currentStakingPeriod >= d.FirstIteration, nil
 }
 
 // Ended returns whether the delegation has ended
 // It returns true if:
 // - the delegation's exit iteration is less than the current staking period
 // - OR if the validation is in exit status and the delegation has started
-func (d *Delegation) Ended(val *validation.Validation, currentBlock uint32) bool {
+func (d *Delegation) Ended(val *validation.Validation, currentBlock uint32) (bool, error) {
 	if d.IsEmpty() {
-		return false
+		return false, nil
 	}
 	if val.Status == validation.StatusQueued {
-		return false // Delegation cannot end if the validation is not active
+		return false, nil // Delegation cannot end if the validation is not active
 	}
-	if val.Status == validation.StatusExit && d.Started(val, currentBlock) {
-		return true // Delegation is ended if the validation is in exit status
+	started, err := d.Started(val, currentBlock)
+	if err != nil {
+		return false, err
 	}
-	currentStakingPeriod := val.CurrentIteration(currentBlock)
+	if val.Status == validation.StatusExit && started {
+		return true, nil // Delegation is ended if the validation is in exit status
+	}
+	currentStakingPeriod, err := val.CurrentIteration(currentBlock)
+	if err != nil {
+		return false, err
+	}
 	if d.LastIteration == nil {
-		return false
+		return false, nil
 	}
-	return *d.LastIteration < currentStakingPeriod
+	return *d.LastIteration < currentStakingPeriod, nil
 }
 
 // IsLocked returns whether the delegation is locked
@@ -71,14 +81,22 @@ func (d *Delegation) Ended(val *validation.Validation, currentBlock uint32) bool
 // - the delegation has started
 // - AND the delegation has not ended
 // - AND the delegation has stake
-func (d *Delegation) IsLocked(val *validation.Validation, currentBlock uint32) bool {
+func (d *Delegation) IsLocked(val *validation.Validation, currentBlock uint32) (bool, error) {
 	if d.IsEmpty() {
-		return false
+		return false, nil
 	}
 
 	if d.Stake == 0 {
-		return false
+		return false, nil
+	}
+	started, err := d.Started(val, currentBlock)
+	if err != nil {
+		return false, err
+	}
+	ended, err := d.Ended(val, currentBlock)
+	if err != nil {
+		return false, err
 	}
 
-	return d.Started(val, currentBlock) && !d.Ended(val, currentBlock)
+	return started && !ended, nil
 }

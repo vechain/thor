@@ -72,11 +72,19 @@ func (s *Service) GetValidatorForExitBlock(blockNum uint32) (thor.Address, error
 	return val, nil
 }
 
-func (s *Service) GetCompletedPeriods(validator thor.Address) (uint32, error) {
+func (s *Service) GetCompletedPeriods(validator thor.Address, currentBlock uint32) (uint32, error) {
 	v, err := s.GetValidation(validator)
 	if err != nil {
 		return uint32(0), err
 	}
+	if v.Status == StatusActive {
+		current, err := v.CurrentIteration(currentBlock)
+		if err != nil {
+			return uint32(0), err
+		}
+		return current - 1, nil
+	}
+
 	return v.CompleteIterations, nil
 }
 
@@ -87,7 +95,11 @@ func (s *Service) IncreaseDelegatorsReward(node thor.Address, reward *big.Int, c
 	}
 
 	periodBytes := make([]byte, 4)
-	binary.BigEndian.PutUint32(periodBytes, val.CurrentIteration(currentBlock))
+	current, err := val.CurrentIteration(currentBlock)
+	if err != nil {
+		return err
+	}
+	binary.BigEndian.PutUint32(periodBytes, current)
 	key := thor.Blake2b([]byte("rewards"), node.Bytes(), periodBytes)
 
 	rewards, err := s.repo.getReward(key)
@@ -190,8 +202,11 @@ func (s *Service) Add(
 }
 
 func (s *Service) SignalExit(validator thor.Address, validation *Validation, currentBlock uint32) error {
-	minBlock := validation.StartBlock + validation.Period*(validation.CurrentIteration(currentBlock))
-	println("signaling exit at block", minBlock)
+	current, err := validation.CurrentIteration(currentBlock)
+	if err != nil {
+		return err
+	}
+	minBlock := validation.StartBlock + validation.Period*current
 	exitBlock, err := s.SetExitBlock(validator, minBlock)
 	if err != nil {
 		return err
@@ -269,24 +284,30 @@ func (s *Service) AddToUpdateGroup(validator thor.Address) error {
 	return s.updateGroup.Add(validator)
 }
 
-func (s *Service) ResetUpdateGroup() error {
-	return s.updateGroup.Reset()
+func (s *Service) RemoveFromUpdateGroup(address thor.Address) error {
+	return s.updateGroup.Remove(address)
 }
 
 // UpdateGroup lists all registered candidates.
-func (s *Service) UpdateGroup() ([]thor.Address, error) {
+func (s *Service) UpdateGroup(currentBlock uint32) ([]thor.Address, error) {
 	group := make([]thor.Address, 0)
-	err := s.UpdateGroupIterator(func(validator thor.Address) error {
-		group = append(group, validator)
+	err := s.UpdateGroupIterator(func(validator thor.Address, val Validation) error {
+		if val.IsPeriodEnd(currentBlock) && val.ExitBlock == nil {
+			group = append(group, validator)
+		}
 		return nil
 	})
 	return group, err
 }
 
-func (s *Service) UpdateGroupIterator(callbacks ...func(thor.Address) error) error {
+func (s *Service) UpdateGroupIterator(callbacks ...func(thor.Address, Validation) error) error {
 	return s.updateGroup.Iter(func(address thor.Address) error {
+		validation, err := s.repo.getValidation(address)
+		if err != nil {
+			return err
+		}
 		for _, callback := range callbacks {
-			if err := callback(address); err != nil {
+			if err := callback(address, *validation); err != nil {
 				return err
 			}
 		}

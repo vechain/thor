@@ -264,10 +264,10 @@ func (e *Energy) addIssued(issued *big.Int) error {
 type staker interface {
 	LockedStake() (uint64, uint64, error)
 	HasDelegations(address thor.Address) (bool, error)
-	IncreaseDelegatorsReward(master thor.Address, reward *big.Int) error
+	IncreaseDelegatorsReward(master thor.Address, reward *big.Int, currentBlock uint32) error
 }
 
-func (e *Energy) DistributeRewards(beneficiary, signer thor.Address, staker staker) error {
+func (e *Energy) DistributeRewards(beneficiary, signer thor.Address, staker staker, currentBlock uint32) error {
 	reward, err := e.CalculateRewards(staker)
 	if err != nil {
 		return err
@@ -301,7 +301,7 @@ func (e *Energy) DistributeRewards(beneficiary, signer thor.Address, staker stak
 			return err
 		}
 		delegationReward := new(big.Int).Sub(reward, proposerReward)
-		if err := staker.IncreaseDelegatorsReward(signer, delegationReward); err != nil {
+		if err := staker.IncreaseDelegatorsReward(signer, delegationReward, currentBlock); err != nil {
 			return err
 		}
 		if err := e.state.SetEnergy(addr, new(big.Int).Add(addrEng, delegationReward), e.blockTime); err != nil {

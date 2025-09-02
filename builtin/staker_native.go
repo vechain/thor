@@ -93,6 +93,14 @@ func init() {
 			if validator.OfflineBlock != nil {
 				offlineBlock = *validator.OfflineBlock
 			}
+			completeIterations := validator.CompleteIterations
+			if validator.Status == validation.StatusActive {
+				current, err := validator.CurrentIteration(env.BlockContext().Number)
+				if err != nil {
+					return nil, err
+				}
+				completeIterations = current - 1
+			}
 			return []any{
 				validator.Endorser,
 				toWei(validator.LockedVET),
@@ -103,7 +111,7 @@ func init() {
 				validator.Period,
 				validator.StartBlock,
 				exitBlock,
-				validator.CompleteIterations,
+				completeIterations,
 			}, nil
 		}},
 		{"native_getWithdrawable", func(env *xenv.Environment) ([]any, error) {
@@ -362,12 +370,16 @@ func init() {
 			if delegation.LastIteration != nil {
 				lastPeriod = *delegation.LastIteration
 			}
+			isLocked, err := delegation.IsLocked(validation, env.BlockContext().Number)
+			if err != nil {
+				return nil, err
+			}
 
 			return []any{
 				delegation.Validation,
 				toWei(delegation.Stake),
 				delegation.Multiplier,
-				delegation.IsLocked(validation, env.BlockContext().Number),
+				isLocked,
 				delegation.FirstIteration,
 				lastPeriod,
 			}, nil

@@ -19,7 +19,6 @@ var (
 	slotExitEpochs  = thor.BytesToBytes32([]byte(("exit-epochs")))
 	slotValidations = thor.BytesToBytes32([]byte(("validations")))
 	slotRewards     = thor.BytesToBytes32([]byte(("period-rewards")))
-	slotUpdates     = thor.BytesToBytes32([]byte(("updates")))
 )
 
 type Repository struct {
@@ -27,8 +26,6 @@ type Repository struct {
 	rewards     *solidity.Mapping[thor.Bytes32, *big.Int] // stores rewards per validator staking period
 
 	exits *solidity.Mapping[thor.Bytes32, thor.Address] // exit block -> validator ID
-
-	updates *solidity.Mapping[thor.Address, Validation]
 }
 
 func NewRepository(sctx *solidity.Context) *Repository {
@@ -36,7 +33,6 @@ func NewRepository(sctx *solidity.Context) *Repository {
 		validations: solidity.NewMapping[thor.Address, Validation](sctx, slotValidations),
 		rewards:     solidity.NewMapping[thor.Bytes32, *big.Int](sctx, slotRewards),
 		exits:       solidity.NewMapping[thor.Bytes32, thor.Address](sctx, slotExitEpochs),
-		updates:     solidity.NewMapping[thor.Address, Validation](sctx, slotUpdates),
 	}
 }
 
@@ -50,21 +46,6 @@ func (r *Repository) getValidation(validator thor.Address) (*Validation, error) 
 
 func (r *Repository) setValidation(validator thor.Address, entry *Validation, isNew bool) error {
 	if err := r.validations.Set(validator, *entry, isNew); err != nil {
-		return errors.Wrap(err, "failed to set validator")
-	}
-	return nil
-}
-
-func (r *Repository) getUpdate(validator thor.Address) (*Validation, error) {
-	v, err := r.updates.Get(validator)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get validator")
-	}
-	return &v, nil
-}
-
-func (r *Repository) setUpdate(validator thor.Address, entry *Validation, isNew bool) error {
-	if err := r.updates.Set(validator, *entry, isNew); err != nil {
 		return errors.Wrap(err, "failed to set validator")
 	}
 	return nil
@@ -86,7 +67,6 @@ func (r *Repository) setReward(key thor.Bytes32, val *big.Int, isNew bool) error
 }
 
 func (r *Repository) getExit(block uint32) (thor.Address, error) {
-	println("getting exit for block", block)
 	var key thor.Bytes32
 	binary.BigEndian.PutUint32(key[:], block)
 
@@ -94,7 +74,6 @@ func (r *Repository) getExit(block uint32) (thor.Address, error) {
 }
 
 func (r *Repository) setExit(block uint32, validator thor.Address) error {
-	println("setting exit for block", block, validator.String())
 	var key thor.Bytes32
 	binary.BigEndian.PutUint32(key[:], block)
 
