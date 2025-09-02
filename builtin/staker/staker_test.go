@@ -358,12 +358,12 @@ func (va *ValidationAssertions) Beneficiary(expected *thor.Address) *ValidationA
 }
 
 type AggregationAssertions struct {
-	validationID thor.Address
+	validationID *thor.Address
 	aggregation  *aggregation.Aggregation
 	t            *testing.T
 }
 
-func assertAggregation(t *testing.T, staker *Staker, validationID thor.Address) *AggregationAssertions {
+func assertAggregation(t *testing.T, staker *Staker, validationID *thor.Address) *AggregationAssertions {
 	agg, err := staker.aggregationService.GetAggregation(validationID)
 	require.NoError(t, err, "failed to get aggregation for validator %s", validationID.String())
 	return &AggregationAssertions{validationID: validationID, aggregation: agg, t: t}

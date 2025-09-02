@@ -15,7 +15,7 @@ import (
 
 func TestDelegation(t *testing.T) {
 	del := Delegation{
-		Validation:     thor.Address{},
+		Validation:     &thor.Address{},
 		Stake:          0,
 		Multiplier:     0,
 		LastIteration:  nil,
@@ -48,7 +48,7 @@ func TestDelegation(t *testing.T) {
 	assert.False(t, del.Ended(&val))
 
 	del = Delegation{
-		Validation:     thor.Address{},
+		Validation:     &thor.Address{},
 		Stake:          1000,
 		Multiplier:     200,
 		LastIteration:  nil,
@@ -85,7 +85,7 @@ func TestDelegation(t *testing.T) {
 
 func TestDelegation_IsLocked(t *testing.T) {
 	del := Delegation{
-		Validation:     thor.Address{},
+		Validation:     &thor.Address{},
 		Stake:          0,
 		Multiplier:     0,
 		LastIteration:  nil,

@@ -140,7 +140,7 @@ func (s *Staker) GetDelegation(
 	if del.IsEmpty() {
 		return del, nil, nil
 	}
-	val, err := s.validationService.GetValidation(del.Validation)
+	val, err := s.validationService.GetValidation(*del.Validation)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -151,7 +151,7 @@ func (s *Staker) GetDelegation(
 func (s *Staker) HasDelegations(
 	node thor.Address,
 ) (bool, error) {
-	agg, err := s.aggregationService.GetAggregation(node)
+	agg, err := s.aggregationService.GetAggregation(&node)
 	if err != nil {
 		return false, err
 	}
@@ -176,7 +176,7 @@ func (s *Staker) GetValidationTotals(validator thor.Address) (*validation.Totals
 	if err != nil {
 		return nil, err
 	}
-	agg, err := s.aggregationService.GetAggregation(validator)
+	agg, err := s.aggregationService.GetAggregation(&validator)
 	if err != nil {
 		return nil, err
 	}
@@ -470,7 +470,7 @@ func (s *Staker) AddDelegation(
 	}
 	weightedStake := stakes.NewWeightedStakeWithMultiplier(stake, multiplier)
 
-	if err = s.aggregationService.AddPendingVET(validator, weightedStake); err != nil {
+	if err = s.aggregationService.AddPendingVET(&validator, weightedStake); err != nil {
 		return nil, err
 	}
 
@@ -501,7 +501,7 @@ func (s *Staker) SignalDelegationExit(delegationID *big.Int) error {
 		return NewReverts("delegation has already been withdrawn")
 	}
 
-	val, err := s.validationService.GetValidation(del.Validation)
+	val, err := s.validationService.GetValidation(*del.Validation)
 	if err != nil {
 		return err
 	}
@@ -539,7 +539,7 @@ func (s *Staker) WithdrawDelegation(
 		return 0, err
 	}
 
-	val, err := s.validationService.GetValidation(del.Validation)
+	val, err := s.validationService.GetValidation(*del.Validation)
 	if err != nil {
 		return 0, err
 	}
@@ -552,7 +552,7 @@ func (s *Staker) WithdrawDelegation(
 	}
 
 	// withdraw delegation
-	withdrawableStake, err := s.delegationService.Withdraw(del, delegationID, val)
+	withdrawableStake, err := s.delegationService.Withdraw(del, delegationID)
 	if err != nil {
 		logger.Info("failed to withdraw", "delegationID", delegationID, "error", err)
 		return 0, err
@@ -581,7 +581,7 @@ func (s *Staker) IncreaseDelegatorsReward(node thor.Address, reward *big.Int) er
 }
 
 func (s *Staker) validateStakeIncrease(validator thor.Address, validation *validation.Validation, amount uint64) error {
-	agg, err := s.aggregationService.GetAggregation(validator)
+	agg, err := s.aggregationService.GetAggregation(&validator)
 	if err != nil {
 		return err
 	}

@@ -148,7 +148,7 @@ func TestStaker_TotalStake(t *testing.T) {
 		require.NoError(t, err)
 
 		// exit the aggregation too
-		aggExit, err := staker.aggregationService.Exit(id)
+		aggExit, err := staker.aggregationService.Exit(&id)
 		require.NoError(t, err)
 
 		// Update global totals
@@ -196,7 +196,7 @@ func TestStaker_TotalStake_Withdrawal(t *testing.T) {
 	require.NoError(t, err)
 
 	// exit the aggregation too
-	aggExit, err := staker.aggregationService.Exit(addr)
+	aggExit, err := staker.aggregationService.Exit(&addr)
 	require.NoError(t, err)
 
 	// Update global totals
@@ -1257,7 +1257,7 @@ func TestStaker_RemoveValidator(t *testing.T) {
 	require.NoError(t, err)
 
 	// exit the aggregation too
-	aggExit, err := staker.aggregationService.Exit(addr)
+	aggExit, err := staker.aggregationService.Exit(&addr)
 	require.NoError(t, err)
 
 	// Update global totals
@@ -2247,7 +2247,7 @@ func Test_GetValidatorTotals_ValidatorExiting(t *testing.T) {
 	dStake := stakes.NewWeightedStakeWithMultiplier(MinStakeVET, 255)
 	newTestSequence(t, staker).AddDelegation(validator.ID, dStake.VET, 255, delegationID)
 
-	_, err := staker.aggregationService.GetAggregation(validators[0].ID)
+	_, err := staker.aggregationService.GetAggregation(&validators[0].ID)
 	assert.NoError(t, err)
 
 	vStake := stakes.NewWeightedStakeWithMultiplier(validators[0].LockedVET, validation.Multiplier)
@@ -2282,7 +2282,7 @@ func Test_GetValidatorTotals_DelegatorExiting_ThenValidator(t *testing.T) {
 
 	validator := validators[0]
 
-	_, err := staker.aggregationService.GetAggregation(validator.ID)
+	_, err := staker.aggregationService.GetAggregation(&validator.ID)
 	require.NoError(t, err)
 	vStake := stakes.NewWeightedStakeWithMultiplier(validators[0].LockedVET, validation.Multiplier)
 	dStake := stakes.NewWeightedStakeWithMultiplier(MinStakeVET, 255)

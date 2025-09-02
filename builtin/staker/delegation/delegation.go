@@ -12,8 +12,8 @@ import (
 )
 
 type Delegation struct {
-	Validation     thor.Address // the validator to which the delegator is delegating
-	Stake          uint64       // the amount of VET delegated(in VET, not wei)
+	Validation     *thor.Address // the validator to which the delegator is delegating
+	Stake          uint64        // the amount of VET delegated(in VET, not wei)
 	Multiplier     uint8
 	LastIteration  *uint32 `rlp:"nil"` // the last staking period in which the delegator was active
 	FirstIteration uint32  // the iteration at which the delegator was created
@@ -21,7 +21,7 @@ type Delegation struct {
 
 // IsEmpty returns whether the entry can be treated as empty.
 func (d *Delegation) IsEmpty() bool {
-	return (d.Stake == 0) && d.Multiplier == 0
+	return d.Stake == 0 && d.Multiplier == 0
 }
 
 // WeightedStake returns the weight of the delegator, which is calculated as:

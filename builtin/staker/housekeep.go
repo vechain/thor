@@ -182,7 +182,7 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 	accumulatedRenewal := globalstats.NewRenewal()
 	// Apply renewals
 	for _, validator := range transition.Renewals {
-		aggRenewal, delegationWeight, err := s.aggregationService.Renew(validator)
+		aggRenewal, delegationWeight, err := s.aggregationService.Renew(&validator)
 		if err != nil {
 			return err
 		}
@@ -209,7 +209,7 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 			return err
 		}
 
-		aggExit, err := s.aggregationService.Exit(*transition.ExitValidator)
+		aggExit, err := s.aggregationService.Exit(transition.ExitValidator)
 		if err != nil {
 			return err
 		}
@@ -255,7 +255,7 @@ func (s *Staker) activateNextValidation(currentBlk uint32, maxLeaderGroupSize ui
 	logger.Debug("activating validator", "validator", validator, "block", currentBlk)
 
 	// renew the current delegations aggregation
-	aggRenew, _, err := s.aggregationService.Renew(validator)
+	aggRenew, _, err := s.aggregationService.Renew(&validator)
 	if err != nil {
 		return thor.Address{}, err
 	}
