@@ -48,8 +48,6 @@ var (
 	slotQueuedTail      = thor.BytesToBytes32([]byte(("validations-queued-tail")))
 	slotQueuedGroupSize = thor.BytesToBytes32([]byte(("validations-queued-group-size")))
 
-	exitMaxTry = 20 // revert transaction if after these attempts an exit block is not found
-
 	// updated validations linked list
 	slotUpdateHead      = thor.BytesToBytes32([]byte(("validations-update-head")))
 	slotUpdateTail      = thor.BytesToBytes32([]byte(("validations-update-tail")))

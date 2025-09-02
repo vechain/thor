@@ -213,7 +213,9 @@ func TestService_SignalExit_SetsExitBlockAndPersists(t *testing.T) {
 	val, err := svc.GetExistingValidation(id)
 	assert.NoError(t, err)
 
-	err = svc.SignalExit(id, val.StartBlock+val.Period*(val.CurrentIteration()), 20)
+	current, err := val.CurrentIteration(120)
+	assert.NoError(t, err)
+	err = svc.SignalExit(id, val.StartBlock+val.Period*current, 20)
 	assert.NoError(t, err)
 
 	after, err := svc.GetValidation(id)
@@ -252,7 +254,9 @@ func TestService_SignalExit_ExitBlockLimitReached(t *testing.T) {
 	val, err := svc.GetExistingValidation(validator)
 	assert.NoError(t, err)
 
-	err = svc.SignalExit(validator, val.StartBlock+val.Period*(val.CurrentIteration()), 20)
+	current, err = val.CurrentIteration(110)
+	assert.NoError(t, err)
+	err = svc.SignalExit(validator, val.StartBlock+val.Period*current, 20)
 
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "max try reached")
@@ -277,7 +281,10 @@ func TestService_SignalExit_SetExitBlock_Error(t *testing.T) {
 
 	val, err := svc.GetExistingValidation(id)
 	assert.NoError(t, err)
-	err = svc.SignalExit(id, val.StartBlock+val.Period*(val.CurrentIteration()), 20)
+
+	current, err := val.CurrentIteration(14)
+	assert.NoError(t, err)
+	err = svc.SignalExit(id, val.StartBlock+val.Period*current, 20)
 	assert.Error(t, err)
 }
 

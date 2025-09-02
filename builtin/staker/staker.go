@@ -272,7 +272,11 @@ func (s *Staker) SignalExit(validator thor.Address, endorser thor.Address, curre
 		return NewReverts(fmt.Sprintf("exit block already set to %d", *val.ExitBlock))
 	}
 
-	minBlock := val.StartBlock + val.Period*(val.CurrentIteration())
+	current, err := val.CurrentIteration(currentBlock)
+	if err != nil {
+		return err
+	}
+	minBlock := val.StartBlock + val.Period*current
 	if err := s.validationService.SignalExit(validator, minBlock, exitMaxTry); err != nil {
 		if errors.Is(err, validation.ErrMaxTryReached) {
 			return NewReverts(validation.ErrMaxTryReached.Error())

@@ -117,9 +117,18 @@ func (l *LinkedList) Contains(address thor.Address) (bool, error) {
 		return false, err
 	}
 
+	contains := !prev.IsZero()
+	if contains {
+		next, err := l.next.Get(prev)
+		if err != nil {
+			return false, err
+		}
+		contains = next.IsZero() || next == address
+	}
+
 	// If it has a previous node, it's in the list
 	// If it's zero and not the head, it's not in the list
-	return !prev.IsZero(), nil
+	return contains, nil
 }
 
 // Remove extracts an address from anywhere in the list, reconnecting adjacent nodes and clearing removed node's pointers
