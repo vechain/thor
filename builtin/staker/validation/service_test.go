@@ -548,6 +548,7 @@ func TestService_GetQueuedAndLeaderGroups(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, a1, idPtr)
 	val, err := svc.GetValidation(idPtr)
+	assert.NoError(t, err)
 	assert.False(t, val.IsEmpty())
 	_, err = svc.ActivateValidator(idPtr, val, 1, &globalstats.Renewal{LockedIncrease: &stakes.WeightedStake{}, LockedDecrease: &stakes.WeightedStake{}})
 	assert.NoError(t, err)

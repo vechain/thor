@@ -1,3 +1,4 @@
+// Copyright (c) 2025 The VeChainThor developers
 //
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
@@ -10,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
@@ -141,7 +143,7 @@ func Test_LinkedList_Remove_NonExistent(t *testing.T) {
 		t.Fatalf("failed to add id2: %v", err)
 	}
 
-	head, err := repo.queuedListHead()
+	head, err := repo.firstQueued()
 	assert.NoError(t, err)
 	assert.Equal(t, id1, head)
 
@@ -150,8 +152,8 @@ func Test_LinkedList_Remove_NonExistent(t *testing.T) {
 		t.Fatalf("expected no error when removing non-existent id, got: %v", err)
 	}
 
-	//Verify head is still id1
-	head, err = repo.queuedListHead()
+	// Verify head is still id1
+	head, err = repo.firstQueued()
 	assert.NoError(t, err)
 	assert.Equal(t, id1, head)
 
@@ -169,7 +171,7 @@ func Test_LinkedList_Remove_NonExistent(t *testing.T) {
 	}
 
 	// Head unchanged
-	head, err = repo.queuedListHead()
+	head, err = repo.firstQueued()
 	assert.NoError(t, err)
 	assert.Equal(t, id1, head)
 
@@ -232,7 +234,7 @@ func Test_LinkedList_Remove(t *testing.T) {
 	}
 
 	// Verify head is id1
-	head, err := repo.queuedListHead()
+	head, err := repo.firstQueued()
 	assert.NoError(t, err)
 	assert.Equal(t, id1, head)
 
@@ -246,7 +248,7 @@ func Test_LinkedList_Remove(t *testing.T) {
 	}
 
 	// Verify head is now id2
-	head, err = repo.queuedListHead()
+	head, err = repo.firstQueued()
 	assert.NoError(t, err)
 	assert.Equal(t, id2, head)
 
@@ -260,7 +262,7 @@ func Test_LinkedList_Remove(t *testing.T) {
 	}
 
 	// Verify list is empty
-	head, err = repo.queuedListHead()
+	head, err = repo.firstQueued()
 	assert.NoError(t, err)
 	assert.True(t, head.IsZero())
 }
@@ -396,7 +398,7 @@ func Test_LinkedList_Pop(t *testing.T) {
 	assert.Equal(t, id1, popped)
 
 	// Verify head is now id2
-	head, err := repo.queuedListHead()
+	head, err := repo.firstQueued()
 	assert.NoError(t, err)
 	assert.Equal(t, id2, head)
 
@@ -406,7 +408,7 @@ func Test_LinkedList_Pop(t *testing.T) {
 	assert.Equal(t, id2, popped)
 
 	// Verify list is empty
-	head, err = repo.queuedListHead()
+	head, err = repo.firstQueued()
 	assert.NoError(t, err)
 	assert.True(t, head.IsZero())
 }
@@ -518,7 +520,7 @@ func Test_LinkedList_Grow_Empty_Grow(t *testing.T) {
 	assert.NoError(t, repo.addValidation(id2, &Validation{Status: StatusQueued}))
 
 	// head should be id1
-	head, err := repo.queuedListHead()
+	head, err := repo.firstQueued()
 	assert.NoError(t, err)
 	assert.Equal(t, id1, head)
 
@@ -543,7 +545,7 @@ func Test_LinkedList_Grow_Empty_Grow(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, id2, popped)
 
-	head, err = repo.queuedListHead()
+	head, err = repo.firstQueued()
 	assert.NoError(t, err)
 	assert.True(t, head.IsZero(), "expected empty head after draining")
 
@@ -559,7 +561,7 @@ func Test_LinkedList_Grow_Empty_Grow(t *testing.T) {
 	assert.NoError(t, repo.addValidation(id4, &Validation{Status: StatusQueued}))
 
 	// head should reset to id3
-	head, err = repo.queuedListHead()
+	head, err = repo.firstQueued()
 	assert.NoError(t, err)
 	assert.Equal(t, id3, head)
 

@@ -107,12 +107,28 @@ func (r *Repository) setExit(block uint32, validator thor.Address) error {
 }
 
 // linked list operation
-func (r *Repository) firstActive() (thor.Address, error) {
-	return thor.Address{}, nil
+func (r *Repository) firstQueued() (thor.Address, error) {
+	head, err := r.queuedList.GetHead()
+	if err != nil {
+		return thor.Address{}, err
+	}
+
+	if head == nil {
+		return thor.Address{}, nil
+	}
+	return *head, nil
 }
 
-func (r *Repository) firstQueued() (thor.Address, error) {
-	return thor.Address{}, nil
+func (r *Repository) firstActive() (thor.Address, error) {
+	head, err := r.activeList.GetHead()
+	if err != nil {
+		return thor.Address{}, err
+	}
+
+	if head == nil {
+		return thor.Address{}, nil
+	}
+	return *head, nil
 }
 
 func (r *Repository) nextEntry(prev thor.Address) (thor.Address, error) {
@@ -133,30 +149,6 @@ func (r *Repository) activeListSize() (uint64, error) {
 
 func (r *Repository) queuedListSize() (uint64, error) {
 	return r.queuedList.GetSize()
-}
-
-func (r *Repository) queuedListHead() (thor.Address, error) {
-	head, err := r.queuedList.GetHead()
-	if err != nil {
-		return thor.Address{}, err
-	}
-
-	if head == nil {
-		return thor.Address{}, nil
-	}
-	return *head, nil
-}
-
-func (r *Repository) activeListHead() (thor.Address, error) {
-	head, err := r.activeList.GetHead()
-	if err != nil {
-		return thor.Address{}, err
-	}
-
-	if head == nil {
-		return thor.Address{}, nil
-	}
-	return *head, nil
 }
 
 func (r *Repository) addQueued(address thor.Address, newEntry *Validation) error {

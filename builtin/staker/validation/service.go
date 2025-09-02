@@ -32,9 +32,7 @@ type Service struct {
 	repo *Repository
 }
 
-var (
-	exitMaxTry = 20 // revert transaction if after these attempts an exit block is not found
-)
+var exitMaxTry = 20 // revert transaction if after these attempts an exit block is not found
 
 func New(sctx *solidity.Context,
 	minStake uint64,
@@ -90,13 +88,13 @@ func (s *Service) IsActive() (bool, error) {
 
 // FirstActive returns validator address of first entry.
 func (s *Service) FirstActive() (*thor.Address, error) {
-	validator, err := s.repo.activeListHead()
+	validator, err := s.repo.firstActive()
 	return &validator, err
 }
 
 // FirstQueued returns validator address of first entry.
 func (s *Service) FirstQueued() (*thor.Address, error) {
-	validator, err := s.repo.queuedListHead()
+	validator, err := s.repo.firstQueued()
 	return &validator, err
 }
 
@@ -109,7 +107,7 @@ func (s *Service) LeaderGroupSize() (uint64, error) {
 }
 
 func (s *Service) GetLeaderGroupHead() (*Validation, error) {
-	validatorID, err := s.repo.activeListHead()
+	validatorID, err := s.repo.firstActive()
 	if err != nil {
 		return nil, err
 	}
