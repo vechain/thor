@@ -1432,8 +1432,8 @@ func TestStakerContract_Native(t *testing.T) {
 	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0])) // mint block 2: hayabusa should fork here and set the contract bytecode
 
 	totalNumRes := make([]any, 2)
-	totalNumRes[0] = new(*big.Int)
-	totalNumRes[1] = new(*big.Int)
+	totalNumRes[0] = new(uint64)
+	totalNumRes[1] = new(uint64)
 	_, err = callContractAndGetOutput(abi, "getValidationsNum", toAddr, &totalNumRes)
 	assert.NoError(t, err, "dsada")
 
@@ -1443,8 +1443,8 @@ func TestStakerContract_Native(t *testing.T) {
 
 	_, err = callContractAndGetOutput(abi, "getValidationsNum", toAddr, &totalNumRes)
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(0).Cmp(*totalNumRes[0].(**big.Int)), 0)
-	assert.Equal(t, big.NewInt(0).Cmp(*totalNumRes[1].(**big.Int)), 0)
+	assert.Equal(t, uint64(0), *(totalNumRes[0].(*uint64)))
+	assert.Equal(t, uint64(0), *(totalNumRes[1].(*uint64)))
 
 	// parameters
 	minStake := big.NewInt(25_000_000)
@@ -1471,8 +1471,8 @@ func TestStakerContract_Native(t *testing.T) {
 
 	_, err = callContractAndGetOutput(abi, "getValidationsNum", toAddr, &totalNumRes)
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(0).Cmp(*totalNumRes[0].(**big.Int)), 0)
-	assert.Equal(t, big.NewInt(1).Cmp(*totalNumRes[1].(**big.Int)), 0)
+	assert.Equal(t, uint64(0), *(totalNumRes[0].(*uint64)))
+	assert.Equal(t, uint64(1), *(totalNumRes[1].(*uint64)))
 
 	totalBurned := new(big.Int)
 	_, err = callContractAndGetOutput(energyAbi, "totalBurned", energyAddress, &totalBurned)
@@ -1573,8 +1573,8 @@ func TestStakerContract_Native(t *testing.T) {
 
 	_, err = callContractAndGetOutput(abi, "getValidationsNum", toAddr, &totalNumRes)
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(1).Cmp(*totalNumRes[0].(**big.Int)), 0)
-	assert.Equal(t, big.NewInt(0).Cmp(*totalNumRes[1].(**big.Int)), 0)
+	assert.Equal(t, uint64(1), *(totalNumRes[0].(*uint64)))
+	assert.Equal(t, uint64(0), *(totalNumRes[1].(*uint64)))
 
 	reward := new(*big.Int)
 	_, err = callContractAndGetOutput(abi, "getDelegatorsRewards", toAddr, reward, node, uint32(1))

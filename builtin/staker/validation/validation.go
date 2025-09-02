@@ -47,6 +47,8 @@ type Validation struct {
 	WithdrawableVET  uint64 // the amount(in VET not wei) that is currently withdrawable
 
 	Weight uint64 // The weight(in VET not wei), LockedVET x1 if no delegations, otherwise x2 + total weight from all delegators
+
+	LinkedListEntry
 }
 
 type Totals struct {
@@ -225,10 +227,7 @@ func (v *Validation) CalculateWithdrawableVET(currentBlock uint32) uint64 {
 		withdrawAmount += v.CooldownVET
 	}
 
-	if v.QueuedVET > 0 {
-		withdrawAmount += v.QueuedVET
-	}
-
+	withdrawAmount += v.QueuedVET
 	return withdrawAmount
 }
 

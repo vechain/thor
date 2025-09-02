@@ -64,7 +64,7 @@ func TestService_SetDelegation_RoundTrip(t *testing.T) {
 	del.Multiplier = 99
 	del.FirstIteration = 5
 
-	assert.NoError(t, svc.setDelegation(id, del, false))
+	assert.NoError(t, svc.delegations.Update(id, *del))
 
 	got, err := svc.GetDelegation(id)
 	assert.NoError(t, err)
