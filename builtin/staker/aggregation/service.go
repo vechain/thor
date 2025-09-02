@@ -41,11 +41,6 @@ func (s *Service) GetAggregation(validator thor.Address) (*Aggregation, error) {
 	return &d, nil
 }
 
-// setAggregation stores the Aggregation
-func (s *Service) setAggregation(validator thor.Address, agg *Aggregation, newValue bool) error {
-	return s.aggregationStorage.Set(validator, *agg, newValue)
-}
-
 // AddPendingVET adds a new delegation to the validator's pending pool.
 // Called when a delegator creates a new delegation.
 func (s *Service) AddPendingVET(validator thor.Address, stake *stakes.WeightedStake) error {
@@ -56,7 +51,7 @@ func (s *Service) AddPendingVET(validator thor.Address, stake *stakes.WeightedSt
 	agg.PendingVET += stake.VET
 	agg.PendingWeight += stake.Weight
 
-	return s.setAggregation(validator, agg, false)
+	return s.aggregationStorage.Upsert(validator, *agg)
 }
 
 // SubPendingVet removes VET from the validator's pending pool.
@@ -75,7 +70,8 @@ func (s *Service) SubPendingVet(validator thor.Address, stake *stakes.WeightedSt
 	agg.PendingVET -= stake.VET
 	agg.PendingWeight -= stake.Weight
 
-	return s.setAggregation(validator, agg, false)
+	// storage slot is already touched
+	return s.aggregationStorage.Update(validator, *agg)
 }
 
 // Renew transitions the validator's delegations to the next staking period.
@@ -91,7 +87,8 @@ func (s *Service) Renew(validator thor.Address) (*globalstats.Renewal, uint64, e
 		return nil, 0, err
 	}
 
-	if err = s.setAggregation(validator, agg, false); err != nil {
+	// storage slot is already touched
+	if err = s.aggregationStorage.Update(validator, *agg); err != nil {
 		return nil, 0, err
 	}
 
@@ -108,7 +105,8 @@ func (s *Service) Exit(validator thor.Address) (*globalstats.Exit, error) {
 
 	exit := agg.exit()
 
-	if err = s.setAggregation(validator, agg, false); err != nil {
+	// storage slot is already touched
+	if err = s.aggregationStorage.Update(validator, *agg); err != nil {
 		return nil, err
 	}
 
@@ -128,5 +126,6 @@ func (s *Service) SignalExit(validator thor.Address, stake *stakes.WeightedStake
 	agg.ExitingVET += stake.VET
 	agg.ExitingWeight += stake.Weight
 
-	return s.setAggregation(validator, agg, false)
+	// storage slot is already touched
+	return s.aggregationStorage.Update(validator, *agg)
 }

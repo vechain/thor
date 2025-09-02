@@ -36,8 +36,8 @@ func NewRepository(sctx *solidity.Context) *Repository {
 	storage := NewStorage(sctx)
 	return &Repository{
 		storage:    storage,
-		activeList: newListStats(sctx, storage, slotActiveHead, slotActiveTail, slotActiveGroupSize, false),
-		queuedList: newListStats(sctx, storage, slotQueuedHead, slotQueuedTail, slotQueuedGroupSize, true),
+		activeList: newListStats(sctx, storage, slotActiveHead, slotActiveTail, slotActiveGroupSize),
+		queuedList: newListStats(sctx, storage, slotQueuedHead, slotQueuedTail, slotQueuedGroupSize),
 	}
 }
 
@@ -53,7 +53,10 @@ func (r *Repository) addValidation(validator thor.Address, entry *Validation) er
 }
 
 func (r *Repository) updateValidation(validator thor.Address, entry *Validation) error {
-	return r.storage.updateValidation(validator, entry)
+	if err := r.storage.updateValidation(validator, entry); err != nil {
+		return errors.Wrap(err, "failed to set validator")
+	}
+	return nil
 }
 
 func (r *Repository) getReward(key thor.Bytes32) (*big.Int, error) {

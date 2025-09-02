@@ -44,14 +44,14 @@ func (s *Storage) getValidation(validator thor.Address) (*Validation, error) {
 }
 
 func (s *Storage) updateValidation(validator thor.Address, entry *Validation) error {
-	if err := s.validations.Set(validator, *entry, false); err != nil {
+	if err := s.validations.Update(validator, *entry); err != nil {
 		return errors.Wrap(err, "failed to set validator")
 	}
 	return nil
 }
 
-func (s *Storage) setValidation(validator thor.Address, entry Validation, isNew bool) error {
-	if err := s.validations.Set(validator, entry, isNew); err != nil {
+func (s *Storage) upsertValidation(validator thor.Address, entry Validation) error {
+	if err := s.validations.Upsert(validator, entry); err != nil {
 		return errors.Wrap(err, "failed to set validator")
 	}
 	return nil
@@ -69,7 +69,7 @@ func (s *Storage) getReward(key thor.Bytes32) (*big.Int, error) {
 }
 
 func (s *Storage) setReward(key thor.Bytes32, val *big.Int, isNew bool) error {
-	return s.rewards.Set(key, val, isNew)
+	return s.rewards.Upsert(key, val)
 }
 
 func (s *Storage) getExit(block uint32) (thor.Address, error) {
@@ -83,7 +83,7 @@ func (s *Storage) setExit(block uint32, validator thor.Address) error {
 	var key thor.Bytes32
 	binary.BigEndian.PutUint32(key[:], block)
 
-	if err := s.exits.Set(key, validator, true); err != nil {
+	if err := s.exits.Insert(key, validator); err != nil {
 		return errors.Wrap(err, "failed to set exit epoch")
 	}
 	return nil

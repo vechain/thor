@@ -93,12 +93,12 @@ func (s *Staker) QueuedStake() (uint64, error) {
 }
 
 // FirstActive returns validator address of first entry.
-func (s *Staker) FirstActive() (*thor.Address, error) {
+func (s *Staker) FirstActive() (thor.Address, error) {
 	return s.validationService.FirstActive()
 }
 
 // FirstQueued returns validator address of first entry.
-func (s *Staker) FirstQueued() (*thor.Address, error) {
+func (s *Staker) FirstQueued() (thor.Address, error) {
 	return s.validationService.FirstQueued()
 }
 

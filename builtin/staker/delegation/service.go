@@ -42,34 +42,14 @@ func (s *Service) GetDelegation(delegationID *big.Int) (*Delegation, error) {
 	return &d, nil
 }
 
-func (s *Service) setDelegation(delegationID *big.Int, entry *Delegation, isNew bool) error {
-	if err := s.delegations.Set(delegationID, *entry, isNew); err != nil {
-		return errors.Wrap(err, "failed to set delegation")
-	}
-	return nil
-}
-
 func (s *Service) Add(
 	validator thor.Address,
 	firstIteration uint32,
 	stake uint64,
 	multiplier uint8,
 ) (*big.Int, error) {
-	// update the global delegation counter
-	id, err := s.idCounter.Get()
+	id, err := s.newDelegationID()
 	if err != nil {
-		return nil, err
-	}
-	// delegation 0 will be a nil pointer
-	if id == nil {
-		id = big.NewInt(0)
-	}
-
-	id.Add(id, big.NewInt(1))
-	if id.Cmp(maxUint256) >= 0 {
-		return nil, errors.New("delegation ID counter overflow: maximum delegations reached")
-	}
-	if err := s.idCounter.Upsert(id); err != nil {
 		return nil, err
 	}
 
@@ -81,7 +61,7 @@ func (s *Service) Add(
 		FirstIteration: firstIteration,
 	}
 
-	if err := s.delegations.Set(delegationID, delegation, false); err != nil {
+	if err := s.delegations.Insert(delegationID, delegation); err != nil {
 		return nil, errors.Wrap(err, "failed to set delegation")
 	}
 
@@ -91,7 +71,7 @@ func (s *Service) Add(
 func (s *Service) SignalExit(delegation *Delegation, delegationID *big.Int, valCurrentIteration uint32) error {
 	delegation.LastIteration = &valCurrentIteration
 
-	return s.setDelegation(delegationID, delegation, false)
+	return s.delegations.Update(delegationID, *delegation)
 }
 
 func (s *Service) Withdraw(del *Delegation, delegationID *big.Int, val *validation.Validation) (uint64, error) {
@@ -99,9 +79,30 @@ func (s *Service) Withdraw(del *Delegation, delegationID *big.Int, val *validati
 	withdrawableStake := del.Stake
 
 	del.Stake = 0
-	if err := s.setDelegation(delegationID, del, false); err != nil {
+	if err := s.delegations.Update(delegationID, *del); err != nil {
 		return 0, err
 	}
 
 	return withdrawableStake, nil
+}
+
+func (s *Service) newDelegationID() (*big.Int, error) {
+	// update the global delegation counter
+	id, err := s.idCounter.Get()
+	if err != nil {
+		return nil, err
+	}
+	// fist seen will be a nil pointer
+	if id == nil {
+		id = big.NewInt(0)
+	}
+
+	id.Add(id, big.NewInt(1))
+	if id.Cmp(maxUint256) >= 0 {
+		return nil, errors.New("delegation ID counter overflow: maximum delegations reached")
+	}
+	if err := s.idCounter.Upsert(id); err != nil {
+		return nil, err
+	}
+	return id, nil
 }

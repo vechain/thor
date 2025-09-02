@@ -65,14 +65,14 @@ func (ts *TestSequence) AssertQueuedVET(expectedVET *big.Int) *TestSequence {
 func (ts *TestSequence) AssertFirstActive(expectedAddr thor.Address) *TestSequence {
 	firstActive, err := ts.staker.FirstActive()
 	assert.NoError(ts.t, err, "failed to get first active validator")
-	assert.Equal(ts.t, expectedAddr, *firstActive, "first active validator mismatch")
+	assert.Equal(ts.t, expectedAddr, firstActive, "first active validator mismatch")
 	return ts
 }
 
 func (ts *TestSequence) AssertFirstQueued(expectedAddr thor.Address) *TestSequence {
 	firstQueued, err := ts.staker.FirstQueued()
 	assert.NoError(ts.t, err, "failed to get first queued validator")
-	assert.Equal(ts.t, expectedAddr, *firstQueued, "first queued validator mismatch")
+	assert.Equal(ts.t, expectedAddr, firstQueued, "first queued validator mismatch")
 	return ts
 }
 

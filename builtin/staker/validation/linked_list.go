@@ -30,20 +30,18 @@ func (l *LinkedListEntry) IsLinked() bool {
 }
 
 type listStats struct {
-	head     *solidity.Raw[*thor.Address]
-	tail     *solidity.Raw[*thor.Address]
-	size     *solidity.Raw[uint64]
-	storage  *Storage
-	isQueued bool
+	head    *solidity.Raw[*thor.Address]
+	tail    *solidity.Raw[*thor.Address]
+	size    *solidity.Raw[uint64]
+	storage *Storage
 }
 
-func newListStats(sctx *solidity.Context, storage *Storage, headKey, tailKey, sizeKey thor.Bytes32, isQueue bool) *listStats {
+func newListStats(sctx *solidity.Context, storage *Storage, headKey, tailKey, sizeKey thor.Bytes32) *listStats {
 	return &listStats{
-		head:     solidity.NewRaw[*thor.Address](sctx, headKey),
-		tail:     solidity.NewRaw[*thor.Address](sctx, tailKey),
-		size:     solidity.NewRaw[uint64](sctx, sizeKey),
-		storage:  storage,
-		isQueued: isQueue,
+		head:    solidity.NewRaw[*thor.Address](sctx, headKey),
+		tail:    solidity.NewRaw[*thor.Address](sctx, tailKey),
+		size:    solidity.NewRaw[uint64](sctx, sizeKey),
+		storage: storage,
 	}
 }
 
@@ -228,5 +226,5 @@ func (l *listStats) add(address thor.Address, newEntry *Validation) error {
 	}
 
 	// update or add new entry
-	return l.storage.setValidation(address, *newEntry, l.isQueued)
+	return l.storage.upsertValidation(address, *newEntry)
 }

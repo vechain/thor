@@ -87,15 +87,13 @@ func (s *Service) IsActive() (bool, error) {
 }
 
 // FirstActive returns validator address of first entry.
-func (s *Service) FirstActive() (*thor.Address, error) {
-	validator, err := s.repo.firstActive()
-	return &validator, err
+func (s *Service) FirstActive() (thor.Address, error) {
+	return s.repo.firstActive()
 }
 
 // FirstQueued returns validator address of first entry.
-func (s *Service) FirstQueued() (*thor.Address, error) {
-	validator, err := s.repo.firstQueued()
-	return &validator, err
+func (s *Service) FirstQueued() (thor.Address, error) {
+	return s.repo.firstQueued()
 }
 
 func (s *Service) QueuedGroupSize() (uint64, error) {

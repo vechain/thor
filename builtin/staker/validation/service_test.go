@@ -178,11 +178,11 @@ func TestService_QueuedAndLeader_LenAndHead(t *testing.T) {
 
 	headActive, err := svc.FirstActive()
 	assert.NoError(t, err)
-	assert.Equal(t, q1, *headActive)
+	assert.Equal(t, q1, headActive)
 
 	headQueued, err := svc.FirstQueued()
 	assert.NoError(t, err)
-	assert.Equal(t, q2, *headQueued)
+	assert.Equal(t, q2, headQueued)
 }
 
 func TestService_IsActive_Flag(t *testing.T) {
@@ -453,9 +453,9 @@ func TestService_ValidatorQueueNext_Order(t *testing.T) {
 
 	head, err := svc.FirstQueued()
 	assert.NoError(t, err)
-	assert.Equal(t, q1, *head)
+	assert.Equal(t, q1, head)
 
-	n2, err := svc.NextEntry(*head)
+	n2, err := svc.NextEntry(head)
 	assert.NoError(t, err)
 	assert.Equal(t, q2, n2)
 
@@ -488,9 +488,9 @@ func TestService_LeaderGroupNext_Order(t *testing.T) {
 
 	head, err := svc.FirstActive()
 	assert.NoError(t, err)
-	assert.Equal(t, a1, *head)
+	assert.Equal(t, a1, head)
 
-	n2, err := svc.NextEntry(*head)
+	n2, err := svc.NextEntry(head)
 	assert.NoError(t, err)
 	assert.Equal(t, a2, n2)
 

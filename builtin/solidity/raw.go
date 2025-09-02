@@ -46,14 +46,22 @@ func (r *Raw[V]) Upsert(value V) error {
 
 // Insert insert a new value for the given key, charging new value gas.
 func (r *Raw[V]) Insert(value V) error {
-	r.context.UseGas(thor.SstoreSetGas)
-	return r.set(value)
+	size, err := r.set(value)
+	if err != nil {
+		return err
+	}
+	r.context.UseGas(size * thor.SstoreSetGas)
+	return nil
 }
 
 // Update update the value for the given key, charging reset value gas.
 func (r *Raw[V]) Update(value V) error {
-	r.context.UseGas(thor.SstoreResetGas)
-	return r.set(value)
+	size, err := r.set(value)
+	if err != nil {
+		return err
+	}
+	r.context.UseGas(size * thor.SstoreResetGas)
+	return nil
 }
 
 func (r *Raw[V]) get() (V, error) {
@@ -73,21 +81,25 @@ func (r *Raw[V]) get() (V, error) {
 	return value, err
 }
 
-func (r *Raw[V]) set(value V) error {
+func (r *Raw[V]) set(value V) (uint64, error) {
 	// do not RLP-encode nil values, instead set raw storage to nil
 	var zero V
 	if value == zero {
 		r.context.state.SetRawStorage(r.context.address, r.pos, nil)
-		return nil
+		return 0, nil // no gas charged for setting nil
 	}
 
 	// encode and store
-	return r.context.state.EncodeStorage(r.context.address, r.pos, func() ([]byte, error) {
+	if err := r.context.state.EncodeStorage(r.context.address, r.pos, func() ([]byte, error) {
 		// encode via rlp library's internal pooling
 		buf, err := rlp.EncodeToBytes(value)
 		if err != nil {
 			return nil, err
 		}
 		return buf, nil
-	})
+	}); err != nil {
+		return 0, err
+	}
+
+	return 1, nil
 }
