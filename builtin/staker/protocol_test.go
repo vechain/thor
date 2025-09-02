@@ -75,13 +75,13 @@ func TestSyncPOS_TransitionBlock_WithValidators(t *testing.T) {
 	endorser1 := thor.BytesToAddress([]byte("endorser1"))
 	stake := uint64(25_000_000)
 
-	err := staker.AddValidation(validator1, endorser1, uint32(360)*24*15, stake)
+	err := staker.AddValidation(&validator1, &endorser1, uint32(360)*24*15, stake)
 	require.NoError(t, err)
 
 	validator2 := thor.BytesToAddress([]byte("validator2"))
 	endorser2 := thor.BytesToAddress([]byte("endorser2"))
 
-	err = staker.AddValidation(validator2, endorser2, uint32(360)*24*15, stake)
+	err = staker.AddValidation(&validator2, &endorser2, uint32(360)*24*15, stake)
 	require.NoError(t, err)
 
 	forkConfig := &thor.ForkConfig{
@@ -130,13 +130,13 @@ func TestSyncPOS_AlreadyActive_NoTransition(t *testing.T) {
 	endorser1 := thor.BytesToAddress([]byte("endorser1"))
 	stake := uint64(25_000_000)
 
-	err := staker.AddValidation(validator1, endorser1, uint32(360)*24*15, stake)
+	err := staker.AddValidation(&validator1, &endorser1, uint32(360)*24*15, stake)
 	require.NoError(t, err)
 
 	validator2 := thor.BytesToAddress([]byte("validator2"))
 	endorser2 := thor.BytesToAddress([]byte("endorser2"))
 
-	err = staker.AddValidation(validator2, endorser2, uint32(360)*24*15, stake)
+	err = staker.AddValidation(&validator2, &endorser2, uint32(360)*24*15, stake)
 	require.NoError(t, err)
 
 	transitioned, err := staker.transition(0)
@@ -250,13 +250,13 @@ func TestSyncPOS_HousekeepError(t *testing.T) {
 	endorser1 := thor.BytesToAddress([]byte("endorser1"))
 	stake := uint64(25_000_000)
 
-	err := staker.AddValidation(validator1, endorser1, uint32(360)*24*15, stake)
+	err := staker.AddValidation(&validator1, &endorser1, uint32(360)*24*15, stake)
 	require.NoError(t, err)
 
 	validator2 := thor.BytesToAddress([]byte("validator2"))
 	endorser2 := thor.BytesToAddress([]byte("endorser2"))
 
-	err = staker.AddValidation(validator2, endorser2, uint32(360)*24*15, stake)
+	err = staker.AddValidation(&validator2, &endorser2, uint32(360)*24*15, stake)
 	require.NoError(t, err)
 
 	transitioned, err := staker.transition(0)

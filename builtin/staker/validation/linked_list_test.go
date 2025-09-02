@@ -29,10 +29,10 @@ func Test_LinkedList_HeadAndTail(t *testing.T) {
 
 	repo := NewRepository(sctx)
 
-	id1 := datagen.RandAddress()
-	id2 := datagen.RandAddress()
+	id1 := datagen.RandAddressPtr()
+	id2 := datagen.RandAddressPtr()
 
-	if err := repo.addValidation(id1, &Validation{Status: StatusQueued}); err != nil {
+	if err := repo.addValidation(id1, &Validation{Endorser: id1, Status: StatusQueued}); err != nil {
 		t.Fatalf("failed to add id1: %v", err)
 	}
 
@@ -51,7 +51,7 @@ func Test_LinkedList_HeadAndTail(t *testing.T) {
 	assert.Nil(t, val.Prev)
 	assert.Nil(t, val.Next)
 
-	if err := repo.addValidation(id2, &Validation{Status: StatusQueued}); err != nil {
+	if err := repo.addValidation(id2, &Validation{Endorser: id2, Status: StatusQueued}); err != nil {
 		t.Fatalf("failed to add id2: %v", err)
 	}
 
@@ -73,7 +73,7 @@ func Test_LinkedList_HeadAndTail(t *testing.T) {
 
 	assert.NotNil(t, val.Prev)
 	assert.Nil(t, val.Next)
-	assert.Equal(t, id1, *val.Prev)
+	assert.Equal(t, id1, val.Prev)
 
 	val, err = repo.getValidation(id2)
 	assert.NoError(t, err)
@@ -94,7 +94,7 @@ func Test_LinkedList_HeadAndTail(t *testing.T) {
 	// Check that id1's next is zero (meaning it's the tail)
 	next, err = repo.nextEntry(id1)
 	assert.NoError(t, err)
-	assert.True(t, next.IsZero())
+	assert.Nil(t, next)
 
 	val, err = repo.getValidation(id1)
 	assert.NoError(t, err)
@@ -111,13 +111,13 @@ func Test_LinkedList_HeadAndTail(t *testing.T) {
 
 	head, err = repo.firstQueued()
 	assert.NoError(t, err)
-	assert.True(t, head.IsZero())
+	assert.Nil(t, head)
 
 	// Verify list is empty by checking head is zero
 	// (when head is zero, tail is implicitly zero too)
 	head, err = repo.firstQueued()
 	assert.NoError(t, err)
-	assert.True(t, head.IsZero())
+	assert.Nil(t, head)
 }
 
 func Test_LinkedList_Remove_NonExistent(t *testing.T) {
@@ -128,9 +128,9 @@ func Test_LinkedList_Remove_NonExistent(t *testing.T) {
 
 	repo := NewRepository(sctx)
 
-	id1 := datagen.RandAddress()
-	id2 := datagen.RandAddress()
-	id3 := datagen.RandAddress()
+	id1 := datagen.RandAddressPtr()
+	id2 := datagen.RandAddressPtr()
+	id3 := datagen.RandAddressPtr()
 
 	if err := repo.addValidation(id1, &Validation{Status: StatusQueued}); err != nil {
 		t.Fatalf("failed to add id1: %v", err)
@@ -157,7 +157,7 @@ func Test_LinkedList_Remove_NonExistent(t *testing.T) {
 	// Verify removed-node pointers are cleared
 	nextPtr, err := repo.nextEntry(id2)
 	assert.NoError(t, err)
-	assert.True(t, nextPtr.IsZero(), "expected next[id2] to be cleared")
+	assert.Nilf(t, nextPtr, "expected next[id2] to be cleared")
 	prevPtr, err := repo.getValidation(id1)
 	assert.NoError(t, err)
 	assert.Nil(t, prevPtr.Prev, "expected prev[id1] to be cleared")
@@ -175,7 +175,7 @@ func Test_LinkedList_Remove_NonExistent(t *testing.T) {
 	// Tail unchanged (i.e. Next(id2) is zero)
 	next, err := repo.nextEntry(id2)
 	assert.NoError(t, err)
-	assert.True(t, next.IsZero())
+	assert.Nil(t, next)
 
 	// Length unchanged
 	length, err := repo.queuedListSize()
@@ -197,8 +197,8 @@ func Test_LinkedList_Remove_NegativeTests(t *testing.T) {
 
 	repo := NewRepository(sctx)
 
-	id1 := thor.Address{}
-	id2 := thor.Address{}
+	id1 := &thor.Address{}
+	id2 := &thor.Address{}
 
 	if err := repo.addValidation(id1, &Validation{Status: StatusQueued}); err != nil {
 		t.Fatalf("failed to add id1: %v", err)
@@ -208,7 +208,7 @@ func Test_LinkedList_Remove_NegativeTests(t *testing.T) {
 		t.Fatalf("failed to add id2: %v", err)
 	}
 
-	assert.Nil(t, repo.removeQueued(thor.Address{}, &Validation{Status: StatusQueued}))
+	assert.Nil(t, repo.removeQueued(&thor.Address{}, &Validation{Status: StatusQueued}))
 }
 
 func Test_LinkedList_Remove(t *testing.T) {
@@ -219,8 +219,8 @@ func Test_LinkedList_Remove(t *testing.T) {
 
 	repo := NewRepository(sctx)
 
-	id1 := datagen.RandAddress()
-	id2 := datagen.RandAddress()
+	id1 := datagen.RandAddressPtr()
+	id2 := datagen.RandAddressPtr()
 
 	if err := repo.addValidation(id1, &Validation{Status: StatusQueued}); err != nil {
 		t.Fatalf("failed to add id1: %v", err)
@@ -261,7 +261,7 @@ func Test_LinkedList_Remove(t *testing.T) {
 	// Verify list is empty
 	head, err = repo.firstQueued()
 	assert.NoError(t, err)
-	assert.True(t, head.IsZero())
+	assert.Nil(t, head)
 }
 
 func Test_LinkedList_Iter(t *testing.T) {
@@ -273,9 +273,9 @@ func Test_LinkedList_Iter(t *testing.T) {
 	repo := NewRepository(sctx)
 
 	// Create 3 addresses
-	id1 := datagen.RandAddress()
-	id2 := datagen.RandAddress()
-	id3 := datagen.RandAddress()
+	id1 := datagen.RandAddressPtr()
+	id2 := datagen.RandAddressPtr()
+	id3 := datagen.RandAddressPtr()
 
 	// Add addresses to the linked list
 	if err := repo.addValidation(id1, &Validation{Status: StatusQueued}); err != nil {
@@ -315,10 +315,10 @@ func Test_LinkedList_Iter(t *testing.T) {
 	}
 
 	// Test iteration
-	var addresses []thor.Address
+	var addresses []*thor.Address
 	count := 0
 
-	err = repo.iterateActive(func(address thor.Address, entry *Validation) error {
+	err = repo.iterateActive(func(address *thor.Address, entry *Validation) error {
 		addresses = append(addresses, address)
 		count++
 		return nil
@@ -332,8 +332,8 @@ func Test_LinkedList_Iter(t *testing.T) {
 	assert.Equal(t, 3, count)
 
 	// Test early termination
-	addresses = []thor.Address{}
-	err = repo.iterateActive(func(address thor.Address, entry *Validation) error {
+	addresses = []*thor.Address{}
+	err = repo.iterateActive(func(address *thor.Address, entry *Validation) error {
 		addresses = append(addresses, address)
 		if len(addresses) >= 2 {
 			return errors.New("early termination")
@@ -353,9 +353,9 @@ func Test_LinkedList_Iter(t *testing.T) {
 	sctx = solidity.NewContext(addr, st, nil)
 	// Test iteration on empty list
 	emptyList := NewRepository(sctx)
-	var emptyResult []thor.Address
+	var emptyResult []*thor.Address
 
-	err = emptyList.iterateActive(func(address thor.Address, entry *Validation) error {
+	err = emptyList.iterateActive(func(address *thor.Address, entry *Validation) error {
 		emptyResult = append(emptyResult, address)
 		return nil
 	})
@@ -378,8 +378,8 @@ func Test_LinkedList_Pop(t *testing.T) {
 	assert.Equal(t, "list is empty", err.Error())
 
 	// Add some addresses
-	id1 := datagen.RandAddress()
-	id2 := datagen.RandAddress()
+	id1 := datagen.RandAddressPtr()
+	id2 := datagen.RandAddressPtr()
 
 	if err := repo.addValidation(id1, &Validation{Status: StatusQueued}); err != nil {
 		t.Fatalf("failed to add id1: %v", err)
@@ -407,7 +407,7 @@ func Test_LinkedList_Pop(t *testing.T) {
 	// Verify list is empty
 	head, err = repo.firstQueued()
 	assert.NoError(t, err)
-	assert.True(t, head.IsZero())
+	assert.Nil(t, head)
 }
 
 func Test_LinkedList_Len(t *testing.T) {
@@ -424,8 +424,8 @@ func Test_LinkedList_Len(t *testing.T) {
 	assert.Equal(t, uint64(0), len)
 
 	// Add addresses
-	id1 := datagen.RandAddress()
-	id2 := datagen.RandAddress()
+	id1 := datagen.RandAddressPtr()
+	id2 := datagen.RandAddressPtr()
 
 	if err := repo.addValidation(id1, &Validation{Status: StatusQueued}); err != nil {
 		t.Fatalf("failed to add id1: %v", err)
@@ -466,14 +466,15 @@ func Test_LinkedList_Next(t *testing.T) {
 	repo := NewRepository(sctx)
 
 	// Test Next on empty list
-	next, err := repo.nextEntry(datagen.RandAddress())
-	assert.NoError(t, err)
-	assert.True(t, next.IsZero())
+	tmpID := datagen.RandAddressPtr()
+	next, err := repo.nextEntry(tmpID)
+	assert.Error(t, err)
+	assert.Nil(t, next)
 
 	// Add addresses
-	id1 := datagen.RandAddress()
-	id2 := datagen.RandAddress()
-	id3 := datagen.RandAddress()
+	id1 := datagen.RandAddressPtr()
+	id2 := datagen.RandAddressPtr()
+	id3 := datagen.RandAddressPtr()
 
 	if err := repo.addValidation(id1, &Validation{Status: StatusQueued}); err != nil {
 		t.Fatalf("failed to add id1: %v", err)
@@ -498,7 +499,7 @@ func Test_LinkedList_Next(t *testing.T) {
 
 	next, err = repo.nextEntry(id3)
 	assert.NoError(t, err)
-	assert.True(t, next.IsZero()) // id3 is the last element
+	assert.Nil(t, next) // id3 is the last element
 }
 
 func Test_LinkedList_Grow_Empty_Grow(t *testing.T) {
@@ -510,8 +511,8 @@ func Test_LinkedList_Grow_Empty_Grow(t *testing.T) {
 	repo := NewRepository(sctx)
 
 	// --- 1) Grow first time
-	id1 := datagen.RandAddress()
-	id2 := datagen.RandAddress()
+	id1 := datagen.RandAddressPtr()
+	id2 := datagen.RandAddressPtr()
 
 	assert.NoError(t, repo.addValidation(id1, &Validation{Status: StatusQueued}))
 	assert.NoError(t, repo.addValidation(id2, &Validation{Status: StatusQueued}))
@@ -527,7 +528,7 @@ func Test_LinkedList_Grow_Empty_Grow(t *testing.T) {
 	assert.Equal(t, id2, nxt)
 	nxt, err = repo.nextEntry(id2)
 	assert.NoError(t, err)
-	assert.True(t, nxt.IsZero())
+	assert.Nil(t, nxt)
 
 	// length == 2
 	ln, err := repo.queuedListSize()
@@ -544,15 +545,15 @@ func Test_LinkedList_Grow_Empty_Grow(t *testing.T) {
 
 	head, err = repo.firstQueued()
 	assert.NoError(t, err)
-	assert.True(t, head.IsZero(), "expected empty head after draining")
+	assert.Nil(t, head)
 
 	ln, err = repo.queuedListSize()
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(0), ln)
 
 	// --- 3) Grow second time
-	id3 := datagen.RandAddress()
-	id4 := datagen.RandAddress()
+	id3 := datagen.RandAddressPtr()
+	id4 := datagen.RandAddressPtr()
 
 	assert.NoError(t, repo.addValidation(id3, &Validation{Status: StatusQueued}))
 	assert.NoError(t, repo.addValidation(id4, &Validation{Status: StatusQueued}))
@@ -568,7 +569,7 @@ func Test_LinkedList_Grow_Empty_Grow(t *testing.T) {
 	assert.Equal(t, id4, nxt)
 	nxt, err = repo.nextEntry(id4)
 	assert.NoError(t, err)
-	assert.True(t, nxt.IsZero())
+	assert.Nil(t, nxt)
 
 	// length should now be 2 again
 	ln, err = repo.queuedListSize()
@@ -584,9 +585,9 @@ func Test_LinkedList_Iter_NegativeCases(t *testing.T) {
 
 	repo := NewRepository(sctx)
 
-	id1 := datagen.RandAddress()
-	id2 := datagen.RandAddress()
-	id3 := datagen.RandAddress()
+	id1 := datagen.RandAddressPtr()
+	id2 := datagen.RandAddressPtr()
+	id3 := datagen.RandAddressPtr()
 
 	if err := repo.addValidation(id1, &Validation{Status: StatusQueued}); err != nil {
 		t.Fatalf("failed to add id1: %v", err)
@@ -624,13 +625,13 @@ func Test_LinkedList_Iter_NegativeCases(t *testing.T) {
 		t.Fatalf("failed to add id3: %v", err)
 	}
 
-	var addresses []thor.Address
+	var addresses []*thor.Address
 	count := 0
 
 	raw, err := st.GetRawStorage(addr, slotActiveHead)
 	assert.NoError(t, err)
 	st.SetRawStorage(addr, slotActiveHead, rlp.RawValue{0xFF})
-	err = repo.iterateActive(func(address thor.Address, entry *Validation) error {
+	err = repo.iterateActive(func(address *thor.Address, entry *Validation) error {
 		addresses = append(addresses, address)
 		count++
 		return nil
@@ -642,7 +643,7 @@ func Test_LinkedList_Iter_NegativeCases(t *testing.T) {
 	raw, err = st.GetRawStorage(addr, slot)
 	assert.NoError(t, err)
 	st.SetRawStorage(addr, slot, rlp.RawValue{0xFF})
-	err = repo.iterateActive(func(address thor.Address, entry *Validation) error {
+	err = repo.iterateActive(func(address *thor.Address, entry *Validation) error {
 		addresses = append(addresses, address)
 		count++
 		return nil

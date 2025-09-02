@@ -41,75 +41,62 @@ func NewRepository(sctx *solidity.Context) *Repository {
 	}
 }
 
-func (r *Repository) getValidation(validator thor.Address) (*Validation, error) {
+func (r *Repository) getValidation(validator *thor.Address) (*Validation, error) {
 	return r.storage.getValidation(validator)
 }
 
-func (r *Repository) addValidation(validator thor.Address, entry *Validation) error {
+func (r *Repository) addValidation(validator *thor.Address, entry *Validation) error {
 	if err := r.queuedList.add(validator, entry); err != nil {
 		return errors.Wrap(err, "failed to add validator to queued list")
 	}
 	return nil
 }
 
-func (r *Repository) updateValidation(validator thor.Address, entry *Validation) error {
+func (r *Repository) updateValidation(validator *thor.Address, entry *Validation) error {
 	if err := r.storage.updateValidation(validator, entry); err != nil {
 		return errors.Wrap(err, "failed to set validator")
 	}
 	return nil
 }
 
-func (r *Repository) getReward(key thor.Bytes32) (*big.Int, error) {
+func (r *Repository) getReward(key *thor.Bytes32) (*big.Int, error) {
 	return r.storage.getReward(key)
 }
 
-func (r *Repository) setReward(key thor.Bytes32, val *big.Int, isNew bool) error {
-	return r.storage.setReward(key, val, isNew)
+func (r *Repository) setReward(key *thor.Bytes32, val *big.Int) error {
+	return r.storage.setReward(key, val)
 }
 
-func (r *Repository) getExit(block uint32) (thor.Address, error) {
+func (r *Repository) getExit(block uint32) (*thor.Address, error) {
 	return r.storage.getExit(block)
 }
 
-func (r *Repository) setExit(block uint32, validator thor.Address) error {
+func (r *Repository) setExit(block uint32, validator *thor.Address) error {
 	return r.storage.setExit(block, validator)
 }
 
 // linked list operation
-func (r *Repository) firstQueued() (thor.Address, error) {
-	head, err := r.queuedList.getHead()
-	if err != nil {
-		return thor.Address{}, err
-	}
-
-	if head == nil {
-		return thor.Address{}, nil
-	}
-	return *head, nil
+func (r *Repository) firstQueued() (*thor.Address, error) {
+	return r.queuedList.getHead()
 }
 
-func (r *Repository) firstActive() (thor.Address, error) {
-	head, err := r.activeList.getHead()
-	if err != nil {
-		return thor.Address{}, err
-	}
-
-	if head == nil {
-		return thor.Address{}, nil
-	}
-	return *head, nil
+func (r *Repository) firstActive() (*thor.Address, error) {
+	return r.activeList.getHead()
 }
 
-func (r *Repository) nextEntry(prev thor.Address) (thor.Address, error) {
+func (r *Repository) nextEntry(prev *thor.Address) (*thor.Address, error) {
 	val, err := r.storage.getValidation(prev)
 	if err != nil {
-		return thor.Address{}, errors.Wrap(err, "failed to get next")
+		return nil, errors.Wrap(err, "failed to get next")
 	}
 
-	if val.Next == nil {
-		return thor.Address{}, nil
+	if val == nil {
+		return nil, errors.New("no validation found")
 	}
-	return *val.Next, nil
+	if val.Next == nil {
+		return nil, nil
+	}
+	return val.Next, nil
 }
 
 func (r *Repository) activeListSize() (uint64, error) {
@@ -120,57 +107,57 @@ func (r *Repository) queuedListSize() (uint64, error) {
 	return r.queuedList.getSize()
 }
 
-func (r *Repository) popQueued() (thor.Address, *Validation, error) {
+func (r *Repository) popQueued() (*thor.Address, *Validation, error) {
 	head, err := r.queuedList.getHead()
 	if err != nil {
-		return thor.Address{}, nil, errors.New("no head present")
+		return nil, nil, errors.New("no head present")
 	}
 
 	if head == nil {
-		return thor.Address{}, nil, errors.New("list is empty")
+		return nil, nil, errors.New("list is empty")
 	}
 
-	entry, err := r.getValidation(*head)
+	entry, err := r.getValidation(head)
 	if err != nil {
-		return thor.Address{}, nil, err
+		return nil, nil, err
 	}
 	if entry.IsEmpty() {
-		return thor.Address{}, nil, errors.New("entry is empty")
+		return nil, nil, errors.New("entry is empty")
 	}
 
 	// otherwise, remove and return
-	val, err := r.queuedList.remove(*head, entry)
+	val, err := r.queuedList.remove(head, entry)
 	if err != nil {
-		return thor.Address{}, nil, err
+		return nil, nil, err
 	}
-	return *head, val, nil
+	return head, val, nil
 }
 
 // removeQueued removes the entry from the queued list and persists the entry
-func (r *Repository) removeQueued(address thor.Address, entry *Validation) error {
+func (r *Repository) removeQueued(address *thor.Address, entry *Validation) error {
 	_, err := r.queuedList.remove(address, entry)
 	return err
 }
 
 // addActive adds the entry to the active list and persists the entry
-func (r *Repository) addActive(address thor.Address, newEntry *Validation) error {
+func (r *Repository) addActive(address *thor.Address, newEntry *Validation) error {
 	return r.activeList.add(address, newEntry)
 }
 
 // removeActive removes the entry from the active list and persists the entry
-func (r *Repository) removeActive(address thor.Address, entry *Validation) error {
+func (r *Repository) removeActive(address *thor.Address, entry *Validation) error {
 	_, err := r.activeList.remove(address, entry)
 	return err
 }
 
-func (r *Repository) iterateActive(callbacks ...func(thor.Address, *Validation) error) error {
+func (r *Repository) iterateActive(callbacks ...func(*thor.Address, *Validation) error) error {
 	current, err := r.activeList.getHead()
 	if err != nil {
 		return err
 	}
 
 	for current != nil {
-		entry, err := r.getValidation(*current)
+		entry, err := r.getValidation(current)
 		if err != nil {
 			return err
 		}
@@ -178,7 +165,7 @@ func (r *Repository) iterateActive(callbacks ...func(thor.Address, *Validation) 
 			return errors.New("entry is empty")
 		}
 		for _, callback := range callbacks {
-			if err := callback(*current, entry); err != nil {
+			if err := callback(current, entry); err != nil {
 				return err
 			}
 		}

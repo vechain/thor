@@ -1633,7 +1633,7 @@ func TestStakerContract_Native_Revert(t *testing.T) {
 	minStakingPeriod := uint32(360) * 24 * 15
 
 	// addValidator
-	addValidatorArgs := []any{master.Address, minStakingPeriod + 1}
+	addValidatorArgs := []any{&master.Address, minStakingPeriod + 1}
 	desc := TestTxDescription{
 		t:          t,
 		abi:        abi,
@@ -1648,7 +1648,7 @@ func TestStakerContract_Native_Revert(t *testing.T) {
 	assert.True(t, receipt.Reverted)
 
 	// update auto renew
-	signalExitArgs := []any{thor.Bytes32{}}
+	signalExitArgs := []any{&thor.Bytes32{}}
 	desc = TestTxDescription{
 		t:          t,
 		abi:        abi,

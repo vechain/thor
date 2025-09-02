@@ -26,10 +26,6 @@ import (
 	"github.com/vechain/thor/v2/trie"
 )
 
-func M(a ...any) []any {
-	return a
-}
-
 // RandomStake returns a random number between MinStake and (MaxStake/2)
 func RandomStake() uint64 {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -46,15 +42,15 @@ func RandomStake() uint64 {
 }
 
 type keySet struct {
-	endorser thor.Address
-	node     thor.Address
+	endorser *thor.Address
+	node     *thor.Address
 }
 
-func createKeys(amount int) map[thor.Address]keySet {
-	keys := make(map[thor.Address]keySet)
+func createKeys(amount int) map[*thor.Address]keySet {
+	keys := make(map[*thor.Address]keySet)
 	for range amount {
-		node := datagen.RandAddress()
-		endorser := datagen.RandAddress()
+		node := datagen.RandAddressPtr()
+		endorser := datagen.RandAddressPtr()
 
 		keys[node] = keySet{
 			endorser: endorser,
@@ -89,45 +85,11 @@ func newStaker(t *testing.T, amount int, maxValidators int64, initialise bool) (
 	return staker, totalStake
 }
 
-func TestStaker(t *testing.T) {
-	validator1 := thor.BytesToAddress([]byte("v1"))
-	validator2 := thor.BytesToAddress([]byte("v2"))
-	validator3 := thor.BytesToAddress([]byte("v3"))
-	stakeAmount := uint64(25e6)
-	zeroStake := uint64(0)
-
-	stkr, _ := newStaker(t, 0, 3, false)
-
-	totalStake := stakeAmount * 2
-
-	tests := []struct {
-		ret      any
-		expected any
-	}{
-		{M(stkr.LockedStake()), M(zeroStake, zeroStake, nil)},
-		{M(stkr.AddValidation(validator1, validator1, uint32(360)*24*15, stakeAmount)), M(nil)},
-		{M(stkr.AddValidation(validator2, validator2, uint32(360)*24*15, stakeAmount)), M(nil)},
-		{M(stkr.transition(0)), M(true, nil)},
-		{M(stkr.LockedStake()), M(totalStake, totalStake, nil)},
-		{M(stkr.AddValidation(validator3, validator3, uint32(360)*24*15, stakeAmount)), M(nil)},
-		{M(stkr.FirstQueued()), M(validator3, nil)},
-		{M(func() (*thor.Address, error) {
-			activated, err := stkr.activateNextValidation(0, getTestMaxLeaderSize(stkr.params))
-			return &activated, err
-		}()), M(&validator3, nil)},
-		{M(stkr.FirstActive()), M(validator1, nil)},
-	}
-
-	for _, tt := range tests {
-		assert.Equal(t, tt.expected, tt.ret)
-	}
-}
-
 func TestStaker_TotalStake(t *testing.T) {
 	staker, totalStaked := newStaker(t, 0, 14, false)
 
-	stakers := datagen.RandAddresses(10)
-	stakes := make(map[thor.Address]uint64)
+	stakers := datagen.RandAddressesPtr(10)
+	stakes := make(map[*thor.Address]uint64)
 
 	for _, addr := range stakers {
 		stakeAmount := RandomStake()
@@ -148,7 +110,7 @@ func TestStaker_TotalStake(t *testing.T) {
 		require.NoError(t, err)
 
 		// exit the aggregation too
-		aggExit, err := staker.aggregationService.Exit(&id)
+		aggExit, err := staker.aggregationService.Exit(id)
 		require.NoError(t, err)
 
 		// Update global totals
@@ -166,7 +128,7 @@ func TestStaker_TotalStake(t *testing.T) {
 func TestStaker_TotalStake_Withdrawal(t *testing.T) {
 	staker, _ := newStaker(t, 0, 14, false)
 
-	addr := datagen.RandAddress()
+	addr := datagen.RandAddressPtr()
 	stakeAmount := RandomStake()
 	period := uint32(360) * 24 * 15
 	err := staker.AddValidation(addr, addr, period, stakeAmount)
@@ -196,7 +158,7 @@ func TestStaker_TotalStake_Withdrawal(t *testing.T) {
 	require.NoError(t, err)
 
 	// exit the aggregation too
-	aggExit, err := staker.aggregationService.Exit(&addr)
+	aggExit, err := staker.aggregationService.Exit(addr)
 	require.NoError(t, err)
 
 	// Update global totals
@@ -240,9 +202,9 @@ func TestStaker_AddValidation_MinimumStake(t *testing.T) {
 	staker, _ := newStaker(t, 68, 101, true)
 
 	tooLow := MinStakeVET - 1
-	err := staker.AddValidation(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, tooLow)
+	err := staker.AddValidation(datagen.RandAddressPtr(), datagen.RandAddressPtr(), uint32(360)*24*15, tooLow)
 	assert.ErrorContains(t, err, "stake is out of range")
-	err = staker.AddValidation(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, MinStakeVET)
+	err = staker.AddValidation(datagen.RandAddressPtr(), datagen.RandAddressPtr(), uint32(360)*24*15, MinStakeVET)
 	assert.NoError(t, err)
 }
 
@@ -250,36 +212,36 @@ func TestStaker_AddValidation_MaximumStake(t *testing.T) {
 	staker, _ := newStaker(t, 68, 101, true)
 
 	tooHigh := MaxStakeVET + 1
-	err := staker.AddValidation(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, tooHigh)
+	err := staker.AddValidation(datagen.RandAddressPtr(), datagen.RandAddressPtr(), uint32(360)*24*15, tooHigh)
 	assert.ErrorContains(t, err, "stake is out of range")
-	err = staker.AddValidation(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, MaxStakeVET)
+	err = staker.AddValidation(datagen.RandAddressPtr(), datagen.RandAddressPtr(), uint32(360)*24*15, MaxStakeVET)
 	assert.NoError(t, err)
 }
 
 func TestStaker_AddValidation_MaximumStakingPeriod(t *testing.T) {
 	staker, _ := newStaker(t, 101, 101, true)
 
-	err := staker.AddValidation(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*400, MinStakeVET)
+	err := staker.AddValidation(datagen.RandAddressPtr(), datagen.RandAddressPtr(), uint32(360)*24*400, MinStakeVET)
 	assert.ErrorContains(t, err, "period is out of boundaries")
-	err = staker.AddValidation(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, MinStakeVET)
+	err = staker.AddValidation(datagen.RandAddressPtr(), datagen.RandAddressPtr(), uint32(360)*24*15, MinStakeVET)
 	assert.NoError(t, err)
 }
 
 func TestStaker_AddValidation_MinimumStakingPeriod(t *testing.T) {
 	staker, _ := newStaker(t, 101, 101, true)
 
-	err := staker.AddValidation(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*1, MinStakeVET)
+	err := staker.AddValidation(datagen.RandAddressPtr(), datagen.RandAddressPtr(), uint32(360)*24*1, MinStakeVET)
 	assert.ErrorContains(t, err, "period is out of boundaries")
-	err = staker.AddValidation(datagen.RandAddress(), datagen.RandAddress(), 100, MinStakeVET)
+	err = staker.AddValidation(datagen.RandAddressPtr(), datagen.RandAddressPtr(), 100, MinStakeVET)
 	assert.ErrorContains(t, err, "period is out of boundaries")
-	err = staker.AddValidation(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, MinStakeVET)
+	err = staker.AddValidation(datagen.RandAddressPtr(), datagen.RandAddressPtr(), uint32(360)*24*15, MinStakeVET)
 	assert.NoError(t, err)
 }
 
 func TestStaker_AddValidation_Duplicate(t *testing.T) {
 	staker, _ := newStaker(t, 68, 101, true)
 
-	addr := datagen.RandAddress()
+	addr := datagen.RandAddressPtr()
 	stake := uint64(25e6)
 	err := staker.AddValidation(addr, addr, uint32(360)*24*15, stake)
 	assert.NoError(t, err)
@@ -290,10 +252,10 @@ func TestStaker_AddValidation_Duplicate(t *testing.T) {
 func TestStaker_AddValidation_QueueOrder(t *testing.T) {
 	staker, _ := newStaker(t, 0, 101, false)
 
-	expectedOrder := [100]thor.Address{}
+	expectedOrder := [100]*thor.Address{}
 	// add 100 validations to the queue
 	for i := range 100 {
-		addr := datagen.RandAddress()
+		addr := datagen.RandAddressPtr()
 		stake := RandomStake()
 		err := staker.AddValidation(addr, addr, uint32(360)*24*15, stake)
 		assert.NoError(t, err)
@@ -334,10 +296,10 @@ func TestStaker_AddValidation_QueueOrder(t *testing.T) {
 func TestStaker_AddValidation(t *testing.T) {
 	staker, _ := newStaker(t, 101, 101, true)
 
-	addr1 := datagen.RandAddress()
-	addr2 := datagen.RandAddress()
-	addr3 := datagen.RandAddress()
-	addr4 := datagen.RandAddress()
+	addr1 := datagen.RandAddressPtr()
+	addr2 := datagen.RandAddressPtr()
+	addr3 := datagen.RandAddressPtr()
+	addr4 := datagen.RandAddressPtr()
 
 	stake := RandomStake()
 	err := staker.AddValidation(addr1, addr1, uint32(360)*24*15, stake)
@@ -372,16 +334,16 @@ func TestStaker_AddValidation(t *testing.T) {
 
 	validator, err = staker.GetValidation(addr4)
 	assert.NoError(t, err)
-	assert.True(t, validator.IsEmpty())
+	assert.Nil(t, validator)
 }
 
 func TestStaker_QueueUpValidators(t *testing.T) {
 	staker, _ := newStaker(t, 101, 101, false)
 
-	addr1 := datagen.RandAddress()
-	addr2 := datagen.RandAddress()
-	addr3 := datagen.RandAddress()
-	addr4 := datagen.RandAddress()
+	addr1 := datagen.RandAddressPtr()
+	addr2 := datagen.RandAddressPtr()
+	addr3 := datagen.RandAddressPtr()
+	addr4 := datagen.RandAddressPtr()
 
 	stake := RandomStake()
 	err := staker.AddValidation(addr1, addr1, uint32(360)*24*15, stake)
@@ -424,7 +386,7 @@ func TestStaker_QueueUpValidators(t *testing.T) {
 
 	validator, err = staker.GetValidation(addr4)
 	assert.NoError(t, err)
-	assert.True(t, validator.IsEmpty())
+	assert.Nil(t, validator)
 
 	validator, err = staker.GetValidation(addr1)
 	assert.NoError(t, err)
@@ -451,16 +413,16 @@ func TestStaker_QueueUpValidators(t *testing.T) {
 func TestStaker_Get_NonExistent(t *testing.T) {
 	staker, _ := newStaker(t, 101, 101, true)
 
-	id := datagen.RandAddress()
+	id := datagen.RandAddressPtr()
 	validator, err := staker.GetValidation(id)
 	assert.NoError(t, err)
-	assert.True(t, validator.IsEmpty())
+	assert.Nil(t, validator)
 }
 
 func TestStaker_Get(t *testing.T) {
 	staker, _ := newStaker(t, 68, 101, true)
 
-	addr := datagen.RandAddress()
+	addr := datagen.RandAddressPtr()
 	stake := RandomStake()
 	err := staker.AddValidation(addr, addr, uint32(360)*24*15, stake)
 	assert.NoError(t, err)
@@ -482,9 +444,9 @@ func TestStaker_Get(t *testing.T) {
 
 func TestStaker_Get_FullFlow_Renewal_Off(t *testing.T) {
 	staker, _ := newStaker(t, 0, 3, false)
-	addr := datagen.RandAddress()
-	addr1 := datagen.RandAddress()
-	addr2 := datagen.RandAddress()
+	addr := datagen.RandAddressPtr()
+	addr1 := datagen.RandAddressPtr()
+	addr2 := datagen.RandAddressPtr()
 	stake := RandomStake()
 	period := uint32(360) * 24 * 15
 
@@ -561,13 +523,13 @@ func TestStaker_Get_FullFlow_Renewal_Off(t *testing.T) {
 
 func TestStaker_WithdrawQueued(t *testing.T) {
 	staker, _ := newStaker(t, 0, 101, false)
-	addr := datagen.RandAddress()
+	addr := datagen.RandAddressPtr()
 	stake := RandomStake()
 
 	// verify queued empty
 	queued, err := staker.FirstQueued()
 	assert.NoError(t, err)
-	assert.Equal(t, thor.Address{}, queued)
+	assert.Nil(t, queued)
 
 	// add the validator
 	period := uint32(360) * 24 * 15
@@ -593,15 +555,15 @@ func TestStaker_WithdrawQueued(t *testing.T) {
 	// verify removed queued
 	queued, err = staker.FirstQueued()
 	assert.NoError(t, err)
-	assert.Equal(t, thor.Address{}, queued)
+	assert.Nil(t, queued)
 }
 
 func TestStaker_IncreaseQueued(t *testing.T) {
 	staker, _ := newStaker(t, 68, 101, true)
-	addr := datagen.RandAddress()
+	addr := datagen.RandAddressPtr()
 	stake := RandomStake()
 
-	err := staker.IncreaseStake(addr, thor.Address{}, stake)
+	err := staker.IncreaseStake(addr, &thor.Address{}, stake)
 	assert.Error(t, err, "validator not found")
 
 	// add the validator
@@ -632,12 +594,12 @@ func TestStaker_IncreaseQueued(t *testing.T) {
 
 func TestStaker_IncreaseQueued_Order(t *testing.T) {
 	staker, _ := newStaker(t, 68, 101, true)
-	addr := datagen.RandAddress()
-	addr1 := datagen.RandAddress()
-	addr2 := datagen.RandAddress()
+	addr := datagen.RandAddressPtr()
+	addr1 := datagen.RandAddressPtr()
+	addr2 := datagen.RandAddressPtr()
 	stake := RandomStake()
 
-	err := staker.IncreaseStake(addr, thor.Address{}, stake)
+	err := staker.IncreaseStake(addr, &thor.Address{}, stake)
 	assert.Error(t, err, "validator not found")
 
 	// add the validator
@@ -707,12 +669,12 @@ func TestStaker_IncreaseQueued_Order(t *testing.T) {
 
 func TestStaker_DecreaseQueued_Order(t *testing.T) {
 	staker, _ := newStaker(t, 68, 101, true)
-	addr := datagen.RandAddress()
-	addr1 := datagen.RandAddress()
-	addr2 := datagen.RandAddress()
+	addr := datagen.RandAddressPtr()
+	addr1 := datagen.RandAddressPtr()
+	addr2 := datagen.RandAddressPtr()
 	stake := RandomStake()
 
-	err := staker.DecreaseStake(addr, thor.Address{}, stake)
+	err := staker.DecreaseStake(addr, &thor.Address{}, stake)
 	assert.Error(t, err, "validator not found")
 
 	// add the validator
@@ -782,7 +744,7 @@ func TestStaker_DecreaseQueued_Order(t *testing.T) {
 
 func TestStaker_IncreaseActive(t *testing.T) {
 	staker, _ := newStaker(t, 0, 101, false)
-	addr := datagen.RandAddress()
+	addr := datagen.RandAddressPtr()
 	stake := RandomStake()
 	period := uint32(360) * 24 * 15
 
@@ -821,8 +783,8 @@ func TestStaker_IncreaseActive(t *testing.T) {
 
 func TestStaker_ChangeStakeActiveValidatorWithQueued(t *testing.T) {
 	staker, _ := newStaker(t, 0, 1, false)
-	addr := datagen.RandAddress()
-	addr2 := datagen.RandAddress()
+	addr := datagen.RandAddressPtr()
+	addr2 := datagen.RandAddressPtr()
 	stake := RandomStake()
 	period := uint32(360) * 24 * 15
 
@@ -909,7 +871,7 @@ func TestStaker_ChangeStakeActiveValidatorWithQueued(t *testing.T) {
 
 func TestStaker_DecreaseActive(t *testing.T) {
 	staker, _ := newStaker(t, 0, 101, false)
-	addr := datagen.RandAddress()
+	addr := datagen.RandAddressPtr()
 	stake := MaxStakeVET
 	period := uint32(360) * 24 * 15
 
@@ -955,7 +917,7 @@ func TestStaker_DecreaseActive(t *testing.T) {
 
 func TestStaker_DecreaseActiveThenExit(t *testing.T) {
 	staker, _ := newStaker(t, 0, 101, false)
-	addr := datagen.RandAddress()
+	addr := datagen.RandAddressPtr()
 	stake := MaxStakeVET
 	period := uint32(360) * 24 * 15
 
@@ -1014,9 +976,9 @@ func TestStaker_DecreaseActiveThenExit(t *testing.T) {
 
 func TestStaker_Get_FullFlow(t *testing.T) {
 	staker, _ := newStaker(t, 0, 3, false)
-	addr := datagen.RandAddress()
-	addr1 := datagen.RandAddress()
-	addr2 := datagen.RandAddress()
+	addr := datagen.RandAddressPtr()
+	addr1 := datagen.RandAddressPtr()
+	addr2 := datagen.RandAddressPtr()
 	stake := RandomStake()
 	period := uint32(360) * 24 * 15
 
@@ -1075,7 +1037,7 @@ func TestStaker_Get_FullFlow(t *testing.T) {
 
 func TestStaker_Get_FullFlow_Renewal_On(t *testing.T) {
 	staker, _ := newStaker(t, 0, 101, false)
-	addr := datagen.RandAddress()
+	addr := datagen.RandAddressPtr()
 	stake := RandomStake()
 
 	// add the validator
@@ -1118,9 +1080,9 @@ func TestStaker_Get_FullFlow_Renewal_On(t *testing.T) {
 
 func TestStaker_Get_FullFlow_Renewal_On_Then_Off(t *testing.T) {
 	staker, _ := newStaker(t, 0, 3, false)
-	addr := datagen.RandAddress()
-	addr1 := datagen.RandAddress()
-	addr2 := datagen.RandAddress()
+	addr := datagen.RandAddressPtr()
+	addr1 := datagen.RandAddressPtr()
+	addr2 := datagen.RandAddressPtr()
 	stake := RandomStake()
 	period := uint32(360) * 24 * 15
 
@@ -1194,14 +1156,14 @@ func TestStaker_ActivateNextValidator_LeaderGroupFull(t *testing.T) {
 
 	// fill 101 validations to leader group
 	for range 101 {
-		err := staker.AddValidation(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, RandomStake())
+		err := staker.AddValidation(datagen.RandAddressPtr(), datagen.RandAddressPtr(), uint32(360)*24*15, RandomStake())
 		assert.NoError(t, err)
 		_, err = staker.activateNextValidation(0, getTestMaxLeaderSize(staker.params))
 		assert.NoError(t, err)
 	}
 
 	// try to add one more to the leadergroup
-	err := staker.AddValidation(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, RandomStake())
+	err := staker.AddValidation(datagen.RandAddressPtr(), datagen.RandAddressPtr(), uint32(360)*24*15, RandomStake())
 	assert.NoError(t, err)
 
 	_, err = staker.activateNextValidation(0, getTestMaxLeaderSize(staker.params))
@@ -1217,7 +1179,7 @@ func TestStaker_ActivateNextValidator_EmptyQueue(t *testing.T) {
 func TestStaker_ActivateNextValidator(t *testing.T) {
 	staker, _ := newStaker(t, 68, 101, true)
 
-	addr := datagen.RandAddress()
+	addr := datagen.RandAddressPtr()
 	stake := RandomStake()
 	err := staker.AddValidation(addr, addr, uint32(360)*24*15, stake)
 	assert.NoError(t, err)
@@ -1232,15 +1194,15 @@ func TestStaker_ActivateNextValidator(t *testing.T) {
 func TestStaker_RemoveValidator_NonExistent(t *testing.T) {
 	staker, _ := newStaker(t, 101, 101, true)
 
-	addr := datagen.RandAddress()
+	addr := datagen.RandAddressPtr()
 	_, err := staker.validationService.ExitValidator(addr)
-	assert.NoError(t, err)
+	assert.ErrorContains(t, err, "failed to get existing validator")
 }
 
 func TestStaker_RemoveValidator(t *testing.T) {
 	staker, _ := newStaker(t, 68, 101, true)
 
-	addr := datagen.RandAddress()
+	addr := datagen.RandAddressPtr()
 	stake := RandomStake()
 	period := uint32(360) * 24 * 15
 
@@ -1257,7 +1219,7 @@ func TestStaker_RemoveValidator(t *testing.T) {
 	require.NoError(t, err)
 
 	// exit the aggregation too
-	aggExit, err := staker.aggregationService.Exit(&addr)
+	aggExit, err := staker.aggregationService.Exit(addr)
 	require.NoError(t, err)
 
 	// Update global totals
@@ -1283,9 +1245,9 @@ func TestStaker_RemoveValidator(t *testing.T) {
 func TestStaker_LeaderGroup(t *testing.T) {
 	staker, _ := newStaker(t, 68, 101, true)
 
-	added := make(map[thor.Address]bool)
+	added := make(map[*thor.Address]bool)
 	for range 10 {
-		addr := datagen.RandAddress()
+		addr := datagen.RandAddressPtr()
 		stake := RandomStake()
 		err := staker.AddValidation(addr, addr, uint32(360)*24*15, stake)
 		assert.NoError(t, err)
@@ -1297,7 +1259,7 @@ func TestStaker_LeaderGroup(t *testing.T) {
 	leaderGroup, err := staker.LeaderGroup()
 	assert.NoError(t, err)
 
-	leaders := make(map[thor.Address]bool)
+	leaders := make(map[*thor.Address]bool)
 	for _, leader := range leaderGroup {
 		leaders[leader.Address] = true
 	}
@@ -1310,18 +1272,18 @@ func TestStaker_LeaderGroup(t *testing.T) {
 func TestStaker_Next_Empty(t *testing.T) {
 	staker, _ := newStaker(t, 101, 101, true)
 
-	id := datagen.RandAddress()
+	id := datagen.RandAddressPtr()
 	next, err := staker.Next(id)
-	assert.Nil(t, err)
-	assert.Equal(t, thor.Address{}, next)
+	assert.ErrorContains(t, err, "no validation found")
+	assert.Nil(t, next)
 }
 
 func TestStaker_Next(t *testing.T) {
 	staker, _ := newStaker(t, 0, 101, false)
 
-	leaderGroup := make([]thor.Address, 0)
+	leaderGroup := make([]*thor.Address, 0)
 	for range 100 {
-		addr := datagen.RandAddress()
+		addr := datagen.RandAddressPtr()
 		stake := RandomStake()
 		err := staker.AddValidation(addr, addr, uint32(360)*24*15, stake)
 		assert.NoError(t, err)
@@ -1330,9 +1292,9 @@ func TestStaker_Next(t *testing.T) {
 		leaderGroup = append(leaderGroup, addr)
 	}
 
-	queuedGroup := [100]thor.Address{}
+	queuedGroup := [100]*thor.Address{}
 	for i := range 100 {
-		addr := datagen.RandAddress()
+		addr := datagen.RandAddressPtr()
 		stake := RandomStake()
 		err := staker.AddValidation(addr, addr, uint32(360)*24*15, stake)
 		assert.NoError(t, err)
@@ -1367,14 +1329,14 @@ func TestStaker_Next(t *testing.T) {
 func TestStaker_Initialise(t *testing.T) {
 	db := muxdb.NewMem()
 	st := state.New(db, trie.Root{})
-	addr := datagen.RandAddress()
+	addr := datagen.RandAddressPtr()
 
 	param := params.New(thor.BytesToAddress([]byte("params")), st)
 	staker := New(thor.BytesToAddress([]byte("stkr")), st, param, nil)
 	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(3)))
 
 	for range 3 {
-		err := staker.AddValidation(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, MinStakeVET)
+		err := staker.AddValidation(datagen.RandAddressPtr(), datagen.RandAddressPtr(), uint32(360)*24*15, MinStakeVET)
 		assert.NoError(t, err)
 	}
 
@@ -1398,8 +1360,8 @@ func TestStaker_Initialise(t *testing.T) {
 
 func TestStaker_Housekeep_TooEarly(t *testing.T) {
 	staker, _ := newStaker(t, 68, 101, true)
-	addr1 := datagen.RandAddress()
-	addr2 := datagen.RandAddress()
+	addr1 := datagen.RandAddressPtr()
+	addr2 := datagen.RandAddressPtr()
 
 	stake := RandomStake()
 
@@ -1424,9 +1386,9 @@ func TestStaker_Housekeep_TooEarly(t *testing.T) {
 
 func TestStaker_Housekeep_ExitOne(t *testing.T) {
 	staker, _ := newStaker(t, 0, 3, false)
-	addr1 := datagen.RandAddress()
-	addr2 := datagen.RandAddress()
-	addr3 := datagen.RandAddress()
+	addr1 := datagen.RandAddressPtr()
+	addr2 := datagen.RandAddressPtr()
+	addr3 := datagen.RandAddressPtr()
 
 	stake := RandomStake()
 	period := uint32(360) * 24 * 15
@@ -1538,9 +1500,9 @@ func TestStaker_Housekeep_ExitOne(t *testing.T) {
 
 func TestStaker_Housekeep_Cooldown(t *testing.T) {
 	staker, _ := newStaker(t, 0, 3, false)
-	addr1 := datagen.RandAddress()
-	addr2 := datagen.RandAddress()
-	addr3 := datagen.RandAddress()
+	addr1 := datagen.RandAddressPtr()
+	addr2 := datagen.RandAddressPtr()
+	addr3 := datagen.RandAddressPtr()
 	period := uint32(360) * 24 * 15
 
 	stake := RandomStake()
@@ -1621,9 +1583,9 @@ func TestStaker_Housekeep_Cooldown(t *testing.T) {
 
 func TestStaker_Housekeep_CooldownToExited(t *testing.T) {
 	staker, _ := newStaker(t, 0, 3, false)
-	addr1 := datagen.RandAddress()
-	addr2 := datagen.RandAddress()
-	addr3 := datagen.RandAddress()
+	addr1 := datagen.RandAddressPtr()
+	addr2 := datagen.RandAddressPtr()
+	addr3 := datagen.RandAddressPtr()
 
 	stake := RandomStake()
 	period := uint32(360) * 24 * 15
@@ -1670,9 +1632,9 @@ func TestStaker_Housekeep_CooldownToExited(t *testing.T) {
 
 func TestStaker_Housekeep_ExitOrder(t *testing.T) {
 	staker, _ := newStaker(t, 0, 3, false)
-	addr1 := datagen.RandAddress()
-	addr2 := datagen.RandAddress()
-	addr3 := datagen.RandAddress()
+	addr1 := datagen.RandAddressPtr()
+	addr2 := datagen.RandAddressPtr()
+	addr3 := datagen.RandAddressPtr()
 
 	stake := RandomStake()
 	period := uint32(360) * 24 * 15
@@ -1735,7 +1697,7 @@ func TestStaker_Housekeep_ExitOrder(t *testing.T) {
 
 func TestStaker_Housekeep_RecalculateIncrease(t *testing.T) {
 	staker, _ := newStaker(t, 0, 101, false)
-	addr1 := datagen.RandAddress()
+	addr1 := datagen.RandAddressPtr()
 
 	stake := MinStakeVET
 	period := uint32(360) * 24 * 15
@@ -1773,7 +1735,7 @@ func TestStaker_Housekeep_RecalculateIncrease(t *testing.T) {
 
 func TestStaker_Housekeep_RecalculateDecrease(t *testing.T) {
 	staker, _ := newStaker(t, 0, 101, false)
-	addr1 := datagen.RandAddress()
+	addr1 := datagen.RandAddressPtr()
 
 	stake := MaxStakeVET
 	period := uint32(360) * 24 * 15
@@ -1812,7 +1774,7 @@ func TestStaker_Housekeep_RecalculateDecrease(t *testing.T) {
 
 func TestStaker_Housekeep_DecreaseThenWithdraw(t *testing.T) {
 	staker, _ := newStaker(t, 0, 101, false)
-	addr1 := datagen.RandAddress()
+	addr1 := datagen.RandAddressPtr()
 
 	stake := MaxStakeVET
 	period := uint32(360) * 24 * 15
@@ -1867,7 +1829,7 @@ func TestStaker_Housekeep_DecreaseThenWithdraw(t *testing.T) {
 
 func TestStaker_DecreaseActive_DecreaseMultipleTimes(t *testing.T) {
 	staker, _ := newStaker(t, 0, 101, false)
-	addr1 := datagen.RandAddress()
+	addr1 := datagen.RandAddressPtr()
 
 	stake := RandomStake()
 	period := uint32(360) * 24 * 15
@@ -1905,9 +1867,9 @@ func TestStaker_DecreaseActive_DecreaseMultipleTimes(t *testing.T) {
 
 func TestStaker_Housekeep_Cannot_Exit_If_It_Breaks_Finality(t *testing.T) {
 	staker, _ := newStaker(t, 0, 3, false)
-	addr1 := datagen.RandAddress()
-	addr2 := datagen.RandAddress()
-	addr3 := datagen.RandAddress()
+	addr1 := datagen.RandAddressPtr()
+	addr2 := datagen.RandAddressPtr()
+	addr3 := datagen.RandAddressPtr()
 
 	stake := RandomStake()
 	period := uint32(360) * 24 * 15
@@ -1952,9 +1914,9 @@ func TestStaker_Housekeep_Cannot_Exit_If_It_Breaks_Finality(t *testing.T) {
 
 func TestStaker_Housekeep_Exit_Decrements_Leader_Group_Size(t *testing.T) {
 	staker, _ := newStaker(t, 0, 3, false)
-	addr1 := datagen.RandAddress()
-	addr2 := datagen.RandAddress()
-	addr3 := datagen.RandAddress()
+	addr1 := datagen.RandAddressPtr()
+	addr2 := datagen.RandAddressPtr()
+	addr3 := datagen.RandAddressPtr()
 
 	stake := RandomStake()
 	period := uint32(360) * 24 * 15
@@ -1977,7 +1939,7 @@ func TestStaker_Housekeep_Exit_Decrements_Leader_Group_Size(t *testing.T) {
 	newTestSequence(t, staker).
 		Housekeep(block).
 		AssertLeaderGroupSize(0).
-		AssertFirstActive(thor.Address{})
+		AssertFirstActive(nil)
 
 	assertValidation(t, staker, addr2).Status(validation.StatusExit)
 
@@ -1998,9 +1960,9 @@ func TestStaker_Housekeep_Exit_Decrements_Leader_Group_Size(t *testing.T) {
 
 func TestStaker_Housekeep_Adds_Queued_Validators_Up_To_Limit(t *testing.T) {
 	staker, _ := newStaker(t, 0, 2, false)
-	addr1 := datagen.RandAddress()
-	addr2 := datagen.RandAddress()
-	addr3 := datagen.RandAddress()
+	addr1 := datagen.RandAddressPtr()
+	addr2 := datagen.RandAddressPtr()
+	addr3 := datagen.RandAddressPtr()
 
 	stake := RandomStake()
 	period := uint32(360) * 24 * 15
@@ -2042,7 +2004,7 @@ func TestStaker_Housekeep_Adds_Queued_Validators_Up_To_Limit(t *testing.T) {
 
 func TestStaker_QueuedValidator_Withdraw(t *testing.T) {
 	staker, _ := newStaker(t, 0, 3, false)
-	addr1 := datagen.RandAddress()
+	addr1 := datagen.RandAddressPtr()
 
 	stake := RandomStake()
 	period := uint32(360) * 24 * 15
@@ -2065,7 +2027,7 @@ func TestStaker_QueuedValidator_Withdraw(t *testing.T) {
 
 func TestStaker_IncreaseStake_Withdraw(t *testing.T) {
 	staker, _ := newStaker(t, 0, 3, false)
-	addr1 := datagen.RandAddress()
+	addr1 := datagen.RandAddressPtr()
 
 	stake := RandomStake()
 	period := uint32(360) * 24 * 15
@@ -2098,7 +2060,7 @@ func TestStaker_IncreaseStake_Withdraw(t *testing.T) {
 func TestStaker_GetRewards(t *testing.T) {
 	staker, _ := newStaker(t, 0, 3, false)
 
-	proposerAddr := datagen.RandAddress()
+	proposerAddr := datagen.RandAddressPtr()
 
 	stake := RandomStake()
 	period := uint32(360) * 24 * 15
@@ -2124,7 +2086,7 @@ func TestStaker_GetRewards(t *testing.T) {
 func TestStaker_GetCompletedPeriods(t *testing.T) {
 	staker, _ := newStaker(t, 0, 3, false)
 
-	proposerAddr := datagen.RandAddress()
+	proposerAddr := datagen.RandAddressPtr()
 
 	stake := RandomStake()
 	period := uint32(360) * 24 * 15
@@ -2150,7 +2112,7 @@ func TestStaker_GetCompletedPeriods(t *testing.T) {
 func TestStaker_MultipleUpdates_CorrectWithdraw(t *testing.T) {
 	staker, _ := newStaker(t, 0, 1, false)
 
-	acc := datagen.RandAddress()
+	acc := datagen.RandAddressPtr()
 	initialStake := RandomStake()
 	increases := uint64(0)
 	decreases := uint64(0)
@@ -2247,7 +2209,7 @@ func Test_GetValidatorTotals_ValidatorExiting(t *testing.T) {
 	dStake := stakes.NewWeightedStakeWithMultiplier(MinStakeVET, 255)
 	newTestSequence(t, staker).AddDelegation(validator.ID, dStake.VET, 255, delegationID)
 
-	_, err := staker.aggregationService.GetAggregation(&validators[0].ID)
+	_, err := staker.aggregationService.GetAggregation(validators[0].ID)
 	assert.NoError(t, err)
 
 	vStake := stakes.NewWeightedStakeWithMultiplier(validators[0].LockedVET, validation.Multiplier)
@@ -2282,7 +2244,7 @@ func Test_GetValidatorTotals_DelegatorExiting_ThenValidator(t *testing.T) {
 
 	validator := validators[0]
 
-	_, err := staker.aggregationService.GetAggregation(&validator.ID)
+	_, err := staker.aggregationService.GetAggregation(validator.ID)
 	require.NoError(t, err)
 	vStake := stakes.NewWeightedStakeWithMultiplier(validators[0].LockedVET, validation.Multiplier)
 	dStake := stakes.NewWeightedStakeWithMultiplier(MinStakeVET, 255)
@@ -2333,7 +2295,7 @@ func Test_GetValidatorTotals_DelegatorExiting_ThenValidator(t *testing.T) {
 func Test_Validator_Decrease_Exit_Withdraw(t *testing.T) {
 	staker, _ := newStaker(t, 0, 1, false)
 
-	acc := datagen.RandAddress()
+	acc := datagen.RandAddressPtr()
 
 	originalStake := uint64(3) * MinStakeVET
 	err := staker.AddValidation(acc, acc, thor.LowStakingPeriod(), originalStake)
@@ -2363,7 +2325,7 @@ func Test_Validator_Decrease_Exit_Withdraw(t *testing.T) {
 func Test_Validator_Decrease_SeveralTimes(t *testing.T) {
 	staker, _ := newStaker(t, 0, 1, false)
 
-	acc := datagen.RandAddress()
+	acc := datagen.RandAddressPtr()
 
 	originalStake := uint64(3) * MinStakeVET
 	err := staker.AddValidation(acc, acc, thor.LowStakingPeriod(), originalStake)
@@ -2386,7 +2348,7 @@ func Test_Validator_Decrease_SeveralTimes(t *testing.T) {
 
 func Test_Validator_IncreaseDecrease_Combinations(t *testing.T) {
 	staker, _ := newStaker(t, 0, 1, false)
-	acc := datagen.RandAddress()
+	acc := datagen.RandAddressPtr()
 
 	// Add & activate validator
 	err := staker.AddValidation(acc, acc, thor.LowStakingPeriod(), MinStakeVET)
@@ -2438,19 +2400,19 @@ func Test_Validator_IncreaseDecrease_Combinations(t *testing.T) {
 func TestStaker_AddValidation_CannotAddValidationWithSameMaster(t *testing.T) {
 	staker, _ := newStaker(t, 68, 101, true)
 
-	address := datagen.RandAddress()
-	err := staker.AddValidation(address, datagen.RandAddress(), uint32(360)*24*15, MinStakeVET)
+	address := datagen.RandAddressPtr()
+	err := staker.AddValidation(address, datagen.RandAddressPtr(), uint32(360)*24*15, MinStakeVET)
 	assert.NoError(t, err)
 
-	err = staker.AddValidation(address, datagen.RandAddress(), uint32(360)*24*15, MinStakeVET)
+	err = staker.AddValidation(address, datagen.RandAddressPtr(), uint32(360)*24*15, MinStakeVET)
 	assert.Error(t, err, "validator already exists")
 }
 
 func TestStaker_AddValidation_CannotAddValidationWithSameMasterAfterExit(t *testing.T) {
 	staker, _ := newStaker(t, 68, 101, true)
 
-	master := datagen.RandAddress()
-	endorser := datagen.RandAddress()
+	master := datagen.RandAddressPtr()
+	endorser := datagen.RandAddressPtr()
 	err := staker.AddValidation(master, endorser, uint32(360)*24*15, MinStakeVET)
 	assert.NoError(t, err)
 
@@ -2463,7 +2425,7 @@ func TestStaker_AddValidation_CannotAddValidationWithSameMasterAfterExit(t *test
 	_, err = staker.validationService.ExitValidator(master)
 	assert.NoError(t, err)
 
-	err = staker.AddValidation(master, datagen.RandAddress(), uint32(360)*24*15, MinStakeVET)
+	err = staker.AddValidation(master, datagen.RandAddressPtr(), uint32(360)*24*15, MinStakeVET)
 	assert.Error(t, err, "validator already exists")
 }
 
@@ -2496,9 +2458,9 @@ func TestStaker_HasDelegations(t *testing.T) {
 func TestStaker_SetBeneficiary(t *testing.T) {
 	staker, _ := newStaker(t, 0, 1, false)
 
-	master := datagen.RandAddress()
-	endorser := datagen.RandAddress()
-	beneficiary := datagen.RandAddress()
+	master := datagen.RandAddressPtr()
+	endorser := datagen.RandAddressPtr()
+	beneficiary := datagen.RandAddressPtr()
 
 	testSetup := newTestSequence(t, staker)
 
@@ -2508,14 +2470,14 @@ func TestStaker_SetBeneficiary(t *testing.T) {
 
 	// negative cases
 	assert.ErrorContains(t, staker.SetBeneficiary(master, master, beneficiary), "endorser required")
-	assert.ErrorContains(t, staker.SetBeneficiary(endorser, endorser, beneficiary), "validation does not exist")
+	assert.ErrorContains(t, staker.SetBeneficiary(endorser, endorser, beneficiary), "failed to get existing validator")
 
 	// set beneficiary, should be successful
 	testSetup.SetBeneficiary(master, endorser, beneficiary)
-	assertValidation(t, staker, master).Beneficiary(&beneficiary)
+	assertValidation(t, staker, master).Beneficiary(beneficiary)
 
 	// remove the beneficiary
-	testSetup.SetBeneficiary(master, endorser, thor.Address{})
+	testSetup.SetBeneficiary(master, endorser, &thor.Address{})
 	assertValidation(t, staker, master).Beneficiary(nil)
 }
 
@@ -2557,7 +2519,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	// one active validator without delegations, one queued delegator without delegations
 	stake := MinStakeVET
 	keys := createKeys(1)
-	validator2 := thor.Address{}
+	validator2 := &thor.Address{}
 	for _, key := range keys {
 		validator2 = key.node
 		if err := staker.AddValidation(key.node, key.endorser, uint32(360)*24*15, stake); err != nil {
@@ -3240,7 +3202,7 @@ func TestStaker_Housekeep_NegativeCases(t *testing.T) {
 
 	st.SetRawStorage(stakerAddr, activeHeadSlot, rlp.RawValue{0x0})
 	slotLockedVET := thor.BytesToBytes32([]byte(("total-weighted-stake")))
-	valAddr := thor.Address{}
+	valAddr := &thor.Address{}
 	for _, key := range keys {
 		stake := RandomStake()
 		valAddr = key.node
@@ -3269,8 +3231,8 @@ func TestStaker_Housekeep_NegativeCases(t *testing.T) {
 	addr := thor.BytesToAddress([]byte("a"))
 	blockNum := uint32(10)
 	funcA := staker.exitsCallback(blockNum, &addr)
-	err = funcA(addr, &validation.Validation{
-		Endorser:           thor.Address{},
+	err = funcA(&addr, &validation.Validation{
+		Endorser:           &thor.Address{},
 		Beneficiary:        nil,
 		Period:             0,
 		CompleteIterations: 0,
@@ -3306,16 +3268,16 @@ func TestStaker_Housekeep_NegativeCases(t *testing.T) {
 	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(0)))
 	err = staker.applyEpochTransition(&EpochTransition{
 		Block:           0,
-		Renewals:        []thor.Address{validatorAddr},
+		Renewals:        []*thor.Address{&validatorAddr},
 		ExitValidator:   nil,
 		Evictions:       nil,
 		ActivationCount: 0,
 	})
 	assert.ErrorContains(t, err, "failed to get validator aggregation")
-
+	re2 := thor.BytesToAddress([]byte("renewal2"))
 	err = staker.applyEpochTransition(&EpochTransition{
 		Block:           0,
-		Renewals:        []thor.Address{thor.BytesToAddress([]byte("renewal2"))},
+		Renewals:        []*thor.Address{&re2},
 		ExitValidator:   nil,
 		Evictions:       nil,
 		ActivationCount: 0,
@@ -3330,8 +3292,8 @@ func TestStaker_Housekeep_NegativeCases(t *testing.T) {
 
 	err = staker.applyEpochTransition(&EpochTransition{
 		Block:           0,
-		Renewals:        []thor.Address{},
-		ExitValidator:   &valAddr,
+		Renewals:        []*thor.Address{},
+		ExitValidator:   valAddr,
 		Evictions:       nil,
 		ActivationCount: 0,
 	})
@@ -3344,8 +3306,8 @@ func TestStaker_Housekeep_NegativeCases(t *testing.T) {
 	st.SetRawStorage(stakerAddr, slotActiveGroupSize, rlp.RawValue{0x2})
 	err = staker.applyEpochTransition(&EpochTransition{
 		Block:           0,
-		Renewals:        []thor.Address{},
-		ExitValidator:   &valAddr,
+		Renewals:        []*thor.Address{},
+		ExitValidator:   valAddr,
 		Evictions:       nil,
 		ActivationCount: 0,
 	})
@@ -3363,7 +3325,7 @@ func TestValidation_NegativeCases(t *testing.T) {
 	stakerAddr := thor.BytesToAddress([]byte("stkr"))
 	staker := New(stakerAddr, st, param, nil)
 
-	node1 := datagen.RandAddress()
+	node1 := datagen.RandAddressPtr()
 	stake := RandomStake()
 	err := staker.AddValidation(node1, node1, uint32(360)*24*15, stake)
 	assert.NoError(t, err)

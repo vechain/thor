@@ -34,20 +34,17 @@ func New(sctx *solidity.Context) *Service {
 }
 
 // GetDelegation retrieves the delegation for a validator.
-// Returns a zero-initialized delegation if none exists.
 func (s *Service) GetDelegation(delegationID *big.Int) (*Delegation, error) {
 	d, err := s.delegations.Get(delegationID)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get delegation")
 	}
-	if d == nil || d.IsEmpty() {
-		return &Delegation{}, nil
-	}
+
 	return d, nil
 }
 
 func (s *Service) Add(
-	validator thor.Address,
+	validator *thor.Address,
 	firstIteration uint32,
 	stake uint64,
 	multiplier uint8,
@@ -59,7 +56,7 @@ func (s *Service) Add(
 
 	delegationID := new(big.Int).Set(id)
 	delegation := &Delegation{
-		Validation:     &validator,
+		Validation:     validator,
 		Multiplier:     multiplier,
 		Stake:          stake,
 		FirstIteration: firstIteration,

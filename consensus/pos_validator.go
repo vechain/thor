@@ -49,11 +49,11 @@ func (c *Consensus) validateStakingProposer(
 		beneficiary *thor.Address
 	)
 	for _, leader := range leaders {
-		if leader.Address == signer && leader.Beneficiary != nil {
+		if *leader.Address == signer && leader.Beneficiary != nil {
 			beneficiary = leader.Beneficiary
 		}
 		proposers = append(proposers, pos.Proposer{
-			Address: leader.Address,
+			Address: *leader.Address,
 			Active:  leader.Active,
 			Weight:  leader.Weight,
 		})
@@ -80,7 +80,7 @@ func (c *Consensus) validateStakingProposer(
 	}
 
 	for _, u := range updates {
-		if err := staker.SetOnline(u.Address, header.Number(), u.Active); err != nil {
+		if err := staker.SetOnline(&u.Address, header.Number(), u.Active); err != nil {
 			return err
 		}
 	}

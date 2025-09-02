@@ -81,14 +81,14 @@ func (s *Staker) TransitionPeriodBalanceCheck(fc *thor.ForkConfig, currentBlock 
 		if currentBlock < fc.HAYABUSA { // before HAYABUSA fork, we only check the account balance
 			return false, nil
 		}
-		validation, err := s.validationService.GetValidation(validator)
+		validation, err := s.validationService.GetValidation(&validator)
 		if err != nil {
 			return false, err
 		}
-		if validation.IsEmpty() {
+		if validation == nil || validation.IsEmpty() {
 			return false, nil
 		}
-		if validation.Endorser != endorser {
+		if validation.Endorser == nil || *validation.Endorser != endorser {
 			return false, nil // endorser mismatch
 		}
 		queuedVET := big.NewInt(0).SetUint64(validation.QueuedVET)

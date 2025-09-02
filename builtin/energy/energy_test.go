@@ -266,11 +266,11 @@ func (m *mockStaker) LockedStake() (uint64, uint64, error) {
 	return m.lockedVET, m.lockedWeight, nil
 }
 
-func (m *mockStaker) HasDelegations(address thor.Address) (bool, error) {
+func (m *mockStaker) HasDelegations(address *thor.Address) (bool, error) {
 	return m.hasDelegations, nil
 }
 
-func (m *mockStaker) IncreaseDelegatorsReward(master thor.Address, reward *big.Int) error {
+func (m *mockStaker) IncreaseDelegatorsReward(master *thor.Address, reward *big.Int) error {
 	return m.increaseRewardErr
 }
 

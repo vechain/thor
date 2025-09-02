@@ -22,42 +22,44 @@ var (
 )
 
 type Storage struct {
-	validations *solidity.Mapping[thor.Address, Validation]
-	rewards     *solidity.Mapping[thor.Bytes32, *big.Int]
-	exits       *solidity.Mapping[thor.Bytes32, thor.Address]
+	validations *solidity.Mapping[*thor.Address, *Validation]
+	rewards     *solidity.Mapping[*thor.Bytes32, *big.Int]
+	exits       *solidity.Mapping[*thor.Bytes32, *thor.Address]
 }
 
 func NewStorage(sctx *solidity.Context) *Storage {
 	return &Storage{
-		validations: solidity.NewMapping[thor.Address, Validation](sctx, slotValidations),
-		rewards:     solidity.NewMapping[thor.Bytes32, *big.Int](sctx, slotRewards),
-		exits:       solidity.NewMapping[thor.Bytes32, thor.Address](sctx, slotExitEpochs),
+		validations: solidity.NewMapping[*thor.Address, *Validation](sctx, slotValidations),
+		rewards:     solidity.NewMapping[*thor.Bytes32, *big.Int](sctx, slotRewards),
+		exits:       solidity.NewMapping[*thor.Bytes32, *thor.Address](sctx, slotExitEpochs),
 	}
 }
 
-func (s *Storage) getValidation(validator thor.Address) (*Validation, error) {
+func (s *Storage) getValidation(validator *thor.Address) (*Validation, error) {
 	v, err := s.validations.Get(validator)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get validator")
 	}
-	return &v, nil
+	return v, nil
 }
 
-func (s *Storage) updateValidation(validator thor.Address, entry *Validation) error {
-	if err := s.validations.Update(validator, *entry); err != nil {
+func (s *Storage) updateValidation(validator *thor.Address, entry *Validation) error {
+	if err := s.validations.Update(validator, entry); err != nil {
 		return errors.Wrap(err, "failed to set validator")
 	}
 	return nil
 }
 
-func (s *Storage) upsertValidation(validator thor.Address, entry Validation) error {
+func (s *Storage) upsertValidation(validator *thor.Address, entry *Validation) error {
 	if err := s.validations.Upsert(validator, entry); err != nil {
 		return errors.Wrap(err, "failed to set validator")
 	}
 	return nil
 }
 
-func (s *Storage) getReward(key thor.Bytes32) (*big.Int, error) {
+// getReward retrieves the reward for a validator.
+// Returns a zero-initialized reward if none exists.
+func (s *Storage) getReward(key *thor.Bytes32) (*big.Int, error) {
 	reward, err := s.rewards.Get(key)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get reward")
@@ -68,22 +70,22 @@ func (s *Storage) getReward(key thor.Bytes32) (*big.Int, error) {
 	return reward, nil
 }
 
-func (s *Storage) setReward(key thor.Bytes32, val *big.Int, isNew bool) error {
+func (s *Storage) setReward(key *thor.Bytes32, val *big.Int) error {
 	return s.rewards.Upsert(key, val)
 }
 
-func (s *Storage) getExit(block uint32) (thor.Address, error) {
+func (s *Storage) getExit(block uint32) (*thor.Address, error) {
 	var key thor.Bytes32
 	binary.BigEndian.PutUint32(key[:], block)
 
-	return s.exits.Get(key)
+	return s.exits.Get(&key)
 }
 
-func (s *Storage) setExit(block uint32, validator thor.Address) error {
+func (s *Storage) setExit(block uint32, validator *thor.Address) error {
 	var key thor.Bytes32
 	binary.BigEndian.PutUint32(key[:], block)
 
-	if err := s.exits.Insert(key, validator); err != nil {
+	if err := s.exits.Insert(&key, validator); err != nil {
 		return errors.Wrap(err, "failed to set exit epoch")
 	}
 	return nil

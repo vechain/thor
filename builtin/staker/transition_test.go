@@ -35,7 +35,7 @@ func TestTransition(t *testing.T) {
 
 	node1 := datagen.RandAddress()
 	stake := RandomStake()
-	err = staker.AddValidation(node1, node1, uint32(360)*24*15, stake)
+	err = staker.AddValidation(&node1, &node1, uint32(360)*24*15, stake)
 	assert.NoError(t, err)
 
 	isExecuted, err = staker.transition(thor.EpochLength())
@@ -43,7 +43,7 @@ func TestTransition(t *testing.T) {
 	assert.False(t, isExecuted)
 
 	node2 := datagen.RandAddress()
-	err = staker.AddValidation(node2, node2, uint32(360)*24*15, stake)
+	err = staker.AddValidation(&node2, &node2, uint32(360)*24*15, stake)
 	assert.NoError(t, err)
 
 	staker.params.Set(thor.KeyMaxBlockProposers, big.NewInt(0))
@@ -136,7 +136,7 @@ func TestStaker_TransitionPeriodBalanceCheck(t *testing.T) {
 			currentBlock: 15,
 			preTestHook: func(staker *Staker) {
 				stake := big.NewInt(0).Div(MinStake, bigE18).Uint64()
-				assert.NoError(t, staker.AddValidation(master, endorser, thor.MediumStakingPeriod(), stake))
+				assert.NoError(t, staker.AddValidation(&master, &endorser, thor.MediumStakingPeriod(), stake))
 			},
 			ok: true,
 		},

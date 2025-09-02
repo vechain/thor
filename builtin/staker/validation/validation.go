@@ -31,7 +31,7 @@ const (
 var ErrMaxTryReached = errors.New("max try reached")
 
 type Validation struct {
-	Endorser           thor.Address  // the address providing the stake
+	Endorser           *thor.Address `rlp:"nil"` // the address providing the stake
 	Beneficiary        *thor.Address `rlp:"nil"` // the address receiving the rewards
 	Period             uint32        // the staking period of the validation
 	CompleteIterations uint32        // the completed staking periods by the validation

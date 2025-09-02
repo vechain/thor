@@ -68,16 +68,16 @@ func TestConsensus_PosFork(t *testing.T) {
 	var newLeaders []validation.Leader
 	for _, leader := range leaders {
 		// delete(leaders, signer)
-		if leader.Address == signer {
+		if *leader.Address == signer {
 			continue
 		}
 		newLeaders = append(newLeaders, leader)
 	}
 
 	newLeaders = append(newLeaders, validation.Leader{
-		Address:     parentSig,
+		Address:     &parentSig,
 		Beneficiary: &beneficiary,
-		Endorser:    thor.Address{},
+		Endorser:    &thor.Address{},
 		Weight:      10,
 		Active:      false,
 	})
@@ -100,11 +100,11 @@ func TestConsensus_PosFork(t *testing.T) {
 
 	newLeaders = make([]validation.Leader, 0, len(leaders))
 	for _, leader := range newLeaders {
-		if leader.Address == parentSig {
+		if *leader.Address == parentSig {
 			newLeaders = append(newLeaders, validation.Leader{
-				Address:     parentSig,
+				Address:     &parentSig,
 				Beneficiary: nil,
-				Endorser:    thor.Address{},
+				Endorser:    &thor.Address{},
 				Weight:      10,
 				Active:      false,
 			})
@@ -199,7 +199,7 @@ func TestConsensus_POS_MissedSlots(t *testing.T) {
 	err = setup.consensus.validateStakingProposer(blk.Header(), parent.Header, builtin.Staker.Native(st))
 	assert.NoError(t, err)
 	staker := builtin.Staker.Native(st)
-	validator, err := staker.GetValidation(signer.Address)
+	validator, err := staker.GetValidation(&signer.Address)
 	assert.NoError(t, err)
 	assert.Nil(t, validator.OfflineBlock)
 }

@@ -29,7 +29,7 @@ func TestDelegation(t *testing.T) {
 	offlineBlock := uint32(0)
 
 	val := validation.Validation{
-		Endorser:           thor.Address{},
+		Endorser:           &thor.Address{},
 		Period:             0,
 		CompleteIterations: 0,
 		Status:             0,
@@ -93,7 +93,7 @@ func TestDelegation_IsLocked(t *testing.T) {
 	}
 
 	val := validation.Validation{
-		Endorser:           thor.Address{},
+		Endorser:           &thor.Address{},
 		Period:             0,
 		CompleteIterations: 0,
 		Status:             validation.StatusActive,
