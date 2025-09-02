@@ -66,7 +66,7 @@ func TestScheduler_IsScheduled(t *testing.T) {
 	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed1"))
 	assert.NoError(t, err)
 
-	assert.True(t, sched.IsScheduled(110, genesis.DevAccounts()[2].Address))
+	assert.True(t, sched.IsScheduled(70, genesis.DevAccounts()[2].Address))
 }
 
 func TestScheduler_Distribution(t *testing.T) {
@@ -86,21 +86,21 @@ func TestScheduler_Distribution(t *testing.T) {
 			tolerance: 0.03,
 			stakes: func(index int, acc thor.Address) uint64 {
 				if index%2 == 0 {
-					return 2000
+					return 50e6
 				}
-				return 1000
+				return 25e6
 			},
 		},
 		{
 			name:      "all_same",
 			tolerance: 0.03,
 			stakes: func(index int, acc thor.Address) uint64 {
-				return 1000
+				return 25e6
 			},
 		},
 		{
 			name:      "pseudo_random_weight",
-			tolerance: 0.04,
+			tolerance: 0.03,
 			stakes: func(index int, acc thor.Address) uint64 {
 				millionEth := uint64(1e6)
 				maxWeight := uint64(1200) * millionEth // max with multipliers
@@ -117,19 +117,19 @@ func TestScheduler_Distribution(t *testing.T) {
 		},
 		{
 			name:      "increasing",
-			tolerance: 0.02,
+			tolerance: 0.03,
 			stakes: func(index int, acc thor.Address) uint64 {
-				return uint64(index * 1000)
+				return uint64(index * 1e6)
 			},
 		},
 		{
 			name:      "some whales",
-			tolerance: 0.07, // less than 0.01 with 10m iterations
+			tolerance: 0.03, // less than 0.01 with 10m iterations
 			stakes: func(index int, acc thor.Address) uint64 {
 				if index < 3 {
-					return 1200
+					return 100e6
 				}
-				return 50
+				return 25e6
 			},
 		},
 	}
@@ -338,4 +338,73 @@ func TestU64ToI64(t *testing.T) {
 	assert.Equal(t, int64(-1), uint64ToI64(1<<63-1))
 	assert.Equal(t, int64(-22), uint64ToI64(1<<63-22))
 	assert.Equal(t, int64(math.MinInt64), uint64ToI64(0))
+}
+
+func TestScheduler_ScoreComparison_DifferentWeights(t *testing.T) {
+	proposers := []Proposer{
+		{Address: thor.BytesToAddress([]byte("min_stake")), Weight: 25_000_000, Active: true},  // 25M VET (Min)
+		{Address: thor.BytesToAddress([]byte("low_stake")), Weight: 40_000_000, Active: true},  // 40M VET
+		{Address: thor.BytesToAddress([]byte("mid_low")), Weight: 50_000_000, Active: true},    // 50M VET (Mid)
+		{Address: thor.BytesToAddress([]byte("mid_high")), Weight: 66_000_000, Active: true},   // 50M + 16M*1.0
+		{Address: thor.BytesToAddress([]byte("high_stake")), Weight: 82_000_000, Active: true}, // 50M + 16M*2.0
+		{Address: thor.BytesToAddress([]byte("very_high")), Weight: 150_000_000, Active: true}, // 150M VET
+		{Address: thor.BytesToAddress([]byte("extreme")), Weight: 300_000_000, Active: true},   // 300M VET
+		{Address: thor.BytesToAddress([]byte("max_stake")), Weight: 600_000_000, Active: true}, // 600M VET (Max)
+	}
+
+	sched, err := NewScheduler(proposers[0].Address, proposers, 1, 10, []byte("seed1"))
+	assert.NoError(t, err)
+
+	t.Log("=== Priority Score Comparison with Real Network Weights ===")
+	for i, entry := range sched.sequence {
+		t.Logf("Validator %d: Weight=%d VET, Priority Score=%.10f",
+			i+1, entry.weight, entry.score)
+	}
+
+	// Verify score differences
+	scores := make([]float64, len(sched.sequence))
+	for i, entry := range sched.sequence {
+		scores[i] = entry.score
+	}
+
+	// Check if there are score differences
+	hasDifference := false
+	for i := 1; i < len(scores); i++ {
+		if scores[i] != scores[0] {
+			hasDifference = true
+			break
+		}
+	}
+
+	if hasDifference {
+		t.Log("✅ Different weights produced different priority scores")
+		// Calculate score difference range
+		minScore := scores[0]
+		maxScore := scores[0]
+		for _, score := range scores {
+			if score < minScore {
+				minScore = score
+			}
+			if score > maxScore {
+				maxScore = score
+			}
+		}
+		scoreDiff := maxScore - minScore
+		t.Logf("📊 Score difference range: %.10f (from %.10f to %.10f)", scoreDiff, minScore, maxScore)
+	} else {
+		t.Log("⚠️  All validators have the same priority score, weight differences not reflected")
+	}
+
+	// Analyze the relationship between weights and scores
+	t.Log("\n📈 Weight vs Score Relationship Analysis:")
+	for i, entry := range sched.sequence {
+		if i > 0 {
+			prevWeight := sched.sequence[i-1].weight
+			prevScore := sched.sequence[i-1].score
+			weightRatio := float64(entry.weight) / float64(prevWeight)
+			scoreRatio := entry.score / prevScore
+			t.Logf("  Weight ratio: %.2fx (%.0f → %.0f), Score ratio: %.6f (%.10f → %.10f)",
+				weightRatio, float64(prevWeight), float64(entry.weight), scoreRatio, prevScore, entry.score)
+		}
+	}
 }

@@ -218,26 +218,13 @@ func (s *Service) Add(
 	return s.repo.setValidation(validator, entry, true)
 }
 
-func (s *Service) SignalExit(validator thor.Address, validation *Validation, currentBlock uint32) error {
-	current, err := validation.CurrentIteration(currentBlock)
-	if err != nil {
-		return err
-	}
-	minBlock := validation.StartBlock + validation.Period*current
-	return s.markValidatorExit(validator, minBlock, exitMaxTry)
-}
-
-func (s *Service) Evict(validator thor.Address, currentBlock uint32) error {
-	return s.markValidatorExit(validator, currentBlock+thor.EpochLength(), int(thor.InitialMaxBlockProposers))
-}
-
-func (s *Service) markValidatorExit(validator thor.Address, minblock uint32, maxTry int) error {
+func (s *Service) SignalExit(validator thor.Address, minBlock uint32, maxTry int) error {
 	validation, err := s.GetExistingValidation(validator)
 	if err != nil {
 		return err
 	}
 
-	exitBlock, err := s.SetExitBlock(validator, minblock, maxTry)
+	exitBlock, err := s.SetExitBlock(validator, minBlock, maxTry)
 	if err != nil {
 		return err
 	}
