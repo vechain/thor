@@ -79,6 +79,8 @@ func NewScheduler(
 				active:  p.Active,
 				score:   -math.Log(random) / float64(p.Weight),
 			})
+			// https://en.wikipedia.org/wiki/Reservoir_sampling#Algorithm_A-Res
+			// A-Res Reservoir sampling algorithm with -ln(random)/weight
 		}
 	}
 	if !listed {
