@@ -225,7 +225,7 @@ func TestService_SignalExit_SetsExitBlockAndPersists(t *testing.T) {
 	val, err := svc.GetExistingValidation(id)
 	assert.NoError(t, err)
 
-	err = svc.SignalExit(id, val)
+	err = svc.SignalExit(id, val.StartBlock+val.Period*(val.CurrentIteration()), 20)
 	assert.NoError(t, err)
 
 	after, err := svc.GetValidation(id)
@@ -263,7 +263,7 @@ func TestService_SignalExit_ExitBlockLimitReached(t *testing.T) {
 	val, err := svc.GetExistingValidation(validator)
 	assert.NoError(t, err)
 
-	err = svc.SignalExit(validator, val)
+	err = svc.SignalExit(validator, val.StartBlock+val.Period*(val.CurrentIteration()), 20)
 
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "max try reached")
@@ -288,7 +288,7 @@ func TestService_SignalExit_SetExitBlock_Error(t *testing.T) {
 
 	val, err := svc.GetExistingValidation(id)
 	assert.NoError(t, err)
-	err = svc.SignalExit(id, val)
+	err = svc.SignalExit(id, val.StartBlock+val.Period*(val.CurrentIteration()), 20)
 	assert.Error(t, err)
 }
 
@@ -601,17 +601,17 @@ func TestService_Evict(t *testing.T) {
 
 	assert.NoError(t, svc.Add(id1, id1, thor.LowStakingPeriod(), uint64(1)))
 
-	assert.NoError(t, svc.Evict(id1, 5))
+	assert.NoError(t, svc.SignalExit(id1, 5+thor.EpochLength(), int(thor.InitialMaxBlockProposers)))
 	val, err := svc.GetValidation(id1)
 	assert.NoError(t, err)
 	expectedExitBlock := uint32(5) + thor.EpochLength()
 	assert.Equal(t, &expectedExitBlock, val.ExitBlock)
 
 	poisonExitSlot(st, addr, 7+thor.EpochLength())
-	assert.Error(t, svc.Evict(id1, 7))
+	assert.Error(t, svc.SignalExit(id1, 7+thor.EpochLength(), int(thor.InitialMaxBlockProposers)))
 
 	poisonValidationSlot(st, addr, id1)
-	assert.Error(t, svc.Evict(id1, 8))
+	assert.Error(t, svc.SignalExit(id1, 8+thor.EpochLength(), int(thor.InitialMaxBlockProposers)))
 }
 
 func TestService_SetBeneficiary(t *testing.T) {
