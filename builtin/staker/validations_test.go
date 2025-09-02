@@ -113,7 +113,7 @@ func TestStaker(t *testing.T) {
 		{M(stkr.FirstQueued()), M(&validator3, nil)},
 		{M(func() (*thor.Address, error) {
 			activated, err := stkr.activateNextValidation(0, getTestMaxLeaderSize(stkr.params))
-			return activated, err
+			return &activated, err
 		}()), M(&validator3, nil)},
 		{M(stkr.FirstActive()), M(&validator1, nil)},
 	}
@@ -498,8 +498,8 @@ func TestStaker_Get_FullFlow_Renewal_Off(t *testing.T) {
 
 	active, queued, err := staker.GetValidationsNum()
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(0).String(), active.String())
-	assert.Equal(t, big.NewInt(3), queued)
+	assert.Equal(t, uint64(0), active)
+	assert.Equal(t, uint64(3), queued)
 
 	validator, err := staker.GetValidation(addr)
 	assert.NoError(t, err)
@@ -518,22 +518,22 @@ func TestStaker_Get_FullFlow_Renewal_Off(t *testing.T) {
 
 	active, queued, err = staker.GetValidationsNum()
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(1), active)
-	assert.Equal(t, big.NewInt(2), queued)
+	assert.Equal(t, uint64(1), active)
+	assert.Equal(t, uint64(2), queued)
 
 	_, err = staker.activateNextValidation(0, getTestMaxLeaderSize(staker.params))
 	assert.NoError(t, err)
 	active, queued, err = staker.GetValidationsNum()
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(2), active)
-	assert.Equal(t, big.NewInt(1), queued)
+	assert.Equal(t, uint64(2), active)
+	assert.Equal(t, uint64(1), queued)
 
 	_, err = staker.activateNextValidation(0, getTestMaxLeaderSize(staker.params))
 	assert.NoError(t, err)
 	active, queued, err = staker.GetValidationsNum()
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(3), active)
-	assert.Equal(t, big.NewInt(0).String(), queued.String())
+	assert.Equal(t, uint64(3), active)
+	assert.Equal(t, uint64(0), queued)
 
 	err = staker.SignalExit(addr, addr)
 	assert.NoError(t, err)
@@ -550,8 +550,8 @@ func TestStaker_Get_FullFlow_Renewal_Off(t *testing.T) {
 
 	active, queued, err = staker.GetValidationsNum()
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(2), active)
-	assert.Equal(t, big.NewInt(0).String(), queued.String())
+	assert.Equal(t, uint64(2), active)
+	assert.Equal(t, uint64(0), queued)
 
 	// withdraw the stake
 	withdrawAmount, err := staker.WithdrawStake(addr, addr, period+thor.CooldownPeriod())
@@ -1390,10 +1390,10 @@ func TestStaker_Initialise(t *testing.T) {
 	assert.NoError(t, err)
 	assert.False(t, first.IsZero())
 
-	expectedLength := big.NewInt(101)
+	expectedLength := uint64(101)
 	length, err := staker.validationService.LeaderGroupSize()
 	assert.NoError(t, err)
-	assert.True(t, expectedLength.Cmp(length) == 0)
+	assert.Equal(t, expectedLength, length)
 }
 
 func TestStaker_Housekeep_TooEarly(t *testing.T) {
@@ -2014,11 +2014,11 @@ func TestStaker_Housekeep_Adds_Queued_Validators_Up_To_Limit(t *testing.T) {
 
 	queuedValidators, err := staker.validationService.QueuedGroupSize()
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(3), queuedValidators)
+	assert.Equal(t, uint64(3), queuedValidators)
 
 	leaderGroupSize, err := staker.validationService.LeaderGroupSize()
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(0).String(), leaderGroupSize.String())
+	assert.Equal(t, uint64(0), leaderGroupSize)
 
 	block := uint32(360) * 24 * 13
 	_, err = staker.Housekeep(block)
@@ -2034,10 +2034,10 @@ func TestStaker_Housekeep_Adds_Queued_Validators_Up_To_Limit(t *testing.T) {
 	assert.Equal(t, validation.StatusQueued, validator2.Status)
 	leaderGroupSize, err = staker.validationService.LeaderGroupSize()
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(2), leaderGroupSize)
+	assert.Equal(t, uint64(2), leaderGroupSize)
 	queuedValidators, err = staker.validationService.QueuedGroupSize()
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(1), queuedValidators)
+	assert.Equal(t, uint64(1), queuedValidators)
 }
 
 func TestStaker_QueuedValidator_Withdraw(t *testing.T) {
@@ -2519,12 +2519,12 @@ func TestStaker_SetBeneficiary(t *testing.T) {
 	assertValidation(t, staker, master).Beneficiary(nil)
 }
 
-func getTestMaxLeaderSize(param *params.Params) *big.Int {
+func getTestMaxLeaderSize(param *params.Params) uint64 {
 	maxLeaderGroupSize, err := param.Get(thor.KeyMaxBlockProposers)
 	if err != nil {
 		panic(err)
 	}
-	return maxLeaderGroupSize
+	return maxLeaderGroupSize.Uint64()
 }
 
 func TestStaker_TestWeights(t *testing.T) {
@@ -3291,13 +3291,13 @@ func TestStaker_Housekeep_NegativeCases(t *testing.T) {
 	st.SetRawStorage(stakerAddr, slotActiveGroupSize, rlp.RawValue{0xFF})
 	count, err := staker.computeActivationCount(true)
 	assert.Error(t, err)
-	assert.Equal(t, int64(0), count)
+	assert.Equal(t, uint64(0), count)
 
 	st.SetRawStorage(stakerAddr, slotActiveGroupSize, rlp.RawValue{0x0})
 	st.SetRawStorage(paramsAddr, thor.KeyMaxBlockProposers, rlp.RawValue{0xFF})
 	count, err = staker.computeActivationCount(true)
 	assert.Error(t, err)
-	assert.Equal(t, int64(0), count)
+	assert.Equal(t, uint64(0), count)
 
 	slotAggregations := thor.BytesToBytes32([]byte("aggregated-delegations"))
 	validatorAddr := thor.BytesToAddress([]byte("renewal1"))

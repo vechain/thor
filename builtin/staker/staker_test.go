@@ -76,17 +76,17 @@ func (ts *TestSequence) AssertFirstQueued(expectedAddr thor.Address) *TestSequen
 	return ts
 }
 
-func (ts *TestSequence) AssertQueueSize(expectedSize int64) *TestSequence {
+func (ts *TestSequence) AssertQueueSize(expectedSize uint64) *TestSequence {
 	size, err := ts.staker.QueuedGroupSize()
 	assert.NoError(ts.t, err, "failed to get queue size")
-	assert.Equal(ts.t, expectedSize, size.Int64(), "queue size mismatch")
+	assert.Equal(ts.t, expectedSize, size, "queue size mismatch")
 	return ts
 }
 
-func (ts *TestSequence) AssertLeaderGroupSize(expectedSize int64) *TestSequence {
+func (ts *TestSequence) AssertLeaderGroupSize(expectedSize uint64) *TestSequence {
 	size, err := ts.staker.LeaderGroupSize()
 	assert.NoError(ts.t, err, "failed to get leader group size")
-	assert.Equal(ts.t, expectedSize, size.Int64(), "leader group size mismatch")
+	assert.Equal(ts.t, expectedSize, size, "leader group size mismatch")
 	return ts
 }
 
@@ -256,7 +256,7 @@ func (ts *TestSequence) AssertTotals(validationID thor.Address, expected *valida
 func (ts *TestSequence) ActivateNext(block uint32) *TestSequence {
 	mbp, err := ts.staker.params.Get(thor.KeyMaxBlockProposers)
 	assert.NoError(ts.t, err, "failed to get max block proposers")
-	_, err = ts.staker.activateNextValidation(block, mbp)
+	_, err = ts.staker.activateNextValidation(block, mbp.Uint64())
 	assert.NoError(ts.t, err, "failed to activate next validator at block %d", block)
 	return ts
 }
@@ -540,13 +540,17 @@ func TestValidation_IncreaseStake_ActiveHasExitBlock(t *testing.T) {
 
 	assert.NoError(t, staker.validationService.Add(id, end, thor.MediumStakingPeriod(), 100))
 
-	staker.validationService.ActivateValidator(id, 0, &globalstats.Renewal{
+	val, err := staker.validationService.GetValidation(id)
+	assert.NoError(t, err)
+	assert.False(t, val.IsEmpty())
+
+	staker.validationService.ActivateValidator(id, val, 0, &globalstats.Renewal{
 		LockedIncrease: stakes.NewWeightedStake(0, 0),
 		LockedDecrease: stakes.NewWeightedStake(0, 0),
 		QueuedDecrease: 0,
 	})
 
-	err := staker.SignalExit(id, end)
+	err = staker.SignalExit(id, end)
 	assert.NoError(t, err)
 
 	err = staker.IncreaseStake(id, end, 5)
@@ -580,13 +584,17 @@ func TestValidation_DecreaseStake_StatusExit(t *testing.T) {
 
 	assert.NoError(t, staker.validationService.Add(id, end, thor.MediumStakingPeriod(), 100))
 
-	staker.validationService.ActivateValidator(id, 0, &globalstats.Renewal{
+	val, err := staker.validationService.GetValidation(id)
+	assert.NoError(t, err)
+	assert.False(t, val.IsEmpty())
+
+	staker.validationService.ActivateValidator(id, val, 0, &globalstats.Renewal{
 		LockedIncrease: stakes.NewWeightedStake(0, 0),
 		LockedDecrease: stakes.NewWeightedStake(0, 0),
 		QueuedDecrease: 0,
 	})
 
-	err := staker.SignalExit(id, end)
+	err = staker.SignalExit(id, end)
 	assert.NoError(t, err)
 
 	err = staker.DecreaseStake(id, end, 5)
@@ -601,13 +609,17 @@ func TestValidation_DecreaseStake_ActiveHasExitBlock(t *testing.T) {
 
 	assert.NoError(t, staker.validationService.Add(id, end, thor.MediumStakingPeriod(), 100))
 
-	staker.validationService.ActivateValidator(id, 0, &globalstats.Renewal{
+	val, err := staker.validationService.GetValidation(id)
+	assert.NoError(t, err)
+	assert.False(t, val.IsEmpty())
+
+	staker.validationService.ActivateValidator(id, val, 0, &globalstats.Renewal{
 		LockedIncrease: stakes.NewWeightedStake(0, 0),
 		LockedDecrease: stakes.NewWeightedStake(0, 0),
 		QueuedDecrease: 0,
 	})
 
-	err := staker.SignalExit(id, end)
+	err = staker.SignalExit(id, end)
 	assert.NoError(t, err)
 
 	err = staker.DecreaseStake(id, end, 5)
@@ -634,13 +646,17 @@ func TestValidation_DecreaseStake_ActiveSuccess(t *testing.T) {
 
 	assert.NoError(t, staker.validationService.Add(id, end, thor.MediumStakingPeriod(), MinStakeVET+100))
 
-	staker.validationService.ActivateValidator(id, 0, &globalstats.Renewal{
+	val, err := staker.validationService.GetValidation(id)
+	assert.NoError(t, err)
+	assert.False(t, val.IsEmpty())
+
+	staker.validationService.ActivateValidator(id, val, 0, &globalstats.Renewal{
 		LockedIncrease: stakes.NewWeightedStake(0, 0),
 		LockedDecrease: stakes.NewWeightedStake(0, 0),
 		QueuedDecrease: 0,
 	})
 
-	err := staker.DecreaseStake(id, end, 100)
+	err = staker.DecreaseStake(id, end, 100)
 	assert.NoError(t, err)
 
 	v, err := staker.validationService.GetValidation(id)
@@ -731,7 +747,11 @@ func TestDelegation_SignalExit(t *testing.T) {
 	id, err := staker.AddDelegation(v, 3, 100)
 	assert.NoError(t, err)
 
-	staker.validationService.ActivateValidator(v, 0, &globalstats.Renewal{
+	val, err := staker.validationService.GetValidation(v)
+	assert.NoError(t, err)
+	assert.False(t, val.IsEmpty())
+
+	staker.validationService.ActivateValidator(v, val, 0, &globalstats.Renewal{
 		LockedIncrease: stakes.NewWeightedStake(0, 0),
 		LockedDecrease: stakes.NewWeightedStake(0, 0),
 		QueuedDecrease: 0,

@@ -103,12 +103,12 @@ func (s *Staker) FirstQueued() (*thor.Address, error) {
 }
 
 // QueuedGroupSize returns the number of validations in the queue
-func (s *Staker) QueuedGroupSize() (*big.Int, error) {
+func (s *Staker) QueuedGroupSize() (uint64, error) {
 	return s.validationService.QueuedGroupSize()
 }
 
 // LeaderGroupSize returns the number of validations in the leader group
-func (s *Staker) LeaderGroupSize() (*big.Int, error) {
+func (s *Staker) LeaderGroupSize() (uint64, error) {
 	return s.validationService.LeaderGroupSize()
 }
 
@@ -185,19 +185,11 @@ func (s *Staker) GetValidationTotals(validator thor.Address) (*validation.Totals
 // If the provided address is not in a list, it will return empty bytes.
 func (s *Staker) Next(prev thor.Address) (thor.Address, error) {
 	// First check leader group
-	next, err := s.validationService.LeaderGroupNext(prev)
+	next, err := s.validationService.NextEntry(prev)
 	if err != nil {
 		return thor.Address{}, err
-	}
-	if !next.IsZero() {
-		return next, nil
 	}
 
-	// Then check validator queue
-	next, err = s.validationService.ValidatorQueueNext(prev)
-	if err != nil {
-		return thor.Address{}, err
-	}
 	return next, nil
 }
 
@@ -608,14 +600,14 @@ func (s *Staker) validateStakeIncrease(validator thor.Address, validation *valid
 }
 
 // GetValidationsNum returns the number of validators in the leader group and number of queued validators.
-func (s *Staker) GetValidationsNum() (*big.Int, *big.Int, error) {
+func (s *Staker) GetValidationsNum() (uint64, uint64, error) {
 	leaderGroupSize, err := s.LeaderGroupSize()
 	if err != nil {
-		return nil, nil, err
+		return 0, 0, err
 	}
 	queuedGroupSize, err := s.QueuedGroupSize()
 	if err != nil {
-		return leaderGroupSize, nil, err
+		return 0, 0, err
 	}
 	return leaderGroupSize, queuedGroupSize, nil
 }

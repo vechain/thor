@@ -24,13 +24,13 @@ var (
 
 type Service struct {
 	delegations *solidity.Mapping[*big.Int, Delegation]
-	idCounter   *solidity.Uint256
+	idCounter   *solidity.Raw[*big.Int]
 }
 
 func New(sctx *solidity.Context) *Service {
 	return &Service{
 		delegations: solidity.NewMapping[*big.Int, Delegation](sctx, slotDelegations),
-		idCounter:   solidity.NewUint256(sctx, slotDelegationsCounter),
+		idCounter:   solidity.NewRaw[*big.Int](sctx, slotDelegationsCounter),
 	}
 }
 
@@ -56,7 +56,7 @@ func (s *Service) Add(
 	multiplier uint8,
 ) (*big.Int, error) {
 	// update the global delegation counter
-	id, err := s.idCounter.Add(big.NewInt(1))
+	id, err := s.increaseCounter()
 	if err != nil {
 		return nil, err
 	}
@@ -96,4 +96,21 @@ func (s *Service) Withdraw(del *Delegation, delegationID *big.Int, val *validati
 	}
 
 	return withdrawableStake, nil
+}
+
+func (s *Service) increaseCounter() (*big.Int, error) {
+	id, err := s.idCounter.Get()
+	if err != nil {
+		return nil, err
+	}
+	if id == nil {
+		id = big.NewInt(0)
+	}
+
+	id.Add(id, big.NewInt(1))
+	if err := s.idCounter.Upsert(id); err != nil {
+		return nil, err
+	}
+
+	return id, nil
 }
