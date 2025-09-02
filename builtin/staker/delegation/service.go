@@ -56,13 +56,21 @@ func (s *Service) Add(
 	multiplier uint8,
 ) (*big.Int, error) {
 	// update the global delegation counter
-	id, err := s.increaseCounter()
+	id, err := s.idCounter.Get()
 	if err != nil {
 		return nil, err
 	}
+	// delegation 0 will be a nil pointer
+	if id == nil {
+		id = big.NewInt(0)
+	}
 
+	id.Add(id, big.NewInt(1))
 	if id.Cmp(maxUint256) >= 0 {
 		return nil, errors.New("delegation ID counter overflow: maximum delegations reached")
+	}
+	if err := s.idCounter.Upsert(id); err != nil {
+		return nil, err
 	}
 
 	delegationID := new(big.Int).Set(id)
@@ -96,21 +104,4 @@ func (s *Service) Withdraw(del *Delegation, delegationID *big.Int, val *validati
 	}
 
 	return withdrawableStake, nil
-}
-
-func (s *Service) increaseCounter() (*big.Int, error) {
-	id, err := s.idCounter.Get()
-	if err != nil {
-		return nil, err
-	}
-	if id == nil {
-		id = big.NewInt(0)
-	}
-
-	id.Add(id, big.NewInt(1))
-	if err := s.idCounter.Upsert(id); err != nil {
-		return nil, err
-	}
-
-	return id, nil
 }
