@@ -26,7 +26,7 @@ func newSvc() (*Service, thor.Address, *state.State) {
 	return svc, addr, st
 }
 
-func poisonMapping(st *state.State, contract thor.Address, validator thor.Address) {
+func poisonMapping(st *state.State, contract thor.Address, validator *thor.Address) {
 	slot := thor.Blake2b(validator.Bytes(), slotAggregations.Bytes())
 	st.SetRawStorage(contract, slot, rlp.RawValue{0xFF})
 }
@@ -34,7 +34,8 @@ func poisonMapping(st *state.State, contract thor.Address, validator thor.Addres
 func TestService_GetAggregation_ZeroInit(t *testing.T) {
 	svc, _, _ := newSvc()
 
-	v := thor.BytesToAddress([]byte("validator"))
+	va := thor.BytesToAddress([]byte("validator"))
+	v := &va
 	agg, err := svc.GetAggregation(v)
 	assert.NoError(t, err)
 
@@ -47,7 +48,8 @@ func TestService_GetAggregation_ZeroInit(t *testing.T) {
 func TestService_AddAndSub_Pending(t *testing.T) {
 	svc, _, _ := newSvc()
 
-	v := thor.BytesToAddress([]byte("v"))
+	va := thor.BytesToAddress([]byte("v"))
+	v := &va
 	ws := stakes.NewWeightedStakeWithMultiplier(1000, 200)
 
 	assert.NoError(t, svc.AddPendingVET(v, ws))
@@ -68,7 +70,8 @@ func TestService_AddAndSub_Pending(t *testing.T) {
 
 func TestService_Renew(t *testing.T) {
 	svc, _, _ := newSvc()
-	v := thor.BytesToAddress([]byte("v"))
+	va := thor.BytesToAddress([]byte("v"))
+	v := &va
 
 	wsAdd := stakes.NewWeightedStakeWithMultiplier(3000, 200)
 	assert.NoError(t, svc.AddPendingVET(v, wsAdd))
@@ -101,7 +104,8 @@ func TestService_Renew(t *testing.T) {
 
 func TestService_Exit(t *testing.T) {
 	svc, _, _ := newSvc()
-	v := thor.BytesToAddress([]byte("v"))
+	va := thor.BytesToAddress([]byte("v"))
+	v := &va
 
 	assert.NoError(t, svc.AddPendingVET(v, stakes.NewWeightedStakeWithMultiplier(uint64(2000), 200)))
 	_, _, err := svc.Renew(v)
@@ -122,7 +126,8 @@ func TestService_Exit(t *testing.T) {
 
 func TestService_SignalExit(t *testing.T) {
 	svc, _, _ := newSvc()
-	v := thor.BytesToAddress([]byte("v"))
+	va := thor.BytesToAddress([]byte("v"))
+	v := &va
 
 	ws := stakes.NewWeightedStakeWithMultiplier(uint64(1500), 200) // weight 3000
 	assert.NoError(t, svc.SignalExit(v, ws))
@@ -135,7 +140,8 @@ func TestService_SignalExit(t *testing.T) {
 
 func TestService_GetAggregation_Error(t *testing.T) {
 	svc, contract, st := newSvc()
-	v := thor.BytesToAddress([]byte("v"))
+	va := thor.BytesToAddress([]byte("v"))
+	v := &va
 	poisonMapping(st, contract, v)
 
 	_, err := svc.GetAggregation(v)
@@ -144,7 +150,8 @@ func TestService_GetAggregation_Error(t *testing.T) {
 
 func TestService_AddPendingVET_ErrorOnGet(t *testing.T) {
 	svc, contract, st := newSvc()
-	v := thor.BytesToAddress([]byte("v"))
+	va := thor.BytesToAddress([]byte("v"))
+	v := &va
 	poisonMapping(st, contract, v)
 
 	err := svc.AddPendingVET(v, stakes.NewWeightedStakeWithMultiplier(uint64(1000), 100))
@@ -153,7 +160,8 @@ func TestService_AddPendingVET_ErrorOnGet(t *testing.T) {
 
 func TestService_SubPendingVet_ErrorOnGet(t *testing.T) {
 	svc, contract, st := newSvc()
-	v := thor.BytesToAddress([]byte("v"))
+	va := thor.BytesToAddress([]byte("v"))
+	v := &va
 	poisonMapping(st, contract, v)
 
 	err := svc.SubPendingVet(v, stakes.NewWeightedStakeWithMultiplier(uint64(1000), 100))
@@ -162,7 +170,8 @@ func TestService_SubPendingVet_ErrorOnGet(t *testing.T) {
 
 func TestService_Renew_ErrorOnGet(t *testing.T) {
 	svc, contract, st := newSvc()
-	v := thor.BytesToAddress([]byte("v"))
+	va := thor.BytesToAddress([]byte("v"))
+	v := &va
 	poisonMapping(st, contract, v)
 
 	_, _, err := svc.Renew(v)
@@ -171,7 +180,8 @@ func TestService_Renew_ErrorOnGet(t *testing.T) {
 
 func TestService_Exit_ErrorOnGet(t *testing.T) {
 	svc, contract, st := newSvc()
-	v := thor.BytesToAddress([]byte("v"))
+	va := thor.BytesToAddress([]byte("v"))
+	v := &va
 	poisonMapping(st, contract, v)
 
 	_, err := svc.Exit(v)
@@ -180,7 +190,8 @@ func TestService_Exit_ErrorOnGet(t *testing.T) {
 
 func TestService_SignalExit_ErrorOnGet(t *testing.T) {
 	svc, contract, st := newSvc()
-	v := thor.BytesToAddress([]byte("v"))
+	va := thor.BytesToAddress([]byte("v"))
+	v := &va
 	poisonMapping(st, contract, v)
 
 	err := svc.SignalExit(v, stakes.NewWeightedStakeWithMultiplier(uint64(1000), 100))
