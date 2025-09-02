@@ -32,8 +32,6 @@ type Service struct {
 	repo *Repository
 }
 
-var exitMaxTry = 20 // revert transaction if after these attempts an exit block is not found
-
 func New(sctx *solidity.Context,
 	minStake uint64,
 	maxStake uint64,
