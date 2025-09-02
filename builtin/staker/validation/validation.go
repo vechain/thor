@@ -8,8 +8,6 @@ package validation
 import (
 	"errors"
 
-	"github.com/pkg/errors"
-
 	"github.com/vechain/thor/v2/builtin/staker/aggregation"
 	"github.com/vechain/thor/v2/builtin/staker/globalstats"
 	"github.com/vechain/thor/v2/builtin/staker/stakes"

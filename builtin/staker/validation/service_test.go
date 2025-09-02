@@ -237,8 +237,9 @@ func TestService_SignalExit_ExitBlockLimitReached(t *testing.T) {
 	}
 
 	assert.NoError(t, svc.repo.setValidation(validator, validation, true))
-
-	minBlock := validation.StartBlock + validation.Period*(validation.CurrentIteration())
+	current, err := validation.CurrentIteration(110)
+	assert.NoError(t, err)
+	minBlock := validation.StartBlock + validation.Period*current
 
 	for idx := range 20 {
 		blockNum := minBlock + uint32(idx*int(thor.EpochLength()))
@@ -251,7 +252,7 @@ func TestService_SignalExit_ExitBlockLimitReached(t *testing.T) {
 	val, err := svc.GetExistingValidation(validator)
 	assert.NoError(t, err)
 
-	err = svc.SignalExit(validator, val)
+	err = svc.SignalExit(validator, val, 110)
 
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "max try reached")

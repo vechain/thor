@@ -249,7 +249,7 @@ func Test_Delegator_DisableAutoRenew_PendingLocked(t *testing.T) {
 	assert.ErrorContains(t, staker.SignalDelegationExit(id, 20), "delegation has not started yet")
 	_, err = staker.Housekeep(validator.Period)
 	assert.NoError(t, err)
-	assert.NoError(t, staker.SignalDelegationExit(id, 129600))
+	assert.NoError(t, staker.SignalDelegationExit(id, validator.Period))
 	aggregation, err = staker.aggregationService.GetAggregation(validator.ID)
 	assert.NoError(t, err)
 	assert.Equal(t, stake, aggregation.LockedVET)  // This is the only delegator
@@ -264,7 +264,7 @@ func Test_Delegator_DisableAutoRenew_PendingLocked(t *testing.T) {
 	assert.Equal(t, uint64(0), aggregation.ExitingVET) // WithdrawableVET should be equal to the stake
 
 	// And the delegation should be withdrawable
-	amount, err := staker.WithdrawDelegation(id, 10)
+	amount, err := staker.WithdrawDelegation(id, validator.Period*2)
 	assert.NoError(t, err)
 	assert.Equal(t, stake, amount)
 }
@@ -390,7 +390,7 @@ func Test_Delegator_AutoRenew_ValidatorExits(t *testing.T) {
 	assert.Equal(t, stake, aggregation.LockedVET)
 
 	// When the validator signals an exit
-	assert.NoError(t, staker.SignalExit(validator.ID, validator.Endorser, 10))
+	assert.NoError(t, staker.SignalExit(validator.ID, validator.Endorser, validator.Period*1))
 
 	// And the next staking period is over
 	_, err = staker.Housekeep(validator.Period * 2)

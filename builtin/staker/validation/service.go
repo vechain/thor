@@ -218,8 +218,12 @@ func (s *Service) Add(
 	return s.repo.setValidation(validator, entry, true)
 }
 
-func (s *Service) SignalExit(validator thor.Address, validation *Validation) error {
-	minBlock := validation.StartBlock + validation.Period*(validation.CurrentIteration())
+func (s *Service) SignalExit(validator thor.Address, validation *Validation, currentBlock uint32) error {
+	current, err := validation.CurrentIteration(currentBlock)
+	if err != nil {
+		return err
+	}
+	minBlock := validation.StartBlock + validation.Period*current
 	return s.markValidatorExit(validator, minBlock, exitMaxTry)
 }
 
