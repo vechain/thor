@@ -6,7 +6,6 @@
 package pos
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"math"
@@ -25,7 +24,6 @@ type Proposer struct {
 type entry struct {
 	address thor.Address
 	weight  uint64
-	hash    thor.Bytes32
 	active  bool
 	score   float64
 }
@@ -56,59 +54,55 @@ func NewScheduler(
 	var num [4]byte
 	binary.BigEndian.PutUint32(num[:], parentBlockNumber)
 
-	// Step 1: shuffle the all proposers using the seed, including offline proposers
+	// Step 1: Generate a seed for the deterministic pseudo-random generator
+	hashedSeed := thor.Blake2b(seed, num[:])
+	pseudoRND := rand.New(rand.NewSource(uint64ToI64(binary.LittleEndian.Uint64(hashedSeed[:])))) //#nosec G404
+
+	// Step 2: Calculate priority scores for each validator based on their weight
+	// using the exponential distribution method for weighted random sampling
 	for _, p := range proposers {
 		if p.Address == addr {
 			proposer = p
 			listed = true
 		}
-		shuffled = append(shuffled, entry{
-			address: p.Address,
-			weight:  p.Weight,
-			active:  p.Active,
-			hash:    thor.Blake2b(seed, num[:], p.Address.Bytes()),
-		})
+		// IMPORTANT: Every validator in the leader group should be allocated
+		// with the deterministic random number sequence from the same source.
+		random := pseudoRND.Float64()
+		if random == 0 {
+			random = 1e-10 // prevent ln(0)
+		}
+		// but only active/online validators will be picked for block production
+		if p.Active || p.Address == addr {
+			shuffled = append(shuffled, entry{
+				address: p.Address,
+				weight:  p.Weight,
+				active:  p.Active,
+				score:   -math.Log(random) / float64(p.Weight),
+			})
+			// https://en.wikipedia.org/wiki/Reservoir_sampling#Algorithm_A-Res
+			// A-Res Reservoir sampling algorithm with -ln(random)/weight
+		}
 	}
 	if !listed {
 		return nil, errors.New("unauthorized block proposer")
 	}
 
+	// Step 3: Sort validators by priority score in ascending order
 	slices.SortStableFunc(shuffled, func(a, b entry) int {
-		return bytes.Compare(a.hash.Bytes(), b.hash.Bytes())
-	})
-
-	// Step 2: Generate a deterministic seed for the random number generator
-	hashedSeed := thor.Blake2b(seed, num[:])
-	pseudoRND := rand.New(rand.NewSource(uint64ToI64(binary.LittleEndian.Uint64(hashedSeed[:])))) //#nosec G404
-
-	// Step 3: Calculate priority scores for each validator based on their weight
-	// using the exponential distribution method for weighted random sampling
-	sequence := make([]entry, 0, len(shuffled))
-	for _, entry := range shuffled {
-		// IMPORTANT: Every validator in the leader group should be allocated
-		// with the deterministic random number sequence from the same source.
-		random := pseudoRND.Float64()
-		// but only active/online validators will be picked for block production
-		if entry.active || entry.address == addr {
-			entry.score = math.Pow(random, 1.0/float64(entry.weight))
-			sequence = append(sequence, entry)
-		}
-	}
-
-	// Step 4: Sort validators by priority score in descending order
-	slices.SortStableFunc(sequence, func(a, b entry) int {
-		if a.score < b.score {
-			return 1
-		} else if a.score > b.score {
+		switch {
+		case a.score < b.score:
 			return -1
+		case a.score > b.score:
+			return 1
+		default:
+			return 0
 		}
-		return 0
 	})
 
 	return &Scheduler{
 		proposer,
 		parentBlockTime,
-		sequence,
+		shuffled,
 	}, nil
 }
 
