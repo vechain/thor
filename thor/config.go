@@ -21,6 +21,8 @@ var (
 	cooldownPeriod      uint32 = 8640      // 8640 blocks, 1 day
 	hayabusaTP          uint32 = 8640 * 14 // 14 days
 
+	evictionEpochDivider = epochLength * 48 * 3 // every three days, 48 epochs in the day, three days
+
 	locked bool
 )
 
@@ -29,6 +31,7 @@ type Config struct {
 	EpochLength                uint32 `json:"epochLength"`                // number of blocks per epoch, also the number of blocks between two checkpoints.
 	SeederInterval             uint32 `json:"seederInterval"`             // blocks between two scheduler seeder epochs.
 	ValidatorEvictionThreshold uint32 `json:"validatorEvictionThreshold"` // the number of blocks after which offline validator will be evicted from the leader group (7 days)
+	EvictionEpochDivider       uint32 `json:"evictionEpochDivider"`       // period between two eviction function executions
 
 	// staker parameters
 	LowStakingPeriod    uint32  `json:"lowStakingPeriod"`
@@ -80,6 +83,10 @@ func SetConfig(cfg Config) {
 
 	if cfg.HayabusaTP != nil {
 		hayabusaTP = *cfg.HayabusaTP
+	}
+
+	if cfg.EvictionEpochDivider != 0 {
+		evictionEpochDivider = cfg.EvictionEpochDivider
 	}
 }
 
@@ -133,3 +140,6 @@ func CooldownPeriod() uint32 {
 func HayabusaTP() uint32 {
 	return hayabusaTP
 }
+
+// default value is 3 days
+func EvictionEpochDivider() uint32 { return evictionEpochDivider }

@@ -13,8 +13,6 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-var evictionEpochDivider = thor.EpochLength() * 48 * 3 // every three days, 48 epochs in the day, three days
-
 //
 // State transition types
 //
@@ -64,7 +62,7 @@ func (s *Staker) computeEpochTransition(currentBlock uint32) (*EpochTransition, 
 	var err error
 
 	var evictions []thor.Address
-	if currentBlock != 0 && currentBlock%evictionEpochDivider == 0 {
+	if currentBlock != 0 && currentBlock%thor.EvictionEpochDivider() == 0 {
 		err = s.validationService.LeaderGroupIterator(
 			s.evictionCallback(currentBlock, &evictions),
 		)
