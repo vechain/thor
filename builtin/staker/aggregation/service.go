@@ -66,6 +66,12 @@ func (s *Service) SubPendingVet(validator thor.Address, stake *stakes.WeightedSt
 	if err != nil {
 		return err
 	}
+	if stake.VET > agg.PendingVET {
+		return errors.New("insufficient pending VET to subtract")
+	}
+	if stake.Weight > agg.PendingWeight {
+		return errors.New("insufficient pending weight to subtract")
+	}
 	agg.PendingVET -= stake.VET
 	agg.PendingWeight -= stake.Weight
 
@@ -80,7 +86,10 @@ func (s *Service) Renew(validator thor.Address) (*globalstats.Renewal, uint64, e
 		return nil, 0, err
 	}
 
-	renew := agg.renew()
+	renew, err := agg.renew()
+	if err != nil {
+		return nil, 0, err
+	}
 
 	if err = s.setAggregation(validator, agg, false); err != nil {
 		return nil, 0, err

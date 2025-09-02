@@ -152,3 +152,80 @@ func TestPacker_StopsEnergyAtHardfork(t *testing.T) {
 		})
 	}
 }
+
+func TestFlow_Revert(t *testing.T) {
+	config := &thor.SoloFork
+	config.HAYABUSA = 2
+	hayabusaTP := uint32(1)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
+	config.BLOCKLIST = math.MaxUint32
+
+	chain, err := testchain.NewWithFork(config, 1)
+	assert.NoError(t, err)
+
+	// mint block 1: using PoA
+	root := chain.Repo().BestBlockSummary().Root()
+	packMbpBlock(t, chain, thor.BlockInterval())
+	verifyMechanism(t, chain, true, root)
+
+	// mint block 2: deploy staker contract, still using PoA
+	root = chain.Repo().BestBlockSummary().Root()
+	packNext(t, chain, thor.BlockInterval())
+	verifyMechanism(t, chain, true, root)
+
+	// mint block 3: add validator tx
+	root = chain.Repo().BestBlockSummary().Root()
+	packAddValidatorBlock(t, chain, thor.BlockInterval())
+	verifyMechanism(t, chain, true, root)
+
+	// mint block 4: should switch to PoS
+	root = chain.Repo().BestBlockSummary().Root()
+	packNext(t, chain, thor.BlockInterval())
+	verifyMechanism(t, chain, true, root)
+
+	oldStakerBalance, err := chain.Stater().NewState(root).GetBalance(builtin.Staker.Address)
+	assert.NoError(t, err)
+	oldBalance, err := chain.Stater().NewState(root).GetBalance(genesis.DevAccounts()[1].Address)
+	assert.NoError(t, err)
+
+	bestBlock, _ := chain.BestBlock()
+	amount, _ := big.NewInt(0).SetString("1000000000000000000", 10)
+	failingTransaction := tx.NewBuilder(tx.TypeDynamicFee).
+		ChainTag(chain.Repo().ChainTag()).
+		Expiration(10).
+		Nonce(1).
+		Gas(3000000).
+		MaxFeePerGas(bestBlock.Header().BaseFee()).
+		MaxPriorityFeePerGas(big.NewInt(3000000)).
+		Clause(tx.NewClause(&builtin.Staker.Address).WithData([]byte{
+			0xc3, 0xc4, 0xb1, 0x38, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0xf0, 0x77, 0xb4, 0x91,
+			0xb3, 0x55, 0xe6, 0x40, 0x48, 0xce, 0x21, 0xe3,
+			0xa6, 0xfc, 0x47, 0x51, 0xee, 0xea, 0x77, 0xfa,
+
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0e, 0x10,
+		}).WithValue(amount)).
+		Clause(tx.NewClause(&genesis.DevAccounts()[1].Address).WithValue(amount)).
+		Build()
+	failingTransaction = tx.MustSign(failingTransaction, genesis.DevAccounts()[0].PrivateKey)
+
+	// mint block 5: full PoS
+	root = chain.Repo().BestBlockSummary().Root()
+	packNext(t,
+		chain,
+		thor.BlockInterval(),
+		failingTransaction,
+	)
+	verifyMechanism(t, chain, false, root)
+
+	stakerBalance, err := chain.Stater().NewState(root).GetBalance(builtin.Staker.Address)
+	assert.NoError(t, err)
+	assert.Equal(t, oldStakerBalance, stakerBalance)
+
+	balance, err := chain.Stater().NewState(root).GetBalance(genesis.DevAccounts()[1].Address)
+	assert.NoError(t, err)
+	assert.Equal(t, oldBalance, balance)
+}

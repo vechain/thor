@@ -60,29 +60,28 @@ func TestConsensus_PosFork(t *testing.T) {
 	signer, err := best.Header.Signer()
 	assert.NoError(t, err)
 
-	delete(leaders, signer)
 	parentSig, err := parent.Header.Signer()
 	assert.NoError(t, err)
 
 	beneficiary := thor.BytesToAddress([]byte("test"))
-	offlineBlock := uint32(1)
-	leaders[parentSig] = &validation.Validation{
-		Endorser:           thor.Address{},
-		Beneficiary:        &beneficiary,
-		Period:             0,
-		CompleteIterations: 0,
-		Status:             0,
-		StartBlock:         0,
-		ExitBlock:          nil,
-		OfflineBlock:       &offlineBlock,
-		LockedVET:          0,
-		PendingUnlockVET:   0,
-		QueuedVET:          0,
-		CooldownVET:        0,
-		WithdrawableVET:    0,
-		Weight:             10,
+
+	var newLeaders []validation.Leader
+	for _, leader := range leaders {
+		// delete(leaders, signer)
+		if leader.Address == signer {
+			continue
+		}
+		newLeaders = append(newLeaders, leader)
 	}
-	cache.Add(parent.Header.ID(), leaders)
+
+	newLeaders = append(newLeaders, validation.Leader{
+		Address:     parentSig,
+		Beneficiary: &beneficiary,
+		Endorser:    thor.Address{},
+		Weight:      10,
+		Active:      false,
+	})
+	cache.Add(parent.Header.ID(), newLeaders)
 	setup.consensus.validatorsCache = cache
 
 	newParentHeader := new(block.Builder).
@@ -99,24 +98,42 @@ func TestConsensus_PosFork(t *testing.T) {
 	err = setup.consensus.validateStakingProposer(best.Header, newParentHeader, builtin.Staker.Native(st))
 	assert.ErrorContains(t, err, "pos - stake beneficiary mismatch")
 
-	leaders[parentSig] = &validation.Validation{
-		Endorser:           thor.Address{},
-		Beneficiary:        nil,
-		Period:             0,
-		CompleteIterations: 0,
-		Status:             0,
-		StartBlock:         0,
-		ExitBlock:          nil,
-		OfflineBlock:       &offlineBlock,
-		LockedVET:          0,
-		PendingUnlockVET:   0,
-		QueuedVET:          0,
-		CooldownVET:        0,
-		WithdrawableVET:    0,
-		Weight:             10,
+	newLeaders = make([]validation.Leader, 0, len(leaders))
+	for _, leader := range newLeaders {
+		if leader.Address == parentSig {
+			newLeaders = append(newLeaders, validation.Leader{
+				Address:     parentSig,
+				Beneficiary: nil,
+				Endorser:    thor.Address{},
+				Weight:      10,
+				Active:      false,
+			})
+		} else {
+			newLeaders = append(newLeaders, leader)
+		}
 	}
-	cache.Add(parent.Header.ID(), leaders)
+	cache.Add(parent.Header.ID(), newLeaders)
 	setup.consensus.validatorsCache = cache
+
+	newParentHeader = new(block.Builder).
+		ParentID(parent.Header.ParentID()).
+		Timestamp(parent.Header.Timestamp()).
+		GasLimit(parent.Header.GasLimit()).
+		GasUsed(parent.Header.GasUsed()).
+		TotalScore(1).
+		StateRoot(parent.Header.StateRoot()).
+		ReceiptsRoot(parent.Header.ReceiptsRoot()).
+		Beneficiary(parent.Header.Beneficiary()).
+		Build().Header()
+
+	err = setup.consensus.validateStakingProposer(best.Header, newParentHeader, builtin.Staker.Native(st))
+	assert.ErrorContains(t, err, "pos - block total score invalid")
+
+	slotLockedVET := thor.BytesToBytes32([]byte(("total-weighted-stake")))
+	st.SetRawStorage(builtin.Staker.Address, slotLockedVET, rlp.RawValue{0xFF})
+
+	err = setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st))
+	assert.ErrorContains(t, err, "pos - cannot get total weight")
 
 	newParentHeader = new(block.Builder).
 		ParentID(parent.Header.ParentID()).
@@ -135,26 +152,6 @@ func TestConsensus_PosFork(t *testing.T) {
 
 	err = setup.consensus.validateStakingProposer(best.Header, newParentHeader, builtin.Staker.Native(st))
 	assert.ErrorContains(t, err, "failed to get validator")
-
-	newParentHeader = new(block.Builder).
-		ParentID(parent.Header.ParentID()).
-		Timestamp(parent.Header.Timestamp()).
-		GasLimit(parent.Header.GasLimit()).
-		GasUsed(parent.Header.GasUsed()).
-		TotalScore(999).
-		StateRoot(parent.Header.StateRoot()).
-		ReceiptsRoot(parent.Header.ReceiptsRoot()).
-		Beneficiary(parent.Header.Beneficiary()).
-		Build().Header()
-
-	err = setup.consensus.validateStakingProposer(best.Header, newParentHeader, builtin.Staker.Native(st))
-	assert.ErrorContains(t, err, "pos - block total score invalid")
-
-	slotLockedVET := thor.BytesToBytes32([]byte(("total-weighted-stake")))
-	st.SetRawStorage(builtin.Staker.Address, slotLockedVET, rlp.RawValue{0xFF})
-
-	err = setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st))
-	assert.ErrorContains(t, err, "pos - cannot get total weight")
 }
 
 func TestConsensus_CannotGetLeaderGroup(t *testing.T) {

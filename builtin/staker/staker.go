@@ -6,6 +6,8 @@
 package staker
 
 import (
+	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/vechain/thor/v2/builtin/gascharger"
@@ -76,7 +78,7 @@ func (s *Staker) IsPoSActive() (bool, error) {
 }
 
 // LeaderGroup lists all registered candidates.
-func (s *Staker) LeaderGroup() (map[thor.Address]*validation.Validation, error) {
+func (s *Staker) LeaderGroup() ([]validation.Leader, error) {
 	return s.validationService.LeaderGroup()
 }
 
@@ -176,7 +178,7 @@ func (s *Staker) GetValidationTotals(validator thor.Address) (*validation.Totals
 	if err != nil {
 		return nil, err
 	}
-	return val.Totals(agg), nil
+	return val.Totals(agg)
 }
 
 // Next returns the next validator in a linked list.
@@ -264,7 +266,14 @@ func (s *Staker) SignalExit(validator thor.Address, endorser thor.Address, curre
 		return NewReverts("can't signal exit while not active")
 	}
 
-	if err := s.validationService.SignalExit(validator, val, currentBlock); err != nil {
+	if val.ExitBlock != nil {
+		return NewReverts(fmt.Sprintf("exit block already set to %d", *val.ExitBlock))
+	}
+
+	if err := s.validationService.SignalExit(validator, val); err != nil {
+		if errors.Is(err, validation.ErrMaxTryReached) {
+			return NewReverts(validation.ErrMaxTryReached.Error())
+		}
 		logger.Info("signal exit failed", "validator", validator, "error", err)
 		return err
 	}
@@ -338,7 +347,8 @@ func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, am
 		// We don't consider any increases, i.e., entry.QueuedVET. We only consider locked and current decreases.
 		// The reason is that validator can instantly withdraw QueuedVET at any time.
 		// We need to make sure the locked VET minus the sum of the current decreases is still above the minimum stake.
-		if val.LockedVET-val.PendingUnlockVET-amount < MinStakeVET {
+		pendingAndDecrease := val.PendingUnlockVET + amount
+		if pendingAndDecrease > val.LockedVET || val.LockedVET-pendingAndDecrease < MinStakeVET {
 			return NewReverts("next period stake is lower than minimum stake")
 		}
 	}
@@ -617,7 +627,15 @@ func (s *Staker) validateStakeIncrease(validator thor.Address, validation *valid
 	}
 
 	// accumulated TVL should cannot be more than MaxStake
-	if validation.NextPeriodTVL()+agg.NextPeriodTVL()+amount > MaxStakeVET {
+	aggNextPeriodTVL, err := agg.NextPeriodTVL()
+	if err != nil {
+		return err
+	}
+	valNextPeriodTVL, err := validation.NextPeriodTVL()
+	if err != nil {
+		return err
+	}
+	if valNextPeriodTVL+aggNextPeriodTVL+amount > MaxStakeVET {
 		return NewReverts("stake is out of range")
 	}
 

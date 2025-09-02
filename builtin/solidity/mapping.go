@@ -23,23 +23,20 @@ type Key interface {
 //   - Setting the default type value means removing the value from storage
 //
 //   - If Mapping[thor.Bytes32, *thor.Address]:
-//     ex: SET (k:0x123, v:nil) -> stores nil
-//     ex: SET (k:0x123, v:&thor.Address{})  -> stores nil
+//     ex: SET (k:0x123, v:nil) -> stores nil (default empty value)
 //
 //   - If Mapping[thor.Bytes32, thor.Address]:
 //     ex: SET (k:0x123, v:thor.Address{}) -> stores nil (default empty value)
 //
-//   - Getting a nil storage value will always return default value of V not an empty pointer of the instance
+//   - Getting a nil storage value will always return default value of V
 //
 //   - If Mapping[thor.Bytes32, *thor.Address]:
 //     ex: SET (k:0x123, v:nil) GET (k:0x123)-> returns nil
-//     ex: SET (k:0x123, v:&thor.Address{}) GET (k:0x123)-> returns nil
 //
 //   - If Mapping[thor.Bytes32, thor.Address]:
-//     ex: SET (k:0x123, v:nil) GET (k:0x123)-> returns thor.Address{} (default empty value)
 //     ex: SET (k:0x123, v:thor.Address{}) GET (k:0x123)-> returns thor.Address{} (default empty value)
 //
-// - Getting a non-existing storage will always return the default value of the type defined in the V comparable mapping
+// - Getting a non-existing storage will always return the default value of the type defined in the V
 type Mapping[K Key, V comparable] struct {
 	context *Context
 	basePos thor.Bytes32
@@ -62,16 +59,12 @@ func (m *Mapping[K, V]) Get(key K) (V, error) {
 	// attempt to decode storage into value
 	err := m.context.state.DecodeStorage(
 		m.context.address, position, func(raw []byte) error {
+			// charge gas per word size
+			m.context.UseGas(toWordSize(len(raw)) * thor.SloadGas)
 			if len(raw) == 0 {
-				// use at least one SLOAD
-				m.context.UseGas(thor.SloadGas)
 				// no data, leave value as zero
 				return nil
 			}
-
-			// charge gas per 32-byte word
-			slots := (uint64(len(raw)) + 31) / 32
-			m.context.UseGas(slots * thor.SloadGas)
 
 			// decode RLP in-place
 			return rlp.DecodeBytes(raw, &value)
@@ -105,8 +98,8 @@ func (m *Mapping[K, V]) Set(key K, value V, newValue bool) error {
 			return nil, err
 		}
 
-		// charge gas per 32-byte word
-		slots := (uint64(len(buf)) + 31) / 32
+		// charge gas per word size
+		slots := toWordSize(len(buf))
 		if newValue {
 			m.context.UseGas(slots * thor.SstoreSetGas)
 		} else {

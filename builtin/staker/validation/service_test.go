@@ -7,6 +7,7 @@ package validation
 import (
 	"encoding/binary"
 	"math/big"
+	"strconv"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -108,9 +109,10 @@ func TestService_ActivateAndExit_Flow(t *testing.T) {
 	}
 	assert.NoError(t, svc.repo.setValidation(id, val, true))
 
-	renew := (&Validation{QueuedVET: uint64(100), LockedVET: uint64(0), Weight: uint64(0)}).renew(uint64(0))
+	renew, err := (&Validation{QueuedVET: uint64(100), LockedVET: uint64(0), Weight: uint64(0)}).renew(uint64(0))
+	assert.NoError(t, err)
 
-	_, err := svc.ActivateValidator(id, 1, renew)
+	_, err = svc.ActivateValidator(id, 1, renew)
 	assert.NoError(t, err)
 
 	after, err := svc.GetValidation(id)
@@ -141,8 +143,14 @@ func TestService_LeaderGroup_ReturnsActiveOnly(t *testing.T) {
 
 	group, err := svc.LeaderGroup()
 	assert.NoError(t, err)
-	_, inQueued := group[q]
-	_, inActive := group[a]
+
+	leaders := make(map[thor.Address]bool)
+	for _, leader := range group {
+		leaders[leader.Address] = true
+	}
+
+	_, inQueued := leaders[q]
+	_, inActive := leaders[a]
 	assert.False(t, inQueued)
 	assert.True(t, inActive)
 }
@@ -213,6 +221,44 @@ func TestService_SignalExit_SetsExitBlockAndPersists(t *testing.T) {
 	if assert.NotNil(t, after.ExitBlock) {
 		assert.Equal(t, uint32(130), *after.ExitBlock)
 	}
+}
+
+func TestService_SignalExit_ExitBlockLimitReached(t *testing.T) {
+	svc, _, _ := newSvc()
+
+	validator := thor.BytesToAddress([]byte("validator"))
+	endorser := validator
+	validation := &Validation{
+		Endorser:           endorser,
+		Status:             StatusActive,
+		StartBlock:         100,
+		Period:             10,
+		CompleteIterations: 0,
+	}
+
+	assert.NoError(t, svc.repo.setValidation(validator, validation, true))
+
+	minBlock := validation.StartBlock + validation.Period*(validation.CurrentIteration())
+
+	for idx := range 20 {
+		blockNum := minBlock + uint32(idx*int(thor.EpochLength()))
+
+		exitValidator := thor.BytesToAddress([]byte("exit" + strconv.Itoa(idx)))
+
+		assert.NoError(t, svc.repo.setExit(blockNum, exitValidator))
+	}
+
+	val, err := svc.GetExistingValidation(validator)
+	assert.NoError(t, err)
+
+	err = svc.SignalExit(validator, val)
+
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "max try reached")
+
+	updatedVal, err := svc.GetValidation(validator)
+	assert.NoError(t, err)
+	assert.Nil(t, updatedVal.ExitBlock)
 }
 
 func TestService_SignalExit_SetExitBlock_Error(t *testing.T) {
@@ -539,11 +585,6 @@ func TestService_Evict(t *testing.T) {
 	val, err := svc.GetValidation(id1)
 	assert.NoError(t, err)
 	expectedExitBlock := uint32(5) + thor.EpochLength()
-	assert.Equal(t, &expectedExitBlock, val.ExitBlock)
-
-	assert.NoError(t, svc.Evict(id1, 7))
-	val, err = svc.GetValidation(id1)
-	assert.NoError(t, err)
 	assert.Equal(t, &expectedExitBlock, val.ExitBlock)
 
 	poisonExitSlot(st, addr, 7+thor.EpochLength())

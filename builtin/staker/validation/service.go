@@ -18,6 +18,14 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
+type Leader struct {
+	Address     thor.Address
+	Endorser    thor.Address
+	Beneficiary *thor.Address
+	Active      bool
+	Weight      uint64
+}
+
 type Service struct {
 	leaderGroup    *linkedlist.LinkedList
 	validatorQueue *linkedlist.LinkedList
@@ -39,6 +47,8 @@ var (
 	slotQueuedHead      = thor.BytesToBytes32([]byte(("validations-queued-head")))
 	slotQueuedTail      = thor.BytesToBytes32([]byte(("validations-queued-tail")))
 	slotQueuedGroupSize = thor.BytesToBytes32([]byte(("validations-queued-group-size")))
+
+	exitMaxTry = 20 // revert transaction if after these attempts an exit block is not found
 
 	// updated validations linked list
 	slotUpdateHead      = thor.BytesToBytes32([]byte(("validations-update-head")))
@@ -166,10 +176,17 @@ func (s *Service) GetLeaderGroupHead() (*Validation, error) {
 }
 
 // LeaderGroup lists all registered candidates.
-func (s *Service) LeaderGroup() (map[thor.Address]*Validation, error) {
-	group := make(map[thor.Address]*Validation)
+func (s *Service) LeaderGroup() ([]Leader, error) {
+	group := make([]Leader, 0, thor.InitialMaxBlockProposers)
 	err := s.LeaderGroupIterator(func(validator thor.Address, entry *Validation) error {
-		group[validator] = entry
+		group = append(group, Leader{
+			Address:     validator,
+			Endorser:    entry.Endorser,
+			Beneficiary: entry.Beneficiary,
+			Active:      entry.IsOnline(),
+			Weight:      entry.Weight,
+		})
+
 		return nil
 	})
 	return group, err
@@ -201,34 +218,26 @@ func (s *Service) Add(
 	return s.repo.setValidation(validator, entry, true)
 }
 
-func (s *Service) SignalExit(validator thor.Address, validation *Validation, currentBlock uint32) error {
-	current, err := validation.CurrentIteration(currentBlock)
-	if err != nil {
-		return err
-	}
-	minBlock := validation.StartBlock + validation.Period*current
-	exitBlock, err := s.SetExitBlock(validator, minBlock)
-	if err != nil {
-		return err
-	}
-	validation.ExitBlock = &exitBlock
-
-	return s.repo.setValidation(validator, validation, false)
+func (s *Service) SignalExit(validator thor.Address, validation *Validation) error {
+	minBlock := validation.StartBlock + validation.Period*(validation.CurrentIteration())
+	return s.markValidatorExit(validator, minBlock, exitMaxTry)
 }
 
 func (s *Service) Evict(validator thor.Address, currentBlock uint32) error {
+	return s.markValidatorExit(validator, currentBlock+thor.EpochLength(), int(thor.InitialMaxBlockProposers))
+}
+
+func (s *Service) markValidatorExit(validator thor.Address, minblock uint32, maxTry int) error {
 	validation, err := s.GetExistingValidation(validator)
 	if err != nil {
 		return err
 	}
 
-	exitBlock, err := s.SetExitBlock(validator, currentBlock+thor.EpochLength())
+	exitBlock, err := s.SetExitBlock(validator, minblock, maxTry)
 	if err != nil {
 		return err
 	}
-	if validation.ExitBlock != nil && *validation.ExitBlock < exitBlock {
-		exitBlock = *validation.ExitBlock
-	}
+
 	validation.ExitBlock = &exitBlock
 
 	return s.repo.setValidation(validator, validation, false)
@@ -406,9 +415,9 @@ func (s *Service) ExitValidator(validator thor.Address) (*globalstats.Exit, erro
 // SetExitBlock sets the exit block for a validator.
 // It ensures that the exit block is not already set for another validator.
 // A validator cannot consume several epochs at once.
-func (s *Service) SetExitBlock(validator thor.Address, minBlock uint32) (uint32, error) {
+func (s *Service) SetExitBlock(validator thor.Address, minBlock uint32, maxTry int) (uint32, error) {
 	start := minBlock
-	for {
+	for range maxTry {
 		existing, err := s.GetExitEpoch(start)
 		if err != nil {
 			return 0, err
@@ -424,6 +433,8 @@ func (s *Service) SetExitBlock(validator thor.Address, minBlock uint32) (uint32,
 		}
 		start += thor.EpochLength()
 	}
+
+	return 0, ErrMaxTryReached
 }
 
 func (s *Service) GetExitEpoch(block uint32) (thor.Address, error) {
@@ -522,7 +533,10 @@ func (s *Service) Renew(validator thor.Address, delegationWeight uint64) (*globa
 	if err != nil {
 		return nil, err
 	}
-	delta := validation.renew(delegationWeight)
+	delta, err := validation.renew(delegationWeight)
+	if err != nil {
+		return nil, err
+	}
 	if err = s.repo.setValidation(validator, validation, false); err != nil {
 		return nil, errors.Wrap(err, "failed to renew validator")
 	}
