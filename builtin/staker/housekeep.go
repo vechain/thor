@@ -220,7 +220,7 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 	// Apply evictions
 	for _, validator := range transition.Evictions {
 		logger.Info("evicting validator", "validator", validator)
-		if err := s.validationService.Evict(validator, transition.Block); err != nil {
+		if err := s.validationService.SignalExit(validator, transition.Block+thor.EpochLength(), int(thor.InitialMaxBlockProposers)); err != nil {
 			return err
 		}
 	}
