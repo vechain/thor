@@ -10,17 +10,17 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-// updateList is a doubly linked list implementation to store the toUpdate list for
+// renewalList is a doubly linked list implementation to store the toUpdate list for
 // validation service, which is self sufficient, no outside dependency.
-type updateList struct {
+type renewalList struct {
 	head *solidity.Raw[thor.Address]
 	tail *solidity.Raw[thor.Address]
 	prev *solidity.Mapping[thor.Address, thor.Address]
 	next *solidity.Mapping[thor.Address, thor.Address]
 }
 
-func newUpdateList(sctx *solidity.Context, headKey, tailKey, prevKey, nextKey thor.Bytes32) *updateList {
-	return &updateList{
+func newRenewalList(sctx *solidity.Context, headKey, tailKey, prevKey, nextKey thor.Bytes32) *renewalList {
+	return &renewalList{
 		head: solidity.NewRaw[thor.Address](sctx, headKey),
 		tail: solidity.NewRaw[thor.Address](sctx, tailKey),
 		prev: solidity.NewMapping[thor.Address, thor.Address](sctx, prevKey),
@@ -28,12 +28,12 @@ func newUpdateList(sctx *solidity.Context, headKey, tailKey, prevKey, nextKey th
 	}
 }
 
-func (u *updateList) contains(key thor.Address) (bool, error) {
+func (r *renewalList) contains(key thor.Address) (bool, error) {
 	if key.IsZero() {
 		return false, nil
 	}
 
-	val, err := u.next.Get(key)
+	val, err := r.next.Get(key)
 	if err != nil {
 		return false, err
 	}
@@ -44,7 +44,7 @@ func (u *updateList) contains(key thor.Address) (bool, error) {
 	}
 
 	// check if key is the tail
-	tail, err := u.tail.Get()
+	tail, err := r.tail.Get()
 	if err != nil {
 		return false, err
 	}
@@ -52,12 +52,12 @@ func (u *updateList) contains(key thor.Address) (bool, error) {
 }
 
 // Add adds a new entry to the list，this is a idempotent operation.
-func (u *updateList) Add(newKey thor.Address) error {
+func (r *renewalList) Add(newKey thor.Address) error {
 	if newKey.IsZero() {
 		return nil
 	}
 
-	has, err := u.contains(newKey)
+	has, err := r.contains(newKey)
 	if err != nil {
 		return err
 	}
@@ -66,17 +66,17 @@ func (u *updateList) Add(newKey thor.Address) error {
 		return nil
 	}
 
-	prevTail, err := u.tail.Get()
+	prevTail, err := r.tail.Get()
 	if err != nil {
 		return err
 	}
 
 	if prevTail.IsZero() {
 		// this list is empty, set head and tail to newKey
-		if err := u.head.Upsert(newKey); err != nil {
+		if err := r.head.Upsert(newKey); err != nil {
 			return err
 		}
-		if err := u.tail.Upsert(newKey); err != nil {
+		if err := r.tail.Upsert(newKey); err != nil {
 			return err
 		}
 
@@ -84,22 +84,22 @@ func (u *updateList) Add(newKey thor.Address) error {
 	}
 
 	// Update prev tail's next pointer
-	if err := u.next.Upsert(prevTail, newKey); err != nil {
+	if err := r.next.Upsert(prevTail, newKey); err != nil {
 		return err
 	}
 	// Update new key's prev pointer
-	if err := u.prev.Upsert(newKey, prevTail); err != nil {
+	if err := r.prev.Upsert(newKey, prevTail); err != nil {
 		return err
 	}
-	return u.tail.Upsert(newKey)
+	return r.tail.Upsert(newKey)
 }
 
-func (u *updateList) Remove(toRemove thor.Address) error {
+func (r *renewalList) Remove(toRemove thor.Address) error {
 	if toRemove.IsZero() {
 		return nil
 	}
 
-	has, err := u.contains(toRemove)
+	has, err := r.contains(toRemove)
 	if err != nil {
 		return err
 	}
@@ -108,19 +108,19 @@ func (u *updateList) Remove(toRemove thor.Address) error {
 		return nil
 	}
 
-	prev, err := u.prev.Get(toRemove)
+	prev, err := r.prev.Get(toRemove)
 	if err != nil {
 		return err
 	}
 
-	next, err := u.next.Get(toRemove)
+	next, err := r.next.Get(toRemove)
 	if err != nil {
 		return err
 	}
 
 	if prev.IsZero() && next.IsZero() {
 		// entry is not linked, check if it is the only element in the list
-		head, err := u.head.Get()
+		head, err := r.head.Get()
 		if err != nil {
 			return err
 		}
@@ -130,7 +130,7 @@ func (u *updateList) Remove(toRemove thor.Address) error {
 			return nil
 		}
 
-		tail, err := u.tail.Get()
+		tail, err := r.tail.Get()
 		if err != nil {
 			return err
 		}
@@ -146,12 +146,12 @@ func (u *updateList) Remove(toRemove thor.Address) error {
 	if prev.IsZero() {
 		// entry is the head, update head to next
 		// headKey is touched previously since entry is linked
-		if err := u.head.Update(next); err != nil {
+		if err := r.head.Update(next); err != nil {
 			return err
 		}
 	} else {
 		// update prev's next pointer
-		if err := u.next.Update(prev, next); err != nil {
+		if err := r.next.Update(prev, next); err != nil {
 			return err
 		}
 	}
@@ -159,25 +159,25 @@ func (u *updateList) Remove(toRemove thor.Address) error {
 	if next.IsZero() {
 		// entry is the tail, update tail to prev
 		// tailKey is touched previously since entry is linked
-		if err := u.tail.Update(prev); err != nil {
+		if err := r.tail.Update(prev); err != nil {
 			return err
 		}
 	} else {
 		// update next's prev pointer
-		if err := u.prev.Update(next, prev); err != nil {
+		if err := r.prev.Update(next, prev); err != nil {
 			return err
 		}
 	}
 
 	// clear removed entry's prev and next pointers
-	if err := u.prev.Update(toRemove, thor.Address{}); err != nil {
+	if err := r.prev.Update(toRemove, thor.Address{}); err != nil {
 		return err
 	}
-	return u.next.Update(toRemove, thor.Address{})
+	return r.next.Update(toRemove, thor.Address{})
 }
 
-func (u *updateList) Iterate(callbacks func(thor.Address) error) error {
-	current, err := u.head.Get()
+func (r *renewalList) Iterate(callbacks func(thor.Address) error) error {
+	current, err := r.head.Get()
 	if err != nil {
 		return err
 	}
@@ -186,7 +186,7 @@ func (u *updateList) Iterate(callbacks func(thor.Address) error) error {
 		if err := callbacks(current); err != nil {
 			return err
 		}
-		next, err := u.next.Get(current)
+		next, err := r.next.Get(current)
 		if err != nil {
 			return err
 		}

@@ -24,7 +24,7 @@ func TestUpdateList(t *testing.T) {
 
 	sctx := solidity.NewContext(addr, st, nil)
 
-	list := newUpdateList(sctx, slotUpdateHead, slotUpdateTail, slotUpdatePrev, slotUpdateNext)
+	list := newRenewalList(sctx, slotRenewalHead, slotRenewalTail, slotRenewalPrev, slotRenewalNext)
 
 	// zero address behavior
 	has, err := list.contains(thor.Address{})
@@ -202,7 +202,7 @@ func TestUpdateListRemove(t *testing.T) {
 
 	sctx := solidity.NewContext(addr, st, nil)
 
-	list := newUpdateList(sctx, slotUpdateHead, slotUpdateTail, slotUpdatePrev, slotUpdateNext)
+	list := newRenewalList(sctx, slotRenewalHead, slotRenewalTail, slotRenewalPrev, slotRenewalNext)
 
 	// zero address behavior
 	assert.NoError(t, list.Remove(thor.Address{4}))
@@ -287,7 +287,7 @@ func TestUpdateListIterate(t *testing.T) {
 
 	sctx := solidity.NewContext(addr, st, nil)
 
-	list := newUpdateList(sctx, slotUpdateHead, slotUpdateTail, slotUpdatePrev, slotUpdateNext)
+	list := newRenewalList(sctx, slotRenewalHead, slotRenewalTail, slotRenewalPrev, slotRenewalNext)
 
 	addr1 := thor.Address{1}
 	addr2 := thor.Address{2}

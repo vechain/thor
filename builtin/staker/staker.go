@@ -309,7 +309,7 @@ func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, am
 	}
 
 	if val.Status == validation.StatusActive {
-		if err := s.validationService.AddToUpdateGroup(validator); err != nil {
+		if err := s.validationService.AddToRenewalList(validator); err != nil {
 			return err
 		}
 	}
@@ -364,7 +364,7 @@ func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, am
 	}
 
 	if val.Status == validation.StatusActive {
-		if err := s.validationService.AddToUpdateGroup(validator); err != nil {
+		if err := s.validationService.AddToRenewalList(validator); err != nil {
 			return err
 		}
 	}
@@ -487,7 +487,7 @@ func (s *Staker) AddDelegation(
 	}
 
 	if val.Status == validation.StatusActive {
-		if err = s.validationService.AddToUpdateGroup(validator); err != nil {
+		if err = s.validationService.AddToRenewalList(validator); err != nil {
 			return nil, err
 		}
 	}
@@ -552,7 +552,7 @@ func (s *Staker) SignalDelegationExit(delegationID *big.Int, currentBlock uint32
 	}
 
 	if val.Status == validation.StatusActive {
-		if err = s.validationService.AddToUpdateGroup(del.Validation); err != nil {
+		if err = s.validationService.AddToRenewalList(del.Validation); err != nil {
 			return err
 		}
 	}

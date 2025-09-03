@@ -158,7 +158,7 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 		}
 		accumulatedRenewal.Add(valRenewal)
 
-		if err := s.validationService.RemoveFromUpdateGroup(validator); err != nil {
+		if err := s.validationService.RemoveFromRenewalList(validator); err != nil {
 			return err
 		}
 	}

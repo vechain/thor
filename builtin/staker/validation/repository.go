@@ -26,17 +26,17 @@ var (
 	slotQueuedGroupSize = thor.BytesToBytes32([]byte(("validations-queued-group-size")))
 
 	// update list
-	slotUpdateHead = thor.BytesToBytes32([]byte(("validations-update-head")))
-	slotUpdateTail = thor.BytesToBytes32([]byte(("validations-update-tail")))
-	slotUpdatePrev = thor.BytesToBytes32([]byte(("validations-update-prev")))
-	slotUpdateNext = thor.BytesToBytes32([]byte(("validations-update-next")))
+	slotRenewalHead = thor.BytesToBytes32([]byte(("validations-renewal-head")))
+	slotRenewalTail = thor.BytesToBytes32([]byte(("validations-renewal-tail")))
+	slotRenewalPrev = thor.BytesToBytes32([]byte(("validations-renewal-prev")))
+	slotRenewalNext = thor.BytesToBytes32([]byte(("validations-renewal-next")))
 )
 
 type Repository struct {
 	storage     *Storage
-	activeList  *listStats  // active list stats
-	queuedList  *listStats  // queued list stats
-	updateGroup *updateList // update list
+	activeList  *listStats   // active list stats
+	queuedList  *listStats   // queued list stats
+	renewalList *renewalList // renewal list
 }
 
 func NewRepository(sctx *solidity.Context) *Repository {
@@ -45,7 +45,7 @@ func NewRepository(sctx *solidity.Context) *Repository {
 		storage:     storage,
 		activeList:  newListStats(sctx, storage, slotActiveHead, slotActiveTail, slotActiveGroupSize),
 		queuedList:  newListStats(sctx, storage, slotQueuedHead, slotQueuedTail, slotQueuedGroupSize),
-		updateGroup: newUpdateList(sctx, slotUpdateHead, slotUpdateTail, slotUpdatePrev, slotUpdateNext),
+		renewalList: newRenewalList(sctx, slotRenewalHead, slotRenewalTail, slotRenewalPrev, slotRenewalNext),
 	}
 }
 
@@ -162,8 +162,8 @@ func (r *Repository) iterateActive(callback func(thor.Address, *Validation) erro
 	return r.activeList.Iterate(callback)
 }
 
-func (r *Repository) iterateUpdateGroup(callbacks ...func(thor.Address, *Validation) error) error {
-	return r.updateGroup.Iterate(func(address thor.Address) error {
+func (r *Repository) iterateRenewalList(callbacks ...func(thor.Address, *Validation) error) error {
+	return r.renewalList.Iterate(func(address thor.Address) error {
 		entry, err := r.getValidation(address)
 		if err != nil {
 			return err

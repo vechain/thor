@@ -216,18 +216,18 @@ func (s *Service) DecreaseStake(validator thor.Address, validation *Validation, 
 	return s.repo.updateValidation(validator, validation)
 }
 
-func (s *Service) AddToUpdateGroup(validator thor.Address) error {
-	return s.repo.updateGroup.Add(validator)
+func (s *Service) AddToRenewalList(validator thor.Address) error {
+	return s.repo.renewalList.Add(validator)
 }
 
-func (s *Service) RemoveFromUpdateGroup(address thor.Address) error {
-	return s.repo.updateGroup.Remove(address)
+func (s *Service) RemoveFromRenewalList(address thor.Address) error {
+	return s.repo.renewalList.Remove(address)
 }
 
 // UpdateGroup lists all registered candidates.
 func (s *Service) UpdateGroup(currentBlock uint32) ([]thor.Address, error) {
 	group := make([]thor.Address, 0)
-	err := s.repo.iterateUpdateGroup(func(validator thor.Address, val *Validation) error {
+	err := s.repo.iterateRenewalList(func(validator thor.Address, val *Validation) error {
 		// here we only handle renewals, not evictions or exits
 		if val.IsPeriodEnd(currentBlock) && val.ExitBlock == nil {
 			group = append(group, validator)
