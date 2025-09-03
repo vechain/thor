@@ -37,7 +37,7 @@ func TestConsensus_PosFork(t *testing.T) {
 
 	// mint block 2: chain should set the staker contract, still using PoA
 	best, parent, st := setup.mintBlock()
-	err := setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st))
+	_, err := setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st))
 	assert.ErrorContains(t, err, "pos - block signer invalid")
 	_, err = setup.consensus.validateAuthorityProposer(best.Header, parent.Header, st)
 	assert.NoError(t, err)
@@ -47,7 +47,7 @@ func TestConsensus_PosFork(t *testing.T) {
 
 	// mint block 4: chain should switch to PoS
 	best, parent, st = setup.mintBlock()
-	err = setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st))
+	_, err = setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st))
 	assert.NoError(t, err)
 
 	cache, err := simplelru.NewLRU(16, nil)
@@ -95,7 +95,7 @@ func TestConsensus_PosFork(t *testing.T) {
 		Beneficiary(parent.Header.Beneficiary()).
 		Build().Header()
 
-	err = setup.consensus.validateStakingProposer(best.Header, newParentHeader, builtin.Staker.Native(st))
+	_, err = setup.consensus.validateStakingProposer(best.Header, newParentHeader, builtin.Staker.Native(st))
 	assert.ErrorContains(t, err, "pos - stake beneficiary mismatch")
 
 	newLeaders = make([]validation.Leader, 0, len(leaders))
@@ -126,13 +126,13 @@ func TestConsensus_PosFork(t *testing.T) {
 		Beneficiary(parent.Header.Beneficiary()).
 		Build().Header()
 
-	err = setup.consensus.validateStakingProposer(best.Header, newParentHeader, builtin.Staker.Native(st))
+	_, err = setup.consensus.validateStakingProposer(best.Header, newParentHeader, builtin.Staker.Native(st))
 	assert.ErrorContains(t, err, "pos - block total score invalid")
 
 	slotLockedVET := thor.BytesToBytes32([]byte(("total-weighted-stake")))
 	st.SetRawStorage(builtin.Staker.Address, slotLockedVET, rlp.RawValue{0xFF})
 
-	err = setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st))
+	_, err = setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st))
 	assert.ErrorContains(t, err, "pos - cannot get total weight")
 
 	newParentHeader = new(block.Builder).
@@ -150,7 +150,7 @@ func TestConsensus_PosFork(t *testing.T) {
 	slot := thor.Blake2b(parentSig.Bytes(), slotValidation.Bytes())
 	st.SetRawStorage(builtin.Staker.Address, slot, rlp.RawValue{0xFF})
 
-	err = setup.consensus.validateStakingProposer(best.Header, newParentHeader, builtin.Staker.Native(st))
+	_, err = setup.consensus.validateStakingProposer(best.Header, newParentHeader, builtin.Staker.Native(st))
 	assert.ErrorContains(t, err, "failed to get validator")
 }
 
@@ -160,7 +160,7 @@ func TestConsensus_CannotGetLeaderGroup(t *testing.T) {
 	setup.mintMbpBlock(1)
 
 	best, parent, st := setup.mintBlock()
-	err := setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st))
+	_, err := setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st))
 	assert.ErrorContains(t, err, "pos - block signer invalid")
 	_, err = setup.consensus.validateAuthorityProposer(best.Header, parent.Header, st)
 	assert.NoError(t, err)
@@ -168,14 +168,14 @@ func TestConsensus_CannotGetLeaderGroup(t *testing.T) {
 	setup.mintAddValidatorBlock()
 
 	best, parent, st = setup.mintBlock()
-	err = setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st))
+	_, err = setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st))
 	assert.NoError(t, err)
 
 	slotValidationsActiveHead := thor.BytesToBytes32([]byte("validations-active-head"))
 
 	st.SetRawStorage(builtin.Staker.Address, slotValidationsActiveHead, rlp.RawValue{0xFF})
 
-	err = setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st))
+	_, err = setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st))
 	assert.ErrorContains(t, err, "pos - cannot get leader group")
 }
 
@@ -196,7 +196,7 @@ func TestConsensus_POS_MissedSlots(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NoError(t, setup.chain.AddBlock(blk, stage, receipts))
 
-	err = setup.consensus.validateStakingProposer(blk.Header(), parent.Header, builtin.Staker.Native(st))
+	_, err = setup.consensus.validateStakingProposer(blk.Header(), parent.Header, builtin.Staker.Native(st))
 	assert.NoError(t, err)
 	staker := builtin.Staker.Native(st)
 	validator, err := staker.GetValidation(signer.Address)
@@ -220,7 +220,7 @@ func TestConsensus_POS_Unscheduled(t *testing.T) {
 	blk, _, _, err := flow.Pack(signer.PrivateKey, 0, false)
 	assert.NoError(t, err)
 
-	err = setup.consensus.validateStakingProposer(blk.Header(), parent.Header, builtin.Staker.Native(st))
+	_, err = setup.consensus.validateStakingProposer(blk.Header(), parent.Header, builtin.Staker.Native(st))
 	assert.ErrorContains(t, err, "block timestamp unscheduled")
 }
 
@@ -265,7 +265,7 @@ func TestValidateStakingProposer_LockedVETError(t *testing.T) {
 	blk = blk.WithSignature(validSignature)
 	header := blk.Header()
 
-	err := consensus.validateStakingProposer(header, parent, staker)
+	_, err := consensus.validateStakingProposer(header, parent, staker)
 	assert.ErrorContains(t, err, "pos - block signer invalid")
 }
 

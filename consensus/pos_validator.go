@@ -9,26 +9,28 @@ import (
 	"fmt"
 
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
 	stakerContract "github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/pos"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
 
 func (c *Consensus) validateStakingProposer(
 	header *block.Header,
 	parent *block.Header,
 	staker *stakerContract.Staker,
-) error {
+) (*posCacher, error) {
 	signer, err := header.Signer()
 	if err != nil {
-		return consensusError(fmt.Sprintf("pos - block signer unavailable: %v", err))
+		return nil, consensusError(fmt.Sprintf("pos - block signer unavailable: %v", err))
 	}
 
 	var seed []byte
 	seed, err = c.seeder.Generate(header.ParentID())
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var leaders []validation.Leader
 	if cached, ok := c.validatorsCache.Get(header.ParentID()); ok {
@@ -40,7 +42,7 @@ func (c *Consensus) validateStakingProposer(
 	if len(leaders) == 0 {
 		leaders, err = staker.LeaderGroup()
 		if err != nil {
-			return consensusError(fmt.Sprintf("pos - cannot get leader group: %v", err))
+			return nil, consensusError(fmt.Sprintf("pos - cannot get leader group: %v", err))
 		}
 	}
 
@@ -61,32 +63,63 @@ func (c *Consensus) validateStakingProposer(
 
 	sched, err := pos.NewScheduler(signer, proposers, parent.Number(), parent.Timestamp(), seed)
 	if err != nil {
-		return consensusError(fmt.Sprintf("pos - block signer invalid: %v %v", signer, err))
+		return nil, consensusError(fmt.Sprintf("pos - block signer invalid: %v %v", signer, err))
 	}
 	if !sched.IsTheTime(header.Timestamp()) {
-		return consensusError(fmt.Sprintf("pos - block timestamp unscheduled: t %v, s %v", header.Timestamp(), signer))
+		return nil, consensusError(fmt.Sprintf("pos - block timestamp unscheduled: t %v, s %v", header.Timestamp(), signer))
 	}
 
 	_, totalWeight, err := staker.LockedStake()
 	if err != nil {
-		return consensusError(fmt.Sprintf("pos - cannot get total weight: %v", err))
+		return nil, consensusError(fmt.Sprintf("pos - cannot get total weight: %v", err))
 	}
 	updates, score := sched.Updates(header.Timestamp(), totalWeight)
 	if parent.TotalScore()+score != header.TotalScore() {
-		return consensusError(fmt.Sprintf("pos - block total score invalid: want %v, have %v", parent.TotalScore()+score, header.TotalScore()))
+		return nil, consensusError(fmt.Sprintf("pos - block total score invalid: want %v, have %v", parent.TotalScore()+score, header.TotalScore()))
 	}
 	if beneficiary != nil && *beneficiary != header.Beneficiary() {
-		return consensusError(fmt.Sprintf("pos - stake beneficiary mismatch: want %v, have %v", *beneficiary, header.Beneficiary()))
+		return nil, consensusError(fmt.Sprintf("pos - stake beneficiary mismatch: want %v, have %v", *beneficiary, header.Beneficiary()))
 	}
 
 	for _, u := range updates {
 		if err := staker.SetOnline(u.Address, header.Number(), u.Active); err != nil {
-			return err
+			return nil, err
 		}
 	}
-	if len(updates) == 0 {
-		c.validatorsCache.Add(header.ID(), leaders)
+
+	return &posCacher{leaderGroup: leaders, hasUpdates: len(updates) > 0}, nil
+}
+
+type posCacher struct {
+	leaderGroup []validation.Leader
+	hasUpdates  bool
+}
+
+var _ cacher = (*posCacher)(nil)
+
+func (p posCacher) Handle(_ *block.Header, receipts tx.Receipts) (any, error) {
+	if !p.hasUpdates {
+		return nil, nil
 	}
 
-	return nil
+	// check if there is any beneficiary change event
+	// if there is, skip the cache update to avoid inconsistency
+	// the cache will be updated in the next block
+	beneficiaryABI, ok := builtin.Staker.Events().EventByName("SetBeneficiary")
+	if !ok {
+		return nil, fmt.Errorf("pos - cannot get SetBeneficiary event")
+	}
+
+	// if there is no beneficiary change event, skip the cache update
+	for _, r := range receipts {
+		for _, o := range r.Outputs {
+			for _, ev := range o.Events {
+				if ev.Address == builtin.Staker.Address && ev.Topics[0] == beneficiaryABI.ID() {
+					return nil, nil
+				}
+			}
+		}
+	}
+
+	return p.leaderGroup, nil
 }
