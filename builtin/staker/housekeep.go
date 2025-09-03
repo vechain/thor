@@ -56,7 +56,7 @@ func (s *Staker) computeEpochTransition(currentBlock uint32) (*EpochTransition, 
 	var err error
 
 	var evictions []thor.Address
-	if currentBlock != 0 && currentBlock%thor.EvictionEpochDivider() == 0 {
+	if currentBlock != 0 && currentBlock%thor.EvictionCheckInterval() == 0 {
 		err = s.validationService.LeaderGroupIterator(
 			s.evictionCallback(currentBlock, &evictions),
 		)
