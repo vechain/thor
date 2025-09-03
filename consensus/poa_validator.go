@@ -16,7 +16,7 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func (c *Consensus) validateAuthorityProposer(header *block.Header, parent *block.Header, st *state.State) (*poa.Candidates, error) {
+func (c *Consensus) validateAuthorityProposer(header *block.Header, parent *block.Header, st *state.State) (*poaCacher, error) {
 	signer, err := header.Signer()
 	if err != nil {
 		return nil, consensusError(fmt.Sprintf("block signer unavailable: %v", err))
@@ -79,11 +79,17 @@ func (c *Consensus) validateAuthorityProposer(header *block.Header, parent *bloc
 		}
 	}
 
-	return candidates, nil
+	return &poaCacher{candidates, c.forkConfig}, nil
 }
 
-// handleAuthorityEvents checks each block for authority related events, and updates the candidates list accordingly.
-func (c *Consensus) authorityCacheHandler(candidates *poa.Candidates, header *block.Header, receipts tx.Receipts) error {
+type poaCacher struct {
+	candidates *poa.Candidates
+	forkConfig *thor.ForkConfig
+}
+
+var _ cacher = (*poaCacher)(nil)
+
+func (p *poaCacher) Handle(header *block.Header, receipts tx.Receipts) (any, error) {
 	hasAuthorityEvent := func() bool {
 		for _, r := range receipts {
 			for _, o := range r.Outputs {
@@ -105,7 +111,9 @@ func (c *Consensus) authorityCacheHandler(candidates *poa.Candidates, header *bl
 			for _, r := range receipts {
 				for _, o := range r.Outputs {
 					for _, ev := range o.Events {
-						if header.Number() >= c.forkConfig.HAYABUSA && ev.Address == builtin.Staker.Address {
+						// after HAYABUSA, authorities are allowed to migrate to staker contract,
+						// so any staker contract event(AddValidation, StakeIncreased/Decreased/Withdrawn) will need to invalidate cache
+						if header.Number() >= p.forkConfig.HAYABUSA && ev.Address == builtin.Staker.Address {
 							return true
 						}
 						if ev.Address == builtin.Params.Address {
@@ -113,7 +121,7 @@ func (c *Consensus) authorityCacheHandler(candidates *poa.Candidates, header *bl
 						}
 					}
 					for _, t := range o.Transfers {
-						if candidates.IsEndorsor(t.Sender) || candidates.IsEndorsor(t.Recipient) {
+						if p.candidates.IsEndorsor(t.Sender) || p.candidates.IsEndorsor(t.Recipient) {
 							return true
 						}
 					}
@@ -123,10 +131,9 @@ func (c *Consensus) authorityCacheHandler(candidates *poa.Candidates, header *bl
 		}()
 
 		if hasEndorsorEvent {
-			candidates.InvalidateCache()
+			p.candidates.InvalidateCache()
 		}
-		c.validatorsCache.Add(header.ID(), candidates)
 	}
 
-	return nil
+	return p.candidates, nil
 }
