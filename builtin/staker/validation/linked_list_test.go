@@ -577,6 +577,53 @@ func Test_LinkedList_Grow_Empty_Grow(t *testing.T) {
 	assert.Equal(t, uint64(2), ln)
 }
 
+func Test_LinkedList_Remove_UnlinkedSingleElement(t *testing.T) {
+	db := muxdb.NewMem()
+	st := state.New(db, trie.Root{})
+	addr := thor.BytesToAddress([]byte("test"))
+	sctx := solidity.NewContext(addr, st, nil)
+
+	repo := NewRepository(sctx)
+
+	// Add a single validation
+	id1 := datagen.RandAddress()
+	validation := &Validation{Endorser: id1, Status: StatusQueued}
+	if err := repo.addValidation(id1, validation); err != nil {
+		t.Fatalf("failed to add validation: %v", err)
+	}
+
+	// Verify it's the only element (head == tail)
+	head, err := repo.firstQueued()
+	assert.NoError(t, err)
+	assert.Equal(t, id1, head)
+	
+	size, err := repo.queuedListSize()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), size)
+
+	// Get the validation entry and manually clear its links to simulate an unlinked state
+	val, err := repo.getValidation(id1)
+	assert.NoError(t, err)
+	assert.NotNil(t, val)
+	assert.Nil(t, val.Prev) // Should already be nil for single element
+	assert.Nil(t, val.Next) // Should already be nil for single element
+	
+	// This tests the critical code path in Remove() lines 76-114
+	// where !entry.IsLinked() and it's checking head == tail == address
+	removedEntry, err := repo.queuedList.Remove(id1, val)
+	assert.NoError(t, err)
+	assert.NotNil(t, removedEntry)
+
+	// Verify the list is now empty
+	head, err = repo.firstQueued()
+	assert.NoError(t, err)
+	assert.True(t, head.IsZero())
+
+	size, err = repo.queuedListSize()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(0), size)
+}
+
 func Test_LinkedList_Iter_NegativeCases(t *testing.T) {
 	db := muxdb.NewMem()
 	st := state.New(db, trie.Root{})

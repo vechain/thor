@@ -84,7 +84,7 @@ func (l *listStats) Remove(address thor.Address, entry *Validation) (*Validation
 			return entry, nil
 		}
 
-		tail, err := l.head.Get()
+		tail, err := l.tail.Get()
 		if err != nil {
 			return nil, err
 		}
