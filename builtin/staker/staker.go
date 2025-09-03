@@ -269,7 +269,7 @@ func (s *Staker) SignalExit(validator thor.Address, endorser thor.Address, curre
 		return err
 	}
 	minBlock := val.StartBlock + val.Period*current
-	if err := s.validationService.SignalExit(validator, minBlock, exitMaxTry); err != nil {
+	if err := s.validationService.SignalExit(validator, currentBlock, minBlock, exitMaxTry); err != nil {
 		if errors.Is(err, validation.ErrMaxTryReached) {
 			return NewReverts(validation.ErrMaxTryReached.Error())
 		}
@@ -311,6 +311,12 @@ func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, am
 	if err := s.validationService.IncreaseStake(validator, val, amount); err != nil {
 		logger.Info("increase stake failed", "validator", validator, "error", err)
 		return err
+	}
+
+	if val.Status == validation.StatusActive {
+		if err := s.validationService.AddToUpdateGroup(validator); err != nil {
+			return err
+		}
 	}
 
 	// update global queued, use the initial multiplier
@@ -362,6 +368,12 @@ func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, am
 	if err = s.validationService.DecreaseStake(validator, val, amount); err != nil {
 		logger.Info("decrease stake failed", "validator", validator, "error", err)
 		return err
+	}
+
+	if val.Status == validation.StatusActive {
+		if err := s.validationService.AddToUpdateGroup(validator); err != nil {
+			return err
+		}
 	}
 
 	if val.Status == validation.StatusQueued {

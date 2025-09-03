@@ -36,8 +36,6 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 		return false, nil
 	}
 
-	logger.Info("🏠performing housekeeping", "block", currentBlock)
-
 	transition, err := s.computeEpochTransition(currentBlock)
 	if err != nil {
 		return false, err
@@ -50,8 +48,6 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 	if err := s.applyEpochTransition(transition); err != nil {
 		return false, err
 	}
-
-	logger.Info("performed housekeeping", "block", currentBlock, "updates", true)
 	return true, nil
 }
 
@@ -164,8 +160,7 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 		}
 		accumulatedRenewal.Add(valRenewal)
 
-		s.validationService.RemoveFromUpdateGroup(validator)
-		if err != nil {
+		if err := s.validationService.RemoveFromUpdateGroup(validator); err != nil {
 			return err
 		}
 	}
@@ -197,7 +192,8 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 	// Apply evictions
 	for _, validator := range transition.Evictions {
 		logger.Info("evicting validator", "validator", validator)
-		if err := s.validationService.SignalExit(validator, transition.Block+thor.EpochLength(), int(thor.InitialMaxBlockProposers)); err != nil {
+		// signal exit to the eviction validator for the next epoch, since exit process is already done in this flow
+		if err := s.validationService.SignalExit(validator, transition.Block, transition.Block+thor.EpochLength(), int(thor.InitialMaxBlockProposers)); err != nil {
 			return err
 		}
 	}

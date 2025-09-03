@@ -34,7 +34,7 @@ type Validation struct {
 	Endorser           thor.Address  // the address providing the stake
 	Beneficiary        *thor.Address `rlp:"nil"` // the address receiving the rewards
 	Period             uint32        // the staking period of the validation
-	CompleteIterations uint32        // the completed staking periods by the validation
+	CompleteIterations uint32        // the completed staking periods by the validation, this will be updated when signal exit is called
 	Status             Status        // status of the validation
 	StartBlock         uint32        // the block number when the validation started the first staking period
 	ExitBlock          *uint32       `rlp:"nil"` // the block number when the validation moved to cooldown
@@ -126,19 +126,52 @@ func (v *Validation) NextPeriodTVL() (uint64, error) {
 }
 
 func (v *Validation) CurrentIteration(currentBlock uint32) (uint32, error) {
-	if v.Status == StatusActive {
-		if currentBlock < v.StartBlock {
-			return 0, errors.New("curren block cannot be less than start block")
-		}
-		if v.Period == 0 {
-			return 0, errors.New("period cannot be zero")
-		}
-		elapsedBlocks := currentBlock - v.StartBlock
-		completePeriods := elapsedBlocks / v.Period
-		return completePeriods + 1, nil
+	// Unknown, Queued return 0
+	if v.Status == StatusUnknown || v.Status == StatusQueued {
+		return 0, nil
 	}
 
-	return v.CompleteIterations, nil
+	// Active(signaled exit) or Exit
+	// Once signaled exit, complete iterations is set to the current
+	// iteration of the time that exit is signaled
+	if v.CompleteIterations > 0 {
+		return v.CompleteIterations, nil
+	}
+
+	// Active
+	if currentBlock < v.StartBlock {
+		return 0, errors.New("curren block cannot be less than start block")
+	}
+	if v.Period == 0 {
+		return 0, errors.New("period cannot be zero")
+	}
+	elapsedBlocks := currentBlock - v.StartBlock
+	completePeriods := elapsedBlocks / v.Period
+	return completePeriods + 1, nil
+}
+
+func (v *Validation) CompletedIterations(currentBlock uint32) (uint32, error) {
+	// Unknown, Queued return 0
+	if v.Status == StatusUnknown || v.Status == StatusQueued {
+		return 0, nil
+	}
+
+	if v.Status == StatusExit {
+		return v.CompleteIterations, nil
+	}
+
+	// Active(signaled exit) but not exited
+	if v.CompleteIterations > 0 && v.Status == StatusActive {
+		return v.CompleteIterations - 1, nil
+	}
+
+	// Active
+	current, err := v.CurrentIteration(currentBlock)
+	if err != nil {
+		return 0, err
+	}
+
+	return current - 1, nil
 }
 
 // renew moves the stakes and weights around as follows:
@@ -190,7 +223,6 @@ func (v *Validation) renew(delegationWeight uint64) (*globalstats.Renewal, error
 	v.LockedVET = after.lockedVET
 	v.WithdrawableVET += v.PendingUnlockVET
 	v.Weight = after.valWeight + delegationWeight
-	v.CompleteIterations++
 	v.QueuedVET = 0
 	v.PendingUnlockVET = 0
 
@@ -211,7 +243,6 @@ func (v *Validation) exit() *globalstats.Exit {
 	v.LockedVET = 0
 	v.PendingUnlockVET = 0
 	v.Weight = 0
-	v.CompleteIterations++
 
 	// unlock pending stake
 	if v.QueuedVET > 0 {

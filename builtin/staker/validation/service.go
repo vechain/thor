@@ -172,7 +172,7 @@ func (s *Service) Add(
 	return s.repo.addValidation(validator, entry)
 }
 
-func (s *Service) SignalExit(validator thor.Address, minBlock uint32, maxTry int) error {
+func (s *Service) SignalExit(validator thor.Address, currentBlock uint32, minBlock uint32, maxTry int) error {
 	validation, err := s.GetExistingValidation(validator)
 	if err != nil {
 		return err
@@ -183,18 +183,19 @@ func (s *Service) SignalExit(validator thor.Address, minBlock uint32, maxTry int
 		return err
 	}
 
+	current, err := validation.CurrentIteration(currentBlock)
+	if err != nil {
+		return err
+	}
 	validation.ExitBlock = &exitBlock
+	// validator is going to exit after current iteration
+	validation.CompleteIterations = current
 
 	return s.repo.updateValidation(validator, validation)
 }
 
 func (s *Service) IncreaseStake(validator thor.Address, validation *Validation, amount uint64) error {
 	validation.QueuedVET += amount
-	if validation.Status == StatusActive {
-		if err := s.AddToUpdateGroup(validator); err != nil {
-			return errors.Wrap(err, "failed to add to update group")
-		}
-	}
 
 	return s.repo.updateValidation(validator, validation)
 }
@@ -214,9 +215,6 @@ func (s *Service) SetBeneficiary(validator thor.Address, validation *Validation,
 func (s *Service) DecreaseStake(validator thor.Address, validation *Validation, amount uint64) error {
 	if validation.Status == StatusActive {
 		validation.PendingUnlockVET += amount
-		if err := s.AddToUpdateGroup(validator); err != nil {
-			return errors.Wrap(err, "failed to add to update group")
-		}
 	}
 
 	if validation.Status == StatusQueued {
@@ -239,6 +237,7 @@ func (s *Service) RemoveFromUpdateGroup(address thor.Address) error {
 func (s *Service) UpdateGroup(currentBlock uint32) ([]thor.Address, error) {
 	group := make([]thor.Address, 0)
 	err := s.repo.iterateUpdateGroup(func(validator thor.Address, val *Validation) error {
+		// here we only handle renewals, not evictions or exits
 		if val.IsPeriodEnd(currentBlock) && val.ExitBlock == nil {
 			group = append(group, validator)
 		}

@@ -93,13 +93,10 @@ func init() {
 			if validator.OfflineBlock != nil {
 				offlineBlock = *validator.OfflineBlock
 			}
-			completeIterations := validator.CompleteIterations
-			if validator.Status == validation.StatusActive {
-				current, err := validator.CurrentIteration(env.BlockContext().Number)
-				if err != nil {
-					return nil, err
-				}
-				completeIterations = current - 1
+
+			completeIterations, err := validator.CompletedIterations(env.BlockContext().Number)
+			if err != nil {
+				return nil, err
 			}
 			return []any{
 				validator.Endorser,
