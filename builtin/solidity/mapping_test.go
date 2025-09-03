@@ -85,12 +85,12 @@ func TestMapping_SetGet_StructPointer(t *testing.T) {
 	value := newRandomStruct()
 
 	t.Run("set new value charges SstoreSetGas", func(t *testing.T) {
-		require.NoError(t, mapping.Set(key, value, true))
+		require.NoError(t, mapping.Insert(key, value))
 		assert.Equal(t, 2*thor.SstoreSetGas, charger.TotalGas(), "wrong gas for new struct")
 	})
 
 	t.Run("get existing value charges SloadGas and returns value", func(t *testing.T) {
-		require.NoError(t, mapping.Set(key, value, true))
+		require.NoError(t, mapping.Insert(key, value))
 
 		// reset charger to measure only load
 		charger = gascharger.New(newXenv())
@@ -105,7 +105,8 @@ func TestMapping_SetGet_StructPointer(t *testing.T) {
 	t.Run("set zero pointer clears storage and returns nil", func(t *testing.T) {
 		// reset charger
 		charger = gascharger.New(newXenv())
-		require.NoError(t, mapping.Set(key, nil, true))
+		mapping.context.charger = charger
+		require.NoError(t, mapping.Update(key, nil))
 		assert.Equal(t, uint64(0), charger.TotalGas(), "expected no gas for clearing slot")
 
 		got, err := mapping.Get(key)
@@ -125,23 +126,23 @@ func TestMapping_SetGet_StructPointer(t *testing.T) {
 
 	t.Run("reset existing with newValue=false charges ResetGas", func(t *testing.T) {
 		// pre-populate
-		require.NoError(t, mapping.Set(key, value, true))
+		require.NoError(t, mapping.Insert(key, value))
 		// reset charger
 		charger = gascharger.New(newXenv())
 		mapping.context.charger = charger
 
-		require.NoError(t, mapping.Set(key, newRandomStruct(), false))
+		require.NoError(t, mapping.Update(key, newRandomStruct()))
 		assert.Equal(t, 2*thor.SstoreResetGas, charger.TotalGas(), "wrong gas for reset struct")
 	})
 
 	t.Run("overwrite existing with newValue=true charges SetGas", func(t *testing.T) {
 		// pre-populate
-		require.NoError(t, mapping.Set(key, value, true))
+		require.NoError(t, mapping.Insert(key, value))
 		// reset charger
 		charger = gascharger.New(newXenv())
 		mapping.context.charger = charger
 
-		require.NoError(t, mapping.Set(key, newRandomStruct(), true))
+		require.NoError(t, mapping.Insert(key, newRandomStruct()))
 		assert.Equal(t, 2*thor.SstoreSetGas, charger.TotalGas(), "wrong gas for overwrite struct")
 	})
 }
@@ -152,7 +153,7 @@ func TestMapping_SetGet_AddressValue(t *testing.T) {
 	addr := datagen.RandAddress()
 
 	t.Run("set non-zero address charges gas", func(t *testing.T) {
-		require.NoError(t, mapping.Set(key, addr, true))
+		require.NoError(t, mapping.Insert(key, addr))
 		assert.Equal(t, thor.SstoreSetGas, charger.TotalGas(), "wrong gas for new address")
 	})
 
@@ -167,8 +168,10 @@ func TestMapping_SetGet_AddressValue(t *testing.T) {
 	})
 
 	t.Run("clear address by setting zero-value and no gas", func(t *testing.T) {
-		require.NoError(t, mapping.Set(key, thor.Address{}, true))
-		assert.Equal(t, thor.SloadGas, charger.TotalGas())
+		charger = gascharger.New(newXenv())
+		mapping.context.charger = charger
+		require.NoError(t, mapping.Update(key, thor.Address{}))
+		assert.Equal(t, uint64(0), charger.TotalGas())
 	})
 }
 
@@ -178,7 +181,7 @@ func TestMapping_SetGet_AddressPointer(t *testing.T) {
 	addr := datagen.RandAddress()
 
 	t.Run("set non-nil pointer charges gas", func(t *testing.T) {
-		require.NoError(t, mapping.Set(key, &addr, true))
+		require.NoError(t, mapping.Insert(key, &addr))
 		assert.Equal(t, thor.SstoreSetGas, charger.TotalGas(), "wrong gas for pointer address set")
 	})
 
@@ -193,7 +196,7 @@ func TestMapping_SetGet_AddressPointer(t *testing.T) {
 	})
 
 	t.Run("clear pointer by setting nil and no gas", func(t *testing.T) {
-		require.NoError(t, mapping.Set(key, nil, true))
+		require.NoError(t, mapping.Insert(key, nil))
 		assert.Equal(t, thor.SloadGas, charger.TotalGas(), "expected no gas for clearing pointer slot")
 		got, err := mapping.Get(key)
 		require.NoError(t, err)
@@ -207,7 +210,7 @@ func TestMapping_SetGet_Uint64Value(t *testing.T) {
 	val := uint64(42)
 
 	t.Run("set non-zero uint64 charges gas", func(t *testing.T) {
-		require.NoError(t, mapping.Set(key, val, true))
+		require.NoError(t, mapping.Insert(key, val))
 		assert.Equal(t, thor.SstoreSetGas, charger.TotalGas(), "wrong gas for uint64 set")
 	})
 
@@ -221,7 +224,7 @@ func TestMapping_SetGet_Uint64Value(t *testing.T) {
 	})
 
 	t.Run("clear uint64 by setting zero-value and no gas", func(t *testing.T) {
-		require.NoError(t, mapping.Set(key, 0, true))
+		require.NoError(t, mapping.Insert(key, 0))
 		assert.Equal(t, thor.SloadGas, charger.TotalGas(), "expected no gas for clearing uint64 slot")
 	})
 }
@@ -233,14 +236,14 @@ func TestMapping_MultiSlotValue(t *testing.T) {
 	value := newBigStruct()
 
 	t.Run("set big struct charges correct SstoreSetGas", func(t *testing.T) {
-		require.NoError(t, mapping.Set(key, value, true))
+		require.NoError(t, mapping.Insert(key, value))
 		// maximum 2 slots, defined by gas.go
 		expected := 2 * thor.SstoreSetGas
 		assert.Equal(t, expected, charger.TotalGas(), "wrong gas for big struct set")
 	})
 
 	t.Run("get big struct charges correct SloadGas and returns value", func(t *testing.T) {
-		require.NoError(t, mapping.Set(key, value, true))
+		require.NoError(t, mapping.Insert(key, value))
 		charger = gascharger.New(newXenv())
 		mapping.context.charger = charger
 
@@ -278,7 +281,7 @@ func TestMappingGetSet_ErrorReturnsZeroAndErr(t *testing.T) {
 	m2 := NewMapping[thor.Address, chan int](ctx, basePos)
 	value := make(chan int)
 
-	err = m2.Set(key, value, true)
+	err = m2.Insert(key, value)
 	if err == nil {
 		t.Fatalf("expected encode error, got nil")
 	}

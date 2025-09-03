@@ -6,8 +6,6 @@
 package staker
 
 import (
-	"math/big"
-
 	"github.com/vechain/thor/v2/builtin/staker/globalstats"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
@@ -22,7 +20,7 @@ type EpochTransition struct {
 	Renewals        []thor.Address
 	ExitValidator   *thor.Address
 	Evictions       []thor.Address
-	ActivationCount int64
+	ActivationCount uint64
 }
 
 func (et *EpochTransition) HasUpdates() bool {
@@ -106,7 +104,7 @@ func (s *Staker) evictionCallback(currentBlock uint32, evictions *[]thor.Address
 }
 
 // computeActivationCount calculates how many validators can be activated
-func (s *Staker) computeActivationCount(hasValidatorExited bool) (int64, error) {
+func (s *Staker) computeActivationCount(hasValidatorExited bool) (uint64, error) {
 	// Calculate how many validators can be activated
 	queuedSize, err := s.QueuedGroupSize()
 	if err != nil {
@@ -118,25 +116,29 @@ func (s *Staker) computeActivationCount(hasValidatorExited bool) (int64, error) 
 	}
 	// the current leaderSize might have changed for the next activations
 	if hasValidatorExited {
-		leaderSize = big.NewInt(0).Sub(leaderSize, big.NewInt(1))
+		leaderSize = leaderSize - 1
 	}
 
-	maxSize, err := s.params.Get(thor.KeyMaxBlockProposers)
+	mbp, err := s.params.Get(thor.KeyMaxBlockProposers)
 	if err != nil {
 		return 0, err
 	}
+	maxBlockProposers := mbp.Uint64()
+	if maxBlockProposers == 0 {
+		maxBlockProposers = thor.InitialMaxBlockProposers
+	}
 
 	// If full or nothing queued then no activations
-	if leaderSize.Cmp(maxSize) >= 0 || queuedSize.Sign() <= 0 {
+	if leaderSize >= maxBlockProposers || queuedSize <= 0 {
 		return 0, nil
 	}
 
-	leaderDelta := maxSize.Int64() - leaderSize.Int64()
+	leaderDelta := maxBlockProposers - leaderSize
 	if leaderDelta <= 0 {
 		return 0, nil
 	}
 
-	queuedCount := queuedSize.Int64()
+	queuedCount := queuedSize
 	if leaderDelta < queuedCount {
 		return leaderDelta, nil
 	}
@@ -201,13 +203,17 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 	}
 
 	// Apply activations using existing method
-	maxLeaderGroupSize, err := s.params.Get(thor.KeyMaxBlockProposers)
+	mbp, err := s.params.Get(thor.KeyMaxBlockProposers)
 	if err != nil {
 		return err
 	}
+	maxBlockProposers := mbp.Uint64()
+	if maxBlockProposers == 0 {
+		maxBlockProposers = thor.InitialMaxBlockProposers
+	}
 
 	for range transition.ActivationCount {
-		_, err := s.activateNextValidation(transition.Block, maxLeaderGroupSize)
+		_, err := s.activateNextValidation(transition.Block, maxBlockProposers)
 		if err != nil {
 			return err
 		}
@@ -216,29 +222,29 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 	return nil
 }
 
-func (s *Staker) activateNextValidation(currentBlk uint32, maxLeaderGroupSize *big.Int) (*thor.Address, error) {
-	validatorID, err := s.validationService.NextToActivate(maxLeaderGroupSize)
+func (s *Staker) activateNextValidation(currentBlk uint32, maxLeaderGroupSize uint64) (thor.Address, error) {
+	validator, validation, err := s.validationService.NextToActivate(maxLeaderGroupSize)
 	if err != nil {
-		return nil, err
+		return thor.Address{}, err
 	}
-	logger.Debug("activating validator", "validatorID", validatorID, "block", currentBlk)
+	logger.Debug("activating validator", "validator", validator, "block", currentBlk)
 
 	// renew the current delegations aggregation
-	aggRenew, _, err := s.aggregationService.Renew(*validatorID)
+	aggRenew, _, err := s.aggregationService.Renew(validator)
 	if err != nil {
-		return nil, err
+		return thor.Address{}, err
 	}
 
 	// Activate the validator using the validation service
-	validatorRenewal, err := s.validationService.ActivateValidator(*validatorID, currentBlk, aggRenew)
+	validatorRenewal, err := s.validationService.ActivateValidator(validator, validation, currentBlk, aggRenew)
 	if err != nil {
-		return nil, err
+		return thor.Address{}, err
 	}
 
 	// Update global stats with both validator and delegation renewals
 	if err = s.globalStatsService.ApplyRenewal(validatorRenewal.Add(aggRenew)); err != nil {
-		return nil, err
+		return thor.Address{}, err
 	}
 
-	return validatorID, nil
+	return validator, nil
 }

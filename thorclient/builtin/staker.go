@@ -322,15 +322,15 @@ func (s *Staker) GetValidationTotals(node thor.Address) (*ValidationTotals, erro
 	return validationTotals, nil
 }
 
-func (s *Staker) GetValidationsNum() (*big.Int, *big.Int, error) {
+func (s *Staker) GetValidationsNum() (uint64, uint64, error) {
 	out := make([]any, 4)
-	out[0] = new(*big.Int)
-	out[1] = new(*big.Int)
+	out[0] = new(uint64)
+	out[1] = new(uint64)
 	if err := s.contract.Method("getValidationsNum").Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
-		return nil, nil, err
+		return 0, 0, err
 	}
 
-	return *(out[0].(**big.Int)), *(out[1].(**big.Int)), nil
+	return *(out[0].(*uint64)), *(out[1].(*uint64)), nil
 }
 
 func (s *Staker) Issuance(revision string) (*big.Int, error) {

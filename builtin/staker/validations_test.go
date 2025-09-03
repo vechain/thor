@@ -110,12 +110,12 @@ func TestStaker(t *testing.T) {
 		{M(stkr.transition(0)), M(true, nil)},
 		{M(stkr.LockedStake()), M(totalStake, totalStake, nil)},
 		{M(stkr.AddValidation(validator3, validator3, uint32(360)*24*15, stakeAmount)), M(nil)},
-		{M(stkr.FirstQueued()), M(&validator3, nil)},
+		{M(stkr.FirstQueued()), M(validator3, nil)},
 		{M(func() (*thor.Address, error) {
 			activated, err := stkr.activateNextValidation(0, getTestMaxLeaderSize(stkr.params))
-			return activated, err
+			return &activated, err
 		}()), M(&validator3, nil)},
-		{M(stkr.FirstActive()), M(&validator1, nil)},
+		{M(stkr.FirstActive()), M(validator1, nil)},
 	}
 
 	for _, tt := range tests {
@@ -306,13 +306,13 @@ func TestStaker_AddValidation_QueueOrder(t *testing.T) {
 	// iterating using the `Next` method should return the same order
 	loopID := first
 	for i := range 100 {
-		_, err := staker.validationService.GetValidation(*loopID)
+		_, err := staker.validationService.GetValidation(loopID)
 		assert.NoError(t, err)
-		assert.Equal(t, expectedOrder[i], *loopID)
+		assert.Equal(t, expectedOrder[i], loopID)
 
-		next, err := staker.Next(*loopID)
+		next, err := staker.Next(loopID)
 		assert.NoError(t, err)
-		loopID = &next
+		loopID = next
 	}
 
 	// activating validations should continue to set the correct head of the queue
@@ -322,9 +322,9 @@ func TestStaker_AddValidation_QueueOrder(t *testing.T) {
 		assert.NoError(t, err)
 		first, err = staker.FirstQueued()
 		assert.NoError(t, err)
-		previous, err := staker.GetValidation(*loopID)
+		previous, err := staker.GetValidation(loopID)
 		assert.NoError(t, err)
-		current, err := staker.GetValidation(*first)
+		current, err := staker.GetValidation(first)
 		assert.NoError(t, err)
 		assert.True(t, previous.LockedVET >= current.LockedVET)
 		loopID = first
@@ -498,8 +498,8 @@ func TestStaker_Get_FullFlow_Renewal_Off(t *testing.T) {
 
 	active, queued, err := staker.GetValidationsNum()
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(0).String(), active.String())
-	assert.Equal(t, big.NewInt(3), queued)
+	assert.Equal(t, uint64(0), active)
+	assert.Equal(t, uint64(3), queued)
 
 	validator, err := staker.GetValidation(addr)
 	assert.NoError(t, err)
@@ -518,22 +518,22 @@ func TestStaker_Get_FullFlow_Renewal_Off(t *testing.T) {
 
 	active, queued, err = staker.GetValidationsNum()
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(1), active)
-	assert.Equal(t, big.NewInt(2), queued)
+	assert.Equal(t, uint64(1), active)
+	assert.Equal(t, uint64(2), queued)
 
 	_, err = staker.activateNextValidation(0, getTestMaxLeaderSize(staker.params))
 	assert.NoError(t, err)
 	active, queued, err = staker.GetValidationsNum()
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(2), active)
-	assert.Equal(t, big.NewInt(1), queued)
+	assert.Equal(t, uint64(2), active)
+	assert.Equal(t, uint64(1), queued)
 
 	_, err = staker.activateNextValidation(0, getTestMaxLeaderSize(staker.params))
 	assert.NoError(t, err)
 	active, queued, err = staker.GetValidationsNum()
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(3), active)
-	assert.Equal(t, big.NewInt(0).String(), queued.String())
+	assert.Equal(t, uint64(3), active)
+	assert.Equal(t, uint64(0), queued)
 
 	err = staker.SignalExit(addr, addr, 10)
 	assert.NoError(t, err)
@@ -550,8 +550,8 @@ func TestStaker_Get_FullFlow_Renewal_Off(t *testing.T) {
 
 	active, queued, err = staker.GetValidationsNum()
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(2), active)
-	assert.Equal(t, big.NewInt(0).String(), queued.String())
+	assert.Equal(t, uint64(2), active)
+	assert.Equal(t, uint64(0), queued)
 
 	// withdraw the stake
 	withdrawAmount, err := staker.WithdrawStake(addr, addr, period+thor.CooldownPeriod())
@@ -567,7 +567,7 @@ func TestStaker_WithdrawQueued(t *testing.T) {
 	// verify queued empty
 	queued, err := staker.FirstQueued()
 	assert.NoError(t, err)
-	assert.Equal(t, thor.Address{}, *queued)
+	assert.Equal(t, thor.Address{}, queued)
 
 	// add the validator
 	period := uint32(360) * 24 * 15
@@ -583,7 +583,7 @@ func TestStaker_WithdrawQueued(t *testing.T) {
 	// verify queued
 	queued, err = staker.FirstQueued()
 	assert.NoError(t, err)
-	assert.Equal(t, addr, *queued)
+	assert.Equal(t, addr, queued)
 
 	// withraw queued
 	withdrawAmount, err := staker.WithdrawStake(addr, addr, period+thor.CooldownPeriod())
@@ -593,7 +593,7 @@ func TestStaker_WithdrawQueued(t *testing.T) {
 	// verify removed queued
 	queued, err = staker.FirstQueued()
 	assert.NoError(t, err)
-	assert.Equal(t, thor.Address{}, *queued)
+	assert.Equal(t, thor.Address{}, queued)
 }
 
 func TestStaker_IncreaseQueued(t *testing.T) {
@@ -671,7 +671,7 @@ func TestStaker_IncreaseQueued_Order(t *testing.T) {
 	// verify order
 	queued, err := staker.FirstQueued()
 	assert.NoError(t, err)
-	assert.Equal(t, *queued, addr)
+	assert.Equal(t, queued, addr)
 
 	// increase stake queued
 	increaseBy := uint64(1000)
@@ -682,13 +682,13 @@ func TestStaker_IncreaseQueued_Order(t *testing.T) {
 	// verify order after increasing stake
 	queued, err = staker.FirstQueued()
 	assert.NoError(t, err)
-	assert.Equal(t, *queued, addr)
-	entry, err := staker.GetValidation(*queued)
+	assert.Equal(t, queued, addr)
+	entry, err := staker.GetValidation(queued)
 	assert.NoError(t, err)
 	assert.Equal(t, stake, entry.QueuedVET)
 	assert.Equal(t, uint64(0), entry.Weight)
 
-	queuedAddr, err := staker.Next(*queued)
+	queuedAddr, err := staker.Next(queued)
 	assert.NoError(t, err)
 	assert.Equal(t, queuedAddr, addr1)
 	entry, err = staker.GetValidation(queuedAddr)
@@ -746,7 +746,7 @@ func TestStaker_DecreaseQueued_Order(t *testing.T) {
 	// verify order
 	queued, err := staker.FirstQueued()
 	assert.NoError(t, err)
-	assert.Equal(t, *queued, addr)
+	assert.Equal(t, queued, addr)
 
 	// increase stake queued
 	decreaseBy := uint64(1000)
@@ -758,12 +758,12 @@ func TestStaker_DecreaseQueued_Order(t *testing.T) {
 	// verify order after increasing stake
 	queued, err = staker.FirstQueued()
 	assert.NoError(t, err)
-	assert.Equal(t, *queued, addr)
-	entry, err := staker.GetValidation(*queued)
+	assert.Equal(t, queued, addr)
+	entry, err := staker.GetValidation(queued)
 	assert.NoError(t, err)
 	assert.Equal(t, stake, entry.QueuedVET)
 	assert.Equal(t, uint64(0), entry.Weight)
-	next, err := staker.Next(*queued)
+	next, err := staker.Next(queued)
 	assert.NoError(t, err)
 	assert.Equal(t, next, addr1)
 	entry, err = staker.GetValidation(next)
@@ -1341,7 +1341,7 @@ func TestStaker_Next(t *testing.T) {
 
 	firstLeader, err := staker.FirstActive()
 	assert.NoError(t, err)
-	assert.Equal(t, leaderGroup[0], *firstLeader)
+	assert.Equal(t, leaderGroup[0], firstLeader)
 
 	for i := range 99 {
 		next, err := staker.Next(leaderGroup[i])
@@ -1354,13 +1354,13 @@ func TestStaker_Next(t *testing.T) {
 
 	current := firstQueued
 	for i := range 100 {
-		_, err := staker.GetValidation(*current)
+		_, err := staker.GetValidation(current)
 		assert.NoError(t, err)
-		assert.Equal(t, queuedGroup[i], *current)
+		assert.Equal(t, queuedGroup[i], current)
 
-		next, err := staker.Next(*current)
+		next, err := staker.Next(current)
 		assert.NoError(t, err)
-		current = &next
+		current = next
 	}
 }
 
@@ -1390,10 +1390,10 @@ func TestStaker_Initialise(t *testing.T) {
 	assert.NoError(t, err)
 	assert.False(t, first.IsZero())
 
-	expectedLength := big.NewInt(101)
+	expectedLength := uint64(101)
 	length, err := staker.validationService.LeaderGroupSize()
 	assert.NoError(t, err)
-	assert.True(t, expectedLength.Cmp(length) == 0)
+	assert.Equal(t, expectedLength, length)
 }
 
 func TestStaker_Housekeep_TooEarly(t *testing.T) {
@@ -1568,8 +1568,8 @@ func TestStaker_Housekeep_Cooldown(t *testing.T) {
 
 	id, err := staker.FirstActive()
 	assert.NoError(t, err)
-	assert.Equal(t, addr1, *id)
-	next, err := staker.Next(*id)
+	assert.Equal(t, addr1, id)
+	next, err := staker.Next(id)
 	assert.NoError(t, err)
 	assert.Equal(t, addr2, next)
 
@@ -1862,7 +1862,7 @@ func TestStaker_Housekeep_DecreaseThenWithdraw(t *testing.T) {
 	assert.Equal(t, stake, validator.Weight)
 	activeValidator, err := staker.FirstActive()
 	assert.NoError(t, err)
-	assert.Equal(t, addr1, *activeValidator)
+	assert.Equal(t, addr1, activeValidator)
 }
 
 func TestStaker_DecreaseActive_DecreaseMultipleTimes(t *testing.T) {
@@ -2014,11 +2014,11 @@ func TestStaker_Housekeep_Adds_Queued_Validators_Up_To_Limit(t *testing.T) {
 
 	queuedValidators, err := staker.validationService.QueuedGroupSize()
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(3), queuedValidators)
+	assert.Equal(t, uint64(3), queuedValidators)
 
 	leaderGroupSize, err := staker.validationService.LeaderGroupSize()
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(0).String(), leaderGroupSize.String())
+	assert.Equal(t, uint64(0), leaderGroupSize)
 
 	block := uint32(360) * 24 * 13
 	_, err = staker.Housekeep(block)
@@ -2034,10 +2034,10 @@ func TestStaker_Housekeep_Adds_Queued_Validators_Up_To_Limit(t *testing.T) {
 	assert.Equal(t, validation.StatusQueued, validator2.Status)
 	leaderGroupSize, err = staker.validationService.LeaderGroupSize()
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(2), leaderGroupSize)
+	assert.Equal(t, uint64(2), leaderGroupSize)
 	queuedValidators, err = staker.validationService.QueuedGroupSize()
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(1), queuedValidators)
+	assert.Equal(t, uint64(1), queuedValidators)
 }
 
 func TestStaker_QueuedValidator_Withdraw(t *testing.T) {
@@ -2478,19 +2478,19 @@ func TestStaker_HasDelegations(t *testing.T) {
 	delegationID := big.NewInt(0)
 	newTestSequence(t, staker).
 		// no delegations, should be false
-		AssertHasDelegations(*validator, false).
+		AssertHasDelegations(validator, false).
 		// delegation added, housekeeping not performed, should be false
-		AddDelegation(*validator, dStake, 200, delegationID, 10).
-		AssertHasDelegations(*validator, false).
+		AddDelegation(validator, dStake, 200, delegationID, 10).
+		AssertHasDelegations(validator, false).
 		// housekeeping performed, should be true
 		Housekeep(stakingPeriod).
-		AssertHasDelegations(*validator, true).
+		AssertHasDelegations(validator, true).
 		// signal exit, housekeeping not performed, should still be true
 		SignalDelegationExit(delegationID, stakingPeriod*1).
-		AssertHasDelegations(*validator, true).
+		AssertHasDelegations(validator, true).
 		// housekeeping performed, should be false
 		Housekeep(stakingPeriod*2).
-		AssertHasDelegations(*validator, false)
+		AssertHasDelegations(validator, false)
 }
 
 func TestStaker_SetBeneficiary(t *testing.T) {
@@ -2519,12 +2519,12 @@ func TestStaker_SetBeneficiary(t *testing.T) {
 	assertValidation(t, staker, master).Beneficiary(nil)
 }
 
-func getTestMaxLeaderSize(param *params.Params) *big.Int {
+func getTestMaxLeaderSize(param *params.Params) uint64 {
 	maxLeaderGroupSize, err := param.Get(thor.KeyMaxBlockProposers)
 	if err != nil {
 		panic(err)
 	}
-	return maxLeaderGroupSize
+	return maxLeaderGroupSize.Uint64()
 }
 
 func TestStaker_TestWeights(t *testing.T) {
@@ -2532,7 +2532,7 @@ func TestStaker_TestWeights(t *testing.T) {
 
 	validator, err := staker.FirstActive()
 	assert.NoError(t, err)
-	val, err := staker.GetValidation(*validator)
+	val, err := staker.GetValidation(validator)
 	assert.NoError(t, err)
 	assert.Equal(t, val.LockedVET, val.Weight)
 
@@ -2546,7 +2546,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(0), qStake)
 
-	totals, err := staker.GetValidationTotals(*validator)
+	totals, err := staker.GetValidationTotals(validator)
 	assert.NoError(t, err)
 	assert.Equal(t, val.LockedVET, totals.TotalLockedStake)
 	assert.Equal(t, val.Weight, totals.TotalLockedWeight)
@@ -2574,7 +2574,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, stake, qStake)
 
-	totals, err = staker.GetValidationTotals(*validator)
+	totals, err = staker.GetValidationTotals(validator)
 	assert.NoError(t, err)
 	assert.Equal(t, val.LockedVET, totals.TotalLockedStake)
 	assert.Equal(t, val.Weight, totals.TotalLockedWeight)
@@ -2593,7 +2593,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	// active validator with queued delegation, queued validator
 	delegationID := new(big.Int)
 	dStake := stakes.NewWeightedStakeWithMultiplier(1, 255)
-	newTestSequence(t, staker).AddDelegation(*validator, dStake.VET, 255, delegationID, 10)
+	newTestSequence(t, staker).AddDelegation(validator, dStake.VET, 255, delegationID, 10)
 
 	lStake, lWeight, err = staker.LockedStake()
 	assert.NoError(t, err)
@@ -2604,7 +2604,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, stake+dStake.VET, qStake)
 
-	totals, err = staker.GetValidationTotals(*validator)
+	totals, err = staker.GetValidationTotals(validator)
 	assert.NoError(t, err)
 	assert.Equal(t, val.LockedVET, totals.TotalLockedStake)
 	assert.Equal(t, val.Weight, totals.TotalLockedWeight)
@@ -2622,7 +2622,7 @@ func TestStaker_TestWeights(t *testing.T) {
 
 	// second delegator shouldn't multiply
 	delegationID2 := big.NewInt(2)
-	newTestSequence(t, staker).AddDelegation(*validator, dStake.VET, 255, delegationID2, 10)
+	newTestSequence(t, staker).AddDelegation(validator, dStake.VET, 255, delegationID2, 10)
 
 	lStake, lWeight, err = staker.LockedStake()
 	assert.NoError(t, err)
@@ -2633,7 +2633,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, stake+dStake.VET*2, qStake)
 
-	totals, err = staker.GetValidationTotals(*validator)
+	totals, err = staker.GetValidationTotals(validator)
 	assert.NoError(t, err)
 	assert.Equal(t, val.LockedVET, totals.TotalLockedStake)
 	assert.Equal(t, val.Weight, totals.TotalLockedWeight)
@@ -2662,7 +2662,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, stake+dStake.VET*3, qStake)
 
-	totals, err = staker.GetValidationTotals(*validator)
+	totals, err = staker.GetValidationTotals(validator)
 	assert.NoError(t, err)
 	assert.Equal(t, val.LockedVET, totals.TotalLockedStake)
 	assert.Equal(t, val.Weight, totals.TotalLockedWeight)
@@ -2691,7 +2691,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, stake+dStake.VET*4, qStake)
 
-	totals, err = staker.GetValidationTotals(*validator)
+	totals, err = staker.GetValidationTotals(validator)
 	assert.NoError(t, err)
 	assert.Equal(t, val.LockedVET, totals.TotalLockedStake)
 	assert.Equal(t, val.Weight, totals.TotalLockedWeight)
@@ -2720,7 +2720,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, stake+dStake.VET*2, qStake)
 
-	totals, err = staker.GetValidationTotals(*validator)
+	totals, err = staker.GetValidationTotals(validator)
 	assert.NoError(t, err)
 	assert.Equal(t, val.LockedVET+dStake.VET*2, totals.TotalLockedStake)
 	assert.Equal(t, val.LockedVET*2+dStake.Weight*2, totals.TotalLockedWeight)
@@ -2748,7 +2748,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, stake+dStake.VET, qStake)
 
-	totals, err = staker.GetValidationTotals(*validator)
+	totals, err = staker.GetValidationTotals(validator)
 	assert.NoError(t, err)
 	assert.Equal(t, val.LockedVET+dStake.VET*2, totals.TotalLockedStake)
 	assert.Equal(t, val.LockedVET*2+dStake.Weight*2, totals.TotalLockedWeight)
@@ -2767,7 +2767,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	// exit second queued, multiplier should be one
 	stakeIncrease := uint64(1000)
 	newTestSequence(t, staker).WithdrawDelegation(delegationID4, dStake.VET, 10)
-	newTestSequence(t, staker).IncreaseStake(*validator, val.Endorser, stakeIncrease)
+	newTestSequence(t, staker).IncreaseStake(validator, val.Endorser, stakeIncrease)
 	newTestSequence(t, staker).Housekeep(stakingPeriod * 3)
 
 	lStake, lWeight, err = staker.LockedStake()
@@ -2781,7 +2781,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, stake, qStake)
 
-	totals, err = staker.GetValidationTotals(*validator)
+	totals, err = staker.GetValidationTotals(validator)
 	assert.NoError(t, err)
 	assert.Equal(t, increasedLocked+dStake.VET*2, totals.TotalLockedStake)
 	assert.Equal(t, increasedLockedWeight+dStake.Weight*2, totals.TotalLockedWeight)
@@ -2810,7 +2810,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, stake, qStake)
 
-	totals, err = staker.GetValidationTotals(*validator)
+	totals, err = staker.GetValidationTotals(validator)
 	assert.NoError(t, err)
 	assert.Equal(t, increasedLocked+dStake.VET, totals.TotalLockedStake)
 	assert.Equal(t, increasedLockedWeight+dStake.Weight, totals.TotalLockedWeight)
@@ -2828,7 +2828,7 @@ func TestStaker_TestWeights(t *testing.T) {
 
 	// exit second active, multiplier should change to 1
 	newTestSequence(t, staker).SignalDelegationExit(delegationID2, stakingPeriod*4)
-	totals, err = staker.GetValidationTotals(*validator)
+	totals, err = staker.GetValidationTotals(validator)
 	assert.NoError(t, err)
 	assert.Equal(t, increasedLocked+dStake.VET, totals.TotalLockedStake)
 	assert.Equal(t, increasedLockedWeight+dStake.Weight, totals.TotalLockedWeight)
@@ -2848,7 +2848,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, stake, qStake)
 
-	totals, err = staker.GetValidationTotals(*validator)
+	totals, err = staker.GetValidationTotals(validator)
 	assert.NoError(t, err)
 	assert.Equal(t, increasedLocked, totals.TotalLockedStake)
 	assert.Equal(t, increasedLocked, totals.TotalLockedWeight)
@@ -2870,7 +2870,7 @@ func TestStaker_TestWeights_IncreaseStake(t *testing.T) {
 
 	validator, err := staker.FirstActive()
 	assert.NoError(t, err)
-	val, err := staker.GetValidation(*validator)
+	val, err := staker.GetValidation(validator)
 	assert.NoError(t, err)
 	assert.Equal(t, val.LockedVET, val.Weight)
 
@@ -2885,7 +2885,7 @@ func TestStaker_TestWeights_IncreaseStake(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(0), qStake)
 
-	totals, err := staker.GetValidationTotals(*validator)
+	totals, err := staker.GetValidationTotals(validator)
 	assert.NoError(t, err)
 	assert.Equal(t, baseStake, totals.TotalLockedStake)
 	assert.Equal(t, baseStake, totals.TotalLockedWeight)
@@ -2895,7 +2895,7 @@ func TestStaker_TestWeights_IncreaseStake(t *testing.T) {
 
 	// one active validator without delegations, increase stake, multiplier should be 0, increase stake should be queued
 	stakeIncrease := uint64(1500)
-	newTestSequence(t, staker).IncreaseStake(*validator, val.Endorser, stakeIncrease)
+	newTestSequence(t, staker).IncreaseStake(validator, val.Endorser, stakeIncrease)
 
 	lStake, lWeight, err = staker.LockedStake()
 	assert.NoError(t, err)
@@ -2906,7 +2906,7 @@ func TestStaker_TestWeights_IncreaseStake(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, stakeIncrease, qStake)
 
-	totals, err = staker.GetValidationTotals(*validator)
+	totals, err = staker.GetValidationTotals(validator)
 	assert.NoError(t, err)
 	assert.Equal(t, baseStake, totals.TotalLockedStake)
 	assert.Equal(t, baseStake, totals.TotalLockedWeight)
@@ -2917,7 +2917,7 @@ func TestStaker_TestWeights_IncreaseStake(t *testing.T) {
 	// adding queued delegation, queued stake should multiply
 	delegationID1 := big.NewInt(1)
 	delStake := MinStakeVET
-	newTestSequence(t, staker).AddDelegation(*validator, delStake, 200, delegationID1, 10)
+	newTestSequence(t, staker).AddDelegation(validator, delStake, 200, delegationID1, 10)
 
 	lStake, lWeight, err = staker.LockedStake()
 	assert.NoError(t, err)
@@ -2929,7 +2929,7 @@ func TestStaker_TestWeights_IncreaseStake(t *testing.T) {
 	assert.Equal(t, stakeIncrease+delStake, qStake)
 	expectedWeight := stakeIncrease*2 + delStake*2 + baseStake
 
-	totals, err = staker.GetValidationTotals(*validator)
+	totals, err = staker.GetValidationTotals(validator)
 	assert.NoError(t, err)
 	assert.Equal(t, baseStake, totals.TotalLockedStake)
 	assert.Equal(t, baseStake, totals.TotalLockedWeight)
@@ -2940,7 +2940,7 @@ func TestStaker_TestWeights_IncreaseStake(t *testing.T) {
 	// decreasing stake shouldn't affect multipliers
 	stakeDecrease := uint64(500)
 	stakeIncDecDiff := stakeIncrease - stakeDecrease
-	newTestSequence(t, staker).DecreaseStake(*validator, val.Endorser, stakeDecrease)
+	newTestSequence(t, staker).DecreaseStake(validator, val.Endorser, stakeDecrease)
 
 	lStake, lWeight, err = staker.LockedStake()
 	assert.NoError(t, err)
@@ -2951,7 +2951,7 @@ func TestStaker_TestWeights_IncreaseStake(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, stakeIncrease+delStake, qStake)
 
-	totals, err = staker.GetValidationTotals(*validator)
+	totals, err = staker.GetValidationTotals(validator)
 	assert.NoError(t, err)
 	assert.Equal(t, baseStake, totals.TotalLockedStake)
 	assert.Equal(t, baseStake, totals.TotalLockedWeight)
@@ -2977,7 +2977,7 @@ func TestStaker_TestWeights_IncreaseStake(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(0), qStake)
 
-	totals, err = staker.GetValidationTotals(*validator)
+	totals, err = staker.GetValidationTotals(validator)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedStake, totals.TotalLockedStake)
 	assert.Equal(t, expectedWeight, totals.TotalLockedWeight)
@@ -2991,7 +2991,7 @@ func TestStaker_TestWeights_DecreaseStake(t *testing.T) {
 
 	validator, err := staker.FirstActive()
 	assert.NoError(t, err)
-	val, err := staker.GetValidation(*validator)
+	val, err := staker.GetValidation(validator)
 	assert.NoError(t, err)
 	assert.Equal(t, val.LockedVET, val.Weight)
 
@@ -3006,7 +3006,7 @@ func TestStaker_TestWeights_DecreaseStake(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(0), qStake)
 
-	totals, err := staker.GetValidationTotals(*validator)
+	totals, err := staker.GetValidationTotals(validator)
 	assert.NoError(t, err)
 	assert.Equal(t, baseStake, totals.TotalLockedStake)
 	assert.Equal(t, baseStake, totals.TotalLockedWeight)
@@ -3016,7 +3016,7 @@ func TestStaker_TestWeights_DecreaseStake(t *testing.T) {
 
 	// one active validator without delegations, increase stake, multiplier should be 0, decrease stake should be queued
 	stakeDecrease := uint64(1500)
-	newTestSequence(t, staker).DecreaseStake(*validator, val.Endorser, stakeDecrease)
+	newTestSequence(t, staker).DecreaseStake(validator, val.Endorser, stakeDecrease)
 
 	lStake, lWeight, err = staker.LockedStake()
 	assert.NoError(t, err)
@@ -3027,7 +3027,7 @@ func TestStaker_TestWeights_DecreaseStake(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(0), qStake)
 
-	totals, err = staker.GetValidationTotals(*validator)
+	totals, err = staker.GetValidationTotals(validator)
 	assert.NoError(t, err)
 	assert.Equal(t, baseStake, totals.TotalLockedStake)
 	assert.Equal(t, baseStake, totals.TotalLockedWeight)
@@ -3038,7 +3038,7 @@ func TestStaker_TestWeights_DecreaseStake(t *testing.T) {
 	// adding queued delegation, queued stake should multiply
 	delegationID1 := big.NewInt(1)
 	delStake := MinStakeVET
-	newTestSequence(t, staker).AddDelegation(*validator, delStake, 200, delegationID1, 10)
+	newTestSequence(t, staker).AddDelegation(validator, delStake, 200, delegationID1, 10)
 
 	lStake, lWeight, err = staker.LockedStake()
 	assert.NoError(t, err)
@@ -3050,7 +3050,7 @@ func TestStaker_TestWeights_DecreaseStake(t *testing.T) {
 	assert.Equal(t, delStake, qStake)
 	expectedWeight := delStake*2 + lStake
 
-	totals, err = staker.GetValidationTotals(*validator)
+	totals, err = staker.GetValidationTotals(validator)
 	assert.NoError(t, err)
 	assert.Equal(t, baseStake, totals.TotalLockedStake)
 	assert.Equal(t, baseStake, totals.TotalLockedWeight)
@@ -3061,7 +3061,7 @@ func TestStaker_TestWeights_DecreaseStake(t *testing.T) {
 	// decreasing stake shouldn't affect multipliers
 	additionalDecrease := uint64(500)
 	stakeDecrease += additionalDecrease
-	newTestSequence(t, staker).DecreaseStake(*validator, val.Endorser, additionalDecrease)
+	newTestSequence(t, staker).DecreaseStake(validator, val.Endorser, additionalDecrease)
 
 	lStake, lWeight, err = staker.LockedStake()
 	assert.NoError(t, err)
@@ -3073,7 +3073,7 @@ func TestStaker_TestWeights_DecreaseStake(t *testing.T) {
 	assert.Equal(t, delStake, qStake)
 	expectedWeight = delStake*2 + lStake
 
-	totals, err = staker.GetValidationTotals(*validator)
+	totals, err = staker.GetValidationTotals(validator)
 	assert.NoError(t, err)
 	assert.Equal(t, baseStake, totals.TotalLockedStake)
 	assert.Equal(t, baseStake, totals.TotalLockedWeight)
@@ -3097,7 +3097,7 @@ func TestStaker_TestWeights_DecreaseStake(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(0), qStake)
 
-	totals, err = staker.GetValidationTotals(*validator)
+	totals, err = staker.GetValidationTotals(validator)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedStake, totals.TotalLockedStake)
 	assert.Equal(t, expectedWeight, totals.TotalLockedWeight)
@@ -3116,7 +3116,7 @@ func TestStaker_TestWeights_DecreaseStake(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(0), qStake)
 
-	totals, err = staker.GetValidationTotals(*validator)
+	totals, err = staker.GetValidationTotals(validator)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedStake, totals.TotalLockedStake)
 	assert.Equal(t, expectedWeight, totals.TotalLockedWeight)
@@ -3136,7 +3136,7 @@ func TestStaker_TestWeights_DecreaseStake(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(0), qStake)
 
-	totals, err = staker.GetValidationTotals(*validator)
+	totals, err = staker.GetValidationTotals(validator)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedStake, totals.TotalLockedStake)
 	assert.Equal(t, expectedStake, totals.TotalLockedWeight)
@@ -3153,10 +3153,10 @@ func TestStaker_OfflineValidator(t *testing.T) {
 	validator1, err := testSetup.staker.FirstActive()
 	assert.NoError(t, err)
 
-	validator2, err := testSetup.staker.Next(*validator1)
+	validator2, err := testSetup.staker.Next(validator1)
 	assert.NoError(t, err)
 
-	val1, err := testSetup.staker.GetValidation(*validator1)
+	val1, err := testSetup.staker.GetValidation(validator1)
 	assert.NoError(t, err)
 	assert.Nil(t, val1.OfflineBlock)
 	assert.Nil(t, val1.ExitBlock)
@@ -3167,29 +3167,29 @@ func TestStaker_OfflineValidator(t *testing.T) {
 	assert.Nil(t, val2.ExitBlock)
 
 	// setting validator offline will record offline block
-	testSetup.SetOnline(*validator1, 4, false)
+	testSetup.SetOnline(validator1, 4, false)
 
 	expectedOfflineBlock := uint32(4)
-	val1, err = testSetup.staker.GetValidation(*validator1)
+	val1, err = testSetup.staker.GetValidation(validator1)
 	assert.NoError(t, err)
 	assert.Equal(t, &expectedOfflineBlock, val1.OfflineBlock)
 	assert.Nil(t, val1.ExitBlock)
 
 	// setting validator online will clear offline block
-	testSetup.SetOnline(*validator1, 8, true)
+	testSetup.SetOnline(validator1, 8, true)
 
-	val1, err = testSetup.staker.GetValidation(*validator1)
+	val1, err = testSetup.staker.GetValidation(validator1)
 	assert.NoError(t, err)
 	assert.Nil(t, val1.OfflineBlock)
 	assert.Nil(t, val1.ExitBlock)
 
 	// setting validator offline will not trigger eviction until threshold is met
-	testSetup.SetOnline(*validator1, 8, false)
+	testSetup.SetOnline(validator1, 8, false)
 	// Epoch length is 180, 336 is the number of epochs in 7 days which is threshold, 8 is the block number when val wen't offline
 	testSetup.Housekeep(thor.EpochLength() * 336)
 
 	expectedOfflineBlock = uint32(8)
-	val1, err = testSetup.staker.GetValidation(*validator1)
+	val1, err = testSetup.staker.GetValidation(validator1)
 	assert.NoError(t, err)
 	assert.Equal(t, &expectedOfflineBlock, val1.OfflineBlock)
 	assert.Nil(t, val1.ExitBlock)
@@ -3199,7 +3199,7 @@ func TestStaker_OfflineValidator(t *testing.T) {
 	expectedExitBlock := (thor.EpochLength() * 48 * 3 * 3) + 180
 
 	expectedOfflineBlock = uint32(8)
-	val1, err = testSetup.staker.GetValidation(*validator1)
+	val1, err = testSetup.staker.GetValidation(validator1)
 	assert.NoError(t, err)
 	assert.Equal(t, validation.StatusActive, val1.Status)
 	assert.Equal(t, &expectedOfflineBlock, val1.OfflineBlock)
@@ -3208,7 +3208,7 @@ func TestStaker_OfflineValidator(t *testing.T) {
 	// validator should exit here
 	testSetup.Housekeep(expectedExitBlock)
 
-	val1, err = testSetup.staker.GetValidation(*validator1)
+	val1, err = testSetup.staker.GetValidation(validator1)
 	assert.NoError(t, err)
 	assert.Equal(t, validation.StatusExit, val1.Status)
 	assert.Equal(t, &expectedOfflineBlock, val1.OfflineBlock)
@@ -3270,13 +3270,13 @@ func TestStaker_Housekeep_NegativeCases(t *testing.T) {
 	st.SetRawStorage(stakerAddr, slotActiveGroupSize, rlp.RawValue{0xFF})
 	count, err := staker.computeActivationCount(true)
 	assert.Error(t, err)
-	assert.Equal(t, int64(0), count)
+	assert.Equal(t, uint64(0), count)
 
 	st.SetRawStorage(stakerAddr, slotActiveGroupSize, rlp.RawValue{0x0})
 	st.SetRawStorage(paramsAddr, thor.KeyMaxBlockProposers, rlp.RawValue{0xFF})
 	count, err = staker.computeActivationCount(true)
 	assert.Error(t, err)
-	assert.Equal(t, int64(0), count)
+	assert.Equal(t, uint64(0), count)
 
 	slotAggregations := thor.BytesToBytes32([]byte("aggregated-delegations"))
 	validatorAddr := thor.BytesToAddress([]byte("renewal1"))

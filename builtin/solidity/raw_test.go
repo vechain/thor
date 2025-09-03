@@ -160,7 +160,7 @@ func TestRaw_ZeroValue(t *testing.T) {
 	// Test setting zero value (should clear storage)
 	err = raw.Update(uint64(0))
 	require.NoError(t, err)
-	assert.Equal(t, thor.SstoreResetGas, ctx.charger.TotalGas())
+	assert.Equal(t, uint64(0), ctx.charger.TotalGas())
 
 	// Verify storage was cleared
 	ctx.charger = gascharger.New(newXenv())

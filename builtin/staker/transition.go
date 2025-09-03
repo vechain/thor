@@ -26,13 +26,14 @@ func (s *Staker) transition(currentBlock uint32) (bool, error) {
 		return false, nil
 	}
 
-	maxProposers, err := s.params.Get(thor.KeyMaxBlockProposers)
+	mbp, err := s.params.Get(thor.KeyMaxBlockProposers)
 	if err != nil {
 		return false, err
 	}
 
-	if maxProposers.Cmp(big.NewInt(0)) == 0 {
-		maxProposers = big.NewInt(0).SetUint64(thor.InitialMaxBlockProposers)
+	maxBlockProposers := mbp.Uint64()
+	if maxBlockProposers == 0 {
+		maxBlockProposers = thor.InitialMaxBlockProposers
 	}
 
 	queueSize, err := s.validationService.QueuedGroupSize()
@@ -43,7 +44,7 @@ func (s *Staker) transition(currentBlock uint32) (bool, error) {
 	// Transitions is not possible if the queue size is not AT LEAST 2/3 of the maxProposers
 	// queueSize >= 2/3 * maxProposers
 	// queueSize * 3 >= maxProposers * 2
-	if queueSize.Int64()*3 < maxProposers.Int64()*2 { // these figures will never surpass int64
+	if queueSize*3 < maxBlockProposers*2 { // these figures will never surpass int64
 		return false, nil
 	}
 

@@ -308,8 +308,8 @@ func TestStaker(t *testing.T) {
 	// GetValidationsNum
 	active, queued, err := staker.GetValidationsNum()
 	require.NoError(t, err)
-	require.Equal(t, big.NewInt(2), active)
-	require.Equal(t, big.NewInt(1), queued)
+	require.Equal(t, uint64(2), active)
+	require.Equal(t, uint64(1), queued)
 
 	// UpdateDelegationAutoRenew - Enable AutoRenew
 	receipt, _, err = staker.SignalDelegationExit(delegationID).
