@@ -503,7 +503,7 @@ func TestService_IncreaseStake_UnknownValidator(t *testing.T) {
 	staker := newTestStaker()
 	id := thor.BytesToAddress([]byte("unknown"))
 	err := staker.IncreaseStake(id, id, 1)
-	assert.ErrorContains(t, err, "failed to get existing validator")
+	assert.ErrorContains(t, err, "validation does not exist")
 }
 
 func TestValidation_IncreaseStake_InvalidEndorser(t *testing.T) {

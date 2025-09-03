@@ -28,11 +28,13 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-var (
-	logger = log.WithContext("pkg", "staker")
-
+const (
 	MinStakeVET = uint64(25e6)  // 25M VET
 	MaxStakeVET = uint64(600e6) // 600M VET
+)
+
+var (
+	logger = log.WithContext("pkg", "staker")
 
 	// exported for other packages to use
 	MinStake = big.NewInt(0).Mul(new(big.Int).SetUint64(MinStakeVET), big.NewInt(1e18))
