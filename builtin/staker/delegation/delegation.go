@@ -28,7 +28,7 @@ func (d *Delegation) WeightedStake() *stakes.WeightedStake {
 // Started returns whether the delegation became locked
 func (d *Delegation) Started(val *validation.Validation, currentBlock uint32) (bool, error) {
 	if val.Status == validation.StatusQueued || val.Status == validation.StatusUnknown {
-		return false // Delegation cannot start if the validation is not active
+		return false, nil // Delegation cannot start if the validation is not active
 	}
 	currentStakingPeriod, err := val.CurrentIteration(currentBlock)
 	if err != nil {

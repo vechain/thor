@@ -148,16 +148,16 @@ func (s *Service) Add(
 	stake uint64,
 ) error {
 	entry := &Validation{
-		Endorser:           endorser,
-		Period:             period,
-		CompleteIterations: 0,
-		Status:             StatusQueued,
-		LockedVET:          0,
-		QueuedVET:          stake,
-		CooldownVET:        0,
-		PendingUnlockVET:   0,
-		WithdrawableVET:    0,
-		Weight:             0,
+		Endorser:         endorser,
+		Period:           period,
+		CompletedPeriods: 0,
+		Status:           StatusQueued,
+		LockedVET:        0,
+		QueuedVET:        stake,
+		CooldownVET:      0,
+		PendingUnlockVET: 0,
+		WithdrawableVET:  0,
+		Weight:           0,
 	}
 
 	return s.repo.addValidation(validator, entry)
@@ -180,7 +180,7 @@ func (s *Service) SignalExit(validator thor.Address, currentBlock uint32, minBlo
 	}
 	validation.ExitBlock = &exitBlock
 	// validator is going to exit after current iteration
-	validation.CompleteIterations = current
+	validation.CompletedPeriods = current
 
 	return s.repo.updateValidation(validator, validation)
 }

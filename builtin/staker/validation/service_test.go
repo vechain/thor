@@ -56,10 +56,10 @@ func TestService_SetGetValidation_RoundTrip(t *testing.T) {
 	id := thor.BytesToAddress([]byte("v1"))
 	ed := thor.BytesToAddress([]byte("e1"))
 	val := &Validation{
-		Endorser:           ed,
-		Period:             2,
-		CompleteIterations: 0,
-		Status:             StatusQueued,
+		Endorser:         ed,
+		Period:           2,
+		CompletedPeriods: 0,
+		Status:           StatusQueued,
 	}
 
 	assert.NoError(t, svc.repo.addValidation(id, val))
@@ -99,15 +99,15 @@ func TestService_ActivateAndExit_Flow(t *testing.T) {
 	idv := thor.BytesToAddress([]byte("v3"))
 	id := idv
 	val := &Validation{
-		Endorser:           id,
-		Period:             2,
-		Status:             StatusQueued,
-		QueuedVET:          uint64(100),
-		LockedVET:          uint64(0),
-		PendingUnlockVET:   uint64(0),
-		WithdrawableVET:    uint64(0),
-		Weight:             uint64(0),
-		CompleteIterations: 0,
+		Endorser:         id,
+		Period:           2,
+		Status:           StatusQueued,
+		QueuedVET:        uint64(100),
+		LockedVET:        uint64(0),
+		PendingUnlockVET: uint64(0),
+		WithdrawableVET:  uint64(0),
+		Weight:           uint64(0),
+		CompletedPeriods: 0,
 	}
 	assert.NoError(t, svc.repo.addValidation(id, val))
 
@@ -250,14 +250,14 @@ func TestService_SignalExit_ExitBlockLimitReached(t *testing.T) {
 
 	endorser := val
 	validation := &Validation{
-		Endorser:           endorser,
-		Status:             StatusActive,
-		StartBlock:         100,
-		Period:             10,
-		CompleteIterations: 0,
+		Endorser:         endorser,
+		Status:           StatusActive,
+		StartBlock:       100,
+		Period:           10,
+		CompletedPeriods: 0,
 	}
 
-	assert.NoError(t, svc.repo.addValidation(validator, validation))
+	assert.NoError(t, svc.repo.addValidation(val, validation))
 	current, err := validation.CurrentIteration(110)
 	assert.NoError(t, err)
 	minBlock := validation.StartBlock + validation.Period*current
@@ -273,9 +273,9 @@ func TestService_SignalExit_ExitBlockLimitReached(t *testing.T) {
 	valA, err := svc.GetExistingValidation(val)
 	assert.NoError(t, err)
 
-	current, err = val.CurrentIteration(110)
+	current, err = valA.CurrentIteration(110)
 	assert.NoError(t, err)
-	err = svc.SignalExit(validator, 110, val.StartBlock+val.Period*current, 20)
+	err = svc.SignalExit(val, 110, valA.StartBlock+valA.Period*current, 20)
 
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "max try reached")
@@ -294,7 +294,7 @@ func TestService_SignalExit_SetExitBlock_Error(t *testing.T) {
 
 	assert.NoError(t, svc.repo.addValidation(id, &Validation{
 		Endorser: end, Status: StatusActive,
-		StartBlock: 10, Period: 5, CompleteIterations: 0,
+		StartBlock: 10, Period: 5, CompletedPeriods: 0,
 	}))
 
 	poisonExitSlot(st, contract, 15)
@@ -546,7 +546,9 @@ func TestService_GetCompletedPeriods(t *testing.T) {
 	}
 
 	val, err := svc.GetValidation(a1)
-	completed, err := val.CompleteIterations(10)
+	assert.NoError(t, err)
+	assert.NotNil(t, val, "validation not found", a1.String())
+	completed, err := val.CompletedIterations(10)
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(0), completed)
 }
@@ -593,7 +595,7 @@ func TestService_GetQueuedAndLeaderGroups(t *testing.T) {
 	assert.Equal(t, uint64(1), val.LockedVET)
 	assert.Equal(t, uint64(1), val.Weight)
 	assert.Equal(t, thor.LowStakingPeriod(), val.Period)
-	assert.Equal(t, uint32(0), val.CompleteIterations)
+	assert.Equal(t, uint32(0), val.CompletedPeriods)
 	assert.Equal(t, StatusActive, val.Status)
 	assert.Equal(t, uint32(1), val.StartBlock)
 	assert.Nil(t, val.ExitBlock)

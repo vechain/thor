@@ -28,19 +28,19 @@ func TestDelegation(t *testing.T) {
 	offlineBlock := uint32(0)
 
 	val := validation.Validation{
-		Endorser:           thor.Address{},
-		Period:             2,
-		CompleteIterations: 0,
-		Status:             0,
-		OfflineBlock:       &offlineBlock,
-		StartBlock:         0,
-		ExitBlock:          nil,
-		LockedVET:          0,
-		PendingUnlockVET:   0,
-		QueuedVET:          0,
-		CooldownVET:        0,
-		WithdrawableVET:    0,
-		Weight:             0,
+		Endorser:         thor.Address{},
+		Period:           2,
+		CompletedPeriods: 0,
+		Status:           0,
+		OfflineBlock:     &offlineBlock,
+		StartBlock:       0,
+		ExitBlock:        nil,
+		LockedVET:        0,
+		PendingUnlockVET: 0,
+		QueuedVET:        0,
+		CooldownVET:      0,
+		WithdrawableVET:  0,
+		Weight:           0,
 	}
 
 	started, err := del.Started(&val, 10)
@@ -85,7 +85,7 @@ func TestDelegation(t *testing.T) {
 	assert.True(t, started)
 
 	val.Status = validation.StatusExit
-	val.CompleteIterations = 4
+	val.CompletedPeriods = 4
 	ended, err = del.Ended(&val, 6)
 	assert.NoError(t, err)
 	assert.True(t, ended)
@@ -109,19 +109,19 @@ func TestDelegation_IsLocked(t *testing.T) {
 	}
 
 	val := validation.Validation{
-		Endorser:           thor.Address{},
-		Period:             1,
-		CompleteIterations: 0,
-		Status:             validation.StatusActive,
-		OfflineBlock:       nil,
-		StartBlock:         0,
-		ExitBlock:          nil,
-		LockedVET:          0,
-		PendingUnlockVET:   0,
-		QueuedVET:          0,
-		CooldownVET:        0,
-		WithdrawableVET:    0,
-		Weight:             0,
+		Endorser:         thor.Address{},
+		Period:           1,
+		CompletedPeriods: 0,
+		Status:           validation.StatusActive,
+		OfflineBlock:     nil,
+		StartBlock:       0,
+		ExitBlock:        nil,
+		LockedVET:        0,
+		PendingUnlockVET: 0,
+		QueuedVET:        0,
+		CooldownVET:      0,
+		WithdrawableVET:  0,
+		Weight:           0,
 	}
 
 	isLocked, err := del.IsLocked(&val, 1)

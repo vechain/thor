@@ -231,7 +231,9 @@ func (ts *TestSequence) AssertCompletedPeriods(
 	currentBlock uint32,
 ) *TestSequence {
 	val, err := ts.staker.GetValidation(validationID)
-	periods := val.CompleteIterations(currentBlock)
+	assert.NotNil(ts.t, val, "validation %s not found", validationID.String())
+	assert.NoError(ts.t, err, "failed to get validation %s", validationID.String())
+	periods, err := val.CompletedIterations(currentBlock)
 	assert.NoError(ts.t, err, "failed to get completed periods for validator %s: %v", validationID.String(), err)
 	assert.Equal(ts.t, expectedPeriods, periods, "completed periods mismatch for validator %s", validationID.String())
 	return ts
@@ -326,11 +328,6 @@ func (va *ValidationAssertions) WithdrawableVET(expected uint64) *ValidationAsse
 
 func (va *ValidationAssertions) Period(expected uint32) *ValidationAssertions {
 	assert.Equal(va.t, expected, va.validator.Period, "validator %s period mismatch", va.addr.String())
-	return va
-}
-
-func (va *ValidationAssertions) CompletedPeriods(expected uint32) *ValidationAssertions {
-	assert.Equal(va.t, expected, va.validator.CompleteIterations, "validator %s completed periods mismatch", va.addr.String())
 	return va
 }
 

@@ -173,11 +173,6 @@ func (s *Staker) GetDelegatorRewards(validator thor.Address, stakingPeriod uint3
 	return s.validationService.GetDelegatorRewards(validator, stakingPeriod)
 }
 
-// GetCompletedPeriods returns number of completed staking periods for validation.
-func (s *Staker) GetCompletedPeriods(validator thor.Address, currentBlock uint32) (uint32, error) {
-	return s.validationService.GetCompletedPeriods(validator, currentBlock)
-}
-
 // GetValidationTotals returns the total stake, total weight, total delegators stake and total delegators weight.
 func (s *Staker) GetValidationTotals(validator thor.Address) (*validation.Totals, error) {
 	val, err := s.getValidationOrRevert(validator)

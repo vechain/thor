@@ -31,14 +31,14 @@ const (
 var ErrMaxTryReached = errors.New("max try reached")
 
 type Validation struct {
-	Endorser           thor.Address  // the address providing the stake
-	Beneficiary        *thor.Address `rlp:"nil"` // the address receiving the rewards, if not set then endorser is rewarded
-	Period             uint32        // the staking period of the validation
-	CompleteIterations uint32        // the completed staking periods by the validation, this will be updated when signal exit is called
-	Status             Status        // status of the validation
-	StartBlock         uint32        // the block number when the validation started the first staking period
-	ExitBlock          *uint32       `rlp:"nil"` // the block number when the validation moved to cooldown
-	OfflineBlock       *uint32       `rlp:"nil"` // the block when validator went offline, it will be cleared once online
+	Endorser         thor.Address  // the address providing the stake
+	Beneficiary      *thor.Address `rlp:"nil"` // the address receiving the rewards, if not set then endorser is rewarded
+	Period           uint32        // the staking period of the validation
+	CompletedPeriods uint32        // the completed staking periods by the validation, this will be updated when signal exit is called
+	Status           Status        // status of the validation
+	StartBlock       uint32        // the block number when the validation started the first staking period
+	ExitBlock        *uint32       `rlp:"nil"` // the block number when the validation moved to cooldown
+	OfflineBlock     *uint32       `rlp:"nil"` // the block when validator went offline, it will be cleared once online
 
 	LockedVET        uint64 // the amount(in VET not wei) locked for the current staking period, for the validator only
 	PendingUnlockVET uint64 // the amount(in VET not wei) that will be unlocked in the next staking period. DOES NOT contribute to the TVL
@@ -129,8 +129,8 @@ func (v *Validation) CurrentIteration(currentBlock uint32) (uint32, error) {
 	// Active(signaled exit) or Exit
 	// Once signaled exit, complete iterations is set to the current
 	// iteration of the time that exit is signaled
-	if v.CompleteIterations > 0 {
-		return v.CompleteIterations, nil
+	if v.CompletedPeriods > 0 {
+		return v.CompletedPeriods, nil
 	}
 
 	// Active
@@ -141,8 +141,8 @@ func (v *Validation) CurrentIteration(currentBlock uint32) (uint32, error) {
 		return 0, errors.New("period cannot be zero")
 	}
 	elapsedBlocks := currentBlock - v.StartBlock
-	completePeriods := elapsedBlocks / v.Period
-	return completePeriods + 1, nil
+	completedPeriods := elapsedBlocks / v.Period
+	return completedPeriods + 1, nil
 }
 
 func (v *Validation) CompletedIterations(currentBlock uint32) (uint32, error) {
@@ -152,12 +152,7 @@ func (v *Validation) CompletedIterations(currentBlock uint32) (uint32, error) {
 	}
 
 	if v.Status == StatusExit {
-		return v.CompleteIterations, nil
-	}
-
-	// Active(signaled exit) but not exited
-	if v.CompleteIterations > 0 && v.Status == StatusActive {
-		return v.CompleteIterations - 1, nil
+		return v.CompletedPeriods, nil
 	}
 
 	// Active

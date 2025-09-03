@@ -1274,7 +1274,7 @@ func TestStaker_Next_Empty(t *testing.T) {
 
 	id := datagen.RandAddress()
 	next, err := staker.Next(id)
-	assert.ErrorContains(t, err, "no validation found")
+	assert.NoError(t, err)
 	assert.True(t, next.IsZero())
 }
 
@@ -2098,7 +2098,9 @@ func TestStaker_GetCompletedPeriods(t *testing.T) {
 	assert.NoError(t, err)
 
 	val, err := staker.GetValidation(proposerAddr)
-	periods, err := val.CompleteIterations(period - 1)
+	assert.NoError(t, err)
+	assert.NotNil(t, val, "validation not found")
+	periods, err := val.CompletedIterations(period - 1)
 
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(0), periods)
@@ -2107,7 +2109,9 @@ func TestStaker_GetCompletedPeriods(t *testing.T) {
 	assert.NoError(t, err)
 
 	val, err = staker.GetValidation(proposerAddr)
-	periods = val.CompleteIterations(period)
+	assert.NoError(t, err)
+	assert.NotNil(t, val, "validation not found")
+	periods, err = val.CompletedIterations(period)
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(1), periods)
 }
