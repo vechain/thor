@@ -184,7 +184,7 @@ func (s *Staker) GetValidationTotals(validator thor.Address) (*validation.Totals
 	if val == nil {
 		return nil, nil
 	}
-	// if the validation exists then the aggregation must also exist ( even if as zeros )
+	// GetAggregation ensures new aggregation is created if not found
 	agg, err := s.aggregationService.GetAggregation(validator)
 	if err != nil {
 		return nil, err
