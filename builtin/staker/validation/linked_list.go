@@ -60,14 +60,6 @@ func (l *listStats) GetHead() (thor.Address, error) {
 	return *head, nil
 }
 
-func (l *listStats) GetTail() (thor.Address, error) {
-	tail, err := l.tail.Get()
-	if err != nil {
-		return thor.Address{}, err
-	}
-	return *tail, nil
-}
-
 func (l *listStats) GetSize() (uint64, error) {
 	return l.size.Get()
 }
@@ -79,7 +71,7 @@ func (l *listStats) Remove(address thor.Address, entry *Validation) (*Validation
 		if err != nil {
 			return nil, err
 		}
-		if head == nil || head.String() != address.String() {
+		if head == nil || *head != address {
 			// not the last element, return entry anyway
 			return entry, nil
 		}
@@ -88,7 +80,7 @@ func (l *listStats) Remove(address thor.Address, entry *Validation) (*Validation
 		if err != nil {
 			return nil, err
 		}
-		if tail == nil || tail.String() != address.String() {
+		if tail == nil || *tail != address {
 			// not the last element, return entry anyway
 			return entry, nil
 		}
@@ -213,6 +205,31 @@ func (l *listStats) Add(address thor.Address, newEntry *Validation) error {
 
 	// update or add new entry
 	return l.storage.upsertValidation(address, newEntry)
+}
+
+func (l *listStats) Iterate(callback func(thor.Address, *Validation) error) error {
+	current, err := l.head.Get()
+	if err != nil {
+		return err
+	}
+
+	for current != nil {
+		entry, err := l.storage.getValidation(*current)
+		if err != nil {
+			return err
+		}
+		if entry == nil {
+			return errors.New("entry is empty")
+		}
+
+		if err := callback(*current, entry); err != nil {
+			return err
+		}
+
+		current = entry.Next
+	}
+
+	return nil
 }
 
 ///
