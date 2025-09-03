@@ -101,9 +101,6 @@ type posCacher struct {
 var _ cacher = (*posCacher)(nil)
 
 func (p *posCacher) Handle(_ *block.Header, receipts tx.Receipts) (any, error) {
-	// check if there is any beneficiary change event
-	// if there is, skip the cache update to avoid inconsistency
-	// the cache will be updated in the next block
 	beneficiaryABI, ok := builtin.Staker.Events().EventByName("SetBeneficiary")
 	if !ok {
 		return nil, fmt.Errorf("pos - cannot get SetBeneficiary event")
@@ -114,13 +111,13 @@ func (p *posCacher) Handle(_ *block.Header, receipts tx.Receipts) (any, error) {
 		for _, o := range r.Outputs {
 			for _, ev := range o.Events {
 				if ev.Address == builtin.Staker.Address && ev.Topics[0] == beneficiaryABI.ID() {
-					return nil, nil
+					return nil, nil // skip the cache update
 				}
 			}
 		}
 	}
 
-	return p.leaderGroup, nil
+	return p.leaderGroup, nil // no beneficiary change, reuse the leader group
 }
 
 type noOpCacher struct{}
