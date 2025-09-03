@@ -257,7 +257,7 @@ func (s *Staker) SignalExit(validator thor.Address, endorser thor.Address) error
 	if val == nil {
 		return NewReverts("validation does not exist")
 	}
-	if val.Endorser.String() != endorser.String() {
+	if val.Endorser != endorser {
 		return NewReverts("endorser required")
 	}
 	if val.Status != validation.StatusActive {
@@ -286,11 +286,14 @@ func (s *Staker) SignalExit(validator thor.Address, endorser thor.Address) error
 func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, amount uint64) error {
 	logger.Debug("increasing stake", "endorser", endorser, "validator", validator, "amount", amount)
 
-	val, err := s.validationService.GetExistingValidation(validator)
+	val, err := s.validationService.GetValidation(validator)
 	if err != nil {
 		return err
 	}
-	if val.Endorser.String() != endorser.String() {
+	if val == nil {
+		return NewReverts("validation does not exist")
+	}
+	if val.Endorser != endorser {
 		return NewReverts("endorser required")
 	}
 	if val.Status == validation.StatusExit {
@@ -379,7 +382,7 @@ func (s *Staker) WithdrawStake(validator thor.Address, endorser thor.Address, cu
 		return 0, err
 	}
 
-	if val.Endorser.String() != endorser.String() {
+	if val.Endorser != endorser {
 		return 0, NewReverts("endorser required")
 	}
 
@@ -536,14 +539,12 @@ func (s *Staker) WithdrawDelegation(
 		return 0, NewReverts("delegation is empty")
 	}
 
-	val, err := s.validationService.GetValidation(del.Validation)
+	// there can never be a delegation pointing to a non-existent validation
+	val, err := s.validationService.GetExistingValidation(del.Validation)
 	if err != nil {
 		return 0, err
 	}
 
-	if val == nil {
-		return 0, NewReverts("validation is empty")
-	}
 	// ensure the delegation is either queued or finished
 	started := del.Started(val)
 	finished := del.Ended(val)
