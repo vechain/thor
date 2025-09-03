@@ -30,15 +30,15 @@ func New(sctx *solidity.Context) *Service {
 // GetAggregation retrieves the delegation aggregation for a validator.
 // Returns a zero-initialized aggregation if none exists.
 func (s *Service) GetAggregation(validator thor.Address) (*Aggregation, error) {
-	d, err := s.aggregationStorage.Get(validator)
+	agg, err := s.aggregationStorage.Get(validator)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get validator aggregation")
 	}
 
-	if d == nil || d.IsEmpty() {
+	if agg == nil || agg.IsEmpty() {
 		return newAggregation(), nil
 	}
-	return d, nil
+	return agg, nil
 }
 
 // AddPendingVET adds a new delegation to the validator's pending pool.

@@ -493,7 +493,8 @@ func (s *Staker) SignalDelegationExit(delegationID *big.Int) error {
 		return NewReverts("delegation has already been withdrawn")
 	}
 
-	val, err := s.validationService.GetValidation(del.Validation)
+	// there can never be a delegation pointing to a non-existent validation
+	val, err := s.validationService.GetExistingValidation(del.Validation)
 	if err != nil {
 		return err
 	}

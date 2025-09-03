@@ -596,7 +596,6 @@ func Test_LinkedList_Remove_UnlinkedSingleElement(t *testing.T) {
 	head, err := repo.firstQueued()
 	assert.NoError(t, err)
 	assert.Equal(t, id1, head)
-	
 	size, err := repo.queuedListSize()
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(1), size)
@@ -607,7 +606,7 @@ func Test_LinkedList_Remove_UnlinkedSingleElement(t *testing.T) {
 	assert.NotNil(t, val)
 	assert.Nil(t, val.Prev) // Should already be nil for single element
 	assert.Nil(t, val.Next) // Should already be nil for single element
-	
+
 	// This tests the critical code path in Remove() lines 76-114
 	// where !entry.IsLinked() and it's checking head == tail == address
 	removedEntry, err := repo.queuedList.Remove(id1, val)
