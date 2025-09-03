@@ -111,6 +111,8 @@ func (p *poaCacher) Handle(header *block.Header, receipts tx.Receipts) (any, err
 			for _, r := range receipts {
 				for _, o := range r.Outputs {
 					for _, ev := range o.Events {
+						// after HAYABUSA, authorities are allowed to migrate to staker contract,
+						// so any staker contract event(AddValidation, StakeIncreased/Decreased/Withdrawn) will need to invalidate cache
 						if header.Number() >= p.forkConfig.HAYABUSA && ev.Address == builtin.Staker.Address {
 							return true
 						}
