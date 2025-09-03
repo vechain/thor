@@ -221,8 +221,10 @@ func (l *listStats) Iterate(callback func(thor.Address, *Validation) error) erro
 	return nil
 }
 
-// /
-// / Private Methods - use pointers
+///
+/// Private Methods - use pointers
+///
+
 func (l *listStats) addSize() error {
 	size, err := l.size.Get()
 	if err != nil {

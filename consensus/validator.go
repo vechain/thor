@@ -302,7 +302,6 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 	}
 
 	if posActive {
-		// TODO: We can reward priority fees here too
 		staker := builtin.Staker.Native(state)
 		energy := builtin.Energy.Native(state, header.Timestamp())
 		if err := energy.DistributeRewards(blk.Header().Beneficiary(), signer, staker, header.Number()); err != nil {

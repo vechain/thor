@@ -172,7 +172,7 @@ func (r *Repository) iterateRenewalList(callbacks ...func(thor.Address, *Validat
 			return errors.New("entry is empty")
 		}
 		for _, callback := range callbacks {
-			if err := callback(address, entry); err != nil {
+			if err = callback(address, entry); err != nil {
 				return err
 			}
 		}

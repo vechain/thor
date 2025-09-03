@@ -309,7 +309,7 @@ func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, am
 	}
 
 	if val.Status == validation.StatusActive {
-		if err := s.validationService.AddToRenewalList(validator); err != nil {
+		if err = s.validationService.AddToRenewalList(validator); err != nil {
 			return err
 		}
 	}
@@ -364,7 +364,7 @@ func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, am
 	}
 
 	if val.Status == validation.StatusActive {
-		if err := s.validationService.AddToRenewalList(validator); err != nil {
+		if err = s.validationService.AddToRenewalList(validator); err != nil {
 			return err
 		}
 	}
@@ -563,7 +563,8 @@ func (s *Staker) SignalDelegationExit(delegationID *big.Int, currentBlock uint32
 
 // WithdrawDelegation allows expired and queued delegations to withdraw their stake.
 func (s *Staker) WithdrawDelegation(
-	delegationID *big.Int, currentBlock uint32,
+	delegationID *big.Int,
+	currentBlock uint32,
 ) (uint64, error) {
 	logger.Debug("withdrawing delegation", "delegationID", delegationID)
 

@@ -214,7 +214,6 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 	}
 
 	if f.posActive {
-		// TODO: We can reward priority fees here too
 		signer := crypto.PubkeyToAddress(privateKey.PublicKey)
 		staker := builtin.Staker.Native(f.runtime.State())
 		energy := builtin.Energy.Native(f.runtime.State(), f.runtime.Context().Time)
