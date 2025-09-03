@@ -150,31 +150,6 @@ func (r *Repository) removeActive(address thor.Address, entry *Validation) error
 	return err
 }
 
-func (r *Repository) iterateActive(callbacks ...func(thor.Address, *Validation) error) error {
-	current, err := r.activeList.GetHead()
-	if err != nil {
-		return err
-	}
-
-	for !current.IsZero() {
-		entry, err := r.getValidation(current)
-		if err != nil {
-			return err
-		}
-		if entry == nil {
-			return errors.New("entry is empty")
-		}
-		for _, callback := range callbacks {
-			if err := callback(current, entry); err != nil {
-				return err
-			}
-		}
-		if entry.Next == nil { // next is a nillable pointer
-			current = thor.Address{}
-			continue
-		}
-		current = *entry.Next
-	}
-
-	return nil
+func (r *Repository) iterateActive(callback func(thor.Address, *Validation) error) error {
+	return r.activeList.Iterate(callback)
 }

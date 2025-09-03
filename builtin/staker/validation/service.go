@@ -72,7 +72,14 @@ func (s *Service) IncreaseDelegatorsReward(node thor.Address, reward *big.Int) e
 }
 
 func (s *Service) LeaderGroupIterator(callbacks ...func(thor.Address, *Validation) error) error {
-	return s.repo.iterateActive(callbacks...)
+	return s.repo.iterateActive(func(address thor.Address, entry *Validation) error {
+		for _, callback := range callbacks {
+			if err := callback(address, entry); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // IsActive returns true if there are active validations.
