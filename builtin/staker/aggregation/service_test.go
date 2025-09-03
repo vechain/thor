@@ -38,7 +38,7 @@ func TestService_GetAggregation_ZeroInit(t *testing.T) {
 	agg, err := svc.GetAggregation(v)
 	assert.NoError(t, err)
 
-	assert.True(t, agg.IsEmpty())
+	assert.True(t, agg.LockedVET == 0 && agg.ExitingVET == 0 && agg.PendingVET == 0)
 	assert.Equal(t, uint64(0), agg.LockedVET)
 	assert.Equal(t, uint64(0), agg.PendingVET)
 	assert.Equal(t, uint64(0), agg.ExitingVET)
@@ -118,7 +118,7 @@ func TestService_Exit(t *testing.T) {
 
 	agg, err := svc.GetAggregation(v)
 	assert.NoError(t, err)
-	assert.True(t, agg.IsEmpty())
+	assert.True(t, agg.LockedVET == 0 && agg.ExitingVET == 0 && agg.PendingVET == 0)
 }
 
 func TestService_SignalExit(t *testing.T) {

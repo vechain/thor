@@ -35,7 +35,7 @@ func (s *Service) GetAggregation(validator thor.Address) (*Aggregation, error) {
 		return nil, errors.Wrap(err, "failed to get validator aggregation")
 	}
 
-	if agg == nil || agg.IsEmpty() {
+	if agg == nil {
 		return newAggregation(), nil
 	}
 	return agg, nil
