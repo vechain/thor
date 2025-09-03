@@ -85,7 +85,7 @@ func (s *Staker) TransitionPeriodBalanceCheck(fc *thor.ForkConfig, currentBlock 
 		if err != nil {
 			return false, err
 		}
-		if validation.IsEmpty() {
+		if validation == nil {
 			return false, nil
 		}
 		if validation.Endorser != endorser {

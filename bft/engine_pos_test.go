@@ -873,7 +873,7 @@ func (test *TestBFT) transitionToPosBlock(parentSummary *chain.BlockSummary, mas
 	if err != nil {
 		return nil, err
 	}
-	if validation.IsEmpty() {
+	if validation == nil {
 		// Add all dev accounts as validators
 		for _, dev := range devAccounts {
 			if err := test.adoptStakerTx(flow, dev.PrivateKey, "addValidation", toWei(validatorStake), dev.Address, minStakingPeriod); err != nil {

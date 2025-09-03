@@ -228,7 +228,8 @@ func (ts *TestSequence) AssertCompletedPeriods(
 	validationID thor.Address,
 	expectedPeriods uint32,
 ) *TestSequence {
-	periods, err := ts.staker.GetCompletedPeriods(validationID)
+	val, err := ts.staker.GetValidation(validationID)
+	periods := val.CompleteIterations
 	assert.NoError(ts.t, err, "failed to get completed periods for validator %s: %v", validationID.String(), err)
 	assert.Equal(ts.t, expectedPeriods, periods, "completed periods mismatch for validator %s", validationID.String())
 	return ts
@@ -337,7 +338,7 @@ func (va *ValidationAssertions) PendingUnlockVET(expected *big.Int) *ValidationA
 }
 
 func (va *ValidationAssertions) IsEmpty(expected bool) *ValidationAssertions {
-	assert.Equal(va.t, expected, va.validator.IsEmpty(), "validator %s empty state mismatch", va.addr.String())
+	assert.Equal(va.t, expected, va.validator == nil, "validator %s empty state mismatch", va.addr.String())
 	return va
 }
 
@@ -348,11 +349,11 @@ func (va *ValidationAssertions) Rewards(period uint32, expected *big.Int) *Valid
 	return va
 }
 
-func (va *ValidationAssertions) Beneficiary(expected *thor.Address) *ValidationAssertions {
-	if expected == nil {
+func (va *ValidationAssertions) Beneficiary(expected thor.Address) *ValidationAssertions {
+	if expected.IsZero() {
 		assert.Nil(va.t, va.validator.Beneficiary, "validator %s beneficiary mismatch", va.addr.String())
 	} else {
-		assert.Equal(va.t, *expected, *va.validator.Beneficiary, "validator %s beneficiary mismatch", va.addr.String())
+		assert.Equal(va.t, expected, *va.validator.Beneficiary, "validator %s beneficiary mismatch", va.addr.String())
 	}
 	return va
 }
@@ -479,10 +480,11 @@ func TestValidation_SignalExit_InvalidEndorser(t *testing.T) {
 
 	id := thor.BytesToAddress([]byte("v"))
 	end := thor.BytesToAddress([]byte("endorse"))
+	wrong := thor.BytesToAddress([]byte("wrong"))
 
 	assert.NoError(t, staker.validationService.Add(id, end, thor.MediumStakingPeriod(), 100))
 
-	err := staker.SignalExit(id, thor.BytesToAddress([]byte("wrong")))
+	err := staker.SignalExit(id, wrong)
 	assert.ErrorContains(t, err, "endorser required")
 }
 
@@ -510,10 +512,11 @@ func TestValidation_IncreaseStake_InvalidEndorser(t *testing.T) {
 
 	id := thor.BytesToAddress([]byte("v"))
 	end := thor.BytesToAddress([]byte("endorse"))
+	wrong := thor.BytesToAddress([]byte("wrong"))
 
 	assert.NoError(t, staker.validationService.Add(id, end, thor.MediumStakingPeriod(), 100))
 
-	err := staker.IncreaseStake(id, thor.BytesToAddress([]byte("wrong")), 10)
+	err := staker.IncreaseStake(id, wrong, 10)
 	assert.ErrorContains(t, err, "endorser required")
 }
 
@@ -542,7 +545,7 @@ func TestValidation_IncreaseStake_ActiveHasExitBlock(t *testing.T) {
 
 	val, err := staker.validationService.GetValidation(id)
 	assert.NoError(t, err)
-	assert.False(t, val.IsEmpty())
+	assert.False(t, val == nil)
 
 	staker.validationService.ActivateValidator(id, val, 0, &globalstats.Renewal{
 		LockedIncrease: stakes.NewWeightedStake(0, 0),
@@ -569,10 +572,11 @@ func TestValidation_DecreaseStake_InvalidEndorser(t *testing.T) {
 	staker := newTestStaker()
 	id := thor.BytesToAddress([]byte("v"))
 	end := thor.BytesToAddress([]byte("endorse"))
+	wrong := thor.BytesToAddress([]byte("wrong"))
 
 	assert.NoError(t, staker.validationService.Add(id, end, thor.MediumStakingPeriod(), 100))
 
-	err := staker.DecreaseStake(id, thor.BytesToAddress([]byte("wrong")), 1)
+	err := staker.DecreaseStake(id, wrong, 1)
 	assert.ErrorContains(t, err, "endorser required")
 }
 
@@ -586,7 +590,7 @@ func TestValidation_DecreaseStake_StatusExit(t *testing.T) {
 
 	val, err := staker.validationService.GetValidation(id)
 	assert.NoError(t, err)
-	assert.False(t, val.IsEmpty())
+	assert.False(t, val == nil)
 
 	staker.validationService.ActivateValidator(id, val, 0, &globalstats.Renewal{
 		LockedIncrease: stakes.NewWeightedStake(0, 0),
@@ -611,7 +615,7 @@ func TestValidation_DecreaseStake_ActiveHasExitBlock(t *testing.T) {
 
 	val, err := staker.validationService.GetValidation(id)
 	assert.NoError(t, err)
-	assert.False(t, val.IsEmpty())
+	assert.False(t, val == nil)
 
 	staker.validationService.ActivateValidator(id, val, 0, &globalstats.Renewal{
 		LockedIncrease: stakes.NewWeightedStake(0, 0),
@@ -648,7 +652,7 @@ func TestValidation_DecreaseStake_ActiveSuccess(t *testing.T) {
 
 	val, err := staker.validationService.GetValidation(id)
 	assert.NoError(t, err)
-	assert.False(t, val.IsEmpty())
+	assert.False(t, val == nil)
 
 	staker.validationService.ActivateValidator(id, val, 0, &globalstats.Renewal{
 		LockedIncrease: stakes.NewWeightedStake(0, 0),
@@ -697,10 +701,11 @@ func TestValidation_WithdrawStake_InvalidEndorser(t *testing.T) {
 	staker := newTestStaker()
 
 	id := thor.BytesToAddress([]byte("v"))
+	wrong := thor.BytesToAddress([]byte("wrong"))
 	endorsor := id
 	assert.NoError(t, staker.AddValidation(id, endorsor, thor.LowStakingPeriod(), MinStakeVET))
 
-	amt, err := staker.WithdrawStake(id, thor.BytesToAddress([]byte("wrong")), 0)
+	amt, err := staker.WithdrawStake(id, wrong, 0)
 	assert.Equal(t, uint64(0), amt)
 	assert.ErrorContains(t, err, "endorser required")
 }
@@ -720,10 +725,11 @@ func TestValidation_SetBeneficiary_Error(t *testing.T) {
 	staker := newTestStaker()
 
 	id := thor.BytesToAddress([]byte("v"))
+	wrong := thor.BytesToAddress([]byte("wrong"))
 	endorsor := id
 	assert.NoError(t, staker.AddValidation(id, endorsor, thor.LowStakingPeriod(), MinStakeVET))
 
-	assert.ErrorContains(t, staker.SetBeneficiary(id, thor.BytesToAddress([]byte("wrong")), id), "endorser required")
+	assert.ErrorContains(t, staker.SetBeneficiary(id, wrong, id), "endorser required")
 
 	_, err := staker.WithdrawStake(id, id, 0)
 	assert.NoError(t, err)
@@ -749,7 +755,7 @@ func TestDelegation_SignalExit(t *testing.T) {
 
 	val, err := staker.validationService.GetValidation(v)
 	assert.NoError(t, err)
-	assert.False(t, val.IsEmpty())
+	assert.False(t, val == nil)
 
 	staker.validationService.ActivateValidator(v, val, 0, &globalstats.Renewal{
 		LockedIncrease: stakes.NewWeightedStake(0, 0),

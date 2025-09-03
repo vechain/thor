@@ -29,8 +29,9 @@ func newRepo(t *testing.T) (*Repository, thor.Address, *state.State) {
 func TestRepository_Validation_RoundTrip(t *testing.T) {
 	repo, _, _ := newRepo(t)
 	id := thor.BytesToAddress([]byte("v1"))
+	e1 := thor.BytesToAddress([]byte("e1"))
 	entry := &Validation{
-		Endorser:           thor.BytesToAddress([]byte("e1")),
+		Endorser:           e1,
 		Period:             15,
 		CompleteIterations: 2,
 		Status:             StatusQueued,
@@ -70,7 +71,7 @@ func TestRepository_Reward_RoundTrip_DefaultZero(t *testing.T) {
 
 	// set then get
 	want := big.NewInt(1234)
-	assert.NoError(t, repo.setReward(key, want, true))
+	assert.NoError(t, repo.setReward(key, want))
 
 	got, err := repo.getReward(key)
 	assert.NoError(t, err)
@@ -97,5 +98,5 @@ func TestRepository_Exit_RoundTrip(t *testing.T) {
 
 	addr, err := repo.getExit(42)
 	assert.NoError(t, err)
-	assert.Equal(t, validator, addr)
+	assert.Equal(t, validator.String(), addr.String())
 }

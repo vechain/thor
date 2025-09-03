@@ -26,10 +26,6 @@ import (
 	"github.com/vechain/thor/v2/trie"
 )
 
-func M(a ...any) []any {
-	return a
-}
-
 // RandomStake returns a random number between MinStake and (MaxStake/2)
 func RandomStake() uint64 {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -87,40 +83,6 @@ func newStaker(t *testing.T, amount int, maxValidators int64, initialise bool) (
 		assert.True(t, transitioned)
 	}
 	return staker, totalStake
-}
-
-func TestStaker(t *testing.T) {
-	validator1 := thor.BytesToAddress([]byte("v1"))
-	validator2 := thor.BytesToAddress([]byte("v2"))
-	validator3 := thor.BytesToAddress([]byte("v3"))
-	stakeAmount := uint64(25e6)
-	zeroStake := uint64(0)
-
-	stkr, _ := newStaker(t, 0, 3, false)
-
-	totalStake := stakeAmount * 2
-
-	tests := []struct {
-		ret      any
-		expected any
-	}{
-		{M(stkr.LockedStake()), M(zeroStake, zeroStake, nil)},
-		{M(stkr.AddValidation(validator1, validator1, uint32(360)*24*15, stakeAmount)), M(nil)},
-		{M(stkr.AddValidation(validator2, validator2, uint32(360)*24*15, stakeAmount)), M(nil)},
-		{M(stkr.transition(0)), M(true, nil)},
-		{M(stkr.LockedStake()), M(totalStake, totalStake, nil)},
-		{M(stkr.AddValidation(validator3, validator3, uint32(360)*24*15, stakeAmount)), M(nil)},
-		{M(stkr.FirstQueued()), M(validator3, nil)},
-		{M(func() (*thor.Address, error) {
-			activated, err := stkr.activateNextValidation(0, getTestMaxLeaderSize(stkr.params))
-			return &activated, err
-		}()), M(&validator3, nil)},
-		{M(stkr.FirstActive()), M(validator1, nil)},
-	}
-
-	for _, tt := range tests {
-		assert.Equal(t, tt.expected, tt.ret)
-	}
 }
 
 func TestStaker_TotalStake(t *testing.T) {
@@ -345,7 +307,7 @@ func TestStaker_AddValidation(t *testing.T) {
 
 	validator, err := staker.GetValidation(addr1)
 	assert.NoError(t, err)
-	assert.False(t, validator.IsEmpty())
+	assert.False(t, validator == nil)
 	assert.Equal(t, stake, validator.QueuedVET)
 	assert.Equal(t, validation.StatusQueued, validator.Status)
 
@@ -354,7 +316,7 @@ func TestStaker_AddValidation(t *testing.T) {
 
 	validator, err = staker.GetValidation(addr2)
 	assert.NoError(t, err)
-	assert.False(t, validator.IsEmpty())
+	assert.False(t, validator == nil)
 	assert.Equal(t, stake, validator.QueuedVET)
 	assert.Equal(t, validation.StatusQueued, validator.Status)
 
@@ -363,7 +325,7 @@ func TestStaker_AddValidation(t *testing.T) {
 
 	validator, err = staker.GetValidation(addr2)
 	assert.NoError(t, err)
-	assert.False(t, validator.IsEmpty())
+	assert.False(t, validator == nil)
 	assert.Equal(t, stake, validator.QueuedVET)
 	assert.Equal(t, validation.StatusQueued, validator.Status)
 
@@ -372,7 +334,7 @@ func TestStaker_AddValidation(t *testing.T) {
 
 	validator, err = staker.GetValidation(addr4)
 	assert.NoError(t, err)
-	assert.True(t, validator.IsEmpty())
+	assert.Nil(t, validator)
 }
 
 func TestStaker_QueueUpValidators(t *testing.T) {
@@ -389,7 +351,7 @@ func TestStaker_QueueUpValidators(t *testing.T) {
 
 	validator, err := staker.GetValidation(addr1)
 	assert.NoError(t, err)
-	assert.False(t, validator.IsEmpty())
+	assert.False(t, validator == nil)
 	assert.Equal(t, stake, validator.QueuedVET)
 	assert.Equal(t, validation.StatusQueued, validator.Status)
 
@@ -397,7 +359,7 @@ func TestStaker_QueueUpValidators(t *testing.T) {
 	assert.NoError(t, err)
 	validator, err = staker.GetValidation(addr1)
 	assert.NoError(t, err)
-	assert.False(t, validator.IsEmpty())
+	assert.False(t, validator == nil)
 	assert.Equal(t, stake, validator.LockedVET)
 	assert.Equal(t, validation.StatusActive, validator.Status)
 
@@ -406,7 +368,7 @@ func TestStaker_QueueUpValidators(t *testing.T) {
 
 	validator, err = staker.GetValidation(addr2)
 	assert.NoError(t, err)
-	assert.False(t, validator.IsEmpty())
+	assert.False(t, validator == nil)
 	assert.Equal(t, stake, validator.QueuedVET)
 	assert.Equal(t, validation.StatusQueued, validator.Status)
 
@@ -415,7 +377,7 @@ func TestStaker_QueueUpValidators(t *testing.T) {
 
 	validator, err = staker.GetValidation(addr3)
 	assert.NoError(t, err)
-	assert.False(t, validator.IsEmpty())
+	assert.False(t, validator == nil)
 	assert.Equal(t, stake, validator.QueuedVET)
 	assert.Equal(t, validation.StatusQueued, validator.Status)
 
@@ -424,11 +386,11 @@ func TestStaker_QueueUpValidators(t *testing.T) {
 
 	validator, err = staker.GetValidation(addr4)
 	assert.NoError(t, err)
-	assert.True(t, validator.IsEmpty())
+	assert.Nil(t, validator)
 
 	validator, err = staker.GetValidation(addr1)
 	assert.NoError(t, err)
-	assert.False(t, validator.IsEmpty())
+	assert.False(t, validator == nil)
 	assert.Equal(t, stake, validator.LockedVET)
 	assert.Equal(t, validation.StatusActive, validator.Status)
 
@@ -437,13 +399,13 @@ func TestStaker_QueueUpValidators(t *testing.T) {
 
 	validator, err = staker.GetValidation(addr2)
 	assert.NoError(t, err)
-	assert.False(t, validator.IsEmpty())
+	assert.False(t, validator == nil)
 	assert.Equal(t, stake, validator.LockedVET)
 	assert.Equal(t, validation.StatusActive, validator.Status)
 
 	validator, err = staker.GetValidation(addr1)
 	assert.NoError(t, err)
-	assert.False(t, validator.IsEmpty())
+	assert.False(t, validator == nil)
 	assert.Equal(t, stake, validator.LockedVET)
 	assert.Equal(t, validation.StatusActive, validator.Status)
 }
@@ -454,7 +416,7 @@ func TestStaker_Get_NonExistent(t *testing.T) {
 	id := datagen.RandAddress()
 	validator, err := staker.GetValidation(id)
 	assert.NoError(t, err)
-	assert.True(t, validator.IsEmpty())
+	assert.Nil(t, validator)
 }
 
 func TestStaker_Get(t *testing.T) {
@@ -467,7 +429,7 @@ func TestStaker_Get(t *testing.T) {
 
 	validator, err := staker.GetValidation(addr)
 	assert.NoError(t, err)
-	assert.False(t, validator.IsEmpty())
+	assert.False(t, validator == nil)
 	assert.Equal(t, stake, validator.QueuedVET)
 	assert.Equal(t, validation.StatusQueued, validator.Status)
 
@@ -567,7 +529,7 @@ func TestStaker_WithdrawQueued(t *testing.T) {
 	// verify queued empty
 	queued, err := staker.FirstQueued()
 	assert.NoError(t, err)
-	assert.Equal(t, thor.Address{}, queued)
+	assert.True(t, queued.IsZero())
 
 	// add the validator
 	period := uint32(360) * 24 * 15
@@ -593,7 +555,7 @@ func TestStaker_WithdrawQueued(t *testing.T) {
 	// verify removed queued
 	queued, err = staker.FirstQueued()
 	assert.NoError(t, err)
-	assert.Equal(t, thor.Address{}, queued)
+	assert.True(t, queued.IsZero())
 }
 
 func TestStaker_IncreaseQueued(t *testing.T) {
@@ -624,7 +586,7 @@ func TestStaker_IncreaseQueued(t *testing.T) {
 	assert.Equal(t, newAmount, expectedStake)
 	validator, err = staker.GetValidation(addr)
 	assert.NoError(t, err)
-	assert.False(t, validator.IsEmpty())
+	assert.False(t, validator == nil)
 	assert.Equal(t, validator.Status, validation.StatusQueued)
 	assert.Equal(t, validator.QueuedVET, expectedStake)
 	assert.Equal(t, uint64(0), validator.Weight)
@@ -1113,7 +1075,7 @@ func TestStaker_Get_FullFlow_Renewal_On(t *testing.T) {
 	assert.Equal(t, uint64(0), amount)
 	validator, err = staker.GetValidation(addr)
 	assert.NoError(t, err)
-	assert.False(t, validator.IsEmpty())
+	assert.False(t, validator == nil)
 }
 
 func TestStaker_Get_FullFlow_Renewal_On_Then_Off(t *testing.T) {
@@ -1165,7 +1127,7 @@ func TestStaker_Get_FullFlow_Renewal_On_Then_Off(t *testing.T) {
 	assert.Equal(t, uint64(0), amount)
 	validator, err = staker.GetValidation(addr)
 	assert.NoError(t, err)
-	assert.False(t, validator.IsEmpty())
+	assert.False(t, validator == nil)
 
 	assert.NoError(t, staker.SignalExit(addr, addr))
 
@@ -1186,7 +1148,7 @@ func TestStaker_Get_FullFlow_Renewal_On_Then_Off(t *testing.T) {
 	assert.Equal(t, stake, withdrawAmount)
 	validator, err = staker.GetValidation(addr)
 	assert.NoError(t, err)
-	assert.False(t, validator.IsEmpty())
+	assert.False(t, validator == nil)
 }
 
 func TestStaker_ActivateNextValidator_LeaderGroupFull(t *testing.T) {
@@ -1234,7 +1196,7 @@ func TestStaker_RemoveValidator_NonExistent(t *testing.T) {
 
 	addr := datagen.RandAddress()
 	_, err := staker.validationService.ExitValidator(addr)
-	assert.NoError(t, err)
+	assert.ErrorContains(t, err, "failed to get existing validator")
 }
 
 func TestStaker_RemoveValidator(t *testing.T) {
@@ -1312,8 +1274,8 @@ func TestStaker_Next_Empty(t *testing.T) {
 
 	id := datagen.RandAddress()
 	next, err := staker.Next(id)
-	assert.Nil(t, err)
-	assert.Equal(t, thor.Address{}, next)
+	assert.ErrorContains(t, err, "no validation found")
+	assert.True(t, next.IsZero())
 }
 
 func TestStaker_Next(t *testing.T) {
@@ -2135,14 +2097,16 @@ func TestStaker_GetCompletedPeriods(t *testing.T) {
 	_, err = staker.activateNextValidation(0, getTestMaxLeaderSize(staker.params))
 	assert.NoError(t, err)
 
-	periods, err := staker.GetCompletedPeriods(proposerAddr)
+	val, err := staker.GetValidation(proposerAddr)
+	periods := val.CompleteIterations
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(0), periods)
 
 	_, err = staker.Housekeep(period)
 	assert.NoError(t, err)
 
-	periods, err = staker.GetCompletedPeriods(proposerAddr)
+	val, err = staker.GetValidation(proposerAddr)
+	periods = val.CompleteIterations
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(1), periods)
 }
@@ -2504,7 +2468,7 @@ func TestStaker_SetBeneficiary(t *testing.T) {
 
 	// add validation without a beneficiary
 	testSetup.AddValidation(master, endorser, thor.MediumStakingPeriod(), MinStakeVET).ActivateNext(0)
-	assertValidation(t, staker, master).Beneficiary(nil)
+	assertValidation(t, staker, master).Beneficiary(thor.Address{})
 
 	// negative cases
 	assert.ErrorContains(t, staker.SetBeneficiary(master, master, beneficiary), "endorser required")
@@ -2512,11 +2476,11 @@ func TestStaker_SetBeneficiary(t *testing.T) {
 
 	// set beneficiary, should be successful
 	testSetup.SetBeneficiary(master, endorser, beneficiary)
-	assertValidation(t, staker, master).Beneficiary(&beneficiary)
+	assertValidation(t, staker, master).Beneficiary(beneficiary)
 
 	// remove the beneficiary
 	testSetup.SetBeneficiary(master, endorser, thor.Address{})
-	assertValidation(t, staker, master).Beneficiary(nil)
+	assertValidation(t, staker, master).Beneficiary(thor.Address{})
 }
 
 func getTestMaxLeaderSize(param *params.Params) uint64 {
@@ -3307,16 +3271,16 @@ func TestStaker_Housekeep_NegativeCases(t *testing.T) {
 	err = staker.applyEpochTransition(&EpochTransition{
 		Block:           0,
 		Renewals:        []thor.Address{validatorAddr},
-		ExitValidator:   nil,
+		ExitValidator:   thor.Address{},
 		Evictions:       nil,
 		ActivationCount: 0,
 	})
 	assert.ErrorContains(t, err, "failed to get validator aggregation")
-
+	re2 := thor.BytesToAddress([]byte("renewal2"))
 	err = staker.applyEpochTransition(&EpochTransition{
 		Block:           0,
-		Renewals:        []thor.Address{thor.BytesToAddress([]byte("renewal2"))},
-		ExitValidator:   nil,
+		Renewals:        []thor.Address{re2},
+		ExitValidator:   thor.Address{},
 		Evictions:       nil,
 		ActivationCount: 0,
 	})
@@ -3331,7 +3295,7 @@ func TestStaker_Housekeep_NegativeCases(t *testing.T) {
 	err = staker.applyEpochTransition(&EpochTransition{
 		Block:           0,
 		Renewals:        []thor.Address{},
-		ExitValidator:   &valAddr,
+		ExitValidator:   valAddr,
 		Evictions:       nil,
 		ActivationCount: 0,
 	})
@@ -3345,7 +3309,7 @@ func TestStaker_Housekeep_NegativeCases(t *testing.T) {
 	err = staker.applyEpochTransition(&EpochTransition{
 		Block:           0,
 		Renewals:        []thor.Address{},
-		ExitValidator:   &valAddr,
+		ExitValidator:   valAddr,
 		Evictions:       nil,
 		ActivationCount: 0,
 	})

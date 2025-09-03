@@ -69,8 +69,9 @@ func init() {
 				return nil, err
 			}
 
-			// IMPORTANT, DO NOT return zero value for pointer type, subsequent abi.EncodeOutput will panic due to call of reflect.ValueOf.
-			if validator.IsEmpty() {
+			// IMPORTANT, DO NOT return zero value for pointer type
+			// Subsequent abi.EncodeOutput will panic due to call of reflect.ValueOf.
+			if validator == nil {
 				return []any{
 					thor.Address{},
 					big.NewInt(0),
@@ -126,6 +127,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
+
 			return []any{first}, nil
 		}},
 		{"native_firstQueued", func(env *xenv.Environment) ([]any, error) {
@@ -135,6 +137,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
+
 			return []any{first}, nil
 		}},
 		{"native_next", func(env *xenv.Environment) ([]any, error) {
@@ -148,6 +151,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
+
 			return []any{next}, nil
 		}},
 		{"native_withdrawStake", func(env *xenv.Environment) ([]any, error) {
@@ -177,6 +181,8 @@ func init() {
 				Stake     *big.Int
 			}
 			env.ParseArgs(&args)
+			val := thor.Address(args.Validator)
+			end := thor.Address(args.Endorser)
 			charger := gascharger.New(env)
 
 			isPoSActive, err := Staker.NativeMetered(env.State(), charger).IsPoSActive()
@@ -201,8 +207,8 @@ func init() {
 
 			err = Staker.NativeMetered(env.State(), charger).
 				AddValidation(
-					thor.Address(args.Validator),
-					thor.Address(args.Endorser),
+					val,
+					end,
 					args.Period,
 					toVET(args.Stake), // convert from wei to VET
 				)
@@ -351,8 +357,9 @@ func init() {
 				return nil, err
 			}
 
-			// IMPORTANT, DO NOT return zero value for pointer type, subsequent abi.EncodeOutput will panic due to call of reflect.ValueOf.
-			if delegation.IsEmpty() {
+			// IMPORTANT, DO NOT return zero value for pointer type
+			// Subsequent abi.EncodeOutput will panic due to call of reflect.ValueOf.
+			if delegation == nil {
 				return []any{thor.Address{}, big.NewInt(0), uint8(0), false, uint32(0), uint32(math.MaxUint32)}, nil
 			}
 
@@ -405,6 +412,15 @@ func init() {
 			totals, err := Staker.NativeMetered(env.State(), charger).GetValidationTotals(thor.Address(args.Validator))
 			if err != nil {
 				return nil, err
+			}
+			if totals == nil {
+				return []any{
+					new(big.Int),
+					new(big.Int),
+					new(big.Int),
+					new(big.Int),
+					new(big.Int),
+				}, nil
 			}
 			return []any{
 				toWei(totals.TotalLockedStake),

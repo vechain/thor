@@ -45,51 +45,29 @@ func newListStats(sctx *solidity.Context, storage *Storage, headKey, tailKey, si
 	}
 }
 
-func (l *listStats) getHead() (*thor.Address, error) {
-	return l.head.Get()
+///
+/// Public methods - receive and return values
+///
+
+func (l *listStats) GetHead() (thor.Address, error) {
+	head, err := l.head.Get()
+	if err != nil {
+		return thor.Address{}, err
+	}
+	if head == nil {
+		return thor.Address{}, nil
+	}
+	return *head, nil
 }
 
-func (l *listStats) getTail() (*thor.Address, error) {
-	return l.tail.Get()
-}
-
-func (l *listStats) getSize() (uint64, error) {
+func (l *listStats) GetSize() (uint64, error) {
 	return l.size.Get()
 }
 
-func (l *listStats) setHead(key *thor.Address) error {
-	return l.head.Upsert(key)
-}
-
-func (l *listStats) setTail(key *thor.Address) error {
-	return l.tail.Upsert(key)
-}
-
-func (l *listStats) addSize() error {
-	size, err := l.size.Get()
-	if err != nil {
-		return err
-	}
-	return l.size.Upsert(size + 1)
-}
-
-func (l *listStats) subSize() error {
-	size, err := l.size.Get()
-	if err != nil {
-		return err
-	}
-	if size == 0 {
-		return errors.New("size is already 0")
-	}
-
-	// already touched by AddSize
-	return l.size.Update(size - 1)
-}
-
-func (l *listStats) remove(address thor.Address, entry *Validation) (*Validation, error) {
+func (l *listStats) Remove(address thor.Address, entry *Validation) (*Validation, error) {
 	if !entry.IsLinked() {
 		// if entry is not linked, check if it is the last element in the list
-		head, err := l.getHead()
+		head, err := l.head.Get()
 		if err != nil {
 			return nil, err
 		}
@@ -98,7 +76,7 @@ func (l *listStats) remove(address thor.Address, entry *Validation) (*Validation
 			return entry, nil
 		}
 
-		tail, err := l.getTail()
+		tail, err := l.tail.Get()
 		if err != nil {
 			return nil, err
 		}
@@ -137,7 +115,7 @@ func (l *listStats) remove(address thor.Address, entry *Validation) (*Validation
 		if err != nil {
 			return nil, err
 		}
-		if prevEntry.IsEmpty() {
+		if prevEntry == nil {
 			return nil, errors.New("prev entry is empty")
 		}
 
@@ -157,7 +135,7 @@ func (l *listStats) remove(address thor.Address, entry *Validation) (*Validation
 		if err != nil {
 			return nil, err
 		}
-		if nextEntry.IsEmpty() {
+		if nextEntry == nil {
 			return nil, errors.New("next entry is empty")
 		}
 
@@ -183,8 +161,8 @@ func (l *listStats) remove(address thor.Address, entry *Validation) (*Validation
 	return entry, nil
 }
 
-func (l *listStats) add(address thor.Address, newEntry *Validation) error {
-	tail, err := l.getTail()
+func (l *listStats) Add(address thor.Address, newEntry *Validation) error {
+	tail, err := l.tail.Get()
 	if err != nil {
 		return err
 	}
@@ -207,7 +185,7 @@ func (l *listStats) add(address thor.Address, newEntry *Validation) error {
 			return err
 		}
 
-		if tailEntry.IsEmpty() {
+		if tailEntry == nil {
 			return errors.New("tail entry is empty")
 		}
 
@@ -226,5 +204,63 @@ func (l *listStats) add(address thor.Address, newEntry *Validation) error {
 	}
 
 	// update or add new entry
-	return l.storage.upsertValidation(address, *newEntry)
+	return l.storage.upsertValidation(address, newEntry)
+}
+
+func (l *listStats) Iterate(callback func(thor.Address, *Validation) error) error {
+	current, err := l.head.Get()
+	if err != nil {
+		return err
+	}
+
+	for current != nil {
+		entry, err := l.storage.getValidation(*current)
+		if err != nil {
+			return err
+		}
+		if entry == nil {
+			return errors.New("entry is empty")
+		}
+
+		if err := callback(*current, entry); err != nil {
+			return err
+		}
+
+		current = entry.Next
+	}
+
+	return nil
+}
+
+///
+/// Private Methods - use pointers
+//
+
+func (l *listStats) setHead(key *thor.Address) error {
+	return l.head.Upsert(key)
+}
+
+func (l *listStats) setTail(key *thor.Address) error {
+	return l.tail.Upsert(key)
+}
+
+func (l *listStats) addSize() error {
+	size, err := l.size.Get()
+	if err != nil {
+		return err
+	}
+	return l.size.Upsert(size + 1)
+}
+
+func (l *listStats) subSize() error {
+	size, err := l.size.Get()
+	if err != nil {
+		return err
+	}
+	if size == 0 {
+		return errors.New("size is already 0")
+	}
+
+	// already touched by AddSize
+	return l.size.Update(size - 1)
 }

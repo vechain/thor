@@ -11,7 +11,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
-	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -23,23 +22,25 @@ var (
 )
 
 type Service struct {
-	delegations *solidity.Mapping[*big.Int, Delegation]
+	delegations *solidity.Mapping[*big.Int, *Delegation]
 	idCounter   *solidity.Raw[*big.Int]
 }
 
 func New(sctx *solidity.Context) *Service {
 	return &Service{
-		delegations: solidity.NewMapping[*big.Int, Delegation](sctx, slotDelegations),
+		delegations: solidity.NewMapping[*big.Int, *Delegation](sctx, slotDelegations),
 		idCounter:   solidity.NewRaw[*big.Int](sctx, slotDelegationsCounter),
 	}
 }
 
+// GetDelegation retrieves the delegation for a validator.
 func (s *Service) GetDelegation(delegationID *big.Int) (*Delegation, error) {
 	d, err := s.delegations.Get(delegationID)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get delegation")
 	}
-	return &d, nil
+
+	return d, nil
 }
 
 func (s *Service) Add(
@@ -54,7 +55,7 @@ func (s *Service) Add(
 	}
 
 	delegationID := new(big.Int).Set(id)
-	delegation := Delegation{
+	delegation := &Delegation{
 		Validation:     validator,
 		Multiplier:     multiplier,
 		Stake:          stake,
@@ -71,15 +72,15 @@ func (s *Service) Add(
 func (s *Service) SignalExit(delegation *Delegation, delegationID *big.Int, valCurrentIteration uint32) error {
 	delegation.LastIteration = &valCurrentIteration
 
-	return s.delegations.Update(delegationID, *delegation)
+	return s.delegations.Update(delegationID, delegation)
 }
 
-func (s *Service) Withdraw(del *Delegation, delegationID *big.Int, val *validation.Validation) (uint64, error) {
+func (s *Service) Withdraw(del *Delegation, delegationID *big.Int) (uint64, error) {
 	// ensure the pointers are copied, not referenced
 	withdrawableStake := del.Stake
 
 	del.Stake = 0
-	if err := s.delegations.Update(delegationID, *del); err != nil {
+	if err := s.delegations.Update(delegationID, del); err != nil {
 		return 0, err
 	}
 

@@ -20,14 +20,14 @@ import (
 type EpochTransition struct {
 	Block           uint32
 	Renewals        []thor.Address
-	ExitValidator   *thor.Address
+	ExitValidator   thor.Address
 	Evictions       []thor.Address
 	ActivationCount uint64
 }
 
 func (et *EpochTransition) HasUpdates() bool {
 	return len(et.Renewals) > 0 || // renewing existing staking periods
-		(et.ExitValidator != nil && !et.ExitValidator.IsZero()) || // exiting 1 validator
+		!et.ExitValidator.IsZero() || // exiting 1 validator
 		len(et.Evictions) > 0 || // forcing eviction of offline validators
 		et.ActivationCount > 0 // activating new validators
 }
@@ -76,11 +76,11 @@ func (s *Staker) computeEpochTransition(currentBlock uint32) (*EpochTransition, 
 	transition := &EpochTransition{Block: currentBlock, Renewals: renewals, Evictions: evictions}
 
 	if !exitValidator.IsZero() {
-		transition.ExitValidator = &exitValidator
+		transition.ExitValidator = exitValidator
 	}
 
 	// 3. Compute all activations
-	transition.ActivationCount, err = s.computeActivationCount(transition.ExitValidator != nil)
+	transition.ActivationCount, err = s.computeActivationCount(!transition.ExitValidator.IsZero())
 	if err != nil {
 		return nil, err
 	}
@@ -200,16 +200,16 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 	}
 
 	// Apply exits
-	if transition.ExitValidator != nil {
+	if !transition.ExitValidator.IsZero() {
 		logger.Info("exiting validator", "validator", transition.ExitValidator)
 
 		// Now call ExitValidator to get the actual exit details and perform the exit
-		exit, err := s.validationService.ExitValidator(*transition.ExitValidator)
+		exit, err := s.validationService.ExitValidator(transition.ExitValidator)
 		if err != nil {
 			return err
 		}
 
-		aggExit, err := s.aggregationService.Exit(*transition.ExitValidator)
+		aggExit, err := s.aggregationService.Exit(transition.ExitValidator)
 		if err != nil {
 			return err
 		}
