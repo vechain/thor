@@ -16,10 +16,23 @@ func RandAddress() (addr thor.Address) {
 	return
 }
 
+func RandAddressPtr() *thor.Address {
+	addr := RandAddress()
+	return &addr
+}
+
 func RandAddresses(n int) (addrs []thor.Address) {
 	addrs = make([]thor.Address, n)
 	for i := range addrs {
 		addrs[i] = RandAddress()
+	}
+	return
+}
+
+func RandAddressesPtr(n int) (addrs []*thor.Address) {
+	addrs = make([]*thor.Address, n)
+	for i := range addrs {
+		addrs[i] = RandAddressPtr()
 	}
 	return
 }

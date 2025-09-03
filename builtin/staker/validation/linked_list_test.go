@@ -32,7 +32,7 @@ func Test_LinkedList_HeadAndTail(t *testing.T) {
 	id1 := datagen.RandAddress()
 	id2 := datagen.RandAddress()
 
-	if err := repo.addValidation(id1, &Validation{Status: StatusQueued}); err != nil {
+	if err := repo.addValidation(id1, &Validation{Endorser: id1, Status: StatusQueued}); err != nil {
 		t.Fatalf("failed to add id1: %v", err)
 	}
 
@@ -46,12 +46,12 @@ func Test_LinkedList_HeadAndTail(t *testing.T) {
 
 	val, err := repo.getValidation(id1)
 	assert.NoError(t, err)
-	assert.False(t, val.IsEmpty())
+	assert.False(t, val == nil)
 
 	assert.Nil(t, val.Prev)
 	assert.Nil(t, val.Next)
 
-	if err := repo.addValidation(id2, &Validation{Status: StatusQueued}); err != nil {
+	if err := repo.addValidation(id2, &Validation{Endorser: id2, Status: StatusQueued}); err != nil {
 		t.Fatalf("failed to add id2: %v", err)
 	}
 
@@ -69,7 +69,7 @@ func Test_LinkedList_HeadAndTail(t *testing.T) {
 
 	val, err = repo.getValidation(id2)
 	assert.NoError(t, err)
-	assert.False(t, val.IsEmpty())
+	assert.False(t, val == nil)
 
 	assert.NotNil(t, val.Prev)
 	assert.Nil(t, val.Next)
@@ -77,7 +77,7 @@ func Test_LinkedList_HeadAndTail(t *testing.T) {
 
 	val, err = repo.getValidation(id2)
 	assert.NoError(t, err)
-	assert.False(t, val.IsEmpty())
+	assert.False(t, val == nil)
 	// remove ID2
 	if err := repo.removeQueued(id2, val); err != nil {
 		t.Fatalf("failed to remove id2: %v", err)
@@ -98,7 +98,7 @@ func Test_LinkedList_HeadAndTail(t *testing.T) {
 
 	val, err = repo.getValidation(id1)
 	assert.NoError(t, err)
-	assert.False(t, val.IsEmpty())
+	assert.False(t, val == nil)
 
 	// remove ID1
 	if err := repo.removeQueued(id1, val); err != nil {
@@ -157,7 +157,7 @@ func Test_LinkedList_Remove_NonExistent(t *testing.T) {
 	// Verify removed-node pointers are cleared
 	nextPtr, err := repo.nextEntry(id2)
 	assert.NoError(t, err)
-	assert.True(t, nextPtr.IsZero(), "expected next[id2] to be cleared")
+	assert.Truef(t, nextPtr.IsZero(), "expected next[id2] to be cleared")
 	prevPtr, err := repo.getValidation(id1)
 	assert.NoError(t, err)
 	assert.Nil(t, prevPtr.Prev, "expected prev[id1] to be cleared")
@@ -237,7 +237,7 @@ func Test_LinkedList_Remove(t *testing.T) {
 
 	val, err := repo.getValidation(id1)
 	assert.NoError(t, err)
-	assert.False(t, val.IsEmpty())
+	assert.False(t, val == nil)
 
 	// Remove id1
 	if err := repo.removeQueued(id1, val); err != nil {
@@ -251,7 +251,7 @@ func Test_LinkedList_Remove(t *testing.T) {
 
 	val, err = repo.getValidation(id2)
 	assert.NoError(t, err)
-	assert.False(t, val.IsEmpty())
+	assert.False(t, val == nil)
 
 	// Remove id2
 	if err := repo.removeQueued(id2, val); err != nil {
@@ -284,7 +284,7 @@ func Test_LinkedList_Iter(t *testing.T) {
 
 	val, err := repo.getValidation(id1)
 	assert.NoError(t, err)
-	assert.False(t, val.IsEmpty())
+	assert.False(t, val == nil)
 
 	if err := repo.addActive(id1, val); err != nil {
 		t.Fatalf("failed to activate id1: %v", err)
@@ -296,7 +296,7 @@ func Test_LinkedList_Iter(t *testing.T) {
 
 	val, err = repo.getValidation(id2)
 	assert.NoError(t, err)
-	assert.False(t, val.IsEmpty())
+	assert.False(t, val == nil)
 
 	if err := repo.addActive(id2, val); err != nil {
 		t.Fatalf("failed to activate id2: %v", err)
@@ -308,7 +308,7 @@ func Test_LinkedList_Iter(t *testing.T) {
 
 	val, err = repo.getValidation(id3)
 	assert.NoError(t, err)
-	assert.False(t, val.IsEmpty())
+	assert.False(t, val == nil)
 
 	if err := repo.addActive(id3, val); err != nil {
 		t.Fatalf("failed to activate id3: %v", err)
@@ -445,7 +445,7 @@ func Test_LinkedList_Len(t *testing.T) {
 
 	val, err := repo.getValidation(id1)
 	assert.NoError(t, err)
-	assert.False(t, val.IsEmpty())
+	assert.False(t, val == nil)
 
 	// Remove one address
 	if err := repo.removeQueued(id1, val); err != nil {
@@ -466,8 +466,9 @@ func Test_LinkedList_Next(t *testing.T) {
 	repo := NewRepository(sctx)
 
 	// Test Next on empty list
-	next, err := repo.nextEntry(datagen.RandAddress())
-	assert.NoError(t, err)
+	tmpID := datagen.RandAddress()
+	next, err := repo.nextEntry(tmpID)
+	assert.Error(t, err)
 	assert.True(t, next.IsZero())
 
 	// Add addresses
@@ -544,7 +545,7 @@ func Test_LinkedList_Grow_Empty_Grow(t *testing.T) {
 
 	head, err = repo.firstQueued()
 	assert.NoError(t, err)
-	assert.True(t, head.IsZero(), "expected empty head after draining")
+	assert.True(t, head.IsZero())
 
 	ln, err = repo.queuedListSize()
 	assert.NoError(t, err)
@@ -576,6 +577,52 @@ func Test_LinkedList_Grow_Empty_Grow(t *testing.T) {
 	assert.Equal(t, uint64(2), ln)
 }
 
+func Test_LinkedList_Remove_UnlinkedSingleElement(t *testing.T) {
+	db := muxdb.NewMem()
+	st := state.New(db, trie.Root{})
+	addr := thor.BytesToAddress([]byte("test"))
+	sctx := solidity.NewContext(addr, st, nil)
+
+	repo := NewRepository(sctx)
+
+	// Add a single validation
+	id1 := datagen.RandAddress()
+	validation := &Validation{Endorser: id1, Status: StatusQueued}
+	if err := repo.addValidation(id1, validation); err != nil {
+		t.Fatalf("failed to add validation: %v", err)
+	}
+
+	// Verify it's the only element (head == tail)
+	head, err := repo.firstQueued()
+	assert.NoError(t, err)
+	assert.Equal(t, id1, head)
+	size, err := repo.queuedListSize()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), size)
+
+	// Get the validation entry and manually clear its links to simulate an unlinked state
+	val, err := repo.getValidation(id1)
+	assert.NoError(t, err)
+	assert.NotNil(t, val)
+	assert.Nil(t, val.Prev) // Should already be nil for single element
+	assert.Nil(t, val.Next) // Should already be nil for single element
+
+	// This tests the critical code path in Remove() lines 76-114
+	// where !entry.IsLinked() and it's checking head == tail == address
+	removedEntry, err := repo.queuedList.Remove(id1, val)
+	assert.NoError(t, err)
+	assert.NotNil(t, removedEntry)
+
+	// Verify the list is now empty
+	head, err = repo.firstQueued()
+	assert.NoError(t, err)
+	assert.True(t, head.IsZero())
+
+	size, err = repo.queuedListSize()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(0), size)
+}
+
 func Test_LinkedList_Iter_NegativeCases(t *testing.T) {
 	db := muxdb.NewMem()
 	st := state.New(db, trie.Root{})
@@ -594,7 +641,7 @@ func Test_LinkedList_Iter_NegativeCases(t *testing.T) {
 
 	val1, err := repo.getValidation(id1)
 	assert.NoError(t, err)
-	assert.False(t, val1.IsEmpty())
+	assert.False(t, val1 == nil)
 
 	if err := repo.addActive(id1, val1); err != nil {
 		t.Fatalf("failed to add id1: %v", err)
@@ -606,7 +653,7 @@ func Test_LinkedList_Iter_NegativeCases(t *testing.T) {
 
 	val2, err := repo.getValidation(id2)
 	assert.NoError(t, err)
-	assert.False(t, val1.IsEmpty())
+	assert.False(t, val1 == nil)
 
 	if err := repo.addActive(id2, val2); err != nil {
 		t.Fatalf("failed to add id2: %v", err)
@@ -618,7 +665,7 @@ func Test_LinkedList_Iter_NegativeCases(t *testing.T) {
 
 	val3, err := repo.getValidation(id3)
 	assert.NoError(t, err)
-	assert.False(t, val1.IsEmpty())
+	assert.False(t, val1 == nil)
 
 	if err := repo.addActive(id3, val3); err != nil {
 		t.Fatalf("failed to add id3: %v", err)
@@ -660,7 +707,7 @@ func Test_LinkedList_Iter_NegativeCases(t *testing.T) {
 	st.SetRawStorage(addr, slotActiveGroupSize, rlp.RawValue{0xFF})
 	val1, err = repo.getValidation(id1)
 	assert.NoError(t, err)
-	assert.False(t, val1.IsEmpty())
+	assert.False(t, val1 == nil)
 	err = repo.removeActive(id1, val1)
 	assert.ErrorContains(t, err, "state: rlp")
 }

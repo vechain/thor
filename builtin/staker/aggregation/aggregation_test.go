@@ -13,7 +13,7 @@ import (
 func TestAggregation(t *testing.T) {
 	agg := newAggregation()
 
-	assert.True(t, agg.IsEmpty())
+	assert.True(t, agg.LockedVET == 0 && agg.ExitingVET == 0 && agg.PendingVET == 0)
 
 	agg.LockedVET = uint64(10000)
 	agg.LockedWeight = uint64(20000)

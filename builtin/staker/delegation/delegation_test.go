@@ -22,7 +22,6 @@ func TestDelegation(t *testing.T) {
 		FirstIteration: 0,
 	}
 
-	assert.True(t, del.IsEmpty())
 	wStake := del.WeightedStake()
 	assert.Equal(t, uint64(0), wStake.VET)
 	assert.Equal(t, uint64(0), wStake.Weight)
@@ -59,7 +58,6 @@ func TestDelegation(t *testing.T) {
 		FirstIteration: 0,
 	}
 
-	assert.False(t, del.IsEmpty())
 	wStake = del.WeightedStake()
 	assert.Equal(t, uint64(1000), wStake.VET)
 	assert.Equal(t, uint64(2000), wStake.Weight)

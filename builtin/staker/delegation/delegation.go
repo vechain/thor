@@ -19,27 +19,16 @@ type Delegation struct {
 	FirstIteration uint32  // the iteration at which the delegator was created
 }
 
-// IsEmpty returns whether the entry can be treated as empty.
-func (d *Delegation) IsEmpty() bool {
-	return (d.Stake == 0) && d.Multiplier == 0
-}
-
 // WeightedStake returns the weight of the delegator, which is calculated as:
 // weight = stake * multiplier / 100
 func (d *Delegation) WeightedStake() *stakes.WeightedStake {
-	if d.IsEmpty() {
-		return stakes.NewWeightedStake(0, 0)
-	}
 	return stakes.NewWeightedStakeWithMultiplier(d.Stake, d.Multiplier)
 }
 
 // Started returns whether the delegation became locked
 func (d *Delegation) Started(val *validation.Validation, currentBlock uint32) (bool, error) {
-	if d.IsEmpty() {
-		return false, nil
-	}
-	if val.Status == validation.StatusQueued {
-		return false, nil // Delegation cannot start if the validation is not active
+	if val.Status == validation.StatusQueued || val.Status == validation.StatusUnknown {
+		return false // Delegation cannot start if the validation is not active
 	}
 	currentStakingPeriod, err := val.CurrentIteration(currentBlock)
 	if err != nil {
@@ -53,9 +42,6 @@ func (d *Delegation) Started(val *validation.Validation, currentBlock uint32) (b
 // - the delegation's exit iteration is less than the current staking period
 // - OR if the validation is in exit status and the delegation has started
 func (d *Delegation) Ended(val *validation.Validation, currentBlock uint32) (bool, error) {
-	if d.IsEmpty() {
-		return false, nil
-	}
 	if val.Status == validation.StatusQueued {
 		return false, nil // Delegation cannot end if the validation is not active
 	}
@@ -82,10 +68,6 @@ func (d *Delegation) Ended(val *validation.Validation, currentBlock uint32) (boo
 // - AND the delegation has not ended
 // - AND the delegation has stake
 func (d *Delegation) IsLocked(val *validation.Validation, currentBlock uint32) (bool, error) {
-	if d.IsEmpty() {
-		return false, nil
-	}
-
 	if d.Stake == 0 {
 		return false, nil
 	}

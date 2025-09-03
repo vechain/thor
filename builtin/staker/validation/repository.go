@@ -71,8 +71,8 @@ func (r *Repository) getReward(key thor.Bytes32) (*big.Int, error) {
 	return r.storage.getReward(key)
 }
 
-func (r *Repository) setReward(key thor.Bytes32, val *big.Int, isNew bool) error {
-	return r.storage.setReward(key, val, isNew)
+func (r *Repository) setReward(key thor.Bytes32, val *big.Int) error {
+	return r.storage.setReward(key, val)
 }
 
 func (r *Repository) getExit(block uint32) (thor.Address, error) {
@@ -85,27 +85,11 @@ func (r *Repository) setExit(block uint32, validator thor.Address) error {
 
 // linked list operation
 func (r *Repository) firstQueued() (thor.Address, error) {
-	head, err := r.queuedList.GetHead()
-	if err != nil {
-		return thor.Address{}, err
-	}
-
-	if head == nil {
-		return thor.Address{}, nil
-	}
-	return *head, nil
+	return r.queuedList.GetHead()
 }
 
 func (r *Repository) firstActive() (thor.Address, error) {
-	head, err := r.activeList.GetHead()
-	if err != nil {
-		return thor.Address{}, err
-	}
-
-	if head == nil {
-		return thor.Address{}, nil
-	}
-	return *head, nil
+	return r.activeList.GetHead()
 }
 
 func (r *Repository) nextEntry(prev thor.Address) (thor.Address, error) {
@@ -114,6 +98,9 @@ func (r *Repository) nextEntry(prev thor.Address) (thor.Address, error) {
 		return thor.Address{}, errors.Wrap(err, "failed to get next")
 	}
 
+	if val == nil {
+		return thor.Address{}, nil // not found, just return empty
+	}
 	if val.Next == nil {
 		return thor.Address{}, nil
 	}
@@ -134,24 +121,24 @@ func (r *Repository) popQueued() (thor.Address, *Validation, error) {
 		return thor.Address{}, nil, errors.New("no head present")
 	}
 
-	if head == nil {
+	if head.IsZero() {
 		return thor.Address{}, nil, errors.New("list is empty")
 	}
 
-	entry, err := r.getValidation(*head)
+	entry, err := r.getValidation(head)
 	if err != nil {
 		return thor.Address{}, nil, err
 	}
-	if entry.IsEmpty() {
+	if entry == nil {
 		return thor.Address{}, nil, errors.New("entry is empty")
 	}
 
 	// otherwise, remove and return
-	val, err := r.queuedList.Remove(*head, entry)
+	val, err := r.queuedList.Remove(head, entry)
 	if err != nil {
 		return thor.Address{}, nil, err
 	}
-	return *head, val, nil
+	return head, val, nil
 }
 
 // removeQueued removes the entry from the queued list and persists the entry
@@ -171,29 +158,8 @@ func (r *Repository) removeActive(address thor.Address, entry *Validation) error
 	return err
 }
 
-func (r *Repository) iterateActive(callbacks ...func(thor.Address, *Validation) error) error {
-	current, err := r.activeList.GetHead()
-	if err != nil {
-		return err
-	}
-
-	for current != nil {
-		entry, err := r.getValidation(*current)
-		if err != nil {
-			return err
-		}
-		if entry == nil {
-			return errors.New("entry is empty")
-		}
-		for _, callback := range callbacks {
-			if err := callback(*current, entry); err != nil {
-				return err
-			}
-		}
-		current = entry.Next
-	}
-
-	return nil
+func (r *Repository) iterateActive(callback func(thor.Address, *Validation) error) error {
+	return r.activeList.Iterate(callback)
 }
 
 func (r *Repository) iterateUpdateGroup(callbacks ...func(thor.Address, *Validation) error) error {

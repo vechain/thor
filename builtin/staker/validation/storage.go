@@ -22,14 +22,14 @@ var (
 )
 
 type Storage struct {
-	validations *solidity.Mapping[thor.Address, Validation]
+	validations *solidity.Mapping[thor.Address, *Validation]
 	rewards     *solidity.Mapping[thor.Bytes32, *big.Int]
 	exits       *solidity.Mapping[thor.Bytes32, thor.Address]
 }
 
 func NewStorage(sctx *solidity.Context) *Storage {
 	return &Storage{
-		validations: solidity.NewMapping[thor.Address, Validation](sctx, slotValidations),
+		validations: solidity.NewMapping[thor.Address, *Validation](sctx, slotValidations),
 		rewards:     solidity.NewMapping[thor.Bytes32, *big.Int](sctx, slotRewards),
 		exits:       solidity.NewMapping[thor.Bytes32, thor.Address](sctx, slotExitEpochs),
 	}
@@ -40,23 +40,25 @@ func (s *Storage) getValidation(validator thor.Address) (*Validation, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get validator")
 	}
-	return &v, nil
+	return v, nil
 }
 
 func (s *Storage) updateValidation(validator thor.Address, entry *Validation) error {
-	if err := s.validations.Update(validator, *entry); err != nil {
+	if err := s.validations.Update(validator, entry); err != nil {
 		return errors.Wrap(err, "failed to set validator")
 	}
 	return nil
 }
 
-func (s *Storage) upsertValidation(validator thor.Address, entry Validation) error {
+func (s *Storage) upsertValidation(validator thor.Address, entry *Validation) error {
 	if err := s.validations.Upsert(validator, entry); err != nil {
 		return errors.Wrap(err, "failed to set validator")
 	}
 	return nil
 }
 
+// getReward retrieves the reward for a validator.
+// Returns a zero-initialized reward if none exists.
 func (s *Storage) getReward(key thor.Bytes32) (*big.Int, error) {
 	reward, err := s.rewards.Get(key)
 	if err != nil {
@@ -68,7 +70,7 @@ func (s *Storage) getReward(key thor.Bytes32) (*big.Int, error) {
 	return reward, nil
 }
 
-func (s *Storage) setReward(key thor.Bytes32, val *big.Int, isNew bool) error {
+func (s *Storage) setReward(key thor.Bytes32, val *big.Int) error {
 	return s.rewards.Upsert(key, val)
 }
 

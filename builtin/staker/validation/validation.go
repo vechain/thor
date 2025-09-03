@@ -32,7 +32,7 @@ var ErrMaxTryReached = errors.New("max try reached")
 
 type Validation struct {
 	Endorser           thor.Address  // the address providing the stake
-	Beneficiary        *thor.Address `rlp:"nil"` // the address receiving the rewards
+	Beneficiary        *thor.Address `rlp:"nil"` // the address receiving the rewards, if not set then endorser is rewarded
 	Period             uint32        // the staking period of the validation
 	CompleteIterations uint32        // the completed staking periods by the validation, this will be updated when signal exit is called
 	Status             Status        // status of the validation
@@ -99,11 +99,6 @@ func (v *Validation) Totals(agg *aggregation.Aggregation) (*Totals, error) {
 		TotalExitingStake: exitingVET,
 		NextPeriodWeight:  nextPeriodWeight,
 	}, nil
-}
-
-// IsEmpty returns whether the entry can be treated as empty.
-func (v *Validation) IsEmpty() bool {
-	return v.Status == StatusUnknown
 }
 
 func (v *Validation) IsOnline() bool {

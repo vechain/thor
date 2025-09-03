@@ -16,10 +16,7 @@ import (
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/builtin/authority"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
-	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/poa"
-	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -81,14 +78,8 @@ func TestAuthority_Hayabusa_NegativeCases(t *testing.T) {
 }
 
 func TestAuthorityCacheHandler_Success(t *testing.T) {
-	db := muxdb.NewMem()
-	stater := state.NewStater(db)
-
-	mockRepo := &chain.Repository{}
 	mockForkConfig := &thor.ForkConfig{}
 	mockForkConfig.HAYABUSA = 0
-
-	consensus := New(mockRepo, stater, mockForkConfig)
 
 	candidateList := []*authority.Candidate{
 		{
@@ -135,18 +126,13 @@ func TestAuthorityCacheHandler_Success(t *testing.T) {
 		},
 	}
 
-	err := consensus.authorityCacheHandler(candidates, header, receipts)
+	cacher := &poaCacher{candidates, mockForkConfig}
+	_, err := cacher.Handle(header, receipts)
 	assert.NoError(t, err)
 }
 
 func TestAuthorityCacheHandler_NilCandidates(t *testing.T) {
-	db := muxdb.NewMem()
-	stater := state.NewStater(db)
-
-	mockRepo := &chain.Repository{}
 	mockForkConfig := &thor.ForkConfig{}
-
-	consensus := New(mockRepo, stater, mockForkConfig)
 
 	header := new(block.Builder).
 		ParentID(thor.BytesToBytes32([]byte("parent123"))).
@@ -161,18 +147,13 @@ func TestAuthorityCacheHandler_NilCandidates(t *testing.T) {
 
 	receipts := tx.Receipts{}
 
-	err := consensus.authorityCacheHandler(nil, header, receipts)
+	cacher := &poaCacher{nil, mockForkConfig}
+	_, err := cacher.Handle(header, receipts)
 	assert.NoError(t, err)
 }
 
 func TestAuthorityCacheHandler_EmptyCandidates(t *testing.T) {
-	db := muxdb.NewMem()
-	stater := state.NewStater(db)
-
-	mockRepo := &chain.Repository{}
 	mockForkConfig := &thor.ForkConfig{}
-
-	consensus := New(mockRepo, stater, mockForkConfig)
 
 	candidates := poa.NewCandidates([]*authority.Candidate{})
 
@@ -189,18 +170,13 @@ func TestAuthorityCacheHandler_EmptyCandidates(t *testing.T) {
 
 	receipts := tx.Receipts{}
 
-	err := consensus.authorityCacheHandler(candidates, header, receipts)
+	cacher := &poaCacher{candidates, mockForkConfig}
+	_, err := cacher.Handle(header, receipts)
 	assert.NoError(t, err)
 }
 
 func TestAuthorityCacheHandler_WithAuthorityEvents(t *testing.T) {
-	db := muxdb.NewMem()
-	stater := state.NewStater(db)
-
-	mockRepo := &chain.Repository{}
 	mockForkConfig := &thor.ForkConfig{}
-
-	consensus := New(mockRepo, stater, mockForkConfig)
 
 	candidateList := []*authority.Candidate{
 		{
@@ -242,20 +218,15 @@ func TestAuthorityCacheHandler_WithAuthorityEvents(t *testing.T) {
 		},
 	}
 
-	err := consensus.authorityCacheHandler(candidates, header, receipts)
+	cacher := &poaCacher{candidates, mockForkConfig}
+	_, err := cacher.Handle(header, receipts)
 	assert.NoError(t, err)
 }
 
 func TestAuthorityCacheHandler_WithStakerEvents(t *testing.T) {
-	db := muxdb.NewMem()
-	stater := state.NewStater(db)
-
-	mockRepo := &chain.Repository{}
 	mockForkConfig := &thor.ForkConfig{
 		HAYABUSA: 100,
 	}
-
-	consensus := New(mockRepo, stater, mockForkConfig)
 
 	candidateList := []*authority.Candidate{
 		{
@@ -296,18 +267,13 @@ func TestAuthorityCacheHandler_WithStakerEvents(t *testing.T) {
 		},
 	}
 
-	err := consensus.authorityCacheHandler(candidates, header, receipts)
+	cacher := &poaCacher{candidates, mockForkConfig}
+	_, err := cacher.Handle(header, receipts)
 	assert.NoError(t, err)
 }
 
 func TestAuthorityCacheHandler_WithParamsEvents(t *testing.T) {
-	db := muxdb.NewMem()
-	stater := state.NewStater(db)
-
-	mockRepo := &chain.Repository{}
 	mockForkConfig := &thor.ForkConfig{}
-
-	consensus := New(mockRepo, stater, mockForkConfig)
 
 	candidateList := []*authority.Candidate{
 		{
@@ -348,18 +314,13 @@ func TestAuthorityCacheHandler_WithParamsEvents(t *testing.T) {
 		},
 	}
 
-	err := consensus.authorityCacheHandler(candidates, header, receipts)
+	cacher := &poaCacher{candidates, mockForkConfig}
+	_, err := cacher.Handle(header, receipts)
 	assert.NoError(t, err)
 }
 
 func TestAuthorityCacheHandler_WithEndorsorTransfers(t *testing.T) {
-	db := muxdb.NewMem()
-	stater := state.NewStater(db)
-
-	mockRepo := &chain.Repository{}
 	mockForkConfig := &thor.ForkConfig{}
-
-	consensus := New(mockRepo, stater, mockForkConfig)
 
 	candidateList := []*authority.Candidate{
 		{
@@ -399,18 +360,61 @@ func TestAuthorityCacheHandler_WithEndorsorTransfers(t *testing.T) {
 		},
 	}
 
-	err := consensus.authorityCacheHandler(candidates, header, receipts)
+	cacher := &poaCacher{candidates, mockForkConfig}
+	_, err := cacher.Handle(header, receipts)
 	assert.NoError(t, err)
 }
 
-func TestAuthorityCacheHandler_WithMultipleEvents(t *testing.T) {
-	db := muxdb.NewMem()
-	stater := state.NewStater(db)
-
-	mockRepo := &chain.Repository{}
+func TestAuthorityCacheHandler_WithAuthoritySetEvent(t *testing.T) {
 	mockForkConfig := &thor.ForkConfig{}
 
-	consensus := New(mockRepo, stater, mockForkConfig)
+	candidateList := []*authority.Candidate{
+		{
+			NodeMaster: thor.BytesToAddress([]byte("master1")),
+			Endorsor:   thor.BytesToAddress([]byte("endorsor1")),
+			Identity:   thor.BytesToBytes32([]byte("identity1")),
+			Active:     true,
+		},
+	}
+
+	candidates := poa.NewCandidates(candidateList)
+
+	header := new(block.Builder).
+		ParentID(thor.BytesToBytes32([]byte("parent123"))).
+		Timestamp(1000).
+		GasLimit(1000000).
+		GasUsed(0).
+		TotalScore(0).
+		StateRoot(thor.Bytes32{}).
+		ReceiptsRoot(thor.Bytes32{}).
+		Beneficiary(thor.Address{}).
+		Build().Header()
+
+	receipts := tx.Receipts{
+		&tx.Receipt{
+			Outputs: []*tx.Output{
+				{
+					Events: tx.Events{
+						{
+							Address: builtin.Authority.Address,
+							Topics: []thor.Bytes32{
+								thor.BytesToBytes32([]byte("authority_set")),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	cacher := &poaCacher{candidates, mockForkConfig}
+	output, err := cacher.Handle(header, receipts)
+	assert.NoError(t, err)
+	assert.Nil(t, output)
+}
+
+func TestAuthorityCacheHandler_WithMultipleEvents(t *testing.T) {
+	mockForkConfig := &thor.ForkConfig{}
 
 	candidateList := []*authority.Candidate{
 		{
@@ -457,18 +461,13 @@ func TestAuthorityCacheHandler_WithMultipleEvents(t *testing.T) {
 		},
 	}
 
-	err := consensus.authorityCacheHandler(candidates, header, receipts)
+	cacher := &poaCacher{candidates, mockForkConfig}
+	_, err := cacher.Handle(header, receipts)
 	assert.NoError(t, err)
 }
 
 func TestAuthorityCacheHandler_WithNilReceipts(t *testing.T) {
-	db := muxdb.NewMem()
-	stater := state.NewStater(db)
-
-	mockRepo := &chain.Repository{}
 	mockForkConfig := &thor.ForkConfig{}
-
-	consensus := New(mockRepo, stater, mockForkConfig)
 
 	candidateList := []*authority.Candidate{
 		{
@@ -492,18 +491,13 @@ func TestAuthorityCacheHandler_WithNilReceipts(t *testing.T) {
 		Beneficiary(thor.Address{}).
 		Build().Header()
 
-	err := consensus.authorityCacheHandler(candidates, header, nil)
+	cacher := &poaCacher{candidates, mockForkConfig}
+	_, err := cacher.Handle(header, nil)
 	assert.NoError(t, err)
 }
 
 func TestAuthorityCacheHandler_WithEmptyReceipts(t *testing.T) {
-	db := muxdb.NewMem()
-	stater := state.NewStater(db)
-
-	mockRepo := &chain.Repository{}
 	mockForkConfig := &thor.ForkConfig{}
-
-	consensus := New(mockRepo, stater, mockForkConfig)
 
 	candidateList := []*authority.Candidate{
 		{
@@ -529,7 +523,8 @@ func TestAuthorityCacheHandler_WithEmptyReceipts(t *testing.T) {
 
 	receipts := tx.Receipts{}
 
-	err := consensus.authorityCacheHandler(candidates, header, receipts)
+	cacher := &poaCacher{candidates, mockForkConfig}
+	_, err := cacher.Handle(header, receipts)
 	assert.NoError(t, err)
 }
 

@@ -293,7 +293,7 @@ func Test_QueuedDelegator_Withdraw_NonAutoRenew(t *testing.T) {
 	// And the delegation should be removed
 	delegation, _, err := staker.GetDelegation(id)
 	assert.NoError(t, err)
-	assert.False(t, delegation.IsEmpty())
+	assert.False(t, delegation == nil)
 }
 
 func Test_QueuedDelegator_Withdraw_AutoRenew(t *testing.T) {
@@ -320,7 +320,7 @@ func Test_QueuedDelegator_Withdraw_AutoRenew(t *testing.T) {
 	// And the delegation should be removed
 	delegation, _, err := staker.GetDelegation(id)
 	assert.NoError(t, err)
-	assert.False(t, delegation.IsEmpty())
+	assert.False(t, delegation == nil)
 }
 
 func Test_Delegator_DisableAutoRenew_InAStakingPeriod(t *testing.T) {
@@ -427,7 +427,7 @@ func Test_Delegator_WithdrawWhilePending(t *testing.T) {
 	// And the delegation should be removed
 	delegation, _, err := staker.GetDelegation(id)
 	assert.NoError(t, err)
-	assert.False(t, delegation.IsEmpty())
+	assert.False(t, delegation == nil)
 }
 
 func Test_Delegator_ID_ShouldBeIncremental(t *testing.T) {

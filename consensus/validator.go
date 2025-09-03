@@ -15,7 +15,6 @@ import (
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/log"
-	"github.com/vechain/thor/v2/poa"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -23,6 +22,10 @@ import (
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/xenv"
 )
+
+type cacher interface {
+	Handle(header *block.Header, receipts tx.Receipts) (cachedEntry any, err error)
+}
 
 func (c *Consensus) validate(
 	state *state.State,
@@ -49,11 +52,11 @@ func (c *Consensus) validate(
 		c.validatorsCache.Remove(parent.ID())
 	}
 
-	var candidates *poa.Candidates
+	var cacher cacher
 	if dPosStatus.Active {
-		err = c.validateStakingProposer(header, parent, staker)
+		cacher, err = c.validateStakingProposer(header, parent, staker)
 	} else {
-		candidates, err = c.validateAuthorityProposer(header, parent, state)
+		cacher, err = c.validateAuthorityProposer(header, parent, state)
 	}
 	if err != nil {
 		return nil, nil, err
@@ -68,10 +71,12 @@ func (c *Consensus) validate(
 		return nil, nil, err
 	}
 
-	if !dPosStatus.Active {
-		if err := c.authorityCacheHandler(candidates, header, receipts); err != nil {
-			return nil, nil, err
-		}
+	cachedEntry, err := cacher.Handle(header, receipts)
+	if err != nil {
+		return nil, nil, err
+	}
+	if cachedEntry != nil {
+		c.validatorsCache.Add(header.ID(), cachedEntry)
 	}
 
 	return stage, receipts, nil

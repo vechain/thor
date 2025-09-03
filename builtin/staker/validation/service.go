@@ -53,24 +53,8 @@ func (s *Service) GetValidatorForExitBlock(blockNum uint32) (thor.Address, error
 	return val, nil
 }
 
-func (s *Service) GetCompletedPeriods(validator thor.Address, currentBlock uint32) (uint32, error) {
-	v, err := s.GetValidation(validator)
-	if err != nil {
-		return uint32(0), err
-	}
-	if v.Status == StatusActive {
-		current, err := v.CurrentIteration(currentBlock)
-		if err != nil {
-			return uint32(0), err
-		}
-		return current - 1, nil
-	}
-
-	return v.CompleteIterations, nil
-}
-
 func (s *Service) IncreaseDelegatorsReward(node thor.Address, reward *big.Int, currentBlock uint32) error {
-	val, err := s.GetValidation(node)
+	val, err := s.GetExistingValidation(node)
 	if err != nil {
 		return err
 	}
@@ -88,11 +72,18 @@ func (s *Service) IncreaseDelegatorsReward(node thor.Address, reward *big.Int, c
 		return err
 	}
 
-	return s.repo.setReward(key, big.NewInt(0).Add(rewards, reward), false)
+	return s.repo.setReward(key, big.NewInt(0).Add(rewards, reward))
 }
 
 func (s *Service) LeaderGroupIterator(callbacks ...func(thor.Address, *Validation) error) error {
-	return s.repo.iterateActive(callbacks...)
+	return s.repo.iterateActive(func(address thor.Address, entry *Validation) error {
+		for _, callback := range callbacks {
+			if err := callback(address, entry); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // IsActive returns true if there are active validations.
@@ -128,7 +119,7 @@ func (s *Service) GetLeaderGroupHead() (*Validation, error) {
 		return nil, err
 	}
 
-	return s.GetValidation(validatorID)
+	return s.GetExistingValidation(validatorID)
 }
 
 // LeaderGroup lists all registered candidates.
@@ -317,12 +308,9 @@ func (s *Service) NextToActivate(maxLeaderGroupSize uint64) (thor.Address, *Vali
 
 // ExitValidator removes the validator from the active list and puts it in cooldown.
 func (s *Service) ExitValidator(validator thor.Address) (*globalstats.Exit, error) {
-	entry, err := s.GetValidation(validator)
+	entry, err := s.GetExistingValidation(validator)
 	if err != nil {
 		return nil, err
-	}
-	if entry.IsEmpty() {
-		return nil, nil
 	}
 
 	exit := entry.exit()
@@ -344,15 +332,14 @@ func (s *Service) SetExitBlock(validator thor.Address, minBlock uint32, maxTry i
 		if err != nil {
 			return 0, err
 		}
-		if existing == validator {
-			return start, nil
-		}
+
 		if existing.IsZero() {
 			if err = s.repo.setExit(start, validator); err != nil {
 				return 0, errors.Wrap(err, "failed to set exit epoch")
 			}
 			return start, nil
 		}
+
 		start += thor.EpochLength()
 	}
 
@@ -470,7 +457,8 @@ func (s *Service) GetExistingValidation(validator thor.Address) (*Validation, er
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get validator")
 	}
-	if v.IsEmpty() {
+
+	if v == nil {
 		return nil, errors.New("failed to get existing validator")
 	}
 	return v, nil

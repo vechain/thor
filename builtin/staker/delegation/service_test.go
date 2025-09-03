@@ -8,8 +8,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/vechain/thor/v2/builtin/staker/validation"
-
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 
@@ -39,8 +37,9 @@ func newSvc() (*Service, thor.Address, *state.State) {
 
 func TestService_Add_And_GetDelegation(t *testing.T) {
 	svc, _, _ := newSvc()
+	v := thor.BytesToAddress([]byte("v"))
 
-	id, err := svc.Add(thor.BytesToAddress([]byte("v")), 2, 1000, 50)
+	id, err := svc.Add(v, 2, 1000, 50)
 	assert.NoError(t, err)
 	assert.NotNil(t, id)
 
@@ -64,7 +63,7 @@ func TestService_SetDelegation_RoundTrip(t *testing.T) {
 	del.Multiplier = 99
 	del.FirstIteration = 5
 
-	assert.NoError(t, svc.delegations.Update(id, *del))
+	assert.NoError(t, svc.delegations.Update(id, del))
 
 	got, err := svc.GetDelegation(id)
 	assert.NoError(t, err)
@@ -80,24 +79,8 @@ func TestService_Withdraw(t *testing.T) {
 
 	del, err := svc.GetDelegation(id)
 	assert.NoError(t, err)
-	val := validation.Validation{
-		Endorser:           thor.Address{},
-		Beneficiary:        nil,
-		Period:             0,
-		CompleteIterations: 0,
-		Status:             0,
-		StartBlock:         0,
-		ExitBlock:          nil,
-		OfflineBlock:       nil,
-		LockedVET:          0,
-		PendingUnlockVET:   0,
-		QueuedVET:          0,
-		CooldownVET:        0,
-		WithdrawableVET:    0,
-		Weight:             0,
-	}
 
-	withdraw, err := svc.Withdraw(del, id, &val)
+	withdraw, err := svc.Withdraw(del, id)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(12345), withdraw)
 
@@ -111,7 +94,7 @@ func TestService_GetDelegation_NotFoundZeroValue(t *testing.T) {
 	id := big.NewInt(999)
 	del, err := svc.GetDelegation(id)
 	assert.NoError(t, err)
-	assert.NotNil(t, del)
+	assert.Nil(t, del)
 }
 
 func TestService_GetDelegation_Error(t *testing.T) {
@@ -128,8 +111,8 @@ func TestService_GetDelegation_Error(t *testing.T) {
 func TestService_Add_CounterGetError(t *testing.T) {
 	svc, contract, st := newSvc()
 	poisonCounterGet(st, contract)
-
-	_, err := svc.Add(thor.BytesToAddress([]byte("v")), 1, 10, 1)
+	v := thor.BytesToAddress([]byte("v"))
+	_, err := svc.Add(v, 1, 10, 1)
 	assert.Error(t, err)
 }
 
@@ -137,8 +120,8 @@ func TestService_Add_CounterSetOverflow(t *testing.T) {
 	svc, contract, st := newSvc()
 	max := new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(2))
 	st.SetStorage(contract, slotDelegationsCounter, thor.BytesToBytes32(max.Bytes()))
-
-	_, err := svc.Add(thor.BytesToAddress([]byte("v")), 1, 10, 1)
+	v := thor.BytesToAddress([]byte("v"))
+	_, err := svc.Add(v, 1, 10, 1)
 	assert.ErrorContains(t, err, "delegation ID counter overflow")
 	assert.ErrorContains(t, err, " maximum delegations reached")
 }
