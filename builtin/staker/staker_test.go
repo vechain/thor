@@ -107,8 +107,8 @@ func (ts *TestSequence) AddValidation(
 	return ts
 }
 
-func (ts *TestSequence) SignalExit(validator, endorser thor.Address) *TestSequence {
-	err := ts.staker.SignalExit(validator, endorser)
+func (ts *TestSequence) SignalExit(validator, endorser thor.Address, currentBlock uint32) *TestSequence {
+	err := ts.staker.SignalExit(validator, endorser, currentBlock)
 	assert.NoError(ts.t, err, "failed to signal exit for validator %s with endorser %s", validator.String(), endorser.String())
 	return ts
 }
@@ -179,8 +179,9 @@ func (ts *TestSequence) AddDelegation(
 	amount uint64,
 	multiplier uint8,
 	idSetter *big.Int,
+	currentBlock uint32,
 ) *TestSequence {
-	delegationID, err := ts.staker.AddDelegation(master, amount, multiplier)
+	delegationID, err := ts.staker.AddDelegation(master, amount, multiplier, currentBlock)
 	assert.NoError(
 		ts.t,
 		err,
@@ -201,13 +202,13 @@ func (ts *TestSequence) AssertHasDelegations(node thor.Address, expected bool) *
 	return ts
 }
 
-func (ts *TestSequence) SignalDelegationExit(delegationID *big.Int) *TestSequence {
-	assert.NoError(ts.t, ts.staker.SignalDelegationExit(delegationID))
+func (ts *TestSequence) SignalDelegationExit(delegationID *big.Int, currentBlock uint32) *TestSequence {
+	assert.NoError(ts.t, ts.staker.SignalDelegationExit(delegationID, currentBlock))
 	return ts
 }
 
-func (ts *TestSequence) WithdrawDelegation(delegationID *big.Int, expectedOut uint64) *TestSequence {
-	amount, err := ts.staker.WithdrawDelegation(delegationID)
+func (ts *TestSequence) WithdrawDelegation(delegationID *big.Int, expectedOut uint64, currentBlock uint32) *TestSequence {
+	amount, err := ts.staker.WithdrawDelegation(delegationID, currentBlock)
 	assert.NoError(ts.t, err, "failed to withdraw delegation %s: %v", delegationID.String(), err)
 	assert.Equal(ts.t, expectedOut, amount, "withdrawn amount mismatch for delegation %s", delegationID.String())
 	return ts
@@ -227,9 +228,12 @@ func (ts *TestSequence) AssertDelegatorRewards(
 func (ts *TestSequence) AssertCompletedPeriods(
 	validationID thor.Address,
 	expectedPeriods uint32,
+	currentBlock uint32,
 ) *TestSequence {
 	val, err := ts.staker.GetValidation(validationID)
-	periods := val.CompleteIterations
+	assert.NotNil(ts.t, val, "validation %s not found", validationID.String())
+	assert.NoError(ts.t, err, "failed to get validation %s", validationID.String())
+	periods, err := val.CompletedIterations(currentBlock)
 	assert.NoError(ts.t, err, "failed to get completed periods for validator %s: %v", validationID.String(), err)
 	assert.Equal(ts.t, expectedPeriods, periods, "completed periods mismatch for validator %s", validationID.String())
 	return ts
@@ -274,8 +278,8 @@ func (ts *TestSequence) Transition(block uint32) *TestSequence {
 	return ts
 }
 
-func (ts *TestSequence) IncreaseDelegatorsReward(node thor.Address, reward *big.Int) *TestSequence {
-	assert.NoError(ts.t, ts.staker.IncreaseDelegatorsReward(node, reward))
+func (ts *TestSequence) IncreaseDelegatorsReward(node thor.Address, reward *big.Int, currentBlock uint32) *TestSequence {
+	assert.NoError(ts.t, ts.staker.IncreaseDelegatorsReward(node, reward, currentBlock))
 	return ts
 }
 
@@ -324,11 +328,6 @@ func (va *ValidationAssertions) WithdrawableVET(expected uint64) *ValidationAsse
 
 func (va *ValidationAssertions) Period(expected uint32) *ValidationAssertions {
 	assert.Equal(va.t, expected, va.validator.Period, "validator %s period mismatch", va.addr.String())
-	return va
-}
-
-func (va *ValidationAssertions) CompletedPeriods(expected uint32) *ValidationAssertions {
-	assert.Equal(va.t, expected, va.validator.CompleteIterations, "validator %s completed periods mismatch", va.addr.String())
 	return va
 }
 
@@ -405,6 +404,7 @@ type DelegationAssertions struct {
 	t            *testing.T
 	delegation   *delegation.Delegation
 	validation   *validation.Validation
+	currentBlock uint32
 }
 
 func assertDelegation(t *testing.T, staker *Staker, delegationID *big.Int) *DelegationAssertions {
@@ -445,11 +445,17 @@ func (da *DelegationAssertions) LastIteration(expected *uint32) *DelegationAsser
 
 func (da *DelegationAssertions) IsLocked(expected bool) *DelegationAssertions {
 	if expected {
-		assert.True(da.t, da.delegation.Started(da.validation), "delegation %s locked state mismatch", da.delegationID.String())
-		assert.False(da.t, da.delegation.Ended(da.validation), "delegation %s ended state mismatch", da.delegationID.String())
+		started, err := da.delegation.Started(da.validation, da.currentBlock)
+		assert.NoError(da.t, err)
+		ended, err := da.delegation.Ended(da.validation, da.currentBlock)
+		assert.NoError(da.t, err)
+		assert.True(da.t, started, "delegation %s locked state mismatch", da.delegationID.String())
+		assert.False(da.t, ended, "delegation %s ended state mismatch", da.delegationID.String())
 	} else {
-		started := da.delegation.Started(da.validation)
-		ended := da.delegation.Ended(da.validation)
+		started, err := da.delegation.Started(da.validation, da.currentBlock)
+		assert.NoError(da.t, err)
+		ended, err := da.delegation.Ended(da.validation, da.currentBlock)
+		assert.NoError(da.t, err)
 		if started && !ended {
 			da.t.Fatalf("delegation %s is expected to be not locked, but it is", da.delegationID.String())
 		}
@@ -458,12 +464,16 @@ func (da *DelegationAssertions) IsLocked(expected bool) *DelegationAssertions {
 }
 
 func (da *DelegationAssertions) IsStarted(expected bool) *DelegationAssertions {
-	assert.Equal(da.t, expected, da.delegation.Started(da.validation), "delegation %s started state mismatch", da.delegationID.String())
+	started, err := da.delegation.Started(da.validation, da.currentBlock)
+	assert.NoError(da.t, err)
+	assert.Equal(da.t, expected, started, "delegation %s started state mismatch", da.delegationID.String())
 	return da
 }
 
 func (da *DelegationAssertions) IsFinished(expected bool) *DelegationAssertions {
-	assert.Equal(da.t, expected, da.delegation.Ended(da.validation), "delegation %s finished state mismatch", da.delegationID.String())
+	ended, err := da.delegation.Ended(da.validation, da.currentBlock)
+	assert.NoError(da.t, err)
+	assert.Equal(da.t, expected, ended, "delegation %s finished state mismatch", da.delegationID.String())
 	return da
 }
 
@@ -484,7 +494,7 @@ func TestValidation_SignalExit_InvalidEndorser(t *testing.T) {
 
 	assert.NoError(t, staker.validationService.Add(id, end, thor.MediumStakingPeriod(), 100))
 
-	err := staker.SignalExit(id, wrong)
+	err := staker.SignalExit(id, wrong, 10)
 	assert.ErrorContains(t, err, "endorser required")
 }
 
@@ -496,7 +506,7 @@ func TestValidation_SignalExit_NotActive(t *testing.T) {
 
 	assert.NoError(t, staker.validationService.Add(id, end, thor.MediumStakingPeriod(), 100))
 
-	err := staker.SignalExit(id, end)
+	err := staker.SignalExit(id, end, 10)
 	assert.ErrorContains(t, err, "can't signal exit while not active")
 }
 
@@ -553,7 +563,7 @@ func TestValidation_IncreaseStake_ActiveHasExitBlock(t *testing.T) {
 		QueuedDecrease: 0,
 	})
 
-	err = staker.SignalExit(id, end)
+	err = staker.SignalExit(id, end, 10)
 	assert.NoError(t, err)
 
 	err = staker.IncreaseStake(id, end, 5)
@@ -598,7 +608,7 @@ func TestValidation_DecreaseStake_StatusExit(t *testing.T) {
 		QueuedDecrease: 0,
 	})
 
-	err = staker.SignalExit(id, end)
+	err = staker.SignalExit(id, end, 10)
 	assert.NoError(t, err)
 
 	err = staker.DecreaseStake(id, end, 5)
@@ -623,7 +633,7 @@ func TestValidation_DecreaseStake_ActiveHasExitBlock(t *testing.T) {
 		QueuedDecrease: 0,
 	})
 
-	err = staker.SignalExit(id, end)
+	err = staker.SignalExit(id, end, 10)
 	assert.NoError(t, err)
 
 	err = staker.DecreaseStake(id, end, 5)
@@ -740,7 +750,7 @@ func TestValidation_SetBeneficiary_Error(t *testing.T) {
 func TestDelegation_Add_InputValidation(t *testing.T) {
 	staker := newTestStaker()
 
-	_, err := staker.AddDelegation(thor.Address{}, 1, 0)
+	_, err := staker.AddDelegation(thor.Address{}, 1, 0, 10)
 	assert.ErrorContains(t, err, "multiplier cannot be 0")
 }
 
@@ -750,7 +760,7 @@ func TestDelegation_SignalExit(t *testing.T) {
 	v := thor.BytesToAddress([]byte("v"))
 	assert.NoError(t, staker.AddValidation(v, v, thor.MediumStakingPeriod(), MinStakeVET))
 
-	id, err := staker.AddDelegation(v, 3, 100)
+	id, err := staker.AddDelegation(v, 3, 100, 10)
 	assert.NoError(t, err)
 
 	val, err := staker.validationService.GetValidation(v)
@@ -766,14 +776,14 @@ func TestDelegation_SignalExit(t *testing.T) {
 	_, _, err = staker.GetDelegation(id)
 	assert.NoError(t, err)
 
-	assert.NoError(t, staker.SignalDelegationExit(id))
+	assert.NoError(t, staker.SignalDelegationExit(id, 10))
 
 	del2, _, err := staker.GetDelegation(id)
 	assert.NoError(t, err)
 	assert.NotNil(t, del2.LastIteration)
 	assert.Equal(t, uint32(1), *del2.LastIteration)
 
-	assert.ErrorContains(t, staker.SignalDelegationExit(id), "delegation is already signaled exit")
+	assert.ErrorContains(t, staker.SignalDelegationExit(id, 10), "delegation is already signaled exit")
 }
 
 func TestDelegation_SignalExit_AlreadyWithdrawn(t *testing.T) {
@@ -782,20 +792,20 @@ func TestDelegation_SignalExit_AlreadyWithdrawn(t *testing.T) {
 	v := thor.BytesToAddress([]byte("v"))
 	assert.NoError(t, staker.AddValidation(v, v, thor.MediumStakingPeriod(), MinStakeVET))
 
-	id, err := staker.AddDelegation(v, 3, 100)
+	id, err := staker.AddDelegation(v, 3, 100, 10)
 	assert.NoError(t, err)
 
 	_, _, err = staker.GetDelegation(id)
 	assert.NoError(t, err)
-	amt, err := staker.WithdrawDelegation(id)
+	amt, err := staker.WithdrawDelegation(id, 10)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(3), amt)
 
-	assert.ErrorContains(t, staker.SignalDelegationExit(id), "delegation has already been withdrawn")
+	assert.ErrorContains(t, staker.SignalDelegationExit(id, 10), "delegation has already been withdrawn")
 }
 
 func TestDelegation_SignalExit_Empty(t *testing.T) {
 	staker := newTestStaker()
 
-	assert.ErrorContains(t, staker.SignalDelegationExit(big.NewInt(2)), "delegation is empty")
+	assert.ErrorContains(t, staker.SignalDelegationExit(big.NewInt(2), 10), "delegation is empty")
 }

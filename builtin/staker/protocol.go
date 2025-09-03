@@ -54,6 +54,7 @@ func (s *Staker) SyncPOS(forkConfig *thor.ForkConfig, current uint32) (Status, e
 		if err != nil {
 			return status, err
 		}
+		logger.Info("🏠housekeeping", "block", current, "updates", status.Updates)
 	}
 
 	return status, nil

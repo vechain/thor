@@ -94,6 +94,11 @@ func init() {
 			if validator.OfflineBlock != nil {
 				offlineBlock = *validator.OfflineBlock
 			}
+
+			completeIterations, err := validator.CompletedIterations(env.BlockContext().Number)
+			if err != nil {
+				return nil, err
+			}
 			return []any{
 				validator.Endorser,
 				toWei(validator.LockedVET),
@@ -104,7 +109,7 @@ func init() {
 				validator.Period,
 				validator.StartBlock,
 				exitBlock,
-				validator.CompleteIterations,
+				completeIterations,
 			}, nil
 		}},
 		{"native_getWithdrawable", func(env *xenv.Environment) ([]any, error) {
@@ -230,6 +235,7 @@ func init() {
 				SignalExit(
 					thor.Address(args.Validator),
 					thor.Address(args.Endorser),
+					env.BlockContext().Number,
 				)
 			if err != nil {
 				return nil, err
@@ -311,6 +317,7 @@ func init() {
 					thor.Address(args.Validator),
 					toVET(args.Stake), // convert from wei to VET,
 					args.Multiplier,
+					env.BlockContext().Number,
 				)
 			if err != nil {
 				return nil, err
@@ -324,7 +331,7 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			stake, err := Staker.NativeMetered(env.State(), charger).WithdrawDelegation(args.DelegationID)
+			stake, err := Staker.NativeMetered(env.State(), charger).WithdrawDelegation(args.DelegationID, env.BlockContext().Number)
 			if err != nil {
 				return nil, err
 			}
@@ -338,7 +345,7 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			err := Staker.NativeMetered(env.State(), charger).SignalDelegationExit(args.DelegationID)
+			err := Staker.NativeMetered(env.State(), charger).SignalDelegationExit(args.DelegationID, env.BlockContext().Number)
 			if err != nil {
 				return nil, err
 			}
@@ -367,12 +374,16 @@ func init() {
 			if delegation.LastIteration != nil {
 				lastPeriod = *delegation.LastIteration
 			}
+			isLocked, err := delegation.IsLocked(validation, env.BlockContext().Number)
+			if err != nil {
+				return nil, err
+			}
 
 			return []any{
 				delegation.Validation,
 				toWei(delegation.Stake),
 				delegation.Multiplier,
-				delegation.IsLocked(validation),
+				isLocked,
 				delegation.FirstIteration,
 				lastPeriod,
 			}, nil

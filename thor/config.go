@@ -13,6 +13,7 @@ var (
 	epochLength                uint32 = 180      // 180 blocks, 30 minutes
 	seederInterval             uint32 = 8640     // 8640 blocks, 1 day
 	validatorEvictionThreshold uint32 = 7 * 8640 // 7 days
+	evictionCheckInterval      uint32 = 8640 * 3 // 3 days
 
 	// Staker parameters
 	lowStakingPeriod    uint32 = 8640 * 7  // 7 Days
@@ -29,6 +30,7 @@ type Config struct {
 	EpochLength                uint32 `json:"epochLength"`                // number of blocks per epoch, also the number of blocks between two checkpoints.
 	SeederInterval             uint32 `json:"seederInterval"`             // blocks between two scheduler seeder epochs.
 	ValidatorEvictionThreshold uint32 `json:"validatorEvictionThreshold"` // the number of blocks after which offline validator will be evicted from the leader group (7 days)
+	EvictionCheckInterval      uint32 `json:"evictionCheckInterval"`      // blocks between two eviction function executions
 
 	// staker parameters
 	LowStakingPeriod    uint32  `json:"lowStakingPeriod"`
@@ -81,55 +83,42 @@ func SetConfig(cfg Config) {
 	if cfg.HayabusaTP != nil {
 		hayabusaTP = *cfg.HayabusaTP
 	}
+
+	if cfg.EvictionCheckInterval != 0 {
+		evictionCheckInterval = cfg.EvictionCheckInterval
+	}
 }
 
 // LockConfig locks the config, preventing any further changes.
 // Required for mainnet and testnet.
-func LockConfig() {
-	locked = true
-}
+func LockConfig() { locked = true }
 
 // default value is 10 seconds
-func BlockInterval() uint64 {
-	return blockInterval
-}
+func BlockInterval() uint64 { return blockInterval }
 
 // default value is 180 blocks, 30 minutes
-func EpochLength() uint32 {
-	return epochLength
-}
+func EpochLength() uint32 { return epochLength }
 
 // default value is 8640 blocks, 1 day
-func SeederInterval() uint32 {
-	return seederInterval
-}
+func SeederInterval() uint32 { return seederInterval }
 
 // default value is 7 days
-func ValidatorEvictionThreshold() uint32 {
-	return validatorEvictionThreshold
-}
+func ValidatorEvictionThreshold() uint32 { return validatorEvictionThreshold }
 
 // default value is 7 days
-func LowStakingPeriod() uint32 {
-	return lowStakingPeriod
-}
+func LowStakingPeriod() uint32 { return lowStakingPeriod }
 
 // default value is 15 days
-func MediumStakingPeriod() uint32 {
-	return mediumStakingPeriod
-}
+func MediumStakingPeriod() uint32 { return mediumStakingPeriod }
 
 // default value is 30 days
-func HighStakingPeriod() uint32 {
-	return highStakingPeriod
-}
+func HighStakingPeriod() uint32 { return highStakingPeriod }
 
 // default value is 1 day
-func CooldownPeriod() uint32 {
-	return cooldownPeriod
-}
+func CooldownPeriod() uint32 { return cooldownPeriod }
 
 // default value is 14 days
-func HayabusaTP() uint32 {
-	return hayabusaTP
-}
+func HayabusaTP() uint32 { return hayabusaTP }
+
+// default value is 3 days
+func EvictionCheckInterval() uint32 { return evictionCheckInterval }

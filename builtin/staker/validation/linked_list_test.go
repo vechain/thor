@@ -468,7 +468,7 @@ func Test_LinkedList_Next(t *testing.T) {
 	// Test Next on empty list
 	tmpID := datagen.RandAddress()
 	next, err := repo.nextEntry(tmpID)
-	assert.Error(t, err)
+	assert.NoError(t, err)
 	assert.True(t, next.IsZero())
 
 	// Add addresses

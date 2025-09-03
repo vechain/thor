@@ -45,14 +45,26 @@ func New(sctx *solidity.Context,
 	}
 }
 
-func (s *Service) IncreaseDelegatorsReward(node thor.Address, reward *big.Int) error {
+func (s *Service) GetValidatorForExitBlock(blockNum uint32) (thor.Address, error) {
+	val, err := s.repo.getExit(blockNum)
+	if err != nil {
+		return thor.Address{}, err
+	}
+	return val, nil
+}
+
+func (s *Service) IncreaseDelegatorsReward(node thor.Address, reward *big.Int, currentBlock uint32) error {
 	val, err := s.GetExistingValidation(node)
 	if err != nil {
 		return err
 	}
 
 	periodBytes := make([]byte, 4)
-	binary.BigEndian.PutUint32(periodBytes, val.CurrentIteration())
+	current, err := val.CurrentIteration(currentBlock)
+	if err != nil {
+		return err
+	}
+	binary.BigEndian.PutUint32(periodBytes, current)
 	key := thor.Blake2b([]byte("rewards"), node.Bytes(), periodBytes)
 
 	rewards, err := s.repo.getReward(key)
@@ -136,22 +148,22 @@ func (s *Service) Add(
 	stake uint64,
 ) error {
 	entry := &Validation{
-		Endorser:           endorser,
-		Period:             period,
-		CompleteIterations: 0,
-		Status:             StatusQueued,
-		LockedVET:          0,
-		QueuedVET:          stake,
-		CooldownVET:        0,
-		PendingUnlockVET:   0,
-		WithdrawableVET:    0,
-		Weight:             0,
+		Endorser:         endorser,
+		Period:           period,
+		CompletedPeriods: 0,
+		Status:           StatusQueued,
+		LockedVET:        0,
+		QueuedVET:        stake,
+		CooldownVET:      0,
+		PendingUnlockVET: 0,
+		WithdrawableVET:  0,
+		Weight:           0,
 	}
 
 	return s.repo.addValidation(validator, entry)
 }
 
-func (s *Service) SignalExit(validator thor.Address, minBlock uint32, maxTry int) error {
+func (s *Service) SignalExit(validator thor.Address, currentBlock uint32, minBlock uint32, maxTry int) error {
 	validation, err := s.GetExistingValidation(validator)
 	if err != nil {
 		return err
@@ -162,7 +174,13 @@ func (s *Service) SignalExit(validator thor.Address, minBlock uint32, maxTry int
 		return err
 	}
 
+	current, err := validation.CurrentIteration(currentBlock)
+	if err != nil {
+		return err
+	}
 	validation.ExitBlock = &exitBlock
+	// validator is going to exit after current iteration
+	validation.CompletedPeriods = current
 
 	return s.repo.updateValidation(validator, validation)
 }
@@ -196,6 +214,27 @@ func (s *Service) DecreaseStake(validator thor.Address, validation *Validation, 
 	}
 
 	return s.repo.updateValidation(validator, validation)
+}
+
+func (s *Service) AddToRenewalList(validator thor.Address) error {
+	return s.repo.renewalList.Add(validator)
+}
+
+func (s *Service) RemoveFromRenewalList(address thor.Address) error {
+	return s.repo.renewalList.Remove(address)
+}
+
+// UpdateGroup lists all registered candidates.
+func (s *Service) UpdateGroup(currentBlock uint32) ([]thor.Address, error) {
+	group := make([]thor.Address, 0)
+	err := s.repo.iterateRenewalList(func(validator thor.Address, val *Validation) error {
+		// here we only handle renewals, not evictions or exits
+		if val.IsPeriodEnd(currentBlock) && val.ExitBlock == nil {
+			group = append(group, validator)
+		}
+		return nil
+	})
+	return group, err
 }
 
 // WithdrawStake allows validations to withdraw any withdrawable stake.

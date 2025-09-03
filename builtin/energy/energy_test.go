@@ -270,7 +270,7 @@ func (m *mockStaker) HasDelegations(address thor.Address) (bool, error) {
 	return m.hasDelegations, nil
 }
 
-func (m *mockStaker) IncreaseDelegatorsReward(master thor.Address, reward *big.Int) error {
+func (m *mockStaker) IncreaseDelegatorsReward(master thor.Address, reward *big.Int, currentBlock uint32) error {
 	return m.increaseRewardErr
 }
 
@@ -361,7 +361,7 @@ func TestDistributeRewards(t *testing.T) {
 				increaseRewardErr: tt.expectedErr,
 			}
 
-			err := eng.DistributeRewards(beneficiary, signer, mockStaker)
+			err := eng.DistributeRewards(beneficiary, signer, mockStaker, 10)
 			assert.Equal(t, tt.expectedErr, err)
 
 			beneficiaryEnergy, err := eng.Get(beneficiary)

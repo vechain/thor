@@ -6,8 +6,6 @@
 package staker
 
 import (
-	"github.com/pkg/errors"
-
 	"github.com/vechain/thor/v2/builtin/staker/globalstats"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
@@ -38,8 +36,6 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 		return false, nil
 	}
 
-	logger.Info("🏠performing housekeeping", "block", currentBlock)
-
 	transition, err := s.computeEpochTransition(currentBlock)
 	if err != nil {
 		return false, err
@@ -52,23 +48,26 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 	if err := s.applyEpochTransition(transition); err != nil {
 		return false, err
 	}
-
-	logger.Info("performed housekeeping", "block", currentBlock, "updates", true)
 	return true, nil
 }
 
 // computeEpochTransition calculates all state changes needed for an epoch transition
 func (s *Staker) computeEpochTransition(currentBlock uint32) (*EpochTransition, error) {
-	var err error
-
-	var renewals []thor.Address
 	var evictions []thor.Address
-	exitValidator := thor.Address{}
-	err = s.validationService.LeaderGroupIterator(
-		s.renewalCallback(currentBlock, &renewals),
-		s.exitsCallback(currentBlock, &exitValidator),
-		s.evictionCallback(currentBlock, &evictions),
-	)
+	if currentBlock != 0 && currentBlock%thor.EvictionCheckInterval() == 0 {
+		if err := s.validationService.LeaderGroupIterator(
+			s.evictionCallback(currentBlock, &evictions),
+		); err != nil {
+			return nil, err
+		}
+	}
+
+	renewals, err := s.validationService.UpdateGroup(currentBlock)
+	if err != nil {
+		return nil, err
+	}
+
+	exitValidator, err := s.validationService.GetValidatorForExitBlock(currentBlock)
 	if err != nil {
 		return nil, err
 	}
@@ -86,41 +85,6 @@ func (s *Staker) computeEpochTransition(currentBlock uint32) (*EpochTransition, 
 	}
 
 	return transition, nil
-}
-
-func (s *Staker) renewalCallback(currentBlock uint32, renewals *[]thor.Address) func(thor.Address, *validation.Validation) error {
-	// Collect all validators due for renewal
-	return func(validator thor.Address, entry *validation.Validation) error {
-		// Skip validators due to exit
-		if entry.ExitBlock != nil {
-			return nil
-		}
-
-		// Check if period is ending
-		if !entry.IsPeriodEnd(currentBlock) {
-			return nil
-		}
-
-		*renewals = append(*renewals, validator)
-
-		return nil
-	}
-}
-
-func (s *Staker) exitsCallback(currentBlock uint32, exitAddress *thor.Address) func(thor.Address, *validation.Validation) error {
-	// Find the last validator in iteration order that should exit this block
-	// Do NOT call ExitValidator here - just identify which validator should exit
-	return func(validator thor.Address, entry *validation.Validation) error {
-		if entry.ExitBlock != nil && currentBlock == *entry.ExitBlock {
-			// should never be possible for two validators to exit at the same block
-			if !exitAddress.IsZero() {
-				return errors.Errorf("found more than one validator exit in the same block: ValidatorID: %s, ValidatorID: %s", exitAddress, validator)
-			}
-			// Just record which validator should exit (matches original behavior)
-			*exitAddress = validator
-		}
-		return nil
-	}
 }
 
 func (s *Staker) evictionCallback(currentBlock uint32, evictions *[]thor.Address) func(thor.Address, *validation.Validation) error {
@@ -193,6 +157,10 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 			return err
 		}
 		accumulatedRenewal.Add(valRenewal)
+
+		if err := s.validationService.RemoveFromRenewalList(validator); err != nil {
+			return err
+		}
 	}
 	// Apply accumulated renewals to global stats
 	if err := s.globalStatsService.ApplyRenewal(accumulatedRenewal); err != nil {
@@ -222,7 +190,8 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 	// Apply evictions
 	for _, validator := range transition.Evictions {
 		logger.Info("evicting validator", "validator", validator)
-		if err := s.validationService.SignalExit(validator, transition.Block+thor.EpochLength(), int(thor.InitialMaxBlockProposers)); err != nil {
+		// signal exit to the eviction validator for the next epoch, since exit process is already done in this flow
+		if err := s.validationService.SignalExit(validator, transition.Block, transition.Block+thor.EpochLength(), int(thor.InitialMaxBlockProposers)); err != nil {
 			return err
 		}
 	}

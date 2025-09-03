@@ -24,20 +24,28 @@ var (
 	slotQueuedHead      = thor.BytesToBytes32([]byte(("validations-queued-head")))
 	slotQueuedTail      = thor.BytesToBytes32([]byte(("validations-queued-tail")))
 	slotQueuedGroupSize = thor.BytesToBytes32([]byte(("validations-queued-group-size")))
+
+	// update list
+	slotRenewalHead = thor.BytesToBytes32([]byte(("validations-renewal-head")))
+	slotRenewalTail = thor.BytesToBytes32([]byte(("validations-renewal-tail")))
+	slotRenewalPrev = thor.BytesToBytes32([]byte(("validations-renewal-prev")))
+	slotRenewalNext = thor.BytesToBytes32([]byte(("validations-renewal-next")))
 )
 
 type Repository struct {
-	storage    *Storage
-	activeList *listStats // active list stats
-	queuedList *listStats // queued list stats
+	storage     *Storage
+	activeList  *listStats   // active list stats
+	queuedList  *listStats   // queued list stats
+	renewalList *renewalList // renewal list
 }
 
 func NewRepository(sctx *solidity.Context) *Repository {
 	storage := NewStorage(sctx)
 	return &Repository{
-		storage:    storage,
-		activeList: newListStats(sctx, storage, slotActiveHead, slotActiveTail, slotActiveGroupSize),
-		queuedList: newListStats(sctx, storage, slotQueuedHead, slotQueuedTail, slotQueuedGroupSize),
+		storage:     storage,
+		activeList:  newListStats(sctx, storage, slotActiveHead, slotActiveTail, slotActiveGroupSize),
+		queuedList:  newListStats(sctx, storage, slotQueuedHead, slotQueuedTail, slotQueuedGroupSize),
+		renewalList: newRenewalList(sctx, slotRenewalHead, slotRenewalTail, slotRenewalPrev, slotRenewalNext),
 	}
 }
 
@@ -91,7 +99,7 @@ func (r *Repository) nextEntry(prev thor.Address) (thor.Address, error) {
 	}
 
 	if val == nil {
-		return thor.Address{}, errors.New("no validation found")
+		return thor.Address{}, nil // not found, just return empty
 	}
 	if val.Next == nil {
 		return thor.Address{}, nil
@@ -152,4 +160,22 @@ func (r *Repository) removeActive(address thor.Address, entry *Validation) error
 
 func (r *Repository) iterateActive(callback func(thor.Address, *Validation) error) error {
 	return r.activeList.Iterate(callback)
+}
+
+func (r *Repository) iterateRenewalList(callbacks ...func(thor.Address, *Validation) error) error {
+	return r.renewalList.Iterate(func(address thor.Address) error {
+		entry, err := r.getValidation(address)
+		if err != nil {
+			return err
+		}
+		if entry == nil {
+			return errors.New("entry is empty")
+		}
+		for _, callback := range callbacks {
+			if err = callback(address, entry); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }

@@ -12,6 +12,10 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
+// Linked list built a doubly linked list on top of the validation struct.
+// The entry is stored outside of linked list, here in storage, main purpose
+// is to reduce iterating cost, as it is used more frequently.
+
 type LinkedListEntry struct {
 	Prev *thor.Address `rlp:"nil"`
 	Next *thor.Address `rlp:"nil"`
@@ -72,7 +76,7 @@ func (l *listStats) Remove(address thor.Address, entry *Validation) (*Validation
 			return nil, err
 		}
 		if head == nil || *head != address {
-			// not the last element, return entry anyway
+			// not the last element
 			return entry, nil
 		}
 
@@ -81,33 +85,17 @@ func (l *listStats) Remove(address thor.Address, entry *Validation) (*Validation
 			return nil, err
 		}
 		if tail == nil || *tail != address {
-			// not the last element, return entry anyway
+			// not the last element
 			return entry, nil
 		}
 
-		// last element, set head and tail to nil
-		if err := l.setHead(nil); err != nil {
-			return nil, err
-		}
-		if err := l.setTail(nil); err != nil {
-			return nil, err
-		}
-		// subtract size
-		if err := l.subSize(); err != nil {
-			return nil, err
-		}
-
-		// update the entry
-		if err := l.storage.updateValidation(address, entry); err != nil {
-			return nil, err
-		}
-
-		return entry, nil
+		// last element, fallback to default behavior, will reset head and tail to nil
 	}
 
 	if entry.Prev == nil {
-		// entry is the head
-		if err := l.setHead(entry.Next); err != nil {
+		// entry is the head, update head to next
+		// headKey is touched previously since entry is linked
+		if err := l.head.Update(entry.Next); err != nil {
 			return nil, err
 		}
 	} else {
@@ -126,8 +114,9 @@ func (l *listStats) Remove(address thor.Address, entry *Validation) (*Validation
 	}
 
 	if entry.Next == nil {
-		// entry is the tail
-		if err := l.setTail(entry.Prev); err != nil {
+		// entry is the tail, update tail to prev
+		// tailKey is touched previously since entry is linked
+		if err := l.tail.Update(entry.Prev); err != nil {
 			return nil, err
 		}
 	} else {
@@ -170,13 +159,13 @@ func (l *listStats) Add(address thor.Address, newEntry *Validation) error {
 	// set the new entry's prev to the tail
 	newEntry.SetPrev(tail)
 	// add new queued to the tail
-	if err := l.setTail(&address); err != nil {
+	if err := l.tail.Upsert(&address); err != nil {
 		return err
 	}
 
 	// list is empty
 	if tail == nil {
-		if err := l.setHead(&address); err != nil {
+		if err := l.head.Upsert(&address); err != nil {
 			return err
 		}
 	} else {
@@ -234,15 +223,7 @@ func (l *listStats) Iterate(callback func(thor.Address, *Validation) error) erro
 
 ///
 /// Private Methods - use pointers
-//
-
-func (l *listStats) setHead(key *thor.Address) error {
-	return l.head.Upsert(key)
-}
-
-func (l *listStats) setTail(key *thor.Address) error {
-	return l.tail.Upsert(key)
-}
+///
 
 func (l *listStats) addSize() error {
 	size, err := l.size.Get()
