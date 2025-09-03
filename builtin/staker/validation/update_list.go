@@ -19,11 +19,6 @@ type updateList struct {
 	next *solidity.Mapping[thor.Address, thor.Address]
 }
 
-var (
-	headPlaceholder = thor.BytesToAddress([]byte("head-placeholder"))
-	tailPlaceholder = thor.BytesToAddress([]byte("tail-placeholder"))
-)
-
 func newUpdateList(sctx *solidity.Context, headKey, tailKey, prevKey, nextKey thor.Bytes32) *updateList {
 	return &updateList{
 		head: solidity.NewRaw[thor.Address](sctx, headKey),
