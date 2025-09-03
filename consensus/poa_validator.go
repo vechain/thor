@@ -89,7 +89,7 @@ type poaCacher struct {
 
 var _ cacher = (*poaCacher)(nil)
 
-func (p poaCacher) Handle(header *block.Header, receipts tx.Receipts) (any, error) {
+func (p *poaCacher) Handle(header *block.Header, receipts tx.Receipts) (any, error) {
 	hasAuthorityEvent := func() bool {
 		for _, r := range receipts {
 			for _, o := range r.Outputs {

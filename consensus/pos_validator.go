@@ -21,7 +21,7 @@ func (c *Consensus) validateStakingProposer(
 	header *block.Header,
 	parent *block.Header,
 	staker *stakerContract.Staker,
-) (*posCacher, error) {
+) (cacher, error) {
 	signer, err := header.Signer()
 	if err != nil {
 		return nil, consensusError(fmt.Sprintf("pos - block signer unavailable: %v", err))
@@ -87,21 +87,20 @@ func (c *Consensus) validateStakingProposer(
 		}
 	}
 
-	return &posCacher{leaderGroup: leaders, hasUpdates: len(updates) > 0}, nil
+	if len(updates) > 0 {
+		return &noOpCacher{}, nil
+	}
+
+	return &posCacher{leaderGroup: leaders}, nil
 }
 
 type posCacher struct {
 	leaderGroup []validation.Leader
-	hasUpdates  bool
 }
 
 var _ cacher = (*posCacher)(nil)
 
-func (p posCacher) Handle(_ *block.Header, receipts tx.Receipts) (any, error) {
-	if !p.hasUpdates {
-		return nil, nil
-	}
-
+func (p *posCacher) Handle(_ *block.Header, receipts tx.Receipts) (any, error) {
 	// check if there is any beneficiary change event
 	// if there is, skip the cache update to avoid inconsistency
 	// the cache will be updated in the next block
@@ -122,4 +121,12 @@ func (p posCacher) Handle(_ *block.Header, receipts tx.Receipts) (any, error) {
 	}
 
 	return p.leaderGroup, nil
+}
+
+type noOpCacher struct{}
+
+var _ cacher = (*noOpCacher)(nil)
+
+func (n *noOpCacher) Handle(_ *block.Header, _ tx.Receipts) (any, error) {
+	return nil, nil
 }
