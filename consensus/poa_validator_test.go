@@ -365,6 +365,54 @@ func TestAuthorityCacheHandler_WithEndorsorTransfers(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestAuthorityCacheHandler_WithAuthoritySetEvent(t *testing.T) {
+	mockForkConfig := &thor.ForkConfig{}
+
+	candidateList := []*authority.Candidate{
+		{
+			NodeMaster: thor.BytesToAddress([]byte("master1")),
+			Endorsor:   thor.BytesToAddress([]byte("endorsor1")),
+			Identity:   thor.BytesToBytes32([]byte("identity1")),
+			Active:     true,
+		},
+	}
+
+	candidates := poa.NewCandidates(candidateList)
+
+	header := new(block.Builder).
+		ParentID(thor.BytesToBytes32([]byte("parent123"))).
+		Timestamp(1000).
+		GasLimit(1000000).
+		GasUsed(0).
+		TotalScore(0).
+		StateRoot(thor.Bytes32{}).
+		ReceiptsRoot(thor.Bytes32{}).
+		Beneficiary(thor.Address{}).
+		Build().Header()
+
+	receipts := tx.Receipts{
+		&tx.Receipt{
+			Outputs: []*tx.Output{
+				{
+					Events: tx.Events{
+						{
+							Address: builtin.Authority.Address,
+							Topics: []thor.Bytes32{
+								thor.BytesToBytes32([]byte("authority_set")),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	cacher := &poaCacher{candidates, mockForkConfig}
+	output, err := cacher.Handle(header, receipts)
+	assert.NoError(t, err)
+	assert.Nil(t, output)
+}
+
 func TestAuthorityCacheHandler_WithMultipleEvents(t *testing.T) {
 	mockForkConfig := &thor.ForkConfig{}
 
