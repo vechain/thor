@@ -44,7 +44,7 @@ func (s *Service) GetDelegation(delegationID *big.Int) (*Delegation, error) {
 }
 
 func (s *Service) Add(
-	validator *thor.Address,
+	validator thor.Address,
 	firstIteration uint32,
 	stake uint64,
 	multiplier uint8,

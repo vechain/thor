@@ -31,15 +31,15 @@ func TestRepository_Validation_RoundTrip(t *testing.T) {
 	id := thor.BytesToAddress([]byte("v1"))
 	e1 := thor.BytesToAddress([]byte("e1"))
 	entry := &Validation{
-		Endorser:           &e1,
+		Endorser:           e1,
 		Period:             15,
 		CompleteIterations: 2,
 		Status:             StatusQueued,
 	}
 
-	assert.NoError(t, repo.addValidation(&id, entry))
+	assert.NoError(t, repo.addValidation(id, entry))
 
-	got, err := repo.getValidation(&id)
+	got, err := repo.getValidation(id)
 	assert.NoError(t, err)
 	assert.Equal(t, entry.Endorser, got.Endorser)
 	assert.Equal(t, uint32(15), got.Period)
@@ -56,7 +56,7 @@ func TestRepository_Validation_GetError(t *testing.T) {
 	slot := thor.Blake2b(id.Bytes(), slotValidations.Bytes())
 	st.SetRawStorage(addr, slot, rlp.RawValue{0xFF})
 
-	_, err := repo.getValidation(&id)
+	_, err := repo.getValidation(id)
 	assert.ErrorContains(t, err, "failed to get validator")
 }
 
@@ -94,7 +94,7 @@ func TestRepository_Exit_RoundTrip(t *testing.T) {
 	repo, _, _ := newRepo(t)
 	validator := thor.BytesToAddress([]byte("v3"))
 
-	assert.NoError(t, repo.setExit(42, &validator))
+	assert.NoError(t, repo.setExit(42, validator))
 
 	addr, err := repo.getExit(42)
 	assert.NoError(t, err)

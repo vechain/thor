@@ -31,18 +31,18 @@ func (p *Packer) schedulePOS(parent *chain.BlockSummary, nowTimestamp uint64, st
 	)
 
 	for _, leader := range leaderGroup {
-		if *leader.Address == p.nodeMaster {
+		if leader.Address == p.nodeMaster {
 			if leader.Beneficiary != nil { // staker contract beneficiary first
 				beneficiary = *leader.Beneficiary
 			} else if p.beneficiary != nil { // packer beneficiary option second
 				beneficiary = *p.beneficiary
 			} else { // fallback to endorser
-				beneficiary = *leader.Endorser
+				beneficiary = leader.Endorser
 			}
 		}
 
 		proposers = append(proposers, pos.Proposer{
-			Address: *leader.Address,
+			Address: leader.Address,
 			Active:  leader.Active,
 			Weight:  leader.Weight,
 		})
@@ -60,7 +60,7 @@ func (p *Packer) schedulePOS(parent *chain.BlockSummary, nowTimestamp uint64, st
 	updates, score := sched.Updates(newBlockTime, weight)
 
 	for _, u := range updates {
-		if err := staker.SetOnline(&u.Address, parent.Header.Number()+1, u.Active); err != nil {
+		if err := staker.SetOnline(u.Address, parent.Header.Number()+1, u.Active); err != nil {
 			return thor.Address{}, 0, 0, err
 		}
 	}

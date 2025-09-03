@@ -18,18 +18,18 @@ var slotAggregations = thor.BytesToBytes32([]byte("aggregated-delegations"))
 
 // Service manages delegation aggregations for each validator.
 type Service struct {
-	aggregationStorage *solidity.Mapping[*thor.Address, *Aggregation]
+	aggregationStorage *solidity.Mapping[thor.Address, *Aggregation]
 }
 
 func New(sctx *solidity.Context) *Service {
 	return &Service{
-		aggregationStorage: solidity.NewMapping[*thor.Address, *Aggregation](sctx, slotAggregations),
+		aggregationStorage: solidity.NewMapping[thor.Address, *Aggregation](sctx, slotAggregations),
 	}
 }
 
 // GetAggregation retrieves the delegation aggregation for a validator.
 // Returns a zero-initialized aggregation if none exists.
-func (s *Service) GetAggregation(validator *thor.Address) (*Aggregation, error) {
+func (s *Service) GetAggregation(validator thor.Address) (*Aggregation, error) {
 	d, err := s.aggregationStorage.Get(validator)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get validator aggregation")
@@ -43,7 +43,7 @@ func (s *Service) GetAggregation(validator *thor.Address) (*Aggregation, error) 
 
 // AddPendingVET adds a new delegation to the validator's pending pool.
 // Called when a delegator creates a new delegation.
-func (s *Service) AddPendingVET(validator *thor.Address, stake *stakes.WeightedStake) error {
+func (s *Service) AddPendingVET(validator thor.Address, stake *stakes.WeightedStake) error {
 	agg, err := s.GetAggregation(validator)
 	if err != nil {
 		return err
@@ -56,7 +56,7 @@ func (s *Service) AddPendingVET(validator *thor.Address, stake *stakes.WeightedS
 
 // SubPendingVet removes VET from the validator's pending pool.
 // Called when a delegation is withdrawn before becoming active.
-func (s *Service) SubPendingVet(validator *thor.Address, stake *stakes.WeightedStake) error {
+func (s *Service) SubPendingVet(validator thor.Address, stake *stakes.WeightedStake) error {
 	agg, err := s.GetAggregation(validator)
 	if err != nil {
 		return err
@@ -76,7 +76,7 @@ func (s *Service) SubPendingVet(validator *thor.Address, stake *stakes.WeightedS
 
 // Renew transitions the validator's delegations to the next staking period.
 // Called during staking period renewal process.
-func (s *Service) Renew(validator *thor.Address) (*globalstats.Renewal, uint64, error) {
+func (s *Service) Renew(validator thor.Address) (*globalstats.Renewal, uint64, error) {
 	agg, err := s.GetAggregation(validator)
 	if err != nil {
 		return nil, 0, err
@@ -97,7 +97,7 @@ func (s *Service) Renew(validator *thor.Address) (*globalstats.Renewal, uint64, 
 
 // Exit moves all delegations to withdrawable state when validator exits.
 // Called when a validator is removed from the active set.
-func (s *Service) Exit(validator *thor.Address) (*globalstats.Exit, error) {
+func (s *Service) Exit(validator thor.Address) (*globalstats.Exit, error) {
 	agg, err := s.GetAggregation(validator)
 	if err != nil {
 		return nil, err
@@ -115,7 +115,7 @@ func (s *Service) Exit(validator *thor.Address) (*globalstats.Exit, error) {
 
 // SignalExit marks locked delegations as exiting for the next period.
 // Called when a validator signals intent to exit but hasn't exited yet.
-func (s *Service) SignalExit(validator *thor.Address, stake *stakes.WeightedStake) error {
+func (s *Service) SignalExit(validator thor.Address, stake *stakes.WeightedStake) error {
 	agg, err := s.GetAggregation(validator)
 	if err != nil {
 		return err

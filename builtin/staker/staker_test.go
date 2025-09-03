@@ -62,7 +62,7 @@ func (ts *TestSequence) AssertQueuedVET(expectedVET *big.Int) *TestSequence {
 	return ts
 }
 
-func (ts *TestSequence) AssertFirstActive(expectedAddr *thor.Address) *TestSequence {
+func (ts *TestSequence) AssertFirstActive(expectedAddr thor.Address) *TestSequence {
 	firstActive, err := ts.staker.FirstActive()
 	assert.NoError(ts.t, err, "failed to get first active validator")
 	assert.Equal(ts.t, expectedAddr, firstActive, "first active validator mismatch")
@@ -90,7 +90,7 @@ func (ts *TestSequence) AssertLeaderGroupSize(expectedSize uint64) *TestSequence
 	return ts
 }
 
-func (ts *TestSequence) AssertNext(prev *thor.Address, expected thor.Address) *TestSequence {
+func (ts *TestSequence) AssertNext(prev thor.Address, expected thor.Address) *TestSequence {
 	next, err := ts.staker.Next(prev)
 	assert.NoError(ts.t, err, "failed to get next validator after %s", prev.String())
 	assert.Equal(ts.t, expected, next, "next validator mismatch after %s", prev.String())
@@ -98,7 +98,7 @@ func (ts *TestSequence) AssertNext(prev *thor.Address, expected thor.Address) *T
 }
 
 func (ts *TestSequence) AddValidation(
-	endorser, master *thor.Address,
+	endorser, master thor.Address,
 	period uint32,
 	stake uint64,
 ) *TestSequence {
@@ -107,15 +107,15 @@ func (ts *TestSequence) AddValidation(
 	return ts
 }
 
-func (ts *TestSequence) SignalExit(validator, endorser *thor.Address) *TestSequence {
+func (ts *TestSequence) SignalExit(validator, endorser thor.Address) *TestSequence {
 	err := ts.staker.SignalExit(validator, endorser)
 	assert.NoError(ts.t, err, "failed to signal exit for validator %s with endorser %s", validator.String(), endorser.String())
 	return ts
 }
 
 func (ts *TestSequence) IncreaseStake(
-	addr *thor.Address,
-	endorser *thor.Address,
+	addr thor.Address,
+	endorser thor.Address,
 	amount uint64,
 ) *TestSequence {
 	err := ts.staker.IncreaseStake(addr, endorser, amount)
@@ -124,8 +124,8 @@ func (ts *TestSequence) IncreaseStake(
 }
 
 func (ts *TestSequence) DecreaseStake(
-	addr *thor.Address,
-	endorser *thor.Address,
+	addr thor.Address,
+	endorser thor.Address,
 	amount uint64,
 ) *TestSequence {
 	err := ts.staker.DecreaseStake(addr, endorser, amount)
@@ -133,7 +133,7 @@ func (ts *TestSequence) DecreaseStake(
 	return ts
 }
 
-func (ts *TestSequence) WithdrawStake(endorser, master *thor.Address, block uint32, expectedOut uint64) *TestSequence {
+func (ts *TestSequence) WithdrawStake(endorser, master thor.Address, block uint32, expectedOut uint64) *TestSequence {
 	amount, err := ts.staker.WithdrawStake(endorser, master, block)
 	assert.NoError(ts.t, err, "failed to withdraw stake for validator %s with endorser %s at block %d: %v", master.String(), endorser.String(), block, err)
 	assert.Equal(
@@ -148,9 +148,9 @@ func (ts *TestSequence) WithdrawStake(endorser, master *thor.Address, block uint
 }
 
 func (ts *TestSequence) SetBeneficiary(
-	validator *thor.Address,
-	endorser *thor.Address,
-	beneficiary *thor.Address,
+	validator thor.Address,
+	endorser thor.Address,
+	beneficiary thor.Address,
 ) *TestSequence {
 	err := ts.staker.SetBeneficiary(validator, endorser, beneficiary)
 	assert.NoError(ts.t, err, "failed to set beneficiary for validator %s with endorser %s: %v", validator.String(), endorser.String(), err)
@@ -158,7 +158,7 @@ func (ts *TestSequence) SetBeneficiary(
 }
 
 func (ts *TestSequence) AssertWithdrawable(
-	master *thor.Address,
+	master thor.Address,
 	block uint32,
 	expectedWithdrawable *big.Int,
 ) *TestSequence {
@@ -168,14 +168,14 @@ func (ts *TestSequence) AssertWithdrawable(
 	return ts
 }
 
-func (ts *TestSequence) SetOnline(id *thor.Address, blockNum uint32, online bool) *TestSequence {
+func (ts *TestSequence) SetOnline(id thor.Address, blockNum uint32, online bool) *TestSequence {
 	err := ts.staker.SetOnline(id, blockNum, online)
 	assert.NoError(ts.t, err, "failed to set online status for validator %s: %v", id.String(), err)
 	return ts
 }
 
 func (ts *TestSequence) AddDelegation(
-	master *thor.Address,
+	master thor.Address,
 	amount uint64,
 	multiplier uint8,
 	idSetter *big.Int,
@@ -194,7 +194,7 @@ func (ts *TestSequence) AddDelegation(
 	return ts
 }
 
-func (ts *TestSequence) AssertHasDelegations(node *thor.Address, expected bool) *TestSequence {
+func (ts *TestSequence) AssertHasDelegations(node thor.Address, expected bool) *TestSequence {
 	hasDelegations, err := ts.staker.HasDelegations(node)
 	assert.NoError(ts.t, err, "failed to check delegations for validator %s: %v", node.String(), err)
 	assert.Equal(ts.t, expected, hasDelegations, "delegation presence mismatch for validator %s", node.String())
@@ -214,7 +214,7 @@ func (ts *TestSequence) WithdrawDelegation(delegationID *big.Int, expectedOut ui
 }
 
 func (ts *TestSequence) AssertDelegatorRewards(
-	validationID *thor.Address,
+	validationID thor.Address,
 	period uint32,
 	expectedReward *big.Int,
 ) *TestSequence {
@@ -225,7 +225,7 @@ func (ts *TestSequence) AssertDelegatorRewards(
 }
 
 func (ts *TestSequence) AssertCompletedPeriods(
-	validationID *thor.Address,
+	validationID thor.Address,
 	expectedPeriods uint32,
 ) *TestSequence {
 	periods, err := ts.staker.GetCompletedPeriods(validationID)
@@ -234,7 +234,7 @@ func (ts *TestSequence) AssertCompletedPeriods(
 	return ts
 }
 
-func (ts *TestSequence) AssertTotals(validationID *thor.Address, expected *validation.Totals) *TestSequence {
+func (ts *TestSequence) AssertTotals(validationID thor.Address, expected *validation.Totals) *TestSequence {
 	totals, err := ts.staker.GetValidationTotals(validationID)
 	assert.NoError(ts.t, err, "failed to get totals for validator %s", validationID.String())
 
@@ -273,19 +273,19 @@ func (ts *TestSequence) Transition(block uint32) *TestSequence {
 	return ts
 }
 
-func (ts *TestSequence) IncreaseDelegatorsReward(node *thor.Address, reward *big.Int) *TestSequence {
+func (ts *TestSequence) IncreaseDelegatorsReward(node thor.Address, reward *big.Int) *TestSequence {
 	assert.NoError(ts.t, ts.staker.IncreaseDelegatorsReward(node, reward))
 	return ts
 }
 
 type ValidationAssertions struct {
 	staker    *Staker
-	addr      *thor.Address
+	addr      thor.Address
 	validator *validation.Validation
 	t         *testing.T
 }
 
-func assertValidation(t *testing.T, staker *Staker, addr *thor.Address) *ValidationAssertions {
+func assertValidation(t *testing.T, staker *Staker, addr thor.Address) *ValidationAssertions {
 	validator, err := staker.GetValidation(addr)
 	require.NoError(t, err, "failed to get validator %s", addr.String())
 	return &ValidationAssertions{staker: staker, addr: addr, validator: validator, t: t}
@@ -337,7 +337,7 @@ func (va *ValidationAssertions) PendingUnlockVET(expected *big.Int) *ValidationA
 }
 
 func (va *ValidationAssertions) IsEmpty(expected bool) *ValidationAssertions {
-	assert.Equal(va.t, expected, va.validator.IsEmpty(), "validator %s empty state mismatch", va.addr.String())
+	assert.Equal(va.t, expected, va.validator == nil, "validator %s empty state mismatch", va.addr.String())
 	return va
 }
 
@@ -348,22 +348,22 @@ func (va *ValidationAssertions) Rewards(period uint32, expected *big.Int) *Valid
 	return va
 }
 
-func (va *ValidationAssertions) Beneficiary(expected *thor.Address) *ValidationAssertions {
-	if expected == nil {
+func (va *ValidationAssertions) Beneficiary(expected thor.Address) *ValidationAssertions {
+	if expected.IsZero() {
 		assert.Nil(va.t, va.validator.Beneficiary, "validator %s beneficiary mismatch", va.addr.String())
 	} else {
-		assert.Equal(va.t, *expected, *va.validator.Beneficiary, "validator %s beneficiary mismatch", va.addr.String())
+		assert.Equal(va.t, expected, *va.validator.Beneficiary, "validator %s beneficiary mismatch", va.addr.String())
 	}
 	return va
 }
 
 type AggregationAssertions struct {
-	validationID *thor.Address
+	validationID thor.Address
 	aggregation  *aggregation.Aggregation
 	t            *testing.T
 }
 
-func assertAggregation(t *testing.T, staker *Staker, validationID *thor.Address) *AggregationAssertions {
+func assertAggregation(t *testing.T, staker *Staker, validationID thor.Address) *AggregationAssertions {
 	agg, err := staker.aggregationService.GetAggregation(validationID)
 	require.NoError(t, err, "failed to get aggregation for validator %s", validationID.String())
 	return &AggregationAssertions{validationID: validationID, aggregation: agg, t: t}
@@ -481,9 +481,9 @@ func TestValidation_SignalExit_InvalidEndorser(t *testing.T) {
 	end := thor.BytesToAddress([]byte("endorse"))
 	wrong := thor.BytesToAddress([]byte("wrong"))
 
-	assert.NoError(t, staker.validationService.Add(&id, &end, thor.MediumStakingPeriod(), 100))
+	assert.NoError(t, staker.validationService.Add(id, end, thor.MediumStakingPeriod(), 100))
 
-	err := staker.SignalExit(&id, &wrong)
+	err := staker.SignalExit(id, wrong)
 	assert.ErrorContains(t, err, "endorser required")
 }
 
@@ -493,16 +493,16 @@ func TestValidation_SignalExit_NotActive(t *testing.T) {
 	id := thor.BytesToAddress([]byte("v"))
 	end := id
 
-	assert.NoError(t, staker.validationService.Add(&id, &end, thor.MediumStakingPeriod(), 100))
+	assert.NoError(t, staker.validationService.Add(id, end, thor.MediumStakingPeriod(), 100))
 
-	err := staker.SignalExit(&id, &end)
+	err := staker.SignalExit(id, end)
 	assert.ErrorContains(t, err, "can't signal exit while not active")
 }
 
 func TestService_IncreaseStake_UnknownValidator(t *testing.T) {
 	staker := newTestStaker()
 	id := thor.BytesToAddress([]byte("unknown"))
-	err := staker.IncreaseStake(&id, &id, 1)
+	err := staker.IncreaseStake(id, id, 1)
 	assert.ErrorContains(t, err, "failed to get existing validator")
 }
 
@@ -513,9 +513,9 @@ func TestValidation_IncreaseStake_InvalidEndorser(t *testing.T) {
 	end := thor.BytesToAddress([]byte("endorse"))
 	wrong := thor.BytesToAddress([]byte("wrong"))
 
-	assert.NoError(t, staker.validationService.Add(&id, &end, thor.MediumStakingPeriod(), 100))
+	assert.NoError(t, staker.validationService.Add(id, end, thor.MediumStakingPeriod(), 100))
 
-	err := staker.IncreaseStake(&id, &wrong, 10)
+	err := staker.IncreaseStake(id, wrong, 10)
 	assert.ErrorContains(t, err, "endorser required")
 }
 
@@ -525,12 +525,12 @@ func TestValidation_IncreaseStake_StatusExit(t *testing.T) {
 	id := thor.BytesToAddress([]byte("v"))
 	end := id
 
-	assert.NoError(t, staker.validationService.Add(&id, &end, thor.MediumStakingPeriod(), 100))
+	assert.NoError(t, staker.validationService.Add(id, end, thor.MediumStakingPeriod(), 100))
 
-	_, err := staker.WithdrawStake(&id, &end, 1)
+	_, err := staker.WithdrawStake(id, end, 1)
 	assert.NoError(t, err)
 
-	err = staker.IncreaseStake(&id, &end, 5)
+	err = staker.IncreaseStake(id, end, 5)
 	assert.ErrorContains(t, err, "validator exited")
 }
 
@@ -540,22 +540,22 @@ func TestValidation_IncreaseStake_ActiveHasExitBlock(t *testing.T) {
 	id := thor.BytesToAddress([]byte("v"))
 	end := id
 
-	assert.NoError(t, staker.validationService.Add(&id, &end, thor.MediumStakingPeriod(), 100))
+	assert.NoError(t, staker.validationService.Add(id, end, thor.MediumStakingPeriod(), 100))
 
-	val, err := staker.validationService.GetValidation(&id)
+	val, err := staker.validationService.GetValidation(id)
 	assert.NoError(t, err)
-	assert.False(t, val.IsEmpty())
+	assert.False(t, val == nil)
 
-	staker.validationService.ActivateValidator(&id, val, 0, &globalstats.Renewal{
+	staker.validationService.ActivateValidator(id, val, 0, &globalstats.Renewal{
 		LockedIncrease: stakes.NewWeightedStake(0, 0),
 		LockedDecrease: stakes.NewWeightedStake(0, 0),
 		QueuedDecrease: 0,
 	})
 
-	err = staker.SignalExit(&id, &end)
+	err = staker.SignalExit(id, end)
 	assert.NoError(t, err)
 
-	err = staker.IncreaseStake(&id, &end, 5)
+	err = staker.IncreaseStake(id, end, 5)
 	assert.ErrorContains(t, err, "validator has signaled exit, cannot increase stake")
 }
 
@@ -563,7 +563,7 @@ func TestValidation_DecreaseStake_UnknownValidator(t *testing.T) {
 	staker := newTestStaker()
 
 	id := thor.BytesToAddress([]byte("unknown"))
-	err := staker.DecreaseStake(&id, &id, 1)
+	err := staker.DecreaseStake(id, id, 1)
 	assert.ErrorContains(t, err, "failed to get existing validator")
 }
 
@@ -573,9 +573,9 @@ func TestValidation_DecreaseStake_InvalidEndorser(t *testing.T) {
 	end := thor.BytesToAddress([]byte("endorse"))
 	wrong := thor.BytesToAddress([]byte("wrong"))
 
-	assert.NoError(t, staker.validationService.Add(&id, &end, thor.MediumStakingPeriod(), 100))
+	assert.NoError(t, staker.validationService.Add(id, end, thor.MediumStakingPeriod(), 100))
 
-	err := staker.DecreaseStake(&id, &wrong, 1)
+	err := staker.DecreaseStake(id, wrong, 1)
 	assert.ErrorContains(t, err, "endorser required")
 }
 
@@ -585,22 +585,22 @@ func TestValidation_DecreaseStake_StatusExit(t *testing.T) {
 	id := thor.BytesToAddress([]byte("v"))
 	end := id
 
-	assert.NoError(t, staker.validationService.Add(&id, &end, thor.MediumStakingPeriod(), 100))
+	assert.NoError(t, staker.validationService.Add(id, end, thor.MediumStakingPeriod(), 100))
 
-	val, err := staker.validationService.GetValidation(&id)
+	val, err := staker.validationService.GetValidation(id)
 	assert.NoError(t, err)
-	assert.False(t, val.IsEmpty())
+	assert.False(t, val == nil)
 
-	staker.validationService.ActivateValidator(&id, val, 0, &globalstats.Renewal{
+	staker.validationService.ActivateValidator(id, val, 0, &globalstats.Renewal{
 		LockedIncrease: stakes.NewWeightedStake(0, 0),
 		LockedDecrease: stakes.NewWeightedStake(0, 0),
 		QueuedDecrease: 0,
 	})
 
-	err = staker.SignalExit(&id, &end)
+	err = staker.SignalExit(id, end)
 	assert.NoError(t, err)
 
-	err = staker.DecreaseStake(&id, &end, 5)
+	err = staker.DecreaseStake(id, end, 5)
 	assert.ErrorContains(t, err, "validator has signaled exit, cannot decrease stake")
 }
 
@@ -610,22 +610,22 @@ func TestValidation_DecreaseStake_ActiveHasExitBlock(t *testing.T) {
 	id := thor.BytesToAddress([]byte("v"))
 	end := id
 
-	assert.NoError(t, staker.validationService.Add(&id, &end, thor.MediumStakingPeriod(), 100))
+	assert.NoError(t, staker.validationService.Add(id, end, thor.MediumStakingPeriod(), 100))
 
-	val, err := staker.validationService.GetValidation(&id)
+	val, err := staker.validationService.GetValidation(id)
 	assert.NoError(t, err)
-	assert.False(t, val.IsEmpty())
+	assert.False(t, val == nil)
 
-	staker.validationService.ActivateValidator(&id, val, 0, &globalstats.Renewal{
+	staker.validationService.ActivateValidator(id, val, 0, &globalstats.Renewal{
 		LockedIncrease: stakes.NewWeightedStake(0, 0),
 		LockedDecrease: stakes.NewWeightedStake(0, 0),
 		QueuedDecrease: 0,
 	})
 
-	err = staker.SignalExit(&id, &end)
+	err = staker.SignalExit(id, end)
 	assert.NoError(t, err)
 
-	err = staker.DecreaseStake(&id, &end, 5)
+	err = staker.DecreaseStake(id, end, 5)
 	assert.ErrorContains(t, err, "validator has signaled exit, cannot decrease stake")
 }
 
@@ -635,9 +635,9 @@ func TestValidation_DecreaseStake_ActiveTooLowNextPeriod(t *testing.T) {
 	id := thor.BytesToAddress([]byte("v"))
 	end := id
 
-	assert.NoError(t, staker.AddValidation(&id, &end, thor.MediumStakingPeriod(), MinStakeVET))
+	assert.NoError(t, staker.AddValidation(id, end, thor.MediumStakingPeriod(), MinStakeVET))
 
-	err := staker.DecreaseStake(&id, &end, 100)
+	err := staker.DecreaseStake(id, end, 100)
 	assert.ErrorContains(t, err, "next period stake is lower than minimum stake")
 }
 
@@ -647,22 +647,22 @@ func TestValidation_DecreaseStake_ActiveSuccess(t *testing.T) {
 	id := thor.BytesToAddress([]byte("v"))
 	end := id
 
-	assert.NoError(t, staker.validationService.Add(&id, &end, thor.MediumStakingPeriod(), MinStakeVET+100))
+	assert.NoError(t, staker.validationService.Add(id, end, thor.MediumStakingPeriod(), MinStakeVET+100))
 
-	val, err := staker.validationService.GetValidation(&id)
+	val, err := staker.validationService.GetValidation(id)
 	assert.NoError(t, err)
-	assert.False(t, val.IsEmpty())
+	assert.False(t, val == nil)
 
-	staker.validationService.ActivateValidator(&id, val, 0, &globalstats.Renewal{
+	staker.validationService.ActivateValidator(id, val, 0, &globalstats.Renewal{
 		LockedIncrease: stakes.NewWeightedStake(0, 0),
 		LockedDecrease: stakes.NewWeightedStake(0, 0),
 		QueuedDecrease: 0,
 	})
 
-	err = staker.DecreaseStake(&id, &end, 100)
+	err = staker.DecreaseStake(id, end, 100)
 	assert.NoError(t, err)
 
-	v, err := staker.validationService.GetValidation(&id)
+	v, err := staker.validationService.GetValidation(id)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(100), v.PendingUnlockVET)
 	assert.Equal(t, MinStakeVET+100, v.LockedVET)
@@ -674,9 +674,9 @@ func TestValidation_DecreaseStake_QueuedTooLowNextPeriod(t *testing.T) {
 	id := thor.BytesToAddress([]byte("v"))
 	end := id
 
-	assert.NoError(t, staker.AddValidation(&id, &end, thor.MediumStakingPeriod(), MinStakeVET))
+	assert.NoError(t, staker.AddValidation(id, end, thor.MediumStakingPeriod(), MinStakeVET))
 
-	err := staker.DecreaseStake(&id, &end, 100)
+	err := staker.DecreaseStake(id, end, 100)
 	assert.ErrorContains(t, err, "next period stake is lower than minimum stake")
 }
 
@@ -686,11 +686,11 @@ func TestValidation_DecreaseStake_QueuedSuccess(t *testing.T) {
 	id := thor.BytesToAddress([]byte("v"))
 	end := id
 
-	assert.NoError(t, staker.AddValidation(&id, &end, thor.MediumStakingPeriod(), MinStakeVET+100))
+	assert.NoError(t, staker.AddValidation(id, end, thor.MediumStakingPeriod(), MinStakeVET+100))
 
-	assert.NoError(t, staker.DecreaseStake(&id, &end, 100))
+	assert.NoError(t, staker.DecreaseStake(id, end, 100))
 
-	v, err := staker.GetValidation(&id)
+	v, err := staker.GetValidation(id)
 	assert.NoError(t, err)
 	assert.Equal(t, MinStakeVET, v.QueuedVET)
 	assert.Equal(t, uint64(100), v.WithdrawableVET)
@@ -702,9 +702,9 @@ func TestValidation_WithdrawStake_InvalidEndorser(t *testing.T) {
 	id := thor.BytesToAddress([]byte("v"))
 	wrong := thor.BytesToAddress([]byte("wrong"))
 	endorsor := id
-	assert.NoError(t, staker.AddValidation(&id, &endorsor, thor.LowStakingPeriod(), MinStakeVET))
+	assert.NoError(t, staker.AddValidation(id, endorsor, thor.LowStakingPeriod(), MinStakeVET))
 
-	amt, err := staker.WithdrawStake(&id, &wrong, 0)
+	amt, err := staker.WithdrawStake(id, wrong, 0)
 	assert.Equal(t, uint64(0), amt)
 	assert.ErrorContains(t, err, "endorser required")
 }
@@ -714,10 +714,10 @@ func TestValidationAdd_Error(t *testing.T) {
 
 	id1 := thor.BytesToAddress([]byte("id1"))
 
-	assert.ErrorContains(t, staker.AddValidation(&id1, &id1, uint32(1), MinStakeVET), "period is out of boundaries")
-	assert.ErrorContains(t, staker.AddValidation(&id1, &id1, thor.LowStakingPeriod(), 0), "stake is out of range")
-	assert.NoError(t, staker.AddValidation(&id1, &id1, thor.LowStakingPeriod(), MinStakeVET))
-	assert.ErrorContains(t, staker.AddValidation(&id1, &id1, thor.LowStakingPeriod(), MinStakeVET), "validator already exists")
+	assert.ErrorContains(t, staker.AddValidation(id1, id1, uint32(1), MinStakeVET), "period is out of boundaries")
+	assert.ErrorContains(t, staker.AddValidation(id1, id1, thor.LowStakingPeriod(), 0), "stake is out of range")
+	assert.NoError(t, staker.AddValidation(id1, id1, thor.LowStakingPeriod(), MinStakeVET))
+	assert.ErrorContains(t, staker.AddValidation(id1, id1, thor.LowStakingPeriod(), MinStakeVET), "validator already exists")
 }
 
 func TestValidation_SetBeneficiary_Error(t *testing.T) {
@@ -726,20 +726,20 @@ func TestValidation_SetBeneficiary_Error(t *testing.T) {
 	id := thor.BytesToAddress([]byte("v"))
 	wrong := thor.BytesToAddress([]byte("wrong"))
 	endorsor := id
-	assert.NoError(t, staker.AddValidation(&id, &endorsor, thor.LowStakingPeriod(), MinStakeVET))
+	assert.NoError(t, staker.AddValidation(id, endorsor, thor.LowStakingPeriod(), MinStakeVET))
 
-	assert.ErrorContains(t, staker.SetBeneficiary(&id, &wrong, &id), "endorser required")
+	assert.ErrorContains(t, staker.SetBeneficiary(id, wrong, id), "endorser required")
 
-	_, err := staker.WithdrawStake(&id, &id, 0)
+	_, err := staker.WithdrawStake(id, id, 0)
 	assert.NoError(t, err)
 
-	assert.ErrorContains(t, staker.SetBeneficiary(&id, &id, &id), "validator has exited or signaled exit, cannot set beneficiary")
+	assert.ErrorContains(t, staker.SetBeneficiary(id, id, id), "validator has exited or signaled exit, cannot set beneficiary")
 }
 
 func TestDelegation_Add_InputValidation(t *testing.T) {
 	staker := newTestStaker()
 
-	_, err := staker.AddDelegation(&thor.Address{}, 1, 0)
+	_, err := staker.AddDelegation(thor.Address{}, 1, 0)
 	assert.ErrorContains(t, err, "multiplier cannot be 0")
 }
 
@@ -747,16 +747,16 @@ func TestDelegation_SignalExit(t *testing.T) {
 	staker := newTestStaker()
 
 	v := thor.BytesToAddress([]byte("v"))
-	assert.NoError(t, staker.AddValidation(&v, &v, thor.MediumStakingPeriod(), MinStakeVET))
+	assert.NoError(t, staker.AddValidation(v, v, thor.MediumStakingPeriod(), MinStakeVET))
 
-	id, err := staker.AddDelegation(&v, 3, 100)
+	id, err := staker.AddDelegation(v, 3, 100)
 	assert.NoError(t, err)
 
-	val, err := staker.validationService.GetValidation(&v)
+	val, err := staker.validationService.GetValidation(v)
 	assert.NoError(t, err)
-	assert.False(t, val.IsEmpty())
+	assert.False(t, val == nil)
 
-	staker.validationService.ActivateValidator(&v, val, 0, &globalstats.Renewal{
+	staker.validationService.ActivateValidator(v, val, 0, &globalstats.Renewal{
 		LockedIncrease: stakes.NewWeightedStake(0, 0),
 		LockedDecrease: stakes.NewWeightedStake(0, 0),
 		QueuedDecrease: 0,
@@ -779,9 +779,9 @@ func TestDelegation_SignalExit_AlreadyWithdrawn(t *testing.T) {
 	staker := newTestStaker()
 
 	v := thor.BytesToAddress([]byte("v"))
-	assert.NoError(t, staker.AddValidation(&v, &v, thor.MediumStakingPeriod(), MinStakeVET))
+	assert.NoError(t, staker.AddValidation(v, v, thor.MediumStakingPeriod(), MinStakeVET))
 
-	id, err := staker.AddDelegation(&v, 3, 100)
+	id, err := staker.AddDelegation(v, 3, 100)
 	assert.NoError(t, err)
 
 	_, _, err = staker.GetDelegation(id)

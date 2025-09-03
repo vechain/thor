@@ -14,7 +14,7 @@ import (
 )
 
 var baseVal = Validation{
-	Endorser:           &thor.Address{},
+	Endorser:           thor.Address{},
 	Beneficiary:        nil,
 	Period:             5,
 	CompleteIterations: 0,

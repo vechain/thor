@@ -15,21 +15,20 @@ import (
 
 func TestDelegation(t *testing.T) {
 	del := Delegation{
-		Validation:     &thor.Address{},
+		Validation:     thor.Address{},
 		Stake:          0,
 		Multiplier:     0,
 		LastIteration:  nil,
 		FirstIteration: 0,
 	}
 
-	assert.True(t, del.IsEmpty())
 	wStake := del.WeightedStake()
 	assert.Equal(t, uint64(0), wStake.VET)
 	assert.Equal(t, uint64(0), wStake.Weight)
 	offlineBlock := uint32(0)
 
 	val := validation.Validation{
-		Endorser:           &thor.Address{},
+		Endorser:           thor.Address{},
 		Period:             0,
 		CompleteIterations: 0,
 		Status:             0,
@@ -48,14 +47,13 @@ func TestDelegation(t *testing.T) {
 	assert.False(t, del.Ended(&val))
 
 	del = Delegation{
-		Validation:     &thor.Address{},
+		Validation:     thor.Address{},
 		Stake:          1000,
 		Multiplier:     200,
 		LastIteration:  nil,
 		FirstIteration: 0,
 	}
 
-	assert.False(t, del.IsEmpty())
 	wStake = del.WeightedStake()
 	assert.Equal(t, uint64(1000), wStake.VET)
 	assert.Equal(t, uint64(2000), wStake.Weight)
@@ -85,7 +83,7 @@ func TestDelegation(t *testing.T) {
 
 func TestDelegation_IsLocked(t *testing.T) {
 	del := Delegation{
-		Validation:     &thor.Address{},
+		Validation:     thor.Address{},
 		Stake:          0,
 		Multiplier:     0,
 		LastIteration:  nil,
@@ -93,7 +91,7 @@ func TestDelegation_IsLocked(t *testing.T) {
 	}
 
 	val := validation.Validation{
-		Endorser:           &thor.Address{},
+		Endorser:           thor.Address{},
 		Period:             0,
 		CompleteIterations: 0,
 		Status:             validation.StatusActive,

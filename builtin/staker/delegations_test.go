@@ -19,14 +19,14 @@ import (
 )
 
 type testValidators struct {
-	ID *thor.Address
+	ID thor.Address
 	*validation.Validation
 }
 
 func newDelegationStaker(t *testing.T) (*Staker, []*testValidators) {
 	staker, _ := newStaker(t, 75, 101, true)
 	validations := make([]*testValidators, 0)
-	err := staker.validationService.LeaderGroupIterator(func(validatorID *thor.Address, validation *validation.Validation) error {
+	err := staker.validationService.LeaderGroupIterator(func(validatorID thor.Address, validation *validation.Validation) error {
 		validations = append(validations, &testValidators{
 			ID:         validatorID,
 			Validation: validation,
@@ -187,7 +187,7 @@ func Test_AddDelegator_StakeRange(t *testing.T) {
 func Test_AddDelegator_ValidatorNotFound(t *testing.T) {
 	staker, _ := newStaker(t, 75, 101, true)
 
-	_, err := staker.AddDelegation(&thor.Address{}, delegationStake(), 255)
+	_, err := staker.AddDelegation(thor.Address{}, delegationStake(), 255)
 	assert.ErrorContains(t, err, "failed to get existing validator")
 }
 
@@ -273,7 +273,7 @@ func Test_QueuedDelegator_Withdraw_NonAutoRenew(t *testing.T) {
 	// And the delegation should be removed
 	delegation, _, err := staker.GetDelegation(id)
 	assert.NoError(t, err)
-	assert.False(t, delegation.IsEmpty())
+	assert.False(t, delegation == nil)
 }
 
 func Test_QueuedDelegator_Withdraw_AutoRenew(t *testing.T) {
@@ -300,7 +300,7 @@ func Test_QueuedDelegator_Withdraw_AutoRenew(t *testing.T) {
 	// And the delegation should be removed
 	delegation, _, err := staker.GetDelegation(id)
 	assert.NoError(t, err)
-	assert.False(t, delegation.IsEmpty())
+	assert.False(t, delegation == nil)
 }
 
 func Test_Delegator_DisableAutoRenew_InAStakingPeriod(t *testing.T) {
@@ -407,7 +407,7 @@ func Test_Delegator_WithdrawWhilePending(t *testing.T) {
 	// And the delegation should be removed
 	delegation, _, err := staker.GetDelegation(id)
 	assert.NoError(t, err)
-	assert.False(t, delegation.IsEmpty())
+	assert.False(t, delegation == nil)
 }
 
 func Test_Delegator_ID_ShouldBeIncremental(t *testing.T) {
@@ -449,8 +449,8 @@ func Test_Delegator_Queued_Weight(t *testing.T) {
 	assert.Equal(t, lockedVetBefore, lockedWeightBefore)
 	assert.Equal(t, uint64(0), queuedVetBefore)
 
-	node := datagen.RandAddressPtr()
-	endorser := datagen.RandAddressPtr()
+	node := datagen.RandAddress()
+	endorser := datagen.RandAddress()
 	err = staker.AddValidation(node, endorser, uint32(360)*24*15, validatorStake)
 	assert.NoError(t, err)
 
@@ -474,7 +474,7 @@ func Test_Delegator_Queued_Weight(t *testing.T) {
 func Test_Delegator_Queued_Weight_QueuedValidator_Withdraw(t *testing.T) {
 	staker, _ := newStaker(t, 0, 101, false)
 
-	validatorAddr := datagen.RandAddressPtr()
+	validatorAddr := datagen.RandAddress()
 	err := staker.AddValidation(validatorAddr, validatorAddr, uint32(360)*24*15, MinStakeVET)
 	assert.NoError(t, err)
 

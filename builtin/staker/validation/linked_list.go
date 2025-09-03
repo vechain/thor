@@ -45,51 +45,37 @@ func newListStats(sctx *solidity.Context, storage *Storage, headKey, tailKey, si
 	}
 }
 
-func (l *listStats) getHead() (*thor.Address, error) {
-	return l.head.Get()
+///
+/// Public methods - receive and return values
+///
+
+func (l *listStats) GetHead() (thor.Address, error) {
+	head, err := l.head.Get()
+	if err != nil {
+		return thor.Address{}, err
+	}
+	if head == nil {
+		return thor.Address{}, nil
+	}
+	return *head, nil
 }
 
-func (l *listStats) getTail() (*thor.Address, error) {
-	return l.tail.Get()
+func (l *listStats) GetTail() (thor.Address, error) {
+	tail, err := l.tail.Get()
+	if err != nil {
+		return thor.Address{}, err
+	}
+	return *tail, nil
 }
 
-func (l *listStats) getSize() (uint64, error) {
+func (l *listStats) GetSize() (uint64, error) {
 	return l.size.Get()
 }
 
-func (l *listStats) setHead(key *thor.Address) error {
-	return l.head.Upsert(key)
-}
-
-func (l *listStats) setTail(key *thor.Address) error {
-	return l.tail.Upsert(key)
-}
-
-func (l *listStats) addSize() error {
-	size, err := l.size.Get()
-	if err != nil {
-		return err
-	}
-	return l.size.Upsert(size + 1)
-}
-
-func (l *listStats) subSize() error {
-	size, err := l.size.Get()
-	if err != nil {
-		return err
-	}
-	if size == 0 {
-		return errors.New("size is already 0")
-	}
-
-	// already touched by AddSize
-	return l.size.Update(size - 1)
-}
-
-func (l *listStats) remove(address *thor.Address, entry *Validation) (*Validation, error) {
+func (l *listStats) Remove(address thor.Address, entry *Validation) (*Validation, error) {
 	if !entry.IsLinked() {
 		// if entry is not linked, check if it is the last element in the list
-		head, err := l.getHead()
+		head, err := l.head.Get()
 		if err != nil {
 			return nil, err
 		}
@@ -98,7 +84,7 @@ func (l *listStats) remove(address *thor.Address, entry *Validation) (*Validatio
 			return entry, nil
 		}
 
-		tail, err := l.getTail()
+		tail, err := l.head.Get()
 		if err != nil {
 			return nil, err
 		}
@@ -133,16 +119,16 @@ func (l *listStats) remove(address *thor.Address, entry *Validation) (*Validatio
 			return nil, err
 		}
 	} else {
-		prevEntry, err := l.storage.getValidation(entry.Prev)
+		prevEntry, err := l.storage.getValidation(*entry.Prev)
 		if err != nil {
 			return nil, err
 		}
-		if prevEntry.IsEmpty() {
+		if prevEntry == nil {
 			return nil, errors.New("prev entry is empty")
 		}
 
 		prevEntry.SetNext(entry.Next)
-		if err := l.storage.updateValidation(entry.Prev, prevEntry); err != nil {
+		if err := l.storage.updateValidation(*entry.Prev, prevEntry); err != nil {
 			return nil, err
 		}
 	}
@@ -153,16 +139,16 @@ func (l *listStats) remove(address *thor.Address, entry *Validation) (*Validatio
 			return nil, err
 		}
 	} else {
-		nextEntry, err := l.storage.getValidation(entry.Next)
+		nextEntry, err := l.storage.getValidation(*entry.Next)
 		if err != nil {
 			return nil, err
 		}
-		if nextEntry.IsEmpty() {
+		if nextEntry == nil {
 			return nil, errors.New("next entry is empty")
 		}
 
 		nextEntry.SetPrev(entry.Prev)
-		if err := l.storage.updateValidation(entry.Next, nextEntry); err != nil {
+		if err := l.storage.updateValidation(*entry.Next, nextEntry); err != nil {
 			return nil, err
 		}
 	}
@@ -183,8 +169,8 @@ func (l *listStats) remove(address *thor.Address, entry *Validation) (*Validatio
 	return entry, nil
 }
 
-func (l *listStats) add(address *thor.Address, newEntry *Validation) error {
-	tail, err := l.getTail()
+func (l *listStats) Add(address thor.Address, newEntry *Validation) error {
+	tail, err := l.tail.Get()
 	if err != nil {
 		return err
 	}
@@ -192,30 +178,30 @@ func (l *listStats) add(address *thor.Address, newEntry *Validation) error {
 	// set the new entry's prev to the tail
 	newEntry.SetPrev(tail)
 	// add new queued to the tail
-	if err := l.setTail(address); err != nil {
+	if err := l.setTail(&address); err != nil {
 		return err
 	}
 
 	// list is empty
 	if tail == nil {
-		if err := l.setHead(address); err != nil {
+		if err := l.setHead(&address); err != nil {
 			return err
 		}
 	} else {
-		tailEntry, err := l.storage.getValidation(tail)
+		tailEntry, err := l.storage.getValidation(*tail)
 		if err != nil {
 			return err
 		}
 
-		if tailEntry.IsEmpty() {
+		if tailEntry == nil {
 			return errors.New("tail entry is empty")
 		}
 
 		// update link list pointers
 		newEntry.SetPrev(tail)
-		tailEntry.SetNext(address)
+		tailEntry.SetNext(&address)
 
-		if err := l.storage.updateValidation(tail, tailEntry); err != nil {
+		if err := l.storage.updateValidation(*tail, tailEntry); err != nil {
 			return err
 		}
 	}
@@ -227,4 +213,37 @@ func (l *listStats) add(address *thor.Address, newEntry *Validation) error {
 
 	// update or add new entry
 	return l.storage.upsertValidation(address, newEntry)
+}
+
+///
+/// Private Methods - use pointers
+//
+
+func (l *listStats) setHead(key *thor.Address) error {
+	return l.head.Upsert(key)
+}
+
+func (l *listStats) setTail(key *thor.Address) error {
+	return l.tail.Upsert(key)
+}
+
+func (l *listStats) addSize() error {
+	size, err := l.size.Get()
+	if err != nil {
+		return err
+	}
+	return l.size.Upsert(size + 1)
+}
+
+func (l *listStats) subSize() error {
+	size, err := l.size.Get()
+	if err != nil {
+		return err
+	}
+	if size == 0 {
+		return errors.New("size is already 0")
+	}
+
+	// already touched by AddSize
+	return l.size.Update(size - 1)
 }

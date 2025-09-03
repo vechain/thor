@@ -12,33 +12,22 @@ import (
 )
 
 type Delegation struct {
-	Validation     *thor.Address // the validator to which the delegator is delegating
-	Stake          uint64        // the amount of VET delegated(in VET, not wei)
+	Validation     thor.Address // the validator to which the delegator is delegating
+	Stake          uint64       // the amount of VET delegated(in VET, not wei)
 	Multiplier     uint8
 	LastIteration  *uint32 `rlp:"nil"` // the last staking period in which the delegator was active
 	FirstIteration uint32  // the iteration at which the delegator was created
 }
 
-// IsEmpty returns whether the entry can be treated as empty.
-func (d *Delegation) IsEmpty() bool {
-	return d.Stake == 0 && d.Multiplier == 0
-}
-
 // WeightedStake returns the weight of the delegator, which is calculated as:
 // weight = stake * multiplier / 100
 func (d *Delegation) WeightedStake() *stakes.WeightedStake {
-	if d.IsEmpty() {
-		return stakes.NewWeightedStake(0, 0)
-	}
 	return stakes.NewWeightedStakeWithMultiplier(d.Stake, d.Multiplier)
 }
 
 // Started returns whether the delegation became locked
 func (d *Delegation) Started(val *validation.Validation) bool {
-	if d.IsEmpty() {
-		return false
-	}
-	if val.Status == validation.StatusQueued {
+	if val.Status == validation.StatusQueued || val.Status == validation.StatusUnknown {
 		return false // Delegation cannot start if the validation is not active
 	}
 	currentStakingPeriod := val.CurrentIteration()
@@ -50,9 +39,6 @@ func (d *Delegation) Started(val *validation.Validation) bool {
 // - the delegation's exit iteration is less than the current staking period
 // - OR if the validation is in exit status and the delegation has started
 func (d *Delegation) Ended(val *validation.Validation) bool {
-	if d.IsEmpty() {
-		return false
-	}
 	if val.Status == validation.StatusQueued {
 		return false // Delegation cannot end if the validation is not active
 	}
@@ -72,10 +58,6 @@ func (d *Delegation) Ended(val *validation.Validation) bool {
 // - AND the delegation has not ended
 // - AND the delegation has stake
 func (d *Delegation) IsLocked(val *validation.Validation) bool {
-	if d.IsEmpty() {
-		return false
-	}
-
 	if d.Stake == 0 {
 		return false
 	}
