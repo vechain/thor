@@ -103,36 +103,37 @@ func (p *poaCacher) Handle(header *block.Header, receipts tx.Receipts) (any, err
 		return false
 	}()
 
-	// if no event emitted from Authority contract, it's believed that the candidates list not changed
-	if !hasAuthorityEvent {
-		// if no endorsor related transfer, or no event emitted from Params contract, the proposers list
-		// can be reused
-		hasEndorsorEvent := func() bool {
-			for _, r := range receipts {
-				for _, o := range r.Outputs {
-					for _, ev := range o.Events {
-						// after HAYABUSA, authorities are allowed to migrate to staker contract,
-						// so any staker contract event(AddValidation, StakeIncreased/Decreased/Withdrawn) will need to invalidate cache
-						if header.Number() >= p.forkConfig.HAYABUSA && ev.Address == builtin.Staker.Address {
-							return true
-						}
-						if ev.Address == builtin.Params.Address {
-							return true
-						}
+	if hasAuthorityEvent {
+		return nil, nil
+	}
+
+	// if no endorsor related transfer, or no event emitted from Params contract, the proposers list
+	// can be reused
+	hasEndorsorEvent := func() bool {
+		for _, r := range receipts {
+			for _, o := range r.Outputs {
+				for _, ev := range o.Events {
+					// after HAYABUSA, authorities are allowed to migrate to staker contract,
+					// so any staker contract event(AddValidation, StakeIncreased/Decreased/Withdrawn) will need to invalidate cache
+					if header.Number() >= p.forkConfig.HAYABUSA && ev.Address == builtin.Staker.Address {
+						return true
 					}
-					for _, t := range o.Transfers {
-						if p.candidates.IsEndorsor(t.Sender) || p.candidates.IsEndorsor(t.Recipient) {
-							return true
-						}
+					if ev.Address == builtin.Params.Address {
+						return true
+					}
+				}
+				for _, t := range o.Transfers {
+					if p.candidates.IsEndorsor(t.Sender) || p.candidates.IsEndorsor(t.Recipient) {
+						return true
 					}
 				}
 			}
-			return false
-		}()
-
-		if hasEndorsorEvent {
-			p.candidates.InvalidateCache()
 		}
+		return false
+	}()
+
+	if hasEndorsorEvent {
+		p.candidates.InvalidateCache()
 	}
 
 	return p.candidates, nil
