@@ -101,9 +101,9 @@ type posCacher struct {
 var _ cacher = (*posCacher)(nil)
 
 func (p *posCacher) Handle(_ *block.Header, receipts tx.Receipts) (any, error) {
-	beneficiaryABI, ok := builtin.Staker.Events().EventByName("SetBeneficiary")
+	beneficiaryABI, ok := builtin.Staker.Events().EventByName("BeneficiarySet")
 	if !ok {
-		return nil, fmt.Errorf("pos - cannot get SetBeneficiary event")
+		return nil, fmt.Errorf("pos - cannot get BeneficiarySet event")
 	}
 
 	// if there is no beneficiary change event, skip the cache update
