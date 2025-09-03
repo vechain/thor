@@ -24,6 +24,12 @@ var (
 	slotQueuedHead      = thor.BytesToBytes32([]byte(("validations-queued-head")))
 	slotQueuedTail      = thor.BytesToBytes32([]byte(("validations-queued-tail")))
 	slotQueuedGroupSize = thor.BytesToBytes32([]byte(("validations-queued-group-size")))
+
+	// update list
+	slotUpdateHead = thor.BytesToBytes32([]byte(("validations-update-head")))
+	slotUpdateTail = thor.BytesToBytes32([]byte(("validations-update-tail")))
+	slotUpdatePrev = thor.BytesToBytes32([]byte(("validations-update-prev")))
+	slotUpdateNext = thor.BytesToBytes32([]byte(("validations-update-next")))
 )
 
 type Repository struct {
@@ -46,7 +52,7 @@ func (r *Repository) getValidation(validator thor.Address) (*Validation, error) 
 }
 
 func (r *Repository) addValidation(validator thor.Address, entry *Validation) error {
-	if err := r.queuedList.add(validator, entry); err != nil {
+	if err := r.queuedList.Add(validator, entry); err != nil {
 		return errors.Wrap(err, "failed to add validator to queued list")
 	}
 	return nil
@@ -77,7 +83,7 @@ func (r *Repository) setExit(block uint32, validator thor.Address) error {
 
 // linked list operation
 func (r *Repository) firstQueued() (thor.Address, error) {
-	head, err := r.queuedList.getHead()
+	head, err := r.queuedList.GetHead()
 	if err != nil {
 		return thor.Address{}, err
 	}
@@ -89,7 +95,7 @@ func (r *Repository) firstQueued() (thor.Address, error) {
 }
 
 func (r *Repository) firstActive() (thor.Address, error) {
-	head, err := r.activeList.getHead()
+	head, err := r.activeList.GetHead()
 	if err != nil {
 		return thor.Address{}, err
 	}
@@ -113,15 +119,15 @@ func (r *Repository) nextEntry(prev thor.Address) (thor.Address, error) {
 }
 
 func (r *Repository) activeListSize() (uint64, error) {
-	return r.activeList.getSize()
+	return r.activeList.GetSize()
 }
 
 func (r *Repository) queuedListSize() (uint64, error) {
-	return r.queuedList.getSize()
+	return r.queuedList.GetSize()
 }
 
 func (r *Repository) popQueued() (thor.Address, *Validation, error) {
-	head, err := r.queuedList.getHead()
+	head, err := r.queuedList.GetHead()
 	if err != nil {
 		return thor.Address{}, nil, errors.New("no head present")
 	}
@@ -139,7 +145,7 @@ func (r *Repository) popQueued() (thor.Address, *Validation, error) {
 	}
 
 	// otherwise, remove and return
-	val, err := r.queuedList.remove(*head, entry)
+	val, err := r.queuedList.Remove(*head, entry)
 	if err != nil {
 		return thor.Address{}, nil, err
 	}
@@ -148,23 +154,23 @@ func (r *Repository) popQueued() (thor.Address, *Validation, error) {
 
 // removeQueued removes the entry from the queued list and persists the entry
 func (r *Repository) removeQueued(address thor.Address, entry *Validation) error {
-	_, err := r.queuedList.remove(address, entry)
+	_, err := r.queuedList.Remove(address, entry)
 	return err
 }
 
 // addActive adds the entry to the active list and persists the entry
 func (r *Repository) addActive(address thor.Address, newEntry *Validation) error {
-	return r.activeList.add(address, newEntry)
+	return r.activeList.Add(address, newEntry)
 }
 
 // removeActive removes the entry from the active list and persists the entry
 func (r *Repository) removeActive(address thor.Address, entry *Validation) error {
-	_, err := r.activeList.remove(address, entry)
+	_, err := r.activeList.Remove(address, entry)
 	return err
 }
 
 func (r *Repository) iterateActive(callbacks ...func(thor.Address, *Validation) error) error {
-	current, err := r.activeList.getHead()
+	current, err := r.activeList.GetHead()
 	if err != nil {
 		return err
 	}
