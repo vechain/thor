@@ -33,6 +33,14 @@ func TestUpdateList(t *testing.T) {
 	assert.NoError(t, list.Add(thor.Address{}))
 	assert.NoError(t, list.Remove(thor.Address{}))
 
+	addresses := []thor.Address{}
+	err = list.Iterate(func(address thor.Address) error {
+		addresses = append(addresses, address)
+		return nil
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, 0, len(addresses))
+
 	addr1 := thor.Address{1}
 	addr2 := thor.Address{2}
 
@@ -46,6 +54,15 @@ func TestUpdateList(t *testing.T) {
 
 	err = list.Add(addr1)
 	assert.NoError(t, err)
+
+	addresses = []thor.Address{}
+	err = list.Iterate(func(address thor.Address) error {
+		addresses = append(addresses, address)
+		return nil
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(addresses))
+	assert.Equal(t, addr1, addresses[0])
 
 	has, err = list.contains(addr1)
 	assert.NoError(t, err)
@@ -107,6 +124,15 @@ func TestUpdateList(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, addr2, tail)
 
+	addresses = []thor.Address{}
+	err = list.Iterate(func(address thor.Address) error {
+		addresses = append(addresses, address)
+		return nil
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(addresses))
+	assert.Equal(t, addr2, addresses[0])
+
 	// add addr1
 	err = list.Add(addr1)
 	assert.NoError(t, err)
@@ -159,6 +185,13 @@ func TestUpdateList(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, tail.IsZero())
 
+	addresses = []thor.Address{}
+	err = list.Iterate(func(address thor.Address) error {
+		addresses = append(addresses, address)
+		return nil
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, 0, len(addresses))
 }
 
 func TestUpdateListRemove(t *testing.T) {
@@ -244,4 +277,78 @@ func TestUpdateListRemove(t *testing.T) {
 	head, err = list.head.Get()
 	assert.NoError(t, err)
 	assert.True(t, head.IsZero())
+}
+
+func TestUpdateListIterate(t *testing.T) {
+	db := muxdb.NewMem()
+	st := state.New(db, trie.Root{})
+	addr := thor.BytesToAddress([]byte("test"))
+
+	sctx := solidity.NewContext(addr, st, nil)
+
+	list := newUpdateList(sctx, slotUpdateHead, slotUpdateTail, slotUpdatePrev, slotUpdateNext)
+
+	addr1 := thor.Address{1}
+	addr2 := thor.Address{2}
+	addr3 := thor.Address{3}
+	addr4 := thor.Address{4}
+
+	assert.NoError(t, list.Add(addr1))
+	assert.NoError(t, list.Add(addr2))
+	assert.NoError(t, list.Add(addr3))
+	assert.NoError(t, list.Add(addr4))
+
+	addresses := []thor.Address{}
+	err := list.Iterate(func(address thor.Address) error {
+		addresses = append(addresses, address)
+		return nil
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, 4, len(addresses))
+	assert.Equal(t, addr1, addresses[0])
+	assert.Equal(t, addr2, addresses[1])
+	assert.Equal(t, addr3, addresses[2])
+	assert.Equal(t, addr4, addresses[3])
+
+	assert.NoError(t, list.Remove(addr2))
+	addresses = []thor.Address{}
+	err = list.Iterate(func(address thor.Address) error {
+		addresses = append(addresses, address)
+		return nil
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, 3, len(addresses))
+	assert.Equal(t, addr1, addresses[0])
+	assert.Equal(t, addr3, addresses[1])
+	assert.Equal(t, addr4, addresses[2])
+
+	assert.NoError(t, list.Remove(addr4))
+	addresses = []thor.Address{}
+	err = list.Iterate(func(address thor.Address) error {
+		addresses = append(addresses, address)
+		return nil
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(addresses))
+	assert.Equal(t, addr1, addresses[0])
+	assert.Equal(t, addr3, addresses[1])
+
+	assert.NoError(t, list.Remove(addr1))
+	addresses = []thor.Address{}
+	err = list.Iterate(func(address thor.Address) error {
+		addresses = append(addresses, address)
+		return nil
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(addresses))
+	assert.Equal(t, addr3, addresses[0])
+
+	assert.NoError(t, list.Remove(addr3))
+	addresses = []thor.Address{}
+	err = list.Iterate(func(address thor.Address) error {
+		addresses = append(addresses, address)
+		return nil
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, 0, len(addresses))
 }

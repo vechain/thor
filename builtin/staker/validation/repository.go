@@ -33,17 +33,19 @@ var (
 )
 
 type Repository struct {
-	storage    *Storage
-	activeList *listStats // active list stats
-	queuedList *listStats // queued list stats
+	storage     *Storage
+	activeList  *listStats  // active list stats
+	queuedList  *listStats  // queued list stats
+	updateGroup *updateList // update list
 }
 
 func NewRepository(sctx *solidity.Context) *Repository {
 	storage := NewStorage(sctx)
 	return &Repository{
-		storage:    storage,
-		activeList: newListStats(sctx, storage, slotActiveHead, slotActiveTail, slotActiveGroupSize),
-		queuedList: newListStats(sctx, storage, slotQueuedHead, slotQueuedTail, slotQueuedGroupSize),
+		storage:     storage,
+		activeList:  newListStats(sctx, storage, slotActiveHead, slotActiveTail, slotActiveGroupSize),
+		queuedList:  newListStats(sctx, storage, slotQueuedHead, slotQueuedTail, slotQueuedGroupSize),
+		updateGroup: newUpdateList(sctx, slotUpdateHead, slotUpdateTail, slotUpdatePrev, slotUpdateNext),
 	}
 }
 
@@ -180,7 +182,7 @@ func (r *Repository) iterateActive(callbacks ...func(thor.Address, *Validation) 
 		if err != nil {
 			return err
 		}
-		if entry.IsEmpty() {
+		if entry == nil {
 			return errors.New("entry is empty")
 		}
 		for _, callback := range callbacks {
@@ -192,4 +194,22 @@ func (r *Repository) iterateActive(callbacks ...func(thor.Address, *Validation) 
 	}
 
 	return nil
+}
+
+func (r *Repository) iterateUpdateGroup(callbacks ...func(thor.Address, *Validation) error) error {
+	return r.updateGroup.Iterate(func(address thor.Address) error {
+		entry, err := r.getValidation(address)
+		if err != nil {
+			return err
+		}
+		if entry == nil {
+			return errors.New("entry is empty")
+		}
+		for _, callback := range callbacks {
+			if err := callback(address, entry); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }

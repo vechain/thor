@@ -563,7 +563,7 @@ func TestValidation_IncreaseStake_ActiveHasExitBlock(t *testing.T) {
 		QueuedDecrease: 0,
 	})
 
-	err := staker.SignalExit(id, end, 10)
+	err = staker.SignalExit(id, end, 10)
 	assert.NoError(t, err)
 
 	err = staker.IncreaseStake(id, end, 5)
@@ -607,7 +607,7 @@ func TestValidation_DecreaseStake_StatusExit(t *testing.T) {
 		QueuedDecrease: 0,
 	})
 
-	err := staker.SignalExit(id, end, 10)
+	err = staker.SignalExit(id, end, 10)
 	assert.NoError(t, err)
 
 	err = staker.DecreaseStake(id, end, 5)
@@ -632,7 +632,7 @@ func TestValidation_DecreaseStake_ActiveHasExitBlock(t *testing.T) {
 		QueuedDecrease: 0,
 	})
 
-	err := staker.SignalExit(id, end, 10)
+	err = staker.SignalExit(id, end, 10)
 	assert.NoError(t, err)
 
 	err = staker.DecreaseStake(id, end, 5)

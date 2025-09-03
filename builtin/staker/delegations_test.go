@@ -623,7 +623,7 @@ func TestStaker_DelegationExitingVET(t *testing.T) {
 	assert.Equal(t, validator.LockedVET, validator.Weight)
 
 	delStake := uint64(1000)
-	delegationID, err := staker.AddDelegation(firstActive, delStake, 200)
+	delegationID, err := staker.AddDelegation(firstActive, delStake, 200, 10)
 	assert.NoError(t, err)
 
 	delegation, validation, err := staker.GetDelegation(delegationID)
@@ -649,8 +649,8 @@ func TestStaker_DelegationExitingVET(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, started)
 
-	assert.NoError(t, staker.SignalDelegationExit(delegationID))
-	assert.NoError(t, staker.SignalExit(firstActive, validation.Endorser))
+	assert.NoError(t, staker.SignalDelegationExit(delegationID, 129600))
+	assert.NoError(t, staker.SignalExit(firstActive, validation.Endorser, 129600))
 
 	_, err = staker.Housekeep(thor.MediumStakingPeriod() * 2)
 	assert.NoError(t, err)
@@ -692,7 +692,7 @@ func TestStaker_DelegationWithdrawPending(t *testing.T) {
 	assert.Equal(t, validator.LockedVET, validator.Weight)
 
 	delStake := uint64(1000)
-	delegationID, err := staker.AddDelegation(firstActive, delStake, 200)
+	delegationID, err := staker.AddDelegation(firstActive, delStake, 200, 10)
 	assert.NoError(t, err)
 
 	delegation, validation, err := staker.GetDelegation(delegationID)

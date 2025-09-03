@@ -228,45 +228,23 @@ func (s *Service) DecreaseStake(validator thor.Address, validation *Validation, 
 }
 
 func (s *Service) AddToUpdateGroup(validator thor.Address) error {
-	contains, err := s.updateGroup.Contains(validator)
-	if err != nil {
-		return err
-	}
-	if contains {
-		return nil
-	}
-	return s.updateGroup.Add(validator)
+	return s.repo.updateGroup.Add(validator)
 }
 
 func (s *Service) RemoveFromUpdateGroup(address thor.Address) error {
-	return s.updateGroup.Remove(address)
+	return s.repo.updateGroup.Remove(address)
 }
 
 // UpdateGroup lists all registered candidates.
 func (s *Service) UpdateGroup(currentBlock uint32) ([]thor.Address, error) {
 	group := make([]thor.Address, 0)
-	err := s.UpdateGroupIterator(func(validator thor.Address, val Validation) error {
+	err := s.repo.iterateUpdateGroup(func(validator thor.Address, val *Validation) error {
 		if val.IsPeriodEnd(currentBlock) && val.ExitBlock == nil {
 			group = append(group, validator)
 		}
 		return nil
 	})
 	return group, err
-}
-
-func (s *Service) UpdateGroupIterator(callbacks ...func(thor.Address, Validation) error) error {
-	return s.updateGroup.Iter(func(address thor.Address) error {
-		validation, err := s.repo.getValidation(address)
-		if err != nil {
-			return err
-		}
-		for _, callback := range callbacks {
-			if err := callback(address, *validation); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
 }
 
 // WithdrawStake allows validations to withdraw any withdrawable stake.

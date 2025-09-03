@@ -250,7 +250,7 @@ func TestService_SignalExit_ExitBlockLimitReached(t *testing.T) {
 		CompleteIterations: 0,
 	}
 
-	assert.NoError(t, svc.repo.setValidation(validator, validation, true))
+	assert.NoError(t, svc.repo.addValidation(validator, validation))
 	current, err := validation.CurrentIteration(110)
 	assert.NoError(t, err)
 	minBlock := validation.StartBlock + validation.Period*current

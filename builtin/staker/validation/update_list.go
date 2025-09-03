@@ -180,3 +180,24 @@ func (u *updateList) Remove(toRemove thor.Address) error {
 	}
 	return u.next.Update(toRemove, thor.Address{})
 }
+
+func (u *updateList) Iterate(callbacks func(thor.Address) error) error {
+	current, err := u.head.Get()
+	if err != nil {
+		return err
+	}
+
+	for !current.IsZero() {
+		if err := callbacks(current); err != nil {
+			return err
+		}
+		next, err := u.next.Get(current)
+		if err != nil {
+			return err
+		}
+
+		current = next
+	}
+
+	return nil
+}
