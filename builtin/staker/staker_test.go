@@ -228,7 +228,8 @@ func (ts *TestSequence) AssertCompletedPeriods(
 	validationID thor.Address,
 	expectedPeriods uint32,
 ) *TestSequence {
-	periods, err := ts.staker.GetCompletedPeriods(validationID)
+	val, err := ts.staker.GetValidation(validationID)
+	periods := val.CompleteIterations
 	assert.NoError(ts.t, err, "failed to get completed periods for validator %s: %v", validationID.String(), err)
 	assert.Equal(ts.t, expectedPeriods, periods, "completed periods mismatch for validator %s", validationID.String())
 	return ts
@@ -564,7 +565,7 @@ func TestValidation_DecreaseStake_UnknownValidator(t *testing.T) {
 
 	id := thor.BytesToAddress([]byte("unknown"))
 	err := staker.DecreaseStake(id, id, 1)
-	assert.ErrorContains(t, err, "failed to get existing validator")
+	assert.ErrorContains(t, err, "validation does not exist")
 }
 
 func TestValidation_DecreaseStake_InvalidEndorser(t *testing.T) {

@@ -45,14 +45,6 @@ func New(sctx *solidity.Context,
 	}
 }
 
-func (s *Service) GetCompletedPeriods(validator thor.Address) (uint32, error) {
-	v, err := s.GetExistingValidation(validator)
-	if err != nil {
-		return uint32(0), err
-	}
-	return v.CompleteIterations, nil
-}
-
 func (s *Service) IncreaseDelegatorsReward(node thor.Address, reward *big.Int) error {
 	val, err := s.GetExistingValidation(node)
 	if err != nil {

@@ -2097,14 +2097,16 @@ func TestStaker_GetCompletedPeriods(t *testing.T) {
 	_, err = staker.activateNextValidation(0, getTestMaxLeaderSize(staker.params))
 	assert.NoError(t, err)
 
-	periods, err := staker.GetCompletedPeriods(proposerAddr)
+	val, err := staker.GetValidation(proposerAddr)
+	periods := val.CompleteIterations
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(0), periods)
 
 	_, err = staker.Housekeep(period)
 	assert.NoError(t, err)
 
-	periods, err = staker.GetCompletedPeriods(proposerAddr)
+	val, err = staker.GetValidation(proposerAddr)
+	periods = val.CompleteIterations
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(1), periods)
 }
@@ -2470,7 +2472,7 @@ func TestStaker_SetBeneficiary(t *testing.T) {
 
 	// negative cases
 	assert.ErrorContains(t, staker.SetBeneficiary(master, master, beneficiary), "endorser required")
-	assert.ErrorContains(t, staker.SetBeneficiary(endorser, endorser, beneficiary), "failed to get existing validator")
+	assert.ErrorContains(t, staker.SetBeneficiary(endorser, endorser, beneficiary), "validation does not exist")
 
 	// set beneficiary, should be successful
 	testSetup.SetBeneficiary(master, endorser, beneficiary)

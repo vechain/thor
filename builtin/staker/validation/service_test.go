@@ -536,9 +536,9 @@ func TestService_GetCompletedPeriods(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	periods, err := svc.GetCompletedPeriods(a1)
+	val, err := svc.GetValidation(a1)
 	assert.NoError(t, err)
-	assert.Equal(t, uint32(0), periods)
+	assert.Equal(t, uint32(0), val.CompleteIterations)
 }
 
 func TestService_GetQueuedAndLeaderGroups(t *testing.T) {

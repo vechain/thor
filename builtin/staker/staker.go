@@ -128,7 +128,7 @@ func (s *Staker) GetValidation(validator thor.Address) (*validation.Validation, 
 
 // GetWithdrawable returns the withdrawable stake of a validator.
 func (s *Staker) GetWithdrawable(validator thor.Address, block uint32) (uint64, error) {
-	val, err := s.validationService.GetExistingValidation(validator)
+	val, err := s.getValidationOrRevert(validator)
 	if err != nil {
 		return 0, err
 	}
@@ -147,7 +147,8 @@ func (s *Staker) GetDelegation(
 	if del == nil {
 		return nil, nil, nil
 	}
-	val, err := s.validationService.GetValidation(del.Validation)
+	// any valid delegation must have a valid validation
+	val, err := s.validationService.GetExistingValidation(del.Validation)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -172,20 +173,13 @@ func (s *Staker) GetDelegatorRewards(validator thor.Address, stakingPeriod uint3
 	return s.validationService.GetDelegatorRewards(validator, stakingPeriod)
 }
 
-// GetCompletedPeriods returns number of completed staking periods for validation.
-func (s *Staker) GetCompletedPeriods(validator thor.Address) (uint32, error) {
-	return s.validationService.GetCompletedPeriods(validator)
-}
-
 // GetValidationTotals returns the total stake, total weight, total delegators stake and total delegators weight.
 func (s *Staker) GetValidationTotals(validator thor.Address) (*validation.Totals, error) {
-	val, err := s.validationService.GetValidation(validator)
+	val, err := s.getValidationOrRevert(validator)
 	if err != nil {
 		return nil, err
 	}
-	if val == nil {
-		return nil, nil
-	}
+
 	// GetAggregation ensures new aggregation is created if not found
 	agg, err := s.aggregationService.GetAggregation(validator)
 	if err != nil {
@@ -251,14 +245,11 @@ func (s *Staker) AddValidation(
 func (s *Staker) SignalExit(validator thor.Address, endorser thor.Address) error {
 	logger.Debug("signal exit", "endorser", endorser, "validator", validator)
 
-	val, err := s.validationService.GetValidation(validator)
+	val, err := s.getValidationOrRevert(validator)
 	if err != nil {
 		return err
 	}
 
-	if val == nil {
-		return NewReverts("validation does not exist")
-	}
 	if val.Endorser != endorser {
 		return NewReverts("endorser required")
 	}
@@ -288,13 +279,11 @@ func (s *Staker) SignalExit(validator thor.Address, endorser thor.Address) error
 func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, amount uint64) error {
 	logger.Debug("increasing stake", "endorser", endorser, "validator", validator, "amount", amount)
 
-	val, err := s.validationService.GetValidation(validator)
+	val, err := s.getValidationOrRevert(validator)
 	if err != nil {
 		return err
 	}
-	if val == nil {
-		return NewReverts("validation does not exist")
-	}
+
 	if val.Endorser != endorser {
 		return NewReverts("endorser required")
 	}
@@ -327,7 +316,7 @@ func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, am
 func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, amount uint64) error {
 	logger.Debug("decreasing stake", "endorser", endorser, "validator", validator, "amount", amount)
 
-	val, err := s.validationService.GetExistingValidation(validator)
+	val, err := s.getValidationOrRevert(validator)
 	if err != nil {
 		return err
 	}
@@ -379,7 +368,7 @@ func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, am
 // WithdrawStake allows expired validations to withdraw their stake.
 func (s *Staker) WithdrawStake(validator thor.Address, endorser thor.Address, currentBlock uint32) (uint64, error) {
 	logger.Debug("withdrawing stake", "endorser", endorser, "validator", validator)
-	val, err := s.validationService.GetExistingValidation(validator)
+	val, err := s.getValidationOrRevert(validator)
 	if err != nil {
 		return 0, err
 	}
@@ -414,7 +403,7 @@ func (s *Staker) SetOnline(validator thor.Address, blockNum uint32, online bool)
 func (s *Staker) SetBeneficiary(validator, endorser, beneficiary thor.Address) error {
 	logger.Debug("set beneficiary", "validator", validator, "beneficiary", beneficiary)
 
-	val, err := s.validationService.GetExistingValidation(validator)
+	val, err := s.getValidationOrRevert(validator)
 	if err != nil {
 		return err
 	}
@@ -445,7 +434,7 @@ func (s *Staker) AddDelegation(
 		return nil, NewReverts("multiplier cannot be 0")
 	}
 	// ensure validation is ok to receive a new delegation
-	val, err := s.validationService.GetExistingValidation(validator)
+	val, err := s.getValidationOrRevert(validator)
 	if err != nil {
 		return nil, err
 	}
@@ -499,6 +488,7 @@ func (s *Staker) SignalDelegationExit(delegationID *big.Int) error {
 	}
 
 	// there can never be a delegation pointing to a non-existent validation
+	// if the validation does not exist it's a system error
 	val, err := s.validationService.GetExistingValidation(del.Validation)
 	if err != nil {
 		return err
@@ -542,6 +532,7 @@ func (s *Staker) WithdrawDelegation(
 	}
 
 	// there can never be a delegation pointing to a non-existent validation
+	// if the validation does not exist it's a system error
 	val, err := s.validationService.GetExistingValidation(del.Validation)
 	if err != nil {
 		return 0, err
@@ -616,4 +607,15 @@ func (s *Staker) GetValidationsNum() (uint64, uint64, error) {
 		return 0, 0, err
 	}
 	return leaderGroupSize, queuedGroupSize, nil
+}
+
+func (s *Staker) getValidationOrRevert(valID thor.Address) (*validation.Validation, error) {
+	val, err := s.validationService.GetValidation(valID)
+	if err != nil {
+		return nil, err
+	}
+	if val == nil {
+		return nil, NewReverts("validation does not exist")
+	}
+	return val, nil
 }
