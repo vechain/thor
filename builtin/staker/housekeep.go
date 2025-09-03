@@ -53,17 +53,15 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 
 // computeEpochTransition calculates all state changes needed for an epoch transition
 func (s *Staker) computeEpochTransition(currentBlock uint32) (*EpochTransition, error) {
-	var err error
-
 	var evictions []thor.Address
 	if currentBlock != 0 && currentBlock%thor.EvictionCheckInterval() == 0 {
-		err = s.validationService.LeaderGroupIterator(
+		if err := s.validationService.LeaderGroupIterator(
 			s.evictionCallback(currentBlock, &evictions),
-		)
+		); err != nil {
+			return nil, err
+		}
 	}
-	if err != nil {
-		return nil, err
-	}
+
 	renewals, err := s.validationService.UpdateGroup(currentBlock)
 	if err != nil {
 		return nil, err
