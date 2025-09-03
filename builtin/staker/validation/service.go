@@ -63,12 +63,12 @@ func (s *Service) IncreaseDelegatorsReward(node thor.Address, reward *big.Int) e
 	binary.BigEndian.PutUint32(periodBytes, val.CurrentIteration())
 	key := thor.Blake2b([]byte("rewards"), node.Bytes(), periodBytes)
 
-	rewards, err := s.repo.getReward(&key)
+	rewards, err := s.repo.getReward(key)
 	if err != nil {
 		return err
 	}
 
-	return s.repo.setReward(&key, big.NewInt(0).Add(rewards, reward))
+	return s.repo.setReward(key, big.NewInt(0).Add(rewards, reward))
 }
 
 func (s *Service) LeaderGroupIterator(callbacks ...func(thor.Address, *Validation) error) error {
@@ -328,7 +328,7 @@ func (s *Service) GetDelegatorRewards(validator thor.Address, stakingPeriod uint
 	binary.BigEndian.PutUint32(periodBytes, stakingPeriod)
 	key := thor.Blake2b([]byte("rewards"), validator.Bytes(), periodBytes)
 
-	return s.repo.getReward(&key)
+	return s.repo.getReward(key)
 }
 
 // ActivateValidator transitions a validator from queued to active status.

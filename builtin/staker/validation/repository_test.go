@@ -65,15 +65,15 @@ func TestRepository_Reward_RoundTrip_DefaultZero(t *testing.T) {
 	key := thor.BytesToBytes32([]byte("r1"))
 
 	// get before set -> zero
-	val, err := repo.getReward(&key)
+	val, err := repo.getReward(key)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0), val)
 
 	// set then get
 	want := big.NewInt(1234)
-	assert.NoError(t, repo.setReward(&key, want))
+	assert.NoError(t, repo.setReward(key, want))
 
-	got, err := repo.getReward(&key)
+	got, err := repo.getReward(key)
 	assert.NoError(t, err)
 	assert.Equal(t, want, got)
 }
@@ -86,7 +86,7 @@ func TestRepository_Reward_GetError(t *testing.T) {
 	slot := thor.Blake2b(key.Bytes(), slotRewards.Bytes())
 	st.SetRawStorage(addr, slot, rlp.RawValue{0xFF})
 
-	_, err := repo.getReward(&key)
+	_, err := repo.getReward(key)
 	assert.ErrorContains(t, err, "failed to get reward")
 }
 

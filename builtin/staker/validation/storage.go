@@ -23,15 +23,15 @@ var (
 
 type Storage struct {
 	validations *solidity.Mapping[thor.Address, *Validation]
-	rewards     *solidity.Mapping[*thor.Bytes32, *big.Int]
-	exits       *solidity.Mapping[*thor.Bytes32, thor.Address]
+	rewards     *solidity.Mapping[thor.Bytes32, *big.Int]
+	exits       *solidity.Mapping[thor.Bytes32, thor.Address]
 }
 
 func NewStorage(sctx *solidity.Context) *Storage {
 	return &Storage{
 		validations: solidity.NewMapping[thor.Address, *Validation](sctx, slotValidations),
-		rewards:     solidity.NewMapping[*thor.Bytes32, *big.Int](sctx, slotRewards),
-		exits:       solidity.NewMapping[*thor.Bytes32, thor.Address](sctx, slotExitEpochs),
+		rewards:     solidity.NewMapping[thor.Bytes32, *big.Int](sctx, slotRewards),
+		exits:       solidity.NewMapping[thor.Bytes32, thor.Address](sctx, slotExitEpochs),
 	}
 }
 
@@ -59,7 +59,7 @@ func (s *Storage) upsertValidation(validator thor.Address, entry *Validation) er
 
 // getReward retrieves the reward for a validator.
 // Returns a zero-initialized reward if none exists.
-func (s *Storage) getReward(key *thor.Bytes32) (*big.Int, error) {
+func (s *Storage) getReward(key thor.Bytes32) (*big.Int, error) {
 	reward, err := s.rewards.Get(key)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get reward")
@@ -70,7 +70,7 @@ func (s *Storage) getReward(key *thor.Bytes32) (*big.Int, error) {
 	return reward, nil
 }
 
-func (s *Storage) setReward(key *thor.Bytes32, val *big.Int) error {
+func (s *Storage) setReward(key thor.Bytes32, val *big.Int) error {
 	return s.rewards.Upsert(key, val)
 }
 
@@ -78,14 +78,14 @@ func (s *Storage) getExit(block uint32) (thor.Address, error) {
 	var key thor.Bytes32
 	binary.BigEndian.PutUint32(key[:], block)
 
-	return s.exits.Get(&key)
+	return s.exits.Get(key)
 }
 
 func (s *Storage) setExit(block uint32, validator thor.Address) error {
 	var key thor.Bytes32
 	binary.BigEndian.PutUint32(key[:], block)
 
-	if err := s.exits.Insert(&key, validator); err != nil {
+	if err := s.exits.Insert(key, validator); err != nil {
 		return errors.Wrap(err, "failed to set exit epoch")
 	}
 	return nil

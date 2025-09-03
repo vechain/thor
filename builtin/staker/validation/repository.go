@@ -59,11 +59,11 @@ func (r *Repository) updateValidation(validator thor.Address, entry *Validation)
 	return nil
 }
 
-func (r *Repository) getReward(key *thor.Bytes32) (*big.Int, error) {
+func (r *Repository) getReward(key thor.Bytes32) (*big.Int, error) {
 	return r.storage.getReward(key)
 }
 
-func (r *Repository) setReward(key *thor.Bytes32, val *big.Int) error {
+func (r *Repository) setReward(key thor.Bytes32, val *big.Int) error {
 	return r.storage.setReward(key, val)
 }
 
