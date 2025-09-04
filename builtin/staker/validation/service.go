@@ -53,20 +53,18 @@ func (s *Service) GetValidatorForExitBlock(blockNum uint32) (thor.Address, error
 	return val, nil
 }
 
-func (s *Service) IncreaseDelegatorsReward(node thor.Address, reward *big.Int, currentBlock uint32) error {
-	val, err := s.GetExistingValidation(node)
+func (s *Service) IncreaseDelegatorsReward(validator thor.Address, reward *big.Int, currentBlock uint32) error {
+	val, err := s.GetExistingValidation(validator)
 	if err != nil {
 		return err
 	}
 
-	periodBytes := make([]byte, 4)
 	current, err := val.CurrentIteration(currentBlock)
 	if err != nil {
 		return err
 	}
-	binary.BigEndian.PutUint32(periodBytes, current)
-	key := thor.Blake2b([]byte("rewards"), node.Bytes(), periodBytes)
 
+	key := makeRewardKey(validator, current)
 	rewards, err := s.repo.getReward(key)
 	if err != nil {
 		return err
@@ -355,11 +353,7 @@ func (s *Service) GetExitEpoch(block uint32) (thor.Address, error) {
 }
 
 func (s *Service) GetDelegatorRewards(validator thor.Address, stakingPeriod uint32) (*big.Int, error) {
-	periodBytes := make([]byte, 4)
-	binary.BigEndian.PutUint32(periodBytes, stakingPeriod)
-	key := thor.Blake2b([]byte("rewards"), validator.Bytes(), periodBytes)
-
-	return s.repo.getReward(key)
+	return s.repo.getReward(makeRewardKey(validator, stakingPeriod))
 }
 
 // ActivateValidator transitions a validator from queued to active status.
@@ -466,4 +460,12 @@ func (s *Service) GetExistingValidation(validator thor.Address) (*Validation, er
 
 func (s *Service) NextEntry(prev thor.Address) (thor.Address, error) {
 	return s.repo.nextEntry(prev)
+}
+
+func makeRewardKey(validator thor.Address, stakingPeriod uint32) thor.Bytes32 {
+	// [period(4 bytes), validator(20 bytes), 8 bytes zero]
+	var key thor.Bytes32
+	binary.BigEndian.PutUint32(key[:4], stakingPeriod)
+	copy(key[4:], validator.Bytes())
+	return key
 }
