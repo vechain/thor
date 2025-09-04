@@ -335,6 +335,9 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 				if err != nil {
 					return nil, err
 				}
+				if validator == nil {
+					return nil, errors.New("validator not found")
+				}
 				weight = validator.Weight
 			}
 			// If PoS is not active or error occurred, weight remains nil
