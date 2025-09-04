@@ -215,6 +215,10 @@ func (s *Staker) AddValidation(
 		return NewReverts("stake is out of range")
 	}
 
+	if validator.IsZero() {
+		return NewReverts("validator cannot be zero")
+	}
+
 	val, err := s.validationService.GetValidation(validator)
 	if err != nil {
 		return err
