@@ -53,29 +53,28 @@ jobs:
             exit 1
           fi
 
-  retag-and-publish-docker-image:
-    name: Retag and Publish Docker Image
+  # Split the job in 2. First one finds the relevant RC tag, and outputs it. The next job should be manually approved by the release team.
+  find-and-pull-rc-image:
+    name: Find and Pull RC Image
     runs-on: ubuntu-22.04
     needs:
       - validate
-    permissions:
-      contents: read
-      packages: write
-    environment: docker-publish
+    outputs:
+      rc_tag: ${{ steps.find-rc.outputs.latest_rc_tag }}
     steps:
       - name: Find Latest RC Tag
         id: find-rc
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Extract base version (e.g., v2.1.0 from v2.1.0)
+          # Extract base version (e.g., v2.3.1 from v2.3.1)
           base_version="${{ github.ref_name }}"
           echo "Base version: $base_version"
           
           # Find all RC tags for this version and get the latest one
           latest_rc=$(gh api repos/vechain/thor/git/refs/tags \
             --jq '[.[]
-              | select(.ref | test("refs/tags/v2.3.1-rc.[0-9]+$"))
+              | select(.ref | test("refs/tags/${base_version}-rc.[0-9]+$"))
               | {ref, rc: (.ref | capture("rc\\.(?<num>[0-9]+)$").num | tonumber)}
             ]
             | sort_by(.rc)
@@ -93,6 +92,25 @@ jobs:
           echo "Latest RC tag: $latest_rc"
           echo "latest_rc_tag=$latest_rc" >> $GITHUB_OUTPUT
 
+      - name: Pull RC Image from Docker Hub
+        run: |
+          RC_TAG="${{ steps.find-rc.outputs.latest_rc_tag }}"
+          REPO="${{ github.repository }}"
+          
+          echo "Pulling RC image: $REPO:$RC_TAG"
+          # Pull from Docker Hub (public, no login needed)
+          docker pull $REPO:$RC_TAG
+
+  retag-and-publish-docker-image:
+    name: Retag and Publish Docker Image
+    runs-on: ubuntu-22.04
+    needs:
+      - find-and-pull-rc-image
+    permissions:
+      contents: read
+      packages: write
+    environment: docker-publish
+    steps:
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -106,13 +124,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Pull and Retag Docker Images
+      - name: Pull, Retag and Push Docker Images
         run: |
-          RC_TAG="${{ steps.find-rc.outputs.latest_rc_tag }}"
+          RC_TAG="${{ needs.find-and-pull-rc-image.outputs.rc_tag }}"
           RELEASE_TAG="${{ github.ref_name }}"
           REPO="${{ github.repository }}"
           
-          echo "Pulling RC images for tag: $RC_TAG"
+          echo "Using RC tag: $RC_TAG"
+          echo "Release tag: $RELEASE_TAG"
           
           # Pull RC images from both registries
           docker pull $REPO:$RC_TAG
