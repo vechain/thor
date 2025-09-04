@@ -57,6 +57,8 @@ jobs:
   find-and-pull-rc-image:
     name: Find and Pull RC Image
     runs-on: ubuntu-22.04
+    permissions:
+      contents: read
     needs:
       - validate
     outputs:
