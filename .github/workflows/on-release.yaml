@@ -53,23 +53,90 @@ jobs:
             exit 1
           fi
 
-  publish-docker-image:
-    name: Publish Docker Image
-    uses: ./.github/workflows/publish-docker-images.yaml
-    secrets: inherit
+  retag-and-publish-docker-image:
+    name: Retag and Publish Docker Image
+    runs-on: ubuntu-22.04
     needs:
       - validate
     permissions:
       contents: read
       packages: write
-    with:
-      environment: docker-publish
-      images: |
-        ${{ github.repository }}
-        ghcr.io/${{ github.repository }}
-      tags: |
-        type=raw,value=${{ github.ref_name }}
-        type=raw,value=latest
+    environment: docker-publish
+    steps:
+      - name: Find Latest RC Tag
+        id: find-rc
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Extract base version (e.g., v2.1.0 from v2.1.0)
+          base_version="${{ github.ref_name }}"
+          echo "Base version: $base_version"
+          
+          # Find all RC tags for this version and get the latest one
+          latest_rc=$(gh api repos/vechain/thor/git/refs/tags \
+            --jq '[.[]
+              | select(.ref | test("refs/tags/v2.3.1-rc.[0-9]+$"))
+              | {ref, rc: (.ref | capture("rc\\.(?<num>[0-9]+)$").num | tonumber)}
+            ]
+            | sort_by(.rc)
+            | last
+            | .ref')
+
+          # remove the "refs/tags/" prefix
+          latest_rc="${latest_rc#refs/tags/}"
+          
+          if [ -z "$latest_rc" ]; then
+            echo "No RC tag found for $base_version"
+            exit 1
+          fi
+          
+          echo "Latest RC tag: $latest_rc"
+          echo "latest_rc_tag=$latest_rc" >> $GITHUB_OUTPUT
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull and Retag Docker Images
+        run: |
+          RC_TAG="${{ steps.find-rc.outputs.latest_rc_tag }}"
+          RELEASE_TAG="${{ github.ref_name }}"
+          REPO="${{ github.repository }}"
+          
+          echo "Pulling RC images for tag: $RC_TAG"
+          
+          # Pull RC images from both registries
+          docker pull $REPO:$RC_TAG
+          docker pull ghcr.io/$REPO:$RC_TAG
+          
+          echo "Retagging images for release: $RELEASE_TAG"
+          
+          # Retag Docker Hub images
+          docker tag $REPO:$RC_TAG $REPO:$RELEASE_TAG
+          docker tag $REPO:$RC_TAG $REPO:latest
+          
+          # Retag GHCR images  
+          docker tag ghcr.io/$REPO:$RC_TAG ghcr.io/$REPO:$RELEASE_TAG
+          docker tag ghcr.io/$REPO:$RC_TAG ghcr.io/$REPO:latest
+          
+          echo "Pushing retagged images"
+          
+          # Push to Docker Hub
+          docker push $REPO:$RELEASE_TAG
+          docker push $REPO:latest
+          
+          # Push to GHCR
+          docker push ghcr.io/$REPO:$RELEASE_TAG
+          docker push ghcr.io/$REPO:latest
 
   publish-binaries:
     name: Publish Binaries
