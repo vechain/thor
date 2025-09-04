@@ -177,7 +177,7 @@ func Test_AddDelegator_StakeRange(t *testing.T) {
 
 	// should NOT be able to stake greater than max stake
 	_, err := staker.AddDelegation(validators[1].ID, MaxStakeVET, 255, 10)
-	assert.ErrorContains(t, err, "stake is out of range")
+	assert.ErrorContains(t, err, "total stake would exceed maximum")
 
 	// should be able stake 1 VET
 	id1, err := staker.AddDelegation(validators[2].ID, 1, 255, 10)
@@ -201,7 +201,7 @@ func Test_AddDelegator_StakeRange(t *testing.T) {
 
 	// should not be able to stake more than max stake
 	_, err = staker.AddDelegation(validator.ID, 1, 255, 10)
-	assert.ErrorContains(t, err, "stake is out of range")
+	assert.ErrorContains(t, err, "total stake would exceed maximum")
 }
 
 func Test_AddDelegator_ValidatorNotFound(t *testing.T) {

@@ -287,6 +287,9 @@ func (s *Staker) SignalExit(validator thor.Address, endorser thor.Address, curre
 func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, amount uint64) error {
 	logger.Debug("increasing stake", "endorser", endorser, "validator", validator, "amount", amount)
 
+	if amount <= 0 {
+		return NewReverts("amount must be greater than zero")
+	}
 	val, err := s.getValidationOrRevert(validator)
 	if err != nil {
 		return err
@@ -329,6 +332,10 @@ func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, am
 
 func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, amount uint64) error {
 	logger.Debug("decreasing stake", "endorser", endorser, "validator", validator, "amount", amount)
+
+	if amount <= 0 {
+		return NewReverts("amount must be greater than zero")
+	}
 
 	val, err := s.getValidationOrRevert(validator)
 	if err != nil {
@@ -450,6 +457,10 @@ func (s *Staker) AddDelegation(
 	currentBlock uint32,
 ) (*big.Int, error) {
 	logger.Debug("adding delegation", "validator", validator, "stake", stake, "multiplier", multiplier)
+
+	if stake <= 0 {
+		return nil, NewReverts("stake must be greater than 0")
+	}
 
 	if multiplier == 0 {
 		return nil, NewReverts("multiplier cannot be 0")
@@ -645,8 +656,15 @@ func (s *Staker) validateStakeIncrease(validator thor.Address, validation *valid
 	if err != nil {
 		return err
 	}
-	if valNextPeriodTVL+aggNextPeriodTVL+amount > MaxStakeVET {
-		return NewReverts("stake is out of range")
+
+	if valNextPeriodTVL > MaxStakeVET || aggNextPeriodTVL > MaxStakeVET || amount > MaxStakeVET {
+		return NewReverts("individual stake component exceeds maximum")
+	}
+	if valNextPeriodTVL > MaxStakeVET-aggNextPeriodTVL {
+		return NewReverts("validator and aggregation TVL would overflow")
+	}
+	if valNextPeriodTVL+aggNextPeriodTVL > MaxStakeVET-amount {
+		return NewReverts("total stake would exceed maximum")
 	}
 
 	return nil
