@@ -18,6 +18,7 @@ import (
 	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
 )
@@ -454,11 +455,12 @@ func TestService_GetDelegatorRewards_Error(t *testing.T) {
 
 	idv := thor.BytesToAddress([]byte("v"))
 	id := idv
-	var pb [4]byte
-	binary.BigEndian.PutUint32(pb[:], 3)
-	key := thor.Blake2b([]byte("rewards"), id.Bytes(), pb[:])
 
-	slot := thor.Blake2b(key.Bytes(), slotRewards.Bytes())
+	var key thor.Bytes32
+	binary.BigEndian.PutUint32(key[:], 3)
+	copy(key[4:], id.Bytes())
+
+	slot := thor.Blake2b(key[:], slotRewards.Bytes())
 	st.SetRawStorage(contract, slot, rlp.RawValue{0xFF})
 
 	_, err := svc.GetDelegatorRewards(id, 3)
@@ -756,4 +758,27 @@ func TestService_Renew(t *testing.T) {
 	assert.Equal(t, uint64(0), val.QueuedVET)
 	assert.Equal(t, uint64(0), val.CooldownVET)
 	assert.Equal(t, uint64(500), val.WithdrawableVET)
+}
+
+func TestMakeRewardKey(t *testing.T) {
+	for range 100 {
+		validator := datagen.RandAddress()
+		stakingPeriod := uint32(datagen.RandInt())
+		key := makeRewardKey(validator, stakingPeriod)
+
+		assert.False(t, key.IsZero())
+		assert.NotZero(t, binary.BigEndian.Uint32(key[:4]))
+		assert.False(t, thor.BytesToAddress(key[4:24]).IsZero())
+
+		assert.Equal(t, validator.Bytes(), key[4:24])
+		assert.Equal(t, stakingPeriod, binary.BigEndian.Uint32(key[:4]))
+	}
+}
+
+func TestX(t *testing.T) {
+	stakingPeriod := uint32(datagen.RandInt())
+
+	var key thor.Bytes32
+	binary.BigEndian.PutUint32(key[:], stakingPeriod)
+	t.Log(key)
 }
