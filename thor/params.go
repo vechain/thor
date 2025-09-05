@@ -70,7 +70,8 @@ var (
 // If capToInitial is true, values greater than InitialMaxBlockProposers are also capped (PoA)
 func GetMaxBlockProposers(params interface {
 	Get(Bytes32) (*big.Int, error)
-}, capToInitial bool) (uint64, error) {
+}, capToInitial bool,
+) (uint64, error) {
 	mbp, err := params.Get(KeyMaxBlockProposers)
 	if err != nil {
 		return 0, err
