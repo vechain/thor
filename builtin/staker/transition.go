@@ -26,7 +26,7 @@ func (s *Staker) transition(currentBlock uint32) (bool, error) {
 		return false, nil
 	}
 
-	maxBlockProposers, err := s.getMaxBlockProposers()
+	maxBlockProposers, err := s.GetMaxBlockProposers()
 	if err != nil {
 		return false, err
 	}

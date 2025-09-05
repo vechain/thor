@@ -97,8 +97,8 @@ func (s *Staker) evictionCallback(currentBlock uint32, evictions *[]thor.Address
 	}
 }
 
-// getMaxBlockProposers returns the max block proposers from the params
-func (s *Staker) getMaxBlockProposers() (uint64, error) {
+// GetMaxBlockProposers returns the max block proposers from the params
+func (s *Staker) GetMaxBlockProposers() (uint64, error) {
 	mbp, err := s.params.Get(thor.KeyMaxBlockProposers)
 	if err != nil {
 		return 0, err
@@ -126,7 +126,7 @@ func (s *Staker) computeActivationCount(hasValidatorExited bool) (uint64, error)
 		leaderSize = leaderSize - 1
 	}
 
-	maxBlockProposers, err := s.getMaxBlockProposers()
+	maxBlockProposers, err := s.GetMaxBlockProposers()
 	if err != nil {
 		return 0, err
 	}
@@ -206,7 +206,7 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 	}
 
 	// Apply activations using existing method
-	maxBlockProposers, err := s.getMaxBlockProposers()
+	maxBlockProposers, err := s.GetMaxBlockProposers()
 	if err != nil {
 		return err
 	}
