@@ -26,14 +26,9 @@ func (s *Staker) transition(currentBlock uint32) (bool, error) {
 		return false, nil
 	}
 
-	mbp, err := s.params.Get(thor.KeyMaxBlockProposers)
+	maxBlockProposers, err := s.getMaxBlockProposers()
 	if err != nil {
 		return false, err
-	}
-
-	maxBlockProposers := mbp.Uint64()
-	if maxBlockProposers == 0 {
-		maxBlockProposers = thor.InitialMaxBlockProposers
 	}
 
 	queueSize, err := s.validationService.QueuedGroupSize()
