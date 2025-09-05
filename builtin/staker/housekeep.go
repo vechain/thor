@@ -97,6 +97,19 @@ func (s *Staker) evictionCallback(currentBlock uint32, evictions *[]thor.Address
 	}
 }
 
+// getMaxBlockProposers returns the max block proposers from the params
+func (s *Staker) getMaxBlockProposers() (uint64, error) {
+	mbp, err := s.params.Get(thor.KeyMaxBlockProposers)
+	if err != nil {
+		return 0, err
+	}
+	maxBlockProposers := mbp.Uint64()
+	if maxBlockProposers == 0 {
+		maxBlockProposers = thor.InitialMaxBlockProposers
+	}
+	return maxBlockProposers, nil
+}
+
 // computeActivationCount calculates how many validators can be activated
 func (s *Staker) computeActivationCount(hasValidatorExited bool) (uint64, error) {
 	// Calculate how many validators can be activated
@@ -113,13 +126,9 @@ func (s *Staker) computeActivationCount(hasValidatorExited bool) (uint64, error)
 		leaderSize = leaderSize - 1
 	}
 
-	mbp, err := s.params.Get(thor.KeyMaxBlockProposers)
+	maxBlockProposers, err := s.getMaxBlockProposers()
 	if err != nil {
 		return 0, err
-	}
-	maxBlockProposers := mbp.Uint64()
-	if maxBlockProposers == 0 {
-		maxBlockProposers = thor.InitialMaxBlockProposers
 	}
 
 	// If full or nothing queued then no activations
@@ -197,13 +206,9 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 	}
 
 	// Apply activations using existing method
-	mbp, err := s.params.Get(thor.KeyMaxBlockProposers)
+	maxBlockProposers, err := s.getMaxBlockProposers()
 	if err != nil {
 		return err
-	}
-	maxBlockProposers := mbp.Uint64()
-	if maxBlockProposers == 0 {
-		maxBlockProposers = thor.InitialMaxBlockProposers
 	}
 
 	for range transition.ActivationCount {
