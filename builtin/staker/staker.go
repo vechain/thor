@@ -287,9 +287,6 @@ func (s *Staker) SignalExit(validator thor.Address, endorser thor.Address, curre
 func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, amount uint64) error {
 	logger.Debug("increasing stake", "endorser", endorser, "validator", validator, "amount", amount)
 
-	if amount <= 0 {
-		return NewReverts("amount must be greater than zero")
-	}
 	val, err := s.getValidationOrRevert(validator)
 	if err != nil {
 		return err
@@ -332,10 +329,6 @@ func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, am
 
 func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, amount uint64) error {
 	logger.Debug("decreasing stake", "endorser", endorser, "validator", validator, "amount", amount)
-
-	if amount <= 0 {
-		return NewReverts("amount must be greater than zero")
-	}
 
 	val, err := s.getValidationOrRevert(validator)
 	if err != nil {

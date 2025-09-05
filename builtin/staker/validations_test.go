@@ -8,7 +8,7 @@ package staker
 
 import (
 	"math/big"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 	"time"
 
@@ -28,7 +28,7 @@ import (
 
 // RandomStake returns a random number between MinStake and (MaxStake/2)
 func RandomStake() uint64 {
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	rng := rand.New(rand.NewPCG(uint64(time.Now().UnixNano()), 0))
 
 	max := MaxStakeVET / 2
 	// Calculate the range (max - MinStake)
