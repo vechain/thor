@@ -108,6 +108,11 @@ var (
 		Value: 11235,
 		Usage: "P2P network listening port",
 	}
+	// would prefer to copy disco and remove this/ p2pPort flag. Client could provide the full listen address, eg [::]:55555 for IPv6
+	p2pIpv6Flag = cli.BoolFlag{
+		Name:  "enable-p2p-ipv6",
+		Usage: "enable an IPv6 listener in place of IPv4",
+	}
 	natFlag = cli.StringFlag{
 		Name:  "nat",
 		Value: "any",

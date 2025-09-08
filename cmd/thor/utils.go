@@ -509,6 +509,11 @@ func newP2PCommunicator(ctx *cli.Context, repo *chain.Repository, txPool *txpool
 	} else if err := rlp.DecodeBytes(data, &cachedPeers); err != nil {
 		log.Warn("failed to load peers cache", "err", err)
 	}
+	listenerProtocol := ":%v" // ipv4
+	if ctx.Bool(p2pIpv6Flag.Name) {
+		listenerProtocol = "[::]:%v" // enable an ipv6 listener
+	}
+	listenerAddress := fmt.Sprintf(listenerProtocol, ctx.Int(p2pPortFlag.Name))
 
 	return p2p.New(
 		comm.New(repo, txPool),
@@ -517,8 +522,7 @@ func newP2PCommunicator(ctx *cli.Context, repo *chain.Repository, txPool *txpool
 		userNAT,
 		fullVersion(),
 		ctx.Int(maxPeersFlag.Name),
-		ctx.Int(p2pPortFlag.Name),
-		fmt.Sprintf(":%v", ctx.Int(p2pPortFlag.Name)),
+		listenerAddress,
 		allowedPeers,
 		cachedPeers,
 		bootnodePeers,

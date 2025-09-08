@@ -36,7 +36,6 @@ func New(
 	nat nat.Interface,
 	version string,
 	maxPeers int,
-	listenPort int,
 	listenAddr string,
 	allowedPeers []*discover.Node,
 	cachedPeers []*discover.Node,
@@ -81,7 +80,7 @@ func New(
 		comm:           communicator,
 		p2pSrv:         p2psrv.New(opts),
 		peersCachePath: peersCachePath,
-		enode:          fmt.Sprintf("enode://%x@[extip]:%v", discover.PubkeyID(&privateKey.PublicKey).Bytes(), listenPort),
+		enode:          fmt.Sprintf("enode://%x@%s", discover.PubkeyID(&privateKey.PublicKey).Bytes(), listenAddr),
 	}
 }
 
