@@ -665,10 +665,7 @@ func (s *Staker) validateStakeIncrease(validator thor.Address, validation *valid
 
 func checkStake(valNextPeriodTVL, aggNextPeriodTVL, amount uint64) (uint64, error) {
 	total1, carry := bits.Add64(valNextPeriodTVL, aggNextPeriodTVL, 0)
-	if carry != 0 {
-		return 0, NewReverts("stake is out of range")
-	}
-	total2, carry := bits.Add64(total1, amount, 0)
+	total2, carry := bits.Add64(total1, amount, carry)
 	if carry != 0 {
 		return 0, NewReverts("stake is out of range")
 	}
