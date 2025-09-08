@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"math/bits"
 
 	"github.com/vechain/thor/v2/builtin/gascharger"
 	"github.com/vechain/thor/v2/builtin/params"
@@ -451,6 +452,10 @@ func (s *Staker) AddDelegation(
 ) (*big.Int, error) {
 	logger.Debug("adding delegation", "validator", validator, "stake", stake, "multiplier", multiplier)
 
+	if stake <= 0 {
+		return nil, NewReverts("stake must be greater than 0")
+	}
+
 	if multiplier == 0 {
 		return nil, NewReverts("multiplier cannot be 0")
 	}
@@ -645,11 +650,26 @@ func (s *Staker) validateStakeIncrease(validator thor.Address, validation *valid
 	if err != nil {
 		return err
 	}
-	if valNextPeriodTVL+aggNextPeriodTVL+amount > MaxStakeVET {
-		return NewReverts("stake is out of range")
+
+	total, err := checkStake(valNextPeriodTVL, aggNextPeriodTVL, amount)
+	if err != nil {
+		return err
+	}
+
+	if total > MaxStakeVET {
+		return NewReverts("total stake would exceed maximum")
 	}
 
 	return nil
+}
+
+func checkStake(valNextPeriodTVL, aggNextPeriodTVL, amount uint64) (uint64, error) {
+	total1, carry := bits.Add64(valNextPeriodTVL, aggNextPeriodTVL, 0)
+	total2, carry := bits.Add64(total1, amount, carry)
+	if carry != 0 {
+		return 0, NewReverts("stake is out of range")
+	}
+	return total2, nil
 }
 
 // GetValidationsNum returns the number of validators in the leader group and number of queued validators.

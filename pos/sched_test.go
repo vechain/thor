@@ -9,7 +9,7 @@ import (
 	"encoding/binary"
 	"math"
 	"math/big"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -66,7 +66,7 @@ func TestScheduler_IsScheduled(t *testing.T) {
 	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed1"))
 	assert.NoError(t, err)
 
-	assert.True(t, sched.IsScheduled(70, genesis.DevAccounts()[2].Address))
+	assert.True(t, sched.IsScheduled(130, genesis.DevAccounts()[2].Address))
 }
 
 func TestScheduler_Distribution(t *testing.T) {
@@ -74,7 +74,7 @@ func TestScheduler_Distribution(t *testing.T) {
 	// e.g., 1 million usually gets all tolerances down to about 2% (i.e., 0.02)
 	iterations := 100_000
 	type stakeFunc func(index int, acc thor.Address) uint64
-	rnd := rand.New(rand.NewSource(412342)) //nolint:gosec
+	rnd := rand.New(rand.NewPCG(412342, 0)) //nolint:gosec
 
 	testCases := []struct {
 		name      string
@@ -108,7 +108,7 @@ func TestScheduler_Distribution(t *testing.T) {
 				diff := maxWeight - minWeight
 
 				// Generate random number in [0, diff)
-				n := rnd.Intn(int(diff)) //nolint:gosec
+				n := rnd.IntN(int(diff)) //nolint:gosec
 				// Add min to shift range to [min, max)
 				randomValue := minWeight + uint64(n)
 

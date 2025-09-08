@@ -9,7 +9,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"slices"
 
 	"github.com/vechain/thor/v2/thor"
@@ -56,7 +56,8 @@ func NewScheduler(
 
 	// Step 1: Generate a seed for the deterministic pseudo-random generator
 	hashedSeed := thor.Blake2b(seed, num[:])
-	pseudoRND := rand.New(rand.NewSource(uint64ToI64(binary.LittleEndian.Uint64(hashedSeed[:])))) //#nosec G404
+	src := rand.NewChaCha8(hashedSeed)
+	pseudoRND := rand.New(src) //#nosec G404
 
 	// Step 2: Calculate priority scores for each validator based on their weight
 	// using the exponential distribution method for weighted random sampling
