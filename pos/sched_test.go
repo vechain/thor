@@ -408,3 +408,101 @@ func TestScheduler_ScoreComparison_DifferentWeights(t *testing.T) {
 		}
 	}
 }
+
+func TestNewScheduler_UnauthorizedProposer(t *testing.T) {
+	validators, _ := createParams()
+	unauthorized := thor.BytesToAddress([]byte("not_in_list"))
+	_, err := NewScheduler(unauthorized, validators, 1, 10, []byte("seed1"))
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unauthorized block proposer")
+}
+
+func TestScheduler(t *testing.T) {
+	validators, _ := createParams()
+	sched, err := NewScheduler(validators[0].Address, validators, 1, 10, []byte("seed1"))
+	assert.NoError(t, err)
+	T := thor.BlockInterval()
+
+	tests := []struct {
+		name      string
+		action    func(*Scheduler) bool
+		wantValue bool
+	}{
+		{
+			name: "IsTheTime matches IsScheduled",
+			action: func(s *Scheduler) bool {
+				blockTime := s.Schedule(20)
+				return s.IsScheduled(blockTime, s.proposer.Address) == s.IsTheTime(blockTime)
+			},
+			wantValue: true,
+		},
+		{
+			name: "IsScheduled blockTime == parentBlockTime",
+			action: func(s *Scheduler) bool {
+				return s.IsScheduled(10, s.proposer.Address)
+			},
+			wantValue: false,
+		},
+		{
+			name: "IsScheduled blockTime < parentBlockTime",
+			action: func(s *Scheduler) bool {
+				return s.IsScheduled(5, s.proposer.Address)
+			},
+			wantValue: false,
+		},
+		{
+			name: "IsScheduled blockTime not aligned",
+			action: func(s *Scheduler) bool {
+				return s.IsScheduled(10+T+1, s.proposer.Address)
+			},
+			wantValue: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.action(sched)
+			assert.Equal(t, tc.wantValue, got)
+		})
+	}
+}
+
+func TestScheduler_Updates_InactiveProposer(t *testing.T) {
+	validators, _ := createParams()
+	inactive := validators[0]
+	inactive.Active = false
+	validators[0] = inactive
+	sched, err := NewScheduler(inactive.Address, validators, 1, 10, []byte("seed1"))
+	assert.NoError(t, err)
+	updates, _ := sched.Updates(30, 100)
+	found := false
+	for _, u := range updates {
+		if u.Address == inactive.Address && u.Active {
+			found = true
+		}
+	}
+	assert.True(t, found, "Inactive proposer should be reactivated in updates")
+}
+
+func TestScheduler_Updates_ZeroTotalWeight(t *testing.T) {
+	validators, _ := createParams()
+	sched, err := NewScheduler(validators[0].Address, validators, 1, 10, []byte("seed1"))
+	assert.NoError(t, err)
+	updates, score := sched.Updates(30, 0)
+	assert.Equal(t, 0, int(score))
+	assert.NotNil(t, updates)
+}
+
+func TestScheduler_Schedule_Panic(t *testing.T) {
+	validators, _ := createParams()
+	sched, err := NewScheduler(validators[0].Address, validators, 1, 10, []byte("seed1"))
+	assert.NoError(t, err)
+	// Set the sequence to empty to force panic
+	sched.sequence = []entry{}
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("Schedule should panic if proposer is not found in sequence")
+		}
+	}()
+	sched.Schedule(20)
+}

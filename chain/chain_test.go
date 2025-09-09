@@ -85,4 +85,65 @@ func TestChain(t *testing.T) {
 		_, err = dangleChain.Exclude(c1)
 		assert.Error(t, err)
 	}
+
+	chain := repo.NewBestChain()
+	t.Run("GenesisID", func(t *testing.T) {
+		assert.Equal(t, repo.GenesisBlock().Header().ID(), chain.GenesisID())
+	})
+
+	t.Run("BlockSummaryRoot", func(t *testing.T) {
+		summary, err := repo.GetBlockSummary(repo.GenesisBlock().Header().ID())
+		assert.NoError(t, err)
+		root := summary.Root()
+		assert.Equal(t, summary.Header.StateRoot(), root.Hash)
+		assert.Equal(t, summary.Header.Number(), root.Ver.Major)
+		assert.Equal(t, summary.Conflicts, root.Ver.Minor)
+	})
+
+	t.Run("GetBlockID_NotFound", func(t *testing.T) {
+		_, err := chain.GetBlockID(9999)
+		assert.Error(t, err)
+		assert.True(t, chain.IsNotFound(err))
+	})
+
+	t.Run("GetTransactionMeta_NotFound", func(t *testing.T) {
+		_, err := chain.GetTransactionMeta(thor.Bytes32{})
+		assert.Error(t, err)
+		assert.True(t, chain.IsNotFound(err))
+	})
+
+	t.Run("HasTransaction_TooNew", func(t *testing.T) {
+		ok, err := chain.HasTransaction(thor.Bytes32{}, 9999)
+		assert.NoError(t, err)
+		assert.False(t, ok)
+	})
+
+	t.Run("HasTransaction_NotFound", func(t *testing.T) {
+		ok, err := chain.HasTransaction(thor.Bytes32{}, 0)
+		assert.NoError(t, err)
+		assert.False(t, ok)
+	})
+
+	t.Run("GetBlockHeader_NotFound", func(t *testing.T) {
+		_, err := chain.GetBlockHeader(9999)
+		assert.Error(t, err)
+		assert.True(t, chain.IsNotFound(err))
+	})
+
+	t.Run("GetBlockSummary_NotFound", func(t *testing.T) {
+		_, err := chain.GetBlockSummary(9999)
+		assert.Error(t, err)
+		assert.True(t, chain.IsNotFound(err))
+	})
+
+	t.Run("GetBlock_NotFound", func(t *testing.T) {
+		_, err := chain.GetBlock(9999)
+		assert.Error(t, err)
+		assert.True(t, chain.IsNotFound(err))
+	})
+
+	t.Run("NewTicker", func(t *testing.T) {
+		w := repo.NewTicker()
+		assert.NotNil(t, w)
+	})
 }
