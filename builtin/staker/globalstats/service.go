@@ -6,6 +6,8 @@
 package globalstats
 
 import (
+	"errors"
+
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/thor"
@@ -56,6 +58,9 @@ func (s *Service) ApplyRenewal(renewal *Renewal) error {
 	locked.Add(renewal.LockedIncrease)
 	if err := locked.Sub(renewal.LockedDecrease); err != nil {
 		return err
+	}
+	if renewal.QueuedDecrease > queued {
+		return errors.New("cannot decrease more queued stake than available")
 	}
 	queued -= renewal.QueuedDecrease
 
