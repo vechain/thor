@@ -25,6 +25,26 @@ jobs:
             exit 1
           fi
 
+      - name: Validate API Version
+        run: |
+          thor_version=$(cat cmd/thor/VERSION)
+          api_version=$(grep -o 'version: [0-9.]*' api/doc/thor.yaml | awk '{print $2}')
+          if [ "$thor_version" != "$api_version" ]; then
+            echo "API spec version ($api_version) does not match Thor version ($thor_version)"
+            exit 1
+          fi
+
+      - name: Validate Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # This step validates that the tag is an official release
+        run: |
+          prerelease=$(gh release view ${{ github.ref_name }} --json isPrerelease | jq -r '.isPrerelease')
+          if [ "$prerelease" != "false" ]; then
+            echo "Tag is not an official release"
+            exit 1
+          fi
+
   publish-docker-image:
     name: Publish Pre-Release Docker Image
     uses: ./.github/workflows/publish-docker-images.yaml
@@ -50,6 +70,6 @@ jobs:
       - validate
     permissions:
       contents: write
-
+      packages: write
     with:
       binary: 'thor'
