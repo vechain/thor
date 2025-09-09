@@ -1612,6 +1612,7 @@ func TestValidateTxBasics(t *testing.T) {
 	defer pool.Close()
 
 	repo := pool.repo
+	wrongChainTag := repo.ChainTag() + 1
 
 	tests := []struct {
 		name        string
@@ -1622,14 +1623,14 @@ func TestValidateTxBasics(t *testing.T) {
 	}{
 		{
 			name:        "invalid legacy tx chain tag",
-			getTx:       func() *tx.Transaction { return tx.NewBuilder(tx.TypeLegacy).ChainTag(0xff).Build() },
+			getTx:       func() *tx.Transaction { return tx.NewBuilder(tx.TypeLegacy).ChainTag(wrongChainTag).Build() },
 			head:        &chain.BlockSummary{},
 			forkConfig:  &thor.NoFork,
 			expectedErr: badTxError{"chain tag mismatch"},
 		},
 		{
 			name:        "invalid dyn fee tx chain tag",
-			getTx:       func() *tx.Transaction { return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(0xff).Build() },
+			getTx:       func() *tx.Transaction { return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(wrongChainTag).Build() },
 			head:        &chain.BlockSummary{},
 			forkConfig:  &thor.NoFork,
 			expectedErr: badTxError{"chain tag mismatch"},
