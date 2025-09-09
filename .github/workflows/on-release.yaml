@@ -73,7 +73,7 @@ jobs:
           echo "Base version: $base_version"
           
           # Find all RC tags for this version and get the latest one
-          latest_rc=$(gh api repos/vechain/thor/git/refs/tags \
+          latest_rc=$(gh api repos/${{github.repository}}/git/refs/tags \
             --jq '[.[]
               | select(.ref | test("refs/tags/${base_version}-rc.[0-9]+$"))
               | {ref, rc: (.ref | capture("rc\\.(?<num>[0-9]+)$").num | tonumber)}
@@ -126,11 +126,11 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Pull, Retag and Push Docker Images
+        env:
+          RC_TAG: ${{ needs.find-and-pull-rc-image.outputs.rc_tag }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
         run: |
-          RC_TAG="${{ needs.find-and-pull-rc-image.outputs.rc_tag }}"
-          RELEASE_TAG="${{ github.ref_name }}"
-          REPO="${{ github.repository }}"
-          
           echo "Using RC tag: $RC_TAG"
           echo "Release tag: $RELEASE_TAG"
           
