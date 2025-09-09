@@ -25,6 +25,17 @@ jobs:
             exit 1
           fi
 
+      - name: Validate VERSION
+        run: |
+          version=$(cat cmd/thor/VERSION)
+          tag="${{ github.ref_name }}"
+          tag="${tag#v}"  # Remove the "v" prefix from the tag
+          tag="${tag%%-rc.*}" # Remove the "-rc.*" suffix from the tag
+          if [ "$tag" != "$version" ]; then
+            echo "VERSION file does not match tag"
+            exit 1
+          fi
+
       - name: Validate API Version
         run: |
           thor_version=$(cat cmd/thor/VERSION)
