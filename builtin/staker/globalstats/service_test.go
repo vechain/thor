@@ -71,6 +71,9 @@ func TestService_ApplyRenewal(t *testing.T) {
 	qVET, err := svc.GetQueuedStake()
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(0), qVET)
+
+	r.QueuedDecrease = 1000
+	assert.ErrorContains(t, svc.ApplyRenewal(r), "queued underflow occurred")
 }
 
 func TestService_ApplyExit(t *testing.T) {
