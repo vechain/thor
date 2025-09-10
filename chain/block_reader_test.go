@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/thor"
 )
 
 func TestBlockReader(t *testing.T) {
@@ -93,4 +95,64 @@ func TestBlockReaderFork(t *testing.T) {
 		{block.Compose(b4.Header(), b4.Transactions()), false},
 	},
 		blks)
+}
+
+type errorRepo struct {
+	*Repository
+	getBlockErr  error
+	bestChainErr error
+}
+
+func (r *errorRepo) GetBlock(id thor.Bytes32) (*block.Block, error) {
+	if r.getBlockErr != nil {
+		return nil, r.getBlockErr
+	}
+	return r.Repository.GetBlock(id)
+}
+
+func (r *errorRepo) NewBestChain() *Chain {
+	c := r.Repository.NewBestChain()
+	if r.bestChainErr != nil {
+		c.lazyInit = func() (*muxdb.Trie, error) { return nil, r.bestChainErr }
+	}
+	return c
+}
+
+func TestBlockReader_Errors(t *testing.T) {
+	_, repo := newTestRepo()
+	b0 := repo.GenesisBlock()
+	b1 := newBlock(b0, 10)
+	repo.AddBlock(b1, nil, 0, false)
+	b2 := newBlock(b1, 20)
+	repo.AddBlock(b2, nil, 0, false)
+
+	testCases := []struct {
+		name        string
+		wrap        func(*Repository) *errorRepo
+		expectError string
+	}{
+		{
+			name: "GetBlock error",
+			wrap: func(r *Repository) *errorRepo {
+				return &errorRepo{Repository: r, getBlockErr: assert.AnError}
+			},
+			expectError: assert.AnError.Error(),
+		},
+		{
+			name: "BestChain error",
+			wrap: func(r *Repository) *errorRepo {
+				return &errorRepo{Repository: r, bestChainErr: assert.AnError}
+			},
+			expectError: assert.AnError.Error(),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := tc.wrap(repo)
+			br := repo.NewBlockReader(b2.Header().ID())
+			_, err := br.Read()
+			assert.Error(t, err)
+		})
+	}
 }
