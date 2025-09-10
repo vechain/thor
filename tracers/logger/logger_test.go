@@ -258,7 +258,6 @@ func TestFormatLogs(t *testing.T) {
 		} else if value2 != expectedValue2 {
 			t.Errorf("Expected storage value for key '%s' to be '%s', got '%s'", expectedKey2, expectedValue2, value2)
 		}
-
 	}
 
 	// Test return data formatting
