@@ -186,11 +186,35 @@ func TestFormatLogs(t *testing.T) {
 		if len(*formatted.Memory) < 2 {
 			t.Errorf("Expected at least 2 memory chunks, got %d", len(*formatted.Memory))
 		}
-		// Test first memory chunk (should be hex encoded)
+
+		// Test specific memory chunks with exact values
+		expectedFirstChunk := hex.EncodeToString(testMemory[0:32])
+		expectedSecondChunk := hex.EncodeToString(testMemory[32:64])
+
+		// Verify first memory chunk
 		if len(*formatted.Memory) > 0 {
 			firstChunk := (*formatted.Memory)[0]
-			if len(firstChunk) != 64 { // 32 bytes = 64 hex chars
-				t.Errorf("Expected memory chunk to be 64 hex chars, got %d", len(firstChunk))
+			if len(firstChunk) != 64 {
+				t.Errorf("Expected first memory chunk to be 64 hex chars, got %d", len(firstChunk))
+			} else if firstChunk != expectedFirstChunk {
+				t.Errorf("Expected first memory chunk to be '%s', got '%s'", expectedFirstChunk, firstChunk)
+			}
+		}
+
+		// Verify second memory chunk
+		if len(*formatted.Memory) > 1 {
+			secondChunk := (*formatted.Memory)[1]
+			if len(secondChunk) != 64 {
+				t.Errorf("Expected second memory chunk to be 64 hex chars, got %d", len(secondChunk))
+			} else if secondChunk != expectedSecondChunk {
+				t.Errorf("Expected second memory chunk to be '%s', got '%s'", expectedSecondChunk, secondChunk)
+			}
+		}
+
+		// Test that all memory chunks are 64 hex characters (32 bytes)
+		for i, chunk := range *formatted.Memory {
+			if len(chunk) != 64 {
+				t.Errorf("Expected memory chunk %d to be 64 hex chars, got %d: '%s'", i, len(chunk), chunk)
 			}
 		}
 	}
