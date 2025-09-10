@@ -65,3 +65,21 @@ var (
 	EnergyGrowthRate      = big.NewInt(5000000000) // WEI THOR per token(VET) per second. about 0.000432 THOR per token per day.
 	NumberOfBlocksPerYear = big.NewInt(8640 * 365) // number of blocks per year, non leap (365 days)
 )
+
+// GetMaxBlockProposers retrieves the max block proposers parameter with fallback to initial value
+// If capToInitial is true, values greater than InitialMaxBlockProposers are also capped (PoA)
+func GetMaxBlockProposers(params interface {
+	Get(Bytes32) (*big.Int, error)
+}, capToInitial bool,
+) (uint64, error) {
+	mbp, err := params.Get(KeyMaxBlockProposers)
+	if err != nil {
+		return 0, err
+	}
+
+	maxBlockProposers := mbp.Uint64()
+	if maxBlockProposers == 0 || (capToInitial && maxBlockProposers > InitialMaxBlockProposers) {
+		maxBlockProposers = InitialMaxBlockProposers
+	}
+	return maxBlockProposers, nil
+}
