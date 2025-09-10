@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
@@ -126,14 +127,107 @@ func TestStructLogMarshalingOmitEmpty(t *testing.T) {
 	}
 }
 
-func TestFormatLogs(t *testing.T) {
+func TestFormatLogs(t *testing.T) {d
+	testMemory := []byte("test data for memory that is long enough to be processed as 32-byte chunks")
+	testStack := []uint256.Int{*uint256.NewInt(42), *uint256.NewInt(123)}
+	testStorage := map[common.Hash]common.Hash{
+		common.BytesToHash([]byte("key1")): common.BytesToHash([]byte("val1")),
+		common.BytesToHash([]byte("key2")): common.BytesToHash([]byte("val2")),
+	}
+	testReturnData := []byte("return data")
+
 	logs := []StructLog{
-		{Pc: 1, Op: vm.PUSH1, Gas: 100, GasCost: 2, Depth: 1, Memory: []byte("test"), Stack: []uint256.Int{*uint256.NewInt(1)}},
+		{
+			Pc:         1,
+			Op:         vm.PUSH1,
+			Gas:        100,
+			GasCost:    2,
+			Depth:      1,
+			Memory:     testMemory,
+			Stack:      testStack,
+			Storage:    testStorage,
+			ReturnData: testReturnData,
+		},
 	}
 
 	formattedLogs := formatLogs(logs)
+
+	// Test length
 	if len(formattedLogs) != len(logs) {
 		t.Errorf("Expected %d formatted logs, got %d", len(logs), len(formattedLogs))
+		return
+	}
+
+	formatted := formattedLogs[0]
+
+	// Test basic fields
+	if formatted.Pc != 1 {
+		t.Errorf("Expected Pc=1, got %d", formatted.Pc)
+	}
+	if formatted.Op != "PUSH1" {
+		t.Errorf("Expected Op='PUSH1', got '%s'", formatted.Op)
+	}
+	if formatted.Gas != 100 {
+		t.Errorf("Expected Gas=100, got %d", formatted.Gas)
+	}
+	if formatted.GasCost != 2 {
+		t.Errorf("Expected GasCost=2, got %d", formatted.GasCost)
+	}
+	if formatted.Depth != 1 {
+		t.Errorf("Expected Depth=1, got %d", formatted.Depth)
+	}
+
+	// Test memory formatting
+	if formatted.Memory == nil {
+		t.Error("Expected Memory to be formatted, got nil")
+	} else {
+		// Memory is processed in 32-byte chunks, so we expect at least 2 chunks for our test data
+		if len(*formatted.Memory) < 2 {
+			t.Errorf("Expected at least 2 memory chunks, got %d", len(*formatted.Memory))
+		}
+		// Test first memory chunk (should be hex encoded)
+		if len(*formatted.Memory) > 0 {
+			firstChunk := (*formatted.Memory)[0]
+			if len(firstChunk) != 64 { // 32 bytes = 64 hex chars
+				t.Errorf("Expected memory chunk to be 64 hex chars, got %d", len(firstChunk))
+			}
+		}
+	}
+
+	// Test stack formatting
+	if formatted.Stack == nil {
+		t.Error("Expected Stack to be formatted, got nil")
+	} else {
+		if len(*formatted.Stack) != len(testStack) {
+			t.Errorf("Expected %d stack items, got %d", len(testStack), len(*formatted.Stack))
+		}
+		// Test first stack item (should be hex encoded)
+		if len(*formatted.Stack) > 0 {
+			firstStack := (*formatted.Stack)[0]
+			if firstStack != "0x2a" { // 42 in hex
+				t.Errorf("Expected first stack item to be '0x2a', got '%s'", firstStack)
+			}
+		}
+	}
+
+	// Test storage formatting
+	if formatted.Storage == nil {
+		t.Error("Expected Storage to be formatted, got nil")
+	} else {
+		if len(*formatted.Storage) != len(testStorage) {
+			t.Errorf("Expected %d storage items, got %d", len(testStorage), len(*formatted.Storage))
+		}
+		// Test storage key-value formatting
+		for key, value := range *formatted.Storage {
+			if len(key) != 64 || len(value) != 64 { // 32 bytes = 64 hex chars
+				t.Errorf("Expected storage key/value to be 64 hex chars, got key=%d, value=%d", len(key), len(value))
+			}
+		}
+	}
+
+	// Test return data formatting
+	if formatted.ReturnData != hexutil.Bytes(testReturnData).String() {
+		t.Errorf("Expected ReturnData to be hex encoded, got '%s'", formatted.ReturnData)
 	}
 }
 
