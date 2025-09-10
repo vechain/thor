@@ -124,13 +124,9 @@ func (s *Staker) computeActivationCount(hasValidatorExited bool) (uint64, error)
 		leaderSize = leaderSize - 1
 	}
 
-	mbp, err := s.params.Get(thor.KeyMaxBlockProposers)
+	maxBlockProposers, err := thor.GetMaxBlockProposers(s.params, false)
 	if err != nil {
 		return 0, err
-	}
-	maxBlockProposers := mbp.Uint64()
-	if maxBlockProposers == 0 {
-		maxBlockProposers = thor.InitialMaxBlockProposers
 	}
 
 	// If full or nothing queued then no activations
@@ -216,13 +212,9 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 	}
 
 	// Apply activations using existing method
-	mbp, err := s.params.Get(thor.KeyMaxBlockProposers)
+	maxBlockProposers, err := thor.GetMaxBlockProposers(s.params, false)
 	if err != nil {
 		return err
-	}
-	maxBlockProposers := mbp.Uint64()
-	if maxBlockProposers == 0 {
-		maxBlockProposers = thor.InitialMaxBlockProposers
 	}
 
 	for range transition.ActivationCount {
