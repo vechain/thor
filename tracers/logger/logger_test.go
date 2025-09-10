@@ -127,7 +127,7 @@ func TestStructLogMarshalingOmitEmpty(t *testing.T) {
 	}
 }
 
-func TestFormatLogs(t *testing.T) {d
+func TestFormatLogs(t *testing.T) {
 	testMemory := []byte("test data for memory that is long enough to be processed as 32-byte chunks")
 	testStack := []uint256.Int{*uint256.NewInt(42), *uint256.NewInt(123)}
 	testStorage := map[common.Hash]common.Hash{
