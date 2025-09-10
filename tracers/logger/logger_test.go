@@ -18,6 +18,7 @@ package logger
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -217,10 +218,34 @@ func TestFormatLogs(t *testing.T) {
 		if len(*formatted.Storage) != len(testStorage) {
 			t.Errorf("Expected %d storage items, got %d", len(testStorage), len(*formatted.Storage))
 		}
-		// Test storage key-value formatting
+
+		// Test specific storage key-value pairs
+		expectedKey1 := hex.EncodeToString(common.BytesToHash([]byte("key1")).Bytes())
+		expectedValue1 := hex.EncodeToString(common.BytesToHash([]byte("val1")).Bytes())
+		expectedKey2 := hex.EncodeToString(common.BytesToHash([]byte("key2")).Bytes())
+		expectedValue2 := hex.EncodeToString(common.BytesToHash([]byte("val2")).Bytes())
+
+		// Verify first key-value pair
+		if value1, exists := (*formatted.Storage)[expectedKey1]; !exists {
+			t.Errorf("Expected storage key '%s' not found", expectedKey1)
+		} else if value1 != expectedValue1 {
+			t.Errorf("Expected storage value for key '%s' to be '%s', got '%s'", expectedKey1, expectedValue1, value1)
+		}
+
+		// Verify second key-value pair
+		if value2, exists := (*formatted.Storage)[expectedKey2]; !exists {
+			t.Errorf("Expected storage key '%s' not found", expectedKey2)
+		} else if value2 != expectedValue2 {
+			t.Errorf("Expected storage value for key '%s' to be '%s', got '%s'", expectedKey2, expectedValue2, value2)
+		}
+
+		// Test that all keys and values are 64 hex characters (32 bytes)
 		for key, value := range *formatted.Storage {
-			if len(key) != 64 || len(value) != 64 { // 32 bytes = 64 hex chars
-				t.Errorf("Expected storage key/value to be 64 hex chars, got key=%d, value=%d", len(key), len(value))
+			if len(key) != 64 {
+				t.Errorf("Expected storage key to be 64 hex chars, got %d: '%s'", len(key), key)
+			}
+			if len(value) != 64 {
+				t.Errorf("Expected storage value to be 64 hex chars, got %d: '%s'", len(value), value)
 			}
 		}
 	}
