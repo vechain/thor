@@ -42,10 +42,11 @@ type Communicator struct {
 	feedScope      event.SubscriptionScope
 	goes           co.Goes
 	onceSynced     sync.Once
+	wspChecker     *WeakSubjectivityChecker
 }
 
 // New create a new Communicator instance.
-func New(repo *chain.Repository, txPool *txpool.TxPool) *Communicator {
+func New(repo *chain.Repository, txPool *txpool.TxPool, wspChecker *WeakSubjectivityChecker) *Communicator {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Communicator{
 		repo:           repo,
@@ -55,6 +56,7 @@ func New(repo *chain.Repository, txPool *txpool.TxPool) *Communicator {
 		peerSet:        newPeerSet(),
 		syncedCh:       make(chan struct{}),
 		announcementCh: make(chan *announcement),
+		wspChecker:     wspChecker,
 	}
 }
 
@@ -119,6 +121,9 @@ func (c *Communicator) Sync(ctx context.Context, handler HandleBlockStream) {
 			if isSynced() {
 				delay = syncInterval
 				c.onceSynced.Do(func() {
+					if err := c.wspChecker.PerformCheck(ctx); err != nil {
+						panic(fmt.Errorf("weak subjectivity check failed: %w", err))
+					}
 					// once off - after a bootstrap the syncedCh trigger the peers.syncTxs
 					close(c.syncedCh)
 				})
