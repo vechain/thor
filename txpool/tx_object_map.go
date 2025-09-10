@@ -151,9 +151,11 @@ func (m *txObjectMap) ToTxObjects() []*txObject {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 
-	txObjs := make([]*txObject, 0, len(m.mapByHash))
+	txObjs := make([]*txObject, len(m.mapByHash))
+	i := 0
 	for _, txObj := range m.mapByHash {
-		txObjs = append(txObjs, txObj)
+		txObjs[i] = txObj
+		i++
 	}
 	return txObjs
 }
@@ -162,9 +164,11 @@ func (m *txObjectMap) ToTxs() tx.Transactions {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 
-	txs := make(tx.Transactions, 0, len(m.mapByHash))
+	txs := make(tx.Transactions, len(m.mapByHash))
+	i := 0
 	for _, txObj := range m.mapByHash {
-		txs = append(txs, txObj.Transaction)
+		txs[i] = txObj.Transaction
+		i++
 	}
 	return txs
 }
