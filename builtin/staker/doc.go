@@ -5,7 +5,7 @@
 
 package staker
 
-// Package staker implements the buitlin staker contract.
+// Package staker implements the builtin staker contract.
 //
 // It contains the core logic for the staker contract, including the staker's
 // state, the staker's methods, and the staker's events.
