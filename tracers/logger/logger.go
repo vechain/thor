@@ -475,14 +475,14 @@ func formatLogs(logs []StructLog) []StructLogRes {
 		if trace.Memory != nil {
 			memory := make([]string, 0, (len(trace.Memory)+31)/32)
 			for i := 0; i+32 <= len(trace.Memory); i += 32 {
-				memory = append(memory, fmt.Sprintf("%x", trace.Memory[i:i+32]))
+				memory = append(memory, hex.EncodeToString(trace.Memory[i:i+32]))
 			}
 			formatted[index].Memory = &memory
 		}
 		if trace.Storage != nil {
 			storage := make(map[string]string)
 			for i, storageValue := range trace.Storage {
-				storage[fmt.Sprintf("%x", i)] = fmt.Sprintf("%x", storageValue)
+				storage[hex.EncodeToString(i[:])] = hex.EncodeToString(storageValue[:])
 			}
 			formatted[index].Storage = &storage
 		}
