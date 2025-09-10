@@ -482,7 +482,13 @@ func loadNodeMaster(ctx *cli.Context) (*node.Master, error) {
 	return master, nil
 }
 
-func newP2PCommunicator(ctx *cli.Context, repo *chain.Repository, txPool *txpool.TxPool, instanceDir string) (*p2p.P2P, error) {
+func newP2PCommunicator(
+	ctx *cli.Context,
+	repo *chain.Repository,
+	txPool *txpool.TxPool,
+	wspChecker *comm.WeakSubjectivityChecker,
+	instanceDir string,
+) (*p2p.P2P, error) {
 	// known peers will be loaded/stored from/in this file
 	peersCachePath := filepath.Join(instanceDir, "peers.cache")
 
@@ -522,7 +528,7 @@ func newP2PCommunicator(ctx *cli.Context, repo *chain.Repository, txPool *txpool
 	}
 
 	return p2p.New(
-		comm.New(repo, txPool),
+		comm.New(repo, txPool, wspChecker),
 		key,
 		instanceDir,
 		userNAT,
