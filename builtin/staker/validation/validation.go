@@ -142,7 +142,7 @@ func (v *Validation) CurrentIteration(currentBlock uint32) (uint32, error) {
 
 	// Active
 	if currentBlock < v.StartBlock {
-		return 0, errors.New("curren block cannot be less than start block")
+		return 0, errors.New("current block cannot be less than start block")
 	}
 	if v.Period == 0 {
 		return 0, errors.New("period cannot be zero")
