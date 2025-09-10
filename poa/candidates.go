@@ -54,13 +54,9 @@ func (c *Candidates) Copy() *Candidates {
 func (c *Candidates) Pick(state *state.State, checkBalance authority.BalanceChecker) ([]Proposer, error) {
 	satisfied := c.satisfied
 	if len(satisfied) == 0 {
-		mbp, err := builtin.Params.Native(state).Get(thor.KeyMaxBlockProposers)
+		maxBlockProposers, err := thor.GetMaxBlockProposers(builtin.Params.Native(state), true)
 		if err != nil {
 			return nil, err
-		}
-		maxBlockProposers := mbp.Uint64()
-		if maxBlockProposers == 0 || maxBlockProposers > thor.InitialMaxBlockProposers {
-			maxBlockProposers = thor.InitialMaxBlockProposers
 		}
 
 		satisfied = make([]int, 0, len(c.list))
