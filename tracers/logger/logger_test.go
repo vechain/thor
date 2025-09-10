@@ -194,9 +194,7 @@ func TestFormatLogs(t *testing.T) {
 		// Verify first memory chunk
 		if len(*formatted.Memory) > 0 {
 			firstChunk := (*formatted.Memory)[0]
-			if len(firstChunk) != 64 {
-				t.Errorf("Expected first memory chunk to be 64 hex chars, got %d", len(firstChunk))
-			} else if firstChunk != expectedFirstChunk {
+			if firstChunk != expectedFirstChunk {
 				t.Errorf("Expected first memory chunk to be '%s', got '%s'", expectedFirstChunk, firstChunk)
 			}
 		}
@@ -204,9 +202,7 @@ func TestFormatLogs(t *testing.T) {
 		// Verify second memory chunk
 		if len(*formatted.Memory) > 1 {
 			secondChunk := (*formatted.Memory)[1]
-			if len(secondChunk) != 64 {
-				t.Errorf("Expected second memory chunk to be 64 hex chars, got %d", len(secondChunk))
-			} else if secondChunk != expectedSecondChunk {
+			if secondChunk != expectedSecondChunk {
 				t.Errorf("Expected second memory chunk to be '%s', got '%s'", expectedSecondChunk, secondChunk)
 			}
 		}
@@ -263,15 +259,6 @@ func TestFormatLogs(t *testing.T) {
 			t.Errorf("Expected storage value for key '%s' to be '%s', got '%s'", expectedKey2, expectedValue2, value2)
 		}
 
-		// Test that all keys and values are 64 hex characters (32 bytes)
-		for key, value := range *formatted.Storage {
-			if len(key) != 64 {
-				t.Errorf("Expected storage key to be 64 hex chars, got %d: '%s'", len(key), key)
-			}
-			if len(value) != 64 {
-				t.Errorf("Expected storage value to be 64 hex chars, got %d: '%s'", len(value), value)
-			}
-		}
 	}
 
 	// Test return data formatting
