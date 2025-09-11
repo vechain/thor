@@ -1,8 +1,8 @@
-name: Get colors
-description: Get the live and staging colors of a specified network
+name: Setup Release
+description: Setup the release environment
 inputs:
   goos:
-    description: The node network of which the colors are to be retrieved
+    description: The operating system to build for
     required: true
   dockerhub-username:
     description: Docker Hub username
