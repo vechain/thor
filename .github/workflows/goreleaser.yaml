@@ -11,6 +11,8 @@ jobs:
     permissions:
       contents: read
     name: Validate Release
+    permissions:
+      contents: read
     outputs:
       COMMIT_SHA: ${{ steps.commit-sha.outputs.commit_sha }}
       FLAGS: ${{ steps.set-flags.outputs.flags }}
@@ -39,7 +41,6 @@ jobs:
           fi
           
           prerelease=$(gh release view ${{ github.ref_name }} --json isPrerelease | jq -r '.isPrerelease')
-          
           version="${{ github.ref_name }}"
           
           if [ "$prerelease" == "true" ]; then
@@ -96,7 +97,7 @@ jobs:
             go-os: windows
 
     permissions:
-      contents: read
+      contents: write
       packages: write
 
     environment: docker-publish
@@ -111,7 +112,7 @@ jobs:
           goos: ${{ matrix.go-os }}
           dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
-          github-token: ${{ github.token }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
           gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
           cosign-key: ${{ secrets.COSIGN_KEY }}
@@ -122,7 +123,7 @@ jobs:
           version: latest
           args: release --clean --split --verbose ${{ needs.validate.outputs.FLAGS }}
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
           GOOS: ${{ matrix.go-os }}
           GOARCH: ${{ matrix.go-arch }}
@@ -156,8 +157,10 @@ jobs:
     environment: docker-publish
 
     permissions:
-      contents: read
+      contents: write
       packages: write
+      id-token: write
+      attestations: write
 
     steps:
       - name: Checkout code
@@ -170,7 +173,7 @@ jobs:
           goos: linux
           dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
-          github-token: ${{ github.token }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
           gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
           cosign-key: ${{ secrets.COSIGN_KEY }}
@@ -202,14 +205,16 @@ jobs:
 
       - name: Debug
         run: |
-          ls -la ./dist
+          ls -laR ./dist
+          ls -la
+
       - uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser-pro
           version: latest
           args: continue --merge --verbose ${{ needs.validate.outputs.FLAGS }}
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
           GOOS: ${{ matrix.go-os }}
           GOARCH: ${{ matrix.go-arch }}

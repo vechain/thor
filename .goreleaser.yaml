@@ -73,11 +73,24 @@ docker_signs:
 
 archives:
   - formats: [ 'tar.gz' ]
-    wrap_in_directory: true
+    id: thor
+    ids:
+      - thor
     format_overrides:
       - goos: windows
         formats: [ 'zip' ]
-    name_template: '{{ .ProjectName }}-{{ .Tag }}-{{ .Os }}-{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}'
+    name_template: 'thor-{{ .Tag }}-{{ .Os }}-{{ .Arch }}'
+    files:
+      - LICENSE
+      - README.md
+  - formats: [ 'tar.gz' ]
+    id: disco
+    ids:
+      - disco
+    format_overrides:
+      - goos: windows
+        formats: [ 'zip' ]
+    name_template: 'disco-{{ .Env.DISCO_VERSION }}-{{ .Os }}-{{ .Arch }}'
     files:
       - LICENSE
       - README.md
@@ -92,11 +105,14 @@ checksum:
 release:
   skip_upload: false
   github:
-    owner: vecahin
+    owner: vechain
     name: thor
   ids:
     - disco
     - thor
+  mode: append
+  prerelease: '{{ .IsNightly }}true{{ else }}false{{ end }}'
+  make_latest: '{{ if .IsRelease }}true{{ else }}false{{ end }}'
   header: |
     Thor is the official Golang client for VeChainThor, the public blockchain powering the VeChain ecosystem. VeChainThor is designed for real-world adoption, enabling scalable, low-cost, and sustainable applications.
 
