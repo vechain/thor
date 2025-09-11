@@ -1,0 +1,237 @@
+name: GoReleaser
+
+on:
+  push:
+    tags:
+      - v*
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    name: Validate Release
+    outputs:
+      COMMIT_SHA: ${{ steps.commit-sha.outputs.commit_sha }}
+      FLAGS: ${{ steps.set-flags.outputs.flags }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+
+      - name: Commit SHA
+        id: commit-sha
+        run: echo "commit_sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Validate Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # This step validates that the tag is an official release
+        id: set-flags
+        run: |
+          if [[ "${{ github.ref }}" != refs/tags/* ]]; then
+              echo "This workflow only runs on tags"
+              exit 1
+          fi
+          
+          prerelease=$(gh release view ${{ github.ref_name }} --json isPrerelease | jq -r '.isPrerelease')
+          
+          version="${{ github.ref_name }}"
+          
+          if [ "$prerelease" == "true" ]; then
+          
+            echo "flags=--nightly" >> $GITHUB_ENV
+            echo "flags=--nightly" >> "$GITHUB_OUTPUT"
+          
+            # if it does not contain 'rc', it's invalid
+            if [[ "${{ github.ref_name }}" != *-rc* ]]; then
+                echo "Tag is a prerelease, but the tag name does not contain -rc"
+                exit 1
+            fi
+          
+            version="${version#v}"  # Remove the "v" prefix from the tag
+            version="${version%%-rc.*}" # Remove the "-rc.*" suffix from the tag
+          else
+            echo "flags=" >> $GITHUB_ENV
+            echo "flags=" >> "$GITHUB_OUTPUT"
+            node -e "if (!/^v\d+\.\d+\.\d+$/.test('${{ github.ref_name }}')) { console.error('Invalid version format. Expected: vX.Y.Z'); process.exit(1); }"
+            version="${version#v}"  # Remove the "v" prefix from the tag
+          fi
+          
+          thor_version=$(cat cmd/thor/VERSION)
+          if [ "$version" != "$thor_version" ]; then
+            echo "VERSION file ($thor_version) does not match tag ($version)"
+            exit 1
+          fi
+          
+          api_version=$(grep -o 'version: [0-9.]*' api/doc/thor.yaml | awk '{print $2}')
+          if [ "$version" != "$api_version" ]; then
+              echo "API spec version ($api_version) does not match Thor version ($version)"
+              exit 1
+          fi
+          
+  prepare:
+    runs-on: ${{ matrix.runs-on }}
+    needs: validate
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          # see actions/download-artifact in release job if modifying these
+          - runs-on: ubuntu-latest
+            go-arch: amd64
+            go-os: linux
+          - runs-on: ubuntu-24.04-arm
+            go-arch: arm64
+            go-os: linux
+          - runs-on: macos-latest
+            go-arch: arm64
+            go-os: darwin
+          - runs-on: windows-latest
+            go-arch: amd64
+            go-os: windows
+
+    permissions:
+      contents: read
+      packages: write
+
+    environment: docker-publish
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - uses: ./.github/actions/setup-release
+        name: Setup Release
+        id: setup
+        with:
+          goos: ${{ matrix.go-os }}
+          dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
+          github-token: ${{ github.token }}
+          gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          cosign-key: ${{ secrets.COSIGN_KEY }}
+
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser-pro
+          version: latest
+          args: release --clean --split --verbose ${{ needs.validate.outputs.FLAGS }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+          GOOS: ${{ matrix.go-os }}
+          GOARCH: ${{ matrix.go-arch }}
+          THOR_VERSION: ${{ steps.setup.outputs.thor_version }}
+          DISCO_VERSION: ${{ steps.setup.outputs.disco_version }}
+          COPYRIGHT_YEAR: ${{ steps.setup.outputs.copyright_year }}
+          REPOSITORY: ${{ github.repository }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          GPG_FINGERPRINT: ${{ steps.setup.outputs.gpg_fingerprint }}
+          COSIGN_KEY: ${{ secrets.COSIGN_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dist-${{ needs.validate.outputs.COMMIT_SHA }}${{ needs.validate.outputs.FLAGS }}-${{ matrix.go-os }}_${{ matrix.go-arch }}
+          path: ./dist/${{ matrix.go-os }}_${{ matrix.go-arch }}
+          retention-days: 1
+
+      - shell: bash
+        run: |
+          ls -laR ./dist
+  release:
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+      - validate
+    env:
+      DOCKER_CLI_EXPERIMENTAL: "enabled"
+    environment: docker-publish
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - uses: ./.github/actions/setup-release
+        name: Setup Release
+        id: setup
+        with:
+          goos: linux
+          dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
+          github-token: ${{ github.token }}
+          gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          cosign-key: ${{ secrets.COSIGN_KEY }}
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: anchore/sbom-action/download-syft@v0.20.5
+
+      - name: Linux (AMD64)
+        uses: actions/download-artifact@v5
+        with:
+          name: dist-${{ needs.validate.outputs.COMMIT_SHA }}${{ needs.validate.outputs.FLAGS }}-linux_amd64
+          path: ./dist/linux_amd64
+      - name: Linux (ARM64)
+        uses: actions/download-artifact@v5
+        with:
+          name: dist-${{ needs.validate.outputs.COMMIT_SHA }}${{ needs.validate.outputs.FLAGS }}-linux_arm64
+          path: ./dist/linux_arm64
+      - name: macOS (ARM64)
+        uses: actions/download-artifact@v5
+        with:
+          name: dist-${{ needs.validate.outputs.COMMIT_SHA }}${{ needs.validate.outputs.FLAGS }}-darwin_arm64
+          path: ./dist/darwin_arm64
+      - name: Windows (AMD64)
+        uses: actions/download-artifact@v5
+        with:
+          name: dist-${{ needs.validate.outputs.COMMIT_SHA }}${{ needs.validate.outputs.FLAGS }}-windows_amd64
+          path: ./dist/windows_amd64
+
+      - name: Debug
+        run: |
+          ls -laR ./dist
+          ls -la
+          cat cosign.key
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser-pro
+          version: latest
+          args: continue --merge --verbose ${{ needs.validate.outputs.FLAGS }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+          GOOS: ${{ matrix.go-os }}
+          GOARCH: ${{ matrix.go-arch }}
+          THOR_VERSION: ${{ steps.setup.outputs.thor_version }}
+          DISCO_VERSION: ${{ steps.setup.outputs.disco_version }}
+          COPYRIGHT_YEAR: ${{ steps.setup.outputs.copyright_year }}
+          REPOSITORY: ${{ github.repository }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          GPG_FINGERPRINT: ${{ steps.setup.outputs.gpg_fingerprint }}
+          COSIGN_KEY: ${{ secrets.COSIGN_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+
+      - uses: actions/attest-build-provenance@v3
+        with:
+          subject-checksums: ./dist/checksums.txt
+
+      - uses: actions/attest-build-provenance@v3
+        with:
+          subject-checksums: ./dist/digests.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dist-${{ needs.validate.outputs.COMMIT_SHA }}${{ needs.validate.outputs.FLAGS }}
+          path: ./dist
+          retention-days: 1

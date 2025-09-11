@@ -1,0 +1,87 @@
+name: Get colors
+description: Get the live and staging colors of a specified network
+inputs:
+  goos:
+    description: The node network of which the colors are to be retrieved
+    required: true
+  dockerhub-username:
+    description: Docker Hub username
+    required: false
+  dockerhub-token:
+    description: Docker Hub token
+    required: false
+  github-token:
+    description: GitHub token
+    required: false
+  gpg-passphrase:
+    description: The passphrase for the GPG key used for signing
+    required: false
+  gpg-private-key:
+    description: The private GPG key used for signing
+    required: false
+  cosign-key:
+    description: The private Cosign key used for signing
+    required: false
+outputs:
+  thor_version:
+    description: The live color
+    value: ${{ steps.env.outputs.THOR_VERSION }}
+  disco_version:
+    description: The staging color
+    value: ${{ steps.env.outputs.DISCO_VERSION }}
+  copyright_year:
+    description: The staging color
+    value: ${{ steps.env.outputs.COPYRIGHT_YEAR }}
+  gpg_fingerprint:
+    description: The GPG fingerprint used for signing
+    value: ${{ steps.import_gpg.outputs.fingerprint }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@v6
+      with:
+        go-version: 1.24
+
+    - uses: sigstore/cosign-installer@v3.9.2
+
+    - name: Log in to GHCR
+      uses: docker/login-action@v3
+      if: ${{ inputs.goos == 'linux' }}
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ inputs.github-token}}
+
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      if: ${{ inputs.goos == 'linux' }}
+      with:
+        username: ${{ inputs.dockerhub-username }}
+        password: ${{ inputs.dockerhub-token }}
+
+    - name: Import GPG key
+      id: import_gpg
+      uses: crazy-max/ghaction-import-gpg@v6
+      with:
+        gpg_private_key: ${{ inputs.gpg-private-key }}
+        passphrase: ${{ inputs.gpg-passphrase }}
+
+    - name: Set Cosign Key
+      if: ${{ inputs.goos == 'linux' }}
+      shell: bash
+      run: echo "$COSIGN_KEY" > cosign.key
+      env:
+        COSIGN_KEY: ${{ inputs.cosign-key }}
+
+    - name: Set Up Env
+      id: env
+      shell: bash
+      run: |
+        THOR_VERSION=$(cat ./cmd/thor/VERSION)
+        echo "THOR_VERSION=$THOR_VERSION" >> "$GITHUB_OUTPUT"
+        DISCO_VERSION=$(cat ./cmd/disco/VERSION)
+        echo "DISCO_VERSION=$DISCO_VERSION" >> "$GITHUB_OUTPUT"
+        COPYRIGHT_YEAR=$(date +'%Y')
+        echo "COPYRIGHT_YEAR=$COPYRIGHT_YEAR" >> "$GITHUB_OUTPUT"
