@@ -8,6 +8,8 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     name: Validate Release
     outputs:
       COMMIT_SHA: ${{ steps.commit-sha.outputs.commit_sha }}
