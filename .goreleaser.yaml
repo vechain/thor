@@ -123,13 +123,6 @@ source:
   enabled: true
   name_template: '{{ .ProjectName }}-{{ .Tag }}-source'
 
-# TODO
-#homebrew_casks:
-#nfpms:
-#cloudsmiths:
-#snapcrafts:
-#npms:
-
 dockers:
   - goarch: amd64
     goos: linux
