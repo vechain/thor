@@ -26,21 +26,11 @@ jobs:
     name: Go Module Check
     uses: ./.github/workflows/go-mod-check.yaml
 
-  run-e2e-tests:
-    name: E2E Tests
-    uses: ./.github/workflows/test-e2e.yaml
-    permissions:
-      contents: read
-    secrets: inherit
+  thor-docker-test-suite:
+    uses: ./.github/workflows/thor-docker-test-suite.yaml
+    secrets:
+      DRAUPNIR_TOKEN: ${{ secrets.DRAUPNIR_TOKEN }}
 
-  run-smoke-tests:
-    name: Smoke Tests
-    uses: ./.github/workflows/test-smoke.yaml
-    permissions:
-      contents: read
-    secrets: inherit
-    needs: [run-e2e-tests]
-    
   run-rosetta-tests:
     name: Rosetta Tests
     uses: ./.github/workflows/test-rosetta.yaml
