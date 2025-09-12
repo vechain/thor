@@ -1,0 +1,30 @@
+name: Build Docker Image
+
+on:
+  workflow_call:
+
+jobs:
+  build-docker-image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and export
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          tags: thor-pipeline:${{ github.sha }}
+          outputs: type=docker,dest=/tmp/thor-pipeline.tar
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: thor-pipeline-image-${{ github.sha }}
+          path: /tmp/thor-pipeline.tar
