@@ -151,7 +151,7 @@ func TestUpdatePackMetrics(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			n := &Node{}
 
-			for i := 0; i < 3; i++ {
+			for range 3 {
 				assert.NotPanics(t, func() {
 					n.updatePackMetrics(tt.success)
 				})
@@ -331,14 +331,14 @@ func TestCleanupTransactions_WithTransactions(t *testing.T) {
 
 	transactions := []*tx.Transaction{}
 
-	for i := 0; i < 3; i++ {
+	for idx := range 3 {
 		trx := new(tx.Builder).
 			Clause(tx.NewClause(&genesis.DevAccounts()[1].Address)).
 			ChainTag(n.repo.ChainTag()).
 			Expiration(32).
 			BlockRef(tx.NewBlockRef(bbSum.Header.Number())).
 			Gas(21000).
-			Nonce(uint64(i + 1)).
+			Nonce(uint64(idx + 1)).
 			Build()
 		trx = tx.MustSign(trx, genesis.DevAccounts()[1].PrivateKey)
 		transactions = append(transactions, trx)
