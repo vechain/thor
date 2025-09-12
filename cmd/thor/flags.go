@@ -180,6 +180,10 @@ var (
 		Value: "localhost:2113",
 		Usage: "admin service listening address",
 	}
+	wscProviderURLFlag = cli.StringFlag{
+		Name:  "wsc-provider-url",
+		Usage: "URL of the weak subjectivity checkpoint provider",
+	}
 	txPoolLimitPerAccountFlag = cli.Uint64Flag{
 		Name:  "txpool-limit-per-account",
 		Value: 128,
