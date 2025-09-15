@@ -276,7 +276,7 @@ func (n *Node) finalizeAndBroadcast(ctx *packContext, newBlock *block.Block, rec
 }
 
 func (n *Node) logBlockPacked(newBlock *block.Block, receipts tx.Receipts, execElapsed, commitElapsed mclock.AbsTime) {
-	logger.Info("�� new block packed",
+	logger.Info("📦 new block packed",
 		"txs", len(receipts),
 		"mgas", float64(newBlock.Header().GasUsed())/1000/1000,
 		"et", fmt.Sprintf("%v|%v", common.PrettyDuration(execElapsed), common.PrettyDuration(commitElapsed)),
