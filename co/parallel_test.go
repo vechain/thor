@@ -3,13 +3,11 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package co_test
+package co
 
 import (
 	"testing"
 	"time"
-
-	"github.com/vechain/thor/v2/co"
 )
 
 func TestParallel(t *testing.T) {
@@ -25,7 +23,7 @@ func TestParallel(t *testing.T) {
 	t.Log("non-parallel", time.Duration(time.Now().UnixNano()-startTime))
 
 	startTime = time.Now().UnixNano()
-	<-co.Parallel(func(queue chan<- func()) {
+	<-Parallel(func(queue chan<- func()) {
 		for range n {
 			queue <- fn
 		}
