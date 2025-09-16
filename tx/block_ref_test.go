@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package tx_test
+package tx
 
 import (
 	"crypto/rand"
@@ -12,18 +12,17 @@ import (
 	"github.com/vechain/thor/v2/thor"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/vechain/thor/v2/tx"
 )
 
 func TestBlockRef(t *testing.T) {
-	assert.Equal(t, uint32(0), tx.BlockRef{}.Number())
+	assert.Equal(t, uint32(0), BlockRef{}.Number())
 
-	assert.Equal(t, tx.BlockRef{0, 0, 0, 0xff, 0, 0, 0, 0}, tx.NewBlockRef(0xff))
+	assert.Equal(t, BlockRef{0, 0, 0, 0xff, 0, 0, 0, 0}, NewBlockRef(0xff))
 
 	var bid thor.Bytes32
-	rand.Read(bid[:])
+	_, err := rand.Read(bid[:])
+	assert.NoError(t, err)
 
-	br := tx.NewBlockRefFromID(bid)
+	br := NewBlockRefFromID(bid)
 	assert.Equal(t, bid[:8], br[:])
 }
