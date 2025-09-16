@@ -3351,3 +3351,16 @@ func TestValidation_DecreaseOverflow(t *testing.T) {
 
 	assertValidation(t, staker, addr).QueuedVET(MinStakeVET)
 }
+
+func TestValidation_IncreaseOverflow(t *testing.T) {
+	staker, _ := newStaker(t, 0, 1, false)
+	addr := datagen.RandAddress()
+	endorser := datagen.RandAddress()
+
+	newTestSequence(t, staker).AddValidation(addr, endorser, thor.MediumStakingPeriod(), MinStakeVET)
+
+	overflowIncrease := math.MaxUint64 - MinStakeVET + 1
+	assert.ErrorContains(t, staker.IncreaseStake(addr, endorser, overflowIncrease), "increase amount is too large")
+
+	assertValidation(t, staker, addr).QueuedVET(MinStakeVET)
+}
