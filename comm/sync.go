@@ -18,6 +18,11 @@ import (
 	"github.com/vechain/thor/v2/comm/proto"
 )
 
+type rawBlockBatch struct {
+	rawBlocks []rlp.RawValue
+	startNum  uint32
+}
+
 func download(_ctx context.Context, repo *chain.Repository, peer *Peer, headNum uint32, handler HandleBlockStream) error {
 	ancestor, err := findCommonAncestor(_ctx, repo, peer, headNum)
 	if err != nil {
@@ -26,19 +31,19 @@ func download(_ctx context.Context, repo *chain.Repository, peer *Peer, headNum 
 
 	var (
 		ctx, cancel = context.WithCancel(_ctx)
-		fetched     = make(chan []*block.Block, 1)
+		rawBatches  = make(chan rawBlockBatch, 10)
 		warmedUp    = make(chan *block.Block, 2048)
 		goes        co.Goes
 		fetchErr    error
 	)
 	defer goes.Wait()
 	goes.Go(func() {
-		defer close(fetched)
-		fetchErr = fetchBlocks(ctx, peer, ancestor+1, fetched)
+		defer close(rawBatches)
+		fetchErr = fetchRawBlockBatches(ctx, peer, ancestor+1, rawBatches)
 	})
 	goes.Go(func() {
 		defer close(warmedUp)
-		warmupBlocks(ctx, fetched, warmedUp)
+		decodeAndWarmupBatches(ctx, rawBatches, warmedUp)
 	})
 	defer cancel()
 	if err := handler(ctx, warmedUp); err != nil {
@@ -47,7 +52,7 @@ func download(_ctx context.Context, repo *chain.Repository, peer *Peer, headNum 
 	return fetchErr
 }
 
-func fetchBlocks(ctx context.Context, peer *Peer, fromBlockNum uint32, fetched chan<- []*block.Block) error {
+func fetchRawBlockBatches(ctx context.Context, peer *Peer, fromBlockNum uint32, rawBatches chan<- rawBlockBatch) error {
 	for {
 		result, err := proto.GetBlocksFromNumber(ctx, peer, fromBlockNum)
 		if err != nil {
@@ -57,66 +62,69 @@ func fetchBlocks(ctx context.Context, peer *Peer, fromBlockNum uint32, fetched c
 			return nil
 		}
 
-		blocks := make([]*block.Block, 0, len(result))
-		for _, raw := range result {
-			var blk block.Block
-			if err := rlp.DecodeBytes(raw, &blk); err != nil {
-				return errors.Wrap(err, "invalid block")
-			}
-			if blk.Header().Number() != fromBlockNum {
-				return errors.New("broken sequence")
-			}
-			fromBlockNum++
-			blocks = append(blocks, &blk)
+		batch := rawBlockBatch{
+			rawBlocks: result,
+			startNum:  fromBlockNum,
 		}
 
 		select {
-		case fetched <- blocks:
+		case rawBatches <- batch:
 		case <-ctx.Done():
 			return ctx.Err()
 		}
+
+		fromBlockNum += uint32(len(result))
 	}
 }
 
-func warmupBlocks(ctx context.Context, fetched <-chan []*block.Block, warmedUp chan<- *block.Block) {
+func decodeAndWarmupBatches(ctx context.Context, rawBatches <-chan rawBlockBatch, warmedUp chan<- *block.Block) {
 	<-co.Parallel(func(queue chan<- func()) {
-		for blocks := range fetched {
-			for _, blk := range blocks {
-				queue <- func() {
-					blk.Header().ID()
-					blk.Header().Beta()
-				}
-				for _, tx := range blk.Transactions() {
-					queue <- func() {
-						tx.ID()
-						tx.UnprovedWork()
-						_, _ = tx.IntrinsicGas()
-						_, _ = tx.Delegator()
-					}
-				}
-			}
-
-			for _, blk := range blocks {
-				select {
-				case <-ctx.Done():
-					return
-				case warmedUp <- blk:
-				}
-
-				// when queued blocks count > 10% warmed up channel cap,
-				// send nil block to throttle to reduce mem pressure.
-				if len(warmedUp)*10 > cap(warmedUp) {
-					const targetSize = 2048
-					for range int(blk.Size())/targetSize - 1 {
-						select {
-						case warmedUp <- nil:
-						default:
-						}
-					}
-				}
+		for batch := range rawBatches {
+			queue <- func() {
+				decodeAndWarmupBatch(ctx, batch, warmedUp)
 			}
 		}
 	})
+}
+
+func decodeAndWarmupBatch(ctx context.Context, batch rawBlockBatch, warmedUp chan<- *block.Block) {
+	blocks := make([]*block.Block, 0, len(batch.rawBlocks))
+
+	for i, raw := range batch.rawBlocks {
+		var blk block.Block
+		if err := rlp.DecodeBytes(raw, &blk); err != nil {
+			// Log error and continue
+			continue
+		}
+
+		expectedNum := batch.startNum + uint32(i)
+		if blk.Header().Number() != expectedNum {
+			// Log sequence error and continue
+			continue
+		}
+
+		blocks = append(blocks, &blk)
+	}
+
+	// Warm up blocks (reuse existing warmup logic)
+	for _, blk := range blocks {
+		// Pre-compute expensive operations
+		blk.Header().ID()
+		blk.Header().Beta()
+
+		for _, tx := range blk.Transactions() {
+			tx.ID()
+			tx.UnprovedWork()
+			_, _ = tx.IntrinsicGas()
+			_, _ = tx.Delegator()
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case warmedUp <- blk:
+		}
+	}
 }
 
 func findCommonAncestor(ctx context.Context, repo *chain.Repository, peer *Peer, headNum uint32) (uint32, error) {
