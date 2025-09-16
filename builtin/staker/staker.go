@@ -335,7 +335,7 @@ func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, am
 
 func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, amount uint64) error {
 	logger.Debug("decreasing stake", "endorser", endorser, "validator", validator, "amount", amount)
-	if amount > MaxStakeVET {
+	if amount > MaxStakeVET-MinStakeVET {
 		return NewReverts("decrease amount is too large")
 	}
 
