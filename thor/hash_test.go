@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package thor_test
+package thor
 
 import (
 	"hash"
@@ -13,8 +13,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/sha3"
-
-	"github.com/vechain/thor/v2/thor"
 )
 
 func BenchmarkHash(b *testing.B) {
@@ -29,7 +27,7 @@ func BenchmarkHash(b *testing.B) {
 		}
 
 		k := sha3.NewLegacyKeccak256().(keccakState)
-		var b32 thor.Bytes32
+		var b32 Bytes32
 		for b.Loop() {
 			k.Write(data)
 			k.Read(b32[:])
@@ -39,7 +37,7 @@ func BenchmarkHash(b *testing.B) {
 
 	b.Run("blake2b", func(b *testing.B) {
 		for b.Loop() {
-			thor.Blake2b(data)
+			Blake2b(data)
 		}
 	})
 }
@@ -49,13 +47,13 @@ func BenchmarkBlake2b(b *testing.B) {
 	rand.New(rand.NewSource(1)).Read(data) //#nosec G404
 	b.Run("Blake2b", func(b *testing.B) {
 		for b.Loop() {
-			thor.Blake2b(data).Bytes()
+			Blake2b(data).Bytes()
 		}
 	})
 
 	b.Run("BlakeFn", func(b *testing.B) {
 		for b.Loop() {
-			thor.Blake2bFn(func(w io.Writer) {
+			Blake2bFn(func(w io.Writer) {
 				w.Write(data)
 			})
 		}
@@ -63,7 +61,7 @@ func BenchmarkBlake2b(b *testing.B) {
 }
 
 func TestNewBlake2b(t *testing.T) {
-	hasher := thor.NewBlake2b()
+	hasher := NewBlake2b()
 	if hasher == nil {
 		t.Error("NewBlake2b returned nil")
 	}
@@ -81,13 +79,13 @@ func TestBlake2b(t *testing.T) {
 	multipleData := [][]byte{[]byte("multi"), []byte("ple"), []byte("data")}
 
 	// Single slice of data
-	singleHash := thor.Blake2b(singleData)
+	singleHash := Blake2b(singleData)
 	if len(singleHash) != 32 {
 		t.Errorf("Expected hash length of 32, got %d", len(singleHash))
 	}
 
 	// Multiple slices of data
-	multiHash := thor.Blake2b(multipleData...)
+	multiHash := Blake2b(multipleData...)
 	if len(multiHash) != 32 {
 		t.Errorf("Expected hash length of 32, got %d", len(multiHash))
 	}
@@ -99,11 +97,11 @@ func TestBlake2b(t *testing.T) {
 }
 
 func TestBlake2bFn(t *testing.T) {
-	h := thor.Blake2bFn(func(w io.Writer) {
+	h := Blake2bFn(func(w io.Writer) {
 		w.Write([]byte("custom writer"))
 	})
 
-	assert.Equal(t, thor.Blake2b([]byte("custom writer")), h)
+	assert.Equal(t, Blake2b([]byte("custom writer")), h)
 }
 
 func TestKeccak256(t *testing.T) {
@@ -111,13 +109,13 @@ func TestKeccak256(t *testing.T) {
 	multipleData := [][]byte{[]byte("multi"), []byte("ple"), []byte("data")}
 
 	// Single slice of data
-	singleHash := thor.Keccak256(singleData)
+	singleHash := Keccak256(singleData)
 	if len(singleHash) != 32 {
 		t.Errorf("Expected hash length of 32, got %d", len(singleHash))
 	}
 
 	// Multiple slices of data
-	multiHash := thor.Keccak256(multipleData...)
+	multiHash := Keccak256(multipleData...)
 	if len(multiHash) != 32 {
 		t.Errorf("Expected hash length of 32, got %d", len(multiHash))
 	}
