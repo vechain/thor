@@ -110,7 +110,7 @@ func run(ctx *cli.Context) error {
 		}
 		fmt.Println("metrics server listening", url)
 		defer closeFunc()
-		pollMetrics(exitSignal, net)
+		go pollMetrics(exitSignal, net)
 	}
 
 	<-exitSignal.Done()
