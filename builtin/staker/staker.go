@@ -289,9 +289,6 @@ func (s *Staker) SignalExit(validator thor.Address, endorser thor.Address, curre
 // the weight will be recalculated at the end of the staking period, by the housekeep function
 func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, amount uint64) error {
 	logger.Debug("increasing stake", "endorser", endorser, "validator", validator, "amount", amount)
-	if amount > MaxStakeVET {
-		return NewReverts("increase amount is too large")
-	}
 
 	val, err := s.getValidationOrRevert(validator)
 	if err != nil {
@@ -462,10 +459,6 @@ func (s *Staker) AddDelegation(
 
 	if stake <= 0 {
 		return nil, NewReverts("stake must be greater than 0")
-	}
-	maxStake := MaxStakeVET - MinStakeVET
-	if stake > maxStake {
-		return nil, NewReverts("total stake would exceed maximum")
 	}
 
 	if multiplier == 0 {
@@ -648,6 +641,9 @@ func (s *Staker) IncreaseDelegatorsReward(node thor.Address, reward *big.Int, cu
 }
 
 func (s *Staker) validateStakeIncrease(validator thor.Address, validation *validation.Validation, amount uint64) error {
+	if amount > MaxStakeVET {
+		return NewReverts("increase amount is too large")
+	}
 	agg, err := s.aggregationService.GetAggregation(validator)
 	if err != nil {
 		return err
