@@ -17,10 +17,11 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/pkg/errors"
+	cli "gopkg.in/urfave/cli.v1"
+
 	"github.com/vechain/thor/v2/cmd/thor/httpserver"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/metrics"
-	cli "gopkg.in/urfave/cli.v1"
 )
 
 var (
