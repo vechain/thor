@@ -3,14 +3,13 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package genesis_test
+package genesis
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -19,7 +18,7 @@ import (
 
 func TestTestnetGenesis(t *testing.T) {
 	db := muxdb.NewMem()
-	gene := genesis.NewTestnet()
+	gene := NewTestnet()
 
 	b0, _, _, err := gene.Build(state.NewStater(db))
 	assert.Nil(t, err)
