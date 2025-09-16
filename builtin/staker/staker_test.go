@@ -258,6 +258,15 @@ func (ts *TestSequence) AssertTotals(validationID thor.Address, expected *valida
 	return ts
 }
 
+func (ts *TestSequence) AssertGlobalWithdrawable(expected uint64) *TestSequence {
+	withdrawable, err := ts.staker.globalStatsService.GetWithdrawableStake()
+	assert.NoError(ts.t, err, "failed to get global withdrawable")
+
+	assert.Equal(ts.t, expected, withdrawable, "total withdrawable mismatch")
+
+	return ts
+}
+
 func (ts *TestSequence) ActivateNext(block uint32) *TestSequence {
 	mbp, err := ts.staker.params.Get(thor.KeyMaxBlockProposers)
 	assert.NoError(ts.t, err, "failed to get max block proposers")
@@ -537,6 +546,7 @@ func TestValidation_IncreaseStake_StatusExit(t *testing.T) {
 	end := id
 
 	assert.NoError(t, staker.validationService.Add(id, end, thor.MediumStakingPeriod(), 100))
+	assert.NoError(t, staker.globalStatsService.AddQueued(100))
 
 	_, err := staker.WithdrawStake(id, end, 1)
 	assert.NoError(t, err)
@@ -677,6 +687,9 @@ func TestValidation_DecreaseStake_ActiveSuccess(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(100), v.PendingUnlockVET)
 	assert.Equal(t, MinStakeVET+100, v.LockedVET)
+	withdrawable, err := staker.globalStatsService.GetWithdrawableStake()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(0), withdrawable)
 }
 
 func TestValidation_DecreaseStake_QueuedTooLowNextPeriod(t *testing.T) {
@@ -700,6 +713,9 @@ func TestValidation_DecreaseStake_QueuedSuccess(t *testing.T) {
 	assert.NoError(t, staker.AddValidation(id, end, thor.MediumStakingPeriod(), MinStakeVET+100))
 
 	assert.NoError(t, staker.DecreaseStake(id, end, 100))
+	withdrawable, err := staker.globalStatsService.GetWithdrawableStake()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(0), withdrawable)
 
 	v, err := staker.GetValidation(id)
 	assert.NoError(t, err)
@@ -775,8 +791,14 @@ func TestDelegation_SignalExit(t *testing.T) {
 
 	_, _, err = staker.GetDelegation(id)
 	assert.NoError(t, err)
+	withdrawable, err := staker.globalStatsService.GetWithdrawableStake()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(0), withdrawable)
 
 	assert.NoError(t, staker.SignalDelegationExit(id, 10))
+	withdrawable, err = staker.globalStatsService.GetWithdrawableStake()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(0), withdrawable)
 
 	del2, _, err := staker.GetDelegation(id)
 	assert.NoError(t, err)
@@ -795,11 +817,23 @@ func TestDelegation_SignalExit_AlreadyWithdrawn(t *testing.T) {
 	id, err := staker.AddDelegation(v, 3, 100, 10)
 	assert.NoError(t, err)
 
+	withdrawable, err := staker.globalStatsService.GetWithdrawableStake()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(0), withdrawable)
+
 	_, _, err = staker.GetDelegation(id)
 	assert.NoError(t, err)
+
+	withdrawable, err = staker.globalStatsService.GetWithdrawableStake()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(0), withdrawable)
 	amt, err := staker.WithdrawDelegation(id, 10)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(3), amt)
+
+	withdrawable, err = staker.globalStatsService.GetWithdrawableStake()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(0), withdrawable)
 
 	assert.ErrorContains(t, staker.SignalDelegationExit(id, 10), "delegation has already been withdrawn")
 }

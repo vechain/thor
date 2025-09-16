@@ -6,27 +6,32 @@
 package globalstats
 
 import (
+	"errors"
+
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/thor"
 )
 
 var (
-	slotLocked = thor.BytesToBytes32([]byte(("total-weighted-stake")))
-	slotQueued = thor.BytesToBytes32([]byte(("queued-stake")))
+	slotLocked       = thor.BytesToBytes32([]byte(("total-weighted-stake")))
+	slotQueued       = thor.BytesToBytes32([]byte(("queued-stake")))
+	slotWithdrawable = thor.BytesToBytes32([]byte(("withdrawable-stake")))
 )
 
 // Service manages contract-wide staking totals.
 // Tracks both locked stake (from active validators/delegations) and queued stake (pending activation).
 type Service struct {
-	locked *solidity.Raw[*stakes.WeightedStake]
-	queued *solidity.Raw[uint64]
+	locked       *solidity.Raw[*stakes.WeightedStake]
+	queued       *solidity.Raw[uint64]
+	withdrawable *solidity.Raw[uint64]
 }
 
 func New(sctx *solidity.Context) *Service {
 	return &Service{
-		locked: solidity.NewRaw[*stakes.WeightedStake](sctx, slotLocked),
-		queued: solidity.NewRaw[uint64](sctx, slotQueued),
+		locked:       solidity.NewRaw[*stakes.WeightedStake](sctx, slotLocked),
+		queued:       solidity.NewRaw[uint64](sctx, slotQueued),
+		withdrawable: solidity.NewRaw[uint64](sctx, slotWithdrawable),
 	}
 }
 
@@ -68,6 +73,9 @@ func (s *Service) ApplyRenewal(renewal *Renewal) error {
 	if err := s.queued.Update(queued); err != nil {
 		return err
 	}
+	if err := s.AddWithdrawable(renewal.LockedDecrease.VET); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -95,6 +103,9 @@ func (s *Service) ApplyExit(exit *Exit) error {
 	if err := s.queued.Update(queued); err != nil {
 		return err
 	}
+	if err := s.AddWithdrawable(exit.ExitedTVL.VET); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -118,6 +129,9 @@ func (s *Service) RemoveQueued(stake uint64) error {
 		return err
 	}
 
+	if queued < stake {
+		return errors.New("stake cannot be grater than queued")
+	}
 	queued -= stake
 	// queued here is already touched by addQueued
 	return s.queued.Update(queued)
@@ -136,4 +150,37 @@ func (s *Service) GetLockedStake() (uint64, uint64, error) {
 // GetQueuedStake returns the total VET and weight waiting to be activated.
 func (s *Service) GetQueuedStake() (uint64, error) {
 	return s.queued.Get()
+}
+
+// AddWithdravable increases withdrawable totals when stake becomes withdrwable
+func (s *Service) AddWithdrawable(stake uint64) error {
+	withdrawable, err := s.withdrawable.Get()
+	if err != nil {
+		return err
+	}
+
+	withdrawable += stake
+	// for the initial state, use upsert to handle correct gas cost
+	return s.withdrawable.Upsert(withdrawable)
+}
+
+// RemoveWithdrawable decreases withdrawable totals when stake is withdrawn.
+func (s *Service) RemoveWithdrawable(stake uint64) error {
+	withdrawable, err := s.withdrawable.Get()
+	if err != nil {
+		return err
+	}
+
+	if withdrawable < stake {
+		println("with", withdrawable, stake)
+		return errors.New("stake cannot be grater than withdrawable")
+	}
+	withdrawable -= stake
+	// witdrawable here is already touched by addWithdrawable
+	return s.withdrawable.Update(withdrawable)
+}
+
+// GetWithdrawableStake returns the total VET to be withdrawn.
+func (s *Service) GetWithdrawableStake() (uint64, error) {
+	return s.withdrawable.Get()
 }

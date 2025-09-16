@@ -412,6 +412,13 @@ func (s *Staker) WithdrawStake(validator thor.Address, endorser thor.Address, cu
 		}
 	}
 
+	if val.CooldownVET > 0 {
+		err = s.globalStatsService.RemoveWithdrawable(val.CooldownVET)
+		if err != nil {
+			return 0, err
+		}
+	}
+
 	logger.Info("withdrew validator staker", "validator", validator)
 	return stake, nil
 }
@@ -622,6 +629,10 @@ func (s *Staker) WithdrawDelegation(
 		}
 
 		if err = s.globalStatsService.RemoveQueued(withdrawableStake); err != nil {
+			return 0, err
+		}
+	} else {
+		if err = s.globalStatsService.RemoveWithdrawable(withdrawableStake); err != nil {
 			return 0, err
 		}
 	}

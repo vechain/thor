@@ -1928,7 +1928,9 @@ func TestStaker_Housekeep_Exit_Decrements_Leader_Group_Size(t *testing.T) {
 		ActivateNext(0).
 		SignalExit(addr1, addr1, 10).
 		SignalExit(addr2, addr2, 10).
+		AssertGlobalWithdrawable(0).
 		Housekeep(period).
+		AssertGlobalWithdrawable(stake).
 		AssertLeaderGroupSize(1).
 		AssertFirstActive(addr2)
 
@@ -1937,7 +1939,9 @@ func TestStaker_Housekeep_Exit_Decrements_Leader_Group_Size(t *testing.T) {
 
 	block := period + thor.EpochLength()
 	newTestSequence(t, staker).
+		AssertGlobalWithdrawable(stake).
 		Housekeep(block).
+		AssertGlobalWithdrawable(stake * 2).
 		AssertLeaderGroupSize(0).
 		AssertFirstActive(thor.Address{})
 
@@ -1953,7 +1957,7 @@ func TestStaker_Housekeep_Exit_Decrements_Leader_Group_Size(t *testing.T) {
 	assertValidation(t, staker, addr3).Status(validation.StatusActive)
 
 	block = block + period
-	newTestSequence(t, staker).Housekeep(block)
+	newTestSequence(t, staker).Housekeep(block).AssertGlobalWithdrawable(stake * 3)
 
 	assertValidation(t, staker, addr3).Status(validation.StatusExit)
 }
@@ -2231,13 +2235,16 @@ func Test_GetValidatorTotals_ValidatorExiting(t *testing.T) {
 
 	vStake.Weight += validators[0].LockedVET
 	newTestSequence(t, staker).
+		AssertGlobalWithdrawable(0).
 		Housekeep(validator.Period).
+		AssertGlobalWithdrawable(0).
 		AssertTotals(validator.ID, &validation.Totals{
 			TotalLockedStake:  vStake.VET + dStake.VET,
 			TotalLockedWeight: vStake.Weight + dStake.Weight,
 			NextPeriodWeight:  vStake.Weight + dStake.Weight,
 		}).
 		SignalExit(validator.ID, validator.Endorser, 10).
+		AssertGlobalWithdrawable(0).
 		AssertTotals(validator.ID, &validation.Totals{
 			TotalLockedStake:  vStake.VET + dStake.VET,
 			TotalLockedWeight: vStake.Weight + dStake.Weight,
@@ -2266,9 +2273,13 @@ func Test_GetValidatorTotals_DelegatorExiting_ThenValidator(t *testing.T) {
 		NextPeriodWeight:  vStake.Weight + dStake.Weight + vStake.VET,
 	})
 
+	staker.globalStatsService.GetWithdrawableStake()
+
 	vStake.Weight += validators[0].LockedVET
 	newTestSequence(t, staker).
+		AssertGlobalWithdrawable(0).
 		Housekeep(validator.Period).
+		AssertGlobalWithdrawable(0).
 		AssertTotals(validator.ID, &validation.Totals{
 			TotalLockedStake:  vStake.VET + dStake.VET,
 			TotalLockedWeight: vStake.Weight + dStake.Weight,
@@ -2276,6 +2287,7 @@ func Test_GetValidatorTotals_DelegatorExiting_ThenValidator(t *testing.T) {
 			NextPeriodWeight:  vStake.Weight + dStake.Weight,
 		}).
 		SignalDelegationExit(delegationID, validator.Period+1).
+		AssertGlobalWithdrawable(0).
 		AssertTotals(validator.ID, &validation.Totals{
 			TotalLockedStake:  vStake.VET + dStake.VET,
 			TotalLockedWeight: vStake.Weight + dStake.Weight,
@@ -2284,6 +2296,7 @@ func Test_GetValidatorTotals_DelegatorExiting_ThenValidator(t *testing.T) {
 			NextPeriodWeight:  vStake.Weight - vStake.VET,
 		}).
 		SignalExit(validator.ID, validator.Endorser, validator.Period+1).
+		AssertGlobalWithdrawable(0).
 		AssertTotals(validator.ID, &validation.Totals{
 			TotalLockedStake:  vStake.VET + dStake.VET,
 			TotalLockedWeight: vStake.Weight + dStake.Weight,
@@ -2291,6 +2304,7 @@ func Test_GetValidatorTotals_DelegatorExiting_ThenValidator(t *testing.T) {
 			NextPeriodWeight:  vStake.Weight + dStake.Weight - vStake.Weight - dStake.Weight,
 		}).
 		Housekeep(validator.Period*2).
+		AssertGlobalWithdrawable(validator.LockedVET+dStake.VET).
 		AssertTotals(validator.ID, &validation.Totals{
 			TotalLockedStake:  0,
 			TotalLockedWeight: 0,
@@ -2451,14 +2465,18 @@ func TestStaker_HasDelegations(t *testing.T) {
 		// delegation added, housekeeping not performed, should be false
 		AddDelegation(validator, dStake, 200, delegationID, 10).
 		AssertHasDelegations(validator, false).
+		AssertGlobalWithdrawable(0).
 		// housekeeping performed, should be true
 		Housekeep(stakingPeriod).
+		AssertGlobalWithdrawable(0).
 		AssertHasDelegations(validator, true).
 		// signal exit, housekeeping not performed, should still be true
 		SignalDelegationExit(delegationID, stakingPeriod*1).
+		AssertGlobalWithdrawable(0).
 		AssertHasDelegations(validator, true).
 		// housekeeping performed, should be false
 		Housekeep(stakingPeriod*2).
+		AssertGlobalWithdrawable(dStake).
 		AssertHasDelegations(validator, false)
 }
 
@@ -2706,7 +2724,10 @@ func TestStaker_TestWeights(t *testing.T) {
 	assert.Equal(t, stake*2+dStake.Weight*2, totals2.NextPeriodWeight)
 
 	// exit queued
-	newTestSequence(t, staker).WithdrawDelegation(delegationID3, dStake.VET, 10)
+	newTestSequence(t, staker).
+		AssertGlobalWithdrawable(0).
+		WithdrawDelegation(delegationID3, dStake.VET, 10).
+		AssertGlobalWithdrawable(0)
 
 	lStake, lWeight, err = staker.LockedStake()
 	assert.NoError(t, err)
@@ -2737,7 +2758,9 @@ func TestStaker_TestWeights(t *testing.T) {
 	stakeIncrease := uint64(1000)
 	newTestSequence(t, staker).WithdrawDelegation(delegationID4, dStake.VET, 10)
 	newTestSequence(t, staker).IncreaseStake(validator, val.Endorser, stakeIncrease)
-	newTestSequence(t, staker).Housekeep(stakingPeriod * 3)
+	newTestSequence(t, staker).AssertGlobalWithdrawable(0).
+		Housekeep(stakingPeriod * 3).
+		AssertGlobalWithdrawable(0)
 
 	lStake, lWeight, err = staker.LockedStake()
 	assert.NoError(t, err)
@@ -2768,7 +2791,9 @@ func TestStaker_TestWeights(t *testing.T) {
 
 	// exit first active, multiplier should not change
 	newTestSequence(t, staker).SignalDelegationExit(delegationID, stakingPeriod*3)
-	newTestSequence(t, staker).Housekeep(stakingPeriod * 4)
+	newTestSequence(t, staker).AssertGlobalWithdrawable(0).
+		Housekeep(stakingPeriod * 4).
+		AssertGlobalWithdrawable(dStake.VET)
 
 	lStake, lWeight, err = staker.LockedStake()
 	assert.NoError(t, err)
@@ -2805,7 +2830,9 @@ func TestStaker_TestWeights(t *testing.T) {
 	assert.Equal(t, uint64(0), totals.TotalQueuedStake)
 	assert.Equal(t, increasedLockedWeight-increasedLocked, totals.NextPeriodWeight)
 
-	newTestSequence(t, staker).Housekeep(stakingPeriod * 5)
+	newTestSequence(t, staker).AssertGlobalWithdrawable(dStake.VET).
+		Housekeep(stakingPeriod * 5).
+		AssertGlobalWithdrawable(dStake.VET * 2)
 	assert.NoError(t, err)
 
 	lStake, lWeight, err = staker.LockedStake()
@@ -3051,7 +3078,9 @@ func TestStaker_TestWeights_DecreaseStake(t *testing.T) {
 	assert.Equal(t, baseStake+expectedWeight-stakeDecrease*2, totals.NextPeriodWeight)
 
 	stakingPeriod := thor.MediumStakingPeriod()
-	newTestSequence(t, staker).Housekeep(stakingPeriod * 2)
+	newTestSequence(t, staker).AssertGlobalWithdrawable(0).
+		Housekeep(stakingPeriod * 2).
+		AssertGlobalWithdrawable(stakeDecrease)
 
 	lStake, lWeight, err = staker.LockedStake()
 	assert.NoError(t, err)
@@ -3093,7 +3122,9 @@ func TestStaker_TestWeights_DecreaseStake(t *testing.T) {
 	assert.Equal(t, uint64(0), totals.TotalQueuedStake)
 	assert.Equal(t, expectedWeight-delStake*2-baseStake+stakeDecrease, totals.NextPeriodWeight)
 
-	newTestSequence(t, staker).Housekeep(stakingPeriod * 3)
+	newTestSequence(t, staker).AssertGlobalWithdrawable(stakeDecrease).
+		Housekeep(stakingPeriod * 3).
+		AssertGlobalWithdrawable(stakeDecrease + delStake)
 	lStake, lWeight, err = staker.LockedStake()
 	assert.NoError(t, err)
 
@@ -3175,7 +3206,9 @@ func TestStaker_OfflineValidator(t *testing.T) {
 	assert.Equal(t, expectedExitBlock, *val1.ExitBlock)
 
 	// validator should exit here
-	testSetup.Housekeep(expectedExitBlock)
+	testSetup.AssertGlobalWithdrawable(0).
+		Housekeep(expectedExitBlock).
+		AssertGlobalWithdrawable(val1.LockedVET)
 
 	val1, err = testSetup.staker.GetValidation(validator1)
 	assert.NoError(t, err)
