@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/v2/builtin/staker/aggregation"
+	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -32,12 +33,9 @@ var baseVal = Validation{
 
 func TestValidation_Totals(t *testing.T) {
 	agg := aggregation.Aggregation{
-		LockedVET:     500,
-		LockedWeight:  1000,
-		PendingVET:    400,
-		PendingWeight: 800,
-		ExitingVET:    300,
-		ExitingWeight: 600,
+		Locked:  stakes.NewWeightedStake(500, 1000),
+		Pending: stakes.NewWeightedStake(400, 800),
+		Exiting: stakes.NewWeightedStake(300, 600),
 	}
 	totals, err := baseVal.Totals(&agg)
 	assert.NoError(t, err)

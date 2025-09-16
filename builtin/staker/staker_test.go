@@ -370,32 +370,32 @@ func assertAggregation(t *testing.T, staker *Staker, validationID thor.Address) 
 }
 
 func (aa *AggregationAssertions) PendingVET(expected uint64) *AggregationAssertions {
-	assert.Equal(aa.t, expected, aa.aggregation.PendingVET, "aggregation for validator %s pending VET mismatch", aa.validationID.String())
+	assert.Equal(aa.t, expected, aa.aggregation.Pending.VET, "aggregation for validator %s pending VET mismatch", aa.validationID.String())
 	return aa
 }
 
 func (aa *AggregationAssertions) PendingWeight(expected uint64) *AggregationAssertions {
-	assert.Equal(aa.t, expected, aa.aggregation.PendingWeight, "aggregation for validator %s pending weight mismatch", aa.validationID.String())
+	assert.Equal(aa.t, expected, aa.aggregation.Pending.Weight, "aggregation for validator %s pending weight mismatch", aa.validationID.String())
 	return aa
 }
 
 func (aa *AggregationAssertions) LockedVET(expected uint64) *AggregationAssertions {
-	assert.Equal(aa.t, expected, aa.aggregation.LockedVET, "aggregation for validator %s locked VET mismatch", aa.validationID.String())
+	assert.Equal(aa.t, expected, aa.aggregation.Locked.VET, "aggregation for validator %s locked VET mismatch", aa.validationID.String())
 	return aa
 }
 
 func (aa *AggregationAssertions) LockedWeight(expected uint64) *AggregationAssertions {
-	assert.Equal(aa.t, expected, aa.aggregation.LockedWeight, "aggregation for validator %s locked weight mismatch", aa.validationID.String())
+	assert.Equal(aa.t, expected, aa.aggregation.Locked.Weight, "aggregation for validator %s locked weight mismatch", aa.validationID.String())
 	return aa
 }
 
 func (aa *AggregationAssertions) ExitingVET(expected uint64) *AggregationAssertions {
-	assert.Equal(aa.t, expected, aa.aggregation.ExitingVET, "aggregation for validator %s exiting VET mismatch", aa.validationID.String())
+	assert.Equal(aa.t, expected, aa.aggregation.Exiting.VET, "aggregation for validator %s exiting VET mismatch", aa.validationID.String())
 	return aa
 }
 
 func (aa *AggregationAssertions) ExitingWeight(expected uint64) *AggregationAssertions {
-	assert.Equal(aa.t, expected, aa.aggregation.ExitingWeight, "aggregation for validator %s exiting weight mismatch", aa.validationID.String())
+	assert.Equal(aa.t, expected, aa.aggregation.Exiting.Weight, "aggregation for validator %s exiting weight mismatch", aa.validationID.String())
 	return aa
 }
 

@@ -38,10 +38,10 @@ func TestService_GetAggregation_ZeroInit(t *testing.T) {
 	agg, err := svc.GetAggregation(v)
 	assert.NoError(t, err)
 
-	assert.True(t, agg.LockedVET == 0 && agg.ExitingVET == 0 && agg.PendingVET == 0)
-	assert.Equal(t, uint64(0), agg.LockedVET)
-	assert.Equal(t, uint64(0), agg.PendingVET)
-	assert.Equal(t, uint64(0), agg.ExitingVET)
+	assert.True(t, agg.Locked.VET == 0 && agg.Exiting.VET == 0 && agg.Pending.VET == 0)
+	assert.Equal(t, uint64(0), agg.Locked.VET)
+	assert.Equal(t, uint64(0), agg.Pending.VET)
+	assert.Equal(t, uint64(0), agg.Exiting.VET)
 }
 
 func TestService_AddAndSub_Pending(t *testing.T) {
@@ -55,16 +55,16 @@ func TestService_AddAndSub_Pending(t *testing.T) {
 
 	agg, err := svc.GetAggregation(v)
 	assert.NoError(t, err)
-	assert.Equal(t, uint64(1000), agg.PendingVET)
-	assert.Equal(t, uint64(2000), agg.PendingWeight)
+	assert.Equal(t, uint64(1000), agg.Pending.VET)
+	assert.Equal(t, uint64(2000), agg.Pending.Weight)
 
 	err = svc.SubPendingVet(v, ws)
 	assert.NoError(t, err)
 
 	agg, err = svc.GetAggregation(v)
 	assert.NoError(t, err)
-	assert.Equal(t, uint64(0), agg.PendingVET)
-	assert.Equal(t, uint64(0), agg.PendingWeight)
+	assert.Equal(t, uint64(0), agg.Pending.VET)
+	assert.Equal(t, uint64(0), agg.Pending.Weight)
 }
 
 func TestService_Renew(t *testing.T) {
@@ -94,10 +94,10 @@ func TestService_Renew(t *testing.T) {
 
 	agg, err := svc.GetAggregation(v)
 	assert.NoError(t, err)
-	assert.Equal(t, uint64(2500), agg.LockedVET)    // 3000 + 500
-	assert.Equal(t, uint64(5000), agg.LockedWeight) // 6000 + 1000
-	assert.Equal(t, uint64(0), agg.PendingVET)
-	assert.Equal(t, uint64(0), agg.ExitingVET)
+	assert.Equal(t, uint64(2500), agg.Locked.VET)    // 3000 + 500
+	assert.Equal(t, uint64(5000), agg.Locked.Weight) // 6000 + 1000
+	assert.Equal(t, uint64(0), agg.Pending.VET)
+	assert.Equal(t, uint64(0), agg.Exiting.VET)
 }
 
 func TestService_Exit(t *testing.T) {
@@ -118,7 +118,7 @@ func TestService_Exit(t *testing.T) {
 
 	agg, err := svc.GetAggregation(v)
 	assert.NoError(t, err)
-	assert.True(t, agg.LockedVET == 0 && agg.ExitingVET == 0 && agg.PendingVET == 0)
+	assert.True(t, agg.Locked.VET == 0 && agg.Exiting.VET == 0 && agg.Pending.VET == 0)
 }
 
 func TestService_SignalExit(t *testing.T) {
@@ -130,8 +130,8 @@ func TestService_SignalExit(t *testing.T) {
 
 	agg, err := svc.GetAggregation(v)
 	assert.NoError(t, err)
-	assert.Equal(t, uint64(1500), agg.ExitingVET)
-	assert.Equal(t, uint64(3000), agg.ExitingWeight)
+	assert.Equal(t, uint64(1500), agg.Exiting.VET)
+	assert.Equal(t, uint64(3000), agg.Exiting.Weight)
 }
 
 func TestService_GetAggregation_Error(t *testing.T) {

@@ -166,7 +166,7 @@ func (s *Staker) HasDelegations(
 	}
 
 	// Only return true if there is locked VET in the aggregation.
-	return agg.LockedVET > 0, nil
+	return agg.Locked.VET > 0, nil
 }
 
 // GetDelegatorRewards returns reward amount for validator and staking period.

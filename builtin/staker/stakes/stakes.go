@@ -46,3 +46,10 @@ func (s *WeightedStake) Sub(new *WeightedStake) error {
 	s.Weight -= new.Weight
 	return nil
 }
+
+func (s *WeightedStake) Clone() *WeightedStake {
+	return &WeightedStake{
+		VET:    s.VET,
+		Weight: s.Weight,
+	}
+}
