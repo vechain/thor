@@ -203,7 +203,7 @@ func TestStaker_AddValidation_MinimumStake(t *testing.T) {
 
 	tooLow := MinStakeVET - 1
 	err := staker.AddValidation(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, tooLow)
-	assert.ErrorContains(t, err, "stake is out of range")
+	assert.ErrorContains(t, err, "stake is below minimum")
 	err = staker.AddValidation(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, MinStakeVET)
 	assert.NoError(t, err)
 }
@@ -213,7 +213,7 @@ func TestStaker_AddValidation_MaximumStake(t *testing.T) {
 
 	tooHigh := MaxStakeVET + 1
 	err := staker.AddValidation(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, tooHigh)
-	assert.ErrorContains(t, err, "stake is out of range")
+	assert.ErrorContains(t, err, "stake is above maximum")
 	err = staker.AddValidation(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, MaxStakeVET)
 	assert.NoError(t, err)
 }
