@@ -5,28 +5,31 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/p2p/discv5"
-	lru "github.com/hashicorp/golang-lru"
+
+	"github.com/vechain/thor/v2/metrics"
 )
 
-func pollMetrics(ctx context.Context, net *discv5.Network) {
-	ticker := time.NewTicker(20 * time.Second)
+var metricsPeerCount = metrics.GaugeVec("disco_peercount", []string{"id"})
 
-	cache, err := lru.NewARC(100)
-	if err != nil {
-		panic(err)
-	}
+func pollMetrics(ctx context.Context, net *discv5.Network) {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
-			ticker.Stop()
 			return
 		case <-ticker.C:
-			nodes := make([]*discv5.Node, 16)
+			nodes := make([]*discv5.Node, 1000)
 			net.ReadRandomNodes(nodes)
+			var read int64
 			for _, n := range nodes {
-				cache.Add(n.ID.String(), true)
+				if n == nil {
+					break
+				}
+				read++
 			}
+			metricsPeerCount.SetWithLabel(read, map[string]string{"id": net.Self().ID.String()})
 		}
 	}
 }

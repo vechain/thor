@@ -20,7 +20,6 @@ import (
 	cli "gopkg.in/urfave/cli.v1"
 
 	"github.com/vechain/thor/v2/cmd/thor/httpserver"
-	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/metrics"
 )
 
@@ -37,6 +36,8 @@ var (
 		natFlag,
 		netRestrictFlag,
 		verbosityFlag,
+		enableMetricsFlag,
+		metricsAddrFlag,
 	}
 )
 
@@ -107,7 +108,7 @@ func run(ctx *cli.Context) error {
 		if err != nil {
 			return fmt.Errorf("unable to start metrics server - %w", err)
 		}
-		log.Info("metrics server started", "url", url)
+		fmt.Println("metrics server listening", url)
 		defer closeFunc()
 		pollMetrics(exitSignal, net)
 	}
