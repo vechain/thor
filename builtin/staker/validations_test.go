@@ -7,6 +7,7 @@
 package staker
 
 import (
+	"math"
 	"math/big"
 	"math/rand/v2"
 	"testing"
@@ -3336,4 +3337,17 @@ func TestValidation_NegativeCases(t *testing.T) {
 
 	_, err = staker.GetValidation(node1)
 	assert.Error(t, err)
+}
+
+func TestValidation_DecreaseOverflow(t *testing.T) {
+	staker, _ := newStaker(t, 0, 1, false)
+	addr := datagen.RandAddress()
+	endorser := datagen.RandAddress()
+
+	newTestSequence(t, staker).AddValidation(addr, endorser, thor.MediumStakingPeriod(), MinStakeVET)
+
+	overflowDecrease := math.MaxUint64 - MinStakeVET - 1
+	assert.ErrorContains(t, staker.DecreaseStake(addr, endorser, overflowDecrease), "decrease amount is too large")
+
+	assertValidation(t, staker, addr).QueuedVET(MinStakeVET)
 }
