@@ -111,7 +111,7 @@ release:
     - disco
     - thor
   mode: append
-  prerelease: '{{ .IsNightly }}true{{ else }}false{{ end }}'
+  prerelease: '{{ if .IsNightly }}true{{ else }}false{{ end }}'
   make_latest: '{{ if .IsRelease }}true{{ else }}false{{ end }}'
   header: |
     Thor is the official Golang client for VeChainThor, the public blockchain powering the VeChain ecosystem. VeChainThor is designed for real-world adoption, enabling scalable, low-cost, and sustainable applications.
