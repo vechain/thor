@@ -67,7 +67,6 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
           GPG_FINGERPRINT: ${{ steps.setup.outputs.gpg_fingerprint }}
-          COSIGN_KEY: ${{ secrets.COSIGN_KEY }}
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
           SNAPSHOT_TAG: ${{ steps.setup.outputs.snapshot_tag }}
           SKIP_DOCKER_PUSH: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
@@ -160,7 +159,6 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
           GPG_FINGERPRINT: ${{ steps.setup.outputs.gpg_fingerprint }}
-          COSIGN_KEY: ${{ secrets.COSIGN_KEY }}
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
           SNAPSHOT_TAG: ${{ steps.setup.outputs.snapshot_tag }}
           SKIP_DOCKER_PUSH: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
