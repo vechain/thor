@@ -89,7 +89,12 @@ func TestService_ApplyExit(t *testing.T) {
 		ExitedTVL:      stakes.NewWeightedStake(400, 800),
 		QueuedDecrease: 300,
 	}
-	assert.NoError(t, svc.ApplyExit(exit))
+
+	valExit := &Exit{
+		ExitedTVL:      stakes.NewWeightedStake(200, 400),
+		QueuedDecrease: 0,
+	}
+	assert.NoError(t, svc.ApplyExit(valExit.ExitedTVL.VET, exit))
 
 	lockedV, lockedW, err := svc.GetLockedStake()
 	assert.NoError(t, err)
@@ -144,4 +149,33 @@ func TestService_GetWithdrawableStake(t *testing.T) {
 	withdrawable, err = svc.GetWithdrawableStake()
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(1), withdrawable)
+}
+
+func TestService_GetCooldownStake(t *testing.T) {
+	svc, _, _ := newSvc()
+
+	cooldown, err := svc.GetCooldownStake()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(0), cooldown)
+
+	err = svc.AddCooldown(15)
+	assert.NoError(t, err)
+
+	cooldown, err = svc.GetCooldownStake()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(15), cooldown)
+
+	err = svc.RemoveCooldown(9)
+	assert.NoError(t, err)
+
+	cooldown, err = svc.GetCooldownStake()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(6), cooldown)
+
+	err = svc.RemoveCooldown(9)
+	assert.ErrorContains(t, err, "cooldown underflow occurred")
+
+	cooldown, err = svc.GetCooldownStake()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(6), cooldown)
 }
