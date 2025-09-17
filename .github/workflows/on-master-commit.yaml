@@ -54,11 +54,10 @@ jobs:
       - lint
       - license-check
     permissions:
-      # TODO: are these really needed?
-      contents: write
+      contents: read
       packages: write
-      id-token: write
-      attestations: write
+      id-token: read
+      attestations: read
 
   notify-slack:
     name: Notify Slack

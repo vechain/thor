@@ -1,0 +1,16 @@
+name: On Release
+
+on:
+  push:
+    tags:
+      - v*
+
+jobs:
+  publish:
+    uses: ./.github/workflows/goreleaser.yaml
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+    secrets: inherit

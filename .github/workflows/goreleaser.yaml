@@ -1,13 +1,7 @@
 name: GoReleaser
 
 on:
-  push:
-    tags:
-      - v*
-  # for master branch - publish to ghcr.io only, no docker hub
   workflow_call:
-  # for feature branches - publish to ghcr.io only, no docker hub
-  workflow_dispatch:
 
 jobs:
   prepare:
@@ -29,10 +23,6 @@ jobs:
           - runs-on: windows-latest
             go-arch: amd64
             go-os: windows
-
-    permissions:
-      contents: write
-      packages: write
 
     environment: ${{ startsWith(github.ref, 'refs/tags/') && 'docker-publish' || '' }}
     steps:
@@ -92,12 +82,6 @@ jobs:
     environment: ${{ startsWith(github.ref, 'refs/tags/') && 'docker-publish' || '' }}
 
     if: ${{ github.event_name != 'pull_request' }}
-
-    permissions:
-      contents: write
-      packages: write
-      id-token: write
-      attestations: write
 
     steps:
       - name: Checkout code

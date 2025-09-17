@@ -46,13 +46,12 @@ jobs:
       thor_version: ${{ github.event.pull_request.head.sha }}
 
   # This doesn't publish the image, it just tests the publishing workflow (build the image / tags / labels)
-  test-docker-publish:
-    name: Test Docker Publish
+  test-publish:
+    name: Test Build (no publish) Docker Image
     uses: ./.github/workflows/goreleaser.yaml
     secrets: inherit
     permissions:
-      # TODO: are these really needed?
-      contents: write
-      packages: write
-      id-token: write
-      attestations: write
+      contents: read
+      packages: read
+      id-token: read
+      attestations: read
