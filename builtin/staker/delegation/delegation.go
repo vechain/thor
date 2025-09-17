@@ -34,7 +34,6 @@ func (d *Delegation) Started(val *validation.Validation, currentBlock uint32) (b
 	if err != nil {
 		return false, err
 	}
-
 	return currentStakingPeriod >= d.FirstIteration, nil
 }
 
