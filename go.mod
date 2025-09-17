@@ -1,6 +1,8 @@
 module github.com/vechain/thor/v2
 
-go 1.24
+go 1.24.0
+
+toolchain go1.24.2
 
 require (
 	github.com/beevik/ntp v0.2.0
@@ -57,6 +59,7 @@ require (
 	github.com/prometheus/procfs v0.12.0 // indirect
 	github.com/rjeczalik/notify v0.9.3 // indirect
 	golang.org/x/net v0.38.0 // indirect
+	golang.org/x/sync v0.17.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect

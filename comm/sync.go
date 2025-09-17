@@ -9,12 +9,13 @@ import (
 	"context"
 	"fmt"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/comm/proto"
 )
 
@@ -33,23 +34,30 @@ func download(_ctx context.Context, repo *chain.Repository, peer *Peer, headNum 
 		ctx, cancel = context.WithCancel(_ctx)
 		rawBatches  = make(chan rawBlockBatch, 10)
 		warmedUp    = make(chan *block.Block, 2048)
-		goes        co.Goes
-		fetchErr    error
 	)
-	defer goes.Wait()
-	goes.Go(func() {
-		defer close(rawBatches)
-		fetchErr = fetchRawBlockBatches(ctx, peer, ancestor+1, rawBatches)
-	})
-	goes.Go(func() {
-		defer close(warmedUp)
-		fetchErr = decodeAndWarmupBatches(ctx, rawBatches, warmedUp)
-	})
 	defer cancel()
-	if err := handler(ctx, warmedUp); err != nil {
+
+	g, ctx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		defer close(rawBatches)
+		return fetchRawBlockBatches(ctx, peer, ancestor+1, rawBatches)
+	})
+
+	g.Go(func() error {
+		defer close(warmedUp)
+		return decodeAndWarmupBatches(ctx, rawBatches, warmedUp)
+	})
+
+	g.Go(func() error {
+		return handler(ctx, warmedUp)
+	})
+
+	if err := g.Wait(); err != nil {
 		return err
 	}
-	return fetchErr
+
+	return nil
 }
 
 func fetchRawBlockBatches(ctx context.Context, peer *Peer, fromBlockNum uint32, rawBatches chan<- rawBlockBatch) error {
@@ -78,27 +86,15 @@ func fetchRawBlockBatches(ctx context.Context, peer *Peer, fromBlockNum uint32, 
 }
 
 func decodeAndWarmupBatches(ctx context.Context, rawBatches <-chan rawBlockBatch, warmedUp chan<- *block.Block) error {
-	errorChan := make(chan error, 1)
+	g, ctx := errgroup.WithContext(ctx)
 
-	<-co.Parallel(func(queue chan<- func()) {
-		for batch := range rawBatches {
-			queue <- func() {
-				if err := decodeAndWarmupBatch(ctx, batch, warmedUp); err != nil {
-					select {
-					case errorChan <- err:
-					default:
-					}
-				}
-			}
-		}
-	})
-
-	select {
-	case err := <-errorChan:
-		return err
-	default:
-		return nil
+	for batch := range rawBatches {
+		g.Go(func() error {
+			return decodeAndWarmupBatch(ctx, batch, warmedUp)
+		})
 	}
+
+	return g.Wait()
 }
 
 func decodeAndWarmupBatch(ctx context.Context, batch rawBlockBatch, warmedUp chan<- *block.Block) error {
@@ -123,6 +119,7 @@ func decodeAndWarmupBatch(ctx context.Context, batch rawBlockBatch, warmedUp cha
 		blk.Header().Beta()
 
 		for _, tx := range blk.Transactions() {
+			// pre warming functions with cache
 			tx.ID()
 			tx.UnprovedWork()
 			_, _ = tx.IntrinsicGas()

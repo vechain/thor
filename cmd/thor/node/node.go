@@ -155,6 +155,9 @@ func (n *Node) handleBlockStream(ctx context.Context, stream <-chan *block.Block
 		if blk == nil {
 			continue
 		}
+		if blk.Header().Number()%100000 == 0 {
+			println("processed block", blk.Header().Number())
+		}
 		if _, err := n.processBlock(blk, &stats); err != nil {
 			return err
 		}
