@@ -94,6 +94,8 @@ runs:
     - name: Env Setup & Validation
       id: env
       shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
       run: |
         THOR_VERSION=$(cat ./cmd/thor/VERSION)
         echo "THOR_VERSION=$THOR_VERSION" >> "$GITHUB_OUTPUT"
