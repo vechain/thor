@@ -119,10 +119,7 @@ func (s *Service) AddQueued(stake uint64) error {
 		return err
 	}
 
-	queued, overflow := math.SafeAdd(queued, stake)
-	if overflow {
-		return errors.New("queued overflow occurred")
-	}
+	queued += stake
 	// for the initial state, use upsert to handle correct gas cost
 	return s.queued.Upsert(queued)
 }
@@ -157,7 +154,7 @@ func (s *Service) GetQueuedStake() (uint64, error) {
 	return s.queued.Get()
 }
 
-// AddWithdravable increases withdrawable totals when stake becomes withdrwable
+// AddWithdrawable increases withdrawable totals when stake becomes withdrwable
 func (s *Service) AddWithdrawable(stake uint64) error {
 	withdrawable, err := s.withdrawable.Get()
 	if err != nil {
@@ -183,7 +180,7 @@ func (s *Service) RemoveWithdrawable(stake uint64) error {
 	if underflow {
 		return errors.New("withdrawable underflow occurred")
 	}
-	// witdrawable here is already touched by addWithdrawable
+	// withdrawable here is already touched by addWithdrawable
 	return s.withdrawable.Update(withdrawable)
 }
 
