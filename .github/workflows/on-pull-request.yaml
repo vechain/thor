@@ -48,13 +48,11 @@ jobs:
   # This doesn't publish the image, it just tests the publishing workflow (build the image / tags / labels)
   test-docker-publish:
     name: Test Docker Publish
-    uses: ./.github/workflows/publish-docker-images.yaml
+    uses: ./.github/workflows/goreleaser.yaml
     secrets: inherit
     permissions:
-      contents: read
+      # TODO: are these really needed?
+      contents: write
       packages: write
-    with:
-      images: |
-        ghcr.io/${{ github.repository }}
-      tags: |
-        type=raw,value=${{ github.ref }}-${{ github.sha }}
+      id-token: write
+      attestations: write

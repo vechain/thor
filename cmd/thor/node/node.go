@@ -192,6 +192,9 @@ func (n *Node) houseKeeping(ctx context.Context) {
 	connectivityTicker := time.NewTicker(time.Second)
 	defer connectivityTicker.Stop()
 
+	clockSyncTicker := time.NewTicker(10 * time.Minute)
+	defer clockSyncTicker.Stop()
+
 	var noPeerTimes int
 
 	futureBlocks := cache.NewRandCache(32)
@@ -246,6 +249,8 @@ func (n *Node) houseKeeping(ctx context.Context) {
 			} else {
 				noPeerTimes = 0
 			}
+		case <-clockSyncTicker.C:
+			go checkClockOffset()
 		}
 	}
 }

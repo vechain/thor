@@ -53,7 +53,17 @@ func (n *Node) packerLoop(ctx context.Context) {
 			n.packer.SetTargetGasLimit(suggested)
 		}
 
-		flow, err := n.packer.Schedule(n.repo.BestBlockSummary(), now)
+		base := now
+		// a block proposer will be given higher priority in the range of (slotTime, slotTime+2*thor.BlockInterval)
+		// and here we left at maximum 3 second as buffer for packing and broadcasting the block
+		buff := min(thor.BlockInterval/2, uint64(3))
+		parentTime := n.repo.BestBlockSummary().Header.Timestamp()
+		// if now is in the prioritized window, use the optimal timestamp as base to schedule next time slot
+		if now > parentTime && now < parentTime+3*thor.BlockInterval-buff {
+			base = parentTime + thor.BlockInterval
+		}
+		// otherwise, use now as base
+		flow, err := n.packer.Schedule(n.repo.BestBlockSummary(), base)
 		if err != nil {
 			if authorized {
 				authorized = false

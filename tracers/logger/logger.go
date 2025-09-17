@@ -391,8 +391,9 @@ func (t *MDLogger) CaptureState(pc uint64, op vm.OpCode, _, cost uint64, _ *vm.M
 
 	if !t.cfg.DisableStack {
 		// format stack
-		var a []string
-		for _, elem := range stack.Data() {
+		stackData := stack.Data()
+		a := make([]string, 0, len(stackData))
+		for _, elem := range stackData {
 			a = append(a, elem.Hex())
 		}
 		b := fmt.Sprintf("[%v]", strings.Join(a, ","))
