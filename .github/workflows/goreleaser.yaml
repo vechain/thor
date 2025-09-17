@@ -11,8 +11,6 @@ jobs:
     permissions:
       contents: read
     name: Validate Release
-    permissions:
-      contents: read
     outputs:
       COMMIT_SHA: ${{ steps.commit-sha.outputs.commit_sha }}
       FLAGS: ${{ steps.set-flags.outputs.flags }}
