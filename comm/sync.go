@@ -86,15 +86,12 @@ func fetchRawBlockBatches(ctx context.Context, peer *Peer, fromBlockNum uint32, 
 }
 
 func decodeAndWarmupBatches(ctx context.Context, rawBatches <-chan rawBlockBatch, warmedUp chan<- *block.Block) error {
-	g, ctx := errgroup.WithContext(ctx)
-
 	for batch := range rawBatches {
-		g.Go(func() error {
-			return decodeAndWarmupBatch(ctx, batch, warmedUp)
-		})
+		if err := decodeAndWarmupBatch(ctx, batch, warmedUp); err != nil {
+			return err
+		}
 	}
-
-	return g.Wait()
+	return nil
 }
 
 func decodeAndWarmupBatch(ctx context.Context, batch rawBlockBatch, warmedUp chan<- *block.Block) error {
