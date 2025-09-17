@@ -211,9 +211,11 @@ func (s *Staker) AddValidation(
 		"period", period,
 		"stake", stake,
 	)
-
-	if stake < MinStakeVET || stake > MaxStakeVET {
-		return NewReverts("stake is out of range")
+	if stake < MinStakeVET {
+		return NewReverts("stake is below minimum")
+	}
+	if stake > MaxStakeVET {
+		return NewReverts("stake is above maximum")
 	}
 
 	if validator.IsZero() {
@@ -330,6 +332,9 @@ func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, am
 
 func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, amount uint64) error {
 	logger.Debug("decreasing stake", "endorser", endorser, "validator", validator, "amount", amount)
+	if amount > MaxStakeVET-MinStakeVET {
+		return NewReverts("decrease amount is too large")
+	}
 
 	val, err := s.getValidationOrRevert(validator)
 	if err != nil {
@@ -346,21 +351,21 @@ func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, am
 		return NewReverts("validator has signaled exit, cannot decrease stake")
 	}
 
+	var nextPeriodVET uint64
 	if val.Status == validation.StatusActive {
 		// We don't consider any increases, i.e., entry.QueuedVET. We only consider locked and current decreases.
 		// The reason is that validator can instantly withdraw QueuedVET at any time.
 		// We need to make sure the locked VET minus the sum of the current decreases is still above the minimum stake.
-		pendingAndDecrease := val.PendingUnlockVET + amount
-		if pendingAndDecrease > val.LockedVET || val.LockedVET-pendingAndDecrease < MinStakeVET {
-			return NewReverts("next period stake is lower than minimum stake")
-		}
+		nextPeriodVET = val.LockedVET - val.PendingUnlockVET
 	}
-
 	if val.Status == validation.StatusQueued {
-		// All the validator's stake exists within QueuedVET, so we need to make sure it maintains a minimum of MinStake.
-		if val.QueuedVET-amount < MinStakeVET {
-			return NewReverts("next period stake is lower than minimum stake")
-		}
+		nextPeriodVET = val.QueuedVET
+	}
+	if amount > nextPeriodVET {
+		return NewReverts("not enough locked stake")
+	}
+	if nextPeriodVET-amount < MinStakeVET {
+		return NewReverts("next period stake is lower than minimum stake")
 	}
 
 	if err = s.validationService.DecreaseStake(validator, val, amount); err != nil {
@@ -647,6 +652,9 @@ func (s *Staker) IncreaseDelegatorsReward(node thor.Address, reward *big.Int, cu
 }
 
 func (s *Staker) validateStakeIncrease(validator thor.Address, validation *validation.Validation, amount uint64) error {
+	if amount > MaxStakeVET {
+		return NewReverts("increase amount is too large")
+	}
 	agg, err := s.aggregationService.GetAggregation(validator)
 	if err != nil {
 		return err
