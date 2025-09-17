@@ -726,7 +726,7 @@ func TestValidationAdd_Error(t *testing.T) {
 	id1 := thor.BytesToAddress([]byte("id1"))
 
 	assert.ErrorContains(t, staker.AddValidation(id1, id1, uint32(1), MinStakeVET), "period is out of boundaries")
-	assert.ErrorContains(t, staker.AddValidation(id1, id1, thor.LowStakingPeriod(), 0), "stake is out of range")
+	assert.ErrorContains(t, staker.AddValidation(id1, id1, thor.LowStakingPeriod(), 0), "stake is below minimum")
 	assert.NoError(t, staker.AddValidation(id1, id1, thor.LowStakingPeriod(), MinStakeVET))
 	assert.ErrorContains(t, staker.AddValidation(id1, id1, thor.LowStakingPeriod(), MinStakeVET), "validator already exists")
 }
