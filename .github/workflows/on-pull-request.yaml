@@ -53,5 +53,3 @@ jobs:
     permissions:
       contents: read
       packages: read
-      id-token: read
-      attestations: read

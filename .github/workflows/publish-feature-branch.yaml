@@ -11,5 +11,3 @@ jobs:
     permissions:
       contents: read
       packages: write
-      id-token: read
-      attestations: read
