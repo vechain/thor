@@ -7,6 +7,7 @@
 package staker
 
 import (
+	"math"
 	"math/big"
 	"math/rand/v2"
 	"testing"
@@ -203,7 +204,7 @@ func TestStaker_AddValidation_MinimumStake(t *testing.T) {
 
 	tooLow := MinStakeVET - 1
 	err := staker.AddValidation(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, tooLow)
-	assert.ErrorContains(t, err, "stake is out of range")
+	assert.ErrorContains(t, err, "stake is below minimum")
 	err = staker.AddValidation(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, MinStakeVET)
 	assert.NoError(t, err)
 }
@@ -213,7 +214,7 @@ func TestStaker_AddValidation_MaximumStake(t *testing.T) {
 
 	tooHigh := MaxStakeVET + 1
 	err := staker.AddValidation(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, tooHigh)
-	assert.ErrorContains(t, err, "stake is out of range")
+	assert.ErrorContains(t, err, "stake is above maximum")
 	err = staker.AddValidation(datagen.RandAddress(), datagen.RandAddress(), uint32(360)*24*15, MaxStakeVET)
 	assert.NoError(t, err)
 }
@@ -3336,4 +3337,30 @@ func TestValidation_NegativeCases(t *testing.T) {
 
 	_, err = staker.GetValidation(node1)
 	assert.Error(t, err)
+}
+
+func TestValidation_DecreaseOverflow(t *testing.T) {
+	staker, _ := newStaker(t, 0, 1, false)
+	addr := datagen.RandAddress()
+	endorser := datagen.RandAddress()
+
+	newTestSequence(t, staker).AddValidation(addr, endorser, thor.MediumStakingPeriod(), MinStakeVET)
+
+	overflowDecrease := math.MaxUint64 - MinStakeVET - 1
+	assert.ErrorContains(t, staker.DecreaseStake(addr, endorser, overflowDecrease), "decrease amount is too large")
+
+	assertValidation(t, staker, addr).QueuedVET(MinStakeVET)
+}
+
+func TestValidation_IncreaseOverflow(t *testing.T) {
+	staker, _ := newStaker(t, 0, 1, false)
+	addr := datagen.RandAddress()
+	endorser := datagen.RandAddress()
+
+	newTestSequence(t, staker).AddValidation(addr, endorser, thor.MediumStakingPeriod(), MinStakeVET)
+
+	overflowIncrease := math.MaxUint64 - MinStakeVET + 1
+	assert.ErrorContains(t, staker.IncreaseStake(addr, endorser, overflowIncrease), "increase amount is too large")
+
+	assertValidation(t, staker, addr).QueuedVET(MinStakeVET)
 }
