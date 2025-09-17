@@ -35,9 +35,6 @@ func (d *Delegation) Started(val *validation.Validation, currentBlock uint32) (b
 		return false, err
 	}
 
-	if val.CompletedPeriods == 0 && val.Status == validation.StatusExit {
-		return false, nil
-	}
 	return currentStakingPeriod >= d.FirstIteration, nil
 }
 
