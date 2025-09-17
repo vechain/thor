@@ -182,7 +182,8 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 			return err
 		}
 
-		if err := s.globalStatsService.ApplyExit(exit.Add(aggExit)); err != nil {
+		valExitedTVL := exit.ExitedTVL.VET
+		if err := s.globalStatsService.ApplyExit(valExitedTVL, exit.Add(aggExit)); err != nil {
 			return err
 		}
 	}

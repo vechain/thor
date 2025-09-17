@@ -403,7 +403,7 @@ func (s *Staker) WithdrawStake(validator thor.Address, endorser thor.Address, cu
 		return 0, NewReverts("endorser required")
 	}
 
-	stake, queued, err := s.validationService.WithdrawStake(validator, val, currentBlock)
+	stake, queued, cooldown, err := s.validationService.WithdrawStake(validator, val, currentBlock)
 	if err != nil {
 		logger.Info("withdraw failed", "validator", validator, "error", err)
 		return 0, err
@@ -417,8 +417,8 @@ func (s *Staker) WithdrawStake(validator thor.Address, endorser thor.Address, cu
 		}
 	}
 
-	if val.CooldownVET > 0 {
-		err = s.globalStatsService.RemoveWithdrawable(val.CooldownVET)
+	if cooldown > 0 {
+		err = s.globalStatsService.RemoveCooldown(cooldown)
 		if err != nil {
 			return 0, err
 		}

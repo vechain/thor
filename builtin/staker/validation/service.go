@@ -241,7 +241,8 @@ func (s *Service) WithdrawStake(
 	validator thor.Address,
 	validation *Validation,
 	currentBlock uint32,
-) (uint64, uint64, error) {
+) (uint64, uint64, uint64, error) {
+	cooldownVET := uint64(0)
 	// if the validator is queued make sure to exit it
 	if validation.Status == StatusQueued {
 		withdrawable := validation.WithdrawableVET
@@ -252,10 +253,10 @@ func (s *Service) WithdrawStake(
 		validation.WithdrawableVET = 0
 		validation.Status = StatusExit
 		if err := s.repo.removeQueued(validator, validation); err != nil {
-			return 0, 0, err
+			return 0, 0, cooldownVET, err
 		}
 
-		return withdrawable, queuedVET, nil
+		return withdrawable, queuedVET, cooldownVET, nil
 	}
 
 	withdrawable := validation.WithdrawableVET
@@ -268,15 +269,16 @@ func (s *Service) WithdrawStake(
 
 	// validator has exited and waited for the cooldown period
 	if validation.ExitBlock != nil && *validation.ExitBlock+thor.CooldownPeriod() <= currentBlock {
+		cooldownVET = validation.CooldownVET
 		withdrawable += validation.CooldownVET
 		validation.CooldownVET = 0
 	}
 
 	if err := s.repo.updateValidation(validator, validation); err != nil {
-		return 0, 0, err
+		return 0, 0, cooldownVET, err
 	}
 
-	return withdrawable, queuedVET, nil
+	return withdrawable, queuedVET, cooldownVET, nil
 }
 
 func (s *Service) NextToActivate(maxLeaderGroupSize uint64) (thor.Address, *Validation, error) {

@@ -362,9 +362,10 @@ func TestService_WithdrawStake_QueuedToExit(t *testing.T) {
 	val, err = svc.GetExistingValidation(id)
 	assert.NoError(t, err)
 
-	amt, _, err := svc.WithdrawStake(id, val, 0)
+	amt, _, cooldown, err := svc.WithdrawStake(id, val, 0)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(50), amt)
+	assert.Equal(t, uint64(0), cooldown)
 
 	v2, err := svc.GetValidation(id)
 	assert.NoError(t, err)
@@ -392,9 +393,10 @@ func TestService_WithdrawStake_ClearCooldownWhenMatured(t *testing.T) {
 	val, err := svc.GetExistingValidation(id)
 	assert.NoError(t, err)
 
-	amt, _, err := svc.WithdrawStake(id, val, 11)
+	amt, _, cooldown, err := svc.WithdrawStake(id, val, 11)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(45), amt)
+	assert.Equal(t, uint64(40), cooldown)
 
 	v2, err := svc.GetValidation(id)
 	assert.NoError(t, err)
@@ -439,9 +441,10 @@ func TestService_WithdrawStake_ActiveClearsQueuedAndWithdrawable(t *testing.T) {
 	val, err := svc.GetExistingValidation(id)
 	assert.NoError(t, err)
 
-	amt, _, err := svc.WithdrawStake(id, val, 0)
+	amt, _, cooldown, err := svc.WithdrawStake(id, val, 0)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(15), amt)
+	assert.Equal(t, uint64(0), cooldown)
 
 	v2, err := svc.GetValidation(id)
 	assert.NoError(t, err)
