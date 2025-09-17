@@ -115,7 +115,7 @@ func TestStaker_TotalStake(t *testing.T) {
 		require.NoError(t, err)
 
 		// Update global totals
-		err = staker.globalStatsService.ApplyExit(exit.Add(aggExit))
+		err = staker.globalStatsService.ApplyExit(exit.ExitedTVL.VET, exit.Add(aggExit))
 		require.NoError(t, err)
 
 		totalStaked -= stake
@@ -163,7 +163,7 @@ func TestStaker_TotalStake_Withdrawal(t *testing.T) {
 	require.NoError(t, err)
 
 	// Update global totals
-	err = staker.globalStatsService.ApplyExit(exit.Add(aggExit))
+	err = staker.globalStatsService.ApplyExit(exit.ExitedTVL.VET, exit.Add(aggExit))
 	require.NoError(t, err)
 
 	lockedVET, lockedWeight, err = staker.LockedStake()
@@ -1224,7 +1224,8 @@ func TestStaker_RemoveValidator(t *testing.T) {
 	require.NoError(t, err)
 
 	// Update global totals
-	err = staker.globalStatsService.ApplyExit(exit.Add(aggExit))
+	valExitedTVL := exit.ExitedTVL.VET
+	err = staker.globalStatsService.ApplyExit(valExitedTVL, exit.Add(aggExit))
 	require.NoError(t, err)
 
 	validator, err := staker.GetValidation(addr)
@@ -1931,7 +1932,8 @@ func TestStaker_Housekeep_Exit_Decrements_Leader_Group_Size(t *testing.T) {
 		SignalExit(addr2, addr2, 10).
 		AssertGlobalWithdrawable(0).
 		Housekeep(period).
-		AssertGlobalWithdrawable(stake).
+		AssertGlobalWithdrawable(0).
+		AssertGlobalCooldown(stake).
 		AssertLeaderGroupSize(1).
 		AssertFirstActive(addr2)
 
@@ -1940,9 +1942,11 @@ func TestStaker_Housekeep_Exit_Decrements_Leader_Group_Size(t *testing.T) {
 
 	block := period + thor.EpochLength()
 	newTestSequence(t, staker).
-		AssertGlobalWithdrawable(stake).
+		AssertGlobalCooldown(stake).
+		AssertGlobalWithdrawable(0).
 		Housekeep(block).
-		AssertGlobalWithdrawable(stake * 2).
+		AssertGlobalCooldown(stake * 2).
+		AssertGlobalWithdrawable(0).
 		AssertLeaderGroupSize(0).
 		AssertFirstActive(thor.Address{})
 
@@ -1958,7 +1962,7 @@ func TestStaker_Housekeep_Exit_Decrements_Leader_Group_Size(t *testing.T) {
 	assertValidation(t, staker, addr3).Status(validation.StatusActive)
 
 	block = block + period
-	newTestSequence(t, staker).Housekeep(block).AssertGlobalWithdrawable(stake * 3)
+	newTestSequence(t, staker).Housekeep(block).AssertGlobalWithdrawable(0).AssertGlobalCooldown(stake * 3)
 
 	assertValidation(t, staker, addr3).Status(validation.StatusExit)
 }
@@ -2298,6 +2302,7 @@ func Test_GetValidatorTotals_DelegatorExiting_ThenValidator(t *testing.T) {
 		}).
 		SignalExit(validator.ID, validator.Endorser, validator.Period+1).
 		AssertGlobalWithdrawable(0).
+		AssertGlobalCooldown(0).
 		AssertTotals(validator.ID, &validation.Totals{
 			TotalLockedStake:  vStake.VET + dStake.VET,
 			TotalLockedWeight: vStake.Weight + dStake.Weight,
@@ -2305,7 +2310,8 @@ func Test_GetValidatorTotals_DelegatorExiting_ThenValidator(t *testing.T) {
 			NextPeriodWeight:  vStake.Weight + dStake.Weight - vStake.Weight - dStake.Weight,
 		}).
 		Housekeep(validator.Period*2).
-		AssertGlobalWithdrawable(validator.LockedVET+dStake.VET).
+		AssertGlobalWithdrawable(dStake.VET).
+		AssertGlobalCooldown(validator.LockedVET).
 		AssertTotals(validator.ID, &validation.Totals{
 			TotalLockedStake:  0,
 			TotalLockedWeight: 0,
@@ -3209,7 +3215,8 @@ func TestStaker_OfflineValidator(t *testing.T) {
 	// validator should exit here
 	testSetup.AssertGlobalWithdrawable(0).
 		Housekeep(expectedExitBlock).
-		AssertGlobalWithdrawable(val1.LockedVET)
+		AssertGlobalCooldown(val1.LockedVET).
+		AssertGlobalWithdrawable(0)
 
 	val1, err = testSetup.staker.GetValidation(validator1)
 	assert.NoError(t, err)
@@ -3396,4 +3403,32 @@ func TestValidation_IncreaseOverflow(t *testing.T) {
 	assert.ErrorContains(t, staker.IncreaseStake(addr, endorser, overflowIncrease), "increase amount is too large")
 
 	assertValidation(t, staker, addr).QueuedVET(MinStakeVET)
+}
+
+func TestValidation_WithdrawBeforeAfterCooldown(t *testing.T) {
+	staker, _ := newStaker(t, 2, 2, true)
+
+	first, err := staker.FirstActive()
+	assert.NoError(t, err)
+	val, err := staker.GetValidation(first)
+	assert.NoError(t, err)
+
+	stake := val.LockedVET
+
+	test := newTestSequence(t, staker)
+
+	test.AssertGlobalWithdrawable(0).
+		SignalExit(first, val.Endorser, 1).
+		Housekeep(thor.MediumStakingPeriod())
+
+	assertValidation(t, staker, first).
+		Status(validation.StatusExit).
+		WithdrawableVET(0).
+		CooldownVET(stake)
+
+	test.AssertGlobalCooldown(stake).
+		AssertGlobalWithdrawable(0).
+		WithdrawStake(first, val.Endorser, thor.MediumStakingPeriod()+thor.CooldownPeriod(), stake).
+		AssertGlobalWithdrawable(0).
+		AssertGlobalCooldown(0)
 }

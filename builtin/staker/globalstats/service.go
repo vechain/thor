@@ -19,6 +19,7 @@ var (
 	slotLocked       = thor.BytesToBytes32([]byte(("total-weighted-stake")))
 	slotQueued       = thor.BytesToBytes32([]byte(("queued-stake")))
 	slotWithdrawable = thor.BytesToBytes32([]byte(("withdrawable-stake")))
+	slotCooldown     = thor.BytesToBytes32([]byte(("cooldown-stake")))
 )
 
 // Service manages contract-wide staking totals.
@@ -27,6 +28,7 @@ type Service struct {
 	locked       *solidity.Raw[*stakes.WeightedStake]
 	queued       *solidity.Raw[uint64]
 	withdrawable *solidity.Raw[uint64]
+	cooldown     *solidity.Raw[uint64]
 }
 
 func New(sctx *solidity.Context) *Service {
@@ -34,6 +36,7 @@ func New(sctx *solidity.Context) *Service {
 		locked:       solidity.NewRaw[*stakes.WeightedStake](sctx, slotLocked),
 		queued:       solidity.NewRaw[uint64](sctx, slotQueued),
 		withdrawable: solidity.NewRaw[uint64](sctx, slotWithdrawable),
+		cooldown:     solidity.NewRaw[uint64](sctx, slotCooldown),
 	}
 }
 
@@ -82,7 +85,7 @@ func (s *Service) ApplyRenewal(renewal *Renewal) error {
 	return nil
 }
 
-func (s *Service) ApplyExit(exit *Exit) error {
+func (s *Service) ApplyExit(valExitedTVL uint64, exit *Exit) error {
 	locked, err := s.getLocked()
 	if err != nil {
 		return err
@@ -105,8 +108,13 @@ func (s *Service) ApplyExit(exit *Exit) error {
 	if err := s.queued.Update(queued); err != nil {
 		return err
 	}
-	if err := s.AddWithdrawable(exit.ExitedTVL.VET); err != nil {
+	if err := s.AddCooldown(valExitedTVL); err != nil {
 		return err
+	}
+	if exit.ExitedTVL.VET > valExitedTVL {
+		if err := s.AddWithdrawable(exit.ExitedTVL.VET - valExitedTVL); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -187,4 +195,39 @@ func (s *Service) RemoveWithdrawable(stake uint64) error {
 // GetWithdrawableStake returns the total VET to be withdrawn.
 func (s *Service) GetWithdrawableStake() (uint64, error) {
 	return s.withdrawable.Get()
+}
+
+// AddCooldown increases cooldown totals when stake goes to cooldown
+func (s *Service) AddCooldown(stake uint64) error {
+	cooldown, err := s.cooldown.Get()
+	if err != nil {
+		return err
+	}
+
+	cooldown, overflow := math.SafeAdd(cooldown, stake)
+	if overflow {
+		return errors.New("cooldown overflow occurred")
+	}
+	// for the initial state, use upsert to handle correct gas cost
+	return s.cooldown.Upsert(cooldown)
+}
+
+// RemoveCooldown decreases cooldown totals when stake goes to withdrawable.
+func (s *Service) RemoveCooldown(stake uint64) error {
+	cooldown, err := s.cooldown.Get()
+	if err != nil {
+		return err
+	}
+
+	cooldown, underflow := math.SafeSub(cooldown, stake)
+	if underflow {
+		return errors.New("cooldown underflow occurred")
+	}
+	// cooldown here is already touched by addCooldown
+	return s.cooldown.Update(cooldown)
+}
+
+// GetCooldownStake returns the total VET in cooldown.
+func (s *Service) GetCooldownStake() (uint64, error) {
+	return s.cooldown.Get()
 }

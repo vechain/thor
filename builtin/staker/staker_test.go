@@ -267,6 +267,15 @@ func (ts *TestSequence) AssertGlobalWithdrawable(expected uint64) *TestSequence 
 	return ts
 }
 
+func (ts *TestSequence) AssertGlobalCooldown(expected uint64) *TestSequence {
+	cooldown, err := ts.staker.globalStatsService.GetCooldownStake()
+	assert.NoError(ts.t, err, "failed to get global cooldown")
+
+	assert.Equal(ts.t, expected, cooldown, "total cooldown mismatch")
+
+	return ts
+}
+
 func (ts *TestSequence) ActivateNext(block uint32) *TestSequence {
 	mbp, err := ts.staker.params.Get(thor.KeyMaxBlockProposers)
 	assert.NoError(ts.t, err, "failed to get max block proposers")
