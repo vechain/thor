@@ -133,6 +133,12 @@ func (v *Validation) CurrentIteration(currentBlock uint32) (uint32, error) {
 		return v.CompletedPeriods, nil
 	}
 
+	// In case of a Queued -> Exit validation
+	// no periods were completed and it's status is exited
+	if v.Status == StatusExit && v.CompletedPeriods == 0 {
+		return 0, nil
+	}
+
 	// Active
 	if currentBlock < v.StartBlock {
 		return 0, errors.New("curren block cannot be less than start block")

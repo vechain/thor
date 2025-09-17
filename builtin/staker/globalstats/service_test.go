@@ -116,3 +116,32 @@ func TestService_GetLockedVET_GetLockedVetError(t *testing.T) {
 	_, _, err := svc.GetLockedStake()
 	assert.Error(t, err)
 }
+
+func TestService_GetWithdrawableStake(t *testing.T) {
+	svc, _, _ := newSvc()
+
+	withdrawable, err := svc.GetWithdrawableStake()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(0), withdrawable)
+
+	err = svc.AddWithdrawable(10)
+	assert.NoError(t, err)
+
+	withdrawable, err = svc.GetWithdrawableStake()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(10), withdrawable)
+
+	err = svc.RemoveWithdrawable(9)
+	assert.NoError(t, err)
+
+	withdrawable, err = svc.GetWithdrawableStake()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), withdrawable)
+
+	err = svc.RemoveWithdrawable(9)
+	assert.ErrorContains(t, err, "withdrawable underflow occurred")
+
+	withdrawable, err = svc.GetWithdrawableStake()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), withdrawable)
+}
