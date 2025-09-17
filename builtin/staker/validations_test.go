@@ -3429,5 +3429,6 @@ func TestValidation_WithdrawBeforeAfterCooldown(t *testing.T) {
 	test.AssertGlobalCooldown(stake).
 		AssertGlobalWithdrawable(0).
 		WithdrawStake(first, val.Endorser, thor.MediumStakingPeriod()+thor.CooldownPeriod(), stake).
-		AssertGlobalWithdrawable(0)
+		AssertGlobalWithdrawable(0).
+		AssertGlobalCooldown(0)
 }
