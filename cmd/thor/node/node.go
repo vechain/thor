@@ -71,6 +71,7 @@ type Node struct {
 	packer      PackerEngine
 	cons        ConsensusEngine
 	master      *Master
+	stater      *state.Stater
 	repo        *chain.Repository
 	bft         *bft.Engine
 	logDB       *logdb.LogDB
@@ -91,6 +92,7 @@ type Node struct {
 func New(
 	master *Master,
 	repo *chain.Repository,
+	stater *state.Stater,
 	bft *bft.Engine,
 	logDB *logdb.LogDB,
 	txPool *txpool.TxPool,
@@ -105,6 +107,7 @@ func New(
 		packer:      packerEngine,
 		cons:        consensusEngine,
 		master:      master,
+		stater:      stater,
 		repo:        repo,
 		bft:         bft,
 		logDB:       logDB,

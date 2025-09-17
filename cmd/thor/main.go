@@ -313,6 +313,7 @@ func defaultAction(ctx *cli.Context) error {
 	return node.New(
 		master,
 		repo,
+		stater,
 		bftEngine,
 		logDB,
 		txPool,

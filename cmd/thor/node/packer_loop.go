@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/pkg/errors"
 
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/thor"
@@ -81,10 +82,22 @@ func (n *Node) packerLoop(ctx context.Context) {
 			authorized = true
 			logger.Info("prepared to pack block")
 		}
-		logger.Debug("scheduled to pack block", "after", time.Duration(flow.When()-now)*time.Second)
+		logger.Info("scheduled to pack block", "after", time.Duration(flow.When()-now)*time.Second)
+
+		state := n.stater.NewState(n.repo.BestBlockSummary().Root())
+		_, _, _, active, err := builtin.Authority.Native(state).Get(thor.Address(n.master.Address()))
+		if err != nil {
+			logger.Error("failed to get authority", "err", err)
+			continue
+		}
+		timeToPack := flow.When() - thor.BlockInterval/2
+		if active {
+			timeToPack = flow.When() + thor.BlockInterval
+		}
 
 		for {
-			if uint64(time.Now().Unix())+thor.BlockInterval/2 > flow.When() {
+			// delay
+			if uint64(time.Now().Unix()) > timeToPack {
 				// time to pack block
 				// blockInterval/2 early to allow more time for processing txs
 				if err := n.pack(flow); err != nil {
@@ -107,7 +120,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 				if (best.Number() == flow.ParentHeader().Number() && s1 != s2) ||
 					best.TotalScore() > flow.TotalScore() {
-					logger.Debug("re-schedule packer due to new best block")
+					logger.Info("re-schedule packer due to new best block")
 					goto RE_SCHEDULE
 				}
 			}
