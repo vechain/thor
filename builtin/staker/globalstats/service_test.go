@@ -139,7 +139,7 @@ func TestService_GetWithdrawableStake(t *testing.T) {
 	assert.Equal(t, uint64(1), withdrawable)
 
 	err = svc.RemoveWithdrawable(9)
-	assert.ErrorContains(t, err, "stake cannot be grater than withdrawable")
+	assert.ErrorContains(t, err, "withdrawable underflow occurred")
 
 	withdrawable, err = svc.GetWithdrawableStake()
 	assert.NoError(t, err)

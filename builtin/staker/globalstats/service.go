@@ -8,6 +8,8 @@ package globalstats
 import (
 	"errors"
 
+	"github.com/ethereum/go-ethereum/common/math"
+
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/thor"
@@ -117,7 +119,10 @@ func (s *Service) AddQueued(stake uint64) error {
 		return err
 	}
 
-	queued += stake
+	queued, overflow := math.SafeAdd(queued, stake)
+	if overflow {
+		return errors.New("queued overflow occurred")
+	}
 	// for the initial state, use upsert to handle correct gas cost
 	return s.queued.Upsert(queued)
 }
@@ -129,10 +134,10 @@ func (s *Service) RemoveQueued(stake uint64) error {
 		return err
 	}
 
-	if queued < stake {
-		return errors.New("stake cannot be grater than queued")
+	queued, underflow := math.SafeSub(queued, stake)
+	if underflow {
+		return errors.New("queued underflow occurred")
 	}
-	queued -= stake
 	// queued here is already touched by addQueued
 	return s.queued.Update(queued)
 }
@@ -159,7 +164,10 @@ func (s *Service) AddWithdrawable(stake uint64) error {
 		return err
 	}
 
-	withdrawable += stake
+	withdrawable, overflow := math.SafeAdd(withdrawable, stake)
+	if overflow {
+		return errors.New("withdrawable overflow occurred")
+	}
 	// for the initial state, use upsert to handle correct gas cost
 	return s.withdrawable.Upsert(withdrawable)
 }
@@ -171,11 +179,10 @@ func (s *Service) RemoveWithdrawable(stake uint64) error {
 		return err
 	}
 
-	if withdrawable < stake {
-		println("with", withdrawable, stake)
-		return errors.New("stake cannot be grater than withdrawable")
+	withdrawable, underflow := math.SafeSub(withdrawable, stake)
+	if underflow {
+		return errors.New("withdrawable underflow occurred")
 	}
-	withdrawable -= stake
 	// witdrawable here is already touched by addWithdrawable
 	return s.withdrawable.Update(withdrawable)
 }
