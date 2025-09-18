@@ -32,7 +32,8 @@ type Service struct {
 	repo *Repository
 }
 
-func New(sctx *solidity.Context,
+func New(
+	sctx *solidity.Context,
 	minStake uint64,
 	maxStake uint64,
 ) *Service {

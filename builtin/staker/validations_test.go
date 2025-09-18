@@ -61,15 +61,127 @@ func createKeys(amount int) map[thor.Address]keySet {
 	return keys
 }
 
-func newStaker(t *testing.T, amount int, maxValidators int64, initialise bool) (*Staker, uint64) {
+type testStaker struct {
+	addr  thor.Address
+	state *state.State
+	*Staker
+}
+
+func (ts *testStaker) AddValidation(
+	validator thor.Address,
+	endorser thor.Address,
+	period uint32,
+	stake uint64,
+) error {
+	balance, err := ts.state.GetBalance(ts.addr)
+	if err != nil {
+		return err
+	}
+	newBalance := big.NewInt(0).Add(balance, ToWei(stake))
+	if ts.state.SetBalance(ts.addr, newBalance) != nil {
+		return err
+	}
+	err = ts.Staker.AddValidation(validator, endorser, period, stake)
+	if err != nil {
+		if ts.state.SetBalance(ts.addr, balance) != nil {
+			return err
+		}
+	}
+	return err
+}
+
+func (ts *testStaker) IncreaseStake(validator thor.Address, endorser thor.Address, amount uint64) error {
+	balance, err := ts.state.GetBalance(ts.addr)
+	if err != nil {
+		return err
+	}
+	newBalance := big.NewInt(0).Add(balance, ToWei(amount))
+	if ts.state.SetBalance(ts.addr, newBalance) != nil {
+		return err
+	}
+	err = ts.Staker.IncreaseStake(validator, endorser, amount)
+	if err != nil {
+		if ts.state.SetBalance(ts.addr, balance) != nil {
+			return err
+		}
+	}
+	return err
+}
+
+func (ts *testStaker) WithdrawStake(validator thor.Address, endorser thor.Address, currentBlock uint32) (uint64, error) {
+	amount, err := ts.Staker.WithdrawStake(validator, endorser, currentBlock)
+	if err != nil {
+		return 0, err
+	}
+	balance, err := ts.state.GetBalance(ts.addr)
+	if err != nil {
+		return 0, err
+	}
+	newBalance := big.NewInt(0).Sub(balance, ToWei(amount))
+	if ts.state.SetBalance(ts.addr, newBalance) != nil {
+		return 0, err
+	}
+	return amount, nil
+}
+
+func (ts *testStaker) AddDelegation(
+	validator thor.Address,
+	stake uint64,
+	multiplier uint8,
+	currentBlock uint32,
+) (*big.Int, error) {
+	balance, err := ts.state.GetBalance(ts.addr)
+	if err != nil {
+		return nil, err
+	}
+	newBalance := big.NewInt(0).Add(balance, ToWei(stake))
+	if ts.state.SetBalance(ts.addr, newBalance) != nil {
+		return nil, err
+	}
+	delegation, err := ts.Staker.AddDelegation(validator, stake, multiplier, currentBlock)
+	if err != nil {
+		if ts.state.SetBalance(ts.addr, balance) != nil {
+			return nil, err
+		}
+	}
+	return delegation, err
+}
+
+func (ts *testStaker) WithdrawDelegation(
+	delegationID *big.Int,
+	currentBlock uint32,
+) (uint64, error) {
+	amount, err := ts.Staker.WithdrawDelegation(delegationID, currentBlock)
+	if err != nil {
+		return amount, err
+	}
+	balance, err := ts.state.GetBalance(ts.addr)
+	if err != nil {
+		return 0, err
+	}
+	newBalance := big.NewInt(0).Sub(balance, ToWei(amount))
+	if ts.state.SetBalance(ts.addr, newBalance) != nil {
+		return 0, err
+	}
+	return amount, nil
+}
+
+func newStaker(t *testing.T, amount int, maxValidators int64, initialise bool) (*testStaker, uint64) {
 	db := muxdb.NewMem()
 	st := state.New(db, trie.Root{})
 
 	keys := createKeys(amount)
 	param := params.New(thor.BytesToAddress([]byte("params")), st)
+	stakerAddr := thor.BytesToAddress([]byte("stkr"))
 
 	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(maxValidators)))
-	staker := New(thor.BytesToAddress([]byte("stkr")), st, param, nil)
+	stakerImpl := New(stakerAddr, st, param, nil)
+	staker := &testStaker{
+		addr:   stakerAddr,
+		state:  st,
+		Staker: stakerImpl,
+	}
+
 	totalStake := uint64(0)
 	if initialise {
 		for _, key := range keys {
@@ -83,7 +195,12 @@ func newStaker(t *testing.T, amount int, maxValidators int64, initialise bool) (
 		assert.NoError(t, err)
 		assert.True(t, transitioned)
 	}
-	return staker, totalStake
+
+	return &testStaker{
+		addr:   stakerAddr,
+		state:  st,
+		Staker: stakerImpl,
+	}, totalStake
 }
 
 func TestStaker_TotalStake(t *testing.T) {
@@ -1333,7 +1450,12 @@ func TestStaker_Initialise(t *testing.T) {
 	addr := datagen.RandAddress()
 
 	param := params.New(thor.BytesToAddress([]byte("params")), st)
-	staker := New(thor.BytesToAddress([]byte("stkr")), st, param, nil)
+	stakerImpl := New(thor.BytesToAddress([]byte("stkr")), st, param, nil)
+	staker := &testStaker{
+		Staker: stakerImpl,
+		addr:   thor.BytesToAddress([]byte("stkr")),
+		state:  st,
+	}
 	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(3)))
 
 	for range 3 {

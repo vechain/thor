@@ -7,6 +7,7 @@ package staker
 
 import (
 	"fmt"
+	"math/big"
 
 	"github.com/vechain/thor/v2/thor"
 )
@@ -58,4 +59,12 @@ func (s *Staker) SyncPOS(forkConfig *thor.ForkConfig, current uint32) (Status, e
 	}
 
 	return status, nil
+}
+
+func ToVET(wei *big.Int) uint64 {
+	return new(big.Int).Div(wei, bigE18).Uint64()
+}
+
+func ToWei(vet uint64) *big.Int {
+	return new(big.Int).Mul(new(big.Int).SetUint64(vet), bigE18)
 }

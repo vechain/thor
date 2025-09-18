@@ -25,11 +25,11 @@ import (
 )
 
 type TestSequence struct {
-	staker *Staker
+	staker *testStaker
 	t      *testing.T
 }
 
-func newTestSequence(t *testing.T, staker *Staker) *TestSequence {
+func newTestSequence(t *testing.T, staker *testStaker) *TestSequence {
 	return &TestSequence{staker: staker, t: t}
 }
 
@@ -104,6 +104,18 @@ func (ts *TestSequence) AddValidation(
 ) *TestSequence {
 	err := ts.staker.AddValidation(endorser, master, period, stake)
 	assert.NoError(ts.t, err, "failed to add validator %s with endorser %s", master.String(), endorser.String())
+	return ts
+}
+
+func (ts *TestSequence) UpdateContractBalance(amount uint64) *TestSequence {
+	addr := ts.staker.Address()
+	current, err := ts.staker.state.GetBalance(addr)
+	assert.NoError(ts.t, err, "failed to get contract balance")
+	if current == nil {
+		current = big.NewInt(0)
+	}
+	newBalance := new(big.Int).Add(current, big.NewInt(int64(amount)))
+	ts.staker.state.SetBalance(addr, newBalance)
 	return ts
 }
 
@@ -302,13 +314,13 @@ func (ts *TestSequence) IncreaseDelegatorsReward(node thor.Address, reward *big.
 }
 
 type ValidationAssertions struct {
-	staker    *Staker
+	staker    *testStaker
 	addr      thor.Address
 	validator *validation.Validation
 	t         *testing.T
 }
 
-func assertValidation(t *testing.T, staker *Staker, addr thor.Address) *ValidationAssertions {
+func assertValidation(t *testing.T, staker *testStaker, addr thor.Address) *ValidationAssertions {
 	validator, err := staker.GetValidation(addr)
 	require.NoError(t, err, "failed to get validator %s", addr.String())
 	return &ValidationAssertions{staker: staker, addr: addr, validator: validator, t: t}
@@ -381,7 +393,7 @@ type AggregationAssertions struct {
 	t            *testing.T
 }
 
-func assertAggregation(t *testing.T, staker *Staker, validationID thor.Address) *AggregationAssertions {
+func assertAggregation(t *testing.T, staker *testStaker, validationID thor.Address) *AggregationAssertions {
 	agg, err := staker.aggregationService.GetAggregation(validationID)
 	require.NoError(t, err, "failed to get aggregation for validator %s", validationID.String())
 	return &AggregationAssertions{validationID: validationID, aggregation: agg, t: t}
@@ -425,7 +437,7 @@ type DelegationAssertions struct {
 	currentBlock uint32
 }
 
-func assertDelegation(t *testing.T, staker *Staker, delegationID *big.Int) *DelegationAssertions {
+func assertDelegation(t *testing.T, staker *testStaker, delegationID *big.Int) *DelegationAssertions {
 	delegation, validation, err := staker.GetDelegation(delegationID)
 	require.NoError(t, err, "failed to get delegation %s", delegationID.String())
 	return &DelegationAssertions{delegationID: delegationID, t: t, delegation: delegation, validation: validation}

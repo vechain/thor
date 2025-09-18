@@ -15,6 +15,7 @@ import (
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
@@ -330,7 +331,7 @@ func (h *hayabusaSetup) mintAddValidatorBlock(accs ...genesis.DevAccount) (*chai
 	contract := h.chain.Contract(builtin.Staker.Address, builtin.Staker.ABI, genesis.DevAccounts()[0])
 	for _, acc := range accs {
 		contract = contract.Attach(acc)
-		tx, err := contract.BuildTransaction("addValidation", toWei(minStake), acc.Address, uint32(360)*24*7)
+		tx, err := contract.BuildTransaction("addValidation", staker.ToWei(minStake), acc.Address, uint32(360)*24*7)
 		assert.NoError(h.t, err)
 		txs = append(txs, tx)
 	}
