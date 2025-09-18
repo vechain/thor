@@ -316,28 +316,20 @@ func toWei(vet uint64) *big.Int {
 }
 
 func increaseStakerBal(state *state.State, vet uint64) {
-	increaseStakerBalByWei(state, toWei(vet))
-}
-
-func increaseStakerBalByWei(state *state.State, wei *big.Int) {
 	currentBal, err := state.GetBalance(builtin.Staker.Address)
 	if err != nil {
 		panic(err)
 	}
-	newBal := big.NewInt(0).Add(currentBal, wei)
+	newBal := big.NewInt(0).Add(currentBal, toWei(vet))
 	state.SetBalance(builtin.Staker.Address, newBal)
 }
 
 func decreaseStakerBal(state *state.State, vet uint64) {
-	decreaseStakerBalByWei(state, toWei(vet))
-}
-
-func decreaseStakerBalByWei(state *state.State, wei *big.Int) {
 	currentBal, err := state.GetBalance(builtin.Staker.Address)
 	if err != nil {
 		panic(err)
 	}
-	newBal := big.NewInt(0).Sub(currentBal, wei)
+	newBal := big.NewInt(0).Sub(currentBal, toWei(vet))
 	state.SetBalance(builtin.Staker.Address, newBal)
 }
 
