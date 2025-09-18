@@ -6,10 +6,21 @@
 package staker
 
 import (
+	"fmt"
+	"math/big"
+
 	"github.com/vechain/thor/v2/builtin/staker/globalstats"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
 )
+
+func ToVET(wei *big.Int) uint64 {
+	return new(big.Int).Div(wei, bigE18).Uint64()
+}
+
+func ToWei(vet uint64) *big.Int {
+	return new(big.Int).Mul(new(big.Int).SetUint64(vet), bigE18)
+}
 
 //
 // State transition types
@@ -48,6 +59,11 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 	if err := s.applyEpochTransition(transition); err != nil {
 		return false, err
 	}
+
+	if err := s.PerformSanityCheck(); err != nil {
+		return false, err
+	}
+
 	return true, nil
 }
 
@@ -246,4 +262,46 @@ func (s *Staker) activateNextValidation(currentBlk uint32, maxLeaderGroupSize ui
 	}
 
 	return validator, nil
+}
+
+// This check ensures that locked + queued + withdrawable VET + cooldown VET equals the total VET in the staker account address.
+func (s *Staker) PerformSanityCheck() error {
+	// Sum all locked, queued, and withdrawable VET for all validations
+	lockedStake, _, err := s.globalStatsService.GetLockedStake()
+	if err != nil {
+		return fmt.Errorf("error while retrieving GetLockedStake: %w", err)
+	}
+	queuedStake, err := s.globalStatsService.GetQueuedStake()
+	if err != nil {
+		return fmt.Errorf("error while retrieving GetQueuedStake: %w", err)
+	}
+	withdrawableStake, err := s.globalStatsService.GetWithdrawableStake()
+	if err != nil {
+		return fmt.Errorf("error while retrieving GetWithdrawableStake: %w", err)
+	}
+	cooldownStake, err := s.globalStatsService.GetCooldownStake()
+	if err != nil {
+		return fmt.Errorf("error while retrieving GetCooldownStake: %w", err)
+	}
+
+	// Get the staker contract's account balance
+	stakerAddr := s.validationService.ContractAddress()
+	balance, err := s.state.GetBalance(stakerAddr)
+	if err != nil {
+		return err
+	}
+	balanceVET := ToVET(balance)
+	total := lockedStake + queuedStake + withdrawableStake + cooldownStake
+	if balanceVET != total {
+		return fmt.Errorf(
+			"sanity check failed: locked(%d) + queued(%d) + withdrawable(%d) = %d, but account balance is %d, diff= %d",
+			lockedStake,
+			queuedStake,
+			withdrawableStake,
+			total,
+			balanceVET,
+			balanceVET-total,
+		)
+	}
+	return nil
 }
