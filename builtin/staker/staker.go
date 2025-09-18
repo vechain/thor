@@ -253,8 +253,12 @@ func (s *Staker) AddValidation(
 		return err
 	}
 
+	if err = s.ContractBalanceCheck(0); err != nil {
+		return err
+	}
+
 	logger.Info("added validator", "validator", validator)
-	return s.ContractBalanceCheck(0)
+	return nil
 }
 
 func (s *Staker) SignalExit(validator thor.Address, endorser thor.Address, currentBlock uint32) error {
@@ -334,8 +338,12 @@ func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, am
 		return err
 	}
 
+	if err = s.ContractBalanceCheck(0); err != nil {
+		return err
+	}
+
 	logger.Info("increased stake", "validator", validator)
-	return s.ContractBalanceCheck(0)
+	return nil
 }
 
 func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, amount uint64) error {
@@ -399,8 +407,13 @@ func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, am
 		}
 	}
 
+	if err = s.ContractBalanceCheck(0); err != nil {
+		return err
+	}
+
 	logger.Info("decreased stake", "validator", validator)
-	return s.ContractBalanceCheck(0)
+
+	return nil
 }
 
 // WithdrawStake allows expired validations to withdraw their stake.
@@ -446,8 +459,11 @@ func (s *Staker) WithdrawStake(validator thor.Address, endorser thor.Address, cu
 		return 0, errors.New("overflow occurred")
 	}
 
-	logger.Info("withdrew validator staker", "validator", validator)
-	return total, s.ContractBalanceCheck(total)
+	if err = s.ContractBalanceCheck(total); err != nil {
+		return 0, err
+	}
+
+	return total, nil
 }
 
 func (s *Staker) SetOnline(validator thor.Address, blockNum uint32, online bool) error {
@@ -535,8 +551,12 @@ func (s *Staker) AddDelegation(
 		}
 	}
 
+	if err = s.ContractBalanceCheck(0); err != nil {
+		return nil, err
+	}
+
 	logger.Info("added delegation", "validator", validator, "delegationID", delegationID)
-	return delegationID, s.ContractBalanceCheck(0)
+	return delegationID, nil
 }
 
 // SignalDelegationExit updates the auto-renewal status of a delegation.
@@ -664,8 +684,13 @@ func (s *Staker) WithdrawDelegation(
 		}
 	}
 
+	if err = s.ContractBalanceCheck(withdrawableStake); err != nil {
+		return 0, err
+	}
+
 	logger.Info("withdrew delegation", "delegationID", delegationID, "stake", withdrawableStake)
-	return withdrawableStake, s.ContractBalanceCheck(withdrawableStake)
+
+	return withdrawableStake, nil
 }
 
 // IncreaseDelegatorsReward Increases reward for validation's delegators.
