@@ -452,16 +452,18 @@ func (s *Staker) WithdrawStake(validator thor.Address, endorser thor.Address, cu
 	}
 	total, overflow := math.SafeAdd(withdrawableVET, queuedVET)
 	if overflow {
-		return 0, errors.New("overflow occurred")
+		return 0, errors.New("withdrawableVET/ queuedVET overflow")
 	}
 	total, overflow = math.SafeAdd(total, cooldownVET)
 	if overflow {
-		return 0, errors.New("overflow occurred")
+		return 0, errors.New("cooldownVET caused overflow")
 	}
 
 	if err = s.ContractBalanceCheck(total); err != nil {
 		return 0, err
 	}
+
+	logger.Info("withdrew stake", "validator", validator, "amount", total)
 
 	return total, nil
 }
