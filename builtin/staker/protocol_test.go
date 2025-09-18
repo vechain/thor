@@ -67,14 +67,13 @@ func TestSyncPOS_TransitionBlock_WithValidators(t *testing.T) {
 	st := state.New(db, trie.Root{})
 	param := params.New(thor.BytesToAddress([]byte("params")), st)
 
-
 	param.Set(thor.KeyMaxBlockProposers, big.NewInt(3))
 
 	stakerAddr := thor.BytesToAddress([]byte("stkr"))
 	staker := &testStaker{
 		Staker: New(stakerAddr, st, param, nil),
-		addr:  stakerAddr,
-		state: st,
+		addr:   stakerAddr,
+		state:  st,
 	}
 
 	validator1 := thor.BytesToAddress([]byte("validator1"))
@@ -133,8 +132,8 @@ func TestSyncPOS_AlreadyActive_NoTransition(t *testing.T) {
 	stakerAddr := thor.BytesToAddress([]byte("stkr"))
 	staker := &testStaker{
 		Staker: New(stakerAddr, st, param, nil),
-		addr:  stakerAddr,
-		state: st,
+		addr:   stakerAddr,
+		state:  st,
 	}
 
 	validator1 := thor.BytesToAddress([]byte("validator1"))
@@ -258,8 +257,8 @@ func TestSyncPOS_HousekeepError(t *testing.T) {
 	stakerAddr := thor.BytesToAddress([]byte("stkr"))
 	staker := &testStaker{
 		Staker: New(stakerAddr, st, param, nil),
-		addr:  stakerAddr,
-		state: st,
+		addr:   stakerAddr,
+		state:  st,
 	}
 
 	validator1 := thor.BytesToAddress([]byte("validator1"))

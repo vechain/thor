@@ -372,7 +372,7 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 		builtin.Params.Native(state).Set(thor.KeyStakerSwitches, big.NewInt(0b11))
 
 		stakerNative := builtin.Staker.Native(state)
-		valStake := minStakeVET*2
+		valStake := minStakeVET * 2
 		stakerBal := toWei(valStake)
 		state.SetBalance(builtin.Staker.Address, stakerBal)
 		err := stakerNative.AddValidation(validator1, endorser, thor.LowStakingPeriod(), valStake)
