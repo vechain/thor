@@ -186,11 +186,8 @@ func (v *Validation) renew(delegationWeight uint64) (*globalstats.Renewal, error
 	}
 	prev.valWeight = stakes.NewWeightedStakeWithMultiplier(v.LockedVET, v.multiplier()).Weight
 
-	lockedIncrease := stakes.NewWeightedStake(0, 0)
-	lockedDecrease := stakes.NewWeightedStake(0, 0)
-
-	lockedIncrease.VET = v.QueuedVET
-	lockedDecrease.VET = v.PendingUnlockVET
+	lockedIncrease := stakes.NewWeightedStake(v.QueuedVET, 0)
+	lockedDecrease := stakes.NewWeightedStake(v.PendingUnlockVET, 0)
 
 	v.LockedVET += v.QueuedVET
 	var underflow bool
@@ -251,10 +248,7 @@ func (v *Validation) exit() *globalstats.Exit {
 
 // CooldownEnded returns true if validator has exited and the cooldown period has ended.
 func (v *Validation) CooldownEnded(currentBlock uint32) bool {
-	if v.ExitBlock != nil && *v.ExitBlock+thor.CooldownPeriod() <= currentBlock {
-		return true
-	}
-	return false
+	return v.ExitBlock != nil && *v.ExitBlock+thor.CooldownPeriod() <= currentBlock
 }
 
 // CalculateWithdrawableVET returns the validator withdrawable amount for a given block + period
