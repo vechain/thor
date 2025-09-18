@@ -257,7 +257,7 @@ func (s *Staker) activateNextValidation(currentBlk uint32, maxLeaderGroupSize ui
 	return validator, nil
 }
 
-// PerformSanityCheck ensures that locked + queued + withdrawable VET equals the total VET in the staker account address.
+// ContractBalanceCheck ensures that locked + queued + withdrawable VET equals the total VET in the staker account address.
 // pendingWithdraw is the amount that is about to be withdrawn from the staker contract. It has not yet been deducted from the contract.
 func (s *Staker) ContractBalanceCheck(pendingWithdraw uint64) error {
 	// Sum all locked, queued, and withdrawable VET for all validations
