@@ -16,6 +16,8 @@ import (
 	"math/big"
 	"math/bits"
 
+	"github.com/ethereum/go-ethereum/common/math"
+
 	"github.com/vechain/thor/v2/builtin/gascharger"
 	"github.com/vechain/thor/v2/builtin/params"
 	"github.com/vechain/thor/v2/builtin/solidity"
@@ -251,6 +253,10 @@ func (s *Staker) AddValidation(
 		return err
 	}
 
+	if err = s.ContractBalanceCheck(0); err != nil {
+		return err
+	}
+
 	logger.Info("added validator", "validator", validator)
 	return nil
 }
@@ -332,6 +338,10 @@ func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, am
 		return err
 	}
 
+	if err = s.ContractBalanceCheck(0); err != nil {
+		return err
+	}
+
 	logger.Info("increased stake", "validator", validator)
 	return nil
 }
@@ -397,7 +407,12 @@ func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, am
 		}
 	}
 
+	if err = s.ContractBalanceCheck(0); err != nil {
+		return err
+	}
+
 	logger.Info("decreased stake", "validator", validator)
+
 	return nil
 }
 
@@ -435,9 +450,22 @@ func (s *Staker) WithdrawStake(validator thor.Address, endorser thor.Address, cu
 			return 0, err
 		}
 	}
+	total, overflow := math.SafeAdd(withdrawableVET, queuedVET)
+	if overflow {
+		return 0, errors.New("withdrawableVET/ queuedVET overflow")
+	}
+	total, overflow = math.SafeAdd(total, cooldownVET)
+	if overflow {
+		return 0, errors.New("cooldownVET caused overflow")
+	}
 
-	logger.Info("withdrew validator staker", "validator", validator)
-	return withdrawableVET + queuedVET + cooldownVET, nil
+	if err = s.ContractBalanceCheck(total); err != nil {
+		return 0, err
+	}
+
+	logger.Info("withdrew stake", "validator", validator, "amount", total)
+
+	return total, nil
 }
 
 func (s *Staker) SetOnline(validator thor.Address, blockNum uint32, online bool) error {
@@ -523,6 +551,10 @@ func (s *Staker) AddDelegation(
 		if err = s.validationService.AddToRenewalList(validator); err != nil {
 			return nil, err
 		}
+	}
+
+	if err = s.ContractBalanceCheck(0); err != nil {
+		return nil, err
 	}
 
 	logger.Info("added delegation", "validator", validator, "delegationID", delegationID)
@@ -654,7 +686,12 @@ func (s *Staker) WithdrawDelegation(
 		}
 	}
 
+	if err = s.ContractBalanceCheck(withdrawableStake); err != nil {
+		return 0, err
+	}
+
 	logger.Info("withdrew delegation", "delegationID", delegationID, "stake", withdrawableStake)
+
 	return withdrawableStake, nil
 }
 

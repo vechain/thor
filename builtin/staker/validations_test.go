@@ -3355,7 +3355,11 @@ func TestStaker_Housekeep_NegativeCases(t *testing.T) {
 	param := params.New(paramsAddr, st)
 
 	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(2)))
-	staker := New(stakerAddr, st, param, nil)
+	staker := &testStaker{
+		Staker: New(stakerAddr, st, param, nil),
+		addr:   stakerAddr,
+		state:  st,
+	}
 
 	housekeep, err := staker.Housekeep(thor.EpochLength() - 1)
 	assert.NoError(t, err)
@@ -3471,7 +3475,11 @@ func TestValidation_NegativeCases(t *testing.T) {
 
 	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(2)))
 	stakerAddr := thor.BytesToAddress([]byte("stkr"))
-	staker := New(stakerAddr, st, param, nil)
+	staker := &testStaker{
+		Staker: New(stakerAddr, st, param, nil),
+		addr:   stakerAddr,
+		state:  st,
+	}
 
 	node1 := datagen.RandAddress()
 	stake := RandomStake()

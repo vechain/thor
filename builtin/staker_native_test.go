@@ -311,6 +311,28 @@ func TestStakerContract_Native_CheckStake(t *testing.T) {
 		Assert(t)
 }
 
+func toWei(vet uint64) *big.Int {
+	return big.NewInt(0).Mul(big.NewInt(int64(vet)), big.NewInt(1e18))
+}
+
+func increaseStakerBal(state *state.State, vet uint64) {
+	currentBal, err := state.GetBalance(builtin.Staker.Address)
+	if err != nil {
+		panic(err)
+	}
+	newBal := big.NewInt(0).Add(currentBal, toWei(vet))
+	state.SetBalance(builtin.Staker.Address, newBal)
+}
+
+func decreaseStakerBal(state *state.State, vet uint64) {
+	currentBal, err := state.GetBalance(builtin.Staker.Address)
+	if err != nil {
+		panic(err)
+	}
+	newBal := big.NewInt(0).Sub(currentBal, toWei(vet))
+	state.SetBalance(builtin.Staker.Address, newBal)
+}
+
 func TestStakerContract_PauseSwitches(t *testing.T) {
 	var (
 		endorser   = thor.BytesToAddress([]byte("endorser"))
@@ -342,11 +364,15 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 		builtin.Params.Native(state).Set(thor.KeyStakerSwitches, big.NewInt(0b11))
 
 		stakerNative := builtin.Staker.Native(state)
-		err := stakerNative.AddValidation(validator1, endorser, thor.LowStakingPeriod(), minStakeVET*2)
+		valStake := minStakeVET * 2
+		stakerBal := toWei(valStake)
+		state.SetBalance(builtin.Staker.Address, stakerBal)
+		err := stakerNative.AddValidation(validator1, endorser, thor.LowStakingPeriod(), valStake)
 		if err != nil {
 			return err
 		}
 
+		state.SetBalance(builtin.Staker.Address, stakerBal.Add(stakerBal, toWei(minStakeVET)))
 		// add delegation1 to validator1
 		_, err = stakerNative.AddDelegation(validator1, minStakeVET, 100, 10)
 		if err != nil {
@@ -356,7 +382,6 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 		state.SetBalance(endorser, big.NewInt(0).Mul(big.NewInt(6000e6), big.NewInt(1e18)))
 		state.SetBalance(rich, big.NewInt(0).Mul(big.NewInt(6000e6), big.NewInt(1e18)))
 		state.SetBalance(delegator, big.NewInt(0).Mul(big.NewInt(6000e6), big.NewInt(1e18)))
-		state.SetBalance(builtin.Staker.Address, big.NewInt(0).Mul(big.NewInt(50e6), big.NewInt(1e18)))
 
 		status, err := stakerNative.SyncPOS(fc, 0)
 		if err != nil {
@@ -364,6 +389,9 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 		}
 		if !status.Active {
 			return errors.New("transition failed")
+		}
+		if stakerNative.ContractBalanceCheck(0) != nil {
+			return errors.New("staker sanity check failed")
 		}
 
 		return nil
@@ -377,15 +405,18 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 
 	// withdraw validator3 to make it in status exit
 	stakerNative := builtin.Staker.Native(state)
+	increaseStakerBal(state, minStakeVET)
 	err = stakerNative.AddValidation(validator3, endorser, thor.LowStakingPeriod(), minStakeVET)
 	assert.NoError(t, err)
 
 	// add delegation2 to queued validator3
+	increaseStakerBal(state, minStakeVET)
 	_, err = stakerNative.AddDelegation(validator3, minStakeVET, 100, 10)
 	assert.NoError(t, err)
 
 	_, err = stakerNative.WithdrawStake(validator3, endorser, 1)
 	assert.NoError(t, err)
+	decreaseStakerBal(state, minStakeVET)
 
 	rt := runtime.New(
 		repo.NewBestChain(),

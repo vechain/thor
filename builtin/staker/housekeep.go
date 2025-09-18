@@ -53,7 +53,7 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 		return false, err
 	}
 
-	if err := s.ContractBalanceCheck(); err != nil {
+	if err := s.ContractBalanceCheck(0); err != nil {
 		return false, err
 	}
 
@@ -257,8 +257,9 @@ func (s *Staker) activateNextValidation(currentBlk uint32, maxLeaderGroupSize ui
 	return validator, nil
 }
 
-// ContractBalanceCheck checks that locked + queued + withdrawable VET equals the total VET in the staker account address.
-func (s *Staker) ContractBalanceCheck() error {
+// ContractBalanceCheck ensures that locked + queued + withdrawable VET equals the total VET in the staker account address.
+// pendingWithdraw is the amount that is about to be withdrawn from the staker contract. It has not yet been deducted from the contract.
+func (s *Staker) ContractBalanceCheck(pendingWithdraw uint64) error {
 	// Sum all locked, queued, and withdrawable VET for all validations
 	lockedStake, _, err := s.globalStatsService.GetLockedStake()
 	if err != nil {
@@ -285,20 +286,30 @@ func (s *Staker) ContractBalanceCheck() error {
 	}
 	balanceVET := ToVET(balance)
 	total := uint64(0)
-	for _, stake := range []uint64{lockedStake, queuedStake, withdrawableStake, cooldownStake} {
+	for _, stake := range []uint64{lockedStake, queuedStake, withdrawableStake, cooldownStake, pendingWithdraw} {
 		partialSum, overflow := math.SafeAdd(total, stake)
 		if overflow {
 			return fmt.Errorf(
-				"total overflow occurred while adding locked(%d) + queued(%d) + withdrawable(%d) + cooldown(%d)",
+				"total overflow occurred while adding locked(%d) + queued(%d) + withdrawable(%d) + cooldown(%d) + pendingWithdraw(%d)",
 				lockedStake,
 				queuedStake,
 				withdrawableStake,
 				cooldownStake,
+				pendingWithdraw,
 			)
 		}
 		total = partialSum
 	}
 	if balanceVET != total {
+		logger.Error("sanity check failed",
+			"locked", lockedStake,
+			"queued", queuedStake,
+			"withdrawable", withdrawableStake,
+			"cooldown", cooldownStake,
+			"pendingWithdraw", pendingWithdraw,
+			"total", total,
+			"balance", balance,
+		)
 		return fmt.Errorf(
 			"sanity check failed: locked(%d) + queued(%d) + withdrawable(%d) = %d, but account balance is %d, diff= %d",
 			lockedStake,

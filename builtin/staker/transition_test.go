@@ -27,7 +27,7 @@ func TestTransition(t *testing.T) {
 
 	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(2)))
 	stakerAddr := thor.BytesToAddress([]byte("stkr"))
-	staker := New(stakerAddr, st, param, nil)
+	staker := &testStaker{Staker: New(stakerAddr, st, param, nil), state: st, addr: stakerAddr}
 
 	isExecuted, err := staker.transition(thor.EpochLength())
 	assert.NoError(t, err)

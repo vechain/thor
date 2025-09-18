@@ -507,12 +507,12 @@ func (da *DelegationAssertions) IsFinished(expected bool) *DelegationAssertions 
 	return da
 }
 
-func newTestStaker() *Staker {
+func newTestStaker() *testStaker {
 	db := muxdb.NewMem()
 	st := state.New(db, trie.Root{})
 
 	addr := thor.BytesToAddress([]byte("staker"))
-	return New(addr, st, params.New(addr, st), nil)
+	return &testStaker{addr, st, New(addr, st, params.New(addr, st), nil)}
 }
 
 func TestValidation_SignalExit_InvalidEndorser(t *testing.T) {
@@ -566,8 +566,7 @@ func TestValidation_IncreaseStake_StatusExit(t *testing.T) {
 	id := thor.BytesToAddress([]byte("v"))
 	end := id
 
-	assert.NoError(t, staker.validationService.Add(id, end, thor.MediumStakingPeriod(), 100))
-	assert.NoError(t, staker.globalStatsService.AddQueued(100))
+	assert.NoError(t, staker.AddValidation(id, end, thor.MediumStakingPeriod(), MinStakeVET+1))
 
 	_, err := staker.WithdrawStake(id, end, 1)
 	assert.NoError(t, err)
@@ -695,11 +694,12 @@ func TestValidation_DecreaseStake_ActiveSuccess(t *testing.T) {
 	assert.NoError(t, err)
 	assert.False(t, val == nil)
 
-	staker.validationService.ActivateValidator(id, val, 0, &globalstats.Renewal{
+	_, err = staker.validationService.ActivateValidator(id, val, 0, &globalstats.Renewal{
 		LockedIncrease: stakes.NewWeightedStake(0, 0),
 		LockedDecrease: stakes.NewWeightedStake(0, 0),
 		QueuedDecrease: 0,
 	})
+	assert.NoError(t, err)
 
 	err = staker.DecreaseStake(id, end, 100)
 	assert.NoError(t, err)
