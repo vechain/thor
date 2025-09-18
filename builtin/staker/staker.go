@@ -50,8 +50,9 @@ func SetLogger(l log.Logger) {
 
 // Staker implements native methods of `Staker` contract.
 type Staker struct {
-	params *params.Params
-	state  *state.State
+	params  *params.Params
+	state   *state.State
+	address thor.Address
 
 	aggregationService *aggregation.Service
 	globalStatsService *globalstats.Service
@@ -64,8 +65,9 @@ func New(addr thor.Address, state *state.State, params *params.Params, charger *
 	sctx := solidity.NewContext(addr, state, charger)
 
 	return &Staker{
-		params: params,
-		state:  state,
+		params:  params,
+		state:   state,
+		address: addr,
 
 		aggregationService: aggregation.New(sctx),
 		globalStatsService: globalstats.New(sctx),
@@ -193,6 +195,10 @@ func (s *Staker) GetValidationTotals(validator thor.Address) (*validation.Totals
 // If the provided address is not in a list, it will return empty bytes.
 func (s *Staker) Next(prev thor.Address) (thor.Address, error) {
 	return s.validationService.NextEntry(prev)
+}
+
+func (s *Staker) Address() thor.Address {
+	return s.address
 }
 
 //

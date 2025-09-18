@@ -153,7 +153,3 @@ func (m *Mapping[K, V]) set(key K, value V) (uint64, error) {
 
 	return size, nil
 }
-
-func (m *Mapping[K, V]) Context() *Context {
-	return m.context
-}

@@ -32,7 +32,8 @@ type Service struct {
 	repo *Repository
 }
 
-func New(sctx *solidity.Context,
+func New(
+	sctx *solidity.Context,
 	minStake uint64,
 	maxStake uint64,
 ) *Service {
@@ -75,17 +76,6 @@ func (s *Service) IncreaseDelegatorsReward(validator thor.Address, reward *big.I
 
 func (s *Service) LeaderGroupIterator(callbacks ...func(thor.Address, *Validation) error) error {
 	return s.repo.iterateActive(func(address thor.Address, entry *Validation) error {
-		for _, callback := range callbacks {
-			if err := callback(address, entry); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-}
-
-func (s *Service) QueuedGroupIterator(callbacks ...func(thor.Address, *Validation) error) error {
-	return s.repo.iterateQueued(func(address thor.Address, entry *Validation) error {
 		for _, callback := range callbacks {
 			if err := callback(address, entry); err != nil {
 				return err
@@ -479,8 +469,4 @@ func makeRewardKey(validator thor.Address, stakingPeriod uint32) thor.Bytes32 {
 	binary.BigEndian.PutUint32(key[:4], stakingPeriod)
 	copy(key[4:], validator.Bytes())
 	return key
-}
-
-func (s *Service) ContractAddress() thor.Address {
-	return s.repo.storage.validations.Context().Address()
 }

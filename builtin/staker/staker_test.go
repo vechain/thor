@@ -108,7 +108,7 @@ func (ts *TestSequence) AddValidation(
 }
 
 func (ts *TestSequence) UpdateContractBalance(amount uint64) *TestSequence {
-	addr := ts.staker.validationService.ContractAddress()
+	addr := ts.staker.Address()
 	current, err := ts.staker.state.GetBalance(addr)
 	assert.NoError(ts.t, err, "failed to get contract balance")
 	if current == nil {

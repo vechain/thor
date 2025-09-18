@@ -162,10 +162,6 @@ func (r *Repository) iterateActive(callback func(thor.Address, *Validation) erro
 	return r.activeList.Iterate(callback)
 }
 
-func (r *Repository) iterateQueued(callback func(thor.Address, *Validation) error) error {
-	return r.queuedList.Iterate(callback)
-}
-
 func (r *Repository) iterateRenewalList(callbacks ...func(thor.Address, *Validation) error) error {
 	return r.renewalList.Iterate(func(address thor.Address) error {
 		entry, err := r.getValidation(address)
