@@ -81,7 +81,8 @@ func (ts *testStaker) AddValidation(
 	if ts.state.SetBalance(ts.addr, newBalance) != nil {
 		return err
 	}
-	if err := ts.Staker.AddValidation(validator, endorser, period, stake); err != nil {
+	err = ts.Staker.AddValidation(validator, endorser, period, stake)
+	if err != nil {
 		if ts.state.SetBalance(ts.addr, balance) != nil {
 			return err
 		}
