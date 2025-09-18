@@ -16,6 +16,8 @@ import (
 	"math/big"
 	"math/bits"
 
+	"github.com/ethereum/go-ethereum/common/math"
+
 	"github.com/vechain/thor/v2/builtin/gascharger"
 	"github.com/vechain/thor/v2/builtin/params"
 	"github.com/vechain/thor/v2/builtin/solidity"
@@ -435,7 +437,14 @@ func (s *Staker) WithdrawStake(validator thor.Address, endorser thor.Address, cu
 			return 0, err
 		}
 	}
-	total := withdrawableVET + queuedVET + cooldownVET
+	total, overflow := math.SafeAdd(withdrawableVET, queuedVET)
+	if overflow {
+		return 0, errors.New("overflow occurred")
+	}
+	total, overflow = math.SafeAdd(total, cooldownVET)
+	if overflow {
+		return 0, errors.New("overflow occurred")
+	}
 
 	logger.Info("withdrew validator staker", "validator", validator)
 	return total, s.ContractBalanceCheck(total)
