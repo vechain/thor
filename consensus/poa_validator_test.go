@@ -15,20 +15,13 @@ import (
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/builtin/authority"
+	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/poa"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
-
-func toWei(vet uint64) *big.Int {
-	return new(big.Int).Mul(new(big.Int).SetUint64(vet), big.NewInt(1e18))
-}
-
-func toVet(wei *big.Int) uint64 {
-	return wei.Div(wei, big.NewInt(1e18)).Uint64()
-}
 
 func TestAuthority_Hayabusa_TransitionPeriod(t *testing.T) {
 	setup := newHayabusaSetup(t)
@@ -52,7 +45,7 @@ func TestAuthority_Hayabusa_TransitionPeriod(t *testing.T) {
 	// check the endorsor balance has reduced
 	newEndorsorBal, err := getEndorsorBalance(best.Header, setup.chain)
 	assert.NoError(t, err)
-	assert.Equal(t, toVet(newEndorsorBal)+minStake, toVet(endorsorBal))
+	assert.Equal(t, staker.ToVET(newEndorsorBal)+minStake, staker.ToVET(endorsorBal))
 
 	// check the staker contract has the correct stake
 	masterStake, err := getMasterStake(setup.chain, blk.Header)

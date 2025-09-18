@@ -7,7 +7,6 @@ package staker
 
 import (
 	"fmt"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/math"
 
@@ -15,14 +14,6 @@ import (
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
 )
-
-func ToVET(wei *big.Int) uint64 {
-	return new(big.Int).Div(wei, bigE18).Uint64()
-}
-
-func ToWei(vet uint64) *big.Int {
-	return new(big.Int).Mul(new(big.Int).SetUint64(vet), bigE18)
-}
 
 //
 // State transition types
