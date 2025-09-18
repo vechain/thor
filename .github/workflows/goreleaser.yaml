@@ -1,0 +1,166 @@
+name: GoReleaser
+
+on:
+  workflow_call:
+
+jobs:
+  prepare:
+    runs-on: ${{ matrix.runs-on }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          # see actions/download-artifact in release job if modifying these
+          - runs-on: ubuntu-latest
+            go-arch: amd64
+            go-os: linux
+          - runs-on: ubuntu-24.04-arm
+            go-arch: arm64
+            go-os: linux
+          - runs-on: macos-latest
+            go-arch: arm64
+            go-os: darwin
+          - runs-on: windows-latest
+            go-arch: amd64
+            go-os: windows
+
+    environment: ${{ startsWith(github.ref, 'refs/tags/') && 'docker-publish' || '' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - uses: ./.github/actions/setup-release
+        name: Setup Release
+        id: setup
+        with:
+          goos: ${{ matrix.go-os }}
+          dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          cosign-key: ${{ secrets.COSIGN_KEY }}
+
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser-pro
+          version: latest
+          args: release --clean --split --verbose ${{ steps.setup.outputs.flags }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+          GOOS: ${{ matrix.go-os }}
+          GOARCH: ${{ matrix.go-arch }}
+          THOR_VERSION: ${{ steps.setup.outputs.thor_version }}
+          DISCO_VERSION: ${{ steps.setup.outputs.disco_version }}
+          COPYRIGHT_YEAR: ${{ steps.setup.outputs.copyright_year }}
+          REPOSITORY: ${{ github.repository }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          GPG_FINGERPRINT: ${{ steps.setup.outputs.gpg_fingerprint }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+          SNAPSHOT_TAG: ${{ steps.setup.outputs.snapshot_tag }}
+          SKIP_DOCKER_PUSH: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
+          IS_OFFICIAL_RELEASE: ${{ steps.setup.outputs.is_official_release }}
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dist-${{ github.sha }}${{ steps.setup.outputs.flags }}-${{ matrix.go-os }}_${{ matrix.go-arch }}
+          path: ./dist/${{ matrix.go-os }}_${{ matrix.go-arch }}
+          retention-days: 1
+
+      - shell: bash
+        run: |
+          ls -laR ./dist
+
+  release:
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+    env:
+      DOCKER_CLI_EXPERIMENTAL: "enabled"
+    environment: ${{ startsWith(github.ref, 'refs/tags/') && 'docker-publish' || '' }}
+
+    if: ${{ github.event_name != 'pull_request' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - uses: ./.github/actions/setup-release
+        name: Setup Release
+        id: setup
+        with:
+          goos: linux
+          dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          cosign-key: ${{ secrets.COSIGN_KEY }}
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: anchore/sbom-action/download-syft@v0.20.5
+
+      - name: Linux (AMD64)
+        uses: actions/download-artifact@v5
+        with:
+          name: dist-${{ github.sha }}${{ steps.setup.outputs.flags }}-linux_amd64
+          path: ./dist/linux_amd64
+      - name: Linux (ARM64)
+        uses: actions/download-artifact@v5
+        with:
+          name: dist-${{ github.sha }}${{ steps.setup.outputs.flags }}-linux_arm64
+          path: ./dist/linux_arm64
+      - name: macOS (ARM64)
+        uses: actions/download-artifact@v5
+        with:
+          name: dist-${{ github.sha }}${{ steps.setup.outputs.flags }}-darwin_arm64
+          path: ./dist/darwin_arm64
+      - name: Windows (AMD64)
+        uses: actions/download-artifact@v5
+        with:
+          name: dist-${{ github.sha }}${{ steps.setup.outputs.flags }}-windows_amd64
+          path: ./dist/windows_amd64
+
+      - name: Debug
+        run: |
+          ls -laR ./dist
+          ls -la
+
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser-pro
+          version: latest
+          args: continue --merge --verbose
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+          THOR_VERSION: ${{ steps.setup.outputs.thor_version }}
+          DISCO_VERSION: ${{ steps.setup.outputs.disco_version }}
+          COPYRIGHT_YEAR: ${{ steps.setup.outputs.copyright_year }}
+          REPOSITORY: ${{ github.repository }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          GPG_FINGERPRINT: ${{ steps.setup.outputs.gpg_fingerprint }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+          SNAPSHOT_TAG: ${{ steps.setup.outputs.snapshot_tag }}
+          SKIP_DOCKER_PUSH: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
+          IS_OFFICIAL_RELEASE: ${{ steps.setup.outputs.is_official_release }}
+
+      - uses: actions/attest-build-provenance@v3
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          subject-checksums: ./dist/checksums.txt
+
+      - uses: actions/attest-build-provenance@v3
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          subject-checksums: ./dist/digests.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dist-${{ github.sha }}${{ steps.setup.outputs.flags }}
+          path: ./dist
+          retention-days: 1

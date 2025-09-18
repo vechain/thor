@@ -1,0 +1,171 @@
+name: Setup Release
+description: Setup the release environment
+inputs:
+  goos:
+    description: The operating system to build for
+    required: true
+  dockerhub-username:
+    description: Docker Hub username
+    required: false
+  dockerhub-token:
+    description: Docker Hub token
+    required: false
+  github-token:
+    description: GitHub token
+    required: false
+  gpg-passphrase:
+    description: The passphrase for the GPG key used for signing
+    required: false
+  gpg-private-key:
+    description: The private GPG key used for signing
+    required: false
+  cosign-key:
+    description: The private Cosign key used for signing
+    required: false
+outputs:
+  thor_version:
+    description: The live color
+    value: ${{ steps.env.outputs.THOR_VERSION }}
+  disco_version:
+    description: The staging color
+    value: ${{ steps.env.outputs.DISCO_VERSION }}
+  copyright_year:
+    description: The staging color
+    value: ${{ steps.env.outputs.COPYRIGHT_YEAR }}
+  gpg_fingerprint:
+    description: The GPG fingerprint used for signing
+    value: ${{ steps.import_gpg.outputs.fingerprint }}
+  snapshot_tag:
+    description: The tag to use to publish the Docker image
+    value: ${{ steps.env.outputs.TAG }}
+  flags:
+    description: Flags to pass to goreleaser
+    value: ${{ steps.env.outputs.FLAGS }}
+  is_official_release:
+    description: Whether this is an official release
+    value: ${{ steps.env.outputs.IS_OFFICIAL_RELEASE }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@v6
+      with:
+        go-version: 1.24
+
+    - name: Setup Node
+      uses: actions/setup-node@v5
+      with:
+        node-version: '20'
+
+    - uses: sigstore/cosign-installer@v3.9.2
+      if: ${{ inputs.goos == 'linux' && startsWith(github.ref, 'refs/tags/') }}
+
+    - name: Log in to GHCR
+      uses: docker/login-action@v3
+      if: ${{ inputs.goos == 'linux' && github.event_name != 'pull_request' }}
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ inputs.github-token}}
+
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      if: ${{ inputs.goos == 'linux' && startsWith(github.ref, 'refs/tags/') }}
+      with:
+        username: ${{ inputs.dockerhub-username }}
+        password: ${{ inputs.dockerhub-token }}
+
+    - name: Import GPG key
+      id: import_gpg
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: crazy-max/ghaction-import-gpg@v6
+      with:
+        gpg_private_key: ${{ inputs.gpg-private-key }}
+        passphrase: ${{ inputs.gpg-passphrase }}
+
+    - name: Set Cosign Key
+      if: ${{ inputs.goos == 'linux' && startsWith(github.ref, 'refs/tags/') }}
+      shell: bash
+      run: echo "$COSIGN_KEY" > cosign.key
+      env:
+        COSIGN_KEY: ${{ inputs.cosign-key }}
+
+    - name: Env Setup & Validation
+      id: env
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        THOR_VERSION=$(cat ./cmd/thor/VERSION)
+        echo "THOR_VERSION=$THOR_VERSION" >> "$GITHUB_OUTPUT"
+        DISCO_VERSION=$(cat ./cmd/disco/VERSION)
+        echo "DISCO_VERSION=$DISCO_VERSION" >> "$GITHUB_OUTPUT"
+        COPYRIGHT_YEAR=$(date +'%Y')
+        echo "COPYRIGHT_YEAR=$COPYRIGHT_YEAR" >> "$GITHUB_OUTPUT"
+        
+        echo "event_name=${{ github.event_name }}"
+        echo "IS_OFFICIAL_RELEASE=false" >> $GITHUB_OUTPUT
+        
+        # if triggered by workflow_dispatch, ie a feature branch build
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.event_name }}" == "pull_request" ]]; then
+            # Sanitize branch name by replacing / with -
+            sanitized_branch=$(echo "${{ github.ref_name }}" | sed 's|/|-|g')
+            short_sha=$(echo $GITHUB_SHA | cut -c1-7)
+            echo "TAG=${sanitized_branch}-${short_sha}" >> "$GITHUB_OUTPUT"
+        
+            echo "FLAGS=--nightly" >> $GITHUB_OUTPUT
+            echo "Creating docker images for a feature branch..."
+            exit 0
+        fi
+        
+        # if triggered from another workflow, verify it is master
+        if [[ "${{ github.event_name }}" == "push" && "${{ github.ref_name }}" == "master" ]]; then
+          tag_date=$(date +'%Y%m%d')
+          short_sha=$(echo $GITHUB_SHA | cut -c1-7)
+        
+          echo "TAG=master-${tag_date}-${short_sha}" >> "$GITHUB_OUTPUT"
+          echo "FLAGS=--nightly" >> $GITHUB_OUTPUT
+          echo "Creating docker images for master..."
+          exit 0
+        fi
+        
+        if [[ "${{ github.ref }}" != refs/tags/* ]]; then
+            echo "Branch is not a tag, exiting..."
+            exit 1
+        fi
+        
+        echo "TAG=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+        
+        prerelease=$(gh release view ${{ github.ref_name }} --json isPrerelease | jq -r '.isPrerelease')
+        version="${{ github.ref_name }}"
+        
+        if [ "$prerelease" == "true" ]; then
+          echo "FLAGS=" >> $GITHUB_OUTPUT
+      
+          # if it does not contain 'rc', it's invalid
+          if [[ "${{ github.ref_name }}" != *-rc* ]]; then
+              echo "Tag is a prerelease, but the tag name does not contain -rc"
+              exit 1
+          fi
+      
+          version="${version#v}"  # Remove the "v" prefix from the tag
+          version="${version%%-rc.*}" # Remove the "-rc.*" suffix from the tag
+        else
+          echo "FLAGS=" >> $GITHUB_OUTPUT
+          node -e "if (!/^v\d+\.\d+\.\d+$/.test('${{ github.ref_name }}')) { console.error('Invalid version format. Expected: vX.Y.Z'); process.exit(1); }"
+          version="${version#v}"  # Remove the "v" prefix from the tag
+          echo "IS_OFFICIAL_RELEASE=true" >> $GITHUB_OUTPUT
+        fi
+        
+        thor_version=$(cat cmd/thor/VERSION)
+        if [ "$version" != "$thor_version" ]; then
+          echo "VERSION file ($thor_version) does not match tag ($version)"
+          exit 1
+        fi
+      
+        api_version=$(grep -o 'version: [0-9.]*' api/doc/thor.yaml | awk '{print $2}')
+        if [ "$version" != "$api_version" ]; then
+            echo "API spec version ($api_version) does not match Thor version ($version)"
+            exit 1
+        fi
