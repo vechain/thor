@@ -283,7 +283,7 @@ func (s *Staker) PerformSanityCheck() error {
 	}
 	total := lockedStake + queuedStake + withdrawableStake + cooldownStake
 	if balance.Uint64() != total {
-		return fmt.Errorf("sanity check failed: locked(%d) + queued(%d) + withdrawable(%d) = %d, but account balance is %d", lockedStake, queuedStake, withdrawableStake, total, balance.Uint64())
+		return fmt.Errorf("sanity check failed: locked(%d) + queued(%d) + withdrawable(%d) = %d, but account balance is %d, diff= %d", lockedStake, queuedStake, withdrawableStake, total, balance.Uint64(), balance.Uint64() - total)
 	}
 	return nil
 }
