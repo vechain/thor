@@ -85,7 +85,7 @@ func (s *Service) ApplyRenewal(renewal *Renewal) error {
 }
 
 func (s *Service) ApplyExit(validation *Exit, aggregation *Exit) error {
-	totalExited := stakes.NewWeightedStake(validation.ExitedTVL.VET, validation.ExitedTVL.Weight)
+	totalExited := validation.ExitedTVL.Clone()
 	if err := totalExited.Add(aggregation.ExitedTVL); err != nil {
 		return err
 	}
