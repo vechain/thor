@@ -18,6 +18,9 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/pkg/errors"
 	cli "gopkg.in/urfave/cli.v1"
+
+	"github.com/vechain/thor/v2/cmd/thor/httpserver"
+	"github.com/vechain/thor/v2/metrics"
 )
 
 var (
@@ -33,6 +36,8 @@ var (
 		natFlag,
 		netRestrictFlag,
 		verbosityFlag,
+		enableMetricsFlag,
+		metricsAddrFlag,
 	}
 )
 
@@ -92,9 +97,25 @@ func run(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	defer net.Close()
 	fmt.Println("Running", net.Self().String())
 
-	select {}
+	exitSignal := handleExitSignal()
+
+	if ctx.Bool(enableMetricsFlag.Name) {
+		metrics.InitializePrometheusMetrics()
+		url, closeFunc, err := httpserver.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
+		if err != nil {
+			return fmt.Errorf("unable to start metrics server - %w", err)
+		}
+		fmt.Println("metrics server listening", url)
+		defer closeFunc()
+		go pollMetrics(exitSignal, net)
+	}
+
+	<-exitSignal.Done()
+
+	return nil
 }
 
 func main() {
