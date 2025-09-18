@@ -398,7 +398,7 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 		if !status.Active {
 			return errors.New("transition failed")
 		}
-		if stakerNative.PerformSanityCheck(0) != nil {
+		if stakerNative.ContractBalanceCheck(0) != nil {
 			return errors.New("staker sanity check failed")
 		}
 
