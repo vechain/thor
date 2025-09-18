@@ -242,7 +242,6 @@ func (s *Service) WithdrawStake(
 	validation *Validation,
 	currentBlock uint32,
 ) (uint64, uint64, uint64, error) {
-	cooldownVET := uint64(0)
 	// if the validator is queued make sure to exit it
 	if validation.Status == StatusQueued {
 		withdrawable := validation.WithdrawableVET
@@ -253,12 +252,13 @@ func (s *Service) WithdrawStake(
 		validation.WithdrawableVET = 0
 		validation.Status = StatusExit
 		if err := s.repo.removeQueued(validator, validation); err != nil {
-			return 0, 0, cooldownVET, err
+			return 0, 0, 0, err
 		}
 
-		return withdrawable, queuedVET, cooldownVET, nil
+		return withdrawable, queuedVET, 0, nil
 	}
 
+	cooldownVET := uint64(0)
 	withdrawable := validation.WithdrawableVET
 	queuedVET := validation.QueuedVET
 	withdrawable += validation.QueuedVET
@@ -268,14 +268,14 @@ func (s *Service) WithdrawStake(
 	validation.WithdrawableVET = 0
 
 	// validator has exited and waited for the cooldown period
-	if validation.ExitBlock != nil && *validation.ExitBlock+thor.CooldownPeriod() <= currentBlock {
+	if validation.CooldownEnded(currentBlock) {
 		cooldownVET = validation.CooldownVET
 		withdrawable += validation.CooldownVET
 		validation.CooldownVET = 0
 	}
 
 	if err := s.repo.updateValidation(validator, validation); err != nil {
-		return 0, 0, cooldownVET, err
+		return 0, 0, 0, err
 	}
 
 	return withdrawable, queuedVET, cooldownVET, nil
@@ -381,7 +381,7 @@ func (s *Service) ActivateValidator(
 	validation.QueuedVET = 0
 
 	mul := Multiplier
-	if aggRenew.LockedIncrease.VET-aggRenew.LockedDecrease.VET > 0 {
+	if aggRenew.LockedIncrease.VET > aggRenew.LockedDecrease.VET {
 		// if validator has delegations, multiplier is 200%
 		mul = MultiplierWithDelegations
 	}
