@@ -7,6 +7,7 @@ package staker
 
 import (
 	"fmt"
+	"math/big"
 
 	"github.com/vechain/thor/v2/builtin/staker/globalstats"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
@@ -51,7 +52,7 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 		return false, err
 	}
 
-	if err := s.PerformSanityCheck(); err != nil {
+	if err := s.PerformSanityCheck(0); err != nil {
 		return false, err
 	}
 
@@ -255,8 +256,9 @@ func (s *Staker) activateNextValidation(currentBlk uint32, maxLeaderGroupSize ui
 	return validator, nil
 }
 
-// This check ensures that locked + queued + withdrawable VET equals the total VET in the staker account address.
-func (s *Staker) PerformSanityCheck() error {
+// PerformSanityCheck ensures that locked + queued + withdrawable VET equals the total VET in the staker account address.
+// pendingWithdraw is the amount that is about to be withdrawn from the staker contract. It has not yet been deducted from the contract.
+func (s *Staker) PerformSanityCheck(pendingWithdraw uint64) error {
 	// Sum all locked, queued, and withdrawable VET for all validations
 	lockedStake, _, err := s.globalStatsService.GetLockedStake()
 	if err != nil {
@@ -281,16 +283,27 @@ func (s *Staker) PerformSanityCheck() error {
 	if err != nil {
 		return err
 	}
-	total := lockedStake + queuedStake + withdrawableStake + cooldownStake
-	if balance.Uint64() != total {
+	total := lockedStake + queuedStake + withdrawableStake + cooldownStake + pendingWithdraw
+	totalWei := big.NewInt(0).Mul(bigE18, big.NewInt(0).SetUint64(total))
+	if totalWei.Cmp(balance) != 0 {
+		logger.Error("sanity check failed",
+			"locked", lockedStake,
+			"queued", queuedStake,
+			"withdrawable", withdrawableStake,
+			"cooldown", cooldownStake,
+			"pendingWithdraw", pendingWithdraw,
+			"total", total,
+			"balance", balance,
+		)
 		return fmt.Errorf(
-			"sanity check failed: locked(%d) + queued(%d) + withdrawable(%d) = %d, but account balance is %d, diff= %d",
+			"balance sheet failure, balance (%s) != totals (%d)\nlocked (%d) + queued (%d) + withdrawable (%d) + cooldown (%d) + pendingWithdraw (%d)",
+			big.NewInt(0).Div(balance, bigE18).String(),
+			total,
 			lockedStake,
 			queuedStake,
 			withdrawableStake,
-			total,
-			balance.Uint64(),
-			balance.Uint64()-total,
+			cooldownStake,
+			pendingWithdraw,
 		)
 	}
 	return nil

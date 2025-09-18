@@ -67,6 +67,10 @@ type testStaker struct {
 	*Staker
 }
 
+func toWei(amount uint64) *big.Int {
+	return big.NewInt(0).Mul(big.NewInt(0).SetUint64(amount), bigE18)
+}
+
 func (ts *testStaker) AddValidation(
 	validator thor.Address,
 	endorser thor.Address,
@@ -77,7 +81,7 @@ func (ts *testStaker) AddValidation(
 	if err != nil {
 		return err
 	}
-	newBalance := big.NewInt(0).Add(balance, big.NewInt(0).SetUint64(stake))
+	newBalance := big.NewInt(0).Add(balance, toWei(stake))
 	if ts.state.SetBalance(ts.addr, newBalance) != nil {
 		return err
 	}
@@ -95,7 +99,7 @@ func (ts *testStaker) IncreaseStake(validator thor.Address, endorser thor.Addres
 	if err != nil {
 		return err
 	}
-	newBalance := big.NewInt(0).Add(balance, big.NewInt(0).SetUint64(amount))
+	newBalance := big.NewInt(0).Add(balance, toWei(amount))
 	if ts.state.SetBalance(ts.addr, newBalance) != nil {
 		return err
 	}
@@ -117,7 +121,7 @@ func (ts *testStaker) WithdrawStake(validator thor.Address, endorser thor.Addres
 	if err != nil {
 		return 0, err
 	}
-	newBalance := big.NewInt(0).Sub(balance, big.NewInt(0).SetUint64(amount))
+	newBalance := big.NewInt(0).Sub(balance, toWei(amount))
 	if ts.state.SetBalance(ts.addr, newBalance) != nil {
 		return 0, err
 	}
@@ -134,7 +138,7 @@ func (ts *testStaker) AddDelegation(
 	if err != nil {
 		return nil, err
 	}
-	newBalance := big.NewInt(0).Add(balance, big.NewInt(0).SetUint64(stake))
+	newBalance := big.NewInt(0).Add(balance, toWei(stake))
 	if ts.state.SetBalance(ts.addr, newBalance) != nil {
 		return nil, err
 	}
@@ -159,7 +163,7 @@ func (ts *testStaker) WithdrawDelegation(
 	if err != nil {
 		return 0, err
 	}
-	newBalance := big.NewInt(0).Sub(balance, big.NewInt(0).SetUint64(amount))
+	newBalance := big.NewInt(0).Sub(balance, toWei(amount))
 	if ts.state.SetBalance(ts.addr, newBalance) != nil {
 		return 0, err
 	}
@@ -3355,7 +3359,11 @@ func TestStaker_Housekeep_NegativeCases(t *testing.T) {
 	param := params.New(paramsAddr, st)
 
 	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(2)))
-	staker := New(stakerAddr, st, param, nil)
+	staker := &testStaker{
+		Staker: New(stakerAddr, st, param, nil),
+		addr:  stakerAddr,
+		state: st,
+	}
 
 	housekeep, err := staker.Housekeep(thor.EpochLength() - 1)
 	assert.NoError(t, err)
@@ -3471,7 +3479,11 @@ func TestValidation_NegativeCases(t *testing.T) {
 
 	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(2)))
 	stakerAddr := thor.BytesToAddress([]byte("stkr"))
-	staker := New(stakerAddr, st, param, nil)
+	staker := &testStaker{
+		Staker: New(stakerAddr, st, param, nil),
+		addr:  stakerAddr,
+		state: st,
+	}
 
 	node1 := datagen.RandAddress()
 	stake := RandomStake()

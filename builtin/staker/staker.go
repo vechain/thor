@@ -246,7 +246,7 @@ func (s *Staker) AddValidation(
 	}
 
 	logger.Info("added validator", "validator", validator)
-	return nil
+	return s.PerformSanityCheck(0)
 }
 
 func (s *Staker) SignalExit(validator thor.Address, endorser thor.Address, currentBlock uint32) error {
@@ -327,7 +327,7 @@ func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, am
 	}
 
 	logger.Info("increased stake", "validator", validator)
-	return nil
+	return s.PerformSanityCheck(0)
 }
 
 func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, amount uint64) error {
@@ -388,7 +388,7 @@ func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, am
 	}
 
 	logger.Info("decreased stake", "validator", validator)
-	return nil
+	return s.PerformSanityCheck(0)
 }
 
 // WithdrawStake allows expired validations to withdraw their stake.
@@ -423,7 +423,7 @@ func (s *Staker) WithdrawStake(validator thor.Address, endorser thor.Address, cu
 	}
 
 	logger.Info("withdrew validator staker", "validator", validator)
-	return withdrawable, nil
+	return withdrawable, s.PerformSanityCheck(withdrawable)
 }
 
 func (s *Staker) SetOnline(validator thor.Address, blockNum uint32, online bool) error {
@@ -512,7 +512,7 @@ func (s *Staker) AddDelegation(
 	}
 
 	logger.Info("added delegation", "validator", validator, "delegationID", delegationID)
-	return delegationID, nil
+	return delegationID, s.PerformSanityCheck(0)
 }
 
 // SignalDelegationExit updates the auto-renewal status of a delegation.
@@ -641,7 +641,7 @@ func (s *Staker) WithdrawDelegation(
 	}
 
 	logger.Info("withdrew delegation", "delegationID", delegationID, "stake", withdrawableStake)
-	return withdrawableStake, nil
+	return withdrawableStake, s.PerformSanityCheck(withdrawableStake)
 }
 
 // IncreaseDelegatorsReward Increases reward for validation's delegators.
