@@ -62,7 +62,7 @@ func createKeys(amount int) map[thor.Address]keySet {
 }
 
 type testStaker struct {
-	addr thor.Address
+	addr  thor.Address
 	state *state.State
 	*Staker
 }
@@ -176,9 +176,9 @@ func newStaker(t *testing.T, amount int, maxValidators int64, initialise bool) (
 
 	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(maxValidators)))
 	stakerImpl := New(stakerAddr, st, param, nil)
-	staker :=&testStaker{
-		addr:  stakerAddr,
-		state: st,
+	staker := &testStaker{
+		addr:   stakerAddr,
+		state:  st,
 		Staker: stakerImpl,
 	}
 
@@ -197,8 +197,8 @@ func newStaker(t *testing.T, amount int, maxValidators int64, initialise bool) (
 	}
 
 	return &testStaker{
-		addr:  stakerAddr,
-		state: st,
+		addr:   stakerAddr,
+		state:  st,
 		Staker: stakerImpl,
 	}, totalStake
 }
