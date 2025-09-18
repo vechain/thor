@@ -97,9 +97,26 @@ func (s *Staker) LockedStake() (uint64, uint64, error) {
 	return s.globalStatsService.GetLockedStake()
 }
 
-// QueuedStake returns the amount of VET queued by validations and delegations.
-func (s *Staker) QueuedStake() (uint64, error) {
-	return s.globalStatsService.GetQueuedStake()
+// Stakes returns the amount of VET locked, queued, withdrawable and cooldown by validations and delegations.
+func (s *Staker) Stakes() (uint64, uint64, uint64, uint64, error) {
+	locked, _, err := s.globalStatsService.GetLockedStake()
+	if err != nil {
+		return 0, 0, 0, 0, err
+	}
+	queued, err := s.globalStatsService.GetQueuedStake()
+	if err != nil {
+		return 0, 0, 0, 0, err
+	}
+	withdrawable, err := s.globalStatsService.GetWithdrawableStake()
+	if err != nil {
+		return 0, 0, 0, 0, err
+	}
+	cooldown, err := s.globalStatsService.GetCooldownStake()
+	if err != nil {
+		return 0, 0, 0, 0, err
+	}
+
+	return locked, queued, withdrawable, cooldown, nil
 }
 
 // FirstActive returns validator address of first entry.

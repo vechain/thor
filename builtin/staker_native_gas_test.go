@@ -83,8 +83,8 @@ func TestStakerNativeGasCosts(t *testing.T) {
 			description: "Get total locked stake",
 		},
 		{
-			function:    "native_queuedStake",
-			expectedGas: 200,
+			function:    "native_stakes",
+			expectedGas: 800,
 			args:        []any{},
 			description: "Get total queued stake",
 		},

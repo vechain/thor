@@ -219,7 +219,7 @@ func TestStaker(t *testing.T) {
 	require.False(t, firstQueued.Endorser.IsZero())
 
 	// TotalQueued
-	queuedStake, err := staker.QueuedStake()
+	_, queuedStake, _, _, err := staker.Stakes()
 	require.NoError(t, err)
 	stake := big.NewInt(0).Mul(big.NewInt(1e18), big.NewInt(25))
 	stake = big.NewInt(0).Mul(stake, big.NewInt(1e6))
@@ -463,7 +463,7 @@ func TestStaker_NegativeMatrix_MethodNotFound(t *testing.T) {
 		run  func() error
 	}{
 		{"TotalStake", func() error { _, _, err := bad.TotalStake(); return err }},
-		{"QueuedStake", func() error { _, err := bad.QueuedStake(); return err }},
+		{"Stakes", func() error { _, _, _, _, err := bad.Stakes(); return err }},
 		{"GetValidation", func() error { _, err := bad.GetValidation(nodeAddr); return err }},
 		{"GetValidationPeriodDetails", func() error { _, err := bad.GetValidationPeriodDetails(nodeAddr); return err }},
 		{"GetWithdrawable", func() error { _, err := bad.GetWithdrawable(nodeAddr); return err }},
@@ -514,7 +514,7 @@ func TestStaker_BadRevision_Reads(t *testing.T) {
 
 	_, _, err = s.Revision("bad").TotalStake()
 	require.Error(t, err)
-	_, err = s.Revision("bad").QueuedStake()
+	_, _, _, _, err = s.Revision("bad").Stakes()
 	require.Error(t, err)
 	_, err = s.Revision("bad").GetValidation(addr)
 	require.Error(t, err)

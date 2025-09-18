@@ -337,7 +337,7 @@ func Test_Delegator_DisableAutoRenew_InAStakingPeriod(t *testing.T) {
 	id, err := staker.AddDelegation(validator.ID, stake, 255, 10)
 	assert.NoError(t, err)
 
-	queuedVet, err := staker.QueuedStake()
+	_, queuedVet, _, _, err := staker.Stakes()
 	assert.NoError(t, err)
 	assert.Equal(t, stake, queuedVet)
 
@@ -347,7 +347,7 @@ func Test_Delegator_DisableAutoRenew_InAStakingPeriod(t *testing.T) {
 	aggregation, err := staker.aggregationService.GetAggregation(validator.ID)
 	assert.NoError(t, err)
 	assert.Equal(t, stake, aggregation.Locked.VET)
-	queuedVet, err = staker.QueuedStake()
+	_, queuedVet, _, _, err = staker.Stakes()
 
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(0), queuedVet)
@@ -358,7 +358,7 @@ func Test_Delegator_DisableAutoRenew_InAStakingPeriod(t *testing.T) {
 	aggregation, err = staker.aggregationService.GetAggregation(validator.ID)
 	assert.NoError(t, err)
 	assert.Equal(t, stake, aggregation.Locked.VET)
-	queuedVet, err = staker.QueuedStake()
+	_, queuedVet, _, _, err = staker.Stakes()
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(0), queuedVet)
 
@@ -462,7 +462,7 @@ func Test_Delegator_Queued_Weight(t *testing.T) {
 
 	lockedVetBefore, lockedWeightBefore, err := staker.LockedStake()
 	assert.NoError(t, err)
-	queuedVetBefore, err := staker.QueuedStake()
+	_, queuedVetBefore, _, _, err := staker.Stakes()
 	assert.NoError(t, err)
 
 	assert.Equal(t, totalStaked, lockedVetBefore)
@@ -483,7 +483,7 @@ func Test_Delegator_Queued_Weight(t *testing.T) {
 
 	lockedVetAfter, lockedWeightAfter, err := staker.LockedStake()
 	assert.NoError(t, err)
-	queuedVetAfter, err := staker.QueuedStake()
+	_, queuedVetAfter, _, _, err := staker.Stakes()
 	assert.NoError(t, err)
 
 	assert.Equal(t, lockedVetBefore, lockedVetAfter)
@@ -498,14 +498,14 @@ func Test_Delegator_Queued_Weight_QueuedValidator_Withdraw(t *testing.T) {
 	err := staker.AddValidation(validatorAddr, validatorAddr, uint32(360)*24*15, MinStakeVET)
 	assert.NoError(t, err)
 
-	initialQueuedVET, err := staker.QueuedStake()
+	_, initialQueuedVET, _, _, err := staker.Stakes()
 	assert.NoError(t, err)
 
 	delegationStake := MinStakeVET / 4
 	delegationID, err := staker.AddDelegation(validatorAddr, delegationStake, 255, 10)
 	assert.NoError(t, err)
 
-	afterAddQueuedVET, err := staker.QueuedStake()
+	_, afterAddQueuedVET, _, _, err := staker.Stakes()
 	assert.NoError(t, err)
 
 	assert.Equal(t, initialQueuedVET+delegationStake, afterAddQueuedVET)
@@ -514,7 +514,7 @@ func Test_Delegator_Queued_Weight_QueuedValidator_Withdraw(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, delegationStake, withdrawnAmount)
 
-	afterWithdrawQueuedVET, err := staker.QueuedStake()
+	_, afterWithdrawQueuedVET, _, _, err := staker.Stakes()
 	assert.NoError(t, err)
 
 	assert.Equal(t, initialQueuedVET, afterWithdrawQueuedVET)
@@ -527,7 +527,7 @@ func Test_Delegator_Queued_Weight_MultipleDelegations_Withdraw(t *testing.T) {
 	stake1 := MinStakeVET
 	stake2 := MinStakeVET / 2
 
-	initialQueuedVET, err := staker.QueuedStake()
+	_, initialQueuedVET, _, _, err := staker.Stakes()
 	assert.NoError(t, err)
 
 	id1, err := staker.AddDelegation(validator.ID, stake1, 200, 10)
@@ -536,7 +536,7 @@ func Test_Delegator_Queued_Weight_MultipleDelegations_Withdraw(t *testing.T) {
 	id2, err := staker.AddDelegation(validator.ID, stake2, 150, 10)
 	assert.NoError(t, err)
 
-	afterAddQueuedVET, err := staker.QueuedStake()
+	_, afterAddQueuedVET, _, _, err := staker.Stakes()
 	assert.NoError(t, err)
 
 	assert.Equal(t, initialQueuedVET+stake1+stake2, afterAddQueuedVET)
@@ -545,7 +545,7 @@ func Test_Delegator_Queued_Weight_MultipleDelegations_Withdraw(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, stake1, withdrawnAmount1)
 
-	afterWithdraw1QueuedVET, err := staker.QueuedStake()
+	_, afterWithdraw1QueuedVET, _, _, err := staker.Stakes()
 	assert.NoError(t, err)
 
 	assert.Equal(t, initialQueuedVET+stake2, afterWithdraw1QueuedVET)
@@ -554,7 +554,7 @@ func Test_Delegator_Queued_Weight_MultipleDelegations_Withdraw(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, stake2, withdrawnAmount2)
 
-	afterWithdraw2QueuedVET, err := staker.QueuedStake()
+	_, afterWithdraw2QueuedVET, _, _, err := staker.Stakes()
 	assert.NoError(t, err)
 
 	assert.Equal(t, initialQueuedVET, afterWithdraw2QueuedVET)
@@ -614,7 +614,7 @@ func TestStaker_DelegationExitingVET(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, totalStake, stake)
 	assert.Equal(t, totalStake, weight)
-	qStake, err := staker.QueuedStake()
+	_, qStake, _, _, err := staker.Stakes()
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(0), qStake)
 
@@ -636,7 +636,7 @@ func TestStaker_DelegationExitingVET(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, totalStake, stake)
 	assert.Equal(t, totalStake, weight)
-	qStake, err = staker.QueuedStake()
+	_, qStake, _, _, err = staker.Stakes()
 	assert.NoError(t, err)
 	assert.Equal(t, delStake, qStake)
 
@@ -660,7 +660,7 @@ func TestStaker_DelegationExitingVET(t *testing.T) {
 	assert.Equal(t, uint64(0), lVet)
 	assert.Equal(t, uint64(0), lWeight)
 
-	qVet, err := staker.QueuedStake()
+	_, qVet, _, _, err := staker.Stakes()
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(0), qVet)
 
@@ -683,7 +683,7 @@ func TestStaker_DelegationWithdrawPending(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, totalStake, stake)
 	assert.Equal(t, totalStake, weight)
-	qStake, err := staker.QueuedStake()
+	_, qStake, _, _, err := staker.Stakes()
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(0), qStake)
 
@@ -705,7 +705,7 @@ func TestStaker_DelegationWithdrawPending(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, totalStake, stake)
 	assert.Equal(t, totalStake, weight)
-	qStake, err = staker.QueuedStake()
+	_, qStake, _, _, err = staker.Stakes()
 	assert.NoError(t, err)
 	assert.Equal(t, delStake, qStake)
 

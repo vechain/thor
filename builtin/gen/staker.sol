@@ -34,11 +34,11 @@ contract Staker {
     }
 
     /**
-     * @dev queuedStake returns all stakes by queued validators.
+     * @dev stakes returns the amount of VET locked, queued, withdrawable and cooldown of all validations and delegations.
      */
-    function queuedStake() public view returns (uint256 queuedVET) {
-        return StakerNative(address(this)).native_queuedStake();
-    }
+    function stakes() public view returns (uint256 locked, uint256 queued, uint256 withdrawable, uint256 cooldown) {
+        return StakerNative(address(this)).native_stakes();
+    }   
 
     /**
      * @dev addValidation creates a validation to the queue.
@@ -349,7 +349,7 @@ interface StakerNative {
     // Read methods
     function native_totalStake() external pure returns (uint256, uint256);
 
-    function native_queuedStake() external pure returns (uint256);
+    function native_stakes() external pure returns (uint256, uint256, uint256, uint256);
 
     function native_getDelegation(
         uint256 delegationID

@@ -46,15 +46,18 @@ func init() {
 				toWei(weight),
 			}, nil
 		}},
-		{"native_queuedStake", func(env *xenv.Environment) ([]any, error) {
+		{"native_stakes", func(env *xenv.Environment) ([]any, error) {
 			charger := gascharger.New(env)
 
-			staked, err := Staker.NativeMetered(env.State(), charger).QueuedStake()
+			locked, queued, withdrawable, cooldown, err := Staker.NativeMetered(env.State(), charger).Stakes()
 			if err != nil {
 				return nil, err
 			}
 			return []any{
-				toWei(staked),
+				toWei(locked),
+				toWei(queued),
+				toWei(withdrawable),
+				toWei(cooldown),
 			}, nil
 		}},
 		{"native_getValidation", func(env *xenv.Environment) ([]any, error) {
