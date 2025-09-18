@@ -23,7 +23,7 @@ type testValidators struct {
 	*validation.Validation
 }
 
-func newDelegationStaker(t *testing.T) (*Staker, []*testValidators) {
+func newDelegationStaker(t *testing.T) (*testStaker, []*testValidators) {
 	staker, _ := newStaker(t, 75, 101, true)
 	validations := make([]*testValidators, 0)
 	err := staker.validationService.LeaderGroupIterator(func(validatorID thor.Address, validation *validation.Validation) error {

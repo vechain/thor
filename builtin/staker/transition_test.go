@@ -88,13 +88,13 @@ func TestStaker_TransitionPeriodBalanceCheck(t *testing.T) {
 	tests := []struct {
 		name         string
 		currentBlock uint32
-		preTestHook  func(staker *Staker)
+		preTestHook  func(staker *testStaker)
 		ok           bool
 	}{
 		{
 			name:         "before hayabusa, validator has greater than funds",
 			currentBlock: 5,
-			preTestHook: func(staker *Staker) {
+			preTestHook: func(staker *testStaker) {
 				assert.NoError(t, staker.state.SetBalance(endorser, big.NewInt(2000)))
 			},
 			ok: true,
@@ -102,7 +102,7 @@ func TestStaker_TransitionPeriodBalanceCheck(t *testing.T) {
 		{
 			name:         "before hayabusa, validator funds are too low",
 			currentBlock: 5,
-			preTestHook: func(staker *Staker) {
+			preTestHook: func(staker *testStaker) {
 				assert.NoError(t, staker.state.SetBalance(endorser, big.NewInt(500)))
 			},
 			ok: false,
@@ -110,7 +110,7 @@ func TestStaker_TransitionPeriodBalanceCheck(t *testing.T) {
 		{
 			name:         "before hayabusa, validator has exactly enough funds",
 			currentBlock: 5,
-			preTestHook: func(staker *Staker) {
+			preTestHook: func(staker *testStaker) {
 				assert.NoError(t, staker.state.SetBalance(endorser, big.NewInt(1000)))
 			},
 			ok: true,
@@ -118,7 +118,7 @@ func TestStaker_TransitionPeriodBalanceCheck(t *testing.T) {
 		{
 			name:         "during transition period, validator has not staked, has enough funds",
 			currentBlock: 15,
-			preTestHook: func(staker *Staker) {
+			preTestHook: func(staker *testStaker) {
 				assert.NoError(t, staker.state.SetBalance(endorser, big.NewInt(2000)))
 			},
 			ok: true,
@@ -126,7 +126,7 @@ func TestStaker_TransitionPeriodBalanceCheck(t *testing.T) {
 		{
 			name:         "during transition period, validator has not staked, has insufficient funds",
 			currentBlock: 15,
-			preTestHook: func(staker *Staker) {
+			preTestHook: func(staker *testStaker) {
 				assert.NoError(t, staker.state.SetBalance(endorser, big.NewInt(500)))
 			},
 			ok: false,
@@ -134,7 +134,7 @@ func TestStaker_TransitionPeriodBalanceCheck(t *testing.T) {
 		{
 			name:         "during transition period, validator has staked",
 			currentBlock: 15,
-			preTestHook: func(staker *Staker) {
+			preTestHook: func(staker *testStaker) {
 				stake := big.NewInt(0).Div(MinStake, bigE18).Uint64()
 				assert.NoError(t, staker.AddValidation(master, endorser, thor.MediumStakingPeriod(), stake))
 			},
