@@ -380,9 +380,13 @@ func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, am
 	}
 
 	if val.Status == validation.StatusQueued {
-		// update global totals, use the initial multiplier
-		err = s.globalStatsService.RemoveQueued(amount)
-		if err != nil {
+		// update global queued
+		if err = s.globalStatsService.RemoveQueued(amount); err != nil {
+			return err
+		}
+
+		// update global withdrawable
+		if err = s.globalStatsService.AddWithdrawable(amount); err != nil {
 			return err
 		}
 	}
@@ -418,6 +422,12 @@ func (s *Staker) WithdrawStake(validator thor.Address, endorser thor.Address, cu
 
 	if cooldown > 0 {
 		if err = s.globalStatsService.RemoveCooldown(cooldown); err != nil {
+			return 0, err
+		}
+	}
+
+	if withdrawable > queued + cooldown {
+		if err := s.globalStatsService.RemoveWithdrawable(withdrawable - queued - cooldown); err != nil {
 			return 0, err
 		}
 	}

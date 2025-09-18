@@ -566,8 +566,7 @@ func TestValidation_IncreaseStake_StatusExit(t *testing.T) {
 	id := thor.BytesToAddress([]byte("v"))
 	end := id
 
-	assert.NoError(t, staker.validationService.Add(id, end, thor.MediumStakingPeriod(), 100))
-	assert.NoError(t, staker.globalStatsService.AddQueued(100))
+	assert.NoError(t, staker.AddValidation(id, end, thor.MediumStakingPeriod(), MinStakeVET+1))
 
 	_, err := staker.WithdrawStake(id, end, 1)
 	assert.NoError(t, err)
@@ -737,7 +736,7 @@ func TestValidation_DecreaseStake_QueuedSuccess(t *testing.T) {
 	assert.NoError(t, staker.DecreaseStake(id, end, 100))
 	withdrawable, err := staker.globalStatsService.GetWithdrawableStake()
 	assert.NoError(t, err)
-	assert.Equal(t, uint64(0), withdrawable)
+	assert.Equal(t, uint64(100), withdrawable)
 
 	v, err := staker.GetValidation(id)
 	assert.NoError(t, err)
