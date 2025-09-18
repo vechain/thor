@@ -84,6 +84,17 @@ func (s *Service) LeaderGroupIterator(callbacks ...func(thor.Address, *Validatio
 	})
 }
 
+func (s *Service) QueuedGroupIterator(callbacks ...func(thor.Address, *Validation) error) error {
+	return s.repo.iterateQueued(func(address thor.Address, entry *Validation) error {
+		for _, callback := range callbacks {
+			if err := callback(address, entry); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 // IsActive returns true if there are active validations.
 func (s *Service) IsActive() (bool, error) {
 	activeCount, err := s.repo.activeListSize()
@@ -470,4 +481,8 @@ func makeRewardKey(validator thor.Address, stakingPeriod uint32) thor.Bytes32 {
 	binary.BigEndian.PutUint32(key[:4], stakingPeriod)
 	copy(key[4:], validator.Bytes())
 	return key
+}
+
+func (s *Service) ContractAddress() thor.Address {
+	return s.repo.storage.validations.Context().Address()
 }

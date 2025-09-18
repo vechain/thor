@@ -107,6 +107,18 @@ func (ts *TestSequence) AddValidation(
 	return ts
 }
 
+func (ts *TestSequence) UpdateContractBalance(amount uint64) *TestSequence {
+	addr := ts.staker.validationService.ContractAddress()
+	current, err := ts.staker.state.GetBalance(addr)
+	assert.NoError(ts.t, err, "failed to get contract balance")
+	if current == nil {
+		current = big.NewInt(0)
+	}
+	newBalance := new(big.Int).Add(current, big.NewInt(int64(amount)))
+	ts.staker.state.SetBalance(addr, newBalance)
+	return ts
+}
+
 func (ts *TestSequence) SignalExit(validator, endorser thor.Address, currentBlock uint32) *TestSequence {
 	err := ts.staker.SignalExit(validator, endorser, currentBlock)
 	assert.NoError(ts.t, err, "failed to signal exit for validator %s with endorser %s", validator.String(), endorser.String())

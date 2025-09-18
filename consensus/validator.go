@@ -303,6 +303,9 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 
 	if posActive {
 		staker := builtin.Staker.Native(state)
+		if err := staker.PerformSanityCheck(); err != nil {
+			return nil, nil, fmt.Errorf("staker sanity check failed while verifying block: %w", err)
+		}
 		energy := builtin.Energy.Native(state, header.Timestamp())
 		if err := energy.DistributeRewards(blk.Header().Beneficiary(), signer, staker, header.Number()); err != nil {
 			return nil, nil, err
