@@ -14,6 +14,14 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
+func ToVET(wei *big.Int) uint64 {
+	return new(big.Int).Div(wei, bigE18).Uint64()
+}
+
+func ToWei(vet uint64) *big.Int {
+	return new(big.Int).Mul(new(big.Int).SetUint64(vet), bigE18)
+}
+
 //
 // State transition types
 //
@@ -283,9 +291,9 @@ func (s *Staker) PerformSanityCheck(pendingWithdraw uint64) error {
 	if err != nil {
 		return err
 	}
+	balanceVET := ToVET(balance)
 	total := lockedStake + queuedStake + withdrawableStake + cooldownStake + pendingWithdraw
-	totalWei := big.NewInt(0).Mul(bigE18, big.NewInt(0).SetUint64(total))
-	if totalWei.Cmp(balance) != 0 {
+	if balanceVET != total {
 		logger.Error("sanity check failed",
 			"locked", lockedStake,
 			"queued", queuedStake,
@@ -296,14 +304,13 @@ func (s *Staker) PerformSanityCheck(pendingWithdraw uint64) error {
 			"balance", balance,
 		)
 		return fmt.Errorf(
-			"balance sheet failure, balance (%s) != totals (%d)\nlocked (%d) + queued (%d) + withdrawable (%d) + cooldown (%d) + pendingWithdraw (%d)",
-			big.NewInt(0).Div(balance, bigE18).String(),
-			total,
+			"sanity check failed: locked(%d) + queued(%d) + withdrawable(%d) = %d, but account balance is %d, diff= %d",
 			lockedStake,
 			queuedStake,
 			withdrawableStake,
-			cooldownStake,
-			pendingWithdraw,
+			total,
+			balanceVET,
+			balanceVET-total,
 		)
 	}
 	return nil
