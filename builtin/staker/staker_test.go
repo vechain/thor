@@ -724,7 +724,7 @@ func TestValidation_DecreaseStake_QueuedSuccess(t *testing.T) {
 	assert.NoError(t, staker.DecreaseStake(id, end, 100))
 	withdrawable, err := staker.globalStatsService.GetWithdrawableStake()
 	assert.NoError(t, err)
-	assert.Equal(t, uint64(0), withdrawable)
+	assert.Equal(t, uint64(100), withdrawable)
 
 	v, err := staker.GetValidation(id)
 	assert.NoError(t, err)
