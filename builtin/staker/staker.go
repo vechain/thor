@@ -420,8 +420,8 @@ func (s *Staker) WithdrawStake(validator thor.Address, endorser thor.Address, cu
 	}
 
 	// update global stats
-	if withdrawableVET > queuedVET+cooldownVET {
-		if err := s.globalStatsService.RemoveWithdrawable(withdrawableVET - queuedVET - cooldownVET); err != nil {
+	if withdrawableVET > 0 {
+		if err := s.globalStatsService.RemoveWithdrawable(withdrawableVET); err != nil {
 			return 0, err
 		}
 	}
