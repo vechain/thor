@@ -85,16 +85,17 @@ func TestService_ApplyExit(t *testing.T) {
 
 	assert.NoError(t, svc.AddQueued(300)) // weight 600
 
-	exit := &Exit{
-		ExitedTVL:      stakes.NewWeightedStake(400, 800),
-		QueuedDecrease: 300,
-	}
-
 	valExit := &Exit{
 		ExitedTVL:      stakes.NewWeightedStake(200, 400),
 		QueuedDecrease: 0,
 	}
-	assert.NoError(t, svc.ApplyExit(valExit.ExitedTVL.VET, exit))
+
+	aggExit := &Exit{
+		ExitedTVL:      stakes.NewWeightedStake(200, 400),
+		QueuedDecrease: 300,
+	}
+
+	assert.NoError(t, svc.ApplyExit(valExit, aggExit))
 
 	lockedV, lockedW, err := svc.GetLockedStake()
 	assert.NoError(t, err)

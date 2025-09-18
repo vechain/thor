@@ -115,7 +115,7 @@ func TestStaker_TotalStake(t *testing.T) {
 		require.NoError(t, err)
 
 		// Update global totals
-		err = staker.globalStatsService.ApplyExit(exit.ExitedTVL.VET, exit.Add(aggExit))
+		err = staker.globalStatsService.ApplyExit(exit, aggExit)
 		require.NoError(t, err)
 
 		totalStaked -= stake
@@ -163,7 +163,7 @@ func TestStaker_TotalStake_Withdrawal(t *testing.T) {
 	require.NoError(t, err)
 
 	// Update global totals
-	err = staker.globalStatsService.ApplyExit(exit.ExitedTVL.VET, exit.Add(aggExit))
+	err = staker.globalStatsService.ApplyExit(exit, aggExit)
 	require.NoError(t, err)
 
 	lockedVET, lockedWeight, err = staker.LockedStake()
@@ -1224,8 +1224,7 @@ func TestStaker_RemoveValidator(t *testing.T) {
 	require.NoError(t, err)
 
 	// Update global totals
-	valExitedTVL := exit.ExitedTVL.VET
-	err = staker.globalStatsService.ApplyExit(valExitedTVL, exit.Add(aggExit))
+	err = staker.globalStatsService.ApplyExit(exit, aggExit)
 	require.NoError(t, err)
 
 	validator, err := staker.GetValidation(addr)
