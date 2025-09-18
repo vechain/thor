@@ -48,9 +48,8 @@ func (s *Service) AddPendingVET(validator thor.Address, stake *stakes.WeightedSt
 	if err != nil {
 		return err
 	}
-	agg.PendingVET += stake.VET
-	agg.PendingWeight += stake.Weight
 
+	agg.Pending.Add(stake)
 	return s.aggregationStorage.Upsert(validator, agg)
 }
 
@@ -61,14 +60,9 @@ func (s *Service) SubPendingVet(validator thor.Address, stake *stakes.WeightedSt
 	if err != nil {
 		return err
 	}
-	if stake.VET > agg.PendingVET {
-		return errors.New("insufficient pending VET to subtract")
+	if err = agg.Pending.Sub(stake); err != nil {
+		return err
 	}
-	if stake.Weight > agg.PendingWeight {
-		return errors.New("insufficient pending weight to subtract")
-	}
-	agg.PendingVET -= stake.VET
-	agg.PendingWeight -= stake.Weight
 
 	// storage slot is already touched
 	return s.aggregationStorage.Update(validator, agg)
@@ -92,7 +86,7 @@ func (s *Service) Renew(validator thor.Address) (*globalstats.Renewal, uint64, e
 		return nil, 0, err
 	}
 
-	return renew, agg.LockedWeight, nil
+	return renew, agg.Locked.Weight, nil
 }
 
 // Exit moves all delegations to withdrawable state when validator exits.
@@ -123,8 +117,7 @@ func (s *Service) SignalExit(validator thor.Address, stake *stakes.WeightedStake
 
 	// Only move to exiting pools - don't subtract from locked yet
 	// The subtraction happens during renewal
-	agg.ExitingVET += stake.VET
-	agg.ExitingWeight += stake.Weight
+	agg.Exiting.Add(stake)
 
 	// storage slot is already touched
 	return s.aggregationStorage.Update(validator, agg)
