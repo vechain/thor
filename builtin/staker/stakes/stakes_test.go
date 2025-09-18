@@ -5,6 +5,7 @@
 package stakes
 
 import (
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -40,4 +41,13 @@ func TestNewWeightedStakeWithMultiplier_LargeValues(t *testing.T) {
 	want := uint64(1e15 * 25 / 100)
 	assert.Equal(t, vet, ws.VET)
 	assert.Equal(t, want, ws.Weight)
+}
+
+func TestOverFlow(t *testing.T) {
+	a := NewWeightedStake(1, 1)
+	b := NewWeightedStake(math.MaxUint64, 0)
+	assert.ErrorContains(t, a.Add(b), "VET add overflow occurred")
+
+	c := NewWeightedStake(0, math.MaxUint64)
+	assert.ErrorContains(t, a.Add(c), "weight add overflow occurred")
 }

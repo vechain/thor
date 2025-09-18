@@ -49,7 +49,10 @@ func (s *Service) AddPendingVET(validator thor.Address, stake *stakes.WeightedSt
 		return err
 	}
 
-	agg.Pending.Add(stake)
+	if err = agg.Pending.Add(stake); err != nil {
+		return err
+	}
+
 	return s.aggregationStorage.Upsert(validator, agg)
 }
 
@@ -117,7 +120,9 @@ func (s *Service) SignalExit(validator thor.Address, stake *stakes.WeightedStake
 
 	// Only move to exiting pools - don't subtract from locked yet
 	// The subtraction happens during renewal
-	agg.Exiting.Add(stake)
+	if err = agg.Exiting.Add(stake); err != nil {
+		return err
+	}
 
 	// storage slot is already touched
 	return s.aggregationStorage.Update(validator, agg)

@@ -407,29 +407,31 @@ func (s *Staker) WithdrawStake(validator thor.Address, endorser thor.Address, cu
 		return 0, NewReverts("endorser required")
 	}
 
-	stake, queued, cooldown, err := s.validationService.WithdrawStake(validator, val, currentBlock)
+	withdrawableVET, queuedVET, cooldownVET, err := s.validationService.WithdrawStake(validator, val, currentBlock)
 	if err != nil {
 		logger.Info("withdraw failed", "validator", validator, "error", err)
 		return 0, err
 	}
 
-	// remove validator QueuedVET if the validator is still queued or had a pending increase
-	if queued > 0 {
-		err = s.globalStatsService.RemoveQueued(queued)
-		if err != nil {
+	// update global stats
+	if withdrawableVET > 0 {
+		if err = s.globalStatsService.RemoveWithdrawable(withdrawableVET); err != nil {
 			return 0, err
 		}
 	}
-
-	if cooldown > 0 {
-		err = s.globalStatsService.RemoveCooldown(cooldown)
-		if err != nil {
+	if queuedVET > 0 {
+		if err = s.globalStatsService.RemoveQueued(cooldownVET); err != nil {
+			return 0, err
+		}
+	}
+	if cooldownVET > 0 {
+		if err = s.globalStatsService.RemoveCooldown(cooldownVET); err != nil {
 			return 0, err
 		}
 	}
 
 	logger.Info("withdrew validator staker", "validator", validator)
-	return stake, nil
+	return withdrawableVET + queuedVET + cooldownVET, nil
 }
 
 func (s *Staker) SetOnline(validator thor.Address, blockNum uint32, online bool) error {
