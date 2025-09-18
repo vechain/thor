@@ -6,6 +6,8 @@
 package staker
 
 import (
+	"fmt"
+
 	"github.com/vechain/thor/v2/builtin/staker/globalstats"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
@@ -48,6 +50,11 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 	if err := s.applyEpochTransition(transition); err != nil {
 		return false, err
 	}
+
+	if err := s.PerformSanityCheck(); err != nil {
+		return false, err
+	}
+
 	return true, nil
 }
 
@@ -246,4 +253,37 @@ func (s *Staker) activateNextValidation(currentBlk uint32, maxLeaderGroupSize ui
 	}
 
 	return validator, nil
+}
+
+// This check ensures that locked + queued + withdrawable VET equals the total VET in the staker account address.
+func (s *Staker) PerformSanityCheck() error {
+	// Sum all locked, queued, and withdrawable VET for all validations
+	lockedStake, _, err := s.globalStatsService.GetLockedStake()
+	if err != nil {
+		return fmt.Errorf("error while retrieving GetLockedStake: %w", err)
+	}
+	queuedStake, err := s.globalStatsService.GetQueuedStake()
+	if err != nil {
+		return fmt.Errorf("error while retrieving GetQueuedStake: %w", err)
+	}
+	withdrawableStake, err := s.globalStatsService.GetWithdrawableStake()
+	if err != nil {
+		return fmt.Errorf("error while retrieving GetWithdrawableStake: %w", err)
+	}
+	cooldownStake, err := s.globalStatsService.GetCooldownStake()
+	if err != nil {
+		return fmt.Errorf("error while retrieving GetCooldownStake: %w", err)
+	}
+
+	// Get the staker contract's account balance
+	stakerAddr := s.validationService.ContractAddress()
+	balance, err := s.state.GetBalance(stakerAddr)
+	if err != nil {
+		return err
+	}
+	total := lockedStake + queuedStake + withdrawableStake + cooldownStake
+	if balance.Uint64() != total {
+		return fmt.Errorf("sanity check failed: locked(%d) + queued(%d) + withdrawable(%d) = %d, but account balance is %d", lockedStake, queuedStake, withdrawableStake, total, balance.Uint64())
+	}
+	return nil
 }
