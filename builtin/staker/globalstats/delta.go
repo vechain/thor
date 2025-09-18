@@ -9,6 +9,7 @@ import (
 	"errors"
 
 	"github.com/ethereum/go-ethereum/common/math"
+
 	"github.com/vechain/thor/v2/builtin/staker/stakes"
 )
 
