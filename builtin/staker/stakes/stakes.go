@@ -5,7 +5,11 @@
 
 package stakes
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/ethereum/go-ethereum/common/math"
+)
 
 type WeightedStake struct {
 	VET    uint64 // The amount of VET staked(in VET, not wei)
@@ -30,20 +34,31 @@ func NewWeightedStake(stake uint64, weight uint64) *WeightedStake {
 	}
 }
 
-func (s *WeightedStake) Add(new *WeightedStake) {
-	s.VET += new.VET
-	s.Weight += new.Weight
+func (s *WeightedStake) Add(new *WeightedStake) error {
+	var overflow bool
+
+	if s.VET, overflow = math.SafeAdd(s.VET, new.VET); overflow {
+		return errors.New("VET add overflow occurred")
+	}
+
+	if s.Weight, overflow = math.SafeAdd(s.Weight, new.Weight); overflow {
+		return errors.New("weight add overflow occurred")
+	}
+
+	return nil
 }
 
 func (s *WeightedStake) Sub(new *WeightedStake) error {
-	if new.VET > s.VET {
-		return errors.New("cannot subtract more VET than available")
+	var underflow bool
+
+	if s.VET, underflow = math.SafeSub(s.VET, new.VET); underflow {
+		return errors.New("VET subtract underflow occurred")
 	}
-	if new.Weight > s.Weight {
-		return errors.New("cannot subtract more weight than available")
+
+	if s.Weight, underflow = math.SafeSub(s.Weight, new.Weight); underflow {
+		return errors.New("weight subtract underflow occurred")
 	}
-	s.VET -= new.VET
-	s.Weight -= new.Weight
+
 	return nil
 }
 

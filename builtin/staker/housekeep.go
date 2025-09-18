@@ -172,7 +172,7 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 		logger.Info("exiting validator", "validator", transition.ExitValidator)
 
 		// Now call ExitValidator to get the actual exit details and perform the exit
-		exit, err := s.validationService.ExitValidator(transition.ExitValidator)
+		valExit, err := s.validationService.ExitValidator(transition.ExitValidator)
 		if err != nil {
 			return err
 		}
@@ -182,8 +182,7 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 			return err
 		}
 
-		valExitedTVL := exit.ExitedTVL.VET
-		if err := s.globalStatsService.ApplyExit(valExitedTVL, exit.Add(aggExit)); err != nil {
+		if err := s.globalStatsService.ApplyExit(valExit, aggExit); err != nil {
 			return err
 		}
 	}
@@ -236,8 +235,13 @@ func (s *Staker) activateNextValidation(currentBlk uint32, maxLeaderGroupSize ui
 		return thor.Address{}, err
 	}
 
+	globalRenewal, err := validatorRenewal.Add(aggRenew)
+	if err != nil {
+		return thor.Address{}, err
+	}
+
 	// Update global stats with both validator and delegation renewals
-	if err = s.globalStatsService.ApplyRenewal(validatorRenewal.Add(aggRenew)); err != nil {
+	if err = s.globalStatsService.ApplyRenewal(globalRenewal); err != nil {
 		return thor.Address{}, err
 	}
 

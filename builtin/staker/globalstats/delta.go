@@ -5,7 +5,13 @@
 
 package globalstats
 
-import "github.com/vechain/thor/v2/builtin/staker/stakes"
+import (
+	"errors"
+
+	"github.com/ethereum/go-ethereum/common/math"
+
+	"github.com/vechain/thor/v2/builtin/staker/stakes"
+)
 
 type Renewal struct {
 	LockedIncrease *stakes.WeightedStake
@@ -22,29 +28,27 @@ func NewRenewal() *Renewal {
 }
 
 // Add sets r to the sum of itself and other.
-func (r *Renewal) Add(other *Renewal) *Renewal {
+func (r *Renewal) Add(other *Renewal) (*Renewal, error) {
 	if other == nil {
-		return r
+		return r, nil
 	}
 
-	r.LockedIncrease.Add(other.LockedIncrease)
-	r.LockedDecrease.Add(other.LockedDecrease)
-	r.QueuedDecrease += other.QueuedDecrease
-	return r
+	if err := r.LockedIncrease.Add(other.LockedIncrease); err != nil {
+		return nil, err
+	}
+	if err := r.LockedDecrease.Add(other.LockedDecrease); err != nil {
+		return nil, err
+	}
+
+	var overflow bool
+	if r.QueuedDecrease, overflow = math.SafeAdd(r.QueuedDecrease, other.QueuedDecrease); overflow {
+		return nil, errors.New("queued decrease overflow occurred")
+	}
+
+	return r, nil
 }
 
 type Exit struct {
 	ExitedTVL      *stakes.WeightedStake
 	QueuedDecrease uint64 // stake/VET only
-}
-
-// Add sets e to the sum of itself and other.
-func (e *Exit) Add(other *Exit) *Exit {
-	if other == nil {
-		return e
-	}
-
-	e.ExitedTVL.Add(other.ExitedTVL)
-	e.QueuedDecrease += other.QueuedDecrease
-	return e
 }

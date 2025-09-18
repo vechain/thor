@@ -236,49 +236,47 @@ func (s *Service) UpdateGroup(currentBlock uint32) ([]thor.Address, error) {
 }
 
 // WithdrawStake allows validations to withdraw any withdrawable stake.
-// It also verifies the endorser and updates the validator totals.
+// Will return the withdrawable, queued and cooldown VET, all these value are the total VET that user can withdraw.
 func (s *Service) WithdrawStake(
 	validator thor.Address,
 	validation *Validation,
 	currentBlock uint32,
 ) (uint64, uint64, uint64, error) {
-	cooldownVET := uint64(0)
 	// if the validator is queued make sure to exit it
 	if validation.Status == StatusQueued {
-		withdrawable := validation.WithdrawableVET
+		withdrawableVET := validation.WithdrawableVET
 		queuedVET := validation.QueuedVET
-		withdrawable += queuedVET
 
+		// reset queued and withdrawable
 		validation.QueuedVET = 0
 		validation.WithdrawableVET = 0
 		validation.Status = StatusExit
 		if err := s.repo.removeQueued(validator, validation); err != nil {
-			return 0, 0, cooldownVET, err
+			return 0, 0, 0, err
 		}
 
-		return withdrawable, queuedVET, cooldownVET, nil
+		return withdrawableVET, queuedVET, 0, nil
 	}
 
-	withdrawable := validation.WithdrawableVET
+	cooldownVET := uint64(0)
+	withdrawableVET := validation.WithdrawableVET
 	queuedVET := validation.QueuedVET
-	withdrawable += validation.QueuedVET
 
 	// reset queued and withdrawable
 	validation.QueuedVET = 0
 	validation.WithdrawableVET = 0
 
 	// validator has exited and waited for the cooldown period
-	if validation.ExitBlock != nil && *validation.ExitBlock+thor.CooldownPeriod() <= currentBlock {
+	if validation.CooldownEnded(currentBlock) {
 		cooldownVET = validation.CooldownVET
-		withdrawable += validation.CooldownVET
 		validation.CooldownVET = 0
 	}
 
 	if err := s.repo.updateValidation(validator, validation); err != nil {
-		return 0, 0, cooldownVET, err
+		return 0, 0, 0, err
 	}
 
-	return withdrawable, queuedVET, cooldownVET, nil
+	return withdrawableVET, queuedVET, cooldownVET, nil
 }
 
 func (s *Service) NextToActivate(maxLeaderGroupSize uint64) (thor.Address, *Validation, error) {
@@ -381,7 +379,7 @@ func (s *Service) ActivateValidator(
 	validation.QueuedVET = 0
 
 	mul := Multiplier
-	if aggRenew.LockedIncrease.VET-aggRenew.LockedDecrease.VET > 0 {
+	if aggRenew.LockedIncrease.VET > aggRenew.LockedDecrease.VET {
 		// if validator has delegations, multiplier is 200%
 		mul = MultiplierWithDelegations
 	}

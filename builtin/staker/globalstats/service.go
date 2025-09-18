@@ -58,26 +58,25 @@ func (s *Service) ApplyRenewal(renewal *Renewal) error {
 	if err != nil {
 		return err
 	}
-	queued, err := s.queued.Get()
-	if err != nil {
+
+	if err := locked.Add(renewal.LockedIncrease); err != nil {
 		return err
 	}
 
-	locked.Add(renewal.LockedIncrease)
 	if err := locked.Sub(renewal.LockedDecrease); err != nil {
 		return err
 	}
-	queued -= renewal.QueuedDecrease
 
 	// for the initial state, use upsert to handle correct gas cost
 	if err := s.locked.Upsert(locked); err != nil {
 		return err
 	}
 
-	// queued here is already touched by addQueued
-	if err := s.queued.Update(queued); err != nil {
+	if err := s.RemoveQueued(renewal.QueuedDecrease); err != nil {
 		return err
 	}
+
+	// move locked decrease to withdrawable, includes validation's pending unlock and delegation's exiting
 	if err := s.AddWithdrawable(renewal.LockedDecrease.VET); err != nil {
 		return err
 	}
@@ -85,39 +84,50 @@ func (s *Service) ApplyRenewal(renewal *Renewal) error {
 	return nil
 }
 
-func (s *Service) ApplyExit(valExitedTVL uint64, exit *Exit) error {
-	locked, err := s.getLocked()
-	if err != nil {
+func (s *Service) ApplyExit(validation *Exit, aggregation *Exit) error {
+	totalExited := validation.ExitedTVL.Clone()
+	if err := totalExited.Add(aggregation.ExitedTVL); err != nil {
 		return err
 	}
 
-	queued, err := s.queued.Get()
-	if err != nil {
+	if err := s.RemoveLocked(totalExited); err != nil {
 		return err
 	}
 
-	if err := locked.Sub(exit.ExitedTVL); err != nil {
-		return err
-	}
-	queued -= exit.QueuedDecrease
-
-	if err := s.locked.Update(locked); err != nil {
+	if err := s.RemoveQueued(validation.QueuedDecrease + aggregation.QueuedDecrease); err != nil {
 		return err
 	}
 
-	if err := s.queued.Update(queued); err != nil {
-		return err
+	// move validation's exiting to cooldown
+	if validation.ExitedTVL.VET > 0 {
+		if err := s.AddCooldown(validation.ExitedTVL.VET); err != nil {
+			return err
+		}
 	}
-	if err := s.AddCooldown(valExitedTVL); err != nil {
-		return err
-	}
-	if exit.ExitedTVL.VET > valExitedTVL {
-		if err := s.AddWithdrawable(exit.ExitedTVL.VET - valExitedTVL); err != nil {
+
+	// move aggregation's exiting to withdrawable
+	if aggregation.ExitedTVL.VET > 0 {
+		if err := s.AddWithdrawable(aggregation.ExitedTVL.VET); err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+// RemoveLocked decreases locked totals when stake is removed from the locked.
+func (s *Service) RemoveLocked(weightedStake *stakes.WeightedStake) error {
+	locked, err := s.getLocked()
+	if err != nil {
+		return err
+	}
+
+	if err := locked.Sub(weightedStake); err != nil {
+		return err
+	}
+
+	// locked here is already touched by addLocked
+	return s.locked.Update(locked)
 }
 
 // AddQueued increases queued totals when new stake is added to the queue.

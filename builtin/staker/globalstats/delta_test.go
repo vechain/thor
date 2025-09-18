@@ -32,7 +32,8 @@ func TestRenewal_Add(t *testing.T) {
 		QueuedDecrease: 1,
 	}
 
-	got := base.Add(inc)
+	got, err := base.Add(inc)
+	assert.NoError(t, err)
 	assert.Same(t, base, got)
 	assert.Equal(t, uint64(11), got.LockedIncrease.VET)
 	assert.Equal(t, uint64(22), got.LockedIncrease.Weight)
@@ -46,39 +47,11 @@ func TestRenewal_Add_Nil(t *testing.T) {
 		LockedIncrease: stakes.NewWeightedStake(5, 6),
 		LockedDecrease: stakes.NewWeightedStake(7, 8),
 	}
-	got := base.Add(nil)
+	got, err := base.Add(nil)
+	assert.NoError(t, err)
 	assert.Same(t, base, got)
 	assert.Equal(t, uint64(5), got.LockedIncrease.VET)
 	assert.Equal(t, uint64(6), got.LockedIncrease.Weight)
 	assert.Equal(t, uint64(7), got.LockedDecrease.VET)
 	assert.Equal(t, uint64(8), got.LockedDecrease.Weight)
-}
-
-func TestExit_Add(t *testing.T) {
-	base := &Exit{
-		ExitedTVL:      stakes.NewWeightedStake(100, 200),
-		QueuedDecrease: 300,
-	}
-	inc := &Exit{
-		ExitedTVL:      stakes.NewWeightedStake(1, 2),
-		QueuedDecrease: 3,
-	}
-
-	got := base.Add(inc)
-	assert.Same(t, base, got)
-	assert.Equal(t, uint64(101), got.ExitedTVL.VET)
-	assert.Equal(t, uint64(202), got.ExitedTVL.Weight)
-	assert.Equal(t, uint64(303), got.QueuedDecrease)
-}
-
-func TestExit_Add_Nil(t *testing.T) {
-	base := &Exit{
-		ExitedTVL:      stakes.NewWeightedStake(10, 20),
-		QueuedDecrease: 30,
-	}
-	got := base.Add(nil)
-	assert.Same(t, base, got)
-	assert.Equal(t, uint64(10), got.ExitedTVL.VET)
-	assert.Equal(t, uint64(20), got.ExitedTVL.Weight)
-	assert.Equal(t, uint64(30), got.QueuedDecrease)
 }
