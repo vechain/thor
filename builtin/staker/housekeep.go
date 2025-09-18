@@ -7,11 +7,20 @@ package staker
 
 import (
 	"fmt"
+	"math/big"
 
 	"github.com/vechain/thor/v2/builtin/staker/globalstats"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
 )
+
+func ToVET(wei *big.Int) uint64 {
+	return new(big.Int).Div(wei, bigE18).Uint64()
+}
+
+func ToWei(vet uint64) *big.Int {
+	return new(big.Int).Mul(new(big.Int).SetUint64(vet), bigE18)
+}
 
 //
 // State transition types
@@ -281,16 +290,17 @@ func (s *Staker) PerformSanityCheck() error {
 	if err != nil {
 		return err
 	}
+	balanceVET := ToVET(balance)
 	total := lockedStake + queuedStake + withdrawableStake + cooldownStake
-	if balance.Uint64() != total {
+	if balanceVET != total {
 		return fmt.Errorf(
 			"sanity check failed: locked(%d) + queued(%d) + withdrawable(%d) = %d, but account balance is %d, diff= %d",
 			lockedStake,
 			queuedStake,
 			withdrawableStake,
 			total,
-			balance.Uint64(),
-			balance.Uint64()-total,
+			balanceVET,
+			balanceVET-total,
 		)
 	}
 	return nil

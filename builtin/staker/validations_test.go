@@ -77,7 +77,7 @@ func (ts *testStaker) AddValidation(
 	if err != nil {
 		return err
 	}
-	newBalance := big.NewInt(0).Add(balance, big.NewInt(0).SetUint64(stake))
+	newBalance := big.NewInt(0).Add(balance, ToWei(stake))
 	if ts.state.SetBalance(ts.addr, newBalance) != nil {
 		return err
 	}
@@ -95,7 +95,7 @@ func (ts *testStaker) IncreaseStake(validator thor.Address, endorser thor.Addres
 	if err != nil {
 		return err
 	}
-	newBalance := big.NewInt(0).Add(balance, big.NewInt(0).SetUint64(amount))
+	newBalance := big.NewInt(0).Add(balance, ToWei(amount))
 	if ts.state.SetBalance(ts.addr, newBalance) != nil {
 		return err
 	}
@@ -117,7 +117,7 @@ func (ts *testStaker) WithdrawStake(validator thor.Address, endorser thor.Addres
 	if err != nil {
 		return 0, err
 	}
-	newBalance := big.NewInt(0).Sub(balance, big.NewInt(0).SetUint64(amount))
+	newBalance := big.NewInt(0).Sub(balance, ToWei(amount))
 	if ts.state.SetBalance(ts.addr, newBalance) != nil {
 		return 0, err
 	}
@@ -134,7 +134,7 @@ func (ts *testStaker) AddDelegation(
 	if err != nil {
 		return nil, err
 	}
-	newBalance := big.NewInt(0).Add(balance, big.NewInt(0).SetUint64(stake))
+	newBalance := big.NewInt(0).Add(balance, ToWei(stake))
 	if ts.state.SetBalance(ts.addr, newBalance) != nil {
 		return nil, err
 	}
@@ -159,7 +159,7 @@ func (ts *testStaker) WithdrawDelegation(
 	if err != nil {
 		return 0, err
 	}
-	newBalance := big.NewInt(0).Sub(balance, big.NewInt(0).SetUint64(amount))
+	newBalance := big.NewInt(0).Sub(balance, ToWei(amount))
 	if ts.state.SetBalance(ts.addr, newBalance) != nil {
 		return 0, err
 	}

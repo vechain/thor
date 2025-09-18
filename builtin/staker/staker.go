@@ -426,6 +426,12 @@ func (s *Staker) WithdrawStake(validator thor.Address, endorser thor.Address, cu
 		}
 	}
 
+	if withdrawable > queued+cooldown {
+		if err := s.globalStatsService.RemoveWithdrawable(withdrawable - queued - cooldown); err != nil {
+			return 0, err
+		}
+	}
+
 	logger.Info("withdrew validator staker", "validator", validator)
 	return withdrawable, nil
 }
