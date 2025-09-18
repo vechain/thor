@@ -62,7 +62,7 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 		return false, err
 	}
 
-	if err := s.PerformSanityCheck(); err != nil {
+	if err := s.ContractBalanceCheck(); err != nil {
 		return false, err
 	}
 
@@ -266,8 +266,8 @@ func (s *Staker) activateNextValidation(currentBlk uint32, maxLeaderGroupSize ui
 	return validator, nil
 }
 
-// This check ensures that locked + queued + withdrawable VET equals the total VET in the staker account address.
-func (s *Staker) PerformSanityCheck() error {
+// ContractBalanceCheck checks that locked + queued + withdrawable VET equals the total VET in the staker account address.
+func (s *Staker) ContractBalanceCheck() error {
 	// Sum all locked, queued, and withdrawable VET for all validations
 	lockedStake, _, err := s.globalStatsService.GetLockedStake()
 	if err != nil {
