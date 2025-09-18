@@ -43,6 +43,9 @@ func (b *Bandwidth) Update(header *block.Header, elapsed time.Duration) (uint64,
 	// use float64 to avoid overflow
 	newValue := uint64(float64(gasUsed) * float64(time.Second) / float64(elapsed))
 
+	metricGasPerSecond().Set(int64(newValue))
+	metricTimeElapsed().Set(int64(elapsed))
+
 	if b.value == 0 {
 		b.value = newValue
 	} else {
