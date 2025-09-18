@@ -7,20 +7,13 @@ package staker
 
 import (
 	"fmt"
-	"math/big"
+
+	"github.com/ethereum/go-ethereum/common/math"
 
 	"github.com/vechain/thor/v2/builtin/staker/globalstats"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
 )
-
-func ToVET(wei *big.Int) uint64 {
-	return new(big.Int).Div(wei, bigE18).Uint64()
-}
-
-func ToWei(vet uint64) *big.Int {
-	return new(big.Int).Mul(new(big.Int).SetUint64(vet), bigE18)
-}
 
 //
 // State transition types
@@ -60,7 +53,7 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 		return false, err
 	}
 
-	if err := s.PerformSanityCheck(0); err != nil {
+	if err := s.ContractBalanceCheck(0); err != nil {
 		return false, err
 	}
 
@@ -266,7 +259,7 @@ func (s *Staker) activateNextValidation(currentBlk uint32, maxLeaderGroupSize ui
 
 // PerformSanityCheck ensures that locked + queued + withdrawable VET equals the total VET in the staker account address.
 // pendingWithdraw is the amount that is about to be withdrawn from the staker contract. It has not yet been deducted from the contract.
-func (s *Staker) PerformSanityCheck(pendingWithdraw uint64) error {
+func (s *Staker) ContractBalanceCheck(pendingWithdraw uint64) error {
 	// Sum all locked, queued, and withdrawable VET for all validations
 	lockedStake, _, err := s.globalStatsService.GetLockedStake()
 	if err != nil {
@@ -286,13 +279,27 @@ func (s *Staker) PerformSanityCheck(pendingWithdraw uint64) error {
 	}
 
 	// Get the staker contract's account balance
-	stakerAddr := s.validationService.ContractAddress()
+	stakerAddr := s.Address()
 	balance, err := s.state.GetBalance(stakerAddr)
 	if err != nil {
 		return err
 	}
 	balanceVET := ToVET(balance)
-	total := lockedStake + queuedStake + withdrawableStake + cooldownStake + pendingWithdraw
+	total := uint64(0)
+	for _, stake := range []uint64{lockedStake, queuedStake, withdrawableStake, cooldownStake, pendingWithdraw} {
+		partialSum, overflow := math.SafeAdd(total, stake)
+		if overflow {
+			return fmt.Errorf(
+				"total overflow occurred while adding locked(%d) + queued(%d) + withdrawable(%d) + cooldown(%d) + pendingWithdraw(%d)",
+				lockedStake,
+				queuedStake,
+				withdrawableStake,
+				cooldownStake,
+				pendingWithdraw,
+			)
+		}
+		total = partialSum
+	}
 	if balanceVET != total {
 		logger.Error("sanity check failed",
 			"locked", lockedStake,

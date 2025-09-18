@@ -50,8 +50,9 @@ func SetLogger(l log.Logger) {
 
 // Staker implements native methods of `Staker` contract.
 type Staker struct {
-	params *params.Params
-	state  *state.State
+	params  *params.Params
+	state   *state.State
+	address thor.Address
 
 	aggregationService *aggregation.Service
 	globalStatsService *globalstats.Service
@@ -64,8 +65,9 @@ func New(addr thor.Address, state *state.State, params *params.Params, charger *
 	sctx := solidity.NewContext(addr, state, charger)
 
 	return &Staker{
-		params: params,
-		state:  state,
+		params:  params,
+		state:   state,
+		address: addr,
 
 		aggregationService: aggregation.New(sctx),
 		globalStatsService: globalstats.New(sctx),
@@ -195,6 +197,10 @@ func (s *Staker) Next(prev thor.Address) (thor.Address, error) {
 	return s.validationService.NextEntry(prev)
 }
 
+func (s *Staker) Address() thor.Address {
+	return s.address
+}
+
 //
 // Setters - state change
 //
@@ -246,7 +252,7 @@ func (s *Staker) AddValidation(
 	}
 
 	logger.Info("added validator", "validator", validator)
-	return s.PerformSanityCheck(0)
+	return s.ContractBalanceCheck(0)
 }
 
 func (s *Staker) SignalExit(validator thor.Address, endorser thor.Address, currentBlock uint32) error {
@@ -327,7 +333,7 @@ func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, am
 	}
 
 	logger.Info("increased stake", "validator", validator)
-	return s.PerformSanityCheck(0)
+	return s.ContractBalanceCheck(0)
 }
 
 func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, amount uint64) error {
@@ -392,7 +398,7 @@ func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, am
 	}
 
 	logger.Info("decreased stake", "validator", validator)
-	return s.PerformSanityCheck(0)
+	return s.ContractBalanceCheck(0)
 }
 
 // WithdrawStake allows expired validations to withdraw their stake.
@@ -432,7 +438,7 @@ func (s *Staker) WithdrawStake(validator thor.Address, endorser thor.Address, cu
 	total := withdrawableVET + queuedVET + cooldownVET
 
 	logger.Info("withdrew validator staker", "validator", validator)
-	return total, s.PerformSanityCheck(total)
+	return total, s.ContractBalanceCheck(total)
 }
 
 func (s *Staker) SetOnline(validator thor.Address, blockNum uint32, online bool) error {
@@ -521,7 +527,7 @@ func (s *Staker) AddDelegation(
 	}
 
 	logger.Info("added delegation", "validator", validator, "delegationID", delegationID)
-	return delegationID, s.PerformSanityCheck(0)
+	return delegationID, s.ContractBalanceCheck(0)
 }
 
 // SignalDelegationExit updates the auto-renewal status of a delegation.
@@ -650,7 +656,7 @@ func (s *Staker) WithdrawDelegation(
 	}
 
 	logger.Info("withdrew delegation", "delegationID", delegationID, "stake", withdrawableStake)
-	return withdrawableStake, s.PerformSanityCheck(withdrawableStake)
+	return withdrawableStake, s.ContractBalanceCheck(withdrawableStake)
 }
 
 // IncreaseDelegatorsReward Increases reward for validation's delegators.

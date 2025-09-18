@@ -34,7 +34,3 @@ func (c *Context) UseGas(gas uint64) {
 		c.charger.Charge(gas)
 	}
 }
-
-func (c *Context) Address() thor.Address {
-	return c.address
-}
