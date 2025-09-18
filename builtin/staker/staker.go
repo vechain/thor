@@ -420,7 +420,7 @@ func (s *Staker) WithdrawStake(validator thor.Address, endorser thor.Address, cu
 		}
 	}
 	if queuedVET > 0 {
-		if err = s.globalStatsService.RemoveQueued(cooldownVET); err != nil {
+		if err = s.globalStatsService.RemoveQueued(queuedVET); err != nil {
 			return 0, err
 		}
 	}
