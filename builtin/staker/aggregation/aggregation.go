@@ -59,18 +59,15 @@ func (a *Aggregation) renew() (*globalstats.Renewal, error) {
 	queuedDecrease := a.Pending.VET
 
 	// Move Pending => Locked
-	err := a.Locked.Add(a.Pending)
-	if err != nil {
+	if err := a.Locked.Add(a.Pending); err != nil {
 		return nil, err
 	}
 	a.Pending = &stakes.WeightedStake{}
 
 	// Remove ExitingVET from LockedVET
-	err = a.Locked.Sub(a.Exiting)
-	if err != nil {
+	if err := a.Locked.Sub(a.Exiting); err != nil {
 		return nil, err
 	}
-
 	a.Exiting = &stakes.WeightedStake{}
 
 	return &globalstats.Renewal{

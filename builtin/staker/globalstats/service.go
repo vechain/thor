@@ -115,7 +115,7 @@ func (s *Service) ApplyExit(validation *Exit, aggregation *Exit) error {
 	return nil
 }
 
-// RemovedLocked decreases locked totals when stake is removed from the locked.
+// RemoveLocked decreases locked totals when stake is removed from the locked.
 func (s *Service) RemoveLocked(weightedStake *stakes.WeightedStake) error {
 	locked, err := s.getLocked()
 	if err != nil {
