@@ -58,6 +58,7 @@ func syncLogDB(ctx context.Context, repo *chain.Repository, logDB *logdb.LogDB, 
 	defer func() { pb.NotPrint = true }()
 
 	w := logDB.NewWriterSyncOff()
+	defer w.Close()
 
 	if err := w.Truncate(startPos); err != nil {
 		return err

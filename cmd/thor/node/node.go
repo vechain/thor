@@ -80,12 +80,14 @@ type Node struct {
 	forkConfig  *thor.ForkConfig
 	options     Options
 
-	logDBFailed   bool
-	initialSynced bool // true if the initial synchronization process is done
-	bandwidth     bandwidth.Bandwidth
-	maxBlockNum   uint32
-	processLock   sync.Mutex
-	logWorker     *worker
+	logDBFailed      bool
+	initialSynced    bool // true if the initial synchronization process is done
+	bandwidth        bandwidth.Bandwidth
+	maxBlockNum      uint32
+	processLock      sync.Mutex
+	logWorker        *worker
+	persistentWriter *logdb.Writer
+	writerMutex      sync.Mutex
 }
 
 func New(
@@ -154,6 +156,10 @@ func (n *Node) handleBlockStream(ctx context.Context, stream <-chan *block.Block
 	for blk = range stream {
 		if blk == nil {
 			continue
+		}
+
+		if blk.Header().Number()%100000 == 0 {
+			logger.Info(fmt.Sprintf("====== imported block number (%d)", blk.Header().Number()))
 		}
 		if _, err := n.processBlock(blk, &stats); err != nil {
 			return err
@@ -460,19 +466,32 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 	return *isTrunk, nil
 }
 
-func (n *Node) writeLogs(newBlock *block.Block, newReceipts tx.Receipts, oldBestBlockID thor.Bytes32) (err error) {
-	var w *logdb.Writer
-	if int64(newBlock.Header().Timestamp()) < time.Now().Unix()-24*3600 {
-		// turn off log sync to quickly catch up
-		w = n.logDB.NewWriterSyncOff()
-	} else {
-		w = n.logDB.NewWriter()
-	}
-	defer func() {
-		if err != nil {
-			n.logWorker.Run(w.Rollback)
+func (n *Node) getPersistentWriter() *logdb.Writer {
+	n.writerMutex.Lock()
+	defer n.writerMutex.Unlock()
+
+	if n.persistentWriter == nil {
+		if n.options.SkipLogs {
+			n.persistentWriter = n.logDB.NewWriterSyncOff()
+		} else {
+			n.persistentWriter = n.logDB.NewWriter()
 		}
-	}()
+	}
+	return n.persistentWriter
+}
+
+func (n *Node) closePersistentWriter() {
+	n.writerMutex.Lock()
+	defer n.writerMutex.Unlock()
+
+	if n.persistentWriter != nil {
+		n.persistentWriter.Close()
+		n.persistentWriter = nil
+	}
+}
+
+func (n *Node) writeLogs(newBlock *block.Block, newReceipts tx.Receipts, oldBestBlockID thor.Bytes32) (err error) {
+	w := n.getPersistentWriter()
 
 	oldTrunk := n.repo.NewChain(oldBestBlockID)
 	newTrunk := n.repo.NewChain(newBlock.Header().ParentID())
@@ -493,7 +512,8 @@ func (n *Node) writeLogs(newBlock *block.Block, newReceipts tx.Receipts, oldBest
 	if err != nil {
 		return err
 	}
-	// write logs on the new branch.
+
+	// write logs on the new branch
 	for _, id := range newBranch {
 		block, err := n.repo.GetBlock(id)
 		if err != nil {
@@ -508,6 +528,7 @@ func (n *Node) writeLogs(newBlock *block.Block, newReceipts tx.Receipts, oldBest
 		})
 	}
 
+	// Write the new block
 	n.logWorker.Run(func() error {
 		if err := w.Write(newBlock, newReceipts); err != nil {
 			return err

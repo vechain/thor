@@ -10,6 +10,8 @@ import (
 	"database/sql"
 	"fmt"
 	"math/big"
+	"path/filepath"
+	"sync"
 
 	sqlite3 "github.com/mattn/go-sqlite3"
 
@@ -413,12 +415,22 @@ func (db *LogDB) HasBlockID(id thor.Bytes32) (bool, error) {
 
 // NewWriter creates a log writer.
 func (db *LogDB) NewWriter() *Writer {
-	return &Writer{conn: db.wconn, stmtCache: db.stmtCache}
+	return &Writer{
+		conn:       db.wconn,
+		stmtCache:  db.stmtCache,
+		db:         db,
+		partitions: make(map[string]*sql.DB),
+	}
 }
 
 // NewWriterSyncOff creates a log writer which applied 'pragma synchronous = off'.
 func (db *LogDB) NewWriterSyncOff() *Writer {
-	return &Writer{conn: db.wconnSyncOff, stmtCache: db.stmtCache}
+	return &Writer{
+		conn:       db.wconnSyncOff,
+		stmtCache:  db.stmtCache,
+		db:         db,
+		partitions: make(map[string]*sql.DB),
+	}
 }
 
 func topicValue(topics []thor.Bytes32, i int) []byte {
@@ -447,6 +459,12 @@ type Writer struct {
 
 	tx               *sql.Tx
 	uncommittedCount int
+
+	// Partitioning support
+	db               *LogDB
+	partitions       map[string]*sql.DB // Store *sql.DB instead of *sql.Conn
+	partitionMux     sync.RWMutex
+	currentPartition int
 }
 
 // Truncate truncates the database by deleting logs after blockNum (included).
@@ -456,17 +474,149 @@ func (w *Writer) Truncate(blockNum uint32) error {
 		return err
 	}
 
-	if err := w.exec("DELETE FROM event WHERE seq >= ?", seq); err != nil {
+	if err := w.execWithTx("DELETE FROM event WHERE seq >= ?", seq); err != nil {
 		return err
 	}
-	if err := w.exec("DELETE FROM transfer WHERE seq >= ?", seq); err != nil {
+	if err := w.execWithTx("DELETE FROM transfer WHERE seq >= ?", seq); err != nil {
 		return err
 	}
 	return nil
 }
 
-// Write writes all logs of the given block.
 func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
+	blockNum := b.Header().Number()
+
+	// Calculate partition number
+	partitionNum := int(blockNum / 500000)
+
+	//println("DEBUG: Block %d -> Partition %d, Current partition: %d", blockNum, partitionNum, w.currentPartition)
+
+	// Switch to partition if needed
+	if w.currentPartition != partitionNum {
+		// Close previous partition database if it exists
+		if w.currentPartition >= 0 {
+			prevPartitionName := fmt.Sprintf("events_partition_%d", w.currentPartition)
+			if db, exists := w.partitions[prevPartitionName]; exists {
+				println("DEBUG: Closing previous partition %s", prevPartitionName)
+				db.Close()                              // Close the previous partition database
+				delete(w.partitions, prevPartitionName) // Remove from map
+			}
+		}
+
+		partitionName := fmt.Sprintf("events_partition_%d", partitionNum)
+		println("DEBUG: Switching to partition ", partitionName)
+		partitionDB := w.getPartitionDatabase(partitionName)
+
+		// Get a new connection from the partition database
+		conn, err := partitionDB.Conn(context.Background())
+		if err != nil {
+			return fmt.Errorf("failed to get connection for partition %s: %v", partitionName, err)
+		}
+
+		w.conn = conn
+		w.currentPartition = partitionNum
+		// Reset transaction state
+		w.tx = nil
+		w.uncommittedCount = 0
+		println("DEBUG: Switched to partition %s, total open partitions: %d", partitionName, len(w.partitions))
+	}
+
+	return w.writeToDatabase(w.conn, b, receipts)
+}
+
+// getPartitionConnection gets or creates a partition database connection
+//func (w *Writer) getPartitionConnection(partitionName string) *sql.Conn {
+//	w.partitionMux.RLock()
+//	if conn, exists := w.partitions[partitionName]; exists {
+//		w.partitionMux.RUnlock()
+//		return conn
+//	}
+//	w.partitionMux.RUnlock()
+//
+//	w.partitionMux.Lock()
+//	defer w.partitionMux.Unlock()
+//
+//	// Double-check after acquiring write lock
+//	if conn, exists := w.partitions[partitionName]; exists {
+//		return conn
+//	}
+//
+//	// Create partition database
+//	partitionPath := filepath.Join(filepath.Dir(w.db.Path()), partitionName+".db")
+//
+//	db, err := sql.Open("sqlite3", partitionPath+"?_journal=wal&cache=shared")
+//	if err != nil {
+//		panic(fmt.Sprintf("Failed to create partition %s: %v", partitionName, err))
+//	}
+//
+//	// Initialize schema
+//	schema := refTableScheme + eventTableSchema + transferTableSchema
+//	if _, err := db.Exec(schema); err != nil {
+//		db.Close()
+//		panic(fmt.Sprintf("Failed to initialize partition schema %s: %v", partitionName, err))
+//	}
+//
+//	// Create connection and store it
+//	conn, err := db.Conn(context.Background())
+//	if err != nil {
+//		db.Close()
+//		panic(fmt.Sprintf("Failed to get connection for partition %s: %v", partitionName, err))
+//	}
+//
+//	w.partitions[partitionName] = conn
+//	return conn
+//}
+
+func (w *Writer) getPartitionDatabase(partitionName string) *sql.DB {
+	w.partitionMux.RLock()
+	if db, exists := w.partitions[partitionName]; exists {
+		println("DEBUG: Reusing existing partition %s", partitionName)
+		w.partitionMux.RUnlock()
+		return db
+	}
+	w.partitionMux.RUnlock()
+
+	w.partitionMux.Lock()
+	defer w.partitionMux.Unlock()
+
+	// Double-check after acquiring write lock
+	if db, exists := w.partitions[partitionName]; exists {
+		println("DEBUG: Reusing existing partition %s (double-check)", partitionName)
+		return db
+	}
+
+	// Create partition database
+	partitionPath := filepath.Join(filepath.Dir(w.db.Path()), partitionName+".db")
+	println("DEBUG: Creating new partition %s at %s", partitionName, partitionPath)
+
+	db, err := sql.Open("sqlite3", partitionPath+"?_journal=wal&cache=shared")
+	if err != nil {
+		println("ERROR: Failed to create partition %s: %v", partitionName, err)
+		panic(fmt.Sprintf("Failed to create partition %s: %v", partitionName, err))
+	}
+
+	// Initialize schema
+	schema := refTableScheme + eventTableSchema + transferTableSchema
+	if _, err := db.Exec(schema); err != nil {
+		println("ERROR: Failed to initialize partition schema %s: %v", partitionName, err)
+		db.Close()
+		panic(fmt.Sprintf("Failed to initialize partition schema %s: %v", partitionName, err))
+	}
+
+	w.partitions[partitionName] = db
+	println("DEBUG: Created partition %s, total partitions: %d", partitionName, len(w.partitions))
+	return db
+}
+
+func (w *Writer) writeToDatabase(conn *sql.Conn, b *block.Block, receipts tx.Receipts) error {
+	// Start transaction if not already started
+	if w.tx == nil {
+		var err error
+		if w.tx, err = conn.BeginTx(context.Background(), nil); err != nil {
+			return err
+		}
+	}
+
 	var (
 		blockID        = b.Header().ID()
 		blockNum       = b.Header().Number()
@@ -491,7 +641,7 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 
 		if !blockIDInserted {
 			// block id is not yet inserted
-			if err := w.exec(
+			if err := w.execWithTx(
 				"INSERT OR IGNORE INTO ref(data) VALUES(?)",
 				blockID[:]); err != nil {
 				return err
@@ -510,7 +660,7 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 		}
 
 		txIndex := i
-		if err := w.exec(
+		if err := w.execWithTx(
 			"INSERT OR IGNORE INTO ref(data) VALUES(?),(?)",
 			txID[:], txOrigin[:]); err != nil {
 			return err
@@ -518,7 +668,7 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 
 		for clauseIndex, output := range r.Outputs {
 			for _, ev := range output.Events {
-				if err := w.exec(
+				if err := w.execWithTx(
 					"INSERT OR IGNORE INTO ref (data) VALUES(?),(?),(?),(?),(?),(?)",
 					ev.Address[:],
 					topicValue(ev.Topics, 0),
@@ -552,7 +702,7 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 					return err
 				}
 
-				if err := w.exec(
+				if err := w.execWithTx(
 					query,
 					seq,
 					blockTimestamp,
@@ -573,7 +723,7 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 			}
 
 			for _, tr := range output.Transfers {
-				if err := w.exec(
+				if err := w.execWithTx(
 					"INSERT OR IGNORE INTO ref (data) VALUES(?),(?)",
 					tr.Sender[:],
 					tr.Recipient[:]); err != nil {
@@ -592,7 +742,7 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 					return err
 				}
 
-				if err := w.exec(
+				if err := w.execWithTx(
 					query,
 					seq,
 					blockTimestamp,
@@ -646,15 +796,41 @@ func (w *Writer) UncommittedCount() int {
 	return w.uncommittedCount
 }
 
-func (w *Writer) exec(query string, args ...any) (err error) {
+//func (w *Writer) exec(query string, args ...any) (err error) {
+//	if w.tx == nil {
+//		if w.tx, err = w.conn.BeginTx(context.Background(), nil); err != nil {
+//			return
+//		}
+//	}
+//	if _, err = w.tx.Stmt(w.stmtCache.MustPrepare(query)).Exec(args...); err != nil {
+//		return
+//	}
+//	w.uncommittedCount++
+//	return nil
+//}
+
+func (w *Writer) execWithTx(query string, args ...any) error {
 	if w.tx == nil {
-		if w.tx, err = w.conn.BeginTx(context.Background(), nil); err != nil {
-			return
-		}
+		return fmt.Errorf("no active transaction")
 	}
-	if _, err = w.tx.Stmt(w.stmtCache.MustPrepare(query)).Exec(args...); err != nil {
-		return
+	if _, err := w.tx.Exec(query, args...); err != nil {
+		return err
 	}
 	w.uncommittedCount++
+	return nil
+}
+
+func (w *Writer) Close() error {
+	w.partitionMux.Lock()
+	defer w.partitionMux.Unlock()
+
+	println("DEBUG: Closing writer, total partitions to close: %d", len(w.partitions))
+	for name, db := range w.partitions {
+		println("DEBUG: Closing partition %s", name)
+		db.Close()
+		delete(w.partitions, name)
+	}
+	w.partitions = make(map[string]*sql.DB)
+	println("DEBUG: Writer closed, all partitions cleaned up")
 	return nil
 }
