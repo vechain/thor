@@ -40,24 +40,19 @@ func (ts *TestSequence) AssertActive(active bool) *TestSequence {
 	return ts
 }
 
-func (ts *TestSequence) AssertLockedVET(expectedVET, expectedWeight *big.Int) *TestSequence {
+func (ts *TestSequence) AssertLockedVET(expectedVET, expectedWeight uint64) *TestSequence {
 	locked, weight, err := ts.staker.LockedStake()
 	assert.NoError(ts.t, err, "failed to get locked VET")
-	if expectedVET != nil {
-		assert.Equal(ts.t, expectedVET, locked, "locked VET mismatch")
-	}
-	if expectedWeight != nil {
-		assert.Equal(ts.t, expectedWeight, weight, "locked weight mismatch")
-	}
+	assert.Equal(ts.t, expectedVET, locked, "locked VET mismatch")
+	assert.Equal(ts.t, expectedWeight, weight, "locked weight mismatch")
+
 	return ts
 }
 
-func (ts *TestSequence) AssertQueuedVET(expectedVET *big.Int) *TestSequence {
+func (ts *TestSequence) AssertQueuedVET(expectedVET uint64) *TestSequence {
 	queued, err := ts.staker.QueuedStake()
 	assert.NoError(ts.t, err, "failed to get queued VET")
-	if expectedVET != nil {
-		assert.Equal(ts.t, expectedVET, queued, "queued VET mismatch")
-	}
+	assert.Equal(ts.t, expectedVET, queued, "queued VET mismatch")
 
 	return ts
 }
@@ -95,6 +90,14 @@ func (ts *TestSequence) AssertNext(prev thor.Address, expected thor.Address) *Te
 	assert.NoError(ts.t, err, "failed to get next validator after %s", prev.String())
 	assert.Equal(ts.t, expected, next, "next validator mismatch after %s", prev.String())
 	return ts
+}
+
+func (ts *TestSequence) FirstActive() (thor.Address, *validation.Validation) {
+	first, err := ts.staker.FirstActive()
+	assert.NoError(ts.t, err)
+	val, err := ts.staker.GetValidation(first)
+	assert.NoError(ts.t, err)
+	return first, val
 }
 
 func (ts *TestSequence) AddValidation(
@@ -135,6 +138,18 @@ func (ts *TestSequence) IncreaseStake(
 	return ts
 }
 
+func (ts *TestSequence) IncreaseStakeErrors(
+	addr thor.Address,
+	endorser thor.Address,
+	amount uint64,
+	errMsg string,
+) *TestSequence {
+	err := ts.staker.IncreaseStake(addr, endorser, amount)
+	assert.NotNil(ts.t, err, "expected error when increasing stake for validator %s by %d", addr.String(), amount)
+	assert.ErrorContains(ts.t, err, errMsg, "expected error message when increasing stake for validator %s by 1", addr.String())
+	return ts
+}
+
 func (ts *TestSequence) DecreaseStake(
 	addr thor.Address,
 	endorser thor.Address,
@@ -142,6 +157,18 @@ func (ts *TestSequence) DecreaseStake(
 ) *TestSequence {
 	err := ts.staker.DecreaseStake(addr, endorser, amount)
 	assert.NoError(ts.t, err, "failed to decrease stake for validator %s by %d: %v", addr.String(), amount, err)
+	return ts
+}
+
+func (ts *TestSequence) DecreaseStakeErrors(
+	addr thor.Address,
+	endorser thor.Address,
+	amount uint64,
+	errMsg string,
+) *TestSequence {
+	err := ts.staker.DecreaseStake(addr, endorser, amount)
+	assert.NotNil(ts.t, err, "expected error when decreasing stake for validator %s by %d", addr.String(), amount)
+	assert.ErrorContains(ts.t, err, errMsg, "expected error message when decreasing stake for validator %s by 1", addr.String())
 	return ts
 }
 
@@ -172,7 +199,7 @@ func (ts *TestSequence) SetBeneficiary(
 func (ts *TestSequence) AssertWithdrawable(
 	master thor.Address,
 	block uint32,
-	expectedWithdrawable *big.Int,
+	expectedWithdrawable uint64,
 ) *TestSequence {
 	withdrawable, err := ts.staker.GetWithdrawable(master, block)
 	assert.NoError(ts.t, err, "failed to get withdrawable amount for validator %s at block %d: %v", master.String(), block, err)
@@ -313,17 +340,26 @@ func (ts *TestSequence) IncreaseDelegatorsReward(node thor.Address, reward *big.
 	return ts
 }
 
+// ExitValidator manually exits a validator, skipping the housekeeping part
+func (ts *TestSequence) ExitValidator(node thor.Address) *TestSequence {
+	exit, err := ts.staker.validationService.ExitValidator(node)
+	assert.NoError(ts.t, err, "failed to exit validator %s", node.String())
+	aggExit, err := ts.staker.aggregationService.Exit(node)
+	assert.NoError(ts.t, err, "failed to exit aggregation for validator %s", node.String())
+	assert.NoError(ts.t, ts.staker.globalStatsService.ApplyExit(exit, aggExit))
+	return ts
+}
+
 type ValidationAssertions struct {
-	staker    *testStaker
 	addr      thor.Address
 	validator *validation.Validation
 	t         *testing.T
 }
 
-func assertValidation(t *testing.T, staker *testStaker, addr thor.Address) *ValidationAssertions {
-	validator, err := staker.GetValidation(addr)
+func assertValidation(t *testing.T, test *TestSequence, addr thor.Address) *ValidationAssertions {
+	validator, err := test.staker.GetValidation(addr)
 	require.NoError(t, err, "failed to get validator %s", addr.String())
-	return &ValidationAssertions{staker: staker, addr: addr, validator: validator, t: t}
+	return &ValidationAssertions{addr: addr, validator: validator, t: t}
 }
 
 func (va *ValidationAssertions) Status(expected validation.Status) *ValidationAssertions {
@@ -361,20 +397,13 @@ func (va *ValidationAssertions) Period(expected uint32) *ValidationAssertions {
 	return va
 }
 
-func (va *ValidationAssertions) PendingUnlockVET(expected *big.Int) *ValidationAssertions {
+func (va *ValidationAssertions) PendingUnlockVET(expected uint64) *ValidationAssertions {
 	assert.Equal(va.t, expected, va.validator.PendingUnlockVET, "validator %s next period decrease mismatch", va.addr.String())
 	return va
 }
 
 func (va *ValidationAssertions) IsEmpty(expected bool) *ValidationAssertions {
 	assert.Equal(va.t, expected, va.validator == nil, "validator %s empty state mismatch", va.addr.String())
-	return va
-}
-
-func (va *ValidationAssertions) Rewards(period uint32, expected *big.Int) *ValidationAssertions {
-	reward, err := va.staker.GetDelegatorRewards(va.addr, period)
-	assert.NoError(va.t, err, "failed to get rewards for validator %s at period %d", va.addr.String(), period)
-	assert.Equal(va.t, expected, reward, "validator %s rewards mismatch for period %d", va.addr.String(), period)
 	return va
 }
 
