@@ -1,3 +1,8 @@
+// Copyright (c) 2025 The VeChainThor developers
+//
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
 package staker
 
 import (
@@ -303,15 +308,55 @@ func (ts *TestSequence) AssertTotals(validationID thor.Address, expected *valida
 	assert.NoError(ts.t, err, "failed to get totals for validator %s", validationID.String())
 
 	// exiting
-	assert.Equal(ts.t, expected.TotalExitingStake, totals.TotalExitingStake, "total exiting stake mismatch for validator %s, expected=%d, got=%d", validationID.String(), expected.TotalExitingStake, totals.TotalExitingStake)
+	assert.Equal(
+		ts.t,
+		expected.TotalExitingStake,
+		totals.TotalExitingStake,
+		"total exiting stake mismatch for validator %s, expected=%d, got=%d",
+		validationID.String(),
+		expected.TotalExitingStake,
+		totals.TotalExitingStake,
+	)
 
 	// locked
-	assert.Equal(ts.t, expected.TotalLockedStake, totals.TotalLockedStake, "total locked stake mismatch for validator %s, expected=%d, got=%d", validationID.String(), expected.TotalLockedStake, totals.TotalLockedStake)
-	assert.Equal(ts.t, expected.TotalLockedWeight, totals.TotalLockedWeight, "total locked weight mismatch for validator %s, expected=%d, got=%d", validationID.String(), expected.TotalLockedWeight, totals.TotalLockedWeight)
+	assert.Equal(
+		ts.t,
+		expected.TotalLockedStake,
+		totals.TotalLockedStake,
+		"total locked stake mismatch for validator %s, expected=%d, got=%d",
+		validationID.String(),
+		expected.TotalLockedStake,
+		totals.TotalLockedStake,
+	)
+	assert.Equal(
+		ts.t,
+		expected.TotalLockedWeight,
+		totals.TotalLockedWeight,
+		"total locked weight mismatch for validator %s, expected=%d, got=%d",
+		validationID.String(),
+		expected.TotalLockedWeight,
+		totals.TotalLockedWeight,
+	)
 
 	// queued
-	assert.Equal(ts.t, expected.TotalQueuedStake, totals.TotalQueuedStake, "total queued stake mismatch for validator %s, expected=%d, got=%d", validationID.String(), expected.TotalQueuedStake, totals.TotalQueuedStake)
-	assert.Equal(ts.t, expected.NextPeriodWeight, totals.NextPeriodWeight, "next period weight mismatch for validator %s, expected=%d, got=%d", validationID.String(), expected.NextPeriodWeight, totals.NextPeriodWeight)
+	assert.Equal(
+		ts.t,
+		expected.TotalQueuedStake,
+		totals.TotalQueuedStake,
+		"total queued stake mismatch for validator %s, expected=%d, got=%d",
+		validationID.String(),
+		expected.TotalQueuedStake,
+		totals.TotalQueuedStake,
+	)
+	assert.Equal(
+		ts.t,
+		expected.NextPeriodWeight,
+		totals.NextPeriodWeight,
+		"next period weight mismatch for validator %s, expected=%d, got=%d",
+		validationID.String(),
+		expected.NextPeriodWeight,
+		totals.NextPeriodWeight,
+	)
 
 	return ts
 }

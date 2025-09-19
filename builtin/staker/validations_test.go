@@ -2677,8 +2677,8 @@ func TestStaker_TestWeights(t *testing.T) {
 
 	v1Totals = &validation.Totals{
 		TotalLockedStake:  val.LockedVET + dStake.VET*2,
-		TotalLockedWeight: val.LockedVET *2 + dStake.Weight*2,
-		NextPeriodWeight:  val.LockedVET *2 + dStake.Weight*2,
+		TotalLockedWeight: val.LockedVET*2 + dStake.Weight*2,
+		NextPeriodWeight:  val.LockedVET*2 + dStake.Weight*2,
 	}
 
 	staker.AssertLockedVET(v1Totals.TotalLockedStake, v1Totals.TotalLockedWeight).
@@ -2709,8 +2709,8 @@ func TestStaker_TestWeights(t *testing.T) {
 		AssertGlobalWithdrawable(0)
 
 	v1Totals.TotalLockedStake += stakeIncrease
-	v1Totals.TotalLockedWeight += stakeIncrease *2
-	v1Totals.NextPeriodWeight += stakeIncrease *2
+	v1Totals.TotalLockedWeight += stakeIncrease * 2
+	v1Totals.NextPeriodWeight += stakeIncrease * 2
 
 	v2Totals = &validation.Totals{
 		TotalQueuedStake: stake,
@@ -3002,8 +3002,6 @@ func TestStaker_OfflineValidator(t *testing.T) {
 	offlineBlock := uint32(4)
 	staker.SetOnline(validator1, offlineBlock, false)
 
-	expectedOfflineBlock := uint32(4)
-
 	staker.AssertValidation(validator1).
 		OfflineBlock(&offlineBlock).
 		ExitBlock(nil)
@@ -3020,7 +3018,7 @@ func TestStaker_OfflineValidator(t *testing.T) {
 	// Epoch length is 180, 336 is the number of epochs in 7 days which is threshold, 8 is the block number when val wen't offline
 	staker.Housekeep(thor.EpochLength() * 336)
 
-	expectedOfflineBlock = uint32(8)
+	expectedOfflineBlock := uint32(8)
 	staker.AssertValidation(validator1).
 		OfflineBlock(&expectedOfflineBlock).
 		ExitBlock(nil)
