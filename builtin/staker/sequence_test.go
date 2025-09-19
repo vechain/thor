@@ -107,7 +107,7 @@ func (ts *TestSequence) UpdateContractBalance(amount uint64) *TestSequence {
 		current = big.NewInt(0)
 	}
 	newBalance := new(big.Int).Add(current, big.NewInt(int64(amount)))
-	ts.staker.state.SetBalance(addr, newBalance)
+	assert.NoError(ts.t, ts.staker.state.SetBalance(addr, newBalance))
 	return ts
 }
 
@@ -135,7 +135,7 @@ func (ts *TestSequence) IncreaseStakeErrors(
 ) *TestSequence {
 	err := ts.staker.IncreaseStake(addr, endorser, amount)
 	assert.NotNil(ts.t, err, "expected error when increasing stake for validator %s by %d", addr.String(), amount)
-	assert.ErrorContains(ts.t, err, errMsg, "expected error message when increasing stake for validator %s by 1", addr.String())
+	assert.ErrorContains(ts.t, err, errMsg, "expected error message when increasing stake for validator %s by %d", addr.String(), amount)
 	return ts
 }
 
