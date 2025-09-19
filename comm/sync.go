@@ -39,6 +39,27 @@ func download(_ctx context.Context, repo *chain.Repository, peer *Peer, headNum 
 
 	g, ctx := errgroup.WithContext(ctx)
 
+	// Three-stage pipeline for block synchronization:
+	//
+	// Stage 1: Raw Data Fetcher (Worker 1)
+	//   - Fetches raw block data from peer in batches
+	//   - Sends raw data to rawBatches channel
+	//   - Closes rawBatches when done
+	//
+	// Stage 2: Decoder & Warm-up (Worker 2)
+	//   - Receives raw data from rawBatches channel
+	//   - Decodes raw data into block objects
+	//   - Pre-warms block/transaction caches (ID, Beta, IntrinsicGas, etc.)
+	//   - Sends decoded blocks to warmedUp channel
+	//   - Closes warmedUp when done
+	//
+	// Stage 3: Block Handler (Worker 3)
+	//   - Receives pre-warmed blocks from warmedUp channel
+	//   - Processes blocks (validation, storage, etc.)
+	//   - Runs until warmedUp channel is closed
+	//
+	// Channel Flow:
+	//   rawBatches (chan []byte) -> warmedUp (chan *block.Block)
 	g.Go(func() error {
 		defer close(rawBatches)
 		return fetchRawBlockBatches(ctx, peer, ancestor+1, rawBatches)
@@ -112,21 +133,20 @@ func decodeAndWarmupBatch(ctx context.Context, batch rawBlockBatch, warmedUp cha
 	}
 
 	for _, blk := range blocks {
-		blk.Header().ID()
-		blk.Header().Beta()
-
-		for _, tx := range blk.Transactions() {
-			// pre warming functions with cache
-			tx.ID()
-			tx.UnprovedWork()
-			_, _ = tx.IntrinsicGas()
-			_, _ = tx.Delegator()
-		}
-
 		select {
 		case <-ctx.Done():
 			return nil
 		case warmedUp <- blk:
+			blk.Header().ID()
+			blk.Header().Beta()
+
+			for _, tx := range blk.Transactions() {
+				// pre warming functions with cache
+				tx.ID()
+				tx.UnprovedWork()
+				_, _ = tx.IntrinsicGas()
+				_, _ = tx.Delegator()
+			}
 		}
 	}
 
