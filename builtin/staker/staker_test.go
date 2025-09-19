@@ -196,6 +196,25 @@ func (ts *TestSequence) SetBeneficiary(
 	return ts
 }
 
+func (ts *TestSequence) SetBeneficiaryErrors(
+	validator thor.Address,
+	endorser thor.Address,
+	beneficiary thor.Address,
+	errMsg string,
+) *TestSequence {
+	err := ts.staker.SetBeneficiary(validator, endorser, beneficiary)
+	assert.NotNil(ts.t, err, "expected error when setting beneficiary for validator %s with endorser %s", validator.String(), endorser.String())
+	assert.ErrorContains(
+		ts.t,
+		err,
+		errMsg,
+		"expected error message when setting beneficiary for validator %s with endorser %s",
+		validator.String(),
+		endorser.String(),
+	)
+	return ts
+}
+
 func (ts *TestSequence) AssertWithdrawable(
 	master thor.Address,
 	block uint32,

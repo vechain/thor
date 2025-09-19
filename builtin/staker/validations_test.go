@@ -2565,29 +2565,27 @@ func TestStaker_HasDelegations(t *testing.T) {
 }
 
 func TestStaker_SetBeneficiary(t *testing.T) {
-	staker, _ := newStaker(t, 0, 1, false)
+	staker, _ := newStakerV2(t, 0, 1, false)
 
 	master := datagen.RandAddress()
 	endorser := datagen.RandAddress()
 	beneficiary := datagen.RandAddress()
 
-	test := newTestSequence(t, staker)
-
 	// add validation without a beneficiary
-	test.AddValidation(master, endorser, thor.MediumStakingPeriod(), MinStakeVET).ActivateNext(0)
-	assertValidation(t, test, master).Beneficiary(thor.Address{})
+	staker.AddValidation(master, endorser, thor.MediumStakingPeriod(), MinStakeVET).ActivateNext(0)
+	assertValidation(t, staker, master).Beneficiary(thor.Address{})
 
 	// negative cases
-	assert.ErrorContains(t, staker.SetBeneficiary(master, master, beneficiary), "endorser required")
-	assert.ErrorContains(t, staker.SetBeneficiary(endorser, endorser, beneficiary), "validation does not exist")
+	staker.SetBeneficiaryErrors(master, master, beneficiary, "endorser required")
+	staker.SetBeneficiaryErrors(endorser, endorser, beneficiary, "validation does not exist")
 
 	// set beneficiary, should be successful
-	test.SetBeneficiary(master, endorser, beneficiary)
-	assertValidation(t, test, master).Beneficiary(beneficiary)
+	staker.SetBeneficiary(master, endorser, beneficiary)
+	assertValidation(t, staker, master).Beneficiary(beneficiary)
 
 	// remove the beneficiary
-	test.SetBeneficiary(master, endorser, thor.Address{})
-	assertValidation(t, test, master).Beneficiary(thor.Address{})
+	staker.SetBeneficiary(master, endorser, thor.Address{})
+	assertValidation(t, staker, master).Beneficiary(thor.Address{})
 }
 
 func getTestMaxLeaderSize(param *params.Params) uint64 {
