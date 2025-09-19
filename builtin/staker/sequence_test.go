@@ -90,12 +90,12 @@ func (ts *TestSequence) FirstActive() (thor.Address, *validation.Validation) {
 }
 
 func (ts *TestSequence) AddValidation(
-	endorser, master thor.Address,
+	validator, endorser thor.Address,
 	period uint32,
 	stake uint64,
 ) *TestSequence {
-	err := ts.staker.AddValidation(endorser, master, period, stake)
-	assert.NoError(ts.t, err, "failed to add validator %s with endorser %s", master.String(), endorser.String())
+	err := ts.staker.AddValidation(validator, endorser, period, stake)
+	assert.NoError(ts.t, err, "failed to add validator %s with endorser %s", validator.String(), endorser.String())
 	return ts
 }
 
@@ -161,14 +161,14 @@ func (ts *TestSequence) DecreaseStakeErrors(
 	return ts
 }
 
-func (ts *TestSequence) WithdrawStake(endorser, master thor.Address, block uint32, expectedOut uint64) *TestSequence {
-	amount, err := ts.staker.WithdrawStake(endorser, master, block)
-	assert.NoError(ts.t, err, "failed to withdraw stake for validator %s with endorser %s at block %d: %v", master.String(), endorser.String(), block, err)
+func (ts *TestSequence) WithdrawStake(validator, endorser thor.Address, block uint32, expectedOut uint64) *TestSequence {
+	amount, err := ts.staker.WithdrawStake(validator, endorser, block)
+	assert.NoError(ts.t, err, "failed to withdraw stake for validator %s with endorser %s at block %d: %v", validator.String(), endorser.String(), block, err)
 	assert.Equal(
 		ts.t,
 		amount, expectedOut,
 		"withdrawn amount mismatch for validator %s with endorser %s at block %d",
-		master.String(),
+		validator.String(),
 		endorser.String(),
 		block,
 	)
@@ -205,13 +205,13 @@ func (ts *TestSequence) SetBeneficiaryErrors(
 }
 
 func (ts *TestSequence) AssertWithdrawable(
-	master thor.Address,
+	validator thor.Address,
 	block uint32,
 	expectedWithdrawable uint64,
 ) *TestSequence {
-	withdrawable, err := ts.staker.GetWithdrawable(master, block)
-	assert.NoError(ts.t, err, "failed to get withdrawable amount for validator %s at block %d: %v", master.String(), block, err)
-	assert.Equal(ts.t, expectedWithdrawable, withdrawable, "withdrawable amount mismatch for validator %s", master.String())
+	withdrawable, err := ts.staker.GetWithdrawable(validator, block)
+	assert.NoError(ts.t, err, "failed to get withdrawable amount for validator %s at block %d: %v", validator.String(), block, err)
+	assert.Equal(ts.t, expectedWithdrawable, withdrawable, "withdrawable amount mismatch for validator %s", validator.String())
 	return ts
 }
 
@@ -222,18 +222,18 @@ func (ts *TestSequence) SetOnline(id thor.Address, blockNum uint32, online bool)
 }
 
 func (ts *TestSequence) AddDelegation(
-	master thor.Address,
+	validator thor.Address,
 	amount uint64,
 	multiplier uint8,
 	idSetter *big.Int,
 	currentBlock uint32,
 ) *TestSequence {
-	delegationID, err := ts.staker.AddDelegation(master, amount, multiplier, currentBlock)
+	delegationID, err := ts.staker.AddDelegation(validator, amount, multiplier, currentBlock)
 	assert.NoError(
 		ts.t,
 		err,
 		"failed to add delegation for validator %s with amount %d and multiplier %d: %v",
-		master.String(),
+		validator.String(),
 		amount,
 		multiplier,
 		err,
