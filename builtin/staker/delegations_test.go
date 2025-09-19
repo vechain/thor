@@ -155,13 +155,12 @@ func Test_AddDelegator(t *testing.T) {
 
 	stake := MinStakeVET
 
-	id := big.NewInt(0)
 	validatorID := validators[0].ID
 
-	newTestSequence(t, staker).
-		AddDelegation(validatorID, stake, 255, id, 10)
+	id := newTestSequence(t, staker).
+		AddDelegation(validatorID, stake, 255, 10)
 
-	assertDelegation(t, staker, id).
+	assertDelegation(t, staker, id,  10).
 		IsStarted(false).
 		LastIteration(nil)
 
