@@ -27,6 +27,14 @@ import (
 // gasLimitSoftLimit is the soft limit of the adaptive block gaslimit.
 const gasLimitSoftLimit uint64 = 40_000_000
 
+type packContext struct {
+	flow       *packer.Flow
+	conflicts  uint32
+	startTime  mclock.AbsTime
+	logEnabled bool
+	oldBest    *chain.BlockSummary
+}
+
 func (n *Node) packerLoop(ctx context.Context) {
 	logger.Debug("enter packer loop")
 	defer logger.Debug("leave packer loop")
@@ -126,7 +134,9 @@ func (n *Node) pack(flow *packer.Flow) error {
 
 	err := n.processBlockWithGuard(flow, txs, &txsToRemove)
 
-	n.cleanupTransactions(txsToRemove)
+	if err == nil {
+		n.cleanupTransactions(txsToRemove)
+	}
 
 	n.updatePackMetrics(err == nil)
 
@@ -179,14 +189,6 @@ func (n *Node) updatePackMetrics(success bool) {
 	metricBlockProcessedCount().AddWithLabel(1, map[string]string{"type": "proposed", "success": successLabel})
 }
 
-type packContext struct {
-	flow       *packer.Flow
-	conflicts  uint32
-	startTime  mclock.AbsTime
-	logEnabled bool
-	oldBest    *chain.BlockSummary
-}
-
 func (n *Node) processTransactions(ctx *packContext, txs []*tx.Transaction, txsToRemove *[]*tx.Transaction) error {
 	for _, tx := range txs {
 		if err := ctx.flow.Adopt(tx); err != nil {
@@ -236,7 +238,8 @@ func (n *Node) processPackedBlock(ctx *packContext, newBlock *block.Block, stage
 		return errors.Wrap(err, "bft commits")
 	}
 
-	return n.finalizeAndBroadcast(ctx, newBlock, receipts, execElapsed)
+	n.finalizeAndBroadcast(ctx, newBlock, receipts, execElapsed)
+	return nil
 }
 
 func (n *Node) writeLogsIfEnabled(ctx *packContext, newBlock *block.Block, receipts tx.Receipts) error {
@@ -272,7 +275,7 @@ func (n *Node) commitToBFT(newBlock *block.Block) error {
 	return nil
 }
 
-func (n *Node) finalizeAndBroadcast(ctx *packContext, newBlock *block.Block, receipts tx.Receipts, execElapsed mclock.AbsTime) error {
+func (n *Node) finalizeAndBroadcast(ctx *packContext, newBlock *block.Block, receipts tx.Receipts, execElapsed mclock.AbsTime) {
 	realElapsed := mclock.Now() - ctx.startTime
 	commitElapsed := realElapsed - execElapsed
 
@@ -281,8 +284,6 @@ func (n *Node) finalizeAndBroadcast(ctx *packContext, newBlock *block.Block, rec
 
 	n.logBlockPacked(newBlock, receipts, execElapsed, commitElapsed)
 	n.updateMetrics(newBlock, receipts, realElapsed)
-
-	return nil
 }
 
 func (n *Node) logBlockPacked(newBlock *block.Block, receipts tx.Receipts, execElapsed, commitElapsed mclock.AbsTime) {
