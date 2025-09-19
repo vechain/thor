@@ -2,8 +2,6 @@ module github.com/vechain/thor/v2
 
 go 1.24.0
 
-toolchain go1.24.2
-
 require (
 	github.com/beevik/ntp v0.2.0
 	github.com/davecgh/go-spew v1.1.1
