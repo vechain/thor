@@ -84,7 +84,7 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 			MaxLifetime:     10 * time.Minute,
 		}, &thor.NoFork),
 	)
-	node.New(communicator, mempool, false).Mount(router, "/node")
+	node.New(communicator, mempool, true).Mount(router, "/node")
 
 	fees.New(thorChain.Repo(), thorChain.Engine(), thorChain.GetForkConfig(), thorChain.Stater(), fees.Config{
 		APIBacktraceLimit:          6,
@@ -431,6 +431,36 @@ func testNodeEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) {
 	t.Run("GetPeersStats", func(t *testing.T) {
 		_, err := c.Peers()
 		require.NoError(t, err)
+	})
+
+	// 2. Test GET /node/txpool
+	t.Run("GetTxPool", func(t *testing.T) {
+		// Test with transaction IDs only
+		result, err := c.TxPool(false, nil)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		// TODO validate the response body here
+
+		// Test with expanded transactions
+		result, err = c.TxPool(true, nil)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		// TODO validate the response body here
+
+		// Test with origin filter
+		origin := thor.MustParseAddress("0x0123456789abcdef0123456789abcdef01234567")
+		result, err = c.TxPool(false, &origin)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		// TODO validate the response body here
+	})
+
+	// 3. Test GET /node/txpool/status
+	t.Run("GetTxPoolStatus", func(t *testing.T) {
+		status, err := c.TxPoolStatus()
+		require.NoError(t, err)
+		require.NotNil(t, status)
+		// TODO validate the response body here
 	})
 }
 
