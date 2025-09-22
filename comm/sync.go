@@ -125,14 +125,17 @@ func decodeAndWarmupBatches(ctx context.Context, rawBatches <-chan rawBlockBatch
 				}
 
 				// warm up functions with cache, ignore error here
-				_ = blk.Header().ID()
-				_, _ = blk.Header().Beta()
+				queue <- func() {
+					_ = blk.Header().ID()
+					_, _ = blk.Header().Beta()
+				}
 				for _, tx := range blk.Transactions() {
-					// pre warming functions with cache
-					_ = tx.ID()
-					_ = tx.UnprovedWork()
-					_, _ = tx.IntrinsicGas()
-					_, _ = tx.Delegator()
+					queue <- func() {
+						_ = tx.ID()
+						_ = tx.UnprovedWork()
+						_, _ = tx.IntrinsicGas()
+						_, _ = tx.Delegator()
+					}
 				}
 				select {
 				case <-ctx.Done():
