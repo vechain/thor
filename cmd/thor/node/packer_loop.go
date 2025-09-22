@@ -7,21 +7,16 @@ package node
 
 import (
 	"context"
-	"fmt"
 	"time"
 
-	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/state"
-
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/pkg/errors"
 
-	"github.com/vechain/thor/v2/log"
+	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/txpool"
 )
 
 // gasLimitSoftLimit is the soft limit of the adaptive block gaslimit.
@@ -89,7 +84,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			if uint64(time.Now().Unix())+thor.BlockInterval()/2 > flow.When() {
 				// time to pack block
 				// blockInterval/2 early to allow more time for processing txs
-				if err := n.pack(flow); err != nil {
+				if err := n.doPack(flow); err != nil {
 					logger.Error("failed to pack block", "err", err)
 				}
 				break
@@ -118,180 +113,83 @@ func (n *Node) packerLoop(ctx context.Context) {
 	}
 }
 
-func (n *Node) pack(flow *packer.Flow) error {
-	txs := n.txPool.Executables()
+func (n *Node) doPack(flow *packer.Flow) error {
 	var txsToRemove []*tx.Transaction
 
-	err := n.processBlockWithGuard(flow, txs, &txsToRemove)
-
+	err := n.proposeAndCommit(flow, &txsToRemove)
 	if err == nil {
-		n.cleanupTransactions(txsToRemove)
+		cleanupTransactions(txsToRemove, n.txPool)
 	}
-
-	n.updatePackMetrics(err == nil)
+	updatePackMetrics(err == nil)
 
 	return err
 }
 
-func (n *Node) processBlockWithGuard(flow *packer.Flow, txs []*tx.Transaction, txsToRemove *[]*tx.Transaction) error {
-	return n.guardBlockProcessing(flow.Number(), func(conflicts uint32) (thor.Bytes32, error) {
-		return n.processBlockWithConflicts(flow, txs, txsToRemove, conflicts)
+func (n *Node) proposeAndCommit(flow *packer.Flow, txsToRemove *[]*tx.Transaction) error {
+	return n.guardBlockProcessing(flow.Number(), func(conflicts uint32) error {
+		var ctx = &blockExecContext{
+			prevBest:   n.repo.BestBlockSummary().Header,
+			conflicts:  conflicts,
+			startTime:  mclock.Now(),
+			stats:      &blockStats{},
+			packing:    true,
+			becomeBest: true,
+		}
+
+		txs := n.txPool.Executables()
+		// adopt txs
+		for _, tx := range txs {
+			if err := flow.Adopt(tx); err != nil {
+				if packer.IsGasLimitReached(err) {
+					break
+				}
+				if packer.IsTxNotAdoptableNow(err) {
+					continue
+				}
+				*txsToRemove = append(*txsToRemove, tx)
+			}
+		}
+
+		var (
+			shouldVote bool
+			err        error
+		)
+		if flow.Number() >= n.forkConfig.FINALITY {
+			shouldVote, err = n.bft.ShouldVote(flow.ParentHeader().ID())
+			if err != nil {
+				return errors.Wrap(err, "get vote")
+			}
+		}
+
+		// pack the new block
+		ctx.newBlock, ctx.stage, ctx.receipts, err = flow.Pack(n.master.PrivateKey, conflicts, shouldVote)
+		if err != nil {
+			return errors.Wrap(err, "failed to pack block")
+		}
+
+		err = n.commitBlock(ctx)
+		if err != nil {
+			return err
+		}
+
+		n.comm.BroadcastBlock(ctx.newBlock)
+		logger.Info("📦 new block packed", ctx.stats.LogContext(ctx.newBlock.Header())...)
+		n.postBlockProcessing(ctx.newBlock, ctx.conflicts)
+
+		return nil
 	})
 }
 
-func (n *Node) processBlockWithConflicts(flow *packer.Flow, txs []*tx.Transaction, txsToRemove *[]*tx.Transaction, conflicts uint32) (thor.Bytes32, error) {
-	ctx := &packContext{
-		flow:       flow,
-		conflicts:  conflicts,
-		startTime:  mclock.Now(),
-		logEnabled: !n.options.SkipLogs && !n.logDBFailed,
-		oldBest:    n.repo.BestBlockSummary(),
-	}
-
-	if err := n.processTransactions(ctx, txs, txsToRemove); err != nil {
-		return thor.Bytes32{}, err
-	}
-
-	shouldVote, err := n.determineVotingRequirement(flow)
-	if err != nil {
-		return thor.Bytes32{}, errors.Wrap(err, "get vote")
-	}
-
-	newBlock, stage, receipts, err := n.packBlock(flow, conflicts, shouldVote)
-	if err != nil {
-		return thor.Bytes32{}, errors.Wrap(err, "failed to pack block")
-	}
-
-	return newBlock.Header().ID(), n.processPackedBlock(ctx, newBlock, stage, receipts)
-}
-
-func (n *Node) cleanupTransactions(txsToRemove []*tx.Transaction) {
+func cleanupTransactions(txsToRemove []*tx.Transaction, txPool *txpool.TxPool) {
 	for _, tx := range txsToRemove {
-		n.txPool.Remove(tx.Hash(), tx.ID())
+		txPool.Remove(tx.Hash(), tx.ID())
 	}
 }
 
-func (n *Node) updatePackMetrics(success bool) {
+func updatePackMetrics(success bool) {
 	successLabel := "false"
 	if success {
 		successLabel = "true"
 	}
 	metricBlockProcessedCount().AddWithLabel(1, map[string]string{"type": "proposed", "success": successLabel})
-}
-
-func (n *Node) processTransactions(ctx *packContext, txs []*tx.Transaction, txsToRemove *[]*tx.Transaction) error {
-	for _, tx := range txs {
-		if err := ctx.flow.Adopt(tx); err != nil {
-			if packer.IsGasLimitReached(err) {
-				break
-			}
-			if packer.IsTxNotAdoptableNow(err) {
-				continue
-			}
-			*txsToRemove = append(*txsToRemove, tx)
-		}
-	}
-	return nil
-}
-
-func (n *Node) determineVotingRequirement(flow *packer.Flow) (bool, error) {
-	if flow.Number() >= n.forkConfig.FINALITY {
-		return n.bft.ShouldVote(flow.ParentHeader().ID())
-	}
-	return false, nil
-}
-
-func (n *Node) packBlock(flow *packer.Flow, conflicts uint32, shouldVote bool) (*block.Block, *state.Stage, tx.Receipts, error) {
-	return flow.Pack(n.master.PrivateKey, conflicts, shouldVote)
-}
-
-func (n *Node) processPackedBlock(ctx *packContext, newBlock *block.Block, stage *state.Stage, receipts tx.Receipts) error {
-	execElapsed := mclock.Now() - ctx.startTime
-
-	if err := n.writeLogsIfEnabled(ctx, newBlock, receipts); err != nil {
-		return errors.Wrap(err, "write logs")
-	}
-
-	if err := n.commitState(stage); err != nil {
-		return errors.Wrap(err, "commit state")
-	}
-
-	if err := n.syncLogWorker(ctx); err != nil {
-		return err
-	}
-
-	if err := n.addBlockToRepository(newBlock, receipts, ctx.conflicts); err != nil {
-		return errors.Wrap(err, "add block")
-	}
-
-	if err := n.commitToBFT(newBlock); err != nil {
-		return errors.Wrap(err, "bft commits")
-	}
-
-	n.finalizeAndBroadcast(ctx, newBlock, receipts, execElapsed)
-
-	return nil
-}
-
-func (n *Node) writeLogsIfEnabled(ctx *packContext, newBlock *block.Block, receipts tx.Receipts) error {
-	if ctx.logEnabled {
-		return n.writeLogs(newBlock, receipts, ctx.oldBest.Header.ID())
-	}
-	return nil
-}
-
-func (n *Node) commitState(stage *state.Stage) error {
-	_, err := stage.Commit()
-	return err
-}
-
-func (n *Node) syncLogWorker(ctx *packContext) error {
-	if ctx.logEnabled {
-		if err := n.logWorker.Sync(); err != nil {
-			log.Warn("failed to write logs", "err", err)
-			n.logDBFailed = true
-		}
-	}
-	return nil
-}
-
-func (n *Node) addBlockToRepository(newBlock *block.Block, receipts tx.Receipts, conflicts uint32) error {
-	return n.repo.AddBlock(newBlock, receipts, conflicts, true)
-}
-
-func (n *Node) commitToBFT(newBlock *block.Block) error {
-	if newBlock.Header().Number() >= n.forkConfig.FINALITY {
-		return n.bft.CommitBlock(newBlock.Header(), true)
-	}
-	return nil
-}
-
-func (n *Node) finalizeAndBroadcast(ctx *packContext, newBlock *block.Block, receipts tx.Receipts, execElapsed mclock.AbsTime) {
-	realElapsed := mclock.Now() - ctx.startTime
-	commitElapsed := realElapsed - execElapsed
-
-	n.processFork(newBlock, ctx.oldBest.Header.ID())
-	n.comm.BroadcastBlock(newBlock)
-
-	n.logBlockPacked(newBlock, receipts, execElapsed, commitElapsed)
-	n.updateMetrics(newBlock, receipts, realElapsed)
-}
-
-func (n *Node) logBlockPacked(newBlock *block.Block, receipts tx.Receipts, execElapsed, commitElapsed mclock.AbsTime) {
-	logger.Info("📦 new block packed",
-		"txs", len(receipts),
-		"mgas", float64(newBlock.Header().GasUsed())/1000/1000,
-		"et", fmt.Sprintf("%v|%v", common.PrettyDuration(execElapsed), common.PrettyDuration(commitElapsed)),
-		"id", shortID(newBlock.Header().ID()),
-	)
-}
-
-func (n *Node) updateMetrics(newBlock *block.Block, receipts tx.Receipts, realElapsed mclock.AbsTime) {
-	if v, updated := n.bandwidth.Update(newBlock.Header(), time.Duration(realElapsed)); updated {
-		logger.Trace("bandwidth updated", "gps", v)
-	}
-
-	metricBlockProcessedTxs().SetWithLabel(int64(len(receipts)), map[string]string{"type": "proposed"})
-	metricBlockProcessedGas().SetWithLabel(int64(newBlock.Header().GasUsed()), map[string]string{"type": "proposed"})
-	metricBlockProcessedDuration().Observe(time.Duration(realElapsed).Milliseconds())
 }
