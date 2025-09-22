@@ -1,8 +1,15 @@
+// Copyright (c) 2025 The VeChainThor developers
+//
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
 package staker
 
 import (
 	"math/big"
 	"testing"
+
+	"github.com/vechain/thor/v2/state"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -22,6 +29,14 @@ func newTestSequence(t *testing.T, staker *testStaker) *TestSequence {
 	return &TestSequence{staker: staker, t: t}
 }
 
+func (ts *TestSequence) State() *state.State {
+	return ts.staker.state
+}
+
+func (ts *TestSequence) Address() thor.Address {
+	return ts.staker.Address()
+}
+
 func (ts *TestSequence) AssertActive(active bool) *TestSequence {
 	isActive, err := ts.staker.IsPoSActive()
 	assert.NoError(ts.t, err, "failed to check PoS active state")
@@ -32,8 +47,8 @@ func (ts *TestSequence) AssertActive(active bool) *TestSequence {
 func (ts *TestSequence) AssertLockedVET(expectedVET, expectedWeight uint64) *TestSequence {
 	locked, weight, err := ts.staker.LockedStake()
 	assert.NoError(ts.t, err, "failed to get locked VET")
-	assert.Equal(ts.t, expectedVET, locked, "locked VET mismatch")
-	assert.Equal(ts.t, expectedWeight, weight, "locked weight mismatch")
+	assert.Equal(ts.t, expectedVET, locked, "locked VET mismatch, got %d, expected %d", locked, expectedVET)
+	assert.Equal(ts.t, expectedWeight, weight, "locked weight mismatch, got %d, expected %d", weight, expectedWeight)
 
 	return ts
 }
@@ -41,7 +56,7 @@ func (ts *TestSequence) AssertLockedVET(expectedVET, expectedWeight uint64) *Tes
 func (ts *TestSequence) AssertQueuedVET(expectedVET uint64) *TestSequence {
 	queued, err := ts.staker.QueuedStake()
 	assert.NoError(ts.t, err, "failed to get queued VET")
-	assert.Equal(ts.t, expectedVET, queued, "queued VET mismatch")
+	assert.Equal(ts.t, expectedVET, queued, "queued VET mismatch, got %d, expected %d", queued, expectedVET)
 
 	return ts
 }
@@ -87,6 +102,44 @@ func (ts *TestSequence) FirstActive() (thor.Address, *validation.Validation) {
 	val, err := ts.staker.GetValidation(first)
 	assert.NoError(ts.t, err)
 	return first, val
+}
+
+func (ts *TestSequence) Next(prev thor.Address) (thor.Address, *validation.Validation) {
+	first, err := ts.staker.Next(prev)
+	assert.NoError(ts.t, err)
+	val, err := ts.staker.GetValidation(first)
+	assert.NoError(ts.t, err)
+	return first, val
+}
+
+func (ts *TestSequence) GetValidator(addr thor.Address) *validation.Validation {
+	val, err := ts.staker.GetValidation(addr)
+	assert.NoError(ts.t, err, "failed to get validator %s", addr.String())
+	return val
+}
+
+func (ts *TestSequence) GetAggregation(addr thor.Address) *aggregation.Aggregation {
+	agg, err := ts.staker.aggregationService.GetAggregation(addr)
+	assert.NoError(ts.t, err, "failed to get aggregation for validator %s", addr.String())
+	return agg
+}
+
+func (ts *TestSequence) GetDelegation(delegationID *big.Int) *delegation.Delegation {
+	del, _, err := ts.staker.GetDelegation(delegationID)
+	assert.NoError(ts.t, err, "failed to get delegation %s", delegationID.String())
+	return del
+}
+
+func (ts *TestSequence) AddValidationErrors(
+	validator, endorser thor.Address,
+	period uint32,
+	stake uint64,
+	errMsg string,
+) *TestSequence {
+	err := ts.staker.AddValidation(validator, endorser, period, stake)
+	assert.NotNil(ts.t, err, "expected error when adding validator %s with endorser %s", validator.String(), endorser.String())
+	assert.ErrorContains(ts.t, err, errMsg, "expected error message when adding validator %s with endorser %s", validator.String(), endorser.String())
+	return ts
 }
 
 func (ts *TestSequence) AddValidation(
@@ -225,9 +278,8 @@ func (ts *TestSequence) AddDelegation(
 	validator thor.Address,
 	amount uint64,
 	multiplier uint8,
-	idSetter *big.Int,
 	currentBlock uint32,
-) *TestSequence {
+) *big.Int {
 	delegationID, err := ts.staker.AddDelegation(validator, amount, multiplier, currentBlock)
 	assert.NoError(
 		ts.t,
@@ -238,7 +290,27 @@ func (ts *TestSequence) AddDelegation(
 		multiplier,
 		err,
 	)
-	idSetter.Set(delegationID)
+	return delegationID
+}
+
+func (ts *TestSequence) AddDelegationErrors(
+	validator thor.Address,
+	amount uint64,
+	multiplier uint8,
+	currentBlock uint32,
+	errMsg string,
+) *TestSequence {
+	_, err := ts.staker.AddDelegation(validator, amount, multiplier, currentBlock)
+	assert.NotNil(ts.t, err, "expected error when adding delegation for validator %s with amount %d and multiplier %d", validator.String(), amount, multiplier)
+	assert.ErrorContains(
+		ts.t,
+		err,
+		errMsg,
+		"expected error message when adding delegation for validator %s with amount %d and multiplier %d",
+		validator.String(),
+		amount,
+		multiplier,
+	)
 	return ts
 }
 
@@ -291,16 +363,55 @@ func (ts *TestSequence) AssertTotals(validationID thor.Address, expected *valida
 	assert.NoError(ts.t, err, "failed to get totals for validator %s", validationID.String())
 
 	// exiting
-	assert.Equal(ts.t, expected.TotalExitingStake, totals.TotalExitingStake, "total exiting stake mismatch for validator %s", validationID.String())
+	assert.Equal(
+		ts.t,
+		expected.TotalExitingStake,
+		totals.TotalExitingStake,
+		"total exiting stake mismatch for validator %s, expected=%d, got=%d",
+		validationID.String(),
+		expected.TotalExitingStake,
+		totals.TotalExitingStake,
+	)
 
 	// locked
-	assert.Equal(ts.t, expected.TotalLockedStake, totals.TotalLockedStake, "total locked stake mismatch for validator %s", validationID.String())
-	assert.Equal(ts.t, expected.TotalLockedWeight, totals.TotalLockedWeight, "total locked weight mismatch for validator %s", validationID.String())
+	assert.Equal(
+		ts.t,
+		expected.TotalLockedStake,
+		totals.TotalLockedStake,
+		"total locked stake mismatch for validator %s, expected=%d, got=%d",
+		validationID.String(),
+		expected.TotalLockedStake,
+		totals.TotalLockedStake,
+	)
+	assert.Equal(
+		ts.t,
+		expected.TotalLockedWeight,
+		totals.TotalLockedWeight,
+		"total locked weight mismatch for validator %s, expected=%d, got=%d",
+		validationID.String(),
+		expected.TotalLockedWeight,
+		totals.TotalLockedWeight,
+	)
 
 	// queued
-	assert.Equal(ts.t, expected.TotalQueuedStake, totals.TotalQueuedStake, "total queued stake mismatch for validator %s", validationID.String())
-
-	assert.Equal(ts.t, expected.NextPeriodWeight, totals.NextPeriodWeight, "next period weight mismatch for validator %s", validationID.String())
+	assert.Equal(
+		ts.t,
+		expected.TotalQueuedStake,
+		totals.TotalQueuedStake,
+		"total queued stake mismatch for validator %s, expected=%d, got=%d",
+		validationID.String(),
+		expected.TotalQueuedStake,
+		totals.TotalQueuedStake,
+	)
+	assert.Equal(
+		ts.t,
+		expected.NextPeriodWeight,
+		totals.NextPeriodWeight,
+		"next period weight mismatch for validator %s, expected=%d, got=%d",
+		validationID.String(),
+		expected.NextPeriodWeight,
+		totals.NextPeriodWeight,
+	)
 
 	return ts
 }
@@ -331,6 +442,15 @@ func (ts *TestSequence) ActivateNext(block uint32) *TestSequence {
 	return ts
 }
 
+func (ts *TestSequence) ActivateNextErrors(block uint32, errMsg string) *TestSequence {
+	mbp, err := ts.staker.params.Get(thor.KeyMaxBlockProposers)
+	assert.NoError(ts.t, err, "failed to get max block proposers")
+	_, err = ts.staker.activateNextValidation(block, mbp.Uint64())
+	assert.NotNil(ts.t, err, "expected error when activating next validator at block %d", block)
+	assert.ErrorContains(ts.t, err, errMsg, "expected error message when activating next validator at block %d", block)
+	return ts
+}
+
 func (ts *TestSequence) Housekeep(block uint32) *TestSequence {
 	_, err := ts.staker.Housekeep(block)
 	assert.NoError(ts.t, err, "failed to perform housekeeping at block %d", block)
@@ -356,6 +476,25 @@ func (ts *TestSequence) ExitValidator(node thor.Address) *TestSequence {
 	assert.NoError(ts.t, err, "failed to exit aggregation for validator %s", node.String())
 	assert.NoError(ts.t, ts.staker.globalStatsService.ApplyExit(exit, aggExit))
 	return ts
+}
+
+func (ts *TestSequence) ExitValidatorErrors(node thor.Address, errMsg string) *TestSequence {
+	_, err := ts.staker.validationService.ExitValidator(node)
+	assert.NotNil(ts.t, err, "expected error when exiting validator %s", node.String())
+	assert.ErrorContains(ts.t, err, errMsg, "expected error message when exiting validator %s", node.String())
+	return ts
+}
+
+func (ts *TestSequence) AssertValidation(addr thor.Address) *ValidationAssertions {
+	return assertValidation(ts.t, ts, addr)
+}
+
+func (ts *TestSequence) AssertAggregation(validationID thor.Address) *AggregationAssertions {
+	return assertAggregation(ts.t, ts.staker, validationID)
+}
+
+func (ts *TestSequence) AssertDelegation(delegationID *big.Int, currentBlock uint32) *DelegationAssertions {
+	return assertDelegation(ts.t, ts.staker, delegationID, currentBlock)
 }
 
 type ValidationAssertions struct {
@@ -424,6 +563,16 @@ func (va *ValidationAssertions) Beneficiary(expected thor.Address) *ValidationAs
 	return va
 }
 
+func (va *ValidationAssertions) OfflineBlock(expected *uint32) *ValidationAssertions {
+	assert.Equal(va.t, expected, va.validator.OfflineBlock, "validator %s offline block mismatch", va.addr.String())
+	return va
+}
+
+func (va *ValidationAssertions) ExitBlock(expected *uint32) *ValidationAssertions {
+	assert.Equal(va.t, expected, va.validator.ExitBlock, "validator %s exit block mismatch", va.addr.String())
+	return va
+}
+
 type AggregationAssertions struct {
 	validationID thor.Address
 	aggregation  *aggregation.Aggregation
@@ -474,10 +623,10 @@ type DelegationAssertions struct {
 	currentBlock uint32
 }
 
-func assertDelegation(t *testing.T, staker *testStaker, delegationID *big.Int) *DelegationAssertions {
+func assertDelegation(t *testing.T, staker *testStaker, delegationID *big.Int, currentBlock uint32) *DelegationAssertions {
 	delegation, validation, err := staker.GetDelegation(delegationID)
 	require.NoError(t, err, "failed to get delegation %s", delegationID.String())
-	return &DelegationAssertions{delegationID: delegationID, t: t, delegation: delegation, validation: validation}
+	return &DelegationAssertions{delegationID: delegationID, t: t, delegation: delegation, validation: validation, currentBlock: currentBlock}
 }
 
 func (da *DelegationAssertions) Validation(expected thor.Address) *DelegationAssertions {
