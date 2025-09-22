@@ -47,6 +47,8 @@ var (
 	errBFTRejected                 = errors.New("block rejected by BFT engine")
 )
 
+const BATCH_SIZE = 100
+
 // Options options for tx pool.
 type Options struct {
 	TargetGasLimit   uint64
@@ -88,6 +90,7 @@ type Node struct {
 	logWorker        *worker
 	persistentWriter *logdb.Writer
 	writerMutex      sync.Mutex
+	writerBlockCount uint64
 }
 
 func New(
@@ -491,6 +494,7 @@ func (n *Node) closePersistentWriter() {
 }
 
 func (n *Node) writeLogs(newBlock *block.Block, newReceipts tx.Receipts, oldBestBlockID thor.Bytes32) (err error) {
+	// Use persistent writer instead of creating new one
 	w := n.getPersistentWriter()
 
 	oldTrunk := n.repo.NewChain(oldBestBlockID)
@@ -533,7 +537,17 @@ func (n *Node) writeLogs(newBlock *block.Block, newReceipts tx.Receipts, oldBest
 		if err := w.Write(newBlock, newReceipts); err != nil {
 			return err
 		}
-		return w.Commit()
+
+		// Batch commits every 100 blocks instead of per block
+		n.writerMutex.Lock()
+		n.writerBlockCount++
+		shouldCommit := n.writerBlockCount%100 == 0
+		n.writerMutex.Unlock()
+
+		if shouldCommit {
+			return w.Commit()
+		}
+		return nil
 	})
 	return nil
 }

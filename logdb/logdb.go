@@ -465,6 +465,8 @@ type Writer struct {
 	partitions       map[string]*sql.DB // Store *sql.DB instead of *sql.Conn
 	partitionMux     sync.RWMutex
 	currentPartition int
+	connectionPool   map[string]*sql.DB
+	poolMutex        sync.RWMutex
 }
 
 // Truncate truncates the database by deleting logs after blockNum (included).
@@ -833,4 +835,21 @@ func (w *Writer) Close() error {
 	w.partitions = make(map[string]*sql.DB)
 	println("DEBUG: Writer closed, all partitions cleaned up")
 	return nil
+}
+
+func (w *Writer) getConnection(partitionName string) *sql.DB {
+	w.poolMutex.RLock()
+	if conn, exists := w.connectionPool[partitionName]; exists {
+		w.poolMutex.RUnlock()
+		return conn
+	}
+	w.poolMutex.RUnlock()
+
+	// Create and cache connection
+	w.poolMutex.Lock()
+	defer w.poolMutex.Unlock()
+
+	conn := w.getPartitionDatabase(partitionName)
+	w.connectionPool[partitionName] = conn
+	return conn
 }
