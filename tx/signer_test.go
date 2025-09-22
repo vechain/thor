@@ -120,43 +120,40 @@ func TestMustSignDelegated_ReturnsSignedTx(t *testing.T) {
 }
 
 func TestSign_ErrorFromCryptoSign(t *testing.T) {
-	// go-ethereum's crypto.Sign panics on nil/invalid keys, so we expect a panic here.
 	defer func() {
 		if r := recover(); r == nil {
-			t.Error("Sign should panic when given an invalid key (go-ethereum/crypto.Sign panics)")
+			t.Error("Sign should panic when given an invalid key")
 		}
 	}()
-	pk := &ecdsa.PrivateKey{} // zero value, not valid
+	pk := &ecdsa.PrivateKey{}
 	trx := NewBuilder(TypeLegacy).Build()
 	_, _ = Sign(trx, pk)
 }
 
 func TestSignDelegated_ErrorFromOriginSign(t *testing.T) {
-	// go-ethereum's crypto.Sign panics on nil/invalid keys, so we expect a panic here.
 	defer func() {
 		if r := recover(); r == nil {
-			t.Error("SignDelegated should panic when given an invalid origin key (go-ethereum/crypto.Sign panics)")
+			t.Error("SignDelegated should panic when given an invalid origin key")
 		}
 	}()
 	delegatorPK, _ := crypto.GenerateKey()
-	originPK := &ecdsa.PrivateKey{} // invalid
+	invalidOriginPK := &ecdsa.PrivateKey{}
 	var features Features
 	features.SetDelegated(true)
 	trx := NewBuilder(TypeLegacy).Features(features).Build()
-	_, _ = SignDelegated(trx, originPK, delegatorPK)
+	_, _ = SignDelegated(trx, invalidOriginPK, delegatorPK)
 }
 
 func TestSignDelegated_ErrorFromDelegatorSign(t *testing.T) {
-	// go-ethereum's crypto.Sign panics on nil/invalid keys, so we expect a panic here.
 	defer func() {
 		if r := recover(); r == nil {
-			t.Error("SignDelegated should panic when given an invalid delegator key (go-ethereum/crypto.Sign panics)")
+			t.Error("SignDelegated should panic when given an invalid delegator key")
 		}
 	}()
-	delegatorPK := &ecdsa.PrivateKey{} // invalid
+	invalidDelegatorPK := &ecdsa.PrivateKey{}
 	originPK, _ := crypto.GenerateKey()
 	var features Features
 	features.SetDelegated(true)
 	trx := NewBuilder(TypeLegacy).Features(features).Build()
-	_, _ = SignDelegated(trx, originPK, delegatorPK)
+	_, _ = SignDelegated(trx, originPK, invalidDelegatorPK)
 }

@@ -13,10 +13,10 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/thor"
 )
 
-// stubMsgReadWriter is a no-op MsgReadWriter
 type stubMsgReadWriter struct{}
 
 func (stubMsgReadWriter) ReadMsg() (p2p.Msg, error) { return p2p.Msg{}, nil }
@@ -92,7 +92,7 @@ func TestPeerSetAddFindRemoveSliceLen(t *testing.T) {
 	removed := ps.Remove(peer.ID())
 	assert.Equal(t, peer, removed)
 	assert.Equal(t, 0, ps.Len())
-	// Add multiple and test Slice
+
 	peer2 := newPeer(p2p.NewPeer(discover.NodeID{2}, "test2", nil), stubMsgReadWriter{})
 	peer3 := newPeer(p2p.NewPeer(discover.NodeID{3}, "test3", nil), stubMsgReadWriter{})
 	ps.Add(peer2)

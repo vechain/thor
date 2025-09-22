@@ -24,71 +24,70 @@ func newTx(txType tx.Type) *tx.Transaction {
 	)
 }
 
-// Note: Cannot test the MarshalBinary error path (line 41) from outside the tx package
-// because txData is unexported and has unexported methods, so we cannot create a mock.
-// All other error/branch tests are present below.
 func TestTxStash_ErrorsAndBranches(t *testing.T) {
-	t.Run("db.Has returns error (line 33)", func(t *testing.T) {
+	t.Run("db.Has returns error", func(t *testing.T) {
 		db, _ := leveldb.Open(storage.NewMemStorage(), nil)
-		_ = db.Close() // force error
+		assert.NoError(t, db.Close()) // force error later
 		stash := newTxStash(db, 10)
 		tx := newTx(tx.TypeLegacy)
 		err := stash.Save(tx)
 		assert.Error(t, err)
 	})
 
-	t.Run("db.Has returns true (line 36)", func(t *testing.T) {
+	t.Run("db.Has returns true", func(t *testing.T) {
 		db, _ := leveldb.Open(storage.NewMemStorage(), nil)
 		stash := newTxStash(db, 10)
 		tx := newTx(tx.TypeLegacy)
-		_ = stash.Save(tx)    // Save once
-		err := stash.Save(tx) // Save again, should be no error, no-op
+		assert.NoError(t, stash.Save(tx))
+		err := stash.Save(tx) // When saving again, should be no error, no-op
 		assert.NoError(t, err)
 	})
 
-	t.Run("db.Delete returns error (line 51)", func(t *testing.T) {
+	t.Run("db.Delete returns error", func(t *testing.T) {
 		db, _ := leveldb.Open(storage.NewMemStorage(), nil)
 		stash := newTxStash(db, 1)
 		tx1 := newTx(tx.TypeLegacy)
 		tx2 := newTx(tx.TypeDynamicFee)
-		_ = stash.Save(tx1)
+		assert.NoError(t, stash.Save(tx1))
 		// Close DB to force error on Delete
-		_ = db.Close()
+		assert.NoError(t, db.Close())
 		err := stash.Save(tx2)
 		assert.Error(t, err)
 	})
 
-	t.Run("UnmarshalBinary returns error (line 69, 72)", func(t *testing.T) {
+	t.Run("UnmarshalBinary returns error", func(t *testing.T) {
 		db, _ := leveldb.Open(storage.NewMemStorage(), nil)
 		stash := newTxStash(db, 10)
 		badKey := []byte{0x01, 0x02, 0x03}
-		badVal := []byte{0xFF, 0xFF, 0xFF} // not a valid tx
-		_ = db.Put(badKey, badVal, nil)
+		badVal := []byte{0xFF, 0xFF, 0xFF}
+		assert.NoError(t, db.Put(badKey, badVal, nil))
 		loaded := stash.LoadAll()
-		assert.Len(t, loaded, 0) // should skip bad tx
+		assert.Len(t, loaded, 0)
 	})
 
-	t.Run("Key mismatch triggers remap (line 78)", func(t *testing.T) {
+	t.Run("Key mismatch triggers remap", func(t *testing.T) {
 		db, _ := leveldb.Open(storage.NewMemStorage(), nil)
 		stash := newTxStash(db, 10)
 		tx := newTx(tx.TypeLegacy)
 		val, _ := tx.MarshalBinary()
 		wrongKey := []byte{0xAA, 0xBB, 0xCC}
-		_ = db.Put(wrongKey, val, nil)
+		assert.NoError(t, db.Put(wrongKey, val, nil))
 		loaded := stash.LoadAll()
 		assert.NotEmpty(t, loaded)
-		// The tx should be loaded and remapped under the correct key
-		ok, _ := db.Has(tx.Hash().Bytes(), nil)
+
+		ok, err := db.Has(tx.Hash().Bytes(), nil)
+		assert.NoError(t, err)
 		assert.True(t, ok)
 	})
 
-	t.Run("db.Write returns error (line 85)", func(t *testing.T) {
+	t.Run("db.Write returns error", func(t *testing.T) {
 		db, _ := leveldb.Open(storage.NewMemStorage(), nil)
 		stash := newTxStash(db, 10)
 		tx := newTx(tx.TypeLegacy)
-		_ = stash.Save(tx)
+		assert.NoError(t, stash.Save(tx))
 		// Close DB to force error on Write
-		_ = db.Close()
-		_ = stash.LoadAll() // Should not panic, error is logged
+		assert.NoError(t, db.Close())
+		txs := stash.LoadAll()
+		assert.Len(t, txs, 0)
 	})
 }

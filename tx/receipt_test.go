@@ -124,25 +124,7 @@ func TestDecodeEmptyTypedReceipt(t *testing.T) {
 	input := []byte{0x80}
 	var r Receipt
 	err := rlp.DecodeBytes(input, &r)
-	if err != errShortTypedReceipt {
-		t.Fatal("wrong error:", err)
-	}
-}
-
-func TestEncodeRLP_ErrorFromEncodeTyped(t *testing.T) {
-	receipt := getMockReceipt(TypeDynamicFee)
-	// Use a receipt with an unencodable field to force rlp.Encode to fail
-	receipt.Outputs = []*Output{{Events: nil, Transfers: nil}}
-	// Intentionally set Paid to a value that cannot be encoded (e.g., a custom type)
-	// But big.Int is always encodable, so this is hard to force. Instead, just check that no panic occurs and error is possible.
-	buf := new(bytes.Buffer)
-	err := receipt.EncodeRLP(buf)
-	// Accept either error or no error, but test runs the path
-	if err == nil {
-		t.Log("EncodeRLP did not error, but path was exercised")
-	} else {
-		assert.Error(t, err)
-	}
+	assert.ErrorIs(t, err, errShortTypedReceipt)
 }
 
 func TestDecodeTyped_ShortInput(t *testing.T) {
@@ -180,7 +162,6 @@ func TestDecodeRLP_ErrorFromDecode(t *testing.T) {
 	var buf bytes.Buffer
 	_ = rlp.Encode(&buf, []byte{0x01, 0x02})
 	s := rlp.NewStream(&buf, 0)
-	// Force List kind by encoding a list
 	err := r.DecodeRLP(s)
 	assert.Error(t, err)
 }
@@ -189,7 +170,6 @@ func TestDecodeRLP_ErrorFromBytes(t *testing.T) {
 	r := &Receipt{}
 	// Use a stream with no bytes to trigger error in Bytes
 	s := rlp.NewStream(bytes.NewReader([]byte{}), 0)
-	// This will cause s.Bytes() to return io.EOF
 	err := r.DecodeRLP(s)
 	assert.Error(t, err)
 }
@@ -217,7 +197,7 @@ func TestDecodeRLP_UnknownTypeTyped(t *testing.T) {
 func TestDerivableReceipts_EncodeIndex_PanicsOnMarshalError(t *testing.T) {
 	dr := derivableReceipts{&Receipt{Type: 0xFF}} // unknown type, may cause MarshalBinary to error or panic
 	defer func() {
-		_ = recover() // Accept panic or error
+		_ = recover()
 	}()
 	_ = dr.EncodeIndex(0)
 }

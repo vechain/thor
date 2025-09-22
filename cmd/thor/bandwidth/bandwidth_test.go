@@ -42,9 +42,8 @@ func TestBandwithUpdate(t *testing.T) {
 		lock:  sync.Mutex{},
 	}
 
-	block := new(
-		block.Builder,
-	).ParentID(thor.Bytes32{1}).
+	block := new(block.Builder).
+		ParentID(thor.Bytes32{1}).
 		Timestamp(1).
 		GasLimit(100000).
 		Beneficiary(thor.Address{1}).
@@ -67,9 +66,8 @@ func TestBandwidthSuggestGasLimit(t *testing.T) {
 		lock:  sync.Mutex{},
 	}
 
-	block := new(
-		block.Builder,
-	).ParentID(thor.Bytes32{1}).
+	block := new(block.Builder).
+		ParentID(thor.Bytes32{1}).
 		Timestamp(1).
 		GasLimit(100000).
 		Beneficiary(thor.Address{1}).
@@ -95,9 +93,8 @@ func TestBandwidthUpdate_ElapsedZero(t *testing.T) {
 
 func TestBandwidthUpdate_IgnoreLowGasUsed(t *testing.T) {
 	bandwidth := Bandwidth{}
-	block := new(
-		block.Builder,
-	).ParentID(thor.Bytes32{1}).
+	block := new(block.Builder).
+		ParentID(thor.Bytes32{1}).
 		Timestamp(1).
 		GasLimit(100000).
 		Beneficiary(thor.Address{1}).
@@ -114,9 +111,8 @@ func TestBandwidthUpdate_IgnoreLowGasUsed(t *testing.T) {
 
 func TestBandwidthUpdate_LowPassFilter(t *testing.T) {
 	bandwidth := Bandwidth{value: 1000}
-	block := new(
-		block.Builder,
-	).ParentID(thor.Bytes32{1}).
+	block := new(block.Builder).
+		ParentID(thor.Bytes32{1}).
 		Timestamp(1).
 		GasLimit(100000).
 		Beneficiary(thor.Address{1}).
@@ -126,7 +122,7 @@ func TestBandwidthUpdate_LowPassFilter(t *testing.T) {
 		ReceiptsRoot(thor.Bytes32{1}).
 		Build()
 	header := block.Header()
-	val, updated := bandwidth.Update(header, 2) // elapsed = 2
+	val, updated := bandwidth.Update(header, 2)
 	assert.True(t, updated)
 	// The new value should be a weighted average between the old value and the newValue
 	newValue := uint64(float64(16000) * float64(1e9) / 2)
