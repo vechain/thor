@@ -129,8 +129,9 @@ func decodeAndWarmupBatches(ctx context.Context, rawBatches <-chan rawBlockBatch
 					_ = blk.Header().ID()
 					_, _ = blk.Header().Beta()
 				}
-				for _, tx := range blk.Transactions() {
-					queue <- func() {
+				txs := blk.Transactions()
+				queue <- func() {
+					for _, tx := range txs {
 						_ = tx.ID()
 						_ = tx.UnprovedWork()
 						_, _ = tx.IntrinsicGas()
