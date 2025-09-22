@@ -1,0 +1,13 @@
+name: Feature Branch Docker Image
+
+on:
+  workflow_dispatch:
+
+jobs:
+  publish:
+    name: Publish Docker Image
+    uses: ./.github/workflows/goreleaser.yaml
+    secrets: inherit
+    permissions:
+      contents: read
+      packages: write
