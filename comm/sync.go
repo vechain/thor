@@ -16,6 +16,7 @@ import (
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/comm/proto"
 )
 
@@ -107,50 +108,57 @@ func fetchRawBlockBatches(ctx context.Context, peer *Peer, fromBlockNum uint32, 
 }
 
 func decodeAndWarmupBatches(ctx context.Context, rawBatches <-chan rawBlockBatch, warmedUp chan<- *block.Block) error {
-	for batch := range rawBatches {
-		if err := decodeAndWarmupBatch(ctx, batch, warmedUp); err != nil {
-			return err
-		}
-	}
-	return nil
-}
+	var err error
+	<-co.Parallel(func(queue chan<- func()) {
+		for batch := range rawBatches {
+			for i, raw := range batch.rawBlocks {
+				var blk block.Block
+				if decodeErr := rlp.DecodeBytes(raw, &blk); err != nil {
+					err = errors.Wrap(decodeErr, "invalid block")
+					return
+				}
 
-func decodeAndWarmupBatch(ctx context.Context, batch rawBlockBatch, warmedUp chan<- *block.Block) error {
-	blocks := make([]*block.Block, 0, len(batch.rawBlocks))
+				expectedNum := batch.startNum + uint32(i)
+				if blk.Header().Number() != expectedNum {
+					err = errors.New("broken sequence")
+					return
+				}
 
-	for i, raw := range batch.rawBlocks {
-		var blk block.Block
-		if err := rlp.DecodeBytes(raw, &blk); err != nil {
-			return errors.Wrap(err, "invalid block")
-		}
-
-		expectedNum := batch.startNum + uint32(i)
-		if blk.Header().Number() != expectedNum {
-			return errors.New("broken sequence")
-		}
-
-		blocks = append(blocks, &blk)
-	}
-
-	for _, blk := range blocks {
-		select {
-		case <-ctx.Done():
-			return nil
-		case warmedUp <- blk:
-			blk.Header().ID()
-			blk.Header().Beta()
-
-			for _, tx := range blk.Transactions() {
-				// pre warming functions with cache
-				tx.ID()
-				tx.UnprovedWork()
-				_, _ = tx.IntrinsicGas()
-				_, _ = tx.Delegator()
+				// warm up functions with cache, ignore error here
+				queue <- func() {
+					_ = blk.Header().ID()
+					_, _ = blk.Header().Beta()
+				}
+				txs := blk.Transactions()
+				queue <- func() {
+					for _, tx := range txs {
+						_ = tx.ID()
+						_ = tx.UnprovedWork()
+						_, _ = tx.IntrinsicGas()
+						_, _ = tx.Delegator()
+					}
+				}
+				select {
+				case <-ctx.Done():
+					err = ctx.Err()
+					return
+				case warmedUp <- &blk:
+					// when queued blocks count > 10% warmed up channel cap,
+					// send nil block to throttle to reduce mem pressure.
+					if len(warmedUp)*10 > cap(warmedUp) {
+						const targetSize = 2048
+						for range int(blk.Size())/targetSize - 1 {
+							select {
+							case warmedUp <- nil:
+							default:
+							}
+						}
+					}
+				}
 			}
 		}
-	}
-
-	return nil
+	})
+	return err
 }
 
 func findCommonAncestor(ctx context.Context, repo *chain.Repository, peer *Peer, headNum uint32) (uint32, error) {

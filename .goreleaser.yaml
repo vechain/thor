@@ -1,0 +1,219 @@
+# This is an example .goreleaser.yml file with some sensible defaults.
+# Make sure to check the documentation at https://goreleaser.com
+
+# The lines below are called `modelines`. See `:help modeline`
+# Feel free to remove those if you don't want/need to use them.
+# yaml-language-server: $schema=https://goreleaser.com/static/schema-pro.json
+# vim: set ts=2 sw=2 tw=0 fo=cnqoj
+
+version: 2
+pro: true
+project_name: thor
+
+metadata:
+  license: "LGPL-3.0"
+  homepage: "https://github.com/{{ .Env.REPOSITORY }}"
+  description: "A general purpose blockchain highly compatible with Ethereum's ecosystem"
+  full_description: "Thor is the official Golang client for VeChainThor, the public blockchain powering the VeChain ecosystem. VeChainThor is designed for real-world adoption, enabling scalable, low-cost, and sustainable applications."
+
+partial:
+  by: target
+
+builds:
+  - id: "thor"
+    main: ./cmd/thor
+    binary: thor
+    ldflags:
+      - -s -w
+      - -X main.version={{.Env.THOR_VERSION}}
+      - -X main.gitCommit={{.ShortCommit}}
+      - -X main.gitTag={{.Tag}}
+      - -X main.copyrightYear={{.Env.COPYRIGHT_YEAR}}
+    env:
+      - CGO_ENABLED=1
+  - id: "disco"
+    main: ./cmd/disco
+    binary: disco
+    ldflags:
+      - -s -w
+      - -X main.version={{.Env.DISCO_VERSION}}
+      - -X main.gitCommit={{.ShortCommit}}
+      - -X main.gitTag={{.Tag}}
+      - -X main.copyrightYear={{.Env.COPYRIGHT_YEAR}}
+    env:
+      - CGO_ENABLED=1
+
+signs:
+  - cmd: gpg
+    if: '{{ if .IsRelease }}true{{ else }}false{{ end }}'
+    args:
+    - "--batch"
+    - "-u"
+    - "{{ .Env.GPG_FINGERPRINT }}"
+    - "--output"
+    - "${signature}"
+    - "--detach-sign"
+    - "${artifact}"
+
+binary_signs:
+  - cmd: gpg
+    if: '{{ if .IsRelease }}true{{ else }}false{{ end }}'
+    args:
+      - "--batch"
+      - "-u"
+      - "{{ .Env.GPG_FINGERPRINT }}"
+      - "--output"
+      - "${signature}"
+      - "--detach-sign"
+      - "${artifact}"
+    output: true
+
+docker_signs:
+  - artifacts: all
+    if: '{{ if .IsRelease }}true{{ else }}false{{ end }}'
+    stdin: "{{ .Env.COSIGN_PASSWORD }}"
+    output: true
+
+archives:
+  - formats: [ 'tar.gz' ]
+    id: thor
+    ids:
+      - thor
+    format_overrides:
+      - goos: windows
+        formats: [ 'zip' ]
+    name_template: 'thor-{{ .Tag }}-{{ .Os }}-{{ .Arch }}'
+    files:
+      - LICENSE
+      - README.md
+  - formats: [ 'tar.gz' ]
+    id: disco
+    ids:
+      - disco
+    format_overrides:
+      - goos: windows
+        formats: [ 'zip' ]
+    name_template: 'disco-{{ .Env.DISCO_VERSION }}-{{ .Os }}-{{ .Arch }}'
+    files:
+      - LICENSE
+      - README.md
+
+snapshot:
+  version_template: SNAPSHOT-{{ .Commit }}
+
+checksum:
+  disable: false
+  name_template: 'checksums.txt'
+
+release:
+  skip_upload: '{{ if .IsRelease }}false{{ else }}true{{ end }}'
+  github:
+    owner: vechain
+    name: thor
+  ids:
+    - disco
+    - thor
+  mode: append
+  prerelease: '{{ if eq .Env.IS_OFFICIAL_RELEASE "true" }}false{{ else }}true{{ end }}'
+  make_latest: '{{ if eq .Env.IS_OFFICIAL_RELEASE "true" }}true{{ else }}false{{ end }}'
+  header: |
+    Thor is the official Golang client for VeChainThor, the public blockchain powering the VeChain ecosystem. VeChainThor is designed for real-world adoption, enabling scalable, low-cost, and sustainable applications.
+
+changelog:
+  disable: true
+
+source:
+  enabled: true
+  name_template: '{{ .ProjectName }}-{{ .Tag }}-source'
+
+dockers:
+  - goarch: amd64
+    goos: linux
+    skip_build: false
+    skip_push: '{{ .Env.SKIP_DOCKER_PUSH }}'
+    image_templates:
+      # Use both ghcr.io and Docker Hub for releases
+      - '{{ if .IsRelease }}ghcr.io/{{ .Env.REPOSITORY }}:{{ .Tag }}-amd64{{ end }}'
+      - '{{ if .IsRelease }}{{ .Env.REPOSITORY }}:{{ .Tag }}-amd64{{ end }}'
+      # Use only ghcr.io for snapshots
+      - '{{ if .IsNightly }}ghcr.io/{{ .Env.REPOSITORY }}:{{ .Env.SNAPSHOT_TAG }}-amd64{{ end }}'
+    ids:
+      - thor
+      - disco
+    dockerfile: Dockerfile.goreleaser
+    build_flag_templates:
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.description=A general purpose blockchain highly compatible with Ethereum's ecosystem"
+      - "--label=org.opencontainers.image.source={{.GitURL}}"
+      - "--label=org.opencontainers.image.url={{.GitURL}}"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Tag}}"
+      - "--label=org.opencontainers.image.licenses=LGPL-3.0"
+      - "--platform=linux/amd64"
+  - goarch: arm64
+    goos: linux
+    skip_build: false
+    skip_push: '{{ .Env.SKIP_DOCKER_PUSH }}'
+    image_templates:
+      # Use both ghcr.io and Docker Hub for releases
+      - '{{ if .IsRelease }}ghcr.io/{{ .Env.REPOSITORY }}:{{ .Tag }}-arm64{{ end }}'
+      - '{{ if .IsRelease }}{{ .Env.REPOSITORY }}:{{ .Tag }}-arm64{{ end }}'
+      # Use only ghcr.io for snapshots
+      - '{{ if .IsNightly }}ghcr.io/{{ .Env.REPOSITORY }}:{{ .Env.SNAPSHOT_TAG }}-arm64{{ end }}'
+    ids:
+      - thor
+      - disco
+    dockerfile: Dockerfile.goreleaser
+    build_flag_templates:
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.description=A general purpose blockchain highly compatible with Ethereum's ecosystem"
+      - "--label=org.opencontainers.image.source={{.GitURL}}"
+      - "--label=org.opencontainers.image.url={{.GitURL}}"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Tag}}"
+      - "--label=org.opencontainers.image.licenses=LGPL-3.0"
+      - "--platform=linux/arm64"
+
+docker_manifests:
+  # Use both ghcr.io and Docker Hub for releases
+  - name_template: '{{ .Env.REPOSITORY }}:latest'
+    image_templates:
+      - '{{ .Env.REPOSITORY }}:{{ .Tag }}-amd64'
+      - '{{ .Env.REPOSITORY }}:{{ .Tag }}-arm64'
+    skip_push: '{{ if eq .Env.IS_OFFICIAL_RELEASE "true" }}false{{ else }}true{{ end }}'
+
+  - name_template: 'ghcr.io/{{ .Env.REPOSITORY }}:latest'
+    image_templates:
+      - 'ghcr.io/{{ .Env.REPOSITORY }}:{{ .Tag }}-amd64'
+      - 'ghcr.io/{{ .Env.REPOSITORY }}:{{ .Tag }}-arm64'
+    skip_push: '{{ if eq .Env.IS_OFFICIAL_RELEASE "true" }}false{{ else }}true{{ end }}'
+
+  - name_template: '{{ .Env.REPOSITORY }}:{{ .Tag }}'
+    image_templates:
+      - '{{ .Env.REPOSITORY }}:{{ .Tag }}-amd64'
+      - '{{ .Env.REPOSITORY }}:{{ .Tag }}-arm64'
+    skip_push: '{{ if .IsRelease }}false{{ else }}true{{ end }}'
+
+  - name_template: 'ghcr.io/{{ .Env.REPOSITORY }}:{{ .Tag }}'
+    image_templates:
+      - 'ghcr.io/{{ .Env.REPOSITORY }}:{{ .Tag }}-amd64'
+      - 'ghcr.io/{{ .Env.REPOSITORY }}:{{ .Tag }}-arm64'
+    skip_push: '{{ if or .IsRelease }}false{{ else }}true{{ end }}'
+
+  # Use only ghcr.io for snapshots, ie master branch or feature branches
+  - name_template: 'ghcr.io/{{ .Env.REPOSITORY }}:{{ .Env.SNAPSHOT_TAG }}'
+    image_templates:
+      - '{{ if .IsNightly }}ghcr.io/{{ .Env.REPOSITORY }}:{{ .Env.SNAPSHOT_TAG }}-arm64{{ end }}'
+      - '{{ if .IsNightly }}ghcr.io/{{ .Env.REPOSITORY }}:{{ .Env.SNAPSHOT_TAG }}-amd64{{ end }}'
+    skip_push: '{{ if .IsNightly }}false{{ else }}true{{ end }}'
+
+  - name_template: 'ghcr.io/{{ .Env.REPOSITORY }}:master-latest'
+    image_templates:
+      - '{{ if .IsNightly }}ghcr.io/{{ .Env.REPOSITORY }}:{{ .Env.SNAPSHOT_TAG }}-arm64{{ end }}'
+      - '{{ if .IsNightly }}ghcr.io/{{ .Env.REPOSITORY }}:{{ .Env.SNAPSHOT_TAG }}-amd64{{ end }}'
+    skip_push: '{{ if eq .Branch "master" }}false{{ else }}true{{ end }}'
+
+docker_digest:
+  name_template: "digests.txt"
