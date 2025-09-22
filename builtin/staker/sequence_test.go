@@ -118,6 +118,18 @@ func (ts *TestSequence) GetValidator(addr thor.Address) *validation.Validation {
 	return val
 }
 
+func (ts *TestSequence) GetAggregation(addr thor.Address) *aggregation.Aggregation {
+	agg, err := ts.staker.aggregationService.GetAggregation(addr)
+	assert.NoError(ts.t, err, "failed to get aggregation for validator %s", addr.String())
+	return agg
+}
+
+func (ts *TestSequence) GetDelegation(delegationID *big.Int) *delegation.Delegation {
+	del, _, err := ts.staker.GetDelegation(delegationID)
+	assert.NoError(ts.t, err, "failed to get delegation %s", delegationID.String())
+	return del
+}
+
 func (ts *TestSequence) AddValidationErrors(
 	validator, endorser thor.Address,
 	period uint32,
@@ -281,6 +293,27 @@ func (ts *TestSequence) AddDelegation(
 	return delegationID
 }
 
+func (ts *TestSequence) AddDelegationErrors(
+	validator thor.Address,
+	amount uint64,
+	multiplier uint8,
+	currentBlock uint32,
+	errMsg string,
+) *TestSequence {
+	_, err := ts.staker.AddDelegation(validator, amount, multiplier, currentBlock)
+	assert.NotNil(ts.t, err, "expected error when adding delegation for validator %s with amount %d and multiplier %d", validator.String(), amount, multiplier)
+	assert.ErrorContains(
+		ts.t,
+		err,
+		errMsg,
+		"expected error message when adding delegation for validator %s with amount %d and multiplier %d",
+		validator.String(),
+		amount,
+		multiplier,
+	)
+	return ts
+}
+
 func (ts *TestSequence) AssertHasDelegations(node thor.Address, expected bool) *TestSequence {
 	hasDelegations, err := ts.staker.HasDelegations(node)
 	assert.NoError(ts.t, err, "failed to check delegations for validator %s: %v", node.String(), err)
@@ -409,6 +442,15 @@ func (ts *TestSequence) ActivateNext(block uint32) *TestSequence {
 	return ts
 }
 
+func (ts *TestSequence) ActivateNextErrors(block uint32, errMsg string) *TestSequence {
+	mbp, err := ts.staker.params.Get(thor.KeyMaxBlockProposers)
+	assert.NoError(ts.t, err, "failed to get max block proposers")
+	_, err = ts.staker.activateNextValidation(block, mbp.Uint64())
+	assert.NotNil(ts.t, err, "expected error when activating next validator at block %d", block)
+	assert.ErrorContains(ts.t, err, errMsg, "expected error message when activating next validator at block %d", block)
+	return ts
+}
+
 func (ts *TestSequence) Housekeep(block uint32) *TestSequence {
 	_, err := ts.staker.Housekeep(block)
 	assert.NoError(ts.t, err, "failed to perform housekeeping at block %d", block)
@@ -433,6 +475,13 @@ func (ts *TestSequence) ExitValidator(node thor.Address) *TestSequence {
 	aggExit, err := ts.staker.aggregationService.Exit(node)
 	assert.NoError(ts.t, err, "failed to exit aggregation for validator %s", node.String())
 	assert.NoError(ts.t, ts.staker.globalStatsService.ApplyExit(exit, aggExit))
+	return ts
+}
+
+func (ts *TestSequence) ExitValidatorErrors(node thor.Address, errMsg string) *TestSequence {
+	_, err := ts.staker.validationService.ExitValidator(node)
+	assert.NotNil(ts.t, err, "expected error when exiting validator %s", node.String())
+	assert.ErrorContains(ts.t, err, errMsg, "expected error message when exiting validator %s", node.String())
 	return ts
 }
 
