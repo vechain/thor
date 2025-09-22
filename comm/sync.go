@@ -137,8 +137,22 @@ func decodeAndWarmupBatch(ctx context.Context, batch rawBlockBatch, warmedUp cha
 		case <-ctx.Done():
 			return nil
 		case warmedUp <- blk:
+			// when queued blocks count > 10% warmed up channel cap,
+			// send nil block to throttle to reduce mem pressure.
+			if len(warmedUp)*10 > cap(warmedUp) {
+				const targetSize = 2048
+				for range int(blk.Size())/targetSize - 1 {
+					select {
+					case warmedUp <- nil:
+					default:
+					}
+				}
+			}
 			blk.Header().ID()
-			blk.Header().Beta()
+			_, err := blk.Header().Beta()
+			if err != nil {
+				return err
+			}
 
 			for _, tx := range blk.Transactions() {
 				// pre warming functions with cache
