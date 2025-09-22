@@ -11,7 +11,9 @@ import (
 	"fmt"
 	"math/big"
 	"path/filepath"
+	"strings"
 	"sync"
+	"time"
 
 	sqlite3 "github.com/mattn/go-sqlite3"
 
@@ -413,23 +415,28 @@ func (db *LogDB) HasBlockID(id thor.Bytes32) (bool, error) {
 	return count > 0, nil
 }
 
-// NewWriter creates a log writer.
 func (db *LogDB) NewWriter() *Writer {
 	return &Writer{
-		conn:       db.wconn,
-		stmtCache:  db.stmtCache,
-		db:         db,
-		partitions: make(map[string]*sql.DB),
+		conn:              db.wconn,
+		stmtCache:         db.stmtCache,
+		db:                db,
+		connectionPool:    make(map[string]*sql.DB),
+		partitions:        make(map[string]*sql.Conn),
+		maxOpenPartitions: 3,                          // Add this line
+		partitionLRU:      make(map[string]time.Time), // Add this line
 	}
 }
 
 // NewWriterSyncOff creates a log writer which applied 'pragma synchronous = off'.
 func (db *LogDB) NewWriterSyncOff() *Writer {
 	return &Writer{
-		conn:       db.wconnSyncOff,
-		stmtCache:  db.stmtCache,
-		db:         db,
-		partitions: make(map[string]*sql.DB),
+		conn:              db.wconnSyncOff,
+		stmtCache:         db.stmtCache,
+		db:                db,
+		connectionPool:    make(map[string]*sql.DB),
+		partitions:        make(map[string]*sql.Conn), // Add this line
+		maxOpenPartitions: 3,                          // Add this line
+		partitionLRU:      make(map[string]time.Time),
 	}
 }
 
@@ -461,12 +468,14 @@ type Writer struct {
 	uncommittedCount int
 
 	// Partitioning support
-	db               *LogDB
-	partitions       map[string]*sql.DB // Store *sql.DB instead of *sql.Conn
-	partitionMux     sync.RWMutex
-	currentPartition int
-	connectionPool   map[string]*sql.DB
-	poolMutex        sync.RWMutex
+	db                *LogDB
+	partitionMux      sync.RWMutex
+	currentPartition  int
+	partitions        map[string]*sql.Conn
+	connectionPool    map[string]*sql.DB
+	poolMutex         sync.RWMutex
+	maxOpenPartitions int
+	partitionLRU      map[string]time.Time
 }
 
 // Truncate truncates the database by deleting logs after blockNum (included).
@@ -487,43 +496,83 @@ func (w *Writer) Truncate(blockNum uint32) error {
 
 func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 	blockNum := b.Header().Number()
-
-	// Calculate partition number
 	partitionNum := int(blockNum / 500000)
 
-	//println("DEBUG: Block %d -> Partition %d, Current partition: %d", blockNum, partitionNum, w.currentPartition)
-
-	// Switch to partition if needed
+	// Only switch partition if we're moving to a new one
 	if w.currentPartition != partitionNum {
-		// Close previous partition database if it exists
-		if w.currentPartition >= 0 {
-			prevPartitionName := fmt.Sprintf("events_partition_%d", w.currentPartition)
-			if db, exists := w.partitions[prevPartitionName]; exists {
-				println("DEBUG: Closing previous partition %s", prevPartitionName)
-				db.Close()                              // Close the previous partition database
-				delete(w.partitions, prevPartitionName) // Remove from map
-			}
+		if err := w.commitCurrentPartition(); err != nil {
+			return err
 		}
-
-		partitionName := fmt.Sprintf("events_partition_%d", partitionNum)
-		println("DEBUG: Switching to partition ", partitionName)
-		partitionDB := w.getPartitionDatabase(partitionName)
-
-		// Get a new connection from the partition database
-		conn, err := partitionDB.Conn(context.Background())
-		if err != nil {
-			return fmt.Errorf("failed to get connection for partition %s: %v", partitionName, err)
+		if err := w.switchToPartition(partitionNum); err != nil {
+			return err
 		}
-
-		w.conn = conn
-		w.currentPartition = partitionNum
-		// Reset transaction state
-		w.tx = nil
-		w.uncommittedCount = 0
-		println("DEBUG: Switched to partition %s, total open partitions: %d", partitionName, len(w.partitions))
 	}
 
+	// Batch this block's data into current transaction
 	return w.writeToDatabase(w.conn, b, receipts)
+}
+
+func (w *Writer) commitCurrentPartition() error {
+	if w.tx != nil {
+		if err := w.tx.Commit(); err != nil {
+			return err
+		}
+		w.tx = nil
+		w.uncommittedCount = 0
+	}
+	return nil
+}
+
+type PartitionManager struct {
+	partitions     map[string]*sql.DB
+	connections    map[string]*sql.Conn
+	maxConnections int
+}
+
+//func (w *Writer) getConnection(partitionName string) *sql.Conn {
+//	w.poolMutex.RLock()
+//	if conn, exists := w.connectionPool[partitionName]; exists {
+//		w.poolMutex.RUnlock()
+//		return conn
+//	}
+//	w.poolMutex.RUnlock()
+//
+//	// Create and cache connection
+//	w.poolMutex.Lock()
+//	defer w.poolMutex.Unlock()
+//
+//	db := w.getPartitionDatabase(partitionName)
+//	conn, err := db.Conn(context.Background())
+//	if err != nil {
+//		panic(fmt.Sprintf("Failed to get connection for partition %s: %v", partitionName, err))
+//	}
+//
+//	w.connectionPool[partitionName] = conn
+//	return conn
+//}
+
+func (w *Writer) switchToPartition(partitionNum int) error {
+	partitionName := fmt.Sprintf("events_partition_%d", partitionNum)
+
+	// Check if partition is already open
+	if _, exists := w.partitions[partitionName]; exists {
+		w.currentPartition = partitionNum
+		w.conn = w.getConnection(partitionName) // This now returns *sql.Conn
+		return nil
+	}
+
+	// Close oldest partition if we've hit the limit
+	if len(w.partitions) >= w.maxOpenPartitions {
+		w.evictOldestPartition()
+	}
+
+	// Create new partition
+	db := w.createPartition(partitionName)
+	w.connectionPool[partitionName] = db
+	w.currentPartition = partitionNum
+	w.conn = w.getConnection(partitionName) // This now returns *sql.Conn
+
+	return nil
 }
 
 // getPartitionConnection gets or creates a partition database connection
@@ -571,7 +620,7 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 
 func (w *Writer) getPartitionDatabase(partitionName string) *sql.DB {
 	w.partitionMux.RLock()
-	if db, exists := w.partitions[partitionName]; exists {
+	if db, exists := w.connectionPool[partitionName]; exists {
 		println("DEBUG: Reusing existing partition %s", partitionName)
 		w.partitionMux.RUnlock()
 		return db
@@ -582,7 +631,7 @@ func (w *Writer) getPartitionDatabase(partitionName string) *sql.DB {
 	defer w.partitionMux.Unlock()
 
 	// Double-check after acquiring write lock
-	if db, exists := w.partitions[partitionName]; exists {
+	if db, exists := w.connectionPool[partitionName]; exists {
 		println("DEBUG: Reusing existing partition %s (double-check)", partitionName)
 		return db
 	}
@@ -605,8 +654,8 @@ func (w *Writer) getPartitionDatabase(partitionName string) *sql.DB {
 		panic(fmt.Sprintf("Failed to initialize partition schema %s: %v", partitionName, err))
 	}
 
-	w.partitions[partitionName] = db
-	println("DEBUG: Created partition %s, total partitions: %d", partitionName, len(w.partitions))
+	w.connectionPool[partitionName] = db
+	println("DEBUG: Created partition %s, total partitions: %d", partitionName, len(w.connectionPool))
 	return db
 }
 
@@ -826,20 +875,20 @@ func (w *Writer) Close() error {
 	w.partitionMux.Lock()
 	defer w.partitionMux.Unlock()
 
-	println("DEBUG: Closing writer, total partitions to close: %d", len(w.partitions))
-	for name, db := range w.partitions {
+	println("DEBUG: Closing writer, total partitions to close: %d", len(w.connectionPool))
+	for name, db := range w.connectionPool {
 		println("DEBUG: Closing partition %s", name)
 		db.Close()
-		delete(w.partitions, name)
+		delete(w.connectionPool, name)
 	}
-	w.partitions = make(map[string]*sql.DB)
+	w.connectionPool = make(map[string]*sql.DB)
 	println("DEBUG: Writer closed, all partitions cleaned up")
 	return nil
 }
 
-func (w *Writer) getConnection(partitionName string) *sql.DB {
+func (w *Writer) getConnection(partitionName string) *sql.Conn {
 	w.poolMutex.RLock()
-	if conn, exists := w.connectionPool[partitionName]; exists {
+	if conn, exists := w.partitions[partitionName]; exists {
 		w.poolMutex.RUnlock()
 		return conn
 	}
@@ -849,7 +898,58 @@ func (w *Writer) getConnection(partitionName string) *sql.DB {
 	w.poolMutex.Lock()
 	defer w.poolMutex.Unlock()
 
-	conn := w.getPartitionDatabase(partitionName)
-	w.connectionPool[partitionName] = conn
+	// Double-check after acquiring write lock
+	if conn, exists := w.partitions[partitionName]; exists {
+		return conn
+	}
+
+	db := w.getPartitionDatabase(partitionName)
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		panic(fmt.Sprintf("Failed to get connection for partition %s: %v", partitionName, err))
+	}
+
+	w.partitions[partitionName] = conn
 	return conn
+}
+
+func (w *Writer) createPartition(partitionName string) *sql.DB {
+	partitionPath := filepath.Join(filepath.Dir(w.db.Path()), partitionName+".db")
+
+	// Optimize settings for write-heavy workloads
+	db, err := sql.Open("sqlite3", partitionPath+"?"+strings.Join([]string{
+		"_journal=wal",
+		"cache=shared",
+		"synchronous=normal", // Faster than full sync
+		"temp_store=memory",
+		"mmap_size=268435456", // 256MB memory mapping
+	}, "&"))
+
+	if err != nil {
+		panic(fmt.Sprintf("Failed to create partition %s: %v", partitionName, err))
+	}
+
+	// Set additional pragmas
+	db.Exec("PRAGMA journal_mode=WAL")
+	db.Exec("PRAGMA synchronous=normal")
+	db.Exec("PRAGMA cache_size=10000")
+	db.Exec("PRAGMA temp_store=memory")
+
+	return db
+}
+
+func (w *Writer) evictOldestPartition() {
+	if len(w.connectionPool) < w.maxOpenPartitions {
+		return
+	}
+
+	// Simple eviction: close the first partition that's not current
+	for name, db := range w.connectionPool {
+		if name != fmt.Sprintf("events_partition_%d", w.currentPartition) {
+			println("DEBUG: Evicting partition %s", name)
+			db.Close()
+			delete(w.connectionPool, name)
+			break
+		}
+	}
 }
