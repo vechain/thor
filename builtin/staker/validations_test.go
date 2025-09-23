@@ -83,7 +83,7 @@ func TestStaker_TotalStake_Withdrawal(t *testing.T) {
 		ExitValidator(addr).
 		AssertLockedVET(0, 0)
 
-	assertValidation(t, staker, addr).
+	staker.AssertValidation(addr).
 		Status(validation.StatusExit).
 		CooldownVET(stakeAmount)
 
@@ -91,7 +91,7 @@ func TestStaker_TotalStake_Withdrawal(t *testing.T) {
 		AssertWithdrawable(addr, period+thor.CooldownPeriod(), stakeAmount).
 		WithdrawStake(addr, addr, period+thor.CooldownPeriod(), stakeAmount)
 
-	assertValidation(t, staker, addr).
+	staker.AssertValidation(addr).
 		Status(validation.StatusExit).
 		WithdrawableVET(0)
 
@@ -997,8 +997,8 @@ func TestStaker_Housekeep_Exit_Decrements_Leader_Group_Size(t *testing.T) {
 		AssertLeaderGroupSize(1).
 		AssertFirstActive(addr2)
 
-	assertValidation(t, staker, addr1).Status(validation.StatusExit)
-	assertValidation(t, staker, addr2).Status(validation.StatusActive)
+	staker.AssertValidation(addr1).Status(validation.StatusExit)
+	staker.AssertValidation(addr2).Status(validation.StatusActive)
 
 	block := period + thor.EpochLength()
 	staker.
@@ -1010,7 +1010,7 @@ func TestStaker_Housekeep_Exit_Decrements_Leader_Group_Size(t *testing.T) {
 		AssertLeaderGroupSize(0).
 		AssertFirstActive(thor.Address{})
 
-	assertValidation(t, staker, addr2).Status(validation.StatusExit)
+	staker.AssertValidation(addr1).Status(validation.StatusExit)
 
 	staker.
 		AddValidation(addr3, addr3, period, stake).
@@ -1019,12 +1019,12 @@ func TestStaker_Housekeep_Exit_Decrements_Leader_Group_Size(t *testing.T) {
 		AssertFirstActive(addr3).
 		AssertLeaderGroupSize(1)
 
-	assertValidation(t, staker, addr3).Status(validation.StatusActive)
+	staker.AssertValidation(addr3).Status(validation.StatusActive)
 
 	block = block + period
 	staker.Housekeep(block).AssertGlobalWithdrawable(0).AssertGlobalCooldown(stake * 3)
 
-	assertValidation(t, staker, addr3).Status(validation.StatusExit)
+	staker.AssertValidation(addr3).Status(validation.StatusExit)
 }
 
 func TestStaker_Housekeep_Adds_Queued_Validators_Up_To_Limit(t *testing.T) {
@@ -1415,7 +1415,7 @@ func TestStaker_SetBeneficiary(t *testing.T) {
 
 	// add validation without a beneficiary
 	staker.AddValidation(master, endorser, thor.MediumStakingPeriod(), MinStakeVET).ActivateNext(0)
-	assertValidation(t, staker, master).Beneficiary(thor.Address{})
+	staker.AssertValidation(master).Beneficiary(thor.Address{})
 
 	// negative cases
 	staker.SetBeneficiaryErrors(master, master, beneficiary, "endorser required")
@@ -1423,11 +1423,11 @@ func TestStaker_SetBeneficiary(t *testing.T) {
 
 	// set beneficiary, should be successful
 	staker.SetBeneficiary(master, endorser, beneficiary)
-	assertValidation(t, staker, master).Beneficiary(beneficiary)
+	staker.AssertValidation(master).Beneficiary(beneficiary)
 
 	// remove the beneficiary
 	staker.SetBeneficiary(master, endorser, thor.Address{})
-	assertValidation(t, staker, master).Beneficiary(thor.Address{})
+	staker.AssertValidation(master).Beneficiary(thor.Address{})
 }
 
 func TestStaker_TestWeights(t *testing.T) {
@@ -1960,7 +1960,7 @@ func TestValidation_DecreaseOverflow(t *testing.T) {
 	overflowDecrease := math.MaxUint64 - MinStakeVET - 1
 	staker.DecreaseStakeErrors(addr, endorser, overflowDecrease, "decrease amount is too large")
 
-	assertValidation(t, staker, addr).QueuedVET(MinStakeVET)
+	staker.AssertValidation(addr).QueuedVET(MinStakeVET)
 }
 
 func TestValidation_IncreaseOverflow(t *testing.T) {
@@ -1973,7 +1973,7 @@ func TestValidation_IncreaseOverflow(t *testing.T) {
 	overflowIncrease := math.MaxUint64 - MinStakeVET + 1
 	staker.IncreaseStakeErrors(addr, endorser, overflowIncrease, "increase amount is too large")
 
-	assertValidation(t, staker, addr).QueuedVET(MinStakeVET)
+	staker.AssertValidation(addr).QueuedVET(MinStakeVET)
 }
 
 func TestValidation_WithdrawBeforeAfterCooldown(t *testing.T) {
@@ -1986,7 +1986,7 @@ func TestValidation_WithdrawBeforeAfterCooldown(t *testing.T) {
 		SignalExit(first, val.Endorser, 1).
 		Housekeep(thor.MediumStakingPeriod())
 
-	assertValidation(t, staker, first).
+	staker.AssertValidation(first).
 		Status(validation.StatusExit).
 		WithdrawableVET(0).
 		CooldownVET(stake)
