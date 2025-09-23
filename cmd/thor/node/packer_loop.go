@@ -134,12 +134,12 @@ func (n *Node) pack(flow *packer.Flow) error {
 }
 
 func (n *Node) processBlockWithGuard(flow *packer.Flow, txs []*tx.Transaction, txsToRemove *[]*tx.Transaction) error {
-	return n.guardBlockProcessing(flow.Number(), func(conflicts uint32) error {
+	return n.guardBlockProcessing(flow.Number(), func(conflicts uint32) (thor.Bytes32, error) {
 		return n.processBlockWithConflicts(flow, txs, txsToRemove, conflicts)
 	})
 }
 
-func (n *Node) processBlockWithConflicts(flow *packer.Flow, txs []*tx.Transaction, txsToRemove *[]*tx.Transaction, conflicts uint32) error {
+func (n *Node) processBlockWithConflicts(flow *packer.Flow, txs []*tx.Transaction, txsToRemove *[]*tx.Transaction, conflicts uint32) (thor.Bytes32, error) {
 	ctx := &packContext{
 		flow:       flow,
 		conflicts:  conflicts,
@@ -149,20 +149,20 @@ func (n *Node) processBlockWithConflicts(flow *packer.Flow, txs []*tx.Transactio
 	}
 
 	if err := n.processTransactions(ctx, txs, txsToRemove); err != nil {
-		return err
+		return thor.Bytes32{}, err
 	}
 
 	shouldVote, err := n.determineVotingRequirement(flow)
 	if err != nil {
-		return errors.Wrap(err, "get vote")
+		return thor.Bytes32{}, errors.Wrap(err, "get vote")
 	}
 
 	newBlock, stage, receipts, err := n.packBlock(flow, conflicts, shouldVote)
 	if err != nil {
-		return errors.Wrap(err, "failed to pack block")
+		return thor.Bytes32{}, errors.Wrap(err, "failed to pack block")
 	}
 
-	return n.processPackedBlock(ctx, newBlock, stage, receipts)
+	return newBlock.Header().ID(), n.processPackedBlock(ctx, newBlock, stage, receipts)
 }
 
 func (n *Node) cleanupTransactions(txsToRemove []*tx.Transaction) {

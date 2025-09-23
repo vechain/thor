@@ -200,11 +200,11 @@ func newCustomNet(gen *CustomGenesis) (*Genesis, error) {
 
 func CustomNetWithParams(
 	t *testing.T,
-	executor genesis.Executor,
-	baseGasPrice genesis.HexOrDecimal256,
-	rewardRatio genesis.HexOrDecimal256,
-	proposerEndorsement genesis.HexOrDecimal256,
-) genesis.CustomGenesis {
+	executor Executor,
+	baseGasPrice HexOrDecimal256,
+	rewardRatio HexOrDecimal256,
+	proposerEndorsement HexOrDecimal256,
+) CustomGenesis {
 	defaultFC := thor.ForkConfig{
 		VIP191:    math.MaxUint32,
 		ETH_CONST: math.MaxUint32,

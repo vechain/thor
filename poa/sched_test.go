@@ -9,10 +9,11 @@ import (
 	"encoding/binary"
 	"testing"
 
+	"github.com/vechain/thor/v2/poa"
+
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/poa"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -23,7 +24,7 @@ var (
 	pv4 = thor.BytesToAddress([]byte("p4"))
 	pv5 = thor.BytesToAddress([]byte("p5"))
 
-	proposers = []Proposer{
+	proposers = []poa.Proposer{
 		{pv1, false},
 		{pv2, true},
 		{pv3, false},
@@ -35,13 +36,13 @@ var (
 )
 
 func TestSchedule(t *testing.T) {
-	_, err := NewSchedulerV1(thor.BytesToAddress([]byte("px")), proposers, 1, parentTimeV1)
+	_, err := poa.NewSchedulerV1(thor.BytesToAddress([]byte("px")), proposers, 1, parentTimeV1)
 	assert.NotNil(t, err)
 
-	sched, _ := NewSchedulerV1(p1, proposers, 1, parentTimeV1)
+	sched, _ := poa.NewSchedulerV1(pv1, proposers, 1, parentTimeV1)
 
 	for i := uint64(0); i < 100; i++ {
-		now := parentTimeV1 + i*thor.BlockInterval/2
+		now := parentTimeV1 + i*thor.BlockInterval()/uint64(2)
 		nbt := sched.Schedule(now)
 		assert.True(t, nbt >= now)
 		assert.True(t, sched.IsTheTime(nbt))
@@ -49,15 +50,15 @@ func TestSchedule(t *testing.T) {
 }
 
 func TestIsTheTime(t *testing.T) {
-	sched, _ := NewSchedulerV1(p2, proposers, 1, parentTimeV1)
+	sched, _ := poa.NewSchedulerV1(pv2, proposers, 1, parentTimeV1)
 
 	tests := []struct {
 		now  uint64
 		want bool
 	}{
 		{parentTimeV1 - 1, false},
-		{parentTimeV1 + thor.BlockInterval/2, false},
-		{parentTimeV1 + thor.BlockInterval, true},
+		{parentTimeV1 + thor.BlockInterval()/2, false},
+		{parentTimeV1 + thor.BlockInterval(), true},
 	}
 
 	for _, tt := range tests {
@@ -66,14 +67,14 @@ func TestIsTheTime(t *testing.T) {
 }
 
 func TestUpdates(t *testing.T) {
-	sched, _ := NewSchedulerV1(p1, proposers, 1, parentTimeV1)
+	sched, _ := poa.NewSchedulerV1(pv1, proposers, 1, parentTimeV1)
 
 	tests := []struct {
 		newBlockTime uint64
 		want         uint64
 	}{
-		{parentTimeV1 + thor.BlockInterval, 2},
-		{parentTimeV1 + thor.BlockInterval*30, 1},
+		{parentTimeV1 + thor.BlockInterval(), 2},
+		{parentTimeV1 + thor.BlockInterval()*30, 1},
 	}
 
 	for _, tt := range tests {
@@ -87,13 +88,13 @@ func TestScheduleV2(t *testing.T) {
 	binary.BigEndian.PutUint32(parentID[:], 0)
 	parent := new(block.Builder).ParentID(parentID).Timestamp(parentTimeV1).Build()
 
-	_, err := NewSchedulerV2(thor.BytesToAddress([]byte("p6")), proposers, parent.Header().Number(), parent.Header().Timestamp(), nil)
+	_, err := poa.NewSchedulerV2(thor.BytesToAddress([]byte("p6")), proposers, parent.Header().Number(), parent.Header().Timestamp(), nil)
 	assert.NotNil(t, err)
 
-	sched, _ := NewSchedulerV2(p2, proposers, parent.Header().Number(), parent.Header().Timestamp(), nil)
+	sched, _ := poa.NewSchedulerV2(pv2, proposers, parent.Header().Number(), parent.Header().Timestamp(), nil)
 
 	for i := uint64(0); i < 100; i++ {
-		now := parentTimeV1 + i*thor.BlockInterval/2
+		now := parentTimeV1 + i*thor.BlockInterval()/2
 		nbt := sched.Schedule(now)
 		assert.True(t, nbt >= now)
 		assert.True(t, sched.IsTheTime(nbt))
@@ -105,7 +106,7 @@ func TestIsTheTimeV2(t *testing.T) {
 	binary.BigEndian.PutUint32(parentID[:], 0)
 	parent := new(block.Builder).ParentID(parentID).Timestamp(parentTimeV1).Build()
 
-	sched, err := NewSchedulerV2(p2, proposers, parent.Header().Number(), parent.Header().Timestamp(), nil)
+	sched, err := poa.NewSchedulerV2(pv2, proposers, parent.Header().Number(), parent.Header().Timestamp(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,8 +116,8 @@ func TestIsTheTimeV2(t *testing.T) {
 		want bool
 	}{
 		{parentTimeV1 - 1, false},
-		{parentTimeV1 + thor.BlockInterval/2, false},
-		{parentTimeV1 + thor.BlockInterval, true},
+		{parentTimeV1 + thor.BlockInterval()/2, false},
+		{parentTimeV1 + thor.BlockInterval(), true},
 	}
 
 	for _, tt := range tests {
@@ -129,7 +130,7 @@ func TestUpdatesV2(t *testing.T) {
 	binary.BigEndian.PutUint32(parentID[:], 0)
 	parent := new(block.Builder).ParentID(parentID).Timestamp(parentTimeV1).Build()
 
-	sched, err := NewSchedulerV2(p2, proposers, parent.Header().Number(), parent.Header().Timestamp(), nil)
+	sched, err := poa.NewSchedulerV2(pv2, proposers, parent.Header().Number(), parent.Header().Timestamp(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,8 +139,8 @@ func TestUpdatesV2(t *testing.T) {
 		newBlockTime uint64
 		want         uint64
 	}{
-		{parentTimeV1 + thor.BlockInterval*30, 1},
-		{parentTimeV1 + thor.BlockInterval, 1},
+		{parentTimeV1 + thor.BlockInterval()*30, 1},
+		{parentTimeV1 + thor.BlockInterval(), 1},
 	}
 
 	for _, tt := range tests {
@@ -153,7 +154,7 @@ func TestActivateInV2(t *testing.T) {
 	binary.BigEndian.PutUint32(parentID[:], 0)
 	parent := new(block.Builder).ParentID(parentID).Timestamp(parentTimeV1).Build()
 
-	sched, err := NewSchedulerV2(p1, proposers, parent.Header().Number(), parent.Header().Timestamp(), nil)
+	sched, err := poa.NewSchedulerV2(pv1, proposers, parent.Header().Number(), parent.Header().Timestamp(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,8 +163,8 @@ func TestActivateInV2(t *testing.T) {
 		newBlockTime uint64
 		want         uint64
 	}{
-		{parentTimeV1 + thor.BlockInterval*30, 1},
-		{parentTimeV1 + thor.BlockInterval, 2},
+		{parentTimeV1 + thor.BlockInterval()*30, 1},
+		{parentTimeV1 + thor.BlockInterval(), 2},
 	}
 
 	for _, tt := range tests {

@@ -38,7 +38,7 @@ const (
 func getFlowAndNode(t *testing.T, forkConfig *thor.ForkConfig) (*packer.Flow, *Node) {
 	db := muxdb.NewMem()
 	now := time.Now().Unix()
-	launchTime := uint64(now) - thor.BlockInterval
+	launchTime := uint64(now) - thor.BlockInterval()
 	builder := genesis.NewDevnetWithConfig(genesis.DevConfig{ForkConfig: &thor.SoloFork, LaunchTime: launchTime})
 	a1 := genesis.DevAccounts()[0]
 
@@ -83,8 +83,8 @@ func getFlowAndNode(t *testing.T, forkConfig *thor.ForkConfig) (*packer.Flow, *N
 
 	minTxGas := thor.TxGas + thor.ClauseGas
 	smallGasLimit := minTxGas + 1000
-	flow, err := p.Mock(repo.BestBlockSummary(),
-		repo.BestBlockSummary().Header.Timestamp()+thor.BlockInterval,
+	flow, _, err := p.Mock(repo.BestBlockSummary(),
+		repo.BestBlockSummary().Header.Timestamp()+thor.BlockInterval(),
 		smallGasLimit)
 	assert.NoError(t, err)
 	return flow, n

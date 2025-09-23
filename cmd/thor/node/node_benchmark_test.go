@@ -25,7 +25,6 @@ import (
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/consensus"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/muxdb"
@@ -200,13 +199,13 @@ func benchmarkBlockProcess(b *testing.B, db *muxdb.MuxDB, accounts []genesis.Dev
 	engine, err := bft.NewEngine(thorChain.Repo(), thorChain.Database(), thorChain.GetForkConfig(), proposer.Address)
 	require.NoError(b, err)
 
-	masterAddr := &Master{
-		PrivateKey: proposer.PrivateKey,
-	}
 	node := New(
-		masterAddr,
+		&Master{
+			PrivateKey: proposer.PrivateKey,
+		},
 		thorChain.Repo(),
 		engine,
+		thorChain.Stater(),
 		nil,
 		nil,
 		"",
@@ -217,8 +216,6 @@ func benchmarkBlockProcess(b *testing.B, db *muxdb.MuxDB, accounts []genesis.Dev
 			MinTxPriorityFee: 0,
 			TargetGasLimit:   10_000_000,
 		},
-		consensus.New(thorChain.Repo(), thorChain.Stater(), &thor.NoFork),
-		packer.New(thorChain.Repo(), thorChain.Stater(), masterAddr.Address(), masterAddr.Beneficiary, &thor.NoFork, 10_000_000),
 	)
 
 	stats := &blockStats{}
