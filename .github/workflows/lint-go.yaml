@@ -26,7 +26,7 @@ jobs:
 
       - name: Check `modernize` (code style)
         run: |
-          go run golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@v0.18.1 ./...
+          go run golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@latest -test ./...
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v8
