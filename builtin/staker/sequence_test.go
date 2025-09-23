@@ -589,6 +589,13 @@ func (va *ValidationAssertions) ExitBlock(expected *uint32) *ValidationAssertion
 	return va
 }
 
+func (va *ValidationAssertions) CompletedIterations(expected, block uint32) *ValidationAssertions {
+	completed, err := va.validator.CompletedIterations(block)
+	assert.NoError(va.t, err)
+	assert.Equal(va.t, expected, completed)
+	return va
+}
+
 type AggregationAssertions struct {
 	validationID thor.Address
 	aggregation  *aggregation.Aggregation
