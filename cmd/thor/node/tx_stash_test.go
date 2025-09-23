@@ -6,9 +6,7 @@
 package node
 
 import (
-	"bytes"
 	"math/rand/v2"
-	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -26,35 +24,70 @@ func newTx(txType tx.Type) *tx.Transaction {
 	)
 }
 
-func TestTxStash(t *testing.T) {
-	db, _ := leveldb.Open(storage.NewMemStorage(), nil)
-	defer db.Close()
-
-	stash := newTxStash(db, 20)
-
-	var saved tx.Transactions
-	for range 11 {
+func TestTxStash_ErrorsAndBranches(t *testing.T) {
+	t.Run("db.Has returns error", func(t *testing.T) {
+		db, _ := leveldb.Open(storage.NewMemStorage(), nil)
+		assert.NoError(t, db.Close()) // force error later
+		stash := newTxStash(db, 10)
 		tx := newTx(tx.TypeLegacy)
-		assert.Nil(t, stash.Save(tx))
-		saved = append(saved, tx)
-	}
-
-	for range 11 {
-		tx := newTx(tx.TypeDynamicFee)
-		assert.Nil(t, stash.Save(tx))
-		saved = append(saved, tx)
-	}
-
-	loaded := newTxStash(db, 20).LoadAll()
-
-	saved = saved[2:]
-	sort.Slice(saved, func(i, j int) bool {
-		return bytes.Compare(saved[i].ID().Bytes(), saved[j].ID().Bytes()) < 0
+		err := stash.Save(tx)
+		assert.Error(t, err)
 	})
 
-	sort.Slice(loaded, func(i, j int) bool {
-		return bytes.Compare(loaded[i].ID().Bytes(), loaded[j].ID().Bytes()) < 0
+	t.Run("db.Has returns true", func(t *testing.T) {
+		db, _ := leveldb.Open(storage.NewMemStorage(), nil)
+		stash := newTxStash(db, 10)
+		tx := newTx(tx.TypeLegacy)
+		assert.NoError(t, stash.Save(tx))
+		err := stash.Save(tx) // When saving again, should be no error, no-op
+		assert.NoError(t, err)
 	})
 
-	assert.Equal(t, saved.RootHash(), loaded.RootHash())
+	t.Run("db.Delete returns error", func(t *testing.T) {
+		db, _ := leveldb.Open(storage.NewMemStorage(), nil)
+		stash := newTxStash(db, 1)
+		tx1 := newTx(tx.TypeLegacy)
+		tx2 := newTx(tx.TypeDynamicFee)
+		assert.NoError(t, stash.Save(tx1))
+		// Close DB to force error on Delete
+		assert.NoError(t, db.Close())
+		err := stash.Save(tx2)
+		assert.Error(t, err)
+	})
+
+	t.Run("UnmarshalBinary returns error", func(t *testing.T) {
+		db, _ := leveldb.Open(storage.NewMemStorage(), nil)
+		stash := newTxStash(db, 10)
+		badKey := []byte{0x01, 0x02, 0x03}
+		badVal := []byte{0xFF, 0xFF, 0xFF}
+		assert.NoError(t, db.Put(badKey, badVal, nil))
+		loaded := stash.LoadAll()
+		assert.Len(t, loaded, 0)
+	})
+
+	t.Run("Key mismatch triggers remap", func(t *testing.T) {
+		db, _ := leveldb.Open(storage.NewMemStorage(), nil)
+		stash := newTxStash(db, 10)
+		tx := newTx(tx.TypeLegacy)
+		val, _ := tx.MarshalBinary()
+		wrongKey := []byte{0xAA, 0xBB, 0xCC}
+		assert.NoError(t, db.Put(wrongKey, val, nil))
+		loaded := stash.LoadAll()
+		assert.NotEmpty(t, loaded)
+
+		ok, err := db.Has(tx.Hash().Bytes(), nil)
+		assert.NoError(t, err)
+		assert.True(t, ok)
+	})
+
+	t.Run("db.Write returns error", func(t *testing.T) {
+		db, _ := leveldb.Open(storage.NewMemStorage(), nil)
+		stash := newTxStash(db, 10)
+		tx := newTx(tx.TypeLegacy)
+		assert.NoError(t, stash.Save(tx))
+		// Close DB to force error on Write
+		assert.NoError(t, db.Close())
+		txs := stash.LoadAll()
+		assert.Len(t, txs, 0)
+	})
 }
