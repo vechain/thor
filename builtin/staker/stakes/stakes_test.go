@@ -51,3 +51,33 @@ func TestOverFlow(t *testing.T) {
 	c := NewWeightedStake(0, math.MaxUint64)
 	assert.ErrorContains(t, a.Add(c), "weight add overflow occurred")
 }
+
+func TestWeightedStake_Sub(t *testing.T) {
+	a := NewWeightedStake(10, 20)
+	b := NewWeightedStake(3, 5)
+	// Normal subtraction
+	assert.NoError(t, a.Sub(b))
+	assert.Equal(t, uint64(7), a.VET)
+	assert.Equal(t, uint64(15), a.Weight)
+
+	// VET underflow
+	a = NewWeightedStake(1, 1)
+	b = NewWeightedStake(2, 0)
+	err := a.Sub(b)
+	assert.ErrorContains(t, err, "VET subtract underflow occurred")
+
+	// Weight underflow
+	a = NewWeightedStake(2, 1)
+	b = NewWeightedStake(1, 2)
+	err = a.Sub(b)
+	assert.ErrorContains(t, err, "weight subtract underflow occurred")
+}
+
+func TestWeightedStake_Clone(t *testing.T) {
+	orig := NewWeightedStake(42, 99)
+	clone := orig.Clone()
+	assert.Equal(t, orig.VET, clone.VET)
+	assert.Equal(t, orig.Weight, clone.Weight)
+	// Ensure it's a different pointer
+	assert.NotSame(t, orig, clone)
+}
