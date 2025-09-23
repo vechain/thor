@@ -60,119 +60,8 @@ func createKeys(amount int) map[thor.Address]keySet {
 	return keys
 }
 
-type testStaker struct {
-	addr  thor.Address
-	state *state.State
-	*Staker
-}
-
-func (ts *testStaker) AddValidation(
-	validator thor.Address,
-	endorser thor.Address,
-	period uint32,
-	stake uint64,
-) error {
-	balance, err := ts.state.GetBalance(ts.addr)
-	if err != nil {
-		return err
-	}
-	newBalance := big.NewInt(0).Add(balance, ToWei(stake))
-	if ts.state.SetBalance(ts.addr, newBalance) != nil {
-		return err
-	}
-	err = ts.Staker.AddValidation(validator, endorser, period, stake)
-	if err != nil {
-		if ts.state.SetBalance(ts.addr, balance) != nil {
-			return err
-		}
-	}
-	return err
-}
-
-func (ts *testStaker) IncreaseStake(validator thor.Address, endorser thor.Address, amount uint64) error {
-	balance, err := ts.state.GetBalance(ts.addr)
-	if err != nil {
-		return err
-	}
-	newBalance := big.NewInt(0).Add(balance, ToWei(amount))
-	if ts.state.SetBalance(ts.addr, newBalance) != nil {
-		return err
-	}
-	err = ts.Staker.IncreaseStake(validator, endorser, amount)
-	if err != nil {
-		if ts.state.SetBalance(ts.addr, balance) != nil {
-			return err
-		}
-	}
-	return err
-}
-
-func (ts *testStaker) WithdrawStake(validator thor.Address, endorser thor.Address, currentBlock uint32) (uint64, error) {
-	amount, err := ts.Staker.WithdrawStake(validator, endorser, currentBlock)
-	if err != nil {
-		return 0, err
-	}
-	balance, err := ts.state.GetBalance(ts.addr)
-	if err != nil {
-		return 0, err
-	}
-	newBalance := big.NewInt(0).Sub(balance, ToWei(amount))
-	if ts.state.SetBalance(ts.addr, newBalance) != nil {
-		return 0, err
-	}
-	return amount, nil
-}
-
-func (ts *testStaker) AddDelegation(
-	validator thor.Address,
-	stake uint64,
-	multiplier uint8,
-	currentBlock uint32,
-) (*big.Int, error) {
-	balance, err := ts.state.GetBalance(ts.addr)
-	if err != nil {
-		return nil, err
-	}
-	newBalance := big.NewInt(0).Add(balance, ToWei(stake))
-	if ts.state.SetBalance(ts.addr, newBalance) != nil {
-		return nil, err
-	}
-	delegation, err := ts.Staker.AddDelegation(validator, stake, multiplier, currentBlock)
-	if err != nil {
-		if ts.state.SetBalance(ts.addr, balance) != nil {
-			return nil, err
-		}
-	}
-	return delegation, err
-}
-
-func (ts *testStaker) WithdrawDelegation(
-	delegationID *big.Int,
-	currentBlock uint32,
-) (uint64, error) {
-	amount, err := ts.Staker.WithdrawDelegation(delegationID, currentBlock)
-	if err != nil {
-		return amount, err
-	}
-	balance, err := ts.state.GetBalance(ts.addr)
-	if err != nil {
-		return 0, err
-	}
-	newBalance := big.NewInt(0).Sub(balance, ToWei(amount))
-	if ts.state.SetBalance(ts.addr, newBalance) != nil {
-		return 0, err
-	}
-	return amount, nil
-}
-
 // newStakerV2 is a temporary function to help migration to use TestSequence.
 func newStakerV2(t *testing.T, amount int, maxValidators int64, initialise bool) (*TestSequence, uint64) {
-	staker, totalStake := newStaker(t, amount, maxValidators, initialise)
-
-	return newTestSequence(t, staker), totalStake
-}
-
-func newStaker(t *testing.T, amount int, maxValidators int64, initialise bool) (*testStaker, uint64) {
 	db := muxdb.NewMem()
 	st := state.New(db, trie.Root{})
 
@@ -182,31 +71,21 @@ func newStaker(t *testing.T, amount int, maxValidators int64, initialise bool) (
 
 	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(maxValidators)))
 	stakerImpl := New(stakerAddr, st, param, nil)
-	staker := &testStaker{
-		addr:   stakerAddr,
-		state:  st,
-		Staker: stakerImpl,
-	}
+	staker := newTestSequence(t, stakerImpl, param)
 
 	totalStake := uint64(0)
 	if initialise {
 		for _, key := range keys {
 			stake := RandomStake()
 			totalStake += stake
-			if err := staker.AddValidation(key.node, key.endorser, thor.MediumStakingPeriod(), stake); err != nil {
-				t.Fatal(err)
-			}
+			staker.AddValidation(key.node, key.endorser, thor.MediumStakingPeriod(), stake)
 		}
 		transitioned, err := staker.transition(0)
 		assert.NoError(t, err)
 		assert.True(t, transitioned)
 	}
 
-	return &testStaker{
-		addr:   stakerAddr,
-		state:  st,
-		Staker: stakerImpl,
-	}, totalStake
+	return staker, totalStake
 }
 
 func TestStaker_TotalStake(t *testing.T) {
@@ -799,7 +678,7 @@ func TestStaker_LeaderGroup(t *testing.T) {
 		test.ActivateNext(0)
 	}
 
-	leaderGroup, err := test.staker.LeaderGroup()
+	leaderGroup, err := test.Staker.LeaderGroup()
 	assert.NoError(t, err)
 
 	leaders := make(map[thor.Address]bool)
@@ -867,7 +746,7 @@ func TestStaker_Initialise(t *testing.T) {
 		test.AddValidation(datagen.RandAddress(), datagen.RandAddress(), thor.MediumStakingPeriod(), MinStakeVET)
 	}
 
-	transitioned, err := test.staker.transition(0)
+	transitioned, err := test.Staker.transition(0)
 	assert.NoError(t, err) // should succeed
 	assert.True(t, transitioned)
 	// should be able to add validations after initialisation
@@ -878,7 +757,7 @@ func TestStaker_Initialise(t *testing.T) {
 	assert.False(t, first.IsZero())
 
 	expectedLength := uint64(101)
-	length, err := test.staker.validationService.LeaderGroupSize()
+	length, err := test.Staker.validationService.LeaderGroupSize()
 	assert.NoError(t, err)
 	assert.Equal(t, expectedLength, length)
 }
@@ -1997,28 +1876,19 @@ func TestStaker_OfflineValidator(t *testing.T) {
 }
 
 func TestStaker_Housekeep_NegativeCases(t *testing.T) {
-	db := muxdb.NewMem()
-	st := state.New(db, trie.Root{})
-	stakerAddr := thor.BytesToAddress([]byte("stkr"))
-	paramsAddr := thor.BytesToAddress([]byte("params"))
+	test, _ := newStakerV2(t, 0, 2, false)
 
-	param := params.New(paramsAddr, st)
-
-	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(2)))
-	staker := &testStaker{
-		Staker: New(stakerAddr, st, param, nil),
-		addr:   stakerAddr,
-		state:  st,
-	}
-
-	housekeep, err := staker.Housekeep(thor.EpochLength() - 1)
+	housekeep, err := test.Staker.Housekeep(thor.EpochLength() - 1)
 	assert.NoError(t, err)
 	assert.False(t, housekeep)
+
+	st := test.State()
+	stakerAddr := test.Address()
 
 	activeHeadSlot := thor.BytesToBytes32([]byte(("validations-active-head")))
 	st.SetRawStorage(stakerAddr, activeHeadSlot, rlp.RawValue{0xFF})
 
-	_, err = staker.Housekeep(thor.EpochLength() * 48 * 3)
+	_, err = test.Staker.Housekeep(thor.EpochLength() * 48 * 3)
 	assert.Error(t, err)
 
 	keys := createKeys(2)
@@ -2029,23 +1899,21 @@ func TestStaker_Housekeep_NegativeCases(t *testing.T) {
 	for _, key := range keys {
 		stake := RandomStake()
 		valAddr = key.node
-		if err := staker.AddValidation(key.node, key.endorser, thor.MediumStakingPeriod(), stake); err != nil {
-			t.Fatal(err)
-		}
+		test.AddValidation(key.node, key.endorser, thor.MediumStakingPeriod(), stake)
 	}
 	lockedVet, err := st.GetRawStorage(stakerAddr, slotLockedVET)
 	assert.NoError(t, err)
 	st.SetRawStorage(stakerAddr, slotLockedVET, rlp.RawValue{0xFF})
-	_, err = staker.Housekeep(thor.EpochLength())
+	_, err = test.Staker.Housekeep(thor.EpochLength())
 	assert.Error(t, err)
 
-	_, err = staker.Housekeep(thor.EpochLength() * 2)
+	_, err = test.Staker.Housekeep(thor.EpochLength() * 2)
 	assert.Error(t, err)
 
 	slotQueuedGroupSize := thor.BytesToBytes32([]byte(("validations-queued-group-size")))
 	st.SetRawStorage(stakerAddr, slotLockedVET, lockedVet)
 	st.SetRawStorage(stakerAddr, slotQueuedGroupSize, rlp.RawValue{0xFF})
-	_, err = staker.Housekeep(thor.EpochLength() * 4)
+	_, err = test.Staker.Housekeep(thor.EpochLength() * 4)
 	assert.Error(t, err)
 
 	st.SetRawStorage(stakerAddr, slotLockedVET, rlp.RawValue{0xc2, 0x80, 0x80})
@@ -2053,13 +1921,13 @@ func TestStaker_Housekeep_NegativeCases(t *testing.T) {
 
 	slotActiveGroupSize := thor.BytesToBytes32([]byte(("validations-active-group-size")))
 	st.SetRawStorage(stakerAddr, slotActiveGroupSize, rlp.RawValue{0xFF})
-	count, err := staker.computeActivationCount(true)
+	count, err := test.computeActivationCount(true)
 	assert.Error(t, err)
 	assert.Equal(t, uint64(0), count)
 
 	st.SetRawStorage(stakerAddr, slotActiveGroupSize, rlp.RawValue{0x0})
-	st.SetRawStorage(paramsAddr, thor.KeyMaxBlockProposers, rlp.RawValue{0xFF})
-	count, err = staker.computeActivationCount(true)
+	st.SetRawStorage(thor.BytesToAddress([]byte("params")), thor.KeyMaxBlockProposers, rlp.RawValue{0xFF})
+	count, err = test.computeActivationCount(true)
 	assert.Error(t, err)
 	assert.Equal(t, uint64(0), count)
 
@@ -2067,8 +1935,8 @@ func TestStaker_Housekeep_NegativeCases(t *testing.T) {
 	validatorAddr := thor.BytesToAddress([]byte("renewal1"))
 	slot := thor.Blake2b(validatorAddr.Bytes(), slotAggregations.Bytes())
 	st.SetRawStorage(stakerAddr, slot, []byte{0xFF, 0xFF, 0xFF, 0xFF})
-	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(0)))
-	err = staker.applyEpochTransition(&EpochTransition{
+	assert.NoError(t, test.params.Set(thor.KeyMaxBlockProposers, big.NewInt(0)))
+	err = test.applyEpochTransition(&EpochTransition{
 		Block:           0,
 		Renewals:        []thor.Address{validatorAddr},
 		ExitValidator:   thor.Address{},
@@ -2077,7 +1945,7 @@ func TestStaker_Housekeep_NegativeCases(t *testing.T) {
 	})
 	assert.ErrorContains(t, err, "failed to get validator aggregation")
 	re2 := thor.BytesToAddress([]byte("renewal2"))
-	err = staker.applyEpochTransition(&EpochTransition{
+	err = test.applyEpochTransition(&EpochTransition{
 		Block:           0,
 		Renewals:        []thor.Address{re2},
 		ExitValidator:   thor.Address{},
@@ -2092,7 +1960,7 @@ func TestStaker_Housekeep_NegativeCases(t *testing.T) {
 	assert.NoError(t, err)
 	st.SetRawStorage(stakerAddr, slot, rlp.RawValue{0xFF})
 
-	err = staker.applyEpochTransition(&EpochTransition{
+	err = test.applyEpochTransition(&EpochTransition{
 		Block:           0,
 		Renewals:        []thor.Address{},
 		ExitValidator:   valAddr,
@@ -2106,7 +1974,7 @@ func TestStaker_Housekeep_NegativeCases(t *testing.T) {
 	slot = thor.Blake2b(valAddr.Bytes(), slotAggregations.Bytes())
 	st.SetRawStorage(stakerAddr, slot, []byte{0xFF, 0xFF, 0xFF, 0xFF})
 	st.SetRawStorage(stakerAddr, slotActiveGroupSize, rlp.RawValue{0x2})
-	err = staker.applyEpochTransition(&EpochTransition{
+	err = test.applyEpochTransition(&EpochTransition{
 		Block:           0,
 		Renewals:        []thor.Address{},
 		ExitValidator:   valAddr,
@@ -2118,44 +1986,25 @@ func TestStaker_Housekeep_NegativeCases(t *testing.T) {
 }
 
 func TestValidation_NegativeCases(t *testing.T) {
-	db := muxdb.NewMem()
-	st := state.New(db, trie.Root{})
-
-	param := params.New(thor.BytesToAddress([]byte("params")), st)
-
-	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(2)))
-	stakerAddr := thor.BytesToAddress([]byte("stkr"))
-	staker := &testStaker{
-		Staker: New(stakerAddr, st, param, nil),
-		addr:   stakerAddr,
-		state:  st,
-	}
+	staker, _ := newStakerV2(t, 0, 2, false)
 
 	node1 := datagen.RandAddress()
 	stake := RandomStake()
-	err := staker.AddValidation(node1, node1, thor.MediumStakingPeriod(), stake)
-	assert.NoError(t, err)
+	staker.AddValidation(node1, node1, thor.MediumStakingPeriod(), stake)
 
 	validationsSlot := thor.BytesToBytes32([]byte(("validations")))
 	slot := thor.Blake2b(node1.Bytes(), validationsSlot.Bytes())
-	st.SetRawStorage(stakerAddr, slot, rlp.RawValue{0xFF})
-	_, err = staker.GetWithdrawable(node1, thor.EpochLength())
+	staker.State().SetRawStorage(staker.Address(), slot, rlp.RawValue{0xFF})
+	_, err := staker.GetWithdrawable(node1, thor.EpochLength())
 	assert.Error(t, err)
 
 	_, err = staker.GetValidationTotals(node1)
 	assert.Error(t, err)
 
-	_, err = staker.WithdrawStake(node1, node1, thor.EpochLength())
-	assert.Error(t, err)
-
-	err = staker.SignalExit(node1, node1, 10)
-	assert.Error(t, err)
-
-	err = staker.SignalDelegationExit(big.NewInt(0), 10)
-	assert.Error(t, err)
-
-	_, err = staker.GetValidation(node1)
-	assert.Error(t, err)
+	staker.WithdrawStakeErrors(node1, node1, thor.EpochLength(), "state: rlp")
+	staker.SignalExitErrors(node1, node1, 10, "state: rlp")
+	staker.SignalDelegationExitErrors(big.NewInt(0), 10, "delegation is empty")
+	staker.GetValidationErrors(node1, "state: rlp")
 }
 
 func TestValidation_DecreaseOverflow(t *testing.T) {

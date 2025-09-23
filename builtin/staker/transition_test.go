@@ -11,23 +11,12 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vechain/thor/v2/builtin/params"
-	"github.com/vechain/thor/v2/muxdb"
-	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/trie"
 )
 
 func TestTransition(t *testing.T) {
-	db := muxdb.NewMem()
-	st := state.New(db, trie.Root{})
-
-	param := params.New(thor.BytesToAddress([]byte("params")), st)
-
-	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(2)))
-	stakerAddr := thor.BytesToAddress([]byte("stkr"))
-	staker := &testStaker{Staker: New(stakerAddr, st, param, nil), state: st, addr: stakerAddr}
+	staker, _ := newStakerV2(t, 0, 2, false)
 
 	isExecuted, err := staker.transition(thor.EpochLength())
 	assert.NoError(t, err)
@@ -35,16 +24,14 @@ func TestTransition(t *testing.T) {
 
 	node1 := datagen.RandAddress()
 	stake := RandomStake()
-	err = staker.AddValidation(node1, node1, uint32(360)*24*15, stake)
-	assert.NoError(t, err)
+	staker.AddValidation(node1, node1, uint32(360)*24*15, stake)
 
 	isExecuted, err = staker.transition(thor.EpochLength())
 	assert.NoError(t, err)
 	assert.False(t, isExecuted)
 
 	node2 := datagen.RandAddress()
-	err = staker.AddValidation(node2, node2, uint32(360)*24*15, stake)
-	assert.NoError(t, err)
+	staker.AddValidation(node2, node2, uint32(360)*24*15, stake)
 
 	staker.params.Set(thor.KeyMaxBlockProposers, big.NewInt(0))
 
@@ -61,6 +48,9 @@ func TestTransition(t *testing.T) {
 	isExecuted, err = staker.transition(thor.EpochLength())
 	assert.NoError(t, err)
 	assert.False(t, isExecuted)
+
+	st := staker.State()
+	stakerAddr := staker.Address()
 
 	activeCountSlot := thor.BytesToBytes32([]byte(("validations-active-group-size")))
 	st.SetRawStorage(stakerAddr, activeCountSlot, rlp.RawValue{0xFF})
@@ -146,7 +136,7 @@ func TestStaker_TransitionPeriodBalanceCheck(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			test, _ := newStakerV2(t, 1, 1, false)
 			tt.preTestHook(test)
-			balanceCheck := test.staker.TransitionPeriodBalanceCheck(fc, tt.currentBlock, endorsement)
+			balanceCheck := test.Staker.TransitionPeriodBalanceCheck(fc, tt.currentBlock, endorsement)
 			ok, err := balanceCheck(master, endorser)
 			assert.NoError(t, err)
 			assert.Equal(t, tt.ok, ok)

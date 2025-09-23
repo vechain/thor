@@ -7,7 +7,6 @@
 package staker
 
 import (
-	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -63,31 +62,18 @@ func TestSyncPOS_TransitionBlock_NotActive(t *testing.T) {
 }
 
 func TestSyncPOS_TransitionBlock_WithValidators(t *testing.T) {
-	db := muxdb.NewMem()
-	st := state.New(db, trie.Root{})
-	param := params.New(thor.BytesToAddress([]byte("params")), st)
-
-	param.Set(thor.KeyMaxBlockProposers, big.NewInt(3))
-
-	stakerAddr := thor.BytesToAddress([]byte("stkr"))
-	staker := &testStaker{
-		Staker: New(stakerAddr, st, param, nil),
-		addr:   stakerAddr,
-		state:  st,
-	}
+	staker, _ := newStakerV2(t, 0, 3, false)
 
 	validator1 := thor.BytesToAddress([]byte("validator1"))
 	endorser1 := thor.BytesToAddress([]byte("endorser1"))
 	stake := uint64(25_000_000)
 
-	err := staker.AddValidation(validator1, endorser1, uint32(360)*24*15, stake)
-	require.NoError(t, err)
+	staker.AddValidation(validator1, endorser1, uint32(360)*24*15, stake)
 
 	validator2 := thor.BytesToAddress([]byte("validator2"))
 	endorser2 := thor.BytesToAddress([]byte("endorser2"))
 
-	err = staker.AddValidation(validator2, endorser2, uint32(360)*24*15, stake)
-	require.NoError(t, err)
+	staker.AddValidation(validator2, endorser2, uint32(360)*24*15, stake)
 
 	forkConfig := &thor.ForkConfig{
 		HAYABUSA: 10,
@@ -123,31 +109,18 @@ func TestSyncPOS_TransitionBlock_ZeroTransitionPeriod(t *testing.T) {
 }
 
 func TestSyncPOS_AlreadyActive_NoTransition(t *testing.T) {
-	db := muxdb.NewMem()
-	st := state.New(db, trie.Root{})
-	param := params.New(thor.BytesToAddress([]byte("params")), st)
-
-	param.Set(thor.KeyMaxBlockProposers, big.NewInt(3))
-
-	stakerAddr := thor.BytesToAddress([]byte("stkr"))
-	staker := &testStaker{
-		Staker: New(stakerAddr, st, param, nil),
-		addr:   stakerAddr,
-		state:  st,
-	}
+	staker, _ := newStakerV2(t, 0, 3, false)
 
 	validator1 := thor.BytesToAddress([]byte("validator1"))
 	endorser1 := thor.BytesToAddress([]byte("endorser1"))
 	stake := uint64(25_000_000)
 
-	err := staker.AddValidation(validator1, endorser1, uint32(360)*24*15, stake)
-	require.NoError(t, err)
+	staker.AddValidation(validator1, endorser1, uint32(360)*24*15, stake)
 
 	validator2 := thor.BytesToAddress([]byte("validator2"))
 	endorser2 := thor.BytesToAddress([]byte("endorser2"))
 
-	err = staker.AddValidation(validator2, endorser2, uint32(360)*24*15, stake)
-	require.NoError(t, err)
+	staker.AddValidation(validator2, endorser2, uint32(360)*24*15, stake)
 
 	transitioned, err := staker.transition(0)
 	require.NoError(t, err)
@@ -248,31 +221,18 @@ func TestSyncPOS_TransitionError(t *testing.T) {
 }
 
 func TestSyncPOS_HousekeepError(t *testing.T) {
-	db := muxdb.NewMem()
-	st := state.New(db, trie.Root{})
-	param := params.New(thor.BytesToAddress([]byte("params")), st)
-
-	param.Set(thor.KeyMaxBlockProposers, big.NewInt(3))
-
-	stakerAddr := thor.BytesToAddress([]byte("stkr"))
-	staker := &testStaker{
-		Staker: New(stakerAddr, st, param, nil),
-		addr:   stakerAddr,
-		state:  st,
-	}
+	staker, _ := newStakerV2(t, 0, 3, false)
 
 	validator1 := thor.BytesToAddress([]byte("validator1"))
 	endorser1 := thor.BytesToAddress([]byte("endorser1"))
 	stake := uint64(25_000_000)
 
-	err := staker.AddValidation(validator1, endorser1, uint32(360)*24*15, stake)
-	require.NoError(t, err)
+	staker.AddValidation(validator1, endorser1, uint32(360)*24*15, stake)
 
 	validator2 := thor.BytesToAddress([]byte("validator2"))
 	endorser2 := thor.BytesToAddress([]byte("endorser2"))
 
-	err = staker.AddValidation(validator2, endorser2, uint32(360)*24*15, stake)
-	require.NoError(t, err)
+	staker.AddValidation(validator2, endorser2, uint32(360)*24*15, stake)
 
 	transitioned, err := staker.transition(0)
 	require.NoError(t, err)
