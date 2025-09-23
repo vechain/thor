@@ -337,6 +337,58 @@ func (c *Client) GetFeesPriority() (*api.FeesPriority, error) {
 	return &priority, nil
 }
 
+// GetTxPool retrieves transactions from the transaction pool.
+func (c *Client) GetTxPool(expanded bool, origin *thor.Address) (any, error) {
+	url := c.url + "/node/txpool"
+	params := []string{}
+
+	if expanded {
+		params = append(params, "expanded=true")
+	}
+
+	if origin != nil {
+		params = append(params, "origin="+origin.String())
+	}
+
+	if len(params) > 0 {
+		url += "?" + strings.Join(params, "&")
+	}
+
+	body, err := c.httpGET(url)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get txpool - %w", err)
+	}
+
+	if expanded {
+		var transactions []transactions.Transaction
+		if err = json.Unmarshal(body, &transactions); err != nil {
+			return nil, fmt.Errorf("unable to unmarshal txpool transactions - %w", err)
+		}
+		return transactions, nil
+	}
+
+	var txIDs []thor.Bytes32
+	if err = json.Unmarshal(body, &txIDs); err != nil {
+		return nil, fmt.Errorf("unable to unmarshal txpool transaction IDs - %w", err)
+	}
+	return txIDs, nil
+}
+
+// GetTxPoolStatus retrieves the current status of the transaction pool.
+func (c *Client) GetTxPoolStatus() (*api.Status, error) {
+	body, err := c.httpGET(c.url + "/node/txpool/status")
+	if err != nil {
+		return nil, fmt.Errorf("unable to get txpool status - %w", err)
+	}
+
+	var status api.Status
+	if err = json.Unmarshal(body, &status); err != nil {
+		return nil, fmt.Errorf("unable to unmarshal txpool status - %w", err)
+	}
+
+	return &status, nil
+}
+
 // RawHTTPPost sends a raw HTTP POST request to the specified URL with the provided data.
 func (c *Client) RawHTTPPost(url string, calldata any) ([]byte, int, error) {
 	var data []byte
