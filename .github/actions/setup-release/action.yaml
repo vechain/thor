@@ -64,8 +64,6 @@ runs:
       run: |
         sudo apt-get update
         sudo apt-get install -y musl-tools
-        # optional: verify
-        musl-gcc --version
 
     - uses: sigstore/cosign-installer@v3.9.2
       if: ${{ inputs.goos == 'linux' && startsWith(github.ref, 'refs/tags/') }}
