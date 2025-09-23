@@ -46,10 +46,15 @@ jobs:
       thor_version: ${{ github.event.pull_request.head.sha }}
 
   # This doesn't publish the image, it just tests the publishing workflow (build the image / tags / labels)
-  test-publish:
-    name: Test Build (no publish) Docker Image
-    uses: ./.github/workflows/goreleaser.yaml
+  test-docker-publish:
+    name: Test Docker Publish
+    uses: ./.github/workflows/publish-docker-images.yaml
     secrets: inherit
     permissions:
       contents: read
-      packages: read
+      packages: write
+    with:
+      images: |
+        ghcr.io/${{ github.repository }}
+      tags: |
+        type=raw,value=${{ github.ref }}-${{ github.sha }}
