@@ -104,6 +104,18 @@ func (ts *TestSequence) AssertNext(prev thor.Address, expected thor.Address) *Te
 	return ts
 }
 
+func (ts *TestSequence) LockedStake() (uint64, uint64) {
+	vet, weight, err := ts.staker.LockedStake()
+	assert.NoError(ts.t, err, "failed to get locked stake")
+	return vet, weight
+}
+
+func (ts *TestSequence) QueuedStake() uint64 {
+	vet, err := ts.staker.QueuedStake()
+	assert.NoError(ts.t, err, "failed to get queued stake")
+	return vet
+}
+
 func (ts *TestSequence) FirstActive() (thor.Address, *validation.Validation) {
 	first, err := ts.staker.FirstActive()
 	assert.NoError(ts.t, err)
@@ -342,6 +354,13 @@ func (ts *TestSequence) SignalDelegationExit(delegationID *big.Int, currentBlock
 	return ts
 }
 
+func (ts *TestSequence) SignalDelegationExitErrors(delegationID *big.Int, currentBlock uint32, errMsg string) *TestSequence {
+	err := ts.staker.SignalDelegationExit(delegationID, currentBlock)
+	assert.NotNil(ts.t, err, "expected error when signaling exit for delegation %s", delegationID.String())
+	assert.ErrorContains(ts.t, err, errMsg, "expected error message when signaling exit for delegation %s", delegationID.String())
+	return ts
+}
+
 func (ts *TestSequence) WithdrawDelegation(delegationID *big.Int, expectedOut uint64, currentBlock uint32) *TestSequence {
 	amount, err := ts.staker.WithdrawDelegation(delegationID, currentBlock)
 	assert.NoError(ts.t, err, "failed to withdraw delegation %s: %v", delegationID.String(), err)
@@ -509,8 +528,8 @@ func (ts *TestSequence) AssertAggregation(validationID thor.Address) *Aggregatio
 	return assertAggregation(ts.t, ts.staker, validationID)
 }
 
-func (ts *TestSequence) AssertDelegation(delegationID *big.Int, currentBlock uint32) *DelegationAssertions {
-	return assertDelegation(ts.t, ts.staker, delegationID, currentBlock)
+func (ts *TestSequence) AssertDelegation(delegationID *big.Int) *DelegationAssertions {
+	return assertDelegation(ts.t, ts.staker, delegationID)
 }
 
 type ValidationAssertions struct {
@@ -643,13 +662,12 @@ type DelegationAssertions struct {
 	t            *testing.T
 	delegation   *delegation.Delegation
 	validation   *validation.Validation
-	currentBlock uint32
 }
 
-func assertDelegation(t *testing.T, staker *testStaker, delegationID *big.Int, currentBlock uint32) *DelegationAssertions {
+func assertDelegation(t *testing.T, staker *testStaker, delegationID *big.Int) *DelegationAssertions {
 	delegation, validation, err := staker.GetDelegation(delegationID)
 	require.NoError(t, err, "failed to get delegation %s", delegationID.String())
-	return &DelegationAssertions{delegationID: delegationID, t: t, delegation: delegation, validation: validation, currentBlock: currentBlock}
+	return &DelegationAssertions{delegationID: delegationID, t: t, delegation: delegation, validation: validation}
 }
 
 func (da *DelegationAssertions) Validation(expected thor.Address) *DelegationAssertions {
@@ -682,35 +700,22 @@ func (da *DelegationAssertions) LastIteration(expected *uint32) *DelegationAsser
 	return da
 }
 
-func (da *DelegationAssertions) IsLocked(expected bool) *DelegationAssertions {
-	if expected {
-		started, err := da.delegation.Started(da.validation, da.currentBlock)
-		assert.NoError(da.t, err)
-		ended, err := da.delegation.Ended(da.validation, da.currentBlock)
-		assert.NoError(da.t, err)
-		assert.True(da.t, started, "delegation %s locked state mismatch", da.delegationID.String())
-		assert.False(da.t, ended, "delegation %s ended state mismatch", da.delegationID.String())
-	} else {
-		started, err := da.delegation.Started(da.validation, da.currentBlock)
-		assert.NoError(da.t, err)
-		ended, err := da.delegation.Ended(da.validation, da.currentBlock)
-		assert.NoError(da.t, err)
-		if started && !ended {
-			da.t.Fatalf("delegation %s is expected to be not locked, but it is", da.delegationID.String())
-		}
-	}
+func (da *DelegationAssertions) IsLocked(expected bool, currentBlock uint32) *DelegationAssertions {
+	locked, err := da.delegation.IsLocked(da.validation, currentBlock)
+	assert.NoError(da.t, err)
+	assert.Equal(da.t, expected, locked, "delegation %s locked state mismatch", da.delegationID.String())
 	return da
 }
 
-func (da *DelegationAssertions) IsStarted(expected bool) *DelegationAssertions {
-	started, err := da.delegation.Started(da.validation, da.currentBlock)
+func (da *DelegationAssertions) IsStarted(expected bool, currentBlock uint32) *DelegationAssertions {
+	started, err := da.delegation.Started(da.validation, currentBlock)
 	assert.NoError(da.t, err)
 	assert.Equal(da.t, expected, started, "delegation %s started state mismatch", da.delegationID.String())
 	return da
 }
 
-func (da *DelegationAssertions) IsFinished(expected bool) *DelegationAssertions {
-	ended, err := da.delegation.Ended(da.validation, da.currentBlock)
+func (da *DelegationAssertions) IsFinished(expected bool, currentBlock uint32) *DelegationAssertions {
+	ended, err := da.delegation.Ended(da.validation, currentBlock)
 	assert.NoError(da.t, err)
 	assert.Equal(da.t, expected, ended, "delegation %s finished state mismatch", da.delegationID.String())
 	return da

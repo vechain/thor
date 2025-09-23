@@ -15,8 +15,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/vechain/thor/v2/builtin/params"
 	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
@@ -1366,14 +1364,11 @@ func Test_GetValidatorTotals_ValidatorExiting(t *testing.T) {
 	validator := validators[0]
 
 	dStake := stakes.NewWeightedStakeWithMultiplier(MinStakeVET, 255)
-	newTestSequence(t, staker).AddDelegation(validator.ID, dStake.VET, 255, 10)
-
-	_, err := staker.aggregationService.GetAggregation(validators[0].ID)
-	assert.NoError(t, err)
+	staker.AddDelegation(validator.ID, dStake.VET, 255, 10)
 
 	vStake := stakes.NewWeightedStakeWithMultiplier(validators[0].LockedVET, validation.Multiplier)
 
-	newTestSequence(t, staker).AssertTotals(validator.ID, &validation.Totals{
+	staker.AssertTotals(validator.ID, &validation.Totals{
 		TotalQueuedStake:  dStake.VET,
 		TotalLockedWeight: vStake.Weight,
 		TotalLockedStake:  vStake.VET,
@@ -1382,7 +1377,7 @@ func Test_GetValidatorTotals_ValidatorExiting(t *testing.T) {
 	})
 
 	vStake.Weight += validators[0].LockedVET
-	newTestSequence(t, staker).
+	staker.
 		AssertGlobalWithdrawable(0).
 		Housekeep(validator.Period).
 		AssertGlobalWithdrawable(0).
@@ -1406,14 +1401,12 @@ func Test_GetValidatorTotals_DelegatorExiting_ThenValidator(t *testing.T) {
 
 	validator := validators[0]
 
-	_, err := staker.aggregationService.GetAggregation(validator.ID)
-	require.NoError(t, err)
 	vStake := stakes.NewWeightedStakeWithMultiplier(validators[0].LockedVET, validation.Multiplier)
 	dStake := stakes.NewWeightedStakeWithMultiplier(MinStakeVET, 255)
 
-	delegationID := newTestSequence(t, staker).AddDelegation(validator.ID, dStake.VET, 255, 10)
+	delegationID := staker.AddDelegation(validator.ID, dStake.VET, 255, 10)
 
-	newTestSequence(t, staker).AssertTotals(validator.ID, &validation.Totals{
+	staker.AssertTotals(validator.ID, &validation.Totals{
 		TotalQueuedStake:  dStake.VET,
 		TotalLockedWeight: vStake.Weight,
 		TotalLockedStake:  vStake.VET,
@@ -1421,7 +1414,7 @@ func Test_GetValidatorTotals_DelegatorExiting_ThenValidator(t *testing.T) {
 	})
 
 	vStake.Weight += validators[0].LockedVET
-	newTestSequence(t, staker).
+	staker.
 		AssertGlobalWithdrawable(0).
 		Housekeep(validator.Period).
 		AssertGlobalWithdrawable(0).
