@@ -920,9 +920,9 @@ func (w *Writer) createPartition(partitionName string) *sql.DB {
 	db, err := sql.Open("sqlite3", partitionPath+"?"+strings.Join([]string{
 		"_journal=wal",
 		"cache=shared",
-		"synchronous=normal", // Faster than full sync
+		"synchronous=normal",
 		"temp_store=memory",
-		"mmap_size=268435456", // 256MB memory mapping
+		"mmap_size=268435456",
 	}, "&"))
 
 	if err != nil {
@@ -935,6 +935,15 @@ func (w *Writer) createPartition(partitionName string) *sql.DB {
 	db.Exec("PRAGMA cache_size=10000")
 	db.Exec("PRAGMA temp_store=memory")
 
+	// Initialize schema - THIS IS THE KEY FIX
+	schema := refTableScheme + eventTableSchema + transferTableSchema
+	if _, err := db.Exec(schema); err != nil {
+		println("ERROR: Failed to initialize partition schema %s: %v", partitionName, err)
+		db.Close()
+		panic(fmt.Sprintf("Failed to initialize partition schema %s: %v", partitionName, err))
+	}
+
+	println("DEBUG: Successfully created partition %s with schema", partitionName)
 	return db
 }
 
