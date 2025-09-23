@@ -55,3 +55,48 @@ func TestRenewal_Add_Nil(t *testing.T) {
 	assert.Equal(t, uint64(7), got.LockedDecrease.VET)
 	assert.Equal(t, uint64(8), got.LockedDecrease.Weight)
 }
+
+func TestRenewal_Add_LockedIncreaseOverflow(t *testing.T) {
+	base := &Renewal{
+		LockedIncrease: stakes.NewWeightedStake(^uint64(0), 0),
+		LockedDecrease: stakes.NewWeightedStake(0, 0),
+		QueuedDecrease: 0,
+	}
+	inc := &Renewal{
+		LockedIncrease: stakes.NewWeightedStake(1, 0),
+		LockedDecrease: stakes.NewWeightedStake(0, 0),
+		QueuedDecrease: 0,
+	}
+	_, err := base.Add(inc)
+	assert.ErrorContains(t, err, "VET add overflow occurred")
+}
+
+func TestRenewal_Add_LockedDecreaseOverflow(t *testing.T) {
+	base := &Renewal{
+		LockedIncrease: stakes.NewWeightedStake(0, 0),
+		LockedDecrease: stakes.NewWeightedStake(^uint64(0), 0),
+		QueuedDecrease: 0,
+	}
+	inc := &Renewal{
+		LockedIncrease: stakes.NewWeightedStake(0, 0),
+		LockedDecrease: stakes.NewWeightedStake(1, 0),
+		QueuedDecrease: 0,
+	}
+	_, err := base.Add(inc)
+	assert.ErrorContains(t, err, "VET add overflow occurred")
+}
+
+func TestRenewal_Add_QueuedDecreaseOverflow(t *testing.T) {
+	base := &Renewal{
+		LockedIncrease: stakes.NewWeightedStake(0, 0),
+		LockedDecrease: stakes.NewWeightedStake(0, 0),
+		QueuedDecrease: ^uint64(0),
+	}
+	inc := &Renewal{
+		LockedIncrease: stakes.NewWeightedStake(0, 0),
+		LockedDecrease: stakes.NewWeightedStake(0, 0),
+		QueuedDecrease: 1,
+	}
+	_, err := base.Add(inc)
+	assert.ErrorContains(t, err, "queued decrease overflow occurred")
+}
