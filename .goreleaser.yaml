@@ -31,7 +31,7 @@ builds:
       - -X main.copyrightYear={{.Env.COPYRIGHT_YEAR}}
     env:
       - CGO_ENABLED=1
-      - '{{ if .eq .Env.GOOS "linux" }}CC=musl-gcc{{ end }}'
+      - '{{ if eq .Env.GOOS "linux" }}CC=musl-gcc{{ end }}'
   - id: "disco"
     main: ./cmd/disco
     binary: disco
@@ -43,7 +43,7 @@ builds:
       - -X main.copyrightYear={{.Env.COPYRIGHT_YEAR}}
     env:
       - CGO_ENABLED=1
-      - '{{ if .eq .Env.GOOS "linux" }}CC=musl-gcc{{ end }}'
+      - '{{ if eq .Env.GOOS "linux" }}CC=musl-gcc{{ end }}'
 
 signs:
   - cmd: gpg
