@@ -51,8 +51,8 @@ jobs:
         # This step validates that the tag is an official release
         run: |
           prerelease=$(gh release view ${{ github.ref_name }} --json isPrerelease | jq -r '.isPrerelease')
-          if [ "$prerelease" != "false" ]; then
-            echo "Tag is not an official release"
+          if [ "$prerelease" != "true" ]; then
+            echo "Tag is not a release candidate"
             exit 1
           fi
 
