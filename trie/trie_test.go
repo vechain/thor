@@ -627,7 +627,7 @@ func TestCommitSkipHash(t *testing.T) {
 	ver := Version{}
 	tr := New(Root{}, db)
 	n := uint32(100)
-	for i := range n {
+	for i := uint32(0); i < n; i++ {
 		var k [4]byte
 		binary.BigEndian.PutUint32(k[:], i)
 		tr.Update(k[:], thor.Blake2b(k[:]).Bytes(), nil)
@@ -636,7 +636,7 @@ func TestCommitSkipHash(t *testing.T) {
 	}
 
 	tr = New(Root{thor.BytesToBytes32([]byte{1}), ver}, db)
-	for i := range n {
+	for i := uint32(0); i < n; i++ {
 		var k [4]byte
 		binary.BigEndian.PutUint32(k[:], i)
 		val, _, err := tr.Get(k[:])

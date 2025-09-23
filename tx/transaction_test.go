@@ -190,7 +190,7 @@ func TestEvaluateWork(t *testing.T) {
 	evaluate := trx.body.(*legacyTransaction).evaluateWork(origin)
 
 	// Test with a range of nonce values
-	for nonce := range uint64(100) {
+	for nonce := uint64(0); nonce < 100; nonce++ {
 		work := evaluate(nonce)
 
 		// Basic Assertions

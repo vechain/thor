@@ -39,7 +39,7 @@ func TestSchedule(t *testing.T) {
 
 	sched, _ := NewSchedulerV1(p1, proposers, 1, parentTimeV1)
 
-	for i := range uint64(100) {
+	for i := uint64(0); i < 100; i++ {
 		now := parentTimeV1 + i*thor.BlockInterval/2
 		nbt := sched.Schedule(now)
 		assert.True(t, nbt >= now)
@@ -91,7 +91,7 @@ func TestScheduleV2(t *testing.T) {
 
 	sched, _ := NewSchedulerV2(p2, proposers, parent.Header().Number(), parent.Header().Timestamp(), nil)
 
-	for i := range uint64(100) {
+	for i := uint64(0); i < 100; i++ {
 		now := parentTimeV1 + i*thor.BlockInterval/2
 		nbt := sched.Schedule(now)
 		assert.True(t, nbt >= now)
