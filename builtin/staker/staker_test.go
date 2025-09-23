@@ -17,7 +17,7 @@ import (
 )
 
 func TestValidation_SignalExit_InvalidEndorser(t *testing.T) {
-	staker, _ := newStakerV2(t, 0, 101, false)
+	staker := newTest(t)
 
 	id := thor.BytesToAddress([]byte("v"))
 	end := thor.BytesToAddress([]byte("endorse"))
@@ -28,7 +28,7 @@ func TestValidation_SignalExit_InvalidEndorser(t *testing.T) {
 }
 
 func TestValidation_SignalExit_NotActive(t *testing.T) {
-	staker, _ := newStakerV2(t, 0, 101, false)
+	staker := newTest(t)
 
 	id := thor.BytesToAddress([]byte("v"))
 	end := id
@@ -38,13 +38,13 @@ func TestValidation_SignalExit_NotActive(t *testing.T) {
 }
 
 func TestService_IncreaseStake_UnknownValidator(t *testing.T) {
-	staker, _ := newStakerV2(t, 0, 101, false)
+	staker := newTest(t)
 	id := thor.BytesToAddress([]byte("unknown"))
 	staker.IncreaseStakeErrors(id, id, 1, "validation does not exist")
 }
 
 func TestValidation_IncreaseStake_InvalidEndorser(t *testing.T) {
-	staker, _ := newStakerV2(t, 0, 101, false)
+	staker := newTest(t)
 
 	id := thor.BytesToAddress([]byte("v"))
 	end := thor.BytesToAddress([]byte("endorse"))
@@ -55,7 +55,7 @@ func TestValidation_IncreaseStake_InvalidEndorser(t *testing.T) {
 }
 
 func TestValidation_IncreaseStake_StatusExit(t *testing.T) {
-	staker, _ := newStakerV2(t, 0, 101, false)
+	staker := newTest(t)
 
 	id := thor.BytesToAddress([]byte("v"))
 	end := id
@@ -66,7 +66,7 @@ func TestValidation_IncreaseStake_StatusExit(t *testing.T) {
 }
 
 func TestValidation_IncreaseStake_ActiveHasExitBlock(t *testing.T) {
-	staker, _ := newStakerV2(t, 0, 101, false)
+	staker := newTest(t)
 
 	id := thor.BytesToAddress([]byte("v"))
 	end := id
@@ -80,14 +80,14 @@ func TestValidation_IncreaseStake_ActiveHasExitBlock(t *testing.T) {
 }
 
 func TestValidation_DecreaseStake_UnknownValidator(t *testing.T) {
-	staker, _ := newStakerV2(t, 0, 101, false)
+	staker := newTest(t)
 
 	id := thor.BytesToAddress([]byte("unknown"))
 	staker.DecreaseStakeErrors(id, id, 1, "validation does not exist")
 }
 
 func TestValidation_DecreaseStake_InvalidEndorser(t *testing.T) {
-	staker, _ := newStakerV2(t, 0, 101, false)
+	staker := newTest(t)
 	id := thor.BytesToAddress([]byte("v"))
 	end := thor.BytesToAddress([]byte("endorse"))
 	wrong := thor.BytesToAddress([]byte("wrong"))
@@ -97,7 +97,7 @@ func TestValidation_DecreaseStake_InvalidEndorser(t *testing.T) {
 }
 
 func TestValidation_DecreaseStake_StatusExit(t *testing.T) {
-	staker, _ := newStakerV2(t, 0, 101, false)
+	staker := newTest(t)
 
 	id := thor.BytesToAddress([]byte("v"))
 	end := id
@@ -111,7 +111,7 @@ func TestValidation_DecreaseStake_StatusExit(t *testing.T) {
 }
 
 func TestValidation_DecreaseStake_ActiveHasExitBlock(t *testing.T) {
-	staker, _ := newStakerV2(t, 0, 101, false)
+	staker := newTest(t)
 
 	id := thor.BytesToAddress([]byte("v"))
 	end := id
@@ -125,7 +125,7 @@ func TestValidation_DecreaseStake_ActiveHasExitBlock(t *testing.T) {
 }
 
 func TestValidation_DecreaseStake_ActiveTooLowNextPeriod(t *testing.T) {
-	staker, _ := newStakerV2(t, 0, 101, false)
+	staker := newTest(t)
 
 	id := thor.BytesToAddress([]byte("v"))
 	end := id
@@ -135,7 +135,7 @@ func TestValidation_DecreaseStake_ActiveTooLowNextPeriod(t *testing.T) {
 }
 
 func TestValidation_DecreaseStake_ActiveSuccess(t *testing.T) {
-	staker, _ := newStakerV2(t, 0, 101, false)
+	staker := newTest(t)
 
 	id := thor.BytesToAddress([]byte("v"))
 	end := id
@@ -149,7 +149,7 @@ func TestValidation_DecreaseStake_ActiveSuccess(t *testing.T) {
 }
 
 func TestValidation_DecreaseStake_QueuedTooLowNextPeriod(t *testing.T) {
-	staker, _ := newStakerV2(t, 0, 101, false)
+	staker := newTest(t)
 
 	id := thor.BytesToAddress([]byte("v"))
 	end := id
@@ -159,7 +159,7 @@ func TestValidation_DecreaseStake_QueuedTooLowNextPeriod(t *testing.T) {
 }
 
 func TestValidation_DecreaseStake_QueuedSuccess(t *testing.T) {
-	staker, _ := newStakerV2(t, 0, 101, false)
+	staker := newTest(t)
 
 	id := thor.BytesToAddress([]byte("v"))
 	end := id
@@ -174,7 +174,7 @@ func TestValidation_DecreaseStake_QueuedSuccess(t *testing.T) {
 }
 
 func TestValidation_WithdrawStake_InvalidEndorser(t *testing.T) {
-	staker, _ := newStakerV2(t, 0, 101, false)
+	staker := newTest(t)
 
 	id := thor.BytesToAddress([]byte("v"))
 	wrong := thor.BytesToAddress([]byte("wrong"))
@@ -184,7 +184,7 @@ func TestValidation_WithdrawStake_InvalidEndorser(t *testing.T) {
 }
 
 func TestValidationAdd_Error(t *testing.T) {
-	staker, _ := newStakerV2(t, 0, 101, false)
+	staker := newTest(t)
 
 	id1 := thor.BytesToAddress([]byte("id1"))
 
@@ -195,7 +195,7 @@ func TestValidationAdd_Error(t *testing.T) {
 }
 
 func TestValidation_SetBeneficiary_Error(t *testing.T) {
-	staker, _ := newStakerV2(t, 0, 101, false)
+	staker := newTest(t)
 
 	id := thor.BytesToAddress([]byte("v"))
 	wrong := thor.BytesToAddress([]byte("wrong"))
@@ -208,13 +208,13 @@ func TestValidation_SetBeneficiary_Error(t *testing.T) {
 }
 
 func TestDelegation_Add_InputValidation(t *testing.T) {
-	staker, _ := newStakerV2(t, 0, 101, false)
+	staker := newTest(t)
 
 	staker.AddDelegationErrors(thor.Address{}, 1, 0, 10, "multiplier cannot be 0")
 }
 
 func TestDelegation_SignalExit(t *testing.T) {
-	staker, _ := newStakerV2(t, 0, 101, false)
+	staker := newTest(t)
 
 	v := thor.BytesToAddress([]byte("v"))
 	staker.AddValidation(v, v, thor.MediumStakingPeriod(), MinStakeVET)
@@ -244,7 +244,7 @@ func TestDelegation_SignalExit(t *testing.T) {
 }
 
 func TestDelegation_SignalExit_AlreadyWithdrawn(t *testing.T) {
-	staker, _ := newStakerV2(t, 0, 101, false)
+	staker := newTest(t)
 
 	v := thor.BytesToAddress([]byte("v"))
 	staker.AddValidation(v, v, thor.MediumStakingPeriod(), MinStakeVET)
@@ -268,7 +268,7 @@ func TestDelegation_SignalExit_AlreadyWithdrawn(t *testing.T) {
 }
 
 func TestDelegation_SignalExit_Empty(t *testing.T) {
-	staker, _ := newStakerV2(t, 0, 101, false)
+	staker := newTest(t)
 
 	staker.SignalDelegationExitErrors(big.NewInt(2), 10, "delegation is empty")
 }

@@ -23,8 +23,8 @@ type testValidators struct {
 	*validation.Validation
 }
 
-func newDelegationStaker(t *testing.T) (*TestSequence, []*testValidators) {
-	test, _ := newStakerV2(t, 75, 101, true)
+func newDelegationStaker(t *testing.T) (*StakerTest, []*testValidators) {
+	test := newTest(t).Fill(75).Transition(0)
 	validations := make([]*testValidators, 0)
 	err := test.validationService.LeaderGroupIterator(func(validatorID thor.Address, validation *validation.Validation) error {
 		validations = append(validations, &testValidators{
@@ -194,7 +194,7 @@ func Test_AddDelegator_StakeRange(t *testing.T) {
 }
 
 func Test_AddDelegator_ValidatorNotFound(t *testing.T) {
-	staker, _ := newStakerV2(t, 75, 101, true)
+	staker, _ := newDelegationStaker(t)
 
 	staker.AddDelegationErrors(thor.Address{}, delegationStake(), 255, 10, "validation does not exist")
 }
@@ -402,7 +402,7 @@ func Test_Delegator_Queued_Weight(t *testing.T) {
 }
 
 func Test_Delegator_Queued_Weight_QueuedValidator_Withdraw(t *testing.T) {
-	staker, _ := newStakerV2(t, 0, 101, false)
+	staker := newTest(t)
 
 	validatorAddr := datagen.RandAddress()
 	staker.AddValidation(validatorAddr, validatorAddr, uint32(360)*24*15, MinStakeVET)
@@ -478,22 +478,24 @@ func Test_Delegations_EnableAutoRenew_MatchStakeReached(t *testing.T) {
 }
 
 func TestStaker_DelegationExitingVET(t *testing.T) {
-	staker, totalStake := newStakerV2(t, 1, 1, true)
+	staker := newTest(t).SetMBP(1).Fill(1).Transition(0)
+	_, validator := staker.FirstActive()
+	initialVET := validator.LockedVET
+	initialWeight := validator.Weight
 
 	firstActive, _ := staker.FirstActive()
-	staker.AssertLockedVET(totalStake, totalStake).AssertQueuedVET(0)
-	staker.AssertValidation(firstActive).LockedVET(totalStake).Weight(totalStake)
+	staker.AssertLockedVET(initialVET, initialWeight).AssertQueuedVET(0)
 
 	delStake := uint64(1000)
 	delegationID := staker.AddDelegation(firstActive, delStake, 200, 10)
 
 	delegation := staker.GetDelegation(delegationID)
-	validator := staker.GetValidation(firstActive)
+	validator = staker.GetValidation(firstActive)
 	started, err := delegation.Started(validator, 10)
 	assert.NoError(t, err)
 	assert.False(t, started)
 
-	staker.AssertLockedVET(totalStake, totalStake).AssertQueuedVET(delStake)
+	staker.AssertLockedVET(initialVET, initialWeight).AssertQueuedVET(delStake)
 
 	staker.Housekeep(thor.MediumStakingPeriod())
 
@@ -519,9 +521,10 @@ func TestStaker_DelegationExitingVET(t *testing.T) {
 }
 
 func TestStaker_DelegationWithdrawPending(t *testing.T) {
-	staker, totalStake := newStakerV2(t, 1, 1, true)
+	staker := newTest(t).SetMBP(1).Fill(1).Transition(0)
+	_, validator := staker.FirstActive()
 
-	staker.AssertLockedVET(totalStake, totalStake).AssertQueuedVET(0)
+	staker.AssertLockedVET(validator.LockedVET, validator.Weight).AssertQueuedVET(0)
 
 	firstActive, validator := staker.FirstActive()
 	assert.Equal(t, validator.LockedVET, validator.Weight)
@@ -534,7 +537,7 @@ func TestStaker_DelegationWithdrawPending(t *testing.T) {
 	assert.NoError(t, err)
 	assert.False(t, started)
 
-	staker.AssertLockedVET(totalStake, totalStake).AssertQueuedVET(delStake)
+	staker.AssertLockedVET(validator.LockedVET, validator.Weight).AssertQueuedVET(delStake)
 	staker.WithdrawDelegation(delegationID, delStake, 10)
 	staker.Housekeep(thor.MediumStakingPeriod())
 

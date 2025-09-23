@@ -16,7 +16,7 @@ import (
 )
 
 func TestTransition(t *testing.T) {
-	staker, _ := newStakerV2(t, 0, 2, false)
+	staker := newTest(t).SetMBP(2)
 
 	isExecuted, err := staker.transition(thor.EpochLength())
 	assert.NoError(t, err)
@@ -78,13 +78,13 @@ func TestStaker_TransitionPeriodBalanceCheck(t *testing.T) {
 	tests := []struct {
 		name         string
 		currentBlock uint32
-		preTestHook  func(staker *TestSequence)
+		preTestHook  func(staker *StakerTest)
 		ok           bool
 	}{
 		{
 			name:         "before hayabusa, validator has greater than funds",
 			currentBlock: 5,
-			preTestHook: func(staker *TestSequence) {
+			preTestHook: func(staker *StakerTest) {
 				assert.NoError(t, staker.State().SetBalance(endorser, big.NewInt(2000)))
 			},
 			ok: true,
@@ -92,7 +92,7 @@ func TestStaker_TransitionPeriodBalanceCheck(t *testing.T) {
 		{
 			name:         "before hayabusa, validator funds are too low",
 			currentBlock: 5,
-			preTestHook: func(staker *TestSequence) {
+			preTestHook: func(staker *StakerTest) {
 				assert.NoError(t, staker.State().SetBalance(endorser, big.NewInt(500)))
 			},
 			ok: false,
@@ -100,7 +100,7 @@ func TestStaker_TransitionPeriodBalanceCheck(t *testing.T) {
 		{
 			name:         "before hayabusa, validator has exactly enough funds",
 			currentBlock: 5,
-			preTestHook: func(staker *TestSequence) {
+			preTestHook: func(staker *StakerTest) {
 				assert.NoError(t, staker.State().SetBalance(endorser, big.NewInt(1000)))
 			},
 			ok: true,
@@ -108,7 +108,7 @@ func TestStaker_TransitionPeriodBalanceCheck(t *testing.T) {
 		{
 			name:         "during transition period, validator has not staked, has enough funds",
 			currentBlock: 15,
-			preTestHook: func(staker *TestSequence) {
+			preTestHook: func(staker *StakerTest) {
 				assert.NoError(t, staker.State().SetBalance(endorser, big.NewInt(2000)))
 			},
 			ok: true,
@@ -116,7 +116,7 @@ func TestStaker_TransitionPeriodBalanceCheck(t *testing.T) {
 		{
 			name:         "during transition period, validator has not staked, has insufficient funds",
 			currentBlock: 15,
-			preTestHook: func(staker *TestSequence) {
+			preTestHook: func(staker *StakerTest) {
 				assert.NoError(t, staker.State().SetBalance(endorser, big.NewInt(500)))
 			},
 			ok: false,
@@ -124,7 +124,7 @@ func TestStaker_TransitionPeriodBalanceCheck(t *testing.T) {
 		{
 			name:         "during transition period, validator has staked",
 			currentBlock: 15,
-			preTestHook: func(staker *TestSequence) {
+			preTestHook: func(staker *StakerTest) {
 				stake := big.NewInt(0).Div(MinStake, bigE18).Uint64()
 				staker.AddValidation(master, endorser, thor.MediumStakingPeriod(), stake)
 			},
@@ -134,7 +134,7 @@ func TestStaker_TransitionPeriodBalanceCheck(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			test, _ := newStakerV2(t, 1, 1, false)
+			test := newTest(t).SetMBP(1).Fill(1).Transition(0)
 			tt.preTestHook(test)
 			balanceCheck := test.TransitionPeriodBalanceCheck(fc, tt.currentBlock, endorsement)
 			ok, err := balanceCheck(master, endorser)
