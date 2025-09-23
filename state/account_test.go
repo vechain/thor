@@ -40,6 +40,33 @@ func TestAccount(t *testing.T) {
 	assert.True(t, acc.IsEmpty())
 }
 
+func TestCalculateEnergy(t *testing.T) {
+	assert.True(t, emptyAccount().IsEmpty())
+
+	acc := emptyAccount()
+	acc.Energy = big.NewInt(1)
+	energy := acc.CalcEnergy(1, 10)
+	assert.Equal(t, big.NewInt(1), energy)
+
+	acc.BlockTime = 1
+	energy = acc.CalcEnergy(1, 10)
+	assert.Equal(t, big.NewInt(1), energy)
+
+	acc.Balance = big.NewInt(100000000000000000)
+	energy = acc.CalcEnergy(1, 10)
+	assert.Equal(t, big.NewInt(1), energy)
+
+	energy = acc.CalcEnergy(10, 10)
+	assert.Equal(t, big.NewInt(4500000001), energy)
+
+	energy = acc.CalcEnergy(20, 10)
+	assert.Equal(t, big.NewInt(4500000001), energy)
+
+	acc.BlockTime = 10
+	energy = acc.CalcEnergy(20, 10)
+	assert.Equal(t, big.NewInt(1), energy)
+}
+
 func TestTrie(t *testing.T) {
 	db := muxdb.NewMem()
 	tr := db.NewTrie("", trie.Root{})

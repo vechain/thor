@@ -89,6 +89,7 @@ func main() {
 			apiLogsLimitFlag,
 			apiPriorityFeesPercentageFlag,
 			verbosityFlag,
+			verbosityStakerFlag,
 			jsonLogsFlag,
 			maxPeersFlag,
 			p2pPortFlag,
@@ -132,6 +133,7 @@ func main() {
 					persistFlag,
 					gasLimitFlag,
 					verbosityFlag,
+					verbosityStakerFlag,
 					jsonLogsFlag,
 					pprofFlag,
 					verifyLogsFlag,
@@ -145,6 +147,7 @@ func main() {
 					enableAdminFlag,
 					allowedTracersFlag,
 					minEffectivePriorityFeeFlag,
+					hayabusaFlag,
 				},
 				Action: soloAction,
 			},
@@ -172,11 +175,10 @@ func defaultAction(ctx *cli.Context) error {
 
 	defer func() { log.Info("exited") }()
 
-	lvl, err := readIntFromUInt64Flag(ctx.Uint64(verbosityFlag.Name))
+	logLevel, err := initLogger(ctx)
 	if err != nil {
-		return errors.Wrap(err, "parse verbosity flag")
+		return err
 	}
-	logLevel := initLogger(lvl, ctx.Bool(jsonLogsFlag.Name))
 
 	// enable metrics as soon as possible
 	enableMetrics := ctx.Bool(enableMetricsFlag.Name)
@@ -257,6 +259,7 @@ func defaultAction(ctx *cli.Context) error {
 			repo,
 			p2pCommunicator.Communicator(),
 			logAPIRequests,
+			master,
 		)
 		if err != nil {
 			return fmt.Errorf("unable to start admin server - %w", err)
@@ -328,17 +331,15 @@ func defaultAction(ctx *cli.Context) error {
 func soloAction(ctx *cli.Context) error {
 	exitSignal := handleExitSignal()
 	defer func() { log.Info("exited") }()
-
-	lvl, err := readIntFromUInt64Flag(ctx.Uint64(verbosityFlag.Name))
+	logLevel, err := initLogger(ctx)
 	if err != nil {
-		return errors.Wrap(err, "parse verbosity flag")
+		return err
 	}
 
-	logLevel := initLogger(lvl, ctx.Bool(jsonLogsFlag.Name))
-
+	isHayabusa := ctx.Bool(hayabusaFlag.Name)
 	onDemandBlockProduction := ctx.Bool(onDemandFlag.Name)
-	blockProductionInterval := ctx.Uint64(blockInterval.Name)
-	if blockProductionInterval == 0 {
+	blockInterval := ctx.Uint64(blockInterval.Name)
+	if blockInterval == 0 {
 		return errors.New("block-interval cannot be zero")
 	}
 
@@ -362,8 +363,17 @@ func soloAction(ctx *cli.Context) error {
 
 	flagGenesis := ctx.String(genesisFlag.Name)
 	if flagGenesis == "" {
-		gene = genesis.NewDevnet()
-		forkConfig = &thor.SoloFork
+		if isHayabusa {
+			fc := thor.SoloFork
+			fc.GALACTICA = 0
+			fc.HAYABUSA = 0
+
+			forkConfig = &fc
+			gene = genesis.NewHayabusaDevnet(&fc)
+		} else {
+			gene = genesis.NewDevnet()
+			forkConfig = &thor.SoloFork
+		}
 	} else {
 		gene, forkConfig, err = parseGenesisFile(flagGenesis)
 		if err != nil {
@@ -412,6 +422,7 @@ func soloAction(ctx *cli.Context) error {
 			repo,
 			nil,
 			logAPIRequests,
+			nil,
 		)
 		if err != nil {
 			return fmt.Errorf("unable to start admin server - %w", err)
@@ -429,24 +440,45 @@ func soloAction(ctx *cli.Context) error {
 		}
 	}
 
-	txPoolOption := defaultTxPoolOptions
-	txPoolOption.Limit, err = readIntFromUInt64Flag(ctx.Uint64(txPoolLimitFlag.Name))
-	if err != nil {
-		return errors.Wrap(err, "parse txpool-limit flag")
+	minTxPriorityFee := ctx.Uint64(minEffectivePriorityFeeFlag.Name)
+	if minTxPriorityFee > 0 {
+		log.Info(fmt.Sprintf("the minimum effective priority fee required in transactions is %d wei", minTxPriorityFee))
 	}
-	txPoolOption.LimitPerAccount, err = readIntFromUInt64Flag(ctx.Uint64(txPoolLimitPerAccountFlag.Name))
-	if err != nil {
-		return errors.Wrap(err, "parse txpool-limit-per-account flag")
+	options := solo.Options{
+		GasLimit:         ctx.Uint64(gasLimitFlag.Name),
+		SkipLogs:         skipLogs,
+		MinTxPriorityFee: minTxPriorityFee,
+		OnDemand:         onDemandBlockProduction,
+		BlockInterval:    blockInterval,
 	}
 
-	txPool := txpool.New(repo, state.NewStater(mainDB), txPoolOption, forkConfig)
-	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
+	stater := state.NewStater(mainDB)
+	core := solo.NewCore(repo, stater, logDB, options, forkConfig)
+
+	var pool solo.TxPool
+	if ctx.Bool(onDemandFlag.Name) {
+		pool = solo.NewOnDemandTxPool(core)
+	} else {
+		txPoolOption := defaultTxPoolOptions
+		txPoolOption.Limit, err = readIntFromUInt64Flag(ctx.Uint64(txPoolLimitFlag.Name))
+		if err != nil {
+			return errors.Wrap(err, "parse txpool-limit flag")
+		}
+		txPoolOption.LimitPerAccount, err = readIntFromUInt64Flag(ctx.Uint64(txPoolLimitPerAccountFlag.Name))
+		if err != nil {
+			return errors.Wrap(err, "parse txpool-limit-per-account flag")
+		}
+
+		txPool := txpool.New(repo, state.NewStater(mainDB), txPoolOption, forkConfig)
+		defer func() { log.Info("closing tx pool..."); txPool.Close() }()
+		pool = txPool
+	}
 
 	apiURL, srvCloser, err := httpserver.StartAPIServer(
 		ctx.String(apiAddrFlag.Name),
 		repo,
-		state.NewStater(mainDB),
-		txPool,
+		stater,
+		pool,
 		logDB,
 		bft.NewMockedEngine(repo.GenesisBlock().Header().ID()),
 		&solo.Communicator{},
@@ -458,11 +490,6 @@ func soloAction(ctx *cli.Context) error {
 	}
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
-	blockInterval := ctx.Uint64(blockInterval.Name)
-	if blockInterval == 0 {
-		return errors.New("block-interval cannot be zero")
-	}
-
 	printStartupMessage2(gene, apiURL, "", metricsURL, adminURL)
 
 	if !ctx.Bool(disablePrunerFlag.Name) {
@@ -470,25 +497,7 @@ func soloAction(ctx *cli.Context) error {
 		defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
 	}
 
-	minTxPriorityFee := ctx.Uint64(minEffectivePriorityFeeFlag.Name)
-	if minTxPriorityFee > 0 {
-		log.Info(fmt.Sprintf("the minimum effective priority fee required in transactions is %d wei", minTxPriorityFee))
-	}
-
-	options := solo.Options{
-		GasLimit:         ctx.Uint64(gasLimitFlag.Name),
-		SkipLogs:         skipLogs,
-		MinTxPriorityFee: minTxPriorityFee,
-		OnDemand:         onDemandBlockProduction,
-		BlockInterval:    blockProductionInterval,
-	}
-
-	return solo.New(repo,
-		state.NewStater(mainDB),
-		logDB,
-		txPool,
-		forkConfig,
-		options).Run(exitSignal)
+	return solo.New(repo, stater, pool, options, core).Run(exitSignal)
 }
 
 func masterKeyAction(ctx *cli.Context) error {
@@ -508,7 +517,7 @@ func masterKeyAction(ctx *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		fmt.Println("Master:", thor.Address(crypto.PubkeyToAddress(masterKey.PublicKey)))
+		fmt.Println("Master:", crypto.PubkeyToAddress(masterKey.PublicKey).Hex())
 		return nil
 	}
 
@@ -537,7 +546,7 @@ func masterKeyAction(ctx *cli.Context) error {
 		if err := crypto.SaveECDSA(keyPath, key.PrivateKey); err != nil {
 			return err
 		}
-		fmt.Println("Master key imported:", thor.Address(key.Address))
+		fmt.Println("Master key imported:", key.Address.Hex())
 		return nil
 	}
 

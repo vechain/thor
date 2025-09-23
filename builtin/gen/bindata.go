@@ -2,23 +2,28 @@ package gen
 
 import (
 	"embed"
-	"strings"
+	"encoding/hex"
 )
 
 //go:embed compiled
 var fs embed.FS
 
-// MustAsset ensures that the asset is available and returns its contents.
-// It simplifies safe initialization of global variables.
-func MustAsset(name string) []byte {
-	if !strings.HasSuffix(name, ".abi") && !strings.HasSuffix(name, ".bin-runtime") {
-		panic("asset: Asset(" + name + "): not a valid asset name")
-	}
-
+func MustABI(name string) []byte {
 	data, err := fs.ReadFile(name)
 	if err != nil {
-		panic("asset: Asset(" + name + "): " + err.Error())
+		panic(err)
 	}
-
 	return data
+}
+
+func MustBIN(name string) []byte {
+	data, err := fs.ReadFile(name)
+	if err != nil {
+		panic(err)
+	}
+	bytes, err := hex.DecodeString(string(data))
+	if err != nil {
+		panic(err)
+	}
+	return bytes
 }

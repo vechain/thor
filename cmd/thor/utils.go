@@ -39,6 +39,7 @@ import (
 	"github.com/pkg/errors"
 	"gopkg.in/urfave/cli.v1"
 
+	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/httpserver"
 	"github.com/vechain/thor/v2/cmd/thor/node"
@@ -57,25 +58,35 @@ import (
 
 var devNetGenesisID thor.Bytes32
 
-func initLogger(lvl int, jsonLogs bool) *slog.LevelVar {
-	logLevel := log.FromLegacyLevel(lvl)
-	output := io.Writer(os.Stdout)
-	var level slog.LevelVar
-	level.Set(logLevel)
-
-	var handler slog.Handler
-	if jsonLogs {
-		handler = log.JSONHandlerWithLevel(output, &level)
-	} else {
-		useColor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
-		handler = log.NewTerminalHandlerWithLevel(output, &level, useColor)
+func initLogger(ctx *cli.Context) (*slog.LevelVar, error) {
+	lvl, err := readIntFromUInt64Flag(ctx.Uint64(verbosityFlag.Name))
+	if err != nil {
+		return nil, errors.Wrap(err, "parse verbosity flag")
 	}
-	log.SetDefault(log.NewLogger(handler))
+	stakerLvl, err := readIntFromUInt64Flag(ctx.Uint64(verbosityStakerFlag.Name))
+	if err != nil {
+		return nil, errors.Wrap(err, "parse staker-verbosity flag")
+	}
+	jsonLogs := ctx.Bool(jsonLogsFlag.Name)
+
+	var level slog.LevelVar
+	level.Set(log.FromLegacyLevel(lvl))
+	var stakerLevel slog.LevelVar
+	stakerLevel.Set(log.FromLegacyLevel(stakerLvl))
+
+	// init global logs
+	logger := log.New(jsonLogs, &level)
+	log.SetDefault(logger)
+
+	// init staker logs
+	stakerLogger := log.New(jsonLogs, &stakerLevel).With("pkg", "staker")
+	staker.SetLogger(stakerLogger)
+
 	ethlog.Root().SetHandler(ethlog.LvlFilterHandler(ethlog.LvlWarn, &ethLogger{
 		logger: log.WithContext("pkg", "geth"),
 	}))
 
-	return &level
+	return &level, nil
 }
 
 type ethLogger struct {
@@ -557,12 +568,12 @@ func printStartupMessage1(
 				return fmt.Sprintf(`
     Master       [ %v ]
     Beneficiary  [ %v ]`,
-					master.Address(),
+					master.Address().Hex(),
 					func() string {
 						if master.Beneficiary == nil {
-							return "not set, defaults to endorsor"
+							return "not set, defaults to endorser"
 						}
-						return master.Beneficiary.String()
+						return master.Beneficiary.Hex()
 					}(),
 				)
 			}

@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/transactions"
@@ -35,8 +36,9 @@ const (
 // Client represents the HTTP client for interacting with the VeChainThor blockchain.
 // It manages communication via HTTP requests.
 type Client struct {
-	url string
-	c   *http.Client
+	url     string
+	c       *http.Client
+	genesis atomic.Pointer[api.JSONCollapsedBlock]
 }
 
 // New creates a new Client with the provided URL.
@@ -46,8 +48,9 @@ func New(url string) *Client {
 
 func NewWithHTTP(url string, c *http.Client) *Client {
 	return &Client{
-		url: url,
-		c:   c,
+		url:     url,
+		c:       c,
+		genesis: atomic.Pointer[api.JSONCollapsedBlock]{},
 	}
 }
 
@@ -217,6 +220,9 @@ func (c *Client) SendTransaction(obj *api.RawTx) (*api.SendTxResult, error) {
 
 // GetBlock retrieves a block by its block ID.
 func (c *Client) GetBlock(blockID string) (*api.JSONCollapsedBlock, error) {
+	if blockID == "0" && c.genesis.Load() != nil {
+		return c.genesis.Load(), nil
+	}
 	body, err := c.httpGET(c.url + "/blocks/" + blockID)
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve block - %w", err)
@@ -229,6 +235,11 @@ func (c *Client) GetBlock(blockID string) (*api.JSONCollapsedBlock, error) {
 	var block api.JSONCollapsedBlock
 	if err = json.Unmarshal(body, &block); err != nil {
 		return nil, fmt.Errorf("unable to unmarshal block - %w", err)
+	}
+
+	if block.Number == 0 {
+		// Cache the genesis block for future requests
+		c.genesis.Store(&block)
 	}
 
 	return &block, nil
@@ -251,6 +262,25 @@ func (c *Client) GetExpandedBlock(revision string) (*api.JSONExpandedBlock, erro
 	}
 
 	return &block, nil
+}
+
+// GetBlockReward retrieves a block reward and validator for block
+func (c *Client) GetBlockReward(revision string) (*api.JSONBlockReward, error) {
+	body, err := c.httpGET(c.url + "/blocks/reward/" + revision)
+	if err != nil {
+		return nil, fmt.Errorf("unable to retrieve block reward - %w", err)
+	}
+
+	if len(body) == 0 || bytes.Equal(bytes.TrimSpace(body), []byte("null")) {
+		return nil, ErrNotFound
+	}
+
+	var blockReward api.JSONBlockReward
+	if err = json.Unmarshal(body, &blockReward); err != nil {
+		return nil, fmt.Errorf("unable to unmarshal block reward - %w", err)
+	}
+
+	return &blockReward, nil
 }
 
 // FilterEvents filters events based on the provided event filter.

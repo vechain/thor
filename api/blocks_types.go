@@ -44,6 +44,12 @@ type JSONCollapsedBlock struct {
 	Transactions []thor.Bytes32 `json:"transactions"`
 }
 
+type JSONBlockReward struct {
+	Reward      *math.HexOrDecimal256 `json:"reward"`
+	Master      *thor.Address         `json:"master"`
+	ValidatorID *thor.Address         `json:"validatorId"`
+}
+
 type JSONClause struct {
 	To    *thor.Address        `json:"to"`
 	Value math.HexOrDecimal256 `json:"value"`

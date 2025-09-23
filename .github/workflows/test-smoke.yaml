@@ -2,72 +2,32 @@ name: Smoke Tests
 
 on:
   workflow_call:
-    inputs:
-      draupnir-branch:
-        type: string
-        default: 'main'
-
-permissions:
-  contents: read
+    secrets:
+      DRAUPNIR_TOKEN:
+        required: true
 
 jobs:
-  build-docker-image:
-    name: Build Docker image
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Try to download e2e artifact
-        id: download-artifact
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: vechain-thor-image-${{ github.sha }}
-          path: /tmp
-
-      - name: Set up QEMU
-        if: steps.download-artifact.outcome == 'failure'
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        if: steps.download-artifact.outcome == 'failure'
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and export
-        if: steps.download-artifact.outcome == 'failure'
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          tags: vechain/thor:${{ github.sha }}
-          outputs: type=docker,dest=/tmp/vechain-thor.tar
-
-      - name: Upload artifact
-        if: steps.download-artifact.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: vechain-thor-image-${{ github.sha }}
-          path: /tmp/vechain-thor.tar
-          retention-days: 7
-
   run-smoke-tests:
     runs-on: ubuntu-latest
-    needs: build-docker-image
     env:
-      THOR_IMAGE: vechain/thor:${{ github.sha }}
-    name: Run Smoke Tests
+      THOR_IMAGE: thor-pipeline:${{ github.sha }}
     steps:
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: thor-pipeline-image-${{ github.sha }}
+          path: /tmp
+      - name: Load image
+        run: docker load --input /tmp/thor-pipeline.tar
       - name: Set up git credentials
         run: |
           git config --global url."https://${{ secrets.DRAUPNIR_TOKEN }}@github.com/".insteadOf "https://github.com/"
-
       - name: Set draupnir repo reference
         id: set-ref
         run: |
           # Default fallback commit
           DEFAULT_COMMIT="87786521c01be03d7a39cedb3b34d640f9f8632e"
           REF="$DEFAULT_COMMIT"
-      
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             # For pull_request events, we only look at the PR's base branch
             if [[ "${{ github.event.pull_request.base.ref }}" == release/* ]]; then
@@ -87,52 +47,34 @@ jobs:
           else
             echo "ref=$REF" >> "$GITHUB_OUTPUT"
           fi
-
           echo "DRAUPNIR REF: $(<$GITHUB_OUTPUT)"
-
       - name: Checkout
         uses: actions/checkout@v4
         with:
           repository: vechain/draupnir
           token: ${{ secrets.DRAUPNIR_TOKEN }}
           ref: ${{ steps.set-ref.outputs.ref }}
-
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: vechain-thor-image-${{ github.sha }}
-          path: /tmp
-
-      - name: Load image
-        run: |
-          docker load --input /tmp/vechain-thor.tar
-          docker image ls -a
-
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.24.x'
-
       - name: Start Thor Node
         run: |
           docker run -d --name thor-node \
             --network host \
             -p 8669:8669 \
-            vechain/thor:${{ github.sha }} \
+            thor-pipeline:${{ github.sha }} \
             solo --gas-limit=40000000 --api-cors="*" --enable-metrics
-
       - name: Wait for Thor to be ready
         run: |
           timeout 60 bash -c 'until curl -s http://localhost:8669/accounts; do sleep 2; done'
-
-
       - name: Run Smoke Test Separately
         run: |
+          THOR_BRANCH=${{ github.head_ref || github.ref_name }} \
           RUNTESTS=TestSmokeTest,TestGenerateRequests,TestConnectionDiesNoPingResponse,TestConnectionClosedWithoutSubscription \
           TEST_NETWORK_ADDR=http://127.0.0.1:8669 \
           TEST_PK=99f0500549792796c14fed62011a51081dc5b5e68fe8bd8a13b86be829c4fd36 \
           go test --count=1 -v ./tests/smoketest -run TestSmokeTest
-
       - name: Cleanup
         if: always()
         run: |

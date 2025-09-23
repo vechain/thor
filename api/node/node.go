@@ -16,16 +16,15 @@ import (
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
-	"github.com/vechain/thor/v2/txpool"
 )
 
 type Node struct {
-	pool         *txpool.TxPool
+	pool         transactions.Pool
 	nw           api.Network
 	enableTxpool bool
 }
 
-func New(nw api.Network, pool *txpool.TxPool, enableTxpool bool) *Node {
+func New(nw api.Network, pool transactions.Pool, enableTxpool bool) *Node {
 	return &Node{
 		pool,
 		nw,

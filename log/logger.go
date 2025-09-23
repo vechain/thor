@@ -18,11 +18,14 @@ package log
 
 import (
 	"context"
+	"io"
 	"log/slog"
 	"math"
 	"os"
 	"runtime"
 	"time"
+
+	"github.com/mattn/go-isatty"
 )
 
 const errorKey = "LOG_ERROR"
@@ -159,6 +162,18 @@ type Logger interface {
 
 type logger struct {
 	inner *slog.Logger
+}
+
+func New(jsonLogs bool, level *slog.LevelVar) Logger {
+	output := io.Writer(os.Stdout)
+	var handler slog.Handler
+	if jsonLogs {
+		handler = JSONHandlerWithLevel(output, level)
+	} else {
+		useColor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
+		handler = NewTerminalHandlerWithLevel(output, level, useColor)
+	}
+	return NewLogger(handler)
 }
 
 // NewLogger returns a logger with the specified handler set

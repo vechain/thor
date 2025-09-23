@@ -49,5 +49,3 @@ func (n noopMeters) Add(int64) {}
 func (n noopMeters) Set(int64) {}
 
 func (n noopMeters) Observe(int64) {}
-
-func (n *noopMetrics) ObserveWithLabels(int64, map[string]string) {}

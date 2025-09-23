@@ -71,7 +71,7 @@ func (s *SchedulerV1) whoseTurn(t uint64) Proposer {
 // Schedule to determine time of the proposer to produce a block, according to `nowTime`.
 // `newBlockTime` is promised to be >= nowTime and > parentBlockTime
 func (s *SchedulerV1) Schedule(nowTime uint64) (newBlockTime uint64) {
-	const T = thor.BlockInterval
+	T := thor.BlockInterval()
 
 	newBlockTime = s.parentBlockTime + T
 
@@ -98,7 +98,7 @@ func (s *SchedulerV1) IsTheTime(newBlockTime uint64) bool {
 		return false
 	}
 
-	if (newBlockTime-s.parentBlockTime)%thor.BlockInterval != 0 {
+	if (newBlockTime-s.parentBlockTime)%thor.BlockInterval() != 0 {
 		// invalid block time
 		return false
 	}
@@ -108,15 +108,16 @@ func (s *SchedulerV1) IsTheTime(newBlockTime uint64) bool {
 
 // Updates returns proposers whose status are changed, and the score when new block time is assumed to be newBlockTime.
 func (s *SchedulerV1) Updates(newBlockTime uint64) (updates []Proposer, score uint64) {
+	T := thor.BlockInterval()
 	toDeactivate := make(map[thor.Address]Proposer)
 
-	t := newBlockTime - thor.BlockInterval
+	t := newBlockTime - T
 	for i := uint64(0); i < thor.InitialMaxBlockProposers && t > s.parentBlockTime; i++ {
 		p := s.whoseTurn(t)
 		if p.Address != s.proposer.Address {
 			toDeactivate[p.Address] = p
 		}
-		t -= thor.BlockInterval
+		t -= T
 	}
 
 	updates = make([]Proposer, 0, len(toDeactivate)+1)

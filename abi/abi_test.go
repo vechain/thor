@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package abi
+package abi_test
 
 import (
 	"math/big"
@@ -12,13 +12,14 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/builtin/gen"
 	"github.com/vechain/thor/v2/thor"
 )
 
 func TestABI(t *testing.T) {
-	data := gen.MustAsset("compiled/Params.abi")
-	abi, err := New(data)
+	data := gen.MustABI("compiled/Params.abi")
+	abi, err := abi.New(data)
 	assert.Nil(t, err)
 
 	// pack/unpack input
@@ -81,5 +82,32 @@ func TestABI(t *testing.T) {
 		assert.Nil(t, err)
 
 		assert.Equal(t, value, d)
+	}
+}
+
+func TestStakerABI(t *testing.T) {
+	data := gen.MustABI("compiled/Staker.abi")
+	abi, err := abi.New(data)
+	assert.Nil(t, err)
+
+	type testCase struct {
+		name     string
+		constant bool
+	}
+
+	testCases := []testCase{
+		{"totalStake", true},
+		{"queuedStake", true},
+		{"addValidation", false},
+		{"withdrawStake", false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			method, found := abi.MethodByName(tc.name)
+			assert.True(t, found)
+			assert.NotNil(t, method)
+			assert.Equal(t, tc.constant, method.Const())
+		})
 	}
 }

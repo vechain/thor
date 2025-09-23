@@ -20,7 +20,7 @@ func TestCacheBaseFee(t *testing.T) {
 	forkConfig := thor.NoFork
 	forkConfig.GALACTICA = 2
 
-	tchain, err := testchain.NewWithFork(&forkConfig)
+	tchain, err := testchain.NewWithFork(&forkConfig, 180)
 	assert.NoError(t, err)
 
 	repo := tchain.Repo()

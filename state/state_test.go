@@ -6,6 +6,8 @@
 package state
 
 import (
+	"fmt"
+	"math"
 	"math/big"
 	"testing"
 
@@ -103,15 +105,26 @@ func TestEnergy(t *testing.T) {
 
 	acc := thor.BytesToAddress([]byte("a1"))
 
+	startTime := uint64(10)
 	time1 := uint64(1000)
 
 	vetBal := big.NewInt(1e18)
 	st.SetBalance(acc, vetBal)
-	st.SetEnergy(acc, &big.Int{}, 10)
+	st.SetEnergy(acc, &big.Int{}, startTime)
 
-	bal1, _ := st.GetEnergy(acc, time1)
+	bal1, _ := st.GetEnergy(acc, time1, math.MaxUint64)
 	x := new(big.Int).Mul(thor.EnergyGrowthRate, vetBal)
-	x.Mul(x, new(big.Int).SetUint64(time1-10))
+	x.Mul(x, new(big.Int).SetUint64(time1-startTime))
+	x.Div(x, big.NewInt(1e18))
+
+	assert.Equal(t, x, bal1)
+
+	// test stop energy growth
+	stopTime := uint64(20)
+	now := uint64(30)
+	bal1, _ = st.GetEnergy(acc, now, stopTime)
+	x = new(big.Int).Mul(thor.EnergyGrowthRate, vetBal)
+	x.Mul(x, new(big.Int).SetUint64(stopTime-startTime))
 	x.Div(x, big.NewInt(1e18))
 
 	assert.Equal(t, x, bal1)
@@ -221,4 +234,139 @@ func TestStorageBarrier(t *testing.T) {
 	acc, _, err := loadAccount(tr, addr)
 	assert.Nil(t, err)
 	assert.Equal(t, 0, len(acc.StorageRoot), "should skip storage writes when account deleteed then recreated")
+}
+
+func TestStateCheckout(t *testing.T) {
+	state := New(muxdb.NewMem(), trie.Root{})
+	addr := thor.BytesToAddress([]byte("account1"))
+	state.SetBalance(addr, big.NewInt(42))
+
+	// Create a new state with a different root to simulate checkout
+	customRoot := trie.Root{Hash: thor.BytesToBytes32([]byte("custom"))}
+	checkoutState := state.Checkout(customRoot)
+	assert.NotSame(t, state, checkoutState, "Checkout should return a new State instance")
+	assert.Equal(t, state.db, checkoutState.db, "DB should be the same after checkout")
+
+	bal, err := checkoutState.GetBalance(addr)
+	assert.Nil(t, bal)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "state:")
+}
+
+func TestStorageTrieNamePanic(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("StorageTrieName should panic when passed an empty sid")
+		}
+	}()
+	_ = StorageTrieName([]byte{})
+}
+
+func TestCacheGetterUnexpectedKeyType(t *testing.T) {
+	state := New(muxdb.NewMem(), trie.Root{})
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("cacheGetter should panic on unexpected key type")
+		}
+	}()
+	_, _, _ = state.cacheGetter(12345) // passing an int since it's not a valid key type
+}
+
+func TestGetAccountCopyError(t *testing.T) {
+	state := New(muxdb.NewMem(), trie.Root{})
+	addr := thor.BytesToAddress([]byte("nonexistent"))
+	acc, err := state.getAccountCopy(addr)
+	assert.NoError(t, err)
+	assert.NotNil(t, acc.Balance)
+	assert.NotNil(t, acc.Energy)
+	assert.Equal(t, big.NewInt(0), acc.Balance)
+	assert.Equal(t, big.NewInt(0), acc.Energy)
+}
+
+func TestStateErrorBranches(t *testing.T) {
+	state := New(muxdb.NewMem(), trie.Root{})
+	addr := thor.BytesToAddress([]byte("nonexistent"))
+	key := thor.BytesToBytes32([]byte("key"))
+
+	err := state.SetBalance(addr, big.NewInt(1))
+	assert.NoError(t, err)
+
+	_, err = state.GetEnergy(addr, 0, 0)
+	assert.NoError(t, err)
+
+	err = state.SetEnergy(addr, big.NewInt(1), 0)
+	assert.NoError(t, err)
+
+	_, err = state.GetMaster(addr)
+	assert.NoError(t, err)
+
+	err = state.SetMaster(addr, thor.BytesToAddress([]byte("master")))
+	assert.NoError(t, err)
+
+	_, err = state.GetStorage(addr, key)
+	assert.NoError(t, err)
+
+	_, err = state.GetRawStorage(addr, key)
+	assert.NoError(t, err)
+
+	err = state.EncodeStorage(addr, key, func() ([]byte, error) { return nil, fmt.Errorf("encode error") })
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "encode error")
+
+	err = state.DecodeStorage(addr, key, func([]byte) error { return fmt.Errorf("decode error") })
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "decode error")
+
+	_, err = state.GetCode(addr)
+	assert.NoError(t, err)
+
+	_, err = state.GetCodeHash(addr)
+	assert.NoError(t, err)
+
+	err = state.SetCode(addr, []byte("code"))
+	assert.NoError(t, err)
+
+	_, err = state.Exists(addr)
+	assert.NoError(t, err)
+
+	_, err = state.BuildStorageTrie(addr)
+	assert.NoError(t, err)
+}
+
+func TestRLPDecodeErrors(t *testing.T) {
+	state := New(muxdb.NewMem(), trie.Root{})
+	addr := thor.BytesToAddress([]byte("rlperror"))
+	key := thor.BytesToBytes32([]byte("key"))
+	// Set invalid RLP data
+	state.SetRawStorage(addr, key, []byte{0xff, 0xff, 0xff})
+
+	tests := []struct {
+		name string
+		run  func() error
+	}{
+		{
+			name: "GetStorage",
+			run: func() error {
+				_, err := state.GetStorage(addr, key)
+				return err
+			},
+		},
+		{
+			name: "DecodeStorage",
+			run: func() error {
+				decodeFunc := func(b []byte) error {
+					return rlp.DecodeBytes(b, new([]byte))
+				}
+				return state.DecodeStorage(addr, key, decodeFunc)
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.run()
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "state:")
+		})
+	}
 }

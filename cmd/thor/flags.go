@@ -94,6 +94,11 @@ var (
 		Value: log.LegacyLevelInfo,
 		Usage: "log verbosity (0-9)",
 	}
+	verbosityStakerFlag = cli.Uint64Flag{
+		Name:  "verbosity-staker",
+		Usage: "log verbosity for staker (0-9)",
+		Value: log.LegacyLevelError,
+	}
 	jsonLogsFlag = cli.BoolFlag{
 		Name:  "json-logs",
 		Usage: "output logs in JSON format",
@@ -166,7 +171,6 @@ var (
 		Value: "localhost:2112",
 		Usage: "metrics service listening address",
 	}
-
 	enableAdminFlag = cli.BoolFlag{
 		Name:  "enable-admin",
 		Usage: "enables admin server",
@@ -195,6 +199,10 @@ var (
 	}
 
 	// solo mode only flags
+	hayabusaFlag = cli.BoolFlag{
+		Name:  "hayabusa",
+		Usage: "start solo immidetaly as hayabusa",
+	}
 	onDemandFlag = cli.BoolFlag{
 		Name:  "on-demand",
 		Usage: "create new block when there is pending transaction",

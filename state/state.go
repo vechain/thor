@@ -178,12 +178,13 @@ func (s *State) SetBalance(addr thor.Address, balance *big.Int) error {
 }
 
 // GetEnergy get energy for the given address at block number specified.
-func (s *State) GetEnergy(addr thor.Address, blockTime uint64) (*big.Int, error) {
+func (s *State) GetEnergy(addr thor.Address, blockTime uint64, stopTime uint64) (*big.Int, error) {
 	acc, err := s.getAccount(addr)
 	if err != nil {
 		return nil, &Error{err}
 	}
-	return acc.CalcEnergy(blockTime), nil
+
+	return acc.CalcEnergy(blockTime, stopTime), nil
 }
 
 // SetEnergy set energy at block number for the given address.

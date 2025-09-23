@@ -11,9 +11,11 @@ import (
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/builtin/authority"
 	"github.com/vechain/thor/v2/builtin/energy"
+	"github.com/vechain/thor/v2/builtin/gascharger"
 	"github.com/vechain/thor/v2/builtin/gen"
 	"github.com/vechain/thor/v2/builtin/params"
 	"github.com/vechain/thor/v2/builtin/prototype"
+	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/xenv"
@@ -31,6 +33,7 @@ var (
 		mustLoadContract("ExtensionV2"),
 		mustLoadContract("ExtensionV3"),
 	}
+	Staker  = &stakerContract{mustLoadContract("Staker")}
 	Measure = mustLoadContract("Measure")
 )
 
@@ -45,6 +48,7 @@ type (
 		V2 *contract
 		V3 *contract
 	}
+	stakerContract struct{ *contract }
 )
 
 func (p *paramsContract) Native(state *state.State) *params.Params {
@@ -56,7 +60,7 @@ func (a *authorityContract) Native(state *state.State) *authority.Authority {
 }
 
 func (e *energyContract) Native(state *state.State, blockTime uint64) *energy.Energy {
-	return energy.New(e.Address, state, blockTime)
+	return energy.New(e.Address, state, blockTime, Params.Native(state))
 }
 
 func (p *prototypeContract) Native(state *state.State) *prototype.Prototype {
@@ -65,7 +69,25 @@ func (p *prototypeContract) Native(state *state.State) *prototype.Prototype {
 
 func (p *prototypeContract) Events() *abi.ABI {
 	asset := "compiled/PrototypeEvent.abi"
-	data := gen.MustAsset(asset)
+	data := gen.MustABI(asset)
+	abi, err := abi.New(data)
+	if err != nil {
+		panic(errors.Wrap(err, "load ABI for "+asset))
+	}
+	return abi
+}
+
+func (s *stakerContract) NativeMetered(state *state.State, charger *gascharger.Charger) *staker.Staker {
+	return staker.New(s.Address, state, Params.Native(state), charger)
+}
+
+func (s *stakerContract) Native(state *state.State) *staker.Staker {
+	return s.NativeMetered(state, nil)
+}
+
+func (s *stakerContract) Events() *abi.ABI {
+	asset := "compiled/Staker.abi"
+	data := gen.MustABI(asset)
 	abi, err := abi.New(data)
 	if err != nil {
 		panic(errors.Wrap(err, "load ABI for "+asset))

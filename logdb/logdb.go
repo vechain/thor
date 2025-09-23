@@ -7,15 +7,17 @@ package logdb
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"math/big"
-
-	sqlite3 "github.com/mattn/go-sqlite3"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
+
+	"github.com/mattn/go-sqlite3"
 )
 
 const (
@@ -73,8 +75,49 @@ func New(path string) (logDB *LogDB, err error) {
 }
 
 // NewMem create a log db in ram.
+// Unlike the file-based database, this implementation:
+// 1. Uses synchronous=off for faster writes in memory
+// 2. Uses a single connection with minimal transaction overhead
+// 3. Optimizes for in-memory performance
 func NewMem() (*LogDB, error) {
-	return New("file::memory:")
+	// Generate 6 random bytes for unique database name
+	randBytes := make([]byte, 6)
+	if _, err := rand.Read(randBytes); err != nil {
+		return nil, fmt.Errorf("failed to generate random bytes: %w", err)
+	}
+	dbName := fmt.Sprintf("file:memdb_%s?mode=memory&cache=shared&_txlock=immediate&synchronous=off&journal_mode=memory", hex.EncodeToString(randBytes))
+	// Open SQLite in-memory database with optimized settings:
+	// - mode=memory: Create a new in-memory database
+	// - cache=shared: Enable shared cache mode
+	// - _txlock=immediate: Acquire locks immediately for better concurrency
+	// - synchronous=off: Fastest mode for in-memory database
+	// - journal_mode=memory: Use in-memory journal for better performance
+	db, err := sql.Open("sqlite3", dbName)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := db.Exec(refTableScheme + eventTableSchema + transferTableSchema); err != nil {
+		db.Close()
+		return nil, err
+	}
+
+	// Create a single connection with optimized settings
+	wconn, err := db.Conn(context.Background())
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+
+	driverVer, _, _ := sqlite3.Version()
+	return &LogDB{
+		path:          dbName,
+		driverVersion: driverVer,
+		db:            db,
+		wconn:         wconn,
+		wconnSyncOff:  wconn, // Use same connection for both writers
+		stmtCache:     newStmtCache(db),
+	}, nil
 }
 
 // Close close the log db.
