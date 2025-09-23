@@ -50,6 +50,24 @@ func TestSequence(t *testing.T) {
 	}
 }
 
+func TestSequence_Errors(t *testing.T) {
+	t.Run("blockNum out of range", func(t *testing.T) {
+		_, err := newSequence(blockNumMask+1, 0, 0)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "block number out of range")
+	})
+	t.Run("txIndex out of range", func(t *testing.T) {
+		_, err := newSequence(0, txIndexMask+1, 0)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "tx index out of range")
+	})
+	t.Run("logIndex out of range", func(t *testing.T) {
+		_, err := newSequence(0, 0, logIndexMask+1)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "log index out of range")
+	})
+}
+
 // In case some one messes up the bit allocation
 func TestSequenceValue(t *testing.T) {
 	//#nosec G404
