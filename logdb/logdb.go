@@ -862,7 +862,11 @@ func (w *Writer) UncommittedCount() int {
 
 func (w *Writer) execWithTx(query string, args ...any) error {
 	if w.tx == nil {
-		return fmt.Errorf("no active transaction")
+		trx, err := w.conn.BeginTx(context.Background(), nil)
+		if err != nil {
+			return err
+		}
+		w.tx = trx
 	}
 	if _, err := w.tx.Exec(query, args...); err != nil {
 		return err
