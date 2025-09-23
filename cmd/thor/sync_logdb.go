@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/pmezard/go-difflib/difflib"
@@ -44,7 +45,7 @@ func syncLogDB(ctx context.Context, repo *chain.Repository, logDB *logdb.LogDB, 
 	}
 
 	if startPos == 0 {
-		fmt.Println(">> Rebuilding log db <<")
+		fmt.Println(">> Rebuilding log db <<", time.Now().String())
 		startPos = 1 // block 0 can be skipped
 	} else {
 		fmt.Println(">> Syncing log db <<")
