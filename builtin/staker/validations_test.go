@@ -907,17 +907,17 @@ func TestStaker_RemoveValidator(t *testing.T) {
 }
 
 func TestStaker_LeaderGroup(t *testing.T) {
-	staker, _ := newStakerV2(t, 68, 101, true)
+	test, _ := newStakerV2(t, 68, 101, true)
 
 	added := make(map[thor.Address]bool)
 	for range 10 {
 		addr := datagen.RandAddress()
 		stake := RandomStake()
-		staker.AddValidation(addr, addr, thor.MediumStakingPeriod(), stake)
-		staker.ActivateNext(0)
+		test.AddValidation(addr, addr, thor.MediumStakingPeriod(), stake)
+		test.ActivateNext(0)
 	}
 
-	leaderGroup, err := staker.LeaderGroup()
+	leaderGroup, err := test.staker.LeaderGroup()
 	assert.NoError(t, err)
 
 	leaders := make(map[thor.Address]bool)
@@ -978,25 +978,25 @@ func TestStaker_Next(t *testing.T) {
 }
 
 func TestStaker_Initialise(t *testing.T) {
-	staker, _ := newStakerV2(t, 0, 3, false)
+	test, _ := newStakerV2(t, 0, 3, false)
 	addr := datagen.RandAddress()
 
 	for range 3 {
-		staker.AddValidation(datagen.RandAddress(), datagen.RandAddress(), thor.MediumStakingPeriod(), MinStakeVET)
+		test.AddValidation(datagen.RandAddress(), datagen.RandAddress(), thor.MediumStakingPeriod(), MinStakeVET)
 	}
 
-	transitioned, err := staker.transition(0)
+	transitioned, err := test.staker.transition(0)
 	assert.NoError(t, err) // should succeed
 	assert.True(t, transitioned)
 	// should be able to add validations after initialisation
-	staker.AddValidation(addr, addr, thor.MediumStakingPeriod(), MinStakeVET)
+	test.AddValidation(addr, addr, thor.MediumStakingPeriod(), MinStakeVET)
 
-	staker, _ = newStakerV2(t, 101, 101, true)
-	first, _ := staker.FirstActive()
+	test, _ = newStakerV2(t, 101, 101, true)
+	first, _ := test.FirstActive()
 	assert.False(t, first.IsZero())
 
 	expectedLength := uint64(101)
-	length, err := staker.validationService.LeaderGroupSize()
+	length, err := test.staker.validationService.LeaderGroupSize()
 	assert.NoError(t, err)
 	assert.Equal(t, expectedLength, length)
 }
