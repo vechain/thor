@@ -136,7 +136,7 @@ func TestStaker_TransitionPeriodBalanceCheck(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			test, _ := newStakerV2(t, 1, 1, false)
 			tt.preTestHook(test)
-			balanceCheck := test.Staker.TransitionPeriodBalanceCheck(fc, tt.currentBlock, endorsement)
+			balanceCheck := test.TransitionPeriodBalanceCheck(fc, tt.currentBlock, endorsement)
 			ok, err := balanceCheck(master, endorser)
 			assert.NoError(t, err)
 			assert.Equal(t, tt.ok, ok)

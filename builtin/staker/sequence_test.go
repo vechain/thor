@@ -32,21 +32,21 @@ func newTestSequence(t *testing.T, staker *Staker, params *params.Params) *TestS
 }
 
 func (ts *TestSequence) subContractVET(amount uint64) {
-	balance, err := ts.Staker.state.GetBalance(ts.Staker.Address())
+	balance, err := ts.state.GetBalance(ts.Staker.Address())
 	require.NoError(ts.t, err, "failed to get contract balance")
 	newBalance := big.NewInt(0).Sub(balance, ToWei(amount))
-	require.NoError(ts.t, ts.Staker.state.SetBalance(ts.Staker.Address(), newBalance), "failed to set contract balance")
+	require.NoError(ts.t, ts.state.SetBalance(ts.Staker.Address(), newBalance), "failed to set contract balance")
 }
 
 func (ts *TestSequence) addContractVET(amount uint64) {
-	balance, err := ts.Staker.state.GetBalance(ts.Staker.Address())
+	balance, err := ts.state.GetBalance(ts.Staker.Address())
 	require.NoError(ts.t, err, "failed to get contract balance")
 	newBalance := big.NewInt(0).Add(balance, ToWei(amount))
-	require.NoError(ts.t, ts.Staker.state.SetBalance(ts.Staker.Address(), newBalance), "failed to set contract balance")
+	require.NoError(ts.t, ts.state.SetBalance(ts.Staker.Address(), newBalance), "failed to set contract balance")
 }
 
 func (ts *TestSequence) State() *state.State {
-	return ts.Staker.state
+	return ts.state
 }
 
 func (ts *TestSequence) Address() thor.Address {
@@ -54,7 +54,7 @@ func (ts *TestSequence) Address() thor.Address {
 }
 
 func (ts *TestSequence) AssertActive(active bool) *TestSequence {
-	isActive, err := ts.Staker.IsPoSActive()
+	isActive, err := ts.IsPoSActive()
 	assert.NoError(ts.t, err, "failed to check PoS active state")
 	assert.Equal(ts.t, active, isActive, "PoS active state mismatch")
 	return ts
@@ -78,7 +78,7 @@ func (ts *TestSequence) AssertQueuedVET(expectedVET uint64) *TestSequence {
 }
 
 func (ts *TestSequence) AssertValidationNums(expectedActive, expectedQueued uint64) *TestSequence {
-	active, queued, err := ts.Staker.GetValidationsNum()
+	active, queued, err := ts.GetValidationsNum()
 	assert.NoError(ts.t, err, "failed to get validation numbers")
 	assert.Equal(ts.t, expectedActive, active, "active validators count mismatch, got %d, expected %d", active, expectedActive)
 	assert.Equal(ts.t, expectedQueued, queued, "queued validators count mismatch, got %d, expected %d", queued, expectedQueued)
@@ -100,14 +100,14 @@ func (ts *TestSequence) AssertFirstQueued(expectedAddr thor.Address) *TestSequen
 }
 
 func (ts *TestSequence) AssertQueueSize(expectedSize uint64) *TestSequence {
-	size, err := ts.Staker.QueuedGroupSize()
+	size, err := ts.QueuedGroupSize()
 	assert.NoError(ts.t, err, "failed to get queue size")
 	assert.Equal(ts.t, expectedSize, size, "queue size mismatch")
 	return ts
 }
 
 func (ts *TestSequence) AssertLeaderGroupSize(expectedSize uint64) *TestSequence {
-	size, err := ts.Staker.LeaderGroupSize()
+	size, err := ts.LeaderGroupSize()
 	assert.NoError(ts.t, err, "failed to get leader group size")
 	assert.Equal(ts.t, expectedSize, size, "leader group size mismatch")
 	return ts
@@ -170,7 +170,7 @@ func (ts *TestSequence) GetValidationErrors(addr thor.Address, errMsg string) *T
 }
 
 func (ts *TestSequence) GetAggregation(addr thor.Address) *aggregation.Aggregation {
-	agg, err := ts.Staker.aggregationService.GetAggregation(addr)
+	agg, err := ts.aggregationService.GetAggregation(addr)
 	assert.NoError(ts.t, err, "failed to get aggregation for validator %s", addr.String())
 	return agg
 }
@@ -208,13 +208,13 @@ func (ts *TestSequence) AddValidation(
 
 func (ts *TestSequence) UpdateContractBalance(amount uint64) *TestSequence {
 	addr := ts.Staker.Address()
-	current, err := ts.Staker.state.GetBalance(addr)
+	current, err := ts.state.GetBalance(addr)
 	assert.NoError(ts.t, err, "failed to get contract balance")
 	if current == nil {
 		current = big.NewInt(0)
 	}
 	newBalance := new(big.Int).Add(current, big.NewInt(int64(amount)))
-	assert.NoError(ts.t, ts.Staker.state.SetBalance(addr, newBalance))
+	assert.NoError(ts.t, ts.state.SetBalance(addr, newBalance))
 	return ts
 }
 
@@ -227,7 +227,14 @@ func (ts *TestSequence) SignalExit(validator, endorser thor.Address, currentBloc
 func (ts *TestSequence) SignalExitErrors(validator, endorser thor.Address, currentBlock uint32, errMsg string) *TestSequence {
 	err := ts.Staker.SignalExit(validator, endorser, currentBlock)
 	assert.NotNil(ts.t, err, "expected error when signaling exit for validator %s with endorser %s", validator.String(), endorser.String())
-	assert.ErrorContains(ts.t, err, errMsg, "expected error message when signaling exit for validator %s with endorser %s", validator.String(), endorser.String())
+	assert.ErrorContains(
+		ts.t,
+		err,
+		errMsg,
+		"expected error message when signaling exit for validator %s with endorser %s",
+		validator.String(),
+		endorser.String(),
+	)
 	return ts
 }
 
@@ -295,7 +302,15 @@ func (ts *TestSequence) WithdrawStake(validator, endorser thor.Address, block ui
 
 func (ts *TestSequence) WithdrawStakeErrors(validator, endorser thor.Address, block uint32, errMsg string) *TestSequence {
 	_, err := ts.Staker.WithdrawStake(validator, endorser, block)
-	assert.ErrorContains(ts.t, err, errMsg, "expected error message when withdrawing stake for validator %s with endorser %s at block %d", validator.String(), endorser.String(), block)
+	assert.ErrorContains(
+		ts.t,
+		err,
+		errMsg,
+		"expected error message when withdrawing stake for validator %s with endorser %s at block %d",
+		validator.String(),
+		endorser.String(),
+		block,
+	)
 	return ts
 }
 
@@ -333,7 +348,7 @@ func (ts *TestSequence) AssertWithdrawable(
 	block uint32,
 	expectedWithdrawable uint64,
 ) *TestSequence {
-	withdrawable, err := ts.Staker.GetWithdrawable(validator, block)
+	withdrawable, err := ts.GetWithdrawable(validator, block)
 	assert.NoError(ts.t, err, "failed to get withdrawable amount for validator %s at block %d: %v", validator.String(), block, err)
 	assert.Equal(ts.t, expectedWithdrawable, withdrawable, "withdrawable amount mismatch for validator %s", validator.String())
 	return ts
@@ -389,7 +404,7 @@ func (ts *TestSequence) AddDelegationErrors(
 }
 
 func (ts *TestSequence) AssertHasDelegations(node thor.Address, expected bool) *TestSequence {
-	hasDelegations, err := ts.Staker.HasDelegations(node)
+	hasDelegations, err := ts.HasDelegations(node)
 	assert.NoError(ts.t, err, "failed to check delegations for validator %s: %v", node.String(), err)
 	assert.Equal(ts.t, expected, hasDelegations, "delegation presence mismatch for validator %s", node.String())
 	return ts
@@ -422,7 +437,7 @@ func (ts *TestSequence) AssertDelegatorRewards(
 	period uint32,
 	expectedReward *big.Int,
 ) *TestSequence {
-	reward, err := ts.Staker.GetDelegatorRewards(validationID, period)
+	reward, err := ts.GetDelegatorRewards(validationID, period)
 	assert.NoError(ts.t, err, "failed to get rewards for validator %s at period %d: %v", validationID.String(), period, err)
 	assert.Equal(ts.t, expectedReward, reward, "reward mismatch for validator %s at period %d", validationID.String(), period)
 	return ts
@@ -443,7 +458,7 @@ func (ts *TestSequence) AssertCompletedPeriods(
 }
 
 func (ts *TestSequence) AssertTotals(validationID thor.Address, expected *validation.Totals) *TestSequence {
-	totals, err := ts.Staker.GetValidationTotals(validationID)
+	totals, err := ts.GetValidationTotals(validationID)
 	assert.NoError(ts.t, err, "failed to get totals for validator %s", validationID.String())
 
 	// exiting
@@ -501,7 +516,7 @@ func (ts *TestSequence) AssertTotals(validationID thor.Address, expected *valida
 }
 
 func (ts *TestSequence) AssertGlobalWithdrawable(expected uint64) *TestSequence {
-	withdrawable, err := ts.Staker.globalStatsService.GetWithdrawableStake()
+	withdrawable, err := ts.globalStatsService.GetWithdrawableStake()
 	assert.NoError(ts.t, err, "failed to get global withdrawable")
 
 	assert.Equal(ts.t, expected, withdrawable, "total withdrawable mismatch")
@@ -510,7 +525,7 @@ func (ts *TestSequence) AssertGlobalWithdrawable(expected uint64) *TestSequence 
 }
 
 func (ts *TestSequence) AssertGlobalCooldown(expected uint64) *TestSequence {
-	cooldown, err := ts.Staker.globalStatsService.GetCooldownStake()
+	cooldown, err := ts.globalStatsService.GetCooldownStake()
 	assert.NoError(ts.t, err, "failed to get global cooldown")
 
 	assert.Equal(ts.t, expected, cooldown, "total cooldown mismatch")
@@ -521,7 +536,7 @@ func (ts *TestSequence) AssertGlobalCooldown(expected uint64) *TestSequence {
 func (ts *TestSequence) ActivateNext(block uint32) *TestSequence {
 	mbp, err := ts.Staker.params.Get(thor.KeyMaxBlockProposers)
 	assert.NoError(ts.t, err, "failed to get max block proposers")
-	_, err = ts.Staker.activateNextValidation(block, mbp.Uint64())
+	_, err = ts.activateNextValidation(block, mbp.Uint64())
 	assert.NoError(ts.t, err, "failed to activate next validator at block %d", block)
 	return ts
 }
@@ -529,7 +544,7 @@ func (ts *TestSequence) ActivateNext(block uint32) *TestSequence {
 func (ts *TestSequence) ActivateNextErrors(block uint32, errMsg string) *TestSequence {
 	mbp, err := ts.Staker.params.Get(thor.KeyMaxBlockProposers)
 	assert.NoError(ts.t, err, "failed to get max block proposers")
-	_, err = ts.Staker.activateNextValidation(block, mbp.Uint64())
+	_, err = ts.activateNextValidation(block, mbp.Uint64())
 	assert.NotNil(ts.t, err, "expected error when activating next validator at block %d", block)
 	assert.ErrorContains(ts.t, err, errMsg, "expected error message when activating next validator at block %d", block)
 	return ts
@@ -542,7 +557,7 @@ func (ts *TestSequence) Housekeep(block uint32) *TestSequence {
 }
 
 func (ts *TestSequence) Transition(block uint32) *TestSequence {
-	_, err := ts.Staker.transition(block)
+	_, err := ts.transition(block)
 	assert.NoError(ts.t, err, "failed to transition at block %d", block)
 	return ts
 }
@@ -554,16 +569,16 @@ func (ts *TestSequence) IncreaseDelegatorsReward(node thor.Address, reward *big.
 
 // ExitValidator manually exits a validator, skipping the housekeeping part
 func (ts *TestSequence) ExitValidator(node thor.Address) *TestSequence {
-	exit, err := ts.Staker.validationService.ExitValidator(node)
+	exit, err := ts.validationService.ExitValidator(node)
 	assert.NoError(ts.t, err, "failed to exit validator %s", node.String())
-	aggExit, err := ts.Staker.aggregationService.Exit(node)
+	aggExit, err := ts.aggregationService.Exit(node)
 	assert.NoError(ts.t, err, "failed to exit aggregation for validator %s", node.String())
-	assert.NoError(ts.t, ts.Staker.globalStatsService.ApplyExit(exit, aggExit))
+	assert.NoError(ts.t, ts.globalStatsService.ApplyExit(exit, aggExit))
 	return ts
 }
 
 func (ts *TestSequence) ExitValidatorErrors(node thor.Address, errMsg string) *TestSequence {
-	_, err := ts.Staker.validationService.ExitValidator(node)
+	_, err := ts.validationService.ExitValidator(node)
 	assert.NotNil(ts.t, err, "expected error when exiting validator %s", node.String())
 	assert.ErrorContains(ts.t, err, errMsg, "expected error message when exiting validator %s", node.String())
 	return ts

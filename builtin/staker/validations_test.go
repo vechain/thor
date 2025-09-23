@@ -678,7 +678,7 @@ func TestStaker_LeaderGroup(t *testing.T) {
 		test.ActivateNext(0)
 	}
 
-	leaderGroup, err := test.Staker.LeaderGroup()
+	leaderGroup, err := test.LeaderGroup()
 	assert.NoError(t, err)
 
 	leaders := make(map[thor.Address]bool)
@@ -746,7 +746,7 @@ func TestStaker_Initialise(t *testing.T) {
 		test.AddValidation(datagen.RandAddress(), datagen.RandAddress(), thor.MediumStakingPeriod(), MinStakeVET)
 	}
 
-	transitioned, err := test.Staker.transition(0)
+	transitioned, err := test.transition(0)
 	assert.NoError(t, err) // should succeed
 	assert.True(t, transitioned)
 	// should be able to add validations after initialisation
@@ -757,7 +757,7 @@ func TestStaker_Initialise(t *testing.T) {
 	assert.False(t, first.IsZero())
 
 	expectedLength := uint64(101)
-	length, err := test.Staker.validationService.LeaderGroupSize()
+	length, err := test.validationService.LeaderGroupSize()
 	assert.NoError(t, err)
 	assert.Equal(t, expectedLength, length)
 }
