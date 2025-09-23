@@ -65,6 +65,9 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 		Mount(router, "/accounts")
 
 	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute}, &forks)
+
+	addTransactionToPool(t, mempool, thorChain.Repo().ChainTag())
+
 	transactions.New(thorChain.Repo(), mempool).Mount(router, "/transactions")
 
 	blocks.New(thorChain.Repo(), thorChain.Engine()).Mount(router, "/blocks")
@@ -84,7 +87,7 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 			MaxLifetime:     10 * time.Minute,
 		}, &thor.NoFork),
 	)
-	node.New(communicator, mempool, false).Mount(router, "/node")
+	node.New(communicator, mempool, true).Mount(router, "/node")
 
 	fees.New(thorChain.Repo(), thorChain.Engine(), thorChain.GetForkConfig(), thorChain.Stater(), fees.Config{
 		APIBacktraceLimit:          6,
@@ -140,6 +143,27 @@ func mintTransactions(t *testing.T, thorChain *testchain.Chain) {
 
 	dynFeeTx = tx.MustSign(dynFeeTx, genesis.DevAccounts()[0].PrivateKey)
 	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], dynFeeTx))
+}
+
+func addTransactionToPool(t *testing.T, mempool *txpool.TxPool, chainTag byte) {
+	toAddr := datagen.RandAddress()
+
+	cla := tx.NewClause(&toAddr).WithValue(big.NewInt(10000))
+	testTx := tx.NewBuilder(tx.TypeLegacy).
+		ChainTag(chainTag).
+		GasPriceCoef(1).
+		Expiration(10).
+		Gas(21000).
+		Nonce(1).
+		Clause(cla).
+		BlockRef(tx.NewBlockRef(0)).
+		Build()
+
+	testTx = tx.MustSign(testTx, genesis.DevAccounts()[0].PrivateKey)
+
+	// Add transaction to the pool
+	err := mempool.Add(testTx)
+	require.NoError(t, err)
 }
 
 func TestAPIs(t *testing.T) {
@@ -431,6 +455,54 @@ func testNodeEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) {
 	t.Run("GetPeersStats", func(t *testing.T) {
 		_, err := c.Peers()
 		require.NoError(t, err)
+	})
+
+	// 2. Test GET /node/txpool
+	t.Run("GetTxPool", func(t *testing.T) {
+		// Test with transaction IDs only
+		result, err := c.TxPool(false, nil)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		txIDs, ok := result.([]thor.Bytes32)
+		require.True(t, ok, "Expected []thor.Bytes32, got %T", result)
+		require.GreaterOrEqual(t, len(txIDs), 1, "Expected at leastone transaction in pool")
+
+		// Test with expanded transactions
+		result, err = c.TxPool(true, nil)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		txs, ok := result.([]transactions.Transaction)
+		require.True(t, ok, "Expected []transactions.Transaction, got %T", result)
+		require.GreaterOrEqual(t, len(txs), 1, "Expected at least one transaction in pool")
+
+		// Test with origin filter
+		origin := genesis.DevAccounts()[0].Address
+		result, err = c.TxPool(false, &origin)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		txIDsFiltered, ok := result.([]thor.Bytes32)
+		require.True(t, ok, "Expected []thor.Bytes32, got %T", result)
+		require.GreaterOrEqual(t, len(txIDsFiltered), 1, "Expected non-negative length")
+
+		// Origin does not exist
+		origin = thor.MustParseAddress("0x0123456789abcdef0123456789abcdef01234567")
+		result, err = c.TxPool(false, &origin)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		txIDsFilteredNoOrigin, ok := result.([]thor.Bytes32)
+		require.True(t, ok, "Expected []thor.Bytes32, got %T", result)
+		require.Equal(t, len(txIDsFilteredNoOrigin), 0, "No tx expected")
+	})
+
+	// 3. Test GET /node/txpool/status
+	t.Run("GetTxPoolStatus", func(t *testing.T) {
+		status, err := c.TxPoolStatus()
+		require.NoError(t, err)
+		require.NotNil(t, status)
+		require.True(t, status.Amount >= 1 && status.Amount <= 2, "Expected 1 or 2 transactions, got %d", status.Amount)
 	})
 }
 
