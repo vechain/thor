@@ -62,7 +62,7 @@ func TestSyncPOS_TransitionBlock_NotActive(t *testing.T) {
 }
 
 func TestSyncPOS_TransitionBlock_WithValidators(t *testing.T) {
-	staker, _ := newStakerV2(t, 0, 3, false)
+	staker := newTest(t).SetMBP(3)
 
 	validator1 := thor.BytesToAddress([]byte("validator1"))
 	endorser1 := thor.BytesToAddress([]byte("endorser1"))
@@ -109,7 +109,7 @@ func TestSyncPOS_TransitionBlock_ZeroTransitionPeriod(t *testing.T) {
 }
 
 func TestSyncPOS_AlreadyActive_NoTransition(t *testing.T) {
-	staker, _ := newStakerV2(t, 0, 3, false)
+	staker := newTest(t).SetMBP(3)
 
 	validator1 := thor.BytesToAddress([]byte("validator1"))
 	endorser1 := thor.BytesToAddress([]byte("endorser1"))
@@ -221,7 +221,7 @@ func TestSyncPOS_TransitionError(t *testing.T) {
 }
 
 func TestSyncPOS_HousekeepError(t *testing.T) {
-	staker, _ := newStakerV2(t, 0, 3, false)
+	staker := newTest(t).SetMBP(3)
 
 	validator1 := thor.BytesToAddress([]byte("validator1"))
 	endorser1 := thor.BytesToAddress([]byte("endorser1"))
