@@ -64,7 +64,11 @@ func init() {
 	}
 	versionLine := regexp.MustCompile(`(?m)^(.*)RESTful API to access VechainThor Network.*$`)
 	s := string(content)
-	s = versionLine.ReplaceAllString(s, "${1}RESTful API to access VechainThor Network\n${1}\n${1}Build git commit: "+gitCommit)
+	versionMeta := "release"
+	if gitTag == "" {
+		versionMeta = "dev"
+	}
+	s = versionLine.ReplaceAllString(s, "${1}RESTful API to access VechainThor Network\n${1}\n${1}Build version: "+gitCommit+"-"+versionMeta)
 	doc.Thoryaml = []byte(s)
 }
 
