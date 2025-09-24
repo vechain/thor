@@ -93,14 +93,12 @@ func (s *Service) ApplyExit(validation *Exit, aggregation *Exit) error {
 	if err := s.RemoveLocked(totalExited); err != nil {
 		return err
 	}
-
-	// all queued VET will be moved to withdrawable
-	// this pertains both validations and aggregations queued stake
-	if validation.QueuedDecrease+aggregation.QueuedDecrease > 0 {
-		if err := s.RemoveQueued(validation.QueuedDecrease + aggregation.QueuedDecrease); err != nil {
-			return err
-		}
-		if err := s.AddWithdrawable(validation.QueuedDecrease + aggregation.QueuedDecrease); err != nil {
+	// all queued VET will be moved from queued to withdrawable, this pertains both validations and
+	// aggregations queued stake, since it was never locked, just queued, can be withdrawn directly
+	queuedDecrease := validation.QueuedDecrease + aggregation.QueuedDecrease
+	withdrawableIncrease := queuedDecrease
+	if queuedDecrease > 0 {
+		if err := s.RemoveQueued(queuedDecrease); err != nil {
 			return err
 		}
 	}
@@ -113,7 +111,8 @@ func (s *Service) ApplyExit(validation *Exit, aggregation *Exit) error {
 	}
 
 	// move aggregation's exiting to withdrawable
-	if aggregation.ExitedTVL.VET > 0 {
+	withdrawableIncrease += aggregation.ExitedTVL.VET
+	if withdrawableIncrease > 0 {
 		if err := s.AddWithdrawable(aggregation.ExitedTVL.VET); err != nil {
 			return err
 		}
