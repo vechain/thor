@@ -112,8 +112,8 @@ func (s *Service) ApplyExit(validation *Exit, aggregation *Exit) error {
 		}
 	}
 
-	// Both queued (val + del) stakes and exited validations are now withdrawable
-	// exited validations do not go on cooldown
+	// Both queued (val + del) stakes and exited delegations are now withdrawable
+	// exited delegations do not go on cooldown
 	withdrawableIncrease := queuedDecrease + aggregation.ExitedTVL.VET
 	if withdrawableIncrease > 0 {
 		if err := s.AddWithdrawable(withdrawableIncrease); err != nil {
