@@ -155,19 +155,27 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 	accumulatedRenewal := globalstats.NewRenewal()
 	// Apply renewals
 	for _, validator := range transition.Renewals {
+		// handle the renewals for aggregations
 		aggRenewal, delegationWeight, err := s.aggregationService.Renew(validator)
 		if err != nil {
 			return err
 		}
-		accumulatedRenewal.Add(aggRenewal)
+		accumulatedRenewal, err = accumulatedRenewal.Add(aggRenewal)
+		if err != nil {
+			return err
+		}
+
 		// Update validator state
 		valRenewal, err := s.validationService.Renew(validator, delegationWeight)
 		if err != nil {
 			return err
 		}
-		accumulatedRenewal.Add(valRenewal)
+		accumulatedRenewal, err = accumulatedRenewal.Add(valRenewal)
+		if err != nil {
+			return err
+		}
 
-		if err := s.validationService.RemoveFromRenewalList(validator); err != nil {
+		if err = s.validationService.RemoveFromRenewalList(validator); err != nil {
 			return err
 		}
 	}
@@ -308,7 +316,7 @@ func (s *Staker) ContractBalanceCheck(pendingWithdraw uint64) error {
 			"cooldown", cooldownStake,
 			"pendingWithdraw", pendingWithdraw,
 			"total", total,
-			"balance", balance,
+			"balance", balanceVET,
 		)
 		return fmt.Errorf(
 			"sanity check failed: locked(%d) + queued(%d) + withdrawable(%d) = %d, but account balance is %d, diff= %d",

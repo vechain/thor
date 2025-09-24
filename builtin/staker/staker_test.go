@@ -864,3 +864,100 @@ func TestDelegation_SignalExit_Empty(t *testing.T) {
 
 	assert.ErrorContains(t, staker.SignalDelegationExit(big.NewInt(2), 10), "delegation is empty")
 }
+
+func Test_AddDelegation_WhileValidatorExiting(t *testing.T) {
+	staker, _ := newStaker(t, 3, 3, true)
+
+	first, err := staker.FirstActive()
+	assert.NoError(t, err)
+	val, err := staker.GetValidation(first)
+	assert.NoError(t, err)
+
+	_, err = staker.AddDelegation(first, 10_000, 150, 10)
+	assert.NoError(t, err)
+
+	assert.NoError(t, staker.SignalExit(first, val.Endorser, 20))
+
+	_, err = staker.AddDelegation(first, 10_000, 150, 10)
+	assert.ErrorContains(t, err, "cannot add delegation to exiting validator")
+
+	_, err = staker.Housekeep(val.Period)
+	assert.NoError(t, err)
+}
+
+// Add a check to avoid delegations to be added to exitting validators
+// Add the Queued Aggregations AND Validations Stake in the housekeep
+func Test_Increase_WhileValidatorExiting(t *testing.T) {
+	staker, _ := newStaker(t, 3, 3, true)
+
+	first, err := staker.FirstActive()
+	assert.NoError(t, err)
+	val, err := staker.GetValidation(first)
+	assert.NoError(t, err)
+
+	// add before validator signals exit, should be okay
+	err = staker.IncreaseStake(first, val.Endorser, 10_000)
+	assert.NoError(t, err)
+
+	assert.NoError(t, staker.SignalExit(first, val.Endorser, 20))
+
+	// add before validator signals exit, should be okay
+	err = staker.IncreaseStake(first, val.Endorser, 10_000)
+	assert.NoError(t, err)
+
+	// housekeep should clean up the queued delegation
+	_, err = staker.Housekeep(val.Period)
+	assert.NoError(t, err)
+
+	// housekeep should clean up the queued delegation
+	_, err = staker.Housekeep(val.Period + val.Period)
+	assert.NoError(t, err)
+}
+
+func Test_WithdrawDelegation_before_SignalExit(t *testing.T) {
+	staker, _ := newStaker(t, 3, 3, true)
+
+	first, err := staker.FirstActive()
+	assert.NoError(t, err)
+	val, err := staker.GetValidation(first)
+	assert.NoError(t, err)
+
+	delID, err := staker.AddDelegation(first, 10_000, 150, 10)
+	assert.NoError(t, err)
+
+	delStake, err := staker.WithdrawDelegation(delID, 15)
+	assert.NoError(t, err)
+	assert.Equal(t, delStake, uint64(10_000))
+
+	assert.NoError(t, staker.SignalExit(first, val.Endorser, 20))
+
+	_, err = staker.AddDelegation(first, 10_000, 150, 10)
+	assert.ErrorContains(t, err, "cannot add delegation to exiting validator")
+
+	_, err = staker.Housekeep(val.Period)
+	assert.NoError(t, err)
+}
+
+func Test_WithdrawDelegation_after_SignalExit(t *testing.T) {
+	staker, _ := newStaker(t, 3, 3, true)
+
+	first, err := staker.FirstActive()
+	assert.NoError(t, err)
+	val, err := staker.GetValidation(first)
+	assert.NoError(t, err)
+
+	delID, err := staker.AddDelegation(first, 10_000, 150, 10)
+	assert.NoError(t, err)
+
+	assert.NoError(t, staker.SignalExit(first, val.Endorser, 20))
+
+	delStake, err := staker.WithdrawDelegation(delID, 15)
+	assert.NoError(t, err)
+	assert.Equal(t, delStake, uint64(10_000))
+
+	_, err = staker.AddDelegation(first, 10_000, 150, 10)
+	assert.ErrorContains(t, err, "cannot add delegation to exiting validator")
+
+	_, err = staker.Housekeep(val.Period)
+	assert.NoError(t, err)
+}

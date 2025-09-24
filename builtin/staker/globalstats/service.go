@@ -94,8 +94,15 @@ func (s *Service) ApplyExit(validation *Exit, aggregation *Exit) error {
 		return err
 	}
 
-	if err := s.RemoveQueued(validation.QueuedDecrease + aggregation.QueuedDecrease); err != nil {
-		return err
+	// all queued VET will be moved to withdrawable
+	// this pertains both validations and aggregations queued stake
+	if validation.QueuedDecrease+aggregation.QueuedDecrease > 0 {
+		if err := s.RemoveQueued(validation.QueuedDecrease + aggregation.QueuedDecrease); err != nil {
+			return err
+		}
+		if err := s.AddWithdrawable(validation.QueuedDecrease + aggregation.QueuedDecrease); err != nil {
+			return err
+		}
 	}
 
 	// move validation's exiting to cooldown
