@@ -89,6 +89,12 @@ func StartAPIServer(
 	router := mux.NewRouter()
 
 	// to serve stoplight, swagger and api docs
+	router.Path("/doc/thor.yaml").HandlerFunc(
+		func(w http.ResponseWriter, req *http.Request) {
+			w.Header().Set("Content-Type", "application/x-yaml")
+			w.Write(doc.ThorYaml)
+		})
+
 	router.PathPrefix("/doc").Handler(
 		http.StripPrefix("/doc/", http.FileServer(http.FS(doc.FS))),
 	)
