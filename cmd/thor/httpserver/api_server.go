@@ -92,7 +92,7 @@ func StartAPIServer(
 	router.Path("/doc/thor.yaml").HandlerFunc(
 		func(w http.ResponseWriter, req *http.Request) {
 			w.Header().Set("Content-Type", "application/x-yaml")
-			w.Write(doc.ThorYaml)
+			w.Write(doc.Thoryaml)
 		})
 
 	router.PathPrefix("/doc").Handler(
