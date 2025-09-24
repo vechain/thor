@@ -519,10 +519,6 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 		Caller(endorser).
 		Assert(t)
 
-	test.Case("signalExit", validator1).
-		Caller(endorser).
-		Assert(t)
-
 	// change switch to pause nothing
 	builtin.Params.Native(state).Set(thor.KeyStakerSwitches, big.NewInt(0b00))
 
@@ -531,6 +527,11 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 	test.Case("addDelegation", validator1, uint8(100)).
 		Value(minStake).
 		Caller(delegator).
+		Assert(t)
+
+	// cannot add delegation after the signal validation exit
+	test.Case("signalExit", validator1).
+		Caller(endorser).
 		Assert(t)
 
 	// withdraw delegation2 on exited validator3

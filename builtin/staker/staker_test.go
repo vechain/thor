@@ -903,7 +903,7 @@ func Test_Increase_WhileValidatorExiting(t *testing.T) {
 
 	// add after validator signals exit, should fail
 	err = staker.IncreaseStake(first, val.Endorser, 10_000)
-	assert.NoError(t, err)
+	assert.Error(t, err)
 
 	// housekeep should clean up the queued delegation
 	_, err = staker.Housekeep(val.Period)
