@@ -11,6 +11,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/pkg/errors"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/consensus"
@@ -85,7 +86,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 			return errParentMissing
 		}
 
-		var ctx = &blockExecContext{
+		ctx := &blockExecContext{
 			prevBest:  n.repo.BestBlockSummary().Header,
 			newBlock:  newBlock,
 			conflicts: conflicts,
@@ -222,7 +223,6 @@ func (n *Node) postBlockProcessing(newBlock *block.Block, conflicts uint32) {
 				blockNum >= n.forkConfig.HAYABUSA+thor.HayabusaTP() &&
 				// if transition period are set to 0, transition will attempt to happen on every block
 				(thor.HayabusaTP() == 0 || (blockNum-n.forkConfig.HAYABUSA)%thor.HayabusaTP() == 0) {
-
 				summary, err := n.repo.GetBlockSummary(blockID)
 				if err != nil {
 					return err

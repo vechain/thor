@@ -12,7 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/pkg/errors"
 
-	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -21,14 +20,6 @@ import (
 
 // gasLimitSoftLimit is the soft limit of the adaptive block gaslimit.
 const gasLimitSoftLimit uint64 = 40_000_000
-
-type packContext struct {
-	flow       *packer.Flow
-	conflicts  uint32
-	startTime  mclock.AbsTime
-	logEnabled bool
-	oldBest    *chain.BlockSummary
-}
 
 func (n *Node) packerLoop(ctx context.Context) {
 	logger.Debug("enter packer loop")
@@ -127,7 +118,7 @@ func (n *Node) doPack(flow *packer.Flow) error {
 
 func (n *Node) proposeAndCommit(flow *packer.Flow, txsToRemove *[]*tx.Transaction) error {
 	return n.guardBlockProcessing(flow.Number(), func(conflicts uint32) error {
-		var ctx = &blockExecContext{
+		ctx := &blockExecContext{
 			prevBest:   n.repo.BestBlockSummary().Header,
 			conflicts:  conflicts,
 			startTime:  mclock.Now(),
