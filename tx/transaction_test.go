@@ -614,3 +614,180 @@ func TestEffectivePriorityFeePerGas(t *testing.T) {
 	// should be the maxPriorityFeePerGas
 	assert.Equal(t, effectivePriorityFeePerGas, new(big.Int).Sub(trx.MaxFeePerGas(), baseFee))
 }
+
+func TestHashCoverage(t *testing.T) {
+	for _, txType := range []Type{TypeLegacy, TypeDynamicFee} {
+		trx := GetMockTx(txType)
+		hash := trx.Hash()
+		assert.NotEqual(t, thor.Bytes32{}, hash)
+	}
+}
+
+func TestClausesCoverage(t *testing.T) {
+	trx := GetMockTx(TypeLegacy)
+	clauses := trx.Clauses()
+	assert.NotNil(t, clauses)
+	assert.Greater(t, len(clauses), 0)
+}
+
+func TestDependsOnNilBranch(t *testing.T) {
+	trx := NewBuilder(TypeLegacy).Build()
+	assert.Nil(t, trx.DependsOn())
+}
+
+func TestOriginErrorBranch(t *testing.T) {
+	trx := GetMockTx(TypeLegacy)
+	// Set an invalid signature length
+	trx = trx.WithSignature([]byte{1, 2, 3})
+	_, err := trx.Origin()
+	assert.Error(t, err)
+}
+
+func TestDelegatorErrorBranch(t *testing.T) {
+	trx := GetMockTx(TypeLegacy)
+	// Set an invalid signature length
+	trx = trx.WithSignature([]byte{1, 2, 3})
+	_, err := trx.Delegator()
+	assert.Error(t, err)
+}
+
+func TestFeaturesError(t *testing.T) {
+	trx := GetMockTx(TypeLegacy)
+	// Unsupported features
+	err := trx.TestFeatures(Features(0))
+	assert.Error(t, err)
+	body := trx.body.copy()
+	reserved := body.reserved()
+	reserved.Unused = append(reserved.Unused, []byte{1, 2, 3})
+}
+
+func TestGasPriceCoefNonLegacy(t *testing.T) {
+	trx := GetMockTx(TypeDynamicFee)
+	assert.Equal(t, uint8(0), trx.GasPriceCoef())
+}
+
+func TestProvedWorkUnprovedWorkNonLegacy(t *testing.T) {
+	trx := GetMockTx(TypeDynamicFee)
+	pw, err := trx.ProvedWork(0, func(uint32) (thor.Bytes32, error) { return thor.Bytes32{}, nil })
+	assert.NoError(t, err)
+	assert.Equal(t, &big.Int{}, pw)
+	assert.Equal(t, &big.Int{}, trx.UnprovedWork())
+}
+
+func TestProvedWorkError(t *testing.T) {
+	trx := NewBuilder(TypeLegacy).BlockRef(BlockRef{0, 0, 0, 0, 0, 0, 0, 0}).Build()
+	_, err := trx.ProvedWork(1, func(uint32) (thor.Bytes32, error) { return thor.Bytes32{}, assert.AnError })
+	assert.Error(t, err)
+}
+
+func TestUnprovedWorkError(t *testing.T) {
+	trx := GetMockTx(TypeLegacy)
+	// Set an invalid signature to cause Origin() error
+	trx = trx.WithSignature([]byte{1, 2, 3})
+	assert.Equal(t, &big.Int{}, trx.UnprovedWork())
+}
+
+func TestIDAndSizeCacheHit(t *testing.T) {
+	trx := GetMockTx(TypeLegacy)
+	id := trx.ID() // populate cache
+	assert.Equal(t, trx.ID(), id)
+	id = trx.ID() // hit cache
+	assert.Equal(t, trx.ID(), id)
+	size := trx.Size() // populate cache
+	assert.Equal(t, trx.Size(), size)
+	size = trx.Size() // hit cache
+	assert.Equal(t, trx.Size(), size)
+}
+
+func TestDecodeTypedError(t *testing.T) {
+	trx := &Transaction{}
+	// TypeDynamicFee with invalid data (too short)
+	b := append([]byte{TypeDynamicFee}, 0x01)
+	_, err := trx.decodeTyped(b)
+	assert.Error(t, err)
+}
+
+func TestDecodeRLP(t *testing.T) {
+	trx := &Transaction{}
+	s := rlp.NewStream(bytes.NewReader([]byte{0xFF}), 0)
+	err := trx.DecodeRLP(s)
+	assert.Error(t, err)
+
+	buf := bytes.NewBuffer([]byte{0x01, 0x02, 0x03})
+	s = rlp.NewStream(buf, 0)
+	err = trx.DecodeRLP(s)
+	assert.Error(t, err)
+}
+
+func TestProvedWork_EarlyReturns(t *testing.T) {
+	trx := NewBuilder(TypeLegacy).BlockRef(BlockRef{0, 0, 0, 0, 0, 0, 0, 10}).Build()
+	// refNum >= headBlockNum
+	pw, err := trx.ProvedWork(10, func(uint32) (thor.Bytes32, error) { return thor.Bytes32{}, nil })
+	assert.NoError(t, err)
+	assert.Equal(t, &big.Int{}, pw)
+	// delay > MaxTxWorkDelay
+	pw, err = trx.ProvedWork(1000, func(uint32) (thor.Bytes32, error) { return thor.Bytes32{}, nil })
+	assert.NoError(t, err)
+	assert.Equal(t, &big.Int{}, pw)
+	// !HasPrefix
+	trx = NewBuilder(TypeLegacy).BlockRef(BlockRef{0, 0, 0, 0, 0, 0, 0, 1}).Build()
+	pw, err = trx.ProvedWork(2, func(uint32) (thor.Bytes32, error) { return thor.Bytes32{2}, nil })
+	assert.NoError(t, err)
+	assert.Equal(t, &big.Int{}, pw)
+}
+
+func TestUnprovedWork_CacheHit(t *testing.T) {
+	trx := GetMockTx(TypeLegacy)
+	_ = trx.UnprovedWork()       // populate cache
+	cached := trx.UnprovedWork() // hit cache
+	assert.NotNil(t, cached)
+}
+
+func TestFeatures_UnusedReservedSlot(t *testing.T) {
+	trx := GetMockTx(TypeLegacy)
+	// Use reflection to set Unused
+	body := reflect.ValueOf(trx.body)
+	reservedField := body.Elem().FieldByName("Reserved")
+	if reservedField.IsValid() && reservedField.CanSet() {
+		reserved := reservedField.Interface().(reserved)
+		reserved.Unused = append(reserved.Unused, []byte{1, 2, 3})
+		reservedField.Set(reflect.ValueOf(reserved))
+		err := trx.TestFeatures(trx.Features())
+		assert.Error(t, err)
+	}
+}
+
+func TestOverallGasPrice_NonLegacy(t *testing.T) {
+	trx := GetMockTx(TypeDynamicFee)
+	maxFee := trx.MaxFeePerGas()
+	assert.Equal(t, maxFee, trx.OverallGasPrice(nil, nil))
+}
+
+func TestHash_CacheHit(t *testing.T) {
+	trx := GetMockTx(TypeLegacy)
+	_ = trx.Hash()       // populate cache
+	cached := trx.Hash() // hit cache
+	assert.NotNil(t, cached)
+}
+
+func TestUnprovedWork_TypeDynamicFee(t *testing.T) {
+	trx := GetMockTx(TypeDynamicFee)
+	w := trx.UnprovedWork()
+	assert.Equal(t, &big.Int{}, w)
+}
+
+func TestDecodeTyped_ErrorFromBodyDecode2(t *testing.T) {
+	trx := &Transaction{}
+	// TypeDynamicFee with invalid data (simulate error from decode)
+	b := append([]byte{TypeDynamicFee}, 0x01)
+	_, err := trx.decodeTyped(b)
+	assert.Error(t, err)
+}
+
+func TestOverallGasPrice_LegacyWithProvedWork(t *testing.T) {
+	trx := GetMockTx(TypeLegacy)
+	baseGasPrice := big.NewInt(1000)
+	provedWork := big.NewInt(1000)
+	res := trx.OverallGasPrice(baseGasPrice, provedWork)
+	assert.NotNil(t, res)
+}

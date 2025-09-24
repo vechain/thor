@@ -6,6 +6,8 @@ info:
     RESTful API to access VechainThor Network
     
     [Project Home](https://github.com/vechain/thor)
+
+    Build version: {{GIT_VERSION}}
     
     ⚠️ <b>Note:</b> The examples given in this specification are optimized for mainnet. 
 
