@@ -63,7 +63,12 @@ type Staker struct {
 }
 
 // New create a new instance.
-func New(addr thor.Address, state *state.State, params *params.Params, charger *gascharger.Charger) *Staker {
+func New(
+	addr thor.Address,
+	state *state.State,
+	params *params.Params,
+	charger *gascharger.Charger,
+) *Staker {
 	sctx := solidity.NewContext(addr, state, charger)
 
 	return &Staker{
