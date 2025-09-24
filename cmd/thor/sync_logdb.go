@@ -11,6 +11,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	goruntime "runtime"
+	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/pmezard/go-difflib/difflib"
@@ -44,7 +47,7 @@ func syncLogDB(ctx context.Context, repo *chain.Repository, logDB *logdb.LogDB, 
 	}
 
 	if startPos == 0 {
-		fmt.Println(">> Rebuilding log db <<")
+		fmt.Println(">> Rebuilding log db <<", time.Now().String())
 		startPos = 1 // block 0 can be skipped
 	} else {
 		fmt.Println(">> Syncing log db <<")
@@ -57,11 +60,75 @@ func syncLogDB(ctx context.Context, repo *chain.Repository, logDB *logdb.LogDB, 
 
 	defer func() { pb.NotPrint = true }()
 
-	w := logDB.NewWriterSyncOff()
-	defer w.Close()
+	// Create multiple log writers for parallel processing
+	numWorkers := goruntime.NumCPU()
+	if numWorkers > 16 {
+		numWorkers = 16 // Cap at 8 workers to avoid too many connections
+	}
+	if numWorkers < 1 {
+		numWorkers = 1
+	}
 
-	if err := w.Truncate(startPos); err != nil {
-		return err
+	fmt.Printf("Using %d workers for parallel log writing\n", numWorkers)
+
+	// Create worker pool for log writing
+	type logTask struct {
+		block    *block.Block
+		receipts tx.Receipts
+	}
+
+	logTasks := make(chan logTask, 1000)
+	var wg sync.WaitGroup
+	var writeErrors []error
+	var mu sync.Mutex
+
+	// Start log writing workers with separate connections
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+
+			// Create separate database connection for this worker
+			workerLogDB, err := logdb.New(logDB.Path())
+			if err != nil {
+				writeErrors = append(writeErrors, fmt.Errorf("worker %d conn error: %v", workerID, err))
+			}
+			defer workerLogDB.Close()
+
+			w := workerLogDB.NewWriterSyncOff()
+
+			uncommittedCount := 0
+			const commitInterval = 100
+
+			for task := range logTasks {
+				if err := w.Write(task.block, task.receipts); err != nil {
+					mu.Lock()
+					writeErrors = append(writeErrors, fmt.Errorf("worker %d error: %v", workerID, err))
+					mu.Unlock()
+					continue
+				}
+
+				uncommittedCount++
+
+				if uncommittedCount >= commitInterval {
+					if err := w.Commit(); err != nil {
+						mu.Lock()
+						writeErrors = append(writeErrors, fmt.Errorf("worker %d commit error: %v", workerID, err))
+						mu.Unlock()
+					}
+					uncommittedCount = 0
+				}
+			}
+
+			// Final commit
+			if uncommittedCount > 0 {
+				if err := w.Commit(); err != nil {
+					mu.Lock()
+					writeErrors = append(writeErrors, fmt.Errorf("worker %d final commit error: %v", workerID, err))
+					mu.Unlock()
+				}
+			}
+		}(i)
 	}
 
 	var (
@@ -80,34 +147,43 @@ func syncLogDB(ctx context.Context, repo *chain.Repository, logDB *logdb.LogDB, 
 
 	defer cancel()
 
+	// Process blocks and send to workers
 	for b := range ch {
 		receipts, err := repo.GetBlockReceipts(b.Header().ID())
 		if err != nil {
+			close(logTasks)
+			wg.Wait()
 			return err
 		}
-		if err := w.Write(b, receipts); err != nil {
-			return err
-		}
-		if w.UncommittedCount() > 2048 {
-			if err := w.Commit(); err != nil {
-				return err
-			}
-		}
+
 		select {
+		case logTasks <- logTask{block: b, receipts: receipts}:
+			pb.Increment()
 		case <-ctx.Done():
-			if err := w.Commit(); err != nil {
-				return err
-			}
+			close(logTasks)
+			wg.Wait()
 			return ctx.Err()
-		default:
 		}
-		pb.Add64(1)
 	}
-	if err := w.Commit(); err != nil {
-		return err
+
+	close(logTasks)
+	wg.Wait()
+
+	// Check for write errors
+	if len(writeErrors) > 0 {
+		return fmt.Errorf("log writing errors: %v", writeErrors)
 	}
+
+	if pumpErr != nil {
+		return pumpErr
+	}
+
+	// Remove the problematic lines - they're not needed for sync
+	// if b != nil && stats.processed > 0 {
+	//     report(b)
+	// }
 	pb.Finish()
-	return pumpErr
+	return nil
 }
 
 func seekLogDBSyncPosition(repo *chain.Repository, logDB *logdb.LogDB) (uint32, error) {
