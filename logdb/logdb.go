@@ -37,7 +37,16 @@ type LogDB struct {
 
 // New create or open log db at given path.
 func New(path string) (logDB *LogDB, err error) {
-	db, err := sql.Open("sqlite3", path+"?_journal=wal&cache=shared")
+	db, err := sql.Open("sqlite3", path+strings.Join([]string{
+		"?_journal=wal",
+		"cache=shared",
+		"synchronous=off", // Critical for sync speed
+		"temp_store=memory",
+		"mmap_size=268435456",
+		"page_size=4096",
+		"auto_vacuum=none", // Disable during sync
+		"wal_autocheckpoint=500",
+	}, "&"))
 	if err != nil {
 		return nil, err
 	}
@@ -60,6 +69,16 @@ func New(path string) (logDB *LogDB, err error) {
 	if err != nil {
 		return nil, err
 	}
+
+	db.Exec("PRAGMA journal_mode=WAL")
+	db.Exec("PRAGMA synchronous=OFF")
+	db.Exec("PRAGMA cache_size=100000")
+	db.Exec("PRAGMA temp_store=memory")
+	db.Exec("PRAGMA mmap_size=268435456")
+	db.Exec("PRAGMA page_size=4096")
+	db.Exec("PRAGMA auto_vacuum=none")
+	db.Exec("PRAGMA wal_autocheckpoint=500") // Checkpoint every 500 pages
+	db.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
 
 	if _, err := wconn2.ExecContext(context.Background(), "pragma synchronous=off"); err != nil {
 		return nil, err
@@ -640,7 +659,16 @@ func (w *Writer) getPartitionDatabase(partitionName string) *sql.DB {
 	partitionPath := filepath.Join(filepath.Dir(w.db.Path()), partitionName+".db")
 	println("DEBUG: Creating new partition %s at %s", partitionName, partitionPath)
 
-	db, err := sql.Open("sqlite3", partitionPath+"?_journal=wal&cache=shared")
+	db, err := sql.Open("sqlite3", partitionPath+strings.Join([]string{
+		"?_journal=wal",
+		"cache=shared",
+		"synchronous=off", // Critical for sync speed
+		"temp_store=memory",
+		"mmap_size=268435456",
+		"page_size=4096",
+		"auto_vacuum=none", // Disable during sync
+		"wal_autocheckpoint=500",
+	}, "&"))
 	if err != nil {
 		println("ERROR: Failed to create partition %s: %v", partitionName, err)
 		panic(fmt.Sprintf("Failed to create partition %s: %v", partitionName, err))
@@ -648,6 +676,16 @@ func (w *Writer) getPartitionDatabase(partitionName string) *sql.DB {
 
 	// Initialize schema
 	schema := refTableScheme + eventTableSchema + transferTableSchema
+
+	db.Exec("PRAGMA journal_mode=WAL")
+	db.Exec("PRAGMA synchronous=OFF")
+	db.Exec("PRAGMA cache_size=100000")
+	db.Exec("PRAGMA temp_store=memory")
+	db.Exec("PRAGMA mmap_size=268435456")
+	db.Exec("PRAGMA page_size=4096")
+	db.Exec("PRAGMA auto_vacuum=none")
+	db.Exec("PRAGMA wal_autocheckpoint=500") // Checkpoint every 500 pages
+	db.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
 	if _, err := db.Exec(schema); err != nil {
 		println("ERROR: Failed to initialize partition schema %s: %v", partitionName, err)
 		db.Close()
@@ -921,12 +959,15 @@ func (w *Writer) createPartition(partitionName string) *sql.DB {
 	partitionPath := filepath.Join(filepath.Dir(w.db.Path()), partitionName+".db")
 
 	// Optimize settings for write-heavy workloads
-	db, err := sql.Open("sqlite3", partitionPath+"?"+strings.Join([]string{
-		"_journal=wal",
+	db, err := sql.Open("sqlite3", partitionPath+strings.Join([]string{
+		"?_journal=wal",
 		"cache=shared",
-		"synchronous=normal",
+		"synchronous=off", // Critical for sync speed
 		"temp_store=memory",
 		"mmap_size=268435456",
+		"page_size=4096",
+		"auto_vacuum=none", // Disable during sync
+		"wal_autocheckpoint=500",
 	}, "&"))
 
 	if err != nil {
@@ -935,9 +976,14 @@ func (w *Writer) createPartition(partitionName string) *sql.DB {
 
 	// Set additional pragmas
 	db.Exec("PRAGMA journal_mode=WAL")
-	db.Exec("PRAGMA synchronous=normal")
-	db.Exec("PRAGMA cache_size=10000")
+	db.Exec("PRAGMA synchronous=OFF")
+	db.Exec("PRAGMA cache_size=100000")
 	db.Exec("PRAGMA temp_store=memory")
+	db.Exec("PRAGMA mmap_size=268435456")
+	db.Exec("PRAGMA page_size=4096")
+	db.Exec("PRAGMA auto_vacuum=none")
+	db.Exec("PRAGMA wal_autocheckpoint=500") // Checkpoint every 500 pages
+	db.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
 
 	// Initialize schema - THIS IS THE KEY FIX
 	schema := refTableScheme + eventTableSchema + transferTableSchema
