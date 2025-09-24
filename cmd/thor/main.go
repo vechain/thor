@@ -60,12 +60,10 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	var versionLine = regexp.MustCompile(`(?m)^(.*)version:.*$`)
+	versionLine := regexp.MustCompile(`(?m)^(.*)version:.*$`)
 	s := string(content)
 	s = versionLine.ReplaceAllString(s, "${1}version: "+version+"-"+gitCommit)
-
-	doc.ThorYaml = []byte(s)
-
+	doc.Thoryaml = []byte(s)
 }
 
 func fullVersion() string {
