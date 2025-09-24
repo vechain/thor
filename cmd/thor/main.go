@@ -11,7 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -60,13 +60,12 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	versionLine := regexp.MustCompile(`(?m)^(.*)RESTful API to access VechainThor Network.*$`)
 	s := string(content)
 	versionMeta := "release"
 	if gitTag == "" {
 		versionMeta = "dev"
 	}
-	s = versionLine.ReplaceAllString(s, "${1}RESTful API to access VechainThor Network\n${1}\n${1}Build version: "+gitCommit+"-"+versionMeta)
+	s = strings.Replace(s, "{{GIT_VERSION}}", gitCommit+"-"+versionMeta, 1)
 	doc.Thoryaml = []byte(s)
 }
 
