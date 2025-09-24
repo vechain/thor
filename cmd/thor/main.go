@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 	"github.com/pkg/errors"
 	"gopkg.in/urfave/cli.v1"
 
+	"github.com/vechain/thor/v2/api/doc"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/cmd/thor/httpserver"
 	"github.com/vechain/thor/v2/cmd/thor/node"
@@ -54,6 +56,20 @@ var (
 		MaxLifetime:     20 * time.Minute,
 	}
 )
+
+func init() {
+	content, err := doc.FS.ReadFile("thor.yaml")
+	if err != nil {
+		panic(err)
+	}
+	s := string(content)
+	versionMeta := "release"
+	if gitTag == "" {
+		versionMeta = "dev"
+	}
+	s = strings.Replace(s, "{{GIT_VERSION}}", gitCommit+"-"+versionMeta, 1)
+	doc.Thoryaml = []byte(s)
+}
 
 func fullVersion() string {
 	versionMeta := "release"
