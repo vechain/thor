@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"fmt"
 	"math/big"
+	"strings"
 
 	sqlite3 "github.com/mattn/go-sqlite3"
 
@@ -33,7 +34,17 @@ type LogDB struct {
 
 // New create or open log db at given path.
 func New(path string) (logDB *LogDB, err error) {
-	db, err := sql.Open("sqlite3", path+"?_journal=wal&cache=shared")
+	db, err := sql.Open("sqlite3", path+strings.Join([]string{
+		"?_journal=wal",
+		"cache=shared",
+		"synchronous=off", // Critical for sync speed
+		"temp_store=memory",
+		"mmap_size=268435456",
+		"page_size=4096",
+		"auto_vacuum=none", // Disable during sync
+		"wal_autocheckpoint=500",
+	}, "&"))
+
 	if err != nil {
 		return nil, err
 	}
@@ -42,6 +53,16 @@ func New(path string) (logDB *LogDB, err error) {
 			_ = db.Close()
 		}
 	}()
+
+	db.Exec("PRAGMA journal_mode=WAL")
+	db.Exec("PRAGMA synchronous=OFF")
+	db.Exec("PRAGMA cache_size=100000")
+	db.Exec("PRAGMA temp_store=memory")
+	db.Exec("PRAGMA mmap_size=268435456")
+	db.Exec("PRAGMA page_size=4096")
+	db.Exec("PRAGMA auto_vacuum=none")
+	db.Exec("PRAGMA wal_autocheckpoint=500") // Checkpoint every 500 pages
+	db.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
 
 	if _, err := db.Exec(refTableScheme + eventTableSchema + transferTableSchema); err != nil {
 		return nil, err
