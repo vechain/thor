@@ -521,6 +521,11 @@ func (s *Staker) AddDelegation(
 		return nil, NewReverts("validation is not queued or active")
 	}
 
+	// delegations cannot be added to a validator that has signaled to exit
+	if val.ExitBlock != nil {
+		return nil, NewReverts("cannot add delegation to exiting validator")
+	}
+
 	// validate that new TVL is <= Max stake
 	if err = s.validateStakeIncrease(validator, val, stake); err != nil {
 		return nil, err
