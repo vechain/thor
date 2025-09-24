@@ -901,7 +901,7 @@ func Test_Increase_WhileValidatorExiting(t *testing.T) {
 
 	assert.NoError(t, staker.SignalExit(first, val.Endorser, 20))
 
-	// add before validator signals exit, should be okay
+	// add after validator signals exit, should fail
 	err = staker.IncreaseStake(first, val.Endorser, 10_000)
 	assert.NoError(t, err)
 
