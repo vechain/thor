@@ -105,70 +105,69 @@ func (n *Node) packerLoop(ctx context.Context) {
 }
 
 func (n *Node) doPack(flow *packer.Flow) error {
-	var txsToRemove []*tx.Transaction
-
-	err := n.proposeAndCommit(flow, &txsToRemove)
-	if err == nil {
-		cleanupTransactions(txsToRemove, n.txPool)
-	}
+	err := n.guardBlockProcessing(flow.Number(), func(conflicts uint32) error {
+		return n.proposeAndCommit(flow, conflicts)
+	})
 	updatePackMetrics(err == nil)
 
 	return err
 }
 
-func (n *Node) proposeAndCommit(flow *packer.Flow, txsToRemove *[]*tx.Transaction) error {
-	return n.guardBlockProcessing(flow.Number(), func(conflicts uint32) error {
-		ctx := &blockExecContext{
-			prevBest:   n.repo.BestBlockSummary().Header,
-			conflicts:  conflicts,
-			startTime:  mclock.Now(),
-			stats:      &blockStats{},
-			packing:    true,
-			becomeBest: true,
+func (n *Node) proposeAndCommit(flow *packer.Flow, conflicts uint32) (err error) {
+	var txsToRemove []*tx.Transaction
+	defer func() {
+		if err == nil {
+			cleanupTransactions(txsToRemove, n.txPool)
 		}
+	}()
 
-		txs := n.txPool.Executables()
-		// adopt txs
-		for _, tx := range txs {
-			if err := flow.Adopt(tx); err != nil {
-				if packer.IsGasLimitReached(err) {
-					break
-				}
-				if packer.IsTxNotAdoptableNow(err) {
-					continue
-				}
-				*txsToRemove = append(*txsToRemove, tx)
+	ctx := &blockExecContext{
+		prevBest:   n.repo.BestBlockSummary().Header,
+		conflicts:  conflicts,
+		startTime:  mclock.Now(),
+		stats:      &blockStats{},
+		packing:    true,
+		becomeBest: true,
+	}
+
+	txs := n.txPool.Executables()
+	// adopt txs
+	for _, tx := range txs {
+		if err := flow.Adopt(tx); err != nil {
+			if packer.IsGasLimitReached(err) {
+				break
 			}
-		}
-
-		var (
-			shouldVote bool
-			err        error
-		)
-		if flow.Number() >= n.forkConfig.FINALITY {
-			shouldVote, err = n.bft.ShouldVote(flow.ParentHeader().ID())
-			if err != nil {
-				return errors.Wrap(err, "get vote")
+			if packer.IsTxNotAdoptableNow(err) {
+				continue
 			}
+			txsToRemove = append(txsToRemove, tx)
 		}
+	}
 
-		// pack the new block
-		ctx.newBlock, ctx.stage, ctx.receipts, err = flow.Pack(n.master.PrivateKey, conflicts, shouldVote)
+	var shouldVote bool
+	if flow.Number() >= n.forkConfig.FINALITY {
+		shouldVote, err = n.bft.ShouldVote(flow.ParentHeader().ID())
 		if err != nil {
-			return errors.Wrap(err, "failed to pack block")
+			return errors.Wrap(err, "get vote")
 		}
+	}
 
-		err = n.commitBlock(ctx)
-		if err != nil {
-			return err
-		}
+	// pack the new block
+	ctx.newBlock, ctx.stage, ctx.receipts, err = flow.Pack(n.master.PrivateKey, conflicts, shouldVote)
+	if err != nil {
+		return errors.Wrap(err, "failed to pack block")
+	}
 
-		n.comm.BroadcastBlock(ctx.newBlock)
-		logger.Info("📦 new block packed", ctx.stats.LogContext(ctx.newBlock.Header())...)
-		n.postBlockProcessing(ctx.newBlock, ctx.conflicts)
+	err = n.commitBlock(ctx)
+	if err != nil {
+		return err
+	}
 
-		return nil
-	})
+	n.comm.BroadcastBlock(ctx.newBlock)
+	logger.Info("📦 new block packed", ctx.stats.LogContext(ctx.newBlock.Header())...)
+	n.postBlockProcessing(ctx.newBlock, ctx.conflicts)
+
+	return nil
 }
 
 func cleanupTransactions(txsToRemove []*tx.Transaction, txPool *txpool.TxPool) {

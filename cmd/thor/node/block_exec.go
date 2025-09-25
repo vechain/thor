@@ -66,67 +66,10 @@ func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts uint
 func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, error) {
 	var isTrunk bool
 
-	if err := n.guardBlockProcessing(newBlock.Header().Number(), func(conflicts uint32) error {
-		// Check whether the block was already there.
-		// It can be skipped if no conflicts.
-		if conflicts > 0 {
-			if _, err := n.repo.GetBlockSummary(newBlock.Header().ID()); err != nil {
-				if !n.repo.IsNotFound(err) {
-					return err
-				}
-			} else {
-				return errKnownBlock
-			}
-		}
-		parentSummary, err := n.repo.GetBlockSummary(newBlock.Header().ParentID())
-		if err != nil {
-			if !n.repo.IsNotFound(err) {
-				return err
-			}
-			return errParentMissing
-		}
-
-		ctx := &blockExecContext{
-			prevBest:  n.repo.BestBlockSummary().Header,
-			newBlock:  newBlock,
-			conflicts: conflicts,
-			startTime: mclock.Now(),
-			stats:     stats,
-		}
-
-		// reject the block if the parent is conflicting with finalized checkpoint
-		if ok, err := n.bft.Accepts(newBlock.Header().ParentID()); err != nil {
-			return errors.Wrap(err, "bft accepts")
-		} else if !ok {
-			return errBFTRejected
-		}
-
-		// process the new block
-		ctx.stage, ctx.receipts, err = n.cons.Process(parentSummary, newBlock, uint64(time.Now().Unix()), conflicts)
-		if err != nil {
-			return err
-		}
-
-		// let bft engine decide the best block after fork FINALITY
-		if newBlock.Header().Number() >= n.forkConfig.FINALITY && ctx.prevBest.Number() >= n.forkConfig.FINALITY {
-			ctx.becomeBest, err = n.bft.Select(newBlock.Header())
-			if err != nil {
-				return errors.Wrap(err, "bft select")
-			}
-		} else {
-			ctx.becomeBest = newBlock.Header().BetterThan(ctx.prevBest)
-		}
-
-		if err := n.commitBlock(ctx); err != nil {
-			return err
-		}
-
-		isTrunk = ctx.becomeBest
-		// run post block processing hook when no error
-		n.postBlockProcessing(ctx.newBlock, ctx.conflicts)
-
-		return nil
-	}); err != nil {
+	err := n.guardBlockProcessing(newBlock.Header().Number(), func(conflicts uint32) error {
+		return n.executeAndCommitBlock(newBlock, stats, conflicts, &isTrunk)
+	})
+	if err != nil {
 		switch {
 		case err == errKnownBlock:
 			stats.UpdateIgnored(1)
@@ -147,6 +90,68 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 	}
 	metricBlockProcessedCount().AddWithLabel(1, map[string]string{"type": "received", "success": "true"})
 	return isTrunk, nil
+}
+
+func (n *Node) executeAndCommitBlock(newBlock *block.Block, stats *blockStats, conflicts uint32, isTrunk *bool) error {
+	// Check whether the block was already there.
+	// It can be skipped if no conflicts.
+	if conflicts > 0 {
+		if _, err := n.repo.GetBlockSummary(newBlock.Header().ID()); err != nil {
+			if !n.repo.IsNotFound(err) {
+				return err
+			}
+		} else {
+			return errKnownBlock
+		}
+	}
+	parentSummary, err := n.repo.GetBlockSummary(newBlock.Header().ParentID())
+	if err != nil {
+		if !n.repo.IsNotFound(err) {
+			return err
+		}
+		return errParentMissing
+	}
+
+	ctx := &blockExecContext{
+		prevBest:  n.repo.BestBlockSummary().Header,
+		newBlock:  newBlock,
+		conflicts: conflicts,
+		startTime: mclock.Now(),
+		stats:     stats,
+	}
+
+	// reject the block if the parent is conflicting with finalized checkpoint
+	if ok, err := n.bft.Accepts(newBlock.Header().ParentID()); err != nil {
+		return errors.Wrap(err, "bft accepts")
+	} else if !ok {
+		return errBFTRejected
+	}
+
+	// process the new block
+	ctx.stage, ctx.receipts, err = n.cons.Process(parentSummary, newBlock, uint64(time.Now().Unix()), conflicts)
+	if err != nil {
+		return err
+	}
+
+	// let bft engine decide the best block after fork FINALITY
+	if newBlock.Header().Number() >= n.forkConfig.FINALITY && ctx.prevBest.Number() >= n.forkConfig.FINALITY {
+		ctx.becomeBest, err = n.bft.Select(newBlock.Header())
+		if err != nil {
+			return errors.Wrap(err, "bft select")
+		}
+	} else {
+		ctx.becomeBest = newBlock.Header().BetterThan(ctx.prevBest)
+	}
+
+	if err := n.commitBlock(ctx); err != nil {
+		return err
+	}
+
+	*isTrunk = ctx.becomeBest
+	// run post block processing hook when no error
+	n.postBlockProcessing(ctx.newBlock, ctx.conflicts)
+
+	return nil
 }
 
 func (n *Node) commitBlock(ctx *blockExecContext) error {
