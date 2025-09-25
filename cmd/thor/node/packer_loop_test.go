@@ -7,7 +7,6 @@ package node
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -20,10 +19,8 @@ import (
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/txpool"
 
-	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/thor"
@@ -119,7 +116,7 @@ func TestPack(t *testing.T) {
 
 	time.Sleep(1100 * time.Millisecond)
 
-	err = n.pack(flow)
+	err = n.doPack(flow)
 	assert.NoError(t, err)
 }
 
@@ -128,7 +125,7 @@ func TestCleanupTransactions(t *testing.T) {
 	var txsToRemove []*tx.Transaction
 
 	assert.NotPanics(t, func() {
-		n.cleanupTransactions(txsToRemove)
+		cleanupTransactions(txsToRemove, n.txPool)
 	})
 }
 
@@ -149,177 +146,15 @@ func TestUpdatePackMetrics(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			n := &Node{}
+			_ = &Node{}
 
 			for range 3 {
 				assert.NotPanics(t, func() {
-					n.updatePackMetrics(tt.success)
+					updatePackMetrics(tt.success)
 				})
 			}
 		})
 	}
-}
-
-func TestPackContext(t *testing.T) {
-	flow := &packer.Flow{}
-	oldBest := &chain.BlockSummary{}
-
-	ctx := &packContext{
-		flow:       flow,
-		conflicts:  0,
-		startTime:  mclock.Now(),
-		logEnabled: true,
-		oldBest:    oldBest,
-	}
-
-	assert.NotNil(t, ctx)
-	assert.Equal(t, flow, ctx.flow)
-	assert.Equal(t, uint32(0), ctx.conflicts)
-	assert.True(t, ctx.logEnabled)
-	assert.Equal(t, oldBest, ctx.oldBest)
-}
-
-func TestWriteLogsIfEnabled(t *testing.T) {
-	tests := []struct {
-		name       string
-		logEnabled bool
-	}{
-		{
-			name:       "logs disabled - should return nil",
-			logEnabled: false,
-		},
-	}
-
-	parentID := thor.Bytes32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			n := &Node{}
-
-			ctx := &packContext{
-				logEnabled: tt.logEnabled,
-				oldBest: &chain.BlockSummary{
-					Header: (&block.Builder{}).
-						ParentID(parentID).
-						Build().Header(),
-					Txs:       make([]thor.Bytes32, 0),
-					Size:      0,
-					Conflicts: 0,
-				},
-			}
-
-			newBlock := (&block.Builder{}).
-				ParentID(thor.Bytes32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32}).
-				Timestamp(uint64(time.Now().Unix())).
-				Build()
-			receipts := tx.Receipts{}
-
-			err := n.writeLogsIfEnabled(ctx, newBlock, receipts)
-			assert.NoError(t, err)
-		})
-	}
-}
-
-func TestSyncLogWorker(t *testing.T) {
-	tests := []struct {
-		name       string
-		logEnabled bool
-	}{
-		{
-			name:       "logs disabled",
-			logEnabled: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			n := &Node{}
-
-			ctx := &packContext{
-				logEnabled: tt.logEnabled,
-			}
-
-			err := n.syncLogWorker(ctx)
-			assert.NoError(t, err)
-		})
-	}
-}
-
-func TestDetermineVotingRequirement_BeforeFinality(t *testing.T) {
-	flow, n := getFlowAndNode(t, nil)
-
-	n.forkConfig = &thor.ForkConfig{FINALITY: 1000}
-
-	shouldVote, err := n.determineVotingRequirement(flow)
-
-	assert.NoError(t, err)
-	assert.False(t, shouldVote)
-}
-
-func TestProcessPackedBlock_WriteLogsError(t *testing.T) {
-	flow, n := getFlowAndNode(t, nil)
-
-	ctx := &packContext{
-		flow:       flow,
-		conflicts:  0,
-		startTime:  mclock.Now(),
-		logEnabled: true,
-		oldBest:    n.repo.BestBlockSummary(),
-	}
-
-	newBlock := (&block.Builder{}).
-		ParentID(thor.Bytes32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32}).
-		Timestamp(uint64(time.Now().Unix())).
-		Build()
-	receipts := tx.Receipts{}
-
-	n.logDBFailed = true
-
-	stage := &state.Stage{}
-
-	err := n.processPackedBlock(ctx, newBlock, stage, receipts)
-
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "write logs")
-}
-
-func TestCommitToBFT_BeforeFinality(t *testing.T) {
-	forkConfig := thor.SoloFork
-	forkConfig.FINALITY = 1000
-	_, n := getFlowAndNode(t, &forkConfig)
-
-	newBlock := (&block.Builder{}).
-		ParentID(n.repo.BestBlockSummary().Header.ID()).
-		Timestamp(uint64(time.Now().Unix())).
-		Build()
-
-	err := n.commitToBFT(newBlock)
-
-	assert.NoError(t, err)
-	assert.Nil(t, err)
-}
-
-func TestSyncLogWorker_SyncLogWorkerFail(t *testing.T) {
-	flow, n := getFlowAndNode(t, nil)
-
-	ctx := &packContext{
-		flow:       flow,
-		conflicts:  0,
-		startTime:  mclock.Now(),
-		logEnabled: true,
-		oldBest:    n.repo.BestBlockSummary(),
-	}
-
-	assert.False(t, n.logDBFailed)
-
-	n.logWorker.Run(func() error {
-		return fmt.Errorf("error")
-	})
-
-	err := n.syncLogWorker(ctx)
-	assert.NoError(t, err)
-
-	assert.True(t, n.logDBFailed)
 }
 
 func TestCleanupTransactions_WithTransactions(t *testing.T) {
@@ -354,7 +189,7 @@ func TestCleanupTransactions_WithTransactions(t *testing.T) {
 
 	txsToRemove := transactions[:2]
 
-	n.cleanupTransactions(txsToRemove)
+	cleanupTransactions(txsToRemove, n.txPool)
 
 	assert.Equal(t, 1, n.txPool.Len())
 
