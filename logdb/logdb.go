@@ -9,9 +9,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"math/big"
-
 	sqlite3 "github.com/mattn/go-sqlite3"
+	"math/big"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
@@ -33,7 +32,7 @@ type LogDB struct {
 
 // New create or open log db at given path.
 func New(path string) (logDB *LogDB, err error) {
-	db, err := sql.Open("sqlite3", path+"?_journal=wal&cache=shared")
+	db, err := sql.Open("sqlite3", path+"?cache=shared")
 	if err != nil {
 		return nil, err
 	}
@@ -52,12 +51,19 @@ func New(path string) (logDB *LogDB, err error) {
 		return nil, err
 	}
 
+	if _, err := wconn1.ExecContext(context.Background(), "PRAGMA journal_mode=WAL"); err != nil {
+		return nil, err
+	}
+
 	wconn2, err := db.Conn(context.Background())
 	if err != nil {
 		return nil, err
 	}
 
-	if _, err := wconn2.ExecContext(context.Background(), "pragma synchronous=off"); err != nil {
+	if _, err := wconn2.ExecContext(context.Background(), "PRAGMA journal_mode=MEMORY"); err != nil {
+		return nil, err
+	}
+	if _, err := wconn2.ExecContext(context.Background(), "PRAGMA synchronous=OFF"); err != nil {
 		return nil, err
 	}
 
@@ -657,4 +663,38 @@ func (w *Writer) exec(query string, args ...any) (err error) {
 	}
 	w.uncommittedCount++
 	return nil
+}
+
+func (w *Writer) ExecuteJournalWalModeSwitch() error {
+	_, err := w.conn.ExecContext(context.Background(), "PRAGMA journal_mode=WAL")
+	return err
+}
+
+func (w *Writer) CreateIndexes() error {
+	if w.tx == nil {
+		var err error
+		if w.tx, err = w.conn.BeginTx(context.Background(), nil); err != nil {
+			return err
+		}
+	}
+
+	indexes := []string{
+		`CREATE INDEX IF NOT EXISTS event_i0 ON event(address)`,
+		`CREATE INDEX IF NOT EXISTS event_i1 ON event(topic0, address)`,
+		`CREATE INDEX IF NOT EXISTS event_i2 ON event(topic1, topic0, address) WHERE topic1 IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS event_i3 ON event(topic2, topic0, address) WHERE topic2 IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS event_i4 ON event(topic3, topic0, address) WHERE topic3 IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS transfer_i0 ON transfer(txOrigin)`,
+		`CREATE INDEX IF NOT EXISTS transfer_i1 ON transfer(sender)`,
+		`CREATE INDEX IF NOT EXISTS transfer_i2 ON transfer(recipient)`,
+	}
+
+	for _, query := range indexes {
+		if err := w.exec(query); err != nil {
+			return err
+		}
+	}
+
+	err := w.Commit()
+	return err
 }

@@ -129,7 +129,22 @@ func (n *Node) Run(ctx context.Context) error {
 	n.maxBlockNum = maxBlockNum
 
 	var goes co.Goes
-	goes.Go(func() { n.comm.Sync(ctx, n.handleBlockStream) })
+	goes.Go(func() {
+		n.comm.Sync(ctx, n.handleBlockStream)
+		writer := n.logDB.NewWriter()
+		logger.Info("Sync done, creating indexes")
+		err = writer.CreateIndexes()
+		if err != nil {
+			logger.Error("Error while creating indexes", "err", err)
+			return
+		}
+		err = writer.ExecuteJournalWalModeSwitch()
+		if err != nil {
+			logger.Error("Error while switching journal mode", "err", err)
+			return
+		}
+		logger.Info("Sync done, indexes created, journal mode switched")
+	})
 	goes.Go(func() { n.houseKeeping(ctx) })
 	goes.Go(func() { n.txStashLoop(ctx) })
 	goes.Go(func() { n.packerLoop(ctx) })
