@@ -15,6 +15,8 @@ import (
 //
 //go:embed thor.yaml stoplight-ui swagger-ui icons
 var FS embed.FS
+var Thoryaml []byte
+
 var version string
 
 // Version open api version
