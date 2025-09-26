@@ -98,7 +98,6 @@ func TestNewThorP2P(t *testing.T) {
 				nil,
 				"1.0",
 				tc.maxPeers,
-				123,
 				tc.listenAddr,
 				tc.allowedPeers,
 				tc.cachedPeers,

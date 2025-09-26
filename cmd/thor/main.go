@@ -92,6 +92,7 @@ func main() {
 			jsonLogsFlag,
 			maxPeersFlag,
 			p2pPortFlag,
+			p2pHostFlag,
 			natFlag,
 			bootNodeFlag,
 			allowedPeersFlag,
