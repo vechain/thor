@@ -35,6 +35,17 @@ var (
 	}
 	Staker  = &stakerContract{mustLoadContract("Staker")}
 	Measure = mustLoadContract("Measure")
+
+	// return gas map maintains the builtin contracts that can be made native call cheaper
+	// only the 0.4.24 compiled contracts are allowed to return gas, as the newer compiler
+	// versions have dynamic cost and pattern that is not predictable, any further added new
+	// builtin contract must not be added in this map.
+	returnGas = map[thor.Address]bool{
+		Params.Address:    true,
+		Authority.Address: true,
+		Energy.Address:    true,
+		Executor.Address:  true,
+	}
 )
 
 type (
@@ -108,15 +119,15 @@ type methodKey struct {
 var nativeMethods = make(map[methodKey]*nativeMethod)
 
 // FindNativeCall find native calls.
-func FindNativeCall(to thor.Address, input []byte) (*abi.Method, func(*xenv.Environment) []any, bool) {
+func FindNativeCall(to thor.Address, input []byte) (*abi.Method, func(*xenv.Environment) []any, bool, bool) {
 	methodID, err := abi.ExtractMethodID(input)
 	if err != nil {
-		return nil, nil, false
+		return nil, nil, false, false
 	}
 
 	method := nativeMethods[methodKey{to, methodID}]
 	if method == nil {
-		return nil, nil, false
+		return nil, nil, false, false
 	}
-	return method.abi, method.run, true
+	return method.abi, method.run, true, returnGas[to]
 }

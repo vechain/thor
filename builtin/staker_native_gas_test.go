@@ -369,7 +369,7 @@ func executeNativeFunction(t *testing.T, setup *testSetup, functionName string, 
 
 	// Get the native method implementation
 	methodID := method.ID()
-	nativeMethod, run, found := builtin.FindNativeCall(builtin.Staker.Address, methodID[:])
+	nativeMethod, run, found, _ := builtin.FindNativeCall(builtin.Staker.Address, methodID[:])
 	require.True(t, found, "Native method not found for %s", functionName)
 	require.NotNil(t, nativeMethod, "Native method is nil for %s", functionName)
 

@@ -233,7 +233,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 				return nil, nil, false
 			}
 
-			abi, run, found := builtin.FindNativeCall(thor.Address(contract.Address()), contract.Input)
+			abi, run, found, returnsGas := builtin.FindNativeCall(thor.Address(contract.Address()), contract.Input)
 			if !found {
 				lastNonNativeCallGas = contract.Gas
 				return nil, nil, false
@@ -248,11 +248,13 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 				panic("value transfer not allowed")
 			}
 
-			// here we return call gas and extcodeSize gas for native calls, to make
-			// builtin contract cheap.
-			contract.Gas += nativeCallReturnGas
-			if contract.Gas > lastNonNativeCallGas {
-				panic("serious bug: native call returned gas over consumed")
+			if returnsGas {
+				// here we return call gas and extcodeSize gas for native calls, to make
+				// builtin contract cheap, this only applies to the 0.4.24 complied contracts
+				contract.Gas += nativeCallReturnGas
+				if contract.Gas > lastNonNativeCallGas {
+					panic("serious bug: native call returned gas over consumed")
+				}
 			}
 
 			ret, err := xenv.New(abi, rt.chain, rt.state, rt.ctx, txCtx, evm, contract, clauseIndex).Call(run)
