@@ -768,3 +768,13 @@ func (s *Staker) getValidationOrRevert(valID thor.Address) (*validation.Validati
 	}
 	return val, nil
 }
+
+func (s *Staker) GetEffectiveBalance() (*big.Int, error) {
+	// accessing slot 0 defined in staker.sol
+	val, err := s.state.GetStorage(s.address, thor.Bytes32{})
+	if err != nil {
+		return nil, err
+	}
+
+	return new(big.Int).SetBytes(val.Bytes()), nil
+}

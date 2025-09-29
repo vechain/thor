@@ -5,6 +5,8 @@ uint256 constant DELEGATOR_PAUSED_BIT = 1 << 0;
 uint256 constant STAKER_PAUSED_BIT = 1 << 1;
 
 contract Staker {
+    uint256 effectiveBalance = 0;
+
     event ValidationQueued(
         address indexed validator,
         address indexed endorser,
@@ -48,6 +50,8 @@ contract Staker {
         uint32 period
     ) public payable checkStake(msg.value) stakerNotPaused {
         StakerNative(address(this)).native_addValidation(validator, msg.sender, period, msg.value);
+        effectiveBalance = effectiveBalance + msg.value;
+
         emit ValidationQueued(validator, msg.sender, period, msg.value);
     }
 
@@ -56,6 +60,8 @@ contract Staker {
      */
     function increaseStake(address validator) public payable checkStake(msg.value) stakerNotPaused {
         StakerNative(address(this)).native_increaseStake(validator, msg.sender, msg.value);
+        effectiveBalance = effectiveBalance + msg.value;
+
         emit StakeIncreased(validator, msg.value);
     }
 
@@ -87,6 +93,8 @@ contract Staker {
 
         (bool success, ) = msg.sender.call{value: stake}("");
         require(success, "Transfer failed");
+
+        effectiveBalance = effectiveBalance - stake;
         emit ValidationWithdrawn(validator, stake);
     }
 
@@ -117,6 +125,8 @@ contract Staker {
             msg.value,
             multiplier
         );
+
+        effectiveBalance = effectiveBalance + msg.value;
         emit DelegationAdded(validator, delegationID, msg.value, multiplier);
         return delegationID;
     }
@@ -142,6 +152,8 @@ contract Staker {
 
         emit DelegationWithdrawn(delegationID, stake);
         (bool success, ) = msg.sender.call{value: stake}("");
+
+        effectiveBalance = effectiveBalance - stake;
         require(success, "Transfer failed");
     }
 
