@@ -58,6 +58,7 @@ func TestNativeCallReturnGas(t *testing.T) {
 	assert.Equal(t, uint64(1562), outerGasUsed-innerGasUsed*2)
 }
 
+// make sure every upgraded VM still has the same native call return gas
 func TestNativeCallReturnGasWithLatestVM(t *testing.T) {
 	state := state.New(muxdb.NewMem(), trie.Root{})
 	state.SetCode(builtin.Measure.Address, builtin.Measure.RuntimeBytecodes())
