@@ -44,6 +44,7 @@ var (
 		Params.Address:    true,
 		Authority.Address: true,
 		Energy.Address:    true,
+		Prototype.Address: true,
 		Extension.Address: true,
 	}
 )
