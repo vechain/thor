@@ -32,6 +32,14 @@ func (n *Node) packerLoop(ctx context.Context) {
 	case <-ctx.Done():
 		return
 	case <-n.comm.Synced():
+		n.completingSync = true
+		err := n.completeSync()
+		n.completingSync = false
+		close(n.syncCompleteCh)
+		if err != nil {
+			<-ctx.Done()
+			return
+		}
 	}
 	n.initialSynced = true
 	logger.Info("synchronization process done")
@@ -210,4 +218,25 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 		metricBlockProcessedDuration().Observe(time.Duration(realElapsed).Milliseconds())
 		return newBlock.Header().ID(), nil
 	})
+}
+
+func (n *Node) completeSync() error {
+	writer := n.logDB.NewWriter()
+	logger.Info("Sync done, creating indexes")
+	err := writer.ExecuteJournalWalModeSwitch()
+	if err != nil {
+		logger.Error("Error while switching journal mode", "err", err)
+		return err
+	}
+	err = writer.CreateIndexes()
+	if err != nil {
+		logger.Error("Error while creating indexes", "err", err)
+		return err
+	}
+	if err != nil {
+		logger.Error("Error while switching journal mode", "err", err)
+		return err
+	}
+	logger.Info("Sync done, indexes created, journal mode switched")
+	return nil
 }

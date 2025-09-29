@@ -68,12 +68,14 @@ type Node struct {
 	forkConfig  *thor.ForkConfig
 	options     Options
 
-	logDBFailed   bool
-	initialSynced bool // true if the initial synchronization process is done
-	bandwidth     bandwidth.Bandwidth
-	maxBlockNum   uint32
-	processLock   sync.Mutex
-	logWorker     *worker
+	logDBFailed    bool
+	initialSynced  bool // true if the initial synchronization process is done
+	completingSync bool
+	syncCompleteCh chan struct{}
+	bandwidth      bandwidth.Bandwidth
+	maxBlockNum    uint32
+	processLock    sync.Mutex
+	logWorker      *worker
 }
 
 func New(
@@ -89,18 +91,19 @@ func New(
 	options Options,
 ) *Node {
 	return &Node{
-		packer:      packer.New(repo, stater, master.Address(), master.Beneficiary, forkConfig, options.MinTxPriorityFee),
-		cons:        consensus.New(repo, stater, forkConfig),
-		master:      master,
-		repo:        repo,
-		bft:         bft,
-		stater:      stater,
-		logDB:       logDB,
-		txPool:      txPool,
-		txStashPath: txStashPath,
-		comm:        comm,
-		forkConfig:  forkConfig,
-		options:     options,
+		packer:         packer.New(repo, stater, master.Address(), master.Beneficiary, forkConfig, options.MinTxPriorityFee),
+		cons:           consensus.New(repo, stater, forkConfig),
+		master:         master,
+		repo:           repo,
+		bft:            bft,
+		stater:         stater,
+		logDB:          logDB,
+		txPool:         txPool,
+		txStashPath:    txStashPath,
+		comm:           comm,
+		forkConfig:     forkConfig,
+		options:        options,
+		syncCompleteCh: make(chan struct{}),
 	}
 }
 
@@ -117,7 +120,9 @@ func (n *Node) Run(ctx context.Context) error {
 	n.maxBlockNum = maxBlockNum
 
 	var goes co.Goes
-	goes.Go(func() { n.comm.Sync(ctx, n.handleBlockStream) })
+	goes.Go(func() {
+		n.comm.Sync(ctx, n.handleBlockStream)
+	})
 	goes.Go(func() { n.houseKeeping(ctx) })
 	goes.Go(func() { n.txStashLoop(ctx) })
 	goes.Go(func() { n.packerLoop(ctx) })
@@ -291,6 +296,13 @@ func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts uint
 		blockID   thor.Bytes32
 		conflicts []thor.Bytes32
 	)
+
+	if n.completingSync {
+		n.processLock.Unlock()
+		// Use simple channel receive instead of select with single case
+		<-n.syncCompleteCh
+		n.processLock.Lock()
+	}
 
 	if blockNum > n.maxBlockNum {
 		if blockNum > n.maxBlockNum+1 {
