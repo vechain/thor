@@ -1277,36 +1277,36 @@ func TestExtensionNative(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Equal(t, thor.Bytes32{}.Bytes(), uint8Array[:])
-	assert.Equal(t, uint64(2132), gasUsed)
+	assert.Equal(t, uint64(570), gasUsed)
 
 	gasUsed, err = callContractAndGetOutput(abi, "blockID", toAddr, &uint8Array, big.NewInt(2))
 
 	require.NoError(t, err)
 	require.Equal(t, thor.Bytes32{}.Bytes(), uint8Array[:])
-	assert.Equal(t, uint64(2132), gasUsed)
+	assert.Equal(t, uint64(570), gasUsed)
 
 	gasUsed, err = callContractAndGetOutput(abi, "blockID", toAddr, &uint8Array, big.NewInt(1))
 
 	require.NoError(t, err)
-	assert.Equal(t, uint64(2332), gasUsed)
+	assert.Equal(t, uint64(770), gasUsed)
 	bl, err := thorChain.GetTxBlock(id)
 	require.NoError(t, err)
 	require.Equal(t, bl.Header().ID().Bytes(), uint8Array[:])
 
 	gasUsed, err = callContractAndGetOutput(abi, "blockID", toAddr, &uint8Array, big.NewInt(0))
 	require.NoError(t, err)
-	assert.Equal(t, uint64(2332), gasUsed)
+	assert.Equal(t, uint64(770), gasUsed)
 	require.Equal(t, b0.Header().ID().Bytes(), uint8Array[:])
 
 	var uint64Output uint64
 	gasUsed, err = callContractAndGetOutput(abi, "blockTotalScore", toAddr, &uint64Output, big.NewInt(3))
 	require.NoError(t, err)
-	assert.Equal(t, uint64(2016), gasUsed)
+	assert.Equal(t, uint64(454), gasUsed)
 	require.Equal(t, uint64(0), uint64Output)
 
 	gasUsed, err = callContractAndGetOutput(abi, "blockTotalScore", toAddr, &uint64Output, big.NewInt(2))
 	assert.NoError(t, err)
-	assert.Equal(t, uint64(2016), gasUsed)
+	assert.Equal(t, uint64(454), gasUsed)
 	bl2, err := thorChain.GetTxBlock(id2)
 	require.NoError(t, err)
 	block2, err := thorChain.Repo().GetBlock(bl2.Header().ID())
@@ -1315,7 +1315,7 @@ func TestExtensionNative(t *testing.T) {
 	require.Equal(t, block2.Header().TotalScore(), uint64Output)
 
 	gasUsed, err = callContractAndGetOutput(abi, "blockTotalScore", toAddr, &uint64Output, big.NewInt(1))
-	assert.Equal(t, uint64(2416), gasUsed)
+	assert.Equal(t, uint64(854), gasUsed)
 	assert.NoError(t, err)
 	block1, err := thorChain.Repo().GetBlock(bl.Header().ID())
 
@@ -1325,62 +1325,62 @@ func TestExtensionNative(t *testing.T) {
 	gasUsed, err = callContractAndGetOutput(abi, "blockTotalScore", toAddr, &uint64Output, big.NewInt(0))
 
 	require.NoError(t, err)
-	assert.Equal(t, uint64(2416), gasUsed)
+	assert.Equal(t, uint64(854), gasUsed)
 	require.Equal(t, b0.Header().TotalScore(), uint64Output)
 
 	gasUsed, err = callContractAndGetOutput(abi, "blockTime", toAddr, &bigIntOutput, big.NewInt(3))
 
 	require.NoError(t, err)
-	assert.Equal(t, uint64(1966), gasUsed)
+	assert.Equal(t, uint64(404), gasUsed)
 	require.Equal(t, big.NewInt(0).String(), bigIntOutput.String())
 
 	gasUsed, err = callContractAndGetOutput(abi, "blockTime", toAddr, &bigIntOutput, big.NewInt(2))
 
 	require.NoError(t, err)
-	assert.Equal(t, uint64(1966), gasUsed)
+	assert.Equal(t, uint64(404), gasUsed)
 	require.Equal(t, new(big.Int).SetUint64(block2.Header().Timestamp()), bigIntOutput)
 
 	gasUsed, err = callContractAndGetOutput(abi, "blockTime", toAddr, &bigIntOutput, big.NewInt(1))
 
 	require.NoError(t, err)
-	assert.Equal(t, uint64(2366), gasUsed)
+	assert.Equal(t, uint64(804), gasUsed)
 	require.Equal(t, new(big.Int).SetUint64(block1.Header().Timestamp()), bigIntOutput)
 
 	gasUsed, err = callContractAndGetOutput(abi, "blockTime", toAddr, &bigIntOutput, big.NewInt(0))
 
 	require.NoError(t, err)
-	assert.Equal(t, uint64(2366), gasUsed)
+	assert.Equal(t, uint64(804), gasUsed)
 	require.Equal(t, new(big.Int).SetUint64(b0.Header().Timestamp()), bigIntOutput)
 
 	var addressOutput common.Address
 	gasUsed, err = callContractAndGetOutput(abi, "blockSigner", toAddr, &addressOutput, big.NewInt(3))
 
 	require.NoError(t, err)
-	assert.Equal(t, uint64(1994), gasUsed)
+	assert.Equal(t, uint64(432), gasUsed)
 	require.Equal(t, common.Address{}, addressOutput)
 
 	gasUsed, err = callContractAndGetOutput(abi, "blockSigner", toAddr, &addressOutput, big.NewInt(2))
 
 	require.NoError(t, err)
-	assert.Equal(t, uint64(1994), gasUsed)
+	assert.Equal(t, uint64(432), gasUsed)
 	require.Equal(t, master1.Address.Bytes(), addressOutput.Bytes())
 
 	gasUsed, err = callContractAndGetOutput(abi, "blockSigner", toAddr, &addressOutput, big.NewInt(1))
 
 	require.NoError(t, err)
-	assert.Equal(t, uint64(2394), gasUsed)
+	assert.Equal(t, uint64(832), gasUsed)
 	require.Equal(t, master1.Address.Bytes(), addressOutput.Bytes())
 
 	gasUsed, err = callContractAndGetOutput(abi, "blockSigner", toAddr, &addressOutput, big.NewInt(0))
 
 	require.NoError(t, err)
-	assert.Equal(t, uint64(2394), gasUsed)
+	assert.Equal(t, uint64(832), gasUsed)
 	require.Equal(t, common.Address{}, addressOutput)
 
 	gasUsed, err = callContractAndGetOutput(abi, "txGasPayer", toAddr, &addressOutput)
 
 	require.NoError(t, err)
-	assert.Equal(t, uint64(1934), gasUsed)
+	assert.Equal(t, uint64(372), gasUsed)
 	require.Equal(t, master1.Address.Bytes(), addressOutput.Bytes())
 }
 
