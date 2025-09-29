@@ -7,7 +7,6 @@ package globalstats
 
 import (
 	"errors"
-
 	"github.com/ethereum/go-ethereum/common/math"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
@@ -20,6 +19,7 @@ var (
 	slotQueued       = thor.BytesToBytes32([]byte(("queued-stake")))
 	slotWithdrawable = thor.BytesToBytes32([]byte(("withdrawable-stake")))
 	slotCooldown     = thor.BytesToBytes32([]byte(("cooldown-stake")))
+	slotEffectiveVET = thor.BytesToBytes32([]byte(("effective-vet")))
 )
 
 // Service manages contract-wide staking totals.
@@ -29,6 +29,7 @@ type Service struct {
 	queued       *solidity.Raw[uint64]
 	withdrawable *solidity.Raw[uint64]
 	cooldown     *solidity.Raw[uint64]
+	effectiveVET *solidity.Raw[uint64]
 }
 
 func New(sctx *solidity.Context) *Service {
@@ -37,6 +38,7 @@ func New(sctx *solidity.Context) *Service {
 		queued:       solidity.NewRaw[uint64](sctx, slotQueued),
 		withdrawable: solidity.NewRaw[uint64](sctx, slotWithdrawable),
 		cooldown:     solidity.NewRaw[uint64](sctx, slotCooldown),
+		effectiveVET: solidity.NewRaw[uint64](sctx, slotEffectiveVET),
 	}
 }
 
@@ -249,4 +251,38 @@ func (s *Service) RemoveCooldown(stake uint64) error {
 // GetCooldownStake returns the total VET in cooldown.
 func (s *Service) GetCooldownStake() (uint64, error) {
 	return s.cooldown.Get()
+}
+
+// AddEffectiveVET adds inbound VET to global counter
+func (s *Service) AddEffectiveVET(stake uint64) error {
+	effectiveVET, err := s.effectiveVET.Get()
+	if err != nil {
+		return err
+	}
+
+	effectiveVET, overflow := math.SafeAdd(effectiveVET, stake)
+	if overflow {
+		return errors.New("effectiveVET overflow occurred")
+	}
+	// for the initial state, use upsert to handle correct gas cost
+	return s.effectiveVET.Upsert(effectiveVET)
+}
+
+// RemoveEffectiveVET removes inbound VET to global counter
+func (s *Service) RemoveEffectiveVET(stake uint64) error {
+	effectiveVET, err := s.effectiveVET.Get()
+	if err != nil {
+		return err
+	}
+
+	effectiveVET, underflow := math.SafeSub(effectiveVET, stake)
+	if underflow {
+		return errors.New("effectiveVET underflow occurred")
+	}
+	// cooldown here is already touched by addCooldown
+	return s.cooldown.Update(effectiveVET)
+}
+
+func (s *Service) GetEffectiveVET() (uint64, error) {
+	return s.effectiveVET.Get()
 }

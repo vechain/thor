@@ -249,7 +249,12 @@ func (s *Staker) AddValidation(
 	}
 
 	// update global totals
-	if err := s.globalStatsService.AddQueued(stake); err != nil {
+	if err = s.globalStatsService.AddQueued(stake); err != nil {
+		return err
+	}
+
+	// update effective VET global totals
+	if err = s.globalStatsService.AddEffectiveVET(stake); err != nil {
 		return err
 	}
 
@@ -334,7 +339,12 @@ func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, am
 	}
 
 	// update global queued, use the initial multiplier
-	if err := s.globalStatsService.AddQueued(amount); err != nil {
+	if err = s.globalStatsService.AddQueued(amount); err != nil {
+		return err
+	}
+
+	// update effective VET global totals
+	if err = s.globalStatsService.AddEffectiveVET(amount); err != nil {
 		return err
 	}
 
@@ -459,6 +469,11 @@ func (s *Staker) WithdrawStake(validator thor.Address, endorser thor.Address, cu
 		return 0, errors.New("cooldownVET caused overflow")
 	}
 
+	// update effective VET global totals
+	if err = s.globalStatsService.RemoveEffectiveVET(total); err != nil {
+		return 0, err
+	}
+
 	if err = s.ContractBalanceCheck(total); err != nil {
 		return 0, err
 	}
@@ -556,6 +571,11 @@ func (s *Staker) AddDelegation(
 		if err = s.validationService.AddToRenewalList(validator); err != nil {
 			return nil, err
 		}
+	}
+
+	// update effective VET global totals
+	if err = s.globalStatsService.AddEffectiveVET(stake); err != nil {
+		return nil, err
 	}
 
 	if err = s.ContractBalanceCheck(0); err != nil {
@@ -691,6 +711,11 @@ func (s *Staker) WithdrawDelegation(
 		}
 	}
 
+	// update effective VET global totals
+	if err = s.globalStatsService.RemoveEffectiveVET(withdrawableStake); err != nil {
+		return 0, err
+	}
+
 	if err = s.ContractBalanceCheck(withdrawableStake); err != nil {
 		return 0, err
 	}
@@ -769,12 +794,6 @@ func (s *Staker) getValidationOrRevert(valID thor.Address) (*validation.Validati
 	return val, nil
 }
 
-func (s *Staker) GetEffectiveBalance() (*big.Int, error) {
-	// accessing slot 0 defined in staker.sol
-	val, err := s.state.GetStorage(s.address, thor.Bytes32{})
-	if err != nil {
-		return nil, err
-	}
-
-	return new(big.Int).SetBytes(val.Bytes()), nil
+func (s *Staker) GetEffectiveBalance() (uint64, error) {
+	return s.globalStatsService.GetEffectiveVET()
 }
