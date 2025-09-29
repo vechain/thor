@@ -369,9 +369,10 @@ func executeNativeFunction(t *testing.T, setup *testSetup, functionName string, 
 
 	// Get the native method implementation
 	methodID := method.ID()
-	nativeMethod, run, found, _ := builtin.FindNativeCall(builtin.Staker.Address, methodID[:])
+	nativeMethod, run, found, returnsGas := builtin.FindNativeCall(builtin.Staker.Address, methodID[:])
 	require.True(t, found, "Native method not found for %s", functionName)
 	require.NotNil(t, nativeMethod, "Native method is nil for %s", functionName)
+	require.False(t, returnsGas, "Method %s should marked as return gas", functionName)
 
 	// Execute the native function - this will trigger our test hook
 	result = run(setup.Xenv(nativeMethod))
