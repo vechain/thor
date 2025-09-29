@@ -299,7 +299,6 @@ func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts uint
 
 	if n.completingSync {
 		n.processLock.Unlock()
-		// Use simple channel receive instead of select with single case
 		<-n.syncCompleteCh
 		n.processLock.Lock()
 	}
