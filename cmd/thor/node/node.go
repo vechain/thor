@@ -21,7 +21,6 @@ import (
 
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/bandwidth"
@@ -60,9 +59,20 @@ type SyncConfig struct {
 	syncCompleteCh chan struct{}
 }
 
+// ConsensusEngine defines the interface for consensus processing
+type ConsensusEngine interface {
+	Process(parentSummary *chain.BlockSummary, blk *block.Block, nowTimestamp uint64, blockConflicts uint32) (*state.Stage, tx.Receipts, error)
+}
+
+// PackerEngine defines the interface for packing blocks
+type PackerEngine interface {
+	Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (flow *packer.Flow, posActive bool, err error)
+	SetTargetGasLimit(gl uint64)
+}
+
 type Node struct {
-	packer      *packer.Packer
-	cons        *consensus.Consensus
+	packer      PackerEngine
+	cons        ConsensusEngine
 	master      *Master
 	repo        *chain.Repository
 	bft         *bft.Engine
