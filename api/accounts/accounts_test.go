@@ -728,7 +728,7 @@ func TestRawStorageStaker(t *testing.T) {
 	assert.Equal(t, val.Endorser, validation.Endorser)
 	assert.Nil(t, validation.Beneficiary)
 	assert.Equal(t, uint32(0), validation.CompletedPeriods)
-	assert.Equal(t, uint8(val.Status), uint8(validation.Status))
+	assert.Equal(t, uint8(val.Status), validation.Status)
 	assert.Equal(t, uint32(0), validation.StartBlock)
 	assert.Nil(t, validation.ExitBlock)
 	assert.Nil(t, validation.OfflineBlock)
