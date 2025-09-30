@@ -7,17 +7,15 @@ package node
 
 import (
 	"context"
-	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/pkg/errors"
 
-	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/txpool"
 )
 
 // gasLimitSoftLimit is the soft limit of the adaptive block gaslimit.
@@ -87,7 +85,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			if uint64(time.Now().Unix())+thor.BlockInterval()/2 > flow.When() {
 				// time to pack block
 				// blockInterval/2 early to allow more time for processing txs
-				if err := n.pack(flow); err != nil {
+				if err := n.doPack(flow); err != nil {
 					logger.Error("failed to pack block", "err", err)
 				}
 				break
@@ -116,108 +114,82 @@ func (n *Node) packerLoop(ctx context.Context) {
 	}
 }
 
-func (n *Node) pack(flow *packer.Flow) (err error) {
-	txs := n.txPool.Executables()
+func (n *Node) doPack(flow *packer.Flow) error {
+	err := n.guardBlockProcessing(flow.Number(), func(conflicts uint32) error {
+		return n.proposeAndCommit(flow, conflicts)
+	})
+	updatePackMetrics(err == nil)
+
+	return err
+}
+
+func (n *Node) proposeAndCommit(flow *packer.Flow, conflicts uint32) (err error) {
 	var txsToRemove []*tx.Transaction
 	defer func() {
 		if err == nil {
-			for _, tx := range txsToRemove {
-				n.txPool.Remove(tx.Hash(), tx.ID())
-			}
-			metricBlockProcessedCount().AddWithLabel(1, map[string]string{"type": "proposed", "success": "true"})
-		} else {
-			metricBlockProcessedCount().AddWithLabel(1, map[string]string{"type": "proposed", "success": "false"})
+			cleanupTransactions(txsToRemove, n.txPool)
 		}
 	}()
 
-	return n.guardBlockProcessing(flow.Number(), func(conflicts uint32) (thor.Bytes32, error) {
-		var (
-			startTime  = mclock.Now()
-			logEnabled = !n.options.SkipLogs && !n.logDBFailed
-			oldBest    = n.repo.BestBlockSummary()
-		)
+	ctx := &blockExecContext{
+		prevBest:   n.repo.BestBlockSummary().Header,
+		conflicts:  conflicts,
+		startTime:  mclock.Now(),
+		stats:      &blockStats{},
+		packing:    true,
+		becomeBest: true,
+	}
 
-		// adopt txs
-		for _, tx := range txs {
-			if err := flow.Adopt(tx); err != nil {
-				if packer.IsGasLimitReached(err) {
-					break
-				}
-				if packer.IsTxNotAdoptableNow(err) {
-					continue
-				}
-				txsToRemove = append(txsToRemove, tx)
+	txs := n.txPool.Executables()
+	// adopt txs
+	for _, tx := range txs {
+		if err := flow.Adopt(tx); err != nil {
+			if packer.IsGasLimitReached(err) {
+				break
 			}
-		}
-
-		var shouldVote bool
-		if flow.Number() >= n.forkConfig.FINALITY {
-			var err error
-			shouldVote, err = n.bft.ShouldVote(flow.ParentHeader().ID())
-			if err != nil {
-				return thor.Bytes32{}, errors.Wrap(err, "get vote")
+			if packer.IsTxNotAdoptableNow(err) {
+				continue
 			}
+			txsToRemove = append(txsToRemove, tx)
 		}
+	}
 
-		// pack the new block
-		newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey, conflicts, shouldVote)
+	var shouldVote bool
+	if flow.Number() >= n.forkConfig.FINALITY {
+		shouldVote, err = n.bft.ShouldVote(flow.ParentHeader().ID())
 		if err != nil {
-			return thor.Bytes32{}, errors.Wrap(err, "failed to pack block")
+			return errors.Wrap(err, "get vote")
 		}
-		execElapsed := mclock.Now() - startTime
+	}
 
-		// write logs
-		if logEnabled {
-			if err := n.writeLogs(newBlock, receipts, oldBest.Header.ID()); err != nil {
-				return thor.Bytes32{}, errors.Wrap(err, "write logs")
-			}
-		}
+	// pack the new block
+	ctx.newBlock, ctx.stage, ctx.receipts, err = flow.Pack(n.master.PrivateKey, conflicts, shouldVote)
+	if err != nil {
+		return errors.Wrap(err, "failed to pack block")
+	}
 
-		// commit the state
-		if _, err := stage.Commit(); err != nil {
-			return thor.Bytes32{}, errors.Wrap(err, "commit state")
-		}
+	err = n.commitBlock(ctx)
+	if err != nil {
+		return err
+	}
 
-		// sync the log-writing task
-		if logEnabled {
-			if err := n.logWorker.Sync(); err != nil {
-				log.Warn("failed to write logs", "err", err)
-				n.logDBFailed = true
-			}
-		}
+	n.comm.BroadcastBlock(ctx.newBlock)
+	logger.Info("📦 new block packed", ctx.stats.LogContext(ctx.newBlock.Header())...)
+	n.postBlockProcessing(ctx.newBlock, ctx.conflicts)
 
-		// add the new block into repository
-		if err := n.repo.AddBlock(newBlock, receipts, conflicts, true); err != nil {
-			return thor.Bytes32{}, errors.Wrap(err, "add block")
-		}
+	return nil
+}
 
-		// commit block in bft engine
-		if newBlock.Header().Number() >= n.forkConfig.FINALITY {
-			if err := n.bft.CommitBlock(newBlock.Header(), true); err != nil {
-				return thor.Bytes32{}, errors.Wrap(err, "bft commits")
-			}
-		}
+func cleanupTransactions(txsToRemove []*tx.Transaction, txPool *txpool.TxPool) {
+	for _, tx := range txsToRemove {
+		txPool.Remove(tx.Hash(), tx.ID())
+	}
+}
 
-		realElapsed := mclock.Now() - startTime
-
-		n.processFork(newBlock, oldBest.Header.ID())
-		commitElapsed := mclock.Now() - startTime - execElapsed
-
-		n.comm.BroadcastBlock(newBlock)
-		logger.Info("📦 new block packed",
-			"txs", len(receipts),
-			"mgas", float64(newBlock.Header().GasUsed())/1000/1000,
-			"et", fmt.Sprintf("%v|%v", common.PrettyDuration(execElapsed), common.PrettyDuration(commitElapsed)),
-			"id", shortID(newBlock.Header().ID()),
-		)
-
-		if v, updated := n.bandwidth.Update(newBlock.Header(), time.Duration(realElapsed)); updated {
-			logger.Trace("bandwidth updated", "gps", v)
-		}
-
-		metricBlockProcessedTxs().SetWithLabel(int64(len(receipts)), map[string]string{"type": "proposed"})
-		metricBlockProcessedGas().SetWithLabel(int64(newBlock.Header().GasUsed()), map[string]string{"type": "proposed"})
-		metricBlockProcessedDuration().Observe(time.Duration(realElapsed).Milliseconds())
-		return newBlock.Header().ID(), nil
-	})
+func updatePackMetrics(success bool) {
+	successLabel := "false"
+	if success {
+		successLabel = "true"
+	}
+	metricBlockProcessedCount().AddWithLabel(1, map[string]string{"type": "proposed", "success": successLabel})
 }
