@@ -769,18 +769,13 @@ func (s *Staker) getValidationOrRevert(valID thor.Address) (*validation.Validati
 	return val, nil
 }
 
-// GetEffectiveBalance returns the EffectiveVET in the contract
-func (s *Staker) GetEffectiveBalance() (uint64, error) {
+// GetEffectiveVET returns the EffectiveVET in the contract
+func (s *Staker) GetEffectiveVET() (uint64, error) {
 	// accessing slot 0 defined in staker.sol
 	val, err := s.state.GetStorage(s.address, thor.Bytes32{})
 	if err != nil {
 		return 0, err
 	}
 
-	bi := new(big.Int).SetBytes(val.Bytes())
-	if !bi.IsUint64() {
-		return 0, fmt.Errorf("effective balance overflow: %s does not fit in uint64", bi.String())
-	}
-
-	return bi.Uint64(), nil
+	return ToVET(new(big.Int).SetBytes(val.Bytes())), nil
 }

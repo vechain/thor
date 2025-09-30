@@ -116,6 +116,7 @@ contract Staker {
         delegatorNotPaused
         returns (uint256 delegationID)
     {
+        effectiveVET += msg.value;
         delegationID = StakerNative(address(this)).native_addDelegation(
             validator,
             msg.value,

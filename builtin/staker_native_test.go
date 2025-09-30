@@ -6,6 +6,7 @@
 package builtin_test
 
 import (
+	"fmt"
 	"math/big"
 	"reflect"
 	"testing"
@@ -328,22 +329,56 @@ func toWei(vet uint64) *big.Int {
 	return big.NewInt(0).Mul(big.NewInt(int64(vet)), big.NewInt(1e18))
 }
 
-func increaseStakerBal(state *state.State, vet uint64) {
-	currentBal, err := state.GetBalance(builtin.Staker.Address)
+func increaseStakerBal(state *state.State, amount uint64) {
+	amt := toWei(amount)
+
+	// update effectiveVET tracking
+	effectiveVETBytes, err := state.GetStorage(builtin.Staker.Address, thor.Bytes32{})
 	if err != nil {
 		panic(err)
 	}
-	newBal := big.NewInt(0).Add(currentBal, toWei(vet))
-	state.SetBalance(builtin.Staker.Address, newBal)
+	effectiveVET := new(big.Int).SetBytes(effectiveVETBytes.Bytes())
+	effectiveVET.Add(effectiveVET, amt)
+	state.SetStorage(builtin.Staker.Address, thor.Bytes32{}, thor.BytesToBytes32(effectiveVET.Bytes()))
+
+	// update actual contract balance
+	balance, err := state.GetBalance(builtin.Staker.Address)
+	if err != nil {
+		panic(err)
+	}
+	newBalance := new(big.Int).Add(balance, amt)
+	if err = state.SetBalance(builtin.Staker.Address, newBalance); err != nil {
+		panic(err)
+	}
 }
 
-func decreaseStakerBal(state *state.State, vet uint64) {
-	currentBal, err := state.GetBalance(builtin.Staker.Address)
+func decreaseStakerBal(state *state.State, amount uint64) {
+	amt := toWei(amount)
+
+	// update effectiveVET tracking
+	effectiveVETBytes, err := state.GetStorage(builtin.Staker.Address, thor.Bytes32{})
 	if err != nil {
 		panic(err)
 	}
-	newBal := big.NewInt(0).Sub(currentBal, toWei(vet))
-	state.SetBalance(builtin.Staker.Address, newBal)
+	effectiveVET := new(big.Int).SetBytes(effectiveVETBytes.Bytes())
+	if effectiveVET.Cmp(amt) < 0 {
+		panic(fmt.Errorf("insufficient effectiveVET: have %s, need %d", effectiveVET, amount))
+	}
+	effectiveVET.Sub(effectiveVET, amt)
+	state.SetStorage(builtin.Staker.Address, thor.Bytes32{}, thor.BytesToBytes32(effectiveVET.Bytes()))
+
+	// update actual contract balance
+	balance, err := state.GetBalance(builtin.Staker.Address)
+	if err != nil {
+		panic(err)
+	}
+	if balance.Cmp(amt) < 0 {
+		panic(fmt.Errorf("insufficient balance: have %s, need %d", balance, amount))
+	}
+	newBalance := new(big.Int).Sub(balance, amt)
+	if err = state.SetBalance(builtin.Staker.Address, newBalance); err != nil {
+		panic(err)
+	}
 }
 
 func TestStakerContract_PauseSwitches(t *testing.T) {
@@ -378,15 +413,15 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 
 		stakerNative := builtin.Staker.Native(state)
 		valStake := minStakeVET * 2
-		stakerBal := toWei(valStake)
-		state.SetBalance(builtin.Staker.Address, stakerBal)
+
+		increaseStakerBal(state, valStake)
 		err := stakerNative.AddValidation(validator1, endorser, thor.LowStakingPeriod(), valStake)
 		if err != nil {
 			return err
 		}
 
-		state.SetBalance(builtin.Staker.Address, stakerBal.Add(stakerBal, toWei(minStakeVET)))
 		// add delegation1 to validator1
+		increaseStakerBal(state, minStakeVET)
 		_, err = stakerNative.AddDelegation(validator1, minStakeVET, 100, 10)
 		if err != nil {
 			return err
@@ -525,7 +560,7 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 	test.Case("addValidation", master, thor.LowStakingPeriod()).
 		Value(minStake).
 		Caller(endorser).
-		ShouldUseGas(132571).
+		ShouldUseGas(117571).
 		Assert(t)
 
 	test.Case("increaseStake", validator1).
@@ -552,7 +587,7 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 	test.Case("addDelegation", validator1, uint8(100)).
 		Value(minStake).
 		Caller(delegator).
-		ShouldUseGas(43623).
+		ShouldUseGas(48922).
 		Assert(t)
 
 	// cannot add delegation after the signal validation exit
