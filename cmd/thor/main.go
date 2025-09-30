@@ -28,6 +28,7 @@ import (
 	"github.com/vechain/thor/v2/cmd/thor/node"
 	"github.com/vechain/thor/v2/cmd/thor/pruner"
 	"github.com/vechain/thor/v2/cmd/thor/solo"
+	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
@@ -121,6 +122,7 @@ func main() {
 			txPoolLimitPerAccountFlag,
 			allowedTracersFlag,
 			minEffectivePriorityFeeFlag,
+			wscProviderURLFlag,
 		},
 		Action: defaultAction,
 		Commands: []cli.Command{
@@ -258,7 +260,15 @@ func defaultAction(ctx *cli.Context) error {
 	txPool := txpool.New(repo, state.NewStater(mainDB), txpoolOpt, forkConfig)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
-	p2pCommunicator, err := newP2PCommunicator(ctx, repo, txPool, instanceDir)
+	bftEngine, err := bft.NewEngine(repo, mainDB, forkConfig, master.Address())
+	if err != nil {
+		return errors.Wrap(err, "init bft engine")
+	}
+
+	wscProviderURL := ctx.String(wscProviderURLFlag.Name)
+	wspChecker := comm.NewWeakSubjectivityChecker(repo, bftEngine, wscProviderURL)
+
+	p2pCommunicator, err := newP2PCommunicator(ctx, repo, txPool, wspChecker, instanceDir)
 	if err != nil {
 		return err
 	}
@@ -280,11 +290,6 @@ func defaultAction(ctx *cli.Context) error {
 		}
 		adminURL = url
 		defer func() { log.Info("stopping admin server..."); closeFunc() }()
-	}
-
-	bftEngine, err := bft.NewEngine(repo, mainDB, forkConfig, master.Address())
-	if err != nil {
-		return errors.Wrap(err, "init bft engine")
 	}
 
 	apiURL, srvCloser, err := httpserver.StartAPIServer(
