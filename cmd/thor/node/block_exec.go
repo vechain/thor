@@ -36,6 +36,9 @@ type blockExecContext struct {
 
 // guardBlockProcessing adds lock on block processing and maintains block conflicts.
 func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts uint32) error) (err error) {
+	if n.syncConfig.completingSync {
+		<-n.syncConfig.syncCompleteCh
+	}
 	n.processLock.Lock()
 	defer func() {
 		n.processLock.Unlock()
@@ -221,7 +224,7 @@ func (n *Node) commitBlock(ctx *blockExecContext) error {
 func (n *Node) postBlockProcessing(newBlock *block.Block, conflicts uint32) {
 	if err := func() error {
 		// print welcome info
-		if n.initialSynced {
+		if n.syncConfig.initialSynced {
 			blockNum := newBlock.Header().Number()
 			blockID := newBlock.Header().ID()
 			if needPrintWelcomeInfo() &&
