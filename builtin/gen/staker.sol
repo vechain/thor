@@ -5,6 +5,7 @@ uint256 constant DELEGATOR_PAUSED_BIT = 1 << 0;
 uint256 constant STAKER_PAUSED_BIT = 1 << 1;
 
 contract Staker {
+    uint256 private effectiveVET;
     event ValidationQueued(
         address indexed validator,
         address indexed endorser,
@@ -47,6 +48,7 @@ contract Staker {
         address validator,
         uint32 period
     ) public payable checkStake(msg.value) stakerNotPaused {
+        effectiveVET += msg.value;
         StakerNative(address(this)).native_addValidation(validator, msg.sender, period, msg.value);
         emit ValidationQueued(validator, msg.sender, period, msg.value);
     }
@@ -55,6 +57,7 @@ contract Staker {
      * @dev increaseStake adds VET to the current stake of the queued/active validator.
      */
     function increaseStake(address validator) public payable checkStake(msg.value) stakerNotPaused {
+        effectiveVET += msg.value;
         StakerNative(address(this)).native_increaseStake(validator, msg.sender, msg.value);
         emit StakeIncreased(validator, msg.value);
     }
@@ -85,6 +88,7 @@ contract Staker {
     function withdrawStake(address validator) public stakerNotPaused {
         uint256 stake = StakerNative(address(this)).native_withdrawStake(validator, msg.sender);
 
+        effectiveVET -= stake;
         (bool success, ) = msg.sender.call{value: stake}("");
         require(success, "Transfer failed");
         emit ValidationWithdrawn(validator, stake);
@@ -140,6 +144,7 @@ contract Staker {
     ) public onlyDelegatorContract delegatorNotPaused {
         uint256 stake = StakerNative(address(this)).native_withdrawDelegation(delegationID);
 
+        effectiveVET -= stake;
         emit DelegationWithdrawn(delegationID, stake);
         (bool success, ) = msg.sender.call{value: stake}("");
         require(success, "Transfer failed");

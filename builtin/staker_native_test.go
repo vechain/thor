@@ -525,13 +525,13 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 	test.Case("addValidation", master, thor.LowStakingPeriod()).
 		Value(minStake).
 		Caller(endorser).
-		ShouldUseGas(112272).
+		ShouldUseGas(132571).
 		Assert(t)
 
 	test.Case("increaseStake", validator1).
 		Value(minStake).
 		Caller(endorser).
-		ShouldUseGas(61890).
+		ShouldUseGas(67189).
 		Assert(t)
 
 	test.Case("decreaseStake", validator1, minStake).
@@ -541,7 +541,7 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 
 	test.Case("withdrawStake", validator1).
 		Caller(endorser).
-		ShouldUseGas(27929).
+		ShouldUseGas(33226).
 		Assert(t)
 
 	// change switch to pause nothing
@@ -564,7 +564,7 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 	// withdraw delegation2 on exited validator3
 	test.Case("withdrawDelegation", big.NewInt(2)).
 		Caller(delegator).
-		ShouldUseGas(29475).
+		ShouldUseGas(34763).
 		Assert(t)
 
 	// signal exit delegation1 on validator1

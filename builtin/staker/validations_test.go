@@ -7,6 +7,7 @@
 package staker
 
 import (
+	"fmt"
 	"math"
 	"math/big"
 	"math/rand/v2"
@@ -67,23 +68,67 @@ type testStaker struct {
 	*Staker
 }
 
+func (ts *testStaker) addBalance(amount uint64) error {
+	amt := ToWei(amount)
+
+	// update effectiveVET tracking
+	effectiveVETBytes, err := ts.state.GetStorage(ts.addr, thor.Bytes32{})
+	if err != nil {
+		return err
+	}
+	effectiveVET := new(big.Int).SetBytes(effectiveVETBytes.Bytes())
+	effectiveVET.Add(effectiveVET, amt)
+	ts.state.SetStorage(ts.addr, thor.Bytes32{}, thor.BytesToBytes32(effectiveVET.Bytes()))
+
+	// update actual contract balance
+	balance, err := ts.state.GetBalance(ts.addr)
+	if err != nil {
+		return err
+	}
+	newBalance := new(big.Int).Add(balance, amt)
+	return ts.state.SetBalance(ts.addr, newBalance)
+}
+
+func (ts *testStaker) subBalance(amount uint64) error {
+	amt := ToWei(amount)
+
+	// update effectiveVET tracking
+	effectiveVETBytes, err := ts.state.GetStorage(ts.addr, thor.Bytes32{})
+	if err != nil {
+		return err
+	}
+	effectiveVET := new(big.Int).SetBytes(effectiveVETBytes.Bytes())
+	if effectiveVET.Cmp(amt) < 0 {
+		return fmt.Errorf("insufficient effectiveVET: have %s, need %d", effectiveVET, amount)
+	}
+	effectiveVET.Sub(effectiveVET, amt)
+	ts.state.SetStorage(ts.addr, thor.Bytes32{}, thor.BytesToBytes32(effectiveVET.Bytes()))
+
+	// update actual contract balance
+	balance, err := ts.state.GetBalance(ts.addr)
+	if err != nil {
+		return err
+	}
+	if balance.Cmp(amt) < 0 {
+		return fmt.Errorf("insufficient balance: have %s, need %d", balance, amount)
+	}
+	newBalance := new(big.Int).Sub(balance, amt)
+	return ts.state.SetBalance(ts.addr, newBalance)
+}
+
 func (ts *testStaker) AddValidation(
 	validator thor.Address,
 	endorser thor.Address,
 	period uint32,
 	stake uint64,
 ) error {
-	balance, err := ts.state.GetBalance(ts.addr)
+	err := ts.addBalance(stake)
 	if err != nil {
-		return err
-	}
-	newBalance := big.NewInt(0).Add(balance, ToWei(stake))
-	if ts.state.SetBalance(ts.addr, newBalance) != nil {
 		return err
 	}
 	err = ts.Staker.AddValidation(validator, endorser, period, stake)
 	if err != nil {
-		if ts.state.SetBalance(ts.addr, balance) != nil {
+		if err := ts.subBalance(stake); err != nil {
 			return err
 		}
 	}
@@ -91,17 +136,14 @@ func (ts *testStaker) AddValidation(
 }
 
 func (ts *testStaker) IncreaseStake(validator thor.Address, endorser thor.Address, amount uint64) error {
-	balance, err := ts.state.GetBalance(ts.addr)
+	err := ts.addBalance(amount)
 	if err != nil {
 		return err
 	}
-	newBalance := big.NewInt(0).Add(balance, ToWei(amount))
-	if ts.state.SetBalance(ts.addr, newBalance) != nil {
-		return err
-	}
+
 	err = ts.Staker.IncreaseStake(validator, endorser, amount)
 	if err != nil {
-		if ts.state.SetBalance(ts.addr, balance) != nil {
+		if ts.subBalance(amount) != nil {
 			return err
 		}
 	}
@@ -113,12 +155,8 @@ func (ts *testStaker) WithdrawStake(validator thor.Address, endorser thor.Addres
 	if err != nil {
 		return 0, err
 	}
-	balance, err := ts.state.GetBalance(ts.addr)
-	if err != nil {
-		return 0, err
-	}
-	newBalance := big.NewInt(0).Sub(balance, ToWei(amount))
-	if ts.state.SetBalance(ts.addr, newBalance) != nil {
+
+	if ts.subBalance(amount) != nil {
 		return 0, err
 	}
 	return amount, nil
@@ -130,17 +168,13 @@ func (ts *testStaker) AddDelegation(
 	multiplier uint8,
 	currentBlock uint32,
 ) (*big.Int, error) {
-	balance, err := ts.state.GetBalance(ts.addr)
-	if err != nil {
+	if err := ts.addBalance(stake); err != nil {
 		return nil, err
 	}
-	newBalance := big.NewInt(0).Add(balance, ToWei(stake))
-	if ts.state.SetBalance(ts.addr, newBalance) != nil {
-		return nil, err
-	}
+
 	delegation, err := ts.Staker.AddDelegation(validator, stake, multiplier, currentBlock)
 	if err != nil {
-		if ts.state.SetBalance(ts.addr, balance) != nil {
+		if ts.subBalance(stake) != nil {
 			return nil, err
 		}
 	}
@@ -155,12 +189,8 @@ func (ts *testStaker) WithdrawDelegation(
 	if err != nil {
 		return amount, err
 	}
-	balance, err := ts.state.GetBalance(ts.addr)
-	if err != nil {
-		return 0, err
-	}
-	newBalance := big.NewInt(0).Sub(balance, ToWei(amount))
-	if ts.state.SetBalance(ts.addr, newBalance) != nil {
+
+	if ts.subBalance(amount) != nil {
 		return 0, err
 	}
 	return amount, nil
