@@ -32,16 +32,16 @@ func (n *Node) packerLoop(ctx context.Context) {
 	case <-ctx.Done():
 		return
 	case <-n.comm.Synced():
-		n.completingSync = true
+		n.syncConfig.completingSync = true
 		err := n.completeSync()
-		n.completingSync = false
-		close(n.syncCompleteCh)
+		n.syncConfig.completingSync = false
+		close(n.syncConfig.syncCompleteCh)
 		if err != nil {
 			<-ctx.Done()
 			return
 		}
 	}
-	n.initialSynced = true
+	n.syncConfig.initialSynced = true
 	logger.Info("synchronization process done")
 
 	var (
@@ -231,10 +231,6 @@ func (n *Node) completeSync() error {
 	err = writer.CreateIndexes()
 	if err != nil {
 		logger.Error("Error while creating indexes", "err", err)
-		return err
-	}
-	if err != nil {
-		logger.Error("Error while switching journal mode", "err", err)
 		return err
 	}
 	logger.Info("Sync done, indexes created, journal mode switched")

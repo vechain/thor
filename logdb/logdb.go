@@ -21,7 +21,8 @@ import (
 )
 
 const (
-	refIDQuery = "(SELECT id FROM ref WHERE data=?)"
+	refIDQuery     = "(SELECT id FROM ref WHERE data=?)"
+	journalModeWal = "wal"
 )
 
 type LogDB struct {
@@ -59,16 +60,19 @@ func New(path string) (logDB *LogDB, err error) {
 		return nil, err
 	}
 
-	if _, err := wconn1.ExecContext(context.Background(), "PRAGMA journal_mode=WAL"); err != nil {
+	mode, err := getJournalMode(db)
+	if err != nil {
 		return nil, err
 	}
 
-	if _, err := wconn2.ExecContext(context.Background(), "PRAGMA journal_mode=MEMORY"); err != nil {
-		return nil, err
-	}
+	if mode != journalModeWal {
+		if _, err := wconn2.ExecContext(context.Background(), "PRAGMA journal_mode=MEMORY"); err != nil {
+			return nil, err
+		}
 
-	if _, err := wconn2.ExecContext(context.Background(), "PRAGMA synchronous=OFF"); err != nil {
-		return nil, err
+		if _, err := wconn2.ExecContext(context.Background(), "PRAGMA synchronous=OFF"); err != nil {
+			return nil, err
+		}
 	}
 
 	driverVer, _, _ := sqlite3.Version()
@@ -80,6 +84,12 @@ func New(path string) (logDB *LogDB, err error) {
 		wconnSyncOff:  wconn2,
 		stmtCache:     newStmtCache(db),
 	}, nil
+}
+
+func getJournalMode(db *sql.DB) (string, error) {
+	var mode string
+	err := db.QueryRow("PRAGMA journal_mode").Scan(&mode)
+	return mode, err
 }
 
 // NewMem create a log db in ram.
@@ -711,7 +721,14 @@ func (w *Writer) exec(query string, args ...any) (err error) {
 }
 
 func (w *Writer) ExecuteJournalWalModeSwitch() error {
-	_, err := w.conn.ExecContext(context.Background(), "PRAGMA journal_mode=WAL")
+	_, err := w.conn.ExecContext(context.Background(), `
+        PRAGMA journal_mode=WAL;
+        PRAGMA synchronous=NORMAL;
+        PRAGMA cache_size=10000;
+        PRAGMA temp_store=memory;
+        PRAGMA mmap_size=268435456;
+        PRAGMA wal_autocheckpoint=100;
+    `)
 	return err
 }
 
@@ -727,15 +744,17 @@ func (w *Writer) CreateIndexes() error {
 		`CREATE INDEX IF NOT EXISTS transfer_i2 ON transfer(recipient)`,
 	}
 
+	tx, err := w.conn.BeginTx(context.Background(), nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() // This will clean up if we exit early
+
 	for _, query := range indexes {
-		if err := w.exec(query); err != nil {
-			return err
-		}
-		err := w.Commit()
-		if err != nil {
+		if _, err := tx.ExecContext(context.Background(), query); err != nil {
 			return err
 		}
 	}
 
-	return nil
+	return tx.Commit()
 }
