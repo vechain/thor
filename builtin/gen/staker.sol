@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.20;
 
 uint256 constant DELEGATOR_PAUSED_BIT = 1 << 0;
 uint256 constant STAKER_PAUSED_BIT = 1 << 1;
