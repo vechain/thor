@@ -73,6 +73,71 @@ func TestTransition(t *testing.T) {
 	st.SetRawStorage(stakerAddr, queuedCountSlot, rlp.RawValue{0xFF})
 }
 
+func TestTransitionWithPreExistingVET(t *testing.T) {
+	tests := []struct {
+		name        string
+		expectError bool
+		addBalance  bool // true = add VET, false = remove VET
+	}{
+		{
+			name:        "Extra VET should pass",
+			expectError: false,
+			addBalance:  true,
+		},
+		{
+			name:        "Insufficient VET should error",
+			expectError: true,
+			addBalance:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup like other tests
+			db := muxdb.NewMem()
+			st := state.New(db, trie.Root{})
+			param := params.New(thor.BytesToAddress([]byte("params")), st)
+			assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(2)))
+
+			stakerAddr := thor.BytesToAddress([]byte("stkr"))
+			staker := &testStaker{Staker: New(stakerAddr, st, param, nil), state: st, addr: stakerAddr}
+
+			// Add validators
+			node1 := datagen.RandAddress()
+			node2 := datagen.RandAddress()
+			stake := RandomStake()
+
+			assert.NoError(t, staker.AddValidation(node1, node1, uint32(360)*24*15, stake))
+			assert.NoError(t, staker.AddValidation(node2, node2, uint32(360)*24*15, stake))
+
+			// Modify balance
+			currentBalance, err := staker.state.GetBalance(staker.addr)
+			assert.NoError(t, err)
+
+			changeAmount := ToWei(1000000) // 1M VET
+			var newBalance *big.Int
+			if tt.addBalance {
+				newBalance = big.NewInt(0).Add(currentBalance, changeAmount)
+			} else {
+				newBalance = big.NewInt(0).Sub(currentBalance, changeAmount)
+				if newBalance.Sign() < 0 {
+					newBalance = big.NewInt(0)
+				}
+			}
+			assert.NoError(t, staker.state.SetBalance(staker.addr, newBalance))
+
+			// Test ContractBalanceCheck
+			err = staker.ContractBalanceCheck(0)
+
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestStaker_TransitionPeriodBalanceCheck(t *testing.T) {
 	fc := &thor.ForkConfig{
 		HAYABUSA: 10,

@@ -768,3 +768,14 @@ func (s *Staker) getValidationOrRevert(valID thor.Address) (*validation.Validati
 	}
 	return val, nil
 }
+
+// GetEffectiveVET returns the EffectiveVET in the contract
+func (s *Staker) GetEffectiveVET() (uint64, error) {
+	// accessing slot 0 defined in staker.sol
+	val, err := s.state.GetStorage(s.address, thor.Bytes32{})
+	if err != nil {
+		return 0, err
+	}
+
+	return ToVET(new(big.Int).SetBytes(val.Bytes())), nil
+}

@@ -217,6 +217,7 @@ func NewHayabusaDevnet(forkConfig *thor.ForkConfig) *Genesis {
 
 			// adding a soloBlockSigner as a validator and manage balances manually
 			// Need to send the VET to the staker contract for the balance sheet
+			state.SetStorage(builtin.Staker.Address, thor.Bytes32{}, thor.BytesToBytes32(staker.MinStake.Bytes()))
 			if err := state.SetBalance(builtin.Staker.Address, staker.MinStake); err != nil {
 				return err
 			}
@@ -229,9 +230,6 @@ func NewHayabusaDevnet(forkConfig *thor.ForkConfig) *Genesis {
 			}
 			currentBalance = big.NewInt(0).Sub(currentBalance, staker.MinStake)
 			if err := state.SetBalance(soloBlockSigner.Address, currentBalance); err != nil {
-				return err
-			}
-			if err := state.SetBalance(builtin.Staker.Address, staker.MinStake); err != nil {
 				return err
 			}
 
