@@ -317,6 +317,7 @@ func defaultAction(ctx *cli.Context) error {
 		master,
 		repo,
 		bftEngine,
+		state.NewStater(mainDB),
 		logDB,
 		txPool,
 		filepath.Join(instanceDir, "tx.stash"),

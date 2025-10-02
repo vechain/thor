@@ -94,6 +94,7 @@ func New(
 	master *Master,
 	repo *chain.Repository,
 	bft *bft.Engine,
+	stater *state.Stater,
 	logDB *logdb.LogDB,
 	txPool *txpool.TxPool,
 	txStashPath string,
