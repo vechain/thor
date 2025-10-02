@@ -129,21 +129,22 @@ func StartAPIServer(
 	}
 
 	// middlewares
-	// metrics and request logger should be the first to be used
+	// body limit and timeout
+	router.Use(middleware.HandleRequestBodyLimit(defaultRequestBodyLimit))
+	if config.Timeout > 0 {
+		router.Use(middleware.HandleAPITimeout(time.Duration(config.Timeout) * time.Millisecond))
+	}
+
+	// metrics and request logger should be configured as soon as possible
 	router.Use(middleware.RequestLoggerMiddleware(logger, config.EnableReqLogger))
 	if config.EnableMetrics {
 		router.Use(middleware.MetricsMiddleware)
 	}
 
-	// validation middlewares
-	router.Use(middleware.HandleRequestBodyLimit(defaultRequestBodyLimit))
 	router.Use(middleware.HandleXGenesisID(repo.GenesisBlock().Header().ID()))
 	router.Use(middleware.HandleXThorestVersion)
-	if config.Timeout > 0 {
-		router.Use(middleware.HandleAPITimeout(time.Duration(config.Timeout) * time.Millisecond))
-	}
-	router.Use(handlers.CompressHandler)
 
+	router.Use(handlers.CompressHandler)
 	handler := handlers.CORS(
 		handlers.AllowedOrigins(origins),
 		handlers.AllowedHeaders([]string{"content-type", "x-genesis-id"}),

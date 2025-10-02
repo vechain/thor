@@ -40,4 +40,13 @@ var (
 		Value: log.LegacyLevelWarn,
 		Usage: "log verbosity (0-9)",
 	}
+	enableMetricsFlag = cli.BoolFlag{
+		Name:  "enable-metrics",
+		Usage: "enables metrics collection",
+	}
+	metricsAddrFlag = cli.StringFlag{
+		Name:  "metrics-addr",
+		Value: "localhost:2112",
+		Usage: "metrics service listening address",
+	}
 )

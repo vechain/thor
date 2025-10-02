@@ -268,6 +268,18 @@ func (c *Client) SubscribeTxPool(txID *thor.Bytes32) (*wsclient.Subscription[*ap
 	return c.wsConn.SubscribeTxPool(txID)
 }
 
+// TxPool retrieves transactions from the transaction pool.
+// If expanded is true, returns full transaction objects; otherwise returns transaction IDs.
+// If origin is provided, filters transactions by sender address.
+func (c *Client) TxPool(expanded bool, origin *thor.Address) (any, error) {
+	return c.httpConn.GetTxPool(expanded, origin)
+}
+
+// TxPoolStatus retrieves the current status of the transaction pool.
+func (c *Client) TxPoolStatus() (*api.Status, error) {
+	return c.httpConn.GetTxPoolStatus()
+}
+
 // convertToBatchCallData converts a transaction and sender address to batch call data format.
 func convertToBatchCallData(tx *tx.Transaction, addr *thor.Address) *api.BatchCallData {
 	cls := make(api.Clauses, len(tx.Clauses()))

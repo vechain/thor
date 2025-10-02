@@ -3,18 +3,16 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package tx_test
+package tx
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/vechain/thor/v2/tx"
 )
 
 func TestFeatures(t *testing.T) {
-	var f tx.Features
+	var f Features
 
 	assert.Zero(t, f)
 	assert.False(t, f.IsDelegated())
