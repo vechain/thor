@@ -8,13 +8,13 @@ package genesis
 import (
 	"errors"
 	"fmt"
-	"github.com/vechain/thor/v2/builtin/params"
-	"github.com/vechain/thor/v2/builtin/staker"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
 	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/builtin/params"
+	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"

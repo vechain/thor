@@ -10,8 +10,9 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/vechain/thor/v2/thor"
+
+	"github.com/ethereum/go-ethereum/common/math"
 )
 
 // CustomGenesis is user customized genesis

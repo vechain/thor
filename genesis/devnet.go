@@ -7,10 +7,10 @@ package genesis
 
 import (
 	"crypto/ecdsa"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"math/big"
 	"sync/atomic"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/vechain/thor/v2/builtin"
