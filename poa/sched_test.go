@@ -137,8 +137,8 @@ func TestUpdatesV2(t *testing.T) {
 		newBlockTime uint64
 		want         uint64
 	}{
-		{parentTime + thor.BlockInterval()*30, 1},
-		{parentTime + thor.BlockInterval(), 1},
+		{parentTimeV1 + thor.BlockInterval()*30, 1},
+		{parentTimeV1 + thor.BlockInterval(), 1},
 	}
 
 	for _, tt := range tests {

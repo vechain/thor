@@ -207,7 +207,6 @@ func benchmarkBlockProcess(b *testing.B, db *muxdb.MuxDB, accounts []genesis.Dev
 		masterAddr,
 		thorChain.Repo(),
 		engine,
-		thorChain.Stater(),
 		nil,
 		nil,
 		"",
