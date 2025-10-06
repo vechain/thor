@@ -123,6 +123,7 @@ func init() {
 
 			// Use staker Transition Period logic
 			// to ensure that transitioning validators are marked as endorsed
+			env.UseGas(thor.GetBalanceGas)
 			isEndorsed, err := Staker.Native(env.State()).TransitionPeriodBalanceCheck(
 				env.ForkConfig(),
 				env.BlockContext().Number,

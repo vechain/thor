@@ -58,7 +58,17 @@ type Environment struct {
 }
 
 // New create a new env.
-func New(abi *abi.Method, chain *chain.Chain, state *state.State, blockCtx *BlockContext, forkConfig *thor.ForkConfig, txCtx *TransactionContext, evm *vm.EVM, contract *vm.Contract, clauseIndex uint32) *Environment {
+func New(
+	abi *abi.Method,
+	chain *chain.Chain,
+	state *state.State,
+	blockCtx *BlockContext,
+	forkConfig *thor.ForkConfig,
+	txCtx *TransactionContext,
+	evm *vm.EVM,
+	contract *vm.Contract,
+	clauseIndex uint32,
+) *Environment {
 	return &Environment{
 		abi:         abi,
 		chain:       chain,
