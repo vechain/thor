@@ -128,19 +128,36 @@ func TestExecutorApprover(t *testing.T) {
 			Assert(t)
 	}
 
-	for _, a := range approvers {
-		test.Case("revokeApprover", a).
+	test.Case("approverCount").
+		ShouldOutput(uint8(7)).
+		Assert(t)
+
+	for idx := range len(approvers) {
+		test.Case("approverCount").
+			ShouldOutput(uint8(7 - idx)).
+			Assert(t)
+
+		approver := approvers[idx]
+		test.Case("revokeApprover", approver).
 			ShouldVMError(errReverted).
 			Assert(t)
 
-		test.Case("revokeApprover", a).
-			Caller(builtin.Executor.Address).
-			ShouldLog(approverEvent(a, "revoked")).
-			Assert(t)
-		assert.Equal(t, M(false, nil), M(builtin.Prototype.Native(test.rt.State()).Bind(test.to).IsUser(a)))
+		if idx < len(approvers)-1 {
+			test.Case("revokeApprover", approver).
+				Caller(builtin.Executor.Address).
+				ShouldLog(approverEvent(approver, "revoked")).
+				Assert(t)
+			assert.Equal(t, M(false, nil), M(builtin.Prototype.Native(test.rt.State()).Bind(test.to).IsUser(approver)))
+		} else {
+			test.Case("revokeApprover", approver).
+				Caller(builtin.Executor.Address).
+				ShouldVMError(errReverted).
+				ShouldRevert("remove last approver")
+			assert.Equal(t, M(true, nil), M(builtin.Prototype.Native(test.rt.State()).Bind(test.to).IsUser(approver)))
+		}
 	}
 	test.Case("approverCount").
-		ShouldOutput(uint8(0)).
+		ShouldOutput(uint8(1)).
 		Assert(t)
 }
 

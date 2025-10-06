@@ -15,6 +15,8 @@ import (
 	"github.com/vechain/thor/v2/xenv"
 )
 
+var approverCountKey = thor.Bytes32{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}
+
 func init() {
 	events := Prototype.Events()
 
@@ -278,6 +280,26 @@ func init() {
 				return []any{false}
 			}
 
+			if thor.Address(args.Self) == Executor.Address {
+				env.UseGas(thor.SloadGas)
+
+				var count uint8
+				err = env.State().DecodeStorage(Executor.Address, approverCountKey, func(raw []byte) error {
+					if len(raw) == 0 {
+						count = 0
+						return nil
+					}
+					count = raw[0]
+					return nil
+				})
+				if err != nil {
+					panic(err)
+				}
+
+				if count == 0 {
+					panic("cannot remove last approver")
+				}
+			}
 			env.UseGas(thor.SstoreResetGas)
 			if err := binding.RemoveUser(thor.Address(args.User)); err != nil {
 				panic(err)
