@@ -340,6 +340,7 @@ func (s *testSetup) Xenv(method *abi.Method) *xenv.Environment {
 		nil,
 		s.state,
 		blkContext,
+		nil,
 		txContext,
 		s.evm,
 		s.contract,

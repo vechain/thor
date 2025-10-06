@@ -115,18 +115,23 @@ func init() {
 				return []any{false}
 			}
 
-			env.UseGas(thor.GetBalanceGas)
-			bal, err := env.State().GetBalance(endorsor)
-			if err != nil {
-				panic(err)
-			}
-
 			env.UseGas(thor.SloadGas)
 			endorsement, err := Params.Native(env.State()).Get(thor.KeyProposerEndorsement)
 			if err != nil {
 				panic(err)
 			}
-			return []any{bal.Cmp(endorsement) >= 0}
+
+			// Use staker Transition Period logic
+			// to ensure that transitioning validators are marked as endorsed
+			isEndorsed, err := Staker.Native(env.State()).TransitionPeriodBalanceCheck(
+				env.ForkConfig(),
+				env.BlockContext().Number,
+				endorsement,
+			)(thor.Address(nodeMaster), endorsor)
+			if err != nil {
+				panic(err)
+			}
+			return []any{isEndorsed}
 		}},
 	}
 	abi := Authority.NativeABI()
