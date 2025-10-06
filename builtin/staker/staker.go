@@ -676,7 +676,7 @@ func (s *Staker) WithdrawDelegation(
 
 	// start and finish values are sanitized: !started and finished is impossible
 	// delegation is still queued
-	if !started {
+	if !started && val.Status <= validation.StatusActive {
 		weightedStake := stakes.NewWeightedStakeWithMultiplier(withdrawableStake, del.Multiplier)
 		if err = s.aggregationService.SubPendingVet(del.Validation, weightedStake); err != nil {
 			return 0, err
