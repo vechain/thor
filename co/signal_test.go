@@ -3,21 +3,19 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package co_test
+package co
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/vechain/thor/v2/co"
 )
 
 func TestSignalBroadcastBefore(t *testing.T) {
-	var sig co.Signal
+	var sig Signal
 	sig.Broadcast()
 
-	var ws []co.Waiter
+	var ws []Waiter
 	for range 10 {
 		ws = append(ws, sig.NewWaiter())
 	}
@@ -34,9 +32,9 @@ func TestSignalBroadcastBefore(t *testing.T) {
 }
 
 func TestSignalBroadcastAfterWait(t *testing.T) {
-	var sig co.Signal
+	var sig Signal
 
-	var ws []co.Waiter
+	var ws []Waiter
 	for range 10 {
 		ws = append(ws, sig.NewWaiter())
 	}

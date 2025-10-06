@@ -391,8 +391,9 @@ func (t *MDLogger) CaptureState(pc uint64, op vm.OpCode, _, cost uint64, _ *vm.M
 
 	if !t.cfg.DisableStack {
 		// format stack
-		var a []string
-		for _, elem := range stack.Data() {
+		stackData := stack.Data()
+		a := make([]string, 0, len(stackData))
+		for _, elem := range stackData {
 			a = append(a, elem.Hex())
 		}
 		b := fmt.Sprintf("[%v]", strings.Join(a, ","))
@@ -475,14 +476,14 @@ func formatLogs(logs []StructLog) []StructLogRes {
 		if trace.Memory != nil {
 			memory := make([]string, 0, (len(trace.Memory)+31)/32)
 			for i := 0; i+32 <= len(trace.Memory); i += 32 {
-				memory = append(memory, fmt.Sprintf("%x", trace.Memory[i:i+32]))
+				memory = append(memory, hex.EncodeToString(trace.Memory[i:i+32]))
 			}
 			formatted[index].Memory = &memory
 		}
 		if trace.Storage != nil {
 			storage := make(map[string]string)
 			for i, storageValue := range trace.Storage {
-				storage[fmt.Sprintf("%x", i)] = fmt.Sprintf("%x", storageValue)
+				storage[hex.EncodeToString(i[:])] = hex.EncodeToString(storageValue[:])
 			}
 			formatted[index].Storage = &storage
 		}

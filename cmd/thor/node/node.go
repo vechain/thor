@@ -30,6 +30,7 @@ import (
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/packer"
+	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -53,9 +54,22 @@ type Options struct {
 	MinTxPriorityFee uint64
 }
 
+// ConsensusEngine defines the interface for consensus processing
+type ConsensusEngine interface {
+	Process(parentSummary *chain.BlockSummary, blk *block.Block, nowTimestamp uint64, blockConflicts uint32) (*state.Stage, tx.Receipts, error)
+	NewRuntimeForReplay(header *block.Header, skipValidation bool) (*runtime.Runtime, error)
+}
+
+// PackerEngine defines the interface for packing blocks
+type PackerEngine interface {
+	Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (flow *packer.Flow, err error)
+	Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit uint64) (*packer.Flow, error)
+	SetTargetGasLimit(gl uint64)
+}
+
 type Node struct {
-	packer      *packer.Packer
-	cons        *consensus.Consensus
+	packer      PackerEngine
+	cons        ConsensusEngine
 	master      *Master
 	repo        *chain.Repository
 	bft         *bft.Engine
@@ -78,17 +92,18 @@ func New(
 	master *Master,
 	repo *chain.Repository,
 	bft *bft.Engine,
-	stater *state.Stater,
 	logDB *logdb.LogDB,
 	txPool *txpool.TxPool,
 	txStashPath string,
 	comm *comm.Communicator,
 	forkConfig *thor.ForkConfig,
 	options Options,
+	consensusEngine ConsensusEngine,
+	packerEngine PackerEngine,
 ) *Node {
 	return &Node{
-		packer:      packer.New(repo, stater, master.Address(), master.Beneficiary, forkConfig, options.MinTxPriorityFee),
-		cons:        consensus.New(repo, stater, forkConfig),
+		packer:      packerEngine,
+		cons:        consensusEngine,
 		master:      master,
 		repo:        repo,
 		bft:         bft,
@@ -177,6 +192,9 @@ func (n *Node) houseKeeping(ctx context.Context) {
 	connectivityTicker := time.NewTicker(time.Second)
 	defer connectivityTicker.Stop()
 
+	clockSyncTicker := time.NewTicker(10 * time.Minute)
+	defer clockSyncTicker.Stop()
+
 	var noPeerTimes int
 
 	futureBlocks := cache.NewRandCache(32)
@@ -231,6 +249,8 @@ func (n *Node) houseKeeping(ctx context.Context) {
 			} else {
 				noPeerTimes = 0
 			}
+		case <-clockSyncTicker.C:
+			go checkClockOffset()
 		}
 	}
 }
