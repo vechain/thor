@@ -428,10 +428,25 @@ func (s *Staker) WithdrawStake(validator thor.Address, endorser thor.Address, cu
 		return 0, NewReverts("endorser required")
 	}
 
+	isQueued := val.Status == validation.StatusQueued
+
 	withdrawableVET, queuedVET, cooldownVET, err := s.validationService.WithdrawStake(validator, val, currentBlock)
 	if err != nil {
 		logger.Info("withdraw failed", "validator", validator, "error", err)
 		return 0, err
+	}
+
+	if isQueued {
+		exit, err := s.aggregationService.Exit(validator)
+		if err != nil {
+			return 0, err
+		}
+		if err := s.globalStatsService.AddWithdrawable(exit.QueuedDecrease); err != nil {
+			return 0, err
+		}
+		if err := s.globalStatsService.RemoveQueued(exit.QueuedDecrease); err != nil {
+			return 0, err
+		}
 	}
 
 	// update global stats
@@ -676,7 +691,7 @@ func (s *Staker) WithdrawDelegation(
 
 	// start and finish values are sanitized: !started and finished is impossible
 	// delegation is still queued
-	if !started {
+	if !started && val.Status != validation.StatusExit {
 		weightedStake := stakes.NewWeightedStakeWithMultiplier(withdrawableStake, del.Multiplier)
 		if err = s.aggregationService.SubPendingVet(del.Validation, weightedStake); err != nil {
 			return 0, err
