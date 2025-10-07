@@ -436,6 +436,8 @@ func (s *Staker) WithdrawStake(validator thor.Address, endorser thor.Address, cu
 		return 0, err
 	}
 
+	// clean up aggregations, move all queued to withdrawable. Otherwise, delegation stakes remain in
+	// queued counter until they withdraw.
 	if isQueued {
 		exit, err := s.aggregationService.Exit(validator)
 		if err != nil {
