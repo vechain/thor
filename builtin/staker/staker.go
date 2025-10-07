@@ -442,10 +442,10 @@ func (s *Staker) WithdrawStake(validator thor.Address, endorser thor.Address, cu
 			return 0, err
 		}
 		if exit.QueuedDecrease > 0 {
-			if err := s.globalStatsService.AddWithdrawable(exit.QueuedDecrease); err != nil {
+			if err := s.globalStatsService.RemoveQueued(exit.QueuedDecrease); err != nil {
 				return 0, err
 			}
-			if err := s.globalStatsService.RemoveQueued(exit.QueuedDecrease); err != nil {
+			if err := s.globalStatsService.AddWithdrawable(exit.QueuedDecrease); err != nil {
 				return 0, err
 			}
 		}
