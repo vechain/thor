@@ -674,19 +674,26 @@ func (s *Staker) WithdrawDelegation(
 		return 0, err
 	}
 
-	// start and finish values are sanitized: !started and finished is impossible
-	// delegation is still queued
-	if !started && val.Status != validation.StatusExit {
+	valCompleted, err := val.CompletedIterations(currentBlock)
+	if err != nil {
+		return 0, err
+	}
+
+	// checking if the delegators funds moved from pending to withdrawable
+	// if the validator move from queued to exit this doesn't happen
+	exitedStake := started || valCompleted > 0
+
+	if exitedStake {
+		if err = s.globalStatsService.RemoveWithdrawable(withdrawableStake); err != nil {
+			return 0, err
+		}
+	} else {
 		weightedStake := stakes.NewWeightedStakeWithMultiplier(withdrawableStake, del.Multiplier)
 		if err = s.aggregationService.SubPendingVet(del.Validation, weightedStake); err != nil {
 			return 0, err
 		}
 
 		if err = s.globalStatsService.RemoveQueued(withdrawableStake); err != nil {
-			return 0, err
-		}
-	} else {
-		if err = s.globalStatsService.RemoveWithdrawable(withdrawableStake); err != nil {
 			return 0, err
 		}
 	}
