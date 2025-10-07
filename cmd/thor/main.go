@@ -343,6 +343,7 @@ func soloAction(ctx *cli.Context) error {
 	if blockInterval == 0 {
 		return errors.New("block-interval cannot be zero")
 	}
+	thor.SetConfig(thor.Config{BlockInterval: blockInterval})
 
 	// enable metrics as soon as possible
 	enableMetrics := ctx.Bool(enableMetricsFlag.Name)
@@ -365,15 +366,11 @@ func soloAction(ctx *cli.Context) error {
 	flagGenesis := ctx.String(genesisFlag.Name)
 	if flagGenesis == "" {
 		if isHayabusa {
-			fc := thor.SoloFork
-			fc.GALACTICA = 0
-			fc.HAYABUSA = 0
-
-			forkConfig = &fc
-			gene = genesis.NewHayabusaDevnet(&fc)
+			forkConfig = &thor.ForkConfig{}
+			gene = genesis.NewHayabusaDevnet()
 		} else {
-			gene = genesis.NewDevnet()
 			forkConfig = &thor.SoloFork
+			gene = genesis.NewDevnet()
 		}
 	} else {
 		gene, forkConfig, err = parseGenesisFile(flagGenesis)
@@ -450,7 +447,7 @@ func soloAction(ctx *cli.Context) error {
 		SkipLogs:         skipLogs,
 		MinTxPriorityFee: minTxPriorityFee,
 		OnDemand:         onDemandBlockProduction,
-		BlockInterval:    blockInterval,
+		BlockInterval:    thor.BlockInterval(),
 	}
 
 	stater := state.NewStater(mainDB)
