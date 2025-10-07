@@ -3,14 +3,12 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package stackedmap_test
+package stackedmap
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/vechain/thor/v2/stackedmap"
 )
 
 func M(a ...any) []any {
@@ -22,7 +20,7 @@ func TestStackedMap(t *testing.T) {
 	src := make(map[string]string)
 	src["foo"] = "bar"
 
-	sm := stackedmap.New(func(key any) (any, bool, error) {
+	sm := New(func(key any) (any, bool, error) {
 		v, r := src[key.(string)]
 		return v, r, nil
 	})
@@ -60,7 +58,7 @@ func TestStackedMap(t *testing.T) {
 
 func TestStackedMapPuts(t *testing.T) {
 	assert := assert.New(t)
-	sm := stackedmap.New(func(_ any) (any, bool, error) {
+	sm := New(func(_ any) (any, bool, error) {
 		return nil, false, nil
 	})
 

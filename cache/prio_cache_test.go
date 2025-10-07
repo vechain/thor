@@ -4,7 +4,7 @@
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
 // #nosec G404
-package cache_test
+package cache
 
 import (
 	"math/rand/v2"
@@ -12,12 +12,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/vechain/thor/v2/cache"
 )
 
 func TestPrioCacheAddRemove(t *testing.T) {
-	c := cache.NewPrioCache(16)
+	c := NewPrioCache(16)
 	c.Set("key", "value", 100)
 	assert.True(t, c.Contains("key"))
 	assert.Equal(t, 1, c.Len())
@@ -27,7 +25,7 @@ func TestPrioCacheAddRemove(t *testing.T) {
 	assert.Equal(t, float64(100), p)
 	assert.Equal(t, true, b)
 
-	assert.Equal(t, &cache.PrioEntry{Entry: cache.Entry{Key: "key", Value: "value"}, Priority: float64(100)}, c.Remove("key"))
+	assert.Equal(t, &PrioEntry{Entry: Entry{Key: "key", Value: "value"}, Priority: float64(100)}, c.Remove("key"))
 	assert.Equal(t, 0, c.Len())
 
 	_, _, b = c.Get("key")
@@ -35,7 +33,7 @@ func TestPrioCacheAddRemove(t *testing.T) {
 }
 
 func TestPrioCache(t *testing.T) {
-	c := cache.NewPrioCache(5)
+	c := NewPrioCache(5)
 
 	type kvp struct {
 		k, v int
@@ -58,7 +56,7 @@ func TestPrioCache(t *testing.T) {
 		return kvps[i].p > kvps[j].p
 	})
 	var remained []kvp
-	c.ForEach(func(entry *cache.PrioEntry) bool {
+	c.ForEach(func(entry *PrioEntry) bool {
 		remained = append(remained, kvp{
 			entry.Key.(int),
 			entry.Value.(int),
