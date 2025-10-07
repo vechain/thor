@@ -146,9 +146,17 @@ func testAccountEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) 
 	// 3. Test GET /accounts/{address}/storage/{key}
 	t.Run("GetStorage", func(t *testing.T) {
 		c := New(ts.URL)
-		_, err := c.AccountStorage(&address1, &storageKey)
+		response, err := c.AccountStorage(&address1, &storageKey)
 		require.NoError(t, err)
-		// TODO validate the response body here
+		require.Equal(t, thor.Bytes32{}.String(), response.Value)
+	})
+
+	// 3. Test GET /accounts/{address}/storage/raw/{key}
+	t.Run("GetRawStorage", func(t *testing.T) {
+		c := New(ts.URL)
+		response, err := c.RawAccountStorage(&address1, &storageKey)
+		require.NoError(t, err)
+		require.Equal(t, "0x", response.Value)
 	})
 
 	// 4. Test POST /accounts/*

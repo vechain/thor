@@ -419,6 +419,11 @@ func (c *Client) AccountStorage(addr *thor.Address, key *thor.Bytes32, opts ...O
 	return c.httpConn.GetAccountStorage(addr, key, options.revision)
 }
 
+func (c *Client) RawAccountStorage(addr *thor.Address, key *thor.Bytes32, opts ...Option) (*api.GetRawStorageResponse, error) {
+	options := applyOptions(opts)
+	return c.httpConn.GetRawAccountStorage(addr, key, options.revision)
+}
+
 // Transaction retrieves a transaction by its ID from the VeChainThor blockchain.
 //
 // This method corresponds to the GET /transactions/{id} API endpoint and returns
