@@ -45,6 +45,8 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 		return false, err
 	}
 
+	logger.Info("🏠housekeeping", "block", currentBlock, "updates", transition.HasUpdates())
+
 	if !transition.HasUpdates() {
 		return false, nil
 	}

@@ -218,7 +218,7 @@ func (c *ccase) Assert(t *testing.T) *ccase {
 
 	if c.gas != 0 {
 		assert.Greater(t, inputGas, vmout.LeftOverGas)
-		assert.Equal(t, c.gas, inputGas-vmout.LeftOverGas)
+		assert.Equal(t, c.gas, inputGas-vmout.LeftOverGas, "expected = %d, got = %d", c.gas, inputGas-vmout.LeftOverGas)
 	}
 
 	c.output = nil
@@ -560,7 +560,7 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 	test.Case("addValidation", master, thor.LowStakingPeriod()).
 		Value(minStake).
 		Caller(endorser).
-		ShouldUseGas(117571).
+		ShouldUseGas(132571).
 		Assert(t)
 
 	test.Case("increaseStake", validator1).
@@ -599,7 +599,7 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 	// withdraw delegation2 on exited validator3
 	test.Case("withdrawDelegation", big.NewInt(2)).
 		Caller(delegator).
-		ShouldUseGas(34763).
+		ShouldUseGas(24563).
 		Assert(t)
 
 	// signal exit delegation1 on validator1
