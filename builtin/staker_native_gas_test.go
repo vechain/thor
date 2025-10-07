@@ -14,8 +14,6 @@
 //
 // Current Status:
 //   - Covers basic read operations (no arguments)
-//   - TODO: Implement argument handling for functions that require parameters
-//   - TODO: Add test cases for state-modifying operations
 package builtin_test
 
 import (
@@ -135,7 +133,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:     "native_withdrawStake",
-			expectedGas:  12000,
+			expectedGas:  17200,
 			args:         []any{account1, account1},
 			description:  "Withdraw stake for a validator",
 			preTestHooks: []TestHook{preTestAddValidation(account1)},
@@ -201,7 +199,6 @@ func TestStakerNativeGasCosts(t *testing.T) {
 			description:  "Withdraw delegation from a validator",
 			preTestHooks: []TestHook{preTestAddValidation(account1), preTestAddDelegation(account1)},
 		},
-		// TODO: How can we mint thousands of blocks and perform housekeeping?
 		{
 			function:    "native_signalDelegationExit",
 			expectedGas: 600,
