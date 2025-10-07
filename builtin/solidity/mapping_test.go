@@ -28,7 +28,7 @@ func newXenv() *xenv.Environment {
 	contract := &vm.Contract{
 		Gas: math.MaxUint64,
 	}
-	return xenv.New(nil, nil, nil, nil, nil, nil, contract, 0)
+	return xenv.New(nil, nil, nil, nil, nil, nil, nil, contract, 0)
 }
 
 type TestStruct struct {
