@@ -417,6 +417,8 @@ func TestDistributeRewards_MaxRewardsPercentage(t *testing.T) {
 	}
 
 	energy := New(energyAddr, st, 100, p)
+	issuedBefore, err := energy.getIssued()
+	require.NoError(t, err)
 	require.NoError(t, energy.DistributeRewards(beneficiary, signer, staker, 10))
 
 	// verify beneficiary received 100%, not 200%
@@ -433,4 +435,9 @@ func TestDistributeRewards_MaxRewardsPercentage(t *testing.T) {
 	assert.Equal(t, big.NewInt(0), stargateEnergy)
 	_, delegatorReceived := staker.increases[stargateAddr]
 	assert.False(t, delegatorReceived)
+
+	// verify issued amount
+	issuedAfter, err := energy.getIssued()
+	require.NoError(t, err)
+	assert.Equal(t, big.NewInt(0).Add(issuedBefore, rewards), issuedAfter)
 }
