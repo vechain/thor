@@ -67,16 +67,16 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 				return err
 			}
 
-			if isHayabusaGenesis(gen) {
-				if err := state.SetCode(builtin.Staker.Address, builtin.Staker.RuntimeBytecodes()); err != nil {
-					return err
-				}
-			}
-
 			// Always deploy the executor code at the default executor address
 			// if genesis Executor address is different it's the genesis creator responsibility to manually deploy the executor code
 			if err := state.SetCode(builtin.Executor.Address, builtin.Executor.RuntimeBytecodes()); err != nil {
 				return err
+			}
+
+			if isHayabusaGenesis(gen) {
+				if err := state.SetCode(builtin.Staker.Address, builtin.Staker.RuntimeBytecodes()); err != nil {
+					return err
+				}
 			}
 
 			tokenSupply := &big.Int{}
@@ -177,14 +177,14 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 	}
 	// add initial authority nodes
 	for _, anode := range gen.Authority {
-		data := mustEncodeInput(builtin.Authority.ABI, "add", anode.MasterAddress, anode.EndorsorAddress, anode.Identity)
+		data = mustEncodeInput(builtin.Authority.ABI, "add", anode.MasterAddress, anode.EndorsorAddress, anode.Identity)
 		builder.Call(tx.NewClause(&builtin.Authority.Address).WithData(data), executor)
 	}
 
 	// if genesis Executor address is different from default
 	// the genesis creator must manually deploy the executor code and manually add the approvers
 	for _, approver := range gen.Executor.Approvers {
-		data := mustEncodeInput(builtin.Executor.ABI, "addApprover", approver.Address, approver.Identity)
+		data = mustEncodeInput(builtin.Executor.ABI, "addApprover", approver.Address, approver.Identity)
 		// using builtin.Executor.Address guarantees the execution of this clause
 		builder.Call(tx.NewClause(&builtin.Executor.Address).WithData(data), builtin.Executor.Address)
 	}
