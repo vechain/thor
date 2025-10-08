@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/builtin/params"
 	"github.com/vechain/thor/v2/muxdb"
@@ -260,6 +261,7 @@ type mockStaker struct {
 	lockedWeight      uint64
 	hasDelegations    bool
 	increaseRewardErr error
+	increases         map[thor.Address]*big.Int
 }
 
 func (m *mockStaker) LockedStake() (uint64, uint64, error) {
@@ -271,6 +273,14 @@ func (m *mockStaker) HasDelegations(address thor.Address) (bool, error) {
 }
 
 func (m *mockStaker) IncreaseDelegatorsReward(master thor.Address, reward *big.Int, currentBlock uint32) error {
+	if m.increases == nil {
+		m.increases = make(map[thor.Address]*big.Int)
+	}
+	if existing, ok := m.increases[master]; !ok {
+		m.increases[master] = big.NewInt(0)
+	} else {
+		m.increases[master] = new(big.Int).Add(existing, reward)
+	}
 	return m.increaseRewardErr
 }
 
@@ -379,4 +389,48 @@ func TestDistributeRewards(t *testing.T) {
 			assert.Equal(t, tt.expectedIssued, issued)
 		})
 	}
+}
+
+func TestDistributeRewards_MaxRewardsPercentage(t *testing.T) {
+	// setting rewards over 100 should be capped at 100%
+	// setting above 100 should not decrease the delegators rewards
+	rewardPercent := big.NewInt(200)
+
+	st := state.New(muxdb.NewMem(), trie.Root{})
+
+	beneficiary := thor.BytesToAddress([]byte("beneficiary"))
+	signer := thor.BytesToAddress([]byte("signer"))
+	stargateAddr := thor.BytesToAddress([]byte("stargate"))
+	energyAddr := thor.BytesToAddress([]byte("eng"))
+
+	paramsAddr := thor.BytesToAddress([]byte("par"))
+	p := params.New(paramsAddr, st)
+
+	require.NoError(t, p.Set(thor.KeyValidatorRewardPercentage, rewardPercent))
+	require.NoError(t, p.Set(thor.KeyDelegatorContractAddress, new(big.Int).SetBytes(stargateAddr.Bytes())))
+
+	staker := &mockStaker{
+		lockedVET:         10000,
+		lockedWeight:      22000,
+		hasDelegations:    true,
+		increaseRewardErr: nil,
+	}
+
+	energy := New(energyAddr, st, 100, p)
+	require.NoError(t, energy.DistributeRewards(beneficiary, signer, staker, 10))
+
+	// verify beneficiary received 100%, not 200%
+	beneficiaryEnergy, err := energy.Get(beneficiary)
+	require.NoError(t, err)
+
+	rewards, err := energy.CalculateRewards(staker)
+	require.NoError(t, err)
+	assert.Equal(t, rewards, beneficiaryEnergy)
+
+	// verify delegators received 0%
+	stargateEnergy, err := energy.Get(stargateAddr)
+	require.NoError(t, err)
+	assert.Equal(t, big.NewInt(0), stargateEnergy)
+	_, delegatorReceived := staker.increases[stargateAddr]
+	assert.False(t, delegatorReceived)
 }
