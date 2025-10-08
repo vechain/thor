@@ -29,29 +29,32 @@ import (
 )
 
 type Accounts struct {
-	repo              *chain.Repository
-	stater            *state.Stater
-	callGasLimit      uint64
-	forkConfig        *thor.ForkConfig
-	bft               bft.Committer
-	enabledDeprecated bool
+	repo       *chain.Repository
+	stater     *state.Stater
+	forkConfig *thor.ForkConfig
+	bft        bft.Committer
+	config     *Config
+}
+
+type Config struct {
+	CallGasLimit      uint64
+	EnabledDeprecated bool
+	PrunerDisabled    bool
 }
 
 func New(
 	repo *chain.Repository,
 	stater *state.Stater,
-	callGasLimit uint64,
 	forkConfig *thor.ForkConfig,
 	bft bft.Committer,
-	enabledDeprecated bool,
+	config *Config,
 ) *Accounts {
 	return &Accounts{
 		repo,
 		stater,
-		callGasLimit,
 		forkConfig,
 		bft,
-		enabledDeprecated,
+		config,
 	}
 }
 
@@ -74,7 +77,7 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 		return restutil.BadRequest(errors.WithMessage(err, "revision"))
 	}
 
-	_, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig)
+	_, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig, a.config.PrunerDisabled)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
 			return restutil.BadRequest(errors.WithMessage(err, "revision"))
@@ -128,7 +131,7 @@ func (a *Accounts) handleGetAccount(w http.ResponseWriter, req *http.Request) er
 		return restutil.BadRequest(errors.WithMessage(err, "revision"))
 	}
 
-	summary, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig)
+	summary, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig, a.config.PrunerDisabled)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
 			return restutil.BadRequest(errors.WithMessage(err, "revision"))
@@ -157,7 +160,7 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 		return restutil.BadRequest(errors.WithMessage(err, "revision"))
 	}
 
-	_, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig)
+	_, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig, a.config.PrunerDisabled)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
 			return restutil.BadRequest(errors.WithMessage(err, "revision"))
@@ -181,7 +184,7 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 	if err != nil {
 		return restutil.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	summary, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig)
+	summary, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig, a.config.PrunerDisabled)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
 			return restutil.BadRequest(errors.WithMessage(err, "revision"))
@@ -230,7 +233,7 @@ func (a *Accounts) handleCallBatchCode(w http.ResponseWriter, req *http.Request)
 	if err != nil {
 		return restutil.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	summary, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig)
+	summary, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig, a.config.PrunerDisabled)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
 			return restutil.BadRequest(errors.WithMessage(err, "revision"))
@@ -299,10 +302,10 @@ func (a *Accounts) batchCall(
 }
 
 func (a *Accounts) handleBatchCallData(batchCallData *api.BatchCallData) (txCtx *xenv.TransactionContext, gas uint64, clauses []*tx.Clause, err error) {
-	if batchCallData.Gas > a.callGasLimit {
+	if batchCallData.Gas > a.config.CallGasLimit {
 		return nil, 0, nil, restutil.Forbidden(errors.New("gas: exceeds limit"))
 	} else if batchCallData.Gas == 0 {
-		gas = a.callGasLimit
+		gas = a.config.CallGasLimit
 	} else {
 		gas = batchCallData.Gas
 	}
@@ -389,7 +392,7 @@ func (a *Accounts) Mount(root *mux.Router, pathPrefix string) {
 
 	// These two methods are currently deprecated
 	callContractHandler := restutil.HandleGone
-	if a.enabledDeprecated {
+	if a.config.EnabledDeprecated {
 		callContractHandler = a.handleCallContract
 	}
 	sub.Path("").

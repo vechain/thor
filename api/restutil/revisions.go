@@ -7,6 +7,7 @@ package restutil
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"strconv"
 
@@ -115,6 +116,7 @@ func GetSummaryAndState(
 	bft bft.Committer,
 	stater *state.Stater,
 	forkConfig *thor.ForkConfig,
+	prunerDisabled bool,
 ) (*chain.BlockSummary, *state.State, error) {
 	if rev.IsNext() {
 		best := repo.BestBlockSummary()
@@ -161,6 +163,19 @@ func GetSummaryAndState(
 	sum, err := GetSummary(rev, repo, bft)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	if !prunerDisabled {
+		bestBlockNumber := repo.BestBlockSummary().Header.Number()
+		if bestBlockNumber > thor.MaxStateHistory {
+			oldestAvailable := bestBlockNumber - thor.MaxStateHistory
+			if sum.Header.Number() < oldestAvailable {
+				return nil, nil, fmt.Errorf(
+					"state unavailable: block %d is outside the available range (oldest: %d, best: %d). Sync the node from scratch using --disable-pruner for historical data",
+					sum.Header.Number(), oldestAvailable, bestBlockNumber,
+				)
+			}
+		}
 	}
 
 	st := stater.NewState(sum.Root())

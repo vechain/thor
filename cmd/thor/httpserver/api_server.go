@@ -63,6 +63,7 @@ type APIConfig struct {
 	APIBacktraceLimit          int
 	PriorityIncreasePercentage int
 	Timeout                    int
+	PrunerDisabled             bool
 }
 
 func StartAPIServer(
@@ -99,7 +100,11 @@ func StartAPIServer(
 			http.Redirect(w, req, "doc/stoplight-ui/", http.StatusTemporaryRedirect)
 		})
 
-	accounts.New(repo, stater, config.CallGasLimit, forkConfig, bft, config.EnableDeprecated).Mount(router, "/accounts")
+	accounts.New(repo, stater, forkConfig, bft, &accounts.Config{
+		CallGasLimit:      config.CallGasLimit,
+		EnabledDeprecated: config.EnableDeprecated,
+		PrunerDisabled:    config.PrunerDisabled,
+	}).Mount(router, "/accounts")
 	if !config.SkipLogs {
 		events.New(repo, logDB, config.LogsLimit).Mount(router, "/logs/event")
 		transfers.New(repo, logDB, config.LogsLimit).Mount(router, "/logs/transfer")
@@ -107,16 +112,18 @@ func StartAPIServer(
 	blocks.New(repo, bft).Mount(router, "/blocks")
 	transactions.New(repo, txPool).Mount(router, "/transactions")
 	debug.New(repo, stater, forkConfig, bft,
-		config.CallGasLimit,
-		config.AllowCustomTracer,
-		config.AllowedTracers,
-		config.SoloMode,
-	).Mount(router, "/debug")
+		&debug.Config{
+			CallGasLimit:      config.CallGasLimit,
+			AllowCustomTracer: config.AllowCustomTracer,
+			SkipPoA:           config.SoloMode,
+			PrunerEnabled:     config.PrunerDisabled,
+		}, config.AllowedTracers).Mount(router, "/debug")
 	node.New(nw, txPool, config.EnableTxPool).Mount(router, "/node")
 	fees.New(repo, bft, forkConfig, stater, fees.Config{
 		APIBacktraceLimit:          config.APIBacktraceLimit,
 		PriorityIncreasePercentage: config.PriorityIncreasePercentage,
 		FixedCacheSize:             defaultFeeCacheSize,
+		PrunerEnabled:              config.PrunerDisabled,
 	}).Mount(router, "/fees")
 	subs := subscriptions.New(repo, origins, config.BacktraceLimit, txPool, config.EnableDeprecated)
 	subs.Mount(router, "/subscriptions")

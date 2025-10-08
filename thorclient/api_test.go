@@ -61,7 +61,11 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 
 	router := mux.NewRouter()
 
-	accounts.New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), &thor.NoFork, thorChain.Engine(), true).
+	accounts.New(thorChain.Repo(), thorChain.Stater(), &thor.NoFork, thorChain.Engine(), &accounts.Config{
+		CallGasLimit:      uint64(gasLimit),
+		EnabledDeprecated: true,
+		PrunerDisabled:    true,
+	}).
 		Mount(router, "/accounts")
 
 	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute}, &forks)
@@ -72,7 +76,12 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 
 	blocks.New(thorChain.Repo(), thorChain.Engine()).Mount(router, "/blocks")
 
-	debug.New(thorChain.Repo(), thorChain.Stater(), thorChain.GetForkConfig(), thorChain.Engine(), gasLimit, true, []string{"all"}, false).
+	debug.New(thorChain.Repo(), thorChain.Stater(), thorChain.GetForkConfig(), thorChain.Engine(), &debug.Config{
+		CallGasLimit:      uint64(gasLimit),
+		AllowCustomTracer: true,
+		SkipPoA:           false,
+		PrunerEnabled:     false,
+	}, []string{"all"}).
 		Mount(router, "/debug")
 
 	logDb, err := logdb.NewMem()

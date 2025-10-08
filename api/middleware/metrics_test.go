@@ -49,7 +49,11 @@ func TestMetricsMiddleware(t *testing.T) {
 	assert.NotNil(t, err)
 
 	router := mux.NewRouter()
-	acc := accounts.New(thorChain.Repo(), thorChain.Stater(), math.MaxUint64, &thor.NoFork, thorChain.Engine(), true)
+	acc := accounts.New(thorChain.Repo(), thorChain.Stater(), &thor.NoFork, thorChain.Engine(), &accounts.Config{
+		CallGasLimit:      math.MaxUint64,
+		EnabledDeprecated: true,
+		PrunerDisabled:    false,
+	})
 	acc.Mount(router, "/accounts")
 	router.PathPrefix("/metrics").Handler(metrics.HTTPHandler())
 	router.Use(MetricsMiddleware)

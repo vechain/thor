@@ -596,7 +596,12 @@ func initDebugServer(t *testing.T) {
 	blk = allBlocks[1]
 
 	router := mux.NewRouter()
-	debug = New(thorChain.Repo(), thorChain.Stater(), thorChain.GetForkConfig(), thorChain.Engine(), 21000, true, []string{"all"}, false)
+	debug = New(thorChain.Repo(), thorChain.Stater(), thorChain.GetForkConfig(), thorChain.Engine(), &Config{
+		CallGasLimit:      21000,
+		AllowCustomTracer: true,
+		SkipPoA:           false,
+		PrunerEnabled:     true,
+	}, []string{"all"})
 	debug.Mount(router, "/debug")
 	ts = httptest.NewServer(router)
 }
@@ -610,7 +615,9 @@ func httpPostAndCheckResponseStatus(t *testing.T, url string, obj any, responseS
 }
 
 func TestCreateTracer(t *testing.T) {
-	debug := &Debug{}
+	debug := &Debug{
+		config: &Config{},
+	}
 
 	// all
 	debug.allowedTracers = map[string]struct{}{"all": {}}
@@ -630,7 +637,7 @@ func TestCreateTracer(t *testing.T) {
 	assert.EqualError(t, err, "creating tracer is not allowed: structLogger")
 
 	// custom tracer
-	debug.allowCustomTracer = true
+	debug.config.AllowCustomTracer = true
 	_, err = debug.createTracer("{result:()=>{}, fault:()=>{}}", nil)
 	assert.Nil(t, err)
 }

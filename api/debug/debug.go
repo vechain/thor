@@ -40,14 +40,19 @@ import (
 const defaultMaxStorageResult = 1000
 
 type Debug struct {
-	repo              *chain.Repository
-	stater            *state.Stater
-	forkConfig        *thor.ForkConfig
-	callGasLimit      uint64
-	allowCustomTracer bool
-	bft               bft.Committer
-	allowedTracers    map[string]struct{}
-	skipPoA           bool
+	repo           *chain.Repository
+	stater         *state.Stater
+	forkConfig     *thor.ForkConfig
+	config         *Config
+	bft            bft.Committer
+	allowedTracers map[string]struct{}
+}
+
+type Config struct {
+	CallGasLimit      uint64
+	AllowCustomTracer bool
+	SkipPoA           bool
+	PrunerEnabled     bool
 }
 
 func New(
@@ -55,10 +60,8 @@ func New(
 	stater *state.Stater,
 	forkConfig *thor.ForkConfig,
 	bft bft.Committer,
-	callGaslimit uint64,
-	allowCustomTracer bool,
+	config *Config,
 	allowedTracers []string,
-	soloMode bool,
 ) *Debug {
 	allowedMap := make(map[string]struct{})
 	for _, t := range allowedTracers {
@@ -69,11 +72,9 @@ func New(
 		repo,
 		stater,
 		forkConfig,
-		callGaslimit,
-		allowCustomTracer,
+		config,
 		bft,
 		allowedMap,
-		soloMode,
 	}
 }
 
@@ -88,7 +89,7 @@ func (d *Debug) prepareClauseEnv(
 		d.repo,
 		d.stater,
 		d.forkConfig,
-	).NewRuntimeForReplay(block.Header(), d.skipPoA)
+	).NewRuntimeForReplay(block.Header(), d.config.SkipPoA)
 	if err != nil {
 		return nil, nil, thor.Bytes32{}, err
 	}
@@ -212,7 +213,7 @@ func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error 
 	if err != nil {
 		return restutil.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	summary, st, err := restutil.GetSummaryAndState(revision, d.repo, d.bft, d.stater, d.forkConfig)
+	summary, st, err := restutil.GetSummaryAndState(revision, d.repo, d.bft, d.stater, d.forkConfig, d.config.PrunerEnabled)
 	if err != nil {
 		if d.repo.IsNotFound(err) {
 			return restutil.BadRequest(errors.WithMessage(err, "revision"))
@@ -255,7 +256,7 @@ func (d *Debug) createTracer(name string, config json.RawMessage) (tracers.Trace
 		return tracers.DefaultDirectory.New(tracerName, config, false)
 	}
 
-	if d.allowCustomTracer {
+	if d.config.AllowCustomTracer {
 		return tracers.DefaultDirectory.New(tracerName, config, true)
 	}
 
@@ -461,10 +462,10 @@ func (d *Debug) parseTarget(target string) (block *block.Block, txID thor.Bytes3
 
 func (d *Debug) handleTraceCallOption(opt *api.TraceCallOption) (*xenv.TransactionContext, uint64, *tx.Clause, error) {
 	gas := opt.Gas
-	if opt.Gas > d.callGasLimit {
+	if opt.Gas > d.config.CallGasLimit {
 		return nil, 0, nil, restutil.Forbidden(errors.New("gas: exceeds limit"))
 	} else if opt.Gas == 0 {
-		gas = d.callGasLimit
+		gas = d.config.CallGasLimit
 	}
 
 	txCtx := xenv.TransactionContext{

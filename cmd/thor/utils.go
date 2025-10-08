@@ -258,6 +258,7 @@ func makeAPIConfig(ctx *cli.Context, logAPIRequests *atomic.Bool, soloMode bool)
 		SoloMode:                   soloMode,
 		EnableTxPool:               ctx.Bool(apiTxpoolFlag.Name),
 		Timeout:                    ctx.Int(apiTimeoutFlag.Name),
+		PrunerDisabled:             ctx.Bool(disablePrunerFlag.Name),
 	}
 }
 
