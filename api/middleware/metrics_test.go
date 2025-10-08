@@ -52,7 +52,7 @@ func TestMetricsMiddleware(t *testing.T) {
 	acc := accounts.New(thorChain.Repo(), thorChain.Stater(), &thor.NoFork, thorChain.Engine(), &accounts.Config{
 		CallGasLimit:      math.MaxUint64,
 		EnabledDeprecated: true,
-		PrunerDisabled:    false,
+		PrunerDisabled:    true,
 	})
 	acc.Mount(router, "/accounts")
 	router.PathPrefix("/metrics").Handler(metrics.HTTPHandler())
