@@ -178,7 +178,9 @@ func NewHayabusaDevnet() *Genesis {
 				Identity:        thor.BytesToBytes32([]byte("Solo Block Signer")),
 			},
 		},
-		Params: Params{},
+		Params: Params{
+			ExecutorAddress: &DevAccounts()[0].Address,
+		},
 		Executor: Executor{
 			Approvers: []Approver{
 				{
