@@ -80,8 +80,8 @@ func NewSignalExitAction(
 					return fmt.Errorf("SignalExit Check failed: current iteration cannot be 0")
 				}
 
-				if uint32(blk)-val.StartBlock < 180 {
-					return fmt.Errorf("SignalExit Check failed: no housekeepin has happened")
+				if uint32(blk)-val.StartBlock < HousekeepingInterval {
+					return fmt.Errorf("SignalExit Check failed: no housekeeping has happened")
 				}
 				return nil
 			}).

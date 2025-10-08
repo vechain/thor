@@ -8,7 +8,17 @@ import (
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
+	"log/slog"
+	"os"
 	"testing"
+)
+
+// ----------------------
+// Constants
+// ----------------------
+
+const (
+	HousekeepingInterval = 180 // blocks between housekeeping operations
 )
 
 // ----------------------
@@ -105,38 +115,77 @@ func (b *ActionBuilder) Build() Action {
 // Runner executes an action, runs its checks, then recurses on Next().
 // It now *exposes* and *uses* MinParentBlocksRequired() to control housekeeping cadence.
 func Runner(s *testStaker, action Action, currentBlk int) error {
-	fmt.Printf("▶ Executing: %s\n", action.Name())
+	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+			if a.Key == slog.TimeKey {
+				return slog.Attr{}
+			}
+			return a
+		},
+	}))
+
+	log.Debug("🚀 Starting action execution",
+		"action", action.Name(),
+		"current_block", currentBlk)
 
 	// Use minParentBlocksRequired to drive housekeeping cadence / block skipping.
 	if mpb := action.MinParentBlocksRequired(); mpb != nil {
-		// Ensure Housekeep runs every 180 blocks, possibly multiple times if we've jumped
+		log.Debug("⏭️ Block advancement required",
+			"blocks_to_advance", *mpb,
+			"target_block", currentBlk+*mpb)
+
+		// Ensure Housekeep runs every housekeepingInterval blocks, possibly multiple times if we've jumped
+		housekeepingCount := 0
 		for cblk := currentBlk; cblk <= currentBlk+*mpb; cblk++ {
-			if cblk%180 == 0 {
+			if cblk%HousekeepingInterval == 0 {
+				log.Debug("🧹 Running housekeeping", "block", cblk)
 				_, err := s.Housekeep(uint32(cblk))
 				if err != nil {
-					return err
+					log.Error("❌ Housekeeping failed", "block", cblk, "error", err)
+					return fmt.Errorf("housekeeping failed at block %d: %w", cblk, err)
 				}
+				housekeepingCount++
 			}
 		}
 
+		if housekeepingCount > 0 {
+			log.Info("✅ Housekeeping completed", "operations_count", housekeepingCount)
+		}
+
 		currentBlk += *mpb
+		log.Debug("⬆️ Block advancement completed", "new_block", currentBlk)
 	}
 
+	log.Info("⚡ Executing action", "action", action.Name(), "block", currentBlk)
 	err := action.Execute(s, currentBlk)
-	checkErr := action.Check(s, currentBlk)
-	switch {
-	case checkErr != nil && err != nil:
-	case checkErr == nil && err == nil:
-		break
-	default:
-		return fmt.Errorf("Check failed: action %s failed: ActionErr=%s CheckErr=%s", action.Name(), err, checkErr)
+	if err != nil {
+		log.Error("❌ Action execution failed", "action", action.Name(), "error", err)
+		return fmt.Errorf("action %s execution failed: %w", action.Name(), err)
 	}
+	log.Debug("✅ Action executed successfully", "action", action.Name())
 
-	for _, next := range action.Next() {
-		if err := Runner(s, next, currentBlk); err != nil {
-			return err
+	log.Debug("🔍 Running action checks", "action", action.Name())
+	checkErr := action.Check(s, currentBlk)
+	if checkErr != nil {
+		log.Error("❌ Action check failed", "action", action.Name(), "error", checkErr)
+		return fmt.Errorf("action %s check failed: %w", action.Name(), checkErr)
+	}
+	log.Debug("✅ Action checks passed", "action", action.Name())
+
+	nextActions := action.Next()
+	if len(nextActions) > 0 {
+		log.Info("🔄 Processing next actions", "count", len(nextActions))
+		for i, next := range nextActions {
+			log.Debug("➡️ Starting next action", "sequence", i+1, "action", next.Name())
+			if err := Runner(s, next, currentBlk); err != nil {
+				log.Error("❌ Next action failed", "sequence", i+1, "action", next.Name(), "error", err)
+				return err
+			}
 		}
 	}
+
+	log.Info("🎉 Action completed successfully", "action", action.Name())
 	return nil
 }
 
@@ -146,7 +195,7 @@ func TestPermutation(t *testing.T) {
 	validatorID := thor.BytesToAddress([]byte("validator"))
 	endorserID := thor.BytesToAddress([]byte("endorser"))
 
-	epoch := 180
+	epoch := HousekeepingInterval
 
 	// Compose the flow explicitly: AddValidation -> SignalExit
 	addValidation := NewValidationAction(
