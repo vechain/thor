@@ -116,14 +116,14 @@ func StartAPIServer(
 			CallGasLimit:      config.CallGasLimit,
 			AllowCustomTracer: config.AllowCustomTracer,
 			SkipPoA:           config.SoloMode,
-			PrunerEnabled:     config.PrunerDisabled,
+			PrunerDisabled:    config.PrunerDisabled,
 		}, config.AllowedTracers).Mount(router, "/debug")
 	node.New(nw, txPool, config.EnableTxPool).Mount(router, "/node")
 	fees.New(repo, bft, forkConfig, stater, fees.Config{
 		APIBacktraceLimit:          config.APIBacktraceLimit,
 		PriorityIncreasePercentage: config.PriorityIncreasePercentage,
 		FixedCacheSize:             defaultFeeCacheSize,
-		PrunerEnabled:              config.PrunerDisabled,
+		PrunerDisabled:             config.PrunerDisabled,
 	}).Mount(router, "/fees")
 	subs := subscriptions.New(repo, origins, config.BacktraceLimit, txPool, config.EnableDeprecated)
 	subs.Mount(router, "/subscriptions")

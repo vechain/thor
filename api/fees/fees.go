@@ -32,7 +32,7 @@ type Config struct {
 	APIBacktraceLimit          int
 	PriorityIncreasePercentage int
 	FixedCacheSize             int
-	PrunerEnabled              bool
+	PrunerDisabled             bool
 }
 
 type Fees struct {
@@ -96,7 +96,7 @@ func (f *Fees) validateNewestBlock(req *http.Request, blockCount uint64) (*chain
 		return nil, 0, restutil.BadRequest(errors.WithMessage(err, "newestBlock"))
 	}
 
-	newestBlockSummary, _, err := restutil.GetSummaryAndState(newestBlock, f.data.repo, f.bft, f.data.stater, f.forkConfig, f.config.PrunerEnabled)
+	newestBlockSummary, _, err := restutil.GetSummaryAndState(newestBlock, f.data.repo, f.bft, f.data.stater, f.forkConfig, f.config.PrunerDisabled)
 	if err != nil {
 		if f.data.repo.IsNotFound(err) {
 			return nil, 0, restutil.BadRequest(errors.WithMessage(err, "newestBlock"))

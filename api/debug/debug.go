@@ -52,7 +52,7 @@ type Config struct {
 	CallGasLimit      uint64
 	AllowCustomTracer bool
 	SkipPoA           bool
-	PrunerEnabled     bool
+	PrunerDisabled    bool
 }
 
 func New(
@@ -213,7 +213,7 @@ func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error 
 	if err != nil {
 		return restutil.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	summary, st, err := restutil.GetSummaryAndState(revision, d.repo, d.bft, d.stater, d.forkConfig, d.config.PrunerEnabled)
+	summary, st, err := restutil.GetSummaryAndState(revision, d.repo, d.bft, d.stater, d.forkConfig, d.config.PrunerDisabled)
 	if err != nil {
 		if d.repo.IsNotFound(err) {
 			return restutil.BadRequest(errors.WithMessage(err, "revision"))

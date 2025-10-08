@@ -80,7 +80,7 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 		CallGasLimit:      uint64(gasLimit),
 		AllowCustomTracer: true,
 		SkipPoA:           false,
-		PrunerEnabled:     false,
+		PrunerDisabled:    true,
 	}, []string{"all"}).
 		Mount(router, "/debug")
 

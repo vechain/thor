@@ -600,7 +600,7 @@ func initDebugServer(t *testing.T) {
 		CallGasLimit:      21000,
 		AllowCustomTracer: true,
 		SkipPoA:           false,
-		PrunerEnabled:     true,
+		PrunerDisabled:    true,
 	}, []string{"all"})
 	debug.Mount(router, "/debug")
 	ts = httptest.NewServer(router)
