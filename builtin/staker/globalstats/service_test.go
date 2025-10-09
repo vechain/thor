@@ -71,6 +71,9 @@ func TestService_ApplyRenewal(t *testing.T) {
 	qVET, err := svc.GetQueuedStake()
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(0), qVET)
+
+	r.QueuedDecrease = 1000
+	assert.ErrorContains(t, svc.ApplyRenewal(r), "queued underflow occurred")
 }
 
 func TestService_ApplyExit(t *testing.T) {
@@ -179,4 +182,87 @@ func TestService_GetCooldownStake(t *testing.T) {
 	cooldown, err = svc.GetCooldownStake()
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(6), cooldown)
+}
+
+func TestService_ApplyRenewal_ErrorBranches(t *testing.T) {
+	svc, _, _ := newSvc()
+	// Simulate Add overflow in locked.Add
+	r := &Renewal{
+		LockedIncrease: stakes.NewWeightedStake(^uint64(0), ^uint64(0)),
+		LockedDecrease: stakes.NewWeightedStake(0, 0),
+		QueuedDecrease: 0,
+	}
+	assert.NoError(t, svc.AddQueued(1))
+	svc.locked.Upsert(&stakes.WeightedStake{VET: ^uint64(0), Weight: ^uint64(0)})
+	err := svc.ApplyRenewal(r)
+	assert.ErrorContains(t, err, "VET add overflow occurred")
+
+	// Simulate Sub underflow in locked.Sub
+	r = &Renewal{
+		LockedIncrease: stakes.NewWeightedStake(0, 0),
+		LockedDecrease: stakes.NewWeightedStake(100, 100),
+		QueuedDecrease: 0,
+	}
+	svc.locked.Upsert(&stakes.WeightedStake{VET: 0, Weight: 0})
+	err = svc.ApplyRenewal(r)
+	assert.ErrorContains(t, err, "VET subtract underflow occurred")
+}
+
+func TestService_ApplyExit_ErrorBranches(t *testing.T) {
+	svc, _, _ := newSvc()
+	// 1. Simulate Add overflow in totalExited.Add
+	valExit := &Exit{ExitedTVL: stakes.NewWeightedStake(^uint64(0), ^uint64(0)), QueuedDecrease: 0}
+	aggExit := &Exit{ExitedTVL: stakes.NewWeightedStake(1, 1), QueuedDecrease: 0}
+	err := svc.ApplyExit(valExit, aggExit)
+	assert.ErrorContains(t, err, "VET add overflow occurred")
+
+	// 2. Simulate RemoveLocked underflow
+	valExit = &Exit{ExitedTVL: stakes.NewWeightedStake(1, 1), QueuedDecrease: 0}
+	aggExit = &Exit{ExitedTVL: stakes.NewWeightedStake(1, 1), QueuedDecrease: 0}
+	svc.locked.Upsert(&stakes.WeightedStake{VET: 0, Weight: 0})
+	err = svc.ApplyExit(valExit, aggExit)
+	assert.ErrorContains(t, err, "VET subtract underflow occurred")
+
+	// 3. Simulate RemoveQueued underflow
+	valExit = &Exit{ExitedTVL: stakes.NewWeightedStake(0, 0), QueuedDecrease: 100}
+	aggExit = &Exit{ExitedTVL: stakes.NewWeightedStake(0, 0), QueuedDecrease: 100}
+	svc.queued.Upsert(0)
+	err = svc.ApplyExit(valExit, aggExit)
+	assert.ErrorContains(t, err, "queued underflow occurred")
+
+	// 4. Simulate AddCooldown overflow
+	valExit = &Exit{ExitedTVL: stakes.NewWeightedStake(^uint64(0), 0), QueuedDecrease: 0}
+	aggExit = &Exit{ExitedTVL: stakes.NewWeightedStake(0, 0), QueuedDecrease: 0}
+	svc.cooldown.Upsert(^uint64(0))
+	svc.locked.Upsert(&stakes.WeightedStake{VET: ^uint64(0), Weight: 0})
+	err = svc.ApplyExit(valExit, aggExit)
+	assert.ErrorContains(t, err, "cooldown overflow occurred")
+}
+
+func TestService_RemoveLocked_ErrorBranches(t *testing.T) {
+	svc, addr, st := newSvc()
+	// 1. Simulate getLocked error
+	poisonUintSlot(st, addr, slotLocked)
+	err := svc.RemoveLocked(stakes.NewWeightedStake(1, 1))
+	assert.Error(t, err)
+
+	// 2. Simulate locked.Sub underflow
+	svc, _, _ = newSvc()
+	svc.locked.Upsert(&stakes.WeightedStake{VET: 0, Weight: 0})
+	err = svc.RemoveLocked(stakes.NewWeightedStake(1, 1))
+	assert.ErrorContains(t, err, "VET subtract underflow occurred")
+}
+
+func TestService_AddWithdrawable_Overflow(t *testing.T) {
+	svc, _, _ := newSvc()
+	svc.withdrawable.Upsert(^uint64(0))
+	err := svc.AddWithdrawable(1)
+	assert.ErrorContains(t, err, "withdrawable overflow occurred")
+}
+
+func TestService_AddCooldown_Overflow(t *testing.T) {
+	svc, _, _ := newSvc()
+	svc.cooldown.Upsert(^uint64(0))
+	err := svc.AddCooldown(1)
+	assert.ErrorContains(t, err, "cooldown overflow occurred")
 }

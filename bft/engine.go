@@ -437,15 +437,7 @@ func (engine *Engine) getTotalWeight(sum *chain.BlockSummary) (uint64, error) {
 
 func (engine *Engine) getMaxBlockProposers(sum *chain.BlockSummary) (uint64, error) {
 	state := engine.stater.NewState(sum.Root())
-	params, err := builtin.Params.Native(state).Get(thor.KeyMaxBlockProposers)
-	if err != nil {
-		return 0, err
-	}
-	mbp := params.Uint64()
-	if mbp == 0 || mbp > thor.InitialMaxBlockProposers {
-		mbp = thor.InitialMaxBlockProposers
-	}
-	return mbp, nil
+	return thor.GetMaxBlockProposers(builtin.Params.Native(state), true)
 }
 
 func (engine *Engine) getQuality(id thor.Bytes32) (quality uint32, err error) {
