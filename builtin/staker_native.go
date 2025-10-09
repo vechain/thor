@@ -186,8 +186,6 @@ func init() {
 			}
 
 			if !isPoSActive {
-				charger.Charge(thor.SloadGas) // a.getEntry(ValidatorMaster)
-
 				exists, endorser, _, _, err := Authority.Native(env.State()).Get(thor.Address(args.Validator))
 				if err != nil {
 					return nil, err

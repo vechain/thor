@@ -106,7 +106,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_addValidation",
-			expectedGas: 122000,
+			expectedGas: 121800,
 			args:        []any{account1, account1, thor.LowStakingPeriod(), staker.MinStake},
 			description: "Add a new validator (not implemented yet)",
 		},
