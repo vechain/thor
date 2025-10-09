@@ -272,9 +272,20 @@ func TestPermutations(t *testing.T) {
 		thor.LowStakingPeriod(),
 		MinStakeVET,
 		NewSignalExitAction(signalExitMinBlock, validatorID, endorserID,
-			NewWithDrawAction(withDrawMinBlock, validatorID, endorserID),
+			NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
 		),
-		NewWithDrawAction(withDrawMinBlock, validatorID, endorserID),
+		NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
+		NewIncreaseStakeAction(withDrawMinBlock, validatorID, endorserID, MinStakeVET,
+			NewDecreaseStakeAction(withDrawMinBlock, validatorID, endorserID, MinStakeVET,
+				NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
+			),
+			NewSignalExitAction(withDrawMinBlock, validatorID, endorserID,
+				NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
+			),
+		),
+		NewDecreaseStakeAction(withDrawMinBlock, validatorID, endorserID, MinStakeVET,
+			NewDecreaseStakeAction(withDrawMinBlock, validatorID, endorserID, MaxStakeVET*2),
+		),
 	)
 
 	require.NoError(t, RunWithTree(staker, action, 0))
@@ -283,7 +294,7 @@ func TestPermutations(t *testing.T) {
 func TestRandomPermutations(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 
-	for i := 0; i < 1_000; i++ {
+	for i := range 1_000 {
 		t.Run(fmt.Sprintf("iteration-%d", i+1), func(t *testing.T) {
 			// Create per-action random modifier function
 			randomModifier := func(original *int) *int {
