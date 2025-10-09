@@ -110,12 +110,11 @@ func TestValidatorExitInSamePeriod(t *testing.T) {
 
 	started, err = del1.Started(val1, thor.MediumStakingPeriod()*2+1)
 	require.NoError(t, err)
-	assert.False(t, ended, "delegation1 should not be started due to validator1 exit")
+	assert.False(t, started, "delegation1 should not be started due to validator1 exit")
 
 	withdrawAmt, err := staker.WithdrawDelegation(delegation1, thor.MediumStakingPeriod()*2+1)
 	require.NoError(t, err)
 	require.Equal(t, uint64(1000), withdrawAmt)
-
 }
 
 // TestCascadingExits tests multiple validators exiting in sequence
@@ -125,19 +124,19 @@ func TestCascadingExits(t *testing.T) {
 	// Create validator addresses
 	validators := make([]thor.Address, 7)
 	endorsers := make([]thor.Address, 7)
-	for i := 0; i < 7; i++ {
+	for i := range 7 {
 		validators[i] = thor.BytesToAddress([]byte("validator" + string(rune(i+1))))
 		endorsers[i] = thor.BytesToAddress([]byte("endorser" + string(rune(i+1))))
 	}
 
 	// Step 1: Add all validators
-	for i := 0; i < 7; i++ {
+	for i := range 7 {
 		err := staker.AddValidation(validators[i], endorsers[i], thor.MediumStakingPeriod(), MinStakeVET)
 		require.NoError(t, err)
 	}
 
 	delegations := make([]*big.Int, 7)
-	for i := 0; i < 7; i++ {
+	for i := range 7 {
 		del, err := staker.AddDelegation(validators[i], uint64(1000*(i+1)), 100, thor.MediumStakingPeriod()+1)
 		require.NoError(t, err)
 		delegations[i] = del
@@ -207,19 +206,19 @@ func TestQueueManagement(t *testing.T) {
 	// Create validator addresses
 	validators := make([]thor.Address, 5)
 	endorsers := make([]thor.Address, 5)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		validators[i] = thor.BytesToAddress([]byte("validator" + string(rune(i+1))))
 		endorsers[i] = thor.BytesToAddress([]byte("endorser" + string(rune(i+1))))
 	}
 
 	// Step 1: Add all validators (they will be queued)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		err := staker.AddValidation(validators[i], endorsers[i], thor.MediumStakingPeriod(), MinStakeVET)
 		require.NoError(t, err)
 	}
 
 	// Step 2: Verify all validators are queued
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		val, err := staker.GetValidation(validators[i])
 		require.NoError(t, err)
 		assert.Equal(t, validation.StatusQueued, val.Status, "validator %d should be queued", i+1)
@@ -230,7 +229,7 @@ func TestQueueManagement(t *testing.T) {
 	require.NoError(t, err)
 
 	// Step 4: Verify first 2 validators are active
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		val, err := staker.GetValidation(validators[i])
 		require.NoError(t, err)
 		assert.Equal(t, validation.StatusActive, val.Status, "validator %d should be active", i+1)
@@ -276,13 +275,13 @@ func TestLeaderGroupRotation(t *testing.T) {
 	// Create validator addresses
 	validators := make([]thor.Address, 4)
 	endorsers := make([]thor.Address, 4)
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		validators[i] = thor.BytesToAddress([]byte("validator" + string(rune(i+1))))
 		endorsers[i] = thor.BytesToAddress([]byte("endorser" + string(rune(i+1))))
 	}
 
 	// Step 1: Add all validators
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		err := staker.AddValidation(validators[i], endorsers[i], thor.MediumStakingPeriod(), MinStakeVET)
 		require.NoError(t, err)
 	}
@@ -292,7 +291,7 @@ func TestLeaderGroupRotation(t *testing.T) {
 	require.NoError(t, err)
 
 	// Step 3: Verify first 3 validators are active
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		val, err := staker.GetValidation(validators[i])
 		require.NoError(t, err)
 		assert.Equal(t, validation.StatusActive, val.Status, "validator %d should be active", i+1)
@@ -305,7 +304,7 @@ func TestLeaderGroupRotation(t *testing.T) {
 
 	// Step 5: Add delegations to active validators
 	delegations := make([]*big.Int, 3)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		delegations[i], err = staker.AddDelegation(validators[i], uint64(1000*(i+1)), 100, thor.MediumStakingPeriod()+1)
 		require.NoError(t, err)
 	}
@@ -362,19 +361,19 @@ func TestValidatorEviction(t *testing.T) {
 	// Create validator addresses
 	validators := make([]thor.Address, 4)
 	endorsers := make([]thor.Address, 4)
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		validators[i] = thor.BytesToAddress([]byte("validator" + string(rune(i+1))))
 		endorsers[i] = thor.BytesToAddress([]byte("endorser" + string(rune(i+1))))
 	}
 
 	// Step 1: Add all validators
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		err := staker.AddValidation(validators[i], endorsers[i], thor.LowStakingPeriod(), MinStakeVET)
 		require.NoError(t, err)
 	}
 
 	delegations := make([]*big.Int, 3)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		del, err := staker.AddDelegation(validators[i], uint64(1000*(i+1)), 100, 15)
 		require.NoError(t, err)
 		delegations[i] = del
@@ -436,19 +435,19 @@ func TestComplexMultiValidatorScenario(t *testing.T) {
 	// Create validator addresses
 	validators := make([]thor.Address, 6)
 	endorsers := make([]thor.Address, 6)
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		validators[i] = thor.BytesToAddress([]byte("validator" + string(rune(i+1))))
 		endorsers[i] = thor.BytesToAddress([]byte("endorser" + string(rune(i+1))))
 	}
 
 	// Step 1: Add all validators
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		err := staker.AddValidation(validators[i], endorsers[i], thor.MediumStakingPeriod(), MinStakeVET)
 		require.NoError(t, err)
 	}
 
 	delegations := make([]*big.Int, 4)
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		del, err := staker.AddDelegation(validators[i], uint64(1000*(i+1)), 100, 10)
 		require.NoError(t, err)
 		delegations[i] = del
@@ -543,6 +542,7 @@ func TestComplexMultiValidatorScenario(t *testing.T) {
 	assert.True(t, started, "delegation on validator 5 should be active")
 
 	_, err = staker.Housekeep(thor.MediumStakingPeriod() * 4)
+	require.NoError(t, err)
 	del6, val6, err := staker.GetDelegation(delegation6)
 	require.NoError(t, err)
 	started, err = del6.Started(val6, thor.MediumStakingPeriod()*4+1)
