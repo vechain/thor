@@ -197,7 +197,7 @@ func TestGetSummaryAndState_PrunedBlock(t *testing.T) {
 
 		// Add a few blocks
 		account := genesis.DevAccounts()[0]
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			require.NoError(t, thorChain.MintBlock(account))
 		}
 
@@ -224,7 +224,7 @@ func TestGetSummaryAndState_PrunedBlock(t *testing.T) {
 
 		// Add a few blocks
 		account := genesis.DevAccounts()[0]
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			require.NoError(t, thorChain.MintBlock(account))
 		}
 
@@ -260,7 +260,7 @@ func TestGetSummaryAndState_PrunedBlock(t *testing.T) {
 		numBlocks := thor.MaxStateHistory + 100 // 65635 blocks total (including genesis)
 
 		t.Logf("Creating %d blocks (this takes ~20 seconds)...", numBlocks)
-		for i := 0; i < numBlocks; i++ {
+		for i := range numBlocks {
 			if err := thorChain.MintBlock(account); err != nil {
 				t.Fatalf("Failed to create block %d: %v", i, err)
 			}
