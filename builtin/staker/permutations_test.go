@@ -114,6 +114,59 @@ func (b *ActionBuilder) Build() Action {
 	}
 }
 
+// PrintActionTree prints a tree visualization of the action hierarchy
+func PrintActionTree(action Action) {
+	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+			if a.Key == slog.TimeKey {
+				return slog.Attr{}
+			}
+			return a
+		},
+	}))
+
+	log.Info("📋 Action Execution Plan:")
+	printActionTreeHelper(action, "", true, log)
+	log.Info("🏁 End of execution plan\n")
+}
+
+func printActionTreeHelper(action Action, prefix string, isLast bool, log *slog.Logger) {
+	// Current node
+	connector := "├── "
+	if isLast {
+		connector = "└── "
+	}
+
+	actionInfo := action.Name()
+	if mpb := action.MinParentBlocksRequired(); mpb != nil {
+		actionInfo += fmt.Sprintf(" (blocks: %d)", *mpb)
+	}
+
+	log.Info(fmt.Sprintf("%s%s%s", prefix, connector, actionInfo))
+
+	// Prepare prefix for children
+	childPrefix := prefix
+	if isLast {
+		childPrefix += "    "
+	} else {
+		childPrefix += "│   "
+	}
+
+	// Process next actions
+	nextActions := action.Next()
+	for i, nextAction := range nextActions {
+		isLastChild := i == len(nextActions)-1
+		printActionTreeHelper(nextAction, childPrefix, isLastChild, log)
+	}
+}
+
+// RunWithTree prints the action tree and then executes it
+func RunWithTree(s *testStaker, action Action, currentBlk int) error {
+	PrintActionTree(action)
+	return Runner(s, action, currentBlk)
+}
+
 // Runner executes an action, runs its checks, then recurses on Next().
 // It now *exposes* and *uses* MinParentBlocksRequired() to control housekeeping cadence.
 func Runner(s *testStaker, action Action, currentBlk int) error {
@@ -173,40 +226,16 @@ func Runner(s *testStaker, action Action, currentBlk int) error {
 	log.Debug("✅ Action execution + check passed", "action", action.Name())
 
 	nextActions := action.Next()
-	if len(nextActions) > 0 {
-		log.Info("🔄 Processing next actions", "count", len(nextActions))
-		for i, next := range nextActions {
-			log.Debug("➡️ Starting next action", "sequence", i+1, "action", next.Name())
-			if err := Runner(s, next, currentBlk); err != nil {
-				log.Error("❌ Next action failed", "sequence", i+1, "action", next.Name(), "error", err)
-				return err
-			}
+	for i, next := range nextActions {
+		log.Debug("➡️ Starting next action", "sequence", i+1, "action", next.Name())
+		if err := Runner(CloneStaker(s), next, currentBlk); err != nil {
+			log.Error("❌ Next action failed", "sequence", i+1, "action", next.Name(), "error", err)
+			return err
 		}
 	}
 
 	log.Info("🎉 Action completed successfully", "action", action.Name())
 	return nil
-}
-
-func TestPermutation(t *testing.T) {
-	staker := newTestStaker()
-
-	validatorID := thor.BytesToAddress([]byte("validator"))
-	endorserID := thor.BytesToAddress([]byte("endorser"))
-
-	epoch := HousekeepingInterval
-
-	// Compose the flow explicitly: AddValidation -> SignalExit
-	addValidation := NewValidationAction(
-		nil,
-		validatorID,
-		endorserID,
-		thor.LowStakingPeriod(),
-		MinStakeVET,
-		NewSignalExitAction(&epoch, validatorID, endorserID),
-	)
-
-	require.NoError(t, Runner(staker, addValidation, 0))
 }
 
 func TestPermutations(t *testing.T) {
@@ -263,10 +292,9 @@ func TestPermutations(t *testing.T) {
 			signalExitMinBlock := tt.minParentBlockModifier(&epoch)
 			withDrawMinBlockCalc := convertNilBlock(signalExitMinBlock) + epoch + int(thor.CooldownPeriod())
 			withDrawMinBlock := tt.minParentBlockModifier(&withDrawMinBlockCalc)
-			thor.CooldownPeriod()
 
-			// Compose the flow explicitly: AddValidation -> SignalExit
-			addValidation := NewValidationAction(
+			// Compose the flow explicitly: AddValidation -> SignalExit -> Withdraw
+			action := NewValidationAction(
 				tt.minParentBlockModifier(nil),
 				validatorID,
 				endorserID,
@@ -275,9 +303,10 @@ func TestPermutations(t *testing.T) {
 				NewSignalExitAction(signalExitMinBlock, validatorID, endorserID,
 					NewWithDrawAction(withDrawMinBlock, validatorID, endorserID),
 				),
+				NewWithDrawAction(withDrawMinBlock, validatorID, endorserID),
 			)
 
-			require.NoError(t, Runner(staker, addValidation, 0))
+			require.NoError(t, RunWithTree(staker, action, 0))
 		})
 	}
 }
@@ -287,6 +316,34 @@ func NewStaker() *Staker {
 	st := state.New(db, trie.Root{})
 	addr := thor.BytesToAddress([]byte("staker"))
 	return New(addr, st, params.New(addr, st), nil)
+}
+
+// CloneStaker creates a deep copy of the testStaker with cloned state
+func CloneStaker(ts *testStaker) *testStaker {
+	// Get the current state root by creating and committing a stage
+	stage, err := ts.state.Stage(trie.Version{})
+	if err != nil {
+		panic(err) // For testing, this should not fail
+	}
+
+	// Commit the stage to persist all trie data
+	currentRoot, err := stage.Commit()
+	if err != nil {
+		panic(err) // For testing, this should not fail
+	}
+
+	// Create a new state from the same database but using the committed root
+	// This approach shares the database but creates independent state trees
+	clonedState := ts.state.Checkout(trie.Root{Hash: currentRoot})
+
+	// Create a new staker with the cloned state
+	clonedStaker := New(ts.addr, clonedState, params.New(ts.addr, clonedState), nil)
+
+	return &testStaker{
+		addr:   ts.addr,
+		state:  clonedState,
+		Staker: clonedStaker,
+	}
 }
 
 func convertNilBlock(i *int) int {
