@@ -2,9 +2,9 @@ package staker
 
 import (
 	"fmt"
-
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
+	"math/big"
 )
 
 // NewValidationAction builds an AddValidation action with explicit parameters.
@@ -232,6 +232,113 @@ func NewSetBeneficiaryAction(
 				if val.Status == validation.StatusExit || val.ExitBlock != nil {
 					return fmt.Errorf("Check SetBeneficiary failed, validator has exited or signaled exit")
 				}
+				return nil
+			}).
+		WithNext(next...).
+		Build()
+}
+
+func NewAddDelegationAction(
+	minParentBlocksRequired *int,
+	validationID thor.Address,
+	stake uint64,
+	multiplier uint8,
+	next ...Action,
+) Action {
+	return NewActionBuilder("AddDelegation").
+		WithMinParentBlocksRequired(minParentBlocksRequired).
+		WithExecute(
+			func(staker *testStaker, blk int) error {
+				_, err := staker.AddDelegation(validationID, stake, multiplier, uint32(blk))
+				if err != nil {
+					return fmt.Errorf("AddDelegation failed : %w", err)
+				}
+				return nil
+			}).
+		WithCheck(
+			func(staker *testStaker, blk int) error {
+				if stake <= 0 {
+					return NewReverts("stake must be greater than 0")
+				}
+
+				if multiplier == 0 {
+					return NewReverts("multiplier cannot be 0")
+				}
+				// ensure validation is ok to receive a new delegation
+				val, err := staker.Staker.getValidationOrRevert(validationID)
+				if err != nil {
+					return err
+				}
+
+				if val.Status != validation.StatusQueued && val.Status != validation.StatusActive {
+					return NewReverts("validation is not queued or active")
+				}
+
+				// delegations cannot be added to a validator that has signaled to exit
+				if val.ExitBlock != nil {
+					return NewReverts("cannot add delegation to exiting validator")
+				}
+
+				// validate that new TVL is <= Max stake
+				if err = staker.Staker.validateStakeIncrease(validationID, val, stake); err != nil {
+					return err
+				}
+				return nil
+			}).
+		WithNext(next...).
+		Build()
+}
+
+func NewSignalExitDelegationAction(
+	minParentBlocksRequired *int,
+	delegationID *big.Int,
+	next ...Action,
+) Action {
+	return NewActionBuilder("SignalExitDelegation").
+		WithMinParentBlocksRequired(minParentBlocksRequired).
+		WithExecute(
+			func(staker *testStaker, blk int) error {
+				return staker.SignalDelegationExit(delegationID, uint32(blk))
+			}).
+		WithCheck(
+			func(staker *testStaker, blk int) error {
+				del, err := staker.Staker.delegationService.GetDelegation(delegationID)
+				if err != nil {
+					return err
+				}
+				if del == nil {
+					return NewReverts("delegation is empty")
+				}
+				if del.LastIteration == nil {
+					return NewReverts("delegation is not signaled exit")
+				}
+				if del.Stake == 0 {
+					return NewReverts("delegation has already been withdrawn")
+				}
+
+				// there can never be a delegation pointing to a non-existent validation
+				// if the validation does not exist it's a system error
+				val, err := staker.validationService.GetExistingValidation(del.Validation)
+				if err != nil {
+					return err
+				}
+
+				// ensure delegation can be signaled ( delegation has started and has not ended )
+				started, err := del.Started(val, uint32(blk))
+				if err != nil {
+					return err
+				}
+				if !started {
+					return NewReverts("delegation has not started yet, funds can be withdrawn")
+				}
+				ended, err := del.Ended(val, uint32(blk))
+				if err != nil {
+					return err
+				}
+				if ended {
+					return NewReverts("delegation has ended, funds can be withdrawn")
+				}
+
 				return nil
 			}).
 		WithNext(next...).

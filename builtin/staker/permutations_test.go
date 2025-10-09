@@ -3,6 +3,7 @@ package staker
 import (
 	"fmt"
 	"log/slog"
+	"math/big"
 	"math/rand"
 	"os"
 	"testing"
@@ -291,6 +292,7 @@ func TestPermutations(t *testing.T) {
 
 	validatorID := thor.BytesToAddress([]byte("validator"))
 	endorserID := thor.BytesToAddress([]byte("endorser"))
+	lowStakingPeriod := int(thor.LowStakingPeriod())
 
 	epoch := HousekeepingInterval
 
@@ -324,6 +326,12 @@ func TestPermutations(t *testing.T) {
 		),
 		NewDecreaseStakeAction(withDrawMinBlock, validatorID, endorserID, MinStakeVET,
 			NewDecreaseStakeAction(withDrawMinBlock, validatorID, endorserID, MaxStakeVET*2),
+		),
+		NewAddDelegationAction(originalModifier(nil), validatorID, MinStakeVET, uint8(1),
+			NewSignalExitDelegationAction(originalModifier(&lowStakingPeriod), big.NewInt(1)),
+			NewSignalExitAction(withDrawMinBlock, validatorID, endorserID,
+				NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
+			),
 		),
 	)
 
