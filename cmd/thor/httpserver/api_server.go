@@ -100,7 +100,8 @@ func StartAPIServer(
 			http.Redirect(w, req, "doc/stoplight-ui/", http.StatusTemporaryRedirect)
 		})
 
-	accounts.New(repo, stater, forkConfig, bft, &accounts.Config{
+	accounts.New(repo, stater, bft, &accounts.Config{
+		ForkConfig:        forkConfig,
 		CallGasLimit:      config.CallGasLimit,
 		EnabledDeprecated: config.EnableDeprecated,
 		PrunerDisabled:    config.PrunerDisabled,
@@ -111,8 +112,9 @@ func StartAPIServer(
 	}
 	blocks.New(repo, bft).Mount(router, "/blocks")
 	transactions.New(repo, txPool).Mount(router, "/transactions")
-	debug.New(repo, stater, forkConfig, bft,
+	debug.New(repo, stater, bft,
 		&debug.Config{
+			ForkConfig:        forkConfig,
 			CallGasLimit:      config.CallGasLimit,
 			AllowCustomTracer: config.AllowCustomTracer,
 			SkipPoA:           config.SoloMode,

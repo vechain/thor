@@ -61,7 +61,8 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 
 	router := mux.NewRouter()
 
-	accounts.New(thorChain.Repo(), thorChain.Stater(), &thor.NoFork, thorChain.Engine(), &accounts.Config{
+	accounts.New(thorChain.Repo(), thorChain.Stater(), thorChain.Engine(), &accounts.Config{
+		ForkConfig:        &thor.NoFork,
 		CallGasLimit:      uint64(gasLimit),
 		EnabledDeprecated: true,
 		PrunerDisabled:    true,
@@ -76,7 +77,8 @@ func initAPIServer(t *testing.T) (*testchain.Chain, *httptest.Server) {
 
 	blocks.New(thorChain.Repo(), thorChain.Engine()).Mount(router, "/blocks")
 
-	debug.New(thorChain.Repo(), thorChain.Stater(), thorChain.GetForkConfig(), thorChain.Engine(), &debug.Config{
+	debug.New(thorChain.Repo(), thorChain.Stater(), thorChain.Engine(), &debug.Config{
+		ForkConfig:        thorChain.GetForkConfig(),
 		CallGasLimit:      uint64(gasLimit),
 		AllowCustomTracer: true,
 		SkipPoA:           false,

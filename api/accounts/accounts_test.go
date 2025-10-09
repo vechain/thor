@@ -314,7 +314,8 @@ func initAccountServer(t *testing.T, enabledDeprecated bool) {
 	)
 
 	router := mux.NewRouter()
-	New(thorChain.Repo(), thorChain.Stater(), &thor.NoFork, thorChain.Engine(), &Config{
+	New(thorChain.Repo(), thorChain.Stater(), thorChain.Engine(), &Config{
+		ForkConfig:        &thor.NoFork,
 		CallGasLimit:      uint64(gasLimit),
 		EnabledDeprecated: enabledDeprecated,
 		PrunerDisabled:    true,

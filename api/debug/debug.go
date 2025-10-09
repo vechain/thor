@@ -42,13 +42,13 @@ const defaultMaxStorageResult = 1000
 type Debug struct {
 	repo           *chain.Repository
 	stater         *state.Stater
-	forkConfig     *thor.ForkConfig
 	config         *Config
 	bft            bft.Committer
 	allowedTracers map[string]struct{}
 }
 
 type Config struct {
+	ForkConfig        *thor.ForkConfig
 	CallGasLimit      uint64
 	AllowCustomTracer bool
 	SkipPoA           bool
@@ -58,7 +58,6 @@ type Config struct {
 func New(
 	repo *chain.Repository,
 	stater *state.Stater,
-	forkConfig *thor.ForkConfig,
 	bft bft.Committer,
 	config *Config,
 	allowedTracers []string,
@@ -71,7 +70,6 @@ func New(
 	return &Debug{
 		repo,
 		stater,
-		forkConfig,
 		config,
 		bft,
 		allowedMap,
@@ -88,7 +86,7 @@ func (d *Debug) prepareClauseEnv(
 	rt, err := consensus.New(
 		d.repo,
 		d.stater,
-		d.forkConfig,
+		d.config.ForkConfig,
 	).NewRuntimeForReplay(block.Header(), d.config.SkipPoA)
 	if err != nil {
 		return nil, nil, thor.Bytes32{}, err
@@ -213,7 +211,7 @@ func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error 
 	if err != nil {
 		return restutil.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	summary, st, err := restutil.GetSummaryAndState(revision, d.repo, d.bft, d.stater, d.forkConfig, d.config.PrunerDisabled)
+	summary, st, err := restutil.GetSummaryAndState(revision, d.repo, d.bft, d.stater, d.config.ForkConfig, d.config.PrunerDisabled)
 	if err != nil {
 		if d.repo.IsNotFound(err) {
 			return restutil.BadRequest(errors.WithMessage(err, "revision"))
@@ -286,7 +284,7 @@ func (d *Debug) traceCall(
 			TotalScore:  header.TotalScore(),
 			BaseFee:     header.BaseFee(),
 		},
-		d.forkConfig)
+		d.config.ForkConfig)
 
 	tracer.SetContext(&tracers.Context{
 		BlockID:   header.ID(),

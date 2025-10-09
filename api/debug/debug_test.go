@@ -596,7 +596,8 @@ func initDebugServer(t *testing.T) {
 	blk = allBlocks[1]
 
 	router := mux.NewRouter()
-	debug = New(thorChain.Repo(), thorChain.Stater(), thorChain.GetForkConfig(), thorChain.Engine(), &Config{
+	debug = New(thorChain.Repo(), thorChain.Stater(), thorChain.Engine(), &Config{
+		ForkConfig:        thorChain.GetForkConfig(),
 		CallGasLimit:      21000,
 		AllowCustomTracer: true,
 		SkipPoA:           false,

@@ -29,14 +29,14 @@ import (
 )
 
 type Accounts struct {
-	repo       *chain.Repository
-	stater     *state.Stater
-	forkConfig *thor.ForkConfig
-	bft        bft.Committer
-	config     *Config
+	repo   *chain.Repository
+	stater *state.Stater
+	bft    bft.Committer
+	config *Config
 }
 
 type Config struct {
+	ForkConfig        *thor.ForkConfig
 	CallGasLimit      uint64
 	EnabledDeprecated bool
 	PrunerDisabled    bool
@@ -45,14 +45,12 @@ type Config struct {
 func New(
 	repo *chain.Repository,
 	stater *state.Stater,
-	forkConfig *thor.ForkConfig,
 	bft bft.Committer,
 	config *Config,
 ) *Accounts {
 	return &Accounts{
 		repo,
 		stater,
-		forkConfig,
 		bft,
 		config,
 	}
@@ -77,7 +75,7 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 		return restutil.BadRequest(errors.WithMessage(err, "revision"))
 	}
 
-	_, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig, a.config.PrunerDisabled)
+	_, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.config.ForkConfig, a.config.PrunerDisabled)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
 			return restutil.BadRequest(errors.WithMessage(err, "revision"))
@@ -131,7 +129,7 @@ func (a *Accounts) handleGetAccount(w http.ResponseWriter, req *http.Request) er
 		return restutil.BadRequest(errors.WithMessage(err, "revision"))
 	}
 
-	summary, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig, a.config.PrunerDisabled)
+	summary, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.config.ForkConfig, a.config.PrunerDisabled)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
 			return restutil.BadRequest(errors.WithMessage(err, "revision"))
@@ -160,7 +158,7 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 		return restutil.BadRequest(errors.WithMessage(err, "revision"))
 	}
 
-	_, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig, a.config.PrunerDisabled)
+	_, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.config.ForkConfig, a.config.PrunerDisabled)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
 			return restutil.BadRequest(errors.WithMessage(err, "revision"))
@@ -184,7 +182,7 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 	if err != nil {
 		return restutil.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	summary, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig, a.config.PrunerDisabled)
+	summary, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.config.ForkConfig, a.config.PrunerDisabled)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
 			return restutil.BadRequest(errors.WithMessage(err, "revision"))
@@ -233,7 +231,7 @@ func (a *Accounts) handleCallBatchCode(w http.ResponseWriter, req *http.Request)
 	if err != nil {
 		return restutil.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	summary, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig, a.config.PrunerDisabled)
+	summary, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.config.ForkConfig, a.config.PrunerDisabled)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
 			return restutil.BadRequest(errors.WithMessage(err, "revision"))
@@ -269,7 +267,7 @@ func (a *Accounts) batchCall(
 			TotalScore:  header.TotalScore(),
 			BaseFee:     header.BaseFee(),
 		},
-		a.forkConfig)
+		a.config.ForkConfig)
 	results = make(api.BatchCallResults, 0)
 	resultCh := make(chan any, 1)
 	for i, clause := range clauses {
