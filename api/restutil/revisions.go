@@ -171,7 +171,7 @@ func GetSummaryAndState(
 			oldestAvailable := bestBlockNumber - thor.MaxStateHistory
 			if sum.Header.Number() < oldestAvailable {
 				return nil, nil, fmt.Errorf(
-					"state unavailable: block %d is outside the available range (oldest: %d, best: %d). sync the node from scratch using --disable-pruner for historical data",
+					"state inaccurate: block %d is outside the available range (oldest: %d, best: %d). sync the node from scratch using --disable-pruner for historical data",
 					sum.Header.Number(),
 					oldestAvailable,
 					bestBlockNumber,
