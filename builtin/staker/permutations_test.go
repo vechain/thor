@@ -127,21 +127,29 @@ func PrintActionTree(action Action) {
 	}))
 
 	log.Info("📋 Action Execution Plan:")
-	printActionTreeHelper(action, "", true, log)
+	printActionTreeHelper(action, "", true, 0, log)
 	log.Info("🏁 End of execution plan\n")
 }
 
-func printActionTreeHelper(action Action, prefix string, isLast bool, log *slog.Logger) {
+func printActionTreeHelper(action Action, prefix string, isLast bool, parentBlock int, log *slog.Logger) {
 	// Current node
 	connector := "├── "
 	if isLast {
 		connector = "└── "
 	}
 
-	actionInfo := action.Name()
+	// Calculate block advancement for this action
+	blockAdvancement := 0
 	if mpb := action.MinParentBlocksRequired(); mpb != nil {
-		actionInfo += fmt.Sprintf(" (blocks: %d)", *mpb)
+		blockAdvancement = *mpb
 	}
+	
+	// Calculate the block where this action will execute
+	executionBlock := parentBlock + blockAdvancement
+	
+	// Format: ActionName @ block X (parentBlock + advancement)
+	actionInfo := fmt.Sprintf("%s @ block %d (%d + %d)", 
+		action.Name(), executionBlock, parentBlock, blockAdvancement)
 
 	log.Info(fmt.Sprintf("%s%s%s", prefix, connector, actionInfo))
 
@@ -153,11 +161,11 @@ func printActionTreeHelper(action Action, prefix string, isLast bool, log *slog.
 		childPrefix += "│   "
 	}
 
-	// Process next actions
+	// Process next actions - they will execute after this action's execution block
 	nextActions := action.Next()
 	for i, nextAction := range nextActions {
 		isLastChild := i == len(nextActions)-1
-		printActionTreeHelper(nextAction, childPrefix, isLastChild, log)
+		printActionTreeHelper(nextAction, childPrefix, isLastChild, executionBlock, log)
 	}
 }
 
@@ -242,63 +250,98 @@ func Runner(s *testStaker, action Action, currentBlk int) error {
 }
 
 func TestPermutations(t *testing.T) {
-	rand.Seed(time.Now().UnixNano())
+	staker := newTestStaker()
 
-	// Generate random values for this test run
-	X := rand.Intn(360) + 1 // 1-360
-	Y := rand.Intn(360) + 1 // 1-360
+	validatorID := thor.BytesToAddress([]byte("validator"))
+	endorserID := thor.BytesToAddress([]byte("endorser"))
 
-	tests := []struct {
-		name                   string
-		minParentBlockModifier func(original *int) *int
-	}{
-		{
-			name: "original",
-			minParentBlockModifier: func(original *int) *int {
-				return original
-			},
-		},
-		{
-			name: "below",
-			minParentBlockModifier: func(original *int) *int {
-				if original == nil {
-					return nil
-				}
-				result := *original - X
-				if result <= 0 {
-					return nil
-				}
+	epoch := HousekeepingInterval
 
-				return &result
-			},
-		},
-		{
-			name: "above",
-			minParentBlockModifier: func(original *int) *int {
-				if original == nil {
-					return &Y
-				}
-				result := *original + Y
-				return &result
-			},
-		},
+	// Use original block timings (no modifications)
+	originalModifier := func(original *int) *int {
+		return original
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			staker := newTestStaker()
+	signalExitMinBlock := originalModifier(&epoch)
+	withDrawMinBlockCalc := convertNilBlock(signalExitMinBlock) + epoch + int(thor.CooldownPeriod())
+	withDrawMinBlock := originalModifier(&withDrawMinBlockCalc)
 
+	// Compose the flow explicitly: AddValidation -> SignalExit -> Withdraw
+	action := NewValidationAction(
+		originalModifier(nil),
+		validatorID,
+		endorserID,
+		thor.LowStakingPeriod(),
+		MinStakeVET,
+		NewSignalExitAction(signalExitMinBlock, validatorID, endorserID,
+			NewWithDrawAction(withDrawMinBlock, validatorID, endorserID),
+		),
+		NewWithDrawAction(withDrawMinBlock, validatorID, endorserID),
+	)
+
+	require.NoError(t, RunWithTree(staker, action, 0))
+}
+
+func TestRandomPermutations(t *testing.T) {
+	rand.Seed(time.Now().UnixNano())
+
+	for i := 0; i < 1000; i++ {
+		t.Run(fmt.Sprintf("iteration-%d", i+1), func(t *testing.T) {
+			// Create per-action random modifier function
+			randomModifier := func(actionName string) func(original *int) *int {
+				// Generate new random values for this iteration
+				X := rand.Intn(360) + 1 // 1-360
+				Y := rand.Intn(360) + 1 // 1-360
+
+				return func(original *int) *int {
+					// Randomly choose "above" or "below" for this action
+					useAbove := rand.Intn(2) == 1
+
+					var result *int
+					if useAbove {
+						// "above" permutation
+						if original == nil {
+							result = &Y
+						} else {
+							value := *original + Y
+							result = &value
+						}
+					} else {
+						// "below" permutation
+						if original == nil {
+							result = nil
+						} else {
+							value := *original - X
+							if value <= 0 {
+								result = nil
+							} else {
+								result = &value
+							}
+						}
+					}
+
+					return result
+				}
+			}
+
+			staker := newTestStaker()
 			validatorID := thor.BytesToAddress([]byte("validator"))
 			endorserID := thor.BytesToAddress([]byte("endorser"))
 
 			epoch := HousekeepingInterval
-			signalExitMinBlock := tt.minParentBlockModifier(&epoch)
+
+			// Each action gets its own random permutation choice
+			addValidationModifier := randomModifier("AddValidation")
+			signalExitModifier := randomModifier("SignalExit")
+			withdrawModifier := randomModifier("Withdraw")
+
+			signalExitMinBlock := signalExitModifier(&epoch)
 			withDrawMinBlockCalc := convertNilBlock(signalExitMinBlock) + epoch + int(thor.CooldownPeriod())
-			withDrawMinBlock := tt.minParentBlockModifier(&withDrawMinBlockCalc)
+			withDrawMinBlock := withdrawModifier(&withDrawMinBlockCalc)
 
 			// Compose the flow explicitly: AddValidation -> SignalExit -> Withdraw
 			action := NewValidationAction(
-				tt.minParentBlockModifier(nil),
+				addValidationModifier(nil),
 				validatorID,
 				endorserID,
 				thor.LowStakingPeriod(),
