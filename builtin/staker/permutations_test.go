@@ -138,17 +138,20 @@ func Runner(s *testStaker, action Action, currentBlk int) error {
 			"target_block", currentBlk+*mpb)
 
 		// Ensure Housekeep runs every housekeepingInterval blocks, possibly multiple times if we've jumped
+		start := currentBlk
+		end := currentBlk + *mpb
+		interval := HousekeepingInterval
+		first := ((start + interval - 1) / interval) * interval
+
 		housekeepingCount := 0
-		for cblk := currentBlk; cblk <= currentBlk+*mpb; cblk++ {
-			if cblk%HousekeepingInterval == 0 {
-				log.Debug("🧹 Running housekeeping", "block", cblk)
-				_, err := s.Housekeep(uint32(cblk))
-				if err != nil {
-					log.Error("❌ Housekeeping failed", "block", cblk, "error", err)
-					return fmt.Errorf("housekeeping failed at block %d: %w", cblk, err)
-				}
-				housekeepingCount++
+		for cblk := first; cblk <= end; cblk += interval {
+			log.Debug("🧹 Running housekeeping", "block", cblk)
+			_, err := s.Housekeep(uint32(cblk))
+			if err != nil {
+				log.Error("❌ Housekeeping failed", "block", cblk, "error", err)
+				return fmt.Errorf("housekeeping failed at block %d: %w", cblk, err)
 			}
+			housekeepingCount++
 		}
 
 		if housekeepingCount > 0 {
