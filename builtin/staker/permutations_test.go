@@ -10,8 +10,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/builtin/params"
-	"github.com/vechain/thor/v2/muxdb"
-	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
 )
@@ -143,12 +141,12 @@ func printActionTreeHelper(action Action, prefix string, isLast bool, parentBloc
 	if mpb := action.MinParentBlocksRequired(); mpb != nil {
 		blockAdvancement = *mpb
 	}
-	
+
 	// Calculate the block where this action will execute
 	executionBlock := parentBlock + blockAdvancement
-	
+
 	// Format: ActionName @ block X (parentBlock + advancement)
-	actionInfo := fmt.Sprintf("%s @ block %d (%d + %d)", 
+	actionInfo := fmt.Sprintf("%s @ block %d (%d + %d)",
 		action.Name(), executionBlock, parentBlock, blockAdvancement)
 
 	log.Info(fmt.Sprintf("%s%s%s", prefix, connector, actionInfo))
@@ -285,43 +283,41 @@ func TestPermutations(t *testing.T) {
 func TestRandomPermutations(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 1_000; i++ {
 		t.Run(fmt.Sprintf("iteration-%d", i+1), func(t *testing.T) {
 			// Create per-action random modifier function
-			randomModifier := func(actionName string) func(original *int) *int {
+			randomModifier := func(original *int) *int {
 				// Generate new random values for this iteration
 				X := rand.Intn(360) + 1 // 1-360
 				Y := rand.Intn(360) + 1 // 1-360
 
-				return func(original *int) *int {
-					// Randomly choose "above" or "below" for this action
-					useAbove := rand.Intn(2) == 1
+				// Randomly choose "above" or "below" for this action
+				useAbove := rand.Intn(2) == 1
 
-					var result *int
-					if useAbove {
-						// "above" permutation
-						if original == nil {
-							result = &Y
-						} else {
-							value := *original + Y
-							result = &value
-						}
+				var result *int
+				if useAbove {
+					// "above" permutation
+					if original == nil {
+						result = &Y
 					} else {
-						// "below" permutation
-						if original == nil {
+						value := *original + Y
+						result = &value
+					}
+				} else {
+					// "below" permutation
+					if original == nil {
+						result = nil
+					} else {
+						value := *original - X
+						if value <= 0 {
 							result = nil
 						} else {
-							value := *original - X
-							if value <= 0 {
-								result = nil
-							} else {
-								result = &value
-							}
+							result = &value
 						}
 					}
-
-					return result
 				}
+
+				return result
 			}
 
 			staker := newTestStaker()
@@ -330,18 +326,13 @@ func TestRandomPermutations(t *testing.T) {
 
 			epoch := HousekeepingInterval
 
-			// Each action gets its own random permutation choice
-			addValidationModifier := randomModifier("AddValidation")
-			signalExitModifier := randomModifier("SignalExit")
-			withdrawModifier := randomModifier("Withdraw")
-
-			signalExitMinBlock := signalExitModifier(&epoch)
+			signalExitMinBlock := randomModifier(&epoch)
 			withDrawMinBlockCalc := convertNilBlock(signalExitMinBlock) + epoch + int(thor.CooldownPeriod())
-			withDrawMinBlock := withdrawModifier(&withDrawMinBlockCalc)
+			withDrawMinBlock := randomModifier(&withDrawMinBlockCalc)
 
 			// Compose the flow explicitly: AddValidation -> SignalExit -> Withdraw
 			action := NewValidationAction(
-				addValidationModifier(nil),
+				randomModifier(nil),
 				validatorID,
 				endorserID,
 				thor.LowStakingPeriod(),
@@ -355,13 +346,6 @@ func TestRandomPermutations(t *testing.T) {
 			require.NoError(t, RunWithTree(staker, action, 0))
 		})
 	}
-}
-
-func NewStaker() *Staker {
-	db := muxdb.NewMem()
-	st := state.New(db, trie.Root{})
-	addr := thor.BytesToAddress([]byte("staker"))
-	return New(addr, st, params.New(addr, st), nil)
 }
 
 // CloneStaker creates a deep copy of the testStaker with cloned state
