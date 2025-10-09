@@ -139,7 +139,7 @@ func RunTracerTest(t *testing.T, data *traceTest, tracerName string) json.RawMes
 		Number:      block.Number(data.Context.BlockID),
 		Time:        data.Context.BlockTime,
 		Beneficiary: data.Context.Beneficiary,
-	}, thor.GetForkConfig(gene.Header().ID()))
+	}, thor.GetForkConfig(gene.Header().ID()), true)
 
 	var tr tracers.Tracer
 	if len(tracerName) > 0 {
@@ -378,7 +378,7 @@ func TestInternals(t *testing.T) {
 				Time:        5,
 				Beneficiary: thor.Address{},
 				GasLimit:    6000000,
-			}, thor.GetForkConfig(gene.Header().ID()))
+			}, thor.GetForkConfig(gene.Header().ID()), true)
 
 			tr := tc.tracer
 

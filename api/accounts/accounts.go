@@ -267,7 +267,8 @@ func (a *Accounts) batchCall(
 			TotalScore:  header.TotalScore(),
 			BaseFee:     header.BaseFee(),
 		},
-		a.config.ForkConfig)
+		a.config.ForkConfig,
+		a.config.PrunerDisabled)
 	results = make(api.BatchCallResults, 0)
 	resultCh := make(chan any, 1)
 	for i, clause := range clauses {

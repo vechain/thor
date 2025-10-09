@@ -104,5 +104,6 @@ func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipPoA bool) (*ru
 			TotalScore:  header.TotalScore(),
 			BaseFee:     header.BaseFee(),
 		},
-		c.forkConfig), nil
+		c.forkConfig,
+		true), nil // pruner irrelevant for consensus validation (always recent state)
 }

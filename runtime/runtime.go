@@ -82,12 +82,13 @@ type TransactionExecutor struct {
 
 // Runtime bases on EVM and VeChain Thor builtins.
 type Runtime struct {
-	vmConfig    vm.Config
-	chain       *chain.Chain
-	state       *state.State
-	ctx         *xenv.BlockContext
-	chainConfig vm.ChainConfig
-	forkConfig  *thor.ForkConfig
+	vmConfig       vm.Config
+	chain          *chain.Chain
+	state          *state.State
+	ctx            *xenv.BlockContext
+	chainConfig    vm.ChainConfig
+	forkConfig     *thor.ForkConfig
+	prunerDisabled bool
 }
 
 // New create a Runtime object.
@@ -96,6 +97,7 @@ func New(
 	state *state.State,
 	ctx *xenv.BlockContext,
 	forkConfig *thor.ForkConfig,
+	prunerDisabled bool,
 ) *Runtime {
 	currentChainConfig := baseChainConfig
 	currentChainConfig.ConstantinopleBlock = big.NewInt(int64(forkConfig.ETH_CONST))
@@ -133,11 +135,12 @@ func New(
 	}
 
 	rt := Runtime{
-		chain:       chain,
-		state:       state,
-		ctx:         ctx,
-		chainConfig: currentChainConfig,
-		forkConfig:  forkConfig,
+		chain:          chain,
+		state:          state,
+		ctx:            ctx,
+		chainConfig:    currentChainConfig,
+		forkConfig:     forkConfig,
+		prunerDisabled: prunerDisabled,
 	}
 	return &rt
 }
@@ -241,7 +244,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 				panic("serious bug: native call returned gas over consumed")
 			}
 
-			ret, err := xenv.New(abi, rt.chain, rt.state, rt.ctx, txCtx, evm, contract, clauseIndex).Call(run)
+			ret, err := xenv.New(abi, rt.chain, rt.state, rt.ctx, txCtx, evm, contract, clauseIndex, rt.prunerDisabled).Call(run)
 			return ret, err, true
 		},
 		OnCreateContract: func(_ *vm.EVM, contractAddr, caller common.Address) {

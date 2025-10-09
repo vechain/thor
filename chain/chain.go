@@ -87,6 +87,11 @@ func (c *Chain) HeadID() thor.Bytes32 {
 	return c.headID
 }
 
+// Repository returns the repository.
+func (c *Chain) Repository() *Repository {
+	return c.repo
+}
+
 // GetBlockID returns block id by given block number.
 func (c *Chain) GetBlockID(num uint32) (thor.Bytes32, error) {
 	trie, err := c.lazyInit()

@@ -79,7 +79,7 @@ func initExectorTest() *ctest {
 	st := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
 	chain := repo.NewChain(b0.Header().ID())
 
-	rt := runtime.New(chain, st, &xenv.BlockContext{Time: uint64(time.Now().Unix())}, &thor.NoFork)
+	rt := runtime.New(chain, st, &xenv.BlockContext{Time: uint64(time.Now().Unix())}, &thor.NoFork, true)
 
 	return &ctest{
 		rt:  rt,

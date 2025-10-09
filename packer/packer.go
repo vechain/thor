@@ -139,7 +139,8 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (flow
 			TotalScore:  parent.Header.TotalScore() + score,
 			BaseFee:     galactica.CalcBaseFee(parent.Header, p.forkConfig),
 		},
-		p.forkConfig)
+		p.forkConfig,
+		true) // pruner irrelevant for packer (always packing on recent state)
 
 	return newFlow(p, parent.Header, rt, features), nil
 }
@@ -177,7 +178,8 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 			TotalScore:  parent.Header.TotalScore() + 1,
 			BaseFee:     baseFee,
 		},
-		p.forkConfig)
+		p.forkConfig,
+		true) // pruner irrelevant for mock packer (always on recent state)
 
 	return newFlow(p, parent.Header, rt, features), nil
 }

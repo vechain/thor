@@ -15,6 +15,23 @@ import (
 	"github.com/vechain/thor/v2/xenv"
 )
 
+func validateIfPrunerEnabled(env *xenv.Environment, args struct {
+	Self        common.Address
+	BlockNumber uint32
+}) bool {
+	if !env.PrunerDisabled() {
+		bestBlockNumber := env.Chain().Repository().BestBlockSummary().Header.Number()
+
+		if bestBlockNumber > thor.MaxStateHistory {
+			oldestAvailable := bestBlockNumber - thor.MaxStateHistory
+			if args.BlockNumber < oldestAvailable {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 func init() {
 	events := Prototype.Events()
 
@@ -77,6 +94,11 @@ func init() {
 				return []any{&big.Int{}}
 			}
 
+			if !validateIfPrunerEnabled(env, args) {
+				// Return zero instead of potentially incorrect data
+				return []any{&big.Int{}}
+			}
+
 			if args.BlockNumber == ctx.Number {
 				env.UseGas(thor.GetBalanceGas)
 				val, err := env.State().GetBalance(thor.Address(args.Self))
@@ -116,6 +138,11 @@ func init() {
 			}
 
 			if ctx.Number-args.BlockNumber > thor.MaxStateHistory {
+				return []any{&big.Int{}}
+			}
+
+			if !validateIfPrunerEnabled(env, args) {
+				// Return zero instead of potentially incorrect data
 				return []any{&big.Int{}}
 			}
 

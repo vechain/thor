@@ -284,7 +284,8 @@ func (d *Debug) traceCall(
 			TotalScore:  header.TotalScore(),
 			BaseFee:     header.BaseFee(),
 		},
-		d.config.ForkConfig)
+		d.config.ForkConfig,
+		d.config.PrunerDisabled)
 
 	tracer.SetContext(&tracers.Context{
 		BlockID:   header.ID(),

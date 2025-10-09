@@ -46,14 +46,15 @@ type TransactionContext struct {
 
 // Environment an env to execute native method.
 type Environment struct {
-	abi         *abi.Method
-	chain       *chain.Chain
-	state       *state.State
-	blockCtx    *BlockContext
-	txCtx       *TransactionContext
-	evm         *vm.EVM
-	contract    *vm.Contract
-	clauseIndex uint32
+	abi            *abi.Method
+	chain          *chain.Chain
+	state          *state.State
+	blockCtx       *BlockContext
+	txCtx          *TransactionContext
+	evm            *vm.EVM
+	contract       *vm.Contract
+	clauseIndex    uint32
+	prunerDisabled bool
 }
 
 // New create a new env.
@@ -66,16 +67,18 @@ func New(
 	evm *vm.EVM,
 	contract *vm.Contract,
 	clauseIndex uint32,
+	prunerDisabled bool,
 ) *Environment {
 	return &Environment{
-		abi:         abi,
-		chain:       chain,
-		state:       state,
-		blockCtx:    blockCtx,
-		txCtx:       txCtx,
-		evm:         evm,
-		contract:    contract,
-		clauseIndex: clauseIndex,
+		abi:            abi,
+		chain:          chain,
+		state:          state,
+		blockCtx:       blockCtx,
+		txCtx:          txCtx,
+		evm:            evm,
+		contract:       contract,
+		clauseIndex:    clauseIndex,
+		prunerDisabled: prunerDisabled,
 	}
 }
 
@@ -86,6 +89,7 @@ func (env *Environment) BlockContext() *BlockContext             { return env.bl
 func (env *Environment) Caller() thor.Address                    { return thor.Address(env.contract.Caller()) }
 func (env *Environment) To() thor.Address                        { return thor.Address(env.contract.Address()) }
 func (env *Environment) ClauseIndex() uint32                     { return env.clauseIndex }
+func (env *Environment) PrunerDisabled() bool                    { return env.prunerDisabled }
 
 func (env *Environment) UseGas(gas uint64) {
 	if !env.contract.UseGas(gas) {

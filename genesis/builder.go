@@ -96,7 +96,7 @@ func (b *Builder) Build(stater *state.Stater) (blk *block.Block, events tx.Event
 	rt := runtime.New(nil, state, &xenv.BlockContext{
 		Time:     b.timestamp,
 		GasLimit: b.gasLimit,
-	}, b.forkConfig)
+	}, b.forkConfig, true) // pruner irrelevant for genesis (no history)
 
 	for _, call := range b.calls {
 		exec, _ := rt.PrepareClause(call.clause, 0, math.MaxUint64, &xenv.TransactionContext{

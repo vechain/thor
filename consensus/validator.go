@@ -304,7 +304,8 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 			TotalScore:  header.TotalScore(),
 			BaseFee:     header.BaseFee(),
 		},
-		c.forkConfig)
+		c.forkConfig,
+		true) // pruner irrelevant for consensus validation (always recent state)
 
 	findDep := func(txID thor.Bytes32) (found bool, reverted bool, err error) {
 		if reverted, ok := processedTxs[txID]; ok {
