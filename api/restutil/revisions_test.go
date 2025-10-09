@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -187,4 +188,138 @@ func TestGetSummaryAndState(t *testing.T) {
 	signer, err := summary.Header.Signer()
 	assert.NotNil(t, err)
 	assert.True(t, signer.IsZero())
+}
+
+func TestGetSummaryAndState_PrunedBlock(t *testing.T) {
+	t.Run("pruner disabled allows any block", func(t *testing.T) {
+		thorChain, err := testchain.NewDefault()
+		require.NoError(t, err)
+
+		// Add a few blocks
+		account := genesis.DevAccounts()[0]
+		for i := 0; i < 10; i++ {
+			require.NoError(t, thorChain.MintBlock(account))
+		}
+
+		// With pruner disabled, genesis block should be accessible
+		revision := &Revision{uint32(0)}
+		summary, state, err := GetSummaryAndState(
+			revision,
+			thorChain.Repo(),
+			thorChain.Engine(),
+			thorChain.Stater(),
+			thorChain.GetForkConfig(),
+			true, // pruner disabled
+		)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, summary)
+		assert.NotNil(t, state)
+		assert.Equal(t, uint32(0), summary.Header.Number())
+	})
+
+	t.Run("pruner enabled allows recent blocks", func(t *testing.T) {
+		thorChain, err := testchain.NewDefault()
+		require.NoError(t, err)
+
+		// Add a few blocks
+		account := genesis.DevAccounts()[0]
+		for i := 0; i < 10; i++ {
+			require.NoError(t, thorChain.MintBlock(account))
+		}
+
+		bestBlock := thorChain.Repo().BestBlockSummary()
+
+		// Recent block should be accessible
+		revision := &Revision{bestBlock.Header.Number()}
+		summary, state, err := GetSummaryAndState(
+			revision,
+			thorChain.Repo(),
+			thorChain.Engine(),
+			thorChain.Stater(),
+			thorChain.GetForkConfig(),
+			false, // pruner enabled
+		)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, summary)
+		assert.NotNil(t, state)
+	})
+
+	t.Run("pruner enabled rejects blocks outside MaxStateHistory", func(t *testing.T) {
+		if testing.Short() {
+			t.Skip("skipping block creation test in short mode (takes ~20s)")
+		}
+
+		thorChain, err := testchain.NewDefault()
+		require.NoError(t, err)
+
+		// Create enough blocks to exceed MaxStateHistory
+		// We need bestBlock > MaxStateHistory (65535) to trigger the validation
+		account := genesis.DevAccounts()[0]
+		numBlocks := thor.MaxStateHistory + 100 // 65635 blocks total (including genesis)
+
+		t.Logf("Creating %d blocks (this takes ~20 seconds)...", numBlocks)
+		for i := 0; i < numBlocks; i++ {
+			if err := thorChain.MintBlock(account); err != nil {
+				t.Fatalf("Failed to create block %d: %v", i, err)
+			}
+		}
+
+		bestBlock := thorChain.Repo().BestBlockSummary()
+		bestBlockNumber := bestBlock.Header.Number()
+		oldestAvailable := bestBlockNumber - thor.MaxStateHistory
+
+		t.Logf("Best block: %d, oldest available: %d", bestBlockNumber, oldestAvailable)
+
+		// Test 1: Block within range should be accessible
+		blockWithinRange := oldestAvailable + 10
+		revision := &Revision{blockWithinRange}
+		summary, state, err := GetSummaryAndState(
+			revision,
+			thorChain.Repo(),
+			thorChain.Engine(),
+			thorChain.Stater(),
+			thorChain.GetForkConfig(),
+			false, // pruner enabled
+		)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, summary)
+		assert.NotNil(t, state)
+		assert.Equal(t, blockWithinRange, summary.Header.Number())
+
+		// Test 2: Block outside range should return error
+		blockOutsideRange := oldestAvailable - 1
+		revision = &Revision{blockOutsideRange}
+		summary, state, err = GetSummaryAndState(
+			revision,
+			thorChain.Repo(),
+			thorChain.Engine(),
+			thorChain.Stater(),
+			thorChain.GetForkConfig(),
+			false, // pruner enabled
+		)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "state inaccurate")
+		assert.Contains(t, err.Error(), "outside the available range")
+		assert.Nil(t, summary)
+		assert.Nil(t, state)
+
+		// Test 3: Same block outside range should be accessible with pruner disabled
+		summary, state, err = GetSummaryAndState(
+			revision,
+			thorChain.Repo(),
+			thorChain.Engine(),
+			thorChain.Stater(),
+			thorChain.GetForkConfig(),
+			true, // pruner disabled
+		)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, summary)
+		assert.NotNil(t, state)
+		assert.Equal(t, blockOutsideRange, summary.Header.Number())
+	})
 }
