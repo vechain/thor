@@ -2,6 +2,7 @@ package staker
 
 import (
 	"fmt"
+
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -28,7 +29,6 @@ func NewValidationAction(
 			}).
 		WithCheck(
 			func(s *testStaker, _ int) error {
-				// Per your instruction, the validationID is the validator address.
 				val, err := s.GetValidation(validator)
 				if err != nil {
 					return fmt.Errorf("Check GetValidation failed: %w", err)
@@ -84,8 +84,8 @@ func NewSignalExitAction(
 		Build()
 }
 
-// NewWithDrawAction composes a Withdraw action.
-func NewWithDrawAction(
+// NewWithdrawAction composes a Withdraw action.
+func NewWithdrawAction(
 	minParentBlocksRequired *int,
 	validationID thor.Address,
 	endorserID thor.Address,
@@ -117,5 +117,123 @@ func NewWithDrawAction(
 				//}
 				return nil
 			}).
+		Build()
+}
+
+func NewIncreaseStakeAction(
+	minParentBlocksRequired *int,
+	validationID thor.Address,
+	endorserID thor.Address,
+	amount uint64,
+	next ...Action,
+) Action {
+	return NewActionBuilder("IncreaseStake").
+		WithMinParentBlocksRequired(minParentBlocksRequired).
+		WithExecute(
+			func(staker *testStaker, blk int) error {
+				return staker.IncreaseStake(validationID, endorserID, amount)
+			}).
+		WithCheck(
+			func(staker *testStaker, blk int) error {
+				val, err := staker.GetValidation(validationID)
+				if err != nil {
+					return fmt.Errorf("Check IncreaseStake failed, validator not found: %w", err)
+				}
+				if val.Endorser != endorserID {
+					return fmt.Errorf("Check IncreaseStake failed, endorser not found")
+				}
+				if val.Status == validation.StatusExit {
+					return fmt.Errorf("Check IncreaseStake failed, validator exited")
+				}
+				if val.Status == validation.StatusActive && val.ExitBlock != nil {
+					return fmt.Errorf("Check IncreaseStake failed, validator has signaled exit")
+				}
+				if err := staker.validateStakeIncrease(validationID, val, amount); err != nil {
+					return fmt.Errorf("Check IncreaseStake failed, validateStakeIncrease failed: %w", err)
+				}
+				return nil
+			}).
+		WithNext(next...).
+		Build()
+}
+
+func NewDecreaseStakeAction(
+	minParentBlocksRequired *int,
+	validationID thor.Address,
+	endorserID thor.Address,
+	amount uint64,
+	next ...Action,
+) Action {
+	return NewActionBuilder("DecreaseStake").
+		WithMinParentBlocksRequired(minParentBlocksRequired).
+		WithExecute(
+			func(staker *testStaker, blk int) error {
+				return staker.DecreaseStake(validationID, endorserID, amount)
+			}).
+		WithCheck(
+			func(staker *testStaker, blk int) error {
+				val, err := staker.GetValidation(validationID)
+				if err != nil {
+					return fmt.Errorf("Check DecreaseStake failed, validator not found: %w", err)
+				}
+				if amount > MaxStakeVET-MinStakeVET {
+					return fmt.Errorf("Check DecreaseStake failed, decrease amount is too large")
+				}
+				if val.Endorser != endorserID {
+					return fmt.Errorf("Check DecreaseStake failed, endorser not found")
+				}
+				if val.Status == validation.StatusExit {
+					return fmt.Errorf("Check DecreaseStake failed, validator exited")
+				}
+				if val.Status == validation.StatusActive && val.ExitBlock != nil {
+					return fmt.Errorf("Check DecreaseStake failed, validator has signaled exit")
+				}
+				var nextPeriodVET uint64
+				if val.Status == validation.StatusActive {
+					nextPeriodVET = val.LockedVET - val.PendingUnlockVET
+				}
+				if val.Status == validation.StatusQueued {
+					nextPeriodVET = val.QueuedVET
+				}
+				if amount > nextPeriodVET {
+					return fmt.Errorf("Check DecreaseStake failed, not enough locked stake")
+				}
+				if nextPeriodVET-amount < MinStakeVET {
+					return fmt.Errorf("Check DecreaseStake failed, next period stake is lower than minimum stake")
+				}
+				return nil
+			}).
+		WithNext(next...).
+		Build()
+}
+
+func NewSetBeneficiaryAction(
+	minParentBlocksRequired *int,
+	validationID thor.Address,
+	endorserID thor.Address,
+	beneficiary thor.Address,
+	next ...Action,
+) Action {
+	return NewActionBuilder("SetBeneficiary").
+		WithMinParentBlocksRequired(minParentBlocksRequired).
+		WithExecute(
+			func(staker *testStaker, blk int) error {
+				return staker.SetBeneficiary(validationID, endorserID, beneficiary)
+			}).
+		WithCheck(
+			func(staker *testStaker, blk int) error {
+				val, err := staker.GetValidation(validationID)
+				if err != nil {
+					return fmt.Errorf("Check SetBeneficiary failed, validator not found: %w", err)
+				}
+				if val.Endorser != endorserID {
+					return fmt.Errorf("Check SetBeneficiary failed, endorser not found")
+				}
+				if val.Status == validation.StatusExit || val.ExitBlock != nil {
+					return fmt.Errorf("Check SetBeneficiary failed, validator has exited or signaled exit")
+				}
+				return nil
+			}).
+		WithNext(next...).
 		Build()
 }

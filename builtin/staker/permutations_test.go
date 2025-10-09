@@ -338,9 +338,9 @@ func TestRandomPermutations(t *testing.T) {
 				thor.LowStakingPeriod(),
 				MinStakeVET,
 				NewSignalExitAction(signalExitMinBlock, validatorID, endorserID,
-					NewWithDrawAction(withDrawMinBlock, validatorID, endorserID),
+					NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
 				),
-				NewWithDrawAction(withDrawMinBlock, validatorID, endorserID),
+				NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
 			)
 
 			require.NoError(t, RunWithTree(staker, action, 0))
