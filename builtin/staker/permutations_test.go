@@ -2,17 +2,18 @@ package staker
 
 import (
 	"fmt"
+	"log/slog"
+	"math/rand"
+	"os"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/builtin/params"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
-	"log/slog"
-	"math/rand"
-	"os"
-	"testing"
-	"time"
 )
 
 // ----------------------
@@ -168,7 +169,7 @@ func Runner(s *testStaker, action Action, currentBlk int) error {
 	default:
 		return fmt.Errorf("%s Check Mismatch: ExecutionErr: %s - CheckErr %s", action.Name(), executionErr, checkErr)
 	}
-	
+
 	log.Debug("✅ Action execution + check passed", "action", action.Name())
 
 	nextActions := action.Next()
@@ -259,7 +260,10 @@ func TestPermutations(t *testing.T) {
 			endorserID := thor.BytesToAddress([]byte("endorser"))
 
 			epoch := HousekeepingInterval
-			modifiedEpoch := tt.minParentBlockModifier(&epoch)
+			signalExitMinBlock := tt.minParentBlockModifier(&epoch)
+			withDrawMinBlockCalc := convertNilBlock(signalExitMinBlock) + epoch + int(thor.CooldownPeriod())
+			withDrawMinBlock := tt.minParentBlockModifier(&withDrawMinBlockCalc)
+			thor.CooldownPeriod()
 
 			// Compose the flow explicitly: AddValidation -> SignalExit
 			addValidation := NewValidationAction(
@@ -268,7 +272,9 @@ func TestPermutations(t *testing.T) {
 				endorserID,
 				thor.LowStakingPeriod(),
 				MinStakeVET,
-				NewSignalExitAction(tt.minParentBlockModifier(modifiedEpoch), validatorID, endorserID),
+				NewSignalExitAction(signalExitMinBlock, validatorID, endorserID,
+					NewWithDrawAction(withDrawMinBlock, validatorID, endorserID),
+				),
 			)
 
 			require.NoError(t, Runner(staker, addValidation, 0))
@@ -281,4 +287,12 @@ func NewStaker() *Staker {
 	st := state.New(db, trie.Root{})
 	addr := thor.BytesToAddress([]byte("staker"))
 	return New(addr, st, params.New(addr, st), nil)
+}
+
+func convertNilBlock(i *int) int {
+	base := 0
+	if i != nil {
+		base = *i
+	}
+	return base
 }

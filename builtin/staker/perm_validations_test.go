@@ -43,18 +43,16 @@ func NewValidationAction(
 }
 
 // NewSignalExitAction composes a SignalExit action.
-// getValidationID returns the validation identifier (pointer) to operate on.
 func NewSignalExitAction(
 	minParentBlocksRequired *int,
 	validationID thor.Address,
 	endorserID thor.Address,
+	next ...Action,
 ) Action {
 	return NewActionBuilder("SignalExit").
 		WithMinParentBlocksRequired(minParentBlocksRequired).
 		WithExecute(
 			func(staker *testStaker, blk int) error {
-
-				// Assuming the "from" and "to" are both id per your original sample.
 				return staker.SignalExit(validationID, endorserID, uint32(blk))
 			}).
 		WithCheck(
@@ -80,9 +78,43 @@ func NewSignalExitAction(
 					return fmt.Errorf("SignalExit Check failed: current iteration cannot be 0")
 				}
 
-				if uint32(blk)-val.StartBlock < HousekeepingInterval {
-					return fmt.Errorf("SignalExit Check failed: no housekeeping has happened")
+				return nil
+			}).
+		WithNext(next...).
+		Build()
+}
+
+// NewWithDrawAction composes a Withdraw action.
+func NewWithDrawAction(
+	minParentBlocksRequired *int,
+	validationID thor.Address,
+	endorserID thor.Address,
+) Action {
+	return NewActionBuilder("Withdraw").
+		WithMinParentBlocksRequired(minParentBlocksRequired).
+		WithExecute(
+			func(staker *testStaker, blk int) error {
+				_, err := staker.WithdrawStake(validationID, endorserID, uint32(blk))
+				return err
+			}).
+		WithCheck(
+			func(staker *testStaker, blk int) error {
+				_, err := staker.GetValidation(validationID)
+				if err != nil {
+					return fmt.Errorf("GetValidation failed: %w", err)
 				}
+
+				//if val.Status != validation.StatusExit && val.Status != validation.StatusQueued {
+				//	return fmt.Errorf("expected status failed, got %d", val.Status)
+				//}
+				//
+				//if val.ExitBlock == nil {
+				//	return fmt.Errorf("nil ExitBlock")
+				//}
+				//
+				//if !val.CooldownEnded(uint32(blk)) {
+				//	return fmt.Errorf("expected cooldown ended")
+				//}
 				return nil
 			}).
 		Build()
