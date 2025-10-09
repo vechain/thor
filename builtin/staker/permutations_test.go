@@ -112,8 +112,16 @@ func (b *ActionBuilder) Build() Action {
 	}
 }
 
-// PrintActionTree prints a tree visualization of the action hierarchy
-func PrintActionTree(action Action) {
+// ActionResult captures the execution and check results for an action
+type ActionResult struct {
+	ActionName   string
+	ExecutionErr error
+	CheckErr     error
+	Block        int
+}
+
+// PrintActionTreeWithResults prints a tree visualization with execution results
+func PrintActionTreeWithResults(action Action, results map[string]*ActionResult) {
 	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
@@ -124,12 +132,12 @@ func PrintActionTree(action Action) {
 		},
 	}))
 
-	log.Info("📋 Action Execution Plan:")
-	printActionTreeHelper(action, "", true, 0, log)
-	log.Info("🏁 End of execution plan\n")
+	log.Debug("📊 Action Execution Results:")
+	printActionTreeWithResultsHelper(action, "", true, 0, results, log)
+	log.Debug("🏁 End of execution results")
 }
 
-func printActionTreeHelper(action Action, prefix string, isLast bool, parentBlock int, log *slog.Logger) {
+func printActionTreeWithResultsHelper(action Action, prefix string, isLast bool, parentBlock int, results map[string]*ActionResult, log *slog.Logger) {
 	// Current node
 	connector := "├── "
 	if isLast {
@@ -145,9 +153,30 @@ func printActionTreeHelper(action Action, prefix string, isLast bool, parentBloc
 	// Calculate the block where this action will execute
 	executionBlock := parentBlock + blockAdvancement
 
-	// Format: ActionName @ block X (parentBlock + advancement)
-	actionInfo := fmt.Sprintf("%s @ block %d (%d + %d)",
-		action.Name(), executionBlock, parentBlock, blockAdvancement)
+	// Look up results for this action
+	actionKey := fmt.Sprintf("%s@%d", action.Name(), executionBlock)
+	result, found := results[actionKey]
+
+	// Format result indicators
+	execResult := "❓"
+	checkResult := "❓"
+	if found {
+		if result.ExecutionErr == nil {
+			execResult = "✅"
+		} else {
+			execResult = "❌"
+		}
+
+		if result.CheckErr == nil {
+			checkResult = "✅"
+		} else {
+			checkResult = "❌"
+		}
+	}
+
+	// Format: ActionName @ block X (parentBlock + advancement) ExecutionResult CheckResult
+	actionInfo := fmt.Sprintf("%s @ block %d (%d + %d) %s %s",
+		action.Name(), executionBlock, parentBlock, blockAdvancement, execResult, checkResult)
 
 	log.Info(fmt.Sprintf("%s%s%s", prefix, connector, actionInfo))
 
@@ -163,19 +192,20 @@ func printActionTreeHelper(action Action, prefix string, isLast bool, parentBloc
 	nextActions := action.Next()
 	for i, nextAction := range nextActions {
 		isLastChild := i == len(nextActions)-1
-		printActionTreeHelper(nextAction, childPrefix, isLastChild, executionBlock, log)
+		printActionTreeWithResultsHelper(nextAction, childPrefix, isLastChild, executionBlock, results, log)
 	}
 }
 
-// RunWithTree prints the action tree and then executes it
-func RunWithTree(s *testStaker, action Action, currentBlk int) error {
-	PrintActionTree(action)
-	return Runner(s, action, currentBlk)
+// RunWithResultTree executes actions and prints a tree with results
+func RunWithResultTree(s *testStaker, action Action, currentBlk int) error {
+	results := make(map[string]*ActionResult)
+	err := RunnerWithResults(s, action, currentBlk, results)
+	PrintActionTreeWithResults(action, results)
+	return err
 }
 
-// Runner executes an action, runs its checks, then recurses on Next().
-// It now *exposes* and *uses* MinParentBlocksRequired() to control housekeeping cadence.
-func Runner(s *testStaker, action Action, currentBlk int) error {
+// RunnerWithResults executes an action, runs its checks, captures results, then recurses on Next().
+func RunnerWithResults(s *testStaker, action Action, currentBlk int, results map[string]*ActionResult) error {
 	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
@@ -214,16 +244,25 @@ func Runner(s *testStaker, action Action, currentBlk int) error {
 		}
 
 		if housekeepingCount > 0 {
-			log.Info("✅ Housekeeping completed", "operations_count", housekeepingCount)
+			log.Info("🏡 Housekeeping completed", "operations_count", housekeepingCount)
 		}
 
 		currentBlk += *mpb
 		log.Debug("⬆️ Block advancement completed", "new_block", currentBlk)
 	}
 
-	log.Info("⚡ Executing action", "action", action.Name(), "block", currentBlk)
+	log.Info("⚡️ Executing action", "action", action.Name(), "block", currentBlk)
 	executionErr := action.Execute(s, currentBlk)
 	checkErr := action.Check(s, currentBlk)
+
+	// Create a unique key for this action execution
+	results[fmt.Sprintf("%s@%d", action.Name(), currentBlk)] = &ActionResult{
+		ActionName:   action.Name(),
+		ExecutionErr: executionErr,
+		CheckErr:     checkErr,
+		Block:        currentBlk,
+	}
+
 	switch {
 	case executionErr != nil && checkErr != nil:
 	case executionErr == nil && checkErr == nil:
@@ -237,13 +276,13 @@ func Runner(s *testStaker, action Action, currentBlk int) error {
 	nextActions := action.Next()
 	for i, next := range nextActions {
 		log.Debug("➡️ Starting next action", "sequence", i+1, "action", next.Name())
-		if err := Runner(CloneStaker(s), next, currentBlk); err != nil {
+		if err := RunnerWithResults(CloneStaker(s), next, currentBlk, results); err != nil {
 			log.Error("❌ Next action failed", "sequence", i+1, "action", next.Name(), "error", err)
 			return err
 		}
 	}
 
-	log.Info("🎉 Action completed successfully", "action", action.Name())
+	log.Debug("🎉 Action completed successfully", "action", action.Name())
 	return nil
 }
 
@@ -264,7 +303,7 @@ func TestPermutations(t *testing.T) {
 	withDrawMinBlockCalc := convertNilBlock(signalExitMinBlock) + epoch + int(thor.CooldownPeriod())
 	withDrawMinBlock := originalModifier(&withDrawMinBlockCalc)
 
-	// Compose the flow explicitly: AddValidation -> SignalExit -> Withdraw
+	// Compose the flow explicitly
 	action := NewValidationAction(
 		originalModifier(nil),
 		validatorID,
@@ -288,7 +327,7 @@ func TestPermutations(t *testing.T) {
 		),
 	)
 
-	require.NoError(t, RunWithTree(staker, action, 0))
+	require.NoError(t, RunWithResultTree(staker, action, 0))
 }
 
 func TestRandomPermutations(t *testing.T) {
@@ -354,7 +393,7 @@ func TestRandomPermutations(t *testing.T) {
 				NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
 			)
 
-			require.NoError(t, RunWithTree(staker, action, 0))
+			require.NoError(t, RunWithResultTree(staker, action, 0))
 		})
 	}
 }
