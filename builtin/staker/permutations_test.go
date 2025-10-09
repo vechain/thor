@@ -9,8 +9,10 @@ import (
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
 	"log/slog"
+	"math/rand"
 	"os"
 	"testing"
+	"time"
 )
 
 // ----------------------
@@ -31,7 +33,6 @@ type Action interface {
 	Execute(s *testStaker, blk int) error
 	Check(s *testStaker, blk int) error
 	Next() []Action
-	// Option A (typed): used by Runner to decide block skipping/housekeeping cadence.
 	MinParentBlocksRequired() *int
 }
 
@@ -158,20 +159,17 @@ func Runner(s *testStaker, action Action, currentBlk int) error {
 	}
 
 	log.Info("⚡ Executing action", "action", action.Name(), "block", currentBlk)
-	err := action.Execute(s, currentBlk)
-	if err != nil {
-		log.Error("❌ Action execution failed", "action", action.Name(), "error", err)
-		return fmt.Errorf("action %s execution failed: %w", action.Name(), err)
-	}
-	log.Debug("✅ Action executed successfully", "action", action.Name())
-
-	log.Debug("🔍 Running action checks", "action", action.Name())
+	executionErr := action.Execute(s, currentBlk)
 	checkErr := action.Check(s, currentBlk)
-	if checkErr != nil {
-		log.Error("❌ Action check failed", "action", action.Name(), "error", checkErr)
-		return fmt.Errorf("action %s check failed: %w", action.Name(), checkErr)
+	switch {
+	case executionErr != nil && checkErr != nil:
+	case executionErr == nil && checkErr == nil:
+		break
+	default:
+		return fmt.Errorf("%s Check Mismatch: ExecutionErr: %s - CheckErr %s", action.Name(), executionErr, checkErr)
 	}
-	log.Debug("✅ Action checks passed", "action", action.Name())
+	
+	log.Debug("✅ Action execution + check passed", "action", action.Name())
 
 	nextActions := action.Next()
 	if len(nextActions) > 0 {
@@ -208,6 +206,74 @@ func TestPermutation(t *testing.T) {
 	)
 
 	require.NoError(t, Runner(staker, addValidation, 0))
+}
+
+func TestPermutations(t *testing.T) {
+	rand.Seed(time.Now().UnixNano())
+
+	// Generate random values for this test run
+	X := rand.Intn(360) + 1 // 1-360
+	Y := rand.Intn(360) + 1 // 1-360
+
+	tests := []struct {
+		name                   string
+		minParentBlockModifier func(original *int) *int
+	}{
+		{
+			name: "original",
+			minParentBlockModifier: func(original *int) *int {
+				return original
+			},
+		},
+		{
+			name: "below",
+			minParentBlockModifier: func(original *int) *int {
+				if original == nil {
+					return nil
+				}
+				result := *original - X
+				if result <= 0 {
+					return nil
+				}
+
+				return &result
+			},
+		},
+		{
+			name: "above",
+			minParentBlockModifier: func(original *int) *int {
+				if original == nil {
+					return &Y
+				}
+				result := *original + Y
+				return &result
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			staker := newTestStaker()
+
+			validatorID := thor.BytesToAddress([]byte("validator"))
+			endorserID := thor.BytesToAddress([]byte("endorser"))
+
+			epoch := HousekeepingInterval
+			modifiedEpoch := tt.minParentBlockModifier(&epoch)
+
+			// Compose the flow explicitly: AddValidation -> SignalExit
+			addValidation := NewValidationAction(
+				tt.minParentBlockModifier(nil),
+				validatorID,
+				endorserID,
+				thor.LowStakingPeriod(),
+				MinStakeVET,
+				NewSignalExitAction(tt.minParentBlockModifier(modifiedEpoch), validatorID, endorserID),
+			)
+
+			require.NoError(t, Runner(staker, addValidation, 0))
+		})
+	}
 }
 
 func NewStaker() *Staker {
