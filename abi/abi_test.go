@@ -169,6 +169,18 @@ func TestConstructorWithParameters(t *testing.T) {
 	// Verify first 32 bytes contain the uint256 value (12345)
 	decodedValue := new(big.Int).SetBytes(input[:32])
 	assert.Equal(t, value, decodedValue, "First 32 bytes should contain value 12345")
+
+	// Decode input
+	var decoded struct {
+		Value *big.Int
+		Owner common.Address
+		Name  string
+	}
+	err = constructor.DecodeInput(input, &decoded)
+	assert.Nil(t, err)
+	assert.Equal(t, value, decoded.Value)
+	assert.Equal(t, owner, decoded.Owner)
+	assert.Equal(t, name, decoded.Name)
 }
 
 func TestConstructorWithoutParameters(t *testing.T) {
@@ -192,10 +204,12 @@ func TestConstructorWithoutParameters(t *testing.T) {
 	input, err := constructor.EncodeInput()
 	assert.Nil(t, err)
 
-	// Log the actual output
-	t.Logf("Constructor input length: %d bytes", len(input))
-	t.Logf("Constructor input hex: %x", input)
-
 	// Constructor without parameters should return empty data (0 bytes)
 	assert.Len(t, input, 0, "Constructor without parameters should return 0 bytes")
+
+	// Decode input
+	var decoded struct{}
+	err = constructor.DecodeInput(input, &decoded)
+	assert.Nil(t, err)
+	assert.Equal(t, decoded, struct{}{}) // empty struct
 }

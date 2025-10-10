@@ -53,13 +53,17 @@ func (m *Method) EncodeInput(args ...any) ([]byte, error) {
 
 // DecodeInput decode input data into args.
 func (m *Method) DecodeInput(input []byte, v any) error {
-	if !bytes.HasPrefix(input, m.id[:]) {
-		return errors.New("input has incorrect prefix")
-	}
-
 	// if constructor there is no selector as prefix
 	if m.id == (MethodID{}) {
-		return m.method.Inputs.Unpack(v, input)
+		if len(input) != 0 {
+			return m.method.Inputs.Unpack(v, input)
+		}
+		// if empty constructor
+		return nil
+	}
+
+	if !bytes.HasPrefix(input, m.id[:]) {
+		return errors.New("input has incorrect prefix")
 	}
 
 	return m.method.Inputs.Unpack(v, input[4:])
