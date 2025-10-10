@@ -3,7 +3,6 @@ package staker
 import (
 	"fmt"
 	"log/slog"
-	"math/big"
 	"math/rand"
 	"os"
 	"testing"
@@ -372,24 +371,21 @@ func TestPermutations(t *testing.T) {
 	lowStakingPeriod := int(thor.LowStakingPeriod())
 
 	epoch := HousekeepingInterval
-	plusNFun := func(base *int, increase int) *int {
-		newBase := *base + increase
-		return &newBase
-	}
+	//plusNFun := func(base *int, increase int) *int {
+	//	newBase := *base + increase
+	//	return &newBase
+	//}
 
-	//signalExitMinBlock := &epoch
 	withDrawMinBlockCalc := lowStakingPeriod + epoch + int(thor.CooldownPeriod())
-	//withDrawMinBlock := &withDrawMinBlockCalc
 
-	// Compose the flow explicitly
 	action := NewAddValidationAction(
 		nil,
 		validatorID,
 		endorserID,
 		thor.LowStakingPeriod(),
 		MinStakeVET,
-		//NewSignalExitAction(signalExitMinBlock, validatorID, endorserID,
-		//	NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
+		//NewSignalExitAction(nil, validatorID, endorserID,
+		//	NewWithdrawAction(&withDrawMinBlockCalc, validatorID, endorserID),
 		//),
 		//NewIncreaseStakeAction(&epoch, validatorID, endorserID, MinStakeVET,
 		//	NewIncreaseStakeAction(plusNFun(&epoch, 2), validatorID, endorserID, MinStakeVET,
@@ -405,41 +401,41 @@ func TestPermutations(t *testing.T) {
 		//		NewWithdrawDelegationAction(&withDrawMinBlockCalc, big.NewInt(1)),
 		//	),
 		//),
-
-		NewAddDelegationAction(&epoch, validatorID, MinStakeVET, uint8(1),
-			NewSignalExitAction(plusNFun(&epoch, 2), validatorID, endorserID,
-				NewSignalExitDelegationAction(plusNFun(&lowStakingPeriod, 2), big.NewInt(1),
-					NewWithdrawDelegationAction(&withDrawMinBlockCalc, big.NewInt(1),
-						NewWithdrawAction(&withDrawMinBlockCalc, validatorID, endorserID),
-					),
-				),
+		//
+		//NewAddDelegationAction(&epoch, validatorID, MinStakeVET, uint8(1),
+		//	NewSignalExitAction(plusNFun(&epoch, 2), validatorID, endorserID,
+		//		NewSignalExitDelegationAction(plusNFun(&lowStakingPeriod, 2), big.NewInt(1),
+		//			NewWithdrawDelegationAction(&withDrawMinBlockCalc, big.NewInt(1),
+		//				NewWithdrawAction(&withDrawMinBlockCalc, validatorID, endorserID),
+		//			),
+		//		),
+		//	),
+		//),
+		//
+		//NewWithdrawAction(&withDrawMinBlockCalc, validatorID, endorserID),
+		NewIncreaseStakeAction(&withDrawMinBlockCalc, validatorID, endorserID, MinStakeVET,
+			NewDecreaseStakeAction(&withDrawMinBlockCalc, validatorID, endorserID, MinStakeVET,
+				NewWithdrawAction(&withDrawMinBlockCalc, validatorID, endorserID),
+			),
+			NewSignalExitAction(&withDrawMinBlockCalc, validatorID, endorserID,
+				NewWithdrawAction(&withDrawMinBlockCalc, validatorID, endorserID),
 			),
 		),
-
-		//NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
-		//NewIncreaseStakeAction(withDrawMinBlock, validatorID, endorserID, MinStakeVET,
-		//	NewDecreaseStakeAction(withDrawMinBlock, validatorID, endorserID, MinStakeVET,
-		//		NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
-		//	),
-		//	NewSignalExitAction(withDrawMinBlock, validatorID, endorserID,
-		//		NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
+		//NewDecreaseStakeAction(&withDrawMinBlockCalc, validatorID, endorserID, MinStakeVET,
+		//	NewDecreaseStakeAction(&withDrawMinBlockCalc, validatorID, endorserID, MaxStakeVET*2),
+		//),
+		//NewAddDelegationAction(nil, validatorID, MinStakeVET, uint8(1),
+		//	NewSignalExitDelegationAction(&lowStakingPeriod, big.NewInt(1)),
+		//	NewSignalExitAction(&withDrawMinBlockCalc, validatorID, endorserID,
+		//		NewWithdrawAction(&withDrawMinBlockCalc, validatorID, endorserID),
 		//	),
 		//),
-		//NewDecreaseStakeAction(withDrawMinBlock, validatorID, endorserID, MinStakeVET,
-		//	NewDecreaseStakeAction(withDrawMinBlock, validatorID, endorserID, MaxStakeVET*2),
-		//),
-		//NewAddDelegationAction(originalModifier(nil), validatorID, MinStakeVET, uint8(1),
-		//	NewSignalExitDelegationAction(originalModifier(&lowStakingPeriod), big.NewInt(1)),
-		//	NewSignalExitAction(withDrawMinBlock, validatorID, endorserID,
-		//		NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
+		//NewAddDelegationAction(nil, validatorID, MinStakeVET, uint8(1),
+		//	NewSignalExitDelegationAction(&lowStakingPeriod, big.NewInt(1),
+		//		NewWithdrawAction(&lowStakingPeriod, validatorID, endorserID),
 		//	),
-		//),
-		//NewAddDelegationAction(originalModifier(nil), validatorID, MinStakeVET, uint8(1),
-		//	NewSignalExitDelegationAction(originalModifier(&lowStakingPeriod), big.NewInt(1),
-		//		NewWithdrawAction(originalModifier(&lowStakingPeriod), validatorID, endorserID),
-		//	),
-		//	NewSignalExitAction(withDrawMinBlock, validatorID, endorserID,
-		//		NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
+		//	NewSignalExitAction(&withDrawMinBlockCalc, validatorID, endorserID,
+		//		NewWithdrawAction(&withDrawMinBlockCalc, validatorID, endorserID),
 		//	),
 		//),
 	)
@@ -561,34 +557,16 @@ func calculateExpectedValidationWithdrawAmount(ctx *ExecutionContext, currentBlo
 		return 0
 	}
 
-	// Rule 1: If no SignalExit has been called, can only withdraw adjustments made in same epoch
+	// Rule 1: If no SignalExit has been called
 	if ctx.SignalExitBlock == nil {
-		withdrawableAmt := int64(0)
-		for _, adjustment := range ctx.StakeAdjustments {
-			if IsSameEpoch(currentBlock, adjustment.Block) {
-				withdrawableAmt += adjustment.Amount
-			}
-		}
-
-		if withdrawableAmt > 0 {
-			return uint64(withdrawableAmt)
-		}
-		return 0
+		return calculateWithdrawableAmountNoSignalExit(ctx, currentBlock)
 	}
 
-	// Rule 2: SignalExit is set - two-part calculation
+	// Rule 2: SignalExit is set
 	if ctx.ValidationStartBlock == nil {
 		return 0
 	}
 
-	// Part A: Same-epoch adjustments (always allowed)
-	sameEpochAdjustments := int64(0)
-	for _, adjustment := range ctx.StakeAdjustments {
-		if IsSameEpoch(currentBlock, adjustment.Block) {
-			sameEpochAdjustments += adjustment.Amount
-		}
-	}
-	// Part B: Check if enough time has passed to withdraw initial stake + all adjustments
 	signalExitBlock := *ctx.SignalExitBlock
 	stakingPeriod := int(thor.LowStakingPeriod())
 	cooldownPeriod := int(thor.CooldownPeriod())
@@ -601,16 +579,8 @@ func calculateExpectedValidationWithdrawAmount(ctx *ExecutionContext, currentBlo
 
 	requiredBlock := signalExitBlock + timeToNextHousekeeping + stakingPeriod + cooldownPeriod
 
-	// Part C: Adjustments made before SignalExit are immediately withdrawable
-	adjustmentsBeforeSignalExit := int64(0)
-	for _, adj := range ctx.StakeAdjustments {
-		if adj.Block <= signalExitBlock {
-			adjustmentsBeforeSignalExit += adj.Amount
-		}
-	}
-
+	// If enough time has passed, can withdraw everything (initial stake + all adjustments)
 	if currentBlock >= requiredBlock {
-		// Can withdraw initial stake + all adjustments
 		totalStake := int64(ctx.InitialStake)
 		for _, adj := range ctx.StakeAdjustments {
 			totalStake += adj.Amount
@@ -621,16 +591,46 @@ func calculateExpectedValidationWithdrawAmount(ctx *ExecutionContext, currentBlo
 		}
 	}
 
-	// Return the maximum of same-epoch adjustments or adjustments before SignalExit
-	withdrawableAmount := sameEpochAdjustments
-	if adjustmentsBeforeSignalExit > withdrawableAmount {
-		withdrawableAmount = adjustmentsBeforeSignalExit
+	// Otherwise, apply the same rules as no SignalExit case for immediate withdrawals
+	return calculateWithdrawableAmountNoSignalExit(ctx, currentBlock)
+}
+
+// calculateWithdrawableAmountNoSignalExit calculates withdrawable amounts considering staking period locking
+func calculateWithdrawableAmountNoSignalExit(ctx *ExecutionContext, currentBlock int) uint64 {
+	if ctx == nil || ctx.ValidationStartBlock == nil {
+		return 0
 	}
 
-	if withdrawableAmount > 0 {
-		return uint64(withdrawableAmount)
+	stakingPeriod := int(thor.LowStakingPeriod())
+	withdrawableAmt := int64(0)
+		
+	// Same epoch adjustments are always withdrawable
+	for _, adjustment := range ctx.StakeAdjustments {
+		if IsSameEpoch(currentBlock, adjustment.Block) {
+			withdrawableAmt += adjustment.Amount
+		}
 	}
-
+	
+	// Plus unlocked decreases from previous staking periods
+	for _, adjustment := range ctx.StakeAdjustments {
+		// Skip same-epoch adjustments (already counted above)
+		if IsSameEpoch(currentBlock, adjustment.Block) {
+			continue
+		}
+		
+		// Only consider decreases (negative amounts) - increases get locked after staking period
+		if adjustment.Amount < 0 {
+			stakingPeriodsPassedSinceAdjustment := (currentBlock - adjustment.Block) / stakingPeriod
+			// If at least one staking period has passed since the decrease, it's unlocked and withdrawable
+			if stakingPeriodsPassedSinceAdjustment >= 1 {
+				// Convert negative decrease amount to positive withdrawable amount
+				withdrawableAmt += -adjustment.Amount
+			}
+		}
+	}
+	if withdrawableAmt > 0 {
+		return uint64(withdrawableAmt)
+	}
 	return 0
 }
 

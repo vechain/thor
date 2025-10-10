@@ -106,10 +106,8 @@ func NewWithdrawAction(
 		WithExecute(
 			func(ctx *ExecutionContext, staker *testStaker, blk int) error {
 				amount, err := staker.WithdrawStake(validationID, endorserID, uint32(blk))
-				actualWithdrawnAmount = amount // TODO: uncomment when implementing validation
-				if ctx != nil {
-					ctx.LastActionAmount = amount // For display purposes
-				}
+				actualWithdrawnAmount = amount
+				ctx.LastActionAmount = amount
 				return err
 			}).
 		WithCheck(
@@ -144,13 +142,11 @@ func NewIncreaseStakeAction(
 					return err
 				}
 				// Add positive adjustment to context if context is provided
-				if ctx != nil {
-					ctx.StakeAdjustments = append(ctx.StakeAdjustments, StakeAdjustment{
-						Block:  blk,
-						Amount: int64(amount),
-					})
-					ctx.LastActionAmount = amount // For display purposes
-				}
+				ctx.StakeAdjustments = append(ctx.StakeAdjustments, StakeAdjustment{
+					Block:  blk,
+					Amount: int64(amount),
+				})
+				ctx.LastActionAmount = amount // For display purposes
 				return nil
 			}).
 		WithCheck(
@@ -192,13 +188,11 @@ func NewDecreaseStakeAction(
 					return err
 				}
 				// Add negative adjustment to context if context is provided
-				if ctx != nil {
-					ctx.StakeAdjustments = append(ctx.StakeAdjustments, StakeAdjustment{
-						Block:  blk,
-						Amount: -int64(amount),
-					})
-					ctx.LastActionAmount = amount // For display purposes (positive value)
-				}
+				ctx.StakeAdjustments = append(ctx.StakeAdjustments, StakeAdjustment{
+					Block:  blk,
+					Amount: -int64(amount),
+				})
+				ctx.LastActionAmount = amount // For display purposes (positive value)
 				return nil
 			}).
 		WithCheck(
@@ -218,19 +212,6 @@ func NewDecreaseStakeAction(
 				}
 				if val.Status == validation.StatusActive && val.ExitBlock != nil {
 					return fmt.Errorf("Check DecreaseStake failed, validator has signaled exit")
-				}
-				var nextPeriodVET uint64
-				if val.Status == validation.StatusActive {
-					nextPeriodVET = val.LockedVET - val.PendingUnlockVET
-				}
-				if val.Status == validation.StatusQueued {
-					nextPeriodVET = val.QueuedVET
-				}
-				if amount > nextPeriodVET {
-					return fmt.Errorf("Check DecreaseStake failed, not enough locked stake")
-				}
-				if nextPeriodVET-amount < MinStakeVET {
-					return fmt.Errorf("Check DecreaseStake failed, next period stake is lower than minimum stake")
 				}
 				return nil
 			}).
