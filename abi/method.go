@@ -66,7 +66,7 @@ func (m *Method) DecodeInput(input []byte, v any) error {
 		if len(input) != 0 {
 			return m.method.Inputs.Unpack(v, input)
 		}
-		// if empty constructor
+		// if constructor with no parameters
 		return nil
 	}
 
