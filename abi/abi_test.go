@@ -146,14 +146,9 @@ func TestConstructorWithParameters(t *testing.T) {
 	// It should only contain the encoded parameters
 	assert.NotNil(t, input)
 
-	// The encoded data should start directly with the parameters,
-	// not with 0x00000000 (empty MethodID)
+	// The encoded data should start directly with the parameters
 	// For a constructor with parameters, the data should be > 0 bytes
 	assert.Greater(t, len(input), 0)
-
-	// Log the actual output to see what we're getting
-	t.Logf("Constructor input length: %d bytes", len(input))
-	t.Logf("Constructor input hex: %x", input)
 
 	// Verify the MethodID is empty (all zeros)
 	methodID := constructor.ID()
