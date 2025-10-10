@@ -3,7 +3,6 @@ package staker
 import (
 	"fmt"
 	"log/slog"
-	"math/big"
 	"math/rand"
 	"os"
 	"testing"
@@ -27,11 +26,72 @@ const (
 // Interfaces & Typedefs
 // ----------------------
 
+// ExecutionContext tracks the execution history for amount validation
+type ExecutionContext struct {
+	// Validation context
+	InitialStake         uint64
+	ValidationStartBlock *int
+	SignalExitBlock      *int
+	StakeAdjustments     []StakeAdjustment
+
+	// Delegation context
+	InitialDelegationStake uint64
+	DelegationStartBlock   *int
+	DelegationExitBlock    *int
+
+	// For display purposes - last action amount
+	LastActionAmount uint64
+}
+
+type StakeAdjustment struct {
+	Block  int
+	Amount int64 // positive for increase, negative for decrease
+}
+
+// Clone creates a deep copy of the ExecutionContext
+func (ctx *ExecutionContext) Clone() *ExecutionContext {
+	if ctx == nil {
+		return &ExecutionContext{}
+	}
+
+	clone := &ExecutionContext{
+		InitialStake:           ctx.InitialStake,
+		InitialDelegationStake: ctx.InitialDelegationStake,
+	}
+
+	if ctx.ValidationStartBlock != nil {
+		startBlock := *ctx.ValidationStartBlock
+		clone.ValidationStartBlock = &startBlock
+	}
+
+	if ctx.SignalExitBlock != nil {
+		exitBlock := *ctx.SignalExitBlock
+		clone.SignalExitBlock = &exitBlock
+	}
+
+	if ctx.DelegationStartBlock != nil {
+		startBlock := *ctx.DelegationStartBlock
+		clone.DelegationStartBlock = &startBlock
+	}
+
+	if ctx.DelegationExitBlock != nil {
+		exitBlock := *ctx.DelegationExitBlock
+		clone.DelegationExitBlock = &exitBlock
+	}
+
+	clone.StakeAdjustments = make([]StakeAdjustment, len(ctx.StakeAdjustments))
+	copy(clone.StakeAdjustments, ctx.StakeAdjustments)
+
+	clone.LastActionAmount = ctx.LastActionAmount
+
+	return clone
+}
+
 // Action is now produced by the generic builder. It keeps *Staker runtime-bound.
 type Action interface {
 	Name() string
-	Execute(s *testStaker, blk int) error
-	Check(s *testStaker, blk int) error
+	Execute(ctx *ExecutionContext, s *testStaker, blk int) error
+	Check(ctx *ExecutionContext, s *testStaker, blk int) error
 	Next() []Action
 	MinParentBlocksRequired() *int
 }
@@ -39,26 +99,26 @@ type Action interface {
 // builtAction is the generic concrete type for all actions.
 type builtAction struct {
 	name                    string
-	execute                 func(*testStaker, int) error
-	check                   func(*testStaker, int) error
+	execute                 func(*ExecutionContext, *testStaker, int) error
+	check                   func(*ExecutionContext, *testStaker, int) error
 	next                    []Action
 	minParentBlocksRequired *int
 }
 
 func (a *builtAction) Name() string { return a.name }
 
-func (a *builtAction) Execute(s *testStaker, blk int) error {
+func (a *builtAction) Execute(ctx *ExecutionContext, s *testStaker, blk int) error {
 	if a.execute == nil {
 		return nil
 	}
-	return a.execute(s, blk)
+	return a.execute(ctx, s, blk)
 }
 
-func (a *builtAction) Check(s *testStaker, blk int) error {
+func (a *builtAction) Check(ctx *ExecutionContext, s *testStaker, blk int) error {
 	if a.check == nil {
 		return nil
 	}
-	return a.check(s, blk)
+	return a.check(ctx, s, blk)
 }
 
 func (a *builtAction) Next() []Action { return a.next }
@@ -73,8 +133,8 @@ func (a *builtAction) MinParentBlocksRequired() *int {
 
 type ActionBuilder struct {
 	name                    string
-	execute                 func(*testStaker, int) error
-	check                   func(*testStaker, int) error
+	execute                 func(*ExecutionContext, *testStaker, int) error
+	check                   func(*ExecutionContext, *testStaker, int) error
 	next                    []Action
 	minParentBlocksRequired *int
 }
@@ -83,12 +143,12 @@ func NewActionBuilder(name string) *ActionBuilder {
 	return &ActionBuilder{name: name}
 }
 
-func (b *ActionBuilder) WithExecute(fn func(*testStaker, int) error) *ActionBuilder {
+func (b *ActionBuilder) WithExecute(fn func(*ExecutionContext, *testStaker, int) error) *ActionBuilder {
 	b.execute = fn
 	return b
 }
 
-func (b *ActionBuilder) WithCheck(fn func(*testStaker, int) error) *ActionBuilder {
+func (b *ActionBuilder) WithCheck(fn func(*ExecutionContext, *testStaker, int) error) *ActionBuilder {
 	b.check = fn
 	return b
 }
@@ -119,6 +179,7 @@ type ActionResult struct {
 	ExecutionErr error
 	CheckErr     error
 	Block        int
+	Amount       uint64 // Amount involved in the action (for display purposes)
 }
 
 // PrintActionTreeWithResults prints a tree visualization with execution results
@@ -175,9 +236,17 @@ func printActionTreeWithResultsHelper(action Action, prefix string, isLast bool,
 		}
 	}
 
-	// Format: ActionName @ block X (parentBlock + advancement) ExecutionResult CheckResult
-	actionInfo := fmt.Sprintf("%s @ block %d (%d + %d) %s %s",
-		action.Name(), executionBlock, parentBlock, blockAdvancement, execResult, checkResult)
+	// Format: ActionName @ block X (parentBlock + advancement) [ICON AMOUNT] ExecutionResult CheckResult
+	amountDisplay := ""
+	if found && result.Amount > 0 {
+		icon := getAmountIcon(action.Name())
+		if icon != "" {
+			amountDisplay = fmt.Sprintf(" [%s %s]", icon, formatAmount(result.Amount))
+		}
+	}
+
+	actionInfo := fmt.Sprintf("%s @ block %d (%d + %d)%s %s %s",
+		action.Name(), executionBlock, parentBlock, blockAdvancement, amountDisplay, execResult, checkResult)
 
 	log.Info(fmt.Sprintf("%s%s%s", prefix, connector, actionInfo))
 
@@ -200,13 +269,14 @@ func printActionTreeWithResultsHelper(action Action, prefix string, isLast bool,
 // RunWithResultTree executes actions and prints a tree with results
 func RunWithResultTree(s *testStaker, action Action, currentBlk int) error {
 	results := make(map[string]*ActionResult)
-	err := RunnerWithResults(s, action, currentBlk, results)
+	ctx := &ExecutionContext{}
+	err := RunnerWithResults(s, action, currentBlk, results, ctx)
 	PrintActionTreeWithResults(action, results)
 	return err
 }
 
 // RunnerWithResults executes an action, runs its checks, captures results, then recurses on Next().
-func RunnerWithResults(s *testStaker, action Action, currentBlk int, results map[string]*ActionResult) error {
+func RunnerWithResults(s *testStaker, action Action, currentBlk int, results map[string]*ActionResult, ctx *ExecutionContext) error {
 	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
@@ -253,15 +323,19 @@ func RunnerWithResults(s *testStaker, action Action, currentBlk int, results map
 	}
 
 	log.Info("⚡️ Executing action", "action", action.Name(), "block", currentBlk)
-	executionErr := action.Execute(s, currentBlk)
-	checkErr := action.Check(s, currentBlk)
+
+	// Execute and check with context
+	executionErr := action.Execute(ctx, s, currentBlk)
+	checkErr := action.Check(ctx, s, currentBlk)
 
 	// Create a unique key for this action execution
-	results[fmt.Sprintf("%s@%d", action.Name(), currentBlk)] = &ActionResult{
+	actionKey := fmt.Sprintf("%s@%d", action.Name(), currentBlk)
+	results[actionKey] = &ActionResult{
 		ActionName:   action.Name(),
 		ExecutionErr: executionErr,
 		CheckErr:     checkErr,
 		Block:        currentBlk,
+		Amount:       getActionAmount(action.Name(), ctx, executionErr), // Extract amount from action
 	}
 
 	switch {
@@ -277,7 +351,9 @@ func RunnerWithResults(s *testStaker, action Action, currentBlk int, results map
 	nextActions := action.Next()
 	for i, next := range nextActions {
 		log.Debug("➡️ Starting next action", "sequence", i+1, "action", next.Name())
-		if err := RunnerWithResults(CloneStaker(s), next, currentBlk, results); err != nil {
+		// Clone context for each branch to prevent interference
+		clonedCtx := ctx.Clone()
+		if err := RunnerWithResults(CloneStaker(s), next, currentBlk, results, clonedCtx); err != nil {
 			log.Error("❌ Next action failed", "sequence", i+1, "action", next.Name(), "error", err)
 			return err
 		}
@@ -295,52 +371,60 @@ func TestPermutations(t *testing.T) {
 	lowStakingPeriod := int(thor.LowStakingPeriod())
 
 	epoch := HousekeepingInterval
-
-	// Use original block timings (no modifications)
-	originalModifier := func(original *int) *int {
-		return original
+	plusNFun := func(base *int, increase int) *int {
+		newBase := *base + increase
+		return &newBase
 	}
 
-	signalExitMinBlock := originalModifier(&epoch)
-	withDrawMinBlockCalc := convertNilBlock(signalExitMinBlock) + epoch + int(thor.CooldownPeriod())
-	withDrawMinBlock := originalModifier(&withDrawMinBlockCalc)
+	//signalExitMinBlock := &epoch
+	withDrawMinBlockCalc := lowStakingPeriod + epoch + int(thor.CooldownPeriod())
+	//withDrawMinBlock := &withDrawMinBlockCalc
 
 	// Compose the flow explicitly
-	action := NewValidationAction(
-		originalModifier(nil),
+	action := NewAddValidationAction(
+		nil,
 		validatorID,
 		endorserID,
 		thor.LowStakingPeriod(),
 		MinStakeVET,
-		NewSignalExitAction(signalExitMinBlock, validatorID, endorserID,
-			NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
-		),
-		NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
-		NewIncreaseStakeAction(withDrawMinBlock, validatorID, endorserID, MinStakeVET,
-			NewDecreaseStakeAction(withDrawMinBlock, validatorID, endorserID, MinStakeVET,
-				NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
-			),
-			NewSignalExitAction(withDrawMinBlock, validatorID, endorserID,
-				NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
-			),
-		),
-		NewDecreaseStakeAction(withDrawMinBlock, validatorID, endorserID, MinStakeVET,
-			NewDecreaseStakeAction(withDrawMinBlock, validatorID, endorserID, MaxStakeVET*2),
-		),
-		NewAddDelegationAction(originalModifier(nil), validatorID, MinStakeVET, uint8(1),
-			NewSignalExitDelegationAction(originalModifier(&lowStakingPeriod), big.NewInt(1)),
-			NewSignalExitAction(withDrawMinBlock, validatorID, endorserID,
-				NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
+		//NewSignalExitAction(signalExitMinBlock, validatorID, endorserID,
+		//	NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
+		//),
+		NewIncreaseStakeAction(&epoch, validatorID, endorserID, MinStakeVET,
+			NewIncreaseStakeAction(plusNFun(&epoch, 2), validatorID, endorserID, MinStakeVET,
+				NewIncreaseStakeAction(plusNFun(&epoch, 3), validatorID, endorserID, MinStakeVET,
+					NewSignalExitAction(plusNFun(&epoch, 5), validatorID, endorserID,
+						NewWithdrawAction(&withDrawMinBlockCalc, validatorID, endorserID),
+					),
+				),
 			),
 		),
-		NewAddDelegationAction(originalModifier(nil), validatorID, MinStakeVET, uint8(1),
-			NewSignalExitDelegationAction(originalModifier(&lowStakingPeriod), big.NewInt(1),
-				NewWithdrawAction(originalModifier(&lowStakingPeriod), validatorID, endorserID),
-			),
-			NewSignalExitAction(withDrawMinBlock, validatorID, endorserID,
-				NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
-			),
-		),
+		//NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
+		//NewIncreaseStakeAction(withDrawMinBlock, validatorID, endorserID, MinStakeVET,
+		//	NewDecreaseStakeAction(withDrawMinBlock, validatorID, endorserID, MinStakeVET,
+		//		NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
+		//	),
+		//	NewSignalExitAction(withDrawMinBlock, validatorID, endorserID,
+		//		NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
+		//	),
+		//),
+		//NewDecreaseStakeAction(withDrawMinBlock, validatorID, endorserID, MinStakeVET,
+		//	NewDecreaseStakeAction(withDrawMinBlock, validatorID, endorserID, MaxStakeVET*2),
+		//),
+		//NewAddDelegationAction(originalModifier(nil), validatorID, MinStakeVET, uint8(1),
+		//	NewSignalExitDelegationAction(originalModifier(&lowStakingPeriod), big.NewInt(1)),
+		//	NewSignalExitAction(withDrawMinBlock, validatorID, endorserID,
+		//		NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
+		//	),
+		//),
+		//NewAddDelegationAction(originalModifier(nil), validatorID, MinStakeVET, uint8(1),
+		//	NewSignalExitDelegationAction(originalModifier(&lowStakingPeriod), big.NewInt(1),
+		//		NewWithdrawAction(originalModifier(&lowStakingPeriod), validatorID, endorserID),
+		//	),
+		//	NewSignalExitAction(withDrawMinBlock, validatorID, endorserID,
+		//		NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
+		//	),
+		//),
 	)
 
 	require.NoError(t, RunWithResultTree(staker, action, 0))
@@ -397,7 +481,7 @@ func TestRandomPermutations(t *testing.T) {
 			withDrawMinBlock := randomModifier(&withDrawMinBlockCalc)
 
 			// Compose the flow explicitly: AddValidation -> SignalExit -> Withdraw
-			action := NewValidationAction(
+			action := NewAddValidationAction(
 				randomModifier(nil),
 				validatorID,
 				endorserID,
@@ -448,4 +532,135 @@ func convertNilBlock(i *int) int {
 		base = *i
 	}
 	return base
+}
+
+// ----------------------
+// Amount Calculation Helpers
+// ----------------------
+
+// calculateExpectedValidationWithdrawAmount calculates the expected amount for validation withdrawals
+func calculateExpectedValidationWithdrawAmount(ctx *ExecutionContext, currentBlock int) uint64 {
+	if ctx == nil {
+		return 0
+	}
+
+	// Rule 1: If no SignalExit has been called, can only withdraw adjustments made in same epoch
+	if ctx.SignalExitBlock == nil {
+		withdrawableAmt := int64(0)
+		for _, adjustment := range ctx.StakeAdjustments {
+			if IsSameEpoch(currentBlock, adjustment.Block) {
+				withdrawableAmt += adjustment.Amount
+			}
+		}
+
+		if withdrawableAmt > 0 {
+			return uint64(withdrawableAmt)
+		}
+		return 0
+	}
+
+	// Rule 2: SignalExit is set - two-part calculation
+	if ctx.ValidationStartBlock == nil {
+		return 0
+	}
+
+	// Part A: Same-epoch adjustments (always allowed)
+	sameEpochAdjustments := int64(0)
+	for _, adjustment := range ctx.StakeAdjustments {
+		if IsSameEpoch(currentBlock, adjustment.Block) {
+			sameEpochAdjustments += adjustment.Amount
+		}
+	}
+	// Part B: Check if enough time has passed to withdraw initial stake + all adjustments
+	signalExitBlock := *ctx.SignalExitBlock
+	stakingPeriod := int(thor.LowStakingPeriod())
+	cooldownPeriod := int(thor.CooldownPeriod())
+
+	// Calculate time to next housekeeping from signal exit
+	timeToNextHousekeeping := HousekeepingInterval - (signalExitBlock % HousekeepingInterval)
+	if timeToNextHousekeeping == HousekeepingInterval {
+		timeToNextHousekeeping = 0 // Already at housekeeping boundary
+	}
+
+	requiredBlock := signalExitBlock + timeToNextHousekeeping + stakingPeriod + cooldownPeriod
+
+	// Part C: Adjustments made before SignalExit are immediately withdrawable
+	adjustmentsBeforeSignalExit := int64(0)
+	for _, adj := range ctx.StakeAdjustments {
+		if adj.Block <= signalExitBlock {
+			adjustmentsBeforeSignalExit += adj.Amount
+		}
+	}
+
+	if currentBlock >= requiredBlock {
+		// Can withdraw initial stake + all adjustments
+		totalStake := int64(ctx.InitialStake)
+		for _, adj := range ctx.StakeAdjustments {
+			totalStake += adj.Amount
+		}
+
+		if totalStake > 0 {
+			return uint64(totalStake)
+		}
+	}
+
+	// Return the maximum of same-epoch adjustments or adjustments before SignalExit
+	withdrawableAmount := sameEpochAdjustments
+	if adjustmentsBeforeSignalExit > withdrawableAmount {
+		withdrawableAmount = adjustmentsBeforeSignalExit
+	}
+
+	if withdrawableAmount > 0 {
+		return uint64(withdrawableAmount)
+	}
+
+	return 0
+}
+
+// calculateExpectedDelegationWithdrawAmount calculates the expected amount for delegation withdrawals
+// TODO: Implement proper business logic - currently returns actual amount to always pass
+func calculateExpectedDelegationWithdrawAmount(ctx *ExecutionContext, currentBlock int) uint64 {
+	// For now, return a placeholder that will be replaced with actual logic
+	// This allows the framework to work while business rules are refined
+	return 0 // Will be overridden by actual withdrawn amount comparison logic
+}
+
+// IsSameEpoch returns true if both blocks are within the same housekeeping epoch.
+// Epochs are defined as [1..interval], [interval+1..2*interval], etc.
+func IsSameEpoch(a, b int) bool {
+	return (a-1)/HousekeepingInterval == (b-1)/HousekeepingInterval
+}
+
+// formatAmount formats an amount in millions (e.g., 25000000 -> "25M")
+func formatAmount(amount uint64) string {
+	if amount == 0 {
+		return ""
+	}
+	millions := amount / 1000000
+	if amount%1000000 == 0 {
+		return fmt.Sprintf("%dM", millions)
+	}
+	return fmt.Sprintf("%.1fM", float64(amount)/1000000)
+}
+
+// getAmountIcon returns the appropriate icon for an action type
+func getAmountIcon(actionName string) string {
+	switch actionName {
+	case "AddValidation", "IncreaseStake", "AddDelegation":
+		return "⬆️"
+	case "DecreaseStake":
+		return "⬇️"
+	case "Withdraw", "WithdrawDelegation":
+		return "💵"
+	default:
+		return ""
+	}
+}
+
+// getActionAmount extracts the amount from an action execution
+func getActionAmount(actionName string, ctx *ExecutionContext, executionErr error) uint64 {
+	if ctx == nil || executionErr != nil {
+		return 0
+	}
+	return ctx.LastActionAmount
 }

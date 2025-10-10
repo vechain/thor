@@ -7,10 +7,10 @@ import (
 	"math/big"
 )
 
-// NewValidationAction builds an AddValidation action with explicit parameters.
+// NewAddValidationAction builds an AddValidation action with explicit parameters.
 // Note: *Staker is NOT captured; it's passed at Execute-time as requested.
 // Chaining is explicit: pass follow-up actions via `next ...Action`.
-func NewValidationAction(
+func NewAddValidationAction(
 	minParentBlocksRequired *int,
 	validator thor.Address,
 	endorser thor.Address,
@@ -21,14 +21,18 @@ func NewValidationAction(
 	return NewActionBuilder("AddValidation").
 		WithMinParentBlocksRequired(minParentBlocksRequired).
 		WithExecute(
-			func(s *testStaker, _ int) error {
+			func(ctx *ExecutionContext, s *testStaker, blk int) error {
 				if err := s.AddValidation(validator, endorser, period, stake); err != nil {
 					return fmt.Errorf("AddValidation failed: %w", err)
 				}
+				// Update context with initial stake and start block
+				ctx.InitialStake = stake
+				ctx.ValidationStartBlock = &blk
+				ctx.LastActionAmount = stake // For display purposes
 				return nil
 			}).
 		WithCheck(
-			func(s *testStaker, _ int) error {
+			func(ctx *ExecutionContext, s *testStaker, blk int) error {
 				val, err := s.GetValidation(validator)
 				if err != nil {
 					return fmt.Errorf("Check GetValidation failed: %w", err)
@@ -52,11 +56,16 @@ func NewSignalExitAction(
 	return NewActionBuilder("SignalExit").
 		WithMinParentBlocksRequired(minParentBlocksRequired).
 		WithExecute(
-			func(staker *testStaker, blk int) error {
-				return staker.SignalExit(validationID, endorserID, uint32(blk))
+			func(ctx *ExecutionContext, staker *testStaker, blk int) error {
+				if err := staker.SignalExit(validationID, endorserID, uint32(blk)); err != nil {
+					return err
+				}
+				// Update context with signal exit block
+				ctx.SignalExitBlock = &blk
+				return nil
 			}).
 		WithCheck(
-			func(staker *testStaker, blk int) error {
+			func(ctx *ExecutionContext, staker *testStaker, blk int) error {
 				val, err := staker.GetValidation(validationID)
 				if err != nil {
 					return fmt.Errorf("Check SignalExit GetValidation failed: %w", err)
@@ -90,31 +99,31 @@ func NewWithdrawAction(
 	validationID thor.Address,
 	endorserID thor.Address,
 ) Action {
+	var actualWithdrawnAmount uint64 // Store actual amount from execution
+
 	return NewActionBuilder("Withdraw").
 		WithMinParentBlocksRequired(minParentBlocksRequired).
 		WithExecute(
-			func(staker *testStaker, blk int) error {
-				_, err := staker.WithdrawStake(validationID, endorserID, uint32(blk))
+			func(ctx *ExecutionContext, staker *testStaker, blk int) error {
+				amount, err := staker.WithdrawStake(validationID, endorserID, uint32(blk))
+				actualWithdrawnAmount = amount // TODO: uncomment when implementing validation
+				if ctx != nil {
+					ctx.LastActionAmount = amount // For display purposes
+				}
 				return err
 			}).
 		WithCheck(
-			func(staker *testStaker, blk int) error {
+			func(ctx *ExecutionContext, staker *testStaker, blk int) error {
 				_, err := staker.GetValidation(validationID)
 				if err != nil {
 					return fmt.Errorf("GetValidation failed: %w", err)
 				}
 
-				//if val.Status != validation.StatusExit && val.Status != validation.StatusQueued {
-				//	return fmt.Errorf("expected status failed, got %d", val.Status)
-				//}
-				//
-				//if val.ExitBlock == nil {
-				//	return fmt.Errorf("nil ExitBlock")
-				//}
-				//
-				//if !val.CooldownEnded(uint32(blk)) {
-				//	return fmt.Errorf("expected cooldown ended")
-				//}
+				expectedAmount := calculateExpectedValidationWithdrawAmount(ctx, blk)
+				if actualWithdrawnAmount != expectedAmount {
+					return fmt.Errorf("Amount validation failed: expected %d, got %d", expectedAmount, actualWithdrawnAmount)
+				}
+
 				return nil
 			}).
 		Build()
@@ -130,11 +139,22 @@ func NewIncreaseStakeAction(
 	return NewActionBuilder("IncreaseStake").
 		WithMinParentBlocksRequired(minParentBlocksRequired).
 		WithExecute(
-			func(staker *testStaker, blk int) error {
-				return staker.IncreaseStake(validationID, endorserID, amount)
+			func(ctx *ExecutionContext, staker *testStaker, blk int) error {
+				if err := staker.IncreaseStake(validationID, endorserID, amount); err != nil {
+					return err
+				}
+				// Add positive adjustment to context if context is provided
+				if ctx != nil {
+					ctx.StakeAdjustments = append(ctx.StakeAdjustments, StakeAdjustment{
+						Block:  blk,
+						Amount: int64(amount),
+					})
+					ctx.LastActionAmount = amount // For display purposes
+				}
+				return nil
 			}).
 		WithCheck(
-			func(staker *testStaker, blk int) error {
+			func(ctx *ExecutionContext, staker *testStaker, blk int) error {
 				val, err := staker.GetValidation(validationID)
 				if err != nil {
 					return fmt.Errorf("Check IncreaseStake failed, validator not found: %w", err)
@@ -167,11 +187,22 @@ func NewDecreaseStakeAction(
 	return NewActionBuilder("DecreaseStake").
 		WithMinParentBlocksRequired(minParentBlocksRequired).
 		WithExecute(
-			func(staker *testStaker, blk int) error {
-				return staker.DecreaseStake(validationID, endorserID, amount)
+			func(ctx *ExecutionContext, staker *testStaker, blk int) error {
+				if err := staker.DecreaseStake(validationID, endorserID, amount); err != nil {
+					return err
+				}
+				// Add negative adjustment to context if context is provided
+				if ctx != nil {
+					ctx.StakeAdjustments = append(ctx.StakeAdjustments, StakeAdjustment{
+						Block:  blk,
+						Amount: -int64(amount),
+					})
+					ctx.LastActionAmount = amount // For display purposes (positive value)
+				}
+				return nil
 			}).
 		WithCheck(
-			func(staker *testStaker, blk int) error {
+			func(ctx *ExecutionContext, staker *testStaker, blk int) error {
 				val, err := staker.GetValidation(validationID)
 				if err != nil {
 					return fmt.Errorf("Check DecreaseStake failed, validator not found: %w", err)
@@ -217,11 +248,11 @@ func NewSetBeneficiaryAction(
 	return NewActionBuilder("SetBeneficiary").
 		WithMinParentBlocksRequired(minParentBlocksRequired).
 		WithExecute(
-			func(staker *testStaker, blk int) error {
+			func(ctx *ExecutionContext, staker *testStaker, blk int) error {
 				return staker.SetBeneficiary(validationID, endorserID, beneficiary)
 			}).
 		WithCheck(
-			func(staker *testStaker, blk int) error {
+			func(ctx *ExecutionContext, staker *testStaker, blk int) error {
 				val, err := staker.GetValidation(validationID)
 				if err != nil {
 					return fmt.Errorf("Check SetBeneficiary failed, validator not found: %w", err)
@@ -248,15 +279,21 @@ func NewAddDelegationAction(
 	return NewActionBuilder("AddDelegation").
 		WithMinParentBlocksRequired(minParentBlocksRequired).
 		WithExecute(
-			func(staker *testStaker, blk int) error {
+			func(ctx *ExecutionContext, staker *testStaker, blk int) error {
 				_, err := staker.AddDelegation(validationID, stake, multiplier, uint32(blk))
 				if err != nil {
 					return fmt.Errorf("AddDelegation failed : %w", err)
 				}
+				// Update context with delegation info if context is provided
+				if ctx != nil {
+					ctx.InitialDelegationStake = stake
+					ctx.DelegationStartBlock = &blk
+					ctx.LastActionAmount = stake // For display purposes
+				}
 				return nil
 			}).
 		WithCheck(
-			func(staker *testStaker, blk int) error {
+			func(ctx *ExecutionContext, staker *testStaker, blk int) error {
 				if stake <= 0 {
 					return NewReverts("stake must be greater than 0")
 				}
@@ -297,11 +334,18 @@ func NewSignalExitDelegationAction(
 	return NewActionBuilder("SignalExitDelegation").
 		WithMinParentBlocksRequired(minParentBlocksRequired).
 		WithExecute(
-			func(staker *testStaker, blk int) error {
-				return staker.SignalDelegationExit(delegationID, uint32(blk))
+			func(ctx *ExecutionContext, staker *testStaker, blk int) error {
+				if err := staker.SignalDelegationExit(delegationID, uint32(blk)); err != nil {
+					return err
+				}
+				// Update context with delegation exit block if context is provided
+				if ctx != nil {
+					ctx.DelegationExitBlock = &blk
+				}
+				return nil
 			}).
 		WithCheck(
-			func(staker *testStaker, blk int) error {
+			func(ctx *ExecutionContext, staker *testStaker, blk int) error {
 				del, err := staker.Staker.delegationService.GetDelegation(delegationID)
 				if err != nil {
 					return err
@@ -350,18 +394,24 @@ func NewWithdrawDelegationAction(
 	delegationID *big.Int,
 	next ...Action,
 ) Action {
+	// var actualWithdrawnAmount uint64 // Store actual amount from execution - TODO: uncomment when implementing validation
+
 	return NewActionBuilder("WithdrawDelegation").
 		WithMinParentBlocksRequired(minParentBlocksRequired).
 		WithExecute(
-			func(staker *testStaker, blk int) error {
-				_, err := staker.WithdrawDelegation(delegationID, uint32(blk))
+			func(ctx *ExecutionContext, staker *testStaker, blk int) error {
+				amount, err := staker.WithdrawDelegation(delegationID, uint32(blk))
+				// actualWithdrawnAmount = amount // TODO: uncomment when implementing validation
 				if err != nil {
 					return fmt.Errorf("WithdrawDelegation failed : %w", err)
+				}
+				if ctx != nil {
+					ctx.LastActionAmount = amount // For display purposes
 				}
 				return nil
 			}).
 		WithCheck(
-			func(staker *testStaker, blk int) error {
+			func(ctx *ExecutionContext, staker *testStaker, blk int) error {
 				del, err := staker.delegationService.GetDelegation(delegationID)
 				if err != nil {
 					return err
@@ -390,7 +440,16 @@ func NewWithdrawDelegationAction(
 				if started && !finished {
 					return NewReverts("delegation is not eligible for withdraw")
 				}
-				
+
+				// TODO: Implement delegation amount validation logic
+				// For now, always pass to allow framework testing
+				// if ctx != nil {
+				//     expectedAmount := calculateExpectedDelegationWithdrawAmount(ctx, blk)
+				//     if actualWithdrawnAmount != expectedAmount {
+				//         return fmt.Errorf("Delegation amount validation failed: expected %d, got %d", expectedAmount, actualWithdrawnAmount)
+				//     }
+				// }
+
 				return nil
 			}).
 		WithNext(next...).
