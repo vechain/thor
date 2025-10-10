@@ -26,11 +26,12 @@ type Builder struct {
 	timestamp uint64
 	gasLimit  uint64
 
-	stateProcs []func(state *state.State) error
+	stateProcs func(state *state.State) error
 	calls      []call
 	extraData  [28]byte
 
 	forkConfig *thor.ForkConfig
+	postState  func(state *state.State) error
 }
 
 type call struct {
@@ -52,7 +53,7 @@ func (b *Builder) GasLimit(limit uint64) *Builder {
 
 // State add a state process !!!touch accounts's energy is mandatory if you touch its balance
 func (b *Builder) State(proc func(state *state.State) error) *Builder {
-	b.stateProcs = append(b.stateProcs, proc)
+	b.stateProcs = proc
 	return b
 }
 
@@ -65,6 +66,12 @@ func (b *Builder) Call(clause *tx.Clause, caller thor.Address) *Builder {
 // ExtraData set extra data, which will be put into last 28 bytes of genesis parent id.
 func (b *Builder) ExtraData(data [28]byte) *Builder {
 	b.extraData = data
+	return b
+}
+
+// PostCallState executes state changes after the contract calls
+func (b *Builder) PostCallState(f func(state *state.State) error) *Builder {
+	b.postState = f
 	return b
 }
 
@@ -87,8 +94,8 @@ func (b *Builder) ComputeID() (thor.Bytes32, error) {
 func (b *Builder) Build(stater *state.Stater) (blk *block.Block, events tx.Events, transfers tx.Transfers, err error) {
 	state := stater.NewState(trie.Root{})
 
-	for _, proc := range b.stateProcs {
-		if err := proc(state); err != nil {
+	if b.stateProcs != nil {
+		if err := b.stateProcs(state); err != nil {
 			return nil, nil, nil, errors.Wrap(err, "state process")
 		}
 	}
@@ -111,6 +118,12 @@ func (b *Builder) Build(stater *state.Stater) (blk *block.Block, events tx.Event
 		}
 		events = append(events, out.Events...)
 		transfers = append(transfers, out.Transfers...)
+	}
+
+	if b.postState != nil {
+		if err = b.postState(state); err != nil {
+			return nil, nil, nil, errors.Wrap(err, "post state")
+		}
 	}
 
 	stage, err := state.Stage(trie.Version{})

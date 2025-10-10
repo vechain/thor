@@ -85,29 +85,38 @@ func (s *Service) ApplyRenewal(renewal *Renewal) error {
 }
 
 func (s *Service) ApplyExit(validation *Exit, aggregation *Exit) error {
+	// Track the unlock of validation + aggregations locked stakes
 	totalExited := validation.ExitedTVL.Clone()
 	if err := totalExited.Add(aggregation.ExitedTVL); err != nil {
 		return err
 	}
 
-	if err := s.RemoveLocked(totalExited); err != nil {
-		return err
+	if totalExited.VET > 0 {
+		if err := s.RemoveLocked(totalExited); err != nil {
+			return err
+		}
 	}
 
-	if err := s.RemoveQueued(validation.QueuedDecrease + aggregation.QueuedDecrease); err != nil {
-		return err
+	// All queued values are now removed from the queued tracker
+	queuedDecrease := validation.QueuedDecrease + aggregation.QueuedDecrease
+	if queuedDecrease > 0 {
+		if err := s.RemoveQueued(queuedDecrease); err != nil {
+			return err
+		}
 	}
 
-	// move validation's exiting to cooldown
+	// Unlocked validation stake is now on cooldown
 	if validation.ExitedTVL.VET > 0 {
 		if err := s.AddCooldown(validation.ExitedTVL.VET); err != nil {
 			return err
 		}
 	}
 
-	// move aggregation's exiting to withdrawable
-	if aggregation.ExitedTVL.VET > 0 {
-		if err := s.AddWithdrawable(aggregation.ExitedTVL.VET); err != nil {
+	// Both queued (val + del) stakes and exited delegations are now withdrawable
+	// exited delegations do not go on cooldown
+	withdrawableIncrease := queuedDecrease + aggregation.ExitedTVL.VET
+	if withdrawableIncrease > 0 {
+		if err := s.AddWithdrawable(withdrawableIncrease); err != nil {
 			return err
 		}
 	}

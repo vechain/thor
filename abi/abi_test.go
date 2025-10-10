@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package abi_test
+package abi
 
 import (
 	"math/big"
@@ -12,14 +12,13 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/builtin/gen"
 	"github.com/vechain/thor/v2/thor"
 )
 
 func TestABI(t *testing.T) {
 	data := gen.MustABI("compiled/Params.abi")
-	abi, err := abi.New(data)
+	abi, err := New(data)
 	assert.Nil(t, err)
 
 	// pack/unpack input
@@ -87,7 +86,7 @@ func TestABI(t *testing.T) {
 
 func TestStakerABI(t *testing.T) {
 	data := gen.MustABI("compiled/Staker.abi")
-	abi, err := abi.New(data)
+	abi, err := New(data)
 	assert.Nil(t, err)
 
 	type testCase struct {
