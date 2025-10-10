@@ -39,6 +39,12 @@ func (m *Method) EncodeInput(args ...any) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// if constructor there are no method bytes to prefix
+	if m.id == (MethodID{}) {
+		return data, nil
+	}
+
 	return append(m.id[:], data...), nil
 }
 
