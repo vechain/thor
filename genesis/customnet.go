@@ -6,32 +6,19 @@
 package genesis
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
 
 	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/builtin/params"
+	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
-
-// CustomGenesis is user customized genesis
-type CustomGenesis struct {
-	LaunchTime uint64           `json:"launchTime"`
-	GasLimit   uint64           `json:"gaslimit"`
-	ExtraData  string           `json:"extraData"`
-	Accounts   []Account        `json:"accounts"`
-	Authority  []Authority      `json:"authority"`
-	Params     Params           `json:"params"`
-	Executor   Executor         `json:"executor"`
-	ForkConfig *thor.ForkConfig `json:"forkConfig"`
-	Config     *thor.Config     `json:"config"`
-}
 
 // NewCustomNet create custom network genesis.
 func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
@@ -52,11 +39,10 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 	if gen.GasLimit == 0 {
 		gen.GasLimit = thor.InitialGasLimit
 	}
-	var executor thor.Address
+
+	executor := builtin.Executor.Address
 	if gen.Params.ExecutorAddress != nil {
 		executor = *gen.Params.ExecutorAddress
-	} else {
-		executor = builtin.Executor.Address
 	}
 
 	builder := new(Builder).
@@ -81,9 +67,14 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 				return err
 			}
 
-			// if executor is the default executor, set the executor code
-			if executor == builtin.Executor.Address && len(gen.Executor.Approvers) > 0 {
-				if err := state.SetCode(builtin.Executor.Address, builtin.Executor.RuntimeBytecodes()); err != nil {
+			// Always deploy the executor code at the default executor address
+			// if genesis Executor address is different it's the genesis creator responsibility to manually deploy the executor code
+			if err := state.SetCode(builtin.Executor.Address, builtin.Executor.RuntimeBytecodes()); err != nil {
+				return err
+			}
+
+			if isHayabusaGenesis(gen) {
+				if err := state.SetCode(builtin.Staker.Address, builtin.Staker.RuntimeBytecodes()); err != nil {
 					return err
 				}
 			}
@@ -186,17 +177,36 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 	}
 	// add initial authority nodes
 	for _, anode := range gen.Authority {
-		data := mustEncodeInput(builtin.Authority.ABI, "add", anode.MasterAddress, anode.EndorsorAddress, anode.Identity)
+		data = mustEncodeInput(builtin.Authority.ABI, "add", anode.MasterAddress, anode.EndorsorAddress, anode.Identity)
 		builder.Call(tx.NewClause(&builtin.Authority.Address).WithData(data), executor)
 	}
 
-	// if executor is the default executor, set the approvers
-	if executor == builtin.Executor.Address && len(gen.Executor.Approvers) > 0 {
-		for _, approver := range gen.Executor.Approvers {
-			data := mustEncodeInput(builtin.Executor.ABI, "addApprover", approver.Address, approver.Identity)
-			builder.Call(tx.NewClause(&builtin.Executor.Address).WithData(data), executor)
+	// if genesis Executor address is different from default
+	// the genesis creator must manually deploy the executor code and manually add the approvers
+	for _, approver := range gen.Executor.Approvers {
+		data = mustEncodeInput(builtin.Executor.ABI, "addApprover", approver.Address, approver.Identity)
+		// using builtin.Executor.Address guarantees the execution of this clause
+		builder.Call(tx.NewClause(&builtin.Executor.Address).WithData(data), builtin.Executor.Address)
+	}
+
+	if isHayabusaGenesis(gen) {
+		// auth nodes are now validators
+		for _, authority := range gen.Authority {
+			data = mustEncodeInput(builtin.Staker.ABI, "addValidation", authority.MasterAddress, thor.HighStakingPeriod())
+			builder.Call(tx.NewClause(&builtin.Staker.Address).WithData(data).WithValue(staker.MinStake), authority.EndorsorAddress)
 		}
 	}
+
+	builder.PostCallState(func(state *state.State) error {
+		if isHayabusaGenesis(gen) {
+			stk := staker.New(builtin.Staker.Address, state, params.New(builtin.Params.Address, state), nil)
+			_, err := stk.Housekeep(0)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 
 	if len(gen.ExtraData) > 0 {
 		var extra [28]byte
@@ -211,69 +221,6 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 	return &Genesis{builder, id, "customnet"}, nil
 }
 
-// Account is the account will set to the genesis block
-type Account struct {
-	Address thor.Address            `json:"address"`
-	Balance *HexOrDecimal256        `json:"balance"`
-	Energy  *HexOrDecimal256        `json:"energy"`
-	Code    string                  `json:"code"`
-	Storage map[string]thor.Bytes32 `json:"storage"`
-}
-
-// Authority is the authority node info
-type Authority struct {
-	MasterAddress   thor.Address `json:"masterAddress"`
-	EndorsorAddress thor.Address `json:"endorsorAddress"`
-	Identity        thor.Bytes32 `json:"identity"`
-}
-
-// Executor is the params for executor info
-type Executor struct {
-	Approvers []Approver `json:"approvers"`
-}
-
-// Approver is the approver info for executor contract
-type Approver struct {
-	Address  thor.Address `json:"address"`
-	Identity thor.Bytes32 `json:"identity"`
-}
-
-// Params means the chain params for params contract
-type Params struct {
-	RewardRatio         *HexOrDecimal256 `json:"rewardRatio"`
-	BaseGasPrice        *HexOrDecimal256 `json:"baseGasPrice"`
-	ProposerEndorsement *HexOrDecimal256 `json:"proposerEndorsement"`
-	ExecutorAddress     *thor.Address    `json:"executorAddress"`
-	MaxBlockProposers   *uint64          `json:"maxBlockProposers"`
-}
-
-// hexOrDecimal256 marshals big.Int as hex or decimal.
-// Copied from go-ethereum/common/math and implement json. Marshaler
-type HexOrDecimal256 math.HexOrDecimal256
-
-// UnmarshalJSON implements the json.Unmarshaler interface.
-func (i *HexOrDecimal256) UnmarshalJSON(input []byte) error {
-	var hex string
-	if err := json.Unmarshal(input, &hex); err != nil {
-		if err = (*big.Int)(i).UnmarshalJSON(input); err != nil {
-			return err
-		}
-		return nil
-	}
-	bigint, ok := math.ParseBig256(hex)
-	if !ok {
-		return fmt.Errorf("invalid hex or decimal integer %q", input)
-	}
-	*i = HexOrDecimal256(*bigint)
-	return nil
-}
-
-// MarshalJSON implements the json.Marshaler interface.
-func (i HexOrDecimal256) MarshalJSON() ([]byte, error) {
-	decimal256 := math.HexOrDecimal256(i)
-	text, err := decimal256.MarshalText()
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(string(text))
+func isHayabusaGenesis(gen *CustomGenesis) bool {
+	return gen.ForkConfig.HAYABUSA == 0 && gen.Config != nil && gen.Config.HayabusaTP != nil && *gen.Config.HayabusaTP == 0
 }

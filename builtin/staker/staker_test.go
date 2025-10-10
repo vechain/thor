@@ -272,3 +272,63 @@ func TestDelegation_SignalExit_Empty(t *testing.T) {
 
 	staker.SignalDelegationExitErrors(big.NewInt(2), 10, "delegation is empty")
 }
+
+func Test_AddDelegation_WhileValidatorExiting(t *testing.T) {
+	staker := newTest(t).SetMBP(3).Fill(3).Transition(0)
+
+	first, val := staker.FirstActive()
+
+	staker.AddDelegation(first, 10_000, 150, 10)
+	staker.SignalExit(first, val.Endorser, 20)
+
+	staker.AddDelegationErrors(first, 10_000, 150, 10, "cannot add delegation to exiting validator")
+
+	staker.Housekeep(val.Period)
+}
+
+// Add a check to avoid delegations to be added to exitting validators
+// Add the Queued Aggregations AND Validations Stake in the housekeep
+func Test_Increase_WhileValidatorExiting(t *testing.T) {
+	staker := newTest(t).SetMBP(3).Fill(3).Transition(0)
+
+	first, val := staker.FirstActive()
+
+	// add before validator signals exit, should be okay
+	staker.IncreaseStake(first, val.Endorser, 10_000)
+	staker.SignalExit(first, val.Endorser, 20)
+
+	// add after validator signals exit, should fail
+	staker.IncreaseStakeErrors(first, val.Endorser, 10_000, "validator has signaled exit, cannot increase stake")
+
+	// housekeep should clean up the queued delegation
+	staker.Housekeep(val.Period)
+
+	// housekeep should clean up the queued delegation
+	staker.Housekeep(val.Period + val.Period)
+}
+
+func Test_WithdrawDelegation_before_SignalExit(t *testing.T) {
+	staker := newTest(t).SetMBP(3).Fill(3).Transition(0)
+
+	first, val := staker.FirstActive()
+
+	delID := staker.AddDelegation(first, 10_000, 150, 10)
+
+	staker.WithdrawDelegation(delID, 10_000, 15)
+	staker.SignalExit(first, val.Endorser, 20)
+
+	staker.AddDelegationErrors(first, 10_000, 150, 10, "cannot add delegation to exiting validator")
+	staker.Housekeep(val.Period)
+}
+
+func Test_WithdrawDelegation_after_SignalExit(t *testing.T) {
+	staker := newTest(t).SetMBP(3).Fill(3).Transition(0)
+	first, val := staker.FirstActive()
+
+	delID := staker.AddDelegation(first, 10_000, 150, 10)
+	staker.SignalExit(first, val.Endorser, 20)
+
+	staker.WithdrawDelegation(delID, 10_000, 15)
+
+	staker.AddDelegationErrors(first, 10_000, 150, 10, "cannot add delegation to exiting validator")
+}

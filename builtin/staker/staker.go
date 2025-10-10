@@ -433,10 +433,29 @@ func (s *Staker) WithdrawStake(validator thor.Address, endorser thor.Address, cu
 		return 0, NewReverts("endorser required")
 	}
 
+	isQueued := val.Status == validation.StatusQueued
+
 	withdrawableVET, queuedVET, cooldownVET, err := s.validationService.WithdrawStake(validator, val, currentBlock)
 	if err != nil {
 		logger.Info("withdraw failed", "validator", validator, "error", err)
 		return 0, err
+	}
+
+	// clean up aggregations, move all queued to withdrawable. Otherwise, delegation stakes remain in
+	// queued counter until they withdraw.
+	if isQueued {
+		exit, err := s.aggregationService.Exit(validator)
+		if err != nil {
+			return 0, err
+		}
+		if exit.QueuedDecrease > 0 {
+			if err := s.globalStatsService.RemoveQueued(exit.QueuedDecrease); err != nil {
+				return 0, err
+			}
+			if err := s.globalStatsService.AddWithdrawable(exit.QueuedDecrease); err != nil {
+				return 0, err
+			}
+		}
 	}
 
 	// update global stats
@@ -524,6 +543,11 @@ func (s *Staker) AddDelegation(
 
 	if val.Status != validation.StatusQueued && val.Status != validation.StatusActive {
 		return nil, NewReverts("validation is not queued or active")
+	}
+
+	// delegations cannot be added to a validator that has signaled to exit
+	if val.ExitBlock != nil {
+		return nil, NewReverts("cannot add delegation to exiting validator")
 	}
 
 	// validate that new TVL is <= Max stake
@@ -676,7 +700,7 @@ func (s *Staker) WithdrawDelegation(
 
 	// start and finish values are sanitized: !started and finished is impossible
 	// delegation is still queued
-	if !started {
+	if !started && val.Status != validation.StatusExit {
 		weightedStake := stakes.NewWeightedStakeWithMultiplier(withdrawableStake, del.Multiplier)
 		if err = s.aggregationService.SubPendingVet(del.Validation, weightedStake); err != nil {
 			return 0, err
@@ -767,4 +791,15 @@ func (s *Staker) getValidationOrRevert(valID thor.Address) (*validation.Validati
 		return nil, NewReverts("validation does not exist")
 	}
 	return val, nil
+}
+
+// GetEffectiveVET returns the EffectiveVET in the contract
+func (s *Staker) GetEffectiveVET() (uint64, error) {
+	// accessing slot 0 defined in staker.sol
+	val, err := s.state.GetStorage(s.address, thor.Bytes32{})
+	if err != nil {
+		return 0, err
+	}
+
+	return ToVET(new(big.Int).SetBytes(val.Bytes())), nil
 }

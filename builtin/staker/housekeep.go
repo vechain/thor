@@ -45,6 +45,8 @@ func (s *Staker) Housekeep(currentBlock uint32) (bool, error) {
 		return false, err
 	}
 
+	logger.Info("🏠housekeeping", "block", currentBlock, "updates", transition.HasUpdates())
+
 	if !transition.HasUpdates() {
 		return false, nil
 	}
@@ -151,19 +153,27 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 	accumulatedRenewal := globalstats.NewRenewal()
 	// Apply renewals
 	for _, validator := range transition.Renewals {
+		// handle the renewals for aggregations
 		aggRenewal, delegationWeight, err := s.aggregationService.Renew(validator)
 		if err != nil {
 			return err
 		}
-		accumulatedRenewal.Add(aggRenewal)
+		accumulatedRenewal, err = accumulatedRenewal.Add(aggRenewal)
+		if err != nil {
+			return err
+		}
+
 		// Update validator state
 		valRenewal, err := s.validationService.Renew(validator, delegationWeight)
 		if err != nil {
 			return err
 		}
-		accumulatedRenewal.Add(valRenewal)
+		accumulatedRenewal, err = accumulatedRenewal.Add(valRenewal)
+		if err != nil {
+			return err
+		}
 
-		if err := s.validationService.RemoveFromRenewalList(validator); err != nil {
+		if err = s.validationService.RemoveFromRenewalList(validator); err != nil {
 			return err
 		}
 	}
@@ -270,19 +280,12 @@ func (s *Staker) ContractBalanceCheck(pendingWithdraw uint64) error {
 		return fmt.Errorf("error while retrieving GetCooldownStake: %w", err)
 	}
 
-	// Get the staker contract's account balance
-	stakerAddr := s.Address()
-	balance, err := s.state.GetBalance(stakerAddr)
-	if err != nil {
-		return err
-	}
-	balanceVET := ToVET(balance)
-	total := uint64(0)
+	counterTotal := uint64(0)
 	for _, stake := range []uint64{lockedStake, queuedStake, withdrawableStake, cooldownStake, pendingWithdraw} {
-		partialSum, overflow := math.SafeAdd(total, stake)
+		partialSum, overflow := math.SafeAdd(counterTotal, stake)
 		if overflow {
 			return fmt.Errorf(
-				"total overflow occurred while adding locked(%d) + queued(%d) + withdrawable(%d) + cooldown(%d) + pendingWithdraw(%d)",
+				"counterTotal overflow occurred while adding locked(%d) + queued(%d) + withdrawable(%d) + cooldown(%d) + pendingWithdraw(%d)",
 				lockedStake,
 				queuedStake,
 				withdrawableStake,
@@ -290,27 +293,51 @@ func (s *Staker) ContractBalanceCheck(pendingWithdraw uint64) error {
 				pendingWithdraw,
 			)
 		}
-		total = partialSum
+		counterTotal = partialSum
 	}
-	if balanceVET != total {
-		logger.Error("sanity check failed",
+
+	// Get the staker contract's account balance
+	stakerAddr := s.Address()
+	balance, err := s.state.GetBalance(stakerAddr)
+	if err != nil {
+		return err
+	}
+	balanceVET := ToVET(balance)
+
+	// Get the Effective VET tracked
+	effectiveVET, err := s.GetEffectiveVET()
+	if err != nil {
+		return err
+	}
+	// The Staker will always have money to pay withdrawals
+	if balanceVET < effectiveVET {
+		logger.Error("balance check failed: not enough vet in account balance",
 			"locked", lockedStake,
 			"queued", queuedStake,
 			"withdrawable", withdrawableStake,
 			"cooldown", cooldownStake,
 			"pendingWithdraw", pendingWithdraw,
-			"total", total,
-			"balance", balance,
+			"total", counterTotal,
+			"balance", balanceVET,
+			"effectiveVET", effectiveVET,
 		)
-		return fmt.Errorf(
-			"sanity check failed: locked(%d) + queued(%d) + withdrawable(%d) = %d, but account balance is %d, diff= %d",
-			lockedStake,
-			queuedStake,
-			withdrawableStake,
-			total,
-			balanceVET,
-			balanceVET-total,
-		)
+		return fmt.Errorf("balance check failed: balanceVET(%d) < effectiveVET(%d)", balanceVET, effectiveVET)
 	}
+
+	// The Effective VET is always the same as the SumCounters
+	if effectiveVET != counterTotal {
+		logger.Error("balance check failed: mismatched effective vet and counter total",
+			"locked", lockedStake,
+			"queued", queuedStake,
+			"withdrawable", withdrawableStake,
+			"cooldown", cooldownStake,
+			"pendingWithdraw", pendingWithdraw,
+			"total", counterTotal,
+			"balance", balanceVET,
+			"effectiveVET", effectiveVET,
+		)
+		return fmt.Errorf("balance check failed: effectiveVET(%d) != counterTotal(%d)", effectiveVET, counterTotal)
+	}
+
 	return nil
 }

@@ -6,13 +6,16 @@
 package main
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
+	"os/signal"
 	"os/user"
 	"path/filepath"
+	"syscall"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	ethlog "github.com/ethereum/go-ethereum/log"
@@ -115,4 +118,17 @@ func readIntFromUInt64Flag(val uint64) (int, error) {
 	}
 
 	return i, nil
+}
+
+func handleExitSignal() context.Context {
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		exitSignalCh := make(chan os.Signal, 1)
+		signal.Notify(exitSignalCh, os.Interrupt, syscall.SIGTERM)
+
+		sig := <-exitSignalCh
+		log.Info("exit signal received", "signal", sig)
+		cancel()
+	}()
+	return ctx
 }

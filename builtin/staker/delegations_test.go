@@ -551,3 +551,21 @@ func TestStaker_DelegationWithdrawPending(t *testing.T) {
 	assert.NoError(t, err)
 	assert.False(t, isLocked)
 }
+
+func TestStaker_WithdrawPendingDelegation_AfterValidatorExit(t *testing.T) {
+	staker := newTest(t).SetMBP(1).Fill(1).Transition(0)
+
+	firstActive, val := staker.FirstActive()
+
+	// add the delegation
+	id := staker.AddDelegation(firstActive, 1000, 200, 5)
+
+	// signal an exit
+	staker.SignalExit(firstActive, val.Endorser, 10)
+
+	// remove the validator
+	staker.Housekeep(val.Period)
+
+	// ensure the delegator can still withdraw their funds
+	staker.WithdrawDelegation(id, 1000, 10)
+}

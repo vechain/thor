@@ -205,7 +205,6 @@ func (e *Energy) Sub(addr thor.Address, amount *big.Int) (bool, error) {
 }
 
 // StopEnergyGrowth sets the end time of energy growth at the current block time.
-// Calling this function more than once will result an error.
 func (e *Energy) StopEnergyGrowth() error {
 	if ts, err := e.GetEnergyGrowthStopTime(); err != nil {
 		return err
