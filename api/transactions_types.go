@@ -90,20 +90,6 @@ type Output struct {
 	Transfers       []*Transfer   `json:"transfers"`
 }
 
-// Event event.
-type Event struct {
-	Address thor.Address   `json:"address"`
-	Topics  []thor.Bytes32 `json:"topics"`
-	Data    string         `json:"data"`
-}
-
-// Transfer transfer log.
-type Transfer struct {
-	Sender    thor.Address          `json:"sender"`
-	Recipient thor.Address          `json:"recipient"`
-	Amount    *math.HexOrDecimal256 `json:"amount"`
-}
-
 // ConvertReceipt convert a raw clause into a jason format clause
 func ConvertReceipt(txReceipt *tx.Receipt, header *block.Header, tx *tx.Transaction) (*Receipt, error) {
 	reward := math.HexOrDecimal256(*txReceipt.Reward)

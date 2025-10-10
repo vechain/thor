@@ -50,12 +50,6 @@ type JSONBlockReward struct {
 	ValidatorID *thor.Address         `json:"validatorId"`
 }
 
-type JSONClause struct {
-	To    *thor.Address        `json:"to"`
-	Value math.HexOrDecimal256 `json:"value"`
-	Data  string               `json:"data"`
-}
-
 type JSONTransfer struct {
 	Sender    thor.Address          `json:"sender"`
 	Recipient thor.Address          `json:"recipient"`
@@ -80,7 +74,7 @@ type JSONEmbeddedTx struct {
 	ChainTag             byte                  `json:"chainTag"`
 	BlockRef             string                `json:"blockRef"`
 	Expiration           uint32                `json:"expiration"`
-	Clauses              []*JSONClause         `json:"clauses"`
+	Clauses              Clauses               `json:"clauses"`
 	GasPriceCoef         *uint8                `json:"gasPriceCoef,omitempty"`
 	MaxFeePerGas         *math.HexOrDecimal256 `json:"maxFeePerGas,omitempty"`
 	MaxPriorityFeePerGas *math.HexOrDecimal256 `json:"maxPriorityFeePerGas,omitempty"`
@@ -168,13 +162,13 @@ func BuildJSONEmbeddedTxs(txs tx.Transactions, receipts tx.Receipts) []*JSONEmbe
 		origin, _ := trx.Origin()
 		delegator, _ := trx.Delegator()
 
-		jcs := make([]*JSONClause, 0, len(clauses))
+		jcs := make([]*Clause, 0, len(clauses))
 		jos := make([]*JSONOutput, 0, len(receipt.Outputs))
 
 		for i, c := range clauses {
-			jcs = append(jcs, &JSONClause{
+			jcs = append(jcs, &Clause{
 				c.To(),
-				math.HexOrDecimal256(*c.Value()),
+				(*math.HexOrDecimal256)(c.Value()),
 				hexutil.Encode(c.Data()),
 			})
 			if !receipt.Reverted {
