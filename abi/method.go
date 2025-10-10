@@ -12,6 +12,9 @@ import (
 	ethabi "github.com/ethereum/go-ethereum/accounts/abi"
 )
 
+// MethodID method id.
+type MethodID [4]byte
+
 // Method see abi.Method in go-ethereum.
 type Method struct {
 	id     MethodID
@@ -40,7 +43,7 @@ func (m *Method) EncodeInput(args ...any) ([]byte, error) {
 		return nil, err
 	}
 
-	// if constructor there are no method bytes to prefix
+	// if constructor there is no selector to prefix
 	if m.id == (MethodID{}) {
 		return data, nil
 	}
@@ -53,6 +56,12 @@ func (m *Method) DecodeInput(input []byte, v any) error {
 	if !bytes.HasPrefix(input, m.id[:]) {
 		return errors.New("input has incorrect prefix")
 	}
+
+	// if constructor there is no selector as prefix
+	if m.id == (MethodID{}) {
+		return m.method.Inputs.Unpack(v, input)
+	}
+
 	return m.method.Inputs.Unpack(v, input[4:])
 }
 
@@ -68,9 +77,6 @@ func (m *Method) DecodeOutput(output []byte, v any) error {
 	}
 	return m.method.Outputs.Unpack(v, output)
 }
-
-// MethodID method id.
-type MethodID [4]byte
 
 // ExtractMethodID extract method id from input data.
 func ExtractMethodID(input []byte) (id MethodID, err error) {
