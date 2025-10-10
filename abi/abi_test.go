@@ -150,9 +150,9 @@ func TestConstructorWithParameters(t *testing.T) {
 	// For a constructor with parameters, the data should be > 0 bytes
 	assert.Greater(t, len(input), 0)
 
-	// Verify the MethodID is empty (all zeros)
+	// Verify the MethodID is empty (constructor case)
 	methodID := constructor.ID()
-	assert.Equal(t, [4]byte{0x00, 0x00, 0x00, 0x00}, [4]byte(methodID))
+	assert.True(t, methodID.IsEmpty(), "Constructor should have empty MethodID")
 
 	// Verify that constructor data does NOT start with MethodID
 	// The constructor data should be pure ABI encoding without 4-byte selector

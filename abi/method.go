@@ -15,6 +15,14 @@ import (
 // MethodID method id.
 type MethodID [4]byte
 
+// EmptyMethodID represents an empty method ID (used for constructors).
+var EmptyMethodID = MethodID{}
+
+// IsEmpty returns true if the MethodID is empty.
+func (id MethodID) IsEmpty() bool {
+	return id == EmptyMethodID
+}
+
 // Method see abi.Method in go-ethereum.
 type Method struct {
 	id     MethodID
@@ -44,7 +52,7 @@ func (m *Method) EncodeInput(args ...any) ([]byte, error) {
 	}
 
 	// if constructor there is no selector to prefix
-	if m.id == (MethodID{}) {
+	if m.id.IsEmpty() {
 		return data, nil
 	}
 
@@ -54,7 +62,7 @@ func (m *Method) EncodeInput(args ...any) ([]byte, error) {
 // DecodeInput decode input data into args.
 func (m *Method) DecodeInput(input []byte, v any) error {
 	// if constructor there is no selector as prefix
-	if m.id == (MethodID{}) {
+	if m.id.IsEmpty() {
 		if len(input) != 0 {
 			return m.method.Inputs.Unpack(v, input)
 		}
