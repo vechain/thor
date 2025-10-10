@@ -344,3 +344,55 @@ func NewSignalExitDelegationAction(
 		WithNext(next...).
 		Build()
 }
+
+func NewWithdrawDelegationAction(
+	minParentBlocksRequired *int,
+	delegationID *big.Int,
+	next ...Action,
+) Action {
+	return NewActionBuilder("WithdrawDelegation").
+		WithMinParentBlocksRequired(minParentBlocksRequired).
+		WithExecute(
+			func(staker *testStaker, blk int) error {
+				_, err := staker.WithdrawDelegation(delegationID, uint32(blk))
+				if err != nil {
+					return fmt.Errorf("WithdrawDelegation failed : %w", err)
+				}
+				return nil
+			}).
+		WithCheck(
+			func(staker *testStaker, blk int) error {
+				del, err := staker.delegationService.GetDelegation(delegationID)
+				if err != nil {
+					return err
+				}
+
+				if del == nil {
+					return NewReverts("delegation is empty")
+				}
+
+				// there can never be a delegation pointing to a non-existent validation
+				// if the validation does not exist it's a system error
+				val, err := staker.validationService.GetExistingValidation(del.Validation)
+				if err != nil {
+					return err
+				}
+
+				// ensure the delegation is either queued or finished
+				started, err := del.Started(val, uint32(blk))
+				if err != nil {
+					return err
+				}
+				finished, err := del.Ended(val, uint32(blk))
+				if err != nil {
+					return err
+				}
+				if started && !finished {
+					return NewReverts("delegation is not eligible for withdraw")
+				}
+				
+				return nil
+			}).
+		WithNext(next...).
+		Build()
+}

@@ -333,6 +333,14 @@ func TestPermutations(t *testing.T) {
 				NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
 			),
 		),
+		NewAddDelegationAction(originalModifier(nil), validatorID, MinStakeVET, uint8(1),
+			NewSignalExitDelegationAction(originalModifier(&lowStakingPeriod), big.NewInt(1),
+				NewWithdrawAction(originalModifier(&lowStakingPeriod), validatorID, endorserID),
+			),
+			NewSignalExitAction(withDrawMinBlock, validatorID, endorserID,
+				NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
+			),
+		),
 	)
 
 	require.NoError(t, RunWithResultTree(staker, action, 0))
