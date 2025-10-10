@@ -125,7 +125,7 @@ func TestConstructorWithParameters(t *testing.T) {
 		}
 	]`)
 
-	abi, err := abi.New(abiJSON)
+	abi, err := New(abiJSON)
 	assert.Nil(t, err)
 
 	constructor := abi.Constructor()
@@ -192,7 +192,7 @@ func TestConstructorWithoutParameters(t *testing.T) {
 		}
 	]`)
 
-	abi, err := abi.New(abiJSON)
+	abi, err := New(abiJSON)
 	assert.Nil(t, err)
 
 	constructor := abi.Constructor()
