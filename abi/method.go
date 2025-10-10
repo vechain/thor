@@ -44,14 +44,13 @@ func (m *Method) Const() bool {
 	return m.method.Const
 }
 
-// EncodeInput encode args to data, and the data is prefixed with method id.
+// EncodeInput encode args to data.
 func (m *Method) EncodeInput(args ...any) ([]byte, error) {
 	data, err := m.method.Inputs.Pack(args...)
 	if err != nil {
 		return nil, err
 	}
 
-	// if constructor there is no selector to prefix
 	if m.id.IsEmpty() {
 		return data, nil
 	}
@@ -61,7 +60,6 @@ func (m *Method) EncodeInput(args ...any) ([]byte, error) {
 
 // DecodeInput decode input data into args.
 func (m *Method) DecodeInput(input []byte, v any) error {
-	// if constructor there is no selector as prefix
 	if m.id.IsEmpty() {
 		if len(input) != 0 {
 			return m.method.Inputs.Unpack(v, input)
