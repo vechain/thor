@@ -3,6 +3,7 @@ package staker
 import (
 	"fmt"
 	"log/slog"
+	"math/big"
 	"math/rand"
 	"os"
 	"testing"
@@ -335,7 +336,7 @@ func RunnerWithResults(s *testStaker, action Action, currentBlk int, results map
 		ExecutionErr: executionErr,
 		CheckErr:     checkErr,
 		Block:        currentBlk,
-		Amount:       getActionAmount(action.Name(), ctx, executionErr), // Extract amount from action
+		Amount:       ctx.LastActionAmount,
 	}
 
 	switch {
@@ -390,15 +391,31 @@ func TestPermutations(t *testing.T) {
 		//NewSignalExitAction(signalExitMinBlock, validatorID, endorserID,
 		//	NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
 		//),
-		NewIncreaseStakeAction(&epoch, validatorID, endorserID, MinStakeVET,
-			NewIncreaseStakeAction(plusNFun(&epoch, 2), validatorID, endorserID, MinStakeVET,
-				NewIncreaseStakeAction(plusNFun(&epoch, 3), validatorID, endorserID, MinStakeVET,
-					NewSignalExitAction(plusNFun(&epoch, 5), validatorID, endorserID,
+		//NewIncreaseStakeAction(&epoch, validatorID, endorserID, MinStakeVET,
+		//	NewIncreaseStakeAction(plusNFun(&epoch, 2), validatorID, endorserID, MinStakeVET,
+		//		NewIncreaseStakeAction(plusNFun(&epoch, 3), validatorID, endorserID, MinStakeVET,
+		//			NewSignalExitAction(plusNFun(&epoch, 5), validatorID, endorserID,
+		//				NewWithdrawAction(&withDrawMinBlockCalc, validatorID, endorserID),
+		//			),
+		//		),
+		//	),
+		//),
+		//NewAddDelegationAction(&epoch, validatorID, MinStakeVET, uint8(1),
+		//	NewSignalExitDelegationAction(plusNFun(&lowStakingPeriod, 2), big.NewInt(1),
+		//		NewWithdrawDelegationAction(&withDrawMinBlockCalc, big.NewInt(1)),
+		//	),
+		//),
+
+		NewAddDelegationAction(&epoch, validatorID, MinStakeVET, uint8(1),
+			NewSignalExitAction(plusNFun(&epoch, 2), validatorID, endorserID,
+				NewSignalExitDelegationAction(plusNFun(&lowStakingPeriod, 2), big.NewInt(1),
+					NewWithdrawDelegationAction(&withDrawMinBlockCalc, big.NewInt(1),
 						NewWithdrawAction(&withDrawMinBlockCalc, validatorID, endorserID),
 					),
 				),
 			),
 		),
+
 		//NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
 		//NewIncreaseStakeAction(withDrawMinBlock, validatorID, endorserID, MinStakeVET,
 		//	NewDecreaseStakeAction(withDrawMinBlock, validatorID, endorserID, MinStakeVET,
@@ -618,11 +635,66 @@ func calculateExpectedValidationWithdrawAmount(ctx *ExecutionContext, currentBlo
 }
 
 // calculateExpectedDelegationWithdrawAmount calculates the expected amount for delegation withdrawals
-// TODO: Implement proper business logic - currently returns actual amount to always pass
 func calculateExpectedDelegationWithdrawAmount(ctx *ExecutionContext, currentBlock int) uint64 {
-	// For now, return a placeholder that will be replaced with actual logic
-	// This allows the framework to work while business rules are refined
-	return 0 // Will be overridden by actual withdrawn amount comparison logic
+	if ctx == nil {
+		return 0
+	}
+
+	// Rule 1: If both DelegationExitBlock == nil AND SignalExitBlock == nil → return 0 (no signal)
+	if ctx.DelegationExitBlock == nil && ctx.SignalExitBlock == nil {
+		return 0
+	}
+
+	// Rule 2: If either SignalExitBlock OR DelegationExitBlock are set
+
+	// Rule 2a: If DelegationExitBlock was done in same epoch as AddDelegation → can exit
+	if ctx.DelegationExitBlock != nil && ctx.DelegationStartBlock != nil {
+		if IsSameEpoch(*ctx.DelegationExitBlock, *ctx.DelegationStartBlock) {
+			return ctx.InitialDelegationStake
+		}
+	}
+
+	// Rule 2b: If the older of (SignalExitBlock, DelegationExitBlock) was done at least a staking period ago → can exit
+	var olderExitBlock int
+	hasExitBlock := false
+
+	if ctx.SignalExitBlock != nil && ctx.DelegationExitBlock != nil {
+		// Both exist, use the older (smaller) one
+		if *ctx.SignalExitBlock < *ctx.DelegationExitBlock {
+			olderExitBlock = *ctx.SignalExitBlock
+		} else {
+			olderExitBlock = *ctx.DelegationExitBlock
+		}
+		hasExitBlock = true
+	} else if ctx.SignalExitBlock != nil {
+		// Only SignalExitBlock exists
+		olderExitBlock = *ctx.SignalExitBlock
+		hasExitBlock = true
+	} else if ctx.DelegationExitBlock != nil {
+		// Only DelegationExitBlock exists
+		olderExitBlock = *ctx.DelegationExitBlock
+		hasExitBlock = true
+	}
+
+	if hasExitBlock {
+		stakingPeriod := int(thor.LowStakingPeriod())
+
+		// Calculate time to next housekeeping from the older exit block
+		timeToNextHousekeeping := HousekeepingInterval - (olderExitBlock % HousekeepingInterval)
+		if timeToNextHousekeeping == HousekeepingInterval {
+			timeToNextHousekeeping = 0 // Already at housekeeping boundary
+		}
+
+		requiredBlock := olderExitBlock + timeToNextHousekeeping + stakingPeriod
+
+		if currentBlock >= requiredBlock {
+			// Enough time has passed, can withdraw delegation amount
+			return ctx.InitialDelegationStake
+		}
+	}
+
+	// No conditions met for withdrawal
+	return 0
 }
 
 // IsSameEpoch returns true if both blocks are within the same housekeeping epoch.
@@ -655,12 +727,4 @@ func getAmountIcon(actionName string) string {
 	default:
 		return ""
 	}
-}
-
-// getActionAmount extracts the amount from an action execution
-func getActionAmount(actionName string, ctx *ExecutionContext, executionErr error) uint64 {
-	if ctx == nil || executionErr != nil {
-		return 0
-	}
-	return ctx.LastActionAmount
 }

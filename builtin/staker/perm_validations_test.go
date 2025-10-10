@@ -394,17 +394,17 @@ func NewWithdrawDelegationAction(
 	delegationID *big.Int,
 	next ...Action,
 ) Action {
-	// var actualWithdrawnAmount uint64 // Store actual amount from execution - TODO: uncomment when implementing validation
+	var actualWithdrawnAmount uint64 // Store actual amount from execution
 
 	return NewActionBuilder("WithdrawDelegation").
 		WithMinParentBlocksRequired(minParentBlocksRequired).
 		WithExecute(
 			func(ctx *ExecutionContext, staker *testStaker, blk int) error {
 				amount, err := staker.WithdrawDelegation(delegationID, uint32(blk))
-				// actualWithdrawnAmount = amount // TODO: uncomment when implementing validation
 				if err != nil {
 					return fmt.Errorf("WithdrawDelegation failed : %w", err)
 				}
+				actualWithdrawnAmount = amount
 				if ctx != nil {
 					ctx.LastActionAmount = amount // For display purposes
 				}
@@ -441,14 +441,10 @@ func NewWithdrawDelegationAction(
 					return NewReverts("delegation is not eligible for withdraw")
 				}
 
-				// TODO: Implement delegation amount validation logic
-				// For now, always pass to allow framework testing
-				// if ctx != nil {
-				//     expectedAmount := calculateExpectedDelegationWithdrawAmount(ctx, blk)
-				//     if actualWithdrawnAmount != expectedAmount {
-				//         return fmt.Errorf("Delegation amount validation failed: expected %d, got %d", expectedAmount, actualWithdrawnAmount)
-				//     }
-				// }
+				expectedAmount := calculateExpectedDelegationWithdrawAmount(ctx, blk)
+				if actualWithdrawnAmount != expectedAmount {
+					return fmt.Errorf("Delegation amount validation failed: expected %d, got %d", expectedAmount, actualWithdrawnAmount)
+				}
 
 				return nil
 			}).
