@@ -483,7 +483,7 @@ func TestClient_GetPeers(t *testing.T) {
 
 func TestClient_GetTxPool(t *testing.T) {
 	t.Run("GetTxPoolWithTransactionIDs", func(t *testing.T) {
-		expectedTxIDs := []thor.Bytes32{
+		expectedTxIDs := []*thor.Bytes32{
 			{0x01, 0x02, 0x03},
 			{0x04, 0x05, 0x06},
 		}
@@ -498,16 +498,14 @@ func TestClient_GetTxPool(t *testing.T) {
 		defer ts.Close()
 
 		client := New(ts.URL)
-		result, err := client.GetTxPool(false, nil)
+		result, err := client.GetTxPool(nil)
 
 		assert.NoError(t, err)
-		txIDs, ok := result.([]thor.Bytes32)
-		assert.True(t, ok)
-		assert.Equal(t, expectedTxIDs, txIDs)
+		assert.Equal(t, expectedTxIDs, result)
 	})
 
 	t.Run("GetTxPoolWithExpandedTransactions", func(t *testing.T) {
-		expectedTxs := []transactions.Transaction{
+		expectedTxs := []*transactions.Transaction{
 			{ID: thor.Bytes32{0x01, 0x02, 0x03}},
 			{ID: thor.Bytes32{0x04, 0x05, 0x06}},
 		}
@@ -522,17 +520,15 @@ func TestClient_GetTxPool(t *testing.T) {
 		defer ts.Close()
 
 		client := New(ts.URL)
-		result, err := client.GetTxPool(true, nil)
+		result, err := client.GetExpandedTxPool(nil)
 
 		assert.NoError(t, err)
-		txs, ok := result.([]transactions.Transaction)
-		assert.True(t, ok)
-		assert.Equal(t, expectedTxs, txs)
+		assert.Equal(t, expectedTxs, result)
 	})
 
 	t.Run("GetTxPoolWithOriginFilter", func(t *testing.T) {
 		origin := thor.Address{0x01, 0x02, 0x03}
-		expectedTxIDs := []thor.Bytes32{
+		expectedTxIDs := []*thor.Bytes32{
 			{0x01, 0x02, 0x03},
 		}
 
@@ -546,17 +542,15 @@ func TestClient_GetTxPool(t *testing.T) {
 		defer ts.Close()
 
 		client := New(ts.URL)
-		result, err := client.GetTxPool(false, &origin)
+		result, err := client.GetTxPool(&origin)
 
 		assert.NoError(t, err)
-		txIDs, ok := result.([]thor.Bytes32)
-		assert.True(t, ok)
-		assert.Equal(t, expectedTxIDs, txIDs)
+		assert.Equal(t, expectedTxIDs, result)
 	})
 
 	t.Run("GetTxPoolWithExpandedAndOrigin", func(t *testing.T) {
 		origin := thor.Address{0x01, 0x02, 0x03}
-		expectedTxs := []transactions.Transaction{
+		expectedTxs := []*transactions.Transaction{
 			{ID: thor.Bytes32{0x01, 0x02, 0x03}},
 		}
 
@@ -571,12 +565,10 @@ func TestClient_GetTxPool(t *testing.T) {
 		defer ts.Close()
 
 		client := New(ts.URL)
-		result, err := client.GetTxPool(true, &origin)
+		result, err := client.GetExpandedTxPool(&origin)
 
 		assert.NoError(t, err)
-		txs, ok := result.([]transactions.Transaction)
-		assert.True(t, ok)
-		assert.Equal(t, expectedTxs, txs)
+		assert.Equal(t, expectedTxs, result)
 	})
 }
 
@@ -685,7 +677,7 @@ func TestClient_Errors(t *testing.T) {
 		{
 			name:     "TxPool",
 			path:     "/node/txpool",
-			function: func(client *Client) (any, error) { return client.GetTxPool(false, nil) },
+			function: func(client *Client) (any, error) { return client.GetTxPool(nil) },
 		},
 		{
 			name:     "TxPoolStatus",
