@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package prototype_test
+package prototype
 
 import (
 	"math/big"
@@ -11,7 +11,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vechain/thor/v2/builtin/prototype"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -25,7 +24,7 @@ func M(a ...any) []any {
 func TestPrototype(t *testing.T) {
 	st := state.New(muxdb.NewMem(), trie.Root{})
 
-	proto := prototype.New(thor.BytesToAddress([]byte("proto")), st)
+	proto := New(thor.BytesToAddress([]byte("proto")), st)
 	binding := proto.Bind(thor.BytesToAddress([]byte("binding")))
 
 	user := thor.BytesToAddress([]byte("user"))

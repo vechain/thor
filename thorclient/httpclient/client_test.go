@@ -503,6 +503,125 @@ func TestClient_GetPeers(t *testing.T) {
 	assert.Equal(t, expectedPeers, peers)
 }
 
+func TestClient_GetTxPool(t *testing.T) {
+	t.Run("GetTxPoolWithTransactionIDs", func(t *testing.T) {
+		expectedTxIDs := []thor.Bytes32{
+			{0x01, 0x02, 0x03},
+			{0x04, 0x05, 0x06},
+		}
+
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/node/txpool", r.URL.Path)
+			assert.Equal(t, "", r.URL.RawQuery)
+
+			txIDsBytes, _ := json.Marshal(expectedTxIDs)
+			w.Write(txIDsBytes)
+		}))
+		defer ts.Close()
+
+		client := New(ts.URL)
+		result, err := client.GetTxPool(false, nil)
+
+		assert.NoError(t, err)
+		txIDs, ok := result.([]thor.Bytes32)
+		assert.True(t, ok)
+		assert.Equal(t, expectedTxIDs, txIDs)
+	})
+
+	t.Run("GetTxPoolWithExpandedTransactions", func(t *testing.T) {
+		expectedTxs := []transactions.Transaction{
+			{ID: thor.Bytes32{0x01, 0x02, 0x03}},
+			{ID: thor.Bytes32{0x04, 0x05, 0x06}},
+		}
+
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/node/txpool", r.URL.Path)
+			assert.Equal(t, "expanded=true", r.URL.RawQuery)
+
+			txsBytes, _ := json.Marshal(expectedTxs)
+			w.Write(txsBytes)
+		}))
+		defer ts.Close()
+
+		client := New(ts.URL)
+		result, err := client.GetTxPool(true, nil)
+
+		assert.NoError(t, err)
+		txs, ok := result.([]transactions.Transaction)
+		assert.True(t, ok)
+		assert.Equal(t, expectedTxs, txs)
+	})
+
+	t.Run("GetTxPoolWithOriginFilter", func(t *testing.T) {
+		origin := thor.Address{0x01, 0x02, 0x03}
+		expectedTxIDs := []thor.Bytes32{
+			{0x01, 0x02, 0x03},
+		}
+
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/node/txpool", r.URL.Path)
+			assert.Equal(t, "origin="+origin.String(), r.URL.RawQuery)
+
+			txIDsBytes, _ := json.Marshal(expectedTxIDs)
+			w.Write(txIDsBytes)
+		}))
+		defer ts.Close()
+
+		client := New(ts.URL)
+		result, err := client.GetTxPool(false, &origin)
+
+		assert.NoError(t, err)
+		txIDs, ok := result.([]thor.Bytes32)
+		assert.True(t, ok)
+		assert.Equal(t, expectedTxIDs, txIDs)
+	})
+
+	t.Run("GetTxPoolWithExpandedAndOrigin", func(t *testing.T) {
+		origin := thor.Address{0x01, 0x02, 0x03}
+		expectedTxs := []transactions.Transaction{
+			{ID: thor.Bytes32{0x01, 0x02, 0x03}},
+		}
+
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/node/txpool", r.URL.Path)
+			expectedQuery := "expanded=true&origin=" + origin.String()
+			assert.Equal(t, expectedQuery, r.URL.RawQuery)
+
+			txsBytes, _ := json.Marshal(expectedTxs)
+			w.Write(txsBytes)
+		}))
+		defer ts.Close()
+
+		client := New(ts.URL)
+		result, err := client.GetTxPool(true, &origin)
+
+		assert.NoError(t, err)
+		txs, ok := result.([]transactions.Transaction)
+		assert.True(t, ok)
+		assert.Equal(t, expectedTxs, txs)
+	})
+}
+
+func TestClient_GetTxPoolStatus(t *testing.T) {
+	expectedStatus := &api.Status{
+		Amount: 42,
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/node/txpool/status", r.URL.Path)
+
+		statusBytes, _ := json.Marshal(expectedStatus)
+		w.Write(statusBytes)
+	}))
+	defer ts.Close()
+
+	client := New(ts.URL)
+	status, err := client.GetTxPoolStatus()
+
+	assert.NoError(t, err)
+	assert.Equal(t, expectedStatus, status)
+}
+
 func TestClient_Errors(t *testing.T) {
 	txID := thor.Bytes32{0x01}
 	blockID := "123"
@@ -584,6 +703,16 @@ func TestClient_Errors(t *testing.T) {
 			name:     "Peers",
 			path:     "/node/network/peers",
 			function: func(client *Client) ([]*api.PeerStats, error) { return client.GetPeers() },
+		},
+		{
+			name:     "TxPool",
+			path:     "/node/txpool",
+			function: func(client *Client) (any, error) { return client.GetTxPool(false, nil) },
+		},
+		{
+			name:     "TxPoolStatus",
+			path:     "/node/txpool/status",
+			function: func(client *Client) (*api.Status, error) { return client.GetTxPoolStatus() },
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

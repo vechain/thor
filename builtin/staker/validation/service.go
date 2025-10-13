@@ -318,6 +318,11 @@ func (s *Service) ExitValidator(validator thor.Address) (*globalstats.Exit, erro
 		return nil, err
 	}
 
+	// clean up in the renewal list, in case the validator inc/dec stake in the same period that signaled exit
+	if err = s.repo.renewalList.Remove(validator); err != nil {
+		return nil, err
+	}
+
 	return exit, nil
 }
 
