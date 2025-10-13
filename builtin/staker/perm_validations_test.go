@@ -2,9 +2,10 @@ package staker
 
 import (
 	"fmt"
+	"math/big"
+
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
-	"math/big"
 )
 
 // NewAddValidationAction builds an AddValidation action with explicit parameters.
@@ -98,6 +99,7 @@ func NewWithdrawAction(
 	minParentBlocksRequired *int,
 	validationID thor.Address,
 	endorserID thor.Address,
+	next ...Action,
 ) Action {
 	var actualWithdrawnAmount uint64 // Store actual amount from execution
 
@@ -124,6 +126,7 @@ func NewWithdrawAction(
 
 				return nil
 			}).
+		WithNext(next...).
 		Build()
 }
 

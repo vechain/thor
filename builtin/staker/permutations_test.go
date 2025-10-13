@@ -603,21 +603,21 @@ func calculateWithdrawableAmountNoSignalExit(ctx *ExecutionContext, currentBlock
 
 	stakingPeriod := int(thor.LowStakingPeriod())
 	withdrawableAmt := int64(0)
-		
+
 	// Same epoch adjustments are always withdrawable
 	for _, adjustment := range ctx.StakeAdjustments {
-		if IsSameEpoch(currentBlock, adjustment.Block) {
+		if IsSamePeriod(currentBlock, adjustment.Block, stakingPeriod) {
 			withdrawableAmt += adjustment.Amount
 		}
 	}
-	
+
 	// Plus unlocked decreases from previous staking periods
 	for _, adjustment := range ctx.StakeAdjustments {
 		// Skip same-epoch adjustments (already counted above)
-		if IsSameEpoch(currentBlock, adjustment.Block) {
+		if IsSamePeriod(currentBlock, adjustment.Block, stakingPeriod) {
 			continue
 		}
-		
+
 		// Only consider decreases (negative amounts) - increases get locked after staking period
 		if adjustment.Amount < 0 {
 			stakingPeriodsPassedSinceAdjustment := (currentBlock - adjustment.Block) / stakingPeriod
@@ -649,7 +649,7 @@ func calculateExpectedDelegationWithdrawAmount(ctx *ExecutionContext, currentBlo
 
 	// Rule 2a: If DelegationExitBlock was done in same epoch as AddDelegation → can exit
 	if ctx.DelegationExitBlock != nil && ctx.DelegationStartBlock != nil {
-		if IsSameEpoch(*ctx.DelegationExitBlock, *ctx.DelegationStartBlock) {
+		if IsSamePeriod(*ctx.DelegationExitBlock, *ctx.DelegationStartBlock, int(thor.LowStakingPeriod())) {
 			return ctx.InitialDelegationStake
 		}
 	}
@@ -660,11 +660,7 @@ func calculateExpectedDelegationWithdrawAmount(ctx *ExecutionContext, currentBlo
 
 	if ctx.SignalExitBlock != nil && ctx.DelegationExitBlock != nil {
 		// Both exist, use the older (smaller) one
-		if *ctx.SignalExitBlock < *ctx.DelegationExitBlock {
-			olderExitBlock = *ctx.SignalExitBlock
-		} else {
-			olderExitBlock = *ctx.DelegationExitBlock
-		}
+		olderExitBlock = min(*ctx.SignalExitBlock, *ctx.DelegationExitBlock)
 		hasExitBlock = true
 	} else if ctx.SignalExitBlock != nil {
 		// Only SignalExitBlock exists
@@ -697,10 +693,9 @@ func calculateExpectedDelegationWithdrawAmount(ctx *ExecutionContext, currentBlo
 	return 0
 }
 
-// IsSameEpoch returns true if both blocks are within the same housekeeping epoch.
-// Epochs are defined as [1..interval], [interval+1..2*interval], etc.
-func IsSameEpoch(a, b int) bool {
-	return (a-1)/HousekeepingInterval == (b-1)/HousekeepingInterval
+// IsSamePeriod returns true if both blocks are within the same housekeeping period.
+func IsSamePeriod(a, b, periodLen int) bool {
+	return (a-1)/periodLen == (b-1)/periodLen
 }
 
 // formatAmount formats an amount in millions (e.g., 25000000 -> "25M")
@@ -726,5 +721,178 @@ func getAmountIcon(actionName string) string {
 		return "💵"
 	default:
 		return ""
+	}
+}
+
+// getActionAmount extracts the amount from an action execution
+func getActionAmount(actionName string, ctx *ExecutionContext, executionErr error) uint64 {
+	if ctx == nil || executionErr != nil {
+		return 0
+	}
+	return ctx.LastActionAmount
+}
+
+// --- Permutation Manager Skeleton ---
+
+type permutationManager struct {
+	actionConstructors map[string]func(next ...Action) Action
+}
+
+// Generate all unique permutations of the provided set of actions with their counts.
+func (pm *permutationManager) GenerateAllPermutations(config map[string]int) [][]string {
+	const headKey = "NewValidationAction"
+	countHead := config[headKey]
+	if countHead < 1 {
+		return nil // no permutations allowed if no NewValidationAction
+	}
+	// Build action list excluding ONE head action to be inserted at front.
+	var baseList []string
+	for name, count := range config {
+		c := count
+		if name == headKey {
+			c-- // We've reserved one for the head
+		}
+		for i := 0; i < c; i++ {
+			baseList = append(baseList, name)
+		}
+	}
+	var results [][]string
+	var permute func([]string, int)
+	permute = func(arr []string, l int) {
+		if l == len(arr)-1 {
+			p := make([]string, len(arr))
+			copy(p, arr)
+			// Always prepend headKey
+			results = append(results, append([]string{headKey}, p...))
+			return
+		}
+		dedup := make(map[string]bool)
+		for i := l; i < len(arr); i++ {
+			if dedup[arr[i]] {
+				continue
+			}
+			dedup[arr[i]] = true
+			arr[l], arr[i] = arr[i], arr[l]
+			permute(arr, l+1)
+			arr[l], arr[i] = arr[i], arr[l]
+		}
+	}
+	if len(baseList) == 0 {
+		// Just [headKey] is the only permutation
+		results = [][]string{{headKey}}
+	} else {
+		permute(baseList, 0)
+	}
+	return results
+}
+
+// Given a permutation (list of action names), chain the real Action objects using hardcoded arguments.
+func (pm *permutationManager) InstantiateChain(order []string) Action {
+	if len(order) == 0 {
+		return nil
+	}
+	// Remove these unused variables (declared but not used):
+	// validatorID, endorserID, lowStakingPeriod, minStake, maxStake, withDrawMinBlock, beneficiary, delegationID
+	// For this example, use nil for minParentBlocksRequired etc.
+
+	var makeAction func(idx int) Action
+	makeAction = func(idx int) Action {
+		if idx >= len(order) {
+			return nil
+		}
+		tail := makeAction(idx + 1)
+		ctor := pm.actionConstructors[order[idx]]
+		if ctor == nil {
+			panic("unknown action: " + order[idx])
+		}
+		if tail != nil {
+			return ctor(tail)
+		}
+		return ctor()
+	}
+	return makeAction(0)
+}
+
+func TestRandomPermutationManager(t *testing.T) {
+	rand.Seed(time.Now().UnixNano())
+
+	for i := range 100 {
+		t.Run(fmt.Sprintf("iteration-%d", i+1), func(t *testing.T) {
+			// Create per-action random modifier function
+			randomModifier := func(original *int) *int {
+				// Generate new random values for this iteration
+				X := rand.Intn(360) + 1 // 1-360
+				Y := rand.Intn(360) + 1 // 1-360
+
+				// Randomly choose "above" or "below" for this action
+				useAbove := rand.Intn(2) == 1
+
+				var result *int
+				if useAbove {
+					// "above" permutation
+					if original == nil {
+						result = &Y
+					} else {
+						value := *original + Y
+						result = &value
+					}
+				} else {
+					// "below" permutation
+					if original == nil {
+						result = nil
+					} else {
+						value := *original - X
+						if value <= 0 {
+							result = nil
+						} else {
+							result = &value
+						}
+					}
+				}
+
+				return result
+			}
+
+			validatorID := thor.BytesToAddress([]byte("validator"))
+			endorserID := thor.BytesToAddress([]byte("endorser"))
+
+			epoch := HousekeepingInterval
+
+			signalExitMinBlock := randomModifier(&epoch)
+			withdrawMinBlockCalc := convertNilBlock(signalExitMinBlock) + epoch + int(thor.CooldownPeriod())
+			withdrawMinBlock := randomModifier(&withdrawMinBlockCalc)
+
+			permManager := &permutationManager{
+				actionConstructors: map[string]func(next ...Action) Action{
+					"NewValidationAction": func(next ...Action) Action {
+						return NewAddValidationAction(&epoch, validatorID, endorserID, thor.LowStakingPeriod(), MinStakeVET, next...)
+					},
+					"NewIncreaseStakeAction": func(next ...Action) Action {
+						return NewIncreaseStakeAction(&epoch, validatorID, endorserID, MinStakeVET, next...)
+					},
+					"NewSignalExitAction": func(next ...Action) Action {
+						return NewSignalExitAction(signalExitMinBlock, validatorID, endorserID, next...)
+					},
+					"NewWithdrawAction": func(next ...Action) Action {
+						return NewWithdrawAction(withdrawMinBlock, validatorID, endorserID, next...)
+					},
+				},
+			}
+
+			config := map[string]int{
+				"NewValidationAction":    1,
+				"NewIncreaseStakeAction": 3,
+				"NewSignalExitAction":    1,
+				"NewWithdrawAction":      1,
+			}
+
+			perms := permManager.GenerateAllPermutations(config)
+			for _, order := range perms {
+				action := permManager.InstantiateChain(order)
+				staker := newTestStaker()
+				fmt.Println("The permutation is: ", order)
+				require.NoError(t, RunWithResultTree(staker, action, 0))
+			}
+		})
 	}
 }
