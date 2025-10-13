@@ -425,13 +425,13 @@ func testEventsEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) {
 func testNodeEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) {
 	c := New(ts.URL)
 	// 1. Test GET /node/network/peers
-	t.Run("GetPeersStats", func(t *testing.T) {
+	t.Run("Peers", func(t *testing.T) {
 		_, err := c.Peers()
 		require.NoError(t, err)
 	})
 
 	// 2. Test GET /node/txpool
-	t.Run("GetTxPool", func(t *testing.T) {
+	t.Run("PoolTransactionIDs", func(t *testing.T) {
 		// Test with transaction IDs only
 		result, err := c.PoolTransactionIDs(nil)
 		require.NoError(t, err)
@@ -456,7 +456,7 @@ func testNodeEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) {
 	})
 
 	// 3. Test GET /node/txpool?expanded=true
-	t.Run("GetExpandedTxPool", func(t *testing.T) {
+	t.Run("PoolTransactions", func(t *testing.T) {
 		result, err := c.PoolTransactions(nil)
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -464,7 +464,7 @@ func testNodeEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) {
 	})
 
 	// 4. Test GET /node/txpool/status
-	t.Run("GetTxPoolStatus", func(t *testing.T) {
+	t.Run("TxPoolStatus", func(t *testing.T) {
 		status, err := c.TxPoolStatus()
 		require.NoError(t, err)
 		require.NotNil(t, status)
