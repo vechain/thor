@@ -21,42 +21,6 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func TestFlow_Schedule_POS(t *testing.T) {
-	config := &thor.SoloFork
-	config.HAYABUSA = 2
-	hayabusaTP := uint32(1)
-	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
-	config.BLOCKLIST = math.MaxUint32
-
-	chain, err := testchain.NewWithFork(config, 1)
-	assert.NoError(t, err)
-
-	// mint block 1: using PoA
-	root := chain.Repo().BestBlockSummary().Root()
-	packMbpBlock(t, chain, thor.BlockInterval())
-	verifyMechanism(t, chain, true, root)
-
-	// mint block 2: deploy staker contract, still using PoA
-	root = chain.Repo().BestBlockSummary().Root()
-	packNext(t, chain, thor.BlockInterval())
-	verifyMechanism(t, chain, true, root)
-
-	// mint block 3: add validator tx
-	root = chain.Repo().BestBlockSummary().Root()
-	packAddValidatorBlock(t, chain, thor.BlockInterval())
-	verifyMechanism(t, chain, true, root)
-
-	// mint block 4: should switch to PoS
-	root = chain.Repo().BestBlockSummary().Root()
-	packNext(t, chain, thor.BlockInterval())
-	verifyMechanism(t, chain, true, root)
-
-	// mint block 5: full PoS
-	root = chain.Repo().BestBlockSummary().Root()
-	packNext(t, chain, thor.BlockInterval())
-	verifyMechanism(t, chain, false, root)
-}
-
 func packNext(t *testing.T, chain *testchain.Chain, interval uint64, txs ...*tx.Transaction) {
 	account := genesis.DevAccounts()[0]
 	p := packer.New(chain.Repo(), chain.Stater(), account.Address, &account.Address, chain.GetForkConfig(), 0)
@@ -123,8 +87,8 @@ func TestPacker_StopsEnergyAtHardfork(t *testing.T) {
 		hayabusa   uint32
 		expectStop bool
 	}{
-		{"stops at hardfork block", 2, true},
 		{"does not stop without fork", math.MaxUint32, false},
+		{"stops at hardfork block", 2, true},
 	}
 
 	for _, tc := range cases {
@@ -151,6 +115,42 @@ func TestPacker_StopsEnergyAtHardfork(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestFlow_Schedule_POS(t *testing.T) {
+	config := &thor.SoloFork
+	config.HAYABUSA = 2
+	hayabusaTP := uint32(1)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
+	config.BLOCKLIST = math.MaxUint32
+
+	chain, err := testchain.NewWithFork(config, 1)
+	assert.NoError(t, err)
+
+	// mint block 1: using PoA
+	root := chain.Repo().BestBlockSummary().Root()
+	packMbpBlock(t, chain, thor.BlockInterval())
+	verifyMechanism(t, chain, true, root)
+
+	// mint block 2: deploy staker contract, still using PoA
+	root = chain.Repo().BestBlockSummary().Root()
+	packNext(t, chain, thor.BlockInterval())
+	verifyMechanism(t, chain, true, root)
+
+	// mint block 3: add validator tx
+	root = chain.Repo().BestBlockSummary().Root()
+	packAddValidatorBlock(t, chain, thor.BlockInterval())
+	verifyMechanism(t, chain, true, root)
+
+	// mint block 4: should switch to PoS
+	root = chain.Repo().BestBlockSummary().Root()
+	packNext(t, chain, thor.BlockInterval())
+	verifyMechanism(t, chain, true, root)
+
+	// mint block 5: full PoS
+	root = chain.Repo().BestBlockSummary().Root()
+	packNext(t, chain, thor.BlockInterval())
+	verifyMechanism(t, chain, false, root)
 }
 
 func TestFlow_Revert(t *testing.T) {

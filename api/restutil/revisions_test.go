@@ -109,6 +109,7 @@ func TestGetSummary(t *testing.T) {
 		VIP214:    0,
 		FINALITY:  0,
 		GALACTICA: 100,
+		HAYABUSA:  180,
 	}
 	thorChain, err := testchain.NewWithFork(&forks, 180)
 	require.NoError(t, err)

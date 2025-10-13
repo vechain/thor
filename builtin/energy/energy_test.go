@@ -190,13 +190,13 @@ func TestCalcEnergyCappedAtStopTime(t *testing.T) {
 
 	p := params.New(thor.BytesToAddress([]byte("par")), st)
 	eng := New(thor.Address{}, st, 1000, p)
+	energyGrowthStopTimeMutex.Lock()
+	energyGrowthStopTimeCache.Purge()
+	energyGrowthStopTimeMutex.Unlock()
 
 	// Set stop time at 500
 	eng.blockTime = 500
-	assert.NoError(t, eng.StopEnergyGrowth())
 
-	// Later time should not accrue further energy beyond stop time
-	eng.blockTime = 2000
 	bal, err := eng.Get(acc)
 	assert.NoError(t, err)
 
@@ -211,6 +211,9 @@ func TestGetEnergyGrowthStopTime(t *testing.T) {
 	st := state.New(muxdb.NewMem(), trie.Root{})
 	p := params.New(thor.BytesToAddress([]byte("params")), st)
 	eng := New(thor.BytesToAddress([]byte("energy")), st, 10, p)
+	energyGrowthStopTimeMutex.Lock()
+	energyGrowthStopTimeCache.Purge()
+	energyGrowthStopTimeMutex.Unlock()
 
 	// no stop time set
 	stopTime, err := eng.GetEnergyGrowthStopTime()

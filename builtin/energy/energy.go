@@ -8,6 +8,9 @@ package energy
 import (
 	"math"
 	"math/big"
+	"sync"
+
+	lru "github.com/hashicorp/golang-lru"
 
 	"github.com/ethereum/go-ethereum/rlp"
 
@@ -23,6 +26,10 @@ var (
 	issuedKey         = thor.Blake2b([]byte("issued"))
 	growthStopTimeKey = thor.Blake2b([]byte("growth-stop-time"))
 	bigE18            = big.NewInt(1e18)
+
+	// Global cache for energy growth stop time
+	energyGrowthStopTimeCache, _ = lru.NewARC(10)
+	energyGrowthStopTimeMutex    sync.RWMutex
 )
 
 // Energy implements energy operations.
@@ -220,6 +227,9 @@ func (e *Energy) StopEnergyGrowth() error {
 	}
 
 	e.stopTime = e.blockTime
+	energyGrowthStopTimeMutex.Lock()
+	energyGrowthStopTimeCache.Add(growthStopTimeKey, e.blockTime)
+	energyGrowthStopTimeMutex.Unlock()
 	return nil
 }
 
@@ -229,6 +239,14 @@ func (e *Energy) GetEnergyGrowthStopTime() (uint64, error) {
 	if e.stopTime != 0 {
 		return e.stopTime, nil
 	}
+
+	energyGrowthStopTimeMutex.RLock()
+	if cached, ok := energyGrowthStopTimeCache.Get(growthStopTimeKey); ok {
+		energyGrowthStopTimeMutex.RUnlock()
+		e.stopTime = cached.(uint64)
+		return e.stopTime, nil
+	}
+	energyGrowthStopTimeMutex.RUnlock()
 
 	var time uint64
 	if err := e.state.DecodeStorage(e.addr, growthStopTimeKey, func(raw []byte) error {
@@ -243,6 +261,9 @@ func (e *Energy) GetEnergyGrowthStopTime() (uint64, error) {
 	if time == 0 {
 		e.stopTime = math.MaxUint64
 	} else {
+		energyGrowthStopTimeMutex.Lock()
+		energyGrowthStopTimeCache.Add(growthStopTimeKey, time)
+		energyGrowthStopTimeMutex.Unlock()
 		e.stopTime = time
 	}
 
