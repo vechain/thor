@@ -154,10 +154,11 @@ func NewIncreaseStakeAction(
 			}).
 		WithCheck(
 			func(ctx *ExecutionContext, staker *testStaker, blk int) error {
-				val, err := staker.GetValidation(validationID)
+				val, err := staker.getValidationOrRevert(validationID)
 				if err != nil {
 					return fmt.Errorf("Check IncreaseStake failed, validator not found: %w", err)
 				}
+
 				if val.Endorser != endorserID {
 					return fmt.Errorf("Check IncreaseStake failed, endorser not found")
 				}
@@ -434,4 +435,166 @@ func NewWithdrawDelegationAction(
 			}).
 		WithNext(next...).
 		Build()
+}
+
+// ----------------------
+// Amount Calculation Helpers
+// ----------------------
+
+// calculateExpectedValidationWithdrawAmount calculates the expected amount for validation withdrawals
+func calculateExpectedValidationWithdrawAmount(ctx *ExecutionContext, currentBlock int) uint64 {
+	if ctx == nil {
+		return 0
+	}
+
+	// Rule 1: If no SignalExit has been called
+	if ctx.SignalExitBlock == nil {
+		return calculateWithdrawableAmountNoSignalExit(ctx, currentBlock)
+	}
+
+	// Rule 2: SignalExit is set
+	if ctx.ValidationStartBlock == nil {
+		return 0
+	}
+
+	signalExitBlock := *ctx.SignalExitBlock
+	stakingPeriod := int(thor.LowStakingPeriod())
+	cooldownPeriod := int(thor.CooldownPeriod())
+
+	// New period-based rule: If SignalExit was done in period N,
+	// withdraw is available at (end of period N + cooldown blocks)
+	signalExitPeriod := (signalExitBlock-1)/stakingPeriod + 1
+	endOfSignalExitPeriod := signalExitPeriod * stakingPeriod
+	requiredBlockPeriodBased := endOfSignalExitPeriod + cooldownPeriod
+
+	// Old housekeeping-based rule for backward compatibility
+	timeToNextHousekeeping := HousekeepingInterval - (signalExitBlock % HousekeepingInterval)
+	if timeToNextHousekeeping == HousekeepingInterval {
+		timeToNextHousekeeping = 0 // Already at housekeeping boundary
+	}
+	requiredBlockHousekeeping := signalExitBlock + timeToNextHousekeeping + stakingPeriod + cooldownPeriod
+
+	// Use the earlier of the two requirements (more restrictive)
+	requiredBlock := requiredBlockHousekeeping
+	if requiredBlockPeriodBased < requiredBlockHousekeeping {
+		requiredBlock = requiredBlockPeriodBased
+	}
+
+	// If enough time has passed, can withdraw everything (initial stake + all adjustments)
+	if currentBlock >= requiredBlock {
+		totalStake := int64(ctx.InitialStake)
+		for _, adj := range ctx.StakeAdjustments {
+			totalStake += adj.Amount
+		}
+
+		if totalStake > 0 {
+			return uint64(totalStake)
+		}
+	}
+
+	// Otherwise, apply the same rules as no SignalExit case for immediate withdrawals
+	return calculateWithdrawableAmountNoSignalExit(ctx, currentBlock)
+}
+
+// calculateWithdrawableAmountNoSignalExit calculates withdrawable amounts considering staking period locking
+func calculateWithdrawableAmountNoSignalExit(ctx *ExecutionContext, currentBlock int) uint64 {
+	if ctx == nil || ctx.ValidationStartBlock == nil {
+		return 0
+	}
+
+	stakingPeriod := int(thor.LowStakingPeriod())
+	withdrawableAmt := int64(0)
+
+	// Same epoch adjustments are always withdrawable
+	for _, adjustment := range ctx.StakeAdjustments {
+		if isSamePeriod(currentBlock, adjustment.Block, stakingPeriod) {
+			withdrawableAmt += adjustment.Amount
+		}
+	}
+
+	// Plus unlocked decreases from previous staking periods
+	for _, adjustment := range ctx.StakeAdjustments {
+		// Skip same-epoch adjustments (already counted above)
+		if isSamePeriod(currentBlock, adjustment.Block, stakingPeriod) {
+			continue
+		}
+
+		// Only consider decreases (negative amounts) - increases get locked after staking period
+		if adjustment.Amount < 0 {
+			stakingPeriodsPassedSinceAdjustment := (currentBlock - adjustment.Block) / stakingPeriod
+			// If at least one staking period has passed since the decrease, it's unlocked and withdrawable
+			if stakingPeriodsPassedSinceAdjustment >= 1 {
+				// Convert negative decrease amount to positive withdrawable amount
+				withdrawableAmt += -adjustment.Amount
+			}
+		}
+	}
+	if withdrawableAmt > 0 {
+		return uint64(withdrawableAmt)
+	}
+	return 0
+}
+
+// calculateExpectedDelegationWithdrawAmount calculates the expected amount for delegation withdrawals
+func calculateExpectedDelegationWithdrawAmount(ctx *ExecutionContext, currentBlock int) uint64 {
+	if ctx == nil {
+		return 0
+	}
+
+	// Rule 1: If both DelegationExitBlock == nil AND SignalExitBlock == nil → return check if WithdrawDelegation was done in same Period as AddDelegation → can exit
+	if isSamePeriod(*ctx.DelegationStartBlock, currentBlock, int(thor.LowStakingPeriod())) {
+		return ctx.InitialDelegationStake
+	}
+
+	// Rule 2: If either SignalExitBlock OR DelegationExitBlock are set
+
+	// Rule 2a: If DelegationExitBlock was done in same Period as AddDelegation → can exit
+	if ctx.DelegationExitBlock != nil && ctx.DelegationStartBlock != nil {
+		if isSamePeriod(*ctx.DelegationExitBlock, *ctx.DelegationStartBlock, int(thor.LowStakingPeriod())) {
+			return ctx.InitialDelegationStake
+		}
+	}
+
+	// Rule 2b: If the older of (SignalExitBlock, DelegationExitBlock) was done at least a staking period ago → can exit
+	var olderExitBlock int
+	hasExitBlock := false
+
+	if ctx.SignalExitBlock != nil && ctx.DelegationExitBlock != nil {
+		// Both exist, use the older (smaller) one
+		olderExitBlock = min(*ctx.SignalExitBlock, *ctx.DelegationExitBlock)
+		hasExitBlock = true
+	} else if ctx.SignalExitBlock != nil {
+		// Only SignalExitBlock exists
+		olderExitBlock = *ctx.SignalExitBlock
+		hasExitBlock = true
+	} else if ctx.DelegationExitBlock != nil {
+		// Only DelegationExitBlock exists
+		olderExitBlock = *ctx.DelegationExitBlock
+		hasExitBlock = true
+	}
+
+	if hasExitBlock {
+		stakingPeriod := int(thor.LowStakingPeriod())
+
+		// Calculate time to next housekeeping from the older exit block
+		timeToNextHousekeeping := HousekeepingInterval - (olderExitBlock % HousekeepingInterval)
+		if timeToNextHousekeeping == HousekeepingInterval {
+			timeToNextHousekeeping = 0 // Already at housekeeping boundary
+		}
+
+		requiredBlock := olderExitBlock + timeToNextHousekeeping + stakingPeriod
+
+		if currentBlock >= requiredBlock {
+			// Enough time has passed, can withdraw delegation amount
+			return ctx.InitialDelegationStake
+		}
+	}
+
+	// No conditions met for withdrawal
+	return 0
+}
+
+// isSamePeriod returns true if both blocks are within the same housekeeping period.
+func isSamePeriod(a, b, periodLen int) bool {
+	return (a-1)/periodLen == (b-1)/periodLen
 }

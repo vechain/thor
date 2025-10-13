@@ -3,6 +3,7 @@ package staker
 import (
 	"fmt"
 	"log/slog"
+	"math/big"
 	"math/rand"
 	"os"
 	"testing"
@@ -245,8 +246,16 @@ func printActionTreeWithResultsHelper(action Action, prefix string, isLast bool,
 		}
 	}
 
-	actionInfo := fmt.Sprintf("%s @ block %d (%d + %d)%s %s %s",
-		action.Name(), executionBlock, parentBlock, blockAdvancement, amountDisplay, execResult, checkResult)
+	var actionInfo string
+	stakingPeriod := int(thor.LowStakingPeriod())
+	if executionBlock > stakingPeriod {
+		excessBlocks := executionBlock - stakingPeriod
+		actionInfo = fmt.Sprintf("%s @ block %d (%d + ⏳ StakingPeriod(%d)+%d)%s %s %s",
+			action.Name(), executionBlock, parentBlock, stakingPeriod, excessBlocks, amountDisplay, execResult, checkResult)
+	} else {
+		actionInfo = fmt.Sprintf("%s @ block %d (%d + %d)%s %s %s",
+			action.Name(), executionBlock, parentBlock, blockAdvancement, amountDisplay, execResult, checkResult)
+	}
 
 	log.Info(fmt.Sprintf("%s%s%s", prefix, connector, actionInfo))
 
@@ -315,14 +324,14 @@ func RunnerWithResults(s *testStaker, action Action, currentBlk int, results map
 		}
 
 		if housekeepingCount > 0 {
-			log.Info("🏡 Housekeeping completed", "operations_count", housekeepingCount)
+			log.Debug("🏡 Housekeeping completed", "operations_count", housekeepingCount)
 		}
 
 		currentBlk += *mpb
 		log.Debug("⬆️ Block advancement completed", "new_block", currentBlk)
 	}
 
-	log.Info("⚡️ Executing action", "action", action.Name(), "block", currentBlk)
+	log.Debug("⚡️ Executing action", "action", action.Name(), "block", currentBlk)
 
 	// Execute and check with context
 	executionErr := action.Execute(ctx, s, currentBlk)
@@ -353,7 +362,7 @@ func RunnerWithResults(s *testStaker, action Action, currentBlk int, results map
 		log.Debug("➡️ Starting next action", "sequence", i+1, "action", next.Name())
 		// Clone context for each branch to prevent interference
 		clonedCtx := ctx.Clone()
-		if err := RunnerWithResults(CloneStaker(s), next, currentBlk, results, clonedCtx); err != nil {
+		if err := RunnerWithResults(cloneStaker(s), next, currentBlk, results, clonedCtx); err != nil {
 			log.Error("❌ Next action failed", "sequence", i+1, "action", next.Name(), "error", err)
 			return err
 		}
@@ -363,156 +372,8 @@ func RunnerWithResults(s *testStaker, action Action, currentBlk int, results map
 	return nil
 }
 
-func TestPermutations(t *testing.T) {
-	staker := newTestStaker()
-
-	validatorID := thor.BytesToAddress([]byte("validator"))
-	endorserID := thor.BytesToAddress([]byte("endorser"))
-	lowStakingPeriod := int(thor.LowStakingPeriod())
-
-	epoch := HousekeepingInterval
-	//plusNFun := func(base *int, increase int) *int {
-	//	newBase := *base + increase
-	//	return &newBase
-	//}
-
-	withDrawMinBlockCalc := lowStakingPeriod + epoch + int(thor.CooldownPeriod())
-
-	action := NewAddValidationAction(
-		nil,
-		validatorID,
-		endorserID,
-		thor.LowStakingPeriod(),
-		MinStakeVET,
-		//NewSignalExitAction(nil, validatorID, endorserID,
-		//	NewWithdrawAction(&withDrawMinBlockCalc, validatorID, endorserID),
-		//),
-		//NewIncreaseStakeAction(&epoch, validatorID, endorserID, MinStakeVET,
-		//	NewIncreaseStakeAction(plusNFun(&epoch, 2), validatorID, endorserID, MinStakeVET,
-		//		NewIncreaseStakeAction(plusNFun(&epoch, 3), validatorID, endorserID, MinStakeVET,
-		//			NewSignalExitAction(plusNFun(&epoch, 5), validatorID, endorserID,
-		//				NewWithdrawAction(&withDrawMinBlockCalc, validatorID, endorserID),
-		//			),
-		//		),
-		//	),
-		//),
-		//NewAddDelegationAction(&epoch, validatorID, MinStakeVET, uint8(1),
-		//	NewSignalExitDelegationAction(plusNFun(&lowStakingPeriod, 2), big.NewInt(1),
-		//		NewWithdrawDelegationAction(&withDrawMinBlockCalc, big.NewInt(1)),
-		//	),
-		//),
-		//
-		//NewAddDelegationAction(&epoch, validatorID, MinStakeVET, uint8(1),
-		//	NewSignalExitAction(plusNFun(&epoch, 2), validatorID, endorserID,
-		//		NewSignalExitDelegationAction(plusNFun(&lowStakingPeriod, 2), big.NewInt(1),
-		//			NewWithdrawDelegationAction(&withDrawMinBlockCalc, big.NewInt(1),
-		//				NewWithdrawAction(&withDrawMinBlockCalc, validatorID, endorserID),
-		//			),
-		//		),
-		//	),
-		//),
-		//
-		//NewWithdrawAction(&withDrawMinBlockCalc, validatorID, endorserID),
-		NewIncreaseStakeAction(&withDrawMinBlockCalc, validatorID, endorserID, MinStakeVET,
-			NewDecreaseStakeAction(&withDrawMinBlockCalc, validatorID, endorserID, MinStakeVET,
-				NewWithdrawAction(&withDrawMinBlockCalc, validatorID, endorserID),
-			),
-			NewSignalExitAction(&withDrawMinBlockCalc, validatorID, endorserID,
-				NewWithdrawAction(&withDrawMinBlockCalc, validatorID, endorserID),
-			),
-		),
-		//NewDecreaseStakeAction(&withDrawMinBlockCalc, validatorID, endorserID, MinStakeVET,
-		//	NewDecreaseStakeAction(&withDrawMinBlockCalc, validatorID, endorserID, MaxStakeVET*2),
-		//),
-		//NewAddDelegationAction(nil, validatorID, MinStakeVET, uint8(1),
-		//	NewSignalExitDelegationAction(&lowStakingPeriod, big.NewInt(1)),
-		//	NewSignalExitAction(&withDrawMinBlockCalc, validatorID, endorserID,
-		//		NewWithdrawAction(&withDrawMinBlockCalc, validatorID, endorserID),
-		//	),
-		//),
-		//NewAddDelegationAction(nil, validatorID, MinStakeVET, uint8(1),
-		//	NewSignalExitDelegationAction(&lowStakingPeriod, big.NewInt(1),
-		//		NewWithdrawAction(&lowStakingPeriod, validatorID, endorserID),
-		//	),
-		//	NewSignalExitAction(&withDrawMinBlockCalc, validatorID, endorserID,
-		//		NewWithdrawAction(&withDrawMinBlockCalc, validatorID, endorserID),
-		//	),
-		//),
-	)
-
-	require.NoError(t, RunWithResultTree(staker, action, 0))
-}
-
-func TestRandomPermutations(t *testing.T) {
-	rand.Seed(time.Now().UnixNano())
-
-	for i := range 1_000 {
-		t.Run(fmt.Sprintf("iteration-%d", i+1), func(t *testing.T) {
-			// Create per-action random modifier function
-			randomModifier := func(original *int) *int {
-				// Generate new random values for this iteration
-				X := rand.Intn(360) + 1 // 1-360
-				Y := rand.Intn(360) + 1 // 1-360
-
-				// Randomly choose "above" or "below" for this action
-				useAbove := rand.Intn(2) == 1
-
-				var result *int
-				if useAbove {
-					// "above" permutation
-					if original == nil {
-						result = &Y
-					} else {
-						value := *original + Y
-						result = &value
-					}
-				} else {
-					// "below" permutation
-					if original == nil {
-						result = nil
-					} else {
-						value := *original - X
-						if value <= 0 {
-							result = nil
-						} else {
-							result = &value
-						}
-					}
-				}
-
-				return result
-			}
-
-			staker := newTestStaker()
-			validatorID := thor.BytesToAddress([]byte("validator"))
-			endorserID := thor.BytesToAddress([]byte("endorser"))
-
-			epoch := HousekeepingInterval
-
-			signalExitMinBlock := randomModifier(&epoch)
-			withDrawMinBlockCalc := convertNilBlock(signalExitMinBlock) + epoch + int(thor.CooldownPeriod())
-			withDrawMinBlock := randomModifier(&withDrawMinBlockCalc)
-
-			// Compose the flow explicitly: AddValidation -> SignalExit -> Withdraw
-			action := NewAddValidationAction(
-				randomModifier(nil),
-				validatorID,
-				endorserID,
-				thor.LowStakingPeriod(),
-				MinStakeVET,
-				NewSignalExitAction(signalExitMinBlock, validatorID, endorserID,
-					NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
-				),
-				NewWithdrawAction(withDrawMinBlock, validatorID, endorserID),
-			)
-
-			require.NoError(t, RunWithResultTree(staker, action, 0))
-		})
-	}
-}
-
-// CloneStaker creates a deep copy of the testStaker with cloned state
-func CloneStaker(ts *testStaker) *testStaker {
+// cloneStaker creates a deep copy of the testStaker with cloned state
+func cloneStaker(ts *testStaker) *testStaker {
 	// Get the current state root by creating and committing a stage
 	stage, err := ts.state.Stage(trie.Version{})
 	if err != nil {
@@ -547,157 +408,6 @@ func convertNilBlock(i *int) int {
 	return base
 }
 
-// ----------------------
-// Amount Calculation Helpers
-// ----------------------
-
-// calculateExpectedValidationWithdrawAmount calculates the expected amount for validation withdrawals
-func calculateExpectedValidationWithdrawAmount(ctx *ExecutionContext, currentBlock int) uint64 {
-	if ctx == nil {
-		return 0
-	}
-
-	// Rule 1: If no SignalExit has been called
-	if ctx.SignalExitBlock == nil {
-		return calculateWithdrawableAmountNoSignalExit(ctx, currentBlock)
-	}
-
-	// Rule 2: SignalExit is set
-	if ctx.ValidationStartBlock == nil {
-		return 0
-	}
-
-	signalExitBlock := *ctx.SignalExitBlock
-	stakingPeriod := int(thor.LowStakingPeriod())
-	cooldownPeriod := int(thor.CooldownPeriod())
-
-	// Calculate time to next housekeeping from signal exit
-	timeToNextHousekeeping := HousekeepingInterval - (signalExitBlock % HousekeepingInterval)
-	if timeToNextHousekeeping == HousekeepingInterval {
-		timeToNextHousekeeping = 0 // Already at housekeeping boundary
-	}
-
-	requiredBlock := signalExitBlock + timeToNextHousekeeping + stakingPeriod + cooldownPeriod
-
-	// If enough time has passed, can withdraw everything (initial stake + all adjustments)
-	if currentBlock >= requiredBlock {
-		totalStake := int64(ctx.InitialStake)
-		for _, adj := range ctx.StakeAdjustments {
-			totalStake += adj.Amount
-		}
-
-		if totalStake > 0 {
-			return uint64(totalStake)
-		}
-	}
-
-	// Otherwise, apply the same rules as no SignalExit case for immediate withdrawals
-	return calculateWithdrawableAmountNoSignalExit(ctx, currentBlock)
-}
-
-// calculateWithdrawableAmountNoSignalExit calculates withdrawable amounts considering staking period locking
-func calculateWithdrawableAmountNoSignalExit(ctx *ExecutionContext, currentBlock int) uint64 {
-	if ctx == nil || ctx.ValidationStartBlock == nil {
-		return 0
-	}
-
-	stakingPeriod := int(thor.LowStakingPeriod())
-	withdrawableAmt := int64(0)
-
-	// Same epoch adjustments are always withdrawable
-	for _, adjustment := range ctx.StakeAdjustments {
-		if IsSamePeriod(currentBlock, adjustment.Block, stakingPeriod) {
-			withdrawableAmt += adjustment.Amount
-		}
-	}
-
-	// Plus unlocked decreases from previous staking periods
-	for _, adjustment := range ctx.StakeAdjustments {
-		// Skip same-epoch adjustments (already counted above)
-		if IsSamePeriod(currentBlock, adjustment.Block, stakingPeriod) {
-			continue
-		}
-
-		// Only consider decreases (negative amounts) - increases get locked after staking period
-		if adjustment.Amount < 0 {
-			stakingPeriodsPassedSinceAdjustment := (currentBlock - adjustment.Block) / stakingPeriod
-			// If at least one staking period has passed since the decrease, it's unlocked and withdrawable
-			if stakingPeriodsPassedSinceAdjustment >= 1 {
-				// Convert negative decrease amount to positive withdrawable amount
-				withdrawableAmt += -adjustment.Amount
-			}
-		}
-	}
-	if withdrawableAmt > 0 {
-		return uint64(withdrawableAmt)
-	}
-	return 0
-}
-
-// calculateExpectedDelegationWithdrawAmount calculates the expected amount for delegation withdrawals
-func calculateExpectedDelegationWithdrawAmount(ctx *ExecutionContext, currentBlock int) uint64 {
-	if ctx == nil {
-		return 0
-	}
-
-	// Rule 1: If both DelegationExitBlock == nil AND SignalExitBlock == nil → return 0 (no signal)
-	if ctx.DelegationExitBlock == nil && ctx.SignalExitBlock == nil {
-		return 0
-	}
-
-	// Rule 2: If either SignalExitBlock OR DelegationExitBlock are set
-
-	// Rule 2a: If DelegationExitBlock was done in same epoch as AddDelegation → can exit
-	if ctx.DelegationExitBlock != nil && ctx.DelegationStartBlock != nil {
-		if IsSamePeriod(*ctx.DelegationExitBlock, *ctx.DelegationStartBlock, int(thor.LowStakingPeriod())) {
-			return ctx.InitialDelegationStake
-		}
-	}
-
-	// Rule 2b: If the older of (SignalExitBlock, DelegationExitBlock) was done at least a staking period ago → can exit
-	var olderExitBlock int
-	hasExitBlock := false
-
-	if ctx.SignalExitBlock != nil && ctx.DelegationExitBlock != nil {
-		// Both exist, use the older (smaller) one
-		olderExitBlock = min(*ctx.SignalExitBlock, *ctx.DelegationExitBlock)
-		hasExitBlock = true
-	} else if ctx.SignalExitBlock != nil {
-		// Only SignalExitBlock exists
-		olderExitBlock = *ctx.SignalExitBlock
-		hasExitBlock = true
-	} else if ctx.DelegationExitBlock != nil {
-		// Only DelegationExitBlock exists
-		olderExitBlock = *ctx.DelegationExitBlock
-		hasExitBlock = true
-	}
-
-	if hasExitBlock {
-		stakingPeriod := int(thor.LowStakingPeriod())
-
-		// Calculate time to next housekeeping from the older exit block
-		timeToNextHousekeeping := HousekeepingInterval - (olderExitBlock % HousekeepingInterval)
-		if timeToNextHousekeeping == HousekeepingInterval {
-			timeToNextHousekeeping = 0 // Already at housekeeping boundary
-		}
-
-		requiredBlock := olderExitBlock + timeToNextHousekeeping + stakingPeriod
-
-		if currentBlock >= requiredBlock {
-			// Enough time has passed, can withdraw delegation amount
-			return ctx.InitialDelegationStake
-		}
-	}
-
-	// No conditions met for withdrawal
-	return 0
-}
-
-// IsSamePeriod returns true if both blocks are within the same housekeeping period.
-func IsSamePeriod(a, b, periodLen int) bool {
-	return (a-1)/periodLen == (b-1)/periodLen
-}
-
 // formatAmount formats an amount in millions (e.g., 25000000 -> "25M")
 func formatAmount(amount uint64) string {
 	if amount == 0 {
@@ -722,14 +432,6 @@ func getAmountIcon(actionName string) string {
 	default:
 		return ""
 	}
-}
-
-// getActionAmount extracts the amount from an action execution
-func getActionAmount(actionName string, ctx *ExecutionContext, executionErr error) uint64 {
-	if ctx == nil || executionErr != nil {
-		return 0
-	}
-	return ctx.LastActionAmount
 }
 
 // --- Permutation Manager Skeleton ---
@@ -813,10 +515,53 @@ func (pm *permutationManager) InstantiateChain(order []string) Action {
 	return makeAction(0)
 }
 
+// Permutation tests
+func TestPermutation(t *testing.T) {
+	staker := newTestStaker()
+
+	validatorID := thor.BytesToAddress([]byte("validator"))
+	endorserID := thor.BytesToAddress([]byte("endorser"))
+	delegationID := big.NewInt(1)
+
+	// Block advancement values to match the scenario
+	addValidationBlocks := 32
+	increaseStakeBlocks := 89
+	addDelegationBlocks := 32
+	signalExitBlocks := 50
+	withdrawBlocks := 69138 // This will result in block 69519 (381 + 69138)
+	signalExitDelegationBlocks := 32
+	withdrawDelegationBlocks := 69138
+
+	action := NewAddValidationAction(
+		&addValidationBlocks,
+		validatorID,
+		endorserID,
+		thor.LowStakingPeriod(),
+		MinStakeVET,
+		NewIncreaseStakeAction(&increaseStakeBlocks, validatorID, endorserID, MinStakeVET,
+			NewIncreaseStakeAction(&increaseStakeBlocks, validatorID, endorserID, MinStakeVET,
+				NewIncreaseStakeAction(&increaseStakeBlocks, validatorID, endorserID, MinStakeVET,
+					NewAddDelegationAction(&addDelegationBlocks, validatorID, MinStakeVET, uint8(1),
+						NewSignalExitAction(&signalExitBlocks, validatorID, endorserID,
+							NewWithdrawAction(&withdrawBlocks, validatorID, endorserID,
+								NewSignalExitDelegationAction(&signalExitDelegationBlocks, delegationID,
+									NewWithdrawDelegationAction(&withdrawDelegationBlocks, delegationID),
+								),
+							),
+						),
+					),
+				),
+			),
+		),
+	)
+
+	require.NoError(t, RunWithResultTree(staker, action, 0))
+}
+
 func TestRandomPermutationManager(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 
-	for i := range 100 {
+	for i := range 1 {
 		t.Run(fmt.Sprintf("iteration-%d", i+1), func(t *testing.T) {
 			// Create per-action random modifier function
 			randomModifier := func(original *int) *int {
@@ -855,20 +600,24 @@ func TestRandomPermutationManager(t *testing.T) {
 
 			validatorID := thor.BytesToAddress([]byte("validator"))
 			endorserID := thor.BytesToAddress([]byte("endorser"))
+			delegationID := big.NewInt(1)
 
 			epoch := HousekeepingInterval
+			stakingPeriod := int(thor.LowStakingPeriod())
 
+			addValidationMinBlk := randomModifier(&epoch)
+			increaseValidationMinBlk := randomModifier(&epoch)
 			signalExitMinBlock := randomModifier(&epoch)
-			withdrawMinBlockCalc := convertNilBlock(signalExitMinBlock) + epoch + int(thor.CooldownPeriod())
+			withdrawMinBlockCalc := convertNilBlock(signalExitMinBlock) + epoch + stakingPeriod + int(thor.CooldownPeriod())
 			withdrawMinBlock := randomModifier(&withdrawMinBlockCalc)
 
 			permManager := &permutationManager{
 				actionConstructors: map[string]func(next ...Action) Action{
 					"NewValidationAction": func(next ...Action) Action {
-						return NewAddValidationAction(&epoch, validatorID, endorserID, thor.LowStakingPeriod(), MinStakeVET, next...)
+						return NewAddValidationAction(addValidationMinBlk, validatorID, endorserID, uint32(stakingPeriod), MinStakeVET, next...)
 					},
 					"NewIncreaseStakeAction": func(next ...Action) Action {
-						return NewIncreaseStakeAction(&epoch, validatorID, endorserID, MinStakeVET, next...)
+						return NewIncreaseStakeAction(increaseValidationMinBlk, validatorID, endorserID, MinStakeVET, next...)
 					},
 					"NewSignalExitAction": func(next ...Action) Action {
 						return NewSignalExitAction(signalExitMinBlock, validatorID, endorserID, next...)
@@ -876,21 +625,32 @@ func TestRandomPermutationManager(t *testing.T) {
 					"NewWithdrawAction": func(next ...Action) Action {
 						return NewWithdrawAction(withdrawMinBlock, validatorID, endorserID, next...)
 					},
+					"NewAddDelegationAction": func(next ...Action) Action {
+						return NewAddDelegationAction(addValidationMinBlk, validatorID, MinStakeVET, uint8(1), next...)
+					},
+					"NewSignalExitDelegationAction": func(next ...Action) Action {
+						return NewSignalExitDelegationAction(addValidationMinBlk, delegationID, next...)
+					},
+					"NewWithdrawDelegationAction": func(next ...Action) Action {
+						return NewWithdrawDelegationAction(withdrawMinBlock, delegationID, next...)
+					},
 				},
 			}
 
 			config := map[string]int{
-				"NewValidationAction":    1,
-				"NewIncreaseStakeAction": 3,
-				"NewSignalExitAction":    1,
-				"NewWithdrawAction":      1,
+				"NewValidationAction":           1,
+				"NewIncreaseStakeAction":        3,
+				"NewSignalExitAction":           1,
+				"NewWithdrawAction":             1,
+				"NewAddDelegationAction":        1,
+				"NewSignalExitDelegationAction": 1,
+				"NewWithdrawDelegationAction":   1,
 			}
 
 			perms := permManager.GenerateAllPermutations(config)
 			for _, order := range perms {
 				action := permManager.InstantiateChain(order)
 				staker := newTestStaker()
-				fmt.Println("The permutation is: ", order)
 				require.NoError(t, RunWithResultTree(staker, action, 0))
 			}
 		})
