@@ -110,6 +110,7 @@ func NewWithdrawAction(
 				amount, err := staker.WithdrawStake(validationID, endorserID, uint32(blk))
 				actualWithdrawnAmount = amount
 				ctx.LastActionAmount = amount
+
 				return err
 			}).
 		WithCheck(
@@ -168,7 +169,7 @@ func NewIncreaseStakeAction(
 				if val.Status == validation.StatusActive && val.ExitBlock != nil {
 					return fmt.Errorf("Check IncreaseStake failed, validator has signaled exit")
 				}
-				if err := staker.validateStakeIncrease(validationID, val, amount); err != nil {
+				if err = staker.validateStakeIncrease(validationID, val, amount); err != nil {
 					return fmt.Errorf("Check IncreaseStake failed, validateStakeIncrease failed: %w", err)
 				}
 				return nil
@@ -201,7 +202,7 @@ func NewDecreaseStakeAction(
 			}).
 		WithCheck(
 			func(ctx *ExecutionContext, staker *testStaker, blk int) error {
-				val, err := staker.GetValidation(validationID)
+				val, err := staker.getValidationOrRevert(validationID)
 				if err != nil {
 					return fmt.Errorf("Check DecreaseStake failed, validator not found: %w", err)
 				}
@@ -217,6 +218,7 @@ func NewDecreaseStakeAction(
 				if val.Status == validation.StatusActive && val.ExitBlock != nil {
 					return fmt.Errorf("Check DecreaseStake failed, validator has signaled exit")
 				}
+
 				return nil
 			}).
 		WithNext(next...).

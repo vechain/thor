@@ -183,9 +183,9 @@ type ActionResult struct {
 	Amount       uint64 // Amount involved in the action (for display purposes)
 }
 
-// PrintActionTreeWithResults prints a tree visualization with execution results
-func PrintActionTreeWithResults(action Action, results map[string]*ActionResult) {
-	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+// createLogger creates a structured logger with consistent configuration
+func createLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
 			if a.Key == slog.TimeKey {
@@ -194,10 +194,6 @@ func PrintActionTreeWithResults(action Action, results map[string]*ActionResult)
 			return a
 		},
 	}))
-
-	log.Debug("📊 Action Execution Results:")
-	printActionTreeWithResultsHelper(action, "", true, 0, results, log)
-	log.Debug("🏁 End of execution results")
 }
 
 func printActionTreeWithResultsHelper(action Action, prefix string, isLast bool, parentBlock int, results map[string]*ActionResult, log *slog.Logger) {
@@ -205,6 +201,10 @@ func printActionTreeWithResultsHelper(action Action, prefix string, isLast bool,
 	connector := "├── "
 	if isLast {
 		connector = "└── "
+	}
+
+	if prefix == "" {
+		connector = "──> "
 	}
 
 	// Calculate block advancement for this action
@@ -221,21 +221,7 @@ func printActionTreeWithResultsHelper(action Action, prefix string, isLast bool,
 	result, found := results[actionKey]
 
 	// Format result indicators
-	execResult := "❓"
-	checkResult := "❓"
-	if found {
-		if result.ExecutionErr == nil {
-			execResult = "✅"
-		} else {
-			execResult = "❌"
-		}
-
-		if result.CheckErr == nil {
-			checkResult = "✅"
-		} else {
-			checkResult = "❌"
-		}
-	}
+	execResult, checkResult := formatResultIndicators(found, result)
 
 	// Format: ActionName @ block X (parentBlock + advancement) [ICON AMOUNT] ExecutionResult CheckResult
 	amountDisplay := ""
@@ -248,8 +234,8 @@ func printActionTreeWithResultsHelper(action Action, prefix string, isLast bool,
 
 	var actionInfo string
 	stakingPeriod := int(thor.LowStakingPeriod())
-	if executionBlock > stakingPeriod {
-		excessBlocks := executionBlock - stakingPeriod
+	if blockAdvancement > stakingPeriod {
+		excessBlocks := blockAdvancement - stakingPeriod
 		actionInfo = fmt.Sprintf("%s @ block %d (%d + ⏳ StakingPeriod(%d)+%d)%s %s %s",
 			action.Name(), executionBlock, parentBlock, stakingPeriod, excessBlocks, amountDisplay, execResult, checkResult)
 	} else {
@@ -277,54 +263,30 @@ func printActionTreeWithResultsHelper(action Action, prefix string, isLast bool,
 
 // RunWithResultTree executes actions and prints a tree with results
 func RunWithResultTree(s *testStaker, action Action, currentBlk int) error {
+	log := createLogger()
 	results := make(map[string]*ActionResult)
 	ctx := &ExecutionContext{}
 	err := RunnerWithResults(s, action, currentBlk, results, ctx)
-	PrintActionTreeWithResults(action, results)
+	printActionTreeWithResultsHelper(action, "", true, 0, results, log)
 	return err
 }
 
 // RunnerWithResults executes an action, runs its checks, captures results, then recurses on Next().
 func RunnerWithResults(s *testStaker, action Action, currentBlk int, results map[string]*ActionResult, ctx *ExecutionContext) error {
-	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
-			if a.Key == slog.TimeKey {
-				return slog.Attr{}
-			}
-			return a
-		},
-	}))
+	log := createLogger()
 
 	log.Debug("🚀 Starting action execution",
 		"action", action.Name(),
 		"current_block", currentBlk)
 
-	// Use minParentBlocksRequired to drive housekeeping cadence / block skipping.
+	// Advance blocks and run housekeeping if needed
 	if mpb := action.MinParentBlocksRequired(); mpb != nil {
 		log.Debug("⏭️ Block advancement required",
 			"blocks_to_advance", *mpb,
 			"target_block", currentBlk+*mpb)
 
-		// Ensure Housekeep runs every housekeepingInterval blocks, possibly multiple times if we've jumped
-		start := currentBlk
-		end := currentBlk + *mpb
-		interval := HousekeepingInterval
-		first := ((start + interval - 1) / interval) * interval
-
-		housekeepingCount := 0
-		for cblk := first; cblk <= end; cblk += interval {
-			log.Debug("🧹 Running housekeeping", "block", cblk)
-			_, err := s.Housekeep(uint32(cblk))
-			if err != nil {
-				log.Error("❌ Housekeeping failed", "block", cblk, "error", err)
-				return fmt.Errorf("housekeeping failed at block %d: %w", cblk, err)
-			}
-			housekeepingCount++
-		}
-
-		if housekeepingCount > 0 {
-			log.Debug("🏡 Housekeeping completed", "operations_count", housekeepingCount)
+		if err := runHousekeepingForBlockRange(s, currentBlk, currentBlk+*mpb, log); err != nil {
+			return err
 		}
 
 		currentBlk += *mpb
@@ -372,6 +334,28 @@ func RunnerWithResults(s *testStaker, action Action, currentBlk int, results map
 	return nil
 }
 
+// runHousekeepingForBlockRange runs housekeeping for all intervals in a block range
+func runHousekeepingForBlockRange(s *testStaker, start, end int, log *slog.Logger) error {
+	interval := HousekeepingInterval
+	first := ((start + interval - 1) / interval) * interval
+
+	housekeepingCount := 0
+	for cblk := first; cblk <= end; cblk += interval {
+		log.Debug("🧹 Running housekeeping", "block", cblk)
+		_, err := s.Housekeep(uint32(cblk))
+		if err != nil {
+			log.Error("❌ Housekeeping failed", "block", cblk, "error", err)
+			return fmt.Errorf("housekeeping failed at block %d: %w", cblk, err)
+		}
+		housekeepingCount++
+	}
+
+	if housekeepingCount > 0 {
+		log.Debug("🏡 Housekeeping completed", "operations_count", housekeepingCount)
+	}
+	return nil
+}
+
 // cloneStaker creates a deep copy of the testStaker with cloned state
 func cloneStaker(ts *testStaker) *testStaker {
 	// Get the current state root by creating and committing a stage
@@ -401,11 +385,60 @@ func cloneStaker(ts *testStaker) *testStaker {
 }
 
 func convertNilBlock(i *int) int {
-	base := 0
 	if i != nil {
-		base = *i
+		return *i
 	}
-	return base
+	return 0
+}
+
+// createRandomModifier creates a random modifier function for block advancements
+func createRandomModifier() func(*int) *int {
+	return func(original *int) *int {
+		X := rand.Intn(360) + 1 // 1-360
+		Y := rand.Intn(360) + 1 // 1-360
+		useAbove := rand.Intn(2) == 1
+
+		if useAbove {
+			// "above" permutation
+			if original == nil {
+				return &Y
+			}
+			value := *original + Y
+			return &value
+		}
+
+		// "below" permutation
+		if original == nil {
+			return nil
+		}
+		value := *original - X
+		if value <= 0 {
+			return nil
+		}
+		return &value
+	}
+}
+
+// formatResultIndicators formats execution and check result indicators
+func formatResultIndicators(found bool, result *ActionResult) (string, string) {
+	execResult := "❓"
+	checkResult := "❓"
+
+	if found {
+		if result.ExecutionErr == nil {
+			execResult = "✅"
+		} else {
+			execResult = "❌"
+		}
+
+		if result.CheckErr == nil {
+			checkResult = "✅"
+		} else {
+			checkResult = "❌"
+		}
+	}
+
+	return execResult, checkResult
 }
 
 // formatAmount formats an amount in millions (e.g., 25000000 -> "25M")
@@ -488,14 +521,11 @@ func (pm *permutationManager) GenerateAllPermutations(config map[string]int) [][
 	return results
 }
 
-// Given a permutation (list of action names), chain the real Action objects using hardcoded arguments.
+// InstantiateChain creates a chain of Action objects from a permutation order
 func (pm *permutationManager) InstantiateChain(order []string) Action {
 	if len(order) == 0 {
 		return nil
 	}
-	// Remove these unused variables (declared but not used):
-	// validatorID, endorserID, lowStakingPeriod, minStake, maxStake, withDrawMinBlock, beneficiary, delegationID
-	// For this example, use nil for minParentBlocksRequired etc.
 
 	var makeAction func(idx int) Action
 	makeAction = func(idx int) Action {
@@ -521,16 +551,12 @@ func TestPermutation(t *testing.T) {
 
 	validatorID := thor.BytesToAddress([]byte("validator"))
 	endorserID := thor.BytesToAddress([]byte("endorser"))
-	delegationID := big.NewInt(1)
+	//delegationID := big.NewInt(1)
 
 	// Block advancement values to match the scenario
-	addValidationBlocks := 32
-	increaseStakeBlocks := 89
-	addDelegationBlocks := 32
-	signalExitBlocks := 50
-	withdrawBlocks := 69138 // This will result in block 69519 (381 + 69138)
-	signalExitDelegationBlocks := 32
-	withdrawDelegationBlocks := 69138
+	addValidationBlocks := 97  // AddValidation @ block 97 (0 + 97)
+	increaseStakeBlocks := 454 // IncreaseStake @ block 551 (97 + 454)
+	decreaseStakeBlocks := 454 // DecreaseStake @ block 1913 (1459 + 454)
 
 	action := NewAddValidationAction(
 		&addValidationBlocks,
@@ -541,14 +567,8 @@ func TestPermutation(t *testing.T) {
 		NewIncreaseStakeAction(&increaseStakeBlocks, validatorID, endorserID, MinStakeVET,
 			NewIncreaseStakeAction(&increaseStakeBlocks, validatorID, endorserID, MinStakeVET,
 				NewIncreaseStakeAction(&increaseStakeBlocks, validatorID, endorserID, MinStakeVET,
-					NewAddDelegationAction(&addDelegationBlocks, validatorID, MinStakeVET, uint8(1),
-						NewSignalExitAction(&signalExitBlocks, validatorID, endorserID,
-							NewWithdrawAction(&withdrawBlocks, validatorID, endorserID,
-								NewSignalExitDelegationAction(&signalExitDelegationBlocks, delegationID,
-									NewWithdrawDelegationAction(&withdrawDelegationBlocks, delegationID),
-								),
-							),
-						),
+					NewDecreaseStakeAction(&decreaseStakeBlocks, validatorID, endorserID, MinStakeVET,
+						NewDecreaseStakeAction(&decreaseStakeBlocks, validatorID, endorserID, MinStakeVET),
 					),
 				),
 			),
@@ -561,42 +581,9 @@ func TestPermutation(t *testing.T) {
 func TestRandomPermutationManager(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 
-	for i := range 1 {
+	for i := range 10 {
 		t.Run(fmt.Sprintf("iteration-%d", i+1), func(t *testing.T) {
-			// Create per-action random modifier function
-			randomModifier := func(original *int) *int {
-				// Generate new random values for this iteration
-				X := rand.Intn(360) + 1 // 1-360
-				Y := rand.Intn(360) + 1 // 1-360
-
-				// Randomly choose "above" or "below" for this action
-				useAbove := rand.Intn(2) == 1
-
-				var result *int
-				if useAbove {
-					// "above" permutation
-					if original == nil {
-						result = &Y
-					} else {
-						value := *original + Y
-						result = &value
-					}
-				} else {
-					// "below" permutation
-					if original == nil {
-						result = nil
-					} else {
-						value := *original - X
-						if value <= 0 {
-							result = nil
-						} else {
-							result = &value
-						}
-					}
-				}
-
-				return result
-			}
+			randomModifier := createRandomModifier()
 
 			validatorID := thor.BytesToAddress([]byte("validator"))
 			endorserID := thor.BytesToAddress([]byte("endorser"))
@@ -619,6 +606,9 @@ func TestRandomPermutationManager(t *testing.T) {
 					"NewIncreaseStakeAction": func(next ...Action) Action {
 						return NewIncreaseStakeAction(increaseValidationMinBlk, validatorID, endorserID, MinStakeVET, next...)
 					},
+					"NewDecreaseStakeAction": func(next ...Action) Action {
+						return NewDecreaseStakeAction(increaseValidationMinBlk, validatorID, endorserID, MinStakeVET, next...)
+					},
 					"NewSignalExitAction": func(next ...Action) Action {
 						return NewSignalExitAction(signalExitMinBlock, validatorID, endorserID, next...)
 					},
@@ -640,6 +630,7 @@ func TestRandomPermutationManager(t *testing.T) {
 			config := map[string]int{
 				"NewValidationAction":           1,
 				"NewIncreaseStakeAction":        3,
+				"NewDecreaseStakeAction":        3,
 				"NewSignalExitAction":           1,
 				"NewWithdrawAction":             1,
 				"NewAddDelegationAction":        1,
