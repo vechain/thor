@@ -463,7 +463,7 @@ func testNodeEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) {
 		require.GreaterOrEqual(t, len(result), 1, "Expected at least one transaction in pool")
 	})
 
-	// 3. Test GET /node/txpool/status
+	// 4. Test GET /node/txpool/status
 	t.Run("GetTxPoolStatus", func(t *testing.T) {
 		status, err := c.TxPoolStatus()
 		require.NoError(t, err)
