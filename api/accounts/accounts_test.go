@@ -658,7 +658,7 @@ func TestRawStorageStaker(t *testing.T) {
 	fc.HAYABUSA = 0
 	fc.GALACTICA = 0
 
-	gene := genesis.NewHayabusaDevnet(&fc)
+	gene := genesis.NewHayabusaDevnet()
 	thorChain, err := testchain.NewIntegrationTestChainWithGenesis(gene, &fc, thor.EpochLength())
 	require.NoError(t, err)
 
