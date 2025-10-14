@@ -166,6 +166,33 @@ paths:
                 type: string
                 example: 'Invalid address'
 
+  /accounts/{address}/storage/raw/{key}:
+    parameters:
+      - $ref: '#/components/parameters/GetStorageAddressInPath'
+      - $ref: '#/components/parameters/StorageKeyInPath'
+      - $ref: '#/components/parameters/RevisionInQuery'
+    get:
+      tags:
+        - Accounts
+      summary: Retrieve raw storage value for the given storage position
+      description: |
+        This endpoint retrieves the storage for the given storage position in `RAW RLP encoded` format. This API is not served as the general purpose API, the storage value needs to be decoded by the caller to serve any further purpose..
+               
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetRawStorageResponse'
+        '400':
+          description: Bad Request
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: 'Invalid address'
+
   /transactions/{id}:
     get:
       parameters:
@@ -962,6 +989,19 @@ components:
           pattern: '^0x[0-9a-f]{64}$'
       example:
         value: '0x0000000000000000000000000000000000000000000000000000000000000001'
+    
+    GetRawStorageResponse:
+      type: object
+      title: GetRawStorageResponse
+      properties:
+        value:
+          type: string
+          description: The raw value(RLP encoded) of the storage at the given storage position.
+          example: '0x01'
+          nullable: false
+          pattern: '^0x[0-9a-f]*$'
+      example:
+        value: '0x01'
 
     GetTxResponse:
       type: object

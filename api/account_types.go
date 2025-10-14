@@ -37,6 +37,10 @@ type GetStorageResult struct {
 	Value string `json:"value"`
 }
 
+type GetRawStorageResponse struct {
+	Value string `json:"value"`
+}
+
 type CallResult struct {
 	Data      string      `json:"data"`
 	Events    []*Event    `json:"events"`

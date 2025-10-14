@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
+	"net/url"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -111,14 +112,6 @@ func (a *Accounts) getAccount(addr thor.Address, header *block.Header, state *st
 	}, nil
 }
 
-func (a *Accounts) getStorage(addr thor.Address, key thor.Bytes32, state *state.State) (thor.Bytes32, error) {
-	storage, err := state.GetStorage(addr, key)
-	if err != nil {
-		return thor.Bytes32{}, err
-	}
-	return storage, nil
-}
-
 func (a *Accounts) handleGetAccount(w http.ResponseWriter, req *http.Request) error {
 	addr, err := thor.ParseAddress(mux.Vars(req)["address"])
 	if err != nil {
@@ -144,25 +137,42 @@ func (a *Accounts) handleGetAccount(w http.ResponseWriter, req *http.Request) er
 	return restutil.WriteJSON(w, acc)
 }
 
-func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) error {
-	addr, err := thor.ParseAddress(mux.Vars(req)["address"])
+func (a *Accounts) getStorage(addr thor.Address, key thor.Bytes32, state *state.State) (thor.Bytes32, error) {
+	storage, err := state.GetStorage(addr, key)
 	if err != nil {
-		return restutil.BadRequest(errors.WithMessage(err, "address"))
+		return thor.Bytes32{}, err
 	}
-	key, err := thor.ParseBytes32(mux.Vars(req)["key"])
+	return storage, nil
+}
+
+func (a *Accounts) parseStorageRequest(routerVars map[string]string, queryParams url.Values) (thor.Address, thor.Bytes32, *state.State, error) {
+	addr, err := thor.ParseAddress(routerVars["address"])
 	if err != nil {
-		return restutil.BadRequest(errors.WithMessage(err, "key"))
+		return thor.Address{}, thor.Bytes32{}, nil, restutil.BadRequest(errors.WithMessage(err, "address"))
 	}
-	revision, err := restutil.ParseRevision(req.URL.Query().Get("revision"), false)
+	key, err := thor.ParseBytes32(routerVars["key"])
 	if err != nil {
-		return restutil.BadRequest(errors.WithMessage(err, "revision"))
+		return thor.Address{}, thor.Bytes32{}, nil, restutil.BadRequest(errors.WithMessage(err, "key"))
+	}
+	revision, err := restutil.ParseRevision(queryParams.Get("revision"), false)
+	if err != nil {
+		return thor.Address{}, thor.Bytes32{}, nil, restutil.BadRequest(errors.WithMessage(err, "revision"))
 	}
 
 	_, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
-			return restutil.BadRequest(errors.WithMessage(err, "revision"))
+			return thor.Address{}, thor.Bytes32{}, nil, restutil.BadRequest(errors.WithMessage(err, "revision"))
 		}
+		return thor.Address{}, thor.Bytes32{}, nil, err
+	}
+
+	return addr, key, st, nil
+}
+
+func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) error {
+	addr, key, st, err := a.parseStorageRequest(mux.Vars(req), req.URL.Query())
+	if err != nil {
 		return err
 	}
 
@@ -171,6 +181,28 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 		return err
 	}
 	return restutil.WriteJSON(w, &api.GetStorageResult{Value: storage.String()})
+}
+
+func (a *Accounts) getRawStorage(addr thor.Address, key thor.Bytes32, state *state.State) ([]byte, error) {
+	storage, err := state.GetRawStorage(addr, key)
+	if err != nil {
+		return nil, err
+	}
+	return storage, nil
+}
+
+func (a *Accounts) handleGetRawStorage(w http.ResponseWriter, req *http.Request) error {
+	addr, key, st, err := a.parseStorageRequest(mux.Vars(req), req.URL.Query())
+	if err != nil {
+		return err
+	}
+
+	storage, err := a.getRawStorage(addr, key, st)
+	if err != nil {
+		return err
+	}
+
+	return restutil.WriteJSON(w, &api.GetStorageResult{Value: hexutil.Encode(storage)})
 }
 
 func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) error {
@@ -387,6 +419,10 @@ func (a *Accounts) Mount(root *mux.Router, pathPrefix string) {
 		Methods("GET").
 		Name("GET /accounts/{address}/storage").
 		HandlerFunc(restutil.WrapHandlerFunc(a.handleGetStorage))
+	sub.Path("/{address}/storage/raw/{key}").
+		Methods("GET").
+		Name("GET /accounts/{address}/storage/raw").
+		HandlerFunc(restutil.WrapHandlerFunc(a.handleGetRawStorage))
 
 	// These two methods are currently deprecated
 	callContractHandler := restutil.HandleGone

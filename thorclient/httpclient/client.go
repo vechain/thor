@@ -130,6 +130,26 @@ func (c *Client) GetAccountStorage(addr *thor.Address, key *thor.Bytes32, revisi
 	return &res, nil
 }
 
+// GetRawAccountStorage retrieves the storage value for the given address and key at the specified revision.
+func (c *Client) GetRawAccountStorage(addr *thor.Address, key *thor.Bytes32, revision string) (*api.GetRawStorageResponse, error) {
+	url := c.url + "/accounts/" + addr.String() + "/storage/raw/" + key.String()
+	if revision != "" {
+		url += "?revision=" + revision
+	}
+
+	body, err := c.httpGET(url)
+	if err != nil {
+		return nil, fmt.Errorf("unable to retrieve raw account storage - %w", err)
+	}
+
+	var res api.GetRawStorageResponse
+	if err = json.Unmarshal(body, &res); err != nil {
+		return nil, fmt.Errorf("unable to unmarshal raw storage result - %w", err)
+	}
+
+	return &res, nil
+}
+
 // GetTransaction retrieves the transaction details by the transaction ID, along with options for head and pending status.
 func (c *Client) GetTransaction(txID *thor.Bytes32, head string, isPending bool) (*transactions.Transaction, error) {
 	url := c.url + "/transactions/" + txID.String() + "?"

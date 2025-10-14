@@ -212,6 +212,28 @@ func TestClient_GetStorage(t *testing.T) {
 	assert.Equal(t, expectedStorageRsp.Value, data.Value)
 }
 
+func TestClient_GetRawStorage(t *testing.T) {
+	addr := thor.Address{0x01}
+	key := thor.Bytes32{0x01}
+	expectedStorageRsp := &api.GetStorageResult{Value: hexutil.Encode([]byte{0x01, 0x03})}
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/accounts/"+addr.String()+"/storage/raw/"+key.String(), r.URL.Path)
+
+		marshal, err := json.Marshal(expectedStorageRsp)
+		require.NoError(t, err)
+
+		w.Write(marshal)
+	}))
+	defer ts.Close()
+
+	client := New(ts.URL)
+	data, err := client.GetRawAccountStorage(&addr, &key, BestRevision)
+
+	assert.NoError(t, err)
+	assert.Equal(t, expectedStorageRsp.Value, data.Value)
+}
+
 func TestClient_GetExpandedBlock(t *testing.T) {
 	blockID := "123"
 	expectedBlock := &api.JSONExpandedBlock{}
