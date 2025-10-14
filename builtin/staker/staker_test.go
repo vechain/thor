@@ -677,8 +677,10 @@ func TestValidation_DecreaseStake_ActiveTooLowNextPeriod(t *testing.T) {
 	end := id
 
 	assert.NoError(t, staker.AddValidation(id, end, thor.MediumStakingPeriod(), MinStakeVET))
+	_, err := staker.Housekeep(thor.MediumStakingPeriod())
+	assert.NoError(t, err)
 
-	err := staker.DecreaseStake(id, end, 100)
+	err = staker.DecreaseStake(id, end, 100)
 	assert.ErrorContains(t, err, "next period stake is lower than minimum stake")
 }
 
@@ -721,7 +723,10 @@ func TestValidation_DecreaseStake_QueuedTooLowNextPeriod(t *testing.T) {
 
 	assert.NoError(t, staker.AddValidation(id, end, thor.MediumStakingPeriod(), MinStakeVET))
 
-	err := staker.DecreaseStake(id, end, 100)
+	_, err := staker.Housekeep(thor.MediumStakingPeriod())
+	assert.NoError(t, err)
+
+	err = staker.DecreaseStake(id, end, 100)
 	assert.ErrorContains(t, err, "next period stake is lower than minimum stake")
 }
 
@@ -733,15 +738,19 @@ func TestValidation_DecreaseStake_QueuedSuccess(t *testing.T) {
 
 	assert.NoError(t, staker.AddValidation(id, end, thor.MediumStakingPeriod(), MinStakeVET+100))
 
+	_, err := staker.Housekeep(thor.MediumStakingPeriod())
+	assert.NoError(t, err)
+
 	assert.NoError(t, staker.DecreaseStake(id, end, 100))
 	withdrawable, err := staker.globalStatsService.GetWithdrawableStake()
 	assert.NoError(t, err)
-	assert.Equal(t, uint64(100), withdrawable)
+	assert.Equal(t, uint64(0), withdrawable)
 
 	v, err := staker.GetValidation(id)
 	assert.NoError(t, err)
-	assert.Equal(t, MinStakeVET, v.QueuedVET)
-	assert.Equal(t, uint64(100), v.WithdrawableVET)
+	assert.Equal(t, uint64(0), v.QueuedVET)
+	assert.Equal(t, MinStakeVET+100, v.LockedVET)
+	assert.Equal(t, uint64(0), v.WithdrawableVET)
 }
 
 func TestValidation_WithdrawStake_InvalidEndorser(t *testing.T) {

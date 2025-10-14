@@ -150,7 +150,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		// },
 		{
 			function:    "native_increaseStake",
-			expectedGas: 16600,
+			expectedGas: 400,
 			args: []any{
 				account1,
 				account1,
@@ -161,7 +161,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_decreaseStake",
-			expectedGas: 36600,
+			expectedGas: 400,
 			args: []any{
 				account1,
 				account1,

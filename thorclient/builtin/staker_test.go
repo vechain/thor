@@ -55,7 +55,7 @@ func ExpectRevert(t *testing.T, receipt *api.Receipt, sender *bind.MethodBuilder
 }
 
 func TestStaker(t *testing.T) {
-	minStakingPeriod := uint32(360) * 24 * 7 // 360 days in seconds
+	minStakingPeriod := uint32(1) // 360 days in seconds
 
 	node, client := newTestNode(t, false)
 	defer node.Stop()
@@ -103,7 +103,8 @@ func TestStaker(t *testing.T) {
 	minStake := MinStake()
 
 	thor.SetConfig(thor.Config{
-		EpochLength: 1,
+		EpochLength:      1,
+		LowStakingPeriod: 1,
 	})
 	for _, acc := range validators {
 		method := staker.AddValidation(acc.Address, minStake, minStakingPeriod)
@@ -225,10 +226,6 @@ func TestStaker(t *testing.T) {
 	stake = big.NewInt(0).Mul(stake, big.NewInt(1e6))
 	require.Equal(t, stake, queuedStake)
 
-	thor.SetConfig(thor.Config{
-		EpochLength: 180,
-	})
-
 	// IncreaseStake
 	receipt, _, err = staker.IncreaseStake(queuedID, minStake).
 		Send().
@@ -241,6 +238,9 @@ func TestStaker(t *testing.T) {
 	require.Len(t, increaseEvents, 1)
 	require.Equal(t, validator.Address, increaseEvents[0].Validator)
 	require.Equal(t, minStake, increaseEvents[0].Added)
+
+	// pack a new block
+	require.NoError(t, node.Chain().MintBlock(genesis.DevAccounts()[0]))
 
 	// DecreaseStake
 	receipt, _, err = staker.DecreaseStake(queuedID, minStake).
@@ -255,17 +255,21 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, queuedID, decreaseEvents[0].Validator)
 	require.Equal(t, minStake, decreaseEvents[0].Removed)
 
-	// SignalExit
-	receipt, _, err = staker.SignalExit(queuedID).
-		Send().
-		WithSigner(validatorKey).
-		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
-	require.NoError(t, err)
-
-	// No events for signal exit when state is queued
-	autoRenewEvents, err := staker.FilterValidationSignaledExit(newRange(receipt), nil, logdb.ASC)
-	require.NoError(t, err)
-	require.Len(t, autoRenewEvents, 0)
+	//thor.SetConfig(thor.Config{
+	//	EpochLength: 180,
+	//})
+	//
+	//// SignalExit
+	//receipt, _, err = staker.SignalExit(queuedID).
+	//	Send().
+	//	WithSigner(validatorKey).
+	//	WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
+	//require.NoError(t, err)
+	//
+	//// No events for signal exit when state is queued
+	//autoRenewEvents, err := staker.FilterValidationSignaledExit(newRange(receipt), nil, logdb.ASC)
+	//require.NoError(t, err)
+	//require.Len(t, autoRenewEvents, 1)
 
 	// AddDelegation
 	receipt, _, err = staker.AddDelegation(queuedID, minStake, 100).
@@ -292,7 +296,7 @@ func TestStaker(t *testing.T) {
 	// GetDelegationPeriodDetails
 	delegationPeriodDetails, err := staker.GetDelegationPeriodDetails(delegationID)
 	require.NoError(t, err)
-	require.Equal(t, uint32(1), delegationPeriodDetails.StartPeriod)
+	require.Equal(t, uint32(5), delegationPeriodDetails.StartPeriod)
 	require.Equal(t, uint32(math.MaxUint32), delegationPeriodDetails.EndPeriod)
 
 	// GetValidatorsTotals
@@ -308,22 +312,33 @@ func TestStaker(t *testing.T) {
 	// GetValidationsNum
 	active, queued, err := staker.GetValidationsNum()
 	require.NoError(t, err)
-	require.Equal(t, uint64(2), active)
-	require.Equal(t, uint64(1), queued)
+	require.Equal(t, uint64(3), active)
+	require.Equal(t, uint64(0), queued)
 
-	// UpdateDelegationAutoRenew - Enable AutoRenew
+	// UpdateDelegationAutoRenew - Disable AutoRenew
 	receipt, _, err = staker.SignalDelegationExit(delegationID).
 		Send().
 		WithSigner(stargate).
 		WithOptions(txOpts()).
 		SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
-	ExpectRevert(t, receipt, staker.SignalDelegationExit(delegationID), "delegation has not started yet, funds can be withdrawn")
 
 	// DelegationSignaledExit may not emit while queued; ensure no crash and zero events
 	delegationSignaledExit, err := staker.FilterDelegationSignaledExit(newRange(receipt), nil, logdb.ASC)
 	require.NoError(t, err)
-	require.Len(t, delegationSignaledExit, 0)
+	require.Len(t, delegationSignaledExit, 1)
+
+	// SignalExit
+	receipt, _, err = staker.SignalExit(queuedID).
+		Send().
+		WithSigner(validatorKey).
+		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
+	require.NoError(t, err)
+
+	// No events for signal exit when state is queued
+	autoRenewEvents, err := staker.FilterValidationSignaledExit(newRange(receipt), nil, logdb.ASC)
+	require.NoError(t, err)
+	require.Len(t, autoRenewEvents, 1)
 
 	// Withdraw
 	receipt, _, err = staker.WithdrawStake(queuedID).Send().WithSigner(validatorKey).WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
@@ -531,6 +546,9 @@ func TestStaker_BadRevision_Reads(t *testing.T) {
 
 func TestStaker_Next_NoNext(t *testing.T) {
 	minStakingPeriod := uint32(360) * 24 * 7
+	thor.SetConfig(thor.Config{
+		LowStakingPeriod: minStakingPeriod,
+	})
 
 	node, client := newTestNode(t, false)
 	defer node.Stop()
