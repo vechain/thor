@@ -285,7 +285,7 @@ func (e *Energy) DistributeRewards(beneficiary, signer thor.Address, staker stak
 
 	// If delegated amount of VET is 0 then transfer the whole reward to the validator
 	proposerReward := new(big.Int).Set(reward)
-	if hasDelegations {
+	if hasDelegations && validatorRewardPerc.Cmp(big.NewInt(100)) < 0 {
 		proposerReward.Mul(proposerReward, validatorRewardPerc)
 		proposerReward.Div(proposerReward, big.NewInt(100))
 
