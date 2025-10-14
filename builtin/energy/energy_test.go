@@ -30,7 +30,7 @@ func TestEnergy(t *testing.T) {
 	acc := thor.BytesToAddress([]byte("a1"))
 
 	p := params.New(thor.BytesToAddress([]byte("par")), st)
-	eng := New(thor.BytesToAddress([]byte("eng")), st, 0, p)
+	eng := New(thor.BytesToAddress([]byte("eng")), st, 0, p, nil)
 	tests := []struct {
 		ret      any
 		expected any
@@ -53,7 +53,7 @@ func TestInitialSupply(t *testing.T) {
 	st := state.New(muxdb.NewMem(), trie.Root{})
 
 	p := params.New(thor.BytesToAddress([]byte("par")), st)
-	eng := New(thor.BytesToAddress([]byte("eng")), st, 0, p)
+	eng := New(thor.BytesToAddress([]byte("eng")), st, 0, p, nil)
 
 	// get initial supply before set should return 0
 	supply, err := eng.getInitialSupply()
@@ -71,7 +71,7 @@ func TestInitialSupplyError(t *testing.T) {
 	st := state.New(muxdb.NewMem(), trie.Root{})
 
 	p := params.New(thor.BytesToAddress([]byte("par")), st)
-	eng := New(thor.BytesToAddress([]byte("a1")), st, 0, p)
+	eng := New(thor.BytesToAddress([]byte("a1")), st, 0, p, nil)
 
 	eng.SetInitialSupply(big.NewInt(0), big.NewInt(0))
 
@@ -86,7 +86,7 @@ func TestTotalSupply(t *testing.T) {
 
 	addr := thor.BytesToAddress([]byte("eng"))
 	p := params.New(thor.BytesToAddress([]byte("par")), st)
-	eng := New(addr, st, 1, p)
+	eng := New(addr, st, 1, p, nil)
 
 	eng.SetInitialSupply(big.NewInt(100000000000000000), big.NewInt(456))
 
@@ -132,7 +132,7 @@ func TestTokenTotalSupply(t *testing.T) {
 	st := state.New(muxdb.NewMem(), trie.Root{})
 
 	p := params.New(thor.BytesToAddress([]byte("par")), st)
-	eng := New(thor.BytesToAddress([]byte("eng")), st, 0, p)
+	eng := New(thor.BytesToAddress([]byte("eng")), st, 0, p, nil)
 
 	eng.SetInitialSupply(big.NewInt(123), big.NewInt(456))
 
@@ -146,7 +146,7 @@ func TestTotalBurned(t *testing.T) {
 	st := state.New(muxdb.NewMem(), trie.Root{})
 
 	p := params.New(thor.BytesToAddress([]byte("par")), st)
-	eng := New(thor.BytesToAddress([]byte("eng")), st, 0, p)
+	eng := New(thor.BytesToAddress([]byte("eng")), st, 0, p, nil)
 
 	eng.SetInitialSupply(big.NewInt(123), big.NewInt(456))
 
@@ -167,7 +167,7 @@ func TestEnergyGrowth(t *testing.T) {
 	st.SetBalance(acc, vetBal)
 
 	p := params.New(thor.BytesToAddress([]byte("par")), st)
-	bal1, err := New(thor.Address{}, st, 1000, p).
+	bal1, err := New(thor.Address{}, st, 1000, p, nil).
 		Get(acc)
 
 	assert.Nil(t, err)
@@ -189,8 +189,7 @@ func TestCalcEnergyCappedAtStopTime(t *testing.T) {
 	st.SetBalance(acc, vetBal)
 
 	p := params.New(thor.BytesToAddress([]byte("par")), st)
-	eng := New(thor.Address{}, st, 1000, p)
-	energyGrowthStopTimeCache.Purge()
+	eng := New(thor.Address{}, st, 1000, p, nil)
 
 	// Set stop time at 500
 	eng.blockTime = 500
@@ -208,8 +207,7 @@ func TestCalcEnergyCappedAtStopTime(t *testing.T) {
 func TestGetEnergyGrowthStopTime(t *testing.T) {
 	st := state.New(muxdb.NewMem(), trie.Root{})
 	p := params.New(thor.BytesToAddress([]byte("params")), st)
-	eng := New(thor.BytesToAddress([]byte("energy")), st, 10, p)
-	energyGrowthStopTimeCache.Purge()
+	eng := New(thor.BytesToAddress([]byte("energy")), st, 10, p, nil)
 
 	// no stop time set
 	stopTime, err := eng.GetEnergyGrowthStopTime()
@@ -232,7 +230,7 @@ func TestAddIssued(t *testing.T) {
 	st := state.New(muxdb.NewMem(), trie.Root{})
 
 	p := params.New(thor.BytesToAddress([]byte("par")), st)
-	eng := New(thor.BytesToAddress([]byte("eng")), st, 1, p)
+	eng := New(thor.BytesToAddress([]byte("eng")), st, 1, p, nil)
 
 	issued, err := eng.getIssued()
 	assert.NoError(t, err)
@@ -278,7 +276,7 @@ func TestCalculateRewards(t *testing.T) {
 	st.SetStorage(thor.BytesToAddress([]byte("par")), thor.KeyCurveFactor, thor.BytesToBytes32(thor.InitialCurveFactor.Bytes()))
 
 	p := params.New(thor.BytesToAddress([]byte("par")), st)
-	eng := New(thor.BytesToAddress([]byte("eng")), st, 1, p)
+	eng := New(thor.BytesToAddress([]byte("eng")), st, 1, p, nil)
 
 	mockStaker := &mockStaker{
 		lockedVET:         25,
@@ -305,7 +303,7 @@ func TestDistributeRewards(t *testing.T) {
 	st.SetStorage(paramsAddr, thor.KeyValidatorRewardPercentage, thor.BytesToBytes32(big.NewInt(int64(thor.InitialValidatorRewardPercentage)).Bytes()))
 	st.SetStorage(paramsAddr, thor.KeyDelegatorContractAddress, thor.BytesToBytes32(stargateAddr.Bytes()))
 
-	eng := New(thor.BytesToAddress([]byte("eng")), st, 1, p)
+	eng := New(thor.BytesToAddress([]byte("eng")), st, 1, p, nil)
 
 	stake := uint64(25)
 	expectedReward := big.NewInt(121765601217656012)
