@@ -314,7 +314,7 @@ func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, am
 		return NewReverts("validator exited")
 	}
 	if val.Status != validation.StatusActive {
-		return NewReverts("can't increase stake exit while validator not active")
+		return NewReverts("can't increase stake while validator not active")
 	}
 	if val.ExitBlock != nil {
 		return NewReverts("validator has signaled exit, cannot increase stake")
