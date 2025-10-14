@@ -229,9 +229,6 @@ func (e *Energy) StopEnergyGrowth(blockNum uint32) error {
 	}
 
 	e.stopTime = e.blockTime
-	energyGrowthStopTimeMutex.Lock()
-	energyGrowthStopTimeCache.Add(growthStopTimeKey, e.blockTime)
-	energyGrowthStopTimeMutex.Unlock()
 	return nil
 }
 
