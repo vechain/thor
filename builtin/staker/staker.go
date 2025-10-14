@@ -313,7 +313,10 @@ func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, am
 	if val.Status == validation.StatusExit {
 		return NewReverts("validator exited")
 	}
-	if val.Status == validation.StatusActive && val.ExitBlock != nil {
+	if val.Status != validation.StatusActive {
+		return NewReverts("can't increase stake exit while validator not active")
+	}
+	if val.ExitBlock != nil {
 		return NewReverts("validator has signaled exit, cannot increase stake")
 	}
 
@@ -327,10 +330,8 @@ func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, am
 		return err
 	}
 
-	if val.Status == validation.StatusActive {
-		if err = s.validationService.AddToRenewalList(validator); err != nil {
-			return err
-		}
+	if err = s.validationService.AddToRenewalList(validator); err != nil {
+		return err
 	}
 
 	// update global queued, use the initial multiplier
@@ -363,20 +364,14 @@ func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, am
 	if val.Status == validation.StatusExit {
 		return NewReverts("validator exited")
 	}
-	if val.Status == validation.StatusActive && val.ExitBlock != nil {
+	if val.Status != validation.StatusActive {
+		return NewReverts("can't decrease stake while validator not active")
+	}
+	if val.ExitBlock != nil {
 		return NewReverts("validator has signaled exit, cannot decrease stake")
 	}
 
-	var nextPeriodVET uint64
-	if val.Status == validation.StatusActive {
-		// We don't consider any increases, i.e., entry.QueuedVET. We only consider locked and current decreases.
-		// The reason is that validator can instantly withdraw QueuedVET at any time.
-		// We need to make sure the locked VET minus the sum of the current decreases is still above the minimum stake.
-		nextPeriodVET = val.LockedVET - val.PendingUnlockVET
-	}
-	if val.Status == validation.StatusQueued {
-		nextPeriodVET = val.QueuedVET
-	}
+	nextPeriodVET := val.LockedVET - val.PendingUnlockVET
 	if amount > nextPeriodVET {
 		return NewReverts("not enough locked stake")
 	}
@@ -389,22 +384,8 @@ func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, am
 		return err
 	}
 
-	if val.Status == validation.StatusActive {
-		if err = s.validationService.AddToRenewalList(validator); err != nil {
-			return err
-		}
-	}
-
-	if val.Status == validation.StatusQueued {
-		// update global queued
-		if err = s.globalStatsService.RemoveQueued(amount); err != nil {
-			return err
-		}
-
-		// update global withdrawable
-		if err = s.globalStatsService.AddWithdrawable(amount); err != nil {
-			return err
-		}
+	if err = s.validationService.AddToRenewalList(validator); err != nil {
+		return err
 	}
 
 	if err = s.ContractBalanceCheck(0); err != nil {
