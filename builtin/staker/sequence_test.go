@@ -473,6 +473,13 @@ func (ts *StakerTest) WithdrawDelegation(delegationID *big.Int, expectedOut uint
 	return ts
 }
 
+func (ts *StakerTest) WithdrawDelegationErrors(delegationID *big.Int, currentBlock uint32, errMsg string) *StakerTest {
+	_, err := ts.Staker.WithdrawDelegation(delegationID, currentBlock)
+	assert.NotNil(ts.t, err, "expected error when withdrawing for delegation %s", delegationID.String())
+	assert.ErrorContains(ts.t, err, errMsg, "expected error message when withdrawing for delegation %s", delegationID.String())
+	return ts
+}
+
 func (ts *StakerTest) AssertDelegatorRewards(
 	validationID thor.Address,
 	period uint32,
