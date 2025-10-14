@@ -20,7 +20,7 @@ var (
 	mediumStakingPeriod uint32 = 8640 * 15 // 15 Days
 	highStakingPeriod   uint32 = 8640 * 30 // 30 Days
 	cooldownPeriod      uint32 = 8640      // 8640 blocks, 1 day
-	hayabusaTP          uint32 = 8640 * 14 // 14 days
+	hayabusaTP          uint32 = 8640 * 7  // 7 days
 
 	locked bool
 )
