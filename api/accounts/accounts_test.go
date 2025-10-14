@@ -16,16 +16,19 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
+	clientBuiltin "github.com/vechain/thor/v2/thorclient/builtin"
 	"github.com/vechain/thor/v2/thorclient/httpclient"
 	"github.com/vechain/thor/v2/tx"
 
@@ -585,4 +588,150 @@ func batchCallWithNullClause(t *testing.T) {
 	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/accounts/*", []byte("{\"clauses\":[] }"))
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, statusCode, "null clause")
+}
+
+func TestGetRawStorage(t *testing.T) {
+	initAccountServer(t, true)
+	defer ts.Close()
+
+	tclient = thorclient.New(ts.URL)
+
+	// get authority head key
+	addr := builtin.Authority.Address
+	key := thor.Blake2b([]byte("head"))
+
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/accounts/" + addr.String() + "/storage/raw/" + key.String())
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, statusCode, "OK")
+
+	var value api.GetStorageResult
+	err = json.Unmarshal(res, &value)
+	assert.NoError(t, err)
+
+	raw, err := hexutil.Decode(value.Value)
+	assert.NoError(t, err)
+
+	k, content, left, err := rlp.Split(raw)
+	assert.NoError(t, err)
+	assert.Equal(t, k, rlp.String)
+	assert.Equal(t, content, genesis.DevAccounts()[0].Address[:])
+	assert.Equal(t, len(left), 0)
+
+	b32 := thor.BytesToBytes32(content)
+	res, statusCode, err = tclient.RawHTTPClient().RawHTTPGet("/accounts/" + addr.String() + "/storage/raw/" + b32.String())
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, statusCode, "OK")
+
+	err = json.Unmarshal(res, &value)
+	assert.NoError(t, err)
+
+	raw, err = hexutil.Decode(value.Value)
+	assert.NoError(t, err)
+
+	k, _, left, err = rlp.Split(raw)
+	assert.NoError(t, err)
+	assert.Equal(t, k, rlp.List)
+	assert.Equal(t, len(left), 0)
+
+	err = json.Unmarshal(res, &value)
+	assert.NoError(t, err)
+
+	var ent struct {
+		Endorsor thor.Address
+		Identity thor.Bytes32
+		Active   bool
+		Prev     *thor.Address `rlp:"nil"`
+		Next     *thor.Address `rlp:"nil"`
+	}
+
+	err = rlp.DecodeBytes(raw, &ent)
+	assert.NoError(t, err)
+
+	assert.Equal(t, ent.Endorsor, genesis.DevAccounts()[0].Address)
+	assert.True(t, ent.Active)
+	assert.True(t, ent.Prev == nil)
+	assert.True(t, ent.Next == nil)
+}
+
+func TestRawStorageStaker(t *testing.T) {
+	fc := thor.SoloFork
+	fc.HAYABUSA = 0
+	fc.GALACTICA = 0
+
+	gene := genesis.NewHayabusaDevnet()
+	thorChain, err := testchain.NewIntegrationTestChainWithGenesis(gene, &fc, thor.EpochLength())
+	require.NoError(t, err)
+
+	router := mux.NewRouter()
+	New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), &fc, nil, true).
+		Mount(router, "/accounts")
+
+	ts = httptest.NewServer(router)
+	defer ts.Close()
+
+	client := thorclient.New(ts.URL)
+
+	validator := genesis.DevAccounts()[0]
+	staker, err := clientBuiltin.NewStaker(client)
+	assert.NoError(t, err)
+
+	val, err := staker.GetValidation(validator.Address)
+	assert.NoError(t, err)
+
+	// validation has been added to the state
+	slot := thor.Blake2b(validator.Address.Bytes(), thor.BytesToBytes32([]byte(("validations"))).Bytes())
+	res, statusCode, err := client.RawHTTPClient().RawHTTPGet("/accounts/" + builtin.Staker.Address.String() + "/storage/raw/" + slot.String())
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, statusCode, "OK")
+
+	var value api.GetStorageResult
+	err = json.Unmarshal(res, &value)
+	assert.NoError(t, err)
+
+	raw, err := hexutil.Decode(value.Value)
+	assert.NoError(t, err)
+
+	k, _, left, err := rlp.Split(raw)
+	assert.NoError(t, err)
+	assert.Equal(t, k, rlp.List)
+	assert.Equal(t, len(left), 0)
+
+	type LinkedListEntry struct {
+		Prev *thor.Address `rlp:"nil"`
+		Next *thor.Address `rlp:"nil"`
+	}
+
+	var validation struct {
+		Endorser         thor.Address
+		Beneficiary      *thor.Address `rlp:"nil"`
+		Period           uint32
+		CompletedPeriods uint32
+		Status           uint8
+		StartBlock       uint32
+		ExitBlock        *uint32 `rlp:"nil"`
+		OfflineBlock     *uint32 `rlp:"nil"`
+
+		LockedVET        uint64
+		PendingUnlockVET uint64
+		QueuedVET        uint64
+		CooldownVET      uint64
+		WithdrawableVET  uint64
+
+		Weight uint64
+
+		LinkedListEntry
+	}
+
+	err = rlp.DecodeBytes(raw, &validation)
+	assert.NoError(t, err)
+
+	assert.Equal(t, val.Endorser, validation.Endorser)
+	assert.Nil(t, validation.Beneficiary)
+	assert.Equal(t, uint32(0), validation.CompletedPeriods)
+	assert.Equal(t, uint8(val.Status), validation.Status)
+	assert.Equal(t, uint32(0), validation.StartBlock)
+	assert.Nil(t, validation.ExitBlock)
+	assert.Nil(t, validation.OfflineBlock)
+	assert.Equal(t, uint64(25000000), validation.LockedVET)
+	assert.Equal(t, uint64(25000000), validation.Weight)
 }
