@@ -413,7 +413,7 @@ func TestDistributeRewards_MaxRewardsPercentage(t *testing.T) {
 		increaseRewardErr: nil,
 	}
 
-	energy := New(energyAddr, st, 100, p)
+	energy := New(energyAddr, st, 100, p, nil)
 	issuedBefore, err := energy.getIssued()
 	require.NoError(t, err)
 	require.NoError(t, energy.DistributeRewards(beneficiary, signer, staker, 10))
