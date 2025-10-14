@@ -131,6 +131,9 @@ func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Re
 	if err := restutil.ParseJSON(req.Body, &rawTx); err != nil {
 		return restutil.BadRequest(errors.WithMessage(err, "body"))
 	}
+	if rawTx == nil {
+		return restutil.BadRequest(errors.New("body"))
+	}
 	tx, err := rawTx.Decode()
 	if err != nil {
 		return restutil.BadRequest(errors.WithMessage(err, "raw"))
