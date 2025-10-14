@@ -53,6 +53,7 @@ func TestTransaction(t *testing.T) {
 		"sendTxWithBadFormat":                      sendTxWithBadFormat,
 		"sendTxThatCannotBeAcceptedInLocalMempool": sendTxThatCannotBeAcceptedInLocalMempool,
 		"sendDynamicFeeTx":                         sendDynamicFeeTx,
+		"sendNullTx":                               sendNullTx,
 	} {
 		t.Run(name, tt)
 	}
@@ -169,6 +170,10 @@ func sendLegacyTx(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, trx.ID().String(), txObj["id"], "should be the same transaction id")
+}
+
+func sendNullTx(t *testing.T) {
+	httpPostAndCheckResponseStatus(t, "/transactions", nil, 400)
 }
 
 func sendDynamicFeeTx(t *testing.T) {
