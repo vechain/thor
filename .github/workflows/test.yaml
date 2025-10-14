@@ -82,8 +82,11 @@ jobs:
         with:
           go-version: 1.24.x
 
+      - name: Make all
+        run: make thor
+
       - name: Start Solo
-        run: nohup go run ./cmd/thor ${{matrix.args}} > thor-solo.log 2>&1 &
+        run: bin/thor ${{matrix.args}} > thor-solo.log 2>&1 &
 
       - name: Wait for block 1
         run: |
