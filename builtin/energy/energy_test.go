@@ -102,7 +102,7 @@ func TestTotalSupply(t *testing.T) {
 	assert.Equal(t, big.NewInt(499500000456), totalSupply)
 
 	eng.blockTime = 1500
-	eng.StopEnergyGrowth()
+	eng.StopEnergyGrowth(0)
 	totalSupply, err = eng.TotalSupply()
 
 	assert.Nil(t, err)
@@ -220,7 +220,7 @@ func TestGetEnergyGrowthStopTime(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(math.MaxUint64), stopTime)
 
-	err = eng.StopEnergyGrowth()
+	err = eng.StopEnergyGrowth(0)
 	assert.NoError(t, err)
 
 	stopTime, err = eng.GetEnergyGrowthStopTime()
@@ -228,7 +228,7 @@ func TestGetEnergyGrowthStopTime(t *testing.T) {
 	assert.Equal(t, uint64(10), stopTime)
 
 	// set multiple times should return nil
-	err = eng.StopEnergyGrowth()
+	err = eng.StopEnergyGrowth(0)
 	assert.NoError(t, err)
 }
 

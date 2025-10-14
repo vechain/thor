@@ -212,12 +212,14 @@ func (e *Energy) Sub(addr thor.Address, amount *big.Int) (bool, error) {
 }
 
 // StopEnergyGrowth sets the end time of energy growth at the current block time.
-func (e *Energy) StopEnergyGrowth() error {
-	if ts, err := e.GetEnergyGrowthStopTime(); err != nil {
-		return err
-	} else if ts != math.MaxUint64 {
-		// We simply ignore multiple calls to this function
-		return nil
+func (e *Energy) StopEnergyGrowth(blockNum uint32) error {
+	if blockNum != 0 {
+		if ts, err := e.GetEnergyGrowthStopTime(); err != nil {
+			return err
+		} else if ts != math.MaxUint64 {
+			// We simply ignore multiple calls to this function
+			return nil
+		}
 	}
 
 	if err := e.state.EncodeStorage(e.addr, growthStopTimeKey, func() ([]byte, error) {
