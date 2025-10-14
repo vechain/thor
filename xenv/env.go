@@ -23,13 +23,14 @@ import (
 
 // BlockContext block context.
 type BlockContext struct {
-	Beneficiary thor.Address
-	Signer      thor.Address
-	Number      uint32
-	Time        uint64
-	GasLimit    uint64
-	TotalScore  uint64
-	BaseFee     *big.Int
+	Beneficiary    thor.Address
+	Signer         thor.Address
+	Number         uint32
+	Time           uint64
+	GasLimit       uint64
+	TotalScore     uint64
+	BaseFee        *big.Int
+	EnergyStopTime *uint64
 }
 
 // TransactionContext transaction context.

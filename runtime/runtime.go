@@ -10,6 +10,8 @@ import (
 	"math/big"
 	"sync/atomic"
 
+	"github.com/ethereum/go-ethereum/rlp"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
@@ -146,6 +148,19 @@ func New(
 		}
 	}
 
+	if ctx.Number >= forkConfig.HAYABUSA {
+		var time *uint64
+		if err := state.DecodeStorage(builtin.Energy.Address, thor.Blake2b([]byte("growth-stop-time")), func(raw []byte) error {
+			if len(raw) == 0 {
+				return nil
+			}
+			return rlp.DecodeBytes(raw, &time)
+		}); err != nil {
+			time = nil
+		}
+		ctx.EnergyStopTime = time
+	}
+
 	rt := Runtime{
 		chain:       chain,
 		state:       state,
@@ -185,11 +200,11 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 			}
 			// touch energy balance when token balance changed
 			// SHOULD be performed before transfer
-			senderEnergy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(sender))
+			senderEnergy, err := builtin.Energy.NativeStopTime(rt.state, rt.ctx.Time, rt.ctx.EnergyStopTime).Get(thor.Address(sender))
 			if err != nil {
 				panic(err)
 			}
-			recipientEnergy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(recipient))
+			recipientEnergy, err := builtin.Energy.NativeStopTime(rt.state, rt.ctx.Time, rt.ctx.EnergyStopTime).Get(thor.Address(recipient))
 			if err != nil {
 				panic(err)
 			}
@@ -279,14 +294,14 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 		},
 		OnSuicideContract: func(_ *vm.EVM, contractAddr, tokenReceiver common.Address) {
 			// it's IMPORTANT to process energy before token
-			energy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(contractAddr))
+			energy, err := builtin.Energy.NativeStopTime(rt.state, rt.ctx.Time, rt.ctx.EnergyStopTime).Get(thor.Address(contractAddr))
 			if err != nil {
 				panic(err)
 			}
 			bal := stateDB.GetBalance(contractAddr)
 
 			if bal.Sign() != 0 || energy.Sign() != 0 {
-				receiverEnergy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(tokenReceiver))
+				receiverEnergy, err := builtin.Energy.NativeStopTime(rt.state, rt.ctx.Time, rt.ctx.EnergyStopTime).Get(thor.Address(tokenReceiver))
 				if err != nil {
 					panic(err)
 				}
@@ -539,7 +554,7 @@ func (rt *Runtime) PrepareTransaction(trx *tx.Transaction) (*TransactionExecutor
 				receipt.Reward = priorityFeePerGas.Mul(priorityFeePerGas, new(big.Int).SetUint64(receipt.GasUsed))
 			}
 
-			if err := builtin.Energy.Native(rt.state, rt.ctx.Time).Add(rt.ctx.Beneficiary, receipt.Reward); err != nil {
+			if err := builtin.Energy.NativeStopTime(rt.state, rt.ctx.Time, rt.ctx.EnergyStopTime).Add(rt.ctx.Beneficiary, receipt.Reward); err != nil {
 				return nil, err
 			}
 			return receipt, nil

@@ -9,8 +9,6 @@ import (
 	"math"
 	"math/big"
 
-	lru "github.com/hashicorp/golang-lru"
-
 	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/vechain/thor/v2/builtin/params"
@@ -25,9 +23,6 @@ var (
 	issuedKey         = thor.Blake2b([]byte("issued"))
 	growthStopTimeKey = thor.Blake2b([]byte("growth-stop-time"))
 	bigE18            = big.NewInt(1e18)
-
-	// Global cache for energy growth stop time
-	energyGrowthStopTimeCache, _ = lru.NewARC(10)
 )
 
 // Energy implements energy operations.
@@ -40,12 +35,17 @@ type Energy struct {
 }
 
 // New creates a new energy instance.
-func New(addr thor.Address, state *state.State, blockTime uint64, params *params.Params) *Energy {
+func New(addr thor.Address, state *state.State, blockTime uint64, params *params.Params, stopTime *uint64) *Energy {
 	var eng Energy
 	eng.addr = addr
 	eng.state = state
 	eng.blockTime = blockTime
 	eng.params = params
+	if stopTime == nil {
+		eng.stopTime = 0
+	} else {
+		eng.stopTime = *stopTime
+	}
 
 	return &eng
 }
@@ -237,11 +237,6 @@ func (e *Energy) GetEnergyGrowthStopTime() (uint64, error) {
 		return e.stopTime, nil
 	}
 
-	if cached, ok := energyGrowthStopTimeCache.Get(growthStopTimeKey); ok {
-		e.stopTime = cached.(uint64)
-		return e.stopTime, nil
-	}
-
 	var time uint64
 	if err := e.state.DecodeStorage(e.addr, growthStopTimeKey, func(raw []byte) error {
 		if len(raw) == 0 {
@@ -255,7 +250,6 @@ func (e *Energy) GetEnergyGrowthStopTime() (uint64, error) {
 	if time == 0 {
 		e.stopTime = math.MaxUint64
 	} else {
-		energyGrowthStopTimeCache.Add(growthStopTimeKey, time)
 		e.stopTime = time
 	}
 

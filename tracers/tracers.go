@@ -31,12 +31,13 @@ import (
 // Context contains some contextual infos for a transaction execution that is not
 // available from within the EVM object.
 type Context struct {
-	BlockID     thor.Bytes32 // Hash of the block the tx is contained within (zero if dangling tx or call)
-	BlockTime   uint64       // Timestamp of the block the tx is contained within
-	TxIndex     uint64       // Index of the transaction within a block (zero if dangling tx or call)
-	TxID        thor.Bytes32 // ID of the transaction being traced (zero if dangling call)
-	ClauseIndex uint32       // Index of the clause within a transaction (zero if dangling call)
-	State       *state.State
+	BlockID        thor.Bytes32 // Hash of the block the tx is contained within (zero if dangling tx or call)
+	BlockTime      uint64       // Timestamp of the block the tx is contained within
+	TxIndex        uint64       // Index of the transaction within a block (zero if dangling tx or call)
+	TxID           thor.Bytes32 // ID of the transaction being traced (zero if dangling call)
+	ClauseIndex    uint32       // Index of the clause within a transaction (zero if dangling call)
+	State          *state.State
+	EnergyStopTime *uint64
 }
 
 // Tracer interface extends vm.EVMLogger and additionally

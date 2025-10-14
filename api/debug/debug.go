@@ -152,12 +152,13 @@ func (d *Debug) traceClause(ctx context.Context, tracer tracers.Tracer, block *b
 		}
 	}
 	tracer.SetContext(&tracers.Context{
-		BlockID:     block.Header().ID(),
-		BlockTime:   rt.Context().Time,
-		TxID:        txID,
-		TxIndex:     txIndex,
-		ClauseIndex: clauseIndex,
-		State:       rt.State(),
+		BlockID:        block.Header().ID(),
+		BlockTime:      rt.Context().Time,
+		TxID:           txID,
+		TxIndex:        txIndex,
+		ClauseIndex:    clauseIndex,
+		State:          rt.State(),
+		EnergyStopTime: rt.Context().EnergyStopTime,
 	})
 	rt.SetVMConfig(vm.Config{Tracer: tracer})
 	errCh := make(chan error, 1)
@@ -288,9 +289,10 @@ func (d *Debug) traceCall(
 		d.forkConfig)
 
 	tracer.SetContext(&tracers.Context{
-		BlockID:   header.ID(),
-		BlockTime: header.Timestamp(),
-		State:     st,
+		BlockID:        header.ID(),
+		BlockTime:      header.Timestamp(),
+		State:          st,
+		EnergyStopTime: rt.Context().EnergyStopTime,
 	})
 	rt.SetVMConfig(vm.Config{Tracer: tracer})
 
