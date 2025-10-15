@@ -25,6 +25,20 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
+func assertHexOrDecimal256Equal(t *testing.T, expected, actual *math.HexOrDecimal256) {
+	if expected == nil && actual == nil {
+		return
+	}
+	if expected == nil || actual == nil {
+		t.Fatalf("expected %v, got %v", expected, actual)
+	}
+	expectedInt := (*big.Int)(expected)
+	actualInt := (*big.Int)(actual)
+	if expectedInt.Cmp(actualInt) != 0 {
+		t.Fatalf("expected %v, got %v", expectedInt.String(), actualInt.String())
+	}
+}
+
 func TestClient_GetTransactionReceipt(t *testing.T) {
 	txID := thor.Bytes32{0x01}
 	expectedReceipt := &api.Receipt{
@@ -51,8 +65,8 @@ func TestClient_GetTransactionReceipt(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, expectedReceipt.GasUsed, receipt.GasUsed)
 	assert.Equal(t, expectedReceipt.GasPayer, receipt.GasPayer)
-	assert.Equal(t, (*big.Int)(expectedReceipt.Paid).Cmp((*big.Int)(receipt.Paid)), 0)
-	assert.Equal(t, (*big.Int)(expectedReceipt.Reward).Cmp((*big.Int)(receipt.Reward)), 0)
+	assertHexOrDecimal256Equal(t, expectedReceipt.Paid, receipt.Paid)
+	assertHexOrDecimal256Equal(t, expectedReceipt.Reward, receipt.Reward)
 	assert.Equal(t, expectedReceipt.Reverted, receipt.Reverted)
 	assert.Equal(t, expectedReceipt.Meta, receipt.Meta)
 	assert.Equal(t, len(expectedReceipt.Outputs), len(receipt.Outputs))
@@ -128,7 +142,7 @@ func TestClient_FilterTransfers(t *testing.T) {
 	for i, expectedTransfer := range expectedTransfers {
 		assert.Equal(t, expectedTransfer.Sender, transfers[i].Sender)
 		assert.Equal(t, expectedTransfer.Recipient, transfers[i].Recipient)
-		assert.Equal(t, (*big.Int)(expectedTransfer.Amount).Cmp((*big.Int)(transfers[i].Amount)), 0)
+		assertHexOrDecimal256Equal(t, expectedTransfer.Amount, transfers[i].Amount)
 		assert.Equal(t, expectedTransfer.Meta, transfers[i].Meta)
 	}
 }
@@ -178,8 +192,8 @@ func TestClient_GetAccount(t *testing.T) {
 	account, err := client.GetAccount(&addr, "")
 
 	assert.NoError(t, err)
-	assert.Equal(t, (*big.Int)(expectedAccount.Balance).Cmp((*big.Int)(account.Balance)), 0)
-	assert.Equal(t, (*big.Int)(expectedAccount.Energy).Cmp((*big.Int)(account.Energy)), 0)
+	assertHexOrDecimal256Equal(t, expectedAccount.Balance, account.Balance)
+	assertHexOrDecimal256Equal(t, expectedAccount.Energy, account.Energy)
 	assert.Equal(t, expectedAccount.HasCode, account.HasCode)
 }
 
