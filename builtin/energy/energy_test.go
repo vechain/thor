@@ -441,3 +441,88 @@ func TestDistributeRewards_MaxRewardsPercentage(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).Add(issuedBefore, rewards), issuedAfter)
 }
+
+func TestEnergyStopTimeCaching(t *testing.T) {
+	st := state.New(muxdb.NewMem(), trie.Root{})
+	p := params.New(thor.BytesToAddress([]byte("params")), st)
+
+	energyAddr := thor.BytesToAddress([]byte("energy"))
+	eng := New(energyAddr, st, 1000, p)
+
+	// Initial call - should return MaxUint64 (not set) and cache the result
+	stopTime1, err := eng.GetEnergyGrowthStopTime()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(math.MaxUint64), stopTime1)
+
+	// Second call - should return cached value (MaxUint64)
+	stopTime2, err := eng.GetEnergyGrowthStopTime()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(math.MaxUint64), stopTime2)
+	assert.Equal(t, stopTime1, stopTime2)
+
+	// Verify internal cache state - should have cached MaxUint64
+	assert.Equal(t, uint64(math.MaxUint64), eng.stopTime) // internal field should be set to MaxUint64 when not found
+
+	// Set stop time
+	err = eng.StopEnergyGrowth()
+	assert.NoError(t, err)
+
+	// Verify internal cache was updated
+	assert.Equal(t, uint64(1000), eng.stopTime)
+
+	// Call should return the new stop time (1000)
+	stopTime3, err := eng.GetEnergyGrowthStopTime()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1000), stopTime3)
+
+	// Multiple calls should return the same cached value
+	stopTime4, err := eng.GetEnergyGrowthStopTime()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1000), stopTime4)
+	assert.Equal(t, stopTime3, stopTime4)
+
+	// Test cache invalidation by calling StopEnergyGrowth again (should be ignored)
+	eng.blockTime = 2000
+	err = eng.StopEnergyGrowth()
+	assert.NoError(t, err) // Should succeed but ignore the call
+
+	// Should still return the original stop time (1000), not the new block time (2000)
+	stopTime5, err := eng.GetEnergyGrowthStopTime()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1000), stopTime5)
+}
+
+func TestEnergyStopTimeCachingWithMultipleInstances(t *testing.T) {
+	st := state.New(muxdb.NewMem(), trie.Root{})
+	p := params.New(thor.BytesToAddress([]byte("params")), st)
+
+	energyAddr := thor.BytesToAddress([]byte("energy"))
+
+	// First instance
+	eng1 := New(energyAddr, st, 1000, p)
+
+	// Set stop time with first instance
+	err := eng1.StopEnergyGrowth()
+	assert.NoError(t, err)
+
+	// Verify first instance returns correct stop time
+	stopTime1, err := eng1.GetEnergyGrowthStopTime()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1000), stopTime1)
+
+	// Create second instance with same address but different block time
+	eng2 := New(energyAddr, st, 2000, p)
+
+	// Second instance should read from storage and cache the same stop time
+	stopTime2, err := eng2.GetEnergyGrowthStopTime()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1000), stopTime2) // Should be 1000, not 2000
+
+	// Both instances should return the same cached value
+	assert.Equal(t, stopTime1, stopTime2)
+
+	// Multiple calls on second instance should return cached value
+	stopTime3, err := eng2.GetEnergyGrowthStopTime()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1000), stopTime3)
+}

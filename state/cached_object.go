@@ -24,9 +24,10 @@ type cachedObject struct {
 	meta AccountMetadata
 
 	cache struct {
-		code        []byte
-		storageTrie *muxdb.Trie
-		storage     map[thor.Bytes32]rlp.RawValue
+		code           []byte
+		storageTrie    *muxdb.Trie
+		storage        map[thor.Bytes32]rlp.RawValue
+		energyStopTime *uint64 // cached energy stop time
 	}
 }
 

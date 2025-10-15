@@ -292,6 +292,52 @@ func (s *State) DecodeStorage(addr thor.Address, key thor.Bytes32, dec func([]by
 	return nil
 }
 
+// GetCachedEnergyStopTime retrieves energy stop time with caching support.
+// Returns cached value if available, otherwise decodes from storage and caches the result.
+// This is specific to the Energy contract address only.
+func (s *State) GetCachedEnergyStopTime(addr thor.Address, key thor.Bytes32) (uint64, error) {
+	obj, err := s.getCachedObject(addr)
+	if err != nil {
+		return 0, &Error{err}
+	}
+
+	cache := &obj.cache
+
+	// Check cache first
+	if cache.energyStopTime != nil {
+		return *cache.energyStopTime, nil
+	}
+
+	// Not in cache, decode from storage
+	var time uint64
+	if err := s.DecodeStorage(addr, key, func(raw []byte) error {
+		if len(raw) == 0 {
+			return nil
+		}
+		return rlp.DecodeBytes(raw, &time)
+	}); err != nil {
+		return 0, err
+	}
+
+	// Cache the result
+	cache.energyStopTime = &time
+
+	return time, nil
+}
+
+// InvalidateEnergyStopTimeCache clears the cached energy stop time for the given address.
+// This should be called when the energy stop time is updated.
+// This is specific to the Energy contract address only.
+func (s *State) InvalidateEnergyStopTimeCache(addr thor.Address, key thor.Bytes32) {
+	obj, err := s.getCachedObject(addr)
+	if err != nil {
+		return // ignore errors for cache invalidation
+	}
+
+	cache := &obj.cache
+	cache.energyStopTime = nil
+}
+
 // GetCode returns code for the given address.
 func (s *State) GetCode(addr thor.Address) ([]byte, error) {
 	v, _, err := s.sm.Get(codeKey(addr))

@@ -219,6 +219,8 @@ func (e *Energy) StopEnergyGrowth() error {
 		return err
 	}
 
+	// Invalidate cache after successful storage update
+	e.state.InvalidateEnergyStopTimeCache(e.addr, growthStopTimeKey)
 	e.stopTime = e.blockTime
 	return nil
 }
@@ -230,13 +232,9 @@ func (e *Energy) GetEnergyGrowthStopTime() (uint64, error) {
 		return e.stopTime, nil
 	}
 
-	var time uint64
-	if err := e.state.DecodeStorage(e.addr, growthStopTimeKey, func(raw []byte) error {
-		if len(raw) == 0 {
-			return nil
-		}
-		return rlp.DecodeBytes(raw, &time)
-	}); err != nil {
+	// Use cached method to avoid repeated RLP decoding
+	time, err := e.state.GetCachedEnergyStopTime(e.addr, growthStopTimeKey)
+	if err != nil {
 		return math.MaxUint64, err
 	}
 
