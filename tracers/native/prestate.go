@@ -144,7 +144,7 @@ func (t *prestateTracer) CaptureClauseEnd(_ uint64) {
 		newBalance := t.env.StateDB.GetBalance(addr)
 		newCode := t.env.StateDB.GetCode(addr)
 
-		energy, err := builtin.Energy.NativeStopTime(t.ctx.State, t.ctx.BlockTime, t.ctx.EnergyStopTime).Get(thor.Address(addr))
+		energy, err := builtin.Energy.Native(t.ctx.State, t.ctx.BlockTime, t.ctx.EnergyStopTime).Get(thor.Address(addr))
 		if err != nil {
 			// panic state errors, will be recovered by runtime
 			panic(err)
@@ -290,7 +290,7 @@ func (t *prestateTracer) lookupAccount(addr common.Address) {
 		return
 	}
 
-	energy, err := builtin.Energy.NativeStopTime(t.ctx.State, t.ctx.BlockTime, t.ctx.EnergyStopTime).Get(thor.Address(addr))
+	energy, err := builtin.Energy.Native(t.ctx.State, t.ctx.BlockTime, t.ctx.EnergyStopTime).Get(thor.Address(addr))
 	if err != nil {
 		// panic state errors, will be recovered by runtime
 		panic(err)

@@ -7,6 +7,7 @@ package packer
 
 import (
 	"errors"
+	"math"
 	"math/big"
 
 	"github.com/vechain/thor/v2/block"
@@ -62,16 +63,19 @@ type scheduler func(parent *chain.BlockSummary, nowTimestamp uint64, state *stat
 func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (*Flow, bool, error) {
 	st := p.stater.NewState(parent.Root())
 
-	var features tx.Features
-	if parent.Header.Number()+1 >= p.forkConfig.VIP191 {
+	var (
+		features tx.Features
+		blockNum = parent.Header.Number() + 1
+	)
+	if blockNum >= p.forkConfig.VIP191 {
 		features |= tx.DelegationFeature
 	}
 
 	var sched scheduler
 	checkpoint := st.NewCheckpoint()
-	dPosStatus, err := builtin.Staker.Native(st).SyncPOS(p.forkConfig, parent.Header.Number()+1)
+	dPosStatus, err := builtin.Staker.Native(st).SyncPOS(p.forkConfig, blockNum)
 	if err != nil {
-		log.Error("staker sync pos failed - reverting state", "err", err, "height", parent.Header.Number()+1, "parent", parent, "checkpoint", checkpoint)
+		log.Error("staker sync pos failed - reverting state", "err", err, "height", blockNum, "parent", parent, "checkpoint", checkpoint)
 		st.RevertTo(checkpoint)
 	}
 	if dPosStatus.Active {
@@ -85,17 +89,23 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (*Flo
 		return nil, false, err
 	}
 
+	energyStopTime, err := p.energyStopTime(p.repo.NewChain(parent.Header.ID()), newBlockTime)
+	if err != nil {
+		return nil, false, err
+	}
+
 	rt := runtime.New(
 		p.repo.NewChain(parent.Header.ID()),
 		st,
 		&xenv.BlockContext{
-			Beneficiary: beneficiary,
-			Signer:      p.nodeMaster,
-			Number:      parent.Header.Number() + 1,
-			Time:        newBlockTime,
-			GasLimit:    p.gasLimit(parent.Header.GasLimit()),
-			TotalScore:  parent.Header.TotalScore() + score,
-			BaseFee:     galactica.CalcBaseFee(parent.Header, p.forkConfig),
+			Beneficiary:    beneficiary,
+			Signer:         p.nodeMaster,
+			Number:         parent.Header.Number() + 1,
+			Time:           newBlockTime,
+			GasLimit:       p.gasLimit(parent.Header.GasLimit()),
+			TotalScore:     parent.Header.TotalScore() + score,
+			BaseFee:        galactica.CalcBaseFee(parent.Header, p.forkConfig),
+			EnergyStopTime: energyStopTime,
 		},
 		p.forkConfig)
 
@@ -108,13 +118,16 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (*Flo
 func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit uint64) (*Flow, bool, error) {
 	state := p.stater.NewState(parent.Root())
 
-	var features tx.Features
-	if parent.Header.Number()+1 >= p.forkConfig.VIP191 {
+	var (
+		features tx.Features
+		blockNum = parent.Header.Number() + 1
+	)
+	if blockNum >= p.forkConfig.VIP191 {
 		features |= tx.DelegationFeature
 	}
 
 	staker := builtin.Staker.Native(state)
-	dPosStatus, err := staker.SyncPOS(p.forkConfig, parent.Header.Number()+1)
+	dPosStatus, err := staker.SyncPOS(p.forkConfig, blockNum)
 	if err != nil {
 		return nil, false, err
 	}
@@ -174,22 +187,23 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 		gl = p.gasLimit(parent.Header.GasLimit())
 	}
 
-	var baseFee *big.Int
-	if parent.Header.Number()+1 >= p.forkConfig.GALACTICA {
-		baseFee = galactica.CalcBaseFee(parent.Header, p.forkConfig)
+	energyStopTime, err := p.energyStopTime(p.repo.NewChain(parent.Header.ID()), targetTime)
+	if err != nil {
+		return nil, false, err
 	}
 
 	rt := runtime.New(
 		p.repo.NewChain(parent.Header.ID()),
 		state,
 		&xenv.BlockContext{
-			Beneficiary: *beneficiary,
-			Signer:      p.nodeMaster,
-			Number:      parent.Header.Number() + 1,
-			Time:        targetTime,
-			GasLimit:    gl,
-			TotalScore:  parent.Header.TotalScore() + score,
-			BaseFee:     baseFee,
+			Beneficiary:    *beneficiary,
+			Signer:         p.nodeMaster,
+			Number:         parent.Header.Number() + 1,
+			Time:           targetTime,
+			GasLimit:       gl,
+			TotalScore:     parent.Header.TotalScore() + score,
+			BaseFee:        galactica.CalcBaseFee(parent.Header, p.forkConfig),
+			EnergyStopTime: energyStopTime,
 		},
 		p.forkConfig)
 
@@ -207,4 +221,22 @@ func (p *Packer) gasLimit(parentGasLimit uint64) uint64 {
 // it as it can.
 func (p *Packer) SetTargetGasLimit(gl uint64) {
 	p.targetGasLimit = gl
+}
+
+func (p *Packer) energyStopTime(chain *chain.Chain, blockTime uint64) (uint64, error) {
+	blockNum := block.Number(chain.HeadID()) + 1
+
+	if blockNum == p.forkConfig.HAYABUSA {
+		return blockTime, nil
+	}
+
+	if blockNum > p.forkConfig.HAYABUSA {
+		h, err := chain.GetBlockHeader(p.forkConfig.HAYABUSA)
+		if err != nil {
+			return math.MaxUint64, err
+		}
+		return h.Timestamp(), nil
+	}
+
+	return math.MaxUint64, nil
 }

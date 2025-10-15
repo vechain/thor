@@ -66,7 +66,7 @@ func (o *TxObject) Payer() *thor.Address {
 	return o.payer
 }
 
-func (o *TxObject) Executable(chain *chain.Chain, state *state.State, headBlock *block.Header, forkConfig *thor.ForkConfig, baseFee *big.Int) (bool, error) {
+func (o *TxObject) Executable(chain *chain.Chain, state *state.State, headBlock *block.Header, forkConfig *thor.ForkConfig, baseFee *big.Int, energyStopTime uint64) (bool, error) {
 	// evaluate the tx on the next block as head block is already history
 	nextBlockNum := headBlock.Number() + 1
 	nextBlockTime := headBlock.Timestamp() + thor.BlockInterval()
@@ -120,7 +120,7 @@ func (o *TxObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 	checkpoint := state.NewCheckpoint()
 	defer state.RevertTo(checkpoint)
 
-	legacyTxBaseGasPrice, _, payer, prepaid, _, err := o.resolved.BuyGas(state, nextBlockTime, baseFee)
+	legacyTxBaseGasPrice, _, payer, prepaid, _, err := o.resolved.BuyGas(state, nextBlockTime, baseFee, energyStopTime)
 	if err != nil {
 		return false, err
 	}

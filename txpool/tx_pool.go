@@ -7,6 +7,7 @@ package txpool
 
 import (
 	"context"
+	"math"
 	"math/big"
 	"math/rand/v2"
 	"os"
@@ -265,6 +266,11 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 			}
 		}
 
+		energyStopTime, err := p.energyStopTime(headSummary)
+		if err != nil {
+			return txRejectedError{err.Error()}
+		}
+
 		state := p.stater.NewState(headSummary.Root())
 		executable, err := txObj.Executable(
 			p.repo.NewChain(headSummary.Header.ID()),
@@ -272,6 +278,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 			headSummary.Header,
 			p.forkConfig,
 			p.baseFeeCache.Get(headSummary.Header),
+			energyStopTime,
 		)
 		if err != nil {
 			return txRejectedError{err.Error()}
@@ -290,7 +297,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		txObj.executable = executable
 		if err := p.all.Add(txObj, p.options.LimitPerAccount, func(payer thor.Address, needs *big.Int) error {
 			// check payer's balance
-			balance, err := builtin.Energy.Native(state, headSummary.Header.Timestamp()+thor.BlockInterval()).Get(payer)
+			balance, err := builtin.Energy.Native(state, headSummary.Header.Timestamp()+thor.BlockInterval(), energyStopTime).Get(payer)
 			if err != nil {
 				return err
 			}
@@ -455,6 +462,12 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 		now                 = time.Now().UnixNano()
 		baseFee             = p.baseFeeCache.Get(headSummary.Header)
 	)
+
+	energyStopTime, err := p.energyStopTime(headSummary)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+
 	for _, txObj := range all {
 		if thor.IsOriginBlocked(txObj.Origin()) || p.blocklist.Contains(txObj.Origin()) {
 			toRemove = append(toRemove, txObj)
@@ -475,7 +488,7 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 			continue
 		}
 		// settled, out of energy or dep broken
-		executable, err := txObj.Executable(chain, newState(), headSummary.Header, p.forkConfig, baseFee)
+		executable, err := txObj.Executable(chain, newState(), headSummary.Header, p.forkConfig, baseFee, energyStopTime)
 		if err != nil {
 			toRemove = append(toRemove, txObj)
 			logger.Trace("tx washed out", "id", txObj.ID(), "err", err)
@@ -579,4 +592,22 @@ func isChainSynced(nowTimestamp, blockTimestamp uint64) bool {
 		timeDiff = blockTimestamp - nowTimestamp
 	}
 	return timeDiff < thor.BlockInterval()*6
+}
+
+func (p *TxPool) energyStopTime(headSummary *chain.BlockSummary) (uint64, error) {
+	blockNum := headSummary.Header.Number() + 1
+	blockTime := headSummary.Header.Timestamp() + thor.BlockInterval()
+
+	if blockNum == p.forkConfig.HAYABUSA {
+		return blockTime, nil
+	}
+	if blockNum > p.forkConfig.HAYABUSA {
+		h, err := p.repo.NewChain(headSummary.Header.ID()).GetBlockHeader(p.forkConfig.HAYABUSA)
+		if err != nil {
+			return math.MaxUint64, err
+		}
+		return h.Timestamp(), nil
+	}
+
+	return math.MaxUint64, nil
 }

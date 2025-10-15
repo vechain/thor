@@ -71,11 +71,7 @@ func (a *authorityContract) Native(state *state.State) *authority.Authority {
 	return authority.New(a.Address, state)
 }
 
-func (e *energyContract) Native(state *state.State, blockTime uint64) *energy.Energy {
-	return e.NativeStopTime(state, blockTime, nil)
-}
-
-func (e *energyContract) NativeStopTime(state *state.State, blockTime uint64, stopTime *uint64) *energy.Energy {
+func (e *energyContract) Native(state *state.State, blockTime uint64, stopTime uint64) *energy.Energy {
 	return energy.New(e.Address, state, blockTime, Params.Native(state), stopTime)
 }
 

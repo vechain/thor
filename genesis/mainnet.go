@@ -6,6 +6,7 @@
 package genesis
 
 import (
+	"math"
 	"math/big"
 
 	"github.com/vechain/thor/v2/builtin"
@@ -95,7 +96,7 @@ func NewMainnet() *Genesis {
 				return err
 			}
 
-			return builtin.Energy.Native(state, launchTime).SetInitialSupply(tokenSupply, energySupply)
+			return builtin.Energy.Native(state, launchTime, math.MaxUint64).SetInitialSupply(tokenSupply, energySupply)
 		})
 
 	///// initialize builtin contracts

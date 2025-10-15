@@ -7,6 +7,7 @@ package solo
 
 import (
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -161,5 +162,6 @@ func (c *Core) IsExecutable(trx *tx.Transaction) (bool, error) {
 		return false, errors.WithMessage(err, "resolve transaction")
 	}
 
-	return txObject.Executable(chain, state, best.Header, c.forkConfig, baseFee)
+	// TODO: solve it in 2.4.1
+	return txObject.Executable(chain, state, best.Header, c.forkConfig, baseFee, math.MaxUint64)
 }

@@ -90,7 +90,7 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 	return restutil.WriteJSON(w, &api.GetCodeResult{Code: hexutil.Encode(code)})
 }
 
-func (a *Accounts) getAccount(addr thor.Address, header *block.Header, state *state.State) (*api.Account, error) {
+func (a *Accounts) getAccount(addr thor.Address, header *block.Header, state *state.State, energyStopTime uint64) (*api.Account, error) {
 	b, err := state.GetBalance(addr)
 	if err != nil {
 		return nil, err
@@ -99,7 +99,7 @@ func (a *Accounts) getAccount(addr thor.Address, header *block.Header, state *st
 	if err != nil {
 		return nil, err
 	}
-	energy, err := builtin.Energy.Native(state, header.Timestamp()).Get(addr)
+	energy, err := builtin.Energy.Native(state, header.Timestamp(), energyStopTime).Get(addr)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +137,16 @@ func (a *Accounts) handleGetAccount(w http.ResponseWriter, req *http.Request) er
 		return err
 	}
 
-	acc, err := a.getAccount(addr, summary.Header, st)
+	var energyStopTime uint64 = math.MaxUint64
+	if summary.Header.Number() >= a.forkConfig.HAYABUSA {
+		h, err := a.repo.NewChain(summary.Header.ID()).GetBlockHeader(a.forkConfig.HAYABUSA)
+		if err != nil {
+			return err
+		}
+		energyStopTime = h.Timestamp()
+	}
+
+	acc, err := a.getAccount(addr, summary.Header, st, energyStopTime)
 	if err != nil {
 		return err
 	}

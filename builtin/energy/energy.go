@@ -6,7 +6,6 @@
 package energy
 
 import (
-	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -18,11 +17,10 @@ import (
 )
 
 var (
-	initialSupplyKey  = thor.Blake2b([]byte("initial-supply"))
-	totalAddSubKey    = thor.Blake2b([]byte("total-add-sub"))
-	issuedKey         = thor.Blake2b([]byte("issued"))
-	growthStopTimeKey = thor.Blake2b([]byte("growth-stop-time"))
-	bigE18            = big.NewInt(1e18)
+	initialSupplyKey = thor.Blake2b([]byte("initial-supply"))
+	totalAddSubKey   = thor.Blake2b([]byte("total-add-sub"))
+	issuedKey        = thor.Blake2b([]byte("issued"))
+	bigE18           = big.NewInt(1e18)
 )
 
 // Energy implements energy operations.
@@ -35,17 +33,13 @@ type Energy struct {
 }
 
 // New creates a new energy instance.
-func New(addr thor.Address, state *state.State, blockTime uint64, params *params.Params, stopTime *uint64) *Energy {
+func New(addr thor.Address, state *state.State, blockTime uint64, params *params.Params, stopTime uint64) *Energy {
 	var eng Energy
 	eng.addr = addr
 	eng.state = state
 	eng.blockTime = blockTime
 	eng.params = params
-	if stopTime == nil {
-		eng.stopTime = 0
-	} else {
-		eng.stopTime = *stopTime
-	}
+	eng.stopTime = stopTime
 
 	return &eng
 }
@@ -124,11 +118,7 @@ func (e *Energy) TotalSupply() (*big.Int, error) {
 	}
 
 	// this is a virtual account, use account.CalcEnergy directly
-	stopTime, err := e.GetEnergyGrowthStopTime()
-	if err != nil {
-		return nil, err
-	}
-	grown := acc.CalcEnergy(e.blockTime, stopTime)
+	grown := acc.CalcEnergy(e.blockTime, e.stopTime)
 
 	issued, err := e.getIssued()
 	if err != nil {
@@ -150,12 +140,7 @@ func (e *Energy) TotalBurned() (*big.Int, error) {
 
 // Get returns energy of an account at given block time.
 func (e *Energy) Get(addr thor.Address) (*big.Int, error) {
-	stopTime, err := e.GetEnergyGrowthStopTime()
-	if err != nil {
-		return nil, err
-	}
-
-	return e.state.GetEnergy(addr, e.blockTime, stopTime)
+	return e.state.GetEnergy(addr, e.blockTime, e.stopTime)
 }
 
 // Add add amount of energy to given address.
@@ -207,51 +192,6 @@ func (e *Energy) Sub(addr thor.Address, amount *big.Int) (bool, error) {
 		return false, err
 	}
 	return true, nil
-}
-
-// StopEnergyGrowth sets the end time of energy growth at the current block time.
-func (e *Energy) StopEnergyGrowth() error {
-	if ts, err := e.GetEnergyGrowthStopTime(); err != nil {
-		return err
-	} else if ts != math.MaxUint64 {
-		// We simply ignore multiple calls to this function
-		return nil
-	}
-
-	if err := e.state.EncodeStorage(e.addr, growthStopTimeKey, func() ([]byte, error) {
-		return rlp.EncodeToBytes(e.blockTime)
-	}); err != nil {
-		return err
-	}
-
-	e.stopTime = e.blockTime
-	return nil
-}
-
-// GetEnergyGrowthStopTime returns the stop time of energy growth
-// if the stop time is not set, return math.MaxUint64
-func (e *Energy) GetEnergyGrowthStopTime() (uint64, error) {
-	if e.stopTime != 0 {
-		return e.stopTime, nil
-	}
-
-	var time uint64
-	if err := e.state.DecodeStorage(e.addr, growthStopTimeKey, func(raw []byte) error {
-		if len(raw) == 0 {
-			return nil
-		}
-		return rlp.DecodeBytes(raw, &time)
-	}); err != nil {
-		return math.MaxUint64, err
-	}
-
-	if time == 0 {
-		e.stopTime = math.MaxUint64
-	} else {
-		e.stopTime = time
-	}
-
-	return e.stopTime, nil
 }
 
 func (e *Energy) addIssued(issued *big.Int) error {

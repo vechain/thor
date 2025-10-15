@@ -37,7 +37,7 @@ type Context struct {
 	TxID           thor.Bytes32 // ID of the transaction being traced (zero if dangling call)
 	ClauseIndex    uint32       // Index of the clause within a transaction (zero if dangling call)
 	State          *state.State
-	EnergyStopTime *uint64
+	EnergyStopTime uint64
 }
 
 // Tracer interface extends vm.EVMLogger and additionally

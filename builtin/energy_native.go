@@ -21,7 +21,7 @@ func init() {
 	}{
 		{"native_totalSupply", func(env *xenv.Environment) []any {
 			env.UseGas(thor.SloadGas)
-			supply, err := Energy.NativeStopTime(env.State(), env.BlockContext().Time, env.BlockContext().EnergyStopTime).TotalSupply()
+			supply, err := Energy.Native(env.State(), env.BlockContext().Time, env.BlockContext().EnergyStopTime).TotalSupply()
 			if err != nil {
 				panic(err)
 			}
@@ -29,7 +29,7 @@ func init() {
 		}},
 		{"native_totalBurned", func(env *xenv.Environment) []any {
 			env.UseGas(thor.SloadGas)
-			burned, err := Energy.NativeStopTime(env.State(), env.BlockContext().Time, env.BlockContext().EnergyStopTime).TotalBurned()
+			burned, err := Energy.Native(env.State(), env.BlockContext().Time, env.BlockContext().EnergyStopTime).TotalBurned()
 			if err != nil {
 				panic(err)
 			}
@@ -40,7 +40,7 @@ func init() {
 			env.ParseArgs(&addr)
 
 			env.UseGas(thor.GetBalanceGas)
-			bal, err := Energy.NativeStopTime(env.State(), env.BlockContext().Time, env.BlockContext().EnergyStopTime).Get(thor.Address(addr))
+			bal, err := Energy.Native(env.State(), env.BlockContext().Time, env.BlockContext().EnergyStopTime).Get(thor.Address(addr))
 			if err != nil {
 				panic(err)
 			}
@@ -67,7 +67,7 @@ func init() {
 			} else {
 				env.UseGas(thor.SstoreSetGas)
 			}
-			if err := Energy.NativeStopTime(env.State(), env.BlockContext().Time, env.BlockContext().EnergyStopTime).Add(thor.Address(args.Addr), args.Amount); err != nil {
+			if err := Energy.Native(env.State(), env.BlockContext().Time, env.BlockContext().EnergyStopTime).Add(thor.Address(args.Addr), args.Amount); err != nil {
 				panic(err)
 			}
 			return nil
@@ -83,7 +83,7 @@ func init() {
 			}
 
 			env.UseGas(thor.GetBalanceGas)
-			ok, err := Energy.NativeStopTime(env.State(), env.BlockContext().Time, env.BlockContext().EnergyStopTime).Sub(thor.Address(args.Addr), args.Amount)
+			ok, err := Energy.Native(env.State(), env.BlockContext().Time, env.BlockContext().EnergyStopTime).Sub(thor.Address(args.Addr), args.Amount)
 			if err != nil {
 				panic(err)
 			}

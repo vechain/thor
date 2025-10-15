@@ -6,6 +6,7 @@
 package genesis
 
 import (
+	"math"
 	"math/big"
 
 	"github.com/vechain/thor/v2/builtin"
@@ -70,7 +71,7 @@ func NewTestnet() *Genesis {
 			}
 			tokenSupply.Add(tokenSupply, amount)
 
-			return builtin.Energy.Native(state, launchTime).SetInitialSupply(tokenSupply, &big.Int{})
+			return builtin.Energy.Native(state, launchTime, math.MaxUint64).SetInitialSupply(tokenSupply, &big.Int{})
 		}).
 		// set initial params
 		// use an external account as executor to manage testnet easily

@@ -8,6 +8,7 @@ package genesis
 import (
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -119,7 +120,7 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 				}
 			}
 
-			return builtin.Energy.Native(state, launchTime).SetInitialSupply(tokenSupply, energySupply)
+			return builtin.Energy.Native(state, launchTime, math.MaxUint64).SetInitialSupply(tokenSupply, energySupply)
 		})
 
 	///// initialize builtin contracts

@@ -7,6 +7,7 @@ package genesis
 
 import (
 	"crypto/ecdsa"
+	"math"
 	"math/big"
 	"sync/atomic"
 
@@ -117,7 +118,7 @@ func NewDevnetWithConfig(config DevConfig) *Genesis {
 				tokenSupply.Add(tokenSupply, bal)
 				energySupply.Add(energySupply, bal)
 			}
-			return builtin.Energy.Native(state, launchTime).SetInitialSupply(tokenSupply, energySupply)
+			return builtin.Energy.Native(state, launchTime, math.MaxUint64).SetInitialSupply(tokenSupply, energySupply)
 		}).
 		Call(
 			tx.NewClause(&builtin.Params.Address).

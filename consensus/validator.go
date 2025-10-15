@@ -8,6 +8,7 @@ package consensus
 import (
 	"bytes"
 	"fmt"
+	"math"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
@@ -221,17 +222,30 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 	signer, _ := header.Signer()
 	chain := c.repo.NewChain(header.ParentID())
 
+	var energyStopTime uint64 = math.MaxUint64
+	blockNum := blk.Header().Number()
+	if blockNum == c.forkConfig.HAYABUSA {
+		energyStopTime = header.Timestamp()
+	} else if blockNum > c.forkConfig.HAYABUSA {
+		h, err := chain.GetBlockHeader(c.forkConfig.HAYABUSA)
+		if err != nil {
+			return nil, nil, err
+		}
+		energyStopTime = h.Timestamp()
+	}
+
 	rt := runtime.New(
 		chain,
 		state,
 		&xenv.BlockContext{
-			Beneficiary: header.Beneficiary(),
-			Signer:      signer,
-			Number:      header.Number(),
-			Time:        header.Timestamp(),
-			GasLimit:    header.GasLimit(),
-			TotalScore:  header.TotalScore(),
-			BaseFee:     header.BaseFee(),
+			Beneficiary:    header.Beneficiary(),
+			Signer:         signer,
+			Number:         header.Number(),
+			Time:           header.Timestamp(),
+			GasLimit:       header.GasLimit(),
+			TotalScore:     header.TotalScore(),
+			BaseFee:        header.BaseFee(),
+			EnergyStopTime: energyStopTime,
 		},
 		c.forkConfig)
 
@@ -306,7 +320,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 		if err := staker.ContractBalanceCheck(0); err != nil {
 			return nil, nil, consensusError(fmt.Sprintf("staker sanity check failed while verifying block: %v", err))
 		}
-		energy := builtin.Energy.Native(state, header.Timestamp())
+		energy := builtin.Energy.Native(state, header.Timestamp(), energyStopTime)
 		if err := energy.DistributeRewards(blk.Header().Beneficiary(), signer, staker, header.Number()); err != nil {
 			return nil, nil, err
 		}
