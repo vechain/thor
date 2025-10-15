@@ -29,14 +29,15 @@ import (
 )
 
 type Core struct {
-	repo       *chain.Repository
-	stater     *state.Stater
-	packer     *packer.Packer
-	logDB      *logdb.LogDB
-	bandwidth  bandwidth.Bandwidth
-	options    Options
-	forkConfig *thor.ForkConfig
-	mu         sync.Mutex // protects the Pack method
+	repo           *chain.Repository
+	stater         *state.Stater
+	packer         *packer.Packer
+	logDB          *logdb.LogDB
+	bandwidth      bandwidth.Bandwidth
+	options        Options
+	forkConfig     *thor.ForkConfig
+	energyStopTime uint64
+	mu             sync.Mutex // protects the Pack method
 }
 
 func NewCore(
@@ -57,9 +58,10 @@ func NewCore(
 			forkConfig,
 			options.MinTxPriorityFee,
 		),
-		logDB:      logDB,
-		options:    options,
-		forkConfig: forkConfig,
+		logDB:          logDB,
+		options:        options,
+		forkConfig:     forkConfig,
+		energyStopTime: math.MaxUint64,
 	}
 }
 
@@ -162,6 +164,16 @@ func (c *Core) IsExecutable(trx *tx.Transaction) (bool, error) {
 		return false, errors.WithMessage(err, "resolve transaction")
 	}
 
-	// TODO: solve it in 2.4.1
-	return txObject.Executable(chain, state, best.Header, c.forkConfig, baseFee, math.MaxUint64)
+	// if energy growth is not stopped, check if the hayabusa block is already passed
+	if c.energyStopTime == math.MaxUint64 {
+		if best.Header.Number() >= c.forkConfig.HAYABUSA {
+			h, err := chain.GetBlockHeader(c.forkConfig.HAYABUSA)
+			if err != nil {
+				return false, err
+			}
+			c.energyStopTime = h.Timestamp()
+		}
+	}
+
+	return txObject.Executable(chain, state, best.Header, c.forkConfig, baseFee, c.energyStopTime)
 }
