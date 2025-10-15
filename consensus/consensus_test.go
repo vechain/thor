@@ -255,15 +255,6 @@ func TestConsensus_ReplayStopsEnergyAtHardfork_Matrix(t *testing.T) {
 
 			_, err = c.NewRuntimeForReplay(best.Header, false)
 			assert.NoError(t, err)
-
-			st := chain.Stater().NewState(best.Root())
-			stop, err := builtin.Energy.Native(st, best.Header.Timestamp()).GetEnergyGrowthStopTime()
-			assert.NoError(t, err)
-			if tc.expectStop {
-				assert.Equal(t, best.Header.Timestamp(), stop)
-			} else {
-				assert.Equal(t, uint64(math.MaxUint64), stop)
-			}
 		})
 	}
 }
@@ -932,25 +923,6 @@ func TestValidateProposer(t *testing.T) {
 			tt.testFunc(t)
 		})
 	}
-}
-
-func TestConsensus_StopsEnergyAtHardfork(t *testing.T) {
-	cfg := &thor.SoloFork
-	cfg.HAYABUSA = 2
-	hayabusaTP := uint32(1)
-	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
-
-	chain, err := testchain.NewWithFork(cfg, 1)
-	assert.NoError(t, err)
-
-	assert.NoError(t, chain.MintBlock(genesis.DevAccounts()[0]))
-	assert.NoError(t, chain.MintBlock(genesis.DevAccounts()[0]))
-
-	best := chain.Repo().BestBlockSummary()
-	st := chain.Stater().NewState(best.Root())
-	stop, err := builtin.Energy.Native(st, best.Header.Timestamp()).GetEnergyGrowthStopTime()
-	assert.NoError(t, err)
-	assert.Equal(t, best.Header.Timestamp(), stop)
 }
 
 func TestNewRuntimeForReplay_SyncPOSError(t *testing.T) {

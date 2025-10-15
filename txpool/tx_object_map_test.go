@@ -7,6 +7,7 @@ package txpool
 
 import (
 	"errors"
+	"math"
 	"math/big"
 	"testing"
 
@@ -175,15 +176,15 @@ func TestPendingCost(t *testing.T) {
 	state := stater.NewState(best.Root())
 
 	baseFee := galactica.CalcBaseFee(best.Header, forkConfig)
-	txObj1.executable, err = txObj1.Executable(chain, state, best.Header, forkConfig, baseFee)
+	txObj1.executable, err = txObj1.Executable(chain, state, best.Header, forkConfig, baseFee, math.MaxUint64)
 	assert.Nil(t, err)
 	assert.True(t, txObj1.executable)
 
-	txObj2.executable, err = txObj2.Executable(chain, state, best.Header, forkConfig, baseFee)
+	txObj2.executable, err = txObj2.Executable(chain, state, best.Header, forkConfig, baseFee, math.MaxUint64)
 	assert.Nil(t, err)
 	assert.True(t, txObj2.executable)
 
-	txObj3.executable, err = txObj3.Executable(chain, state, best.Header, forkConfig, baseFee)
+	txObj3.executable, err = txObj3.Executable(chain, state, best.Header, forkConfig, baseFee, math.MaxUint64)
 	assert.Nil(t, err)
 	assert.True(t, txObj3.executable)
 

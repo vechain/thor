@@ -379,7 +379,7 @@ func TestStaker(t *testing.T) {
 
 	best := node.Chain().Repo().BestBlockSummary()
 	state := node.Chain().Stater().NewState(best.Root())
-	energy := builtin.Energy.Native(state, best.Header.Timestamp())
+	energy := builtin.Energy.Native(state, best.Header.Timestamp(), math.MaxUint64)
 	stakerNative := builtin.Staker.Native(state)
 
 	rewards, err = energy.CalculateRewards(stakerNative)

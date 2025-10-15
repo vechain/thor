@@ -270,11 +270,31 @@ func (c *Chain) ClauseCall(account genesis.DevAccount, trx *tx.Transaction, clau
 	if err != nil {
 		return nil, 0, err
 	}
+
+	var energyStopTime uint64 = math.MaxUint64
+	if summary.Header.Number() >= c.forkConfig.HAYABUSA {
+		h, err := ch.GetBlockHeader(c.forkConfig.HAYABUSA)
+		if err != nil {
+			return nil, 0, err
+		}
+		energyStopTime = h.Timestamp()
+	}
 	st := state.New(c.db, trie.Root{Hash: summary.Header.StateRoot(), Ver: trie.Version{Major: summary.Header.Number()}})
+
+	signer, _ := summary.Header.Signer()
 	rt := runtime.New(
 		ch,
 		st,
-		&xenv.BlockContext{Number: summary.Header.Number(), Time: summary.Header.Timestamp(), TotalScore: summary.Header.TotalScore(), Signer: account.Address},
+		&xenv.BlockContext{
+			Beneficiary:    summary.Header.Beneficiary(),
+			Signer:         signer,
+			Number:         summary.Header.Number(),
+			Time:           summary.Header.Timestamp(),
+			GasLimit:       summary.Header.GasLimit(),
+			TotalScore:     summary.Header.TotalScore(),
+			BaseFee:        summary.Header.BaseFee(),
+			EnergyStopTime: energyStopTime,
+		},
 		c.forkConfig,
 	)
 	maxGas := uint64(math.MaxUint32)

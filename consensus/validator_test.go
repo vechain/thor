@@ -124,7 +124,7 @@ func TestValidateBlock(t *testing.T) {
 						Build(),
 					genesis.DevAccounts()[0].PrivateKey,
 				)
-				blk := new(block.Builder).BaseFee(baseFee).Transaction(tr).Build()
+				blk := new(block.Builder).ParentID(repo.BestBlockSummary().Header.ID()).BaseFee(baseFee).Transaction(tr).Build()
 
 				c := New(repo, stater, &thor.ForkConfig{GALACTICA: 0})
 				s, r, err := c.verifyBlock(blk, state, 0, false)
@@ -140,6 +140,7 @@ func TestValidateBlock(t *testing.T) {
 				tr := tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Gas(21000).BlockRef(tx.NewBlockRef(10)).Gas(21000).Build()
 				tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 				blk := new(block.Builder).
+					ParentID(repo.BestBlockSummary().Header.ID()).
 					BaseFee(baseFee).
 					Transaction(tr).
 					GasUsed(21000).

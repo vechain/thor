@@ -31,7 +31,7 @@ func TestEnergy(t *testing.T) {
 	acc := thor.BytesToAddress([]byte("a1"))
 
 	p := params.New(thor.BytesToAddress([]byte("par")), st)
-	eng := New(thor.BytesToAddress([]byte("eng")), st, 0, p, nil)
+	eng := New(thor.BytesToAddress([]byte("eng")), st, 0, p, math.MaxUint64)
 	tests := []struct {
 		ret      any
 		expected any
@@ -54,7 +54,7 @@ func TestInitialSupply(t *testing.T) {
 	st := state.New(muxdb.NewMem(), trie.Root{})
 
 	p := params.New(thor.BytesToAddress([]byte("par")), st)
-	eng := New(thor.BytesToAddress([]byte("eng")), st, 0, p, nil)
+	eng := New(thor.BytesToAddress([]byte("eng")), st, 0, p, math.MaxUint64)
 
 	// get initial supply before set should return 0
 	supply, err := eng.getInitialSupply()
@@ -72,7 +72,7 @@ func TestInitialSupplyError(t *testing.T) {
 	st := state.New(muxdb.NewMem(), trie.Root{})
 
 	p := params.New(thor.BytesToAddress([]byte("par")), st)
-	eng := New(thor.BytesToAddress([]byte("a1")), st, 0, p, nil)
+	eng := New(thor.BytesToAddress([]byte("a1")), st, 0, p, math.MaxUint64)
 
 	eng.SetInitialSupply(big.NewInt(0), big.NewInt(0))
 
@@ -87,7 +87,7 @@ func TestTotalSupply(t *testing.T) {
 
 	addr := thor.BytesToAddress([]byte("eng"))
 	p := params.New(thor.BytesToAddress([]byte("par")), st)
-	eng := New(addr, st, 1, p, nil)
+	eng := New(addr, st, 1, p, 1500)
 
 	eng.SetInitialSupply(big.NewInt(100000000000000000), big.NewInt(456))
 
@@ -103,7 +103,6 @@ func TestTotalSupply(t *testing.T) {
 	assert.Equal(t, big.NewInt(499500000456), totalSupply)
 
 	eng.blockTime = 1500
-	eng.StopEnergyGrowth()
 	totalSupply, err = eng.TotalSupply()
 
 	assert.Nil(t, err)
@@ -133,7 +132,7 @@ func TestTokenTotalSupply(t *testing.T) {
 	st := state.New(muxdb.NewMem(), trie.Root{})
 
 	p := params.New(thor.BytesToAddress([]byte("par")), st)
-	eng := New(thor.BytesToAddress([]byte("eng")), st, 0, p, nil)
+	eng := New(thor.BytesToAddress([]byte("eng")), st, 0, p, math.MaxUint64)
 
 	eng.SetInitialSupply(big.NewInt(123), big.NewInt(456))
 
@@ -147,7 +146,7 @@ func TestTotalBurned(t *testing.T) {
 	st := state.New(muxdb.NewMem(), trie.Root{})
 
 	p := params.New(thor.BytesToAddress([]byte("par")), st)
-	eng := New(thor.BytesToAddress([]byte("eng")), st, 0, p, nil)
+	eng := New(thor.BytesToAddress([]byte("eng")), st, 0, p, math.MaxUint64)
 
 	eng.SetInitialSupply(big.NewInt(123), big.NewInt(456))
 
@@ -168,7 +167,7 @@ func TestEnergyGrowth(t *testing.T) {
 	st.SetBalance(acc, vetBal)
 
 	p := params.New(thor.BytesToAddress([]byte("par")), st)
-	bal1, err := New(thor.Address{}, st, 1000, p, nil).
+	bal1, err := New(thor.Address{}, st, 1000, p, math.MaxUint64).
 		Get(acc)
 
 	assert.Nil(t, err)
@@ -190,7 +189,7 @@ func TestCalcEnergyCappedAtStopTime(t *testing.T) {
 	st.SetBalance(acc, vetBal)
 
 	p := params.New(thor.BytesToAddress([]byte("par")), st)
-	eng := New(thor.Address{}, st, 1000, p, nil)
+	eng := New(thor.Address{}, st, 1000, p, math.MaxUint64)
 
 	// Set stop time at 500
 	eng.blockTime = 500
@@ -205,33 +204,11 @@ func TestCalcEnergyCappedAtStopTime(t *testing.T) {
 	assert.Equal(t, expected, bal)
 }
 
-func TestGetEnergyGrowthStopTime(t *testing.T) {
-	st := state.New(muxdb.NewMem(), trie.Root{})
-	p := params.New(thor.BytesToAddress([]byte("params")), st)
-	eng := New(thor.BytesToAddress([]byte("energy")), st, 10, p, nil)
-
-	// no stop time set
-	stopTime, err := eng.GetEnergyGrowthStopTime()
-	assert.NoError(t, err)
-	assert.Equal(t, uint64(math.MaxUint64), stopTime)
-
-	err = eng.StopEnergyGrowth()
-	assert.NoError(t, err)
-
-	stopTime, err = eng.GetEnergyGrowthStopTime()
-	assert.NoError(t, err)
-	assert.Equal(t, uint64(10), stopTime)
-
-	// set multiple times should return nil
-	err = eng.StopEnergyGrowth()
-	assert.NoError(t, err)
-}
-
 func TestAddIssued(t *testing.T) {
 	st := state.New(muxdb.NewMem(), trie.Root{})
 
 	p := params.New(thor.BytesToAddress([]byte("par")), st)
-	eng := New(thor.BytesToAddress([]byte("eng")), st, 1, p, nil)
+	eng := New(thor.BytesToAddress([]byte("eng")), st, 1, p, math.MaxUint64)
 
 	issued, err := eng.getIssued()
 	assert.NoError(t, err)
@@ -286,7 +263,7 @@ func TestCalculateRewards(t *testing.T) {
 	st.SetStorage(thor.BytesToAddress([]byte("par")), thor.KeyCurveFactor, thor.BytesToBytes32(thor.InitialCurveFactor.Bytes()))
 
 	p := params.New(thor.BytesToAddress([]byte("par")), st)
-	eng := New(thor.BytesToAddress([]byte("eng")), st, 1, p, nil)
+	eng := New(thor.BytesToAddress([]byte("eng")), st, 1, p, math.MaxUint64)
 
 	mockStaker := &mockStaker{
 		lockedVET:         25,
@@ -313,7 +290,7 @@ func TestDistributeRewards(t *testing.T) {
 	st.SetStorage(paramsAddr, thor.KeyValidatorRewardPercentage, thor.BytesToBytes32(big.NewInt(int64(thor.InitialValidatorRewardPercentage)).Bytes()))
 	st.SetStorage(paramsAddr, thor.KeyDelegatorContractAddress, thor.BytesToBytes32(stargateAddr.Bytes()))
 
-	eng := New(thor.BytesToAddress([]byte("eng")), st, 1, p, nil)
+	eng := New(thor.BytesToAddress([]byte("eng")), st, 1, p, math.MaxUint64)
 
 	stake := uint64(25)
 	expectedReward := big.NewInt(121765601217656012)
@@ -413,7 +390,7 @@ func TestDistributeRewards_MaxRewardsPercentage(t *testing.T) {
 		increaseRewardErr: nil,
 	}
 
-	energy := New(energyAddr, st, 100, p, nil)
+	energy := New(energyAddr, st, 100, p, math.MaxUint64)
 	issuedBefore, err := energy.getIssued()
 	require.NoError(t, err)
 	require.NoError(t, energy.DistributeRewards(beneficiary, signer, staker, 10))

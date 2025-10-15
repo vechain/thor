@@ -102,11 +102,11 @@ func TestGaspriceLessThanBaseFee(t *testing.T) {
 	obj, err := runtime.ResolveTransaction(trx)
 	assert.Nil(t, err)
 
-	_, _, _, _, _, err = obj.BuyGas(st, 0, big.NewInt(101))
+	_, _, _, _, _, err = obj.BuyGas(st, 0, big.NewInt(101), math.MaxUint64)
 	assert.ErrorContains(t, err, "gas price is less than block base fee")
 
 	// can cover the base fee, not return less than base fee error
-	_, _, _, _, _, err = obj.BuyGas(st, 0, big.NewInt(100))
+	_, _, _, _, _, err = obj.BuyGas(st, 0, big.NewInt(100), math.MaxUint64)
 	assert.NotNil(t, err)
 	assert.NotContains(t, err.Error(), "gas price is less than block base fee")
 
@@ -116,11 +116,11 @@ func TestGaspriceLessThanBaseFee(t *testing.T) {
 	obj, err = runtime.ResolveTransaction(trx)
 	assert.Nil(t, err)
 
-	_, _, _, _, _, err = obj.BuyGas(st, 0, big.NewInt(101))
+	_, _, _, _, _, err = obj.BuyGas(st, 0, big.NewInt(101), math.MaxUint64)
 	assert.ErrorContains(t, err, "gas price is less than block base fee")
 
 	// can cover the base fee, not return less than base fee error
-	_, _, _, _, _, err = obj.BuyGas(st, 0, big.NewInt(100))
+	_, _, _, _, _, err = obj.BuyGas(st, 0, big.NewInt(100), math.MaxUint64)
 	assert.NotNil(t, err)
 	assert.NotContains(t, err.Error(), "gas price is less than block base fee")
 }
@@ -279,7 +279,7 @@ func (tr *testResolvedTransaction) TestBuyGas() {
 		if err != nil {
 			tr.t.Fatal(err)
 		}
-		_, _, payer, _, returnGas, err := resolve.BuyGas(state, targetTime, nil)
+		_, _, payer, _, returnGas, err := resolve.BuyGas(state, targetTime, nil, math.MaxUint64)
 		tr.assert.Nil(err)
 		returnGas(100)
 		return payer

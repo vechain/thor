@@ -600,7 +600,11 @@ func TestEnergyNative(t *testing.T) {
 	err = builtin.Params.Native(st).Set(thor.KeyCurveFactor, thor.InitialCurveFactor)
 	assert.NoError(t, err)
 
-	energyAtBlock, err := builtin.Energy.Native(st, summary.Header.Timestamp()).Get(summary.Header.Beneficiary())
+	h, err := thorChain.Repo().NewChain(summary.Header.ID()).GetBlockHeader(fc.HAYABUSA)
+	require.NoError(t, err)
+	energyStopTime := h.Timestamp()
+
+	energyAtBlock, err := builtin.Energy.Native(st, summary.Header.Timestamp(), energyStopTime).Get(summary.Header.Beneficiary())
 	require.NoError(t, err)
 	validatorMap[summary.Header.Timestamp()] = energyAtBlock
 	require.NoError(t, err)
@@ -614,7 +618,7 @@ func TestEnergyNative(t *testing.T) {
 		require.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
 		summary = thorChain.Repo().BestBlockSummary()
 		st := thorChain.Stater().NewState(summary.Root())
-		energyAtBlock, err = builtin.Energy.Native(st, summary.Header.Timestamp()).Get(summary.Header.Beneficiary())
+		energyAtBlock, err = builtin.Energy.Native(st, summary.Header.Timestamp(), energyStopTime).Get(summary.Header.Beneficiary())
 		require.NoError(t, err)
 		validatorMap[thorChain.Repo().BestBlockSummary().Header.Timestamp()] = energyAtBlock
 
@@ -636,7 +640,7 @@ func TestEnergyNative(t *testing.T) {
 		require.NoError(t, err)
 		st = thorChain.Stater().NewState(summary.Root())
 		staker := builtin.Staker.Native(st)
-		energy := builtin.Energy.Native(st, summary.Header.Timestamp())
+		energy := builtin.Energy.Native(st, summary.Header.Timestamp(), energyStopTime)
 		reward, err := energy.CalculateRewards(staker)
 		require.NoError(t, err)
 		stakeRewards.Add(stakeRewards, reward)

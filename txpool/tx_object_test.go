@@ -123,7 +123,7 @@ func TestExecutableWithError(t *testing.T) {
 		// pass custom headID
 		chain := repo.NewChain(thor.Bytes32{0})
 
-		exe, err := txObj.Executable(chain, st, b1.Header(), fc, baseFee)
+		exe, err := txObj.Executable(chain, st, b1.Header(), fc, baseFee, math.MaxUint64)
 		if tt.expectedErr != "" {
 			assert.Equal(t, tt.expectedErr, err.Error())
 		} else {
@@ -208,7 +208,7 @@ func TestExecutable(t *testing.T) {
 		txObj, err := ResolveTx(tt.tx, false)
 		assert.Nil(t, err)
 
-		exe, err := txObj.Executable(repo.NewChain(b0.Header().ID()), st, b0.Header(), tchain.GetForkConfig(), baseFee)
+		exe, err := txObj.Executable(repo.NewChain(b0.Header().ID()), st, b0.Header(), tchain.GetForkConfig(), baseFee, math.MaxUint64)
 		if tt.expectedErr != "" {
 			assert.Equal(t, tt.expectedErr, err.Error())
 		} else {
@@ -236,7 +236,7 @@ func TestExecutableRejectNonLegacyBeforeGalactica(t *testing.T) {
 	assert.Nil(t, err)
 
 	st := tchain.Stater().NewState(repo.BestBlockSummary().Root())
-	exe, err := txObj1.Executable(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig, baseFee)
+	exe, err := txObj1.Executable(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig, baseFee, math.MaxUint64)
 	assert.False(t, exe)
 	assert.Equal(t, tx.ErrTxTypeNotSupported, err)
 
@@ -244,7 +244,7 @@ func TestExecutableRejectNonLegacyBeforeGalactica(t *testing.T) {
 	txObj2, err := ResolveTx(legacyTx, false)
 	assert.Nil(t, err)
 
-	exe, err = txObj2.Executable(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig, baseFee)
+	exe, err = txObj2.Executable(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig, baseFee, math.MaxUint64)
 	assert.True(t, exe)
 	assert.Nil(t, err)
 
@@ -254,7 +254,7 @@ func TestExecutableRejectNonLegacyBeforeGalactica(t *testing.T) {
 	// recalculate the base fee since new block is added
 	baseFee = galactica.CalcBaseFee(repo.BestBlockSummary().Header, forkConfig)
 	st = tchain.Stater().NewState(repo.BestBlockSummary().Root())
-	_, err = txObj1.Executable(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig, baseFee)
+	_, err = txObj1.Executable(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig, baseFee, math.MaxUint64)
 	assert.Nil(t, err)
 }
 
@@ -280,6 +280,7 @@ func TestExecutableRejectUnsupportedFeatures(t *testing.T) {
 		repo.BestBlockSummary().Header,
 		forkConfig,
 		galactica.CalcBaseFee(repo.BestBlockSummary().Header, forkConfig),
+		math.MaxUint64,
 	)
 	assert.False(t, exe)
 	assert.ErrorContains(t, err, "unsupported features")
@@ -294,6 +295,7 @@ func TestExecutableRejectUnsupportedFeatures(t *testing.T) {
 		repo.BestBlockSummary().Header,
 		forkConfig,
 		galactica.CalcBaseFee(repo.BestBlockSummary().Header, forkConfig),
+		math.MaxUint64,
 	)
 	assert.Nil(t, err)
 }

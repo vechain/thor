@@ -265,16 +265,26 @@ func (a *Accounts) batchCall(
 		return nil, err
 	}
 
+	var energyStopTime uint64 = math.MaxUint64
+	if header.Number() >= a.forkConfig.HAYABUSA {
+		h, err := a.repo.NewChain(header.ID()).GetBlockHeader(a.forkConfig.HAYABUSA)
+		if err != nil {
+			return nil, err
+		}
+		energyStopTime = h.Timestamp()
+	}
+
 	signer, _ := header.Signer()
 	rt := runtime.New(a.repo.NewChain(header.ParentID()), st,
 		&xenv.BlockContext{
-			Beneficiary: header.Beneficiary(),
-			Signer:      signer,
-			Number:      header.Number(),
-			Time:        header.Timestamp(),
-			GasLimit:    header.GasLimit(),
-			TotalScore:  header.TotalScore(),
-			BaseFee:     header.BaseFee(),
+			Beneficiary:    header.Beneficiary(),
+			Signer:         signer,
+			Number:         header.Number(),
+			Time:           header.Timestamp(),
+			GasLimit:       header.GasLimit(),
+			TotalScore:     header.TotalScore(),
+			BaseFee:        header.BaseFee(),
+			EnergyStopTime: energyStopTime,
 		},
 		a.forkConfig)
 	results = make(api.BatchCallResults, 0)
