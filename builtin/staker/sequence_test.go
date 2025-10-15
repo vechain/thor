@@ -604,6 +604,12 @@ func (ts *StakerTest) Housekeep(block uint32) *StakerTest {
 	return ts
 }
 
+func (ts *StakerTest) HousekeepWithUpdates(block uint32) (*StakerTest, bool) {
+	updates, err := ts.Staker.Housekeep(block)
+	assert.NoError(ts.t, err, "failed to perform housekeeping at block %d", block)
+	return ts, updates
+}
+
 func (ts *StakerTest) Transition(block uint32) *StakerTest {
 	_, err := ts.transition(block)
 	assert.NoError(ts.t, err, "failed to transition at block %d", block)
