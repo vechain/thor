@@ -66,7 +66,14 @@ func (o *TxObject) Payer() *thor.Address {
 	return o.payer
 }
 
-func (o *TxObject) Executable(chain *chain.Chain, state *state.State, headBlock *block.Header, forkConfig *thor.ForkConfig, baseFee *big.Int, energyStopTime uint64) (bool, error) {
+func (o *TxObject) Executable(
+	chain *chain.Chain,
+	state *state.State,
+	headBlock *block.Header,
+	forkConfig *thor.ForkConfig,
+	baseFee *big.Int,
+	energyStopTime uint64,
+) (bool, error) {
 	// evaluate the tx on the next block as head block is already history
 	nextBlockNum := headBlock.Number() + 1
 	nextBlockTime := headBlock.Timestamp() + thor.BlockInterval()
