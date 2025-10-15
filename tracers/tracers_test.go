@@ -156,7 +156,7 @@ func RunTracerTest(t *testing.T, data *traceTest, tracerName string) json.RawMes
 	tr.SetContext(&tracers.Context{
 		BlockTime:      rt.Context().Time,
 		State:          rt.State(),
-		EnergyStopTime: rt.Context().EnergyStopTime,
+		EnergyStopTime: rt.Context().GetEnergyStopTime(),
 	})
 	rt.SetVMConfig(vm.Config{Tracer: tr})
 
@@ -386,7 +386,7 @@ func TestInternals(t *testing.T) {
 			tr.SetContext(&tracers.Context{
 				BlockTime:      rt.Context().Time,
 				State:          rt.State(),
-				EnergyStopTime: rt.Context().EnergyStopTime,
+				EnergyStopTime: rt.Context().GetEnergyStopTime(),
 			})
 			rt.SetVMConfig(vm.Config{Tracer: tr})
 

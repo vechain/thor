@@ -121,7 +121,7 @@ func init() {
 
 			if args.BlockNumber == ctx.Number {
 				env.UseGas(thor.GetBalanceGas)
-				val, err := Energy.NativeStopTime(env.State(), ctx.Time, ctx.EnergyStopTime).Get(thor.Address(args.Self))
+				val, err := Energy.NativeStopTime(env.State(), ctx.Time, ctx.GetEnergyStopTime()).Get(thor.Address(args.Self))
 				if err != nil {
 					panic(err)
 				}
@@ -139,7 +139,7 @@ func init() {
 			state := env.State().Checkout(summary.Root())
 
 			env.UseGas(thor.GetBalanceGas)
-			val, err := Energy.NativeStopTime(state, summary.Header.Timestamp(), env.BlockContext().EnergyStopTime).Get(thor.Address(args.Self))
+			val, err := Energy.NativeStopTime(state, summary.Header.Timestamp(), env.BlockContext().GetEnergyStopTime()).Get(thor.Address(args.Self))
 			if err != nil {
 				panic(err)
 			}

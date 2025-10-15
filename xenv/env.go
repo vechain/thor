@@ -30,7 +30,7 @@ type BlockContext struct {
 	GasLimit       uint64
 	TotalScore     uint64
 	BaseFee        *big.Int
-	EnergyStopTime *uint64
+	energyStopTime *uint64
 }
 
 // TransactionContext transaction context.
@@ -147,4 +147,17 @@ func (env *Environment) Call(proc func(env *Environment) []any) (output []byte, 
 		panic(errors.WithMessage(err, "encode native output"))
 	}
 	return data, nil
+}
+
+func (ctx *BlockContext) SetEnergyStopTime(stopTime uint64) error {
+	if ctx.energyStopTime != nil {
+		return errors.New("EnergyStopTime is already set and cannot be changed")
+	}
+	ctx.energyStopTime = &stopTime
+	return nil
+}
+
+// GetEnergyStopTime returns the energy stop time
+func (ctx *BlockContext) GetEnergyStopTime() *uint64 {
+	return ctx.energyStopTime
 }

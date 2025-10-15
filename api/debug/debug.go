@@ -158,7 +158,7 @@ func (d *Debug) traceClause(ctx context.Context, tracer tracers.Tracer, block *b
 		TxIndex:        txIndex,
 		ClauseIndex:    clauseIndex,
 		State:          rt.State(),
-		EnergyStopTime: rt.Context().EnergyStopTime,
+		EnergyStopTime: rt.Context().GetEnergyStopTime(),
 	})
 	rt.SetVMConfig(vm.Config{Tracer: tracer})
 	errCh := make(chan error, 1)
@@ -292,7 +292,7 @@ func (d *Debug) traceCall(
 		BlockID:        header.ID(),
 		BlockTime:      header.Timestamp(),
 		State:          st,
-		EnergyStopTime: rt.Context().EnergyStopTime,
+		EnergyStopTime: rt.Context().GetEnergyStopTime(),
 	})
 	rt.SetVMConfig(vm.Config{Tracer: tracer})
 
