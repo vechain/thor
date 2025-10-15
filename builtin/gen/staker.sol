@@ -364,9 +364,9 @@ interface StakerNative {
     function native_getValidation(
         address validator
     )
-    external
-    view
-    returns (address, uint256, uint256, uint256, uint8, uint32, uint32, uint32, uint32, uint32);
+        external
+        view
+        returns (address, uint256, uint256, uint256, uint8, uint32, uint32, uint32, uint32, uint32);
 
     function native_getWithdrawable(address validator) external view returns (uint256);
 
