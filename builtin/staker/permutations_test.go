@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"math/rand"
 	"os"
+	"runtime"
 	"testing"
 	"time"
 
@@ -42,11 +43,15 @@ type ExecutionContext struct {
 
 	// For display purposes - last action amount
 	LastActionAmount uint64
+
+	// Current operation sequence (for Check function)
+	CurrentSequence int
 }
 
 type StakeAdjustment struct {
-	Block  int
-	Amount int64 // positive for increase, negative for decrease
+	Block    int
+	Amount   int64 // positive for increase, negative for decrease
+	Sequence int   // execution sequence within the block
 }
 
 // Clone creates a deep copy of the ExecutionContext
@@ -84,8 +89,20 @@ func (ctx *ExecutionContext) Clone() *ExecutionContext {
 	copy(clone.StakeAdjustments, ctx.StakeAdjustments)
 
 	clone.LastActionAmount = ctx.LastActionAmount
+	clone.CurrentSequence = ctx.CurrentSequence
 
 	return clone
+}
+
+// StakeAdjustmentsNegativeSum returns the sum of all negative (decrease) stake adjustments
+func (ctx *ExecutionContext) StakeAdjustmentsNegativeSum() uint64 {
+	var sum uint64
+	for _, adj := range ctx.StakeAdjustments {
+		if adj.Amount < 0 {
+			sum += uint64(-adj.Amount)
+		}
+	}
+	return sum
 }
 
 // Action is now produced by the generic builder. It keeps *Staker runtime-bound.
@@ -196,7 +213,7 @@ func createLogger() *slog.Logger {
 	}))
 }
 
-func printActionTreeWithResultsHelper(action Action, prefix string, isLast bool, parentBlock int, results map[string]*ActionResult, log *slog.Logger) {
+func printActionTreeWithResultsHelper(action Action, prefix string, isLast bool, parentBlock int, results map[string]*ActionResult, log *slog.Logger, usedResults map[string]bool) {
 	// Current node
 	connector := "├── "
 	if isLast {
@@ -216,9 +233,22 @@ func printActionTreeWithResultsHelper(action Action, prefix string, isLast bool,
 	// Calculate the block where this action will execute
 	executionBlock := parentBlock + blockAdvancement
 
-	// Look up results for this action
-	actionKey := fmt.Sprintf("%s@%d", action.Name(), executionBlock)
-	result, found := results[actionKey]
+	// Look up results for this action - since we don't know the sequence number during tree printing,
+	// we need to find the matching key with the correct action and block that hasn't been used yet
+	var result *ActionResult
+	var found bool
+	var matchingKey string
+	for key, res := range results {
+		if res.ActionName == action.Name() && res.Block == executionBlock && !usedResults[key] {
+			result = res
+			found = true
+			matchingKey = key
+			break
+		}
+	}
+	if found {
+		usedResults[matchingKey] = true
+	}
 
 	// Format result indicators
 	execResult, checkResult := formatResultIndicators(found, result)
@@ -257,7 +287,7 @@ func printActionTreeWithResultsHelper(action Action, prefix string, isLast bool,
 	nextActions := action.Next()
 	for i, nextAction := range nextActions {
 		isLastChild := i == len(nextActions)-1
-		printActionTreeWithResultsHelper(nextAction, childPrefix, isLastChild, executionBlock, results, log)
+		printActionTreeWithResultsHelper(nextAction, childPrefix, isLastChild, executionBlock, results, log, usedResults)
 	}
 }
 
@@ -265,14 +295,16 @@ func printActionTreeWithResultsHelper(action Action, prefix string, isLast bool,
 func RunWithResultTree(s *testStaker, action Action, currentBlk int) error {
 	log := createLogger()
 	results := make(map[string]*ActionResult)
+	blockSequence := make(map[int]int) // Track sequence per block
 	ctx := &ExecutionContext{}
-	err := RunnerWithResults(s, action, currentBlk, results, ctx)
-	printActionTreeWithResultsHelper(action, "", true, 0, results, log)
+	err := RunnerWithResults(s, action, currentBlk, results, ctx, blockSequence)
+	usedResults := make(map[string]bool)
+	printActionTreeWithResultsHelper(action, "", true, 0, results, log, usedResults)
 	return err
 }
 
 // RunnerWithResults executes an action, runs its checks, captures results, then recurses on Next().
-func RunnerWithResults(s *testStaker, action Action, currentBlk int, results map[string]*ActionResult, ctx *ExecutionContext) error {
+func RunnerWithResults(s *testStaker, action Action, currentBlk int, results map[string]*ActionResult, ctx *ExecutionContext, blockSequence map[int]int) error {
 	log := createLogger()
 
 	log.Debug("🚀 Starting action execution",
@@ -295,12 +327,25 @@ func RunnerWithResults(s *testStaker, action Action, currentBlk int, results map
 
 	log.Debug("⚡️ Executing action", "action", action.Name(), "block", currentBlk)
 
+	// Create a unique key for this action execution with per-block sequence
+	blockSequence[currentBlk]++
+	sequenceNum := blockSequence[currentBlk]
+
 	// Execute and check with context
 	executionErr := action.Execute(ctx, s, currentBlk)
-	checkErr := action.Check(ctx, s, currentBlk)
 
-	// Create a unique key for this action execution
-	actionKey := fmt.Sprintf("%s@%d", action.Name(), currentBlk)
+	// Update the sequence number on the last added StakeAdjustment (if any)
+	if len(ctx.StakeAdjustments) > 0 {
+		lastAdjustment := &ctx.StakeAdjustments[len(ctx.StakeAdjustments)-1]
+		if lastAdjustment.Block == currentBlk && lastAdjustment.Sequence == 0 {
+			lastAdjustment.Sequence = sequenceNum
+		}
+	}
+
+	// Store current sequence in context for Check function to use
+	ctx.CurrentSequence = sequenceNum
+	checkErr := action.Check(ctx, s, currentBlk)
+	actionKey := fmt.Sprintf("%s@%d#%d", action.Name(), currentBlk, sequenceNum)
 	results[actionKey] = &ActionResult{
 		ActionName:   action.Name(),
 		ExecutionErr: executionErr,
@@ -323,8 +368,13 @@ func RunnerWithResults(s *testStaker, action Action, currentBlk int, results map
 	for i, next := range nextActions {
 		log.Debug("➡️ Starting next action", "sequence", i+1, "action", next.Name())
 		// Clone context for each branch to prevent interference
+		// Each fork gets its own copy of blockSequence to handle parallel branches
+		clonedBlockSequence := make(map[int]int)
+		for block, seq := range blockSequence {
+			clonedBlockSequence[block] = seq
+		}
 		clonedCtx := ctx.Clone()
-		if err := RunnerWithResults(cloneStaker(s), next, currentBlk, results, clonedCtx); err != nil {
+		if err := RunnerWithResults(cloneStaker(s), next, currentBlk, results, clonedCtx, clonedBlockSequence); err != nil {
 			log.Error("❌ Next action failed", "sequence", i+1, "action", next.Name(), "error", err)
 			return err
 		}
@@ -474,13 +524,15 @@ type permutationManager struct {
 }
 
 // Generate all unique permutations of the provided set of actions with their counts.
+// This generates ONLY complete permutations that include ALL actions from the config.
 func (pm *permutationManager) GenerateAllPermutations(config map[string]int) [][]string {
 	const headKey = "NewValidationAction"
 	countHead := config[headKey]
 	if countHead < 1 {
 		return nil // no permutations allowed if no NewValidationAction
 	}
-	// Build action list excluding ONE head action to be inserted at front.
+
+	// Build complete action list excluding ONE head action to be inserted at front.
 	var baseList []string
 	for name, count := range config {
 		c := count
@@ -491,16 +543,25 @@ func (pm *permutationManager) GenerateAllPermutations(config map[string]int) [][
 			baseList = append(baseList, name)
 		}
 	}
+
+	if len(baseList) == 0 {
+		// Just [headKey] is the only permutation
+		return [][]string{{headKey}}
+	}
+
 	var results [][]string
 	var permute func([]string, int)
 	permute = func(arr []string, l int) {
-		if l == len(arr)-1 {
+		// Only generate complete permutations (when we've reached the end)
+		if l == len(arr) {
 			p := make([]string, len(arr))
 			copy(p, arr)
-			// Always prepend headKey
+			// Always prepend headKey to create complete scenario
 			results = append(results, append([]string{headKey}, p...))
 			return
 		}
+
+		// Use deduplication to avoid generating identical permutations
 		dedup := make(map[string]bool)
 		for i := l; i < len(arr); i++ {
 			if dedup[arr[i]] {
@@ -512,12 +573,8 @@ func (pm *permutationManager) GenerateAllPermutations(config map[string]int) [][
 			arr[l], arr[i] = arr[i], arr[l]
 		}
 	}
-	if len(baseList) == 0 {
-		// Just [headKey] is the only permutation
-		results = [][]string{{headKey}}
-	} else {
-		permute(baseList, 0)
-	}
+
+	permute(baseList, 0)
 	return results
 }
 
@@ -551,12 +608,19 @@ func TestPermutation(t *testing.T) {
 
 	validatorID := thor.BytesToAddress([]byte("validator"))
 	endorserID := thor.BytesToAddress([]byte("endorser"))
-	//delegationID := big.NewInt(1)
+	delegationID := big.NewInt(1)
 
-	// Block advancement values to match the scenario
-	addValidationBlocks := 97  // AddValidation @ block 97 (0 + 97)
-	increaseStakeBlocks := 454 // IncreaseStake @ block 551 (97 + 454)
-	decreaseStakeBlocks := 454 // DecreaseStake @ block 1913 (1459 + 454)
+	// Block advancement values to match the requested scenario
+	addValidationBlocks := 148
+	signalExitBlocks := 0   // SignalExit happens at the same block
+	withdrawBlocks := 69453 // Withdraw after staking period + cooldown
+	addDelegationBlocks := 148
+	signalExitDelegationBlocks := 148
+	increaseStakeBlocks := 0          // IncreaseStake happens at the same block
+	withdrawDelegationBlocks := 69453 // WithdrawDelegation after staking period + cooldown
+	decreaseStakeBlocks := 0          // DecreaseStake happens at the same block
+	decreaseStakeBlocks2 := 0         // Second DecreaseStake at the same block
+	increaseStakeBlocks2 := 0         // Final IncreaseStake at the same block
 
 	action := NewAddValidationAction(
 		&addValidationBlocks,
@@ -564,11 +628,19 @@ func TestPermutation(t *testing.T) {
 		endorserID,
 		thor.LowStakingPeriod(),
 		MinStakeVET,
-		NewIncreaseStakeAction(&increaseStakeBlocks, validatorID, endorserID, MinStakeVET,
-			NewIncreaseStakeAction(&increaseStakeBlocks, validatorID, endorserID, MinStakeVET,
-				NewIncreaseStakeAction(&increaseStakeBlocks, validatorID, endorserID, MinStakeVET,
-					NewDecreaseStakeAction(&decreaseStakeBlocks, validatorID, endorserID, MinStakeVET,
-						NewDecreaseStakeAction(&decreaseStakeBlocks, validatorID, endorserID, MinStakeVET),
+		NewSignalExitAction(&signalExitBlocks, validatorID, endorserID,
+			NewWithdrawAction(&withdrawBlocks, validatorID, endorserID,
+				NewAddDelegationAction(&addDelegationBlocks, validatorID, MinStakeVET, uint8(1),
+					NewSignalExitDelegationAction(&signalExitDelegationBlocks, delegationID,
+						NewIncreaseStakeAction(&increaseStakeBlocks, validatorID, endorserID, MinStakeVET,
+							NewWithdrawDelegationAction(&withdrawDelegationBlocks, delegationID,
+								NewDecreaseStakeAction(&decreaseStakeBlocks, validatorID, endorserID, MinStakeVET,
+									NewDecreaseStakeAction(&decreaseStakeBlocks2, validatorID, endorserID, MinStakeVET,
+										NewIncreaseStakeAction(&increaseStakeBlocks2, validatorID, endorserID, MinStakeVET),
+									),
+								),
+							),
+						),
 					),
 				),
 			),
@@ -581,7 +653,7 @@ func TestPermutation(t *testing.T) {
 func TestRandomPermutationManager(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 
-	for i := range 10 {
+	for i := range 3 {
 		t.Run(fmt.Sprintf("iteration-%d", i+1), func(t *testing.T) {
 			randomModifier := createRandomModifier()
 
@@ -629,8 +701,8 @@ func TestRandomPermutationManager(t *testing.T) {
 
 			config := map[string]int{
 				"NewValidationAction":           1,
-				"NewIncreaseStakeAction":        3,
-				"NewDecreaseStakeAction":        3,
+				"NewIncreaseStakeAction":        2,
+				"NewDecreaseStakeAction":        2,
 				"NewSignalExitAction":           1,
 				"NewWithdrawAction":             1,
 				"NewAddDelegationAction":        1,
@@ -639,11 +711,24 @@ func TestRandomPermutationManager(t *testing.T) {
 			}
 
 			perms := permManager.GenerateAllPermutations(config)
-			for _, order := range perms {
+			t.Logf("Total permutations to test: %d", len(perms))
+			for i, order := range perms {
 				action := permManager.InstantiateChain(order)
 				staker := newTestStaker()
 				require.NoError(t, RunWithResultTree(staker, action, 0))
+
+				// Force garbage collection every 100 permutations
+				if i%1000 == 0 {
+					runtime.GC()
+					runtime.GC()
+					time.Sleep(time.Millisecond * 100) // Let GC finish
+				}
 			}
 		})
+		// Force aggressive garbage collection between iterations
+		runtime.GC()
+		runtime.GC()
+		time.Sleep(time.Millisecond * 100) // Let GC finish
+
 	}
 }

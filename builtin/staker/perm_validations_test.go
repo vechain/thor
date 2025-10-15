@@ -147,8 +147,9 @@ func NewIncreaseStakeAction(
 				}
 				// Add positive adjustment to context if context is provided
 				ctx.StakeAdjustments = append(ctx.StakeAdjustments, StakeAdjustment{
-					Block:  blk,
-					Amount: int64(amount),
+					Block:    blk,
+					Amount:   int64(amount),
+					Sequence: 0, // Will be updated in RunnerWithResults
 				})
 				ctx.LastActionAmount = amount // For display purposes
 				return nil
@@ -166,8 +167,11 @@ func NewIncreaseStakeAction(
 				if val.Status == validation.StatusExit {
 					return fmt.Errorf("Check IncreaseStake failed, validator exited")
 				}
-				if val.Status == validation.StatusActive && val.ExitBlock != nil {
-					return fmt.Errorf("Check IncreaseStake failed, validator has signaled exit")
+				if val.Status != validation.StatusActive {
+					return fmt.Errorf("Check IncreaseStake failed, can't increase stake while validator not active")
+				}
+				if val.ExitBlock != nil {
+					return fmt.Errorf("Check IncreaseStake failed, validator has signaled exit, cannot increase stake")
 				}
 				if err = staker.validateStakeIncrease(validationID, val, amount); err != nil {
 					return fmt.Errorf("Check IncreaseStake failed, validateStakeIncrease failed: %w", err)
@@ -194,8 +198,9 @@ func NewDecreaseStakeAction(
 				}
 				// Add negative adjustment to context if context is provided
 				ctx.StakeAdjustments = append(ctx.StakeAdjustments, StakeAdjustment{
-					Block:  blk,
-					Amount: -int64(amount),
+					Block:    blk,
+					Amount:   -int64(amount),
+					Sequence: 0, // Will be updated in RunnerWithResults
 				})
 				ctx.LastActionAmount = amount // For display purposes (positive value)
 				return nil
@@ -215,8 +220,52 @@ func NewDecreaseStakeAction(
 				if val.Status == validation.StatusExit {
 					return fmt.Errorf("Check DecreaseStake failed, validator exited")
 				}
-				if val.Status == validation.StatusActive && val.ExitBlock != nil {
-					return fmt.Errorf("Check DecreaseStake failed, validator has signaled exit")
+				if val.Status != validation.StatusActive {
+					return fmt.Errorf("Check DecreaseStake failed, can't decrease stake while validator not active")
+				}
+				if val.ExitBlock != nil {
+					return fmt.Errorf("Check DecreaseStake failed, validator has signaled exit, cannot decrease stake")
+				}
+
+				// Calculate available stake using independent context accounting
+				availableStake := uint64(0)
+				currentBlock := blk
+				stakingPeriod := int(thor.LowStakingPeriod())
+				epochInterval := HousekeepingInterval // 180 blocks
+
+				// Initial stake becomes available after validation is active (1 epoch) + 1 staking period
+				if ctx.ValidationStartBlock != nil {
+					initialStakeMaturityBlock := *ctx.ValidationStartBlock + epochInterval + stakingPeriod
+					if currentBlock >= initialStakeMaturityBlock {
+						availableStake += ctx.InitialStake
+					}
+				}
+
+				// Use the current sequence from the context
+				currentSequence := ctx.CurrentSequence
+
+				// Add matured increases and subtract decreases (but not the current one being validated)
+				for _, adjustment := range ctx.StakeAdjustments {
+					if adjustment.Amount > 0 {
+						// Increase: becomes available after 1 staking period
+						increaseMaturityBlock := adjustment.Block + stakingPeriod
+						if currentBlock >= increaseMaturityBlock {
+							availableStake += uint64(adjustment.Amount)
+						}
+					} else {
+						// Decrease: reduces available stake immediately, but exclude the current operation
+						if adjustment.Block != currentBlock || adjustment.Sequence != currentSequence {
+							availableStake -= uint64(-adjustment.Amount)
+						}
+					}
+				}
+
+				// Check if decrease would leave sufficient stake
+				if availableStake < amount {
+					return fmt.Errorf("Check DecreaseStake failed, not enough matured stake available")
+				}
+				if availableStake-amount < MinStakeVET {
+					return fmt.Errorf("Check DecreaseStake failed, remaining stake would be below minimum (%d)", MinStakeVET)
 				}
 
 				return nil
@@ -486,6 +535,9 @@ func calculateExpectedValidationWithdrawAmount(ctx *ExecutionContext, currentBlo
 	if currentBlock >= requiredBlock {
 		totalStake := int64(ctx.InitialStake)
 		for _, adj := range ctx.StakeAdjustments {
+			if adj.Amount < 0 {
+				continue
+			}
 			totalStake += adj.Amount
 		}
 
