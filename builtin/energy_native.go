@@ -6,6 +6,7 @@
 package builtin
 
 import (
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -21,6 +22,9 @@ func init() {
 	}{
 		{"native_totalSupply", func(env *xenv.Environment) []any {
 			env.UseGas(thor.SloadGas)
+			if env.BlockContext().EnergyStopTime != math.MaxUint64 {
+				env.UseGas(thor.SloadGas) // growth stopped, need to load issued
+			}
 			supply, err := Energy.Native(env.State(), env.BlockContext().Time, env.BlockContext().EnergyStopTime).TotalSupply()
 			if err != nil {
 				panic(err)

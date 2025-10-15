@@ -6,6 +6,7 @@
 package energy
 
 import (
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -120,9 +121,13 @@ func (e *Energy) TotalSupply() (*big.Int, error) {
 	// this is a virtual account, use account.CalcEnergy directly
 	grown := acc.CalcEnergy(e.blockTime, e.stopTime)
 
-	issued, err := e.getIssued()
-	if err != nil {
-		return nil, err
+	issued := new(big.Int)
+	// growth stopped, we are at hayabusa, need issued for total supply calculation
+	if e.stopTime != math.MaxUint64 {
+		issued, err = e.getIssued()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return grown.Add(grown, issued), nil
