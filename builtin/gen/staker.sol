@@ -30,14 +30,14 @@ contract Staker {
     /**
      * @dev totalStake returns all stakes and weight by active validators.
      */
-    function totalStake() public view returns (uint256 totalVET, uint256 totalWeight) {
+    function totalStake() external view returns (uint256 totalVET, uint256 totalWeight) {
         return StakerNative(address(this)).native_totalStake();
     }
 
     /**
      * @dev queuedStake returns all stakes by queued validators.
      */
-    function queuedStake() public view returns (uint256 queuedVET) {
+    function queuedStake() external view returns (uint256 queuedVET) {
         return StakerNative(address(this)).native_queuedStake();
     }
 
@@ -47,7 +47,7 @@ contract Staker {
     function addValidation(
         address validator,
         uint32 period
-    ) public payable checkStake(msg.value) stakerNotPaused {
+    ) external payable checkStake(msg.value) stakerNotPaused {
         effectiveVET += msg.value;
         StakerNative(address(this)).native_addValidation(validator, msg.sender, period, msg.value);
         emit ValidationQueued(validator, msg.sender, period, msg.value);
@@ -56,7 +56,7 @@ contract Staker {
     /**
      * @dev increaseStake adds VET to the current stake of the queued/active validator.
      */
-    function increaseStake(address validator) public payable checkStake(msg.value) stakerNotPaused {
+    function increaseStake(address validator) external payable checkStake(msg.value) stakerNotPaused {
         effectiveVET += msg.value;
         StakerNative(address(this)).native_increaseStake(validator, msg.sender, msg.value);
         emit StakeIncreased(validator, msg.value);
@@ -65,7 +65,7 @@ contract Staker {
     /**
      * @dev setBeneficiary sets the beneficiary address for a validator.
      */
-    function setBeneficiary(address validator, address beneficiary) public stakerNotPaused {
+    function setBeneficiary(address validator, address beneficiary) external stakerNotPaused {
         StakerNative(address(this)).native_setBeneficiary(validator, msg.sender, beneficiary);
 
         emit BeneficiarySet(validator, beneficiary);
@@ -77,7 +77,7 @@ contract Staker {
     function decreaseStake(
         address validator,
         uint256 amount
-    ) public checkStake(amount) stakerNotPaused {
+    ) external checkStake(amount) stakerNotPaused {
         StakerNative(address(this)).native_decreaseStake(validator, msg.sender, amount);
         emit StakeDecreased(validator, amount);
     }
@@ -85,7 +85,7 @@ contract Staker {
     /**
      * @dev allows the caller to withdraw a stake when their status is set to exited
      */
-    function withdrawStake(address validator) public stakerNotPaused {
+    function withdrawStake(address validator) external stakerNotPaused {
         uint256 stake = StakerNative(address(this)).native_withdrawStake(validator, msg.sender);
 
         effectiveVET -= stake;
@@ -97,7 +97,7 @@ contract Staker {
     /**
      * @dev signalExit signals the intent to exit a validator position at the end of the staking period.
      */
-    function signalExit(address validator) public stakerNotPaused {
+    function signalExit(address validator) external stakerNotPaused {
         StakerNative(address(this)).native_signalExit(validator, msg.sender);
         emit ValidationSignaledExit(validator);
     }
@@ -109,7 +109,7 @@ contract Staker {
         address validator,
         uint8 multiplier // (% of msg.value) 100 for x1, 200 for x2, etc. This enforces a maximum of 2.56x multiplier
     )
-        public
+        external
         payable
         onlyDelegatorContract
         checkStake(msg.value)
@@ -132,7 +132,7 @@ contract Staker {
      */
     function signalDelegationExit(
         uint256 delegationID
-    ) public onlyDelegatorContract delegatorNotPaused {
+    ) external onlyDelegatorContract delegatorNotPaused {
         StakerNative(address(this)).native_signalDelegationExit(delegationID);
         emit DelegationSignaledExit(delegationID);
     }
@@ -142,7 +142,7 @@ contract Staker {
      */
     function withdrawDelegation(
         uint256 delegationID
-    ) public onlyDelegatorContract delegatorNotPaused {
+    ) external onlyDelegatorContract delegatorNotPaused {
         uint256 stake = StakerNative(address(this)).native_withdrawDelegation(delegationID);
 
         effectiveVET -= stake;
@@ -156,7 +156,7 @@ contract Staker {
      */
     function getDelegation(
         uint256 delegationID
-    ) public view returns (address validator, uint256 stake, uint8 multiplier, bool isLocked) {
+    ) external view returns (address validator, uint256 stake, uint8 multiplier, bool isLocked) {
         (validator, stake, multiplier, isLocked, , ) = StakerNative(address(this))
             .native_getDelegation(delegationID);
         return (validator, stake, multiplier, isLocked);
@@ -167,7 +167,7 @@ contract Staker {
      */
     function getDelegationPeriodDetails(
         uint256 delegationID
-    ) public view returns (uint32 startPeriod, uint32 endPeriod) {
+    ) external view returns (uint32 startPeriod, uint32 endPeriod) {
         (, , , , startPeriod, endPeriod) = StakerNative(address(this)).native_getDelegation(
             delegationID
         );
@@ -180,7 +180,7 @@ contract Staker {
     function getValidation(
         address validator
     )
-        public
+        external
         view
         returns (
             address endorser,
@@ -203,7 +203,7 @@ contract Staker {
     function getValidationPeriodDetails(
         address validator
     )
-        public
+        external
         view
         returns (uint32 period, uint32 startBlock, uint32 exitBlock, uint32 completedPeriods)
     {
@@ -215,28 +215,28 @@ contract Staker {
     /**
      * @dev getWithdrawable returns the amount of a validator's withdrawable VET.
      */
-    function getWithdrawable(address id) public view returns (uint256 withdrawableVET) {
+    function getWithdrawable(address id) external view returns (uint256 withdrawableVET) {
         return StakerNative(address(this)).native_getWithdrawable(id);
     }
 
     /**
      * @dev firstActive returns the head validatorId of the active validators.
      */
-    function firstActive() public view returns (address first) {
+    function firstActive() external view returns (address first) {
         return StakerNative(address(this)).native_firstActive();
     }
 
     /**
      * @dev firstQueued returns the head validatorId of the queued validators.
      */
-    function firstQueued() public view returns (address first) {
+    function firstQueued() external view returns (address first) {
         return StakerNative(address(this)).native_firstQueued();
     }
 
     /**
      * @dev next returns the validator in a linked list
      */
-    function next(address prev) public view returns (address nextValidation) {
+    function next(address prev) external view returns (address nextValidation) {
         return StakerNative(address(this)).native_next(prev);
     }
 
@@ -246,7 +246,7 @@ contract Staker {
     function getDelegatorsRewards(
         address validator,
         uint32 stakingPeriod
-    ) public view returns (uint256 rewards) {
+    ) external view returns (uint256 rewards) {
         return StakerNative(address(this)).native_getDelegatorsRewards(validator, stakingPeriod);
     }
 
@@ -257,7 +257,7 @@ contract Staker {
     function getValidationTotals(
         address validator
     )
-        public
+        external
         view
         returns (
             uint256 lockedVET,
@@ -273,14 +273,14 @@ contract Staker {
     /**
      * @dev getValidationsNum returns the number of active and queued validators.
      */
-    function getValidationsNum() public view returns (uint64 activeCount, uint64 queuedCount) {
+    function getValidationsNum() external view returns (uint64 activeCount, uint64 queuedCount) {
         return StakerNative(address(this)).native_getValidationsNum();
     }
 
     /**
      * @dev issuance returns the total amount of VTHO generated for the context of current block.
      */
-    function issuance() public view returns (uint256 issued) {
+    function issuance() external view returns (uint256 issued) {
         return StakerNative(address(this)).native_issuance();
     }
 
