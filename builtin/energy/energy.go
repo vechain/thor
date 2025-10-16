@@ -370,7 +370,7 @@ func decodeUint64(encoded []byte) (uint64, error) {
 			return 0, errors.New("rlp: uint overflow")
 		}
 		if len(encoded) < int(1+size) {
-			return 0, errors.New("unexpected EOF")
+			return 0, errors.New("rlp: unexpected EOF")
 		}
 		switch size {
 		case 0:
