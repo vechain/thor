@@ -7,6 +7,7 @@ package builtin
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+
 	"github.com/vechain/thor/v2/builtin/gascharger"
 
 	"github.com/vechain/thor/v2/thor"
