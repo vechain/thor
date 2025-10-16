@@ -184,11 +184,6 @@ func (c *Client) Block(revision string) (blocks *api.JSONCollapsedBlock, err err
 	return c.httpConn.GetBlock(revision)
 }
 
-// BlockReward retrieved block reward and proposer by its revision
-func (c *Client) BlockReward(revision string) (blocks *api.JSONBlockReward, err error) {
-	return c.httpConn.GetBlockReward(revision)
-}
-
 // ExpandedBlock retrieves an expanded block by its revision.
 func (c *Client) ExpandedBlock(revision string) (blocks *api.JSONExpandedBlock, err error) {
 	return c.httpConn.GetExpandedBlock(revision)
