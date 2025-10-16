@@ -40,13 +40,15 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 		gen.GasLimit = thor.InitialGasLimit
 	}
 
+	// When a ExecutorAddress is set, the gen.Executor.Approvers cannot be set by the genesis
+	// as the ExecutorAddress can be a contract or an EOA
 	if gen.Params.ExecutorAddress != nil && len(gen.Executor.Approvers) > 0 {
 		return nil, errors.New("can not specify both executorAddress and approvers")
 	}
 
 	executor := builtin.Executor.Address
 	externalExecutor := false
-	// if external executor address is specified, ignore gen.Executor.Approvers
+
 	if gen.Params.ExecutorAddress != nil {
 		executor = *gen.Params.ExecutorAddress
 		externalExecutor = true
