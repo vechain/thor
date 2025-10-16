@@ -78,6 +78,11 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 					return err
 				}
 			}
+			if gen.ForkConfig.HAYABUSA == 0 {
+				if err := state.SetCode(builtin.Staker.Address, builtin.Staker.RuntimeBytecodes()); err != nil {
+					return err
+				}
+			}
 
 			tokenSupply := &big.Int{}
 			energySupply := &big.Int{}
