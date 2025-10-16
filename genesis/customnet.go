@@ -197,7 +197,8 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 	}
 
 	builder.PostCallState(func(state *state.State) error {
-		if gen.ForkConfig.HAYABUSA == 0 && thor.HayabusaTP() == 0 {
+		// if hayabusa starts from genesis, skip the transition period and directly promote queued validators to active
+		if gen.ForkConfig.HAYABUSA == 0 {
 			stk := staker.New(builtin.Staker.Address, state, params.New(builtin.Params.Address, state), nil)
 			_, err := stk.Housekeep(0)
 			if err != nil {
