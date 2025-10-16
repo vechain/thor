@@ -324,21 +324,6 @@ func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts uint
 			return err
 		}
 
-		n.maxBlockNum = blockNum
-		return nil
-	}
-
-	conflicts, err = n.repo.GetConflicts(blockNum)
-	if err != nil {
-		return err
-	}
-	blockID, err = process(uint32(len(conflicts)))
-	if err != nil {
-		return err
-	}
-
-	// post process block hook, executed only if the block is processed successfully
-	if err = func() error {
 		if n.initialSynced {
 			if needPrintWelcomeInfo() &&
 				blockNum >= n.forkConfig.HAYABUSA+thor.HayabusaTP() &&
@@ -359,6 +344,21 @@ func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts uint
 			}
 		}
 
+		n.maxBlockNum = blockNum
+		return nil
+	}
+
+	conflicts, err = n.repo.GetConflicts(blockNum)
+	if err != nil {
+		return err
+	}
+	blockID, err = process(uint32(len(conflicts)))
+	if err != nil {
+		return err
+	}
+
+	// post process block hook, executed only if the block is processed successfully
+	if err = func() error {
 		if len(conflicts) > 0 {
 			newBlock, err := n.repo.GetBlock(blockID)
 			if err != nil {
