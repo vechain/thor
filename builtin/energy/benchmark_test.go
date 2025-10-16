@@ -1,3 +1,8 @@
+// Copyright (c) 2025 The VeChainThor developers
+
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
 package energy
 
 import (
@@ -6,32 +11,12 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// Benchmark encoding operations for typical timestamp values
-func BenchmarkEncode_Timestamp_Standard(b *testing.B) {
-	val := uint64(1698000000) // Typical timestamp value
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := rlp.EncodeToBytes(val)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func BenchmarkEncode_Timestamp_Optimized(b *testing.B) {
-	val := uint64(1698000000) // Typical timestamp value
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = encodeUint64RLP(val)
-	}
-}
-
 // Benchmark decoding operations for typical timestamp values
 func BenchmarkDecode_Timestamp_Standard(b *testing.B) {
 	val := uint64(1698000000) // Typical timestamp value
 	data, _ := rlp.EncodeToBytes(val)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result uint64
 		err := rlp.DecodeBytes(data, &result)
 		if err != nil {
@@ -42,33 +27,13 @@ func BenchmarkDecode_Timestamp_Standard(b *testing.B) {
 
 func BenchmarkDecode_Timestamp_Optimized(b *testing.B) {
 	val := uint64(1698000000) // Typical timestamp value
-	data := encodeUint64RLP(val)
+	data, _ := rlp.EncodeToBytes(val)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := decodeUint64RLP(data)
+	for b.Loop() {
+		_, err := decodeUint64(data)
 		if err != nil {
 			b.Fatal(err)
 		}
-	}
-}
-
-// Benchmark encoding operations for zero values
-func BenchmarkEncode_Zero_Standard(b *testing.B) {
-	val := uint64(0)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := rlp.EncodeToBytes(val)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func BenchmarkEncode_Zero_Optimized(b *testing.B) {
-	val := uint64(0)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = encodeUint64RLP(val)
 	}
 }
 
@@ -77,7 +42,7 @@ func BenchmarkDecode_Zero_Standard(b *testing.B) {
 	val := uint64(0)
 	data, _ := rlp.EncodeToBytes(val)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result uint64
 		err := rlp.DecodeBytes(data, &result)
 		if err != nil {
@@ -88,33 +53,13 @@ func BenchmarkDecode_Zero_Standard(b *testing.B) {
 
 func BenchmarkDecode_Zero_Optimized(b *testing.B) {
 	val := uint64(0)
-	data := encodeUint64RLP(val)
+	data, _ := rlp.EncodeToBytes(val)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := decodeUint64RLP(data)
+	for b.Loop() {
+		_, err := decodeUint64(data)
 		if err != nil {
 			b.Fatal(err)
 		}
-	}
-}
-
-// Benchmark encoding operations for max uint64 values
-func BenchmarkEncode_MaxUint64_Standard(b *testing.B) {
-	val := uint64(18446744073709551615) // MaxUint64
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := rlp.EncodeToBytes(val)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func BenchmarkEncode_MaxUint64_Optimized(b *testing.B) {
-	val := uint64(18446744073709551615) // MaxUint64
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = encodeUint64RLP(val)
 	}
 }
 
@@ -123,7 +68,7 @@ func BenchmarkDecode_MaxUint64_Standard(b *testing.B) {
 	val := uint64(18446744073709551615) // MaxUint64
 	data, _ := rlp.EncodeToBytes(val)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result uint64
 		err := rlp.DecodeBytes(data, &result)
 		if err != nil {
@@ -134,10 +79,10 @@ func BenchmarkDecode_MaxUint64_Standard(b *testing.B) {
 
 func BenchmarkDecode_MaxUint64_Optimized(b *testing.B) {
 	val := uint64(18446744073709551615) // MaxUint64
-	data := encodeUint64RLP(val)
+	data, _ := rlp.EncodeToBytes(val)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := decodeUint64RLP(data)
+	for b.Loop() {
+		_, err := decodeUint64(data)
 		if err != nil {
 			b.Fatal(err)
 		}

@@ -6,8 +6,8 @@
 package energy
 
 import (
-	"encoding/binary"
 	"errors"
+	"io"
 	"math"
 	"math/big"
 
@@ -216,7 +216,7 @@ func (e *Energy) StopEnergyGrowth() error {
 	}
 
 	if err := e.state.EncodeStorage(e.addr, growthStopTimeKey, func() ([]byte, error) {
-		return encodeUint64RLP(e.blockTime), nil
+		return rlp.EncodeToBytes(e.blockTime)
 	}); err != nil {
 		return err
 	}
@@ -238,7 +238,7 @@ func (e *Energy) GetEnergyGrowthStopTime() (uint64, error) {
 			return nil
 		}
 		var err error
-		time, err = decodeUint64RLP(raw)
+		time, err = decodeUint64(raw)
 		return err
 	}); err != nil {
 		return math.MaxUint64, err
@@ -354,73 +354,39 @@ func (e *Energy) CalculateRewards(staker staker) (*big.Int, error) {
 	return reward, nil
 }
 
-// encodeUint64RLP efficiently encodes a uint64 to RLP format without reflection
-func encodeUint64RLP(val uint64) []byte {
-	if val == 0 {
-		return []byte{0x80} // RLP encoding of 0
+// decodeUint64 efficiently decodes RLP data to uint64 without reflection
+func decodeUint64(encoded []byte) (uint64, error) {
+	if len(encoded) == 0 {
+		return 0, io.EOF
 	}
 
-	// Convert to minimal byte representation
-	buf := make([]byte, 8)
-	binary.BigEndian.PutUint64(buf, val)
-
-	// Find first non-zero byte
-	start := 0
-	for start < 8 && buf[start] == 0 {
-		start++
-	}
-
-	data := buf[start:]
-	length := len(data)
-
-	if length == 1 && data[0] < 0x80 {
-		// Single byte less than 0x80 is encoded as itself
-		return data
-	}
-
-	// Short string: 0x80 + length, followed by data
-	result := make([]byte, 1+length)
-	result[0] = 0x80 + byte(length)
-	copy(result[1:], data)
-	return result
-}
-
-// decodeUint64RLP efficiently decodes RLP data to uint64 without reflection
-func decodeUint64RLP(data []byte) (uint64, error) {
-	if len(data) == 0 {
-		return 0, nil
-	}
-
-	if data[0] == 0x80 {
-		// RLP encoding of 0
-		return 0, nil
-	}
-
-	if data[0] < 0x80 {
-		// Single byte
-		return uint64(data[0]), nil
-	}
-
-	if data[0] <= 0xb7 {
-		// Short string
-		length := int(data[0] - 0x80)
-		if len(data) < 1+length {
+	b := encoded[0] // kind byte
+	switch {
+	case b < 0x80: // type bytes [0x00, 0x7F]
+		return uint64(b), nil
+	case b < 0xB8: // type string 0-55 bytes
+		size := uint64(b - 0x80)
+		if size > 8 {
+			return 0, errors.New("rlp: uint overflow")
+		}
+		if len(encoded) < int(1+size) {
 			return 0, errors.New("unexpected EOF")
 		}
-
-		payload := data[1 : 1+length]
-		if len(payload) > 8 {
-			return 0, errors.New("uint overflow")
+		switch size {
+		case 0:
+			return 0, nil
+		case 1:
+			return uint64(encoded[1]), nil
+		default:
+			var decoded uint64
+			for _, b := range encoded[1 : 1+size] {
+				decoded = (decoded << 8) | uint64(b)
+			}
+			return decoded, nil
 		}
-
-		// Convert to uint64
-		var result uint64
-		for _, b := range payload {
-			result = (result << 8) | uint64(b)
-		}
-		return result, nil
+	case b < 0xC0: // type string > 55 bytes
+		return 0, errors.New("rlp: uint overflow")
+	default:
+		return 0, errors.New("rlp: expected string")
 	}
-
-	// Long string (shouldn't happen for uint64)
-	return 0, errors.New("unexpected format")
 }
