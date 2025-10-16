@@ -11,6 +11,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/rlp"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -440,4 +442,32 @@ func TestDistributeRewards_MaxRewardsPercentage(t *testing.T) {
 	issuedAfter, err := energy.getIssued()
 	require.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).Add(issuedBefore, rewards), issuedAfter)
+}
+
+func TestDecodeUint64(t *testing.T) {
+	tests := []struct {
+		name  string
+		input uint64
+	}{
+		{"0", 0},
+		{"1", 1},
+		{"127", 127},
+		{"128", 128},
+		{"255", 255},
+		{"256", 256},
+		{"65535", 65535},
+		{"65536", 65536},
+		{"4294967295", 4294967295},
+		{"4294967296", 4294967296},
+		{"max uint64", math.MaxUint64},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			encoded, err := rlp.EncodeToBytes(tt.input)
+			require.NoError(t, err)
+			decoded, err := decodeUint64(encoded)
+			require.NoError(t, err)
+			assert.Equal(t, tt.input, decoded)
+		})
+	}
 }
