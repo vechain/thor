@@ -104,7 +104,7 @@ func (e *Energy) TokenTotalSupply() (*big.Int, error) {
 	return init.Token, nil
 }
 
-// TotalSupply returns total supply of energy.
+// TotalSupply returns total supply of energy. Does not account for burned tokens.
 func (e *Energy) TotalSupply() (*big.Int, error) {
 	initialSupply, err := e.getInitialSupply()
 	if err != nil {
