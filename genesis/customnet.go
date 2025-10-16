@@ -78,7 +78,7 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 					return err
 				}
 			}
-			if gen.ForkConfig.HAYABUSA == 0 {
+			if isHayabusaGenesis(gen) {
 				if err := state.SetCode(builtin.Staker.Address, builtin.Staker.RuntimeBytecodes()); err != nil {
 					return err
 				}
@@ -194,7 +194,7 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 		}
 	}
 
-	if gen.ForkConfig.HAYABUSA == 0 {
+	if isHayabusaGenesis(gen) {
 		for _, authority := range gen.Authority {
 			data = mustEncodeInput(builtin.Staker.ABI, "addValidation", authority.MasterAddress, thor.HighStakingPeriod())
 			builder.Call(tx.NewClause(&builtin.Staker.Address).WithData(data).WithValue(staker.MinStake), authority.EndorsorAddress)
@@ -202,8 +202,7 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 	}
 
 	builder.PostCallState(func(state *state.State) error {
-		// if hayabusa starts from genesis, skip the transition period and directly promote queued validators to active
-		if gen.ForkConfig.HAYABUSA == 0 {
+		if isHayabusaGenesis(gen) {
 			stk := staker.New(builtin.Staker.Address, state, params.New(builtin.Params.Address, state), nil)
 			_, err := stk.Housekeep(0)
 			if err != nil {
@@ -224,4 +223,8 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 		panic(err)
 	}
 	return &Genesis{builder, id, "customnet"}, nil
+}
+
+func isHayabusaGenesis(gen *CustomGenesis) bool {
+	return gen.ForkConfig.HAYABUSA == 0 && gen.Config != nil && gen.Config.HayabusaTP != nil && *gen.Config.HayabusaTP == 0
 }
