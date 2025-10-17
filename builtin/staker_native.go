@@ -442,6 +442,7 @@ func init() {
 			charger := gascharger.New(env)
 
 			staker := Staker.NativeMetered(env.State(), charger)
+			charger.Charge(thor.SloadGas)
 			issuance, err := Energy.Native(env.State(), env.BlockContext().Time).CalculateRewards(staker)
 			if err != nil {
 				return nil, err
