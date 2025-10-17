@@ -1,8 +1,14 @@
+// Copyright (c) 2025 The VeChainThor developers
+
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
 package staker
 
 import (
 	"fmt"
 	"log/slog"
+	"maps"
 	"math/big"
 	"math/rand"
 	"os"
@@ -11,6 +17,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
 	"github.com/vechain/thor/v2/builtin/params"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
@@ -213,7 +220,15 @@ func createLogger() *slog.Logger {
 	}))
 }
 
-func printActionTreeWithResultsHelper(action Action, prefix string, isLast bool, parentBlock int, results map[string]*ActionResult, log *slog.Logger, usedResults map[string]bool) {
+func printActionTreeWithResultsHelper(
+	action Action,
+	prefix string,
+	isLast bool,
+	parentBlock int,
+	results map[string]*ActionResult,
+	log *slog.Logger,
+	usedResults map[string]bool,
+) {
 	// Current node
 	connector := "├── "
 	if isLast {
@@ -370,9 +385,7 @@ func RunnerWithResults(s *testStaker, action Action, currentBlk int, results map
 		// Clone context for each branch to prevent interference
 		// Each fork gets its own copy of blockSequence to handle parallel branches
 		clonedBlockSequence := make(map[int]int)
-		for block, seq := range blockSequence {
-			clonedBlockSequence[block] = seq
-		}
+		maps.Copy(clonedBlockSequence, blockSequence)
 		clonedCtx := ctx.Clone()
 		if err := RunnerWithResults(cloneStaker(s), next, currentBlk, results, clonedCtx, clonedBlockSequence); err != nil {
 			log.Error("❌ Next action failed", "sequence", i+1, "action", next.Name(), "error", err)
@@ -444,9 +457,9 @@ func convertNilBlock(i *int) int {
 // createRandomModifier creates a random modifier function for block advancements
 func createRandomModifier() func(*int) *int {
 	return func(original *int) *int {
-		X := rand.Intn(360) + 1 // 1-360
-		Y := rand.Intn(360) + 1 // 1-360
-		useAbove := rand.Intn(2) == 1
+		X := rand.Intn(360) + 1       //nolint:gosec // 1-360
+		Y := rand.Intn(360) + 1       //nolint:gosec // 1-360
+		useAbove := rand.Intn(2) == 1 //nolint:gosec
 
 		if useAbove {
 			// "above" permutation
@@ -539,7 +552,7 @@ func (pm *permutationManager) GenerateAllPermutations(config map[string]int) [][
 		if name == headKey {
 			c-- // We've reserved one for the head
 		}
-		for i := 0; i < c; i++ {
+		for range c {
 			baseList = append(baseList, name)
 		}
 	}
@@ -654,7 +667,10 @@ func TestPermutation(t *testing.T) {
 }
 
 func TestRandomPermutationManager(t *testing.T) {
-	rand.Seed(time.Now().UnixNano())
+	// If RUN_PERMUTATIONS is empty, skip.
+	if os.Getenv("RUN_PERMUTATIONS") == "" {
+		t.Skipf("Skipping %s because RUN_PERMUTATIONS is empty ", t.Name())
+	}
 
 	for i := range 3 {
 		t.Run(fmt.Sprintf("iteration-%d", i+1), func(t *testing.T) {
@@ -732,6 +748,5 @@ func TestRandomPermutationManager(t *testing.T) {
 		runtime.GC()
 		runtime.GC()
 		time.Sleep(time.Millisecond * 100) // Let GC finish
-
 	}
 }

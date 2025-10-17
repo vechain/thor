@@ -1,3 +1,8 @@
+// Copyright (c) 2025 The VeChainThor developers
+
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
 package staker
 
 import (
@@ -526,10 +531,7 @@ func calculateExpectedValidationWithdrawAmount(ctx *ExecutionContext, currentBlo
 	requiredBlockHousekeeping := signalExitBlock + timeToNextHousekeeping + stakingPeriod + cooldownPeriod
 
 	// Use the earlier of the two requirements (more restrictive)
-	requiredBlock := requiredBlockHousekeeping
-	if requiredBlockPeriodBased < requiredBlockHousekeeping {
-		requiredBlock = requiredBlockPeriodBased
-	}
+	requiredBlock := min(requiredBlockPeriodBased, requiredBlockHousekeeping)
 
 	// If enough time has passed, can withdraw everything (initial stake + all adjustments)
 	if currentBlock >= requiredBlock {
@@ -595,7 +597,8 @@ func calculateExpectedDelegationWithdrawAmount(ctx *ExecutionContext, currentBlo
 		return 0
 	}
 
-	// Rule 1: If both DelegationExitBlock == nil AND SignalExitBlock == nil → return check if WithdrawDelegation was done in same Period as AddDelegation → can exit
+	// Rule 1: If both DelegationExitBlock == nil AND SignalExitBlock == nil → return check if WithdrawDelegation was done in same Period as AddDelegation →
+	// can exit
 	if isSamePeriod(*ctx.DelegationStartBlock, currentBlock, int(thor.LowStakingPeriod())) {
 		return ctx.InitialDelegationStake
 	}
