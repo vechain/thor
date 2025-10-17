@@ -8,6 +8,8 @@ package builtin
 import (
 	"github.com/ethereum/go-ethereum/common"
 
+	"github.com/vechain/thor/v2/builtin/gascharger"
+
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/xenv"
 )
@@ -124,7 +126,7 @@ func init() {
 			// Use staker Transition Period logic
 			// to ensure that transitioning validators are marked as endorsed
 			env.UseGas(thor.GetBalanceGas)
-			isEndorsed, err := Staker.Native(env.State()).TransitionPeriodBalanceCheck(
+			isEndorsed, err := Staker.NativeMetered(env.State(), gascharger.New(env)).TransitionPeriodBalanceCheck(
 				env.ForkConfig(),
 				env.BlockContext().Number,
 				endorsement,
