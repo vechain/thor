@@ -610,17 +610,20 @@ func TestPermutation(t *testing.T) {
 	endorserID := thor.BytesToAddress([]byte("endorser"))
 	delegationID := big.NewInt(1)
 
-	// Block advancement values to match the requested scenario
-	addValidationBlocks := 148
-	signalExitBlocks := 0   // SignalExit happens at the same block
-	withdrawBlocks := 69453 // Withdraw after staking period + cooldown
-	addDelegationBlocks := 148
-	signalExitDelegationBlocks := 148
-	increaseStakeBlocks := 0          // IncreaseStake happens at the same block
-	withdrawDelegationBlocks := 69453 // WithdrawDelegation after staking period + cooldown
-	decreaseStakeBlocks := 0          // DecreaseStake happens at the same block
-	decreaseStakeBlocks2 := 0         // Second DecreaseStake at the same block
-	increaseStakeBlocks2 := 0         // Final IncreaseStake at the same block
+	// Block advancement values for all green execution
+	epoch := HousekeepingInterval
+	stakingPeriod := int(thor.LowStakingPeriod())
+
+	addValidationBlocks := 0                  // AddValidation at block 0
+	addDelegationBlocks := 1                  // AddDelegation at block 1
+	increaseStakeBlocks1 := epoch             // First IncreaseStake after epoch
+	increaseStakeBlocks2 := stakingPeriod     // Second IncreaseStake after staking period
+	decreaseStakeBlocks1 := epoch             // First DecreaseStake after epoch
+	decreaseStakeBlocks2 := stakingPeriod     // Second DecreaseStake after staking period
+	signalExitDelegationBlocks := epoch       // SignalExitDelegation after epoch
+	withdrawDelegationBlocks := stakingPeriod // WithdrawDelegation after staking period
+	signalExitBlocks := 1                     // SignalExit after 1 block
+	withdrawBlocks := stakingPeriod           // Withdraw after staking period
 
 	action := NewAddValidationAction(
 		&addValidationBlocks,
@@ -628,15 +631,15 @@ func TestPermutation(t *testing.T) {
 		endorserID,
 		thor.LowStakingPeriod(),
 		MinStakeVET,
-		NewSignalExitAction(&signalExitBlocks, validatorID, endorserID,
-			NewWithdrawAction(&withdrawBlocks, validatorID, endorserID,
-				NewAddDelegationAction(&addDelegationBlocks, validatorID, MinStakeVET, uint8(1),
-					NewSignalExitDelegationAction(&signalExitDelegationBlocks, delegationID,
-						NewIncreaseStakeAction(&increaseStakeBlocks, validatorID, endorserID, MinStakeVET,
-							NewWithdrawDelegationAction(&withdrawDelegationBlocks, delegationID,
-								NewDecreaseStakeAction(&decreaseStakeBlocks, validatorID, endorserID, MinStakeVET,
-									NewDecreaseStakeAction(&decreaseStakeBlocks2, validatorID, endorserID, MinStakeVET,
-										NewIncreaseStakeAction(&increaseStakeBlocks2, validatorID, endorserID, MinStakeVET),
+		NewAddDelegationAction(&addDelegationBlocks, validatorID, MinStakeVET, uint8(1),
+			NewIncreaseStakeAction(&increaseStakeBlocks1, validatorID, endorserID, MinStakeVET,
+				NewIncreaseStakeAction(&increaseStakeBlocks2, validatorID, endorserID, MinStakeVET,
+					NewDecreaseStakeAction(&decreaseStakeBlocks1, validatorID, endorserID, MinStakeVET,
+						NewDecreaseStakeAction(&decreaseStakeBlocks2, validatorID, endorserID, MinStakeVET,
+							NewSignalExitDelegationAction(&signalExitDelegationBlocks, delegationID,
+								NewWithdrawDelegationAction(&withdrawDelegationBlocks, delegationID,
+									NewSignalExitAction(&signalExitBlocks, validatorID, endorserID,
+										NewWithdrawAction(&withdrawBlocks, validatorID, endorserID),
 									),
 								),
 							),

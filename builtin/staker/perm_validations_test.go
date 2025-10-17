@@ -636,7 +636,13 @@ func calculateExpectedDelegationWithdrawAmount(ctx *ExecutionContext, currentBlo
 			timeToNextHousekeeping = 0 // Already at housekeeping boundary
 		}
 
-		requiredBlock := olderExitBlock + timeToNextHousekeeping + stakingPeriod
+		// Calculate time to next staking period from the older exit block
+		timeToNextStakingPeriod := stakingPeriod - (olderExitBlock % stakingPeriod)
+		if timeToNextStakingPeriod == stakingPeriod {
+			timeToNextStakingPeriod = 0 // Already at staking period boundary
+		}
+
+		requiredBlock := olderExitBlock + timeToNextHousekeeping + timeToNextStakingPeriod
 
 		if currentBlock >= requiredBlock {
 			// Enough time has passed, can withdraw delegation amount
