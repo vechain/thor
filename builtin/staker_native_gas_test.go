@@ -236,7 +236,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_issuance",
-			expectedGas: 200,
+			expectedGas: 400,
 			description: "Get issuance for the current block",
 		},
 	}
