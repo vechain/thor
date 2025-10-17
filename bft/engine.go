@@ -305,6 +305,7 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 		js = (entry.Value).(*justifier)
 		end = header.Number()
 	} else {
+		// create a new vote set if cache missed or new block is checkpoint
 		var err error
 		js, err = engine.newJustifier(header.ParentID())
 		if err != nil {
