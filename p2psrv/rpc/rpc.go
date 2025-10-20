@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
+	p2p "github.com/vechain/thor/v2/p2psrv"
 
 	"github.com/vechain/thor/v2/log"
 )

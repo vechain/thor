@@ -31,12 +31,12 @@ import (
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/crypto"
 	ethlog "github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/mattn/go-isatty"
 	"github.com/mattn/go-tty"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/p2psrv/nat"
+	"github.com/vechain/thor/v2/p2psrv/tempdiscv5"
 	"gopkg.in/urfave/cli.v1"
 
 	"github.com/vechain/thor/v2/builtin/staker"
@@ -521,6 +521,8 @@ func newP2PCommunicator(ctx *cli.Context, repo *chain.Repository, txPool *txpool
 		log.Warn("failed to load peers cache", "err", err)
 	}
 
+	//node, _ := enode.New()
+	//discv5bootstrap := []*enode.Node{node}
 	return p2p.New(
 		comm.New(repo, txPool),
 		key,
@@ -533,6 +535,8 @@ func newP2PCommunicator(ctx *cli.Context, repo *chain.Repository, txPool *txpool
 		allowedPeers,
 		cachedPeers,
 		bootnodePeers,
+		nil,
+		true,
 	), nil
 }
 
@@ -652,14 +656,14 @@ func openMemLogDB() *logdb.LogDB {
 	return db
 }
 
-func parseNodeList(list string) ([]*discover.Node, error) {
+func parseNodeList(list string) ([]*tempdiscv5.Node, error) {
 	inputs := strings.Split(list, ",")
-	var nodes []*discover.Node
+	var nodes []*tempdiscv5.Node
 	for _, i := range inputs {
 		if i == "" {
 			continue
 		}
-		node, err := discover.ParseNode(i)
+		node, err := tempdiscv5.ParseNode(i)
 		if err != nil {
 			return nil, err
 		}

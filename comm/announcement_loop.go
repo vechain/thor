@@ -6,11 +6,11 @@
 package comm
 
 import (
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/comm/proto"
+	"github.com/vechain/thor/v2/p2psrv/tempdiscv5"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -22,7 +22,7 @@ type announcement struct {
 func (c *Communicator) announcementLoop() {
 	const maxFetches = 3 // per block ID
 
-	fetchingPeers := map[discover.NodeID]bool{}
+	fetchingPeers := map[tempdiscv5.NodeID]bool{}
 	fetchingBlockIDs := map[thor.Bytes32]int{}
 
 	fetchDone := make(chan *announcement)

@@ -13,7 +13,7 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.4.1
 	github.com/hashicorp/golang-lru v0.0.0-20160813221303-0a025b7e63ad
-	github.com/holiman/uint256 v1.2.4
+	github.com/holiman/uint256 v1.3.2
 	github.com/mattn/go-isatty v0.0.3
 	github.com/mattn/go-sqlite3 v1.14.22
 	github.com/mattn/go-tty v0.0.0-20180219170247-931426f7535a
@@ -66,4 +66,8 @@ require (
 
 replace github.com/syndtr/goleveldb => github.com/vechain/goleveldb v1.0.1-0.20220809091043-51eb019c8655
 
-replace github.com/ethereum/go-ethereum => github.com/vechain/go-ethereum v1.8.15-0.20250708104014-34fea45fc2b7
+//replace github.com/ethereum/go-ethereum => github.com/vechain/go-ethereum v1.8.15-0.20250708104014-34fea45fc2b7
+
+replace github.com/ethereum/go-ethereum => ../go-ethereum
+
+replace github.com/vechain/go-ethereum => ../go-ethereum

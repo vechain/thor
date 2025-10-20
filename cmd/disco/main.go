@@ -13,10 +13,10 @@ import (
 	"os"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/p2p/discv5"
-	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/p2psrv/nat"
+	"github.com/vechain/thor/v2/p2psrv/netutil"
+	"github.com/vechain/thor/v2/p2psrv/tempdiscv5"
 	cli "gopkg.in/urfave/cli.v1"
 
 	"github.com/vechain/thor/v2/cmd/thor/httpserver"
@@ -93,7 +93,7 @@ func run(ctx *cli.Context) error {
 			realAddr = &net.UDPAddr{IP: ext, Port: realAddr.Port}
 		}
 	}
-	net, err := discv5.ListenUDP(key, conn, realAddr, "", restrictList)
+	net, err := tempdiscv5.ListenUDP(key, conn, realAddr, "", restrictList, nil)
 	if err != nil {
 		return err
 	}

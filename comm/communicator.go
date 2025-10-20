@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discv5"
+	p2p "github.com/vechain/thor/v2/p2psrv"
+	"github.com/vechain/thor/v2/p2psrv/tempdiscv5"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
@@ -140,9 +140,9 @@ func (c *Communicator) Protocols() []*p2p.Protocol {
 }
 
 // DiscTopic returns the topic for p2p network discovery.
-func (c *Communicator) DiscTopic() discv5.Topic {
+func (c *Communicator) DiscTopic() tempdiscv5.Topic {
 	genesisID := c.repo.GenesisBlock().Header().ID()
-	return discv5.Topic(fmt.Sprintf("%v1@%x", proto.Name, genesisID[24:]))
+	return tempdiscv5.Topic(fmt.Sprintf("%v1@%x", proto.Name, genesisID[24:]))
 }
 
 // Start start the communicator.
