@@ -72,7 +72,8 @@ contract Staker {
     }
 
     /**
-     * @dev decreaseStake removes VET from the current stake of an active validator
+     * @dev decreaseStake removes VET from the current stake of an active validator but do not change
+     the effectiveVET since it will require withdrawStake.
      */
     function decreaseStake(
         address validator,
