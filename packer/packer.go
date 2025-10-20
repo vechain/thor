@@ -35,7 +35,7 @@ type Packer struct {
 }
 
 // New create a new Packer instance.
-// The beneficiary is optional, it defaults to endorsor if not set.
+// The beneficiary is optional, it defaults to endorser if not set.
 func New(
 	repo *chain.Repository,
 	stater *state.Stater,
