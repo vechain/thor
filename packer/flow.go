@@ -32,6 +32,7 @@ type Flow struct {
 	txs          tx.Transactions
 	receipts     tx.Receipts
 	features     tx.Features
+	posActive    bool
 }
 
 func newFlow(
@@ -39,6 +40,7 @@ func newFlow(
 	parentHeader *block.Header,
 	runtime *runtime.Runtime,
 	features tx.Features,
+	posActive bool,
 ) *Flow {
 	return &Flow{
 		packer:       packer,
@@ -46,6 +48,7 @@ func newFlow(
 		runtime:      runtime,
 		processedTxs: make(map[thor.Bytes32]bool),
 		features:     features,
+		posActive:    posActive,
 	}
 }
 
@@ -208,6 +211,15 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shouldVote bool) (*block.Block, *state.Stage, tx.Receipts, error) {
 	if f.packer.nodeMaster != thor.Address(crypto.PubkeyToAddress(privateKey.PublicKey)) {
 		return nil, nil, nil, errors.New("private key mismatch")
+	}
+
+	if f.posActive {
+		signer := crypto.PubkeyToAddress(privateKey.PublicKey)
+		staker := builtin.Staker.Native(f.runtime.State())
+		energy := builtin.Energy.Native(f.runtime.State(), f.runtime.Context().Time)
+		if err := energy.DistributeRewards(f.runtime.Context().Beneficiary, thor.Address(signer), staker, f.Number()); err != nil {
+			return nil, nil, nil, err
+		}
 	}
 
 	stage, err := f.runtime.State().Stage(trie.Version{Major: f.Number(), Minor: newBlockConflicts})

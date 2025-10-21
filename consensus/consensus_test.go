@@ -9,6 +9,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"fmt"
+	"math"
 	"math/big"
 	"strings"
 	"testing"
@@ -93,7 +94,7 @@ func newTestConsensus() (*testConsensus, error) {
 	proposer := genesis.DevAccounts()[0]
 	p := packer.New(repo, stater, proposer.Address, &proposer.Address, &forkConfig, 0)
 	parentSum, _ := repo.GetBlockSummary(parent.Header().ID())
-	flow, err := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval)
+	flow, _, err := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval())
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +131,7 @@ func newTestConsensus() (*testConsensus, error) {
 	proposer2 := genesis.DevAccounts()[1]
 	p2 := packer.New(repo, stater, proposer2.Address, &proposer2.Address, &forkConfig, 0)
 	b1sum, _ := repo.GetBlockSummary(b1.Header().ID())
-	flow2, err := p2.Schedule(b1sum, b1.Header().Timestamp()+100*thor.BlockInterval)
+	flow2, _, err := p2.Schedule(b1sum, b1.Header().Timestamp()+100*thor.BlockInterval())
 	if err != nil {
 		return nil, err
 	}
@@ -266,6 +267,10 @@ func TestNewRuntimeForReplayWithError(t *testing.T) {
 
 	assert.NotNil(t, err)
 	assert.Nil(t, runtime)
+
+	runtime, err = consensus.con.NewRuntimeForReplay(&block.Header{}, false)
+	assert.Error(t, err)
+	assert.Nil(t, runtime)
 }
 
 func TestValidateBlockHeader(t *testing.T) {
@@ -334,7 +339,7 @@ func TestValidateBlockHeader(t *testing.T) {
 		{
 			"ErrFutureBlock", func(t *testing.T) {
 				builder := tc.builder(tc.original.Header())
-				blk, err := tc.sign(builder.Timestamp(tc.time + thor.BlockInterval*2))
+				blk, err := tc.sign(builder.Timestamp(tc.time + thor.BlockInterval()*2))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -467,7 +472,7 @@ func TestValidateBlockHeaderWithBadBaseFee(t *testing.T) {
 	forkConfig.GALACTICA = 1
 	forkConfig.VIP214 = 2
 
-	chain, err := testchain.NewWithFork(&forkConfig)
+	chain, err := testchain.NewWithFork(&forkConfig, 180)
 	assert.NoError(t, err)
 
 	con := New(chain.Repo(), chain.Stater(), &forkConfig)
@@ -479,7 +484,7 @@ func TestValidateBlockHeaderWithBadBaseFee(t *testing.T) {
 	rand.Read(sig[:])
 	newBlock := new(block.Builder).
 		ParentID(best.Header().ID()).
-		Timestamp(best.Header().Timestamp() + thor.BlockInterval).
+		Timestamp(best.Header().Timestamp() + thor.BlockInterval()).
 		TotalScore(best.Header().TotalScore() + 1).
 		BaseFee(big.NewInt(thor.InitialBaseFee * 123)).
 		TransactionFeatures(1).
@@ -886,4 +891,132 @@ func TestValidateProposer(t *testing.T) {
 			tt.testFunc(t)
 		})
 	}
+}
+
+func TestConsensus_StopsEnergyAtHardfork(t *testing.T) {
+	cfg := &thor.SoloFork
+	cfg.HAYABUSA = 2
+	hayabusaTP := uint32(1)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
+
+	chain, err := testchain.NewWithFork(cfg, 1)
+	assert.NoError(t, err)
+
+	assert.NoError(t, chain.MintBlock(genesis.DevAccounts()[0]))
+	assert.NoError(t, chain.MintBlock(genesis.DevAccounts()[0]))
+
+	best := chain.Repo().BestBlockSummary()
+	st := chain.Stater().NewState(best.Root())
+	stop, err := builtin.Energy.Native(st, best.Header.Timestamp()).GetEnergyGrowthStopTime()
+	assert.NoError(t, err)
+	assert.Equal(t, best.Header.Timestamp(), stop)
+}
+
+func TestConsensus_ReplayStopsEnergyAtHardfork_Matrix(t *testing.T) {
+	cases := []struct {
+		name       string
+		hayabusa   uint32
+		expectStop bool
+	}{
+		{"replay stops at hardfork", 2, true},
+		{"replay does not stop without fork", math.MaxUint32, false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := thor.SoloFork
+			cfg.HAYABUSA = tc.hayabusa
+			hayabusaTP := uint32(1)
+			thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
+
+			chain, err := testchain.NewWithFork(&cfg, 1)
+			assert.NoError(t, err)
+
+			assert.NoError(t, chain.MintBlock(genesis.DevAccounts()[0]))
+			assert.NoError(t, chain.MintBlock(genesis.DevAccounts()[0]))
+
+			best := chain.Repo().BestBlockSummary()
+			c := New(chain.Repo(), chain.Stater(), &cfg)
+
+			_, err = c.NewRuntimeForReplay(best.Header, false)
+			assert.NoError(t, err)
+
+			st := chain.Stater().NewState(best.Root())
+			stop, err := builtin.Energy.Native(st, best.Header.Timestamp()).GetEnergyGrowthStopTime()
+			assert.NoError(t, err)
+			if tc.expectStop {
+				assert.Equal(t, best.Header.Timestamp(), stop)
+			} else {
+				assert.Equal(t, uint64(math.MaxUint64), stop)
+			}
+		})
+	}
+}
+
+func TestNewRuntimeForReplay_SyncPOSError(t *testing.T) {
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+
+	gen := genesis.NewDevnet()
+	genesisBlock, _, _, err := gen.Build(stater)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	repo, err := chain.NewRepository(db, genesisBlock)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mockForkConfig := &thor.ForkConfig{}
+
+	consensus := New(repo, stater, mockForkConfig)
+
+	builder := new(block.Builder).
+		ParentID(genesisBlock.Header().ID()).
+		Timestamp(1000).
+		GasLimit(1000000).
+		GasUsed(0).
+		TotalScore(0).
+		StateRoot(thor.Bytes32{}).
+		ReceiptsRoot(thor.Bytes32{}).
+		Beneficiary(thor.Address{})
+
+	blk := builder.Build()
+	validSignature := make([]byte, 65)
+	copy(validSignature, []byte("valid_signature_65_bytes_long_for_testing"))
+	blk = blk.WithSignature(validSignature)
+	header := blk.Header()
+
+	_, err = consensus.NewRuntimeForReplay(header, false)
+
+	assert.Error(t, err, "block signer invalid")
+}
+
+func TestNewRuntimeForReplay_ValidateStakingProposerError(t *testing.T) {
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+
+	mockRepo := &chain.Repository{}
+	mockForkConfig := &thor.ForkConfig{}
+
+	consensus := New(mockRepo, stater, mockForkConfig)
+
+	builder := new(block.Builder).
+		ParentID(thor.Bytes32{}).
+		Timestamp(1000).
+		GasLimit(1000000).
+		GasUsed(0).
+		TotalScore(0).
+		StateRoot(thor.Bytes32{}).
+		ReceiptsRoot(thor.Bytes32{}).
+		Beneficiary(thor.Address{})
+
+	blk := builder.Build()
+	blk = blk.WithSignature([]byte("invalid"))
+	header := blk.Header()
+
+	_, err := consensus.NewRuntimeForReplay(header, false)
+
+	assert.Error(t, err, "invalid signature length")
 }

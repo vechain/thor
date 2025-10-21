@@ -20,7 +20,7 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-type txObject struct {
+type TxObject struct {
 	*tx.Transaction
 	resolved *runtime.ResolvedTransaction
 
@@ -36,13 +36,13 @@ type txObject struct {
 	executable bool // don't touch this value, will be updated by the pool
 }
 
-func resolveTx(tx *tx.Transaction, localSubmitted bool) (*txObject, error) {
+func ResolveTx(tx *tx.Transaction, localSubmitted bool) (*TxObject, error) {
 	resolved, err := runtime.ResolveTransaction(tx)
 	if err != nil {
 		return nil, err
 	}
 
-	return &txObject{
+	return &TxObject{
 		Transaction:    tx,
 		resolved:       resolved,
 		timeAdded:      time.Now().UnixNano(),
@@ -50,33 +50,33 @@ func resolveTx(tx *tx.Transaction, localSubmitted bool) (*txObject, error) {
 	}, nil
 }
 
-func (o *txObject) Origin() thor.Address {
+func (o *TxObject) Origin() thor.Address {
 	return o.resolved.Origin
 }
 
-func (o *txObject) Delegator() *thor.Address {
+func (o *TxObject) Delegator() *thor.Address {
 	return o.resolved.Delegator
 }
 
-func (o *txObject) Cost() *big.Int {
+func (o *TxObject) Cost() *big.Int {
 	return o.cost
 }
 
-func (o *txObject) Payer() *thor.Address {
+func (o *TxObject) Payer() *thor.Address {
 	return o.payer
 }
 
-func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock *block.Header, forkConfig *thor.ForkConfig, baseFee *big.Int) (bool, error) {
+func (o *TxObject) Executable(chain *chain.Chain, state *state.State, headBlock *block.Header, forkConfig *thor.ForkConfig, baseFee *big.Int) (bool, error) {
 	// evaluate the tx on the next block as head block is already history
 	nextBlockNum := headBlock.Number() + 1
-	nextBlockTime := headBlock.Timestamp() + thor.BlockInterval
+	nextBlockTime := headBlock.Timestamp() + thor.BlockInterval()
 
 	switch {
 	case o.Gas() > headBlock.GasLimit():
 		return false, errors.New("gas too large")
 	case o.IsExpired(nextBlockNum): // Check tx expiration on top of next block
 		return false, errors.New("expired")
-	case o.BlockRef().Number() > nextBlockNum+uint32(5*60/thor.BlockInterval):
+	case o.BlockRef().Number() > nextBlockNum+uint32(5*60/thor.BlockInterval()):
 		// reject deferred tx which will be applied after 5mins
 		return false, errors.New("block ref out of schedule")
 	case nextBlockNum < forkConfig.GALACTICA && o.Type() != tx.TypeLegacy:
@@ -145,8 +145,8 @@ func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 	return true, nil
 }
 
-func sortTxObjsByPriorityGasPriceDesc(txObjs []*txObject) {
-	slices.SortFunc(txObjs, func(a, b *txObject) int {
+func sortTxObjsByPriorityGasPriceDesc(txObjs []*TxObject) {
+	slices.SortFunc(txObjs, func(a, b *TxObject) int {
 		if cmp := b.priorityGasPrice.Cmp(a.priorityGasPrice); cmp != 0 {
 			return cmp
 		}

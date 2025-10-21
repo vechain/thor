@@ -45,7 +45,7 @@ func (a *Account) IsEmpty() bool {
 var bigE18 = big.NewInt(1e18)
 
 // CalcEnergy calculates energy based on current block time.
-func (a *Account) CalcEnergy(blockTime uint64) *big.Int {
+func (a *Account) CalcEnergy(blockTime uint64, stopTime uint64) *big.Int {
 	if a.BlockTime == 0 {
 		return a.Energy
 	}
@@ -58,11 +58,26 @@ func (a *Account) CalcEnergy(blockTime uint64) *big.Int {
 		return a.Energy
 	}
 
-	x := new(big.Int).SetUint64(blockTime - a.BlockTime)
-	x.Mul(x, a.Balance)
-	x.Mul(x, thor.EnergyGrowthRate)
-	x.Div(x, bigE18)
-	return new(big.Int).Add(a.Energy, x)
+	growth := new(big.Int)
+	// If accounts last access block time is less than stop time, calculate energy growth.
+	if a.BlockTime < stopTime {
+		timeDiff := uint64(0)
+		// if current block time is less than growth stop time, time diff is block time - account last access block time.
+		// the same as before growth stop.
+		if blockTime <= stopTime {
+			timeDiff = blockTime - a.BlockTime
+		} else {
+			// if current block time is greater than growth stop time, we are taking the time diff only up to growth stop time.
+			timeDiff = stopTime - a.BlockTime
+		}
+		// the rest of calculation is same as before growth stops.
+		growth.SetUint64(timeDiff)
+		growth.Mul(growth, a.Balance)
+		growth.Mul(growth, thor.EnergyGrowthRate)
+		growth.Div(growth, bigE18)
+	}
+
+	return new(big.Int).Add(a.Energy, growth)
 }
 
 func emptyAccount() *Account {

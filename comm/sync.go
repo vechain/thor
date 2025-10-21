@@ -113,8 +113,8 @@ func decodeAndWarmupBatches(ctx context.Context, rawBatches <-chan rawBlockBatch
 		for batch := range rawBatches {
 			for i, raw := range batch.rawBlocks {
 				var blk block.Block
-				if decodeErr := rlp.DecodeBytes(raw, &blk); err != nil {
-					err = errors.Wrap(decodeErr, "invalid block")
+				if err = rlp.DecodeBytes(raw, &blk); err != nil {
+					err = errors.Wrap(err, "invalid block")
 					return
 				}
 

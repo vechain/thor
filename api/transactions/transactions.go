@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 
@@ -16,15 +17,24 @@ import (
 	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
 )
 
-type Transactions struct {
-	repo *chain.Repository
-	pool *txpool.TxPool
+type Pool interface {
+	Get(txID thor.Bytes32) *tx.Transaction
+	AddLocal(tx *tx.Transaction) error
+	Dump() tx.Transactions
+	Len() int
+	SubscribeTxEvent(chan *txpool.TxEvent) event.Subscription
 }
 
-func New(repo *chain.Repository, pool *txpool.TxPool) *Transactions {
+type Transactions struct {
+	repo *chain.Repository
+	pool Pool
+}
+
+func New(repo *chain.Repository, pool Pool) *Transactions {
 	return &Transactions{
 		repo,
 		pool,
@@ -120,6 +130,9 @@ func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Re
 	var rawTx *api.RawTx
 	if err := restutil.ParseJSON(req.Body, &rawTx); err != nil {
 		return restutil.BadRequest(errors.WithMessage(err, "body"))
+	}
+	if rawTx == nil {
+		return restutil.BadRequest(errors.New("body"))
 	}
 	tx, err := rawTx.Decode()
 	if err != nil {

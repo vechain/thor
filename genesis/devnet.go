@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"sync/atomic"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/vechain/thor/v2/builtin"
@@ -143,4 +144,58 @@ func NewDevnetWithConfig(config DevConfig) *Genesis {
 	}
 
 	return &Genesis{builder, id, "devnet"}
+}
+
+// NewHayabusaDevnet create genesis for solo mode.
+func NewHayabusaDevnet() (*Genesis, *thor.ForkConfig) {
+	hayabusaTP := uint32(0)
+	largeNo := (*HexOrDecimal256)(new(big.Int).SetBytes(hexutil.MustDecode("0xffffffffffffffffffffffffffffffffff")))
+	fc := thor.ForkConfig{
+		VIP191:    0,
+		ETH_CONST: 0,
+		BLOCKLIST: 0,
+		ETH_IST:   0,
+		VIP214:    0,
+		FINALITY:  0,
+		HAYABUSA:  0,
+		GALACTICA: 0,
+	}
+	gen := &CustomGenesis{
+		LaunchTime: uint64(1526400000), // Default launch time 'Wed May 16 2018 00:00:00 GMT+0800 (CST)',
+		GasLimit:   thor.InitialGasLimit,
+		ExtraData:  "hayabusa solo",
+		Accounts: []Account{
+			{
+				Address: DevAccounts()[0].Address,
+				Balance: largeNo,
+				Energy:  largeNo,
+			},
+		},
+		Authority: []Authority{
+			{
+				MasterAddress:   DevAccounts()[0].Address,
+				EndorsorAddress: DevAccounts()[0].Address,
+				Identity:        thor.BytesToBytes32([]byte("Solo Block Signer")),
+			},
+		},
+		Params: Params{
+			ExecutorAddress: &DevAccounts()[0].Address,
+		},
+		ForkConfig: &fc,
+		Config: &thor.Config{
+			BlockInterval:       10,
+			LowStakingPeriod:    12,
+			MediumStakingPeriod: 30,
+			HighStakingPeriod:   90,
+			CooldownPeriod:      12,
+			EpochLength:         6,
+			HayabusaTP:          &hayabusaTP,
+		},
+	}
+
+	customNet, err := NewCustomNet(gen)
+	if err != nil {
+		panic(err)
+	}
+	return customNet, &fc
 }

@@ -207,6 +207,7 @@ func benchmarkBlockProcess(b *testing.B, db *muxdb.MuxDB, accounts []genesis.Dev
 		masterAddr,
 		thorChain.Repo(),
 		engine,
+		thorChain.Stater(),
 		nil,
 		nil,
 		"",
@@ -341,7 +342,7 @@ func packTxsIntoBlock(
 		return nil, err
 	}
 
-	flow, err := p.Schedule(parentSum, parentBlk.Header().Timestamp()+1)
+	flow, _, err := p.Schedule(parentSum, parentBlk.Header().Timestamp()+1)
 	if err != nil {
 		return nil, err
 	}

@@ -53,6 +53,7 @@ func TestTransaction(t *testing.T) {
 		"sendTxWithBadFormat":                      sendTxWithBadFormat,
 		"sendTxThatCannotBeAcceptedInLocalMempool": sendTxThatCannotBeAcceptedInLocalMempool,
 		"sendDynamicFeeTx":                         sendDynamicFeeTx,
+		"sendNullTx":                               sendNullTx,
 	} {
 		t.Run(name, tt)
 	}
@@ -169,6 +170,10 @@ func sendLegacyTx(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, trx.ID().String(), txObj["id"], "should be the same transaction id")
+}
+
+func sendNullTx(t *testing.T) {
+	httpPostAndCheckResponseStatus(t, "/transactions", nil, 400)
 }
 
 func sendDynamicFeeTx(t *testing.T) {
@@ -373,7 +378,7 @@ func initTransactionServer(t *testing.T) {
 	forkConfig.GALACTICA = 2
 
 	var err error
-	thorChain, err = testchain.NewWithFork(&forkConfig)
+	thorChain, err = testchain.NewWithFork(&forkConfig, 180)
 	require.NoError(t, err)
 
 	chainTag = thorChain.Repo().ChainTag()

@@ -13,15 +13,18 @@ import (
 	"github.com/gorilla/mux"
 
 	"github.com/vechain/thor/v2/api/restutil"
+	"github.com/vechain/thor/v2/cmd/thor/node"
 )
 
 type API struct {
 	healthStatus *Health
+	master       *node.Master
 }
 
-func NewAPI(healthStatus *Health) *API {
+func NewAPI(healthStatus *Health, master *node.Master) *API {
 	return &API{
 		healthStatus: healthStatus,
+		master:       master,
 	}
 }
 
@@ -46,7 +49,7 @@ func (h *API) handleGetHealth(w http.ResponseWriter, r *http.Request) error {
 		}
 	}
 
-	acc, err := h.healthStatus.Status(blockTolerance, minPeerCount)
+	acc, err := h.healthStatus.Status(blockTolerance, minPeerCount, h.master)
 	if err != nil {
 		return err
 	}

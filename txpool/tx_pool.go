@@ -18,6 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/pkg/errors"
 
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/log"
@@ -28,7 +29,7 @@ import (
 
 const (
 	// max size of tx allowed
-	maxTxSize = 64 * 1024
+	MaxTxSize = 64 * 1024
 )
 
 var logger = log.WithContext("pkg", "txpool")
@@ -250,7 +251,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		return err
 	}
 
-	txObj, err := resolveTx(newTx, localSubmitted)
+	txObj, err := ResolveTx(newTx, localSubmitted)
 	if err != nil {
 		return badTxError{err.Error()}
 	}
@@ -289,7 +290,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		txObj.executable = executable
 		if err := p.all.Add(txObj, p.options.LimitPerAccount, func(payer thor.Address, needs *big.Int) error {
 			// check payer's balance
-			balance, err := state.GetEnergy(payer, headSummary.Header.Timestamp()+thor.BlockInterval)
+			balance, err := builtin.Energy.Native(state, headSummary.Header.Timestamp()+thor.BlockInterval()).Get(payer)
 			if err != nil {
 				return err
 			}
@@ -382,7 +383,7 @@ func (p *TxPool) Executables() tx.Transactions {
 
 // Fill fills txs into pool.
 func (p *TxPool) Fill(txs tx.Transactions) {
-	txObjs := make([]*txObject, 0, len(txs))
+	txObjs := make([]*TxObject, 0, len(txs))
 	for _, tx := range txs {
 		origin, _ := tx.Origin()
 		if thor.IsOriginBlocked(origin) || p.blocklist.Contains(origin) {
@@ -393,7 +394,7 @@ func (p *TxPool) Fill(txs tx.Transactions) {
 			continue
 		}
 		// here we ignore errors
-		if txObj, err := resolveTx(tx, false); err == nil {
+		if txObj, err := ResolveTx(tx, false); err == nil {
 			txObjs = append(txObjs, txObj)
 		}
 	}
@@ -409,8 +410,8 @@ func (p *TxPool) Dump() tx.Transactions {
 // this method should only be called in housekeeping go routine
 func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transactions, removedLegacy int, removedDynamicFee int, err error) {
 	all := p.all.ToTxObjects()
-	var toRemove []*txObject
-	var toUpdateCost []*txObject
+	var toRemove []*TxObject
+	var toUpdateCost []*TxObject
 	defer func() {
 		if err != nil {
 			// in case of error, simply cut pool size to limit
@@ -448,9 +449,9 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 
 	var (
 		chain               = p.repo.NewChain(headSummary.Header.ID())
-		executableObjs      = make([]*txObject, 0, len(all))
-		nonExecutableObjs   = make([]*txObject, 0, len(all))
-		localExecutableObjs = make([]*txObject, 0, len(all))
+		executableObjs      = make([]*TxObject, 0, len(all))
+		nonExecutableObjs   = make([]*TxObject, 0, len(all))
+		localExecutableObjs = make([]*TxObject, 0, len(all))
 		now                 = time.Now().UnixNano()
 		baseFee             = p.baseFeeCache.Get(headSummary.Header)
 	)
@@ -565,7 +566,7 @@ func (p *TxPool) validateTxBasics(trx *tx.Transaction) error {
 		return badTxError{"chain tag mismatch"}
 	}
 
-	if trx.Size() > maxTxSize {
+	if trx.Size() > MaxTxSize {
 		return txRejectedError{"size too large"}
 	}
 
@@ -577,5 +578,5 @@ func isChainSynced(nowTimestamp, blockTimestamp uint64) bool {
 	if blockTimestamp > nowTimestamp {
 		timeDiff = blockTimestamp - nowTimestamp
 	}
-	return timeDiff < thor.BlockInterval*6
+	return timeDiff < thor.BlockInterval()*6
 }

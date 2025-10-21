@@ -20,7 +20,10 @@ func TestForkConfigString(t *testing.T) {
 		VIP214:    math.MaxUint32,
 		FINALITY:  math.MaxUint32,
 		GALACTICA: math.MaxUint32,
+		HAYABUSA:  math.MaxUint32,
 	}
+	hayabusaTP := uint32(math.MaxUint32)
+	SetConfig(Config{HayabusaTP: &hayabusaTP})
 
 	expectedStr := "VIP191: #1, BLOCKLIST: #2"
 	if fc.String() != expectedStr {

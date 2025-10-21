@@ -126,7 +126,7 @@ func GetSummaryAndState(
 		// call to header.Signer(), the error should be ignored.
 		builder := new(block.Builder).
 			ParentID(best.Header.ID()).
-			Timestamp(best.Header.Timestamp() + thor.BlockInterval).
+			Timestamp(best.Header.Timestamp() + thor.BlockInterval()).
 			TotalScore(best.Header.TotalScore()).
 			GasLimit(best.Header.GasLimit()).
 			Beneficiary(best.Header.Beneficiary()).

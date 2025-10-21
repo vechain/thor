@@ -40,7 +40,7 @@ func TestSchedule(t *testing.T) {
 	sched, _ := NewSchedulerV1(p1, proposers, 1, parentTimeV1)
 
 	for i := range uint64(100) {
-		now := parentTimeV1 + i*thor.BlockInterval/2
+		now := parentTime + i*thor.BlockInterval()/2
 		nbt := sched.Schedule(now)
 		assert.True(t, nbt >= now)
 		assert.True(t, sched.IsTheTime(nbt))
@@ -55,8 +55,8 @@ func TestIsTheTime(t *testing.T) {
 		want bool
 	}{
 		{parentTimeV1 - 1, false},
-		{parentTimeV1 + thor.BlockInterval/2, false},
-		{parentTimeV1 + thor.BlockInterval, true},
+		{parentTimeV1 + thor.BlockInterval()/2, false},
+		{parentTimeV1 + thor.BlockInterval(), true},
 	}
 
 	for _, tt := range tests {
@@ -71,8 +71,8 @@ func TestUpdates(t *testing.T) {
 		newBlockTime uint64
 		want         uint64
 	}{
-		{parentTimeV1 + thor.BlockInterval, 2},
-		{parentTimeV1 + thor.BlockInterval*30, 1},
+		{parentTimeV1 + thor.BlockInterval(), 2},
+		{parentTimeV1 + thor.BlockInterval()*30, 1},
 	}
 
 	for _, tt := range tests {
@@ -92,7 +92,7 @@ func TestScheduleV2(t *testing.T) {
 	sched, _ := NewSchedulerV2(p2, proposers, parent.Header().Number(), parent.Header().Timestamp(), nil)
 
 	for i := range uint64(100) {
-		now := parentTimeV1 + i*thor.BlockInterval/2
+		now := parentTimeV1 + i*thor.BlockInterval()/2
 		nbt := sched.Schedule(now)
 		assert.True(t, nbt >= now)
 		assert.True(t, sched.IsTheTime(nbt))
@@ -114,8 +114,8 @@ func TestIsTheTimeV2(t *testing.T) {
 		want bool
 	}{
 		{parentTimeV1 - 1, false},
-		{parentTimeV1 + thor.BlockInterval/2, false},
-		{parentTimeV1 + thor.BlockInterval, true},
+		{parentTimeV1 + thor.BlockInterval()/2, false},
+		{parentTimeV1 + thor.BlockInterval(), true},
 	}
 
 	for _, tt := range tests {
@@ -137,8 +137,8 @@ func TestUpdatesV2(t *testing.T) {
 		newBlockTime uint64
 		want         uint64
 	}{
-		{parentTimeV1 + thor.BlockInterval*30, 1},
-		{parentTimeV1 + thor.BlockInterval, 1},
+		{parentTimeV1 + thor.BlockInterval()*30, 1},
+		{parentTimeV1 + thor.BlockInterval(), 1},
 	}
 
 	for _, tt := range tests {
@@ -161,8 +161,8 @@ func TestActivateInV2(t *testing.T) {
 		newBlockTime uint64
 		want         uint64
 	}{
-		{parentTimeV1 + thor.BlockInterval*30, 1},
-		{parentTimeV1 + thor.BlockInterval, 2},
+		{parentTimeV1 + thor.BlockInterval()*30, 1},
+		{parentTimeV1 + thor.BlockInterval(), 2},
 	}
 
 	for _, tt := range tests {

@@ -254,6 +254,22 @@ func (r *Repository) ScanConflicts(blockNum uint32) (uint32, error) {
 	return count, iter.Error()
 }
 
+// GetConflicts returns an array of found conflicts
+func (r *Repository) GetConflicts(blockNum uint32) ([]thor.Bytes32, error) {
+	prefix := binary.BigEndian.AppendUint32(nil, blockNum)
+
+	iter := r.hdrStore.Iterate(kv.Range(*util.BytesPrefix(prefix)))
+	defer iter.Release()
+
+	conflicts := make([]thor.Bytes32, 0, 1)
+	for iter.Next() {
+		key := make([]byte, 32)
+		copy(key, iter.Key())
+		conflicts = append(conflicts, thor.BytesToBytes32(key))
+	}
+	return conflicts, iter.Error()
+}
+
 // ScanHeads returns all head blockIDs from the given blockNum(included) in descending order.
 // It will return all fork's head block id stored in to local database after the given block number.
 // The following example will return B' and C.

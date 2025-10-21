@@ -20,10 +20,11 @@ type ForkConfig struct {
 	ETH_IST   uint32
 	VIP214    uint32
 	FINALITY  uint32
+	HAYABUSA  uint32 // Start of the Hayabusa Transition Period - PoA is still active until the transition period is over and 2/3 of the MBP have entered the PoS queue
 	GALACTICA uint32
 }
 
-func (fc ForkConfig) String() string {
+func (fc *ForkConfig) String() string {
 	var strs []string
 	push := func(name string, blockNum uint32) {
 		if blockNum != math.MaxUint32 {
@@ -38,6 +39,7 @@ func (fc ForkConfig) String() string {
 	push("VIP214", fc.VIP214)
 	push("FINALITY", fc.FINALITY)
 	push("GALACTICA", fc.GALACTICA)
+	push("HAYABUSA", fc.HAYABUSA)
 
 	return strings.Join(strs, ", ")
 }
@@ -51,6 +53,7 @@ var NoFork = ForkConfig{
 	VIP214:    math.MaxUint32,
 	FINALITY:  math.MaxUint32,
 	GALACTICA: math.MaxUint32,
+	HAYABUSA:  math.MaxUint32,
 }
 
 // SoloFork is used to define the solo fork config.
@@ -63,6 +66,7 @@ var SoloFork = ForkConfig{
 	FINALITY:  0,
 	// Any subsequent fork should be started from block 1.
 	GALACTICA: 1,
+	HAYABUSA:  1,
 }
 
 // for well-known networks
@@ -76,6 +80,7 @@ var forkConfigs = map[Bytes32]*ForkConfig{
 		VIP214:    10_653_500,
 		FINALITY:  13_815_000,
 		GALACTICA: 22_084_200, // ~ Tue, 01 Jul 2025 12:00:00 UTC
+		HAYABUSA:  23_414_400, // ~ Tue, 02 Dec 2025 11:27:00 UTC
 	},
 	// testnet
 	MustParseBytes32("0x000000000b2bce3c70bc649a02749e8687721b09ed2e15997f466536b20bb127"): {
@@ -86,6 +91,7 @@ var forkConfigs = map[Bytes32]*ForkConfig{
 		VIP214:    10_606_800,
 		FINALITY:  13_086_360,
 		GALACTICA: 21_770_500, // ~ Tue, 20 May 2025 12:00:00 UTC
+		HAYABUSA:  23_161_500, // ~ Tue, 28 Oct 2025 12:11:50 UTC
 	},
 }
 

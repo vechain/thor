@@ -18,6 +18,7 @@ import (
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/runtime/statedb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -32,6 +33,8 @@ var (
 	nativeCallReturnGas     uint64 = 1562 // see test case for calculation
 
 	EmptyRuntimeBytecode = []byte{0x60, 0x60, 0x60, 0x40, 0x52, 0x60, 0x02, 0x56}
+
+	logger = log.WithContext("pkg", "runtime")
 )
 
 func init() {
@@ -132,6 +135,17 @@ func New(
 		}
 	}
 
+	// Prepare the transition period
+	if forkConfig.HAYABUSA == ctx.Number {
+		logger.Info("HAYABUSA fork, setting up staker contract")
+		if err := state.SetCode(builtin.Staker.Address, builtin.Staker.RuntimeBytecodes()); err != nil {
+			panic(err)
+		}
+		if err := builtin.Energy.Native(state, ctx.Time).StopEnergyGrowth(); err != nil {
+			panic(err)
+		}
+	}
+
 	rt := Runtime{
 		chain:       chain,
 		state:       state,
@@ -171,11 +185,11 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 			}
 			// touch energy balance when token balance changed
 			// SHOULD be performed before transfer
-			senderEnergy, err := rt.state.GetEnergy(thor.Address(sender), rt.ctx.Time)
+			senderEnergy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(sender))
 			if err != nil {
 				panic(err)
 			}
-			recipientEnergy, err := rt.state.GetEnergy(thor.Address(recipient), rt.ctx.Time)
+			recipientEnergy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(recipient))
 			if err != nil {
 				panic(err)
 			}
@@ -219,7 +233,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 				return nil, nil, false
 			}
 
-			abi, run, found := builtin.FindNativeCall(thor.Address(contract.Address()), contract.Input)
+			abi, run, found, returnsGas := builtin.FindNativeCall(thor.Address(contract.Address()), contract.Input)
 			if !found {
 				lastNonNativeCallGas = contract.Gas
 				return nil, nil, false
@@ -234,14 +248,16 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 				panic("value transfer not allowed")
 			}
 
-			// here we return call gas and extcodeSize gas for native calls, to make
-			// builtin contract cheap.
-			contract.Gas += nativeCallReturnGas
-			if contract.Gas > lastNonNativeCallGas {
-				panic("serious bug: native call returned gas over consumed")
+			if returnsGas {
+				// here we return call gas and extcodeSize gas for native calls, to make
+				// builtin contract cheap, this only applies to the 0.4.24 complied contracts
+				contract.Gas += nativeCallReturnGas
+				if contract.Gas > lastNonNativeCallGas {
+					panic("serious bug: native call returned gas over consumed")
+				}
 			}
 
-			ret, err := xenv.New(abi, rt.chain, rt.state, rt.ctx, txCtx, evm, contract, clauseIndex).Call(run)
+			ret, err := xenv.New(abi, rt.chain, rt.state, rt.ctx, rt.forkConfig, txCtx, evm, contract, clauseIndex).Call(run)
 			return ret, err, true
 		},
 		OnCreateContract: func(_ *vm.EVM, contractAddr, caller common.Address) {
@@ -263,14 +279,14 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 		},
 		OnSuicideContract: func(_ *vm.EVM, contractAddr, tokenReceiver common.Address) {
 			// it's IMPORTANT to process energy before token
-			energy, err := rt.state.GetEnergy(thor.Address(contractAddr), rt.ctx.Time)
+			energy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(contractAddr))
 			if err != nil {
 				panic(err)
 			}
 			bal := stateDB.GetBalance(contractAddr)
 
 			if bal.Sign() != 0 || energy.Sign() != 0 {
-				receiverEnergy, err := rt.state.GetEnergy(thor.Address(tokenReceiver), rt.ctx.Time)
+				receiverEnergy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(tokenReceiver))
 				if err != nil {
 					panic(err)
 				}

@@ -8,7 +8,7 @@ package thor
 import (
 	"hash"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -18,7 +18,10 @@ import (
 func BenchmarkHash(b *testing.B) {
 	data := make([]byte, 10)
 
-	rand.New(rand.NewSource(1)).Read(data) //#nosec G404
+	rng := rand.New(rand.NewPCG(1, 0)) //#nosec G404
+	for i := range data {
+		data[i] = byte(rng.Uint64())
+	}
 
 	b.Run("keccak", func(b *testing.B) {
 		type keccakState interface {
@@ -44,7 +47,11 @@ func BenchmarkHash(b *testing.B) {
 
 func BenchmarkBlake2b(b *testing.B) {
 	data := make([]byte, 100)
-	rand.New(rand.NewSource(1)).Read(data) //#nosec G404
+
+	rng := rand.New(rand.NewPCG(1, 0)) //#nosec G404
+	for i := range data {
+		data[i] = byte(rng.Uint64())
+	}
 	b.Run("Blake2b", func(b *testing.B) {
 		for b.Loop() {
 			Blake2b(data).Bytes()
