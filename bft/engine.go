@@ -341,7 +341,7 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 				}
 				weight = validator.Weight
 			}
-			// If PoS is not active or error occurred, weight remains nil
+			// If PoS is not active or error occurred, weight remains 0
 			js.AddBlock(signer, h.COM(), weight)
 		} else {
 			js.AddBlock(signer, h.COM(), 0)
