@@ -79,6 +79,47 @@ jobs:
           # use the branch + sha if workflow_dispatch
           tags: ${{ inputs.tags || format('type=raw,value={0}-{1}', github.ref_name, github.sha) }}
 
+      - name: Compute cache scopes
+        # BuildKit GHA cache is partitioned to avoid clobbering across platforms and PRs.
+        # Behavior by event:
+        # - pull_request: read from shared (warmed by default/base branch) + PR branch scopes; write only to PR branch scope.
+        # - workflow_dispatch: if targeting default or release/* branches, treat as non-PR (write shared+branch);
+        #                      otherwise treat like PR (read shared+branch, write branch only) to avoid polluting shared.
+        # - other (push to master/release/*): read from shared; write to shared+branch (warm cache for future PRs).
+        id: cache
+        shell: bash
+        env:
+          REPO: ${{ github.repository }}
+          PLATFORM: ${{ matrix.platform }}
+          REF: ${{ github.ref_name }}
+          EVENT: ${{ github.event_name }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          SHARED="${REPO}-${PLATFORM}-shared"
+          BRANCH="${REPO}-${PLATFORM}-${REF}"
+          case "${EVENT}" in
+            pull_request)
+              FROM=$(printf '%s\n' "type=gha,scope=${SHARED}" "type=gha,scope=${BRANCH}")
+              TO=$(printf '%s\n' "type=gha,mode=max,scope=${BRANCH}")
+              ;;
+            workflow_dispatch)
+              if [ "${REF}" = "${DEFAULT_BRANCH}" ] || [[ "${REF}" == release/* ]]; then
+                FROM=$(printf '%s\n' "type=gha,scope=${SHARED}")
+                TO=$(printf '%s\n' "type=gha,mode=max,scope=${SHARED}" "type=gha,mode=max,scope=${BRANCH}")
+              else
+                FROM=$(printf '%s\n' "type=gha,scope=${SHARED}" "type=gha,scope=${BRANCH}")
+                TO=$(printf '%s\n' "type=gha,mode=max,scope=${BRANCH}")
+              fi
+              ;;
+            *)
+              FROM=$(printf '%s\n' "type=gha,scope=${SHARED}")
+              TO=$(printf '%s\n' "type=gha,mode=max,scope=${SHARED}" "type=gha,mode=max,scope=${BRANCH}")
+              ;;
+          esac
+          echo "from<<EOF" >> "$GITHUB_OUTPUT"; echo "${FROM}" >> "$GITHUB_OUTPUT"; echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "to<<EOF"   >> "$GITHUB_OUTPUT"; echo "${TO}"   >> "$GITHUB_OUTPUT"; echo "EOF" >> "$GITHUB_OUTPUT"
+
       - name: Compute arch-suffixed tags
         id: tags
         shell: bash
@@ -115,8 +156,8 @@ jobs:
           sbom: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.tags.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to:   type=gha,mode=max
+          cache-from: ${{ steps.cache.outputs.from }}
+          cache-to:   ${{ steps.cache.outputs.to }}
 
       - name: Compute safe platform name
         id: platform
