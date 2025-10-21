@@ -52,7 +52,6 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
-        if: ${{ github.event_name != 'pull_request' }}
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to Docker Hub
@@ -83,27 +82,25 @@ jobs:
       - name: Compute arch-suffixed tags
         id: tags
         shell: bash
+        env:
+          META_TAGS: ${{ steps.meta.outputs.tags }}
         run: |
-          PLATFORM="${{ matrix.platform }}"
-          case "$PLATFORM" in
+          set -euo pipefail
+          case "${{ matrix.platform }}" in
             linux/amd64) ARCH="amd64" ;;
             linux/arm64) ARCH="arm64" ;;
-            *) echo "Unsupported platform: $PLATFORM" >&2; exit 1 ;;
+            *) echo "Unsupported platform: ${{ matrix.platform }}" >&2; exit 1 ;;
           esac
-          echo "arch=$ARCH" >> "$GITHUB_OUTPUT"
+          TMP_FILE="$(mktemp)"
+          printf '%s\n' "${META_TAGS}" | awk -v a="$ARCH" 'NF{print $0 "-" a}' > "$TMP_FILE"
+          if [ ! -s "$TMP_FILE" ]; then
+            echo "No arch-suffixed tags produced" >&2
+            exit 1
+          fi
           echo "tags<<EOF" >> "$GITHUB_OUTPUT"
-          while IFS= read -r tag; do
-            [ -z "$tag" ] && continue
-            echo "${tag}-${ARCH}"
-          done <<< "${{ steps.meta.outputs.tags }}"
+          cat "$TMP_FILE" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
-
-      - name: Debug tags
-        run: |
-          echo "META TAGS:"
-          printf '%s\n' "${{ steps.meta.outputs.tags }}"
-          echo "SUFFIXED TAGS:"
-          printf '%s\n' "${{ steps.tags.outputs.tags }}"
+          rm -f "$TMP_FILE"
 
       - name: Build and push (${{ matrix.platform }})
         id: build
@@ -118,8 +115,8 @@ jobs:
           sbom: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.tags.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: ${{ github.event_name != 'pull_request' && 'type=gha' || '' }}
-          cache-to:   ${{ github.event_name != 'pull_request' && 'type=gha,mode=max' || '' }}
+          cache-from: type=gha
+          cache-to:   type=gha,mode=max
 
       - name: Compute safe platform name
         id: platform
