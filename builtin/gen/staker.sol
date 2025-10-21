@@ -72,7 +72,8 @@ contract Staker {
     }
 
     /**
-     * @dev decreaseStake removes VET from the current stake of an active validator
+     * @dev decreaseStake removes VET from the current stake of an active validator but do not change
+     the effectiveVET since it will require withdrawStake.
      */
     function decreaseStake(
         address validator,
@@ -107,7 +108,7 @@ contract Staker {
      */
     function addDelegation(
         address validator,
-        uint8 multiplier // (% of msg.value) 100 for x1, 200 for x2, etc. This enforces a maximum of 2.56x multiplier
+        uint8 multiplier // (% of msg.value) 100 for x1, 200 for x2, etc. This enforces a maximum of 2.55x multiplier
     )
         external
         payable

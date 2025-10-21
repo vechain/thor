@@ -124,6 +124,7 @@ func (js *justifier) AddBlock(signer thor.Address, isCOM bool, weight uint64) {
 	}
 }
 
+// Summarize summarizes the state of vote set.
 func (js *justifier) Summarize() *bftState {
 	var justified, committed bool
 
